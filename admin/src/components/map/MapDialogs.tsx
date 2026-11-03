@@ -296,8 +296,9 @@ export function SourcesDialog({ open, detail, onClose }: { open: boolean; detail
               <tr key={source.section} className="align-top">
                 <td className={tdClass}>{source.label}</td>
                 <td className={tdClass}>
-                  <Badge tone={source.origin === "db" ? "green" : source.origin === "config" ? "amber" : "slate"}>
-                    {source.origin === "db" ? "服务端库表" : source.origin === "config" ? "客户端资源" : "生成快照"}
+                  {/* 只有两类（#655 起「生成快照」这一类随数据落库消失）；未知值按库表兜底显示原文 */}
+                  <Badge tone={source.origin === "config" ? "amber" : "green"}>
+                    {source.origin === "config" ? "客户端资源" : "服务端库表"}
                   </Badge>
                 </td>
                 <td className={`${tdClass} font-mono text-[11px]`}>{source.ref}</td>

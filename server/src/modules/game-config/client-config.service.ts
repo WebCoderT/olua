@@ -1,8 +1,8 @@
 import { Injectable } from "@nestjs/common";
 import { MAP_TYPE_GROUPS } from "../../common/constants/map-config";
-import { MONSTER_PRESENTATION_ROWS } from "../../shared/monster-presentation.generated";
 import { MapService } from "../map/map.service";
 import { UiEffectService } from "../ui-effect/ui-effect.service";
+import { MonsterPresentationRepository } from "../../database/repositories/monster-presentation.repository";
 import { GameConfigService } from "./game-config.service";
 import { GrowthConfigService } from "./growth-config.service";
 import { MallPricingService } from "./mall-pricing.service";
@@ -22,7 +22,8 @@ const ALL = { page: 1, size: 1_000_000 };
  *
  * 只做**编排**：逐表调各配置服务的列表方法（camelCase DTO 形状与管理端一致），
  * 不引入第二套 row → DTO 映射 —— 管理端看到什么形状，客户端快照就是什么形状。
- * 各服务的 `onModuleInit` 负责幂等 seed，快照永远有数据可发。
+ * 数据全部来自数据库（出厂快照 `server/data/config-sync.sql` 在空库首启时灌入），
+ * 所以「快照里有几条」就等于「库里有几条」——没有第二份代码常量可能对不上。
  */
 @Injectable()
 export class ClientConfigService {
@@ -36,6 +37,7 @@ export class ClientConfigService {
     private readonly guide: GuideSettingsService,
     private readonly map: MapService,
     private readonly uiEffect: UiEffectService,
+    private readonly monsterPresentations: MonsterPresentationRepository,
   ) {}
 
   snapshot(): GameConfigSnapshotDto {    return {
@@ -46,15 +48,16 @@ export class ClientConfigService {
       drugs: this.gameConfig.listDrugs({ ...ALL }).list,
       items: this.gameConfig.listItems({ ...ALL }).list,
       monsters: this.gameConfig.listMonsters({ ...ALL }).list,
-      // #588：怪物资源与表现（生成物实测），客户端不再持有怪物数据文件
-      monsterPresentations: MONSTER_PRESENTATION_ROWS.map((row) => MonsterPresentationDto.from(row)),
+      // #588 / #655：怪物资源与表现读 `monster_presentation` 表（生成器直接写库），
+      // 客户端不再持有怪物数据文件
+      monsterPresentations: this.monsterPresentations.listAll().map((row) => MonsterPresentationDto.from(row)),
       npcs: this.gameConfig.listNpcs({ ...ALL }).list,
       fashions: this.gameConfig.listFashions({ ...ALL }).list,
       // #655：等级表直接读 `role_levels`（60 行逐级配置，曲线已从运行时移除）——
       // 客户端 levelMap 的唯一来源。表为空（迁移没跑）才回落到曲线展开，保证空库能进游戏。
       levels: this.snapshotLevels(),
       growthScalars: this.growth.listScalars({ ...ALL }).list,
-      // #603 战斗力权重 / #605 可配化：出厂值在 `shared/combat-seed.ts`，当前值在
+      // #603 战斗力权重 / #605 可配化：出厂值在 `config-sync.sql`，当前值在
       // `combat_weights` 表（管理端「战斗力权重」页可改）。客户端本地只留空 Map ——
       // 「这件装备是不是更好」的提示与服务端算战力用同一组数字
       combatWeights: this.combatWeights.weights(),
@@ -83,7 +86,7 @@ export class ClientConfigService {
       // #605：运行时参数（掉落手感 / 自动战斗 / 帮会规则）—— 原本写死在客户端的两份参数，
       // 现在由运营在管理端改；客户端进游戏覆写本地（guild 那组同时也是服务端校验门槛）
       runtimeParams: this.runtimeParams.get(),
-      // #605：新手引导步骤（出厂值在 shared/guide-seed.ts，运营在管理端「新手引导」页改）。
+      // #605：新手引导步骤（出厂值在 config-sync.sql，运营在管理端「新手引导」页改）。
       // 客户端本地不再存这张表 —— 改一句新手文案不用重打客户端包
       guideSteps: this.guide.steps(),
     };

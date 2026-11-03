@@ -23,7 +23,7 @@ export const GUILD_RANK_LABELS: Record<string, string> = {
 };
 
 // 帮会名 / 公告 / 入帮留言的长度**不再在这里**（#605）：它们已升级为运行时参数，
-// 出厂值在 `shared/runtime-seed.ts` 的 `guild` 组，运营在管理端「运行时参数」页改，
+// 出厂值在 `config-sync.sql` 的 `guild` 组，运营在管理端「运行时参数」页改，
 // 校验在 `GuildService` 里按当前配置判（DTO 只留宽一点的结构上限）。
 // 常量留在这里的旧写法会变成「第二份真相」—— 改配置不生效，改代码又要发版。
 

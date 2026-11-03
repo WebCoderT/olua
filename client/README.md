@@ -52,21 +52,19 @@
    - 文案统一走 `configs/texts`（模板带 `{占位符}`，取值用 `getText(key, params)`），代码里不写中文
    - 布局统一走 `configs/layout/*`，barrel 出口是 `configs/hudLayout`
    - `configs/` 与 `types/` **不依赖 UI 层**（配置只描述数据，回调与分支留在组件里）
-   - 其中**仍由客户端持有出厂数据的几张**（装备 / 技能 / 物品 / 时装 / 职业，外加 `types/role.ts`
-     的枚举注释）改完要重生成公共数据：`node ../tools/gen-shared-data.cjs` —— 服务端与管理端读的就是它，忘了生成会被 `make audit-shared-data` 逮住
-   - **越来越多数据的「唯一书写处」在服务端种子**（#590 起是等级 / 三条成长线 / 成长曲线 / 装备属性公式，
-     #603 起是怪物掉落 / 怪物技能 / 状态 / 任务 / 成就 / 掉落表 / 战斗力权重 / NPC）：客户端对应的
-     `configs/*.ts` 只是**空运行时表**，进游戏由配置快照整表重建 —— **不要再往这些文件里写数据**，
-     那等于又造一份真相
+   - 其中**全部出厂数据自 #655 起都住在数据库**（`server/data/config-sync.sql` 是出厂快照，运行中在库里）：
+     `configs/` 里的那些表只是**空运行时表**，进游戏由配置快照（`GET /game-config`）整表重建 ——
+     **不要再往这些文件里写数据**，那等于又造一份真相；改数值请走管理端，改完 `make config-export`
+   - 只有**枚举**（职业 / 性别 / 部位 / 怪物定位 / 引导位与事件）手写在服务端
+     `common/constants/game-enums.ts`，客户端 `types/*` 与它同名同值，`make audit-shared-data` 逐值比对
    - **「这个数据归谁、改哪儿、客户端什么时候拿到」→ 查 [`CONFIG-DATA.md`](CONFIG-DATA.md)**（一张对照表：
      快照段 / 落库函数 / 客户端表 / 服务端出厂 / 管理端页面）
 2. **接口文件是生成的，禁止手改**
    `assets/ui/utils/net/{ApiRoutes,ApiModels,Api}.ts` 由服务端 Swagger 文档生成（见 [../FAQ.md](../FAQ.md#接口文件路径--类型--方法为什么是生成的想加一个接口改哪)）。
    要加接口 → 改服务端 → `cd server && npm run gen:api` → 按编译报错改调用点。
 3. **可配置项的唯一去处就是 `configs`**，别的地方多存一份必然漂移。`audit-config-leak` 的第 1 段专门抓这个。
-   反过来说：`configs` 里被三端共用的那几张，就是**三端唯一的游戏数据来源**（服务端与管理端读的都是由它生成的
-   `server/src/shared/game-data.generated.ts`）—— 客户端这边改了，记得重生成一次。
-   例外是上面那批「服务端种子」表：它们的唯一书写处在服务端，客户端只做运行时容器。
+   反过来说：`configs` 里的表在运行期就是**客户端侧的运行时容器**（出厂值来自库，见上一条）——
+   别再往里补默认数值，也别在别处再抄一份。
 
 ## 目录结构
 
@@ -131,7 +129,7 @@ node tools/test-bag-tidy.cjs                                 # 单跑一套
 
 | 脚本 | 产出 | 说明 |
 | --- | --- | --- |
-| `gen-monster-config.cjs` | `../server/src/shared/monster-presentation.generated.ts` | 怪物资源与表现清单（#588 起写到**服务端**，客户端零副本）：几何读图集 plist 基准帧实测；规则写在脚本文件头，改完重跑 |
+| `gen-monster-config.cjs` | `monster_presentation` 表的几何列（不再有生成物） | 怪物资源表现几何（#588 的清单，#655 起**只量素材、写回库**）：`outOffset` / `contentSize` / `aggressive` 由图集 plist 基准帧实测；`icon` / `out` / 移动速度这些运营数据一律不动。规则写在脚本文件头，改完重跑 + `make config-export` |
 | `clean-role-empty-frames.cjs` | 清理空帧素材 | 先预演列清单，`--apply` 才真动；会先备份到仓库根 `.workbuddy/backup/` |
 
 ### 单测沙箱（`tools/lib/`）
@@ -177,8 +175,8 @@ cd client
 
 | 类别 | 字段 | 唯一来源 | 改完怎么生效 |
 |---|---|---|---|
-| 数值 | `label` / `level` / `tier` / `maxHp` / 六项攻防 | 服务端 `monsters` 表（出厂 = `server/src/shared/monster-seed.ts` 曲线展开，管理端可改） | 保存即生效，客户端下次进游戏拉快照 |
-| 资源表现 | `icon` / `out` / `outOffset` / `contentSize` / `moveSpeed` / `aggressive` / `detectRange` / `speedRate` 覆盖 | `server/src/shared/monster-presentation.generated.ts`（`client/tools/gen-monster-config.cjs` 从图集 plist 实测生成） | 重跑生成器 + 重启服务端 |
+| 数值 | `label` / `level` / `tier` / `maxHp` / 六项攻防 | 服务端 `monsters` 表（出厂值就在库里，管理端可改） | 保存即生效，客户端下次进游戏拉快照 |
+| 资源表现 | `icon` / `out` / `outOffset` / `contentSize` / `moveSpeed` / `aggressive` / `detectRange` / `speedRate` 覆盖 | 服务端 `monster_presentation` 表（`client/tools/gen-monster-config.cjs` 只量几何写回库） | 重跑生成器 + `make config-export` + 重启服务端 |
 | 掉落 | 每怪掉落表 | 服务端 `monster_drops`（管理端改） | 保存即生效 |
 
 客户端运行时两张表（`configs/game-config.ts` 区 16 的 `monsterRuntime` / `monsterResource`）全部由快照填充：数值段
@@ -188,9 +186,9 @@ cd client
 （`node ../tools/audit-world-authority.cjs`：怪物分区不许再长数值字段、
 运行时表必须被快照两段填充、MonsterManager 不许自己兜一份怪物数据）。
 
-**加一只怪 = 三步**：① 素材入库跑 `client/tools/gen-monster-config.cjs`；
-② `server/src/shared/monster-seed.ts` 加一行四元组（数值唯一要写的地方）；
-③ 重启服务端（新 key 自动 seed 进表）。key 三方（素材目录 / 种子 / 掉落表）
+**加一只怪 = 三步**：① 素材入 `assets/resources/monster/out/<id>/`；
+② 管理端「怪物配置」加数值行 + 表现行（落 `monsters` / `monster_presentation` 两张表）；
+③ 跑 `client/tools/gen-monster-config.cjs` 量几何 → `make config-export`。key 三方（素材目录 / 数值行 / 掉落表）
 由生成器双向对账，少一边会报错。
 
 **怪物放在哪儿也不归客户端**：刷怪区（位置 / 区域尺寸 / 数量）在服务端 `map_spawn_areas` 表，

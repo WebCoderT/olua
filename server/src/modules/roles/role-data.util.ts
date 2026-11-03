@@ -1,7 +1,6 @@
 import { BizCode } from "../../common/constants/biz-code";
 import { BizException } from "../../common/errors/biz.exception";
-import { ROLE_OCCUPATION_CODES, ROLE_SEX_CODES } from "../../shared/game-data";
-import { GUIDE_STEP_MAX } from "../../shared/guide-seed";
+import { GUIDE_STEP_MAX, ROLE_OCCUPATION_CODES, ROLE_SEX_CODES } from "../../common/constants/game-enums";
 
 /**
  * 允许的职业 / 性别

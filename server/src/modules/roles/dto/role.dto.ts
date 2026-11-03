@@ -1,6 +1,6 @@
 import { ApiProperty } from "@nestjs/swagger";
 import { RoleRow, RoleWithAccountRow } from "../../../database/rows";
-import { OCCUPATION_HINT, SEX_HINT } from "../../../shared/game-data";
+import { OCCUPATION_HINT, SEX_HINT } from "../../../common/constants/game-enums";
 import { compareRoleAttributesOfRole } from "../../combat/role-attribute-comparison";
 import { decodeStoredRoleData } from "../role-data.util";
 

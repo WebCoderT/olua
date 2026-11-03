@@ -52,7 +52,7 @@ import { SEX } from "../types/role";
  * 所以弹窗 / 战力计算 / 名牌外显 / 背包 / 图鉴零改动即读新值。
  *
  * #590 起称号 / 战魂 / 军衔 / 等级表是**整表重建**（与地图 #573 同款）：
- * 客户端没有本地数据兜底行（书写处在 server/src/shared/*-seed.ts），
+ * 客户端没有本地数据兜底行（书写处是数据库，出厂那份 = `server/data/config-sync.sql`），
  * 快照里没有的阶 / 级客户端就不存在 —— 「管理端删了一行」会如实反映。
  *
  * ## #604 起是**显式契约**，不再有「缺段跳过」
@@ -265,7 +265,7 @@ export function applyConfigSnapshot(snapshot: GameConfigSnapshot): void {
  * 覆写运行时参数（#605）：掉落手感 + 自动战斗与寻路
  *
  * 这两组原本写死在客户端 `configs/drop.ts` / `configs/autoBattle.ts` 里，运营改不了；
- * 现在服务端存一份（`shared/runtime-seed.ts` → `runtime_params` 表 → 管理端可改），
+ * 现在服务端存一份（`config-sync.sql` → `runtime_params` 表 → 管理端可改），
  * 进游戏拉一次快照就覆写到本地参数对象上。
  *
  * **覆写是「改字段」不是「换对象」**：消费方（DropManager / AutoBattle / DropScatter）

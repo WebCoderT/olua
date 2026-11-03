@@ -259,9 +259,10 @@ function regionOf(source, index) {
   ]);
 
   // —— 服务端那一侧真的在下发：快照带表现段 ——
+  // #655 起出厂数据在库里，这一段从仓储读（不再是常量数组），判据只看「字段有没有接上」
   const CLIENT_CONFIG_SERVICE = path.join(SERVER, "modules", "game-config", "client-config.service.ts");
   requirePatterns(CLIENT_CONFIG_SERVICE, [
-    { pattern: /monsterPresentations:\s*MONSTER_PRESENTATION_ROWS/, hint: "快照必须携带 monsterPresentations 段（客户端零副本，全靠这一段）" },
+    { pattern: /monsterPresentations:\s*[\w.]*monsterPresentations[\w.]*\.listAll\(\)/, hint: "快照必须携带 monsterPresentations 段（客户端零副本，全靠这一段）" },
   ]);
 }
 

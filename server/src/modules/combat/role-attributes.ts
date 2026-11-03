@@ -26,11 +26,10 @@
  * 面板与伤害分裂，且没有任何报错。覆盖层由 `RuntimeConfigService` 在启动时与管理端
  * 每次写操作后装载。
  *
- * 数据来源仍是同一份（客户端的 `client/assets/configs` → 生成物），只是**真相搬到了库里**：
- * 生成物回到「出厂值 + 兜底」的位置。
+ * 数据来源只有一处：数据库（出厂快照 `server/data/config-sync.sql`）。
  */
 
-import { COMBAT_RANGE_KEYS } from "../../shared/game-data.generated";
+import { COMBAT_RANGE_KEYS } from "../../common/constants/game-enums";
 import {
   combatWeightsOf,
   equipmentAttributesOf,
@@ -38,7 +37,7 @@ import {
   roleLevelAttributesOf,
   soulAttributesOf,
   titleAttributesOf,
-} from "../../shared/runtime-overrides";
+} from "../../common/runtime-config-cache";
 
 /** 汇总所需的那几个角色字段（角色存档里的原样字段名） */
 export interface RoleAttributeSource {

@@ -7,9 +7,8 @@
  * 三块内容各有归属：
  * - **生成物**（禁止手改）：`./endpoints` 接口方法 + `./models` 实体类型 + `./routes` 路径表，
  *   由 `tools/gen-api.cjs` 从服务端 OpenAPI 文档生成；
- * - **公共游戏数据**（也是生成物）：`./gameData` 引用三端共用的那一份快照
- *   （`server/src/shared/game-data.generated.ts`），职业 / 性别 / 装备 / 技能 / 物品的名字都在它那里；
- *   地图不在其中（#573：地图的玩法配置归服务端 `maps` 表，见 `./mapCatalog`）；
+ * - **游戏数据查表**：`./gameData` 登录后拉一次 `GET /admin/game-data` 存内存，装备 / 技能 /
+ *   物品的名字都在库里（#655 起代码里没有第二份副本）；地图名字走 `./mapCatalog`（`maps` 表）；
  * - **手写**：`./types` 里的错误模型、业务码、权限点、展示字典（服务端文档描述不了它们）；
  * - `./config` / `./http`：地址与请求实现，页面不直接碰。
  */
@@ -54,6 +53,7 @@ export {
   runtimeParamsApi,
   combatWeightsApi,
   guideStepsApi,
+  gameDataApi,
 } from "./endpoints";
 export { routes } from "./routes";
 export type * from "./models";
@@ -95,9 +95,11 @@ export {
   SKILL_TARGET_TYPE_LABELS,
   STATUS_SOURCE_LABELS,
 } from "./types";
-// 游戏数据：三端共用的那一份（生成物 + 查表函数）
+// 游戏数据查表（#655）：名字与 id 都在数据库，登录后拉一次快照，之后同步读
 export {
   avatarPath,
+  ensureGameData,
+  gameDataLoaded,
   drugIcon,
   drugIds,
   drugLevel,
@@ -109,9 +111,6 @@ export {
   equipmentName,
   equipmentSlot,
   equipmentSlotKeys,
-  EQUIPMENT_DISPLAY_NAMES,
-  EQUIPMENT_SLOTS,
-  EQUIPMENT_SLOT_OF,
   equipmentText,
   fashionDescription,
   fashionIcon,
@@ -121,7 +120,6 @@ export {
   itemIcon,
   itemIds,
   itemType,
-  ITEM_LABELS,
   itemText,
   levelCount,
   mapPreview,
@@ -143,7 +141,6 @@ export {
   skillIds,
   skillLevelReq,
   skillOwner,
-  SKILL_LABELS,
   skillText,
   slotLabel,
   soulAnimation,

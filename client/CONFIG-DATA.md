@@ -56,28 +56,28 @@
 
 | 快照段 | 落库函数 | 落到哪个客户端表 | 服务端出厂（唯一书写处） | 管理端页面 |
 |---|---|---|---|---|
-| `combatWeights` | `applyCombatWeights` | `game-config` 区 5 `combatCalc` | `shared/combat-seed.ts` → `combat_weights` 表 | `/combat-weights` |
-| `titles` | `applyTitleRows` | `game-config` 区 1 `titleLevels`（全量）+ `titleUpgradeChain`（渠道 = upgrade 的行，按 `upgradeOrder`） | `shared/title-seed.ts` → `titles` 表 | `/titles` |
-| `souls` | `applySoulRows` | `game-config` 区 2 `soulLevels`（全量）+ `soulUpgradeChain`（全量，按 `upgradeOrder`） | `shared/soul-seed.ts` → `souls` 表 | `/souls` |
-| `ranks` | `applyRankRows` | `game-config` 区 3 `rankLevels`（100 阶按阶就是链） | `shared/rank-seed.ts` → `ranks` 表 | `/ranks` |
-| `levels` / `growthScalars` | `applyLevelRows` / `applyGrowthScalars` | `game-config` 区 4 `levelMap`、区 6 `roleMaxLevel` | `shared/growth-seed.ts` | `/growth` |
-| `equipments` | `applyEquipments`（→ `applyEquipmentData`） | `configs/equipments.ts` 七张部位表 + `configs/items.ts` 的装备条目（基础件展开 555 变体） | `shared/equipment-seed.ts` → `equipments` 表 | `/equipments` |
-| `equipmentSlots` | `applyEquipmentSlots` | `configs/equipments.ts` `equipmentSlots` / `equipmentSlotOrder` | `shared/equipment-seed.ts` → `equipment_slots` 表 | `/equipment-settings` |
-| `equipmentMeta` | `applyEquipmentRules`（区 6）/ `applyEquipmentQualityLabels`（equipments） | `game-config` 区 6 的前后缀倍率 + 回收价曲线、`configs/equipments.ts` 的品质文案 | `shared/equipment-seed.ts` → `equipment_meta` 表 | `/equipment-settings` |
-| `items` | `applyItemRows`（→ `applyItemBaseData`，整表重建） | `game-config` 区 9 `materials` | `shared/item-seed.ts` → `items` 表 | `/items` |
-| `drugs` | `applyDrugRows`（→ `applyDrugData`，整表重建） | `game-config` 区 8 `drugs` | `shared/item-seed.ts` → `drugs` 表 | `/drugs` |
-| `monsters` | `applyMonsterRows` | `game-config` 区 16 `monsterRuntime` | `shared/monster-seed.ts` → `monsters` 表 | `/monsters` |
-| `monsterPresentations` | `applyMonsterPresentations` | `game-config` 区 16 `monsterResource` | `shared/monster-presentation.generated.ts` | `/monsters`（掉落弹窗另有摘要） |
-| `npcs` | `applyNpcRows` | `game-config` 区 10 `npcs` | `shared/npc-seed.ts` → `npcs` 表 | `/npcs` |
-| `quests` | `applyQuestRows` | `game-config` 区 11 `questData` + 区 12 `quests`（按行派生的注册表） | `shared/quest-seed.ts` → `quests` 表 | `/quests` |
-| `skills` | `applySkillRows`（→ `applySkillData`，整表重建） | `game-config` 区 13 `skillData` + `oeccupationSkills`（按行派生的职业映射） | `shared/skill-seed.ts` → `skills` 表 | `/skills` |
-| `statuses` | `applyStatusRows` | `game-config` 区 7 `statuses` | `shared/status-seed.ts` | `/statuses` |
-| `fashions` | `applyFashionRows`（→ `applyFashionData`，整表重建） | `game-config` 区 14 `fashionData`（空数组）+ 取源规则 | `shared/fashion-seed.ts` → `fashions` 表 | `/fashions` |
-| `mallPrices` / `mallSettings` | `applyMallPrices` / `applyMallPricing` | `game-config` 区 17（特殊价 + 统一价，客户端无出厂值） | `shared/mall-seed.ts` → `mall_settings`；特殊价只在表里 | `/mall-pricing` |
-| `maps` / `mapTypes` | `applyMapRows` | `game-config` 区 18 `maps`、`mapTypeGroups` | `shared/map-config.ts` → `maps` 表 | `/maps` |
+| `combatWeights` | `applyCombatWeights` | `game-config` 区 5 `combatCalc` | `config-sync.sql` → `combat_weights` 表 | `/combat-weights` |
+| `titles` | `applyTitleRows` | `game-config` 区 1 `titleLevels`（全量）+ `titleUpgradeChain`（渠道 = upgrade 的行，按 `upgradeOrder`） | `config-sync.sql` → `titles` 表 | `/titles` |
+| `souls` | `applySoulRows` | `game-config` 区 2 `soulLevels`（全量）+ `soulUpgradeChain`（全量，按 `upgradeOrder`） | `config-sync.sql` → `souls` 表 | `/souls` |
+| `ranks` | `applyRankRows` | `game-config` 区 3 `rankLevels`（100 阶按阶就是链） | `config-sync.sql` → `ranks` 表 | `/ranks` |
+| `levels` / `growthScalars` | `applyLevelRows` / `applyGrowthScalars` | `game-config` 区 4 `levelMap`、区 6 `roleMaxLevel` | `config-sync.sql` | `/growth` |
+| `equipments` | `applyEquipments`（→ `applyEquipmentData`） | `configs/equipments.ts` 七张部位表 + `configs/items.ts` 的装备条目（基础件展开 555 变体） | `config-sync.sql` → `equipments` 表 | `/equipments` |
+| `equipmentSlots` | `applyEquipmentSlots` | `configs/equipments.ts` `equipmentSlots` / `equipmentSlotOrder` | `config-sync.sql` → `equipment_slots` 表 | `/equipment-settings` |
+| `equipmentMeta` | `applyEquipmentRules`（区 6）/ `applyEquipmentQualityLabels`（equipments） | `game-config` 区 6 的前后缀倍率 + 回收价曲线、`configs/equipments.ts` 的品质文案 | `config-sync.sql` → `equipment_meta` 表 | `/equipment-settings` |
+| `items` | `applyItemRows`（→ `applyItemBaseData`，整表重建） | `game-config` 区 9 `materials` | `config-sync.sql` → `items` 表 | `/items` |
+| `drugs` | `applyDrugRows`（→ `applyDrugData`，整表重建） | `game-config` 区 8 `drugs` | `config-sync.sql` → `drugs` 表 | `/drugs` |
+| `monsters` | `applyMonsterRows` | `game-config` 区 16 `monsterRuntime` | `config-sync.sql` → `monsters` 表 | `/monsters` |
+| `monsterPresentations` | `applyMonsterPresentations` | `game-config` 区 16 `monsterResource` | `config-sync.sql` → `monster_presentation` 表（几何由 `client/tools/gen-monster-config.cjs` 量素材写回） | `/monsters`（掉落弹窗另有摘要） |
+| `npcs` | `applyNpcRows` | `game-config` 区 10 `npcs` | `config-sync.sql` → `npcs` 表 | `/npcs` |
+| `quests` | `applyQuestRows` | `game-config` 区 11 `questData` + 区 12 `quests`（按行派生的注册表） | `config-sync.sql` → `quests` 表 | `/quests` |
+| `skills` | `applySkillRows`（→ `applySkillData`，整表重建） | `game-config` 区 13 `skillData` + `oeccupationSkills`（按行派生的职业映射） | `config-sync.sql` → `skills` 表 | `/skills` |
+| `statuses` | `applyStatusRows` | `game-config` 区 7 `statuses` | `config-sync.sql` | `/statuses` |
+| `fashions` | `applyFashionRows`（→ `applyFashionData`，整表重建） | `game-config` 区 14 `fashionData`（空数组）+ 取源规则 | `config-sync.sql` → `fashions` 表 | `/fashions` |
+| `mallPrices` / `mallSettings` | `applyMallPrices` / `applyMallPricing` | `game-config` 区 17（特殊价 + 统一价，客户端无出厂值） | `config-sync.sql` → `mall_settings`；特殊价只在表里 | `/mall-pricing` |
+| `maps` / `mapTypes` | `applyMapRows` | `game-config` 区 18 `maps`、`mapTypeGroups` | `config-sync.sql` → `maps` 表 | `/maps` |
 | `uiEffects` | `applyUiEffectRows` | `game-config` 区 19 `uiEffects`（升级特效 `upgrade` + 掉落光效 `light_1`…`light_6` 七行） | `ui_effects` 表 | `/ui-effects` |
-| `runtimeParams` | `applyRuntimeParams`（→ `applyDropRuntime` / `applyAutoBattleParams`） | `configs/drop.ts` `dropRuntime`（对象引用不变）、`configs/autoBattle.ts` `autoBattle`（只覆写行为参数，`routeLine` 样式不动） | `shared/runtime-seed.ts` → `runtime_params` 表 | `/runtime-params` |
-| `guideSteps` | `applyGuideSteps`（整表替换） | `configs/guide.ts` `guideSteps`（表现层：遮罩配色 / 节点名 / 排版仍在客户端） | `shared/guide-seed.ts` → `guide_settings` 表 | `/guide-steps` |
+| `runtimeParams` | `applyRuntimeParams`（→ `applyDropRuntime` / `applyAutoBattleParams`） | `configs/drop.ts` `dropRuntime`（对象引用不变）、`configs/autoBattle.ts` `autoBattle`（只覆写行为参数，`routeLine` 样式不动） | `config-sync.sql` → `runtime_params` 表 | `/runtime-params` |
+| `guideSteps` | `applyGuideSteps`（整表替换） | `configs/guide.ts` `guideSteps`（表现层：遮罩配色 / 节点名 / 排版仍在客户端） | `config-sync.sql` → `guide_settings` 表 | `/guide-steps` |
 
 ### 3.2 三条成长线的「升级路径」（后台配，客户端照做）
 
@@ -204,15 +204,15 @@
 尺寸取素材、AI 节奏与移动手感），判据见 4.2。至此 #603 的「运营数据进库」全部收口。
 
 > 第九域的三层切分值得记住：**显示与规则**进 `equipments` / `equipment_slots` / `equipment_meta` 三张表；
-> **八项战斗属性**不进表，由 `growth-seed.equipmentStats(level, slot)` 公式算（#590）；
+> **八项战斗属性**在 `equipment_variants` 表里逐条写明（#655：555 行，运行时零现算，回收价也在这张表）；
 > **几何**（内观锚点 / 外观 8 向）在表里是**出厂值**，工作台结果在 `equip_aligns` / `equip_in_aligns`、每次进图另发。
 
 > 注：成就（`achievements`）虽然也在快照里，但客户端**不落表** —— 成就面板走
 > `AchievementStore` + `/achievements/me`（进度与达成状态是玩家数据，不是配置）。这一段属于
 > 「发了但没人读」，留着是为了以后要做「成就配置改动即时生效」时不用再改服务端。
 
-**每一域的验收口径都一样**：重新生成 `server/src/shared/game-data.generated.ts` 必须**逐字节相同**
-（或差异只在一句注释），否则说明数据在搬迁中被悄悄改了。
+**验收口径**：出厂快照 `server/data/config-sync.sql` 必须与库**逐行相同**（`make config-check`）——
+不相等就说明有人在库里改了配置却没重导快照，别人 `config-import` 之后会回到旧值。
 
 ## 七、为什么 21 个域合成一个文件（#626）
 
@@ -231,10 +231,10 @@
    （`audit-world-authority` 的 `regionOf(source, 15)`）。**新增函数要放进它自己的分区里**，
    放到上一个区的尾巴上照样能编译，但按区取源码的守点会读不到。
 
-同步改动的工具链（都是「换一个 require 名字」级别，语义没变）：
-`client/tools/lib/configs-sandbox.cjs`（单测垫片）、`tools/lib/client-config-compile.cjs`（生成器编译管线）、
-`tools/gen-shared-data.cjs`（`SOURCE_FILES` 只剩 4 个入口文件）、`tools/audit-snapshot-contract.cjs`（契约文件路径）、
+#655 之后这条链上已经没有「生成物」了：数据只在库 → `config-sync.sql` → 服务端启动灌库 → 快照接口 →
+客户端整表重建。相关工具是 `client/tools/lib/configs-sandbox.cjs`（单测垫片，喂的是快照）、
+`tools/lib/snapshot-sql.cjs`（唯一的快照解析实现）、`tools/audit-snapshot-contract.cjs`（契约守点）、
 `tools/audit-world-authority.cjs`（按区取怪物数值字段）。
 
 **验收**：`make client-check` 0 错、`make client-test` 与合并前基线一致（55 过 / 4 红，红全是素材未入库）、
-`make audit` 15 条全绿；`gen-shared-data` 与 `gen-monster-config` 的产物**逐字节不变**。
+`make audit` 15 条全绿；`make config-check` 通过（快照与库逐行一致）。

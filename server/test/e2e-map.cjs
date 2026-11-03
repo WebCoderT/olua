@@ -289,8 +289,8 @@ async function main() {
     );
     checkEqual(
       [...new Set(sources.map((item) => item.origin))].sort().join(","),
-      "config,db,snapshot",
-      "来源分三类：客户端资源 / 服务端快照 / 服务端库表",
+      "config,db",
+      "来源分两类：客户端资源 / 服务端库表（#655 起不再有「生成快照」那一类）",
     );
     check(
       sources

@@ -1,8 +1,8 @@
 import { Injectable, Logger, OnApplicationBootstrap, OnApplicationShutdown } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import { MONSTER_AI } from "../../shared/game-data.generated";
-import { MONSTER_PRESENTATION_ROWS } from "../../shared/monster-presentation.generated";
+import { MonsterPresentationRepository } from "../../database/repositories/monster-presentation.repository";
 import { MonsterRepository } from "../../database/repositories/monster.repository";
+import { RuntimeParamsRepository } from "../../database/repositories/runtime-params.repository";
 import { MonsterSkillRepository } from "../../database/repositories/monster-skill.repository";
 import { SkillRepository } from "../../database/repositories/skill.repository";
 import { StatusRepository } from "../../database/repositories/status.repository";
@@ -13,19 +13,46 @@ import { RolesService } from "../roles/roles.service";
 import { WorldService, worldKey, type WorldMonster } from "../world/world.service";
 import type { RealtimeMonsterAiEntry, RealtimeMonsterCast, RealtimeMonsterHit } from "./realtime.protocol";
 
-/** 怪物 AI 参数（生成物 MONSTER_AI：普攻间隔 / 普攻距离 / 待机游走节奏，与客户端同源） */
-const AI = MONSTER_AI as unknown as {
+/**
+ * 怪物 AI 参数（`runtime_params.monster_ai` 列，管理端「运行时参数」页可改）
+ *
+ * 这一组值决定「怪出手多快、走多快、游走多远」—— 它们是**运营数据**，出厂值在
+ * `server/data/config-sync.sql` 里，代码不存第二份。
+ */
+interface MonsterAiParams {
   attackInterval: number;
   attackRange: number;
+  /** 施法硬直兜底（毫秒）：技能没配 castLockMs 时用它 */
   attackActionTime: number;
   idleMoveInterval: [number, number];
   idleMoveDuration: [number, number];
   idleMoveSpeedScale: number;
   wanderRadius: number;
+}
+
+/**
+ * 表里缺列 / 坏列时的**最小可用**参数
+ *
+ * 这不是「出厂值的第二份副本」（出厂值在 SQL 快照里）：它只在 `runtime_params.monster_ai`
+ * 读不出来时兜住进程 —— 全部取 0 会让怪物每 tick 出手一次（打爆玩家），比不跑更糟。
+ * 读到兜底值时 `refreshConfig` 会 warn 一次，让人去修数据。
+ */
+const FALLBACK_AI: MonsterAiParams = {
+  attackInterval: 2000,
+  attackRange: 60,
+  attackActionTime: 400,
+  idleMoveInterval: [4000, 9000],
+  idleMoveDuration: [300, 800],
+  idleMoveSpeedScale: 0.5,
+  wanderRadius: 60,
 };
 
-/** 怪物表现参数（#588：monster-presentation 生成物，aggressive / detectRange / moveSpeed 驱动权威 AI） */
-const PRESENTATION_BY_KEY = new Map(MONSTER_PRESENTATION_ROWS.map((row) => [row.id, row]));
+/** 一只怪的 AI 视觉参数（`monster_presentation` 表的一行，摊平成 AI 用得上的三个字段） */
+interface MonsterAiConfig {
+  aggressive: boolean;
+  detectRange: number;
+  moveSpeed: number;
+}
 
 /**
  * 技能 / 挂载 / 状态的读库缓存时长（毫秒）
@@ -50,7 +77,7 @@ interface CastPlan {
   cooldown: number;
   /** 施法距离（像素；状态型忽略距离） */
   distance: number;
-  /** 施法硬直（毫秒）：0 = 回落到普攻动作时长 AI.attackActionTime */
+  /** 施法硬直（毫秒）：0 = 回落到普攻动作时长 this.ai.attackActionTime */
   castLockMs: number;
   /** 伤害系数（取等级 1 的第一条；怪物不练级） */
   baseType: string;
@@ -102,6 +129,32 @@ interface PlayerPosition {
   y: number;
   hp: number;
   updatedAt: number;
+}
+
+/** 读一列 JSON 对象（坏数据返回 null，由调用方决定兜底） */
+function parseJsonObject(text: string | undefined): Record<string, unknown> | null {
+  if (!text) return null;
+  try {
+    const parsed: unknown = JSON.parse(text);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** 正数取值（0 / 负数 / 非数字 → 兜底） */
+function positiveOr(value: unknown, fallback: number): number {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+/** `[min, max]` 区间取值（两端都要是有限数字，且 min ≤ max） */
+function rangeOr(value: unknown, fallback: [number, number]): [number, number] {
+  if (!Array.isArray(value) || value.length < 2) return fallback;
+  const min = Number(value[0]);
+  const max = Number(value[1]);
+  if (!Number.isFinite(min) || !Number.isFinite(max) || min < 0 || max < min) return fallback;
+  return [min, max];
 }
 
 function randomBetween(range: [number, number]): number {
@@ -170,7 +223,7 @@ function buildCastPlan(skill: SkillRow, priority: number, cooldownOverride: numb
  *   已经在身上的状态不重复放（等它到期）；
  * - **距离**：伤害型要够得着（技能 distance，钳到普攻距离下限）；状态型不看距离 ——
  *   追击路上就能给自己上 buff；
- * - **硬直**：`castLockMs`（0 回落 `AI.attackActionTime`）期间不移动不出手，
+ * - **硬直**：`castLockMs`（0 回落 `this.ai.attackActionTime`）期间不移动不出手，
  *   同时把普攻间隔一并推后（普攻与施法共用同一个「出手」窗口）；
  * - **状态生效**：`attackMultiplier` 乘伤害、`defenseMultiplier` 乘被玩家打时的防御
  *   （`CombatSettlementService` 通过 `defenseMultiplierOf` 取），到期惰性清理。
@@ -212,7 +265,13 @@ export class MonsterAiService implements OnApplicationBootstrap, OnApplicationSh
   private skillPlans = new Map<string, CastPlan[]>();
   /** 状态行缓存（#372）：statusId → 行（算状态修正时不再查库） */
   private statusRows = new Map<string, StatusRow>();
+  /** 怪物表现参数缓存（#655 起读 `monster_presentation` 表，与技能缓存同一个 TTL） */
+  private presentationByKey = new Map<string, MonsterAiConfig>();
+  /** 怪物 AI 参数（`runtime_params.monster_ai`，同一 TTL） */
+  private ai: MonsterAiParams = FALLBACK_AI;
   private skillCacheLoadedAt = 0;
+  /** 只在第一次读到兜底参数时喊一次，别每 tick 刷日志 */
+  private aiFallbackWarned = false;
 
   /**
    * 广播出口（发给谁、怎么发是通道的事）。RealtimeService 启动时接线；
@@ -234,6 +293,8 @@ export class MonsterAiService implements OnApplicationBootstrap, OnApplicationSh
     private readonly skillsRepo: SkillRepository,
     private readonly statusesRepo: StatusRepository,
     private readonly monsterSkillsRepo: MonsterSkillRepository,
+    private readonly presentationRepo: MonsterPresentationRepository,
+    private readonly runtimeParamsRepo: RuntimeParamsRepository,
   ) {}
 
   onApplicationBootstrap(): void {
@@ -360,7 +421,7 @@ export class MonsterAiService implements OnApplicationBootstrap, OnApplicationSh
           runtimes.delete(monster.instanceId);
           continue;
         }
-        const config = PRESENTATION_BY_KEY.get(monster.monsterKey);
+        const config = this.presentationByKey.get(monster.monsterKey);
         if (!config) continue;
         const runtime = this.runtimeOf(monster);
         this.stepMonster(runtime, monster, config, players, now, key);
@@ -422,11 +483,11 @@ export class MonsterAiService implements OnApplicationBootstrap, OnApplicationSh
       const distance = Math.hypot(position.x - runtime.x, position.y - runtime.y);
       // 技能优先（#372）：进入战斗才有意义 —— 没有敌人时给自己上 buff 没有价值
       if (this.tryCast(runtime, monster, distance, now, mapKey)) return;
-      if (distance <= AI.attackRange) {
+      if (distance <= this.ai.attackRange) {
         // 站定出手：按普攻间隔结算一次
         runtime.movingNow = false;
         if (now >= runtime.nextAttackAt) {
-          runtime.nextAttackAt = now + AI.attackInterval;
+          runtime.nextAttackAt = now + this.ai.attackInterval;
           const hit = this.attack(monster, runtime.target);
           if (hit) this.pushHit(mapKey, hit);
         }
@@ -442,12 +503,12 @@ export class MonsterAiService implements OnApplicationBootstrap, OnApplicationSh
 
     // 没目标：待机游走（停留点 + 活动半径，与客户端 stayIdle / wanderStep 同口径）
     if (now >= runtime.nextIdleMoveAt && runtime.idleMoveEndAt <= now) {
-      runtime.nextIdleMoveAt = now + randomBetween(AI.idleMoveInterval);
-      runtime.idleMoveEndAt = now + randomBetween(AI.idleMoveDuration);
+      runtime.nextIdleMoveAt = now + randomBetween(this.ai.idleMoveInterval);
+      runtime.idleMoveEndAt = now + randomBetween(this.ai.idleMoveDuration);
       const offsetX = runtime.x - runtime.anchorX;
       const offsetY = runtime.y - runtime.anchorY;
       const fromAnchor = Math.hypot(offsetX, offsetY);
-      if (fromAnchor > AI.wanderRadius) {
+      if (fromAnchor > this.ai.wanderRadius) {
         // 离停留点超过活动半径：往回走
         runtime.idleMoveDirectionX = -offsetX / fromAnchor;
         runtime.idleMoveDirectionY = -offsetY / fromAnchor;
@@ -458,7 +519,7 @@ export class MonsterAiService implements OnApplicationBootstrap, OnApplicationSh
       }
     }
     if (runtime.idleMoveEndAt > now) {
-      const speed = config.moveSpeed * AI.idleMoveSpeedScale;
+      const speed = config.moveSpeed * this.ai.idleMoveSpeedScale;
       runtime.x += runtime.idleMoveDirectionX * ((speed * this.tickMs()) / 1000);
       runtime.y += runtime.idleMoveDirectionY * ((speed * this.tickMs()) / 1000);
       runtime.movingNow = true;
@@ -484,7 +545,7 @@ export class MonsterAiService implements OnApplicationBootstrap, OnApplicationSh
     for (const plan of plans) {
       if (now < (runtime.skillReadyAt.get(plan.skillId) ?? 0)) continue;
       // 伤害型要够得着；状态型不看距离（追击路上也能给自己上 buff）
-      if (plan.category === "0" && distance > Math.max(plan.distance, AI.attackRange)) continue;
+      if (plan.category === "0" && distance > Math.max(plan.distance, this.ai.attackRange)) continue;
       if (plan.category === "2" && runtime.statuses.has(plan.statusId) && (runtime.statuses.get(plan.statusId) ?? 0) > now) continue;
       this.castSkill(runtime, monster, plan, now, mapKey);
       return true;
@@ -503,9 +564,9 @@ export class MonsterAiService implements OnApplicationBootstrap, OnApplicationSh
     runtime.movingNow = false;
     runtime.skillReadyAt.set(plan.skillId, now + plan.cooldown * 1000);
     // 硬直：配置值优先；0 回落到普攻动作时长（服务端不知道客户端动画有多长）
-    runtime.castEndAt = now + (plan.castLockMs > 0 ? plan.castLockMs : AI.attackActionTime);
+    runtime.castEndAt = now + (plan.castLockMs > 0 ? plan.castLockMs : this.ai.attackActionTime);
     // 普攻与施法共用同一个出手窗口：技能放完不会立刻接一记普攻
-    runtime.nextAttackAt = Math.max(runtime.nextAttackAt, now + AI.attackInterval);
+    runtime.nextAttackAt = Math.max(runtime.nextAttackAt, now + this.ai.attackInterval);
 
     const cast: RealtimeMonsterCast = { instanceId: monster.instanceId, skillId: plan.skillId };
     if (plan.category === "2") {
@@ -588,17 +649,31 @@ export class MonsterAiService implements OnApplicationBootstrap, OnApplicationSh
 
   //#endregion
 
-  //#region 技能缓存（#372：三张表读库，1 秒 TTL）
+  //#region 配置缓存（#372 技能 / #655 怪物表现与 AI 参数：都读库，1 秒 TTL）
 
   /**
-   * 加载技能 / 状态 / 挂载三张表的快照（TTL 内直接返回）
+   * 加载配置快照（TTL 内直接返回）：技能 / 状态 / 挂载 + 怪物表现 + AI 参数
    *
-   * 顺序排序在构建时完成：**状态型整体先于伤害型**（buff 先上），同类型按 priority 升序，
+   * 五张表都不大（技能 15 / 挂载若干 / 表现 220 行 / 参数 1 行），但 AI 每 tick 每只怪
+   * 都要用它们 —— 1 秒 TTL 让「管理端改完最多 1 秒生效」，同时把查询成本压到可忽略。
+   *
+   * 技能顺序在构建时完成：**状态型整体先于伤害型**（buff 先上），同类型按 priority 升序，
    * 再按技能 id 兜底 —— 保证「同一只怪两轮 tick 里放技能的次序」是确定的。
    */
   private refreshSkillCache(now: number): void {
     if (now - this.skillCacheLoadedAt < SKILL_CACHE_TTL_MS) return;
     this.skillCacheLoadedAt = now;
+
+    const presentation = new Map<string, MonsterAiConfig>();
+    for (const row of this.presentationRepo.listAll()) {
+      presentation.set(row.id, {
+        aggressive: Number(row.aggressive) === 1,
+        detectRange: Number(row.detect_range) || 0,
+        moveSpeed: Number(row.move_speed) || 0,
+      });
+    }
+    this.presentationByKey = presentation;
+    this.ai = this.readAiParams();
 
     const skills = new Map<string, SkillRow>();
     for (const row of this.skillsRepo.listAll()) skills.set(row.id, row);
@@ -622,6 +697,40 @@ export class MonsterAiService implements OnApplicationBootstrap, OnApplicationSh
       list.sort((a, b) => (a.category === "2" ? 0 : 1) - (b.category === "2" ? 0 : 1) || a.priority - b.priority || a.skillId.localeCompare(b.skillId));
     }
     this.skillPlans = plans;
+  }
+
+  /**
+   * 读 `runtime_params.monster_ai` 这一列（JSON）
+   *
+   * 缺列 / 坏 JSON / 缺键都退回 `FALLBACK_AI` 并 warn 一次：这一组值直接乘在
+   * 「怪物每秒走多远、多久打一下」上，取 0 会让战斗彻底失衡。
+   */
+  private readAiParams(): MonsterAiParams {
+    const raw = this.runtimeParamsRepo.get()?.monster_ai;
+    const parsed = parseJsonObject(raw);
+    const next: MonsterAiParams = {
+      attackInterval: positiveOr(parsed?.attackInterval, FALLBACK_AI.attackInterval),
+      attackRange: positiveOr(parsed?.attackRange, FALLBACK_AI.attackRange),
+      attackActionTime: positiveOr(parsed?.attackActionTime, FALLBACK_AI.attackActionTime),
+      idleMoveInterval: rangeOr(parsed?.idleMoveInterval, FALLBACK_AI.idleMoveInterval),
+      idleMoveDuration: rangeOr(parsed?.idleMoveDuration, FALLBACK_AI.idleMoveDuration),
+      idleMoveSpeedScale: positiveOr(parsed?.idleMoveSpeedScale, FALLBACK_AI.idleMoveSpeedScale),
+      wanderRadius: positiveOr(parsed?.wanderRadius, FALLBACK_AI.wanderRadius),
+    };
+    // 判据是「这一列里没有这个键」，不是「算出来的值等于兜底值」—— 出厂值本来就等于兜底
+    // （攻击间隔 2000 / 攻击距离 60 / 漫游速度倍率 0.5），拿值相等当判据会让每次启动都喊缺参数，
+    // 喊上几遍之后这一行 warn 就没人看了。
+    const fallbackFields = (Object.keys(FALLBACK_AI) as Array<keyof MonsterAiParams>).filter(
+      (key) => parsed === null || parsed[key] === undefined,
+    );
+    if (fallbackFields.length > 0 && !this.aiFallbackWarned) {
+      this.aiFallbackWarned = true;
+      this.logger.warn(
+        `runtime_params.monster_ai 缺这些参数，已用最小可用值兜底：${fallbackFields.join(", ")}` +
+          "（跑 make config-import 恢复出厂值）",
+      );
+    }
+    return next;
   }
 
   //#endregion
@@ -649,7 +758,7 @@ export class MonsterAiService implements OnApplicationBootstrap, OnApplicationSh
       idleMoveEndAt: 0,
       idleMoveDirectionX: 0,
       idleMoveDirectionY: 0,
-      nextIdleMoveAt: Date.now() + randomBetween(AI.idleMoveInterval),
+      nextIdleMoveAt: Date.now() + randomBetween(this.ai.idleMoveInterval),
       sentX: monster.x,
       sentY: monster.y,
       sentMoving: false,

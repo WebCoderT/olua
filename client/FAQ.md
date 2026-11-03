@@ -131,9 +131,9 @@ Cocos 的 `TiledMap` 默认把瓦片画在「地图中心为原点」的本地�
 
 ### 掉落想怎么调？
 
-掉落优先级是 `monster_drops` 每怪独立掉落表 > `drop_tables` 里被引用的具名表（common/elite/boss）> 兜底 `default` 表。**三张表全在服务端**：出厂书写处是 `server/src/shared/monster-drop-seed.ts`（每怪）与 `drop-seed.ts`（具名 + 兜底），线上改走管理端「掉落配置」；客户端只剩 `configs/drop.ts` 的 `dropRuntime` 手感参数。
+掉落优先级是 `monster_drops` 每怪独立掉落表 > `drop_tables` 里被引用的具名表（common/elite/boss）> 兜底 `default` 表。**三张表全在服务端**（出厂那份 = `server/data/config-sync.sql`，新装库首启灌进去），线上改走管理端「掉落配置」；客户端只剩 `configs/drop.ts` 的 `dropRuntime` 手感参数。
 
-- 改某只怪掉什么、掉多重、掉几件：改 `server/src/shared/monster-drop-seed.ts` 里该 key 的 `entries`（每条独立配 `weight` 权重 / `chance` 概率 / `count` 数量区间）与 `picks`（改完重跑 `node tools/gen-shared-data.cjs` 并重新 seed；线上直接去管理端改）。`picks` 支持数字（固定件数）或 `[最小, 最大]` 区间（例 `[1, 10]` = 本次掉 1~10 件；**每次抽取独立随机、可重复命中同一条目**，重复的会合并数量，默认按定位 普通 `[1,3]` / 精英 `[2,6]` / BOSS `[3,10]`）
+- 改某只怪掉什么、掉多重、掉几件：管理端「掉落配置」改该怪那一行的 `entries`（每条独立配 `weight` 权重 / `chance` 概率 / `count` 数量区间）与 `picks`。`picks` 支持数字（固定件数）或 `[最小, 最大]` 区间（例 `[1, 10]` = 本次掉 1~10 件；**每次抽取独立随机、可重复命中同一条目**，重复的会合并数量，默认按定位 普通 `[1,3]` / 精英 `[2,6]` / BOSS `[3,10]`）。**想让这个改动进「出厂值」**（别人 `make config-import` 之后也是这套），改完库再 `make config-export` 重导快照。
 - 掉落物散落：`ui/utils/drop/DropScatter.scatterDropPositions` 以落点为圆心按最小间距 `configs/drop.dropRuntime.scatterMinDistance`(52px，= 图标 40 + 12 留白) 一圈圈贪心铺开，保证**任意两件掉落物都不重叠**（世界坐标无额外缩放，圆即屏幕上的圆）；件数越多圈数越大（10 件最外圈半径 ≈ 102）
 - 地面掉落名：装备拼成「前缀 + 名称 + 后缀」三段并**分段着色**（前缀/名称用前缀色、后缀用后缀色），取段与取色**与详情弹窗同走 `configs/equipments.getEquipmentNameParts`** —— 两处永远一致，不各写一份色表；非装备仍单行白字，可叠加物品追加「x{数量}」段。几何（图标尺寸 / 名称字号行高 / 段间距 / 名称与数量颜色）全在 `configs/layout/hud.dropItemLayout`；名称行按内容宽度自适应（`Layout` 横向 CONTAINER + 各段 `Overflow.NONE`）并在图标正下方居中
 - 装备条目口径：取「level ≤ 怪物等级且不超过 10 级、每部位最多 2 档」的基础装备，每件展开全部 15 个前后缀变体（`_p前缀s后缀`，普通的·人级沿用基础 id），权重按前后缀稀有度衰减（前缀 ×[1, 0.7, 0.45, 0.25, 0.12]、后缀 ×[1, 0.5, 0.22]、部位 ×1 / 0.9 / 0.8）
@@ -165,7 +165,7 @@ Cocos 的 `TiledMap` 默认把瓦片画在「地图中心为原点」的本地�
 - **自查（改完跑一下）**：
   - `node ../tools/audit-config-leak.cjs` —— 报出「散落在 ui/ 里的可配置项」+ 反向检查「代码引用的文案 key 是否都已在 `configs/texts` 登记」。开发期日志（`console.*`）与内部节点名不算外泄，前者直接跳过，后者登记在 `../tools/config-leak-allowlist.json` 并写明原因
   - `node tools/test-texts.cjs` —— 文案模板单测（占位符替换、漏参保留、未登记 key 兜底）
-  - `node ../tools/gen-shared-data.cjs` —— 改的是**三端共用**的那几张表（等级 / 战斗 / 战魂 / 称号 / 军衔 / 装备 / 技能 / 物品 / 地图）时跑它，把公共数据重生成一次：服务端与管理端读的就是它，不跑会被 `make audit-shared-data` 逮住
+  - `make config-export` —— 在管理端改完数据后跑它，把当前库里的 32 张配置表整份重写成 `server/data/config-sync.sql`（提交这个文件 = 同步给别人；`make config-check` 会告诉你快照有没有落后于库）
 - **改配置不生效？** 先看这条是不是「配置改了但代码里又存了一份」：审计脚本的第 1 段就是专门抓这个的，报 0 处才算收敛
 
 ### 背包「一键整理」的排序想改（升序 / 部位先后 / 谁排前面）？
@@ -182,8 +182,7 @@ Cocos 的 `TiledMap` 默认把瓦片画在「地图中心为原点」的本地�
 
 ### 背包「一键回收」的价想调（太贵/太便宜、想单独改某一件）？
 
-- **价是「等级曲线 × 前后缀倍率」**，曲线出厂在 `server/src/shared/equipment-seed.ts` 的 `EQUIPMENT_RECYCLE_CURVE_SEED`（6 档分段线性，和角色/怪物同一种曲线；管理端 `/equipment-settings` 可改），客户端读快照里的那一份（`configs/game-config.ts` 区 6 的 `equipmentRecyclePrice`）：基础价按装备自己的 `level` 取（60 级约 4 万），前后缀变体再乘 `equipmentPrefixRates × equipmentSuffixRates`（超神·神级 = 基础价 × 4.2）。想整体调价**只改那一段曲线**
-- **想给某件装备单独定价**：在它的条目里写 `recyclePrice`（覆盖曲线生成值，与「战斗属性可写可不写」同一套路）。基础件与它的 14 个变体都按这个基础价缩放
+- **价就写在那件装备自己那一行**：`equipment_variants.sell_price`（管理端「装备变体」页可改，555 行逐条配）。原本「等级曲线 × 前后缀倍率」的算法在 #655 已下架 —— 现在超神·神级为什么比普通·人级贵，是因为它那一行的 `sell_price` 数值本身就大，不再由倍率乘出来
 - **货币是绑定元宝**（`role.bindGold`，与战魂升级同一个钱包），回收后角色信息栏余额立即刷新；装备详情弹窗（鼠标悬停）里会显示这件装备的「回收价 N 绑定元宝」
 - **只回收背包里的装备**：身上穿着的槽位一律不动；药品/材料/解析不出配置的 id 一概不碰、连格子引用都不换（`configs/items.recycleBagEquipmentGrid` 是纯函数，守着「行列不变 / 非装备一件不动」两条不变量）
 - **结算在服务端**（#397）：本地只把「要卖的装备清单」报给 `role.sellGoods`，价格读共享快照的出售价表、扣物与入账都在服务端，返回的 bag / bindGold / revision 直接覆盖本地 —— 客户端既不能报价，也改不出钱；服务端整单结算，任一条不合法都不落库
@@ -256,9 +255,9 @@ Cocos 的 `TiledMap` 默认把瓦片画在「地图中心为原点」的本地�
 
 - **入口**：角色信息弹窗右下的「称 号」按钮（唯一入口，**不走 NPC**）；称号升级弹窗与战魂弹窗同构（左等级列表 / 中名牌动画与信息 / 右属性 + 绑定元宝 + 升级按钮），但没有「外显」勾选框
 - **显示**：解锁称号（升到 1 阶）后名牌动画**常显**在角色头顶，节点挂在**头部信息栏容器**里（与角色名称/血条同一个 FlexCol，`RoleDisplay.updateTitleShow`）：位置由该容器的纵向布局自动排列（插在最上 = 排在名称之上），代码不手动定位、也**不缩放**（按素材原始尺寸显示）；插入位置与占位尺寸见 `configs/layout/hud.roleShowLayout.title`（`siblingIndex` / `size`）。名牌取代了头部信息栏里原来写死的「- 战神 * 女武神 -」文字占位；未激活时不显示
-- **数据**：出厂在服务端 `server/src/shared/title-seed.ts`（管理端 `/titles` 可改），客户端只收快照（`configs/game-config.ts` 区 1 的 `titleLevels`）—— 34 个帧目录（resources/titles 全登记）按强度排成 1~34 阶：sfx_13009~13020 江湖系（factor 1）→ 13031~13041 军阶系（1.15）→ 13060~13070「我能打」搞怪系（1.3）；名称与素材画面上烙的字一致
-- **属性曲线**：与战魂同一套做法 —— 每阶映射一个「等效角色等级」，取裸属性再打 `titleGrowth.rate`（0.3，弱于战魂的 0.5）× 系列 factor 折；靠的是服务端 `growth-seed.ts` 的等级曲线（管理端 `/growth`），改它称号强度自动跟着走
-- **价格曲线**：升到 N 阶 = `titleGrowth.priceBase`（200）× N² 绑定元宝（战魂是 300 × N²，见 `titleUpgradePrice`）；想整体调贵贱只改这两个数
+- **数据**：出厂在库里 `titles` 表（`server/data/config-sync.sql`，管理端「称号配置」页可改），客户端只收快照（`configs/game-config.ts` 区 1 的 `titleLevels`）—— 34 个帧目录（resources/titles 全登记）按强度排成 1~34 阶：sfx_13009~13020 江湖系（factor 1）→ 13031~13041 军阶系（1.15）→ 13060~13070「我能打」搞怪系（1.3）；名称与素材画面上烙的字一致
+- **属性逐阶写死在那一行**：每阶八项（`max_hp` / `hp_recover` / 三系攻防）都是自己那一行的列值，#655 起不再由「等效角色等级 × `titleGrowth.rate`」现算 —— 想调哪一阶的强度就改哪一行，改 N 阶不会牵动 N+1
+- **价格也是逐行的**：升到 N 阶要花的绑定元宝 = 那一行的 `bind_gold`（服务端按目标行取，客户端报什么都不算数）；想整体调贵贱就逐行改，或让运营在管理端「称号成长列表」里改价
 - **存档**：旧档缺 `title` 字段自动补 0（`StorageManager.ensureRoleDefaults`）；升级走 `StorageManager.upgradeTitle`，属性与战斗力即时重算，头顶名牌同步刷新
 - **预加载**：进图前 `PreloadManager` 把**当前称号**的帧目录一起预载（未激活跳过），名牌进图即出现
 - 回归单测：`node tools/test-title.cjs`（等级序列对磁盘、属性/价格曲线逐级复算、素材守卫、接线与「占位文字称号已移除」断言）
@@ -267,19 +266,19 @@ Cocos 的 `TiledMap` 默认把瓦片画在「地图中心为原点」的本地�
 
 回血是**一项普通属性**（`hpRecover`，单位「点/秒」），与最大生命同级存在角色身上，五个来源相加在**服务端**完成并经 `roleUpdate` 帧下发（客户端不再自己算）：
 
-- **强度按最大生命比例派生**：等级裸回血 = 最大生命 × `hpRecoverRate`（`server/src/shared/growth-seed.ts` 的 `ATTRIBUTE_RANGE.hpRecoverRate`，管理端 `/growth` 的标量键 `attributeRange.hpRecoverRate`；默认 `0.01` = 每秒回 1%）。**想整体调快慢，只改这一个数** —— 装备 / 战魂 / 称号 / 军衔的回血都是各自乘自己那套折扣算出来的，会跟着同比例变化。
-- **只有防御部位装备加回血**：`server/src/shared/growth-seed.ts` 的 `EQUIPMENT_SLOT_SHARE` 的 `recover` 列（衣服 40 / 头盔 20 / 腰带 20 / 鞋子 20，合计 100；武器与首饰为 0）。穿满四个防御部位 ≈ 裸回血的 `equipmentGrowth.setPowerRate`（2）倍。这里**故意不做「保底 1 点」**：低等级防具只加几十点血，凑不出 1 点/秒是正常的；强行保底会让 1 级穿满四件防具的角色白拿 4 点/秒（同级怪打人约 7 点/秒），前期直接无敌。
-- **战魂 / 称号 / 军衔**：和它们的其它属性同一套算法（`rate × 系列/大段 factor`），因此回血与最大生命**同涨同落**。
+- **每一处回血都是库里的一列**（#655 起不再有换算率）：等级裸回血在 `role_levels.hp_recover`（管理端「角色等级」页，60 行逐级），装备在 `equipment_variants.hp_recover`（「装备变体」页，555 行逐件），战魂 / 称号 / 军衔各自表里的 `hp_recover`（「战魂 / 称号 / 军衔」页）。**想调哪一级就是改那一行**，不会牵动别的等级 —— 原来那个 `attributeRange.hpRecoverRate` 标量在 #655 之后已经没有任何代码在读，纯属「改了没反应」，别去动它。
+- **只有防御部位装备加回血**：这是出厂数据的选择（衣服 / 头盔 / 腰带 / 鞋子那几行 `hp_recover` > 0，武器与首饰是 0），不是代码里的规则 —— 想让哪个部位给，直接改那一行。这里**故意不做「保底 1 点」**：低等级防具只加几十点血，凑不出 1 点/秒是正常的；强行保底会让 1 级穿满四件防具的角色白拿几点/秒，前期直接无敌。
+- **战魂 / 称号 / 军衔**：同样逐阶配在各自表里，因此回血与最大生命**怎么涨由这两列各自的数值决定**（出厂是一起涨的，改的时候记得两边一起看）。
 - **结算**：`ui/utils/battle/HpHelper.recover`，游戏主循环**每秒**结一次（与回蓝共用同一个计时器、同一次落盘，不会因此多写存档）；不足 1 点的部分累加在 `hpRecoverAccumulator` 里不丢（低回血速度下不会被取整丢掉）；回复封顶不超过最大生命。
 - **死亡期间不回复**：`hp ≤ 0` 时直接不结算，否则回血会把角色从死亡流程（死亡动画 + 复活弹窗）里「拉起来」。
-- **不计入战斗力**：`configs/game-config.ts` 区 5 的 `combatCalc` 权重表显式排除了 `hpRecover`。回血不改变输出与承伤上限，算进去只会凭空抬高所有地图的战力门槛。**怪物也不回血**（`server/src/shared/monster-seed.ts` 展开的怪物属性里 `hpRecover` 恒 0）。
+- **不计入战斗力**：`configs/game-config.ts` 区 5 的 `combatCalc` 权重表显式排除了 `hpRecover`。回血不改变输出与承伤上限，算进去只会凭空抬高所有地图的战力门槛。**怪物也不回血**（`monsters` 表里没有回血列，服务端恒按 0 处理）。
 - **旧存档**：读角色时由 `StorageManager.ensureRoleDefaults → HpHelper.ensureDefaults` 把缺的字段补 0（补满血则以最大生命为准），不需要迁移脚本。
 - **显示**：装备详情与角色信息弹窗的「基础属性」列表按 `configs/good.goodShowAttributes`（哪些部位列出这一项）与 `goodShowAttributesLabel`（标签文案「每秒回血」、以及列表顺序）渲染，界面代码里没有写死的属性表。
-- 回归单测：`node tools/test-hp-recover.cjs`（等级曲线逐级复算、装备回血只出现在防御部位且权重合计 100、三条成长线单调、显示口径、真实 `HpHelper` 行为：满血/死亡/封顶/余数/旧档补齐，外加数值量级探针与全部接线源码断言）
+- 回归单测：`node tools/test-hp-recover.cjs`（每级 `hp_recover` 是数字且逐级不降、五处来源的字段形态、显示口径、真实 `HpHelper` 行为：满血/死亡/封顶/余数/旧档补齐、全部接线源码断言）—— **不比对任何基准数值**，运营在后台改了哪一级都照绿
 
 ### 状态数值（格挡/加防）是怎么参与伤害结算的？想调概率/强度改哪里？
 
-状态在 #14 之前只有名称/图标/时长，之后补上了战斗数值语义。**想调某个状态的强度，去管理端 `/statuses` 改对应条目的 `combat` 字段**（出厂在 `server/src/shared/status-seed.ts`，客户端 `configs/game-config.ts` 区 7 只是快照落下来的运行时表）；结算公式想换口径，改 `ui/utils/battle/BattleMath.ts`（纯函数）。
+状态在 #14 之前只有名称/图标/时长，之后补上了战斗数值语义。**想调某个状态的强度，去管理端 `/statuses` 改对应条目的 `combat` 字段**（出厂在 `server/data/config-sync.sql`，客户端 `configs/game-config.ts` 区 7 只是快照落下来的运行时表）；结算公式想换口径，改 `ui/utils/battle/BattleMath.ts`（纯函数）。
 
 - **数值语义在配置**：`StatusConfig.combat`（`types/status.ts`）三个可选字段——`blockChance`（格挡概率 0-1）、`blockFactor`（格挡触发时伤害乘的系数，0.5 = 减半）、`defenseMultiplier`（防御乘法系数）。不配 `combat` 的状态是纯表现状态，不参与结算
 - **现行口径**：护体神盾（2001）= 30% 概率格挡、格挡时本次伤害 ×0.5；金刚护体（2002）= 防御 ×1.5

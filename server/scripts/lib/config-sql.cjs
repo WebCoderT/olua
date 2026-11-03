@@ -122,8 +122,15 @@ function build(dbPath, options = {}) {
 
       const lines = [`-- ===== ${table}（${rows.length} 行）=====`, `DELETE FROM ${quoteIdent(table)};`];
       const columnNames = columns.map((column) => column.name);
+      // 列名必须显式写出来：**表的物理列顺序不是契约**。存量库是用 `ALTER TABLE ADD COLUMN`
+      // 一路长出来的（新列追加在末尾），而新建库按 `CREATE TABLE` 里写的顺序建 —— 两边一旦
+      // 不同，位置式 `INSERT INTO t VALUES (…)` 就会把值塞进别的列（`souls.upgrade_order`
+      // 撞唯一索引就是这么炸的，见 #655）。写列名之后，追加列 / 调顺序都不再影响导入。
+      const columnList = columnNames.map((name) => quoteIdent(name)).join(", ");
       for (const row of rows) {
-        lines.push(`INSERT INTO ${quoteIdent(table)} VALUES (${columnNames.map((name) => literal(row[name])).join(", ")});`);
+        lines.push(
+          `INSERT INTO ${quoteIdent(table)} (${columnList}) VALUES (${columnNames.map((name) => literal(row[name])).join(", ")});`,
+        );
       }
       lines.push("");
       sections.push(lines.join("\n"));

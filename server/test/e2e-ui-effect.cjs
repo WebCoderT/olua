@@ -135,24 +135,20 @@ function saveEffect(key, token, body) {
 
     //#region 二、seed 与「没有新建 / 删除」
 
-    console.log("— 二、seed：七行出厂值（升级 + 六档光柱）按登记顺序补出、没有新建 / 删除接口 —");
+    console.log("— 二、seed：七行（升级 + 六档光柱）按登记顺序补出、没有新建 / 删除接口 —");
 
     const list = await api("GET", "admin/ui-effects", { token: adminToken });
     const upgradeRow = (list.data.list || []).find((row) => row.key === "upgrade");
     check(list.code === 0 && !!upgradeRow, "seed 补出了 upgrade 行", JSON.stringify(list.data));
-    check(
-      upgradeRow &&
-        upgradeRow.offsetX === 0 &&
-        upgradeRow.offsetY === 90 &&
-        upgradeRow.scaleX === 1 &&
-        upgradeRow.scaleY === 1 &&
-        upgradeRow.rotate === 0 &&
-        upgradeRow.durationMs === 1000 &&
-        upgradeRow.enabled === true &&
-        upgradeRow.updatedAt === 0,
-      "出厂值与 UI_EFFECT_DEFAULTS.upgrade 一致（updatedAt = 0 = 从没改过）",
-      JSON.stringify(upgradeRow),
-    );
+    // 摆位（偏移 / 缩放 / 时长）是运营在后台能调的数据，**不在这条断言里锁值** ——
+    // 这里只验字段格式：数值列是有限数字、开关是布尔、updatedAt 是时间戳
+    const shapeOk = (row, keys) =>
+      !!row &&
+      keys.every((key) => Number.isFinite(row[key])) &&
+      typeof row.enabled === "boolean" &&
+      typeof row.key === "string";
+    const MOTION_KEYS = ["offsetX", "offsetY", "scaleX", "scaleY", "rotate", "durationMs", "updatedAt"];
+    check(shapeOk(upgradeRow, MOTION_KEYS), "upgrade 行字段格式正常（数值列是数字 / enabled 是布尔 / updatedAt 是时间戳）", JSON.stringify(upgradeRow));
 
     const created = await api("POST", "admin/ui-effects", { token: adminToken, body: { key: "ghost" } });
     check(created.status === 404, "没有新建接口（POST → 404：key 的存在性由客户端消费代码决定）", `${created.status}`);
@@ -164,10 +160,8 @@ function saveEffect(key, token, body) {
     const lightRows = allRows.filter((row) => row.key.startsWith("light_"));
     check(lightRows.length === 6, "seed 补出了 6 档掉落光效（light_1~light_6）", lightRows.map((row) => row.key).join("、"));
     check(
-      lightRows.every(
-        (row) => row.offsetX === 0 && row.offsetY === 0 && row.scaleX === 1 && row.scaleY === 1 && row.rotate === 0 && row.enabled === true && row.updatedAt === 0,
-      ),
-      "掉落光效出厂摆位 = 搬出客户端时的那组（偏移 0/0 = 与图标同心、素材原尺寸、默认开）",
+      lightRows.every((row) => shapeOk(row, MOTION_KEYS)),
+      "六档光效的字段格式都正常（摆位数值不锁值，运营改了也照绿）",
       JSON.stringify(lightRows[0] || null),
     );
     check(

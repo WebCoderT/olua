@@ -4,13 +4,13 @@
  *
  * #588 起客户端没有怪物数据文件 —— 本测盯的新不变量（改 gen-monster-config.cjs /
  * monster-seed.ts / monsterRuntime.ts 后必须全绿）：
- * · 服务端 monster-presentation.generated 220 行齐全，且**每只都有实测几何**：
+ * · 快照的 monster_presentation 220 行齐全，且**每只都有实测几何**：
  *   contentSize > 0、outOffset 与图集基准帧 trim 反向偏移一致（直接重读 plist 独立复核，
  *   生成器与引擎同一数据源）；
- * · key 双向对账：资源行与数值种子（monster-seed.ts）一一对应（生成器断言，这里复核）；
+ * · key 双向对账：资源行（monster_presentation）与数值行（monsters）一一对应（生成器断言，这里复核）；
  * · 动作速度：经 applyMonsterPresentation 落运行时表后，每只怪 speedRate 都是**完整 11 个动作**
  *   且 >0（快照覆盖与 monsterDefaultSpeedRate 在落表时合成）；
- * · 主动怪规则：种子 tier=boss 或身体宽 ≥ 阈值（与生成器头部常量一致）；
+ * · 主动怪规则：tier=boss 或身体宽 ≥ 阈值（与生成器头部常量一致）；
  * · 老怪行为不回退：1~4 号 moveSpeed 2 / detectRange 200 / stand 速度 1；
  * · 资源在位：每只怪的 icon 与 out 图集都真实存在；
  * · 接线：createMonsterBody 消费 outOffset；运行时表消费方不再 import configs/game-config 的怪物 Map
@@ -24,9 +24,8 @@ const outDir = prepare("olua-monster-config", ["configs/game-config.ts", "config
 const { monsterResource, applyMonsterPresentation } = require(path.join(outDir, "configs/game-config.js"));
 const { monsterDefaultSpeedRate } = require(path.join(outDir, "configs/game-config.js"));
 
-const SHARED = path.join(PROJECT_ROOT, "..", "server", "src", "shared");
-const PRES_SRC = fs.readFileSync(path.join(SHARED, "monster-presentation.generated.ts"), "utf8");
-const SEED_SRC = fs.readFileSync(path.join(SHARED, "monster-seed.ts"), "utf8");
+/** #655 起怪物数值与表现都是库里的行（快照 = server/data/config-sync.sql） */
+const factory = require("./lib/factory-data.cjs");
 const HELPER_SRC = fs.readFileSync(path.join(PROJECT_ROOT, "assets/ui/helpers/GameUiHelper.ts"), "utf8");
 const GEN_SRC = fs.readFileSync(path.join(PROJECT_ROOT, "tools/gen-monster-config.cjs"), "utf8");
 const RUNTIME_SRC = fs.readFileSync(path.join(PROJECT_ROOT, "assets/configs/game-config.ts"), "utf8");
@@ -38,47 +37,6 @@ const AGGRESSIVE_BODY_WIDTH = 250;
 const STAND_BASE_FRAME = "d4_00.png";
 /** 动作全集（ACTION 枚举的**值**，运行时 speedRate 的键就是它们） */
 const ACTION_KEYS = ["stand", "walk", "run", "attack_near", "attack_skill_1", "test3", "attack_far", "injured", "a1", "die", "test1"];
-
-/** 解析生成物的资源行（格式由生成器固定：每行一个字段，机器产出无变体） */
-function parsePresentation() {
-  const block = PRES_SRC.slice(PRES_SRC.indexOf("export const MONSTER_PRESENTATION_ROWS"), PRES_SRC.indexOf("\n];", PRES_SRC.indexOf("export const MONSTER_PRESENTATION_ROWS")));
-  const rows = new Map();
-  const blocks = block.split(/\n  \{/).slice(1);
-  for (const part of blocks) {
-    const grab = (re) => {
-      const m = re.exec(part);
-      return m ? m[1] : undefined;
-    };
-    const id = grab(/id:\s*"([^"]+)"/);
-    if (!id) continue;
-    const offset = /outOffset:\s*\[([-\d.]+),\s*([-\d.]+)\]/.exec(part);
-    const size = /contentSize:\s*\[(\d+),\s*(\d+)\]/.exec(part);
-    const rate = grab(/speedRate:\s*\{([^}]*)\}/);
-    const speedRate = {};
-    if (rate) for (const [, action, value] of rate.matchAll(/(\w+):\s*([\d.]+)/g)) speedRate[action] = Number(value);
-    rows.set(id, {
-      icon: grab(/icon:\s*"([^"]+)"/),
-      out: grab(/out:\s*"([^"]+)"/),
-      outOffset: { x: Number(offset[1]), y: Number(offset[2]) },
-      contentSize: { width: Number(size[1]), height: Number(size[2]) },
-      moveSpeed: Number(grab(/moveSpeed:\s*([\d.]+)/)),
-      aggressive: grab(/aggressive:\s*(\w+)/) === "true",
-      detectRange: Number(grab(/detectRange:\s*([\d.]+)/)),
-      speedRate: Object.keys(speedRate).length ? speedRate : undefined,
-    });
-  }
-  return rows;
-}
-
-/** 解析数值种子的 tier（aggressive 规则的输入） */
-function parseSeedTiers() {
-  const block = SEED_SRC.slice(SEED_SRC.indexOf("export const MONSTER_SEED_ROWS"), SEED_SRC.indexOf("\n];", SEED_SRC.indexOf("export const MONSTER_SEED_ROWS")));
-  const tiers = new Map();
-  let m;
-  const re = /\{ id: "([^"]+)", label: "[^"]*", level: \d+, tier: "(\w+)" \}/g;
-  while ((m = re.exec(block))) tiers.set(m[1], m[2]);
-  return tiers;
-}
 
 /** 重读某只怪基准帧的图集 trim 数据（生成器与引擎同一数据源，这里独立复核） */
 function readTrim(key) {
@@ -95,15 +53,15 @@ function readTrim(key) {
   return { width: size[0], height: size[1], offsetX: offset[0], offsetY: offset[1] };
 }
 
-const rows = parsePresentation();
-const tierByKey = parseSeedTiers();
+const rows = new Map(factory.monsterPresentations().map((row) => [row.id, row]));
+const tierByKey = new Map(factory.monsters().map((row) => [String(row.id), row.tier]));
 
 //#region A. 数据行为（服务端资源行 → 运行时表）
 
 const keys = [...rows.keys()].sort((a, b) => Number(a) - Number(b));
 check(keys.length === 220 && keys.every((key, index) => key === String(index + 1)), "220 只怪资源行齐全且 key 连续（1~220）", `实得 ${keys.length} 条`);
-check(tierByKey.size === 220, "数值种子 220 行齐全（key 双向对账的另一半）", `实得 ${tierByKey.size} 行`);
-check(keys.every((key) => tierByKey.has(key)) && [...tierByKey.keys()].every((key) => rows.has(key)), "资源行与数值种子的 key 一一对应（生成器断言之外的复核）");
+check(tierByKey.size === 220, "数值表 220 行齐全（key 双向对账的另一半）", `实得 ${tierByKey.size} 行`);
+check(keys.every((key) => tierByKey.has(key)) && [...tierByKey.keys()].every((key) => rows.has(key)), "资源行与数值行的 key 一一对应（生成器断言之外的复核）");
 
 check(
   [...rows.values()].every((m) => m.contentSize.width > 0 && m.contentSize.height > 0),

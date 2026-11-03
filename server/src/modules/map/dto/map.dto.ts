@@ -18,10 +18,13 @@ import {
  * 所以这里能写的只有 `SaveMapConfigDto` 那五个字段 —— 没有「新建地图」的入参：
  * 一张图存不存在由客户端的 TMX 决定（行由启动 seed 按资源清单补出来）。
  *
- * 来源分三类，详情里的 `sources` 会把每一块标出来（页面上也是按这个分栏的）：
- * - `services`：`maps` 表（名称 / 类型 / 进入条件）——#573 起从客户端搬过来的；
- * - `snapshot`：服务端代码里的生成快照（TMX 尺寸、图层、对象组 —— 随仓库提交，随版本发布）；
- * - `db`：服务端库表（`map_spawn_areas` 刷怪区、`world_monsters` 场上实例）。
+ * 来源分两类，详情里的 `sources` 会把每一块标出来（页面上也是按这个分栏的）：
+ * - `config`：客户端资源包（TMX / 底图 / 预览图）—— 服务端一个字段都改不了；
+ * - `db`：服务端库表（`maps` 的名称 / 类型 / 进入条件 / 尺寸 / 图层 / 对象组、
+ *   `map_spawn_areas` 刷怪区、`world_monsters` 场上实例）。
+ *
+ * #655 之前还有第三类 `snapshot`（尺寸 / 图层 / 对象组是仓库里的生成快照），
+ * 那些列落库之后就没有「代码里的第二份」了 —— 所以现在只剩两类。
  */
 
 /** 图层（只取结构；瓦片数据在客户端，管理端不需要） */
@@ -177,10 +180,10 @@ export class MapSourceDto {
   @ApiProperty({ description: "给人看的名字" })
   label: string;
 
-  @ApiProperty({ description: "来源类别：config 客户端配置 / snapshot 服务端生成快照 / db 服务端库表" })
-  origin: "config" | "snapshot" | "db";
+  @ApiProperty({ description: "来源类别：config 客户端资源 / db 服务端库表" })
+  origin: "config" | "db";
 
-  @ApiProperty({ description: "具体文件或表名（config / snapshot 给路径，db 给表名）" })
+  @ApiProperty({ description: "具体文件路径（config）或表名（db）" })
   ref: string;
 
   @ApiProperty({ description: "一句话说明这块能不能改、改了怎么生效" })

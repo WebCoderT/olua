@@ -170,14 +170,7 @@ server/
 │   │   ├── system/                 系统信息（运行时 / 各表行数 / 脱敏配置快照）
 │   │   ├── token/                  JWT 签发与校验（双受众）
 │   │   └── health/
-│   ├── shared/
-│   │   ├── game-data.generated.ts  公共游戏数据快照（装备 / 物品 / 技能 / 状态 / 掉落 / NPC / 时装等；
-│   │   │                           @generated，重生成 = node tools/gen-shared-data.cjs）
-│   │   ├── growth-seed.ts          成长曲线与等级裸属性的唯一书写处（#590；装备出厂属性公式 equipmentStats 也在这里）
-│   │   ├── title-seed.ts / soul-seed.ts / rank-seed.ts
-│   │   │                           三条成长线的唯一书写处（#590；客户端 configs 只是空运行时表，快照整表下发）
-│   │   ├── monster-seed.ts         怪物出厂数值的唯一书写处（#588）
-│   │   └── game-data.ts            服务端门面（手写）：从上面那份派生职业 / 性别码清单与文档文案
+│   ├── shared/                     ← #655 起已删除：出厂数据只在库里（server/data/config-sync.sql）
 │   └── swagger/
 │       ├── setup.ts                文档挂载（抽成函数，好让测试也生成一次来验分组/权限/悬空 $ref）
 │       ├── models.ts               文档用的响应模型
@@ -273,7 +266,7 @@ git pull && make config-import       # 整表替换配置；账号与角色存�
 | `role_enemies` | 敌人标记（#389） | **单向一行**：`PRIMARY KEY (role_id, enemy_id)`，我标我的，对方既不知道也不受影响（没有通知、不需要事务）。关系优先级里敌意压过同帮与好友 |
 | `quests` | 任务配置（#396） | 单目标（kill / talk / collect）+ 奖励（金币 / 经验 / 物品 JSON 列）；`kind` 分主线（一次性）与日常（领奖删行可重接）；`prev_quest_id` 组线性链，环检测在 service（`assertQuestConsistency`）。管理端可增删改，改完随配置快照下发 |
 | `quest_progress` | 玩家任务进度（#396） | `PRIMARY KEY (role_id, quest_id)`；`status`（accepted / ready / claimed）+ `progress`。kill 由实时进程发 `monster:killed`、任务服务订阅后写（#401 起走总线），talk 由 NPC 对话推进，collect 在交付时查背包；主线领奖后留 `claimed` 行作链门控，日常领奖删行 |
-| `achievements` | 成就配置（#401） | 条件（`condition_type` / `target` / `count`）+ 奖励（金币 / 经验 / 物品 JSON 列）+ `category` / `sort_order` / `hidden`；seed 来自服务端 `shared/achievement-seed.ts`，管理端可增删改，**有玩家记录拒删** |
+| `achievements` | 成就配置（#401） | 条件（`condition_type` / `target` / `count`）+ 奖励（金币 / 经验 / 物品 JSON 列）+ `category` / `sort_order` / `hidden`；seed 来自服务端 `config-sync.sql`，管理端可增删改，**有玩家记录拒删** |
 | `role_achievements` | 玩家成就记录（#401） | `PRIMARY KEY (role_id, achievement_id)`；**只有累计型写 `progress`**（状态型查询时现算，故没有行也正常）；`achieved_at` 非空 = 可领、`claimed_at` 非空 = 已领；达成后不再累加，行不会因达成而删除 |
 | `equip_aligns` | 装备外观对齐几何（#513） | 一行 = 一件衣服 / 一把武器 / 一套裸模的**外观**几何：`id` 形如 `cloth:cloth_1` / `weapon:weapon_1` / `role:1`；`out_positions` 是 8 个方向的 `[x, y]` JSON；`out_manual = 1` 表示绝对位置（武器的渐进语义）；**没有行 = 用客户端配置里的值**，所以「重置」就是删行 |
 | `role_mails` | 游戏内邮件（#429 / 频道 #436 / 保质期 #439） | `id` 主键 + `role_id`（外键级联）；`channel`（四枚举：system / reward / social / combat，默认 system，与来源标签 `kind` 分工）/ `kind` / `title` / `body` / 附件（`gold` / `exp` / `attachments` JSON 列）+ `read_at` / `claimed_at` + `expires_at`（毫秒时间戳，NULL = 永不过期，由投递方在 send 时给 `ttlMs`）。**与 `mail_queue` 无关**（那张是外发 SMTP 投递队列，其 `MAIL_RETENTION_DAYS` 是投递记录的保留期，与收件箱保质期是两件事）。附件在领取时才入包；`claimed_at` 为空且带附件的行拒绝删除；**带未领附件的行即使过期也不清理**（过期不等于替玩家扔奖励），清理任务每轮最多删 `MAIL_PURGE_BATCH` 条；索引 `(role_id, created_at DESC)` 取箱、`(role_id, claimed_at)` 数未领 |
@@ -291,9 +284,9 @@ git pull && make config-import       # 整表替换配置；账号与角色存�
 | `skills` | 技能配置（#367） | 主键是技能 id；**角色与怪物同表**，`owner`（`role` / `monster`）区分并可按归属筛选；分类 / 目标类型 / 动作 / 特效 / 冷却 / 耗蓝 / 距离 / 等级 / 伤害系数（JSON，下标 = 等级 - 1）/ 挂载状态 `status_id` / **释放限制**（`cast_lock_ms` 动作锁、`require_target`）；跨字段约束在 service（状态型必须挂状态、主动至少一条倍率、`status_id` 必须存在）；**怪物技能（9000 段）可增删**（角色技能清单固定，id 被技能栏 / 快捷键 / 存档引用；被怪物挂载引用中的行拒删） |
 | `statuses` | 状态配置（#367） | 主键是状态 id（被 `skills.status_id` 引用）；`owner` 同上分流；时长 / 来源 / 图标 / 身上特效 / `combat`（JSON：格挡概率、格挡系数、防御倍率、**攻击倍率**，缺省 = 该维度不参与）——**角色侧公式在客户端 `BattleMath`，怪物侧在服务端 `MonsterAiService`**（#372：狂怒乘出手伤害、硬化皮肤乘防御项）；id 清单固定，只可改不可增删 |
 | `monster_skills` | 怪物技能挂载（#372） | 复合主键（`monster_key` + `skill_id`）；一只怪放哪些技能、`priority`（越小越先）、`cooldown`（秒，NULL = 用技能自身的冷却）；**整份替换**（PUT 这份清单就是全部，空数组 = 只普攻）；校验技能必须存在且 `owner=monster`、同怪不重复挂 |
-| `fashions` | 时装配置（#257） | 主键是时装 id（出厂在 `shared/fashion-seed.ts`，如 `cloth_2`）；名称 / 描述 / 售卖价 / 获得渠道（复用 AcquireChannel，seed 默认 unavailable）/ 八项属性（seed 全 0）；`icon` / `in_res` / `out_res` 资源路径可改（管理端图片选择器）；id 清单固定，只可改不可增删；**角色存档的 `fashionCloth` 存的就是这里的 id**（#377 穿戴系统，null = 没穿） |
+| `fashions` | 时装配置（#257） | 主键是时装 id（出厂在 `config-sync.sql`，如 `cloth_2`）；名称 / 描述 / 售卖价 / 获得渠道（复用 AcquireChannel，seed 默认 unavailable）/ 八项属性（seed 全 0）；`icon` / `in_res` / `out_res` 资源路径可改（管理端图片选择器）；id 清单固定，只可改不可增删；**角色存档的 `fashionCloth` 存的就是这里的 id**（#377 穿戴系统，null = 没穿） |
 | `mall_prices` | 商城特殊定价（#251） | 主键是商品 id（装备变体 id，商品清单来自生成物）；**全库唯一允许动态增删的配置表**（PUT upsert / DELETE 回统一价）；未定价商品走 `mall_settings` 的统一价 |
-| `mall_settings` | 商城统一价（#251） | 单行表（id 恒为 1）；全场默认售价 seed 自生成物 MALL_DEFAULT_PRICE（出厂 `shared/mall-seed.ts` 的 `MALL_DEFAULT_PRICE`，客户端一个价格都不存），运营可改 |
+| `mall_settings` | 商城统一价（#251） | 单行表（id 恒为 1）；全场默认售价 seed 自生成物 MALL_DEFAULT_PRICE（出厂 `config-sync.sql` 的 `MALL_DEFAULT_PRICE`，客户端一个价格都不存），运营可改 |
 | `drop_tables` | 掉落表（#254） | 主键是表 id（`[a-z][a-z0-9_]{0,49}`）；`picks`（捞取次数）与 `entries`（goodId / 权重 / 概率 / 数量区间）都是 JSON 列，结构校验在 service（goodId 必须在生成物 ITEM_LABELS 里）；**允许动态增删的配置表**（同 mall_prices 定位），被 `monster_drops.table_id` 引用中的行拒删；seed 三张具名表 common / elite / boss + default 兜底 |
 | `monster_drops` | 怪物掉落（#254） | 主键是怪物 key（怪物种子 `monster-seed.ts` 关联键）；`source` 三选一：`table`（引用 drop_tables）/ `entries`（内联条目 + 必填 picks）/ `none`（清空）；key 与怪物一一对应，只有 list + PATCH 整份替换，不可增删 |
 

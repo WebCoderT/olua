@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import { equipmentIcon, formatTime, mallApi, PERMISSION } from "../api";
+import { equipmentIcon, equipmentSlotKeys, formatTime, mallApi, PERMISSION, slotLabel } from "../api";
 import type { MallPriceItem, MallSettings, PageResult } from "../api";
-import { EQUIPMENT_SLOTS } from "../api/gameData";
 import { GameIcon } from "../components/GameImage";
 import { Modal } from "../components/Modal";
 import { Pagination } from "../components/Pagination";
@@ -10,8 +9,15 @@ import { hasPermission } from "../store/session";
 import { toastSuccess } from "../store/toast";
 import { PageHeader } from "../components/PageHeader";
 
-/** 部位下拉的选项（id + 中文名；生成物 EQUIPMENT_SLOTS 派生） */
-const SLOT_OPTIONS = Object.entries(EQUIPMENT_SLOTS);
+/**
+ * 部位下拉的选项（id + 中文名）
+ *
+ * 部位清单与名字都在 `equipment_slots` 表（#655：代码里不再有第二份），
+ * 所以这份选项**在渲染时算**，不能提到模块级（那时字典还没拉回来）。
+ */
+function slotOptions(): [string, string][] {
+  return equipmentSlotKeys().map((key) => [key, slotLabel(key)]);
+}
 
 /**
  * 商城定价管理（#251，运营定价页）
@@ -176,7 +182,7 @@ export function MallPricingPage() {
           <Field width="w-32" label="部位">
               <Select value={draft.slot} onChange={(event) => setDraft({ ...draft, slot: event.target.value })}>
                 <option value="">全部</option>
-                {SLOT_OPTIONS.map(([value, text]) => (
+                {slotOptions().map(([value, text]) => (
                   <option key={value} value={value}>
                     {text}
                   </option>
@@ -227,7 +233,7 @@ export function MallPricingPage() {
                     {item.label}
                   </td>
                   <td className={tdClass}>
-                    <Badge tone="slate">{SLOT_OPTIONS.find(([value]) => value === item.slot)?.[1] ?? item.slot}</Badge>
+                    <Badge tone="slate">{slotLabel(item.slot)}</Badge>
                   </td>
                   <td className={tdClass}>{item.level}</td>
                   <td className={tdClass}>

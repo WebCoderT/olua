@@ -5,7 +5,7 @@ import { dirname } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { AdminRole } from "../common/constants/permission";
 import { AnnouncementLevel } from "../common/constants/announcement";
-import { MAP_PIXEL_SIZES } from "../shared/map-sizes.generated";
+import { bootstrapConfigSnapshot } from "./config-snapshot";
 
 /** 可绑定的参数值（node:sqlite 支持的类型） */
 export type SqlParam = string | number | bigint | null | Uint8Array;
@@ -39,6 +39,10 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
     // 没有这个等待的话偶发的并发写就会变成玩家看到的报错。5 秒足够越过一次备份 checkpoint。
     if (path !== ":memory:") this.db.exec("PRAGMA busy_timeout = 5000;");
     this.migrate();
+    // 建表之后、任何 service 的 onModuleInit 之前：空库先灌出厂快照。
+    // 之后所有配置读的都是库，代码里不再有第二份数值副本（#655）。
+    const bootstrap = bootstrapConfigSnapshot(this.db, this.logger);
+    if (bootstrap.status === "imported") this.logger.log("出厂数据自举完成（空库首启，只发生一次）");
     this.logger.log(`SQLite 就绪：${path}`);
   }
 
@@ -232,6 +236,18 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
         level       INTEGER NOT NULL DEFAULT 0,
         combat      INTEGER NOT NULL DEFAULT 0,
         soul_of_war INTEGER NOT NULL DEFAULT 0,
+        -- 地图几何（#655）：以前是 'map-sizes.generated.ts' / 'map-content.generated.ts'
+        -- 两份编译期快照（源自 Tiled 的 TMX 头），现在只是这一行的列。
+        -- 判据没变：几何来自资源，运营不改它；运营改的是上面五行。
+        grid_cols   INTEGER NOT NULL DEFAULT 0,
+        grid_rows   INTEGER NOT NULL DEFAULT 0,
+        tile_width  INTEGER NOT NULL DEFAULT 128,
+        tile_height INTEGER NOT NULL DEFAULT 128,
+        pixel_width INTEGER NOT NULL DEFAULT 0,
+        pixel_height INTEGER NOT NULL DEFAULT 0,
+        -- 图层 + 对象组（JSON：'{ layers: [...], groups: [...] }'）—— 管理端详情页的
+        -- 「图层 / 对象组」两块就渲染它；刷怪区另有一张表，不在这里
+        content     TEXT    NOT NULL DEFAULT '{"layers":[],"groups":[]}',
         updated_by  TEXT    NOT NULL DEFAULT '',
         updated_at  INTEGER NOT NULL DEFAULT 0
       );
@@ -589,6 +605,26 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
         updated_at           INTEGER NOT NULL DEFAULT 0
       );
 
+      -- 怪物表现 / 资源（#588 / #655）：一行 = 一只怪的图集路径 + 基准帧几何 + AI 视觉参数。
+      -- 以前是生成物 'monster-presentation.generated.ts'（生成器实测图集基准帧的 trim），
+      -- 现在只是表 —— 客户端从快照拿它拼资源，服务端权威 AI 读 aggressive / detectRange / moveSpeed。
+      -- **数值不在这张表**（label / level / 六项在 'monsters'），这里只有「长什么样、怎么动」。
+      CREATE TABLE IF NOT EXISTS monster_presentation (
+        id             TEXT    PRIMARY KEY,
+        icon           TEXT    NOT NULL DEFAULT '',
+        out            TEXT    NOT NULL DEFAULT '',
+        out_offset_x   INTEGER NOT NULL DEFAULT 0,
+        out_offset_y   INTEGER NOT NULL DEFAULT 0,
+        content_width  INTEGER NOT NULL DEFAULT 0,
+        content_height INTEGER NOT NULL DEFAULT 0,
+        move_speed     REAL    NOT NULL DEFAULT 0,
+        aggressive     INTEGER NOT NULL DEFAULT 0,
+        detect_range   INTEGER NOT NULL DEFAULT 0,
+        -- 可选的速度倍率覆写（动作名 → 倍率），空 JSON = 全用默认
+        speed_rate     TEXT    NOT NULL DEFAULT '{}',
+        updated_at     INTEGER NOT NULL DEFAULT 0
+      );
+
       -- NPC 数据（#258 / #603 第七域）：主键是 NPC id（Tiled 对象组的关联键），清单固定不可增删行；
       -- label / dialog / src / scale / position 全是运营可改的表现数据（客户端不再存一份），
       -- 进游戏由 GET /game-config 快照下发；src 是 resources 下的素材目录（图集动画）
@@ -619,7 +655,7 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
         updated_at    INTEGER NOT NULL DEFAULT 0
       );
 
-      -- 时装配置（#257）：主键是时装 id（shared/fashion-seed.ts），清单固定不可增删行；
+      -- 时装配置（#257）：主键是时装 id（config-sync.sql），清单固定不可增删行；
       -- 名称 / 文案 / 售卖价 / 属性 / 获得渠道 seed 自生成物 FASHIONS，运营可改；
       -- icon / in / out 是客户端资源路径（表现层），后台不改
       CREATE TABLE IF NOT EXISTS fashions (
@@ -648,7 +684,7 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
         updated_at           INTEGER NOT NULL DEFAULT 0
       );
 
-      -- 具名掉落表（#254）：主键是表 id（出厂值见 shared/drop-seed.ts 的 common/elite/boss + 兜底 default）；
+      -- 具名掉落表（#254）：主键是表 id（出厂值见 config-sync.sql 的 common/elite/boss + 兜底 default）；
       -- **允许动态增删**（运营自建新表给多怪复用，同 mall_prices 定位），
       -- 被 monster_drops.table_id 引用中的行在 service 拒删
       CREATE TABLE IF NOT EXISTS drop_tables (
@@ -931,6 +967,10 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
         drop_params TEXT    NOT NULL DEFAULT '{}',
         auto_battle TEXT    NOT NULL DEFAULT '{}',
         guild_rules TEXT    NOT NULL DEFAULT '{}',
+        -- 怪物 AI（#655）：攻击间隔 / 攻击距离 / 游荡半径… 原本是生成物 'MONSTER_AI'
+        -- 的六个常量，服务端权威 AI 每 tick 读它。进这里而不是另开一张表：它同样是
+        -- 「一进程一份、运营可调的参数」，与上面三组同性质
+        monster_ai  TEXT    NOT NULL DEFAULT '{}',
         updated_at  INTEGER NOT NULL DEFAULT 0
       );
 
@@ -938,7 +978,7 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
       -- 为什么是 KV 行而不是单行宽表：键就是属性名（maxHp / physicalAttack …），
       -- 与快照 combatWeights 段（Record<string, number>）1:1，将来多一个权重属性
       -- 只多一行、不动表结构；读写都是「按 key 取」，不需要知道总共有几列。
-      -- 出厂值在 shared/combat-seed.ts（生成物 COMBAT_WEIGHTS 的源头），缺行回落出厂。
+      -- 出厂值在 config-sync.sql（生成物 COMBAT_WEIGHTS 的源头），缺行回落出厂。
       CREATE TABLE IF NOT EXISTS combat_weights (
         key        TEXT PRIMARY KEY,
         weight     REAL    NOT NULL DEFAULT 0,
@@ -1043,6 +1083,17 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
     this.db.exec(
       "CREATE UNIQUE INDEX IF NOT EXISTS idx_souls_upgrade_order ON souls(upgrade_order) WHERE upgrade_order IS NOT NULL;",
     );
+    // 地图几何 / 对象组（#655）：存量库补列，值由 `node scripts/absorb-generated.cjs` 一次性灌；
+    // 新库由 config-sync.sql 直接带过来（快照里就有这几列）
+    this.ensureColumn("maps", "grid_cols", "INTEGER NOT NULL DEFAULT 0");
+    this.ensureColumn("maps", "grid_rows", "INTEGER NOT NULL DEFAULT 0");
+    this.ensureColumn("maps", "tile_width", "INTEGER NOT NULL DEFAULT 128");
+    this.ensureColumn("maps", "tile_height", "INTEGER NOT NULL DEFAULT 128");
+    this.ensureColumn("maps", "pixel_width", "INTEGER NOT NULL DEFAULT 0");
+    this.ensureColumn("maps", "pixel_height", "INTEGER NOT NULL DEFAULT 0");
+    this.ensureColumn("maps", "content", `TEXT NOT NULL DEFAULT '{"layers":[],"groups":[]}'`);
+    // 怪物 AI 参数（#655）：原本是生成物 `MONSTER_AI` 的六个常量，现在并进运行时参数单行表
+    this.ensureColumn("runtime_params", "monster_ai", "TEXT NOT NULL DEFAULT '{}'");
     this.ensureSuperAdmin();
   }
 
@@ -1098,29 +1149,34 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
    * 不平移的话，升级后怪物会按旧坐标出现在离正确位置半张图远的地方（多半在地图外）。
    *
    * 平移不可重复执行（再来一次就整体偏半张图），所以用 `world_meta.coord_origin` 打标记：
-   * 只在它还是 'center' 时做一次，做完置 'topleft'。地图尺寸取自 TMX 头生成的快照
-   * （`shared/map-sizes.generated.ts`），认不出的 map_id 只 warn、不动数据。
+   * 只在它还是 'center' 时做一次，做完置 'topleft'。地图尺寸读 `maps` 的几何列
+   * （`tools/import-spawn-areas.cjs` 从 TMX 头写进来的），认不出的 map_id 只 warn、不动数据。
    */
   private migrateMapCoordinateOrigin(): void {
     const pending = this.count("SELECT COUNT(1) AS total FROM world_meta WHERE coord_origin = 'center'");
     if (pending === 0) return;
+    const sizes = this.all<{ map_id: string; pixel_width: number; pixel_height: number }>(
+      "SELECT map_id, pixel_width, pixel_height FROM maps",
+    );
     let moved = 0;
     this.transaction(() => {
-      for (const [mapId, size] of Object.entries(MAP_PIXEL_SIZES)) {
-        const dx = size.width / 2;
-        const dy = -size.height / 2;
-        moved += this.execute("UPDATE map_spawn_areas SET cx = cx + ?, cy = cy + ? WHERE map_id = ?", [dx, dy, mapId]).changes;
-        moved += this.execute("UPDATE world_monsters SET x = x + ?, y = y + ? WHERE map_id = ?", [dx, dy, mapId]).changes;
+      for (const size of sizes) {
+        if (size.pixel_width <= 0 || size.pixel_height <= 0) continue;
+        const dx = size.pixel_width / 2;
+        const dy = -size.pixel_height / 2;
+        moved += this.execute("UPDATE map_spawn_areas SET cx = cx + ?, cy = cy + ? WHERE map_id = ?", [dx, dy, size.map_id]).changes;
+        moved += this.execute("UPDATE world_monsters SET x = x + ?, y = y + ? WHERE map_id = ?", [dx, dy, size.map_id]).changes;
       }
       this.run("UPDATE world_meta SET coord_origin = 'topleft' WHERE id = 1");
     });
+    const known = new Set(sizes.filter((row) => row.pixel_width > 0).map((row) => row.map_id));
     const unknown = this.all<{ map_id: string }>(
       "SELECT DISTINCT map_id FROM world_monsters UNION SELECT DISTINCT map_id FROM map_spawn_areas",
-    ).filter((row) => !(row.map_id in MAP_PIXEL_SIZES));
+    ).filter((row) => !known.has(row.map_id));
     if (unknown.length > 0) {
-      this.logger.warn(`地图原点迁移：这些 map_id 没有 TMX 尺寸快照，坐标未平移 —— ${unknown.map((row) => row.map_id).join(", ")}`);
+      this.logger.warn(`地图原点迁移：这些 map_id 没有几何（先跑 node tools/import-spawn-areas.cjs），坐标未平移 —— ${unknown.map((row) => row.map_id).join(", ")}`);
     }
-    this.logger.log(`地图原点已改为左上角：平移 ${moved} 条世界坐标（${Object.keys(MAP_PIXEL_SIZES).length} 张图）`);
+    this.logger.log(`地图原点已改为左上角：平移 ${moved} 条世界坐标（${known.size} 张图）`);
   }
 
   /** 给已有表补一列（列已存在则不动；SQLite 的 ADD COLUMN 带 NOT NULL 必须有默认值） */

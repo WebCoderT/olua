@@ -10,16 +10,17 @@
  * B. 出手与结算接线（源码断言）：warrior.ts 通道可用时 sendCast 后 return（不许本地再扣一次），
  *    回滚路径保留；MonsterManager.applyServerSettle 走 skillDamageBand 对账、死亡清索引；
  *    Game.ts 接 onSettle、RealtimeClient 转发 settle 帧、CombatChannel.castSeq 单调
- * C. 服务端快照与守卫：#588 起怪物数值**服务端独有** —— 生成物不再导出 MONSTERS、
- *    audit-shared-data 的 REQUIRED_EXPORTS 同步收窄、gen-shared-data 不再收录怪物表；
- *    e2e-combat 依赖的怪物 "1" 数值锚改由真实 expandMonsterSeed 从种子展开（不再看快照字面量）
+ * C. 快照与守卫：#655 起怪物数值**服务端独有** —— 代码里不再有 shared/ 目录（数值只在库里）、
+ *    audit-shared-data 同步收窄；e2e-combat 依赖的怪物 "1" 锚点直接从配置快照取
  *
  * 沙箱机制：A 段复用 lib/configs-sandbox.cjs 的 prepare（真实 BattleMath + cc 垫片，
  * 只用到 Vec2 的构造，BoxCollider2D/Node 只在不会调用的函数里出现）。
  */
 const fs = require("fs");
 const path = require("path");
-const { PROJECT_ROOT, prepare, compileServerShared, check, finish } = require("./lib/configs-sandbox.cjs");
+const { PROJECT_ROOT, prepare, check, finish } = require("./lib/configs-sandbox.cjs");
+/** #655 起配置的唯一来源是数据库快照（server/data/config-sync.sql） */
+const factory = require("./lib/factory-data.cjs");
 
 const read = (rel) => fs.readFileSync(path.join(PROJECT_ROOT, rel), "utf8");
 
@@ -132,27 +133,25 @@ check(/id: SkillId;/.test(skillTypeSource), "SkillConfig 声明 id 字段（技�
 
 console.log("\n— C. 服务端快照与守卫 —");
 
-const generated = read(path.join("..", "server", "src", "shared", "game-data.generated.ts"));
 const auditSource = read(path.join("..", "tools", "audit-shared-data.cjs"));
-const genSource = read(path.join("..", "tools", "gen-shared-data.cjs"));
+const rootDir = path.join(PROJECT_ROOT, "..");
 
-check(!/export const MONSTERS[ :]/.test(generated), "生成物不再导出 MONSTERS（#588：怪物数值服务端独有，客户端零本地副本）");
-check(!/"MONSTERS"/.test(auditSource), "audit-shared-data 的 REQUIRED_EXPORTS 不再收 MONSTERS（守卫跟着快照收窄）");
-check(!/MONSTERS/.test(genSource), "gen-shared-data 不再收录怪物数值表（出厂数值唯一书写处 = server/src/shared/monster-seed.ts）");
+check(!fs.existsSync(path.join(PROJECT_ROOT, "..", "server", "src", "shared")), "服务端没有 shared/ 目录（#655：出厂数值只在库里，代码不留第二份副本）");
+check(!fs.existsSync(path.join(rootDir, "tools", "gen-shared-data.cjs")), "生成链已删除（tools/gen-shared-data.cjs 不再存在）");
+check(/config-sync\.sql/.test(auditSource), "audit-shared-data 改为盯配置快照（守点跟着数据源搬家）");
+check(!/MONSTERS[ :]/.test(auditSource), "守卫不收怪物数值表（怪物数值服务端独有，客户端零本地副本）");
 
 {
-  // 用真实 expandMonsterSeed 展开（不是测试里复刻公式）：种子连着 game-data.generated
-  // 一起编译，角色曲线改动时这里跟着走 —— e2e-combat 的 [8,16] 区间依赖这两个锚点值
-  const seedJs = compileServerShared("monster-seed.ts", "olua-monster-seed-combat");
-  const { MONSTER_SEED_ROWS, expandMonsterSeed } = require(seedJs);
-  check(MONSTER_SEED_ROWS.length === 220, `种子收录 220 只怪（实得 ${MONSTER_SEED_ROWS.length}）`);
-  const row = MONSTER_SEED_ROWS.find((item) => item.id === "1");
-  const attrs = expandMonsterSeed(row);
-  check(attrs.maxHp === 65, `怪物 "1" 的锚点 maxHp 65（e2e-combat 依赖，由种子 + 角色曲线展开）`, String(attrs.maxHp));
+  // 怪物锚点从配置快照取：e2e-combat 的 [8,16] 区间依赖这两个值，
+  // 库里改了它们就该在这里先红，而不是等 e2e 跑到一半才发现区间不对
+  const monsters = factory.monsters();
+  check(monsters.length === 220, `快照收录 220 只怪（实得 ${monsters.length}）`);
+  const row = monsters.find((item) => String(item.id) === "1");
+  check(row?.maxHp === 65, `怪物 "1" 的锚点 maxHp 65（e2e-combat 依赖）`, String(row?.maxHp));
   check(
-    JSON.stringify(attrs.physicalDefense) === "[4,6]",
+    JSON.stringify(row?.attributes?.physicalDefense) === '{"min":4,"max":6}',
     `怪物 "1" 物防 [4,6]（e2e 区间 [8,16] 的怪侧一半）`,
-    JSON.stringify(attrs.physicalDefense),
+    JSON.stringify(row?.attributes?.physicalDefense),
   );
 }
 

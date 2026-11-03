@@ -14,7 +14,7 @@ import { CombatWeightsResponseDto, UpdateCombatWeightsDto } from "./dto/combat-w
  * 门槛（`maps.combat`）的刻度 —— 一次改动等于全服准入门槛重新标定，所以写操作带
  * `@AuditTarget("combatWeights")`，必须能追溯。
  *
- * **只有 get / update**：有哪几项由算法决定（`shared/combat-seed.ts`），后台只改值，
+ * **只有 get / update**：有哪几项由算法决定（`config-sync.sql`），后台只改值，
  * 不增删行（与称号 / 商城主页同一取向）。
  */
 @ApiAudience("admin")
@@ -31,7 +31,7 @@ export class AdminCombatWeightsController {
       "口径（客户端与服务端一致）：区间属性（三系攻击 / 三系防御）按**上下限之和**乘倍率，" +
       "生命按单值乘倍率，最后求和。`hpRecover`（每秒回血）**不计入** —— 回血不改变输出与承伤上限，\n" +
       "算进来会凭空抬高所有地图的门槛。\n\n" +
-      "缺行回落出厂值（`shared/combat-seed.ts`），所以这张表不需要迁移。",
+      "缺行回落出厂值（`config-sync.sql`），所以这张表不需要迁移。",
     permissions: [Permission.GAME_CONFIG_READ],
   })
   @ApiDataResponse(CombatWeightsResponseDto, { description: "当前生效权重（含 updatedAt）" })

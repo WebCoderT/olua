@@ -3975,7 +3975,7 @@
     },
     "/admin/achievements": {
       "get": {
-        "description": "seed 自 server/src/shared/achievement-seed.ts，允许动态增删。`category` 筛 battle / growth / explore，`keyword` 模糊匹配 id / 名称。\n\n`condition` 分两类：`kill` / `quest` 是**累计型**（进度由事件流落库），`level` / `combat` / `collect` 是**状态型**（每次查询按角色当前状态现算，不落进度）。\n\n**排序**：`sort` 取 `id` / `category` / `label` / `sortOrder` / `updatedAt`，`order` 取 asc / desc（默认分类内顺序）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
+        "description": "seed 自 server/data/config-sync.sql，允许动态增删。`category` 筛 battle / growth / explore，`keyword` 模糊匹配 id / 名称。\n\n`condition` 分两类：`kill` / `quest` 是**累计型**（进度由事件流落库），`level` / `combat` / `collect` 是**状态型**（每次查询按角色当前状态现算，不落进度）。\n\n**排序**：`sort` 取 `id` / `category` / `label` / `sortOrder` / `updatedAt`，`order` 取 asc / desc（默认分类内顺序）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
         "operationId": "adminAchievement.list",
         "parameters": [
           {
@@ -7974,7 +7974,7 @@
     },
     "/admin/fashions": {
       "get": {
-        "description": "id 清单固定（seed 自 shared/fashion-seed.ts 的 20 套），**没有创建 / 删除**。`keyword` 模糊匹配 id / 名称，`acquireChannel` 按获得渠道筛。\n\n属性 seed 时全 0（原配置就是零加成），在这里运营可改；图标 / 内观 / 外观资源路径同样可改（管理端可视化选择器）。\n\n**排序**：`sort` 取 `id` / `label` / `sellPrice` / `updatedAt`，`order` 取 asc / desc（默认 id 升序）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
+        "description": "id 清单固定（seed 自 config-sync.sql 的 20 套），**没有创建 / 删除**。`keyword` 模糊匹配 id / 名称，`acquireChannel` 按获得渠道筛。\n\n属性 seed 时全 0（原配置就是零加成），在这里运营可改；图标 / 内观 / 外观资源路径同样可改（管理端可视化选择器）。\n\n**排序**：`sort` 取 `id` / `label` / `sellPrice` / `updatedAt`，`order` 取 asc / desc（默认 id 升序）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
         "operationId": "adminFashion.list",
         "parameters": [
           {
@@ -9116,7 +9116,7 @@
     },
     "/admin/runtime-params": {
       "get": {
-        "description": "三个分组一起返回（**单行配置，没有分页**）：\n\n- `drop`：掉落物手感（拾取半径 / 散落间距 / 应答超时 / 满包提示间隔）—— 服务端只下发不消费；\n- `autoBattle`：自动战斗与寻路（目标距离 / 网格 / 重寻路节奏 / 卡住判定 / 吸附半径）—— 同上；\n- `guild`：帮会规则门槛（名字长度 / 公告长度 / 申请留言长度）—— **服务端校验读它**。\n\n缺键回落出厂值（`shared/runtime-seed.ts`），所以新增参数不需要迁移。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
+        "description": "三个分组一起返回（**单行配置，没有分页**）：\n\n- `drop`：掉落物手感（拾取半径 / 散落间距 / 应答超时 / 满包提示间隔）—— 服务端只下发不消费；\n- `autoBattle`：自动战斗与寻路（目标距离 / 网格 / 重寻路节奏 / 卡住判定 / 吸附半径）—— 同上；\n- `guild`：帮会规则门槛（名字长度 / 公告长度 / 申请留言长度）—— **服务端校验读它**。\n\n缺键回落出厂值（`config-sync.sql`），所以新增参数不需要迁移。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
         "operationId": "adminRuntimeParams.get",
         "parameters": [],
         "responses": {
@@ -9218,7 +9218,7 @@
     },
     "/admin/combat-weights": {
       "get": {
-        "description": "当前生效的七项倍率 + 最后修改时间（**单行配置，没有分页**）。\n\n口径（客户端与服务端一致）：区间属性（三系攻击 / 三系防御）按**上下限之和**乘倍率，生命按单值乘倍率，最后求和。`hpRecover`（每秒回血）**不计入** —— 回血不改变输出与承伤上限，\n算进来会凭空抬高所有地图的门槛。\n\n缺行回落出厂值（`shared/combat-seed.ts`），所以这张表不需要迁移。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
+        "description": "当前生效的七项倍率 + 最后修改时间（**单行配置，没有分页**）。\n\n口径（客户端与服务端一致）：区间属性（三系攻击 / 三系防御）按**上下限之和**乘倍率，生命按单值乘倍率，最后求和。`hpRecover`（每秒回血）**不计入** —— 回血不改变输出与承伤上限，\n算进来会凭空抬高所有地图的门槛。\n\n缺行回落出厂值（`config-sync.sql`），所以这张表不需要迁移。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
         "operationId": "adminCombatWeights.get",
         "parameters": [],
         "responses": {
@@ -9320,7 +9320,7 @@
     },
     "/admin/guide-steps": {
       "get": {
-        "description": "整份步骤表（数组顺序 = 体验顺序）+ 最后修改时间（**单行配置，没有分页**）。\n\n`spot` / `trigger` 的取值是**客户端能力白名单**：一个新的高亮位要 `GuideOverlay` 认识这个节点，\n一个新的推进事件要在玩法代码里 `notify` 一次 —— 所以它们不能凭运营自由填写。\n\n缺行 / 坏行回落出厂值（`shared/guide-seed.ts`），坏行会被丢弃（好行保留）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
+        "description": "整份步骤表（数组顺序 = 体验顺序）+ 最后修改时间（**单行配置，没有分页**）。\n\n`spot` / `trigger` 的取值是**客户端能力白名单**：一个新的高亮位要 `GuideOverlay` 认识这个节点，\n一个新的推进事件要在玩法代码里 `notify` 一次 —— 所以它们不能凭运营自由填写。\n\n缺行 / 坏行回落出厂值（`config-sync.sql`），坏行会被丢弃（好行保留）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
         "operationId": "adminGuide.get",
         "parameters": [],
         "responses": {
@@ -9417,6 +9417,53 @@
         },
         "x-olua-permissions": [
           "gameConfig:write"
+        ]
+      }
+    },
+    "/admin/game-data": {
+      "get": {
+        "description": "与 `GET /game-config` **同一份快照**：称号 / 战魂 / 军衔 / 装备变体 / 药品 / 物品 / 怪物 / 怪物表现 / NPC / 时装 / 技能 / 状态 / 任务 / 成就 / 地图 / 等级表 / 成长标量 / 商城价 / 掉落表。\n\n管理端登录后拉一次存内存，用于「角色背包里那件装备叫什么」「掉落引用了哪只怪」这类**同步查表**的展示；名字与 id 都来自数据库，代码里不再有第二份数据副本。\n\n只读、无副作用、无参数。数据量约 1MB（555 件装备变体是大头），不要在每次渲染时调用。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
+        "operationId": "adminGameData.snapshot",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "全部运营配置（与客户端快照同形）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/GameConfigSnapshotDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "游戏数据字典（管理端查表用）",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/GameConfigSnapshotDto"
+        },
+        "x-olua-permissions": [
+          "gameConfig:read"
         ]
       }
     },
@@ -21390,7 +21437,7 @@
         "properties": {
           "id": {
             "type": "string",
-            "description": "时装 id（seed 自 shared/fashion-seed.ts，如 \"cloth_2\"；序列固定，不可增删行）"
+            "description": "时装 id（seed 自 config-sync.sql，如 \"cloth_2\"；序列固定，不可增删行）"
           },
           "label": {
             "type": "string",
@@ -21800,7 +21847,7 @@
           },
           "aggressive": {
             "type": "boolean",
-            "description": "是否主动攻击玩家（表现与客户端 AI 口径；服务端权威 AI 读生成物同一份）"
+            "description": "是否主动攻击玩家（表现与客户端 AI 口径；服务端权威 AI 读同一行）"
           },
           "detectRange": {
             "type": "number",
@@ -22321,7 +22368,7 @@
           },
           "combatWeights": {
             "type": "object",
-            "description": "战斗力权重（属性名 → 倍率；#603：唯一书写处是服务端 shared/combat-seed.ts）。服务端用它算角色战斗力，客户端只用它算「这件装备是不是更好」——客户端 configs/battle 不再存倍率，进游戏由这段整表填充。hpRecover 不在表里（回血不计战斗力）",
+            "description": "战斗力权重（属性名 → 倍率；#603：唯一书写处是服务端 config-sync.sql）。服务端用它算角色战斗力，客户端只用它算「这件装备是不是更好」——客户端 configs/battle 不再存倍率，进游戏由这段整表填充。hpRecover 不在表里（回血不计战斗力）",
             "additionalProperties": {
               "type": "number"
             }
@@ -24071,11 +24118,11 @@
           },
           "origin": {
             "type": "string",
-            "description": "来源类别：config 客户端配置 / snapshot 服务端生成快照 / db 服务端库表"
+            "description": "来源类别：config 客户端资源 / db 服务端库表"
           },
           "ref": {
             "type": "string",
-            "description": "具体文件或表名（config / snapshot 给路径，db 给表名）"
+            "description": "具体文件路径（config）或表名（db）"
           },
           "note": {
             "type": "string",

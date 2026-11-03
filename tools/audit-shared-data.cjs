@@ -1,586 +1,412 @@
 #!/usr/bin/env node
 /**
- * 守卫：公共游戏数据生成物是否与客户端来源一致
+ * 守卫：数据权威与跨端约定（#655 起「代码里没有第二份数据」）
  *
  * ===========================================================================
- * 为什么必须有这个
+ * 这个审计守什么（#655 之前它守的是「生成物与客户端 configs 逐字节一致」）
  * ===========================================================================
- * `game-data.generated.ts` 是客户端配置的**快照**。快照这种东西，生成完没人管就会腐化：
- * 有人改了 `client/assets/configs/equipments.ts` 的装备数值、或者改了个称号名，服务端与
- * 管理端手里那份还停在旧值上 —— 管理端给运营看的装备名是旧的，服务端算出来的伤害与
- * 客户端显示的也对不上。**双方都不会报错，只是一端慢慢偏离另一端。**
+ * 那时三端共用的数据是 `server/src/shared/game-data.generated.ts` —— 从客户端 configs
+ * 扫描出来的快照。于是必须有守卫盯着「改了客户端配置、忘了重新生成」。
  *
- * 所以照 `audit-api-generated.cjs` 的做法，用「重新生成一遍 + 逐字节比对」把它钉死。
- * 过期时不需要人去判断「要不要更新」—— 答案永远是「重新生成」，因为来源在客户端，
- * 这边没有别的正确答案可选。
+ * #655 删掉了整条生成链：**数据只在库里，仓库里那份是 `server/data/config-sync.sql`**。
+ * 文件名还叫 shared-data（三端共用的这份数据），守的东西换成了四条：
  *
- * ===========================================================================
- * 除了逐字节，还查什么
- * ===========================================================================
- * 逐字节比对只能发现「产物与生成器不一致」，发现不了「生成器自己少产了一张表」——
- * 后者是同一份代码生成的，比对必然通过，而消费方拿到的是 `undefined`（管理端页面上
- * 就是空白、服务端查表就是 0）。所以这里再补两条：
+ *   1. **快照完整性**：文件在、是本工具生成的、表清单与 `config-tables.cjs` 完全一致、
+ *      每张配置表都有行。少一张表 = 别人 `config-import` 之后那张表整张空掉，
+ *      而界面上只表现为「这一页什么都没有」。
+ *   2. **枚举仍然只有一份**：职业 / 性别 / 装备部位 / 引导位与事件 / 怪物定位这几个
+ *      **枚举**（加一个值就要改代码的那类）手写在 `common/constants/game-enums.ts`，
+ *      客户端 `assets/types/*` 各有一份**同名同值**的声明 —— 这里逐值比对。
+ *      「两份声明」没法消掉（一端 TS 编译、一端 Cocos 编译），所以至少要机械对齐。
+ *   3. **不许把枚举抄进业务代码**：把 `["1","2","3","4"]` 或 `"1": "战士"` 这类东西写进
+ *      页面 / DTO / 配置表，是「第二份数据」最常见的复活方式（#122 就是这么来的）。
+ *      判据要精确（只认那几组已知键），宁可漏也不许误报 —— 误报的守卫活不过一个季度。
+ *   4. **跨端常量**：实时通道关闭码（#111）与组队等级门槛（#497）两端各有一份，
+ *      对不上不会报错，只会让行为悄悄变错（把 4000 当成普通掉线去抢连 = 两个客户端互相踢）。
  *
- *   1. **必需导出清单**：每张表都得在（漏一张 = FAIL，并指名道姓）；
- *   2. **非空**：每张表至少有一条数据（空表几乎一定是抽错了来源数组）。
- *
- * ===========================================================================
- * 还有一条更难的：**内容被抄进源码**
- * ===========================================================================
- * 「谁也不许自己维护一份」这句话，破法有两种：
- *
- *   a. **复制一张表到本地**（`const OCCUPATION_LABELS = {`）—— 判据是「与生成物**同名**的定义」，
- *      转发写法（`export { X } from "…"`）不会误报；
- *   b. **换个名字把同一份内容写一遍**（手写的 `["1","2","3","4"]` 清单、DTO 描述里那一行
- *      `1 战士 / 2 魔法师 / …`）—— 同名判据抓不到，而且它**全靠人记得同步**。
- *
- * b 才是真正会腐化的那种（#122：服务端的 `ROLE_OCCUPATIONS` 注释里写着「与客户端一致」，
- * 而这两个文件之间没有任何机械连接）。判据按「短标签表」定：
- *
- *   - **完整键列表被写成数组字面量**：`["1", "2", "3", "4"]`；
- *   - **行文被抄**：同一张表里出现 ≥ 2 条 `码 名`（如 `1 战士`、`2 魔法师`）。
- *
- * 只对「键数 ≤ 8 且值全是字符串」的表做这两条：那是枚举清单的形状，
- * 逐条抄进源码是真实发生过的破法；而物品 / 装备那种几百行的表本来就抄不动，
- * 硬去匹配只会带来误报。**带 `@generated` 标记的文件一律跳过** ——
- * 两端的 `ApiModels.ts` / `models.ts` 里本来就镜像着 DTO 描述，那是生成出来的，不是维护的。
- *
- * ===========================================================================
- * 第三种破法：**同一个数，两端各写一份**
- * ===========================================================================
- * 「三端只有一份」不只管数据表。**实时通道的关闭码**（#111）就是同一个数写在两个地方：
- * 协议码只在服务端定义（`server/src/modules/realtime/realtime.protocol.ts` 的 `REALTIME_CLOSE`），
- * 客户端要判「被别处顶掉」就得各存一份（`ui/utils/net/ApiCodes.ts` 的手写镜像）。
- * 两边对不上**不会报错**，只会让行为悄悄变错 —— 比如把 4000 当成普通掉线去抢连，
- * 于是两个客户端互相踢。判据是**逐键比对**（键名也必须一样，换个名字就失去意义了）。
- *
- * （同类的还有组队最低等级 #497；角色数量上限也曾是这一类 —— 后来整个取消、不再有这个数，
- *   见 `configs/role` 顶部的说明。删守卫比留一个没东西可守的判据诚实。）
+ * 不查什么：库与快照是否同步（那是 `make config-check` 的活，要连库）；
+ * 客户端 configs 自身的完整性（那是 `audit-equip-align-catalog` 与客户端单测的活）。
  *
  * 用法：node tools/audit-shared-data.cjs
+ * 退出码：全部通过 = 0；任一问题 = 1（`make audit` 据此判定 FAIL）
  */
 
 const fs = require("node:fs");
-const os = require("node:os");
 const path = require("node:path");
-const { execFileSync } = require("node:child_process");
+
+const { CONFIG_TABLES, FORMAT_TAG, TABLES_LINE_PREFIX } = require("../server/scripts/lib/config-tables.cjs");
+const { readRows, readSnapshotText } = require("./lib/snapshot-sql.cjs");
 
 const ROOT = path.resolve(__dirname, "..");
 const SERVER_SRC = path.join(ROOT, "server", "src");
-const GENERATED = path.join(SERVER_SRC, "shared", "game-data.generated.ts");
-const GENERATOR = path.join(ROOT, "tools", "gen-shared-data.cjs");
-
-/** 客户端资产根（跨端数值约定的客户端一侧都从这里取） */
 const ASSETS = path.join(ROOT, "client", "assets");
+const ADMIN_SRC = path.join(ROOT, "admin", "src");
 
-/** 服务端配置（跨端数值约定的服务端一侧；运行时的 .env 是部署本地的，读不到） */
+/** 枚举的唯一手写处 */
+const GAME_ENUMS = path.join(SERVER_SRC, "common", "constants", "game-enums.ts");
+/** 客户端枚举声明（逐值比对的对象） */
+const CLIENT_TYPES = {
+  role: path.join(ASSETS, "types", "role.ts"),
+  good: path.join(ASSETS, "types", "good.ts"),
+  guide: path.join(ASSETS, "types", "guide.ts"),
+  monster: path.join(ASSETS, "types", "monster.ts"),
+};
 const SERVER_CONFIG = path.join(SERVER_SRC, "config", "configuration.ts");
-
-/** 实时通道关闭码的两端所在（服务端是唯一来源，客户端是手写镜像） */
+const SOCIAL_CONSTANTS = path.join(SERVER_SRC, "common", "constants", "social.ts");
+const CLIENT_NAV = path.join(ASSETS, "configs", "bottomNav.ts");
 const REALTIME_PROTOCOL = path.join(SERVER_SRC, "modules", "realtime", "realtime.protocol.ts");
 const CLIENT_API_CODES = path.join(ASSETS, "ui", "utils", "net", "ApiCodes.ts");
 
-/**
- * 必须存在的导出 —— 每张表都要在，且至少一条数据
- *
- * 清单与 `gen-shared-data.cjs` 的 `render()` 一一对应；加一张表就加一行。
- * 少写一行不会让别的检查失效，只会让「这张表整个消失」这件事没人管 —— 所以列全。
- */
-const REQUIRED_EXPORTS = [
-  // 战斗数值（服务端算角色属性用）
-  "COMBAT_RANGE_KEYS",
-  "COMBAT_SINGLE_KEYS",
-  "COMBAT_WEIGHTS",
-  "EQUIPMENT_ATTRIBUTES",
-  "SKILLS",
-  "STATUSES",
-  "MONSTER_SKILLS",
-  "NPCS",
-  "MALL",
-  "FASHIONS",
-  "DROP_TABLES",
-  "MONSTER_DROPS",
-  "DROP_DEFAULT",
-  "EQUIPMENT_RECYCLE_PRICES",
-  // 名字与元数据（三端做界面用）
-  "OCCUPATION_LABELS",
-  "SEX_LABELS",
-  "ITEM_LABELS",
-  "ITEM_TYPES",
-  "EQUIPMENT_SLOTS",
-  "EQUIPMENT_SLOT_ORDER",
-  "EQUIPMENT_DISPLAY_NAMES",
-  "EQUIPMENT_SLOT_OF",
-  "EQUIPMENT_BASES",
-  "DRUGS",
-  "ITEM_BASES",
-  "SELL_PRICES",
-  "QUESTS",
-  "ACHIEVEMENTS",
-  "SKILL_LABELS",
-  "EQUIPMENT_PREFIX_LABELS",
-  "EQUIPMENT_SUFFIX_LABELS",
-];
+const problems = [];
+const fail = (message) => problems.push(message);
 
-function main() {
-  if (!fs.existsSync(GENERATED)) {
-    fail(`生成物不存在：${path.relative(ROOT, GENERATED)}\n  先跑 node tools/gen-shared-data.cjs`);
+/** 读文件（不存在直接报问题，别静默跳过） */
+function read(file, label) {
+  if (!fs.existsSync(file)) {
+    fail(`找不到 ${label}（${path.relative(ROOT, file)}）—— 判据被删了就等于没有守点`);
+    return "";
+  }
+  return fs.readFileSync(file, "utf8");
+}
+
+/** 剥注释（守卫判据一律读「代码」，不读注释里的例子） */
+function stripComments(source) {
+  return source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1");
+}
+
+//#region 1. 快照完整性
+
+function checkSnapshot() {
+  const text = readSnapshotText();
+  if (!text) {
+    fail("server/data/config-sync.sql 不存在 —— 出厂数据没了，空库启动会直接没有配置（跑一次 make config-export）");
+    return;
+  }
+  if (!text.includes(FORMAT_TAG)) {
+    fail(`快照缺少格式标记（${FORMAT_TAG}）—— 这不是 make config-export 的产物`);
+    return;
   }
 
-  const before = fs.readFileSync(GENERATED, "utf8");
-
-  // 就地重生成：gen 脚本的输出路径是固定的，跑完把结果读回来比对即可
-  try {
-    execFileSync(process.execPath, [GENERATOR], {
-      cwd: ROOT,
-      stdio: "ignore",
-      env: { ...process.env, NODE_OPTIONS: "" },
-    });
-  } catch (error) {
+  const header = text.split("\n", 12);
+  const tablesLine = header.find((line) => line.startsWith(TABLES_LINE_PREFIX));
+  const declared = tablesLine ? tablesLine.slice(TABLES_LINE_PREFIX.length).split(",").filter(Boolean) : [];
+  const declaredSet = new Set(declared);
+  const expectedSet = new Set(CONFIG_TABLES);
+  const missing = CONFIG_TABLES.filter((name) => !declaredSet.has(name));
+  const extra = declared.filter((name) => !expectedSet.has(name));
+  if (missing.length || extra.length) {
     fail(
-      "重新生成公共游戏数据失败 —— 生成器跑不过去（来源配置改坏了？）\n" +
-        `  自己跑一遍看报错：node ${path.relative(ROOT, GENERATOR)}\n` +
-        `  ${String(error.message).split("\n")[0]}`,
-    );
-  }
-  const after = fs.readFileSync(GENERATED, "utf8");
-
-  const failures = [];
-  if (before !== after) {
-    failures.push(
-      "公共游戏数据生成物已过期（客户端 configs 改了，但快照没跟上）\n" +
-        "  修法只有一种：重新生成\n" +
-        "    node tools/gen-shared-data.cjs",
+      `快照的表清单与 config-tables.cjs 不一致：${[
+        missing.length ? `缺 ${missing.join(", ")}` : "",
+        extra.length ? `多 ${extra.join(", ")}` : "",
+      ]
+        .filter(Boolean)
+        .join("；")}\n  说明这份快照是旧版本导出的（中间加 / 删过配置表）—— 重新 make config-export。`,
     );
   }
 
-  // 必需导出 + 非空：编译一份**真的产物**再数键数
-  // （在源码上按缩进数条目会连嵌套的 damageCoefficients 一起算进来，那不是「一张表几条」）
-  let counts = [];
-  try {
-    const mod = compileGenerated();
-    counts = inspectExports(mod);
-    // 消费方自查：两端都不许再手写同一份数据（同名字典 / 清单字面量 / 抄来的文案）
-    failures.push(...findLocalCopies());
-    failures.push(...findHandWrittenData(mod));
-  } catch (error) {
-    failures.push(String(error.message));
-  }
-
-  // 跨端数值约定：实时通道的关闭码（服务端定义、客户端手写镜像）—— 见 #111
-  let closeDrift = null;
-  try {
-    closeDrift = findRealtimeCloseDrift();
-    failures.push(...closeDrift.problems);
-  } catch (error) {
-    failures.push(String(error.message));
-  }
-
-  // 跨端数值约定：组队的最低等级（客户端入口锁 vs 服务端门槛）—— 见 #497
-  let partyLevel = null;
-  try {
-    partyLevel = findPartyMinLevelDrift();
-    failures.push(...partyLevel.problems);
-  } catch (error) {
-    failures.push(String(error.message));
-  }
-
-  if (failures.length > 0) fail(failures.join("\n\n"));
-
-  // 去掉末尾那个换行再数：直接 split("\n") 会因末尾的空串多算一行，
-  // 报出来的数会比 wc -l 大 1 —— 而 PR 里报产物行数用的是 wc -l，两个数字对不上就得解释半天
-  const lines = after.replace(/\n$/, "").split("\n").length;
-  const kb = Math.round(fs.statSync(GENERATED).size / 1024);
-  console.log(`✔ 公共游戏数据一致（重新生成后逐字节相同，${lines} 行 / ${kb} KB）`);
-  console.log(`  表 ${REQUIRED_EXPORTS.length} 张：${counts.join(" · ")}`);
-  if (closeDrift) {
-    const pairs = [...closeDrift.codes].map(([key, value]) => `${key}=${value}`).join(" · ");
-    console.log(`  实时关闭码：客户端与 ${path.relative(ROOT, REALTIME_PROTOCOL)} 逐键一致（${pairs}）✓`);
-  }
-  if (partyLevel && typeof partyLevel.server === "number") {
-    console.log(`  组队等级门槛：服务端 ${partyLevel.server} 级 = 客户端入口 openLevel ${partyLevel.client} ✓`);
-  }
-}
-
-/**
- * 跨端数值约定：组队的最低等级（#497）
- *
- * 同一个门槛写在两处：
- *   - 客户端 `bottomNav.ts` 里组队入口的 `openLevel` —— 界面按它锁入口，
- *     并提示「组队功能需要在 N 级后开放」；
- *   - 服务端 `PARTY_MIN_LEVEL_DEFAULT`（可 `PARTY_MIN_LEVEL` 覆盖）—— 真正拦得住的那个。
- *
- * 两边不等的两种事故方向：
- *   - **客户端比服务端高**：服务端放行一次邀请，对方收到后打不开面板（入口锁着），
- *     邀请烂在对方那里，两边都不知道发生了什么（就是 #497 本身）；
- *   - **客户端比服务端低**：界面允许进、服务端一律拒绝，玩家只会觉得「组队坏了」。
- *
- * 判据是等号 + 默认值不许在 configuration.ts 里再写一遍字面量。
- */
-function findPartyMinLevelDrift() {
-  const socialFile = path.join(SERVER_SRC, "common", "constants", "social.ts");
-  const navFile = path.join(ASSETS, "configs", "bottomNav.ts");
-  const problems = [];
-
-  const serverMatch = fs.readFileSync(socialFile, "utf8").match(/export const PARTY_MIN_LEVEL_DEFAULT\s*=\s*(\d+)\s*;/);
-  if (!serverMatch) {
-    problems.push(`找不到 PARTY_MIN_LEVEL_DEFAULT（${path.relative(ROOT, socialFile)}）—— 组队门槛的唯一来源没了`);
-    return { problems };
-  }
-
-  // 按 key 定位组队那一条，避免命中别的入口（各入口的 openLevel 不同）
-  const groupLine = fs
-    .readFileSync(navFile, "utf8")
-    .split("\n")
-    .find((line) => line.includes('key: "group"'));
-  const clientMatch = groupLine && groupLine.match(/openLevel:\s*(\d+)/);
-  if (!clientMatch) {
-    problems.push(`找不到组队入口的 openLevel（${path.relative(ROOT, navFile)} 里 key: "group" 那一行）`);
-    return { problems };
-  }
-
-  const server = Number(serverMatch[1]);
-  const client = Number(clientMatch[1]);
-  if (server !== client) {
-    problems.push(
-      "组队等级门槛两端不一致（#497）：\n" +
-        `  服务端 PARTY_MIN_LEVEL_DEFAULT = ${server}\n` +
-        `  客户端 bottomNav「组队」openLevel = ${client}\n` +
-        "  两边必须相等：客户端高了，服务端放行的邀请对方打不开面板；客户端低了，玩家能进却一律被拒。",
-    );
-  }
-
-  if (!/partyMinLevel:\s*Number\(\s*process\.env\.PARTY_MIN_LEVEL\s*\?\?\s*PARTY_MIN_LEVEL_DEFAULT\s*\)/.test(fs.readFileSync(SERVER_CONFIG, "utf8"))) {
-    problems.push("configuration.ts 的 partyMinLevel 默认值必须引用 PARTY_MIN_LEVEL_DEFAULT（不许再写一份字面量）");
-  }
-
-  return { problems, server, client };
-}
-
-/**
- * 把生成物编译成 JS 并 `require` 回来（后面两条检查都要**真的值**，不是源码文本）
- *
- * 这个编译单元**没有** Cocos 依赖（生成物本身不含引擎类型），所以任何 error TS 都是真错误，一律当失败。
- */
-function compileGenerated() {
-  const work = fs.mkdtempSync(path.join(os.tmpdir(), "olua-shared-audit-"));
-  const outdir = path.join(work, "out");
-  const tsconfig = path.join(work, "tsconfig.json");
-  fs.writeFileSync(
-    tsconfig,
-    JSON.stringify(
-      {
-        compilerOptions: {
-          target: "ES2022",
-          module: "CommonJS",
-          moduleResolution: "node",
-          outDir: outdir,
-          rootDir: SERVER_SRC,
-          skipLibCheck: true,
-          esModuleInterop: true,
-          strict: false,
-          noEmitOnError: false,
-        },
-        files: [GENERATED],
-      },
-      null,
-      2,
-    ),
-    "utf8",
+  // 逐表数行：空表几乎一定是导出前就空着（或表名写错），消费方拿到的是「一页空白」
+  const countsLine = header.find((line) => line.startsWith("-- counts: ")) ?? "";
+  const declaredCounts = new Map(
+    countsLine
+      .slice("-- counts: ".length)
+      .split(",")
+      .filter(Boolean)
+      .map((pair) => [pair.split("=")[0], Number(pair.split("=")[1])]),
   );
+  const empty = [];
+  let total = 0;
+  for (const table of CONFIG_TABLES) {
+    const rows = readRows(text, table).length;
+    total += rows;
+    if (rows === 0) empty.push(table);
+    const declaredCount = declaredCounts.get(table);
+    if (declaredCount !== undefined && declaredCount !== rows) {
+      fail(`快照头部写的 ${table}=${declaredCount} 与实际行数 ${rows} 不符 —— 文件被手工改过？重新导出`);
+    }
+  }
+  if (empty.length > 0) {
+    fail(
+      `这些配置表在快照里一行都没有：${empty.join(", ")}\n` +
+        `  空表 = 别人 config-import 之后那张表整张空掉，而界面上只表现为「这一页什么都没有」。`,
+    );
+  }
 
-  runTsc(tsconfig, `生成物编译不过（${path.relative(ROOT, GENERATED)} 自己坏了）`);
-
-  const mod = require(path.join(outdir, "shared", "game-data.generated.js"));
-  fs.rmSync(work, { recursive: true, force: true });
-  return mod;
+  console.log(`  快照：${CONFIG_TABLES.length} 张配置表 / ${total} 行`);
 }
 
-/**
- * 跑一次 tsc，只把 `error TS` 当失败
- *
- * 两个编译单元共用。生成物那个**没有** Cocos 依赖，任何 error TS 都是真错误；
- * 布局那个 import 了 `cc`（本机没有引擎类型），所以 `Cannot find module 'cc'`
- * 要放过 —— 与 `gen-shared-data.cjs` 同口径：缺类型不影响 JS 产物，下面要的是运行时的值。
- */
-function runTsc(tsconfig, failMessage, ignoreMissingCc = false) {
-  const tsc = path.join(ROOT, "server", "node_modules", ".bin", "tsc");
-  if (!fs.existsSync(tsc)) throw new Error(`找不到 tsc：${tsc}（先在 server/ 下装依赖）`);
+//#endregion
 
-  let log = "";
-  try {
-    log = execFileSync(tsc, ["-p", tsconfig], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
-  } catch (error) {
-    log = `${error.stdout ?? ""}${error.stderr ?? ""}`;
+//#region 2. 枚举逐值比对
+
+/** 从 `export const NAME: Record<string,string> = { "1": "战士", … }` 里取键（键是码） */
+function readLabelKeys(source, name) {
+  const start = source.indexOf(`export const ${name}`);
+  if (start < 0) return null;
+  const open = source.indexOf("{", start);
+  const close = source.indexOf("};", open);
+  if (open < 0 || close < 0) return null;
+  return [...stripComments(source.slice(open, close)).matchAll(/"([^"]+)"\s*:/g)].map((match) => match[1]);
+}
+
+/** 从 `export const NAME: string[] = [ "a", "b" ]`（可带 as const）里取值 */
+function readStringArray(source, name) {
+  const start = source.indexOf(`export const ${name}`);
+  if (start < 0) return null;
+  // 从 `=` 之后找 `[`：类型标注里的 `string[]` 会先命中一个方括号
+  const equals = source.indexOf("=", start);
+  const open = source.indexOf("[", equals < 0 ? start : equals);
+  const close = source.indexOf("]", open);
+  if (open < 0 || close < 0) return null;
+  return [...stripComments(source.slice(open, close)).matchAll(/"([^"]+)"/g)].map((match) => match[1]);
+}
+
+/** 从 `export const NAME = { A: "x", … } as const` 里取值（客户端那份引导白名单是对象形式） */
+function readObjectValues(source, name) {
+  const start = source.indexOf(`export const ${name}`);
+  if (start < 0) return null;
+  const open = source.indexOf("{", start);
+  const close = source.indexOf("}", open);
+  if (open < 0 || close < 0) return null;
+  return [...stripComments(source.slice(open, close)).matchAll(/:\s*"([^"]+)"/g)].map((match) => match[1]);
+}
+
+/** 从 `export enum NAME { A = "x", … }` 里取值 */
+function readStringEnum(source, name) {
+  const start = source.indexOf(`export enum ${name} {`);
+  if (start < 0) return null;
+  const close = source.indexOf("}", start);
+  if (close < 0) return null;
+  return [...stripComments(source.slice(start, close)).matchAll(/=\s*"([^"]+)"/g)].map((match) => match[1]);
+}
+
+/** 从 `export type NAME = "a" | "b"` 里取值 */
+function readStringUnion(source, name) {
+  const matched = new RegExp(`export type ${name}\\s*=([^;]+);`).exec(source);
+  if (!matched) return null;
+  return [...matched[1].matchAll(/"([^"]+)"/g)].map((match) => match[1]);
+}
+
+/** 两组值必须完全相同（不看顺序，但看数量） */
+function compareValues(label, server, client, serverFile, clientFile) {
+  if (!server || server.length === 0) {
+    fail(`${path.relative(ROOT, serverFile)} 里解析不出 ${label}（写法变了？改了就同步改本审计的判据）`);
+    return;
   }
-  const fatal = log
-    .split("\n")
-    .filter((line) => line.includes("error TS") && !(ignoreMissingCc && line.includes("Cannot find module 'cc'")));
-  if (fatal.length > 0) {
-    throw new Error(`${failMessage}：\n  ${fatal.slice(0, 3).join("\n  ")}`);
+  if (!client || client.length === 0) {
+    fail(`${path.relative(ROOT, clientFile)} 里解析不出 ${label} 的对应声明（写法变了？）`);
+    return;
+  }
+  const serverSet = new Set(server);
+  const clientSet = new Set(client);
+  const onlyServer = [...serverSet].filter((value) => !clientSet.has(value));
+  const onlyClient = [...clientSet].filter((value) => !serverSet.has(value));
+  if (onlyServer.length || onlyClient.length) {
+    fail(
+      `${label} 两端不一致：\n` +
+        `  ${path.relative(ROOT, serverFile)} 多出 ${onlyServer.join(", ") || "（无）"}\n` +
+        `  ${path.relative(ROOT, clientFile)} 多出 ${onlyClient.join(", ") || "（无）"}\n` +
+        `  枚举加一个值意味着客户端也要认识它（否则界面打不开、服务端保存被拒）。`,
+    );
   }
 }
 
-/** 逐表数条目，顺带查「表在不在、空不空」 */
-function inspectExports(mod) {
-  const problems = [];
-  const counts = [];
-  for (const name of REQUIRED_EXPORTS) {
-    const value = mod[name];
-    if (value === undefined) {
-      problems.push(`生成物缺少导出 ${name}（生成器漏产了一张表，消费方拿到的是 undefined）`);
+function checkEnums() {
+  const enums = read(GAME_ENUMS, "common/constants/game-enums.ts");
+  if (!enums) return;
+
+  const roleTypes = read(CLIENT_TYPES.role, "types/role.ts");
+  const goodTypes = read(CLIENT_TYPES.good, "types/good.ts");
+  const guideTypes = read(CLIENT_TYPES.guide, "types/guide.ts");
+  const monsterTypes = read(CLIENT_TYPES.monster, "types/monster.ts");
+
+  compareValues("职业码", readLabelKeys(enums, "OCCUPATION_LABELS"), readStringEnum(roleTypes, "OECCUPATION"), GAME_ENUMS, CLIENT_TYPES.role);
+  compareValues("性别码", readLabelKeys(enums, "SEX_LABELS"), readStringEnum(roleTypes, "SEX"), GAME_ENUMS, CLIENT_TYPES.role);
+  compareValues("装备部位", readStringArray(enums, "EQUIPMENT_SLOT_KEYS"), readStringEnum(goodTypes, "EQUIPMENT_TYPE"), GAME_ENUMS, CLIENT_TYPES.good);
+  compareValues("引导高亮位", readStringArray(enums, "GUIDE_SPOTS"), readObjectValues(guideTypes, "GUIDE_SPOT"), GAME_ENUMS, CLIENT_TYPES.guide);
+  compareValues("引导推进事件", readStringArray(enums, "GUIDE_EVENTS"), readObjectValues(guideTypes, "GUIDE_EVENT"), GAME_ENUMS, CLIENT_TYPES.guide);
+  compareValues("怪物定位", readStringArray(enums, "MONSTER_TIERS"), readStringUnion(monsterTypes, "MonsterTier"), GAME_ENUMS, CLIENT_TYPES.monster);
+}
+
+//#endregion
+
+//#region 3. 不许把枚举抄进业务代码
+
+/** 允许出现「完整键清单」的地方：枚举的唯一手写处（这份文件本身就是权威） */
+const ENUM_HOME = path.relative(ROOT, GAME_ENUMS);
+
+/** 递归列出目录下的 .ts / .tsx */
+function listSources(dir) {
+  const out = [];
+  const stack = [dir];
+  while (stack.length > 0) {
+    const current = stack.pop();
+    let entries;
+    try {
+      entries = fs.readdirSync(current, { withFileTypes: true });
+    } catch {
       continue;
     }
-    const rows = Array.isArray(value) ? value.length : Object.keys(value).length;
-    if (rows === 0) {
-      problems.push(`${name} 是空表（0 条）—— 来源数组抽错了，还是客户端配置被清空了？`);
-      continue;
-    }
-    counts.push(`${name}=${rows}`);
-  }
-  if (problems.length > 0) throw new Error(problems.join("\n"));
-  return counts;
-}
-
-/**
- * 遍历两端源码（只 `.ts` / `.tsx`），跳过依赖目录与**生成物**
- *
- * 跳过生成物的判据是文件里有 `@generated` 标记 —— 不能按目录名跳：
- * `server/src/shared/` 里除了生成物还有手写的门面（`game-data.ts`），那个要扫。
- *
- * 给的 `source` 已经**剥掉注释**（见 stripComments）。
- */
-function* eachSource() {
-  const roots = [path.join(ROOT, "admin", "src"), SERVER_SRC];
-  const skipDirs = new Set(["node_modules", "dist", "build"]);
-
-  function* walk(dir) {
-    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    for (const entry of entries) {
+      const full = path.join(current, entry.name);
       if (entry.isDirectory()) {
-        if (!skipDirs.has(entry.name)) yield* walk(path.join(dir, entry.name));
+        if (entry.name === "node_modules" || entry.name.startsWith(".")) continue;
+        stack.push(full);
         continue;
       }
-      if (!/\.tsx?$/.test(entry.name)) continue;
-      const file = path.join(dir, entry.name);
-      const raw = fs.readFileSync(file, "utf8");
-      if (raw.includes("@generated")) continue;
-      yield { file, rel: path.relative(ROOT, file), source: stripComments(raw) };
+      if (/\.(ts|tsx)$/.test(entry.name) && !entry.name.endsWith(".d.ts")) out.push(full);
     }
   }
-
-  for (const root of roots) if (fs.existsSync(root)) yield* walk(root);
+  return out;
 }
 
-/**
- * 剥掉注释（块注释换成等量空格、行注释删到行尾），**行号与列位置不变**
- *
- * 为什么必须剥：注释里写反例是正常的 —— 「不要写成 `["1","2","3","4"]`」这种说明
- * 恰恰应该写在被禁止的地方旁边（本文件头注释与 `game-data.ts` 里就各有一处），
- * 不剥的话守卫会把说明当成副本，然后逼着人把文档改丑。**真副本在代码与字符串里**：
- * 手写的清单是代码、DTO 的 `description` 是字符串字面量，剥注释都删不掉。
- *
- * 代价（已知，接受）：字符串里出现 `//`（比如 URL）会把该行后面截掉，
- * 于是那一行不再被扫。这类行里放游戏数据副本的概率可以忽略。
- */
-function stripComments(source) {
-  return source
-    .replace(/\/\*[\s\S]*?\*\//g, (block) => block.replace(/[^\n]/g, " "))
-    .replace(/\/\/[^\n]*/g, "");
-}
+function checkNoCopies() {
+  const enums = read(GAME_ENUMS, "common/constants/game-enums.ts");
+  if (!enums) return;
 
-/** 报错时的落点（`文件:行号`） */
-function locate(source, index) {
-  return source.slice(0, index).split("\n").length;
-}
+  /** 要防的几组：完整键清单被写成数组字面量、或者码 → 名被写成字典 */
+  const groups = [
+    { name: "职业码", values: readLabelKeys(enums, "OCCUPATION_LABELS") ?? [], labelled: true },
+    { name: "性别码", values: readLabelKeys(enums, "SEX_LABELS") ?? [], labelled: true },
+    { name: "装备部位", values: readStringArray(enums, "EQUIPMENT_SLOT_KEYS") ?? [], labelled: false },
+  ].filter((group) => group.values.length >= 3);
 
-/**
- * 抓 a 类：**与生成物同名的字典型定义**（复制一张表到本地）
- *
- * 判据是 `const X = {` / `const X: Record<...> = {`（X 与生成物导出同名）。
- * 转发写法（`export { X } from "…"`）不匹配，所以正解不会被误报。
- */
-function findLocalCopies() {
-  const pattern = new RegExp(`(?:export\\s+)?const\\s+(${REQUIRED_EXPORTS.join("|")})\\s*[:=]`);
-  const problems = [];
-
-  for (const { rel, source } of eachSource()) {
-    const match = pattern.exec(source);
-    if (!match) continue;
-    problems.push(
-      `${rel}:${locate(source, match.index)} 自己定义了一份 ${match[1]} —— ` +
-        `游戏数据只有一份（server/src/shared/game-data.generated.ts），` +
-        `要从它引用（管理端经 admin/src/api/gameData.ts、服务端经 server/src/shared/game-data.ts），不许复制`,
-    );
-  }
-  return problems;
-}
-
-/** 短标签表的键数上限：超过这个数就不是「枚举清单」的形状，逐条抄进源码不现实 */
-const SHORT_TABLE_MAX_KEYS = 8;
-
-/**
- * 抓 b 类：**换个名字把内容写了一遍**（手写清单 / 抄来的文案）
- *
- * 见文件头「内容被抄进源码」一节。只查「键数 ≤ 8 且值全是字符串」的表，
- * 免得物品 / 装备那种大表把误报引进来。
- */
-function findHandWrittenData(mod) {
-  const tables = [];
-  for (const [name, value] of Object.entries(mod)) {
-    if (!value || typeof value !== "object" || Array.isArray(value)) continue;
-    const keys = Object.keys(value);
-    if (keys.length === 0 || keys.length > SHORT_TABLE_MAX_KEYS) continue;
-    if (!Object.values(value).every((item) => typeof item === "string")) continue;
-    tables.push([name, keys, Object.values(value)]);
-  }
-
-  const problems = [];
-  for (const { rel, source } of eachSource()) {
-    for (const [name, keys, values] of tables) {
-      // ① 完整键列表被写成数组字面量（`["1", "2", "3", "4"]`）
-      const listPattern = new RegExp(`\\[\\s*${keys.map(quote).join("\\s*,\\s*")}\\s*\\]`);
-      const list = listPattern.exec(source);
-      if (list) {
-        problems.push(
-          `${rel}:${locate(source, list.index)} 手写了一遍 ${name} 的键清单 —— ` +
-            `这份清单必须从公共数据取（用 Object.keys(…) 取键），否则客户端加了码这边不会知道`,
-        );
+  const targets = [
+    ...listSources(SERVER_SRC),
+    ...listSources(ADMIN_SRC),
+    ...listSources(path.join(ASSETS, "configs")),
+  ];
+  for (const file of targets) {
+    const rel = path.relative(ROOT, file);
+    if (rel === ENUM_HOME) continue;
+    const source = stripComments(fs.readFileSync(file, "utf8"));
+    for (const group of groups) {
+      // 完整键清单：`["1", "2", "3", "4"]`（顺序无关，只要全都出现且没有别的）
+      for (const matched of source.matchAll(/\[([^\]\n]{10,400})\]/g)) {
+        const values = [...matched[1].matchAll(/"([^"]+)"/g)].map((item) => item[1]);
+        if (values.length !== group.values.length) continue;
+        if (group.values.every((value) => values.includes(value))) {
+          fail(
+            `${rel} 里手抄了${group.name}的完整清单（${values.join(", ")}）—— ` +
+              `从 common/constants/game-enums 取，别维护第二份`,
+          );
+        }
       }
-
-      // ② 行文被抄（`1 战士` / `2 魔法师`：同一张表至少两条才判）
-      const hits = [];
-      for (let index = 0; index < keys.length; index++) {
-        const hit = new RegExp(`${escapeRegExp(keys[index])}\\s*${escapeRegExp(values[index])}`).exec(source);
-        if (hit) hits.push({ index: hit.index, text: `${keys[index]} ${values[index]}` });
-      }
-      if (hits.length >= 2) {
-        problems.push(
-          `${rel}:${locate(source, hits[0].index)} 抄了 ${name} 的行文（${hits.map((hit) => hit.text).join(" / ")}…）—— ` +
-            `这类文案要用 shared/game-data 的枚举一览常量，别手写`,
-        );
+      // 码 → 名字典：必须**键集完全等于**这组码才算抄（`{"0":"主动","1":"被动",…}` 这类
+      // 技能分类字典里有 1/2/3，但它们不是职业码 —— 宽松判据会把它误报成抄职业名）
+      if (group.labelled) {
+        for (const matched of source.matchAll(/\{[^{}]{10,800}\}/g)) {
+          const keys = [...matched[0].matchAll(/"([^"]+)"\s*:\s*"/g)].map((item) => item[1]);
+          if (keys.length !== group.values.length) continue;
+          const keySet = new Set(keys);
+          if (group.values.every((value) => keySet.has(value))) {
+            fail(
+              `${rel} 里手抄了${group.name} → 名字的字典（${keys.join(", ")}）—— ` +
+                `名字也在 game-enums，别另写一份`,
+            );
+          }
+        }
       }
     }
   }
-
-  problems.push(...findRequiresDerived());
-  return problems;
 }
 
-/**
- * ③ 服务端**校验用**的那两条清单必须是从公共数据派生的
- *
- * 与 ① 的分工：① 抓「内容被抄了一遍」，这条抓「清单的来源」—— 只要右侧不是从公共数据
- * 算出来的（写回字面量、或换成别的本地常量），这里就报。它是这三条里唯一读**具体文件**的，
- * 因为「职业 / 性别的允许值」只有这一处入口，而它正是 #122 那个「注释里写着与客户端一致」
- * 的现场。
- */
-function findRequiresDerived() {
-  const file = path.join(SERVER_SRC, "modules", "roles", "role-data.util.ts");
-  if (!fs.existsSync(file)) {
-    throw new Error(`找不到 ${path.relative(ROOT, file)}（改名了？改了就来同步这条判据）`);
-  }
-  const source = fs.readFileSync(file, "utf8");
-  const rel = path.relative(ROOT, file);
-  const problems = [];
+//#endregion
 
-  if (!/from\s+"[^"]*shared\/game-data"/.test(source)) {
-    problems.push(`${rel} 没有引用公共游戏数据（shared/game-data）—— 职业 / 性别清单必须从那里取`);
-  }
-  for (const name of ["ROLE_OCCUPATIONS", "ROLE_SEXES"]) {
-    const match = new RegExp(`export const ${name}\\b[^=]*=\\s*([^;\\n]*)`).exec(source);
-    if (!match) {
-      problems.push(`${rel} 里找不到 ${name} 的定义（改名了？改了就来同步这条判据）`);
-      continue;
-    }
-    if (/^\s*\[/.test(match[1])) {
-      problems.push(`${rel} 的 ${name} 又写成字面量清单了：${match[1].trim().slice(0, 40)} —— 要从公共数据取键`);
-    }
-  }
-  return problems;
-}
+//#region 4. 跨端常量
 
-/**
- * 跨端数值约定：**实时通道的关闭码**（见 #111、文件头「同一个数两端各写一份」）
- *
- * 协议码只在服务端定义（`REALTIME_CLOSE`），客户端要判「被别处顶掉（4000）」就得各存一份。
- * 这与角色上限是同一类问题：**两边对不上不会报错，只会让行为悄悄变错** ——
- * 比如把 4000 当成普通掉线去重连，于是两个客户端互相踢、来回刷。
- *
- * 判据：**键名与取值逐项相同**（不是只比数字集合 —— 键名换掉等于这条约定失去意义；
- * 也不是只比值 —— `GOING_AWAY` 与 `REPLACED` 的值被写反同样要拦）。
- *
- * 两边都读不到就抛错（不是静默跳过）：上游改了写法必须有人来看一眼。
- *
- * @returns `{ problems, codes }`（`codes` 只用于成功时把实测值打出来）
- */
-function findRealtimeCloseDrift() {
-  const problems = [];
-  for (const file of [REALTIME_PROTOCOL, CLIENT_API_CODES]) {
-    if (!fs.existsSync(file)) {
-      throw new Error(`找不到 ${path.relative(ROOT, file)}（改名了？改了就来同步这条判据）`);
-    }
-  }
-
-  const server = readNumericEnum(fs.readFileSync(REALTIME_PROTOCOL, "utf8"), "REALTIME_CLOSE");
-  const client = readNumericEnum(fs.readFileSync(CLIENT_API_CODES, "utf8"), "REALTIME_CLOSE");
-  const relServer = path.relative(ROOT, REALTIME_PROTOCOL);
-  const relClient = path.relative(ROOT, CLIENT_API_CODES);
-
-  if (!server) throw new Error(`${relServer} 里找不到 \`export const REALTIME_CLOSE = {…}\`（改写过了？改了就来同步这条判据）`);
-  if (!client) throw new Error(`${relClient} 里找不到 \`export const REALTIME_CLOSE = {…}\`（改写过了？改了就来同步这条判据）`);
-  if (server.size === 0 || client.size === 0) {
-    throw new Error(`REALTIME_CLOSE 解析出来是空的（${relServer} ${server.size} 项 / ${relClient} ${client.size} 项）—— 写法变了？`);
-  }
-
-  for (const [key, value] of server) {
-    if (!client.has(key)) {
-      problems.push(
-        `${relClient} 的 REALTIME_CLOSE 少了 ${key}（服务端是 ${value}）—— ` +
-          `关闭码对不上不会报错，只会让客户端的行为悄悄变错`,
-      );
-      continue;
-    }
-    if (client.get(key) !== value) {
-      problems.push(
-        `REALTIME_CLOSE.${key} 两端不一致：${relServer} 是 ${value}，${relClient} 是 ${client.get(key)}`,
-      );
-    }
-  }
-  for (const key of client.keys()) {
-    if (!server.has(key)) {
-      problems.push(`${relClient} 的 REALTIME_CLOSE 多了 ${key} —— 服务端没有这个码，客户端在判一个不存在的东西`);
-    }
-  }
-
-  return { problems, codes: server };
-}
-
-/**
- * 从一段源码里抽出 `export const <name> = { … };`（或 `} as const;`）的「键 → 数字」清单
- *
- * 先剥注释：这份文件里到处是解释性的注释，注释里出现 `X: 1` 这样的例子完全正常
- * （写守卫时自己就爱在注释里写反例），不剥就会把文档里的例子当成真的定义。
- */
+/** 从 `export const NAME = { A: 4000, … }`（或 `} as const;`）里取「键 → 数字」 */
 function readNumericEnum(source, name) {
-  const anchor = `export const ${name} = {`;
-  const start = source.indexOf(anchor);
+  const start = source.indexOf(`export const ${name} = {`);
   if (start === -1) return null;
   const rest = source.slice(start);
   const close = /}\s*(?:as\s+const\s*)?;/.exec(rest);
   if (!close) return null;
-
   const out = new Map();
-  const body = stripComments(rest.slice(0, close.index));
-  for (const match of body.matchAll(/([A-Za-z_]\w*)\s*:\s*(\d+)\s*,/g)) out.set(match[1], Number(match[2]));
+  for (const match of stripComments(rest.slice(0, close.index)).matchAll(/([A-Za-z_]\w*)\s*:\s*(\d+)\s*,/g)) {
+    out.set(match[1], Number(match[2]));
+  }
   return out;
 }
 
-const quote = (text) => `"${text}"`;
-const escapeRegExp = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-
-function fail(message) {
-  console.error(`\n✗ ${message}\n`);
-  process.exit(1);
+/** 实时通道关闭码：服务端定义，客户端 `ApiCodes.ts` 是手写镜像，逐键比对 */
+function checkRealtimeClose() {
+  const server = readNumericEnum(read(REALTIME_PROTOCOL, "realtime.protocol.ts"), "REALTIME_CLOSE");
+  const client = readNumericEnum(read(CLIENT_API_CODES, "ui/utils/net/ApiCodes.ts"), "REALTIME_CLOSE");
+  if (!server || server.size === 0) {
+    fail("realtime.protocol.ts 里解析不出 REALTIME_CLOSE（写法变了？改了就同步改本审计）");
+    return;
+  }
+  if (!client || client.size === 0) {
+    fail("ApiCodes.ts 里解析不出 REALTIME_CLOSE（客户端那份手写镜像没了？两个客户端互相踢的 bug 会回来）");
+    return;
+  }
+  for (const [key, value] of server) {
+    if (!client.has(key)) {
+      fail(`ApiCodes.ts 的 REALTIME_CLOSE 少了 ${key}（服务端是 ${value}）`);
+      continue;
+    }
+    if (client.get(key) !== value) {
+      fail(`REALTIME_CLOSE.${key} 两端不一致：服务端 ${value}、客户端 ${client.get(key)}`);
+    }
+  }
+  for (const key of client.keys()) {
+    if (!server.has(key)) fail(`ApiCodes.ts 的 REALTIME_CLOSE 多了 ${key} —— 服务端没有这个码，客户端在判一个不存在的东西`);
+  }
 }
 
-main();
+/** 组队等级门槛：服务端常量与客户端「组队」入口的 openLevel 必须相等 */
+function checkPartyMinLevel() {
+  const social = read(SOCIAL_CONSTANTS, "common/constants/social.ts");
+  const serverMatch = /export const PARTY_MIN_LEVEL_DEFAULT\s*=\s*(\d+)\s*;/.exec(social);
+  if (!serverMatch) {
+    fail("找不到 PARTY_MIN_LEVEL_DEFAULT（common/constants/social.ts）—— 组队门槛的唯一来源没了");
+    return;
+  }
+  const groupLine = read(CLIENT_NAV, "configs/bottomNav.ts")
+    .split("\n")
+    .find((line) => line.includes('key: "group"'));
+  const clientMatch = groupLine && /openLevel:\s*(\d+)/.exec(groupLine);
+  if (!clientMatch) {
+    fail('找不到组队入口的 openLevel（configs/bottomNav.ts 里 key: "group" 那一行）');
+    return;
+  }
+  const server = Number(serverMatch[1]);
+  const client = Number(clientMatch[1]);
+  if (server !== client) {
+    fail(
+      "组队等级门槛两端不一致（#497）：\n" +
+        `  服务端 PARTY_MIN_LEVEL_DEFAULT = ${server}\n` +
+        `  客户端 bottomNav「组队」openLevel = ${client}\n` +
+        "  客户端高了，服务端放行的邀请对方打不开面板；客户端低了，玩家能进却一律被拒。",
+    );
+  }
+  const configurable =
+    /partyMinLevel:\s*Number\(\s*process\.env\.PARTY_MIN_LEVEL\s*\?\?\s*PARTY_MIN_LEVEL_DEFAULT\s*\)/.test(
+      read(SERVER_CONFIG, "config/configuration.ts"),
+    );
+  if (!configurable) {
+    fail("configuration.ts 的 partyMinLevel 默认值必须引用 PARTY_MIN_LEVEL_DEFAULT（不许再写一份字面量）");
+  }
+}
+
+//#endregion
+
+console.log("检查数据权威与跨端约定…");
+checkSnapshot();
+checkEnums();
+checkNoCopies();
+checkRealtimeClose();
+checkPartyMinLevel();
+
+if (problems.length === 0) {
+  console.log(
+    "✓ 配置快照完整（表齐、每张非空、行数与头部一致）、枚举与客户端逐值一致、业务代码里没有第二份枚举、跨端常量（关闭码 / 组队门槛）对齐",
+  );
+  process.exit(0);
+}
+
+console.error(`\n✗ 数据权威守卫有 ${problems.length} 处问题：\n`);
+problems.forEach((item, index) => console.error(`  ${index + 1}. ${item}`));
+console.error("");
+process.exit(1);

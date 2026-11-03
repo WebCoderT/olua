@@ -2,6 +2,7 @@ import { Module } from "@nestjs/common";
 import { MapModule } from "../map/map.module";
 import { UiEffectModule } from "../ui-effect/ui-effect.module";
 import { AdminAchievementController } from "./admin-achievement.controller";
+import { AdminGameDataController } from "./admin-game-data.controller";
 import { AdminDropController } from "./admin-drop.controller";
 import { ClientConfigController } from "./client-config.controller";
 import { ClientConfigService } from "./client-config.service";
@@ -48,7 +49,7 @@ import { GuideSettingsService } from "./guide-settings.service";
   // 地图玩法配置（#573）：配置快照要下发它（客户端据此判进入条件）
   // 特效（#594 升级特效 / #634 掉落光效）：配置快照要下发它（客户端特效按服务端参数演）
   imports: [MapModule, UiEffectModule],
-  controllers: [AdminAchievementController, AdminTitleController, AdminSoulController, AdminRankController, AdminSkillController, AdminStatusController, AdminEquipmentController, AdminEquipmentVariantController, AdminEquipmentRulesController, AdminEquipAlignController, AdminEquipInAlignController, AdminDrugController, AdminItemController, AdminMonsterController, AdminNpcController, AdminQuestController, AdminMallController, AdminFashionController, AdminDropController, AdminRoleLevelController, AdminGrowthScalarController, ClientConfigController, AdminRuntimeParamsController, AdminCombatWeightsController, AdminGuideController],
+  controllers: [AdminAchievementController, AdminTitleController, AdminSoulController, AdminRankController, AdminSkillController, AdminStatusController, AdminEquipmentController, AdminEquipmentVariantController, AdminEquipmentRulesController, AdminEquipAlignController, AdminEquipInAlignController, AdminDrugController, AdminItemController, AdminMonsterController, AdminNpcController, AdminQuestController, AdminMallController, AdminFashionController, AdminDropController, AdminRoleLevelController, AdminGrowthScalarController, ClientConfigController, AdminRuntimeParamsController, AdminCombatWeightsController, AdminGuideController, AdminGameDataController],
   providers: [GameConfigService, EquipAlignService, EquipInAlignService, DropConfigService, GrowthConfigService, MallPricingService, ClientConfigService, RuntimeConfigService, RuntimeParamsService, CombatWeightsService, GuideSettingsService],
   // 商城购买收权（#304）：存档域（roles）读这里的成交价
   // 运行时参数（#605）：社交域（social）的帮会规则门槛要读同一份配置

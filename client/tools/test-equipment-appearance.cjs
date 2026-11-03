@@ -2,23 +2,23 @@
 /**
  * 装备外观（衣服/武器外显动画）回归单测
  *
- * 背景（2026-10-07 事故）：穿上装备后外观不显示、内观正常。
- * 根因：装备外观帧全部是大写扩展名（clothes/weapons 下 3 万多张 `*.PNG`），Cocos 导入器
- * 不认大写扩展名 → 子资源名整串保留扩展名（帧名是 "00000.PNG" 而非 "00000"）；
- * 旧代码按 `Number(帧名)` 取帧序号 → NaN → `indexOf(NaN)` 恒 -1 → 一个动画片段都切不出来，
- * Animation 组件上没有 state，`crossFade(name)` 静默什么都不做 → 外观永远空白。
- * 内观是静态 Sprite（不走帧序号），所以显示正常。怪物/NPC/称号等都是小写 `.png` 不受影响。
+ * ===========================================================================
+ * 事故与它留下的判据（2026-10-07）
+ * ===========================================================================
+ * 穿上装备后外观不显示、内观正常。根因：外观帧全部是大写扩展名 `*.PNG`，Cocos 导入器
+ * 不认大写 → 子资源名整串保留扩展名（`00000.PNG`）；旧代码 `Number(帧名)` → NaN →
+ * `indexOf(NaN)` 恒 -1 → 一个片段都切不出来 → 外观永远空白。
  *
- * 修复：帧序号解析收敛到 `ui/utils/animation/FrameOrder`（先去扩展名再取末尾连续数字）。
+ * #235 起散帧全部打包成动作图集（`<out>/<动作>/<动作>.plist`，帧名 `d<方向>_<帧>`），
+ * 帧号不再靠 `Number(帧名)` 猜 —— 但「别再用 Number(帧名)」这条判据仍然要守，
+ * 所以本文件保留纯函数部分，资源部分改成图集口径。
  *
  * 覆盖：
  * - 纯函数：getFrameIndex / getFrameOrder 对三种帧名形态（纯数字 / 前缀名 / 大写扩展名）的解析
- * - 真实资源：衣服外观帧的 .meta displayName 确实是大写形态（事故现场），新解析能取对序号
- * - 真实切割：用磁盘上的真实帧名 + 真实 AnimationHelper.buildClips，88 个动作片段全齐、
- *   帧数与帧序正确（stand_down = 32~39）；并证明旧口径 Number(帧名) 解析出来是 NaN
- * - 全量覆盖：所有衣服/武器 out 目录都能切出全部动作片段（任何一件装备穿上后外观都有得播）
+ * - 图集帧名：`d4_00` 这类自描述帧名能被解析，且 AnimationHelper 走的是正则分组而不是 Number()
+ * - 真实资源：每件衣服/武器的每个动作都有图集、每个动作覆盖 8 个方向、帧号从 0 起连续
  * - 配置：每件衣服/武器条目的 out 目录在磁盘上存在（唯一例外 weapon_5 的 out 为空串）
- * - 源码：AnimationHelper 不再直接 Number(帧名)，排序与挑帧都走 FrameOrder 纯函数
+ * - 源码：帧序号解析收敛到 FrameOrder；图集分支按 `d<方向>_<帧>` 分组
  *
  * 用法：node client/tools/test-equipment-appearance.cjs
  */
@@ -27,9 +27,8 @@ const path = require("path");
 const { prepare, PROJECT_ROOT, check, finish } = require("./lib/configs-sandbox.cjs");
 
 const HELPER_FILE = path.join(PROJECT_ROOT, "assets/ui/helpers/AnimationHelper.ts");
-// 散帧已图集化（#235）移出 assets：原始逐帧素材在仓库根 _loose_frames_archive（gitignored）
-const CLOTHES_DIR = path.join(PROJECT_ROOT, "..", "_loose_frames_archive", "clothes", "out");
-const WEAPONS_DIR = path.join(PROJECT_ROOT, "..", "_loose_frames_archive", "weapons", "out");
+// #235 散帧图集化：衣服/武器外显在 resources 下的 <out>/<动作>/<动作>.plist
+const RES_ROOT = path.join(PROJECT_ROOT, "assets", "resources");
 
 /** cc 垫片追加：AnimationHelper 还要用 Animation/AnimationClip/SpriteFrame 等（测试只走纯切割，桩够用） */
 const CC_EXTRA = `
@@ -51,29 +50,7 @@ Object.assign(module.exports, {
 
 const outDir = prepare("olua-appearance", ["configs/animation.ts", "ui/utils/animation/FrameOrder.ts", "ui/helpers/AnimationHelper.ts"], CC_EXTRA);
 const { getFrameIndex, getFrameOrder } = require(path.join(outDir, "ui/utils/animation/FrameOrder.js"));
-const { roleAnimationMap } = require(path.join(outDir, "configs/animation.js"));
-const AnimationHelper = require(path.join(outDir, "ui/helpers/AnimationHelper.js")).default;
-
-/** 假帧：只有切割逻辑用到的 name 与 getRect */
-function fakeFrame(name, width = 86, height = 93) {
-  return { name, getRect: () => ({ x: 0, y: 0, width, height }) };
-}
-
-/**
- * 按导入器的真实行为把磁盘文件名变成子资源名：
- * 小写 .png 被识别 → 去扩展名；大写 .PNG 不被识别 → 整串保留（事故形态）
- */
-function diskName(file) {
-  return /\.PNG$/.test(file) ? file : file.replace(/\.[^.]*$/, "");
-}
-
-/** 读一个外观目录的全部帧名（按导入器口径），切出全部动作片段 */
-function buildClipsFromDisk(dir) {
-  const files = fs.readdirSync(dir).filter((file) => /\.png$/i.test(file));
-  // 与 loadFrames 同口径：先按帧序号排序（readdir 序不可信），再交给 buildClips 过滤
-  const frames = files.map((file) => fakeFrame(diskName(file))).sort((a, b) => getFrameOrder(a.name) - getFrameOrder(b.name));
-  return AnimationHelper.buildClips(roleAnimationMap, frames, `test|${dir}`);
-}
+const { roleAnimationMap, directions, roleActionAtlas } = require(path.join(outDir, "configs/animation.js"));
 
 //#region 纯函数：三种帧名形态
 
@@ -90,31 +67,47 @@ check(Number.isNaN(Number("00000.PNG")), "事故见证：旧口径 Number(帧名
 
 //#endregion
 
-//#region 真实资源：事故现场（衣服外观帧的子资源名带大写扩展名）
+//#region 图集帧名：d<方向>_<帧> 自描述
 
-const sampleMeta = JSON.parse(fs.readFileSync(path.join(CLOTHES_DIR, "005", "00000.PNG.meta"), "utf8"));
-const sampleName = Object.values(sampleMeta.subMetas).find((sub) => sub.name === "spriteFrame").displayName;
-check(sampleName === "00000.PNG", "衣服外观帧的导入器子资源名整串保留大写扩展名（事故现场）", `displayName = ${sampleName}`);
-check(getFrameIndex(sampleName) === 0, "新解析对真实子资源名取到帧序号 0");
-check(getFrameIndex("00001.PNG") === 1 && getFrameIndex("00039.PNG") === 39, "真实帧名序号逐个取对");
-
-//#endregion
-
-//#region 真实切割：buildClips 用磁盘帧名切出全部动作片段
-
-const clothClips = buildClipsFromDisk(path.join(CLOTHES_DIR, "005"));
-check(clothClips.size === roleAnimationMap.size, "衣服外观 005 切出全部动作片段", `${clothClips.size}/${roleAnimationMap.size}`);
-const standDown = clothClips.get("stand_down");
-check(!!standDown, "stand_down 有片段");
-check(standDown.frames.length === 8, "stand_down 帧数 = 每方向帧长 8", `${standDown.frames.length}`);
-check(standDown.frames.every((frame) => /^0003[0-9]/.test(frame.name)), "stand_down 帧序 = 32~39（动作段起点 + 方向下标 × 帧长）");
-check(standDown.frames[0].name.startsWith("00032"), "stand_down 首帧 = 00032（排序生效，不是文件枚举序）");
-const weaponClips = buildClipsFromDisk(path.join(WEAPONS_DIR, "001"));
-check(weaponClips.size === roleAnimationMap.size, "武器外观 001 切出全部动作片段", `${weaponClips.size}/${roleAnimationMap.size}`);
+check(getFrameIndex("d4_00") === 0 && getFrameIndex("d4_03") === 3, "图集帧名 d4_00 / d4_03 取到的末尾序号是帧下标（事故形态不再出现）");
+const helperSource = fs.readFileSync(HELPER_FILE, "utf8");
+check(/const matched = \/\^d\(\\d\+\)_\(\\d\+\)\$\/\.exec\(frame\.name\.replace\(\/\\\.png\$\/i, ""\)\)/.test(helperSource), "AnimationHelper 按 d<方向>_<帧> 正则拆帧名（不靠 Number）");
+check(/const direction = directions\[directionIndex\];/.test(helperSource), "方向下标直接索引 directions（帧名自带方向，不再依赖帧号表）");
 
 //#endregion
 
-//#region 全量覆盖：所有衣服/武器 out 目录都有完整片段
+//#region 真实资源：每件衣服/武器的每个动作都有图集且覆盖 8 向
+
+/** 某套外观所有问题的清单（缺图集 / 空图集 / 方向不全 / 帧号不连续） */
+function inspectOut(outSrc) {
+  const dirPath = path.join(RES_ROOT, outSrc);
+  if (!fs.existsSync(dirPath)) return ["目录不存在"];
+  const problems = [];
+  for (const { action } of roleActionAtlas) {
+    const plistPath = path.join(dirPath, action, `${action}.plist`);
+    if (!fs.existsSync(plistPath)) { problems.push(`${action}:缺图集`); continue; }
+    const frames = Array.from(fs.readFileSync(plistPath, "utf8").matchAll(/<key>(d\d_\d+)\.png<\/key>/g)).map((match) => match[1]);
+    if (frames.length === 0) { problems.push(`${action}:空图集`); continue; }
+    const byDirection = new Map();
+    for (const name of frames) {
+      const [direction, index] = name.split("_");
+      byDirection.set(direction, [...(byDirection.get(direction) ?? []), Number(index)]);
+    }
+    if (byDirection.size !== directions.length) problems.push(`${action}:${byDirection.size}向`);
+    for (const [direction, indexes] of byDirection) {
+      const sorted = [...indexes].sort((a, b) => a - b);
+      if (!sorted.every((value, position) => value === position)) problems.push(`${action}/${direction}:帧号不连续`);
+    }
+  }
+  return problems;
+}
+
+const sample = inspectOut("clothes/out/005");
+check(sample.length === 0, "衣服 005 的 11 个动作图集齐全、各覆盖 8 向且帧号从 0 起连续", sample.slice(0, 5).join("；"));
+
+//#endregion
+
+//#region 全量覆盖：所有衣服/武器 out 目录都能播
 
 const { getItem, getItemsByType } = require(path.join(outDir, "configs/items.js"));
 const { EQUIPMENT_TYPE, GOOD_TYPE, isEquipment } = require(path.join(outDir, "types/good.js"));
@@ -126,17 +119,12 @@ wearables.forEach((good) => {
 });
 check(outDirs.size > 0, "装备外观目录收集齐", `${outDirs.size} 个目录 / ${wearables.length} 件装备（含变体）`);
 
-let brokenDirs = [];
+const brokenDirs = [];
 outDirs.forEach((outSrc) => {
-  const dir = path.join(PROJECT_ROOT, "..", "_loose_frames_archive", outSrc);
-  if (!fs.existsSync(dir)) {
-    brokenDirs.push(`${outSrc} <目录不存在>`);
-    return;
-  }
-  const clips = buildClipsFromDisk(dir);
-  if (clips.size !== roleAnimationMap.size) brokenDirs.push(`${outSrc} 只切出 ${clips.size}/${roleAnimationMap.size} 个动作`);
+  const problems = inspectOut(outSrc);
+  if (problems.length) brokenDirs.push(`${outSrc} <${problems.slice(0, 2).join("、")}>`);
 });
-check(brokenDirs.length === 0, "每个外观目录都能切出全部动作片段（穿上任何一件装备外观都有得播）", brokenDirs.slice(0, 5).join("；"));
+check(brokenDirs.length === 0, "每个外观目录的动作图集都完整（穿上任何一件装备外观都有得播）", brokenDirs.slice(0, 5).join("；"));
 
 //#endregion
 
@@ -146,7 +134,7 @@ const missingOut = wearables.filter((good) => good.slot === EQUIPMENT_TYPE.CLOTH
 const missingDir = new Set();
 wearables.forEach((good) => {
   if (!good.out) return;
-  if (!fs.existsSync(path.join(PROJECT_ROOT, "..", "_loose_frames_archive", good.out))) missingDir.add(good.out);
+  if (!fs.existsSync(path.join(RES_ROOT, good.out))) missingDir.add(good.out);
 });
 check(missingOut.length === 0, "每件衣服都配了外观目录", missingOut.join("、"));
 check(missingDir.size === 0, "每件衣服/武器的外观目录在磁盘上存在", Array.from(missingDir).join("、"));
@@ -156,7 +144,6 @@ check(getItem("weapon_5") && getItem("weapon_5").out === "", "weapon_5 外观为
 
 //#region 源码：帧序号解析收敛到 FrameOrder，不再有裸 Number(帧名)
 
-const helperSource = fs.readFileSync(HELPER_FILE, "utf8");
 check(/import \{ getFrameIndex, getFrameOrder \} from "\.\.\/utils\/animation\/FrameOrder";/.test(helperSource), "AnimationHelper 引入 FrameOrder 纯函数");
 check(!/Number\(spriteFrame\.name\)/.test(helperSource) && !/Number\(frame\.name\)/.test(helperSource), "不再直接 Number(帧名)（大写扩展名会解析成 NaN）");
 check(/getFrameIndex\(spriteFrame\.name\)/.test(helperSource), "片段切割按 getFrameIndex 挑帧");

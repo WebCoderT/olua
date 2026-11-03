@@ -48,8 +48,8 @@
 ### 列表里的缩略图是从哪来的？为什么有的行显示「无图」？
 
 - 缩略图组件在 `components/GameImage.tsx`：单图资源（`icon` 字段）用 `<img>` 直出；称号 / 战魂 / NPC 这类图集动画解析 plist 取**文档序第一帧**画到 canvas（兼容 TexturePacker format 2 / 3 两套方言，模块级缓存一屏只解析一次）。
-- 图片路径一律查 `game-data.generated.ts`（`api/gameData.ts` 的 `equipmentIcon` 等查表函数）；技能 / 状态 / 时装 / 称号 / 战魂的接口行里本来就带 `icon` / `animation` 字段，直接用行值 —— 两条路是**同一份配置**，不存在第二份字典。
-- 显示「无图」= 路径为空或 PNG 拿不到：要么客户端素材还没加（新配置先于素材），要么 id 是库里后加的、生成物里还没有。补素材或重跑 `node tools/gen-shared-data.cjs` 即可，列表其它功能不受影响。
+- 图片路径一律来自**数据库快照**（`api/gameData.ts` 的 `equipmentIcon` 等查表函数读的是 `GET /admin/game-data` 拉回来的那份数据，与客户端 `GET /game-config` 同源）；技能 / 状态 / 时装 / 称号 / 战魂的接口行里本来就带 `icon` / `animation` 字段，直接用行值 —— 两条路是**同一份配置**，不存在第二份字典。
+- 显示「无图」= 路径为空或 PNG 拿不到：要么客户端素材还没加（新配置先于素材），要么这一行的资源路径还没在管理端配（图标列直接填 `item/jcy_1` 这种路径，或点旁边的图片按钮挑）。补素材 / 补路径即可，列表其它功能不受影响。
 - URL 根是 `/game-resources/`：dev 由 vite 中间件直读 `client/assets/resources`，prod 由管理端 nginx 反代到 game 容器 —— 与装备对齐工作台同一条链路，同源加载所以 canvas 不会被跨域污染。
 - **缩略图可以点击放大**：点任意一格会弹出灯箱（大图、Esc 或点遮罩关闭）。图集大图是用同一份缓存首帧**重画**的大尺寸 canvas，不是把 40px 的小图拉大，像素风依旧锐利。
 
@@ -105,15 +105,15 @@
 
 ### 后台能自己加一张「装备名 / 职业名」的表吗？
 
-**不能，而且守卫会拦。** 装备 / 战魂 / 称号 / 军衔 / 技能 / 物品 / 地图的名字，权威定义只有一处 —— 客户端的 `client/assets/configs`（外加 `client/assets/types/role.ts` 的枚举注释：「全职业」这个职业码与三个性别名只写在那里）；#590 起称号 / 战魂 / 军衔的名字另有一处服务端种子 `server/src/shared/{title,soul,rank}-seed.ts`，`api/gameData.ts` 直接 import 同一份。`src/api/gameData.ts` 读的生成物 `server/src/shared/game-data.generated.ts` **与生成物同一份、不是第二份副本**。
+**不能，而且守卫会拦。** 装备 / 战魂 / 称号 / 军衔 / 技能 / 物品 / NPC / 怪物 / 地图的**名字与数值**只有一个权威：**数据库**（出厂值在 `server/data/config-sync.sql`，三端都从 `GET /game-config` 那一份快照读，客户端 configs 是空运行时表）。`api/gameData.ts` 也是登录后拉 `GET /admin/game-data` 索引成 Map，**代码里没有任何一份数据副本**。
 
-要在 `admin/src` 里再写一份与生成物同名的字典（比如 `SEX_LABELS = { … }`），`make audit-shared-data` 会直接 FAIL 并点出文件行号。此前 `types.ts` 里就手抄过一份职业名与性别名 —— 客户端改了这边不会知道，已经删掉改成引用。
+只有**枚举**（职业 / 性别 / 装备部位 / 怪物定位 / 引导位与事件 —— 加一个值就要改代码的那类）是手写的，住在服务端 `server/src/common/constants/game-enums.ts`，客户端 `assets/types/*` 各有一份同名同值的声明。要在 `admin/src` 里再写一份（比如 `SEX_LABELS = { … }`），`make audit-shared-data` 会直接 FAIL 并点出文件行号。此前 `types.ts` 里就手抄过一份职业名与性别名 —— 客户端改了这边不会知道，已经删掉改成引用。
 
 ### 想改装备名 / 称号名，改哪里？
 
-改对应来源 → 视情况重跑或重建：装备 / 物品 / 技能名改客户端配置后跑 `node tools/gen-shared-data.cjs`（= `make gen-shared-data`）；#590 起称号 / 战魂 / 军衔 / 等级 / 曲线的名字与数值在 `server/src/shared/{title,soul,rank,growth}-seed.ts`（管理端 `api/gameData.ts` 直接 import 同一份），改完重启服务端即可。
+**在管理端改，改完就是最新。** 名字与数值都在配置表里（`/equipments`、`/titles`、`/skills` …），保存即落库；本进程的查表缓存刷新页面即最新，玩家下次进游戏拉快照。改完记得 `make config-export` 把库同步回 `server/data/config-sync.sql`（`make config-check` 会告诉你库与快照是否已经分叉——别人 `config-import` 之后就会回到快照那一份）。
 
-忘了重新生成也不会漏过去：`make audit-shared-data` 会报「生成物已过期」。这条守卫不去让人判断「要不要更新」—— 来源在客户端，这边没有别的正确答案。
+`make audit-shared-data` 守的是另外四件事：快照文件完整（表清单与 `config-tables.cjs` 一致、每张表都有行）、枚举两端逐值一致、枚举没有被抄进业务代码、跨端常量（实时关闭码 / 组队等级门槛）两端对齐。
 
 ## 接口层
 

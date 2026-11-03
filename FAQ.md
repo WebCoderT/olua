@@ -118,8 +118,9 @@ admin/src/api/{routes,models,endpoints}.ts
 
 另有几个**由生成器产出的游戏配置表**（不是接口生成物，但同样是生成物）：
 
-- `server/src/shared/monster-presentation.generated.ts` ← `client/tools/gen-monster-config.cjs`（怪物资源表现清单，#588 起产出到服务端；几何读图集 plist 基准帧实测）
 - `configs/monsterDrops.ts` ← `client/tools/gen-monster-drops.cjs`（掉落表）
+- 怪物表现几何不再有生成物：#655 起 `client/tools/gen-monster-config.cjs` 只**量素材**，
+  把 `outOffset` / `contentSize` / `aggressive` 写回 `monster_presentation` 表的几何列（再 `make config-export`）
 
 这两个的规则写在各自脚本的文件头，改完要重跑脚本，不要直接改产物。
 

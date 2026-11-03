@@ -146,26 +146,26 @@ admin/
 
 ## 游戏数据从哪来（三端共用一份）
 
-装备 / 战魂 / 称号 / 军衔 / 技能 / 物品的名字与元数据，**权威定义只有一处** —— 客户端 `client/assets/configs`
-（外加 `client/assets/types/role.ts` 的枚举注释，「全职业」这个职业码与三个性别名只写在那里）。
+装备 / 战魂 / 称号 / 军衔 / 技能 / 物品 / NPC / 时装 / 怪物 / 地图的名字与数值，**权威定义只有一处** —— **数据库**
+（出厂值在 `server/data/config-sync.sql`，空库启动时由 `bootstrapConfigSnapshot()` 整份灌进去）。
 
-**地图是例外（#573）**：地图的玩法配置（名称 / 类型 / 进入等级 / 进入战斗力 / 进入战魂阶）已经搬到服务端 `maps` 表，
-出厂值在 `server/src/common/constants/map-config.ts`（首次启动按资源清单种进去，之后运营改了重启不会被盖回），
-客户端只保留资源约定（`map/<id>/<id>` 目录、对象组与属性名）。地图名录要**同步**读取（角色详情、实体选择器都在渲染中途要名字），
-所以走 `src/api/mapCatalog.ts` 的进程内缓存：`Layout` 挂载时 `ensureMapCatalog()` 拉一次，地图页保存成功后再 `refreshMapCatalog()`。
+**地图的玩法配置（#573）**：名称 / 类型 / 进入等级 / 进入战斗力 / 进入战魂阶 就在 `maps` 表里（与其它配置同一套做法，
+管理端「地图管理」可改），客户端只保留资源约定（`map/<id>/<id>` 目录、对象组与属性名）。地图名录要**同步**读取
+（角色详情、实体选择器都在渲染中途要名字），所以走 `src/api/mapCatalog.ts` 的进程内缓存：`Layout` 挂载时
+`ensureMapCatalog()` 拉一次，地图页保存成功后再 `refreshMapCatalog()`。
 
-管理端**不复制**一份：`src/api/gameData.ts` 按相对路径 import 那份公共生成物
-（`server/src/shared/game-data.generated.ts`，由 `tools/gen-shared-data.cjs` 生成），Vite 直接把它打进包里 ——
-服务端与管理端读的是**同一个文件**。
+管理端**不复制**一份数据：`src/api/gameData.ts` 登录后拉 `GET /admin/game-data`（与客户端 `GET /game-config` 同一份
+快照），索引成几张 Map，之后所有查表都是同步读缓存。**代码里没有任何一份数据副本**。
 
-- 改数值 / 改名字 → 改客户端配置 → `node tools/gen-shared-data.cjs`（忘了生成会被 `make audit-shared-data` 逮住）；
-- **不许在这里或页面里再写一份字典**：`make audit-shared-data` 会扫 `admin/src`，出现与生成物同名的字典型定义就 FAIL；
+- 改数值 / 改名字 → 在管理端对应的页面改（保存即落库）→ `make config-export` 把库同步回快照；忘了同步会被
+  `make config-check` 逮住；
+- **不许在这里或页面里再写一份字典型数据**：`make audit-shared-data` 会扫 `admin/src`，把枚举（职业 / 性别 / 部位 …）
+  抄成第二份就 FAIL —— 枚举的唯一手写处是 `server/src/common/constants/game-enums.ts`；
 - 页面上的名字都过查表函数（`gameData.ts` 的 `equipmentText` / `skillText` / `itemText` / `soulText` / `titleText` /
   `rankText`…，地图的是 `mapCatalog.ts` 的 `mapText`）。它们只做「查表 + 查不到就显示原 id」，不拼口径 ——
-  装备显示名（含前后缀）与部位归属是生成器在客户端那份数据上算好的。
+  装备显示名（含前后缀）与部位归属是快照里那几列（`equipment_variants.label`）。
 
-> dev 模式要读项目**外**的文件，所以 `vite.config.ts` 里放行了上层目录（`server.fs.allow: [".."]`）；
-> 构建（rollup）不受这条影响。
+> 缓存没到（还没登录完 / 请求失败）时，名字类查表回落 id 本身，一眼能看出「数据还没加载」。
 
 ## 权限模型
 

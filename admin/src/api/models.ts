@@ -5719,7 +5719,7 @@ export type MallPriceRemove = {
 
 export type Fashion = {
   /**
-   * 时装 id（seed 自 shared/fashion-seed.ts，如 "cloth_2"；序列固定，不可增删行）
+   * 时装 id（seed 自 config-sync.sql，如 "cloth_2"；序列固定，不可增删行）
    */
   id: string;
   /**
@@ -5957,7 +5957,7 @@ export type MonsterPresentation = {
    */
   moveSpeed: number;
   /**
-   * 是否主动攻击玩家（表现与客户端 AI 口径；服务端权威 AI 读生成物同一份）
+   * 是否主动攻击玩家（表现与客户端 AI 口径；服务端权威 AI 读同一行）
    */
   aggressive: boolean;
   /**
@@ -6271,7 +6271,7 @@ export type GameConfigSnapshot = {
    */
   growthScalars: GrowthScalar[];
   /**
-   * 战斗力权重（属性名 → 倍率；#603：唯一书写处是服务端 shared/combat-seed.ts）。服务端用它算角色战斗力，客户端只用它算「这件装备是不是更好」——客户端 configs/battle 不再存倍率，进游戏由这段整表填充。hpRecover 不在表里（回血不计战斗力）
+   * 战斗力权重（属性名 → 倍率；#603：唯一书写处是服务端 config-sync.sql）。服务端用它算角色战斗力，客户端只用它算「这件装备是不是更好」——客户端 configs/battle 不再存倍率，进游戏由这段整表填充。hpRecover 不在表里（回血不计战斗力）
    */
   combatWeights: Record<string, number>;
   /**
@@ -7358,11 +7358,11 @@ export type MapSource = {
    */
   label: string;
   /**
-   * 来源类别：config 客户端配置 / snapshot 服务端生成快照 / db 服务端库表
+   * 来源类别：config 客户端资源 / db 服务端库表
    */
   origin: string;
   /**
-   * 具体文件或表名（config / snapshot 给路径，db 给表名）
+   * 具体文件路径（config）或表名（db）
    */
   ref: string;
   /**

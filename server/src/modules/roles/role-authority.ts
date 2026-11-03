@@ -32,7 +32,6 @@
  */
 
 import { adoptBagShape, readBagGrid } from "./role-inventory";
-import { MP_RECOVER_PER_SECOND } from "../../shared/growth-seed";
 
 /** 账本：只有服务端能改（客户端上报值一律丢弃） */
 export const SERVER_LEDGER_FIELDS = ["gold", "bindGold", "silver"] as const;
@@ -184,17 +183,6 @@ export function enforceServerAuthority(
   return drift;
 }
 
-/**
- * 魔法值自然回复速度（点 / 秒）—— **出厂值**（定义在 `shared/growth-seed`，这里再导出一次，
- * 让结算相关的调用方只需认识 `role-authority` 这一个模块）
- *
- * 真实值在 `growth_scalars` 表的 `mpRecoverPerSecond`（管理端「成长配置」可改，出厂 2），
- * 由调用方读库后传进 `settleVitalsAuthority`；这个常量只是读不到时的兜底，也是 e2e 的出厂对照。
- * 客户端 `configs/role.mpRecoverPerSecond` 是同一个数的本地出厂值，进游戏后由快照
- * `growthScalars` 段覆写成服务端的当前值（#605 起不再靠「两边手改保持一致」）。
- */
-export { MP_RECOVER_PER_SECOND };
-
 /** 回复结算的存档字段（服务端独占；客户端那份只是演出预测，save 时整体覆盖） */
 export const SERVER_VITALS_FIELDS = [
   "hp",
@@ -235,7 +223,7 @@ export function settleVitalsAuthority(
   stored: Record<string, unknown>,
   incoming: Record<string, unknown>,
   now: number,
-  mpRecoverPerSecond: number = MP_RECOVER_PER_SECOND,
+  mpRecoverPerSecond: number,
 ): void {
   const settledAt = Number(stored.vitalsSettledAt);
   const baseHp = Math.max(0, Math.floor(Number(stored.hp) || 0));
@@ -261,7 +249,7 @@ export function settleVitalsAuthority(
   incoming.hpRecoverAccumulator = hpGain > 0 ? hpAccumulated - hpGain : Math.min(hpAccumulated, 0.999);
 
   // 回复速度为负 = 配置拍错，按 0 处理（倒扣蓝比不回复更糟）
-  const mpRate = Number.isFinite(mpRecoverPerSecond) ? Math.max(0, mpRecoverPerSecond) : MP_RECOVER_PER_SECOND;
+  const mpRate = Number.isFinite(mpRecoverPerSecond) ? Math.max(0, mpRecoverPerSecond) : 0;
   const mpAccumulated = Math.max(0, Number(stored.mpRecoverAccumulator) || 0) +
     (mpRate * elapsed) / 1000;
   const mpGain = Math.floor(mpAccumulated);

@@ -5,7 +5,7 @@
  * 盯的不变量（改默认外观 / 加性别素材后必须全绿）：
  * · 配置表：男 role/1、女 role/2，字段与装备外观同口径（out / outScale / outPositions）
  * · 回落：未登记的性别（SEX.ALL、旧存档空值、未知串）一律回落男性 —— 角色任何情况下都必须有身体
- * · 素材对齐：配置的每个目录都真实存在、帧数完整，且按**该目录的帧号基准**归一后动画表 88 组全能切
+ * · 素材对齐：配置的每个目录都在 resources 下，且每个动作都有图集（#235 散帧图集化，帧号在 plist 里）
  * · 接线：外观回退与预加载都按 role.sex 取默认外观（不再是单一常量），且旧常量已彻底清除
  * · 同口径：RoleAppearance 的衣服/武器变换参数是 OutTransform，装备与默认外观共用一套变换代码
  *
@@ -17,8 +17,8 @@ const path = require("path");
 const { PROJECT_ROOT, prepare, check, finish, fail } = require("./lib/configs-sandbox.cjs");
 
 const read = (rel) => fs.readFileSync(path.join(PROJECT_ROOT, rel), "utf8");
-// 散帧已图集化（#235）移出 assets：role/1、role/2 原始逐帧在仓库根 _loose_frames_archive（gitignored）
-const roleRoot = path.join(PROJECT_ROOT, "..", "_loose_frames_archive", "role");
+// #235 散帧已图集化：角色本体在 resources/role/<n>/<action>/<action>.plist（散帧归档已不进仓库）
+const roleRoot = path.join(PROJECT_ROOT, "assets", "resources");
 
 let outDir;
 try {
@@ -29,9 +29,8 @@ try {
 }
 
 const { roleDefaultCloths, getRoleDefaultCloth } = require(path.join(outDir, "configs/role.js"));
-const { roleAnimationMap, directions, animationFrameBases, getAnimationFrameBase } = require(path.join(outDir, "configs/animation.js"));
+const { roleAnimationMap, directions, animationFrameBases, getAnimationFrameBase, roleActionAtlas } = require(path.join(outDir, "configs/animation.js"));
 const { SEX } = require(path.join(outDir, "types/role.js"));
-const { getFrameIndex } = require(path.join(outDir, "ui/utils/animation/FrameOrder.js"));
 
 const roleSource = read("assets/configs/role.ts");
 const animationSource = read("assets/configs/animation.ts");
@@ -69,25 +68,28 @@ roleDefaultCloths.forEach((cloth, sex) => {
 check(/export interface OutTransform/.test(goodSource), "types/good 导出共用外观变换接口 OutTransform");
 check(/outScale\?: number;/.test(goodSource) && /outPositions\?: Vec2\[\];/.test(goodSource), "OutTransform 的字段可选（装备与默认外观都能满足）");
 
-console.log("\n— D. 素材对齐：目录存在、帧数完整、按帧号基准全能切 —");
+console.log("\n— D. 素材对齐：图集目录与动作齐全 —");
 roleDefaultCloths.forEach((cloth, sex) => {
-  const dirPath = path.join(roleRoot, cloth.out.replace(/^role\//, ""));
+  const dirPath = path.join(roleRoot, cloth.out);
   if (!fs.existsSync(dirPath)) {
-    check(false, `性别 ${sex} 的默认外观目录存在（${cloth.out}）`);
+    check(false, `性别 ${sex} 的默认外观目录存在（assets/resources/${cloth.out}）`);
     return;
   }
-  const pngs = fs.readdirSync(dirPath).filter((name) => name.toLowerCase().endsWith(".png"));
-  check(pngs.length > 0, `性别 ${sex} 的目录 ${cloth.out} 里有帧`, `${pngs.length} 帧`);
-
-  // 与 AnimationHelper.buildClips 同口径：帧号先减该目录的帧号基准，再匹配动作区间
-  const base = getAnimationFrameBase(cloth.out);
-  const available = new Set(pngs.map((name) => getFrameIndex(name)).filter((index) => index !== null).map((index) => index - base));
-  const emptyPairs = [];
-  roleAnimationMap.forEach((frameIndexes, name) => {
-    if (!frameIndexes.some((index) => available.has(index))) emptyPairs.push(name);
-  });
-  check(available.has(0), `性别 ${sex} 的目录存在归一后的 0 号帧（待机起始帧）`);
-  check(emptyPairs.length === 0, `性别 ${sex} 的目录按帧号基准 ${base} 归一后 88 组动画全部能切出帧`, emptyPairs.slice(0, 6).join("、"));
+  const missing = [];
+  for (const { action } of roleActionAtlas) {
+    const plistPath = path.join(dirPath, action, `${action}.plist`);
+    if (!fs.existsSync(plistPath)) { missing.push(action); continue; }
+    const plist = fs.readFileSync(plistPath, "utf8");
+    const frames = Array.from(plist.matchAll(/<key>(d\d_\d+\.png)<\/key>/g)).map((match) => match[1]);
+    if (frames.length === 0) missing.push(`${action}:空图集`);
+    const dirs = new Set(frames.map((name) => name.split("_")[0]));
+    if (dirs.size !== directions.length) missing.push(`${action}:${dirs.size}向`);
+  }
+  check(
+    missing.length === 0,
+    `性别 ${sex} 的 ${roleActionAtlas.length} 个动作都有图集、且每个动作覆盖 ${directions.length} 向`,
+    missing.slice(0, 6).join("、"),
+  );
 });
 
 console.log("\n— E. 帧号基准登记（与另一套全局连续编号的素材必须登记）—");
@@ -96,7 +98,7 @@ check(getAnimationFrameBase("role/1") === 0, "role/1 从 0 起编号，无需登
 check(getAnimationFrameBase("role/9") === 0, "未登记的目录基准为 0（不会因缺登记而崩）");
 
 console.log("\n— F. 接线：回退与预加载都按性别取默认外观 —");
-check(/getRoleDefaultCloth\(role\.sex\)/.test(appearanceSource), "RoleAppearance 按 role.sex 取默认外观");
+check(/getRoleDefaultCloth\(source\.sex\)/.test(appearanceSource), "RoleAppearance 按来源的 sex 取默认外观（主角与远端玩家共用一份优先级）");
 check(/getRoleDefaultCloth\(role\.sex\)\.out/.test(preloadSource), "PreloadManager 按 role.sex 取默认外观再预加载");
 check(/getRoleDefaultCloth/.test(roleSource) && /export function getRoleDefaultCloth/.test(roleSource), "configs/role 导出 getRoleDefaultCloth");
 check(/getAnimationFrameBase\(dirSrc\)/.test(animationHelperSource), "AnimationHelper.prepare 按目录取帧号基准");

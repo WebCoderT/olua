@@ -16,6 +16,8 @@
 const fs = require("fs");
 const path = require("path");
 const { PROJECT_ROOT, prepare, check, finish, fail } = require("./lib/configs-sandbox.cjs");
+/** #655 起配置的唯一来源是数据库快照（server/data/config-sync.sql） */
+const factory = require("./lib/factory-data.cjs");
 
 /** 构造服务端的八项属性（区间是 {min,max} 对象，客户端用元组） */
 const attributes = (maxHp, hpRecover, attack, defense) => ({
@@ -70,7 +72,9 @@ function main() {
   console.log("\n=== 快照到达前的表（沙箱按线上同一条路灌种子）===");
   check(drugs.length === 11, "药品表 11 种（#603 第十域：数据在 item-seed；金创药 5 档 + 魔法药 3 档 + 太阳水 + 两种百分比药）", `size=${drugs.length}`);
   check(fashionData.length === 20, "时装表 20 套（#603 第十二域：数据在 fashion-seed）", String(fashionData.length));
-  check(npcs.size === 0, "NPC 表为空（客户端没有本地兜底）", `size=${npcs.size}`);
+  // #655：沙箱里这张表由快照灌满（线上也是同一条 apply* 链），所以判据从「空」改成「行数 = 快照行数」；
+  // 「客户端没有本地兜底」由源码断言守（game-config.ts 里 npcs 以空 Map 起）
+  check(npcs.size === factory.npcs().length, "NPC 表行数 = 快照行数（客户端自身零出厂行）", `size=${npcs.size}`);
 
   console.log("\n=== 装备：只下发基础件，变体按倍率重算 ===");
   const baseBefore = getItem("cloth_1");

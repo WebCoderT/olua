@@ -9,7 +9,7 @@ import {
   ROLE_OCCUPATIONS,
   ROLE_SEXES,
 } from "../../roles/role-data.util";
-import { OCCUPATION_HINT, SEX_HINT } from "../../../shared/game-data";
+import { OCCUPATION_HINT, SEX_HINT } from "../../../common/constants/game-enums";
 import { ADMIN_NUMBER_FIELD_MAX } from "./query.dto";
 
 /**

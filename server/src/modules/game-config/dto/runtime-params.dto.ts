@@ -6,7 +6,7 @@ import { Type } from "class-transformer";
  * 客户端运行时参数（#605）：掉落手感 / 自动战斗 / 帮会规则
  *
  * 三个分组各自可**部分更新**（管理端一次只提交改动过的字段），共用一份出厂值
- * （`shared/runtime-seed.ts`）——缺键回落出厂，所以加参数不用给存量库补列。
+ * （`config-sync.sql`）——缺键回落出厂，所以加参数不用给存量库补列。
  *
  * 取值域写在 DTO 上（单字段），跨字段约束（`nameMin ≤ nameMax`）在 service 里判，
  * 与成长曲线「DTO 管单字段、service 管跨行」同一分工。

@@ -5,7 +5,7 @@ import { Color, Size } from "cc";
  * 快速攻击：释放 canAuto 技能时没有可打目标/目标超出距离，自动选最近怪物走位到范围内连续出手
  * 自动挂机：开关打开后持续自动选目标攻击，目标死亡换下一个，无限重复
  *
- * **#605 起行为数值由运营配置**：`server/src/shared/runtime-seed.ts` 是唯一书写处，
+ * **#605 起行为数值由运营配置**：`server/data/config-sync.sql` 是唯一书写处，
  * 管理端「运行时参数」页可改，随 `GET /game-config` 的 `runtimeParams.autoBattle` 段下发，
  * `applyAutoBattleParams` 逐键覆写下面这份出厂值。
  *

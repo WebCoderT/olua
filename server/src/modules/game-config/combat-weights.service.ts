@@ -1,42 +1,39 @@
-import { Injectable, OnModuleInit } from "@nestjs/common";
+import { Injectable, Logger, OnApplicationBootstrap } from "@nestjs/common";
 import { BizCode } from "../../common/constants/biz-code";
 import { BizException } from "../../common/errors/biz.exception";
+import { applyCombatWeights } from "../../common/runtime-config-cache";
 import { CombatWeightsRepository } from "../../database/repositories/combat-weights.repository";
-import { COMBAT_WEIGHTS_SEED } from "../../shared/combat-seed";
-import { applyCombatWeightsOverrides } from "../../shared/runtime-overrides";
 import { CombatWeightsDto, CombatWeightsResponseDto, UpdateCombatWeightsDto } from "./dto/combat-weights.dto";
 
 /**
- * 战斗力权重（#605）
+ * 战斗力权重（#605 / #655）
  *
- * 这七项倍率原来只写在 `shared/combat-seed.ts`（编译期常量）：服务端算战力、客户端提示
- * 「这件装备是不是更好」都用同一组数字，但**运营改不了** —— 改一次要发版、要重打客户端包。
- * 现在它们落在 `combat_weights` 表：出厂值 seed 自 seed 文件，管理端「战斗力权重」页可改。
+ * 七项倍率住在 `combat_weights` 表（一行一个属性）：服务端算战力、客户端提示
+ * 「这件装备是不是更好」用的都是这组数字，运营在管理端「战斗力权重」页可改。
  *
  * ## 三条读取路径，同一份数字
  * 1. **服务端结算**（面板 / 地图准入门槛）：`role-attributes.computeCombat` 是纯函数、
- *    拿不到 Nest 注入 —— 所以写操作后由本类把当前值装进 `shared/runtime-overrides`，
+ *    拿不到 Nest 注入 —— 所以这里把当前值装进 `common/runtime-config-cache`，
  *    结算读 `combatWeightsOf()`；
- * 2. **客户端**：配置快照的 `combatWeights` 段（本类 `weights()`），进游戏拉一次覆写本地表；
+ * 2. **客户端**：配置快照的 `combatWeights` 段，进游戏拉一次覆写本地表；
  * 3. **管理端**：`get()`，改完立刻回读。
  *
- * ## 为什么不像运行时参数那样整组 JSON 存一列
- * 权重表的键就是属性名，与快照 `combatWeights`（`Record<string, number>`）1:1 ——
- * 一行一个属性最直白，读出来直接就是那张表。将来多一个权重属性也只多一行 seed。
+ * ## 键集从库里来，不是从代码里来
+ * #655 之前键集与出厂值都在 `config-sync.sql`，于是「加一项权重」= 改代码 + 重生成。
+ * 现在**行就是键集**：表里有哪几行，战力就算哪几项；运营删掉一行就等于这一项不计入
+ * （这也是「七项全为 0 直接拒」这条校验存在的理由）。
  *
  * ## 每次现读库、不缓存
- * 与 `GrowthConfigService` / `RuntimeParamsService` 同一取向：7 行现查，频率极低
- * （快照一次 / 管理端一次），缓存反而要处理失效。
+ * 7 行现查，频率极低（快照一次 / 管理端一次），缓存反而要处理失效。
  */
 @Injectable()
-export class CombatWeightsService implements OnModuleInit {
+export class CombatWeightsService implements OnApplicationBootstrap {
+  private readonly logger = new Logger(CombatWeightsService.name);
+
   constructor(private readonly repository: CombatWeightsRepository) {}
 
-  /** 启动 seed（幂等：行已存在则保留运营改过的值）+ 装进覆盖层 */
-  onModuleInit(): void {
-    for (const [key, weight] of Object.entries(COMBAT_WEIGHTS_SEED)) {
-      this.repository.seed({ key, weight, updated_at: 0 });
-    }
+  /** 启动时装进结算层（快照与配置服务的 seed 已由 `config-sync.sql` 首启灌好） */
+  onApplicationBootstrap(): void {
     this.apply();
   }
 
@@ -49,22 +46,27 @@ export class CombatWeightsService implements OnModuleInit {
     return dto;
   }
 
-  /** 当前生效值（扁平对象：配置快照与覆盖层用，不经 DTO） */
+  /** 当前生效值（扁平对象：配置快照与结算层用，不经 DTO） */
   weights(): Record<string, number> {
-    return this.resolve(this.repository.listAll());
+    const out: Record<string, number> = {};
+    for (const row of this.repository.listAll()) {
+      const value = Number(row.weight);
+      out[row.key] = Number.isFinite(value) && value >= 0 ? value : 0;
+    }
+    return out;
   }
 
   /**
    * 部分更新（只提交改动过的属性）
    *
    * **先算出结果、再校验、最后落库**：先写后验会把被拒的脏值留在库里，
-   * 之后所有合法修改都会跟着挂。落库后立刻重装覆盖层 —— 否则服务端结算要等到
+   * 之后所有合法修改都会跟着挂。落库后立刻重装结算层 —— 否则服务端结算要等到
    * 下次进程重启才认新倍率（那就是「管理端改了、战力没动」这类最难查的问题）。
    */
   update(dto: UpdateCombatWeightsDto): CombatWeightsResponseDto {
     const current = this.weights();
     const next: Record<string, number> = { ...current };
-    for (const key of Object.keys(COMBAT_WEIGHTS_SEED)) {
+    for (const key of Object.keys(current)) {
       // DTO 是 class 实例，未提交的字段是 own property = undefined（不是缺键）—— 只认「有值」的
       const raw = (dto as unknown as Record<string, unknown>)[key];
       if (raw === undefined || raw === null) continue;
@@ -72,7 +74,7 @@ export class CombatWeightsService implements OnModuleInit {
       if (!Number.isFinite(weight) || weight < 0) continue;
       next[key] = weight;
     }
-    // 跨字段：七项全 0 = 所有人战力恒 0 = 所有地图的准入条件失效（一次误操作足以放开全图）
+    // 跨字段：全 0 = 所有人战力恒 0 = 所有地图的准入条件失效（一次误操作足以放开全图）
     const total = Object.values(next).reduce((sum, value) => sum + value, 0);
     if (total <= 0) {
       throw new BizException(
@@ -91,20 +93,13 @@ export class CombatWeightsService implements OnModuleInit {
     return this.get();
   }
 
-  /** 把当前值装进覆盖层（启动 + 每次写操作后） */
+  /** 把当前值装进结算层（启动 + 每次写操作后） */
   private apply(): void {
-    applyCombatWeightsOverrides(this.weights());
-  }
-
-  /** 行 + 出厂值 → 生效值（只认出厂值的键；坏值 / 负数回落出厂） */
-  private resolve(rows: ReadonlyArray<{ key: string; weight: number }>): Record<string, number> {
-    const stored = new Map<string, number>();
-    for (const row of rows) stored.set(row.key, Number(row.weight));
-    const out: Record<string, number> = {};
-    for (const [key, fallback] of Object.entries(COMBAT_WEIGHTS_SEED)) {
-      const value = stored.get(key);
-      out[key] = value !== undefined && Number.isFinite(value) && value >= 0 ? value : fallback;
+    const rows = this.repository.listAll();
+    if (rows.length === 0) {
+      // 空表 = 出厂快照没灌进来。战力会全为 0，地图门槛随之失效 —— 必须喊出来
+      this.logger.warn("combat_weights 表为空：战力权重全按 0 计算（跑 make config-import 恢复出厂值）");
     }
-    return out;
+    applyCombatWeights(rows.map((row) => ({ key: row.key, value: Number(row.weight) })));
   }
 }

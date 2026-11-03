@@ -1,4 +1,4 @@
-import { Injectable, Logger, OnModuleInit } from "@nestjs/common";
+import { Injectable, Logger } from "@nestjs/common";
 import { BizCode } from "../../common/constants/biz-code";
 import { AcquireChannel } from "../../common/constants/game-config";
 import { BizException } from "../../common/errors/biz.exception";
@@ -27,6 +27,7 @@ import { RoleAchievementRepository } from "../../database/repositories/role-achi
 import { QuestProgressRepository } from "../../database/repositories/quest-progress.repository";
 import { SoulRepository, SoulListOptions } from "../../database/repositories/soul.repository";
 import { TitleRepository, TitleListOptions } from "../../database/repositories/title.repository";
+import { itemExists } from "../../common/runtime-config-cache";
 import { RuntimeConfigService } from "./runtime-config.service";
 import {
   DrugRow,
@@ -45,85 +46,6 @@ import {
   StatusRow,
   TitleRow,
 } from "../../database/rows";
-import {
-  ACHIEVEMENTS,
-  EQUIPMENT_BASES,
-  EQUIPMENT_PREFIX_RATES,
-  EQUIPMENT_SUFFIX_RATES,
-  MONSTER_SKILLS,
-  QUESTS,
-  ITEM_TYPES,
-  STATUSES,
-} from "../../shared/game-data.generated";
-import { DRUG_SEED_ROWS, ITEM_BASE_SEED_ROWS } from "../../shared/item-seed";
-import { SKILL_SEED_ROWS } from "../../shared/skill-seed";
-import { FASHION_SEED_ROWS } from "../../shared/fashion-seed";
-import { MONSTER_SEED_ROWS, expandMonsterSeed } from "../../shared/monster-seed";
-import { TITLE_SEEDS } from "../../shared/title-seed";
-import { SOUL_SEEDS } from "../../shared/soul-seed";
-import { RANK_SEEDS } from "../../shared/rank-seed";
-import { NPC_SEED_ROWS } from "../../shared/npc-seed";
-import {
-  EQUIPMENT_PREFIX_LABEL_SEEDS,
-  EQUIPMENT_PREFIX_RATE_SEEDS,
-  EQUIPMENT_RECYCLE_CURVE_SEED,
-  EQUIPMENT_SEED_ROWS,
-  EQUIPMENT_SLOT_SEEDS,
-  EQUIPMENT_SUFFIX_LABEL_SEEDS,
-  EQUIPMENT_SUFFIX_RATE_SEEDS,
-  EquipmentSeedRow,
-} from "../../shared/equipment-seed";
-import { expandEquipmentVariants } from "../../shared/equipment-variant-expand";
-
-/** 怪物 key 清单（出厂种子派生；成就击杀目标 / 任务击杀目标的存在性校验共用） */
-const MONSTER_SEED_KEYS = new Set(MONSTER_SEED_ROWS.map((row) => row.id));
-/** NPC id 清单（#603 第七域起同样从服务端种子派生，不再读生成物里的 NPCS 表） */
-const NPC_SEED_KEYS = new Set(NPC_SEED_ROWS.map((row) => row.id));
-
-/**
- * 装备种子行 → 数据库行（#603 第九域）
- *
- * 八项属性刻意留 0：它们由 `growth-seed.equipmentStats(level, slot)` 公式算，
- * 调用方用生成物 `EQUIPMENT_BASES` 的 `flatAttributes` 覆盖（见 `seedEquipments`）。
- */
-function equipmentSeedToRow(row: EquipmentSeedRow): EquipmentRow {
-  return {
-    id: row.id,
-    slot: row.slot,
-    level: row.level,
-    sell_price: row.sellPrice,
-    label: row.label,
-    occupation: row.occupation,
-    sex: row.sex,
-    description: row.description,
-    icon: row.icon,
-    in_atlas: row.in,
-    out_atlas: row.out,
-    tags: JSON.stringify(row.tags),
-    in_pos_x: row.inPosition.x,
-    in_pos_y: row.inPosition.y,
-    in_scale_x: row.inScaleX,
-    in_scale_y: row.inScaleY,
-    in_rotate: row.inRotate ?? 0,
-    out_scale: row.outScale,
-    out_positions: JSON.stringify(row.outPositions),
-    max_hp: 0,
-    hp_recover: 0,
-    physical_attack_min: 0,
-    physical_attack_max: 0,
-    magic_attack_min: 0,
-    magic_attack_max: 0,
-    taoist_attack_min: 0,
-    taoist_attack_max: 0,
-    physical_defense_min: 0,
-    physical_defense_max: 0,
-    magic_defense_min: 0,
-    magic_defense_max: 0,
-    taoist_defense_min: 0,
-    taoist_defense_max: 0,
-    updated_at: 0,
-  };
-}
 import {
   EquipmentDto,
   EquipmentMetaDto,
@@ -157,7 +79,6 @@ import { SoulDto, SoulQueryDto, UpdateSoulDto } from "./dto/soul.dto";
 import {
   attributesFromRow,
   ConfigAttributesDto,
-  SEED_ACQUIRE_CHANNEL,
   SoulRowShape,
   TitleDto,
   TitleQueryDto,
@@ -179,7 +100,7 @@ const RANGE_KEYS = ["physicalAttack", "magicAttack", "taoistAttack", "physicalDe
  * 后台接口只有 list / update，没有 create / remove（序列固定，e2e 固化这一约束）。
  */
 @Injectable()
-export class GameConfigService implements OnModuleInit {
+export class GameConfigService {
   private readonly logger = new Logger(GameConfigService.name);
 
   constructor(
@@ -203,25 +124,6 @@ export class GameConfigService implements OnModuleInit {
     private readonly roleAchievementsRepo: RoleAchievementRepository,
     private readonly runtime: RuntimeConfigService,
   ) {}
-
-  /** 启动时把客户端配置 seed 进库（幂等；已存在的行原样保留） */
-  onModuleInit() {
-    this.seedTitles();
-    this.seedSouls();
-    this.seedRanks();
-    this.seedEquipments();
-    this.seedEquipmentVariants();
-    this.seedDrugs();
-    this.seedItems();
-    this.seedMonsters();
-    this.seedNpcs();
-    this.seedFashions();
-    this.seedSkills();
-    this.seedStatuses();
-    this.seedMonsterSkills();
-    this.seedQuests();
-    this.seedAchievements();
-  }
 
   /**
    * 写完库立刻把运营库的当前值装进结算层（#544）
@@ -550,20 +452,17 @@ export class GameConfigService implements OnModuleInit {
     return EquipmentSlotDto.from(updated);
   }
 
-  /** 装备规则（单行：前后缀倍率 / 文案 / 回收价曲线）；表里没有行时回落出厂种子 */
+  /**
+   * 装备规则（单行：前后缀倍率 / 文案 / 回收价曲线）
+   *
+   * #655 起这些倍率与曲线**不再参与任何现算**（555 个变体各自一行、自带属性与价签），
+   * 它们只剩两个用途：客户端拼「强化的·天级」这类名称时读文案，以及作为「这一档默认长什么样」
+   * 的参考。行由 `config-sync.sql` 建库时灌入，缺行直接报错 —— 造一份假数据返回只会让
+   * 客户端拼出空档名。
+   */
   getEquipmentMeta(): EquipmentMetaDto {
     const row = this.equipments.getMeta();
-    if (!row) {
-      return EquipmentMetaDto.from({
-        id: 1,
-        prefix_rates: JSON.stringify(EQUIPMENT_PREFIX_RATE_SEEDS),
-        suffix_rates: JSON.stringify(EQUIPMENT_SUFFIX_RATE_SEEDS),
-        prefix_labels: JSON.stringify(EQUIPMENT_PREFIX_LABEL_SEEDS),
-        suffix_labels: JSON.stringify(EQUIPMENT_SUFFIX_LABEL_SEEDS),
-        recycle_curve: JSON.stringify(EQUIPMENT_RECYCLE_CURVE_SEED),
-        updated_at: 0,
-      });
-    }
+    if (!row) throw new BizException(BizCode.INTERNAL, "装备规则行缺失（equipment_meta 被清了？跑 make config-import）");
     return EquipmentMetaDto.from(row);
   }
 
@@ -1294,18 +1193,18 @@ export class GameConfigService implements OnModuleInit {
   private assertAchievementConsistency(row: AchievementRow): void {
     const target = String(row.condition_target ?? "");
     if (row.condition_type === "kill" && target !== "*") {
-      if (!MONSTER_SEED_KEYS.has(target)) {
+      if (!this.monstersRepo.findByKey(target)) {
         throw new BizException(
           BizCode.PARAM_INVALID,
           `成就 ${row.id} 的击杀目标 ${target || "(空)"} 不是已配置的怪物（任意怪请写 *）`,
         );
       }
     }
-    if (row.condition_type === "collect" && !(target in (ITEM_TYPES as Record<string, unknown>))) {
+    if (row.condition_type === "collect" && !itemExists(target)) {
       throw new BizException(BizCode.PARAM_INVALID, `成就 ${row.id} 的持有目标 ${target || "(空)"} 不是已配置的物品`);
     }
     for (const item of parseRewardItems(row.reward_items)) {
-      if (!(item.goodId in (ITEM_TYPES as Record<string, unknown>))) {
+      if (!itemExists(item.goodId)) {
         throw new BizException(BizCode.PARAM_INVALID, `成就 ${row.id} 的奖励物品 ${item.goodId} 不存在`);
       }
     }
@@ -1327,17 +1226,17 @@ export class GameConfigService implements OnModuleInit {
    */
   private assertQuestConsistency(row: QuestRow): void {
     if (row.objective_type === "kill") {
-      if (!MONSTER_SEED_KEYS.has(String(row.objective_target))) {
+      if (!this.monstersRepo.findByKey(String(row.objective_target))) {
         throw new BizException(BizCode.PARAM_INVALID, `任务 ${row.id} 的击杀目标 ${row.objective_target} 不是已配置的怪物`);
       }
     } else if (row.objective_type === "talk") {
-      if (!NPC_SEED_KEYS.has(String(row.objective_target))) {
+      if (!this.npcsRepo.findByKey(String(row.objective_target))) {
         throw new BizException(BizCode.PARAM_INVALID, `任务 ${row.id} 的对话目标 ${row.objective_target} 不是已配置的 NPC`);
       }
-    } else if (!(row.objective_target in (ITEM_TYPES as Record<string, unknown>))) {
+    } else if (!itemExists(row.objective_target)) {
       throw new BizException(BizCode.PARAM_INVALID, `任务 ${row.id} 的收集目标 ${row.objective_target} 不是已配置的物品`);
     }
-    if (row.npc_id && !NPC_SEED_KEYS.has(String(row.npc_id))) {
+    if (row.npc_id && !this.npcsRepo.findByKey(String(row.npc_id))) {
       throw new BizException(BizCode.PARAM_INVALID, `任务 ${row.id} 的发布 NPC ${row.npc_id} 不是已配置的 NPC`);
     }
     if (row.prev_quest_id) {
@@ -1361,7 +1260,7 @@ export class GameConfigService implements OnModuleInit {
       }
     }
     for (const item of parseRewardItems(row.reward_items)) {
-      if (!(item.goodId in (ITEM_TYPES as Record<string, unknown>))) {
+      if (!itemExists(item.goodId)) {
         throw new BizException(BizCode.PARAM_INVALID, `任务 ${row.id} 的奖励物品 ${item.goodId} 不存在`);
       }
     }
@@ -1373,431 +1272,8 @@ export class GameConfigService implements OnModuleInit {
     return row;
   }
 
-  /**
-   * 药品 seed（#603 第十域）：`item-seed.ts` 的 `DRUG_SEED_ROWS` 整行灌 ——
-   * 名称 / 描述 / **图标** / 等级 / 售价 / 叠加 / 冷却 / 四段回复量全在服务端种子里,
-   * 客户端 `configs/drug` 只剩空数组（进游戏由快照整表重建）。
-   *
-   * 存量库的行是「没有 icon 列」的老形态，`seedRow` 的 INSERT OR IGNORE 会整行跳过,
-   * 所以补一次 `backfillIcon`（只在空串时填）—— 否则老库的药会集体没图标。
-   */
-  private seedDrugs() {
-    let backfilled = 0;
-    for (const row of DRUG_SEED_ROWS) {
-      const seeded: DrugRow = {
-        id: row.id,
-        label: row.label,
-        description: row.description,
-        icon: row.icon,
-        level: row.level,
-        sell_price: row.sellPrice,
-        max_stack: row.maxStack,
-        cooldown: row.cooldown,
-        effect_hp: row.effectHp,
-        effect_mp: row.effectMp,
-        effect_hp_percent: row.effectHpPercent,
-        effect_mp_percent: row.effectMpPercent,
-        updated_at: 0,
-      };
-      this.drugs.seedRow(seeded);
-      backfilled += this.drugs.backfillIcon(seeded);
-    }
-    if (backfilled > 0) this.logger.log(`药品图标补全：${backfilled} 行`);
-  }
-
-  /**
-   * 装备种子（#603 第九域）：`equipment-seed.ts`（显示与规则）+ `EQUIPMENT_BASES`（八项属性）
-   *
-   * 属性仍由 `growth-seed.equipmentStats(level, slot)` 公式算（#590 的结论），生成物里的
-   * `EQUIPMENT_BASES` 就是它的快照 —— 所以这里**属性读生成物、其余读种子**，
-   * 两边的 id 集合必须一致（生成物忘了重新生成会被下面的断言逮住，而不是静默少几行）。
-   *
-   * 槽位与规则（倍率 / 文案 / 回收价曲线）也在这张种子文件里，一并 seed。
-   */
-  /**
-   * 装备变体 seed（#655）：把 37 个基础件展开成 555 行写进 `equipment_variants`
-   *
-   * **只在表为空时跑**：已有行说明迁移跑过 / 运营改过，一行都不能覆盖。
-   * 这是「出厂数据的构造」而不是「每次读取都重算」—— 运行时（结算 / 快照）只读表，
-   * 由 `tools/audit-derived-tables.cjs` 禁止 modules 下出现展开函数调用。
-   */
-  private seedEquipmentVariants() {
-    if (this.equipmentVariants.count() > 0) return;
-    const bases = this.equipments.list({ page: 1, size: 1_000_000 });
-    if (bases.length === 0) return;
-    const variants = expandEquipmentVariants(
-      bases,
-      EQUIPMENT_PREFIX_RATES,
-      EQUIPMENT_SUFFIX_RATES,
-      EQUIPMENT_RECYCLE_CURVE_SEED,
-    );
-    for (const variant of variants) {
-      this.equipmentVariants.seedRow({ ...variant, updated_at: 0 });
-    }
-    this.logger.log(`装备变体已展开：${bases.length} 个基础件 → ${variants.length} 个变体（#655）`);
-  }
-
-  private seedEquipments() {
-    const bases = EQUIPMENT_BASES as Record<string, Record<string, unknown>>;
-    const seedIds = new Set(EQUIPMENT_SEED_ROWS.map((row) => row.id));
-    const baseIds = new Set(Object.keys(bases));
-    if (seedIds.size !== baseIds.size || EQUIPMENT_SEED_ROWS.some((row) => !baseIds.has(row.id))) {
-      throw new Error(
-        `装备种子与生成物不同步：种子 ${seedIds.size} 件 / EQUIPMENT_BASES ${baseIds.size} 件（先跑 node tools/gen-shared-data.cjs）`,
-      );
-    }
-    for (const row of EQUIPMENT_SEED_ROWS) {
-      const meta = bases[row.id];
-      this.equipments.seedRow({
-        ...equipmentSeedToRow(row),
-        ...flatAttributes(meta.attributes as Record<string, unknown>),
-      });
-      // 老库（只有 id + 名称 + 数值的行）补显示字段；icon 已填的行不受影响
-      this.equipments.backfillAppearance({
-        ...equipmentSeedToRow(row),
-        ...flatAttributes(meta.attributes as Record<string, unknown>),
-      });
-    }
-    for (const [index, slot] of EQUIPMENT_SLOT_SEEDS.entries()) {
-      this.equipments.seedSlot({
-        key: slot.key,
-        label: slot.label,
-        image_src: slot.imageSrc,
-        position: slot.position,
-        sort_order: index,
-        updated_at: 0,
-      });
-    }
-    this.equipments.seedMeta({
-      id: 1,
-      prefix_rates: JSON.stringify(EQUIPMENT_PREFIX_RATE_SEEDS),
-      suffix_rates: JSON.stringify(EQUIPMENT_SUFFIX_RATE_SEEDS),
-      prefix_labels: JSON.stringify(EQUIPMENT_PREFIX_LABEL_SEEDS),
-      suffix_labels: JSON.stringify(EQUIPMENT_SUFFIX_LABEL_SEEDS),
-      recycle_curve: JSON.stringify(EQUIPMENT_RECYCLE_CURVE_SEED),
-      updated_at: 0,
-    });
-  }
-
-  /** 军衔 seed：rank-seed 全量展开直接灌库（#590 起书写处在 server/src/shared/rank-seed.ts） */
-  private seedRanks() {
-    for (const row of RANK_SEEDS) {
-      this.ranks.seedRow({
-        level: row.level,
-        label: row.label,
-        tier: row.tier,
-        description: row.description,
-        bind_gold: row.bindGold,
-        ...flatAttributes(row.attributes),
-        updated_at: 0,
-      });
-    }
-  }
-
-  /**
-   * 称号 seed：title-seed 全量展开直接灌库（#590 起书写处在 server/src/shared/title-seed.ts）；
-   * 渠道默认「无法获取」，由运营逐个开放（赠送逻辑暂未实现）
-   */
-  private seedTitles() {
-    for (const row of TITLE_SEEDS) {
-      this.titles.seedRow({
-        level: row.level,
-        label: row.label,
-        description: row.description,
-        animation: row.animation,
-        animation_frame_rate: row.animationFrameRate,
-        bind_gold: row.bindGold,
-        acquire_channel: AcquireChannel.UNAVAILABLE,
-        upgrade_order: null,
-        ...flatAttributes(row.attributes),
-        updated_at: 0,
-      });
-    }
-  }
-
-  /** 战魂 seed：soul-seed 全量展开直接灌库（#590 起书写处在 server/src/shared/soul-seed.ts） */
-  private seedSouls() {
-    for (const row of SOUL_SEEDS) {
-      this.souls.seedRow({
-        level: row.level,
-        label: row.label,
-        description: row.description,
-        animation: row.animation,
-        animation_frame_rate: row.animationFrameRate,
-        bind_gold: row.bindGold,
-        upgrade_order: row.level,
-        ...flatAttributes(row.attributes),
-        updated_at: 0,
-      });
-    }
-  }
-
-  /**
-   * 物品与材料 seed（#603 第十域）：`item-seed.ts` 的 `ITEM_BASE_SEED_ROWS` 整行灌,
-   * 含图标；客户端 `configs/material` 只剩空数组。
-   * 老库同样补一次 `backfillIcon`（只在空串时填）。
-   */
-  private seedItems() {
-    let backfilled = 0;
-    for (const row of ITEM_BASE_SEED_ROWS) {
-      const seeded: ItemRow = {
-        id: row.id,
-        type: row.type,
-        label: row.label,
-        description: row.description,
-        icon: row.icon,
-        level: row.level,
-        sell_price: row.sellPrice,
-        max_stack: row.maxStack,
-        updated_at: 0,
-      };
-      this.items.seedRow(seeded);
-      backfilled += this.items.backfillIcon(seeded);
-    }
-    if (backfilled > 0) this.logger.log(`物品图标补全：${backfilled} 行`);
-  }
-
-  /** 怪物 seed：出厂种子（服务端自有，#588）展开成数值行，220 只（#258） */
-  private seedMonsters() {
-    for (const row of MONSTER_SEED_ROWS) {
-      const attributes = expandMonsterSeed(row);
-      this.monstersRepo.seedRow({
-        id: row.id,
-        label: row.label,
-        tier: row.tier,
-        level: row.level,
-        max_hp: attributes.maxHp,
-        ...flatMonsterAttributes(attributes),
-        updated_at: 0,
-      });
-      // 存量修复（#588）：tier 列晚灌的旧行吃了 DEFAULT 'normal'，boss 顶着 normal 的 tier
-      this.monstersRepo.alignTierToFactory(row.id, row.tier, attributes.maxHp);
-    }
-  }
-
-  /**
-   * NPC seed（#258 / #603 第七域）：NPC_SEED_ROWS 整行灌 —— 名称 / 对话（空串）/ 素材目录 /
-   * 缩放 / 偏移都在服务端种子里，客户端不再存任何一条。
-   * 存量库的行是「只有 id + 名称」的老形态，`seedRow` 的 INSERT OR IGNORE 会整行跳过，
-   * 所以这里补一次 `backfillAppearance`（只在 src 空着时填），否则老库的 NPC 会集体不显示。
-   */
-  private seedNpcs() {
-    let backfilled = 0;
-    for (const row of NPC_SEED_ROWS) {
-      const seeded = {
-        id: row.id,
-        label: row.label,
-        dialog: "",
-        src: row.src,
-        scale_x: row.scale?.x ?? 1,
-        scale_y: row.scale?.y ?? 1,
-        pos_x: row.position?.x ?? 0,
-        pos_y: row.position?.y ?? 0,
-        updated_at: 0,
-      };
-      this.npcsRepo.seedRow(seeded);
-      backfilled += this.npcsRepo.backfillAppearance(seeded);
-    }
-    if (backfilled > 0) this.logger.log(`NPC 外观补全：${backfilled} 行老数据补上素材目录 / 缩放 / 偏移`);
-  }
-
-  /** 任务 seed（#396）：QUESTS 整行快照直接灌；reward_items 落库前序列化成 JSON */
-  private seedQuests() {
-    for (const [id, meta] of Object.entries(QUESTS as Record<string, Record<string, unknown>>)) {
-      const objective = (meta.objective ?? {}) as Record<string, unknown>;
-      const rewards = (meta.rewards ?? {}) as Record<string, unknown>;
-      this.questsRepo.seedRow({
-        id,
-        kind: String(meta.kind ?? "main"),
-        label: String(meta.label ?? ""),
-        description: String(meta.description ?? ""),
-        prev_quest_id: String(meta.prevQuestId ?? ""),
-        min_level: Number(meta.minLevel) || 1,
-        npc_id: String(meta.npcId ?? ""),
-        objective_type: String(objective.type ?? "kill"),
-        objective_target: String(objective.target ?? ""),
-        objective_count: Number(objective.count) || 1,
-        reward_gold: Number(rewards.gold) || 0,
-        reward_exp: Number(rewards.exp) || 0,
-        reward_items: JSON.stringify(
-          (Array.isArray(rewards.items) ? rewards.items : []).map((item) => {
-            const entry = (item ?? {}) as Record<string, unknown>;
-            return { goodId: String(entry.goodId ?? ""), count: Number(entry.count) || 1 };
-          }),
-        ),
-        updated_at: 0,
-      });
-    }
-  }
-
-  /** 成就 seed（#401）：ACHIEVEMENTS 整行快照直接灌；reward_items 落库前序列化成 JSON */
-  private seedAchievements() {
-    for (const [id, meta] of Object.entries(ACHIEVEMENTS as Record<string, Record<string, unknown>>)) {
-      const condition = (meta.condition ?? {}) as Record<string, unknown>;
-      const rewards = (meta.rewards ?? {}) as Record<string, unknown>;
-      this.achievementsRepo.seedRow({
-        id,
-        category: String(meta.category ?? "battle"),
-        label: String(meta.label ?? ""),
-        description: String(meta.description ?? ""),
-        condition_type: String(condition.type ?? "kill"),
-        condition_target: String(condition.target ?? ""),
-        condition_count: Number(condition.count) || 1,
-        reward_gold: Number(rewards.gold) || 0,
-        reward_exp: Number(rewards.exp) || 0,
-        reward_items: JSON.stringify(
-          (Array.isArray(rewards.items) ? rewards.items : []).map((item) => {
-            const entry = (item ?? {}) as Record<string, unknown>;
-            return { goodId: String(entry.goodId ?? ""), count: Number(entry.count) || 1 };
-          }),
-        ),
-        sort_order: Number(meta.order) || 0,
-        hidden: meta.hidden ? 1 : 0,
-        updated_at: 0,
-      });
-    }
-  }
-
-  /**
-   * 时装 seed（#257 / #603 第十二域）：`fashion-seed.ts` 的 `FASHION_SEED_ROWS` 整行灌 ——
-   * 名称 / 文案 / 图标 / 内观 / 外观资源 / 售卖价 / 八项属性都在服务端种子，
-   * 客户端 `configs/fashionClothes` 只剩空数组（进游戏由快照整表重建），20 套；
-   * 渠道默认 unavailable（运营按活动开放）。
-   */
-  private seedFashions() {
-    for (const row of FASHION_SEED_ROWS) {
-      this.fashionsRepo.seedRow({
-        id: row.id,
-        label: row.label,
-        description: row.description,
-        icon: row.icon,
-        in_res: row.inRes,
-        out_res: row.outRes,
-        sell_price: row.sellPrice,
-        acquire_channel: SEED_ACQUIRE_CHANNEL,
-        // 种子里的区间与快照同形（{min,max}），入库列是 min/max 拍平的两列
-        ...flatAttributes({
-          maxHp: row.maxHp,
-          hpRecover: row.hpRecover,
-          physicalAttack: [row.physicalAttack.min, row.physicalAttack.max],
-          magicAttack: [row.magicAttack.min, row.magicAttack.max],
-          taoistAttack: [row.taoistAttack.min, row.taoistAttack.max],
-          physicalDefense: [row.physicalDefense.min, row.physicalDefense.max],
-          magicDefense: [row.magicDefense.min, row.magicDefense.max],
-          taoistDefense: [row.taoistDefense.min, row.taoistDefense.max],
-        }),
-        updated_at: 0,
-      });
-    }
-  }
-
-  /**
-   * 技能 seed（#603 第十一域）：`skill-seed.ts` 的 `SKILL_SEED_ROWS` 整行灌 ——
-   * 名称 / 图标 / 分类 / 目标 / 动作 / 特效 / 冷却 / 耗蓝 / 距离 / 等级 / 描述 / 倍率 /
-   * 挂载状态 / 施法锁 / 释放限制 / **职业归属** / **击退距离** 都在服务端种子,
-   * 客户端 `configs/skill-data` 只剩空数组（进游戏由快照整表重建）。
-   *
-   * 角色技能行 id 固定（客户端技能栏 / 快捷键 / 角色存档都引用它），所以这里只有 INSERT OR IGNORE。
-   */
-  private seedSkills() {
-    for (const row of SKILL_SEED_ROWS) {
-      this.skillsRepo.seedRow({
-        id: row.id,
-        owner: row.owner,
-        label: row.label,
-        icon: row.icon,
-        category: row.category,
-        target_type: row.targetType,
-        action: row.action,
-        effect: row.effect,
-        effect_on_self: row.effectOnSelf ? 1 : 0,
-        cooldown: row.cooldown,
-        mp_cost: row.mpCost,
-        distance: row.distance,
-        level_req: row.levelReq,
-        description: row.description,
-        damage_coefficients: JSON.stringify(
-          row.damageCoefficients.map((entry) => ({ baseType: String(entry.baseType ?? ""), baseTypeRate: Number(entry.baseTypeRate) || 0 })),
-        ),
-        status_id: row.statusId,
-        cast_lock_ms: row.castLockMs,
-        require_target: row.requireTarget ? 1 : 0,
-        can_auto: row.canAuto ? 1 : 0,
-        occupation: row.occupation,
-        push_distance: row.pushDistance,
-        updated_at: 0,
-      });
-    }
-  }
-
-  /**
-   * 状态 seed（#367）：状态 id 被技能（status_id）引用，清单固定，同样只 INSERT OR IGNORE。
-   * combat 落库成 JSON —— 空对象 = 纯表现状态。
-   */
-  private seedStatuses() {
-    for (const [id, meta] of Object.entries(STATUSES as Record<string, Record<string, unknown>>)) {
-      this.statusesRepo.seedRow({
-        id,
-        owner: String(meta.owner ?? "role"),
-        label: String(meta.label ?? ""),
-        icon: String(meta.icon ?? ""),
-        duration: Number(meta.duration) || 0,
-        source: String(meta.source ?? "other"),
-        description: String(meta.description ?? ""),
-        effect: String(meta.effect ?? ""),
-        effect_hold_last: meta.effectHoldLast === true ? 1 : 0,
-        combat: JSON.stringify(meta.combat ?? {}),
-        updated_at: 0,
-      });
-    }
-  }
-
-  /**
-   * 怪物技能挂载 seed（#372）：生成物 `MONSTER_SKILLS` 是 `{怪物 key: 条目数组}`
-   *
-   * 同样只 INSERT OR IGNORE —— 运营在管理端整份替换过的清单不会被重启覆盖回去。
-   * 与其它的差别只在「可增删」：删掉的行重启后会被 seed 补回来（配置是基线），
-   * 想永久删就同时改 `configs/monster-skills`。这条口径写进服务端 README。
-   */
-  private seedMonsterSkills() {
-    const table = MONSTER_SKILLS as Record<string, Array<{ skillId?: string; priority?: number; cooldown?: number }>>;
-    for (const [monsterKey, entries] of Object.entries(table)) {
-      for (const entry of entries ?? []) {
-        this.monsterSkillsRepo.seedRow({
-          monster_key: monsterKey,
-          skill_id: String(entry.skillId ?? ""),
-          priority: Number(entry.priority) || 0,
-          cooldown: entry.cooldown === undefined ? null : Number(entry.cooldown),
-          updated_at: 0,
-        });
-      }
-    }
-  }
 }
 
-/** 生成物的属性形状（{maxHp, physicalAttack:[min,max], ...}）→ 拍平的行属性列 */
-function flatAttributes(attributes: Record<string, unknown>): Pick<TitleRow, AttrColumnNames> {
-  const range = (key: string): [number, number] => {
-    const value = attributes[key];
-    return Array.isArray(value) ? [Number(value[0]) || 0, Number(value[1]) || 0] : [0, 0];
-  };
-  return {
-    max_hp: Number(attributes.maxHp) || 0,
-    hp_recover: Number(attributes.hpRecover) || 0,
-    physical_attack_min: range("physicalAttack")[0],
-    physical_attack_max: range("physicalAttack")[1],
-    magic_attack_min: range("magicAttack")[0],
-    magic_attack_max: range("magicAttack")[1],
-    taoist_attack_min: range("taoistAttack")[0],
-    taoist_attack_max: range("taoistAttack")[1],
-    physical_defense_min: range("physicalDefense")[0],
-    physical_defense_max: range("physicalDefense")[1],
-    magic_defense_min: range("magicDefense")[0],
-    magic_defense_max: range("magicDefense")[1],
-    taoist_defense_min: range("taoistDefense")[0],
-    taoist_defense_max: range("taoistDefense")[1],
-  };
-}
 
 /** 行属性列名（flatAttributes / attributeColumns 共用的键集合） */
 type AttrColumnNames =
@@ -1855,16 +1331,6 @@ function assertAttributeRanges(attributes: ConfigAttributesDto): void {
   }
 }
 
-/** 生成物 MONSTERS 条目的属性形状（六项区间数组，无 maxHp / hpRecover —— maxHp 是独立字段） */
-type MonsterAttributesRowShape = Record<string, unknown> & {
-  physicalAttack: number[];
-  magicAttack: number[];
-  taoistAttack: number[];
-  physicalDefense: number[];
-  magicDefense: number[];
-  taoistDefense: number[];
-};
-
 /** 怪物行属性列名（flatMonsterAttributes / monsterAttributeColumns 共用的键集合） */
 type MonsterAttrColumnNames =
   | "physical_attack_min"
@@ -1898,25 +1364,6 @@ function monsterAttributeColumns(attributes: MonsterAttributesDto): Pick<Monster
   };
 }
 
-/** 生成物 MONSTERS 条目（区间数组形状）→ 拍平行属性列（seed 用） */
-function flatMonsterAttributes(attributes: MonsterAttributesRowShape): Pick<MonsterRow, MonsterAttrColumnNames> {
-  const range = (value: number[]): [number, number] =>
-    Array.isArray(value) && value.length >= 2 ? [Number(value[0]) || 0, Number(value[1]) || 0] : [0, 0];
-  return {
-    physical_attack_min: range(attributes.physicalAttack)[0],
-    physical_attack_max: range(attributes.physicalAttack)[1],
-    magic_attack_min: range(attributes.magicAttack)[0],
-    magic_attack_max: range(attributes.magicAttack)[1],
-    taoist_attack_min: range(attributes.taoistAttack)[0],
-    taoist_attack_max: range(attributes.taoistAttack)[1],
-    physical_defense_min: range(attributes.physicalDefense)[0],
-    physical_defense_max: range(attributes.physicalDefense)[1],
-    magic_defense_min: range(attributes.magicDefense)[0],
-    magic_defense_max: range(attributes.magicDefense)[1],
-    taoist_defense_min: range(attributes.taoistDefense)[0],
-    taoist_defense_max: range(attributes.taoistDefense)[1],
-  };
-}
 
 /**
  * 怪物区间属性的组合校验（0 ≤ min ≤ max）

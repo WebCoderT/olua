@@ -10,7 +10,7 @@ import { PageResult } from "../../common/interfaces/api-envelope.interface";
 import { RANK_SORT, sortFieldNames } from "../../database/sort-specs";
 import { GameConfigService } from "./game-config.service";
 import { RankDto, RankPageDto, RankQueryDto, UpdateRankDto } from "./dto/rank.dto";
-import { RANK_TIERS } from "../../shared/rank-seed";
+import { RANK_TIERS } from "../../common/constants/game-enums";
 
 /**
  * 管理端 · 军衔配置（#250）

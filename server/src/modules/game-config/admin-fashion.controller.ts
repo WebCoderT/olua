@@ -32,7 +32,7 @@ export class AdminFashionController {
     operationId: "adminFashion.list",
     summary: "时装配置列表",
     description:
-      "id 清单固定（seed 自 shared/fashion-seed.ts 的 20 套），**没有创建 / 删除**。" +
+      "id 清单固定（seed 自 config-sync.sql 的 20 套），**没有创建 / 删除**。" +
       "`keyword` 模糊匹配 id / 名称，`acquireChannel` 按获得渠道筛。\n\n" +
       "属性 seed 时全 0（原配置就是零加成），在这里运营可改；图标 / 内观 / 外观资源路径同样可改（管理端可视化选择器）。\n\n" +
       `**排序**：\`sort\` 取 ${sortFieldNames(FASHION_SORT)}，\`order\` 取 asc / desc（默认 id 升序）。`,

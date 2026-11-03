@@ -6,7 +6,7 @@ import { GuideSettingsRow } from "../rows";
  * 新手引导步骤（#605）—— 单行表 `guide_settings`
  *
  * 与 `runtime_params` / `equipment_meta` 同一取向：**一行、没有增删**，seed 自
- * `shared/guide-seed.ts`（INSERT OR IGNORE 幂等，运营改过的整份步骤表不会被覆盖回去）。
+ * `config-sync.sql`（INSERT OR IGNORE 幂等，运营改过的整份步骤表不会被覆盖回去）。
  * 「加一步 / 删一步」是改那一列 JSON 数组，不是加行删行。
  */
 @Injectable()

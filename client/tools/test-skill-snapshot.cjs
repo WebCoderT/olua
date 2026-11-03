@@ -15,7 +15,8 @@
  */
 const fs = require("fs");
 const path = require("path");
-const { PROJECT_ROOT, prepare, compileServerShared, check, finish, fail } = require("./lib/configs-sandbox.cjs");
+const { PROJECT_ROOT, prepare, check, finish, fail } = require("./lib/configs-sandbox.cjs");
+const factory = require("./lib/factory-data.cjs");
 
 const read = (rel) => fs.readFileSync(path.join(PROJECT_ROOT, rel), "utf8");
 
@@ -61,16 +62,15 @@ function main() {
   const { skillData, oeccupationSkills, statuses } = cfg;
   // 每段的落库方法在 game-config（#626），总入口 / 组合入口在 apply-snapshot
   const snapshotApi = require(path.join(outDir, "configs/apply-snapshot.js"));
-  // #603 起客户端 configs/game-config 只剩空 Map（数据唯一书写处是服务端 status-seed.ts），
-  // 先把真实种子灌进去，还原「快照到达前的客户端」与「覆写是原地改」这两个前提
-  const { STATUS_SEED_ROWS } = require(compileServerShared("status-seed.ts", "olua-status-seed"));
-  for (const { id, ...rest } of STATUS_SEED_ROWS) statuses.set(id, rest);
+  // #603 起客户端 configs/game-config 只剩空 Map（数据唯一书写处是服务端 statuses 表），
+  // 先把出厂行灌进去，还原「快照到达前端」与「覆写是原地改」这两个前提
+  for (const { id, ...rest } of factory.statuses()) statuses.set(id, rest);
 
   console.log("\n=== 技能：整表重建（快照是唯一来源，#603 第十一域）===");
   // 沙箱按线上同一条路灌好了种子（prepare → hydrateSnapshotTables），与「快照已到」同形；
   // 客户端自身零出厂行（出厂数据唯一书写处是服务端 server/src/shared/skill-seed.ts）
-  check(skillData.length > 0, "沙箱里的技能表由 skill-seed 灌好（不是客户端写死的行）", String(skillData.length));
-  const { SKILL_SEED_ROWS } = require(compileServerShared("skill-seed.ts", "olua-skill-seed"));
+  check(skillData.length > 0, "沙箱里的技能表由配置快照灌好（不是客户端写死的行）", String(skillData.length));
+  const SKILL_SEED_ROWS = factory.skills();
   cfg.applySkillRows(SKILL_SEED_ROWS);
   check(skillData.length === SKILL_SEED_ROWS.length, "整表重建后行数 = 快照行数", `${skillData.length} / ${SKILL_SEED_ROWS.length}`);
   check(

@@ -336,6 +336,20 @@ export interface MapRow {
   combat: number;
   /** 进入所需战魂阶（0 = 无限制） */
   soul_of_war: number;
+  /** 横向格数（几何来自 TMX，运营不改） */
+  grid_cols: number;
+  /** 纵向格数 */
+  grid_rows: number;
+  /** 单格宽（像素） */
+  tile_width: number;
+  /** 单格高（像素） */
+  tile_height: number;
+  /** 地图像素宽（= grid_cols × tile_width） */
+  pixel_width: number;
+  /** 地图像素高（= grid_rows × tile_height） */
+  pixel_height: number;
+  /** 图层 + 对象组（JSON：`{ layers, groups }`，管理端详情页渲染它） */
+  content: string;
   /** 最后一个改它的管理员账号名（追账用；与 audit_logs 能对上） */
   updated_by: string;
   updated_at: number;
@@ -839,7 +853,7 @@ export interface MallSettingsRow {
 /**
  * 客户端运行时参数（#605）：单行配置（id 恒为 1），三个分组各一列 JSON
  *
- * 列里存的是「运营改过的部分」，缺键回落到 `shared/runtime-seed.ts` 的出厂值 ——
+ * 列里存的是「运营改过的部分」，缺键回落到 `config-sync.sql` 的出厂值 ——
  * 这样加一个参数不用给存量库补列，也不用写迁移。
  */
 export interface RuntimeParamsRow {
@@ -851,13 +865,37 @@ export interface RuntimeParamsRow {
   auto_battle: string;
   /** 帮会规则门槛（`GuildRuleParams` 的 JSON；服务端校验读它） */
   guild_rules: string;
+  /** 怪物 AI 参数（`MonsterAiParams` 的 JSON；服务端权威 AI 每 tick 读它） */
+  monster_ai: string;
+  updated_at: number;
+}
+
+/**
+ * 怪物表现 / 资源（`monster_presentation` 表；#655）
+ *
+ * 一行 = 一只怪的图集路径 + 基准帧几何 + AI 视觉参数。数值在 `monsters`，这里只有
+ * 「长什么样、怎么动」—— 所以这张表**没有管理端写入口**，是资源侧生成物。
+ */
+export interface MonsterPresentationRow {
+  id: string;
+  icon: string;
+  out: string;
+  out_offset_x: number;
+  out_offset_y: number;
+  content_width: number;
+  content_height: number;
+  move_speed: number;
+  aggressive: number;
+  detect_range: number;
+  /** 动作名 → 速度倍率的 JSON（空对象 = 全用默认） */
+  speed_rate: string;
   updated_at: number;
 }
 
 /**
  * 战斗力权重（#605）：`combat_weights` 表的一行 = 一个属性
  *
- * 出厂值来自 `shared/combat-seed.ts`（`COMBAT_WEIGHTS_SEED`，生成物 `COMBAT_WEIGHTS` 的源头），
+ * 出厂值来自 `config-sync.sql`（`COMBAT_WEIGHTS_SEED`，生成物 `COMBAT_WEIGHTS` 的源头），
  * seed 幂等（INSERT OR IGNORE），后台只改 `weight`、不增删行。
  * 表里缺某个 key 时由 service 回落出厂值 —— 与运行时参数同一套「缺键回落」口径。
  */
@@ -873,7 +911,7 @@ export interface CombatWeightRow {
  * 新手引导步骤（#605）：`guide_settings` 单行表
  *
  * 整张步骤表存在 `steps` 一列 JSON 数组里（有序，数组顺序即体验顺序）。
- * 出厂值来自 `shared/guide-seed.ts`，缺行 / 坏 JSON 时 service 回落出厂值。
+ * 出厂值来自 `config-sync.sql`，缺行 / 坏 JSON 时 service 回落出厂值。
  */
 export interface GuideSettingsRow {
   /** 恒为 1（单行表） */
@@ -929,7 +967,7 @@ export interface MonsterDropRow {
 /**
  * 时装配置（#257）：管理端「时装配置」的行
  *
- * 主键是时装 id（shared/fashion-seed.ts，如 "cloth_2"）—— 清单固定，**不可增删行**。
+ * 主键是时装 id（config-sync.sql，如 "cloth_2"）—— 清单固定，**不可增删行**。
  * 名称 / 文案 / 售卖价 / 属性 / 获得渠道 seed 自生成物 FASHIONS（属性当前全 0），
  * 运营可改；`icon` / `in_res` / `out_res` 是客户端资源路径（表现层），后台不改。
  * `acquire_channel` 的取值域复用称号的 AcquireChannel（见 common/constants/game-config，

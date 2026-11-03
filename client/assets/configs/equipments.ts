@@ -452,12 +452,12 @@ export function applyEquipmentData(data: EquipmentData[]): Equipment[] {
 }
 
 /**
- * 服务端装备种子的行形状（`server/src/shared/equipment-seed.ts` 的 `EquipmentSeedRow`）
+ * 服务端装备种子的行形状（`server/data/config-sync.sql` 的 `EquipmentSeedRow`）
  *
  * 与那边**同形但不 import**（客户端不能依赖服务端源码，服务端也不能依赖客户端）——
  * 这是一份「客户端读种子时需要的字段」的声明，判据是两端字段名一致。
- * 只有工具链会用它：`tools/gen-shared-data.cjs`（生成物）与
- * `client/tools/lib/configs-sandbox.cjs`（配置层单测沙箱）都要在 Node 里把种子摊开成 555 条。
+ * 只有工具链会用它：`client/tools/lib/configs-sandbox.cjs`（配置层单测沙箱）要在
+ * Node 里把库里的 555 行摊开成运行时表。
  */
 export interface EquipmentSeedRowLike {
   id: string;

@@ -10,7 +10,7 @@ import type { GuideEvent, GuideSpot } from "../types/guide";
  *
  * ## #605：表搬到服务端了
  * 以前这张表写死在本文件（改一句文案要重打客户端包）。现在它来自配置快照的
- * `guideSteps` 段（出厂值在 `server/src/shared/guide-seed.ts`，运营在管理端「新手引导」页改），
+ * `guideSteps` 段（出厂值在 `server/data/config-sync.sql`，运营在管理端「新手引导」页改），
  * 由 `applyGuideSteps()` **整表替换**：
  * - 进游戏拉到快照之前，`guideSteps` 是**空表** —— `guideStepCount()` 为 0，
  *   `normalizeGuideProgress` 会把存档里的进度按「已完成」处理（不会因为表还没到就把玩家

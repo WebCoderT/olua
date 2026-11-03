@@ -84,7 +84,7 @@ export const routes = {
     /**
      * 成就配置列表（GET /admin/achievements）
      *
-     * seed 自 server/src/shared/achievement-seed.ts，允许动态增删。`category` 筛 battle / growth / explore，`keyword` 模糊匹配 id / 名称。
+     * seed 自 server/data/config-sync.sql，允许动态增删。`category` 筛 battle / growth / explore，`keyword` 模糊匹配 id / 名称。
      */
     list: "/admin/achievements",
     /**
@@ -390,7 +390,7 @@ export const routes = {
     /**
      * 时装配置列表（GET /admin/fashions）
      *
-     * id 清单固定（seed 自 shared/fashion-seed.ts 的 20 套），**没有创建 / 删除**。`keyword` 模糊匹配 id / 名称，`acquireChannel` 按获得渠道筛。
+     * id 清单固定（seed 自 config-sync.sql 的 20 套），**没有创建 / 删除**。`keyword` 模糊匹配 id / 名称，`acquireChannel` 按获得渠道筛。
      */
     list: "/admin/fashions",
     /**
@@ -399,6 +399,15 @@ export const routes = {
      * **部分更新**：只改请求体里出现的字段。
      */
     update: (id: string) => `/admin/fashions/${encodeURIComponent(id)}`,
+  },
+  /** adminGameData 模块（1 个接口） */
+  adminGameData: {
+    /**
+     * 游戏数据字典（管理端查表用）（GET /admin/game-data）
+     *
+     * 与 `GET /game-config` **同一份快照**：称号 / 战魂 / 军衔 / 装备变体 / 药品 / 物品 / 怪物 / 怪物表现 / NPC / 时装 / 技能 / 状态 / 任务 / 成就 / 地图 / 等级表 / 成长标量 / 商城价 / 掉落表。
+     */
+    snapshot: "/admin/game-data",
   },
   /** adminGameMail 模块（1 个接口） */
   adminGameMail: {

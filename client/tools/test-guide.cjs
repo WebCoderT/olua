@@ -50,10 +50,10 @@ const requireOut = (rel) => require(path.join(outDir, rel));
 const guideLogic = requireOut("ui/utils/guide/guide-progress.js");
 const GuideStore = requireOut("ui/core/GuideStore.js").default;
 const guideConfig = requireOut("configs/guide.js");
-// #605：步骤表搬到服务端了（客户端只留表现层）—— 这里按线上同一条路（applyGuideSteps）灌出厂种子。
+// #605：步骤表搬到服务端了（客户端只留表现层）—— 这里按线上同一条路（applyGuideSteps）灌出厂数据。
 // 不灌就是空表：`guideStepCount()` 为 0，下面所有「该推进到第几步」的断言都会按「已完成」处理而假绿。
-const guideSeed = require(require("./lib/configs-sandbox.cjs").compileServerShared("guide-seed.ts", "olua-seed-guide"));
-guideConfig.applyGuideSteps(guideSeed.GUIDE_STEP_SEEDS);
+const guideSteps = require("./lib/factory-data.cjs").guideSteps();
+guideConfig.applyGuideSteps(guideSteps);
 const guideTypes = requireOut("types/guide.js");
 const uiSize = requireOut("configs/layout/sizes.js").uiSize;
 
@@ -73,9 +73,9 @@ function makeRole(id, name = "引导测试") {
 console.log("— A. 步骤表：数据驱动，加一步不用改代码 —");
 
 check(stepCount > 0, "至少有一步引导", `${stepCount} 步`);
-check(stepCount === guideSeed.GUIDE_STEP_SEEDS.length, "步骤数 = 服务端出厂种子（表在服务端，客户端不再存）", `${stepCount} vs ${guideSeed.GUIDE_STEP_SEEDS.length}`);
+check(stepCount === guideSteps.length, "步骤数 = 服务端出厂种子（表在服务端，客户端不再存）", `${stepCount} vs ${guideSteps.length}`);
 check(
-  steps.every((step, index) => step.id === guideSeed.GUIDE_STEP_SEEDS[index].id && step.desc === guideSeed.GUIDE_STEP_SEEDS[index].desc),
+  steps.every((step, index) => step.id === guideSteps[index].id && step.desc === guideSteps[index].desc),
   "每一步的标识与文案都来自种子（不是客户端遗留的旧表）",
 );
 check(new Set(steps.map((step) => step.id)).size === stepCount, "步骤 id 唯一（落日志与断言都靠它）", steps.map((step) => step.id).join("/"));
@@ -297,8 +297,8 @@ guideConfig.applyGuideSteps([]);
 check(guideConfig.guideStepCount() === 0, "空表 = 服务端把引导关了（步数 0）");
 check(guideConfig.guideStepAt(0) === null, "空表时取第 0 步返回 null（调用方据此判定「已经走完」，不会崩）");
 
-guideConfig.applyGuideSteps(guideSeed.GUIDE_STEP_SEEDS);
-check(guideConfig.guideStepCount() === guideSeed.GUIDE_STEP_SEEDS.length, "重新灌回出厂表（后续断言与线上一致）");
+guideConfig.applyGuideSteps(guideSteps);
+check(guideConfig.guideStepCount() === guideSteps.length, "重新灌回出厂表（后续断言与线上一致）");
 
 //#endregion
 

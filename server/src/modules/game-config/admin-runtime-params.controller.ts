@@ -11,7 +11,7 @@ import { RuntimeParamsDto, UpdateRuntimeParamsDto } from "./dto/runtime-params.d
  * 管理端 · 客户端运行时参数（#605）
  *
  * 单行配置（id 恒为 1），三个分组：掉落手感 / 自动战斗与寻路 / 帮会规则。
- * **只有 get / update，没有创建与删除** —— 行的形状由 `shared/runtime-seed.ts` 定义，
+ * **只有 get / update，没有创建与删除** —— 行的形状由 `config-sync.sql` 定义，
  * seed 固定，后台只改数值（与称号 / 商城主页同一取向）。
  *
  * 与其它配置页的区别：`drop` / `autoBattle` 服务端**不消费**，纯属「替客户端存一份可运营的参数」
@@ -34,7 +34,7 @@ export class AdminRuntimeParamsController {
       "- `drop`：掉落物手感（拾取半径 / 散落间距 / 应答超时 / 满包提示间隔）—— 服务端只下发不消费；\n" +
       "- `autoBattle`：自动战斗与寻路（目标距离 / 网格 / 重寻路节奏 / 卡住判定 / 吸附半径）—— 同上；\n" +
       "- `guild`：帮会规则门槛（名字长度 / 公告长度 / 申请留言长度）—— **服务端校验读它**。\n\n" +
-      "缺键回落出厂值（`shared/runtime-seed.ts`），所以新增参数不需要迁移。",
+      "缺键回落出厂值（`config-sync.sql`），所以新增参数不需要迁移。",
     permissions: [Permission.GAME_CONFIG_READ],
   })
   @ApiDataResponse(RuntimeParamsDto, { description: "当前生效值（含 updatedAt）" })

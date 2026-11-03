@@ -38,7 +38,7 @@ export interface DropResult {
 
 /**
  * 怪物掉落配置
- * - 字符串：引用具名掉落表（服务端 `drop_tables` 的行 id，出厂值见 server/src/shared/drop-seed.ts），便于多怪物复用同一掉落
+ * - 字符串：引用具名掉落表（服务端 `drop_tables` 的行 id，出厂值见 server/data/config-sync.sql），便于多怪物复用同一掉落
  * - 掉落表对象 / 掉落条目数组：内联掉落（条目数组等价于 { picks: 1, entries: 数组 }）
  */
 export type DropSource = string | DropTable | DropEntry[];

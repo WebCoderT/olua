@@ -20,6 +20,7 @@ import { DrugRepository } from "./repositories/drug.repository";
 import { ItemRepository } from "./repositories/item.repository";
 import { MallRepository } from "./repositories/mall.repository";
 import { MonsterRepository } from "./repositories/monster.repository";
+import { MonsterPresentationRepository } from "./repositories/monster-presentation.repository";
 import { NpcRepository } from "./repositories/npc.repository";
 import { FashionRepository } from "./repositories/fashion.repository";
 import { DropTableRepository } from "./repositories/drop-table.repository";
@@ -76,6 +77,7 @@ import { UiEffectRepository } from "./repositories/ui-effect.repository";
     DrugRepository,
     ItemRepository,
     MonsterRepository,
+    MonsterPresentationRepository,
     MallRepository,
     NpcRepository,
     FashionRepository,
@@ -123,6 +125,7 @@ import { UiEffectRepository } from "./repositories/ui-effect.repository";
     DrugRepository,
     ItemRepository,
     MonsterRepository,
+    MonsterPresentationRepository,
     MallRepository,
     NpcRepository,
     FashionRepository,

@@ -17,7 +17,9 @@
  */
 const fs = require("fs");
 const path = require("path");
-const { prepare, compileServerShared, seedRuntimeTables, check, finish, fail } = require("./lib/configs-sandbox.cjs");
+const { prepare, seedRuntimeTables, check, finish, fail } = require("./lib/configs-sandbox.cjs");
+/** #655 起配置的唯一来源是数据库快照（server/data/config-sync.sql） */
+const factory = require("./lib/factory-data.cjs");
 
 const ASSETS = path.resolve(__dirname, "..", "assets");
 
@@ -31,24 +33,26 @@ function main() {
   }
 
   seedRuntimeTables(outDir);
-  const soulSeed = require(compileServerShared("soul-seed.ts", "olua-soul-soul-seed"));
-  const growthSeed = require(compileServerShared("growth-seed.ts", "olua-soul-growth-seed"));
+  const soulRows = factory.souls();
+  const roleLevels = factory.levels();
   const { soulLevels, soulMaxLevel, getSoulLevel } = require(path.join(outDir, "configs/game-config.js"));
   const { titleLevels } = require(path.join(outDir, "configs/game-config.js"));
   const { rankLevels } = require(path.join(outDir, "configs/game-config.js"));
 
   // 消耗表 = 种子展开行的 bindGold（升到 N 阶的价；37 阶满阶不再有消耗）
-  const soulUpgradeCosts = soulSeed.SOUL_SEEDS.map((row) => row.bindGold);
+  const soulUpgradeCosts = soulRows.map((row) => row.bindGold);
 
   console.log("\n=== 数据完整性：两张表与外观序列逐阶对齐 ===");
   check(soulMaxLevel() === 37, `战魂共 ${soulMaxLevel()} 阶（resources/war-soul 的 37 个外观目录）`);
-  check(soulSeed.SOUL_SEEDS.length === 37, "服务端种子 37 行");
-  check(soulLevels.length === soulSeed.SOUL_SEEDS.length, "客户端运行时表行数 = 服务端种子行数（#590 整表重建）");
+  check(soulRows.length === 37, "库里战魂表 37 行");
+  check(soulLevels.length === soulRows.length, "客户端运行时表行数 = 快照行数（整表重建）");
   // 属性键序不参与比较（种子行 hpRecover 在末尾、客户端构造顺序不同），属性按固定键序取值再比
   const ATTR_KEYS = ["maxHp", "hpRecover", "physicalAttack", "magicAttack", "taoistAttack", "physicalDefense", "magicDefense", "taoistDefense"];
-  const attrJson = (attributes) => JSON.stringify(ATTR_KEYS.map((key) => attributes[key]));
+  // 快照行是 {min,max}，客户端运行时表是元组 [min,max]
+  const attrJson = (attributes) =>
+    JSON.stringify(ATTR_KEYS.map((key) => (Array.isArray(attributes[key]) ? attributes[key] : [attributes[key].min, attributes[key].max])));
   const seedMismatch = soulLevels.filter((config, index) => {
-    const seed = soulSeed.SOUL_SEEDS[index];
+    const seed = soulRows[index];
     return (
       config.level !== seed.level ||
       config.label !== seed.label ||
@@ -76,10 +80,8 @@ function main() {
     if (!Number.isInteger(soulUpgradeCosts[i])) costLadderOk = false;
   }
   check(costLadderOk, "升阶消耗逐阶严格递增且全为整数");
-  const totalCost = soulUpgradeCosts.reduce((sum, cost) => sum + cost, 0);
-  check(totalCost === 5272500, `升满战魂合计 ${totalCost} 绑定元宝（改了消耗表记得同步文档里「约 527 万」那句口径）`);
-  check(soulUpgradeCosts[0] === 300, "1 阶 300（新手第一阶不心疼）");
-  check(soulUpgradeCosts[soulUpgradeCosts.length - 1] === 410700, `末阶 ${soulUpgradeCosts[soulUpgradeCosts.length - 1]}（约为 1 阶的 1300 倍，长线压力）`);
+  // 合计 / 单价的具体数字不在这里锁：消耗逐阶配在 `souls.bind_gold` 上，
+  // 运营改一档就是改一档，锁总数只会变成「改数值就得改测试」
 
   console.log("\n=== 属性曲线：逐阶不降、跳档可见、满阶定标 ===");
   const upper = (value) => (Array.isArray(value) ? value[1] : value);
@@ -95,32 +97,30 @@ function main() {
   check(monotonicOk, "全部属性逐阶不降（上限与下限都校验）");
   check(soulLevels[20].attributes.maxHp > soulLevels[19].attributes.maxHp, "跨系列跳档可见：20 阶（灵体系末）→ 21 阶（兽魂/魔将系首）属性上升");
   check(soulLevels[35].attributes.maxHp > soulLevels[34].attributes.maxHp, "跨系列跳档可见：35 阶（兽魂系末）→ 36 阶（魔神系首）属性上升");
-  const soulBare60 = growthSeed.getRoleLevelAttributes(60);
-  const freezeRate = 0.5 * 1.35; // 冻结时的口径：等效 60 级裸属性 × rate 0.5 × 魔神系 factor 1.35
-  check(soulLevels[soulLevels.length - 1].attributes.maxHp === Math.round(soulBare60.maxHp * freezeRate), `满阶 maxHp = 60 级裸 maxHp × ${freezeRate}（冻结定标 ${soulLevels[soulLevels.length - 1].attributes.maxHp}）`);
-  check(upper(soulLevels[soulLevels.length - 1].attributes.physicalAttack) === Math.round(soulBare60.physicalAttack[1] * freezeRate), "满阶攻击上限同一口径");
-  check(soulLevels[soulLevels.length - 1].attributes.maxHp / soulLevels[0].attributes.maxHp > 1000, `满阶 vs 1 阶 maxHp 拉开 ${Math.round(soulLevels[soulLevels.length - 1].attributes.maxHp / soulLevels[0].attributes.maxHp)} 倍（长线成长可感知）`);
+  // 满阶定标（曾是「60 级裸属性 × 0.5 × 1.35」）随 #655 一起下架：现在满阶属性就是
+  // `souls` 表最后一行的列值，运营改多少就是多少 —— 只留「比 1 阶强很多」的形态判断
+  check(
+    soulLevels[soulLevels.length - 1].attributes.maxHp > soulLevels[0].attributes.maxHp,
+    `满阶 maxHp ${soulLevels[soulLevels.length - 1].attributes.maxHp} 高于 1 阶 ${soulLevels[0].attributes.maxHp}（值不锁）`,
+  );
 
   console.log("\n=== 三条成长线：满阶收益排序 称号 < 军衔 < 战魂 ===");
   const titleMaxHp = titleLevels[titleLevels.length - 1].attributes.maxHp;
   const rankMaxHp = rankLevels[rankLevels.length - 1].attributes.maxHp;
   const soulMaxHp = soulLevels[soulLevels.length - 1].attributes.maxHp;
-  check(titleMaxHp < rankMaxHp, `满阶称号 maxHp ${titleMaxHp}（≈39%）< 满阶军衔 ${rankMaxHp}（≈52.5%）`);
-  check(rankMaxHp < soulMaxHp, `满阶军衔 ${rankMaxHp} < 满阶战魂 ${soulMaxHp}（≈67.5%）`);
-  check(
-    Math.round((titleMaxHp / soulBare60.maxHp) * 100) === 39 && Math.round((rankMaxHp / soulBare60.maxHp) * 100) === 53,
-    "称号/军衔的满阶收益比例与 README 描述一致（39% / 52.5%，四舍五入 53）",
-  );
+  check(titleMaxHp < rankMaxHp, `满阶称号 maxHp ${titleMaxHp} < 满阶军衔 ${rankMaxHp}`);
+  check(rankMaxHp < soulMaxHp, `满阶军衔 ${rankMaxHp} < 满阶战魂 ${soulMaxHp}`);
+  // 具体百分比（39% / 53%）不锁：三条成长线的满阶值都是库里逐行配的，比例随时会变
 
   console.log("\n=== 客户端零数据：soul.ts 不再有任何数据或派生 ===");
   const soulSrc = fs.readFileSync(path.join(ASSETS, "configs/game-config.ts"), "utf8");
   check(!/getRoleLevelAttributes|getEquivalentLevel|scaleAttributes|soulGrowth|soulUpgradeCosts|soulLevelAttributes/.test(soulSrc), "soul.ts 不再引用等级曲线、旧派生函数或本地数据表");
   check(/soulLevels: SoulLevelConfig\[\] = \[\]/.test(soulSrc), "运行时表以空数组起（快照到达后整表重建）");
-  // 数据明文搬家了：两张表现在只在服务端种子
-  const soulSeedSrc = fs.readFileSync(path.join(ASSETS, "..", "..", "server", "src", "shared", "soul-seed.ts"), "utf8");
-  check(/SOUL_UPGRADE_COSTS: number\[\] = \[/.test(soulSeedSrc) && /SOUL_ATTRIBUTE_ROWS/.test(soulSeedSrc), "消耗表与属性表以字面量形式在服务端种子里（唯一书写处）");
+  // 数据明文搬家了：两张表现在只在库里（快照 = server/data/config-sync.sql）
+  check(!fs.existsSync(path.join(ASSETS, "..", "..", "server", "src", "shared")), "服务端不再有 shared/ 目录（数值不在代码里）");
+  check(soulRows.every((row) => typeof row.bindGold === "number" && row.bindGold >= 0), "消耗表随快照下发（每阶 bindGold 都在行里）");
 
-  finish("PASS：战魂逐级明文表完整、曲线单调、三条成长线排序保持、数据唯一来源在服务端种子。");
+  finish("PASS：战魂逐级明文表完整、曲线单调、三条成长线排序保持、数据唯一来源在数据库快照。");
 }
 
 main();

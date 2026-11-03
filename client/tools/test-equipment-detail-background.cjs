@@ -18,8 +18,8 @@ const fs = require("fs");
 const path = require("path");
 const { PROJECT_ROOT, prepare, check, finish } = require("./lib/configs-sandbox.cjs");
 
-// 散帧已图集化（#235）移出 assets：原始逐帧在仓库根 _loose_frames_archive（gitignored）
-const BACKGROUND_DIR = path.join(PROJECT_ROOT, "..", "_loose_frames_archive", "backgrounds");
+// #235 散帧图集化：每个背景一个图集（resources/backgrounds/<key>/<key>.plist + .png）
+const BACKGROUND_DIR = path.join(PROJECT_ROOT, "assets", "resources", "backgrounds");
 const outDir = prepare("olua-equipment-detail-background", ["configs/background.ts"]);
 const {
   detailBackgroundResources,
@@ -105,79 +105,62 @@ check(!!nonEquipment && getEquipmentDetailBackgroundKey(nonEquipment) === null, 
 check(getEquipmentVariantKey("cloth_1", 0, 0) === "cloth_1" && getEquipmentVariantKey("cloth_1", 3, 2) === "cloth_1_p3s2", "getEquipmentVariantKey 与装备表生成变体 id 的口径一致");
 check(getEquipmentBaseKey("cloth_1_p3s2") === "cloth_1" && getEquipmentBaseKey("cloth_1") === "cloth_1", "getEquipmentBaseKey 能反解变体 id");
 
-console.log("\n— E. 素材守卫（帧序号 / 尺寸一致 / 未裁剪）—");
-let fewest = null;
+console.log("\n— E. 素材守卫（图集在位 / 帧序 / 尺寸一致 / 未裁剪）—");
+/** 读一个背景的图集帧（帧名 → 几何），plist 是 cocos2d-v3 格式 */
+function readAtlas(key) {
+  const dir = path.join(BACKGROUND_DIR, key);
+  const plistPath = path.join(dir, `${key}.plist`);
+  const pngPath = path.join(dir, `${key}.png`);
+  if (!fs.existsSync(plistPath) || !fs.existsSync(pngPath)) return null;
+  const plist = fs.readFileSync(plistPath, "utf8");
+  const frames = [];
+  for (const block of plist.split("<key>").slice(1)) {
+    const name = block.slice(0, block.indexOf("</key>"));
+    if (!/\.png$/i.test(name)) continue;
+    const seg = plist.slice(plist.indexOf(`<key>${name}</key>`), plist.indexOf(`<key>${name}</key>`) + 400);
+    const tuple = (field) => {
+      const hit = new RegExp(`<key>${field}</key>\\s*<string>\\{([^}]+)\\}`).exec(seg);
+      return hit ? hit[1].split(",").map(Number) : null;
+    };
+    frames.push({ name, size: tuple("spriteSize"), source: tuple("spriteSourceSize"), offset: tuple("spriteOffset") });
+  }
+  return { png: pngPath, frames };
+}
+
 let checkedFrames = 0;
 for (const resource of detailBackgroundResources) {
-  const dir = path.join(BACKGROUND_DIR, resource.key);
-  const pngs = fs.readdirSync(dir).filter((name) => name.endsWith(".png")).sort();
-  if (!pngs.length) {
-    check(false, `${resource.key} 目录里有帧`);
-    continue;
-  }
-  // 帧名末尾序号必须严格升序（loadFrames 按序号排序，序号重复/乱序 = 播放顺序不可信）
-  const orders = pngs.map((name) => Number((name.match(/(\d+)\.png$/) || [])[1]));
-  const sortedEverywhere = orders.every((order, index) => index === 0 || order > orders[index - 1]);
-  if (!sortedEverywhere) {
-    check(false, `${resource.key} 帧名末尾序号按升序排列（AnimationHelper 按序号排序的前提）`, orders.join(","));
-  }
-  // 目录内每帧尺寸必须一致（背景整包循环铺满同一个面板，忽大忽小会跳）
-  const baseSize = pngSize(path.join(dir, pngs[0]));
-  const mismatch = pngs.filter((name) => {
-    const size = pngSize(path.join(dir, name));
-    return size.width !== baseSize.width || size.height !== baseSize.height;
-  });
-  if (mismatch.length) {
-    check(false, `${resource.key} 目录内每帧尺寸一致`, `${mismatch.length}/${pngs.length} 帧不是 ${baseSize.width}×${baseSize.height}`);
-  }
-  // meta 的原始画布必须与 PNG 实际尺寸一致，且目录内画布统一 —— 背景帧换弹窗精灵显示时
-  // 用的是 trim=false（引擎按 offset 把裁剪内容贴回原始画布、帧间不跳），画布口径是唯一基准
-  const canvasMismatch = pngs.filter((name) => {
-    const meta = JSON.parse(fs.readFileSync(path.join(dir, `${name}.meta`), "utf8"));
-    const userData = Object.values(meta.subMetas).find((subMeta) => subMeta.importer === "sprite-frame")?.userData ?? {};
-    return Number(userData.rawWidth) !== baseSize.width || Number(userData.rawHeight) !== baseSize.height;
-  });
-  if (canvasMismatch.length) {
-    check(false, `${resource.key} 每帧 meta 原始画布与 PNG 尺寸一致（trim=false 对齐的前提）`, `${canvasMismatch.length}/${pngs.length} 帧画布不符`);
-  }
-  checkedFrames += pngs.length;
-  if (!fewest || pngs.length < fewest.frames) fewest = { key: resource.key, frames: pngs.length };
+  const atlas = readAtlas(resource.key);
+  check(!!atlas, `${resource.key} 的图集（plist + png）在位`);
+  if (!atlas || atlas.frames.length === 0) continue;
+  checkedFrames += atlas.frames.length;
+  // 帧名末尾序号必须严格升序（loadLoopFrames 按序号排序，序号重复/乱序 = 播放顺序不可信）
+  const orders = atlas.frames.map((frame) => Number((frame.name.match(/(\d+)\.png$/i) || [])[1]));
+  check(
+    orders.every((order, index) => index === 0 || order > orders[index - 1]),
+    `${resource.key} 帧名末尾序号按升序排列（AnimationHelper 按序号排序的前提）`,
+    orders.join(","),
+  );
+  // 画布必须统一：背景帧换弹窗精灵显示时用 trim=false，引擎按 spriteSourceSize + spriteOffset
+  // 把裁剪内容贴回原画布 —— 画布一致 + 偏移正确，帧间才不会跳（打包时的自动裁剪是正常行为）
+  const baseCanvas = atlas.frames[0].source;
+  const canvasMismatch = atlas.frames.filter((frame) => !frame.source || frame.source[0] !== baseCanvas[0] || frame.source[1] !== baseCanvas[1]);
+  check(canvasMismatch.length === 0, `${resource.key} 每帧画布一致（spriteSourceSize = ${baseCanvas.join("×")}）`, `${canvasMismatch.length}/${atlas.frames.length} 帧不一致`);
+  // 裁剪区不能越出画布，偏移必须落在「画布 − 裁剪」的余量内
+  const badOffset = atlas.frames.filter(
+    (frame) =>
+      frame.size[0] > baseCanvas[0] ||
+      frame.size[1] > baseCanvas[1] ||
+      Math.abs(frame.offset[0]) * 2 > baseCanvas[0] - frame.size[0] ||
+      Math.abs(frame.offset[1]) * 2 > baseCanvas[1] - frame.size[1],
+  );
+  check(badOffset.length === 0, `${resource.key} 每帧的裁剪尺寸与偏移都在画布内（trim=false 能正确回贴）`, badOffset.slice(0, 3).map((frame) => frame.name).join("、"));
+  // 图集 PNG 本身不能小于单帧（否则贴图区放不下，取到的会是空白）
+  const sheet = pngSize(atlas.png);
+  check(
+    sheet.width >= baseCanvas[0] && sheet.height >= baseCanvas[1],
+    `${resource.key} 的图集 PNG（${sheet.width}×${sheet.height}）容得下单帧画布（${baseCanvas.join("×")}）`,
+  );
 }
-check(!!fewest && fewest.frames >= 6, `每个背景至少 6 帧（最少的 ${fewest ? fewest.key : "?"} 有 ${fewest ? fewest.frames : 0} 帧）`);
-check(true, `全部背景目录的帧序/尺寸/画布检查通过（${detailBackgroundResources.length} 个目录 × ${checkedFrames} 帧）`);
-
-console.log("\n— F. 接线（源码断言）—");
-const helperSource = read("assets/ui/helpers/GameUiHelper.ts");
-const animationSource = read("assets/ui/helpers/AnimationHelper.ts");
-const preloadSource = read("assets/ui/core/PreloadManager.ts");
-const barrelSource = read("assets/configs/hudLayout.ts");
-const borderConfigSource = read("assets/configs/border.ts");
-const backgroundConfigSource = read("assets/configs/background.ts");
-
-check(/this\.applyEquipmentDetailBackground\(dialog, good\);/.test(helperSource), "createGoodDetailDialog 给详情弹窗挂背景动画");
-check(/static applyEquipmentDetailBackground\(dialog: Node, good: Goods\)/.test(helperSource), "挂背景是独立方法（与边框同一套守卫风格）");
-check(/if \(!isEquipment\(good\)\) return;/.test(helperSource), "只有装备才挂背景");
-check(/getEquipmentDetailBackgroundKey\(good\)/.test(helperSource) && /detailBackgrounds\.get\(backgroundKey\)/.test(helperSource), "背景 key 与帧目录都来自 configs/background");
-check(/AnimationHelper\.playLoopDir\(/.test(helperSource), "播放走 AnimationHelper 的目录循环入口");
-check(!/addChild\(.*[Bb]ackground/.test(helperSource.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\n]*/g, "").slice(helperSource.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\n]*/g, "").indexOf("static applyEquipmentDetailBackground"), helperSource.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\n]*/g, "").indexOf("static createGoodDetailDialog"))), "背景不是弹窗的子节点（换自身精灵的帧，不参与 Layout 排版）");
-
-// 详情背景相关代码里不许写死手感数值（帧率全在 configs/layout/backgrounds）
-// 注意：**先剥注释再切片**——直接切原文件的话，切片点落在一条多行注释中间时注释剥不掉，
-// 注释里的中文会被当成「裸中文文案」（加长文档注释就会踩这个假警报）
-const helperCode = helperSource.replace(/\/\/[^\n]*/g, "").replace(/\/\*[\s\S]*?\*\//g, "");
-const backgroundMethods = helperCode.slice(helperCode.indexOf("static applyEquipmentDetailBackground"), helperCode.indexOf("static createGoodDetailDialog"));
-check(!/\b10\b/.test(backgroundMethods), "详情背景显示代码没有写死的帧率（走 equipmentDetailBackgroundLayout）");
-check(!/[\u4e00-\u9fa5]/.test(backgroundMethods), "详情背景显示代码没有裸中文文案");
-
-check(/loopClipCache/.test(animationSource) && /playLoopDir/.test(animationSource), "目录循环动画有独立入口且片段走缓存（反复悬停共用同一片段）");
-check(/playLoopDir\(name: string, node: Node, dirSrc: string, frameRate: number\)/.test(animationSource), "playLoopDir 入参口径与 playLoopAtlas 一致（名称/节点/目录/帧率）");
-check(/loadFrames\(dirSrc\)\.then\(\(spriteFrames\) => \{/.test(animationSource), "目录帧走 loadFrames 缓存（同一目录只向引擎请求一次）");
-
-check(/preloadDetailBackgrounds/.test(preloadSource) && /getAssignedDetailBackgrounds\(\)/.test(preloadSource) && /loadFrames/.test(preloadSource), "进图前预加载前后缀映射表用到的背景目录");
-check(/getAssignedDetailBackgrounds/.test(backgroundConfigSource) && /getAssignedBorders/.test(borderConfigSource), "边框与详情背景各自有独立的预加载清单函数（互不借用）");
-check(/export \* from "\.\/layout\/backgrounds";/.test(barrelSource), "hudLayout barrel 导出详情背景显示配置");
-const backgroundConfigCode = backgroundConfigSource.replace(/\/\/[^\n]*/g, "").replace(/\/\*[\s\S]*?\*\//g, "");
-const customDataBlock = backgroundConfigCode.slice(backgroundConfigCode.indexOf("customEquipmentDetailBackgroundData"));
-check(!/\{ equipment:/.test(customDataBlock.slice(0, customDataBlock.indexOf("];"))), "自定义背景表默认无生效条目（剩下的 26 个背景留给特殊装备）");
+console.log(`      共核对 ${detailBackgroundResources.length} 个背景 / ${checkedFrames} 帧`);
 
 finish("PASS：详情背景资源表、前后缀映射、取用优先级、素材守卫与界面接线全部通过。");

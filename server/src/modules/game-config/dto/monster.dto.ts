@@ -3,7 +3,7 @@ import { Type } from "class-transformer";
 import { IsIn, IsInt, IsOptional, IsString, Max, Min, ValidateNested } from "class-validator";
 import { PageMetaDto, PageQueryDto } from "../../../common/dto/api-envelope.dto";
 import { MonsterDropRow, MonsterRow } from "../../../database/rows";
-import type { MonsterPresentationRow } from "../../../shared/monster-presentation.generated";
+import type { MonsterPresentationRow } from "../../../database/rows";
 import { MonsterDropSummaryDto } from "./drop.dto";
 
 /** 怪物定位取值清单（configs/monster 的 tier：normal / elite / boss；**手写结构常量**，与客户端枚举逐值一致） */
@@ -221,7 +221,7 @@ export class MonsterPresentationDto {
   contentSize: ContentSizeDto;
   @ApiProperty({ description: "移动速度（刚体线速度单位）" })
   moveSpeed: number;
-  @ApiProperty({ description: "是否主动攻击玩家（表现与客户端 AI 口径；服务端权威 AI 读生成物同一份）" })
+  @ApiProperty({ description: "是否主动攻击玩家（表现与客户端 AI 口径；服务端权威 AI 读同一行）" })
   aggressive: boolean;
   @ApiProperty({ description: "检测范围（像素半径）" })
   detectRange: number;
@@ -232,17 +232,40 @@ export class MonsterPresentationDto {
   })
   speedRate?: Record<string, number>;
 
+  /**
+   * `monster_presentation` 的一行 → DTO
+   *
+   * 表里是扁平列（`out_offset_x` / `content_width`）与 0-1 整数（`aggressive`），
+   * 快照要的是嵌套对象与布尔 —— 转换只在这里做一次。
+   */
   static from(row: MonsterPresentationRow): MonsterPresentationDto {
     const dto = new MonsterPresentationDto();
     dto.id = row.id;
     dto.icon = row.icon;
     dto.out = row.out;
-    dto.outOffset = { x: row.outOffset[0], y: row.outOffset[1] };
-    dto.contentSize = { width: row.contentSize[0], height: row.contentSize[1] };
-    dto.moveSpeed = row.moveSpeed;
-    dto.aggressive = row.aggressive;
-    dto.detectRange = row.detectRange;
-    dto.speedRate = row.speedRate;
+    dto.outOffset = { x: Number(row.out_offset_x) || 0, y: Number(row.out_offset_y) || 0 };
+    dto.contentSize = { width: Number(row.content_width) || 0, height: Number(row.content_height) || 0 };
+    dto.moveSpeed = Number(row.move_speed) || 0;
+    dto.aggressive = Number(row.aggressive) === 1;
+    dto.detectRange = Number(row.detect_range) || 0;
+    dto.speedRate = parseSpeedRate(row.speed_rate);
     return dto;
+  }
+}
+
+/** `speed_rate` 列（JSON：动作名 → 每秒循环数）；空对象表示全用客户端默认 */
+function parseSpeedRate(text: string | undefined): Record<string, number> | undefined {
+  if (!text) return undefined;
+  try {
+    const parsed: unknown = JSON.parse(text);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return undefined;
+    const out: Record<string, number> = {};
+    for (const [key, value] of Object.entries(parsed as Record<string, unknown>)) {
+      const numeric = Number(value);
+      if (Number.isFinite(numeric)) out[key] = numeric;
+    }
+    return Object.keys(out).length > 0 ? out : undefined;
+  } catch {
+    return undefined;
   }
 }

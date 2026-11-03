@@ -19,7 +19,8 @@ const fs = require("fs");
 const os = require("os");
 const path = require("path");
 const { spawnSync } = require("child_process");
-const { PROJECT_ROOT, findTsc, prepare, compileServerShared, check, finish } = require("./lib/configs-sandbox.cjs");
+const { PROJECT_ROOT, findTsc, prepare, check, finish } = require("./lib/configs-sandbox.cjs");
+const factory = require("./lib/factory-data.cjs");
 
 const read = (rel) => fs.readFileSync(path.join(PROJECT_ROOT, rel), "utf8");
 
@@ -250,8 +251,7 @@ if (!tsc) {
       const stubs = require(warriorJs);
       // #603 第十一域：客户端技能表加载期是空的（数据在 skill-seed.ts），
       // 这里按线上同一条路灌种子再让接线层重算 skills Map —— 不灌就是「空 Map 全红」
-      const skillSeed = require(compileServerShared("skill-seed.ts", "olua-seed-skill-wire"));
-      require(path.join(out, "configs/game-config.js")).applySkillData(skillSeed.SKILL_SEED_ROWS);
+      require(path.join(out, "configs/game-config.js")).applySkillData(factory.skills());
       wired.rebuildSkills();
       /** id → 应接的实现函数名（与 warrior.ts 的导出名一一对应） */
       const HANDLERS = {

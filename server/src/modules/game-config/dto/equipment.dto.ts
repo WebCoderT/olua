@@ -16,11 +16,10 @@ import {
 } from "class-validator";
 import { PageMetaDto, PageQueryDto } from "../../../common/dto/api-envelope.dto";
 import { EquipmentMetaRow, EquipmentRow, EquipmentSlotRow, EquipmentVariantRow } from "../../../database/rows";
-import { EQUIPMENT_SLOTS, OCCUPATION_HINT, OCCUPATION_LABELS, SEX_HINT, SEX_LABELS } from "../../../shared/game-data";
+import { EQUIPMENT_SLOT_KEYS, OCCUPATION_HINT, OCCUPATION_LABELS, SEX_HINT, SEX_LABELS } from "../../../common/constants/game-enums";
 import { attributesFromRow, ConfigAttributesDto, SoulRowShape } from "./title.dto";
 
-/** 部位取值清单（**派生**自生成物的 EQUIPMENT_SLOTS，键即 EQUIPMENT_TYPE 的枚举值） */
-export const EQUIPMENT_SLOT_KEYS = Object.keys(EQUIPMENT_SLOTS);
+export { EQUIPMENT_SLOT_KEYS };
 
 /**
  * 职业限制取值清单（派生自生成物 `OCCUPATION_LABELS` 的键 —— 客户端 `OECCUPATION` 枚举值）

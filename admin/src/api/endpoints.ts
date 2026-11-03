@@ -11,7 +11,7 @@
 import { http } from "./http";
 import type { HttpOptions } from "./http";
 import { routes } from "./routes";
-import type { Account, AccountDetail, AccountPage, AccountQuery, Achievement, AchievementPage, AchievementQuery, AdminAuthResult, AdminGuild, AdminGuildDetail, AdminInfo, AdminLogin, AdminMonster, AdminPage, AdminQuery, AdminRegister, AdminRoleDetail, AdminRolePage, AdminSendMail, AdminStats, AdminUpdateGuild, AdminUpdatePayload, AdminZone, Announcement, AnnouncementPage, AnnouncementQuery, AuditActionList, AuditExport, AuditLogPage, AuditQuery, BatchDeleteResult, BatchDeleteRoles, BatchStatusResult, BatchUpdateAccountStatus, ChangeAdminPassword, CombatWeightsResponse, CreateAchievement, CreateAnnouncement, CreateDropTable, CreateQuest, CreateSkill, CreateZone, DropTable, DropTableList, Drug, DrugPage, DrugQuery, EquipAlign, EquipAlignList, EquipInAlign, EquipInAlignList, Equipment, EquipmentMeta, EquipmentPage, EquipmentQuery, EquipmentSlot, EquipmentVariant, EquipmentVariantPage, EquipmentVariantQuery, Fashion, FashionPage, FashionQuery, GrowthScalar, GrowthScalarPage, GrowthScalarQuery, GuideSteps, Item, ItemPage, ItemQuery, MailJob, MailJobPage, MailQuery, MailTemplate, MailView, MallPriceItem, MallPricePage, MallPriceQuery, MallPriceRemove, MallSettings, MapDetail, MapList, MapSummary, MergeZone, MonsterDrop, MonsterDropPage, MonsterDropQuery, MonsterPage, MonsterQuery, MonsterSkillList, Npc, NpcPage, NpcQuery, PutMallPrice, Quest, QuestPage, QuestQuery, Rank, RankPage, RankQuery, ReplaceMonsterSkills, ReportPage, ReportQuery, ResetAccountPassword, ResetAdminPassword, ResetPasswordResult, RoleLevel, RoleLevelPage, RoleLevelQuery, RolePatchPayload, RoleQuery, RuntimeParams, SaveEquipAlign, SaveEquipInAlign, SaveMapConfig, SaveUiEffect, SendMail, SendMailResult, Skill, SkillPage, SkillQuery, Soul, SoulPage, SoulQuery, StatsBreakdown, StatsRecentItem, StatsRecentQuery, StatsTrend, StatsTrendQuery, Status, StatusPage, StatusQuery, SystemInfo, Title, TitlePage, TitleQuery, UiEffect, UiEffectList, UpdateAccountEmail, UpdateAccountStatus, UpdateAchievement, UpdateAnnouncement, UpdateCombatWeights, UpdateDropTable, UpdateDrug, UpdateEquipment, UpdateEquipmentMeta, UpdateEquipmentSlot, UpdateEquipmentVariant, UpdateFashion, UpdateGrowthScalar, UpdateGuideSteps, UpdateItem, UpdateMallSettings, UpdateMonster, UpdateMonsterDrop, UpdateNpc, UpdateQuest, UpdateRank, UpdateRoleLevel, UpdateRuntimeParams, UpdateSkill, UpdateSoul, UpdateStatus, UpdateTitle, UpgradeOrder } from "./models";
+import type { Account, AccountDetail, AccountPage, AccountQuery, Achievement, AchievementPage, AchievementQuery, AdminAuthResult, AdminGuild, AdminGuildDetail, AdminInfo, AdminLogin, AdminMonster, AdminPage, AdminQuery, AdminRegister, AdminRoleDetail, AdminRolePage, AdminSendMail, AdminStats, AdminUpdateGuild, AdminUpdatePayload, AdminZone, Announcement, AnnouncementPage, AnnouncementQuery, AuditActionList, AuditExport, AuditLogPage, AuditQuery, BatchDeleteResult, BatchDeleteRoles, BatchStatusResult, BatchUpdateAccountStatus, ChangeAdminPassword, CombatWeightsResponse, CreateAchievement, CreateAnnouncement, CreateDropTable, CreateQuest, CreateSkill, CreateZone, DropTable, DropTableList, Drug, DrugPage, DrugQuery, EquipAlign, EquipAlignList, EquipInAlign, EquipInAlignList, Equipment, EquipmentMeta, EquipmentPage, EquipmentQuery, EquipmentSlot, EquipmentVariant, EquipmentVariantPage, EquipmentVariantQuery, Fashion, FashionPage, FashionQuery, GameConfigSnapshot, GrowthScalar, GrowthScalarPage, GrowthScalarQuery, GuideSteps, Item, ItemPage, ItemQuery, MailJob, MailJobPage, MailQuery, MailTemplate, MailView, MallPriceItem, MallPricePage, MallPriceQuery, MallPriceRemove, MallSettings, MapDetail, MapList, MapSummary, MergeZone, MonsterDrop, MonsterDropPage, MonsterDropQuery, MonsterPage, MonsterQuery, MonsterSkillList, Npc, NpcPage, NpcQuery, PutMallPrice, Quest, QuestPage, QuestQuery, Rank, RankPage, RankQuery, ReplaceMonsterSkills, ReportPage, ReportQuery, ResetAccountPassword, ResetAdminPassword, ResetPasswordResult, RoleLevel, RoleLevelPage, RoleLevelQuery, RolePatchPayload, RoleQuery, RuntimeParams, SaveEquipAlign, SaveEquipInAlign, SaveMapConfig, SaveUiEffect, SendMail, SendMailResult, Skill, SkillPage, SkillQuery, Soul, SoulPage, SoulQuery, StatsBreakdown, StatsRecentItem, StatsRecentQuery, StatsTrend, StatsTrendQuery, Status, StatusPage, StatusQuery, SystemInfo, Title, TitlePage, TitleQuery, UiEffect, UiEffectList, UpdateAccountEmail, UpdateAccountStatus, UpdateAchievement, UpdateAnnouncement, UpdateCombatWeights, UpdateDropTable, UpdateDrug, UpdateEquipment, UpdateEquipmentMeta, UpdateEquipmentSlot, UpdateEquipmentVariant, UpdateFashion, UpdateGrowthScalar, UpdateGuideSteps, UpdateItem, UpdateMallSettings, UpdateMonster, UpdateMonsterDrop, UpdateNpc, UpdateQuest, UpdateRank, UpdateRoleLevel, UpdateRuntimeParams, UpdateSkill, UpdateSoul, UpdateStatus, UpdateTitle, UpgradeOrder } from "./models";
 
 /**
  * 接口方法（管理端唯一调服务端的地方，自动生成，禁止手改）
@@ -117,7 +117,7 @@ export const achievementsApi = {
   /**
    * 成就配置列表（GET /admin/achievements）
    *
-   * seed 自 server/src/shared/achievement-seed.ts，允许动态增删。`category` 筛 battle / growth / explore，`keyword` 模糊匹配 id / 名称。
+   * seed 自 server/data/config-sync.sql，允许动态增删。`category` 筛 battle / growth / explore，`keyword` 模糊匹配 id / 名称。
    *
    * 权限点：gameConfig:read
    */
@@ -517,7 +517,7 @@ export const fashionsApi = {
   /**
    * 时装配置列表（GET /admin/fashions）
    *
-   * id 清单固定（seed 自 shared/fashion-seed.ts 的 20 套），**没有创建 / 删除**。`keyword` 模糊匹配 id / 名称，`acquireChannel` 按获得渠道筛。
+   * id 清单固定（seed 自 config-sync.sql 的 20 套），**没有创建 / 删除**。`keyword` 模糊匹配 id / 名称，`acquireChannel` 按获得渠道筛。
    *
    * 权限点：gameConfig:read
    */
@@ -530,6 +530,18 @@ export const fashionsApi = {
    * 权限点：gameConfig:write
    */
   update: (id: string, body: UpdateFashion, options?: Options) => http.patch<Fashion>(routes.adminFashion.update(id), body, options),
+};
+
+/** adminGameData 模块的接口（1 个，生成） */
+export const gameDataApi = {
+  /**
+   * 游戏数据字典（管理端查表用）（GET /admin/game-data）
+   *
+   * 与 `GET /game-config` **同一份快照**：称号 / 战魂 / 军衔 / 装备变体 / 药品 / 物品 / 怪物 / 怪物表现 / NPC / 时装 / 技能 / 状态 / 任务 / 成就 / 地图 / 等级表 / 成长标量 / 商城价 / 掉落表。
+   *
+   * 权限点：gameConfig:read
+   */
+  snapshot: (options?: Options) => http.get<GameConfigSnapshot>(routes.adminGameData.snapshot, options),
 };
 
 /** adminGameMail 模块的接口（1 个，生成） */

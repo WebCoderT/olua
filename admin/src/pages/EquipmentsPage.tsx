@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { equipmentsApi, formatTime, OCCUPATION_LABELS, PERMISSION, SEX_LABELS, slotLabel } from "../api";
+import { equipmentsApi, equipmentSlotKeys, formatTime, OCCUPATION_LABELS, PERMISSION, SEX_LABELS, slotLabel } from "../api";
 import type { ConfigAttributes, Equipment, PageResult } from "../api";
 import { AttributesGrid, crossedRangeKeys } from "../components/AttributesEditor";
 import { GameIcon } from "../components/GameImage";
@@ -8,7 +8,6 @@ import { anyPickerOpen } from "../components/pickerStack";
 import { Modal } from "../components/Modal";
 import { Pagination } from "../components/Pagination";
 import { Badge, Button, Card, EmptyState, Field, Input, Select, Spinner, tableClass, tdClass, thClass, theadClass } from "../components/ui";
-import { EQUIPMENT_SLOTS } from "../api/gameData";
 import { hasPermission } from "../store/session";
 import { toastSuccess } from "../store/toast";
 import { PageHeader } from "../components/PageHeader";
@@ -19,8 +18,15 @@ function attributeSummary(item: Equipment): string {
   return `生命 ${a.maxHp} · 物攻 ${a.physicalAttack.min}~${a.physicalAttack.max} · 物防 ${a.physicalDefense.min}~${a.physicalDefense.max}`;
 }
 
-/** 部位下拉的选项（id + 中文名；EQUIPMENT_SLOTS 派生，含暂无装备的 other1/other2 也无妨） */
-const SLOT_OPTIONS = Object.entries(EQUIPMENT_SLOTS);
+/**
+ * 部位下拉的选项（id + 中文名）
+ *
+ * 部位清单与名字都在 `equipment_slots` 表（#655 起代码里不再有第二份），所以**渲染时**才算 ——
+ * 模块级那时字典还没拉回来。含暂无装备的 other1 / other2 也无妨（后端也认这两个位）。
+ */
+function slotOptions(): [string, string][] {
+  return equipmentSlotKeys().map((key) => [key, slotLabel(key)]);
+}
 
 /**
  * 装备基础件编辑弹窗（#252 起；#603 第九域扩到「全部显示字段」）
@@ -467,7 +473,7 @@ export function EquipmentsPage() {
           <Field width="w-36" label="部位">
               <Select value={draft.slot} onChange={(event) => setDraft({ ...draft, slot: event.target.value })}>
                 <option value="">全部</option>
-                {SLOT_OPTIONS.map(([value, text]) => (
+                {slotOptions().map(([value, text]) => (
                   <option key={value} value={value}>
                     {text}
                   </option>

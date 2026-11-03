@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
-import { adminRoleLabel, authApi, ensureMapCatalog, PERMISSION } from "../api";
+import { adminRoleLabel, authApi, ensureGameData, ensureMapCatalog, PERMISSION } from "../api";
 import { APP_TITLE } from "../api/config";
 import { clearSession, hasPermission, readAdmin, readToken, saveSession, subscribeSession } from "../store/session";
 import { Badge, Button } from "./ui";
@@ -157,6 +157,13 @@ export function Layout() {
   // 登录后进到布局就拉一次，失败静默（只是名字回落成 id，不挡任何页面）
   useEffect(() => {
     void ensureMapCatalog();
+  }, []);
+
+  // 游戏数据字典（#655）：装备 / 物品 / 技能 / 怪物 / NPC 的名字与下拉清单都在数据库，
+  // 与地图名录同一个套路 —— 登录后拉一次 `GET /admin/game-data`，之后同步查表。
+  // 放在布局里而不是每个页面：这些名字在表格、选择器、详情页到处都要用。
+  useEffect(() => {
+    void ensureGameData();
   }, []);
 
   /**

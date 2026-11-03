@@ -6,8 +6,9 @@
  * 其余断言都是围绕它的边界 —— 谁能写、能写什么、写坏了会怎样。
  *
  * ## 五条主线
- * 1. **空表 = 出厂值**：新建库一张行都没有，管理端列表与玩家侧接口都是空数组
- *    （客户端「按 id 对齐、缺省不动」，所以空表等于「全都用 configs 里的值」）。
+ * 1. **出厂几何就在库里**（#655）：`equip_aligns` 是配置表，出厂快照里带着 32 行
+ *    （每条装备 / 两个裸模各一行），空库首启整表灌入 —— 所以「新建库是空表」这个旧前提已经不成立。
+ *    客户端「按 id 对齐、缺省不动」，缺行才回落到 `equipments.out_positions`。
  * 2. **保存即生效**：PUT 一条 → 管理端列表立刻反映 → **玩家侧接口拿到同样的形状**。
  * 3. **幂等**：同 id 重复保存不会变成两行（UPSERT），重置删不存在的行也返回成功。
  * 4. **边界**：id 形态、8 个方向、缩放区间、位置上限；参数不合法是 400 而不是"存进去再说"。
@@ -22,6 +23,10 @@ const path = require("node:path");
 const SERVER_DIR = path.join(__dirname, "..");
 const ENTRY = path.join(SERVER_DIR, "dist", "main.js");
 const ADMIN_CODE = "equipalign-code";
+
+/** 出厂几何行数（`server/data/config-sync.sql` 里的 `equip_aligns`） */
+const configSnapshot = require("./lib/config-snapshot.cjs");
+const FACTORY_ALIGN_ROWS = configSnapshot.rows("equip_aligns").length;
 
 //#region 断言小工具（与其余几套同一骨架）
 
@@ -152,11 +157,11 @@ async function main() {
 
     //#region 一、空表 = 出厂值
 
-    group("一、空表：没有行就代表「全都用客户端配置里的值」");
+    group("一、出厂几何：库里的行就是快照那一份");
 
-    const emptyList = await api(base, "GET", "/api/admin/equip-aligns", { token: rootToken });
-    checkEqual(emptyList.status, 200, "管理端列表可读");
-    checkEqual(emptyList.body?.data?.list?.length, 0, "新建库没有任何对齐行");
+    const factoryList = await api(base, "GET", "/api/admin/equip-aligns", { token: rootToken });
+    checkEqual(factoryList.status, 200, "管理端列表可读");
+    checkEqual(factoryList.body?.data?.list?.length, FACTORY_ALIGN_ROWS, `新建库就有出厂几何行（快照 ${FACTORY_ALIGN_ROWS} 条）`);
 
     const noToken = await api(base, "GET", "/api/admin/equip-aligns");
     checkEqual(noToken.status, 401, "没有令牌读不到列表");
@@ -187,22 +192,25 @@ async function main() {
     checkEqual(savedRole.status, 200, "保存 role:2（女裸模）成功");
 
     const threeRows = await api(base, "GET", "/api/admin/equip-aligns", { token: rootToken });
-    checkEqual(threeRows.body?.data?.list?.length, 3, "三条都在列表里");
+    checkEqual(threeRows.body?.data?.list?.length, FACTORY_ALIGN_ROWS, "行数不变（三次保存都是覆写出厂行，不是插新行）");
+    const savedIds = threeRows.body?.data?.list?.map((row) => row.id) ?? [];
+    checkEqual(savedIds.join(","), [...savedIds].sort().join(","), "列表按 id 升序（整份下发的字节序稳定）");
     checkEqual(
-      threeRows.body?.data?.list?.map((row) => row.id).join(","),
-      "cloth:cloth_1,role:2,weapon:weapon_1",
-      "列表按 id 升序（整份下发的字节序稳定）",
+      ["cloth:cloth_1", "role:2", "weapon:weapon_1"].filter((id) => savedIds.includes(id)).length,
+      3,
+      "三条都还在列表里（被覆写，不是被删掉）",
     );
 
     const playerToken = await registerPlayer(base, "equipalignplayer", "123456");
     const playerView = await api(base, "GET", "/api/game-config/equip-align", { token: playerToken });
     checkEqual(playerView.status, 200, "玩家侧能读到对齐几何");
-    checkEqual(playerView.body?.data?.list?.length, 3, "玩家侧拿到同样 3 条");
-    checkEqual(playerView.body?.data?.list?.[0]?.id, "cloth:cloth_1", "玩家侧 id 形态一致");
-    checkEqual(playerView.body?.data?.list?.[0]?.outScale, 1.1, "玩家侧缩放与管理端一致");
-    checkEqual(playerView.body?.data?.list?.[0]?.outPositions?.length, 8, "玩家侧也是 8 个方向");
-    checkEqual(playerView.body?.data?.list?.[0]?.outPositions?.[0]?.x, 0.5, "玩家侧位置分量一致");
-    checkEqual(playerView.body?.data?.list?.[2]?.outManual, true, "玩家侧也拿到 outManual（客户端据此决定走不走自动算法）");
+    checkEqual(playerView.body?.data?.list?.length, FACTORY_ALIGN_ROWS, "玩家侧拿到同一整份（行数与管理端一致）");
+    const playerCloth = playerView.body?.data?.list?.find((row) => row.id === "cloth:cloth_1");
+    const playerWeapon = playerView.body?.data?.list?.find((row) => row.id === "weapon:weapon_1");
+    checkEqual(playerCloth?.outScale, 1.1, "玩家侧缩放与管理端一致");
+    checkEqual(playerCloth?.outPositions?.length, 8, "玩家侧也是 8 个方向");
+    checkEqual(playerCloth?.outPositions?.[0]?.x, 0.5, "玩家侧位置分量一致");
+    checkEqual(playerWeapon?.outManual, true, "玩家侧也拿到 outManual（客户端据此决定走不走自动算法）");
 
     const playerNoToken = await api(base, "GET", "/api/game-config/equip-align");
     checkEqual(playerNoToken.status, 401, "玩家侧接口同样需要令牌");
@@ -220,7 +228,7 @@ async function main() {
     checkEqual(again.status, 200, "同 id 再保存成功");
     checkEqual(again.body?.data?.outScale, 1.25, "返回新值");
     const afterAgain = await api(base, "GET", "/api/admin/equip-aligns", { token: rootToken });
-    checkEqual(afterAgain.body?.data?.list?.length, 3, "仍是 3 行（UPSERT，不是插新行）");
+    checkEqual(afterAgain.body?.data?.list?.length, FACTORY_ALIGN_ROWS, "行数不变（UPSERT，不是插新行）");
     checkEqual(
       afterAgain.body?.data?.list?.find((row) => row.id === "cloth:cloth_1")?.outPositions?.[0]?.x,
       1.5,
@@ -232,7 +240,7 @@ async function main() {
     const resetTwice = await api(base, "DELETE", "/api/admin/equip-aligns/role%3A2", { token: rootToken });
     checkEqual(resetTwice.status, 200, "重复重置仍成功（幂等：它表达的是「回到默认」这个状态）");
     const afterReset = await api(base, "GET", "/api/admin/equip-aligns", { token: rootToken });
-    checkEqual(afterReset.body?.data?.list?.length, 2, "重置后只剩 2 行");
+    checkEqual(afterReset.body?.data?.list?.length, FACTORY_ALIGN_ROWS - 1, "重置删掉那一行（其余出厂行原样保留）");
     check(!afterReset.body?.data?.list?.some((row) => row.id === "role:2"), "被重置的那条不在列表里");
 
     //#endregion

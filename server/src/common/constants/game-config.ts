@@ -29,7 +29,7 @@ export const ACQUIRE_CHANNEL_LABELS: Record<AcquireChannelValue, string> = {
 
 // —— 成长参数（#256 / #655）——
 
-import { COMBAT_RANGE_KEYS, COMBAT_SINGLE_KEYS } from "../../shared/game-data.generated";
+import { COMBAT_RANGE_KEYS, COMBAT_SINGLE_KEYS } from "./game-enums";
 
 /**
  * 成长标量参数的取值域（键 → 约束）

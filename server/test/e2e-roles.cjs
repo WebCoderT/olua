@@ -687,8 +687,8 @@ async function raiseLevel(roleId, level, token) {
 
   console.log("— 八点六、管理端改价签 / 等级 → 服务端成交价跟着变 —");
 
-  // 出厂价签 / 装备展开口径的对照来源（#655 后装备价不再来自回收曲线，但材料价还是）
-  const shared = require("../dist/shared/game-data.generated");
+  // 出厂价签的对照来源：配置快照（#655 后价签逐条落在库里，快照是它的逐行投影）
+  const snap = require("./lib/config-snapshot.cjs");
 
   // 这条守的是「经济出口两端一致」：客户端背包里的价签来自快照覆写（管理端改完立刻变），
   // 服务端此前读的是编译期生成物 —— 界面上写 77，到账 2。玩家只能描述成「价签不对」。
@@ -697,7 +697,7 @@ async function raiseLevel(roleId, level, token) {
   const putHide = await api("PATCH", `admin/roles/${roleD1Id}`, { token: adminToken, body: bagWith("material_hide", 5) });
   check(putHide.code === 0, "准备：背包里放 5 块兽皮", putHide.message);
 
-  const hideFactory = shared.SELL_PRICES["material_hide"];
+  const hideFactory = snap.index("items")["material_hide"].sellPrice;
   const soldAtFactory = await api("POST", `roles/${roleD1Id}/sell`, {
     token: tokenC,
     body: { entries: [{ goodId: "material_hide", count: 1 }] },

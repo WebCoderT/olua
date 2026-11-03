@@ -142,6 +142,9 @@ const MODULES = {
   adminQuest: { target: "admin", export: "questsApi" },
   adminReport: { target: "admin", export: "reportsApi" },
   adminAchievement: { target: "admin", export: "achievementsApi" },
+  // 游戏数据字典（#655）：管理端查表用的只读快照（与 GET /game-config 同形），
+  // 让「背包里那件装备叫什么」这类同步渲染不再依赖代码里的数据副本
+  adminGameData: { target: "admin", export: "gameDataApi" },
 };
 
 /** 生成目标（文件落点与请求层方言） */

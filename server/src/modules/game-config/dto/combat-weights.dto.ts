@@ -4,7 +4,7 @@ import { IsNumber, IsOptional, IsString, Max, Min } from "class-validator";
 /**
  * 战斗力权重（#605）：属性名 → 倍率
  *
- * 出厂值在 `shared/combat-seed.ts`（生成物 `COMBAT_WEIGHTS` 的源头），七项写死在算法里
+ * 出厂值在 `config-sync.sql`（生成物 `COMBAT_WEIGHTS` 的源头），七项写死在算法里
  * （`computeCombat` 按这七项求和）—— 运营改的是「每一项值多少」，不是「有哪几项」，
  * 所以这里是**显式字段**而不是 `Record<string, number>`：拼错的键在类型层就红，
  * 也不会出现「库里多一个键 → 静默参与求和」。

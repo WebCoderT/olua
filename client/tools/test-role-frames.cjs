@@ -1,17 +1,20 @@
 #!/usr/bin/env node
 /**
- * role 帧素材守卫单测
+ * 角色本体素材单测（client/tools/test-role-frames.cjs）
  *
- * 背景（2026-10-07 真事故）：`resources/role/{1,2}` 里混入 368 个「扩展名 .png、本体却是 1×1 BMP」的
- * **空帧占位**（导出工具给「该帧无内容」的帧输出的 70 字节占位文件）。Cocos 按 .png 解码必然失败 →
- * 每张图的 .meta 都是 `imported:false` / `subMetas:{}`（没有任何子资源）→ 客户端导入阶段刷屏报错。
- * 已全部移除（各目录由 600 个文件降到 416 帧），原件备份在 `.workbuddy/backup/role-empty-frames-*`。
+ * ===========================================================================
+ * #235 起散帧全部图集化，本文件随之改写
+ * ===========================================================================
+ * 改写前它数的是 `_loose_frames_archive/role` 下那批逐帧 PNG（416 帧 / 全局连续编号 /
+ * role/2 从 600 起）。那批文件已经打包进 `assets/resources/role/<n>/<action>/<action>.plist`
+ * 并从仓库移出，于是判据换成图集口径 —— 事故（外观整片空白）的真正成因是**帧匹配**，
+ * 与「帧在磁盘上是不是散着放」无关，所以这几条仍然必须成立：
  *
- * 本测试钉住四件事，防止同类问题再次混进来、也防止清理时误删真帧：
- *   1. 目录里**每个帧文件都是合法 PNG**（扩展名与真实格式一致 —— 这是本次事故的根因）
- *   2. 两套素材（role/1 男、role/2 女）按各自**帧号基准**归一后，动画表的每个动作 × 每个方向都能切出帧
- *   3. 帧号不重复、无孤立 .meta（`.png.meta` 存在但 `.png` 不在）
- *   4. role/1 的基准为 0、role/2 的基准为 600（configs/animation.animationFrameBases）
+ * · 每个动作的图集 PNG 是合法 PNG（ext 与真实格式一致，历史上踩过 `.PNG` 大写扩展名）
+ * · 每个动作的 plist 里有帧、帧名能解析出「方向 + 帧序号」，且每帧都真的在图集里
+ * · 每个动作覆盖 8 个方向、每个方向的帧号从 0 起连续（切片段时按 0 基下标取）
+ * · 男 role/1 与女 role/2 两套同规格（缺一套就是「换个性别整片空白」）
+ * · 动画表 88 组（11 动作 × 8 方向）都能在对应动作图集里找到帧
  *
  * 用法：node client/tools/test-role-frames.cjs
  */
@@ -19,30 +22,85 @@ const fs = require("fs");
 const path = require("path");
 const { PROJECT_ROOT, prepare, check, finish, fail } = require("./lib/configs-sandbox.cjs");
 
-/** 事故后各目录的帧数（600 - 184 个空帧占位）；真帧被误删会让它变小 */
-const EXPECTED_FRAME_COUNT = 416;
 const ROLE_DIRS = ["1", "2"];
-
+const RES_ROOT = path.join(PROJECT_ROOT, "assets", "resources");
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
-
-// 散帧已图集化（#235）移出 assets：原始逐帧素材在仓库根 _loose_frames_archive（gitignored）
-const roleRoot = path.join(PROJECT_ROOT, "..", "_loose_frames_archive", "role");
-if (!fs.existsSync(roleRoot)) {
-  fail(`找不到素材目录：${roleRoot}`);
-  process.exit();
-}
 
 let outDir;
 try {
-  outDir = prepare("olua-role-frames", ["configs/animation.ts", "ui/utils/animation/FrameOrder.ts"]);
+  outDir = prepare("olua-role-frames", ["configs/animation.ts"]);
 } catch (error) {
   fail(String(error && error.message ? error.message : error));
   process.exit();
 }
-const { roleAnimationMap, directions, animationFrameBases, getAnimationFrameBase } = require(path.join(outDir, "configs/animation.js"));
-const { getFrameIndex } = require(path.join(outDir, "ui/utils/animation/FrameOrder.js"));
+const { roleAnimationMap, directions, roleActionAtlas } = require(path.join(outDir, "configs/animation.js"));
 
-// 动画名 = `${action}_${direction}`，而方向本身可能带下划线（right_up / left_down …），
+const readPngHead = (file) => {
+  const head = Buffer.alloc(8);
+  const fd = fs.openSync(file, "r");
+  try {
+    fs.readSync(fd, head, 0, 8, 0);
+  } finally {
+    fs.closeSync(fd);
+  }
+  return head;
+};
+
+/** 某套外观某个动作的帧：`d<方向>_<序号>` → { 方向: [序号…] } */
+function readAtlas(dir, action) {
+  const dirPath = path.join(RES_ROOT, "role", dir, action);
+  const plistPath = path.join(dirPath, `${action}.plist`);
+  if (!fs.existsSync(plistPath)) return null;
+  const names = Array.from(fs.readFileSync(plistPath, "utf8").matchAll(/<key>(d\d_\d+)\.png<\/key>/g)).map((match) => match[1]);
+  const byDirection = new Map();
+  for (const name of names) {
+    const [direction, index] = name.split("_");
+    if (!byDirection.has(direction)) byDirection.set(direction, []);
+    byDirection.get(direction).push(Number(index));
+  }
+  return { png: path.join(dirPath, `${action}.png`), byDirection };
+}
+
+console.log("【1】素材格式：每个动作的图集都是合法 PNG（扩展名与真实格式一致）");
+for (const dir of ROLE_DIRS) {
+  const bad = [];
+  const missing = [];
+  for (const { action } of roleActionAtlas) {
+    const atlas = readAtlas(dir, action);
+    if (!atlas) { missing.push(action); continue; }
+    const head = readPngHead(atlas.png);
+    // 典型的空帧占位是 BMP（"BM"）——历史上用 1×1 BMP 冒充 PNG
+    if (!head.equals(PNG_SIGNATURE)) bad.push(`${action}（magic ${head.slice(0, 2).toString("hex")}）`);
+  }
+  check(missing.length === 0, `role/${dir} 的 ${roleActionAtlas.length} 个动作都有图集`, missing.join("、"));
+  check(bad.length === 0, `role/${dir} 的图集 PNG 格式正确`, bad.slice(0, 5).join("、"));
+}
+
+console.log("\n【2】帧名：每个动作覆盖 8 个方向，帧号从 0 起连续");
+for (const dir of ROLE_DIRS) {
+  const badDirection = [];
+  const badNumbering = [];
+  for (const { action } of roleActionAtlas) {
+    const atlas = readAtlas(dir, action);
+    if (!atlas) continue;
+    if (atlas.byDirection.size !== directions.length) badDirection.push(`${action}:${atlas.byDirection.size}向`);
+    for (const [direction, indexes] of atlas.byDirection) {
+      const sorted = [...indexes].sort((a, b) => a - b);
+      const contiguous = sorted.every((value, position) => value === position);
+      if (!contiguous) badNumbering.push(`${action}/${direction}:${sorted.join(",")}`);
+    }
+  }
+  check(badDirection.length === 0, `role/${dir} 每个动作都覆盖 ${directions.length} 个方向`, badDirection.slice(0, 5).join("、"));
+  check(
+    badNumbering.length === 0,
+    `role/${dir} 每个「动作 × 方向」的帧号都从 0 起连续（切片段按下标取帧）`,
+    badNumbering.slice(0, 3).join(" / "),
+  );
+}
+
+console.log("\n【3】动画切割：88 组「动作 × 方向」都能在对应动作图集里找到帧");
+check(roleAnimationMap.size === 88, "动画表共 11 个动作 × 8 个方向 = 88 组", `实际 ${roleAnimationMap.size}`);
+// 动画名 = `${action}_${direction}`，方向本身可能带下划线（right_up / left_down …），
 // 所以按方向后缀「从长到短」匹配去掉，才不会把 stand_right_up 切成 stand_right
 const directionSuffixes = directions.map((direction) => `_${direction}`).sort((a, b) => b.length - a.length);
 function toAction(name) {
@@ -51,102 +109,37 @@ function toAction(name) {
   }
   return name;
 }
-
-console.log("【1】素材格式：每个帧文件都是合法 PNG（扩展名与真实格式一致）");
-const framesByDir = {};
-ROLE_DIRS.forEach((dir) => {
-  const dirPath = path.join(roleRoot, dir);
-  if (!fs.existsSync(dirPath)) {
-    check(false, `role/${dir} 目录存在`);
-    framesByDir[dir] = [];
-    return;
+for (const dir of ROLE_DIRS) {
+  const atlases = new Map(roleActionAtlas.map(({ action }) => [action, readAtlas(dir, action)]));
+  // 动画表用的是「整张表全局帧号」：动作按 roleActionAtlas 的顺序首尾相接，
+  // 每个动作占 frames × 方向数 个号（换动作时号段整体后移）
+  const specFrames = new Map();
+  const actionBase = new Map();
+  let cursor = 0;
+  for (const { action, frames } of roleActionAtlas) {
+    specFrames.set(action, frames);
+    actionBase.set(action, cursor);
+    cursor += frames * directions.length;
   }
-  const pngs = fs.readdirSync(dirPath).filter((name) => name.toLowerCase().endsWith(".png"));
-  const notPng = [];
-  const emptyNumbers = [];
-  pngs.forEach((name) => {
-    const head = Buffer.alloc(8);
-    const fd = fs.openSync(path.join(dirPath, name), "r");
-    try {
-      fs.readSync(fd, head, 0, 8, 0);
-    } finally {
-      fs.closeSync(fd);
-    }
-    if (!head.equals(PNG_SIGNATURE)) {
-      // 典型的空帧占位是 BMP（"BM"）——把这类文件单独点名，便于定位
-      notPng.push(`${name}（magic ${head.slice(0, 2).toString("hex")}）`);
-      if (head[0] === 0x42 && head[1] === 0x4d) emptyNumbers.push(name);
-    }
-  });
-  check(notPng.length === 0, `role/${dir} 的 ${pngs.length} 个帧文件格式与扩展名一致`, notPng.slice(0, 5).join("、"));
-  if (emptyNumbers.length) console.log(`      （其中 ${emptyNumbers.length} 个是 1×1 BMP 空帧占位，需清理：node client/tools/clean-role-empty-frames.cjs --apply）`);
-
-  // 帧号（末尾连续数字）；同时收集重号
-  const numbers = [];
-  const seen = new Set();
-  const duplicated = [];
-  pngs.forEach((name) => {
-    const index = getFrameIndex(name);
-    if (index === null) return;
-    if (seen.has(index)) duplicated.push(index);
-    seen.add(index);
-    numbers.push(index);
-  });
-  check(duplicated.length === 0, `role/${dir} 帧号无重复`, duplicated.slice(0, 5).join("、"));
-  check(pngs.length === EXPECTED_FRAME_COUNT, `role/${dir} 帧数保持 ${EXPECTED_FRAME_COUNT}（清理空帧后各 184 个占位被移除，真帧一个不少）`, `实际 ${pngs.length}`);
-
-  // 孤立 .meta：.png.meta 在、对应 .png 不在 —— 删帧时漏删 meta 会留下它，编辑器会报一次缺失
-  const metas = fs.readdirSync(dirPath).filter((name) => name.toLowerCase().endsWith(".png.meta"));
-  const orphan = metas.filter((meta) => !fs.existsSync(path.join(dirPath, meta.slice(0, -".meta".length))));
-  check(orphan.length === 0, `role/${dir} 无孤立 .meta`, orphan.slice(0, 5).join("、"));
-
-  framesByDir[dir] = numbers;
-});
-
-/**
- * 角色动画表 roleAnimationMap 的每个动作 × 每个方向在该目录里都至少能切出 1 帧
- * 与 AnimationHelper.buildClips 同口径：**先把帧号减掉该目录的帧号基准**再匹配动作区间
- * （role/2 的帧号从 600 起、与 role/1 全局连续编号，不减基准则一组都切不出来 → 外观整片空白）
- */
-function checkClips(dir) {
-  const base = getAnimationFrameBase(`role/${dir}`);
-  const available = new Set((framesByDir[dir] || []).map((index) => index - base));
-  const actionTotals = new Map();
   const emptyPairs = [];
   roleAnimationMap.forEach((frameIndexes, name) => {
-    const hits = frameIndexes.filter((index) => available.has(index));
+    const atlas = atlases.get(toAction(name));
+    if (!atlas) { emptyPairs.push(`${name}:无图集`); return; }
+    // 动画区间是「动作内全局帧号」（方向 n 从 n × 单方向帧数 起），图集里是「按方向的 0 基下标」；
+    // 单方向帧数取配置里的 frames（= 8），图集实际只有前几帧（后几帧历史上是空占位）
     const action = toAction(name);
-    actionTotals.set(action, (actionTotals.get(action) || 0) + hits.length);
-    if (hits.length === 0) emptyPairs.push(name);
+    const perDirection = specFrames.get(action) ?? 0;
+    // 方向也要按「最长后缀」匹配（否则 stand_right_up 会被当成 *_up）
+    const suffix = directionSuffixes.find((item) => name.length > item.length && name.endsWith(item));
+    const directionIndex = suffix ? directions.indexOf(suffix.slice(1)) : -1;
+    if (directionIndex < 0) { emptyPairs.push(`${name}:方向不明`); return; }
+    const offset = (actionBase.get(action) ?? 0) + directionIndex * perDirection;
+    const available = new Set((atlas.byDirection.get(`d${directionIndex}`) ?? []).map((index) => offset + index));
+    if (!frameIndexes.some((index) => available.has(index))) emptyPairs.push(name);
   });
-  check(emptyPairs.length === 0, `role/${dir}（帧号基准 ${base}）的每个「动作 × 方向」都能切出帧`, emptyPairs.slice(0, 6).join("、"));
-  return { available, actionTotals };
+  check(emptyPairs.length === 0, `role/${dir} 的每个「动作 × 方向」都能切出帧`, emptyPairs.slice(0, 6).join("、"));
+  const stand = atlases.get("stand");
+  check((stand?.byDirection.get("d4") ?? []).length > 0, `role/${dir} 的 stand 有正面帧（角色出生就会播到）`);
 }
 
-console.log("\n【2】动画切割：roleAnimationMap 的每个动作 × 每个方向至少能切出 1 帧");
-check(roleAnimationMap.size === 88, "动画表共 11 个动作 × 8 个方向 = 88 组", `实际 ${roleAnimationMap.size}`);
-const clipsByDir = {};
-ROLE_DIRS.forEach((dir) => {
-  clipsByDir[dir] = checkClips(dir);
-});
-// 逐动作打印每方向有效帧数（可见性：素材每个方向 8 帧里后 4 帧本就是空占位，故多为 4 帧）
-const directionCount = 8;
-const clipSummary = clipsByDir["1"].actionTotals;
-console.log("      每个动作每方向有效帧数（括号内为该动作合计；男 role/1 与女 role/2 同规格）：");
-clipSummary.forEach((total, action) => {
-  console.log(`        ${action.padEnd(16, " ")} ${(total / directionCount).toFixed(1)} 帧/方向  (合计 ${total})`);
-});
-
-console.log("\n【3】动画片段可播放：每个动作都有帧，且帧序从 0 号起算");
-// 男/女各一套默认身体（见 configs/role.roleDefaultCloths），两套都必须能正常播
-ROLE_DIRS.forEach((dir) => {
-  const available = clipsByDir[dir].available;
-  check(available.has(0), `role/${dir} 存在 0 号帧（待机起始帧，角色出生就会播到）`);
-  check((clipsByDir[dir].actionTotals.get("stand") || 0) > 0, `role/${dir} 的 stand 动作能切出片段`);
-});
-// 女性外观的帧号基准必须登记：role/2 若不登记基准，上面「每个动作都能切出帧」会直接失败
-check(getAnimationFrameBase("role/1") === 0, "role/1 无需帧号基准（素材从 0 起编号）");
-check(getAnimationFrameBase("role/2") === 600, "role/2 登记了帧号基准 600（与 role/1 全局连续编号）", `实际 ${getAnimationFrameBase("role/2")}`);
-check(animationFrameBases.size > 0, "帧号基准表非空（未登记基准的目录按 0 处理）");
-
-finish("PASS：role 两套素材全为合法 PNG、无重号无孤立 meta、各自按帧号基准归一后 88 组动画全部可切、帧数保持 416。");
+finish("PASS：role 两套本体图集格式正确、帧名覆盖 8 向且从 0 起连续、88 组动画全部可切。");

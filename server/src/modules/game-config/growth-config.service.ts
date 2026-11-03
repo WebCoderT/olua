@@ -1,6 +1,6 @@
-import { Injectable, OnModuleInit } from "@nestjs/common";
+import { Injectable } from "@nestjs/common";
 import { BizCode } from "../../common/constants/biz-code";
-import { GROWTH_SCALAR_DESCRIPTIONS, GROWTH_SCALAR_SPECS } from "../../common/constants/game-config";
+import { GROWTH_SCALAR_SPECS } from "../../common/constants/game-config";
 import { BizException } from "../../common/errors/biz.exception";
 import { PageResult } from "../../common/interfaces/api-envelope.interface";
 import {
@@ -9,7 +9,6 @@ import {
 } from "../../database/repositories/growth.repository";
 import { RoleLevelRepository } from "../../database/repositories/role-level.repository";
 import { GrowthScalarRow, RoleLevelRow } from "../../database/rows";
-import { GROWTH_SCALARS, ROLE_LEVEL_ATTRIBUTES } from "../../shared/growth-seed";
 import {
   GrowthScalarDto,
   GrowthScalarQueryDto,
@@ -34,18 +33,12 @@ const DEFAULT_PAGE_SIZE = 100;
  * 改它影响全线而不是某一段。
  */
 @Injectable()
-export class GrowthConfigService implements OnModuleInit {
+export class GrowthConfigService {
   constructor(
     private readonly growth: GrowthRepository,
     private readonly roleLevels: RoleLevelRepository,
     private readonly runtime: RuntimeConfigService,
   ) {}
-
-  /** 启动时把出厂值 seed 进库（幂等；已存在的行原样保留） */
-  onModuleInit() {
-    this.seedRoleLevels();
-    this.seedScalars();
-  }
 
   // —— 角色等级（#655：曲线展开后的最终值，运行时与快照的唯一来源） ——
 
@@ -146,62 +139,12 @@ export class GrowthConfigService implements OnModuleInit {
     }
     const next: GrowthScalarRow = { ...existing, value: dto.value, updated_at: Date.now() };
     this.growth.updateScalar(next);
+    // 结算层（纯函数）读的是内存里那一份：不重装就是「管理端改了、服务端还算老值」
+    this.runtime.refreshAll();
     return GrowthScalarDto.from(this.growth.findScalar(key)!);
   }
 
   // —— 内部 ——
-
-  /**
-   * 角色等级 seed（#655）：60 行最终属性写进 `role_levels`
-   *
-   * **只在表为空时跑**：已有行说明迁移跑过 / 运营改过，一行都不能覆盖。
-   * 属性直接取 `ROLE_LEVEL_ATTRIBUTES`（曲线展开后的常量），经验优先取刚 seed 的
-   * `level_exps` —— 这样「空库自举」与「老库迁移」两条路得到的值逐值相同。
-   */
-  /**
-   * 角色等级 seed（#655）：60 行最终属性写进 `role_levels`
-   *
-   * **只在表为空时跑**：已有行说明迁移跑过 / 运营改过，一行都不能覆盖。
-   * 出厂值 = `ROLE_LEVEL_ATTRIBUTES`（60 行常量，曲线展开的一次性结果已经落成字面量）。
-   */
-  private seedRoleLevels() {
-    if (this.roleLevels.count() > 0) return;
-    for (const [levelKey, attributes] of Object.entries(ROLE_LEVEL_ATTRIBUTES)) {
-      const level = Number(levelKey);
-      this.roleLevels.seedRow({
-        level,
-        exp: Math.max(1, Math.round(attributes.exp)),
-        max_hp: attributes.maxHp,
-        max_mp: attributes.maxMp,
-        hp_recover: attributes.hpRecover,
-        physical_attack_min: attributes.physicalAttack[0],
-        physical_attack_max: attributes.physicalAttack[1],
-        magic_attack_min: attributes.magicAttack[0],
-        magic_attack_max: attributes.magicAttack[1],
-        taoist_attack_min: attributes.taoistAttack[0],
-        taoist_attack_max: attributes.taoistAttack[1],
-        physical_defense_min: attributes.physicalDefense[0],
-        physical_defense_max: attributes.physicalDefense[1],
-        magic_defense_min: attributes.magicDefense[0],
-        magic_defense_max: attributes.magicDefense[1],
-        taoist_defense_min: attributes.taoistDefense[0],
-        taoist_defense_max: attributes.taoistDefense[1],
-        updated_at: 0,
-      });
-    }
-  }
-
-  /** 标量参数 seed：GROWTH_SCALARS 逐行落库，说明取自服务端自己的字典 */
-  private seedScalars() {
-    for (const [key, value] of Object.entries(GROWTH_SCALARS)) {
-      this.growth.seedScalar({
-        key,
-        value: Number(value),
-        description: GROWTH_SCALAR_DESCRIPTIONS[key] ?? "",
-        updated_at: 0,
-      });
-    }
-  }
 }
 
 /**
