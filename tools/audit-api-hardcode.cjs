@@ -53,6 +53,8 @@ const ENDPOINT = {
     "admin/src/pages/equipAlign/assets.ts",
     "admin/src/components/GameImage.tsx",
     "admin/src/components/ImagePicker.tsx",
+    // 音效配置页（#680）的音频清单 / 目录列表：同属静态素材读取，不碰 /api、不带令牌
+    "admin/src/pages/audioSettings/assets.ts",
   ],
   adminRoutes: "admin/src/api/routes.ts",
   adminEnv: "admin/.env.example",
