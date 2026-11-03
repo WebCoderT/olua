@@ -77,7 +77,7 @@ export const bottomBarLayout = {
   hpOrb: {
     position: new Vec2(-370, 5),
     size: new Size(90, 90),
-    text: { position: new Vec2(0, -51.5), size: new Size(120, 10), fontSize: 12 },
+    text: { position: new Vec2(0, -51.5), size: new Size(120, 10), fontSize: 14 },
   },
   /**
    * 魔法球（role_mp_orb 节点：结构与血球一致，填充图为蓝色魔法球）
@@ -86,7 +86,7 @@ export const bottomBarLayout = {
   mpOrb: {
     position: new Vec2(370, 5),
     size: new Size(90, 90),
-    text: { position: new Vec2(0, -51.5), size: new Size(120, 10), fontSize: 12 },
+    text: { position: new Vec2(0, -51.5), size: new Size(120, 10), fontSize: 14 },
   },
   /** 快捷键栏（横向布局容器，5 格 = 5×44 + 4×4 = 224；居中在血球与功能按键区之间的空档） */
   shortcutBar: { spacing: 4, position: new Vec2(-194, -18), size: new Size(226, 44) },

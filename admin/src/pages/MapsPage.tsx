@@ -178,14 +178,6 @@ export function MapsPage() {
         }
       />
 
-      <Notice tone="slate" title="哪些能改、哪些改不了">
-        <span className="text-emerald-300">能改</span>：名称 / 类型 / 进入等级 / 进入战斗力 / 进入战魂阶（服务端 <code className="text-slate-200">maps</code> 表，保存即生效）。
-        <br />
-        <span className="text-amber-300">改不了</span>：图层 / 刷怪区 / NPC —— 它们来自 TMX。换图只能改{" "}
-        <code className="text-slate-200">resources/map/&lt;id&gt;/&lt;id&gt;.tmx</code> → 跑{" "}
-        <code className="text-slate-200">node tools/import-spawn-areas.cjs</code>（带 <code className="text-slate-200">--db</code> 时覆盖刷怪区表）→ 重新打包客户端。
-      </Notice>
-
       {loading ? (
         <div className="flex items-center gap-2 py-10 text-xs text-slate-500">
           <Spinner /> 加载地图清单…
