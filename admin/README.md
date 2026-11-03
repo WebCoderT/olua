@@ -75,7 +75,8 @@ admin/
 │   │   ├── equipAlign/             对齐工作台的纯逻辑：atlas（plist+轮廓）/ model（几何）/ render（8 宫格）/ assets（素材 fetch）/ saved（服务端读写）
 │   │   └── equipAlignIn/           内观工作台的纯逻辑：model（圆盘 / 手位 / 初值）/ render（单帧五层）/ saved（服务端读写）
 │   ├── data/equip-align.catalog.json  ⚠️ 生成物：装备对齐清单（`tools/gen-equip-align-catalog.cjs` 产出，`audit-equip-align-catalog` 守）
-│   ├── components/                 Layout / Pagination / ConfirmDialog / ResetPasswordDialog / BanDialog / BanStatus / AnnouncementDialog / RoleAttributesCard / ImagePicker / sortable / charts / ToastHost / ui
+│   ├── components/                 Layout / Pagination / ConfirmDialog / ResetPasswordDialog / BanDialog / BanStatus / AnnouncementDialog / RoleAttributesCard / ImagePicker（+ IconField）/ EntityPickButton / pickerStack（选择器 Esc 放行计数）/ sortable / charts / ToastHost / ui
+│   │   └── entity/                 EntityPicker（选装备 / 物品 / 技能…）/ EntityPickerList / EntityImage / catalog（候选清单与取名口径）/ BagGrid / EquipSlots / SkillList / LevelLadder
 │   │   └── map/                    MapCanvas（预览图 + SVG 叠加层，两套坐标同图核对）/ MapDialogs（图层 / 点位 / 刷怪区 / 场上怪物 / 对象组 / 数据来源）
 │   └── store/
 │       ├── session.ts              令牌与管理员的读写（含订阅机制 + hasPermission）
@@ -97,9 +98,17 @@ admin/
 | 单图 | `<IconField mode="image" rootDir="item" …>` | 这张图的路径 | 药品 / 物品 / 装备图标、技能与状态图标、部位底图 |
 | 一套动画 | `<IconField mode="atlas" rootDir="clothes/out" …>` | 锚点 + 第一段目录 | 称号 / 战魂动画、NPC 素材、内观 / 外观、技能与状态特效、时装三件套 |
 
+**物品 id 字段一样可视化挑**（#648）：掉落条目、任务 / 成就奖励物品、成就的「持有物品」条件、邮件附件都是 `<EntityPickButton>`（`components/entity/EntityPickButton.tsx`）——「图标 + 名字 + 一行说明」的按钮，点开就是 `<EntityPicker>` 里那一堆候选（带搜索与分组），不用再背 `drug_hp_1` / `weapon_1_p0s1`：
+
+```tsx
+<EntityPickButton value={draft.goodId} options={entityOptions("item")} onChange={(goodId) => …} />
+```
+
+候选清单与「叫什么、长什么样」全在 `components/entity/catalog.ts`（把 `api/gameData` 的生成物包成 `EntityOption`），页面不写游戏数据 —— 客户端加一件装备，选择器自动多一条。掉落条目的候选恰是服务端校验用的那份 `ITEM_LABELS`（装备全量变体 + 药品 + 材料），所以**能选出来的必定能存进去**；值不在清单里（旧数据）时字段会标黄色「清单里没有这个 id」，而不是装作空值。
+
 `mode="atlas"` 的「一套」由 `rootDir` 锚定（`clothes/out` 之下的 `001` 就是一套），一条规则同时覆盖三种磁盘形态（Cocos 图集目录 / 路径即基名 / 按动作分子目录），不会把 `001/a1` 这种内部动作目录漏给运营去选。
 
-> 顺带一个必须记住的坑：**选择器叠在编辑弹窗上时，编辑弹窗的 `onClose` 要判 `anyPickerOpen()`**。两个 `Modal` 各挂一个 window 的 Esc 监听，编辑弹窗先注册先收到 —— 不拦就会「关选择器顺带把编辑弹窗也关了」，改了一半的内容全丢。`IconField` 已经把弹窗包在里面，所以页面只需要改 `onClose` 那一行。图片清单有两个来源、同一个 JSON 形状：**开发**用 vite 中间件的 `GET /game-resources/__list?dir=item` 直接扫 `client/assets/resources`（素材一放进来就能选，零额外步骤）；**生产** nginx 只是静态反代、没有目录列表能力，读落盘清单 `resources/image-manifest.json`（`make image-manifest` 生成，随素材包分发）。拿不到清单时弹窗里给的是**可执行的提示**（素材目录在哪 / 该跑哪条命令），不是一句「加载失败」。
+> 顺带一个必须记住的坑：**选择器叠在编辑弹窗上时，编辑弹窗的 `onClose` 要判 `anyPickerOpen()`**（`components/pickerStack.ts`，`IconField` / `EntityPickButton` 都会自动登记）。两个 `Modal` 各挂一个 window 的 Esc 监听，编辑弹窗先注册先收到 —— 不拦就会「关选择器顺带把编辑弹窗也关了」，改了一半的内容全丢。页面只需要改 `onClose` 那一行：`onClose={() => { if (!anyPickerOpen()) onCancel(); }}`。图片清单有两个来源、同一个 JSON 形状：**开发**用 vite 中间件的 `GET /game-resources/__list?dir=item` 直接扫 `client/assets/resources`（素材一放进来就能选，零额外步骤）；**生产** nginx 只是静态反代、没有目录列表能力，读落盘清单 `resources/image-manifest.json`（`make image-manifest` 生成，随素材包分发）。拿不到清单时弹窗里给的是**可执行的提示**（素材目录在哪 / 该跑哪条命令），不是一句「加载失败」。
 
 | 页面 | 路由 | 需要的权限点 | 能做什么 |
 | --- | --- | --- | --- |

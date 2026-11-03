@@ -1,5 +1,8 @@
+import { useMemo } from "react";
 import type { DropEntry, DropTable, MonsterDropSummary } from "../../api";
-import { itemText } from "../../api";
+import { EntityImage } from "../entity/EntityImage";
+import { EntityPickButton } from "../entity/EntityPickButton";
+import { entityImage, entityLabel, entityOptions } from "../entity/catalog";
 import { Button, Field, Input } from "../ui";
 
 /**
@@ -74,7 +77,7 @@ export function entryErrors(drafts: EntryDraft[]): string[] {
   const errors: string[] = [];
   drafts.forEach((draft, index) => {
     const where = `条目 ${index + 1}`;
-    if (!draft.goodId.trim()) errors.push(`${where} 的物品 id 为空`);
+    if (!draft.goodId.trim()) errors.push(`${where} 还没挑物品`);
     if (Number(draft.chance) < 0 || Number(draft.chance) > 1) errors.push(`${where} 的概率要在 0~1 之间`);
     if (Number(draft.countMin) > Number(draft.countMax)) errors.push(`${where} 的数量下限大于上限`);
   });
@@ -84,10 +87,16 @@ export function entryErrors(drafts: EntryDraft[]): string[] {
 /**
  * 条目池编辑器（具名表与每怪内联共用一份）
  *
- * 每行：物品 id + 物品名提示 + 权重 + 概率 + 数量区间；可增删行。
- * 物品名走 gameData 查表（ITEM_LABELS = 装备全量变体 + 药品 + 材料，与服务端校验同一来源）。
+ * 每行：**物品（可视化挑选）** + 权重 + 概率 + 数量区间；可增删行。
+ *
+ * 物品从 #648 起不再是文本框：以前要人背 `drug_hp_1` / `weapon_1_p0s1`，现在是「图标 + 名字 +
+ * 一行说明」的按钮，点开就是全部可掉落的物品（装备全量变体 + 药品 + 材料）。候选集与服务端
+ * 校验同一份（`ITEM_LABELS` → `entityOptions("item")`），所以能选出来的必定能存进去。
  */
 export function EntriesEditor({ drafts, onChange }: { drafts: EntryDraft[]; onChange: (next: EntryDraft[]) => void }) {
+  // 2200 多条的清单由 catalog 缓存，这里只是取一次引用
+  const itemOptions = useMemo(() => entityOptions("item"), []);
+
   const update = (index: number, patch: Partial<EntryDraft>) => {
     onChange(drafts.map((draft, i) => (i === index ? { ...draft, ...patch } : draft)));
   };
@@ -105,14 +114,16 @@ export function EntriesEditor({ drafts, onChange }: { drafts: EntryDraft[]; onCh
       <div className="flex flex-col gap-2 rounded-xl border border-slate-800 bg-slate-950/40 p-3">
         {drafts.map((draft, index) => (
           <div key={index} className="flex flex-wrap items-end gap-2">
-            <div className="min-w-[180px] flex-1">
-              <Input
+            <div className="min-w-[220px] flex-1">
+              <EntityPickButton
                 value={draft.goodId}
-                placeholder="物品 id（如 drug_hp_1 / weapon_1_p0s1）"
-                className="font-mono text-xs"
-                onChange={(event) => update(index, { goodId: event.target.value })}
+                options={itemOptions}
+                kind="item"
+                pickerTitle={`选择条目 ${index + 1} 的物品`}
+                hint="装备（含全部前后缀变体）/ 药品 / 材料都在这里；挑中即存它的 id。"
+                emptyHint="物品总表是空的 —— 先确认客户端配置已生成（make client-gen-…）"
+                onChange={(goodId) => update(index, { goodId })}
               />
-              <span className="mt-0.5 block truncate text-[10px] text-slate-500">{itemText(draft.goodId)}</span>
             </div>
             <div className="w-20"><Input type="number" min={0} step="0.01" aria-label="权重" value={draft.weight} onChange={(event) => update(index, { weight: event.target.value })} /></div>
             <div className="w-20"><Input type="number" min={0} max={1} step="0.01" aria-label="概率" value={draft.chance} onChange={(event) => update(index, { chance: event.target.value })} /></div>
@@ -141,6 +152,42 @@ export function PicksEditor({ draft, onChange }: { draft: PicksDraft; onChange: 
       <Field label="上限（留空 = 固定）">
         <div className="w-24"><Input type="number" min={1} value={draft.max} onChange={(event) => onChange({ ...draft, max: event.target.value })} /></div>
       </Field>
+    </div>
+  );
+}
+
+/**
+ * 条目池的「长什么样」预览（引用具名表时用）
+ *
+ * 选中一张共用表后，运营最需要知道的是「这张表里到底是什么」—— 只看 `12 条` 这个数字就点保存，
+ * 等于把不可见的改动广播给所有引用它的怪。这里按图标 + 名字 + 数量铺成一行，
+ * 与条目池编辑器同一套取图 / 取名口径（`entityImage` / `entityLabel`）。
+ */
+export function EntriesPreview({ entries, max = 12 }: { entries: DropEntry[]; max?: number }) {
+  if (entries.length === 0) {
+    return <p className="text-xs text-amber-300/90">这张表没有条目 —— 抽出来会是空的（服务端不放行空表，存不进去）。</p>;
+  }
+  const shown = entries.slice(0, max);
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      {shown.map((entry, index) => {
+        const label = entityLabel("item", entry.goodId) || entry.goodId;
+        const [low, high] = entry.count ?? [1, 1];
+        return (
+          <span
+            key={`${entry.goodId}-${index}`}
+            title={`${label}（${entry.goodId}）· 权重 ${entry.weight} · 概率 ${entry.chance}`}
+            className="flex items-center gap-1 rounded-lg border border-slate-800 bg-slate-900/60 py-0.5 pl-0.5 pr-1.5"
+          >
+            <EntityImage image={entityImage("item", entry.goodId)} alt={label} size={20} />
+            <span className="max-w-[120px] truncate text-[11px] text-slate-300">{label}</span>
+            <span className="font-mono text-[10px] text-slate-500">×{low === high ? low : `${low}~${high}`}</span>
+          </span>
+        );
+      })}
+      {entries.length > shown.length ? (
+        <span className="text-[11px] text-slate-500">还有 {entries.length - shown.length} 条…</span>
+      ) : null}
     </div>
   );
 }

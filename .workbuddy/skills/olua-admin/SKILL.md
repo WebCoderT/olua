@@ -100,7 +100,7 @@ await authApi.login({ username, password }, { silent: true }); // 表单自己�
 | `MapsPage` | **地图管理（#571 观测 / #573 玩法配置可改 / #580 可视化 + 弹窗）**：左侧 11 张图，右侧 = 上半「玩法配置」（可改可存，`PATCH /admin/maps/:id` 落 `maps` 表并进审计）+ 下半 **`components/map/MapCanvas`**（预览图上叠 SVG：刷怪区实线 + TMX 原始矩形虚线 + NPC/复活点/碰撞盒，可逐个开关、可「放大」到 72vh、点区域/点 NPC 打开对应弹窗并高亮那一行）。其余观测块全在 `components/map/MapDialogs` 的弹窗里（图层 / 点位 / 刷怪区 / 场上怪物 / 对象组 / 数据来源）；**刷怪区越界**由服务端算好后显示（`MapSpawnArea.inBounds/overflow`，弹窗里「在图内」列 + 地图上红色虚线 + 地图卡片只在 >0 时出徽标）——提醒：容器 `overflow-hidden` 会把越出 viewBox 的部分裁掉，「区域在图外」在图上表现为「区域不存在」，不能指望眼睛发现—— **页面只留配置与地图**：地图页看不到地图等于没有地图页。**观测区没有编辑入口是功能定义不是缺口**：地图真相在客户端 TMX，换图只能改 TMX → 跑 `import-spawn-areas` → 重打包客户端（POST / PUT / DELETE 一律 404，超管也一样；`src` 塞进来也会被白名单剥掉）。保存成功后要 `refreshMapCatalog()` —— 地图名走 `api/mapCatalog.ts` 的进程内缓存（`Layout` 挂载时 `ensureMapCatalog()`），不刷新的话角色详情与实体选择器还显示旧名字 |
 | `MallPricingPage` | **商城定价**（#251）：统一价卡片（单行改价）+ 商品定价列表（部位/关键字/定价状态筛选，商品清单来自生成物 555 件变体）；未定价行高亮「走统一价」；特殊价 PUT upsert /「回统一价」DELETE —— **全后台唯一允许增删行的定价数据** |
 | `FashionsPage` | **时装配置**（#257）：关键字 / 获得渠道筛选 + 分页；编辑弹窗开放名称 / 描述 / 售卖价 / 渠道下拉 / 八项属性（maxHp/hpRecover + `RANGE_FIELDS` 六区间，复用 title.dto 的 ConfigAttributesDto 形状）；icon/inRes/outRes 资源路径用 `IconField` 现挑（#641）；渠道中文名按时装语境另配（值域仍复用 ACQUIRE_CHANNEL） |
-| `DropConfigPage` | **掉落配置**（#254）：上半部具名掉落表卡片组（新建 / 编辑 / 删除，picks 捞取次数 + entries 条目编辑器逐行 goodId（带物品名提示）/ 权重 / 概率 / 数量区间）；下半部每怪掉落列表（关键字 / 来源筛选 + 分页，编辑弹窗三选一：引用具名表 / 内联条目+必填 picks / 清空 none）；具名表被引用中的行拒删。**弹窗与编辑器是共用件**（`components/drop/DropEditors.tsx` + `components/drop/MonsterDropDialog.tsx`，怪物列表 #584 用同一份）—— 别再在页面里各写一套三选一 |
+| `DropConfigPage` | **掉落配置**（#254）：上半部具名掉落表卡片组（新建 / 编辑 / 删除，picks 捞取次数 + entries 条目编辑器逐行 **物品（`EntityPickButton` 可视化挑，不再手填 id）** / 权重 / 概率 / 数量区间）；下半部每怪掉落列表（关键字 / 来源筛选 + 分页，编辑弹窗三选一：引用具名表 / 内联条目+必填 picks / 清空 none）；具名表被引用中的行拒删。**弹窗与编辑器是共用件**（`components/drop/DropEditors.tsx` + `components/drop/MonsterDropDialog.tsx`，怪物列表 #584 用同一份）—— 别再在页面里各写一套三选一 |
 | `MailsPage` | 邮件投递记录（`mail:read` 看记录、`mail:write` 发信，编辑走 `EmailDialog`） |
 | `AdminsPage` | 管理员列表与改角色 / 启停 / **重置密码**（自己那一行置灰）/ 删除（`admin:manage`） |
 | `AuditPage` | **操作日志**：关键字（操作人 / 动作 / 目标 id / 路径）+ 动作下拉（清单从接口拉）+ 目标类型 + 结果 + 时间范围 + 目标 id → 分页表格，行可展开看请求体（`audit:read`） |
@@ -149,7 +149,14 @@ await authApi.login({ username, password }, { silent: true }); // 表单自己�
 - `<IconField mode="image" rootDir="item" value={form.icon} onChange={…}/>` —— 单图（药品 / 物品 / 装备图标、技能与状态图标、部位底图）；
 - `<IconField mode="atlas" rootDir="clothes/out" …/>` —— 一套动画（称号 / 战魂 `/titles` `/war-soul`、NPC `npc`、内观 `clothes/in`、外观 `clothes/out`、技能特效 `effect/skill`、状态特效 `effect/status`、时装三件套）。
 - `mode="atlas"` 的「一套」= `rootDir` 之下的**第一段**，所以 `clothes/out/001` 不会拆成 `001/a1` 让运营去选动作。
-- **图标 / 动画字段别自己拼输入框 + 弹窗**：还要处理 `anyPickerOpen()` 的 Esc 放行，漏了就是「关选择器顺带把编辑弹窗关了」（弹窗嵌套时两个 Modal 各挂一个 window 监听，外层先注册先收到）。
+- **图标 / 动画字段别自己拼输入框 + 弹窗**：还要处理 `anyPickerOpen()` 的 Esc 放行，漏了就是「关选择器顺带把编辑弹窗关了」（弹窗嵌套时两个 Modal 各挂一个 window 监听，外层先注册先收到）。计数在 `components/pickerStack.ts`，`IconField` / `ImagePicker` / `EntityPicker` 各自登记，调用方只问 `anyPickerOpen()`。
+
+**物品 / 装备 / 技能的 id 字段一律用 `EntityPickButton`**（`components/entity/EntityPickButton.tsx`，#648）：图标 + 名字 + 一行说明的按钮，点开就是 `EntityPicker`（搜索 + 分组 + 网格）。**不许再让运营手填 `drug_hp_1` 这类 id，也不要用 2000 项的原生 `<select>`**：
+
+- `<EntityPickButton value={draft.goodId} options={entityOptions("item")} onChange={…}/>` —— 掉落条目、任务 / 成就奖励、成就「持有物品」条件；
+- 邮件附件 = `entityOptions("item")` + `entityOptions("fashion")` 两份拼接（时装不在物品总表）；
+- 候选清单统一来自 `entity/catalog.ts`（`entityOptions(kind)` 带模块级缓存），**页面不许自己拼候选数组**；
+- 服务端校验口径与清单必须是同一份：掉落条目卡的是 `ITEM_LABELS`（装备全量变体 + 药品 + 材料），对应 `entityOptions("item")` —— 能选出来就必定存得进去，选不出来的（比如怪物 / 地图资源）说明它根本不该入库。
 
 ## 五点六、养成配置页面模式（TitlesPage / SoulsPage，称号与战魂同构）
 
@@ -290,7 +297,8 @@ await authApi.login({ username, password }, { silent: true }); // 表单自己�
 | 目录 | `entity/catalog.ts` | `entityOptions(kind)` / `entityLabel` / `entityNote` / `entityImage`（单图 or 图集首帧）+ `levelOptions(kind)` / `levelLabel` / `levelNote` / `levelImage` / `levelDescription`；模块级 `Map` 缓存，**数据只从 `api/gameData` 取** |
 | 原子 | `entity/EntityImage.tsx` | 单图 / 图集首帧 / **空值虚线方块**（不画「无图」占位：未激活、没穿时装是正常状态，画成缺资源会让人去找那张图） |
 | 卡片 | `entity/EntityCard.tsx` | 一张可点卡（图标 + 主标题 + 副标题 + 角标），空值画虚线、有值右上角 `×` 清除 |
-| 选择器 | `entity/EntityPickerList.tsx`（无壳）/ `entity/EntityPicker.tsx`（`Modal` 外壳） | 搜索 + 分组 chips + 网格；`max=120` 上限并提示「只画了前 N 项」 |
+| 选择器 | `entity/EntityPickerList.tsx`（无壳）/ `entity/EntityPicker.tsx`（`Modal` 外壳） | 搜索 + 分组 chips + 网格；`max=120` 上限并提示「只画了前 N 项」；开着时登记到 `pickerStack`（Esc 放行） |
+| 字段 | `entity/EntityPickButton.tsx` | 「图标 + 名字 + 一行说明」的行内按钮，点开即选择器（#648）——**页面里的物品 / 装备 / 技能 id 字段一律用它**，别再写 `Input` 或 2000 项原生 `select`；值不在清单里标黄「清单里没有这个 id」 |
 | 业务 | `entity/EquipSlots.tsx` / `LevelLadder.tsx` / `SkillList.tsx` / `BagGrid.tsx` | 部位槽位 / 档位阶梯 / 技能行 / 背包网格 |
 
 复用它要记的四条：

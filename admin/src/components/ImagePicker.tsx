@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { GAME_RES_ROOT, GameFrame, GameIcon } from "./GameImage";
 import { Modal } from "./Modal";
+import { usePickerStackEntry } from "./pickerStack";
 import { Button, Field, Input, Spinner } from "./ui";
 
 /**
@@ -26,21 +27,6 @@ import { Button, Field, Input, Spinner } from "./ui";
  */
 
 type ImageCatalog = { images: string[]; source: "list" | "manifest" };
-
-/** 当前开着的选择器数量 */
-let openPickerCount = 0;
-
-/**
- * 有没有图片选择器开着 —— 给编辑弹窗的 `onClose` 用
- *
- * 选择器叠在编辑弹窗之上，两个 `Modal` 各挂一个 window 的 Esc 监听：编辑弹窗先注册、先收到，
- * 不拦一下就会「关掉选择器顺带把编辑弹窗也关了」，改了一半的内容全丢。
- * 判据是「现在有没有选择器开着」而不是某个页面自己记的布尔 —— 一个弹窗里可能有三个图标字段
- * （装备的图标 / 内观 / 外观），谁也不该去维护「这三个里哪个开着」。
- */
-export function anyPickerOpen(): boolean {
-  return openPickerCount > 0;
-}
 
 /**
  * 挑什么：
@@ -315,14 +301,8 @@ export function ImagePicker({
   // 每次打开 / 点「重新扫描」都重新拉（素材可能在两次打开之间更新过）
   const [reloadKey, setReloadKey] = useState(0);
 
-  // 开着的选择器数量：编辑弹窗靠它判断「Esc 该不该放行」（见下方 anyPickerOpen）
-  useEffect(() => {
-    if (!open) return;
-    openPickerCount += 1;
-    return () => {
-      openPickerCount -= 1;
-    };
-  }, [open]);
+  // 开着的选择器数量（`pickerStack`）：编辑弹窗靠 `anyPickerOpen()` 判断「Esc 该不该放行」
+  usePickerStackEntry(open);
 
   useEffect(() => {
     if (!open) return;

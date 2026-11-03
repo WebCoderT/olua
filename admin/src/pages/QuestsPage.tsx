@@ -4,6 +4,9 @@ import type { CreateQuest, Item, Monster, Npc, PageResult, Quest, QuestRewardIte
 import { Modal } from "../components/Modal";
 import { Pagination } from "../components/Pagination";
 import { DescriptionField, FormFooter, ProblemList } from "../components/form-bits";
+import { EntityPickButton } from "../components/entity/EntityPickButton";
+import { entityOptions } from "../components/entity/catalog";
+import { anyPickerOpen } from "../components/pickerStack";
 import { Badge, Button, Card, EmptyState, Field, Input, Select, Spinner, tableClass, tdClass, thClass, theadClass } from "../components/ui";
 import { hasPermission } from "../store/session";
 import { toastSuccess } from "../store/toast";
@@ -130,6 +133,8 @@ function QuestDialog({
   const [id, setId] = useState("");
   const [form, setForm] = useState<QuestForm | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  /** 奖励物品的候选（与服务端校验同一份物品总表；选择器只认 EntityOption） */
+  const rewardOptions = useMemo(() => entityOptions("item"), []);
 
   useEffect(() => {
     if (!open) return;
@@ -217,7 +222,10 @@ function QuestDialog({
           : "id 是行身份，不可改。保存后随配置快照下发客户端；正在进行的玩家进度不受影响（进度记的是 quest id）。"
       }
       size="lg"
-      onClose={onCancel}
+      onClose={() => {
+        // 奖励物品的选择器叠在本弹窗上：关选择器不该把整份任务表单一起关掉
+        if (!anyPickerOpen()) onCancel();
+      }}
       footer={
         <FormFooter
           submitting={submitting}
@@ -349,21 +357,16 @@ function QuestDialog({
           {form.items.length === 0 ? <p className="text-xs text-slate-500">没有物品奖励：只发金币与经验。</p> : null}
           {form.items.map((entry, index) => (
             <div key={index} className="flex items-center gap-2">
-              <Select
-                className="flex-1"
-                value={entry.goodId}
-                onChange={(event) => setItem(index, { goodId: event.target.value })}
-              >
-                <option value="">（请选择物品）</option>
-                {itemOptions.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.id} · {item.label}
-                  </option>
-                ))}
-                {entry.goodId && !itemOptions.some((item) => item.id === entry.goodId) ? (
-                  <option value={entry.goodId}>{entry.goodId}（未在物品表中）</option>
-                ) : null}
-              </Select>
+              <div className="min-w-0 flex-1">
+                <EntityPickButton
+                  value={entry.goodId}
+                  options={rewardOptions}
+                  kind="item"
+                  pickerTitle={`选择第 ${index + 1} 条奖励物品`}
+                  hint="装备（含全部前后缀变体）/ 药品 / 材料都在这里。"
+                  onChange={(goodId) => setItem(index, { goodId })}
+                />
+              </div>
               <span className="text-xs text-slate-600">×</span>
               <div className="w-24">
                 <Input

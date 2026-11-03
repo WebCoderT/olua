@@ -1,8 +1,11 @@
 import { useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { drugIds, drugText, equipmentIds, equipmentName, fashionIds, fashionText, gameMailsApi, itemIds, itemText, PERMISSION } from "../api";
+import { gameMailsApi, PERMISSION } from "../api";
 import type { MailView } from "../api";
 import { PageHeader } from "../components/PageHeader";
+import { EntityPickButton } from "../components/entity/EntityPickButton";
+import { entityOptions } from "../components/entity/catalog";
+import type { EntityOption } from "../components/entity/catalog";
 import { Button, Card, Field, Input, Select } from "../components/ui";
 import { hasPermission } from "../store/session";
 import { toastSuccess } from "../store/toast";
@@ -13,14 +16,14 @@ const CHANNEL_OPTIONS = [
   { value: "reward", label: "奖励（reward）" },
 ] as const;
 
-/** 物品下拉的一份候选（物品 / 药品 / 装备 / 时装；id 手输也放行 —— 服务端领取时才校验存在性） */
-function goodOptions(): { value: string; label: string }[] {
-  const options: { value: string; label: string }[] = [];
-  for (const id of itemIds()) options.push({ value: id, label: `物品 · ${itemText(id)}` });
-  for (const id of drugIds()) options.push({ value: id, label: `药品 · ${drugText(id)}` });
-  for (const id of equipmentIds()) options.push({ value: id, label: `装备 · ${equipmentName(id)}` });
-  for (const id of fashionIds()) options.push({ value: id, label: `时装 · ${fashionText(id)}` });
-  return options;
+/**
+ * 附件候选：物品总表（装备全量变体 + 药品 + 材料）+ 时装
+ *
+ * 服务端领取时才校验存在性（`gameMail` 发放走背包入包那条路），所以这里给的是**客户端的
+ * 全部可入包物**；时装不在物品总表里（它走 `fashions` 表 + 单独穿戴），单独并进来。
+ */
+function attachOptions(): EntityOption[] {
+  return [...entityOptions("item"), ...entityOptions("fashion")];
 }
 
 interface ItemLine {
@@ -43,7 +46,7 @@ interface ItemLine {
 export function MailSendPage() {
   const canSend = hasPermission(PERMISSION.GAME_MAIL_SEND);
   const [params] = useSearchParams();
-  const options = useMemo(goodOptions, []);
+  const options = useMemo(attachOptions, []);
 
   const [roleId, setRoleId] = useState(params.get("roleId") ?? "");
   const [channel, setChannel] = useState<string>("system");
@@ -162,14 +165,18 @@ export function MailSendPage() {
           ) : (
             items.map((line, index) => (
               <div key={index} className="flex items-center gap-2">
-                <Select value={line.goodId} onChange={(event) => updateItem(index, { goodId: event.target.value })} disabled={!canSend} className="min-w-0 flex-1">
-                  <option value="">选择物品…</option>
-                  {options.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </Select>
+                <div className="min-w-0 flex-1">
+                  <EntityPickButton
+                    value={line.goodId}
+                    options={options}
+                    kind="item"
+                    pickerTitle={`选择第 ${index + 1} 件附件`}
+                    hint="物品（装备 / 药品 / 材料）与时装都在这里；玩家在消息中心点领取才真的到手。"
+                    emptyHint="附件清单是空的 —— 确认客户端配置已生成"
+                    disabled={!canSend}
+                    onChange={(goodId) => updateItem(index, { goodId })}
+                  />
+                </div>
                 <Input
                   type="number"
                   min={1}
