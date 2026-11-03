@@ -52,6 +52,30 @@ export class AudioSettingRepository {
   }
 
   /**
+   * 把一个**出厂行**重设成新的出厂值（返回是否真的改了）
+   *
+   * 为什么需要：`INSERT OR IGNORE` 只在「没有这行」时插入，已经存在的行一个字段都不动 ——
+   * 于是代码里改出厂值（#685 那批文件按用途改名 / 换文件 / 调默认音量）在老库上完全不生效，
+   * 表里还指着 `sounds/login_bg.wav`，而资源已经叫 `login_bgm.wav` → 一进游戏全都没声音，
+   * 且看不出原因（服务端不查文件存在性）。
+   *
+   * 边界：**只动 `updated_at = 0` 的行**（= 运营从没改过）。改过的行是运营的决定，
+   * 出厂值再怎么变都不该把手伸过去，即使它指向的旧文件名已经不存在了。
+   *
+   * 追账字段保持 0 / 空串：这仍然是一行「没被改过」的出厂值，只是出厂值本身变了。
+   */
+  rebaseOnPreset(row: AudioSettingRow): boolean {
+    return (
+      this.db.execute(
+        `UPDATE audio_settings SET file_path = ?, volume = ?, loop = ?, enabled = ?
+         WHERE audio_key = ? AND updated_at = 0
+           AND (file_path <> ? OR volume <> ? OR loop <> ? OR enabled <> ?)`,
+        [row.file_path, row.volume, row.loop, row.enabled, row.audio_key, row.file_path, row.volume, row.loop, row.enabled],
+      ).changes > 0
+    );
+  }
+
+  /**
    * 删掉不在清单里的行（返回删了几条）
    *
    * 为什么需要：key 改名（`login_click` → `ui_click`，#685）之后，老库里的旧行不会被
