@@ -140,3 +140,31 @@ function round(value: number): number {
 }
 
 //#endregion
+
+//#region 碰撞盒（#676）
+
+/**
+ * 矩形是否**整块**落在图外（画面上完全看不到）
+ *
+ * 碰撞盒不做「在图内」判定：每张图的四面围墙本来就画在图外（`x = -64`、宽 8320），
+ * 半截在外的矩形是正常数据。但「整块在外」是另一回事 —— 那个盒子对游戏毫无影响，
+ * 却会一直躺在列表里，所以要能一眼认出来。
+ *
+ * 判据是「四条平行线里有一对完全错开」：整个矩形在图左之外、或图右之外、或图上方之外
+ * （`bottom >= 0`，y 轴向上所以顶边是 0）、或图下方之外（`top <= -H`）。
+ * 这与 `spawnAreaOverflow` 的四个数同源，只是这里要的是布尔而不是越界量。
+ *
+ * ⚠️ 两条 y 判据的**方向**最容易写反：图占的是 `y ∈ [-H, 0]`，所以
+ * 「在图上方的外面」是 `bottom >= 0`（不是 `top <= 0`），
+ * 「在图下方的外面」是 `top <= -H`（不是 `bottom >= -H`）。
+ * 写反的后果不是报错，是**几乎所有盒子都被标成在图外**（0 号图 99 个里标 97 个）。
+ */
+export function rectFullyOutside(rect: SpawnAreaRect, map: MapPixelRect): boolean {
+  const left = rect.cx - rect.w / 2;
+  const right = rect.cx + rect.w / 2;
+  const top = rect.cy + rect.h / 2;
+  const bottom = rect.cy - rect.h / 2;
+  return right <= 0 || left >= map.width || bottom >= 0 || top <= -map.height;
+}
+
+//#endregion

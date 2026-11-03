@@ -550,7 +550,7 @@ export const routes = {
      */
     updateSettings: "/admin/mall/settings",
   },
-  /** adminMap 模块（12 个接口） */
+  /** adminMap 模块（15 个接口） */
   adminMap: {
     /**
      * 地图列表（GET /admin/maps）
@@ -561,7 +561,7 @@ export const routes = {
     /**
      * 地图详情（GET /admin/maps/{id}）
      *
-     * 列表字段 + 图层 + 对象组 + 刷怪区 + NPC 点位 + 复活点 + 场上怪物 + **每一块数据的来源**（`sources`）。
+     * 列表字段 + 图层 + 刷怪区 + NPC 点位 + 复活点 + 碰撞盒 + 场上怪物 + **每一块数据的来源**（`sources`）。
      */
     detail: (id: string) => `/admin/maps/${encodeURIComponent(id)}`,
     /**
@@ -570,6 +570,24 @@ export const routes = {
      * 改的是**整理结果**：名称 / 类型 / 进入等级 / 进入战斗力 / 进入战魂阶。保存后立刻生效 ——
      */
     save: (id: string) => `/admin/maps/${encodeURIComponent(id)}`,
+    /**
+     * 画一个碰撞盒（在图上拖一个框）（POST /admin/maps/{id}/collisions）
+     *
+     * 管理端地图页「绘制碰撞盒」保存时调它。**入参是世界坐标**（原点 = 地图左上角、y 轴向上，故 `cy` 为负），
+     */
+    createCollision: (id: string) => `/admin/maps/${encodeURIComponent(id)}/collisions`,
+    /**
+     * 删除碰撞盒（DELETE /admin/maps/{id}/collisions/{boxId}）
+     *
+     * 删掉这张图上的一个碰撞盒。图里的人要换图 / 重进才会觉得「这里能过去了」——
+     */
+    deleteCollision: (id: string, boxId: string) => `/admin/maps/${encodeURIComponent(id)}/collisions/${encodeURIComponent(boxId)}`,
+    /**
+     * 修改碰撞盒（整份覆盖）（PATCH /admin/maps/{id}/collisions/{boxId}）
+     *
+     * 挪位置与改尺寸是同一次动作，入参与新建完全一致。**整份覆盖**而不是分字段：
+     */
+    updateCollision: (id: string, boxId: string) => `/admin/maps/${encodeURIComponent(id)}/collisions/${encodeURIComponent(boxId)}`,
     /**
      * 实时地图监控（GET /admin/maps/{id}/monitor）
      *

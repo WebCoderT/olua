@@ -56,6 +56,7 @@ const CONFIG_TABLES = Object.freeze([
   "items",
   "mall_prices",
   "mall_settings",
+  "map_collisions",
   "map_npcs",
   "map_spawn_areas",
   "maps",

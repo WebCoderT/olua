@@ -1,37 +1,33 @@
 #!/usr/bin/env node
 /**
- * 地图资源导入工具（几何 + 图层/对象组 → 数据库）
+ * 地图资源导入工具（几何 + 图层 → 数据库）
  *
  * 从客户端 Tiled 地图文件（client/assets/resources/map/<id>/<id>.tmx）解析两样东西，
  * **直接写进库**（#655 起库里是唯一权威，代码里不再有第二份快照）：
  *
  * 1. `maps` 的几何列 —— `grid_cols/grid_rows/tile_width/tile_height/pixel_width/pixel_height`，
  *    服务端判定刷怪区越界与客户端摆图都要它；
- * 2. `maps.content` 列 —— 图层与**全部**对象组（npc / monster / collision / objects）的原始
- *    Tiled 数据（坐标不换算、属性原样保留）。管理端「地图管理」页读它，用来对着编辑器核对
- *    「资源里到底有什么」。
+ * 2. `maps.content` 列 —— **图层结构**（名字 / 格数）。瓦片数据留在客户端资源里，这里只收结构。
  *
- * ## 它**不再**写刷怪区（#667）
+ * ## 它只认「几何 + 图层」（#676）
  *
- * 以前这个工具叫 `import-spawn-areas.cjs`，还会解析 TMX 的 `monster` 对象组、整表替换
- * `map_spawn_areas`。现在刷怪区归后台：地图管理页上拖框直接画、能改能删，写库走
- * `POST/PATCH/DELETE /admin/maps/:id/spawn-areas`。TMX 里的 `monster` 组**不再是数据源**
- * （对象组本身仍留在资源文件里，`content` 里也照旧收着，只是没人拿它当真相）。
+ * 以前这个工具还解析 TMX 的 `monster` / `npc` / `collision` 对象组，把原始矩形收进
+ * `content.groups` 给管理端做「资源对照」。现在三块都归后台了（#667 刷怪区 / #672 点位 /
+ * #676 碰撞盒），**TMX 里的对象组已由 `tools/strip-map-objects.cjs` 整组删除** ——
+ * 地图文件只剩瓦片与图层，只做显示。
  *
- * 所以本工具只在两种时候跑：**换了一张 TMX**（几何变了）或**新加一张图**（要补几何）。
- * 它不碰 `map_spawn_areas`、也不碰 `maps` 的运营字段（名称 / 类型 / 进入条件）。
+ * 所以 `content.groups` 恒为空数组：字段留着是为了存量库的老 content 仍能解析，
+ * 读方（管理端详情 / 客户端快照）只看 `layers`。本工具也不再解析任何 `<objectgroup>`。
+ *
+ * ## 它不写运营数据
+ *
+ * 不碰 `map_spawn_areas` / `map_collisions` / `map_npcs`，也不碰 `maps` 的名称 / 类型 /
+ * 进入条件 / 复活点。只在两种时候跑：**换了一张 TMX**（几何变了）或**新加一张图**（要补几何）。
  *
  * 写完之后要 `make config-export` 把几何与 content 带进 `server/data/config-sync.sql`，
  * 否则别人拉下来还是旧数据（`config-sync.sql` 是空库自举的唯一来源）。
  *
- * ## 坐标口径
- *
- * `content` 刻意不做坐标换算：管理端要能对着 Tiled 看同一组数字。
- * 世界坐标（刷怪区用的那套）由管理端画布在提交时换算：
- * `cx = x + w/2`、`cy = -(y + h/2)`（#566 起地图原点 = 左上角，没有半图偏移）。
- *
- * 解析口径移植自 client/assets/ui/utils/map/TiledObjects.ts（正则读 TMX 原文，
- * 不用引擎解析 —— 引擎会丢对象类并翻转 y）。
+ * 解析口径是正则读 TMX 原文（不用引擎解析 —— 引擎会丢对象类并翻转 y）。
  *
  * 用法：
  *   node tools/import-map-resources.cjs                       # 写默认库 server/data/olua.db
@@ -47,7 +43,7 @@ const MAP_DIR = path.join(REPO, "client", "assets", "resources", "map");
 const DEFAULT_DB = path.join(REPO, "server", "data", "olua.db");
 
 // ----------------------------------------------------------------------------//
-// TMX 解析（移植 client/assets/ui/utils/map/TiledObjects.ts 的口径）
+// TMX 解析（正则读原文：引擎解析会丢对象类并翻转 y）
 // ----------------------------------------------------------------------------//
 
 /** 读取 XML 标签的属性值（属性名前要求空白或开头，避免命中 xxxname 这类后缀同名的属性） */
@@ -56,22 +52,8 @@ function readXmlAttribute(attributes, name) {
   return match ? match[1] : "";
 }
 
-/** 读取对象的自定义属性（值写在 value 属性里，或写在标签体内，两种 Tiled 写法都支持） */
-function readObjectProperties(body) {
-  const properties = {};
-  const propertyPattern = /<property\b([^>]*?)(?:\/>|>([\s\S]*?)<\/property>)/g;
-  let match;
-  while ((match = propertyPattern.exec(body))) {
-    const name = readXmlAttribute(match[1], "name");
-    if (!name) continue;
-    const value = readXmlAttribute(match[1], "value");
-    properties[name] = value || (match[2] ?? "").trim();
-  }
-  return properties;
-}
-
 // ----------------------------------------------------------------------------//
-// 图层与对象组解析（#571：管理端地图页的全量只读视图）
+// 图层解析（管理端地图页的只读视图）
 // ----------------------------------------------------------------------------//
 
 /** 瓦片图层：只取结构（名字 / 格数），`<data>` 里的几万个 gid 对管理端没有意义 */
@@ -91,50 +73,6 @@ function parseLayers(xml) {
   return layers;
 }
 
-/** 一个对象组里的全部对象（坐标原样保留：管理端要跟 Tiled 对得上） */
-function parseObjects(body) {
-  const objects = [];
-  const openTagPattern = /<object\b([^>]*?)(\/?)>/g;
-  let match;
-  while ((match = openTagPattern.exec(body))) {
-    const attributes = match[1];
-    const bodyStart = openTagPattern.lastIndex;
-    const bodyEnd = match[2] === "/" ? bodyStart : body.indexOf("</object>", bodyStart);
-    const inner = bodyEnd < 0 ? "" : body.slice(bodyStart, bodyEnd);
-    if (bodyEnd > bodyStart) openTagPattern.lastIndex = bodyEnd;
-
-    objects.push({
-      id: Number(readXmlAttribute(attributes, "id")) || 0,
-      name: readXmlAttribute(attributes, "name"),
-      // Tiled 1.9 起把 type 改名 class；两种写法都认，空串 = 普通矩形
-      klass: readXmlAttribute(attributes, "type") || readXmlAttribute(attributes, "class"),
-      x: Number(readXmlAttribute(attributes, "x")) || 0,
-      y: Number(readXmlAttribute(attributes, "y")) || 0,
-      width: Number(readXmlAttribute(attributes, "width")) || 0,
-      height: Number(readXmlAttribute(attributes, "height")) || 0,
-      properties: readObjectProperties(inner),
-    });
-  }
-  return objects;
-}
-
-/** 全部对象组（npc / monster / collision / 早期 objects），按 TMX 里的出现顺序 */
-function parseObjectGroups(xml) {
-  const groups = [];
-  const openTagPattern = /<objectgroup\b([^>]*)>/g;
-  let match;
-  while ((match = openTagPattern.exec(xml))) {
-    const attributes = match[1];
-    if (/\/\s*$/.test(attributes)) continue;
-    const start = match.index + match[0].length;
-    const end = xml.indexOf("</objectgroup>", start);
-    const body = end < 0 ? "" : xml.slice(start, end);
-    groups.push({ name: readXmlAttribute(attributes, "name"), objects: parseObjects(body) });
-    if (end > start) openTagPattern.lastIndex = end;
-  }
-  return groups;
-}
-
 // ----------------------------------------------------------------------------//
 // 主流程
 // ----------------------------------------------------------------------------//
@@ -151,7 +89,7 @@ function main() {
 
   /** mapId → 几何（`maps` 的 6 个数值列） */
   const mapSizes = new Map();
-  /** mapId → 图层与对象组（存 `maps.content` 的 JSON 原文） */
+  /** mapId → 图层（存 `maps.content` 的 JSON 原文；`groups` 恒为空数组，见文件头） */
   const mapContents = new Map();
   const mapDirs = fs
     .readdirSync(MAP_DIR, { withFileTypes: true })
@@ -178,17 +116,13 @@ function main() {
     const tileW = Number(readXmlAttribute(mapTag[1], "tilewidth"));
     const tileH = Number(readXmlAttribute(mapTag[1], "tileheight"));
     mapSizes.set(mapId, { cols, rows, tileW, tileH, width: cols * tileW, height: rows * tileH });
-    // 图层与对象组：安全图（没有 monster 组）也要收，管理端要能看到它的 NPC 与碰撞
-    mapContents.set(mapId, { layers: parseLayers(xml), groups: roundObjects(parseObjectGroups(xml)) });
+    // 只收图层结构；`groups` 恒空 —— TMX 里已经没有对象组了（#676），点位 / 区域 / 碰撞盒在各自表里
+    mapContents.set(mapId, { layers: parseLayers(xml), groups: [] });
     console.log(`地图 ${mapId}：${cols * tileW}x${rows * tileH}（${cols}×${rows} 格 · ${tileW}×${tileH} 单格）`);
   }
 
-  const objectCount = [...mapContents.values()].reduce(
-    (total, content) => total + content.groups.reduce((sum, group) => sum + group.objects.length, 0),
-    0,
-  );
   const layerCount = [...mapContents.values()].reduce((total, content) => total + content.layers.length, 0);
-  console.log(`\n解析完成：${mapSizes.size} 张图 · ${layerCount} 个图层 · ${objectCount} 个对象（刷怪区归后台，本工具不碰）`);
+  console.log(`\n解析完成：${mapSizes.size} 张图 · ${layerCount} 个图层（对象组已不在 TMX 里，本工具也不解析）`);
 
   if (dryRun) {
     console.log("--dry：不写库");
@@ -256,24 +190,6 @@ function main() {
   } finally {
     db.close();
   }
-}
-
-/** 坐标保留两位小数（浮点噪声没必要进库，也让重跑结果逐字节一致） */
-function round(value) {
-  return Math.round(value * 100) / 100;
-}
-
-/** 对象坐标同样收两位小数（Tiled 拖拽留下的是 267.381 这种三位小数，进库没有意义） */
-function roundObjects(groups) {
-  for (const group of groups) {
-    for (const object of group.objects) {
-      object.x = round(object.x);
-      object.y = round(object.y);
-      object.width = round(object.width);
-      object.height = round(object.height);
-    }
-  }
-  return groups;
 }
 
 main();

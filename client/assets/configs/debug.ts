@@ -11,7 +11,7 @@ import { Color, Size } from "cc";
 export const debugConfig = {
   /**
    * 是否显示碰撞体的碰撞范围（范围框 + 名称 + 尺寸）
-   * 覆盖全部碰撞体：Tiled collision 对象组 / NPC / 怪物 / 角色自身
+   * 覆盖全部碰撞体：服务端碰撞盒（快照下发）/ NPC / 怪物 / 角色自身
    */
   colliderRange: false,
   /**

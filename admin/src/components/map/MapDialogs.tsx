@@ -1,10 +1,10 @@
 import { Modal } from "../Modal";
 import { Badge, Button, EmptyState, tableClass, tdClass, thClass, theadClass } from "../ui";
-import type { MapDetail, MapNpc, MapObject, MapSpawnArea } from "../../api";
+import type { MapCollision, MapDetail, MapNpc, MapSpawnArea } from "../../api";
 import { overflowText, overflowTitle } from "./bounds";
 
 /**
- * 地图观测弹窗（图层 / 点位 / 刷怪区 / 场上怪物 / 对象组 / 数据来源）
+ * 地图观测弹窗（图层 / 点位 / 刷怪区 / 碰撞盒 / 场上怪物 / 数据来源）
  *
  * ## 为什么全塞进弹窗
  *
@@ -12,13 +12,12 @@ import { overflowText, overflowTitle } from "./bounds";
  * 才能看到「这张图的刷怪区长什么样」，而两者本来要一起判断（「50 级的图配了 3 个刷怪区，对么？」）。
  *
  * 主视图留「配置 + 地图」，其余按需打开 —— 打开的宽度按内容形态选：
- * 表格型（刷怪区 / 对象组 / 点位）用 `lg`，长表（对象组明细带属性）用 `xl`，
- * 数据来源与图层这种小表用 `md`。
+ * 表格型（刷怪区 / 碰撞盒 / 点位）用 `lg`，数据来源与图层这种小表用 `md`。
  *
  * ## 每个弹窗都要能回答「这块数据是谁的」
  *
  * 只读区块最容易造成的误会是「页面显示的就是能改的」。所以每个标题下面都带一句来源
- * （客户端 TMX / 服务端库表 / 生成快照），和页面的来源表口径一致。
+ * （客户端 TMX / 服务端库表），和页面的来源表口径一致。
  */
 
 /** 行高亮：从图上点过来时，表里那一行要能被一眼找到（否则弹窗打开了还得自己找） */
@@ -63,7 +62,7 @@ export function LayersDialog({ open, detail, onClose }: { open: boolean; detail:
  * #672 之前这里是「客户端资源对照」：TMX 里写了几个 NPC、几个复活点。但那已经是**旧口径**——
  * 点位现在由这张页面的画布写进库，客户端也只认快照。再把 TMX 的那份列出来，运维会看到两套
  * 不一致的数字（资源里 1 个、库里 0 个），而这页面的任务恰恰是「让它生效」，不是「对账」。
- * TMX 里还剩什么，在「对象组」弹窗里看。
+ * #676 起 TMX 里连对象组都没有了，所以也不再需要一处「对照」的地方。
  *
  * 坐标一律显示**世界坐标**（库里的口径，也是客户端消费的口径），与刷怪区表格对齐；
  * 画布上的点标记是 Tiled 口径（y 取反），两者是同一个点的两种写法 —— 弹窗里标了 `cy` 为负。
@@ -309,31 +308,68 @@ export function WorldMonstersDialog({ open, detail, onClose }: { open: boolean; 
   );
 }
 
-/** 对象组计数 + 逐组明细（一张表看全，明细按组折叠） */
-export function GroupsDialog({ open, detail, onClose }: { open: boolean; detail: MapDetail | null; onClose: () => void }) {
+/**
+ * 碰撞盒清单（读服务端 `map_collisions`，#676 起碰撞归后台）
+ *
+ * 一张图几十到两百多个盒子，画布上只能看出「哪里不能走」，改的时候要按 id 找 ——
+ * 所以给一张表：点一行 → 关掉本弹窗、在画布上打开那个盒子的表单（矩形同时高亮）。
+ */
+export function CollisionsDialog({
+  open,
+  detail,
+  focusId,
+  onEdit,
+  onClose,
+}: {
+  open: boolean;
+  detail: MapDetail | null;
+  focusId?: number;
+  onEdit: (box: MapCollision) => void;
+  onClose: () => void;
+}) {
   return (
     <Modal
       open={open}
-      title="对象组与对象明细"
-      hint="来源：客户端 TMX 的对象层。坐标是 Tiled 原始口径；这里是「资源里到底有什么」，不是服务端的刷怪区"
-      size="xl"
+      title={`碰撞盒（${detail?.collisions.length ?? 0}）`}
+      hint="来源：服务端 map_collisions 表 —— 在画布上拖框新增、点已有框改。坐标是世界坐标（原点 = 地图左上角、y 向上），允许超出地图边界（四面围墙就在图外）"
+      size="lg"
       onClose={onClose}
     >
-      {!detail ? null : detail.groups.length === 0 ? (
-        <EmptyState title="没有对象组" description="这张图的 TMX 里没有 objectgroup" />
+      {!detail ? null : detail.collisions.length === 0 ? (
+        <EmptyState title="这张图没有碰撞盒" description="没有阻挡 = 玩家和挂机寻路都可以直接穿过去" />
       ) : (
-        <div className="space-y-2">
-          {detail.groups.map((group) => (
-            <details key={group.name} className="rounded-lg border border-slate-800 bg-slate-900/30" open={group.name !== "collision"}>
-              <summary className="cursor-pointer select-none px-3 py-2 text-xs text-slate-300">
-                {group.name} <span className="text-slate-600">（{group.objects.length} 个）</span>
-              </summary>
-              <div className="max-h-72 overflow-auto border-t border-slate-800 px-3 py-2">
-                <ObjectsTable objects={group.objects} empty="这个对象组是空的" />
-              </div>
-            </details>
-          ))}
-        </div>
+        <table className={tableClass}>
+          <thead className={theadClass}>
+            <tr>
+              <th className={thClass}>#</th>
+              <th className={thClass}>中心（世界坐标）</th>
+              <th className={thClass}>尺寸</th>
+              <th className={thClass}>位置</th>
+              <th className={thClass} />
+            </tr>
+          </thead>
+          <tbody>
+            {detail.collisions.map((box) => (
+              <tr key={box.id}>
+                <td className={rowClass(box.id === focusId)}>{box.id}</td>
+                <td className={rowClass(box.id === focusId)}>
+                  ({box.cx}, {box.cy})
+                </td>
+                <td className={rowClass(box.id === focusId)}>
+                  {box.w} × {box.h}
+                </td>
+                <td className={rowClass(box.id === focusId)}>
+                  {box.fullyOutside ? <Badge tone="red">整块在图外（看不见）</Badge> : <span className="text-slate-500">图内 / 跨边界</span>}
+                </td>
+                <td className={rowClass(box.id === focusId)}>
+                  <Button variant="ghost" onClick={() => onEdit(box)}>
+                    编辑
+                  </Button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       )}
     </Modal>
   );
@@ -377,43 +413,4 @@ export function SourcesDialog({ open, detail, onClose }: { open: boolean; detail
       )}
     </Modal>
   );
-}
-
-export function ObjectsTable({ objects, empty }: { objects: MapObject[]; empty: string }) {
-  if (objects.length === 0) return <EmptyState title={empty} />;
-  return (
-    <table className={tableClass}>
-      <thead className={theadClass}>
-        <tr>
-          <th className={thClass}>id</th>
-          <th className={thClass}>名称</th>
-          <th className={thClass}>类</th>
-          <th className={thClass}>坐标（Tiled）</th>
-          <th className={thClass}>尺寸</th>
-          <th className={thClass}>属性</th>
-        </tr>
-      </thead>
-      <tbody>
-        {objects.map((object) => (
-          <tr key={`${object.id}-${object.name}`}>
-            <td className={tdClass}>{object.id}</td>
-            <td className={tdClass}>{object.name || "—"}</td>
-            <td className={tdClass}>{object.klass || "—"}</td>
-            <td className={tdClass}>
-              ({object.x}, {object.y})
-            </td>
-            <td className={tdClass}>{object.width || object.height ? `${object.width} × ${object.height}` : "点"}</td>
-            <td className={`${tdClass} whitespace-normal font-mono text-[11px] text-slate-500`}>{formatProperties(object.properties)}</td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
-  );
-}
-
-/** 属性对象 → 一行 `k=v`（空属性给「—」，别让单元格看起来像漏数据） */
-function formatProperties(properties: Record<string, string>): string {
-  const entries = Object.entries(properties);
-  if (entries.length === 0) return "—";
-  return entries.map(([key, value]) => `${key}=${value}`).join(" · ");
 }

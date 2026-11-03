@@ -5,11 +5,20 @@ description: 传奇类 2.5D 端游/手游 TiledMap 场景地图生成器。从 T
 
 # mir2-tmx-map 地图生成技能
 
-> **本项目的口径（#667 / #672）**：生成的 TMX 里 `monster` / `npc` 对象组仍然按老样子写（保持资源形态与旧工具兼容），
-> 但**客户端已经不读了** —— 刷怪区、NPC 点位、复活点由管理端「地图管理」直接放，存在服务端
-> （`map_spawn_areas` / `map_npcs` / `maps.revive_*`）。也就是说：新地图跑完 `tools/import-map-resources.cjs`
-> 之后，还要在管理端把刷怪区、NPC、复活点摆一遍，不然进图是一张空图（有地形、没怪、没 NPC、没复活点）。
-> 只有 `collision` 组仍然直接生效。
+> **本项目的口径（#667 / #672 / #676）**：生成的 TMX 里对象组**已经没人消费了**。
+> 刷怪区、NPC 点位、复活点、碰撞盒全部由管理端「地图管理」直接画，存在服务端
+> （`map_spawn_areas` / `map_npcs` / `maps.revive_*` / `map_collisions`），客户端只读配置快照。
+> 已有的 11 张图，对象组已被 `tools/strip-map-objects.cjs` **整组删除**（TMX 只剩瓦片与图层，只做显示）。
+>
+> 所以新图的两条路：
+> - **要么**照老样子写对象组（本 SKILL 的生成器仍会产出 `monster` / `npc` / `collision` 三层），
+>   然后在服务端跑「迁移 + 删对象组」那条链：
+>   `db:migrate-map-points` → `db:migrate-map-collisions` → `node tools/strip-map-objects.cjs`
+>   → `node tools/import-map-resources.cjs` → `make config-export`；
+> - **要么**只生成瓦片层，跑完 `import-map-resources` 之后**在管理端把刷怪区、NPC、复活点、碰撞盒摆一遍**，
+>   不然进图是一张空图（有地形、没怪、没 NPC、没复活点、没有阻挡）。
+>
+> 顺序反了就是「搬出 0 行」：删对象组必须排在两个 `migrate-*` 之后。
 
 
 从本库素材生成 Tiled 1.10 格式 TMX 地图。**在项目根目录运行所有命令**（脚本按相对路径找 `jpg/` 与 `游戏场景元素/`）。

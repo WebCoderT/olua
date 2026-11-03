@@ -129,15 +129,16 @@ import {
 import { EquipAlignDto, EquipAlignListDto, EquipAlignPointDto, SaveEquipAlignDto } from "../modules/game-config/dto/equip-align.dto";
 import { EquipInAlignDto, EquipInAlignListDto, EquipInAlignPointDto, SaveEquipInAlignDto } from "../modules/game-config/dto/equip-in-align.dto";
 import {
+  MapCollisionBoxDto,
+  MapCollisionDeletedDto,
+  MapCollisionDto,
   MapConfigDto,
   MapDetailDto,
-  MapGroupDto,
   MapLayerDto,
   MapListDto,
   MapNpcDeletedDto,
   MapNpcDto,
   MapNpcPointDto,
-  MapObjectDto,
   MapPositionDto,
   MapRevivePointClearedDto,
   MapRevivePointDto,
@@ -148,6 +149,7 @@ import {
   MapSummaryDto,
   MapTypeGroupDto,
   MapWorldMonsterDto,
+  SaveMapCollisionDto,
   SaveMapConfigDto,
   SaveMapNpcDto,
   SaveRevivePointDto,
@@ -460,8 +462,6 @@ export const SWAGGER_MODELS = [
   SaveEquipInAlignDto,
   // 地图管理（#571 观测台 / #573 玩法配置可改）
   MapLayerDto,
-  MapObjectDto,
-  MapGroupDto,
   MapSpawnAreaDto,
   MapWorldMonsterDto,
   MapSourceDto,
@@ -484,6 +484,11 @@ export const SWAGGER_MODELS = [
   MapSpawnAreaPointDto,
   SaveMapNpcDto,
   SaveRevivePointDto,
+  // 碰撞盒（#676）
+  MapCollisionDto,
+  MapCollisionBoxDto,
+  MapCollisionDeletedDto,
+  SaveMapCollisionDto,
   // 实时地图监控（#665）
   MapMonitorDto,
   MapMonitorMonsterDto,

@@ -14,7 +14,8 @@ import { mapSrcOf } from "../../../configs/game-config";
 /**
  * 地图组件（自身即地图节点）
  * 负责地图资源加载与复活点定位，地图对象（NPC/复活点）生成交给 MapObjectSpawner、
- * 碰撞区域（collision 对象组）生成交给 CollisionAreaSpawner。
+ * 碰撞区域（配置快照里的碰撞盒）生成交给 CollisionAreaSpawner。
+ * 本类只从 TMX 拿瓦片与图层 —— 地图文件只做显示（#676）。
  * **怪物不在这里生成**（#581）：本类只登记「我在哪张图」(`sendWorldJoin`)，
  * 实例由服务端按 `map_spawn_areas` 播种、经 world 帧落到 MonsterManager —— 客户端没有
  * 「没有服务端也能刷怪」这条路径了（连离线都不刷：刷出来也结算不了）
@@ -80,8 +81,8 @@ export default class GameMap extends Node {
     // 按服务端快照的 NPC 点位生成 NPC（碰撞区与 NPC 的碰撞范围显示都在生成流程内完成）
     const objectSpawner = new MapObjectSpawner(this.onMapId);
     objectSpawner.spawnAll();
-    // 按 collision 对象组生成碰撞区域（静态碰撞体 + 名称/区域指示线）
-    new CollisionAreaSpawner(this as Node).spawnAll();
+    // 按快照里的碰撞盒生成静态碰撞体（#676 起 TMX 里已经没有 collision 对象组）
+    new CollisionAreaSpawner(this.onMapId).spawnAll();
     // 进图登记（#35 / #493）：**无条件**发，且要在任何「通道是否在线」的判断之前 ——
     // RealtimeClient.start() 是异步的（取票据 → 握手 → welcome），建图常常比它快；
     // sendWorldJoin 内部先记 lastJoin 再发，未连接时发送是 no-op，连上后 welcome 会补发。

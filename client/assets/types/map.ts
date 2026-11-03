@@ -16,7 +16,7 @@ export interface NPC {
 
 /**
  * NPC 数据条目（configs/npc 的 npcData）
- * id 只做关联（Tiled 对象组里的 id 与它对应），不参与数值计算
+ * id 只做关联（服务端 map_npcs / 掉落 / 任务里都用它），不参与数值计算
  */
 export interface NpcData extends NPC {
   /** NPC 编号（唯一） */
@@ -60,14 +60,36 @@ export interface MapSpawnAreaPoint {
 }
 
 /**
+ * 碰撞盒（世界坐标；#676 起由管理端在地图上拖框画）
+ *
+ * 一个轴对齐矩形：`(x, y)` 是**中心**，`(w, h)` 是尺寸 —— 与库表和接口字段一一对应，
+ * 客户端拿到直接 `node.setWorldPosition(x, y)` + 节点尺寸 `new Size(w, h)`，不换算。
+ *
+ * **可以超出地图边界**：每张图四面围墙本来就画在图外（`x = -64`、宽 8320），
+ * 那是「把玩家关在图里」的手段 —— 别在下游加「在不在图内」的过滤，那会让围墙失效、
+ * 玩家直接走出去。
+ */
+export interface MapCollisionBox {
+  /** 矩形中心 x（原点 = 地图左上角） */
+  x: number;
+  /** 矩形中心 y（y 轴向上，故为负） */
+  y: number;
+  /** 矩形宽（像素） */
+  w: number;
+  /** 矩形高（像素） */
+  h: number;
+}
+
+/**
  * 地图的玩法配置 + 点位（**运行时**填充）
  *
  * ⚠ 客户端不存这些值的出厂数据（#573 之前它们写在 `configs/map.ts` 的 mapData 里）。
  * 进游戏时 `ConfigLoader` 拉 `gameConfig.snapshot`，由 `configs/apply-snapshot` 按 id
  * 覆写进 `configs/map` 的运行时表；资源路径不在其中（由 `mapSrcOf` 按目录约定拼）。
  *
- * 点位（`npcs` / `revive` / `spawnAreas`）也一样：#672 起 TMX 不再是它们的来源，
- * 后台改完下次进图就生效（正在图里的人要换图 / 重进）。
+ * 点位与碰撞盒（`npcs` / `revive` / `spawnAreas` / `collisions`）也一样：#672 / #676 起
+ * TMX 不再是它们的来源（地图文件里已经没有对象组了），后台改完下次进图就生效
+ * （正在图里的人要换图 / 重进）。
  */
 export interface MapConfig {
   /** 地图名称（传送弹窗 / 小地图 / 预览图标题都读它） */
@@ -88,4 +110,6 @@ export interface MapConfig {
   revive: MapRevivePoint | null;
   /** 刷怪区中心（只给小地图标名字，不含尺寸与数量） */
   spawnAreas: MapSpawnAreaPoint[];
+  /** 碰撞盒（静态碰撞体 + 自动战斗的静态障碍都用它；空数组 = 这张图没有阻挡） */
+  collisions: MapCollisionBox[];
 }

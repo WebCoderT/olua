@@ -161,6 +161,9 @@ const REPO_EDGES = {
   ],
   // NPC 点位（#672）：点位归后台，只有地图域读写（管理端画布 + 配置快照）
   "database/repositories/map-npc.repository.ts": ["modules/map"],
+  // 碰撞盒（#676）：与点位同理 —— 只有地图域读写（画布增删改 + 配置快照下发）；
+  // 客户端是从快照里拿矩形自己建碰撞体的，没有第二个模块连这张表
+  "database/repositories/map-collision.repository.ts": ["modules/map"],
   // 养成配置（#213）：称号 / 战魂配置的读写只在 game-config 模块内 —— 玩家侧消费走
   // game-data.generated 快照（与角色属性同一来源），不直连这两张表
   "database/repositories/title.repository.ts": ["modules/game-config", "modules/roles"],

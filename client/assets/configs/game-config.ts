@@ -1838,16 +1838,15 @@ export function getMallPrice(good: Goods): number {
  */
 
 /**
- * Tiled 对象组名称（地图文件与游戏代码之间的约定，改名只需改这里）
+ * 地图文件里已经没有对象组了（#676）
  *
- * 只剩 `collision` 一个消费方（#672）。`npc` / `objects` / `monster` 三组在 TMX 里
- * 可能还留着（美术没删），但客户端**不再读它们** —— 点位与刷怪区的真相在服务端。
- * 需要看资源里到底还有什么，去管理端「地图管理 → 对象组」。
+ * 以前这里有一份「Tiled 对象组名 → 客户端消费方」的约定（`collision` 是最后一个消费方）。
+ * 碰撞盒搬进 `map_collisions` 之后，TMX 里**一个对象组都不存在**：地图 = 瓦片 + 图层，
+ * 只负责显示；点位 / 刷怪区 / 碰撞盒全部来自配置快照。
+ *
+ * 这条不是建议而是边界：谁要是又想在客户端读 TMX 的对象组，先回答「为什么这份数据不能
+ * 在管理端改」—— 那正是 `tools/strip-map-objects.cjs` 存在的理由。
  */
-export const tiledGroupNames = {
-  /** 碰撞区域（瓦片物理，仍归美术资源） */
-  collision: "collision",
-};
 
 /**
  * 地图资源路径
@@ -1917,6 +1916,11 @@ export function applyMapRows(rows: MapConfigRow[], groups: MapTypeGroupRow[]): v
       spawnAreas: (row.spawnAreas ?? [])
         .filter((area) => area && typeof area.monsterKey === "string")
         .map((area) => ({ monsterKey: area.monsterKey, cx: Number(area.cx) || 0, cy: Number(area.cy) || 0 })),
+      // 碰撞盒（#676）：宽高必须为正 —— 零面积的盒子在客户端建出来是个「点了没反应的空节点」，
+      // 直接丢掉比留着让人以为「这里明明有碰撞」好
+      collisions: (row.collisions ?? [])
+        .filter((box) => box && Number(box.w) > 0 && Number(box.h) > 0)
+        .map((box) => ({ x: Number(box.x) || 0, y: Number(box.y) || 0, w: Number(box.w) || 0, h: Number(box.h) || 0 })),
     });
   }
   mapTypeGroups.length = 0;
