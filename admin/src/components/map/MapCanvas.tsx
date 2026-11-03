@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { mapPreview } from "../../api";
-import type { MapDetail, MapObject, MapSpawnArea } from "../../api";
+import type { MapDetail, MapNpc, MapObject, MapRevivePoint, MapSpawnArea } from "../../api";
 import { gameResUrl } from "../GameImage";
 import { overflowText } from "./bounds";
 
 /**
- * 地图可视化（预览图 + SVG 叠加层 + **刷怪区绘制**）
+ * 地图可视化（预览图 + SVG 叠加层 + **在图上改点位**）
  *
  * ## 为什么在图上画，而不是再看一张表
  *
@@ -18,15 +18,27 @@ import { overflowText } from "./bounds";
  * - **画布 / 用户看到的是 Tiled 口径**：左上角原点、y 向下，`viewBox` 就是 TMX 像素。
  * - **库里存的是世界坐标**：原点同样是左上角，但 y 轴向上（`cy` 为负）。
  *
- * 换算只有两条式子，且只在提交那一刻发生（`worldBoxOf`）：
- * `cx = x + w/2`、`cy = -(y + h/2)`；反算是 `tiledBoxOf`。
- * 读回来的区域用 `tiledBoxOf` 画，画出去的新框用 `worldBoxOf` 存 —— 一处进、一处出。
+ * 换算只有两条式子，且只在「进」和「出」两个口子发生：
+ * 进（读库 → 画）：`x = cx`、`y = -cy`（`tiledPointOf`）；矩形再按中心反算（`tiledBoxOf`）。
+ * 出（画 → 提交）：`cx = x`、`cy = -y`（`worldPointOf`）；矩形同理（`worldBoxOf`）。
  *
- * ## 绘制模式（#667）
+ * ## 四种模式（#672 从「绘制开关」扩成模式）
  *
- * 打开后指针在图上拖出矩形，松手回调 `onDrawBox`（Tiled 口径）。三条约束都是「防手滑」：
- * 太小的框不提交（`MIN_DRAW_PX`，服务端也会拒）、拖拽期间区域不再响应点击（否则一按就弹窗）、
- * `Esc` 取消并把草稿清掉。`touchAction: none` 是为了拖拽时别触发页面滚动。
+ * | 模式 | 按下空白 | 按下已有对象 |
+ * |---|---|---|
+ * | `view` | 什么都不做 | 打开编辑弹窗 |
+ * | `spawn` | 拖出矩形 → 新建刷怪区 | 不响应（拖拽期间误触会不停弹窗） |
+ * | `npc` | 松手处 = 新 NPC 点位的坐标 | **拖动**，松手即保存；没拖动就算点击 → 打开编辑 |
+ * | `revive` | 松手处 = 复活点 | 拖动复活点同理 |
+ *
+ * 三种编辑模式都有同一个「防手滑」底座：太小的框不提交（`MIN_DRAW_PX`）、
+ * `Esc` 取消、`touchAction: none`（拖拽时别让页面跟着滚）。
+ *
+ * ## 别把点击处理挂在 `<svg>` 上，挂在垫底的那块透明矩形上
+ *
+ * 早期版本让 `svg` 的 `onPointerDown` 处理「画框」，结果点到已有对象时会**双触发**
+ * （子元素的 handler 先跑，父元素的 state 还没更新看不到抑制标记）。现在把「空白处按下」
+ * 交给 viewBox 大小的透明 `<rect>`（画在最底层），子元素天然优先 —— 不需要任何 flag。
  *
  * ## 坐标系之外的两个约定
  *
@@ -51,12 +63,21 @@ export interface MapLayerVisibility {
   collision: boolean;
 }
 
+/** 画布模式：看 / 画刷怪区 / 放 NPC / 设复活点 */
+export type CanvasMode = "view" | "spawn" | "npc" | "revive";
+
 /** 画布上拖出来的矩形（**Tiled 口径**：左上角原点、y 向下；可直接对应 `viewBox`） */
 export interface DrawBox {
   x: number;
   y: number;
   width: number;
   height: number;
+}
+
+/** 画布上的一个点（**Tiled 口径**） */
+export interface DrawPoint {
+  x: number;
+  y: number;
 }
 
 const COLOR = {
@@ -66,7 +87,10 @@ const COLOR = {
   /** 正在编辑的那一块 */
   spawnActive: "#a78bfa", // violet-400
   npc: "#38bdf8", // sky-400
+  npcActive: "#7dd3fc", // sky-300
   revive: "#34d399", // emerald-400
+  reviveActive: "#6ee7b7", // emerald-300
+  outside: "#f43f5e", // rose-500（越界点位）
   collision: "#fb7185", // rose-400
 };
 
@@ -82,30 +106,47 @@ export function MapCanvas({
   visible,
   onPickArea,
   onPickNpc,
-  drawMode = false,
-  selectedAreaId,
+  onPickRevive,
   onDrawBox,
+  onPlaceNpc,
+  onMoveNpc,
+  onPlaceRevive,
+  mode = "view",
+  selectedAreaId,
+  selectedNpcId,
   maxWidth = "min(100%, 62vh)",
 }: {
   detail: MapDetail;
   visible: MapLayerVisibility;
   /** 点击刷怪区：打开编辑弹窗 */
   onPickArea: (area: MapSpawnArea) => void;
-  /** 点击 NPC / 复活点：打开点位弹窗并定位到那一行 */
-  onPickNpc: (object: MapObject) => void;
-  /** 绘制模式：指针在图上拖矩形，松手回调 `onDrawBox` */
-  drawMode?: boolean;
-  /** 正在编辑的区域：描边加粗 + 换色（从列表/图上点进来时能一眼找到） */
-  selectedAreaId?: number;
+  /** 点击 NPC 点：打开编辑弹窗 */
+  onPickNpc: (point: MapNpc) => void;
+  /** 点击复活点：由上层决定（当前是「切到复活点模式」的提示，见页面） */
+  onPickRevive?: (point: MapRevivePoint) => void;
   /** 画完一个矩形（Tiled 口径）；由上层换算成世界坐标并打开表单 */
   onDrawBox?: (box: DrawBox) => void;
+  /** `npc` 模式点空白：把落点（Tiled 口径）交给上层打开「放哪个 NPC」的表单 */
+  onPlaceNpc?: (point: DrawPoint) => void;
+  /** `npc` 模式拖动已有 NPC 点并松手（已经判断过「确实移动了」） */
+  onMoveNpc?: (point: MapNpc, to: DrawPoint) => void;
+  /** `revive` 模式点空白：直接设 / 挪复活点 */
+  onPlaceRevive?: (point: DrawPoint) => void;
+  /** 当前模式（默认只看） */
+  mode?: CanvasMode;
+  /** 正在编辑的区域：描边加粗 + 换色（从列表/图上点进来时能一眼找到） */
+  selectedAreaId?: number;
+  /** 正在编辑的 NPC 点：圈加粗 + 换色 */
+  selectedNpcId?: number;
   /** 宽度上限：页面上按视口高度限（一屏能同时看到配置与地图），放大镜里给 100% */
   maxWidth?: string;
 }) {
   const [imageFailed, setImageFailed] = useState(false);
   const svgRef = useRef<SVGSVGElement | null>(null);
-  /** 拖拽中的草稿（两个角，未必有序） */
+  /** 拖拽中的框草稿（两个角，未必有序） */
   const [draft, setDraft] = useState<{ x0: number; y0: number; x1: number; y1: number } | null>(null);
+  /** 拖拽中的点（NPC / 复活点）：位置是 Tiled 口径，`moved` 用来区分「点击」与「拖动」 */
+  const [drag, setDrag] = useState<{ npc: MapNpc | null; from: DrawPoint; at: DrawPoint; moved: boolean } | null>(null);
 
   // 所有地图的预览图都是 TMX 的等比缩小（实测 2048 vs 8192），容器按 TMX 宽高比留位，
   // 图片 object-contain 正好铺满 —— 不写死 8192，也不假设正方形。
@@ -113,12 +154,18 @@ export function MapCanvas({
   const dotRadius = Math.max(8, detail.width * DOT_RADIUS_RATIO);
   const labelSize = Math.max(20, detail.width * LABEL_RATIO);
   const collisionObjects = collisionOf(detail);
+  const editing = mode !== "view";
 
-  /** 屏幕坐标 → viewBox 坐标（`preserveAspectRatio="none"` + 容器等比，x/y 各自按比例换算） */
+  /**
+   * 屏幕坐标 → viewBox 坐标
+   *
+   * 基准取 **svg 自己的 rect**（不是事件目标的）：点在 `<g>` / `<circle>` 上时，
+   * `getBoundingClientRect()` 返回的是那个小圆的包围盒 —— 曾因此把拖动坐标算到图外。
+   */
   const pointOf = useCallback(
-    (event: React.PointerEvent<SVGSVGElement>) => {
-      const rect = event.currentTarget.getBoundingClientRect();
-      if (rect.width <= 0 || rect.height <= 0) return { x: 0, y: 0 };
+    (event: { clientX: number; clientY: number }): DrawPoint => {
+      const rect = svgRef.current?.getBoundingClientRect();
+      if (!rect || rect.width <= 0 || rect.height <= 0) return { x: 0, y: 0 };
       const x = ((event.clientX - rect.left) / rect.width) * detail.width;
       const y = ((event.clientY - rect.top) / rect.height) * detail.height;
       return {
@@ -129,22 +176,99 @@ export function MapCanvas({
     [detail.width, detail.height],
   );
 
-  // Esc 取消草稿：拖到一半发现画错了，不用松手再删一个区域
+  // Esc 取消：拖到一半发现画错了，不用松手再删一个区域 / 不用再把它拖回去
   useEffect(() => {
-    if (!drawMode) return;
+    if (!editing) return;
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setDraft(null);
+      if (event.key !== "Escape") return;
+      setDraft(null);
+      setDrag(null);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [drawMode]);
+  }, [editing]);
 
-  // 退出绘制模式时清掉草稿，否则下次进来还挂着上一次的半个框
+  // 退出编辑模式时清掉草稿，否则下次进来还挂着上一次的半个框 / 半个点
   useEffect(() => {
-    if (!drawMode) setDraft(null);
-  }, [drawMode]);
+    if (!editing) {
+      setDraft(null);
+      setDrag(null);
+    }
+  }, [editing]);
 
   const draftBox = draft ? normalizeBox(draft) : null;
+
+  /**
+   * 空白处按下（垫底透明矩形）
+   *
+   * 三种模式三种含义：画框 / 放 NPC / 设复活点。全都把指针捕获到 `svg` 上 ——
+   * 之后 move / up 统一由 `svg` 收，拖到图外也不会丢事件。
+   */
+  const onBackgroundDown = (event: React.PointerEvent<SVGRectElement>) => {
+    if (!editing || event.button !== 0) return;
+    event.currentTarget.ownerSVGElement?.setPointerCapture(event.pointerId);
+    const point = pointOf(event);
+    if (mode === "spawn") {
+      setDraft({ x0: point.x, y0: point.y, x1: point.x, y1: point.y });
+      return;
+    }
+    // 点位模式：按下即落点（松手才提交，见 onPointerUp —— 这样 Esc 还有机会取消）
+    setDrag({ npc: null, from: point, at: point, moved: true });
+  };
+
+  /** 拖动一个已有的点位（NPC / 复活点） */
+  const startDragPoint = (event: React.PointerEvent<SVGElement>, npc: MapNpc | null, at: DrawPoint) => {
+    if (mode !== (npc ? "npc" : "revive") || event.button !== 0) return;
+    event.currentTarget.ownerSVGElement?.setPointerCapture(event.pointerId);
+    setDrag({ npc, from: at, at, moved: false });
+  };
+
+  const movePointer = (event: React.PointerEvent<SVGSVGElement>) => {
+    if (draft) {
+      const point = pointOf(event);
+      setDraft({ ...draft, x1: point.x, y1: point.y });
+      return;
+    }
+    if (!drag) return;
+    const point = pointOf(event);
+    // 阈值：移动超过「点半径」才算拖动 —— 手抖 1 像素不该把 NPC 挪走，也不该让点击失效
+    const moved = drag.moved || Math.hypot(point.x - drag.from.x, point.y - drag.from.y) > dotRadius * 0.5;
+    setDrag({ ...drag, at: point, moved });
+  };
+
+  const releasePointer = (event: React.PointerEvent<SVGSVGElement>) => {
+    const point = pointOf(event);
+    if (draft) {
+      const box = normalizeBox({ ...draft, x1: point.x, y1: point.y });
+      setDraft(null);
+      // 太小的框当没画：手抖点一下会得到一个 1×1 的区域，那种区域能刷但不能用
+      if (box.width < MIN_DRAW_PX || box.height < MIN_DRAW_PX) return;
+      onDrawBox?.(box);
+      return;
+    }
+    if (!drag) return;
+    const { npc, moved } = drag;
+    setDrag(null);
+
+    // 没拖动 = 点击：打开编辑弹窗（点位模式下也能「点开看看是谁」）
+    if (!moved) {
+      if (npc) onPickNpc(npc);
+      else if (detail.revivePoint) onPickRevive?.(detail.revivePoint);
+      return;
+    }
+
+    if (mode === "npc") {
+      if (npc) onMoveNpc?.(npc, point);
+      else onPlaceNpc?.(point);
+      return;
+    }
+    if (mode === "revive") onPlaceRevive?.(point);
+  };
+
+  const dragging = drag?.moved ? drag : null;
+  /** 复活点：库里的世界坐标 → Tiled 口径；拖动中就画在手下的位置 */
+  const reviveOrigin = detail.revivePoint ? tiledPointOf(detail.revivePoint) : null;
+  const reviveAt = reviveOrigin ? (dragging && !dragging.npc ? dragging.at : reviveOrigin) : null;
 
   return (
     <div
@@ -174,31 +298,27 @@ export function MapCanvas({
         ref={svgRef}
         viewBox={`0 0 ${detail.width} ${detail.height}`}
         preserveAspectRatio="none"
-        className={`absolute inset-0 h-full w-full ${drawMode ? "cursor-crosshair" : ""}`}
-        style={drawMode ? { touchAction: "none" } : undefined}
+        className={`absolute inset-0 h-full w-full ${editing ? "cursor-crosshair" : ""} ${dragging ? "cursor-grabbing" : ""}`}
+        style={editing ? { touchAction: "none" } : undefined}
         role="img"
         aria-label={`${detail.label} 的刷怪区与点位`}
-        onPointerDown={(event) => {
-          if (!drawMode || event.button !== 0) return;
-          event.currentTarget.setPointerCapture(event.pointerId);
-          const point = pointOf(event);
-          setDraft({ x0: point.x, y0: point.y, x1: point.x, y1: point.y });
-        }}
-        onPointerMove={(event) => {
-          if (!drawMode || !draft) return;
-          const point = pointOf(event);
-          setDraft({ ...draft, x1: point.x, y1: point.y });
-        }}
-        onPointerUp={(event) => {
-          if (!drawMode || !draft) return;
-          const box = normalizeBox({ ...draft, x1: pointOf(event).x, y1: pointOf(event).y });
+        onPointerMove={movePointer}
+        onPointerUp={releasePointer}
+        onPointerCancel={() => {
           setDraft(null);
-          // 太小的框当没画：手抖点一下会得到一个 1×1 的区域，那种区域能刷但不能用
-          if (box.width < MIN_DRAW_PX || box.height < MIN_DRAW_PX) return;
-          onDrawBox?.(box);
+          setDrag(null);
         }}
-        onPointerCancel={() => setDraft(null)}
       >
+        {/* 空白处的命中层：画在最底层，尺寸 = 整张图。有它就不必在 `<svg>` 上判「是不是点到了对象」 */}
+        <rect
+          x={0}
+          y={0}
+          width={detail.width}
+          height={detail.height}
+          fill="transparent"
+          onPointerDown={onBackgroundDown}
+        />
+
         {/* 碰撞盒：垫在最底层，只给轮廓（填充会糊住底图，反而看不出刷怪区压在什么地形上） */}
         {visible.collision &&
           collisionObjects.map((object) => (
@@ -228,8 +348,9 @@ export function MapCanvas({
             return (
               <g
                 key={`spawn-${area.id}`}
-                className={drawMode ? undefined : "cursor-pointer"}
-                pointerEvents={drawMode ? "none" : undefined}
+                className={editing ? undefined : "cursor-pointer"}
+                // 编辑点位时整块区域不再吃事件：不然「在刷怪区里点一下放 NPC」会先弹开区域表单
+                pointerEvents={editing ? "none" : undefined}
                 onClick={() => onPickArea(area)}
               >
                 <rect
@@ -263,30 +384,63 @@ export function MapCanvas({
             );
           })}
 
-        {/* NPC / 复活点：点对象（width/height 为 0），坐标就是点本身 */}
-        {visible.revive &&
-          npcObjectsOf(detail, "revive").map((object) => (
-            <g key={`revive-${object.id}`} className="cursor-pointer" pointerEvents={drawMode ? "none" : undefined} onClick={() => onPickNpc(object)}>
-              <circle cx={object.x} cy={object.y} r={dotRadius * 0.8} fill={COLOR.revive} fillOpacity={0.35} stroke={COLOR.revive} strokeWidth={2} vectorEffect="non-scaling-stroke">
-                <title>{`复活点「${object.name || object.id}」 (${object.x}, ${object.y})`}</title>
-              </circle>
-              <text x={object.x + dotRadius} y={object.y + labelSize / 3} fontSize={labelSize * 0.9} fill={COLOR.revive} stroke="#0f172a" strokeWidth={labelSize / 24} paintOrder="stroke" pointerEvents="none">
-                {object.name || "复活点"}
-              </text>
-            </g>
-          ))}
+        {/* 复活点（服务端 maps.revive_cx/cy，每图最多一个）：点 = 打开，拖动 = 挪位置 */}
+        {visible.revive && detail.revivePoint && reviveOrigin && reviveAt ? (
+          <PointDot
+            cx={reviveAt.x}
+            cy={reviveAt.y}
+            color={mode === "revive" ? COLOR.reviveActive : COLOR.revive}
+            radius={dotRadius * 0.8}
+            label="复活点"
+            labelSize={labelSize}
+            inBounds={detail.revivePoint.inBounds}
+            draggable={mode === "revive"}
+            openOnClick={mode === "view"}
+            onPointerDown={(event) => startDragPoint(event, null, reviveOrigin)}
+            onOpen={() => onPickRevive?.(detail.revivePoint!)}
+            title={`复活点 (${detail.revivePoint.cx}, ${detail.revivePoint.cy})${detail.revivePoint.inBounds ? "" : " · ⚠ 越出地图边界"}`}
+          />
+        ) : null}
 
+        {/* NPC 点位（服务端 map_npcs）：点 = 打开编辑，拖动 = 松手即保存 */}
         {visible.npc &&
-          npcObjectsOf(detail, "npc").map((object) => (
-            <g key={`npc-${object.id}`} className="cursor-pointer" pointerEvents={drawMode ? "none" : undefined} onClick={() => onPickNpc(object)}>
-              <circle cx={object.x} cy={object.y} r={dotRadius} fill={COLOR.npc} fillOpacity={0.4} stroke={COLOR.npc} strokeWidth={2} vectorEffect="non-scaling-stroke">
-                <title>{`NPC「${object.name || object.id}」 (${object.x}, ${object.y})${object.properties.id ? ` · id=${object.properties.id}` : ""}`}</title>
-              </circle>
-              <text x={object.x + dotRadius} y={object.y + labelSize / 3} fontSize={labelSize} fill={COLOR.npc} stroke="#0f172a" strokeWidth={labelSize / 24} paintOrder="stroke" pointerEvents="none">
-                {object.name || `NPC ${object.id}`}
-              </text>
-            </g>
-          ))}
+          detail.npcPoints.map((point) => {
+            const origin = tiledPointOf(point);
+            const moving = dragging?.npc?.id === point.id;
+            const at = moving ? dragging!.at : origin;
+            return (
+              <PointDot
+                key={`npc-${point.id}`}
+                cx={at.x}
+                cy={at.y}
+                color={mode === "npc" && point.id === selectedNpcId ? COLOR.npcActive : COLOR.npc}
+                radius={dotRadius}
+                label={point.npcLabel}
+                labelSize={labelSize}
+                inBounds={point.inBounds}
+                draggable={mode === "npc"}
+                openOnClick={mode === "view"}
+                onPointerDown={(event) => startDragPoint(event, point, origin)}
+                onOpen={() => onPickNpc(point)}
+                title={`NPC「${point.npcLabel}」(#${point.id} npcId=${point.npcId})\n世界坐标 (${point.cx}, ${point.cy})${point.inBounds ? "" : "\n⚠ 越出地图边界，图上看不到这个点"}`}
+              />
+            );
+          })}
+
+        {/* 点位模式下，拖动中的点位画一条「起点 → 当前位置」的虚线，让位移看得见 */}
+        {dragging ? (
+          <line
+            x1={dragging.from.x}
+            y1={dragging.from.y}
+            x2={dragging.at.x}
+            y2={dragging.at.y}
+            stroke={COLOR.spawnActive}
+            strokeWidth={2}
+            strokeDasharray={`${labelSize * 0.35} ${labelSize * 0.25}`}
+            vectorEffect="non-scaling-stroke"
+            pointerEvents="none"
+          />
+        ) : null}
 
         {/* 拖拽预览：虚线框 + 实时尺寸。pointerEvents none —— 它出现在光标下面，不能吃掉 move 事件 */}
         {draftBox ? (
@@ -319,9 +473,12 @@ export function MapCanvas({
         ) : null}
       </svg>
 
-      {drawMode ? (
-        <div className="pointer-events-none absolute left-1 top-1 rounded bg-slate-950/80 px-2 py-1 text-[11px] text-violet-200">
-          在图上拖出一个矩形 = 新建刷怪区 · Esc 取消
+      {MODE_HINT[mode] ? (
+        <div
+          className="pointer-events-none absolute left-1 top-1 rounded bg-slate-950/80 px-2 py-1 text-[11px]"
+          style={{ color: MODE_HINT[mode]!.color }}
+        >
+          {MODE_HINT[mode]!.text}
         </div>
       ) : null}
 
@@ -329,6 +486,88 @@ export function MapCanvas({
         {detail.width} × {detail.height} px · {detail.cols}×{detail.rows} 格
       </div>
     </div>
+  );
+}
+
+/** 每种编辑模式左上角那一行提示（`view` 不提示：查看模式不该有常驻横幅） */
+const MODE_HINT: Record<CanvasMode, { text: string; color: string } | null> = {
+  view: null,
+  spawn: { text: "在图上拖出矩形 = 新建刷怪区 · Esc 取消", color: "#ddd6fe" },
+  npc: { text: "点空白 = 放一个 NPC（再选是谁）· 拖已有点 = 挪位置 · Esc 取消", color: "#bae6fd" },
+  revive: { text: "点哪里 = 复活点就设在哪里 · 拖动已有点 = 挪位置 · Esc 取消", color: "#a7f3d0" },
+};
+
+/**
+ * 一个点位标记（NPC / 复活点共用）
+ *
+ * 圆 + 标签 + `title` 三件套必须长得一致，否则「为什么这个能拖那个不能」会变成靠猜。
+ * 越界点位换警示色（同刷怪区那条理由：容器裁掉之后画面上什么都没有，只剩颜色能说话）。
+ *
+ * **拖动与点开是两个开关**（`draggable` / `openOnClick`）：点位模式下「点一下已有点」的语义是
+ * 「拖了 0 像素」，由画布在 `pointerup` 里统一发（先判位移、再决定是打开还是提交），
+ * 所以这里不能再挂 `onClick` —— 两个入口会各开一次弹窗。查看模式反过来：只有 `onClick`。
+ */
+function PointDot({
+  cx,
+  cy,
+  color,
+  radius,
+  label,
+  labelSize,
+  inBounds,
+  draggable,
+  openOnClick,
+  title,
+  onPointerDown,
+  onOpen,
+}: {
+  cx: number;
+  cy: number;
+  color: string;
+  radius: number;
+  label: string;
+  labelSize: number;
+  inBounds: boolean;
+  /** 当前模式下这个点能不能拖 */
+  draggable: boolean;
+  /** 当前模式下「点一下」等于打开编辑（仅查看模式） */
+  openOnClick: boolean;
+  title: string;
+  onPointerDown: (event: React.PointerEvent<SVGCircleElement>) => void;
+  onOpen: () => void;
+}) {
+  const stroke = inBounds ? color : COLOR.outside;
+  const hit = draggable || openOnClick;
+  return (
+    <g className={hit ? "cursor-pointer" : undefined} onClick={openOnClick ? onOpen : undefined}>
+      <circle
+        cx={cx}
+        cy={cy}
+        r={radius}
+        fill={stroke}
+        fillOpacity={0.4}
+        stroke={stroke}
+        strokeWidth={2}
+        strokeDasharray={inBounds ? undefined : `${radius * 0.4} ${radius * 0.25}`}
+        vectorEffect="non-scaling-stroke"
+        pointerEvents={hit ? "auto" : "none"}
+        onPointerDown={onPointerDown}
+      >
+        <title>{title}</title>
+      </circle>
+      <text
+        x={cx + radius}
+        y={cy + labelSize / 3}
+        fontSize={labelSize}
+        fill={stroke}
+        stroke="#0f172a"
+        strokeWidth={labelSize / 24}
+        paintOrder="stroke"
+        pointerEvents="none"
+      >
+        {label}
+      </text>
+    </g>
   );
 }
 
@@ -357,6 +596,16 @@ export function worldBoxOf(box: DrawBox): { cx: number; cy: number; w: number; h
   };
 }
 
+/** 世界坐标的点 → Tiled 口径的点（`y = -cy`） */
+export function tiledPointOf(point: { cx: number; cy: number }): DrawPoint {
+  return { x: point.cx, y: -point.cy };
+}
+
+/** Tiled 口径的点 → 提交给服务端的世界坐标（`cx = x`、`cy = -y`） */
+export function worldPointOf(point: DrawPoint): { cx: number; cy: number } {
+  return { cx: round2(point.x), cy: round2(-point.y) };
+}
+
 /** 与画布像素对齐到两位小数：拖出来的 1234.5678 进库没有意义，也让 e2e 能直接对数字 */
 function round2(value: number): number {
   return Math.round(value * 100) / 100;
@@ -367,18 +616,7 @@ function groupOf(detail: MapDetail, name: string): MapObject[] {
   return detail.groups.find((group) => group.name === name)?.objects ?? [];
 }
 
-/** 碰撞盒（对象组 collision） */
+/** 碰撞盒（对象组 collision）—— 碰撞不归后台管（它属于 TMX 的瓦片物理），这里只画 */
 export function collisionOf(detail: MapDetail): MapObject[] {
   return groupOf(detail, "collision");
-}
-
-/**
- * 某一类的点位对象（`klass` = Tiled 的 type 字段）
- *
- * 实测 11 张图：`npc` 对象组里恰好每张 1 个 `klass=npc` + 1 个 `klass=revive`，
- * 全部带类型 —— 所以按 klass 过滤就够，不用再猜「组名 + 空类型」那种兜底
- * （兜底规则一旦写进来，下次多一个 `klass=npc` 的传送点会被它算进复活点）。
- */
-export function npcObjectsOf(detail: MapDetail, klass: "npc" | "revive"): MapObject[] {
-  return detail.groups.flatMap((group) => group.objects).filter((object) => object.klass === klass);
 }

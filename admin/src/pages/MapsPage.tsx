@@ -2,10 +2,11 @@ import { useCallback, useEffect, useState } from "react";
 import { Modal } from "../components/Modal";
 import { PageHeader } from "../components/PageHeader";
 import { Badge, Button, Card, EmptyState, Field as FormField, Input, Select, Spinner } from "../components/ui";
-import { MapCanvas, type DrawBox, type MapLayerVisibility } from "../components/map/MapCanvas";
+import { MapCanvas, type CanvasMode, type DrawBox, type DrawPoint, type MapLayerVisibility } from "../components/map/MapCanvas";
 import { MapMonitorDialog } from "../components/map/MapMonitor";
+import { NpcPointFormDialog } from "../components/map/NpcPointForm";
+import { outOfBoundsCount, pointsOutOfBounds } from "../components/map/bounds";
 import { SpawnAreaFormDialog } from "../components/map/SpawnAreaForm";
-import { outOfBoundsCount } from "../components/map/bounds";
 import {
   GroupsDialog,
   LayersDialog,
@@ -15,7 +16,7 @@ import {
   WorldMonstersDialog,
 } from "../components/map/MapDialogs";
 import { mapsApi, refreshMapCatalog } from "../api";
-import type { MapDetail, MapObject, MapSpawnArea, MapSummary, MapTypeGroup, SaveMapConfig } from "../api";
+import type { MapDetail, MapNpc, MapSpawnArea, MapSummary, MapTypeGroup, SaveMapConfig } from "../api";
 import { toastSuccess } from "../store/toast";
 
 /** 类型码（服务端生成的字面量联合："0" 安全 / "1" 等级 / "2" 战斗力 / "3" 战魂） */
@@ -81,12 +82,16 @@ export function MapsPage() {
   const [focusNpc, setFocusNpc] = useState<number | undefined>(undefined);
   /** 放大地图（密集的图在 620px 宽下标签会挤，这里给到 1024） */
   const [zoomed, setZoomed] = useState(false);
-  /** 绘制刷怪区模式：指针在图上拖矩形（#667） */
-  const [drawMode, setDrawMode] = useState(false);
-  /** 刚画出来的框（Tiled 口径）—— 有它就打开新建表单 */
+  /** 画布模式：看 / 画刷怪区 / 放 NPC / 设复活点（#672 从「绘制开关」扩成四态） */
+  const [mode, setMode] = useState<CanvasMode>("view");
+  /** 刚画出来的框（Tiled 口径）—— 有它就打开新建刷怪区表单 */
   const [draft, setDraft] = useState<DrawBox | null>(null);
-  /** 正在编辑的区域（有它就打开编辑表单）；与 draft 互斥 */
+  /** 正在编辑的刷怪区（有它就打开编辑表单）；与 draft 互斥 */
   const [editArea, setEditArea] = useState<MapSpawnArea | null>(null);
+  /** 刚点出来的 NPC 落点（Tiled 口径）—— 有它就打开「放哪个 NPC」表单 */
+  const [npcDraft, setNpcDraft] = useState<DrawPoint | null>(null);
+  /** 正在编辑的 NPC 点位；与 npcDraft 互斥 */
+  const [editNpc, setEditNpc] = useState<MapNpc | null>(null);
 
   const loadList = useCallback(async () => {
     setLoading(true);
@@ -154,6 +159,15 @@ export function MapsPage() {
     }
   };
 
+  /** 切换画布模式（再点一次同一个模式 = 回到查看；换模式时把上一个模式的草稿清掉） */
+  const switchMode = (next: CanvasMode) => {
+    setMode((current) => (current === next ? "view" : next));
+    setDraft(null);
+    setEditArea(null);
+    setNpcDraft(null);
+    setEditNpc(null);
+  };
+
   /** 从图上点刷怪区 → 直接打开编辑表单（列表弹窗仍然保留，用来总览与删） */
   const openArea = (area: MapSpawnArea) => {
     setDraft(null);
@@ -166,38 +180,103 @@ export function MapsPage() {
     setDraft(box);
   };
 
-  /** 刷怪区保存 / 删除之后：列表里的计数与详情里的区域都要跟着变 */
-  const reloadAfterSpawnChange = (message: string) => {
-    setDraft(null);
-    setEditArea(null);
-    void loadList();
-    if (selected) {
-      mapsApi
-        .detail(selected)
-        .then((data) => setDetail(data))
-        .catch(() => {
-          /* 错误已由请求层统一提示 */
-        });
-    }
-    // 提示由表单自己 toast；这里只负责把画布上的区域刷成新的
-    void message;
+  /** `npc` 模式点空白 → 打开「放哪个 NPC」（落点已定，只差「是谁」） */
+  const onPlaceNpc = (point: DrawPoint) => {
+    setEditNpc(null);
+    setNpcDraft(point);
   };
 
-  /** 从图上点 NPC / 复活点 → 打开弹窗并定位到那一行 */
-  const openNpc = (object: MapObject) => {
-    setFocusNpc(object.id);
-    setDialog("points");
+  /**
+   * `npc` 模式拖完一个已有的点 → 松手即保存
+   *
+   * 只改坐标不改 NPC：`npcId` 原样带回（换 NPC 走表单）。乐观更新不做 —— 一次往返
+   * 换来的是「图上那个点真的就在库里那个位置」，而拖错了还要再拖回来。
+   */
+  const onMoveNpc = async (point: MapNpc, to: DrawPoint) => {
+    if (!detail) return;
+    try {
+      const saved = await mapsApi.updateNpc(detail.id, String(point.id), { npcId: point.npcId, cx: round2(to.x), cy: round2(-to.y) });
+      toastSuccess(`NPC「${saved.npcLabel}」已挪到 (${saved.cx}, ${saved.cy})`);
+      reloadDetail();
+    } catch {
+      /* 错误已由请求层统一提示（越界 400） */
+    }
+  };
+
+  /** `revive` 模式点空白 → 直接设 / 挪复活点（不需要表单：位置就是全部信息） */
+  const onPlaceRevive = async (point: DrawPoint) => {
+    if (!detail) return;
+    try {
+      const saved = await mapsApi.setRevivePoint(detail.id, { cx: round2(point.x), cy: round2(-point.y) });
+      toastSuccess(`复活点已设为 (${saved.cx}, ${saved.cy})`);
+      reloadDetail();
+    } catch {
+      /* 同上 */
+    }
+  };
+
+  /** 清掉复活点（幂等操作，但仍要二次确认：删掉之后玩家死在这张图会退回上一处） */
+  const clearRevivePoint = async () => {
+    if (!detail) return;
+    try {
+      await mapsApi.clearRevivePoint(detail.id);
+      toastSuccess("这张图的复活点已清空");
+      reloadDetail();
+    } catch {
+      /* 同上 */
+    }
+  };
+
+  /** 刷怪区 / 点位改动之后：列表计数与详情都要跟着变（两处都读服务端，不做本地拼算） */
+  const reloadDetail = () => {
+    setDraft(null);
+    setEditArea(null);
+    setNpcDraft(null);
+    setEditNpc(null);
+    void loadList();
+    if (!selected) return;
+    mapsApi
+      .detail(selected)
+      .then((data) => {
+        setDetail(data);
+        setForm(formOf(data));
+      })
+      .catch(() => {
+        /* 错误已由请求层统一提示 */
+      });
+  };
+
+  /** 从图上点 NPC → 打开该点位的编辑表单 */
+  const openNpc = (point: MapNpc) => {
+    setNpcDraft(null);
+    setEditNpc(point);
+    // 顺手记下焦点：之后打开点位清单时那一行会被高亮（从图上认人 → 去表里核对的路径）
+    setFocusNpc(point.id);
+  };
+
+  /**
+   * 查看模式点复活点 → 切到复活点模式
+   *
+   * 复活点没有表单可填（位置就是全部信息），所以「点它」的下一步应该是「能拖它」，
+   * 而不是弹一个只有两个数字的框再让人关掉。
+   */
+  const openRevive = () => {
+    setMode("revive");
+    setDraft(null);
+    setEditArea(null);
+    setNpcDraft(null);
+    setEditNpc(null);
   };
 
   const dirty = !!form && !!detail && !sameForm(form, formOf(detail));
-  /** 越界区域数（服务端判；0 时页面保持安静，>0 才出红色徽标） */
-  const outOfBounds = detail ? outOfBoundsCount(detail.spawnAreas) : 0;
+  /** 越界数（区域 + 点位；服务端判，0 时页面保持安静，>0 才出红色徽标） */
+  const outOfBounds = detail ? outOfBoundsCount(detail.spawnAreas) + pointsOutOfBounds(detail) : 0;
 
   return (
     <div className="space-y-3">
       <PageHeader
         title="地图管理"
-        description="玩法配置在这里改，保存即生效；怪物与 NPC 在地图上看。"
+        description="玩法配置、刷怪区、NPC 与复活点都在这里改，保存即生效；底图与碰撞仍是客户端资源。"
         actions={
           <>
             <Badge tone="indigo">可编辑玩法配置</Badge>
@@ -239,6 +318,10 @@ export function MapsPage() {
                         </span>
                         <span>·</span>
                         <span>刷怪区 {item.spawnAreaCount}</span>
+                        <span>·</span>
+                        <span>NPC {item.npcPointCount}</span>
+                        {/* 复活点只有「有 / 没有」两种状态：没有时不必占位，写出来反而像少了一个 */}
+                        {item.hasRevivePoint ? <span className="text-emerald-400/70">· 复活点</span> : null}
                       </div>
                     </button>
                   </li>
@@ -307,18 +390,20 @@ export function MapsPage() {
                   title="地图"
                   description={
                     <>
-                      刷怪区现在**在这里画**：点「绘制刷怪区」后在图上拖出矩形，填怪物与数量即入库（#667 起 TMX 不再是刷怪区来源）。
+                      刷怪区、NPC 与复活点都在**这张图上改**（#667 / #672 起 TMX 不再是它们的来源）：
+                      选模式 → 在图上拖 / 点一下，填完即入库。
                       <br />
-                      区域必须整体落在图内（x ∈ [0, 宽]、y ∈ [-高, 0]）：越界的那块会被画布裁掉，所以越界区域描成红色虚线 —— 新建时越界会被服务端直接拒。
+                      位置必须落在图内：越界的那块会被画布裁掉，所以越界的区域描成红色虚线、越界的点位画成红圈虚线 —— 新建时越界会被服务端直接拒。
                       <br />
-                      资源 {detail.src || "—"} · {detail.cols}×{detail.rows} 格（{detail.width}×{detail.height} px）· 图层 {detail.layerCount} · NPC/复活点{" "}
-                      {detail.npcCount}/{detail.reviveCount} · 刷怪区 {detail.spawnAreaCount}（资源 {detail.monsterAreaCount}）· 场上怪物 {detail.worldMonsterCount}
+                      资源 {detail.src || "—"} · {detail.cols}×{detail.rows} 格（{detail.width}×{detail.height} px）· 图层 {detail.layerCount} · NPC{" "}
+                      {detail.npcPoints.length} · 复活点 {detail.revivePoint ? "已设" : "未设"} · 刷怪区 {detail.spawnAreaCount} · 场上怪物{" "}
+                      {detail.worldMonsterCount}
                     </>
                   }
                   actions={
                     <>
                       {/* 只在有越界时出现：0 越界是常态，天天挂一个绿徽标等于没有徽标 */}
-                      {outOfBounds > 0 && <Badge tone="red">刷怪区越界 {outOfBounds}</Badge>}
+                      {outOfBounds > 0 && <Badge tone="red">越界 {outOfBounds}</Badge>}
                       <Button variant="ghost" onClick={() => setZoomed(true)}>
                         放大
                       </Button>
@@ -331,7 +416,7 @@ export function MapsPage() {
                   <LayerLegend visible={layers} onChange={setLayers} />
                   <p className="mt-1.5 flex items-center gap-1.5 text-[11px] text-slate-500">
                     <span className="inline-block h-2.5 w-2.5 shrink-0 rounded-sm border-2 border-dashed" style={{ borderColor: "#f43f5e" }} />
-                    红色虚线 = 越出地图边界的区域（超出部分被画布裁掉，图上只剩缺角）
+                    红色虚线 = 越出地图边界的区域 / 点位（超出部分被画布裁掉，图上只剩缺角）
                   </p>
                   <div className="mt-2">
                     <MapCanvas
@@ -339,26 +424,41 @@ export function MapsPage() {
                       visible={layers}
                       onPickArea={openArea}
                       onPickNpc={openNpc}
-                      drawMode={drawMode}
+                      onPickRevive={openRevive}
+                      mode={mode}
                       selectedAreaId={editArea?.id}
+                      selectedNpcId={editNpc?.id}
                       onDrawBox={onDrawBox}
+                      onPlaceNpc={onPlaceNpc}
+                      onMoveNpc={onMoveNpc}
+                      onPlaceRevive={onPlaceRevive}
                     />
                   </div>
                   <div className="mt-3 flex flex-wrap items-center gap-2">
-                    <Button variant={drawMode ? "primary" : "ghost"} onClick={() => setDrawMode((previous) => !previous)}>
-                      {drawMode ? "退出绘制" : "绘制刷怪区"}
-                    </Button>
-                    <Button variant="ghost" onClick={() => {
+                    <ModeSwitch mode={mode} onChange={switchMode} />
+                    {/* 复活点是单值：有就允许清，没有就不显示（一个点了没反应的按钮比没有更糟） */}
+                    {detail.revivePoint ? (
+                      <Button variant="ghost" onClick={() => void clearRevivePoint()}>
+                        清除复活点
+                      </Button>
+                    ) : null}
+                    <Button
+                      variant="ghost"
+                      onClick={() => {
                         setFocusArea(undefined);
                         setDialog("spawn");
-                      }}>
+                      }}
+                    >
                       刷怪区（{detail.spawnAreas.length}）
                     </Button>
-                    <Button variant="ghost" onClick={() => {
+                    <Button
+                      variant="ghost"
+                      onClick={() => {
                         setFocusNpc(undefined);
                         setDialog("points");
-                      }}>
-                      NPC / 复活点（{detail.npcCount + detail.reviveCount}）
+                      }}
+                    >
+                      NPC / 复活点（{detail.npcPoints.length + (detail.revivePoint ? 1 : 0)}）
                     </Button>
                     <Button variant="ghost" onClick={() => setDialog("monsters")}>
                       场上怪物（{detail.worldMonsterCount}）
@@ -412,7 +512,21 @@ export function MapsPage() {
             setDraft(null);
             setEditArea(null);
           }}
-          onSaved={reloadAfterSpawnChange}
+          onSaved={reloadDetail}
+        />
+      ) : null}
+      {detail ? (
+        <NpcPointFormDialog
+          open={!!npcDraft || !!editNpc}
+          mapId={detail.id}
+          detail={detail}
+          point={editNpc}
+          draft={npcDraft}
+          onClose={() => {
+            setNpcDraft(null);
+            setEditNpc(null);
+          }}
+          onSaved={reloadDetail}
         />
       ) : null}
       <SpawnAreasDialog
@@ -425,7 +539,20 @@ export function MapsPage() {
         }}
         onClose={() => setDialog(null)}
       />
-      <NpcPointsDialog open={dialog === "points"} detail={detail} focusId={focusNpc} onClose={() => setDialog(null)} />
+      <NpcPointsDialog
+        open={dialog === "points"}
+        detail={detail}
+        focusId={focusNpc}
+        onEdit={(point) => {
+          setDialog(null);
+          openNpc(point);
+        }}
+        onEditRevive={() => {
+          setDialog(null);
+          setMode("revive");
+        }}
+        onClose={() => setDialog(null)}
+      />
       <WorldMonstersDialog open={dialog === "monsters"} detail={detail} onClose={() => setDialog(null)} />
       {detail ? (
         <MapMonitorDialog
@@ -438,6 +565,47 @@ export function MapsPage() {
       <LayersDialog open={dialog === "layers"} detail={detail} onClose={() => setDialog(null)} />
       <GroupsDialog open={dialog === "groups"} detail={detail} onClose={() => setDialog(null)} />
       <SourcesDialog open={dialog === "sources"} detail={detail} onClose={() => setDialog(null)} />
+    </div>
+  );
+}
+
+/**
+ * 模式切换（查看 / 画刷怪区 / 放 NPC / 设复活点）
+ *
+ * 四个分段按钮而不是四个独立按钮：它们是**互斥状态**，用互斥的样式说出来（当前那个高亮）。
+ * 再点一次当前模式 = 回查看 —— 编辑态是「临时借用的画布」，用完该能一键还回去。
+ */
+function ModeSwitch({ mode, onChange }: { mode: CanvasMode; onChange: (next: CanvasMode) => void }) {
+  const items: Array<{ key: CanvasMode; label: string; active: string }> = [
+    { key: "spawn", label: "绘制刷怪区", active: "bg-violet-500/20 text-violet-200" },
+    { key: "npc", label: "放置 NPC", active: "bg-sky-500/20 text-sky-200" },
+    { key: "revive", label: "设复活点", active: "bg-emerald-500/20 text-emerald-200" },
+  ];
+  return (
+    <div className="flex overflow-hidden rounded-lg border border-slate-800">
+      {items.map((item) => (
+        <button
+          key={item.key}
+          type="button"
+          onClick={() => onChange(item.key)}
+          className={`px-2.5 py-1.5 text-xs font-medium transition ${
+            mode === item.key ? item.active : "text-slate-300 hover:bg-slate-800/60"
+          }`}
+          // 再点一次退出：提示写在 title 里，不给按钮换字（换字会让四个按钮宽度跳变）
+          title={mode === item.key ? "再点一次退出该模式" : undefined}
+        >
+          {item.label}
+        </button>
+      ))}
+      {mode !== "view" ? (
+        <button
+          type="button"
+          onClick={() => onChange("view")}
+          className="border-l border-slate-800 px-2.5 py-1.5 text-xs text-slate-400 transition hover:bg-slate-800/60"
+        >
+          退出
+        </button>
+      ) : null}
     </div>
   );
 }
@@ -494,4 +662,9 @@ function sameForm(a: MapForm, b: MapForm): boolean {
     toInt(a.combat) === toInt(b.combat) &&
     toInt(a.soulOfWar) === toInt(b.soulOfWar)
   );
+}
+
+/** 与画布像素对齐到两位小数（拖动 / 点按算出来的 1234.5678 进库没有意义，也让 e2e 能直接对数字） */
+function round2(value: number): number {
+  return Math.round(value * 100) / 100;
 }

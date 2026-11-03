@@ -1,6 +1,6 @@
 import { Modal } from "../Modal";
 import { Badge, Button, EmptyState, tableClass, tdClass, thClass, theadClass } from "../ui";
-import type { MapDetail, MapObject, MapSpawnArea } from "../../api";
+import type { MapDetail, MapNpc, MapObject, MapSpawnArea } from "../../api";
 import { overflowText, overflowTitle } from "./bounds";
 
 /**
@@ -55,61 +55,131 @@ export function LayersDialog({ open, detail, onClose }: { open: boolean; detail:
   );
 }
 
-/** NPC / 复活点清单（从图上点进来时定位到那一行） */
+/**
+ * NPC 点位与复活点清单（读服务端 `map_npcs` / `maps.revive_*`，#672 起点位归后台）
+ *
+ * ## 为什么不再显示 TMX 的 npc 对象组
+ *
+ * #672 之前这里是「客户端资源对照」：TMX 里写了几个 NPC、几个复活点。但那已经是**旧口径**——
+ * 点位现在由这张页面的画布写进库，客户端也只认快照。再把 TMX 的那份列出来，运维会看到两套
+ * 不一致的数字（资源里 1 个、库里 0 个），而这页面的任务恰恰是「让它生效」，不是「对账」。
+ * TMX 里还剩什么，在「对象组」弹窗里看。
+ *
+ * 坐标一律显示**世界坐标**（库里的口径，也是客户端消费的口径），与刷怪区表格对齐；
+ * 画布上的点标记是 Tiled 口径（y 取反），两者是同一个点的两种写法 —— 弹窗里标了 `cy` 为负。
+ */
 export function NpcPointsDialog({
   open,
   detail,
   focusId,
+  onEdit,
+  onEditRevive,
   onClose,
 }: {
   open: boolean;
   detail: MapDetail | null;
+  /** 从图上点过来时高亮那一行（点位行 id，不是 Tiled 的 object id） */
   focusId?: number;
+  /** 点「编辑」：上层打开 NPC 点位表单 */
+  onEdit: (point: MapNpc) => void;
+  /** 点复活点的「编辑」：上层切到复活点模式（页面上那条提示会指引点图） */
+  onEditRevive: () => void;
   onClose: () => void;
 }) {
-  const objects = detail ? detail.groups.flatMap((group) => group.objects).filter((object) => object.klass === "npc" || object.klass === "revive") : [];
   return (
     <Modal
       open={open}
-      title="NPC / 复活点"
-      hint="来源：客户端 TMX 的 npc 对象组。坐标是 Tiled 原始口径（左上角原点、y 向下），与地图上的点标记一致"
+      title="NPC 点位与复活点"
+      hint="数据来自服务端（map_npcs / maps.revive_cx,cy）。坐标是世界坐标：原点 = 地图左上角、y 轴向上，故 cy 为负 —— 与画布上差一次 y 取反"
       size="lg"
       onClose={onClose}
     >
-      {objects.length === 0 ? (
-        <EmptyState title="这张图没有 NPC / 复活点" description="安全地图一般只有一个复活点；野外图才挂 NPC" />
-      ) : (
-        <div className="overflow-x-auto">
-          <table className={tableClass}>
-            <thead className={theadClass}>
-              <tr>
-                <th className={thClass}>id</th>
-                <th className={thClass}>名称</th>
-                <th className={thClass}>类</th>
-                <th className={thClass}>坐标（Tiled）</th>
-                <th className={thClass}>属性</th>
-              </tr>
-            </thead>
-            <tbody>
-              {objects.map((object) => (
-                <tr key={`${object.id}-${object.name}`} className="align-top">
-                  <td className={rowClass(object.id === focusId)}>{object.id}</td>
-                  <td className={rowClass(object.id === focusId)}>{object.name || "—"}</td>
-                  <td className={rowClass(object.id === focusId)}>
-                    <Badge tone={object.klass === "revive" ? "green" : "indigo"}>{object.klass === "revive" ? "复活点" : "NPC"}</Badge>
-                  </td>
-                  <td className={rowClass(object.id === focusId)}>
-                    ({object.x}, {object.y})
-                  </td>
-                  <td className={`${rowClass(object.id === focusId)} whitespace-normal font-mono text-[11px] text-slate-500`}>{formatProperties(object.properties)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      {!detail ? null : (
+        <div className="space-y-3">
+          <section>
+            <h4 className="mb-1 text-xs text-slate-300">
+              NPC 点位 <span className="text-slate-600">（{detail.npcPoints.length}）</span>
+            </h4>
+            {detail.npcPoints.length === 0 ? (
+              <EmptyState title="这张图没有 NPC" description="安全地图一般只有复活点；要加就点页面上「放置 NPC」，在图上点一下" />
+            ) : (
+              <div className="overflow-x-auto">
+                <table className={tableClass}>
+                  <thead className={theadClass}>
+                    <tr>
+                      <th className={thClass}>#</th>
+                      <th className={thClass}>NPC</th>
+                      <th className={thClass}>世界坐标</th>
+                      <th className={thClass}>在图内</th>
+                      <th className={thClass}>操作</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {detail.npcPoints.map((point) => (
+                      <tr key={point.id}>
+                        <td className={rowClass(point.id === focusId)}>{point.id}</td>
+                        <td className={rowClass(point.id === focusId)}>
+                          {point.npcLabel} <span className="text-slate-600">({point.npcId})</span>
+                        </td>
+                        <td className={rowClass(point.id === focusId)}>
+                          ({point.cx}, {point.cy})
+                        </td>
+                        <td className={rowClass(point.id === focusId)}>
+                          <InBoundsCell inBounds={point.inBounds} />
+                        </td>
+                        <td className={tdClass}>
+                          <Button variant="ghost" onClick={() => onEdit(point)}>
+                            编辑
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
+
+          <section>
+            <h4 className="mb-1 text-xs text-slate-300">复活点</h4>
+            {!detail.revivePoint ? (
+              <EmptyState title="这张图没有复活点" description="没有复活点的图，玩家死在这里会退回上一次的复活点 —— 点页面上「设复活点」，在图上点一下即可" />
+            ) : (
+              <table className={tableClass}>
+                <thead className={theadClass}>
+                  <tr>
+                    <th className={thClass}>世界坐标</th>
+                    <th className={thClass}>在图内</th>
+                    <th className={thClass}>操作</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td className={tdClass}>
+                      ({detail.revivePoint.cx}, {detail.revivePoint.cy})
+                    </td>
+                    <td className={tdClass}>
+                      <InBoundsCell inBounds={detail.revivePoint.inBounds} />
+                    </td>
+                    <td className={tdClass}>
+                      <Button variant="ghost" onClick={onEditRevive}>
+                        去图上挪
+                      </Button>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            )}
+          </section>
         </div>
       )}
     </Modal>
   );
+}
+
+/** 「在图内」单元格：判据来自服务端 `inBounds`（点位没有 overflow 量，只有一个是非） */
+function InBoundsCell({ inBounds }: { inBounds: boolean }) {
+  return inBounds ? <Badge tone="green">在图内</Badge> : <Badge tone="red">越界</Badge>;
 }
 
 /**
