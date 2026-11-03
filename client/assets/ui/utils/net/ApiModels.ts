@@ -2035,6 +2035,32 @@ export type SaveSpawnArea = {
   h: number;
 };
 
+export type SaveMapNpc = {
+  /**
+   * NPC id（必须在 npcs 表里存在）
+   */
+  npcId: string;
+  /**
+   * 世界坐标 x（原点 = 地图左上角）
+   */
+  cx: number;
+  /**
+   * 世界坐标 y（y 轴向上，故为负）
+   */
+  cy: number;
+};
+
+export type SaveRevivePoint = {
+  /**
+   * 世界坐标 x（原点 = 地图左上角）
+   */
+  cx: number;
+  /**
+   * 世界坐标 y（y 轴向上，故为负）
+   */
+  cy: number;
+};
+
 export type SaveUiEffect = {
 };
 
@@ -6098,6 +6124,47 @@ export type Achievement = {
   recordCount?: number;
 };
 
+export type MapNpcPoint = {
+  /**
+   * NPC id（npcs 表主键）
+   */
+  npcId: string;
+  /**
+   * 世界坐标 x
+   */
+  x: number;
+  /**
+   * 世界坐标 y（为负）
+   */
+  y: number;
+};
+
+export type MapPosition = {
+  /**
+   * 世界坐标 x（原点 = 地图左上角）
+   */
+  x: number;
+  /**
+   * 世界坐标 y（y 轴向上，故为负）
+   */
+  y: number;
+};
+
+export type MapSpawnAreaPoint = {
+  /**
+   * 怪物 key（客户端据此查名字与动画）
+   */
+  monsterKey: string;
+  /**
+   * 区域中心 x（世界坐标）
+   */
+  cx: number;
+  /**
+   * 区域中心 y（世界坐标，为负）
+   */
+  cy: number;
+};
+
 export type MapConfig = {
   /**
    * 地图 id（= 角色 onMap 存的值 = resources/map 下的目录名）
@@ -6127,6 +6194,18 @@ export type MapConfig = {
    * 进入所需战魂阶（0 = 不限）
    */
   soulOfWar: number;
+  /**
+   * NPC 点位（#672 起由后台放置；坐标已是世界坐标，客户端直接摆节点）
+   */
+  npcs: MapNpcPoint[];
+  /**
+   * 复活点（null = 这张图没有复活点：客户端不进图定位、不回点复活）
+   */
+  revive: MapPosition | null;
+  /**
+   * 刷怪区中心点（只给「在哪画怪物区域名标签」，尺寸与数量不下发）
+   */
+  spawnAreas: MapSpawnAreaPoint[];
 };
 
 export type MapTypeGroup = {
@@ -6311,7 +6390,7 @@ export type GameConfigSnapshot = {
    */
   achievements: Achievement[];
   /**
-   * 地图玩法配置（#573：名称 / 类型 / 进入条件）。**客户端不再自己存这些** —— `configs/map.ts` 只剩 TMX 的约定与运行时表，进游戏时按 id 覆写；资源路径由客户端按 `resources/map/<id>/<id>` 拼，不在下发范围里
+   * 地图配置（#573：名称 / 类型 / 进入条件；#672：NPC 点位 / 复活点 / 刷怪区中心）。**客户端不再自己存这些**，也不再从 TMX 对象组里读点位 —— `configs/map.ts` 只剩 TMX 的约定与运行时表，进游戏时按 id 覆写；资源路径由客户端按 `resources/map/<id>/<id>` 拼，不在下发范围里
    */
   maps: MapConfig[];
   /**
@@ -7437,9 +7516,17 @@ export type MapSummary = {
    */
   layerCount: number;
   /**
-   * NPC 对象数（客户端资源 npc 组里 klass=npc 的对象）
+   * NPC 对象数（**客户端资源对照**：TMX npc 组里 klass=npc 的对象，不再有消费方）
    */
   npcCount: number;
+  /**
+   * 服务端 NPC 点位数（map_npcs；#672 起点位归后台）
+   */
+  npcPointCount: number;
+  /**
+   * 服务端是否设了复活点（maps.revive_cx/cy 非空）
+   */
+  hasRevivePoint: boolean;
   /**
    * 刷怪区对象数（客户端资源 monster 组的矩形数）
    */
@@ -7449,7 +7536,7 @@ export type MapSummary = {
    */
   collisionCount: number;
   /**
-   * 复活点数（客户端资源里 klass=revive 的对象）
+   * 复活点数（**客户端资源对照**：TMX 里 klass=revive 的对象，不再有消费方）
    */
   reviveCount: number;
   /**
@@ -7475,6 +7562,48 @@ export type MapList = {
    * 全部地图类型（管理端编辑下拉用；含当前没有地图使用的类型，顺序即传送弹窗分组顺序）
    */
   types: MapTypeGroup[];
+};
+
+export type MapNpc = {
+  /**
+   * 点位行 id（改 / 删用它定位；换 NPC 时 id 不变）
+   */
+  id: number;
+  /**
+   * NPC id（npcs 表主键；客户端据此查外观与点击行为）
+   */
+  npcId: string;
+  /**
+   * NPC 名（查不到 npcs 行时回落成 id）
+   */
+  npcLabel: string;
+  /**
+   * 世界坐标 x（原点 = 地图左上角）
+   */
+  cx: number;
+  /**
+   * 世界坐标 y（y 轴向上，故为负）
+   */
+  cy: number;
+  /**
+   * 是否落在图内（`[0, W] × [-H, 0]`，容差 1px）
+   */
+  inBounds: boolean;
+};
+
+export type MapRevivePoint = {
+  /**
+   * 世界坐标 x（原点 = 地图左上角）
+   */
+  cx: number;
+  /**
+   * 世界坐标 y（y 轴向上，故为负）
+   */
+  cy: number;
+  /**
+   * 是否落在图内（`[0, W] × [-H, 0]`，容差 1px）
+   */
+  inBounds: boolean;
 };
 
 export type MapDetail = {
@@ -7539,9 +7668,17 @@ export type MapDetail = {
    */
   layerCount: number;
   /**
-   * NPC 对象数（客户端资源 npc 组里 klass=npc 的对象）
+   * NPC 对象数（**客户端资源对照**：TMX npc 组里 klass=npc 的对象，不再有消费方）
    */
   npcCount: number;
+  /**
+   * 服务端 NPC 点位数（map_npcs；#672 起点位归后台）
+   */
+  npcPointCount: number;
+  /**
+   * 服务端是否设了复活点（maps.revive_cx/cy 非空）
+   */
+  hasRevivePoint: boolean;
   /**
    * 刷怪区对象数（客户端资源 monster 组的矩形数）
    */
@@ -7551,7 +7688,7 @@ export type MapDetail = {
    */
   collisionCount: number;
   /**
-   * 复活点数（客户端资源里 klass=revive 的对象）
+   * 复活点数（**客户端资源对照**：TMX 里 klass=revive 的对象，不再有消费方）
    */
   reviveCount: number;
   /**
@@ -7575,6 +7712,14 @@ export type MapDetail = {
    */
   spawnAreas: MapSpawnArea[];
   /**
+   * NPC 点位（服务端库表，世界坐标）
+   */
+  npcPoints: MapNpc[];
+  /**
+   * 复活点（服务端库表；null = 这张图没有复活点）
+   */
+  revivePoint: MapRevivePoint | null;
+  /**
    * 场上怪物（按区分组；进程未启动过世界时为空）
    */
   worldMonsters: MapWorldMonster[];
@@ -7593,6 +7738,24 @@ export type MapSpawnAreaDeleted = {
    * 被删掉的行 id
    */
   id: number;
+};
+
+export type MapNpcDeleted = {
+  /**
+   * 恒为 true（失败会抛 404，不会有 false）
+   */
+  deleted: boolean;
+  /**
+   * 被删掉的点位行 id
+   */
+  id: number;
+};
+
+export type MapRevivePointCleared = {
+  /**
+   * 恒为 true（本来就没有复活点时也返回 true —— 清空是幂等的）
+   */
+  cleared: boolean;
 };
 
 export type MapMonitorMonster = {

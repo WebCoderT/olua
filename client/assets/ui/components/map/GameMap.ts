@@ -9,7 +9,6 @@ import MapObjectSpawner from "./MapObjectSpawner";
 import CollisionAreaSpawner from "./CollisionAreaSpawner";
 import CombatChannel from "../../utils/net/CombatChannel";
 import { loadResourceAsync } from "../../utils/resource/ResourceLoader";
-import { mapPointToWorld } from "../../utils/map/MapPointMath";
 import { mapSrcOf } from "../../../configs/game-config";
 
 /**
@@ -23,7 +22,7 @@ import { mapSrcOf } from "../../../configs/game-config";
  * 避免节点先挂上而地图未加载完成导致的黑屏
  */
 export default class GameMap extends Node {
-  /** 复活点世界坐标（地图标了 class=revive 的点位且地图加载完成后才有值） */
+  /** 复活点世界坐标（服务端快照给了复活点且地图加载完成后才有值） */
   private reviveWorldPosition: Vec3 | null = null;
   /** 复活点就绪回调（由组合根注入主角的定位方法，见 setReviveHandler） */
   private reviveHandler: ((worldPosition: Vec3) => void) | null = null;
@@ -78,8 +77,8 @@ export default class GameMap extends Node {
     // 屏幕外的格子在裁剪阶段被丢弃，实测开销远小于「传送后黑屏」的体验损失。
     tiledMap.enableCulling = false;
     LayerManager.addToMapLayer(this);
-    // 按 npc 对象组生成 NPC（碰撞区与 NPC 的碰撞范围显示都在生成流程内完成）
-    const objectSpawner = new MapObjectSpawner(this as Node);
+    // 按服务端快照的 NPC 点位生成 NPC（碰撞区与 NPC 的碰撞范围显示都在生成流程内完成）
+    const objectSpawner = new MapObjectSpawner(this.onMapId);
     objectSpawner.spawnAll();
     // 按 collision 对象组生成碰撞区域（静态碰撞体 + 名称/区域指示线）
     new CollisionAreaSpawner(this as Node).spawnAll();
@@ -89,7 +88,7 @@ export default class GameMap extends Node {
     // 怪物实例由服务端播种并以 world 帧回来（MonsterManager.applyWorldState），这里不生成任何怪。
     CombatChannel.sendWorldJoin(this.onMapId);
     // 自动战斗的寻路网格以这张地图为基准（换图后旧网格作废，挂机目标重新选取）
-    AutoBattle.setMap(this as Node);
+    AutoBattle.setMap(this as Node, this.onMapId);
     this.goToRevivePoint(objectSpawner.getRevivePoint());
   }
 
@@ -115,17 +114,19 @@ export default class GameMap extends Node {
   }
 
   /**
-   * 前往复活点：把复活点的地图坐标换算成世界坐标后交给主角
-   * 复活点由 npc 对象组中类为 revive 的点位决定（旧地图用对象名 revive 标记，同样识别）
-   * 地图未标复活点时只提示、不打断后续流程（否则会连带阻断地图对象生成）
-   * @param revivePoint 复活点坐标（Tiled 原始坐标），无复活点时为 null
+   * 前往复活点：把快照给的复活点（世界坐标）交给主角
+   *
+   * #672 起复活点由管理端在地图上点放（`maps.revive_cx/cy`），快照下发时已经是世界坐标，
+   * 这里**不再换算**（TMX 那条 `mapPointToWorld` 的路随点位一起下架了）。
+   * 地图没设复活点时只提示、不打断后续流程（否则会连带阻断地图对象生成）
+   * @param reviveWorld 复活点世界坐标，没有复活点时为 null
    */
-  private goToRevivePoint(revivePoint: Vec3 | null) {
-    if (!revivePoint) {
-      console.warn(`${this.name} 未标复活点：请在 npc 对象组放一个类为 revive 的点位`);
+  private goToRevivePoint(reviveWorld: Vec3 | null) {
+    if (!reviveWorld) {
+      console.warn(`${this.name} 没有复活点：在管理端「地图管理 → 设复活点」里点一下，保存即时生效`);
       return;
     }
-    this.reviveWorldPosition = mapPointToWorld(revivePoint.x, revivePoint.y);
+    this.reviveWorldPosition = reviveWorld;
     this.reviveHandler?.(this.reviveWorldPosition);
   }
 }

@@ -1822,45 +1822,31 @@ export function getMallPrice(good: Goods): number {
  *
  * | 数据 | 在哪 | 谁能改 |
  * |---|---|---|
- * | TMX / 底图 / 预览图 | 客户端资源包 `resources/map/<id>/` | 美术（随包发布） |
- * | 名称 / 类型 / 进入条件 | 服务端 `maps` 表 | 运营（管理端「地图管理」，保存即生效） |
+ * | TMX / 底图 / 预览图 / 碰撞盒 | 客户端资源包 `resources/map/<id>/` | 美术（随包发布） |
+ * | 名称 / 类型 / 进入条件 / NPC 点位 / 复活点 / 刷怪区 | 服务端（`maps` / `map_npcs` / `map_spawn_areas`） | 运营（管理端「地图管理」，保存即生效） |
+ *
+ * **TMX 里只剩瓦片与碰撞**（#667 刷怪区、#672 NPC 与复活点先后搬到后台）：点位这类
+ * 「运维天天要调」的东西留在资源包里，等于每改一次都要重打 3G 的包。
  *
  * 客户端要做的只有两件事：**按 id 拼资源路径**（`mapSrcOf`，目录约定）、
  * **进游戏时把服务端那份配置接住**（`configs/apply-snapshot` 的 `applyMapRows`）。
  *
  * ⚠ 所以 `maps` 在配置拉回来之前是**空的**，这不是 bug：
  * - 资源预加载 / 进图**不用查它**（路径由 `mapSrcOf` 算，见 ui/Game 与 Loading）；
- * - 显示层（小地图 / 传送弹窗）读空时用 `mapLabelOf` 的兜底文案，并随快照到达自动更新。
+ * - 显示层（小地图 / 传送弹窗）读空时用 `mapLabelOf` 的兜底文案，并随快照到达自动更新；
+ * - NPC / 复活点 / 刷怪区标签**必须**有它（没有就一个都不摆，见 `MapObjectSpawner`）。
  */
 
-/** Tiled 对象组名称（地图文件与游戏代码之间的约定，改名只需改这里） */
+/**
+ * Tiled 对象组名称（地图文件与游戏代码之间的约定，改名只需改这里）
+ *
+ * 只剩 `collision` 一个消费方（#672）。`npc` / `objects` / `monster` 三组在 TMX 里
+ * 可能还留着（美术没删），但客户端**不再读它们** —— 点位与刷怪区的真相在服务端。
+ * 需要看资源里到底还有什么，去管理端「地图管理 → 对象组」。
+ */
 export const tiledGroupNames = {
-  /** NPC 与复活点 */
-  npc: "npc",
-  /** 兼容早期地图：NPC 与复活点画在 objects 组 */
-  legacyObjects: "objects",
-  /** 刷怪区域 */
-  monster: "monster",
-  /** 碰撞区域 */
+  /** 碰撞区域（瓦片物理，仍归美术资源） */
   collision: "collision",
-};
-
-/** Tiled 对象的自定义属性名（地图文件与游戏代码之间的约定） */
-export const tiledPropertyNames = {
-  /** 编号（NPC 编号 / 怪物编号） */
-  id: "id",
-  /** 刷怪区域允许的最少怪物数 */
-  min: "min",
-  /** 刷怪区域允许的最多怪物数 */
-  max: "max",
-};
-
-/** Tiled 对象的对象类取值（对象标签上的 class/type） */
-export const tiledObjectClasses = {
-  /** NPC（有外观点位） */
-  npc: "npc",
-  /** 复活点（只是坐标，没有外观） */
-  revive: "revive",
 };
 
 /**
@@ -1922,6 +1908,15 @@ export function applyMapRows(rows: MapConfigRow[], groups: MapTypeGroupRow[]): v
       level: Number(row.level) || 0,
       combat: Number(row.combat) || 0,
       soulOfWar: Number(row.soulOfWar) || 0,
+      // 点位（#672）：坐标已经是世界坐标，客户端不再换算；缺段当「没有点位」而不是报错 ——
+      // 老服务端配新客户端时少几个 NPC 比整个快照加载失败好
+      npcs: (row.npcs ?? [])
+        .filter((point) => point && typeof point.npcId === "string")
+        .map((point) => ({ npcId: point.npcId, x: Number(point.x) || 0, y: Number(point.y) || 0 })),
+      revive: row.revive ? { x: Number(row.revive.x) || 0, y: Number(row.revive.y) || 0 } : null,
+      spawnAreas: (row.spawnAreas ?? [])
+        .filter((area) => area && typeof area.monsterKey === "string")
+        .map((area) => ({ monsterKey: area.monsterKey, cx: Number(area.cx) || 0, cy: Number(area.cy) || 0 })),
     });
   }
   mapTypeGroups.length = 0;

@@ -1,5 +1,4 @@
 import { _decorator, Camera, Component, isValid, Node, screen, sys, Vec3 } from "cc";
-import { mapSrcOf } from "../configs/game-config";
 import MpHelper from "./utils/battle/MpHelper";
 import HpHelper from "./utils/battle/HpHelper";
 import { ActivityController } from "./controllers/ActivityController";
@@ -232,9 +231,9 @@ export class Game extends Component {
     // 预加载：地图信息 → 地图内 NPC/怪物帧动画 → 当前角色穿戴的帧动画（见 core/PreloadManager）
     // 走 Loading 过渡场景进来时资源已就绪，这里直接命中缓存立即返回；
     // 直接从 Game 场景启动（编辑器里单独跑 Game）时在此补齐，避免进图后逐个节点异步加载帧动画造成卡顿
-    // 资源路径按目录约定拼（#573）：不等配置快照也能算出该加载哪张图
+    // 资源路径与帧动画来源都按地图 id 走（#672：NPC / 刷怪区从服务端快照取，不读 TMX）
     if (role) {
-      await PreloadManager.preloadGame(mapSrcOf(role.onMap), role).catch((error) =>
+      await PreloadManager.preloadGame(role.onMap, role).catch((error) =>
         console.error("资源预加载失败：", error),
       );
     }
