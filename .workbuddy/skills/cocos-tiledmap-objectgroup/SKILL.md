@@ -6,11 +6,24 @@ agent_created: true
 
 # Cocos TiledMap 对象组实例化
 
-> **本项目的口径（#667 / #672）**：生成的 TMX 里 `monster` / `npc` 对象组仍然按老样子写（保持资源形态与旧工具兼容），
-> 但**客户端已经不读了** —— 刷怪区、NPC 点位、复活点由管理端「地图管理」直接放，存在服务端
-> （`map_spawn_areas` / `map_npcs` / `maps.revive_*`）。也就是说：新地图跑完 `tools/import-map-resources.cjs`
-> 之后，还要在管理端把刷怪区、NPC、复活点摆一遍，不然进图是一张空图（有地形、没怪、没 NPC、没复活点）。
-> 只有 `collision` 组仍然直接生效。
+> **本项目的口径（#667 / #672 / #676）**：**这张表里对象组的数据本项目已经全部不用了**。
+> 刷怪区、NPC 点位、复活点、碰撞盒都由管理端「地图管理」直接画，存在服务端
+> （`map_spawn_areas` / `map_npcs` / `maps.revive_*` / `map_collisions`），客户端**只读配置快照**
+> （`maps.spawnAreas` / `maps.npcs` / `maps.revive` / `maps.collisions`，全是世界坐标，直接
+> `setWorldPosition`，一次换算都不要）。
+>
+> 已有的 11 张图，对象组已被 `tools/strip-map-objects.cjs` **整组删除** —— TMX 里只剩瓦片与图层，
+> 地图文件**只做显示**。客户端的 `TiledObjects.ts`、`tiledGroupNames`、`mapPointToWorld` /
+> `mapRectCenterToWorld` 全部下架，`tools/audit-map-origin.cjs` 会拦「它们又回来了」
+> （判据：`client/assets` 里出现 `TiledObjects` / `tiledGroupNames` / `getObjectGroup(` 即红）。
+>
+> 也就是说：**下面这些引擎坑仍然是对的，但本项目已经不再踩它们**（不实例化对象组，就没有
+> 「类被丢弃」「y 被翻两次」的问题）。留着是因为新图若还带对象组、或别的项目要用，
+> 这几个坑一个都躲不掉。读这篇的正确姿势：先看「为什么要读原文」，再看本项目的 4 个数据源
+> 各自在哪张表。
+>
+> 另外，**坑 4（改锚点后图层不重算 → 整屏黑）与坑 3（enableCulling）与对象组无关**，
+> 它们仍然在生效的路径上：`GameMap.loadMap` 每次进图都要按顺序做那两步。
 
 
 ## 先记住四条引擎行为（否则必错）
