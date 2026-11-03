@@ -209,7 +209,7 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
       -- （世界里唯一稳定的真相），而监控要看的是**此刻**的位置 —— 怪物 AI 的模拟坐标只活在
       -- 实时进程内存里，且不落盘（见 monster-ai.service 的 MonsterRuntime）。管理端接口在
       -- 存档进程（3100），两个进程之间只有 SQLite 这一条路，所以这里做一份高频镜像：
-      -- 它是**运行时投影，不是配置**，config-sync 的 32 张表里没有它，重启清空也无所谓。
+      -- 它是**运行时投影，不是配置**，config-sync 的 33 张表里没有它，重启清空也无所谓。
       CREATE TABLE IF NOT EXISTS map_monitor_state (
         zone_id    INTEGER NOT NULL,
         map_id     TEXT    NOT NULL,
@@ -254,6 +254,25 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
       CREATE UNIQUE INDEX IF NOT EXISTS idx_map_spawn_areas_natural ON map_spawn_areas(map_id, name);
       CREATE INDEX IF NOT EXISTS idx_map_spawn_areas_map ON map_spawn_areas(map_id);
 
+      -- NPC 点位（#672）：一行 = 「某个 NPC 站在某张图的某个点上」。
+      -- #672 之前这张表不存在：点位写在 TMX 的 npc 对象组里（属性 id 关联 npcs 表），
+      -- 客户端四处读它（生成节点 / 预加载动画 / 寻路障碍 / 小地图标记）。
+      -- 现在**点位归后台**：TMX 里的对象组只剩资源对照，没有消费方。
+      -- 坐标是世界坐标（原点 = 地图左上角、y 轴向上，cy 为负），与 map_spawn_areas 同口径：
+      -- 写进来的与读出去的同构，Tiled 口径的换算只在管理端画布那一处。
+      -- (map_id, npc_id) 唯一：同一个 NPC 在一张图摆两份没有意义（多张图各一份是正常的，比如传送使者）。
+      -- NPC 的外观（label / src / scale / 偏移）在 npcs 表，这张表只管「站在哪」。
+      CREATE TABLE IF NOT EXISTS map_npcs (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        map_id     TEXT    NOT NULL,
+        npc_id     TEXT    NOT NULL,
+        cx         REAL    NOT NULL,
+        cy         REAL    NOT NULL,
+        updated_at INTEGER NOT NULL DEFAULT 0
+      );
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_map_npcs_natural ON map_npcs(map_id, npc_id);
+      CREATE INDEX IF NOT EXISTS idx_map_npcs_map ON map_npcs(map_id);
+
       -- 地图玩法配置（#573）：一行 = 一张图的「整理结果」。
       -- 客户端只存资源本体（TMX / 图 / 预览图），名称 / 类型 / 进入条件这些**玩法数据**归服务端，
       -- 管理端「地图管理」页可视化地改它们，客户端进游戏时随配置快照拉走（configs/apply-snapshot）。
@@ -279,6 +298,10 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
         -- 图层 + 对象组（JSON：'{ layers: [...], groups: [...] }'）—— 管理端详情页的
         -- 「图层 / 对象组」两块就渲染它；刷怪区另有一张表，不在这里
         content     TEXT    NOT NULL DEFAULT '{"layers":[],"groups":[]}',
+        -- 复活点（#672）：每张图最多一个，NULL = 这张图没有复活点（客户端不进图定位、不回点复活）。
+        -- 以前是 TMX 里 class=revive 的那个点，现在归后台；单值跟地图同生命周期，就不单开表了
+        revive_cx   REAL,
+        revive_cy   REAL,
         updated_by  TEXT    NOT NULL DEFAULT '',
         updated_at  INTEGER NOT NULL DEFAULT 0
       );
@@ -1100,6 +1123,10 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
     // 世界坐标口径（#566）：存量库补列时落到旧口径 'center'，紧接着由 migrateMapCoordinateOrigin 抹平
     this.ensureColumn("world_meta", "coord_origin", "TEXT NOT NULL DEFAULT 'center'");
     this.migrateMapCoordinateOrigin();
+    // 复活点（#672）：可空 —— NULL 就是「这张图没有复活点」，不能垫 0（(0,0) 是图左上角那个点，
+    // 会变成「一进图就飞到角上」）。存量库的初值由 migrate-map-points.cjs 从 TMX 对象组灌一次
+    this.ensureColumn("maps", "revive_cx", "REAL");
+    this.ensureColumn("maps", "revive_cy", "REAL");
     // 曲线退场的收尾（#655）：老库的这两张表还留着就会让人以为「还能改」—— 每次启动顺手清掉
     // （`IF EXISTS`，新库就是两条空操作；数据早已由快照灌进 role_levels）
     this.db.exec("DROP TABLE IF EXISTS level_exps; DROP TABLE IF EXISTS growth_segments;");

@@ -11980,7 +11980,7 @@
     },
     "/admin/maps": {
       "get": {
-        "description": "全部地图的概览：名称 / 类型 / 进入条件 / 尺寸 + 各类对象计数。\n\n计数分两类，**不要混着看**：\n- `npcCount` / `monsterAreaCount` / `collisionCount` / `reviveCount`：客户端 TMX 里的对象数（生成快照）；\n- `spawnAreaCount` / `worldMonsterCount`：服务端库表里的行数（`map_spawn_areas` / `world_monsters`）。\n\n不分页，按 id **数值**升序（`10` 排在 `9` 后面）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
+        "description": "全部地图的概览：名称 / 类型 / 进入条件 / 尺寸 + 各类对象计数。\n\n计数分两类，**不要混着看**：\n- `npcCount` / `monsterAreaCount` / `collisionCount` / `reviveCount`：客户端 TMX 里的对象数（#672 起只剩资源对照）；\n- `spawnAreaCount` / `npcPointCount` / `hasRevivePoint` / `worldMonsterCount`：服务端库表里的行数。\n\n不分页，按 id **数值**升序（`10` 排在 `9` 后面）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
         "operationId": "adminMap.list",
         "parameters": [],
         "responses": {
@@ -12027,7 +12027,7 @@
     },
     "/admin/maps/{id}": {
       "get": {
-        "description": "列表字段 + 图层 + 对象组 + 刷怪区 + 场上怪物 + **每一块数据的来源**（`sources`）。\n\n- `layers` / `groups`：TMX 快照，坐标是 **Tiled 原始口径**（左上角原点、y 向下），用于对着编辑器核对；\n- `spawnAreas`：服务端整理后的刷怪区（世界坐标，原点 = 地图左上角、y 轴向上）—— 与上面的\n  `groups[monster]` 不是同一份数据，页面并排显示就是为了核对两者是否一致；\n- `worldMonsters`：按区聚合的场上实例（进程没跑过世界时为空数组）。\n\n地图 id 不存在 → 404（`50032`）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
+        "description": "列表字段 + 图层 + 对象组 + 刷怪区 + NPC 点位 + 复活点 + 场上怪物 + **每一块数据的来源**（`sources`）。\n\n- `layers` / `groups`：TMX 快照，坐标是 **Tiled 原始口径**（左上角原点、y 向下），用于对着编辑器核对；\n- `spawnAreas` / `npcPoints` / `revivePoint`：服务端整理后的地图内容（世界坐标，原点 = 地图左上角、y 轴向上）——\n  与上面的 `groups` 不是同一份数据，`groups` 现在只是资源对照；\n- `worldMonsters`：按区聚合的场上实例（进程没跑过世界时为空数组）。\n\n地图 id 不存在 → 404（`50032`）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
         "operationId": "adminMap.detail",
         "parameters": [
           {
@@ -12432,6 +12432,335 @@
         "x-olua-data-nullable": false,
         "x-olua-data-schema": {
           "$ref": "#/components/schemas/MapSpawnAreaDeletedDto"
+        },
+        "x-olua-permissions": [
+          "gameConfig:write"
+        ]
+      }
+    },
+    "/admin/maps/{id}/npcs": {
+      "post": {
+        "description": "管理端地图页「放置 NPC」保存时调它。**入参是世界坐标**（原点 = 地图左上角、y 轴向上，故 `cy` 为负），\n与读接口的 `npcPoints` 完全同构 —— 画布（Tiled 口径）负责换算 `cx = x`、`cy = -y`。\n\n#672 之前 NPC 点位写在 TMX 的 `npc` 对象组里（属性 `id` 关联 `npcs` 表），现在点位归这张表，\nTMX 那组对象只剩资源对照。\n\n四道校验：\n- 地图存在且有像素尺寸（`50032`）；\n- `npcId` 在 `npcs` 表里（`50034`，404）；\n- 同图同 NPC 唯一（`20020`，409）—— 不同图各放一个是正常的（传送使者就是每图一个）；\n- 点位在图内（`40000`，文案带「往哪边偏了多少」）。\n\n**生效时机**：客户端在进游戏时拉配置快照、按它摆节点，所以图里的人要换图 / 重进才看得到新点位。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
+        "operationId": "adminMap.createNpc",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "地图 id（必须已有对应 TMX 资源）",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SaveMapNpcDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "新建的这一行（含 id / NPC 名 / 越界判定）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/MapNpcDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "放一个 NPC 点位（在图上点一下）",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/MapNpcDto"
+        },
+        "x-olua-permissions": [
+          "gameConfig:write"
+        ]
+      }
+    },
+    "/admin/maps/{id}/npcs/{npcRowId}": {
+      "patch": {
+        "description": "画布上拖动一个已有 NPC 点，松手就调它（`npcId` 原样带回，只换坐标）。\n换 NPC 也走这里 —— 入参与新建完全一致，整份覆盖。\n\n点位不属于这张图（或已被别人删掉）→ 404 `50035`；改成同图已存在的 NPC → 409 `20020`。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
+        "operationId": "adminMap.updateNpc",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "地图 id",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "npcRowId",
+            "required": true,
+            "in": "path",
+            "description": "点位行 id（详情里的 npcPoints[].id）",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SaveMapNpcDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "更新后的这一行",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/MapNpcDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "修改 NPC 点位（换 NPC / 挪位置，整份覆盖）",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/MapNpcDto"
+        },
+        "x-olua-permissions": [
+          "gameConfig:write"
+        ]
+      },
+      "delete": {
+        "description": "删掉这张图上的一个 NPC 点位。图里的人要换图 / 重进才看不到它。\n\n行不存在或不属于这张图 → 404 `50035`。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
+        "operationId": "adminMap.deleteNpc",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "地图 id",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "npcRowId",
+            "required": true,
+            "in": "path",
+            "description": "点位行 id",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "删除结果（deleted + id）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/MapNpcDeletedDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "删除 NPC 点位",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/MapNpcDeletedDto"
+        },
+        "x-olua-permissions": [
+          "gameConfig:write"
+        ]
+      }
+    },
+    "/admin/maps/{id}/revive-point": {
+      "put": {
+        "description": "每张图最多一个复活点（沿用 #672 之前的粒度：TMX 里也是每图一个 `class=revive` 的点）。\n`PUT` 即覆盖 —— 「设」与「挪」写的是同一对列，没有单独的新增接口。\n\n客户端拿它做两件事：**进图时把角色定位到这里**、死亡后「安全复活」回到这里。\n没设的图不做定位（角色停在上次的位置），客户端会打一条 warn。\n\n校验：地图存在且有像素尺寸（`50032`）、点位在图内（`40000`）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
+        "operationId": "adminMap.setRevivePoint",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "地图 id",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SaveRevivePointDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "设好之后的复活点（含越界判定）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/MapRevivePointDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "设 / 挪复活点",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/MapRevivePointDto"
+        },
+        "x-olua-permissions": [
+          "gameConfig:write"
+        ]
+      },
+      "delete": {
+        "description": "把这张图的复活点置空（两列置 NULL，不是删地图行）。**幂等**：本来就没有也返回 `cleared: true` ——\n「清空」的目标状态是「没有复活点」，重复点一次不该报错。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
+        "operationId": "adminMap.clearRevivePoint",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "地图 id",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "清空结果（cleared 恒为 true）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/MapRevivePointClearedDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "清掉复活点",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/MapRevivePointClearedDto"
         },
         "x-olua-permissions": [
           "gameConfig:write"
@@ -15835,6 +16164,46 @@
           "cy",
           "w",
           "h"
+        ]
+      },
+      "SaveMapNpcDto": {
+        "type": "object",
+        "properties": {
+          "npcId": {
+            "type": "string",
+            "description": "NPC id（必须在 npcs 表里存在）",
+            "example": "0002"
+          },
+          "cx": {
+            "type": "number",
+            "description": "世界坐标 x（原点 = 地图左上角）"
+          },
+          "cy": {
+            "type": "number",
+            "description": "世界坐标 y（y 轴向上，故为负）"
+          }
+        },
+        "required": [
+          "npcId",
+          "cx",
+          "cy"
+        ]
+      },
+      "SaveRevivePointDto": {
+        "type": "object",
+        "properties": {
+          "cx": {
+            "type": "number",
+            "description": "世界坐标 x（原点 = 地图左上角）"
+          },
+          "cy": {
+            "type": "number",
+            "description": "世界坐标 y（y 轴向上，故为负）"
+          }
+        },
+        "required": [
+          "cx",
+          "cy"
         ]
       },
       "SaveUiEffectDto": {
@@ -22377,6 +22746,67 @@
           "updatedAt"
         ]
       },
+      "MapNpcPointDto": {
+        "type": "object",
+        "properties": {
+          "npcId": {
+            "type": "string",
+            "description": "NPC id（npcs 表主键）"
+          },
+          "x": {
+            "type": "number",
+            "description": "世界坐标 x"
+          },
+          "y": {
+            "type": "number",
+            "description": "世界坐标 y（为负）"
+          }
+        },
+        "required": [
+          "npcId",
+          "x",
+          "y"
+        ]
+      },
+      "MapPositionDto": {
+        "type": "object",
+        "properties": {
+          "x": {
+            "type": "number",
+            "description": "世界坐标 x（原点 = 地图左上角）"
+          },
+          "y": {
+            "type": "number",
+            "description": "世界坐标 y（y 轴向上，故为负）"
+          }
+        },
+        "required": [
+          "x",
+          "y"
+        ]
+      },
+      "MapSpawnAreaPointDto": {
+        "type": "object",
+        "properties": {
+          "monsterKey": {
+            "type": "string",
+            "description": "怪物 key（客户端据此查名字与动画）"
+          },
+          "cx": {
+            "type": "number",
+            "description": "区域中心 x（世界坐标）"
+          },
+          "cy": {
+            "type": "number",
+            "description": "区域中心 y（世界坐标，为负）"
+          }
+        },
+        "required": [
+          "monsterKey",
+          "cx",
+          "cy"
+        ]
+      },
       "MapConfigDto": {
         "type": "object",
         "properties": {
@@ -22407,6 +22837,30 @@
           "soulOfWar": {
             "type": "number",
             "description": "进入所需战魂阶（0 = 不限）"
+          },
+          "npcs": {
+            "description": "NPC 点位（#672 起由后台放置；坐标已是世界坐标，客户端直接摆节点）",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MapNpcPointDto"
+            }
+          },
+          "revive": {
+            "description": "复活点（null = 这张图没有复活点：客户端不进图定位、不回点复活）",
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/MapPositionDto"
+              }
+            ]
+          },
+          "spawnAreas": {
+            "description": "刷怪区中心点（只给「在哪画怪物区域名标签」，尺寸与数量不下发）",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MapSpawnAreaPointDto"
+            }
           }
         },
         "required": [
@@ -22416,7 +22870,10 @@
           "typeLabel",
           "level",
           "combat",
-          "soulOfWar"
+          "soulOfWar",
+          "npcs",
+          "revive",
+          "spawnAreas"
         ]
       },
       "MapTypeGroupDto": {
@@ -22717,7 +23174,7 @@
             }
           },
           "maps": {
-            "description": "地图玩法配置（#573：名称 / 类型 / 进入条件）。**客户端不再自己存这些** —— `configs/map.ts` 只剩 TMX 的约定与运行时表，进游戏时按 id 覆写；资源路径由客户端按 `resources/map/<id>/<id>` 拼，不在下发范围里",
+            "description": "地图配置（#573：名称 / 类型 / 进入条件；#672：NPC 点位 / 复活点 / 刷怪区中心）。**客户端不再自己存这些**，也不再从 TMX 对象组里读点位 —— `configs/map.ts` 只剩 TMX 的约定与运行时表，进游戏时按 id 覆写；资源路径由客户端按 `resources/map/<id>/<id>` 拼，不在下发范围里",
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/MapConfigDto"
@@ -24488,7 +24945,15 @@
           },
           "npcCount": {
             "type": "number",
-            "description": "NPC 对象数（客户端资源 npc 组里 klass=npc 的对象）"
+            "description": "NPC 对象数（**客户端资源对照**：TMX npc 组里 klass=npc 的对象，不再有消费方）"
+          },
+          "npcPointCount": {
+            "type": "number",
+            "description": "服务端 NPC 点位数（map_npcs；#672 起点位归后台）"
+          },
+          "hasRevivePoint": {
+            "type": "boolean",
+            "description": "服务端是否设了复活点（maps.revive_cx/cy 非空）"
           },
           "monsterAreaCount": {
             "type": "number",
@@ -24500,7 +24965,7 @@
           },
           "reviveCount": {
             "type": "number",
-            "description": "复活点数（客户端资源里 klass=revive 的对象）"
+            "description": "复活点数（**客户端资源对照**：TMX 里 klass=revive 的对象，不再有消费方）"
           },
           "spawnAreaCount": {
             "type": "number",
@@ -24528,6 +24993,8 @@
           "height",
           "layerCount",
           "npcCount",
+          "npcPointCount",
+          "hasRevivePoint",
           "monsterAreaCount",
           "collisionCount",
           "reviveCount",
@@ -24561,6 +25028,65 @@
           "total",
           "list",
           "types"
+        ]
+      },
+      "MapNpcDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "number",
+            "description": "点位行 id（改 / 删用它定位；换 NPC 时 id 不变）"
+          },
+          "npcId": {
+            "type": "string",
+            "description": "NPC id（npcs 表主键；客户端据此查外观与点击行为）"
+          },
+          "npcLabel": {
+            "type": "string",
+            "description": "NPC 名（查不到 npcs 行时回落成 id）"
+          },
+          "cx": {
+            "type": "number",
+            "description": "世界坐标 x（原点 = 地图左上角）"
+          },
+          "cy": {
+            "type": "number",
+            "description": "世界坐标 y（y 轴向上，故为负）"
+          },
+          "inBounds": {
+            "type": "boolean",
+            "description": "是否落在图内（`[0, W] × [-H, 0]`，容差 1px）"
+          }
+        },
+        "required": [
+          "id",
+          "npcId",
+          "npcLabel",
+          "cx",
+          "cy",
+          "inBounds"
+        ]
+      },
+      "MapRevivePointDto": {
+        "type": "object",
+        "properties": {
+          "cx": {
+            "type": "number",
+            "description": "世界坐标 x（原点 = 地图左上角）"
+          },
+          "cy": {
+            "type": "number",
+            "description": "世界坐标 y（y 轴向上，故为负）"
+          },
+          "inBounds": {
+            "type": "boolean",
+            "description": "是否落在图内（`[0, W] × [-H, 0]`，容差 1px）"
+          }
+        },
+        "required": [
+          "cx",
+          "cy",
+          "inBounds"
         ]
       },
       "MapDetailDto": {
@@ -24628,7 +25154,15 @@
           },
           "npcCount": {
             "type": "number",
-            "description": "NPC 对象数（客户端资源 npc 组里 klass=npc 的对象）"
+            "description": "NPC 对象数（**客户端资源对照**：TMX npc 组里 klass=npc 的对象，不再有消费方）"
+          },
+          "npcPointCount": {
+            "type": "number",
+            "description": "服务端 NPC 点位数（map_npcs；#672 起点位归后台）"
+          },
+          "hasRevivePoint": {
+            "type": "boolean",
+            "description": "服务端是否设了复活点（maps.revive_cx/cy 非空）"
           },
           "monsterAreaCount": {
             "type": "number",
@@ -24640,7 +25174,7 @@
           },
           "reviveCount": {
             "type": "number",
-            "description": "复活点数（客户端资源里 klass=revive 的对象）"
+            "description": "复活点数（**客户端资源对照**：TMX 里 klass=revive 的对象，不再有消费方）"
           },
           "spawnAreaCount": {
             "type": "number",
@@ -24670,6 +25204,23 @@
             "items": {
               "$ref": "#/components/schemas/MapSpawnAreaDto"
             }
+          },
+          "npcPoints": {
+            "description": "NPC 点位（服务端库表，世界坐标）",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MapNpcDto"
+            }
+          },
+          "revivePoint": {
+            "description": "复活点（服务端库表；null = 这张图没有复活点）",
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/MapRevivePointDto"
+              }
+            ]
           },
           "worldMonsters": {
             "description": "场上怪物（按区分组；进程未启动过世界时为空）",
@@ -24703,6 +25254,8 @@
           "height",
           "layerCount",
           "npcCount",
+          "npcPointCount",
+          "hasRevivePoint",
           "monsterAreaCount",
           "collisionCount",
           "reviveCount",
@@ -24711,6 +25264,8 @@
           "layers",
           "groups",
           "spawnAreas",
+          "npcPoints",
+          "revivePoint",
           "worldMonsters",
           "sources"
         ]
@@ -24730,6 +25285,35 @@
         "required": [
           "deleted",
           "id"
+        ]
+      },
+      "MapNpcDeletedDto": {
+        "type": "object",
+        "properties": {
+          "deleted": {
+            "type": "boolean",
+            "description": "恒为 true（失败会抛 404，不会有 false）"
+          },
+          "id": {
+            "type": "number",
+            "description": "被删掉的点位行 id"
+          }
+        },
+        "required": [
+          "deleted",
+          "id"
+        ]
+      },
+      "MapRevivePointClearedDto": {
+        "type": "object",
+        "properties": {
+          "cleared": {
+            "type": "boolean",
+            "description": "恒为 true（本来就没有复活点时也返回 true —— 清空是幂等的）"
+          }
+        },
+        "required": [
+          "cleared"
         ]
       },
       "MapMonitorMonsterDto": {

@@ -159,6 +159,8 @@ const REPO_EDGES = {
     // 地图管理（#571）：只读地图页要按图统计刷怪区行数（countByMap），不写任何东西
     "modules/map",
   ],
+  // NPC 点位（#672）：点位归后台，只有地图域读写（管理端画布 + 配置快照）
+  "database/repositories/map-npc.repository.ts": ["modules/map"],
   // 养成配置（#213）：称号 / 战魂配置的读写只在 game-config 模块内 —— 玩家侧消费走
   // game-data.generated 快照（与角色属性同一来源），不直连这两张表
   "database/repositories/title.repository.ts": ["modules/game-config", "modules/roles"],
@@ -196,7 +198,8 @@ const REPO_EDGES = {
   "database/repositories/monster.repository.ts": ["modules/game-config", "modules/world", "modules/realtime", "modules/map"],
   // NPC 基础数据（#258）：同称号 / 战魂 / 军衔 / 装备，只在 game-config 模块内读写；
   // 任务（#396）的 npc-talk 也读（对话文案 + 存在性校验）
-  "database/repositories/npc.repository.ts": ["modules/game-config", "modules/quest"],
+  // #672：地图域放点位时要校验 npcId 存在并取名字（只读一行），与 monster.repository 同一理由
+  "database/repositories/npc.repository.ts": ["modules/game-config", "modules/quest", "modules/map"],
   // 商城定价（#251）：同上，只在 game-config 模块内读写（特殊价行动态增删，商品清单来自生成物）
   "database/repositories/mall.repository.ts": ["modules/game-config"],
   // 时装配置（#257）：同称号 / 战魂 / 军衔 / 装备，只在 game-config 模块内读写；

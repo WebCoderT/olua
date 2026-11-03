@@ -376,8 +376,37 @@ export interface MapRow {
   pixel_height: number;
   /** 图层 + 对象组（JSON：`{ layers, groups }`，管理端详情页渲染它） */
   content: string;
+  /**
+   * 复活点世界坐标（#672；两个都可能是 null）
+   *
+   * `null` = 这张图没有复活点 —— 与「(0,0) 那个点」是两件事，所以列是可空的（垫 0 会让
+   * 玩家一进图就飞到左上角）。两列同生同灭，写的一侧必须是 `MapRepository.setRevivePoint(…, null)`。
+   */
+  revive_cx: number | null;
+  revive_cy: number | null;
   /** 最后一个改它的管理员账号名（追账用；与 audit_logs 能对上） */
   updated_by: string;
+  updated_at: number;
+}
+
+/**
+ * NPC 点位一行（`map_npcs` 表；#672 起由管理端放置）
+ *
+ * 一行 = 「某个 NPC 站在某张图的某个点上」。外观（label / src / 缩放 / 偏移）在 `npcs` 表，
+ * 这张表只管「站在哪」：`(map_id, npc_id)` 唯一，同一个 NPC 能在多张图各放一个（传送使者就是）。
+ * 坐标是世界坐标（原点 = 地图左上角、y 轴向上，`cy` 为负）。
+ */
+export interface MapNpcRow {
+  /** 行 id（接口路由用它定位，不用 npc_id —— 换 NPC 时 id 不变更好对账） */
+  id: number;
+  /** 地图 id（= resources/map 下的目录名） */
+  map_id: string;
+  /** NPC id（`npcs` 表的主键） */
+  npc_id: string;
+  /** 世界坐标 x（左上角原点向右） */
+  cx: number;
+  /** 世界坐标 y（y 轴向上，故为负） */
+  cy: number;
   updated_at: number;
 }
 
