@@ -6,15 +6,18 @@ import { loadResourceAsync } from "../utils/resource/ResourceLoader";
 /** 按钮点击音的最小间隔（毫秒）：连点 / 双击只响一声，不然一下点两下会出两下声音 */
 const CLICK_MIN_GAP_MS = 60;
 
+/** 移动脚步音起步一声的最小间隔（毫秒）：移动状态短促抖动时只响一声 */
+const MOVE_MIN_GAP_MS = 80;
+
 /**
  * 音效播放（#683）
  *
  * ## 它是什么
  *
- * 运营在管理端「音效配置」里改的 11 项，客户端按 **key** 播 —— 文件路径 / 音量 / 循环 / 开关
+ * 运营在管理端「音效配置」里改的 12 项，客户端按 **key** 播 —— 文件路径 / 音量 / 循环 / 开关
  * 全部来自服务端，客户端不存一份默认值（没下发就不响，见 `configs/game-config` 区 21）。
  *
- * 调用点一共 11 个 key，全在「服务端已经确认」的那一行之后（别提前播，那会把「点了但被拒」
+ * 调用点一共 12 个 key，全在「服务端已经确认」的那一行之后（别提前播，那会把「点了但被拒」
  * 演成「成功」）：
  *
  * | key | 调用点 |
@@ -23,6 +26,7 @@ const CLICK_MIN_GAP_MS = 60;
  * | `ui_click` | **所有按钮**：`bindClick(node)`（`UiHelper.createButton` / `createToggle` 自动挂，其余手写按钮各自贴一行） |
  * | `warrior_attack` | `skills/warrior.skill_1000`（只对战士） |
  * | `role_die_man` / `role_die_woman` | `ui/Game.checkRoleDeath`（按 `role.sex` 选一个） |
+ * | `move` | `ui/Game.update`（移动状态驱动，#685：点地面走一步 = 播一声，长按持续移动 = 循环，停下即停） |
  * | `item_drop` | `ui/core/DropManager.spawnResults`（铺到地上）+ `applyPickedFrame`（捡起来） |
  * | `equip_wear` | `ui/core/StorageManager.equipFromBag` |
  * | `money_change` | `ui/core/StorageManager.applyServerRoleUpdate` |
@@ -46,12 +50,16 @@ const CLICK_MIN_GAP_MS = 60;
  *
  * 场景切换（登录 → 选角 → 游戏）会把场景里的节点全销毁，而音效要跨场景响。
  * 所以第一次 `init()` 建一个根节点并 `director.addPersistRootNode()` —— 它是**唯一**在
- * 场景切换中活下来的东西。两个 `AudioSource` 分工：
+ * 场景切换中活下来的东西。三个 `AudioSource` 分工：
  * - `music`：循环音（目前只有登录背景音），一次只播一首，切场景要显式 `stopMusic()`；
+ * - `loop`：**移动脚步音**的循环（#685），与 `music` 分开 —— 移动是游戏内高频起停的
+ *   循环音，跟「一次只播一首、切场景才停」的背景音不是一个生命周期，混在一路会互相顶掉；
  * - `sfx`：一次性音，`playOneShot` 可以同时叠很多个（一堆怪同时死、连续普攻都用它）。
  *
- * **必须两个**：`playOneShot` 不会打断 `clip` 的循环播放，但循环音写在同一路的
- * `clip` 上，一旦那一路被 `play()` 重设就会把背景音顶掉。
+ * **必须三路分开**：`playOneShot` 不会打断 `clip` 的循环播放，但循环音写在同一路的
+ * `clip` 上，一旦那一路被 `play()` 重设就会把背景音顶掉 —— 所以循环音（music / loop）
+ * 与一次性音（sfx）不能共用；而移动脚步音与背景音虽都是循环，起停节奏完全不同
+ * （每走一步都可能起停 vs 一次播放跨整个场景），各占一路才不会互相打断。
  *
  * ## 为什么音量走 `volumeScale` 而不是 `source.volume`
  *
@@ -70,6 +78,8 @@ export default class SoundManager {
   private static node: Node | null = null;
   /** 循环音（背景音）专用的一路 */
   private static music: AudioSource | null = null;
+  /** 移动脚步音循环专用的一路（#685；与 music 分开的理由见类注释「必须三路分开」） */
+  private static loop: AudioSource | null = null;
   /** 一次性音效共用的一路（`playOneShot` 可叠加） */
   private static sfx: AudioSource | null = null;
   /** 已加载的音频（资源路径 → clip）：同一首反复播不该反复 IO */
@@ -78,6 +88,8 @@ export default class SoundManager {
   private static loading = new Map<string, Promise<AudioClip | null>>();
   /** 当前正在循环的 key（同一个 key 不重复起播，否则每次 `start()` 都会从头再来一遍） */
   private static musicKey: string | null = null;
+  /** 移动循环路上正在播的 key（防重复起播，同 `musicKey` 的道理） */
+  private static loopKey: string | null = null;
   /** 拉公开音效配置的进行中请求（登录页可能被重复进入） */
   private static configRequest: Promise<void> | null = null;
   /** 公开接口已经试过一次（失败也不重试：按钮点击音会高频打到这条路上，不能每次点击都发请求） */
@@ -105,6 +117,10 @@ export default class SoundManager {
     this.music.loop = true;
     this.music.playOnAwake = false;
     this.music.volume = 1;
+    this.loop = node.addComponent(AudioSource);
+    this.loop.loop = true;
+    this.loop.playOnAwake = false;
+    this.loop.volume = 1;
     this.sfx = node.addComponent(AudioSource);
     this.sfx.loop = false;
     this.sfx.playOnAwake = false;
@@ -187,6 +203,63 @@ export default class SoundManager {
     this.music.stop();
     // 清掉 clip 引用：常驻节点不会回收，留着等于让这首 6 MB 的曲子常驻内存
     this.music.clip = null;
+  }
+
+  /**
+   * 移动脚步音「起步的一声」（#685，用户口径：左右键点击地面 = 播放一次）
+   *
+   * 为什么不走 `play("move")`：play 的循环分支听配置的 `loop` 字段，而移动音的循环
+   * 由**移动状态**决定（停下就停，见 `startLoop`）——运营把这项的循环开关打开，
+   * 也不该让起步的一声被路由到背景音那一路（会把登录曲顶掉、且永远停不下来）。
+   * 所以这里固定走单次，并带一个最小间隔：按住拖动摇杆经过死区时移动状态可能
+   * 短促抖动，抖一下不该叠出两声。
+   */
+  static async playMove(): Promise<void> {
+    const now = Date.now();
+    const last = this.lastPlayAt.get("move") ?? 0;
+    if (now - last < MOVE_MIN_GAP_MS) return;
+    this.lastPlayAt.set("move", now);
+    if (audioConfigs.size === 0) await this.ensureConfig();
+    const config = audioConfigOf("move");
+    if (!config) return;
+    this.init();
+    if (!this.node || !this.sfx) return;
+    const clip = await this.clipOf(config.filePath);
+    if (!clip) return;
+    this.sfx.playOneShot(clip, Math.min(1, Math.max(0, config.volume / 100)));
+  }
+
+  /**
+   * 起移动循环（#685，用户口径：长按持续移动 = 循环播放）
+   *
+   * 专用 `loop` 路而不是 `play()` 的循环分支：起停节奏完全不同（每走一步都可能起停
+   * vs 背景音一次跨整个场景），分开才不会互相顶掉（理由详见类注释「必须三路分开」）。
+   * 这一路**永远循环**——要不要循环由调用方（Game.update 的移动状态）决定，不听配置的
+   * `loop` 字段；调用方在移动结束时必须配对调 `stopLoop()`。
+   */
+  static async startLoop(key: string): Promise<void> {
+    // 已经在循环同一个 key 就不重来（每帧 tick 都可能调到这里，不做这层判断会不断从头起播）
+    if (this.loopKey === key && this.loop?.playing) return;
+    if (audioConfigs.size === 0) await this.ensureConfig();
+    const config = audioConfigOf(key);
+    if (!config) return;
+    this.init();
+    if (!this.node || !this.loop) return;
+    const clip = await this.clipOf(config.filePath);
+    if (!clip) return;
+    this.loop.clip = clip;
+    this.loop.volume = Math.min(1, Math.max(0, config.volume / 100));
+    this.loop.play();
+    this.loopKey = key;
+  }
+
+  /** 停移动循环（移动结束 / 离开游戏场景时调；幂等） */
+  static stopLoop(): void {
+    this.loopKey = null;
+    if (!this.loop) return;
+    this.loop.stop();
+    // 同 stopMusic：清掉 clip 引用，别让音频在常驻节点上常驻内存
+    this.loop.clip = null;
   }
 
   /**

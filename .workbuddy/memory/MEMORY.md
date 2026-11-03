@@ -123,6 +123,19 @@
   **连 `.meta` 一起改**（uuid 在 meta 上）。改名要能落地到老库 → `onModuleInit` 补完行后
   `deleteOrphans(AUDIO_KEYS)` 清掉清单外的行（安全前提：行只来自 seed，没有新建接口）。
   `sounds/move.wav`（用户 01:31 新放）**没有对应 key，未配**，用途待确认。
+- **#685 收尾：移动脚步音 move（分支 feat/685-move-sound）**：用户确认用途 = 点地面走一步播一声、
+  长按持续移动循环、停下即停。`AUDIO_KEYS` 加 `move`（战斗与角色，出厂 `sounds/move.wav` 音量 65）。
+  客户端 `Game.tickMoveSound` 每帧按**移动状态**驱动（`isManualMoving() || isAutoMoving()`，
+  不跟输入事件走）：起步 `playMove()`（**强制单次**，不走 `play()` —— 运营开「循环」开关时 play()
+  会把它路由到背景音那一路）→ 持续超 `MOVE_LOOP_AFTER_MS`(450ms，脚步音本体长度之后) 接
+  `startLoop("move")` → 停下 `stopLoop()`（起步那一声不掐）；`onDestroy` 必须 stopLoop。
+  `SoundManager` 变**三路 AudioSource**：`music`（一次只播一首）/ `loop`（移动循环，永远循环、
+  调用方起停，不听配置 loop 字段）/ `sfx`（playOneShot 可叠加）。
+  **列表顺序不再靠 rowid**：`ui_click` 改名重播种过一次 rowid 落到表尾 → `listAll()` 显式按
+  `AUDIO_KEYS` 排序（顺序是清单自己的属性，库里历史各机不同）。加 key 的固定顺序：
+  **先播种真实库（临时实例）→ config-export → 复跑 e2e**（空库自举先灌 config-sync.sql 再跑
+  onModuleInit，跳步会把新 key 排到末尾、误判成排序 bug）。e2e 口径随运营数据演进放宽两条：
+  出厂行追账不锁 0（gm001 保存过）；掉落来源不锁全内联（用户把怪 1 指到自建具名表 `elite_1_10`）。
 - open：#669 刷怪区改完即时生效（分域重载）· #670 怪物 AI 打尸体仍放技能 · #8 官网 / #9 包体积 / #12~#19 素材 / #295 阶段三 / #403 帮会战 / #606 地图门槛硬拦。
 - skill 索引：#655 起 `cocos-game-growth-curve` → **`olua-numeric-tuning`**（曲线方法论作废，改成「数值逐条落库 + 掉落配置法」）。
 - 定保持现状：技能 1011 / 快捷键 6 格 / 装备 7 部位（药品档位已由 #643 改为「金创药 5 + 魔法药 3」，不再保持 3 档）。

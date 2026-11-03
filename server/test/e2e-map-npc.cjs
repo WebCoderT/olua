@@ -25,6 +25,11 @@ const path = require("node:path");
 const SERVER_DIR = path.join(__dirname, "..");
 const ENTRY = path.join(SERVER_DIR, "dist", "main.js");
 const ADMIN_CODE = "mapnpc-code";
+// 出厂点位的期望从配置快照取（不锁死数值）：复活点是管理端可拖可清的运营配置，
+// 用户拖过地图 0 的复活点之后，锁 4100/-4736 这种出厂数字只会误红 ——
+// 钉住的是「详情接口返回的就是库里那一行」，坐标本身以 config-sync.sql 为准
+const configSnapshot = require("./lib/config-snapshot.cjs");
+const snapshotMap0 = configSnapshot.index("maps", "mapId")["0"] ?? {};
 
 //#region 断言小工具（与其余几套同一骨架）
 
@@ -182,8 +187,8 @@ async function main() {
 
     const revive = detail.body?.data?.revivePoint ?? null;
     check(Boolean(revive), "0 号图出厂就带复活点");
-    checkEqual(revive?.cx, 4100, "复活点世界坐标 x");
-    checkEqual(revive?.cy, -4736, "复活点世界坐标 y（-Tiled y）");
+    checkEqual(revive?.cx, snapshotMap0.reviveCx, "复活点世界坐标 x（= 快照 maps.reviveCx）");
+    checkEqual(revive?.cy, snapshotMap0.reviveCy, "复活点世界坐标 y（= 快照 maps.reviveCy）");
     checkEqual(revive?.inBounds, true, "复活点在图内");
 
     //#endregion
