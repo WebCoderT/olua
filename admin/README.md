@@ -75,7 +75,7 @@ admin/
 │   │   ├── equipAlign/             对齐工作台的纯逻辑：atlas（plist+轮廓）/ model（几何）/ render（8 宫格）/ assets（素材 fetch）/ saved（服务端读写）
 │   │   └── equipAlignIn/           内观工作台的纯逻辑：model（圆盘 / 手位 / 初值）/ render（单帧五层）/ saved（服务端读写）
 │   ├── data/equip-align.catalog.json  ⚠️ 生成物：装备对齐清单（`tools/gen-equip-align-catalog.cjs` 产出，`audit-equip-align-catalog` 守）
-│   ├── components/                 Layout / Pagination / ConfirmDialog / ResetPasswordDialog / BanDialog / BanStatus / AnnouncementDialog / RoleAttributesCard / sortable / charts / ToastHost / ui
+│   ├── components/                 Layout / Pagination / ConfirmDialog / ResetPasswordDialog / BanDialog / BanStatus / AnnouncementDialog / RoleAttributesCard / ImagePicker / sortable / charts / ToastHost / ui
 │   │   └── map/                    MapCanvas（预览图 + SVG 叠加层，两套坐标同图核对）/ MapDialogs（图层 / 点位 / 刷怪区 / 场上怪物 / 对象组 / 数据来源）
 │   └── store/
 │       ├── session.ts              令牌与管理员的读写（含订阅机制 + hasPermission）
@@ -87,6 +87,8 @@ admin/
 ## 页面
 
 配置类列表页的**第一列是缩略图**：单图资源（装备 / 药品 / 物品 / 怪物 / 技能 / 状态 / 时装 / 商城商品）直接显示图标，称号 / 战魂 / NPC 显示图集动画的**首帧**（组件在 `components/GameImage.tsx`）。**缩略图可点击放大**（灯箱查看，Esc 关闭）。图片来源是客户端素材（dev 由 vite 中间件、prod 由 nginx 反代到 game 容器，同 `/game-resources/` 前缀），字段查三端共用的那份生成物 —— 素材缺失或 id 不在生成物里时显示「无图」占位，不影响列表。
+
+**图标字段可以可视化挑**：药品编辑弹窗的「图标」从手填路径改成「预览 + 路径 + **选择图片**」——弹窗里按目录分组铺开客户端素材的缩略图，点一张即选中（组件在 `components/ImagePicker.tsx`）。图片清单有两个来源、同一个 JSON 形状：**开发**用 vite 中间件的 `GET /game-resources/__list?dir=item` 直接扫 `client/assets/resources`（素材一放进来就能选，零额外步骤）；**生产** nginx 只是静态反代、没有目录列表能力，读落盘清单 `resources/image-manifest.json`（`make image-manifest` 生成，随素材包分发）。拿不到清单时弹窗里给的是**可执行的提示**（素材目录在哪 / 该跑哪条命令），不是一句「加载失败」。
 
 | 页面 | 路由 | 需要的权限点 | 能做什么 |
 | --- | --- | --- | --- |

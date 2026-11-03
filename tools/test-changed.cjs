@@ -176,6 +176,11 @@ function buildPlan(files) {
     // ---------- 管理端 ----------
     if (rel.startsWith("admin/src/") || rel === "admin/package.json") {
       plan.adminTsc = true;
+      // 管理端源码还要过这两条静态审计：请求出口（fetch 必须走 api/http.ts，素材读取走白名单）
+      // 与界面一致性（Modal / PageHeader / Card / Field）。只跑 tsc 会漏 —— #641 本地全绿、
+      // CI 才红在 audit-api-hardcode，白跑一趟 CI。
+      plan.audits.add("audit-api-hardcode");
+      plan.audits.add("audit-admin-ui");
       continue;
     }
 

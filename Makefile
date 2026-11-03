@@ -65,7 +65,7 @@ CREATOR ?= CocosCreator
         client-clean-frames client-clean-frames-apply client-open client-gen-declarations \
         server-dev server-build server-start server-e2e server-e2e-roles server-e2e-guard \
         server-e2e-mail server-e2e-account-email server-e2e-realtime server-e2e-combat server-e2e-world server-e2e-dual server-e2e-game-config server-e2e-backup server-e2e-zone server-e2e-guild server-e2e-social server-e2e-chat server-e2e-quest server-e2e-sell server-e2e-bag server-e2e-blocks server-e2e-party server-e2e-rank server-e2e-achievement server-e2e-game-mail server-e2e-equip-align server-e2e-equip-in-align server-e2e-map server-verify db-backup db-restore gen-api \
-        resources-manifest resources-verify resources-pack resources-upload resources-download \
+        resources-manifest resources-verify resources-pack resources-upload resources-download image-manifest \
         admin-dev admin-build admin-typecheck admin-preview \
         clean
 
@@ -491,6 +491,9 @@ ci: ci-static e2e-all ## 门禁全量（本机串行版 = CI 跑过的全部内�
 
 RES_PY ?= python3
 RES_VERSION ?=
+
+image-manifest: ## 生成客户端素材的图片清单（管理端图标选择器在生产环境的数据源）
+	$(NODE) tools/gen-image-manifest.cjs
 
 resources-manifest: ## 生成/更新 resources.manifest.json：make resources-manifest VERSION=2026-10-25-1
 	@test -n "$(RES_VERSION)" || { echo "用法：make resources-manifest VERSION=<版本号>"; exit 1; }
