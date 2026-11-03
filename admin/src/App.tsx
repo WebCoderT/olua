@@ -28,6 +28,7 @@ import { MonstersPage } from "./pages/MonstersPage";
 import { NpcsPage } from "./pages/NpcsPage";
 import { MapsPage } from "./pages/MapsPage";
 import { UiEffectsPage } from "./pages/UiEffectsPage";
+import { AudioSettingsPage } from "./pages/AudioSettingsPage";
 import { SkillsPage } from "./pages/SkillsPage";
 import { StatusesPage } from "./pages/StatusesPage";
 import { QuestsPage } from "./pages/QuestsPage";
@@ -353,6 +354,14 @@ export function App() {
             element={
               <RequirePermission permission={PERMISSION.GAME_CONFIG_READ}>
                 <UiEffectsPage />
+              </RequirePermission>
+            }
+          />
+          <Route
+            path="audio"
+            element={
+              <RequirePermission permission={PERMISSION.GAME_CONFIG_READ}>
+                <AudioSettingsPage />
               </RequirePermission>
             }
           />
