@@ -101,6 +101,8 @@ await authApi.login({ username, password }, { silent: true }); // 表单自己�
 | `MallPricingPage` | **商城定价**（#251）：统一价卡片（单行改价）+ 商品定价列表（部位/关键字/定价状态筛选，商品清单来自 `equipment_variants` 555 行）；未定价行高亮「走统一价」；特殊价 PUT upsert /「回统一价」DELETE —— **全后台唯一允许增删行的定价数据** |
 | `FashionsPage` | **时装配置**（#257）：关键字 / 获得渠道筛选 + 分页；编辑弹窗开放名称 / 描述 / 售卖价 / 渠道下拉 / 八项属性（maxHp/hpRecover + `RANGE_FIELDS` 六区间，复用 title.dto 的 ConfigAttributesDto 形状）；icon/inRes/outRes 资源路径用 `IconField` 现挑（#641）；渠道中文名按时装语境另配（值域仍复用 ACQUIRE_CHANNEL） |
 | `DropConfigPage` | **掉落模版仓库**（#254 / #661 / #663）：只有具名掉落表卡片组（新建 / 编辑 / 删除，picks 捞取次数 + entries 条目编辑器；「批量添加」走 `EntityPicker multiple` 多选）。条目池是**固定列宽栅格**（`ENTRY_GRID`：序 / 物品 / 权重 / 概率 / 数量 / 删，列头与行共用同一串 `grid-cols-[…]`）；**概率那一格按百分比填**（`EntryDraft.chancePct` 0~100，落库 ÷100），留空 = 必掉。具名表被引用中的行拒删。**每怪掉落不在这页** —— 怪物列表里每只怪自己一行「掉落」（`MonsterDropDialog`），两处列同一份数据只会互相打架。编辑器与弹窗是共用件（`components/drop/DropEditors.tsx` + `components/drop/MonsterDropDialog.tsx`）—— 别再在页面里各写一套三选一 |
+| `UiEffectsPage` | **特效表现参数**（#594 / #634，`game-config:read/write`）：一族一个页签（升级特效 / 掉落光效），左栏预览右栏参数，改一个数左边立刻重画（未保存也生效）。图集路径是两端约定，所以没有新建 / 删除 |
+| `AudioSettingsPage` | **音效配置**（#680）：一个音效项一张卡 —— 文件路径（`sounds/xxx.wav`，**只能英文名**）/ 音量 / 循环 / 启用 + **试听**（按表单当前值播）。路径**入库**（与特效的差别），服务端不查文件存在性，验证靠试听；本轮只落库、不下发快照 —— 见「五点十五」 |
 | `MailsPage` | 邮件投递记录（`mail:read` 看记录、`mail:write` 发信，编辑走 `EmailDialog`） |
 | `AdminsPage` | 管理员列表与改角色 / 启停 / **重置密码**（自己那一行置灰）/ 删除（`admin:manage`） |
 | `AuditPage` | **操作日志**：关键字（操作人 / 动作 / 目标 id / 路径）+ 动作下拉（清单从接口拉）+ 目标类型 + 结果 + 时间范围 + 目标 id → 分页表格，行可展开看请求体（`audit:read`） |
@@ -417,6 +419,34 @@ await authApi.login({ username, password }, { silent: true }); // 表单自己�
    没有天然唯一键，可能有两个同位置同尺寸的盒子）+ `tools/strip-map-objects.cjs`（删 TMX 的
    `<objectgroup>`，支持 `--dry` / `--dir`）。顺序错了就是「搬出 0 行」：先迁点位 → 再迁碰撞 →
    再删对象组 → 再 `import-map-resources` 刷 content → 最后 `config-export`。
+
+## 五点十五、音效配置：路径入库，靠「试听」验证（#680）
+
+音效页（`/audio`，`AudioSettingsPage`）与特效页（`/ui-effects`）长得像，但有一处**根本差别**，
+这一节记的就是它：
+
+1. **路径入库，不是两端约定**。特效图集路径由 key 推导（`effect/<key>/<key>.plist`），换美术必须
+   重打包，所以那张表里没有路径列；音效的文件是**运营挑的**（`audio_settings.file_path` =
+   `sounds/xxx.wav`，相对 `client/assets/resources/`，**带扩展名**），换一首登录曲只要新文件已在
+   资源包里。带扩展名的理由：与文件系统一一对应，目录列表 / 试听地址可以直接拼；客户端对接时
+   去掉扩展名再 `resources.load(path, AudioClip)`。
+2. **文件名只允许英文**（用户 2026-11-04 定）：字母 / 数字 / 下划线 / 短横线 + `sounds/` 前缀 +
+   扩展名白名单（`.wav .mp3 .ogg .m4a`）。资源目录里临时放的中文名要先改名 —— 所以**选择器要把
+   不合规的文件名挡在列表外**，别让人选完保存才吃 400（页面会提示「另有 N 个文件名不是英文」）。
+   空串 = 未配置（合法状态，这一项不响），不是错误。
+3. **服务端不检查文件是否存在**。资源包不在服务端（镜像里没有 `client/assets/resources`），强行查
+   只会掩盖「本地有、线上没有」。所以**试听按钮是这个页面的核心**：能播 = 路径对、MIME 对、文件在。
+   试听按表单当前值播（音量 / 循环都取未保存的值），与「保存后会是什么样」保持一致。
+4. **本轮不下发配置快照**（用户定「先配置、后对接」）：`AudioSettingService` 已导出、`list()` 已备好，
+   但 `ClientConfigService` 里**没有** audio 段，e2e 里有一条断言钉着「快照里没有 audio」——
+   对接客户端时那条要一起改。
+5. **素材清单两个来源同形状**（与图片选择器一个道理）：生产 `resources/audio-manifest.json`
+   （`make image-manifest` 一并生成，带扩展名）、开发 `/game-resources/__list?dir=sounds&audio=1`
+   （vite 中间件扫盘）。都拿不到就降级成「手填 + 试听」，不阻塞配置。
+6. **静态素材读取要进审计白名单**：`fetch('/game-resources/...')` 直接写在页面里会被
+   `audit-api-hardcode` 判红（管理端请求只许从 `api/http.ts` 发）。做法是像 `equipAlign/assets.ts`
+   那样单独一个文件（`pages/audioSettings/assets.ts`）并在审计的 `adminAssets` 里登记，
+   页面里连 `fetch` 都不出现。**提示文案里也别写 `http://localhost:8080`** —— 那同样算硬编码地址。
 
 ## 六、必踩的坑
 
