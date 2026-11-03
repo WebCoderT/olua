@@ -37,17 +37,14 @@ import {
   DRUGS,
   EQUIPMENT_ATTRIBUTES,
   EQUIPMENT_BASES,
-  EQUIPMENT_PREFIX_RATES,
-  EQUIPMENT_RECYCLE_PRICES,
-  EQUIPMENT_SUFFIX_RATES,
   ITEM_BASES,
   SELL_PRICES,
   SKILLS,
 } from "./game-data.generated";
+import { ROLE_LEVEL_ATTRIBUTES } from "./growth-seed";
 import { RANK_LEVEL_ATTRIBUTES } from "./rank-seed";
 import { SOUL_LEVEL_ATTRIBUTES } from "./soul-seed";
 import { TITLE_LEVEL_ATTRIBUTES } from "./title-seed";
-import { EquipmentCurveSegment, sampleEquipmentCurve } from "./equipment-seed";
 
 /** 生成物里「一份属性包」的形状：单值 + 六项区间元组 */
 export type AttributeBundle = Record<string, unknown>;
@@ -75,10 +72,32 @@ export interface AttributeColumns {
   taoist_defense_max: number;
 }
 
-/** 装备基础件的一行（id + 等级 + 八项属性；部位 / 名称不参与结算，等级决定回收价） */
-export interface EquipmentBaseOverride extends AttributeColumns {
+/**
+ * 装备变体的一行（`equipment_variants` 表；#655）
+ *
+ * 以前这里是「基础件一行 + 倍率展开 15 个」，现在是 555 行逐一配置 ——
+ * 属性、卖价、穿戴等级都有自己的列，运行时不再乘任何倍率。
+ */
+export interface EquipmentVariantOverride extends AttributeColumns {
   id: string;
+  base_id: string;
+  prefix: number;
+  suffix: number;
+  label: string;
   level: number;
+  sell_price: number;
+}
+
+/**
+ * 角色等级的一行（`role_levels` 表；#655）
+ *
+ * 以前是「曲线采样 + 派生」，现在 60 行都是配置值。`max_mp` 不在 `AttributeColumns` 里
+ * （那套列只给装备 / 称号 / 战魂 / 军衔共用），所以这里单独补上。
+ */
+export interface RoleLevelOverride extends AttributeColumns {
+  level: number;
+  exp: number;
+  max_mp: number;
 }
 
 /** 物品 / 材料的一行（`items` 表：叠加上限与卖价参与结算） */
@@ -136,10 +155,15 @@ export interface DrugOverride {
 
 //#region 存储（null = 没有运营改动，读取方回落生成物）
 
-let equipmentVariants: Map<string, AttributeBundle> | null = null;
-let equipmentPrices: Map<string, number> | null = null;
-/** 变体 id → 穿戴等级门槛（跟着基础件走；#556 起穿戴校验要读它） */
-let equipmentLevels: Map<string, number> | null = null;
+/**
+ * 装备变体：id → { 属性包, 穿戴等级, 回收价 }（#655 起 555 行逐一配置）
+ *
+ * 三个值同进同出：它们在一行里，分开存三个 Map 只会让「装了属性忘了装价」这种
+ * 半截状态成为可能。`null` = 表里没有行 → 回落生成物（出厂值兜底，见 getter）。
+ */
+let equipmentVariantRows: Map<string, { bundle: AttributeBundle; level: number; price: number }> | null = null;
+/** 角色等级：等级 → 属性包（#655 起 60 行逐一配置） */
+let roleLevelRows: Map<number, AttributeBundle> | null = null;
 let titleBundles: Map<number, AttributeBundle> | null = null;
 let soulBundles: Map<number, AttributeBundle> | null = null;
 let rankBundles: Map<number, AttributeBundle> | null = null;
@@ -175,63 +199,47 @@ export function attributeBundleOf(row: AttributeColumns): AttributeBundle {
 }
 
 /**
- * 装备规则覆盖（#603 第九域）：前后缀倍率 + 回收价曲线
+ * 装进角色等级的当前值（`role_levels` 表；传空数组 = 清空回落生成物）
  *
- * 三者（倍率、文案、曲线）在 `equipment_meta` 表里是一行，但结算只用得到倍率与曲线；
- * 文案的消费方是生成物 `EQUIPMENT_DISPLAY_NAMES`（编译期拼接，改文案不影响结算）。
- * `null` = 库里没有规则行 → 回落生成物的出厂值。
+ * #655：曲线（`growth_segments`）不再参与运行时，60 行是配置值。
+ * `bundleOfRoleLevel` 顺手把 `maxMp` 塞进属性包 —— 下游 `role-attributes` 就按
+ * 「等级包 + 装备包 + 三条成长线包」统一求和，不用给 maxMp 单开一条路径。
  */
-let equipmentRules: { prefixRates: number[]; suffixRates: number[]; recycleCurve: EquipmentCurveSegment[] } | null = null;
-
-/** 装进装备规则的当前值（管理端改完倍率/曲线后由 `RuntimeConfigService` 调；传 null 清空） */
-export function applyEquipmentRulesOverrides(
-  rules: { prefixRates: number[]; suffixRates: number[]; recycleCurve: EquipmentCurveSegment[] } | null,
-): void {
-  equipmentRules = rules && rules.prefixRates.length > 0 && rules.suffixRates.length > 0 ? rules : null;
+export function applyRoleLevels(rows: RoleLevelOverride[]): void {
+  if (!rows.length) {
+    roleLevelRows = null;
+    return;
+  }
+  const map = new Map<number, AttributeBundle>();
+  for (const row of rows) {
+    map.set(numberOr(row.level), { ...attributeBundleOf(row), maxMp: numberOr(row.max_mp) });
+  }
+  roleLevelRows = map;
 }
 
 /**
- * 装进装备基础件的当前值，并按前后缀倍率**重算全部变体**
+ * 装进装备变体的当前值（`equipment_variants` 表；555 行）
  *
- * 为什么按基础件重算而不是逐变体下发：库里只有基础件（37 行，运营改的就是它），
- * 555 个变体是「基础件 × 5 前缀 × 3 后缀」展开的结果，展开规则属代码不属运营数据。
- * 重算口径与客户端 `buildEquipmentMap` 完全一致（`Math.round(基础值 × 倍率)`），
- * 倍率取生成物的 `EQUIPMENT_PREFIX_RATES` / `EQUIPMENT_SUFFIX_RATES` —— 同一组数字。
+ * 与旧的 `applyEquipmentOverrides` 的本质区别：**不再乘倍率**。库里每一行都是
+ * 「某前缀某后缀那件装备」的最终属性与价签，这里只做形状转换。
  *
- * 变体 id 从**出厂表的键**解析（`cloth_1_p3s2` → 基础件 `cloth_1`、前缀 3、后缀 2），
- * 不给运维新造 id 的机会：基础件之外的 id 一律不认。
- *
- * 顺带把**回收价**一起算好（#545）：价 = 等级对应的基础价 × 同一组倍率，取整口径与客户端
- * `applyEquipmentRows` 里的 `Math.round(equipmentRecyclePrice(level) * rate)` 逐值相同。
- * 之所以价签也在这里算：运营改**等级**就改了价（等级既是穿戴门槛也是定价依据），
- * 而客户端的价格读的是自己即时算的曲线值，服务端若还按出厂价签付钱，就是「显示一个价、
- * 到账另一个价」。
+ * 传空数组 = 清空覆盖 → 读取方回落生成物（出厂值兜底，e2e 用临时库时不会因为
+ * 没跑迁移就属性全 0；生产库启动时由 `RuntimeConfigService` 装上 555 行）。
  */
-export function applyEquipmentOverrides(rows: EquipmentBaseOverride[]): void {
+export function applyEquipmentVariants(rows: EquipmentVariantOverride[]): void {
   if (!rows.length) {
-    equipmentVariants = null;
-    equipmentPrices = null;
-    equipmentLevels = null;
+    equipmentVariantRows = null;
     return;
   }
-  const bases = new Map<string, { bundle: AttributeBundle; level: number }>();
-  for (const row of rows) bases.set(row.id, { bundle: attributeBundleOf(row), level: numberOr(row.level) });
-
-  const variants = new Map<string, AttributeBundle>();
-  const prices = new Map<string, number>();
-  const levels = new Map<string, number>();
-  for (const id of Object.keys(EQUIPMENT_ATTRIBUTES)) {
-    const parsed = parseEquipmentVariantId(id);
-    const base = parsed ? bases.get(parsed.baseKey) : undefined;
-    if (!parsed || !base) continue;
-    const rate = rateOf(parsed.prefix, parsed.suffix);
-    variants.set(id, scaleBundle(base.bundle, rate));
-    prices.set(id, Math.round(recycleBasePriceOf(base.level) * rate));
-    levels.set(id, base.level);
+  const map = new Map<string, { bundle: AttributeBundle; level: number; price: number }>();
+  for (const row of rows) {
+    map.set(row.id, {
+      bundle: attributeBundleOf(row),
+      level: numberOr(row.level),
+      price: numberOr(row.sell_price),
+    });
   }
-  equipmentVariants = variants;
-  equipmentPrices = prices;
-  equipmentLevels = levels;
+  equipmentVariantRows = map;
 }
 
 /** 装进物品 / 材料的当前值（`items` 表：叠加上限、卖价；形状与生成物 `ITEM_BASES` 对齐） */
@@ -346,11 +354,8 @@ export function applyCombatWeightsOverrides(weights: Record<string, number> | nu
 
 /** 清空全部覆盖（e2e 之间隔离用；生产只在进程启动时天然为空） */
 export function resetRuntimeOverrides(): void {
-  // 规则要先于装备清：装备覆盖里的价格是按当时那套倍率/曲线算好的，清掉任一都要重装
-  equipmentRules = null;
-  equipmentVariants = null;
-  equipmentPrices = null;
-  equipmentLevels = null;
+  equipmentVariantRows = null;
+  roleLevelRows = null;
   titleBundles = null;
   soulBundles = null;
   rankBundles = null;
@@ -376,22 +381,39 @@ export function combatWeightsOf(): Record<string, number> {
   return combatWeights ?? (COMBAT_WEIGHTS as Record<string, number>);
 }
 
+/**
+ * 某等级的角色裸属性；表里没有该级时回落生成物（出厂值兜底）
+ *
+ * #655：`role_levels` 是权威，60 行都由管理端逐行维护。生成物只兜两种情况：
+ * 迁移还没跑（空库启动），以及等级超出表范围（运营调低了 roleMaxLevel 但存档里有老角色）。
+ */
+export function roleLevelAttributesOf(level: number | undefined): AttributeBundle | null {
+  const value = Number(level);
+  if (!Number.isFinite(value) || value < 1) return null;
+  const levelValue = Math.trunc(value);
+  const fromTable = roleLevelRows?.get(levelValue);
+  if (fromTable) return fromTable;
+  const bundle = (ROLE_LEVEL_ATTRIBUTES as Record<string, AttributeBundle>)[String(levelValue)];
+  return bundle && typeof bundle === "object" ? bundle : null;
+}
+
 /** 某件装备（含变体）的当前属性；查不到返回 null（调用方按"没穿"处理并记账） */
 export function equipmentAttributesOf(id: string): AttributeBundle | null {
-  return equipmentVariants?.get(id) ?? (EQUIPMENT_ATTRIBUTES as Record<string, AttributeBundle>)[id] ?? null;
+  return (
+    equipmentVariantRows?.get(id)?.bundle ??
+    (EQUIPMENT_ATTRIBUTES as Record<string, AttributeBundle>)[id] ??
+    null
+  );
 }
 
 /**
  * 某件装备（含变体）的**穿戴等级门槛**；不是装备返回 null
  *
- * 等级既是门槛，也是回收价的依据。运营在管理端把一件衣服从 16 级改到 22 级，
- * 客户端快照会跟着变（`apply-snapshot` 原地覆写），服务端的门槛若还读出厂的 16，
- * 就是「客户端不让穿、接口放过去」—— 所以这里与属性 / 价签走同一层覆盖。
- *
- * 变体（`cloth_1_p3s2`）没有自己的等级，跟着基础件走（与客户端 `buildEquipmentMap` 一致）。
+ * #655：变体行自带 `level`，运营改某一件的等级就只影响那一件（旧口径是
+ * 「变体跟基础件走」，改基础件连带 15 个变体一起变）。表里没有才回落到基础件。
  */
 export function equipmentLevelOf(id: string): number | null {
-  const overridden = equipmentLevels?.get(id);
+  const overridden = equipmentVariantRows?.get(id)?.level;
   if (overridden !== undefined) return overridden;
   const parsed = parseEquipmentVariantId(id);
   if (!parsed) return null;
@@ -433,15 +455,14 @@ export function itemBaseOf(id: string): AttributeBundle | null {
  * 某个物品的**出售单价**（货币 = 绑定元宝/个）；`null` = 不可卖
  *
  * 卖价的三条来源，按「谁有裁决权」排序：
- * 1. 装备（含变体）→ 回收价 = 等级基础价 × 前后缀倍率（覆盖层里已算好，见
- *    `applyEquipmentOverrides`）。**不看 `sell_price` 列** —— 客户端 `applyEquipmentRows`
- *    也是按等级曲线重算的，两边必须同一口径，否则「背包显示 400、到账 100」；
+ * 1. 装备（含变体）→ `equipment_variants.sell_price`（#655 起逐行配置；以前是
+ *    「等级基础价 × 前后缀倍率」现算，现在这一行直接就是到账价）；
  * 2. 药品 / 材料 → 各自表里的 `sell_price`（运营在管理端改的就是它）；
  * 3. 都没有 → 回落生成物 `SELL_PRICES`（出厂价签）；仍然没有 = `null` = 不可卖
  *    （任务物 / 关键道具就靠这条拦住，`SELL_NOT_SELLABLE`）。
  */
 export function sellPriceOf(id: string): number | null {
-  const equipment = equipmentPrices?.get(id);
+  const equipment = equipmentVariantRows?.get(id)?.price;
   if (equipment !== undefined) return equipment;
   const drug = drugRows?.get(id);
   if (drug) return numberOr(drug.sellPrice);
@@ -474,56 +495,6 @@ function parseEquipmentVariantId(id: string): { baseKey: string; prefix: number;
   const suffix = Number(match[3]);
   if (!baseKey || !Number.isFinite(prefix) || !Number.isFinite(suffix)) return null;
   return { baseKey, prefix, suffix };
-}
-
-/** 前后缀倍率（越界按 1 处理 —— 与客户端 `equipmentPrefixRates.length > p ? ... : NORMAL` 同口径） */
-function rateOf(prefix: number, suffix: number): number {
-  // #603 第九域：倍率可在管理端改（`equipment_meta`），缺省才是生成物的出厂值
-  const prefixRates = equipmentRules?.prefixRates ?? EQUIPMENT_PREFIX_RATES;
-  const suffixRates = equipmentRules?.suffixRates ?? EQUIPMENT_SUFFIX_RATES;
-  const prefixRate = prefix < prefixRates.length ? numberOr(prefixRates[prefix]) : 1;
-  const suffixRate = suffix < suffixRates.length ? numberOr(suffixRates[suffix]) : 1;
-  return prefixRate * suffixRate;
-}
-
-/**
- * 某等级装备的回收基础价（普通·人级，含前后缀倍率之前）
- *
- * 两条来源：
- * - **库里有规则行**（#603 第九域起，运营可改）→ 用 `equipment_meta.recycle_curve` 现算，
- *   算术是 `equipment-seed.sampleEquipmentCurve`，与客户端同一段；
- * - 否则→ 生成物里的**采样值**（下标 = 等级 - 1），两端读同一组数字。
- *
- * 等级越界按端点夹紧（运营把等级改成 0 / 999 时不至于让价格变成 NaN 或 0：
- * 宁可给端点价，也不要「卖掉却没给钱」）。曲线分支的夹紧口径与采样表逐值一致
- * （采样表就是「1..roleMaxLevel 的曲线值」，两端取端点即等价）。
- */
-function recycleBasePriceOf(level: number): number {
-  if (equipmentRules) {
-    const curve = equipmentRules.recycleCurve;
-    if (!curve.length) return 0;
-    const maxLevel = curve[curve.length - 1].to;
-    const clamped = Math.min(Math.max(Math.trunc(level) || 1, 1), maxLevel);
-    return Math.max(0, Math.round(sampleEquipmentCurve(curve, clamped)));
-  }
-  if (!EQUIPMENT_RECYCLE_PRICES.length) return 0;
-  const index = Math.trunc(level) - 1;
-  if (!Number.isFinite(index) || index < 0) return numberOr(EQUIPMENT_RECYCLE_PRICES[0]);
-  if (index >= EQUIPMENT_RECYCLE_PRICES.length) return numberOr(EQUIPMENT_RECYCLE_PRICES[EQUIPMENT_RECYCLE_PRICES.length - 1]);
-  return numberOr(EQUIPMENT_RECYCLE_PRICES[index]);
-}
-
-/** 按倍率缩放一份属性包（单值逐项乘、区间两端各乘，统一 Math.round） */
-function scaleBundle(bundle: AttributeBundle, rate: number): AttributeBundle {
-  const scaled: AttributeBundle = {};
-  for (const [key, value] of Object.entries(bundle)) {
-    if (Array.isArray(value)) {
-      scaled[key] = value.map((item) => Math.round(Number(item) * rate));
-      continue;
-    }
-    scaled[key] = typeof value === "number" ? Math.round(value * rate) : value;
-  }
-  return scaled;
 }
 
 function bundleMapOf(rows: LevelOverride[]): Map<number, AttributeBundle> {

@@ -1555,7 +1555,27 @@ async function main() {
     checkEqual(snap.titles?.length, titleSeed.TITLE_SEEDS.length, "快照称号行数 = 配置表");
     checkEqual(snap.souls?.length, soulSeed.SOUL_SEEDS.length, "快照战魂行数 = 配置表");
     checkEqual(snap.ranks?.length, rankSeed.RANK_SEEDS.length, "快照军衔行数 = 配置表（100 阶）");
-    checkEqual(snap.equipments?.length, Object.keys(shared.EQUIPMENT_BASES).length, "快照装备基础件行数 = 生成物");
+    // #655：快照发的是 555 个**变体**（37 基础件 × 5 前缀 × 3 后缀），每行都是最终数值，
+    // 客户端不再按倍率展开 —— 所以这里对的是「变体总数」，不是基础件数
+    const expectedVariants =
+      Object.keys(shared.EQUIPMENT_BASES).length *
+      shared.EQUIPMENT_PREFIX_RATES.length *
+      shared.EQUIPMENT_SUFFIX_RATES.length;
+    checkEqual(snap.equipments?.length, expectedVariants, "快照装备 = 全部变体（37 × 5 × 3 = 555）");
+    {
+      // 变体是独立行而不是现算 —— 抽查最强档，确认「迁移/seed 的展开口径」与倍率一致，
+      // 否则「管理端改了一件变体」和「客户端看到的数值」会从这里开始分叉
+      const baseRow = snap.equipments?.find((item) => item.id === "cloth_1") ?? {};
+      const topRow = snap.equipments?.find((item) => item.id === "cloth_1_p4s2") ?? {};
+      const rate = shared.EQUIPMENT_PREFIX_RATES[4] * shared.EQUIPMENT_SUFFIX_RATES[2];
+      checkEqual(
+        topRow?.attributes?.maxHp,
+        Math.round((baseRow.attributes?.maxHp ?? 0) * rate),
+        "变体属性 = 基础件 × 前后缀倍率（展开口径与旧版一致）",
+      );
+      checkEqual(topRow?.prefix, 4, "变体行带前缀序号（客户端按它取品质文案与颜色）");
+      checkEqual(topRow?.suffix, 2, "变体行带后缀序号");
+    }
     {
       // #603 第九域：客户端 `configs/equipments` 已经没有装备数据 —— 显示字段全在这段里，缺字段 = 装备整表是空的
       const row = snap.equipments?.find((item) => item.id === "cloth_1") ?? {};

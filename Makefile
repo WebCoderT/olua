@@ -64,7 +64,7 @@ CREATOR ?= CocosCreator
         client-check client-test client-test-one client-gen-monster client-gen-drops \
         client-clean-frames client-clean-frames-apply client-open client-gen-declarations \
         server-dev server-build server-start server-e2e server-e2e-roles server-e2e-guard \
-        server-e2e-mail server-e2e-account-email server-e2e-realtime server-e2e-combat server-e2e-world server-e2e-dual server-e2e-game-config server-e2e-backup server-e2e-zone server-e2e-guild server-e2e-social server-e2e-chat server-e2e-quest server-e2e-sell server-e2e-bag server-e2e-blocks server-e2e-party server-e2e-rank server-e2e-achievement server-e2e-game-mail server-e2e-equip-align server-e2e-equip-in-align server-e2e-map server-verify db-backup db-restore config-export config-import config-check gen-api \
+        server-e2e-mail server-e2e-account-email server-e2e-realtime server-e2e-combat server-e2e-world server-e2e-dual server-e2e-game-config server-e2e-backup server-e2e-zone server-e2e-guild server-e2e-social server-e2e-chat server-e2e-quest server-e2e-sell server-e2e-bag server-e2e-blocks server-e2e-party server-e2e-rank server-e2e-achievement server-e2e-game-mail server-e2e-equip-align server-e2e-equip-in-align server-e2e-map server-verify db-backup db-restore config-export config-import config-check data-migrate gen-api \
         resources-manifest resources-verify resources-pack resources-upload resources-download image-manifest \
         admin-dev admin-build admin-typecheck admin-preview \
         clean
@@ -359,6 +359,9 @@ config-import: ## 把 config-sync.sql 灌进当前库（整表替换；账号与
 
 config-check: ## 检查 config-sync.sql 是否落后于当前库（落后退出码 1）
 	@cd server && $(NPM) run config:check
+
+data-migrate: ## 把曲线派生数据一次性展开成表行（#655：60 级属性 + 555 装备变体；跑一次就够）
+	@cd server && $(NPM) run data:migrate
 
 gen-api: ## 重新生成接口契约（openapi.json + 客户端与管理端生成物）
 	@echo "==> swagger:emit + gen-api"

@@ -9,7 +9,8 @@ import {
   GrowthSegmentListOptions,
   LevelExpListOptions,
 } from "../../database/repositories/growth.repository";
-import { GrowthScalarRow, GrowthSegmentRow } from "../../database/rows";
+import { RoleLevelRepository } from "../../database/repositories/role-level.repository";
+import { GrowthScalarRow, GrowthSegmentRow, RoleLevelRow } from "../../database/rows";
 import {
   GROWTH_CURVES,
   GROWTH_SCALARS,
@@ -22,10 +23,14 @@ import {
   GrowthSegmentQueryDto,
   LevelExpDto,
   LevelExpQueryDto,
+  RoleLevelDto,
+  RoleLevelQueryDto,
   UpdateGrowthScalarDto,
   UpdateGrowthSegmentDto,
   UpdateLevelExpDto,
+  UpdateRoleLevelDto,
 } from "./dto/growth.dto";
+import { RuntimeConfigService } from "./runtime-config.service";
 
 /** 曲线表默认每页条数：曲线行数都不大，默认一页装下全量 */
 const DEFAULT_PAGE_SIZE = 100;
@@ -45,19 +50,86 @@ const DEFAULT_PAGE_SIZE = 100;
  */
 @Injectable()
 export class GrowthConfigService implements OnModuleInit {
-  constructor(private readonly growth: GrowthRepository) {}
+  constructor(
+    private readonly growth: GrowthRepository,
+    private readonly roleLevels: RoleLevelRepository,
+    private readonly runtime: RuntimeConfigService,
+  ) {}
 
-  /** 启动时把客户端配置 seed 进库（幂等；已存在的行原样保留） */
+  /** 启动时把出厂值 seed 进库（幂等；已存在的行原样保留） */
   onModuleInit() {
     this.seedLevelExps();
+    this.seedRoleLevels();
     this.seedSegments();
     this.seedScalars();
   }
 
+  // —— 角色等级（#655：曲线展开后的最终值，运行时与快照的唯一来源） ——
+
+  /** 全量行（快照 `levels` 段用；60 行，量表为空时返回空数组由调用方兜底） */
+  listRoleLevelRows(): RoleLevelRow[] {
+    return this.roleLevels.listAll();
+  }
+
+  listRoleLevels(query: RoleLevelQueryDto): PageResult<RoleLevelDto> {
+    const options = {
+      page: query.page ?? 1,
+      size: query.size ?? DEFAULT_PAGE_SIZE,
+      keyword: query.keyword,
+      sort: query.sort,
+      order: query.order,
+    };
+    const list = this.roleLevels.list(options).map(RoleLevelDto.from);
+    return { list, total: this.roleLevels.count(options), page: options.page, size: options.size };
+  }
+
+  /**
+   * 改一个等级的数值（部分更新）
+   *
+   * 写完立刻重装运行时覆盖层：`role-attributes` 读的是内存里的 `role_levels` 快照，
+   * 不刷新就是「管理端保存了、服务端还算老值」。区间两端的校验放在 service 而不是 DTO：
+   * 「下限不能大于上限」要拿合并后的值判断，单字段 DTO 看不到另一半。
+   */
+  updateRoleLevel(level: number, dto: UpdateRoleLevelDto): RoleLevelDto {
+    const existing = this.roleLevels.findByLevel(level);
+    if (!existing) throw BizException.notFound(BizCode.LEVEL_EXP_NOT_FOUND, `等级 ${level} 的角色属性不存在`);
+    const next: RoleLevelRow = {
+      ...existing,
+      exp: dto.exp ?? existing.exp,
+      max_hp: dto.maxHp ?? existing.max_hp,
+      max_mp: dto.maxMp ?? existing.max_mp,
+      hp_recover: dto.hpRecover ?? existing.hp_recover,
+      physical_attack_min: dto.physicalAttackMin ?? existing.physical_attack_min,
+      physical_attack_max: dto.physicalAttackMax ?? existing.physical_attack_max,
+      magic_attack_min: dto.magicAttackMin ?? existing.magic_attack_min,
+      magic_attack_max: dto.magicAttackMax ?? existing.magic_attack_max,
+      taoist_attack_min: dto.taoistAttackMin ?? existing.taoist_attack_min,
+      taoist_attack_max: dto.taoistAttackMax ?? existing.taoist_attack_max,
+      physical_defense_min: dto.physicalDefenseMin ?? existing.physical_defense_min,
+      physical_defense_max: dto.physicalDefenseMax ?? existing.physical_defense_max,
+      magic_defense_min: dto.magicDefenseMin ?? existing.magic_defense_min,
+      magic_defense_max: dto.magicDefenseMax ?? existing.magic_defense_max,
+      taoist_defense_min: dto.taoistDefenseMin ?? existing.taoist_defense_min,
+      taoist_defense_max: dto.taoistDefenseMax ?? existing.taoist_defense_max,
+      updated_at: Date.now(),
+    };
+    assertRangeOrder("physicalAttack", next.physical_attack_min, next.physical_attack_max);
+    assertRangeOrder("magicAttack", next.magic_attack_min, next.magic_attack_max);
+    assertRangeOrder("taoistAttack", next.taoist_attack_min, next.taoist_attack_max);
+    assertRangeOrder("physicalDefense", next.physical_defense_min, next.physical_defense_max);
+    assertRangeOrder("magicDefense", next.magic_defense_min, next.magic_defense_max);
+    assertRangeOrder("taoistDefense", next.taoist_defense_min, next.taoist_defense_max);
+    this.roleLevels.update(next);
+    this.runtime.refreshAll();
+    return RoleLevelDto.from(this.roleLevels.findByLevel(level)!);
+  }
+
   // —— 等级经验 ——
 
-  /** 某一级的最终升级经验（快照 levels 段用；没有行返回 undefined，调用方回落曲线出厂值） */
+  /** 某一级的最终升级经验（读 role_levels；表里没有时回落旧的 level_exps，迁移前兼容） */
   findLevelExp(level: number) {
+    const row = this.roleLevels.findByLevel(level);
+    if (row) return { level: row.level, exp: row.exp, updated_at: row.updated_at };
     return this.growth.findLevelExp(level);
   }
 
@@ -68,20 +140,21 @@ export class GrowthConfigService implements OnModuleInit {
       sort: query.sort,
       order: query.order,
     };
-    const list = this.growth.listLevelExps(options).map(LevelExpDto.from);
-    return { list, total: this.growth.countLevelExps(), page: options.page, size: options.size };
+    // #655：经验已经并进 role_levels，旧接口保留路径（管理端老页面/脚本还在用），
+    // 但数据源同一份 —— 两边各读一张表就是「改了这个页面、那个页面不变」。
+    const rows = this.roleLevels.list({ page: options.page, size: options.size, sort: options.sort, order: options.order });
+    const list = rows.map((row) => LevelExpDto.from({ level: row.level, exp: row.exp, updated_at: row.updated_at }));
+    return { list, total: this.roleLevels.count(), page: options.page, size: options.size };
   }
 
   updateLevelExp(level: number, dto: UpdateLevelExpDto): LevelExpDto {
-    const existing = this.growth.findLevelExp(level);
+    const existing = this.roleLevels.findByLevel(level);
     if (!existing) throw BizException.notFound(BizCode.LEVEL_EXP_NOT_FOUND, `等级 ${level} 的升级经验不存在`);
-    const next: typeof existing = {
-      ...existing,
-      exp: dto.exp ?? existing.exp,
-      updated_at: Date.now(),
-    };
-    this.growth.updateLevelExp(next);
-    return LevelExpDto.from(this.growth.findLevelExp(level)!);
+    const next: RoleLevelRow = { ...existing, exp: dto.exp ?? existing.exp, updated_at: Date.now() };
+    this.roleLevels.update(next);
+    this.runtime.refreshAll();
+    const row = this.roleLevels.findByLevel(level)!;
+    return LevelExpDto.from({ level: row.level, exp: row.exp, updated_at: row.updated_at });
   }
 
   // —— 曲线分段 ——
@@ -200,6 +273,41 @@ export class GrowthConfigService implements OnModuleInit {
     }
   }
 
+  /**
+   * 角色等级 seed（#655）：60 行最终属性写进 `role_levels`
+   *
+   * **只在表为空时跑**：已有行说明迁移跑过 / 运营改过，一行都不能覆盖。
+   * 属性直接取 `ROLE_LEVEL_ATTRIBUTES`（曲线展开后的常量），经验优先取刚 seed 的
+   * `level_exps` —— 这样「空库自举」与「老库迁移」两条路得到的值逐值相同。
+   */
+  private seedRoleLevels() {
+    if (this.roleLevels.count() > 0) return;
+    for (const [levelKey, attributes] of Object.entries(ROLE_LEVEL_ATTRIBUTES)) {
+      const level = Number(levelKey);
+      const expRow = this.growth.findLevelExp(level);
+      this.roleLevels.seedRow({
+        level,
+        exp: Math.max(1, Math.round(expRow ? expRow.exp : attributes.exp)),
+        max_hp: attributes.maxHp,
+        max_mp: attributes.maxMp,
+        hp_recover: attributes.hpRecover,
+        physical_attack_min: attributes.physicalAttack[0],
+        physical_attack_max: attributes.physicalAttack[1],
+        magic_attack_min: attributes.magicAttack[0],
+        magic_attack_max: attributes.magicAttack[1],
+        taoist_attack_min: attributes.taoistAttack[0],
+        taoist_attack_max: attributes.taoistAttack[1],
+        physical_defense_min: attributes.physicalDefense[0],
+        physical_defense_max: attributes.physicalDefense[1],
+        magic_defense_min: attributes.magicDefense[0],
+        magic_defense_max: attributes.magicDefense[1],
+        taoist_defense_min: attributes.taoistDefense[0],
+        taoist_defense_max: attributes.taoistDefense[1],
+        updated_at: 0,
+      });
+    }
+  }
+
   /** 等级经验 seed：ROLE_LEVEL_ATTRIBUTES 每级的 exp（升级所需经验与曲线共用同一来源） */
   private seedLevelExps() {
     for (const [level, attributes] of Object.entries(ROLE_LEVEL_ATTRIBUTES)) {
@@ -238,5 +346,17 @@ export class GrowthConfigService implements OnModuleInit {
         updated_at: 0,
       });
     }
+  }
+}
+
+/**
+ * 区间两端必须「下限 ≤ 上限」
+ *
+ * 改单边时最容易踩：把上限调到 10、下限还是 20，属性区间就反了 —— 结算里
+ * `[low, high]` 被当成两段独立加总，面板会显示一个负的波动范围，且没有任何报错。
+ */
+function assertRangeOrder(name: string, min: number, max: number): void {
+  if (min > max) {
+    throw new BizException(BizCode.PARAM_INVALID, `${name} 的下限（${min}）不能大于上限（${max}）`);
   }
 }

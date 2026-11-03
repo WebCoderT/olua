@@ -161,26 +161,35 @@ const ZERO_EQUIPMENT_ATTRIBUTES: BattleAttributes = {
  * **key 只做关联**：背包 / 掉落表 / 掉落拾取入包都用它引用，
  * key 可以是任意字符串（"ring_1"、"cloth_fire" 都行），**不参与任何数值计算**。
  *
- * **前后缀变体**：每件基础装备展开成全部「前缀 × 后缀」组合（5 × 3 = 15 件）：
- * - 「普通的·人级」沿用基础装备的原 key（基础件本身，倍率 1 × 1）
- * - 其余组合 key 为 `${key}_p${前缀序号}s${后缀序号}`（如 cloth_1_p3s2）
+ * ## 两条路径（#655 起）
+ * 1. **线上（快照）**：服务端下发的是**展开后的变体行** —— 每行自带 `prefix` / `suffix`
+ *    与最终属性 / 回收价，这里直接建表，**不乘任何倍率**。管理端改某一件变体，
+ *    客户端就跟着变（以前只改基础件才会被展开逻辑带过去）。
+ * 2. **工具链（`applyEquipmentSeed`）**：传的是 37 个基础件（没有序号），
+ *    按 `equipmentPrefixRates × equipmentSuffixRates` 展开成 555 件。
+ *    这条只在 Node 里跑（生成器 / 单测沙箱），不进游戏。
  *
- * **倍率来自快照**（`configs/growth` 的 `equipmentPrefixRates` / `equipmentSuffixRates`）：
- * 空数组 = 快照没到 = 一件都展开不出来，这是有意的（不兜本地倍率）。
- *
- * **回收价**按倍率缩放：基础价 = 条目的 recyclePrice（写了才用）或按 level 从
- * 回收价曲线取（曲线也来自快照），变体乘同一个 rate（超神·神级 = 基础价 × 4.2）。
- *
- * 注意：等级同时是「穿戴门槛」（GameHelper.getEquipmentRejectReason 会挡「需要等级 N」），
- * 变体与基础件同 level，门槛一致；所以排等级时要想清楚这件装备应该在什么等级被拿到。
+ * 判据是「条目有没有带 prefix 序号」—— 不看调用方，避免两条路径各写一份召唤条件。
  */
 export function buildEquipmentMap(data: EquipmentData[]): Map<string, Equipment> {
   const map = new Map<string, Equipment>();
   for (const entry of data) {
     const { key, ...rest } = entry; // key 只做关联，不写进最终配置对象
-    // 结构基线（零值兜底）+ 条目覆盖（属性就是服务端下发的基础件属性），变体在其上乘前后缀倍率
+    // 结构基线（零值兜底）+ 条目覆盖
     const base = { ...ZERO_EQUIPMENT_ATTRIBUTES, ...rest } as unknown as Equipment;
-    // 回收基础价（普通·人级的价）：条目里写了就用它，否则按等级从回收价曲线取（见 configs/growth）
+
+    // 路径 1：服务端变体行（自带序号）—— 数值就是最终值
+    if (typeof entry.prefix === "number" && typeof entry.suffix === "number") {
+      map.set(key, {
+        ...base,
+        prefix: entry.prefix,
+        suffix: entry.suffix,
+        recyclePrice: entry.recyclePrice ?? 0,
+      });
+      continue;
+    }
+
+    // 路径 2：种子基础件（工具链）—— 按倍率展开成 15 件
     const baseRecyclePrice = entry.recyclePrice ?? equipmentRecyclePrice(rest.level);
     for (let p = 0; p < equipmentPrefixRates.length; p++) {
       for (let s = 0; s < equipmentSuffixRates.length; s++) {
@@ -189,7 +198,6 @@ export function buildEquipmentMap(data: EquipmentData[]): Map<string, Equipment>
         map.set(id, {
           ...base,
           ...scaleEquipmentAttributes(base, rate),
-          // 回收价与战斗属性同一口径：前后缀越强越值钱（超神·神级 = 基础价 × 4.2）
           recyclePrice: Math.round(baseRecyclePrice * rate),
           prefix: p as EQUIPMENT_PREFIX,
           suffix: s as EQUIPMENT_SUFFIX,

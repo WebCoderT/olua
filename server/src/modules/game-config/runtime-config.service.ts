@@ -1,19 +1,18 @@
 import { Injectable, Logger, OnApplicationBootstrap } from "@nestjs/common";
 import { DrugRepository } from "../../database/repositories/drug.repository";
-import { EquipmentRepository } from "../../database/repositories/equipment.repository";
+import { EquipmentVariantRepository } from "../../database/repositories/equipment-variant.repository";
 import { ItemRepository } from "../../database/repositories/item.repository";
 import { RankRepository } from "../../database/repositories/rank.repository";
+import { RoleLevelRepository } from "../../database/repositories/role-level.repository";
 import { SkillRepository } from "../../database/repositories/skill.repository";
 import { SoulRepository } from "../../database/repositories/soul.repository";
 import { TitleRepository } from "../../database/repositories/title.repository";
-import { EquipmentMetaRow } from "../../database/rows";
-import { EquipmentCurveSegment } from "../../shared/equipment-seed";
 import {
   applyDrugOverrides,
-  applyEquipmentOverrides,
-  applyEquipmentRulesOverrides,
+  applyEquipmentVariants,
   applyItemOverrides,
   applyRankOverrides,
+  applyRoleLevels,
   applySkillOverrides,
   applySoulOverrides,
   applyTitleOverrides,
@@ -47,7 +46,8 @@ export class RuntimeConfigService implements OnApplicationBootstrap {
   private readonly logger = new Logger(RuntimeConfigService.name);
 
   constructor(
-    private readonly equipments: EquipmentRepository,
+    private readonly equipmentVariants: EquipmentVariantRepository,
+    private readonly roleLevels: RoleLevelRepository,
     private readonly titles: TitleRepository,
     private readonly souls: SoulRepository,
     private readonly ranks: RankRepository,
@@ -62,17 +62,18 @@ export class RuntimeConfigService implements OnApplicationBootstrap {
 
   /** 全量重装（启动时一次 + 每次管理端写操作后一次） */
   refreshAll(): void {
-    const equipments = this.equipments.list({ ...ALL });
+    const variants = this.equipmentVariants.listAll();
+    const roleLevels = this.roleLevels.listAll();
     const titles = this.titles.list({ ...ALL });
     const souls = this.souls.list({ ...ALL });
     const ranks = this.ranks.list({ ...ALL });
     const skills = this.skills.listAll();
     const drugs = this.drugs.list({ ...ALL });
     const items = this.items.list({ ...ALL });
-    // #603 第九域：规则（倍率 / 回收价曲线）必须先装 —— 装备覆盖里的变体属性与价签
-    // 是按当前规则算好存起来的，顺序反了会「改倍率后价格还是旧的」
-    applyEquipmentRulesOverrides(equipmentRulesOf(this.equipments.getMeta()));
-    applyEquipmentOverrides(equipments);
+    // #655：装备变体与角色等级都是**逐行配置**了 —— 不再读倍率/曲线现算。
+    // 表为空时不报错（空库 / 迁移还没跑），读取方回落生成物的出厂值，行为与旧版一致。
+    applyEquipmentVariants(variants);
+    applyRoleLevels(roleLevels);
     applyTitleOverrides(titles);
     applySoulOverrides(souls);
     applyRankOverrides(ranks);
@@ -81,51 +82,19 @@ export class RuntimeConfigService implements OnApplicationBootstrap {
     applyItemOverrides(items);
     // 只记条数不记值：出问题时第一件事就是确认「覆盖层里到底装没装上」
     this.logger.log(
-      `运营配置已装载：装备 ${equipments.length} 件（含变体展开）· 称号 ${titles.length} 级 · ` +
-        `战魂 ${souls.length} 阶 · 军衔 ${ranks.length} 阶 · 技能 ${skills.length} 个 · ` +
-        `药品 ${drugs.length} 种 · 材料 ${items.length} 种`,
+      `运营配置已装载：装备变体 ${variants.length} 件 · 角色等级 ${roleLevels.length} 级 · ` +
+        `称号 ${titles.length} 级 · 战魂 ${souls.length} 阶 · 军衔 ${ranks.length} 阶 · ` +
+        `技能 ${skills.length} 个 · 药品 ${drugs.length} 种 · 材料 ${items.length} 种`,
     );
-  }
-}
-
-/**
- * `equipment_meta` 行 → 覆盖层要的形状（#603 第九域）
- *
- * 解析失败/缺行一律返回 null = 回落生成物的出厂规则（宁可回出厂值，也不要让错误数据
- * 把全局倍率变成 1 或价格变成 0 —— 那等于全服经济静默重算一次）。
- */
-function equipmentRulesOf(row: EquipmentMetaRow | undefined): {
-  prefixRates: number[];
-  suffixRates: number[];
-  recycleCurve: EquipmentCurveSegment[];
-} | null {
-  if (!row) return null;
-  const parse = (text: string): unknown => {
-    try {
-      return JSON.parse(text);
-    } catch {
-      return null;
+    if (variants.length === 0) {
+      this.logger.warn(
+        "equipment_variants 是空表 —— 装备属性回落出厂值。跑一次 `make data-migrate` 把 555 个变体写进库。",
+      );
     }
-  };
-  const numbers = (value: unknown): number[] =>
-    Array.isArray(value) ? value.map((item) => Number(item)).filter((item) => Number.isFinite(item)) : [];
-  const prefixRates = numbers(parse(row.prefix_rates));
-  const suffixRates = numbers(parse(row.suffix_rates));
-  const curveRaw = parse(row.recycle_curve);
-  const recycleCurve: EquipmentCurveSegment[] = Array.isArray(curveRaw)
-    ? curveRaw
-        .filter((segment) => segment && typeof segment === "object")
-        .map((segment) => {
-          const item = segment as Record<string, unknown>;
-          return {
-            from: Number(item.from) || 0,
-            to: Number(item.to) || 0,
-            start: Number(item.start) || 0,
-            perLevel: Number(item.perLevel) || 0,
-          };
-        })
-        .filter((segment) => segment.to >= segment.from)
-    : [];
-  if (!prefixRates.length || !suffixRates.length || !recycleCurve.length) return null;
-  return { prefixRates, suffixRates, recycleCurve };
+    if (roleLevels.length === 0) {
+      this.logger.warn(
+        "role_levels 是空表 —— 角色属性回落出厂曲线。跑一次 `make data-migrate` 把 60 级属性写进库。",
+      );
+    }
+  }
 }

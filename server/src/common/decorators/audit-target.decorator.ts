@@ -35,6 +35,8 @@ export const AUDIT_TARGET_TYPES = [
   "dropTable",
   "monsterDrop",
   "levelExp",
+  "roleLevel",
+  "equipmentVariant",
   "growthSegment",
   "growthScalar",
   "skill",

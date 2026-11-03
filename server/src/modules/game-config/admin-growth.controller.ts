@@ -8,7 +8,7 @@ import { AuditTarget } from "../../common/decorators/audit-target.decorator";
 import { Permission } from "../../common/constants/permission";
 import { PageResult } from "../../common/interfaces/api-envelope.interface";
 import { GROWTH_CURVE_KEYS, GROWTH_SCALAR_SPECS } from "../../common/constants/game-config";
-import { sortFieldNames, GROWTH_SCALAR_SORT, GROWTH_SEGMENT_SORT, LEVEL_EXP_SORT } from "../../database/sort-specs";
+import { sortFieldNames, GROWTH_SCALAR_SORT, GROWTH_SEGMENT_SORT, LEVEL_EXP_SORT, ROLE_LEVEL_SORT } from "../../database/sort-specs";
 import { GrowthConfigService } from "./growth-config.service";
 import {
   GrowthScalarDto,
@@ -20,9 +20,13 @@ import {
   LevelExpDto,
   LevelExpPageDto,
   LevelExpQueryDto,
+  RoleLevelDto,
+  RoleLevelPageDto,
+  RoleLevelQueryDto,
   UpdateGrowthScalarDto,
   UpdateGrowthSegmentDto,
   UpdateLevelExpDto,
+  UpdateRoleLevelDto,
 } from "./dto/growth.dto";
 
 /**
@@ -32,6 +36,55 @@ import {
  * 客户端 configs/growth 定义，seed 固定，后台只改内容（e2e 固化「POST/DELETE 404」）。
  * 写操作带 @AuditTarget：改的是全服玩家的数值曲线，必须可追溯。
  */
+
+/**
+ * 管理端 · 角色等级表（#655）
+ *
+ * 60 行 = 每级的最终裸属性 + 升级经验。曲线（`growth-segments`）已不再是运行时输入，
+ * 这张表就是权威：改哪一级就只影响哪一级，没有「改一段曲线带动 10 级」的连带效果。
+ * 与旧接口的关系：`admin/level-exps` 只剩经验一列（同一个数据源），这里给全字段。
+ */
+@ApiAudience("admin")
+@Controller("admin/role-levels")
+export class AdminRoleLevelController {
+  constructor(private readonly growthConfigService: GrowthConfigService) {}
+
+  @Get()
+  @ApiAdminDoc({
+    operationId: "adminRoleLevel.list",
+    summary: "角色等级表",
+    description:
+      "等级序列固定（1..roleMaxLevel），**没有创建 / 删除**：一行 = 该级的裸属性（血 / 蓝 / 回血 / 六项攻防区间）+ 升级经验。\n\n" +
+      "这是战斗结算与客户端等级表的**唯一来源** —— 曲线已从运行时移除，想调哪一级就改哪一行。\n\n" +
+      "`keyword` 按等级号模糊匹配。\n\n" +
+      `**排序**：\`sort\` 取 ${sortFieldNames(ROLE_LEVEL_SORT)}，\`order\` 取 asc / desc（默认 level 升序）。`,
+    permissions: [Permission.GAME_CONFIG_READ],
+  })
+  @ApiQueryModel(RoleLevelQueryDto)
+  @ApiDataResponse(RoleLevelPageDto, { description: "分页结果（list/total/page/size）" })
+  list(@Query() query: RoleLevelQueryDto): PageResult<RoleLevelDto> {
+    return this.growthConfigService.listRoleLevels(query);
+  }
+
+  @Patch(":level")
+  @AuditTarget("roleLevel")
+  @ApiAdminDoc({
+    operationId: "adminRoleLevel.update",
+    summary: "编辑角色等级",
+    description:
+      "**部分更新**：只改传了的字段（等级本身不可改）。\n\n" +
+      "- 六个区间都是 `xxxMin` / `xxxMax` 两个字段，校验「下限 ≤ 上限」（合并后判断）。\n" +
+      "- 改完立刻重装结算层，**服务端下一次结算就用新值**（不用重启）。\n" +
+      "- 客户端下次拉配置快照时生效 —— 已经进游戏的玩家要重进。\n" +
+      "- 等级不存在 → 404（`50012`）。",
+    permissions: [Permission.GAME_CONFIG_WRITE],
+  })
+  @ApiParam({ name: "level", description: "等级（1 起）" })
+  @ApiDataResponse(RoleLevelDto, { description: "更新后的等级行" })
+  update(@Param("level", ParseIntPipe) level: number, @Body() dto: UpdateRoleLevelDto): RoleLevelDto {
+    return this.growthConfigService.updateRoleLevel(level, dto);
+  }
+}
 
 @ApiAudience("admin")
 @Controller("admin/level-exps")

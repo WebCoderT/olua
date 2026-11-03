@@ -14,6 +14,8 @@ import { CombatWeightsRepository } from "./repositories/combat-weights.repositor
 import { GuideSettingsRepository } from "./repositories/guide-settings.repository";
 import { RankRepository } from "./repositories/rank.repository";
 import { EquipmentRepository } from "./repositories/equipment.repository";
+import { EquipmentVariantRepository } from "./repositories/equipment-variant.repository";
+import { RoleLevelRepository } from "./repositories/role-level.repository";
 import { DrugRepository } from "./repositories/drug.repository";
 import { ItemRepository } from "./repositories/item.repository";
 import { MallRepository } from "./repositories/mall.repository";
@@ -69,6 +71,8 @@ import { UiEffectRepository } from "./repositories/ui-effect.repository";
     TitleRepository,
     RankRepository,
     EquipmentRepository,
+    EquipmentVariantRepository,
+    RoleLevelRepository,
     DrugRepository,
     ItemRepository,
     MonsterRepository,
@@ -114,6 +118,8 @@ import { UiEffectRepository } from "./repositories/ui-effect.repository";
     TitleRepository,
     RankRepository,
     EquipmentRepository,
+    EquipmentVariantRepository,
+    RoleLevelRepository,
     DrugRepository,
     ItemRepository,
     MonsterRepository,

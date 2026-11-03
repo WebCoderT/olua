@@ -4,7 +4,7 @@ import { ValidateNested } from "class-validator";
 import { DrugDto } from "./drug.dto";
 import { RuntimeParamsDto } from "./runtime-params.dto";
 import { DropTableDto, MonsterDropDto } from "./drop.dto";
-import { EquipmentDto, EquipmentMetaDto, EquipmentSlotDto } from "./equipment.dto";
+import { EquipmentMetaDto, EquipmentSlotDto, EquipmentVariantDto } from "./equipment.dto";
 import { FashionDto } from "./fashion.dto";
 import { GrowthScalarDto, LevelDto } from "./growth.dto";
 import { ItemDto } from "./item.dto";
@@ -46,9 +46,13 @@ export class GameConfigSnapshotDto {
   @Type(() => RankDto)
   ranks!: RankDto[];
 
-  @ApiProperty({ description: "装备基础件配置（555 件变体由客户端按前后缀倍率展开）", type: [EquipmentDto] })
-  @Type(() => EquipmentDto)
-  equipments!: EquipmentDto[];
+  @ApiProperty({
+    description:
+      "装备变体（555 件：37 基础件 × 5 前缀 × 3 后缀）。#655 起每件都是最终值，客户端直接建表、不再乘倍率展开",
+    type: [EquipmentVariantDto],
+  })
+  @Type(() => EquipmentVariantDto)
+  equipments!: EquipmentVariantDto[];
 
   @ApiProperty({ description: "药品配置", type: [DrugDto] })
   @Type(() => DrugDto)

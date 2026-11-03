@@ -31,6 +31,7 @@
     "config:export": "node --disable-warning=ExperimentalWarning scripts/config-export.cjs",
     "config:import": "node --disable-warning=ExperimentalWarning scripts/config-import.cjs",
     "config:check": "node --disable-warning=ExperimentalWarning scripts/config-export.cjs --check",
+    "data:migrate": "node --disable-warning=ExperimentalWarning scripts/migrate-derived-tables.cjs",
     "test:config-sync": "node --disable-warning=ExperimentalWarning test/config-sync.cjs",
     "swagger:emit": "npm run build && node --disable-warning=ExperimentalWarning dist/swagger/emit.js",
     "gen:api": "npm run swagger:emit && node ../tools/gen-api.cjs",

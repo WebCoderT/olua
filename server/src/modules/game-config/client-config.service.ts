@@ -1,7 +1,6 @@
 import { Injectable } from "@nestjs/common";
 import { MAP_TYPE_GROUPS } from "../../common/constants/map-config";
 import { MONSTER_PRESENTATION_ROWS } from "../../shared/monster-presentation.generated";
-import { ROLE_LEVEL_ATTRIBUTES } from "../../shared/growth-seed";
 import { MapService } from "../map/map.service";
 import { UiEffectService } from "../ui-effect/ui-effect.service";
 import { GameConfigService } from "./game-config.service";
@@ -39,12 +38,11 @@ export class ClientConfigService {
     private readonly uiEffect: UiEffectService,
   ) {}
 
-  snapshot(): GameConfigSnapshotDto {
-    return {
+  snapshot(): GameConfigSnapshotDto {    return {
       titles: this.gameConfig.listTitles({ ...ALL }).list,
       souls: this.gameConfig.listSouls({ ...ALL }).list,
       ranks: this.gameConfig.listRanks({ ...ALL }).list,
-      equipments: this.gameConfig.listEquipments({ ...ALL }).list,
+      equipments: this.gameConfig.listEquipmentVariants(),
       drugs: this.gameConfig.listDrugs({ ...ALL }).list,
       items: this.gameConfig.listItems({ ...ALL }).list,
       monsters: this.gameConfig.listMonsters({ ...ALL }).list,
@@ -52,11 +50,9 @@ export class ClientConfigService {
       monsterPresentations: MONSTER_PRESENTATION_ROWS.map((row) => MonsterPresentationDto.from(row)),
       npcs: this.gameConfig.listNpcs({ ...ALL }).list,
       fashions: this.gameConfig.listFashions({ ...ALL }).list,
-      // #590：等级表（属性按曲线展开 + level_exps 最终经验）—— 客户端 levelMap 的唯一来源
-      levels: Object.entries(ROLE_LEVEL_ATTRIBUTES).map(([level, attributes]) => {
-        const row = this.growth.findLevelExp(Number(level));
-        return LevelDto.from(Number(level), attributes, row ? row.exp : Number(attributes.exp));
-      }),
+      // #655：等级表直接读 `role_levels`（60 行逐级配置，曲线已从运行时移除）——
+      // 客户端 levelMap 的唯一来源。表为空（迁移没跑）才回落到曲线展开，保证空库能进游戏。
+      levels: this.snapshotLevels(),
       growthScalars: this.growth.listScalars({ ...ALL }).list,
       // #603 战斗力权重 / #605 可配化：出厂值在 `shared/combat-seed.ts`，当前值在
       // `combat_weights` 表（管理端「战斗力权重」页可改）。客户端本地只留空 Map ——
@@ -91,5 +87,15 @@ export class ClientConfigService {
       // 客户端本地不再存这张表 —— 改一句新手文案不用重打客户端包
       guideSteps: this.guide.steps(),
     };
+  }
+
+  /**
+   * 快照 `levels` 段（#655）
+   *
+   * 唯一来源是 `role_levels` 的 60 行（管理端逐行改，改完快照即变）。
+   * 表不会为空：建库 seed 与迁移脚本都保证 60 行（见 `GrowthConfigService.seedRoleLevels`）。
+   */
+  private snapshotLevels(): LevelDto[] {
+    return this.growth.listRoleLevelRows().map(LevelDto.fromRow);
   }
 }

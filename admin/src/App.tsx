@@ -14,6 +14,8 @@ import { TitlesPage } from "./pages/TitlesPage";
 import { SoulsPage } from "./pages/SoulsPage";
 import { RanksPage } from "./pages/RanksPage";
 import { EquipmentsPage } from "./pages/EquipmentsPage";
+import { EquipmentVariantsPage } from "./pages/EquipmentVariantsPage";
+import { RoleLevelsPage } from "./pages/RoleLevelsPage";
 import { EquipmentSettingsPage } from "./pages/EquipmentSettingsPage";
 import { RuntimeParamsPage } from "./pages/RuntimeParamsPage";
 import { CombatWeightsPage } from "./pages/CombatWeightsPage";
@@ -311,6 +313,22 @@ export function App() {
             element={
               <RequirePermission permission={PERMISSION.GAME_CONFIG_READ}>
                 <DropConfigPage />
+              </RequirePermission>
+            }
+          />
+          <Route
+            path="equipment-variants"
+            element={
+              <RequirePermission permission={PERMISSION.GAME_CONFIG_READ}>
+                <EquipmentVariantsPage />
+              </RequirePermission>
+            }
+          />
+          <Route
+            path="role-levels"
+            element={
+              <RequirePermission permission={PERMISSION.GAME_CONFIG_READ}>
+                <RoleLevelsPage />
               </RequirePermission>
             }
           />

@@ -6,6 +6,10 @@ import { PageResult } from "../../common/interfaces/api-envelope.interface";
 import { RankRepository, RankListOptions } from "../../database/repositories/rank.repository";
 import { DrugRepository, DrugListOptions } from "../../database/repositories/drug.repository";
 import { EquipmentRepository, EquipmentListOptions } from "../../database/repositories/equipment.repository";
+import {
+  EquipmentVariantListOptions,
+  EquipmentVariantRepository,
+} from "../../database/repositories/equipment-variant.repository";
 import { FashionRepository, FashionListOptions } from "../../database/repositories/fashion.repository";
 import { ItemRepository, ItemListOptions } from "../../database/repositories/item.repository";
 import { MonsterRepository, MonsterListOptions } from "../../database/repositories/monster.repository";
@@ -27,6 +31,7 @@ import { RuntimeConfigService } from "./runtime-config.service";
 import {
   DrugRow,
   EquipmentRow,
+  EquipmentVariantRow,
   FashionRow,
   ItemRow,
   MonsterRow,
@@ -43,6 +48,8 @@ import {
 import {
   ACHIEVEMENTS,
   EQUIPMENT_BASES,
+  EQUIPMENT_PREFIX_RATES,
+  EQUIPMENT_SUFFIX_RATES,
   MONSTER_SKILLS,
   QUESTS,
   ITEM_TYPES,
@@ -66,6 +73,7 @@ import {
   EQUIPMENT_SUFFIX_RATE_SEEDS,
   EquipmentSeedRow,
 } from "../../shared/equipment-seed";
+import { expandEquipmentVariants } from "../../shared/equipment-variant-expand";
 
 /** 怪物 key 清单（出厂种子派生；成就击杀目标 / 任务击杀目标的存在性校验共用） */
 const MONSTER_SEED_KEYS = new Set(MONSTER_SEED_ROWS.map((row) => row.id));
@@ -121,9 +129,12 @@ import {
   EquipmentMetaDto,
   EquipmentQueryDto,
   EquipmentSlotDto,
+  EquipmentVariantDto,
+  EquipmentVariantQueryDto,
   UpdateEquipmentDto,
   UpdateEquipmentMetaDto,
   UpdateEquipmentSlotDto,
+  UpdateEquipmentVariantDto,
 } from "./dto/equipment.dto";
 
 import { DrugDto, DrugQueryDto, UpdateDrugDto } from "./dto/drug.dto";
@@ -176,6 +187,7 @@ export class GameConfigService implements OnModuleInit {
     private readonly souls: SoulRepository,
     private readonly ranks: RankRepository,
     private readonly equipments: EquipmentRepository,
+    private readonly equipmentVariants: EquipmentVariantRepository,
     private readonly drugs: DrugRepository,
     private readonly items: ItemRepository,
     private readonly monstersRepo: MonsterRepository,
@@ -198,6 +210,7 @@ export class GameConfigService implements OnModuleInit {
     this.seedSouls();
     this.seedRanks();
     this.seedEquipments();
+    this.seedEquipmentVariants();
     this.seedDrugs();
     this.seedItems();
     this.seedMonsters();
@@ -394,7 +407,71 @@ export class GameConfigService implements OnModuleInit {
     return RankDto.from(this.requireRank(level));
   }
 
-  // —— 装备基础件（#252：id / 部位结构固定，只改数值；变体在客户端按倍率展开）——
+  // —— 装备变体（#655：555 行逐一配置，不再由基础件乘倍率现算）——
+
+  /**
+   * 快照用：全部 555 个变体的**完整装备清单**（显示字段取基础件、数值取变体行）
+   *
+   * 客户端 `applyEquipmentData` 直接吃这份清单建表，不再自己展开 —— 「管理端改
+   * 某一个变体」从此在客户端可见（以前只改基础件才会被展开逻辑带过去）。
+   *
+   * 基础件不存在时**跳过**而不是抛错：孤儿变体只可能来自手改库/迁移残留，
+   * 为它让整个配置快照 500（客户端直接进不去游戏）是不划算的。
+   */
+  listEquipmentVariants(): EquipmentVariantDto[] {
+    const bases = new Map(this.equipments.list({ page: 1, size: 1_000_000 }).map((row) => [row.id, row]));
+    const list: EquipmentVariantDto[] = [];
+    for (const row of this.equipmentVariants.listAll()) {
+      const base = bases.get(row.base_id);
+      if (!base) {
+        this.logger.warn(`装备变体 ${row.id} 的基础件 ${row.base_id} 不存在，快照里已跳过`);
+        continue;
+      }
+      list.push(EquipmentVariantDto.fromVariant(base, row));
+    }
+    return list;
+  }
+
+  /** 管理端：分页列变体（可按基础件筛，装备页里点开一件基础件看它的 15 个变体） */
+  listVariantPage(query: EquipmentVariantQueryDto): PageResult<EquipmentVariantDto> {
+    const options: EquipmentVariantListOptions = {
+      page: query.page ?? 1,
+      size: query.size ?? DEFAULT_PAGE_SIZE,
+      baseId: query.baseId,
+      keyword: query.keyword,
+      sort: query.sort,
+      order: query.order,
+    };
+    const bases = new Map(this.equipments.list({ page: 1, size: 1_000_000 }).map((row) => [row.id, row]));
+    const list: EquipmentVariantDto[] = [];
+    for (const row of this.equipmentVariants.list(options)) {
+      const base = bases.get(row.base_id);
+      if (base) list.push(EquipmentVariantDto.fromVariant(base, row));
+    }
+    return { list, total: this.equipmentVariants.count(options), page: options.page, size: options.size };
+  }
+
+  /** 管理端：改一个变体（属性整份提交；名称 / 等级 / 回收价部分更新） */
+  updateEquipmentVariant(id: string, dto: UpdateEquipmentVariantDto): EquipmentVariantDto {
+    const existing = this.equipmentVariants.findById(id);
+    if (!existing) throw BizException.notFound(BizCode.EQUIPMENT_NOT_FOUND, `装备变体 ${id} 不存在`);
+    if (dto.attributes) assertAttributeRanges(dto.attributes);
+    const next: EquipmentVariantRow = {
+      ...existing,
+      label: dto.label ?? existing.label,
+      level: dto.level ?? existing.level,
+      sell_price: dto.sellPrice ?? existing.sell_price,
+      ...(dto.attributes ? attributeColumns(dto.attributes) : {}),
+      updated_at: Date.now(),
+    };
+    this.equipmentVariants.update(next);
+    this.touchRuntime();
+    const base = this.equipments.list({ page: 1, size: 1_000_000 }).find((row) => row.id === next.base_id);
+    if (!base) throw BizException.notFound(BizCode.EQUIPMENT_NOT_FOUND, `装备变体 ${id} 的基础件不存在`);
+    return EquipmentVariantDto.fromVariant(base, this.equipmentVariants.findById(id)!);
+  }
+
+  // —— 装备基础件（#252：id / 部位结构固定，只改数值；变体见上面的 #655 区）——
 
   listEquipments(query: EquipmentQueryDto): PageResult<EquipmentDto> {
     const options: EquipmentListOptions = {
@@ -1337,6 +1414,29 @@ export class GameConfigService implements OnModuleInit {
    *
    * 槽位与规则（倍率 / 文案 / 回收价曲线）也在这张种子文件里，一并 seed。
    */
+  /**
+   * 装备变体 seed（#655）：把 37 个基础件展开成 555 行写进 `equipment_variants`
+   *
+   * **只在表为空时跑**：已有行说明迁移跑过 / 运营改过，一行都不能覆盖。
+   * 这是「出厂数据的构造」而不是「每次读取都重算」—— 运行时（结算 / 快照）只读表，
+   * 由 `tools/audit-derived-tables.cjs` 禁止 modules 下出现展开函数调用。
+   */
+  private seedEquipmentVariants() {
+    if (this.equipmentVariants.count() > 0) return;
+    const bases = this.equipments.list({ page: 1, size: 1_000_000 });
+    if (bases.length === 0) return;
+    const variants = expandEquipmentVariants(
+      bases,
+      EQUIPMENT_PREFIX_RATES,
+      EQUIPMENT_SUFFIX_RATES,
+      EQUIPMENT_RECYCLE_CURVE_SEED,
+    );
+    for (const variant of variants) {
+      this.equipmentVariants.seedRow({ ...variant, updated_at: 0 });
+    }
+    this.logger.log(`装备变体已展开：${bases.length} 个基础件 → ${variants.length} 个变体（#655）`);
+  }
+
   private seedEquipments() {
     const bases = EQUIPMENT_BASES as Record<string, Record<string, unknown>>;
     const seedIds = new Set(EQUIPMENT_SEED_ROWS.map((row) => row.id));

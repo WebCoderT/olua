@@ -43,8 +43,15 @@ export class GrowthRepository {
   constructor(private readonly db: DatabaseService) {}
 
   // —— 等级经验 ——
+  //
+  // #655：经验的**权威表**变成 `role_levels.exp`（与 60 行属性同居一行），
+  // `level_exps` 只剩「迁移来源 + 老库兼容」的身份。这里三个读方法都先查新表，
+  // 因为 `roles.service` 的升级判定直接走本仓储 —— 不改这里就会出现
+  // 「管理端改了经验、玩家还是按旧值升级」。
 
   seedLevelExp(row: LevelExpRow): void {
+    // 只写老表：新表的 60 行由 `GrowthConfigService.seedRoleLevels` 整行写入
+    // （这里 INSERT 只给三列的话，属性列会停在默认 0，那是「升级后血量为 0」的源头）
     this.db.run("INSERT OR IGNORE INTO level_exps (level, exp, updated_at) VALUES (?, ?, ?)", [
       row.level,
       row.exp,
@@ -53,6 +60,12 @@ export class GrowthRepository {
   }
 
   updateLevelExp(row: LevelExpRow): { changes: number } {
+    const updated = this.db.execute("UPDATE role_levels SET exp = ?, updated_at = ? WHERE level = ?", [
+      row.exp,
+      row.updated_at,
+      row.level,
+    ]);
+    if (updated.changes > 0) return updated;
     return this.db.execute("UPDATE level_exps SET exp = ?, updated_at = ? WHERE level = ?", [
       row.exp,
       row.updated_at,
@@ -61,12 +74,17 @@ export class GrowthRepository {
   }
 
   findLevelExp(level: number): LevelExpRow | undefined {
+    const fromRoleLevels = this.db.get<LevelExpRow>(
+      "SELECT level, exp, updated_at FROM role_levels WHERE level = ?",
+      [level],
+    );
+    if (fromRoleLevels) return fromRoleLevels;
     return this.db.get<LevelExpRow>("SELECT * FROM level_exps WHERE level = ?", [level]);
   }
 
   listLevelExps(options: LevelExpListOptions): LevelExpRow[] {
     return this.db.all<LevelExpRow>(
-      `SELECT * FROM level_exps
+      `SELECT level, exp, updated_at FROM role_levels
        ORDER BY ${resolveSort(LEVEL_EXP_SORT, options.sort, options.order)}
        LIMIT ? OFFSET ?`,
       [options.size, (options.page - 1) * options.size],
@@ -74,7 +92,8 @@ export class GrowthRepository {
   }
 
   countLevelExps(): number {
-    return this.db.count("SELECT COUNT(1) AS total FROM level_exps");
+    const total = this.db.count("SELECT COUNT(1) AS total FROM role_levels");
+    return total > 0 ? total : this.db.count("SELECT COUNT(1) AS total FROM level_exps");
   }
 
   // —— 曲线分段 ——

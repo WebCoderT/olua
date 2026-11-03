@@ -12,7 +12,7 @@ import { Badge, Button } from "./ui";
  * 与后端的 `@RequirePermissions` 一一对应（见服务端 constants/permission）。
  * 「我的账号」不做成导航项：它是每个人的私有页面，放在右上角身份栏更顺手。
  *
- * 32 项按功能分成四个可折叠分组 + 一个顶层独立项（概览）：
+ * 分组按功能分成四个可折叠分组 + 一个顶层独立项（概览）：
  * 路由本身仍是扁平路径（`App.tsx` 不用动），分组只是侧栏的视觉与交互层次。
  */
 type NavItem = { to: string; label: string; end?: boolean; permission: string | null };
@@ -39,6 +39,7 @@ const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
     label: "战斗与装备",
     items: [
       { to: "/equipments", label: "装备配置", permission: PERMISSION.GAME_CONFIG_READ },
+      { to: "/equipment-variants", label: "装备变体", permission: PERMISSION.GAME_CONFIG_READ },
       { to: "/equipment-settings", label: "槽位与规则", permission: PERMISSION.GAME_CONFIG_READ },
       { to: "/equip-align", label: "装备对齐", permission: PERMISSION.GAME_CONFIG_READ },
       { to: "/equip-in-align", label: "内观对齐", permission: PERMISSION.GAME_CONFIG_READ },
@@ -63,7 +64,8 @@ const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
       { to: "/drugs", label: "药品配置", permission: PERMISSION.GAME_CONFIG_READ },
       { to: "/items", label: "物品配置", permission: PERMISSION.GAME_CONFIG_READ },
       { to: "/fashions", label: "时装配置", permission: PERMISSION.GAME_CONFIG_READ },
-      { to: "/growth", label: "成长曲线", permission: PERMISSION.GAME_CONFIG_READ },
+      { to: "/growth", label: "成长参数", permission: PERMISSION.GAME_CONFIG_READ },
+      { to: "/role-levels", label: "角色等级", permission: PERMISSION.GAME_CONFIG_READ },
       { to: "/quests", label: "任务配置", permission: PERMISSION.GAME_CONFIG_READ },
       { to: "/achievements", label: "成就配置", permission: PERMISSION.GAME_CONFIG_READ },
       { to: "/mall", label: "商城定价", permission: PERMISSION.GAME_CONFIG_READ },

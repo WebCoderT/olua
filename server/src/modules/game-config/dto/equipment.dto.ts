@@ -15,7 +15,7 @@ import {
   ValidateNested,
 } from "class-validator";
 import { PageMetaDto, PageQueryDto } from "../../../common/dto/api-envelope.dto";
-import { EquipmentMetaRow, EquipmentRow, EquipmentSlotRow } from "../../../database/rows";
+import { EquipmentMetaRow, EquipmentRow, EquipmentSlotRow, EquipmentVariantRow } from "../../../database/rows";
 import { EQUIPMENT_SLOTS, OCCUPATION_HINT, OCCUPATION_LABELS, SEX_HINT, SEX_LABELS } from "../../../shared/game-data";
 import { attributesFromRow, ConfigAttributesDto, SoulRowShape } from "./title.dto";
 
@@ -155,7 +155,7 @@ export class EquipmentDto {
   @Type(() => EquipmentPointDto)
   outPositions: EquipmentPointDto[];
 
-  @ApiProperty({ description: "八项基础属性（普通的·人级；变体是它乘前后缀倍率展开的）", type: ConfigAttributesDto })
+  @ApiProperty({ description: "八项基础属性（普通的·人级那一件自己的值；#655 起变体各自成行，不再由它乘倍率现算）", type: ConfigAttributesDto })
   attributes: ConfigAttributesDto;
 
   @ApiProperty({ description: "最近更新时间（毫秒）" })
@@ -188,9 +188,42 @@ export class EquipmentDto {
   }
 }
 
+/**
+ * 装备变体（快照专用；#655）
+ *
+ * 与 `EquipmentDto` 的唯一区别：**属性 / 等级 / 卖价是这一件变体自己的值**，
+ * 不再由基础件乘前后缀倍率现算。客户端因此可以直接建表，不用再展开。
+ * 显示字段（图标 / 图集 / 几何 / 职业限制）从基础件复制 —— 同一件装备的 15 个变体
+ * 外观相同，只有数值不同。
+ */
+export class EquipmentVariantDto extends EquipmentDto {
+  @ApiProperty({ description: "所属基础件 id（如 cloth_1）" })
+  baseId: string;
+
+  @ApiProperty({ description: "前缀序号（0 = 普通的；文案与颜色按下标对齐，颜色留在客户端）" })
+  prefix: number;
+
+  @ApiProperty({ description: "后缀序号（0 = 人级）" })
+  suffix: number;
+
+  /** 基础件 + 变体行 → 一条完整装备（显示字段取基础件，数值取变体） */
+  static fromVariant(base: EquipmentRow, variant: EquipmentVariantRow): EquipmentVariantDto {
+    const dto = Object.assign(new EquipmentVariantDto(), EquipmentDto.from(base));
+    dto.id = variant.id;
+    dto.baseId = variant.base_id;
+    dto.label = variant.label;
+    dto.level = variant.level;
+    dto.sellPrice = variant.sell_price;
+    dto.attributes = attributesFromRow(variant as unknown as EquipmentRow & SoulRowShape);
+    dto.updatedAt = variant.updated_at;
+    dto.prefix = variant.prefix;
+    dto.suffix = variant.suffix;
+    return dto;
+  }
+}
+
 /** 装备列表查询入参 */
-export class EquipmentQueryDto extends PageQueryDto {
-  @ApiPropertyOptional({ description: "关键字：模糊匹配 id 与名称" })
+export class EquipmentQueryDto extends PageQueryDto {  @ApiPropertyOptional({ description: "关键字：模糊匹配 id 与名称" })
   @IsOptional()
   @IsString({ message: "关键字必须是字符串" })
   declare keyword?: string;
@@ -571,6 +604,60 @@ function parseCurve(text: string): EquipmentCurveSegmentDto[] {
   } catch {
     return [];
   }
+}
+
+//#endregion
+
+//#region 装备变体（#655：555 行逐一配置）
+
+/** 装备变体列表查询入参（管理端「装备变体」页） */
+export class EquipmentVariantQueryDto extends PageQueryDto {
+  @ApiPropertyOptional({ description: "只列某个基础件的 15 个变体（如 cloth_1）" })
+  @IsOptional()
+  @IsString({ message: "基础件 id 必须是字符串" })
+  declare baseId?: string;
+
+  @ApiPropertyOptional({ description: "关键字：模糊匹配变体 id 与名称" })
+  @IsOptional()
+  @IsString({ message: "关键字必须是字符串" })
+  declare keyword?: string;
+}
+
+/** 装备变体分页结果 */
+export class EquipmentVariantPageDto extends PageMetaDto {
+  @ApiProperty({ description: "当前页的装备变体", type: [EquipmentVariantDto] })
+  list: EquipmentVariantDto[];
+}
+
+/**
+ * 编辑一个装备变体（部分更新；id / 基础件 / 前后缀序号不可改）
+ *
+ * 属性拆成六组 min/max，与数据库列一一对应 —— 管理端点某一格时只送那一格。
+ */
+export class UpdateEquipmentVariantDto {
+  @ApiPropertyOptional({ description: "名称（基础名，不含前后缀文案；前后缀由客户端按下标拼）", maxLength: 50 })
+  @IsOptional()
+  @IsString({ message: "名称必须是字符串" })
+  @MaxLength(50, { message: "名称不能超过 50 字" })
+  label?: string;
+
+  @ApiPropertyOptional({ description: "穿戴需求等级（≥ 1）", minimum: 1 })
+  @IsOptional()
+  @IsInt({ message: "等级必须是整数" })
+  @Min(1, { message: "等级至少为 1" })
+  level?: number;
+
+  @ApiPropertyOptional({ description: "回收价（≥ 0；货币 = 绑定元宝）", minimum: 0 })
+  @IsOptional()
+  @IsInt({ message: "回收价必须是整数" })
+  @Min(0, { message: "回收价不能为负" })
+  sellPrice?: number;
+
+  @ApiPropertyOptional({ description: "八项属性（整份提交；不传则保留原值）", type: ConfigAttributesDto })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => ConfigAttributesDto)
+  attributes?: ConfigAttributesDto;
 }
 
 //#endregion

@@ -49,6 +49,8 @@ export {
   zonesApi,
   guildsApi,
   levelExpsApi,
+  roleLevelsApi,
+  equipmentVariantsApi,
   growthSegmentsApi,
   growthScalarsApi,
   runtimeParamsApi,

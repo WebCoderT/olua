@@ -2,7 +2,7 @@ import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
 import { IsIn, IsInt, IsNumber, IsOptional, IsString, Min } from "class-validator";
 import { GROWTH_CURVE_KEYS } from "../../../common/constants/game-config";
 import { PageMetaDto, PageQueryDto } from "../../../common/dto/api-envelope.dto";
-import { GrowthScalarRow, GrowthSegmentRow, LevelExpRow } from "../../../database/rows";
+import { GrowthScalarRow, GrowthSegmentRow, LevelExpRow, RoleLevelRow } from "../../../database/rows";
 import { ConfigAttributeRangeDto } from "./title.dto";
 
 // —— 等级经验 ——
@@ -48,7 +48,34 @@ export class LevelDto {
   @ApiProperty({ description: "升到下一级所需经验（level_exps 表的最终值）" })
   exp: number;
 
-  /** 从 growth-seed 展开行 + level_exps 最终值拼一行（六项区间是 [min,max] 元组） */
+  /** 从 `role_levels` 表行拼一行（#655：属性已是最终值，不再按曲线展开） */
+  static fromRow(row: RoleLevelRow): LevelDto {
+    const dto = new LevelDto();
+    const range = (min: number, max: number): ConfigAttributeRangeDto => {
+      const out = new ConfigAttributeRangeDto();
+      out.min = min;
+      out.max = max;
+      return out;
+    };
+    dto.level = row.level;
+    dto.maxHp = row.max_hp;
+    dto.maxMp = row.max_mp;
+    dto.hpRecover = row.hp_recover;
+    dto.physicalAttack = range(row.physical_attack_min, row.physical_attack_max);
+    dto.magicAttack = range(row.magic_attack_min, row.magic_attack_max);
+    dto.taoistAttack = range(row.taoist_attack_min, row.taoist_attack_max);
+    dto.physicalDefense = range(row.physical_defense_min, row.physical_defense_max);
+    dto.magicDefense = range(row.magic_defense_min, row.magic_defense_max);
+    dto.taoistDefense = range(row.taoist_defense_min, row.taoist_defense_max);
+    dto.exp = row.exp;
+    return dto;
+  }
+
+  /**
+   * 从「曲线展开行 + 最终经验」拼一行（旧口径，迁移完成前的兜底）
+   *
+   * 保留是因为空库 / 迁移未跑时快照仍要有内容（客户端进游戏读到空等级表会直接黑屏）。
+   */
   static from(level: number, attributes: Record<string, unknown>, exp: number): LevelDto {
     const dto = new LevelDto();
     const range = (value: unknown): ConfigAttributeRangeDto => {
@@ -71,6 +98,167 @@ export class LevelDto {
     dto.exp = exp;
     return dto;
   }
+}
+
+/**
+ * 管理端看到的一行角色等级（#655）
+ *
+ * 与快照的 `LevelDto` 是同一份数据的两个视角：管理端多一个 `updatedAt`（判断
+ * 「这一行是不是我改的 / 谁最后改的」），快照不带时间戳（客户端不用）。
+ */
+export class RoleLevelDto {
+  @ApiProperty({ description: "等级（1 起；序列固定，不可增删行）" })
+  level: number;
+
+  @ApiProperty({ description: "升到下一级所需经验（≥ 1）" })
+  exp: number;
+
+  @ApiProperty({ description: "生命上限（裸属性）" })
+  maxHp: number;
+
+  @ApiProperty({ description: "魔法上限（裸属性）" })
+  maxMp: number;
+
+  @ApiProperty({ description: "每秒回血（裸属性）" })
+  hpRecover: number;
+
+  @ApiProperty({ description: "物攻区间", type: ConfigAttributeRangeDto })
+  physicalAttack: ConfigAttributeRangeDto;
+
+  @ApiProperty({ description: "魔攻区间", type: ConfigAttributeRangeDto })
+  magicAttack: ConfigAttributeRangeDto;
+
+  @ApiProperty({ description: "道攻区间", type: ConfigAttributeRangeDto })
+  taoistAttack: ConfigAttributeRangeDto;
+
+  @ApiProperty({ description: "物防区间", type: ConfigAttributeRangeDto })
+  physicalDefense: ConfigAttributeRangeDto;
+
+  @ApiProperty({ description: "魔防区间", type: ConfigAttributeRangeDto })
+  magicDefense: ConfigAttributeRangeDto;
+
+  @ApiProperty({ description: "道防区间", type: ConfigAttributeRangeDto })
+  taoistDefense: ConfigAttributeRangeDto;
+
+  @ApiProperty({ description: "最近更新时间（毫秒）" })
+  updatedAt: number;
+
+  static from(row: RoleLevelRow): RoleLevelDto {
+    const dto = new RoleLevelDto();
+    const range = (min: number, max: number): ConfigAttributeRangeDto => {
+      const out = new ConfigAttributeRangeDto();
+      out.min = min;
+      out.max = max;
+      return out;
+    };
+    dto.level = row.level;
+    dto.exp = row.exp;
+    dto.maxHp = row.max_hp;
+    dto.maxMp = row.max_mp;
+    dto.hpRecover = row.hp_recover;
+    dto.physicalAttack = range(row.physical_attack_min, row.physical_attack_max);
+    dto.magicAttack = range(row.magic_attack_min, row.magic_attack_max);
+    dto.taoistAttack = range(row.taoist_attack_min, row.taoist_attack_max);
+    dto.physicalDefense = range(row.physical_defense_min, row.physical_defense_max);
+    dto.magicDefense = range(row.magic_defense_min, row.magic_defense_max);
+    dto.taoistDefense = range(row.taoist_defense_min, row.taoist_defense_max);
+    dto.updatedAt = row.updated_at;
+    return dto;
+  }
+}
+
+/** 角色等级列表查询入参（等级序列就是主键升序，筛选只有一个「跳到某级」） */
+export class RoleLevelQueryDto extends PageQueryDto {
+  @ApiPropertyOptional({ description: "关键字：按等级号模糊匹配" })
+  @IsOptional()
+  @IsString({ message: "关键字必须是字符串" })
+  declare keyword?: string;
+}
+
+/** 角色等级分页结果 */
+export class RoleLevelPageDto extends PageMetaDto {
+  @ApiProperty({ description: "当前页的角色等级", type: [RoleLevelDto] })
+  list: RoleLevelDto[];
+}
+
+/**
+ * 编辑角色等级入参（部分更新；等级本身不可改）
+ *
+ * 六个区间都拆成 `xxxMin` / `xxxMax` 两个字段 —— 与数据库列一一对应，
+ * 不做「数组字段」是因为管理端点选某格改一个数时，送整个数组容易把另一半覆盖成 0。
+ */
+export class UpdateRoleLevelDto {
+  @ApiPropertyOptional({ description: "升到下一级所需经验（≥ 1）", minimum: 1 })
+  @IsOptional()
+  @IsInt({ message: "经验必须是整数" })
+  @Min(1, { message: "经验至少为 1" })
+  exp?: number;
+
+  @ApiPropertyOptional({ description: "生命上限（≥ 0）", minimum: 0 })
+  @IsOptional()
+  @IsInt({ message: "生命上限必须是整数" })
+  @Min(0, { message: "生命上限不能为负" })
+  maxHp?: number;
+
+  @ApiPropertyOptional({ description: "魔法上限（≥ 0）", minimum: 0 })
+  @IsOptional()
+  @IsInt({ message: "魔法上限必须是整数" })
+  @Min(0, { message: "魔法上限不能为负" })
+  maxMp?: number;
+
+  @ApiPropertyOptional({ description: "每秒回血（≥ 0）", minimum: 0 })
+  @IsOptional()
+  @IsInt({ message: "每秒回血必须是整数" })
+  @Min(0, { message: "每秒回血不能为负" })
+  hpRecover?: number;
+
+  @ApiPropertyOptional({ description: "物攻下限（≥ 0）", minimum: 0 })
+  @IsOptional() @IsInt({ message: "物攻下限必须是整数" }) @Min(0, { message: "物攻下限不能为负" })
+  physicalAttackMin?: number;
+
+  @ApiPropertyOptional({ description: "物攻上限（≥ 0）", minimum: 0 })
+  @IsOptional() @IsInt({ message: "物攻上限必须是整数" }) @Min(0, { message: "物攻上限不能为负" })
+  physicalAttackMax?: number;
+
+  @ApiPropertyOptional({ description: "魔攻下限（≥ 0）", minimum: 0 })
+  @IsOptional() @IsInt({ message: "魔攻下限必须是整数" }) @Min(0, { message: "魔攻下限不能为负" })
+  magicAttackMin?: number;
+
+  @ApiPropertyOptional({ description: "魔攻上限（≥ 0）", minimum: 0 })
+  @IsOptional() @IsInt({ message: "魔攻上限必须是整数" }) @Min(0, { message: "魔攻上限不能为负" })
+  magicAttackMax?: number;
+
+  @ApiPropertyOptional({ description: "道攻下限（≥ 0）", minimum: 0 })
+  @IsOptional() @IsInt({ message: "道攻下限必须是整数" }) @Min(0, { message: "道攻下限不能为负" })
+  taoistAttackMin?: number;
+
+  @ApiPropertyOptional({ description: "道攻上限（≥ 0）", minimum: 0 })
+  @IsOptional() @IsInt({ message: "道攻上限必须是整数" }) @Min(0, { message: "道攻上限不能为负" })
+  taoistAttackMax?: number;
+
+  @ApiPropertyOptional({ description: "物防下限（≥ 0）", minimum: 0 })
+  @IsOptional() @IsInt({ message: "物防下限必须是整数" }) @Min(0, { message: "物防下限不能为负" })
+  physicalDefenseMin?: number;
+
+  @ApiPropertyOptional({ description: "物防上限（≥ 0）", minimum: 0 })
+  @IsOptional() @IsInt({ message: "物防上限必须是整数" }) @Min(0, { message: "物防上限不能为负" })
+  physicalDefenseMax?: number;
+
+  @ApiPropertyOptional({ description: "魔防下限（≥ 0）", minimum: 0 })
+  @IsOptional() @IsInt({ message: "魔防下限必须是整数" }) @Min(0, { message: "魔防下限不能为负" })
+  magicDefenseMin?: number;
+
+  @ApiPropertyOptional({ description: "魔防上限（≥ 0）", minimum: 0 })
+  @IsOptional() @IsInt({ message: "魔防上限必须是整数" }) @Min(0, { message: "魔防上限不能为负" })
+  magicDefenseMax?: number;
+
+  @ApiPropertyOptional({ description: "道防下限（≥ 0）", minimum: 0 })
+  @IsOptional() @IsInt({ message: "道防下限必须是整数" }) @Min(0, { message: "道防下限不能为负" })
+  taoistDefenseMin?: number;
+
+  @ApiPropertyOptional({ description: "道防上限（≥ 0）", minimum: 0 })
+  @IsOptional() @IsInt({ message: "道防上限必须是整数" }) @Min(0, { message: "道防上限不能为负" })
+  taoistDefenseMax?: number;
 }
 
 /** 管理端看到的一行升级经验 */

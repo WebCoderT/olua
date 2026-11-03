@@ -1039,6 +1039,25 @@ export type UpdateEquipment = {
   attributes?: ConfigAttributes;
 };
 
+export type UpdateEquipmentVariant = {
+  /**
+   * 名称（基础名，不含前后缀文案；前后缀由客户端按下标拼）
+   */
+  label?: string;
+  /**
+   * 穿戴需求等级（≥ 1）
+   */
+  level?: number;
+  /**
+   * 回收价（≥ 0；货币 = 绑定元宝）
+   */
+  sellPrice?: number;
+  /**
+   * 八项属性（整份提交；不传则保留原值）
+   */
+  attributes?: ConfigAttributes;
+};
+
 export type UpdateEquipmentSlot = {
   /**
    * 槽位中文名（不传则不改；≤20 字）
@@ -1558,6 +1577,73 @@ export type UpdateMonsterDrop = {
    * 内联条目池（**整份替换**）
    */
   entries?: DropEntry[];
+};
+
+export type UpdateRoleLevel = {
+  /**
+   * 升到下一级所需经验（≥ 1）
+   */
+  exp?: number;
+  /**
+   * 生命上限（≥ 0）
+   */
+  maxHp?: number;
+  /**
+   * 魔法上限（≥ 0）
+   */
+  maxMp?: number;
+  /**
+   * 每秒回血（≥ 0）
+   */
+  hpRecover?: number;
+  /**
+   * 物攻下限（≥ 0）
+   */
+  physicalAttackMin?: number;
+  /**
+   * 物攻上限（≥ 0）
+   */
+  physicalAttackMax?: number;
+  /**
+   * 魔攻下限（≥ 0）
+   */
+  magicAttackMin?: number;
+  /**
+   * 魔攻上限（≥ 0）
+   */
+  magicAttackMax?: number;
+  /**
+   * 道攻下限（≥ 0）
+   */
+  taoistAttackMin?: number;
+  /**
+   * 道攻上限（≥ 0）
+   */
+  taoistAttackMax?: number;
+  /**
+   * 物防下限（≥ 0）
+   */
+  physicalDefenseMin?: number;
+  /**
+   * 物防上限（≥ 0）
+   */
+  physicalDefenseMax?: number;
+  /**
+   * 魔防下限（≥ 0）
+   */
+  magicDefenseMin?: number;
+  /**
+   * 魔防上限（≥ 0）
+   */
+  magicDefenseMax?: number;
+  /**
+   * 道防下限（≥ 0）
+   */
+  taoistDefenseMin?: number;
+  /**
+   * 道防上限（≥ 0）
+   */
+  taoistDefenseMax?: number;
 };
 
 export type UpdateLevelExp = {
@@ -3226,7 +3312,7 @@ export type AuditQuery = {
   /**
    * 目标类型筛选
    */
-  targetType?: "account" | "role" | "admin" | "announcement" | "mail" | "title" | "soul" | "rank" | "equipment" | "drug" | "item" | "monster" | "npc" | "mall" | "fashion" | "dropTable" | "monsterDrop" | "levelExp" | "growthSegment" | "growthScalar" | "skill" | "status" | "zone" | "guild" | "quest" | "achievement" | "equipAlign" | "equipInAlign" | "map" | "uiEffect" | "runtimeParams" | "combatWeights" | "guideSteps";
+  targetType?: "account" | "role" | "admin" | "announcement" | "mail" | "title" | "soul" | "rank" | "equipment" | "drug" | "item" | "monster" | "npc" | "mall" | "fashion" | "dropTable" | "monsterDrop" | "levelExp" | "roleLevel" | "equipmentVariant" | "growthSegment" | "growthScalar" | "skill" | "status" | "zone" | "guild" | "quest" | "achievement" | "equipAlign" | "equipInAlign" | "map" | "uiEffect" | "runtimeParams" | "combatWeights" | "guideSteps";
   /**
    * 只看针对某个目标的日志（目标 id）
    */
@@ -4077,6 +4163,99 @@ export type LevelExpQuery = {
   order?: "asc" | "desc";
 };
 
+export type RoleLevel = {
+  /**
+   * 等级（1 起；序列固定，不可增删行）
+   */
+  level: number;
+  /**
+   * 升到下一级所需经验（≥ 1）
+   */
+  exp: number;
+  /**
+   * 生命上限（裸属性）
+   */
+  maxHp: number;
+  /**
+   * 魔法上限（裸属性）
+   */
+  maxMp: number;
+  /**
+   * 每秒回血（裸属性）
+   */
+  hpRecover: number;
+  /**
+   * 物攻区间
+   */
+  physicalAttack: ConfigAttributeRange;
+  /**
+   * 魔攻区间
+   */
+  magicAttack: ConfigAttributeRange;
+  /**
+   * 道攻区间
+   */
+  taoistAttack: ConfigAttributeRange;
+  /**
+   * 物防区间
+   */
+  physicalDefense: ConfigAttributeRange;
+  /**
+   * 魔防区间
+   */
+  magicDefense: ConfigAttributeRange;
+  /**
+   * 道防区间
+   */
+  taoistDefense: ConfigAttributeRange;
+  /**
+   * 最近更新时间（毫秒）
+   */
+  updatedAt: number;
+};
+
+export type RoleLevelPage = {
+  /**
+   * 总条数
+   */
+  total: number;
+  /**
+   * 当前页码（从 1 开始）
+   */
+  page: number;
+  /**
+   * 每页条数
+   */
+  size: number;
+  /**
+   * 当前页的角色等级
+   */
+  list: RoleLevel[];
+};
+
+export type RoleLevelQuery = {
+  /**
+   * 页码，从 1 开始
+   */
+  page?: number;
+  /**
+   * 每页条数（1~100）
+   */
+  size?: number;
+  /**
+   * 关键字：按等级号模糊匹配
+   */
+  keyword?: string;
+  /**
+   * 排序字段（取值见各接口说明，未登记的值会退回默认排序）
+   */
+  sort?: string;
+  /**
+   * 排序方向：asc 升序 / desc 降序
+   */
+  order?: "asc" | "desc";
+};
+
 export type GrowthSegment = {
   /**
    * 曲线键（maxHp / attack / defense / killsPerLevel）
@@ -4539,7 +4718,7 @@ export type Equipment = {
    */
   outPositions: EquipmentPoint[];
   /**
-   * 八项基础属性（普通的·人级；变体是它乘前后缀倍率展开的）
+   * 八项基础属性（普通的·人级那一件自己的值；#655 起变体各自成行，不再由它乘倍率现算）
    */
   attributes: ConfigAttributes;
   /**
@@ -4600,6 +4779,151 @@ export type EquipmentQuery = {
    * 等级段上限（含）
    */
   maxLevel?: number;
+};
+
+export type EquipmentVariant = {
+  /**
+   * 装备基础件 id（如 cloth_1；变体 id 带 _pXsY 不进管理端）
+   */
+  id: string;
+  /**
+   * 部位（EQUIPMENT_TYPE 的枚举值，如 cloth）
+   */
+  slot: string;
+  /**
+   * 穿戴需求等级（装备定强的锚点）
+   */
+  level: number;
+  /**
+   * 售卖价（0 = 不可售卖；商城售价归商城定价管理，不在这里）
+   */
+  sellPrice: number;
+  /**
+   * 名称（如「青铜重甲」；前后缀由客户端拼在名字前后）
+   */
+  label: string;
+  /**
+   * 描述（装备详情弹窗正文）
+   */
+  description: string;
+  /**
+   * 职业限制（取值域见 OCCUPATION_HINT：1 战士 / 2 魔法师 / 3 道士 / 4 全职业）
+   */
+  occupation: string;
+  /**
+   * 性别限制（取值域见 SEX_HINT：1 男 / 2 女 / 3 全性别）
+   */
+  sex: string;
+  /**
+   * 图标（resources 相对路径，如 clothes/icon/005；管理端列表缩略图与客户端图标共用）
+   */
+  icon: string;
+  /**
+   * 内观图集（角色弹窗里穿在身上的那套；resources 相对路径）
+   */
+  inAtlas: string;
+  /**
+   * 外观图集（场景里跟着角色走的那个；resources 相对路径）
+   */
+  outAtlas: string;
+  /**
+   * 标签（如「第一大陆」；详情弹窗展示，无逻辑含义）
+   */
+  tags: string[];
+  /**
+   * 外观缩放（1 = 原尺寸）
+   */
+  outScale: number;
+  /**
+   * 内观横向缩放（1 = 原尺寸）
+   */
+  inScaleX: number;
+  /**
+   * 内观纵向缩放（1 = 原尺寸）
+   */
+  inScaleY: number;
+  /**
+   * 内观旋转角度（度，0 = 不转）
+   */
+  inRotate: number;
+  /**
+   * 内观锚点 x（弹窗坐标系，原点 = 弹窗中心、y 向上）
+   */
+  inPosX: number;
+  /**
+   * 内观锚点 y（弹窗坐标系，y 向上）
+   */
+  inPosY: number;
+  /**
+   * 外观 8 向绝对位置（相对角色脚底锚点，y 向上；顺序 up / right_up / right / right_down / down / left_down / left / left_up）。**这是出厂值**：管理端「装备对齐」工作台调过的结果在 equip_aligns 表、每次进图另发
+   */
+  outPositions: EquipmentPoint[];
+  /**
+   * 八项基础属性（普通的·人级那一件自己的值；#655 起变体各自成行，不再由它乘倍率现算）
+   */
+  attributes: ConfigAttributes;
+  /**
+   * 最近更新时间（毫秒）
+   */
+  updatedAt: number;
+  /**
+   * 所属基础件 id（如 cloth_1）
+   */
+  baseId: string;
+  /**
+   * 前缀序号（0 = 普通的；文案与颜色按下标对齐，颜色留在客户端）
+   */
+  prefix: number;
+  /**
+   * 后缀序号（0 = 人级）
+   */
+  suffix: number;
+};
+
+export type EquipmentVariantPage = {
+  /**
+   * 总条数
+   */
+  total: number;
+  /**
+   * 当前页码（从 1 开始）
+   */
+  page: number;
+  /**
+   * 每页条数
+   */
+  size: number;
+  /**
+   * 当前页的装备变体
+   */
+  list: EquipmentVariant[];
+};
+
+export type EquipmentVariantQuery = {
+  /**
+   * 页码，从 1 开始
+   */
+  page?: number;
+  /**
+   * 每页条数（1~100）
+   */
+  size?: number;
+  /**
+   * 关键字：模糊匹配变体 id 与名称
+   */
+  keyword?: string;
+  /**
+   * 排序字段（取值见各接口说明，未登记的值会退回默认排序）
+   */
+  sort?: string;
+  /**
+   * 排序方向：asc 升序 / desc 降序
+   */
+  order?: "asc" | "desc";
+  /**
+   * 只列某个基础件的 15 个变体（如 cloth_1）
+   */
+  baseId?: string;
 };
 
 export type Drug = {
@@ -6071,9 +6395,9 @@ export type GameConfigSnapshot = {
    */
   ranks: Rank[];
   /**
-   * 装备基础件配置（555 件变体由客户端按前后缀倍率展开）
+   * 装备变体（555 件：37 基础件 × 5 前缀 × 3 后缀）。#655 起每件都是最终值，客户端直接建表、不再乘倍率展开
    */
-  equipments: Equipment[];
+  equipments: EquipmentVariant[];
   /**
    * 药品配置
    */

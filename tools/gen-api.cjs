@@ -107,6 +107,8 @@ const MODULES = {
   adminSoul: { target: "admin", export: "soulsApi" },
   adminRank: { target: "admin", export: "ranksApi" },
   adminEquipment: { target: "admin", export: "equipmentsApi" },
+  // 装备变体（#655）：555 行逐一配置；与 adminEquipment（37 个基础件）不是同一张表
+  adminEquipmentVariant: { target: "admin", export: "equipmentVariantsApi" },
   // 装备槽位（#603 第九域）：13 行固定清单，客户端槽位表/整理序的唯一来源
   adminEquipmentSlot: { target: "admin", export: "equipmentSlotsApi" },
   // 装备规则（#603 第九域）：前后缀倍率 / 文案 / 回收价曲线（单行）
@@ -127,6 +129,8 @@ const MODULES = {
   adminFashion: { target: "admin", export: "fashionsApi" },
   adminDrop: { target: "admin", export: "dropApi" },
   adminLevelExp: { target: "admin", export: "levelExpsApi" },
+  // 角色等级表（#655）：60 行属性 + 经验；levelExps 只剩经验一列（同源），这里是全字段
+  adminRoleLevel: { target: "admin", export: "roleLevelsApi" },
   adminGrowthSegment: { target: "admin", export: "growthSegmentsApi" },
   adminGrowthScalar: { target: "admin", export: "growthScalarsApi" },
   // 运行时参数（#605）：掉落手感 / 自动战斗 / 帮会规则，单行三组 JSON

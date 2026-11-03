@@ -623,36 +623,57 @@ async function raiseLevel(roleId, level, token) {
   const baseMaxHp = wearIt.data.derived.attributes.maxHp;
   check(typeof baseMaxHp === "number", "穿上后取到含装备加成的 maxHp", String(baseMaxHp));
 
-  const doubled = await api("PATCH", `admin/equipments/${sampleEquip.id}`, {
-    token: adminToken,
-    body: { attributes: { ...sampleEquip.attributes, maxHp: sampleEquip.attributes.maxHp * 2 } },
-  });
-  check(doubled.code === 0, "管理端把该装备的 maxHp 改成 2 倍", doubled.message);
+  // #655：变体是**独立配置行** —— 管理端改哪一行，服务端下一次重算就用那一行
+  const variantList = await api("GET", `admin/equipment-variants?baseId=${sampleEquip.id}&size=20`, { token: adminToken });
+  const variantRow = (variantList.data.list || []).find((item) => item.id === sampleEquip.id);
+  check(!!variantRow, "准备：变体表里能查到这件装备的 p0s0 行", JSON.stringify((variantList.data.list || []).length));
 
-  const afterDouble = await api("GET", `admin/roles/${roleD1Id}`, { token: adminToken });
-  const doubledMaxHp = afterDouble.data.derived.attributes.maxHp;
+  const boost = await api("PATCH", `admin/equipment-variants/${sampleEquip.id}`, {
+    token: adminToken,
+    body: { attributes: { ...variantRow.attributes, maxHp: variantRow.attributes.maxHp * 2 } },
+  });
+  check(boost.code === 0, "管理端把该变体的 maxHp 改成 2 倍", boost.message);
+
+  const afterBoost = await api("GET", `admin/roles/${roleD1Id}`, { token: adminToken });
+  const boostedMaxHp = afterBoost.data.derived.attributes.maxHp;
   check(
-    doubledMaxHp === baseMaxHp + sampleEquip.attributes.maxHp,
-    "服务端重算立刻按新值（不需要重启、也不需要客户端同步）",
-    `${baseMaxHp} → ${doubledMaxHp}（基础件 maxHp ${sampleEquip.attributes.maxHp}）`,
+    boostedMaxHp === baseMaxHp + variantRow.attributes.maxHp,
+    "改变体 → 服务端重算立刻按新值（不需要重启、也不需要客户端同步）",
+    `${baseMaxHp} → ${boostedMaxHp}（变体原 maxHp ${variantRow.attributes.maxHp}）`,
   );
 
-  // 变体同一口径：管理端改的是基础件，玩家身上穿的可能是 `_pXsY` 变体（属性 = 基础件 × 前后缀倍率）
-  const shared = require("../dist/shared/game-data.generated");
-  const variantRate = shared.EQUIPMENT_PREFIX_RATES[4] * shared.EQUIPMENT_SUFFIX_RATES[2];
+  // 独立性守点（#655 的语义变化）：改基础件**不再**带动它的 15 个变体
+  const baseTriple = await api("PATCH", `admin/equipments/${sampleEquip.id}`, {
+    token: adminToken,
+    body: { attributes: { ...sampleEquip.attributes, maxHp: sampleEquip.attributes.maxHp * 3 } },
+  });
+  check(baseTriple.code === 0, "管理端把基础件 maxHp 改成 3 倍", baseTriple.message);
+  const afterBase = await api("GET", `admin/roles/${roleD1Id}`, { token: adminToken });
+  check(
+    afterBase.data.derived.attributes.maxHp === boostedMaxHp,
+    "改基础件不再带动变体（每件变体都是独立配置行）",
+    `${boostedMaxHp} vs ${afterBase.data.derived.attributes.maxHp}`,
+  );
+
+  // 变体各算各的：p4s2 穿在身上，加成就是它自己那一行的值
   const variantId = `${sampleEquip.id}_p4s2`;
+  const topVariant = (variantList.data.list || []).find((item) => item.id === variantId);
+  check(!!topVariant, "准备：同一件的 p4s2 变体也在表里", JSON.stringify((variantList.data.list || []).map((item) => item.id)));
   const wearVariant = await api("PATCH", `admin/roles/${roleD1Id}`, { token: adminToken, body: { equipments: { WEAPON: variantId } } });
   check(wearVariant.code === 0, "准备：把同一件的变体穿上（p4s2）", wearVariant.message);
   // 等级那部分加成没变，减掉它剩下的就是装备加成
   const variantBonus = wearVariant.data.derived.attributes.maxHp - (baseMaxHp - sampleEquip.attributes.maxHp);
   check(
-    variantBonus === Math.round(sampleEquip.attributes.maxHp * 2 * variantRate),
-    "变体按「基础件 × 前后缀倍率」重算（p4s2 = 1.4 × 3）",
-    `${variantBonus} vs ${Math.round(sampleEquip.attributes.maxHp * 2 * variantRate)}`,
+    variantBonus === topVariant.attributes.maxHp,
+    "变体按自己那一行算（不再由基础件 × 前后缀倍率现算）",
+    `${variantBonus} vs ${topVariant.attributes.maxHp}`,
   );
 
+  // 还原：先把变体和基础件都改回原值，再确认角色属性回到起点
+  const restoreVariant = await api("PATCH", `admin/equipment-variants/${sampleEquip.id}`, { token: adminToken, body: { attributes: variantRow.attributes } });
+  check(restoreVariant.code === 0, "还原该变体的属性", restoreVariant.message);
   const restoredEquip = await api("PATCH", `admin/equipments/${sampleEquip.id}`, { token: adminToken, body: { attributes: sampleEquip.attributes } });
-  check(restoredEquip.code === 0, "还原该装备的属性", restoredEquip.message);
+  check(restoredEquip.code === 0, "还原该基础件的属性", restoredEquip.message);
   const backToNormal = await api("PATCH", `admin/roles/${roleD1Id}`, { token: adminToken, body: { equipments: { WEAPON: sampleEquip.id } } });
   check(
     backToNormal.data.derived.attributes.maxHp === baseMaxHp,
@@ -665,6 +686,9 @@ async function raiseLevel(roleId, level, token) {
   //#region 八点六、管理端改价签 → 服务端成交价跟着变（#545）
 
   console.log("— 八点六、管理端改价签 / 等级 → 服务端成交价跟着变 —");
+
+  // 出厂价签 / 装备展开口径的对照来源（#655 后装备价不再来自回收曲线，但材料价还是）
+  const shared = require("../dist/shared/game-data.generated");
 
   // 这条守的是「经济出口两端一致」：客户端背包里的价签来自快照覆写（管理端改完立刻变），
   // 服务端此前读的是编译期生成物 —— 界面上写 77，到账 2。玩家只能描述成「价签不对」。
@@ -695,7 +719,7 @@ async function raiseLevel(roleId, level, token) {
   });
   check(soldBackToFactory.data.sold[0].unitPrice === hideFactory, "还原后回到出厂价（覆盖层跟着回退，不是一次性的）", soldBackToFactory.data.sold[0].unitPrice);
 
-  // 装备：等级既是穿戴门槛也是定价依据（回收价 = 等级基础价 × 前后缀倍率）
+  // 装备：#655 起回收价就是**变体行的 sell_price**（以前是「等级基础价 × 前后缀倍率」现算）
   const putEquip = await api("PATCH", `admin/roles/${roleD1Id}`, { token: adminToken, body: bagWith(sampleEquip.id, 1) });
   check(putEquip.code === 0, "准备：背包里放一件该装备（基础件）", putEquip.message);
   const soldEquip = await api("POST", `roles/${roleD1Id}/sell`, {
@@ -703,11 +727,13 @@ async function raiseLevel(roleId, level, token) {
     body: { entries: [{ goodId: sampleEquip.id, count: 1 }] },
   });
   check(
-    soldEquip.data.sold[0].unitPrice === shared.EQUIPMENT_RECYCLE_PRICES[sampleEquip.level - 1],
-    "装备价 = 该等级的回收基础价（客户端显示的就是这一档）",
-    `${soldEquip.data.sold[0].unitPrice} vs ${shared.EQUIPMENT_RECYCLE_PRICES[sampleEquip.level - 1]}`,
+    soldEquip.data.sold[0].unitPrice === variantRow.sellPrice,
+    "装备价 = 变体行自己的回收价（库里的最终值，客户端显示的是同一个数）",
+    `${soldEquip.data.sold[0].unitPrice} vs ${variantRow.sellPrice}`,
   );
 
+  // 改基础件等级**不再**改价签（变体行有独立 level / sell_price）——
+  // 想调价就改那一行的 sellPrice，这是 #655 的语义变化
   const levelUp = await api("PATCH", `admin/equipments/${sampleEquip.id}`, { token: adminToken, body: { level: 50 } });
   check(levelUp.code === 0, "管理端把该装备的等级改成 50", levelUp.message);
   await api("PATCH", `admin/roles/${roleD1Id}`, { token: adminToken, body: bagWith(sampleEquip.id, 1) });
@@ -716,13 +742,29 @@ async function raiseLevel(roleId, level, token) {
     body: { entries: [{ goodId: sampleEquip.id, count: 1 }] },
   });
   check(
-    soldEquip50.data.sold[0].unitPrice === shared.EQUIPMENT_RECYCLE_PRICES[49],
-    "改等级后价签跟着走（不用重新生成共享数据）",
-    `${soldEquip50.data.sold[0].unitPrice} vs ${shared.EQUIPMENT_RECYCLE_PRICES[49]}`,
+    soldEquip50.data.sold[0].unitPrice === variantRow.sellPrice,
+    "改基础件等级不影响变体价签（价签是变体行自己的列）",
+    `${soldEquip50.data.sold[0].unitPrice} vs ${variantRow.sellPrice}`,
   );
 
   const levelRestore = await api("PATCH", `admin/equipments/${sampleEquip.id}`, { token: adminToken, body: { level: sampleEquip.level } });
   check(levelRestore.code === 0, "还原该装备的等级（后续断言仍按出厂值）", levelRestore.message);
+
+  // 改变体自己的 sellPrice → 成交价立刻跟着走（这才是现在调价的入口）
+  const variantPrice = variantRow.sellPrice + 7;
+  const priceUpVariant = await api("PATCH", `admin/equipment-variants/${sampleEquip.id}`, { token: adminToken, body: { sellPrice: variantPrice } });
+  check(priceUpVariant.code === 0, "管理端把该变体的回收价 +7", priceUpVariant.message);
+  await api("PATCH", `admin/roles/${roleD1Id}`, { token: adminToken, body: bagWith(sampleEquip.id, 1) });
+  const soldEquipNewPrice = await api("POST", `roles/${roleD1Id}/sell`, {
+    token: tokenC,
+    body: { entries: [{ goodId: sampleEquip.id, count: 1 }] },
+  });
+  check(
+    soldEquipNewPrice.data.sold[0].unitPrice === variantPrice,
+    "改变体回收价 → 成交价立刻跟着走（不重启、不用重新生成共享数据）",
+    `${soldEquipNewPrice.data.sold[0].unitPrice} vs ${variantPrice}`,
+  );
+  await api("PATCH", `admin/equipment-variants/${sampleEquip.id}`, { token: adminToken, body: { sellPrice: variantRow.sellPrice } });
 
   //#endregion
 

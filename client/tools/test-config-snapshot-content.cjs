@@ -138,6 +138,38 @@ function main() {
     `${baseAfter.recyclePrice} / ${variantAfter.recyclePrice}`,
   );
 
+  // #655：服务端下发的是**展开后的变体行**（自带 prefix / suffix / 最终价），
+  // 客户端必须原样建表 —— 再乘一次倍率就会变成 4.2² 倍，这是最容易踩的回归
+  console.log("\n=== 装备变体行：数值是最终值，客户端不再乘倍率（#655） ===");
+  const variantRow = {
+    ...equipmentRow,
+    id: "cloth_1_p4s2",
+    sellPrice: 4321,
+    level: 12,
+    prefix: 4,
+    suffix: 2,
+    attributes: attributes(4321, 21, 420, 84),
+    updatedAt: 0,
+  };
+  snapshotApi.applyContentSnapshot(contentSnapshot({ equipments: [variantRow] }));
+  const directVariant = getItem("cloth_1_p4s2");
+  check(!!directVariant, "变体行能按 id 建进装备表", String(Boolean(directVariant)));
+  check(
+    directVariant.maxHp === 4321,
+    "变体 maxHp = 服务端行原值（不再 × 前后缀倍率）",
+    `${directVariant.maxHp}（若被再乘一次会变成 ${Math.round(4321 * rate)}）`,
+  );
+  check(
+    directVariant.physicalAttack[0] === 420 && directVariant.recyclePrice === 4321,
+    "变体攻击区间与回收价同样原样落地",
+    `${JSON.stringify(directVariant.physicalAttack)} / ${directVariant.recyclePrice}`,
+  );
+  check(
+    directVariant.prefix === 4 && directVariant.suffix === 2,
+    "前后缀序号取自服务端行（详情弹窗按它取品质文案与颜色）",
+    `${directVariant.prefix}/${directVariant.suffix}`,
+  );
+
   console.log("\n=== 药品：整表重建 + 扁平四值还原成 effects（#603 第十域） ===");
   const drugBefore = drugs.find((drug) => drug.id === "drug_hp_1");
   // 「到达前有 11 种」已在文件开头断言（分段入口会整表重建，这里再判就没意义了）

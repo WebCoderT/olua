@@ -375,9 +375,64 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
         updated_at           INTEGER NOT NULL DEFAULT 0
       );
 
+      -- 角色等级表（#655）：一行 = 一个等级的**最终裸属性 + 升级经验**。
+      -- 这是「移除成长曲线」后的唯一书写处：曲线（growth_segments）不再参与运行时，
+      -- 60 行数值由 server/scripts/migrate-derived-tables.cjs 一次性展开写入，
+      -- 之后只由管理端「角色等级」页逐行改。运行时 / 快照都只读这张表。
+      CREATE TABLE IF NOT EXISTS role_levels (
+        level                INTEGER PRIMARY KEY,
+        exp                  INTEGER NOT NULL DEFAULT 1,
+        max_hp               INTEGER NOT NULL DEFAULT 0,
+        max_mp               INTEGER NOT NULL DEFAULT 0,
+        hp_recover           INTEGER NOT NULL DEFAULT 0,
+        physical_attack_min  INTEGER NOT NULL DEFAULT 0,
+        physical_attack_max  INTEGER NOT NULL DEFAULT 0,
+        magic_attack_min     INTEGER NOT NULL DEFAULT 0,
+        magic_attack_max     INTEGER NOT NULL DEFAULT 0,
+        taoist_attack_min    INTEGER NOT NULL DEFAULT 0,
+        taoist_attack_max    INTEGER NOT NULL DEFAULT 0,
+        physical_defense_min INTEGER NOT NULL DEFAULT 0,
+        physical_defense_max INTEGER NOT NULL DEFAULT 0,
+        magic_defense_min    INTEGER NOT NULL DEFAULT 0,
+        magic_defense_max    INTEGER NOT NULL DEFAULT 0,
+        taoist_defense_min   INTEGER NOT NULL DEFAULT 0,
+        taoist_defense_max   INTEGER NOT NULL DEFAULT 0,
+        updated_at           INTEGER NOT NULL DEFAULT 0
+      );
+
+      -- 装备变体表（#655）：一行 = 一件**具体可掉落/可穿戴**的装备（基础件 × 前后缀，
+      -- 37 × 15 = 555 行）。这是「移除变体倍率」后的唯一书写处：不再由基础件乘倍率现算，
+      -- 每行的属性 / 卖价 / 穿戴等级都可单独改。equipments 只留 37 个基础件（模板与名称）。
+      CREATE TABLE IF NOT EXISTS equipment_variants (
+        id                   TEXT    PRIMARY KEY,
+        base_id              TEXT    NOT NULL,
+        prefix               INTEGER NOT NULL DEFAULT 0,
+        suffix               INTEGER NOT NULL DEFAULT 0,
+        label                TEXT    NOT NULL DEFAULT '',
+        level                INTEGER NOT NULL DEFAULT 1,
+        sell_price           INTEGER NOT NULL DEFAULT 0,
+        max_hp               INTEGER NOT NULL DEFAULT 0,
+        hp_recover           INTEGER NOT NULL DEFAULT 0,
+        physical_attack_min  INTEGER NOT NULL DEFAULT 0,
+        physical_attack_max  INTEGER NOT NULL DEFAULT 0,
+        magic_attack_min     INTEGER NOT NULL DEFAULT 0,
+        magic_attack_max     INTEGER NOT NULL DEFAULT 0,
+        taoist_attack_min    INTEGER NOT NULL DEFAULT 0,
+        taoist_attack_max    INTEGER NOT NULL DEFAULT 0,
+        physical_defense_min INTEGER NOT NULL DEFAULT 0,
+        physical_defense_max INTEGER NOT NULL DEFAULT 0,
+        magic_defense_min    INTEGER NOT NULL DEFAULT 0,
+        magic_defense_max    INTEGER NOT NULL DEFAULT 0,
+        taoist_defense_min   INTEGER NOT NULL DEFAULT 0,
+        taoist_defense_max   INTEGER NOT NULL DEFAULT 0,
+        updated_at           INTEGER NOT NULL DEFAULT 0
+      );
+      CREATE INDEX IF NOT EXISTS idx_equipment_variants_base ON equipment_variants(base_id);
+
       -- 成长曲线（#256）：升级经验 + 分段曲线 + 标量参数，三张表都**只能改内容、不能增删行**
       -- （行的形状由客户端 configs/growth 定义，seed 时落库）。
       -- 改曲线会连锁影响军衔等效强度与怪物数值 —— 军衔映射基准（#250）与结算口径都以它为底。
+      -- ⚠️ #655：level_exps / growth_segments 已被 role_levels 取代，运行时不再读（保留列只做迁移来源）
       CREATE TABLE IF NOT EXISTS level_exps (
         level      INTEGER PRIMARY KEY,
         exp        INTEGER NOT NULL,

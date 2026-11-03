@@ -168,6 +168,11 @@ const REPO_EDGES = {
   // 装备基础件（#252）：同称号 / 战魂 / 军衔，只在 game-config 模块内读写；
   // 战斗结算仍走 game-data.generated 的 EQUIPMENT_ATTRIBUTES（客户端对接 #248/#249 未做）
   "database/repositories/equipment.repository.ts": ["modules/game-config"],
+  // 装备变体（#655）：555 行逐一配置，只有 game-config 读写（管理端 + 快照）；
+  // 战斗结算走 `shared/runtime-overrides` 的覆盖层，不直连仓储
+  "database/repositories/equipment-variant.repository.ts": ["modules/game-config"],
+  // 角色等级表（#655）：60 行属性 + 经验，只有 game-config 读写；结算同样走覆盖层
+  "database/repositories/role-level.repository.ts": ["modules/game-config"],
   // 装备对齐几何（#513）：只属于 game-config —— 它存的是客户端布局，服务端不参与任何计算，
   // 也就没有第二个域该读它（客户端那条路走的是快照接口，不经过仓储）
   "database/repositories/equip-align.repository.ts": ["modules/game-config"],

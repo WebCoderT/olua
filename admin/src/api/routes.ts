@@ -355,12 +355,27 @@ export const routes = {
      */
     update: (key: string) => `/admin/equipment-slots/${encodeURIComponent(key)}`,
   },
+  /** adminEquipmentVariant 模块（2 个接口） */
+  adminEquipmentVariant: {
+    /**
+     * 装备变体列表（555 件）（GET /admin/equipment-variants）
+     *
+     * 555 行 = 37 基础件 × 5 前缀 × 3 后缀。`baseId` 只看某一件基础件的 15 个变体；`keyword` 模糊匹配变体 id 与名称。
+     */
+    list: "/admin/equipment-variants",
+    /**
+     * 编辑装备变体（PATCH /admin/equipment-variants/{id}）
+     *
+     * **部分更新**：`label` / `level` / `sellPrice` 传哪个改哪个；`attributes` 是八项属性，**整份提交**。
+     */
+    update: (id: string) => `/admin/equipment-variants/${encodeURIComponent(id)}`,
+  },
   /** adminEquipment 模块（2 个接口） */
   adminEquipment: {
     /**
      * 装备基础件配置列表（GET /admin/equipments）
      *
-     * **只收基础件**（普通的·人级，如 `cloth_1`），变体（`cloth_1_p3s2`）不进管理端 —— 它是基础件乘前后缀倍率展开的。id / 部位结构固定，**没有创建 / 删除**。
+     * **只收基础件**（普通的·人级，如 `cloth_1`），变体（`cloth_1_p3s2`）在 `admin/equipment-variants` 单独管。id / 部位结构固定，**没有创建 / 删除**。
      */
     list: "/admin/equipments",
     /**
@@ -669,6 +684,21 @@ export const routes = {
      * 按举报时间倒序（新举报在前，同毫秒以 id 兜底，翻页稳定）。
      */
     list: "/admin/reports",
+  },
+  /** adminRoleLevel 模块（2 个接口） */
+  adminRoleLevel: {
+    /**
+     * 角色等级表（GET /admin/role-levels）
+     *
+     * 等级序列固定（1..roleMaxLevel），**没有创建 / 删除**：一行 = 该级的裸属性（血 / 蓝 / 回血 / 六项攻防区间）+ 升级经验。
+     */
+    list: "/admin/role-levels",
+    /**
+     * 编辑角色等级（PATCH /admin/role-levels/{level}）
+     *
+     * **部分更新**：只改传了的字段（等级本身不可改）。
+     */
+    update: (level: string) => `/admin/role-levels/${encodeURIComponent(level)}`,
   },
   /** adminRole 模块（6 个接口） */
   adminRole: {

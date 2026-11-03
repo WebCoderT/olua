@@ -31,11 +31,11 @@
  */
 
 import { COMBAT_RANGE_KEYS } from "../../shared/game-data.generated";
-import { ROLE_LEVEL_ATTRIBUTES } from "../../shared/growth-seed";
 import {
   combatWeightsOf,
   equipmentAttributesOf,
   rankAttributesOf,
+  roleLevelAttributesOf,
   soulAttributesOf,
   titleAttributesOf,
 } from "../../shared/runtime-overrides";
@@ -132,7 +132,7 @@ export function summarizeRoleAttributes(source: RoleAttributeSource): RoleAttrib
 export function summarizeRoleAttributesWithNotes(source: RoleAttributeSource): { summary: RoleAttributeSummary | null; notes: RoleAttributeNotes } {
   const notes: RoleAttributeNotes = { unknownEquipmentIds: [] };
 
-  const levelBundle = lookupGeneratedBundle(ROLE_LEVEL_ATTRIBUTES, source.level);
+  const levelBundle = roleLevelAttributesOf(source.level);
   if (!levelBundle) return { summary: null, notes };
 
   const equipmentBundles = collectEquipmentBundles(source.equipments, notes);
@@ -218,14 +218,6 @@ function rangeOf(bundle: GeneratedBundle, key: string): [number, number] | null 
   const high = Number(value[1]);
   if (!Number.isFinite(low) || !Number.isFinite(high)) return null;
   return [low, high];
-}
-
-/** 按**等级键**查表（角色等级那一支：键就是等级本身） */
-function lookupGeneratedBundle(table: GeneratedBundle, level: number): GeneratedBundle | null {
-  const value = Number(level);
-  if (!Number.isFinite(value)) return null;
-  const bundle = table[String(Math.trunc(value))];
-  return bundle && typeof bundle === "object" ? (bundle as GeneratedBundle) : null;
 }
 
 /** 收集穿戴装备的属性包（查不到的 id 跳过，但记进 notes） */

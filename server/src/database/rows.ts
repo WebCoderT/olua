@@ -457,6 +457,34 @@ export interface SoulRow {
 
 //#region 成长曲线（#256）
 
+/**
+ * 角色等级一行（`role_levels` 表；#655）
+ *
+ * 一行 = 一个等级的**最终裸属性 + 升级经验**。曲线（`growth_segments`）已从运行时移除，
+ * 这 60 行由迁移脚本一次性展开写入，之后只由管理端逐行改 —— 运行时与快照都只读它。
+ */
+export interface RoleLevelRow {
+  level: number;
+  /** 升到下一级所需经验（原 level_exps.exp；主键同级一一对应） */
+  exp: number;
+  max_hp: number;
+  max_mp: number;
+  hp_recover: number;
+  physical_attack_min: number;
+  physical_attack_max: number;
+  magic_attack_min: number;
+  magic_attack_max: number;
+  taoist_attack_min: number;
+  taoist_attack_max: number;
+  physical_defense_min: number;
+  physical_defense_max: number;
+  magic_defense_min: number;
+  magic_defense_max: number;
+  taoist_defense_min: number;
+  taoist_defense_max: number;
+  updated_at: number;
+}
+
 /** 等级经验一行（`level_exps` 表）：一行 = 一个等级升到下一级所需经验 */
 export interface LevelExpRow {
   /** 等级（1 起；主键，不可增删行） */
@@ -572,6 +600,45 @@ export interface EquipmentRow {
   out_scale: number;
   /** 外观 8 向绝对位置 JSON 数组文本（`[{"x":..,"y":..}, …]`，顺序 up → left_up） */
   out_positions: string;
+  max_hp: number;
+  hp_recover: number;
+  physical_attack_min: number;
+  physical_attack_max: number;
+  magic_attack_min: number;
+  magic_attack_max: number;
+  taoist_attack_min: number;
+  taoist_attack_max: number;
+  physical_defense_min: number;
+  physical_defense_max: number;
+  magic_defense_min: number;
+  magic_defense_max: number;
+  taoist_defense_min: number;
+  taoist_defense_max: number;
+  updated_at: number;
+}
+
+/**
+ * 装备变体一行（`equipment_variants` 表；#655）
+ *
+ * 一行 = 一件**具体可掉落 / 可穿戴**的装备（基础件 × 前后缀，37 × 15 = 555 行）。
+ * 以前是「基础件属性 × 前后缀倍率」在运行时现算，现在每一行都是独立配置：
+ * 属性、卖价、穿戴等级都可单独改，`equipments` 只留 37 个基础件当模板与名称来源。
+ */
+export interface EquipmentVariantRow {
+  /** 变体 id（基础件原 id，或 `cloth_1_p3s2`；主键 = 物品 id） */
+  id: string;
+  /** 基础件 id（`equipments.id`；用于按基础件筛变体 / 连带改名） */
+  base_id: string;
+  /** 前缀序号（0 = 普通；下标与品质文案、颜色对齐） */
+  prefix: number;
+  /** 后缀序号（0 = 人级） */
+  suffix: number;
+  /** 完整名称（已拼好，如「精良的青铜重甲」—— 消费方不必再拼） */
+  label: string;
+  /** 穿戴需求等级 */
+  level: number;
+  /** 回收价（货币 = 绑定元宝；一键回收按它结算） */
+  sell_price: number;
   max_hp: number;
   hp_recover: number;
   physical_attack_min: number;

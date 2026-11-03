@@ -158,6 +158,9 @@ function toBattleAttributes(attributes: ConfigAttributes): BattleAttributes {
  */
 function rowToEquipmentData(row: EquipmentRow): EquipmentData {
   const attributes = toBattleAttributes(row.attributes);
+  // #655：快照发的是展开后的变体行，行自带前后缀序号与最终回收价 ——
+  // 客户端不再乘倍率（sentinel 见 buildEquipmentMap 的两条路径判定）
+  const variant = row as EquipmentRow & { prefix?: number; suffix?: number };
   return {
     key: row.id,
     type: GOOD_TYPE.EQUIPMENT,
@@ -178,15 +181,18 @@ function rowToEquipmentData(row: EquipmentRow): EquipmentData {
     inRotate: row.inRotate,
     outScale: row.outScale,
     outPositions: (row.outPositions ?? []).map((point) => new Vec2(point.x, point.y)),
+    prefix: variant.prefix as EquipmentData["prefix"],
+    suffix: variant.suffix as EquipmentData["suffix"],
+    recyclePrice: row.sellPrice,
     ...attributes,
   };
 }
 
 /**
- * 装载装备（#603 第九域：整表重建）
+ * 装载装备（#603 第九域：整表重建；#655：快照发的是 555 个变体，不再在客户端展开）
  *
- * 服务端下发**基础件**（37 件）+ 全部显示字段，`applyEquipmentData` 按「前缀 × 后缀」
- * 展开成 555 条变体并按部位分表。物品总表（`items`）不在这里逐条写 —— 由
+ * 服务端下发**展开后的变体**（37 基础件 × 5 前缀 × 3 后缀 = 555）+ 全部显示字段，
+ * `applyEquipmentData` 直接按部位分表。物品总表（`items`）不在这里逐条写 —— 由
  * `applyContentSnapshot` 末尾的 `rebuildItemIndex()` 一次性重建（#603 第十域）,
  * 顺序「装备 → 药品 → 材料」只有那一处实现。
  */
