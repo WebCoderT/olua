@@ -16,7 +16,7 @@ import { DrugDto, DrugPageDto, DrugQueryDto, UpdateDrugDto } from "./dto/drug.dt
  *
  * 与称号 / 战魂 / 军衔 / 装备基础件同一取向：**只有 list / update，没有 create / remove** ——
  * 药品 id 清单固定（被掉落表与背包引用），e2e 会固化「POST/DELETE 404」。
- * `level` 不开放编辑（使用等级需求属客户端成长曲线定标的一部分）；
+ * `level` 自 #643 起可改（只影响展示与背包排序，服务端用药不拦等级）；
  * 四项回复量是 effects 数组按键**求和**的单值（客户端 resolveDrugRecovery 逐项累加，语义等价）；
  * **商城售价不在这里**（归商城定价管理）。写操作带 `@AuditTarget("drug")`。
  */
@@ -30,9 +30,10 @@ export class AdminDrugController {
     operationId: "adminDrug.list",
     summary: "药品配置列表",
     description:
-      "id 清单固定（seed 自客户端 configs/drug 的 8 种），**没有创建 / 删除**。" +
+      "id 清单固定（seed 自服务端 `item-seed.ts` 的 11 种），**没有创建 / 删除**。" +
       "`keyword` 模糊匹配 id / 名称 / 描述。\n\n" +
       "`sellPrice` 是客户端条目的售卖价（0 = 不可售卖），**商城售价归商城定价管理**，不在这里。\n\n" +
+      "**回复量两种口径**：金创药走固定值（`effectHp`），魔法药走百分比（`effectMpPercent`）。\n\n" +
       `**排序**：\`sort\` 取 ${sortFieldNames(DRUG_SORT)}，\`order\` 取 asc / desc（默认 id 升序）。`,
     permissions: [Permission.GAME_CONFIG_READ],
   })
@@ -54,7 +55,7 @@ export class AdminDrugController {
       "- `maxStack` / `cooldown`：堆叠上限 / 使用冷却秒数（0 = 无冷却）。\n" +
       "- `effectHp` / `effectMp`：固定回复量；`effectHpPercent` / `effectMpPercent`：百分比回复（50 = 50%，≤100）。" +
       "四项都是 effects 数组按键求和后的单值，客户端按逐项累加结算，语义等价。\n" +
-      "- `level` 不开放编辑（使用等级需求属客户端成长曲线定标的一部分）。\n" +
+      "- `level`：使用等级需求（1 ~ 60）。只作用于展示与背包排序，**服务端用药不拦等级**。\n" +
       "- `id` 不存在 → 404（`50017`）。",
     permissions: [Permission.GAME_CONFIG_WRITE],
   })

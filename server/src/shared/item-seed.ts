@@ -58,13 +58,21 @@ export interface DrugSeedRow {
 }
 
 /**
- * 药品（8 种）
+ * 药品（11 种）
  *
- * 回复量按 `growth-seed` 的等级曲线定标：「小药 ≈ 1 级血量的 60%、中药 ≈ 5 级、大药 ≈ 10~20 级」——
- * 每档药大约回满它对应等级段的一条命，越级使用就会明显不够用。改了成长曲线记得回来同步这三档。
+ * **金创药 5 档**（小 / 中 / 大 / 特大 / 超级）走**固定回复量**，沿 `growth-seed` 的血量曲线往上外推：
+ * 每档大约回满它对应等级段的一条命，越级使用就会明显不够用
+ * （`maxHp`：L1 100 / L5 172 / L10 262 / L20 861 / L35 6040）。改曲线时回来同步这五档。
  *
- * 百分比药（强效血药 / 强效蓝药）不参与等级分档：回复量按 maxHp / maxMp 的百分比算，
+ * **魔法药 3 档**（小 / 中 / 大）走**百分比回复**：30% / 60% / 100%。蓝量本来就少
+ * （maxMp = maxHp × 0.5）、技能消耗又随等级涨，写固定值等于每隔十几级就要重拍一次数；
+ * 百分比对任何等级段都成立。最高档刻意就是 100% —— 再高会被「血蓝各自封顶」吃掉，白写。
+ *
+ * 百分比药（强效血药 / 强效蓝药）同样不参与等级分档：回复量按 maxHp / maxMp 的百分比算，
  * 任何等级段都等价好用，因此所有怪物均可掉落（见 monster-drop-seed）。
+ *
+ * `level`（使用等级需求）**只是展示与背包排序口径，不拦用药** —— 服务端 `useDrug` 不看它
+ * （玩家血少时越级吃药是合理操作）。管理端可改，改了立刻随快照下发。
  */
 export const DRUG_SEED_ROWS: DrugSeedRow[] = [
   {
@@ -110,32 +118,74 @@ export const DRUG_SEED_ROWS: DrugSeedRow[] = [
     effectMpPercent: 0,
   },
   {
+    id: "drug_hp_4",
+    label: "金创药（特大）",
+    description: "外伤药，使用后恢复 2600 点生命值。",
+    icon: "item/fs_5",
+    level: 20,
+    sellPrice: 100,
+    maxStack: 99,
+    cooldown: 1,
+    effectHp: 2600,
+    effectMp: 0,
+    effectHpPercent: 0,
+    effectMpPercent: 0,
+  },
+  {
+    id: "drug_hp_5",
+    label: "金创药（超级）",
+    description: "外伤药，使用后恢复 15000 点生命值。",
+    icon: "item/fs_6",
+    level: 35,
+    sellPrice: 250,
+    maxStack: 99,
+    cooldown: 1,
+    effectHp: 15000,
+    effectMp: 0,
+    effectHpPercent: 0,
+    effectMpPercent: 0,
+  },
+  {
     id: "drug_mp_1",
     label: "魔法药（小）",
-    description: "使用后恢复 40 点魔法值。",
+    description: "使用后恢复 30% 魔法值。",
     icon: "item/sz_2",
     level: 1,
     sellPrice: 5,
     maxStack: 99,
     cooldown: 1,
     effectHp: 0,
-    effectMp: 40,
+    effectMp: 0,
     effectHpPercent: 0,
-    effectMpPercent: 0,
+    effectMpPercent: 30,
   },
   {
     id: "drug_mp_2",
     label: "魔法药（中）",
-    description: "使用后恢复 180 点魔法值。",
+    description: "使用后恢复 60% 魔法值。",
     icon: "item/sz_3",
     level: 5,
     sellPrice: 15,
     maxStack: 99,
     cooldown: 1,
     effectHp: 0,
-    effectMp: 180,
+    effectMp: 0,
     effectHpPercent: 0,
-    effectMpPercent: 0,
+    effectMpPercent: 60,
+  },
+  {
+    id: "drug_mp_3",
+    label: "魔法药（大）",
+    description: "使用后恢复 100% 魔法值。",
+    icon: "item/sz_4",
+    level: 10,
+    sellPrice: 40,
+    maxStack: 99,
+    cooldown: 1,
+    effectHp: 0,
+    effectMp: 0,
+    effectHpPercent: 0,
+    effectMpPercent: 100,
   },
   {
     id: "drug_sun",

@@ -749,9 +749,9 @@ async function main() {
     checkEqual(drugPct?.effectHpPercent, shared.DRUGS["drug_hp_pct"].hpPercent, "drug_hp_pct 百分比回复与配置一致");
 
     const drugKeywordLabel = await api(base, "GET", "/api/admin/drugs?keyword=" + encodeURIComponent("金创"), { token });
-    checkEqual(drugKeywordLabel.body?.data?.total, 3, "关键字按名称命中三档金创药");
+    checkEqual(drugKeywordLabel.body?.data?.total, 5, "关键字按名称命中五档金创药");
     const drugKeywordId = await api(base, "GET", "/api/admin/drugs?keyword=drug_mp", { token });
-    checkEqual(drugKeywordId.body?.data?.total, 3, "关键字按 id 命中三档蓝药");
+    checkEqual(drugKeywordId.body?.data?.total, 4, "关键字按 id 命中三档魔法药 + 强效蓝药");
 
     const drugPatched = await api(base, "PATCH", "/api/admin/drugs/drug_hp_1", { token, body: { label: "金创药（小·改）", effectHp: 120, cooldown: 2, maxStack: 999 } });
     checkEqual(drugPatched.status, 200, "PATCH 药品成功（名称/回复量/冷却/堆叠一起改）");
@@ -772,9 +772,15 @@ async function main() {
     const drugGhost = await api(base, "PATCH", "/api/admin/drugs/drug_none", { token, body: { label: "x" } });
     checkEqual(drugGhost.status, 404, "改不存在的药品 → 404");
     checkEqual(drugGhost.body?.code, 50017, "药品未找到用专属业务码 50017");
-    const drugStructural = await api(base, "PATCH", "/api/admin/drugs/drug_hp_1", { token, body: { level: 99 } });
-    checkEqual(drugStructural.status, 200, "PATCH 结构字段不报错（白名单剥离）");
-    checkEqual(drugStructural.body?.data?.level, shared.DRUGS["drug_hp_1"].level, "level 不可编辑（使用等级属客户端定标）");
+    // #643：使用等级开放编辑（只影响展示与背包排序，服务端用药不拦）
+    const drugLevelPatched = await api(base, "PATCH", "/api/admin/drugs/drug_hp_1", { token, body: { level: 30 } });
+    checkEqual(drugLevelPatched.status, 200, "使用等级可编辑");
+    checkEqual(drugLevelPatched.body?.data?.level, 30, "使用等级已更新为 30");
+    const drugLevelBad = await api(base, "PATCH", "/api/admin/drugs/drug_hp_1", { token, body: { level: 99 } });
+    checkEqual(drugLevelBad.status, 400, "使用等级超过上限 60 → 400");
+    checkEqual(drugLevelBad.body?.code, 40000, "使用等级越界用 40000（参数非法）");
+    const drugLevelRestore = await api(base, "PATCH", "/api/admin/drugs/drug_hp_1", { token, body: { level: shared.DRUGS["drug_hp_1"].level } });
+    checkEqual(drugLevelRestore.body?.data?.level, shared.DRUGS["drug_hp_1"].level, "使用等级已还原出厂值");
     const postDrug = await api(base, "POST", "/api/admin/drugs", { token, body: { id: "drug_new" } });
     checkEqual(postDrug.status, 404, "POST 药品 → 404（路由不存在）");
     const deleteDrug = await api(base, "DELETE", "/api/admin/drugs/drug_hp_1", { token });

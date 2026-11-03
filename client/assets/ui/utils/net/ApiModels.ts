@@ -1170,6 +1170,10 @@ export type UpdateDrug = {
    */
   icon?: string;
   /**
+   * 使用等级需求（不传则不改；1 ~ 角色等级上限）。只作用于展示与背包排序，不拦用药
+   */
+  level?: number;
+  /**
    * 售卖价（不传则不改；0 = 不可售卖。**商城售价不在这里** —— 唯一写入口归商城定价管理）
    */
   sellPrice?: number;
@@ -4250,7 +4254,7 @@ export type Drug = {
    */
   icon: string;
   /**
-   * 使用等级需求（暂不开放编辑）
+   * 使用等级需求（展示与背包排序口径，不拦用药；管理端可改）
    */
   level: number;
   /**

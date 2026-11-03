@@ -67,7 +67,7 @@ function main() {
   // 沙箱的「快照到达前」状态：客户端自身零出厂行，表是 hydrateSnapshotTables 按服务端种子灌的。
   // **必须在任何 apply* 之前断言** —— 分段入口是整表重建，后跑的分段会把别的表清空。
   console.log("\n=== 快照到达前的表（沙箱按线上同一条路灌种子）===");
-  check(drugs.length === 8, "药品表 8 种（#603 第十域：数据在 item-seed）", `size=${drugs.length}`);
+  check(drugs.length === 11, "药品表 11 种（#603 第十域：数据在 item-seed；金创药 5 档 + 魔法药 3 档 + 太阳水 + 两种百分比药）", `size=${drugs.length}`);
   check(fashionData.length === 20, "时装表 20 套（#603 第十二域：数据在 fashion-seed）", String(fashionData.length));
   check(npcs.size === 0, "NPC 表为空（客户端没有本地兜底）", `size=${npcs.size}`);
 
@@ -139,7 +139,7 @@ function main() {
 
   console.log("\n=== 药品：整表重建 + 扁平四值还原成 effects（#603 第十域） ===");
   const drugBefore = drugs.find((drug) => drug.id === "drug_hp_1");
-  // 「到达前有 8 种」已在文件开头断言（分段入口会整表重建，这里再判就没意义了）
+  // 「到达前有 11 种」已在文件开头断言（分段入口会整表重建，这里再判就没意义了）
   snapshotApi.applyContentSnapshot(
     contentSnapshot({
       drugs: [

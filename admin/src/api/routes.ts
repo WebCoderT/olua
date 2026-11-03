@@ -258,7 +258,7 @@ export const routes = {
     /**
      * 药品配置列表（GET /admin/drugs）
      *
-     * id 清单固定（seed 自客户端 configs/drug 的 8 种），**没有创建 / 删除**。`keyword` 模糊匹配 id / 名称 / 描述。
+     * id 清单固定（seed 自服务端 `item-seed.ts` 的 11 种），**没有创建 / 删除**。`keyword` 模糊匹配 id / 名称 / 描述。
      */
     list: "/admin/drugs",
     /**
