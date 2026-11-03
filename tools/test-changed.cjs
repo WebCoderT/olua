@@ -17,6 +17,8 @@
  *   - 服务端 e2e **按模块表匹配**：e2e 是黑盒 HTTP 测试，源码里认不出模块归属，
  *     所以这里显式登记「模块目录 → 套件」；改了表里没有的模块 → 全量 e2e，
  *     并把缺项补进这张表（宁可全量，不可静默漏）。
+ *   - 服务端脚本测试（不起服务，如 `test:config-sync`）单独一类：改 `server/scripts/` 或
+ *     改那套测试自己时跑它，别混进 e2e（它们不 build、不占端口）。
  *   - 审计按「它守什么」匹配：文档动了跑文档数字审计，env 配置动了跑硬编码审计，
  *     configs 动了跑数据漂移审计；`tools/audit-x.cjs` 自己被改 → 跑它自己。
  *
@@ -119,6 +121,7 @@ function buildPlan(files) {
     clientTests: new Set(),
     serverTsc: false,
     e2e: new Set(), // null = 全量
+    scripts: new Set(), // 不起服务的服务端脚本测试（如 config-sync → npm run test:config-sync）
     adminTsc: false,
     audits: new Set(),
     notes: [],
@@ -164,9 +167,15 @@ function buildPlan(files) {
           plan.notes.push(`server/src 下表外路径 ${rel} —— e2e 回落全量（补进 SERVER_MODULE_E2E 后可收敛）`);
         }
       } else if (rel.startsWith("server/test/")) {
-        // 直接改了某个 e2e：跑它自己（套件名 = 去掉 e2e- 前缀；backup.cjs 的名字就是 backup）
-        const m = rel.match(/(?:^|\/)(?:e2e-)?([\w-]+)\.cjs$/);
-        if (m) plan.e2e.add(m[1]);
+        // 直接改了某个测试：跑它自己。
+        // e2e-*.cjs → `test:e2e:<名>`；其余（config-sync.cjs）→ `test:<名>`，它们不起服务
+        const m = rel.match(/(?:^|\/)(e2e-)?([\w-]+)\.cjs$/);
+        if (m) (m[1] ? plan.e2e : plan.scripts).add(m[2]);
+      } else if (rel.startsWith("server/scripts/")) {
+        // 运维脚本：配置同步（config-* + lib/config-*）由 test:config-sync 覆盖；
+        // 备份 / 恢复脚本自己的专项是 e2e backup（它要起真服务验「运行中备份」）
+        if (/config/.test(rel)) plan.scripts.add("config-sync");
+        if (/backup|restore/.test(rel)) plan.e2e.add("backup");
       } else if (rel === "server/package.json" || rel.startsWith("server/tsconfig")) {
         plan.serverTsc = true;
       }
@@ -222,6 +231,7 @@ function buildPlan(files) {
     clientTests: [...plan.clientTests],
     serverTsc: plan.serverTsc,
     e2e: plan.e2e === null ? null : [...plan.e2e],
+    scripts: [...plan.scripts],
     adminTsc: plan.adminTsc,
     audits: [...plan.audits],
     notes: plan.notes,
@@ -296,6 +306,9 @@ function main() {
   }
   if (plan.serverTsc) {
     step("服务端编译（tsc）", () => sh("npm", ["run", "build"], path.join(ROOT, "server")));
+  }
+  for (const name of plan.scripts) {
+    step(`服务端脚本测试 ${name}`, () => sh("npm", ["run", `test:${name}`], path.join(ROOT, "server")));
   }
   const e2eNames = plan.e2e === null ? allE2eNames() : plan.e2e;
   for (const name of e2eNames) {
