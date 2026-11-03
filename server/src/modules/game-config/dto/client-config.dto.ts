@@ -21,6 +21,7 @@ import { AchievementDto } from "./achievement.dto";
 import { SoulDto } from "./soul.dto";
 import { TitleDto } from "./title.dto";
 import { GuideStepDto } from "./guide.dto";
+import { AudioConfigDto } from "../../audio-setting/dto/audio-setting.dto";
 
 /**
  * 玩家侧配置快照（#294）
@@ -207,4 +208,14 @@ export class GameConfigSnapshotDto {
   @ValidateNested({ each: true })
   @Type(() => GuideStepDto)
   guideSteps!: GuideStepDto[];
+
+  @ApiProperty({
+    description:
+      "音效配置（#683：用哪个文件 / 多大声 / 循环不循环 / 开不开）。这是**唯一**由服务端覆写的资源路径 —— " +
+      "其余资源路径都是两端约定（图集 / 帧动画按 id 拼），而音效文件是运营挑的，换一首曲子只要新文件在资源包里。\n\n" +
+      "空 `filePath` = 这一项没配（不播）；`enabled = false` = 连文件都不读。",
+    type: [AudioConfigDto],
+  })
+  @Type(() => AudioConfigDto)
+  audio!: AudioConfigDto[];
 }

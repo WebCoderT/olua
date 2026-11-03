@@ -104,6 +104,10 @@ const ALLOWED_EDGES = [
   // 注意 realtime **不在这张图里**：进图条件故意不拦连接（原因见 MapService 顶部）
   { from: "modules/game-config", to: "modules/map/", why: "配置快照下发地图玩法配置" },
   { from: "modules/game-config", to: "modules/ui-effect/", why: "配置快照下发界面特效参数（#594）" },
+  // 音效（#683）：配置快照下发 11 个音效项（文件路径 / 音量 / 循环 / 开关），
+  // 公开接口 `GET /game-config/audio` 也复用同一个 service（登录页没有令牌）——
+  // 两条路读的都是 `audio_settings` 表经 AudioSettingService 的公开口，不直接摸表
+  { from: "modules/game-config", to: "modules/audio-setting/", why: "配置快照 + 公开接口下发音效配置（#683）" },
 ];
 
 /** 仓储 → 允许注入它的业务模块（持久化实现不许被表外的文件摸到） */
@@ -168,6 +172,9 @@ const REPO_EDGES = {
   // 本轮还**没有**下发配置快照，所以也没有第二个模块连这张表 —— 客户端对接后
   // 若走 ClientConfigService 下发，那条边在这里补 "modules/game-config"
   "database/repositories/audio-setting.repository.ts": ["modules/audio-setting"],
+  // 注：音效配置进快照（#683）之后，game-config **没有**加进这一行 —— 它注入的是
+  // AudioSettingService（AudioSettingModule 导出），不直接摸表。仓储边保持只有音效域，
+  // 「谁能读这张表」与「谁能拿到配音效服务」是两件事，别把后者的便利当理由放开前者。
   // 养成配置（#213）：称号 / 战魂配置的读写只在 game-config 模块内 —— 玩家侧消费走
   // game-data.generated 快照（与角色属性同一来源），不直连这两张表
   "database/repositories/title.repository.ts": ["modules/game-config", "modules/roles"],

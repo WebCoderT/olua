@@ -1,5 +1,5 @@
 /**
- * 可配置音效的 key、出厂值与路径口径（**唯一书写处**）
+ * 可配置音效的 key、分类、出厂值与路径口径（**唯一书写处**）
  *
  * ## 为什么是固定清单，不是自由增删
  *
@@ -20,10 +20,58 @@
  *   不用「先猜扩展名再试」；客户端对接时按 `resources.load(去掉扩展名的路径, AudioClip)` 读。
  * - 只允许 `sounds/` 开头：音效文件就是放这里的，限制前缀能挡住「误填成图片路径」。
  * - 空串 = **未配置**（这一项不响），不是错误 —— 新加的音效通常先留空等美术给文件。
+ *
+ * ## 分类为什么也在这里
+ *
+ * 分类只影响管理端的 tab 与展示分组，不影响客户端播放（客户端按 key 取，不认分类）。
+ * 所以它和展示名一样属于**服务端常量**，不进库：库里的行是「运营改过的值」，
+ * 分类是「这个东西属于哪一类」—— 后者要改，意味着清单本身变了（客户端也得跟着改）。
+ * 落在表里的后果是：新加一项时，别处机器上那行不存在，分类 tab 就少一个。
  */
 
-/** 可配置音效的 key（登记顺序 = 管理端展示顺序） */
-export const AUDIO_KEYS = ["login_bgm", "login_click"] as const;
+/** 音效分类（顺序 = 管理端 tab 顺序） */
+export const AUDIO_CATEGORIES = [
+  { key: "login", label: "登录与界面" },
+  { key: "combat", label: "战斗与角色" },
+  { key: "item", label: "物品与货币" },
+  { key: "growth", label: "成长与传送" },
+] as const;
+
+/** 分类 key 类型 */
+export type AudioCategory = (typeof AUDIO_CATEGORIES)[number]["key"];
+
+/**
+ * 可配置音效的 key（登记顺序 = 管理端展示顺序；**按分类成组，不要打散**）
+ *
+ * 每个 key 都必须有客户端的调用点，否则就是永远不响的开关。对照表：
+ * - `login_bgm` → `ui/Login.start`（进登录场景起播）、`ui/core/SceneManager.loadScene`（离场停）
+ * - `login_click` → `ui/Login.submit`（点登录 / 注册按钮）
+ * - `warrior_attack` → `skills/warrior.skill_1000`（战士基础剑术，仅战士）
+ * - `role_die_man` / `role_die_woman` → `ui/Game.checkRoleDeath`（按 `role.sex` 选一个）
+ * - `item_drop` → `ui/core/DropManager.spawnResults`（掉落物真的铺到地上时）
+ * - `equip_wear` → `ui/core/StorageManager.equipFromBag`（服务端接受之后）
+ * - `money_change` → `ui/core/StorageManager.applyServerRoleUpdate`（三种货币任一变化）
+ * - `bag_resort` → `ui/core/StorageManager.tidyBag`（一键整理成功）
+ * - `level_up` → `ui/core/StorageManager.applyKillReward` / `applyPartyExpGain`（`leveledUp`）
+ * - `map_teleport` → `ui/core/StorageManager.changeOnMap`（校验通过、真的换图）
+ */
+export const AUDIO_KEYS = [
+  // 登录与界面
+  "login_bgm",
+  "login_click",
+  // 战斗与角色
+  "warrior_attack",
+  "role_die_man",
+  "role_die_woman",
+  // 物品与货币
+  "item_drop",
+  "equip_wear",
+  "money_change",
+  "bag_resort",
+  // 成长与传送
+  "level_up",
+  "map_teleport",
+] as const;
 
 /** 音效 key 类型（`AUDIO_KEYS` 派生，别处不要手抄字面量） */
 export type AudioKey = (typeof AUDIO_KEYS)[number];
@@ -46,6 +94,8 @@ export const AUDIO_LIMITS = {
 export interface AudioPreset {
   /** 管理端展示名（中文，随接口下发；页面不写死文案） */
   label: string;
+  /** 所属分类（管理端 tab 分组；客户端不消费） */
+  category: AudioCategory;
   /** 资源相对路径（带扩展名；空串 = 未配置） */
   filePath: string;
   /** 音量百分比（0~100） */
@@ -59,14 +109,18 @@ export interface AudioPreset {
 /**
  * 出厂值
  *
- * 两项都指向资源包里**已有**的文件（2026-11-04 运营放进 `sounds/` 的那批）：
- * 背景音是 `login_bg.wav`（6 MB 的长曲），点击音是 `click_button.wav`。
+ * 全部指向资源包里**已有**的文件（2026-11-04 运营放进 `sounds/` 的那批，
+ * 其中 `warrior_attack.wav` 原名 `木剑砍击音效.wav`，用户指定它就是战士普攻音）：
  * 指向真实文件的好处是「装完就有声音」，运营只需要改想改的那一项 ——
  * 编一个不存在的文件名只会得到「配置看着对、进游戏没声音」。
+ *
+ * 音量取 60~80：登录曲是唯一的长音（60，压低一点不吵）；`item_drop` 会连响
+ * （一堆怪同时死）所以给 70 而不是 100。
  */
 export const AUDIO_DEFAULTS: Record<AudioKey, AudioPreset> = {
   login_bgm: {
     label: "登录场景背景音",
+    category: "login",
     filePath: "sounds/login_bg.wav",
     volume: 60,
     loop: true,
@@ -74,8 +128,81 @@ export const AUDIO_DEFAULTS: Record<AudioKey, AudioPreset> = {
   },
   login_click: {
     label: "登录场景点击登录按钮音",
+    category: "login",
     filePath: "sounds/click_button.wav",
     volume: 80,
+    loop: false,
+    enabled: true,
+  },
+  warrior_attack: {
+    label: "战士普通攻击音",
+    category: "combat",
+    filePath: "sounds/warrior_attack.wav",
+    volume: 70,
+    loop: false,
+    enabled: true,
+  },
+  role_die_man: {
+    label: "男角色死亡音",
+    category: "combat",
+    filePath: "sounds/die_man.wav",
+    volume: 80,
+    loop: false,
+    enabled: true,
+  },
+  role_die_woman: {
+    label: "女角色死亡音",
+    category: "combat",
+    filePath: "sounds/die_woman.wav",
+    volume: 80,
+    loop: false,
+    enabled: true,
+  },
+  item_drop: {
+    label: "物品掉落音",
+    category: "item",
+    filePath: "sounds/drop.wav",
+    volume: 70,
+    loop: false,
+    enabled: true,
+  },
+  equip_wear: {
+    label: "穿戴装备成功音",
+    category: "item",
+    filePath: "sounds/equipment_use_success.mp3",
+    volume: 75,
+    loop: false,
+    enabled: true,
+  },
+  money_change: {
+    label: "金钱更新音",
+    category: "item",
+    filePath: "sounds/money_change_success.mp3",
+    volume: 70,
+    loop: false,
+    enabled: true,
+  },
+  bag_resort: {
+    label: "背包整理成功音",
+    category: "item",
+    filePath: "sounds/bag_change_success.wav",
+    volume: 65,
+    loop: false,
+    enabled: true,
+  },
+  level_up: {
+    label: "升级成功音",
+    category: "growth",
+    filePath: "sounds/upgrade_success.wav",
+    volume: 80,
+    loop: false,
+    enabled: true,
+  },
+  map_teleport: {
+    label: "传送成功音",
+    category: "growth",
+    filePath: "sounds/teleport_success.mp3",
+    volume: 75,
     loop: false,
     enabled: true,
   },
@@ -84,6 +211,16 @@ export const AUDIO_DEFAULTS: Record<AudioKey, AudioPreset> = {
 /** key → 展示名（未知 key 回落成 key 本身：宁可显示得难看，也不要显示成「未命名」） */
 export function audioLabelOf(key: string): string {
   return (AUDIO_DEFAULTS as Record<string, AudioPreset>)[key]?.label ?? key;
+}
+
+/** key → 分类 key（未知 key 落到第一个分类，保证管理端的 tab 总能装下它） */
+export function audioCategoryOf(key: string): AudioCategory {
+  return (AUDIO_DEFAULTS as Record<string, AudioPreset>)[key]?.category ?? AUDIO_CATEGORIES[0].key;
+}
+
+/** 分类 → 展示名（未知分类回落成分类 key 本身，理由同 `audioLabelOf`） */
+export function audioCategoryLabelOf(category: string): string {
+  return AUDIO_CATEGORIES.find((item) => item.key === category)?.label ?? category;
 }
 
 /**

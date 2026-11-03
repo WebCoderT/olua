@@ -5,15 +5,17 @@
  * 盯的不变量（改音效接口 / seed / AUDIO_DEFAULTS 后必须全绿）：
  *
  * 一、鉴权：观察员可读不可写（403 / 30006）、玩家令牌 401 —— 改音效是运营动作
- * 二、seed：两项（登录背景音 + 登录按钮音）按登记顺序补出、`updatedAt = 0`（= 从没改过）、
+ * 二、seed：**11 项**按 `AUDIO_KEYS` 登记顺序（分类成组）补出、四个分类各有项、
+ *     每行形状对（展示名 / 分类 / 分类名 / 音量范围 / 路径合法 / 两个布尔 / 无追账）；
  *     **没有新建 / 删除接口**（POST / DELETE 404：key 由客户端播放代码决定）
  * 三、路径判据：只认 `sounds/` 下、扩展名白名单、不许 `..` / 绝对路径 / 中文与空格；
  *     空串合法（= 未配置，这一项不响）；反斜杠会被规范成正斜杠
  * 四、音量边界：0 / 100 收，-1 / 101 / 小数被拒
  * 五、保存：整份覆盖 + 追账字段（updatedBy / updatedAt > 0）+ 再读一次还在
- * 六、**本轮不接客户端**：`GET /game-config` 里没有 audio 段（对接时这条要一起改）
+ * 六、客户端（#683）：快照有 `audio` 段（11 行、只有播放要用的五个字段）、
+ *     公开接口 `GET /game-config/audio` 不带令牌也能读且与快照同形状同顺序
  * 七、审计：action = adminAudioSetting.save、targetType = audioSetting
- * 八、文档：两个 operation 在 OpenAPI 里、模型字段齐全、写模型没有 key（路径里已经有了）
+ * 八、文档：两个管理 operation + 一个玩家 operation、模型字段齐全、写模型没有 key
  *
  * 用法：先 `npm run build`，再 `node test/e2e-audio-config.cjs`
  */
@@ -128,7 +130,7 @@ function saveAudio(key, token, body) {
     console.log("— 一、鉴权：观察员可读不可写、玩家令牌 401 —");
 
     const viewerList = await api("GET", "admin/audio-settings", { token: viewerToken });
-    check(viewerList.code === 0 && viewerList.data.total === 2, "观察员能读音效列表（gameConfig:read）", `${viewerList.status}`);
+    check(viewerList.code === 0 && viewerList.data.total === 11, "观察员能读音效列表（gameConfig:read）", `${viewerList.status}`);
     const viewerSave = await saveAudio("login_bgm", viewerToken, { volume: 30 });
     check(
       viewerSave.status === 403 && viewerSave.code === 30006,
@@ -142,24 +144,66 @@ function saveAudio(key, token, body) {
 
     //#region 二、seed 与「没有新建 / 删除」
 
-    console.log("— 二、seed：两项按登记顺序补出、没有新建 / 删除接口 —");
+    console.log("— 二、seed：11 项按登记顺序（分类成组）补出、没有新建 / 删除接口 —");
 
     const list = await api("GET", "admin/audio-settings", { token: adminToken });
     check(list.code === 0, "超管能读音效列表", list.message);
     const rows = list.data?.list ?? [];
-    check(rows.length === 2 && list.data.total === 2, "出厂两项（登录背景音 / 登录按钮音）", `${rows.length}`);
+    check(rows.length === 11 && list.data.total === 11, "出厂 11 个音效项", `${rows.length}`);
 
-    const [bgm, click] = rows;
-    check(bgm?.key === "login_bgm", "第一项是登录背景音（按 AUDIO_KEYS 登记顺序，不是字典序）", bgm?.key);
-    check(bgm?.label === "登录场景背景音", "展示名随接口下发（页面不写死文案）", bgm?.label);
-    check(bgm?.filePath === "sounds/login_bg.wav", "背景音出厂指向资源包里已有的文件", bgm?.filePath);
-    check(bgm?.volume === 60 && bgm?.loop === true && bgm?.enabled === true, "背景音出厂：音量 60 / 循环 / 启用", JSON.stringify(bgm));
-    check(bgm?.updatedAt === 0 && bgm?.updatedBy === "", "出厂行没有追账（0 = 从没改过）", `${bgm?.updatedAt}/${bgm?.updatedBy}`);
+    // 顺序 = `AUDIO_KEYS` 登记顺序（按分类成组）—— 管理端 tab 的分组与顺序就按它排，
+    // 换成字典序会让「登录与界面」不再排在最前面
+    const EXPECTED_KEYS = [
+      "login_bgm",
+      "login_click",
+      "warrior_attack",
+      "role_die_man",
+      "role_die_woman",
+      "item_drop",
+      "equip_wear",
+      "money_change",
+      "bag_resort",
+      "level_up",
+      "map_teleport",
+    ];
+    check(
+      JSON.stringify(rows.map((row) => row.key)) === JSON.stringify(EXPECTED_KEYS),
+      "按 AUDIO_KEYS 登记顺序返回（分类成组，不是字典序）",
+      rows.map((row) => row.key).join(","),
+    );
 
-    check(click?.key === "login_click", "第二项是登录按钮音", click?.key);
-    check(click?.label === "登录场景点击登录按钮音", "按钮音展示名正确", click?.label);
-    check(click?.filePath === "sounds/click_button.wav", "按钮音出厂指向资源包里已有的点击音", JSON.stringify(click?.filePath));
-    check(click?.loop === false, "点击音不循环（循环播点击音会一直响）", String(click?.loop));
+    // 逐行的**形状**断言：不锁具体数值（出厂音量 / 路径随时会被运营改），只锁「该有的都在、类型对」
+    for (const row of rows) {
+      check(!!row.label && row.label !== row.key, `${row.key}：有展示名`, row.label);
+      check(
+        ["login", "combat", "item", "growth"].includes(row.category),
+        `${row.key}：分类在四个已知分类里`,
+        row.category,
+      );
+      check(!!row.categoryLabel && row.categoryLabel !== row.category, `${row.key}：有分类展示名`, row.categoryLabel);
+      check(
+        Number.isInteger(row.volume) && row.volume >= 0 && row.volume <= 100,
+        `${row.key}：音量是 0~100 的整数`,
+        row.volume,
+      );
+      check(
+        row.filePath === "" || /^sounds\/[A-Za-z0-9_\-/]+\.[A-Za-z0-9]+$/.test(row.filePath),
+        `${row.key}：路径合法（sounds/ 下英文名）或未配置`,
+        JSON.stringify(row.filePath),
+      );
+      check(typeof row.loop === "boolean" && typeof row.enabled === "boolean", `${row.key}：两个布尔开关`, `${row.loop}/${row.enabled}`);
+      check(row.updatedAt === 0 && row.updatedBy === "", `${row.key}：出厂行没有追账`, `${row.updatedAt}/${row.updatedBy}`);
+    }
+
+    // 分类是**清单本身**的一部分（不是运营数据）：每类各几项，改了清单就要改这条
+    const byCategory = rows.reduce((acc, row) => ({ ...acc, [row.category]: (acc[row.category] ?? 0) + 1 }), {});
+    check(
+      byCategory.login === 2 && byCategory.combat === 3 && byCategory.item === 4 && byCategory.growth === 2,
+      "四个分类各有项（登录 2 / 战斗 3 / 物品 4 / 成长 2）",
+      JSON.stringify(byCategory),
+    );
+    check(rows.some((row) => row.loop), "至少有一项是循环（登录背景音）", rows.filter((row) => row.loop).map((row) => row.key).join(","));
+    check(rows.every((row) => row.enabled), "出厂全部启用（没有任何一项默认哑掉）");
 
     const createTry = await api("POST", "admin/audio-settings", { token: adminToken, body: {} });
     check(createTry.status === 404, "没有新建接口（POST 404：key 由客户端播放代码决定）", `${createTry.status}`);
@@ -178,7 +222,7 @@ function saveAudio(key, token, body) {
       { filePath: "sounds/../secrets.wav", why: "出现 .." },
       { filePath: "sounds/login_bg.txt", why: "扩展名不在白名单" },
       { filePath: "sounds/login bg.wav", why: "文件名带空格" },
-      { filePath: "sounds/木剑砍击音效.wav", why: "文件名带中文（用户定：只允许英文名）" },
+      { filePath: "sounds/战士普攻.wav", why: "文件名带中文（用户定：只允许英文名）" },
     ];
     for (const { filePath, why } of badPaths) {
       const rejected = await saveAudio("login_bgm", adminToken, { filePath });
@@ -245,14 +289,38 @@ function saveAudio(key, token, body) {
 
     //#endregion
 
-    //#region 六、本轮不接客户端
+    //#region 六、客户端对接（#683）
 
-    console.log("— 六、本轮不接客户端：快照里还没有 audio 段 —");
+    console.log("— 六、客户端：快照有 audio 段 + 公开接口无需令牌、同形状同顺序 —");
 
     const snapshot = await api("GET", "game-config", { token: playerToken });
     check(snapshot.code === 0, "玩家能拉配置快照", snapshot.message);
-    // 对接客户端时这一条要一起改：届时 audio 段会出现在快照里（并且带 enabled / filePath / volume / loop）
-    check(snapshot.data?.audio === undefined, "快照里没有 audio 段（本轮约定：先配置、后对接）", typeof snapshot.data?.audio);
+    const audio = snapshot.data?.audio;
+    check(Array.isArray(audio) && audio.length === 11, "快照 audio 段 11 行（客户端按 key 取用）", `${Array.isArray(audio) ? audio.length : typeof audio}`);
+    check(
+      Array.isArray(audio) && audio.every((row) => ["key", "filePath", "volume", "loop", "enabled"].every((field) => field in row)),
+      "客户端形状只有播放要用的五个字段",
+      JSON.stringify(audio?.[0]),
+    );
+    check(
+      Array.isArray(audio) && audio.every((row) => !("label" in row) && !("category" in row) && !("updatedBy" in row) && !("updatedAt" in row)),
+      "不下发展示名 / 分类 / 追账（客户端不消费，多一个字段就多一个误读）",
+      JSON.stringify(audio?.[0]),
+    );
+    check(
+      JSON.stringify((audio ?? []).map((row) => row.key)) === JSON.stringify(EXPECTED_KEYS),
+      "快照顺序与 AUDIO_KEYS 登记顺序一致",
+      (audio ?? []).map((row) => row.key).join(","),
+    );
+
+    // 公开接口：登录场景没有令牌，而登录背景音正是那时要播的（与公告同一口径）
+    const anonymous = await api("GET", "game-config/audio");
+    check(anonymous.code === 0 && anonymous.data?.total === 11, "公开接口不带令牌也能读（登录页要用）", `${anonymous.status}/${anonymous.code}`);
+    check(
+      JSON.stringify((anonymous.data?.list ?? []).map((row) => row.key)) === JSON.stringify(EXPECTED_KEYS),
+      "公开接口与快照同形状同顺序（客户端只留一套读法）",
+      (anonymous.data?.list ?? []).map((row) => row.key).join(","),
+    );
 
     //#endregion
 
@@ -275,7 +343,7 @@ function saveAudio(key, token, body) {
 
     //#region 八、文档契约
 
-    console.log("— 八、文档：两个 operation + 模型字段 —");
+    console.log("— 八、文档：三个 operation + 模型字段 —");
 
     // OpenAPI 文档直接从 `server/openapi.json` 取（与 gen-api 同源；swagger:emit 时产出）
     const swaggerDoc = require("../openapi.json");
@@ -290,11 +358,24 @@ function saveAudio(key, token, body) {
     const schema = swaggerDoc.components?.schemas?.AudioSettingDto;
     check(Boolean(schema), "模型 AudioSettingDto 已登记（SWAGGER_MODELS）");
     const props = Object.keys(schema?.properties ?? {});
-    for (const field of ["key", "label", "filePath", "volume", "loop", "enabled", "updatedBy", "updatedAt"]) {
+    for (const field of ["key", "label", "category", "categoryLabel", "filePath", "volume", "loop", "enabled", "updatedBy", "updatedAt"]) {
       check(props.includes(field), `AudioSettingDto 有 ${field}`, props.join(","));
     }
     const saveProps = Object.keys(swaggerDoc.components?.schemas?.SaveAudioSettingDto?.properties ?? {});
     check(!saveProps.includes("key"), "写模型没有 key（路径里已经有了）", saveProps.join(","));
+
+    // 客户端形状（#683）：五个字段，没有展示名 / 分类 / 追账
+    const configProps = Object.keys(swaggerDoc.components?.schemas?.AudioConfigDto?.properties ?? {});
+    check(
+      JSON.stringify(configProps.slice().sort()) === JSON.stringify(["enabled", "filePath", "key", "loop", "volume"]),
+      "AudioConfigDto 只有播放要用的五个字段",
+      configProps.join(","),
+    );
+    const gameConfigOps = Object.entries(swaggerDoc.paths)
+      .filter(([path]) => path.includes("/game-config"))
+      .map(([, item]) => Object.values(item).map((op) => op.operationId))
+      .flat();
+    check(gameConfigOps.includes("gameConfig.audio"), "文档里有 gameConfig.audio（公开接口）", JSON.stringify(gameConfigOps));
 
     //#endregion
   } finally {
