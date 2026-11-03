@@ -92,8 +92,8 @@ export const warSoulDialogLayout = {
   attribute: growthAttribute,
   /** 右：绑定元宝余额 */
   bindGold: growthBindGold,
-  /** 右：升级按钮（满级时文案与置灰） */
-  upgradeButton: { position: new Vec2(250, -205), text: "升 级", maxedText: "已满级" },
+  /** 右：升级按钮（满级 / 当前阶不在成长链上时都置灰，文案分别走 maxedText、lockedText） */
+  upgradeButton: { position: new Vec2(250, -205), text: "升 级", maxedText: "已满级", lockedText: "不可续升" },
 };
 
 //#endregion
@@ -123,8 +123,8 @@ export const titleUpgradeDialogLayout = {
   attribute: growthAttribute,
   /** 右：绑定元宝余额 */
   bindGold: growthBindGold,
-  /** 右：升级按钮（满级时文案与置灰） */
-  upgradeButton: { position: new Vec2(250, -205), text: "升 级", maxedText: "已满级" },
+  /** 右：升级按钮（满级 / 当前称号不在成长链上时都置灰，文案分别走 maxedText、lockedText） */
+  upgradeButton: { position: new Vec2(250, -205), text: "升 级", maxedText: "已满级", lockedText: "不可续升" },
 };
 
 //#endregion
@@ -168,7 +168,7 @@ export const rankUpgradeDialogLayout = {
   /** 右：绑定元宝余额 */
   bindGold: growthBindGold,
   /** 右：晋升按钮（满衔时文案与置灰） */
-  upgradeButton: { position: new Vec2(250, -205), text: "晋 升", maxedText: "已满衔" },
+  upgradeButton: { position: new Vec2(250, -205), text: "晋 升", maxedText: "已满衔", lockedText: "不可进阶" },
 };
 
 //#endregion

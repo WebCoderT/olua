@@ -1154,17 +1154,32 @@ export default class GameUiHelper {
 
   //#endregion
 
+  //#region 三条成长线共用（称号 / 战魂 / 军衔）
+
+  /**
+   * 升级链为空时的列表占位（运营一档都没开放）
+   *
+   * 不铺一排假卡片、也不静默留白：玩家至少要知道「这里本来是列表，但还没开放」，
+   * 而不是对着空面板猜是不是加载失败。
+   * @param name 节点名（各弹窗取不同的，调试时能认出是哪个弹窗的列表）
+   * @param width 列表卡片宽度（用于居中与折行）
+   */
+  static createChainEmptyLabel(name: string, width: number, color: Color, fontSize: number) {
+    return UiHelper.createLabel(name, getText("label_growth_chain_empty"), color, fontSize, new Vec2(), new Size(width, 28), Label.HorizontalAlign.CENTER);
+  }
+
+  //#endregion
+
   //#region 战魂
 
   /**
    * 创建战魂等级卡片（左侧列表行）：等级 + 名称 + 激活状态，选中加金色描边
    * @param config 该等级的战魂配置
-   * @param currentLevel 角色当前战魂等级（决定激活状态）
+   * @param activated 是否已到达 —— **由调用方按升级链序判定**（链序 ≠ 阶数，这里不做比较）
    * @param selected 是否为当前选中项
    * @param onClick 点击回调（切换选中预览）
    */
-  static createSoulCard(config: SoulLevelConfig, currentLevel: number, selected: boolean, onClick: () => void) {
-    const activated = config.level <= currentLevel;
+  static createSoulCard(config: SoulLevelConfig, activated: boolean, selected: boolean, onClick: () => void) {
     const card = UiHelper.createNode(`soul_card_${config.level}`, new Vec2(), soul.list.cardSize);
     const button = card.addComponent(Button);
     button.transition = Button.Transition.SCALE;
@@ -1305,8 +1320,14 @@ export default class GameUiHelper {
    * @param selected 是否为当前选中项
    * @param onClick 点击回调（切换选中预览）
    */
-  static createTitleCard(config: TitleLevelConfig, currentLevel: number, selected: boolean, onClick: () => void) {
-    const activated = config.level <= currentLevel;
+  /**
+   * 创建称号等级卡片（左侧列表行）：等级 + 名称 + 激活状态，选中加金色描边
+   * @param config 该等级的称号配置
+   * @param activated 是否已到达 —— **由调用方按升级链序判定**（链序 ≠ 等级号，这里不做比较）
+   * @param selected 是否为当前选中项
+   * @param onClick 点击回调（切换选中预览）
+   */
+  static createTitleCard(config: TitleLevelConfig, activated: boolean, selected: boolean, onClick: () => void) {
     const card = UiHelper.createNode(`title_card_${config.level}`, new Vec2(), titleUpgradeDialogLayout.list.cardSize);
     const button = card.addComponent(Button);
     button.transition = Button.Transition.SCALE;
@@ -1401,11 +1422,11 @@ export default class GameUiHelper {
    * 创建军衔阶数卡片（左侧列表行）：阶数 + 衔名 + 授衔状态，选中加金色描边（与称号/战魂卡片同一套样式）
    * 卡片只在这里建一次（100 阶重建一次代价不小，见弹窗的 buildList），点击切换选中走 updateRankCard 改外观
    * @param config 该阶的军衔配置
-   * @param currentLevel 角色当前军衔阶数（0 = 未授衔，决定授衔状态）
+   * @param activated 是否已授衔 —— 由调用方给（军衔按阶比较，与称号/战魂的链序判定分开写）
    * @param selected 是否为当前选中项
    * @param onClick 点击回调（切换选中预览）
    */
-  static createRankCard(config: RankLevelConfig, currentLevel: number, selected: boolean, onClick: () => void) {
+  static createRankCard(config: RankLevelConfig, activated: boolean, selected: boolean, onClick: () => void) {
     const card = UiHelper.createNode(`rank_card_${config.level}`, new Vec2(), rankUpgradeDialogLayout.list.cardSize);
     const button = card.addComponent(Button);
     button.transition = Button.Transition.SCALE;
@@ -1431,7 +1452,7 @@ export default class GameUiHelper {
       ),
     );
     // 选中状态、授衔状态与描边统一交给 updateRankCard（建与刷同一个口径）
-    this.updateRankCard(card, config, currentLevel, selected);
+    this.updateRankCard(card, activated, selected);
     card.on(Node.EventType.TOUCH_END, onClick, this);
     // 手写的 Button + TOUCH_END（不走 UiHelper.createButton），鼠标通道同样补一次命中拦截
     blockClickThrough(card);
@@ -1441,8 +1462,9 @@ export default class GameUiHelper {
   /**
    * 刷新一张已有军衔卡片的选中/授衔外观（切换选中、晋升后重刷状态都走它，不重建卡片）
    * 只动颜色、文字与「选中描边」这一个子节点，杜绝「点一下重建 100 张卡片」
+   * @param granted 是否已授衔（调用方按阶比较：`config.level <= role.rank`）
    */
-  static updateRankCard(card: Node, config: RankLevelConfig, currentLevel: number, selected: boolean) {
+  static updateRankCard(card: Node, granted: boolean, selected: boolean) {
     // 选中描边：画在文字之下，故插到第 0 位；取消选中时摘除并销毁
     const border = card.getChildByName("rank_card_border");
     if (selected && !border) {
@@ -1458,7 +1480,6 @@ export default class GameUiHelper {
       border.removeFromParent();
       border.destroy();
     }
-    const granted = config.level <= currentLevel;
     const nameLabel = card.getChildByName("rank_card_label")?.getComponent(Label);
     if (nameLabel) nameLabel.color = selected ? rankUpgradeDialogLayout.list.selectedColor : granted ? Color.WHITE : rankUpgradeDialogLayout.list.lockedColor;
     const stateLabel = card.getChildByName("rank_card_state")?.getComponent(Label);

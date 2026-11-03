@@ -4,7 +4,8 @@ import LayerManager from "../../core/LayerManager";
 import StorageManager from "../../core/StorageManager";
 import RoleUIManager from "../../core/RoleUIManager";
 import UiHelper from "../../helpers/UiHelper";
-import { getTitleLevel, titleLevels, titleMaxLevel } from "../../../configs/game-config";
+import { getTitleLevel, nextTitleUpgrade, titleUpgradeChain } from "../../../configs/game-config";
+import type { TitleLevelConfig } from "../../../types/title";
 import { titleUpgradeDialogLayout } from "../../../configs/hudLayout";
 import { getText } from "../../../configs/texts";
 import { clearChildren } from "../../utils/node/NodeTree";
@@ -13,11 +14,20 @@ import { clearChildren } from "../../utils/node/NodeTree";
 const layout = titleUpgradeDialogLayout;
 
 /**
+ * 打开时默认选中的档：当前已获得且在链上 → 它自己；否则链首（链为空时回落到当前阶，列表会是空的）
+ */
+function defaultSelectedLevel(current: number): number {
+  if (titleUpgradeChain.some((config) => config.level === current)) return current;
+  return titleUpgradeChain[0]?.level ?? Math.max(1, current);
+}
+
+/**
  * 称号升级弹窗（左中右三栏，结构与战魂弹窗一致）
- * 左：所有称号等级卡片的竖向滚动列表（按等级从上到下排列，已激活/未激活/选中三种状态）
+ * 左：**升级链上的**称号卡片竖向滚动列表（按管理端配置的顺序排列，已激活/未激活/选中三种状态）
  * 中：所选等级的称号名牌动画 + 名称/描述/当前称号信息（称号常显头顶，没有「外显」勾选框）
- * 右：所选等级的称号属性（带下一级增量）+ 绑定元宝余额 + 升级按钮
- * 升级消耗绑定元宝（价格曲线见 configs/title），成功后整体刷新弹窗并刷新头顶名牌
+ * 右：所选等级的称号属性（带链上下一个的增量）+ 绑定元宝余额 + 升级按钮
+ * 升级消耗绑定元宝与「下一级是哪一档」都来自服务端配置（`upgradeOrder` 链，见 configs/game-config），
+ * 成功后整体刷新弹窗并刷新头顶名牌
  * 入口在角色信息弹窗的「称号」按钮（不走 NPC，见 RoleInfoDialog）
  */
 export default class TitleUpgradeDialog {
@@ -35,8 +45,8 @@ export default class TitleUpgradeDialog {
   /** 打开弹窗 */
   open() {
     const role = StorageManager.findOnlineRole();
-    // 默认预览当前称号等级（尚未激活时预览 1 阶）
-    this.selectedLevel = Math.max(1, role?.title ?? 1);
+    // 默认预览当前称号（不在链上时停在链首 —— 列表里本来就没有它）
+    this.selectedLevel = defaultSelectedLevel(role?.title ?? 0);
     const dialog = GameUiHelper.createDialog(layout.name, layout.title, new Vec2(), layout.size);
     // 左：称号等级列表（可上下滑动）
     const list = GameUiHelper.createScrollView(layout.list.name, layout.list.position, layout.list.size);
@@ -72,22 +82,35 @@ export default class TitleUpgradeDialog {
   /** 整体刷新（选中等级切换、升级成功后调用）：列表状态 / 动画 / 信息 / 属性 / 按钮全部重建 */
   private refresh() {
     const role = StorageManager.findOnlineRole();
+    if (!role || !this.listContent || !this.animationSlot || !this.infoSlot || !this.attributeSlot) return;
+    // 选中档被运营从链上摘掉时回落到链首（同一份快照不会中途变，但刷新路径不止一条）
+    if (!titleUpgradeChain.some((item) => item.level === this.selectedLevel)) {
+      this.selectedLevel = defaultSelectedLevel(role.title);
+    }
     const config = getTitleLevel(this.selectedLevel);
-    if (!role || !config || !this.listContent || !this.animationSlot || !this.infoSlot || !this.attributeSlot) return;
-    // 左列表：按等级从上到下（titleLevels 本身升序），点击切换预览
+    if (!config) return;
+    // 左列表：只列升级链上的档（运营没放出的等级不出现），点击切换预览
     clearChildren(this.listContent);
-    titleLevels.forEach((item) =>
+    if (titleUpgradeChain.length === 0) {
       this.listContent.addChild(
-        GameUiHelper.createTitleCard(
-          item,
-          role.title,
-          item.level === this.selectedLevel,
-          () => {
-            if (this.selectedLevel === item.level) return;
-            this.selectedLevel = item.level;
-            this.refresh();
-          },
-        ),
+        GameUiHelper.createChainEmptyLabel("title_chain_empty", layout.list.cardSize.width, layout.list.lockedColor, layout.list.cardFontSize),
+      );
+    }
+    /** 当前称号在链上的位置（-1 = 不在链上，例如运营把已获得的称号切去了「系统赠送」渠道） */
+    const currentIndex = titleUpgradeChain.findIndex((item) => item.level === role.title);
+    /**
+     * 是否已到达：当前档在链上时按**链序**比（运营拖过顺序也准），
+     * 不在链上时按等级号兜底 —— 玩家手上确实有这个称号，列表里比它低的不该显示成未解锁
+     */
+    const reached = (item: TitleLevelConfig) =>
+      currentIndex >= 0 ? titleUpgradeChain.indexOf(item) <= currentIndex : item.level <= role.title;
+    titleUpgradeChain.forEach((item) =>
+      this.listContent.addChild(
+        GameUiHelper.createTitleCard(item, reached(item), item.level === this.selectedLevel, () => {
+          if (this.selectedLevel === item.level) return;
+          this.selectedLevel = item.level;
+          this.refresh();
+        }),
       ),
     );
     // 中间动画：先销毁旧的再重建（不同等级帧目录不同）
@@ -103,16 +126,24 @@ export default class TitleUpgradeDialog {
     this.infoSlot.addChild(
       UiHelper.createLabel("title_current", current ? getText("label_title_current", { level: role.title, label: current.label }) : getText("label_title_none"), info.current.color, info.current.fontSize, info.current.position, info.current.size),
     );
-    // 右侧属性：所选等级属性 + 下一级增量
+    // 右侧属性：所选等级属性 + 链上下一个的增量（不是「等级 + 1」—— 链上可能跳号）
     clearChildren(this.attributeSlot);
-    this.attributeSlot.addChild(GameUiHelper.createTitleAttributeList(config, getTitleLevel(this.selectedLevel + 1)));
-    // 升级按钮与绑定元宝（按钮始终针对当前称号等级的下一级；满级置灰，文案随 maxedText 切换）
+    const nextStep = nextTitleUpgrade(this.selectedLevel);
+    this.attributeSlot.addChild(GameUiHelper.createTitleAttributeList(config, nextStep.kind === "next" ? nextStep.config : null));
+    // 升级按钮与绑定元宝（按钮始终针对当前称号在链上的下一档；到链尾 / 断链都置灰，文案分开）
     if (this.upgradeButton) {
       const sprite = this.upgradeButton.getComponent(Sprite);
       const label = this.upgradeButton.getChildByName("title_upgrade_button_label")?.getComponent(Label);
-      const maxed = role.title >= titleMaxLevel();
-      if (label) label.string = maxed ? layout.upgradeButton.maxedText : layout.upgradeButton.text;
-      if (sprite) sprite.grayscale = maxed;
+      const step = nextTitleUpgrade(role.title);
+      if (label) {
+        label.string =
+          step.kind === "next"
+            ? layout.upgradeButton.text
+            : step.kind === "maxed"
+              ? layout.upgradeButton.maxedText
+              : layout.upgradeButton.lockedText;
+      }
+      if (sprite) sprite.grayscale = step.kind !== "next";
     }
     if (this.bindGoldLabel) this.bindGoldLabel.getComponent(Label).string = getText("label_bind_gold", { value: role.bindGold });
   }

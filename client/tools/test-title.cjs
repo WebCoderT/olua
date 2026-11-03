@@ -135,7 +135,7 @@ const panelsSource = read("assets/configs/layout/panels.ts");
 
 check(/title: number = 0;/.test(roleSource) && /称号等级/.test(roleSource), "Role 有 title 字段（0 = 未激活）");
 check(/typeof role\.title !== "number"\) role\.title = 0;/.test(storageSource), "旧存档迁移：title 缺失补 0（ensureRoleDefaults）");
-check(/static async upgradeTitle\(\): Promise<boolean>/.test(storageSource) && /getTitleLevel\(role\.title \+ 1\)/.test(storageSource), "StorageManager.upgradeTitle 按下一级配置预检（预检只是 UX，推进在服务端）");
+check(/static async upgradeTitle\(\): Promise<boolean>/.test(storageSource) && /nextTitleUpgrade\(role\.title\)/.test(storageSource), "StorageManager.upgradeTitle 的下一级取自成长链（不是 title + 1；预检只是 UX，推进在服务端）");
 check(/title_max_tip|title_bind_gold_tip|title_upgrade_tip/.test(storageSource) === true && /createTip\("title_max_tip"\)/.test(storageSource), "升级失败/成功都走浮动提示（configs/texts）");
 // #248：扣费与阶位推进都搬到服务端，客户端走三条成长线共用的 upgradeGrowthOnServer
 const growthBody = storageSource.slice(storageSource.indexOf("private static async upgradeGrowthOnServer"), storageSource.indexOf("static async upgradeSoul"));

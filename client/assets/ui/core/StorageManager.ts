@@ -18,9 +18,9 @@ import { getEquipment, getItem, moveBagCellGrid, normalizeBagGrid, resolveDrugRe
 import { getMallPrice } from "../../configs/game-config";
 import { getFashion, fashionData } from "../../configs/game-config";
 import { getEquipmentNameParts } from "../../configs/equipments";
-import { getSoulLevel } from "../../configs/game-config";
-import { getTitleLevel } from "../../configs/game-config";
-import { getRankLevel } from "../../configs/game-config";
+import { nextSoulUpgrade } from "../../configs/game-config";
+import { nextTitleUpgrade } from "../../configs/game-config";
+import { nextRankUpgrade } from "../../configs/game-config";
 import RoleSync from "../utils/net/RoleSync";
 import Session from "../utils/net/Session";
 import { RoleApi } from "../utils/net/Api";
@@ -307,17 +307,29 @@ export default class StorageManager {
   }
 
   /**
-   * 战魂升级（当前在线角色）：扣费与推进在服务端（见 configs/soul 仅作本地预检）
+   * 战魂升级（当前在线角色）：扣费与推进在服务端
+   *
+   * 「下一阶」按管理端配的成长链取（`nextSoulUpgrade`），不是 `soulOfWar + 1` ——
+   * 运营可拖动排序，阶号与链序解耦。预检只做即时 UX，服务端结果才是权威。
    * @returns 是否升级成功（失败原因已用浮动提示告知）
    */
   static async upgradeSoul(): Promise<boolean> {
     const role = this.findOnlineRole();
     if (!role) return false;
-    const next = getSoulLevel(role.soulOfWar + 1);
-    if (!next) {
+    const step = nextSoulUpgrade(role.soulOfWar);
+    if (step.kind === "maxed") {
       GameUiHelper.createTip("soul_max_tip");
       return false;
     }
+    if (step.kind === "closed") {
+      GameUiHelper.createTip("soul_growth_closed_tip");
+      return false;
+    }
+    if (step.kind === "locked") {
+      GameUiHelper.createTip("soul_chain_locked_tip");
+      return false;
+    }
+    const next = step.config;
     if (role.bindGold < next.bindGold) {
       GameUiHelper.createTip("soul_bind_gold_tip", { need: next.bindGold });
       return false;
@@ -326,17 +338,30 @@ export default class StorageManager {
   }
 
   /**
-   * 称号升级/解锁（当前在线角色）：扣费与推进在服务端（configs/title 仅作本地预检；0 阶升 1 阶即解锁）
+   * 称号升级/解锁（当前在线角色）：扣费与推进在服务端
+   *
+   * 「下一级」按管理端配的成长链取（`nextTitleUpgrade`）—— 称号链**只含运营放出的等级**
+   * （`acquire_channel = upgrade`），所以链上可能跳号；用 `title + 1` 会指向一个没开放的等级，
+   * 服务端会以「目标阶位不合法」拒绝。0 阶升链首即解锁。
    * @returns 是否升级成功（失败原因已用浮动提示告知）
    */
   static async upgradeTitle(): Promise<boolean> {
     const role = this.findOnlineRole();
     if (!role) return false;
-    const next = getTitleLevel(role.title + 1);
-    if (!next) {
+    const step = nextTitleUpgrade(role.title);
+    if (step.kind === "maxed") {
       GameUiHelper.createTip("title_max_tip");
       return false;
     }
+    if (step.kind === "closed") {
+      GameUiHelper.createTip("title_growth_closed_tip");
+      return false;
+    }
+    if (step.kind === "locked") {
+      GameUiHelper.createTip("title_chain_locked_tip");
+      return false;
+    }
+    const next = step.config;
     if (role.bindGold < next.bindGold) {
       GameUiHelper.createTip("title_bind_gold_tip", { need: next.bindGold });
       return false;
@@ -345,7 +370,10 @@ export default class StorageManager {
   }
 
   /**
-   * 军衔晋升/授衔（当前在线角色）：扣费与推进在服务端（configs/rank 仅作本地预检；0 阶晋 1 阶即授衔）
+   * 军衔晋升/授衔（当前在线角色）：扣费与推进在服务端
+   *
+   * 「下一阶」也走统一的链口径（`nextRankUpgrade`）：军衔没有 `upgrade_order`，
+   * 100 阶天然按阶就是链，结果与 `rank + 1` 等价 —— 三条线共用一套写法，少一条特例分支。
    * 军衔的外显就是头顶那行红字，随 updateUi → RoleUIManager.updateRoleData → RoleDisplay.updateHead 自动刷新，
    * 不需要像称号那样另外调一次外显刷新
    * @returns 是否晋升成功（失败原因已用浮动提示告知）
@@ -353,11 +381,20 @@ export default class StorageManager {
   static async upgradeRank(): Promise<boolean> {
     const role = this.findOnlineRole();
     if (!role) return false;
-    const next = getRankLevel(role.rank + 1);
-    if (!next) {
+    const step = nextRankUpgrade(role.rank);
+    if (step.kind === "maxed") {
       GameUiHelper.createTip("rank_max_tip");
       return false;
     }
+    if (step.kind === "closed") {
+      GameUiHelper.createTip("rank_growth_closed_tip");
+      return false;
+    }
+    if (step.kind === "locked") {
+      GameUiHelper.createTip("rank_chain_locked_tip");
+      return false;
+    }
+    const next = step.config;
     if (role.bindGold < next.bindGold) {
       GameUiHelper.createTip("rank_bind_gold_tip", { need: next.bindGold });
       return false;

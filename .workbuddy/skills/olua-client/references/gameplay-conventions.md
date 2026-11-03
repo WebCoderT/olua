@@ -26,7 +26,12 @@
 
 - **`growth.sampleGrowth` 只吃整数等级**：曲线段间不连续（第 10 级 262 血 / 第 11 级 330 血），分数等级会拿下一段斜率外推。按分数等效等级取属性必须**两侧整数等级线性插值**（服务端 `rank-seed.ts` 的 `getEquivalentAttributes`，#590 起成长曲线与插值都在服务端，test-rank 钉死）。
 - **三条成长线同构**（战魂 `soul` 37 阶 / 称号 `title` 34 阶 / 军衔 `rank` 100 阶 = 10 大段 × 10 阶）：
-  都 = 「等效等级裸属性 × rate × 系列/大段 factor」（rate 0.5 / 0.3 / 0.35）；都消耗**绑定元宝**、价格 = `priceBase × N²`（300 / 200 / 30）；都计 `GameHelper.combatCalc`、都要 `StorageManager.ensureRoleDefaults` 补 0、都走 `StorageManager.upgradeXxx()`（先扣款再落阶再重算再 updateUi）。
+  都 = 「等效等级裸属性 × rate × 系列/大段 factor」（rate 0.5 / 0.3 / 0.35）；都消耗**绑定元宝**、出厂价 = `priceBase × N²`（300 / 200 / 30，管理端成长列表可改）；都计 `GameHelper.combatCalc`、都要 `StorageManager.ensureRoleDefaults` 补 0；升级都走 `StorageManager.upgradeXxx()` → 服务端 `upgradeGrowth`（扣费 / 落阶 / 属性重算全在服务端，客户端只报 `targetLevel`）。
+- **升级路径 = 后台配的成长链**（#635）：称号链**只含 `acquire_channel = upgrade` 的行**，战魂 37 阶全量，军衔按阶；
+  顺序取 `upgrade_order`（称号/战魂可拖动，军衔没有这一列）→ 客户端 `titleUpgradeChain` / `soulUpgradeChain` / `nextXxxUpgrade`。
+  **弹窗列表只列链上的档、下一档取链上下一个（禁 `level + 1`）**；`growthStepOf` 分四态 next / maxed / locked / closed，
+  满级 / 断链（当前档被移出链）/ 未开放（链空）**不许互相冒充**（提示与按钮文案各不相同）。守卫 `test-growth-chain.cjs`。
+  `getTitleLevel` 等仍按等级号读全表（头顶名牌 / 当前称号不看链序）。
 - **`hpRecover`（点/秒）**：单值属性（**不进 `attributeKeys` 区间循环**）。五来源 = 等级（`maxHp × hpRecoverRate`，默认 0.01）+ **防御装备**（衣 40% / 头 20% / 腰带 20% / 鞋 20%，**不保底 1**）+ 战魂 / 称号 / 军衔。汇总在 `combatCalc`、结算 `HpHelper.recover`（`hp<=0` 不回、攒余数）、与 `MpHelper` 共用一次落盘。**不计战斗力**、怪物恒 0。守卫 `test-hp-recover.cjs`。
 
 ## 显示与交互

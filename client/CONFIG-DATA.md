@@ -57,9 +57,9 @@
 | 快照段 | 落库函数 | 落到哪个客户端表 | 服务端出厂（唯一书写处） | 管理端页面 |
 |---|---|---|---|---|
 | `combatWeights` | `applyCombatWeights` | `game-config` 区 5 `combatCalc` | `shared/combat-seed.ts` | ⚠ 无编辑页（待 #605） |
-| `titles` | `applyTitleRows` | `game-config` 区 1 `titleLevels` | `shared/title-seed.ts` | `/titles` |
-| `souls` | `applySoulRows` | `game-config` 区 2 `soulLevels` | `shared/soul-seed.ts` | `/souls` |
-| `ranks` | `applyRankRows` | `game-config` 区 3 `rankLevels` | `shared/rank-seed.ts` | `/ranks` |
+| `titles` | `applyTitleRows` | `game-config` 区 1 `titleLevels`（全量）+ `titleUpgradeChain`（渠道 = upgrade 的行，按 `upgradeOrder`） | `shared/title-seed.ts` → `titles` 表 | `/titles` |
+| `souls` | `applySoulRows` | `game-config` 区 2 `soulLevels`（全量）+ `soulUpgradeChain`（全量，按 `upgradeOrder`） | `shared/soul-seed.ts` → `souls` 表 | `/souls` |
+| `ranks` | `applyRankRows` | `game-config` 区 3 `rankLevels`（100 阶按阶就是链） | `shared/rank-seed.ts` → `ranks` 表 | `/ranks` |
 | `levels` / `growthScalars` | `applyLevelRows` / `applyGrowthScalars` | `game-config` 区 4 `levelMap`、区 6 `roleMaxLevel` | `shared/growth-seed.ts` | `/growth` |
 | `equipments` | `applyEquipments`（→ `applyEquipmentData`） | `configs/equipments.ts` 七张部位表 + `configs/items.ts` 的装备条目（基础件展开 555 变体） | `shared/equipment-seed.ts` → `equipments` 表 | `/equipments` |
 | `equipmentSlots` | `applyEquipmentSlots` | `configs/equipments.ts` `equipmentSlots` / `equipmentSlotOrder` | `shared/equipment-seed.ts` → `equipment_slots` 表 | `/equipment-settings` |
@@ -77,7 +77,29 @@
 | `maps` / `mapTypes` | `applyMapRows` | `game-config` 区 18 `maps`、`mapTypeGroups` | `shared/map-config.ts` → `maps` 表 | `/maps` |
 | `uiEffects` | `applyUiEffectRows` | `game-config` 区 19 `uiEffects`（升级特效 `upgrade` + 掉落光效 `light_1`…`light_6` 七行） | `ui_effects` 表 | `/ui-effects` |
 
-### 3.2 几何（两个独立接口，不进快照）
+### 3.2 三条成长线的「升级路径」（后台配，客户端照做）
+
+称号 / 战魂 / 军衔的升级弹窗**不是**按等级号铺全表，而是按管理端配的成长链：
+
+| 线 | 链的范围 | 顺序 | 管理端在哪配 |
+|---|---|---|---|
+| 称号 | **只含获得渠道 = 「称号升级」的行**（`acquire_channel = upgrade`） | `upgrade_order`（拖动排序，与等级号解耦） | `/titles` → 编辑弹窗改渠道；「称号成长列表」拖动 + 改价 |
+| 战魂 | 37 阶全量（没有渠道概念） | `upgrade_order`（可拖动） | `/souls` → 「战魂成长列表」 |
+| 军衔 | 100 阶全量 | 按阶（管理端不让拖，也没有 `upgrade_order` 列） | `/ranks` → 「军衔成长列表」只看价格 |
+
+客户端三条口径（`configs/game-config` 的 `titleUpgradeChain` / `soulUpgradeChain` / `nextXxxUpgrade`）：
+
+1. **列表只列链上的档** —— 运营没放出的等级不出现在弹窗里（以前是 34 阶全画出来，玩家会看到一串点不动的空档）；
+2. **下一档 = 链上下一个**，不是 `level + 1` —— 链可能跳号、顺序可能被拖过；
+   `StorageManager.upgradeXxx` 报给服务端的 `targetLevel` 与服务端 `roles.service.resolveGrowthTarget`
+   算出的下一档必须一致（否则服务端以「目标阶位不合法」拒收）；
+3. **三态分开**（`growthStepOf`）：`maxed` 到链尾 / `locked` 当前档不在链上（运营把玩家已有的称号切了渠道）
+   / `closed` 链为空（一档都没开放）—— 都不能互相冒充，提示与按钮文案各不相同。
+
+`getTitleLevel` / `getSoulLevel` / `getRankLevel` 仍按**等级号**读全表：头顶名牌、当前称号/军衔展示
+走的是「玩家已获得的那一档」，与链序无关（运营改链不该让玩家头顶的称号消失）。
+
+### 3.3 几何（两个独立接口，不进快照）
 
 | 接口 | 落库函数 | 落到哪里 | 管理端页面 |
 |---|---|---|---|
@@ -95,7 +117,7 @@
 | 区 | 表 / 常量 | 填充者 | 原文件 |
 |---|---|---|---|
 | 0 | 契约 `SNAPSHOT_SECTIONS` | —（客户端自己的要求） | `snapshot-contract.ts` |
-| 1 / 2 / 3 | `titleLevels` / `soulLevels` / `rankLevels` | 各自的 `apply*Rows` | `title.ts` / `soul.ts` / `rank.ts` |
+| 1 / 2 / 3 | `titleLevels` / `soulLevels` / `rankLevels`（+ 区 1/2 由表派生的 `titleUpgradeChain` / `soulUpgradeChain`） | 各自的 `apply*Rows` | `title.ts` / `soul.ts` / `rank.ts` |
 | 4 | `levelMap` | `applyLevelRows` | `level.ts` |
 | 5 | `combatCalc` | `applyCombatWeights` | `battle.ts` |
 | 6 | 前后缀倍率 / 回收价曲线 / `roleMaxLevel` | `applyEquipmentRules` / `setRoleMaxLevel` | `growth.ts` |
