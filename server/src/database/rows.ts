@@ -819,6 +819,20 @@ export interface CombatWeightRow {
 }
 
 /**
+ * 新手引导步骤（#605）：`guide_settings` 单行表
+ *
+ * 整张步骤表存在 `steps` 一列 JSON 数组里（有序，数组顺序即体验顺序）。
+ * 出厂值来自 `shared/guide-seed.ts`，缺行 / 坏 JSON 时 service 回落出厂值。
+ */
+export interface GuideSettingsRow {
+  /** 恒为 1（单行表） */
+  id: number;
+  /** `GuideStepSeed[]` 的 JSON（`id` / `title` / `desc` / `spot` / `trigger`） */
+  steps: string;
+  updated_at: number;
+}
+
+/**
  * 具名掉落表（#254）：`drop_tables` 表的一行
  *
  * 一行 = 一张可被多怪复用的掉落表（seed 自生成物 DROP_TABLES 的 common / elite / boss，

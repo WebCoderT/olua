@@ -39,6 +39,7 @@ import { items, rebuildItemIndex } from "./items";
 import { applyEquipmentData, applyEquipmentQualityLabels, applyEquipmentSlots, getEquipmentBaseKey } from "./equipments";
 import { roleDefaultCloths, setMpRecoverPerSecond } from "./role";
 import { applyDropRuntime } from "./drop";
+import { applyGuideSteps } from "./guide";
 import { applyAutoBattleParams } from "./autoBattle";
 import { SEX } from "../types/role";
 
@@ -250,6 +251,8 @@ export function applyConfigSnapshot(snapshot: GameConfigSnapshot): void {
   applyMapRows(snapshot.maps, snapshot.mapTypes);
   applyUiEffectRows(snapshot.uiEffects);
   applyRuntimeParams(snapshot.runtimeParams);
+  // #605：新手引导步骤（表在服务端，客户端只留表现层）
+  applyGuideSteps(snapshot.guideSteps);
 }
 
 /**

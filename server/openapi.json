@@ -3150,7 +3150,8 @@
                 "map",
                 "uiEffect",
                 "runtimeParams",
-                "combatWeights"
+                "combatWeights",
+                "guideSteps"
               ]
             }
           },
@@ -3434,7 +3435,8 @@
                 "map",
                 "uiEffect",
                 "runtimeParams",
-                "combatWeights"
+                "combatWeights",
+                "guideSteps"
               ]
             }
           },
@@ -9333,6 +9335,108 @@
         ]
       }
     },
+    "/admin/guide-steps": {
+      "get": {
+        "description": "整份步骤表（数组顺序 = 体验顺序）+ 最后修改时间（**单行配置，没有分页**）。\n\n`spot` / `trigger` 的取值是**客户端能力白名单**：一个新的高亮位要 `GuideOverlay` 认识这个节点，\n一个新的推进事件要在玩法代码里 `notify` 一次 —— 所以它们不能凭运营自由填写。\n\n缺行 / 坏行回落出厂值（`shared/guide-seed.ts`），坏行会被丢弃（好行保留）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
+        "operationId": "adminGuide.get",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "当前步骤表（含 updatedAt）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/GuideStepsDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "新手引导步骤",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/GuideStepsDto"
+        },
+        "x-olua-permissions": [
+          "gameConfig:read"
+        ]
+      },
+      "patch": {
+        "description": "**整份替换**：提交的数组就是新的步骤表（顺序即体验顺序），不是增量。\n\n约束：至少 1 步、最多 64 步（存档里的步数上限也是它）；`id` 唯一且以小写字母开头；\n标题 1~20 字、正文 1~200 字；`spot` / `trigger` 必须在客户端白名单内。\n\n任何一步不合法 → 40000 且**整份不落库**（半份步骤表会让玩家卡在某一步推进不了）。\n\n改完玩家下次进游戏拉配置快照后生效；引导进度（走到第几步）不受影响。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
+        "operationId": "adminGuide.update",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateGuideStepsDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "更新后的步骤表",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/GuideStepsDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "编辑新手引导步骤",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/GuideStepsDto"
+        },
+        "x-olua-permissions": [
+          "gameConfig:write"
+        ]
+      }
+    },
     "/admin/mails/templates": {
       "get": {
         "description": "发信前先拉这份列表：`variables` 是**必填变量**，缺一个就直接拒发（不会发出「亲爱的 ，」这种信）。`custom` 是不用模板、标题与正文由运营自己填，此时 `subject` / `body` 必填。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`mail:read`（查看邮件投递记录；角色：超级管理员 / 管理员）",
@@ -14935,6 +15039,77 @@
           }
         }
       },
+      "GuideStepDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "步骤标识（日志与单测用；同一份配置里唯一，不落存档）",
+            "example": "move"
+          },
+          "title": {
+            "type": "string",
+            "description": "气泡标题",
+            "example": "先动起来"
+          },
+          "desc": {
+            "type": "string",
+            "description": "气泡正文（一句话说清「做什么」）",
+            "example": "拖住左下角的摇杆走两步；电脑上也可以按住方向键或点地面。"
+          },
+          "spot": {
+            "type": "string",
+            "description": "高亮语义位：joystick / nav:bag / nav:skill / nav:chat / shortcut（客户端按它现取节点，取不到就只显示气泡）",
+            "enum": [
+              "joystick",
+              "nav:bag",
+              "nav:skill",
+              "nav:chat",
+              "shortcut"
+            ],
+            "example": "joystick"
+          },
+          "trigger": {
+            "type": "string",
+            "description": "推进事件：move / kill / pickup / openBag / openSkill / openChat（当前步收到它才前进，别的事件不越级）",
+            "enum": [
+              "move",
+              "kill",
+              "pickup",
+              "openBag",
+              "openSkill",
+              "openChat"
+            ],
+            "example": "move"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "desc",
+          "spot",
+          "trigger"
+        ]
+      },
+      "UpdateGuideStepsDto": {
+        "type": "object",
+        "properties": {
+          "steps": {
+            "description": "步骤表（整份替换，顺序即体验顺序）",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GuideStepDto"
+            }
+          },
+          "note": {
+            "type": "string",
+            "description": "修改备注（写进审计日志的上下文，便于追溯「为什么改」）"
+          }
+        },
+        "required": [
+          "steps"
+        ]
+      },
       "SendMailDto": {
         "type": "object",
         "properties": {
@@ -17257,7 +17432,8 @@
               "map",
               "uiEffect",
               "runtimeParams",
-              "combatWeights"
+              "combatWeights",
+              "guideSteps"
             ]
           },
           "targetId": {
@@ -19117,6 +19293,27 @@
         },
         "required": [
           "weights",
+          "updatedAt"
+        ]
+      },
+      "GuideStepsDto": {
+        "type": "object",
+        "properties": {
+          "steps": {
+            "description": "步骤表（数组顺序 = 体验顺序）",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GuideStepDto"
+            }
+          },
+          "updatedAt": {
+            "type": "number",
+            "description": "最后修改时间（毫秒，0 = 从未改过、仍是出厂值）",
+            "example": 1762000000000
+          }
+        },
+        "required": [
+          "steps",
           "updatedAt"
         ]
       },
@@ -22005,6 +22202,13 @@
                 "$ref": "#/components/schemas/RuntimeParamsDto"
               }
             ]
+          },
+          "guideSteps": {
+            "description": "新手引导步骤（数组顺序 = 体验顺序）。客户端 `configs/guide` 不再存这张表 —— 运营改文案 / 顺序 / 高亮位 / 推进事件都不用重打客户端包",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GuideStepDto"
+            }
           }
         },
         "required": [
@@ -22034,7 +22238,8 @@
           "uiEffects",
           "equipmentSlots",
           "equipmentMeta",
-          "runtimeParams"
+          "runtimeParams",
+          "guideSteps"
         ]
       },
       "GuildSummaryDto": {

@@ -1,6 +1,7 @@
 import { BizCode } from "../../common/constants/biz-code";
 import { BizException } from "../../common/errors/biz.exception";
 import { ROLE_OCCUPATION_CODES, ROLE_SEX_CODES } from "../../shared/game-data";
+import { GUIDE_STEP_MAX } from "../../shared/guide-seed";
 
 /**
  * 允许的职业 / 性别
@@ -56,10 +57,11 @@ export const ROLE_FIELD_VALUE_MAX_LENGTH = 128;
 /**
  * 引导进度的步数上限（#402）
  *
- * 这是**体量上限**，不是「客户端的引导配置有几步」—— 服务端仍然不认识那份配置
- * （与 `ROLE_LEVEL_MAX` 同性质）。客户端加一百步也不用动这个数。
+ * #605 起服务端也认识引导配置了（`guide_settings` 表 + 管理端「新手引导」页），
+ * 所以这里直接取配置的步数上限（`shared/guide-seed.GUIDE_STEP_MAX`）：
+ * 「配置里能加到 64 步、存档只收到 50 步」这种错，只有两处是同一个数才不会发生。
  */
-export const ROLE_GUIDE_STEP_MAX = 64;
+export const ROLE_GUIDE_STEP_MAX = GUIDE_STEP_MAX;
 
 /** 背包格子（管理端提交的稀疏格式：只报「哪一格放了什么」） */
 export interface BagCellInput {

@@ -163,6 +163,7 @@ const REPO_EDGES = {
   // social 只**读帮会规则门槛**（名字 / 公告 / 申请留言长度），建帮与改公告的校验在那边
   "database/repositories/runtime-params.repository.ts": ["modules/game-config", "modules/social"],
   "database/repositories/combat-weights.repository.ts": ["modules/game-config"],
+  "database/repositories/guide-settings.repository.ts": ["modules/game-config"],
   "database/repositories/rank.repository.ts": ["modules/game-config", "modules/roles"],
   // 装备基础件（#252）：同称号 / 战魂 / 军衔，只在 game-config 模块内读写；
   // 战斗结算仍走 game-data.generated 的 EQUIPMENT_ATTRIBUTES（客户端对接 #248/#249 未做）

@@ -10,6 +10,7 @@ import { MallPricingService } from "./mall-pricing.service";
 import { DropConfigService } from "./drop-config.service";
 import { RuntimeParamsService } from "./runtime-params.service";
 import { CombatWeightsService } from "./combat-weights.service";
+import { GuideSettingsService } from "./guide-settings.service";
 import { GameConfigSnapshotDto } from "./dto/client-config.dto";
 import { LevelDto } from "./dto/growth.dto";
 import { MonsterPresentationDto } from "./dto/monster.dto";
@@ -33,6 +34,7 @@ export class ClientConfigService {
     private readonly drop: DropConfigService,
     private readonly runtimeParams: RuntimeParamsService,
     private readonly combatWeights: CombatWeightsService,
+    private readonly guide: GuideSettingsService,
     private readonly map: MapService,
     private readonly uiEffect: UiEffectService,
   ) {}
@@ -85,6 +87,9 @@ export class ClientConfigService {
       // #605：运行时参数（掉落手感 / 自动战斗 / 帮会规则）—— 原本写死在客户端的两份参数，
       // 现在由运营在管理端改；客户端进游戏覆写本地（guild 那组同时也是服务端校验门槛）
       runtimeParams: this.runtimeParams.get(),
+      // #605：新手引导步骤（出厂值在 shared/guide-seed.ts，运营在管理端「新手引导」页改）。
+      // 客户端本地不再存这张表 —— 改一句新手文案不用重打客户端包
+      guideSteps: this.guide.steps(),
     };
   }
 }

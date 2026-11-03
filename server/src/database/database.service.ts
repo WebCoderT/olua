@@ -907,6 +907,16 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
         weight     REAL    NOT NULL DEFAULT 0,
         updated_at INTEGER NOT NULL DEFAULT 0
       );
+
+      -- 新手引导步骤（#605）：单行表，整张步骤表存一列 JSON 数组。
+      -- 为什么整表一列而不是一行一步：步骤是**有序的一小张表**（出厂 6 步、上限 64 步），
+      -- 运营调的是「顺序 / 文案 / 高亮位 / 推进事件」，整份保存比逐行增删更贴近编辑动作
+      -- （与 equipment_meta 的回收价曲线同一手法）。行内顺序即体验顺序。
+      CREATE TABLE IF NOT EXISTS guide_settings (
+        id         INTEGER PRIMARY KEY CHECK (id = 1),
+        steps      TEXT    NOT NULL DEFAULT '[]',
+        updated_at INTEGER NOT NULL DEFAULT 0
+      );
     `);
 
     // 存量库补列（CREATE TABLE IF NOT EXISTS 不会改已有表结构）

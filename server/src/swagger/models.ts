@@ -102,6 +102,7 @@ import {
   CombatWeightsResponseDto,
   UpdateCombatWeightsDto,
 } from "../modules/game-config/dto/combat-weights.dto";
+import { GuideStepDto, GuideStepsDto, UpdateGuideStepsDto } from "../modules/game-config/dto/guide.dto";
 import { LoginDto, RegisterDto } from "../modules/auth/dto/register.dto";
 import { RealtimeTicketDto } from "../modules/realtime/dto/realtime.dto";
 import { ZoneDto, AdminZoneDto, CreateZoneDto, MergeZoneDto } from "../modules/zone/dto/zone.dto";
@@ -292,6 +293,10 @@ export const SWAGGER_MODELS = [
   CombatWeightsDto,
   CombatWeightsResponseDto,
   UpdateCombatWeightsDto,
+  // 新手引导步骤（#605）
+  GuideStepDto,
+  GuideStepsDto,
+  UpdateGuideStepsDto,
   // 养成配置（军衔 #250）
   RankDto,
   RankPageDto,

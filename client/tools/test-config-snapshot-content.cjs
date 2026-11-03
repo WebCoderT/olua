@@ -13,8 +13,9 @@
  *
  * 用法：node client/tools/test-config-snapshot-content.cjs
  */
+const fs = require("fs");
 const path = require("path");
-const { prepare, check, finish, fail } = require("./lib/configs-sandbox.cjs");
+const { PROJECT_ROOT, prepare, check, finish, fail } = require("./lib/configs-sandbox.cjs");
 
 /** 构造服务端的八项属性（区间是 {min,max} 对象，客户端用元组） */
 const attributes = (maxHp, hpRecover, attack, defense) => ({
@@ -331,6 +332,37 @@ function main() {
   check(dropRuntime.autoPickupRadius === 0, "0 是合法值（可以作为「关闭自动拾取」用）");
   applyAutoBattleParams({ cellSize: 0, stuckRetryLimit: 0 });
   check(autoBattle.cellSize === 24 && autoBattle.stuckRetryLimit === 3, "网格边长与重试次数有下限 1（0 会让寻路 / 放弃逻辑失去意义）", `cell=${autoBattle.cellSize}`);
+
+  //#endregion
+
+  //#region 新手引导步骤（#605）
+
+  console.log("\n=== 新手引导步骤：整表替换 / 坏行跳过 / 空表 = 关闭 ===");
+  const guideConfig = require(path.join(outDir, "configs/guide.js"));
+  check(guideConfig.guideStepCount() === 0 || guideConfig.guideSteps.length >= 0, "引导步骤表可读（快照到达前为空表是正常状态）");
+  // 接线：整份快照的落库结尾必须调它（这段守「忘了接」—— 表在服务端，忘了接就等于引导永远关着）
+  check(
+    /applyGuideSteps\(snapshot\.guideSteps\)/.test(fs.readFileSync(path.join(PROJECT_ROOT, "assets/configs/apply-snapshot.ts"), "utf8")),
+    "applyConfigSnapshot 结尾接了 applyGuideSteps(snapshot.guideSteps)",
+  );
+  guideConfig.applyGuideSteps([
+    { id: "move", title: "先动起来", desc: "拖摇杆走两步。", spot: "joystick", trigger: "move" },
+    { id: "fight", title: "打一只怪", desc: "点技能出手。", spot: "shortcut", trigger: "kill" },
+  ]);
+  check(guideConfig.guideStepCount() === 2, "整表替换：快照给两步就是两步", String(guideConfig.guideStepCount()));
+  check(guideConfig.guideStepAt(0).id === "move" && guideConfig.guideStepAt(1).trigger === "kill", "顺序即体验顺序（数组下标 = 第几步）");
+  check(guideConfig.guideStepAt(2) === null, "越界返回 null（调用方据此判定「走完了」）");
+
+  guideConfig.applyGuideSteps([
+    { id: "ok", title: "好人", desc: "合法", spot: "joystick", trigger: "move" },
+    { id: "badSpot", title: "坏高亮", desc: "客户端不认识这个高亮位", spot: "nav:unknown", trigger: "move" },
+    { id: "badEvent", title: "坏事件", desc: "客户端不认识这个推进事件", spot: "joystick", trigger: "teleport" },
+    { id: "ok", title: "重复", desc: "标识撞了", spot: "joystick", trigger: "move" },
+  ]);
+  check(guideConfig.guideStepCount() === 1, "坏行跳过（未知高亮位 / 未知事件 / 重复标识），好行留下 —— 少一步不影响玩，卡住才致命", String(guideConfig.guideStepCount()));
+
+  guideConfig.applyGuideSteps([]);
+  check(guideConfig.guideStepCount() === 0, "空数组 = 服务端把引导关了（步数 0，进度按已完成处理）");
 
   //#endregion
 

@@ -1732,6 +1732,40 @@ export type UpdateCombatWeights = {
   note?: string;
 };
 
+export type GuideStep = {
+  /**
+   * 步骤标识（日志与单测用；同一份配置里唯一，不落存档）
+   */
+  id: string;
+  /**
+   * 气泡标题
+   */
+  title: string;
+  /**
+   * 气泡正文（一句话说清「做什么」）
+   */
+  desc: string;
+  /**
+   * 高亮语义位：joystick / nav:bag / nav:skill / nav:chat / shortcut（客户端按它现取节点，取不到就只显示气泡）
+   */
+  spot: "joystick" | "nav:bag" | "nav:skill" | "nav:chat" | "shortcut";
+  /**
+   * 推进事件：move / kill / pickup / openBag / openSkill / openChat（当前步收到它才前进，别的事件不越级）
+   */
+  trigger: "move" | "kill" | "pickup" | "openBag" | "openSkill" | "openChat";
+};
+
+export type UpdateGuideSteps = {
+  /**
+   * 步骤表（整份替换，顺序即体验顺序）
+   */
+  steps: GuideStep[];
+  /**
+   * 修改备注（写进审计日志的上下文，便于追溯「为什么改」）
+   */
+  note?: string;
+};
+
 export type SendMail = {
   /**
    * 收件邮箱（可选）。不传时，若关联的玩家账号填了邮箱，则自动用该账号的邮箱投递；两者皆无则报错（50005）。管理端选了关联账号后会自动把账号邮箱带进这个字段，所以运营大多不用手填。
@@ -3180,7 +3214,7 @@ export type AuditQuery = {
   /**
    * 目标类型筛选
    */
-  targetType?: "account" | "role" | "admin" | "announcement" | "mail" | "title" | "soul" | "rank" | "equipment" | "drug" | "item" | "monster" | "npc" | "mall" | "fashion" | "dropTable" | "monsterDrop" | "levelExp" | "growthSegment" | "growthScalar" | "skill" | "status" | "zone" | "guild" | "quest" | "achievement" | "equipAlign" | "equipInAlign" | "map" | "uiEffect" | "runtimeParams" | "combatWeights";
+  targetType?: "account" | "role" | "admin" | "announcement" | "mail" | "title" | "soul" | "rank" | "equipment" | "drug" | "item" | "monster" | "npc" | "mall" | "fashion" | "dropTable" | "monsterDrop" | "levelExp" | "growthSegment" | "growthScalar" | "skill" | "status" | "zone" | "guild" | "quest" | "achievement" | "equipAlign" | "equipInAlign" | "map" | "uiEffect" | "runtimeParams" | "combatWeights" | "guideSteps";
   /**
    * 只看针对某个目标的日志（目标 id）
    */
@@ -4323,6 +4357,17 @@ export type CombatWeightsResponse = {
   weights: CombatWeights;
   /**
    * 最后修改时间（毫秒，0 = 从未改过，仍是出厂值）
+   */
+  updatedAt: number;
+};
+
+export type GuideSteps = {
+  /**
+   * 步骤表（数组顺序 = 体验顺序）
+   */
+  steps: GuideStep[];
+  /**
+   * 最后修改时间（毫秒，0 = 从未改过、仍是出厂值）
    */
   updatedAt: number;
 };
@@ -6109,6 +6154,10 @@ export type GameConfigSnapshot = {
    * 客户端运行时参数（#605，单行三组）：掉落手感（`drop`）/ 自动战斗与寻路（`autoBattle`）/ 帮会规则门槛（`guild`）。前两组服务端只下发不消费，客户端据此覆写 `configs/drop` 与 `configs/autoBattle` 里原本写死的数值；`guild` 是服务端校验门槛，客户端读到只为**提前提示**
    */
   runtimeParams: RuntimeParams;
+  /**
+   * 新手引导步骤（数组顺序 = 体验顺序）。客户端 `configs/guide` 不再存这张表 —— 运营改文案 / 顺序 / 高亮位 / 推进事件都不用重打客户端包
+   */
+  guideSteps: GuideStep[];
 };
 
 export type GuildSummary = {

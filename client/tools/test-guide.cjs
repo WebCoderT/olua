@@ -50,6 +50,10 @@ const requireOut = (rel) => require(path.join(outDir, rel));
 const guideLogic = requireOut("ui/utils/guide/guide-progress.js");
 const GuideStore = requireOut("ui/core/GuideStore.js").default;
 const guideConfig = requireOut("configs/guide.js");
+// #605：步骤表搬到服务端了（客户端只留表现层）—— 这里按线上同一条路（applyGuideSteps）灌出厂种子。
+// 不灌就是空表：`guideStepCount()` 为 0，下面所有「该推进到第几步」的断言都会按「已完成」处理而假绿。
+const guideSeed = require(require("./lib/configs-sandbox.cjs").compileServerShared("guide-seed.ts", "olua-seed-guide"));
+guideConfig.applyGuideSteps(guideSeed.GUIDE_STEP_SEEDS);
 const guideTypes = requireOut("types/guide.js");
 const uiSize = requireOut("configs/layout/sizes.js").uiSize;
 
@@ -69,6 +73,11 @@ function makeRole(id, name = "引导测试") {
 console.log("— A. 步骤表：数据驱动，加一步不用改代码 —");
 
 check(stepCount > 0, "至少有一步引导", `${stepCount} 步`);
+check(stepCount === guideSeed.GUIDE_STEP_SEEDS.length, "步骤数 = 服务端出厂种子（表在服务端，客户端不再存）", `${stepCount} vs ${guideSeed.GUIDE_STEP_SEEDS.length}`);
+check(
+  steps.every((step, index) => step.id === guideSeed.GUIDE_STEP_SEEDS[index].id && step.desc === guideSeed.GUIDE_STEP_SEEDS[index].desc),
+  "每一步的标识与文案都来自种子（不是客户端遗留的旧表）",
+);
 check(new Set(steps.map((step) => step.id)).size === stepCount, "步骤 id 唯一（落日志与断言都靠它）", steps.map((step) => step.id).join("/"));
 check(
   steps.every((step) => step.title.length > 0 && step.desc.length > 0),
@@ -269,4 +278,28 @@ check(
 
 //#endregion
 
-finish("新手引导（#402）：步骤表 / 推进 / 老档 / 续走 / 跳过 / 下一步 / 接线 / 排版");
+//#region H. 配置下发（#605）：坏行跳过、空表 = 引导关闭
+
+console.log("— H. 下发：#605 起步骤表来自服务端，坏行跳过、空表按关闭处理 —");
+
+guideConfig.applyGuideSteps([
+  { id: "ok", title: "好人", desc: "这一步是合法的", spot: "joystick", trigger: "move" },
+  { id: "badSpot", title: "坏高亮", desc: "高亮位是客户端不认识的", spot: "nav:unknown", trigger: "move" },
+  { id: "badEvent", title: "坏事件", desc: "推进事件是客户端不认识的", spot: "joystick", trigger: "teleport" },
+  { id: "ok", title: "重复", desc: "标识与前面撞了", spot: "joystick", trigger: "move" },
+  { id: "noTitle", title: "", desc: "没有标题", spot: "joystick", trigger: "move" },
+]);
+check(guideConfig.guideSteps.length === 1, "只留下合法的那一步（坏高亮 / 坏事件 / 重复标识 / 缺标题全跳过）", String(guideConfig.guideSteps.length));
+check(guideConfig.guideStepCount() === 1, "步骤总数跟着变（不是缓存了旧长度）");
+check(guideConfig.guideStepAt(0).id === "ok" && guideConfig.guideStepAt(1) === null, "按新表取步：第 0 步是留着的那步，第 1 步已经是「走完」");
+
+guideConfig.applyGuideSteps([]);
+check(guideConfig.guideStepCount() === 0, "空表 = 服务端把引导关了（步数 0）");
+check(guideConfig.guideStepAt(0) === null, "空表时取第 0 步返回 null（调用方据此判定「已经走完」，不会崩）");
+
+guideConfig.applyGuideSteps(guideSeed.GUIDE_STEP_SEEDS);
+check(guideConfig.guideStepCount() === guideSeed.GUIDE_STEP_SEEDS.length, "重新灌回出厂表（后续断言与线上一致）");
+
+//#endregion
+
+finish("新手引导（#402 / #605）：步骤表 / 推进 / 老档 / 续走 / 跳过 / 下一步 / 下线跳过 / 接线 / 排版");

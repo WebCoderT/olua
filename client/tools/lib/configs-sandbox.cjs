@@ -140,6 +140,13 @@ function prepare(sandboxName, extraEntries = [], ccExtra = "") {
  */
 function hydrateSnapshotTables(outDir) {
   const has = (rel) => fs.existsSync(path.join(outDir, rel));
+  // 新手引导步骤（#605）：客户端不再存这张表（服务端下发），单测里的步骤来自 guide-seed.ts。
+  // 不灌就是空表 —— 而空表在客户端被当作「服务端把引导关了」，`guideStepCount()` 为 0，
+  // 存档里的进度会被归一成「已完成」：引导相关断言会全部假绿。
+  if (has("configs/guide.js")) {
+    const guideSeed = require(compileServerShared("guide-seed.ts", "olua-seed-guide"));
+    require(path.join(outDir, "configs/guide.js")).applyGuideSteps(guideSeed.GUIDE_STEP_SEEDS);
+  }
   // #626 起快照各域的表与落库都在 `configs/game-config`，一个 require 就能全灌
   if (!has("configs/game-config.js")) return;
   const cfg = require(path.join(outDir, "configs/game-config.js"));

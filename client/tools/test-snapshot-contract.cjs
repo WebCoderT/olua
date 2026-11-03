@@ -181,6 +181,8 @@ function completeSnapshot(over = {}) {
       guild: { nameMin: 2, nameMax: 12, noticeMax: 200, applicationMessageMax: 50 },
       updatedAt: 0,
     },
+    // #605：新手引导步骤（数组顺序 = 体验顺序）
+    guideSteps: [{ id: "move", title: "先动起来", desc: "走两步。", spot: "joystick", trigger: "move" }],
     ...over,
   };
 }

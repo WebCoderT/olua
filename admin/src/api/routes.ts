@@ -424,6 +424,21 @@ export const routes = {
      */
     update: (curve: string, seq: string) => `/admin/growth-segments/${encodeURIComponent(curve)}/${encodeURIComponent(seq)}`,
   },
+  /** adminGuide 模块（2 个接口） */
+  adminGuide: {
+    /**
+     * 新手引导步骤（GET /admin/guide-steps）
+     *
+     * 整份步骤表（数组顺序 = 体验顺序）+ 最后修改时间（**单行配置，没有分页**）。
+     */
+    get: "/admin/guide-steps",
+    /**
+     * 编辑新手引导步骤（PATCH /admin/guide-steps）
+     *
+     * **整份替换**：提交的数组就是新的步骤表（顺序即体验顺序），不是增量。
+     */
+    update: "/admin/guide-steps",
+  },
   /** adminGuild 模块（4 个接口） */
   adminGuild: {
     /**

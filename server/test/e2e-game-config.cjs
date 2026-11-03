@@ -33,6 +33,8 @@ const growthSeedScalars = growthSeed.GROWTH_SCALARS;
 const { RUNTIME_PARAMS } = require(path.join(SERVER_DIR, "dist", "shared", "runtime-seed.js"));
 // #605：战斗力权重的出厂值（管理端可改，这里对照「库里就是种子」）
 const { COMBAT_WEIGHTS_SEED } = require(path.join(SERVER_DIR, "dist", "shared", "combat-seed.js"));
+// #605：新手引导步骤的出厂表（管理端可改，这里对照「库里就是种子」）
+const { GUIDE_STEP_SEEDS } = require(path.join(SERVER_DIR, "dist", "shared", "guide-seed.js"));
 const growthSeedKeys = Object.keys(growthSeedScalars);
 // #588 起怪物数值的唯一书写处是种子（四元组 + 曲线展开），资源表现是独立生成物
 const { MONSTER_SEED_ROWS, expandMonsterSeed } = require(path.join(SERVER_DIR, "dist", "shared", "monster-seed.js"));
@@ -590,6 +592,67 @@ async function main() {
     // 复原出厂值：后面的断言（快照 / 战力）都以出厂口径为基线
     const weightsRestored = await api(base, "PATCH", "/api/admin/combat-weights", { token, body: { magicAttack: COMBAT_WEIGHTS_SEED.magicAttack } });
     checkEqual(weightsRestored.body?.data?.weights?.magicAttack, COMBAT_WEIGHTS_SEED.magicAttack, "复原魔法攻击权重");
+
+    //#endregion
+
+    //#region 六·七、新手引导步骤（#605）：整份读写 / 枚举白名单 / 唯一标识 / 权限
+
+    group("六·七、新手引导步骤（整份读写）");
+
+    const guide = await api(base, "GET", "/api/admin/guide-steps", { token });
+    checkEqual(guide.status, 200, "引导步骤可读");
+    checkEqual(guide.body?.data?.steps?.length, GUIDE_STEP_SEEDS.length, "步骤数 = 出厂种子");
+    checkEqual(guide.body?.data?.steps?.[0]?.id, GUIDE_STEP_SEEDS[0].id, "第 1 步的标识 = 出厂种子");
+    checkEqual(guide.body?.data?.steps?.[0]?.spot, GUIDE_STEP_SEEDS[0].spot, "第 1 步的高亮位 = 出厂种子");
+    checkEqual(guide.body?.data?.updatedAt, 0, "seed 行的 updatedAt 是 0（从没被运营改过）");
+
+    const twoSteps = [
+      { id: "move", title: "先动起来", desc: "走两步看看。", spot: "joystick", trigger: "move" },
+      { id: "fight", title: "打一只怪", desc: "点技能出手。", spot: "shortcut", trigger: "kill" },
+    ];
+    const guidePatched = await api(base, "PATCH", "/api/admin/guide-steps", { token, body: { steps: twoSteps } });
+    checkEqual(guidePatched.status, 200, "整份替换成功");
+    checkEqual(guidePatched.body?.data?.steps?.length, 2, "响应里就是提交的两步");
+    checkEqual(guidePatched.body?.data?.steps?.[1]?.id, "fight", "数组顺序 = 体验顺序");
+    checkEqual(guidePatched.body?.data?.steps?.[0]?.desc, "走两步看看。", "文案按提交值生效");
+    check(guidePatched.body?.data?.updatedAt > 0, "改过之后 updatedAt 才不是 0");
+
+    const guideBadSpot = await api(base, "PATCH", "/api/admin/guide-steps", {
+      token,
+      body: { steps: [{ id: "x", title: "标题", desc: "正文", spot: "nav:unknown", trigger: "move" }] },
+    });
+    checkEqual(guideBadSpot.status, 400, "白名单外的高亮位 → 400（客户端不认识它，玩家会卡在那一步）");
+    const guideBadEvent = await api(base, "PATCH", "/api/admin/guide-steps", {
+      token,
+      body: { steps: [{ id: "x", title: "标题", desc: "正文", spot: "joystick", trigger: "teleport" }] },
+    });
+    checkEqual(guideBadEvent.status, 400, "白名单外的推进事件 → 400（这个事件永远不会命中）");
+    const guideDuplicate = await api(base, "PATCH", "/api/admin/guide-steps", {
+      token,
+      body: {
+        steps: [
+          { id: "same", title: "甲", desc: "正文", spot: "joystick", trigger: "move" },
+          { id: "same", title: "乙", desc: "正文", spot: "joystick", trigger: "kill" },
+        ],
+      },
+    });
+    checkEqual(guideDuplicate.status, 400, "标识重复 → 400");
+    checkEqual(guideDuplicate.body?.code, 40000, "标识重复用参数非法 40000");
+    const guideEmpty = await api(base, "PATCH", "/api/admin/guide-steps", { token, body: { steps: [] } });
+    checkEqual(guideEmpty.status, 400, "清空步骤 → 400（想关引导是让玩家走完，不是删配置）");
+    const guideAfterReject = await api(base, "GET", "/api/admin/guide-steps", { token });
+    checkEqual(guideAfterReject.body?.data?.steps?.length, 2, "被拒的提交没有落库（整份不动）");
+    const viewerGuideWrite = await api(base, "PATCH", "/api/admin/guide-steps", { token: viewerToken, body: { steps: twoSteps } });
+    checkEqual(viewerGuideWrite.status, 403, "观察员改引导步骤 → 403");
+    checkEqual(viewerGuideWrite.body?.code, 30006, "观察员改引导步骤 → 30006（权限点不足）");
+    const postGuide = await api(base, "POST", "/api/admin/guide-steps", { token, body: { steps: twoSteps } });
+    checkEqual(postGuide.status, 404, "POST → 404（单行配置没有创建）");
+    const deleteGuide = await api(base, "DELETE", "/api/admin/guide-steps", { token });
+    checkEqual(deleteGuide.status, 404, "DELETE → 404（单行配置没有删除）");
+
+    // 复原出厂表：快照断言以出厂口径为基线
+    const guideRestored = await api(base, "PATCH", "/api/admin/guide-steps", { token, body: { steps: GUIDE_STEP_SEEDS } });
+    checkEqual(guideRestored.body?.data?.steps?.length, GUIDE_STEP_SEEDS.length, "复原出厂步骤表");
 
     //#endregion
 
@@ -1445,6 +1508,9 @@ async function main() {
     );
     const weightRestoredAgain = await api(base, "PATCH", "/api/admin/combat-weights", { token, body: { maxHp: COMBAT_WEIGHTS_SEED.maxHp } });
     checkEqual(weightRestoredAgain.status, 200, "还原生命权重（后面的断言以出厂口径为基线）");
+    // #605：新手引导步骤随快照下发（六·七 段已复原成出厂表）
+    checkEqual(snap.guideSteps?.length, GUIDE_STEP_SEEDS.length, "引导步骤随快照下发（客户端不再存这张表）");
+    checkEqual(snap.guideSteps?.[0]?.trigger, GUIDE_STEP_SEEDS[0].trigger, "第一步的推进事件与出厂种子一致");
 
     {
       // #604：快照是**显式契约** —— 客户端缺段直接抛错并把玩家挡在 Loading 界面。

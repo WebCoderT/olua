@@ -20,6 +20,7 @@ import { QuestDto } from "./quest.dto";
 import { AchievementDto } from "./achievement.dto";
 import { SoulDto } from "./soul.dto";
 import { TitleDto } from "./title.dto";
+import { GuideStepDto } from "./guide.dto";
 
 /**
  * 玩家侧配置快照（#294）
@@ -191,4 +192,14 @@ export class GameConfigSnapshotDto {
   })
   @Type(() => RuntimeParamsDto)
   runtimeParams!: RuntimeParamsDto;
+
+  @ApiProperty({
+    description:
+      "新手引导步骤（数组顺序 = 体验顺序）。客户端 `configs/guide` 不再存这张表 —— " +
+      "运营改文案 / 顺序 / 高亮位 / 推进事件都不用重打客户端包",
+    type: () => [GuideStepDto],
+  })
+  @ValidateNested({ each: true })
+  @Type(() => GuideStepDto)
+  guideSteps!: GuideStepDto[];
 }
