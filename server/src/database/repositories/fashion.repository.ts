@@ -69,6 +69,8 @@ export class FashionRepository {
     return this.db.execute(
       `UPDATE fashions SET
          label = ?, description = ?, sell_price = ?, acquire_channel = ?,
+         /* #641：资源路径也可改（管理端图片选择器）—— 漏一列就是「接口 200、值没动」 */
+         icon = ?, in_res = ?, out_res = ?,
          max_hp = ?, hp_recover = ?,
          physical_attack_min = ?, physical_attack_max = ?, magic_attack_min = ?, magic_attack_max = ?,
          taoist_attack_min = ?, taoist_attack_max = ?, physical_defense_min = ?, physical_defense_max = ?,
@@ -80,6 +82,9 @@ export class FashionRepository {
         row.description,
         row.sell_price,
         row.acquire_channel,
+        row.icon,
+        row.in_res,
+        row.out_res,
         row.max_hp,
         row.hp_recover,
         row.physical_attack_min,

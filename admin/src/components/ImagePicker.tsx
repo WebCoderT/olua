@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import { GAME_RES_ROOT, GameIcon } from "./GameImage";
+import { GAME_RES_ROOT, GameFrame, GameIcon } from "./GameImage";
 import { Modal } from "./Modal";
-import { Button, Input, Spinner } from "./ui";
+import { Button, Field, Input, Spinner } from "./ui";
 
 /**
  * 图片选择器：可视化挑一张 resources 里的图
@@ -26,6 +26,45 @@ import { Button, Input, Spinner } from "./ui";
  */
 
 type ImageCatalog = { images: string[]; source: "list" | "manifest" };
+
+/** 当前开着的选择器数量 */
+let openPickerCount = 0;
+
+/**
+ * 有没有图片选择器开着 —— 给编辑弹窗的 `onClose` 用
+ *
+ * 选择器叠在编辑弹窗之上，两个 `Modal` 各挂一个 window 的 Esc 监听：编辑弹窗先注册、先收到，
+ * 不拦一下就会「关掉选择器顺带把编辑弹窗也关了」，改了一半的内容全丢。
+ * 判据是「现在有没有选择器开着」而不是某个页面自己记的布尔 —— 一个弹窗里可能有三个图标字段
+ * （装备的图标 / 内观 / 外观），谁也不该去维护「这三个里哪个开着」。
+ */
+export function anyPickerOpen(): boolean {
+  return openPickerCount > 0;
+}
+
+/**
+ * 挑什么：
+ * - `image`：一张**图**（`icon` / `effect` / 底图 —— 存的就是这张图的路径）；
+ * - `atlas`：一套**动画资源**（`animation` / 内观 / 外观 / NPC `src`）。
+ *
+ * ## 动画模式怎么定「一套」
+ * 动画在磁盘上有三种形态，但**对运营来说都是「这个角色 / 称号的那一套」**：
+ * - `titles/sfx_13009/sfx_13009.png`（Cocos 图集目录约定）；
+ * - `clothes/in/001.png` + `.plist`（路径即基名）；
+ * - `clothes/out/001/a1/a1.png`（外观按动作分子目录，一个动作一套图集）。
+ *
+ * 所以要靠清单反推「一套」得写三种规则 —— 不如直接用**调用方给的锚点**：
+ * `rootDir` 之下的**第一段**就是一套（`clothes/out` + `001` → `clothes/out/001`）。
+ * 一条规则覆盖三种形态，也不会把 `001/a1` 这种内部动作目录漏给运营去选。
+ * 因此动画模式下 `rootDir` 是必填的（没有锚点就无从切段，退化成图标模式的行为）。
+ */
+export type ImagePickMode = "image" | "atlas";
+
+/** 相对 rootDir 的第一段（动画模式用它当「一套」的标识） */
+function firstSegmentOf(relative: string): string {
+  const slash = relative.indexOf("/");
+  return slash > 0 ? relative.slice(0, slash) : relative;
+}
 
 /** 清单缓存（一次会话只拉一次；失败不缓存，下次打开重试） */
 let catalogTask: Promise<ImageCatalog> | null = null;
@@ -82,6 +121,7 @@ function trimSlashes(value: string): string {
 function ImagePickerList({
   images,
   rootDir,
+  mode,
   current,
   onPick,
   max = 240,
@@ -89,6 +129,7 @@ function ImagePickerList({
   images: string[];
   /** 只看这个目录下的图（空 = 全部） */
   rootDir?: string;
+  mode: ImagePickMode;
   current?: string;
   onPick: (path: string) => void;
   /** 渲染上限：素材目录动辄几万张，一次性铺完会卡住主线程 */
@@ -99,17 +140,39 @@ function ImagePickerList({
 
   const prefix = rootDir ? `${trimSlashes(rootDir)}/` : "";
 
-  const scoped = useMemo(
-    () => (prefix ? images.filter((path) => path.startsWith(prefix)) : images),
-    [images, prefix],
-  );
+  /**
+   * 候选集
+   *
+   * - 图标模式：一项 = 一个清单项，选中值就是它；
+   * - 动画模式：一项 = `rootDir` 下的一套（按第一段归并、去重），选中值是**锚点 + 第一段**。
+   *   归并是必须的 —— 否则外观 `clothes/out/001` 会铺出几十个动作目录（`001/a1`、
+   *   `001/attack_far` …）让运营以为要挑其中一个。
+   */
+  const candidates = useMemo(() => {
+    const scoped = prefix ? images.filter((path) => path.startsWith(prefix)) : images;
+    if (mode === "image" || !prefix) {
+      return scoped.map((path) => ({ path, value: path, name: path.split("/").pop() ?? path }));
+    }
+    const seen = new Set<string>();
+    const rows: { path: string; value: string; name: string }[] = [];
+    for (const path of scoped) {
+      const segment = firstSegmentOf(path.slice(prefix.length));
+      const value = `${trimSlashes(rootDir ?? "")}/${segment}`;
+      if (seen.has(value)) continue;
+      seen.add(value);
+      rows.push({ path, value, name: segment });
+    }
+    return rows;
+  }, [images, prefix, mode, rootDir]);
 
-  /** 相对 rootDir 的路径（分组与显示名都用它） */
+  /** 相对 rootDir 的路径（分组用） */
   const relativeOf = (path: string): string => (prefix && path.startsWith(prefix) ? path.slice(prefix.length) : path);
 
+  // atlas 模式不分组：每套动画就是一个目录，按目录分组等于「每组一项」，筛选栏只会比列表更长
   const groups = useMemo(() => {
+    if (mode === "atlas") return [];
     const names = new Set<string>();
-    for (const path of scoped) {
+    for (const { path } of candidates) {
       const relative = relativeOf(path);
       const slash = relative.indexOf("/");
       if (slash > 0) names.add(relative.slice(0, slash));
@@ -117,18 +180,18 @@ function ImagePickerList({
     return Array.from(names).sort();
     // relativeOf 依赖 prefix，prefix 已在依赖里
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scoped, prefix]);
+  }, [candidates, prefix, mode]);
 
   const filtered = useMemo(() => {
     const needle = keyword.trim().toLowerCase();
-    return scoped.filter((path) => {
+    return candidates.filter(({ path }) => {
       const relative = relativeOf(path);
       if (group && !relative.startsWith(`${group}/`)) return false;
       if (needle && !path.toLowerCase().includes(needle)) return false;
       return true;
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scoped, keyword, group, prefix]);
+  }, [candidates, keyword, group, prefix]);
 
   const shown = filtered.slice(0, max);
 
@@ -145,7 +208,7 @@ function ImagePickerList({
         {groups.length > 0 ? (
           <div className="flex flex-wrap gap-1">
             <GroupChip active={group === null} onClick={() => setGroup(null)}>
-              全部 {scoped.length}
+              全部 {candidates.length}
             </GroupChip>
             {groups.map((name) => (
               <GroupChip key={name} active={group === name} onClick={() => setGroup(name)}>
@@ -159,26 +222,34 @@ function ImagePickerList({
       <div className="min-h-0 flex-1 overflow-y-auto">
         {shown.length === 0 ? (
           <p className="py-8 text-center text-xs text-slate-500">
-            {scoped.length === 0 ? "这个目录下没有图片" : "没有匹配的图片"}
+            {candidates.length === 0
+              ? mode === "atlas"
+                ? "这个目录下没有动画资源"
+                : "这个目录下没有图片"
+              : "没有匹配的图片"}
           </p>
         ) : (
           <div className="grid grid-cols-4 gap-2 sm:grid-cols-6 lg:grid-cols-8">
-            {shown.map((path) => {
-              const active = current === path;
-              const name = relativeOf(path).split("/").pop() ?? path;
+            {shown.map(({ path, value, name }) => {
+              const active = current === value;
               return (
                 <button
                   key={path}
                   type="button"
-                  title={path}
-                  onClick={() => onPick(path)}
+                  title={value}
+                  onClick={() => onPick(value)}
                   className={`flex flex-col items-center gap-1 rounded-lg border p-1.5 transition ${
                     active
                       ? "border-indigo-500 bg-indigo-500/10"
                       : "border-slate-800 bg-slate-900/60 hover:border-slate-600 hover:bg-slate-800/60"
                   }`}
                 >
-                  <GameIcon path={path} alt={name} size={44} zoomable={false} />
+                  {/* 图集用首帧预览：它可能就是一张整张拼图，直接 <img> 看不出是什么 */}
+                  {mode === "atlas" ? (
+                    <GameFrame atlas={value} alt={name} size={44} zoomable={false} />
+                  ) : (
+                    <GameIcon path={value} alt={name} size={44} zoomable={false} />
+                  )}
                   <span className="w-full truncate text-center text-[10px] text-slate-400">{name}</span>
                 </button>
               );
@@ -189,7 +260,7 @@ function ImagePickerList({
 
       <p className="text-[11px] text-slate-600">
         共 {filtered.length} 项
-        {filtered.length > shown.length ? `，只画了前 ${shown.length} 项 —— 用搜索或分组缩小范围` : ""}
+        {filtered.length > max ? `，只画了前 ${shown.length} 项 —— 用搜索或分组缩小范围` : ""}
       </p>
     </div>
   );
@@ -213,13 +284,15 @@ function GroupChip({ active, onClick, children }: { active: boolean; onClick: ()
  * 图片选择弹窗：受控开合，选中即回调并关闭
  *
  * `value` 传当前值（高亮用），`onSelect` 收到的是 resources 相对路径（不带扩展名）——
- * 正是数据库 `icon` 字段要存的东西。清空不在这里做：调用方保留输入框，清空就是删掉路径。
+ * 正是数据库 `icon` 字段要存的东西。`mode="atlas"` 时收到的是**图集目录**（`animation` /
+ * 内观 / 外观 / NPC `src` 的存法）。清空不在这里做：调用方保留输入框，清空就是删掉路径。
  */
 export function ImagePicker({
   open,
   title,
   hint,
   rootDir,
+  mode = "image",
   value,
   onSelect,
   onClose,
@@ -229,6 +302,8 @@ export function ImagePicker({
   hint?: string;
   /** 只看这个目录下的图（如药品图标传 `item`） */
   rootDir?: string;
+  /** 挑一张图还是一个图集目录（默认一张图） */
+  mode?: ImagePickMode;
   /** 当前值（高亮） */
   value?: string;
   onSelect: (path: string) => void;
@@ -239,6 +314,15 @@ export function ImagePicker({
   const [loading, setLoading] = useState(false);
   // 每次打开 / 点「重新扫描」都重新拉（素材可能在两次打开之间更新过）
   const [reloadKey, setReloadKey] = useState(0);
+
+  // 开着的选择器数量：编辑弹窗靠它判断「Esc 该不该放行」（见下方 anyPickerOpen）
+  useEffect(() => {
+    if (!open) return;
+    openPickerCount += 1;
+    return () => {
+      openPickerCount -= 1;
+    };
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
@@ -274,7 +358,9 @@ export function ImagePicker({
       title={title}
       hint={
         hint ??
-        "点一张即选中。来源是客户端素材目录（开发直读 client/assets/resources；生产读 image-manifest.json）。"
+        (mode === "atlas"
+          ? "点一套即选中（存的是图集**目录**）。来源是客户端素材目录（开发直读 client/assets/resources；生产读 image-manifest.json）。"
+          : "点一张即选中。来源是客户端素材目录（开发直读 client/assets/resources；生产读 image-manifest.json）。")
       }
       size="xl"
       onClose={onClose}
@@ -312,6 +398,7 @@ export function ImagePicker({
         <ImagePickerList
           images={catalog.images}
           rootDir={rootDir}
+          mode={mode}
           current={value}
           onPick={(path) => {
             onSelect(path);
@@ -320,5 +407,80 @@ export function ImagePicker({
         />
       ) : null}
     </Modal>
+  );
+}
+
+/**
+ * 图标 / 动画资源字段：缩略预览 + 路径输入 + 「选择图片」按钮（选择器内嵌，不用父级接线）
+ *
+ * 为什么要这么一层：管理端有十来处「填一个 resources 路径」的字段（物品、装备、技能、状态、
+ * NPC、部位底图、称号 / 战魂 / 军衔动画、时装…）。每处都手写「预览 + 输入框 + 按钮 + 弹窗 +
+ * Esc 放行」的话，第一个漏写的页面就是「运营点不开选择器」或者「选完把编辑弹窗一起关了」。
+ * 这里做一次，调用方只留 `<IconField …/>`。
+ *
+ * 手填路径仍然保留（输入框就在那儿）：素材还没进客户端时可以先填上，或者粘贴一批同目录的值。
+ */
+export function IconField({
+  label,
+  hint,
+  value,
+  onChange,
+  rootDir,
+  mode = "image",
+  placeholder,
+  pickerTitle,
+  disabled = false,
+}: {
+  label: string;
+  hint?: string;
+  value: string;
+  onChange: (path: string) => void;
+  /** 只看这个目录（图标填 `item`；动画填锚点，如 `clothes/out`） */
+  rootDir?: string;
+  /** 挑一张图还是一套动画资源（见 `ImagePickMode`） */
+  mode?: ImagePickMode;
+  placeholder?: string;
+  /** 选择器标题（默认「选择<label>」） */
+  pickerTitle?: string;
+  disabled?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <Field label={label} hint={hint}>
+        <div className="flex items-center gap-2">
+          {/*
+            预览随模式走：图标看这张图；动画看首帧（外观那种「按动作分子目录」的没有单张封面，
+            会显示「无图」占位 —— 这是事实，不是选错了）。
+          */}
+          {mode === "atlas" ? (
+            <GameFrame atlas={value} alt={label} size={36} zoomable={false} />
+          ) : (
+            <GameIcon path={value} alt={label} size={36} zoomable={false} />
+          )}
+          <Input
+            className="flex-1"
+            value={value}
+            placeholder={placeholder ?? (mode === "atlas" ? "图集资源基名" : "path/to/image")}
+            disabled={disabled}
+            onChange={(event) => onChange(event.target.value)}
+          />
+          <Button variant="outline" className="shrink-0" disabled={disabled} onClick={() => setOpen(true)}>
+            选择图片
+          </Button>
+        </div>
+      </Field>
+      {open ? (
+        <ImagePicker
+          open
+          title={pickerTitle ?? `选择${label}`}
+          rootDir={rootDir}
+          mode={mode}
+          value={value}
+          onSelect={onChange}
+          onClose={() => setOpen(false)}
+        />
+      ) : null}
+    </>
   );
 }

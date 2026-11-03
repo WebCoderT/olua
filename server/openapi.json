@@ -7785,7 +7785,7 @@
     },
     "/admin/fashions": {
       "get": {
-        "description": "id 清单固定（seed 自 shared/fashion-seed.ts 的 20 套），**没有创建 / 删除**。`keyword` 模糊匹配 id / 名称，`acquireChannel` 按获得渠道筛。\n\n属性 seed 时全 0（原配置就是零加成），在这里运营可改；资源路径不开放编辑。\n\n**排序**：`sort` 取 `id` / `label` / `sellPrice` / `updatedAt`，`order` 取 asc / desc（默认 id 升序）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
+        "description": "id 清单固定（seed 自 shared/fashion-seed.ts 的 20 套），**没有创建 / 删除**。`keyword` 模糊匹配 id / 名称，`acquireChannel` 按获得渠道筛。\n\n属性 seed 时全 0（原配置就是零加成），在这里运营可改；图标 / 内观 / 外观资源路径同样可改（管理端可视化选择器）。\n\n**排序**：`sort` 取 `id` / `label` / `sellPrice` / `updatedAt`，`order` 取 asc / desc（默认 id 升序）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
         "operationId": "adminFashion.list",
         "parameters": [
           {
@@ -7908,7 +7908,7 @@
     },
     "/admin/fashions/{id}": {
       "patch": {
-        "description": "**部分更新**：只改请求体里出现的字段。\n\n- `label`：名称（≤50 字）。\n- `description`：描述文案（≤500 字）。\n- `sellPrice`：售卖价（绑定元宝/件，0 ≤ 值 ≤ 1 亿）。\n- `acquireChannel`：获得渠道（upgrade / grant / unavailable；渠道语义与称号一致）。\n- `attributes`：八项属性，**整份提交、整份替换**（要求 0 ≤ min ≤ max）。\n- `icon` / `inRes` / `outRes` 不开放编辑（传了会被白名单剥离）。\n- `id` 不存在 → 404（`50022`）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
+        "description": "**部分更新**：只改请求体里出现的字段。\n\n- `label`：名称（≤50 字）。\n- `description`：描述文案（≤500 字）。\n- `sellPrice`：售卖价（绑定元宝/件，0 ≤ 值 ≤ 1 亿）。\n- `acquireChannel`：获得渠道（upgrade / grant / unavailable；渠道语义与称号一致）。\n- `attributes`：八项属性，**整份提交、整份替换**（要求 0 ≤ min ≤ max）。\n- `icon` / `inRes` / `outRes`：资源路径（空串 = 不显示 / 不穿；每项 ≤200 字符）。\n- `id` 不存在 → 404（`50022`）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
         "operationId": "adminFashion.update",
         "parameters": [
           {
@@ -14680,6 +14680,21 @@
               "unavailable"
             ]
           },
+          "icon": {
+            "type": "string",
+            "description": "图标（resources 相对路径，不传则不改；空串 = 不显示图标）",
+            "maxLength": 200
+          },
+          "inRes": {
+            "type": "string",
+            "description": "内观资源（resources 相对路径，不传则不改；空串 = 内观不显示这套）",
+            "maxLength": 200
+          },
+          "outRes": {
+            "type": "string",
+            "description": "外观资源（resources 相对路径，不传则不改；空串 = 场景里不显示这套）",
+            "maxLength": 200
+          },
           "attributes": {
             "description": "八项属性（**整份提交、整份替换**，不传则不改；区间型要求 0 ≤ min ≤ max）",
             "allOf": [
@@ -21178,15 +21193,15 @@
           },
           "icon": {
             "type": "string",
-            "description": "图标资源路径（resources 相对路径；不开放编辑）"
+            "description": "图标资源路径（resources 相对路径；后台可改，空串 = 不显示）"
           },
           "inRes": {
             "type": "string",
-            "description": "内观资源路径（空串 = 无；不开放编辑）"
+            "description": "内观资源路径（空串 = 无；后台可改）"
           },
           "outRes": {
             "type": "string",
-            "description": "外观资源路径（空串 = 无；不开放编辑）"
+            "description": "外观资源路径（空串 = 无；后台可改）"
           },
           "sellPrice": {
             "type": "number",

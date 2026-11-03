@@ -2,8 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { ACQUIRE_CHANNEL, ACQUIRE_CHANNEL_LABELS } from "../api";
 import type { ConfigAttributes, Rank, Soul, Title } from "../api";
 import { AttributesGrid, crossedRangeKeys } from "./AttributesEditor";
-import { GameFrame } from "./GameImage";
 import { Modal } from "./Modal";
+import { IconField, anyPickerOpen } from "./ImagePicker";
 import { Button, Field, Input, Notice, Select } from "./ui";
 
 /** 弹窗表单值（channel 仅称号、tier 仅军衔有；不相关的 kind 传过来时忽略）。价格不在这里 —— 唯一修改口在成长列表（#232/#234/#250） */
@@ -104,7 +104,10 @@ export function GameConfigDialog({
       size="md"
       title={`编辑${kindName} · ${level} ${unit}`}
       hint="等级序列固定（不可新增 / 删除）。属性整份替换：下方八项会一起提交，改错请整行对照。"
-      onClose={onCancel}
+      /* Esc 先到编辑弹窗：图片选择器开着时不能让弹窗一起关（改了一半的内容会丢） */
+      onClose={() => {
+        if (!anyPickerOpen()) onCancel();
+      }}
       footer={
         <>
           <Button variant="outline" disabled={submitting} onClick={onCancel}>
@@ -145,12 +148,15 @@ export function GameConfigDialog({
 
         {hasAnimation ? (
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <Field label="动画资源目录" hint="resources 相对路径；左侧即目录里图集的首帧预览">
-              <div className="flex items-center gap-3">
-                <GameFrame atlas={animation} alt="动画首帧预览" size={56} />
-                <Input value={animation} onChange={(event) => setAnimation(event.target.value)} />
-              </div>
-            </Field>
+            <IconField
+              label="动画资源目录"
+              hint="resources 相对路径；左侧即这套动画的首帧预览"
+              mode="atlas"
+              rootDir={kind === "soul" ? "war-soul" : "titles"}
+              placeholder={kind === "soul" ? "war-soul/sfx_13001" : "titles/sfx_13009"}
+              value={animation}
+              onChange={setAnimation}
+            />
             <Field label="动画帧率">
               <Input
                 type="number"

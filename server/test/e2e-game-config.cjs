@@ -1313,11 +1313,28 @@ async function main() {
     const fashionGhost = await api(base, "PATCH", "/api/admin/fashions/cloth_99", { token, body: { label: "x" } });
     checkEqual(fashionGhost.status, 404, "改不存在的时装 → 404");
     checkEqual(fashionGhost.body?.code, 50022, "时装未找到用专属业务码 50022");
-    const fashionStructural = await api(base, "PATCH", "/api/admin/fashions/cloth_2", { token, body: { icon: "clothes/icon/999", inRes: "x", outRes: "y" } });
-    checkEqual(fashionStructural.status, 200, "PATCH 资源路径不报错（白名单剥离）");
-    checkEqual(fashionStructural.body?.data?.icon, shared.FASHIONS["cloth_2"].icon, "icon 不可编辑（资源路径属表现层）");
-    checkEqual(fashionStructural.body?.data?.inRes, shared.FASHIONS["cloth_2"].in, "inRes 不可编辑");
-    checkEqual(fashionStructural.body?.data?.outRes, shared.FASHIONS["cloth_2"].out, "outRes 不可编辑");
+    // #641：资源路径开放编辑（管理端有可视化图片选择器，素材仍在客户端）
+    const fashionRes = await api(base, "PATCH", "/api/admin/fashions/cloth_2", {
+      token,
+      body: { icon: "clothes/icon/999", inRes: "clothes/in/030", outRes: "clothes/out/030" },
+    });
+    checkEqual(fashionRes.status, 200, "资源路径可以改（图标 / 内观 / 外观）");
+    checkEqual(fashionRes.body?.data?.icon, "clothes/icon/999", "图标按提交值落库");
+    checkEqual(fashionRes.body?.data?.inRes, "clothes/in/030", "内观按提交值落库");
+    checkEqual(fashionRes.body?.data?.outRes, "clothes/out/030", "外观按提交值落库");
+    const fashionResEmpty = await api(base, "PATCH", "/api/admin/fashions/cloth_2", {
+      token,
+      body: { icon: "", inRes: "", outRes: "" },
+    });
+    checkEqual(fashionResEmpty.status, 200, "空串合法（= 不显示 / 不穿）");
+    checkEqual(fashionResEmpty.body?.data?.icon, "", "空串能把图标清掉");
+    const fashionResTooLong = await api(base, "PATCH", "/api/admin/fashions/cloth_2", { token, body: { icon: "x".repeat(201) } });
+    checkEqual(fashionResTooLong.status, 400, "资源路径超长 → 400（防御性上限 200）");
+    const fashionResRestored = await api(base, "PATCH", "/api/admin/fashions/cloth_2", {
+      token,
+      body: { icon: shared.FASHIONS["cloth_2"].icon, inRes: shared.FASHIONS["cloth_2"].in, outRes: shared.FASHIONS["cloth_2"].out },
+    });
+    checkEqual(fashionResRestored.body?.data?.inRes, shared.FASHIONS["cloth_2"].in, "复原内观路径（后面的断言以出厂口径为基线）");
     const postFashion = await api(base, "POST", "/api/admin/fashions", { token, body: { id: "cloth_99" } });
     checkEqual(postFashion.status, 404, "POST 时装 → 404（路由不存在）");
     const deleteFashion = await api(base, "DELETE", "/api/admin/fashions/cloth_2", { token });

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { drugIcon, drugsApi, formatTime, PERMISSION } from "../api";
 import type { Drug, PageResult } from "../api";
 import { GameIcon } from "../components/GameImage";
-import { ImagePicker } from "../components/ImagePicker";
+import { IconField, anyPickerOpen } from "../components/ImagePicker";
 import { Modal } from "../components/Modal";
 import { Pagination } from "../components/Pagination";
 import { Badge, Button, Card, EmptyState, Field, Input, Spinner, tableClass, tdClass, thClass, theadClass } from "../components/ui";
@@ -41,7 +41,6 @@ export function DrugsPage() {
   const [editing, setEditing] = useState<Drug | null>(null);
   const [form, setForm] = useState<Drug | null>(null);
   /** 图标选择器开合（编辑弹窗里的「选择」按钮） */
-  const [picking, setPicking] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -81,7 +80,6 @@ export function DrugsPage() {
   };
 
   const closeEdit = () => {
-    setPicking(false);
     setEditing(null);
     setForm(null);
   };
@@ -217,7 +215,7 @@ export function DrugsPage() {
             size="md"
             /* Esc 先到编辑弹窗：选择器开着时不能把编辑弹窗一起关掉（改了一半的内容会丢） */
             onClose={() => {
-              if (!picking) closeEdit();
+              if (!anyPickerOpen()) closeEdit();
             }}
             footer={<>
               <Button variant="outline" onClick={closeEdit}>
@@ -244,21 +242,14 @@ export function DrugsPage() {
             <Field label="描述">
               <Input value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} />
             </Field>
-            <Field label="图标" hint="resources 相对路径（如 item/fs_2，不带扩展名）；空串 = 不显示图标">
-              <div className="flex items-center gap-2">
-                {/* 当前值的即时预览：换图时不用等保存就能看出对不对 */}
-                <GameIcon path={form.icon} alt={form.label} zoomable={false} />
-                <Input
-                  className="flex-1"
-                  value={form.icon}
-                  placeholder="item/fs_2"
-                  onChange={(event) => setForm({ ...form, icon: event.target.value })}
-                />
-                <Button variant="outline" className="shrink-0" onClick={() => setPicking(true)}>
-                  选择图片
-                </Button>
-              </div>
-            </Field>
+            <IconField
+              label="图标"
+              hint="resources 相对路径（如 item/fs_2，不带扩展名）；空串 = 不显示图标"
+              rootDir="item"
+              placeholder="item/fs_2"
+              value={form.icon}
+              onChange={(path) => setForm({ ...form, icon: path })}
+            />
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               {numberField("使用等级", "展示与背包排序用；服务端用药不拦等级", "level", 1, 60)}
               {numberField("固定回复生命", "使用后立即回复的 HP", "effectHp", 0, 100000000)}
@@ -269,21 +260,6 @@ export function DrugsPage() {
               {numberField("堆叠上限", "背包里最多叠多少个", "maxStack", 1, 9999)}
             </div>
           </Modal>
-          {/*
-            图标选择器叠在编辑弹窗之上。Esc 是两个 Modal 各挂一个 window 监听：
-            编辑弹窗先注册、先收到 —— 不拦一下就会「关选择器顺带把编辑弹窗也关了」，
-            改了一半的内容全丢。放行条件见上面的 onClose。
-          */}
-          {picking ? (
-            <ImagePicker
-              open
-              title="选择药品图标"
-              rootDir="item"
-              value={form.icon}
-              onSelect={(path) => setForm({ ...form, icon: path })}
-              onClose={() => setPicking(false)}
-            />
-          ) : null}
         </>
       ) : null}
     </div>

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { formatTime, npcsApi, PERMISSION } from "../api";
 import type { Npc, PageResult } from "../api";
 import { GameFrame } from "../components/GameImage";
+import { IconField, anyPickerOpen } from "../components/ImagePicker";
 import { Modal } from "../components/Modal";
 import { Pagination } from "../components/Pagination";
 import { Button, Card, EmptyState, Field, Input, Spinner, tableClass, tdClass, thClass, theadClass } from "../components/ui";
@@ -178,7 +179,10 @@ export function NpcsPage() {
           title={<>编辑 NPC · {editing?.id}</>}
           hint="部分更新：只提交下方字段；对话文案传空串 = 清空。"
           size="md"
-          onClose={closeEdit}
+          /* Esc 先到编辑弹窗：图片选择器开着时不能让弹窗一起关（改了一半的内容会丢） */
+          onClose={() => {
+            if (!anyPickerOpen()) closeEdit();
+          }}
           footer={<>
             <Button variant="outline" onClick={closeEdit}>
               取消
@@ -191,9 +195,15 @@ export function NpcsPage() {
           <Field label="名称">
             <Input value={form.label} onChange={(event) => setForm({ ...form, label: event.target.value })} />
           </Field>
-          <Field label="素材目录" hint="resources 下的相对路径（图集动画，如 npc/npc_2125）；空串 = 该 NPC 不显示">
-            <Input value={form.src} onChange={(event) => setForm({ ...form, src: event.target.value })} />
-          </Field>
+          <IconField
+            label="素材目录"
+            hint="resources 下的相对路径（图集动画，如 npc/npc_2125）；空串 = 该 NPC 不显示"
+            mode="atlas"
+            rootDir="npc"
+            placeholder="npc/npc_2125"
+            value={form.src}
+            onChange={(path) => setForm({ ...form, src: path })}
+          />
           <div className="grid grid-cols-2 gap-3">
             <Field label="横向缩放" hint="1 = 原尺寸（0.1~10）">
               <Input

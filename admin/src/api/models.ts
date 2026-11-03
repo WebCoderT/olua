@@ -1483,6 +1483,18 @@ export type UpdateFashion = {
    */
   acquireChannel?: "upgrade" | "grant" | "unavailable";
   /**
+   * 图标（resources 相对路径，不传则不改；空串 = 不显示图标）
+   */
+  icon?: string;
+  /**
+   * 内观资源（resources 相对路径，不传则不改；空串 = 内观不显示这套）
+   */
+  inRes?: string;
+  /**
+   * 外观资源（resources 相对路径，不传则不改；空串 = 场景里不显示这套）
+   */
+  outRes?: string;
+  /**
    * 八项属性（**整份提交、整份替换**，不传则不改；区间型要求 0 ≤ min ≤ max）
    */
   attributes?: ConfigAttributes;
@@ -5555,15 +5567,15 @@ export type Fashion = {
    */
   description: string;
   /**
-   * 图标资源路径（resources 相对路径；不开放编辑）
+   * 图标资源路径（resources 相对路径；后台可改，空串 = 不显示）
    */
   icon: string;
   /**
-   * 内观资源路径（空串 = 无；不开放编辑）
+   * 内观资源路径（空串 = 无；后台可改）
    */
   inRes: string;
   /**
-   * 外观资源路径（空串 = 无；不开放编辑）
+   * 外观资源路径（空串 = 无；后台可改）
    */
   outRes: string;
   /**

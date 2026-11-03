@@ -3,6 +3,7 @@ import { ACQUIRE_CHANNEL, fashionsApi, formatTime, PERMISSION } from "../api";
 import type { ConfigAttributes, Fashion, FashionQuery, PageResult } from "../api";
 import { AttributesGrid, crossedRangeKeys } from "../components/AttributesEditor";
 import { GameIcon } from "../components/GameImage";
+import { IconField, anyPickerOpen } from "../components/ImagePicker";
 import { Modal } from "../components/Modal";
 import { Pagination } from "../components/Pagination";
 import { Badge, Button, Card, EmptyState, Field, Input, Select, Spinner, tableClass, tdClass, thClass, theadClass } from "../components/ui";
@@ -38,8 +39,8 @@ function attributeSummary(item: Fashion): string {
 /**
  * 时装编辑弹窗（#257）
  *
- * 开放「名称 + 描述 + 售卖价 + 获得渠道 + 八项属性」；`icon` / `inRes` / `outRes`
- * 不开放编辑（资源路径是表现层，染色 / 外观资源仍在客户端）。属性**整份提交、
+ * 开放「名称 + 描述 + 售卖价 + 获得渠道 + 八项属性 + 图标 / 内观 / 外观资源路径」；
+ * 资源用 `IconField` 现挑（#641，素材仍在客户端 resources，只是路径可配）。属性**整份提交、
  * 整份替换**（服务端口径）。校验分工：min ≤ max 在这里做即时提示，权威在服务端。
  */
 function FashionEditDialog({
@@ -51,12 +52,25 @@ function FashionEditDialog({
   open: boolean;
   initial: Fashion | null;
   onCancel: () => void;
-  onSubmit: (value: { label: string; description: string; sellPrice: number; acquireChannel: string; attributes: ConfigAttributes }) => Promise<boolean>;
+  onSubmit: (value: {
+    label: string;
+    description: string;
+    sellPrice: number;
+    acquireChannel: string;
+    icon: string;
+    inRes: string;
+    outRes: string;
+    attributes: ConfigAttributes;
+  }) => Promise<boolean>;
 }) {
   const [label, setLabel] = useState("");
   const [description, setDescription] = useState("");
   const [sellPrice, setSellPrice] = useState("0");
   const [channel, setChannel] = useState<string>(ACQUIRE_CHANNEL.UNAVAILABLE);
+  // #641：图标 / 内观 / 外观三个资源路径（后台可视化选择，不再写死）
+  const [icon, setIcon] = useState("");
+  const [inRes, setInRes] = useState("");
+  const [outRes, setOutRes] = useState("");
   const [attributes, setAttributes] = useState<ConfigAttributes | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -66,6 +80,9 @@ function FashionEditDialog({
     setDescription(initial?.description ?? "");
     setSellPrice(initial ? String(initial.sellPrice) : "0");
     setChannel(initial?.acquireChannel ?? ACQUIRE_CHANNEL.UNAVAILABLE);
+    setIcon(initial?.icon ?? "");
+    setInRes(initial?.inRes ?? "");
+    setOutRes(initial?.outRes ?? "");
     setAttributes(initial?.attributes ? { ...initial.attributes } : null);
     setSubmitting(false);
   }, [open, initial]);
@@ -82,7 +99,7 @@ function FashionEditDialog({
 
   const submit = async () => {
     setSubmitting(true);
-    await onSubmit({ label: label.trim(), description: description.trim(), sellPrice: Number(sellPrice), acquireChannel: channel, attributes });
+    await onSubmit({ label: label.trim(), description: description.trim(), sellPrice: Number(sellPrice), acquireChannel: channel, icon: icon.trim(), inRes: inRes.trim(), outRes: outRes.trim(), attributes });
     setSubmitting(false);
   };
 
@@ -90,10 +107,13 @@ function FashionEditDialog({
     <Modal
       open
       title={<>编辑时装 · {initial.id}</>}
-      hint={<>图标 / 内观 / 外观资源路径不可改（外观资源仍在客户端）。获得渠道语义与称号一致；
-          属性当前配置全为 0 加成，需要强化属性时在这里改。</>}
+      hint={<>图标 / 内观 / 外观都可以现挑（素材放进客户端 resources 后点「选择图片」）。
+          获得渠道语义与称号一致；属性当前配置全为 0 加成，需要强化属性时在这里改。</>}
       size="md"
-      onClose={onCancel}
+      /* Esc 先到编辑弹窗：图片选择器开着时不能让弹窗一起关（改了一半的内容会丢） */
+      onClose={() => {
+        if (!anyPickerOpen()) onCancel();
+      }}
       footer={<>
         <Button variant="outline" disabled={submitting} onClick={onCancel}>
           取消
@@ -119,6 +139,35 @@ function FashionEditDialog({
           onChange={(event) => setDescription(event.target.value)}
         />
       </Field>
+      <div className="flex flex-col gap-3 rounded-xl border border-slate-800 bg-slate-950/40 p-4">
+        <span className="text-xs font-medium text-slate-400">资源（换成套素材不用改代码）</span>
+        <IconField
+          label="图标"
+          hint="列表 / 背包里显示的那张小图"
+          rootDir="clothes/icon"
+          placeholder="clothes/icon/001"
+          value={icon}
+          onChange={setIcon}
+        />
+        <IconField
+          label="内观"
+          hint="角色弹窗里穿在身上的那套"
+          mode="atlas"
+          rootDir="clothes/in"
+          placeholder="clothes/in/001"
+          value={inRes}
+          onChange={setInRes}
+        />
+        <IconField
+          label="外观"
+          hint="场景里跟着角色走的那套（整套动作图集，没有单张封面）"
+          mode="atlas"
+          rootDir="clothes/out"
+          placeholder="clothes/out/001"
+          value={outRes}
+          onChange={setOutRes}
+        />
+      </div>
       <Field label="获得渠道">
         <Select value={channel} onChange={(event) => setChannel(event.target.value)}>
           {CHANNEL_OPTIONS.map(([value, text]) => (
@@ -142,7 +191,7 @@ function FashionEditDialog({
  * 时装配置管理（#257，养成配置第八页）
  *
  * id 清单固定（configs/fashionClothes 的 20 套，启动时 seed 落库）——
- * **没有「新建」「删除」**，只有「编辑」；资源路径不开放编辑。
+ * **没有「新建」「删除」**，只有「编辑」；资源路径用图片选择器现挑（#641）。
  * 获得渠道 seed 默认「无法获取」，由运营逐个开放（与称号同一手法）。
  * 写操作要 `gameConfig:write`。
  */
@@ -190,7 +239,16 @@ export function FashionsPage() {
   };
 
   /** 编辑弹窗提交（部分更新：只发弹窗里有的字段；属性整份替换） */
-  const submitDialog = async (value: { label: string; description: string; sellPrice: number; acquireChannel: string; attributes: ConfigAttributes }): Promise<boolean> => {
+  const submitDialog = async (value: {
+    label: string;
+    description: string;
+    sellPrice: number;
+    acquireChannel: string;
+    icon: string;
+    inRes: string;
+    outRes: string;
+    attributes: ConfigAttributes;
+  }): Promise<boolean> => {
     if (!editing) return false;
     try {
       await fashionsApi.update(editing.id, { ...value, acquireChannel: value.acquireChannel as Fashion["acquireChannel"] });
@@ -208,7 +266,7 @@ export function FashionsPage() {
     <div className="flex flex-col gap-4">
       <PageHeader
         title="时装配置"
-        description={<>id 清单固定（configs/fashionClothes 的 20 套），只可编辑、不可新增 / 删除；图标与外观资源路径不开放编辑。
+        description={<>id 清单固定（configs/fashionClothes 的 20 套），只可编辑、不可新增 / 删除；图标与内外观资源可以现挑。
             获得渠道 seed 默认「无法获取」，由运营逐个开放；属性 seed 全 0，可按运营需要调整。</>}
       />
 

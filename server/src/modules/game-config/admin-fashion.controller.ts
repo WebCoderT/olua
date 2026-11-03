@@ -19,8 +19,8 @@ import { FashionDto, FashionPageDto, FashionQueryDto, UpdateFashionDto } from ".
  * （seed 自生成物 FASHIONS 的 20 套），e2e 会固化「POST/DELETE 404」。
  *
  * 可改：名称 / 描述 / 售卖价 / 获得渠道（复用称号 AcquireChannel，seed 默认 unavailable）/
- * 八项属性（整份替换）。不改：`icon` / `inRes` / `outRes` 资源路径（表现层，
- * 染色与外观资源仍在客户端）。写操作带 `@AuditTarget("fashion")`。
+ * 八项属性（整份替换）/ 图标与内外观资源路径（#641 起，管理端可视化选择器）。
+ * 染色与其它表现层参数仍在客户端。写操作带 `@AuditTarget("fashion")`。
  */
 @ApiAudience("admin")
 @Controller("admin/fashions")
@@ -34,7 +34,7 @@ export class AdminFashionController {
     description:
       "id 清单固定（seed 自 shared/fashion-seed.ts 的 20 套），**没有创建 / 删除**。" +
       "`keyword` 模糊匹配 id / 名称，`acquireChannel` 按获得渠道筛。\n\n" +
-      "属性 seed 时全 0（原配置就是零加成），在这里运营可改；资源路径不开放编辑。\n\n" +
+      "属性 seed 时全 0（原配置就是零加成），在这里运营可改；图标 / 内观 / 外观资源路径同样可改（管理端可视化选择器）。\n\n" +
       `**排序**：\`sort\` 取 ${sortFieldNames(FASHION_SORT)}，\`order\` 取 asc / desc（默认 id 升序）。`,
     permissions: [Permission.GAME_CONFIG_READ],
   })
@@ -56,7 +56,7 @@ export class AdminFashionController {
       "- `sellPrice`：售卖价（绑定元宝/件，0 ≤ 值 ≤ 1 亿）。\n" +
       "- `acquireChannel`：获得渠道（upgrade / grant / unavailable；渠道语义与称号一致）。\n" +
       "- `attributes`：八项属性，**整份提交、整份替换**（要求 0 ≤ min ≤ max）。\n" +
-      "- `icon` / `inRes` / `outRes` 不开放编辑（传了会被白名单剥离）。\n" +
+      "- `icon` / `inRes` / `outRes`：资源路径（空串 = 不显示 / 不穿；每项 ≤200 字符）。\n" +
       "- `id` 不存在 → 404（`50022`）。",
     permissions: [Permission.GAME_CONFIG_WRITE],
   })
