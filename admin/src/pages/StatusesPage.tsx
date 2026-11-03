@@ -4,6 +4,7 @@ import type { PageResult, Status, StatusCombat, UpdateStatus } from "../api";
 import { Modal } from "../components/Modal";
 import { Pagination } from "../components/Pagination";
 import { GameIcon } from "../components/GameImage";
+import { IconField, anyPickerOpen } from "../components/ImagePicker";
 import { DescriptionField, FormFooter, ProblemList } from "../components/form-bits";
 import { Badge, Button, Card, EmptyState, Field, Input, Select, Spinner, tableClass, tdClass, thClass, theadClass } from "../components/ui";
 import { hasPermission } from "../store/session";
@@ -135,7 +136,10 @@ function StatusEditDialog({
       }
       hint="归属与 id 是行身份，不可改。状态 id 被技能的「挂载状态」引用，改名不影响引用，改 id 不行（没有改 id 的入口）。"
       size="md"
-      onClose={onCancel}
+      /* Esc 先到编辑弹窗：图片选择器开着时不能让弹窗一起关（改了一半的内容会丢） */
+      onClose={() => {
+        if (!anyPickerOpen()) onCancel();
+      }}
       footer={
         <FormFooter submitting={submitting} canSubmit={canSubmit} onCancel={onCancel} onSubmit={() => void submit()} />
       }
@@ -158,12 +162,23 @@ function StatusEditDialog({
         </Field>
       </div>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <Field label="图标路径" hint="resources 相对路径，不含扩展名">
-          <Input value={form.icon} onChange={(event) => set("icon", event.target.value)} />
-        </Field>
-        <Field label="身上特效" hint="图集路径；空 = 只在图标栏显示">
-          <Input value={form.effect} onChange={(event) => set("effect", event.target.value)} />
-        </Field>
+        <IconField
+          label="图标路径"
+          hint="resources 相对路径，不含扩展名"
+          rootDir="skill/icon"
+          placeholder="skill/icon/2009"
+          value={form.icon}
+          onChange={(path) => set("icon", path)}
+        />
+        <IconField
+          label="身上特效"
+          hint="特效图集（一套动画）；空 = 只在图标栏显示"
+          mode="atlas"
+          rootDir="effect/status"
+          placeholder="effect/status/s_2004@0"
+          value={form.effect}
+          onChange={(path) => set("effect", path)}
+        />
       </div>
       <label className="flex items-center gap-2 text-xs text-slate-300">
         <input type="checkbox" checked={form.effectHoldLast} onChange={(event) => set("effectHoldLast", event.target.checked)} />

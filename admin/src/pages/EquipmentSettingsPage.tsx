@@ -6,6 +6,7 @@ import { Modal } from "../components/Modal";
 import { PageHeader } from "../components/PageHeader";
 import { hasPermission } from "../store/session";
 import { toastSuccess } from "../store/toast";
+import { IconField, anyPickerOpen } from "../components/ImagePicker";
 
 /** 槽位在角色弹窗里的位置分组（与服务端 `EquipmentSlotSeed.position` 同值域） */
 const POSITION_OPTIONS: Array<{ value: string; label: string }> = [
@@ -53,7 +54,10 @@ function SlotEditDialog({
       title={<>编辑槽位 · {slot.key}</>}
       hint={<>槽位 key 是客户端的部位枚举值，不可改；名称 / 底图 / 位置分组 / 排序都是运营可调。</>}
       size="md"
-      onClose={onCancel}
+      /* Esc 先到编辑弹窗：图片选择器开着时不能让弹窗一起关（改了一半的内容会丢） */
+      onClose={() => {
+        if (!anyPickerOpen()) onCancel();
+      }}
       footer={
         <>
           <Button variant="outline" disabled={submitting} onClick={onCancel}>
@@ -72,9 +76,14 @@ function SlotEditDialog({
         <Field label="排序" hint="从 0 起；也决定背包「一键整理」的部位序">
           <Input type="number" min={0} value={order} onChange={(event) => setOrder(event.target.value)} />
         </Field>
-        <Field label="底图" hint="resources 相对路径（不含扩展名），如 slots/cloth">
-          <Input value={imageSrc} onChange={(event) => setImageSrc(event.target.value)} />
-        </Field>
+        <IconField
+          label="底图"
+          hint="resources 相对路径（不含扩展名），如 slots/cloth"
+          rootDir="slots"
+          placeholder="slots/cloth"
+          value={imageSrc}
+          onChange={setImageSrc}
+        />
         <Field label="位置分组" hint="角色弹窗里这一列画在哪边">
           <Select value={position} onChange={(event) => setPosition(event.target.value)}>
             {POSITION_OPTIONS.map((option) => (

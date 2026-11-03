@@ -12,6 +12,7 @@ import {
 } from "../api";
 import type { CreateSkill, DamageCoefficient, PageResult, Skill, Status, UpdateSkill } from "../api";
 import { GameIcon } from "../components/GameImage";
+import { IconField, anyPickerOpen } from "../components/ImagePicker";
 import { Modal } from "../components/Modal";
 import { Pagination } from "../components/Pagination";
 import { DescriptionField, FormFooter, ProblemList } from "../components/form-bits";
@@ -217,7 +218,10 @@ function SkillEditDialog({
         </>
       }
       size="lg"
-      onClose={onCancel}
+      /* Esc 先到编辑弹窗：图片选择器开着时不能让弹窗一起关（改了一半的内容会丢） */
+      onClose={() => {
+        if (!anyPickerOpen()) onCancel();
+      }}
       footer={
         <FormFooter submitting={submitting} canSubmit={canSubmit} onCancel={onCancel} onSubmit={() => void submit()} />
       }
@@ -255,15 +259,26 @@ function SkillEditDialog({
         </Field>
       </div>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <Field label="图标路径" hint="resources 相对路径，不含扩展名；空 = 不显示">
-          <Input value={form.icon} onChange={(event) => set("icon", event.target.value)} />
-        </Field>
+        <IconField
+          label="图标路径"
+          hint="resources 相对路径，不含扩展名；空 = 不显示"
+          rootDir="skill/icon"
+          placeholder="skill/icon/1001"
+          value={form.icon}
+          onChange={(path) => set("icon", path)}
+        />
         <Field label="施法动作" hint="客户端动画动作键（如 attack_near）；空 = 不播动作">
           <Input value={form.action} onChange={(event) => set("action", event.target.value)} />
         </Field>
-        <Field label="技能特效" hint="图集路径；空 = 无特效">
-          <Input value={form.effect} onChange={(event) => set("effect", event.target.value)} />
-        </Field>
+        <IconField
+          label="技能特效"
+          hint="特效图集（一套动画）；空 = 无特效"
+          mode="atlas"
+          rootDir="effect/skill"
+          placeholder="effect/skill/s_1001@0"
+          value={form.effect}
+          onChange={(path) => set("effect", path)}
+        />
         <Field label="挂载状态" hint="释放成功后给自身挂的状态；状态型技能必填">
           <Select value={form.statusId} onChange={(event) => set("statusId", event.target.value)}>
             <option value="">（不挂状态）</option>
@@ -385,6 +400,7 @@ function emptyCreateForm() {
   return {
     id: "9004",
     label: "",
+    icon: "",
     category: "0",
     targetType: "1",
     action: "attack_skill_1",
@@ -447,6 +463,7 @@ function SkillCreateDialog({
       id: form.id.trim(),
       owner: "monster",
       label: form.label.trim(),
+      icon: form.icon.trim(),
       category: form.category as CreateSkill["category"],
       targetType: form.targetType as CreateSkill["targetType"],
       action: form.action.trim(),
@@ -474,7 +491,10 @@ function SkillCreateDialog({
         </>
       }
       size="md"
-      onClose={onCancel}
+      /* Esc 先到编辑弹窗：图片选择器开着时不能让弹窗一起关（改了一半的内容会丢） */
+      onClose={() => {
+        if (!anyPickerOpen()) onCancel();
+      }}
       footer={
         <FormFooter
           submitting={submitting}
@@ -510,12 +530,26 @@ function SkillCreateDialog({
             ))}
           </Select>
         </Field>
+        <IconField
+          label="图标"
+          hint="空 = 不显示；建完也能在编辑弹窗里改"
+          rootDir="skill/icon"
+          placeholder="skill/icon/1001"
+          value={form.icon}
+          onChange={(path) => set("icon", path)}
+        />
         <Field label="施法动作" hint="如 attack_skill_1">
           <Input value={form.action} onChange={(event) => set("action", event.target.value)} />
         </Field>
-        <Field label="技能特效" hint="图集路径；空 = 无特效">
-          <Input value={form.effect} onChange={(event) => set("effect", event.target.value)} />
-        </Field>
+        <IconField
+          label="技能特效"
+          hint="特效图集（一套动画）；空 = 无特效"
+          mode="atlas"
+          rootDir="effect/skill"
+          placeholder="effect/skill/s_1001@0"
+          value={form.effect}
+          onChange={(path) => set("effect", path)}
+        />
         <Field label="冷却（秒）">
           <Input value={form.cooldown} onChange={(event) => set("cooldown", event.target.value)} />
         </Field>

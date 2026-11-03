@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { itemsApi, formatTime, itemIcon, PERMISSION } from "../api";
 import type { Item, PageResult } from "../api";
 import { GameIcon } from "../components/GameImage";
+import { IconField, anyPickerOpen } from "../components/ImagePicker";
 import { Modal } from "../components/Modal";
 import { Pagination } from "../components/Pagination";
 import { Badge, Button, Card, EmptyState, Field, Input, Select, Spinner, tableClass, tdClass, thClass, theadClass } from "../components/ui";
@@ -195,7 +196,10 @@ export function ItemsPage() {
           title={`编辑物品 · ${editing?.id ?? ""}`}
           hint="部分更新：只提交下方字段；大类与等级需求不开放编辑。"
           size="md"
-          onClose={closeEdit}
+          /* Esc 先到编辑弹窗：图片选择器开着时不能让编辑弹窗一起关（改了一半的内容会丢） */
+          onClose={() => {
+            if (!anyPickerOpen()) closeEdit();
+          }}
           footer={
             <>
               <Button variant="outline" onClick={closeEdit}>
@@ -226,9 +230,14 @@ export function ItemsPage() {
               <Input value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} />
             </Field>
 
-            <Field label="图标" hint="resources 相对路径（如 item/2010210）；空串 = 不显示图标">
-              <Input value={form.icon} onChange={(event) => setForm({ ...form, icon: event.target.value })} />
-            </Field>
+            <IconField
+              label="图标"
+              hint="resources 相对路径（如 item/2010210）；空串 = 不显示图标"
+              rootDir="item"
+              placeholder="item/2010210"
+              value={form.icon}
+              onChange={(path) => setForm({ ...form, icon: path })}
+            />
 
             <Field label="堆叠上限" hint="背包里最多叠多少个">
               <Input

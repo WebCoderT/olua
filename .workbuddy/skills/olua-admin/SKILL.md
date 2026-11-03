@@ -99,7 +99,7 @@ await authApi.login({ username, password }, { silent: true }); // 表单自己�
 | `NpcsPage` | **养成配置**（NPC 基础数据 #258）：关键字筛选 + 分页；编辑弹窗只有名称 / 对话文案（对话 seed 为空串，客户端暂无消费） |
 | `MapsPage` | **地图管理（#571 观测 / #573 玩法配置可改 / #580 可视化 + 弹窗）**：左侧 11 张图，右侧 = 上半「玩法配置」（可改可存，`PATCH /admin/maps/:id` 落 `maps` 表并进审计）+ 下半 **`components/map/MapCanvas`**（预览图上叠 SVG：刷怪区实线 + TMX 原始矩形虚线 + NPC/复活点/碰撞盒，可逐个开关、可「放大」到 72vh、点区域/点 NPC 打开对应弹窗并高亮那一行）。其余观测块全在 `components/map/MapDialogs` 的弹窗里（图层 / 点位 / 刷怪区 / 场上怪物 / 对象组 / 数据来源）；**刷怪区越界**由服务端算好后显示（`MapSpawnArea.inBounds/overflow`，弹窗里「在图内」列 + 地图上红色虚线 + 地图卡片只在 >0 时出徽标）——提醒：容器 `overflow-hidden` 会把越出 viewBox 的部分裁掉，「区域在图外」在图上表现为「区域不存在」，不能指望眼睛发现—— **页面只留配置与地图**：地图页看不到地图等于没有地图页。**观测区没有编辑入口是功能定义不是缺口**：地图真相在客户端 TMX，换图只能改 TMX → 跑 `import-spawn-areas` → 重打包客户端（POST / PUT / DELETE 一律 404，超管也一样；`src` 塞进来也会被白名单剥掉）。保存成功后要 `refreshMapCatalog()` —— 地图名走 `api/mapCatalog.ts` 的进程内缓存（`Layout` 挂载时 `ensureMapCatalog()`），不刷新的话角色详情与实体选择器还显示旧名字 |
 | `MallPricingPage` | **商城定价**（#251）：统一价卡片（单行改价）+ 商品定价列表（部位/关键字/定价状态筛选，商品清单来自生成物 555 件变体）；未定价行高亮「走统一价」；特殊价 PUT upsert /「回统一价」DELETE —— **全后台唯一允许增删行的定价数据** |
-| `FashionsPage` | **时装配置**（#257）：关键字 / 获得渠道筛选 + 分页；编辑弹窗开放名称 / 描述 / 售卖价 / 渠道下拉 / 八项属性（maxHp/hpRecover + `RANGE_FIELDS` 六区间，复用 title.dto 的 ConfigAttributesDto 形状）；icon/inRes/outRes 资源路径不开放编辑；渠道中文名按时装语境另配（值域仍复用 ACQUIRE_CHANNEL） |
+| `FashionsPage` | **时装配置**（#257）：关键字 / 获得渠道筛选 + 分页；编辑弹窗开放名称 / 描述 / 售卖价 / 渠道下拉 / 八项属性（maxHp/hpRecover + `RANGE_FIELDS` 六区间，复用 title.dto 的 ConfigAttributesDto 形状）；icon/inRes/outRes 资源路径用 `IconField` 现挑（#641）；渠道中文名按时装语境另配（值域仍复用 ACQUIRE_CHANNEL） |
 | `DropConfigPage` | **掉落配置**（#254）：上半部具名掉落表卡片组（新建 / 编辑 / 删除，picks 捞取次数 + entries 条目编辑器逐行 goodId（带物品名提示）/ 权重 / 概率 / 数量区间）；下半部每怪掉落列表（关键字 / 来源筛选 + 分页，编辑弹窗三选一：引用具名表 / 内联条目+必填 picks / 清空 none）；具名表被引用中的行拒删。**弹窗与编辑器是共用件**（`components/drop/DropEditors.tsx` + `components/drop/MonsterDropDialog.tsx`，怪物列表 #584 用同一份）—— 别再在页面里各写一套三选一 |
 | `MailsPage` | 邮件投递记录（`mail:read` 看记录、`mail:write` 发信，编辑走 `EmailDialog`） |
 | `AdminsPage` | 管理员列表与改角色 / 启停 / **重置密码**（自己那一行置灰）/ 删除（`admin:manage`） |
@@ -143,6 +143,13 @@ await authApi.login({ username, password }, { silent: true }); // 表单自己�
 **弹窗模式**：受控开合（`open` + `onClose`），内容自管状态；**每次打开重新初始化**（`useEffect([open, initial])` 重置表单），编辑另一条时不残留上一条；提交回调签名 `Promise<boolean>`，返回 `true` 才由页面关弹窗刷列表。
 
 **提示统一走 Toast**（`store/toast` 的 `toastSuccess` / `toastError` / `toast`），不要页面自己挂浮层；危险操作统一 `ConfirmDialog`。
+
+**资源路径字段一律用 `IconField`**（`components/ImagePicker.tsx` 导出，#641）：
+
+- `<IconField mode="image" rootDir="item" value={form.icon} onChange={…}/>` —— 单图（药品 / 物品 / 装备图标、技能与状态图标、部位底图）；
+- `<IconField mode="atlas" rootDir="clothes/out" …/>` —— 一套动画（称号 / 战魂 `/titles` `/war-soul`、NPC `npc`、内观 `clothes/in`、外观 `clothes/out`、技能特效 `effect/skill`、状态特效 `effect/status`、时装三件套）。
+- `mode="atlas"` 的「一套」= `rootDir` 之下的**第一段**，所以 `clothes/out/001` 不会拆成 `001/a1` 让运营去选动作。
+- **图标 / 动画字段别自己拼输入框 + 弹窗**：还要处理 `anyPickerOpen()` 的 Esc 放行，漏了就是「关选择器顺带把编辑弹窗关了」（弹窗嵌套时两个 Modal 各挂一个 window 监听，外层先注册先收到）。
 
 ## 五点六、养成配置页面模式（TitlesPage / SoulsPage，称号与战魂同构）
 

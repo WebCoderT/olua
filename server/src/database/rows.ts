@@ -891,11 +891,11 @@ export interface FashionRow {
   label: string;
   /** 描述文案（后台可改） */
   description: string;
-  /** 图标资源路径（resources 相对路径，后台不改） */
+  /** 图标资源路径（resources 相对路径；后台可改，空串 = 不显示） */
   icon: string;
-  /** 内观资源路径（空串 = 无；后台不改） */
+  /** 内观资源路径（空串 = 无；后台可改） */
   in_res: string;
-  /** 外观资源路径（空串 = 无；后台不改） */
+  /** 外观资源路径（空串 = 无；后台可改） */
   out_res: string;
   /** 售卖价（绑定元宝/件；后台可改） */
   sell_price: number;

@@ -88,7 +88,18 @@ admin/
 
 配置类列表页的**第一列是缩略图**：单图资源（装备 / 药品 / 物品 / 怪物 / 技能 / 状态 / 时装 / 商城商品）直接显示图标，称号 / 战魂 / NPC 显示图集动画的**首帧**（组件在 `components/GameImage.tsx`）。**缩略图可点击放大**（灯箱查看，Esc 关闭）。图片来源是客户端素材（dev 由 vite 中间件、prod 由 nginx 反代到 game 容器，同 `/game-resources/` 前缀），字段查三端共用的那份生成物 —— 素材缺失或 id 不在生成物里时显示「无图」占位，不影响列表。
 
-**图标字段可以可视化挑**：药品编辑弹窗的「图标」从手填路径改成「预览 + 路径 + **选择图片**」——弹窗里按目录分组铺开客户端素材的缩略图，点一张即选中（组件在 `components/ImagePicker.tsx`）。图片清单有两个来源、同一个 JSON 形状：**开发**用 vite 中间件的 `GET /game-resources/__list?dir=item` 直接扫 `client/assets/resources`（素材一放进来就能选，零额外步骤）；**生产** nginx 只是静态反代、没有目录列表能力，读落盘清单 `resources/image-manifest.json`（`make image-manifest` 生成，随素材包分发）。拿不到清单时弹窗里给的是**可执行的提示**（素材目录在哪 / 该跑哪条命令），不是一句「加载失败」。
+**图标字段可以可视化挑**：所有「填一个 resources 路径」的字段都是「预览 + 路径 + **选择图片**」——弹窗里按目录分组铺开客户端素材的缩略图，点一张即选中（组件在 `components/ImagePicker.tsx`）。
+
+页面里一律用 `<IconField>`（`ImagePicker.tsx` 导出），不要自己拼「预览 + 输入框 + 按钮 + 弹窗」：
+
+| 字段类型 | 用法 | 选中值 | 覆盖的字段 |
+| --- | --- | --- | --- |
+| 单图 | `<IconField mode="image" rootDir="item" …>` | 这张图的路径 | 药品 / 物品 / 装备图标、技能与状态图标、部位底图 |
+| 一套动画 | `<IconField mode="atlas" rootDir="clothes/out" …>` | 锚点 + 第一段目录 | 称号 / 战魂动画、NPC 素材、内观 / 外观、技能与状态特效、时装三件套 |
+
+`mode="atlas"` 的「一套」由 `rootDir` 锚定（`clothes/out` 之下的 `001` 就是一套），一条规则同时覆盖三种磁盘形态（Cocos 图集目录 / 路径即基名 / 按动作分子目录），不会把 `001/a1` 这种内部动作目录漏给运营去选。
+
+> 顺带一个必须记住的坑：**选择器叠在编辑弹窗上时，编辑弹窗的 `onClose` 要判 `anyPickerOpen()`**。两个 `Modal` 各挂一个 window 的 Esc 监听，编辑弹窗先注册先收到 —— 不拦就会「关选择器顺带把编辑弹窗也关了」，改了一半的内容全丢。`IconField` 已经把弹窗包在里面，所以页面只需要改 `onClose` 那一行。图片清单有两个来源、同一个 JSON 形状：**开发**用 vite 中间件的 `GET /game-resources/__list?dir=item` 直接扫 `client/assets/resources`（素材一放进来就能选，零额外步骤）；**生产** nginx 只是静态反代、没有目录列表能力，读落盘清单 `resources/image-manifest.json`（`make image-manifest` 生成，随素材包分发）。拿不到清单时弹窗里给的是**可执行的提示**（素材目录在哪 / 该跑哪条命令），不是一句「加载失败」。
 
 | 页面 | 路由 | 需要的权限点 | 能做什么 |
 | --- | --- | --- | --- |

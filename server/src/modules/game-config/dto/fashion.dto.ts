@@ -17,6 +17,14 @@ import { MALL_PRICE_MAX } from "./mall.dto";
 export const FASHION_LABEL_MAX = 50;
 export const FASHION_DESCRIPTION_MAX = 500;
 
+/**
+ * 资源路径的长度上限
+ *
+ * 只是**防御性上限**（挡住超长请求），不是资源路径的业务规则 —— 路径合法与否由素材目录决定，
+ * 服务端不扫盘。给 200 是因为 `clothes/out/001` 这类最长的也就二十几个字符。
+ */
+export const FASHION_RES_MAX = 200;
+
 /** 管理端看到的一条时装配置 */
 export class FashionDto {
   @ApiProperty({ description: "时装 id（seed 自 shared/fashion-seed.ts，如 \"cloth_2\"；序列固定，不可增删行）" })
@@ -28,13 +36,13 @@ export class FashionDto {
   @ApiProperty({ description: "描述文案（后台可改）" })
   description: string;
 
-  @ApiProperty({ description: "图标资源路径（resources 相对路径；不开放编辑）" })
+  @ApiProperty({ description: "图标资源路径（resources 相对路径；后台可改，空串 = 不显示）" })
   icon: string;
 
-  @ApiProperty({ description: "内观资源路径（空串 = 无；不开放编辑）" })
+  @ApiProperty({ description: "内观资源路径（空串 = 无；后台可改）" })
   inRes: string;
 
-  @ApiProperty({ description: "外观资源路径（空串 = 无；不开放编辑）" })
+  @ApiProperty({ description: "外观资源路径（空串 = 无；后台可改）" })
   outRes: string;
 
   @ApiProperty({ description: "售卖价（绑定元宝/件，后台可改）" })
@@ -90,8 +98,8 @@ export class FashionPageDto extends PageMetaDto {
  *
  * **没有 Create / Delete**：时装 id 被客户端配置与未来的穿戴 / 衣柜链路引用，
  * 清单固定 —— 这是有意不提供的能力，不是漏了（e2e 会固化「POST/DELETE 路由不存在」）。
- * `icon` / `inRes` / `outRes` 是客户端资源路径（表现层），不开放编辑 ——
- * e2e 会固化「传了也被白名单剥离」。
+ * `icon` / `inRes` / `outRes` 自 #641 起也开放编辑：管理端有可视化图片选择器
+ * （`IconField`），运营换一套素材不用改代码。传空串 = 不显示 / 不穿（与 seed 的空串语义一致）。
  */
 export class UpdateFashionDto {
   @ApiPropertyOptional({ description: "名称（不传则不改）", maxLength: FASHION_LABEL_MAX })
@@ -119,6 +127,24 @@ export class UpdateFashionDto {
   @IsString({ message: "获得渠道必须是字符串" })
   @IsIn([...ACQUIRE_CHANNELS], { message: "获得渠道取值不合法" })
   acquireChannel?: string;
+
+  @ApiPropertyOptional({ description: "图标（resources 相对路径，不传则不改；空串 = 不显示图标）", maxLength: FASHION_RES_MAX })
+  @IsOptional()
+  @IsString({ message: "图标路径必须是字符串" })
+  @MaxLength(FASHION_RES_MAX, { message: `图标路径最长 ${FASHION_RES_MAX} 个字符` })
+  icon?: string;
+
+  @ApiPropertyOptional({ description: "内观资源（resources 相对路径，不传则不改；空串 = 内观不显示这套）", maxLength: FASHION_RES_MAX })
+  @IsOptional()
+  @IsString({ message: "内观资源必须是字符串" })
+  @MaxLength(FASHION_RES_MAX, { message: `内观资源最长 ${FASHION_RES_MAX} 个字符` })
+  inRes?: string;
+
+  @ApiPropertyOptional({ description: "外观资源（resources 相对路径，不传则不改；空串 = 场景里不显示这套）", maxLength: FASHION_RES_MAX })
+  @IsOptional()
+  @IsString({ message: "外观资源必须是字符串" })
+  @MaxLength(FASHION_RES_MAX, { message: `外观资源最长 ${FASHION_RES_MAX} 个字符` })
+  outRes?: string;
 
   @ApiPropertyOptional({
     description: "八项属性（**整份提交、整份替换**，不传则不改；区间型要求 0 ≤ min ≤ max）",

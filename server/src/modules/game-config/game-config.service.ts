@@ -714,6 +714,10 @@ export class GameConfigService implements OnModuleInit {
       description: dto.description ?? existing.description,
       sell_price: dto.sellPrice ?? existing.sell_price,
       acquire_channel: dto.acquireChannel ?? existing.acquire_channel,
+      // #641：资源路径也开放（管理端图片选择器选出来的就是这三个值）
+      icon: dto.icon ?? existing.icon,
+      in_res: dto.inRes ?? existing.in_res,
+      out_res: dto.outRes ?? existing.out_res,
       ...attributeColumns(attributes),
       updated_at: Date.now(),
     };

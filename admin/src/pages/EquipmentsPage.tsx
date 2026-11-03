@@ -3,6 +3,7 @@ import { equipmentsApi, formatTime, OCCUPATION_LABELS, PERMISSION, SEX_LABELS, s
 import type { ConfigAttributes, Equipment, PageResult } from "../api";
 import { AttributesGrid, crossedRangeKeys } from "../components/AttributesEditor";
 import { GameIcon } from "../components/GameImage";
+import { IconField, anyPickerOpen } from "../components/ImagePicker";
 import { Modal } from "../components/Modal";
 import { Pagination } from "../components/Pagination";
 import { Badge, Button, Card, EmptyState, Field, Input, Select, Spinner, tableClass, tdClass, thClass, theadClass } from "../components/ui";
@@ -183,7 +184,10 @@ function EquipmentEditDialog({
         </>
       }
       size="lg"
-      onClose={onCancel}
+      /* Esc 先到编辑弹窗：图片选择器开着时不能让编辑弹窗一起关（改了一半的内容会丢） */
+      onClose={() => {
+        if (!anyPickerOpen()) onCancel();
+      }}
       footer={
         <>
           <Button variant="outline" disabled={submitting} onClick={onCancel}>
@@ -242,15 +246,31 @@ function EquipmentEditDialog({
       <section className="flex flex-col gap-3">
         <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-400">资源与几何</h3>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-          <Field label="图标" hint="resources 相对路径（不含扩展名），如 clothes/icon/005">
-            <Input value={draft.icon} placeholder="clothes/icon/005" onChange={(event) => patch({ icon: event.target.value })} />
-          </Field>
-          <Field label="内观图集" hint="角色弹窗里穿在身上的那套">
-            <Input value={draft.inAtlas} placeholder="clothes/in/005" onChange={(event) => patch({ inAtlas: event.target.value })} />
-          </Field>
-          <Field label="外观图集" hint="场景里跟着角色走的那个">
-            <Input value={draft.outAtlas} placeholder="clothes/out/005" onChange={(event) => patch({ outAtlas: event.target.value })} />
-          </Field>
+          <IconField
+            label="图标"
+            hint="resources 相对路径（不含扩展名），如 clothes/icon/005"
+            placeholder="clothes/icon/005"
+            value={draft.icon}
+            onChange={(path) => patch({ icon: path })}
+          />
+          <IconField
+            label="内观图集"
+            hint="角色弹窗里穿在身上的那套"
+            mode="atlas"
+            rootDir="clothes/in"
+            placeholder="clothes/in/005"
+            value={draft.inAtlas}
+            onChange={(path) => patch({ inAtlas: path })}
+          />
+          <IconField
+            label="外观图集"
+            hint="场景里跟着角色走的那个（整套动作图集，没有单张封面）"
+            mode="atlas"
+            rootDir="clothes/out"
+            placeholder="clothes/out/005"
+            value={draft.outAtlas}
+            onChange={(path) => patch({ outAtlas: path })}
+          />
         </div>
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
           <Field label="外观缩放" hint="1 = 原尺寸">
