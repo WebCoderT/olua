@@ -78,6 +78,14 @@
   TMX 只剩瓦片 + 碰撞（`tiledGroupNames` 只剩 `collision`；`tiledObjectClasses`/`tiledPropertyNames` 已删）。
   管理端 `MapCanvas` 四模式 `view|spawn|npc|revive` + NPC 拖动松手即存；客户端 `preloadGame(mapId, role)`（少一个能传错的参数）。
   出厂迁移 `server/scripts/migrate-map-points.cjs` 读 `maps.content`（不解析 .tmx），`cx=x`、`cy=-y`，`INSERT OR IGNORE`。
+- **#676 碰撞盒收权收官（PR #677 / `781ce083`，2026-11-03）**：`map_collisions`（无唯一索引）+ 三条接口
+  （`50036`），详情 `collisions`、快照 `maps[].collisions`（`x/y/w/h`）；**TMX 里对象组已整组删除**
+  （`tools/strip-map-objects.cjs`，11 张图 33 组 / 1699 对象）→ 地图文件 = 瓦片 + 图层，**只做显示**。
+  客户端 `TiledObjects.ts` / `tiledGroupNames` / `mapPointToWorld` / `mapRectCenterToWorld` 全下架。
+  判据三条：**碰撞盒不判越界**（围墙在图外，只校验宽高 ≥1px）；只标 `fullyOutside`
+  （`right<=0 || left>=W || bottom>=0 || top<=-H`，两条 y 方向写反过一次 → 99 个里 97 个亮红）；
+  **不做拖动**（画布拖 = 新建，点已有 = 表单四个数）。管理端 `MapCanvas` 五模式 `view|spawn|npc|revive|collision`。
+  迁移链顺序：`migrate-map-points` → `migrate-map-collisions` → `strip-map-objects` → `import-map-resources` → `config-export`。
 - open：#669 刷怪区改完即时生效（分域重载）· #670 怪物 AI 打尸体仍放技能 · #8 官网 / #9 包体积 / #12~#19 素材 / #295 阶段三 / #403 帮会战 / #606 地图门槛硬拦。
 - skill 索引：#655 起 `cocos-game-growth-curve` → **`olua-numeric-tuning`**（曲线方法论作废，改成「数值逐条落库 + 掉落配置法」）。
 - 定保持现状：技能 1011 / 快捷键 6 格 / 装备 7 部位（药品档位已由 #643 改为「金创药 5 + 魔法药 3」，不再保持 3 档）。
