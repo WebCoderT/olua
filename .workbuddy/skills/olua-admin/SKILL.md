@@ -100,7 +100,7 @@ await authApi.login({ username, password }, { silent: true }); // 表单自己�
 | `MapsPage` | **地图管理（#571 观测 / #573 玩法配置可改 / #580 可视化 + 弹窗）**：左侧 11 张图，右侧 = 上半「玩法配置」（可改可存，`PATCH /admin/maps/:id` 落 `maps` 表并进审计）+ 下半 **`components/map/MapCanvas`**（预览图上叠 SVG：刷怪区实线 + TMX 原始矩形虚线 + NPC/复活点/碰撞盒，可逐个开关、可「放大」到 72vh、点区域/点 NPC 打开对应弹窗并高亮那一行）。其余观测块全在 `components/map/MapDialogs` 的弹窗里（图层 / 点位 / 刷怪区 / 场上怪物 / 对象组 / 数据来源）；**刷怪区越界**由服务端算好后显示（`MapSpawnArea.inBounds/overflow`，弹窗里「在图内」列 + 地图上红色虚线 + 地图卡片只在 >0 时出徽标）——提醒：容器 `overflow-hidden` 会把越出 viewBox 的部分裁掉，「区域在图外」在图上表现为「区域不存在」，不能指望眼睛发现—— **页面只留配置与地图**：地图页看不到地图等于没有地图页。**观测区没有编辑入口是功能定义不是缺口**：地图真相在客户端 TMX，换图只能改 TMX → 跑 `import-spawn-areas` → 重打包客户端（POST / PUT / DELETE 一律 404，超管也一样；`src` 塞进来也会被白名单剥掉）。保存成功后要 `refreshMapCatalog()` —— 地图名走 `api/mapCatalog.ts` 的进程内缓存（`Layout` 挂载时 `ensureMapCatalog()`），不刷新的话角色详情与实体选择器还显示旧名字 |
 | `MallPricingPage` | **商城定价**（#251）：统一价卡片（单行改价）+ 商品定价列表（部位/关键字/定价状态筛选，商品清单来自 `equipment_variants` 555 行）；未定价行高亮「走统一价」；特殊价 PUT upsert /「回统一价」DELETE —— **全后台唯一允许增删行的定价数据** |
 | `FashionsPage` | **时装配置**（#257）：关键字 / 获得渠道筛选 + 分页；编辑弹窗开放名称 / 描述 / 售卖价 / 渠道下拉 / 八项属性（maxHp/hpRecover + `RANGE_FIELDS` 六区间，复用 title.dto 的 ConfigAttributesDto 形状）；icon/inRes/outRes 资源路径用 `IconField` 现挑（#641）；渠道中文名按时装语境另配（值域仍复用 ACQUIRE_CHANNEL） |
-| `DropConfigPage` | **掉落配置**（#254）：上半部具名掉落表卡片组（新建 / 编辑 / 删除，picks 捞取次数 + entries 条目编辑器逐行 **物品（`EntityPickButton` 可视化挑，不再手填 id）** / 权重 / 概率 / 数量区间）；下半部每怪掉落列表（关键字 / 来源筛选 + 分页，编辑弹窗三选一：引用具名表 / 内联条目+必填 picks / 清空 none）；具名表被引用中的行拒删。**弹窗与编辑器是共用件**（`components/drop/DropEditors.tsx` + `components/drop/MonsterDropDialog.tsx`，怪物列表 #584 用同一份）—— 别再在页面里各写一套三选一 |
+| `DropConfigPage` | **掉落模版仓库**（#254 / #661）：只有具名掉落表卡片组（新建 / 编辑 / 删除，picks 捞取次数 + entries 条目编辑器逐行 **物品（`EntityPickButton` 可视化挑，不再手填 id）** / 权重 / 概率 / 数量区间；「批量添加」走 `EntityPicker multiple` 多选）。具名表被引用中的行拒删。**每怪掉落不在这页** —— 怪物列表里每只怪自己一行「掉落」（`MonsterDropDialog`），两处列同一份数据只会互相打架。编辑器与弹窗是共用件（`components/drop/DropEditors.tsx` + `components/drop/MonsterDropDialog.tsx`）—— 别再在页面里各写一套三选一 |
 | `MailsPage` | 邮件投递记录（`mail:read` 看记录、`mail:write` 发信，编辑走 `EmailDialog`） |
 | `AdminsPage` | 管理员列表与改角色 / 启停 / **重置密码**（自己那一行置灰）/ 删除（`admin:manage`） |
 | `AuditPage` | **操作日志**：关键字（操作人 / 动作 / 目标 id / 路径）+ 动作下拉（清单从接口拉）+ 目标类型 + 结果 + 时间范围 + 目标 id → 分页表格，行可展开看请求体（`audit:read`） |
@@ -153,12 +153,13 @@ await authApi.login({ username, password }, { silent: true }); // 表单自己�
 
 **物品 / 装备 / 技能 / 怪物 / NPC 的 id 字段一律用 `EntityPickButton`**（`components/entity/EntityPickButton.tsx`，#648 / #651）：图标 + 名字 + 一行说明的按钮，点开就是 `EntityPicker`（搜索 + 分组 + 网格）。**不许再让运营手填 `drug_hp_1` 这类 id，也不要用 2000 项的原生 `<select>`**：
 
-- `<EntityPickButton value={draft.goodId} options={entityOptions("item")} onChange={…}/>` —— 掉落条目、任务 / 成就奖励、成就「持有物品」条件、邮件附件（邮件是 item + fashion 两份拼接，时装不在物品总表）；
+- `<EntityPickButton value={draft.goodId} options={entityOptions("item")} onChange={…}/>` —— 任务 / 成就奖励、成就「持有物品」条件、邮件附件（邮件是 item + fashion 两份拼接，时装不在物品总表）；
+- **掉落条目用 `dropItemOptions()`，不是 `entityOptions("item")`**：装备只列 37 个基础件，555 个前后缀变体的候选被滤掉（掉出来是哪一档由变体表决定，不是靠掉落条目点名 `xxx_p2s1`）。药品 / 材料照旧。多选走 `<EntityPicker multiple onSelectMany={ids => …}/>`（勾若干项一次追加成多行）；
 - `<EntityPickButton kind="monster" options={entityOptions("monster")} …/>` —— 任务目标（按类型切 monster / npc / item）、成就「累计击杀」的目标；`*`（任意怪）**不是清单里的行**，要调用方自己塞进候选第一位；
 - 任务「发布 NPC」、`talk` 类型目标用 `entityOptions("npc")`（缩略图是图集首帧）；
 - 候选清单统一来自 `entity/catalog.ts`（`entityOptions(kind)` 带模块级缓存），**页面不许自己拼候选数组**；
 - **别用「列表接口 + size: 100」当候选**：怪物 220 只、物品 2200+ 件，`size: 100` 那套会让第 101 只之后的怪根本选不到（任务页踩过，列表里还全显示裸 id）。固定清单（怪物 / NPC / 物品 / 装备 / 技能）走 catalog 静态清单，只有**可增删**的表（任务、掉落具名表）才该走接口；
-- 服务端校验口径与清单必须是同一份：掉落条目卡的是 `ITEM_LABELS`（装备全量变体 + 药品 + 材料），对应 `entityOptions("item")` —— 能选出来就必定存得进去。
+- 服务端校验口径比界面宽一档：掉落条目卡的是 `ITEM_LABELS`（装备全量变体 + 药品 + 材料，`itemExists`），界面只放基础件 —— 界面是**子集**，所以能选出来就必定存得进去；反过来（库里留着旧变体 id）仍然读得出名字、也存得回去。
 - 怪物名字来自 `monsters` 表（出厂行随快照灌库，管理端可改）：选择器显示表里的名字、**选中值永远是 id**。
 
 ## 五点六、养成配置页面模式（TitlesPage / SoulsPage，称号与战魂同构）
