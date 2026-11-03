@@ -164,6 +164,10 @@ const REPO_EDGES = {
   // 碰撞盒（#676）：与点位同理 —— 只有地图域读写（画布增删改 + 配置快照下发）；
   // 客户端是从快照里拿矩形自己建碰撞体的，没有第二个模块连这张表
   "database/repositories/map-collision.repository.ts": ["modules/map"],
+  // 音效配置（#680）：只有音效模块读写（管理端保存 + 启动 seed）。
+  // 本轮还**没有**下发配置快照，所以也没有第二个模块连这张表 —— 客户端对接后
+  // 若走 ClientConfigService 下发，那条边在这里补 "modules/game-config"
+  "database/repositories/audio-setting.repository.ts": ["modules/audio-setting"],
   // 养成配置（#213）：称号 / 战魂配置的读写只在 game-config 模块内 —— 玩家侧消费走
   // game-data.generated 快照（与角色属性同一来源），不直连这两张表
   "database/repositories/title.repository.ts": ["modules/game-config", "modules/roles"],

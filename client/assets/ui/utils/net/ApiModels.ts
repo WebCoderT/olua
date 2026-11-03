@@ -2083,6 +2083,9 @@ export type SaveRevivePoint = {
 export type SaveUiEffect = {
 };
 
+export type SaveAudioSetting = {
+};
+
 export type PageMeta = {
   /**
    * 总条数
@@ -3339,7 +3342,7 @@ export type AuditQuery = {
   /**
    * 目标类型筛选
    */
-  targetType?: "account" | "role" | "admin" | "announcement" | "mail" | "title" | "soul" | "rank" | "equipment" | "drug" | "item" | "monster" | "npc" | "mall" | "fashion" | "dropTable" | "monsterDrop" | "roleLevel" | "equipmentVariant" | "growthScalar" | "skill" | "status" | "zone" | "guild" | "quest" | "achievement" | "equipAlign" | "equipInAlign" | "map" | "uiEffect" | "runtimeParams" | "combatWeights" | "guideSteps";
+  targetType?: "account" | "role" | "admin" | "announcement" | "mail" | "title" | "soul" | "rank" | "equipment" | "drug" | "item" | "monster" | "npc" | "mall" | "fashion" | "dropTable" | "monsterDrop" | "roleLevel" | "equipmentVariant" | "growthScalar" | "skill" | "status" | "zone" | "guild" | "quest" | "achievement" | "equipAlign" | "equipInAlign" | "map" | "uiEffect" | "audioSetting" | "runtimeParams" | "combatWeights" | "guideSteps";
   /**
    * 只看针对某个目标的日志（目标 id）
    */
@@ -8034,6 +8037,52 @@ export type UiEffectList = {
    * 全部特效行，按 seed 顺序（= UI_EFFECT_KEYS 登记顺序：升级特效在最前，掉落光效按档排）
    */
   list: UiEffect[];
+};
+
+export type AudioSetting = {
+  /**
+   * 音效 key（登录背景音 login_bgm、登录按钮音 login_click；取值域见 AUDIO_KEYS）
+   */
+  key: string;
+  /**
+   * 展示名（中文，随接口下发 —— 页面不写死文案，加一个音效只改服务端常量）
+   */
+  label: string;
+  /**
+   * 资源相对路径（带扩展名，相对 client/assets/resources/；空串 = 未配置，这一项不响）
+   */
+  filePath: string;
+  /**
+   * 音量百分比（0~100，100 = 原始音量）
+   */
+  volume: number;
+  /**
+   * 是否循环播放（背景音 true、点击音 false）
+   */
+  loop: boolean;
+  /**
+   * 开关（false = 客户端整个不播，连文件都不读）
+   */
+  enabled: boolean;
+  /**
+   * 最后一个改它的管理员账号名（追账用，与审计日志能对上）
+   */
+  updatedBy: string;
+  /**
+   * 最后修改时间（毫秒时间戳；0 = 从没改过，仍是出厂值）
+   */
+  updatedAt: number;
+};
+
+export type AudioSettingList = {
+  /**
+   * 行数（= 音效 key 数）
+   */
+  total: number;
+  /**
+   * 全部音效行，按 seed 顺序（= AUDIO_KEYS 登记顺序：登录背景音在前）
+   */
+  list: AudioSetting[];
 };
 
 export type AdminMapMonitorQuery = {

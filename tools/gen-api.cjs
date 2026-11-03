@@ -125,6 +125,8 @@ const MODULES = {
   adminMap: { target: "admin", export: "mapsApi" },
   // 界面特效（#594）：特效表现参数的管理页
   adminUiEffect: { target: "admin", export: "uiEffectsApi" },
+  // 音效（#680）：登录背景音 / 按钮音的「文件 + 音量 + 循环 + 开关」；与 adminUiEffect 同一类（表现参数）
+  adminAudioSetting: { target: "admin", export: "audioSettingsApi" },
   adminMall: { target: "admin", export: "mallApi" },
   adminFashion: { target: "admin", export: "fashionsApi" },
   adminDrop: { target: "admin", export: "dropApi" },

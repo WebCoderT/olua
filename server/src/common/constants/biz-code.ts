@@ -274,6 +274,16 @@ export const BizCode = {
   MAP_COLLISION_NOT_FOUND: 50036,
   //#endregion
 
+  //#region 音效（#680）
+  /**
+   * 音效 key 不存在
+   *
+   * 与特效 / 地图点位同一类：改一个 seed 没有补出来的 key。key 的取值域由客户端的播放入口
+   * 决定（`AUDIO_KEYS`），后台凭空造一行只会得到永远不响的开关，所以直接 404。
+   */
+  AUDIO_KEY_NOT_FOUND: 50037,
+  //#endregion
+
   //#region 任务（#396）
   /** 任务不存在（配置表里没有这个 id） */
   QUEST_NOT_FOUND: 50031,

@@ -12,6 +12,9 @@ const RESOURCES = path.resolve(fileURLToPath(new URL(".", import.meta.url)), "..
 /** 图片清单接口里出现的扩展名（选择器只认这几种；`.meta` 不会命中） */
 const IMAGE_EXTS = [".png", ".jpg", ".jpeg"];
 
+/** 音效清单接口里出现的扩展名（与 server/src/common/constants/audio 的白名单一致） */
+const AUDIO_EXTS = [".wav", ".mp3", ".ogg", ".m4a"];
+
 /**
  * 递归收集图片（path 相对 RESOURCES，posix 分隔，不带扩展名）
  *
@@ -39,6 +42,32 @@ function collectImages(dir: string): string[] {
 }
 
 /**
+ * 递归收集音频（path 相对 RESOURCES，posix 分隔，**带扩展名**）
+ *
+ * 与图片清单的差别就在这个扩展名：图片取值统一补 `.png`，音效的数据库字段存的是
+ * 「带扩展名的资源相对路径」（`sounds/login_bg.wav`），所以列表必须带上 —— 运营点一下
+ * 就该得到能直接存库的字符串，不该自己再拼一遍 `.wav`。
+ */
+function collectAudio(dir: string): string[] {
+  const audio: string[] = [];
+  const walk = (current: string) => {
+    for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
+      const full = path.join(current, entry.name);
+      if (entry.isDirectory()) {
+        walk(full);
+        continue;
+      }
+      const ext = path.extname(entry.name).toLowerCase();
+      if (!AUDIO_EXTS.includes(ext)) continue;
+      audio.push(path.relative(RESOURCES, full).split(path.sep).join("/"));
+    }
+  };
+  walk(dir);
+  audio.sort();
+  return audio;
+}
+
+/**
  * 开发期把客户端素材挂到 `/game-resources` 下
  *
  * 对齐工作台要读 `clothes/out/005/stand/stand.{png,plist}` 这类文件（#542 起图集与散帧同路径）。
@@ -50,6 +79,10 @@ function collectImages(dir: string): string[] {
  * 要「有哪些图可选」，而生产是 nginx 静态反代、没有目录列表能力 —— 那边读生成物
  * `resources/image-manifest.json`（`make image-manifest`），这里直接扫盘，**素材一放进来就能选**，
  * 不需要先重新生成清单。两个来源的 JSON 形状相同（见 `collectImages`）。
+ *
+ * `?audio=1` 是音效配置页（#680）要的清单：同一套扫盘，但返回**带扩展名**的路径
+ * （`{ dir, files: ["sounds/login_bg.wav"] }`）—— 那个字段存的就是带扩展名的相对路径。
+ * 生产对应 `resources/audio-manifest.json`，形状一致。
  */
 function gameResources(): Plugin {
   return {
@@ -61,7 +94,10 @@ function gameResources(): Plugin {
 
         // 目录列表（仅 dev）：`/__list` 或 `/__list?dir=<resources 相对目录>`
         if (relative === "/__list" || relative.startsWith("/__list/")) {
-          const dir = (new URL(rawUrl, "http://local").searchParams.get("dir") ?? "").replace(/^\/+|\/+$/g, "");
+          const query = new URL(rawUrl, "http://local").searchParams;
+          const dir = (query.get("dir") ?? "").replace(/^\/+|\/+$/g, "");
+          /** `?audio=1` = 要音效清单（带扩展名），否则是图片清单（不带扩展名） */
+          const wantAudio = query.get("audio") === "1";
           const base = path.resolve(RESOURCES, `.${dir ? `/${dir}` : ""}`);
           // 目录穿越防护：同下面的文件分支
           if (base !== RESOURCES && !base.startsWith(RESOURCES + path.sep)) {
@@ -75,7 +111,11 @@ function gameResources(): Plugin {
             return;
           }
           res.setHeader("Content-Type", "application/json");
-          res.end(JSON.stringify({ dir, images: collectImages(base) }));
+          res.end(
+            JSON.stringify(
+              wantAudio ? { dir, files: collectAudio(base) } : { dir, images: collectImages(base) },
+            ),
+          );
           return;
         }
 
@@ -97,7 +137,16 @@ function gameResources(): Plugin {
             ? "application/json"
             : file.endsWith(".plist")
               ? "application/xml"
-              : "application/octet-stream";
+              // 音效配置页要就地试听：MIME 说对了浏览器才肯直接播（octet-stream 有的浏览器会拒）
+              : file.endsWith(".wav")
+                ? "audio/wav"
+                : file.endsWith(".mp3")
+                  ? "audio/mpeg"
+                  : file.endsWith(".ogg")
+                    ? "audio/ogg"
+                    : file.endsWith(".m4a")
+                      ? "audio/mp4"
+                      : "application/octet-stream";
         res.setHeader("Content-Type", type);
         fs.createReadStream(file).pipe(res);
       });

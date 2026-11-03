@@ -37,6 +37,7 @@ export {
   npcsApi,
   mapsApi,
   uiEffectsApi,
+  audioSettingsApi,
   skillsApi,
   statusesApi,
   questsApi,

@@ -160,6 +160,21 @@ export const routes = {
      */
     update: (id: string) => `/admin/announcements/${encodeURIComponent(id)}`,
   },
+  /** adminAudioSetting 模块（2 个接口） */
+  adminAudioSetting: {
+    /**
+     * 音效列表（GET /admin/audio-settings）
+     *
+     * 全部音效项的配置：文件路径 / 音量 / 循环 / 开关 + 展示名 + 追账字段。
+     */
+    list: "/admin/audio-settings",
+    /**
+     * 保存一个音效项（整份覆盖）（PATCH /admin/audio-settings/{id}）
+     *
+     * 改的是「文件路径 / 音量 / 循环 / 开关」四项，**整份覆盖**（不是部分更新：这四项是一组联动状态，
+     */
+    save: (id: string) => `/admin/audio-settings/${encodeURIComponent(id)}`,
+  },
   /** adminAudit 模块（3 个接口） */
   adminAudit: {
     /**
