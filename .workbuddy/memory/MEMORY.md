@@ -38,7 +38,7 @@
 - **#604 / #626 快照层**：段清单唯一书写处 = `configs/game-config.ts` 区 0，缺段抛错并停在 Loading 重试（加一段 = DTO / `snapshot()` / 区 0 三处一起改）。
   #626 把 21 个域文件并进 `game-config.ts`（`//#region N · 标签（原 configs/xxx.ts）`，编号稳定、守点按编号取区）：**`apply*` 必须放进自己的区**（放到上一个区尾巴照样编译，但 `regionOf()` 读不到 —— 真踩过）；`items`/`equipments`/`skill`/`apply-snapshot` 不许被反向 import（方向恒为 `apply-snapshot → game-config → types`，`getMallGoods` 因此住 `equipments`）。工具链只换 require 名字（`configs-sandbox` / `client-config-compile` / `test-*.cjs` / `gen-shared-data` 的 `SOURCE_FILES` 只剩 4 个入口 / `audit-world-authority` 的 `MONSTER_REGION=15`）。
 - **#643 药品补档 + 使用等级可编辑（PR 待合）**：金创药 5 档固定值（60/250/900/2600/15000，L1/5/10/20/35）+ 魔法药 3 档百分比（30/60/100%，最高档刻意=100%，再高被血蓝封顶吃掉）；`level` 管理端可改但**只影响展示与背包排序，服务端 useDrug 不拦**。种子唯一处 = `shared/item-seed.ts`（11 种）。
-- **#605 客户端独有运营参数逐项评估收权（PR 见分支 `feat/605-admin-configs`）**：口径「除界面文案外全部可配」。
+- **#605 客户端独有运营参数逐项评估收权（PR #645 五块）**：口径「除界面文案外全部可配」。
   五块：`mpRecoverPerSecond` → `growth_scalars`；`dropRuntime`/`autoBattle` → `runtime_params` 单行表（三组 JSON 列）；
   `guildRules` 由 `GuildService` 现读运行时参数（DTO 只留结构上限）；战斗力权重 → `combat_weights` KV 表 + `/combat-weights` 页；
   `guideSteps` → `guide_settings` 单行表（整份数组）+ `/guide-steps` 页，`GUIDE_SPOTS`/`GUIDE_EVENTS` 白名单即客户端能力边界。
