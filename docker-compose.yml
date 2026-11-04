@@ -95,8 +95,15 @@ services:
     restart: unless-stopped
     depends_on:
       - server
+    environment:
+      # 三站域名（admin/nginx.conf.template 的 envsubst 用）：官网 / 管理端 / 游戏。
+      # 默认值来自 compose 目录下的 `.env`（deploy.sh 会生成上传）；这里再兜一层底，
+      # 本地没有 .env 也能起。**换域名改 .env 再 `up -d admin`，不用重建镜像**。
+      OLUA_SITE_DOMAINS: ${OLUA_SITE_DOMAINS:-yimw.cn www.yimw.cn}
+      OLUA_ADMIN_DOMAIN: ${OLUA_ADMIN_DOMAIN:-admin.yimw.cn}
+      OLUA_GAME_DOMAIN: ${OLUA_GAME_DOMAIN:-game.yimw.cn}
     ports:
-      # 对外只开 80：管理端页面与 /api 都从这里进（**不上 HTTPS**，见 docs/deploy.md）
+      # 对外只开 80：官网 / 管理端 / 游戏都从这里按 server_name 分流（**不上 HTTPS**，见 docs/deploy.md）
       - "${OLUA_ADMIN_PORT:-80}:80"
 
   # 游戏客户端（Web 端）：静态托管 Cocos 构建产物，并把 /api 同源反代到服务端。
@@ -115,6 +122,15 @@ services:
     ports:
       # 对外用独立端口 8080：与管理端互不干扰，改端口用 OLUA_GAME_PORT
       - "${OLUA_GAME_PORT:-8080}:80"
+
+  # 官网（website/ 纯静态站）：不映射宿主机端口，走 admin(:80) 的 server_name 分流
+  # 整站反代进来（yimw.cn / www）。产物随仓库走（deploy.sh 的 git archive 会带上）。
+  # 管理端反代时已带 Host 头，这份 nginx 不需要感知外部域名。
+  website:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    volumes:
+      - ./website:/usr/share/nginx/html:ro
 
 volumes:
   # 具名卷：`docker compose down` 不会删它，只有 `down -v` 才会

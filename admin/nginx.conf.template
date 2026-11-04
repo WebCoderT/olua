@@ -1,12 +1,24 @@
 # ==============================================================================
-#  管理端托管 + 接口同源反代
+#  入口 nginx（唯一对外 :80）—— 官网 / 管理端 / 游戏三站按 server_name 分流
 #
-#  为什么要把 /api 反代过去：管理端与接口**同源**之后，浏览器根本不发跨域请求，
-#  服务端就不必配 CORS_ORIGINS —— 少一处会配错、而且配错了很难被发现的东西。
+#  **这是 envsubst 模板，不是最终配置**：nginx 镜像启动时由 docker-entrypoint.d 里的
+#  20-envsubst-on-templates.sh 把 `${OLUA_*}` 换成容器环境变量，写到 conf.d/default.conf。
+#  所以**换域名不用改代码也不用重建镜像**，改 docker-compose 的环境变量（或服务器上的
+#  `.env`）再 `docker compose up -d admin` 即可。三站各一个变量：
+#      OLUA_SITE_DOMAINS   官网站（空格分隔多个，含 www）
+#      OLUA_ADMIN_DOMAIN   管理端（模板里额外拼了 `_` 保底：直接用 IP 访问也进管理端）
+#      OLUA_GAME_DOMAIN    游戏站
+#  模板里其余的 `$host` / `$uri` 这类 nginx 变量**不会**被误替换 —— envsubst 只替换
+#  容器里真实存在的环境变量，nginx 运行时变量不在其中。
+#
+#  为什么把三个站都放在管理端容器这唯一一个 :80 上：对外只开一个端口最省事，靠
+#  server_name 分流；官网与游戏反代到对应容器（server_name 已写进 Host 头，容器内的
+#  nginx 配置不用感知外部域名），管理端静态文件由本容器自己出。
 #
 #  两处与 docker-compose.yml 耦合，改任何一边都要两边一起改
 #  （tools/audit-deploy.cjs 会替你把它们对上）：
-#    1. `server` 是 compose 里的服务名（下面用变量 + Docker 内置 DNS 解析，见注释）
+#    1. `server` / `game` / `website` 是 compose 里的服务名（用变量 + Docker 内置 DNS 解析，
+#       容器未就绪时不会让 nginx 起不来）
 #    2. `/api/` 要和服务端的 API_PREFIX 一致
 # ==============================================================================
 
@@ -17,9 +29,32 @@ map $http_upgrade $olua_conn_upgrade {
   ''      close;
 }
 
+# ==============================================================================
+#  官网站：yimw.cn / www.yimw.cn → website 容器（纯静态，整站反代）
+# ==============================================================================
 server {
   listen 80;
-  server_name _;
+  server_name ${OLUA_SITE_DOMAINS};
+
+  resolver 127.0.0.11 valid=10s ipv6=off;
+  set $olua_site http://website:80;
+
+  location / {
+    proxy_pass $olua_site;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+  }
+}
+
+# ==============================================================================
+#  管理端：admin.yimw.cn（`_` 保底 = 默认站点，直接用 IP 访问也是管理端）
+#
+#  为什么要把 /api 反代过去：管理端与接口**同源**之后，浏览器根本不发跨域请求，
+#  服务端就不必配 CORS_ORIGINS —— 少一处会配错、而且配错了很难被发现的东西。
+# ==============================================================================
+server {
+  listen 80;
+  server_name ${OLUA_ADMIN_DOMAIN} _;
 
   root /usr/share/nginx/html;
   index index.html;
@@ -77,19 +112,19 @@ server {
 }
 
 # ==============================================================================
-#  游戏站：game.yimw.cn → game 容器（:80 上的整站反代）
+#  游戏站：${OLUA_GAME_DOMAIN} → game 容器（:80 上的整站反代）
 #
 #  为什么放在这里而不是让游戏独占一个端口：对外只开 80 最省事，靠 `server_name` 分流，
 #  和 :8080 是**同一份产物**（game 容器没变），两条入口并存：
-#      http://game.yimw.cn/      → 本段 → game:80
-#      http://<IP>:8080/         → game:80（直连，调试用）
+#      http://${OLUA_GAME_DOMAIN}/   → 本段 → game:80
+#      http://<IP>:8080/             → game:80（直连，调试用）
 #
 #  注意：游戏容器的 nginx 自己负责 /api/ 与 /api/realtime（含 WS upgrade），所以这里
 #  **整站透传**即可，不要在本段重复写 /api 反代 —— 两处各写一份必然会漂移。
 # ==============================================================================
 server {
   listen 80;
-  server_name game.yimw.cn;
+  server_name ${OLUA_GAME_DOMAIN};
 
   resolver 127.0.0.11 valid=10s ipv6=off;
   set $olua_game_site http://game:80;

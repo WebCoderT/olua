@@ -30,5 +30,12 @@ RUN cd admin && npm run build
 
 FROM nginx:1.27-alpine AS runtime
 COPY --from=build /repo/admin/dist /usr/share/nginx/html
-COPY admin/nginx.conf /etc/nginx/conf.d/default.conf
+#  nginx 配置是 **envsubst 模板**：启动时 docker-entrypoint.d 的 20-envsubst-on-templates.sh
+#  把 ${OLUA_*} 换成容器环境变量写到 /etc/nginx/conf.d/default.conf —— 换域名不用重建镜像，
+#  改 compose 环境变量（或 compose 目录下的 .env）再 `docker compose up -d admin` 即可。
+COPY admin/nginx.conf.template /etc/nginx/templates/default.conf.template
+#  三站域名的**兜底默认值**（compose 里不设变量时生效；生产由 .env 覆盖）
+ENV OLUA_SITE_DOMAINS="yimw.cn www.yimw.cn" \
+    OLUA_ADMIN_DOMAIN=admin.yimw.cn \
+    OLUA_GAME_DOMAIN=game.yimw.cn
 EXPOSE 80

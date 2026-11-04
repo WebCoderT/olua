@@ -1,141 +1,97 @@
-# olua 长期记忆（索引；细节见 `.workbuddy/skills/` 与 `memory/2026-*.md`）
+# olua 长期记忆（索引；细节在 `.workbuddy/skills/` 与 `memory/2026-*.md`）
 
-> **纪律**：issue → 分支 `type/n-slug` → PR（写「关联 #n」，别写 `Closes`）→ 本地 `make test-changed` → commit → CI（PR）绿 → squash；
-> 记忆 / 技能与代码**同一个 PR**（文档改动不触发 CI，但少一轮 PR 更省事）。全量 `make ci` 只在「发布前 / 心里没底」时手动跑。
-> 仓库 PUBLIC —— IP / 私钥 / 邀请码 / JWT 不进记忆。**website/ 永不改动**。分支只剩 master（判断残留看内容，不看 `--merged`）。本机待办 `TODO-FOR-USER.md` 已在 `.gitignore`。
+> **纪律**：issue → 分支 `type/n-slug` → PR（写「关联 #n」，别写 `Closes`）→ 本地 `make test-changed` → commit → CI 绿 → squash；
+> 记忆 / 技能与代码同一个 PR。全量 `make ci` 只在发布前或心里没底时手动跑。
+> 仓库 PUBLIC —— 服务器 IP / 私钥 / 邀请码 / JWT 不进记忆。**website/ 永不改动**。分支只剩 master（判断残留看内容）。
+> 本机待办写 `TODO-FOR-USER.md`（已 gitignore）。docs-only 改动用户口头「更新」即可直接推 master。
 
-## 过程纪律（跨域，没被任何 skill 覆盖）
-- **测试只锁「字段格式 + 行为」，不锁数值**（用户 2026-11-03 定）：出厂数值由运营在管理端随时改，
-  断言「出厂价 5 / 两区各 2 只 / updatedAt=0 / 满阶 = 60 级 × 0.5 × 1.35 / 合计 527 万」这类一律删，
-  换成「是非负数字 / 行都在 / 单调 / 接口 == 库里那一列」。要预算就先按快照算（`mallPriceOf()` 那类），
-  别假定统一价。**用户说「这些数据我修改过的」= 停止追红，先改断言口径。**
-- **e2e 在 `startServer()` 之前写库无效**：`bootstrapConfigSnapshot()` 会把配置表整表替换。
-  播种要放启动之后，并先 `DELETE` 出厂行（`e2e-world` / `e2e-game-mail` 都踩过）。
-- **假绿 > 漏检**：扫描器吞异常会「扫 0 个也全绿」→ 断言模块数；错误断言精确匹配文案；缓存 TTL 压 0；重试写进被测助手；节点名用 key 不用图标。
-- **跨时间的耦合断言别钉「第一个匹配」**（#670）：`find(...)[0]` 当样本会随机红 ——
-  权威侧会拒绝为**尸体**结算（`applyMonsterHit` 对 hp ≤ 0 返回 null，而 `casts` 照发），
-  于是第一帧可能只有动作没有数值。改成「等一帧同时满足两边」（超时要盖过一个冷却周期），
-  等不到才是真回归；本机绿 ≠ CI 绿（本机快、CI 慢，窗口才踩得到）。
-- **新增一张表 → `server/scripts/lib/config-tables.cjs` 两份清单必须同时登记**（配置 or 运行时）：
-  `config:export` 里的 `assertAllClassified()` 会全量比对，漏一张直接抛 —— #665 加了 `map_monitor_state/events`
-  却没登记，导致 `make config-export` 坏了两个版本没人发现（导出没人常跑）。顺手看 `CONFIG_TABLES` 的 33 张也进了审计口径。
-- **校验 config-sync 只能拿「同 schema 的库副本」**：`cp data/olua.db /tmp/x.db` 再 `config-import --db`（脚本自带
-  逐字节回读）。拿**新建库**（空库启动）会失败在列亲和性上（`drugs.level` 之类），那不是文件错。
-- **加一张表别整份重导 `config-sync.sql`**：全新库 `config-export` 出的列顺序与仓库那份不同（历史 `ALTER TABLE` vs
-  `CREATE TABLE`），整份覆盖 = 几千行假 diff。做法：只把新增那张表的节**拼接**进去，再手改表头三行（表数 / 行数 / tables / counts）。
-  另：`cp` 库文件前先 `PRAGMA wal_checkpoint(TRUNCATE)`，否则新表还在 `-wal` 里 → 导入报 `no such table`。
-- **`make config-check` 常红在「用户手上正在改的那张表」**（如 `drop_tables` 库 5 / 文件 4）：先逐表比行数定位，
-  确认与本轮无关就**不要整份 `config-export`**（会把他没定稿的改动一起打包进提交）。
-- **工具**：只信 Grep 工具（BSD `grep "a\|b"` 恒空）；批量替换 `perl -pi -e`（本机 `sed -i ''` 异常）；改完看行尾（`GameUiHelper.ts` 历史上是 CRLF，现已统一 LF —— 动手前 `grep -c $'\r'` 确认，别凭记忆假设）；子进程 `env -u NODE_OPTIONS`；`curl --noproxy '*'`；起端口前 `lsof`。
-- 删改代码用 node 按行号区间（跨行正则会从文件头 `/**` 吃到函数尾）；`//#region` 是有语义的注释，不能当注释裁。
-- **一份数据只能一个来源**：库表（`config-sync.sql` 是它的导出物）→ 快照段 → `apply*` 整表重建，守点「导出一致 + 行数自洽」。代码里不许再有种子/生成物副本（`server/src/shared/` 已删）。整表重建后行对象是新的 → 派生 Map 必须重建（`rebuildSkills` / `rebuildItemIndex`），`configs-sandbox` 与真装载共用同一个 `apply*`。
-- **「保存即生效」= 三件事**：服务端存值（没有行 = 出厂值，重置 = 删行且幂等）+ 客户端覆写前先还原出厂值 + 几何每次进图都拉。**先写清用户用什么动作看效果，再定拉取时机**；空 `catch` 会把 404 伪装成「没生效」；「没生效」三分诊 = 查库 + 「N 件未保存」计数 + 写请求。
-- **给权威清单加字段 = 必然有一批测试在测「客户端能改它」**：先 `grep "PUT roles/"`，造状态改走 `PATCH /admin/roles/:id`。
-- 浅拷贝共享的是**数组引用**（15 变体共享 `outPositions`）→ 按基础件命中全部变体要逐个对象赋值；回填「尺寸取客户端、内容取库里」要逐格保坐标；**注释说 A 代码做 B 时先统一**。
-- **babel loose**：`[...map.values()]` 装迭代器 → 一律 `Array.from`；客户端 tsconfig 无 ES2017 → 不用 `Object.entries`（TS2550）。
-- e2e `checkEqual` 是 `===`（对象用 `JSON.stringify`）；改了 `server/src` 的 DTO / 常量要先 `cd server && npm run build`（e2e 跑 `dist/`）；自适应只测 `viewport:null` 的真机窗口。
-- **e2e 期望值一律从快照算**（`server/test/lib/config-snapshot.cjs`），不写死出厂数：`rows()` / `index()` / `group()` / `count()`，空表用 `optionalRows()` 兜。
-- **改 DTO 连描述都算改契约**：`audit-api-generated` 的 A 段是「现算一遍逐字节比对」→ 动过 `@ApiProperty({description})` 必须 `cd server && npm run swagger:emit` + `node tools/gen-api.cjs`，否则审计直接红。
-- **「管理页看不到新行」先查服务端 seed 有没有跑**：`ui_effects` / `maps` 这类行只在 `onModuleInit` 按常量 `INSERT OR IGNORE` 补出来，跑着的进程还是老代码 → 库里没有新行、排序也还是旧的。**重启 3100 才生效，重启管理端没用**；页面列表只在进页面时拉一次，还得刷新。
+## 过程纪律（跨域）
+- **测试只锁「字段格式 + 行为」，不锁数值**：出厂数值运营随时改。断言写「是非负数字 / 行都在 / 单调 / 接口 == 库那一列」，
+  要预算就按快照算（`mallPriceOf()`），别假定统一价。**用户说「数据我改过」= 停追红，先改断言口径。**
+- **e2e 在 `startServer()` 之前写库无效**：`bootstrapConfigSnapshot()` 整表替换配置。播种放启动之后并先 `DELETE` 出厂行。
+- **假绿 > 漏检**：扫描器吞异常会「扫 0 个也全绿」→ 断言模块数；错误断言精确匹配文案；缓存 TTL 压 0；节点名用 key。
+- **跨时间耦合断言别钉「第一个匹配」**（#670）：权威侧拒绝为尸体结算（`applyMonsterHit` hp≤0 返回 null，`casts` 照发），
+  第一帧可能只有动作没数值 → 改成「等一帧同时满足两边」，超时盖过一个冷却周期。本机绿 ≠ CI 绿。
+- **新增表 → `server/scripts/lib/config-tables.cjs` 两份清单同时登记**（配置 / 运行时），`assertAllClassified()` 会全量比对。
+- **校验 config-sync 只能拿同 schema 的库副本**（`cp` 后 `config-import --db`，脚本自带回读）；新建空库会失败在列亲和性上。
+- **加表别整份重导 `config-sync.sql`**：新库导出的列顺序与仓库那份不同（历史 ALTER vs CREATE）→ 只拼接新增那张表的节，
+  再手改表头三行。`cp` 库文件前先 `PRAGMA wal_checkpoint(TRUNCATE)`，否则新表还在 `-wal` 里。
+- **`make config-check` 常红在「用户正在改的那张表」**：逐表比行数定位，与本轮无关就**不要整份 `config-export`**（会打包他未定稿的改动）。
+- **工具**：只信 Grep 工具（BSD `grep "a\|b"` 恒空）；批量替换用 `perl -pi -e`（本机 `sed -i ''` 异常，且 **`$(` 在 perl 里是特殊变量**，
+  改 Makefile 语法必须用 Edit）；改完看行尾（`grep -c $'\r'`）；子进程 `env -u NODE_OPTIONS`；`curl --noproxy '*'`；起端口前 `lsof`。
+- 删改代码用 node 按行号区间（跨行正则会从文件头 `/**` 吃到函数尾）；`//#region` 有语义，不能当注释裁。
+- **一份数据只能一个来源**：库表（`config-sync.sql` 是导出物）→ 快照段 → `apply*` 整表重建，守点「导出一致 + 行数自洽」。
+  代码里不许有第二份种子（`server/src/shared/` 已删）。整表重建后行对象是新的 → 派生 Map 必须重建（`rebuildSkills` / `rebuildItemIndex`）。
+- **「保存即生效」= 三件事**：服务端存值（没有行 = 出厂值，重置 = 删行且幂等）+ 客户端覆写前先还原出厂值 + 几何每次进图都拉。
+  空 `catch` 会把 404 伪装成「没生效」；「没生效」三分诊 = 查库 + 「N 件未保存」计数 + 写请求。
+- 给权威清单加字段 = 必然有测试在测「客户端能改它」：先 `grep "PUT roles/"`，造状态改走 `PATCH /admin/roles/:id`。
+- 浅拷贝共享**数组引用** → 按基础件命中全部变体要逐个对象赋值；回填「尺寸取客户端、内容取库里」要逐格保坐标。
+- **babel loose**：`[...map.values()]` 装迭代器 → 一律 `Array.from`；客户端 tsconfig 无 ES2017 → 不用 `Object.entries`。
+- e2e `checkEqual` 是 `===`（对象用 `JSON.stringify`）；改 `server/src` 的 DTO / 常量要先 `cd server && npm run build`（e2e 跑 `dist/`）。
+- **e2e 期望值一律从快照算**（`server/test/lib/config-snapshot.cjs`）：`rows()` / `index()` / `group()` / `count()`，空表用 `optionalRows()`。
+- **改 DTO 连描述都算改契约**：动过 `@ApiProperty({description})` 必须 `npm run swagger:emit` + `node tools/gen-api.cjs`。
+- **「管理页看不到新行」先查服务端 seed 有没有跑**（`onModuleInit` 里 `INSERT OR IGNORE`）：**重启 3100 才生效**，重启管理端没用；页面列表只在进页面拉一次。
 
-## 引擎坑（细节在 skill 里，这里只留索引）
-- 指针事件必须配 `UITransform`（否则 `cameraPriority` 空指针），UI 根绝不能挂鼠标事件 → `cocos-mouse-button-input`
-- 动画 `AnimationState` 引擎不回收：`NODE_DESTROYED` 里逐个 `state.stop()`；`destroy()` 同帧 `isValid` 仍 true，用 `isValid(node, true)` → `cocos-view-lifecycle`
-- 几何锚点是画布中心、不是脚下（全 0 会让身体沉地下）；「以视觉为准」翻译成行/列直方图逐行取小求和互相关 → `sprite-placement-align`
-- 自适应分三层（模板 / `applyScreenPolicy` / 场景贴边），模板只在 GUI 构建生效；游戏内坐标一律以相机为准 → `cocos-screen-adapt-hud`
+## 引擎坑（细节见 skill）
+- 指针事件必须配 `UITransform`（否则 `cameraPriority` 空指针），UI 根不能挂鼠标事件 → `cocos-mouse-button-input`
+- `AnimationState` 引擎不回收：`NODE_DESTROYED` 里逐个 `state.stop()`；`destroy()` 同帧 `isValid` 仍 true → 用 `isValid(node, true)` → `cocos-view-lifecycle`
+- 几何锚点是画布中心不是脚下（全 0 会沉地下）；「以视觉为准」= 行/列直方图逐行取小求和互相关 → `sprite-placement-align`
+- 自适应三层（模板 / `applyScreenPolicy` / 场景贴边），模板只在 GUI 构建生效；游戏内坐标一律以相机为准 → `cocos-screen-adapt-hud`
+- **Game 脚本挂在 Canvas 上** → `initLayer()` 建的图层容器是 Canvas 子节点，引擎把 Canvas 对齐到屏幕中心（1920×1080 → 世界 960,540）；
+  世界侧实体走 `setWorldPosition` 不受影响，唯独按本地 (0,0) 挂的地图瓦片错开半屏。修法：五个世界层建好后 `setWorldPosition(0,0,0)`（运行时算，别写死 designResolution/2），UILayer 不钉。（#692）
 
 ## 架构不变量（skills `olua-server` / `olua-admin` / `olua-client`）
 - **服务端权威**：伤害 / 掉落 / 经验 / 进度 / 金币 / 背包 / 穿戴 / 建号一律服务端算；客户端只留资源约定 + 手感参数。
-- 管理端接口必须 `@ApiAdminDoc({permissions})`；角色数据不透明（`guide` 例外：只校验、不补默认）；乐观锁 409+20006；`whitelist` 要 DTO + `@Type` + 登记 `SWAGGER_MODELS`；排序白名单 `sort-specs.ts`；`BizException` 默认 400。
-- `configs/` 与 `types/` 不许引 UI 组件（只许 `cc` 四个纯数据类 + `types/*` + `ApiModels` 的**类型**）；新 operationId 模块段登记 `gen-api.cjs` 的 `MODULES`；新仓储登记 `audit-server-boundaries`。
-- 部署：compose 四服务（admin:80 / game:8080 / server:3100 / realtime:3101），`/api` 与 `/game-resources/` 反代；密钥只在 `deploy.env`；Cocos 只能 GUI 打包。
-- 回归 `make test-changed`；client-test 基线 59 套 / 55 过 4 红（红全是素材未入库）；门禁看 **CI（PR 上跑一次）**
-  —— `make ci` 是它的本机串行版，别拿本机全量当硬门禁：负载一高就红在 e2e「等待超时」上（单跑全绿）。
-  e2e 套件清单派生自 `server/package.json`（`tools/run-e2e.cjs`），新增脚本自动进 CI，不再维护 Makefile 清单。
+- 管理端接口必须 `@ApiAdminDoc({permissions})`；角色数据不透明（`guide` 例外：只校验不补默认）；乐观锁 409+20006；
+  `whitelist` 要 DTO + `@Type` + 登记 `SWAGGER_MODELS`；排序白名单 `sort-specs.ts`；`BizException` 默认 400。
+- `configs/` 与 `types/` 不许引 UI 组件（只许 `cc` 四个纯数据类 + `types/*` + `ApiModels` 的类型）；新 operationId 模块段登记 `gen-api.cjs` 的 `MODULES`；新仓储登记 `audit-server-boundaries`。
+- 回归 `make test-changed`；client-test 基线 59 套 / 55 过 4 红（素材未入库）；门禁看 CI（PR 上跑一次），
+  `make ci` 是本机串行版，负载高会红在 e2e「等待超时」（单跑全绿）。e2e 清单派生自 `server/package.json`（`tools/run-e2e.cjs`）。
 
-## 进度
-- 已收官：战斗权威 #25~#37 · 管理端 #259 · 客户端对接 #293 · 社交 #387 · 玩法补全 #394 · 背包穿戴收权 #556 · 管理端风格 #564 · 地图原点 #566 · 地图管理 #571/#573/#580 · 世界权威 #581 · 怪物配掉落 #584 · 刷怪区边界 #586 · **刷怪区改后台绘制 #667（PR #668 / `4f70d26f`）** · **NPC 点位与复活点归后台 #672（PR #673 / `e3e7afc3`，TMX 只剩瓦片+碰撞）** · 建号 #597 · 守卫清理 #598 · 邮件 #437/#439 · 掉落光效入特效管理 #634 · 成长线按后台升级路径 #635（客户端派生链 `titleUpgradeChain` / `soulUpgradeChain` + 四态 `growthStepOf`，空链 = closed 不许冒充满级；`getXxxLevel` 仍按等级号读全表，头顶外显不跟链序）· **存档权威化收官 #596（PR #639）**：hp/mp lazy 结算 + 复活接口 · 时装 buy/wear（清单独占字段）· 体验字段（shortcutKeys/guide/soulShow）帧云同步 · 互见位置最小仲裁（瞬移屏蔽 / 持续异常跟随）· **物品 id 字段可视化 #648（PR #649）**：`EntityPickButton`（字段自带 `EntityPicker`）铺到掉落条目 / 任务奖励 / 成就奖励 + 持有条件 / 邮件附件；`anyPickerOpen()` 收进 `components/pickerStack.ts`（`IconField` 与 `EntityPicker` 各自登记）。 **#651（PR #652）**：catalog 的 `EntityKind` 扩到 8 种（加 `monster` / `npc`，清单来自服务端种子）；任务目标 / 发布 NPC / 成就击杀条件全部可视化 —— **固定清单别用 `size: 100` 的分页接口当候选**（第 101 只怪选不到）。 · **配置同步 #653（PR #654）**：`make config-export/import/check`，31 张配置表**整表替换**写成 `server/data/config-sync.sql`（运行时表一张不进）。**种子是 `INSERT OR IGNORE`，只对空库生效** —— 多机同步不能靠改种子（推上去对方库里那行还在，一个值都不变）。
-- **#603 出厂数据逐域搬到服务端（PR #624）**：模板 = `shared/<域>-seed.ts` → 服务端读种子 → 客户端清空表 + `apply*` 整表重建 → 守点「重生成逐字节不变」。资源路径判据：能按 id 推导的不入库（`map/<id>/<id>`、`effect/<key>/<key>.plist`），反之入库（药品 / 材料图标、时装 `icon/in/out`）。
-- **#604 / #626 快照层**：段清单唯一书写处 = `configs/game-config.ts` 区 0，缺段抛错并停在 Loading 重试（加一段 = DTO / `snapshot()` / 区 0 三处一起改）。
-  #626 把 21 个域文件并进 `game-config.ts`（`//#region N · 标签（原 configs/xxx.ts）`，编号稳定、守点按编号取区）：**`apply*` 必须放进自己的区**（放到上一个区尾巴照样编译，但 `regionOf()` 读不到 —— 真踩过）；`items`/`equipments`/`skill`/`apply-snapshot` 不许被反向 import（方向恒为 `apply-snapshot → game-config → types`，`getMallGoods` 因此住 `equipments`）。工具链只换 require 名字（`configs-sandbox` / `client-config-compile` / `test-*.cjs` / `gen-shared-data` 的 `SOURCE_FILES` 只剩 4 个入口 / `audit-world-authority` 的 `MONSTER_REGION=15`）。
-- **#646 图片选择器铺开（PR 见分支 `feat/646-image-picker-everywhere`）**：`ImagePicker` 加 `mode="image"|"atlas"`
-  （atlas 的「一套」= `rootDir` 下第一段，覆盖图集目录 / 路径即基名 / 按动作分子目录三种形态），导出 `IconField`
-  与 `anyPickerOpen()`（叠在编辑弹窗上时外层 onClose 放行，判据是模块级计数不是每页布尔）。
-  接线 8 页 15 字段；时装 `icon/inRes/outRes` 开放（**DTO 与仓储 UPDATE 列清单两处都要改**，漏一处 = 接口 200 值不动）。
-- **#643 药品补档 + 使用等级可编辑（PR 待合）**：金创药 5 档固定值（60/250/900/2600/15000，L1/5/10/20/35）+ 魔法药 3 档百分比（30/60/100%，最高档刻意=100%，再高被血蓝封顶吃掉）；`level` 管理端可改但**只影响展示与背包排序，服务端 useDrug 不拦**。种子唯一处 = `shared/item-seed.ts`（11 种）。
-- **#605 客户端独有运营参数逐项评估收权（PR #645 五块）**：口径「除界面文案外全部可配」。
-  五块：`mpRecoverPerSecond` → `growth_scalars`；`dropRuntime`/`autoBattle` → `runtime_params` 单行表（三组 JSON 列）；
-  `guildRules` 由 `GuildService` 现读运行时参数（DTO 只留结构上限）；战斗力权重 → `combat_weights` KV 表 + `/combat-weights` 页；
-  `guideSteps` → `guide_settings` 单行表（整份数组）+ `/guide-steps` 页，`GUIDE_SPOTS`/`GUIDE_EVENTS` 白名单即客户端能力边界。
-  纯函数读运营值只能走 `shared/runtime-overrides` 覆盖层（`combatWeightsOf()`）；表现层（颜色 / 节点名 / 气泡排版 / 全局文案）仍留客户端。
-- **#655 派生数据落库 + 曲线下架（PR #657 已合并 2026-11-03）**：`role_levels` 60 行（每级裸属性 + exp）、
-  `equipment_variants` 555 行（每行自带 label/level/sell_price/八项属性，回收价也在这）。运行时零现算：
-  `roleLevelAttributesOf` / `equipmentAttributesOf` / `sellPriceOf` **只读表**，不再回落生成物
-  （旧兜底是 bug：生成物为 `[min,max]` tuple，读方按 `{min,max}` 取）。曲线相关全删：
-  `admin/level-exps`、`admin/growth-segments` 下线，两张表启动 `DROP`，管理端只剩「成长参数」（标量）；
-  `roleMaxLevel` 校验 = 必须等于 role_levels 行数。
-  **`server/src/shared/` 整目录已删除**（19 个 `*-seed.ts` + 5 个 `*.generated.ts` 全搬进 `config-sync.sql`），
-  代码里没有第二份数值副本。**死旋钮已清**：`growth_scalars` 只剩 4 个全局标量（`attributeRange.*` 三条删）、
-  回收价曲线整条链删（`equipment_meta.recycle_curve` 列 + 客户端 `sampleGrowth`/`equipmentRecyclePrice` +
-  管理端卡片；价只认 `equipment_variants.sell_price`）。新增 `dropColumnIfExists()` 删老库死列。
-- **#672 地图点位收权（PR #673 / `e3e7afc3`，已收官）**：NPC 点位（`map_npcs`，`(map_id,npc_id)` 唯一 = 一图一个 NPC）
-  + 复活点（`maps.revive_cx/cy` **可空**，NULL 才是「没有」；垫 0 会让玩家一进图飞到左上角）搬到后台，
-  TMX 只剩瓦片 + 碰撞（`tiledGroupNames` 只剩 `collision`；`tiledObjectClasses`/`tiledPropertyNames` 已删）。
-  管理端 `MapCanvas` 四模式 `view|spawn|npc|revive` + NPC 拖动松手即存；客户端 `preloadGame(mapId, role)`（少一个能传错的参数）。
-  出厂迁移 `server/scripts/migrate-map-points.cjs` 读 `maps.content`（不解析 .tmx），`cx=x`、`cy=-y`，`INSERT OR IGNORE`。
-- **#676 碰撞盒收权收官（PR #677 / `781ce083`，2026-11-03）**：`map_collisions`（无唯一索引）+ 三条接口
-  （`50036`），详情 `collisions`、快照 `maps[].collisions`（`x/y/w/h`）；**TMX 里对象组已整组删除**
-  （`tools/strip-map-objects.cjs`，11 张图 33 组 / 1699 对象）→ 地图文件 = 瓦片 + 图层，**只做显示**。
-  客户端 `TiledObjects.ts` / `tiledGroupNames` / `mapPointToWorld` / `mapRectCenterToWorld` 全下架。
-  判据三条：**碰撞盒不判越界**（围墙在图外，只校验宽高 ≥1px）；只标 `fullyOutside`
-  （`right<=0 || left>=W || bottom>=0 || top<=-H`，两条 y 方向写反过一次 → 99 个里 97 个亮红）；
-  **不做拖动**（画布拖 = 新建，点已有 = 表单四个数）。管理端 `MapCanvas` 五模式 `view|spawn|npc|revive|collision`。
-  迁移链顺序：`migrate-map-points` → `migrate-map-collisions` → `strip-map-objects` → `import-map-resources` → `config-export`。
-- **#680 管理端音效配置（PR #681 / `50c74d62`，2026-11-03，仅后台）**：`audio_settings`（`audio_key` 主键）
-  + `GET/PATCH /admin/audio-settings`（`50037` 找不到 key）；出厂两项 `login_bgm` / `ui_click`（当时的名字是
-  `login_click`，#685 已改名）。**与特效管理的根本差别：`file_path` 入库且带扩展名**
-  （特效图集路径是两端约定、不存），所以换曲子只要新文件在资源包里。**只允许英文名**（`^sounds/[A-Za-z0-9_\-/]+\.[A-Za-z0-9]+$`，
-  中文 / 空格 / `..` / 绝对路径全拒），判据唯一处 `server/src/common/constants/audio.ts` 的 `audioPathProblem()`，
-  页面有逐条对齐的副本做边输边提示 + `usableFiles` 过滤。**服务端不查文件是否存在**（资源包不在镜像里）→ 试听是唯一验证手段。
-  目录清单双来源同形状：生产 `resources/audio-manifest.json`（nginx 无目录列表）/ dev `__list?dir=sounds&audio=1`。
-- **#683 音效接客户端 + 扩到 11 项 + 分类（2026-11-04）**：11 项 4 类（#685 起第一类叫「界面与交互」：
-  背景音 + 全站按钮点击音），**分类也写在服务端常量**（不进库：库里是运营改过的值，分类是清单本身）。
-  下发两条路、同形状 `AudioConfigDto`（key/filePath/volume/loop/enabled，不带展示名/分类/追账）：
-  快照 `audio` 段 + **公开接口 `GET /game-config/audio`**（登录场景没令牌，而背景音正是那时要响）。
-  客户端 `ui/core/SoundManager`：常驻节点（`addPersistRootNode`）+ 两路 AudioSource（循环音 / `playOneShot`），
-  clip 缓存、音量走 volumeScale（`source.volume` 固定 1）。**`file_path` 是全项目唯一允许服务端覆写的资源路径**；
-  客户端**没有本地兜底值**（表里没有 / 停用 / 空路径 → `audioConfigOf` 返回 null = 不播）。
-  挂点都在「服务端确认之后」；掉落一次结算只响一次、金钱音只在三种货币真变时响；战士普攻按 `config.id === "1000"`
-  （`skill_1000` 被 1002~1011 复用）。
-- **#685 音效四处修订（2026-11-04）**：① 点击音从「登录按钮」扩到**所有按钮** —— `login_click` 改名
-  `ui_click`（label「按钮点击音」），唯一入口 `SoundManager.bindClick(node)`：有 `Button` 组件监听
-  `Button.EventType.CLICK`（引擎只在真点中松开时 emit），否则 `TOUCH_END`；`UiHelper.createButton/createToggle`
-  自动挂（覆盖登录/选角/弹窗/面板/页签/列表小按钮），手写按钮各自贴一行（战魂/称号/军衔卡、底部导航、
-  挂机、任务追踪、成就领取、邮件五处、时装卡、举报分类、公告条目、登录区服、`tab-kit`）。
-  **技能快捷栏 / 世界对象（NPC·传送点·掉落物）/ 拖拽·摇杆刻意不响**。同一 key 高频带节流
-  （`play(key, minGapMs)` 判定在 `await` 之前）：按钮 60ms、自动拾取 80ms。
-  ② `item_drop` 在 `applyPickedFrame` 的 ok 分支也响（发 pick 帧只是请求，背包满拿不到这一声）。
-  ③ `bag_resort` 在 `moveBagGood` 成功后也响（失败分支已还原界面，那里不响）。
-  ④ `map_teleport` 从 `changeOnMap` 挪走：`markTeleportArrival()` 留 60 秒有效期的标记，
-  `Game.start` 在 `roleDisplay.init()` 之后 `consumeTeleportArrival()` 才播 —— 登录/选角进图没有标记，不误响。
-  **文件名统一成与 key 同名**（用户授权改名）：`sounds/ui_click.wav` / `role_die_man.wav` / `item_drop.wav` /
-  `equip_wear.mp3` / `money_change.mp3` / `bag_resort.wav` / `level_up.wav` / `map_teleport.mp3` / `login_bgm.wav`，
-  **连 `.meta` 一起改**（uuid 在 meta 上）。改名要能落地到老库 → `onModuleInit` 补完行后
-  `deleteOrphans(AUDIO_KEYS)` 清掉清单外的行（安全前提：行只来自 seed，没有新建接口）。
-  `sounds/move.wav`（用户 01:31 新放）**没有对应 key，未配**，用途待确认。
-- **#685 收尾：移动脚步音 move（分支 feat/685-move-sound）**：用户确认用途 = 点地面走一步播一声、
-  长按持续移动循环、停下即停。`AUDIO_KEYS` 加 `move`（战斗与角色，出厂 `sounds/move.wav` 音量 65）。
-  客户端 `Game.tickMoveSound` 每帧按**移动状态**驱动（`isManualMoving() || isAutoMoving()`，
-  不跟输入事件走）：起步 `playMove()`（**强制单次**，不走 `play()` —— 运营开「循环」开关时 play()
-  会把它路由到背景音那一路）→ 持续超 `MOVE_LOOP_AFTER_MS`(450ms，脚步音本体长度之后) 接
-  `startLoop("move")` → 停下 `stopLoop()`（起步那一声不掐）；`onDestroy` 必须 stopLoop。
-  `SoundManager` 变**三路 AudioSource**：`music`（一次只播一首）/ `loop`（移动循环，永远循环、
-  调用方起停，不听配置 loop 字段）/ `sfx`（playOneShot 可叠加）。
-  **列表顺序不再靠 rowid**：`ui_click` 改名重播种过一次 rowid 落到表尾 → `listAll()` 显式按
-  `AUDIO_KEYS` 排序（顺序是清单自己的属性，库里历史各机不同）。加 key 的固定顺序：
-  **先播种真实库（临时实例）→ config-export → 复跑 e2e**（空库自举先灌 config-sync.sql 再跑
-  onModuleInit，跳步会把新 key 排到末尾、误判成排序 bug）。e2e 口径随运营数据演进放宽两条：
-  出厂行追账不锁 0（gm001 保存过）；掉落来源不锁全内联（用户把怪 1 指到自建具名表 `elite_1_10`）。
-- open：#669 刷怪区改完即时生效（分域重载）· #670 怪物 AI 打尸体仍放技能 · #8 官网 / #9 包体积 / #12~#19 素材 / #295 阶段三 / #403 帮会战 / #606 地图门槛硬拦。
-- skill 索引：#655 起 `cocos-game-growth-curve` → **`olua-numeric-tuning`**（曲线方法论作废，改成「数值逐条落库 + 掉落配置法」）。
-- 定保持现状：技能 1011 / 快捷键 6 格 / 装备 7 部位（药品档位已由 #643 改为「金创药 5 + 魔法药 3」，不再保持 3 档）。
+## 部署（细节见 `docs/deploy.md` + skill `olua-deploy`）
+- compose 四服务：`admin:80`（唯一入口）/ `game:8080` / `server:3100` / `server-realtime:3101`；`/api` 与 `/game-resources/` 反代；
+  密钥只在 `deploy.env`；**Cocos 只能 GUI 打包**。
+- **管理端镜像构建上下文必须是仓库根**：`admin/src/api/gameData.ts` 引 `server/src/common/constants/game-enums` → context `./admin` 时路径出界（TS2307，
+  后接一串 `unknown not assignable to ReactNode` 都是级联）。compose 用 `context: .` + `dockerfile: admin/Dockerfile`，根 `.dockerignore` 挡大目录。
+- **出厂快照必须打进服务端镜像**：`server/.dockerignore` 用 `data/*` + `!data/config-sync.sql`（写 `data` 会整目录跳过使取反失效），
+  Dockerfile `COPY data/config-sync.sql ./config-sync.sql`，compose 两服务给 `CONFIG_SNAPSHOT_PATH: /app/config-sync.sql`；
+  否则 `/app/data` 被卷盖住 → 空库、配置表全空。
+- **验收前等健康检查转绿**（`up -d` 返回时容器还在 starting，立刻打接口必假 502），`deploy.sh verify()` 已内置轮询。
+- 卷名是 **`olua_olua-data`**（compose 项目名前缀）；`docker run -v olua-data:` 会新建空卷。线上库本体只有 4KB、数据在 `-wal`，备份要连 WAL 一起拷。
+- **域名**：`game.yimw.cn` 走管理端 nginx 按 `server_name` 整站反代到 `game:80`（不新建容器/端口），`:8080` 直连保留。
+  客户端 `network.ts` 按 host 判：本机/内网 → `localhost:3100/api`，公网/域名 → 同源 `/api`（旧产物若写死 localhost 需重构建）。
+
+## 进度（细节在 skills / 日报）
+- 已收官：战斗权威 #25~#37 · 管理端 #259 · 客户端对接 #293 · 社交 #387 · 玩法补全 #394 · 背包穿戴收权 #556 · 管理端风格 #564 ·
+  地图原点 #566 · 地图管理 #571/573/580 · 世界权威 #581 · 怪物配掉落 #584 · 刷怪区边界 #586 · 建号 #597 · 守卫清理 #598 · 邮件 #437/439。
+- **#596 存档权威化（PR #639）**：hp/mp lazy 结算 + 复活接口；时装 buy/wear（清单独占字段）；体验字段（shortcutKeys/guide/soulShow）帧云同步；
+  互见位置最小仲裁（瞬移屏蔽 / 持续异常跟随）。
+- **#603 + #604/#626 出厂数据上服务端 + 快照层**：段清单唯一处 = `configs/game-config.ts` 区 0（加一段 = DTO / `snapshot()` / 区 0 三处改）；
+  21 个域文件并进 `game-config.ts`（`//#region N`，**`apply*` 必须放进自己的区**，放上一区尾照样编译但 `regionOf()` 读不到）；
+  方向恒为 `apply-snapshot → game-config → types`。资源路径判据：能按 id 推导的不入库，反之入库。
+- **#605 客户端独有运营参数收权**：`mpRecoverPerSecond`→`growth_scalars`；`dropRuntime`/`autoBattle`→`runtime_params` 单行表；
+  战斗力权重→`combat_weights` + `/combat-weights`；`guideSteps`→`guide_settings` + `/guide-steps`。纯函数读运营值走 `shared/runtime-overrides`。
+- **#643 药品**：金创药 5 档（60/250/900/2600/15000，L1/5/10/20/35）+ 魔法药 3 档百分比（30/60/100%）；`level` 只影响展示与排序，`useDrug` 不拦。
+- **#646/#648/#651 选择器体系**：`ImagePicker` 有 `mode="image"|"atlas"`；`IconField` / `EntityPickButton`（字段自带 `EntityPicker`）；
+  `anyPickerOpen()` 收在 `components/pickerStack.ts`（模块级计数）。`EntityKind` 8 种含 monster/npc —— **固定清单别用 `size:100` 的分页接口当候选**。
+  时装 `icon/inRes/outRes` 开放时 **DTO 与仓储 UPDATE 列清单两处都要改**（漏一处 = 接口 200 值不动）。
+- **#653 配置同步**：`make config-export/import/check`，31 张配置表整表替换写成 `server/data/config-sync.sql`。**种子是 `INSERT OR IGNORE`，只对空库生效**（多机同步不能靠改种子）。
+- **#655 派生数据落库 + 曲线下架**：`role_levels` 60 行、`equipment_variants` 555 行（自带属性与 `sell_price`）；运行时零现算，只读表；
+  `admin/level-exps`、`admin/growth-segments` 下线，两张表启动 DROP；回收价曲线整条链删；`roleMaxLevel` 校验 = 行数。
+- **#667 刷怪区改后台绘制**（PR #668）· **#672 NPC 点位 + 复活点归后台**（PR #673，TMX 只剩瓦片+碰撞；`revive_cx/cy` 可空，垫 0 会飞左上角；
+  管理端 `MapCanvas` 四模式 + NPC 拖动松手即存）· **#676 碰撞盒收权**（PR #677，`map_collisions` 三条接口，TMX 对象组整组删除；
+  不判越界、只标 `fullyOutside`、不做拖动）· 迁移链：`migrate-map-points` → `migrate-map-collisions` → `strip-map-objects` → `import-map-resources` → `config-export`。
+- **#680/#683/#685 音效**：`audio_settings`（`audio_key` 主键）+ `GET/PATCH /admin/audio-settings`；**`file_path` 入库且带扩展名**（全项目唯一允许服务端覆写的资源路径），
+  只允许英文名（`audioPathProblem()` 唯一判据）；11 项 4 类，分类写在服务端常量不进库；下发 = 快照 `audio` 段 + 公开 `GET /game-config/audio`（登录场景无令牌）。
+  客户端 `SoundManager` 三路 AudioSource（music / loop / sfx），点击音统一走 `bindClick(node)`（技能栏 / 世界对象 / 拖拽刻意不响）；
+  移动脚步音由 `Game.tickMoveSound` 按移动状态驱动（起步 playMove 强制单次，450ms 后接循环，停下 stopLoop）。
+  列表显式按 `AUDIO_KEYS` 排序（rowid 不可靠）。加 key 顺序：**先播种真实库 → config-export → 复跑 e2e**。
+- **#689 击杀跨端（PR #690）**：monster-ai 帧加 `kills` 段（`{instanceId, accountId, x, y, drops[]}`），与 hits/casts 同节拍。
+  **判据**：不要「死亡时广播 world 帧」——`applyDamage` 同步触发 `onWorldChanged` 会让 world 帧抢在 settle 应答前到，快照清场吃掉击杀者的经验/掉落。
+  击杀者按 accountId 自跳；观看端掉落是**纯演出不可拾取**（账本归击杀者）。
+- **#693 玩家动作跨端（PR #694）**：players 帧加 `actions` 段（`{accountId, skillId, targetId?}`，普攻也是技能）。**broadcast 必须三路负载按图合并成一帧**
+  （增量 / 动作 / 离开）——站着不动的人出手时增量里没有他。`playRemoteAction` 是 crossFade 一次性动作、不跳过同名（与 `playInjured` 防抖相反）。
+  **边界**：挨打 / 倒地仍不跨端演（hits 只带血量）。
+- open：#669 刷怪区即时生效（分域重载）· #670 打尸体仍放技能 · #8 官网 / #9 包体积 / #12~#19 素材 / #295 阶段三 / #403 帮会战 / #606 地图门槛硬拦。
+- 定保持现状：技能 1011 / 快捷键 6 格 / 装备 7 部位。
+- 资源发布：`make resources-manifest/pack/upload VERSION=x`（`VERSION=` 与 `RES_VERSION=` 都收）；清单先合入 master 再上传 Release。

@@ -7,10 +7,12 @@
 #      bash scripts/deploy.sh --no-build      # 只换代码，不重建镜像
 #      bash scripts/deploy.sh --env-only      # 只更新 server/.env 并重启服务端
 #      bash scripts/deploy.sh --game [目录]   # 同步游戏 Web 产物到 :8080（默认 client/build/web-desktop-001）
+#      bash scripts/deploy.sh --resources     # 同步管理端素材（image-manifest 等）到 game/resources/
 #      bash scripts/deploy.sh --verify        # 只做验收检查
 #
 #  前置：
-#    - 根目录存在 deploy.env（gitignored），含 DEPLOY_HOST/USER/KEY/DIR/JWT_SECRET/ADMIN_REGISTER_CODE
+#    - 根目录存在 deploy.env（gitignored），含 DEPLOY_HOST/USER/KEY/DIR/JWT_SECRET/ADMIN_REGISTER_CODE，
+#      可选 OLUA_SITE_DOMAINS / OLUA_ADMIN_DOMAIN / OLUA_GAME_DOMAIN（三站域名，不填用默认值）
 #    - **改动已提交并合入 master**（git archive 只导出已提交状态，未提交的改动不会上线）
 #    - 本机私钥权限 600（chmod 600），否则 SSH 直接拒绝
 #
@@ -26,6 +28,7 @@ for arg in "$@"; do
     --no-build) MODE="no-build" ;;
     --env-only) MODE="env-only" ;;
     --game)     MODE="game" ;;
+    --resources) MODE="resources" ;;
     --verify)   MODE="verify" ;;
     -h|--help)  sed -n '2,22p' "$0"; exit 0 ;;
     -*) echo "未知参数：$arg"; exit 2 ;;
@@ -68,6 +71,25 @@ build_env() {
 
 GAME_PORT="${GAME_PORT:-8080}"
 
+# ---- 三站域名（admin/nginx.conf.template 的 envsubst 用）----
+# 来源：deploy.env 的 OLUA_* 变量；没写就用与 Dockerfile/compose 一致的默认值。
+# 写进服务器上 compose 目录的 `.env`（compose 插值读它）→ 换域名只改 deploy.env 重发 --env-only？
+# 不行 —— .env 只在 `up -d` 时生效，脚本统一在每次部署时重新生成上传，本地与远端永不漂移。
+SITE_DOMAINS="${OLUA_SITE_DOMAINS:-yimw.cn www.yimw.cn}"
+ADMIN_DOMAIN="${OLUA_ADMIN_DOMAIN:-admin.yimw.cn}"
+GAME_DOMAIN="${OLUA_GAME_DOMAIN:-game.yimw.cn}"
+SITE_PRIMARY="$(printf '%s' "$SITE_DOMAINS" | awk '{print $1}')"
+
+build_compose_env() {
+  {
+    echo "# 由 deploy.sh 生成（compose 插值用），本地真源是 deploy.env 的 OLUA_* 三项"
+    echo "OLUA_SITE_DOMAINS=$SITE_DOMAINS"
+    echo "OLUA_ADMIN_DOMAIN=$ADMIN_DOMAIN"
+    echo "OLUA_GAME_DOMAIN=$GAME_DOMAIN"
+  } > /tmp/olua-compose.env
+  echo "  已生成 compose .env（$SITE_PRIMARY / $ADMIN_DOMAIN / $GAME_DOMAIN）"
+}
+
 verify() {
   echo "==> 验收"
   # `docker compose up -d` 返回时容器**还没开始服务**：上一轮就是在这里读到 502 的假故障
@@ -82,7 +104,30 @@ verify() {
     echo -n 'admin page: '; curl --noproxy '*' -s -o /dev/null -w '%{http_code}\n' --max-time 10 http://127.0.0.1/
     echo -n 'admin api: ';  curl --noproxy '*' -s --max-time 10 http://127.0.0.1/api/health; echo
     echo -n 'game page: ';  curl --noproxy '*' -s -o /dev/null -w '%{http_code}\n' --max-time 10 http://127.0.0.1:${GAME_PORT}/
-    echo -n 'game api: ';   curl --noproxy '*' -s --max-time 10 http://127.0.0.1:${GAME_PORT}/api/health; echo"
+    echo -n 'game api: ';   curl --noproxy '*' -s --max-time 10 http://127.0.0.1:${GAME_PORT}/api/health; echo
+    echo '--- 三域名分流（Host 头模拟，不依赖本机 DNS）'
+    echo -n \"site($SITE_PRIMARY): \";  curl --noproxy '*' -s -H \"Host: $SITE_PRIMARY\" -o /dev/null -w '%{http_code}\n' --max-time 10 http://127.0.0.1/
+    echo -n \"admin($ADMIN_DOMAIN): \"; curl --noproxy '*' -s -H \"Host: $ADMIN_DOMAIN\" -o /dev/null -w '%{http_code}\n' --max-time 10 http://127.0.0.1/
+    echo -n \"game($GAME_DOMAIN): \";   curl --noproxy '*' -s -H \"Host: $GAME_DOMAIN\" -o /dev/null -w '%{http_code}\n' --max-time 10 http://127.0.0.1/
+    echo -n 'image-manifest: ';         curl --noproxy '*' -s -H \"Host: $ADMIN_DOMAIN\" -o /dev/null -w '%{http_code}\n' --max-time 10 http://127.0.0.1/game-resources/image-manifest.json"
+}
+
+# 同步管理端素材（client/assets/resources）→ 服务器 game/resources/：
+# 管理端的 /game-resources/ 反代到 game 容器的 /resources/，图片选择器 / 装备对齐工作台
+# / 音效配置页的生产数据源（image-manifest.json / audio-manifest.json）都在这里面。
+# 与 --game 是两份来源（构建产物 vs 素材包），所以拆成两个模式分别增量同步。
+sync_resources() {
+  local src="client/assets/resources"
+  # 防呆：清单不在 = 素材不完整，直接停（否则 --delete 会把服务器上的 resources 清残）
+  [ -f "$src/image-manifest.json" ] || { echo "✗ $src 里没有 image-manifest.json（先跑 make image-manifest）"; exit 1; }
+  echo "  源：$src  体积：$(du -sh "$src" 2>/dev/null | awk '{print $1}')"
+  echo "==> rsync 增量同步 → $DEPLOY_DIR/game/resources/（首次全量约 2.4G，之后只传差异）"
+  # 不用 -z：素材主体是已压缩的 PNG/WAV，压缩零收益白耗 CPU（同 sync_game 的结论）
+  rsync -a --delete --stats \
+    -e "ssh -i $KEY -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null" \
+    "$src/" "$TARGET:$DEPLOY_DIR/game/resources/" || { echo "✗ rsync 失败"; exit 1; }
+  echo "==> 起/更新 game 容器"
+  "${SSH[@]}" "$TARGET" "cd '$DEPLOY_DIR' && docker compose up -d game"
 }
 
 # 同步游戏 Web 产物：首次全量（2~3G，耗时以小时计），之后只传差异
@@ -105,6 +150,7 @@ sync_game() {
 case "$MODE" in
   verify) verify; exit 0 ;;
   game) sync_game; verify; exit 0 ;;
+  resources) sync_resources; verify; exit 0 ;;
   env-only)
     echo "==> 只更新 server/.env"
     build_env
@@ -113,24 +159,28 @@ case "$MODE" in
     verify; exit 0 ;;
 esac
 
-echo "==> 1/5 导出归档（HEAD=$(git rev-parse --short HEAD)，未提交改动不会包含）"
+echo "==> 1/6 导出归档（HEAD=$(git rev-parse --short HEAD)，未提交改动不会包含）"
 git archive --format=tar.gz -o /tmp/olua-src.tgz HEAD
 ls -lh /tmp/olua-src.tgz | awk '{print "  "$5" "$9}'
 
-echo "==> 2/5 上传"
+echo "==> 2/6 上传"
 "${SCP[@]}" /tmp/olua-src.tgz "$TARGET:/tmp/olua-src.tgz"
 
-echo "==> 3/5 解压"
+echo "==> 3/6 解压"
 "${SSH[@]}" "$TARGET" "cd '$DEPLOY_DIR' && tar xzf /tmp/olua-src.tgz && rm -f /tmp/olua-src.tgz"
 
-echo "==> 4/5 传 server/.env（必须在解压之后）"
+echo "==> 4/6 传 server/.env（必须在解压之后）"
 build_env
 "${SCP[@]}" /tmp/olua-server.env "$TARGET:$DEPLOY_DIR/server/.env"
 
+echo "==> 5/6 传 compose .env（三站域名，nginx 模板的 envsubst 用）"
+build_compose_env
+"${SCP[@]}" /tmp/olua-compose.env "$TARGET:$DEPLOY_DIR/.env"
+
 if [ "$MODE" = "no-build" ]; then
-  echo "==> 5/5 跳过重建（--no-build）"
+  echo "==> 6/6 跳过重建（--no-build）"
 else
-  echo "==> 5/5 docker compose up -d --build（耗时，放到后台跑更稳）"
+  echo "==> 6/6 docker compose up -d --build（耗时，放到后台跑更稳）"
   "${SSH[@]}" "$TARGET" "cd '$DEPLOY_DIR' && docker compose up -d --build"
 fi
 

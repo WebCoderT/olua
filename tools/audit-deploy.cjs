@@ -42,7 +42,7 @@ const FILES = {
   adminDockerfile: "admin/Dockerfile",
   // 管理端的构建上下文是**仓库根**（要跨目录 import 服务端枚举），所以它的 .dockerignore 也在根上
   adminIgnore: ".dockerignore",
-  adminNginx: "admin/nginx.conf",
+  adminNginx: "admin/nginx.conf.template",
   gameNginx: "deploy/nginx-game.conf",
 };
 
@@ -89,9 +89,9 @@ const adminDockerfile = read(FILES.adminDockerfile);
 const nginx = read(FILES.adminNginx);
 const gameNginx = read(FILES.gameNginx);
 
-/** 所有 nginx 配置（管理端与游戏站），接线检查对每一份都要跑一遍 */
+/** 所有 nginx 配置（管理端入口与游戏站），接线检查对每一份都要跑一遍 */
 const NGINX_FILES = [
-  ["admin/nginx.conf", nginx],
+  ["admin/nginx.conf.template", nginx],
   ["deploy/nginx-game.conf", gameNginx],
 ];
 
@@ -263,19 +263,23 @@ if (noDefault.length) {
 // 却又是好的 —— 这种残缺只有「记得补全路径」的人才绕得过，所以在这里拦一道。
 for (const [label, text] of NGINX_FILES) {
   if (!/^\s*index\s+\S+;/m.test(text)) continue; // 纯反代站没有静态入口，跳过
-  const rootBlock = /location\s+\/\s*\{([\s\S]*?)\n {2}\}/.exec(text);
-  if (!rootBlock) {
+  // 入口配置里可能有多个 `location /`（比如管理端模板里的官网站整站反代段）——
+  // 只要有**一个**静态段的 try_files 带 `$uri/` 就算过，但一段都没有就是残缺。
+  const rootBlocks = [...text.matchAll(/location\s+\/\s*\{([\s\S]*?)\n {2}\}/g)].map((m) => m[1]);
+  if (!rootBlocks.length) {
     fail(`${label} 里找不到 \`location / {\` 锚点（静态入口的形状变了？）`);
     continue;
   }
-  const tries = /try_files\s+([^;]+);/.exec(rootBlock[1]);
-  if (!tries) {
-    fail(`${label} 的 location / 里没有 try_files（不知道命中规则是按什么算的）`);
-    continue;
+  const good = rootBlocks.find((body) => {
+    const tries = /try_files\s+([^;]+);/.exec(body);
+    return tries && tries[1].trim().split(/\s+/).includes("$uri/");
+  });
+  if (good) {
+    const args = /try_files\s+([^;]+);/.exec(good)[1].trim();
+    ok(`${label} 根目录请求交给 index`, args);
+  } else {
+    fail(`${label} 里没有任何 \`location /\` 的 try_files 带 \`$uri/\`：请求 / 会直接 404（index 指令够不着）`);
   }
-  const args = tries[1].trim().split(/\s+/);
-  if (args.includes("$uri/")) ok(`${label} 根目录请求交给 index`, args.join(" "));
-  else fail(`${label} 的 try_files 是 \`${args.join(" ")}\`：缺 \`$uri/\`，请求 / 会直接 404（index 指令够不着）`);
 }
 
 //#endregion
@@ -350,8 +354,48 @@ else fail("server/Dockerfile 没有 `EXPOSE 3101` —— 实时进程端口的�
 
 //#endregion
 
+//#region 10. 三站域名接线（envsubst 模板 ↔ Dockerfile ↔ compose ↔ 官网服务）
+
+// 域名一律走环境变量（admin/nginx.conf.template 是 envsubst 模板），配置里**不许写死域名**
+// —— 写死一处，换域名时必然漏改；模板变量 + compose 默认值 + .env 覆盖，三层各司其职。
+for (const [variable, label] of [
+  ["OLUA_SITE_DOMAINS", "官网站"],
+  ["OLUA_ADMIN_DOMAIN", "管理端"],
+  ["OLUA_GAME_DOMAIN", "游戏站"],
+]) {
+  anchor(nginx, new RegExp(`\\$\\{${variable}\\}`), `${label}域名走模板变量`, `admin/nginx.conf.template 里应有 \${${variable}}（不许写死域名）`);
+  anchor(
+    compose,
+    new RegExp(`^\\s{6}${variable}:\\s*`, "m"),
+    `compose 给 admin 传 ${variable}`,
+    "admin 服务 environment 里要有这个变量（模板 envsubst 的数据源，换域名不用重建镜像）"
+  );
+}
+// 只查生效行（剥掉 # 注释）—— 注释里允许出现示例域名做说明
+const nginxActive = nginx
+  .split(/\r?\n/)
+  .filter((line) => !/^\s*#/.test(line))
+  .join("\n");
+if (/\bgame\.yimw\.cn|admin\.yimw\.cn|\byimw\.cn\b/.test(nginxActive)) {
+  fail("admin/nginx.conf.template 里写死了域名 —— 一律用 ${OLUA_*} 模板变量，域名只在 deploy.env/.env 里出现");
+} else {
+  ok("nginx 模板没写死域名");
+}
+
+anchor(
+  adminDockerfile,
+  /COPY admin\/nginx\.conf\.template\s+\/etc\/nginx\/templates\//,
+  "nginx 模板进镜像 templates 目录",
+  "nginx 镜像启动时对 /etc/nginx/templates/*.template 做 envsubst 写到 conf.d/，直接 COPY 到 conf.d 会跳过替换"
+);
+
+anchor(compose, /^ {2}website:\s*$/m, "compose 有 website 服务", "官网静态站（挂 ./website，走 admin :80 的 server_name 分流，不占宿主机端口）");
+anchor(compose, /- \.\/website:\/usr\/share\/nginx\/html:ro/, "website 挂载 ./website 只读", "官网产物随仓库走，容器不需要写");
+
+//#endregion
+
 console.log("部署接线审计 / deploy wiring audit");
-console.log(`文件：${Object.values(FILES).length} 个（compose / 两个 Dockerfile / 两个 .dockerignore / 两份 nginx.conf / .env.example）`);
+console.log(`文件：${Object.values(FILES).length} 个（compose / 两个 Dockerfile / 两个 .dockerignore / nginx 模板与游戏 nginx / .env.example）`);
 console.log("（只做静态接线检查：本机与 CI 不一定有 Docker，镜像构建本身不在这里验）");
 console.log("");
 for (const line of notes) console.log(`  ✓ ${line}`);
@@ -361,4 +405,4 @@ if (failures.length) {
   console.log(`\nFAIL：${failures.length} 处部署接线有问题`);
   process.exit(1);
 }
-console.log("\nPASS：服务名 / 端口 / 卷挂载 / 反代前缀 / COPY 源 / 密钥隔离 / 变量默认值 / 根路径 index / 备份脚本随镜像 / 实时进程双服务接线都接得上");
+console.log("\nPASS：服务名 / 端口 / 卷挂载 / 反代前缀 / COPY 源 / 密钥隔离 / 变量默认值 / 根路径 index / 备份脚本随镜像 / 实时进程双服务 / 三站域名模板接线都接得上");
