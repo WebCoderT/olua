@@ -8,8 +8,9 @@
  * · 取用优先级：自定义表（精确 id → 基础件 key）→ 前后缀表 → 不显示；自定义指向未登记背景时回退
  * · 真实装备表抽查：从 items 总表解析出的装备能查到正确的背景
  * · 素材守卫：目录内帧名末尾序号升序（AnimationHelper 按序号排序 → 播放顺序正确）；
- *   目录内每帧尺寸一致、meta 未裁剪且 offset 为 0 —— 背景直接换弹窗精灵的帧、按节点尺寸铺满的前提
- * · 接线：详情弹窗挂背景（换弹窗自身精灵的帧、不是 Layout 子节点）、目录循环播放、片段缓存、预加载、barrel 导出
+ *   目录内每帧尺寸一致、meta 未裁剪且 offset 为 0 —— 背景按「宽度贴面板、高度按帧原始比例
+ *   自适应」显示的前提（每帧尺寸不一致时高度口径就漂了）
+ * · 接线：详情弹窗挂背景（独立子节点垫底、不参与内容 Layout）、目录循环播放、片段缓存、预加载、barrel 导出
  *
  * 数据层跑在沙箱里（真实的 configs/background + equipments + items，见 lib/configs-sandbox.cjs），
  * 素材与源码断言直接读文件。
@@ -127,7 +128,7 @@ const fxPick = resolveEquipmentDetailBackground({ id: "weapon_fx", prefix: 0, su
 check(!!fxPick && fxPick.key === CUSTOM_KEY && fxPick.effect.x === -8 && fxPick.effect.y === 3 && fxPick.effect.scale === 2, "自定义条目的 effect 原样下发（自定义优先于棋盘）");
 const comboPick = resolveEquipmentDetailBackground({ id: "x", prefix: 0, suffix: 0, type: "equipment" });
 check(!!comboPick && comboPick.key === first && comboPick.effect.x === 12 && comboPick.effect.y === -6 && comboPick.effect.scale === 1.25, "棋盘格的 effect 原样下发");
-// 没写 effect 的条目：回落默认效果（{0,0,1} = 铺满弹窗面板）
+// 没写 effect 的条目：回落默认效果（{0,0,1} = 宽度贴面板、高度按帧原始比例自适应）
 const plainPick = resolveEquipmentDetailBackground({ id: "x", prefix: 4, suffix: 2, type: "equipment" });
 check(!!plainPick && plainPick.effect.x === 0 && plainPick.effect.y === 0 && plainPick.effect.scale === 1, "没写 effect 的条目回落默认效果");
 // 坏 effect 只丢效果、映射保留
