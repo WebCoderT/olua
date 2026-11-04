@@ -31,6 +31,10 @@ services:
       NODE_ENV: production
       # 容器内的数据文件路径 —— 必须落在下面挂的卷里
       DB_PATH: /app/data/olua.db
+      # 出厂配置快照住在**镜像里**（Dockerfile 的 COPY data/config-sync.sql），
+      # 不在 /app/data 下：那个目录被具名卷挂载盖住，卷里不会有这个文件。
+      # 空库首次启动时靠它自举出全部配置表（种子只对空库生效，不动已有运营数据）。
+      CONFIG_SNAPSHOT_PATH: /app/config-sync.sql
       # nginx 转发了 X-Forwarded-For，所以必须信任它：否则 req.ip 全是 nginx 容器的地址，
       # 登录限流的 IP 维度会把所有人当成同一个人一起锁死
       TRUST_PROXY: "true"
@@ -61,6 +65,7 @@ services:
     environment:
       NODE_ENV: production
       DB_PATH: /app/data/olua.db
+      CONFIG_SNAPSHOT_PATH: /app/config-sync.sql
       TRUST_PROXY: "true"
       CORS_ORIGINS: ${OLUA_CORS_ORIGINS:-}
       # 健康检查（见下面的 healthcheck 覆盖）打这个端口；实时进程监听 REALTIME_PORT

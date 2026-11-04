@@ -28,6 +28,10 @@ ENV NODE_ENV=production
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev && npm cache clean --force
 COPY --from=build /app/dist ./dist
+# 出厂配置快照（空库自举用）。**必须进镜像**：/app/data 被具名卷挂载盖住，
+# 卷里不会有这个文件，默认路径 /app/data/config-sync.sql 于是永远缺失 →
+# 「空库起不来、配置表全空」。compose 用 CONFIG_SNAPSHOT_PATH 指向这里。
+COPY data/config-sync.sql ./config-sync.sql
 # 自动备份是在**服务进程里**拉起 scripts/backup.cjs 做的（与其让 TypeScript 另写一份
 # VACUUM INTO，不如复用 make db-backup 走的那份脚本，两者才不会各自漂移）。
 # 所以运行镜像里必须有这个目录 —— 少了它本机验证一切正常，进了容器却是每次都失败。

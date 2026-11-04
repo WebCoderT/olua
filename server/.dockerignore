@@ -5,7 +5,10 @@
 #   data/ —— 本地数据文件没必要也不应该进镜像
 node_modules
 dist
-data
+# data/ 里只有出厂快照要进镜像（空库自举靠它，路径见 CONFIG_SNAPSHOT_PATH）：
+# 用 `data/*` 而不是 `data`，否则 Docker 直接跳过整个目录，下面的取反不生效
+data/*
+!data/config-sync.sql
 backups
 .env
 .env.local
