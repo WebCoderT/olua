@@ -376,7 +376,7 @@ function AssociationBoard({ config, metaVersion }: { config: BoardConfig; metaVe
                               <option value="">（选择{config.noun}）</option>
                               {items.map((item) => (
                                 <option key={item.key} value={item.key}>
-                                  {item.key}
+                                  {item.name?.trim() ? `${item.name.trim()}（${item.key}）` : item.key}
                                 </option>
                               ))}
                             </Select>

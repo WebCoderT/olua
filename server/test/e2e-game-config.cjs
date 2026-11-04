@@ -2565,16 +2565,62 @@ async function main() {
     checkEqual(missingDirRes.status, 400, "素材目录不存在 → 扫描 400（错误里带路径，排查挂载用）");
     fsSync.renameSync(`${bordersDir}.bak`, bordersDir);
 
-    // 同步前先把清单摆成受控状态：99991 带 effect、15 个出厂边框不带（覆盖掉前面小节残留在库里的零散条目）
+    // 同步前先把清单摆成受控状态：99991 带 effect / 别名 / 分组、15 个出厂边框不带（覆盖掉前面小节残留在库里的零散条目）
     const seedEffectPreset = await api(base, "PATCH", "/api/admin/equipment-borders", {
       token,
       body: {
         assignments: borderOk.map((row) => ({ ...row })),
         customs: [],
-        items: [{ key: "sfx_99991_0", effect: { x: 5, y: 0, scale: 2 } }, ...borderOk.map((row) => ({ key: row.key }))],
+        items: [{ key: "sfx_99991_0", effect: { x: 5, y: 0, scale: 2 }, name: "测试边框甲", group: "e2e组" }, ...borderOk.map((row) => ({ key: row.key }))],
       },
     });
-    checkEqual(seedEffectPreset.status, 200, "预置清单：99991 带 effect（同步不得冲掉）");
+    checkEqual(seedEffectPreset.status, 200, "预置清单：99991 带 effect / 别名 / 分组（同步不得冲掉）");
+
+    // 别名 / 分组（#718）：写读一致、空串视同没填、超长 400
+    const labelRoundTrip = await api(base, "PATCH", "/api/admin/equipment-borders", {
+      token,
+      body: {
+        assignments: borderOk.map((row) => ({ ...row })),
+        customs: [],
+        items: [{ key: "sfx_99991_0", effect: { x: 5, y: 0, scale: 2 }, name: "  测试边框甲  ", group: "e2e组" }, ...borderOk.map((row) => ({ key: row.key }))],
+      },
+    });
+    checkEqual(labelRoundTrip.status, 200, "别名 / 分组提交成功（别名带空白、分组非空）");
+    const label99991 = (labelRoundTrip.body?.data?.items ?? []).find((row) => row.key === "sfx_99991_0");
+    checkEqual(label99991?.name, "测试边框甲", "别名 trim 后落库（读出来不带空白）");
+    checkEqual(label99991?.group, "e2e组", "分组原样落库");
+    // 空串视同没填：再提交一次把两条标签全清掉，读出来字段干净
+    const labelClear = await api(base, "PATCH", "/api/admin/equipment-borders", {
+      token,
+      body: {
+        assignments: borderOk.map((row) => ({ ...row })),
+        customs: [],
+        items: [{ key: "sfx_99991_0", effect: { x: 5, y: 0, scale: 2 }, name: "", group: "" }, ...borderOk.map((row) => ({ key: row.key }))],
+      },
+    });
+    checkEqual(labelClear.status, 200, "空串别名 / 分组提交成功（视同没填）");
+    const cleared99991 = (labelClear.body?.data?.items ?? []).find((row) => row.key === "sfx_99991_0");
+    checkEqual(cleared99991?.name, undefined, "空串别名不落库（字段干净）");
+    checkEqual(cleared99991?.group, undefined, "空串分组不落库（字段干净）");
+    // 摆回同步前提：99991 带 effect / 别名 / 分组
+    const relabel = await api(base, "PATCH", "/api/admin/equipment-borders", {
+      token,
+      body: {
+        assignments: borderOk.map((row) => ({ ...row })),
+        customs: [],
+        items: [{ key: "sfx_99991_0", effect: { x: 5, y: 0, scale: 2 }, name: "测试边框甲", group: "e2e组" }, ...borderOk.map((row) => ({ key: row.key }))],
+      },
+    });
+    checkEqual(relabel.status, 200, "摆回同步前提：99991 带 effect / 别名 / 分组");
+    const labelTooLong = await api(base, "PATCH", "/api/admin/equipment-borders", {
+      token,
+      body: {
+        assignments: borderOk.map((row) => ({ ...row })),
+        customs: [],
+        items: [{ key: "sfx_99991_0", name: "字".repeat(33) }, ...borderOk.map((row) => ({ key: row.key }))],
+      },
+    });
+    checkEqual(labelTooLong.status, 400, "别名超 32 字 → 400 且整边不落库");
 
     const borderScanRes = await api(base, "GET", "/api/admin/equipment-borders/resources", { token });
     checkEqual(borderScanRes.status, 200, "扫描边框资源文件夹");
@@ -2595,6 +2641,8 @@ async function main() {
     const borderAfterSyncItems = borderAfterSync.body?.data?.items ?? [];
     const item99991 = borderAfterSyncItems.find((row) => row.key === "sfx_99991_0");
     checkEqual(item99991?.effect?.x, 5, "存活条目的 effect 原样保留（清单是效果的唯一来源）");
+    checkEqual(item99991?.name, "测试边框甲", "存活条目的别名原样保留（#718：与 effect 同一待遇）");
+    checkEqual(item99991?.group, "e2e组", "存活条目的分组原样保留");
     checkEqual(borderAfterSync.body?.data?.assignments?.length, 15, "棋盘不被同步动（15 格原样）");
     checkEqual(borderAfterSync.body?.data?.items?.length, 17, "GET 清单 = 2 个文件夹素材 + 15 个仍被引用的自动并入（引用处可见，待修复）");
 

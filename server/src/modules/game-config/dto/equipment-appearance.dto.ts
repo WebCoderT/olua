@@ -104,6 +104,26 @@ export class AppearanceItemDto {
   @ValidateNested()
   @Type(() => AppearanceEffectDto)
   effect?: AppearanceEffectDto;
+
+  @ApiPropertyOptional({
+    description: "别名（#718，可选；给人看的名字，客户端不消费，快照里没有；空串视同没填）",
+    example: "铁剑·蓝色品质框",
+    maxLength: EQUIPMENT_APPEARANCE_LIMITS.nameMaxLength,
+  })
+  @IsOptional()
+  @IsString()
+  @Length(0, EQUIPMENT_APPEARANCE_LIMITS.nameMaxLength)
+  name?: string;
+
+  @ApiPropertyOptional({
+    description: "分组（#718，可选；管理端按组过滤用，客户端不消费，快照里没有；空串视同没填）",
+    example: "品质系列",
+    maxLength: EQUIPMENT_APPEARANCE_LIMITS.groupMaxLength,
+  })
+  @IsOptional()
+  @IsString()
+  @Length(0, EQUIPMENT_APPEARANCE_LIMITS.groupMaxLength)
+  group?: string;
 }
 
 /** 整份装备外观（GET / PATCH 的响应） */

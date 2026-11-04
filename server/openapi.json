@@ -16719,6 +16719,18 @@
                 "$ref": "#/components/schemas/AppearanceEffectDto"
               }
             ]
+          },
+          "name": {
+            "type": "string",
+            "description": "别名（#718，可选；给人看的名字，客户端不消费，快照里没有；空串视同没填）",
+            "example": "铁剑·蓝色品质框",
+            "maxLength": 32
+          },
+          "group": {
+            "type": "string",
+            "description": "分组（#718，可选；管理端按组过滤用，客户端不消费，快照里没有；空串视同没填）",
+            "example": "品质系列",
+            "maxLength": 32
           }
         },
         "required": [
