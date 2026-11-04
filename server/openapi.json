@@ -5925,6 +5925,53 @@
         ]
       }
     },
+    "/admin/equipment-variants/rebuild": {
+      "post": {
+        "description": "按装备规则（前后缀档位，`GET /admin` 下的 `equipment-meta` 单行表）**当前**的前后缀倍率，把每个基础件 × 每个组合整批重算：\n\n- 属性 = `round(基础值 × 前缀倍率 × 后缀倍率)`；名称 / 穿戴等级取基础件。\n- **卖价保留原值**（运营逐条调过的价不被覆盖）；新增组合（扩档后）按 `round(10 × 等级 × 倍率)` 垫底。\n- 档位缩小后，被删组合的变体行会消失 —— 背包 / 穿戴里还引用那些 id 的装备变成无效引用。\n- 幂等：同一份倍率连点两次，第二次只刷新 updated_at。\n- 重建完立刻重装结算层，服务端即时生效；客户端下次拉快照生效。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
+        "operationId": "adminEquipmentVariant.rebuild",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "重建盘点（基础件数 / 组合数 / 变体行数）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/EquipmentVariantRebuildResultDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "重新生成全部装备变体",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/EquipmentVariantRebuildResultDto"
+        },
+        "x-olua-permissions": [
+          "gameConfig:write"
+        ]
+      }
+    },
     "/admin/equipment-slots": {
       "get": {
         "description": "13 行，**只读清单 + 可改文案/底图/位置分组**，没有创建 / 删除（新增部位属于代码改动）。\n\n`order` 同时是角色弹窗的槽位排列顺序与背包「一键整理」的部位序 —— 客户端 `equipmentSlotOrder` 就是它。\n\nkey 取值：other1 / cloth / other2 / weapon / necklace / ring / accessories / shinguard / helmet / scapular / belt / wristband / shoes。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
@@ -16281,17 +16328,17 @@
         "properties": {
           "prefix": {
             "type": "number",
-            "description": "装备前缀（0 普通的 → 4 超神的，数值即客户端 EQUIPMENT_PREFIX 枚举值）",
+            "description": "装备前缀序号（0 起；运行时档数由 equipment_meta 文案长度决定，硬上限 9）",
             "example": 0,
             "minimum": 0,
-            "maximum": 4
+            "maximum": 9
           },
           "suffix": {
             "type": "number",
-            "description": "装备后缀（0 人级 / 1 天级 / 2 神级，数值即客户端 EQUIPMENT_SUFFIX 枚举值）",
+            "description": "装备后缀序号（0 起；硬上限 9）",
             "example": 0,
             "minimum": 0,
-            "maximum": 2
+            "maximum": 9
           },
           "key": {
             "type": "string",
@@ -16328,14 +16375,14 @@
         "type": "object",
         "properties": {
           "borders": {
-            "description": "前后缀组合 → 边框（整份替换，恰好 15 条且组合不重复）",
+            "description": "前后缀组合 → 边框（整份替换，恰好覆盖当前档数的每种组合且不重复）",
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/AppearanceAssignmentDto"
             }
           },
           "backgrounds": {
-            "description": "前后缀组合 → 详情背景（整份替换，恰好 15 条且组合不重复）",
+            "description": "前后缀组合 → 详情背景（整份替换，恰好覆盖当前档数的每种组合且不重复）",
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/AppearanceAssignmentDto"
@@ -21172,6 +21219,31 @@
           }
         }
       },
+      "EquipmentVariantRebuildResultDto": {
+        "type": "object",
+        "properties": {
+          "bases": {
+            "type": "number",
+            "description": "参与展开的基础件数",
+            "example": 37
+          },
+          "combos": {
+            "type": "number",
+            "description": "前后缀组合数（前缀档数 × 后缀档数）",
+            "example": 15
+          },
+          "variants": {
+            "type": "number",
+            "description": "重建后的变体总行数（= 基础件数 × 组合数）",
+            "example": 555
+          }
+        },
+        "required": [
+          "bases",
+          "combos",
+          "variants"
+        ]
+      },
       "DrugDto": {
         "type": "object",
         "properties": {
@@ -23690,14 +23762,14 @@
         "type": "object",
         "properties": {
           "borders": {
-            "description": "前后缀组合 → 边框（恰好 15 条，每条组合一次）",
+            "description": "前后缀组合 → 边框（恰好覆盖当前档数的每种组合、各一条）",
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/AppearanceAssignmentDto"
             }
           },
           "backgrounds": {
-            "description": "前后缀组合 → 详情背景（恰好 15 条，每条组合一次）",
+            "description": "前后缀组合 → 详情背景（恰好覆盖当前档数的每种组合、各一条）",
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/AppearanceAssignmentDto"

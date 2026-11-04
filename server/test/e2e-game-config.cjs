@@ -2503,6 +2503,81 @@ async function main() {
     checkEqual(restoreAppearance.status, 200, "还原装备外观出厂值（seed 前提复原）");
 
     //#endregion
+
+    //#region 二十三、变体重建（#697）：按当前倍率整批重算，卖价保留
+
+    group("二十三、变体重建：按当前前后缀倍率整批重算，卖价保留原值");
+
+    const metaRes = await api(base, "GET", "/api/admin/equipment-meta", { token });
+    checkEqual(metaRes.status, 200, "装备规则（前后缀档位）可读");
+    const metaBefore = metaRes.body?.data ?? {};
+
+    const variantsTotalRes = await api(base, "GET", "/api/admin/equipment-variants?page=1&size=1", { token });
+    const variantsTotalBefore = variantsTotalRes.body?.data?.total ?? 0;
+
+    const baseRes = await api(base, "GET", "/api/admin/equipments?page=1&size=1&keyword=cloth_1", { token });
+    const baseRow = baseRes.body?.data?.list?.[0];
+    check(Boolean(baseRow), "锚点基础件 cloth_1 可读");
+    const anchorRes = await api(base, "GET", "/api/admin/equipment-variants?page=1&size=1&keyword=cloth_1_p4s2", { token });
+    const anchorBefore = anchorRes.body?.data?.list?.[0];
+    check(Boolean(anchorBefore), "锚点变体 cloth_1_p4s2 可读");
+
+    const rebuildRes = await api(base, "POST", "/api/admin/equipment-variants/rebuild", { token });
+    checkEqual(rebuildRes.status, 201, "重建 → 201（POST 默认码）");
+    const rebuild = rebuildRes.body?.data ?? {};
+    checkEqual(rebuild.combos, metaBefore.prefixRates.length * metaBefore.suffixRates.length, "组合数 = 前缀档数 × 后缀档数");
+    checkEqual(rebuild.variants, variantsTotalBefore, "同档数重建行数不变（幂等）");
+    checkEqual(rebuild.bases, Math.round(variantsTotalBefore / rebuild.combos), "基础件数 = 行数 ÷ 组合数");
+
+    // 展开口径：属性 = round(基础值 × 前缀倍率 × 后缀倍率)（#655 迁移同一口径）；名称 / 等级取基础件
+    const anchorAfterRes = await api(base, "GET", "/api/admin/equipment-variants?page=1&size=1&keyword=cloth_1_p4s2", { token });
+    const anchorAfter = anchorAfterRes.body?.data?.list?.[0];
+    const rate = metaBefore.prefixRates[4] * metaBefore.suffixRates[2];
+    checkEqual(anchorAfter?.attributes?.maxHp, Math.round(baseRow.attributes.maxHp * rate), "重建后 maxHp = round(基础 × 前缀倍率 × 后缀倍率)");
+    checkEqual(anchorAfter?.label, baseRow.label, "重建后名称 = 基础件名（前后缀文案由客户端拼）");
+    checkEqual(anchorAfter?.level, baseRow.level, "重建后穿戴等级 = 基础件等级");
+    checkEqual(anchorAfter?.sellPrice, anchorBefore?.sellPrice, "重建后卖价保留原值（出厂价签来自已下架的回收价曲线，不可复算）");
+
+    // —— 扩一档前缀（测试档 ×2）：档位定义变 6×3，重建后行数随之扩 ——
+    const metaExpandRes = await api(base, "PATCH", "/api/admin/equipment-meta", {
+      token,
+      body: { prefixLabels: [...metaBefore.prefixLabels, "测试档"], prefixRates: [...metaBefore.prefixRates, 2] },
+    });
+    checkEqual(metaExpandRes.status, 200, "扩一档前缀（测试档 ×2）→ 200");
+
+    const rebuildExpandRes = await api(base, "POST", "/api/admin/equipment-variants/rebuild", { token });
+    checkEqual(rebuildExpandRes.status, 201, "扩档后重建 → 201");
+    const basesCount = variantsTotalBefore / rebuild.combos;
+    checkEqual(
+      rebuildExpandRes.body?.data?.variants,
+      variantsTotalBefore + basesCount * metaBefore.suffixRates.length,
+      "扩档后行数 = 旧行数 + 基础件数 × 后缀档数（每个基础件多出一排新组合）",
+    );
+
+    const newComboRes = await api(base, "GET", "/api/admin/equipment-variants?page=1&size=1&keyword=cloth_1_p5s0", { token });
+    const newCombo = newComboRes.body?.data?.list?.[0];
+    check(Boolean(newCombo), "新组合变体 cloth_1_p5s0 已展开");
+    checkEqual(newCombo?.attributes?.maxHp, Math.round(baseRow.attributes.maxHp * 2), "新组合属性 = round(基础 × 新档倍率)");
+    checkEqual(newCombo?.sellPrice, Math.round(10 * baseRow.level * 2), "新组合卖价按公式垫底（round(10 × 等级 × 倍率)，之后可逐条调）");
+
+    // —— 装备外观跟着档数自愈：库存的 15 条盖不住 18 组合 → 回落公式映射（18 条）——
+    const appearanceExpandedRes = await api(base, "GET", "/api/admin/equipment-appearance", { token });
+    checkEqual(appearanceExpandedRes.body?.data?.borders?.length, 18, "扩档后外观表回落公式映射（18 格全覆盖）");
+    const appearanceComboSet = new Set((appearanceExpandedRes.body?.data?.borders ?? []).map((row) => `${row.prefix}|${row.suffix}`));
+    check(appearanceComboSet.has("5|0") && appearanceComboSet.has("5|2"), "新档组合（5|0、5|2）在外观表里");
+
+    // —— 还原：档位写回出厂 + 重建 + 外观表回到库存 15 条 ——
+    const metaRestoreRes = await api(base, "PATCH", "/api/admin/equipment-meta", {
+      token,
+      body: { prefixLabels: metaBefore.prefixLabels, prefixRates: metaBefore.prefixRates },
+    });
+    checkEqual(metaRestoreRes.status, 200, "档位还原出厂");
+    const rebuildRestoreRes = await api(base, "POST", "/api/admin/equipment-variants/rebuild", { token });
+    checkEqual(rebuildRestoreRes.body?.data?.variants, variantsTotalBefore, "还原后重建行数回到出厂");
+    const appearanceRestoredRes = await api(base, "GET", "/api/admin/equipment-appearance", { token });
+    checkEqual(appearanceRestoredRes.body?.data?.borders?.length, 15, "还原后外观表回到库存的 15 条（仍覆盖当前档数，不再回落）");
+
+    //#endregion
   } finally {
     server.kill();
   }

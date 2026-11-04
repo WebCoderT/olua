@@ -385,7 +385,7 @@ export const routes = {
      */
     update: (key: string) => `/admin/equipment-slots/${encodeURIComponent(key)}`,
   },
-  /** adminEquipmentVariant 模块（2 个接口） */
+  /** adminEquipmentVariant 模块（3 个接口） */
   adminEquipmentVariant: {
     /**
      * 装备变体列表（555 件）（GET /admin/equipment-variants）
@@ -399,6 +399,12 @@ export const routes = {
      * **部分更新**：`label` / `level` / `sellPrice` 传哪个改哪个；`attributes` 是八项属性，**整份提交**。
      */
     update: (id: string) => `/admin/equipment-variants/${encodeURIComponent(id)}`,
+    /**
+     * 重新生成全部装备变体（POST /admin/equipment-variants/rebuild）
+     *
+     * 按装备规则（前后缀档位，`GET /admin` 下的 `equipment-meta` 单行表）**当前**的前后缀倍率，把每个基础件 × 每个组合整批重算：
+     */
+    rebuild: "/admin/equipment-variants/rebuild",
   },
   /** adminEquipment 模块（2 个接口） */
   adminEquipment: {

@@ -22,8 +22,10 @@ export interface EquipmentVariantListOptions {
  * 555 行 = 37 个基础件 × 15 个前后缀组合。以前是「基础件属性 × 倍率」在运行时现算，
  * 现在每行都是独立配置：管理端能逐条改属性 / 卖价 / 穿戴等级，服务端与客户端都只读它。
  *
- * 行的**增删**只允许两种来源：迁移脚本（一次性展开）与「基础件新建时连带展开其 15 个变体」
- * （`seedRow` 幂等）。管理端不提供删除单个变体的入口 —— 那样背包里已存在的 id 会变成孤儿。
+ * 行的**增删**允许三种来源：迁移脚本（一次性展开）、「基础件新建时连带展开其 15 个变体」
+ * （`seedRow` 幂等）、以及管理端「重新生成全部装备变体」端点的整表重建（`replaceAll`，
+ * #697 —— 重建按当前前后缀倍率整批重算，是唯一会**删除**既有行的路径）。管理端仍不提供
+ * 删除单个变体的入口 —— 那样背包里已存在的 id 会变成孤儿。
  */
 @Injectable()
 export class EquipmentVariantRepository {
@@ -64,6 +66,54 @@ export class EquipmentVariantRepository {
         row.updated_at,
       ],
     );
+  }
+
+  /**
+   * 整表重建（#697「重新生成全部装备变体」专用）：一个事务里先清空再整批写入
+   *
+   * 与 `seedRow` 的 INSERT OR IGNORE 相反 —— 重建的语义就是「按当前前后缀倍率把
+   * 属性重算一遍」，已存在的行也要覆盖。「卖价保留原值」由调用方在内存里先算好
+   * （row.sell_price 带着来），这里只负责原子的清空 + 写入。
+   */
+  replaceAll(rows: EquipmentVariantRow[]): void {
+    this.db.transaction(() => {
+      this.db.run("DELETE FROM equipment_variants");
+      for (const row of rows) {
+        this.db.run(
+          `INSERT INTO equipment_variants
+            (id, base_id, prefix, suffix, label, level, sell_price,
+             max_hp, hp_recover,
+             physical_attack_min, physical_attack_max, magic_attack_min, magic_attack_max,
+             taoist_attack_min, taoist_attack_max, physical_defense_min, physical_defense_max,
+             magic_defense_min, magic_defense_max, taoist_defense_min, taoist_defense_max, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            row.id,
+            row.base_id,
+            row.prefix,
+            row.suffix,
+            row.label,
+            row.level,
+            row.sell_price,
+            row.max_hp,
+            row.hp_recover,
+            row.physical_attack_min,
+            row.physical_attack_max,
+            row.magic_attack_min,
+            row.magic_attack_max,
+            row.taoist_attack_min,
+            row.taoist_attack_max,
+            row.physical_defense_min,
+            row.physical_defense_max,
+            row.magic_defense_min,
+            row.magic_defense_max,
+            row.taoist_defense_min,
+            row.taoist_defense_max,
+            row.updated_at,
+          ],
+        );
+      }
+    });
   }
 
   update(row: EquipmentVariantRow): { changes: number } {
