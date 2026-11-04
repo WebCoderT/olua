@@ -13,6 +13,7 @@ import {
   EQUIPMENT_PREFIX_MAX,
   EQUIPMENT_SUFFIX_MAX,
   EQUIPMENT_TIER_MAX,
+  normalizeAppearanceLabel,
 } from "../../common/constants/equipment-appearance";
 import type { AppearanceEffect } from "../../common/constants/equipment-appearance";
 import { EquipmentAppearanceRow } from "../../database/rows";
@@ -237,9 +238,9 @@ export class EquipmentAppearanceService implements OnModuleInit {
         `资源目录里有 ${preview.keys.length} 个${spec.label}素材，超过清单上限 ${EQUIPMENT_APPEARANCE_LIMITS.itemMax} —— 先清理素材或扩上限`,
       );
     }
-    // effect 单一来源在清单：存活条目连同 effect 一起保留，新条目缺省
-    const effectByKey = new Map(this.getKind(kind).items.map((item) => [item.key, item.effect]));
-    const items = preview.keys.map((key) => ({ key, ...(effectByKey.get(key) ? { effect: effectByKey.get(key) } : {}) }));
+    // effect 单一来源在清单：存活条目连同 effect / 别名 / 分组一起保留（#718），新条目缺省
+    const savedByKey = new Map(this.getKind(kind).items.map((item) => [item.key, item]));
+    const items = preview.keys.map((key) => savedByKey.get(key) ?? { key });
     const row = this.rowWithFallback();
     row[spec.itemColumn] = JSON.stringify(items);
     row.updated_at = Date.now();
@@ -328,7 +329,7 @@ export class EquipmentAppearanceService implements OnModuleInit {
     this.repository.update(row);
   }
 
-  /** 清单提交校验：key 唯一且格式合法、effect 合法；不传 = 库里清单 ∪ 被引用 key（自动补齐，见 effectiveItems） */
+  /** 清单提交校验：key 唯一且格式合法、effect / 别名 / 分组合法；不传 = 库里清单 ∪ 被引用 key（自动补齐，见 effectiveItems） */
   private assertUniqueItems(
     items: AppearanceItemDto[] | undefined,
     spec: KindSpec,
@@ -351,8 +352,12 @@ export class EquipmentAppearanceService implements OnModuleInit {
       if (effectProblem) {
         throw new BizException(BizCode.PARAM_INVALID, `${spec.label}清单第 ${index + 1} 条（${item.key}）的显示效果：${effectProblem}`);
       }
+      const labelProblem = labelProblemOf(item.name, item.group, index + 1, item.key, spec.label);
+      if (labelProblem) {
+        throw new BizException(BizCode.PARAM_INVALID, labelProblem);
+      }
     }
-    return items.map((item) => ({ key: item.key, ...(item.effect ? { effect: item.effect } : {}) }));
+    return items.map((item) => normalizeItem(item));
   }
 
   /**
@@ -383,7 +388,10 @@ export class EquipmentAppearanceService implements OnModuleInit {
           if (source.effect !== undefined && source.effect !== null && !effect) {
             this.logger.warn(`equipment_appearance.${spec.itemColumn} 有一条（${key}）的 effect 坏了 —— 该条回落默认效果`);
           }
-          items.push({ key, ...(effect ? { effect } : {}) });
+          // 别名 / 分组（#718）坏只丢字段（管理端属性，不影响游戏渲染），条目保留
+          const name = normalizeAppearanceLabel(source.name, EQUIPMENT_APPEARANCE_LIMITS.nameMaxLength) ?? undefined;
+          const group = normalizeAppearanceLabel(source.group, EQUIPMENT_APPEARANCE_LIMITS.groupMaxLength) ?? undefined;
+          items.push({ key, ...(effect ? { effect } : {}), ...(name ? { name } : {}), ...(group ? { group } : {}) });
           seen.add(key);
         }
       }
@@ -561,6 +569,31 @@ const KIND_SPECS: Record<AppearanceKind, KindSpec> = {
 /** effect 缺省合法（不传 = 默认效果）；传了就按人话校验 */
 function effectProblemOf(effect: AppearanceEffect | undefined): string | null {
   return effect === undefined || effect === null ? null : appearanceEffectProblem(effect);
+}
+
+/** 别名 / 分组（#718）的提交校验：格式不对 → 人话错误（null = 合法） */
+function labelProblemOf(name: string | undefined, group: string | undefined, index: number, key: string, label: string): string | null {
+  const nameMax = EQUIPMENT_APPEARANCE_LIMITS.nameMaxLength;
+  if (normalizeAppearanceLabel(name, nameMax) === null) {
+    return `${label}清单第 ${index} 条（${key}）的别名最长 ${nameMax} 字`;
+  }
+  const groupMax = EQUIPMENT_APPEARANCE_LIMITS.groupMaxLength;
+  if (normalizeAppearanceLabel(group, groupMax) === null) {
+    return `${label}清单第 ${index} 条（${key}）的分组名最长 ${groupMax} 字`;
+  }
+  return null;
+}
+
+/** 落库形状：trim 过的别名 / 分组，空串与没填一样不存（读出来字段干净） */
+function normalizeItem(item: AppearanceItemDto): AppearanceItemDto {
+  const name = normalizeAppearanceLabel(item.name, EQUIPMENT_APPEARANCE_LIMITS.nameMaxLength) ?? undefined;
+  const group = normalizeAppearanceLabel(item.group, EQUIPMENT_APPEARANCE_LIMITS.groupMaxLength) ?? undefined;
+  return {
+    key: item.key,
+    ...(item.effect ? { effect: item.effect } : {}),
+    ...(name ? { name } : {}),
+    ...(group ? { group } : {}),
+  };
 }
 
 /** DTO / seed → 落库形状（多出来的键不往下传：行形状由常量定义） */

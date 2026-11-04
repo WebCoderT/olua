@@ -34,6 +34,11 @@ import { toastSuccess } from "../store/toast";
  * 拖拽调偏移、滑杆调缩放 —— 与「装备对齐」工作台同一套交互取向。
  * effect 缺省 = 客户端默认适配（边框 contain 缩进 56×56 外框；背景宽度贴面板、
  * 高度按帧原始比例自适应、顶边贴面板顶）。
+ *
+ * ## 别名 / 分组 / 分页（#718）
+ * sfx 编号记不住：每条可起**别名**（给人看的名字）与**分组**（素材系列），都是可选的
+ * 纯管理端属性 —— 快照段不消费 items，客户端契约不变；「从文件夹同步」对存活条目
+ * 连同别名 / 分组一起保留。表格按 key / 别名过滤、按分组下拉过滤，**客户端分页**每页 20 条。
  */
 
 /** 单边页面配置（两页唯一的差异点） */
@@ -117,6 +122,9 @@ const BACKGROUND_CONFIG: KindConfig = {
   savedToast: "装备详情背景已保存（玩家下次进游戏拉配置后生效）",
 };
 
+/** 清单表格每页条数（#718 客户端分页：20 条一屏，翻页比滚动省眼） */
+const PAGE_SIZE = 20;
+
 export function EquipmentBordersPage() {
   return <EquipmentAppearanceKindPage config={BORDER_CONFIG} />;
 }
@@ -138,8 +146,12 @@ function EquipmentAppearanceKindPage({ config }: { config: KindConfig }) {
   const [saving, setSaving] = useState(false);
   /** 正在调显示效果的清单条目下标（null = 工作台关着） */
   const [effectIndex, setEffectIndex] = useState<number | null>(null);
-  /** 清单表格的 key 过滤词（#716：84 条边框不滤一眼扫不完） */
+  /** 清单表格的过滤词（#716：84 条边框不滤一眼扫不完；#718 起连别名一起匹配） */
   const [query, setQuery] = useState("");
+  /** 分组过滤（#718；"" = 全部分组） */
+  const [groupFilter, setGroupFilter] = useState("");
+  /** 分页（#718；客户端分页，0 起） */
+  const [page, setPage] = useState(0);
   /** 同步弹窗：预览（null = 还在扫）与执行状态 */
   const [syncOpen, setSyncOpen] = useState(false);
   const [scan, setScan] = useState<AppearanceResourceScan | null>(null);
@@ -184,11 +196,26 @@ function EquipmentAppearanceKindPage({ config }: { config: KindConfig }) {
     return inBoard + inCustoms;
   };
 
-  /** 过滤后的清单（带着原下标，编辑写回时好定位） */
+  /** 过滤后的清单（带着原下标，编辑写回时好定位）：过滤词匹配 key 或别名，分组精确匹配 */
   const filteredItems = useMemo(() => {
     const word = query.trim().toLowerCase();
-    return (items ?? []).map((row, index) => ({ row, index })).filter(({ row }) => row.key.toLowerCase().includes(word));
-  }, [items, query]);
+    return (items ?? [])
+      .map((row, index) => ({ row, index }))
+      .filter(({ row }) => (word ? row.key.toLowerCase().includes(word) || (row.name ?? "").toLowerCase().includes(word) : true))
+      .filter(({ row }) => (groupFilter ? row.group === groupFilter : true));
+  }, [items, query, groupFilter]);
+
+  /** 已有的全部分组（排序去重；分组过滤下拉的选项池） */
+  const groups = useMemo(() => [...new Set((items ?? []).map((row) => row.group).filter((group): group is string => Boolean(group)))].sort(), [items]);
+
+  /** 当前页的条目（客户端分页；过滤词 / 分组变化时由下面的 effect 拉回第一页） */
+  const pageCount = Math.max(1, Math.ceil(filteredItems.length / PAGE_SIZE));
+  const safePage = Math.min(page, pageCount - 1);
+  const pagedItems = filteredItems.slice(safePage * PAGE_SIZE, (safePage + 1) * PAGE_SIZE);
+
+  useEffect(() => {
+    setPage(0);
+  }, [query, groupFilter]);
 
   /** 效果工作台的读写口：把 value 写回正在编辑的那条清单条目 */
   const effectValue = (() => {
@@ -210,7 +237,12 @@ function EquipmentAppearanceKindPage({ config }: { config: KindConfig }) {
       const payload = {
         items: items.map((row) => {
           const effect = row.effect as AppearanceEffectValue | undefined;
-          return { key: row.key.trim(), effect: isDefaultEffect(effect) ? undefined : effect };
+          return {
+            key: row.key.trim(),
+            effect: isDefaultEffect(effect) ? undefined : effect,
+            name: row.name?.trim() || undefined,
+            group: row.group?.trim() || undefined,
+          };
         }),
         assignments,
         customs: customs.map((row) => ({ equipment: row.equipment.trim(), key: row.key.trim() })),
@@ -270,13 +302,26 @@ function EquipmentAppearanceKindPage({ config }: { config: KindConfig }) {
       {items ? (
         <Card
           title={`${config.noun}清单（${items.length} 条）`}
-          description={`游戏里能用的${config.noun}都在这里：key 指向客户端资源包里的素材（填错了客户端会跳过并留日志），显示效果是这条素材的属性 —— 改这里，所有引用它的品质 / 特殊装备跟着变。被引用的条目不能删（先在引用处换别的${config.noun}；「从文件夹同步」不受这条限制 —— 以磁盘素材为准整批增删）。`}
+          description={`游戏里能用的${config.noun}都在这里：key 指向客户端资源包里的素材（填错了客户端会跳过并留日志），显示效果是这条素材的属性 —— 改这里，所有引用它的品质 / 特殊装备跟着变。别名 / 分组是给人看的标签（可选，客户端不消费），分组可用来过滤。被引用的条目不能删（先在引用处换别的${config.noun}；「从文件夹同步」不受这条限制 —— 以磁盘素材为准整批增删，同步会保留已填的别名 / 分组 / 效果）。`}
           actions={
             loading ? (
               <Spinner />
             ) : canWrite ? (
               <>
-                <Input placeholder="按 key 过滤…" value={query} onChange={(event) => setQuery(event.target.value)} className="w-40" />
+                <Input
+                  placeholder="按 key / 别名过滤…"
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  className="w-44"
+                />
+                <Select value={groupFilter} onChange={(event) => setGroupFilter(event.target.value)} className="w-32" title="按分组过滤">
+                  <option value="">全部分组</option>
+                  {groups.map((group) => (
+                    <option key={group} value={group}>
+                      {group}
+                    </option>
+                  ))}
+                </Select>
                 <Button variant="ghost" disabled={items.length >= 100} onClick={appendItem}>
                   添加一项
                 </Button>
@@ -294,61 +339,98 @@ function EquipmentAppearanceKindPage({ config }: { config: KindConfig }) {
           {items.length === 0 ? (
             <p className="text-sm text-slate-400">清单空着 —— 点「添加一项」或「从文件夹同步」把素材加进来。</p>
           ) : filteredItems.length === 0 ? (
-            <p className="text-sm text-slate-400">没有 key 包含「{query.trim()}」的条目。</p>
+            <p className="text-sm text-slate-400">没有匹配「{query.trim() || groupFilter || "（过滤条件）"}」的条目。</p>
           ) : (
-            <div className="overflow-x-auto">
-              <table className={tableClass}>
-                <thead className={theadClass}>
-                  <tr>
-                    <th className={thClass}>预览</th>
-                    <th className={thClass}>key</th>
-                    <th className={thClass}>显示效果</th>
-                    <th className={thClass}>引用</th>
-                    <th className={thClass}>操作</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredItems.map(({ row, index }) => {
-                    const refs = referenceCount(row.key.trim());
-                    return (
-                      <tr key={index}>
-                        <td className={tdClass}>
-                          <GameFrame atlas={row.key ? config.atlasOf(row.key) : ""} size={40} alt={row.key} />
-                        </td>
-                        <td className={tdClass}>
-                          <Input
-                            value={row.key}
-                            placeholder={config.keyExample}
-                            disabled={!canWrite}
-                            title={config.keyHint}
-                            className="w-52 font-mono"
-                            onChange={(event) => setItem(index, { key: event.target.value })}
-                          />
-                        </td>
-                        <td className={tdClass}>
-                          <Button variant="ghost" disabled={!canWrite} onClick={() => setEffectIndex(index)}>
-                            效果 {row.effect ? describeEffect(row.effect as AppearanceEffectValue) : "默认"}
-                          </Button>
-                        </td>
-                        <td className={tdClass}>{refs > 0 ? <Badge tone="indigo">引用 {refs}</Badge> : <Badge tone="slate">未引用</Badge>}</td>
-                        <td className={tdClass}>
-                          {canWrite ? (
-                            <Button
-                              variant="ghost"
-                              disabled={refs > 0}
-                              title={refs > 0 ? `被引用 ${refs} 次，先在引用处换别的${config.noun}` : undefined}
-                              onClick={() => removeItem(index)}
-                            >
-                              删除
+            <>
+              <div className="overflow-x-auto">
+                <table className={tableClass}>
+                  <thead className={theadClass}>
+                    <tr>
+                      <th className={thClass}>预览</th>
+                      <th className={thClass}>key</th>
+                      <th className={thClass}>别名</th>
+                      <th className={thClass}>分组</th>
+                      <th className={thClass}>显示效果</th>
+                      <th className={thClass}>引用</th>
+                      <th className={thClass}>操作</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {pagedItems.map(({ row, index }) => {
+                      const refs = referenceCount(row.key.trim());
+                      return (
+                        <tr key={index}>
+                          <td className={tdClass}>
+                            <GameFrame atlas={row.key ? config.atlasOf(row.key) : ""} size={40} alt={row.key} />
+                          </td>
+                          <td className={tdClass}>
+                            <Input
+                              value={row.key}
+                              placeholder={config.keyExample}
+                              disabled={!canWrite}
+                              title={config.keyHint}
+                              className="w-52 font-mono"
+                              onChange={(event) => setItem(index, { key: event.target.value })}
+                            />
+                          </td>
+                          <td className={tdClass}>
+                            <Input
+                              value={row.name ?? ""}
+                              placeholder="给人看的名字（可选）"
+                              disabled={!canWrite}
+                              maxLength={32}
+                              className="w-32"
+                              onChange={(event) => setItem(index, { name: event.target.value })}
+                            />
+                          </td>
+                          <td className={tdClass}>
+                            <Input
+                              value={row.group ?? ""}
+                              placeholder="素材系列（可选）"
+                              disabled={!canWrite}
+                              maxLength={32}
+                              className="w-28"
+                              onChange={(event) => setItem(index, { group: event.target.value })}
+                            />
+                          </td>
+                          <td className={tdClass}>
+                            <Button variant="ghost" disabled={!canWrite} onClick={() => setEffectIndex(index)}>
+                              效果 {row.effect ? describeEffect(row.effect as AppearanceEffectValue) : "默认"}
                             </Button>
-                          ) : null}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+                          </td>
+                          <td className={tdClass}>{refs > 0 ? <Badge tone="indigo">引用 {refs}</Badge> : <Badge tone="slate">未引用</Badge>}</td>
+                          <td className={tdClass}>
+                            {canWrite ? (
+                              <Button
+                                variant="ghost"
+                                disabled={refs > 0}
+                                title={refs > 0 ? `被引用 ${refs} 次，先在引用处换别的${config.noun}` : undefined}
+                                onClick={() => removeItem(index)}
+                              >
+                                删除
+                              </Button>
+                            ) : null}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              {pageCount > 1 ? (
+                <div className="flex items-center justify-end gap-2 pt-1 text-xs text-slate-400">
+                  <span>
+                    共 {filteredItems.length} 条 · 第 {safePage + 1} / {pageCount} 页
+                  </span>
+                  <Button variant="ghost" disabled={safePage <= 0} onClick={() => setPage(safePage - 1)}>
+                    上一页
+                  </Button>
+                  <Button variant="ghost" disabled={safePage >= pageCount - 1} onClick={() => setPage(safePage + 1)}>
+                    下一页
+                  </Button>
+                </div>
+              ) : null}
+            </>
           )}
         </Card>
       ) : null}
@@ -388,7 +470,7 @@ function EquipmentAppearanceKindPage({ config }: { config: KindConfig }) {
                           <option value="">（选择{config.noun}）</option>
                           {(items ?? []).map((item) => (
                             <option key={item.key} value={item.key}>
-                              {item.key}
+                              {item.name?.trim() ? `${item.name.trim()}（${item.key}）` : item.key}
                             </option>
                           ))}
                         </Select>
@@ -411,7 +493,7 @@ function EquipmentAppearanceKindPage({ config }: { config: KindConfig }) {
 
       <Modal
         open={effectIndex !== null}
-        title={effectEntry ? `显示效果 · ${effectEntry.key || "（未填 key）"}` : "显示效果"}
+        title={effectEntry ? `显示效果 · ${effectEntry.name?.trim() || effectEntry.key || "（未填 key）"}` : "显示效果"}
         size="lg"
         onClose={() => setEffectIndex(null)}
         footer={
@@ -512,6 +594,8 @@ function describeInvalid(items: AppearanceItem[] | null, customs: CustomAppearan
     if (!config.keyPattern.test(key)) return `清单第 ${index + 1} 条的 key「${row.key}」格式不对（应为 ${config.keyExample} 这样）。`;
     if (known.has(key)) return `清单第 ${index + 1} 条的 key「${key}」重复了。`;
     known.add(key);
+    if ((row.name ?? "").trim().length > 32) return `清单第 ${index + 1} 条（${key}）的别名最长 32 字。`;
+    if ((row.group ?? "").trim().length > 32) return `清单第 ${index + 1} 条（${key}）的分组名最长 32 字。`;
   }
   const seen = new Set<string>();
   for (const [index, row] of customs.entries()) {

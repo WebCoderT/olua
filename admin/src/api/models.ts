@@ -1873,6 +1873,14 @@ export type AppearanceItem = {
    * 显示效果（#700；不传 = {0,0,1} 即默认适配结果）
    */
   effect?: AppearanceEffect;
+  /**
+   * 别名（#718，可选；给人看的名字，客户端不消费，快照里没有；空串视同没填）
+   */
+  name?: string;
+  /**
+   * 分组（#718，可选；管理端按组过滤用，客户端不消费，快照里没有；空串视同没填）
+   */
+  group?: string;
 };
 
 export type UpdateEquipmentBorder = {

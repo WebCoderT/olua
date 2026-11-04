@@ -52,6 +52,10 @@ export const EQUIPMENT_APPEARANCE_LIMITS = {
   customMax: 200,
   /** 边框 / 背景清单（#714 实体注册表）的最大条数（素材是有限的，100 远够用） */
   itemMax: 100,
+  /** 清单条目别名（#718）的最大长度：sfx 编号记不住，别名给人看，32 字够起名了 */
+  nameMaxLength: 32,
+  /** 清单条目分组名（#718）的最大长度：按素材系列 / 品质系列归组过滤用 */
+  groupMaxLength: 32,
 } as const;
 
 /** 一条「前缀 × 后缀 → 边框 / 背景 key」的出厂映射 */
@@ -85,6 +89,10 @@ export interface AppearanceItemSeed {
   key: string;
   /** 显示效果（缺省 = {0,0,1} 客户端默认适配） */
   effect?: AppearanceEffect;
+  /** 别名（#718，可选）：给人看的名字，客户端不消费 */
+  name?: string;
+  /** 分组（#718，可选）：管理端按组过滤用，客户端不消费 */
+  group?: string;
 }
 
 /** 装备外观的整份出厂值 */
@@ -138,6 +146,19 @@ export function appearanceKeyProblem(rawKey: string, kind: "border" | "backgroun
       : `背景 key 要形如 sfx_16000（resources/backgrounds 下的帧序列目录名），拿到「${rawKey}」`;
   }
   return null;
+}
+
+/**
+ * 归一化一个清单条目的文字属性（#718 的别名 / 分组，同一口径）
+ *
+ * trim 后空串 = 没填 = undefined（落库不存空串，读出来字段干净）；超长返回 null（调用方报 400）。
+ */
+export function normalizeAppearanceLabel(value: unknown, maxLength: number): string | null | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+  return trimmed.length > maxLength ? null : trimmed;
 }
 
 /**
