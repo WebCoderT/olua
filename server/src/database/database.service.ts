@@ -1094,11 +1094,17 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
         backgrounds         TEXT    NOT NULL DEFAULT '[]',
         custom_borders      TEXT    NOT NULL DEFAULT '[]',
         custom_backgrounds  TEXT    NOT NULL DEFAULT '[]',
+        border_items        TEXT    NOT NULL DEFAULT '[]',
+        background_items    TEXT    NOT NULL DEFAULT '[]',
         updated_at          INTEGER NOT NULL DEFAULT 0
       );
     `);
 
     // 存量库补列（CREATE TABLE IF NOT EXISTS 不会改已有表结构）
+    // 边框 / 背景的实体注册表（#714）：清单本体住在列表页，棋盘与自定义表只引用 key ——
+    // 出厂空表，读取时自动把被引用的 key 补进清单（老数据与 config-sync 出厂数据都不用迁移）
+    this.ensureColumn("equipment_appearance", "border_items", "TEXT NOT NULL DEFAULT '[]'");
+    this.ensureColumn("equipment_appearance", "background_items", "TEXT NOT NULL DEFAULT '[]'");
     this.ensureColumn("admins", "role", `TEXT NOT NULL DEFAULT '${AdminRole.ADMIN}'`);
     // 修订号（乐观锁）：存量库补列后老角色都是 1，客户端读到 1 推回来也是 1，不会误判冲突
     this.ensureColumn("roles", "revision", "INTEGER NOT NULL DEFAULT 1");

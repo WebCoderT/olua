@@ -16516,6 +16516,27 @@
           "key"
         ]
       },
+      "AppearanceItemDto": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string",
+            "description": "边框 / 背景 key（客户端资源清单里的 sfx 编号）",
+            "example": "sfx_30123_0"
+          },
+          "effect": {
+            "description": "显示效果（#700；不传 = {0,0,1} 即默认适配结果）",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AppearanceEffectDto"
+              }
+            ]
+          }
+        },
+        "required": [
+          "key"
+        ]
+      },
       "UpdateEquipmentBorderDto": {
         "type": "object",
         "properties": {
@@ -16531,6 +16552,13 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/CustomAppearanceDto"
+            }
+          },
+          "items": {
+            "description": "边框清单（整份替换；被引用的 key 必须在清单里）",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AppearanceItemDto"
             }
           },
           "note": {
@@ -16558,6 +16586,13 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/CustomAppearanceDto"
+            }
+          },
+          "items": {
+            "description": "背景清单（整份替换；被引用的 key 必须在清单里）",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AppearanceItemDto"
             }
           },
           "note": {
@@ -21403,6 +21438,13 @@
       "EquipmentBorderDto": {
         "type": "object",
         "properties": {
+          "items": {
+            "description": "边框清单本体（#714；棋盘与自定义表只引用这里的 key）",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AppearanceItemDto"
+            }
+          },
           "assignments": {
             "description": "前后缀组合 → 边框（恰好覆盖当前档数的每种组合、各一条）",
             "type": "array",
@@ -21424,6 +21466,7 @@
           }
         },
         "required": [
+          "items",
           "assignments",
           "customs",
           "updatedAt"
@@ -21432,6 +21475,13 @@
       "EquipmentBackgroundDto": {
         "type": "object",
         "properties": {
+          "items": {
+            "description": "背景清单本体（#714；棋盘与自定义表只引用这里的 key）",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AppearanceItemDto"
+            }
+          },
           "assignments": {
             "description": "前后缀组合 → 详情背景（恰好覆盖当前档数的每种组合、各一条）",
             "type": "array",
@@ -21453,6 +21503,7 @@
           }
         },
         "required": [
+          "items",
           "assignments",
           "customs",
           "updatedAt"

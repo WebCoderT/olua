@@ -1032,7 +1032,8 @@ export interface GuideSettingsRow {
 /**
  * 装备外观（#695）：`equipment_appearance` 表的一行
  *
- * 四组映射各存一列 JSON 数组（前后缀→边框 / 前后缀→详情背景 / 特殊装备→边框 / 特殊装备→详情背景）。
+ * 四组映射各存一列 JSON 数组（前后缀→边框 / 前后缀→详情背景 / 特殊装备→边框 / 特殊装备→详情背景），
+ * 外加两边各自的**实体注册表**（#714：边框 / 背景清单本体，棋盘与自定义表只引用 key）。
  * 出厂值来自服务常量（seed `INSERT OR IGNORE`），缺行由 service 在启动时补上。
  */
 export interface EquipmentAppearanceRow {
@@ -1046,6 +1047,10 @@ export interface EquipmentAppearanceRow {
   custom_borders: string;
   /** 同上，指向详情背景 key */
   custom_backgrounds: string;
+  /** `AppearanceItemSeed[]` 的 JSON（`key` / `effect?`）：边框清单本体（#714；出厂空，读取时自动并入被引用的 key） */
+  border_items: string;
+  /** 同上：详情背景清单本体 */
+  background_items: string;
   updated_at: number;
 }
 

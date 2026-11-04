@@ -50,6 +50,8 @@ export const EQUIPMENT_APPEARANCE_LIMITS = {
   equipmentIdSource: "^[A-Za-z0-9_\\-]+$",
   /** 自定义表的最大条数（特殊装备是少数，200 条远够用；防手滑贴一整份表） */
   customMax: 200,
+  /** 边框 / 背景清单（#714 实体注册表）的最大条数（素材是有限的，100 远够用） */
+  itemMax: 100,
 } as const;
 
 /** 一条「前缀 × 后缀 → 边框 / 背景 key」的出厂映射 */
@@ -68,6 +70,21 @@ export interface CustomAppearanceSeed {
   equipment: string;
   /** 边框 / 背景 key */
   key: string;
+}
+
+/**
+ * 一条边框 / 背景清单条目（#714 实体注册表）
+ *
+ * 清单是「这个游戏里有哪些边框 / 背景」的本体：key 指向客户端资源包里的素材，
+ * effect 是这条素材的显示效果（缺省 = 客户端默认适配）。棋盘（前后缀组合）与
+ * 特殊装备自定义表都只是**引用**清单里的 key，属性（effect）改在清单里、
+ * 服务端保存时传播进引用处。
+ */
+export interface AppearanceItemSeed {
+  /** 边框 / 背景 key（客户端资源清单里的 sfx 编号） */
+  key: string;
+  /** 显示效果（缺省 = {0,0,1} 客户端默认适配） */
+  effect?: AppearanceEffect;
 }
 
 /** 装备外观的整份出厂值 */

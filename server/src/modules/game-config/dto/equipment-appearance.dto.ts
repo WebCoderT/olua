@@ -87,6 +87,25 @@ export class CustomAppearanceDto {
   effect?: AppearanceEffectDto;
 }
 
+/**
+ * 一条边框 / 背景清单条目（#714 实体注册表）
+ *
+ * 清单是「游戏里有哪些边框 / 背景」的本体：棋盘（前后缀组合）与特殊装备自定义表
+ * 只**引用**清单里的 key；显示效果等属性改在清单里，服务端保存时传播进引用处。
+ */
+export class AppearanceItemDto {
+  @ApiProperty({ description: "边框 / 背景 key（客户端资源清单里的 sfx 编号）", example: "sfx_30123_0" })
+  @IsString()
+  @Length(1, EQUIPMENT_APPEARANCE_LIMITS.keyMaxLength)
+  key: string;
+
+  @ApiPropertyOptional({ description: "显示效果（#700；不传 = {0,0,1} 即默认适配结果）", type: AppearanceEffectDto })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => AppearanceEffectDto)
+  effect?: AppearanceEffectDto;
+}
+
 /** 整份装备外观（GET / PATCH 的响应） */
 export class EquipmentAppearanceDto {
   @ApiProperty({ description: "前后缀组合 → 边框（恰好覆盖当前档数的每种组合、各一条）", type: [AppearanceAssignmentDto] })
@@ -118,6 +137,11 @@ export class EquipmentAppearanceDto {
  * `assignments` / `customs` 的覆盖规则同上；PATCH 时**另一边不受影响**（部分更新）。
  */
 export class EquipmentBorderDto {
+  @ApiProperty({ description: "边框清单本体（#714；棋盘与自定义表只引用这里的 key）", type: [AppearanceItemDto] })
+  @ValidateNested({ each: true })
+  @Type(() => AppearanceItemDto)
+  items: AppearanceItemDto[];
+
   @ApiProperty({ description: "前后缀组合 → 边框（恰好覆盖当前档数的每种组合、各一条）", type: [AppearanceAssignmentDto] })
   @ValidateNested({ each: true })
   @Type(() => AppearanceAssignmentDto)
@@ -134,6 +158,11 @@ export class EquipmentBorderDto {
 
 /** 单边配置 · 详情背景（形状与边框一致，key 格式不同：`sfx_16000` 没有 `_0` 尾巴） */
 export class EquipmentBackgroundDto {
+  @ApiProperty({ description: "背景清单本体（#714；棋盘与自定义表只引用这里的 key）", type: [AppearanceItemDto] })
+  @ValidateNested({ each: true })
+  @Type(() => AppearanceItemDto)
+  items: AppearanceItemDto[];
+
   @ApiProperty({ description: "前后缀组合 → 详情背景（恰好覆盖当前档数的每种组合、各一条）", type: [AppearanceAssignmentDto] })
   @ValidateNested({ each: true })
   @Type(() => AppearanceAssignmentDto)
@@ -169,6 +198,19 @@ export class UpdateEquipmentBorderDto {
   @Type(() => CustomAppearanceDto)
   customs: CustomAppearanceDto[];
 
+  /**
+   * 边框清单本体（#714）。不传 = 沿用库里的清单并自动并入被引用的 key（老调用方兼容）；
+   * 传了 = 整份替换：key 唯一且格式合法，**引用处的 effect 以清单为准传播**，
+   * 且每个被引用的 key 必须在清单里（删掉被引用的条目会被 400 拦下）。
+   */
+  @ApiPropertyOptional({ description: "边框清单（整份替换；被引用的 key 必须在清单里）", type: [AppearanceItemDto] })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(EQUIPMENT_APPEARANCE_LIMITS.itemMax)
+  @ValidateNested({ each: true })
+  @Type(() => AppearanceItemDto)
+  items?: AppearanceItemDto[];
+
   @ApiPropertyOptional({ description: "修改备注（写进审计日志的上下文，便于追溯「为什么改」）" })
   @IsOptional()
   @IsString()
@@ -191,6 +233,15 @@ export class UpdateEquipmentBackgroundDto {
   @ValidateNested({ each: true })
   @Type(() => CustomAppearanceDto)
   customs: CustomAppearanceDto[];
+
+  /** 同 UpdateEquipmentBorderDto.items：不传 = 沿用并自动并入被引用的 key；传了 = 整份替换 + effect 传播 */
+  @ApiPropertyOptional({ description: "背景清单（整份替换；被引用的 key 必须在清单里）", type: [AppearanceItemDto] })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(EQUIPMENT_APPEARANCE_LIMITS.itemMax)
+  @ValidateNested({ each: true })
+  @Type(() => AppearanceItemDto)
+  items?: AppearanceItemDto[];
 
   @ApiPropertyOptional({ description: "修改备注（写进审计日志的上下文，便于追溯「为什么改」）" })
   @IsOptional()
