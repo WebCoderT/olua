@@ -2398,9 +2398,9 @@ async function main() {
 
     //#endregion
 
-    //#region 二十二、装备外观（#695）：边框与详情背景的 key 映射
+    //#region 二十二、装备外观（#695/#699/#700）：边框与背景拆边读写 + 每条显示效果
 
-    group("二十二、装备外观：单行四组映射，整份读整份写");
+    group("二十二、装备外观：边框 / 背景各自整边读写，互不覆盖；条目可带显示效果");
 
     // 出厂预期 = 快照里那一行（JSON 列已解成数组；不锁具体数值，只锁「接口 == 快照」）
     const appearanceSeedRow = configSnapshot.rows("equipment_appearance")[0];
@@ -2408,76 +2408,90 @@ async function main() {
     checkEqual(appearanceSeedRow.borders.length, 15, "出厂边框映射 15 条");
     checkEqual(appearanceSeedRow.backgrounds.length, 15, "出厂背景映射 15 条");
 
-    const appearanceRes = await api(base, "GET", "/api/admin/equipment-appearance", { token });
-    checkEqual(appearanceRes.status, 200, "装备外观可读");
-    const appearance = appearanceRes.body?.data ?? {};
-    checkEqual(appearance.borders?.length, 15, "边框映射 = 快照行数");
-    checkEqual(appearance.backgrounds?.length, 15, "背景映射 = 快照行数");
+    const borderRes = await api(base, "GET", "/api/admin/equipment-borders", { token });
+    checkEqual(borderRes.status, 200, "边框半边可读");
+    const borderPage = borderRes.body?.data ?? {};
+    const backgroundRes = await api(base, "GET", "/api/admin/equipment-backgrounds", { token });
+    checkEqual(backgroundRes.status, 200, "背景半边可读");
+    const backgroundPage = backgroundRes.body?.data ?? {};
+
     const comboKey = (row) => `${row.prefix}|${row.suffix}`;
-    const seedComboSet = new Set(appearanceSeedRow.borders.map(comboKey));
-    check(
-      (appearance.borders ?? []).every((row) => seedComboSet.has(comboKey(row))),
-      "边框映射的每个组合都在快照里（接口 == 快照那一列）",
-    );
     const seedBorderByKey = new Map(appearanceSeedRow.borders.map((row) => [comboKey(row), row.key]));
+    const seedBackgroundByKey = new Map(appearanceSeedRow.backgrounds.map((row) => [comboKey(row), row.key]));
+    checkEqual(borderPage.assignments?.length, 15, "边框棋盘 = 快照行数");
+    checkEqual(backgroundPage.assignments?.length, 15, "背景棋盘 = 快照行数");
     check(
-      (appearance.borders ?? []).every((row) => seedBorderByKey.get(comboKey(row)) === row.key),
+      (borderPage.assignments ?? []).every((row) => seedBorderByKey.get(comboKey(row)) === row.key),
       "边框 key 逐组合与快照一致",
     );
-    checkEqual(appearance.customBorders?.length, appearanceSeedRow.customBorders.length, "自定义边框表 = 快照行数（出厂为空）");
+    check(
+      (backgroundPage.assignments ?? []).every((row) => seedBackgroundByKey.get(comboKey(row)) === row.key),
+      "背景 key 逐组合与快照一致",
+    );
+    checkEqual(borderPage.customs?.length, appearanceSeedRow.customBorders.length, "自定义边框表 = 快照行数（出厂为空）");
+    checkEqual(backgroundPage.customs?.length, appearanceSeedRow.customBackgrounds.length, "自定义背景表 = 快照行数（出厂为空）");
 
-    // —— 校验闭环：三种坏数据都不落库 ——
-    const appearanceOk = appearance.borders ?? [];
-    const comboDup = appearanceOk.slice();
+    // —— 边框半边的校验闭环：坏数据都不落库 ——
+    const borderOk = borderPage.assignments ?? [];
+    const comboDup = borderOk.slice();
     comboDup[1] = { ...comboDup[1], prefix: comboDup[0].prefix, suffix: comboDup[0].suffix };
-    const comboDupRes = await api(base, "PATCH", "/api/admin/equipment-appearance", { token, body: { borders: comboDup, backgrounds: appearance.backgrounds, customBorders: [], customBackgrounds: [] } });
+    const comboDupRes = await api(base, "PATCH", "/api/admin/equipment-borders", { token, body: { assignments: comboDup, customs: [] } });
     checkEqual(comboDupRes.status, 400, "组合重复（两个 0|0）→ 400 且不落库");
 
-    const missingOne = appearanceOk.slice(0, 14);
-    const missingRes = await api(base, "PATCH", "/api/admin/equipment-appearance", { token, body: { borders: missingOne, backgrounds: appearance.backgrounds, customBorders: [], customBackgrounds: [] } });
+    const missingRes = await api(base, "PATCH", "/api/admin/equipment-borders", { token, body: { assignments: borderOk.slice(0, 14), customs: [] } });
     checkEqual(missingRes.status, 400, "只有 14 条（缺一个组合）→ 400");
 
-    const badKey = appearanceOk.slice();
+    const badKey = borderOk.slice();
     badKey[0] = { ...badKey[0], key: "not-a-border" };
-    const badKeyRes = await api(base, "PATCH", "/api/admin/equipment-appearance", { token, body: { borders: badKey, backgrounds: appearance.backgrounds, customBorders: [], customBackgrounds: [] } });
+    const badKeyRes = await api(base, "PATCH", "/api/admin/equipment-borders", { token, body: { assignments: badKey, customs: [] } });
     checkEqual(badKeyRes.status, 400, "边框 key 格式不对 → 400");
 
-    const dupCustomRes = await api(base, "PATCH", "/api/admin/equipment-appearance", {
+    const badEffect = borderOk.slice();
+    badEffect[0] = { ...badEffect[0], effect: { x: 99999, y: 0, scale: 1 } };
+    const badEffectRes = await api(base, "PATCH", "/api/admin/equipment-borders", { token, body: { assignments: badEffect, customs: [] } });
+    checkEqual(badEffectRes.status, 400, "effect 偏移越界（±2000）→ 400");
+
+    const dupCustomRes = await api(base, "PATCH", "/api/admin/equipment-borders", {
       token,
       body: {
-        borders: appearanceOk,
-        backgrounds: appearance.backgrounds,
-        customBorders: [
+        assignments: borderOk,
+        customs: [
           { equipment: "weapon_20", key: "sfx_30206_0" },
           { equipment: "weapon_20", key: "sfx_30205_0" },
         ],
-        customBackgrounds: [],
       },
     });
     checkEqual(dupCustomRes.status, 400, "自定义表装备标识重复 → 400");
 
-    // —— 改了真生效：交换两个组合的边框 + 加一条自定义，GET 与玩家快照都反映 ——
-    const swapped = appearanceOk.slice();
+    // —— 改了真生效（边框半边）：交换两个组合 + 自定义条目带显示效果 ——
+    const swapped = borderOk.slice();
     const tmp = swapped[0].key;
-    swapped[0] = { ...swapped[0], key: swapped[14].key };
+    swapped[0] = { ...swapped[0], key: swapped[14].key, effect: { x: 3, y: -4, scale: 1.2 } };
     swapped[14] = { ...swapped[14], key: tmp };
     const customSeedBorder = "sfx_30206_0";
-    const updateRes = await api(base, "PATCH", "/api/admin/equipment-appearance", {
+    const borderUpdateRes = await api(base, "PATCH", "/api/admin/equipment-borders", {
       token,
       body: {
-        borders: swapped,
-        backgrounds: appearance.backgrounds,
-        customBorders: [{ equipment: "weapon_20", key: customSeedBorder }],
-        customBackgrounds: [],
+        assignments: swapped,
+        customs: [{ equipment: "weapon_20", key: customSeedBorder, effect: { x: -2, y: 6, scale: 0.9 } }],
       },
     });
-    checkEqual(updateRes.status, 200, "合法整份替换 → 200");
-    checkEqual(updateRes.body?.data?.borders?.[0]?.key, swapped[0].key, "交换后的第 1 格 = 提交值");
-    checkEqual(updateRes.body?.data?.customBorders?.[0]?.equipment, "weapon_20", "自定义条目落库");
-    check((updateRes.body?.data?.updatedAt ?? 0) > 0, "updatedAt 被 touched（0 = 从未改过）");
+    checkEqual(borderUpdateRes.status, 200, "合法整边替换 → 200");
+    checkEqual(borderUpdateRes.body?.data?.assignments?.[0]?.key, swapped[0].key, "交换后的第 1 格 = 提交值");
+    checkEqual(borderUpdateRes.body?.data?.assignments?.[0]?.effect?.scale, 1.2, "棋盘格的 effect 随条目落库");
+    checkEqual(borderUpdateRes.body?.data?.customs?.[0]?.equipment, "weapon_20", "自定义条目落库");
+    checkEqual(borderUpdateRes.body?.data?.customs?.[0]?.effect?.y, 6, "自定义条目的 effect 落库");
+    check((borderUpdateRes.body?.data?.updatedAt ?? 0) > 0, "updatedAt 被 touched（0 = 从未改过）");
 
-    const appearanceReread = await api(base, "GET", "/api/admin/equipment-appearance", { token });
-    checkEqual(appearanceReread.body?.data?.borders?.[14]?.key, tmp, "GET 回读 = 提交值（整份替换生效）");
+    const borderReread = await api(base, "GET", "/api/admin/equipment-borders", { token });
+    checkEqual(borderReread.body?.data?.assignments?.[14]?.key, tmp, "GET 回读 = 提交值（整边替换生效）");
+
+    // —— 拆边互不覆盖（#699 的核心语义）：改边框后背景那半边原样 ——
+    const backgroundAfterBorder = await api(base, "GET", "/api/admin/equipment-backgrounds", { token });
+    const backgroundsUnchanged = (backgroundAfterBorder.body?.data?.assignments ?? []).every(
+      (row) => seedBackgroundByKey.get(comboKey(row)) === row.key,
+    );
+    check(backgroundsUnchanged, "改边框不动背景（背景 key 仍逐组合等于出厂值）");
 
     const playerForAppearance = await (async () => {
       const login = await api(base, "POST", "/api/auth/login", { body: { username: "cfgsnap_player", password: "pass1234" } });
@@ -2488,19 +2502,37 @@ async function main() {
     const appearanceSnapData = appearanceSnap.body?.data?.equipmentAppearance;
     check(Boolean(appearanceSnapData), "快照带 equipmentAppearance 段");
     checkEqual(appearanceSnapData?.borders?.[0]?.key, swapped[0].key, "快照里的边框 = 改过的值（客户端进图拿到的就是它）");
+    checkEqual(appearanceSnapData?.borders?.[0]?.effect?.x, 3, "快照里的 effect 随条目下发");
     checkEqual(appearanceSnapData?.customBorders?.length, 1, "快照里的自定义表随行");
+    checkEqual(appearanceSnapData?.backgrounds?.[0]?.key, appearanceSeedRow.backgrounds[0].key, "快照里的背景 = 未动的出厂值（拆边语义对客户端同样成立）");
 
-    // —— 还原 seed 前提（出厂整份写回，updatedAt 归零由 GET 只读不校验） ——
-    const restoreAppearance = await api(base, "PATCH", "/api/admin/equipment-appearance", {
+    // —— 背景半边也走一遍写路径（背景 key 格式与边框不同：sfx_16000 无 _0）——
+    const backgroundOk = backgroundPage.assignments ?? [];
+    const badBgKey = backgroundOk.slice();
+    badBgKey[0] = { ...badBgKey[0], key: "sfx_16000_0" };
+    const badBgKeyRes = await api(base, "PATCH", "/api/admin/equipment-backgrounds", { token, body: { assignments: badBgKey, customs: [] } });
+    checkEqual(badBgKeyRes.status, 400, "背景 key 带了边框的 _0 尾巴 → 400（两半 key 格式各自卡）");
+
+    const bgSwapped = backgroundOk.slice();
+    const bgTmp = bgSwapped[0].key;
+    bgSwapped[0] = { ...bgSwapped[0], key: bgSwapped[14].key };
+    bgSwapped[14] = { ...bgSwapped[14], key: bgTmp };
+    const bgUpdateRes = await api(base, "PATCH", "/api/admin/equipment-backgrounds", { token, body: { assignments: bgSwapped, customs: [] } });
+    checkEqual(bgUpdateRes.status, 200, "背景整边替换 → 200");
+    const borderAfterBg = await api(base, "GET", "/api/admin/equipment-borders", { token });
+    checkEqual(borderAfterBg.body?.data?.assignments?.[0]?.key, swapped[0].key, "改背景不动边框（反向同样成立）");
+
+    // —— 还原 seed 前提（两半各自写回出厂值） ——
+    const restoreBorders = await api(base, "PATCH", "/api/admin/equipment-borders", {
       token,
-      body: {
-        borders: appearanceOk,
-        backgrounds: appearance.backgrounds,
-        customBorders: appearanceSeedRow.customBorders,
-        customBackgrounds: appearanceSeedRow.customBackgrounds,
-      },
+      body: { assignments: appearanceSeedRow.borders, customs: appearanceSeedRow.customBorders },
     });
-    checkEqual(restoreAppearance.status, 200, "还原装备外观出厂值（seed 前提复原）");
+    checkEqual(restoreBorders.status, 200, "还原边框半边出厂值（seed 前提复原）");
+    const restoreBackgrounds = await api(base, "PATCH", "/api/admin/equipment-backgrounds", {
+      token,
+      body: { assignments: appearanceSeedRow.backgrounds, customs: appearanceSeedRow.customBackgrounds },
+    });
+    checkEqual(restoreBackgrounds.status, 200, "还原背景半边出厂值（seed 前提复原）");
 
     //#endregion
 
@@ -2561,9 +2593,9 @@ async function main() {
     checkEqual(newCombo?.sellPrice, Math.round(10 * baseRow.level * 2), "新组合卖价按公式垫底（round(10 × 等级 × 倍率)，之后可逐条调）");
 
     // —— 装备外观跟着档数自愈：库存的 15 条盖不住 18 组合 → 回落公式映射（18 条）——
-    const appearanceExpandedRes = await api(base, "GET", "/api/admin/equipment-appearance", { token });
-    checkEqual(appearanceExpandedRes.body?.data?.borders?.length, 18, "扩档后外观表回落公式映射（18 格全覆盖）");
-    const appearanceComboSet = new Set((appearanceExpandedRes.body?.data?.borders ?? []).map((row) => `${row.prefix}|${row.suffix}`));
+    const appearanceExpandedRes = await api(base, "GET", "/api/admin/equipment-borders", { token });
+    checkEqual(appearanceExpandedRes.body?.data?.assignments?.length, 18, "扩档后外观表回落公式映射（18 格全覆盖）");
+    const appearanceComboSet = new Set((appearanceExpandedRes.body?.data?.assignments ?? []).map((row) => `${row.prefix}|${row.suffix}`));
     check(appearanceComboSet.has("5|0") && appearanceComboSet.has("5|2"), "新档组合（5|0、5|2）在外观表里");
 
     // —— 还原：档位写回出厂 + 重建 + 外观表回到库存 15 条 ——
@@ -2574,8 +2606,8 @@ async function main() {
     checkEqual(metaRestoreRes.status, 200, "档位还原出厂");
     const rebuildRestoreRes = await api(base, "POST", "/api/admin/equipment-variants/rebuild", { token });
     checkEqual(rebuildRestoreRes.body?.data?.variants, variantsTotalBefore, "还原后重建行数回到出厂");
-    const appearanceRestoredRes = await api(base, "GET", "/api/admin/equipment-appearance", { token });
-    checkEqual(appearanceRestoredRes.body?.data?.borders?.length, 15, "还原后外观表回到库存的 15 条（仍覆盖当前档数，不再回落）");
+    const appearanceRestoredRes = await api(base, "GET", "/api/admin/equipment-borders", { token });
+    checkEqual(appearanceRestoredRes.body?.data?.assignments?.length, 15, "还原后外观表回到库存的 15 条（仍覆盖当前档数，不再回落）");
 
     //#endregion
   } finally {

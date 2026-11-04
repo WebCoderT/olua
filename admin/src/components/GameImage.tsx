@@ -148,7 +148,7 @@ export function GameIcon({
 }
 
 /** 图集第一帧的裁剪信息（rect 是图集里的打包区域；rotated = 打包时转了 90°） */
-type FirstFrame = { image: HTMLImageElement; x: number; y: number; w: number; h: number; rotated: boolean };
+export type FirstFrame = { image: HTMLImageElement; x: number; y: number; w: number; h: number; rotated: boolean };
 
 const frameCache = new Map<string, Promise<FirstFrame | null>>();
 
@@ -213,7 +213,7 @@ function parseFirstFrame(xml: string): { x: number; y: number; w: number; h: num
  * 优先，退回「路径即基名」（clothes/in/005 → clothes/in/005.png）；plist 都没有
  * 就当单图整张缩放 —— 称号 / 战魂 / NPC 三种来源都罩得住。
  */
-function loadFirstFrame(atlasPath: string): Promise<FirstFrame | null> {
+export function loadFirstFrame(atlasPath: string): Promise<FirstFrame | null> {
   const base = atlasPath.replace(/^\/+|\/+$/g, "");
   const cached = frameCache.get(base);
   if (cached) return cached;

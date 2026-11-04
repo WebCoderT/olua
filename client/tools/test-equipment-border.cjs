@@ -20,7 +20,7 @@ const { PROJECT_ROOT, prepare, check, finish } = require("./lib/configs-sandbox.
 
 const BORDER_DIR = path.join(PROJECT_ROOT, "assets/resources/borders");
 const outDir = prepare("olua-equipment-border", ["configs/border.ts"]);
-const { borderResources, borders, prefixSuffixBorders, customEquipmentBorders, getEquipmentBorderKey, getAssignedBorders, applyEquipmentAppearance } = require(path.join(outDir, "configs/border.js"));
+const { borderResources, borders, prefixSuffixBorders, customEquipmentBorders, getEquipmentBorderKey, resolveEquipmentBorder, getAssignedBorders, applyEquipmentAppearance } = require(path.join(outDir, "configs/border.js"));
 const { getEquipment, getItem, items } = require(path.join(outDir, "configs/items.js"));
 const { getEquipmentVariantKey, getEquipmentBaseKey } = require(path.join(outDir, "configs/equipments.js"));
 
@@ -84,11 +84,13 @@ check(borderOf(9, 9, "x") === null, "异常前后缀 → 不显示（查不到�
 check(borderOf(0, 0, "") === first, "id 缺失也按前后缀表取");
 // 自定义表：#695 起经 apply 下发（测试里直接写 Map 等价于服务端下发了这些条目）
 const CUSTOM_KEY = borderResources[borderResources.length - 1].key;
+// #700：Map 值是 { key, effect }（effect 缺省等价 {0,0,1}，与「没调过效果」一致）
+const pickOf = (key, effect) => ({ key, effect: effect ?? { x: 0, y: 0, scale: 1 } });
 check(!customEquipmentBorders.size, "apply 空自定义表后仍为空（出厂不给特殊装备配边框）");
-customEquipmentBorders.set("weapon_special", CUSTOM_KEY);
+customEquipmentBorders.set("weapon_special", pickOf(CUSTOM_KEY));
 check(borderOf(0, 0, "weapon_special") === CUSTOM_KEY, "自定义表按精确 id 命中，优先于前后缀表");
 check(borderOf(0, 0, "weapon_other_p3s2") === first, "没登记基础件时，变体不沾光（回退前后缀表）");
-customEquipmentBorders.set("weapon_all", CUSTOM_KEY);
+customEquipmentBorders.set("weapon_all", pickOf(CUSTOM_KEY));
 check(borderOf(0, 0, "weapon_other") === first, "没登记的 id 不显示自定义边框");
 check(borderOf(4, 2, "weapon_all_p4s2") === CUSTOM_KEY, "自定义表按基础件 key 命中变体 id（整件装备的全部变体生效）");
 // 指向未登记图集的自定义条目：apply 时就被丢弃（不进 Map），取用回退前后缀表
@@ -97,6 +99,28 @@ check(!customEquipmentBorders.has("weapon_bad"), "自定义条目指向未登记
 check(borderOf(0, 0, "weapon_bad") === first, "丢弃后的装备回退前后缀表（不显示成空白）");
 applyEquipmentAppearance({ borders: APPLIED, customBorders: [{ equipment: "weapon_all", key: CUSTOM_KEY }] });
 check(borderOf(4, 2, "weapon_all_p4s2") === CUSTOM_KEY, "重新 apply 后自定义表恢复（Map 是重建不是增量）");
+
+console.log("\n— C2. 显示效果（effect，#700）—");
+// 带效果的条目：effect 原样进 Map，resolve 连 key 一起给
+applyEquipmentAppearance({
+  borders: [{ prefix: 0, suffix: 0, key: first, effect: { x: 5, y: -2, scale: 1.5 } }].concat(APPLIED.slice(1)),
+  customBorders: [{ equipment: "weapon_fx", key: CUSTOM_KEY, effect: { x: -3, y: 4, scale: 0.8 } }],
+});
+const fxPick = resolveEquipmentBorder({ id: "weapon_fx", prefix: 0, suffix: 0, type: "equipment" });
+check(!!fxPick && fxPick.key === CUSTOM_KEY && fxPick.effect.x === -3 && fxPick.effect.y === 4 && fxPick.effect.scale === 0.8, "自定义条目的 effect 原样下发（自定义优先于棋盘）");
+const comboPick = resolveEquipmentBorder({ id: "x", prefix: 0, suffix: 0, type: "equipment" });
+check(!!comboPick && comboPick.key === first && comboPick.effect.x === 5 && comboPick.effect.y === -2 && comboPick.effect.scale === 1.5, "棋盘格的 effect 原样下发");
+// 没写 effect 的条目：回落默认效果（{0,0,1}，与「没调过」一致）
+const plainPick = resolveEquipmentBorder({ id: "x", prefix: 4, suffix: 2, type: "equipment" });
+check(!!plainPick && plainPick.effect.x === 0 && plainPick.effect.y === 0 && plainPick.effect.scale === 1, "没写 effect 的条目回落默认效果");
+// 坏 effect 只丢效果、映射保留
+applyEquipmentAppearance({
+  borders: [{ prefix: 0, suffix: 0, key: first, effect: { x: "far" } }].concat(APPLIED.slice(1)),
+  customBorders: [],
+});
+const healedPick = resolveEquipmentBorder({ id: "x", prefix: 0, suffix: 0, type: "equipment" });
+check(!!healedPick && healedPick.key === first && healedPick.effect.scale === 1, "坏 effect 回落默认效果（映射本身保留）");
+applyEquipmentAppearance({ borders: APPLIED, customBorders: [] });
 
 console.log("\n— D. 真实装备表抽查（用 applied 表的前后两条）—");
 const cloth = getItem("cloth_1");
@@ -154,7 +178,7 @@ const equipmentSource = read("assets/configs/equipments.ts");
 
 check(/this\.applyEquipmentBorder\(sprite, good\);/.test(helperSource), "createGood 给物品图标挂边框（传的是图标节点，边框随图标压暗/销毁）");
 check(/if \(!isEquipment\(good\)\) return;/.test(helperSource), "只有装备才挂边框");
-check(/getEquipmentBorderKey\(good\)/.test(helperSource) && /borders\.get\(borderKey\)/.test(helperSource), "边框 key 与图集路径都来自 configs/border");
+check(/resolveEquipmentBorder\(good\)/.test(helperSource) && /applyEffectToNode\(/.test(helperSource), "边框 key 与显示效果都来自 configs/border 的 resolve");
 check(/icon\.addChild\(border\);/.test(helperSource), "边框是图标的子节点（不是格子的子节点，不影响拖动找图标）");
 check(/sprite\.sizeMode = Sprite\.SizeMode\.CUSTOM;/.test(helperSource) && /sprite\.trim = true;/.test(helperSource) && /addComponent\(Animation\)/.test(helperSource), "边框零件：CUSTOM 尺寸 + trim=true（绕开未裁剪素材的非 0 offset）+ 动画组件");
 check(/frame\.originalSize/.test(helperSource) && /Math\.min\(box\.width \/ source\.width, box\.height \/ source\.height\)/.test(helperSource), "尺寸按首帧原始宽高 contain 进外框");

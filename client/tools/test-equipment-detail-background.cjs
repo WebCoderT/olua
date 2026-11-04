@@ -27,6 +27,7 @@ const {
   prefixSuffixDetailBackgrounds,
   customEquipmentDetailBackgrounds,
   getEquipmentDetailBackgroundKey,
+  resolveEquipmentDetailBackground,
   getAssignedDetailBackgrounds,
 } = require(path.join(outDir, "configs/background.js"));
 const { applyEquipmentDetailBackgrounds } = require(path.join(outDir, "configs/background.js"));
@@ -100,11 +101,13 @@ check(backgroundOf(9, 9, "x") === null, "异常前后缀 → 不显示（查不�
 check(backgroundOf(0, 0, "") === first, "id 缺失也按前后缀表取");
 // 自定义表：#695 起经 apply 下发（测试里直接写 Map 等价于服务端下发了这些条目）
 const CUSTOM_KEY = detailBackgroundResources[detailBackgroundResources.length - 1].key;
+// #700：Map 值是 { key, effect }（effect 缺省等价 {0,0,1}，与「没调过效果」一致）
+const pickOf = (key, effect) => ({ key, effect: effect ?? { x: 0, y: 0, scale: 1 } });
 check(!customEquipmentDetailBackgrounds.size, "apply 空自定义表后仍为空（出厂不给特殊装备配背景）");
-customEquipmentDetailBackgrounds.set("weapon_special", CUSTOM_KEY);
+customEquipmentDetailBackgrounds.set("weapon_special", pickOf(CUSTOM_KEY));
 check(backgroundOf(0, 0, "weapon_special") === CUSTOM_KEY, "自定义表按精确 id 命中，优先于前后缀表");
 check(backgroundOf(0, 0, "weapon_other_p3s2") === first, "没登记基础件时，变体不沾光（回退前后缀表）");
-customEquipmentDetailBackgrounds.set("weapon_all", CUSTOM_KEY);
+customEquipmentDetailBackgrounds.set("weapon_all", pickOf(CUSTOM_KEY));
 check(backgroundOf(0, 0, "weapon_other") === first, "没登记的 id 不显示自定义背景");
 check(backgroundOf(4, 2, "weapon_all_p4s2") === CUSTOM_KEY, "自定义表按基础件 key 命中变体 id（整件装备的全部变体生效）");
 // 指向未登记目录的自定义条目：apply 时就被丢弃（不进 Map），取用回退前后缀表
@@ -113,6 +116,28 @@ check(!customEquipmentDetailBackgrounds.has("weapon_bad"), "自定义条目指�
 check(backgroundOf(0, 0, "weapon_bad") === first, "丢弃后的装备回退前后缀表（不显示成空白）");
 applyEquipmentDetailBackgrounds({ backgrounds: APPLIED, customBackgrounds: [{ equipment: "weapon_all", key: CUSTOM_KEY }] });
 check(backgroundOf(4, 2, "weapon_all_p4s2") === CUSTOM_KEY, "重新 apply 后自定义表恢复（Map 是重建不是增量）");
+
+console.log("\n— C2. 显示效果（effect，#700）—");
+// 带效果的条目：effect 原样进 Map，resolve 连 key 一起给
+applyEquipmentDetailBackgrounds({
+  backgrounds: [{ prefix: 0, suffix: 0, key: first, effect: { x: 12, y: -6, scale: 1.25 } }].concat(APPLIED.slice(1)),
+  customBackgrounds: [{ equipment: "weapon_fx", key: CUSTOM_KEY, effect: { x: -8, y: 3, scale: 2 } }],
+});
+const fxPick = resolveEquipmentDetailBackground({ id: "weapon_fx", prefix: 0, suffix: 0, type: "equipment" });
+check(!!fxPick && fxPick.key === CUSTOM_KEY && fxPick.effect.x === -8 && fxPick.effect.y === 3 && fxPick.effect.scale === 2, "自定义条目的 effect 原样下发（自定义优先于棋盘）");
+const comboPick = resolveEquipmentDetailBackground({ id: "x", prefix: 0, suffix: 0, type: "equipment" });
+check(!!comboPick && comboPick.key === first && comboPick.effect.x === 12 && comboPick.effect.y === -6 && comboPick.effect.scale === 1.25, "棋盘格的 effect 原样下发");
+// 没写 effect 的条目：回落默认效果（{0,0,1} = 铺满弹窗面板）
+const plainPick = resolveEquipmentDetailBackground({ id: "x", prefix: 4, suffix: 2, type: "equipment" });
+check(!!plainPick && plainPick.effect.x === 0 && plainPick.effect.y === 0 && plainPick.effect.scale === 1, "没写 effect 的条目回落默认效果");
+// 坏 effect 只丢效果、映射保留
+applyEquipmentDetailBackgrounds({
+  backgrounds: [{ prefix: 0, suffix: 0, key: first, effect: { scale: 99 } }].concat(APPLIED.slice(1)),
+  customBackgrounds: [],
+});
+const healedPick = resolveEquipmentDetailBackground({ id: "x", prefix: 0, suffix: 0, type: "equipment" });
+check(!!healedPick && healedPick.key === first && healedPick.effect.scale === 1, "坏 effect 回落默认效果（映射本身保留）");
+applyEquipmentDetailBackgrounds({ backgrounds: APPLIED, customBackgrounds: [] });
 
 console.log("\n— D. 真实装备表抽查（用 applied 表的前后两条）—");
 const cloth = getItem("cloth_1");

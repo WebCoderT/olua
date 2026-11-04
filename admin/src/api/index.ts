@@ -54,7 +54,8 @@ export {
   runtimeParamsApi,
   combatWeightsApi,
   guideStepsApi,
-  equipmentAppearanceApi,
+  equipmentBorderApi,
+  equipmentBackgroundApi,
   gameDataApi,
 } from "./endpoints";
 export { routes } from "./routes";

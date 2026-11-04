@@ -9511,14 +9511,14 @@
         ]
       }
     },
-    "/admin/equipment-appearance": {
+    "/admin/equipment-borders": {
       "get": {
-        "description": "四组映射 + 最后修改时间（**单行配置，没有分页**）：\n\n- `borders` / `backgrounds`：前后缀组合 → key，**恰好 15 条**（5 前缀 × 3 后缀，每条组合一次）；\n- `customBorders` / `customBackgrounds`：特殊装备 → key（装备写变体 id 只影响那一个变体，\n  写基础件 key 影响其全部变体；**优先于**前后缀表）。\n\nkey 指向客户端资源包里的素材（边框 `resources/borders/sfx_<编号>_0` 图集、\n背景 `resources/backgrounds/sfx_<编号>` 帧序列目录）；素材长什么样见客户端\n`tools/border-preview.png`（编号索引图）。服务端只校验 key 格式，**不校验素材存在**。\n\n缺行 / 坏数据：映射表整份回落出厂值、自定义表坏条目丢弃（好条目保留），均有 error 日志可查。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
-        "operationId": "adminEquipmentAppearance.get",
+        "description": "边框这半边 + 最后修改时间（**单行配置，没有分页**）：\n\n- `assignments`：前后缀组合 → 边框 key，**恰好覆盖当前档数的每种组合**、各一条\n  （档数可在「装备配置」页的前后缀弹窗里增删，出厂 5 前缀 × 3 后缀 = 15 格）；\n- `customs`：特殊装备 → 边框 key（装备写变体 id 只影响那一个变体，写基础件 key\n  影响其全部变体；**优先于**棋盘）。\n\n每条可带 `effect`（x/y 偏移 + scale 倍率，#700），不传 = 默认适配结果。\nkey 指向客户端资源包里的素材（如 sfx_30123_0），素材长什么样见客户端\n`tools/border-preview.png`（编号索引图）。服务端只校验 key 格式，**不校验素材存在**。\n\n缺行 / 坏数据：映射表整份回落出厂映射、自定义表坏条目丢弃（effect 坏只丢效果），均有日志可查。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
+        "operationId": "adminEquipmentBorder.get",
         "parameters": [],
         "responses": {
           "200": {
-            "description": "当前装备外观配置（含 updatedAt）",
+            "description": "当前装备边框配置（含 updatedAt）",
             "content": {
               "application/json": {
                 "schema": {
@@ -9529,7 +9529,7 @@
                     {
                       "properties": {
                         "data": {
-                          "$ref": "#/components/schemas/EquipmentAppearanceDto"
+                          "$ref": "#/components/schemas/EquipmentBorderDto"
                         }
                       }
                     }
@@ -9544,36 +9544,36 @@
             "admin": []
           }
         ],
-        "summary": "装备外观（边框 + 详情背景映射）",
+        "summary": "装备边框配置",
         "tags": [
           "管理端"
         ],
         "x-olua-audience": "admin",
         "x-olua-data-nullable": false,
         "x-olua-data-schema": {
-          "$ref": "#/components/schemas/EquipmentAppearanceDto"
+          "$ref": "#/components/schemas/EquipmentBorderDto"
         },
         "x-olua-permissions": [
           "gameConfig:read"
         ]
       },
       "patch": {
-        "description": "**整份替换**：提交的四组数组就是新配置，不是增量。\n\n约束：`borders` / `backgrounds` 恰好 15 条、前后缀组合**恰好全覆盖且不重复**\n（缺哪个组合，哪个品质就没有边框 / 背景）；key 形如 `sfx_30123_0`（边框）/ `sfx_16000`（背景）；\n自定义表的装备标识唯一、最多 200 条。\n\n任何一条不合法 → 40000 且**整份不落库**。\n\n改完玩家下次进游戏拉配置快照后生效；已经在游戏里的那一次不会变。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
-        "operationId": "adminEquipmentAppearance.update",
+        "description": "**整边替换**：提交的 `assignments` + `customs` 就是边框这半边的新配置，不是增量；\n**详情背景那半边不受影响**（两页各自保存互不覆盖）。\n\n约束：`assignments` 恰好覆盖当前档数的每种组合且不重复（缺哪个组合，哪个品质就没边框）；\nkey 形如 `sfx_30123_0`；`effect` 数值在范围内（偏移 ±2000、倍率 0.1~10）；\n自定义表的装备标识唯一、最多 200 条。\n\n任何一条不合法 → 40000 且**整边不落库**。\n\n改完玩家下次进游戏拉配置快照后生效；已经在游戏里的那一次不会变。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
+        "operationId": "adminEquipmentBorder.update",
         "parameters": [],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/UpdateEquipmentAppearanceDto"
+                "$ref": "#/components/schemas/UpdateEquipmentBorderDto"
               }
             }
           }
         },
         "responses": {
           "200": {
-            "description": "更新后的装备外观配置",
+            "description": "更新后的装备边框配置",
             "content": {
               "application/json": {
                 "schema": {
@@ -9584,7 +9584,7 @@
                     {
                       "properties": {
                         "data": {
-                          "$ref": "#/components/schemas/EquipmentAppearanceDto"
+                          "$ref": "#/components/schemas/EquipmentBorderDto"
                         }
                       }
                     }
@@ -9599,14 +9599,116 @@
             "admin": []
           }
         ],
-        "summary": "编辑装备外观（整份替换）",
+        "summary": "编辑装备边框配置（整边替换）",
         "tags": [
           "管理端"
         ],
         "x-olua-audience": "admin",
         "x-olua-data-nullable": false,
         "x-olua-data-schema": {
-          "$ref": "#/components/schemas/EquipmentAppearanceDto"
+          "$ref": "#/components/schemas/EquipmentBorderDto"
+        },
+        "x-olua-permissions": [
+          "gameConfig:write"
+        ]
+      }
+    },
+    "/admin/equipment-backgrounds": {
+      "get": {
+        "description": "背景这半边 + 最后修改时间（**单行配置，没有分页**）：\n\n- `assignments`：前后缀组合 → 背景 key，**恰好覆盖当前档数的每种组合**、各一条；\n- `customs`：特殊装备 → 背景 key（**优先于**棋盘）。\n\n每条可带 `effect`（x/y 偏移 + scale 倍率，#700），不传 = 默认适配（铺满弹窗面板）。\nkey 形如 `sfx_16000`。服务端只校验 key 格式，**不校验素材存在**。\n\n缺行 / 坏数据：映射表整份回落出厂映射、自定义表坏条目丢弃（effect 坏只丢效果），均有日志可查。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
+        "operationId": "adminEquipmentBackground.get",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "当前装备详情背景配置（含 updatedAt）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/EquipmentBackgroundDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "装备详情背景配置",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/EquipmentBackgroundDto"
+        },
+        "x-olua-permissions": [
+          "gameConfig:read"
+        ]
+      },
+      "patch": {
+        "description": "**整边替换**：提交的 `assignments` + `customs` 就是背景这半边的新配置，不是增量；\n**边框那半边不受影响**（两页各自保存互不覆盖）。\n\n约束：`assignments` 恰好覆盖当前档数的每种组合且不重复；key 形如 `sfx_16000`；\n`effect` 数值在范围内（偏移 ±2000、倍率 0.1~10）；自定义表的装备标识唯一、最多 200 条。\n\n任何一条不合法 → 40000 且**整边不落库**。\n\n改完玩家下次进游戏拉配置快照后生效；已经在游戏里的那一次不会变。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
+        "operationId": "adminEquipmentBackground.update",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateEquipmentBackgroundDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "更新后的装备详情背景配置",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/EquipmentBackgroundDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "编辑装备详情背景配置（整边替换）",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/EquipmentBackgroundDto"
         },
         "x-olua-permissions": [
           "gameConfig:write"
@@ -16323,6 +16425,33 @@
           "steps"
         ]
       },
+      "AppearanceEffectDto": {
+        "type": "object",
+        "properties": {
+          "x": {
+            "type": "number",
+            "description": "水平偏移（像素，右为正；边框相对图标中心、背景相对弹窗面板中心）",
+            "example": 0
+          },
+          "y": {
+            "type": "number",
+            "description": "垂直偏移（像素，上为正）",
+            "example": 0
+          },
+          "scale": {
+            "type": "number",
+            "description": "尺寸倍率（1 = 客户端默认适配结果）",
+            "example": 1,
+            "minimum": 0.1,
+            "maximum": 10
+          }
+        },
+        "required": [
+          "x",
+          "y",
+          "scale"
+        ]
+      },
       "AppearanceAssignmentDto": {
         "type": "object",
         "properties": {
@@ -16344,6 +16473,14 @@
             "type": "string",
             "description": "边框 / 背景 key（客户端资源清单里的 sfx 编号）",
             "example": "sfx_30123_0"
+          },
+          "effect": {
+            "description": "显示效果（#700；不传 = {0,0,1} 即默认适配结果）",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AppearanceEffectDto"
+              }
+            ]
           }
         },
         "required": [
@@ -16364,6 +16501,14 @@
             "type": "string",
             "description": "边框 / 背景 key",
             "example": "sfx_30206_0"
+          },
+          "effect": {
+            "description": "显示效果（#700；不传 = {0,0,1} 即默认适配结果）",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AppearanceEffectDto"
+              }
+            ]
           }
         },
         "required": [
@@ -16371,32 +16516,18 @@
           "key"
         ]
       },
-      "UpdateEquipmentAppearanceDto": {
+      "UpdateEquipmentBorderDto": {
         "type": "object",
         "properties": {
-          "borders": {
-            "description": "前后缀组合 → 边框（整份替换，恰好覆盖当前档数的每种组合且不重复）",
+          "assignments": {
+            "description": "前后缀组合 → 边框（整边替换，恰好覆盖当前档数的每种组合且不重复）",
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/AppearanceAssignmentDto"
             }
           },
-          "backgrounds": {
-            "description": "前后缀组合 → 详情背景（整份替换，恰好覆盖当前档数的每种组合且不重复）",
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/AppearanceAssignmentDto"
-            }
-          },
-          "customBorders": {
-            "description": "特殊装备 → 边框（整份替换；装备标识不可重复）",
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/CustomAppearanceDto"
-            }
-          },
-          "customBackgrounds": {
-            "description": "特殊装备 → 详情背景（整份替换；装备标识不可重复）",
+          "customs": {
+            "description": "特殊装备 → 边框（整边替换；装备标识不可重复）",
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/CustomAppearanceDto"
@@ -16408,10 +16539,35 @@
           }
         },
         "required": [
-          "borders",
-          "backgrounds",
-          "customBorders",
-          "customBackgrounds"
+          "assignments",
+          "customs"
+        ]
+      },
+      "UpdateEquipmentBackgroundDto": {
+        "type": "object",
+        "properties": {
+          "assignments": {
+            "description": "前后缀组合 → 详情背景（整边替换，恰好覆盖当前档数的每种组合且不重复）",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AppearanceAssignmentDto"
+            }
+          },
+          "customs": {
+            "description": "特殊装备 → 详情背景（整边替换；装备标识不可重复）",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CustomAppearanceDto"
+            }
+          },
+          "note": {
+            "type": "string",
+            "description": "修改备注（写进审计日志的上下文，便于追溯「为什么改」）"
+          }
+        },
+        "required": [
+          "assignments",
+          "customs"
         ]
       },
       "SendMailDto": {
@@ -21242,6 +21398,64 @@
           "bases",
           "combos",
           "variants"
+        ]
+      },
+      "EquipmentBorderDto": {
+        "type": "object",
+        "properties": {
+          "assignments": {
+            "description": "前后缀组合 → 边框（恰好覆盖当前档数的每种组合、各一条）",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AppearanceAssignmentDto"
+            }
+          },
+          "customs": {
+            "description": "特殊装备 → 边框（优先于前后缀表；装备标识不可重复）",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CustomAppearanceDto"
+            }
+          },
+          "updatedAt": {
+            "type": "number",
+            "description": "最后修改时间（毫秒，0 = 从未改过、仍是出厂值）",
+            "example": 1762000000000
+          }
+        },
+        "required": [
+          "assignments",
+          "customs",
+          "updatedAt"
+        ]
+      },
+      "EquipmentBackgroundDto": {
+        "type": "object",
+        "properties": {
+          "assignments": {
+            "description": "前后缀组合 → 详情背景（恰好覆盖当前档数的每种组合、各一条）",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AppearanceAssignmentDto"
+            }
+          },
+          "customs": {
+            "description": "特殊装备 → 详情背景（优先于前后缀表；装备标识不可重复）",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CustomAppearanceDto"
+            }
+          },
+          "updatedAt": {
+            "type": "number",
+            "description": "最后修改时间（毫秒，0 = 从未改过、仍是出厂值）",
+            "example": 1762000000000
+          }
+        },
+        "required": [
+          "assignments",
+          "customs",
+          "updatedAt"
         ]
       },
       "DrugDto": {

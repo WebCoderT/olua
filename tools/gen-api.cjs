@@ -138,7 +138,8 @@ const MODULES = {
   adminCombatWeights: { target: "admin", export: "combatWeightsApi" },
   adminGuide: { target: "admin", export: "guideStepsApi" },
   // 装备外观（#695）：边框 + 详情背景的「谁用哪个 key」映射；与 adminUiEffect / adminAudioSetting 同类（表现参数）
-  adminEquipmentAppearance: { target: "admin", export: "equipmentAppearanceApi" },
+  adminEquipmentBorder: { target: "admin", export: "equipmentBorderApi" },
+  adminEquipmentBackground: { target: "admin", export: "equipmentBackgroundApi" },
   adminSkill: { target: "admin", export: "skillsApi" },
   adminStatus: { target: "admin", export: "statusesApi" },
   adminZone: { target: "admin", export: "zonesApi" },

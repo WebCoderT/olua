@@ -340,20 +340,35 @@ export const routes = {
      */
     save: (id: string) => `/admin/equip-in-aligns/${encodeURIComponent(id)}`,
   },
-  /** adminEquipmentAppearance 模块（2 个接口） */
-  adminEquipmentAppearance: {
+  /** adminEquipmentBackground 模块（2 个接口） */
+  adminEquipmentBackground: {
     /**
-     * 装备外观（边框 + 详情背景映射）（GET /admin/equipment-appearance）
+     * 装备详情背景配置（GET /admin/equipment-backgrounds）
      *
-     * 四组映射 + 最后修改时间（**单行配置，没有分页**）：
+     * 背景这半边 + 最后修改时间（**单行配置，没有分页**）：
      */
-    get: "/admin/equipment-appearance",
+    get: "/admin/equipment-backgrounds",
     /**
-     * 编辑装备外观（整份替换）（PATCH /admin/equipment-appearance）
+     * 编辑装备详情背景配置（整边替换）（PATCH /admin/equipment-backgrounds）
      *
-     * **整份替换**：提交的四组数组就是新配置，不是增量。
+     * **整边替换**：提交的 `assignments` + `customs` 就是背景这半边的新配置，不是增量；
      */
-    update: "/admin/equipment-appearance",
+    update: "/admin/equipment-backgrounds",
+  },
+  /** adminEquipmentBorder 模块（2 个接口） */
+  adminEquipmentBorder: {
+    /**
+     * 装备边框配置（GET /admin/equipment-borders）
+     *
+     * 边框这半边 + 最后修改时间（**单行配置，没有分页**）：
+     */
+    get: "/admin/equipment-borders",
+    /**
+     * 编辑装备边框配置（整边替换）（PATCH /admin/equipment-borders）
+     *
+     * **整边替换**：提交的 `assignments` + `customs` 就是边框这半边的新配置，不是增量；
+     */
+    update: "/admin/equipment-borders",
   },
   /** adminEquipmentMeta 模块（2 个接口） */
   adminEquipmentMeta: {

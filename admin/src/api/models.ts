@@ -1815,6 +1815,21 @@ export type UpdateGuideSteps = {
   note?: string;
 };
 
+export type AppearanceEffect = {
+  /**
+   * 水平偏移（像素，右为正；边框相对图标中心、背景相对弹窗面板中心）
+   */
+  x: number;
+  /**
+   * 垂直偏移（像素，上为正）
+   */
+  y: number;
+  /**
+   * 尺寸倍率（1 = 客户端默认适配结果）
+   */
+  scale: number;
+};
+
 export type AppearanceAssignment = {
   /**
    * 装备前缀序号（0 起；运行时档数由 equipment_meta 文案长度决定，硬上限 9）
@@ -1828,6 +1843,10 @@ export type AppearanceAssignment = {
    * 边框 / 背景 key（客户端资源清单里的 sfx 编号）
    */
   key: string;
+  /**
+   * 显示效果（#700；不传 = {0,0,1} 即默认适配结果）
+   */
+  effect?: AppearanceEffect;
 };
 
 export type CustomAppearance = {
@@ -1839,25 +1858,36 @@ export type CustomAppearance = {
    * 边框 / 背景 key
    */
   key: string;
+  /**
+   * 显示效果（#700；不传 = {0,0,1} 即默认适配结果）
+   */
+  effect?: AppearanceEffect;
 };
 
-export type UpdateEquipmentAppearance = {
+export type UpdateEquipmentBorder = {
   /**
-   * 前后缀组合 → 边框（整份替换，恰好覆盖当前档数的每种组合且不重复）
+   * 前后缀组合 → 边框（整边替换，恰好覆盖当前档数的每种组合且不重复）
    */
-  borders: AppearanceAssignment[];
+  assignments: AppearanceAssignment[];
   /**
-   * 前后缀组合 → 详情背景（整份替换，恰好覆盖当前档数的每种组合且不重复）
+   * 特殊装备 → 边框（整边替换；装备标识不可重复）
    */
-  backgrounds: AppearanceAssignment[];
+  customs: CustomAppearance[];
   /**
-   * 特殊装备 → 边框（整份替换；装备标识不可重复）
+   * 修改备注（写进审计日志的上下文，便于追溯「为什么改」）
    */
-  customBorders: CustomAppearance[];
+  note?: string;
+};
+
+export type UpdateEquipmentBackground = {
   /**
-   * 特殊装备 → 详情背景（整份替换；装备标识不可重复）
+   * 前后缀组合 → 详情背景（整边替换，恰好覆盖当前档数的每种组合且不重复）
    */
-  customBackgrounds: CustomAppearance[];
+  assignments: AppearanceAssignment[];
+  /**
+   * 特殊装备 → 详情背景（整边替换；装备标识不可重复）
+   */
+  customs: CustomAppearance[];
   /**
    * 修改备注（写进审计日志的上下文，便于追溯「为什么改」）
    */
@@ -4884,6 +4914,36 @@ export type EquipmentVariantRebuildResult = {
    * 重建后的变体总行数（= 基础件数 × 组合数）
    */
   variants: number;
+};
+
+export type EquipmentBorder = {
+  /**
+   * 前后缀组合 → 边框（恰好覆盖当前档数的每种组合、各一条）
+   */
+  assignments: AppearanceAssignment[];
+  /**
+   * 特殊装备 → 边框（优先于前后缀表；装备标识不可重复）
+   */
+  customs: CustomAppearance[];
+  /**
+   * 最后修改时间（毫秒，0 = 从未改过、仍是出厂值）
+   */
+  updatedAt: number;
+};
+
+export type EquipmentBackground = {
+  /**
+   * 前后缀组合 → 详情背景（恰好覆盖当前档数的每种组合、各一条）
+   */
+  assignments: AppearanceAssignment[];
+  /**
+   * 特殊装备 → 详情背景（优先于前后缀表；装备标识不可重复）
+   */
+  customs: CustomAppearance[];
+  /**
+   * 最后修改时间（毫秒，0 = 从未改过、仍是出厂值）
+   */
+  updatedAt: number;
 };
 
 export type Drug = {

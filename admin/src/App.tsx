@@ -20,7 +20,7 @@ import { EquipmentSettingsPage } from "./pages/EquipmentSettingsPage";
 import { RuntimeParamsPage } from "./pages/RuntimeParamsPage";
 import { CombatWeightsPage } from "./pages/CombatWeightsPage";
 import { GuideStepsPage } from "./pages/GuideStepsPage";
-import { EquipmentAppearancePage } from "./pages/EquipmentAppearancePage";
+import { EquipmentBordersPage, EquipmentBackgroundPage } from "./pages/EquipmentAppearanceKindPage";
 import { EquipAlignPage } from "./pages/EquipAlignPage";
 import { EquipInAlignPage } from "./pages/EquipInAlignPage";
 import { DrugsPage } from "./pages/DrugsPage";
@@ -215,10 +215,18 @@ export function App() {
             }
           />
           <Route
-            path="equipment-appearance"
+            path="equipment-borders"
             element={
               <RequirePermission permission={PERMISSION.GAME_CONFIG_READ}>
-                <EquipmentAppearancePage />
+                <EquipmentBordersPage />
+              </RequirePermission>
+            }
+          />
+          <Route
+            path="equipment-backgrounds"
+            element={
+              <RequirePermission permission={PERMISSION.GAME_CONFIG_READ}>
+                <EquipmentBackgroundPage />
               </RequirePermission>
             }
           />

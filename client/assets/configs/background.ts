@@ -1,6 +1,14 @@
 import { Equipment } from "../types/good";
+import type { AppearanceEffect } from "../types/appearance";
 import type { CustomDetailBackgroundAssignment, DetailBackgroundAssignment, DetailBackgroundResource } from "../types/background";
 import { getEquipmentBaseKey } from "./equipments";
+import { DEFAULT_APPEARANCE_EFFECT, parseAppearanceEffect } from "./appearance";
+
+/** 一条详情背景指派：用哪个帧序列目录（key）+ 怎么显示（effect，#700；缺省 = 铺满弹窗面板） */
+export interface BackgroundPick {
+  key: string;
+  effect: AppearanceEffect;
+}
 
 /**
  * 装备详情背景（品质背景动画）
@@ -51,18 +59,18 @@ export const detailBackgrounds = new Map<string, DetailBackgroundResource>();
 detailBackgroundResources.forEach((resource) => detailBackgrounds.set(resource.key, resource));
 
 /**
- * 前后缀组合 → 详情背景 key（键 = `${prefix}|${suffix}`）
+ * 前后缀组合 → 详情背景指派（键 = `${prefix}|${suffix}`；值带 effect，#700）
  *
  * 快照到达前为空（#695：映射来自服务端，见文件头）；`applyEquipmentDetailBackgrounds()` 重建。
  */
-export const prefixSuffixDetailBackgrounds = new Map<string, string>();
+export const prefixSuffixDetailBackgrounds = new Map<string, BackgroundPick>();
 
 /**
  * 特殊装备的自定义详情背景（key = 物品 id 或基础件 key；**优先于**前后缀表）
  *
  * 快照到达前为空（#695）；`applyEquipmentDetailBackgrounds()` 重建。
  */
-export const customEquipmentDetailBackgrounds = new Map<string, string>();
+export const customEquipmentDetailBackgrounds = new Map<string, BackgroundPick>();
 
 /**
  * 应用快照的 `equipmentAppearance` 段（`apply-snapshot` 用）—— 重建两张映射
@@ -89,7 +97,9 @@ export function applyEquipmentDetailBackgrounds(data: unknown): void {
         if (key) console.warn(`[detail-background] 跳过组合 ${prefix}|${suffix}：背景「${key}」不在客户端资源清单里`);
         continue;
       }
-      prefixSuffixDetailBackgrounds.set(`${prefix}|${suffix}`, key);
+      // effect 坏只丢效果（回落默认），映射本身保留
+      const effect = parseAppearanceEffect(item.effect, (message) => console.warn(`[detail-background] 组合 ${prefix}|${suffix} 的 ${message}`));
+      prefixSuffixDetailBackgrounds.set(`${prefix}|${suffix}`, { key, effect: effect ?? DEFAULT_APPEARANCE_EFFECT });
     }
   }
 
@@ -106,28 +116,38 @@ export function applyEquipmentDetailBackgrounds(data: unknown): void {
         console.warn(`[detail-background] 跳过自定义 ${equipment}：背景「${key}」不在客户端资源清单里`);
         continue;
       }
-      customEquipmentDetailBackgrounds.set(equipment, key);
+      const effect = parseAppearanceEffect(item.effect, (message) => console.warn(`[detail-background] 自定义 ${equipment} 的 ${message}`));
+      customEquipmentDetailBackgrounds.set(equipment, { key, effect: effect ?? DEFAULT_APPEARANCE_EFFECT });
     }
   }
 }
 
 /**
- * 取装备详情应显示的背景 key（不显示返回 null，详情弹窗保持静态底图）
+ * 解析装备详情应显示的背景指派（不显示返回 null，详情弹窗保持静态底图）
  *
  * 1. 自定义表：先按物品 id 精确命中，再按基础件 key 命中（命中但背景未登记 = 配置错误，回退前后缀表）；
  * 2. 前后缀组合表：按 `${prefix}|${suffix}` 查（前后缀异常时查不到，返回 null 不显示）。
  *
  * 只读装备对象自带的 prefix / suffix / id（背包、装备槽解析出的物品都带 id），不反查总表
  */
-export function getEquipmentDetailBackgroundKey(equipment: Equipment | null | undefined): string | null {
+export function resolveEquipmentDetailBackground(equipment: Equipment | null | undefined): BackgroundPick | null {
   if (!equipment) return null;
   const id = equipment.id ?? "";
   const custom = customEquipmentDetailBackgrounds.get(id) ?? customEquipmentDetailBackgrounds.get(getEquipmentBaseKey(id));
   if (custom) {
-    if (detailBackgrounds.has(custom)) return custom;
-    console.warn(`[detail-background] 自定义详情背景未登记：${id} → ${custom}，回退前后缀表`);
+    if (detailBackgrounds.has(custom.key)) return custom;
+    console.warn(`[detail-background] 自定义详情背景未登记：${id} → ${custom.key}，回退前后缀表`);
   }
   return prefixSuffixDetailBackgrounds.get(`${equipment.prefix}|${equipment.suffix}`) ?? null;
+}
+
+/**
+ * 取装备详情应显示的背景 key（不显示返回 null，详情弹窗保持静态底图）
+ *
+ * `resolveEquipmentDetailBackground` 的 key 快捷方式（渲染层要连 effect 一起拿，那个走 resolve）
+ */
+export function getEquipmentDetailBackgroundKey(equipment: Equipment | null | undefined): string | null {
+  return resolveEquipmentDetailBackground(equipment)?.key ?? null;
 }
 
 /**
@@ -136,8 +156,8 @@ export function getEquipmentDetailBackgroundKey(equipment: Equipment | null | un
  */
 export function getAssignedDetailBackgrounds(): DetailBackgroundResource[] {
   const result: DetailBackgroundResource[] = [];
-  prefixSuffixDetailBackgrounds.forEach((key) => {
-    const resource = detailBackgrounds.get(key);
+  prefixSuffixDetailBackgrounds.forEach((pick) => {
+    const resource = detailBackgrounds.get(pick.key);
     if (resource && !result.some((item) => item.key === resource.key)) result.push(resource);
   });
   return result;
