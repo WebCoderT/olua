@@ -70,7 +70,14 @@ GAME_PORT="${GAME_PORT:-8080}"
 
 verify() {
   echo "==> 验收"
+  # `docker compose up -d` 返回时容器**还没开始服务**：上一轮就是在这里读到 502 的假故障
+  # （nginx 已经在，后面 server 还在 starting）。先等健康检查转绿，再打接口。
   "${SSH[@]}" "$TARGET" "cd '$DEPLOY_DIR'
+    for i in \$(seq 1 40); do
+      bad=\$(docker compose ps --format '{{.Service}} {{.Status}}' | grep -cE 'starting|unhealthy|Exit|Restarting' || true)
+      [ \"\$bad\" = 0 ] && break
+      sleep 2
+    done
     docker compose ps
     echo -n 'admin page: '; curl --noproxy '*' -s -o /dev/null -w '%{http_code}\n' --max-time 10 http://127.0.0.1/
     echo -n 'admin api: ';  curl --noproxy '*' -s --max-time 10 http://127.0.0.1/api/health; echo
