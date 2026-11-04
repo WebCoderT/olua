@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { equipmentBackgroundApi, equipmentBorderApi, formatTime, PERMISSION } from "../api";
-import type { AppearanceAssignment, AppearanceEffect, AppearanceItem, CustomAppearance } from "../api";
+import type { AppearanceAssignment, AppearanceEffect, AppearanceItem, AppearanceResourceScan, CustomAppearance } from "../api";
 import { GameFrame } from "../components/GameImage";
 import { AppearanceEffectWorkbench, DEFAULT_EFFECT, describeEffect, isDefaultEffect } from "../components/AppearanceEffectWorkbench";
 import type { AppearanceEffectValue } from "../components/AppearanceEffectWorkbench";
 import { Modal } from "../components/Modal";
-import { Badge, Button, Card, Field, Input, Select, Spinner } from "../components/ui";
+import { Badge, Button, Card, Input, Select, Spinner, tableClass, tdClass, thClass, theadClass } from "../components/ui";
 import { PageHeader } from "../components/PageHeader";
 import { hasPermission } from "../store/session";
 import { toastSuccess } from "../store/toast";
@@ -15,11 +15,18 @@ import { toastSuccess } from "../store/toast";
  *
  * 两页共用这一套编辑器，只有配置不同（素材目录、key 格式、效果基准框）。
  * **清单本体在这里**：游戏里有哪些边框 / 背景（key + 显示效果），增删改查都做在
- * 列表里；「前后缀管理」页的关联棋盘与下方的特殊装备绑定都只是**引用**清单里的 key，
- * 属性（显示效果）改在清单里、保存时由服务端传播进引用处。
+ * 清单表格里；「前后缀管理」页的关联棋盘与下方的特殊装备绑定都只是**引用**清单里的
+ * key，属性（显示效果）改在清单里、保存时由服务端传播进引用处。
  *
  * 保存仍是**整边替换**（items + assignments + customs 一起提交）：assignments
  * 原样透传（棋盘归「前后缀管理」页），customs 在本页编辑。
+ *
+ * ## 从文件夹同步（#716）
+ * 清单条目远少于磁盘素材（边框 84 组、背景 40 组），而且素材以后还会持续增删 ——
+ * 「从文件夹同步」以资源文件夹为准整批增删清单：文件夹里有的全保留（effect 原样）、
+ * 没有的条目移除（**被引用的也移除**，引用处显示异常由运营后续修，客户端安静跳过）。
+ * 先扫盘出预览（新增 / 移除 / 移除且仍被引用），确认后才落库。手填 key 的编辑路径
+ * 仍受「被引用不可删」校验保护 —— 两套口径各管各的场景。
  *
  * ## 每条的预览与效果
  * 每条带 `GameFrame` 首帧缩略图（素材本体经 /game-resources 同源直读，服务端不用存图）；
@@ -64,8 +71,9 @@ const BORDER_CONFIG: KindConfig = {
   title: "装备边框",
   description: (updatedAt) => (
     <>
-      背包格子与身上装备槽的物品图标上那圈品质光效框。这里是**边框清单本体**：新增 / 删除边框、调显示效果都在列表里；
+      背包格子与身上装备槽的物品图标上那圈品质光效框。这里是**边框清单本体**：新增 / 删除边框、调显示效果都在表格里；
       哪个前后缀品质用哪个在「前后缀管理」页的棋盘里引用，特殊装备的单独绑定在本页下方。
+      素材增删了别手填 —— 点「从文件夹同步」按磁盘素材整批更新。
       {updatedAt ? <span className="ml-1 text-slate-500">上次修改：{formatTime(updatedAt)}</span> : null}
     </>
   ),
@@ -88,8 +96,9 @@ const BACKGROUND_CONFIG: KindConfig = {
   title: "装备详情背景",
   description: (updatedAt) => (
     <>
-      物品详情弹窗的品质背景动画。这里是**背景清单本体**：新增 / 删除背景、调显示效果都在列表里；
+      物品详情弹窗的品质背景动画。这里是**背景清单本体**：新增 / 删除背景、调显示效果都在表格里；
       哪个前后缀品质用哪个在「前后缀管理」页的棋盘里引用，特殊装备的单独绑定在本页下方。
+      素材增删了别手填 —— 点「从文件夹同步」按磁盘素材整批更新。
       {updatedAt ? <span className="ml-1 text-slate-500">上次修改：{formatTime(updatedAt)}</span> : null}
     </>
   ),
@@ -129,6 +138,13 @@ function EquipmentAppearanceKindPage({ config }: { config: KindConfig }) {
   const [saving, setSaving] = useState(false);
   /** 正在调显示效果的清单条目下标（null = 工作台关着） */
   const [effectIndex, setEffectIndex] = useState<number | null>(null);
+  /** 清单表格的 key 过滤词（#716：84 条边框不滤一眼扫不完） */
+  const [query, setQuery] = useState("");
+  /** 同步弹窗：预览（null = 还在扫）与执行状态 */
+  const [syncOpen, setSyncOpen] = useState(false);
+  const [scan, setScan] = useState<AppearanceResourceScan | null>(null);
+  const [scanLoading, setScanLoading] = useState(false);
+  const [syncing, setSyncing] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -168,6 +184,12 @@ function EquipmentAppearanceKindPage({ config }: { config: KindConfig }) {
     return inBoard + inCustoms;
   };
 
+  /** 过滤后的清单（带着原下标，编辑写回时好定位） */
+  const filteredItems = useMemo(() => {
+    const word = query.trim().toLowerCase();
+    return (items ?? []).map((row, index) => ({ row, index })).filter(({ row }) => row.key.toLowerCase().includes(word));
+  }, [items, query]);
+
   /** 效果工作台的读写口：把 value 写回正在编辑的那条清单条目 */
   const effectValue = (() => {
     if (effectIndex === null) return DEFAULT_EFFECT;
@@ -206,6 +228,39 @@ function EquipmentAppearanceKindPage({ config }: { config: KindConfig }) {
     }
   };
 
+  /** 打开同步弹窗：先扫盘出预览（新增 / 移除 / 移除且仍被引用） */
+  const openSync = async () => {
+    setSyncOpen(true);
+    setScan(null);
+    setScanLoading(true);
+    try {
+      const data = config.kind === "border" ? await equipmentBorderApi.scanResources() : await equipmentBackgroundApi.scanResources();
+      setScan(data);
+    } catch {
+      setSyncOpen(false); // 目录读不到等错误已由请求层提示，弹窗收起
+    } finally {
+      setScanLoading(false);
+    }
+  };
+
+  /** 确认执行同步（服务端按文件夹重建清单，被引用的条目也允许移除） */
+  const runSync = async () => {
+    setSyncing(true);
+    try {
+      const result = config.kind === "border" ? await equipmentBorderApi.syncResources() : await equipmentBackgroundApi.syncResources();
+      toastSuccess(
+        `${config.noun}清单已按文件夹同步：新增 ${result.added.length} 条、移除 ${result.removed.length} 条，保留 ${result.kept} 条` +
+          (result.removedReferenced.length ? `（${result.removedReferenced.length} 条仍被引用，引用处待修复）` : ""),
+      );
+      setSyncOpen(false);
+      await load();
+    } catch {
+      /* 错误已由请求层统一提示 */
+    } finally {
+      setSyncing(false);
+    }
+  };
+
   const effectEntry = effectIndex !== null ? (items?.[effectIndex] ?? null) : null;
 
   return (
@@ -215,14 +270,18 @@ function EquipmentAppearanceKindPage({ config }: { config: KindConfig }) {
       {items ? (
         <Card
           title={`${config.noun}清单（${items.length} 条）`}
-          description={`游戏里能用的${config.noun}都在这里：key 指向客户端资源包里的素材（填错了客户端会跳过并留日志），显示效果是这条素材的属性 —— 改这里，所有引用它的品质 / 特殊装备跟着变。被引用的条目不能删（先在引用处换别的${config.noun}）。`}
+          description={`游戏里能用的${config.noun}都在这里：key 指向客户端资源包里的素材（填错了客户端会跳过并留日志），显示效果是这条素材的属性 —— 改这里，所有引用它的品质 / 特殊装备跟着变。被引用的条目不能删（先在引用处换别的${config.noun}；「从文件夹同步」不受这条限制 —— 以磁盘素材为准整批增删）。`}
           actions={
             loading ? (
               <Spinner />
             ) : canWrite ? (
               <>
+                <Input placeholder="按 key 过滤…" value={query} onChange={(event) => setQuery(event.target.value)} className="w-40" />
                 <Button variant="ghost" disabled={items.length >= 100} onClick={appendItem}>
                   添加一项
+                </Button>
+                <Button variant="ghost" onClick={() => void openSync()}>
+                  从文件夹同步
                 </Button>
                 <Button disabled={saving || invalid !== null} loading={saving} onClick={() => void save()}>
                   保存全部
@@ -232,29 +291,65 @@ function EquipmentAppearanceKindPage({ config }: { config: KindConfig }) {
           }
         >
           {invalid ? <p className="text-xs text-amber-400">{invalid}</p> : null}
-          {items.length === 0 ? <p className="text-sm text-slate-400">清单空着 —— 点「添加一项」把素材 key 加进来。</p> : null}
-          <div className="flex flex-col gap-3">
-            {items.map((row, index) => {
-              const refs = referenceCount(row.key.trim());
-              return (
-                <div key={index} className="grid grid-cols-1 items-end gap-3 rounded border border-slate-700/60 p-3 sm:grid-cols-[auto_2fr_auto_auto_auto]">
-                  <GameFrame atlas={row.key ? config.atlasOf(row.key) : ""} size={44} alt={row.key} />
-                  <Field label="key" hint={config.keyHint}>
-                    <Input value={row.key} placeholder={config.keyExample} disabled={!canWrite} onChange={(event) => setItem(index, { key: event.target.value })} />
-                  </Field>
-                  <Button variant="ghost" disabled={!canWrite} onClick={() => setEffectIndex(index)}>
-                    效果 {row.effect ? describeEffect(row.effect as AppearanceEffectValue) : ""}
-                  </Button>
-                  {refs > 0 ? <Badge tone="indigo">引用 {refs}</Badge> : <Badge tone="slate">未引用</Badge>}
-                  {canWrite ? (
-                    <Button variant="ghost" disabled={refs > 0} title={refs > 0 ? `被引用 ${refs} 次，先在引用处换别的${config.noun}` : undefined} onClick={() => removeItem(index)}>
-                      删除
-                    </Button>
-                  ) : null}
-                </div>
-              );
-            })}
-          </div>
+          {items.length === 0 ? (
+            <p className="text-sm text-slate-400">清单空着 —— 点「添加一项」或「从文件夹同步」把素材加进来。</p>
+          ) : filteredItems.length === 0 ? (
+            <p className="text-sm text-slate-400">没有 key 包含「{query.trim()}」的条目。</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className={tableClass}>
+                <thead className={theadClass}>
+                  <tr>
+                    <th className={thClass}>预览</th>
+                    <th className={thClass}>key</th>
+                    <th className={thClass}>显示效果</th>
+                    <th className={thClass}>引用</th>
+                    <th className={thClass}>操作</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredItems.map(({ row, index }) => {
+                    const refs = referenceCount(row.key.trim());
+                    return (
+                      <tr key={index}>
+                        <td className={tdClass}>
+                          <GameFrame atlas={row.key ? config.atlasOf(row.key) : ""} size={40} alt={row.key} />
+                        </td>
+                        <td className={tdClass}>
+                          <Input
+                            value={row.key}
+                            placeholder={config.keyExample}
+                            disabled={!canWrite}
+                            title={config.keyHint}
+                            className="w-52 font-mono"
+                            onChange={(event) => setItem(index, { key: event.target.value })}
+                          />
+                        </td>
+                        <td className={tdClass}>
+                          <Button variant="ghost" disabled={!canWrite} onClick={() => setEffectIndex(index)}>
+                            效果 {row.effect ? describeEffect(row.effect as AppearanceEffectValue) : "默认"}
+                          </Button>
+                        </td>
+                        <td className={tdClass}>{refs > 0 ? <Badge tone="indigo">引用 {refs}</Badge> : <Badge tone="slate">未引用</Badge>}</td>
+                        <td className={tdClass}>
+                          {canWrite ? (
+                            <Button
+                              variant="ghost"
+                              disabled={refs > 0}
+                              title={refs > 0 ? `被引用 ${refs} 次，先在引用处换别的${config.noun}` : undefined}
+                              onClick={() => removeItem(index)}
+                            >
+                              删除
+                            </Button>
+                          ) : null}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
         </Card>
       ) : null}
 
@@ -270,31 +365,47 @@ function EquipmentAppearanceKindPage({ config }: { config: KindConfig }) {
             ) : null
           }
         >
-          {customs.length === 0 ? <p className="text-sm text-slate-400">还没有特殊装备绑定（所有装备走「前后缀管理」页的棋盘）。</p> : null}
-          <div className="flex flex-col gap-3">
-            {customs.map((row, index) => (
-              <div key={index} className="grid grid-cols-1 items-end gap-3 rounded border border-slate-700/60 p-3 sm:grid-cols-[2fr_2fr_auto]">
-                <Field label="装备标识" hint="变体 id 或基础件 key">
-                  <Input value={row.equipment} disabled={!canWrite} onChange={(event) => setCustom(index, { equipment: event.target.value })} />
-                </Field>
-                <Field label={config.noun} hint="从清单里选；显示效果在清单条目上改">
-                  <Select value={row.key} disabled={!canWrite} onChange={(event) => setCustom(index, { key: event.target.value })}>
-                    <option value="">（选择{config.noun}）</option>
-                    {(items ?? []).map((item) => (
-                      <option key={item.key} value={item.key}>
-                        {item.key}
-                      </option>
-                    ))}
-                  </Select>
-                </Field>
-                {canWrite ? (
-                  <Button variant="ghost" onClick={() => removeCustom(index)}>
-                    删除
-                  </Button>
-                ) : null}
-              </div>
-            ))}
-          </div>
+          {customs.length === 0 ? (
+            <p className="text-sm text-slate-400">还没有特殊装备绑定（所有装备走「前后缀管理」页的棋盘）。</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className={tableClass}>
+                <thead className={theadClass}>
+                  <tr>
+                    <th className={thClass}>装备标识</th>
+                    <th className={thClass}>{config.noun}</th>
+                    <th className={thClass}>操作</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {customs.map((row, index) => (
+                    <tr key={index}>
+                      <td className={tdClass}>
+                        <Input value={row.equipment} disabled={!canWrite} className="w-56 font-mono" onChange={(event) => setCustom(index, { equipment: event.target.value })} />
+                      </td>
+                      <td className={tdClass}>
+                        <Select value={row.key} disabled={!canWrite} className="w-52 font-mono" onChange={(event) => setCustom(index, { key: event.target.value })}>
+                          <option value="">（选择{config.noun}）</option>
+                          {(items ?? []).map((item) => (
+                            <option key={item.key} value={item.key}>
+                              {item.key}
+                            </option>
+                          ))}
+                        </Select>
+                      </td>
+                      <td className={tdClass}>
+                        {canWrite ? (
+                          <Button variant="ghost" onClick={() => removeCustom(index)}>
+                            删除
+                          </Button>
+                        ) : null}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </Card>
       ) : null}
 
@@ -322,7 +433,70 @@ function EquipmentAppearanceKindPage({ config }: { config: KindConfig }) {
           />
         ) : null}
       </Modal>
+
+      <Modal
+        open={syncOpen}
+        title={`从文件夹同步${config.noun}清单`}
+        size="lg"
+        onClose={() => setSyncOpen(false)}
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setSyncOpen(false)} disabled={syncing}>
+              取消
+            </Button>
+            <Button
+              variant={scan && scan.removed.length > 0 ? "danger" : "primary"}
+              loading={syncing}
+              disabled={!scan || (scan.added.length === 0 && scan.removed.length === 0)}
+              onClick={() => void runSync()}
+            >
+              执行同步
+            </Button>
+          </>
+        }
+      >
+        {scanLoading || !scan ? (
+          <div className="flex items-center gap-2 py-6 text-sm text-slate-400">
+            <Spinner /> 正在扫描资源文件夹…
+          </div>
+        ) : (
+          <div className="flex flex-col gap-3 text-sm text-slate-300">
+            <p>
+              以 <span className="break-all font-mono text-xs text-slate-400">{scan.dir}</span> 为准：文件夹里有
+              <span className="mx-1 text-slate-100">{scan.keys.length}</span>个{config.noun}素材。
+            </p>
+            {scan.added.length === 0 && scan.removed.length === 0 ? (
+              <p className="text-slate-400">清单与文件夹一致，无需同步。</p>
+            ) : null}
+            {scan.added.length > 0 ? (
+              <section>
+                <p className="text-emerald-400">将新增 {scan.added.length} 条（effect 缺省，之后可在清单里调）</p>
+                <ChipList keys={scan.added} tone="text-emerald-300/80" />
+              </section>
+            ) : null}
+            {scan.removed.length > 0 ? (
+              <section>
+                <p className="text-rose-400">将移除 {scan.removed.length} 条（文件夹里已没有对应素材）</p>
+                <ChipList keys={scan.removed} tone="text-rose-300/80" />
+              </section>
+            ) : null}
+            {scan.removedReferenced.length > 0 ? (
+              <p className="rounded border border-amber-700/60 bg-amber-900/20 p-2 text-xs leading-relaxed text-amber-300">
+                其中 {scan.removedReferenced.length} 条（{scan.removedReferenced.join("、")}）仍被前后缀棋盘 / 特殊装备绑定引用 ——
+                同步照样移除，引用处会显示异常（客户端安静跳过），之后请在「前后缀管理」页或下方绑定区改引用别的{config.noun}。
+              </p>
+            ) : null}
+          </div>
+        )}
+      </Modal>
     </div>
+  );
+}
+
+/** 同步预览里的 key 长列表：等宽小字流式排布，超高内滚（84 条不撑破弹窗） */
+function ChipList({ keys, tone }: { keys: string[]; tone: string }) {
+  return (
+    <p className={`mt-1 max-h-32 overflow-y-auto break-all font-mono text-xs leading-5 ${tone}`}>{keys.join("　")}</p>
   );
 }
 

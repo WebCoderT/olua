@@ -1,11 +1,16 @@
-import { Body, Controller, Get, Patch } from "@nestjs/common";
+import { Body, Controller, Get, Patch, Post } from "@nestjs/common";
 import { ApiAudience } from "../../common/decorators/audience.decorator";
 import { ApiAdminDoc } from "../../common/decorators/api-doc.decorator";
 import { ApiDataResponse } from "../../common/decorators/api-data-response.decorator";
 import { AuditTarget } from "../../common/decorators/audit-target.decorator";
 import { Permission } from "../../common/constants/permission";
 import { EquipmentAppearanceService } from "./equipment-appearance.service";
-import { EquipmentBorderDto, UpdateEquipmentBorderDto } from "./dto/equipment-appearance.dto";
+import {
+  AppearanceResourceScanDto,
+  AppearanceResourceSyncDto,
+  EquipmentBorderDto,
+  UpdateEquipmentBorderDto,
+} from "./dto/equipment-appearance.dto";
 
 /**
  * 管理端 · 装备边框（#695 出端点、#699 拆成独立页面的半边）
@@ -71,5 +76,57 @@ export class AdminEquipmentBorderController {
   @ApiDataResponse(EquipmentBorderDto, { description: "更新后的装备边框配置" })
   update(@Body() dto: UpdateEquipmentBorderDto): EquipmentBorderDto {
     return this.equipmentAppearanceService.updateBorder(dto);
+  }
+
+  /**
+   * 扫描边框资源文件夹（#716「从文件夹同步」的预览）
+   *
+   * 与 GET 配置的差异：这是去**磁盘**上数素材（`EQUIPMENT_APPEARANCE_RES_DIR` 下的
+   * `borders/`），返回「文件夹有哪些 key、与当前清单的差集」—— 管理端拿它弹
+   * 「将新增 N / 将移除 M」的确认框，确认后才调下面的 sync。
+   */
+  @Get("resources")
+  @ApiAdminDoc({
+    operationId: "adminEquipmentBorder.scanResources",
+    summary: "扫描边框资源文件夹（同步预览）",
+    description:
+      "扫资源目录（`EQUIPMENT_APPEARANCE_RES_DIR`，缺省 `../client/assets/resources`；线上 compose\n" +
+      "把 `game/resources/` 挂进容器）下的 `borders/`，返回：\n\n" +
+      "- `keys`：文件夹里的全部边框 key（sfx 编号升序；plist + 同名 png 成对才算）\n" +
+      "- `added` / `removed`：与当前清单的差集（同步将新增 / 将移除）\n" +
+      "- `removedReferenced`：removed 里仍被棋盘 / 绑定引用的 key（同步允许移除，\n" +
+      "  引用处之后会显示异常 —— 以文件夹为准就是要这个效果）\n\n" +
+      "目录读不到 → 40000（错误消息里有实际路径，方便排查挂载）。",
+    permissions: [Permission.GAME_CONFIG_READ],
+  })
+  @ApiDataResponse(AppearanceResourceScanDto, { description: "文件夹 key 与当前清单的差集" })
+  scanResources(): AppearanceResourceScanDto {
+    return this.equipmentAppearanceService.scanResources("border");
+  }
+
+  /**
+   * 按资源文件夹同步边框清单（#716）
+   *
+   * 文件夹是事实来源：同步后清单 = 文件夹里的全部素材。**被引用的条目也允许移除**
+   * （引用处显示异常是接受的后果）—— 这是它与整边替换（PATCH）「被引用不可删」
+   * 校验的唯一分歧点，必须是显式点击确认的整批动作才走这条路。
+   */
+  @Post("sync")
+  @AuditTarget("equipmentAppearance")
+  @ApiAdminDoc({
+    operationId: "adminEquipmentBorder.syncResources",
+    summary: "按资源文件夹同步边框清单（以文件夹为准）",
+    description:
+      "**以文件夹为准**重建边框清单：文件夹里的素材全保留（effect 原样），文件夹里没有的\n" +
+      "条目移除——**哪怕仍被棋盘 / 特殊装备绑定引用**（引用处会显示异常，客户端安静跳过，\n" +
+      "读接口会把被引用的 key 自动并回清单，直到引用修好为止）。\n\n" +
+      "只动边框这半边的清单列；棋盘 / 绑定 / 背景那半边都不动。\n\n" +
+      "安全阀：目录读不到 / 空目录（多半是挂载配错）/ 超过清单上限 → 40000 且不落库。\n" +
+      "改完玩家下次进游戏拉配置快照后生效。",
+    permissions: [Permission.GAME_CONFIG_WRITE],
+  })
+  @ApiDataResponse(AppearanceResourceSyncDto, { description: "同步结果（新增 / 移除 / 保留数）" })
+  syncResources(): AppearanceResourceSyncDto {
+    return this.equipmentAppearanceService.syncResources("border");
   }
 }

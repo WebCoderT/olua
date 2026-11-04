@@ -1,11 +1,16 @@
-import { Body, Controller, Get, Patch } from "@nestjs/common";
+import { Body, Controller, Get, Patch, Post } from "@nestjs/common";
 import { ApiAudience } from "../../common/decorators/audience.decorator";
 import { ApiAdminDoc } from "../../common/decorators/api-doc.decorator";
 import { ApiDataResponse } from "../../common/decorators/api-data-response.decorator";
 import { AuditTarget } from "../../common/decorators/audit-target.decorator";
 import { Permission } from "../../common/constants/permission";
 import { EquipmentAppearanceService } from "./equipment-appearance.service";
-import { EquipmentBackgroundDto, UpdateEquipmentBackgroundDto } from "./dto/equipment-appearance.dto";
+import {
+  AppearanceResourceScanDto,
+  AppearanceResourceSyncDto,
+  EquipmentBackgroundDto,
+  UpdateEquipmentBackgroundDto,
+} from "./dto/equipment-appearance.dto";
 
 /**
  * 管理端 · 装备详情背景（#695 出端点、#699 拆成独立页面的半边）
@@ -65,5 +70,47 @@ export class AdminEquipmentBackgroundController {
   @ApiDataResponse(EquipmentBackgroundDto, { description: "更新后的装备详情背景配置" })
   update(@Body() dto: UpdateEquipmentBackgroundDto): EquipmentBackgroundDto {
     return this.equipmentAppearanceService.updateBackground(dto);
+  }
+
+  /**
+   * 扫描背景资源文件夹（#716「从文件夹同步」的预览）：与边框控制器同构，
+   * 只是子目录换成 `backgrounds/`（key = 帧序列目录名）。
+   */
+  @Get("resources")
+  @ApiAdminDoc({
+    operationId: "adminEquipmentBackground.scanResources",
+    summary: "扫描背景资源文件夹（同步预览）",
+    description:
+      "扫资源目录（`EQUIPMENT_APPEARANCE_RES_DIR`，缺省 `../client/assets/resources`；线上 compose\n" +
+      "把 `game/resources/` 挂进容器）下的 `backgrounds/`，返回：\n\n" +
+      "- `keys`：文件夹里的全部背景 key（sfx 编号升序；帧序列目录才算）\n" +
+      "- `added` / `removed`：与当前清单的差集（同步将新增 / 将移除）\n" +
+      "- `removedReferenced`：removed 里仍被棋盘 / 绑定引用的 key（同步允许移除）\n\n" +
+      "目录读不到 → 40000（错误消息里有实际路径，方便排查挂载）。",
+    permissions: [Permission.GAME_CONFIG_READ],
+  })
+  @ApiDataResponse(AppearanceResourceScanDto, { description: "文件夹 key 与当前清单的差集" })
+  scanResources(): AppearanceResourceScanDto {
+    return this.equipmentAppearanceService.scanResources("background");
+  }
+
+  /** 按资源文件夹同步背景清单（#716）：与边框控制器同构，只动背景这半边的清单列。 */
+  @Post("sync")
+  @AuditTarget("equipmentAppearance")
+  @ApiAdminDoc({
+    operationId: "adminEquipmentBackground.syncResources",
+    summary: "按资源文件夹同步背景清单（以文件夹为准）",
+    description:
+      "**以文件夹为准**重建背景清单：文件夹里的素材全保留（effect 原样），文件夹里没有的\n" +
+      "条目移除——**哪怕仍被棋盘 / 特殊装备绑定引用**（引用处会显示异常，客户端安静跳过，\n" +
+      "读接口会把被引用的 key 自动并回清单，直到引用修好为止）。\n\n" +
+      "只动背景这半边的清单列；棋盘 / 绑定 / 边框那半边都不动。\n\n" +
+      "安全阀：目录读不到 / 空目录（多半是挂载配错）/ 超过清单上限 → 40000 且不落库。\n" +
+      "改完玩家下次进游戏拉配置快照后生效。",
+    permissions: [Permission.GAME_CONFIG_WRITE],
+  })
+  @ApiDataResponse(AppearanceResourceSyncDto, { description: "同步结果（新增 / 移除 / 保留数）" })
+  syncResources(): AppearanceResourceSyncDto {
+    return this.equipmentAppearanceService.syncResources("background");
   }
 }

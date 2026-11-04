@@ -4973,6 +4973,52 @@ export type EquipmentBackground = {
   updatedAt: number;
 };
 
+export type AppearanceResourceScan = {
+  /**
+   * 实际扫描的资源目录（排查「为什么扫不到」用）
+   */
+  dir: string;
+  /**
+   * 文件夹里的全部 key（按 sfx 编号升序）
+   */
+  keys: string[];
+  /**
+   * 文件夹有、清单没有的 key（同步会新增）
+   */
+  added: string[];
+  /**
+   * 清单有、文件夹没有的 key（同步会移除）
+   */
+  removed: string[];
+  /**
+   * removed 里仍被棋盘 / 特殊装备绑定引用的 key（#716 允许移除；引用处会显示异常，客户端安静跳过）
+   */
+  removedReferenced: string[];
+};
+
+export type AppearanceResourceSync = {
+  /**
+   * 本次新增的 key
+   */
+  added: string[];
+  /**
+   * 本次移除的 key
+   */
+  removed: string[];
+  /**
+   * 移除的 key 里仍被引用的（引用处待运营修复）
+   */
+  removedReferenced: string[];
+  /**
+   * 保留的条目数（存活条目连同已配置的 effect 一起保留）
+   */
+  kept: number;
+  /**
+   * 同步后的最后修改时间（毫秒）
+   */
+  updatedAt: number;
+};
+
 export type Drug = {
   /**
    * 药品 id（如 drug_hp_1；被掉落表与背包引用，不可增删行）

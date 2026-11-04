@@ -41,8 +41,14 @@ services:
       # 管理端与接口同源 → 默认不放行任何跨域来源（空值 = 不配置 CORS）。
       # 要给别的域名放行：OLUA_CORS_ORIGINS=https://admin.example.com docker compose up -d
       CORS_ORIGINS: ${OLUA_CORS_ORIGINS:-}
+      # 装备边框 / 背景的「从文件夹同步」（#716）要扫客户端素材目录：
+      # 线上就是下面挂进来的 game/resources/（deploy.sh --resources 的产物，与
+      # 管理端 /game-resources/ 反代同一份）；本地开发不配，缺省取 ../client/assets/resources。
+      EQUIPMENT_APPEARANCE_RES_DIR: /app/game-resources
     volumes:
       - olua-data:/app/data
+      # 只读：服务端只需要「数有哪些边框 / 背景素材」，不改也不删任何文件
+      - ./game/resources:/app/game-resources:ro
     # 接口**不映射到宿主机**：管理端走下面的 compose 内网反代已经够用，
     # 对外多开一个 3100 只是把签名接口与 Swagger 一并暴露出去，没有收益。
     # 本地要用 Swagger 调试，把下面四行的注释去掉（或临时 docker run -p 3100:3100）：

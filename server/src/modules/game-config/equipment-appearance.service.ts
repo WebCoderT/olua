@@ -1,4 +1,6 @@
 import { Injectable, Logger, OnModuleInit } from "@nestjs/common";
+import fs from "node:fs";
+import path from "node:path";
 import { BizCode } from "../../common/constants/biz-code";
 import { BizException } from "../../common/errors/biz.exception";
 import {
@@ -19,6 +21,8 @@ import { EquipmentRepository } from "../../database/repositories/equipment.repos
 import {
   AppearanceAssignmentDto,
   AppearanceItemDto,
+  AppearanceResourceScanDto,
+  AppearanceResourceSyncDto,
   CustomAppearanceDto,
   EquipmentAppearanceDto,
   EquipmentBackgroundDto,
@@ -124,6 +128,26 @@ export class EquipmentAppearanceService implements OnModuleInit {
     return this.getKind("border") as EquipmentBorderDto;
   }
 
+  /** 行缺失时的防御性垫底（onModuleInit 正常已 seed；这里只是防御，与 updateKind 同一口径） */
+  private fallbackRow(): EquipmentAppearanceRow {
+    const { prefixCount, suffixCount } = this.tiers();
+    const defaults = buildAppearanceDefaults(prefixCount, suffixCount);
+    return {
+      id: 1,
+      borders: JSON.stringify(toAssignmentRows(defaults.borders)),
+      backgrounds: JSON.stringify(toAssignmentRows(defaults.backgrounds)),
+      custom_borders: "[]",
+      custom_backgrounds: "[]",
+      border_items: "[]",
+      background_items: "[]",
+      updated_at: 0,
+    };
+  }
+
+  private rowWithFallback(): EquipmentAppearanceRow {
+    return this.repository.get() ?? this.fallbackRow();
+  }
+
   /** 单边读 · 背景页 */
   getBackground(): EquipmentBackgroundDto {
     return this.getKind("background") as EquipmentBackgroundDto;
@@ -158,6 +182,80 @@ export class EquipmentAppearanceService implements OnModuleInit {
   updateBackground(dto: UpdateEquipmentBackgroundDto): EquipmentBackgroundDto {
     this.updateKind("background", dto.assignments ?? [], dto.customs ?? [], dto.items);
     return this.getBackground();
+  }
+
+  /**
+   * 资源文件夹扫描（#716「从文件夹同步」的预览）
+   *
+   * 扫 `EQUIPMENT_APPEARANCE_RES_DIR`（缺省 = 仓库布局的 `../client/assets/resources`，
+   * 线上由 compose 把 `game/resources/` 只读挂进容器）下本边素材目录，与**当前清单**
+   * （GET 口径，含被引用自动并入的 key）求差集。管理端拿它弹「将新增 / 将移除」确认框。
+   */
+  scanResources(kind: AppearanceKind): AppearanceResourceScanDto {
+    const { dir, keys } = scanAppearanceFolder(kind);
+    const spec = KIND_SPECS[kind];
+    const row = this.repository.get();
+    const assignments = this.effectiveAssignments(row, spec);
+    const customs = this.effectiveCustoms(row, spec);
+    const items = this.effectiveItems(row, spec, assignments, customs);
+    const folder = new Set(keys);
+    const known = new Set(items.map((item) => item.key));
+    const referenced = new Set([...assignments.map((assignment) => assignment.key), ...customs.map((custom) => custom.key)]);
+    const removed = items.map((item) => item.key).filter((key) => !folder.has(key));
+    return {
+      dir,
+      keys,
+      added: keys.filter((key) => !known.has(key)),
+      removed,
+      removedReferenced: removed.filter((key) => referenced.has(key)),
+    };
+  }
+
+  /**
+   * 从资源文件夹同步清单（#716）：**文件夹是「游戏里有哪些边框 / 背景」的事实来源**
+   *
+   * - 同步后清单 = 文件夹里的全部素材（按 sfx 编号升序）；存活条目的 `effect`
+   *   原样保留（effect 的单一来源在清单，不能被同步冲掉），新条目缺省；
+   * - 文件夹里没了的素材 → 条目移除，**哪怕仍被棋盘 / 自定义表引用** —— 这是与
+   *   `updateKind` 引用完整性校验的唯一分歧点：手工编辑仍走校验（防手滑删错），
+   *   而同步是运营明确「以文件夹为准」的整批动作，引用处显示异常（客户端安静跳过）
+   *   是需求接受的后果，读接口会把被引用的 key 自动并回清单，下次同步前一直可见；
+   * - 棋盘 / 自定义表两列**不动** —— 它们的归属页（前后缀管理 / 本页绑定区）各自修。
+   *
+   * 只写本边的清单列，另一边与映射列不受影响；任何异常（目录读不到 / 空目录 /
+   * 超上限）→ 40000 且**不落库**（空目录多半是挂载配错，拿它清空清单等于删库）。
+   */
+  syncResources(kind: AppearanceKind): AppearanceResourceSyncDto {
+    const preview = this.scanResources(kind);
+    const spec = KIND_SPECS[kind];
+    if (preview.keys.length === 0) {
+      throw new BizException(BizCode.PARAM_INVALID, `资源目录里没扫到任何${spec.label}素材（${preview.dir}）—— 目录多半配错了，拒绝清空清单`);
+    }
+    if (preview.keys.length > EQUIPMENT_APPEARANCE_LIMITS.itemMax) {
+      throw new BizException(
+        BizCode.PARAM_INVALID,
+        `资源目录里有 ${preview.keys.length} 个${spec.label}素材，超过清单上限 ${EQUIPMENT_APPEARANCE_LIMITS.itemMax} —— 先清理素材或扩上限`,
+      );
+    }
+    // effect 单一来源在清单：存活条目连同 effect 一起保留，新条目缺省
+    const effectByKey = new Map(this.getKind(kind).items.map((item) => [item.key, item.effect]));
+    const items = preview.keys.map((key) => ({ key, ...(effectByKey.get(key) ? { effect: effectByKey.get(key) } : {}) }));
+    const row = this.rowWithFallback();
+    row[spec.itemColumn] = JSON.stringify(items);
+    row.updated_at = Date.now();
+    this.repository.update(row);
+    this.logger.log(
+      `${spec.label}清单已按资源文件夹同步：新增 ${preview.added.length}、移除 ${preview.removed.length}` +
+        (preview.removedReferenced.length ? `（其中 ${preview.removedReferenced.length} 个仍被引用，引用处待修复）` : "") +
+        `，共 ${items.length} 条`,
+    );
+    return {
+      added: preview.added,
+      removed: preview.removed,
+      removedReferenced: preview.removedReferenced,
+      kept: items.length,
+      updatedAt: row.updated_at,
+    };
   }
 
   /** 单边读的共享实现：kind 决定读哪几列（清单 + 映射 + 自定义表） */
@@ -216,18 +314,7 @@ export class EquipmentAppearanceService implements OnModuleInit {
     const propagatedAssignments = assignments.map((row) => ({ prefix: row.prefix, suffix: row.suffix, key: row.key, ...(effectOf(row.key) ? { effect: effectOf(row.key) } : {}) }));
     const propagatedCustoms = checkedCustoms.map((row) => ({ equipment: row.equipment, key: row.key, ...(effectOf(row.key) ? { effect: effectOf(row.key) } : {}) }));
 
-    const { prefixCount, suffixCount } = this.tiers();
-    const defaults = buildAppearanceDefaults(prefixCount, suffixCount);
-    const row: EquipmentAppearanceRow = current ?? {
-      id: 1,
-      borders: JSON.stringify(toAssignmentRows(defaults.borders)),
-      backgrounds: JSON.stringify(toAssignmentRows(defaults.backgrounds)),
-      custom_borders: "[]",
-      custom_backgrounds: "[]",
-      border_items: "[]",
-      background_items: "[]",
-      updated_at: 0,
-    };
+    const row: EquipmentAppearanceRow = current ?? this.fallbackRow();
     if (kind === "border") {
       row.borders = JSON.stringify(toAssignmentRows(propagatedAssignments));
       row.custom_borders = JSON.stringify(propagatedCustoms);
@@ -480,3 +567,67 @@ function effectProblemOf(effect: AppearanceEffect | undefined): string | null {
 function toAssignmentRows(rows: { prefix: number; suffix: number; key: string; effect?: AppearanceEffect }[]): { prefix: number; suffix: number; key: string; effect?: AppearanceEffect }[] {
   return rows.map((row) => ({ prefix: row.prefix, suffix: row.suffix, key: row.key, ...(row.effect ? { effect: row.effect } : {}) }));
 }
+
+//#region 资源文件夹扫盘（#716「从文件夹同步」）
+
+/** 每种素材在 resources 下的子目录与 key → 文件名（去扩展名）的规则 */
+const RES_FOLDER_SPECS: Record<AppearanceKind, { subdir: string; filePattern: RegExp }> = {
+  border: { subdir: "borders", filePattern: /^sfx_\d+_0$/ },
+  background: { subdir: "backgrounds", filePattern: /^sfx_\d+$/ },
+};
+
+/**
+ * 资源目录：显式配置优先；缺省按「服务端 cwd 在 server/ 里」的仓库布局取隔壁 client。
+ * 字面量取 env（不走常量间接）是有意的：tools/audit-api-hardcode 的登记检查按
+ * 「process.env + 点号键名」的形状搜集 —— 用了哪个键、.env.example 里就得登记哪个。
+ */
+function appearanceResDir(): string {
+  const configured = process.env.EQUIPMENT_APPEARANCE_RES_DIR?.trim();
+  return configured || path.resolve(process.cwd(), "..", "client", "assets", "resources");
+}
+
+/** 从 key 里抠 sfx 编号（排序用；抠不到排最前，反正格式校验在别处） */
+function appearanceSerialOf(key: string): number {
+  return Number(key.match(/sfx_(\d+)/)?.[1] ?? 0);
+}
+
+/**
+ * 扫资源文件夹拿全部 key（按 sfx 编号升序）
+ *
+ * - 边框 = `borders/sfx_N_0.plist` **且同名 png 存在**（有图集定义没图是坏素材，跳过）；
+ * - 背景 = `backgrounds/sfx_N/` 帧序列目录；
+ * - `.meta`（Cocos 的杂鱼文件）天然不匹配任何规则，不用特判。
+ */
+function scanAppearanceFolder(kind: AppearanceKind): { dir: string; keys: string[] } {
+  const spec = RES_FOLDER_SPECS[kind];
+  const dir = path.resolve(appearanceResDir(), spec.subdir);
+  let entries: fs.Dirent[];
+  try {
+    entries = fs.readdirSync(dir, { withFileTypes: true });
+  } catch {
+    throw new BizException(
+      BizCode.PARAM_INVALID,
+      `资源目录读不到：${dir} —— 用环境变量 EQUIPMENT_APPEARANCE_RES_DIR 把它指到客户端 resources 目录` +
+        `（本地开发缺省就是 ../client/assets/resources；线上由 compose 把 game/resources 挂进容器）`,
+    );
+  }
+  const keys: string[] = [];
+  if (kind === "border") {
+    for (const entry of entries) {
+      if (!entry.isFile() || !entry.name.endsWith(".plist")) continue;
+      const key = entry.name.slice(0, -".plist".length);
+      if (!spec.filePattern.test(key)) continue;
+      if (!entries.some((other) => other.isFile() && other.name === `${key}.png`)) continue;
+      keys.push(key);
+    }
+  } else {
+    for (const entry of entries) {
+      if (!entry.isDirectory() || !spec.filePattern.test(entry.name)) continue;
+      keys.push(entry.name);
+    }
+  }
+  keys.sort((a, b) => appearanceSerialOf(a) - appearanceSerialOf(b));
+  return { dir, keys };
+}
+
+//#endregion
