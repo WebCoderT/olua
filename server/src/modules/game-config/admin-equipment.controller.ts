@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Query } from "@nestjs/common";
+import { Body, Controller, Get, Param, Patch, Post, Query } from "@nestjs/common";
 import { ApiParam } from "@nestjs/swagger";
 import { ApiDataResponse } from "../../common/decorators/api-data-response.decorator";
 import { ApiAdminDoc } from "../../common/decorators/api-doc.decorator";
@@ -16,6 +16,7 @@ import {
   EquipmentVariantDto,
   EquipmentVariantPageDto,
   EquipmentVariantQueryDto,
+  EquipmentVariantRebuildResultDto,
   EQUIPMENT_SLOT_KEYS,
   UpdateEquipmentDto,
   UpdateEquipmentVariantDto,
@@ -127,5 +128,31 @@ export class AdminEquipmentVariantController {
   @ApiDataResponse(EquipmentVariantDto, { description: "更新后的变体" })
   update(@Param("id") id: string, @Body() dto: UpdateEquipmentVariantDto): EquipmentVariantDto {
     return this.gameConfigService.updateEquipmentVariant(id, dto);
+  }
+
+  /**
+   * 重新生成全部装备变体（#697）
+   *
+   * 唯一会**删除**既有变体行的入口：按 equipment_meta 当前前后缀倍率整批重算。
+   * 属性 / 名称 / 等级覆盖，**卖价保留原值**（新组合按公式垫底）；档位缩小时被删
+   * 组合的持有者会变无效引用 —— 管理端按钮自带二次确认。
+   */
+  @Post("rebuild")
+  @AuditTarget("equipmentVariant")
+  @ApiAdminDoc({
+    operationId: "adminEquipmentVariant.rebuild",
+    summary: "重新生成全部装备变体",
+    description:
+      "按装备规则（前后缀档位，`GET /admin` 下的 `equipment-meta` 单行表）**当前**的前后缀倍率，把每个基础件 × 每个组合整批重算：\n\n" +
+      "- 属性 = `round(基础值 × 前缀倍率 × 后缀倍率)`；名称 / 穿戴等级取基础件。\n" +
+      "- **卖价保留原值**（运营逐条调过的价不被覆盖）；新增组合（扩档后）按 `round(10 × 等级 × 倍率)` 垫底。\n" +
+      "- 档位缩小后，被删组合的变体行会消失 —— 背包 / 穿戴里还引用那些 id 的装备变成无效引用。\n" +
+      "- 幂等：同一份倍率连点两次，第二次只刷新 updated_at。\n" +
+      "- 重建完立刻重装结算层，服务端即时生效；客户端下次拉快照生效。",
+    permissions: [Permission.GAME_CONFIG_WRITE],
+  })
+  @ApiDataResponse(EquipmentVariantRebuildResultDto, { description: "重建盘点（基础件数 / 组合数 / 变体行数）" })
+  rebuild(): EquipmentVariantRebuildResultDto {
+    return this.gameConfigService.rebuildEquipmentVariants();
   }
 }

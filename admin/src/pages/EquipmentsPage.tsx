@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { equipmentsApi, equipmentSlotKeys, formatTime, OCCUPATION_LABELS, PERMISSION, SEX_LABELS, slotLabel } from "../api";
-import type { ConfigAttributes, Equipment, PageResult } from "../api";
+import { equipmentsApi, equipmentMetaApi, equipmentSlotKeys, equipmentVariantsApi, formatTime, OCCUPATION_LABELS, PERMISSION, SEX_LABELS, slotLabel } from "../api";
+import type { ConfigAttributes, Equipment, EquipmentVariantRebuildResult, PageResult } from "../api";
 import { AttributesGrid, crossedRangeKeys } from "../components/AttributesEditor";
+import { ConfirmDialog } from "../components/ConfirmDialog";
 import { GameIcon } from "../components/GameImage";
 import { IconField } from "../components/ImagePicker";
 import { anyPickerOpen } from "../components/pickerStack";
@@ -355,6 +356,198 @@ function EquipmentEditDialog({
   );
 }
 
+//#region 前后缀档位管理弹窗（#697）
+
+/** 一档 = 一条文案 + 一个倍率（输入态都是字符串，提交时再解析） */
+type TierDraft = { label: string; rate: string };
+
+const TIER_LIMITS = { min: 1, max: 10, maxRate: 1000, maxLabelLength: 10 };
+
+/** 一组档位的就地体检（返回第一条问题；null = 合法） */
+function tierProblem(tiers: TierDraft[], kind: string): string | null {
+  if (tiers.length < TIER_LIMITS.min) return `${kind}至少要留 ${TIER_LIMITS.min} 档`;
+  if (tiers.length > TIER_LIMITS.max) return `${kind}最多 ${TIER_LIMITS.max} 档`;
+  const seen = new Set<string>();
+  for (const [index, tier] of tiers.entries()) {
+    const label = tier.label.trim();
+    if (!label) return `${kind}第 ${index + 1} 档没有填文案`;
+    if (label.length > TIER_LIMITS.maxLabelLength) return `${kind}第 ${index + 1} 档的文案超过 ${TIER_LIMITS.maxLabelLength} 个字`;
+    if (seen.has(label)) return `${kind}第 ${index + 1} 档的文案「${label}」重复了`;
+    seen.add(label);
+    if (!isNumber(tier.rate)) return `${kind}第 ${index + 1} 档的倍率不是数字`;
+    if (Number(tier.rate) <= 0) return `${kind}第 ${index + 1} 档的倍率必须大于 0`;
+    if (Number(tier.rate) > TIER_LIMITS.maxRate) return `${kind}第 ${index + 1} 档的倍率超出防御性上限（${TIER_LIMITS.maxRate}）`;
+  }
+  return null;
+}
+
+/**
+ * 前后缀档位管理弹窗（#697）：文案 + 倍率的增删改查
+ *
+ * 档位住在 `equipment_meta` 单行表（文案 / 倍率两条平行数组，整份替换）。
+ * **这里只改「档位定义」** —— 已展开的装备变体行不动；增删档位后要回本页点
+ * 「重新生成变体」才会按新档数重建（弹窗里反复讲这件事，因为「改了档位但属性
+ * 没变」是最容易发生的误用）。删除档位在重建后会让该档变体行消失。
+ */
+function TiersDialog({ open, onCancel }: { open: boolean; onCancel: () => void }) {
+  const [prefixTiers, setPrefixTiers] = useState<TierDraft[] | null>(null);
+  const [suffixTiers, setSuffixTiers] = useState<TierDraft[] | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    setLoading(true);
+    equipmentMetaApi
+      .get()
+      .then((row) => {
+        if (cancelled) return;
+        setPrefixTiers(row.prefixLabels.map((label, index) => ({ label, rate: String(row.prefixRates[index] ?? 1) })));
+        setSuffixTiers(row.suffixLabels.map((label, index) => ({ label, rate: String(row.suffixRates[index] ?? 1) })));
+      })
+      .catch(() => {
+        /* 错误已由请求层统一提示；弹窗留在空态，关掉重开再试 */
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
+
+  if (!open) return null;
+
+  const problem = prefixTiers && suffixTiers ? tierProblem(prefixTiers, "前缀") ?? tierProblem(suffixTiers, "后缀") : "加载中";
+  const patchTier = (kind: "prefix" | "suffix", index: number, next: Partial<TierDraft>) => {
+    const setter = kind === "prefix" ? setPrefixTiers : setSuffixTiers;
+    setter((current) => (current ?? []).map((tier, i) => (i === index ? { ...tier, ...next } : tier)));
+  };
+  const appendTier = (kind: "prefix" | "suffix") => {
+    const setter = kind === "prefix" ? setPrefixTiers : setSuffixTiers;
+    setter((current) => [...(current ?? []), { label: "新档", rate: "1" }]);
+  };
+  const removeTier = (kind: "prefix" | "suffix", index: number) => {
+    const setter = kind === "prefix" ? setPrefixTiers : setSuffixTiers;
+    setter((current) => (current ?? []).filter((_, i) => i !== index));
+  };
+
+  const submit = async () => {
+    if (!prefixTiers || !suffixTiers || problem) return;
+    setSaving(true);
+    try {
+      await equipmentMetaApi.update({
+        prefixLabels: prefixTiers.map((tier) => tier.label.trim()),
+        prefixRates: prefixTiers.map((tier) => Number(tier.rate)),
+        suffixLabels: suffixTiers.map((tier) => tier.label.trim()),
+        suffixRates: suffixTiers.map((tier) => Number(tier.rate)),
+      });
+      toastSuccess("前后缀档位已保存（档位定义即改即生效；装备变体要回本页点「重新生成变体」才会按新档数重建）");
+      onCancel();
+    } catch {
+      /* 错误已由请求层统一提示 */
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const renderTiers = (kind: "prefix" | "suffix", tiers: TierDraft[] | null) => {
+    const kindLabel = kind === "prefix" ? "前缀" : "后缀";
+    return (
+      <section className="flex flex-col gap-2">
+        <div className="flex items-center justify-between">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+            {kindLabel}档位（{tiers?.length ?? 0} 档，序号即档位 id）
+          </h3>
+          <Button
+            variant="ghost"
+            disabled={!tiers || tiers.length >= TIER_LIMITS.max}
+            onClick={() => appendTier(kind)}
+          >
+            添加一档
+          </Button>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[420px] border-separate border-spacing-1">
+            <thead>
+              <tr>
+                <th className="w-12 text-xs font-normal text-slate-500">序号</th>
+                <th className="text-xs font-normal text-slate-400">文案</th>
+                <th className="w-28 text-xs font-normal text-slate-400">属性倍率</th>
+                <th className="w-16 text-right text-xs font-normal text-slate-400">操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(tiers ?? []).map((tier, index) => (
+                <tr key={index}>
+                  <td className="text-center text-xs text-slate-500">{index}</td>
+                  <td>
+                    <Input value={tier.label} onChange={(event) => patchTier(kind, index, { label: event.target.value })} />
+                  </td>
+                  <td>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      min={0.01}
+                      value={tier.rate}
+                      onChange={(event) => patchTier(kind, index, { rate: event.target.value })}
+                    />
+                  </td>
+                  <td className="text-right">
+                    <Button variant="ghost" disabled={(tiers?.length ?? 0) <= TIER_LIMITS.min} onClick={() => removeTier(kind, index)}>
+                      删除
+                    </Button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    );
+  };
+
+  return (
+    <Modal
+      open
+      title="前后缀档位管理"
+      hint="档位文案用于客户端拼品质名（如「精良的·天级」），倍率用于「重新生成变体」时算属性。保存即改档位定义，但已展开的装备变体行不变。"
+      size="lg"
+      onClose={onCancel}
+      footer={
+        <>
+          <Button variant="outline" disabled={saving} onClick={onCancel}>
+            取消
+          </Button>
+          <Button disabled={Boolean(problem) || loading} loading={saving} onClick={() => void submit()}>
+            保存档位
+          </Button>
+        </>
+      }
+    >
+      {loading || !prefixTiers || !suffixTiers ? (
+        <div className="flex justify-center py-8">
+          <Spinner />
+        </div>
+      ) : (
+        <div className="flex flex-col gap-5">
+          {renderTiers("prefix", prefixTiers)}
+          {renderTiers("suffix", suffixTiers)}
+          <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs leading-relaxed text-amber-200">
+            <p>· 增删档位只改「档位定义」，已展开的装备变体行不变 —— 保存后请回本页点「重新生成变体」。</p>
+            <p>· 扩档后重建会新增变体行（新组合的卖价按公式垫底，可再逐条调）；缩档后重建会删掉该档变体 —— 身上还穿 / 背包还放的该档装备会变成无效引用（属性查不到、名字回落基础件）。</p>
+            <p>· 装备外观（品质棋盘）跟着档数走：扩档后那一格先按公式外推 key，客户端资源包里没有对应素材前先没光效，去「装备外观」页填真实 key 即可。</p>
+          </div>
+          {problem ? <p className="text-xs text-red-300">{problem}</p> : null}
+        </div>
+      )}
+    </Modal>
+  );
+}
+
+//#endregion
+
 /**
  * 装备配置管理（#252，养成配置第四页）
  *
@@ -373,6 +566,9 @@ export function EquipmentsPage() {
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<Equipment | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [tiersOpen, setTiersOpen] = useState(false);
+  const [rebuildOpen, setRebuildOpen] = useState(false);
+  const [rebuilding, setRebuilding] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -449,13 +645,40 @@ export function EquipmentsPage() {
     }
   };
 
+  /** 重建全部装备变体（#697）：按当前前后缀倍率整批重算；卖价保留、属性 / 名称 / 等级覆盖 */
+  const submitRebuild = async () => {
+    setRebuilding(true);
+    try {
+      const result: EquipmentVariantRebuildResult = await equipmentVariantsApi.rebuild();
+      toastSuccess(`已重建 ${result.variants} 个装备变体（${result.bases} 基础件 × ${result.combos} 组合）`);
+      setRebuildOpen(false);
+    } catch {
+      /* 错误已由请求层统一提示 */
+    } finally {
+      setRebuilding(false);
+    }
+  };
+
   return (
     <div className="flex flex-col gap-4">
       <PageHeader
         title="装备配置"
+        actions={
+          canWrite ? (
+            <>
+              <Button variant="outline" onClick={() => setTiersOpen(true)}>
+                前后缀档位
+              </Button>
+              <Button disabled={rebuilding} onClick={() => setRebuildOpen(true)}>
+                重新生成变体
+              </Button>
+            </>
+          ) : null
+        }
         description={<>只收基础件（普通的·人级），变体是基础件乘前后缀倍率展开的 —— 改基础件即改全部 15 个变体。
             名称 / 描述 / 职业性别 / 图标与图集 / 标签 / 缩放 / 内观锚点 / 外观 8 向位置都在编辑弹窗里（#603 从客户端源码搬来）；
-            id 与部位结构固定，只可编辑、不可新增 / 删除；商城售价归「商城定价」管理，不在这里。</>}
+            id 与部位结构固定，只可编辑、不可新增 / 删除；商城售价归「商城定价」管理，不在这里。
+            前后缀档位与变体整体重建见右上角两个入口（#697）。</>}
       />
 
       <Card>
@@ -570,6 +793,18 @@ export function EquipmentsPage() {
           setEditing(null);
         }}
         onSubmit={submitDialog}
+      />
+
+      <TiersDialog open={tiersOpen} onCancel={() => setTiersOpen(false)} />
+
+      <ConfirmDialog
+        open={rebuildOpen}
+        title="重新生成全部装备变体？"
+        description="按当前前后缀倍率整批重算：属性 / 名称 / 穿戴等级会被覆盖；卖价保留原值（新增组合按公式垫底）。档位缩小后，被删档的变体行会消失 —— 身上还穿 / 背包还放的该档装备会变成无效引用。服务端即时生效，客户端下次拉配置生效。"
+        confirmText="重新生成"
+        loading={rebuilding}
+        onConfirm={() => void submitRebuild()}
+        onCancel={() => setRebuildOpen(false)}
       />
     </div>
   );

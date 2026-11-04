@@ -499,6 +499,18 @@ export class EquipmentMetaDto {
   }
 }
 
+/** 重建全部装备变体的结果盘点（#697） */
+export class EquipmentVariantRebuildResultDto {
+  @ApiProperty({ description: "参与展开的基础件数", example: 37 })
+  bases: number;
+
+  @ApiProperty({ description: "前后缀组合数（前缀档数 × 后缀档数）", example: 15 })
+  combos: number;
+
+  @ApiProperty({ description: "重建后的变体总行数（= 基础件数 × 组合数）", example: 555 })
+  variants: number;
+}
+
 /** 编辑装备规则入参（**部分更新**；整份替换语义与更新 DTO 一致） */
 export class UpdateEquipmentMetaDto {
   @ApiPropertyOptional({ description: "前缀倍率（整份替换；1~10 项，每项 > 0）", type: [Number] })

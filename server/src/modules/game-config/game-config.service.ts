@@ -53,6 +53,7 @@ import {
   EquipmentSlotDto,
   EquipmentVariantDto,
   EquipmentVariantQueryDto,
+  EquipmentVariantRebuildResultDto,
   UpdateEquipmentDto,
   UpdateEquipmentMetaDto,
   UpdateEquipmentSlotDto,
@@ -371,6 +372,71 @@ export class GameConfigService {
     const base = this.equipments.list({ page: 1, size: 1_000_000 }).find((row) => row.id === next.base_id);
     if (!base) throw BizException.notFound(BizCode.EQUIPMENT_NOT_FOUND, `装备变体 ${id} 的基础件不存在`);
     return EquipmentVariantDto.fromVariant(base, this.equipmentVariants.findById(id)!);
+  }
+
+  /**
+   * 重建全部装备变体（管理端「重新生成变体」按钮，#697）
+   *
+   * 按 equipment_meta **当前**的前后缀倍率，把每个基础件 × 每个组合整批重算（与 #655
+   * 迁移同一口径）：
+   * - 属性 = `round(基础值 × 前缀倍率 × 后缀倍率)`（12 列逐列算）；
+   * - 名称 / 穿戴等级 = 基础件（前后缀文案由客户端拼在名字前后，不入 label）；
+   * - **卖价保留原值**：出厂价签来自已下架的回收价曲线，公式复算不出来，运营逐条调过
+   *   的价也不该被一键覆盖。只有新出现的组合（扩档后重建）没有原值可保，按
+   *   `round(10 × 等级 × 前缀倍率 × 后缀倍率)` 垫底（之后可在「装备变体」页逐条调）。
+   *
+   * 档位缩小后，被删组合的变体行在这里消失 —— 背包 / 穿戴 / 掉落表里还引用那些 id
+   * 的装备会变成无效引用（属性 / 卖价查不到、名字回落基础件名）。这是确认弹窗必须
+   * 讲清楚的事；变体 id 的拼法与客户端 `getEquipmentVariantKey` 逐字符一致
+   * （p0s0 就是基础件 id 本身，不带后缀）。
+   */
+  rebuildEquipmentVariants(): EquipmentVariantRebuildResultDto {
+    const meta = this.getEquipmentMeta();
+    const bases = this.equipments.list({ page: 1, size: 1_000_000 });
+    const pricePreserved = new Map(this.equipmentVariants.listAll().map((row) => [row.id, row.sell_price]));
+    const now = Date.now();
+    const rows: EquipmentVariantRow[] = [];
+    for (const base of bases) {
+      for (let prefix = 0; prefix < meta.prefixRates.length; prefix++) {
+        for (let suffix = 0; suffix < meta.suffixRates.length; suffix++) {
+          const prefixRate = meta.prefixRates[prefix];
+          const suffixRate = meta.suffixRates[suffix];
+          const scale = (value: number): number => Math.round(value * prefixRate * suffixRate);
+          const id = prefix === 0 && suffix === 0 ? base.id : `${base.id}_p${prefix}s${suffix}`;
+          rows.push({
+            id,
+            base_id: base.id,
+            prefix,
+            suffix,
+            label: base.label,
+            level: base.level,
+            sell_price: pricePreserved.get(id) ?? scale(10 * base.level),
+            max_hp: scale(base.max_hp),
+            hp_recover: scale(base.hp_recover),
+            physical_attack_min: scale(base.physical_attack_min),
+            physical_attack_max: scale(base.physical_attack_max),
+            magic_attack_min: scale(base.magic_attack_min),
+            magic_attack_max: scale(base.magic_attack_max),
+            taoist_attack_min: scale(base.taoist_attack_min),
+            taoist_attack_max: scale(base.taoist_attack_max),
+            physical_defense_min: scale(base.physical_defense_min),
+            physical_defense_max: scale(base.physical_defense_max),
+            magic_defense_min: scale(base.magic_defense_min),
+            magic_defense_max: scale(base.magic_defense_max),
+            taoist_defense_min: scale(base.taoist_defense_min),
+            taoist_defense_max: scale(base.taoist_defense_max),
+            updated_at: now,
+          });
+        }
+      }
+    }
+    this.equipmentVariants.replaceAll(rows);
+    this.touchRuntime();
+    return {
+      bases: bases.length,
+      combos: meta.prefixRates.length * meta.suffixRates.length,
+      variants: rows.length,
+    };
   }
 
   // —— 装备基础件（#252：id / 部位结构固定，只改数值；变体见上面的 #655 区）——

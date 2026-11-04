@@ -19,14 +19,22 @@
  * **改这里**，再跑一次 `make config-export` 同步快照文件。
  */
 
-/** 装备前缀档数（0~4：普通的 → 超神的；数值即 `EQUIPMENT_PREFIX` 枚举值，枚举在客户端） */
+/** 装备前缀档数（0~4：普通的 → 超神的；数值即 `EQUIPMENT_PREFIX` 枚举值，枚举在客户端）。**出厂值** —— 运营可在管理端增删档位（#697），运行时档数以 equipment_meta 文案长度为准 */
 export const EQUIPMENT_PREFIX_MAX = 4;
 
-/** 装备后缀档数（0~2：人级 / 天级 / 神级；数值即 `EQUIPMENT_SUFFIX` 枚举值） */
+/** 装备后缀档数（0~2：人级 / 天级 / 神级；数值即 `EQUIPMENT_SUFFIX` 枚举值）。**出厂值**，同上 */
 export const EQUIPMENT_SUFFIX_MAX = 2;
 
-/** 前后缀组合总数（5 × 3 = 15；前后缀映射表必须恰好覆盖每一种、各一次） */
+/** 前后缀组合总数（5 × 3 = 15）。**出厂值**，运行时组合数 = 前缀档数 × 后缀档数 */
 export const EQUIPMENT_COMBO_COUNT = (EQUIPMENT_PREFIX_MAX + 1) * (EQUIPMENT_SUFFIX_MAX + 1);
+
+/**
+ * 前后缀档位的硬上限（#697）
+ *
+ * equipment_meta 的文案 / 倍率数组长度下限 1、上限 10（DTO 同口径）——
+ * 档数决定变体行数（基础件 × 组合），10 档封顶是防手滑把 555 行扩成几万行的护栏。
+ */
+export const EQUIPMENT_TIER_MAX = 10;
 
 /** 装备外观配置的取值范围（DTO 校验、服务端兜底、管理端表单提示共用） */
 export const EQUIPMENT_APPEARANCE_LIMITS = {
@@ -75,18 +83,21 @@ export interface EquipmentAppearanceSeed {
 }
 
 /**
- * 出厂映射
+ * 出厂映射（按档数展开，#697 起参数化）
  *
- * 沿用客户端 2026-11 之前的口径：**先按后缀分三档、档内按前缀递增**，
- * 依次取「前 15 张」边框（sfx_30123_0 ~ sfx_30137_0）与前 15 个背景
- * （sfx_16000 ~ sfx_16014）—— 后缀越强边框整体越靠后，档内前缀越强越靠后。
+ * 沿用客户端 2026-11 之前的口径：**先按后缀分档、档内按前缀递增**，依次取边框
+ * （sfx_30123_0 起）与背景（sfx_16000 起）—— 后缀越强整体越靠后，档内前缀越强越靠后。
+ *
+ * 档数扩到出厂值之外时公式照样外推（sfx 编号顺延）——新编号在客户端资源清单里
+ * 多半不存在，客户端 apply 会把不认识的 key 丢掉（那个组合暂时没边框），
+ * 运营在「装备外观」页把真实素材 key 填上即可。
  */
-function buildDefaults(): EquipmentAppearanceSeed {
+export function buildAppearanceDefaults(prefixCount: number, suffixCount: number): EquipmentAppearanceSeed {
   const borders: AppearanceAssignmentSeed[] = [];
   const backgrounds: AppearanceAssignmentSeed[] = [];
-  for (let suffix = 0; suffix <= EQUIPMENT_SUFFIX_MAX; suffix++) {
-    for (let prefix = 0; prefix <= EQUIPMENT_PREFIX_MAX; prefix++) {
-      const slot = suffix * (EQUIPMENT_PREFIX_MAX + 1) + prefix;
+  for (let suffix = 0; suffix < suffixCount; suffix++) {
+    for (let prefix = 0; prefix < prefixCount; prefix++) {
+      const slot = suffix * prefixCount + prefix;
       borders.push({ prefix, suffix, key: `sfx_${30123 + slot}_0` });
       backgrounds.push({ prefix, suffix, key: `sfx_${16000 + slot}` });
     }
@@ -94,8 +105,11 @@ function buildDefaults(): EquipmentAppearanceSeed {
   return { borders, backgrounds, customBorders: [], customBackgrounds: [] };
 }
 
-/** 出厂值（模块加载时算一次；结构固定，不存在运行期变化） */
-export const EQUIPMENT_APPEARANCE_DEFAULTS: EquipmentAppearanceSeed = buildDefaults();
+/** 出厂值（模块加载时算一次；档数可在管理端扩，扩出来的组合按上面的公式回落） */
+export const EQUIPMENT_APPEARANCE_DEFAULTS: EquipmentAppearanceSeed = buildAppearanceDefaults(
+  EQUIPMENT_PREFIX_MAX + 1,
+  EQUIPMENT_SUFFIX_MAX + 1,
+);
 
 /** 校验并归一化一个边框 / 背景 key，返回**人话**错误（null = 合法） */
 export function appearanceKeyProblem(rawKey: string, kind: "border" | "background"): string | null {

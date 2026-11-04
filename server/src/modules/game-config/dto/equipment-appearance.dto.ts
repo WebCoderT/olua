@@ -3,9 +3,7 @@ import { ArrayMaxSize, ArrayMinSize, IsArray, IsInt, IsOptional, IsString, Lengt
 import { Type } from "class-transformer";
 import {
   EQUIPMENT_APPEARANCE_LIMITS,
-  EQUIPMENT_COMBO_COUNT,
-  EQUIPMENT_PREFIX_MAX,
-  EQUIPMENT_SUFFIX_MAX,
+  EQUIPMENT_TIER_MAX,
 } from "../../../common/constants/equipment-appearance";
 
 /**
@@ -23,16 +21,16 @@ import {
 
 /** 一条「前缀 × 后缀 → 边框 / 背景 key」 */
 export class AppearanceAssignmentDto {
-  @ApiProperty({ description: "装备前缀（0 普通的 → 4 超神的，数值即客户端 EQUIPMENT_PREFIX 枚举值）", example: 0, minimum: 0, maximum: EQUIPMENT_PREFIX_MAX })
+  @ApiProperty({ description: `装备前缀序号（0 起；运行时档数由 equipment_meta 文案长度决定，硬上限 ${EQUIPMENT_TIER_MAX - 1}）`, example: 0, minimum: 0, maximum: EQUIPMENT_TIER_MAX - 1 })
   @IsInt()
   @Min(0)
-  @Max(EQUIPMENT_PREFIX_MAX)
+  @Max(EQUIPMENT_TIER_MAX - 1)
   prefix: number;
 
-  @ApiProperty({ description: "装备后缀（0 人级 / 1 天级 / 2 神级，数值即客户端 EQUIPMENT_SUFFIX 枚举值）", example: 0, minimum: 0, maximum: EQUIPMENT_SUFFIX_MAX })
+  @ApiProperty({ description: `装备后缀序号（0 起；硬上限 ${EQUIPMENT_TIER_MAX - 1}）`, example: 0, minimum: 0, maximum: EQUIPMENT_TIER_MAX - 1 })
   @IsInt()
   @Min(0)
-  @Max(EQUIPMENT_SUFFIX_MAX)
+  @Max(EQUIPMENT_TIER_MAX - 1)
   suffix: number;
 
   @ApiProperty({ description: "边框 / 背景 key（客户端资源清单里的 sfx 编号）", example: "sfx_30123_0" })
@@ -57,12 +55,12 @@ export class CustomAppearanceDto {
 
 /** 整份装备外观（GET / PATCH 的响应） */
 export class EquipmentAppearanceDto {
-  @ApiProperty({ description: `前后缀组合 → 边框（恰好 ${EQUIPMENT_COMBO_COUNT} 条，每条组合一次）`, type: [AppearanceAssignmentDto] })
+  @ApiProperty({ description: "前后缀组合 → 边框（恰好覆盖当前档数的每种组合、各一条）", type: [AppearanceAssignmentDto] })
   @ValidateNested({ each: true })
   @Type(() => AppearanceAssignmentDto)
   borders: AppearanceAssignmentDto[];
 
-  @ApiProperty({ description: `前后缀组合 → 详情背景（恰好 ${EQUIPMENT_COMBO_COUNT} 条，每条组合一次）`, type: [AppearanceAssignmentDto] })
+  @ApiProperty({ description: "前后缀组合 → 详情背景（恰好覆盖当前档数的每种组合、各一条）", type: [AppearanceAssignmentDto] })
   @ValidateNested({ each: true })
   @Type(() => AppearanceAssignmentDto)
   backgrounds: AppearanceAssignmentDto[];
@@ -83,18 +81,22 @@ export class EquipmentAppearanceDto {
 
 /** 整份提交（先校验后写：任何一条不合法都不落库） */
 export class UpdateEquipmentAppearanceDto {
-  @ApiProperty({ description: `前后缀组合 → 边框（整份替换，恰好 ${EQUIPMENT_COMBO_COUNT} 条且组合不重复）`, type: [AppearanceAssignmentDto] })
+  /**
+   * 数组长度只做防御性兜底（1 ~ 100）；「恰好覆盖当前档数的每个组合」是跨表约束，
+   * 只有 service 拿着 equipment_meta 的档数才能判（#697 起档数可配，写死在这里必然漂）。
+   */
+  @ApiProperty({ description: "前后缀组合 → 边框（整份替换，恰好覆盖当前档数的每种组合且不重复）", type: [AppearanceAssignmentDto] })
   @IsArray()
-  @ArrayMinSize(EQUIPMENT_COMBO_COUNT)
-  @ArrayMaxSize(EQUIPMENT_COMBO_COUNT)
+  @ArrayMinSize(1)
+  @ArrayMaxSize(100)
   @ValidateNested({ each: true })
   @Type(() => AppearanceAssignmentDto)
   borders: AppearanceAssignmentDto[];
 
-  @ApiProperty({ description: `前后缀组合 → 详情背景（整份替换，恰好 ${EQUIPMENT_COMBO_COUNT} 条且组合不重复）`, type: [AppearanceAssignmentDto] })
+  @ApiProperty({ description: "前后缀组合 → 详情背景（整份替换，恰好覆盖当前档数的每种组合且不重复）", type: [AppearanceAssignmentDto] })
   @IsArray()
-  @ArrayMinSize(EQUIPMENT_COMBO_COUNT)
-  @ArrayMaxSize(EQUIPMENT_COMBO_COUNT)
+  @ArrayMinSize(1)
+  @ArrayMaxSize(100)
   @ValidateNested({ each: true })
   @Type(() => AppearanceAssignmentDto)
   backgrounds: AppearanceAssignmentDto[];

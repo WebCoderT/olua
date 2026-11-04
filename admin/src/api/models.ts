@@ -1817,11 +1817,11 @@ export type UpdateGuideSteps = {
 
 export type AppearanceAssignment = {
   /**
-   * 装备前缀（0 普通的 → 4 超神的，数值即客户端 EQUIPMENT_PREFIX 枚举值）
+   * 装备前缀序号（0 起；运行时档数由 equipment_meta 文案长度决定，硬上限 9）
    */
   prefix: number;
   /**
-   * 装备后缀（0 人级 / 1 天级 / 2 神级，数值即客户端 EQUIPMENT_SUFFIX 枚举值）
+   * 装备后缀序号（0 起；硬上限 9）
    */
   suffix: number;
   /**
@@ -1843,11 +1843,11 @@ export type CustomAppearance = {
 
 export type UpdateEquipmentAppearance = {
   /**
-   * 前后缀组合 → 边框（整份替换，恰好 15 条且组合不重复）
+   * 前后缀组合 → 边框（整份替换，恰好覆盖当前档数的每种组合且不重复）
    */
   borders: AppearanceAssignment[];
   /**
-   * 前后缀组合 → 详情背景（整份替换，恰好 15 条且组合不重复）
+   * 前后缀组合 → 详情背景（整份替换，恰好覆盖当前档数的每种组合且不重复）
    */
   backgrounds: AppearanceAssignment[];
   /**
@@ -4871,6 +4871,21 @@ export type EquipmentVariantQuery = {
   baseId?: string;
 };
 
+export type EquipmentVariantRebuildResult = {
+  /**
+   * 参与展开的基础件数
+   */
+  bases: number;
+  /**
+   * 前后缀组合数（前缀档数 × 后缀档数）
+   */
+  combos: number;
+  /**
+   * 重建后的变体总行数（= 基础件数 × 组合数）
+   */
+  variants: number;
+};
+
 export type Drug = {
   /**
    * 药品 id（如 drug_hp_1；被掉落表与背包引用，不可增删行）
@@ -6423,11 +6438,11 @@ export type AudioConfig = {
 
 export type EquipmentAppearance = {
   /**
-   * 前后缀组合 → 边框（恰好 15 条，每条组合一次）
+   * 前后缀组合 → 边框（恰好覆盖当前档数的每种组合、各一条）
    */
   borders: AppearanceAssignment[];
   /**
-   * 前后缀组合 → 详情背景（恰好 15 条，每条组合一次）
+   * 前后缀组合 → 详情背景（恰好覆盖当前档数的每种组合、各一条）
    */
   backgrounds: AppearanceAssignment[];
   /**

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { equipmentAppearanceApi, formatTime, PERMISSION } from "../api";
-import type { CustomAppearance, EquipmentAppearance, UpdateEquipmentAppearance } from "../api";
+import { equipmentAppearanceApi, equipmentMetaApi, formatTime, PERMISSION } from "../api";
+import type { CustomAppearance, EquipmentAppearance, EquipmentMeta, UpdateEquipmentAppearance } from "../api";
 import { Button, Card, Field, Input, Spinner } from "../components/ui";
 import { PageHeader } from "../components/PageHeader";
 import { hasPermission } from "../store/session";
@@ -19,24 +19,31 @@ import { toastSuccess } from "../store/toast";
  * 服务端只存 key 字符串，**不校验素材存在** —— 填了资源包里没有的编号，客户端会安静跳过
  * （那个品质没有边框 / 详情弹窗保持静态底图），不会报错也不会白屏。
  *
- * ## 前后缀映射是 15 格的完整棋盘
- * 5 前缀 × 3 后缀，每一格都必须有值（缺哪格哪个品质就没光效），保存时服务端会整份校验。
+ * ## 前后缀映射是「档数棋盘」
+ * 行 = 后缀档、列 = 前缀档（#697 起档位可在「装备配置」页增删，棋盘大小跟着 equipment_meta
+ * 走，不再写死 5×3），每一格都必须有值（缺哪格哪个品质就没光效），保存时服务端会整份校验。
  * 特殊装备自定义是可增删的小表：装备填变体 id（如 `weapon_20_p4s2`）只影响那一个变体，
  * 填基础件 key（如 `weapon_20`）影响它的全部前后缀变体，且优先于棋盘。
  */
 export function EquipmentAppearancePage() {
   const canWrite = hasPermission(PERMISSION.GAME_CONFIG_WRITE);
   const [saved, setSaved] = useState<EquipmentAppearance | null>(null);
+  const [meta, setMeta] = useState<EquipmentMeta | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
+  /** 档位标签（棋盘的行列头）；meta 没拉到时按空清单渲染（loading 态会兜住） */
+  const prefixLabels = meta?.prefixLabels ?? [];
+  const suffixLabels = meta?.suffixLabels ?? [];
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await equipmentAppearanceApi.get();
+      const [data, metaRow] = await Promise.all([equipmentAppearanceApi.get(), equipmentMetaApi.get()]);
       setSaved(data);
-      setDraft(toDraft(data));
+      setMeta(metaRow);
+      setDraft(toDraft(data, metaRow.prefixLabels.length, metaRow.suffixLabels.length));
     } catch {
       /* 错误已由请求层统一提示 */
     } finally {
@@ -76,17 +83,17 @@ export function EquipmentAppearancePage() {
   };
 
   /** 逐项体检：key 格式 / 自定义装备唯一 —— 服务端也会拒，但先在这里把按钮拦住 */
-  const invalid = useMemo(() => describeInvalid(draft), [draft]);
+  const invalid = useMemo(() => describeInvalid(draft, prefixLabels.length), [draft, prefixLabels.length]);
 
   const save = async () => {
-    if (!draft) return;
-    const payload = buildPayload(draft);
+    if (!draft || !meta) return;
+    const payload = buildPayload(draft, meta.prefixLabels.length);
     if (!payload) return;
     setSaving(true);
     try {
       const data = await equipmentAppearanceApi.update(payload);
       setSaved(data);
-      setDraft(toDraft(data));
+      setDraft(toDraft(data, meta.prefixLabels.length, meta.suffixLabels.length));
       toastSuccess("装备外观已保存（玩家下次进游戏拉配置后生效）");
     } catch {
       /* 错误已由请求层统一提示 */
@@ -109,7 +116,7 @@ export function EquipmentAppearancePage() {
       />
 
       <Card
-        title="前后缀品质映射（15 格棋盘）"
+        title={`前后缀品质映射（${prefixLabels.length * suffixLabels.length} 格棋盘）`}
         actions={
           loading ? (
             <Spinner />
@@ -121,7 +128,7 @@ export function EquipmentAppearancePage() {
         }
         description={
           canWrite
-            ? "行 = 后缀（人 / 天 / 神级），列 = 前缀（普通的 → 超神的）。每格都必须有 key：缺哪格，哪个品质就没有边框 / 背景。保存是整份替换（棋盘 + 两张自定义表一起提交）。"
+            ? `行 = 后缀（${suffixLabels.join(" / ") || "—"}），列 = 前缀（${prefixLabels.join(" → ") || "—"}）。每格都必须有 key：缺哪格，哪个品质就没有边框 / 背景。保存是整份替换（棋盘 + 两张自定义表一起提交）。档位在「装备配置」页的前后缀弹窗里增删。`
             : "当前角色没有「修改养成配置」权限，本页只读。"
         }
       >
@@ -132,6 +139,8 @@ export function EquipmentAppearancePage() {
               label="装备边框"
               hint="resources/borders 下的图集名，如 sfx_30123_0"
               placeholder="sfx_30123_0"
+              prefixLabels={prefixLabels}
+              suffixLabels={suffixLabels}
               values={draft.borders}
               disabled={!canWrite}
               onChange={(combo, key) => setCombo("borders", combo, key)}
@@ -140,6 +149,8 @@ export function EquipmentAppearancePage() {
               label="详情背景"
               hint="resources/backgrounds 下的帧序列目录名，如 sfx_16000"
               placeholder="sfx_16000"
+              prefixLabels={prefixLabels}
+              suffixLabels={suffixLabels}
               values={draft.backgrounds}
               disabled={!canWrite}
               onChange={(combo, key) => setCombo("backgrounds", combo, key)}
@@ -178,22 +189,22 @@ export function EquipmentAppearancePage() {
 
 //#region 棋盘与自定义表
 
-/** 前缀列（与客户端 EQUIPMENT_PREFIX 枚举一致；标签是给人看的展示文案） */
-const PREFIXES = ["普通的", "强化的", "精良的", "极品的", "超神的"];
-/** 后缀行（与客户端 EQUIPMENT_SUFFIX 枚举一致） */
-const SUFFIXES = ["人级", "天级", "神级"];
-
 /** combo 下标（后缀档优先，档内前缀递增）—— 与服务端出厂值的展开顺序一致 */
-const comboIndex = (prefix: number, suffix: number) => suffix * PREFIXES.length + prefix;
+const comboIndex = (prefix: number, suffix: number, prefixCount: number) => suffix * prefixCount + prefix;
 
 function ComboGrid(props: {
   label: string;
   hint: string;
   placeholder: string;
+  /** 前缀列头（档位文案，来自 equipment_meta；#697 起档数可配） */
+  prefixLabels: string[];
+  /** 后缀行头 */
+  suffixLabels: string[];
   values: string[];
   disabled: boolean;
   onChange: (combo: number, key: string) => void;
 }) {
+  const prefixCount = Math.max(props.prefixLabels.length, 1);
   return (
     <div>
       <h3 className="mb-1 text-sm font-medium text-slate-300">{props.label}</h3>
@@ -203,7 +214,7 @@ function ComboGrid(props: {
           <thead>
             <tr>
               <th className="w-16 text-xs font-normal text-slate-500">后缀 \ 前缀</th>
-              {PREFIXES.map((prefix) => (
+              {props.prefixLabels.map((prefix) => (
                 <th key={prefix} className="text-xs font-normal text-slate-400">
                   {prefix}
                 </th>
@@ -211,11 +222,11 @@ function ComboGrid(props: {
             </tr>
           </thead>
           <tbody>
-            {SUFFIXES.map((suffix, s) => (
+            {props.suffixLabels.map((suffix, s) => (
               <tr key={suffix}>
                 <td className="text-xs text-slate-400">{suffix}</td>
-                {PREFIXES.map((_, p) => {
-                  const combo = comboIndex(p, s);
+                {props.prefixLabels.map((_, p) => {
+                  const combo = comboIndex(p, s, prefixCount);
                   return (
                     <td key={combo}>
                       <Input
@@ -292,13 +303,13 @@ type Draft = {
 };
 
 /** 服务端顺序（prefix,suffix 升序）→ 棋盘顺序（后缀档优先）；服务端顺序与 comboIndex 一致，直接映射 */
-function toDraft(data: EquipmentAppearance): Draft {
+function toDraft(data: EquipmentAppearance, prefixCount: number, suffixCount: number): Draft {
   const byCombo = (rows: { prefix: number; suffix: number; key: string }[]) => {
-    const values = Array.from({ length: 15 }, () => "");
+    const values = Array.from({ length: prefixCount * suffixCount }, () => "");
     for (const row of rows) {
       const p = Number(row.prefix);
       const s = Number(row.suffix);
-      if (p >= 0 && p < PREFIXES.length && s >= 0 && s < SUFFIXES.length) values[comboIndex(p, s)] = row.key;
+      if (p >= 0 && p < prefixCount && s >= 0 && s < suffixCount) values[comboIndex(p, s, prefixCount)] = row.key;
     }
     return values;
   };
@@ -315,18 +326,19 @@ const BACKGROUND_KEY = /^sfx_\d+$/;
 const EQUIPMENT_ID = /^[A-Za-z0-9_\-]+$/;
 
 /** 返回第一条问题（null = 没问题）。服务端也会校验，这里只是让按钮先别让人白点 */
-function describeInvalid(draft: Draft | null): string | null {
+function describeInvalid(draft: Draft | null, prefixCount: number): string | null {
   if (!draft) return null;
+  const where = (combo: number) => `第 ${Math.floor(combo / prefixCount) + 1} 行第 ${(combo % prefixCount) + 1} 列`;
   const seenCombos = new Set<number>();
   for (const [combo, key] of draft.borders.entries()) {
     if (seenCombos.has(combo)) return `边框棋盘第 ${combo + 1} 格重复登记（不应发生，请刷新页面）`;
     seenCombos.add(combo);
-    if (!key.trim()) return `边框棋盘有一格空着（第 ${combo + 1} 格）—— 缺哪格哪个品质就没边框。`;
-    if (!BORDER_KEY.test(key.trim())) return `边框棋盘第 ${Math.floor(combo / 5) + 1} 行第 ${(combo % 5) + 1} 列的 key「${key}」格式不对（应为 sfx_30123_0 这样的图集名）。`;
+    if (!key.trim()) return `边框棋盘有一格空着（${where(combo)}）—— 缺哪格哪个品质就没边框。`;
+    if (!BORDER_KEY.test(key.trim())) return `边框棋盘${where(combo)}的 key「${key}」格式不对（应为 sfx_30123_0 这样的图集名）。`;
   }
   for (const [combo, key] of draft.backgrounds.entries()) {
-    if (!key.trim()) return `背景棋盘有一格空着（第 ${combo + 1} 格）—— 缺哪格哪个品质就没背景。`;
-    if (!BACKGROUND_KEY.test(key.trim())) return `背景棋盘第 ${Math.floor(combo / 5) + 1} 行第 ${(combo % 5) + 1} 列的 key「${key}」格式不对（应为 sfx_16000 这样的目录名）。`;
+    if (!key.trim()) return `背景棋盘有一格空着（${where(combo)}）—— 缺哪格哪个品质就没背景。`;
+    if (!BACKGROUND_KEY.test(key.trim())) return `背景棋盘${where(combo)}的 key「${key}」格式不对（应为 sfx_16000 这样的目录名）。`;
   }
   const checkCustoms = (rows: CustomAppearance[], label: string) => {
     const seen = new Set<string>();
@@ -347,9 +359,9 @@ function describeInvalid(draft: Draft | null): string | null {
  *
  * 棋盘格的 trim 在这里做（输入框里贴进来带空格是常态）；格式校验交给 describeInvalid 拦按钮。
  */
-function buildPayload(draft: Draft): UpdateEquipmentAppearance | null {
+function buildPayload(draft: Draft, prefixCount: number): UpdateEquipmentAppearance | null {
   const toCombos = (values: string[]) =>
-    values.map((key, combo) => ({ prefix: combo % 5, suffix: Math.floor(combo / 5), key: key.trim() }));
+    values.map((key, combo) => ({ prefix: combo % prefixCount, suffix: Math.floor(combo / prefixCount), key: key.trim() }));
   const toCustoms = (rows: CustomAppearance[]) =>
     rows.map((row) => ({ equipment: row.equipment.trim(), key: row.key.trim() }));
   return {

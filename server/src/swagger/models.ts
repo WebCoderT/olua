@@ -56,7 +56,7 @@ import {
 } from "../modules/game-config/dto/title.dto";
 import { SoulDto, SoulPageDto, SoulQueryDto, UpdateSoulDto } from "../modules/game-config/dto/soul.dto";
 import { RankDto, RankPageDto, RankQueryDto, UpdateRankDto } from "../modules/game-config/dto/rank.dto";
-import { EquipmentDto, EquipmentPageDto, EquipmentQueryDto, EquipmentVariantDto, EquipmentVariantPageDto, EquipmentVariantQueryDto, UpdateEquipmentDto, UpdateEquipmentVariantDto } from "../modules/game-config/dto/equipment.dto";
+import { EquipmentDto, EquipmentPageDto, EquipmentQueryDto, EquipmentVariantDto, EquipmentVariantPageDto, EquipmentVariantQueryDto, EquipmentVariantRebuildResultDto, UpdateEquipmentDto, UpdateEquipmentVariantDto } from "../modules/game-config/dto/equipment.dto";
 import { DrugDto, DrugPageDto, DrugQueryDto, UpdateDrugDto } from "../modules/game-config/dto/drug.dto";
 import { ItemDto, ItemPageDto, ItemQueryDto, UpdateItemDto } from "../modules/game-config/dto/item.dto";
 import { MonsterDto, MonsterPageDto, MonsterQueryDto, UpdateMonsterDto } from "../modules/game-config/dto/monster.dto";
@@ -332,6 +332,7 @@ export const SWAGGER_MODELS = [
   EquipmentVariantDto,
   EquipmentVariantPageDto,
   EquipmentVariantQueryDto,
+  EquipmentVariantRebuildResultDto,
   UpdateEquipmentVariantDto,
   // 养成配置（药品 #253）
   DrugDto,
