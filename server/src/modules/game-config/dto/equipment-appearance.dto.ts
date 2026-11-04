@@ -1,7 +1,8 @@
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
-import { ArrayMaxSize, ArrayMinSize, IsArray, IsInt, IsOptional, IsString, Length, Matches, Max, Min, ValidateNested } from "class-validator";
+import { ArrayMaxSize, ArrayMinSize, IsArray, IsInt, IsNumber, IsOptional, IsString, Length, Matches, Max, Min, ValidateNested } from "class-validator";
 import { Type } from "class-transformer";
 import {
+  APPEARANCE_EFFECT_LIMITS,
   EQUIPMENT_APPEARANCE_LIMITS,
   EQUIPMENT_TIER_MAX,
 } from "../../../common/constants/equipment-appearance";
@@ -18,6 +19,27 @@ import {
  * 服务端不校验「素材存不存在」—— 资源包不在服务端，查了只会掩盖
  * 「本地有、线上没有」；填错了客户端会安静跳过并留日志。
  */
+
+/** 单条显示效果（#700）：以素材第一帧为基准的微调；不传 = 缺省 {0,0,1}（与现状完全一致） */
+export class AppearanceEffectDto {
+  @ApiProperty({ description: "水平偏移（像素，右为正；边框相对图标中心、背景相对弹窗面板中心）", example: 0 })
+  @IsNumber()
+  @Min(-APPEARANCE_EFFECT_LIMITS.offsetMax)
+  @Max(APPEARANCE_EFFECT_LIMITS.offsetMax)
+  x: number;
+
+  @ApiProperty({ description: "垂直偏移（像素，上为正）", example: 0 })
+  @IsNumber()
+  @Min(-APPEARANCE_EFFECT_LIMITS.offsetMax)
+  @Max(APPEARANCE_EFFECT_LIMITS.offsetMax)
+  y: number;
+
+  @ApiProperty({ description: "尺寸倍率（1 = 客户端默认适配结果）", example: 1, minimum: APPEARANCE_EFFECT_LIMITS.scaleMin, maximum: APPEARANCE_EFFECT_LIMITS.scaleMax })
+  @IsNumber()
+  @Min(APPEARANCE_EFFECT_LIMITS.scaleMin)
+  @Max(APPEARANCE_EFFECT_LIMITS.scaleMax)
+  scale: number;
+}
 
 /** 一条「前缀 × 后缀 → 边框 / 背景 key」 */
 export class AppearanceAssignmentDto {
@@ -37,6 +59,12 @@ export class AppearanceAssignmentDto {
   @IsString()
   @Length(1, EQUIPMENT_APPEARANCE_LIMITS.keyMaxLength)
   key: string;
+
+  @ApiPropertyOptional({ description: "显示效果（#700；不传 = {0,0,1} 即默认适配结果）", type: AppearanceEffectDto })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => AppearanceEffectDto)
+  effect?: AppearanceEffectDto;
 }
 
 /** 一条「特殊装备 → 边框 / 背景 key」（equipment 可以是变体 id，也可以是基础件 key） */
@@ -51,6 +79,12 @@ export class CustomAppearanceDto {
   @IsString()
   @Length(1, EQUIPMENT_APPEARANCE_LIMITS.keyMaxLength)
   key: string;
+
+  @ApiPropertyOptional({ description: "显示效果（#700；不传 = {0,0,1} 即默认适配结果）", type: AppearanceEffectDto })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => AppearanceEffectDto)
+  effect?: AppearanceEffectDto;
 }
 
 /** 整份装备外观（GET / PATCH 的响应） */
@@ -79,41 +113,84 @@ export class EquipmentAppearanceDto {
   updatedAt: number;
 }
 
-/** 整份提交（先校验后写：任何一条不合法都不落库） */
-export class UpdateEquipmentAppearanceDto {
+/**
+ * 单边配置（#699 起边框 / 背景在管理端是两个独立页面，各自整份读写自己的半边）。
+ * `assignments` / `customs` 的覆盖规则同上；PATCH 时**另一边不受影响**（部分更新）。
+ */
+export class EquipmentBorderDto {
+  @ApiProperty({ description: "前后缀组合 → 边框（恰好覆盖当前档数的每种组合、各一条）", type: [AppearanceAssignmentDto] })
+  @ValidateNested({ each: true })
+  @Type(() => AppearanceAssignmentDto)
+  assignments: AppearanceAssignmentDto[];
+
+  @ApiProperty({ description: "特殊装备 → 边框（优先于前后缀表；装备标识不可重复）", type: [CustomAppearanceDto] })
+  @ValidateNested({ each: true })
+  @Type(() => CustomAppearanceDto)
+  customs: CustomAppearanceDto[];
+
+  @ApiProperty({ description: "最后修改时间（毫秒，0 = 从未改过、仍是出厂值）", example: 1762000000000 })
+  updatedAt: number;
+}
+
+/** 单边配置 · 详情背景（形状与边框一致，key 格式不同：`sfx_16000` 没有 `_0` 尾巴） */
+export class EquipmentBackgroundDto {
+  @ApiProperty({ description: "前后缀组合 → 详情背景（恰好覆盖当前档数的每种组合、各一条）", type: [AppearanceAssignmentDto] })
+  @ValidateNested({ each: true })
+  @Type(() => AppearanceAssignmentDto)
+  assignments: AppearanceAssignmentDto[];
+
+  @ApiProperty({ description: "特殊装备 → 详情背景（优先于前后缀表；装备标识不可重复）", type: [CustomAppearanceDto] })
+  @ValidateNested({ each: true })
+  @Type(() => CustomAppearanceDto)
+  customs: CustomAppearanceDto[];
+
+  @ApiProperty({ description: "最后修改时间（毫秒，0 = 从未改过、仍是出厂值）", example: 1762000000000 })
+  updatedAt: number;
+}
+
+/** 单边提交（先校验后写：任何一条不合法整边不落库；另一边不受影响） */
+export class UpdateEquipmentBorderDto {
   /**
    * 数组长度只做防御性兜底（1 ~ 100）；「恰好覆盖当前档数的每个组合」是跨表约束，
    * 只有 service 拿着 equipment_meta 的档数才能判（#697 起档数可配，写死在这里必然漂）。
    */
-  @ApiProperty({ description: "前后缀组合 → 边框（整份替换，恰好覆盖当前档数的每种组合且不重复）", type: [AppearanceAssignmentDto] })
+  @ApiProperty({ description: "前后缀组合 → 边框（整边替换，恰好覆盖当前档数的每种组合且不重复）", type: [AppearanceAssignmentDto] })
   @IsArray()
   @ArrayMinSize(1)
   @ArrayMaxSize(100)
   @ValidateNested({ each: true })
   @Type(() => AppearanceAssignmentDto)
-  borders: AppearanceAssignmentDto[];
+  assignments: AppearanceAssignmentDto[];
 
-  @ApiProperty({ description: "前后缀组合 → 详情背景（整份替换，恰好覆盖当前档数的每种组合且不重复）", type: [AppearanceAssignmentDto] })
+  @ApiProperty({ description: "特殊装备 → 边框（整边替换；装备标识不可重复）", type: [CustomAppearanceDto] })
+  @IsArray()
+  @ArrayMaxSize(EQUIPMENT_APPEARANCE_LIMITS.customMax)
+  @ValidateNested({ each: true })
+  @Type(() => CustomAppearanceDto)
+  customs: CustomAppearanceDto[];
+
+  @ApiPropertyOptional({ description: "修改备注（写进审计日志的上下文，便于追溯「为什么改」）" })
+  @IsOptional()
+  @IsString()
+  note?: string;
+}
+
+/** 单边提交 · 详情背景 */
+export class UpdateEquipmentBackgroundDto {
+  @ApiProperty({ description: "前后缀组合 → 详情背景（整边替换，恰好覆盖当前档数的每种组合且不重复）", type: [AppearanceAssignmentDto] })
   @IsArray()
   @ArrayMinSize(1)
   @ArrayMaxSize(100)
   @ValidateNested({ each: true })
   @Type(() => AppearanceAssignmentDto)
-  backgrounds: AppearanceAssignmentDto[];
+  assignments: AppearanceAssignmentDto[];
 
-  @ApiProperty({ description: "特殊装备 → 边框（整份替换；装备标识不可重复）", type: [CustomAppearanceDto] })
+  @ApiProperty({ description: "特殊装备 → 详情背景（整边替换；装备标识不可重复）", type: [CustomAppearanceDto] })
   @IsArray()
   @ArrayMaxSize(EQUIPMENT_APPEARANCE_LIMITS.customMax)
   @ValidateNested({ each: true })
   @Type(() => CustomAppearanceDto)
-  customBorders: CustomAppearanceDto[];
-
-  @ApiProperty({ description: "特殊装备 → 详情背景（整份替换；装备标识不可重复）", type: [CustomAppearanceDto] })
-  @IsArray()
-  @ArrayMaxSize(EQUIPMENT_APPEARANCE_LIMITS.customMax)
-  @ValidateNested({ each: true })
-  @Type(() => CustomAppearanceDto)
-  customBackgrounds: CustomAppearanceDto[];
+  customs: CustomAppearanceDto[];
 
   @ApiPropertyOptional({ description: "修改备注（写进审计日志的上下文，便于追溯「为什么改」）" })
   @IsOptional()

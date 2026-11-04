@@ -86,8 +86,9 @@ import {
   uiTheme,
   warSoulDialogLayout,
 } from "../../configs/hudLayout";
-import { borders, getEquipmentBorderKey } from "../../configs/border";
-import { detailBackgrounds, getEquipmentDetailBackgroundKey } from "../../configs/background";
+import { borders, resolveEquipmentBorder } from "../../configs/border";
+import { detailBackgrounds, resolveEquipmentDetailBackground } from "../../configs/background";
+import type { AppearanceEffect } from "../../types/appearance";
 import { getEquipmentLightKey, lights } from "../../configs/light";
 import { getStackBadge, StackBadge } from "../../configs/items";
 
@@ -1636,17 +1637,35 @@ export default class GameUiHelper {
    */
   static applyEquipmentBorder(icon: Node, good: Goods) {
     if (!isEquipment(good)) return;
-    const borderKey = getEquipmentBorderKey(good);
-    const resource = borderKey ? borders.get(borderKey) : null;
-    if (!resource) return;
-    const border = this.createEquipmentBorder(borderKey);
+    const resolved = resolveEquipmentBorder(good);
+    const resource = resolved ? borders.get(resolved.key) : null;
+    if (!resource || !resolved) return;
+    const border = this.createEquipmentBorder(resolved.key);
     icon.addChild(border);
     // 帧异步加载：加载完成后先定尺寸再播放（期间节点可能已被销毁——背包刷新、弹窗关闭都会重建边框）
     AnimationHelper.loadFramesFromAtlas(resource.atlas).then((frames) => {
       if (!isValid(border) || !frames.length) return;
       this.fitNodeToBox(border, frames[0], equipmentBorderLayout.size);
+      // 每条配置的显示效果（#700）：默认 {0,0,1} 与「不调」完全一致
+      this.applyEffectToNode(border, resolved.effect);
       AnimationHelper.playLoopAtlas(border.name, border, resource.atlas, equipmentBorderLayout.frameRate);
     });
+  }
+
+  /**
+   * 把一条显示效果（#700）应用到节点：偏移 + 尺寸倍率
+   *
+   * 语义（与 AppearanceEffect 的注释、管理端工作台同一套口径）：
+   * - `x` / `y`：相对**基准中心**的偏移（y 向上，引擎同口径，直接 setPosition）；
+   * - `scale`：乘在「第一帧 contain 缩进基准框」的结果上（fitNodeToBox 先定尺寸，这里再乘）。
+   * 默认 {0,0,1} 时两个分支都不走，与 #700 之前的行为逐字节一致。
+   */
+  private static applyEffectToNode(node: Node, effect: AppearanceEffect) {
+    if (effect.x || effect.y) node.setPosition(effect.x, effect.y);
+    if (effect.scale !== 1) {
+      const transform = node.getComponent(UITransform);
+      if (transform) transform.setContentSize(transform.contentSize.width * effect.scale, transform.contentSize.height * effect.scale);
+    }
   }
 
   /**
@@ -1667,6 +1686,19 @@ export default class GameUiHelper {
   }
 
   /**
+   * 把一条背景显示效果（#700）应用到背景节点：面板尺寸 × scale + 偏移
+   *
+   * 与边框的 `applyEffectToNode`（乘法）不同：背景的基准是**面板尺寸**（内容自适应，
+   * 撑开后才准），所以由调用方把最终面板传进来直接 set（默认 {0,0,1} = 铺满面板，与旧结构一致）。
+   */
+  private static applyBackgroundEffect(node: Node, effect: AppearanceEffect, panel: Size) {
+    const transform = node.getComponent(UITransform);
+    if (!transform) return;
+    transform.setContentSize(panel.width * effect.scale, panel.height * effect.scale);
+    node.setPosition(effect.x, effect.y);
+  }
+
+  /**
    * 把节点的内容尺寸按 contain 缩进外框（保持素材宽高比，最长的边贴到外框）
    * 用于原始尺寸各异的图集动画（边框 6 个尺寸家族共用一个显示口径，见 configs/layout/borders）
    */
@@ -1679,27 +1711,30 @@ export default class GameUiHelper {
   }
 
   /**
-   * 给装备详情弹窗挂上背景动画（仅装备有；前后缀 → 背景的映射与特殊装备的自定义表在 configs/background）
+   * 给装备详情弹窗创建背景动画节点（#700 起是**独立子节点**，不再换弹窗自身精灵的帧）
    *
-   * 背景是循环播放的帧序列动画（resources/backgrounds，有图集走图集、没有走散帧目录），直接换**弹窗自身**的 spriteFrame：
-   * 不是子节点 —— 弹窗是 Layout 容器，背景若作为子节点会被当成一行参与排版、还会撑高容器；
-   * 换自身帧则完全不吃排版，且弹窗尺寸由内容自适应（ResizeMode.CONTAINER）、
-   * 精灵 sizeMode 为 CUSTOM，背景始终铺满整个面板。
-   * 精灵的 trim 必须保持 createSprite 的缺省 false：这批帧按 auto-trim 导入（裁剪 + 非 0 offset），
-   * trim=false 时引擎按 offset 把裁剪内容贴回原始画布 —— 各帧画布一致（单测有断言）、画面帧间不跳；
-   * 若改成 trim=true 则只画裁剪矩形并拉伸到面板，每帧裁剪范围不同会导致画面抖动。
-   * 加载完成前先显示静态底图（创建时已设），
-   * 未分配到背景的装备（含非装备物品）保持静态底图不变
+   * 为什么改结构：背景的每条配置可以带显示效果（偏移 / 缩放），「换弹窗自身帧」
+   * 没有独立的变换可调（动弹窗节点会连内容一起动）。改为底层子节点后，
+   * 效果 = 面板尺寸 × scale + 偏移，默认 {0,0,1} 与旧结构逐像素一致（帧画布一致、
+   * trim=false 按 offset 贴回原始画布、CUSTOM sizeMode 拉伸铺满）。
+   * Layout 排版陷阱依旧成立：这个节点必须加在**没有 Layout 的弹窗**下（内容排版
+   * 在内层 content 节点上，见 createGoodDetailDialog），先 add 让它垫在内容之下。
+   * 加载完成前弹窗显示静态底图；未分配到背景的装备（含非装备物品）返回 null、保持静态底图。
    *
-   * @param dialog 详情弹窗节点
-   * @param good 物品数据（非装备或没分配到背景时不显示）
+   * @param dialog 详情弹窗节点（背景节点随后 addChild 到它、垫底）
+   * @param good 物品数据
+   * @returns 背景节点与它的效果（无背景时 null）
    */
-  static applyEquipmentDetailBackground(dialog: Node, good: Goods) {
-    if (!isEquipment(good)) return;
-    const backgroundKey = getEquipmentDetailBackgroundKey(good);
-    const resource = backgroundKey ? detailBackgrounds.get(backgroundKey) : null;
-    if (!resource) return;
-    AnimationHelper.playLoopDir(`${equipmentDetailBackgroundLayout.namePrefix}${backgroundKey}`, dialog, resource.dir, equipmentDetailBackgroundLayout.frameRate);
+  static createEquipmentDetailBackground(dialog: Node, good: Goods): { node: Node; effect: AppearanceEffect } | null {
+    if (!isEquipment(good)) return null;
+    const resolved = resolveEquipmentDetailBackground(good);
+    const resource = resolved ? detailBackgrounds.get(resolved.key) : null;
+    if (!resource || !resolved) return null;
+    const node = UiHelper.createSprite(`${equipmentDetailBackgroundLayout.namePrefix}${resolved.key}`, "", new Vec2(), goodDetailLayout.size);
+    node.getComponent(Sprite)!.sizeMode = Sprite.SizeMode.CUSTOM;
+    node.addComponent(Animation);
+    AnimationHelper.playLoopDir(node.name, node, resource.dir, equipmentDetailBackgroundLayout.frameRate);
+    return { node, effect: resolved.effect };
   }
 
   /**
@@ -1711,8 +1746,13 @@ export default class GameUiHelper {
    * 这里**不能**用相机 worldToScreen 的像素坐标减设计分辨率：两个口径差一个 view 缩放系数，
    * 算出来的位置会严重偏移（这个 bug 修过一次，见 utils/layout/ScreenLayout.getPopupPosition 的注释）。
    *
-   * 弹窗自身高度由 Layout 自适应（ResizeMode.CONTAINER），首帧量到的是配置里的占位高度，
-   * 内容撑开后才准，所以尺寸一变就用最终尺寸重算一次位置（幂等，内容稳定后不再动）。
+   * 结构（#700 重构）：弹窗自身只留精灵（静态底图）+ 背景动画子节点（垫底），
+   * 内容排版（Layout GRID + CONTAINER）在内层 `content` 节点上 —— Layout 不能直接
+   * 挂弹窗，否则背景子节点会被当成一行参与排版、还会撑高容器。弹窗尺寸跟随 content
+   * （SIZE_CHANGED 同步），对外表现与旧结构一致。
+   *
+   * 弹窗高度由内容自适应：首帧量到的是配置里的占位高度，内容撑开后才准，
+   * 所以尺寸一变就用最终尺寸重算一次位置（幂等，内容稳定后不再动）。
    *
    * @param good 物品数据
    * @param anchor 物品格节点（摆放与尺寸都以它为准）
@@ -1722,10 +1762,14 @@ export default class GameUiHelper {
    */
   static createGoodDetailDialog(good: Goods, anchor: Node, compare: Equipment | "hint" | null = null) {
     const dialog = UiHelper.createSprite(goodDetailLayout.name, goodDetailLayout.background, new Vec2(), goodDetailLayout.size);
-    // 装备详情背景（前后缀决定的品质背景动画）：换弹窗自身精灵的帧，加载完成前先显示静态底图
-    this.applyEquipmentDetailBackground(dialog, good);
+    // 装备详情背景（前后缀决定的品质背景动画）：独立子节点垫底，加载完成前先显示静态底图
+    const background = this.createEquipmentDetailBackground(dialog, good);
+    if (background) dialog.addChild(background.node);
 
-    const layout = dialog.addComponent(Layout);
+    // 内容排版节点：Layout 在它上面（占位尺寸与旧结构相同，Layout 撑它，弹窗再跟着它走）
+    const content = UiHelper.createNode("content", new Vec2(), goodDetailLayout.size);
+    dialog.addChild(content);
+    const layout = content.addComponent(Layout);
     layout.type = Layout.Type.GRID;
     layout.alignHorizontal = true;
     layout.spacingY = goodDetailLayout.rowSpacing;
@@ -1825,19 +1869,30 @@ export default class GameUiHelper {
       });
     }
 
-    dialog.addChild(contentHeader);
-    if (contentInfo) dialog.addChild(contentInfo);
-    if (contentRecycle) dialog.addChild(contentRecycle);
-    if (contentTags) dialog.addChild(contentTags);
-    dialog.addChild(contentDescription);
-    dialog.addChild(contentBody);
+    content.addChild(contentHeader);
+    if (contentInfo) content.addChild(contentInfo);
+    if (contentRecycle) content.addChild(contentRecycle);
+    if (contentTags) content.addChild(contentTags);
+    content.addChild(contentDescription);
+    content.addChild(contentBody);
     // 对比段（仅背包装备悬停 + 接了对比数据源时出现，模式见上方参数说明）
-    if (compare === "hint") dialog.addChild(this.createGoodCompareHintRow());
-    if (compare && compare !== "hint") dialog.addChild(this.createGoodCompareSection(good as Equipment, compare));
+    if (compare === "hint") content.addChild(this.createGoodCompareHintRow());
+    if (compare && compare !== "hint") content.addChild(this.createGoodCompareSection(good as Equipment, compare));
 
     // 脚步图标（图片来源与尺寸见 configs/layout/dialogs.goodDetailLayout.footerLogo）
     const footerLogo = UiHelper.createSprite("logo", goodDetailLayout.footerLogo.image, new Vec2(), goodDetailLayout.footerLogo.size);
-    dialog.addChild(footerLogo);
+    content.addChild(footerLogo);
+
+    // 弹窗尺寸跟随内容（#700：Layout 撑的是 content，弹窗自身不再被 Layout 管）
+    const dialogTransform = dialog.getComponent(UITransform)!;
+    const contentTransform = content.getComponent(UITransform)!;
+    const syncDialogSize = () => {
+      dialogTransform.setContentSize(contentTransform.contentSize);
+      // 背景效果乘在**最终面板尺寸**上（内容撑开后才是真实面板），偏移相对面板中心
+      if (background) this.applyBackgroundEffect(background.node, background.effect, dialogTransform.contentSize);
+    };
+    content.on(Node.EventType.SIZE_CHANGED, syncDialogSize, this);
+    syncDialogSize();
 
     // 摆放：锚点恒为 0.5/0.5（内容排版交给上面的 Layout，动锚点会让 Layout 按新锚点重排而错位）
     const anchorWorld = anchor.getWorldPosition();

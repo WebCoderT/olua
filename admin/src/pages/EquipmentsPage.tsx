@@ -537,7 +537,7 @@ function TiersDialog({ open, onCancel }: { open: boolean; onCancel: () => void }
           <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs leading-relaxed text-amber-200">
             <p>· 增删档位只改「档位定义」，已展开的装备变体行不变 —— 保存后请回本页点「重新生成变体」。</p>
             <p>· 扩档后重建会新增变体行（新组合的卖价按公式垫底，可再逐条调）；缩档后重建会删掉该档变体 —— 身上还穿 / 背包还放的该档装备会变成无效引用（属性查不到、名字回落基础件）。</p>
-            <p>· 装备外观（品质棋盘）跟着档数走：扩档后那一格先按公式外推 key，客户端资源包里没有对应素材前先没光效，去「装备外观」页填真实 key 即可。</p>
+            <p>· 装备外观（品质棋盘）跟着档数走：扩档后那一格先按公式外推 key，客户端资源包里没有对应素材前先没光效，去「装备边框」/「装备详情背景」页填真实 key 即可。</p>
           </div>
           {problem ? <p className="text-xs text-red-300">{problem}</p> : null}
         </div>

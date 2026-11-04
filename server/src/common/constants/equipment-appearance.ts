@@ -122,3 +122,63 @@ export function appearanceKeyProblem(rawKey: string, kind: "border" | "backgroun
   }
   return null;
 }
+
+/**
+ * 单条数据显示效果（#700）：以素材**第一帧**为基准的微调
+ *
+ * - 边框基准 = contain 缩进 56×56 外框、中心对齐物品图标中心；`x` / `y` 是相对图标中心的
+ *   偏移（y 向上，与引擎同口径）、`scale` 乘在适配后的尺寸上；
+ * - 背景基准 = 详情弹窗面板（铺满面板）；`x` / `y` 相对面板中心、`scale` 乘面板尺寸。
+ *
+ * 缺省 `{ x: 0, y: 0, scale: 1 }` 与「没有 effect 字段」完全等价 —— 旧数据不用迁移。
+ */
+export interface AppearanceEffect {
+  /** 水平偏移（像素，右为正） */
+  x: number;
+  /** 垂直偏移（像素，上为正） */
+  y: number;
+  /** 尺寸倍率（1 = 客户端默认适配结果） */
+  scale: number;
+}
+
+/** 效果缺省值（不写 effect 字段就是这个） */
+export const APPEARANCE_EFFECT_DEFAULT: AppearanceEffect = { x: 0, y: 0, scale: 1 };
+
+/** 显示效果的取值范围（防手滑：偏移拖出两千像素没有意义，缩放 10 倍早就糊满屏了） */
+export const APPEARANCE_EFFECT_LIMITS = {
+  /** 偏移绝对值上限（像素） */
+  offsetMax: 2000,
+  /** 缩放下限 */
+  scaleMin: 0.1,
+  /** 缩放上限 */
+  scaleMax: 10,
+} as const;
+
+/** 校验并归一化一个显示效果，返回「归一化结果 + 人话错误」（null = 合法） */
+export function appearanceEffectProblem(effect: unknown): string | null {
+  if (!effect || typeof effect !== "object") return "显示效果要是一个对象（{ x, y, scale }）";
+  const source = effect as Record<string, unknown>;
+  const x = Number(source.x);
+  const y = Number(source.y);
+  const scale = Number(source.scale);
+  const bound = APPEARANCE_EFFECT_LIMITS.offsetMax;
+  if (!Number.isFinite(x) || Math.abs(x) > bound) return `水平偏移 x 要是 −${bound} ~ ${bound} 的数字，拿到「${String(source.x)}」`;
+  if (!Number.isFinite(y) || Math.abs(y) > bound) return `垂直偏移 y 要是 −${bound} ~ ${bound} 的数字，拿到「${String(source.y)}」`;
+  if (!Number.isFinite(scale) || scale < APPEARANCE_EFFECT_LIMITS.scaleMin || scale > APPEARANCE_EFFECT_LIMITS.scaleMax) {
+    return `尺寸倍率 scale 要是 ${APPEARANCE_EFFECT_LIMITS.scaleMin} ~ ${APPEARANCE_EFFECT_LIMITS.scaleMax} 的数字，拿到「${String(source.scale)}」`;
+  }
+  return null;
+}
+
+/** 归一化一个显示效果（已校验合法的前提下调用；数值保留两位小数防浮点尾巴） */
+export function normalizeAppearanceEffect(effect: unknown): AppearanceEffect {
+  const source = effect as Record<string, unknown>;
+  const round2 = (value: number): number => Math.round(value * 100) / 100;
+  return { x: round2(Number(source.x)), y: round2(Number(source.y)), scale: round2(Number(source.scale)) };
+}
+
+/** 读取一条数据里的 effect：字段缺失 / 形状不对返回 null（调用方回落缺省值），合法则归一化 */
+export function effectiveAppearanceEffect(raw: unknown): AppearanceEffect | null {
+  if (raw === undefined || raw === null) return null;
+  return appearanceEffectProblem(raw) === null ? normalizeAppearanceEffect(raw) : null;
+}

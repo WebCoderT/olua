@@ -1,6 +1,14 @@
 import { Equipment } from "../types/good";
+import type { AppearanceEffect } from "../types/appearance";
 import type { BorderAssignment, BorderResource, CustomBorderAssignment } from "../types/border";
 import { getEquipmentBaseKey } from "./equipments";
+import { DEFAULT_APPEARANCE_EFFECT, parseAppearanceEffect } from "./appearance";
+
+/** 一条边框指派：用哪个图集（key）+ 怎么显示（effect，#700；缺省 = 默认适配） */
+export interface BorderPick {
+  key: string;
+  effect: AppearanceEffect;
+}
 
 /**
  * 装备边框（品质光效框）
@@ -61,18 +69,18 @@ export const borders = new Map<string, BorderResource>();
 borderResources.forEach((resource) => borders.set(resource.key, resource));
 
 /**
- * 前后缀组合 → 边框 key（键 = `${prefix}|${suffix}`）
+ * 前后缀组合 → 边框指派（键 = `${prefix}|${suffix}`；值带 effect，#700）
  *
  * 快照到达前为空（#695：映射来自服务端，见文件头）；`applyEquipmentAppearance()` 重建。
  */
-export const prefixSuffixBorders = new Map<string, string>();
+export const prefixSuffixBorders = new Map<string, BorderPick>();
 
 /**
  * 特殊装备的自定义边框（key = 物品 id 或基础件 key；**优先于**前后缀表）
  *
  * 快照到达前为空（#695）；`applyEquipmentAppearance()` 重建。
  */
-export const customEquipmentBorders = new Map<string, string>();
+export const customEquipmentBorders = new Map<string, BorderPick>();
 
 /**
  * 应用快照的 `equipmentAppearance` 段（`apply-snapshot` 用）—— 重建两张映射
@@ -101,7 +109,9 @@ export function applyEquipmentAppearance(data: unknown): void {
         if (key) console.warn(`[border] 跳过组合 ${prefix}|${suffix}：边框「${key}」不在客户端资源清单里`);
         continue;
       }
-      prefixSuffixBorders.set(`${prefix}|${suffix}`, key);
+      // effect 坏只丢效果（回落默认），映射本身保留
+      const effect = parseAppearanceEffect(item.effect, (message) => console.warn(`[border] 组合 ${prefix}|${suffix} 的 ${message}`));
+      prefixSuffixBorders.set(`${prefix}|${suffix}`, { key, effect: effect ?? DEFAULT_APPEARANCE_EFFECT });
     }
   }
 
@@ -118,28 +128,38 @@ export function applyEquipmentAppearance(data: unknown): void {
         console.warn(`[border] 跳过自定义 ${equipment}：边框「${key}」不在客户端资源清单里`);
         continue;
       }
-      customEquipmentBorders.set(equipment, key);
+      const effect = parseAppearanceEffect(item.effect, (message) => console.warn(`[border] 自定义 ${equipment} 的 ${message}`));
+      customEquipmentBorders.set(equipment, { key, effect: effect ?? DEFAULT_APPEARANCE_EFFECT });
     }
   }
 }
 
 /**
- * 取装备应显示的边框 key（不显示返回 null）
+ * 解析装备应显示的边框指派（不显示返回 null）
  *
  * 1. 自定义表：先按物品 id 精确命中，再按基础件 key 命中（命中但边框未登记 = 配置错误，回退前后缀表）；
  * 2. 前后缀组合表：按 `${prefix}|${suffix}` 查（前后缀异常时查不到，返回 null 不显示）。
  *
  * 只读装备对象自带的 prefix / suffix / id（背包、装备槽解析出的物品都带 id），不反查总表
  */
-export function getEquipmentBorderKey(equipment: Equipment | null | undefined): string | null {
+export function resolveEquipmentBorder(equipment: Equipment | null | undefined): BorderPick | null {
   if (!equipment) return null;
   const id = equipment.id ?? "";
   const custom = customEquipmentBorders.get(id) ?? customEquipmentBorders.get(getEquipmentBaseKey(id));
   if (custom) {
-    if (borders.has(custom)) return custom;
-    console.warn(`[border] 自定义边框未登记：${id} → ${custom}，回退前后缀表`);
+    if (borders.has(custom.key)) return custom;
+    console.warn(`[border] 自定义边框未登记：${id} → ${custom.key}，回退前后缀表`);
   }
   return prefixSuffixBorders.get(`${equipment.prefix}|${equipment.suffix}`) ?? null;
+}
+
+/**
+ * 取装备应显示的边框 key（不显示返回 null）
+ *
+ * `resolveEquipmentBorder` 的 key 快捷方式（渲染层大多要连 effect 一起拿，那个走 resolve）
+ */
+export function getEquipmentBorderKey(equipment: Equipment | null | undefined): string | null {
+  return resolveEquipmentBorder(equipment)?.key ?? null;
 }
 
 /**
@@ -148,8 +168,8 @@ export function getEquipmentBorderKey(equipment: Equipment | null | undefined): 
  */
 export function getAssignedBorders(): BorderResource[] {
   const result: BorderResource[] = [];
-  prefixSuffixBorders.forEach((key) => {
-    const resource = borders.get(key);
+  prefixSuffixBorders.forEach((pick) => {
+    const resource = borders.get(pick.key);
     if (resource && !result.some((item) => item.key === resource.key)) result.push(resource);
   });
   return result;
