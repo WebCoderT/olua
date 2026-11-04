@@ -158,7 +158,7 @@ INSERT INTO "equipment_appearance" ("id", "borders", "backgrounds", "custom_bord
 
 -- ===== equipment_meta（1 行）=====
 DELETE FROM "equipment_meta";
-INSERT INTO "equipment_meta" ("id", "prefix_rates", "suffix_rates", "prefix_labels", "suffix_labels", "updated_at") VALUES (1, '[1,1.1,1.2,1.3,1.4]', '[1,2,3]', '["普通的","强化的","精良的","极品的","超神的"]', '["人级","天级","神级"]', 0);
+INSERT INTO "equipment_meta" ("id", "prefix_rates", "suffix_rates", "prefix_labels", "suffix_labels", "prefix_colors", "suffix_colors", "updated_at") VALUES (1, '[1,1.1,1.2,1.3,1.4]', '[1,2,3]', '["普通的","强化的","精良的","极品的","超神的"]', '["人级","天级","神级"]', '["#DDDDDD","#6EE86E","#4DA6FF","#C77DFF","#FFA640"]', '["#B0B0B0","#4DE3FF","#FFD700"]', 0);
 
 -- ===== equipment_slots（13 行）=====
 DELETE FROM "equipment_slots";

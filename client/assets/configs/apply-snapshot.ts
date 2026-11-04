@@ -249,7 +249,12 @@ export function applyConfigSnapshot(snapshot: GameConfigSnapshot): void {
   // （倍率为空 = 一件都展开不出来）。顺序反了装备表整个是空的。
   // #655：回收价不在这里 —— 变体行的 `recyclePrice` 自己带价（见 equipments.ts 路径 1）
   applyEquipmentRules(snapshot.equipmentMeta.prefixRates, snapshot.equipmentMeta.suffixRates);
-  applyEquipmentQualityLabels(snapshot.equipmentMeta.prefixLabels, snapshot.equipmentMeta.suffixLabels);
+  applyEquipmentQualityLabels(
+    snapshot.equipmentMeta.prefixLabels,
+    snapshot.equipmentMeta.suffixLabels,
+    snapshot.equipmentMeta.prefixColors,
+    snapshot.equipmentMeta.suffixColors,
+  );
   applyEquipmentSlots(snapshot.equipmentSlots);
   applyTitleRows(snapshot.titles);
   applySoulRows(snapshot.souls);

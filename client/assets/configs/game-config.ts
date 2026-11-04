@@ -271,6 +271,19 @@ function collectEquipmentMetaProblems(meta: Record<string, unknown>, problems: S
       });
     }
   }
+  // 文字颜色（#720）：可空（= 内置色）；给了就得与文案等长，否则多出来的档会渲染成内置兜底色
+  for (const [colorsKey, labelsKey] of [["prefixColors", "prefixLabels"], ["suffixColors", "suffixLabels"]] as const) {
+    const colors = meta[colorsKey] as unknown;
+    if (colors === undefined || colors === null) continue; // 老快照没这一段，回落内置
+    const labels = meta[labelsKey];
+    if (Array.isArray(colors) && colors.length > 0 && Array.isArray(labels) && colors.length !== labels.length) {
+      problems.push({
+        key: "equipmentMeta",
+        label: "装备规则",
+        reason: `${colorsKey}（${colors.length} 项）与 ${labelsKey}（${labels.length} 项）长度不一致 —— 颜色要与文案同下标`,
+      });
+    }
+  }
 }
 
 /**

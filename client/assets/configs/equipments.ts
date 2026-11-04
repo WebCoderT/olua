@@ -51,12 +51,10 @@ export let equipmentPrefixLabels: string[] = [];
 export let equipmentSuffixLabels: string[] = [];
 
 /**
- * 装备前缀文字颜色（与文案同下标）：名称与前缀文字都用该色渲染
- *
- * **颜色留在客户端**（不像文案那样上移）：它是渲染主题色（`Color` 对象），
- * 没有任何服务端消费者，改色属于「调 UI 观感」而不是「调数据」。
+ * 内置品质色（#720 起只是**回落值**：快照 `equipmentMeta.prefixColors` / `suffixColors`
+ * 到达后整份替换 —— 颜色跟文案一样是运营数据，收在管理端「前后缀管理」页）
  */
-export const equipmentPrefixColors = [
+const BUILTIN_PREFIX_COLORS = [
   new Color("#DDDDDD"), // 普通的：灰白
   new Color("#6EE86E"), // 强化的：绿
   new Color("#4DA6FF"), // 精良的：蓝
@@ -64,12 +62,35 @@ export const equipmentPrefixColors = [
   new Color("#FFA640"), // 超神的：橙
 ];
 
-/** 装备后缀文字颜色（与文案同下标；只用于后缀文字，不影响名称） */
-export const equipmentSuffixColors = [
+const BUILTIN_SUFFIX_COLORS = [
   new Color("#B0B0B0"), // 人级：灰
   new Color("#4DE3FF"), // 天级：青蓝
   new Color("#FFD700"), // 神级：金
 ];
+
+/** 装备前缀文字颜色（与文案同下标）：名称与前缀文字都用该色渲染；快照到达后整份替换 */
+export let equipmentPrefixColors: Color[] = BUILTIN_PREFIX_COLORS;
+
+/** 装备后缀文字颜色（与文案同下标；只用于后缀文字，不影响名称） */
+export let equipmentSuffixColors: Color[] = BUILTIN_SUFFIX_COLORS;
+
+/** 校验一个 hex 颜色（#RRGGBB）；快照里的坏值不用它渲染 */
+const isHexColor = (value: unknown): value is string => typeof value === "string" && /^#[0-9A-Fa-f]{6}$/.test(value);
+
+/**
+ * 把快照下发的 hex 颜色数组转成 Color 数组（#720）
+ *
+ * 逐档回落：缺位 / 非 `#RRGGBB` 的档用**内置色**顶上（档数超过内置长度时用最后一档的
+ * 内置色兜底）；坏一条只坏一条，不至于整个品质系统跟着掉色。
+ * 数组为空（老数据 / 服务端显式清空）= 整份用内置。档数以文案长度为准（与颜色同下标）。
+ */
+function tierColorsOf(hexes: string[] | undefined, tierCount: number, builtin: Color[]): Color[] {
+  if (!hexes?.length && tierCount <= builtin.length) return builtin;
+  return Array.from({ length: tierCount }, (_, index) => {
+    if (isHexColor(hexes?.[index])) return new Color(hexes[index]);
+    return builtin[Math.min(index, builtin.length - 1)];
+  });
+}
 
 /** 装备名称三段式（详情弹窗按段着色显示：前缀/名称用前缀色，后缀用后缀色） */
 export interface EquipmentNameParts {
@@ -403,10 +424,26 @@ export function applyEquipmentSlots(
   });
 }
 
-/** 装载品质文案（快照 `equipmentMeta.prefixLabels` / `suffixLabels`；颜色仍按同下标取本地常量） */
-export function applyEquipmentQualityLabels(prefixLabels: string[], suffixLabels: string[]): void {
-  if (prefixLabels?.length) equipmentPrefixLabels = prefixLabels.map(String);
-  if (suffixLabels?.length) equipmentSuffixLabels = suffixLabels.map(String);
+/**
+ * 装载品质文案与文字颜色（快照 `equipmentMeta` 段；#720 起颜色也是运营数据）
+ *
+ * 文案缺了不覆盖（保留现有）；颜色：服务端给了非空数组就按档替换（坏 hex / 缺位回落内置色），
+ * 空数组或没给 = 保持内置色 —— 老快照不带上色也不掉色。
+ */
+export function applyEquipmentQualityLabels(
+  prefixLabels: string[],
+  suffixLabels: string[],
+  prefixColors?: string[],
+  suffixColors?: string[],
+): void {
+  if (prefixLabels?.length) {
+    equipmentPrefixLabels = prefixLabels.map(String);
+    equipmentPrefixColors = tierColorsOf(prefixColors, prefixLabels.length, BUILTIN_PREFIX_COLORS);
+  }
+  if (suffixLabels?.length) {
+    equipmentSuffixLabels = suffixLabels.map(String);
+    equipmentSuffixColors = tierColorsOf(suffixColors, suffixLabels.length, BUILTIN_SUFFIX_COLORS);
+  }
 }
 
 /**

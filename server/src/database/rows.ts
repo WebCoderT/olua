@@ -800,6 +800,10 @@ export interface EquipmentMetaRow {
   prefix_labels: string;
   /** 后缀文案 JSON（`["人级", "天级", "神级"]`） */
   suffix_labels: string;
+  /** 前缀文字颜色 JSON（#720，`["#DDDDDD", …]`，与文案同长；空数组 = 客户端内置色） */
+  prefix_colors: string;
+  /** 后缀文字颜色 JSON（#720，同上） */
+  suffix_colors: string;
   updated_at: number;
 }
 

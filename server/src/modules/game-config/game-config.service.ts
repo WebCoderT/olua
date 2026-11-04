@@ -537,6 +537,10 @@ export class GameConfigService {
    *
    * 跨字段校验只在这里做：**倍率与文案必须等长**（差一位就是「某一档没有名字」，
    * 客户端名称会拼出 `undefined·人级`）。回收价不在这里（#655：逐条在 `equipment_variants`）。
+   * 颜色（#720）口径不同：是渲染装饰、不参与档数派生 ——
+   * - **显式传了**才校验：与文案等长（逐档精确控制）或空数组（清空 = 客户端内置色）；
+   * - **没传而档数变了**（扩档 / 缩档）：颜色自动对齐新档数（截短 / 用最后一色垫补），
+   *   不让「只想改档位」的调用被颜色长度卡死 —— 管理端总是整份带上颜色，这条兜的是直连 API。
    */
   updateEquipmentMeta(dto: UpdateEquipmentMetaDto): EquipmentMetaDto {
     const current = this.getEquipmentMeta();
@@ -544,18 +548,31 @@ export class GameConfigService {
     const suffixRates = dto.suffixRates ?? current.suffixRates;
     const prefixLabels = dto.prefixLabels ?? current.prefixLabels;
     const suffixLabels = dto.suffixLabels ?? current.suffixLabels;
+    let prefixColors = dto.prefixColors ?? current.prefixColors;
+    let suffixColors = dto.suffixColors ?? current.suffixColors;
     if (prefixRates.length !== prefixLabels.length) {
       throw new BizException(BizCode.PARAM_INVALID, `前缀倍率（${prefixRates.length} 项）与文案（${prefixLabels.length} 项）长度必须一致`);
     }
     if (suffixRates.length !== suffixLabels.length) {
       throw new BizException(BizCode.PARAM_INVALID, `后缀倍率（${suffixRates.length} 项）与文案（${suffixLabels.length} 项）长度必须一致`);
     }
+    if (dto.prefixColors !== undefined && dto.prefixColors.length > 0 && dto.prefixColors.length !== prefixLabels.length) {
+      throw new BizException(BizCode.PARAM_INVALID, `前缀颜色（${dto.prefixColors.length} 项）与文案（${prefixLabels.length} 项）长度必须一致（或传空数组 = 全部用内置色）`);
+    }
+    if (dto.suffixColors !== undefined && dto.suffixColors.length > 0 && dto.suffixColors.length !== suffixLabels.length) {
+      throw new BizException(BizCode.PARAM_INVALID, `后缀颜色（${dto.suffixColors.length} 项）与文案（${suffixLabels.length} 项）长度必须一致（或传空数组 = 全部用内置色）`);
+    }
+    // 没传颜色而档数变了 → 自动对齐（#720：改档位不该被颜色长度拦住）
+    if (dto.prefixColors === undefined) prefixColors = reconcileTierColors(prefixColors, prefixLabels.length);
+    if (dto.suffixColors === undefined) suffixColors = reconcileTierColors(suffixColors, suffixLabels.length);
     this.equipments.updateMeta({
       id: 1,
       prefix_rates: JSON.stringify(prefixRates),
       suffix_rates: JSON.stringify(suffixRates),
       prefix_labels: JSON.stringify(prefixLabels),
       suffix_labels: JSON.stringify(suffixLabels),
+      prefix_colors: JSON.stringify(prefixColors),
+      suffix_colors: JSON.stringify(suffixColors),
       updated_at: Date.now(),
     });
     this.touchRuntime();
@@ -1441,4 +1458,16 @@ function assertMonsterAttributeRanges(attributes: MonsterAttributesDto): void {
       throw new BizException(BizCode.PARAM_INVALID, "属性下限不能大于上限");
     }
   }
+}
+
+/**
+ * 档数变化时把颜色数组对齐到新长度（#720）
+ *
+ * 只在「这次调用没传颜色」时兜：截短（缩档丢掉多余色）/ 用最后一色垫补（扩档新档先沿用
+ * 邻档色，运营随后在管理端挑）。空数组（= 客户端内置色）原样返回，不存在「对齐」问题。
+ */
+function reconcileTierColors(colors: string[], tierCount: number): string[] {
+  if (colors.length === 0 || colors.length === tierCount) return colors;
+  if (colors.length > tierCount) return colors.slice(0, tierCount);
+  return [...colors, ...Array.from({ length: tierCount - colors.length }, () => colors[colors.length - 1])];
 }

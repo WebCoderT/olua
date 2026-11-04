@@ -6094,7 +6094,7 @@
     },
     "/admin/equipment-meta": {
       "get": {
-        "description": "单行配置。客户端 `configs/equipments` 展开 15 个变体时读它。\n\n- `prefixRates` / `suffixRates`：属性倍率（下标 = 前后缀序号），变体总倍率是两者相乘。\n- `prefixLabels` / `suffixLabels`：名称里显示的品质文案（必须与倍率等长）。\n\n**回收价不在这里**（#655 下架）：每件变体的回收价是 `equipment_variants.sell_price` 一列，\n服务端结算（`sellPriceOf`）与客户端背包都读那一列 —— 要调价就去「装备变体」页改那一行。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
+        "description": "单行配置。客户端 `configs/equipments` 展开 15 个变体时读它。\n\n- `prefixRates` / `suffixRates`：属性倍率（下标 = 前后缀序号），变体总倍率是两者相乘。\n- `prefixLabels` / `suffixLabels`：名称里显示的品质文案（必须与倍率等长）。\n- `prefixColors` / `suffixColors`：品质文字颜色（#720，`#RRGGBB`，与文案等长；空数组 = 客户端内置色）。\n\n**回收价不在这里**（#655 下架）：每件变体的回收价是 `equipment_variants.sell_price` 一列，\n服务端结算（`sellPriceOf`）与客户端背包都读那一列 —— 要调价就去「装备变体」页改那一行。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
         "operationId": "adminEquipmentMeta.get",
         "parameters": [],
         "responses": {
@@ -6139,7 +6139,7 @@
         ]
       },
       "patch": {
-        "description": "**部分更新**：只改请求体里出现的字段（数组字段是整份替换）。\n\n- 倍率与文案**必须等长**（差一位就是某一档没有名字），不等长 → 400。\n- 改完立刻重装服务端结算层：**变体的名字与属性同步变**（不必重启）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
+        "description": "**部分更新**：只改请求体里出现的字段（数组字段是整份替换）。\n\n- 倍率与文案**必须等长**（差一位就是某一档没有名字），不等长 → 400。\n- 颜色（#720）：`#RRGGBB`、与文案等长，或传空数组 = 全部用客户端内置色；坏格式 → 400。\n- 改完立刻重装服务端结算层：**变体的名字与属性同步变**（不必重启）。\n- 颜色改动玩家下次进游戏拉快照后生效（已在线的不刷）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
         "operationId": "adminEquipmentMeta.update",
         "parameters": [],
         "requestBody": {
@@ -15523,6 +15523,20 @@
             "items": {
               "type": "string"
             }
+          },
+          "prefixColors": {
+            "description": "前缀文字颜色（#720，整份替换；每项 #RRGGBB；必须与文案等长或空数组 = 全部用客户端内置色）",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "suffixColors": {
+            "description": "后缀文字颜色（#720，整份替换；口径同前缀颜色）",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         }
       },
@@ -24275,6 +24289,32 @@
               "type": "string"
             }
           },
+          "prefixColors": {
+            "description": "前缀文字颜色（#720，`#RRGGBB`，与文案同长；空数组 = 客户端按内置色渲染）",
+            "example": [
+              "#DDDDDD",
+              "#6EE86E",
+              "#4DA6FF",
+              "#C77DFF",
+              "#FFA640"
+            ],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "suffixColors": {
+            "description": "后缀文字颜色（#720，`#RRGGBB`，与文案同长；空数组 = 客户端按内置色渲染）",
+            "example": [
+              "#B0B0B0",
+              "#4DE3FF",
+              "#FFD700"
+            ],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
           "updatedAt": {
             "type": "number",
             "description": "最近更新时间（毫秒）"
@@ -24285,6 +24325,8 @@
           "suffixRates",
           "prefixLabels",
           "suffixLabels",
+          "prefixColors",
+          "suffixColors",
           "updatedAt"
         ]
       },

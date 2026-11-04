@@ -9,6 +9,7 @@ import {
   IsNumber,
   IsOptional,
   IsString,
+  Matches,
   Max,
   MaxLength,
   Min,
@@ -485,6 +486,20 @@ export class EquipmentMetaDto {
   @ApiProperty({ description: "后缀文案（与倍率同长）", type: [String] })
   suffixLabels: string[];
 
+  @ApiProperty({
+    description: "前缀文字颜色（#720，`#RRGGBB`，与文案同长；空数组 = 客户端按内置色渲染）",
+    example: ["#DDDDDD", "#6EE86E", "#4DA6FF", "#C77DFF", "#FFA640"],
+    type: [String],
+  })
+  prefixColors: string[];
+
+  @ApiProperty({
+    description: "后缀文字颜色（#720，`#RRGGBB`，与文案同长；空数组 = 客户端按内置色渲染）",
+    example: ["#B0B0B0", "#4DE3FF", "#FFD700"],
+    type: [String],
+  })
+  suffixColors: string[];
+
   @ApiProperty({ description: "最近更新时间（毫秒）" })
   updatedAt: number;
 
@@ -494,6 +509,8 @@ export class EquipmentMetaDto {
     dto.suffixRates = parseNumberArray(row.suffix_rates);
     dto.prefixLabels = parseStringArray(row.prefix_labels);
     dto.suffixLabels = parseStringArray(row.suffix_labels);
+    dto.prefixColors = parseStringArray(row.prefix_colors);
+    dto.suffixColors = parseStringArray(row.suffix_colors);
     dto.updatedAt = row.updated_at;
     return dto;
   }
@@ -550,6 +567,30 @@ export class UpdateEquipmentMetaDto {
   @IsString({ each: true, message: "文案必须是字符串" })
   @MaxLength(10, { each: true, message: "每档文案不超过 10 字" })
   suffixLabels?: string[];
+
+  @ApiPropertyOptional({
+    description: "前缀文字颜色（#720，整份替换；每项 #RRGGBB；必须与文案等长或空数组 = 全部用客户端内置色）",
+    type: [String],
+  })
+  @IsOptional()
+  @IsArray({ message: "前缀颜色必须是数组" })
+  @ArrayMinSize(0, { message: "前缀颜色不能是负数项" })
+  @ArrayMaxSize(10, { message: "前缀颜色最多 10 项" })
+  @IsString({ each: true, message: "颜色必须是字符串" })
+  @Matches(/^#[0-9A-Fa-f]{6}$/, { each: true, message: "颜色要形如 #RRGGBB（6 位十六进制）" })
+  prefixColors?: string[];
+
+  @ApiPropertyOptional({
+    description: "后缀文字颜色（#720，整份替换；口径同前缀颜色）",
+    type: [String],
+  })
+  @IsOptional()
+  @IsArray({ message: "后缀颜色必须是数组" })
+  @ArrayMinSize(0, { message: "后缀颜色不能是负数项" })
+  @ArrayMaxSize(10, { message: "后缀颜色最多 10 项" })
+  @IsString({ each: true, message: "颜色必须是字符串" })
+  @Matches(/^#[0-9A-Fa-f]{6}$/, { each: true, message: "颜色要形如 #RRGGBB（6 位十六进制）" })
+  suffixColors?: string[];
 }
 
 /** JSON 文本列 → 数字数组（脏数据降级成空数组） */
