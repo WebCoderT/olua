@@ -916,6 +916,23 @@ async function main() {
     const metaPatched = await api(base, "PATCH", "/api/admin/equipment-meta", { token, body: { prefixRates: [1, 1.1, 1.2, 1.3, 1.5] } });
     checkEqual(metaPatched.status, 200, "PATCH 前缀倍率成功");
     checkEqual(metaPatched.body?.data?.prefixRates?.[4], 1.5, "新版倍率已落库（改它就是全局调强度）");
+
+    // 品质文字颜色（#720）：与文案同下标等长；空数组 = 清空回落客户端内置色；坏 hex / 长度不齐 → 400
+    checkEqual(Array.isArray(metaRow.prefixColors) && metaRow.prefixColors.length, 5, "出厂快照带 5 档前缀颜色（种子内置色）");
+    const metaColors = await api(base, "PATCH", "/api/admin/equipment-meta", {
+      token,
+      body: { prefixColors: ["#112233", "#445566", "#778899", "#AABBCC", "#DDEEFF"] },
+    });
+    checkEqual(metaColors.status, 200, "PATCH 前缀颜色成功（#RRGGBB 整份替换）");
+    checkEqual(metaColors.body?.data?.prefixColors?.[0], "#112233", "颜色已落库");
+    const metaColorsMismatch = await api(base, "PATCH", "/api/admin/equipment-meta", { token, body: { prefixColors: ["#112233"] } });
+    checkEqual(metaColorsMismatch.status, 400, "颜色与文案长度不一致 → 400");
+    const metaColorsBadHex = await api(base, "PATCH", "/api/admin/equipment-meta", { token, body: { prefixColors: ["#11223", "#445566", "#778899", "#AABBCC", "#DDEEFF"] } });
+    checkEqual(metaColorsBadHex.status, 400, "颜色不是 #RRGGBB → 400");
+    const metaColorsCleared = await api(base, "PATCH", "/api/admin/equipment-meta", { token, body: { prefixColors: [] } });
+    checkEqual(metaColorsCleared.status, 200, "空数组颜色 = 清空（客户端回落内置色）");
+    checkEqual(metaColorsCleared.body?.data?.prefixColors?.length, 0, "清空后颜色是空数组");
+
     const metaRestored = await api(base, "PATCH", "/api/admin/equipment-meta", {
       token,
       body: {
@@ -923,9 +940,12 @@ async function main() {
         suffixRates: equipMeta.suffixRates,
         prefixLabels: equipMeta.prefixLabels,
         suffixLabels: equipMeta.suffixLabels,
+        prefixColors: ["#DDDDDD", "#6EE86E", "#4DA6FF", "#C77DFF", "#FFA640"],
+        suffixColors: ["#B0B0B0", "#4DE3FF", "#FFD700"],
       },
     });
     checkEqual(metaRestored.body?.data?.prefixRates?.[4], equipMeta.prefixRates[4], "倍率已还原（不污染后续结算断言）");
+    checkEqual(metaRestored.body?.data?.prefixColors?.length, 5, "颜色已还原（出厂内置色，不污染快照断言）");
 
     //#endregion
 
@@ -1640,6 +1660,7 @@ async function main() {
     checkEqual(snap.equipmentSlots?.length, slotRows.length, `快照槽位行数 = 种子（${slotRows.length}）`);
     checkEqual(snap.equipmentMeta?.prefixRates?.length, equipMeta.prefixRates.length, "快照带前后缀倍率（客户端展开 15 个变体的依据）");
     checkEqual(snap.equipmentMeta?.prefixLabels?.[0], equipMeta.prefixLabels[0], "快照带品质文案");
+    checkEqual(snap.equipmentMeta?.prefixColors?.length, 5, "快照带品质文字颜色（#720，与文案同下标）");
     check(snap.equipmentMeta?.recycleCurve === undefined, "快照不带回收价曲线（价随变体一行下发）");
     checkEqual(snap.drugs?.length, Object.keys(drugs).length, "快照药品行数 = 生成物");
     checkEqual(snap.items?.length, Object.keys(items).length, "快照物品行数 = 生成物");

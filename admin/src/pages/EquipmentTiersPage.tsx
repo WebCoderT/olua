@@ -29,10 +29,18 @@ import { toastSuccess } from "../store/toast";
 
 //#region 档位定义（#697 的 TiersDialog 迁出为页内卡片）
 
-/** 一档 = 一条文案 + 一个倍率（输入态都是字符串，提交时再解析） */
-type TierDraft = { label: string; rate: string };
+/** 一档 = 一条文案 + 一个倍率 + 一个文字颜色（输入态都是字符串，提交时再解析；#720 起带颜色） */
+type TierDraft = { label: string; rate: string; color: string };
 
 const TIER_LIMITS = { min: 1, max: 10, maxRate: 1000, maxLabelLength: 10 };
+
+/** 颜色的出厂回落值（与客户端内置色同源；老数据没上色时取色器显示它们） */
+const BUILTIN_TIER_COLORS = {
+  prefix: ["#DDDDDD", "#6EE86E", "#4DA6FF", "#C77DFF", "#FFA640"],
+  suffix: ["#B0B0B0", "#4DE3FF", "#FFD700"],
+} as const;
+
+const HEX_COLOR_PATTERN = /^#[0-9A-Fa-f]{6}$/;
 
 /** 输入框里的数字（trim 后能解析成有限数才算） */
 const isNumber = (value: string): boolean => value.trim() !== "" && Number.isFinite(Number(value));
@@ -51,6 +59,7 @@ function tierProblem(tiers: TierDraft[], kind: string): string | null {
     if (!isNumber(tier.rate)) return `${kind}第 ${index + 1} 档的倍率不是数字`;
     if (Number(tier.rate) <= 0) return `${kind}第 ${index + 1} 档的倍率必须大于 0`;
     if (Number(tier.rate) > TIER_LIMITS.maxRate) return `${kind}第 ${index + 1} 档的倍率超出防御性上限（${TIER_LIMITS.maxRate}）`;
+    if (!HEX_COLOR_PATTERN.test(tier.color.trim())) return `${kind}第 ${index + 1} 档的颜色要形如 #RRGGBB`;
   }
   return null;
 }
@@ -66,8 +75,22 @@ function TiersCard({ onChanged }: { onChanged: () => void }) {
     setLoading(true);
     try {
       const row = await equipmentMetaApi.get();
-      setPrefixTiers(row.prefixLabels.map((label, index) => ({ label, rate: String(row.prefixRates[index] ?? 1) })));
-      setSuffixTiers(row.suffixLabels.map((label, index) => ({ label, rate: String(row.suffixRates[index] ?? 1) })));
+      const colorOf = (colors: string[] | undefined, kind: keyof typeof BUILTIN_TIER_COLORS, index: number): string =>
+        colors?.[index] ?? BUILTIN_TIER_COLORS[kind][Math.min(index, BUILTIN_TIER_COLORS[kind].length - 1)];
+      setPrefixTiers(
+        row.prefixLabels.map((label, index) => ({
+          label,
+          rate: String(row.prefixRates[index] ?? 1),
+          color: colorOf(row.prefixColors, "prefix", index),
+        })),
+      );
+      setSuffixTiers(
+        row.suffixLabels.map((label, index) => ({
+          label,
+          rate: String(row.suffixRates[index] ?? 1),
+          color: colorOf(row.suffixColors, "suffix", index),
+        })),
+      );
     } catch {
       /* 错误已由请求层统一提示 */
     } finally {
@@ -86,7 +109,8 @@ function TiersCard({ onChanged }: { onChanged: () => void }) {
   };
   const appendTier = (kind: "prefix" | "suffix") => {
     const setter = kind === "prefix" ? setPrefixTiers : setSuffixTiers;
-    setter((current) => [...(current ?? []), { label: "新档", rate: "1" }]);
+    const builtin = BUILTIN_TIER_COLORS[kind];
+    setter((current) => [...(current ?? []), { label: "新档", rate: "1", color: builtin[Math.min(current?.length ?? 0, builtin.length - 1)] }]);
   };
   const removeTier = (kind: "prefix" | "suffix", index: number) => {
     const setter = kind === "prefix" ? setPrefixTiers : setSuffixTiers;
@@ -100,10 +124,12 @@ function TiersCard({ onChanged }: { onChanged: () => void }) {
       await equipmentMetaApi.update({
         prefixLabels: prefixTiers.map((tier) => tier.label.trim()),
         prefixRates: prefixTiers.map((tier) => Number(tier.rate)),
+        prefixColors: prefixTiers.map((tier) => tier.color.trim()),
         suffixLabels: suffixTiers.map((tier) => tier.label.trim()),
         suffixRates: suffixTiers.map((tier) => Number(tier.rate)),
+        suffixColors: suffixTiers.map((tier) => tier.color.trim()),
       });
-      toastSuccess("前后缀档位已保存（档位定义即改即生效；装备变体要回「装备配置」页点「重新生成变体」才会按新档数重建）");
+      toastSuccess("前后缀档位已保存（档位定义与文字颜色即改即生效；装备变体要回「装备配置」页点「重新生成变体」才会按新档数重建）");
       onChanged();
     } catch {
       /* 错误已由请求层统一提示 */
@@ -125,12 +151,13 @@ function TiersCard({ onChanged }: { onChanged: () => void }) {
           </Button>
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[420px] border-separate border-spacing-1">
+          <table className="w-full min-w-[560px] border-separate border-spacing-1">
             <thead>
               <tr>
                 <th className="w-12 text-xs font-normal text-slate-500">序号</th>
                 <th className="text-xs font-normal text-slate-400">文案</th>
                 <th className="w-28 text-xs font-normal text-slate-400">属性倍率</th>
+                <th className="w-48 text-xs font-normal text-slate-400">文字颜色</th>
                 <th className="w-16 text-right text-xs font-normal text-slate-400">操作</th>
               </tr>
             </thead>
@@ -151,6 +178,25 @@ function TiersCard({ onChanged }: { onChanged: () => void }) {
                       onChange={(event) => patchTier(kind, index, { rate: event.target.value })}
                     />
                   </td>
+                  <td>
+                    <div className="flex items-center gap-1.5">
+                      <input
+                        type="color"
+                        aria-label={`${kindLabel}第 ${index + 1} 档颜色`}
+                        value={HEX_COLOR_PATTERN.test(tier.color.trim()) ? tier.color.trim() : "#000000"}
+                        disabled={!canWrite}
+                        className="h-9 w-9 cursor-pointer rounded border border-slate-700 bg-slate-900 p-0.5 disabled:cursor-not-allowed"
+                        onChange={(event) => patchTier(kind, index, { color: event.target.value })}
+                      />
+                      <Input
+                        value={tier.color}
+                        disabled={!canWrite}
+                        title="品质文字颜色（#RRGGBB），客户端名称与品质文案按它着色"
+                        className="w-24 font-mono"
+                        onChange={(event) => patchTier(kind, index, { color: event.target.value })}
+                      />
+                    </div>
+                  </td>
                   <td className="text-right">
                     <Button variant="ghost" disabled={!canWrite || (tiers?.length ?? 0) <= TIER_LIMITS.min} onClick={() => removeTier(kind, index)}>
                       删除
@@ -168,7 +214,7 @@ function TiersCard({ onChanged }: { onChanged: () => void }) {
   return (
     <Card
       title="前后缀档位"
-      description="文案用于客户端拼品质名（如「精良的·天级」），倍率用于「重新生成变体」时算属性。保存即改档位定义，但已展开的装备变体行不变 —— 增删档位后回「装备配置」页点「重新生成变体」。"
+      description="文案用于客户端拼品质名（如「精良的·天级」），倍率用于「重新生成变体」时算属性，颜色是品质文字的着色（客户端名称与文案按它渲染，#720）。保存即改档位定义，但已展开的装备变体行不变 —— 增删档位后回「装备配置」页点「重新生成变体」。"
       actions={
         loading ? (
           <Spinner />

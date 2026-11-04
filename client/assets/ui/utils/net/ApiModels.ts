@@ -1094,6 +1094,14 @@ export type UpdateEquipmentMeta = {
    * 后缀文案（整份替换；必须与后缀倍率等长）
    */
   suffixLabels?: string[];
+  /**
+   * 前缀文字颜色（#720，整份替换；每项 #RRGGBB；必须与文案等长或空数组 = 全部用客户端内置色）
+   */
+  prefixColors?: string[];
+  /**
+   * 后缀文字颜色（#720，整份替换；口径同前缀颜色）
+   */
+  suffixColors?: string[];
 };
 
 export type EquipAlignPoint = {
@@ -6548,6 +6556,14 @@ export type EquipmentMeta = {
    * 后缀文案（与倍率同长）
    */
   suffixLabels: string[];
+  /**
+   * 前缀文字颜色（#720，`#RRGGBB`，与文案同长；空数组 = 客户端按内置色渲染）
+   */
+  prefixColors: string[];
+  /**
+   * 后缀文字颜色（#720，`#RRGGBB`，与文案同长；空数组 = 客户端按内置色渲染）
+   */
+  suffixColors: string[];
   /**
    * 最近更新时间（毫秒）
    */

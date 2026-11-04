@@ -628,8 +628,8 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
         updated_at INTEGER NOT NULL DEFAULT 0
       );
 
-      -- 装备规则（#603 第九域）：单行表（id 恒为 1），存前后缀倍率 / 文案。
-      -- 四个数组都是 JSON 文本 —— 它们是「一组同长的表」，拆成列反而要多维护行数约束。
+      -- 装备规则（#603 第九域）：单行表（id 恒为 1），存前后缀倍率 / 文案 / 文字颜色（#720）。
+      -- 六个数组都是 JSON 文本 —— 它们是「一组同长的表」，拆成列反而要多维护行数约束。
       -- 回收价曲线 #655 下架（逐条价在 equipment_variants.sell_price），老库那列由 ensure 段删掉
       CREATE TABLE IF NOT EXISTS equipment_meta (
         id            INTEGER PRIMARY KEY CHECK (id = 1),
@@ -637,6 +637,8 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
         suffix_rates  TEXT    NOT NULL DEFAULT '[]',
         prefix_labels TEXT    NOT NULL DEFAULT '[]',
         suffix_labels TEXT    NOT NULL DEFAULT '[]',
+        prefix_colors TEXT    NOT NULL DEFAULT '[]',
+        suffix_colors TEXT    NOT NULL DEFAULT '[]',
         updated_at    INTEGER NOT NULL DEFAULT 0
       );
 
@@ -1187,6 +1189,9 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
     // 回收价曲线同样下架（#655）：老库 equipment_meta 里还留着 recycle_curve 列，
     // 导出是 `SELECT *`，不删列它就会一直躺在 config-sync.sql 里
     this.dropColumnIfExists("equipment_meta", "recycle_curve");
+    // 品质文字颜色收管理端（#720）：存量库补列（空数组 = 客户端按内置色渲染，零迁移）
+    this.ensureColumn("equipment_meta", "prefix_colors", "TEXT NOT NULL DEFAULT '[]'");
+    this.ensureColumn("equipment_meta", "suffix_colors", "TEXT NOT NULL DEFAULT '[]'");
     // 称号成长列表顺序（#230）：存量库补列；部分唯一索引保证 upgrade 渠道的行不重号（可空行不参与）
     this.ensureColumn("titles", "upgrade_order", "INTEGER");
     this.db.exec(

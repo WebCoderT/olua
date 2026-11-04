@@ -75,7 +75,8 @@ export class AdminEquipmentRulesController {
     description:
       "单行配置。客户端 `configs/equipments` 展开 15 个变体时读它。\n\n" +
       "- `prefixRates` / `suffixRates`：属性倍率（下标 = 前后缀序号），变体总倍率是两者相乘。\n" +
-      "- `prefixLabels` / `suffixLabels`：名称里显示的品质文案（必须与倍率等长）。\n\n" +
+      "- `prefixLabels` / `suffixLabels`：名称里显示的品质文案（必须与倍率等长）。\n" +
+      "- `prefixColors` / `suffixColors`：品质文字颜色（#720，`#RRGGBB`，与文案等长；空数组 = 客户端内置色）。\n\n" +
       "**回收价不在这里**（#655 下架）：每件变体的回收价是 `equipment_variants.sell_price` 一列，\n" +
       "服务端结算（`sellPriceOf`）与客户端背包都读那一列 —— 要调价就去「装备变体」页改那一行。",
     permissions: [Permission.GAME_CONFIG_READ],
@@ -93,7 +94,9 @@ export class AdminEquipmentRulesController {
     description:
       "**部分更新**：只改请求体里出现的字段（数组字段是整份替换）。\n\n" +
       "- 倍率与文案**必须等长**（差一位就是某一档没有名字），不等长 → 400。\n" +
-      "- 改完立刻重装服务端结算层：**变体的名字与属性同步变**（不必重启）。",
+      "- 颜色（#720）：`#RRGGBB`、与文案等长，或传空数组 = 全部用客户端内置色；坏格式 → 400。\n" +
+      "- 改完立刻重装服务端结算层：**变体的名字与属性同步变**（不必重启）。\n" +
+      "- 颜色改动玩家下次进游戏拉快照后生效（已在线的不刷）。",
     permissions: [Permission.GAME_CONFIG_WRITE],
   })
   @ApiDataResponse(EquipmentMetaDto, { description: "更新后的装备规则" })
