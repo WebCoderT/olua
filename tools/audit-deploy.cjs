@@ -40,7 +40,8 @@ const FILES = {
   serverIgnore: "server/.dockerignore",
   serverEnvExample: "server/.env.example",
   adminDockerfile: "admin/Dockerfile",
-  adminIgnore: "admin/.dockerignore",
+  // 管理端的构建上下文是**仓库根**（要跨目录 import 服务端枚举），所以它的 .dockerignore 也在根上
+  adminIgnore: ".dockerignore",
   adminNginx: "admin/nginx.conf",
   gameNginx: "deploy/nginx-game.conf",
 };
@@ -212,7 +213,8 @@ function copySources(dockerfile, contextDir) {
 
 for (const [label, dockerfile, contextDir] of [
   ["server/Dockerfile", serverDockerfile, "server"],
-  ["admin/Dockerfile", adminDockerfile, "admin"],
+  // 管理端 context = 仓库根（admin/Dockerfile 里 COPY 的是 admin/... 与 server/src/...）
+  ["admin/Dockerfile", adminDockerfile, "."],
 ]) {
   for (const { src, abs } of copySources(dockerfile, contextDir)) {
     if (fs.existsSync(abs)) continue;
@@ -227,14 +229,14 @@ for (const [label, dockerfile, contextDir] of [
 
 for (const [label, rel, text] of [
   ["server", FILES.serverIgnore, read(FILES.serverIgnore)],
-  ["admin", FILES.adminIgnore, read(FILES.adminIgnore)],
+  ["admin（仓库根）", FILES.adminIgnore, read(FILES.adminIgnore)],
 ]) {
   const lines = text.split(/\r?\n/).map((line) => line.trim());
-  if (lines.includes(".env")) ok(`${label}/.dockerignore 排除了 .env（密钥不进镜像层）`);
-  else fail(`${label}/.dockerignore 没有排除 .env —— 密钥会被打进镜像，层里翻得出来`);
+  if (lines.includes(".env")) ok(`${label} 的 .dockerignore 排除了 .env（密钥不进镜像层）`);
+  else fail(`${label} 的 .dockerignore 没有排除 .env —— 密钥会被打进镜像，层里翻得出来`);
 
-  if (lines.includes("node_modules")) ok(`${label}/.dockerignore 排除了 node_modules`);
-  else fail(`${label}/.dockerignore 没有排除 node_modules（宿主机的依赖会被拷进镜像）`);
+  if (lines.includes("node_modules")) ok(`${label} 的 .dockerignore 排除了 node_modules`);
+  else fail(`${label} 的 .dockerignore 没有排除 node_modules（宿主机的依赖会被拷进镜像）`);
 }
 
 // compose 的 env_file 指的文件本身就是 gitignore 的，所以只要求「有模板可抄」

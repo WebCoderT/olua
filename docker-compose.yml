@@ -78,7 +78,11 @@ services:
 
   admin:
     build:
-      context: ./admin
+      # context 是**仓库根**而不是 ./admin：管理端要 import 服务端的枚举常量
+      # （server/src/common/constants/game-enums），只给 admin/ 会让那条相对路径落到上下文外。
+      # 根目录 .dockerignore 已把 client/ 等大目录挡在外面（见 admin/Dockerfile 头部说明）。
+      context: .
+      dockerfile: admin/Dockerfile
       args:
         # 构建期决定（Vite 会内联）；/api 走下面的同源反代
         VITE_API_BASE_URL: /api

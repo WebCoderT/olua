@@ -1,0 +1,31 @@
+# 构建上下文：管理端镜像的 context 是**仓库根**（不是 admin/）
+#
+# 为什么：`admin/src/api/gameData.ts` 用 `../../../server/src/common/constants/game-enums`
+# 引服务端的枚举/结构常量（#655：一份真源，职业/性别/怪物定位不许两端各抄一份）。
+# context 若只给 admin/，那个路径落到上下文外面 → `TS2307 Cannot find module`，构建直接失败。
+#
+# 代价是上下文默认是整个仓库，所以这里要**显式排除**体积大与不该进镜像的东西。
+# 注意：Docker 的 `.env` 只匹配这个文件名本身，`.env.production` 仍会被包含（Vite 构建要读它）。
+
+.git
+.gitignore
+node_modules
+**/node_modules
+
+# 体积大 / 与镜像无关的目录
+client
+resources_dist
+website
+design
+docs
+deploy
+_loose_frames_archive
+
+# 密钥：绝不能进镜像层（任何一次提交都能被翻出来）
+.env
+**/.env
+
+# 构建产物与本地数据
+admin/dist
+server/dist
+server/data
