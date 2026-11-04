@@ -22,6 +22,7 @@ import { SoulDto } from "./soul.dto";
 import { TitleDto } from "./title.dto";
 import { GuideStepDto } from "./guide.dto";
 import { AudioConfigDto } from "../../audio-setting/dto/audio-setting.dto";
+import { EquipmentAppearanceDto } from "./equipment-appearance.dto";
 
 /**
  * 玩家侧配置快照（#294）
@@ -218,4 +219,15 @@ export class GameConfigSnapshotDto {
   })
   @Type(() => AudioConfigDto)
   audio!: AudioConfigDto[];
+
+  @ApiProperty({
+    description:
+      "装备外观（#695：哪个前后缀组合 / 哪件特殊装备用哪个边框、详情背景）。素材本体与资源清单在客户端，" +
+      "这里只下发 key 映射 —— 运营换品质光效 / 给特殊装备配光效不用重打客户端包。\n\n" +
+      "`borders` / `backgrounds` 恰好 15 条（5 前缀 × 3 后缀全覆盖）；`customBorders` / `customBackgrounds` " +
+      "优先于前后缀表。客户端 `configs/border` / `configs/background` 按它重建映射。",
+    type: EquipmentAppearanceDto,
+  })
+  @Type(() => EquipmentAppearanceDto)
+  equipmentAppearance!: EquipmentAppearanceDto;
 }

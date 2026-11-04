@@ -202,7 +202,12 @@ check(
   unclassifiedInSource.length === 0,
   `建表清单里每张表都已归类（漏：${unclassifiedInSource.join(", ") || "无"}）`,
 );
-const ghostTables = [...knownTables].filter((name) => !declaredTables.includes(name));
+// config_meta 由 bootstrapConfigSnapshot（config-snapshot.ts）建——它是快照元信息标记表，
+// 不走 database.service.ts 的建表清单，所以单独豁免（缺了它 knownTables 会误报「多余」）。
+const BOOTSTRAP_ONLY_TABLES = ["config_meta"];
+const ghostTables = [...knownTables].filter(
+  (name) => !declaredTables.includes(name) && !BOOTSTRAP_ONLY_TABLES.includes(name),
+);
 check(ghostTables.length === 0, `分类清单里没有写错的表名（多余：${ghostTables.join(", ") || "无"}）`);
 
 //#endregion
@@ -217,7 +222,10 @@ const exported = configSql.build(source, { tables: TEST_TABLES });
 checkEqual(exported.stats.tables, 3, "导出 3 张表");
 checkEqual(exported.stats.rows, 6, "导出 6 行（drugs 1 + items 3 + monsters 2）");
 check(exported.sql.includes('DELETE FROM "items";'), "每张表先 DELETE（整表替换语义）");
-check(exported.sql.includes('INSERT INTO "monsters" VALUES (\'m_1\', \'鸡\', 1);'), "行按值写出");
+check(
+  exported.sql.includes('INSERT INTO "monsters" ("id", "label", "level") VALUES (\'m_1\', \'鸡\', 1);'),
+  "行按值写出（列名显式列出——位置式 INSERT 在存量库上遇到列序不一致会把值塞错列）",
+);
 check(!exported.sql.includes("accounts"), "运行时表（accounts）不在文件里");
 check(!exported.sql.includes("scrypt$hash$value"), "账号密码哈希不在文件里");
 check(exported.sql.includes("'O''Brien 的剑'"), "单引号被转义成两个（否则导入会语法错）");
@@ -363,8 +371,8 @@ group("六 · compare（报告哪张表落后了）");
 checkEqual(configSql.compare(good, good), null, "内容一致时返回 null");
 
 const drifted = good.replace(
-  "INSERT INTO \"items\" VALUES ('item_iron', '铁矿（精炼）', 999, '锻造用的基础材料');",
-  "INSERT INTO \"items\" VALUES ('item_iron', '铁矿（精炼）', 1, '锻造用的基础材料');",
+  "INSERT INTO \"items\" (\"id\", \"label\", \"sell_price\", \"description\") VALUES ('item_iron', '铁矿（精炼）', 999, '锻造用的基础材料');",
+  "INSERT INTO \"items\" (\"id\", \"label\", \"sell_price\", \"description\") VALUES ('item_iron', '铁矿（精炼）', 1, '锻造用的基础材料');",
 );
 const diff = configSql.compare(drifted, good);
 check(diff !== null, "内容不一致时返回差异");

@@ -2,10 +2,10 @@
 --
 -- 只含配置表：账号 / 角色存档 / 审计日志 / 世界怪物实例不在这个文件里。
 -- 导入：make config-import（整表替换；账号与角色存档不受影响）
--- 表 35 张 / 行 3406 条
+-- 表 36 张 / 行 3407 条
 -- olua config snapshot v1
--- tables: achievements,audio_settings,combat_weights,drop_tables,drugs,equip_aligns,equip_in_aligns,equipment_meta,equipment_slots,equipment_variants,equipments,fashions,growth_scalars,guide_settings,items,mall_prices,mall_settings,map_collisions,map_npcs,map_spawn_areas,maps,monster_drops,monster_presentation,monster_skills,monsters,npcs,quests,ranks,role_levels,runtime_params,skills,souls,statuses,titles,ui_effects
--- counts: achievements=24,audio_settings=12,combat_weights=7,drop_tables=5,drugs=11,equip_aligns=32,equip_in_aligns=31,equipment_meta=1,equipment_slots=13,equipment_variants=555,equipments=37,fashions=20,growth_scalars=4,guide_settings=1,items=5,mall_prices=1,mall_settings=1,map_collisions=1615,map_npcs=11,map_spawn_areas=62,maps=11,monster_drops=220,monster_presentation=220,monster_skills=3,monsters=220,npcs=21,quests=5,ranks=100,role_levels=60,runtime_params=1,skills=15,souls=37,statuses=4,titles=34,ui_effects=7
+-- tables: achievements,audio_settings,combat_weights,drop_tables,drugs,equip_aligns,equip_in_aligns,equipment_appearance,equipment_meta,equipment_slots,equipment_variants,equipments,fashions,growth_scalars,guide_settings,items,mall_prices,mall_settings,map_collisions,map_npcs,map_spawn_areas,maps,monster_drops,monster_presentation,monster_skills,monsters,npcs,quests,ranks,role_levels,runtime_params,skills,souls,statuses,titles,ui_effects
+-- counts: achievements=24,audio_settings=12,combat_weights=7,drop_tables=5,drugs=11,equip_aligns=32,equip_in_aligns=31,equipment_appearance=1,equipment_meta=1,equipment_slots=13,equipment_variants=555,equipments=37,fashions=20,growth_scalars=4,guide_settings=1,items=5,mall_prices=1,mall_settings=1,map_collisions=1615,map_npcs=11,map_spawn_areas=62,maps=11,monster_drops=220,monster_presentation=220,monster_skills=3,monsters=220,npcs=21,quests=5,ranks=100,role_levels=60,runtime_params=1,skills=15,souls=37,statuses=4,titles=34,ui_effects=7
 
 PRAGMA foreign_keys = OFF;
 BEGIN;
@@ -151,6 +151,10 @@ INSERT INTO "equip_in_aligns" ("id", "in_scale_x", "in_scale_y", "in_x", "in_y",
 INSERT INTO "equip_in_aligns" ("id", "in_scale_x", "in_scale_y", "in_x", "in_y", "in_manual", "updated_by", "updated_at") VALUES ('cloth:cloth_31', 1, 1, -70.72, -41.01, 1, 'gm001', 1793286281931);
 INSERT INTO "equip_in_aligns" ("id", "in_scale_x", "in_scale_y", "in_x", "in_y", "in_manual", "updated_by", "updated_at") VALUES ('cloth:cloth_32', 1, 1, -87.5, -21.85, 1, 'gm001', 1793286281933);
 INSERT INTO "equip_in_aligns" ("id", "in_scale_x", "in_scale_y", "in_x", "in_y", "in_manual", "updated_by", "updated_at") VALUES ('cloth:cloth_1', 1.3, 1.3, -74.89, 5.46, 1, 'gm001', 1793554040298);
+
+-- ===== equipment_appearance（1 行）=====
+DELETE FROM "equipment_appearance";
+INSERT INTO "equipment_appearance" ("id", "borders", "backgrounds", "custom_borders", "custom_backgrounds", "updated_at") VALUES (1, '[{"prefix":0,"suffix":0,"key":"sfx_30123_0"},{"prefix":1,"suffix":0,"key":"sfx_30124_0"},{"prefix":2,"suffix":0,"key":"sfx_30125_0"},{"prefix":3,"suffix":0,"key":"sfx_30126_0"},{"prefix":4,"suffix":0,"key":"sfx_30127_0"},{"prefix":0,"suffix":1,"key":"sfx_30128_0"},{"prefix":1,"suffix":1,"key":"sfx_30129_0"},{"prefix":2,"suffix":1,"key":"sfx_30130_0"},{"prefix":3,"suffix":1,"key":"sfx_30131_0"},{"prefix":4,"suffix":1,"key":"sfx_30132_0"},{"prefix":0,"suffix":2,"key":"sfx_30133_0"},{"prefix":1,"suffix":2,"key":"sfx_30134_0"},{"prefix":2,"suffix":2,"key":"sfx_30135_0"},{"prefix":3,"suffix":2,"key":"sfx_30136_0"},{"prefix":4,"suffix":2,"key":"sfx_30137_0"}]', '[{"prefix":0,"suffix":0,"key":"sfx_16000"},{"prefix":1,"suffix":0,"key":"sfx_16001"},{"prefix":2,"suffix":0,"key":"sfx_16002"},{"prefix":3,"suffix":0,"key":"sfx_16003"},{"prefix":4,"suffix":0,"key":"sfx_16004"},{"prefix":0,"suffix":1,"key":"sfx_16005"},{"prefix":1,"suffix":1,"key":"sfx_16006"},{"prefix":2,"suffix":1,"key":"sfx_16007"},{"prefix":3,"suffix":1,"key":"sfx_16008"},{"prefix":4,"suffix":1,"key":"sfx_16009"},{"prefix":0,"suffix":2,"key":"sfx_16010"},{"prefix":1,"suffix":2,"key":"sfx_16011"},{"prefix":2,"suffix":2,"key":"sfx_16012"},{"prefix":3,"suffix":2,"key":"sfx_16013"},{"prefix":4,"suffix":2,"key":"sfx_16014"}]', '[]', '[]', 0);
 
 -- ===== equipment_meta（1 行）=====
 DELETE FROM "equipment_meta";

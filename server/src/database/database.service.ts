@@ -1084,6 +1084,18 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
         steps      TEXT    NOT NULL DEFAULT '[]',
         updated_at INTEGER NOT NULL DEFAULT 0
       );
+
+      -- 装备外观（#695）：单行表，「哪个前后缀组合用哪个边框 / 详情背景」+「哪件特殊装备单独用哪个」。
+      -- 四组各存一列 JSON 数组（15 组合 ×2 + 特殊装备自定义 ×2）；素材本体在客户端资源包，
+      -- 服务端只存 key 字符串（与音效路径入库同一取向）。出厂值由服务常量 seed（INSERT OR IGNORE）。
+      CREATE TABLE IF NOT EXISTS equipment_appearance (
+        id                  INTEGER PRIMARY KEY CHECK (id = 1),
+        borders             TEXT    NOT NULL DEFAULT '[]',
+        backgrounds         TEXT    NOT NULL DEFAULT '[]',
+        custom_borders      TEXT    NOT NULL DEFAULT '[]',
+        custom_backgrounds  TEXT    NOT NULL DEFAULT '[]',
+        updated_at          INTEGER NOT NULL DEFAULT 0
+      );
     `);
 
     // 存量库补列（CREATE TABLE IF NOT EXISTS 不会改已有表结构）

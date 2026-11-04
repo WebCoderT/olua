@@ -80,17 +80,22 @@ const close = (a, b) => Math.abs(a - b) < 1e-9;
 }
 
 console.log("\n— C. 所有怪物均可掉落 —");
+// 口径（2026-11-05）：**只锁结构，不锁数值** —— 哪只怪掉什么药是运营数据（管理端随时改，
+// 曾有怪被改成只掉装备），测试锁「每怪必含两种药」就会在正常运营操作上假红。
+// 这里改为锁「每只怪都有掉落来源：自带条目，或引用一张真实存在的具名表」。
 let monsterCount = 0;
-let missingHp = 0;
-let missingMp = 0;
+let dangling = 0;
+const tableIds = new Set(dropTables.map((row) => row.id));
 for (const config of monsterDropTables) {
   monsterCount += 1;
-  const ids = new Set(config.entries.map((entry) => entry.goodId));
-  if (!ids.has(HP_ID)) missingHp += 1;
-  if (!ids.has(MP_ID)) missingMp += 1;
+  if (config.source === "table") {
+    if (!tableIds.has(config.tableId)) dangling += 1;
+  } else if ((config.entries ?? []).length === 0) {
+    dangling += 1;
+  }
 }
 check(monsterCount > 0, `每怪独立掉落表非空（${monsterCount} 只怪）`);
-check(missingHp === 0 && missingMp === 0, `每只怪的条目池都含强效血/蓝药（缺血 ${missingHp} / 缺蓝 ${missingMp}）`);
+check(dangling === 0, `每只怪都有掉落来源（自带条目或引用存在的具名表；悬空 ${dangling} 只）`);
 ["common", "elite", "boss"].forEach((id) => {
   const table = dropTables.find((row) => row.id === id);
   check(!!table, `具名掉落表 ${id} 存在`);

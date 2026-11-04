@@ -20,7 +20,7 @@ const { PROJECT_ROOT, prepare, check, finish } = require("./lib/configs-sandbox.
 
 const BORDER_DIR = path.join(PROJECT_ROOT, "assets/resources/borders");
 const outDir = prepare("olua-equipment-border", ["configs/border.ts"]);
-const { borderResources, borders, prefixSuffixBorders, customEquipmentBorders, getEquipmentBorderKey, getAssignedBorders } = require(path.join(outDir, "configs/border.js"));
+const { borderResources, borders, prefixSuffixBorders, customEquipmentBorders, getEquipmentBorderKey, getAssignedBorders, applyEquipmentAppearance } = require(path.join(outDir, "configs/border.js"));
 const { getEquipment, getItem, items } = require(path.join(outDir, "configs/items.js"));
 const { getEquipmentVariantKey, getEquipmentBaseKey } = require(path.join(outDir, "configs/equipments.js"));
 
@@ -44,41 +44,65 @@ const PREFIX_COUNT = 5;
 const SUFFIX_COUNT = 3;
 const combos = [];
 for (let p = 0; p < PREFIX_COUNT; p++) for (let s = 0; s < SUFFIX_COUNT; s++) combos.push(`${p}|${s}`);
-check(combos.every((combo) => prefixSuffixBorders.has(combo)), "15 种组合全部有映射", `缺：${combos.filter((c) => !prefixSuffixBorders.has(c)).join("、") || "无"}`);
+
+// #695：映射来自快照（服务端下发）。测试里先断言「快照到达前为空」，再 apply 一份
+// 测试自建的 15 条映射（套用出厂编号口径，期望值全部从 applied 数据推导，不锁出厂数值）
+check(prefixSuffixBorders.size === 0, "快照到达前前后缀映射为空（没有本地兜底表）");
+check(customEquipmentBorders.size === 0, "快照到达前自定义表为空");
+check(getAssignedBorders().length === 0, "快照到达前预加载清单为空（不加载任何边框图集）");
+
+// 测试自建映射：先按后缀分三档、档内按前缀递增，取「前 15 张」编号（与出厂口径同构）
+const APPLIED = [];
+for (let s = 0; s < SUFFIX_COUNT; s++) for (let p = 0; p < PREFIX_COUNT; p++) APPLIED.push({ prefix: p, suffix: s, key: `sfx_${30123 + s * PREFIX_COUNT + p}_0` });
+applyEquipmentAppearance({ borders: APPLIED, customBorders: [] });
+
+check(combos.every((combo) => prefixSuffixBorders.has(combo)), "apply 后 15 种组合全部有映射", `缺：${combos.filter((c) => !prefixSuffixBorders.has(c)).join("、") || "无"}`);
 check(prefixSuffixBorders.size === combos.length, "映射表没有多余的组合");
 const assignedKeys = getAssignedBorders().map((r) => r.key);
 check(new Set(assignedKeys).size === combos.length, "前后缀表用到的边框互不重复");
-const first15 = Array.from({ length: PREFIX_COUNT * SUFFIX_COUNT }, (_, i) => `sfx_${30123 + i}_0`);
-check(JSON.stringify(assignedKeys) === JSON.stringify(first15), "用的是「前 15 张」边框（sfx_30123_0 ~ sfx_30137_0）", assignedKeys.join(","));
+check(JSON.stringify(assignedKeys) === JSON.stringify(APPLIED.map((row) => row.key)), "assigned 顺序 = applied 登记顺序（预加载与映射同源）", assignedKeys.join(","));
 check(assignedKeys.every((key) => borders.has(key)), "映射到的边框都在资源表里");
+
+// 资源清单里没有的 key：丢弃并留日志（配了不存在的编号，整个边框会加载失败）
+applyEquipmentAppearance({
+  borders: APPLIED.slice(0, 14).concat([{ prefix: 4, suffix: 2, key: "sfx_99999_0" }]),
+  customBorders: [],
+});
+check(prefixSuffixBorders.size === 14 && !prefixSuffixBorders.has("4|2"), "指向未登记图集的组合被丢弃（不进映射）");
+applyEquipmentAppearance({ borders: APPLIED, customBorders: [] });
+check(prefixSuffixBorders.size === 15, "重新 apply 合法数据后映射恢复");
 
 console.log("\n— C. 取用函数（getEquipmentBorderKey）—");
 const borderOf = (prefix, suffix, id) => getEquipmentBorderKey({ id, prefix, suffix, type: "equipment" });
-check(borderOf(0, 0, "x") === "sfx_30123_0", "普通的·人级 → 第 1 张", borderOf(0, 0, "x"));
-check(borderOf(4, 2, "x") === "sfx_30137_0", "超神的·神级 → 第 15 张", borderOf(4, 2, "x"));
-check(borderOf(0, 1, "x") === "sfx_30128_0" && borderOf(4, 0, "x") === "sfx_30127_0", "天级档从第 6 张起、前缀在后缀档内递增");
+const first = APPLIED[0].key;
+const last = APPLIED[14].key;
+check(borderOf(0, 0, "x") === first, "普通的·人级 → applied 表第 1 条", borderOf(0, 0, "x"));
+check(borderOf(4, 2, "x") === last, "超神的·神级 → applied 表第 15 条", borderOf(4, 2, "x"));
+check(borderOf(0, 1, "x") === APPLIED[5].key && borderOf(4, 0, "x") === APPLIED[4].key, "后缀档内按前缀递增（取 applied 表同位次）");
 check(getEquipmentBorderKey(null) === null, "没有装备 → 不显示");
 check(borderOf(9, 9, "x") === null, "异常前后缀 → 不显示（查不到组合）");
-check(borderOf(0, 0, "") === "sfx_30123_0", "id 缺失也按前后缀表取");
-// 自定义表（测试里临时写入，跑完清掉）
-const ORIGINAL_BORDERS = "sfx_30206_0";
-check(!customEquipmentBorders.size, "自定义表默认为空（特殊装备按需增补）");
-customEquipmentBorders.set("weapon_special", ORIGINAL_BORDERS);
-check(borderOf(0, 0, "weapon_special") === ORIGINAL_BORDERS, "自定义表按精确 id 命中，优先于前后缀表");
-check(borderOf(0, 0, "weapon_other_p3s2") === "sfx_30123_0", "没登记基础件时，变体不沾光（回退前后缀表）");
-customEquipmentBorders.set("weapon_all", ORIGINAL_BORDERS);
-check(borderOf(0, 0, "weapon_other") === "sfx_30123_0", "没登记的 id 不显示自定义边框");
-check(borderOf(4, 2, "weapon_all_p4s2") === ORIGINAL_BORDERS, "自定义表按基础件 key 命中变体 id（整件装备的全部变体生效）");
-customEquipmentBorders.set("weapon_bad", "sfx_99999_0");
-check(borderOf(0, 0, "weapon_bad") === "sfx_30123_0", "自定义边框未登记 → 回退前后缀表（不显示成空白）");
-customEquipmentBorders.clear();
-check(borderOf(4, 2, "weapon_all_p4s2") === "sfx_30137_0", "清空自定义表后回到前后缀表");
+check(borderOf(0, 0, "") === first, "id 缺失也按前后缀表取");
+// 自定义表：#695 起经 apply 下发（测试里直接写 Map 等价于服务端下发了这些条目）
+const CUSTOM_KEY = borderResources[borderResources.length - 1].key;
+check(!customEquipmentBorders.size, "apply 空自定义表后仍为空（出厂不给特殊装备配边框）");
+customEquipmentBorders.set("weapon_special", CUSTOM_KEY);
+check(borderOf(0, 0, "weapon_special") === CUSTOM_KEY, "自定义表按精确 id 命中，优先于前后缀表");
+check(borderOf(0, 0, "weapon_other_p3s2") === first, "没登记基础件时，变体不沾光（回退前后缀表）");
+customEquipmentBorders.set("weapon_all", CUSTOM_KEY);
+check(borderOf(0, 0, "weapon_other") === first, "没登记的 id 不显示自定义边框");
+check(borderOf(4, 2, "weapon_all_p4s2") === CUSTOM_KEY, "自定义表按基础件 key 命中变体 id（整件装备的全部变体生效）");
+// 指向未登记图集的自定义条目：apply 时就被丢弃（不进 Map），取用回退前后缀表
+applyEquipmentAppearance({ borders: APPLIED, customBorders: [{ equipment: "weapon_bad", key: "sfx_99999_0" }] });
+check(!customEquipmentBorders.has("weapon_bad"), "自定义条目指向未登记图集 → apply 时丢弃并留日志");
+check(borderOf(0, 0, "weapon_bad") === first, "丢弃后的装备回退前后缀表（不显示成空白）");
+applyEquipmentAppearance({ borders: APPLIED, customBorders: [{ equipment: "weapon_all", key: CUSTOM_KEY }] });
+check(borderOf(4, 2, "weapon_all_p4s2") === CUSTOM_KEY, "重新 apply 后自定义表恢复（Map 是重建不是增量）");
 
-console.log("\n— D. 真实装备表抽查 —");
+console.log("\n— D. 真实装备表抽查（用 applied 表的前后两条）—");
 const cloth = getItem("cloth_1");
-check(!!cloth && getEquipmentBorderKey(cloth) === "sfx_30123_0", "基础件 cloth_1（普通的·人级）→ 第 1 张");
+check(!!cloth && getEquipmentBorderKey(cloth) === first, "基础件 cloth_1（普通的·人级）→ applied 表第 1 条");
 const godly = getItem("weapon_20_p4s2");
-check(!!godly && getEquipmentBorderKey(getEquipment("weapon_20_p4s2")) === "sfx_30137_0", "变体 weapon_20_p4s2（超神的·神级）→ 第 15 张");
+check(!!godly && getEquipmentBorderKey(getEquipment("weapon_20_p4s2")) === last, "变体 weapon_20_p4s2（超神的·神级）→ applied 表第 15 条");
 // 非装备不写死 id（药品/材料的编号是注册表按序生成的，改配置就会漂移）：从总表现抓一件
 let nonEquipment = null;
 items.forEach((good) => {

@@ -1030,6 +1030,26 @@ export interface GuideSettingsRow {
 }
 
 /**
+ * 装备外观（#695）：`equipment_appearance` 表的一行
+ *
+ * 四组映射各存一列 JSON 数组（前后缀→边框 / 前后缀→详情背景 / 特殊装备→边框 / 特殊装备→详情背景）。
+ * 出厂值来自服务常量（seed `INSERT OR IGNORE`），缺行由 service 在启动时补上。
+ */
+export interface EquipmentAppearanceRow {
+  /** 恒为 1（单行表） */
+  id: number;
+  /** `AppearanceAssignmentSeed[]` 的 JSON（`prefix` / `suffix` / `key`，15 条） */
+  borders: string;
+  /** 同上，指向详情背景 key（15 条） */
+  backgrounds: string;
+  /** `CustomAppearanceSeed[]` 的 JSON（`equipment` / `key`） */
+  custom_borders: string;
+  /** 同上，指向详情背景 key */
+  custom_backgrounds: string;
+  updated_at: number;
+}
+
+/**
  * 具名掉落表（#254）：`drop_tables` 表的一行
  *
  * 一行 = 一张可被多怪复用的掉落表（seed 自生成物 DROP_TABLES 的 common / elite / boss，

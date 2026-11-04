@@ -340,6 +340,21 @@ export const routes = {
      */
     save: (id: string) => `/admin/equip-in-aligns/${encodeURIComponent(id)}`,
   },
+  /** adminEquipmentAppearance 模块（2 个接口） */
+  adminEquipmentAppearance: {
+    /**
+     * 装备外观（边框 + 详情背景映射）（GET /admin/equipment-appearance）
+     *
+     * 四组映射 + 最后修改时间（**单行配置，没有分页**）：
+     */
+    get: "/admin/equipment-appearance",
+    /**
+     * 编辑装备外观（整份替换）（PATCH /admin/equipment-appearance）
+     *
+     * **整份替换**：提交的四组数组就是新配置，不是增量。
+     */
+    update: "/admin/equipment-appearance",
+  },
   /** adminEquipmentMeta 模块（2 个接口） */
   adminEquipmentMeta: {
     /**

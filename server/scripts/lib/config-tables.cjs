@@ -47,6 +47,7 @@ const CONFIG_TABLES = Object.freeze([
   "drugs",
   "equip_aligns",
   "equip_in_aligns",
+  "equipment_appearance",
   "equipment_meta",
   "equipment_slots",
   "equipment_variants",
