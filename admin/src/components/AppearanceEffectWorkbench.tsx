@@ -7,12 +7,12 @@ import { Button, Field, Input } from "./ui";
 /**
  * 显示效果工作台（#700）：以素材**第一帧**为基准，拖拽调位置、输入 / 滑杆调尺寸
  *
- * 与「装备对齐」工作台同一套交互取向（画布 + 拖拽 + 数值联动），但语义简单得多：
- * 只有一个基准框（边框 = 56×56 外框 / 背景 = 详情弹窗面板），effect 三个数 ——
- * x / y 是相对基准框中心的偏移（**y 向上**，与引擎同口径；画布 y 向下，画和拖的时候翻转）、
- * scale 乘在「第一帧 contain 缩进基准框」的结果上。
+ * 与「装备对齐」工作台同一套交互取向（画布 + 拖拽 + 数值联动），两种适配口径（fit）：
+ * - `contain`（边框）：第一帧 contain 缩进基准框居中，scale 乘在缩进结果上，x/y 相对基准框中心；
+ * - `width-top`（详情背景）：**宽度 = 基准框宽 × scale、高度按帧原始比例自适应、顶边贴基准框顶**，
+ *   x/y 相对「顶边中点」偏移（y 向上，与引擎同口径；画布 y 向下，画和拖的时候翻转）。
  *
- * 画布上看到的 = 客户端会摆出的相对关系（同为第一帧基准、同一套 contain 口径），
+ * 画布上看到的 = 客户端会摆出的相对关系（同为第一帧基准、同一套口径），
  * 只是不带游戏里的动画与周边 UI —— 这是「页面上看到的就是游戏里看到的」的最小实现。
  */
 
@@ -43,8 +43,10 @@ export function describeEffect(effect: AppearanceEffectValue | undefined | null)
 export function AppearanceEffectWorkbench(props: {
   /** 图集路径（GameFrame 同口径：borders/sfx_x 或 backgrounds/sfx_x，两级尝试自动命中） */
   atlas: string;
-  /** 基准外框（游戏像素）：边框 56×56 / 背景 240×200 */
+  /** 基准外框（游戏像素）：边框 = 56×56 外框 / 背景 = 详情弹窗面板 */
   box: { width: number; height: number };
+  /** 适配口径：contain（边框，默认）= 缩进基准框居中；width-top（背景）= 宽度贴框、顶边对齐 */
+  fit?: "contain" | "width-top";
   /** 参考内框（只画虚线给眼晴对位置用，不参与计算），如边框场景的 40×40 图标 */
   innerBox?: { width: number; height: number } | null;
   value: AppearanceEffectValue;
@@ -114,17 +116,30 @@ export function AppearanceEffectWorkbench(props: {
     ctx.restore();
 
     if (!frame) return;
-    // —— 第一帧：contain 缩进基准框 → 乘 scale → 加偏移（画布 y 向下，effect.y 向上要翻转） ——
+    // —— 第一帧 → 乘 scale → 加偏移（画布 y 向下，effect.y 向上要翻转） ——
     const spriteW = frame.rotated ? frame.h : frame.w;
     const spriteH = frame.rotated ? frame.w : frame.h;
     if (!spriteW || !spriteH) return;
-    const fit = Math.min(props.box.width / spriteW, props.box.height / spriteH);
-    const drawW = spriteW * fit * props.value.scale * z;
-    const drawH = spriteH * fit * props.value.scale * z;
-    const centerX = cx + props.value.x * z;
-    const centerY = cy - props.value.y * z;
-    const rw = frame.rotated ? drawH : drawW;
-    const rh = frame.rotated ? drawW : drawH;
+    let frameW: number;
+    let frameH: number;
+    let centerX: number;
+    let centerY: number;
+    if (props.fit === "width-top") {
+      // 背景口径：宽度 = 基准框宽 × scale，高度按帧原始比例，顶边贴基准框顶（x/y 相对顶边中点）
+      frameW = props.box.width * props.value.scale * z;
+      frameH = frameW * (spriteH / spriteW);
+      centerX = cx + props.value.x * z;
+      centerY = cy - (props.box.height * z) / 2 + frameH / 2 - props.value.y * z;
+    } else {
+      // 边框口径：contain 缩进基准框居中，scale 乘在缩进结果上（x/y 相对基准框中心）
+      const fit = Math.min(props.box.width / spriteW, props.box.height / spriteH);
+      frameW = spriteW * fit * props.value.scale * z;
+      frameH = spriteH * fit * props.value.scale * z;
+      centerX = cx + props.value.x * z;
+      centerY = cy - props.value.y * z;
+    }
+    const rw = frame.rotated ? frameH : frameW;
+    const rh = frame.rotated ? frameW : frameH;
     ctx.save();
     ctx.translate(centerX, centerY);
     if (frame.rotated) {
@@ -134,7 +149,7 @@ export function AppearanceEffectWorkbench(props: {
       ctx.drawImage(frame.image, frame.x, frame.y, frame.w, frame.h, -rw / 2, -rh / 2, rw, rh);
     }
     ctx.restore();
-  }, [canvasW, canvasH, props.box, props.innerBox, props.value, props.zoom]);
+  }, [canvasW, canvasH, props.box, props.fit, props.innerBox, props.value, props.zoom]);
 
   useEffect(() => {
     draw();
