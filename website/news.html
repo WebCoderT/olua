@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>新闻动态 · olua · 热血重燃</title>
+  <meta name="description" content="olua 官方新闻动态：版本更新、系统上线、活动公告与新服讯息。" />
+  <link rel="icon" href="assets/icons/favicon.ico" sizes="any" />
+  <link rel="icon" type="image/png" sizes="256x256" href="assets/icons/logo-256.png" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+
+  <header class="nav" id="nav">
+    <div class="nav__inner">
+      <a class="nav__brand" href="index.html">
+        <img class="nav__logo" src="assets/icons/logo-256.png" alt="olua logo" />
+        <span class="nav__name">olua</span>
+      </a>
+      <nav class="nav__links" id="navLinks">
+        <a href="index.html">首页</a>
+        <a href="features.html">特色玩法</a>
+        <a href="guide.html">新手指南</a>
+        <a href="news.html" class="is-active">新闻动态</a>
+        <a href="deploy.html">自建部署</a>
+        <a href="about.html">关于声明</a>
+      </nav>
+      <a class="nav__cta" href="http://game.yimw.cn" target="_blank" rel="noopener">立即进入游戏</a>
+      <button class="nav__toggle" id="navToggle" aria-label="打开菜单">
+        <span></span><span></span><span></span>
+      </button>
+    </div>
+  </header>
+
+  <section class="page-hero">
+    <p class="page-hero__crumb reveal">NEWS · 版本与公告</p>
+    <h1 class="page-hero__title reveal">新闻动态</h1>
+    <p class="page-hero__sub reveal">每一次更新，都让这片大陆更热血一点</p>
+  </section>
+
+  <section class="section">
+    <!--  发新公告：照着下面复制一条 <li> 改日期、标题、正文即可  -->
+    <ul class="news">
+      <li class="news__item reveal">
+        <time datetime="2026-11-05">11-05</time>
+        <div>
+          <h3>官网全新改版：多页站点上线</h3>
+          <p>官网扩容为多页站点：新增特色玩法详解、新手指南、新闻中心、自建部署文档与开源声明页，血色主题全面统一。</p>
+        </div>
+      </li>
+      <li class="news__item reveal">
+        <time datetime="2026-11-04">11-04</time>
+        <div>
+          <h3>全新版本上线：动作跨端同步</h3>
+          <p>出手、技能、击杀与掉落全部实时广播，多人同屏画面完全一致；地图底图校准，走到哪都是同一片大陆。三域名（官网 / 游戏 / 管理端）正式分流上线。</p>
+        </div>
+      </li>
+      <li class="news__item reveal">
+        <time datetime="2026-11-04">11-04</time>
+        <div>
+          <h3>音效系统上线</h3>
+          <p>按钮、掉落、升级、传送、脚步——十一种音效全量接入，运营后台可随时换曲调音量，游戏氛围直接拉满。</p>
+        </div>
+      </li>
+      <li class="news__item reveal">
+        <time datetime="2026-11-04">11-04</time>
+        <div>
+          <h3>资源包发布 2026-11-04 版</h3>
+          <p>全套游戏资源（2.5GB，12000+ 文件）打包发布，含武器、战魂、羽翼等全量素材，自建服务器一键拉取部署。</p>
+        </div>
+      </li>
+      <li class="news__item reveal">
+        <time datetime="2026-11-03">11-03</time>
+        <div>
+          <h3>碰撞盒与地图点位全面后台化</h3>
+          <p>碰撞盒、NPC 点位、复活点全部迁入管理后台可视化编辑，地图文件只负责显示——改地图不再需要动工程文件。</p>
+        </div>
+      </li>
+      <li class="news__item reveal">
+        <time datetime="2026-11-03">11-03</time>
+        <div>
+          <h3>管理端新增音效与成长参数配置</h3>
+          <p>音效资源、成长标量、战斗力权重、新手引导步骤全部搬进管理后台，运营调参不碰代码。</p>
+        </div>
+      </li>
+      <li class="news__item reveal">
+        <time datetime="2026-11-04">11-04</time>
+        <div>
+          <h3>官网正式上线</h3>
+          <p>olua 官网开张。游戏浏览器即开即玩，不需要下载任何客户端。</p>
+        </div>
+      </li>
+    </ul>
+  </section>
+
+  <footer class="footer">
+    <img class="footer__logo" src="assets/icons/logo-256.png" alt="" aria-hidden="true" />
+    <p>olua · 经典 2D 即时战斗 · 浏览器即开即玩</p>
+    <nav class="footer__nav">
+      <a href="index.html">首页</a><span>·</span>
+      <a href="features.html">特色玩法</a><span>·</span>
+      <a href="guide.html">新手指南</a><span>·</span>
+      <a href="news.html">新闻动态</a><span>·</span>
+      <a href="deploy.html">自建部署</a><span>·</span>
+      <a href="about.html">关于声明</a>
+    </nav>
+    <p class="footer__health">健康游戏忠告：抵制不良游戏，拒绝盗版游戏。注意自我保护，谨防受骗上当。适度游戏益脑，沉迷游戏伤身。合理安排时间，享受健康生活。</p>
+    <p class="footer__copy">© 2026 olua · 基于 MIT 协议开源 · <a href="https://github.com/WebCoderT/olua" target="_blank" rel="noopener">GitHub</a> / <a href="https://gitee.com/putiwan/olua" target="_blank" rel="noopener">Gitee</a></p>
+  </footer>
+
+  <script src="js/main.js"></script>
+</body>
+</html>

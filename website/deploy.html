@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>自建部署 · olua · 热血重燃</title>
+  <meta name="description" content="olua 自建服务器部署指南：Docker Compose 一键部署服务端与管理端，拉取 2.5GB 游戏资源包，Cocos 打包客户端，域名与环境变量配置，常见问题排查。" />
+  <link rel="icon" href="assets/icons/favicon.ico" sizes="any" />
+  <link rel="icon" type="image/png" sizes="256x256" href="assets/icons/logo-256.png" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+
+  <header class="nav" id="nav">
+    <div class="nav__inner">
+      <a class="nav__brand" href="index.html">
+        <img class="nav__logo" src="assets/icons/logo-256.png" alt="olua logo" />
+        <span class="nav__name">olua</span>
+      </a>
+      <nav class="nav__links" id="navLinks">
+        <a href="index.html">首页</a>
+        <a href="features.html">特色玩法</a>
+        <a href="guide.html">新手指南</a>
+        <a href="news.html">新闻动态</a>
+        <a href="deploy.html" class="is-active">自建部署</a>
+        <a href="about.html">关于声明</a>
+      </nav>
+      <a class="nav__cta" href="http://game.yimw.cn" target="_blank" rel="noopener">立即进入游戏</a>
+      <button class="nav__toggle" id="navToggle" aria-label="打开菜单">
+        <span></span><span></span><span></span>
+      </button>
+    </div>
+  </header>
+
+  <section class="page-hero">
+    <p class="page-hero__crumb reveal">SELF-HOST · 自建服务器</p>
+    <h1 class="page-hero__title reveal">部署指南</h1>
+    <p class="page-hero__sub reveal">开源完整端 · 一台 Linux 主机 + Docker，跑起你自己的服务器</p>
+  </section>
+
+  <section class="section">
+    <div class="prose">
+      <h3 class="reveal">架构一览</h3>
+      <p class="reveal">仓库自带 Docker Compose 编排，五个服务全部容器化：</p>
+      <table class="reveal">
+        <thead><tr><th>服务</th><th>职责</th><th>对外端口</th></tr></thead>
+        <tbody>
+          <tr><td><code>admin</code></td><td>管理端（React + nginx）：管理页面 + 官网 + 游戏站三域名分流 + <code>/api</code> 同源反代</td><td><code>80</code></td></tr>
+          <tr><td><code>server</code></td><td>游戏服务端（NestJS + SQLite）：账号 / 角色 / 战斗权威 / 管理接口</td><td>仅内网</td></tr>
+          <tr><td><code>server-realtime</code></td><td>实时进程：多人同屏位置 / 动作 / 击杀广播（与 server 同镜像不同入口）</td><td>仅内网</td></tr>
+          <tr><td><code>game</code></td><td>游戏客户端静态托管（Cocos Web 构建产物 + <code>/game-resources</code> 素材）</td><td><code>8080</code></td></tr>
+          <tr><td><code>website</code></td><td>官网静态站（nginx 只读挂载）</td><td>仅内网（经 admin 分流）</td></tr>
+        </tbody>
+      </table>
+      <div class="callout callout--blood reveal">
+        <b>设计约束：</b>数据落在具名卷 <code>olua-data</code> 的 SQLite（WAL 模式，双进程共享）；
+        服务端与实时进程都不映射宿主机端口，所有流量从 <code>:80</code> 按 <code>server_name</code> 分流进入。
+      </div>
+
+      <h3 class="reveal">环境要求</h3>
+      <ul class="reveal">
+        <li>一台 Linux 主机（2C4G 起步，磁盘 ≥ 10GB——游戏资源约 2.5GB）；</li>
+        <li>Docker 20+ 与 Docker Compose v2；</li>
+        <li>本机装有 Git、SSH 客户端（部署脚本从本机推送代码与产物）；</li>
+        <li>（可选）一个域名，A 记录指到服务器 IP；没有域名也能用 IP 直接访问。</li>
+      </ul>
+
+      <h3 class="reveal">快速开始</h3>
+      <h4>1. 拉代码</h4>
+      <pre class="reveal"><code>git clone https://github.com/WebCoderT/olua.git
+cd olua</code></pre>
+
+      <h4>2. 拉取游戏资源包（约 2.5GB，仓库不含素材）</h4>
+      <pre class="reveal"><code># 查看已发布的资源版本
+gh release list --repo WebCoderT/olua
+
+# 下载并解压到 client/assets/resources（也可手动从 GitHub Releases 页面下载）
+make resources-download VERSION=&lt;版本号&gt;</code></pre>
+
+      <h4>3. 填写部署配置</h4>
+      <pre class="reveal"><code>cp deploy.env.example deploy.env
+vim deploy.env</code></pre>
+      <p class="reveal">关键配置项：</p>
+      <table class="reveal">
+        <thead><tr><th>变量</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td><code>DEPLOY_HOST / DEPLOY_USER / DEPLOY_KEY</code></td><td>服务器 IP、SSH 用户与私钥路径（权限须 600）</td></tr>
+          <tr><td><code>DEPLOY_DIR</code></td><td>服务器上的部署目录（如 <code>/opt/olua</code>）</td></tr>
+          <tr><td><code>JWT_SECRET</code></td><td>登录令牌签名密钥，<b>务必改成随机长串</b></td></tr>
+          <tr><td><code>ADMIN_REGISTER_CODE</code></td><td>管理端账号注册邀请码</td></tr>
+          <tr><td><code>OLUA_SITE_DOMAINS</code></td><td>官网站域名（多个用空格分隔，如 <code>"example.com www.example.com"</code>）</td></tr>
+          <tr><td><code>OLUA_ADMIN_DOMAIN</code></td><td>管理端域名（如 <code>admin.example.com</code>）</td></tr>
+          <tr><td><code>OLUA_GAME_DOMAIN</code></td><td>游戏域名（如 <code>game.example.com</code>）</td></tr>
+          <tr><td><code>ADMIN_PORT / GAME_PORT</code></td><td>管理端与游戏站对外端口（默认 80 / 8080）</td></tr>
+        </tbody>
+      </table>
+      <div class="callout reveal">
+        <b>域名全走环境变量：</b>nginx 配置是 envsubst 模板，域名只在 <code>deploy.env</code> 出现——
+        换域名 / 分环境 = 改配置文件重发一次，<b>不改代码、不重建镜像</b>。没有域名时 IP 访问会落入管理端（default_server 兜底）。
+      </div>
+
+      <h4>4. 一键部署</h4>
+      <pre class="reveal"><code>bash .workbuddy/skills/olua-deploy/scripts/deploy.sh            # 全量：传代码 + 生成 .env + 重建镜像 + 健康检查
+bash .workbuddy/skills/olua-deploy/scripts/deploy.sh --no-build # 只换代码，不重建镜像（改静态文件用）
+bash .workbuddy/skills/olua-deploy/scripts/deploy.sh --game     # 同步 Cocos 客户端构建产物
+bash .workbuddy/skills/olua-deploy/scripts/deploy.sh --resources # 同步游戏素材包（image/audio manifest 等）
+bash .workbuddy/skills/olua-deploy/scripts/deploy.sh --verify   # 只做验收检查</code></pre>
+
+      <h4>5. 打包并上传客户端（可选，本地开发机执行）</h4>
+      <p class="reveal">游戏客户端用 Cocos Creator 打开 <code>client/</code> 构建 Web 桌面包（Cocos 只能 GUI 构建），
+      产物在 <code>client/build/web-desktop-001/</code>，然后：</p>
+      <pre class="reveal"><code>bash .workbuddy/skills/olua-deploy/scripts/deploy.sh --game</code></pre>
+
+      <h3 class="reveal">发布新资源版本（开发者）</h3>
+      <pre class="reveal"><code>make resources-manifest VERSION=2026-11-04-1   # 生成清单（先入库提交）
+make resources-pack RES_VERSION=2026-11-04-1   # 打分卷包
+make resources-upload RES_VERSION=2026-11-04-1 # 传 GitHub Release</code></pre>
+      <p class="reveal"><code>VERSION=</code> 与 <code>RES_VERSION=</code> 两种写法等价。同步约定：<b>先清单入库，后上传资源</b>，
+      其他机器 <code>git pull</code> 后按清单下载即可逐字节校验。</p>
+
+      <h3 class="reveal">本地开发</h3>
+      <pre class="reveal"><code>cd server &amp;&amp; npm install &amp;&amp; npm run start:dev   # 服务端 :3100
+cd admin &amp;&amp; npm install &amp;&amp; npm run dev           # 管理端 Vite 开发服务
+# 客户端：Cocos Creator 打开 client/，预览时自动连 localhost:3100</code></pre>
+      <p class="reveal">客户端按访问地址自动判断环境：本机 / 局域网直连 <code>localhost:3100</code>，
+      公网 IP 与域名走同源 <code>/api</code> 反代——一份构建产物，本地与线上通用。</p>
+    </div>
+  </section>
+
+  <!-- ========== 常见问题 ========== -->
+  <section class="section section--alt">
+    <div class="section__head reveal">
+      <h2 class="section__title">部署常见问题</h2>
+      <p class="section__sub">报错先对号入座</p>
+    </div>
+    <div class="faq reveal">
+      <details>
+        <summary>启动后所有配置表为空 / 商城没有商品</summary>
+        <div class="faq__a">出厂配置快照 <code>server/data/config-sync.sql</code> 必须打进镜像。确认没有修改 <code>server/.dockerignore</code> 里对它的放行规则，且 compose 两个服务都设了 <code>CONFIG_SNAPSHOT_PATH=/app/config-sync.sql</code>。</div>
+      </details>
+      <details>
+        <summary>管理端构建报 TS2307（找不到 server 模块）</summary>
+        <div class="faq__a">管理端要引用服务端的枚举常量，构建上下文必须是<b>仓库根</b>而不是 <code>admin/</code>（compose 里 <code>context: .</code> + <code>dockerfile: admin/Dockerfile</code>），根目录 <code>.dockerignore</code> 负责挡大目录。</div>
+      </details>
+      <details>
+        <summary>用 IP 访问 :80 打不开 / 404</summary>
+        <div class="faq__a">nginx 的 <code>_</code> 不是通配符：未匹配的域名会落到 :80 上<b>第一个</b> server 块。管理端块已标 <code>default_server</code> 兜底，若你改过模板请保留这行。</div>
+      </details>
+      <details>
+        <summary>管理端图片选择器报 404：/game-resources/image-manifest.json</summary>
+        <div class="faq__a">素材包没上服务器。执行 <code>deploy.sh --resources</code> 把 <code>client/assets/resources</code>（含 image / audio manifest，约 2.5GB）同步上去。</div>
+      </details>
+      <details>
+        <summary>能登录但实时通道连不上</summary>
+        <div class="faq__a">实时通道走 <code>/api/realtime</code> 的 WebSocket 升级，反代必须透传 <code>Upgrade / Connection</code> 头（仓库自带模板已配好，改动前看 <code>map $http_upgrade</code> 那段）。同时确认 <code>server-realtime</code> 容器在跑。</div>
+      </details>
+      <details>
+        <summary>部署脚本验收报 502</summary>
+        <div class="faq__a">多半是容器还没就绪。新版本脚本已内置健康检查轮询；若手动验收，等 <code>docker compose ps</code> 全部 healthy 后再打接口。</div>
+      </details>
+      <details>
+        <summary>上线前要备份数据吗？</summary>
+        <div class="faq__a">强烈建议。数据在具名卷 <code>olua_olua-data</code> 的 SQLite（注意数据多在 <code>-wal</code> 文件里，备份要连同 <code>-wal</code> 一起拷）。发布前可先 <code>docker exec</code> 进容器执行 <code>PRAGMA wal_checkpoint(TRUNCATE)</code>。</div>
+      </details>
+    </div>
+    <p style="text-align:center;margin-top:40px;" class="reveal">
+      <a class="btn btn--ghost" href="https://github.com/WebCoderT/olua/blob/master/docs/deploy.md" target="_blank" rel="noopener">查看仓库内完整部署文档 →</a>
+    </p>
+  </section>
+
+  <footer class="footer">
+    <img class="footer__logo" src="assets/icons/logo-256.png" alt="" aria-hidden="true" />
+    <p>olua · 经典 2D 即时战斗 · 浏览器即开即玩</p>
+    <nav class="footer__nav">
+      <a href="index.html">首页</a><span>·</span>
+      <a href="features.html">特色玩法</a><span>·</span>
+      <a href="guide.html">新手指南</a><span>·</span>
+      <a href="news.html">新闻动态</a><span>·</span>
+      <a href="deploy.html">自建部署</a><span>·</span>
+      <a href="about.html">关于声明</a>
+    </nav>
+    <p class="footer__health">健康游戏忠告：抵制不良游戏，拒绝盗版游戏。注意自我保护，谨防受骗上当。适度游戏益脑，沉迷游戏伤身。合理安排时间，享受健康生活。</p>
+    <p class="footer__copy">© 2026 olua · 基于 MIT 协议开源 · <a href="https://github.com/WebCoderT/olua" target="_blank" rel="noopener">GitHub</a> / <a href="https://gitee.com/putiwan/olua" target="_blank" rel="noopener">Gitee</a></p>
+  </footer>
+
+  <script src="js/main.js"></script>
+</body>
+</html>

@@ -530,6 +530,13 @@ a { color: inherit; text-decoration: none; }
 }
 .footer__copy { margin-top: 14px; font-size: 12px; color: rgba(168, 144, 138, 0.55); }
 
+.footer__nav { margin: 18px 0 4px; display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; align-items: center; }
+.footer__nav a { color: var(--paper-dim); font-size: 13px; letter-spacing: 0.1em; }
+.footer__nav a:hover { color: var(--blood-bright); }
+.footer__nav span { color: rgba(168, 144, 138, 0.4); }
+.footer__copy a { color: var(--paper-dim); border-bottom: 1px dashed rgba(168, 144, 138, 0.4); }
+.footer__copy a:hover { color: var(--blood-bright); }
+
 /* ---------- 灯箱 ---------- */
 .lightbox {
   position: fixed;
@@ -601,4 +608,255 @@ a { color: inherit; text-decoration: none; }
   .stats__inner { gap: 14px 32px; }
   .stat b { font-size: 30px; }
   .hero { padding-top: 120px; }
+}
+
+/* ==========================================================
+   子页面（多页站点）：页头横幅 / 文档排版 / 表格 / 代码块 / FAQ
+   ========================================================== */
+
+/* ---------- 当前页导航高亮 ---------- */
+.nav__links a.is-active { color: var(--blood-bright); border-color: var(--blood-bright); text-shadow: 0 0 12px rgba(229, 56, 59, 0.6); }
+
+/* ---------- 子页面页头横幅 ---------- */
+.page-hero {
+  padding: 150px 24px 64px;
+  text-align: center;
+  position: relative;
+  background:
+    linear-gradient(180deg, rgba(12, 6, 6, 0.4), var(--ink-0) 92%),
+    radial-gradient(ellipse 70% 80% at 50% 0%, rgba(127, 13, 18, 0.5), transparent 75%);
+  border-bottom: 1px solid rgba(193, 18, 31, 0.3);
+}
+.page-hero__crumb {
+  font-size: 13px;
+  letter-spacing: 0.3em;
+  color: var(--gold);
+  margin-bottom: 14px;
+}
+.page-hero__title {
+  font-family: var(--serif);
+  font-size: clamp(30px, 5vw, 52px);
+  letter-spacing: 0.14em;
+  color: var(--paper);
+  text-shadow: 0 0 30px rgba(193, 18, 31, 0.8), 0 2px 4px rgba(0, 0, 0, 0.8);
+}
+.page-hero__sub {
+  margin-top: 14px;
+  color: var(--paper-dim);
+  letter-spacing: 0.1em;
+  font-size: 15px;
+}
+
+/* ---------- 文档正文 ---------- */
+.prose {
+  max-width: 880px;
+  margin: 0 auto;
+  font-size: 15px;
+}
+.prose h3 {
+  font-family: var(--serif);
+  font-size: 22px;
+  letter-spacing: 0.1em;
+  color: var(--paper);
+  margin: 46px 0 14px;
+  padding-left: 14px;
+  border-left: 3px solid var(--blood);
+  text-shadow: 0 0 14px rgba(193, 18, 31, 0.4);
+}
+.prose h3:first-child { margin-top: 0; }
+.prose h4 {
+  font-size: 16px;
+  letter-spacing: 0.08em;
+  color: var(--gold);
+  margin: 28px 0 10px;
+}
+.prose p { color: var(--paper-dim); margin: 12px 0; }
+.prose b, .prose strong { color: var(--paper); font-weight: 600; }
+.prose em { color: var(--blood-bright); font-style: normal; }
+.prose ul, .prose ol { margin: 10px 0 16px 22px; color: var(--paper-dim); }
+.prose li { margin: 6px 0; }
+.prose li::marker { color: var(--blood); }
+.prose a { color: var(--blood-bright); border-bottom: 1px dashed rgba(229, 56, 59, 0.5); }
+.prose a:hover { color: var(--gold); border-color: var(--gold); }
+
+/* 行内代码 */
+.prose code {
+  font-family: "SF Mono", Menlo, Consolas, monospace;
+  font-size: 0.88em;
+  background: rgba(193, 18, 31, 0.12);
+  border: 1px solid rgba(193, 18, 31, 0.3);
+  padding: 1px 7px;
+  color: #f0b8b0;
+}
+
+/* 代码块 */
+.prose pre {
+  background: #0a0505;
+  border: 1px solid rgba(193, 18, 31, 0.35);
+  border-left: 3px solid var(--blood);
+  padding: 16px 18px;
+  overflow-x: auto;
+  margin: 14px 0 20px;
+  line-height: 1.65;
+}
+.prose pre code {
+  background: none; border: none; padding: 0;
+  font-size: 13px;
+  color: #d8c4bc;
+}
+
+/* ---------- 表格 ---------- */
+.prose table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 14px 0 22px;
+  font-size: 13.5px;
+}
+.prose th {
+  font-family: var(--serif);
+  letter-spacing: 0.1em;
+  color: var(--gold);
+  text-align: left;
+  padding: 10px 12px;
+  border-bottom: 2px solid rgba(193, 18, 31, 0.55);
+  background: rgba(127, 13, 18, 0.18);
+  white-space: nowrap;
+}
+.prose td {
+  padding: 9px 12px;
+  border-bottom: 1px solid rgba(193, 18, 31, 0.18);
+  color: var(--paper-dim);
+  vertical-align: top;
+}
+.prose tr:hover td { background: rgba(193, 18, 31, 0.06); }
+.prose td code { white-space: nowrap; }
+
+/* ---------- 提示框 ---------- */
+.callout {
+  border: 1px solid rgba(217, 164, 65, 0.4);
+  border-left: 3px solid var(--gold);
+  background: rgba(217, 164, 65, 0.07);
+  padding: 14px 18px;
+  margin: 16px 0 22px;
+  font-size: 14px;
+  color: var(--paper-dim);
+}
+.callout--blood { border-color: rgba(229, 56, 59, 0.5); border-left-color: var(--blood-bright); background: rgba(193, 18, 31, 0.08); }
+.callout b { color: var(--gold); }
+.callout--blood b { color: var(--blood-bright); }
+
+/* ---------- FAQ 手风琴 ---------- */
+.faq { max-width: 880px; margin: 0 auto; }
+.faq details {
+  border: var(--frame);
+  background: linear-gradient(170deg, var(--ink-3), var(--ink-2) 70%);
+  margin-bottom: 14px;
+}
+.faq summary {
+  cursor: pointer;
+  padding: 16px 20px;
+  font-size: 15.5px;
+  letter-spacing: 0.06em;
+  color: var(--paper);
+  list-style: none;
+  position: relative;
+  padding-right: 44px;
+}
+.faq summary::-webkit-details-marker { display: none; }
+.faq summary::after {
+  content: "＋";
+  position: absolute;
+  right: 18px; top: 50%;
+  transform: translateY(-50%);
+  color: var(--blood-bright);
+  font-size: 18px;
+  transition: transform 0.2s ease;
+}
+.faq details[open] summary::after { content: "－"; }
+.faq details[open] summary { color: var(--blood-bright); }
+.faq .faq__a { padding: 0 20px 18px; font-size: 14px; color: var(--paper-dim); }
+.faq .faq__a code {
+  font-family: "SF Mono", Menlo, Consolas, monospace;
+  font-size: 0.88em;
+  background: rgba(193, 18, 31, 0.12);
+  border: 1px solid rgba(193, 18, 31, 0.3);
+  padding: 1px 6px;
+  color: #f0b8b0;
+}
+
+/* ---------- 卡片式分栏（玩法详解用） ---------- */
+.grid--cols2 { grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); }
+.panel {
+  background: linear-gradient(170deg, var(--ink-3), var(--ink-2) 65%);
+  border: var(--frame);
+  padding: 28px 26px;
+}
+.panel h3 {
+  font-family: var(--serif);
+  font-size: 20px;
+  letter-spacing: 0.14em;
+  color: var(--blood-bright);
+  text-shadow: 0 0 14px rgba(229, 56, 59, 0.5);
+  margin-bottom: 12px;
+}
+.panel p { font-size: 14px; color: var(--paper-dim); margin-bottom: 10px; }
+.panel ul { list-style: none; margin-top: 8px; }
+.panel li {
+  font-size: 13.5px;
+  color: var(--paper-dim);
+  padding: 4px 0 4px 18px;
+  position: relative;
+}
+.panel li::before { content: "◆"; position: absolute; left: 0; top: 7px; color: var(--blood); font-size: 10px; }
+.panel li b { color: var(--paper); font-weight: 600; }
+
+/* ---------- 品质色阶展示 ---------- */
+.quality-scale { display: flex; flex-wrap: wrap; gap: 10px; margin: 14px 0 20px; }
+.quality-scale span {
+  padding: 6px 16px;
+  font-size: 13px;
+  letter-spacing: 0.14em;
+  border: 1px solid;
+}
+.q-0 { color: #b8a99f; border-color: #b8a99f66; }
+.q-1 { color: #7fb069; border-color: #7fb06966; }
+.q-2 { color: #5b9bd5; border-color: #5b9bd566; }
+.q-3 { color: #c86b3c; border-color: #c86b3c88; }
+.q-4 { color: #e5383b; border-color: #e5383b88; text-shadow: 0 0 10px rgba(229, 56, 59, 0.7); }
+
+/* ---------- 声明页法律条文 ---------- */
+.legal {
+  max-width: 880px;
+  margin: 0 auto;
+}
+.legal section {
+  border: var(--frame);
+  background: linear-gradient(170deg, rgba(42, 17, 19, 0.6), rgba(29, 13, 13, 0.8));
+  padding: 26px 28px;
+  margin-bottom: 22px;
+}
+.legal h3 {
+  font-family: var(--serif);
+  font-size: 20px;
+  letter-spacing: 0.12em;
+  color: var(--gold);
+  margin-bottom: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(193, 18, 31, 0.3);
+}
+.legal p, .legal li { font-size: 14px; color: var(--paper-dim); }
+.legal ul { margin: 8px 0 0 22px; }
+.legal li { margin: 6px 0; }
+.legal b { color: var(--paper); }
+.legal .blood { color: var(--blood-bright); font-weight: 600; }
+
+/* ---------- 仓库按钮组 ---------- */
+.repo-links { display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; margin-top: 26px; }
+
+/* ---------- 子页面移动端 ---------- */
+@media (max-width: 860px) {
+  .page-hero { padding: 120px 18px 46px; }
+  .prose { font-size: 14px; }
+  .prose table { display: block; overflow-x: auto; }
+  .legal section { padding: 20px 16px; }
 }

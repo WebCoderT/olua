@@ -31,11 +31,13 @@ var SHOTS = [
   grid.innerHTML = html;
 })();
 
-/* ---------- 灯箱 ---------- */
+/* ---------- 灯箱（只有带画廊的页面才有这些节点，没有就跳过） ---------- */
 (function initLightbox() {
   var box = document.getElementById("lightbox");
   var img = document.getElementById("lbImg");
   var caption = document.getElementById("lbCaption");
+  var grid = document.getElementById("galleryGrid");
+  if (!box || !img || !caption || !grid) return;
   var current = 0;
 
   function show(index) {
@@ -59,7 +61,7 @@ var SHOTS = [
     document.body.style.overflow = "";
   }
 
-  document.getElementById("galleryGrid").addEventListener("click", function (event) {
+  grid.addEventListener("click", function (event) {
     var shot = event.target.closest(".shot");
     if (shot) open(Number(shot.dataset.index));
   });

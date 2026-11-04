@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>特色玩法 · olua · 热血重燃</title>
+  <meta name="description" content="olua 特色玩法全解：装备品质体系（前缀五档 × 后缀三档）、掉落光柱、战魂 / 称号 / 军衔三条成长线、服务端权威战斗、A* 智能挂机、帮会社交与商城时装。" />
+  <link rel="icon" href="assets/icons/favicon.ico" sizes="any" />
+  <link rel="icon" type="image/png" sizes="256x256" href="assets/icons/logo-256.png" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+
+  <header class="nav" id="nav">
+    <div class="nav__inner">
+      <a class="nav__brand" href="index.html">
+        <img class="nav__logo" src="assets/icons/logo-256.png" alt="olua logo" />
+        <span class="nav__name">olua</span>
+      </a>
+      <nav class="nav__links" id="navLinks">
+        <a href="index.html">首页</a>
+        <a href="features.html" class="is-active">特色玩法</a>
+        <a href="guide.html">新手指南</a>
+        <a href="news.html">新闻动态</a>
+        <a href="deploy.html">自建部署</a>
+        <a href="about.html">关于声明</a>
+      </nav>
+      <a class="nav__cta" href="http://game.yimw.cn" target="_blank" rel="noopener">立即进入游戏</a>
+      <button class="nav__toggle" id="navToggle" aria-label="打开菜单">
+        <span></span><span></span><span></span>
+      </button>
+    </div>
+  </header>
+
+  <section class="page-hero">
+    <p class="page-hero__crumb reveal">FEATURES · 玩法全解</p>
+    <h1 class="page-hero__title reveal">特色玩法</h1>
+    <p class="page-hero__sub reveal">爆装 · 成长 · 战斗 · 社交，每个系统都为「打得爽」服务</p>
+  </section>
+
+  <!-- ========== 装备与掉落 ========== -->
+  <section class="section">
+    <div class="prose reveal">
+      <h3>装备品质体系：555 种组合，全靠打</h3>
+      <p>olua 的装备没有商城直购、没有抽卡保底——<b>每一件都从怪物身上爆出来</b>。
+         装备由「基础件 × 前缀品质 × 后缀阶级」组合而成：</p>
+      <div class="quality-scale" aria-label="前缀品质五档">
+        <span class="q-0">普通</span>
+        <span class="q-1">优秀</span>
+        <span class="q-2">精良</span>
+        <span class="q-3">史诗</span>
+        <span class="q-4">超神</span>
+      </div>
+      <ul>
+        <li><b>前缀五档</b>：普通 → 优秀 → 精良 → 史诗 → 超神，决定属性缩放倍率与名字颜色；</li>
+        <li><b>后缀三档</b>：人级 / 天级 / 神级，决定可强化的成长上限；</li>
+        <li><b>555 个变体</b>：每件装备的等级、出售价与八项属性全部入库可查，管理后台随时可调。</li>
+      </ul>
+      <p><em>最好的那一件，永远在下一只怪身上。</em></p>
+
+      <h3>掉落光柱：全地图的羡慕眼神</h3>
+      <p>每只怪都有独立的掉落表，掉落物散落一地。装备落地即按前缀品质升起光柱——
+         普通是淡淡的白光，<b>超神是冲天的血红光柱</b>，隔着半个屏幕都看得见。
+         看到红光别犹豫，那是全服的限时抢购。</p>
+    </div>
+    <figure class="world__art reveal" style="max-width:880px;margin:26px auto 0;">
+      <img src="assets/img/drop-light.jpg" alt="装备掉落光柱实景" loading="lazy" />
+      <figcaption>掉落光柱：按前缀品质播放，普通 → 超神五档</figcaption>
+    </figure>
+  </section>
+
+  <!-- ========== 三条成长线 ========== -->
+  <section class="section section--alt">
+    <div class="section__head reveal">
+      <h2 class="section__title">三条成长线</h2>
+      <p class="section__sub">战魂 · 称号 · 军衔 —— 条条通往更强</p>
+    </div>
+    <div class="grid grid--cols2">
+      <article class="panel reveal">
+        <h3>战魂 · 37 阶</h3>
+        <p>吞噬战魂精华逐阶突破，每一阶都实打实地加属性。</p>
+        <ul>
+          <li><b>37 阶</b>逐级递进，战力与外观双重成长</li>
+          <li>计入<b>地图进入条件</b>——高级图先看战魂阶数</li>
+          <li>升级路径与消耗全部后台可配</li>
+        </ul>
+      </article>
+      <article class="panel reveal">
+        <h3>称号 · 34 阶</h3>
+        <p>称号不只是名字前缀，它是头顶上的排面。</p>
+        <ul>
+          <li><b>34 阶</b>称号链，逐阶解锁更高属性</li>
+          <li>解锁后<b>直接顶在头顶</b>，走过路过一目了然</li>
+          <li>也是进出高级地图的门槛之一</li>
+        </ul>
+      </article>
+      <article class="panel reveal">
+        <h3>军衔 · 100 阶</h3>
+        <p>最长的成长线，最容易被人记住的身份。</p>
+        <ul>
+          <li><b>100 阶</b>军衔，从新兵一路杀到元帅</li>
+          <li>军衔等级参与战力计算与地图准入</li>
+          <li>头顶外显，让所有人知道你杀过多少怪</li>
+        </ul>
+      </article>
+      <article class="panel reveal">
+        <h3>等级 · 60 级</h3>
+        <p>角色等级是这一切的基础盘。</p>
+        <ul>
+          <li>60 级成长曲线，经验全部由服务端结算</li>
+          <li>每级裸属性入库可查，运营可随时微调</li>
+          <li>挂机 / 手动双路线，升级不打扰生活</li>
+        </ul>
+      </article>
+    </div>
+  </section>
+
+  <!-- ========== 战斗与多人 ========== -->
+  <section class="section">
+    <div class="prose reveal">
+      <h3>战斗：刀刀带感，服务端说了算</h3>
+      <p>冷却、耗蓝、攻击距离全程在服务端校验；伤害飘字、击退、突进位移（战士「十步一杀」瞬移贴脸）、
+         状态 Buff 循环特效、技能图标实时倒计时一应俱全。
+         <b>伤害、掉落、经验、击杀与出手动作全部实时广播</b>，多人同屏画面完全一致——
+         你看到的每一次挥刀，别人也看得到。</p>
+
+      <h3>多人同屏：谁也别想开挂</h3>
+      <p>一账号一线、顶号即踢；互见位置有最小仲裁，瞬移与异常移动会被屏蔽。
+         建号、背包、穿戴、金币、交易全部服务端权威——客户端只负责把战斗演得好看。</p>
+
+      <h3>A* 智能挂机：摸鱼也能变强</h3>
+      <p>一键挂机，A* 寻路绕障碍走位、目标死亡自动换怪、卡住自动脱困。
+         上班挂着，下班回来背包满满——爆没爆神装，全看脸。</p>
+    </div>
+    <figure class="world__art reveal" style="max-width:880px;margin:26px auto 0;">
+      <img src="assets/img/monster.jpg" alt="怪物与战斗实景" loading="lazy" />
+      <figcaption>刀刀带感的即时战斗</figcaption>
+    </figure>
+  </section>
+
+  <!-- ========== 社交与商城 ========== -->
+  <section class="section section--alt">
+    <div class="section__head reveal">
+      <h2 class="section__title">帮会 · 商城 · 时装</h2>
+      <p class="section__sub">一个人是打宝，一群人是江湖</p>
+    </div>
+    <div class="grid grid--cols2">
+      <article class="panel reveal">
+        <h3>帮会与兄弟</h3>
+        <p>帮会规则全服可调，公告、邮件直达每个在线的兄弟。</p>
+        <ul>
+          <li>帮会公告带<b>生效时间窗</b>，大事小情不落下</li>
+          <li>全服邮件一键触达在线玩家</li>
+          <li>规则参数运营后台随时调整</li>
+        </ul>
+      </article>
+      <article class="panel reveal">
+        <h3>商城与时装</h3>
+        <p>全装备自动上架、卡片分页浏览，外观时装随心换。</p>
+        <ul>
+          <li>买前看属性、买后入背包</li>
+          <li>余额不足 / 背包满<b>绝不扣钱</b></li>
+          <li>时装外观与属性分离，穿的是排面</li>
+        </ul>
+      </article>
+    </div>
+    <p style="text-align:center;margin-top:40px;" class="reveal">
+      <a class="btn btn--blood" href="http://game.yimw.cn" target="_blank" rel="noopener">立即进入游戏</a>
+      <a class="btn btn--ghost" href="guide.html" style="margin-left:14px;">新手指南</a>
+    </p>
+  </section>
+
+  <footer class="footer">
+    <img class="footer__logo" src="assets/icons/logo-256.png" alt="" aria-hidden="true" />
+    <p>olua · 经典 2D 即时战斗 · 浏览器即开即玩</p>
+    <nav class="footer__nav">
+      <a href="index.html">首页</a><span>·</span>
+      <a href="features.html">特色玩法</a><span>·</span>
+      <a href="guide.html">新手指南</a><span>·</span>
+      <a href="news.html">新闻动态</a><span>·</span>
+      <a href="deploy.html">自建部署</a><span>·</span>
+      <a href="about.html">关于声明</a>
+    </nav>
+    <p class="footer__health">健康游戏忠告：抵制不良游戏，拒绝盗版游戏。注意自我保护，谨防受骗上当。适度游戏益脑，沉迷游戏伤身。合理安排时间，享受健康生活。</p>
+    <p class="footer__copy">© 2026 olua · 基于 MIT 协议开源 · <a href="https://github.com/WebCoderT/olua" target="_blank" rel="noopener">GitHub</a> / <a href="https://gitee.com/putiwan/olua" target="_blank" rel="noopener">Gitee</a></p>
+  </footer>
+
+  <script src="js/main.js"></script>
+</body>
+</html>
