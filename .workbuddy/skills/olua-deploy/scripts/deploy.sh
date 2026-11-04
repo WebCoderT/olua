@@ -53,7 +53,7 @@ KEY="$DEPLOY_KEY"
 if [ "$KEY" = "${KEY#/}" ]; then KEY="$ROOT/$DEPLOY_KEY"; fi   # 相对路径按仓库根解析
 [ -r "$KEY" ] || { echo "✗ 读不到私钥：$KEY"; exit 1; }
 PERM="$(stat -f '%OLp' "$KEY" 2>/dev/null || stat -c '%a' "$KEY" 2>/dev/null || echo '?')"
-case "$PERM" in 600|400) ;; *) echo "✗ 私钥权限应为 600（当前 $PERM）：chmod 600 $KEY"; exit 1 ;; esac
+case "$PERM" in 600|400) ;; *) echo "✗ 私钥权限应为 600（当前 ${PERM}）：chmod 600 $KEY"; exit 1 ;; esac
 
 SSH=(ssh -i "$KEY" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=30)
 SCP=(scp -i "$KEY" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=30)
@@ -87,7 +87,7 @@ build_compose_env() {
     echo "OLUA_ADMIN_DOMAIN=$ADMIN_DOMAIN"
     echo "OLUA_GAME_DOMAIN=$GAME_DOMAIN"
   } > /tmp/olua-compose.env
-  echo "  已生成 compose .env（$SITE_PRIMARY / $ADMIN_DOMAIN / $GAME_DOMAIN）"
+  echo "  已生成 compose .env（${SITE_PRIMARY} / ${ADMIN_DOMAIN} / ${GAME_DOMAIN}）"
 }
 
 verify() {
