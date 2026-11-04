@@ -184,6 +184,14 @@ function completeSnapshot(over = {}) {
     guideSteps: [{ id: "move", title: "先动起来", desc: "走两步。", spot: "joystick", trigger: "move" }],
     // #683：音效（客户端形状只有播放要用的五个字段）
     audio: [{ key: "login_bgm", filePath: "sounds/login_bg.wav", volume: 60, loop: true, enabled: true }],
+    // #695：装备外观（四组映射；服务端保证 15 组合覆盖，客户端契约只看数组在不在）
+    equipmentAppearance: {
+      borders: Array.from({ length: 15 }, (_, i) => ({ prefix: i % 5, suffix: Math.floor(i / 5), key: `sfx_${30123 + i}_0` })),
+      backgrounds: Array.from({ length: 15 }, (_, i) => ({ prefix: i % 5, suffix: Math.floor(i / 5), key: `sfx_${16000 + i}` })),
+      customBorders: [],
+      customBackgrounds: [],
+      updatedAt: 0,
+    },
     ...over,
   };
 }

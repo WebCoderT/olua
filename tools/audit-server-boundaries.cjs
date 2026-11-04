@@ -188,6 +188,8 @@ const REPO_EDGES = {
   "database/repositories/runtime-params.repository.ts": ["modules/game-config", "modules/social", "modules/realtime"],
   "database/repositories/combat-weights.repository.ts": ["modules/game-config"],
   "database/repositories/guide-settings.repository.ts": ["modules/game-config"],
+  // 装备外观（#695）：边框 + 详情背景的 key 映射（单行表），只有配置域读写
+  "database/repositories/equipment-appearance.repository.ts": ["modules/game-config"],
   "database/repositories/rank.repository.ts": ["modules/game-config", "modules/roles"],
   // 装备基础件（#252）：同称号 / 战魂 / 军衔，只在 game-config 模块内读写；
   // 战斗结算读的是 `equipment_variants` 的快照覆盖层，不直连这两个仓储

@@ -54,6 +54,7 @@ const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
       { to: "/runtime-params", label: "运行时参数", permission: PERMISSION.GAME_CONFIG_READ },
       { to: "/combat-weights", label: "战斗力权重", permission: PERMISSION.GAME_CONFIG_READ },
       { to: "/guide-steps", label: "新手引导", permission: PERMISSION.GAME_CONFIG_READ },
+      { to: "/equipment-appearance", label: "装备外观", permission: PERMISSION.GAME_CONFIG_READ },
     ],
   },
   {

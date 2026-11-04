@@ -439,11 +439,11 @@ async function expectFailure(action) {
   );
 
   const networkSource = read(FILE.network);
-  // baseUrl 直接写成常量（本地开发指向本机服务端；上 Web 部署时改成同源 /api）。
-  // 铁律不变：地址字面量只住在 configs/network.ts（自查 tools/audit-api-hardcode.cjs）
+  // #697：baseUrl 按页面 host 运行时判定（本机/内网直连 3100，公网同源 /api）。
+  // 铁律不变：地址字面量与判定逻辑只住在 configs/network.ts（自查 tools/audit-api-hardcode.cjs）
   check(
-    /baseUrl:\s*"http:\/\/localhost:3100\/api"/.test(networkSource) && !/resolveBaseUrl/.test(networkSource),
-    "configs/network 是客户端唯一地址来源（baseUrl 写死在本文件，环境切换改这一处）",
+    /function isLocalHost/.test(networkSource) && /function resolveBaseUrl/.test(networkSource) && /localhost:3100\/api/.test(networkSource),
+    "configs/network 是客户端唯一地址来源（host 判定 + 两个 baseUrl 都在本文件）",
   );
   //#endregion
 

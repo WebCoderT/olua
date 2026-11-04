@@ -93,6 +93,7 @@ import type {
  * | 19 | 界面特效（升级特效 + 掉落光效） | `uiEffects` | `applyUiEffectRows` |
  * | 20 | 装备几何锚点 | `equip-align` / `equip-in-align`（另两个接口） | `applyEquipAlignRows`（在 apply-snapshot） |
  * | 21 | 音效 | `audio` | `applyAudioRows` |
+ * | 22 | 装备边框与详情背景 | `equipmentAppearance` | `applyEquipmentAppearance` / `applyEquipmentDetailBackgrounds`（在 configs/border + configs/background） |
  *
  * 守点：`tools/audit-snapshot-contract.cjs` —— 分区 0 的清单 == 服务端 `GameConfigSnapshotDto`
  * == `client-config.service.snapshot()` 实际下发的键。加一段配置要三处一起改。
@@ -183,6 +184,7 @@ export const SNAPSHOT_SECTIONS: SnapshotSectionSpec[] = [
   { key: "runtimeParams", label: "运行时参数", kind: "object" },
   { key: "guideSteps", label: "新手引导步骤", kind: "array" },
   { key: "audio", label: "音效配置", kind: "array" },
+  { key: "equipmentAppearance", label: "装备边框与详情背景", kind: "object" },
 ];
 
 /** 一处契约问题（key + 中文名 + 原因，直接拼进日志与界面） */
@@ -224,13 +226,14 @@ export function checkSnapshotContract(snapshot: unknown): SnapshotProblem[] {
       problems.push({ key: spec.key as string, label: spec.label, reason: `应该是对象，拿到的是 ${describeValue(raw)}` });
       continue;
     }
-    // 单值对象目前只有两段，各自的形状要求写在这里（比泛型写法好读）
+    // 单值对象目前只有三段，各自的形状要求写在这里（比泛型写法好读）
     if (spec.key === "equipmentMeta") collectEquipmentMetaProblems(raw as Record<string, unknown>, problems);
     if (spec.key === "mallSettings") {
       if (typeof (raw as Record<string, unknown>).defaultPrice !== "number") {
         problems.push({ key: "mallSettings", label: spec.label, reason: "缺少 defaultPrice（统一价），商城会算不出价" });
       }
     }
+    if (spec.key === "equipmentAppearance") collectEquipmentAppearanceProblems(raw as Record<string, unknown>, problems);
   }
   return problems;
 }
@@ -266,6 +269,28 @@ function collectEquipmentMetaProblems(meta: Record<string, unknown>, problems: S
         label: "装备规则",
         reason: `${labelsKey} 与 ${ratesKey} 长度不一致（${Array.isArray(labels) ? labels.length : "非数组"} vs ${rates.length}）`,
       });
+    }
+  }
+}
+
+/**
+ * 装备外观的形状检查（#695）
+ *
+ * 四组映射数组必须在：`borders` / `backgrounds` 是前后缀组合表（缺了对应品质整个没光效），
+ * `customBorders` / `customBackgrounds` 是自定义表（允许为空）。条目级的合法性
+ * （key 格式 / 组合覆盖度）由服务端 DTO 保证，客户端 apply 层还会再卡一遍 ——
+ * 这里只拦「整段形状不对」的服务端 bug。
+ */
+function collectEquipmentAppearanceProblems(appearance: Record<string, unknown>, problems: SnapshotProblem[]): void {
+  const pairs: Array<[string, string]> = [
+    ["borders", "边框映射"],
+    ["backgrounds", "详情背景映射"],
+    ["customBorders", "边框自定义表"],
+    ["customBackgrounds", "详情背景自定义表"],
+  ];
+  for (const [key, label] of pairs) {
+    if (!Array.isArray(appearance[key])) {
+      problems.push({ key: "equipmentAppearance", label: "装备边框与详情背景", reason: `${key} 不是数组（${label}没法重建）` });
     }
   }
 }

@@ -10,6 +10,7 @@ import { DropConfigService } from "./drop-config.service";
 import { RuntimeParamsService } from "./runtime-params.service";
 import { CombatWeightsService } from "./combat-weights.service";
 import { GuideSettingsService } from "./guide-settings.service";
+import { EquipmentAppearanceService } from "./equipment-appearance.service";
 import { AudioSettingService } from "../audio-setting/audio-setting.service";
 import { GameConfigSnapshotDto } from "./dto/client-config.dto";
 import { LevelDto } from "./dto/growth.dto";
@@ -36,6 +37,7 @@ export class ClientConfigService {
     private readonly runtimeParams: RuntimeParamsService,
     private readonly combatWeights: CombatWeightsService,
     private readonly guide: GuideSettingsService,
+    private readonly equipmentAppearance: EquipmentAppearanceService,
     private readonly audio: AudioSettingService,
     private readonly map: MapService,
     private readonly uiEffect: UiEffectService,
@@ -94,6 +96,9 @@ export class ClientConfigService {
       // #683：音效配置（文件路径 / 音量 / 循环 / 开关）。客户端没有本地兜底表 ——
       // 空 `filePath` 就是「这一项不播」；登录场景另走公开接口 `GET /game-config/audio`
       audio: this.audio.configs(),
+      // #695：装备外观（哪个前后缀组合 / 哪件特殊装备用哪个边框、详情背景）。
+      // 素材与资源清单在客户端，这里只下发 key 映射 —— 运营换组合不重打客户端包
+      equipmentAppearance: this.equipmentAppearance.appearance(),
     };
   }
 

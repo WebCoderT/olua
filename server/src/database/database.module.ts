@@ -49,6 +49,7 @@ import { EquipAlignRepository } from "./repositories/equip-align.repository";
 import { EquipInAlignRepository } from "./repositories/equip-in-align.repository";
 import { UiEffectRepository } from "./repositories/ui-effect.repository";
 import { AudioSettingRepository } from "./repositories/audio-setting.repository";
+import { EquipmentAppearanceRepository } from "./repositories/equipment-appearance.repository";
 
 /**
  * 数据层（全局模块）
@@ -111,6 +112,7 @@ import { AudioSettingRepository } from "./repositories/audio-setting.repository"
     EquipInAlignRepository,
     UiEffectRepository,
     AudioSettingRepository,
+    EquipmentAppearanceRepository,
   ],
   exports: [
     DatabaseService,
@@ -163,6 +165,7 @@ import { AudioSettingRepository } from "./repositories/audio-setting.repository"
     EquipInAlignRepository,
     UiEffectRepository,
     AudioSettingRepository,
+    EquipmentAppearanceRepository,
   ],
 })
 export class DatabaseModule {}

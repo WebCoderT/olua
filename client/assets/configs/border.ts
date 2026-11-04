@@ -1,4 +1,4 @@
-import { EQUIPMENT_PREFIX, EQUIPMENT_SUFFIX, Equipment } from "../types/good";
+import { Equipment } from "../types/good";
 import type { BorderAssignment, BorderResource, CustomBorderAssignment } from "../types/border";
 import { getEquipmentBaseKey } from "./equipments";
 
@@ -7,13 +7,19 @@ import { getEquipmentBaseKey } from "./equipments";
  *
  * 素材：resources/borders 下 84 张图集（plist + 同名 png，整包 8~12 帧循环），
  * 显示在背包格子与身上装备槽的物品图标上（唯一挂点 = GameUiHelper.createGood，见 applyEquipmentBorder）。
- * 边框的取用优先级：**特殊装备的自定义表 → 前后缀组合表**，都没命中就不显示。
  *
- * 前后缀组合表用的是**前 15 张**（sfx_30123_0 ~ sfx_30137_0）：5 个前缀 × 3 个后缀 = 15 种组合各一张，
- * 按强度升序（先按后缀分三档、档内按前缀递增）。剩下的 69 张暂不分配，
- * 留给「某件特殊装备单独配边框」用（写进 customEquipmentBorderData 即生效）。
+ * ## #695：映射表搬到服务端了
+ * 「哪个前后缀组合用哪个边框」「哪件特殊装备单独用哪个」是**运营内容**，来自配置快照的
+ * `equipmentAppearance` 段（出厂值在 `server/src/common/constants/equipment-appearance`，
+ * 运营在管理端「装备外观」页改），由 `applyEquipmentAppearance()` 重建两张映射。
+ * 快照到达前映射是**空的** —— 边框整个不显示（与音效 / 引导同一口径：没有本地兜底表）。
  *
- * 想换某个组合的边框 / 给特殊装备配边框，只改下面这两张表；
+ * 本文件保留的是**客户端自己的那一半**：
+ * - **资源清单**（`borderSerials` → `borderResources`）：哪些边框图集存在是与磁盘文件
+ *   一一对应的资源约定，`test-equipment-border.cjs` 会拿它与磁盘实际文件比对，写错当场报；
+ * - key → 资源的解析（`borders` Map）：服务端下发的 key 在这里查资源，查不到 = 配置写错了
+ *   （管理端填了资源包里没有的编号），显示层安静跳过并留日志。
+ *
  * 素材长什么样见 tools/border-preview.png（编号索引图，重新生成方式见该目录下的说明）。
  */
 
@@ -55,51 +61,67 @@ export const borders = new Map<string, BorderResource>();
 borderResources.forEach((resource) => borders.set(resource.key, resource));
 
 /**
- * 前后缀组合 → 边框（15 种组合各一张；想换边框只改这张表）
+ * 前后缀组合 → 边框 key（键 = `${prefix}|${suffix}`）
  *
- * 顺序按强度升序：先按后缀分「人级 / 天级 / 神级」三档，档内按前缀「普通的 → 超神的」递增，
- * 依次取前 15 张边框 —— 于是每个后缀档独占连续 5 张，前后缀越强边框越靠后。
+ * 快照到达前为空（#695：映射来自服务端，见文件头）；`applyEquipmentAppearance()` 重建。
  */
-const prefixSuffixBorderData: BorderAssignment[] = [
-  // —— 人级（后缀 0）：普通 → 超神 ——
-  { prefix: EQUIPMENT_PREFIX.NORMAL, suffix: EQUIPMENT_SUFFIX.MORTAL, border: "sfx_30123_0" },
-  { prefix: EQUIPMENT_PREFIX.STRENGTHENED, suffix: EQUIPMENT_SUFFIX.MORTAL, border: "sfx_30124_0" },
-  { prefix: EQUIPMENT_PREFIX.FINE, suffix: EQUIPMENT_SUFFIX.MORTAL, border: "sfx_30125_0" },
-  { prefix: EQUIPMENT_PREFIX.SUPERB, suffix: EQUIPMENT_SUFFIX.MORTAL, border: "sfx_30126_0" },
-  { prefix: EQUIPMENT_PREFIX.GODLY, suffix: EQUIPMENT_SUFFIX.MORTAL, border: "sfx_30127_0" },
-  // —— 天级（后缀 1）：普通 → 超神 ——
-  { prefix: EQUIPMENT_PREFIX.NORMAL, suffix: EQUIPMENT_SUFFIX.HEAVEN, border: "sfx_30128_0" },
-  { prefix: EQUIPMENT_PREFIX.STRENGTHENED, suffix: EQUIPMENT_SUFFIX.HEAVEN, border: "sfx_30129_0" },
-  { prefix: EQUIPMENT_PREFIX.FINE, suffix: EQUIPMENT_SUFFIX.HEAVEN, border: "sfx_30130_0" },
-  { prefix: EQUIPMENT_PREFIX.SUPERB, suffix: EQUIPMENT_SUFFIX.HEAVEN, border: "sfx_30131_0" },
-  { prefix: EQUIPMENT_PREFIX.GODLY, suffix: EQUIPMENT_SUFFIX.HEAVEN, border: "sfx_30132_0" },
-  // —— 神级（后缀 2）：普通 → 超神 ——
-  { prefix: EQUIPMENT_PREFIX.NORMAL, suffix: EQUIPMENT_SUFFIX.GODLY, border: "sfx_30133_0" },
-  { prefix: EQUIPMENT_PREFIX.STRENGTHENED, suffix: EQUIPMENT_SUFFIX.GODLY, border: "sfx_30134_0" },
-  { prefix: EQUIPMENT_PREFIX.FINE, suffix: EQUIPMENT_SUFFIX.GODLY, border: "sfx_30135_0" },
-  { prefix: EQUIPMENT_PREFIX.SUPERB, suffix: EQUIPMENT_SUFFIX.GODLY, border: "sfx_30136_0" },
-  { prefix: EQUIPMENT_PREFIX.GODLY, suffix: EQUIPMENT_SUFFIX.GODLY, border: "sfx_30137_0" },
-];
-
-/** 前后缀组合 → 边框 key（键 = `${prefix}|${suffix}`；按组合查表用） */
 export const prefixSuffixBorders = new Map<string, string>();
-prefixSuffixBorderData.forEach((assignment) => prefixSuffixBorders.set(`${assignment.prefix}|${assignment.suffix}`, assignment.border));
 
 /**
- * 特殊装备的自定义边框（key = 物品 id 或基础件 key；**优先于**前后缀表，剩下的 69 张边框留给它用）
+ * 特殊装备的自定义边框（key = 物品 id 或基础件 key；**优先于**前后缀表）
  *
- * · 写变体 id（如 weapon_20_p4s2）→ 只有那一个变体生效；
- * · 写基础件 key（如 weapon_20）→ 该装备的**全部**前后缀变体都生效；
- * · border 写了没登记的 key = 配置错误：回退前后缀表并留一条可查日志（不让边框整个消失）。
+ * 快照到达前为空（#695）；`applyEquipmentAppearance()` 重建。
  */
-const customEquipmentBorderData: CustomBorderAssignment[] = [
-  // 示例（去掉注释即生效）：焚世巨剑（含全部前后缀变体）改用编号最大的边框
-  // { equipment: "weapon_20", border: "sfx_30206_0" },
-];
-
-/** 物品 id / 基础件 key → 边框 key（按装备查表用） */
 export const customEquipmentBorders = new Map<string, string>();
-customEquipmentBorderData.forEach((assignment) => customEquipmentBorders.set(assignment.equipment, assignment.border));
+
+/**
+ * 应用快照的 `equipmentAppearance` 段（`apply-snapshot` 用）—— 重建两张映射
+ *
+ * 只认「**格式合法且在资源清单里**」的边框 key：服务端 DTO 已按 key 格式校验过一遍，
+ * 这里再卡「资源清单里真的有」——「配了资源包里没有的编号」的后果是**整个边框消失**
+ * （图集加载失败），与其到进背包才看到光效缺一块，不如在这里丢弃并留日志。
+ * 组合覆盖度（15 条是否齐全）由服务端保证：缺的组合查不到映射，边框不显示 ——
+ * 那是合法的配置状态（运营想关掉某个品质的边框就少配一条……服务端现在卡全覆盖，
+ * 真要支持得在管理端加「不显示」语义，别在这里偷偷兜）。
+ */
+export function applyEquipmentAppearance(data: unknown): void {
+  if (!data || typeof data !== "object") return;
+  const source = data as Record<string, unknown>;
+
+  // —— 前后缀映射表 ——
+  prefixSuffixBorders.clear();
+  if (Array.isArray(source.borders)) {
+    for (const row of source.borders) {
+      if (!row || typeof row !== "object") continue;
+      const item = row as Record<string, unknown>;
+      const prefix = Number(item.prefix);
+      const suffix = Number(item.suffix);
+      const key = typeof item.key === "string" ? item.key : "";
+      if (!borders.has(key)) {
+        if (key) console.warn(`[border] 跳过组合 ${prefix}|${suffix}：边框「${key}」不在客户端资源清单里`);
+        continue;
+      }
+      prefixSuffixBorders.set(`${prefix}|${suffix}`, key);
+    }
+  }
+
+  // —— 特殊装备自定义表 ——
+  customEquipmentBorders.clear();
+  if (Array.isArray(source.customBorders)) {
+    for (const row of source.customBorders) {
+      if (!row || typeof row !== "object") continue;
+      const item = row as Record<string, unknown>;
+      const equipment = typeof item.equipment === "string" ? item.equipment : "";
+      const key = typeof item.key === "string" ? item.key : "";
+      if (!equipment) continue;
+      if (!borders.has(key)) {
+        console.warn(`[border] 跳过自定义 ${equipment}：边框「${key}」不在客户端资源清单里`);
+        continue;
+      }
+      customEquipmentBorders.set(equipment, key);
+    }
+  }
+}
 
 /**
  * 取装备应显示的边框 key（不显示返回 null）
@@ -126,9 +148,12 @@ export function getEquipmentBorderKey(equipment: Equipment | null | undefined): 
  */
 export function getAssignedBorders(): BorderResource[] {
   const result: BorderResource[] = [];
-  prefixSuffixBorderData.forEach((assignment) => {
-    const resource = borders.get(assignment.border);
+  prefixSuffixBorders.forEach((key) => {
+    const resource = borders.get(key);
     if (resource && !result.some((item) => item.key === resource.key)) result.push(resource);
   });
   return result;
 }
+
+/** 类型再出口（历史 import 路径兼容：`configs/border` 曾是这些类型的唯一出口） */
+export type { BorderAssignment, BorderResource, CustomBorderAssignment };

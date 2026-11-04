@@ -2397,6 +2397,112 @@ async function main() {
     checkEqual(restoreMounts.body?.data?.total, mountSeed.length, "还原怪物 200 的挂载（seed 前提复原）");
 
     //#endregion
+
+    //#region 二十二、装备外观（#695）：边框与详情背景的 key 映射
+
+    group("二十二、装备外观：单行四组映射，整份读整份写");
+
+    // 出厂预期 = 快照里那一行（JSON 列已解成数组；不锁具体数值，只锁「接口 == 快照」）
+    const appearanceSeedRow = configSnapshot.rows("equipment_appearance")[0];
+    check(Boolean(appearanceSeedRow), "快照里有 equipment_appearance（新表进了 config-sync）");
+    checkEqual(appearanceSeedRow.borders.length, 15, "出厂边框映射 15 条");
+    checkEqual(appearanceSeedRow.backgrounds.length, 15, "出厂背景映射 15 条");
+
+    const appearanceRes = await api(base, "GET", "/api/admin/equipment-appearance", { token });
+    checkEqual(appearanceRes.status, 200, "装备外观可读");
+    const appearance = appearanceRes.body?.data ?? {};
+    checkEqual(appearance.borders?.length, 15, "边框映射 = 快照行数");
+    checkEqual(appearance.backgrounds?.length, 15, "背景映射 = 快照行数");
+    const comboKey = (row) => `${row.prefix}|${row.suffix}`;
+    const seedComboSet = new Set(appearanceSeedRow.borders.map(comboKey));
+    check(
+      (appearance.borders ?? []).every((row) => seedComboSet.has(comboKey(row))),
+      "边框映射的每个组合都在快照里（接口 == 快照那一列）",
+    );
+    const seedBorderByKey = new Map(appearanceSeedRow.borders.map((row) => [comboKey(row), row.key]));
+    check(
+      (appearance.borders ?? []).every((row) => seedBorderByKey.get(comboKey(row)) === row.key),
+      "边框 key 逐组合与快照一致",
+    );
+    checkEqual(appearance.customBorders?.length, appearanceSeedRow.customBorders.length, "自定义边框表 = 快照行数（出厂为空）");
+
+    // —— 校验闭环：三种坏数据都不落库 ——
+    const appearanceOk = appearance.borders ?? [];
+    const comboDup = appearanceOk.slice();
+    comboDup[1] = { ...comboDup[1], prefix: comboDup[0].prefix, suffix: comboDup[0].suffix };
+    const comboDupRes = await api(base, "PATCH", "/api/admin/equipment-appearance", { token, body: { borders: comboDup, backgrounds: appearance.backgrounds, customBorders: [], customBackgrounds: [] } });
+    checkEqual(comboDupRes.status, 400, "组合重复（两个 0|0）→ 400 且不落库");
+
+    const missingOne = appearanceOk.slice(0, 14);
+    const missingRes = await api(base, "PATCH", "/api/admin/equipment-appearance", { token, body: { borders: missingOne, backgrounds: appearance.backgrounds, customBorders: [], customBackgrounds: [] } });
+    checkEqual(missingRes.status, 400, "只有 14 条（缺一个组合）→ 400");
+
+    const badKey = appearanceOk.slice();
+    badKey[0] = { ...badKey[0], key: "not-a-border" };
+    const badKeyRes = await api(base, "PATCH", "/api/admin/equipment-appearance", { token, body: { borders: badKey, backgrounds: appearance.backgrounds, customBorders: [], customBackgrounds: [] } });
+    checkEqual(badKeyRes.status, 400, "边框 key 格式不对 → 400");
+
+    const dupCustomRes = await api(base, "PATCH", "/api/admin/equipment-appearance", {
+      token,
+      body: {
+        borders: appearanceOk,
+        backgrounds: appearance.backgrounds,
+        customBorders: [
+          { equipment: "weapon_20", key: "sfx_30206_0" },
+          { equipment: "weapon_20", key: "sfx_30205_0" },
+        ],
+        customBackgrounds: [],
+      },
+    });
+    checkEqual(dupCustomRes.status, 400, "自定义表装备标识重复 → 400");
+
+    // —— 改了真生效：交换两个组合的边框 + 加一条自定义，GET 与玩家快照都反映 ——
+    const swapped = appearanceOk.slice();
+    const tmp = swapped[0].key;
+    swapped[0] = { ...swapped[0], key: swapped[14].key };
+    swapped[14] = { ...swapped[14], key: tmp };
+    const customSeedBorder = "sfx_30206_0";
+    const updateRes = await api(base, "PATCH", "/api/admin/equipment-appearance", {
+      token,
+      body: {
+        borders: swapped,
+        backgrounds: appearance.backgrounds,
+        customBorders: [{ equipment: "weapon_20", key: customSeedBorder }],
+        customBackgrounds: [],
+      },
+    });
+    checkEqual(updateRes.status, 200, "合法整份替换 → 200");
+    checkEqual(updateRes.body?.data?.borders?.[0]?.key, swapped[0].key, "交换后的第 1 格 = 提交值");
+    checkEqual(updateRes.body?.data?.customBorders?.[0]?.equipment, "weapon_20", "自定义条目落库");
+    check((updateRes.body?.data?.updatedAt ?? 0) > 0, "updatedAt 被 touched（0 = 从未改过）");
+
+    const appearanceReread = await api(base, "GET", "/api/admin/equipment-appearance", { token });
+    checkEqual(appearanceReread.body?.data?.borders?.[14]?.key, tmp, "GET 回读 = 提交值（整份替换生效）");
+
+    const playerForAppearance = await (async () => {
+      const login = await api(base, "POST", "/api/auth/login", { body: { username: "cfgsnap_player", password: "pass1234" } });
+      return login.body?.data?.token;
+    })();
+    const appearanceSnap = await api(base, "GET", "/api/game-config", { token: playerForAppearance });
+    checkEqual(appearanceSnap.status, 200, "玩家拉快照");
+    const appearanceSnapData = appearanceSnap.body?.data?.equipmentAppearance;
+    check(Boolean(appearanceSnapData), "快照带 equipmentAppearance 段");
+    checkEqual(appearanceSnapData?.borders?.[0]?.key, swapped[0].key, "快照里的边框 = 改过的值（客户端进图拿到的就是它）");
+    checkEqual(appearanceSnapData?.customBorders?.length, 1, "快照里的自定义表随行");
+
+    // —— 还原 seed 前提（出厂整份写回，updatedAt 归零由 GET 只读不校验） ——
+    const restoreAppearance = await api(base, "PATCH", "/api/admin/equipment-appearance", {
+      token,
+      body: {
+        borders: appearanceOk,
+        backgrounds: appearance.backgrounds,
+        customBorders: appearanceSeedRow.customBorders,
+        customBackgrounds: appearanceSeedRow.customBackgrounds,
+      },
+    });
+    checkEqual(restoreAppearance.status, 200, "还原装备外观出厂值（seed 前提复原）");
+
+    //#endregion
   } finally {
     server.kill();
   }

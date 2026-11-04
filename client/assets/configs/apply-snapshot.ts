@@ -41,6 +41,8 @@ import { applyEquipmentData, applyEquipmentQualityLabels, applyEquipmentSlots, g
 import { roleDefaultCloths, setMpRecoverPerSecond } from "./role";
 import { applyDropRuntime } from "./drop";
 import { applyGuideSteps } from "./guide";
+import { applyEquipmentAppearance } from "./border";
+import { applyEquipmentDetailBackgrounds } from "./background";
 import { applyAutoBattleParams } from "./autoBattle";
 import { SEX } from "../types/role";
 
@@ -263,6 +265,9 @@ export function applyConfigSnapshot(snapshot: GameConfigSnapshot): void {
   applyAudioRows(snapshot.audio);
   // #605：新手引导步骤（表在服务端，客户端只留表现层）
   applyGuideSteps(snapshot.guideSteps);
+  // #695：装备外观（哪个前后缀组合 / 哪件特殊装备用哪个边框、详情背景；资源清单仍在客户端）
+  applyEquipmentAppearance(snapshot.equipmentAppearance);
+  applyEquipmentDetailBackgrounds(snapshot.equipmentAppearance);
 }
 
 /**

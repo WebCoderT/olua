@@ -1815,6 +1815,55 @@ export type UpdateGuideSteps = {
   note?: string;
 };
 
+export type AppearanceAssignment = {
+  /**
+   * 装备前缀（0 普通的 → 4 超神的，数值即客户端 EQUIPMENT_PREFIX 枚举值）
+   */
+  prefix: number;
+  /**
+   * 装备后缀（0 人级 / 1 天级 / 2 神级，数值即客户端 EQUIPMENT_SUFFIX 枚举值）
+   */
+  suffix: number;
+  /**
+   * 边框 / 背景 key（客户端资源清单里的 sfx 编号）
+   */
+  key: string;
+};
+
+export type CustomAppearance = {
+  /**
+   * 物品 id（如 weapon_20_p4s2，只影响这一个变体）或基础件 key（如 weapon_20，影响其全部变体）
+   */
+  equipment: string;
+  /**
+   * 边框 / 背景 key
+   */
+  key: string;
+};
+
+export type UpdateEquipmentAppearance = {
+  /**
+   * 前后缀组合 → 边框（整份替换，恰好 15 条且组合不重复）
+   */
+  borders: AppearanceAssignment[];
+  /**
+   * 前后缀组合 → 详情背景（整份替换，恰好 15 条且组合不重复）
+   */
+  backgrounds: AppearanceAssignment[];
+  /**
+   * 特殊装备 → 边框（整份替换；装备标识不可重复）
+   */
+  customBorders: CustomAppearance[];
+  /**
+   * 特殊装备 → 详情背景（整份替换；装备标识不可重复）
+   */
+  customBackgrounds: CustomAppearance[];
+  /**
+   * 修改备注（写进审计日志的上下文，便于追溯「为什么改」）
+   */
+  note?: string;
+};
+
 export type SendMail = {
   /**
    * 收件邮箱（可选）。不传时，若关联的玩家账号填了邮箱，则自动用该账号的邮箱投递；两者皆无则报错（50005）。管理端选了关联账号后会自动把账号邮箱带进这个字段，所以运营大多不用手填。
@@ -3342,7 +3391,7 @@ export type AuditQuery = {
   /**
    * 目标类型筛选
    */
-  targetType?: "account" | "role" | "admin" | "announcement" | "mail" | "title" | "soul" | "rank" | "equipment" | "drug" | "item" | "monster" | "npc" | "mall" | "fashion" | "dropTable" | "monsterDrop" | "roleLevel" | "equipmentVariant" | "growthScalar" | "skill" | "status" | "zone" | "guild" | "quest" | "achievement" | "equipAlign" | "equipInAlign" | "map" | "uiEffect" | "audioSetting" | "runtimeParams" | "combatWeights" | "guideSteps";
+  targetType?: "account" | "role" | "admin" | "announcement" | "mail" | "title" | "soul" | "rank" | "equipment" | "drug" | "item" | "monster" | "npc" | "mall" | "fashion" | "dropTable" | "monsterDrop" | "roleLevel" | "equipmentVariant" | "growthScalar" | "skill" | "status" | "zone" | "guild" | "quest" | "achievement" | "equipAlign" | "equipInAlign" | "map" | "uiEffect" | "audioSetting" | "runtimeParams" | "combatWeights" | "guideSteps" | "equipmentAppearance";
   /**
    * 只看针对某个目标的日志（目标 id）
    */
@@ -6372,6 +6421,29 @@ export type AudioConfig = {
   enabled: boolean;
 };
 
+export type EquipmentAppearance = {
+  /**
+   * 前后缀组合 → 边框（恰好 15 条，每条组合一次）
+   */
+  borders: AppearanceAssignment[];
+  /**
+   * 前后缀组合 → 详情背景（恰好 15 条，每条组合一次）
+   */
+  backgrounds: AppearanceAssignment[];
+  /**
+   * 特殊装备 → 边框（优先于前后缀表）
+   */
+  customBorders: CustomAppearance[];
+  /**
+   * 特殊装备 → 详情背景（优先于前后缀表）
+   */
+  customBackgrounds: CustomAppearance[];
+  /**
+   * 最后修改时间（毫秒，0 = 从未改过、仍是出厂值）
+   */
+  updatedAt: number;
+};
+
 export type GameConfigSnapshot = {
   /**
    * 称号配置（34 阶，含渠道与升级链顺序）
@@ -6491,6 +6563,12 @@ export type GameConfigSnapshot = {
    * 空 `filePath` = 这一项没配（不播）；`enabled = false` = 连文件都不读。
    */
   audio: AudioConfig[];
+  /**
+   * 装备外观（#695：哪个前后缀组合 / 哪件特殊装备用哪个边框、详情背景）。素材本体与资源清单在客户端，这里只下发 key 映射 —— 运营换品质光效 / 给特殊装备配光效不用重打客户端包。
+   *
+   * `borders` / `backgrounds` 恰好 15 条（5 前缀 × 3 后缀全覆盖）；`customBorders` / `customBackgrounds` 优先于前后缀表。客户端 `configs/border` / `configs/background` 按它重建映射。
+   */
+  equipmentAppearance: EquipmentAppearance;
 };
 
 export type GuildSummary = {
