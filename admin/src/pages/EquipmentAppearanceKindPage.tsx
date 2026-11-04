@@ -22,7 +22,8 @@ import { toastSuccess } from "../store/toast";
  * 每条映射带 `GameFrame` 首帧缩略图（素材本体经 /game-resources 同源直读，服务端不用存图）；
  * 「效果」按钮打开显示效果工作台（AppearanceEffectWorkbench）：以素材第一帧为基准，
  * 拖拽调偏移、滑杆调缩放 —— 与「装备对齐」工作台同一套交互取向。
- * effect 缺省 = 客户端默认适配（边框 contain 缩进 56×56 外框、背景铺满详情弹窗面板）。
+ * effect 缺省 = 客户端默认适配（边框 contain 缩进 56×56 外框；背景宽度贴面板、
+ * 高度按帧原始比例自适应、顶边贴面板顶）。
  */
 
 /** 单边页面配置（两页唯一的差异点） */
@@ -42,6 +43,8 @@ interface KindConfig {
   atlasOf: (key: string) => string;
   /** 效果基准框（游戏像素）：边框 = 56×56 外框；背景 = 详情弹窗面板 240×200 */
   effectBox: { width: number; height: number };
+  /** 工作台适配口径：contain（边框）/ width-top（背景，宽度贴框、顶边对齐） */
+  effectFit: "contain" | "width-top";
   /** 参考内框（只画不做基准）：边框场景的 40×40 物品图标 */
   effectInnerBox: { width: number; height: number } | null;
   /** 工作台画布放大倍数 */
@@ -67,6 +70,7 @@ const BORDER_CONFIG: KindConfig = {
   keyPattern: /^sfx_\d+_0$/,
   atlasOf: (key) => `borders/${key}`,
   effectBox: { width: 56, height: 56 },
+  effectFit: "contain",
   effectInnerBox: { width: 40, height: 40 },
   effectZoom: 3,
   effectHint:
@@ -89,10 +93,11 @@ const BACKGROUND_CONFIG: KindConfig = {
   keyPattern: /^sfx_\d+$/,
   atlasOf: (key) => `backgrounds/${key}`,
   effectBox: { width: 240, height: 200 },
+  effectFit: "width-top",
   effectInnerBox: null,
   effectZoom: 1.5,
   effectHint:
-    "虚线框 = 详情弹窗面板（240×200，实际高度随内容自适应）。背景默认铺满面板 —— 拖动改偏移、滑杆改倍率（>1 会溢出面板，客户端按面板中心裁外）。",
+    "虚线框 = 详情弹窗面板（240×200，实际高度随内容自适应）。背景宽度贴面板、高度按帧原始比例自适应、顶边贴面板顶 —— 拖动改偏移（y 向上）、滑杆改倍率（>1 会超出面板宽）。",
   savedToast: "装备详情背景已保存（玩家下次进游戏拉配置后生效）",
 };
 
@@ -328,6 +333,7 @@ function EquipmentAppearanceKindPage({ config }: { config: KindConfig }) {
           <AppearanceEffectWorkbench
             atlas={effectEntry.key ? config.atlasOf(effectEntry.key) : ""}
             box={config.effectBox}
+            fit={config.effectFit}
             innerBox={config.effectInnerBox}
             value={effectValue}
             onChange={setEffectValue}

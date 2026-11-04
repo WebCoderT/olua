@@ -1686,20 +1686,24 @@ export default class GameUiHelper {
   }
 
   /**
-   * 把一条背景显示效果（#700）应用到背景节点：面板宽 × scale + 偏移，高度按帧原始比例自适应
+   * 把一条背景显示效果（#700）应用到背景节点：顶边贴面板顶 + 面板宽 × scale + 偏移
    *
    * 与边框的 `applyEffectToNode`（乘法）不同：背景的基准是**面板宽度**（宽度贴面板，
-   * 高度 = 宽度 × 帧原始宽高比，不拉伸变形）。「ratio 未知时退回铺满面板」只是帧
-   * 尚未加载完的过渡态，第一帧量到比例后立即按新口径重设（见 createEquipmentDetailBackground）。
-   * 偏移相对面板中心；由调用方把最终面板传进来（内容自适应，撑开后才准）。
+   * 高度 = 宽度 × 帧原始宽高比，不拉伸变形），且**顶边贴弹窗顶部**（锚点 0.5/1，
+   * 位置 = 面板顶边 + effect.y；品质背景是弹窗的「头图」，居中会在上下留出静态底图）。
+   * 「ratio 未知时退回铺满面板」只是帧尚未加载完的过渡态，第一帧量到比例后立即按
+   * 新口径重设（见 createEquipmentDetailBackground）。
+   * 由调用方把最终面板传进来（内容自适应，撑开后才准）。
    */
   private static applyBackgroundEffect(node: Node, effect: AppearanceEffect, panel: Size, ratio: number) {
     const transform = node.getComponent(UITransform);
     if (!transform) return;
+    transform.setAnchorPoint(0.5, 1);
     const width = panel.width * effect.scale;
     const height = ratio > 0 ? width * ratio : panel.height * effect.scale;
     transform.setContentSize(width, height);
-    node.setPosition(effect.x, effect.y);
+    // 弹窗锚点 0.5/0.5 → 面板顶边在本地 y = +panel.height/2；effect.y 向上为正（引擎口径）
+    node.setPosition(effect.x, panel.height / 2 + effect.y);
   }
 
   /**
@@ -1719,9 +1723,9 @@ export default class GameUiHelper {
    *
    * 为什么改结构：背景的每条配置可以带显示效果（偏移 / 缩放），「换弹窗自身帧」
    * 没有独立的变换可调（动弹窗节点会连内容一起动）。改为底层子节点后，
-   * 效果 = 面板宽 × scale + 偏移，**高度按第一帧原始宽高比自适应**（不拉伸变形：
-   * 素材本身宽高比不一，铺满面板会把有的拉高、有的压扁），默认 {0,0,1} 即
-   * 「宽度贴面板、高度等比」。
+   * 效果 = **顶边贴面板顶** + 面板宽 × scale + 偏移，高度按第一帧原始宽高比自适应
+   * （不拉伸变形：素材本身宽高比不一，铺满面板会把有的拉高、有的压扁），
+   * 默认 {0,0,1} 即「宽度贴面板、高度等比、顶边对齐」。
    * Layout 排版陷阱依旧成立：这个节点必须加在**没有 Layout 的弹窗**下（内容排版
    * 在内层 content 节点上，见 createGoodDetailDialog），先 add 让它垫在内容之下。
    * 加载完成前弹窗显示静态底图（节点比例未知，先按占位尺寸铺满作过渡）；
@@ -1904,8 +1908,8 @@ export default class GameUiHelper {
     const contentTransform = content.getComponent(UITransform)!;
     const syncDialogSize = () => {
       dialogTransform.setContentSize(contentTransform.contentSize);
-      // 背景效果乘在**最终面板宽度**上（内容撑开后才是真实面板），高度按帧比例自适应，
-      // 偏移相对面板中心（比例未量到时按铺满面板过渡，帧加载完成后已按最新比例重设）
+      // 背景效果乘在**最终面板宽度**上（内容撑开后才是真实面板），高度按帧比例自适应、
+      // 顶边贴面板顶（帧未量到比例时按铺满过渡，帧加载完成后已按最新比例重设）
       if (background) this.applyBackgroundEffect(background.node, background.effect, dialogTransform.contentSize, background.ratio.value);
     };
     content.on(Node.EventType.SIZE_CHANGED, syncDialogSize, this);
