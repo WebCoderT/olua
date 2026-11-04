@@ -1686,15 +1686,19 @@ export default class GameUiHelper {
   }
 
   /**
-   * 把一条背景显示效果（#700）应用到背景节点：面板尺寸 × scale + 偏移
+   * 把一条背景显示效果（#700）应用到背景节点：面板宽 × scale + 偏移，高度按帧原始比例自适应
    *
-   * 与边框的 `applyEffectToNode`（乘法）不同：背景的基准是**面板尺寸**（内容自适应，
-   * 撑开后才准），所以由调用方把最终面板传进来直接 set（默认 {0,0,1} = 铺满面板，与旧结构一致）。
+   * 与边框的 `applyEffectToNode`（乘法）不同：背景的基准是**面板宽度**（宽度贴面板，
+   * 高度 = 宽度 × 帧原始宽高比，不拉伸变形）。「ratio 未知时退回铺满面板」只是帧
+   * 尚未加载完的过渡态，第一帧量到比例后立即按新口径重设（见 createEquipmentDetailBackground）。
+   * 偏移相对面板中心；由调用方把最终面板传进来（内容自适应，撑开后才准）。
    */
-  private static applyBackgroundEffect(node: Node, effect: AppearanceEffect, panel: Size) {
+  private static applyBackgroundEffect(node: Node, effect: AppearanceEffect, panel: Size, ratio: number) {
     const transform = node.getComponent(UITransform);
     if (!transform) return;
-    transform.setContentSize(panel.width * effect.scale, panel.height * effect.scale);
+    const width = panel.width * effect.scale;
+    const height = ratio > 0 ? width * ratio : panel.height * effect.scale;
+    transform.setContentSize(width, height);
     node.setPosition(effect.x, effect.y);
   }
 
@@ -1715,17 +1719,20 @@ export default class GameUiHelper {
    *
    * 为什么改结构：背景的每条配置可以带显示效果（偏移 / 缩放），「换弹窗自身帧」
    * 没有独立的变换可调（动弹窗节点会连内容一起动）。改为底层子节点后，
-   * 效果 = 面板尺寸 × scale + 偏移，默认 {0,0,1} 与旧结构逐像素一致（帧画布一致、
-   * trim=false 按 offset 贴回原始画布、CUSTOM sizeMode 拉伸铺满）。
+   * 效果 = 面板宽 × scale + 偏移，**高度按第一帧原始宽高比自适应**（不拉伸变形：
+   * 素材本身宽高比不一，铺满面板会把有的拉高、有的压扁），默认 {0,0,1} 即
+   * 「宽度贴面板、高度等比」。
    * Layout 排版陷阱依旧成立：这个节点必须加在**没有 Layout 的弹窗**下（内容排版
    * 在内层 content 节点上，见 createGoodDetailDialog），先 add 让它垫在内容之下。
-   * 加载完成前弹窗显示静态底图；未分配到背景的装备（含非装备物品）返回 null、保持静态底图。
+   * 加载完成前弹窗显示静态底图（节点比例未知，先按占位尺寸铺满作过渡）；
+   * 未分配到背景的装备（含非装备物品）返回 null、保持静态底图。
    *
    * @param dialog 详情弹窗节点（背景节点随后 addChild 到它、垫底）
    * @param good 物品数据
-   * @returns 背景节点与它的效果（无背景时 null）
+   * @returns 背景节点、它的效果与**帧宽高比的可变持有者**（帧加载完成后由本方法回填，
+   *   弹窗尺寸再变时 syncDialogSize 用最新比例重算）
    */
-  static createEquipmentDetailBackground(dialog: Node, good: Goods): { node: Node; effect: AppearanceEffect } | null {
+  static createEquipmentDetailBackground(dialog: Node, good: Goods): { node: Node; effect: AppearanceEffect; ratio: { value: number } } | null {
     if (!isEquipment(good)) return null;
     const resolved = resolveEquipmentDetailBackground(good);
     const resource = resolved ? detailBackgrounds.get(resolved.key) : null;
@@ -1733,8 +1740,17 @@ export default class GameUiHelper {
     const node = UiHelper.createSprite(`${equipmentDetailBackgroundLayout.namePrefix}${resolved.key}`, "", new Vec2(), goodDetailLayout.size);
     node.getComponent(Sprite)!.sizeMode = Sprite.SizeMode.CUSTOM;
     node.addComponent(Animation);
-    AnimationHelper.playLoopDir(node.name, node, resource.dir, equipmentDetailBackgroundLayout.frameRate);
-    return { node, effect: resolved.effect };
+    const ratio = { value: 0 };
+    AnimationHelper.loadLoopFrames(resource.dir).then((frames) => {
+      // 节点/弹窗可能已被销毁（详情弹窗随鼠标移出即销毁）；帧加载失败保持过渡态铺满
+      if (!isValid(node, true) || !isValid(dialog, true) || !frames.length) return;
+      const size = frames[0].originalSize;
+      if (size.width > 0 && size.height > 0) ratio.value = size.height / size.width;
+      const dialogTransform = dialog.getComponent(UITransform);
+      if (dialogTransform) this.applyBackgroundEffect(node, resolved.effect, dialogTransform.contentSize, ratio.value);
+      AnimationHelper.playLoopDir(node.name, node, resource.dir, equipmentDetailBackgroundLayout.frameRate);
+    });
+    return { node, effect: resolved.effect, ratio };
   }
 
   /**
@@ -1888,8 +1904,9 @@ export default class GameUiHelper {
     const contentTransform = content.getComponent(UITransform)!;
     const syncDialogSize = () => {
       dialogTransform.setContentSize(contentTransform.contentSize);
-      // 背景效果乘在**最终面板尺寸**上（内容撑开后才是真实面板），偏移相对面板中心
-      if (background) this.applyBackgroundEffect(background.node, background.effect, dialogTransform.contentSize);
+      // 背景效果乘在**最终面板宽度**上（内容撑开后才是真实面板），高度按帧比例自适应，
+      // 偏移相对面板中心（比例未量到时按铺满面板过渡，帧加载完成后已按最新比例重设）
+      if (background) this.applyBackgroundEffect(background.node, background.effect, dialogTransform.contentSize, background.ratio.value);
     };
     content.on(Node.EventType.SIZE_CHANGED, syncDialogSize, this);
     syncDialogSize();
