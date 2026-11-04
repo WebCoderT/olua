@@ -2,6 +2,7 @@
   "name": "olua-admin",
   "version": "0.1.0",
   "private": true,
+  "license": "MIT",
   "type": "module",
   "description": "olua 管理端（React + Tailwind）：账号与角色管理",
   "scripts": {

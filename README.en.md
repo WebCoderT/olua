@@ -14,6 +14,8 @@ code, issues, PRs and CI all happen on GitHub (the mirror syncs periodically, ma
 [![star](https://gitee.com/putiwan/olua/badge/star.svg?theme=gvp)](https://gitee.com/putiwan/olua/stargazers)
 [![fork](https://gitee.com/putiwan/olua/badge/fork.svg?theme=gvp)](https://gitee.com/putiwan/olua/members)
 
+> If this project helps you (ideas, architecture, the AI-collaboration workflow), please give it a **Star ⭐** on [GitHub](https://github.com/WebCoderT/olua) or [Gitee](https://gitee.com/putiwan/olua) — it is the biggest encouragement for a pure-AI learning project and the motivation to keep updating it.
+
 ## The three sides
 
 The repository splits into three **peer directories**, each with its own README and FAQ.
@@ -41,6 +43,8 @@ admin (React)    ─┘      ↑ the only hand-written place for APIs
 ![Character select and creation](website/assets/img/role_selector.jpg)
 
 ![In-game interface](website/assets/img/game.jpg)
+
+> The screenshots cover login / character select / single-player combat. Multi-player on the same map (players seeing each other's appearance and HP, kill and action sync), different equipment appearance combos, and the admin console are not pictured yet — run the project yourself to see them.
 
 ## Quick start
 
@@ -290,6 +294,13 @@ Each side's README covers its internal layout. Two global conventions: **everyth
 | [client/README.md](client/README.en.md) · [client/FAQ.md](client/FAQ.en.md) | Client: opening the project, architecture and conventions, preview errors |
 | [server/README.md](server/README.en.md) · [server/FAQ.md](server/FAQ.en.md) | Server: startup and environment variables, data model, auth and permissions |
 | [admin/README.md](admin/README.en.md) · [admin/FAQ.md](admin/FAQ.en.md) | Admin: startup and build, permission-driven UI, page list |
+
+## License and commercial use
+
+- This project is open source under the **[MIT License](LICENSE)**.
+- **Commercial use is allowed**: you are free to modify, distribute, deploy and use this project commercially, provided the original copyright notice and license text are kept.
+- **No free commercial support**: all work arising from using this project for commercial purposes (running live servers, re-selling, providing paid services, deployment, tuning, scaling, compliance, after-sales, etc.) is entirely on the user. The author owes no obligation and **does not accept any form of free commercial consulting or technical support requests**.
+- Feedback is limited to the open-source community channels: issues and PRs are welcome, but response times are not guaranteed and none of this constitutes a support commitment.
 
 ## Assets and contact
 

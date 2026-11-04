@@ -14,6 +14,8 @@
 [![star](https://gitee.com/putiwan/olua/badge/star.svg?theme=gvp)](https://gitee.com/putiwan/olua/stargazers)
 [![fork](https://gitee.com/putiwan/olua/badge/fork.svg?theme=gvp)](https://gitee.com/putiwan/olua/members)
 
+> 如果这个项目对你有帮助（思路、架构、AI 协作方式），欢迎在 [GitHub](https://github.com/WebCoderT/olua) 或 [Gitee](https://gitee.com/putiwan/olua) 上点个 **Star ⭐** —— 这是对纯 AI 编写学习项目最大的鼓励，也是项目继续更新的动力。
+
 ## 三个端
 
 仓库按端分成三个**平级目录**，各自有独立的 README 与 FAQ。
@@ -41,6 +43,8 @@ admin（React）   ─┘       ↑ 唯一手写接口的地方
 ![角色选择与创建](website/assets/img/role_selector.jpg)
 
 ![游戏主界面](website/assets/img/game.jpg)
+
+> 截图覆盖登录 / 选角 / 单人战斗画面。多人同屏（同图玩家互见外观血量、击杀与动作同步）、不同装备外观组合、以及管理端运营界面暂未配图，欢迎自行下载运行查看实际效果。
 
 ## 快速开始
 
@@ -291,6 +295,13 @@ olua/
 | [client/README.md](client/README.md) · [client/FAQ.md](client/FAQ.md) | 客户端：工程怎么打开、架构与约定、预览报错 |
 | [server/README.md](server/README.md) · [server/FAQ.md](server/FAQ.md) | 服务端：启动与环境变量、数据模型、认证与权限 |
 | [admin/README.md](admin/README.md) · [admin/FAQ.md](admin/FAQ.md) | 管理端：启动与构建、权限显隐、页面清单 |
+
+## 许可与商业化
+
+- 本项目采用 **[MIT 协议](LICENSE)** 开源。
+- **允许商业化**：你可以自由地修改、分发、部署本项目的代码并用于商业用途，只需保留原版权声明与许可文本。
+- **不提供任何免费商业化支持**：将本项目用于商业目的（开服运营、二次开发销售、对外提供技术服务等）产生的所有工作（部署、调优、扩容、合规、售后等）由使用者自行承担，作者不承担任何义务，也**不接受任何形式的免费商业化咨询与技术支持请求**。
+- 问题反馈仅限开源社区渠道：欢迎提 issue 与 PR，但不保证响应时间，更不构成任何支持承诺。
 
 ## 素材与联系方式
 

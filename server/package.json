@@ -2,6 +2,7 @@
   "name": "olua-server",
   "version": "0.1.0",
   "private": true,
+  "license": "MIT",
   "description": "olua 游戏服务端（账号 / 角色，含管理端接口）",
   "engines": {
     "node": ">=22.5.0"
