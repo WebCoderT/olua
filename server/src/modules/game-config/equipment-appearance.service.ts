@@ -18,6 +18,7 @@ import { EquipmentAppearanceRepository } from "../../database/repositories/equip
 import { EquipmentRepository } from "../../database/repositories/equipment.repository";
 import {
   AppearanceAssignmentDto,
+  AppearanceItemDto,
   CustomAppearanceDto,
   EquipmentAppearanceDto,
   EquipmentBackgroundDto,
@@ -84,6 +85,8 @@ export class EquipmentAppearanceService implements OnModuleInit {
       backgrounds: JSON.stringify(toAssignmentRows(defaults.backgrounds)),
       custom_borders: JSON.stringify(defaults.customBorders),
       custom_backgrounds: JSON.stringify(defaults.customBackgrounds),
+      border_items: "[]",
+      background_items: "[]",
       updated_at: 0,
     });
     this.logger.log("equipment_appearance 无行 —— 已按出厂值补上（当前档数的前后缀组合 × 边框/背景）");
@@ -147,55 +150,166 @@ export class EquipmentAppearanceService implements OnModuleInit {
    * 校验不过 → 40000 且**整边不落库**（本边半新半旧比整边旧更难排查）。
    */
   updateBorder(dto: UpdateEquipmentBorderDto): EquipmentBorderDto {
-    this.updateKind("border", dto.assignments ?? [], dto.customs ?? []);
+    this.updateKind("border", dto.assignments ?? [], dto.customs ?? [], dto.items);
     return this.getBorder();
   }
 
   /** 单边替换 · 背景页 */
   updateBackground(dto: UpdateEquipmentBackgroundDto): EquipmentBackgroundDto {
-    this.updateKind("background", dto.assignments ?? [], dto.customs ?? []);
+    this.updateKind("background", dto.assignments ?? [], dto.customs ?? [], dto.items);
     return this.getBackground();
   }
 
-  /** 单边读的共享实现：kind 决定读哪两列 */
-  private getKind(kind: AppearanceKind): { assignments: AppearanceAssignmentDto[]; customs: CustomAppearanceDto[]; updatedAt: number } {
+  /** 单边读的共享实现：kind 决定读哪几列（清单 + 映射 + 自定义表） */
+  private getKind(kind: AppearanceKind): { items: AppearanceItemDto[]; assignments: AppearanceAssignmentDto[]; customs: CustomAppearanceDto[]; updatedAt: number } {
     const spec = KIND_SPECS[kind];
     const row = this.repository.get();
+    const assignments = this.effectiveAssignments(row, spec);
+    const customs = this.effectiveCustoms(row, spec);
     return {
-      assignments: this.effectiveAssignments(row, spec),
-      customs: this.effectiveCustoms(row, spec),
+      items: this.effectiveItems(row, spec, assignments, customs),
+      assignments,
+      customs,
       updatedAt: Number(row?.updated_at) || 0,
     };
   }
 
   /**
-   * 单边写的共享实现：另一边两列从当前行**原样带回**（行缺失时先按出厂值垫底 ——
+   * 单边写的共享实现：另一边的列从当前行**原样带回**（行缺失时先按出厂值垫底 ——
    * 正常情况下 onModuleInit 已 seed 过，这里只是防御）。
+   *
+   * ## 清单与引用（#714）
+   * `items` 是边框 / 背景清单本体：不传 = 沿用库里的清单并自动并入被引用的 key
+   * （老调用方与既有 e2e 兼容）；传了 = 整份替换，且——
+   * - 每个被引用的 key（棋盘 + 自定义表）都必须在清单里（删掉被引用的条目 → 400）；
+   * - **引用处的 effect 以清单为准传播**：清单是效果的唯一来源，棋盘 / 自定义表里的
+   *   effect 字段只是给客户端快照的副本（契约不变），写库时按清单覆盖。
    */
-  private updateKind(kind: AppearanceKind, assignments: AppearanceAssignmentDto[], customs: CustomAppearanceDto[]): void {
+  private updateKind(kind: AppearanceKind, assignments: AppearanceAssignmentDto[], customs: CustomAppearanceDto[], items?: AppearanceItemDto[]): void {
     const spec = KIND_SPECS[kind];
     this.assertFullCoverage(assignments, spec);
     const checkedCustoms = this.assertUniqueCustoms(customs, spec);
+    const current = this.repository.get();
+    const checkedItems = this.assertUniqueItems(items, spec, current, assignments, checkedCustoms);
+
+    // 引用完整性：每个被引用的 key 都得在清单里（清单是唯一实体来源）
+    const known = new Set(checkedItems.map((item) => item.key));
+    for (const [index, row] of assignments.entries()) {
+      if (!known.has(row.key)) {
+        throw new BizException(
+          BizCode.PARAM_INVALID,
+          `${spec.label}表第 ${index + 1} 条（${row.prefix}|${row.suffix}）引用的「${row.key}」不在清单里 —— 先在清单里添加它，或改引用别的 ${spec.label}`,
+        );
+      }
+    }
+    for (const [index, row] of checkedCustoms.entries()) {
+      if (!known.has(row.key)) {
+        throw new BizException(
+          BizCode.PARAM_INVALID,
+          `${spec.label}自定义表第 ${index + 1} 条（${row.equipment}）引用的「${row.key}」不在清单里 —— 先在清单里添加它，或改引用别的 ${spec.label}`,
+        );
+      }
+    }
+
+    // effect 以清单为准传播进引用处（客户端快照契约不变：effect 仍在 assignments / customs 条目上）
+    const effectOf = (key: string): AppearanceEffect | undefined => checkedItems.find((item) => item.key === key)?.effect;
+    const propagatedAssignments = assignments.map((row) => ({ prefix: row.prefix, suffix: row.suffix, key: row.key, ...(effectOf(row.key) ? { effect: effectOf(row.key) } : {}) }));
+    const propagatedCustoms = checkedCustoms.map((row) => ({ equipment: row.equipment, key: row.key, ...(effectOf(row.key) ? { effect: effectOf(row.key) } : {}) }));
 
     const { prefixCount, suffixCount } = this.tiers();
     const defaults = buildAppearanceDefaults(prefixCount, suffixCount);
-    const row: EquipmentAppearanceRow = this.repository.get() ?? {
+    const row: EquipmentAppearanceRow = current ?? {
       id: 1,
       borders: JSON.stringify(toAssignmentRows(defaults.borders)),
       backgrounds: JSON.stringify(toAssignmentRows(defaults.backgrounds)),
       custom_borders: "[]",
       custom_backgrounds: "[]",
+      border_items: "[]",
+      background_items: "[]",
       updated_at: 0,
     };
     if (kind === "border") {
-      row.borders = JSON.stringify(toAssignmentRows(assignments));
-      row.custom_borders = JSON.stringify(checkedCustoms);
+      row.borders = JSON.stringify(toAssignmentRows(propagatedAssignments));
+      row.custom_borders = JSON.stringify(propagatedCustoms);
+      row.border_items = JSON.stringify(checkedItems);
     } else {
-      row.backgrounds = JSON.stringify(toAssignmentRows(assignments));
-      row.custom_backgrounds = JSON.stringify(checkedCustoms);
+      row.backgrounds = JSON.stringify(toAssignmentRows(propagatedAssignments));
+      row.custom_backgrounds = JSON.stringify(propagatedCustoms);
+      row.background_items = JSON.stringify(checkedItems);
     }
     row.updated_at = Date.now();
     this.repository.update(row);
+  }
+
+  /** 清单提交校验：key 唯一且格式合法、effect 合法；不传 = 库里清单 ∪ 被引用 key（自动补齐，见 effectiveItems） */
+  private assertUniqueItems(
+    items: AppearanceItemDto[] | undefined,
+    spec: KindSpec,
+    row: EquipmentAppearanceRow | undefined,
+    assignments: AppearanceAssignmentDto[],
+    customs: CustomAppearanceDto[],
+  ): AppearanceItemDto[] {
+    if (items === undefined) return this.effectiveItems(row, spec, assignments, customs);
+    const seen = new Set<string>();
+    for (const [index, item] of items.entries()) {
+      if (seen.has(item.key)) {
+        throw new BizException(BizCode.PARAM_INVALID, `${spec.label}清单第 ${index + 1} 条的 key「${item.key}」重复了（清单里每个 key 只能有一条）`);
+      }
+      seen.add(item.key);
+      const problem = appearanceKeyProblem(item.key, spec.kind);
+      if (problem) {
+        throw new BizException(BizCode.PARAM_INVALID, `${spec.label}清单第 ${index + 1} 条：${problem}`);
+      }
+      const effectProblem = effectProblemOf(item.effect);
+      if (effectProblem) {
+        throw new BizException(BizCode.PARAM_INVALID, `${spec.label}清单第 ${index + 1} 条（${item.key}）的显示效果：${effectProblem}`);
+      }
+    }
+    return items.map((item) => ({ key: item.key, ...(item.effect ? { effect: item.effect } : {}) }));
+  }
+
+  /**
+   * 清单读取（#714）：库里的注册表 ∪ 被引用的 key
+   *
+   * 出厂 / 老库里注册表是空的 —— 被引用的 key（棋盘 15 格 + 自定义表）自动补进清单，
+   * effect 取引用处的现值，所以**老数据零迁移**：GET 出来的清单天然完整。
+   * 坏条目（key 格式不对 / effect 坏）丢掉，与自定义表同一自愈口径。
+   */
+  private effectiveItems(row: EquipmentAppearanceRow | undefined, spec: KindSpec, assignments: AppearanceAssignmentDto[], customs: CustomAppearanceDto[]): AppearanceItemDto[] {
+    const items: AppearanceItemDto[] = [];
+    const seen = new Set<string>();
+    if (row) {
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(row[spec.itemColumn]);
+      } catch {
+        this.logger.error(`equipment_appearance.${spec.itemColumn} 不是合法 JSON —— ${spec.label}清单按空表处理（引用处会自动补齐）`);
+        parsed = [];
+      }
+      if (Array.isArray(parsed)) {
+        for (const item of parsed) {
+          if (!item || typeof item !== "object") continue;
+          const source = item as Record<string, unknown>;
+          const key = typeof source.key === "string" ? source.key : "";
+          if (!key || seen.has(key) || appearanceKeyProblem(key, spec.kind)) continue;
+          const effect = effectiveAppearanceEffect(source.effect);
+          if (source.effect !== undefined && source.effect !== null && !effect) {
+            this.logger.warn(`equipment_appearance.${spec.itemColumn} 有一条（${key}）的 effect 坏了 —— 该条回落默认效果`);
+          }
+          items.push({ key, ...(effect ? { effect } : {}) });
+          seen.add(key);
+        }
+      }
+    }
+    // 引用处自动补齐（effect 取引用处现值）：保证 GET 出来的清单覆盖所有在用的 key
+    const append = (key: string, effect: AppearanceEffect | undefined) => {
+      if (seen.has(key)) return;
+      items.push({ key, ...(effect ? { effect } : {}) });
+      seen.add(key);
+    };
+    for (const assignment of assignments) append(assignment.key, assignment.effect);
+    for (const custom of customs) append(custom.key, custom.effect);
+    return items;
   }
 
   /** 前后缀映射表：当前档数的组合恰好全覆盖、各一次、key 与 effect 格式合法 */
@@ -344,6 +458,8 @@ interface KindSpec {
   assignmentColumn: "borders" | "backgrounds";
   /** 行里的自定义表列 */
   customColumn: "custom_borders" | "custom_backgrounds";
+  /** 行里的实体清单列（#714：清单本体，引用处只存 key） */
+  itemColumn: "border_items" | "background_items";
   /** 出厂值里对应的键 */
   seedKey: "borders" | "backgrounds";
 }
@@ -351,8 +467,8 @@ interface KindSpec {
 type AppearanceKind = "border" | "background";
 
 const KIND_SPECS: Record<AppearanceKind, KindSpec> = {
-  border: { label: "边框", kind: "border", assignmentColumn: "borders", customColumn: "custom_borders", seedKey: "borders" },
-  background: { label: "详情背景", kind: "background", assignmentColumn: "backgrounds", customColumn: "custom_backgrounds", seedKey: "backgrounds" },
+  border: { label: "边框", kind: "border", assignmentColumn: "borders", customColumn: "custom_borders", itemColumn: "border_items", seedKey: "borders" },
+  background: { label: "详情背景", kind: "background", assignmentColumn: "backgrounds", customColumn: "custom_backgrounds", itemColumn: "background_items", seedKey: "backgrounds" },
 };
 
 /** effect 缺省合法（不传 = 默认效果）；传了就按人话校验 */

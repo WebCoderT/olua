@@ -17,8 +17,8 @@ export class EquipmentAppearanceRepository {
   /** seed 单行（已存在则跳过） */
   seed(row: EquipmentAppearanceRow): void {
     this.db.run(
-      "INSERT OR IGNORE INTO equipment_appearance (id, borders, backgrounds, custom_borders, custom_backgrounds, updated_at) VALUES (1, ?, ?, ?, ?, ?)",
-      [row.borders, row.backgrounds, row.custom_borders, row.custom_backgrounds, row.updated_at],
+      "INSERT OR IGNORE INTO equipment_appearance (id, borders, backgrounds, custom_borders, custom_backgrounds, border_items, background_items, updated_at) VALUES (1, ?, ?, ?, ?, ?, ?, ?)",
+      [row.borders, row.backgrounds, row.custom_borders, row.custom_backgrounds, row.border_items, row.background_items, row.updated_at],
     );
   }
 
@@ -28,8 +28,8 @@ export class EquipmentAppearanceRepository {
 
   update(row: EquipmentAppearanceRow): { changes: number } {
     return this.db.execute(
-      "UPDATE equipment_appearance SET borders = ?, backgrounds = ?, custom_borders = ?, custom_backgrounds = ?, updated_at = ? WHERE id = 1",
-      [row.borders, row.backgrounds, row.custom_borders, row.custom_backgrounds, row.updated_at],
+      "UPDATE equipment_appearance SET borders = ?, backgrounds = ?, custom_borders = ?, custom_backgrounds = ?, border_items = ?, background_items = ?, updated_at = ? WHERE id = 1",
+      [row.borders, row.backgrounds, row.custom_borders, row.custom_backgrounds, row.border_items, row.background_items, row.updated_at],
     );
   }
 }

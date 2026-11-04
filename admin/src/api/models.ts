@@ -1864,6 +1864,17 @@ export type CustomAppearance = {
   effect?: AppearanceEffect;
 };
 
+export type AppearanceItem = {
+  /**
+   * 边框 / 背景 key（客户端资源清单里的 sfx 编号）
+   */
+  key: string;
+  /**
+   * 显示效果（#700；不传 = {0,0,1} 即默认适配结果）
+   */
+  effect?: AppearanceEffect;
+};
+
 export type UpdateEquipmentBorder = {
   /**
    * 前后缀组合 → 边框（整边替换，恰好覆盖当前档数的每种组合且不重复）
@@ -1873,6 +1884,10 @@ export type UpdateEquipmentBorder = {
    * 特殊装备 → 边框（整边替换；装备标识不可重复）
    */
   customs: CustomAppearance[];
+  /**
+   * 边框清单（整份替换；被引用的 key 必须在清单里）
+   */
+  items?: AppearanceItem[];
   /**
    * 修改备注（写进审计日志的上下文，便于追溯「为什么改」）
    */
@@ -1888,6 +1903,10 @@ export type UpdateEquipmentBackground = {
    * 特殊装备 → 详情背景（整边替换；装备标识不可重复）
    */
   customs: CustomAppearance[];
+  /**
+   * 背景清单（整份替换；被引用的 key 必须在清单里）
+   */
+  items?: AppearanceItem[];
   /**
    * 修改备注（写进审计日志的上下文，便于追溯「为什么改」）
    */
@@ -4918,6 +4937,10 @@ export type EquipmentVariantRebuildResult = {
 
 export type EquipmentBorder = {
   /**
+   * 边框清单本体（#714；棋盘与自定义表只引用这里的 key）
+   */
+  items: AppearanceItem[];
+  /**
    * 前后缀组合 → 边框（恰好覆盖当前档数的每种组合、各一条）
    */
   assignments: AppearanceAssignment[];
@@ -4932,6 +4955,10 @@ export type EquipmentBorder = {
 };
 
 export type EquipmentBackground = {
+  /**
+   * 背景清单本体（#714；棋盘与自定义表只引用这里的 key）
+   */
+  items: AppearanceItem[];
   /**
    * 前后缀组合 → 详情背景（恰好覆盖当前档数的每种组合、各一条）
    */
