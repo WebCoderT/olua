@@ -49,6 +49,11 @@ export default class MonsterManager {
   /** 实例 id -> 怪物节点（服务端结算按 targetId 找落点；换图清场时一起清） */
   private static instanceIndex = new Map<string, Node>();
 
+  /** 按实例 id 取怪物节点（#693 互见动作的朝向与特效落点用；不在场返回 null） */
+  static nodeOf(instanceId: string): Node | null {
+    return this.instanceIndex.get(instanceId) ?? null;
+  }
+
   /** 实例 id 发牌器（会话内单调递增；世界权威 #35 后只服务回滚路径，正常发牌归服务端） */
   private static instanceSeq = 0;
 

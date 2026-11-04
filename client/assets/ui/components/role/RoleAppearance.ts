@@ -142,6 +142,24 @@ export default class RoleAppearance {
     this.weaponAnimate?.crossFade(animationName, 0.1);
   }
 
+  /**
+   * 播放远端玩家的一次性动作（#693 互见动作：别人的攻击 / 技能动画）
+   *
+   * 与 playInjured 同款模式：crossFade 到目标动画但**不改** this.action / this.direction ——
+   * 动画播完由 loadAnimation 注册的 FINISHED 续播自动把画面带回走 / 站（attack 命名的动画
+   * 会触发 onAttackFinished，远端视图的回调是空实现，无副作用）。
+   * 与 playInjured 的差别：**不跳过正在播的同名动画** —— 出手者是按攻击间隔出手的，
+   * 上一段还没播完就来了下一次出手，重启动画才是对的（playInjured 的「连环挨打不重启」
+   * 是防抖口径，这里恰恰相反）。外观缺这段动画（缺段 / 该动作需要武器而没拿）时静默跳过。
+   */
+  playRemoteAction(action: ACTION, direction: DIRECTION) {
+    if (this.dead) return;
+    const animationName = getAnimationName(action, direction);
+    if (!this.clothAnimate || !this.clothAnimate.getState(animationName)) return;
+    this.clothAnimate.crossFade(animationName, 0.1);
+    this.weaponAnimate?.crossFade(animationName, 0.1);
+  }
+
   /** 重新加载衣服动画：无衣服时按性别回退默认外观，保证角色始终有身体 */
   private reloadClothAnimation(source: RoleOutSource) {
     const cloth = getEquipment(source.equipments.cloth);

@@ -32,6 +32,7 @@ import {
   type RealtimeMonsterAiMessage,
   type RealtimePickedMessage,
   type RealtimeRoleUpdateMessage,
+  type RealtimePlayerAction,
   type RealtimePlayerEntry,
   type RealtimePlayersMessage,
   type RealtimeQuestMessage,
@@ -663,13 +664,18 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
    */
   private visiblePlayers(
     viewerAccountId: string,
-    data: { mapId: string; full: boolean; players: RealtimePlayerEntry[]; left: string[] },
-  ): { mapId: string; full: boolean; players: RealtimePlayerEntry[]; left: string[] } {
+    data: { mapId: string; full: boolean; players: RealtimePlayerEntry[]; left: string[]; actions: RealtimePlayerAction[] },
+  ): { mapId: string; full: boolean; players: RealtimePlayerEntry[]; left: string[]; actions: RealtimePlayerAction[] } {
     const viewerRoleId = this.presence.identityOf(viewerAccountId)?.roleId ?? "";
     if (!viewerRoleId) return data;
     const players = data.players.filter((entry) => !this.blocks.hiddenFor(viewerRoleId, entry.roleId ?? ""));
+    // 动作事件与 players 同口径（#693）：拉黑的人出手的动画也不该出现在我的屏幕上
+    const actions = data.actions.filter((action) => {
+      const actorRoleId = this.presence.identityOf(action.accountId)?.roleId ?? "";
+      return !this.blocks.hiddenFor(viewerRoleId, actorRoleId);
+    });
     // 没有要滤掉的条目时原样返回：这条路径每 200ms 跑一遍，能少建一个对象就少建一个
-    return players.length === data.players.length ? data : { ...data, players };
+    return players.length === data.players.length && actions.length === data.actions.length ? data : { ...data, players, actions };
   }
 
   //#endregion

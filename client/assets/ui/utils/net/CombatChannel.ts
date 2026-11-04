@@ -170,6 +170,22 @@ export interface PlayersFrame {
   players: PlayerEntry[];
   /** 已离开的账号（增量帧用；full 帧里恒为空数组） */
   left: string[];
+  /** #693：这一拍发生的玩家动作（攻击/技能动画的跨端演出；旧服务端不带时按空数组处理） */
+  actions?: PlayerActionEntry[];
+}
+
+/**
+ * 玩家互见广播帧里的一条动作事件（#693：协议见 realtime.protocol 的 RealtimePlayerAction）
+ *
+ * settle 只回出手者本人，观看者对「他出了一次手」一无所知 —— 这条事件就是那个来源；
+ * 出手者自己也会收到，客户端按 accountId 跳过（本地已经演过，再来一次会重复）。
+ */
+export interface PlayerActionEntry {
+  accountId: string;
+  /** 技能 id（普攻也是技能，如 "1000"；客户端按配置播动作动画与特效） */
+  skillId: string;
+  /** 目标怪物实例 id（客户端据此定朝向与特效落点；取不到目标时特效退回释放者身上） */
+  targetId?: string;
 }
 
 /** 拾取入包后实际写入的背包格子（#325：叠加进已有堆 = 那一格更新后的形状；装备 = 新占的格子） */
