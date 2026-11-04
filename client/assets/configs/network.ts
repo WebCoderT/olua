@@ -4,75 +4,39 @@
  * 铁律：客户端代码里不允许再出现任何服务端地址字面量
  * （自查 `node tools/audit-api-hardcode.cjs`）。
  *
- * baseUrl **按当前页面的 host 在运行时决定**，一份产物两处通用（#697）：
- *   - 本机 / 局域网预览（Cocos :7456、局域网 IP）→ `http://localhost:3100/api`，直连本机服务端
- *   - 公网（服务器 IP、game.yimw.cn 等域名）      → `/api`，同源，由 nginx 反代到服务端
+ * 开发环境与打包产物的差异**不自动判断**，全部由下面唯一的 `DEV_MODE` 开关手动控制：
+ *   - `true`（开发）  → `http://localhost:3100/api`，Cocos 预览直连本机服务端
+ *   - `false`（打包） → `/api`，同源，由 nginx 反代到服务端
  *
- * 为什么不能写死成常量：写 `localhost:3100` 时公网玩家的浏览器会去连**自己电脑**的 3100，
- * 写 `/api` 时本机预览又没有同源后端 —— 两种写法各错一半，只能按 host 判。
+ * ## 发布流程里的一步
+ * **每次打包发布前把 `DEV_MODE` 改成 `false`，打完开发就改回 `true`** —— 忘了改的后果：
+ *   - 带着true发布：线上玩家去连自己电脑的 3100，全部连不上；
+ *   - 开发时改成 false：预览页没有同源后端，请求全 404。
+ * 两种都很好发现（请求层会在控制台报错），改回来即可。
  *
- * 判据是「这个 host 是不是开发机/内网」：回环、私有网段、`.local`、不带主机名（原生/模拟器）
- * 都算本地；其余（公网 IP、域名）一律走同源 `/api`。
- *
- * ## 预览/调试覆盖（页面参数 = 运行环境里的「环境变量」）
- * Cocos 预览没有进程环境变量可注（预览页跑在浏览器里），但页面 URL 的查询参数永远够得着：
- *   - `?oluaApi=http://192.168.1.5:3100/api` —— 直接连这台机器的服务端（同机调试、真机预览都好用）
- *   - `?oluaApiEnv=prod` —— 强制走同源 `/api`（本机模拟线上环境，验证反代路径）
- *   - `?oluaApiEnv=local` —— 强制直连本机 3100
- * 两个参数都只影响本次页面加载，刷新/关掉即恢复自动判定；打包后的网页版同样支持。
+ * 实时通道（WebSocket）地址由 baseUrl 推导（`http→ws` / `https→wss`，见
+ * ui/utils/net/RealtimeClient 的 buildRealtimeUrl），不在这里重复配置。
  *
  * 与服务端默认值对应关系：server/.env 的 PORT=3100 + API_PREFIX=api。
  */
 
-/** 预览覆盖：页面查询参数指定的地址（null = 没有指定，走 host 自动判定） */
-function overrideFromQuery(): string | null {
-  const scope = globalThis as unknown as { location?: { search?: string } };
-  const search = scope.location?.search ?? "";
-  // URLSearchParams 是浏览器内置；原生/模拟器可能没有，那就当没给参数
-  if (!search || typeof URLSearchParams !== "function") return null;
-  const params = new URLSearchParams(search);
-  const env = params.get("oluaApiEnv");
-  if (env === "prod") return "/api";
-  if (env === "local") return "http://localhost:3100/api";
-  const explicit = params.get("oluaApi");
-  return explicit && explicit.trim() ? explicit.trim() : null;
-}
+/**
+ * 是否为开发模式（**唯一的开发/打包差异开关**）
+ *
+ * 以后再有「开发和打包行为不一样」的配置（地址、日志、调试工具……）都加到这里，
+ * 用 `DEV_MODE ? 开发值 : 打包值` 表达，不再各写各的开关。
+ */
+export const DEV_MODE = true;
 
-/** 本机 / 内网才直连 3100；公网（含服务器公网 IP 与域名）走同源反代 */
-function isLocalHost(host: string): boolean {
-  if (!host) return true; // 原生端 / 模拟器 / file:// —— 没有页面主机名，按本地开发处理
-  if (host === "localhost" || host === "127.0.0.1" || host === "[::1]" || host === "::1" || host === "0.0.0.0") return true;
-  if (host.endsWith(".local") || host.endsWith(".localhost")) return true;
-  // 私有网段：10.0.0.0/8 · 172.16.0.0/12 · 192.168.0.0/16
-  if (/^10\./.test(host)) return true;
-  if (/^192\.168\./.test(host)) return true;
-  const m = /^172\.(\d{1,3})\./.exec(host);
-  if (m && Number(m[1]) >= 16 && Number(m[1]) <= 31) return true;
-  return false;
-}
+/** 开发模式连的本机服务端（Cocos 预览 / 局域网真机调试） */
+const DEV_BASE_URL = "http://localhost:3100/api";
 
-/** 当前页面的主机名（非浏览器环境 / 取不到时给空串） */
-function currentHost(): string {
-  const scope = globalThis as unknown as { location?: { hostname?: string } };
-  return String(scope.location?.hostname ?? "").toLowerCase();
-}
-
-function resolveBaseUrl(): string {
-  const override = overrideFromQuery();
-  if (override) {
-    console.info(`[network] baseUrl 被页面参数覆盖：${override}`);
-    return override;
-  }
-  const host = currentHost();
-  const base = isLocalHost(host) ? "http://localhost:3100/api" : "/api";
-  // 预览时最常疑惑的就是「为什么没直连 3100」——把判定依据打出来，一眼看到 host 到底是什么
-  console.info(`[network] 按 host 判定 baseUrl：host=${host || "(空)"} → ${base}`);
-  return base;
-}
+/** 打包产物走的同源地址（nginx 反代到服务端） */
+const PROD_BASE_URL = "/api";
 
 export const networkConfig = {
   /** 接口根地址（后面接 ui/utils/net/ApiRoutes 里登记的路由） */
-  baseUrl: resolveBaseUrl(),
+  baseUrl: DEV_MODE ? DEV_BASE_URL : PROD_BASE_URL,
   /** 单次请求超时（毫秒） */
   timeout: 10000,
   /** 网络层失败（连不上 / 超时）的重试次数；业务失败不重试 */

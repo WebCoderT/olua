@@ -439,19 +439,21 @@ async function expectFailure(action) {
   );
 
   const networkSource = read(FILE.network);
-  // #697：baseUrl 按页面 host 运行时判定（本机/内网直连 3100，公网同源 /api）。
-  // 铁律不变：地址字面量与判定逻辑只住在 configs/network.ts（自查 tools/audit-api-hardcode.cjs）
+  // #704：开发/打包差异不自动判断，由唯一的 DEV_MODE 手动开关控制
+  // 铁律不变：地址字面量与开关只住在 configs/network.ts（自查 tools/audit-api-hardcode.cjs）
   check(
-    /function isLocalHost/.test(networkSource) && /function resolveBaseUrl/.test(networkSource) && /localhost:3100\/api/.test(networkSource),
-    "configs/network 是客户端唯一地址来源（host 判定 + 两个 baseUrl 都在本文件）",
+    /export const DEV_MODE = (true|false);/.test(networkSource),
+    "configs/network 有唯一的 DEV_MODE 手动开关（开发/打包差异不再自动判断）",
   );
   check(
-    /oluaApi/.test(networkSource) && /oluaApiEnv/.test(networkSource) && /overrideFromQuery/.test(networkSource),
-    "预览可用页面参数覆盖 baseUrl（?oluaApi=<地址> / ?oluaApiEnv=local|prod）——Cocos 预览没有环境变量，URL 参数就是它的环境变量",
+    /DEV_MODE \? DEV_BASE_URL : PROD_BASE_URL/.test(networkSource) &&
+      /const DEV_BASE_URL = "http:\/\/localhost:3100\/api";/.test(networkSource) &&
+      /const PROD_BASE_URL = "\/api";/.test(networkSource),
+    "baseUrl 由 DEV_MODE 三元给出（两个字面量都登记在本文件）",
   );
   check(
-    /按 host 判定 baseUrl/.test(networkSource) && /console\.info/.test(networkSource),
-    "host 判定打一条诊断日志（预览时「为什么没直连 3100」一眼能看到 host 是什么）",
+    !/isLocalHost|currentHost|oluaApi/.test(networkSource),
+    "host 自动判定与页面参数覆盖已移除（不留第二条改变地址的通道）",
   );
   //#endregion
 
