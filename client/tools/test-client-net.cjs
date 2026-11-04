@@ -445,6 +445,14 @@ async function expectFailure(action) {
     /function isLocalHost/.test(networkSource) && /function resolveBaseUrl/.test(networkSource) && /localhost:3100\/api/.test(networkSource),
     "configs/network 是客户端唯一地址来源（host 判定 + 两个 baseUrl 都在本文件）",
   );
+  check(
+    /oluaApi/.test(networkSource) && /oluaApiEnv/.test(networkSource) && /overrideFromQuery/.test(networkSource),
+    "预览可用页面参数覆盖 baseUrl（?oluaApi=<地址> / ?oluaApiEnv=local|prod）——Cocos 预览没有环境变量，URL 参数就是它的环境变量",
+  );
+  check(
+    /按 host 判定 baseUrl/.test(networkSource) && /console\.info/.test(networkSource),
+    "host 判定打一条诊断日志（预览时「为什么没直连 3100」一眼能看到 host 是什么）",
+  );
   //#endregion
 
   finish("PASS：客户端网络层（包裹解包 / 令牌 / 静默 / 防抖同步 / 接线）行为与接线全部通过。");
