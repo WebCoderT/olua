@@ -4,14 +4,17 @@ import { roleShowLayout } from "../../configs/layout/hud";
 import { RELATION, RelationKind, getRelationColor, resolveRelation } from "../../configs/social";
 import { ACTION, DIRECTION } from "../../types/animation";
 import { SEX } from "../../types/role";
+import { findSkillConfig } from "../../configs/skill";
 import RoleAppearance, { RoleOutSource } from "../components/role/RoleAppearance";
+import EffectManager from "./EffectManager";
 import LayerManager from "./LayerManager";
+import MonsterManager from "./MonsterManager";
 import GameUiHelper from "../helpers/GameUiHelper";
 import UiHelper from "../helpers/UiHelper";
 import { getDirectionByVector } from "../utils/battle/BattleMath";
 import SocialStore from "./SocialStore";
 import PartyStore from "./PartyStore";
-import type { PlayerAppearance, PlayerEntry, PlayersFrame } from "../utils/net/CombatChannel";
+import type { PlayerActionEntry, PlayerAppearance, PlayerEntry, PlayersFrame } from "../utils/net/CombatChannel";
 
 /**
  * 互见帧没带外观时的兜底（#383）：旧服务端不发 appearance 字段，
@@ -116,8 +119,9 @@ export interface NearbyPlayer {
  * 不拆不建节点，也不重新请求任何一个帧。
  *
  * ## 演出的边界（刻意留着）
- * - **没有战斗动作**：对方放技能 / 挨打 / 倒地都不会在别人屏幕上播 —— 那需要互见帧
- *   再带一条事件流（他在放什么、打谁），是独立的一刀。现在最多看到他在走 / 站。
+ * - **战斗动作只演「出手」**（#693）：互见帧带 actions 事件流（他在放什么技能、打向哪只怪），
+ *   收到就播动作动画与技能特效 —— 但挨打 / 倒地仍不在别人屏幕上演（受击的权威结果在
+ *   monster-ai 帧的 hits 里、只带血量；要演「他挨打了」得再带一条事件，是独立的一刀）。
  * - **没有军衔**：头顶那行红字按 0 建占位，恒为空行（军衔不随互见帧下发）。
  * - **位置不权威**：坐标就是对方客户端上报的值，本地只做插值平滑，不校正。
  */
@@ -147,6 +151,11 @@ export default class OtherPlayerManager {
     for (const entry of frame.players) {
       if (entry.accountId === selfAccountId) continue;
       this.upsert(entry);
+    }
+    // 动作事件（#693）：别人的攻击 / 技能动画 —— 自己的按 accountId 跳过（本地已演过）
+    for (const action of frame.actions ?? []) {
+      if (action.accountId === selfAccountId) continue;
+      this.playAction(action);
     }
   }
 
@@ -300,6 +309,31 @@ export default class OtherPlayerManager {
     if (isValid(view.node)) view.node.destroy();
   }
 
+  /**
+   * 演一条远端玩家的动作事件（#693）：攻击 / 技能动画 + 技能特效
+   *
+   * - 动画：按技能配置的 action 走 `playRemoteAction`（一次性，播完自动续播走 / 站）；
+   * - 朝向：带 targetId 且目标怪还在场上时，面向目标（打向哪就面向哪）；取不到保持当前朝向；
+   * - 特效：配置带 effect 就播（落点 = 目标怪物节点，取不到时 EffectManager 自己退回释放者身上）；
+   * - 静默降级：技能配置查不到（快照落后 / 技能被删）、外观缺动作段时跳过 —— 演不出可以接受，
+   *   报错不行。人不在场上（动作到之前他换图 / 掉线了）同样跳过。
+   */
+  private static playAction(action: PlayerActionEntry): void {
+    const view = this.others.get(action.accountId);
+    if (!view || !isValid(view.node)) return;
+    const config = findSkillConfig(action.skillId);
+    if (!config) return;
+    const target = action.targetId ? MonsterManager.nodeOf(action.targetId) : null;
+    let direction = view.direction;
+    if (target && isValid(target)) {
+      const from = view.node.getWorldPosition();
+      const to = target.getWorldPosition();
+      direction = getDirectionByVector(new Vec2(to.x - from.x, to.y - from.y));
+    }
+    view.appearance.playRemoteAction(config.action, direction);
+    if (config.effect) EffectManager.play(config, view.node, target && isValid(target) ? target : null, { speedRate: defaultRoleSpeedRate });
+  }
+
   private static create(entry: PlayerEntry): OtherPlayerView {
     /** 宿主节点（几何与主角一致：锚点 (0.5, 0)、roleBody 同尺寸，原点在脚底 —— 互见的坐标才有可比性） */
     const node = new Node(`other_player_${entry.accountId}`);
@@ -309,7 +343,8 @@ export default class OtherPlayerManager {
     node.setPosition(entry.x, entry.y);
     const appearance = entry.appearance ?? DEFAULT_APPEARANCE;
     // 外观装配与主角同一份代码（#383）：衣服 / 武器两个子节点由它在构造函数里挂到宿主上。
-    // 攻击完成的回调给空实现 —— 远端玩家不播攻击动作（见类注释的边界）。
+    // 攻击完成的回调给空实现 —— 远端玩家的攻击锁在逻辑层不存在（#693 起动作动画照播，
+    // 但那只是演出，FINISHED 续播走 / 站由外观自己完成，宿主不需要解锁回调）。
     const roleAppearance = new RoleAppearance(node, () => {});
     const source = toOutSource(appearance);
     roleAppearance.updateOutShow(source, ACTION.STAND, DIRECTION.DOWN);

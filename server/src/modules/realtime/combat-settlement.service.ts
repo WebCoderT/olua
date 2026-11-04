@@ -264,6 +264,11 @@ export class CombatSettlementService {
       this.monsterAi.provoke(cast.targetId, accountId);
     }
 
+    // 玩家动作事件（#693）：观看者据此播「他出手了」的攻击/技能动画 —— settle 只回出手者
+    // 本人，不记这条，别人的屏幕上他永远站着发呆。普攻与技能同一形状（普攻也是技能）。
+    // 只在新结算路径记 —— 幂等重发在上面早退，不会重复广播。
+    this.presence.recordAction(target.zoneId, target.mapId, { accountId, skillId: cast.skillId, targetId: cast.targetId });
+
     this.logger.debug(
       `结算：账号 ${accountId} 技能 ${cast.skillId}(Lv${skillLevel}) → 目标 ${cast.targetId}(${cast.monsterKey}) 伤害 ${damage}，血量 ${applied.hp}/${target.maxHp}${applied.killed ? "，击杀" : ""}${reward ? `，经验 +${reward.exp}，掉落 ${reward.drops.length} 种` : ""}`,
     );

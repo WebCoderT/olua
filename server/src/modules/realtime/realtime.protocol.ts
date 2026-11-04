@@ -409,7 +409,24 @@ export interface RealtimePlayersMessage {
     players: RealtimePlayerEntry[];
     /** 已离开的账号（增量帧用；full 帧里恒为空数组） */
     left: string[];
+    /** #693：这一拍发生的玩家动作（攻击/技能动画的跨端演出；没有动作时是空数组） */
+    actions: RealtimePlayerAction[];
   };
+}
+
+/**
+ * 玩家互见广播帧里的一条动作事件（#693）
+ *
+ * `settle` 只回给出手者本人（#34 的权威设计），同图观看者对「他出了一次手」一无所知 ——
+ * 这条事件把**演出所需的最小集合**广播给全图：谁（accountId）、用的什么技能（skillId，
+ * 普攻也是技能，如 "1000"）、打向哪只怪（targetId，客户端据此定朝向与特效落点；
+ * 取不到目标时特效退回释放者身上）。出手者自己也会收到同一帧 —— 客户端按 accountId
+ * 跳过（自己的动作在 settle 路径上已经演过，这里再来一次会重复）。
+ */
+export interface RealtimePlayerAction {
+  accountId: string;
+  skillId: string;
+  targetId?: string;
 }
 
 //#endregion

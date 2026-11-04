@@ -3,7 +3,7 @@ import { ConfigService } from "@nestjs/config";
 import { GuildRepository } from "../../database/repositories/guild.repository";
 import { roleAttributeSourceOf, summarizeRoleAttributes } from "../combat/role-attributes";
 import { RolesService } from "../roles/roles.service";
-import type { RealtimePlayerAppearance, RealtimePlayerEntry } from "./realtime.protocol";
+import type { RealtimePlayerAction, RealtimePlayerAppearance, RealtimePlayerEntry } from "./realtime.protocol";
 
 /**
  * 一名在线玩家的在场信息（#324：玩家互见的数据源）
@@ -111,19 +111,21 @@ export class PlayerPresenceService implements OnApplicationBootstrap, OnApplicat
   private readonly usernames = new Map<string, string>();
   /** `zone:mapId` → 攒下的离开账号（断线 / 换图时写入，广播时发出并清空） */
   private readonly pendingLeaves = new Map<string, string[]>();
+  /** `zone:mapId` → 攒下的玩家动作事件（#693：结算路径写入，广播时发出并清空） */
+  private readonly pendingActions = new Map<string, RealtimePlayerAction[]>();
   private broadcastTimer: NodeJS.Timeout | null = null;
 
   /**
    * 广播出口（发给谁、怎么发是通道的事）。RealtimeService 启动时接线；
    * 未接线时照常维护在场表，只是没人收到帧。
    */
-  onBroadcast: ((zoneId: number, mapId: string, data: { mapId: string; full: boolean; players: RealtimePlayerEntry[]; left: string[] }) => void) | null = null;
+  onBroadcast: ((zoneId: number, mapId: string, data: { mapId: string; full: boolean; players: RealtimePlayerEntry[]; left: string[]; actions: RealtimePlayerAction[] }) => void) | null = null;
 
   /**
    * 定向发送出口（快照兜底只发给刚进图的连接自己）。
    * 与 onBroadcast 分开：广播的收件人是「观看者集合」，这里是指定账号。
    */
-  onSendTo: ((accountId: string, data: { mapId: string; full: boolean; players: RealtimePlayerEntry[]; left: string[] }) => void) | null = null;
+  onSendTo: ((accountId: string, data: { mapId: string; full: boolean; players: RealtimePlayerEntry[]; left: string[]; actions: RealtimePlayerAction[] }) => void) | null = null;
 
   /**
    * 队伍查询出口（#399，RealtimeService 启动时接线到 `PartyService.partyIdOfRole`）
@@ -150,6 +152,20 @@ export class PlayerPresenceService implements OnApplicationBootstrap, OnApplicat
   }
 
   //#region 输入（通道侧调用）
+
+  /**
+   * 记一条玩家动作事件（#693：结算路径在新结算成功后调用）
+   *
+   * 只攒不判：出手者在不在观看者的场上、有没有拉黑，都是**广播侧**的事
+   * （visiblePlayers 统一过滤）—— 这里只负责按分域攒起来，随下一个互见广播节拍发出。
+   * 幂等重发在结算入口就早退了，不会走到这里，天然不会重复广播。
+   */
+  recordAction(zoneId: number, mapId: string, action: RealtimePlayerAction): void {
+    const key = worldKey(zoneId, mapId);
+    const list = this.pendingActions.get(key);
+    if (list) list.push(action);
+    else this.pendingActions.set(key, [action]);
+  }
 
   /**
    * 记录一次玩家位置上报（不校验图是否加载：上报先到、worldJoin 后到是正常时序）
@@ -286,7 +302,7 @@ export class PlayerPresenceService implements OnApplicationBootstrap, OnApplicat
       if (Date.now() - entry.updatedAt > this.posStaleMs()) continue;
       players.push(this.toEntry(otherId, entry));
     }
-    this.onSendTo?.(accountId, { mapId, full: true, players, left: [] });
+    this.onSendTo?.(accountId, { mapId, full: true, players, left: [], actions: [] });
   }
 
   /**
@@ -389,7 +405,7 @@ export class PlayerPresenceService implements OnApplicationBootstrap, OnApplicat
     if (this.onBroadcast === null && this.onSendTo === null) return;
     const now = Date.now();
     const staleMs = this.posStaleMs();
-    // 按 mapKey 分组增量（观看者以图为单位，分组后每个图最多发一帧）
+    // 按图分组的玩家增量（观看者以图为单位，分组后每个图最多发一帧）
     const changed = new Map<string, RealtimePlayerEntry[]>();
     for (const [accountId, entry] of this.entries) {
       // 超时视作离场：进 left、条目删除（重新上报后会作为新变化再次出现）
@@ -429,25 +445,34 @@ export class PlayerPresenceService implements OnApplicationBootstrap, OnApplicat
       entry.sentGuild = this.guildKey(entry);
       entry.sentParty = entry.partyId;
     }
-    for (const [key, players] of changed) {
-      const at = key.indexOf(":");
-      const zoneId = Number(key.slice(0, at));
-      const mapId = key.slice(at + 1);
-      this.onBroadcast?.(zoneId, mapId, { mapId, full: false, players, left: [] });
+    // 攒下的动作事件（#693）按图取出：key 集要并入下面的发送循环 ——
+    // 站着不动的人出手，玩家增量里没有他，只按 changed 发帧动作就永远到不了
+    const actionsBy = new Map<string, RealtimePlayerAction[]>();
+    for (const [key, list] of this.pendingActions) {
+      this.pendingActions.delete(key);
+      actionsBy.set(key, list);
     }
-    // 攒下的离开事件按图广播
-    for (const [key, left] of this.pendingLeaves) {
-      this.pendingLeaves.delete(key);
+    // 三路负载（玩家增量 / 动作事件 / 离开）按图合并成一帧发出
+    const keys = new Set<string>([...changed.keys(), ...actionsBy.keys(), ...this.pendingLeaves.keys()]);
+    for (const key of keys) {
       const at = key.indexOf(":");
       const zoneId = Number(key.slice(0, at));
       const mapId = key.slice(at + 1);
-      this.onBroadcast?.(zoneId, mapId, { mapId, full: false, players: [], left });
+      const left = this.pendingLeaves.get(key) ?? [];
+      this.pendingLeaves.delete(key);
+      this.onBroadcast?.(zoneId, mapId, {
+        mapId,
+        full: false,
+        players: changed.get(key) ?? [],
+        left,
+        actions: actionsBy.get(key) ?? [],
+      });
     }
   }
 
   /** 立即广播一次离开（断线 / 被踢走这条；超时离场走广播节拍，见 broadcast） */
   private broadcastLeave(zoneId: number, mapId: string, accountId: string): void {
-    this.onBroadcast?.(zoneId, mapId, { mapId, full: false, players: [], left: [accountId] });
+    this.onBroadcast?.(zoneId, mapId, { mapId, full: false, players: [], left: [accountId], actions: [] });
   }
 
   /** 超时离场先进队列（与增量同节拍发出，避免超时清算一轮就广播 N 帧） */

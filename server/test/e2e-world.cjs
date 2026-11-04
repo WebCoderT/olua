@@ -184,6 +184,15 @@ function connect(url) {
     settles: [],
     worlds: [],
     aiFrames: [],
+    /** 互见帧里攒下的玩家动作事件（#693：别人出手随 players 帧广播） */
+    actions: [],
+    /** 等「这个账号的动作事件」（#693：结算后随下一个互见广播节拍发出） */
+    async waitForAction(accountId, timeoutMs = 5_000) {
+      return waitFor(`accountId=${accountId} 的动作事件`, async () => {
+        const hits = session.actions.filter((entry) => entry.accountId === accountId);
+        return hits.length > 0 ? hits[hits.length - 1] : null;
+      }, timeoutMs);
+    },
     /** 等「kill 事件里出现这只怪」（#689：击杀随 monster-ai 帧广播，广播节拍内必到） */
     async waitForKill(instanceId, timeoutMs = 5_000) {
       return waitFor(`instanceId=${instanceId} 的击杀事件`, async () => {
@@ -226,6 +235,7 @@ function connect(url) {
       if (frame.type === "settle") session.settles.push(frame.data);
       if (frame.type === "world") session.worlds.push(frame.data);
       if (frame.type === "monster-ai") session.aiFrames.push(frame.data);
+      if (frame.type === "players") session.actions.push(...(frame.data.actions ?? []));
     } catch {
       /* 非 JSON 帧不记 */
     }
@@ -308,10 +318,22 @@ function connect(url) {
     //#region 二、结算落世界
 
     group("二、结算落世界：cast 的扣血写进共享实例");
+    // A 的账号 id（动作事件 / 击杀事件的 accountId 断言都要用）
+    const meA = await api(baseUrl, "GET", "auth/me", { token: tokenA });
     // 怪物 1：maxHp 65 / 物防 [4,6]；1 级角色物攻 [14,20]，技能 1 级倍率 1 → 伤害 ∈ [8, 16]
     const shot = castA(sessionA, { skillId: "1000", targetId: wA1.instanceId, monsterKey: "1" });
     const settle = await shot.promise;
     check(!!(settle && settle.ok) && settle.damage >= 8 && settle.damage <= 16, "出手结算成功且伤害落带内", JSON.stringify(settle));
+
+    // 动作事件广播（#693）：观看者（B）在 players 帧里收到 actions ——
+    // settle 只发出手者，B 对「A 出了一次手」原本一无所知（别人的屏幕据此播他的攻击/技能动画）
+    const actionEventB = await sessionB.waitForAction(meA.data && meA.data.id);
+    check(!!actionEventB, "动作事件随 players 帧广播给同图观看者（B）", JSON.stringify(actionEventB));
+    checkEqual(actionEventB && actionEventB.skillId, "1000", "动作事件带技能 id（客户端按配置播动作动画与特效）");
+    checkEqual(actionEventB && actionEventB.targetId, wA1.instanceId, "动作事件带目标实例 id（朝向与特效落点用）");
+    const actionEventA = await sessionA.waitForAction(meA.data && meA.data.id);
+    check(!!actionEventA, "出手者自己也收到同一帧（客户端按 accountId 自行跳过，服务端不做收件人剔除）");
+
     const afterShot = await sessionA.joinWorld("1");
     const damaged = afterShot.monsters.find((m) => m.instanceId === wA1.instanceId);
     check(!!damaged && damaged.hp === (settle.ok ? settle.hp : -1), "世界快照的血量 = settle 返回的血量（同一份状态，不是两本账）", damaged && `hp=${damaged.hp}`);
@@ -336,7 +358,6 @@ function connect(url) {
 
     // 击杀事件广播（#689）：观看者（B）在 monster-ai 帧里收到 kills ——
     // 别人的屏幕据此做死亡清场与掉落铺场（settle 帧只发击杀者，B 对这次击杀原本一无所知）
-    const meA = await api(baseUrl, "GET", "auth/me", { token: tokenA });
     const killEventB = await sessionB.waitForKill(wA2.instanceId);
     check(!!killEventB, "击杀事件随 monster-ai 帧广播给同图观看者（B）", JSON.stringify(killEventB));
     checkEqual(killEventB && killEventB.accountId, meA.data && meA.data.id, "击杀事件带击杀者账号（客户端据此跳过自己的击杀）");
