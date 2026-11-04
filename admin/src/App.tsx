@@ -21,6 +21,7 @@ import { RuntimeParamsPage } from "./pages/RuntimeParamsPage";
 import { CombatWeightsPage } from "./pages/CombatWeightsPage";
 import { GuideStepsPage } from "./pages/GuideStepsPage";
 import { EquipmentBordersPage, EquipmentBackgroundPage } from "./pages/EquipmentAppearanceKindPage";
+import { EquipmentTiersPage } from "./pages/EquipmentTiersPage";
 import { EquipAlignPage } from "./pages/EquipAlignPage";
 import { EquipInAlignPage } from "./pages/EquipInAlignPage";
 import { DrugsPage } from "./pages/DrugsPage";
@@ -211,6 +212,14 @@ export function App() {
             element={
               <RequirePermission permission={PERMISSION.GAME_CONFIG_READ}>
                 <GuideStepsPage />
+              </RequirePermission>
+            }
+          />
+          <Route
+            path="equipment-tiers"
+            element={
+              <RequirePermission permission={PERMISSION.GAME_CONFIG_READ}>
+                <EquipmentTiersPage />
               </RequirePermission>
             }
           />
