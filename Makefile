@@ -500,7 +500,10 @@ ci: ci-static e2e-all ## 门禁全量（本机串行版 = CI 跑过的全部内�
 # ==============================================================================
 
 RES_PY ?= python3
-RES_VERSION ?=
+# RES_VERSION 与 VERSION 等价（文档里两种写法都能用）
+ifeq ($(strip $(RES_VERSION)),)
+RES_VERSION := $(VERSION)
+endif
 
 image-manifest: ## 生成客户端素材的图片清单（管理端图标选择器在生产环境的数据源）
 	$(NODE) tools/gen-image-manifest.cjs
