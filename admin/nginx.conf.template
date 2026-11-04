@@ -6,7 +6,7 @@
 #  所以**换域名不用改代码也不用重建镜像**，改 docker-compose 的环境变量（或服务器上的
 #  `.env`）再 `docker compose up -d admin` 即可。三站各一个变量：
 #      OLUA_SITE_DOMAINS   官网站（空格分隔多个，含 www）
-#      OLUA_ADMIN_DOMAIN   管理端（模板里额外拼了 `_` 保底：直接用 IP 访问也进管理端）
+#      OLUA_ADMIN_DOMAIN   管理端（default_server 保底：IP 等未匹配访问也进管理端）
 #      OLUA_GAME_DOMAIN    游戏站
 #  模板里其余的 `$host` / `$uri` 这类 nginx 变量**不会**被误替换 —— envsubst 只替换
 #  容器里真实存在的环境变量，nginx 运行时变量不在其中。
@@ -47,13 +47,17 @@ server {
 }
 
 # ==============================================================================
-#  管理端：admin.yimw.cn（`_` 保底 = 默认站点，直接用 IP 访问也是管理端）
+#  管理端：admin.yimw.cn（default_server 保底 = 未匹配域名的访问（如直接用 IP）进管理端）
+#
+#  **`_` 不是通配符**：nginx 的兜底靠 default_server 标记（:80 的第一个 server 块
+#  是隐式默认 —— 上一个版本只有管理端一个块所以碰巧对，三站分流后必须显式声明，
+#  否则 IP 访问会落到排第一的官网站上拿到 404）。
 #
 #  为什么要把 /api 反代过去：管理端与接口**同源**之后，浏览器根本不发跨域请求，
 #  服务端就不必配 CORS_ORIGINS —— 少一处会配错、而且配错了很难被发现的东西。
 # ==============================================================================
 server {
-  listen 80;
+  listen 80 default_server;
   server_name ${OLUA_ADMIN_DOMAIN} _;
 
   root /usr/share/nginx/html;
