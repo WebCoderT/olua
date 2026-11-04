@@ -1,6 +1,16 @@
 {
- "version": "2026-10-25-1",
+ "version": "2026-11-04-1",
  "files": [
+  [
+   "audio-manifest.json",
+   "7ae0a62d28248c23769dfcae8d50f34176da28ab",
+   434
+  ],
+  [
+   "audio-manifest.json.meta",
+   "d7928b7565f33ff9a36fd30c334c3b3203dc2705",
+   179
+  ],
   [
    "avatars/1-1.png",
    "528c15cba889e6c613aefba811235be5bb9c7bfd",
@@ -14112,6 +14122,31 @@
    169
   ],
   [
+   "effect/upgrade/upgrade.plist",
+   "fcddc1ff4158122d1981eb35456c6804fb9aa70c",
+   3852
+  ],
+  [
+   "effect/upgrade/upgrade.plist.meta",
+   "481eff6386fcae7632bc2427c22f3bd0cc2d6bf6",
+   10749
+  ],
+  [
+   "effect/upgrade/upgrade.png",
+   "5b3ebc8dda24c5a905042e392d6bd27f83ee3547",
+   1583094
+  ],
+  [
+   "effect/upgrade/upgrade.png.meta",
+   "fe2e5d0ca85a1588bf45eecf3dbcb572ab15ee31",
+   2880
+  ],
+  [
+   "effect/upgrade.meta",
+   "838e6910738c28a8b18c45e1a1a0c7ab70fba670",
+   169
+  ],
+  [
    "effect.meta",
    "aa2c534520ed2d12e79e14823d9bdfe020264c63",
    169
@@ -14130,6 +14165,16 @@
    "fonts.meta",
    "96224cd98c1b82648a7281d8127dce333482ea0b",
    169
+  ],
+  [
+   "image-manifest.json",
+   "3fee0d8876c54e8f716478fc174388e8247031f9",
+   88664
+  ],
+  [
+   "image-manifest.json.meta",
+   "0fc383c8f19c0bb875a1dc699c4e84160d824561",
+   179
   ],
   [
    "item/2010210.png",
@@ -14762,6 +14807,106 @@
    2900
   ],
   [
+   "item/jcy_1.png",
+   "872f96edebbd7332add9b03273406ea7c0e487f3",
+   2802
+  ],
+  [
+   "item/jcy_1.png.meta",
+   "a6f63546303af377065aeaa9769321a3a7cdf862",
+   2834
+  ],
+  [
+   "item/jcy_2.png",
+   "41f2f3b2b745c1d77ee8fa3a790a59c598a97421",
+   2894
+  ],
+  [
+   "item/jcy_2.png.meta",
+   "bdeb7e6bd3e413f0d3e67530f90b54e05effe1b6",
+   2834
+  ],
+  [
+   "item/jcy_3.png",
+   "1dfdeabb27cc854385827e3a92ea8369902417b9",
+   3070
+  ],
+  [
+   "item/jcy_3.png.meta",
+   "2ed909ea6ac791ccce1972587eda413c8e13a954",
+   2847
+  ],
+  [
+   "item/jcy_4.png",
+   "9fcb105d651381f6d15766987e92f2f40b14cadc",
+   3194
+  ],
+  [
+   "item/jcy_4.png.meta",
+   "97a723162ddf4db3b1c8c0206cd95f0cb1ca9bf0",
+   2847
+  ],
+  [
+   "item/jcy_5.png",
+   "7c10c876c552abd5f3dcf12a183e8c4b13a13275",
+   9062
+  ],
+  [
+   "item/jcy_5.png.meta",
+   "479aa7477d74a97dd70eadc793af6929e95196a7",
+   2798
+  ],
+  [
+   "item/mfy_1.png",
+   "31fb46d19fe06ae827bf263b6ed15d2c04dd7d3d",
+   2792
+  ],
+  [
+   "item/mfy_1.png.meta",
+   "2d08b3b0720e429d93193318a7af9d4228706a97",
+   2864
+  ],
+  [
+   "item/mfy_2.png",
+   "ce9628a6a30ae3bdd2bd5eda60c8f78501560a07",
+   7566
+  ],
+  [
+   "item/mfy_2.png.meta",
+   "13bfa2862648292b07347c6cfb1f6d70c6ac90ee",
+   2942
+  ],
+  [
+   "item/mfy_3.png",
+   "7d6eed1c5edc840b3ecb3300227df8c591edb07d",
+   3790
+  ],
+  [
+   "item/mfy_3.png.meta",
+   "d741ff460b6b4a7a34cf9e02e505eecb86bacef5",
+   2798
+  ],
+  [
+   "item/qxly.png",
+   "0f229cfe7a1e862d478c63ccf896d74aaa3fa269",
+   2162
+  ],
+  [
+   "item/qxly.png.meta",
+   "589a69836f35c05fb03116faaa7726bb49e410f3",
+   2869
+  ],
+  [
+   "item/qxxy.png",
+   "0a3b324869af32334d62e90dba7df9d51eb093cf",
+   4240
+  ],
+  [
+   "item/qxxy.png.meta",
+   "f551805a3b18e99f0b586e0963a5144dfc32c4ec",
+   2869
+  ],
+  [
    "item/sz_2.png",
    "8149c38e7b156ea8c036b220ae6481c0253cc91e",
    2643
@@ -14820,6 +14965,16 @@
    "item/sz_7.png.meta",
    "c991a1eceeeb3cfb9b83fd2792501ed162dc540c",
    2936
+  ],
+  [
+   "item/tys.png",
+   "a56c5fe3285e160e719e8857a337497ff7916807",
+   8166
+  ],
+  [
+   "item/tys.png.meta",
+   "3730fdb8511fdda9438c99491d6c1b107afae5bf",
+   2794
   ],
   [
    "item/tz_2.png",
@@ -15320,301 +15475,6 @@
    "main/pick.png.meta",
    "8f9d5c323fb0536de01b771a08f4c0ac07e7edb7",
    2885
-  ],
-  [
-   "main/role/0.png",
-   "b046345c9485a040c27cdba8261e23e001ba2dfa",
-   1202
-  ],
-  [
-   "main/role/0.png.meta",
-   "6db5b037f8513c9f729ce937424f1efa0e05d557",
-   2790
-  ],
-  [
-   "main/role/1.png",
-   "bde5e4ccb2eccaa372aa6846a88525b15980d90d",
-   2078
-  ],
-  [
-   "main/role/1.png.meta",
-   "8739d4c5c19e37b58827b9c2956262b869124a52",
-   2957
-  ],
-  [
-   "main/role/10.png",
-   "dea7e8e47de1284871828bd2abe849ac06e97222",
-   1466
-  ],
-  [
-   "main/role/10.png.meta",
-   "e07e777842145b7d6c1d2e60231e5b559a4c6d5e",
-   2792
-  ],
-  [
-   "main/role/2.png",
-   "2b9c20934fbb16af781d16bc4f500ba7f7f38957",
-   2064
-  ],
-  [
-   "main/role/2.png.meta",
-   "3868658bbbafe0dcf283d010570dc370b7e7bc93",
-   2957
-  ],
-  [
-   "main/role/3.png",
-   "a5a0a10fdf061211e2f6b3d6a2e415b1a74f757b",
-   2110
-  ],
-  [
-   "main/role/3.png.meta",
-   "b542979fc9c85912a20815800137cb332ecfe4f1",
-   2957
-  ],
-  [
-   "main/role/4.png",
-   "ecac46039ce4ea96ae041f4902720af5dd7fb5be",
-   2329
-  ],
-  [
-   "main/role/4.png.meta",
-   "e02783ceec4e2a320a0fe2034e4992ea245319e1",
-   2957
-  ],
-  [
-   "main/role/5.png",
-   "ac4127308b9fba6462972e5e3cd183e543bfe517",
-   1959
-  ],
-  [
-   "main/role/5.png.meta",
-   "1e3f7aab9e7cd79366caed7996c555a38893c36d",
-   2957
-  ],
-  [
-   "main/role/6.png",
-   "4a262ed947fa5b4527ebe81da21eb35885b1dc61",
-   1418
-  ],
-  [
-   "main/role/6.png.meta",
-   "74f655f14627a2395dcac01bdb550e29d3498594",
-   2790
-  ],
-  [
-   "main/role/7.png",
-   "a5a4c329ee667389afff15060d176e83f2a369c9",
-   1451
-  ],
-  [
-   "main/role/7.png.meta",
-   "9b979cf2b149e980073b5dc1a3e69e4c0f98ba4a",
-   2790
-  ],
-  [
-   "main/role/8.png",
-   "9532bee141d01dd86cef212c4278ceea25a0eaa7",
-   1534
-  ],
-  [
-   "main/role/8.png.meta",
-   "b46b98cb0c46ab7dfbd78bfa59243a812128312a",
-   2790
-  ],
-  [
-   "main/role/9.png",
-   "db04b1b8d579fe1ade0855520db5174a41d9719a",
-   1438
-  ],
-  [
-   "main/role/9.png.meta",
-   "ade3448cd8aa56ef2926f27b576028e4ebb06b14",
-   2790
-  ],
-  [
-   "main/role/bg.png",
-   "565b1689e4ac5ca4797599ed0cbbdaaade20dca9",
-   428985
-  ],
-  [
-   "main/role/bg.png.meta",
-   "efb528e6bc6c9f39a701062fd023d157e30fc40a",
-   2812
-  ],
-  [
-   "main/role/bs.png",
-   "0e97476c558655e3fe34ff3fb679a9c89946dfdd",
-   1505
-  ],
-  [
-   "main/role/bs.png.meta",
-   "cd7e1b8472aaeab074de4f73a2e1f0c7bb05ddc4",
-   2940
-  ],
-  [
-   "main/role/equip_bg-001.png",
-   "42eaa8a28dc64586e7b1f758140ed90a4177a200",
-   5334
-  ],
-  [
-   "main/role/equip_bg-001.png.meta",
-   "fe9391a4400386ceca5655fe0581541cd274c33f",
-   2812
-  ],
-  [
-   "main/role/equip_bg.png",
-   "42eaa8a28dc64586e7b1f758140ed90a4177a200",
-   5334
-  ],
-  [
-   "main/role/equip_bg.png.meta",
-   "c7fbf02f6fca18eea4d7d5b1af49efe51a998afe",
-   2804
-  ],
-  [
-   "main/role/hw.png",
-   "f7122dda507688c37aa6d4b29c521273e8edae2e",
-   2215
-  ],
-  [
-   "main/role/hw.png.meta",
-   "547d541014ef879117ab22640bace483435da796",
-   2954
-  ],
-  [
-   "main/role/item_bg.png",
-   "9da4aead3be8f591aceb6008976a6a76c7196232",
-   419
-  ],
-  [
-   "main/role/item_bg.png.meta",
-   "06ef91c6a17dd2a909e0ccf270695a4d31444888",
-   2851
-  ],
-  [
-   "main/role/jz.png",
-   "cb45f23486c116eadda70f32a4faf2883ba41e10",
-   2568
-  ],
-  [
-   "main/role/jz.png.meta",
-   "c68c262c2ed0b7198a65acdb6ef12e13dc2201cd",
-   2940
-  ],
-  [
-   "main/role/left_bg.png",
-   "b636395e119e32cb02e1bab40e57cc6371a10be1",
-   33798
-  ],
-  [
-   "main/role/left_bg.png.meta",
-   "7ac9b1a265b0400ea4496e6898a74012cda4ffa7",
-   2835
-  ],
-  [
-   "main/role/ls.png",
-   "bbf069ca7086a08101a0116c257ebb9b31aa80b3",
-   1717
-  ],
-  [
-   "main/role/ls.png.meta",
-   "f6a540eb11aa17f479ee49846af2d6257a7de831",
-   2798
-  ],
-  [
-   "main/role/role_bg.png",
-   "801e81cc433ec32b6e5a40f3be5705c20dd24477",
-   99831
-  ],
-  [
-   "main/role/role_bg.png.meta",
-   "43a43718f985c701923117afcded203a7c1df920",
-   2835
-  ],
-  [
-   "main/role/sy.png",
-   "4f8ff6441c1da180a056100dc7cf6d2e96f5e19e",
-   2898
-  ],
-  [
-   "main/role/sy.png.meta",
-   "3aaaa31edc08aa6aae2eb98567733d3af76a3de4",
-   2952
-  ],
-  [
-   "main/role/tk.png",
-   "fbcdacfb2d6ce9e5486cd9f16bb0bc24447396fa",
-   2603
-  ],
-  [
-   "main/role/tk.png.meta",
-   "296e744f1e059a5aa522a7cb0d339d08adfbbbc1",
-   2939
-  ],
-  [
-   "main/role/wq.png",
-   "2f7a0da7921b24aa08752356cbc9f9ca7401381b",
-   2268
-  ],
-  [
-   "main/role/wq.png.meta",
-   "a54e942a5fd64b046e1579601a751789e09db76c",
-   2952
-  ],
-  [
-   "main/role/xl.png",
-   "9ed237f84163fabdabde7f4fea9b7a27d6e0c58b",
-   2240
-  ],
-  [
-   "main/role/xl.png.meta",
-   "f6ff0bd515de0dead24bcd7e8dd6ba594575f244",
-   2953
-  ],
-  [
-   "main/role/xxz.png",
-   "f1589bc26dd1a671c229697905654141ab14ff5c",
-   2151
-  ],
-  [
-   "main/role/xxz.png.meta",
-   "8fd3c0bcda003007b97f7ab63bdebfc4c4de3e1c",
-   2956
-  ],
-  [
-   "main/role/xz.png",
-   "3d6d8b82555b58b938212bfe7e187b7b6e11a2f9",
-   2018
-  ],
-  [
-   "main/role/xz.png.meta",
-   "b75bd1d7fa50c7ffe1f985e24ad2d37804a9d787",
-   2939
-  ],
-  [
-   "main/role/yd.png",
-   "42ad68103ee77739f047bb5c13ed67bf9cebc98a",
-   1904
-  ],
-  [
-   "main/role/yd.png.meta",
-   "90b6a3a5834f25d3028cca5ca130a9c21c751a54",
-   2955
-  ],
-  [
-   "main/role/yf.png",
-   "17a9743401a28e8242016e2dc8caa159fcdf2e92",
-   2496
-  ],
-  [
-   "main/role/yf.png.meta",
-   "9f121b8cb0eaf52a087e40b97562c91fb78b10d6",
-   2939
-  ],
-  [
-   "main/role.meta",
-   "f243f2a966fd664344205702ce2573cc54fd36ce",
-   169
   ],
   [
    "main/role_bg.png.meta",
@@ -54637,6 +54497,131 @@
    169
   ],
   [
+   "sounds/bag_resort.wav",
+   "f82aa1e71fbfe7ec803b8791a547f76525686afe",
+   66286
+  ],
+  [
+   "sounds/bag_resort.wav.meta",
+   "c9f8462d49b81afaf6203ecf511563a0796c2c9c",
+   222
+  ],
+  [
+   "sounds/equip_wear.mp3",
+   "8af57769329e249f8b91185338e0087e5815048f",
+   25121
+  ],
+  [
+   "sounds/equip_wear.mp3.meta",
+   "d281b0013c40f77007d248d5b1f3e3b530e34757",
+   222
+  ],
+  [
+   "sounds/item_drop.wav",
+   "ed6d469bf7e3fd38982d95b4a682e4daafec461d",
+   92046
+  ],
+  [
+   "sounds/item_drop.wav.meta",
+   "483fc68e1dc1e2ac99f10ccd13d651e839d91247",
+   222
+  ],
+  [
+   "sounds/level_up.wav",
+   "d344f730824462ee98225de310dbdeabdc19c9c4",
+   181384
+  ],
+  [
+   "sounds/level_up.wav.meta",
+   "19b21663746a1202ffae3efaa74aaeb0992c9eed",
+   222
+  ],
+  [
+   "sounds/login_bgm.wav",
+   "fad97347bb1bab294df5d4d59de70cf237c1d7b4",
+   6043692
+  ],
+  [
+   "sounds/login_bgm.wav.meta",
+   "6b982588082b5613d3fbfe3c34db1903b8abc529",
+   222
+  ],
+  [
+   "sounds/map_teleport.mp3",
+   "7409af962da48c87482a1a5afccde645e0f1f30d",
+   62738
+  ],
+  [
+   "sounds/map_teleport.mp3.meta",
+   "96569b59e7779e2b3df770a5694a8255c2a3a97e",
+   222
+  ],
+  [
+   "sounds/money_change.mp3",
+   "5fb8939b69d18e45d44589af578882ca9d37c8ef",
+   53556
+  ],
+  [
+   "sounds/money_change.mp3.meta",
+   "42b2a72f58c04281fb85d7f237bd901da6132e9e",
+   222
+  ],
+  [
+   "sounds/move.wav",
+   "44f36e25ea2bf416e592d16ac402724937120066",
+   38696
+  ],
+  [
+   "sounds/move.wav.meta",
+   "29f28a65d01f4f0bf05e42db9a525df86132f2b1",
+   222
+  ],
+  [
+   "sounds/role_die_man.wav",
+   "5e796a812bdf5ae09db86abef074d82d8e23a757",
+   74218
+  ],
+  [
+   "sounds/role_die_man.wav.meta",
+   "db1d94433a9ac09b44d51a9c8a3bd09d339668e0",
+   222
+  ],
+  [
+   "sounds/role_die_woman.wav",
+   "9ebe8d8dd72016c3c631c1715d1e9af5c2ac86b7",
+   85414
+  ],
+  [
+   "sounds/role_die_woman.wav.meta",
+   "103d444cb23d10a49c14d888867f190d2dd6bca3",
+   222
+  ],
+  [
+   "sounds/ui_click.wav",
+   "995326368500546ffd22d57b34019d594776b8f9",
+   35394
+  ],
+  [
+   "sounds/ui_click.wav.meta",
+   "fe173d823998a973f89d7bac3d4941a6fd8982e9",
+   222
+  ],
+  [
+   "sounds/warrior_attack.wav",
+   "5e76bf48eb2036b9f0a7ce0874b14f5ec3e8f720",
+   41004
+  ],
+  [
+   "sounds/warrior_attack.wav.meta",
+   "cd1b9f9bf6c22ad2cbeeff884c19bce8828a2bea",
+   222
+  ],
+  [
+   "sounds.meta",
+   "0a41d3e7990052eb3bff953c9827676d4735083e",
+   169
+  ],
+  [
    "status/folder.meta",
    "0ae9e43c56fb4b4f4816f19bfe397535876e3155",
    169
@@ -54702,9 +54687,19 @@
    4900
   ],
   [
+   "titles/sfx_13009/sfx_13009.plist.meta",
+   "6ab057c68c38dc199416d00538a2a4f7c90d85c6",
+   17806
+  ],
+  [
    "titles/sfx_13009/sfx_13009.png",
    "cb1e20a95755673322efcb08d0643667abc83fba",
    328025
+  ],
+  [
+   "titles/sfx_13009/sfx_13009.png.meta",
+   "d5a87b197e2b67b511dd10f5f9682eaf2ca13891",
+   2826
   ],
   [
    "titles/sfx_13009.meta",
@@ -54717,9 +54712,19 @@
    4900
   ],
   [
+   "titles/sfx_13010/sfx_13010.plist.meta",
+   "85ec9c6fd40f3650665e1c005950552e4f8c5e55",
+   17806
+  ],
+  [
    "titles/sfx_13010/sfx_13010.png",
    "21feaf90b30a81449430ad047f952ed75f299651",
    264084
+  ],
+  [
+   "titles/sfx_13010/sfx_13010.png.meta",
+   "5330ccc8d48cf35de955b652a8302091046062f9",
+   2950
   ],
   [
    "titles/sfx_13010.meta",
@@ -54732,9 +54737,19 @@
    4900
   ],
   [
+   "titles/sfx_13011/sfx_13011.plist.meta",
+   "56984f7187a57448ead40bd9124b8b11570969b8",
+   17806
+  ],
+  [
    "titles/sfx_13011/sfx_13011.png",
    "27ba5eccc9dacce6642de368e2ca64f1ae9d4e28",
    346450
+  ],
+  [
+   "titles/sfx_13011/sfx_13011.png.meta",
+   "3ce8041127c2e18b37816e0bacc5769d6d1d58e3",
+   2875
   ],
   [
    "titles/sfx_13011.meta",
@@ -54747,9 +54762,19 @@
    4900
   ],
   [
+   "titles/sfx_13012/sfx_13012.plist.meta",
+   "2597cf605aa96fdb8e42cef9885bba460b5e7a40",
+   17806
+  ],
+  [
    "titles/sfx_13012/sfx_13012.png",
    "db96bb81036a247816b9585a231929147bdd2186",
    287676
+  ],
+  [
+   "titles/sfx_13012/sfx_13012.png.meta",
+   "1dbc0320da4103d0f629ec392b35a8a9b773e578",
+   2966
   ],
   [
    "titles/sfx_13012.meta",
@@ -54762,9 +54787,19 @@
    4900
   ],
   [
+   "titles/sfx_13013/sfx_13013.plist.meta",
+   "7cf430a41338570d702d4a0e27ee88ddb73bde38",
+   17806
+  ],
+  [
    "titles/sfx_13013/sfx_13013.png",
    "42719300157614a65b3b3db48f8700c52a2bc0f6",
    256070
+  ],
+  [
+   "titles/sfx_13013/sfx_13013.png.meta",
+   "e7db5d27dfde23cbe3a433ae594a64048db3cdc6",
+   2878
   ],
   [
    "titles/sfx_13013.meta",
@@ -54777,9 +54812,19 @@
    4949
   ],
   [
+   "titles/sfx_13014/sfx_13014.plist.meta",
+   "806db44fae8ef324330c64afab184c209c179c32",
+   17840
+  ],
+  [
    "titles/sfx_13014/sfx_13014.png",
    "d03b9b1cf571717f475d99a053a912fa11d96e07",
    612118
+  ],
+  [
+   "titles/sfx_13014/sfx_13014.png.meta",
+   "50944fdd87c132c2084925d55f3620d7debeec85",
+   2950
   ],
   [
    "titles/sfx_13014.meta",
@@ -54792,9 +54837,19 @@
    2860
   ],
   [
+   "titles/sfx_13015/sfx_13015.plist.meta",
+   "9632a9ae80758463ca0af0edcba16deaed5348f8",
+   9682
+  ],
+  [
    "titles/sfx_13015/sfx_13015.png",
    "1df901b1b8d060cf67f46763ad3c56f89d38d2cc",
    251321
+  ],
+  [
+   "titles/sfx_13015/sfx_13015.png.meta",
+   "47ad98d8b7de2d0f86314d67e71f53f9702dc761",
+   2878
   ],
   [
    "titles/sfx_13015.meta",
@@ -54807,9 +54862,19 @@
    4015
   ],
   [
+   "titles/sfx_13016/sfx_13016.plist.meta",
+   "c802bd9c280c12ace9a7cb27f1fe07671c69fa46",
+   14316
+  ],
+  [
    "titles/sfx_13016/sfx_13016.png",
    "b60fc05d0d30994c1c1ef386cb2aecaa0f5304a0",
    276441
+  ],
+  [
+   "titles/sfx_13016/sfx_13016.png.meta",
+   "70b92957db78b2948e4ec60486987dbf07d2983e",
+   2939
   ],
   [
    "titles/sfx_13016.meta",
@@ -54822,9 +54887,19 @@
    4015
   ],
   [
+   "titles/sfx_13017/sfx_13017.plist.meta",
+   "d01927a32367dca2dea6201407ac199ebdc2c532",
+   14316
+  ],
+  [
    "titles/sfx_13017/sfx_13017.png",
    "f27b4e4f220407fdb5907f0e047ba31e2f463142",
    295534
+  ],
+  [
+   "titles/sfx_13017/sfx_13017.png.meta",
+   "c3347007d59adb9575e7fa8b84f2316fe7668dd1",
+   2919
   ],
   [
    "titles/sfx_13017.meta",
@@ -54837,9 +54912,19 @@
    2860
   ],
   [
+   "titles/sfx_13018/sfx_13018.plist.meta",
+   "ebc86fa53b8237803a07514d49de5ba092e7a83e",
+   9682
+  ],
+  [
    "titles/sfx_13018/sfx_13018.png",
    "ca90124236223046bb99dcd4731f009902f19387",
    301422
+  ],
+  [
+   "titles/sfx_13018/sfx_13018.png.meta",
+   "cd521010fcba0f6ce0d8d72c86d9ca6e3f103331",
+   2838
   ],
   [
    "titles/sfx_13018.meta",
@@ -54852,9 +54937,19 @@
    4014
   ],
   [
+   "titles/sfx_13019/sfx_13019.plist.meta",
+   "d2d5e8d09fc089d025cd26a9364d2f21afc1a54f",
+   14316
+  ],
+  [
    "titles/sfx_13019/sfx_13019.png",
    "e533f44040d3a6a63b7dea3622b9055e623ad279",
    190324
+  ],
+  [
+   "titles/sfx_13019/sfx_13019.png.meta",
+   "a712e015c10e6b95d591814855a1b9cca967fb46",
+   2923
   ],
   [
    "titles/sfx_13019.meta",
@@ -54867,9 +54962,19 @@
    4015
   ],
   [
+   "titles/sfx_13020/sfx_13020.plist.meta",
+   "02d5b3505f801b60f01d9469311ad17b0e168886",
+   14316
+  ],
+  [
    "titles/sfx_13020/sfx_13020.png",
    "cdd320b81f263a121aea19de60c92eb257ca47ea",
    268645
+  ],
+  [
+   "titles/sfx_13020/sfx_13020.png.meta",
+   "b69072964898db213bf2787a03d5c92320a9d3eb",
+   2931
   ],
   [
    "titles/sfx_13020.meta",
@@ -54882,9 +54987,19 @@
    5248
   ],
   [
+   "titles/sfx_13031/sfx_13031.plist.meta",
+   "16f2e896bbafcb3a34ffc6496857ca2bf505b65d",
+   19006
+  ],
+  [
    "titles/sfx_13031/sfx_13031.png",
    "688bdc79755dbbd99a8fe984ad74d81cb2ce9032",
    414159
+  ],
+  [
+   "titles/sfx_13031/sfx_13031.png.meta",
+   "f4f6a49ac510340491df598aac33b6c46220764e",
+   2861
   ],
   [
    "titles/sfx_13031.meta",
@@ -54897,9 +55012,19 @@
    5248
   ],
   [
+   "titles/sfx_13032/sfx_13032.plist.meta",
+   "a9a0d812c8f72a750aa994eeb780bd94564aa59f",
+   19006
+  ],
+  [
    "titles/sfx_13032/sfx_13032.png",
    "4a5108ab795871982899aeabb84587a35926dadf",
    428088
+  ],
+  [
+   "titles/sfx_13032/sfx_13032.png.meta",
+   "18bc9ce10fb2978f4a0566c66d6081e0a63646af",
+   2826
   ],
   [
    "titles/sfx_13032.meta",
@@ -54912,9 +55037,19 @@
    5248
   ],
   [
+   "titles/sfx_13033/sfx_13033.plist.meta",
+   "bcc960652596c68a4803b5c760066b5b08e2bb29",
+   19006
+  ],
+  [
    "titles/sfx_13033/sfx_13033.png",
    "98a3e231ef5acd3c372a9b15c9900f5c31c90b2a",
    437999
+  ],
+  [
+   "titles/sfx_13033/sfx_13033.png.meta",
+   "a305628777c9d83cd581b929a3cd9a326e0a3305",
+   2826
   ],
   [
    "titles/sfx_13033.meta",
@@ -54927,9 +55062,19 @@
    5248
   ],
   [
+   "titles/sfx_13034/sfx_13034.plist.meta",
+   "96dcefecd9dc563053cf4f83172c4a4cda6f44aa",
+   19006
+  ],
+  [
    "titles/sfx_13034/sfx_13034.png",
    "84e1adfa03352d6a94cb876b61a21f8428fe4392",
    432440
+  ],
+  [
+   "titles/sfx_13034/sfx_13034.png.meta",
+   "d8b00ed908b12561855749a80b4815185751a733",
+   2859
   ],
   [
    "titles/sfx_13034.meta",
@@ -54942,9 +55087,19 @@
    5248
   ],
   [
+   "titles/sfx_13035/sfx_13035.plist.meta",
+   "c42543c3273c596174574a8f49fccdf05fc18d1e",
+   19006
+  ],
+  [
    "titles/sfx_13035/sfx_13035.png",
    "bdc32e95c69d34685541ecb9ce96b5bc1be0c603",
    467324
+  ],
+  [
+   "titles/sfx_13035/sfx_13035.png.meta",
+   "a5eef4d9388ea8b4a71efbeda89c814f6a127acf",
+   2861
   ],
   [
    "titles/sfx_13035.meta",
@@ -54957,9 +55112,19 @@
    4949
   ],
   [
+   "titles/sfx_13036/sfx_13036.plist.meta",
+   "dab5a277547700b286607ace4925abe015edb91e",
+   17840
+  ],
+  [
    "titles/sfx_13036/sfx_13036.png",
    "4f4d2fb508b64731a8fdb59ddf5f78c3c3722769",
    526354
+  ],
+  [
+   "titles/sfx_13036/sfx_13036.png.meta",
+   "28ffdc098e11abdfebe95a55744c7a4853d5f2ae",
+   2861
   ],
   [
    "titles/sfx_13036.meta",
@@ -54972,9 +55137,19 @@
    4949
   ],
   [
+   "titles/sfx_13037/sfx_13037.plist.meta",
+   "e6095fa0406bf3f751c4a78d0a9c8fd0bb30a1f1",
+   17840
+  ],
+  [
    "titles/sfx_13037/sfx_13037.png",
    "745c4ba66d2135eb87aba6b2ab5dcbabb4cb80e8",
    555526
+  ],
+  [
+   "titles/sfx_13037/sfx_13037.png.meta",
+   "4c3fd6c9acaf2d196adfb0765195b7e7ac16f3dc",
+   2899
   ],
   [
    "titles/sfx_13037.meta",
@@ -54987,9 +55162,19 @@
    4949
   ],
   [
+   "titles/sfx_13038/sfx_13038.plist.meta",
+   "42142a3395516aaa7b8cd6603a972a7372b6f198",
+   17840
+  ],
+  [
    "titles/sfx_13038/sfx_13038.png",
    "38b89d26db7ed92f4fa0f7625c229b3231c277d7",
    527987
+  ],
+  [
+   "titles/sfx_13038/sfx_13038.png.meta",
+   "4dc0a4e1a32c191b7ea4afa50f795c146579ba5b",
+   2915
   ],
   [
    "titles/sfx_13038.meta",
@@ -55002,9 +55187,19 @@
    4949
   ],
   [
+   "titles/sfx_13039/sfx_13039.plist.meta",
+   "98204bd874e0be73019de70ffe01d574f958e6e0",
+   17840
+  ],
+  [
    "titles/sfx_13039/sfx_13039.png",
    "42818b37b3211bdf9d472ff4c79e004d37bbcbe7",
    562552
+  ],
+  [
+   "titles/sfx_13039/sfx_13039.png.meta",
+   "369055c3ec827e8b8eb17746d8aec1972cae309e",
+   2879
   ],
   [
    "titles/sfx_13039.meta",
@@ -55017,9 +55212,19 @@
    4949
   ],
   [
+   "titles/sfx_13040/sfx_13040.plist.meta",
+   "be7f320cb78586db11cc620386d2ce27059df577",
+   17840
+  ],
+  [
    "titles/sfx_13040/sfx_13040.png",
    "dcf89f9a47dcc148e22068c59889b16ecb5df4a6",
    604005
+  ],
+  [
+   "titles/sfx_13040/sfx_13040.png.meta",
+   "5c3607eba65e746d39b454ad56e399e7410cd259",
+   2912
   ],
   [
    "titles/sfx_13040.meta",
@@ -55032,9 +55237,19 @@
    4949
   ],
   [
+   "titles/sfx_13041/sfx_13041.plist.meta",
+   "663fb8ec3488fb5f8ec641a28efc55eb1d687cae",
+   17840
+  ],
+  [
    "titles/sfx_13041/sfx_13041.png",
    "1385a25e39ff6100ab8b9482c2ab25136c79851c",
    569820
+  ],
+  [
+   "titles/sfx_13041/sfx_13041.png.meta",
+   "8b9c35f89b59df51fdb7133d1f61f52c57763c9f",
+   2898
   ],
   [
    "titles/sfx_13041.meta",
@@ -55047,9 +55262,19 @@
    5196
   ],
   [
+   "titles/sfx_13060/sfx_13060.plist.meta",
+   "1d0514abfc3ae1061be7218506eba6ee7af2b3ec",
+   18970
+  ],
+  [
    "titles/sfx_13060/sfx_13060.png",
    "8855d0a10aa2d3d521690667ef25a4b0e97cb8d8",
    422783
+  ],
+  [
+   "titles/sfx_13060/sfx_13060.png.meta",
+   "c4559b6694e4470fc8193b783bae9e83e8e01245",
+   2826
   ],
   [
    "titles/sfx_13060.meta",
@@ -55062,9 +55287,19 @@
    5196
   ],
   [
+   "titles/sfx_13061/sfx_13061.plist.meta",
+   "f4bf4f37638f65e6ca253ed2d4fb01ad1f96c5f7",
+   18970
+  ],
+  [
    "titles/sfx_13061/sfx_13061.png",
    "aa3e63431acd95622faf40397d5b0db1a12727b9",
    278489
+  ],
+  [
+   "titles/sfx_13061/sfx_13061.png.meta",
+   "ca56622aaf8276d4c6ce56eea9035e1033a0c673",
+   2950
   ],
   [
    "titles/sfx_13061.meta",
@@ -55077,9 +55312,19 @@
    5196
   ],
   [
+   "titles/sfx_13062/sfx_13062.plist.meta",
+   "2d74552e30c23299bb938f7587e0386e540e5ab1",
+   18970
+  ],
+  [
    "titles/sfx_13062/sfx_13062.png",
    "4b8eaf3b641fc0053dbdf1e3afe759fa903022f6",
    422213
+  ],
+  [
+   "titles/sfx_13062/sfx_13062.png.meta",
+   "5b9c006482781441d18eb93f4afc18263011b37e",
+   2864
   ],
   [
    "titles/sfx_13062.meta",
@@ -55092,9 +55337,19 @@
    5196
   ],
   [
+   "titles/sfx_13063/sfx_13063.plist.meta",
+   "910e675a81164e8bc105dd526f65ab8755fcb583",
+   18970
+  ],
+  [
    "titles/sfx_13063/sfx_13063.png",
    "fe32f80072d2a1e267cf4e4625ff0c730e948b0e",
    322335
+  ],
+  [
+   "titles/sfx_13063/sfx_13063.png.meta",
+   "df36a8515ed88a56bfd8521ea636895e36544f97",
+   2908
   ],
   [
    "titles/sfx_13063.meta",
@@ -55107,9 +55362,19 @@
    5196
   ],
   [
+   "titles/sfx_13064/sfx_13064.plist.meta",
+   "073a5c0fcb1e05482cd4cd539a5cfe7c94cf0b34",
+   18970
+  ],
+  [
    "titles/sfx_13064/sfx_13064.png",
    "dcb89f9d9a4dad88f901909f7214454f1c6b69e9",
    380005
+  ],
+  [
+   "titles/sfx_13064/sfx_13064.png.meta",
+   "3581dbe3cd81623f503ce25e1109f8d7f6cd86e6",
+   2826
   ],
   [
    "titles/sfx_13064.meta",
@@ -55122,9 +55387,19 @@
    4900
   ],
   [
+   "titles/sfx_13065/sfx_13065.plist.meta",
+   "079d3607abd0ef358666964ee3bedcf7a163b495",
+   17806
+  ],
+  [
    "titles/sfx_13065/sfx_13065.png",
    "f9d70ace7d7ad3ace2cfd5e60d62f3fc36fdd818",
    431769
+  ],
+  [
+   "titles/sfx_13065/sfx_13065.png.meta",
+   "e957643178c1d9629b62388da97f64095df13fa7",
+   2910
   ],
   [
    "titles/sfx_13065.meta",
@@ -55137,9 +55412,19 @@
    4014
   ],
   [
+   "titles/sfx_13066/sfx_13066.plist.meta",
+   "b48a85f7ce270f70da2791c9f7b26eba727e6e49",
+   14316
+  ],
+  [
    "titles/sfx_13066/sfx_13066.png",
    "c198b3ef976700348978e7b90c341083c8029278",
    305802
+  ],
+  [
+   "titles/sfx_13066/sfx_13066.png.meta",
+   "9b66ff6c090628ecb23103ba08a25e4664386bd9",
+   2826
   ],
   [
    "titles/sfx_13066.meta",
@@ -55152,9 +55437,19 @@
    4014
   ],
   [
+   "titles/sfx_13067/sfx_13067.plist.meta",
+   "b4ac9b1c6d89571b68eefeb0f184ccc1b501c774",
+   14316
+  ],
+  [
    "titles/sfx_13067/sfx_13067.png",
    "483e64a7e3efce305c56c212867c10bfa1c9c7b0",
    275892
+  ],
+  [
+   "titles/sfx_13067/sfx_13067.png.meta",
+   "e210a7e2119813dc8deb38e3c58215024e06e390",
+   2826
   ],
   [
    "titles/sfx_13067.meta",
@@ -55167,9 +55462,19 @@
    5196
   ],
   [
+   "titles/sfx_13068/sfx_13068.plist.meta",
+   "8de1ac4136032c3385daf8089167e22f57c5a87e",
+   18970
+  ],
+  [
    "titles/sfx_13068/sfx_13068.png",
    "e57027142b2d0386bdaf16f822c2bfabbeecce68",
    428508
+  ],
+  [
+   "titles/sfx_13068/sfx_13068.png.meta",
+   "bf20ffb801d2d65aac47cd4ac4850c3148f937b9",
+   2826
   ],
   [
    "titles/sfx_13068.meta",
@@ -55182,9 +55487,19 @@
    4014
   ],
   [
+   "titles/sfx_13069/sfx_13069.plist.meta",
+   "f3fc0dbf821b36c62b054dee6ed7b6c4429eb014",
+   14316
+  ],
+  [
    "titles/sfx_13069/sfx_13069.png",
    "aeb125025e532a03ec04ef235a0ed4911efe7879",
    314022
+  ],
+  [
+   "titles/sfx_13069/sfx_13069.png.meta",
+   "c787d181fbe3f0ce460514a118094c2a3534a2db",
+   2826
   ],
   [
    "titles/sfx_13069.meta",
@@ -55197,9 +55512,19 @@
    4014
   ],
   [
+   "titles/sfx_13070/sfx_13070.plist.meta",
+   "80a4aaa76348e181c30dd8f662b2fc779e495419",
+   14316
+  ],
+  [
    "titles/sfx_13070/sfx_13070.png",
    "636c2a34e13799d6181877e7447029fe5316539a",
    264271
+  ],
+  [
+   "titles/sfx_13070/sfx_13070.png.meta",
+   "7fe92ad2c887b40ef575ed21a0807547160763c9",
+   2875
   ],
   [
    "titles/sfx_13070.meta",
@@ -55217,9 +55542,19 @@
    2864
   ],
   [
+   "war-soul/sfx_13001/sfx_13001.plist.meta",
+   "c690df0b714bb289b33eea65b3c63f738ea946d2",
+   9684
+  ],
+  [
    "war-soul/sfx_13001/sfx_13001.png",
    "1ea7ffa85cb6ef46701386fa923e773720586dc5",
    2211668
+  ],
+  [
+   "war-soul/sfx_13001/sfx_13001.png.meta",
+   "cb7b89491355d540f96aa25344def1f78217f25a",
+   2959
   ],
   [
    "war-soul/sfx_13001.meta",
@@ -55232,9 +55567,19 @@
    2866
   ],
   [
+   "war-soul/sfx_13002/sfx_13002.plist.meta",
+   "c958b36786db6990a3afb49581732923d8a698ba",
+   9686
+  ],
+  [
    "war-soul/sfx_13002/sfx_13002.png",
    "e43d0b0637e176ca6d5778ade435407bebad101d",
    2660357
+  ],
+  [
+   "war-soul/sfx_13002/sfx_13002.png.meta",
+   "b22b9ba82e9ac876518c8f441a55e2482e749f3d",
+   2962
   ],
   [
    "war-soul/sfx_13002.meta",
@@ -55247,9 +55592,19 @@
    2864
   ],
   [
+   "war-soul/sfx_13003/sfx_13003.plist.meta",
+   "b4a3a817a5b6d2a99a9ff3d66788509a49fbedc4",
+   9684
+  ],
+  [
    "war-soul/sfx_13003/sfx_13003.png",
    "1a605772996e776ae12efb2328601f6b3a84f65f",
    2250264
+  ],
+  [
+   "war-soul/sfx_13003/sfx_13003.png.meta",
+   "f1fb7e39474afc5b7a891bf6aba1f2717f404b8b",
+   2888
   ],
   [
    "war-soul/sfx_13003.meta",
@@ -55262,9 +55617,19 @@
    2866
   ],
   [
+   "war-soul/sfx_13004/sfx_13004.plist.meta",
+   "1342afd8f3f8748eae97bc808b36fa8bd03c8f4d",
+   9686
+  ],
+  [
    "war-soul/sfx_13004/sfx_13004.png",
    "c0d7bccea83f484a5bad9479555833885a0999a7",
    2967717
+  ],
+  [
+   "war-soul/sfx_13004/sfx_13004.png.meta",
+   "5bdfe3bcd11d9fc25174e1c430e9f4e120101e58",
+   2889
   ],
   [
    "war-soul/sfx_13004.meta",
@@ -55277,9 +55642,19 @@
    2864
   ],
   [
+   "war-soul/sfx_13005/sfx_13005.plist.meta",
+   "061ce72f476d403a662b865ed5b66e4268099902",
+   9684
+  ],
+  [
    "war-soul/sfx_13005/sfx_13005.png",
    "fb4d4a8875403a3247bb3b3ee4385b13798f3b63",
    1634904
+  ],
+  [
+   "war-soul/sfx_13005/sfx_13005.png.meta",
+   "b531bf9c210696587ed1e938d24bd3b5b79c2df7",
+   2946
   ],
   [
    "war-soul/sfx_13005.meta",
@@ -55292,9 +55667,19 @@
    2866
   ],
   [
+   "war-soul/sfx_13006/sfx_13006.plist.meta",
+   "89b69d8a40cdb3cff0251ee308eb9ffd576481bc",
+   9686
+  ],
+  [
    "war-soul/sfx_13006/sfx_13006.png",
    "9677d1b7347821a1d7de4e6fbf3aa5c680501c0c",
    3027656
+  ],
+  [
+   "war-soul/sfx_13006/sfx_13006.png.meta",
+   "85577b6dc43f2751d078eac01b2f191f4ec0b3d9",
+   2908
   ],
   [
    "war-soul/sfx_13006.meta",
@@ -55307,9 +55692,19 @@
    2866
   ],
   [
+   "war-soul/sfx_13007/sfx_13007.plist.meta",
+   "63537538b3d5485b1d868052ca45c60951208b9b",
+   9686
+  ],
+  [
    "war-soul/sfx_13007/sfx_13007.png",
    "88cb939f2faa6beede213acc9f348410113394ea",
    3793456
+  ],
+  [
+   "war-soul/sfx_13007/sfx_13007.png.meta",
+   "4550868f8cc4a6286c7e5923538aa670b38a01c7",
+   2930
   ],
   [
    "war-soul/sfx_13007.meta",
@@ -55322,9 +55717,19 @@
    2864
   ],
   [
+   "war-soul/sfx_13008/sfx_13008.plist.meta",
+   "19f3538af6b77cda4b67849ffb1c17f682a1e998",
+   9684
+  ],
+  [
    "war-soul/sfx_13008/sfx_13008.png",
    "c911a460cebc855d391109487dd6412ece27c4b4",
    2459096
+  ],
+  [
+   "war-soul/sfx_13008/sfx_13008.png.meta",
+   "8204aac2946a8c06ebe5d9aa3dd5b7ed719bcd31",
+   2886
   ],
   [
    "war-soul/sfx_13008.meta",
@@ -55337,9 +55742,19 @@
    2566
   ],
   [
+   "war-soul/sfx_13009/sfx_13009.plist.meta",
+   "786dc110837777d1738776621f188b7edd6c59e0",
+   8519
+  ],
+  [
    "war-soul/sfx_13009/sfx_13009.png",
    "718d8169aa2d1d73458fbd342b6506252db53d3c",
    1889233
+  ],
+  [
+   "war-soul/sfx_13009/sfx_13009.png.meta",
+   "a7a7495bf4171b320317ab47066e4dc4b566fa97",
+   2922
   ],
   [
    "war-soul/sfx_13009.meta",
@@ -55352,9 +55767,19 @@
    2862
   ],
   [
+   "war-soul/sfx_13010/sfx_13010.plist.meta",
+   "0a72d7bd2c88dd4d9dd6730ab536e10c090b37bc",
+   9682
+  ],
+  [
    "war-soul/sfx_13010/sfx_13010.png",
    "e3eef15c15d555f849996c99d2a224090af33c55",
    1980651
+  ],
+  [
+   "war-soul/sfx_13010/sfx_13010.png.meta",
+   "546843eb6e24a3dd6f6723c4204c76ec00e408ac",
+   2846
   ],
   [
    "war-soul/sfx_13010.meta",
@@ -55367,9 +55792,19 @@
    2864
   ],
   [
+   "war-soul/sfx_13011/sfx_13011.plist.meta",
+   "044dfa67641845e9c6d7b16d9333ab83c476e1bc",
+   9684
+  ],
+  [
    "war-soul/sfx_13011/sfx_13011.png",
    "3710db242474058c4f717de10376b2f5dc751156",
    2207714
+  ],
+  [
+   "war-soul/sfx_13011/sfx_13011.png.meta",
+   "cf0e78679d92f90c20275a172a7ffc94ebe1f724",
+   2975
   ],
   [
    "war-soul/sfx_13011.meta",
@@ -55382,9 +55817,19 @@
    2866
   ],
   [
+   "war-soul/sfx_13012/sfx_13012.plist.meta",
+   "3d130bdfe25df53fbfa58e5b359ee677e0b2e186",
+   9686
+  ],
+  [
    "war-soul/sfx_13012/sfx_13012.png",
    "d03426751148f3a5cfa1695b4c96ed98d83236eb",
    2603320
+  ],
+  [
+   "war-soul/sfx_13012/sfx_13012.png.meta",
+   "c1b2232b674f715e2bb1c179515dc0000c99f75c",
+   2924
   ],
   [
    "war-soul/sfx_13012.meta",
@@ -55397,9 +55842,19 @@
    2864
   ],
   [
+   "war-soul/sfx_13013/sfx_13013.plist.meta",
+   "4d8454e9719048ea4d733bebabc83013f7281d60",
+   9684
+  ],
+  [
    "war-soul/sfx_13013/sfx_13013.png",
    "713759e06da1f6704b0e2d73fe2c871a7ce2e0dc",
    2247967
+  ],
+  [
+   "war-soul/sfx_13013/sfx_13013.png.meta",
+   "6d37c310f72394a669d64d47fd87990e019bcc8b",
+   2874
   ],
   [
    "war-soul/sfx_13013.meta",
@@ -55412,9 +55867,19 @@
    2866
   ],
   [
+   "war-soul/sfx_13014/sfx_13014.plist.meta",
+   "12b3d568be64d68554ab66a1e706817a1796fe21",
+   9686
+  ],
+  [
    "war-soul/sfx_13014/sfx_13014.png",
    "9808dce4463d7ec2ec6086441989a290c1917fd5",
    2990387
+  ],
+  [
+   "war-soul/sfx_13014/sfx_13014.png.meta",
+   "008d1117a8503b91401c324cbf22f5daf45d5921",
+   2875
   ],
   [
    "war-soul/sfx_13014.meta",
@@ -55427,9 +55892,19 @@
    2864
   ],
   [
+   "war-soul/sfx_13015/sfx_13015.plist.meta",
+   "44d0abb748c560f7c84a4658056547bc84a8d634",
+   9684
+  ],
+  [
    "war-soul/sfx_13015/sfx_13015.png",
    "c1b56939818c084db99fb4f5f67ea4e447f02ca7",
    1864991
+  ],
+  [
+   "war-soul/sfx_13015/sfx_13015.png.meta",
+   "a2154e2e6232dcbaaa34c8fb6b0e0fe9e87c7d6f",
+   2942
   ],
   [
    "war-soul/sfx_13015.meta",
@@ -55442,9 +55917,19 @@
    2866
   ],
   [
+   "war-soul/sfx_13016/sfx_13016.plist.meta",
+   "157d16a55c542122cfa4709bac90c86f371a5c40",
+   9686
+  ],
+  [
    "war-soul/sfx_13016/sfx_13016.png",
    "bbb2af88ffcb1a02a07fc861a334e16fc1d01da1",
    3042881
+  ],
+  [
+   "war-soul/sfx_13016/sfx_13016.png.meta",
+   "96bab94ffb7cb17bde53f37fda658b81ed194250",
+   2916
   ],
   [
    "war-soul/sfx_13016.meta",
@@ -55457,9 +55942,19 @@
    2866
   ],
   [
+   "war-soul/sfx_13017/sfx_13017.plist.meta",
+   "0a53a2da9710658b081f96bd4b617d92949e0440",
+   9686
+  ],
+  [
    "war-soul/sfx_13017/sfx_13017.png",
    "0e5f6ac7bc8ad6f78c006befe83910c29d41ad21",
    3758226
+  ],
+  [
+   "war-soul/sfx_13017/sfx_13017.png.meta",
+   "8853ce19057978c1fbdea9ee9a76560ada6236a7",
+   2918
   ],
   [
    "war-soul/sfx_13017.meta",
@@ -55472,9 +55967,19 @@
    2864
   ],
   [
+   "war-soul/sfx_13018/sfx_13018.plist.meta",
+   "92aeb6a2f341c29c69c23015450fb1ec2c4aa493",
+   9684
+  ],
+  [
    "war-soul/sfx_13018/sfx_13018.png",
    "84a6629f663aa74f917d91650307eaaccbc4d892",
    2457881
+  ],
+  [
+   "war-soul/sfx_13018/sfx_13018.png.meta",
+   "63594fa3f56d520e9d503d316fb28aa53d7a5e8e",
+   2916
   ],
   [
    "war-soul/sfx_13018.meta",
@@ -55487,9 +55992,19 @@
    2566
   ],
   [
+   "war-soul/sfx_13019/sfx_13019.plist.meta",
+   "aa82d6dcc3c65baf24dfacb08ecedd9abddfc497",
+   8519
+  ],
+  [
    "war-soul/sfx_13019/sfx_13019.png",
    "f77954cc8e1308cc36349c860431b650a614f3fb",
    1924208
+  ],
+  [
+   "war-soul/sfx_13019/sfx_13019.png.meta",
+   "376853ca3aca684c995cd0dccc4639177b3ee08b",
+   2924
   ],
   [
    "war-soul/sfx_13019.meta",
@@ -55502,9 +56017,19 @@
    2862
   ],
   [
+   "war-soul/sfx_13020/sfx_13020.plist.meta",
+   "8ed7c44edeebd572f5a6b69abf2b4b37eeb82ef8",
+   9682
+  ],
+  [
    "war-soul/sfx_13020/sfx_13020.png",
    "b84bcb03b2328adba78df0607ac197e8d5f9c096",
    1986068
+  ],
+  [
+   "war-soul/sfx_13020/sfx_13020.png.meta",
+   "954c777862dcd062b52c9a02cf6c3afb6076148c",
+   2858
   ],
   [
    "war-soul/sfx_13020.meta",
@@ -55517,9 +56042,19 @@
    4066
   ],
   [
+   "war-soul/sfx_13101/sfx_13101.plist.meta",
+   "5899551f542835d9c87e37d6b0743db05f12c728",
+   14354
+  ],
+  [
    "war-soul/sfx_13101/sfx_13101.png",
    "f3ad591223e326cd718ba97c773096db77e2860c",
    1892997
+  ],
+  [
+   "war-soul/sfx_13101/sfx_13101.png.meta",
+   "c50281882391660f0239108728c045c360f28cd1",
+   3007
   ],
   [
    "war-soul/sfx_13101.meta",
@@ -55532,9 +56067,19 @@
    4059
   ],
   [
+   "war-soul/sfx_13102/sfx_13102.plist.meta",
+   "bb2326c25bf9113acea40466f3ca3f005830220a",
+   14347
+  ],
+  [
    "war-soul/sfx_13102/sfx_13102.png",
    "0720fc93fee42d6f2e72febc9e19c5eecce72b3b",
    2112806
+  ],
+  [
+   "war-soul/sfx_13102/sfx_13102.png.meta",
+   "98bf96e71df587eab9ac1a6f4b44368192764cb7",
+   3011
   ],
   [
    "war-soul/sfx_13102.meta",
@@ -55547,9 +56092,19 @@
    4066
   ],
   [
+   "war-soul/sfx_13103/sfx_13103.plist.meta",
+   "4074b173169ed8be470834ac24767ddaa00513ed",
+   14354
+  ],
+  [
    "war-soul/sfx_13103/sfx_13103.png",
    "eaa99e92b2f552e8b36d9e38e60498aba0e95e72",
    1847712
+  ],
+  [
+   "war-soul/sfx_13103/sfx_13103.png.meta",
+   "aa16f7b1d16d259f52f587031fcf5fcc30acf224",
+   2998
   ],
   [
    "war-soul/sfx_13103.meta",
@@ -55562,9 +56117,19 @@
    4059
   ],
   [
+   "war-soul/sfx_13104/sfx_13104.plist.meta",
+   "ee48c8ab07d7249b8c350bc5a212f9816a943ee1",
+   14347
+  ],
+  [
    "war-soul/sfx_13104/sfx_13104.png",
    "f2192dd149c294d8552fb6288091cf5d52693bf5",
    2180212
+  ],
+  [
+   "war-soul/sfx_13104/sfx_13104.png.meta",
+   "0e30751f9f0fab9e03ba9c0e0c67c59c7b2b4506",
+   2985
   ],
   [
    "war-soul/sfx_13104.meta",
@@ -55577,9 +56142,19 @@
    4063
   ],
   [
+   "war-soul/sfx_13105/sfx_13105.plist.meta",
+   "0597ef27288e1270417d37bb2abd589351bf60c4",
+   14351
+  ],
+  [
    "war-soul/sfx_13105/sfx_13105.png",
    "65db051b6b2b4a793a2d455beb72a30fde111900",
    2875603
+  ],
+  [
+   "war-soul/sfx_13105/sfx_13105.png.meta",
+   "b163eaa60c34deff8940e35bf71416ac4f3fa4d9",
+   2997
   ],
   [
    "war-soul/sfx_13105.meta",
@@ -55592,9 +56167,19 @@
    4059
   ],
   [
+   "war-soul/sfx_13106/sfx_13106.plist.meta",
+   "94dce69907f7275d27b054a4716f54a8e49bf778",
+   14347
+  ],
+  [
    "war-soul/sfx_13106/sfx_13106.png",
    "8b6d9aeca1b35fd09b2bfacd3b52981b9d47cc60",
    2242916
+  ],
+  [
+   "war-soul/sfx_13106/sfx_13106.png.meta",
+   "c36a7c1eb3a37b25507c06ea88914a6efe258311",
+   3006
   ],
   [
    "war-soul/sfx_13106.meta",
@@ -55607,9 +56192,19 @@
    4066
   ],
   [
+   "war-soul/sfx_13107/sfx_13107.plist.meta",
+   "4cb5ad92376478d65b27f91498cb19141d113711",
+   14354
+  ],
+  [
    "war-soul/sfx_13107/sfx_13107.png",
    "311ca92cb7cc93f2370688926a5c9b8ca636e04e",
    2513058
+  ],
+  [
+   "war-soul/sfx_13107/sfx_13107.png.meta",
+   "376542cc5d13e5810566fb65ca85d2f34f12fca0",
+   2947
   ],
   [
    "war-soul/sfx_13107.meta",
@@ -55622,9 +56217,19 @@
    4066
   ],
   [
+   "war-soul/sfx_13108/sfx_13108.plist.meta",
+   "f8ab47025b58e85ace7fa4a3572638d7262efad8",
+   14354
+  ],
+  [
    "war-soul/sfx_13108/sfx_13108.png",
    "6f3150594193dc16f09eae4139e92a5e383d6956",
    1980177
+  ],
+  [
+   "war-soul/sfx_13108/sfx_13108.png.meta",
+   "338453969fffb63383e5726c1775e2669331c044",
+   2997
   ],
   [
    "war-soul/sfx_13108.meta",
@@ -55637,9 +56242,19 @@
    4059
   ],
   [
+   "war-soul/sfx_13109/sfx_13109.plist.meta",
+   "0d96520614e91b637a621389242e656dd57afbed",
+   14347
+  ],
+  [
    "war-soul/sfx_13109/sfx_13109.png",
    "e68dcc16257ca768f7cc7bbc65585d1608b11e01",
    2120064
+  ],
+  [
+   "war-soul/sfx_13109/sfx_13109.png.meta",
+   "08a3aff2c60fef8bfbda1519617affad1319b87d",
+   2999
   ],
   [
    "war-soul/sfx_13109.meta",
@@ -55652,9 +56267,19 @@
    4066
   ],
   [
+   "war-soul/sfx_13110/sfx_13110.plist.meta",
+   "dae46922a68e68bcf6c278e24e9892e6e696d00f",
+   14354
+  ],
+  [
    "war-soul/sfx_13110/sfx_13110.png",
    "3beca25995bb604f36182aec95b863fa99e42c98",
    3391229
+  ],
+  [
+   "war-soul/sfx_13110/sfx_13110.png.meta",
+   "af9db560d1f565dbf48bd96d41883c8ed5449330",
+   2840
   ],
   [
    "war-soul/sfx_13110.meta",
@@ -55667,9 +56292,19 @@
    4066
   ],
   [
+   "war-soul/sfx_13111/sfx_13111.plist.meta",
+   "b3ced93e358c245d5afce526e874f3a6aaeba23b",
+   14354
+  ],
+  [
    "war-soul/sfx_13111/sfx_13111.png",
    "7d480e5471e87604846377be89216132c7385481",
    1972084
+  ],
+  [
+   "war-soul/sfx_13111/sfx_13111.png.meta",
+   "e7c3a38b214def3cbf370a778c73abb128d1da8f",
+   2955
   ],
   [
    "war-soul/sfx_13111.meta",
@@ -55682,9 +56317,19 @@
    4059
   ],
   [
+   "war-soul/sfx_13112/sfx_13112.plist.meta",
+   "9b118c514ca24ba4da8130c99ec3d93219242310",
+   14347
+  ],
+  [
    "war-soul/sfx_13112/sfx_13112.png",
    "216d43ef1a3fca499fe698cf4d8a12a40ff0d493",
    1793081
+  ],
+  [
+   "war-soul/sfx_13112/sfx_13112.png.meta",
+   "3ef64f6722577c5cc3095863864484402153a930",
+   2997
   ],
   [
    "war-soul/sfx_13112.meta",
@@ -55697,9 +56342,19 @@
    4062
   ],
   [
+   "war-soul/sfx_13113/sfx_13113.plist.meta",
+   "644ff70da795d9a75f94e368b2053ec24edd2a5d",
+   14350
+  ],
+  [
    "war-soul/sfx_13113/sfx_13113.png",
    "e6d94372bb2847e6592be3456d4acaaba0515a6d",
    2555683
+  ],
+  [
+   "war-soul/sfx_13113/sfx_13113.png.meta",
+   "84596aaa095cebba12b9d26d28af9380c6613a50",
+   2997
   ],
   [
    "war-soul/sfx_13113.meta",
@@ -55712,9 +56367,19 @@
    4059
   ],
   [
+   "war-soul/sfx_13114/sfx_13114.plist.meta",
+   "afd5b99bdfe0e1c547f2694e6482dc2e6d802fb0",
+   14347
+  ],
+  [
    "war-soul/sfx_13114/sfx_13114.png",
    "6bd3b9c56e85900513fcdcd48621a22760e1383c",
    1605473
+  ],
+  [
+   "war-soul/sfx_13114/sfx_13114.png.meta",
+   "477e6b071082504ab97ebf57b42fa46a38bffa78",
+   2991
   ],
   [
    "war-soul/sfx_13114.meta",
@@ -55727,9 +56392,19 @@
    4066
   ],
   [
+   "war-soul/sfx_13115/sfx_13115.plist.meta",
+   "24dd889a508d3a879121b379a9e61bfb6ad86a59",
+   14354
+  ],
+  [
    "war-soul/sfx_13115/sfx_13115.png",
    "1894019e704a25515c3aef400a53a34a91559d11",
    1816876
+  ],
+  [
+   "war-soul/sfx_13115/sfx_13115.png.meta",
+   "9e80decc1aad37ed42f5f255431d437e198e74d4",
+   3000
   ],
   [
    "war-soul/sfx_13115.meta",
@@ -55742,9 +56417,19 @@
    4066
   ],
   [
+   "war-soul/sfx_13200/sfx_13200.plist.meta",
+   "7c537dbc1d4ac9706742805d01b2bd31fe917b2c",
+   14354
+  ],
+  [
    "war-soul/sfx_13200/sfx_13200.png",
    "1894019e704a25515c3aef400a53a34a91559d11",
    1816876
+  ],
+  [
+   "war-soul/sfx_13200/sfx_13200.png.meta",
+   "df27d9b0dcad17139a62fcf05f2a63890886c2f5",
+   3000
   ],
   [
    "war-soul/sfx_13200.meta",
@@ -55757,9 +56442,19 @@
    4066
   ],
   [
+   "war-soul/sfx_13201/sfx_13201.plist.meta",
+   "83e3efdd7929da9844e7ef9ac6d8eab516d0eca3",
+   14354
+  ],
+  [
    "war-soul/sfx_13201/sfx_13201.png",
    "6f3150594193dc16f09eae4139e92a5e383d6956",
    1980177
+  ],
+  [
+   "war-soul/sfx_13201/sfx_13201.png.meta",
+   "f4dcbe7be6c5d920f6bf75279f696d20a5bef863",
+   2997
   ],
   [
    "war-soul/sfx_13201.meta",
