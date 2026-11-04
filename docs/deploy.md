@@ -8,19 +8,29 @@
 ## 1. 拓扑：这套部署长什么样
 
 ```
-浏览器 ──► :80    管理端容器(nginx)
-              │    静态页面 + 单页前端路由
-              └─►  /api/*  ──┐
-
-浏览器 ──► :8080 游戏容器(nginx)
-              │    Cocos Web 构建产物（静态）
-              ├─►  /api/*  ─────────┐
-              └─►  /api/realtime* ──┤（含 WS upgrade 头）
-                             ▼      ▼
+浏览器 ──► :80 入口容器(管理端镜像里的 nginx，按 server_name 分流，域名全是环境变量)
+              ├─ yimw.cn / www        ─► 官网容器(nginx，挂 ./website 纯静态)
+              ├─ admin.yimw.cn / IP   ─► 管理端（本容器静态页 + 单页前端路由，default_server 兜底）
+              │    ├─►  /api/*  ────────────────┐
+              │    └─►  /game-resources/* ──┐   │
+              │                             │   │
+              └─ game.yimw.cn         ─► 游戏容器(nginx，同一份 Cocos 产物)
+                    ├─►  /api/*  ─────────┤（含 /api/realtime 的 WS upgrade 头）
+                    ▼                     ▼
               服务端容器(:3100)   实时进程容器(:3101)
               （仅 compose 内网可达，同一镜像、不同入口）
                              └─► SQLite（具名卷 olua-data，WAL 双进程共享）
+
+浏览器 ──► :8080 游戏容器（:80 那条游戏入口的直连等价物，调试用）
 ```
+
+**域名是环境变量，不是配置**：`admin/nginx.conf.template` 是 envsubst 模板，三站域名在
+`deploy.env` 的 `OLUA_SITE_DOMAINS` / `OLUA_ADMIN_DOMAIN` / `OLUA_GAME_DOMAIN` 里给，
+deploy.sh 每次部署生成 compose `.env` 上传 → 换域名只改 deploy.env 重发，不改代码、不重建镜像。
+
+管理端的图片 / 音效选择器与装备对齐工作台走 `/game-resources/`（反代到 game 容器的
+`/resources/`）：那份素材（`client/assets/resources`，含 `image-manifest.json` /
+`audio-manifest.json`）**不在 Cocos 构建产物里**，要单独 `deploy.sh --resources` 增量同步。
 
 三条设计约束，改动时别破坏：
 
@@ -29,6 +39,7 @@
 | 管理端与接口**同源**（都从 :80 进，`/api` 由 nginx 反代） | 浏览器压根不发跨域请求 → 服务端**不需要配 CORS**，少一处会配错且配错难发现的地方 |
 | 服务端 `:3100` **不映射到宿主机** | 对外多开一个端口只是把签名接口和 Swagger 一并暴露，没有收益。要本地调试就把 `docker-compose.yml` 里那四行注释打开 |
 | 实时进程 `:3101` **同样不映射**（#175 拆进程） | game 容器把 `/api/realtime*` 按路径反代到 `server-realtime`（含 WS upgrade 头），客户端零改动；两进程共享同一个 SQLite 卷（WAL） |
+| **管理端块必须 `default_server`** | nginx 的 `_` 不是通配符；不标默认站点的话，未匹配域名（如 IP 直访）会落到 :80 的**第一个** server 块（官网站）拿 404 |
 | **不上 HTTPS**（当前决定） | 先跑通。将来要上就在宿主机加一层 nginx/Caddy 做 TLS 终结、反代到 :80，不动 compose |
 
 数据落在具名卷 `olua-data`，`docker compose down` **不会**删它；只有 `down -v` 才会。
