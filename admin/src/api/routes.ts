@@ -340,7 +340,7 @@ export const routes = {
      */
     save: (id: string) => `/admin/equip-in-aligns/${encodeURIComponent(id)}`,
   },
-  /** adminEquipmentBackground 模块（2 个接口） */
+  /** adminEquipmentBackground 模块（4 个接口） */
   adminEquipmentBackground: {
     /**
      * 装备详情背景配置（GET /admin/equipment-backgrounds）
@@ -354,8 +354,20 @@ export const routes = {
      * **整边替换**：提交的 `assignments` + `customs` 就是背景这半边的新配置，不是增量；
      */
     update: "/admin/equipment-backgrounds",
+    /**
+     * 扫描背景资源文件夹（同步预览）（GET /admin/equipment-backgrounds/resources）
+     *
+     * 扫资源目录（`EQUIPMENT_APPEARANCE_RES_DIR`，缺省 `../client/assets/resources`；线上 compose
+     */
+    scanResources: "/admin/equipment-backgrounds/resources",
+    /**
+     * 按资源文件夹同步背景清单（以文件夹为准）（POST /admin/equipment-backgrounds/sync）
+     *
+     * **以文件夹为准**重建背景清单：文件夹里的素材全保留（effect 原样），文件夹里没有的
+     */
+    syncResources: "/admin/equipment-backgrounds/sync",
   },
-  /** adminEquipmentBorder 模块（2 个接口） */
+  /** adminEquipmentBorder 模块（4 个接口） */
   adminEquipmentBorder: {
     /**
      * 装备边框配置（GET /admin/equipment-borders）
@@ -369,6 +381,18 @@ export const routes = {
      * **整边替换**：提交的 `assignments` + `customs` 就是边框这半边的新配置，不是增量；
      */
     update: "/admin/equipment-borders",
+    /**
+     * 扫描边框资源文件夹（同步预览）（GET /admin/equipment-borders/resources）
+     *
+     * 扫资源目录（`EQUIPMENT_APPEARANCE_RES_DIR`，缺省 `../client/assets/resources`；线上 compose
+     */
+    scanResources: "/admin/equipment-borders/resources",
+    /**
+     * 按资源文件夹同步边框清单（以文件夹为准）（POST /admin/equipment-borders/sync）
+     *
+     * **以文件夹为准**重建边框清单：文件夹里的素材全保留（effect 原样），文件夹里没有的
+     */
+    syncResources: "/admin/equipment-borders/sync",
   },
   /** adminEquipmentMeta 模块（2 个接口） */
   adminEquipmentMeta: {

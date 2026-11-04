@@ -15,12 +15,30 @@
  * 用法：npm run test:e2e:game-config（前置 npm run build）
  */
 const { spawn } = require("node:child_process");
+const fs = require("node:fs");
 const net = require("node:net");
+const os = require("node:os");
 const path = require("node:path");
 
 const SERVER_DIR = path.join(__dirname, "..");
 const ENTRY = path.join(SERVER_DIR, "dist", "main.js");
 const ADMIN_CODE = "gamecfgadmin-code";
+
+/**
+ * #716「从文件夹同步」的临时素材目录：**起服务之前**就要建好并随 env 传进子进程 ——
+ * 服务是独立进程，测试中途改 process.env 它看不见；中途能变的只有磁盘文件，
+ * 所以「目录坏了 / 空了」的场景都靠现场增删这里的文件来演。
+ */
+const appearanceResTmp = fs.mkdtempSync(path.join(os.tmpdir(), "olua-appearance-res-"));
+fs.mkdirSync(path.join(appearanceResTmp, "borders"));
+fs.mkdirSync(path.join(appearanceResTmp, "backgrounds", "sfx_19991"), { recursive: true });
+for (const serial of [99991, 99992]) {
+  fs.writeFileSync(path.join(appearanceResTmp, "borders", `sfx_${serial}_0.plist`), "");
+  fs.writeFileSync(path.join(appearanceResTmp, "borders", `sfx_${serial}_0.png`), "");
+}
+fs.writeFileSync(path.join(appearanceResTmp, "borders", "sfx_99994_0.plist"), ""); // 没有同名 png：坏素材，扫描必须跳过
+fs.writeFileSync(path.join(appearanceResTmp, "backgrounds", "sfx_19991", "frame_000.png"), "");
+
 
 // 出厂值的预期来源：配置快照 `server/data/config-sync.sql`
 //
@@ -215,7 +233,7 @@ async function registerAdmin(baseUrl, username, password) {
 //#region 主流程
 
 async function main() {
-  const server = await startServer({});
+  const server = await startServer({ EQUIPMENT_APPEARANCE_RES_DIR: appearanceResTmp });
   try {
     const base = server.baseUrl;
     const token = await registerAdmin(base, "gamecfgadmin", "GameCfg#1");
@@ -2533,6 +2551,114 @@ async function main() {
       body: { assignments: appearanceSeedRow.backgrounds, customs: appearanceSeedRow.customBackgrounds },
     });
     checkEqual(restoreBackgrounds.status, 200, "还原背景半边出厂值（seed 前提复原）");
+
+    // —— 从文件夹同步（#716）：临时素材目录为准整批增删清单，被引用的也允许移除 ——
+    group("二十二·补、从文件夹同步：以磁盘素材为准整批增删清单，effect 存活保留（#716）");
+
+    const fsSync = require("node:fs");
+    const nodePath = require("node:path");
+    const bordersDir = nodePath.join(appearanceResTmp, "borders");
+
+    // 目录坏了（这里把 borders/ 整个搬走模拟挂载缺失）→ 扫描 400
+    fsSync.renameSync(bordersDir, `${bordersDir}.bak`);
+    const missingDirRes = await api(base, "GET", "/api/admin/equipment-borders/resources", { token });
+    checkEqual(missingDirRes.status, 400, "素材目录不存在 → 扫描 400（错误里带路径，排查挂载用）");
+    fsSync.renameSync(`${bordersDir}.bak`, bordersDir);
+
+    // 同步前先把清单摆成受控状态：99991 带 effect、15 个出厂边框不带（覆盖掉前面小节残留在库里的零散条目）
+    const seedEffectPreset = await api(base, "PATCH", "/api/admin/equipment-borders", {
+      token,
+      body: {
+        assignments: borderOk.map((row) => ({ ...row })),
+        customs: [],
+        items: [{ key: "sfx_99991_0", effect: { x: 5, y: 0, scale: 2 } }, ...borderOk.map((row) => ({ key: row.key }))],
+      },
+    });
+    checkEqual(seedEffectPreset.status, 200, "预置清单：99991 带 effect（同步不得冲掉）");
+
+    const borderScanRes = await api(base, "GET", "/api/admin/equipment-borders/resources", { token });
+    checkEqual(borderScanRes.status, 200, "扫描边框资源文件夹");
+    const borderScan = borderScanRes.body?.data ?? {};
+    checkEqual(borderScan.dir, bordersDir, "扫描目录 = env 下的 borders/");
+    checkEqual(JSON.stringify(borderScan.keys), JSON.stringify(["sfx_99991_0", "sfx_99992_0"]), "keys = 成对素材按编号升序（缺 png 的 99994 被跳过）");
+    checkEqual(JSON.stringify(borderScan.added), JSON.stringify(["sfx_99992_0"]), "added = 文件夹有清单没有（99991 已在受控清单里）");
+    checkEqual(borderScan.removed?.length, 15, "removed = 清单里的 15 个出厂边框（文件夹里都没有）");
+    checkEqual(borderScan.removedReferenced?.length, 15, "removedReferenced = 全部 15 个（都被棋盘引用着）");
+
+    const borderSyncRes = await api(base, "POST", "/api/admin/equipment-borders/sync", { token });
+    checkEqual(borderSyncRes.status, 201, "按文件夹同步边框清单");
+    const borderSync = borderSyncRes.body?.data ?? {};
+    checkEqual(borderSync.kept, 2, "同步后清单 = 文件夹里的 2 个素材");
+    checkEqual(borderSync.added?.length, 1, "本次新增 1 条（99992）");
+    checkEqual(borderSync.removed?.length, 15, "本次移除 15 条（文件夹里没有）");
+    const borderAfterSync = await api(base, "GET", "/api/admin/equipment-borders", { token });
+    const borderAfterSyncItems = borderAfterSync.body?.data?.items ?? [];
+    const item99991 = borderAfterSyncItems.find((row) => row.key === "sfx_99991_0");
+    checkEqual(item99991?.effect?.x, 5, "存活条目的 effect 原样保留（清单是效果的唯一来源）");
+    checkEqual(borderAfterSync.body?.data?.assignments?.length, 15, "棋盘不被同步动（15 格原样）");
+    checkEqual(borderAfterSync.body?.data?.items?.length, 17, "GET 清单 = 2 个文件夹素材 + 15 个仍被引用的自动并入（引用处可见，待修复）");
+
+    // 棋盘整体改指文件夹里的素材（15 组合都指 99991），绑定指 99992 —— 引用完整性校验照常放行
+    const reassignToFolder = await api(base, "PATCH", "/api/admin/equipment-borders", {
+      token,
+      body: {
+        assignments: borderOk.map((row) => ({ prefix: row.prefix, suffix: row.suffix, key: "sfx_99991_0" })),
+        customs: [{ equipment: "weapon_20", key: "sfx_99992_0" }],
+      },
+    });
+    checkEqual(reassignToFolder.status, 200, "棋盘 / 绑定改指文件夹素材");
+
+    // 文件夹里删掉 99992 → 再同步：仍被绑定引用的条目也移除
+    fsSync.rmSync(nodePath.join(bordersDir, "sfx_99992_0.plist"));
+    fsSync.rmSync(nodePath.join(bordersDir, "sfx_99992_0.png"));
+    const borderRescanRes = await api(base, "GET", "/api/admin/equipment-borders/resources", { token });
+    checkEqual(JSON.stringify(borderRescanRes.body?.data?.removed), JSON.stringify(["sfx_99992_0"]), "文件删除后扫描标出 removed");
+    checkEqual(JSON.stringify(borderRescanRes.body?.data?.removedReferenced), JSON.stringify(["sfx_99992_0"]), "removed 里的 99992 仍被绑定引用");
+    const borderResyncRes = await api(base, "POST", "/api/admin/equipment-borders/sync", { token });
+    checkEqual(borderResyncRes.status, 201, "删除文件后再同步");
+    checkEqual(borderResyncRes.body?.data?.removedReferenced?.length, 1, "被引用也照样移除（#716 的分歧点：同步不受「被引用不可删」约束）");
+    const borderResyncedItems = (await api(base, "GET", "/api/admin/equipment-borders", { token })).body?.data?.items ?? [];
+    checkEqual(borderResyncedItems.length, 2, "清单 = 1 个文件夹素材 + 1 个仍被绑定引用的自动并入");
+    check(borderResyncedItems.some((row) => row.key === "sfx_99992_0"), "被引用的 99992 读取时仍在清单里（引用处显示异常，运营可见）");
+
+    // 空目录安全阀：目录在但素材被搬空（多半是挂载配错）→ 拒绝清空清单
+    fsSync.mkdirSync(`${bordersDir}.empty`, { recursive: true });
+    for (const name of fsSync.readdirSync(bordersDir)) fsSync.renameSync(nodePath.join(bordersDir, name), nodePath.join(`${bordersDir}.empty`, name));
+    const emptyDirRes = await api(base, "POST", "/api/admin/equipment-borders/sync", { token });
+    checkEqual(emptyDirRes.status, 400, "空目录 → 同步 400 且不落库");
+    const borderAfterEmpty = await api(base, "GET", "/api/admin/equipment-borders", { token });
+    check((borderAfterEmpty.body?.data?.items ?? []).length > 0, "400 之后清单原样（没有被清空）");
+    for (const name of fsSync.readdirSync(`${bordersDir}.empty`)) fsSync.renameSync(nodePath.join(`${bordersDir}.empty`, name), nodePath.join(bordersDir, name));
+    fsSync.rmdirSync(`${bordersDir}.empty`);
+
+    // —— 背景半边同样走一遍（子目录 / key 格式不同） ——
+    const bgSyncRes = await api(base, "POST", "/api/admin/equipment-backgrounds/sync", { token });
+    checkEqual(bgSyncRes.status, 201, "按文件夹同步背景清单");
+    checkEqual(bgSyncRes.body?.data?.kept, 1, "背景清单 = 文件夹里的 1 个素材");
+    checkEqual(bgSyncRes.body?.data?.removed?.length, 15, "背景的 15 个出厂条目被移除");
+    const borderAfterBgSync = await api(base, "GET", "/api/admin/equipment-borders", { token });
+    checkEqual(borderAfterBgSync.body?.data?.items?.length, 2, "同步背景不动边框清单（拆边语义在同步路径上同样成立）");
+
+    // —— 还原：清单 / 棋盘 / 绑定写回出厂值 ——
+    const restoreBorderSync = await api(base, "PATCH", "/api/admin/equipment-borders", {
+      token,
+      body: {
+        assignments: appearanceSeedRow.borders,
+        customs: appearanceSeedRow.customBorders,
+        items: appearanceSeedRow.borders.map((row) => ({ key: row.key })),
+      },
+    });
+    checkEqual(restoreBorderSync.status, 200, "还原边框清单 / 棋盘 / 绑定（seed 前提复原）");
+    const restoreBgSync = await api(base, "PATCH", "/api/admin/equipment-backgrounds", {
+      token,
+      body: {
+        assignments: appearanceSeedRow.backgrounds,
+        customs: appearanceSeedRow.customBackgrounds,
+        items: appearanceSeedRow.backgrounds.map((row) => ({ key: row.key })),
+      },
+    });
+    checkEqual(restoreBgSync.status, 200, "还原背景清单 / 棋盘（seed 前提复原）");
+    fsSync.rmSync(appearanceResTmp, { recursive: true, force: true });
 
     //#endregion
 

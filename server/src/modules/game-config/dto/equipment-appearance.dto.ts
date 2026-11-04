@@ -177,6 +177,62 @@ export class EquipmentBackgroundDto {
   updatedAt: number;
 }
 
+/**
+ * 资源文件夹扫描结果（#716「从文件夹同步」的预览）
+ *
+ * 服务端去扫 `EQUIPMENT_APPEARANCE_RES_DIR`（默认 `../client/assets/resources`）
+ * 下的 `borders/`（sfx_N_0.plist + 同名 png）或 `backgrounds/`（sfx_N 目录），
+ * 与当前清单求差集 —— 管理端拿它弹「将新增 / 将移除」的确认框。
+ */
+export class AppearanceResourceScanDto {
+  @ApiProperty({ description: "实际扫描的资源目录（排查「为什么扫不到」用）", example: "/app/game-resources" })
+  @IsString()
+  dir: string;
+
+  @ApiProperty({ description: "文件夹里的全部 key（按 sfx 编号升序）", example: ["sfx_30123_0"], type: [String] })
+  @IsArray()
+  keys: string[];
+
+  @ApiProperty({ description: "文件夹有、清单没有的 key（同步会新增）", example: [], type: [String] })
+  @IsArray()
+  added: string[];
+
+  @ApiProperty({ description: "清单有、文件夹没有的 key（同步会移除）", example: [], type: [String] })
+  @IsArray()
+  removed: string[];
+
+  @ApiProperty({
+    description: "removed 里仍被棋盘 / 特殊装备绑定引用的 key（#716 允许移除；引用处会显示异常，客户端安静跳过）",
+    example: [],
+    type: [String],
+  })
+  @IsArray()
+  removedReferenced: string[];
+}
+
+/** 同步执行结果（POST .../sync 的响应） */
+export class AppearanceResourceSyncDto {
+  @ApiProperty({ description: "本次新增的 key", example: ["sfx_30183_0"], type: [String] })
+  @IsArray()
+  added: string[];
+
+  @ApiProperty({ description: "本次移除的 key", example: [], type: [String] })
+  @IsArray()
+  removed: string[];
+
+  @ApiProperty({ description: "移除的 key 里仍被引用的（引用处待运营修复）", example: [], type: [String] })
+  @IsArray()
+  removedReferenced: string[];
+
+  @ApiProperty({ description: "保留的条目数（存活条目连同已配置的 effect 一起保留）", example: 84 })
+  @IsInt()
+  kept: number;
+
+  @ApiProperty({ description: "同步后的最后修改时间（毫秒）", example: 1762000000000 })
+  @IsInt()
+  updatedAt: number;
+}
+
 /** 单边提交（先校验后写：任何一条不合法整边不落库；另一边不受影响） */
 export class UpdateEquipmentBorderDto {
   /**
