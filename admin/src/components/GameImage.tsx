@@ -43,7 +43,8 @@ const imgClass = "rounded border border-slate-800 bg-slate-900/60 object-contain
  * portal 到 body：列表页的表格/侧栏都有自己的 overflow 裁剪，留在原处会被裁掉。
  * 点遮罩或按 Esc 关闭（管理端没有移动端诉求，不做的手势）。
  */
-function Lightbox({ alt, onClose, children }: { alt?: string; onClose: () => void; children: React.ReactNode }) {
+/** 导出给帧动画播放器（FrameAnimation）复用：portal 灯箱 + Esc 关闭的交互是同一套 */
+export function Lightbox({ alt, onClose, children }: { alt?: string; onClose: () => void; children: React.ReactNode }) {
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") onClose();
@@ -71,8 +72,8 @@ function Lightbox({ alt, onClose, children }: { alt?: string; onClose: () => voi
   );
 }
 
-/** 包住缩略图的按钮：点开放大；stopPropagation 防止触发行/表格上的其它点击行为 */
-function Zoomable({
+/** 包住缩略图的按钮：点开放大；stopPropagation 防止触发行/表格上的其它点击行为（帧动画播放器同用） */
+export function Zoomable({
   alt,
   onZoom,
   children,
@@ -152,7 +153,7 @@ export type FirstFrame = { image: HTMLImageElement; x: number; y: number; w: num
 
 const frameCache = new Map<string, Promise<FirstFrame | null>>();
 
-function loadImage(url: string): Promise<HTMLImageElement> {
+export function loadImage(url: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.onload = () => resolve(img);

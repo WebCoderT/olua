@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { equipmentBackgroundApi, equipmentBorderApi, formatTime, PERMISSION } from "../api";
 import type { AppearanceAssignment, AppearanceEffect, AppearanceItem, AppearanceResourceScan, CustomAppearance } from "../api";
-import { GameFrame } from "../components/GameImage";
+import { FrameAnimation } from "../components/FrameAnimation";
 import { AppearanceEffectWorkbench, DEFAULT_EFFECT, describeEffect, isDefaultEffect } from "../components/AppearanceEffectWorkbench";
 import type { AppearanceEffectValue } from "../components/AppearanceEffectWorkbench";
 import { Modal } from "../components/Modal";
@@ -29,7 +29,8 @@ import { toastSuccess } from "../store/toast";
  * 仍受「被引用不可删」校验保护 —— 两套口径各管各的场景。
  *
  * ## 每条的预览与效果
- * 每条带 `GameFrame` 首帧缩略图（素材本体经 /game-resources 同源直读，服务端不用存图）；
+ * 每条带 `FrameAnimation` 帧动画预览（#732：素材本体经 /game-resources 同源直读，服务端不用
+ * 存图；循环播放、点击放大播大图 —— 首帧看不出来动效，边框光效 / 背景动画要动起来才能挑）；
  * 「效果」按钮打开显示效果工作台（AppearanceEffectWorkbench）：以素材第一帧为基准，
  * 拖拽调偏移、滑杆调缩放 —— 与「装备对齐」工作台同一套交互取向。
  * effect 缺省 = 客户端默认适配（边框 contain 缩进 56×56 外框；背景宽度贴面板、
@@ -361,7 +362,7 @@ function EquipmentAppearanceKindPage({ config }: { config: KindConfig }) {
                       return (
                         <tr key={index}>
                           <td className={tdClass}>
-                            <GameFrame atlas={row.key ? config.atlasOf(row.key) : ""} size={40} alt={row.key} />
+                            <FrameAnimation atlas={row.key ? config.atlasOf(row.key) : ""} size={40} alt={row.key} />
                           </td>
                           <td className={tdClass}>
                             <Input

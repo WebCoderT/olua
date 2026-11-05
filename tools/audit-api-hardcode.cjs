@@ -52,6 +52,8 @@ const ENDPOINT = {
   adminAssets: [
     "admin/src/pages/equipAlign/assets.ts",
     "admin/src/components/GameImage.tsx",
+    // 帧动画播放器（#732）：同一套 /game-resources 静态直读（plist + png），不碰 /api、不带令牌
+    "admin/src/components/FrameAnimation.tsx",
     "admin/src/components/ImagePicker.tsx",
     // 音效配置页（#680）的音频清单 / 目录列表：同属静态素材读取，不碰 /api、不带令牌
     "admin/src/pages/audioSettings/assets.ts",
