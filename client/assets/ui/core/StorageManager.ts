@@ -532,6 +532,10 @@ export default class StorageManager {
   static applyServerRoleUpdate(update: RoleAuthorityUpdate): void {
     const role = this.findOnlineRole();
     if (!role) return;
+    // 迟到帧守卫（#732）：帧由「行变了」触发，但 bagOp / 称号等 HTTP 应答可能先一步改了本地
+    // （revision 更大）；随后才到的旧帧整帧丢弃 —— 否则战斗力 / 货币会被拉回旧值再弹回来（显示抖动）。
+    // revision 相同的帧照常应用（幂等快照）；任一侧没有 revision 不设防（老服务端兼容）
+    if (typeof update.revision === "number" && typeof role.revision === "number" && update.revision < role.revision) return;
     // 金钱变化音（#683）：这一帧是所有货币变化的汇合点（任务发奖 / 商城 / 回收 / 后台改动），
     // 所以只在**真的变了**的时候响 —— 每帧都响会盖过其它音效（这条帧每几秒就来一次）
     const moneyChanged = update.gold !== role.gold || update.bindGold !== role.bindGold || update.silver !== role.silver;

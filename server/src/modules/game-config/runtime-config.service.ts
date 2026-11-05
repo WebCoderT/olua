@@ -66,8 +66,14 @@ export class RuntimeConfigService implements OnApplicationBootstrap {
     this.refreshAll();
   }
 
-  /** 全量重装（启动时一次 + 每次管理端写操作后一次） */
-  refreshAll(): void {
+  /**
+   * 全量重装（启动时一次 + 每次管理端写操作后一次）
+   *
+   * `silent = true` 给实时进程的**定期重装**用（#732）：每 10 秒一条装载日志只会刷屏，
+   * 正常重装没有值得说的内容 —— 出问题（空表 warn）照喊，那是 warn 自己的活
+   */
+  refreshAll(options?: { silent?: boolean }): void {
+    const silent = options?.silent === true;
     const equipments = this.equipments.list({ ...ALL });
     const variants = this.equipmentVariants.listAll();
     const roleLevels = this.roleLevels.listAll();
@@ -91,12 +97,13 @@ export class RuntimeConfigService implements OnApplicationBootstrap {
     applyItemOverrides(items);
     applyGrowthScalars(scalars);
 
-    // 只记条数不记值：出问题时第一件事就是确认「结算层里到底装没装上」
-    this.logger.log(
-      `运营配置已装载：装备 ${equipments.length} 件 / 变体 ${variants.length} 件 · 角色等级 ${roleLevels.length} 级 · ` +
-        `称号 ${titles.length} 级 · 战魂 ${souls.length} 阶 · 军衔 ${ranks.length} 阶 · ` +
-        `技能 ${skills.length} 个 · 药品 ${drugs.length} 种 · 材料 ${items.length} 种 · 成长标量 ${scalars.length} 项`,
-    );
+    // 只记条数不记值：出问题时第一件事就是确认「结算层里到底装没装上」（定期重装静默跳过）
+    if (!silent)
+      this.logger.log(
+        `运营配置已装载：装备 ${equipments.length} 件 / 变体 ${variants.length} 件 · 角色等级 ${roleLevels.length} 级 · ` +
+          `称号 ${titles.length} 级 · 战魂 ${souls.length} 阶 · 军衔 ${ranks.length} 阶 · ` +
+          `技能 ${skills.length} 个 · 药品 ${drugs.length} 种 · 材料 ${items.length} 种 · 成长标量 ${scalars.length} 项`,
+      );
     // 空表 = 出厂快照没灌进来（`server/data/config-sync.sql`）。必须喊出来：
     // #655 之后没有「回落生成物」这回事了，空表就是「没配」，属性会算成 0
     this.warnIfEmpty("equipments", equipments.length);

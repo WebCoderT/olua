@@ -11,6 +11,7 @@ import { AccountRepository } from "../../database/repositories/account.repositor
 import type { RoleRow } from "../../database/rows";
 import { WorldService } from "../world/world.service";
 import { roleAttributeSourceOf, summarizeRoleAttributes } from "../combat/role-attributes";
+import { RuntimeConfigService } from "../game-config/runtime-config.service";
 import { RolesService } from "../roles/roles.service";
 import { decodeStoredRoleData } from "../roles/role-data.util";
 import { RealtimeTicketDto } from "./dto/realtime.dto";
@@ -118,6 +119,8 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
   private kickPollTimer: NodeJS.Timeout | null = null;
   /** 角色快照轮询定时器（见 syncRoles；0 = 关闭推送） */
   private roleSyncTimer: NodeJS.Timeout | null = null;
+  /** 运营配置定期重装定时器（见 configRefreshMs；0 = 关闭重装） */
+  private configRefreshTimer: NodeJS.Timeout | null = null;
   /** 握手路径（`/<API_PREFIX>/realtime`），bootstrap 时按前缀算出来 */
   private path = `/${REALTIME_PATH}`;
   private closing = false;
@@ -135,6 +138,7 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
     private readonly world: WorldService,
     private readonly accounts: AccountRepository,
     private readonly roles: RolesService,
+    private readonly runtimeConfig: RuntimeConfigService,
   ) {}
 
   //#region 取票据（HTTP 接口调用）
@@ -194,6 +198,13 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
       // 角色权威快照轮询（#541）：属性 / 战斗力 / 货币的写点分散在两个进程，
       // 轮询库变更才推（见 syncRoles）—— 这是玩家面板「实时」的全部来源
       this.roleSyncTimer = setInterval(() => this.syncRoles(), roleSyncMs).unref();
+    }
+    const configRefreshMs = this.configRefreshMs();
+    if (configRefreshMs > 0) {
+      // 运营配置定期重装（#732）：管理端写操作后的 refreshAll 是**进程内**的，跨不到本进程 ——
+      // 不重装的话本进程永远按启动时的旧值现算属性与战斗力，roleUpdate 帧与操作应答各执
+      // 一份值，客户端战斗力显示在两个数之间来回翻。表都很小，全量重装很轻；静默（不刷装载日志）
+      this.configRefreshTimer = setInterval(() => this.runtimeConfig.refreshAll({ silent: true }), configRefreshMs).unref();
     }
     // 世界状态变化（重生等）由世界层通知，这里补上广播出口（世界层不知道连接的存在）
     this.world.onWorldChanged = (zoneId, mapId) => this.broadcastWorld(zoneId, mapId);
@@ -270,6 +281,11 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
     return Math.max(0, Number(this.config.get<number>("realtimeRoleSyncMs") ?? 1000));
   }
 
+  /** 运营配置定期重装间隔（毫秒；0 = 关闭重装） */
+  private configRefreshMs(): number {
+    return Math.max(0, Number(this.config.get<number>("realtimeConfigRefreshMs") ?? 10_000));
+  }
+
   /**
    * 关掉通道（**在 `onModuleDestroy` 而不是 `onApplicationShutdown` 里**）
    *
@@ -285,10 +301,11 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
    */
   async onModuleDestroy(): Promise<void> {
     this.closing = true;
-    for (const timer of [this.heartbeatTimer, this.ticketSweepTimer, this.kickPollTimer, this.roleSyncTimer]) if (timer) clearInterval(timer);
+    for (const timer of [this.heartbeatTimer, this.ticketSweepTimer, this.kickPollTimer, this.roleSyncTimer, this.configRefreshTimer]) if (timer) clearInterval(timer);
     this.heartbeatTimer = null;
     this.ticketSweepTimer = null;
     this.kickPollTimer = null;
+    this.configRefreshTimer = null;
     this.roleSyncTimer = null;
     this.tickets.clear();
 

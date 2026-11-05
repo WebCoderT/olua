@@ -72,5 +72,20 @@ export const uiTheme = {
       riseDistance: 40,
       fadeDuration: 1,
     },
+    /**
+     * 战斗力变化飘字（信息栏战斗力旁边，#732）
+     * 颜色按变化方向由代码选：上升 upColor / 下降 downColor（文案 ±delta 也在代码里拼）
+     */
+    combat: {
+      upColor: new Color(90, 220, 110, 255),
+      downColor: new Color(255, 96, 96, 255),
+      fontSize: 14,
+      size: new Size(90, 18),
+      spawnOffsetX: 36,
+      spawnOffsetY: 14,
+      riseDuration: 0.5,
+      riseDistance: 26,
+      fadeDuration: 1.1,
+    },
   },
 };

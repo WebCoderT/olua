@@ -60,6 +60,8 @@ import { EquipmentAppearanceService } from "./equipment-appearance.service";
   // 运行时参数（#605）：社交域（social）的帮会规则门槛要读同一份配置
   // 战斗力权重（#605）：不需要对外导出 —— 服务端结算经 `shared/runtime-overrides` 的覆盖层读，
   // 不跨模块注入（`role-attributes` 是纯函数，拿不到 Nest 的 provider）
-  exports: [MallPricingService, RuntimeParamsService],
+  // RuntimeConfigService（#732）：实时进程要定时 refreshAll —— 管理端写操作后的进程内重装
+  // 跨不过进程边界，实时进程不重装就会按旧配置现算战斗力（与操作应答各执一份值，客户端抖动）
+  exports: [MallPricingService, RuntimeParamsService, RuntimeConfigService],
 })
 export class GameConfigModule {}

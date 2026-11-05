@@ -29,6 +29,10 @@ export default class RoleInfoBar extends Node {
   private silverCountLabel: Label;
   /** 战斗力文本 */
   private combatLabel: Label;
+  /** 战斗力零件节点（±飘字的挂点） */
+  private combatNode: Node;
+  /** 上一次显示的战斗力（变化检测基准；构造时初始化，首次刷新不弹 ±提示） */
+  private shownCombat: number;
   /** 是否为本人信息栏（本人贴左上角，其他玩家固定在屏幕中心） */
   private isSelf: boolean;
 
@@ -64,6 +68,8 @@ export default class RoleInfoBar extends Node {
     // 战斗力
     const combat = GameUiHelper.createCombatPower(role, layout.combat.position);
     this.combatLabel = combat.combatLabel;
+    this.combatNode = combat.node;
+    this.shownCombat = role.combat;
     this.addChild(combat.node);
     // 状态图标条（头像正下方，进行中状态的图标；由 StatusManager 经 RoleUIManager 刷新）
     const statusIconBar = new StatusIconBar();
@@ -82,11 +88,26 @@ export default class RoleInfoBar extends Node {
   }
 
   /** 数据变更后刷新显示 */
-  updateRole(role: Role) {    this.nameLabel.string = role.name;
+  updateRole(role: Role) {
+    this.nameLabel.string = role.name;
     this.levelLabel.string = role.level.toString();
     this.goldCountLabel.string = role.gold.toString();
     this.bindGoldCountLabel.string = role.bindGold.toString();
     this.silverCountLabel.string = role.silver.toString();
-    this.combatLabel.string = role.combat.toString();
+    this.updateCombat(role.combat);
+  }
+
+  /**
+   * 战斗力数字更新（#732）：真的变了才动文本，并在战斗力旁边弹 ±飘字（上升绿 / 下降红）
+   *
+   * 战斗力的写点有多路（bagOp 应答 / roleUpdate 帧），没变就一个字都不动 ——
+   * 「抖动」的另一面是「没变化也重绘」，这里顺带把显示收敛成变化驱动
+   */
+  private updateCombat(combat: number) {
+    if (combat === this.shownCombat) return;
+    const delta = combat - this.shownCombat;
+    this.shownCombat = combat;
+    this.combatLabel.string = combat.toString();
+    GameUiHelper.showCombatDelta(this.combatNode, delta);
   }
 }

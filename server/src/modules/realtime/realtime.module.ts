@@ -1,4 +1,5 @@
 import { Module } from "@nestjs/common";
+import { GameConfigModule } from "../game-config/game-config.module";
 import { RolesModule } from "../roles/roles.module";
 import { QuestModule } from "../quest/quest.module";
 import { PartyModule } from "../party/party.module";
@@ -34,7 +35,9 @@ import { SoakPointService } from "./soak-point.service";
  * 缓存（`BlockService`）住在本模块 —— 只有实时进程需要它，放社交模块会让 HTTP 进程也养一份。
  */
 @Module({
-  imports: [RolesModule, QuestModule, WorldModule, PartyModule],
+  // GameConfigModule（#732）：RealtimeService 注入 RuntimeConfigService 做定期重装 ——
+  // RolesModule 虽然也 import 了它，但 Nest 的 provider 不随间接 import 透传，这里要自己挂
+  imports: [GameConfigModule, RolesModule, QuestModule, WorldModule, PartyModule],
   controllers: [RealtimeController],
   providers: [
     RealtimeService,
