@@ -2261,9 +2261,11 @@ export default class GameUiHelper {
    * @param node 播放动画的节点
    * @param dirSrc 动画帧存放的文件夹
    * @param speedRate 速度倍率
+   * @param onReady 片段装上并起播后的回调（同步就绪立即回调、异步装载完成回调）
+   * @param isStale 异步装载完成后的作废判断（见 AnimationHelper.useManyNameAnimation）
    */
-  static useRoleAnimation(name: string, node: Node, dirSrc: string, speedRate: SpeedRate) {
-    return AnimationHelper.useRoleAnimation(name, node, dirSrc, speedRate);
+  static useRoleAnimation(name: string, node: Node, dirSrc: string, speedRate: SpeedRate, onReady?: () => void, isStale?: () => boolean) {
+    return AnimationHelper.useRoleAnimation(name, node, dirSrc, speedRate, onReady, isStale);
   }
 
   /**

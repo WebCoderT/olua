@@ -601,9 +601,11 @@ export default class AnimationHelper {
    * @param node 播放动画的节点
    * @param dirSrc 动画帧存放的文件夹
    * @param speedRate 速度倍率
+   * @param onReady 片段装上并起播后的回调（见 useManyNameAnimation）
+   * @param isStale 异步装载完成后的作废判断（见 useManyNameAnimation）
    */
-  static useRoleAnimation(name: string, node: Node, dirSrc: string, speedRate: SpeedRate) {
-    return this.useManyNameAnimation(name, node, dirSrc, speedRate, "role");
+  static useRoleAnimation(name: string, node: Node, dirSrc: string, speedRate: SpeedRate, onReady?: () => void, isStale?: () => boolean) {
+    return this.useManyNameAnimation(name, node, dirSrc, speedRate, "role", onReady, isStale);
   }
 
   /**
@@ -618,6 +620,14 @@ export default class AnimationHelper {
   }
 
   /**
+   * 外观片段是否已就绪（缓存命中即同步可装）：
+   * 换装场景用它判断「帧没加载完成要不要先把节点藏起来」（见 RoleAppearance.loadAnimation）
+   */
+  static clipsReady(dirSrc: string, kind: AnimationKind, speedRate?: SpeedRate): boolean {
+    return !!this.clipCache.get(this.clipKey(dirSrc, kind, speedRate));
+  }
+
+  /**
    * 按名称映射表将整包帧动画切割为多段动画并加载
    * 已预加载（片段有缓存）时同步装好片段并播放；未预加载时异步加载并在完成后补上（节点已返回，调用方可先挂事件）
    * @param name 首次播放动画名称
@@ -625,22 +635,30 @@ export default class AnimationHelper {
    * @param dirSrc 动画帧存放的文件夹
    * @param speedRate 速度倍率
    * @param kind 动画种类
+   * @param onReady 片段装上并起播后的回调（同步路径立即回调、异步路径装载完成回调）——
+   *                换装用它把「加载期间藏起来」的节点重新显示
+   * @param isStale 异步装载完成后的作废判断（返回 true = 装载期间调用方已换了目标，
+   *                不装不播直接丢弃；片段已进缓存，之后再用是同步路径）。
+   *                不做这层判断，迟到的装载会把**新外观的片段覆盖成旧目标**（快速连换两件装备时命中）
    */
-  static useManyNameAnimation(name: string, node: Node, dirSrc: string, speedRate: SpeedRate, kind: AnimationKind) {
+  static useManyNameAnimation(name: string, node: Node, dirSrc: string, speedRate: SpeedRate, kind: AnimationKind, onReady?: () => void, isStale?: () => boolean) {
     if (!this.animatable(node)) return this.useAnimation(node);
     const animate = this.useAnimation(node);
     const clips = this.clipCache.get(this.clipKey(dirSrc, kind, speedRate));
     if (clips) {
       this.applyClips(animate, clips);
       animate.play(name);
+      onReady?.();
       return animate;
     }
     this.prepare(dirSrc, kind, speedRate).then(() => {
+      if (isStale?.()) return;
       if (!isValid(node, true) || !isValid(animate, true)) return;
       const prepared = this.clipCache.get(this.clipKey(dirSrc, kind, speedRate));
       if (!prepared) return;
       this.applyClips(animate, prepared);
       animate.play(name);
+      onReady?.();
     });
     return animate;
   }

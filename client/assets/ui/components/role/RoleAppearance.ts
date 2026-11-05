@@ -1,4 +1,4 @@
-import { Animation, Node, Vec2 } from "cc";
+import { Animation, Node, Vec2, isValid } from "cc";
 import { OutTransform } from "../../../types/good";
 import { ACTION, DIRECTION, SpeedRate } from "../../../types/animation";
 import { SEX } from "../../../types/role";
@@ -7,6 +7,7 @@ import { getEquipment } from "../../../configs/items";
 import { getFashionOut } from "../../../configs/game-config";
 import { getRoleDefaultCloth } from "../../../configs/role";
 import GameUiHelper from "../../helpers/GameUiHelper";
+import AnimationHelper from "../../helpers/AnimationHelper";
 
 /**
  * 装配一套角色外观所需的最小数据（#383）
@@ -181,9 +182,10 @@ export default class RoleAppearance {
     this.weaponTransform = weapon;
     if (src === this.weaponSrc) return;
     this.weaponSrc = src;
+    // 有武器外观时显隐由 loadAnimation 管（外观帧没加载完先藏，见 loadAnimation）；
+    // 这里只在「没有武器外观」时强制隐藏：Sprite 会保留上一把武器的最后一帧，不隐藏就会看到残留的旧武器
     this.weaponAnimate = src ? this.loadAnimation(this.weapon, src, source) : null;
-    // 没有武器外观时必须隐藏：Sprite 会保留上一把武器的最后一帧，不隐藏就会看到残留的旧武器
-    this.weapon.active = !!src;
+    if (!src) this.weapon.active = false;
   }
 
   /**
@@ -206,9 +208,31 @@ export default class RoleAppearance {
     node.setPosition(offset.x, offset.y, 0);
   }
 
-  /** 装载一个外观节点的动画（重复调用时先清掉上一次注册的完成监听，避免重复回调） */
+  /**
+   * 装载一个外观节点的动画（重复调用时先清掉上一次注册的完成监听，避免重复回调）
+   *
+   * **加载期先藏节点**：外观未预加载时片段是异步装的（PreloadManager 只覆盖进图常驻外观，
+   * 换上的新装备外观多半没预热），装载完成前节点上还挂着**旧外观的片段**继续播；
+   * 而 applyOutTransform 会按新装备的 8 向偏移同步摆位 —— 旧帧被摆到新位置上就是换装瞬间
+   * 的错位。所以片段没就绪先把节点藏掉（显示为空），异步装载完成且外观没有再变过才显示：
+   * 加载期的画面是「空白」，而不是「错位」。
+   */
   private loadAnimation(node: Node, src: string, source: RoleOutSource) {
-    const animate = GameUiHelper.useRoleAnimation(getAnimationName(this.action, this.direction), node, src, source.speedRate);
+    const ready = AnimationHelper.clipsReady(src, "role", source.speedRate);
+    if (!ready) node.active = false;
+    // 装载作废判断：装载期间又换了外观（clothSrc/weaponSrc 已不是这次装载的 src）
+    const stale = () => (node === this.weapon ? this.weaponSrc : this.clothSrc) !== src;
+    const animate = GameUiHelper.useRoleAnimation(
+      getAnimationName(this.action, this.direction),
+      node,
+      src,
+      source.speedRate,
+      () => {
+        // 装载完成才显示（作废的装载在 isStale 里已被丢弃，这层是双保险）
+        if (!stale() && isValid(node, true)) node.active = true;
+      },
+      stale,
+    );
     animate.targetOff(this);
     animate.on(
       Animation.EventType.FINISHED,
