@@ -61,9 +61,10 @@ export default class GameHelper {
   /**
    * 取进入地图的限制原因（满足条件返回 null）
    *
-   * 判定项与顺序：等级 → 战斗力 → 战魂等级（服务端 `MapService.enterBlockOf` 是同一套顺序）。
-   * **这里只是提前提示**：配置（等级 / 战力 / 战魂）住在服务端 `maps` 表，进图的权威判定在
-   * `worldJoin`（#573）—— 客户端这份读的是配置快照，改包绕过它也进不去。
+   * 判定项与顺序：等级 → 战斗力 → 战魂等级（服务端 `MapService.enterRejectOf` 是同一套顺序）。
+   * **这里只是提前提示**：权威判定在服务端（#606：`mapEnter` 预判 + `worldJoin` 落地复判），
+   * 客户端这份读的是配置快照 —— 改包跳过它也进不去，只会收到服务端那帧 `mapEnterResult`
+   * （提示文案同样取下面这一套 key，见 `mapEnterRejectText`）。
    *
    * 配置还没拉到（快照失败 / 刚启动）时**不拦**：那时 `maps` 是空的，拦下来只会把
    * 「其实能进」的图也挡住；服务端那道门会给出准确原因。
@@ -81,6 +82,23 @@ export default class GameHelper {
     if (config.level > 0 && config.level > role.level) return textRef("reject_map_level", { map, level: config.level });
     if (config.combat > 0 && config.combat > role.combat) return textRef("reject_map_combat", { map, combat: config.combat });
     if (config.soulOfWar > 0 && config.soulOfWar > role.soulOfWar) return textRef("reject_map_soul", { map, soul: config.soulOfWar });
+    return null;
+  }
+
+  /**
+   * 服务端拒绝换图时该提示什么（#606）
+   *
+   * 服务端只给「缺哪一项 / 要求值 / 图名」三件套，**文案 key 与本地预检同一套** ——
+   * 两条路给玩家看的必须是同一句话，否则同一次拒绝会出现两种口径。
+   * `field` 认不出来（服务端加了新门槛而客户端还没更新）时返回 null：宁可不提示，
+   * 也不显示一句「地图进不去」这种什么都没说的废话。
+   */
+  static mapEnterRejectText(result: { field?: "level" | "combat" | "soul"; need?: number; mapLabel?: string }): TextRef | null {
+    const map = result.mapLabel ?? "";
+    const need = result.need ?? 0;
+    if (result.field === "level") return textRef("reject_map_level", { map, level: need });
+    if (result.field === "combat") return textRef("reject_map_combat", { map, combat: need });
+    if (result.field === "soul") return textRef("reject_map_soul", { map, soul: need });
     return null;
   }
 

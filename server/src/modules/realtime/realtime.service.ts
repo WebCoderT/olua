@@ -10,6 +10,7 @@ import type { ApiEnvelope, AuthenticatedUser } from "../../common/interfaces/api
 import { AccountRepository } from "../../database/repositories/account.repository";
 import type { RoleRow } from "../../database/rows";
 import { WorldService } from "../world/world.service";
+import { MapService, type MapEnterReject } from "../map/map.service";
 import { roleAttributeSourceOf, summarizeRoleAttributes } from "../combat/role-attributes";
 import { RuntimeConfigService } from "../game-config/runtime-config.service";
 import { RolesService } from "../roles/roles.service";
@@ -30,6 +31,7 @@ import {
   type RealtimeChatBroadcast,
   type RealtimeChatMessage,
   type RealtimeIdentity,
+  type RealtimeMapEnterResultMessage,
   type RealtimeMonsterAiMessage,
   type RealtimePickedMessage,
   type RealtimeRoleUpdateMessage,
@@ -136,6 +138,7 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
     private readonly party: PartyService,
     private readonly quests: QuestService,
     private readonly world: WorldService,
+    private readonly maps: MapService,
     private readonly accounts: AccountRepository,
     private readonly roles: RolesService,
     private readonly runtimeConfig: RuntimeConfigService,
@@ -624,6 +627,18 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
       );
       return;
     }
+    if (parsed?.type === "mapEnter") {
+      // 换图意图（#606）：**只回答「能不能去」**，不播种、不登记观看者、不改位置 ——
+      // 客户端拿到 ok 才切场景。这条存在的意义是「被拒的人不进那张空图」：
+      // 切场景是不可逆的，先问一句就不用回滚（详见协议里 RealtimeMapEnterMessage 的注释）
+      const intent = parseMapEnter(parsed.data);
+      if (!intent) {
+        this.send(socket, { type: "error", data: { message: "mapEnter 消息缺 mapId" } });
+        return;
+      }
+      this.send(socket, this.mapEnterResultOf(socket.identity.id, intent.mapId));
+      return;
+    }
     if (parsed?.type === "worldJoin") {
       // 进图登记（播种 / 恢复 / 换图都走这里），应答一张权威快照。
       // 区号从账号行现查（#295 阶段二）：账号归哪个区就进哪个区的世界；
@@ -633,12 +648,21 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
         this.send(socket, { type: "error", data: { message: "worldJoin 消息缺 mapId" } });
         return;
       }
+      // 进图门槛（#606）：这一处是**权威**，`mapEnter` 只是提前问一遍。
+      // 目标图 == 服务端记下的位置（`data.mapAt`）时一律放行 —— 登录不是换图，
+      // 运营事后调高门槛不能把已经站在图里的人锁在门外（#573 的教训）。
+      // 被拒就回一帧 mapEnterResult（ok=false）并且**不登记观看者**：
+      // 绕过 mapEnter 直发 worldJoin 的改包走的就是这条。
+      const reject = this.mapEnterRejectOf(socket.identity.id, join.mapId);
+      if (reject) {
+        this.send(socket, this.mapEnterResultOf(socket.identity.id, join.mapId));
+        return;
+      }
       const zoneId = this.accounts.findById(socket.identity.id)?.zone_id ?? 1;
-      // 进图条件（#573）**故意不在这里拦**，判定留在客户端 `StorageManager.changeOnMap`
-      // （所有传送入口都经过它，配置来自服务端快照）。原因见 `MapService` 顶部的
-      // 「为什么没有『拦连接』的判定」：登录与传送共用 worldJoin，而登录时进的就是
-      // 玩家脚下那张图 —— 运营事后调高门槛会把人锁在门外（进游戏即黑屏）。
       const snapshot = this.world.join(zoneId, socket.identity.id, join.mapId);
+      // 位置以「被接受的 join」为准写回存档（#606）：客户端报 OnMap 是客户端的事，
+      // 服务端只记自己放行过的图 —— 下次登录拿它当「他本来就在这」的判据
+      this.roles.setMapAt(socket.identity.id, join.mapId);
       const frame: RealtimeWorldMessage = { type: "world", data: snapshot };
       this.send(socket, frame);
       // 玩家互见（#324）：随 world 应答发一份同图全量快照（增量帮不上「刚进图的人」）
@@ -652,6 +676,49 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
     }
     this.send(socket, { type: "error", data: { message: `不认识的消息类型：${String(parsed?.type)}` } });
   }
+
+  //#region 进图门槛（#606）
+
+  /**
+   * 这次换图该不该被拒（`null` = 放行）
+   *
+   * 判据只有一条：**目标图 == 服务端记下的位置（`data.mapAt`）就放行**，其余交给
+   * `MapService.enterRejectOf`（等级 / 战斗力 / 战魂，与客户端提示同一套顺序）。
+   *
+   * 为什么要「同一个位置就放行」而不是「登录一律放行」：位置是服务端记的，
+   * 玩家在哪就该在哪；把「这条连接第一次 join」当登录会让改包靠一次重连跳过门槛。
+   * 反过来，「运营刚把门槛调高、人还站在里面」这种事故也由这条挡住 —— 他所在的位置
+   * 与目标一致，放行，不会黑屏。
+   *
+   * 位置记录还没有（`mapAt` 缺失：刚建号 / 老档第一次上线）时**不拦**：那一刻他在哪
+   * 由客户端决定，拦下来只会让新号被自己的配置挡在新手村外面（详见 MapService 顶部）。
+   */
+  private mapEnterRejectOf(accountId: string, mapId: string): MapEnterReject | null {
+    const row = this.roles.onlineRoleRow(accountId);
+    // 没有在线角色：踢下线巡检会处理这条连接，这里不判（判也判不出等级）
+    if (!row) return null;
+    const data = decodeStoredRoleData(row.data);
+    const current = typeof data.mapAt === "string" ? data.mapAt : "";
+    if (!current || current === mapId) return null;
+    // 战斗力按服务端口径现算（与 roleUpdate 帧同一个函数）：存档里的 combat 可能落后一帧。
+    // 等级在成长曲线之外算不出来（理论上到不了，曲线改坏才会）→ 用存档里那份：
+    // 它同样是服务端写进去的（`applyAuthoritativeAttributes`），不是客户端自报
+    const attributes = summarizeRoleAttributes(roleAttributeSourceOf(row.level, data));
+    return this.maps.enterRejectOf(mapId, {
+      level: row.level,
+      combat: attributes?.combat ?? Math.max(0, Number(data.combat) || 0),
+      soulOfWar: Math.max(0, Number(data.soulOfWar) || 0),
+    });
+  }
+
+  /** 组一帧 `mapEnterResult`（放行与被拒同形，客户端只看 `ok`） */
+  private mapEnterResultOf(accountId: string, mapId: string): RealtimeMapEnterResultMessage {
+    const reject = this.mapEnterRejectOf(accountId, mapId);
+    if (!reject) return { type: "mapEnterResult", data: { mapId, ok: true } };
+    return { type: "mapEnterResult", data: { mapId, ok: false, ...reject } };
+  }
+
+  //#endregion
 
   /**
    * 把一张图的权威状态广播给正在看它的人（重生等世界变化时由世界层触发）
@@ -851,6 +918,13 @@ function parseWorldJoin(raw: unknown): ParsedWorldJoin | null {
   if (typeof data.mapId !== "string" || !data.mapId) return null;
   return { mapId: data.mapId };
 }
+
+/**
+ * mapEnter.data 与 worldJoin 同形（#606：都只有一个目标 mapId）
+ *
+ * 不另写一份解析：两条消息要判的是同一件事（哪张图），形状漂了也必须一起漂。
+ */
+const parseMapEnter = parseWorldJoin;
 
 /** pick.data 的解析结果（#325：格式不对回 error 帧，低频操作值得明确告知） */
 interface ParsedPick {

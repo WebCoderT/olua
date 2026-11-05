@@ -82,7 +82,7 @@ const SERVER_MODULE_E2E = [
   ["src/modules/auth", ["guard"]],
   ["src/modules/roles", ["roles"]],
   ["src/modules/mail", ["mail", "game-mail"]],
-  ["src/modules/realtime", ["realtime", "combat", "world", "soak"]],
+  ["src/modules/realtime", ["realtime", "combat", "world", "soak", "map-enter"]],
   ["src/modules/world", ["world"]],
   ["src/modules/combat", ["combat", "roles"]],
   ["src/modules/game-config", ["game-config"]],
@@ -96,7 +96,7 @@ const SERVER_MODULE_E2E = [
   ["src/modules/party", ["party", "realtime"]],
   ["src/modules/leaderboard", ["rank"]],
   ["src/modules/achievement", ["achievement"]],
-  ["src/modules/map", ["map"]],
+  ["src/modules/map", ["map", "map-enter"]],
   ["src/modules/admin", ["guard"]],
   // 建库 / 进程装配是「所有套件的底座」—— 动了就全量
   ["src/database", "ALL"],

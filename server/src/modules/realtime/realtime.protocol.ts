@@ -14,6 +14,8 @@
  * 3. 世界权威（#35）：客户端发 `worldJoin`（进图播种：地图 id + 刷怪计划），服务端持有
  *    怪物实例（hp / 存活 / 出生点，tick 驱动重生）并以 `world` 帧下发权威状态；
  *    实例 id 由服务端发牌，cast 的 targetId 用的就是它；
+ *    进图门槛（#606）也在这一段：客户端先发 `mapEnter` 问一句（回 `mapEnterResult`），
+ *    落地时 `worldJoin` 再判一次 —— 判据只有服务端一处（`MapService.enterRejectOf`）；
  * 4. 其余一律回 `error` 帧，**不断开连接** —— 一条不认识的消息不该让玩家的通道断掉。
  * 掉落拾取（#325）同走这条管子：客户端发 `pick`（拾哪一次击杀的第几件掉落），
  * 服务端按账本原子入包并以 `picked` 帧回结果。
@@ -188,6 +190,48 @@ export interface RealtimeWorldJoinMessage {
   data: {
     /** 地图 id（configs/map 的 key） */
     mapId: string;
+  };
+}
+
+/**
+ * 客户端 → 服务端：换图**意图**（#606）
+ *
+ * 与 `worldJoin` 的分工：这条只问「能不能去」，**不动世界状态**（不播种、不登记观看者、
+ * 不改位置）。客户端拿到 `mapEnterResult.ok` 才切场景，切完照旧发 `worldJoin` 落地。
+ *
+ * 为什么要多一条消息而不是直接看 `worldJoin` 的应答：切图会先卸掉旧场景再加载新图，
+ * 等 world 帧回来时人已经在「新图的空场景」里了 —— 被拒的话就是一屏没怪的空图。
+ * 先问一句，被拒就原地提示，什么都不用回滚。
+ */
+export interface RealtimeMapEnterMessage {
+  type: "mapEnter";
+  data: {
+    /** 目标地图 id */
+    mapId: string;
+  };
+}
+
+/**
+ * 服务端 → 客户端：换图判定结果（#606）
+ *
+ * `ok = false` 时带 `field` / `need` / `mapLabel` 三件套，客户端按 `field` 取自己的文案
+ * （`reject_map_level` / `reject_map_combat` / `reject_map_soul`）拼提示 ——
+ * 服务端不生产面向玩家的句子。
+ *
+ * 同一帧也用于**拒绝一次 worldJoin**（改包绕过 mapEnter 直发的情况）：客户端收到
+ * `ok = false` 且地图对得上时，说明自己不该在那张图里，提示 + 退回原图即可。
+ */
+export interface RealtimeMapEnterResultMessage {
+  type: "mapEnterResult";
+  data: {
+    mapId: string;
+    ok: boolean;
+    /** 缺哪一项（`ok = true` 时没有） */
+    field?: "level" | "combat" | "soul";
+    /** 这张图要求的值（`ok = true` 时没有） */
+    need?: number;
+    /** 图名（提示里要用；`ok = true` 时没有） */
+    mapLabel?: string;
   };
 }
 
@@ -756,6 +800,7 @@ export type RealtimeServerMessage =
   | RealtimeErrorMessage
   | RealtimeSettleMessage
   | RealtimeWorldMessage
+  | RealtimeMapEnterResultMessage
   | RealtimeMonsterAiMessage
   | RealtimePlayersMessage
   | RealtimePickedMessage

@@ -60,6 +60,22 @@ import {
 } from "./dto/map.dto";
 
 /**
+ * 进图被拒的原因（#606）
+ *
+ * 只给「哪一项 / 差多少 / 图名」，不给完整中文句子：文案归客户端（`configs/texts` 的
+ * `reject_map_level` / `reject_map_combat` / `reject_map_soul`），服务端给结构化字段，
+ * 换语言 / 改措辞不用改服务端。
+ */
+export interface MapEnterReject {
+  /** 缺哪一项（决定客户端取哪条文案） */
+  field: "level" | "combat" | "soul";
+  /** 这张图要求的值 */
+  need: number;
+  /** 图名（客户端提示里要用） */
+  mapLabel: string;
+}
+
+/**
  * 地图（#571 观测台 / #573 玩法配置归服务端）
  *
  * ## 这一层现在管什么
@@ -78,23 +94,30 @@ import {
  * 行由出厂快照（`server/data/config-sync.sql`）带进来，一张没有 TMX 的「地图」
  * 在客户端点开就是黑屏，后台不该造得出来。
  *
- * ## 为什么没有「拦连接」的判定（#573 考虑过，故意不做）
+ * ## 进图条件（#606：判定在服务端，客户端只是提前提示）
  *
- * 直觉上「配置归服务端」就该顺手在 `realtime.worldJoin` 上把进入条件也判了，但这条路
- * 走不通 —— 不是偷懒，是三个硬事实：
+ * #573 把配置搬上来了，但判定留在客户端 `StorageManager.changeOnMap` —— 数据在服务端、
+ * 判定在客户端是**权威倒挂**：改个包（或干脆调自己的 `changeOnMap`）就能进任意地图。
+ * 所以现在 `enterRejectOf` 是唯一判据，两处消费：
  *
- * 1. **登录与传送共用同一条 `worldJoin`**，登录时进的就是玩家**脚下那张图**（存档里的
- *    `onMap`）。所以「拦住不合条件的人」会连带拦住「本来就在里面的人」。
- * 2. **运营改配置会立刻生效**：把某张图的进入等级从 10 调到 50，此刻站在那张图里的
- *    低等级玩家下一次登录就被挡在门外 —— 进游戏即黑屏，且他自己没有任何办法出来。
- *    这个事故不需要玩家做错任何事，只要运营点一次保存。
- * 3. **判据本身在客户端已经有唯一入口**：`StorageManager.changeOnMap` 是所有传送的
- *    必经之路，它读的就是服务端下发的这份配置。也就是说「改客户端配置就能进高级图」
- *    这条路在 #573 之后已经不存在了 —— 要绕过得改包。
+ * - 实时通道的 `mapEnter`（换图**意图**）：客户端切场景**之前**先问一句，被拒就原地提示、
+ *   不切图 —— 这样被拦的人不会先进一张空图再被踢回来；
+ * - 实时通道的 `worldJoin`（真正落地那一刻）：再判一次。绕过 `mapEnter` 直发 worldJoin
+ *   的改包走的就是这条，它必须拦得住。
  *
- * 想做真正的硬门槛，前提是加一条**独立的「我要换图」消息**（客户端改包，Cocos 只能
- * GUI 打包）或让 `worldJoin` 带上「这是传送不是登录」的显式意图；两件都超出「把配置
- * 搬到服务端」的范围，记在这里等真需要时再做。
+ * 客户端 `GameHelper.getMapEnterRejectReason` 保留一份同顺序的判据，只做**即时反馈**
+ * （点了就有反应，不必等一个往返），不是权威。
+ *
+ * 三条边界（#573 踩出来的，动之前先读）：
+ *
+ * 1. **登录不算换图**：`worldJoin` 的目标图 == 服务端记下的位置（`data.mapAt`）时一律放行，
+ *    哪怕运营刚把门槛调到这个人够不着 —— 否则站在图里的低等级玩家下次登录就黑屏，
+ *    而且他自己没有任何办法出来。这不是放水，是「他已经在那里」这个事实优先于配置。
+ * 2. **服务端还没有位置记录时不拦**（刚建号 / 老档第一次上线）：那一刻玩家在哪由客户端
+ *    决定，拦下来只会让「新号进新手村」被自己的配置挡住。位置一旦记下就不再接受客户端的
+ *    改口 —— `mapAt` 是服务端独占字段（见 `role-authority.ts`），只有「被接受的 worldJoin」
+ *    与「管理端摆位」能写它。
+ * 3. **不认识的图不拦**：没有配置行就没有门槛，世界层照样给它建一份空图（历史行为）。
  */
 @Injectable()
 export class MapService {
@@ -162,6 +185,36 @@ export class MapService {
       collisions: this.collisions.listByMap(row.map_id).map((box) => this.collisionBoxDtoOf(box)),
     }));
   }
+
+  //#region 进图条件（#606）
+
+  /**
+   * 能不能进这张图（`null` = 可以进）
+   *
+   * 判定项与顺序：**等级 → 战斗力 → 战魂阶**，与客户端 `GameHelper.getMapEnterRejectReason`
+   * 完全同一套（客户端那份只做提前提示）。数值 `0` = 不限制（安全地图就是 0/0/0），
+   * 所以判据是「配置 > 0 且配置 > 角色值」。三条边界见类顶部。
+   *
+   * 返回「哪一项不够 + 差多少 + 图名」而不是一句中文：客户端按 `field` 取自己的文案 key
+   * （`reject_map_level` 等）拼提示，服务端不生产面向玩家的句子 —— 文案归客户端，
+   * 与其余实时帧同一口径。
+   *
+   * @param mapId 目标地图 id
+   * @param role  角色当前的三项门槛值（等级取行里的索引列，战斗力按服务端口径现算）
+   */
+  enterRejectOf(mapId: string, role: { level: number; combat: number; soulOfWar: number }): MapEnterReject | null {
+    const row = this.maps.getById(mapId);
+    // 不认识的图：没有配置就没有门槛（世界层会给它建一份空图，历史行为不变）
+    if (!row) return null;
+    if (row.level > 0 && row.level > role.level) return { field: "level", need: row.level, mapLabel: row.label };
+    if (row.combat > 0 && row.combat > role.combat) return { field: "combat", need: row.combat, mapLabel: row.label };
+    if (row.soul_of_war > 0 && row.soul_of_war > role.soulOfWar) {
+      return { field: "soul", need: row.soul_of_war, mapLabel: row.label };
+    }
+    return null;
+  }
+
+  //#endregion
 
   /**
    * 实时地图监控（#665）：这张图此刻的样子 + 最近的文字流

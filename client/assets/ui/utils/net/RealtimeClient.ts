@@ -277,6 +277,11 @@ export default class RealtimeClient {
       CombatChannel.dispatchWorld(frame.data);
       return;
     }
+    if (frame.type === "mapEnterResult") {
+      // 换图判定（#606）：服务端说能不能去这张图，决定权在调用方（CombatChannel 的等待者）
+      CombatChannel.dispatchMapEnterResult(frame.data);
+      return;
+    }
     if (frame.type === "monster-ai") {
       // 怪物 AI 广播（#323）：位置增量 + 普攻命中事件，形状的解释在 CombatChannel
       CombatChannel.dispatchMonsterAi(frame.data);

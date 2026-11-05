@@ -1327,6 +1327,31 @@ export class RolesService {
     return row && row.account_id === accountId ? row : null;
   }
 
+  /**
+   * 记下「服务端承认的角色位置」（#606：进图门槛拿它当「他现在在哪」）
+   *
+   * 唯一正常写点是实时通道**接受一次 worldJoin** 的那一刻：客户端报什么不算数，
+   * 服务端放行了哪张图才算。第二个写点是管理端摆位（PATCH 带 `onMap` 时一并写，
+   * 那是运营的显式决定）。客户端存档里的同名字段一律回填丢弃（见 `role-authority.ts`
+   * 的 `SERVER_EXCLUSIVE_FIELDS`）。
+   *
+   * **不推进 revision**：位置不是进度，推进修订号只会让刚好在切图时冲上来的客户端存档
+   * 撞乐观锁（它本地那份 onMap 刚改过，撞上就得整份回滚，人会停在旧图）。
+   * 走 `updateDataKeepRevision`，与怪物普攻落账同一条路。
+   *
+   * @param accountId 账号（位置记在它的在线角色上）
+   * @param mapId     这次被接受的图
+   */
+  setMapAt(accountId: string, mapId: string): void {
+    const row = this.onlineRoleRow(accountId);
+    if (!row) return;
+    const data = decodeStoredRoleData(row.data);
+    // 幂等：同一张图重复 join（重连 / 换线）不写库 —— 实时的 join 是高频动作
+    if (typeof data.mapAt === "string" && data.mapAt === mapId) return;
+    data.mapAt = mapId;
+    this.roles.updateDataKeepRevision(row.id, JSON.stringify(data), Date.now());
+  }
+
   /** 选中（在线）角色（#547：标记与心跳一起置上，宽限期从这一刻起算） */
   select(accountId: string, roleId: string): RoleDto {
     this.mustAccount(accountId);

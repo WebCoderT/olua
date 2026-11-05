@@ -15,7 +15,7 @@
  * | 血蓝 | `hp` / `mp`（+ 两个回复累加器与 `vitalsSettledAt` 游标） | **服务端结算**（#596） | 受击 / 用药 / 升级补满各有服务端写点，自然回复由 `settleVitalsAuthority` 在每次写档时按经过时间补齐，复活走 `POST /roles/:id/revive`；客户端那份只是血条平滑用的**演出预测**，save 时整体覆盖 |
  * | 时装 | `fashionCloth` / `fashionsOwned`（清单） | **服务端**（#596） | 购买（扣费 + 渠道校验）与穿脱（拥有才给穿）各有一个接口；清单是**独占字段**（上报整份删除），穿着态走回填。改穿在另一台设备发生时由 `roleUpdate` 帧带回，客户端换外观 |
  * | 体验状态 | `shortcutKeys` / `guide` / `soulShow` | 客户端书写、服务端存证（#596 云同步） | 纯本地体验（换设备要跟着走，但篡改无收益）；save 照收、`roleUpdate` 帧原样带回 |
- * | 客户端全权 | `onMap` / `avatar` / `speedRate` / `relationShip` | 客户端 | 走图 / 头像 / 速度倍率 / 关系展示都发生在本地且不改数值；`onMap` 的位置自报另有**互见最小仲裁**（实时侧：非有限拒绝、瞬移帧屏蔽、持续异常跟随，见 `player-presence.service`） |
+ * | 客户端全权 | `onMap` / `avatar` / `speedRate` / `relationShip` | 客户端 | 走图 / 头像 / 速度倍率 / 关系展示都发生在本地且不改数值；`onMap` 的位置自报另有**互见最小仲裁**（实时侧：非有限拒绝、瞬移帧屏蔽、持续异常跟随，见 `player-presence.service`）。**进图门槛不读它**：门槛读服务端独占的 `mapAt`（#606，见下）|
  *
  * 两条纪律：
  *
@@ -74,8 +74,20 @@ export const SERVER_INVENTORY_FIELDS = ["bag", "equipments", "skills"] as const;
  */
 export const SERVER_FASHION_FIELDS = ["fashionCloth"] as const;
 
-/** 独占字段：库里没有也不放行（见 `SERVER_FASHION_FIELDS` 注释） */
-export const SERVER_EXCLUSIVE_FIELDS = ["fashionsOwned"] as const;
+/**
+ * 独占字段：库里没有也不放行（见 `SERVER_FASHION_FIELDS` 注释）
+ *
+ * - `fashionsOwned`：时装拥有清单，只能由购买 / 管理端发放写入；
+ * - `mapAt`（#606）：**服务端承认的角色当前位置**，进图门槛拿它当「他现在在哪」。
+ *   客户端连这个字段都不该知道 —— 唯一写点是「被接受的 worldJoin」（`RolesService.setMapAt`）
+ *   与管理端摆位（PATCH 带 `onMap` 时一并写）。它一旦可被客户端书写，
+ *   「改包先把位置改成高级图再登录进去」就绕过了门槛，整条收权白做。
+ *
+ *   注意它**不是** `onMap`：`onMap` 仍是客户端自报的位置（走图 / 统计 / 复活点都用它，
+ *   见上表最后一行），`mapAt` 只回答「服务端认为你在哪」，两者故意分开 ——
+ *   混成一个字段就只能在「相信客户端」和「不信客户端」之间二选一。
+ */
+export const SERVER_EXCLUSIVE_FIELDS = ["fashionsOwned", "mapAt"] as const;
 
 /**
  * 派生值：由 `applyAuthoritativeAttributes` 重算覆盖
