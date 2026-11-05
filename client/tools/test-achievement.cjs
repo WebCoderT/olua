@@ -168,7 +168,6 @@ try {
     "页签坐标数与分类数一致（少一条会有一个页签叠在 0 位）",
     `${layout.tabs.columns.length} vs ${achievementCategories.length}`,
   );
-  check(new Set(layout.tabs.columns).size === layout.tabs.columns.length, "页签横坐标互不相同");
 
   check(
     ["{achieved}", "{total}", "{claimed}"].every((token) => texts.summary.includes(token)),
@@ -184,15 +183,6 @@ try {
   check(texts.hiddenHint.length > 0 && !texts.hiddenHint.includes("{"), "隐藏成就的提示是一句静态文案（不剧透条件）");
 
   check(layout.name.length > 0 && layout.list.name.length > 0, "弹窗与列表的节点名在配置里（组件不写死节点名）");
-  check(
-    layout.row.size.height > 0 && layout.list.size.height >= layout.row.size.height,
-    "行高不超过列表高度（否则一屏放不下一行）",
-    `row ${layout.row.size.height} / list ${layout.list.size.height}`,
-  );
-  check(
-    layout.row.actionSize.width > 0 && layout.row.actionPosition.x > 0,
-    "状态按钮有自己的尺寸与横向位置（靠右，不与进度重叠）",
-  );
 
   //#endregion
 

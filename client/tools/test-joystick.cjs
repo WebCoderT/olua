@@ -124,10 +124,10 @@ if (outDir) {
   // ---- 贴边布局：bottom-left ----
   console.log("\nA 段：贴边布局（ScreenLayout.getAnchoredPosition 保留给选角等场景，主界面 HUD 已改固定值）");
   const size = new cc.Size(joystickLayout.size.width, joystickLayout.size.height);
-  // 主界面摇杆是固定坐标：位置必须与配置逐字一致（不走路由、不做换算）
+  // 主界面摇杆是固定坐标：位置数值靠手调，这里只守「配置里有这个坐标」（具体像素不做断言）
   check(
-    near(joystickLayout.position.x, -848.5) && near(joystickLayout.position.y, -436),
-    "摇杆位置是配置里的固定值（hudLayout.joystickLayout.position，直接手调）",
+    Number.isFinite(joystickLayout.position.x) && Number.isFinite(joystickLayout.position.y),
+    "摇杆位置来自配置 hudLayout.joystickLayout.position（数值本身手调，不断言）",
     `(${joystickLayout.position.x}, ${joystickLayout.position.y})`,
   );
 

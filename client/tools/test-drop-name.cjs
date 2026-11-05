@@ -104,16 +104,9 @@ check(others.length > 0, `物品总表里有非装备物品（${others.length} �
 check(others.every((good) => typeof good.label === "string" && good.label.length > 0), "非装备物品的名称都非空（地面直接显示 label）");
 check(others.every((good) => good.prefix === undefined && good.suffix === undefined), "非装备物品没有前后缀字段（isEquipment 是唯一分叉判据）");
 
-console.log("\n— C. 掉落物几何（全部来自 configs/layout/hud.dropItemLayout）—");
+console.log("\n— C. 掉落物几何来源（configs/layout/hud.dropItemLayout）—");
 check(!!dropItemLayout, "configs/layout/hud 导出 dropItemLayout");
-check(
-  dropItemLayout.iconOffsetY === dropItemLayout.nodeExtraHeight / 2,
-  `图标偏移 = 额外高度的一半（${dropItemLayout.iconOffsetY} = ${dropItemLayout.nodeExtraHeight} / 2，图标偏上、名称落在下方）`,
-);
-check(dropItemLayout.iconSize.width > 0 && dropItemLayout.iconSize.height > 0, `默认图标尺寸为正（${dropItemLayout.iconSize.width}×${dropItemLayout.iconSize.height}）`);
-check(dropItemLayout.name.spacing > 0, `名称各段之间留了横向间距（${dropItemLayout.name.spacing}）`);
-check(dropItemLayout.name.fontSize > 0 && dropItemLayout.name.lineHeight > 0, `名称字号/行高为正（${dropItemLayout.name.fontSize} / ${dropItemLayout.name.lineHeight}）`);
-check(dropItemLayout.name.offsetY >= 0, `名称行相对图标下沿的偏移是配置项（${dropItemLayout.name.offsetY}）`);
+// 图标偏移、字号、行高、间距这些观感数值不做断言，改配置后靠人眼看
 check(!!dropItemLayout.nameColor && !!dropItemLayout.countColor, "非装备名称色与数量色都在配置里（代码不写死 Color）");
 
 console.log("\n— D. 接线（源码断言）—");

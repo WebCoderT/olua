@@ -6,6 +6,7 @@
 
 ## 过程纪律
 - **测试锁「字段格式 + 行为」不锁数值**（运营随时改数）；用户说「数据我改过」= 停追红，改断言口径。
+- **显示效果不写断言**（用户 2026-11-05 明确定）：动画/特效的位置、尺寸、帧率、画布对齐等观感一律**人眼看**。这类断言只会因为正常调配置而红，真出错（错位/太小/没播）反而抓不到。可留的只有：素材存在性（缺文件=静默不播）、代码执行顺序（如帧装载完再藏站立帧）、结构接线（按钮有没有绑事件）。
 - **e2e**：期望值从快照算（`server/test/lib/config-snapshot.cjs` 的 rows/index/group）；播种放 `startServer()` 之后；`checkEqual` 是 `===`；改 `server/src` 先 `npm run build`（e2e 跑 `dist/`）；本机绿 ≠ CI 绿（耦合断言等一帧同时满足两边，超时盖过一个冷却周期）。
 - **假绿 > 漏检**：扫描器断言模块数、错误精确匹配文案、缓存 TTL 压 0。
 - **新增一张表的登记四处**：`config-tables.cjs` 两份清单 + `gen-api.cjs` MODULES + `audit-server-boundaries` REPO_EDGES + `audit-target.decorator` 类型。快照加段 = DTO / `snapshot()` / 客户端 `game-config.ts` 区 0 三处 + `audit-snapshot-contract` 守点。
@@ -45,3 +46,4 @@
 - open：#669 刷怪区即时生效 · #670 打尸体仍放技能 · #8 官网 · #9 包体积 · #12~#19 素材 · #295 阶段三 · #403 帮会战 · #606 地图门槛。
 - 定保持现状：技能 1011 / 快捷键 6 格 / 装备 7 部位。
 - **#728 各端图标统一取自官网 logo（PR #729 / `26fccd2c`）**：`tools/gen-app-icons.py`（`make icons`）以 `website/assets/icons/logo-512.png` 为唯一来源，生成 管理端 `admin/public`（真·多尺寸 ICO 16~256 + 256 png）/ `build-templates/web-desktop`（原来引 favicon.ico 但文件从不存在 = 每次构建 404，已补 + index.ejs 三个 link）/ mac·iOS `AppIcon.appiconset`（按 Contents.json 逐条，1024 档由 512 放大）/ Android mipmap / Win .ico（不存在则跳过）。apple-touch-icon 必须**不透明底合成**（iOS 把透明渲染成黑）。**`client/native` 在 .gitignore** → 原生图标只落本机，换机器或重新生成原生工程后重跑 `make icons`；版本化的是脚本 + 官网 logo。mac 打包 Info.plist 的 `CFBundleIconName=AppIcon` 证明资产目录生效（`native/engine/mac/Icon.icns` 是模板残留）。
+- **#733 选角选中态（show 动画 + 脚下特效）+ 显示效果零断言**：`GameUiHelper.setRolePreviewSelected` 按名字切换三个子节点（`*_stand_animation` / `*_show_animation` / `*_select_effect`，后缀常量模块级）；show 与特效首次选中才建、show 等帧装载完再藏站立帧（防闪空白）；特效 `setContentSize` + `SizeMode.CUSTOM`（RAW 会被每帧 sourceSize 覆盖回 134×72），offset/size 全走 `roleSelectorLayout.selection.effect`。白框（Graphics）及其配置已删。**测试纪律：显示效果不写断言**（帧率/尺寸/坐标/颜色/对齐/层级一律人眼看），只留素材存在性、取图单一来源、结构接线与执行顺序；据此删 4 个纯几何测试文件（layout-row-bbox / dialog-row-bounds / skill-row-layout / role-attr-list）。

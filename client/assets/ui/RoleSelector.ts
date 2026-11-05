@@ -1,4 +1,4 @@
-import { _decorator, Color, Component, EditBox, EventHandler, Graphics, isValid, Label, Layout, Node, ScrollView, Size, Sprite, ToggleContainer, UITransform, Vec2 } from "cc";
+import { _decorator, Color, Component, EditBox, EventHandler, isValid, Label, Layout, Node, ScrollView, Size, Sprite, ToggleContainer, UITransform, Vec2 } from "cc";
 import GameUiHelper from "./helpers/GameUiHelper";
 import { occupations } from "../configs/role";
 import StorageManager from "./core/StorageManager";
@@ -21,6 +21,9 @@ const NAME_PLATE_PREFIX = "role_name_plate_";
 
 /** 角色单元格的节点名前缀（滚动网格里每个角色的容器：预览 + 名牌 + 管理模式的删除按钮） */
 const ROLE_CELL_PREFIX = "role_cell_";
+
+/** 角色预览（单元格里的动画容器）节点名前缀：选中态切换要按 id 找回它 */
+const ROLE_PREVIEW_PREFIX = "role_preview_";
 
 /** 选角主视图引用（本组件拼装并持有） */
 interface RoleSelectorMainView {
@@ -60,8 +63,6 @@ export class RoleSelector extends Component {
   private mainView: RoleSelectorMainView;
   private createView: RoleSelectorCreateView | null = null;
   private ownerRoleSelectedId: string | null = null;
-  /** 选中角色框（白细线，Graphics 运行时画）：挂当前选中角色的单元格下，随滚动区走 */
-  private selectionFrame: Node | null = null;
   /** 舞台容器（除背景与底部栏外的所有元素都挂这里，不缩放；见 dockBottomBar） */
   private stage: Node | null = null;
   /**
@@ -298,8 +299,9 @@ export class RoleSelector extends Component {
     });
     // 管理模式下列表变了（如刚删掉一个角色）→ 删除按钮按新列表重建
     if (this.manageMode) this.refreshManageControls();
-    // 选中框挂在单元格里，重建列表时随节点一起销毁了 → 选中的角色还在列表就重新画上
-    if (this.ownerRoleSelectedId) this.showSelectionFrame(this.ownerRoleSelectedId);
+    // 选中态挂在单元格里，重建列表时随节点一起销毁了 → 选中的角色还在列表就重新亮起来
+    // （站立帧 → 展示帧 + 脚下特效，见 GameUiHelper.setRolePreviewSelected）
+    if (this.ownerRoleSelectedId) this.setRoleSelected(this.ownerRoleSelectedId, true);
   }
 
   /**
@@ -314,7 +316,7 @@ export class RoleSelector extends Component {
     const previewY = -(cellSize.height - previewSize.height) / 2;
     const cell = new Node(`${ROLE_CELL_PREFIX}${role.id}`);
     cell.addComponent(UITransform).setContentSize(cellSize);
-    const preview = GameUiHelper.createRolePreview(role.id, 1, role.occupation, role.sex, new Vec2(0, previewY), previewSize);
+    const preview = GameUiHelper.createRolePreview(`${ROLE_PREVIEW_PREFIX}${role.id}`, 1, role.occupation, role.sex, new Vec2(0, previewY), previewSize);
     preview.on(Node.EventType.TOUCH_END, () => this.onlineRole(role.id));
     cell.addChild(preview);
     // 名字与等级挂在脚下（偏移相对预览中心，见 roleSelectorLayout.namePlate —— 头顶留给管理模式的删除按钮）
@@ -457,11 +459,11 @@ export class RoleSelector extends Component {
     if (label) label.string = text;
   }
 
-  /** 复位角色选中态：名称/等级回占位文案、「开始游戏」按钮置灰（选中角色被删除后调用） */
+  /** 复位角色选中态：名称/等级回占位文案、「开始游戏」按钮置灰、角色回到站立帧（选中角色被删除后调用） */
   private clearSelectedRole() {
     const info = roleSelectorLayout.selectedInfo;
+    if (this.ownerRoleSelectedId) this.setRoleSelected(this.ownerRoleSelectedId, false);
     this.ownerRoleSelectedId = null;
-    this.clearSelectionFrame();
     this.mainView.beginGameButton.getComponent(Sprite).grayscale = true;
     this.mainView.selectedRoleName.getComponent(Label).string = info.nameLabel.text;
     this.mainView.selectedRoleLevel.getComponent(Label).string = info.levelLabel.text;
@@ -469,38 +471,25 @@ export class RoleSelector extends Component {
 
   //#endregion
 
-  /** 摘掉选中框（取消选中 / 列表重建前调用；节点随单元格销毁时这里自动变无害） */
-  private clearSelectionFrame() {
-    if (this.selectionFrame && isValid(this.selectionFrame)) this.selectionFrame.destroy();
-    this.selectionFrame = null;
+  /** 按角色 id 取预览节点（列表重建会换新节点，所以每次按名字查，不缓存引用） */
+  private rolePreview(roleId: string): Node | null {
+    const cell = this.roleScrollContent?.getChildByName(`${ROLE_CELL_PREFIX}${roleId}`);
+    return cell?.getChildByName(`${ROLE_PREVIEW_PREFIX}${roleId}`) ?? null;
   }
 
   /**
-   * 给当前选中角色画选中框：白细线（样式见 roleSelectorLayout.selectionFrame）描在单元格的
-   * 预览区域外扩 margin 处，挂在**单元格**下 —— 跟着滚动内容走，滚动后不会与角色错位
+   * 切换某个角色预览的选中态（站立帧 ↔ 展示帧 + 脚下 select_player 特效）
+   * 节点可能已随列表重建销毁（新建 / 删除角色后），找不到就跳过 —— 重建后由 showOwnerRolesUI 补回
    */
-  private showSelectionFrame(roleId: string) {
-    this.clearSelectionFrame();
-    const cell = this.roleScrollContent?.getChildByName(`${ROLE_CELL_PREFIX}${roleId}`);
-    if (!cell) return;
-    const { cell: cellSize } = roleSelectorLayout.roleScroll;
-    const previewSize = roleSelectorLayout.previewSize;
-    const frame = roleSelectorLayout.selectionFrame;
-    const node = new Node("role_selection_frame");
-    const g = node.addComponent(Graphics);
-    g.lineWidth = frame.lineWidth;
-    g.strokeColor = frame.color;
-    const halfW = previewSize.width / 2 + frame.margin;
-    const halfH = previewSize.height / 2 + frame.margin;
-    g.rect(-halfW, -halfH, halfW * 2, halfH * 2);
-    g.stroke();
-    // 框对齐预览区域：预览贴单元格底部（与 createRoleCell 同一条公式）
-    node.setPosition(0, -(cellSize.height - previewSize.height) / 2);
-    cell.addChild(node);
-    this.selectionFrame = node;
+  private setRoleSelected(roleId: string, selected: boolean) {
+    const summary = this.roleSummaries.find((item) => item.id === roleId);
+    const preview = this.rolePreview(roleId);
+    if (!summary || !preview) return;
+    GameUiHelper.setRolePreviewSelected(preview, selected, summary.occupation, summary.sex);
   }
 
   private onlineRole(roleId: string) {
+    const previous = this.ownerRoleSelectedId;
     this.ownerRoleSelectedId = roleId;
     const summary = this.roleSummaries.find((item) => item.id === roleId);
     if (!summary) return;
@@ -508,7 +497,9 @@ export class RoleSelector extends Component {
     this.mainView.beginGameButton.getComponent(Sprite).grayscale = false;
     this.mainView.selectedRoleName.getComponent(Label).string = summary.name;
     this.mainView.selectedRoleLevel.getComponent(Label).string = summary.level.toString();
-    this.showSelectionFrame(roleId);
+    // 换人选中：先把上一个换回站立帧，再点亮这一个（重复点同一个角色 = 展示动画从头播一遍）
+    if (previous && previous !== roleId) this.setRoleSelected(previous, false);
+    this.setRoleSelected(roleId, true);
   }
 
   createRoleUI() {
