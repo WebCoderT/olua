@@ -311,7 +311,13 @@ export class AdminService {
     // 这里只改清单本身 —— 发放后客户端要穿还得走接口，正好让校验跑一遍
     if (dto.fashionsOwned !== undefined) next.fashionsOwned = Array.from(new Set(dto.fashionsOwned.filter((id) => id.length > 0)));
     if (dto.avatar !== undefined) next.avatar = dto.avatar;
-    if (dto.onMap !== undefined) next.onMap = dto.onMap;
+    // 位置：`onMap` 是客户端自报的那份（走图 / 统计），`mapAt` 是服务端承认的那份（#606 进图门槛读它）。
+    // 运营把人摆到某张图 = 同时承认这个位置，所以两个一起写；只改 onMap 会让「门槛认为他还在旧图」，
+    // 玩家下次登录就被自己的门槛挡在门外。
+    if (dto.onMap !== undefined) {
+      next.onMap = dto.onMap;
+      next.mapAt = dto.onMap;
+    }
     // 血蓝（#596 起服务端独占，这里是运营旁路）：改值同时重置回复结算游标，
     // 否则下一次玩家存档会把「游标到现在」的离线时长一次性补成回复
     if (dto.hp !== undefined || dto.mp !== undefined) {

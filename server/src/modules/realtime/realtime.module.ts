@@ -4,6 +4,7 @@ import { RolesModule } from "../roles/roles.module";
 import { QuestModule } from "../quest/quest.module";
 import { PartyModule } from "../party/party.module";
 import { WorldModule } from "../world/world.module";
+import { MapModule } from "../map/map.module";
 import { BlockService } from "./block.service";
 import { ChatService } from "./chat.service";
 import { CombatSettlementService } from "./combat-settlement.service";
@@ -28,16 +29,18 @@ import { SoakPointService } from "./soak-point.service";
  * 广播出口照旧由本模块接线（世界频道复用互见的观看者集合）。
  * 队伍（#399）反过来：队伍态住 `PartyModule`（存档进程也要读），实时进程只是它的
  * **收发口**（帧、连接位置、屏蔽判定三根线在本模块接上去）—— 经验分成也在结算侧调用它。
- * 地图（#573）：进图条件**不在这一层判**（`worldJoin` 只登记）。登录与传送共用同一条
- * 消息，登录时进的就是玩家脚下那张图，硬拦会把人锁在门外；判定在客户端 `changeOnMap`，
- * 它读的是配置快照里那份 `maps`（服务端下发）。原因见 `MapService` 顶部。
+ * 地图（#573 配置 / #606 判定）：进图条件**在这一层判**，判据一个：`MapService.enterRejectOf`。
+ * 客户端先发 `mapEnter` 问一句（回 `mapEnterResult`，被拒就不切场景），落地时 `worldJoin`
+ * 再判一次 —— 绕过意图直发 join 的改包走的就是后面那条。登录不算换图：目标图与服务端
+ * 记下的位置（`data.mapAt`）一致时无条件放行，运营事后调高门槛也不会把人锁在图外。
+ * 三条边界见 `MapService` 顶部。
  * 屏蔽（#398）不是消费者而是**过滤器**：聊天投递与互见帧都要先问它「这个收件人拉黑了对方吗」，
  * 缓存（`BlockService`）住在本模块 —— 只有实时进程需要它，放社交模块会让 HTTP 进程也养一份。
  */
 @Module({
   // GameConfigModule（#732）：RealtimeService 注入 RuntimeConfigService 做定期重装 ——
   // RolesModule 虽然也 import 了它，但 Nest 的 provider 不随间接 import 透传，这里要自己挂
-  imports: [GameConfigModule, RolesModule, QuestModule, WorldModule, PartyModule],
+  imports: [GameConfigModule, RolesModule, QuestModule, WorldModule, PartyModule, MapModule],
   controllers: [RealtimeController],
   providers: [
     RealtimeService,

@@ -461,9 +461,14 @@ function connect(url) {
     check(!!snapA && snapA.alive === false && snapA.hp === 0 && typeof snapA.respawnInMs === "number", "快照里死亡的实例 alive=false 且带重生倒计时", JSON.stringify(snapA));
     check(!!snapB && snapB.alive === true && snapB.hp === monsterRowOf(snapB.monsterKey).maxHp, "快照里活着的实例状态不受会话操作影响", JSON.stringify(snapB));
 
-    // 换图 = 发新的 worldJoin：旧图观看者身份移除、幂等账清零，但旧图实例状态原样保留
-    const map2 = await session.joinWorld("2");
-    check(!!(map2 && map2.monsters.length === spawnCount("2")), `换图 worldJoin 拿到新图的实例（${spawnCount("2")} 只）`, JSON.stringify(map2));
+    // 换图 = 发新的 worldJoin：旧图观看者身份移除、幂等账清零，但旧图实例状态原样保留。
+    // #606 起进图门槛在服务端判（1 级角色既进不了 1 图 10 级、也进不了 2 图 40 级），
+    // 而这一区域要验的是「换图清账」——所以先用管理端把这名角色提到 10 级并承认它的位置
+    // （`onMap` 一并写 `mapAt`），换图目标选新手村 0 图（1 级可进），往返两程都在门槛之内
+    const promoted = await api(baseUrl, "PATCH", `admin/roles/${roleId}`, { token: adminToken, body: { level: 10, onMap: "1" } });
+    check(promoted.code === 0, "换图前把角色提到 10 级并摆回 1 图（门槛之上才有得验换图）", promoted.message);
+    const map2 = await session.joinWorld("0");
+    check(!!(map2 && map2.monsters.length === spawnCount("0")), `换图 worldJoin 拿到新图的实例（${spawnCount("0")} 只）`, JSON.stringify(map2));
     const back = await session.joinWorld("1");
     const backA = back && back.monsters.find((m) => m.instanceId === (mobA ? mobA.instanceId : "m1_1"));
     check(!!backA && backA.alive === false && backA.hp === 0, "换图往返后旧图实例状态保持（世界状态不随会话清）");

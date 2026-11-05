@@ -25,7 +25,8 @@ import { nextRankUpgrade } from "../../configs/game-config";
 import RoleSync from "../utils/net/RoleSync";
 import Session from "../utils/net/Session";
 import { RoleApi } from "../utils/net/Api";
-import type { CombatKillReward, RoleAuthorityUpdate } from "../utils/net/CombatChannel";
+import CombatChannel from "../utils/net/CombatChannel";
+import type { CombatKillReward, MapEnterResult, RoleAuthorityUpdate } from "../utils/net/CombatChannel";
 import type { BagOp, BagOpResult, DrugUseResult, GrowthUpgradeResult, MallPurchaseResult, SellGoodsResult } from "../utils/net/ApiModels";
 import { normalizeGuideProgress } from "../utils/guide/guide-progress";
 import { guideStepCount } from "../../configs/guide";
@@ -1308,23 +1309,68 @@ export default class StorageManager {
     return true;
   }
 
-  /** 跳转地图（不满足地图进入条件时提示并放弃，所有传送入口都经过这里） */
+  /** 正在等服务端放行的一次换图（`null` = 当前没有；防止连点重复发意图） */
+  private static mapEnterPending = false;
+
+  /**
+   * 跳转地图（所有传送入口都经过这里）
+   *
+   * 三段，顺序有意义（#606）：
+   *
+   * 1. **本地预检**：读配置快照判一次，不满足立刻提示 —— 不联也能给反馈，不必等一个往返；
+   * 2. **服务端判定**：权威在服务端（改包跳过第 1 步也没用）。通道不在线时退回老行为
+   *    （本地判据说了算），通道在就发 `mapEnter` 等 `mapEnterResult`；
+   * 3. **放行才切图**：被拒就按服务端给的那一项提示（文案仍是客户端这份），原地不动。
+   *
+   * 为什么不能「先切图、等服务端拒绝再退回」：切场景会先卸掉旧场景再加载新图，
+   * 等 world 帧回来人已经站在一张空图里了 —— 回滚代价远大于先问一句。
+   */
   static changeOnMap(mapId: MapId) {
-    // 进入限制校验：等级/战斗力未达标时提示原因，不切换地图
+    // ① 进入限制校验：等级/战斗力未达标时提示原因，不切换地图
     const reason = GameHelper.getMapEnterRejectReason(mapId);
     if (reason) {
       GameUiHelper.createTip(reason.key, reason.params);
       return;
     }
-    // 获取最新信息
     const role = this.findOnlineRole();
+    if (!role) return;
+    // 传送点就在脚下：不必问服务端（老行为照样重进一次场景）
+    if (role.onMap === mapId) {
+      this.applyMapChange(mapId);
+      return;
+    }
+    // 上一次判定还没回来，忽略这次连点（否则两个回调都会去切场景）
+    if (this.mapEnterPending) return;
+    // 通道不在线：退回老行为，本地判据说了算（断线也有得玩）
+    if (!CombatChannel.active) {
+      this.applyMapChange(mapId);
+      return;
+    }
+    // ② 服务端判定（超时 / 通道掉线由 CombatChannel 兜底成放行 —— 本地判据已经过了）
+    this.mapEnterPending = true;
+    CombatChannel.requestMapEnter(mapId, (result: MapEnterResult) => {
+      this.mapEnterPending = false;
+      if (!result.ok) {
+        // ③ 被拒：按服务端指出缺的那一项提示（文案 key 与本地预检同一套）
+        const reject = GameHelper.mapEnterRejectText(result);
+        if (reject) GameUiHelper.createTip(reject.key, reject.params);
+        return;
+      }
+      this.applyMapChange(mapId);
+    });
+  }
+
+  /** 真正切图（服务端已放行或通道不可用时的本地路径） */
+  private static applyMapChange(mapId: MapId) {
+    const role = this.findOnlineRole();
+    if (!role) return;
     // 更改所在地图
     role.onMap = mapId;
     // 保存
     this.updateOnlineRole(role);
     // 传送成功音（#685）：**不在这里响**。此处到新地图出现还隔着 Loading 场景的资源加载，
     // 现在响等于「点了传送就有声音」，玩家听不出成功。留标记，等 Game.start 把角色摆出来再播
-    // （见 consumeTeleportArrival；被等级 / 战斗力拦住的在上面就 return 了，不会留标记）
+    // （见 consumeTeleportArrival）
     this.markTeleportArrival();
     // 重新进入游戏场景，走过渡场景完成新地图资源加载后再进入
     SceneManager.loadScene("Game");

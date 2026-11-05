@@ -105,8 +105,10 @@ const ALLOWED_EDGES = [
   { from: "modules/social", to: "modules/roles/dto/", why: "在线角色的形状（RoleDto）：消息正文要用角色名与等级" },
   // 地图（#573）：玩法配置从客户端搬到服务端 `maps` 表之后，
   // 配置快照要下发它（game-config）—— 走 MapService 的公开口，不许直接读表。
-  // 注意 realtime **不在这张图里**：进图条件故意不拦连接（原因见 MapService 顶部）
   { from: "modules/game-config", to: "modules/map/", why: "配置快照下发地图玩法配置" },
+  // 进图门槛（#606）：判定从客户端搬到服务端之后，实时通道在 `mapEnter` / `worldJoin`
+  // 两处调 MapService.enterRejectOf —— 判据只有那一处，realtime 不许自己复刻一份门槛算术
+  { from: "modules/realtime", to: "modules/map/", why: "进图门槛判定（mapEnter / worldJoin）" },
   { from: "modules/game-config", to: "modules/ui-effect/", why: "配置快照下发界面特效参数（#594）" },
   // 音效（#683）：配置快照下发 11 个音效项（文件路径 / 音量 / 循环 / 开关），
   // 公开接口 `GET /game-config/audio` 也复用同一个 service（登录页没有令牌）——

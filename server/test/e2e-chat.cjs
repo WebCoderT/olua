@@ -221,8 +221,11 @@ function connect(url) {
     sessionB.send("pos", { mapId: "1", x: 140, y: 200, hp: 100, moving: false });
     sessionC.send("worldJoin", { mapId: "2" });
     sessionC.send("pos", { mapId: "2", x: 100, y: 200, hp: 100, moving: false });
-    await sleep(200);
-    check(sessionA.worlds > 0 && sessionB.worlds > 0 && sessionC.worlds > 0, "三个会话都拿到了所在图的权威快照");
+    /* 等帧而不是 sleep 固定时长：worldJoin 接受后要先落 data.mapAt（#606），慢机器上 200ms 不够 */
+    const joined = await waitFor("三个会话都拿到所在图的权威快照", async () =>
+      sessionA.worlds > 0 && sessionB.worlds > 0 && sessionC.worlds > 0 ? true : null,
+    );
+    check(!!joined, "三个会话都拿到了所在图的权威快照");
 
     //#endregion
 

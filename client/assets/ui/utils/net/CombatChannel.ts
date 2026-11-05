@@ -419,6 +419,18 @@ export default class CombatChannel {
   private static POSITION_INTERVAL = 250;
   private static lastPositionSentAt = 0;
 
+  /**
+   * 正在等应答的那一次换图意图（#606）
+   *
+   * 只留一条：玩家连点两个传送点时，只该有最后一次生效（前一条的回调会被
+   * `cancelMapEnter` 以「放行」收尾 —— 它已经不表示玩家的意图了，静默丢弃即可）
+   */
+  private static pendingMapEnter: {
+    mapId: string;
+    settle: (result: MapEnterResult) => void;
+    timer: ReturnType<typeof setTimeout>;
+  } | null = null;
+
   /** 是否走服务端结算（灰度开关 × 通道在线；false 时调用方退回本地结算） */
   static get active(): boolean {
     return RealtimeClient.status === RealtimeStatus.Connected;
@@ -640,6 +652,85 @@ export default class CombatChannel {
     }
     this.onServerError({ code, message });
   }
+
+  /**
+   * 换图意图的判定结果（#606）：服务端只回答「能不能去」，切不切场景由调用方决定
+   *
+   * `ok = false` 时带 `field` / `need` / `mapLabel`，调用方按 `field` 取文案
+   * （`GameHelper.mapEnterRejectText`），服务端不生产中文句子。
+   */
+  static dispatchMapEnterResult(data: unknown): void {
+    const payload = (data ?? {}) as {
+      mapId?: unknown;
+      ok?: unknown;
+      field?: unknown;
+      need?: unknown;
+      mapLabel?: unknown;
+    };
+    const mapId = typeof payload.mapId === "string" ? payload.mapId : "";
+    const result: MapEnterResult = {
+      mapId,
+      ok: payload.ok === true,
+      field: payload.field === "level" || payload.field === "combat" || payload.field === "soul" ? payload.field : undefined,
+      need: typeof payload.need === "number" && Number.isFinite(payload.need) ? payload.need : undefined,
+      mapLabel: typeof payload.mapLabel === "string" ? payload.mapLabel : undefined,
+    };
+    const pending = this.pendingMapEnter;
+    // 只认「上一次问的那张图」：迟到的应答（超时之后才回来）不该替玩家做第二次决定
+    if (!pending || pending.mapId !== mapId) {
+      console.warn(`[realtime] 收到没有对应请求的换图结果（mapId=${mapId || "?"}，ok=${result.ok}）`);
+      return;
+    }
+    this.pendingMapEnter = null;
+    clearTimeout(pending.timer);
+    pending.settle(result);
+  }
+
+  /**
+   * 问一次「我能不能去这张图」（#606：换图门槛在服务端判）
+   *
+   * @param mapId  目标地图 id
+   * @param settle 判定回来时调用（**必定调用一次**：超时也调，`ok = true` 表示按本地判据放行）
+   * @param timeoutMs 多久没应答就按本地判据走 —— 服务端卡住不该让人点不了传送
+   */
+  static requestMapEnter(mapId: string, settle: (result: MapEnterResult) => void, timeoutMs = 3_000): void {
+    // 上一次还在等：直接放弃它（玩家连点了两个传送点，只该有最后一次生效）
+    this.cancelMapEnter();
+    const timer = setTimeout(() => {
+      if (this.pendingMapEnter?.mapId !== mapId) return;
+      this.pendingMapEnter = null;
+      // 服务端没应答：按**本地**判据放行（与「通道不在线」同一套回滚语义）。
+      // 本地那份判据已经在 changeOnMap 里过了一遍，所以这里不会把人放进够不着的图
+      console.warn(`[realtime] 换图判定超时（${mapId}），按本地判据放行`);
+      settle({ mapId, ok: true });
+    }, timeoutMs);
+    this.pendingMapEnter = { mapId, settle, timer };
+    RealtimeClient.send({ type: "mapEnter", data: { mapId } });
+  }
+
+  /**
+   * 撤掉还没回来的换图请求（玩家又点了一次 / 场景销毁时调用）
+   *
+   * **不回调**：这次请求已经不表示玩家的意图了，替它做决定（放行或拒绝）都是错的。
+   */
+  static cancelMapEnter(): void {
+    const pending = this.pendingMapEnter;
+    if (!pending) return;
+    this.pendingMapEnter = null;
+    clearTimeout(pending.timer);
+  }
+}
+
+/** 换图判定结果（协议见 realtime.protocol 的 RealtimeMapEnterResultMessage） */
+export interface MapEnterResult {
+  mapId: string;
+  ok: boolean;
+  /** 缺哪一项（`ok = true` 时没有） */
+  field?: "level" | "combat" | "soul";
+  /** 这张图要求的值（`ok = true` 时没有） */
+  need?: number;
+  /** 图名（提示里要用） */
+  mapLabel?: string;
 }
 
 /** 服务端拒绝一次结算的形状（协议见 realtime.protocol 的 RealtimeSettleError） */
