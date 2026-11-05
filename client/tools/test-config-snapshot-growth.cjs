@@ -108,6 +108,15 @@ function main() {
   snapshotApi.applyGrowthScalars([{ key: "roleMaxLevel", value: 70, description: "", updatedAt: 0 }]);
   check(mpRate() === 0, "只下发别的标量时回复速度保持不变（不是每次整份重置）", String(mpRate()));
 
+  console.log("\n=== 标量：soakExpPerTick 下发（#722 泡点）===");
+  check(growth.soakExpPerTick === 0, "出厂值 0（活动默认关闭，不误飘提示）", String(growth.soakExpPerTick));
+  snapshotApi.applyGrowthScalars([{ key: "soakExpPerTick", value: 100, description: "", updatedAt: 0 }]);
+  check(growth.soakExpPerTick === 100, "泡点速率随快照覆写（客户端只读它决定要不要报喜）", String(growth.soakExpPerTick));
+  snapshotApi.applyGrowthScalars([{ key: "soakExpPerTick", value: -5, description: "", updatedAt: 0 }]);
+  check(growth.soakExpPerTick === 0, "负数按 0 处理（拍错配置宁可不报喜，也不虚报）", String(growth.soakExpPerTick));
+  snapshotApi.applyGrowthScalars([{ key: "soakExpPerTick", value: 2.7, description: "", updatedAt: 0 }]);
+  check(growth.soakExpPerTick === 2, "小数向下取整（每拍经验是整数点）", String(growth.soakExpPerTick));
+
   console.log("\n=== 缩表：服务端把上限调小 ===");
   const shrunken = levelRows().filter((row) => row.level <= 50);
   snapshotApi.applyGrowthSnapshot({ growthScalars: [], levels: shrunken });

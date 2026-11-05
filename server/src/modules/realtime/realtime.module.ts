@@ -11,6 +11,7 @@ import { MonsterAiService } from "./monster-ai.service";
 import { PlayerPresenceService } from "./player-presence.service";
 import { RealtimeController } from "./realtime.controller";
 import { RealtimeService } from "./realtime.service";
+import { SoakPointService } from "./soak-point.service";
 
 /**
  * 实时模块（服务端侧的 WebSocket 通道）
@@ -43,6 +44,9 @@ import { RealtimeService } from "./realtime.service";
     MapMonitorService,
     ChatService,
     BlockService,
+    // 泡点活动（#722）：在线 tick 发经验。住本模块的理由见服务头注释 ——
+    // 拆进程形态里只有实时进程装载本模块，tick 天然只跑一份
+    SoakPointService,
   ],
 })
 export class RealtimeModule {}

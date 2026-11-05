@@ -34,6 +34,7 @@ import {
   applyUiEffectRows,
   checkSnapshotContract,
   setRoleMaxLevel,
+  setSoakExpPerTick,
   snapshotContractMessage,
 } from "./game-config";
 import { items, rebuildItemIndex } from "./items";
@@ -101,6 +102,9 @@ export function applyGrowthScalars(rows: GrowthScalar[]): void {
         return;
       case "mpRecoverPerSecond":
         setMpRecoverPerSecond(row.value);
+        return;
+      case "soakExpPerTick":
+        setSoakExpPerTick(row.value);
         return;
       default:
         return;

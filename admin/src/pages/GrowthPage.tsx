@@ -14,6 +14,8 @@ const SCALAR_LABELS: Record<string, string> = {
   "expGain.expPerLevel": "每级经验基数",
   "expGain.maxLevelGap": "等级差经验衰减",
   mpRecoverPerSecond: "每秒自然回蓝",
+  soakExpPerTick: "泡点·每拍经验",
+  soakTickSeconds: "泡点·拍间隔秒",
 };
 
 /**

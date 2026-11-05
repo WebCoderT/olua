@@ -53,6 +53,9 @@ export const GROWTH_SCALAR_SPECS: Record<string, GrowthScalarSpec> = {
   "expGain.maxLevelGap": { min: 0, max: 100, integer: true },
   // 允许小数：回复是「每秒 N 点 × 经过秒数」累加的，0.5 这种半速配置是合法需求（#605）
   "mpRecoverPerSecond": { min: 0, max: 1000, integer: false },
+  // 泡点活动（#722）：rate=0 是合法且是出厂值 —— 活动默认关闭，运营在管理端开
+  "soakExpPerTick": { min: 0, max: 1000000, integer: true },
+  "soakTickSeconds": { min: 1, max: 3600, integer: true },
 };
 
 /** 标量参数的中文说明（管理端列表直接展示；键必须与 GROWTH_SCALARS 一致） */
@@ -61,6 +64,8 @@ export const GROWTH_SCALAR_DESCRIPTIONS: Record<string, string> = {
   "expGain.expPerLevel": "每级基准经验：同级击杀经验 = (怪物等级+1) × 该值",
   "expGain.maxLevelGap": "角色与怪物等级差达到该值（含）后不再获得经验",
   "mpRecoverPerSecond": "魔法值自然回复速度（点 / 秒，0 = 关闭自然回蓝；由服务端结算，客户端读快照同步）",
+  "soakExpPerTick": "泡点活动：在线角色每拍获得的经验（0 = 活动关闭；服务端定时发放，走击杀同一套升级链路）",
+  "soakTickSeconds": "泡点活动：发经验的拍间隔（秒；与上一条配合出「每 M 秒发 N 点」的速率）",
 };
 
 /**

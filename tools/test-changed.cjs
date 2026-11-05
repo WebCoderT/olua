@@ -82,7 +82,7 @@ const SERVER_MODULE_E2E = [
   ["src/modules/auth", ["guard"]],
   ["src/modules/roles", ["roles"]],
   ["src/modules/mail", ["mail", "game-mail"]],
-  ["src/modules/realtime", ["realtime", "combat", "world"]],
+  ["src/modules/realtime", ["realtime", "combat", "world", "soak"]],
   ["src/modules/world", ["world"]],
   ["src/modules/combat", ["combat", "roles"]],
   ["src/modules/game-config", ["game-config"]],

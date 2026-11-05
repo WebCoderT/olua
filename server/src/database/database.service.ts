@@ -545,6 +545,13 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
         updated_at  INTEGER NOT NULL DEFAULT 0
       );
 
+      -- 泡点活动参数（#722）：出厂默认 rate=0（活动关闭）。这里 INSERT OR IGNORE
+      -- 每次启动都跑：存量库（快照灌库早于这两个键）也能拿到可编辑的行，
+      -- 管理端「成长参数」页才改得到（updateScalar 对不存在的键是 404）。
+      INSERT OR IGNORE INTO growth_scalars (key, value, description, updated_at) VALUES
+        ('soakExpPerTick', 0, '泡点活动：在线角色每拍获得的经验（0 = 活动关闭；服务端定时发放，走击杀同一套升级链路）', 0),
+        ('soakTickSeconds', 10, '泡点活动：发经验的拍间隔（秒；与上一条配合出「每 M 秒发 N 点」的速率）', 0);
+
       -- 军衔配置（#250）：与 titles / souls 同构（100 阶全量就是成长链，顺序天然按阶，
       -- 没有 upgrade_order 列 —— 军衔不拖动排序）；多 tier 列（大段名），少 animation 两列。
       CREATE TABLE IF NOT EXISTS ranks (
