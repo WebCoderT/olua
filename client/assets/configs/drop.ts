@@ -8,9 +8,9 @@
  * （settle 帧的 `reward.drops`），本地没有任何抽奖代码。
  *
  * 这里留下的是「掉落物在地上怎么被捡起来、怎么摆」—— 纯表现，与掉落表无关。
- * **数值不在这里写死**（#605）：出厂值只是快照没到时的兜底，进游戏后由
- * `GET /game-config` 的 `runtimeParams.drop` 段覆写（管理端「运行时参数」页可改），
- * 于是「捡得更远一点」不用再发一次客户端包。
+ * **数值不在这里写死**（#605 / #724）：唯一来源是 `GET /game-config` 的 `runtimeParams.drop` 段
+ * （管理端「运行时参数」页可改），初始 0 = 快照没到（进游戏前契约已保证快照到达）——
+ * 于是「捡得更远一点」不用再发一次客户端包，客户端也没有第二份出厂值可漂移。
  */
 export interface DropRuntimeParams {
   /** 自动拾取半径（像素）：角色脚底与掉落物距离小于该值即拾取 */
@@ -31,14 +31,15 @@ export interface DropRuntimeParams {
  *
  * 消费方（DropManager / DropScatter）在模块加载时就拿到了这个对象的引用，
  * 所以覆写必须是「原地改字段」而不是「换一个新对象」—— 换对象等于把改动写给空气。
+ *
+ * **初始全 0 = 快照没到**（#724 无本地兜底）：唯一来源是快照 `runtimeParams.drop` 段，
+ * 契约保证进游戏前必到；0 半径/超时只在加载期存在，进游戏后就是服务端给的值。
  */
 export const dropRuntime: DropRuntimeParams = {
-  // 取值 = 图标半宽 20 + 脚部容差 20
-  autoPickupRadius: 40,
-  fullTipInterval: 1500,
-  // 取值 = 图标 40 + 12 留白
-  scatterMinDistance: 52,
-  pickReplyTimeout: 5000,
+  autoPickupRadius: 0,
+  fullTipInterval: 0,
+  scatterMinDistance: 0,
+  pickReplyTimeout: 0,
 };
 
 /**

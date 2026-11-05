@@ -2146,16 +2146,17 @@ export default class GameUiHelper {
    * 创建升级特效（#594：表现参数归服务端）
    *
    * 摆位 / 缩放 / 旋转 / 时长 / 开关全部来自快照（`upgradeEffectConfig()`，管理端「特效管理」
-   * 可改，与武器外观同一套取向）；快照没到 / 表里没有 `upgrade` 行时回落出厂值。
+   * 可改，与武器外观同一套取向）；**无本地兜底**（#724）：快照 `uiEffects` 表里没有 `upgrade`
+   * 行时不演（返回 null，不建节点）—— 服务端没配 / 删了行就该如实地没有特效。
    * 尺寸口径与技能特效（`createSkillEffect`）一致：**不传 size**（`createSprite` 即 RAW +
    * trim = false），节点尺寸由帧的 `spriteSourceSize` 决定、裁剪帧按 `spriteOffset`
    * 回到原画布里的位置 —— 不写死素材尺寸（素材重新导出成分辨率不同也不会被拉伸）。
    * 帧来自 `effect/upgrade/upgrade.plist` 图集（`loadLoopFrames` 图集优先）。
-   * @returns `enabled = false` 时返回 null（调用方不挂节点，不是挂一个空的）
+   * @returns 没配置行或 `enabled = false` 时返回 null（调用方不挂节点，不是挂一个空的）
    */
   static createUpgradeEffect(): Node | null {
     const config = upgradeEffectConfig();
-    if (!config.enabled) return null;
+    if (!config || !config.enabled) return null;
     const upgrade = UiHelper.createSprite("upgrade_effect", "", new Vec2(config.offsetX, config.offsetY));
     upgrade.setScale(config.scaleX, config.scaleY, 1);
     upgrade.angle = config.rotate;

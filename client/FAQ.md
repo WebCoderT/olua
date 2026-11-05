@@ -134,7 +134,7 @@ Cocos 的 `TiledMap` 默认把瓦片画在「地图中心为原点」的本地�
 掉落优先级是 `monster_drops` 每怪独立掉落表 > `drop_tables` 里被引用的具名表（common/elite/boss）> 兜底 `default` 表。**三张表全在服务端**（出厂那份 = `server/data/config-sync.sql`，新装库首启灌进去），线上改走管理端「掉落配置」；客户端只剩 `configs/drop.ts` 的 `dropRuntime` 手感参数。
 
 - 改某只怪掉什么、掉多重、掉几件：管理端「掉落配置」改该怪那一行的 `entries`（每条独立配 `weight` 权重 / `chance` 概率 / `count` 数量区间）与 `picks`。`picks` 支持数字（固定件数）或 `[最小, 最大]` 区间（例 `[1, 10]` = 本次掉 1~10 件；**每次抽取独立随机、可重复命中同一条目**，重复的会合并数量，默认按定位 普通 `[1,3]` / 精英 `[2,6]` / BOSS `[3,10]`）。**想让这个改动进「出厂值」**（别人 `make config-import` 之后也是这套），改完库再 `make config-export` 重导快照。
-- 掉落物散落：`ui/utils/drop/DropScatter.scatterDropPositions` 以落点为圆心按最小间距 `configs/drop.dropRuntime.scatterMinDistance`(52px，= 图标 40 + 12 留白) 一圈圈贪心铺开，保证**任意两件掉落物都不重叠**（世界坐标无额外缩放，圆即屏幕上的圆）；件数越多圈数越大（10 件最外圈半径 ≈ 102）
+- 掉落物散落：`ui/utils/drop/DropScatter.scatterDropPositions` 以落点为圆心按最小间距 `configs/drop.dropRuntime.scatterMinDistance`（管理端「运行时参数」下发，出厂 52px = 图标 40 + 12 留白；客户端不存兜底值）一圈圈贪心铺开，保证**任意两件掉落物都不重叠**（世界坐标无额外缩放，圆即屏幕上的圆）；件数越多圈数越大（10 件最外圈半径 ≈ 102）
 - 地面掉落名：装备拼成「前缀 + 名称 + 后缀」三段并**分段着色**（前缀/名称用前缀色、后缀用后缀色），取段与取色**与详情弹窗同走 `configs/equipments.getEquipmentNameParts`** —— 两处永远一致，不各写一份色表；非装备仍单行白字，可叠加物品追加「x{数量}」段。几何（图标尺寸 / 名称字号行高 / 段间距 / 名称与数量颜色）全在 `configs/layout/hud.dropItemLayout`；名称行按内容宽度自适应（`Layout` 横向 CONTAINER + 各段 `Overflow.NONE`）并在图标正下方居中
 - 装备条目口径：取「level ≤ 怪物等级且不超过 10 级、每部位最多 2 档」的基础装备，每件展开全部 15 个前后缀变体（`_p前缀s后缀`，普通的·人级沿用基础 id），权重按前后缀稀有度衰减（前缀 ×[1, 0.7, 0.45, 0.25, 0.12]、后缀 ×[1, 0.5, 0.22]、部位 ×1 / 0.9 / 0.8）
 - 因此 555 件装备里：武器 / 衣服随各等级段的怪铺开，头盔 / 腰带 / 鞋子 / 项链 / 戒指目前**只有 1 级新手件**，所以只落在低等级怪（≤11 级）的列表里——补齐这些部位的高等级装备后，把 `EQUIP_LEVEL_GAP` 与 `MAX_TIER_PER_SLOT` 放宽重新生成即可覆盖到高等级怪
@@ -155,7 +155,7 @@ Cocos 的 `TiledMap` 默认把瓦片画在「地图中心为原点」的本地�
 | 碰撞范围可视化的线宽/透明度/配色 | `configs/debug.ts` 的 `rangeStyle` |
 | 底部功能入口（名称/图标/解锁等级/快捷键） | `configs/bottomNav.ts`（点击回调留在组件里，按 `key` 关联） |
 | 角色体型与碰撞盒、刚体参数 | `configs/role.ts` 的 `roleBody` / `roleRigid` |
-| 掉落拾取半径、背包满提示节流、掉落物散开间距 | `configs/drop.ts` 的 `dropRuntime` |
+| 掉落拾取半径、背包满提示节流、掉落物散开间距 | 管理端「运行时参数」（客户端 `configs/drop.ts` 的 `dropRuntime` 只是快照落点，无兜底值） |
 | 地面掉落物的名称与几何（图标尺寸 / 名称字号行高 / 段间距 / 名称与数量颜色） | `configs/layout/hud.ts` 的 `dropItemLayout`（前后缀文案与取色见 `configs/equipments.ts` 的 `equipmentPrefixColors` / `equipmentSuffixColors`） |
 | 摇杆手感（死区 / 阈值 / 半径） | `configs/role.ts` 的 `joystickMove` 与 `configs/layout/hud.ts` 的 `joystickLayout` |
 

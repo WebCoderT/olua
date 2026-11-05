@@ -358,7 +358,7 @@ function main() {
   check(dropRuntime.pickReplyTimeout === 3000 && dropRuntime.fullTipInterval === 800, "拾取超时 / 满包间隔也覆写", JSON.stringify(dropRuntime));
   check(autoBattle.maxTargetDistance === 300 && autoBattle.cellSize === 24, "自动战斗距离与网格边长覆写", `dist=${autoBattle.maxTargetDistance} cell=${autoBattle.cellSize}`);
   check(autoBattle.moveByRun === false, "布尔开关（移动用跑步）也能覆写");
-  check(autoBattle.stuckRetryLimit === 3 && autoBattle.dashSnapRadius === 60, "快照里没给的键保持出厂值（部分下发不会把别的参数清零）", `retry=${autoBattle.stuckRetryLimit}`);
+  check(autoBattle.stuckRetryLimit === 0 && autoBattle.dashSnapRadius === 0, "快照里没给的键保持当前值（#724 无出厂值，初始 0 = 快照没给）", `retry=${autoBattle.stuckRetryLimit}`);
   check(autoBattle.routeLine && autoBattle.routeLine.dotRadius === 3, "样式参数（routeLine）不受快照影响 —— 它不在下发范围");
 
   // 坏值守卫：0 是合法值（关闭半径 / 关闭节流），负数与非数字一律保持当前值
@@ -367,7 +367,7 @@ function main() {
   applyDropRuntime({ autoPickupRadius: 0 });
   check(dropRuntime.autoPickupRadius === 0, "0 是合法值（可以作为「关闭自动拾取」用）");
   applyAutoBattleParams({ cellSize: 0, stuckRetryLimit: 0 });
-  check(autoBattle.cellSize === 24 && autoBattle.stuckRetryLimit === 3, "网格边长与重试次数有下限 1（0 会让寻路 / 放弃逻辑失去意义）", `cell=${autoBattle.cellSize}`);
+  check(autoBattle.cellSize === 24 && autoBattle.stuckRetryLimit === 0, "网格边长有下限 1（0 会让寻路失去意义），没配过的键保持 0", `cell=${autoBattle.cellSize}`);
 
   //#endregion
 
