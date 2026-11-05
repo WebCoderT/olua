@@ -15,6 +15,7 @@
     "dev": "node --disable-warning=ExperimentalWarning -r ts-node/register src/main.ts",
     "test:e2e": "node --disable-warning=ExperimentalWarning test/e2e.cjs",
     "test:e2e:roles": "node --disable-warning=ExperimentalWarning test/e2e-roles.cjs",
+    "test:e2e:soak": "node --disable-warning=ExperimentalWarning test/e2e-soak.cjs",
     "test:e2e:role-vitals": "node --disable-warning=ExperimentalWarning test/e2e-role-vitals.cjs",
     "test:e2e:role-fashion": "node --disable-warning=ExperimentalWarning test/e2e-role-fashion.cjs",
     "test:e2e:guard": "node --disable-warning=ExperimentalWarning test/e2e-guard.cjs",

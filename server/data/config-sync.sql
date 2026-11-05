@@ -5,7 +5,7 @@
 -- 表 36 张 / 行 3407 条
 -- olua config snapshot v1
 -- tables: achievements,audio_settings,combat_weights,drop_tables,drugs,equip_aligns,equip_in_aligns,equipment_appearance,equipment_meta,equipment_slots,equipment_variants,equipments,fashions,growth_scalars,guide_settings,items,mall_prices,mall_settings,map_collisions,map_npcs,map_spawn_areas,maps,monster_drops,monster_presentation,monster_skills,monsters,npcs,quests,ranks,role_levels,runtime_params,skills,souls,statuses,titles,ui_effects
--- counts: achievements=24,audio_settings=12,combat_weights=7,drop_tables=5,drugs=11,equip_aligns=32,equip_in_aligns=31,equipment_appearance=1,equipment_meta=1,equipment_slots=13,equipment_variants=555,equipments=37,fashions=20,growth_scalars=4,guide_settings=1,items=5,mall_prices=1,mall_settings=1,map_collisions=1615,map_npcs=11,map_spawn_areas=62,maps=11,monster_drops=220,monster_presentation=220,monster_skills=3,monsters=220,npcs=21,quests=5,ranks=100,role_levels=60,runtime_params=1,skills=15,souls=37,statuses=4,titles=34,ui_effects=7
+-- counts: achievements=24,audio_settings=12,combat_weights=7,drop_tables=5,drugs=11,equip_aligns=32,equip_in_aligns=31,equipment_appearance=1,equipment_meta=1,equipment_slots=13,equipment_variants=555,equipments=37,fashions=20,growth_scalars=6,guide_settings=1,items=5,mall_prices=1,mall_settings=1,map_collisions=1615,map_npcs=11,map_spawn_areas=62,maps=11,monster_drops=220,monster_presentation=220,monster_skills=3,monsters=220,npcs=21,quests=5,ranks=100,role_levels=60,runtime_params=1,skills=15,souls=37,statuses=4,titles=34,ui_effects=7
 
 PRAGMA foreign_keys = OFF;
 BEGIN;
@@ -797,12 +797,14 @@ INSERT INTO "fashions" ("id", "label", "description", "icon", "in_res", "out_res
 INSERT INTO "fashions" ("id", "label", "description", "icon", "in_res", "out_res", "sell_price", "acquire_channel", "max_hp", "hp_recover", "physical_attack_min", "physical_attack_max", "magic_attack_min", "magic_attack_max", "taoist_attack_min", "taoist_attack_max", "physical_defense_min", "physical_defense_max", "magic_defense_min", "magic_defense_max", "taoist_defense_min", "taoist_defense_max", "updated_at") VALUES ('cloth_27', '金龙帝袍', '金龙盘冠的帝王战袍，举手投足间尽显威仪，似有龙吟环绕。', 'clothes/icon/027', 'clothes/in/027', 'clothes/out/027', 0, 'unavailable', 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
 INSERT INTO "fashions" ("id", "label", "description", "icon", "in_res", "out_res", "sell_price", "acquire_channel", "max_hp", "hp_recover", "physical_attack_min", "physical_attack_max", "magic_attack_min", "magic_attack_max", "taoist_attack_min", "taoist_attack_max", "physical_defense_min", "physical_defense_max", "magic_defense_min", "magic_defense_max", "taoist_defense_min", "taoist_defense_max", "updated_at") VALUES ('cloth_28', '金身财神', '金甲加身的财神爷，周身落满金币与火光，见者发财。', 'clothes/icon/028', 'clothes/in/028', 'clothes/out/028', 0, 'unavailable', 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
 
--- ===== growth_scalars（4 行）=====
+-- ===== growth_scalars（6 行）=====
 DELETE FROM "growth_scalars";
 INSERT INTO "growth_scalars" ("key", "value", "description", "updated_at") VALUES ('roleMaxLevel', 60, '角色等级上限（四条曲线的最后一段必须正好覆盖到它）', 0);
 INSERT INTO "growth_scalars" ("key", "value", "description", "updated_at") VALUES ('expGain.expPerLevel', 5, '每级基准经验：同级击杀经验 = (怪物等级+1) × 该值', 0);
 INSERT INTO "growth_scalars" ("key", "value", "description", "updated_at") VALUES ('expGain.maxLevelGap', 6, '角色与怪物等级差达到该值（含）后不再获得经验', 0);
 INSERT INTO "growth_scalars" ("key", "value", "description", "updated_at") VALUES ('mpRecoverPerSecond', 2, '魔法值自然回复速度（点 / 秒，0 = 关闭自然回蓝；由服务端结算，客户端读快照同步）', 0);
+INSERT INTO "growth_scalars" ("key", "value", "description", "updated_at") VALUES ('soakExpPerTick', 0, '泡点活动：在线角色每拍获得的经验（0 = 活动关闭；服务端定时发放，走击杀同一套升级链路）', 0);
+INSERT INTO "growth_scalars" ("key", "value", "description", "updated_at") VALUES ('soakTickSeconds', 10, '泡点活动：发经验的拍间隔（秒；与上一条配合出「每 M 秒发 N 点」的速率）', 0);
 
 -- ===== guide_settings（1 行）=====
 DELETE FROM "guide_settings";

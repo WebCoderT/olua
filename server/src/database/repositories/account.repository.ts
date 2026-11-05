@@ -249,6 +249,16 @@ export class AccountRepository {
   }
 
   /**
+   * 当前所有有在线角色的账号（#722 泡点 tick 用）
+   *
+   * 「在线」的真相由 #547 的心跳清算兜着（实时进程每拍续约 + 清算过期标记），
+   * 这里只做一次全表扫：泡点 tick 最多每秒一次、在线账号是几十的量级，够用。
+   */
+  listOnline(): AccountRow[] {
+    return this.db.all<AccountRow>("SELECT * FROM accounts WHERE online_role_id IS NOT NULL");
+  }
+
+  /**
    * 解封（状态改回正常 + 清空封禁四件套）
    *
    * 一次写完：只把 status 改回 active 却留着 ban_reason，后台会一直显示

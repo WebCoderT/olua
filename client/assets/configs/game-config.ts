@@ -808,6 +808,20 @@ export function setRoleMaxLevel(level: number): void {
 }
 
 /**
+ * 泡点活动：服务端每拍给在线角色发的经验（**可变**：快照 growthScalars 覆写，#722）
+ *
+ * 客户端**只读它决定要不要飘「活动已开启」提示**：经验由服务端定时入账，
+ * 走 roleUpdate 帧回来 —— 这里没有任何本地加经验的路径（#550 的纪律不破）。
+ * 0 = 活动关闭（出厂默认），快照没到时也是 0（不误飘提示）。
+ */
+export let soakExpPerTick = 0;
+
+/** 改泡点每拍经验（**唯一写入口**，`apply-snapshot` 调；理由同 setRoleMaxLevel） */
+export function setSoakExpPerTick(value: number): void {
+  soakExpPerTick = Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
+}
+
+/**
  * 装备前缀属性倍率（下标 = EQUIPMENT_PREFIX 序号）
  *
  * **空数组 = 快照还没到**：此时 `buildEquipmentMap` 展开不出任何变体（装备表整个是空的）。

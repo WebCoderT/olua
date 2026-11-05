@@ -1057,6 +1057,27 @@ export class RolesService {
   }
 
   /**
+   * 泡点入账（#722：在线角色按服务端节拍发经验）
+   *
+   * 与击杀经验共用同一条升级链路（`applyKillExp`：role_levels 判定、循环升到上限、
+   * 权威属性重算），不另起一套 —— 泡点涨的级和打死怪涨的级必须是同一种级。
+   *
+   * **满级短路**：满级后经验不再有任何去处，每拍白写一次库还推进 revision，
+   * 会让客户端每拍多收一帧无意义的 roleUpdate —— 直接跳过。
+   *
+   * @returns 入账结果；不在线 / 满级 / 角色归属不符返回 null（tick 侧跳过，不视为错误）
+   */
+  applySoakExp(accountId: string, exp: number): KillExpResult | null {
+    const account = this.accounts.findById(accountId);
+    const roleId = account?.online_role_id;
+    if (!account || !roleId) return null;
+    const role = this.roles.findById(roleId);
+    if (!role || role.account_id !== accountId) return null;
+    if (role.level >= this.roleMaxLevel()) return null;
+    return this.applyKillExp(accountId, roleId, exp);
+  }
+
+  /**
    * 背包里某物品的总数（collect 型任务交付判定与进度展示用）
    *
    * 只读不写：数量够不够由任务侧判断，这里的职责就是把存档网格数清楚。
