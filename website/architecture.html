@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>架构与数据流 · olua 开源项目</title>
+  <meta name="description" content="olua 的三端架构（客户端 / 存档进程 / 实时进程 / 管理端）与五条核心数据流：登录建号、进图加载、战斗结算、掉落入包、配置下发。含契约生成管线与数据分层说明。" />
+  <link rel="icon" href="assets/icons/favicon.ico" sizes="any" />
+  <link rel="icon" type="image/png" sizes="256x256" href="assets/icons/logo-256.png" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+
+  <header class="nav" id="nav">
+    <div class="nav__inner">
+      <a class="nav__brand" href="index.html">
+        <img class="nav__logo" src="assets/icons/logo-256.png" alt="olua logo" />
+        <span class="nav__name">olua</span>
+      </a>
+      <nav class="nav__links" id="navLinks">
+        <a href="index.html">首页</a>
+        <a href="project.html">项目概览</a>
+        <a href="architecture.html" class="is-active">数据流</a>
+        <a href="engineering.html">工程管理</a>
+        <a href="design.html">设计思路</a>
+        <a href="deploy.html">部署</a>
+        <a href="about.html">关于</a>
+      </nav>
+      <a class="nav__cta" href="http://game.yimw.cn" target="_blank" rel="noopener">在线试玩</a>
+      <button class="nav__toggle" id="navToggle" aria-label="打开菜单">
+        <span></span><span></span><span></span>
+      </button>
+    </div>
+  </header>
+
+  <section class="page-hero">
+    <p class="page-hero__crumb reveal">ARCHITECTURE · 架构与数据流</p>
+    <h1 class="page-hero__title reveal">数据是怎么走的</h1>
+    <p class="page-hero__sub reveal">一次攻击、一件装备、一条配置改动 —— 各自的完整路径</p>
+  </section>
+
+  <nav class="anchor-bar reveal">
+    <a href="#topology">拓扑</a>
+    <a href="#flows">五条主链路</a>
+    <a href="#contract">契约管线</a>
+    <a href="#storage">数据分层</a>
+    <a href="#process">双进程与库</a>
+  </nav>
+
+  <!-- ========== 拓扑 ========== -->
+  <section class="section" id="topology">
+    <div class="section__head reveal">
+      <p class="eyebrow eyebrow--center">TOPOLOGY</p>
+      <h2 class="section__title">四个运行单元</h2>
+      <p class="section__sub">两个前端、两个服务端进程、一个数据库文件</p>
+    </div>
+
+    <div class="layers reveal">
+      <div class="layer">
+        <div class="layer__tag">CLIENT</div>
+        <div class="layer__body">
+          <h4>客户端 · Cocos Creator 3.8.7</h4>
+          <p>登录、选角、战斗、背包、商城、社交。只负责<b>输入与表现</b>：本地存档仅作缓存，任何数值以服务端回包为准。</p>
+          <p><span class="mono">assets/configs/</span> 收全部可调项（布局、配色、时长、资源路径），逻辑里不写死数值。</p>
+        </div>
+      </div>
+      <div class="layer__arrow">▲ HTTP / WebSocket ▼</div>
+      <div class="layer layer--accent">
+        <div class="layer__tag">AUTH+SAVE</div>
+        <div class="layer__body">
+          <h4>存档进程 · :3100</h4>
+          <p>账号与角色、管理端接口、邮件与公告、排行榜、备份。<b>唯一手写接口的地方</b>，Swagger 文档从这里生成。</p>
+          <p>写入：<span class="mono">accounts / roles / role_mails / audit_logs …</span></p>
+        </div>
+      </div>
+      <div class="layer layer--accent">
+        <div class="layer__tag">REALTIME</div>
+        <div class="layer__body">
+          <h4>实时进程 · :3101</h4>
+          <p>WS 通道、取票接口、世界权威（怪物实例）、伤害结算。与存档进程<b>同一个镜像、同一份代码</b>，只装实时那一侧的依赖图。</p>
+          <p>写入：<span class="mono">world_monsters</span>（5 秒批量）与结算血量；<b>不挂 Swagger</b>，避免出现第二份契约源。</p>
+        </div>
+      </div>
+      <div class="layer">
+        <div class="layer__tag">ADMIN</div>
+        <div class="layer__body">
+          <h4>管理端 · React 19 + Vite</h4>
+          <p>50 个页面覆盖账号、角色、地图、刷怪区、NPC、碰撞盒、掉落表、装备体系、特效、权限与操作日志。</p>
+          <p>接口文件由服务端生成，<b>不手写任何一个请求类型</b>。</p>
+        </div>
+      </div>
+      <div class="layer__arrow">▲ ▼ prepared statements</div>
+      <div class="layer">
+        <div class="layer__tag">STORAGE</div>
+        <div class="layer__body">
+          <h4>SQLite 单库 · WAL</h4>
+          <p><b>59 张表</b>，两个进程共享同一个文件。各写各的表（存档进程写账号角色，实时进程写世界怪物），低频并发交给 WAL + <span class="mono">busy_timeout</span>。</p>
+          <p>没有 Postgres、没有 Redis、没有消息队列 —— 一个文件就是全部状态，拷走即可迁移。</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="takeaway reveal">
+      <b>为什么只有两个进程？</b>战斗需要每秒多次广播，而登录 / 后台 / 邮件是低频长事务；混在一起会让一次后台导出卡住整张地图。
+      拆开之后，实时进程只装它需要的模块，挂机也不影响后台；代价是两个进程必须约定「谁写哪些表」，写重了 WAL 也救不回来。
+    </div>
+  </section>
+
+  <!-- ========== 五条主链路 ========== -->
+  <section class="section section--alt" id="flows">
+    <div class="section__head reveal">
+      <p class="eyebrow eyebrow--center">DATA FLOW</p>
+      <h2 class="section__title">五条主链路</h2>
+      <p class="section__sub">从点下登录，到一件装备落进背包</p>
+    </div>
+
+    <!-- 1 登录建号 -->
+    <h3 class="section__title reveal" style="font-size:22px;display:block;text-align:center;margin-bottom:26px;">① 登录与进服</h3>
+    <div class="flow">
+      <div class="flow__step reveal">
+        <div class="flow__num">01</div>
+        <div class="flow__body">
+          <h4>口令校验在服务端</h4>
+          <p>账号与密码发到存档进程，<b>scrypt 加盐摘要</b>比对，通过后签发 7 天有效的 JWT。</p>
+          <p>同一用户名与来源 IP 两个维度各自限流，超限直接拒绝。</p>
+          <div class="flow__io"><span>POST /api/auth/login</span><span>→ JWT</span></div>
+        </div>
+      </div>
+      <div class="flow__step reveal">
+        <div class="flow__num">02</div>
+        <div class="flow__body">
+          <h4>角色列表与建号</h4>
+          <p>角色数据全在服务端，每账号最多 3 个。<b>第一个注册的管理员自动成为超管</b>（仅在管理端侧）。</p>
+          <div class="flow__io"><span>GET /api/roles</span><span>POST /api/roles</span></div>
+        </div>
+      </div>
+      <div class="flow__step reveal">
+        <div class="flow__num">03</div>
+        <div class="flow__body">
+          <h4>取票后建 WS 连接</h4>
+          <p>先向实时进程要一张短期票，再用票建 WebSocket。客户端<b>零改动</b>：取票与建连同属 <em>/api/realtime*</em> 前缀，nginx 按路径反代。</p>
+          <p>一账号只保留一条实时连接，顶号即踢。</p>
+          <div class="flow__io"><span>POST /api/realtime/ticket</span><span>WS upgrade</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 2 进图 -->
+    <h3 class="section__title reveal" style="font-size:22px;display:block;text-align:center;margin:44px 0 26px;">② 进图与世界加载</h3>
+    <div class="flow">
+      <div class="flow__step reveal">
+        <div class="flow__num">01</div>
+        <div class="flow__body">
+          <h4>地图文件只是「一张图」</h4>
+          <p>TMX 里只有瓦片与图层，<b>没有对象组</b>。刷怪区、NPC、复活点、碰撞盒全部在管理端配置、由服务端下发。</p>
+          <p>这样换一张底图不需要重新导出一堆对象坐标，也不会出现「图和碰撞对不上」。</p>
+          <div class="flow__io"><span>TMX：ground + wall</span><span>无 objectgroup</span></div>
+        </div>
+      </div>
+      <div class="flow__step reveal">
+        <div class="flow__num">02</div>
+        <div class="flow__body">
+          <h4>服务端下发场景配置</h4>
+          <p>进图时拿到该图的复活点、矩形刷怪区、NPC 点位、碰撞盒。<b>客户端只登记，不自己刷怪</b>。</p>
+          <div class="flow__io"><span>map_spawn_areas</span><span>map_npcs</span><span>map_collisions</span></div>
+        </div>
+      </div>
+      <div class="flow__step reveal">
+        <div class="flow__num">03</div>
+        <div class="flow__body">
+          <h4>世界权威生成怪物实例</h4>
+          <p>怪物实例由服务端持有并跨账号共享，状态落盘、跨重启恢复。客户端进图只做一件事：<b>把服务端告诉它的怪物摆到位置上</b>。</p>
+          <p>所以两个人看到的同一只怪，血量和位置永远一致。</p>
+          <div class="flow__io"><span>world_monsters</span><span>5s 批量落盘</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 3 战斗 -->
+    <h3 class="section__title reveal" style="font-size:22px;display:block;text-align:center;margin:44px 0 26px;">③ 一次攻击的结算</h3>
+    <div class="flow">
+      <div class="flow__step reveal">
+        <div class="flow__num">01</div>
+        <div class="flow__body">
+          <h4>客户端先演，不等回包</h4>
+          <p>点怪立即播挥砍动画，手感不依赖网络。同时发一条 <b>intent</b>：攻击对象 + 本次操作的 castId。</p>
+          <div class="flow__io"><span>WS → attack{castId, targetId}</span></div>
+        </div>
+      </div>
+      <div class="flow__step reveal">
+        <div class="flow__num">02</div>
+        <div class="flow__body">
+          <h4>实时进程按共享快照算伤害</h4>
+          <p>攻防区间、技能倍率、暴击、状态加成全部在服务端算。同一条 castId<b>重复到达只结算一次</b>（幂等），掉线重连也不会打出双倍伤害。</p>
+          <p>技能还要先过冷却、耗蓝、距离三道校验 —— 校验不过直接丢弃，不扣冷却。</p>
+          <div class="flow__io"><span>config snapshot</span><span>castId 幂等</span></div>
+        </div>
+      </div>
+      <div class="flow__step reveal">
+        <div class="flow__num">03</div>
+        <div class="flow__body">
+          <h4>广播命中帧</h4>
+          <p>结果回给操作者，同时广播给同图其他玩家：<b>伤害数字、目标剩余血量、出手动作</b>。主播和观众看到的是同一条帧。</p>
+          <p>客户端收到后只做一件事：把数字飘出来。</p>
+          <div class="flow__io"><span>hit{damage, hpLeft, castId}</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 4 掉落 -->
+    <h3 class="section__title reveal" style="font-size:22px;display:block;text-align:center;margin:44px 0 26px;">④ 掉落到入包</h3>
+    <div class="flow">
+      <div class="flow__step reveal">
+        <div class="flow__num">01</div>
+        <div class="flow__body">
+          <h4>抽奖发生在服务端</h4>
+          <p>击杀结算后，按这只怪<b>自己那份掉落表</b>（每只怪一份，条目逐条配权重 / 概率 / 数量）抽。抽到什么，在发出广播之前就已经定好。</p>
+          <div class="flow__io"><span>monster_drops</span><span>drop_tables</span></div>
+        </div>
+      </div>
+      <div class="flow__step reveal">
+        <div class="flow__num">02</div>
+        <div class="flow__body">
+          <h4>直接入包，不经过客户端</h4>
+          <p>物品写进角色背包后才广播「拾取帧」。客户端拿到的是<b>结果</b>，不是「你可以捡了」—— 改客户端内存改不出装备。</p>
+          <div class="flow__io"><span>picked{itemId, count}</span></div>
+        </div>
+      </div>
+      <div class="flow__step reveal">
+        <div class="flow__num">03</div>
+        <div class="flow__body">
+          <h4>客户端只负责好看</h4>
+          <p>同心环散落、品质光柱（普通 → 超神五档）、拾取吸附动画，全是纯表现。光柱的摆位、缩放、时长、开关还能在管理端「特效管理」里调。</p>
+          <p>背包开着时同时刷新背包 —— 这一条曾经漏过，拾到东西要关掉重开才看得见。</p>
+          <div class="flow__io"><span>light_1…light_6</span><span>ui_effects</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 5 配置 -->
+    <h3 class="section__title reveal" style="font-size:22px;display:block;text-align:center;margin:44px 0 26px;">⑤ 管理端改一条数据</h3>
+    <div class="flow">
+      <div class="flow__step reveal">
+        <div class="flow__num">01</div>
+        <div class="flow__body">
+          <h4>写库，带乐观锁</h4>
+          <p>管理端 PATCH 某条配置，带上读到的 revision。版本对不上直接 409，<b>不会「最后写入者覆盖」</b>。</p>
+          <p>写操作自动留痕到 <span class="mono">audit_logs</span>，口令类字段落库前打码。</p>
+          <div class="flow__io"><span>PATCH /admin/*</span><span>revision → 409</span></div>
+        </div>
+      </div>
+      <div class="flow__step reveal">
+        <div class="flow__num">02</div>
+        <div class="flow__body">
+          <h4>快照段重建</h4>
+          <p>库表是权威，服务端把它拼成一份 JSON 快照（怪物、装备、地图、掉落、特效…）。这是<b>客户端唯一的数据来源</b>。</p>
+          <div class="flow__io"><span>config snapshot</span><span>整表重建 → 派生 Map 重建</span></div>
+        </div>
+      </div>
+      <div class="flow__step reveal">
+        <div class="flow__num">03</div>
+        <div class="flow__body">
+          <h4>两端各自生效</h4>
+          <p>客户端下次拉快照生效；实时进程按固定间隔（默认 10 秒）重装配置 —— 否则会出现「管理端改完，只有存档进程知道」，表现为战斗力来回抖。</p>
+          <div class="flow__io"><span>REALTIME_CONFIG_REFRESH_MS</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="takeaway reveal">
+      <b>五条链路是同一条原则的不同侧面：</b>客户端能算的只有「怎么画」，不能算「是什么结果」。
+      位置、血量、伤害、掉落、能不能进图 —— 全在服务端定，客户端拿到的是既成事实。
+    </div>
+  </section>
+
+  <!-- ========== 契约管线 ========== -->
+  <section class="section" id="contract">
+    <div class="section__head reveal">
+      <p class="eyebrow eyebrow--center">CONTRACT</p>
+      <h2 class="section__title">接口契约单向生成</h2>
+      <p class="section__sub">只有服务端手写，另外两端是产物</p>
+    </div>
+
+    <div class="chain reveal">
+      <div class="chain__node chain__node--src">
+        <b>server/src</b>
+        <span>控制器 + DTO + 装饰器<br />唯一手写处</span>
+      </div>
+      <div class="chain__arrow">→</div>
+      <div class="chain__node">
+        <b>openapi.json</b>
+        <span>swagger:emit<br />提交进仓库</span>
+      </div>
+      <div class="chain__arrow">→</div>
+      <div class="chain__node">
+        <b>gen-api.cjs</b>
+        <span>按模型生成<br />路径 / 类型 / 调用</span>
+      </div>
+      <div class="chain__arrow">→</div>
+      <div class="chain__node">
+        <b>client · Api*.ts</b>
+        <span>路径 / 模型 / 客户端</span>
+      </div>
+      <div class="chain__arrow">＋</div>
+      <div class="chain__node">
+        <b>admin · api/*.ts</b>
+        <span>routes / models / endpoints</span>
+      </div>
+    </div>
+
+    <div class="prose reveal" style="margin-top:36px;">
+      <p>这不是为了少写几行代码，而是为了让<b>忘记改另一边变成编译错误</b>。
+        服务端把一个字段从 <code>level</code> 改成 <code>roleLevel</code>，跑一遍 <code>npm run gen:api</code>，
+        两端 <code>tsc</code> 立刻报错——而不是等到线上某天冒出 <code>undefined</code>。</p>
+      <p>配套的 <code>audit-api-generated.cjs</code> 盯着生成物：手改了、或者忘了重新生成，门禁直接红。
+        所以「生成物禁止手改」不是一句约定，是一条会拦住你的检查。</p>
+    </div>
+
+    <div class="split reveal" style="margin-top:26px;">
+      <div class="split__col split__col--good">
+        <h4>做对了会怎样</h4>
+        <ul>
+          <li>改一个 DTO，两端签名同时变</li>
+          <li>接口不兼容 = 本地 tsc 就红</li>
+          <li>新增接口自动出现在两端</li>
+          <li>Swagger 页面永远和代码同步</li>
+        </ul>
+      </div>
+      <div class="split__col split__col--bad">
+        <h4>手写会怎样</h4>
+        <ul>
+          <li>三份接口定义慢慢漂移</li>
+          <li>字段名不一致只能靠运行时发现</li>
+          <li>改完忘了通知另一边</li>
+          <li>文档写着上一版的参数</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== 数据分层 ========== -->
+  <section class="section section--alt" id="storage">
+    <div class="section__head reveal">
+      <p class="eyebrow eyebrow--center">DATA LAYERS</p>
+      <h2 class="section__title">数据分四层，每层只有一个来源</h2>
+      <p class="section__sub">同一份数值不允许在两处都能改</p>
+    </div>
+
+    <div class="layers reveal">
+      <div class="layer layer--accent">
+        <div class="layer__tag">L1 权威</div>
+        <div class="layer__body">
+          <h4>SQLite 库表 · 59 张</h4>
+          <p>运营在管理端改的所有东西都在这里。运行时的每一次读都走库或库生成的快照，<b>代码里没有任何数值副本</b>。</p>
+        </div>
+      </div>
+      <div class="layer">
+        <div class="layer__tag">L2 出厂</div>
+        <div class="layer__body">
+          <h4>config-sync.sql</h4>
+          <p>出厂快照，<b>只在空库上灌一次</b>。判据是 marker 表没有记录且哨兵表为空 —— 两条缺一不可，存量库升级绝不整表替换（那会把运营改过的东西冲掉，且毫无提示）。</p>
+          <p>所以新机器 <span class="mono">make dev</span> 起来就是同一套数据。</p>
+        </div>
+      </div>
+      <div class="layer">
+        <div class="layer__tag">L3 下发</div>
+        <div class="layer__body">
+          <h4>运行时快照段</h4>
+          <p>服务端把库表拼成 JSON 下发给客户端。整表重建之后，所有派生 Map 必须跟着重建 —— 漏一处就会读到旧值。</p>
+        </div>
+      </div>
+      <div class="layer">
+        <div class="layer__tag">L4 客户端</div>
+        <div class="layer__body">
+          <h4>assets/configs</h4>
+          <p>只放<b>纯表现参数</b>：布局、配色、时长、资源路径、帧率。所有业务数值初始为 0 / 空 / false，<b>没有本地兜底</b>。</p>
+          <p>没有兜底听起来危险，实际相反：兜底会把「服务端没下发」变成「看起来正常但数值是旧的」，这种 bug 比白屏难查十倍。</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="takeaway reveal">
+      <b>唯一来源的代价是启动顺序变严格了。</b>客户端必须等快照到了才能显示真实数值（加载期显示 0/空），
+      服务端必须先建表再灌快照、先灌快照再补标量行。顺序错了不会崩，只会静默少一块数据 —— 所以每一步都有对应的守卫。
+    </div>
+  </section>
+
+  <!-- ========== 双进程 ========== -->
+  <section class="section" id="process">
+    <div class="section__head reveal">
+      <p class="eyebrow eyebrow--center">PROCESSES</p>
+      <h2 class="section__title">两个进程，一个数据库文件</h2>
+      <p class="section__sub">没有中间件，靠约定划清写入边界</p>
+    </div>
+
+    <div class="kv reveal">
+      <dl>
+        <div class="kv__row">
+          <dt>存档进程 :3100</dt>
+          <dd>账号、角色、背包、邮件、公告、排行榜、管理端全部接口、备份。低频、事务长、要求强一致。</dd>
+        </div>
+        <div class="kv__row">
+          <dt>实时进程 :3101</dt>
+          <dd>WS 通道、取票、世界怪物、伤害结算。高频、短事务、可容忍 5 秒落盘延迟。</dd>
+        </div>
+        <div class="kv__row">
+          <dt>共享方式</dt>
+          <dd>同一个 SQLite 文件，WAL 模式 + <code>busy_timeout</code>。<b>各写各的表</b>，跨进程不写同一行。</dd>
+        </div>
+        <div class="kv__row">
+          <dt>为什么不用 Postgres</dt>
+          <dd>单人 / 小团队运维，一个文件拷走就能迁移、备份就是 <code>cp</code>。代价是并发上限低，所以必须靠「不写同一行」来绕开竞争。</dd>
+        </div>
+        <div class="kv__row">
+          <dt>重启恢复</dt>
+          <dd>怪物实例定期落盘，重启后按最后状态重建；玩家数据每次变更即落库，不依赖内存。</dd>
+        </div>
+        <div class="kv__row">
+          <dt>反向代理</dt>
+          <dd>nginx 按 <code>/api/realtime*</code> 前缀把实时流量分给 3101，其余进 3100。客户端只认一个域名。</dd>
+        </div>
+      </dl>
+    </div>
+
+    <div class="takeaway reveal">
+      <b>这套结构最适合「一台机器、一个人维护」。</b>要横向扩到多台时，WAL 单文件会成为瓶颈 ——
+      那时候该换的是存储而不是打补丁。项目在这一点上不做提前抽象。
+    </div>
+
+    <p style="text-align:center;margin-top:44px;" class="reveal">
+      <a class="btn btn--ghost" href="engineering.html">看这些约束怎么被守住 →</a>
+    </p>
+  </section>
+
+  <footer class="footer">
+    <img class="footer__logo" src="assets/icons/logo-256.png" alt="" aria-hidden="true" />
+    <p>olua · 免费开源的 2D 即时战斗项目 · 任何人都可以自己部署</p>
+    <nav class="footer__nav">
+      <a href="index.html">首页</a><span>·</span>
+      <a href="project.html">项目概览</a><span>·</span>
+      <a href="architecture.html">数据流</a><span>·</span>
+      <a href="engineering.html">工程管理</a><span>·</span>
+      <a href="design.html">设计思路</a><span>·</span>
+      <a href="deploy.html">部署</a><span>·</span>
+      <a href="about.html">关于</a>
+    </nav>
+    <p class="footer__health">健康游戏忠告：抵制不良游戏，拒绝盗版游戏。注意自我保护，谨防受骗上当。适度游戏益脑，沉迷游戏伤身。合理安排时间，享受健康生活。</p>
+    <p class="footer__copy">© 2026 olua · 基于 MIT 协议开源 · <a href="https://github.com/WebCoderT/olua" target="_blank" rel="noopener">GitHub</a> / <a href="https://gitee.com/putiwan/olua" target="_blank" rel="noopener">Gitee</a></p>
+  </footer>
+
+  <script src="js/main.js"></script>
+</body>
+</html>

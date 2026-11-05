@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>自建部署 · olua · 热血重燃</title>
+  <title>自己部署 · olua 开源项目</title>
   <meta name="description" content="olua 自建服务器部署指南：Docker Compose 一键部署服务端与管理端，拉取 2.5GB 游戏资源包，Cocos 打包客户端，域名与环境变量配置，常见问题排查。" />
   <link rel="icon" href="assets/icons/favicon.ico" sizes="any" />
   <link rel="icon" type="image/png" sizes="256x256" href="assets/icons/logo-256.png" />
@@ -19,13 +19,14 @@
       </a>
       <nav class="nav__links" id="navLinks">
         <a href="index.html">首页</a>
-        <a href="features.html">特色玩法</a>
-        <a href="guide.html">新手指南</a>
-        <a href="news.html">新闻动态</a>
-        <a href="deploy.html" class="is-active">自建部署</a>
-        <a href="about.html">关于声明</a>
+        <a href="project.html">项目概览</a>
+        <a href="architecture.html">数据流</a>
+        <a href="engineering.html">工程管理</a>
+        <a href="design.html">设计思路</a>
+        <a href="deploy.html" class="is-active">部署</a>
+        <a href="about.html">关于</a>
       </nav>
-      <a class="nav__cta" href="http://game.yimw.cn" target="_blank" rel="noopener">立即进入游戏</a>
+      <a class="nav__cta" href="http://game.yimw.cn" target="_blank" rel="noopener">在线试玩</a>
       <button class="nav__toggle" id="navToggle" aria-label="打开菜单">
         <span></span><span></span><span></span>
       </button>
@@ -34,8 +35,8 @@
 
   <section class="page-hero">
     <p class="page-hero__crumb reveal">SELF-HOST · 自建服务器</p>
-    <h1 class="page-hero__title reveal">部署指南</h1>
-    <p class="page-hero__sub reveal">开源完整端 · 一台 Linux 主机 + Docker，跑起你自己的服务器</p>
+    <h1 class="page-hero__title reveal">自己部署一份</h1>
+    <p class="page-hero__sub reveal">一台机器 + Docker，跑起属于你自己的服务器</p>
   </section>
 
   <section class="section">
@@ -170,14 +171,15 @@ cd admin &amp;&amp; npm install &amp;&amp; npm run dev           # 管理端 Vit
 
   <footer class="footer">
     <img class="footer__logo" src="assets/icons/logo-256.png" alt="" aria-hidden="true" />
-    <p>olua · 经典 2D 即时战斗 · 浏览器即开即玩</p>
+    <p>olua · 免费开源的 2D 即时战斗项目 · 任何人都可以自己部署</p>
     <nav class="footer__nav">
       <a href="index.html">首页</a><span>·</span>
-      <a href="features.html">特色玩法</a><span>·</span>
-      <a href="guide.html">新手指南</a><span>·</span>
-      <a href="news.html">新闻动态</a><span>·</span>
-      <a href="deploy.html">自建部署</a><span>·</span>
-      <a href="about.html">关于声明</a>
+      <a href="project.html">项目概览</a><span>·</span>
+      <a href="architecture.html">数据流</a><span>·</span>
+      <a href="engineering.html">工程管理</a><span>·</span>
+      <a href="design.html">设计思路</a><span>·</span>
+      <a href="deploy.html">部署</a><span>·</span>
+      <a href="about.html">关于</a>
     </nav>
     <p class="footer__health">健康游戏忠告：抵制不良游戏，拒绝盗版游戏。注意自我保护，谨防受骗上当。适度游戏益脑，沉迷游戏伤身。合理安排时间，享受健康生活。</p>
     <p class="footer__copy">© 2026 olua · 基于 MIT 协议开源 · <a href="https://github.com/WebCoderT/olua" target="_blank" rel="noopener">GitHub</a> / <a href="https://gitee.com/putiwan/olua" target="_blank" rel="noopener">Gitee</a></p>

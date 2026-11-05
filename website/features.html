@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>特色玩法 · olua · 热血重燃</title>
-  <meta name="description" content="olua 特色玩法全解：装备品质体系（前缀五档 × 后缀三档）、掉落光柱、战魂 / 称号 / 军衔三条成长线、服务端权威战斗、A* 智能挂机、帮会社交与商城时装。" />
+  <title>玩法细节 · olua 开源项目</title>
+  <meta name="description" content="olua 玩法细节：装备品质体系（前缀五档 × 后缀三档）、掉落光柱、战魂 / 称号 / 军衔三条成长线、服务端权威战斗、A* 智能挂机、帮会社交与商城时装。" />
   <link rel="icon" href="assets/icons/favicon.ico" sizes="any" />
   <link rel="icon" type="image/png" sizes="256x256" href="assets/icons/logo-256.png" />
   <link rel="stylesheet" href="css/style.css" />
@@ -19,13 +19,14 @@
       </a>
       <nav class="nav__links" id="navLinks">
         <a href="index.html">首页</a>
-        <a href="features.html" class="is-active">特色玩法</a>
-        <a href="guide.html">新手指南</a>
-        <a href="news.html">新闻动态</a>
-        <a href="deploy.html">自建部署</a>
-        <a href="about.html">关于声明</a>
+        <a href="project.html">项目概览</a>
+        <a href="architecture.html">数据流</a>
+        <a href="engineering.html">工程管理</a>
+        <a href="design.html">设计思路</a>
+        <a href="deploy.html">部署</a>
+        <a href="about.html">关于</a>
       </nav>
-      <a class="nav__cta" href="http://game.yimw.cn" target="_blank" rel="noopener">立即进入游戏</a>
+      <a class="nav__cta" href="http://game.yimw.cn" target="_blank" rel="noopener">在线试玩</a>
       <button class="nav__toggle" id="navToggle" aria-label="打开菜单">
         <span></span><span></span><span></span>
       </button>
@@ -33,13 +34,50 @@
   </header>
 
   <section class="page-hero">
-    <p class="page-hero__crumb reveal">FEATURES · 玩法全解</p>
-    <h1 class="page-hero__title reveal">特色玩法</h1>
-    <p class="page-hero__sub reveal">爆装 · 成长 · 战斗 · 社交，每个系统都为「打得爽」服务</p>
+    <p class="page-hero__crumb reveal">GAMEPLAY · 玩法细节</p>
+    <h1 class="page-hero__title reveal">玩法细节</h1>
+    <p class="page-hero__sub reveal">这些系统在实机上是什么样 —— 附真机截图</p>
+  </section>
+
+  <!-- ========== 两大职业（纯文字：立绘由选角界面的实际角色形象承担，这里不放图） ========== -->
+  <section class="section">
+    <div class="section__head reveal">
+      <p class="eyebrow eyebrow--center">CLASSES</p>
+      <h2 class="section__title">两个职业</h2>
+      <p class="section__sub">近战与法术，两种解法</p>
+    </div>
+    <div class="grid grid--classes">
+      <article class="class-card reveal">
+        <div class="class-card__body">
+          <h3 class="class-card__name class-card__name--warrior">战 士</h3>
+          <p class="class-card__role">近战 · 铁血 · 一刀入魂</p>
+          <p>刀刀入肉的打击感。高血高防顶在最前面，普通攻击稳定输出，突进技能「十步一杀」瞬身贴脸；
+             装备成型后站撸群怪，是帮会攻防里最让人放心的一道墙。</p>
+          <ul class="class-card__traits">
+            <li>血厚防高，正面硬刚</li>
+            <li>普攻稳定，上手即战</li>
+            <li>突进位移，贴脸收割</li>
+          </ul>
+        </div>
+      </article>
+      <article class="class-card reveal">
+        <div class="class-card__body">
+          <h3 class="class-card__name class-card__name--mage">法 师</h3>
+          <p class="class-card__role">远程 · 爆发 · 秒天秒地</p>
+          <p>元素为刃，千里之外取怪首级。多段伤害技能成套释放，配合击退与减速控场；
+             蓝量管理是法师的必修课，一瓶魔法药，就是一片火海。</p>
+          <ul class="class-card__traits">
+            <li>远程输出，站位艺术</li>
+            <li>爆发群伤，清场利器</li>
+            <li>控场击退，风筝走位</li>
+          </ul>
+        </div>
+      </article>
+    </div>
   </section>
 
   <!-- ========== 装备与掉落 ========== -->
-  <section class="section">
+  <section class="section section--alt">
     <div class="prose reveal">
       <h3>装备品质体系：555 种组合，全靠打</h3>
       <p>olua 的装备没有商城直购、没有抽卡保底——<b>每一件都从怪物身上爆出来</b>。
@@ -64,13 +102,13 @@
          看到红光别犹豫，那是全服的限时抢购。</p>
     </div>
     <figure class="world__art reveal" style="max-width:880px;margin:26px auto 0;">
-      <img src="assets/img/drop-light.jpg" alt="装备掉落光柱实景" loading="lazy" />
-      <figcaption>掉落光柱：按前缀品质播放，普通 → 超神五档</figcaption>
+      <img src="assets/img/game.jpg" alt="地面掉落光柱实景" loading="lazy" />
+      <figcaption>掉落光柱：装备落地按前缀品质升起，普通 → 超神五档</figcaption>
     </figure>
   </section>
 
   <!-- ========== 三条成长线 ========== -->
-  <section class="section section--alt">
+  <section class="section">
     <div class="section__head reveal">
       <h2 class="section__title">三条成长线</h2>
       <p class="section__sub">战魂 · 称号 · 军衔 —— 条条通往更强</p>
@@ -116,7 +154,7 @@
   </section>
 
   <!-- ========== 战斗与多人 ========== -->
-  <section class="section">
+  <section class="section section--alt">
     <div class="prose reveal">
       <h3>战斗：刀刀带感，服务端说了算</h3>
       <p>冷却、耗蓝、攻击距离全程在服务端校验；伤害飘字、击退、突进位移（战士「十步一杀」瞬移贴脸）、
@@ -133,9 +171,44 @@
          上班挂着，下班回来背包满满——爆没爆神装，全看脸。</p>
     </div>
     <figure class="world__art reveal" style="max-width:880px;margin:26px auto 0;">
-      <img src="assets/img/monster.jpg" alt="怪物与战斗实景" loading="lazy" />
-      <figcaption>刀刀带感的即时战斗</figcaption>
+      <img src="assets/img/combat.jpg" alt="多人同屏战斗与技能特效" loading="lazy" />
+      <figcaption>刀刀带感的即时战斗：伤害、动作与击杀实时广播</figcaption>
     </figure>
+  </section>
+
+  <!-- ========== 运营后台 ========== -->
+  <section class="section">
+    <div class="section__head reveal">
+      <h2 class="section__title">运营后台</h2>
+      <p class="section__sub">数据都在库里 · 改完即生效 · 权限点粒度到接口</p>
+    </div>
+    <div class="grid grid--shots">
+      <figure class="world__art reveal">
+        <img src="assets/img/admin-dashboard.jpg" alt="管理端概览：账号、角色、在线与增长趋势" loading="lazy" />
+        <figcaption>概览：账号 / 角色 / 在线 / 封禁与增长趋势</figcaption>
+      </figure>
+      <figure class="world__art reveal">
+        <img src="assets/img/admin-align.jpg" alt="管理端装备对齐：8 方向动作帧逐帧对位" loading="lazy" />
+        <figcaption>装备对齐：8 方向动作帧逐帧对位</figcaption>
+      </figure>
+      <figure class="world__art reveal">
+        <img src="assets/img/admin-inner.jpg" alt="管理端内观对齐：武器外观逐件对位" loading="lazy" />
+        <figcaption>内观对齐：武器 / 衣服外观逐件对位，改完即落库</figcaption>
+      </figure>
+    </div>
+    <div class="prose reveal" style="margin-top:26px;">
+      <p>游戏里能看到的<b>每一个数字</b>——怪物属性、掉落表、地图刷怪区与碰撞盒、装备外观与边框、
+         技能与状态、音效与光柱特效、泡点与自动战斗参数——全部在管理端可视化配置，
+         服务端只认库里的值，客户端只从快照读，<b>没有人能在代码里偷偷藏一份出厂值</b>。</p>
+      <ul>
+        <li><b>账号与角色</b>：多条件筛选、结构化编辑、重置口令、踢下线、批量删除；</li>
+        <li><b>地图管理</b>：NPC 点位、复活点、矩形刷怪区、碰撞盒直接在底图上放 / 拖 / 画；</li>
+        <li><b>战斗与掉落</b>：技能、状态、每怪独立掉落表（权重 / 概率 / 件数逐条配）；</li>
+        <li><b>装备体系</b>：37 件基础件 × 前后缀五档 / 三档 = 555 个变体，边框与详情背景逐件对位；</li>
+        <li><b>权限与留痕</b>：超级管理员 / 管理员 / 只读观察员，写接口自动记录操作日志。</li>
+      </ul>
+      <p><em>运营改一个数值，不用等版本更新，也不用改一行代码。</em></p>
+    </div>
   </section>
 
   <!-- ========== 社交与商城 ========== -->
@@ -165,21 +238,22 @@
       </article>
     </div>
     <p style="text-align:center;margin-top:40px;" class="reveal">
-      <a class="btn btn--blood" href="http://game.yimw.cn" target="_blank" rel="noopener">立即进入游戏</a>
+      <a class="btn btn--blood" href="http://game.yimw.cn" target="_blank" rel="noopener">在线试玩</a>
       <a class="btn btn--ghost" href="guide.html" style="margin-left:14px;">新手指南</a>
     </p>
   </section>
 
   <footer class="footer">
     <img class="footer__logo" src="assets/icons/logo-256.png" alt="" aria-hidden="true" />
-    <p>olua · 经典 2D 即时战斗 · 浏览器即开即玩</p>
+    <p>olua · 免费开源的 2D 即时战斗项目 · 任何人都可以自己部署</p>
     <nav class="footer__nav">
       <a href="index.html">首页</a><span>·</span>
-      <a href="features.html">特色玩法</a><span>·</span>
-      <a href="guide.html">新手指南</a><span>·</span>
-      <a href="news.html">新闻动态</a><span>·</span>
-      <a href="deploy.html">自建部署</a><span>·</span>
-      <a href="about.html">关于声明</a>
+      <a href="project.html">项目概览</a><span>·</span>
+      <a href="architecture.html">数据流</a><span>·</span>
+      <a href="engineering.html">工程管理</a><span>·</span>
+      <a href="design.html">设计思路</a><span>·</span>
+      <a href="deploy.html">部署</a><span>·</span>
+      <a href="about.html">关于</a>
     </nav>
     <p class="footer__health">健康游戏忠告：抵制不良游戏，拒绝盗版游戏。注意自我保护，谨防受骗上当。适度游戏益脑，沉迷游戏伤身。合理安排时间，享受健康生活。</p>
     <p class="footer__copy">© 2026 olua · 基于 MIT 协议开源 · <a href="https://github.com/WebCoderT/olua" target="_blank" rel="noopener">GitHub</a> / <a href="https://gitee.com/putiwan/olua" target="_blank" rel="noopener">Gitee</a></p>

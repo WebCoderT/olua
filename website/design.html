@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>设计思路 · olua 开源项目</title>
+  <meta name="description" content="olua 的十二条核心设计取舍：服务端权威、一份数据一个来源、契约单向生成、客户端零兜底、派生数据落库、单库双进程、地图只做显示等，每条都写清代价。" />
+  <link rel="icon" href="assets/icons/favicon.ico" sizes="any" />
+  <link rel="icon" type="image/png" sizes="256x256" href="assets/icons/logo-256.png" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+
+  <header class="nav" id="nav">
+    <div class="nav__inner">
+      <a class="nav__brand" href="index.html">
+        <img class="nav__logo" src="assets/icons/logo-256.png" alt="olua logo" />
+        <span class="nav__name">olua</span>
+      </a>
+      <nav class="nav__links" id="navLinks">
+        <a href="index.html">首页</a>
+        <a href="project.html">项目概览</a>
+        <a href="architecture.html">数据流</a>
+        <a href="engineering.html">工程管理</a>
+        <a href="design.html" class="is-active">设计思路</a>
+        <a href="deploy.html">部署</a>
+        <a href="about.html">关于</a>
+      </nav>
+      <a class="nav__cta" href="http://game.yimw.cn" target="_blank" rel="noopener">在线试玩</a>
+      <button class="nav__toggle" id="navToggle" aria-label="打开菜单">
+        <span></span><span></span><span></span>
+      </button>
+    </div>
+  </header>
+
+  <section class="page-hero">
+    <p class="page-hero__crumb reveal">DESIGN NOTES · 设计思路</p>
+    <h1 class="page-hero__title reveal">每个选择都有代价</h1>
+    <p class="page-hero__sub reveal">十二条决策，连同它们换来的麻烦一起写在下面</p>
+  </section>
+
+  <section class="section" style="padding-bottom:48px;">
+    <p class="lede reveal">
+      这个项目没有「最佳实践」，只有「在这个前提下能跑住的做法」。
+      前提是：<b>单人维护、AI 写代码、一台机器、要能拷走就迁</b>。
+      下面每一条都注明了它换来了什么、又付出了什么 —— 如果前提变了，这些结论就该重算。
+    </p>
+  </section>
+
+  <!-- ========== 一、谁说了算 ========== -->
+  <section class="section section--alt" style="padding-top:64px;">
+    <div class="section__head reveal">
+      <p class="eyebrow eyebrow--center">A · TRUTH</p>
+      <h2 class="section__title">谁说了算</h2>
+      <p class="section__sub">数据与结果，只能有一个出处</p>
+    </div>
+
+    <article class="decision reveal">
+      <div class="decision__head"><span class="decision__no">A-01</span><h3>服务端权威：客户端只负责「怎么画」</h3></div>
+      <div class="decision__body">
+        <div class="decision__cell">
+          <h4>背景</h4>
+          <p>客户端算伤害、客户端判掉落，是最省事的做法，也是最容易被改内存的做法。一旦客户端能决定结果，所有反作弊都是补丁。</p>
+        </div>
+        <div class="decision__cell">
+          <h4>决策</h4>
+          <p>位置、血量、伤害、掉落、能不能进图，全部服务端算。客户端点下攻击<b>先演动画</b>，同时上报 intent；结果回来才飘数字。</p>
+        </div>
+        <div class="decision__cell decision__cell--cost">
+          <h4>代价</h4>
+          <p>手感依赖网络。延迟高时会出现「挥了刀但数字半天不来」；断线时表现为「打不动怪」，只能靠 UI 兜住预期。</p>
+        </div>
+      </div>
+    </article>
+
+    <article class="decision reveal">
+      <div class="decision__head"><span class="decision__no">A-02</span><h3>一份数据一个来源：代码里不许有第二份数值</h3></div>
+      <div class="decision__body">
+        <div class="decision__cell">
+          <h4>背景</h4>
+          <p>早期是「TS 里的种子常量 + 库表」两套：服务端启动时 <code>INSERT OR IGNORE</code> 灌一遍。结果运营在管理端改完，重启被种子盖回去 —— 这类 bug 修过好几次，每次都要现场猜「这次是哪个字段」。</p>
+        </div>
+        <div class="decision__cell">
+          <h4>决策</h4>
+          <p>库表是唯一权威。<code>config-sync.sql</code> 降级为<b>出厂快照</b>，只在空库上灌一次；存量库升级只补 marker，绝不整表替换。</p>
+        </div>
+        <div class="decision__cell decision__cell--cost">
+          <h4>代价</h4>
+          <p>改出厂值不能再改代码常量，必须重导快照；新环境启动顺序变得重要（建表 → 灌快照 → 补标量行），顺序错不崩但会静默少数据。</p>
+        </div>
+      </div>
+    </article>
+
+    <article class="decision reveal">
+      <div class="decision__head"><span class="decision__no">A-03</span><h3>配置收权到管理端：地图文件只做显示</h3></div>
+      <div class="decision__body">
+        <div class="decision__cell">
+          <h4>背景</h4>
+          <p>TMX 里原本带对象组：NPC、刷怪区、碰撞盒都画在地图编辑器里。改一个刷怪点要重新导出整张图，而且客户端和碰撞盒还常常对不上。</p>
+        </div>
+        <div class="decision__cell">
+          <h4>决策</h4>
+          <p>TMX 只剩瓦片与图层，<b>连对象组都没有</b>。刷怪区、NPC、复活点、碰撞盒全部在管理端「地图管理」里放 / 拖 / 画，存进库表、由服务端下发。</p>
+        </div>
+        <div class="decision__cell decision__cell--cost">
+          <h4>代价</h4>
+          <p>地图文件不再自带玩法，换一张底图必须重新配一遍玩法数据；美术与策划的工作流彻底分离，交接清单变长。</p>
+        </div>
+      </div>
+    </article>
+
+    <article class="decision reveal">
+      <div class="decision__head"><span class="decision__no">A-04</span><h3>客户端零兜底：缺什么就空着</h3></div>
+      <div class="decision__body">
+        <div class="decision__cell">
+          <h4>背景</h4>
+          <p>以前客户端内置一套出厂值，服务端没下发就用本地的。表现是「管理端改了，游戏里没变」，日志里一个字都没有。</p>
+        </div>
+        <div class="decision__cell">
+          <h4>决策</h4>
+          <p>业务数值初始一律 <b>0 / 空 / false</b>，唯一来源是快照。缺段直接抛错并挡住进游戏，不再静默跳过。</p>
+        </div>
+        <div class="decision__cell decision__cell--cost">
+          <h4>代价</h4>
+          <p>加载期界面上真的会显示 0 和空白；服务端少发一段，玩家会卡在登录而不是「勉强能玩」。风险从「静默」转成了「显性阻断」。</p>
+        </div>
+      </div>
+    </article>
+
+    <article class="decision reveal">
+      <div class="decision__head"><span class="decision__no">A-05</span><h3>派生数据落库：不在读路径上现算</h3></div>
+      <div class="decision__body">
+        <div class="decision__cell">
+          <h4>背景</h4>
+          <p>等级曲线、装备变体这类数据本来是按公式现算。每次读都要重跑一遍，且「运营想微调某一档」时无处可改。</p>
+        </div>
+        <div class="decision__cell">
+          <h4>决策</h4>
+          <p>建表落库（<code>role_levels</code> 60 行、<code>equipment_variants</code> 555 行）。改基础件时<b>连带重建变体</b>：属性按公式重算，卖价保留，整批替换在一个事务里。</p>
+        </div>
+        <div class="decision__cell decision__cell--cost">
+          <h4>代价</h4>
+          <p>写路径变复杂：改一件基础装备要重建 15 个变体。万一漏了重建，库里就会出现「基础件已改、变体还是旧值」的不一致 —— 所以重建必须是接口而不是手工 SQL。</p>
+        </div>
+      </div>
+    </article>
+  </section>
+
+  <!-- ========== 二、边界画在哪 ========== -->
+  <section class="section" style="padding-top:64px;">
+    <div class="section__head reveal">
+      <p class="eyebrow eyebrow--center">B · BOUNDARIES</p>
+      <h2 class="section__title">边界画在哪</h2>
+      <p class="section__sub">宁可多一层约定，也不要一层含糊</p>
+    </div>
+
+    <article class="decision reveal">
+      <div class="decision__head"><span class="decision__no">B-01</span><h3>契约单向生成：只有服务端手写接口</h3></div>
+      <div class="decision__body">
+        <div class="decision__cell">
+          <h4>背景</h4>
+          <p>三端各写一份接口定义，漂移几乎是必然的 —— 而且漂移只在运行时暴露，表现为一个 <code>undefined</code>。</p>
+        </div>
+        <div class="decision__cell">
+          <h4>决策</h4>
+          <p>服务端控制器 + DTO + 装饰器是唯一手写处。<code>swagger:emit</code> 产出 <code>openapi.json</code>，再生成两端的路径、类型、调用文件。签名不兼容 = 编译报错。</p>
+        </div>
+        <div class="decision__cell decision__cell--cost">
+          <h4>代价</h4>
+          <p>改一个字段必须跑生成命令；生成物不能手改（有审计盯着）；两端编译依赖服务端产物，纯前端改样式时也要先有一份最新的生成物。</p>
+        </div>
+      </div>
+    </article>
+
+    <article class="decision reveal">
+      <div class="decision__head"><span class="decision__no">B-02</span><h3>单库双进程：不引入任何中间件</h3></div>
+      <div class="decision__body">
+        <div class="decision__cell">
+          <h4>背景</h4>
+          <p>战斗每秒多次广播，登录 / 后台 / 邮件是低频长事务。混在一个进程里，一次后台导出就能卡住整张地图；但为此上 Redis + 消息队列，运维成本立刻翻倍。</p>
+        </div>
+        <div class="decision__cell">
+          <h4>决策</h4>
+          <p>同一个镜像起两个进程（:3100 存档 / :3101 实时），共享一个 SQLite 文件，WAL + <code>busy_timeout</code>，<b>各写各的表</b>，跨进程不写同一行。</p>
+        </div>
+        <div class="decision__cell decision__cell--cost">
+          <h4>代价</h4>
+          <p>不能横向扩容。写同一行会锁；要上多台机器时，瓶颈在存储而不在应用 —— 那时候该换的是数据库，不是打补丁。</p>
+        </div>
+      </div>
+    </article>
+
+    <article class="decision reveal">
+      <div class="decision__head"><span class="decision__no">B-03</span><h3>三端平级目录：一个仓库，不做 workspace</h3></div>
+      <div class="decision__body">
+        <div class="decision__cell">
+          <h4>背景</h4>
+          <p>客户端是 Cocos 工程（没有 npm 脚本）、服务端是 NestJS、管理端是 Vite。三套构建体系塞进一个 workspace 只会互相拖累。</p>
+        </div>
+        <div class="decision__cell">
+          <h4>决策</h4>
+          <p><code>client/</code> / <code>server/</code> / <code>admin/</code> 平级，各自独立 <code>node_modules</code>、独立 README 与 FAQ。跨端动作收在根目录 Makefile。</p>
+        </div>
+        <div class="decision__cell decision__cell--cost">
+          <h4>代价</h4>
+          <p>仓库偏大，CI 要装三套依赖；没有共享包机制，跨端复用只能靠脚本生成或复制约定。</p>
+        </div>
+      </div>
+    </article>
+
+    <article class="decision reveal">
+      <div class="decision__head"><span class="decision__no">B-04</span><h3>不为未来抽象：先不做的那些</h3></div>
+      <div class="decision__body">
+        <div class="decision__cell">
+          <h4>背景</h4>
+          <p>「以后可能要」是个无底洞：缓存层、消息队列、微服务拆分、多租户，每一项都能提前半年。</p>
+        </div>
+        <div class="decision__cell">
+          <h4>决策</h4>
+          <p>现在没有 Redis、没有 MQ、没有微服务、没有 K8s。当前量级用不到的东西一律不做，需要时再改。</p>
+        </div>
+        <div class="decision__cell decision__cell--cost">
+          <h4>代价</h4>
+          <p>真要扩容时是改架构而不是加机器。这个代价是明知且接受的 —— 目标读者是自己部署着玩的人，不是要开大服的人。</p>
+        </div>
+      </div>
+    </article>
+  </section>
+
+  <!-- ========== 三、怎么让改动可控 ========== -->
+  <section class="section section--alt" style="padding-top:64px;">
+    <div class="section__head reveal">
+      <p class="eyebrow eyebrow--center">C · CONTROL</p>
+      <h2 class="section__title">怎么让改动可控</h2>
+      <p class="section__sub">把「可能出错的地方」提前变成「一定会被发现」</p>
+    </div>
+
+    <article class="decision reveal">
+      <div class="decision__head"><span class="decision__no">C-01</span><h3>一切可调项收进 configs</h3></div>
+      <div class="decision__body">
+        <div class="decision__cell">
+          <h4>背景</h4>
+          <p>位置、尺寸、颜色、时长、概率、资源路径、中文文案散在逻辑里，调一次手感要改八处代码，还得重新理解这段逻辑。</p>
+        </div>
+        <div class="decision__cell">
+          <h4>决策</h4>
+          <p>核心代码（<code>ui</code> / <code>skills</code> / <code>entities</code>）只写「怎么跑」，数值全部沉到 <code>assets/configs/</code>。审计脚本扫外泄，白名单里每条都要写原因。</p>
+        </div>
+        <div class="decision__cell decision__cell--cost">
+          <h4>代价</h4>
+          <p>文件多、跳转多，读一个效果要开两个文件；新人（和 AI）得先习惯「改配置不改逻辑」这条规矩。</p>
+        </div>
+      </div>
+    </article>
+
+    <article class="decision reveal">
+      <div class="decision__head"><span class="decision__no">C-02</span><h3>建筑隔离：风格不同就隔开，不做过渡投机</h3></div>
+      <div class="decision__body">
+        <div class="decision__cell">
+          <h4>背景</h4>
+          <p>不同来源的瓦片拼在同一张图上，如果没有过渡瓦片，接缝会非常突兀 —— 远看像贴图错误。</p>
+        </div>
+        <div class="decision__cell">
+          <h4>决策</h4>
+          <p>硬规则：风格不一致的地面不允许直接相邻，中间加<b>两格厚的隔离带</b>，每格都摆、拐角压大山包。宁可少一块可用面积。</p>
+        </div>
+        <div class="decision__cell decision__cell--cost">
+          <h4>代价</h4>
+          <p>地图设计受限，边角可用面积变少；隔离带本身也要挑素材，找不到合适的就是一道生硬的墙。</p>
+        </div>
+      </div>
+    </article>
+
+    <article class="decision reveal">
+      <div class="decision__head"><span class="decision__no">C-03</span><h3>AI 优先：可验证 &gt; 优雅</h3></div>
+      <div class="decision__body">
+        <div class="decision__cell">
+          <h4>背景</h4>
+          <p>AI 写的代码，人不会逐行读。优雅但难验证的实现，等于没人知道它对不对。</p>
+        </div>
+        <div class="decision__cell">
+          <h4>决策</h4>
+          <p>同等条件下优先选「错了会红」的写法：显式类型、显式契约、启动即校验、宁可多一层断言，也不用隐式魔法和默认值兜底。</p>
+        </div>
+        <div class="decision__cell decision__cell--cost">
+          <h4>代价</h4>
+          <p>代码更啰嗦，样板更多；有些地方看起来像「不信任框架」，实际上是刻意把失败点提前。</p>
+        </div>
+      </div>
+    </article>
+  </section>
+
+  <!-- ========== 收口 ========== -->
+  <section class="section">
+    <div class="section__head reveal">
+      <p class="eyebrow eyebrow--center">SUMMARY</p>
+      <h2 class="section__title">如果只记一句</h2>
+    </div>
+    <p class="lede reveal">
+      所有决策都指向同一件事：<b>让错误尽早、尽显眼地暴露</b>。<br />
+      宁可启动失败、宁可界面上显示 0、宁可编译报错，也不要「看起来正常，其实是旧数据」。
+    </p>
+    <div class="repo-links reveal">
+      <a class="btn btn--blood" href="https://github.com/WebCoderT/olua" target="_blank" rel="noopener">去 GitHub 读代码</a>
+      <a class="btn btn--ghost" href="architecture.html">回看数据流 →</a>
+    </div>
+  </section>
+
+  <footer class="footer">
+    <img class="footer__logo" src="assets/icons/logo-256.png" alt="" aria-hidden="true" />
+    <p>olua · 免费开源的 2D 即时战斗项目 · 任何人都可以自己部署</p>
+    <nav class="footer__nav">
+      <a href="index.html">首页</a><span>·</span>
+      <a href="project.html">项目概览</a><span>·</span>
+      <a href="architecture.html">数据流</a><span>·</span>
+      <a href="engineering.html">工程管理</a><span>·</span>
+      <a href="design.html">设计思路</a><span>·</span>
+      <a href="deploy.html">部署</a><span>·</span>
+      <a href="about.html">关于</a>
+    </nav>
+    <p class="footer__health">健康游戏忠告：抵制不良游戏，拒绝盗版游戏。注意自我保护，谨防受骗上当。适度游戏益脑，沉迷游戏伤身。合理安排时间，享受健康生活。</p>
+    <p class="footer__copy">© 2026 olua · 基于 MIT 协议开源 · <a href="https://github.com/WebCoderT/olua" target="_blank" rel="noopener">GitHub</a> / <a href="https://gitee.com/putiwan/olua" target="_blank" rel="noopener">Gitee</a></p>
+  </footer>
+
+  <script src="js/main.js"></script>
+</body>
+</html>

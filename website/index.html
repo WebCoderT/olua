@@ -3,10 +3,10 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>olua · 热血重燃 · 经典 2D 即时战斗</title>
-  <meta name="description" content="olua 是一款经典 2D 即时战斗网游：装备全靠打，555 件装备变体、15 档品质、掉落光柱；战魂 / 称号 / 军衔三条成长线；战士与法师两大职业、多人同屏、A* 挂机寻路、帮会社交。浏览器即开即玩。" />
-  <meta property="og:title" content="olua · 热血重燃 · 经典 2D 即时战斗" />
-  <meta property="og:description" content="装备全靠打！555 件装备变体、品质掉落光柱、战魂 / 称号 / 军衔三条成长线、多人同屏即时战斗，浏览器即开即玩。" />
+  <title>olua · 一个免费开源的 2D 即时战斗项目</title>
+  <meta name="description" content="olua 是一个免费开源（MIT）的 2D 即时战斗游戏项目：Cocos Creator 客户端 + NestJS 服务端 + React 运营后台，14 万行 TypeScript，任何人可自行部署游玩。这里记录它的架构、数据流、工程管理与设计取舍。" />
+  <meta property="og:title" content="olua · 一个免费开源的 2D 即时战斗项目" />
+  <meta property="og:description" content="三端全开源、可自行部署的 2D 即时战斗项目。看它的架构、数据流、工程管理与设计取舍。" />
   <meta property="og:image" content="assets/img/game.jpg" />
   <meta property="og:type" content="website" />
   <link rel="icon" href="assets/icons/favicon.ico" sizes="any" />
@@ -25,13 +25,14 @@
       </a>
       <nav class="nav__links" id="navLinks">
         <a href="index.html" class="is-active">首页</a>
-        <a href="features.html">特色玩法</a>
-        <a href="guide.html">新手指南</a>
-        <a href="news.html">新闻动态</a>
-        <a href="deploy.html">自建部署</a>
-        <a href="about.html">关于声明</a>
+        <a href="project.html">项目概览</a>
+        <a href="architecture.html">数据流</a>
+        <a href="engineering.html">工程管理</a>
+        <a href="design.html">设计思路</a>
+        <a href="deploy.html">部署</a>
+        <a href="about.html">关于</a>
       </nav>
-      <a class="nav__cta" href="http://game.yimw.cn" target="_blank" rel="noopener">立即进入游戏</a>
+      <a class="nav__cta" href="http://game.yimw.cn" target="_blank" rel="noopener">在线试玩</a>
       <button class="nav__toggle" id="navToggle" aria-label="打开菜单">
         <span></span><span></span><span></span>
       </button>
@@ -39,226 +40,199 @@
   </header>
 
   <!-- ========== 首屏 ==========
-       背景图留位：assets/img/hero-bg.jpg（没有这张图时自动回落为血色渐变） -->
+       保留游戏的视觉调性（燃烧的城门 + 暗红），但定位是「项目主页」而不是游戏广告页：
+       badge 写清开源与免费，副标题直接说明三端与可自部署。 -->
   <section class="hero" id="top">
     <div class="hero__glow"></div>
     <div class="hero__inner">
       <img class="hero__logo reveal" src="assets/icons/logo-512.png" alt="olua 徽记：金龙缠剑" />
-      <p class="hero__badge reveal">经典 2D 即时战斗 · 浏览器即开即玩</p>
+      <p class="hero__badge reveal">免费 · 开源 · MIT · 纯 AI 编写</p>
       <h1 class="hero__title reveal">热血重燃 <em>血战到底</em></h1>
-      <p class="hero__tagline reveal">装备全靠打 · 小怪也能爆神装</p>
+      <p class="hero__tagline reveal">一个跑得起来的 2D 即时战斗项目</p>
       <p class="hero__sub reveal">
-        十五年前的热血，今天再燃一次。<br />
-        战士近身肉搏，法师远程爆发；打怪爆装、品质光柱冲天，<br />
-        战魂、称号、军衔三条成长线，和兄弟们一起，把这片大陆重新杀一遍。
+        客户端、服务端、运营后台<br />
+        全部开源，全部可改，<b>任何人都可以自己部署一份</b>。
       </p>
       <div class="hero__actions reveal">
-        <a class="btn btn--blood" href="http://game.yimw.cn" target="_blank" rel="noopener">立即进入游戏</a>
-        <a class="btn btn--ghost" href="#classes">了解游戏特色</a>
+        <a class="btn btn--blood" href="project.html">看看这个项目</a>
+        <a class="btn btn--ghost" href="http://game.yimw.cn" target="_blank" rel="noopener">在线试玩</a>
       </div>
+      <p class="hero__sub reveal" style="margin-top:20px;font-size:13px;opacity:.75;">
+        想直接跑起来？<a href="deploy.html" style="color:var(--gold);">看部署说明 →</a>
+      </p>
     </div>
     <div class="hero__scroll" aria-hidden="true"></div>
   </section>
 
-  <!-- ========== 数据带 ========== -->
-  <section class="stats">
-    <div class="stats__inner">
-      <div class="stat reveal"><b>555</b><span>件装备变体</span></div>
-      <div class="stat reveal"><b>15</b><span>档品质组合</span></div>
-      <div class="stat reveal"><b>37</b><span>阶战魂</span></div>
-      <div class="stat reveal"><b>100</b><span>阶军衔</span></div>
-      <div class="stat reveal"><b>11</b><span>张大地图</span></div>
-      <div class="stat reveal"><b>∞</b><span>装备全靠打</span></div>
-    </div>
-  </section>
-
-  <!-- ========== 职业介绍 ==========
-       立绘留位：assets/img/class-warrior.jpg / assets/img/class-mage.jpg
-       （图片没放进来之前显示占位框，放进来即自动显示） -->
-  <section class="section" id="classes">
+  <!-- ========== 这是什么 ========== -->
+  <section class="section" style="padding-bottom:56px;">
     <div class="section__head reveal">
-      <h2 class="section__title">选择你的职业</h2>
-      <p class="section__sub">两大经典职业 · 近战与法术的极致</p>
+      <p class="eyebrow eyebrow--center">WHAT IT IS</p>
+      <h2 class="section__title">先说清楚它是什么</h2>
     </div>
-    <div class="grid grid--classes">
-
-      <article class="class-card reveal">
-        <figure class="class-card__art" data-label="战士立绘占位 · 请放入 assets/img/class-warrior.jpg">
-          <img src="assets/img/class-warrior.jpg" alt="战士职业立绘" loading="lazy"
-               onerror="this.style.display='none';this.parentElement.classList.add('is-missing')" />
-        </figure>
-        <div class="class-card__body">
-          <h3 class="class-card__name class-card__name--warrior">战 士</h3>
-          <p class="class-card__role">近战 · 铁血 · 一刀入魂</p>
-          <p>刀刀入肉的打击感。高血高防顶在最前面，普通攻击稳定输出，突进技能「十步一杀」瞬身贴脸；
-             装备成型后站撸群怪，是帮会攻防里最让人放心的一道墙。</p>
-          <ul class="class-card__traits">
-            <li>血厚防高，正面硬刚</li>
-            <li>普攻稳定，上手即战</li>
-            <li>突进位移，贴脸收割</li>
-          </ul>
-        </div>
-      </article>
-
-      <article class="class-card reveal">
-        <figure class="class-card__art" data-label="法师立绘占位 · 请放入 assets/img/class-mage.jpg">
-          <img src="assets/img/class-mage.jpg" alt="法师职业立绘" loading="lazy"
-               onerror="this.style.display='none';this.parentElement.classList.add('is-missing')" />
-        </figure>
-        <div class="class-card__body">
-          <h3 class="class-card__name class-card__name--mage">法 师</h3>
-          <p class="class-card__role">远程 · 爆发 · 秒天秒地</p>
-          <p>元素为刃，千里之外取怪首级。多段伤害技能成套释放，配合击退与减速控场；
-             蓝量管理是法师的必修课，一瓶魔法药，就是一片火海。</p>
-          <ul class="class-card__traits">
-            <li>远程输出，站位艺术</li>
-            <li>爆发群伤，清场利器</li>
-            <li>控场击退，风筝走位</li>
-          </ul>
-        </div>
-      </article>
-
-    </div>
-  </section>
-
-  <!-- ========== 游戏特色（首页精选 4 项，完整版见特色玩法页） ========== -->
-  <section class="section section--alt" id="features">
-    <div class="section__head reveal">
-      <h2 class="section__title">游戏特色</h2>
-      <p class="section__sub">每一件神装，都从你自己手里打出来</p>
-    </div>
-    <div class="grid grid--features">
-
-      <article class="card reveal">
-        <div class="card__icon" aria-hidden="true">
-          <svg viewBox="0 0 24 24"><path d="M12 2l8 4v6c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V6l8-4z"/></svg>
-        </div>
-        <h3>装备全靠打</h3>
-        <p>555 件装备变体，前缀五档（普通→超神）× 后缀三档（人 / 天 / 神级），属性逐项缩放；
-           不卖装备、不做数值绑架，最好的那一件，永远在下一只怪身上。</p>
-      </article>
-
-      <article class="card reveal">
-        <div class="card__icon" aria-hidden="true">
-          <svg viewBox="0 0 24 24"><path d="M12 2v14m0 0l-5-5m5 5l5-5M4 20h16"/></svg>
-        </div>
-        <h3>品质光柱冲天</h3>
-        <p>每只怪独立掉落表，掉落物散落一地；装备落地即按品质升起光柱（普通→超神五档），
-           越高级的光柱越刺眼——远远看到红色光柱，全地图的人都知道出了好东西。</p>
-      </article>
-
-      <article class="card reveal">
-        <div class="card__icon" aria-hidden="true">
-          <svg viewBox="0 0 24 24"><path d="M12 21s-7-4.5-9-9c-1.5-3.5 1-7 4.5-7 2 0 3.5 1 4.5 2.5C13 6 14.5 5 16.5 5 20 5 22.5 8.5 21 12c-2 4.5-9 9-9 9z"/></svg>
-        </div>
-        <h3>三条成长线</h3>
-        <p>战魂 37 阶 · 称号 34 阶 · 军衔 100 阶。三条线都计入战力与地图进入条件，
-           称号与军衔解锁后直接顶在头顶——让走过的人一眼看清，你是谁。</p>
-      </article>
-
-      <article class="card reveal">
-        <div class="card__icon" aria-hidden="true">
-          <svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><path d="M4 20c0-3 2.5-5 5-5s5 2 5 5"/><circle cx="17" cy="9" r="2.4"/><path d="M14.5 19.5c.4-2.4 2-4 4-4 1 0 1.5.2 1.5.2"/></svg>
-        </div>
-        <h3>多人同屏激战</h3>
-        <p>战斗全部服务端结算：伤害、掉落、击杀、出手动作实时广播，多端画面一致；
-           一账号一线、顶号即踢，谁也别想开挂。</p>
-      </article>
-
-    </div>
-    <p style="text-align:center;margin-top:36px;" class="reveal">
-      <a class="btn btn--ghost" href="features.html">查看全部特色玩法 →</a>
+    <p class="lede reveal">
+      olua 是一个 <b>完整开源</b> 的 2D 即时战斗游戏项目 —— 不是教程里的片段，也不是只有前端的 Demo。
+      服务端、运营后台、地图管线、数值表、掉落表都在仓库里，改一下配置就能跑出自己的版本。
+      <br /><br />
+      它是 <em>学习项目</em>，不是商业产品。所以这里除了游戏截图，更多的是：
+      数据怎么流、边界怎么划、改坏了怎么在合并前发现。
     </p>
   </section>
 
-  <!-- ========== 玛法大陆（世界与地图） ========== -->
-  <section class="section world" id="world">
-    <div class="world__inner">
-      <figure class="world__art reveal">
-        <img src="assets/img/small-map.jpg" alt="小地图预览弹窗" loading="lazy" />
-        <figcaption>小地图：左键寻路 · 右键传送</figcaption>
-      </figure>
-      <div class="world__text">
-        <h2 class="section__title reveal">11 张大地图 · 一张比一张凶险</h2>
-        <p class="reveal">
-          从新手村外巴掌大的林地，到冰封千里的<b>雪域高原</b>——每一张地图都有独立的刷怪区、
-          复活点与 NPC 驻守；高级地图有战力门槛，没到军衔就想硬闯？门口的守卫会替你省下药钱。
-        </p>
-        <p class="reveal">
-          小地图按视野等比缩放、随角色平移；预览弹窗左键寻路、右键传送，
-          追杀与逃命，都只差一次右键的距离。
-        </p>
-        <div class="hero__actions reveal" style="justify-content:flex-start;">
-          <a class="btn btn--blood" href="http://game.yimw.cn" target="_blank" rel="noopener">马上踏入大陆</a>
-          <a class="btn btn--ghost" href="guide.html">查看新手指南</a>
-        </div>
-      </div>
+  <!-- ========== 项目数据 ========== -->
+  <section class="section section--alt" id="numbers" style="padding-top:56px;">
+    <div class="section__head reveal">
+      <p class="eyebrow eyebrow--center">BY THE NUMBERS</p>
+      <h2 class="section__title">规模</h2>
+      <p class="section__sub">全部来自仓库统计</p>
+    </div>
+    <div class="metrics metrics--6 reveal">
+      <div class="metric"><b>14.4 万</b><span>行 TypeScript</span><i>三端 + 工具</i></div>
+      <div class="metric"><b>3</b><span>个端</span><i>客户端 / 服务端 / 后台</i></div>
+      <div class="metric"><b>209</b><span>接口操作</span><i>契约自动生成</i></div>
+      <div class="metric"><b>59</b><span>张数据表</span><i>SQLite 单库</i></div>
+      <div class="metric"><b>70</b><span>已实现能力</span><i>只列能跑的</i></div>
+      <div class="metric"><b>29</b><span>套 e2e</span><i>真服务真库</i></div>
     </div>
   </section>
 
-  <!-- ========== 游戏截图 ========== -->
-  <section class="section section--alt" id="gallery">
+  <!-- ========== 三个端 ========== -->
+  <section class="section" id="ends">
     <div class="section__head reveal">
-      <h2 class="section__title">游戏实景</h2>
-      <p class="section__sub">点击任意图片查看大图</p>
+      <p class="eyebrow eyebrow--center">ARCHITECTURE</p>
+      <h2 class="section__title">三个端，一个权威</h2>
+      <p class="section__sub">客户端玩、服务端算、管理端改</p>
+    </div>
+    <div class="trio reveal">
+      <article class="trio__card" data-tag="client /">
+        <h3>客户端</h3>
+        <p class="trio__role">玩家看到的全部</p>
+        <p>登录、选角、战斗、背包、商城、社交。只负责输入与表现，本地不判定任何战斗结果。</p>
+        <div class="trio__stack">Cocos Creator 3.8.7<br />TypeScript · 4.65 万行</div>
+      </article>
+      <article class="trio__card" data-tag="server /">
+        <h3>服务端</h3>
+        <p class="trio__role">唯一手写接口的地方</p>
+        <p>账号、角色、地图、怪物、战斗结算、掉落、邮件。两个进程共用一个 SQLite，契约从这里生成。</p>
+        <div class="trio__stack">NestJS 12 + node:sqlite<br />23 模块 · 4.95 万行</div>
+      </article>
+      <article class="trio__card" data-tag="admin /">
+        <h3>管理端</h3>
+        <p class="trio__role">运营改数据的地方</p>
+        <p>地图刷怪区、NPC、碰撞盒、掉落表、装备体系、特效、权限与日志，50 个页面，改完即生效。</p>
+        <div class="trio__stack">React 19 + Vite<br />50 页面 · 4.11 万行</div>
+      </article>
+    </div>
+    <p style="text-align:center;margin-top:36px;" class="reveal">
+      <a class="btn btn--ghost" href="architecture.html">它们之间怎么通信 →</a>
+    </p>
+  </section>
+
+  <!-- ========== 四个入口 ========== -->
+  <section class="section section--alt" id="explore">
+    <div class="section__head reveal">
+      <p class="eyebrow eyebrow--center">EXPLORE</p>
+      <h2 class="section__title">从哪里看起</h2>
+      <p class="section__sub">按你关心的东西选一条路</p>
+    </div>
+    <div class="grid grid--features">
+      <a class="card reveal" href="project.html">
+        <div class="card__icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><path d="M4 5h16M4 12h16M4 19h10"/></svg>
+        </div>
+        <h3>项目概览</h3>
+        <p>它是什么、不是什么；三端各自负责什么；70 项已实现能力；技术栈与仓库结构。</p>
+      </a>
+      <a class="card reveal" href="architecture.html">
+        <div class="card__icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><path d="M4 6h6v5H4zM14 13h6v5h-6z"/><path d="M10 8.5h4v7"/></svg>
+        </div>
+        <h3>架构与数据流</h3>
+        <p>一次攻击、一件装备、一条配置改动，各自的完整路径；契约怎么生成；数据分四层。</p>
+      </a>
+      <a class="card reveal" href="engineering.html">
+        <div class="card__icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><path d="M12 3l7 4v6c0 4-3 7-7 8-4-1-7-4-7-8V7l7-4z"/><path d="M9 12l2 2 4-4"/></svg>
+        </div>
+        <h3>工程管理</h3>
+        <p>issue → PR → CI → squash 的完整流程；29 套 e2e 与 15 项审计各守什么；AI 协作纪律。</p>
+      </a>
+      <a class="card reveal" href="design.html">
+        <div class="card__icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/></svg>
+        </div>
+        <h3>设计思路</h3>
+        <p>十二条决策，每条都写清背景与代价：为什么服务端权威、为什么客户端零兜底、为什么不上分布式。</p>
+      </a>
+    </div>
+  </section>
+
+  <!-- ========== 游戏实景 ========== -->
+  <section class="section" id="gallery">
+    <div class="section__head reveal">
+      <p class="eyebrow eyebrow--center">SCREENSHOTS</p>
+      <h2 class="section__title">跑起来是这样</h2>
+      <p class="section__sub">全部是本地部署后截的真机画面，点击看大图</p>
     </div>
     <div class="gallery" id="galleryGrid"><!-- JS 渲染 --></div>
   </section>
 
-  <!-- ========== 新闻动态（完整列表见新闻页；想发新公告照着复制一条改文字即可） ========== -->
-  <section class="section" id="news">
+  <!-- ========== 更新日志 ========== -->
+  <section class="section section--alt" id="news">
     <div class="section__head reveal">
-      <h2 class="section__title">新闻动态</h2>
-      <p class="section__sub">版本、活动与新服讯息</p>
+      <p class="eyebrow eyebrow--center">CHANGELOG</p>
+      <h2 class="section__title">最近在做什么</h2>
+      <p class="section__sub">版本与结构改动</p>
     </div>
     <ul class="news">
       <li class="news__item reveal">
-        <time datetime="2026-11-04">11-04</time>
+        <time datetime="2026-11-05">11-05</time>
         <div>
-          <h3>全新版本上线：动作跨端同步</h3>
-          <p>出手、技能、击杀与掉落全部实时广播，多人同屏画面完全一致；地图底图校准，走到哪都是同一片大陆。</p>
+          <h3>真彩地图转换器</h3>
+          <p>支持把传奇真彩地图包（.map / .wix / .wil）转成项目可直接使用的 TMX，按菱形点阵还原原始画幅。</p>
         </div>
       </li>
       <li class="news__item reveal">
         <time datetime="2026-11-04">11-04</time>
         <div>
-          <h3>音效系统上线</h3>
-          <p>按钮、掉落、升级、传送、脚步——十一种音效全量接入，运营后台可随时换曲调音量。</p>
+          <h3>动作跨端同步</h3>
+          <p>出手、技能、击杀与掉落全部实时广播，同图多端画面一致；观看端看到的掉落只是演出，结果以服务端为准。</p>
         </div>
       </li>
       <li class="news__item reveal">
-        <time datetime="2026-11-04">11-04</time>
+        <time datetime="2026-11-02">11-02</time>
         <div>
-          <h3>官网正式上线</h3>
-          <p>olua 官网开张。游戏浏览器即开即玩，不需要下载任何客户端。</p>
+          <h3>装备外观收权到后台</h3>
+          <p>前后缀档位、品质边框、详情背景、特效摆位全部由管理端配置，客户端不再内置出厂值。</p>
         </div>
       </li>
     </ul>
     <p style="text-align:center;margin-top:36px;" class="reveal">
-      <a class="btn btn--ghost" href="news.html">更多动态 →</a>
+      <a class="btn btn--ghost" href="news.html">全部更新 →</a>
     </p>
   </section>
 
-  <!-- ========== 玩家社区 & 开源（详细信息见关于声明页） ========== -->
-  <section class="section section--alt" id="contact">
+  <!-- ========== 参与 ========== -->
+  <section class="section" id="join">
     <div class="section__head reveal">
-      <h2 class="section__title">加入我们</h2>
-      <p class="section__sub">一起打宝 · 问题反馈 · 参与开源</p>
+      <p class="eyebrow eyebrow--center">JOIN</p>
+      <h2 class="section__title">自己跑一份，或者一起改</h2>
+      <p class="section__sub">MIT 协议 · 允许商用 · 不提供免费商业化支持</p>
     </div>
     <div class="contact">
       <div class="contact__card reveal">
-        <h3>官方 QQ 群</h3>
-        <img class="contact__qr" src="assets/img/qq-group.jpg" alt="QQ 群二维码" />
-        <p>群号 1124215785 · 扫码上战场</p>
+        <h3>自己部署</h3>
+        <p style="margin-bottom:16px;">一台机器、四行命令。<br />数据在你自己的库里，改多少都算你的。</p>
+        <a class="btn btn--blood btn--small" href="deploy.html">看部署说明</a>
       </div>
       <div class="contact__card reveal">
-        <h3>开源项目</h3>
-        <p style="margin-bottom:14px;">olua 基于 MIT 协议完整开源，<br />允许商业化，欢迎 Star 与共建。</p>
+        <h3>开源仓库</h3>
+        <p style="margin-bottom:14px;">代码、issue、PR、CI 都在 GitHub。<br />Gitee 是只读镜像。</p>
         <div class="repo-links" style="margin-top:0;">
           <a class="btn btn--blood btn--small" href="https://github.com/WebCoderT/olua" target="_blank" rel="noopener">GitHub</a>
           <a class="btn btn--ghost btn--small" href="https://gitee.com/putiwan/olua" target="_blank" rel="noopener">Gitee</a>
         </div>
-        <p style="margin-top:14px;"><a href="about.html" style="color:var(--blood-bright);">关于项目与声明 →</a></p>
+        <p style="margin-top:14px;"><a href="about.html" style="color:var(--blood-bright);">协议与声明 →</a></p>
       </div>
     </div>
   </section>
@@ -266,14 +240,15 @@
   <!-- ========== 页脚 ========== -->
   <footer class="footer">
     <img class="footer__logo" src="assets/icons/logo-256.png" alt="" aria-hidden="true" />
-    <p>olua · 经典 2D 即时战斗 · 浏览器即开即玩</p>
+    <p>olua · 免费开源的 2D 即时战斗项目 · 任何人都可以自己部署</p>
     <nav class="footer__nav">
       <a href="index.html">首页</a><span>·</span>
-      <a href="features.html">特色玩法</a><span>·</span>
-      <a href="guide.html">新手指南</a><span>·</span>
-      <a href="news.html">新闻动态</a><span>·</span>
-      <a href="deploy.html">自建部署</a><span>·</span>
-      <a href="about.html">关于声明</a>
+      <a href="project.html">项目概览</a><span>·</span>
+      <a href="architecture.html">数据流</a><span>·</span>
+      <a href="engineering.html">工程管理</a><span>·</span>
+      <a href="design.html">设计思路</a><span>·</span>
+      <a href="deploy.html">部署</a><span>·</span>
+      <a href="about.html">关于</a>
     </nav>
     <p class="footer__health">健康游戏忠告：抵制不良游戏，拒绝盗版游戏。注意自我保护，谨防受骗上当。适度游戏益脑，沉迷游戏伤身。合理安排时间，享受健康生活。</p>
     <p class="footer__copy">© 2026 olua · 基于 MIT 协议开源 · <a href="https://github.com/WebCoderT/olua" target="_blank" rel="noopener">GitHub</a> / <a href="https://gitee.com/putiwan/olua" target="_blank" rel="noopener">Gitee</a></p>

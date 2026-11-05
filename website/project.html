@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>项目概览 · olua 开源项目</title>
+  <meta name="description" content="olua 是一个免费开源（MIT）的 2D 即时战斗游戏项目：Cocos Creator 客户端 + NestJS 服务端 + React 运营后台，70 项已实现能力，14 万行 TypeScript，任何人可自行部署。" />
+  <link rel="icon" href="assets/icons/favicon.ico" sizes="any" />
+  <link rel="icon" type="image/png" sizes="256x256" href="assets/icons/logo-256.png" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+
+  <header class="nav" id="nav">
+    <div class="nav__inner">
+      <a class="nav__brand" href="index.html">
+        <img class="nav__logo" src="assets/icons/logo-256.png" alt="olua logo" />
+        <span class="nav__name">olua</span>
+      </a>
+      <nav class="nav__links" id="navLinks">
+        <a href="index.html">首页</a>
+        <a href="project.html" class="is-active">项目概览</a>
+        <a href="architecture.html">数据流</a>
+        <a href="engineering.html">工程管理</a>
+        <a href="design.html">设计思路</a>
+        <a href="deploy.html">部署</a>
+        <a href="about.html">关于</a>
+      </nav>
+      <a class="nav__cta" href="http://game.yimw.cn" target="_blank" rel="noopener">在线试玩</a>
+      <button class="nav__toggle" id="navToggle" aria-label="打开菜单">
+        <span></span><span></span><span></span>
+      </button>
+    </div>
+  </header>
+
+  <section class="page-hero">
+    <p class="page-hero__crumb reveal">OVERVIEW · 项目概览</p>
+    <h1 class="page-hero__title reveal">这是什么</h1>
+    <p class="page-hero__sub reveal">一个跑得起来的、免费开源的 2D 即时战斗项目</p>
+  </section>
+
+  <!-- ========== 定位 ========== -->
+  <section class="section" style="padding-bottom:56px;">
+    <p class="lede reveal">
+      olua 是一个 <b>完整开源（MIT）</b> 的 2D 即时战斗游戏项目：客户端、服务端、运营后台一个不少，
+      数值、地图、掉落、特效都能在后台改。它<b>免费</b>，也<b>允许商用</b> ——
+      任何人都可以拉下来，在自己的机器或服务器上跑起来，和朋友一起玩。
+    </p>
+    <div class="split reveal" style="margin-top:36px;">
+      <div class="split__col split__col--good">
+        <h4>它是</h4>
+        <ul>
+          <li>一个三端跑通的学习型项目</li>
+          <li>一套可以参考的全栈 TypeScript 工程</li>
+          <li>一个「AI 写代码、人验收」的实践样本</li>
+          <li>一个能自己部署、自己改数值的玩具</li>
+        </ul>
+      </div>
+      <div class="split__col split__col--bad">
+        <h4>它不是</h4>
+        <ul>
+          <li>可以直接开服运营的商业产品</li>
+          <li>开箱即用、免配置的发行版</li>
+          <li>追求高并发与横向扩展的架构</li>
+          <li>带客服与 SLA 的服务</li>
+        </ul>
+      </div>
+    </div>
+    <div class="takeaway reveal">
+      <b>说清楚这件事很重要。</b>项目里的每个设计取舍（单库、双进程、不做分布式）都是按「一个人、一台机器、几个朋友」来的；
+      拿它去扛大服会很快撞墙，那不是 bug，是前提不同。
+    </div>
+  </section>
+
+  <!-- ========== 规模 ========== -->
+  <section class="section section--alt" id="scale">
+    <div class="section__head reveal">
+      <p class="eyebrow eyebrow--center">SCALE</p>
+      <h2 class="section__title">现在有多大</h2>
+      <p class="section__sub">数字全部来自仓库统计，不是估算</p>
+    </div>
+
+    <div class="metrics metrics--8 reveal">
+      <div class="metric"><b>14.4 万</b><span>行 TypeScript</span><i>三端 + 工具脚本</i></div>
+      <div class="metric"><b>23</b><span>服务端模块</span><i>NestJS</i></div>
+      <div class="metric"><b>209</b><span>接口操作</span><i>169 条路径</i></div>
+      <div class="metric"><b>59</b><span>张数据表</span><i>SQLite</i></div>
+      <div class="metric"><b>50</b><span>后台页面</span><i>React</i></div>
+      <div class="metric"><b>70</b><span>已实现能力</span><i>按域统计</i></div>
+      <div class="metric"><b>29</b><span>套 e2e</span><i>真服务真库</i></div>
+      <div class="metric"><b>15</b><span>项跨端审计</span><i>静态守点</i></div>
+    </div>
+  </section>
+
+  <!-- ========== 三端 ========== -->
+  <section class="section" id="ends">
+    <div class="section__head reveal">
+      <p class="eyebrow eyebrow--center">THREE ENDS</p>
+      <h2 class="section__title">三个端，职责不重叠</h2>
+      <p class="section__sub">客户端玩、服务端算、管理端改</p>
+    </div>
+
+    <div class="trio reveal">
+      <article class="trio__card" data-tag="client /">
+        <h3>客户端</h3>
+        <p class="trio__role">玩家看到的全部</p>
+        <p>登录、选角、战斗、背包、商城、社交、小地图。Cocos 工程，用 Creator 打开 <code>client/</code> 目录即可运行。</p>
+        <p style="margin-top:10px;">只负责输入与表现：数值等快照、结果等服务端，本地不判定任何战斗结果。</p>
+        <div class="trio__stack">Cocos Creator 3.8.7<br />TypeScript · Box2D<br />186 个 TS 文件 / 4.65 万行</div>
+      </article>
+
+      <article class="trio__card" data-tag="server /">
+        <h3>服务端</h3>
+        <p class="trio__role">唯一的权威数据源</p>
+        <p>账号、角色、地图、怪物、战斗结算、掉落、邮件、排行榜。两个进程共用一个 SQLite 文件，Swagger 从这里生成契约。</p>
+        <p style="margin-top:10px;">客户端与管理端的接口文件都由它产出，不手写。</p>
+        <div class="trio__stack">NestJS 12<br />node:sqlite · JWT · Swagger<br />23 模块 / 4.95 万行</div>
+      </article>
+
+      <article class="trio__card" data-tag="admin /">
+        <h3>管理端</h3>
+        <p class="trio__role">运营改数据的地方</p>
+        <p>账号角色、地图与刷怪区、NPC 与碰撞盒、掉落表、装备体系与外观、特效、公告邮件、权限与操作日志。</p>
+        <p style="margin-top:10px;">页面 50 个，改完落库即生效，不用重启服务端。</p>
+        <div class="trio__stack">React 19 + Vite<br />Tailwind CSS v4<br />50 页面 / 4.11 万行</div>
+      </article>
+    </div>
+
+    <p style="text-align:center;margin-top:36px;" class="reveal">
+      <a class="btn btn--ghost" href="architecture.html">它们之间怎么通信 →</a>
+    </p>
+  </section>
+
+  <!-- ========== 功能全景 ========== -->
+  <section class="section section--alt" id="capabilities">
+    <div class="section__head reveal">
+      <p class="eyebrow eyebrow--center">CAPABILITIES</p>
+      <h2 class="section__title">70 项已实现能力</h2>
+      <p class="section__sub">只列跑得起来的，不列「计划中」</p>
+    </div>
+
+    <div class="caps reveal">
+      <article class="cap">
+        <div class="cap__head"><h3>账号与角色</h3><span class="cap__count">10 项</span></div>
+        <ul>
+          <li>注册登录 · scrypt 加盐摘要 · 7 天令牌</li>
+          <li>角色选择与创建（每账号 3 个）</li>
+          <li>进度云端保存（防抖 1.5 秒合并推送）</li>
+          <li>旧存档自动迁移 · 删除角色两步确认</li>
+          <li>后台账号角色管理 · 重置口令 · 踢下线</li>
+          <li>操作日志（口令字段落库前打码）</li>
+          <li>三级权限：超管 / 管理员 / 只读</li>
+          <li>公告与邮件触达（生效时间窗服务端判定）</li>
+          <li>登录限流（用户名 + 来源 IP 双维度）</li>
+          <li>一账号一线，顶号即踢</li>
+        </ul>
+      </article>
+
+      <article class="cap">
+        <div class="cap__head"><h3>地图与场景</h3><span class="cap__count">9 项</span></div>
+        <ul>
+          <li>场景切换与 Loading 过渡</li>
+          <li>TMX 只做显示：瓦片 + 图层，无对象组</li>
+          <li>刷怪区 / NPC / 碰撞盒在后台放拖画</li>
+          <li>复活点出生（每图一个，可设可清）</li>
+          <li>小地图等比缩放、随角色平移</li>
+          <li>大图预览：左键寻路 / 右键传送</li>
+          <li>地图传送官按类型分组，条件不足给原因</li>
+          <li>进入等级 / 战力 / 战魂阶在后台配</li>
+          <li>碰撞范围调试开关</li>
+        </ul>
+      </article>
+
+      <article class="cap">
+        <div class="cap__head"><h3>角色成长</h3><span class="cap__count">8 项</span></div>
+        <ul>
+          <li>等级与属性成长（60 档曲线落库）</li>
+          <li>击杀经验按等级差衰减，差 6 级无经验</li>
+          <li>升级流程：属性重算 + 血蓝补满 + 特效</li>
+          <li>战魂 37 阶 · 计入战力与地图门槛</li>
+          <li>称号 34 阶 · 名牌常显头顶</li>
+          <li>军衔 100 阶 · 红字常显血条上方</li>
+          <li>每秒回血由等级 / 装备 / 三条成长线相加</li>
+          <li>血球魔法球与头顶血量实时刷新</li>
+        </ul>
+      </article>
+
+      <article class="cap">
+        <div class="cap__head"><h3>装备与物品</h3><span class="cap__count">11 项</span></div>
+        <ul>
+          <li>穿脱与属性汇总，校验等级 / 性别 / 职业</li>
+          <li>内外观：8 方向位置与缩放</li>
+          <li>前后缀变体：5 档 × 3 档 = 555 件</li>
+          <li>品质边框与详情背景动画</li>
+          <li>每怪独立掉落表，条目配权重 / 概率 / 数量</li>
+          <li>掉落光柱按品质播放（5 档）</li>
+          <li>背包整理：合堆 + 按等级部位重排</li>
+          <li>拖动换格 / 一键回收 / 拖出销毁</li>
+          <li>商城全部装备自动上架，卡片分页</li>
+          <li>时装 20 件，只换外观不换数值</li>
+          <li>药品与消耗品使用</li>
+        </ul>
+      </article>
+
+      <article class="cap">
+        <div class="cap__head"><h3>战斗与技能</h3><span class="cap__count">9 项</span></div>
+        <ul>
+          <li>技能统一入口，冷却 / 耗蓝 / 距离校验</li>
+          <li>键鼠双操控：WASD + 左键走右键跑</li>
+          <li>自动战斗与挂机，A* 寻路绕障碍</li>
+          <li>伤害结算在服务端，castId 幂等</li>
+          <li>突进技能按落点瞬移 + 落地特效</li>
+          <li>状态 Buff、身上循环特效、图标倒计时</li>
+          <li>怪物技能由服务端 AI 释放</li>
+          <li>多人同屏，200ms 增量广播</li>
+          <li>寻路路线在大地图与小地图同步画线</li>
+        </ul>
+      </article>
+
+      <article class="cap">
+        <div class="cap__head"><h3>怪物与死亡</h3><span class="cap__count">5 项</span></div>
+        <ul>
+          <li>区域刷怪：服务端按矩形随机生成</li>
+          <li>世界权威：实例跨账号共享、跨重启恢复</li>
+          <li>怪物 AI：游走 / 追击 / 受伤激怒 / 普攻</li>
+          <li>死亡动画播完才移除节点</li>
+          <li>原地复活 / 回复活点安全复活</li>
+        </ul>
+      </article>
+
+      <article class="cap">
+        <div class="cap__head"><h3>帮会与社交</h3><span class="cap__count">9 项</span></div>
+        <ul>
+          <li>帮会：创建 / 申请 / 审批 / 成员 / 转让 / 解散</li>
+          <li>队伍：邀请即建，队长唯一写者</li>
+          <li>组队分经验：同图队友 50%</li>
+          <li>好友双向镜像，敌人单向不可见</li>
+          <li>屏蔽与举报（过滤在服务端）</li>
+          <li>排行榜：等级 / 战力 / 击杀，离线也上榜</li>
+          <li>成就：累计型记账 + 状态型现算</li>
+          <li>游戏内邮件：附件领取、四类分栏</li>
+          <li>名字按关系配色（队友金 / 敌人红 / 好友绿）</li>
+        </ul>
+      </article>
+
+      <article class="cap">
+        <div class="cap__head"><h3>界面与系统</h3><span class="cap__count">9 项</span></div>
+        <ul>
+          <li>HUD：信息栏 / 血球 / 魔法球 / 经验条 / 快捷栏</li>
+          <li>弹窗层级：点哪个哪个浮到最上层</li>
+          <li>悬停详情：名称 / 介绍 / 剩余时间</li>
+          <li>操作摇杆：拖得少走、拖得多跑</li>
+          <li>单一分辨率 1920×1080，等比缩放留黑边</li>
+          <li>UI 点击不穿透，抬起交还世界侧</li>
+          <li>进图前预加载地图 / NPC / 怪物 / 外观帧</li>
+          <li>新手引导 6 步，进度存角色存档</li>
+          <li>公告展示 + 未读红点</li>
+        </ul>
+      </article>
+    </div>
+
+    <p style="text-align:center;margin-top:38px;" class="reveal">
+      <a class="btn btn--ghost" href="features.html">看玩法细节与截图 →</a>
+    </p>
+  </section>
+
+  <!-- ========== 技术栈 ========== -->
+  <section class="section" id="stack">
+    <div class="section__head reveal">
+      <p class="eyebrow eyebrow--center">STACK</p>
+      <h2 class="section__title">技术栈与运行要求</h2>
+      <p class="section__sub">没有原生的坑，没有外部中间件</p>
+    </div>
+
+    <div class="kv reveal">
+      <dl>
+        <div class="kv__row">
+          <dt>客户端</dt>
+          <dd>Cocos Creator <b>3.8.7</b> + TypeScript + Box2D。改客户端才需要编辑器，只跑服务端不需要。</dd>
+        </div>
+        <div class="kv__row">
+          <dt>服务端</dt>
+          <dd>NestJS 12 + <code>node:sqlite</code>（Node 22 内置）+ JWT + Swagger。<b>没有原生模块</b>，<code>npm install</code> 不会卡在编译。</dd>
+        </div>
+        <div class="kv__row">
+          <dt>管理端</dt>
+          <dd>React 19 + TypeScript + Vite + Tailwind CSS v4。构建产物是纯静态文件。</dd>
+        </div>
+        <div class="kv__row">
+          <dt>存储</dt>
+          <dd>SQLite 单库，WAL 模式。备份就是拷文件，迁移就是拷文件。</dd>
+        </div>
+        <div class="kv__row">
+          <dt>部署</dt>
+          <dd>Docker Compose 四服务：<code>admin:80</code>（入口）/ <code>game:8080</code> / <code>server:3100</code> / <code>realtime:3101</code>。</dd>
+        </div>
+        <div class="kv__row">
+          <dt>Node 版本</dt>
+          <dd><b>≥ 22.5</b>。低于这个版本没有 <code>node:sqlite</code>，服务端起不来。</dd>
+        </div>
+        <div class="kv__row">
+          <dt>素材</dt>
+          <dd><code>client/assets/resources/</code> 体积大，不入库。通过 <code>make resources-download</code> 从 Release 拉取并校验 sha1。</dd>
+        </div>
+      </dl>
+    </div>
+
+    <div class="tags reveal" style="justify-content:center;max-width:900px;margin:26px auto 0;">
+      <span class="tag tag--gold">Cocos Creator 3.8.7</span>
+      <span class="tag tag--gold">TypeScript</span>
+      <span class="tag tag--gold">NestJS 12</span>
+      <span class="tag tag--gold">node:sqlite</span>
+      <span class="tag tag--gold">React 19</span>
+      <span class="tag tag--gold">Vite</span>
+      <span class="tag tag--gold">Tailwind v4</span>
+      <span class="tag tag--gold">JWT</span>
+      <span class="tag tag--gold">Swagger</span>
+      <span class="tag tag--gold">Docker Compose</span>
+      <span class="tag tag--gold">nginx</span>
+    </div>
+  </section>
+
+  <!-- ========== 仓库结构 ========== -->
+  <section class="section section--alt" id="repo">
+    <div class="section__head reveal">
+      <p class="eyebrow eyebrow--center">REPOSITORY</p>
+      <h2 class="section__title">仓库长什么样</h2>
+      <p class="section__sub">三端平级，各自有 README 与 FAQ</p>
+    </div>
+
+    <div class="tree reveal">olua/
+├── <b>client/</b>          <i># Cocos Creator 工程（打开这个目录）</i>
+│   ├── assets/
+│   │   ├── configs/  <i># 全部可调项：数值 / 布局 / 配色 / 时长 / 路径</i>
+│   │   ├── ui/       <i># 界面、控制器、组件、网络层</i>
+│   │   ├── skills/   <i># 技能表现</i>
+│   │   ├── entities/ <i># 角色、怪物实体</i>
+│   │   └── resources/ <i># 素材（不入库，走 Release）</i>
+│   ├── README.md · FAQ.md
+│   └── types/engine/ <i># Cocos 类型声明（vendoring，CI 免编辑器）</i>
+│
+├── <b>server/</b>          <i># NestJS，唯一权威</i>
+│   ├── src/
+│   │   ├── modules/   <i># 23 个业务模块</i>
+│   │   ├── database/  <i># 建表 / 快照 / 仓储</i>
+│   │   └── main.ts · main.realtime.ts <i># 两个进程入口</i>
+│   ├── test/          <i># 29 套 e2e</i>
+│   ├── data/config-sync.sql <i># 出厂快照（空库自举）</i>
+│   └── openapi.json   <i># 契约源，提交进仓库</i>
+│
+├── <b>admin/</b>           <i># React 运营后台</i>
+│   └── src/pages/     <i># 50 个页面</i>
+│
+├── <b>tools/</b>           <i># 跨端脚本：契约生成 + 15 项审计</i>
+├── <b>website/</b>         <i># 本项目官网（纯静态）</i>
+├── <b>docs/</b>            <i># 部署说明</i>
+├── Makefile           <i># 三端常用动作收在一处</i>
+├── docker-compose.yml
+└── resources.manifest.json <i># 素材清单（sha1 + 大小）</i></div>
+
+    <div class="takeaway reveal">
+      <b>两条全局约定：</b>客户端一切可调的都在 <code>assets/configs</code>；
+      接口文件全部由服务端生成。前者保证「调手感不用改逻辑」，后者保证「改字段不会忘了一边」。
+    </div>
+  </section>
+
+  <!-- ========== 适合谁 ========== -->
+  <section class="section" id="for-who">
+    <div class="section__head reveal">
+      <p class="eyebrow eyebrow--center">AUDIENCE</p>
+      <h2 class="section__title">适合谁，不适合谁</h2>
+    </div>
+
+    <div class="split reveal">
+      <div class="split__col split__col--good">
+        <h4>适合</h4>
+        <ul>
+          <li>想读一个完整 TS 全栈项目的学生 / 转行者</li>
+          <li>想了解「AI 参与真实项目」是什么样的人</li>
+          <li>想在自己服务器上架一个和朋友玩的游戏的人</li>
+          <li>需要一个 2D 游戏服务端骨架的开发者</li>
+        </ul>
+      </div>
+      <div class="split__col split__col--bad">
+        <h4>不适合</h4>
+        <ul>
+          <li>想直接开服拉人、要商业化运营的</li>
+          <li>要求开箱即用、有人答疑的</li>
+          <li>需要高并发 / 分布式 / 多区服的</li>
+          <li>指望素材可以商用的（素材版权需自行确认）</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="repo-links reveal">
+      <a class="btn btn--blood" href="deploy.html">自己部署一份 →</a>
+      <a class="btn btn--ghost" href="https://github.com/WebCoderT/olua" target="_blank" rel="noopener">GitHub 仓库</a>
+      <a class="btn btn--ghost" href="guide.html">本地跑起来</a>
+    </div>
+  </section>
+
+  <footer class="footer">
+    <img class="footer__logo" src="assets/icons/logo-256.png" alt="" aria-hidden="true" />
+    <p>olua · 免费开源的 2D 即时战斗项目 · 任何人都可以自己部署</p>
+    <nav class="footer__nav">
+      <a href="index.html">首页</a><span>·</span>
+      <a href="project.html">项目概览</a><span>·</span>
+      <a href="architecture.html">数据流</a><span>·</span>
+      <a href="engineering.html">工程管理</a><span>·</span>
+      <a href="design.html">设计思路</a><span>·</span>
+      <a href="deploy.html">部署</a><span>·</span>
+      <a href="about.html">关于</a>
+    </nav>
+    <p class="footer__health">健康游戏忠告：抵制不良游戏，拒绝盗版游戏。注意自我保护，谨防受骗上当。适度游戏益脑，沉迷游戏伤身。合理安排时间，享受健康生活。</p>
+    <p class="footer__copy">© 2026 olua · 基于 MIT 协议开源 · <a href="https://github.com/WebCoderT/olua" target="_blank" rel="noopener">GitHub</a> / <a href="https://gitee.com/putiwan/olua" target="_blank" rel="noopener">Gitee</a></p>
+  </footer>
+
+  <script src="js/main.js"></script>
+</body>
+</html>

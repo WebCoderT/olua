@@ -4,16 +4,21 @@
 
 /* ---------- 截图数据（文件名 + 说明，新增截图在这里加一行即可） ---------- */
 var SHOTS = [
-  { file: "login.jpg",         title: "登录" },
-  { file: "role_selector.jpg", title: "角色选择与创建" },
-  { file: "game.jpg",          title: "游戏主界面（角色信息 / 背包 / 技能弹窗）" },
-  { file: "skill.jpg",         title: "技能列表" },
-  { file: "monster.jpg",       title: "怪物与战斗" },
-  { file: "drop-light.jpg",    title: "装备掉落光柱（按前缀品质播放，普通→超神 5 档）" },
-  { file: "small-map.jpg",     title: "小地图预览弹窗（左键寻路 / 右键传送）" },
-  { file: "war-soul.jpg",      title: "战魂系统（37 阶成长线）" },
-  { file: "border_bg.jpg",     title: "装备品质边框与详情背景动画" },
-  { file: "mall.jpg",          title: "商城（全部装备上架，卡片网格分页）" }
+  { file: "login.jpg",         title: "登录：账号 / 密码 / 区服，浏览器即开即玩" },
+  { file: "role-select.jpg",   title: "角色选择与创建：多角色立在石台上，点职业查看信息" },
+  { file: "game.jpg",          title: "游戏主界面：战斗、背包与地面掉落光柱" },
+  { file: "combat.jpg",        title: "多人同屏战斗与技能特效" },
+  { file: "skill.jpg",         title: "技能列表：冷却 / 耗蓝 / 技能说明一栏看清" },
+  { file: "skill-warrior.jpg", title: "技能详情：战士「十步一杀」" },
+  { file: "skill-mage.jpg",    title: "技能详情：法师「流星火雨」" },
+  { file: "bag.jpg",           title: "背包与快捷技能格" },
+  { file: "item-tip.jpg",      title: "物品悬浮详情：属性、品质与价格" },
+  { file: "equip-detail.jpg",  title: "装备详情：品质边框、背景动画与属性面板" },
+  { file: "mall.jpg",          title: "商城：全部装备自动上架，卡片分页浏览" },
+  { file: "mall-detail.jpg",   title: "商城商品详情：买前看属性，买后入背包" },
+  { file: "title.jpg",         title: "称号系统：34 阶成长线，解锁即顶在头顶" },
+  { file: "teleport.jpg",      title: "地图传送官：按等级分组的大陆传送" },
+  { file: "small-map.jpg",     title: "小地图预览弹窗：左键寻路 / 右键传送" }
 ];
 
 /* ---------- 渲染画廊 ---------- */

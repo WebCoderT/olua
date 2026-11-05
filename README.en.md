@@ -38,13 +38,29 @@ admin (React)    ─┘      ↑ the only hand-written place for APIs
 
 ## Screenshots
 
-![Login](website/assets/img/login.jpg)
+<p align="center">
+  <img src="website/assets/img/login.jpg" width="49%" alt="Login: account / password / server" />
+  <img src="website/assets/img/role-select.jpg" width="49%" alt="Character select and creation" />
+</p>
+<p align="center">
+  <img src="website/assets/img/game.jpg" width="49%" alt="In-game: combat, bag and loot beams" />
+  <img src="website/assets/img/combat.jpg" width="49%" alt="Multi-player combat and skill effects" />
+</p>
+<p align="center">
+  <img src="website/assets/img/equip-detail.jpg" width="49%" alt="Equipment detail: quality frame and stats" />
+  <img src="website/assets/img/mall.jpg" width="49%" alt="Mall: every equipment listed" />
+</p>
 
-![Character select and creation](website/assets/img/role_selector.jpg)
+**Admin console** (ops backend, runs in the browser):
 
-![In-game interface](website/assets/img/game.jpg)
+<p align="center">
+  <img src="website/assets/img/admin-dashboard.jpg" width="49%" alt="Admin overview: accounts, roles, online, growth" />
+  <img src="website/assets/img/admin-align.jpg" width="49%" alt="Admin equipment alignment: 8-direction frames" />
+</p>
 
-> The screenshots cover login / character select / single-player combat. Multi-player on the same map (players seeing each other's appearance and HP, kill and action sync), different equipment appearance combos, and the admin console are not pictured yet — run the project yourself to see them.
+> Covers login / character select / combat / equipment / mall and the admin console. For more in-game
+> screens (skills, titles, teleport, mini-map), see the [website](https://github.com/WebCoderT/olua/tree/master/website)
+> gallery, or run the project yourself.
 
 ## Quick start
 

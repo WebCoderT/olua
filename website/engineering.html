@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>工程管理 · olua 开源项目</title>
+  <meta name="description" content="olua 的研发流程与质量门禁：issue → 分支 → PR → CI → squash；PR 只跑一次全套门禁；29 套 e2e、15 项跨端审计、资源清单锁与 AI 协作纪律。" />
+  <link rel="icon" href="assets/icons/favicon.ico" sizes="any" />
+  <link rel="icon" type="image/png" sizes="256x256" href="assets/icons/logo-256.png" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+
+  <header class="nav" id="nav">
+    <div class="nav__inner">
+      <a class="nav__brand" href="index.html">
+        <img class="nav__logo" src="assets/icons/logo-256.png" alt="olua logo" />
+        <span class="nav__name">olua</span>
+      </a>
+      <nav class="nav__links" id="navLinks">
+        <a href="index.html">首页</a>
+        <a href="project.html">项目概览</a>
+        <a href="architecture.html">数据流</a>
+        <a href="engineering.html" class="is-active">工程管理</a>
+        <a href="design.html">设计思路</a>
+        <a href="deploy.html">部署</a>
+        <a href="about.html">关于</a>
+      </nav>
+      <a class="nav__cta" href="http://game.yimw.cn" target="_blank" rel="noopener">在线试玩</a>
+      <button class="nav__toggle" id="navToggle" aria-label="打开菜单">
+        <span></span><span></span><span></span>
+      </button>
+    </div>
+  </header>
+
+  <section class="page-hero">
+    <p class="page-hero__crumb reveal">ENGINEERING · 工程管理</p>
+    <h1 class="page-hero__title reveal">让「改坏了」在合并前就红</h1>
+    <p class="page-hero__sub reveal">代码是 AI 写的，所以门禁不能靠自觉</p>
+  </section>
+
+  <nav class="anchor-bar reveal">
+    <a href="#loop">研发流程</a>
+    <a href="#ci">CI 门禁</a>
+    <a href="#layers">测试分层</a>
+    <a href="#audits">15 项审计</a>
+    <a href="#resources">资源分发</a>
+    <a href="#ai">AI 协作</a>
+  </nav>
+
+  <!-- ========== 研发流程 ========== -->
+  <section class="section" id="loop">
+    <div class="section__head reveal">
+      <p class="eyebrow eyebrow--center">WORKFLOW</p>
+      <h2 class="section__title">一条改动的完整路径</h2>
+      <p class="section__sub">从 issue 到 master，中间只有一道门，但那道门必须绿</p>
+    </div>
+
+    <div class="flow reveal">
+      <div class="flow__step">
+        <div class="flow__num">01</div>
+        <div class="flow__body">
+          <h4>先有 issue</h4>
+          <p>要解决什么、验收标准是什么，写在 GitHub issue 里。改完 PR 描述带上<b>关联 issue 号</b>；如果这次改动真的关闭了它，就写 <code>Closes #n</code>。</p>
+          <p>写清「关联」和「关闭」的区别——项目里曾经有一批已经合并的 issue 因为只写了「关联」，在列表里挂了很久。</p>
+        </div>
+      </div>
+      <div class="flow__step">
+        <div class="flow__num">02</div>
+        <div class="flow__body">
+          <h4>分支名带类型和 issue 号</h4>
+          <p><code>fix/670-ai-drop-dead-target</code>、<code>feat/722-soak-point-server</code>。
+            从 master 拉出，一个分支只做一件事；跨端的改动也放同一个分支，避免「服务端进了、客户端没进」的中间态。</p>
+        </div>
+      </div>
+      <div class="flow__step">
+        <div class="flow__num">03</div>
+        <div class="flow__body">
+          <h4>本地先跑定向回归</h4>
+          <p><code>make test-changed</code> 只跑这次改动碰到的模块对应的测试 —— 比全量快一个数量级，够用来判断「有没有当场改坏」。</p>
+          <div class="flow__io"><span>make check</span><span>make test-changed</span></div>
+        </div>
+      </div>
+      <div class="flow__step">
+        <div class="flow__num">04</div>
+        <div class="flow__body">
+          <h4>PR 触发全套 CI</h4>
+          <p>静态半边 + 29 套 e2e 分 4 片并行。<b>只跑一次</b>：PR 的 CI 跑的是 <code>refs/pull/N/merge</code>（master + 本次改动），squash 之后 master 的树与它完全相同，再跑一遍测不到新东西。</p>
+          <p>所以直接 push master 是不受门禁保护的 —— 规则是「别那么干」。</p>
+        </div>
+      </div>
+      <div class="flow__step">
+        <div class="flow__num">05</div>
+        <div class="flow__body">
+          <h4>绿了再 squash</h4>
+          <p>合并方式固定 squash：master 上一条改动一个提交，回滚就是 revert 一条。合并后不再跑 CI，直接进发布流程。</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="takeaway reveal">
+      <b>为什么分支模型这么轻？</b>没有 develop、没有 release 分支、不做 code review 轮次 ——
+      因为这里的「另一位开发者」是 AI，评审的价值低于自动化检查。省下的流程成本全部投到门禁上。
+    </div>
+  </section>
+
+  <!-- ========== CI ========== -->
+  <section class="section section--alt" id="ci">
+    <div class="section__head reveal">
+      <p class="eyebrow eyebrow--center">CI</p>
+      <h2 class="section__title">一次 PR，五份工作</h2>
+      <p class="section__sub">一份静态、四片 e2e，全部并行</p>
+    </div>
+
+    <div class="chain reveal">
+      <div class="chain__node chain__node--src">
+        <b>static</b>
+        <span>客户端 tsc<br />管理端构建<br />15 项审计<br />服务端编译</span>
+      </div>
+      <div class="chain__arrow">＋</div>
+      <div class="chain__node">
+        <b>e2e · shard 0</b>
+        <span>按实测耗时<br />贪心装箱</span>
+      </div>
+      <div class="chain__node">
+        <b>e2e · shard 1</b>
+        <span>重的先放<br />丢给最轻的一片</span>
+      </div>
+      <div class="chain__node">
+        <b>e2e · shard 2</b>
+        <span>清单派生自<br />package.json</span>
+      </div>
+      <div class="chain__node">
+        <b>e2e · shard 3</b>
+        <span>fail-fast 关闭<br />一次看全部失败</span>
+      </div>
+    </div>
+
+    <div class="prose reveal" style="margin-top:36px;">
+      <h3>分片清单不写在 CI 文件里</h3>
+      <p>套件清单<b>派生自 <code>server/package.json</code> 的 <code>test:e2e*</code> 脚本</b>，新增一套 e2e 自动进 CI。
+        之前是手写清单，漏了三套（管理端邮件、邮件过期、UI 特效），谁都没发现 ——
+        漏跑不会红，只会让「以为测过了」变成事实。</p>
+
+      <h3>哪些路径不触发 CI</h3>
+      <p>纯文档、记忆、设计稿、官网改动走 <code>paths-ignore</code> 直接不跑：
+        改 <code>.md</code> 不可能让代码变坏，让它在队列里排十分钟没有意义。</p>
+
+      <h3>为什么客户端单测不上 CI</h3>
+      <p>有几套客户端测试断言 <code>assets/resources/</code> 下的真实素材（图集、帧序列、怪物帧 <code>.meta</code>）。
+        素材体积大、有意不入库，干净 clone 上这些断言不可能成立。
+        所以客户端单测是<b>本地专属</b>；CI 上只跑客户端类型检查（Cocos 的 <code>cc.d.ts</code> 已 vendoring 进仓库，不需要编辑器）。</p>
+    </div>
+
+    <div class="callout callout--blood reveal" style="max-width:880px;margin:22px auto 0;">
+      <b>门禁清单只有一份。</b>CI 文件只调三个 make 目标（<code>ci-static</code> / <code>server-install-ci</code> / <code>server-e2e-shard</code>），
+      顺序和内容写在 Makefile 里 —— 本机 <code>make ci</code> 跑的是同一套串行版，两边不会漂。
+    </div>
+  </section>
+
+  <!-- ========== 测试分层 ========== -->
+  <section class="section" id="layers">
+    <div class="section__head reveal">
+      <p class="eyebrow eyebrow--center">TESTING</p>
+      <h2 class="section__title">五层，各管一段</h2>
+      <p class="section__sub">越往下越慢，越往下越接近真实运行</p>
+    </div>
+
+    <div class="prose reveal">
+      <table>
+        <thead>
+          <tr><th>层</th><th>跑什么</th><th>规模</th><th>拦得住什么</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><b>类型检查</b></td>
+            <td><code>make client-check</code> · <code>admin build</code> · <code>server build</code></td>
+            <td>三端全量</td>
+            <td>契约改了没跟着改、字段名拼错</td>
+          </tr>
+          <tr>
+            <td><b>静态审计</b></td>
+            <td><code>make audit</code>（15 个脚本）</td>
+            <td>全仓扫描</td>
+            <td>越界引用、手改生成物、硬编码、路径不存在</td>
+          </tr>
+          <tr>
+            <td><b>客户端单测</b></td>
+            <td><code>make client-test</code>（本地专属）</td>
+            <td>纯函数为主</td>
+            <td>背包整理、伤害公式、坐标换算</td>
+          </tr>
+          <tr>
+            <td><b>服务端 e2e</b></td>
+            <td><code>make server-verify</code></td>
+            <td><b>29 套</b>，每套起真服务 + 真库</td>
+            <td>接口行为、权限、并发、存档一致性</td>
+          </tr>
+          <tr>
+            <td><b>人工验收</b></td>
+            <td>跑起来看</td>
+            <td>—</td>
+            <td>动画、位置、手感、观感</td>
+          </tr>
+        </tbody>
+      </table>
+      <p>e2e 不是 mock 出来的：每套都真的 spawn 一个服务端进程、真的建一个临时 SQLite 库、真的发 HTTP / WS 请求。
+        代价是慢（所以分片），收益是「跑过就是真的跑过」。</p>
+    </div>
+
+    <div class="split reveal" style="margin-top:26px;">
+      <div class="split__col split__col--good">
+        <h4>测试锁什么</h4>
+        <ul>
+          <li>字段格式：类型、长度、取值范围</li>
+          <li>行为：调这个接口会发生什么</li>
+          <li>权限：谁能调、谁不能</li>
+          <li>幂等：同一个请求发两次</li>
+        </ul>
+      </div>
+      <div class="split__col split__col--bad">
+        <h4>测试不锁什么</h4>
+        <ul>
+          <li>具体数值：运营随时会改</li>
+          <li>动画帧率、尺寸、坐标、颜色</li>
+          <li>界面元素的位置与层级</li>
+          <li>文案措辞</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="takeaway reveal">
+      <b>「显示效果不写断言」是一条明确的纪律。</b>这类断言只会因为正常调配置而红，
+      真出错（错位、太小、没播）反而抓不到。可留的只有三样：素材存在性（缺文件 = 静默不播）、
+      代码执行顺序（帧装载完再藏站立帧）、结构接线（按钮有没有绑事件）。
+    </div>
+  </section>
+
+  <!-- ========== 15 项审计 ========== -->
+  <section class="section section--alt" id="audits">
+    <div class="section__head reveal">
+      <p class="eyebrow eyebrow--center">AUDITS</p>
+      <h2 class="section__title">15 个守点</h2>
+      <p class="section__sub">每一条都对应一次真实踩过的坑</p>
+    </div>
+
+    <div class="caps caps--3 reveal">
+      <article class="cap">
+        <div class="cap__head"><h3>契约与权威</h3><span class="cap__count">7 项</span></div>
+        <ul>
+          <li><b>生成物一致性</b> —— 接口文件必须是生成的，手改或忘生成都红</li>
+          <li><b>接口地址硬编码</b> —— 地址与请求各有唯一出口</li>
+          <li><b>快照契约</b> —— 客户端「要什么」与「发什么」是同一张清单，缺段抛错而非静默跳过</li>
+          <li><b>数据权威</b> —— 代码里不允许存在第二份数据</li>
+          <li><b>世界权威</b> —— 怪物生成与掉落只认服务端</li>
+          <li><b>角色存档边界</b> —— 服务端独占字段，客户端推整份存档也改不动</li>
+          <li><b>服务端内部边界</b> —— 跨模块 import 只走白名单边</li>
+        </ul>
+      </article>
+
+      <article class="cap">
+        <div class="cap__head"><h3>口径与一致性</h3><span class="cap__count">5 项</span></div>
+        <ul>
+          <li><b>地图原点</b> —— 世界坐标与 TMX 坐标只差一次 y 取反，错一处 NPC 全体偏半张图</li>
+          <li><b>资源引用</b> —— 代码里写的每个资源路径都要在磁盘上真存在</li>
+          <li><b>装备对齐清单</b> —— 管理端派生的 JSON 与客户端配置一致</li>
+          <li><b>配置外泄</b> —— 位置、颜色、时长、概率、文案不许写进逻辑</li>
+          <li><b>部署接线</b> —— nginx 上游名 = compose 服务名；DB_PATH 必须落在卷里</li>
+        </ul>
+      </article>
+
+      <article class="cap">
+        <div class="cap__head"><h3>表现与构建</h3><span class="cap__count">3 项</span></div>
+        <ul>
+          <li><b>UI 点击穿透</b> —— touch 通道与 mouse 通道的命中归属不能互相挡</li>
+          <li><b>管理端界面一致性</b> —— 页头、弹窗、卡片、字段标签不许各写一份</li>
+          <li><b>迭代器展开</b> —— babel loose 下 <code>[...map.values()]</code> 会被吞掉</li>
+        </ul>
+      </article>
+    </div>
+
+    <div class="takeaway reveal">
+      <b>为什么用静态扫描而不是写更多测试？</b>这些问题的共同点是「能出图、能跑、不报错」——
+      地图偏半张、资源静默空白、生成物被手改，全都不会让任何测试变红。
+      静态扫描比测试便宜，而且能一次性覆盖全仓，适合守这种「约定类」的错误。
+    </div>
+  </section>
+
+  <!-- ========== 资源分发 ========== -->
+  <section class="section" id="resources">
+    <div class="section__head reveal">
+      <p class="eyebrow eyebrow--center">ASSETS</p>
+      <h2 class="section__title">素材不进版本库，但要能锁住</h2>
+      <p class="section__sub">清单 + Release 分卷，多人多机保持一致</p>
+    </div>
+
+    <div class="prose reveal">
+      <p><code>client/assets/resources/</code> 体积大，有意不进 Git。但「不进库」不等于「不管」——
+        仓库里提交一份 <code>resources.manifest.json</code>，记录每个文件的 <b>sha1 + 大小</b>，
+        连 <code>.meta</code> 一起记（Cocos 的 uuid 绑在 meta 上，漏了 meta 等于素材全断链）。</p>
+
+      <div class="cmd">make resources-verify            <i># 拉代码后先跑：本地资源 vs 清单</i>
+make resources-download VERSION=x <i># 不一致或新机器：下载分卷、解压、自动校验</i>
+
+<i># 改完素材的人发布：</i>
+make resources-manifest → make resources-pack → make resources-upload</div>
+
+      <p>约定是<b>先合并带新清单的 PR，再上传 Release</b>。反过来的话，别人拉到的清单指向一个还不存在的包。</p>
+    </div>
+  </section>
+
+  <!-- ========== AI 协作 ========== -->
+  <section class="section section--alt" id="ai">
+    <div class="section__head reveal">
+      <p class="eyebrow eyebrow--center">AI COLLABORATION</p>
+      <h2 class="section__title">AI 写代码，人只提需求与验收</h2>
+      <p class="page-hero__sub reveal" style="margin-top:10px;">这是前提，也是所有工程约束的由来</p>
+    </div>
+
+    <div class="prose reveal">
+      <p>仓库里每一行代码都是 AI 写的。人做的事只有三件：<b>提需求、看效果、说不</b>。
+        这个前提直接决定了两件事 —— 门禁必须自动化，知识必须写下来。</p>
+
+      <h3>知识沉淀跟着仓库走</h3>
+      <p>项目里有三处长期记忆，全部随代码提交：</p>
+      <ul>
+        <li><code>.workbuddy/skills/</code> —— 分端技能：服务端架构约定、管理端接口规范、客户端引擎坑、部署流程、地图制作。新会话读一遍就知道边界在哪。</li>
+        <li><code>.workbuddy/memory/</code> —— 按日的工作日志与长期索引。记的是「为什么这么做」和「上次这么改踩了什么」，不是「改了什么文件」。</li>
+        <li>各端 <code>README.md</code> / <code>FAQ.md</code> —— 面向人的说明，也是 AI 每次改动的输入。</li>
+      </ul>
+      <p>这三处的分工是刻意的：<b>技能写「怎么做」，日志写「为什么」，README 写「是什么」</b>。
+        混在一起会变成没人读的长文档。</p>
+
+      <h3>几条被写死的纪律</h3>
+    </div>
+
+    <div class="decision reveal">
+      <div class="decision__head"><span class="decision__no">R-01</span><h3>测试锁字段格式与行为，不锁数值</h3></div>
+      <div class="decision__body">
+        <div class="decision__cell">
+          <h4>为什么</h4>
+          <p>运营随时在管理端调数值。断言里写死「攻击力 = 137」，下一次调平衡就红一片。</p>
+        </div>
+        <div class="decision__cell">
+          <h4>改成什么</h4>
+          <p>断言「是正整数」「在范围内」「改了之后读回来一致」。数值本身交给运营。</p>
+        </div>
+        <div class="decision__cell decision__cell--cost">
+          <h4>代价</h4>
+          <p>数值算错（比如倍率接反）测不出来，得靠人眼看。</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="decision reveal">
+      <div class="decision__head"><span class="decision__no">R-02</span><h3>显示效果一律人眼看，不写断言</h3></div>
+      <div class="decision__body">
+        <div class="decision__cell">
+          <h4>为什么</h4>
+          <p>动画位置、尺寸、帧率、层级全是会正常变化的调参项。断言它们等于给自己埋雷。</p>
+        </div>
+        <div class="decision__cell">
+          <h4>保留什么</h4>
+          <p>只剩素材存在性、代码执行顺序、结构接线。曾据此删掉 4 个纯几何测试文件。</p>
+        </div>
+        <div class="decision__cell decision__cell--cost">
+          <h4>代价</h4>
+          <p>错位、太小、没播这类问题只能靠截图和实机发现，回归靠人。</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="decision reveal">
+      <div class="decision__head"><span class="decision__no">R-03</span><h3>假绿比漏检更可怕</h3></div>
+      <div class="decision__body">
+        <div class="decision__cell">
+          <h4>为什么</h4>
+          <p>一条永远通过的断言，会让所有人误以为这块有人看着。比没测更危险。</p>
+        </div>
+        <div class="decision__cell">
+          <h4>怎么做</h4>
+          <p>审计断言扫到的模块数；错误必须精确匹配文案；缓存 TTL 压到 0 让测试真的走链路。</p>
+        </div>
+        <div class="decision__cell decision__cell--cost">
+          <h4>代价</h4>
+          <p>测试更脆，改动时常要一起改断言；但每次红都指向真问题。</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="decision reveal">
+      <div class="decision__head"><span class="decision__no">R-04</span><h3>新增一张表要登记四处</h3></div>
+      <div class="decision__body">
+        <div class="decision__cell">
+          <h4>为什么</h4>
+          <p>配置表要进快照、进 API 文档、进边界白名单、进快照契约。漏一处不会报错，只会「管理端看不到新行」。</p>
+        </div>
+        <div class="decision__cell">
+          <h4>怎么做</h4>
+          <p>清单写进技能文档，加表时照着勾；漏了由审计脚本红。</p>
+        </div>
+        <div class="decision__cell decision__cell--cost">
+          <h4>代价</h4>
+          <p>加表比「只写 DDL」麻烦，但省掉了线上静默少数据的排查。</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="takeaway reveal">
+      <b>一句话总结这套工程管理：</b>不假设执行者会记得任何事。
+      能写成脚本的就写成脚本，写不成脚本的就写进技能文档，两者都做不到的才留给人眼。
+    </div>
+
+    <p style="text-align:center;margin-top:44px;" class="reveal">
+      <a class="btn btn--ghost" href="design.html">看这些约束背后的取舍 →</a>
+    </p>
+  </section>
+
+  <footer class="footer">
+    <img class="footer__logo" src="assets/icons/logo-256.png" alt="" aria-hidden="true" />
+    <p>olua · 免费开源的 2D 即时战斗项目 · 任何人都可以自己部署</p>
+    <nav class="footer__nav">
+      <a href="index.html">首页</a><span>·</span>
+      <a href="project.html">项目概览</a><span>·</span>
+      <a href="architecture.html">数据流</a><span>·</span>
+      <a href="engineering.html">工程管理</a><span>·</span>
+      <a href="design.html">设计思路</a><span>·</span>
+      <a href="deploy.html">部署</a><span>·</span>
+      <a href="about.html">关于</a>
+    </nav>
+    <p class="footer__health">健康游戏忠告：抵制不良游戏，拒绝盗版游戏。注意自我保护，谨防受骗上当。适度游戏益脑，沉迷游戏伤身。合理安排时间，享受健康生活。</p>
+    <p class="footer__copy">© 2026 olua · 基于 MIT 协议开源 · <a href="https://github.com/WebCoderT/olua" target="_blank" rel="noopener">GitHub</a> / <a href="https://gitee.com/putiwan/olua" target="_blank" rel="noopener">Gitee</a></p>
+  </footer>
+
+  <script src="js/main.js"></script>
+</body>
+</html>
