@@ -8,6 +8,16 @@
 A 2D character-growth and equipment prototype built on Cocos Creator 3.8.7, together with a NestJS server and a React admin console:
 the three sides run login, character creation, growth, equipment, map exploration and combat end to end.
 
+**Free, open source, and anyone can deploy their own copy.** There is a live instance:
+
+| URL | What it is |
+| --- | --- |
+| <https://yimw.cn> | Project site (overview / data flow / engineering / design notes / deployment) |
+| <https://game.yimw.cn> | Game client (web build, playable right away) |
+| <https://admin.yimw.cn> | Admin console |
+
+To run your own copy, see [`docs/deploy.md`](docs/deploy.md) and the [deployment page](https://yimw.cn/deploy.html).
+
 The primary repository lives on **GitHub** (`github.com/WebCoderT/olua`); [putiwan/olua](https://gitee.com/putiwan/olua) on Gitee is a read-only sync mirror —
 code, issues, PRs and CI all happen on GitHub (the mirror syncs periodically, may lag, and GitHub is authoritative).
 

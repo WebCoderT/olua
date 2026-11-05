@@ -8,6 +8,16 @@
 一个基于 Cocos Creator 3.8.7 的 2D 角色成长与装备玩法原型，配套 NestJS 服务端与 React 管理后台：
 三端跑通登录、建号、成长、装备、地图探索与战斗。
 
+**免费、开源，任何人都能自己部署一套**。线上有可访问的实例：
+
+| 地址 | 是什么 |
+| --- | --- |
+| <https://yimw.cn> | 官网（项目概览 / 数据流 / 工程管理 / 设计思路 / 部署） |
+| <https://game.yimw.cn> | 游戏客户端（Web 版，打开即玩） |
+| <https://admin.yimw.cn> | 运营后台 |
+
+想要自己的服务器上跑一套，看 [`docs/deploy.md`](docs/deploy.md) 与 [官网部署页](https://yimw.cn/deploy.html)。
+
 主仓在 **GitHub**（`github.com/WebCoderT/olua`），Gitee 上的 [putiwan/olua](https://gitee.com/putiwan/olua) 是只读同步镜像：
 代码、issue、PR、CI 都只在 GitHub 上进行（镜像定期同步，有延迟，以 GitHub 为准）。
 
