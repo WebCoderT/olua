@@ -1,6 +1,6 @@
 ---
 name: cocos-frame-animation-preload
-description: Cocos Creator 3.x 里给「帧动画驱动」的游戏做资源预加载、缓存与播放，解决几类典型症状：进图/切场景卡顿（几十上百个节点各自 resources.loadDir 同一个目录、各自把几百帧切成几十个 AnimationClip）、一部分外观进图后一段时间才出现甚至不出现、以及 TexturePacker 图集（plist）来源的帧动画播放异常（帧序乱/缺帧/速度不对/特效不出现）。含：帧序列缓存 + 动画片段跨节点共用（AnimationClip 可共享、AnimationState 每节点独立）、从 TMX 原文推导"这张图要用哪些动画目录"、按目录并发池预加载与进度上报（过渡场景 Loading）、组件复用（同帧 destroy+addComponent 会出现两个组件）、Animation.clips 清空语义、场景切换 autoReleaseAssets 对 JS 缓存的影响；图集来源另有 4 个坑（帧名带扩展名导致 Number("00000.png")=NaN 排序静默失效、同一动画分页 @0/@1 需用 getDirWithPath 同步索引合并、帧号是组号+序号按数值排、sourceSize 即美术世界尺寸故用 RAW+trim=false）、播放速度语义（createWithSpriteFrames 第二参是帧率 sample；动作动画总时长 = 1/speedRate；本类 play 系列"时长秒"与 playLoopWithFrames"每秒帧数"的区别与踩过的 bug）、技能特效的一次性播放与挂在自己/目标身上的接线、**常驻循环装饰动画（装备品质边框：几十个格子共用同一图集的 clip 缓存、多尺寸家族 contain 适配、未裁剪但 offset 非 0 的图集必须 trim=true 否则整帧跑偏）**。触发场景：用户提到"首次加载很卡/进图卡顿"、"怪物/NPC/装备外观没加载出来"、"预加载地图资源"、"预加载帧动画"、"loadDir 重复加载"、"切场景资源重新加载"、"Loading 进度"、"技能特效/特效播放速度"、"帧动画顺序不对/不播放"、"plist 图集"、"装备边框/品质光效/格子发光边框"、"边框位置不对/偏移/跑出格子"、"边框显示成斜的/变形"。
+description: Cocos Creator 3.x 里给「帧动画驱动」的游戏做资源预加载、缓存与播放，解决几类典型症状：进图/切场景卡顿（几十上百个节点各自 resources.loadDir 同一个目录、各自把几百帧切成几十个 AnimationClip）、一部分外观进图后一段时间才出现甚至不出现、以及 TexturePacker 图集（plist）来源的帧动画播放异常（帧序乱/缺帧/速度不对/特效不出现）。含：帧序列缓存 + 动画片段跨节点共用（AnimationClip 可共享、AnimationState 每节点独立）、按**服务端快照的点位**（`maps.npcs` / `spawnAreas`，不再读 TMX 对象组）推导"这张图要用哪些动画目录"、装饰类（边框 / 详情背景）挪出关键路径后台预载、按目录并发池预加载与进度上报（过渡场景 Loading）、组件复用（同帧 destroy+addComponent 会出现两个组件）、Animation.clips 清空语义、场景切换 autoReleaseAssets 对 JS 缓存的影响；图集来源另有 4 个坑（帧名带扩展名导致 Number("00000.png")=NaN 排序静默失效、同一动画分页 @0/@1 需用 getDirWithPath 同步索引合并、帧号是组号+序号按数值排、sourceSize 即美术世界尺寸故用 RAW+trim=false）、播放速度语义（createWithSpriteFrames 第二参是帧率 sample；动作动画总时长 = 1/speedRate；本类 play 系列"时长秒"与 playLoopWithFrames"每秒帧数"的区别与踩过的 bug）、技能特效的一次性播放与挂在自己/目标身上的接线、**常驻循环装饰动画（装备品质边框：几十个格子共用同一图集的 clip 缓存、多尺寸家族 contain 适配、未裁剪但 offset 非 0 的图集必须 trim=true 否则整帧跑偏）**。触发场景：用户提到"首次加载很卡/进图卡顿"、"怪物/NPC/装备外观没加载出来"、"预加载地图资源"、"预加载帧动画"、"loadDir 重复加载"、"切场景资源重新加载"、"Loading 进度"、"技能特效/特效播放速度"、"帧动画顺序不对/不播放"、"plist 图集"、"装备边框/品质光效/格子发光边框"、"边框位置不对/偏移/跑出格子"、"边框显示成斜的/变形"。
 agent_created: true
 ---
 
@@ -67,18 +67,32 @@ const animate = node.getComponent(Animation) ?? node.addComponent(Animation);
 
 ## 四、"这张图要用哪些动画目录"怎么推导（别硬编码）
 
-从地图对象组读编号 → 查配置表拿资源目录。**不需要地图节点**：直接读 TMX 原文即可（预加载阶段还没有地图节点）：
+**本项目口径（#672 起）：从服务端快照的活动点位读，不读 TMX。** 地图里的 NPC 与刷怪区是运营在管理端
+画的、存在 `map_npcs` / `map_spawn_areas`，快照里就是 `maps.get(id).npcs` 与 `.spawnAreas` ——
+「后台刚放一个 NPC，下次进图就该预加载到它」这件事，读 TMX 的静态对象组永远做不到。
 
 ```ts
-const xml = mapAsset.tmxXmlStr ?? "";                 // TiledMapAsset 上就有，编辑器导入时原样保留
-readTiledObjectsFrom(xml, "npc", "objects")           // 见 skill cocos-tiledmap-objectgroup：从 XML 解析对象
-  .filter((o) => o.objectClass === "npc")             // 复活点没有外观，按对象类过滤
-  .forEach((o) => tasks.push({ dir: npcs.get(`${o.properties.id}`).src, kind: "frames" }));
-readTiledObjects(xml, "monster")
-  .forEach((o) => tasks.push({ dir: monsters.get(`${o.properties.id}`).out, kind: "monster", speedRate: 怪物.speedRate }));
+const config = maps.get(mapId);                       // 快照没到就 warn 一次并跳过（进图照样能玩，走异步补加载）
+for (const point of config.npcs) {
+  const npc = npcs.get(point.npcId);
+  if (npc?.src) tasks.push({ dir: npc.src, kind: "frames" });
+}
+for (const area of config.spawnAreas) {               // monsterKey 就是怪物编号；同 key 多区靠去重
+  const resource = monsterResourceOf(area.monsterKey);
+  if (resource?.out) tasks.push({ dir: resource.out, kind: "monster", speedRate: resource.speedRate });
+}
 ```
 
-角色穿戴同理：`role.equipments.cloth?.out || 默认外观`、`role.equipments.weapon?.out`（空串表示这件装备没有外观，别拿空串去 loadDir）。
+角色穿戴同理：`role.equipments.cloth?.out || 默认外观`、`role.equipments.weapon?.out`（空串表示这件装备没有外观，别拿空串去 loadDir）；
+时装优先于装备衣服（`getFashionOut(fashionCloth) || 装备衣服 || 性别默认`），否则穿时装进图第一帧是旧衣服。
+
+**装饰类不进关键路径**：装备边框图集与详情背景帧序列只在进图**之后**的背包 / 悬停详情里用 ——
+`void this.preloadBorders()` 后台预载不 await，换来首进游戏少等 40+ 个目录；光柱例外（掉落物落场就要显示）。
+
+**历史做法（已下架，别再照抄）**：以前是「读 TMX 原文的对象组 → 查配置表拿目录」。对象组已被
+`tools/strip-map-objects.cjs` 整组删掉，客户端也不再解析 TMX —— `tools/audit-map-origin.cjs`
+会拦 `getObjectGroup(` / `TiledObjects` / `tiledGroupNames` 回来。
+
 **用途标签（NPC / 怪物 / 衣服 / 武器）与地图、配置必须一一对应**，漏一个目录，那部分外观就退回"进图异步加载"。
 
 ## 五、预加载编排（进度 + 并发）
@@ -104,8 +118,7 @@ await PreloadManager.preloadGame(mapSrc, role, (ratio, tip) => setProgress(50 + 
 
 ## 七、验证清单
 
-- 目录清单：脚本化核对"地图对象组里的每个 id 都能查到配置，且目录真实存在"，别靠肉眼。
-  用 Python/Node 直接读 `*.tmx` + `configs/*.ts` 对一遍，几秒就能发现漏配或目录改名。
+- 目录清单：脚本化核对"快照里每个点位（`maps.*.npcs[].npcId` / `spawnAreas[].monsterKey`）都能查到配置，且目录真实存在"，别靠肉眼。
 - 同名/同目录复用：同一目录的多个节点应共用同一批 clip（打印 clip 数量或观察内存）。
 - 速度倍率进缓存键：`动画表种类 | 目录 | 整套 speedRate`（本类做法整包拼键），否则改了倍率还在播旧片段。
 - 断言"进图后第一帧就完整"：进图瞬间截图，怪物/NPC/角色外观应全部有图。

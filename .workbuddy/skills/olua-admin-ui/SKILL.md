@@ -1,6 +1,6 @@
 ---
 name: olua-admin-ui
-description: olua 管理端（admin/，React 19 + Tailwind 4 + Vite）的**视觉与版式规范**，以及「把存量页面改到规范上」的迁移做法。核心心智模型：同一类东西必须长得一样（页头 / 卡片 / 弹窗 / 字段标签只许各有一个来源），一屏能看完的不要让人滚，要改的才给控件（只读用纯文本而不是灰掉的输入框）。涵盖：token 表（色板只用 slate/indigo/emerald/amber/rose，圆角三档，字阶三档，全局紧凑档：Card 默认 dense px-3.5 py-2 / py-3、Button px-3 py-1.5、控件 px-2.5 py-1.5、表格 px-3 py-2）、两档版式（列表档 gap-4 / 详情档 gap-3 + dense + 一屏不滚）、PageHeader（标题 + 说明 + 右侧操作 + 返回链接，替代三十处手抄 h1）、FilterBar 筛选条（**条件块内部上下结构：标签在上、控件在下；若干块横向排成一行**，右侧 ml-auto 放查询/重置，宽度一律给 Field width —— 因为 Input 自带 w-full）、Card 与 dense（只压内边距、不动层次）、Modal 四档宽度（sm/md/lg/xl，不许页面自己传 max-w-*）、Notice 提示条（amber/red/slate/emerald 四色，替代各页自造的 amber 卡片）、Field 字段与标签（默认上下结构，替代裸 span 标签）、表格 tableClass 系列、Badge tone、EmptyState/Spinner、components/entity 那套可视化实体组件（EntityPicker/EquipSlots/LevelLadder/BagGrid/SkillList，装备与物品一律「用图挑」而不是输 id）、只看不改成三件事（去掉 input/select、用纯文本、服务端仍权威）、守点 tools/audit-admin-ui.cjs（页面里禁止手写 fixed 遮罩 / 裸 h1 / 自造卡片 / 裸 span 标签）、迁移手册（页头→PageHeader、弹窗→Modal、筛选区→FilterBar+Field、提示条→Notice、逐页核对）与验收命令（make admin-typecheck / admin-build / make audit + 真机 Chrome 逐路由截图量 scrollHeight）。触发场景：用户说"管理端风格统一""把页面风格改一下""照角色详情那套做""前端太乱""字体大小不一致""弹窗宽窄不一""两个页面长得不一样""抽个公共组件""页头统一""做成组件化""把这次改动做成技能""UI 规范""样式规范""设计系统""视觉规范""列表页和详情页版式""一屏看完""紧凑一点""筛选条件放一行""标签放输入框上面""只读展示""不要输入框"。注意：本技能只管**视觉与版式**，接口 / 权限 / 数据口径归 olua-admin。
+description: olua 管理端（admin/，React 19 + Tailwind 4 + Vite）的**视觉与版式规范**，以及「把存量页面改到规范上」的迁移做法。核心心智模型：同一类东西必须长得一样（页头 / 卡片 / 弹窗 / 字段标签只许各有一个来源），一屏能看完的不要让人滚，要改的才给控件（只读用纯文本而不是灰掉的输入框）。涵盖：token 表（色板只用 slate/indigo/emerald/amber/rose，圆角三档，字阶三档，全局紧凑档：Card 默认 dense px-3.5 py-2 / py-3、Button px-3 py-1.5、控件 px-2.5 py-1.5、表格 px-3 py-2）、两档版式（列表档 gap-4 / 详情档 gap-3 + dense + 一屏不滚）、PageHeader（标题 + 说明 + 右侧操作 + 返回链接，替代三十处手抄 h1）、FilterBar 筛选条（**条件块内部上下结构：标签在上、控件在下；若干块横向排成一行**，右侧 ml-auto 放查询/重置，宽度一律给 Field width —— 因为 Input 自带 w-full）、Card 与 dense（只压内边距、不动层次）、Modal 四档宽度（sm/md/lg/xl，不许页面自己传 max-w-*）、Notice 提示条（amber/red/slate/emerald 四色，替代各页自造的 amber 卡片）、Field 字段与标签（默认上下结构，替代裸 span 标签）、表格 tableClass 系列、Badge tone、EmptyState/Spinner、components/entity 那套可视化实体组件（EntityPicker/EquipSlots/LevelLadder/BagGrid/SkillList，装备与物品一律「用图挑」而不是输 id）、素材预览组件（GameFrame 首帧 / FrameAnimation plist 全帧循环：文档序播放、空帧阈值与客户端同值、共享 rAF、路径缓存，一律走 /game-resources 同源）、只看不改成三件事（去掉 input/select、用纯文本、服务端仍权威）、守点 tools/audit-admin-ui.cjs（页面里禁止手写 fixed 遮罩 / 裸 h1 / 自造卡片 / 裸 span 标签）、迁移手册（页头→PageHeader、弹窗→Modal、筛选区→FilterBar+Field、提示条→Notice、逐页核对）与验收命令（make admin-typecheck / admin-build / make audit + 真机 Chrome 逐路由截图量 scrollHeight）。触发场景：用户说"管理端风格统一""把页面风格改一下""照角色详情那套做""前端太乱""字体大小不一致""弹窗宽窄不一""两个页面长得不一样""抽个公共组件""页头统一""做成组件化""把这次改动做成技能""UI 规范""样式规范""设计系统""视觉规范""列表页和详情页版式""一屏看完""紧凑一点""筛选条件放一行""标签放输入框上面""只读展示""不要输入框"。注意：本技能只管**视觉与版式**，接口 / 权限 / 数据口径归 olua-admin。
 agent_created: true
 ---
 
@@ -112,6 +112,8 @@ cd .. && make audit    # 跨端审计，含 tools/audit-admin-ui.cjs
 | 任意内容弹窗 | `Modal` | `size`: `sm`/`md`/`lg`/`xl`，`footer`，Esc 与遮罩关闭 |
 | 确认危险操作 | `ConfirmDialog` | `confirmText` 写明动作（「确认删除」而非「确定」） |
 | 挑一个游戏实体 | `EntityPicker` | 见第八节 |
+| 看一眼素材 / 图集首帧 | `GameFrame` | `src`（走 `gameResUrl`）/ `ext`；带 `Lightbox` 可放大 |
+| 看**动起来**的图集 | `FrameAnimation` | 全帧循环播放，帧率与客户端同档（见第八点五节） |
 | 页面级提示 | `toastSuccess` / `toastError` | 不要自己 setState 一个横幅 |
 
 ### 筛选条：块内上下结构，整组一行
@@ -211,6 +213,24 @@ cd .. && make audit    # 跨端审计，含 tools/audit-admin-ui.cjs
 - **空值画虚线方块，不画「无图」占位** —— 后者看起来像资源缺失。
 - **选择器里文字必须能分辨同名项**：15 个装备变体在总表里同名，label 要取带前后缀的显示名，
   note 补「部位 · 等级」。
+
+## 八点五、素材预览：同源直读，播放口径必须与客户端一致（#732）
+
+`components/GameImage.tsx` + `components/FrameAnimation.tsx` 是**唯一**的素材读取层，页面与业务组件
+都不许自己拼 `/game-resources/...` 路径或自己 `new Image()`：
+
+- **同源**：生产走管理端 nginx 的 `/game-resources/` 反代 game 容器，开发走 `vite.config.ts` 的
+  `gameResources()` 中间件 —— **同一个 URL 前缀**，页面里不写环境分支。`fetch` 也只能出现在
+  审计白名单那几个文件里（`equipAlign/assets.ts` / `pages/audioSettings/assets.ts` 等）。
+- **首帧 vs 全帧**：`GameFrame` 用 `loadFirstFrame`（按名字排序取第一个非空帧，用于列表 / 选择器）；
+  装备边框、详情背景这类**动画素材**要看动起来的效果 → `FrameAnimation` 解析 plist 全部帧并按
+  **文档序**播放。Cocos 的 `SpriteAtlas.getSpriteFrames()` 就是这个顺序，客户端也不重排，
+  所以「页面上看到的顺序 = 游戏里的顺序」；帧名里的 `_0000` 序号是保证这一点的手段。
+- **空帧过滤阈值与客户端同值**（`BLANK_FRAME_MAX_AREA = 4`）：1×1 这类占位空图不过滤会夹空白闪帧，
+  看起来像「动画卡了一下」。
+- **一屏多个播放器不各起一条 `requestAnimationFrame`**：模块级一个共享节拍器，组件挂载订阅、
+  卸载退订，最后一个退订时停表；素材（plist 解析 + 图片解码）按路径缓存，翻页来回不打网络。
+- **trim 偏移按 `spriteSourceSize` 摆**，画布取全帧最大原始尺寸 —— 裁剪过的帧不会左右抖。
 
 ## 九、禁用清单（= `tools/audit-admin-ui.cjs` 的规则）
 

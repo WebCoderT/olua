@@ -7,7 +7,7 @@ agent_created: true
 # 把散落的 UI 位置/尺寸/图片地址收敛成统一配置（Cocos Creator 3.x 项目）
 
 适用场景：项目里 UI 常量散落——每个弹窗组件顶部一堆 `XXX_POSITION / XXX_SIZE`、各种 `new Vec2(...)` 直接写在
-组件里、图片路径以字符串字面量写在各处（`"common/popup-bg"`、`"create_role/bg_dialog"`），
+组件里、图片路径以字符串字面量写在各处（`"common/bg"`、`"create_role/bg_dialog"`），
 改一个界面要翻好几个文件。目标 = **一处可手改的配置 + 组件只引用**。
 
 ## 一、目标结构（本项目已验证的形态）
