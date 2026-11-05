@@ -1,6 +1,6 @@
 import { GameConfigApi } from "./Api";
 import type { EquipAlignList, EquipInAlignList, GameConfigSnapshot } from "./ApiModels";
-import { applyConfigSnapshot, applyEquipAlignRows, applyEquipInAlignRows } from "../../../configs/apply-snapshot";
+import { applyAppearanceSection, applyConfigSnapshot, applyEquipAlignRows, applyEquipInAlignRows } from "../../../configs/apply-snapshot";
 import { checkSnapshotContract, snapshotContractMessage } from "../../../configs/game-config";
 import type { SnapshotProblem } from "../../../configs/game-config";
 import { rebuildSkills } from "../../../configs/skill";
@@ -9,7 +9,8 @@ import { getText } from "../../../configs/texts";
 /**
  * 服务端配置快照加载器（#294 / #513 / #523 / #604）
  *
- * 进游戏拉 `gameConfig.snapshot` + `gameConfig.equipAlign` + `gameConfig.equipInAlign`，
+ * 进游戏拉 `gameConfig.snapshot` + `gameConfig.equipAlign` + `gameConfig.equipInAlign`
+ * + `gameConfig.equipmentAppearance`（#739），
  * 把管理端可改的配置覆写进本地 configs（见 configs/apply-snapshot）。设计要点：
  *
  * - **快照是硬依赖，缺了就进不去**（#604）：客户端那几份出厂表随 #603 逐域退场后，
@@ -20,11 +21,12 @@ import { getText } from "../../../configs/texts";
  *   · `network` —— 请求本身没成（服务端没起、断网、401…），下次进图重试；
  *   · `contract` —— 拿到了但缺段 / 形状不对（服务端代码 bug），逐条列出 key 与中文名。
  *   两类都**不置「已加载」**：一次抖动不该永久退化成空表。
- * - **快照只拉一次，两套几何每次进图都拉**（#513 / #523）：
+ * - **快照只拉一次，三套外观数据每次进图都拉**（#513 / #523 / #739）：
  *   快照十几张表、只跟版本有关，进程内重复拉纯浪费 RTT；
- *   而装备外观 / 内观几何是「人眼调一版、立刻要看效果」的东西，验收动作就是**退回选角再进图**
- *   （场景重载，JS 上下文不重来）。只拉一次的话，那种重进看不到新位置，
- *   会被当成「保存没生效」—— 33 行 / 31 行的小接口，每次进图拉一次不值得省。
+ *   而外观 / 内观几何、装备边框与详情背景的显示效果都是「人眼调一版、立刻要看效果」的东西，
+ *   验收动作就是**退回选角再进图**（场景重载，JS 上下文不重来）。只拉一次的话，那种重进看不到新位置，
+ *   会被当成「保存没生效」—— 这几个接口都只有几十行数据，每次进图拉一次不值得省。
+ *   （装备外观那段在快照里也有同名字段：那是首帧兜底与老客户端兼容，新鲜度以这个接口为准。）
  * - **内观几何还多一次「开弹窗就拉」**（#527）：外观看的是场景里的角色，重进图必然重画；
  *   而内观只在角色信息弹窗里出现，玩家保存完的第一反应是**再点开弹窗看一眼**，
  *   那时人还在同一张图里、场景没重载 —— 只靠进图拉一次就必然「看不到变化」。
@@ -35,8 +37,8 @@ import { getText } from "../../../configs/texts";
  *   但也绝不静默 —— 一个 404 会被当成「保存没生效」，日志里必须留证据。
  * - **去重并发**：同一次进图的重复调用共享同一个 Promise。
  *
- * 三个接口**并行**拉：串行会平白多两个 RTT，而这些 RTT 卡在「进游戏」的路径上。
- * 三者的失败互相独立 —— 内观挂了不影响外观，反之亦然（各自 catch 自己的）。
+ * 四个接口**并行**拉：串行会平白多几个 RTT，而这些 RTT 卡在「进游戏」的路径上。
+ * 四者的失败互相独立 —— 内观挂了不影响外观，外观效果挂了不影响任何一边（各自 catch 自己的）。
  */
 
 /** 配置加载结果（#604：调用方必须看 `ok`，别再「静默当成功」） */
@@ -54,15 +56,21 @@ let snapshotLoaded = false;
 let snapshotLoading: Promise<GameConfigLoadResult> | null = null;
 let alignLoading: Promise<void> | null = null;
 let inAlignLoading: Promise<void> | null = null;
+let appearanceLoading: Promise<void> | null = null;
 
 /**
- * 拉取并落库配置快照 + 外观几何 + 内观几何
+ * 拉取并落库配置快照 + 外观几何 + 内观几何 + 装备外观效果
  *
- * 不抛异常（几何那两路永不失败）；快照成没成看返回值。
+ * 不抛异常（后三路永不失败）；快照成没成看返回值。
  * 调用方在 `ok === false` 时应该**停住**，别继续构建游戏世界。
  */
 export async function loadGameConfig(): Promise<GameConfigLoadResult> {
-  const results = await Promise.all([loadSnapshotOnce(), loadAlignEveryEntry(), loadInAlignEveryEntry()]);
+  const results = await Promise.all([
+    loadSnapshotOnce(),
+    loadAlignEveryEntry(),
+    loadInAlignEveryEntry(),
+    loadAppearanceEveryEntry(),
+  ]);
   return results[0];
 }
 
@@ -92,6 +100,32 @@ function loadInAlignEveryEntry(): Promise<void> {
     inAlignLoading = null;
   }) as Promise<void>;
   return inAlignLoading;
+}
+
+/**
+ * 装备外观（边框 / 详情背景的映射与显示效果）：每次进图都拉（#739）
+ *
+ * 数据在快照的 `equipmentAppearance` 段里也有，但**快照进程内只拉一次** ——
+ * 运营在管理端「显示效果」工作台拖完位置，验收动作是退回选角再进图（场景重载、JS 上下文不重来），
+ * 只走快照就永远拿的是旧 effect，「保存没生效」与「口径不一致」长得一模一样。
+ * 与外观 / 内观几何同一取向（都是人眼调参数），所以也走「每次进图」这条路。
+ *
+ * 失败只 warn：沿用快照里的值（那本来是一份完整数据），不挡进游戏。
+ */
+function loadAppearanceEveryEntry(): Promise<void> {
+  if (appearanceLoading) return appearanceLoading;
+  appearanceLoading = GameConfigApi.equipmentAppearance({ silent: true })
+    .then((appearance) => {
+      applyAppearanceSection(appearance);
+    })
+    .catch((error: unknown) => {
+      // 留证据：404（服务端还是旧版本）会表现成「保存没生效」且日志空白
+      console.warn("[config] 装备外观（边框 / 背景效果）拉取失败，沿用快照里的值：", error);
+    })
+    .then(() => {
+      appearanceLoading = null;
+    }) as Promise<void>;
+  return appearanceLoading;
 }
 
 /**

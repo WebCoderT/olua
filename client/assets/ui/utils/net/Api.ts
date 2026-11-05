@@ -11,7 +11,7 @@
 import HttpClient from "./HttpClient";
 import type { RequestOptions } from "./HttpClient";
 import { ApiRoutes } from "./ApiRoutes";
-import type { Account, AchievementClaimResult, AchievementId, ActiveAnnouncement, ApplyGuild, AudioConfigList, AuthResult, BagOp, BagOpResult, CreateGuild, CreateReport, CreateRole, DrugUse, DrugUseResult, EquipAlignList, EquipInAlignList, FashionBuy, FashionBuyResult, FashionWear, FashionWearResult, GameConfigSnapshot, GameMailClaimAllQuery, GrowthUpgrade, GrowthUpgradeResult, GuildSummary, Health, LeaderboardPage, LeaderboardQuery, LeaderboardSelf, Login, MailBox, MailClaimAllResult, MailClaimResult, MallPurchase, MallPurchaseResult, MyAchievements, MyGuild, MyQuests, MySocial, NpcTalk, NpcTalkResult, QuestId, QuestSubmitResult, RealtimeTicket, Register, ReviewGuildApplication, ReviveResult, RoleDetail, RoleSummary, SaveRole, SellGoods, SellGoodsResult, SocialTarget, TransferGuild, UpdateGuildNotice, Zone } from "./ApiModels";
+import type { Account, AchievementClaimResult, AchievementId, ActiveAnnouncement, ApplyGuild, AudioConfigList, AuthResult, BagOp, BagOpResult, CreateGuild, CreateReport, CreateRole, DrugUse, DrugUseResult, EquipAlignList, EquipInAlignList, EquipmentAppearance, FashionBuy, FashionBuyResult, FashionWear, FashionWearResult, GameConfigSnapshot, GameMailClaimAllQuery, GrowthUpgrade, GrowthUpgradeResult, GuildSummary, Health, LeaderboardPage, LeaderboardQuery, LeaderboardSelf, Login, MailBox, MailClaimAllResult, MailClaimResult, MallPurchase, MallPurchaseResult, MyAchievements, MyGuild, MyQuests, MySocial, NpcTalk, NpcTalkResult, QuestId, QuestSubmitResult, RealtimeTicket, Register, ReviewGuildApplication, ReviveResult, RoleDetail, RoleSummary, SaveRole, SellGoods, SellGoodsResult, SocialTarget, TransferGuild, UpdateGuildNotice, Zone } from "./ApiModels";
 
 /**
  * 客户端接口（自动生成，禁止手改）
@@ -77,7 +77,7 @@ export const AuthApi = {
   register: (body: Register, options?: Options) => HttpClient.post<AuthResult>(ApiRoutes.auth.register, body, { auth: false, ...options }),
 };
 
-/** gameConfig 模块的接口（4 个，生成） */
+/** gameConfig 模块的接口（5 个，生成） */
 export const GameConfigApi = {
   /**
    * 玩家侧配置快照（GET /game-config）
@@ -103,6 +103,12 @@ export const GameConfigApi = {
    * 管理端「内观对齐」工作台保存的全部几何：`id` 形如 `cloth:cloth_1` / `weapon:weapon_1`。
    */
   equipInAlign: (options?: Options) => HttpClient.get<EquipInAlignList>(ApiRoutes.gameConfig.equipInAlign, options),
+  /**
+   * 装备外观映射与显示效果（边框 / 详情背景）（GET /game-config/equipment-appearance）
+   *
+   * `borders`：前后缀组合 → 边框 key + 显示效果（键 = `prefix|suffix`）；
+   */
+  equipmentAppearance: (options?: Options) => HttpClient.get<EquipmentAppearance>(ApiRoutes.gameConfig.equipmentAppearance, options),
 };
 
 /** guild 模块的接口（10 个，生成） */

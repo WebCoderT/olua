@@ -138,8 +138,11 @@ function main() {
   const configLoader = read("assets/ui/utils/net/ConfigLoader.ts");
   check(/GameConfigApi\.equipInAlign\(/.test(configLoader), "ConfigLoader 拉的是 gameConfig.equipInAlign");
   check(
-    /Promise\.all\(\[loadSnapshotOnce\(\), loadAlignEveryEntry\(\), loadInAlignEveryEntry\(\)\]\)/.test(configLoader),
-    "内观与快照、外观并行拉",
+    // #739 起是四路（多了每次进图重拉的装备外观效果）
+    /Promise\.all\(\[[\s\S]{0,400}?loadSnapshotOnce\(\)[\s\S]{0,200}?loadAlignEveryEntry\(\)[\s\S]{0,200}?loadInAlignEveryEntry\(\)[\s\S]{0,200}?loadAppearanceEveryEntry\(\)[\s\S]{0,80}?\]\)/.test(
+      configLoader,
+    ),
+    "内观与快照、外观、外观效果并行拉",
   );
   check(
     /function loadInAlignEveryEntry[\s\S]{0,700}?inAlignLoading = null;/.test(configLoader) &&

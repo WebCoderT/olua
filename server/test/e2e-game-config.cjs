@@ -2545,6 +2545,19 @@ async function main() {
     checkEqual(appearanceSnapData?.customBorders?.length, 1, "快照里的自定义表随行");
     checkEqual(appearanceSnapData?.backgrounds?.[0]?.key, appearanceSeedRow.backgrounds[0].key, "快照里的背景 = 未动的出厂值（拆边语义对客户端同样成立）");
 
+    // —— #739：玩家侧「每次进图重拉」的专用接口（效果是它唯一的新鲜来源）——
+    const appearanceFresh = await api(base, "GET", "/api/game-config/equipment-appearance", { token: playerForAppearance });
+    checkEqual(appearanceFresh.status, 200, "玩家侧能读到装备外观（每次进图重拉）");
+    checkEqual(appearanceFresh.body?.data?.borders?.[0]?.effect?.x, 3, "接口里的 effect 是改过的值（不是出厂值）");
+    checkEqual(
+      appearanceFresh.body?.data?.borders?.length,
+      appearanceSnapData?.borders?.length,
+      "接口与快照段条数一致（同一份表的两种入口）",
+    );
+    checkEqual(appearanceFresh.body?.data?.customBorders?.length, 1, "接口带自定义表（客户端整段覆写要用）");
+    const appearanceNoToken = await api(base, "GET", "/api/game-config/equipment-appearance");
+    checkEqual(appearanceNoToken.status, 401, "外观接口需要令牌（与快照同口径）");
+
     // —— 背景半边也走一遍写路径（背景 key 格式与边框不同：sfx_16000 无 _0）——
     const backgroundOk = backgroundPage.assignments ?? [];
     const badBgKey = backgroundOk.slice();

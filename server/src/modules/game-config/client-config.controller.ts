@@ -7,9 +7,11 @@ import { AudioConfigListDto } from "../audio-setting/dto/audio-setting.dto";
 import { ClientConfigService } from "./client-config.service";
 import { EquipAlignService } from "./equip-align.service";
 import { EquipInAlignService } from "./equip-in-align.service";
+import { EquipmentAppearanceService } from "./equipment-appearance.service";
 import { GameConfigSnapshotDto } from "./dto/client-config.dto";
 import { EquipAlignListDto } from "./dto/equip-align.dto";
 import { EquipInAlignListDto } from "./dto/equip-in-align.dto";
+import { EquipmentAppearanceDto } from "./dto/equipment-appearance.dto";
 
 /**
  * 客户端 · 配置快照
@@ -25,6 +27,7 @@ export class ClientConfigController {
     private readonly audioSetting: AudioSettingService,
     private readonly equipAlign: EquipAlignService,
     private readonly equipInAlign: EquipInAlignService,
+    private readonly equipmentAppearance: EquipmentAppearanceService,
   ) {}
 
   @Get()
@@ -120,5 +123,34 @@ export class ClientConfigController {
   @ApiDataResponse(EquipInAlignListDto, { description: "全部已保存的内观几何" })
   equipInAlignList(): EquipInAlignListDto {
     return this.equipInAlign.list();
+  }
+
+  /**
+   * 装备外观映射与显示效果（#739）
+   *
+   * 数据本身在快照的 `equipmentAppearance` 段里也有（形状完全一致，老客户端不受影响），
+   * 但这个接口的作用是**每次进游戏重拉一遍** —— 运营在管理端「显示效果」工作台拖位置 / 调倍率，
+   * 验收动作就是「退回选角再进图」，而快照在客户端进程内只拉一次，光靠快照那条路永远看不到新值。
+   *
+   * 与 `equip-align` / `equip-in-align` 同一类数据、同一套理由（人眼调参数，不是「跟版本走」的配置）：
+   * 量很小（一条单行表拆出来的三份数组），失败也不致命 —— 拉不到就沿用快照里的值。
+   */
+  @Get("equipment-appearance")
+  @ApiPlayerDoc({
+    operationId: "gameConfig.equipmentAppearance",
+    summary: "装备外观映射与显示效果（边框 / 详情背景）",
+    description:
+      "`borders`：前后缀组合 → 边框 key + 显示效果（键 = `prefix|suffix`）；\n" +
+      "`customBorders`：特殊装备单独绑定的边框（`equipment` = 物品 id 或基础件 key，优先于组合表）；\n" +
+      "`backgrounds` / `customBackgrounds`：详情背景的同名两份表。\n\n" +
+      "`effect` = `{ x, y, scale }`，以素材第一帧为基准：`x` / `y` 是相对基准中心的偏移（像素，y 向上），\n" +
+      "`scale` 乘在适配结果上；缺省等价于 `{ 0, 0, 1 }`（不调）。\n\n" +
+      "**为什么不只靠快照**：这份数据是「人眼调一版、立刻要看效果」的，客户端每次进游戏都会重拉本接口；\n" +
+      "快照里同名字段只在进游戏第一次拉，供老客户端与首帧兜底。资源清单（哪些 key 对应哪张图集）仍只在客户端。\n\n" +
+      "需要玩家令牌（与快照同口径：配置属于玩法数据）。",
+  })
+  @ApiDataResponse(EquipmentAppearanceDto, { description: "边框 / 背景的映射、自定义绑定与显示效果" })
+  equipmentAppearanceData(): EquipmentAppearanceDto {
+    return this.equipmentAppearance.appearance();
   }
 }

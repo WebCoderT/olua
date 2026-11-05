@@ -61,7 +61,7 @@ export const ApiRoutes = {
      */
     register: "/auth/register",
   },
-  /** gameConfig 模块（4 个接口） */
+  /** gameConfig 模块（5 个接口） */
   gameConfig: {
     /**
      * 玩家侧配置快照（GET /game-config）
@@ -87,6 +87,12 @@ export const ApiRoutes = {
      * 管理端「内观对齐」工作台保存的全部几何：`id` 形如 `cloth:cloth_1` / `weapon:weapon_1`。
      */
     equipInAlign: "/game-config/equip-in-align",
+    /**
+     * 装备外观映射与显示效果（边框 / 详情背景）（GET /game-config/equipment-appearance）
+     *
+     * `borders`：前后缀组合 → 边框 key + 显示效果（键 = `prefix|suffix`）；
+     */
+    equipmentAppearance: "/game-config/equipment-appearance",
   },
   /** guild 模块（10 个接口） */
   guild: {

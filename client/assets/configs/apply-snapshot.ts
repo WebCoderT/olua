@@ -275,8 +275,22 @@ export function applyConfigSnapshot(snapshot: GameConfigSnapshot): void {
   // #605：新手引导步骤（表在服务端，客户端只留表现层）
   applyGuideSteps(snapshot.guideSteps);
   // #695：装备外观（哪个前后缀组合 / 哪件特殊装备用哪个边框、详情背景；资源清单仍在客户端）
-  applyEquipmentAppearance(snapshot.equipmentAppearance);
-  applyEquipmentDetailBackgrounds(snapshot.equipmentAppearance);
+  applyAppearanceSection(snapshot.equipmentAppearance);
+}
+
+/**
+ * 落「装备外观」整段（边框 / 背景的映射、自定义绑定，以及每条数据的显示效果 #700）
+ *
+ * 为什么收成一个函数：这一段有两个消费者（边框映射 `configs/border`、详情背景 `configs/background`），
+ * 而落库入口也有两个 —— 配置快照，以及 `GET /game-config/equipment-appearance`
+ * （#739：效果是「人眼调一版、立刻要看效果」的东西，客户端每次进图都重拉）。
+ * 两个入口各写一遍调用迟早会漏一半（边框更新了、背景还是旧的），所以配对只在这里写一次。
+ *
+ * @param data 快照的 `equipmentAppearance` 段，或同一个接口返回的同形状对象
+ */
+export function applyAppearanceSection(data: unknown): void {
+  applyEquipmentAppearance(data);
+  applyEquipmentDetailBackgrounds(data);
 }
 
 /**

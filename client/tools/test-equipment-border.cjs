@@ -201,4 +201,34 @@ check(/preloadBorders/.test(preloadSource) && /getAssignedBorders\(\)/.test(prel
 check(/export \* from "\.\/layout\/borders";/.test(barrelSource), "hudLayout barrel 导出边框显示配置");
 check(/getEquipmentVariantKey\(key, p, s\)/.test(equipmentSource) && equipmentSource.includes("getEquipmentBaseKey"), "变体 key 的拼装与反解都在 equipments（自定义边框按基础件 key 命中的前提）");
 
+//#region 效果的新鲜来源（#739）：equipmentAppearance 每次进图重拉
+//
+// 效果是「人眼调一版、立刻要看效果」的数据，但它在配置快照里 —— 快照进程内只拉一次，
+// 于是「管理端保存了、退回选角再进图」看不到新位置，与「口径不一致」长得一模一样。
+// 这组断言守住接线：专用接口存在、ConfigLoader 每次进图都调它、落库走同一个收口函数。
+
+{
+  const configLoaderSource = fs.readFileSync(path.join(PROJECT_ROOT, "assets/ui/utils/net/ConfigLoader.ts"), "utf8");
+  const applySnapshotSource = fs.readFileSync(path.join(PROJECT_ROOT, "assets/configs/apply-snapshot.ts"), "utf8");
+  const apiRoutesSource = fs.readFileSync(path.join(PROJECT_ROOT, "assets/ui/utils/net/ApiRoutes.ts"), "utf8");
+
+  check(/equipmentAppearance: "\/game-config\/equipment-appearance"/.test(apiRoutesSource), "路由表里有 GET /game-config/equipment-appearance（生成物，服务端 operationId 决定）");
+  check(
+    /function loadAppearanceEveryEntry\(\): Promise<void> \{/.test(configLoaderSource) && /GameConfigApi\.equipmentAppearance\(/.test(configLoaderSource),
+    "ConfigLoader 有「每次进图都拉」的入口，且调的是 gameConfig.equipmentAppearance",
+  );
+  check(
+    /loadSnapshotOnce\(\),\s*\n\s*loadAlignEveryEntry\(\),\s*\n\s*loadInAlignEveryEntry\(\),\s*\n\s*loadAppearanceEveryEntry\(\)/.test(configLoaderSource),
+    "进游戏的四路并行里包含外观效果（漏了就等于没接）",
+  );
+  check(/applyAppearanceSection\(appearance\)/.test(configLoaderSource), "拉到后走 applyAppearanceSection 整段落库");
+  check(
+    /export function applyAppearanceSection\(data: unknown\): void \{\s*\n\s*applyEquipmentAppearance\(data\);\s*\n\s*applyEquipmentDetailBackgrounds\(data\);/.test(applySnapshotSource),
+    "applyAppearanceSection 同时落边框与背景（只落一半就是「边框变了背景没变」）",
+  );
+  check(/applyAppearanceSection\(snapshot\.equipmentAppearance\)/.test(applySnapshotSource), "快照那条路也走同一个收口函数（两处不各写一遍）");
+  check(!/\.catch\(\(error: unknown\) => \{\s*\n\s*throw/.test(configLoaderSource), "拉取失败只 warn 不抛（沿用快照值，不挡进游戏）");
+}
+//#endregion
+
 finish("PASS：边框资源表、前后缀映射、取用优先级、素材守卫与界面接线全部通过。");

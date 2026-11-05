@@ -146,8 +146,11 @@ function main() {
   const configLoader = read("assets/ui/utils/net/ConfigLoader.ts");
   check(/GameConfigApi\.equipAlign\(/.test(configLoader), "ConfigLoader 拉的是 gameConfig.equipAlign");
   check(
-    /Promise\.all\(\[loadSnapshotOnce\(\), loadAlignEveryEntry\(\), loadInAlignEveryEntry\(\)\]\)/.test(configLoader),
-    "快照与两套几何并行拉（串行会平白多两个 RTT，而这些 RTT 卡在进游戏路径上）",
+    // #739 起是四路（多了每次进图重拉的装备外观效果）：断言「同一个 Promise.all 里，快照在前、三套人眼调的数据都在」
+    /Promise\.all\(\[[\s\S]{0,400}?loadSnapshotOnce\(\)[\s\S]{0,200}?loadAlignEveryEntry\(\)[\s\S]{0,200}?loadInAlignEveryEntry\(\)[\s\S]{0,200}?loadAppearanceEveryEntry\(\)[\s\S]{0,80}?\]\)/.test(
+      configLoader,
+    ),
+    "快照与三套「人眼调」数据并行拉（串行会平白多几个 RTT，而这些 RTT 卡在进游戏路径上）",
   );
   // 判据按函数体取（别钉死整行文案：#604 把返回值从 void 改成了结果对象，钉死就会假红）
   const snapshotFn = /function loadSnapshotOnce\(\)[\s\S]*?\n\}/.exec(configLoader);

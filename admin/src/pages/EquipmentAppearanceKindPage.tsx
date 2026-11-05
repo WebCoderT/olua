@@ -95,7 +95,7 @@ const BORDER_CONFIG: KindConfig = {
   effectZoom: 3,
   effectHint:
     "虚线外框 = 客户端 56×56 适配外框（游戏像素 ×3 画），内框 = 物品图标 40×40。第一帧按 contain 缩进外框后居中 —— 拖动改偏移、滑杆改倍率，客户端按同样的口径渲染（y 向上）。",
-  savedToast: "装备边框已保存（玩家下次进游戏拉配置后生效）",
+  savedToast: "装备边框已保存（玩家退回选角再进图即生效）",
 };
 
 const BACKGROUND_CONFIG: KindConfig = {
@@ -120,7 +120,7 @@ const BACKGROUND_CONFIG: KindConfig = {
   effectZoom: 1.5,
   effectHint:
     "虚线框 = 详情弹窗面板（240×200，实际高度随内容自适应）。背景宽度贴面板、高度按帧原始比例自适应、顶边贴面板顶 —— 拖动改偏移（y 向上）、滑杆改倍率（>1 会超出面板宽）。",
-  savedToast: "装备详情背景已保存（玩家下次进游戏拉配置后生效）",
+  savedToast: "装备详情背景已保存（玩家退回选角再进图即生效）",
 };
 
 /** 清单表格每页条数（#718 客户端分页：20 条一屏，翻页比滚动省眼） */
