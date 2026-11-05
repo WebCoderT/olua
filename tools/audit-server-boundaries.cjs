@@ -70,6 +70,10 @@ const ALLOWED_EDGES = [
   { from: "modules/realtime", to: "modules/world/world.service.ts", why: "世界权威公开服务" },
   { from: "modules/realtime", to: "modules/roles/roles.service.ts", why: "结算读写存档走存档服务" },
   { from: "modules/realtime", to: "modules/roles/role-data.util.ts", why: "roleUpdate 组帧解码存档（#541）" },
+  // 实时进程定期重装运营配置（#732）：管理端写操作后的进程内 refreshAll 跨不过进程边界，
+  // 实时进程的属性现算（roleUpdate 帧 + 伤害结算）不吃到新配置就会与存档进程各执一份值 ——
+  // 客户端战斗力显示在两个数之间来回翻。这条边是真实合约：实时域本来就消费 game-config 的运行时缓存
+  { from: "modules/realtime", to: "modules/game-config/runtime-config.service.ts", why: "实时进程定期重装运营配置（两进程缓存同步）" },
   // 社交（#388/#389）：所有帮会 / 好友动作都落在「账号的在线角色」上，
   // 而哪个角色在线只有存档域知道（accounts.online_role_id）—— 不让社交域自己摸账号表
   { from: "modules/social", to: "modules/roles/roles.service.ts", why: "社交动作取账号的在线角色" },

@@ -866,6 +866,33 @@ export default class GameUiHelper {
   }
 
   /**
+   * 战斗力变化飘字（#732：挂在锚点节点下，上浮淡出后自动销毁）
+   *
+   * 锚点是信息栏的战斗力零件节点（RoleInfoBar 传入）——飘字作为它的子节点，
+   * 用局部坐标即可，不必换算世界坐标。上升绿 / 下降红（configs/theme floatingText.combat），
+   * 文案 ±delta 在这里拼；`delta = 0` 不显示。调用方只在**战斗力真的变了**时调用
+   * （见 RoleInfoBar.updateCombat）
+   */
+  static showCombatDelta(anchor: Node, delta: number) {
+    if (!delta || !isValid(anchor)) return;
+    const style = uiTheme.floatingText.combat;
+    const up = delta > 0;
+    const text = `${up ? "+" : "-"}${Math.abs(delta)}`;
+    const node = UiHelper.createLabel("combat_delta", text, up ? style.upColor : style.downColor, style.fontSize, new Vec2(style.spawnOffsetX, style.spawnOffsetY), style.size);
+    anchor.addChild(node);
+    const uiOpacity = node.addComponent(UIOpacity);
+    tween(node)
+      .to(style.riseDuration, { position: new Vec3(node.position.x, node.position.y + style.riseDistance, 0) })
+      .start();
+    tween(uiOpacity)
+      .to(style.fadeDuration, { opacity: 0 })
+      .call(() => {
+        node.destroy();
+      })
+      .start();
+  }
+
+  /**
    * 受击屏幕反馈：全屏薄红闪一下（挂特效层、以相机为中心铺满可视区，淡入即淡出后自毁）
    * 由怪物普攻命中玩家时调用（见 core/MonsterAI 的 onPlayerHit 接线）；
    * 按配置限频 —— 被围殴时不重触发，避免红屏常驻。参数见 configs/effect.hitScreenFlash

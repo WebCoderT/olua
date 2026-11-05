@@ -221,6 +221,16 @@ export interface AppConfiguration {
    * 默认 1 秒：属性面板与货币栏的「实时」以这个粒度为准。
    */
   realtimeRoleSyncMs: number;
+  /**
+   * 实时进程定期重装运营配置的间隔（毫秒；`0` = 关闭定期重装）
+   *
+   * 运营配置（装备变体 / 称号 / 战斗力权重……）的写点在存档进程：管理端每次写操作后
+   * 由 `RuntimeConfigService.refreshAll()` 重装 —— 但那是**进程内**的缓存，跨进程传不过去。
+   * 实时进程不定期重装的话，管理端改完配置它仍按启动时的旧值现算属性与战斗力：
+   * roleUpdate 帧与操作应答各执一份值，客户端战斗力显示在两个数之间来回翻（先降后升的「抖动」）。
+   * 默认 10 秒：配置改动最迟一个间隔后在实时侧生效（表都很小，全量重装很轻）。
+   */
+  realtimeConfigRefreshMs: number;
   //#endregion
 
   //#region 聊天（#395）
@@ -447,6 +457,7 @@ export default function configuration(): AppConfiguration {
     realtimeKickPollMs: Number(process.env.REALTIME_KICK_POLL_MS ?? 3 * 1000),
     realtimeOnlineStaleMs: Number(process.env.REALTIME_ONLINE_STALE_MS ?? 90 * 1000),
     realtimeRoleSyncMs: Number(process.env.REALTIME_ROLE_SYNC_MS ?? 1 * 1000),
+    realtimeConfigRefreshMs: Number(process.env.REALTIME_CONFIG_REFRESH_MS ?? 10 * 1000),
     chatMaxLength: Number(process.env.CHAT_MAX_LENGTH ?? 120),
     chatRateLimit: Number(process.env.CHAT_RATE_LIMIT ?? 5),
     chatRateWindowMs: Number(process.env.CHAT_RATE_WINDOW_MS ?? 10 * 1000),
