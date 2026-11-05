@@ -5,7 +5,7 @@
  * - 资源按 resources 下的文件夹收敛成取图函数（commonImage / loginImage / ...），
  *   同一文件夹里的图统一走对应那一个函数按名字取，不在各处拼字符串
  * - 界面里 eui 用到的具体图统一登记在 uiImages，代码里**不允许再出现裸路径字符串**
- *   （如 "common/popup-bg"、"create_role/bg_dialog"），换图只改这里
+ *   （如 "common/bg"、"create_role/bg_dialog"），换图只改这里
  * - 玩法数据自带的图标（装备/技能/怪物/NPC/状态等）属于各自配置表的数据字段，
  *   仍写在 configs/{equipments,skill,monster,npc,status}.ts 里，不往这里搬
  */
