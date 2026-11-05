@@ -330,6 +330,58 @@ RoleApi.select(id)  →  StorageManager.cacheServerRole(detail)   // 连 revisio
   把几行改回旧值（`updated_at = 0`）→ `DB_PATH=/tmp/x.db PORT=3199 REALTIME_EMBEDDED=false node dist/main.js`
   → 看启动日志「有 N 行出厂值变了」+ 公开接口返回的是新路径。
 
+## 五之八、配置从哪来：快照只拉一次，人眼调参类每次进图拉（#513 / #523 / #739）
+
+`ConfigLoader.loadGameConfig()` 一次并行拉四路，**落库都走 `configs/apply-snapshot`**：
+
+| 路 | 时机 | 数据 |
+|---|---|---|
+| `snapshot` | **进程内只拉一次**（`snapshotLoaded` 守卫） | 十几张表的结构性配置（称号 / 装备 / 怪物 / 商城定价 / 掉落…） |
+| `equipAlign` | 每次进图 | 装备外观对齐几何 |
+| `equipInAlign` | 每次进图 + **每次开角色信息弹窗再拉一次**（`refreshInAlign`） | 内观几何 |
+| `equipmentAppearance` | 每次进图 | 边框 / 详情背景的映射与显示效果（`applyAppearanceSection` 一次落两份） |
+
+**判据**：验收动作是不是「保存 → 退回选角再进图 → 看效果」。是，就必须每次进图拉。
+「退回选角再进图」只是**场景重载**，JS 上下文不重来 —— 快照那条路永远给旧值，
+症状与「管理端保存没生效 / 两端口径不一致」一模一样（#739 就是这么被误判的，查了一整轮公式才发现是缓存）。
+
+- 快照是**硬依赖**：`ok === false` 就停在 Loading 并给文案 + 重试，**不许按空表进游戏**（#604）。
+- 后三路失败**只 `console.warn`**、沿用快照值：缺行本来就是「还没调过」的语义，不该挡进游戏；但绝不静默
+  （一个 404 会被当成「保存没生效」，日志里必须留证据）。
+- 并发去重：同一次进图的重复调用共享同一个 Promise。
+- 新增一路的动作见 skill `olua-server` 的「人眼调参类数据不进快照」。
+
+## 五之九、弹窗的开关语义：一律「再点即关」（#738）
+
+同一类弹窗，有的点一次开一个、有的点一次开一个**再叠一个** —— 后者就是没做开关。范式（背包 / 商城 / 技能 / 快捷键全都这么写）：
+
+```ts
+private dialog: Node | null = null;
+
+open() {
+  // 已开且还活着 → 这次点击的语义是「关」
+  if (this.dialog && isValid(this.dialog) && this.dialog.active) { this.close(); return; }
+  // 被关闭按钮 / 切场景销毁过的残留引用，在这里清掉再照常开
+  if (this.dialog && !isValid(this.dialog)) this.dialog = null;
+  ...建节点...
+  this.dialog = dialog;
+}
+
+close() {
+  this.shortcutKeySettingDialog.close();   // 子弹窗：不收就是「关了大窗、子弹窗还浮在上面」
+  HoverTipManager.hide();                  // 悬停提示挂在别的层，父节点销毁带不走
+  if (this.dialog && isValid(this.dialog)) this.dialog.destroy();
+  this.dialog = null;                      // ← 必须置空：isValid 默认不查「待销毁」，销毁是延迟的
+}
+```
+
+- **判据是「引用 + `isValid` + `active`」三件套**（与 `AchievementDialog` / `BagDialog` 同款）。`isValid(node)` 默认**不检查
+  「待销毁」**，而 `destroy()` 是延迟到帧末生效的 —— 所以 `close()` 里一定要把引用置空，否则下一次点击会拿到一个即将死掉的节点。
+- **引导 / 埋点事件要放在开关判据之后**：点按钮把弹窗关掉不算「学会」，否则统计里每次关窗都是一次学习。
+- 子节点（子弹窗、悬停提示）由 `close()` 统一收，**不要指望父节点销毁会连带**（悬停提示挂在别的层）。
+- 结构断言（`test-skill-dialog.cjs` 那种）只能守「持有引用 / 有这么一条判据 / close 收了三样」，
+  **观感（点一下开、再点一下关）靠人眼**。
+
 ## 七、沙箱单测（不启动 Cocos 也能测请求层）
 
 - `client/tools/lib/net-sandbox.cjs`：把 `configs/network` + `types/common` + `ui/utils/net/*` 编成 CommonJS 塞进沙箱，**`XMLHttpRequest` 由测试注入**，返回 `{ Api, HttpError, Session, RoleSync, ApiRoutes, ApiErrorTextKey, RELOGIN_BIZ_CODES, ROLE_SYNC_BIZ_CODES, getText, sys }`。

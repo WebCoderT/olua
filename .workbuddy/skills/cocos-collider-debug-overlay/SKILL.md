@@ -159,7 +159,7 @@ static showColliderRange(node: Node, name?: string, kind: "obstacle" | "role" = 
 }
 ```
 
-3. **所有产生碰撞体的地方都调一次**（清点方式：全局搜 `addComponent(BoxCollider2D)` / 项目自己的 `addObstacleCollider`），典型 4 处：Tiled 碰撞对象组生成器、NPC 生成、怪物生成、主角自身（主角用另一种配色区分）。**每个都在挂完碰撞体之后一行调用**。
+3. **所有产生碰撞体的地方都调一次**（清点方式：全局搜 `addComponent(BoxCollider2D)` / 项目自己的 `addObstacleCollider`），典型 4 处：地图碰撞盒（`maps.collisions` 快照，**不是** Tiled 对象组 —— 那层已被 `tools/strip-map-objects.cjs` 删掉）、NPC 生成、怪物生成、主角自身（主角用另一种配色区分）。**每个都在挂完碰撞体之后一行调用**。
 4. 掉落物之类**没有碰撞体**的东西（靠距离判定拾取）不会被画到，不要在总结里漏掉这个区别。
 
 ## 收尾检查

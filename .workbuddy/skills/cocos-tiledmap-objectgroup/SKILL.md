@@ -1,6 +1,6 @@
 ---
 name: cocos-tiledmap-objectgroup
-description: Cocos Creator 3.x 中把 Tiled（.tmx）对象组在游戏内实例化的正确做法，含四个必踩的引擎坑（对象「类」被解析器丢弃、object.y 被 _init 原地改写导致坐标翻两次、TiledMap 的瓦片裁剪 enableCulling 在相机跳变后会算错可见范围、改了地图锚点后图层 leftDownToCenter 不会自己重算导致整屏黑）、对象坐标换算、静态碰撞体生成、属性驱动的区域玩法（刷怪区 min/max，默认开图时一次性生成；含数量维持类需求的设计取舍与 tick 归属）、区域名称/指示线的调试显示、点位驱动的出生位置（类 revive 的点 = 进图/传送后的出生点，含「地图异步加载 vs 角色创建」的先后坑与回调式注册）；以及"没有地图节点时直接读 TMX 原文解析对象组"（资源预加载阶段推导地图内 NPC/怪物外观目录用）。触发场景：用户提到"Tiled 对象组 / 对象层"、"collision 碰撞图层"、"地图碰撞区域动态创建"、"NPC/刷怪点/复活点坐标"、"进图在复活点出生/复活点定位"、"按对象类/Class 判断"、"地图坐标转世界坐标"、"地图原点 / 左上角为原点"、"接新 TMX 要不要减半个地图"、"对象位置上下镜像/反了"、"地图整体偏了半张图"、"monster 刷怪层 / 区域刷怪 / min max 数量 / 怪物刷新"、"不实例化地图就读出对象组/预加载地图内容"、"传送后地图一片黑 / 地图不渲染 / 动一下才显示 / 瓦片裁剪 / enableCulling"、"进游戏黑屏但改一下 anchorPoint 就能看到地图 / 地图锚点改左上角后一片黑"等。
+description: Cocos Creator 3.x 中把 Tiled（.tmx）对象组在游戏内实例化的正确做法，含四个必踩的引擎坑（对象「类」被解析器丢弃、object.y 被 _init 原地改写导致坐标翻两次、TiledMap 的瓦片裁剪 enableCulling 在相机跳变后会算错可见范围、改了地图锚点后图层 leftDownToCenter 不会自己重算导致整屏黑）、对象坐标换算、静态碰撞体生成、属性驱动的区域玩法（刷怪区 min/max，默认开图时一次性生成；含数量维持类需求的设计取舍与 tick 归属）、区域名称/指示线的调试显示、点位驱动的出生位置（类 revive 的点 = 进图/传送后的出生点，含「地图异步加载 vs 角色创建」的先后坑与回调式注册）；以及本项目**地图生成器退场后**一张新图的落地四步（TMX 落盘 → `import-map-resources` 补几何 → 管理端画点位 → `config-export`）。触发场景：用户提到"Tiled 对象组 / 对象层"、"collision 碰撞图层"、"地图碰撞区域动态创建"、"NPC/刷怪点/复活点坐标"、"进图在复活点出生/复活点定位"、"按对象类/Class 判断"、"地图坐标转世界坐标"、"地图原点 / 左上角为原点"、"接新 TMX 要不要减半个地图"、"对象位置上下镜像/反了"、"地图整体偏了半张图"、"monster 刷怪层 / 区域刷怪 / min max 数量 / 怪物刷新"、"不实例化地图就读出对象组/预加载地图内容"、"传送后地图一片黑 / 地图不渲染 / 动一下才显示 / 瓦片裁剪 / enableCulling"、"进游戏黑屏但改一下 anchorPoint 就能看到地图 / 地图锚点改左上角后一片黑"等。
 agent_created: true
 ---
 
@@ -24,6 +24,28 @@ agent_created: true
 >
 > 另外，**坑 4（改锚点后图层不重算 → 整屏黑）与坑 3（enableCulling）与对象组无关**，
 > 它们仍然在生效的路径上：`GameMap.loadMap` 每次进图都要按顺序做那两步。
+>
+> ## 新图从哪来（地图**生成器**已退场，别再找它）
+>
+> 以前有一套「从传奇素材拼 TMX」的脚本（`mir2-tmx-map` 技能 + 若干 `build_*.py`），**已整段删除**：
+> 它会产出带 `monster` / `npc` / `collision` 对象组的地图，而那三样现在都归管理端，生成器产出的
+> 对象组正是被 `strip-map-objects.cjs` 反复删掉的东西 —— 留着只会让「改一次图就得再删一次」。
+>
+> 现在一张新地图的流程是四步，**每一步都只有一个入口**：
+>
+> 1. **TMX + 素材落盘**：`client/assets/resources/map/<id>/<id>.tmx`（美术 / 外包给的，或从已有图改），
+>    图集放同目录。这一步没有工具，就是文件进来。
+> 2. **补几何**：`node tools/import-map-resources.cjs`（`--dry` 先看统计）—— 它只读 TMX 的
+>    **几何（格数 / 瓦片尺寸 / 像素尺寸）+ 图层结构**写进 `maps` 表，**不碰任何运营数据**
+>    （刷怪区 / 碰撞 / NPC / 复活点 / 名称 / 进入条件一律不动）。`content.groups` 恒为空数组，字段只为存量兼容。
+> 3. **画玩法点位**：管理端「地图管理」在预览图上画刷怪区 / NPC / 复活点 / 碰撞盒
+>    （skill `olua-admin` 的五点十三 / 五点十四），存进 `map_spawn_areas` / `map_npcs` /
+>    `maps.revive_*` / `map_collisions`。
+> 4. **导快照**：`make config-export` —— 把几何与 content 带进 `server/data/config-sync.sql`，
+>    否则别人拉下来还是旧数据（`config-sync.sql` 是空库自举的唯一来源）。
+>
+> 判据都在 `tools/audit-map-origin.cjs`：导入工具不许碰刷怪区表 / 不许自己算世界坐标、
+> 客户端不许再出现 `TiledObjects` / `tiledGroupNames` / `getObjectGroup(`。
 
 
 ## 先记住四条引擎行为（否则必错）
