@@ -662,9 +662,17 @@ test/e2e-equip-in-align.cjs      装备内观几何专项（73 条断言，#523�
    划到服务端可改，于是只剩 `PATCH :id` 一个写入口，而**资源本体仍然不可改**：
    ① POST / PUT / DELETE 依旧 404（没有「新建 / 删除地图」—— 图存不存在由客户端 TMX 决定），
    ② 请求里塞 `src` 被白名单剥掉，返回仍是 `map/<id>/<id>` 目录约定算出来的值 —— 「下发方永远改不到客户端加载哪张图」；
-   ③ 进图条件**故意不拦连接**（`worldJoin` 里不判）：登录与传送共用同一条消息，登录时进的就是玩家
-   **脚下那张图**，硬拦的后果是「运营把某图门槛调高 → 正站在图里的低等级玩家下次登录即黑屏，且自己出不来」。
-   判定留在客户端 `StorageManager.changeOnMap`（所有传送的必经之路，读的就是下发的那份配置）。
+   ③ 进图条件**判定在服务端**（#606 收权，之前只拦客户端 = 改包可绕）：判据唯一一处是
+   `MapService.enterRejectOf(mapId, {level, combat, soulOfWar})` → `MapEnterReject | null`（只回结构化
+   `field/need/mapLabel`，中文句子归客户端 `configs/texts`）。**凭什么知道玩家在哪 = 存档字段 `data.mapAt`**
+   （服务端承认的位置，与客户端的 `onMap` 分开、进 `SERVER_EXCLUSIVE_FIELDS` 所以客户端上报会被回填/删掉，
+   唯一正常写点是「被接受的 worldJoin」）。三条边界必须同时成立，否则会锁人或漏拦：
+   **a.** 目标图 == `mapAt` → 无条件放行（登录 / 重连 / 回脚下那张图都不是换图。硬拦的后果是「运营调高门槛 →
+   正站在图里的低等级玩家下次登录黑屏且出不来」）；**b.** `mapAt` 缺失（刚建号 / 老档第一次上线）→ 放行；
+   **c.** 图没有配置行 → 放行（无行 = 无门槛）。协议两条：`mapEnter`（意图，不动世界状态）→ `mapEnterResult`
+   `{mapId, ok, field?, need?, mapLabel?}`，放行与被拒同形；`worldJoin` 被拒也发同一帧（客户端只认一个形状）。
+   客户端流程 = 本地预检 → `CombatChannel.requestMapEnter()` 等回帧（3s 超时按本地判据放行）→ 放行才
+   `applyMapChange` 切场景 —— **不能「先切图再等拒绝」**：切场景先卸旧场景，world 帧回来人已在空图里，回滚代价远大于先问一句。
    判据一律写 `> 0` 且 `> 角色值`（0 = 不限制；安全地图是 0/0/0，写成 1 会挡住 1 级新号）。
    **403 与 404 不能混**：403 是「你没权限」，会诱导下一个人去补权限；404 是「这件事没有入口」。配套两条：
    `new BizException(code, msg)` **默认 400** —— 资源不存在必须 `BizException.notFound(code, msg)`，否则

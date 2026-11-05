@@ -4,12 +4,12 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>工程管理 · olua 开源项目</title>
-  <meta name="description" content="olua 的研发流程与质量门禁：issue → 分支 → PR → CI → squash；PR 只跑一次全套门禁；29 套 e2e、15 项跨端审计、资源清单锁与 AI 协作纪律。" />
+  <meta name="description" content="olua 的研发流程与质量门禁：issue → 分支 → PR → CI → squash；PR 只跑一次全套门禁；38 套 e2e、15 项跨端审计、资源清单锁与 AI 协作纪律。" />
   <link rel="canonical" href="http://yimw.cn/engineering.html" />
   <meta property="og:type" content="website" />
   <meta property="og:url" content="http://yimw.cn/engineering.html" />
   <meta property="og:title" content="工程管理 · olua 开源项目" />
-  <meta property="og:description" content="olua 的研发流程与质量门禁：issue → 分支 → PR → CI → squash；PR 只跑一次全套门禁；29 套 e2e、15 项跨端审计、资源清单锁与 AI 协作纪律。" />
+  <meta property="og:description" content="olua 的研发流程与质量门禁：issue → 分支 → PR → CI → squash；PR 只跑一次全套门禁；38 套 e2e、15 项跨端审计、资源清单锁与 AI 协作纪律。" />
   <meta property="og:image" content="http://yimw.cn/assets/img/game.jpg" />
   <meta name="twitter:card" content="summary_large_image" />
   <link rel="icon" href="assets/icons/favicon.ico" sizes="any" />
@@ -92,7 +92,7 @@
         <div class="flow__num">04</div>
         <div class="flow__body">
           <h4>PR 触发全套 CI</h4>
-          <p>静态半边 + 29 套 e2e 分 4 片并行。<b>只跑一次</b>：PR 的 CI 跑的是 <code>refs/pull/N/merge</code>（master + 本次改动），squash 之后 master 的树与它完全相同，再跑一遍测不到新东西。</p>
+          <p>静态半边 + 38 套 e2e 分 4 片并行。<b>只跑一次</b>：PR 的 CI 跑的是 <code>refs/pull/N/merge</code>（master + 本次改动），squash 之后 master 的树与它完全相同，再跑一遍测不到新东西。</p>
           <p>所以直接 push master 是不受门禁保护的 —— 规则是「别那么干」。</p>
         </div>
       </div>
