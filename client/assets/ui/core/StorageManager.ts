@@ -602,6 +602,8 @@ export default class StorageManager {
     role.revision = revision;
     this.updateOnlineRole(role);
     this.updateUi(role);
+    // 背包弹窗开着时实时跟上（updateUi 只刷信息栏/底栏/血条，不含背包）；弹窗没开时是 no-op
+    if (placed.length) RoleUIManager.refreshBag();
   }
 
   //#region 背包物品使用
