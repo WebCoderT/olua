@@ -67,6 +67,7 @@ CREATOR ?= CocosCreator
         server-e2e-mail server-e2e-account-email server-e2e-realtime server-e2e-combat server-e2e-world server-e2e-dual server-e2e-game-config server-e2e-backup server-e2e-zone server-e2e-guild server-e2e-social server-e2e-chat server-e2e-quest server-e2e-sell server-e2e-bag server-e2e-blocks server-e2e-party server-e2e-rank server-e2e-achievement server-e2e-game-mail server-e2e-equip-align server-e2e-equip-in-align server-e2e-map server-verify db-backup db-restore config-export config-import config-check gen-api \
         resources-manifest resources-verify resources-pack resources-upload resources-download image-manifest \
         admin-dev admin-build admin-typecheck admin-preview \
+        icons \
         clean
 
 # ==============================================================================
@@ -387,6 +388,9 @@ admin-build: ## 管理端类型检查 + 构建到 admin/dist
 
 admin-preview: ## 预览管理端已构建产物（需先 make admin-build）
 	@cd admin && $(NPM) run preview
+
+icons: ## 从官网 logo 重新生成各端应用图标（管理端 favicon / web 模板 / 原生 AppIcon；需 python3-pillow）
+	@python3 tools/gen-app-icons.py
 
 # ==============================================================================
 #  审计（tools/，跨端静态检查）
