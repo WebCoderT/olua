@@ -40,8 +40,12 @@ export const effectImage = (name: string) => `effect/${name}`;
 export const mapPreviewImage = (id: string) => `map/${id}/preview`;
 /** resources/avatars：角色头像（按「职业-性别」取图） */
 export const avatarImage = (occupation: string, sex: string) => `avatars/${occupation}-${sex}`;
-/** 选角界面的角色站立帧动画图集（按「职业-性别」取图） */
+/** 选角界面的角色站立帧动画图集（按「职业-性别」取图；未选中时循环播放） */
 export const createRolePreviewImage = (occupation: string, sex: string) => createRoleImage(`plist/create_role_${occupation}_${sex}_stand@0`);
+/** 选角界面的角色展示帧动画图集（按「职业-性别」取图；选中时循环播放，与站立图集同一块 800×800 画布，切换不位移） */
+export const createRoleShowImage = (occupation: string, sex: string) => createRoleImage(`plist/create_role_${occupation}_${sex}_show@0`);
+/** 选角界面的「已选中」脚下特效图集（select_player@0：一圈地面光标） */
+export const roleSelectEffectImage = createRoleImage("select_player@0");
 
 //#endregion
 

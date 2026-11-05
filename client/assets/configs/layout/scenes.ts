@@ -197,10 +197,21 @@ export const roleSelectorLayout = {
     closeButton: { name: "close_create_role_button", image: uiImages.middleRedButtonBackground, position: new Vec2(138, 266), size: new Size(44, 44), fontSize: 24 },
   },
   /**
-   * 选中角色框：白细线描在选中角色的单元格上（预览区域外扩 margin），跟随单元格滚动。
-   * 用引擎 Graphics 运行时画（素材里没有现成的框图），线宽 / 颜色 / 外扩都在这里调
+   * 选中态（不再画白色选中框，用「动画 + 脚下特效」表达选中）：
+   * 选中的角色把站立帧换成**展示帧**（show，循环），并在脚底循环播 select_player@0。
+   * 两套图集都是 800×800 画布、角色站姿对齐，切换时不会跳位
    */
-  selectionFrame: { lineWidth: 2, color: new Color("#FFFFFF"), margin: 6 },
+  selection: {
+    /** show 帧动画帧率（帧数 33，与站立同口径；调快慢只影响这一处） */
+    showFrameRate: 8,
+    /**
+     * 脚下选中特效（select_player@0）：
+     * - `offset` 相对预览中心（预览画布中心），负数往下；按角色脚底位置目视调
+     * - `size` 显示尺寸。图集原画布只有 134×72，这里按它拉伸（非等比，椭圆会更扁宽）
+     * - `frameRate` 8 帧循环的帧率
+     */
+    effect: { offset: new Vec2(0, -180), size: new Size(300, 100), frameRate: 12 },
+  },
 };
 
 //#endregion

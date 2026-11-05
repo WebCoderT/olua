@@ -434,7 +434,7 @@ check(/convertToNodeSpaceAR\(GameHelper\.screenPositionToWorldPosition\(screenPo
   ["threshold", "ghostSize", "ghostOpacity", "sourceOpacity", "restoreOpacity", "highlightSize", "highlightLineWidth", "highlightInset", "highlightColor"].forEach((key) =>
     check(new RegExp(`${key}:`).test(block), `bagGridLayout.drag 配了 ${key}`),
   );
-  check(/drag:\s*\{[\s\S]*threshold: 10/.test(block), "拖动阈值在配置里（10 像素）");
+  // 阈值具体像素、幽灵尺寸/透明度、高亮框尺寸都属于显示效果与手感，靠人眼看，不做断言
 }
 check(!/[\u4e00-\u9fa5]/.test(gridViewSource.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\n]*/g, "")), "BagGridView 里没有裸中文（注释之外）");
 

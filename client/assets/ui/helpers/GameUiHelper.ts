@@ -64,6 +64,8 @@ import {
   bottomBarLayout,
   chatDialogLayout,
   createRolePreviewImage,
+  createRoleShowImage,
+  roleSelectEffectImage,
   dialogFrame,
   dropItemLayout,
   equipmentBorderLayout,
@@ -167,6 +169,15 @@ const soul = warSoulDialogLayout;
 const goodTag = goodDetailLayout.tag;
 
 //#endregion
+
+/**
+ * 角色预览容器下的三个子节点名后缀（都由预览名派生）：
+ * 站立帧 / 选中展示帧 / 脚下选中特效。切换选中态时按名字找、不缓存引用
+ * （选角列表重建会换掉整棵节点树，存引用就得自己管失效）
+ */
+const ROLE_PREVIEW_STAND_SUFFIX = "_stand_animation";
+const ROLE_PREVIEW_SHOW_SUFFIX = "_show_animation";
+const ROLE_PREVIEW_EFFECT_SUFFIX = "_select_effect";
 
 /**
  * 游戏UI零件工厂（静态类）
@@ -392,34 +403,128 @@ export default class GameUiHelper {
   //#region 角色预览
 
   /**
-   * 创建角色预览效果（选角界面的站立帧动画，图集帧循环播放；帧率见 layouts/scenes 的 roleSelectorLayout.previewFrameRate）
+   * 创建角色预览效果（选角界面：未选中播站立帧、选中播展示帧 + 脚下特效）
    * 帧动画走 AnimationHelper：素材是 TexturePacker 图集（plist），按帧名末尾序号排序后循环播放
    * 帧加载是异步的（已缓存时微任务内即完成），装载完成时节点已销毁/已标记销毁则静默跳过
    *
    * 容器用**普通节点**（不是 `UiHelper.createEmptyNode`）：后者是核对体积用的调试节点，
    * 会无条件画一圈纯红 4px 边框，挂到选角界面上就是角色四周一个去不掉的红框（#455）。
-   * @param name 预览名（同时作为动画节点名前缀）
+   *
+   * 选中态由 `setRolePreviewSelected` 切换 —— 展示帧与脚下特效都是**首次选中才建**，
+   * 列表里没被选过的角色不额外占图集内存（图集帧与片段装载后走全局缓存，切角色不重复读盘）
+   * @param name 预览名（同时作为动画节点名前缀；选中态那两个子节点按它派生名字，切换时按名字找）
    * @param level 等级（预览动画与等级无关，保留参数以兼容调用方）
    * @param occupation 职业
    * @param sex 性别
    */
   static createRolePreview(name: string, level: number, occupation: string = "1", sex: string = "1", position: Vec2 = new Vec2(), size: Size = new Size()) {
     const role = UiHelper.createNode(name, position, size);
-    const animationName = name ? `${name}_animation` : "role_preview_animation";
-    const node = UiHelper.createSprite(animationName, "");
-    node.getComponent(Sprite).sizeMode = Sprite.SizeMode.RAW;
-    node.getComponent(Sprite).trim = false;
+    const animationName = `${name}${ROLE_PREVIEW_STAND_SUFFIX}`;
+    const node = this.createRoleFrameSprite(animationName);
     role.addChild(node);
-    AnimationHelper.loadFramesFromAtlas(createRolePreviewImage(occupation, sex)).then((frames) => {
-      // 严格模式判据：角色列表/创建弹窗刷新会销毁旧预览，isValid 默认不查「待销毁」，当帧会漏判
-      if (!isValid(node, true)) return;
-      AnimationHelper.playLoopWithFrames(animationName, node, frames, roleSelectorLayout.previewFrameRate);
-    });
+    AnimationHelper.playLoopAtlas(animationName, node, createRolePreviewImage(occupation, sex), roleSelectorLayout.previewFrameRate);
     // 角色预览本身是可点元素（选角列表点击切换角色），鼠标通道补一次命中拦截
     // 点击音同理（#685）：点角色卡就是点按钮
     SoundManager.bindClick(role);
     blockClickThrough(role);
     return role;
+  }
+
+  /**
+   * 切换角色预览的选中态
+   *
+   * 选中：站立帧隐藏、展示帧（show）循环播放，脚底循环 `select_player@0`；
+   * 取消：反过来（展示帧与特效隐藏，节点留着下次复用，不销毁 —— 列表滚动/反复点选不该反复建节点）。
+   * 展示帧**等帧装载好再藏站立帧**：否则首次选中会有一段「站立已藏、展示帧还没到」的空白。
+   * @param preview createRolePreview 返回的容器节点
+   * @param selected 是否选中
+   * @param occupation 职业（show 图集按它取，取消选中时可传默认值）
+   * @param sex 性别
+   */
+  static setRolePreviewSelected(preview: Node, selected: boolean, occupation: string = "1", sex: string = "1") {
+    if (!isValid(preview, true)) return;
+    const stand = preview.getChildByName(`${preview.name}${ROLE_PREVIEW_STAND_SUFFIX}`);
+    const showName = `${preview.name}${ROLE_PREVIEW_SHOW_SUFFIX}`;
+    const show = preview.getChildByName(showName);
+    if (!selected) {
+      if (show) show.active = false;
+      const effect = preview.getChildByName(`${preview.name}${ROLE_PREVIEW_EFFECT_SUFFIX}`);
+      if (effect) effect.active = false;
+      if (stand && !stand.active) {
+        stand.active = true;
+        this.replayRoleLoop(stand, `${preview.name}${ROLE_PREVIEW_STAND_SUFFIX}`, createRolePreviewImage(occupation, sex), roleSelectorLayout.previewFrameRate);
+      }
+      return;
+    }
+    const atlas = createRoleShowImage(occupation, sex);
+    let target = show;
+    if (!target) {
+      target = this.createRoleFrameSprite(showName);
+      preview.addChild(target);
+    }
+    // 先亮着（此时还没有帧 = 什么都不画），装载完成后再收掉站立帧，见函数头注释
+    target.active = true;
+    const showNode = target;
+    AnimationHelper.loadFramesFromAtlas(atlas).then((frames) => {
+      // 装载期间换了选中角色（showNode 已被藏起）或节点没了：这次装载作废
+      if (!frames.length || !isValid(preview, true) || !isValid(showNode, true) || !showNode.active) return;
+      if (stand) stand.active = false;
+      this.replayRoleLoop(showNode, showName, atlas, roleSelectorLayout.selection.showFrameRate);
+    });
+    this.showRoleSelectEffect(preview, true);
+  }
+
+  /** 脚底选中特效：首次显示才建节点（垫在角色下面，地面圈不能压住脚） */
+  private static showRoleSelectEffect(preview: Node, visible: boolean) {
+    const name = `${preview.name}${ROLE_PREVIEW_EFFECT_SUFFIX}`;
+    let effect = preview.getChildByName(name);
+    if (!visible) {
+      if (effect) effect.active = false;
+      return;
+    }
+    if (!effect) {
+      effect = this.createRoleFrameSprite(name);
+      preview.addChild(effect);
+      // 层级：站立 0、展示 1、特效最后加 → 挪到最下面，才不会被角色挡住
+      effect.setSiblingIndex(0);
+    }
+    // 位置与尺寸每次都对一遍（幂等）：配置改了即时生效，不用等重建节点
+    const { offset, size } = roleSelectorLayout.selection.effect;
+    effect.setPosition(offset.x, offset.y, 0);
+    const sprite = effect.getComponent(Sprite);
+    if (sprite && size.width > 0 && size.height > 0) {
+      // 图集原画布只有 134×72，RAW 出图太小 → 按配置尺寸拉伸。
+      // 必须 CUSTOM：RAW 会让节点尺寸跟着每帧的 sourceSize 走，配置的尺寸会被覆盖
+      sprite.sizeMode = Sprite.SizeMode.CUSTOM;
+      (effect.getComponent(UITransform) ?? effect.addComponent(UITransform)).setContentSize(size);
+    }
+    effect.active = true;
+    this.replayRoleLoop(effect, name, roleSelectEffectImage, roleSelectorLayout.selection.effect.frameRate);
+  }
+
+  /**
+   * 重播一个循环动画：**装过就直接 play**，没装过才走 AnimationHelper 装载
+   *
+   * 反复点选会让 `playLoopAtlas` 每次都 `addClip` 一遍 —— 同一别名会不断 new 出新的
+   * AnimationState（片段是缓存共享的，状态不是），点几十次就攒几十份。所以这里先看节点上
+   * 有没有这个片段：有就只重新 `play`（从头播），没有才装载。
+   */
+  private static replayRoleLoop(node: Node, alias: string, atlasSrc: string, frameRate: number) {
+    const animate = node.getComponent(Animation);
+    if (animate?.getState(alias)) {
+      animate.play(alias);
+      return;
+    }
+    AnimationHelper.playLoopAtlas(alias, node, atlasSrc, frameRate);
+  }
+
+  /** 建一个「等着被帧动画填图」的 Sprite 节点（RAW + 不裁边：按图集原画布尺寸出图，帧间不抖动） */
+  private static createRoleFrameSprite(name: string) {
+    const node = UiHelper.createSprite(name, "");
+    const sprite = node.getComponent(Sprite);
+    sprite.sizeMode = Sprite.SizeMode.RAW;
+    sprite.trim = false;
+    return node;
   }
 
   //#endregion

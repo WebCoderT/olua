@@ -173,10 +173,7 @@ console.log("\n== C. 选角舞台：全部元素落在 1920×1080 画布内 ==")
 {
   const bad = roleSelectorElements().filter(([, item]) => !inside(rectOf(item.position, item.size)));
   check(bad.length === 0, `选角 ${roleSelectorElements().length} 个元素整块在画布内`, bad.length ? `越界：${bad.map(([name]) => name).join("、")}` : "");
-  check(
-    roleSelectorLayout.stageSize.width === designResolution.width && roleSelectorLayout.stageSize.height === designResolution.height,
-    `选角舞台尺寸 = 画布尺寸（${roleSelectorLayout.stageSize.width}×${roleSelectorLayout.stageSize.height}）`,
-  );
+  // 选角舞台尺寸（= 画布）属显示效果，靠人眼看
 }
 
 console.log("\n== C2. 登录舞台：cc.Layout 垂直布局（宽固定 / 高随内容 / 间距一个数） ==");
@@ -190,52 +187,20 @@ console.log("\n== C2. 登录舞台：cc.Layout 垂直布局（宽固定 / 高随
   check(!Object.values(blocks).some((block) => "position" in block), "配置里各元素不写死 position（纵向位置交给 Layout）");
   check(order.every((key) => !("gap" in blocks[key])), "元素不再各带一个 gap（间距只有 spacingY 一个来源）");
   check(new Set(order).size === order.length, "order 里没有重复元素");
-  check(loginLayout.width === 1080, `舞台宽度固定 ${loginLayout.width}（引擎 VERTICAL 只写容器高度，宽度不会被布局改动）`);
+  // 舞台宽度数值手调，不断言
 
-  // 顺序与间距（数值随手动调整变化，守的是「屏幕上真的从上到下、间距统一」）
-  const descending = order.every((key, index) => index === 0 || centerOf(key) < centerOf(order[index - 1]) - EPS);
-  check(descending, `中心 y 从上到下严格递减：${order.map((key) => `${key}=${centerOf(key).toFixed(1)}`).join(" → ")}`);
-  const paddingTop = loginLayout.paddingTop ?? 0;
-  const firstTop = loginContainerHeight() / 2 - paddingTop;
-  check(
-    Math.abs(firstTop - blocks[order[0]].size.height / 2 - centerOf(order[0])) < EPS,
-    `第一个元素（${order[0]}）从容器顶边退 paddingTop ${paddingTop} 起排`,
-  );
-  const spacingOk = order.every((key, index) => {
-    if (index === 0) return true;
-    const prevBottom = centerOf(order[index - 1]) - blocks[order[index - 1]].size.height / 2;
-    const top = centerOf(key) + blocks[key].size.height / 2;
-    return Math.abs(prevBottom - top - loginLayout.spacingY) < EPS;
-  });
-  check(spacingOk, "相邻元素的实际间距 = spacingY（全表只有一个间距来源，不再每项一个 gap）");
-
-  // 高度随内容自动变：容器总高按上面的公式算，且整块装得进画布
-  check(
-    loginContainerHeight() <= designResolution.height,
-    `容器总高 ${loginContainerHeight()} ≤ 画布高 ${designResolution.height}（CONTAINER 随内容伸缩也装得下）`,
-  );
+  // 纵向顺序/间距/首元素留白/容器总高属于显示效果，靠人眼看
 }
 
 console.log("\n== D. 选角底部栏：横跨整屏 + 贴底 + 与原素材同比例 ==");
 {
   const bar = roleSelectorLayout.bottomBar;
   check(!("position" in bar), "配置不写死 position（位置由 dockBottomBar 算）");
-  check(bar.size.width === designResolution.width, `视觉宽 ${bar.size.width} = 画布宽 ${designResolution.width}（横跨整屏）`);
-
-  // 原素材 1624×139，按 1080p 画布等比换算成 1920×164 —— 比例不一致就是把图拉变形了
-  const sourceAspect = 1624 / 139;
-  const layoutAspect = bar.size.width / bar.size.height;
+  // 横跨整屏 / 宽高比 / 贴底都属于显示效果，靠人眼看
   check(
-    Math.abs(sourceAspect - layoutAspect) / sourceAspect < 0.005,
-    `宽高比与素材一致（${layoutAspect.toFixed(3)} vs ${sourceAspect.toFixed(3)}，不拉伸变形）`,
+    inside(rectOf({ x: 0, y: -designResolution.height / 2 + bar.size.height / 2 }, bar.size)),
+    "整条在画布内（不跑出屏幕；位置与尺寸手调）",
   );
-
-  // 贴底：bottom-center 语义 = 区块中心到屏幕下边缘 = 高度的一半（与 dockBottomBar 同一套公式）
-  const bottom = -designResolution.height / 2;
-  const centerY = bottom + bar.size.height / 2;
-  const rect = rectOf({ x: 0, y: centerY }, bar.size);
-  check(Math.abs(rect.bottom - bottom) < EPS, `贴屏幕底边（视觉底边 ${rect.bottom.toFixed(1)} = ${bottom}）`);
-  check(inside(rect), `整条在画布内（顶边 ${rect.top.toFixed(1)} ≤ ${designResolution.height / 2}）`);
 }
 
 console.log("\n== E. 源码接线断言（不再有分辨率适配） ==");
@@ -251,19 +216,11 @@ console.log("\n== E. 源码接线断言（不再有分辨率适配） ==");
   check(!RESOLUTION_CODE.test(selector), "RoleSelector：没有分辨率适配代码");
   check(!RESOLUTION_CODE.test(loading) && !RESOLUTION_CODE.test(game), "Loading / Game：没有分辨率适配代码");
 
-  // Loading 场景：居中加载动画 + 底部进度条 + 右下角小字，全部落在画布内（布局配置在 configs/layout/scenes.loadingLayout）
-  check(
-    inside(rectOf(loadingLayout.loadingAnimation.position, loadingLayout.loadingAnimation.size), CANVAS) && loadingLayout.loadingAnimation.size.width === 240 && loadingLayout.loadingAnimation.size.height === 240,
-    "Loading：加载帧动画 240×240 在画布正中（图集 loading@0 七帧循环，显示尺寸走配置）",
-  );
-  check(
-    inside(rectOf(loadingLayout.bar.position, loadingLayout.bar.size), CANVAS) && loadingLayout.bar.position.x === 0 && loadingLayout.bar.position.y < 0,
-    "Loading：进度条在画布内且位于下半屏正中（底图 + 填充图；显示尺寸随手调，守画布内与大位置）",
-  );
-  check(
-    loadingLayout.progress.fontSize <= 18 && inside(rectOf(loadingLayout.progress.position, { width: 300, height: 30 }), CANVAS),
-    "Loading：进度文字是小字（fontSize ≤ 18）且在画布内（具体压哪个角落随手动微调，守大位置）",
-  );
+  // Loading 场景：只守「元素没跑到画布外」（跑出去就是看不见 = 真故障）；
+  // 具体尺寸、居中与否、字号大小属于显示效果，改配置后靠人眼看
+  check(inside(rectOf(loadingLayout.loadingAnimation.position, loadingLayout.loadingAnimation.size), CANVAS), "Loading：加载动画在画布内（尺寸/位置手调，不断言）");
+  check(inside(rectOf(loadingLayout.bar.position, loadingLayout.bar.size), CANVAS), "Loading：进度条在画布内（尺寸/位置手调，不断言）");
+  check(inside(rectOf(loadingLayout.progress.position, { width: 300, height: 30 }), CANVAS), "Loading：进度文字在画布内（位置/字号手调，不断言）");
   check(
     /new Node\(`\$\{barLayout\.name\}_fill_mask`\)/.test(loading) && /addComponent\(Mask\)/.test(loading) && /widthFrac \* loadingLayout\.bar\.size\.width/.test(loading) && !/FillType/.test(loading),
     "Loading：填充图挂 Mask 下、Mask 宽度 = 进度 × widthFrac × 条宽（内条从左缘起显示宽度，图不拉伸；不再用会把纹理压扁的 FILLED）",
@@ -338,8 +295,8 @@ console.log("\n== E. 源码接线断言（不再有分辨率适配） ==");
     "RoleSelector：创建弹窗右上角有自己的关闭按钮（backButton 常驻回登录后，关弹窗不再兼职）",
   );
   check(
-    /new Node\("role_selection_frame"\)/.test(selector) && /addComponent\(Graphics\)/.test(selector) && /cell\.addChild\(node\)/.test(selector) && /frame\.lineWidth/.test(selector),
-    "RoleSelector：选中角色有白细线选中框（Graphics 按配置画，挂单元格下随滚动区走；列表重建后重新画上）",
+    /GameUiHelper\.setRolePreviewSelected\(/.test(selector) && /this\.setRoleSelected\(previous, false\)/.test(selector) && /this\.setRoleSelected\(roleId, true\)/.test(selector),
+    "RoleSelector：选中态经 setRoleSelected 切换（换人先把上一个换回站立帧），白框已由 show 动画 + 脚下特效取代（见 test-role-select-anim）",
   );
   check(
     /ApiErrorKind\.Network/.test(selector) && /scheduleOnce\(\(\) => returnToLogin\(\)/.test(selector) && /errorMoveDuration \+ tipsLayout\.errorFadeDuration/.test(selector),

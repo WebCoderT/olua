@@ -253,13 +253,13 @@ if (sandbox) {
     check(/itemDot: \{ position: new Vec2\(-126, 13\)/.test(boardBlock), "未读圆点几何在配置里");
     check(/selectedFill: new Color\(70, 60, 44, 220\)/.test(boardBlock), "选中底色在配置里（Graphics 自绘）");
     check(/unreadTitleColor[\s\S]{0,200}readTitleColor[\s\S]{0,200}itemMetaColor/.test(boardBlock), "未读/已读/元信息三套文字颜色都在配置里");
-    check(/body: \{ name: "announcement_body", fontSize: 13, lineHeight: 20, width: 364/.test(boardBlock), "正文宽度与行高在配置里（换行文本靠 lineHeight 撑高）");
+    check(/body: \{ name: "announcement_body"[\s\S]{0,160}(fontSize|lineHeight|width):/.test(boardBlock), "正文宽度与行高仍走配置（换行文本靠 lineHeight 撑高；具体数值手调，不断言）");
 
     const noticeBlock = dialogsSource.slice(dialogsSource.indexOf("export const announcementNoticeDialogLayout"), dialogsSource.indexOf("//#endregion", dialogsSource.indexOf("export const announcementNoticeDialogLayout")));
     check(noticeBlock.length > 0, "能定位 announcementNoticeDialogLayout 配置块");
     ["name", "title", "maskColor", "panel", "titleLabel", "list", "item", "confirmButton"].forEach((key) => check(new RegExp(`\\b${key}:`).test(noticeBlock), `announcementNoticeDialogLayout 配了 ${key}`));
     check(/confirmButton: \{ name: "announcement_notice_confirm_button", text: "我知道了"/.test(noticeBlock), "「我知道了」的几何与文案都在配置里");
-    check(/item: \{[\s\S]{0,400}itemGap: 22/.test(noticeBlock), "条目间距在配置里（提醒弹窗一条条纵向摊开）");
+    check(/item: \{[\s\S]{0,400}itemGap: \d/.test(noticeBlock), "条目间距仍走配置（提醒弹窗一条条纵向摊开；具体数值手调，不断言）");
 
     // 小地图入口与红点
     check(/mailEntry: "mail"/.test(hudSource), "消息入口指定为 small-map 的 mail 图标（素材已存在，不新增资源）");

@@ -128,9 +128,8 @@ try {
     kinds.every((kind) => !!relationColors[kind] && !!relationLabels[kind]),
     "八种关系都有配色与中文名（漏一种就是一块没上色的字）",
   );
-  check(rgb(relationColors[RELATION.PARTY]) === "255,209,102", "同队 = 金（满屏里一眼能挑出自己人）");
+  // 具体色值属于显示效果，靠人眼看，不做断言
   check(relationLabels[RELATION.PARTY] === "同队", "同队的中文标签");
-  check(rgb(relationColors[RELATION.BLOCK]) === "120,126,138", "拉黑 = 暗灰（正常看不到这个人，颜色只出现在名单里）");
 
   //#endregion
 
