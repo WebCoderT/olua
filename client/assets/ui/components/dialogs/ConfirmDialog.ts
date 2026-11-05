@@ -1,4 +1,4 @@
-import { EventTouch, Graphics, Label, Node, Size, UITransform, Vec2 } from "cc";
+import { EventTouch, Graphics, Label, Node, Size, UITransform } from "cc";
 import UiHelper from "../../helpers/UiHelper";
 import GameUiHelper from "../../helpers/GameUiHelper";
 import { confirmDialogLayout } from "../../../configs/hudLayout";
@@ -58,7 +58,7 @@ export default class ConfirmDialog extends Node {
     graphics.fill();
     this.addChild(mask);
     // 居中面板：标题 / 正文 / 确定 · 取消
-    const panel = UiHelper.createSprite(layout.panel.name, layout.panel.background, new Vec2(), layout.panel.size);
+    const panel = GameUiHelper.createDialogPanel(layout.panel.name, layout.panel.size);
     this.addChild(panel);
     panel.addChild(UiHelper.createLabel(layout.title.name, options.title, layout.title.color, layout.title.fontSize, layout.title.position, layout.title.size));
     panel.addChild(this.createMessage(options.message));

@@ -1181,11 +1181,50 @@ export default class GameUiHelper {
   }
 
   /**
+   * 创建通用弹窗背景面板（九宫拼装容器，#737）
+   *
+   * 头部标题带**高度恒定**：不管弹窗多大，头行三块都按原尺寸摆放（红条永远 42px、
+   * 两角回纹永不变形），只有头/底的中块横向拉伸、body 行三块双向拉伸
+   * （切线依据见 configs/layout/dialogs.dialogFrame.background）。
+   * 返回的容器尺寸即弹窗尺寸，后续子件坐标以弹窗中心为原点（与 createDialog 系列一致）。
+   */
+  static createDialogPanel(name: string, size: Size = dialogFrame.size) {
+    const { cornerWidth, headerHeight, footerHeight, pieces } = dialogFrame.background;
+    const panel = UiHelper.createNode(name, new Vec2(), size);
+    const halfW = size.width / 2;
+    const halfH = size.height / 2;
+    // 中列宽 / body 行高（弹窗小于两列角块时兜底为 1，宁可压中块也不让角块重叠）
+    const sideW = Math.max(1, size.width - cornerWidth * 2);
+    const midH = Math.max(1, size.height - headerHeight - footerHeight);
+    // 各行中心 y 与左右列中心 x（body 行的中心与弹窗高度无关：恒 (底行高 - 头行高) / 2）
+    const headerY = halfH - headerHeight / 2;
+    const bodyY = (footerHeight - headerHeight) / 2;
+    const footerY = footerHeight / 2 - halfH;
+    const leftX = cornerWidth / 2 - halfW;
+    const rightX = halfW - cornerWidth / 2;
+    const cells: Array<[string, string, Vec2, Size]> = [
+      [`${name}_header_left`, pieces.headerLeft, new Vec2(leftX, headerY), new Size(cornerWidth, headerHeight)],
+      [`${name}_header_center`, pieces.headerCenter, new Vec2(0, headerY), new Size(sideW, headerHeight)],
+      [`${name}_header_right`, pieces.headerRight, new Vec2(rightX, headerY), new Size(cornerWidth, headerHeight)],
+      [`${name}_body_left`, pieces.bodyLeft, new Vec2(leftX, bodyY), new Size(cornerWidth, midH)],
+      [`${name}_body_center`, pieces.bodyCenter, new Vec2(0, bodyY), new Size(sideW, midH)],
+      [`${name}_body_right`, pieces.bodyRight, new Vec2(rightX, bodyY), new Size(cornerWidth, midH)],
+      [`${name}_footer_left`, pieces.footerLeft, new Vec2(leftX, footerY), new Size(cornerWidth, footerHeight)],
+      [`${name}_footer_center`, pieces.footerCenter, new Vec2(0, footerY), new Size(sideW, footerHeight)],
+      [`${name}_footer_right`, pieces.footerRight, new Vec2(rightX, footerY), new Size(cornerWidth, footerHeight)],
+    ];
+    for (const [cellName, image, position, cellSize] of cells) {
+      panel.addChild(UiHelper.createSprite(cellName, image, position, cellSize));
+    }
+    return panel;
+  }
+
+  /**
    * 创建游戏通用弹窗背景
    */
   static createDialogBg(name: string, position: Vec2 = new Vec2(), size: Size = dialogFrame.size) {
-    const dialog = UiHelper.createSprite(name, dialogFrame.background, position, size);
-    dialog.name = name;
+    const dialog = this.createDialogPanel(name, size);
+    dialog.setPosition(position.x, position.y, 0);
     dialog.addComponent(Draggable);
     // 弹窗面板整体在鼠标通道上拦截：弹窗打开时点它任意位置（含空白处）都不再穿透到下层的 HUD
     // （关闭按钮这类只走 touch 通道的 Button 对 mouse 通道不可见，详见 utils/input/UiHit.blockClickThrough）

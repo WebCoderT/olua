@@ -293,7 +293,7 @@ check(/blockClickThrough\(this\);/.test(confirmSource), "确认框在鼠标通�
 check(/event\.propagationStopped = true;/.test(confirmSource), "触摸独占靠 propagationStopped");
 check(/this\.destroy\(\);\s*\n\s*handler\(\);/.test(confirmSource), "确定/取消都先关掉确认框再执行回调（顺便挡住同帧连点两次）");
 check(!/\bmarkClickThrough\(/.test(confirmSource), "遮罩绝不能标成点击穿透（标了就等于没拦住下层）");
-check(/UiHelper\.createSprite\(layout\.panel\.name, layout\.panel\.background/.test(confirmSource), "面板几何与背景图来自配置（组件不写尺寸与图）");
+check(/GameUiHelper\.createDialogPanel\(layout\.panel\.name, layout\.panel\.size/.test(confirmSource), "面板几何来自配置（背景走九宫拼装 helper，组件不写尺寸与图）");
 check(!/[\u4e00-\u9fa5]/.test(confirmSource.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\n]*/g, "")), "ConfirmDialog 里没有裸中文（文案由使用方从 configs/texts 传入）");
 
 check(/\{ area: dialog, onDropOutside: \(from\) => this\.onDropOutside\(from\) \},/.test(dialogSource), "背包弹窗把自身作为受理区、拖出交由 onDropOutside");

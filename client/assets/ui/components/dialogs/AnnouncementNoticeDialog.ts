@@ -65,7 +65,7 @@ export default class AnnouncementNoticeDialog {
     graphics.fill();
     dialog.addChild(mask);
     // 居中面板
-    const panel = UiHelper.createSprite(layout.panel.name, layout.panel.background, new Vec2(), layout.panel.size);
+    const panel = GameUiHelper.createDialogPanel(layout.panel.name, layout.panel.size);
     dialog.addChild(panel);
     const title = layout.titleLabel;
     panel.addChild(UiHelper.createLabel(title.name, layout.title, title.color, title.fontSize, title.position, title.size));

@@ -61,7 +61,7 @@ export default class ReportDialog extends Node {
     graphics.fill();
     this.addChild(mask);
 
-    const panel = UiHelper.createSprite(layout.panel.name, layout.panel.background, new Vec2(), layout.panel.size);
+    const panel = GameUiHelper.createDialogPanel(layout.panel.name, layout.panel.size);
     this.addChild(panel);
     const title = UiHelper.createLabel(
       layout.title.name,

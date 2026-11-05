@@ -30,6 +30,8 @@ export const buttonImage = (name: string) => `buttons/${name}`;
 export const loginImage = (name: string) => `login/${name}`;
 /** resources/loading：加载界面资源 */
 export const loadingImage = (name: string) => `loading/${name}`;
+/** resources/dialog：通用弹窗背景的九宫拆块（见 dialogs.dialogFrame.background 的切线依据） */
+export const dialogImage = (name: string) => `dialog/${name}`;
 /** resources/mall：商城界面资源（背景图） */
 export const mallImage = (name: string) => `mall/${name}`;
 /** resources/create_role：选角 / 创建角色界面资源 */
@@ -55,8 +57,16 @@ export const uiImages = {
   // ---------------- 通用 ----------------
   /** 默认字体（Label 未指定字体时使用） */
   defaultFont: "fonts/msyh",
-  /** 通用弹窗背景 */
-  dialogBackground: commonImage("popup-bg"),
+  /** 通用弹窗背景 · 九宫拆块（头行/角块原样摆放，中列/中行拉伸；拼装见 GameUiHelper.createDialogPanel） */
+  dialogHeaderLeft: dialogImage("popup-header-left"),
+  dialogHeaderCenter: dialogImage("popup-header-center"),
+  dialogHeaderRight: dialogImage("popup-header-right"),
+  dialogBodyLeft: dialogImage("popup-body-left"),
+  dialogBodyCenter: dialogImage("popup-body-center"),
+  dialogBodyRight: dialogImage("popup-body-right"),
+  dialogFooterLeft: dialogImage("popup-footer-left"),
+  dialogFooterCenter: dialogImage("popup-footer-center"),
+  dialogFooterRight: dialogImage("popup-footer-right"),
   /** 通用关闭按钮 */
   closeButton: commonImage("close-button"),
   /** 物品详情弹窗背景 */

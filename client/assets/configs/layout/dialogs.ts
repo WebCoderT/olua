@@ -29,8 +29,35 @@ export const dialogFrame = {
   },
   /** 关闭按钮：尺寸（公共尺寸，见 sizes.uiSize）+ 距弹窗上/右边缘的内缩 */
   closeButton: { size: uiSize.closeButtonSize, inset: 15 },
-  /** 背景图 */
-  background: uiImages.dialogBackground,
+  /**
+   * 背景图：九宫拼装配置（resources/dialog 下的九块拆图，取图名见 images.dialog*）
+   *
+   * 为什么拆块：整图拉伸会让头部标题带（含两角回纹装饰）跟着弹窗尺寸变形。
+   * 切线依据（对 resources/common/popup-bg.jpg 637×499 的实测）：
+   * - 竖切 x=64 / x=573 —— 两角回纹装饰实测只延伸到 x≈53，角宽留余量；
+   * - 头行 y=0~42 —— 红色标题带（0~34）与其下过渡带（35~41）完整落在头行内；
+   * - 底行 8px —— 底缘细边框线。
+   * 拼装规则见 GameUiHelper.createDialogPanel：头行**高度恒定**、左右列固定角宽、中列/中行拉伸。
+   */
+  background: {
+    /** 左右角块宽（承载回纹，原样摆放不拉伸） */
+    cornerWidth: 64,
+    /** 头行高（红色标题带，任何弹窗尺寸下不变） */
+    headerHeight: 42,
+    /** 底行高（细边框线） */
+    footerHeight: 8,
+    pieces: {
+      headerLeft: uiImages.dialogHeaderLeft,
+      headerCenter: uiImages.dialogHeaderCenter,
+      headerRight: uiImages.dialogHeaderRight,
+      bodyLeft: uiImages.dialogBodyLeft,
+      bodyCenter: uiImages.dialogBodyCenter,
+      bodyRight: uiImages.dialogBodyRight,
+      footerLeft: uiImages.dialogFooterLeft,
+      footerCenter: uiImages.dialogFooterCenter,
+      footerRight: uiImages.dialogFooterRight,
+    },
+  },
   /** 关闭按钮图 */
   closeImage: uiImages.closeButton,
 };
@@ -520,8 +547,8 @@ export const confirmDialogLayout = {
   name: "confirm_dialog",
   /** 遮罩颜色（黑色半透明，盖住整个屏幕并挡住下层点击；与死亡遮罩同色） */
   maskColor: new Color(0, 0, 0, 160),
-  /** 居中面板：尺寸与背景图（复用通用弹窗背景） */
-  panel: { name: "confirm_panel", size: new Size(420, 210), background: uiImages.dialogBackground },
+  /** 居中面板：尺寸（背景为通用弹窗背景的九宫拼装，见 createDialogPanel） */
+  panel: { name: "confirm_panel", size: new Size(420, 210) },
   /** 标题（面板上部，配色与通用弹窗标题一致） */
   title: { name: "confirm_title", position: new Vec2(0, 68), size: new Size(360, 26), fontSize: 16, color: new Color("#FF8B8B") },
   /** 正文：宽度固定、高度按内容自适应（可换行，锚点居中故向上下对称撑开） */
@@ -679,7 +706,7 @@ export const announcementNoticeDialogLayout = {
   name: "announcement_notice_dialog",
   title: "公告",
   maskColor: new Color(0, 0, 0, 170),
-  panel: { name: "announcement_notice_panel", size: new Size(640, 460), background: uiImages.dialogBackground },
+  panel: { name: "announcement_notice_panel", size: new Size(640, 460) },
   /** 标题文本的位置与样式（配色与通用弹窗标题一致） */
   titleLabel: { name: "announcement_notice_title", position: new Vec2(0, 200), size: new Size(560, 26), fontSize: 16, color: new Color("#FF8B8B") },
   /** 公告列表（纵向滚动，每一条自己撑高） */
@@ -961,7 +988,7 @@ export const socialDialogLayout = {
 export const reportDialogLayout = {
   name: "report_dialog",
   maskColor: new Color(0, 0, 0, 170),
-  panel: { name: "report_panel", size: new Size(460, 320), background: uiImages.dialogBackground },
+  panel: { name: "report_panel", size: new Size(460, 320) },
   title: { name: "report_title", position: new Vec2(0, 122), size: new Size(400, 26), fontSize: 16, color: new Color("#FF8B8B") },
   /** 提示行（被举报人 + 一句话说明举报只落库） */
   hint: { name: "report_hint", position: new Vec2(0, 86), size: new Size(400, 20), fontSize: 13, color: new Color("#C8C8C8") },
