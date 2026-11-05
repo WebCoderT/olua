@@ -43,8 +43,6 @@ function main() {
   // roleMaxLevel 是 `export let`：CommonJS 下解构会拷成快照，必须按属性读
   const maxLevel = () => growth.roleMaxLevel;
 
-  // 快照行就是「库里那几行」本身（DTO 形状已由 factory-data 换算好）
-  const growthSeed = { GROWTH_SCALARS: factory.growthScalars() };
   const levelMapRows = new Map(factory.levels().map((row) => [row.level, row]));
   const roleMaxLevelValue = factory.levels().length;
 
@@ -96,11 +94,7 @@ function main() {
   // 与 roleMaxLevel 一样是 `export let`：CommonJS 下解构会拷成快照，必须按属性读
   const roleConfig = require(path.join(outDir, "configs/role.js"));
   const mpRate = () => roleConfig.mpRecoverPerSecond;
-  check(
-    roleConfig.mpRecoverPerSecond === growthSeed.GROWTH_SCALARS.mpRecoverPerSecond,
-    "出厂值 = 服务端种子（快照没到时的兜底两边一致）",
-    `${roleConfig.mpRecoverPerSecond} vs ${growthSeed.GROWTH_SCALARS.mpRecoverPerSecond}`,
-  );
+  check(roleConfig.mpRecoverPerSecond === 0, "初始 0（#724 无本地兜底：快照没到不做回蓝预测）", String(roleConfig.mpRecoverPerSecond));
   snapshotApi.applyGrowthScalars([{ key: "mpRecoverPerSecond", value: 5, description: "", updatedAt: 0 }]);
   check(mpRate() === 5, "回复速度随快照覆写成 5（客户端演出与结算同速）", String(mpRate()));
   snapshotApi.applyGrowthScalars([{ key: "mpRecoverPerSecond", value: -3, description: "", updatedAt: 0 }]);

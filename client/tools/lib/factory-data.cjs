@@ -182,7 +182,7 @@ function equipmentSlots() {
     }));
 }
 
-/** 装备规则（前后缀倍率 / 品质文案；回收价 #655 起逐条在 equipment_variants.sell_price） */
+/** 装备规则（前后缀倍率 / 品质文案与配色；回收价 #655 起逐条在 equipment_variants.sell_price） */
 function equipmentMeta() {
   const row = rows("equipment_meta")[0];
   return {
@@ -190,6 +190,8 @@ function equipmentMeta() {
     suffixRates: row.suffixRates,
     prefixLabels: row.prefixLabels,
     suffixLabels: row.suffixLabels,
+    prefixColors: row.prefixColors ?? [],
+    suffixColors: row.suffixColors ?? [],
     updatedAt: row.updatedAt,
   };
 }

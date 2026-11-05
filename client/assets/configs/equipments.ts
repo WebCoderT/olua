@@ -51,45 +51,38 @@ export let equipmentPrefixLabels: string[] = [];
 export let equipmentSuffixLabels: string[] = [];
 
 /**
- * 内置品质色（#720 起只是**回落值**：快照 `equipmentMeta.prefixColors` / `suffixColors`
- * 到达后整份替换 —— 颜色跟文案一样是运营数据，收在管理端「前后缀管理」页）
+ * 装备前缀文字颜色（与文案同下标）：名称与前缀文字都用该色渲染
+ *
+ * **无本地兜底**（#724）：颜色是运营数据（管理端「前后缀管理」页），唯一来源是快照
+ * `equipmentMeta.prefixColors` —— 数组为空 = 不染色（渲染层落 Label 默认白），
+ * 不再内置一份出厂色顶着「运营改了没生效」。
  */
-const BUILTIN_PREFIX_COLORS = [
-  new Color("#DDDDDD"), // 普通的：灰白
-  new Color("#6EE86E"), // 强化的：绿
-  new Color("#4DA6FF"), // 精良的：蓝
-  new Color("#C77DFF"), // 极品的：紫
-  new Color("#FFA640"), // 超神的：橙
-];
+export let equipmentPrefixColors: Color[] = [];
 
-const BUILTIN_SUFFIX_COLORS = [
-  new Color("#B0B0B0"), // 人级：灰
-  new Color("#4DE3FF"), // 天级：青蓝
-  new Color("#FFD700"), // 神级：金
-];
-
-/** 装备前缀文字颜色（与文案同下标）：名称与前缀文字都用该色渲染；快照到达后整份替换 */
-export let equipmentPrefixColors: Color[] = BUILTIN_PREFIX_COLORS;
-
-/** 装备后缀文字颜色（与文案同下标；只用于后缀文字，不影响名称） */
-export let equipmentSuffixColors: Color[] = BUILTIN_SUFFIX_COLORS;
+/** 装备后缀文字颜色（与文案同下标；只用于后缀文字，不影响名称）；空数组的含义同上 */
+export let equipmentSuffixColors: Color[] = [];
 
 /** 校验一个 hex 颜色（#RRGGBB）；快照里的坏值不用它渲染 */
 const isHexColor = (value: unknown): value is string => typeof value === "string" && /^#[0-9A-Fa-f]{6}$/.test(value);
 
 /**
- * 把快照下发的 hex 颜色数组转成 Color 数组（#720）
+ * 「不染色」的渲染色（白 = Label 默认色）
  *
- * 逐档回落：缺位 / 非 `#RRGGBB` 的档用**内置色**顶上（档数超过内置长度时用最后一档的
- * 内置色兜底）；坏一条只坏一条，不至于整个品质系统跟着掉色。
- * 数组为空（老数据 / 服务端显式清空）= 整份用内置。档数以文案长度为准（与颜色同下标）。
+ * 每次新建而不是共享一份常量：Color 实例会被引用方持有，共享常量一旦被谁改了
+ * 全部「无色档」跟着变。这里只发生在「快照没给这一档的颜色」时 —— 那是配置问题，
+ * 显示成白字就是诚实表现（与边框 / 背景映射缺行的口径一致：显示出错就行）。
  */
-function tierColorsOf(hexes: string[] | undefined, tierCount: number, builtin: Color[]): Color[] {
-  if (!hexes?.length && tierCount <= builtin.length) return builtin;
-  return Array.from({ length: tierCount }, (_, index) => {
-    if (isHexColor(hexes?.[index])) return new Color(hexes[index]);
-    return builtin[Math.min(index, builtin.length - 1)];
-  });
+const noTintColor = (): Color => new Color("#FFFFFF");
+
+/**
+ * 把快照下发的 hex 颜色数组转成 Color 数组（#720 / #724）
+ *
+ * 快照没给（空 / 缺段）= 返回空数组 = 整份不染色；给了就逐档转，
+ * 坏 hex / 缺位的档落「不染色」（白）。档数以文案长度为准（与颜色同下标）。
+ */
+function tierColorsOf(hexes: string[] | undefined, tierCount: number): Color[] {
+  if (!hexes?.length) return [];
+  return Array.from({ length: tierCount }, (_, index) => (isHexColor(hexes[index]) ? new Color(hexes[index]) : noTintColor()));
 }
 
 /** 装备名称三段式（详情弹窗按段着色显示：前缀/名称用前缀色，后缀用后缀色） */
@@ -107,14 +100,15 @@ export interface EquipmentNameParts {
  *
  * 越界前后缀回退到第一档（普通的 / 人级）：快照还没到时 `equipmentPrefixLabels` 是空数组，
  * 这时 `undefined` 会直接落到名称里 —— 回退比显示 `undefined` 好。
+ * 颜色没有本地兜底：快照没给这一档的颜色时落「不染色」（白 = Label 默认色）。
  */
 export function getEquipmentNameParts(equipment: Equipment): EquipmentNameParts {
   const prefix = equipmentPrefixRates.length > equipment.prefix ? equipment.prefix : EQUIPMENT_PREFIX.NORMAL;
   const suffix = equipmentSuffixRates.length > equipment.suffix ? equipment.suffix : EQUIPMENT_SUFFIX.MORTAL;
   return {
-    prefix: { label: equipmentPrefixLabels[prefix] ?? "", color: equipmentPrefixColors[prefix] ?? equipmentPrefixColors[0] },
+    prefix: { label: equipmentPrefixLabels[prefix] ?? "", color: equipmentPrefixColors[prefix] ?? noTintColor() },
     label: equipment.label,
-    suffix: { label: equipmentSuffixLabels[suffix] ?? "", color: equipmentSuffixColors[suffix] ?? equipmentSuffixColors[0] },
+    suffix: { label: equipmentSuffixLabels[suffix] ?? "", color: equipmentSuffixColors[suffix] ?? noTintColor() },
   };
 }
 
@@ -427,8 +421,9 @@ export function applyEquipmentSlots(
 /**
  * 装载品质文案与文字颜色（快照 `equipmentMeta` 段；#720 起颜色也是运营数据）
  *
- * 文案缺了不覆盖（保留现有）；颜色：服务端给了非空数组就按档替换（坏 hex / 缺位回落内置色），
- * 空数组或没给 = 保持内置色 —— 老快照不带上色也不掉色。
+ * 文案缺了不覆盖（保留现有）；颜色**无本地兜底**（#724）：服务端给了非空数组就按档转
+ * （坏 hex / 缺位落「不染色」），空数组或没给 = 颜色表为空（渲染落白）——
+ * 「运营清空了配色」就该如实地显示成不染色，而不是客户端偷偷顶一份出厂色。
  */
 export function applyEquipmentQualityLabels(
   prefixLabels: string[],
@@ -438,11 +433,11 @@ export function applyEquipmentQualityLabels(
 ): void {
   if (prefixLabels?.length) {
     equipmentPrefixLabels = prefixLabels.map(String);
-    equipmentPrefixColors = tierColorsOf(prefixColors, prefixLabels.length, BUILTIN_PREFIX_COLORS);
+    equipmentPrefixColors = tierColorsOf(prefixColors, prefixLabels.length);
   }
   if (suffixLabels?.length) {
     equipmentSuffixLabels = suffixLabels.map(String);
-    equipmentSuffixColors = tierColorsOf(suffixColors, suffixLabels.length, BUILTIN_SUFFIX_COLORS);
+    equipmentSuffixColors = tierColorsOf(suffixColors, suffixLabels.length);
   }
 }
 

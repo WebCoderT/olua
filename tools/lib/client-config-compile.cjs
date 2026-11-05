@@ -116,7 +116,8 @@ function hydrateEquipment(cfg) {
   const meta = factory.equipmentMeta();
 
   snapCfg.applyEquipmentRules(meta.prefixRates, meta.suffixRates);
-  equipments.applyEquipmentQualityLabels(meta.prefixLabels, meta.suffixLabels);
+  // 颜色也走线上同一条路（#724 起客户端无内置色，不灌就是空表 = 不染色）
+  equipments.applyEquipmentQualityLabels(meta.prefixLabels, meta.suffixLabels, meta.prefixColors, meta.suffixColors);
   equipments.applyEquipmentSlots(factory.equipmentSlots());
 
   // 快照发的是**展开后的变体行**（行自带前后缀序号与最终属性 / 回收价），不乘任何倍率

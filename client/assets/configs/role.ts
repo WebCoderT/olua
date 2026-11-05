@@ -67,13 +67,14 @@ export const joystickMove = {
 /**
  * 角色魔法值自然回复速度（点/秒），0 = 关闭自然回复
  *
- * **可变**：真实值由服务端 `growth_scalars` 表的 `mpRecoverPerSecond` 决定（管理端「成长配置」可改），
- * 进游戏后随快照 `growthScalars` 段覆写（#605）；这里的 2 只是快照没到时的出厂值。
+ * **可变、无本地兜底**（#724）：真实值由服务端 `growth_scalars` 表的 `mpRecoverPerSecond` 决定
+ * （管理端「成长配置」可改），进游戏后随快照 `growthScalars` 段覆写（#605）；
+ * 初始 0 = 快照没到（进游戏前契约已保证快照到达）。
  * 血蓝收权（#596）后回复在**服务端**结算，客户端这份只用于血条 / 蓝条的平滑演出预测，
  * 所以两边短暂不一致不会导致存档偏差 —— 但别拿它做玩法判定。
  * 最大魔法值见 configs/level 的等级配置（maxMp），技能消耗见 configs/skill 的 mpCost
  */
-export let mpRecoverPerSecond = 2;
+export let mpRecoverPerSecond = 0;
 
 /**
  * 改魔法自然回复速度（**唯一写入口**）

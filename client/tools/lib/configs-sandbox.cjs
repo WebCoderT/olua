@@ -165,7 +165,8 @@ function hydrateSnapshotTables(outDir) {
   const meta = factory.equipmentMeta();
   const equipmentsMod = require(path.join(outDir, "configs/equipments.js"));
   cfg.applyEquipmentRules(meta.prefixRates, meta.suffixRates);
-  equipmentsMod.applyEquipmentQualityLabels(meta.prefixLabels, meta.suffixLabels);
+  // 颜色也走线上同一条路（#724 起客户端无内置色，不灌就是空表 = 不染色）
+  equipmentsMod.applyEquipmentQualityLabels(meta.prefixLabels, meta.suffixLabels, meta.prefixColors, meta.suffixColors);
   equipmentsMod.applyEquipmentSlots(factory.equipmentSlots());
 
   // 内容表一次落完（装备 → 药品 → 材料 → 怪物 → NPC → 任务 → 时装），末尾自带 rebuildItemIndex

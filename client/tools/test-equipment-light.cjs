@@ -10,9 +10,8 @@
  * · 全部装备都能取到光柱（掉落物不会出现「有的装备没光柱」）
  * · 素材守卫：每个光柱的 plist 图集与同名 png 成对存在、帧号连续无缺口、plist 画布尺寸 == PNG 尺寸
  *   —— 打包时逐帧 alpha 裁剪并以 spriteOffset 保留回贴位置，播放画面与原逐帧版一致（见 #216）
- * · **表现参数归服务端（#634）**：每档都有兜底行、出厂值 = 原写死的口径（偏移 0/0、缩放 1/1、
- *   旋转 0、**时长 = 帧数 × 100ms**）、未登记的 key 返回 null、关掉时连节点都不建；界面不再从
- *   layout 读帧率（一轮时长改由服务端下发）
+ * · **表现参数归服务端（#634）**：客户端无本地兜底（#724）、快照没到的 key 一律不演（返回 null）、
+ *   快照行整份生效（含关掉）、关掉时连节点都不建；界面不再从 layout 读帧率（一轮时长改由服务端下发）
  * · 接线：唯一挂点在掉落物零件、光柱排在图标之前（画在图标下层）、图集循环播放、进图前预加载
  *
  * 数据层跑在沙箱里（真实的 configs/light + game-config + equipments + items，见 lib/configs-sandbox.cjs），
@@ -27,8 +26,6 @@ const PREFIX_COUNT = 5;
 const LIGHT_COUNT = 6;
 /** 预留光柱（留给特殊装备手动添加，不参与前缀映射） */
 const RESERVED_LIGHT = "light_6";
-/** 出厂帧率（#634 之前写死 10fps；搬家后时长 = 帧数 × 100ms，这一档就是它的换算基准） */
-const LEGACY_FRAME_RATE = 10;
 
 let outDir;
 try {
@@ -206,36 +203,24 @@ lightResources.forEach((resource) => {
 console.log("      帧数一览：");
 frameStats.forEach((stat) => console.log(`        ${stat.key.padEnd(10, " ")} ${stat.count} 帧`));
 
-console.log("\n— F. 表现参数：出厂值 = 原写死口径、快照可覆盖、关掉不建节点（#634）—");
+console.log("\n— F. 表现参数：无本地兜底、快照整行生效、关掉不建节点（#634 / #724）—");
 lightResources.forEach((resource) => {
-  const config = dropLightEffectConfig(resource.key);
-  const frames = frameStats.find((stat) => stat.key === resource.key).count;
-  check(!!config && config.key === resource.key, `${resource.key} 有兜底参数（快照缺这一行也演得出来）`);
-  check(
-    !!config && config.offsetX === 0 && config.offsetY === 0 && config.scaleX === 1 && config.scaleY === 1 && config.rotate === 0 && config.enabled === true,
-    `${resource.key} 出厂摆位 = 搬家前写死的那组（偏移 0/0、素材原尺寸、不旋转、默认开）`,
-    JSON.stringify(config),
-  );
-  check(
-    !!config && config.durationMs === (frames * 1000) / LEGACY_FRAME_RATE,
-    `${resource.key} 出厂时长 = 帧数 × 100ms（原 10fps 的等效口径）`,
-    `帧数 ${frames} → ${config && config.durationMs}ms`,
-  );
+  check(dropLightEffectConfig(resource.key) === null, `${resource.key} 快照没到时不演（客户端没有出厂参数可回落）`);
 });
 check(dropLightEffectConfig("light_99") === null, "未登记的光柱返回 null（不拿默认参数演一个不存在的素材）");
 check(dropLightEffectConfig("") === null, "空 key 返回 null（调用方直接跳过）");
 {
-  // 快照覆盖：整行生效（含关掉）；没被覆盖的档仍走兜底；整表重建后不残留
+  // 快照行整份生效（含关掉）；整表重建后没被再下发的 key 归回 null（配置没粘住）
   applyUiEffectRows([{ key: "light_3", offsetX: 12, offsetY: -8, scaleX: 0.5, scaleY: 0.5, rotate: 90, durationMs: 800, enabled: false }]);
   const tuned = dropLightEffectConfig("light_3");
   check(
     !!tuned && tuned.offsetX === 12 && tuned.offsetY === -8 && tuned.scaleX === 0.5 && tuned.rotate === 90 && tuned.durationMs === 800 && tuned.enabled === false,
-    "快照行整份覆盖（偏移 / 缩放 / 旋转 / 时长 / 开关）",
+    "快照行整份生效（偏移 / 缩放 / 旋转 / 时长 / 开关）",
     JSON.stringify(tuned),
   );
-  check(dropLightEffectConfig("light_1").durationMs === 1400, "没被快照覆盖的档仍走兜底");
+  check(dropLightEffectConfig("light_1") === null, "快照没给的光柱仍然不演（没有出厂参数可回落）");
   applyUiEffectRows([]);
-  check(dropLightEffectConfig("light_3").enabled === true, "整表重建后回到兜底（配置没粘住）");
+  check(dropLightEffectConfig("light_3") === null, "整表重建后归空（配置没粘住）");
 }
 
 console.log("\n— G. 接线：挂点唯一、画在图标下层、循环播放、预加载 —");
@@ -282,4 +267,4 @@ check(assigned.every((resource) => !assignedKeys.has(RESERVED_LIGHT) || resource
 check(/export const equipmentLightLayout/.test(layoutSource), "configs/layout/lights 导出显示口径");
 check(/export \* from "\.\/layout\/lights"/.test(barrelSource) && /layout\/lights\.ts/.test(barrelSource), "hudLayout barrel 登记了 lights 布局（统一入口）");
 
-finish("PASS：光柱资源表与磁盘一致、前缀 5 档全覆盖、6 号预留未占用、取用与回退正确、出厂参数 = 原写死口径、素材与接线口径一致。");
+finish("PASS：光柱资源表与磁盘一致、前缀 5 档全覆盖、6 号预留未占用、取用与回退正确、表现参数无本地兜底且快照整行生效、素材与接线口径一致。");
