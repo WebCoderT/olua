@@ -44,6 +44,23 @@ deploy.sh 每次部署生成 compose `.env` 上传 → 换域名只改 deploy.en
 
 数据落在具名卷 `olua-data`，`docker compose down` **不会**删它；只有 `down -v` 才会。
 
+### 1.1 官网为什么自建，而不是 GitHub Pages
+
+官网 `website/` 是**零构建的纯静态站**，扔到哪个静态托管都能跑，最后选了自建，理由只有三条：
+
+| 方案 | 代价 | 结论 |
+| --- | --- | --- |
+| GitHub Pages | 地址是 `https://<owner>.github.io/olua/website/` 这种**子路径**，跟游戏/管理端的域名对不上；Pages 的构建与缓存我们插不上手 | 否 |
+| 第三方静态托管（Vercel / Netlify） | 多一个平台、多一份账号与构建配置，还要再绑域名 | 否 |
+| **自建：compose 里的 `website` 服务 + `server_name` 分流** | 占服务器几十 MB 内存；换域名要重新部署 | **是** |
+
+关键在于**它已经和另外三端在同一个入口后面**：`deploy.sh` 的 `git archive` 顺手就把 `website/` 带上去了，
+`./website` 是**只读 bind mount** → 解压即生效，**不用重建镜像、不用重启容器**，一条 `deploy.sh --no-build` 就完成发布。
+换任何外部托管都要多一步「额外 push 一次站点」，而这一步恰恰最容易忘。
+
+> 副作用：站点文件随仓库走，所以 `website/` 里**不要放**构建产物或大图原图 —— 截图原图走 `.gitignore`
+> 的 `/_screenshots_src/`，站点只用压缩后的 jpg。
+
 ---
 
 ## 2. 配置文件 `deploy.env`：密钥只住在这里
