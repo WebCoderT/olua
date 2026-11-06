@@ -6,7 +6,7 @@
  * · drug_hp_pct / drug_mp_pct 注册进物品总表，效果是百分比（hpPercent/mpPercent），图标指向真实存在的 60×60 PNG
  * · resolveDrugRecovery（纯函数）：固定值与百分比各自累加、按 maxHp/maxMp 折算、四舍五入、负值按 0、空效果归零
  * · **所有怪物均可掉落**：服务端种子 monster-drop-seed.ts（#602 起唯一书写处）每只怪的条目池都含
- *   这两个 id；drop-seed.ts 的三张具名表（common/elite/boss）与兜底表也不缺（兜底口径一致）
+ *   这两个 id；drop-seed.ts 的三张具名表（ui/common/elite/boss）与兜底表也不缺（兜底口径一致）
  * · 接线：StorageManager.useDrug 走 resolveDrugRecovery（不另抄一份回复量口径），魔法满值提示文案存在
  *
  * 数据层跑在沙箱里（真实的 configs/items + 服务端 monster-drop-seed / drop-seed，见 lib/configs-sandbox.cjs）。

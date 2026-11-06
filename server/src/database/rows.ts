@@ -475,14 +475,14 @@ export interface UiEffectRow {
  * 音效配置一行（`audio_settings` 表；#680）
  *
  * 一行 = 一个音效项的「用哪个文件 / 多大声 / 循环不循环 / 开不开」。音频**文件本体**在
- * 客户端资源包里（`client/assets/resources/sounds/`），这里只存资源相对路径 —— 与特效
+ * 客户端资源包里（`client/assets/resources/audio/`），这里只存资源相对路径 —— 与特效
  * 「只存表现参数」同一条纪律：二进制不进库、路径可换可不重打包。
  * 行由启动 seed 按 `AUDIO_DEFAULTS` 补出来，没有新建 / 删除语义（key 由客户端消费代码决定）。
  */
 export interface AudioSettingRow {
   /** 音效 key（登录背景音 login_bgm、按钮点击音 ui_click；取值域见 common/constants/audio） */
   audio_key: string;
-  /** 资源相对路径（带扩展名，如 `sounds/login_bg.wav`；**空串 = 未配置，这一项不响**） */
+  /** 资源相对路径（带扩展名，如 `audio/login-bg.wav`；**空串 = 未配置，这一项不响**） */
   file_path: string;
   /** 音量百分比（0~100，100 = 原始音量） */
   volume: number;
@@ -511,7 +511,7 @@ export interface TitleRow {
   level: number;
   label: string;
   description: string;
-  /** 动画资源目录（resources 相对路径，如 titles/sfx_13009） */
+  /** 动画资源目录（resources 相对路径，如 title/13009） */
   animation: string;
   animation_frame_rate: number;
   /** 升到该级消耗的绑定元宝（仅 `upgrade` 渠道实际使用；其余渠道保留数值但不展示入口） */
@@ -553,7 +553,7 @@ export interface SoulRow {
   level: number;
   label: string;
   description: string;
-  /** 动画资源目录（如 war-soul/sfx_13001） */
+  /** 动画资源目录（如 soul/13001） */
   animation: string;
   animation_frame_rate: number;
   /** 升到该阶消耗的绑定元宝 */
@@ -688,7 +688,7 @@ export interface EquipmentRow {
   sex: string;
   /** 描述（详情弹窗正文） */
   description: string;
-  /** 图标（resources 相对路径，如 `clothes/icon/005`） */
+  /** 图标（resources 相对路径，如 `equipment/clothes/icon/005`） */
   icon: string;
   /** 内观图集（列名避开 SQL 关键字 in） */
   in_atlas: string;
@@ -821,7 +821,7 @@ export interface DrugRow {
   label: string;
   /** 描述（运营文案，可编辑） */
   description: string;
-  /** 图标资源路径（resources 相对路径，如 `item/fs_2`；#603 第十域起由服务端持有并下发） */
+  /** 图标资源路径（resources 相对路径，如 `item/drug-hp-1`；#603 第十域起由服务端持有并下发） */
   icon: string;
   /** 使用等级需求（seed 自 item-seed.ts，暂不开放编辑） */
   level: number;

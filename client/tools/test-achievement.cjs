@@ -272,7 +272,7 @@ try {
   );
   check(/private achievementDialog = new AchievementDialog\(\);/.test(smallMap), "小地图持有一个成就面板实例（不是每次点都 new）");
   check(/entryIcons: \["world", "achievement"/.test(hudLayout), "入口清单里有 achievement，且排在第二颗（美术稿的竖排顺序）");
-  check(!/uiImages\.achievement/.test(smallMap), "入口用的是 small-map 现成图（不新增素材）");
+  check(!/uiImages\.achievement/.test(smallMap), "入口用的是 ui/minimap 现成图（不新增素材）");
   check(
     /AchievementStore\.clear\(\);/.test(read(CLIENT_GAME)),
     "离开游戏时清成就缓存（否则切角色会看到上一个角色的成就墙）",

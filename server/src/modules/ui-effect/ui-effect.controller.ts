@@ -31,7 +31,7 @@ export class AdminUiEffectController {
     description:
       "全部特效的表现参数：摆位 / 缩放 / 旋转 / 时长 / 开关 + 追账字段。\n\n" +
       "行由启动 seed 按 `UI_EFFECT_DEFAULTS` 补出来，**没有新建 / 删除接口** ——\n" +
-      "key 的取值域由客户端的消费代码决定（升级特效 `upgrade` + 掉落光效 `light_1`…`light_6`）。\n\n" +
+      "key 的取值域由客户端的消费代码决定（升级特效 `upgrade` + 掉落光效 `light-1`…`light-6`）。\n\n" +
       "不分页，按 seed 顺序（= `UI_EFFECT_KEYS` 的登记顺序，升级特效在最前）返回。",
     permissions: [Permission.GAME_CONFIG_READ],
   })
@@ -56,7 +56,7 @@ export class AdminUiEffectController {
       "key 不存在 → 404（`50145`）。",
     permissions: [Permission.GAME_CONFIG_WRITE],
   })
-  @ApiParam({ name: "id", description: "特效 key（升级特效 upgrade、掉落光效 light_1~light_6）" })
+  @ApiParam({ name: "id", description: "特效 key（升级特效 upgrade、掉落光效 light-1~light-6）" })
   @ApiDataResponse(UiEffectDto, { description: "保存后的特效配置（含追账字段）" })
   save(@Param("id") key: string, @Body() dto: SaveUiEffectDto, @CurrentUser() actor: AuthenticatedUser): UiEffectDto {
     return this.uiEffectService.save(key, dto, actor);

@@ -60,7 +60,7 @@ export interface StatusConfig {
   combat?: StatusCombatConfig;
   /**
    * 身上循环播放的特效图集（resources 下 TexturePacker 图集路径，不含扩展名，
-   * 如 "effect/skill/s_2009@0"）；不配置则只在图标栏显示、身上不播特效。
+   * 如 "effect/skill/2009"）；不配置则只在图标栏显示、身上不播特效。
    * 播放帧率与挂点偏移统一在 configs/effect 的 statusEffect（所有状态同一口径）
    */
   effect?: string;

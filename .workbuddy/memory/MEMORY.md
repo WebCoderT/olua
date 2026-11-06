@@ -25,6 +25,7 @@
 - `configs/` / `types/` 不引 UI 组件；方向恒为 `apply-snapshot → game-config → types`。
 - 门禁看 CI（PR 跑一次）；`make test-changed` 定向回归；client-test 基线 4 红（素材未入库）。
 - 部分更新接口加数组字段要区分「显式传」与「存量漂移」，否则扩档旧调用被 400 卡死（#720）。
+- **资源目录口径**（`client/RESOURCES.md`）：14 个顶层**域平铺** + `ui/` 收纳全部界面零件；命名全小写 + 连字符，图集 `.plist`/`.png` 同名成对，一套多表加 `@N`，图集编号用语义前缀（`border-30123`/`bg-16000`/`light-1`），纯数字名是配置 id 不动。**平铺图集与「目录内同名图集」都只走 `AnimationHelper.loadLoopFrames`**（两形态探测）。改名要三处同源：磁盘 + plist 自引用 → 库 19 个路径列 + `config-sync.sql` → 客户端 configs。
 
 ## 部署（→ olua-deploy）
 - compose 四服务：admin:80（唯一入口）/ game:8080 / server:3100 / realtime:3101。
@@ -44,5 +45,6 @@
 - **#747 清弹窗死配置**（PR #748 / `85254b79`）：删 `createDialogTitle` / `createCloseButton` 与 4 处死字段（`dialogFrame.title.defaultPosition/defaultSize`、两处 `titleColor/titleFontSize`、`guildDialogLayout.member` 的两个 `position`）。方法 = 真编译配置 × 扫 `assets/ui/**/*.ts` 成员访问链取差集（脚本一次性、不挂 CI，→ `cocos-ui-layout-config` 六之二）；**真死字段的共同特征：注释写的用途已和代码现状不符**；**经参数传递的不许删**。九宫化后 `createDialog` 的标题 / 关闭按钮几何本身没问题。
 - **#749 边框/背景关联改可视化选择器**（PR #750 / `4c105a89`）：棋盘每格 `GameFrame + Select`（84 条原始 key）→ 「帧动画预览 + 别名 + key」整块按钮 + `EntityPicker`。**不新造选择器**：`EntityOption.image.animate` 开逐帧播（缺省仍首帧）、`EntityPicker(List)` 加 `imageSize`（默认 32，这类 56）、`catalog.appearanceOptions()` 把清单条目直接映射成选项（别名当 label、分组当 group，缺省「未分组」否则 chips 漏条）。引用已不在清单里要**照实显示 key 并标黄**（客户端对坏 key 安静跳过）。服务端/快照/客户端零改动。
 - **#751 怪物编辑开放全部可配项**（PR #752 / `3e97ce35`）：一张怪横跨两张表 —— `monsters`（数值 + **tier 也放开了**：不重算数值但决定 BOSS 判定，掉落看 `monster_drops`）与 `monster_presentation`。关键切分：**几何（icon/out/偏移/尺寸）归生成器、行为四列（aggressive / detect_range / move_speed / speed_rate）归运营**，`updateBehavior` 的 SQL 里几何列一个字都不出现。`speedRate` 两种「空」必须分开（不传 = 不改，`{}` = 清空回客户端默认）；动作键只认有帧的五个（stand/walk/run/injured/die），非法键 400 不静默存库；缺表现行 404 `50038`。**校验全部前置再写库**（一次改两张表，别留半截提交）。`gen-monster-config.cjs` 摘掉 `aggressive`（改打印建议），零调用者的整行 `upsert` 一并删。生效时间三档写进弹窗 hint：即时 / ≤1 秒（AI TTL）/ 画面要重进地图。
+- **#753 resources 重整**（分支 `chore/753-resources-layout`）：63 个平级目录 → 14 个顶层域 + `ui/`（15 个子目录），5153 素材 / 2282 移动 / 863 改名 / 70 归档 `_loose_frames_archive/orphans-2026-11/`。**真 bug**：`title`/`soul`/`npc`/`effect/{border,background,light}` 变平铺图集后 `loadLoopFrames` 只认目录内同名图集 → 一律回退散帧失败，改成两形态探测。坑：批量替换误伤 `server/src/common/`→`ui/common/`、文案 key `label_*` 不该跟资源规范、`startsWith("light_")` 前缀判据漏改、e2e 的 `equipment_appearance` 行被跑脏要重写成出厂值。新增 `client/RESOURCES.md`。
 - open：#669 刷怪区即时生效 · #9 包体积 · #12~#19 素材 · #295 阶段三 · #403 帮会战 · #742 站点 TLS（线上只监听 80）。
 - 定保持现状：技能 1011 / 快捷键 6 格 / 装备 7 部位。

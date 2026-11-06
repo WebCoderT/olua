@@ -117,7 +117,7 @@ await authApi.login({ username, password }, { silent: true }); // 表单自己�
 | `QuestsPage` | **任务配置**（#396）：**允许动态增删**（运营内容）；弹窗一次展示整条任务（身份 / 接取条件 / 目标 / 奖励 / 对话）。目标与发布 NPC 一律 `EntityPickButton`，候选走 `catalog` 全量清单（220 只怪一只不少）—— 别退回「拉前 100 行」的老做法（第 101 只之后全显示裸 id） |
 | `AchievementsPage` | **成就配置**（#401）：允许增删，但**有玩家成就记录时拒删**（先清记录）；页面标出「累计型 / 状态型」是因为**进度来源不同** —— 累计型由事件流记账（改门槛只影响「还要做多少次」），状态型每次查询现算（把 10 级改成 1 级，所有人立刻可领） |
 | `UiEffectsPage` | **特效表现参数**（#594 / #634，`game-config:read/write`）：一族一个页签（升级特效 / 掉落光效），左栏预览右栏参数，改一个数左边立刻重画（未保存也生效）。图集路径是两端约定，所以没有新建 / 删除 |
-| `AudioSettingsPage` | **音效配置**（#680）：一个音效项一张卡 —— 文件路径（`sounds/xxx.wav`，**只能英文名**）/ 音量 / 循环 / 启用 + **试听**（按表单当前值播）。路径**入库**（与特效的差别），服务端不查文件存在性，验证靠试听；**分 4 类 tab**（分类随接口下发）、**已下发客户端**（快照 audio 段 + 公开接口）—— 见「五点十五」 |
+| `AudioSettingsPage` | **音效配置**（#680）：一个音效项一张卡 —— 文件路径（`audio/xxx-yyy.wav`，**只能英文名**）/ 音量 / 循环 / 启用 + **试听**（按表单当前值播）。路径**入库**（与特效的差别），服务端不查文件存在性，验证靠试听；**分 4 类 tab**（分类随接口下发）、**已下发客户端**（快照 audio 段 + 公开接口）—— 见「五点十五」 |
 | `RuntimeParamsPage` | **运行时参数**（#605）：三组原本写死在客户端源码里的数（掉落手感 / 自动战斗与寻路 / 帮会规则）。**按组保存、不是整页一个保存按钮** —— 三组各管一件事，整页提交会让并发编辑的两个人互相覆盖；数字先按字符串收 |
 | `GuideStepsPage` | **新手引导步骤**（#605）：推进逻辑在客户端（走到第几步存存档），服务端只存这张有序小表（出厂 6 步、上限 64 步）。**整份保存**：顺序本身就是要改的内容，逐行存会让「上移 / 下移」变成多次请求且中间态可见；任何一步不合法整份 40000 不落库。id 只给日志与单测用，改 id 会让历史日志对不上 |
 | `MailsPage` | 邮件投递记录（`mail:read` 看记录、`mail:write` 发信，编辑走 `EmailDialog`） |
@@ -169,8 +169,8 @@ await authApi.login({ username, password }, { silent: true }); // 表单自己�
 **资源路径字段一律用 `IconField`**（`components/ImagePicker.tsx` 导出，#641）：
 
 - `<IconField mode="image" rootDir="item" value={form.icon} onChange={…}/>` —— 单图（药品 / 物品 / 装备图标、技能与状态图标、部位底图）；
-- `<IconField mode="atlas" rootDir="clothes/out" …/>` —— 一套动画（称号 / 战魂 `/titles` `/war-soul`、NPC `npc`、内观 `clothes/in`、外观 `clothes/out`、技能特效 `effect/skill`、状态特效 `effect/status`、时装三件套）。
-- `mode="atlas"` 的「一套」= `rootDir` 之下的**第一段**，所以 `clothes/out/001` 不会拆成 `001/a1` 让运营去选动作。
+- `<IconField mode="atlas" rootDir="equipment/clothes/out" …/>` —— 一套动画（称号 `title`、战魂 `soul`、NPC `npc`、内观 `equipment/clothes/in`、外观 `equipment/clothes/out`、技能特效 `effect/skill`、状态特效 `effect/status`、时装三件套）。
+- `mode="atlas"` 的「一套」= `rootDir` 之下的**第一段**，所以 `equipment/clothes/out/001` 不会拆成 `001/a1` 让运营去选动作。
 - **图标 / 动画字段别自己拼输入框 + 弹窗**：还要处理 `anyPickerOpen()` 的 Esc 放行，漏了就是「关选择器顺带把编辑弹窗关了」（弹窗嵌套时两个 Modal 各挂一个 window 监听，外层先注册先收到）。计数在 `components/pickerStack.ts`，`IconField` / `ImagePicker` / `EntityPicker` 各自登记，调用方只问 `anyPickerOpen()`。
 
 **物品 / 装备 / 技能 / 怪物 / NPC 的 id 字段一律用 `EntityPickButton`**（`components/entity/EntityPickButton.tsx`，#648 / #651）：图标 + 名字 + 一行说明的按钮，点开就是 `EntityPicker`（搜索 + 分组 + 网格）。**不许再让运营手填 `drug_hp_1` 这类 id，也不要用 2000 项的原生 `<select>`**：
@@ -342,7 +342,7 @@ await authApi.login({ username, password }, { silent: true }); // 表单自己�
 **角色详情的一屏版式**（1440×900 实测 `main.scrollHeight === clientHeight`）：
 
 - 左窄栏 340~420：**一张只读的「角色」卡**，三段用 `border-t` 分隔 ——
-  身份（头像按**职业 + 性别**取 `avatars/<occ>-<sex>.png`；所在地图预览图是 **`.jpg`**）/
+  身份（头像按**职业 + 性别**取 `ui/avatar/<occ>-<sex>.png`；所在地图预览图是 **`.jpg`**）/
   货币与经验 / 战斗属性（`<RoleAttributesCard bare />`）；
 - 右宽栏：**一张可改的「装备」卡** = 穿戴槽位（有装备用大卡、空槽压成一行小按钮）+ 分隔线 +
   「时装与成长阶位」（`EntityCard` + 三个 `LevelLadder compact` 并排一行）；
@@ -456,16 +456,16 @@ await authApi.login({ username, password }, { silent: true }); // 表单自己�
 音效页（`/audio`，`AudioSettingsPage`）与特效页（`/ui-effects`）长得像，但有一处**根本差别**，
 这一节记的就是它：
 
-1. **路径入库，不是两端约定**。特效图集路径由 key 推导（`effect/<key>/<key>.plist`），换美术必须
+1. **路径入库，不是两端约定**。特效图集路径由 key 推导（`effect/upgrade/upgrade.plist`），换美术必须
    重打包，所以那张表里没有路径列；音效的文件是**运营挑的**（`audio_settings.file_path` =
-   `sounds/xxx.wav`，相对 `client/assets/resources/`，**带扩展名**），换一首登录曲只要新文件已在
+   `audio/xxx-yyy.wav`，相对 `client/assets/resources/`，**带扩展名**），换一首登录曲只要新文件已在
    资源包里。带扩展名的理由：与文件系统一一对应，目录列表 / 试听地址可以直接拼；客户端对接时
    去掉扩展名再 `resources.load(path, AudioClip)`。
-2. **文件名只允许英文**（用户 2026-11-04 定）：字母 / 数字 / 下划线 / 短横线 + `sounds/` 前缀 +
+2. **文件名只允许英文**（用户 2026-11-04 定）：字母 / 数字 / 下划线 / 短横线 + `audio/` 前缀 +
    扩展名白名单（`.wav .mp3 .ogg .m4a`）。资源目录里临时放的中文名要先改名 —— 所以**选择器要把
    不合规的文件名挡在列表外**，别让人选完保存才吃 400（页面会提示「另有 N 个文件名不是英文」）。
    空串 = 未配置（合法状态，这一项不响），不是错误。
-   **命名约定：文件名与 key 同名**（`ui_click` → `sounds/ui_click.wav`，#685 用户授权统一改名）。
+   **命名约定：文件名与 key 同名**（`ui_click` → `audio/ui-click.wav`，#685 用户授权统一改名）。
    不是校验规则（运营可换任何合规文件名），纯粹为了对齐：翻资源目录一眼看出对应哪个配置项。
    改文件时**连同 `.meta` 一起改**（uuid 在 meta 上，`resources.load` 按路径找，两边都对才不丢引用）。
 3. **服务端不检查文件是否存在**。资源包不在服务端（镜像里没有 `client/assets/resources`），强行查

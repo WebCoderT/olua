@@ -116,8 +116,8 @@ export function parseAtlasFrames(xml: string): AtlasFrame[] | null {
 
 /**
  * 载入一份图集动画（模块级缓存）：路径拼法两级尝试（`目录/同名` 优先、退回「路径即基名」），
- * 与 `GameFrame.loadFirstFrame` 同一套 —— 边框 `borders/sfx_30123_0` 与背景
- * `backgrounds/sfx_16000` 两种磁盘形态都罩得住。全都不存在返回 null。
+ * 与 `GameFrame.loadFirstFrame` 同一套 —— 边框 `effect/border/border-30123` 与背景
+ * `effect/background/bg-16000` 都是「`目录/同名` 优先、退回「路径即基名」」两级尝试。全都不存在返回 null。
  */
 export function loadAtlasAnimation(atlasPath: string): Promise<AtlasAnimation | null> {
   const base = atlasPath.replace(/^\/+|\/+$/g, "");

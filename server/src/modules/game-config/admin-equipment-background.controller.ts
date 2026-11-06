@@ -44,7 +44,7 @@ export class AdminEquipmentBackgroundController {
       "- `assignments`：前后缀组合 → 背景 key，**恰好覆盖当前档数的每种组合**、各一条；\n" +
       "- `customs`：特殊装备 → 背景 key（**优先于**棋盘）。\n\n" +
       "每条可带 `effect`（x/y 偏移 + scale 倍率，#700），不传 = 默认适配（铺满弹窗面板）。\n" +
-      "key 形如 `sfx_16000`。服务端只校验 key 格式，**不校验素材存在**。\n\n" +
+      "key 形如 `bg-16000`。服务端只校验 key 格式，**不校验素材存在**。\n\n" +
       "缺行 / 坏数据：映射表整份回落出厂映射、自定义表坏条目丢弃（effect 坏只丢效果），均有日志可查。",
     permissions: [Permission.GAME_CONFIG_READ],
   })
@@ -61,7 +61,7 @@ export class AdminEquipmentBackgroundController {
     description:
       "**整边替换**：提交的 `assignments` + `customs` 就是背景这半边的新配置，不是增量；\n" +
       "**边框那半边不受影响**（两页各自保存互不覆盖）。\n\n" +
-      "约束：`assignments` 恰好覆盖当前档数的每种组合且不重复；key 形如 `sfx_16000`；\n" +
+      "约束：`assignments` 恰好覆盖当前档数的每种组合且不重复；key 形如 `bg-16000`；\n" +
       "`effect` 数值在范围内（偏移 ±2000、倍率 0.1~10）；自定义表的装备标识唯一、最多 200 条。\n\n" +
       "任何一条不合法 → 40000 且**整边不落库**。\n\n" +
       "改完玩家下次进游戏拉配置快照后生效；已经在游戏里的那一次不会变。",
@@ -74,7 +74,7 @@ export class AdminEquipmentBackgroundController {
 
   /**
    * 扫描背景资源文件夹（#716「从文件夹同步」的预览）：与边框控制器同构，
-   * 只是子目录换成 `backgrounds/`（key = 帧序列目录名）。
+   * 只是子目录换成 `effect/background/`（key = 图集文件名）。
    */
   @Get("resources")
   @ApiAdminDoc({
@@ -82,7 +82,7 @@ export class AdminEquipmentBackgroundController {
     summary: "扫描背景资源文件夹（同步预览）",
     description:
       "扫资源目录（`EQUIPMENT_APPEARANCE_RES_DIR`，缺省 `../client/assets/resources`；线上 compose\n" +
-      "把 `game/resources/` 挂进容器）下的 `backgrounds/`，返回：\n\n" +
+      "把 `game/resources/` 挂进容器）下的 `effect/background/`，返回：\n\n" +
       "- `keys`：文件夹里的全部背景 key（sfx 编号升序；帧序列目录才算）\n" +
       "- `added` / `removed`：与当前清单的差集（同步将新增 / 将移除）\n" +
       "- `removedReferenced`：removed 里仍被棋盘 / 绑定引用的 key（同步允许移除）\n\n" +

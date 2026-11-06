@@ -145,7 +145,7 @@ RoleApi.select(id)  →  StorageManager.cacheServerRole(detail)   // 连 revisio
 - **切页签就 `reload`，不读缓存**：玩家打开榜就是想看新的；缓存会让他怀疑「我升级了怎么没动」。仓里**故意没有** `ensure`（「有数据就不拉」的语义留着就会让人以为切页能省一次请求）。
 - **请求失败不清旧数据**：只置 `failed`，界面顶部提示一句，旧那份继续显示 —— 一次网络抖动不该把玩家正在看的榜擦成空白。
 - **`clear()` 在 `Game.onDestroy` 里调**（跟 `PartyStore.clear()` 并列）：榜里的「我的名次」属于上一个角色，带过去会写错名字。
-- **入口挂现成的装饰图**：底部功能栏十格已排满，排行榜用的是小地图本来就有的 `small-map/ranking-list`；`bindPointerAction` 绑上去即可，不新增素材。
+- **入口挂现成的装饰图**：底部功能栏十格已排满，排行榜用的是小地图本来就有的 `ui/minimap/ranking-list`；`bindPointerAction` 绑上去即可，不新增素材。
 - **`padStart` 用不了**（客户端 tsconfig 的 lib 没到 ES2017）：名次补零手写 `rank < 10 ? "0" + rank : String(rank)` 这类判断。
 - 阈值/时长这类数字**别散在组件里**：`row.topRankThreshold`、`summary.freshMs` 放 `configs/layout/dialogs.ts`（`audit-config-leak` 会把裸比较打回）。
 
@@ -203,7 +203,7 @@ RoleApi.select(id)  →  StorageManager.cacheServerRole(detail)   // 连 revisio
 - **隐藏成就未达成时不剧透**：描述换成一句静态提示（`texts.hiddenHint`），条件只在达成后才可见。
 - **按钮三态各走各的底色**（可领 / 已领 / 未达成），且**只有「可领且不在领取中」才绑点击** ——
   已领与未达成都不该有响应，比点了弹一句「不能领」干净。
-- **入口用现成素材**：小地图左侧竖排第二颗 `small-map/achievement` 美术稿本来就有，之前是纯占位。
+- **入口用现成素材**：小地图左侧竖排第二颗 `ui/minimap/achievement` 美术稿本来就有，之前是纯占位。
 - `Game.onDestroy` 里 `AchievementStore.clear()`（成就墙是「这个角色」的，不能带给下一个角色）。
 - **规模 24 条**（battle 10 / growth 8 / explore 6，含 3 条隐藏，#428）：条数由库里的 `achievements` 表决定
   （管理端「成就配置」增删改，出厂行随 `server/data/config-sync.sql` 灌库）。条数断言只在
@@ -313,13 +313,13 @@ RoleApi.select(id)  →  StorageManager.cacheServerRole(detail)   // 连 revisio
 - **客户端 tsconfig 的 lib 不到 ES2018** → `Promise.finally` 编译不过（TS2550），收尾用 `.then()`。
 - **新音效 = 三处一起改**：服务端 `AUDIO_KEYS` / `AUDIO_DEFAULTS` 登记 + 客户端写调用点 + 管理端不用动
   （tab 与文案都随接口下发）。只加常量不写调用点 = 一个永远不响的开关。
-- **文件名与 key 同名**（#685 用户授权改名后统一）：`sounds/ui_click.wav` ↔ `ui_click`。
+- **文件名与 key 同名**（#685 用户授权改名后统一）：`audio/ui-click.wav` ↔ `ui_click`。
   不是校验规则（运营可换任何合规文件名），纯粹为了对齐 —— 翻资源目录时一眼看出对应哪个配置项。
   **改文件连同 `.meta` 一起改**（uuid 在 meta 上，改对了 prefab / resources.load 都不受影响）。
 - **改出厂值（改名 / 换文件 / 调默认音量）要能落到老库上**，两件事都得做，缺一项就是「代码改了、
   线上没变」：
   1. **同步出厂行**：`INSERT OR IGNORE` 只在「没有这行」时插入，已有行一个字段都不动 →
-     改了 `AUDIO_DEFAULTS.filePath` 之后，老库里还指着 `sounds/login_bg.wav`，而资源已经叫
+     改了 `AUDIO_DEFAULTS.filePath` 之后，老库里还指着 `audio/login-bg.wav`，而资源已经叫
      `login_bgm.wav` → 一进游戏全都没声音，且看不出原因（服务端不查文件存在性）。
      `AudioSettingService.onModuleInit` 对 `updated_at = 0` 的行调 `rebaseOnPreset`（跟随出厂值）；
      **`updated_at > 0` 的行一个字都不动** —— 那是运营的决定；

@@ -92,7 +92,7 @@ export function setMpRecoverPerSecond(value: number): void {
  *
  * 字段与装备的外观字段同口径（out / outScale / outPositions）—— 于是「穿上衣服」与「脱下衣服回退默认身体」
  * 在 ui/components/role/RoleAppearance 里走的是同一套变换代码（缩放 + 按方向的位置）。
- * 目录若与另一套素材共用全局连续编号（如 role/2 的帧号从 600 起），
+ * 目录若与另一套素材共用全局连续编号（如 role/girl 的帧号从 600 起），
  * 帧号基准要去 configs/animation.animationFrameBases 登记，否则整包片段切不出来（外观全空白）。
  */
 export interface RoleDefaultCloth {
@@ -115,8 +115,8 @@ export interface RoleDefaultCloth {
  * 口径（2026-10-29 施工时逐帧量图确认）：
  *   - 锚点 = 画布中心（Cocos 里外观节点是默认 anchor 0.5/0.5 的 Sprite），
  *     所以位置 (0,0) 的语义是「**画布中心**落在角色脚下」，不是「脚落在角色脚下」；
- *   - 美术画布底部还留着 25~66 单位不等的空白（role/1 画布 150×132、身体只有 71 高），
- *     于是「全 0」会把裸模整体沉到地面以下：role/1 脚底 -31、role/2 脚底 -26；
+ *   - 美术画布底部还留着 25~66 单位不等的空白（role/boy 画布 150×132、身体只有 71 高），
+ *     于是「全 0」会把裸模整体沉到地面以下：role/boy 脚底 -31、role/girl 脚底 -26；
  *   - 客户端开着 `configs/debug.colliderRange` 时最明显：碰撞盒从脚下往上 70
  *     （见 roleBody.colliderOffset），而身体落在碰撞盒的下半部分 —— 看起来就是
  *     「人物外观的锚点跑到了身体正中间」。
@@ -140,7 +140,7 @@ function roleGroundPositions(points: Array<[number, number]>): Vec2[] {
 export const roleDefaultCloths = new Map<SEX, RoleDefaultCloth>();
 
 roleDefaultCloths.set(SEX.BOY, {
-  out: "role/1",
+  out: "role/boy",
   outScale: 1,
   outPositions: roleGroundPositions([
     [1, 31], // up
@@ -154,7 +154,7 @@ roleDefaultCloths.set(SEX.BOY, {
   ]),
 });
 roleDefaultCloths.set(SEX.GRIL, {
-  out: "role/2",
+  out: "role/girl",
   outScale: 1,
   outPositions: roleGroundPositions([
     [-6, 26.5], // up
@@ -181,14 +181,14 @@ export function getRoleDefaultCloth(sex: SEX): RoleDefaultCloth {
  * 判据是项目一贯的三层归属：
  * - **职业名**是可运营文案，唯一的权威副本已经在公共数据里（生成物 `OCCUPATION_LABELS`，
  *   管理端 / 服务端读的都是它，来源就是本表）—— 再建一张表只会变成「两份名字」；
- * - **介绍图路径可按职业码推导**（`create_role/tips_<职业码>`，1/2/3 与 tips_1/2/3 一一对应），
+ * - **介绍图路径可按职业码推导**（`ui/create-role/tips-<职业码>`，1/2/3 与 tips-1/2/3 一一对应），
  *   按「能按 id 推导的资源路径不入库」的判据（地图 `map/<id>/<id>` 同理），它属于资源约定；
  * - **尺寸是素材量出来的**（两张 249×69、一张 245×51），换图才需要改，不是运营数值。
  *
  * 于是这里只留**推导规则**，不再手写三条路径 —— 加第四个职业时不会漏配一条 tips 路径。
  */
 function occupationIntro(name: string, code: OECCUPATION, descriptionSize: Size): RoleOccupationInfo {
-  return { name, description: `create_role/tips_${code}`, descriptionSize };
+  return { name, description: `ui/create-role/tips-${code}`, descriptionSize };
 }
 
 /** 职业介绍信息MAP */

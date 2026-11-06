@@ -25,7 +25,7 @@ const LIGHT_DIR = path.join(PROJECT_ROOT, "assets/resources/effect/light");
 const PREFIX_COUNT = 5;
 const LIGHT_COUNT = 6;
 /** 预留光柱（留给特殊装备手动添加，不参与前缀映射） */
-const RESERVED_LIGHT = "light_6";
+const RESERVED_LIGHT = "light-6";
 
 let outDir;
 try {
@@ -57,13 +57,13 @@ function pngSize(file) {
 console.log("\n— A. 光柱资源表与磁盘 —");
 const diskAtlases = fs
   .readdirSync(LIGHT_DIR)
-  .filter((name) => /^light_\d+\.plist$/.test(name))
-  .map((name) => Number(name.match(/^light_(\d+)\.plist$/)[1]))
+  .filter((name) => /^light-\d+\.plist$/.test(name))
+  .map((name) => Number(name.match(/^light-(\d+)\.plist$/)[1]))
   .sort((a, b) => a - b);
 check(diskAtlases.length === LIGHT_COUNT, `磁盘有 ${LIGHT_COUNT} 个光柱图集`, `实际 ${diskAtlases.length}：${diskAtlases.join("、")}`);
 check(lightResources.length === diskAtlases.length, `资源表数量与磁盘一致（${lightResources.length} 个）`);
 check(
-  JSON.stringify(lightResources.map((r) => r.key)) === JSON.stringify(diskAtlases.map((serial) => `light_${serial}`)),
+  JSON.stringify(lightResources.map((r) => r.key)) === JSON.stringify(diskAtlases.map((serial) => `light-${serial}`)),
   "资源表与磁盘图集一一对应（无多登 / 漏登 / 写错编号）",
 );
 check(new Set(lightResources.map((r) => r.key)).size === lightResources.length, "光柱 key 唯一");
@@ -99,7 +99,7 @@ Array.from(prefixLights.keys()).forEach((prefix) => {
 });
 // 强度升序：前缀枚举值越大 → 光柱编号越大（越强的装备光柱越靠后）
 const ordered = prefixValues.slice().sort((a, b) => Number(a) - Number(b));
-const serials = ordered.map((prefix) => Number(prefixLights.get(prefix).replace("light_", "")));
+const serials = ordered.map((prefix) => Number(prefixLights.get(prefix).replace("light-", "")));
 check(
   serials.every((serial, index) => index === 0 || serial > serials[index - 1]),
   "前缀越强光柱编号越大（强度升序取 1~5 号）",
@@ -142,7 +142,7 @@ const variant = equipments.find((equipment) => equipment.id !== baseKey && equip
 check(!!variant && getEquipmentLightKey(variant) === RESERVED_LIGHT, "写基础件 key → 该装备的全部变体都生效");
 customEquipmentLights.delete(baseKey);
 check(getEquipmentLightKey(sample) === originalPrefixKey, "还原后回到前缀表");
-customEquipmentLights.set(sample.id, "light_99");
+customEquipmentLights.set(sample.id, "light-99");
 check(getEquipmentLightKey(sample) === originalPrefixKey, "自定义指向未登记光柱 → 回退前缀表（不显示为空）");
 customEquipmentLights.delete(sample.id);
 
@@ -207,20 +207,20 @@ console.log("\n— F. 表现参数：无本地兜底、快照整行生效、关�
 lightResources.forEach((resource) => {
   check(dropLightEffectConfig(resource.key) === null, `${resource.key} 快照没到时不演（客户端没有出厂参数可回落）`);
 });
-check(dropLightEffectConfig("light_99") === null, "未登记的光柱返回 null（不拿默认参数演一个不存在的素材）");
+check(dropLightEffectConfig("light-99") === null, "未登记的光柱返回 null（不拿默认参数演一个不存在的素材）");
 check(dropLightEffectConfig("") === null, "空 key 返回 null（调用方直接跳过）");
 {
   // 快照行整份生效（含关掉）；整表重建后没被再下发的 key 归回 null（配置没粘住）
-  applyUiEffectRows([{ key: "light_3", offsetX: 12, offsetY: -8, scaleX: 0.5, scaleY: 0.5, rotate: 90, durationMs: 800, enabled: false }]);
-  const tuned = dropLightEffectConfig("light_3");
+  applyUiEffectRows([{ key: "light-3", offsetX: 12, offsetY: -8, scaleX: 0.5, scaleY: 0.5, rotate: 90, durationMs: 800, enabled: false }]);
+  const tuned = dropLightEffectConfig("light-3");
   check(
     !!tuned && tuned.offsetX === 12 && tuned.offsetY === -8 && tuned.scaleX === 0.5 && tuned.rotate === 90 && tuned.durationMs === 800 && tuned.enabled === false,
     "快照行整份生效（偏移 / 缩放 / 旋转 / 时长 / 开关）",
     JSON.stringify(tuned),
   );
-  check(dropLightEffectConfig("light_1") === null, "快照没给的光柱仍然不演（没有出厂参数可回落）");
+  check(dropLightEffectConfig("light-1") === null, "快照没给的光柱仍然不演（没有出厂参数可回落）");
   applyUiEffectRows([]);
-  check(dropLightEffectConfig("light_3") === null, "整表重建后归空（配置没粘住）");
+  check(dropLightEffectConfig("light-3") === null, "整表重建后归空（配置没粘住）");
 }
 
 console.log("\n— G. 接线：挂点唯一、画在图标下层、循环播放、预加载 —");

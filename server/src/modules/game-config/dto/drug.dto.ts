@@ -32,7 +32,7 @@ export class DrugDto {
   @ApiProperty({ description: "描述" })
   description: string;
 
-  @ApiProperty({ description: "图标资源路径（resources 相对路径，如 item/fs_2）" })
+  @ApiProperty({ description: "图标资源路径（resources 相对路径，如 item/drug-hp-1）" })
   icon: string;
 
   @ApiProperty({ description: "使用等级需求（展示与背包排序口径，不拦用药；管理端可改）" })
@@ -119,7 +119,7 @@ export class UpdateDrugDto {
 
   @ApiPropertyOptional({
     description:
-      "图标（resources 相对路径，如 item/fs_2；空串 = 不显示图标）。" +
+      "图标（resources 相对路径，如 item/drug-hp-1；空串 = 不显示图标）。" +
       "**这是少数允许下发的资源路径** —— 药品图标与 id 之间没有可推导的约定，只能存表",
     maxLength: 200,
   })

@@ -8,7 +8,7 @@ import { Button, Field, Input, Spinner } from "./ui";
  * 图片选择器：可视化挑一张 resources 里的图
  *
  * 为什么要它：图标字段（药品 / 装备 / 物品 / 技能…）在库里存的是 resources 相对路径
- * （如 `item/fs_2`）。手填路径的代价是「改完资源还要记得名字」—— 素材一更新，
+ * （如 `item/drug-hp-1`）。手填路径的代价是「改完资源还要记得名字」—— 素材一更新，
  * 运营就得去翻目录、拼路径、祈祷别打错。这里把「有哪些图」摊成网格，点一下就选中。
  *
  * ## 清单从哪来（两个来源，同一个 JSON 形状）
@@ -21,8 +21,8 @@ import { Button, Field, Input, Spinner } from "./ui";
  * 所以下面这段解析代码只有一条路径，不存在「本地调好了、部署上去没得选」。
  *
  * ## 文件 vs 目录（清单只列图片，但候选未必是图片）
- * 动画模式的「一套」有两种磁盘形态：`clothes/in/001` 是**文件**（`001.png` + `001.plist`），
- * `clothes/out/001` 是**目录**（里面再分 `stand` / `run` / 八方向子目录，本体没有单张封面）。
+ * 动画模式的「一套」有两种磁盘形态：`equipment/clothes/in/001` 是**文件**（`001.png` + `001.plist`），
+ * `equipment/clothes/out/001` 是**目录**（里面再分 `stand` / `run` / 八方向子目录，本体没有单张封面）。
  * 清单里没有目录项，所以目录集由图片路径的各级父目录反推（`indexCatalog`），
  * 判定见 `kindOf`：能出缩略图的（自身是图 / 目录里有同名图集本体）照旧画首帧，
  * 纯目录画**文件夹图标** —— 别让「图集目录」长得像「素材缺失」。
@@ -42,12 +42,12 @@ type ImageCatalog = { images: string[]; source: "list" | "manifest"; index: Cata
  *
  * ## 动画模式怎么定「一套」
  * 动画在磁盘上有三种形态，但**对运营来说都是「这个角色 / 称号的那一套」**：
- * - `titles/sfx_13009/sfx_13009.png`（Cocos 图集目录约定）；
- * - `clothes/in/001.png` + `.plist`（路径即基名）；
- * - `clothes/out/001/a1/a1.png`（外观按动作分子目录，一个动作一套图集）。
+ * - `title/13009/13009.png`（Cocos 图集目录约定）；
+ * - `equipment/clothes/in/001.png` + `.plist`（路径即基名）；
+ * - `equipment/clothes/out/001/a1/a1.png`（外观按动作分子目录，一个动作一套图集）。
  *
  * 所以要靠清单反推「一套」得写三种规则 —— 不如直接用**调用方给的锚点**：
- * `rootDir` 之下的**第一段**就是一套（`clothes/out` + `001` → `clothes/out/001`）。
+ * `rootDir` 之下的**第一段**就是一套（`equipment/clothes/out` + `001` → `equipment/clothes/out/001`）。
  * 一条规则覆盖三种形态，也不会把 `001/a1` 这种内部动作目录漏给运营去选。
  * 因此动画模式下 `rootDir` 是必填的（没有锚点就无从切段，退化成图标模式的行为）。
  */
@@ -79,10 +79,10 @@ function indexCatalog(images: string[]): CatalogIndex {
 /**
  * 这个值在磁盘上是什么：一张图 / 一个目录 / 清单里根本没有
  *
- * - `files.has(value)`：路径本身就是图（`clothes/in/001` → `clothes/in/001.png`）；
- * - `files.has(value/同名)`：目录里放着**同名**图集本体（`titles/sfx_13009/sfx_13009.png`、
- *   `npc/npc_2108/npc_2108.png`）—— 那张就是封面，按「图」处理；
- * - 目录里只有子目录（`clothes/out/001` 的 `stand` / `run` / 八方向）→ 目录；
+ * - `files.has(value)`：路径本身就是图（`equipment/clothes/in/001` → `equipment/clothes/in/001.png`）；
+ * - `files.has(value/同名)`：目录里放着**同名**图集本体（`title/13009/13009.png`、
+ *   `npc/2108/npc_2108.png`）—— 那张就是封面，按「图」处理；
+ * - 目录里只有子目录（`equipment/clothes/out/001` 的 `stand` / `run` / 八方向）→ 目录；
  * - 连目录都不是（库里留着已删素材的路径）→ missing，交给 `GameFrame` 显示「无图」。
  */
 type PathKind = "file" | "folder" | "missing";
@@ -183,7 +183,7 @@ function ImagePickerList({
    *
    * - 图标模式：一项 = 一个清单项，选中值就是它；
    * - 动画模式：一项 = `rootDir` 下的一套（按第一段归并、去重），选中值是**锚点 + 第一段**。
-   *   归并是必须的 —— 否则外观 `clothes/out/001` 会铺出几十个动作目录（`001/a1`、
+   *   归并是必须的 —— 否则外观 `equipment/clothes/out/001` 会铺出几十个动作目录（`001/a1`、
    *   `001/attack_far` …）让运营以为要挑其中一个。
    */
   const candidates = useMemo(() => {
@@ -537,7 +537,7 @@ export function IconField({
   hint?: string;
   value: string;
   onChange: (path: string) => void;
-  /** 只看这个目录（图标填 `item`；动画填锚点，如 `clothes/out`） */
+  /** 只看这个目录（图标填 `item`；动画填锚点，如 `equipment/clothes/out`） */
   rootDir?: string;
   /** 挑一张图还是一套动画资源（见 `ImagePickMode`） */
   mode?: ImagePickMode;
@@ -553,7 +553,7 @@ export function IconField({
       <Field label={label} hint={hint}>
         <div className="flex items-center gap-2">
           {/*
-            预览随模式走：图标看这张图；动画看首帧。有图集本体的（`titles/x/x.png`）出首帧，
+            预览随模式走：图标看这张图；动画看首帧。有图集本体的（`title/x/x.png`）出首帧，
             纯目录的（外观那种「按动作 / 方向分子目录」）画文件夹 —— 以前这里显示「无图」，
             看着像素材丢了。清单还没问到 / 拉不到时按原行为走，不硬改。
           */}

@@ -45,7 +45,7 @@ function collectImages(dir: string): string[] {
  * 递归收集音频（path 相对 RESOURCES，posix 分隔，**带扩展名**）
  *
  * 与图片清单的差别就在这个扩展名：图片取值统一补 `.png`，音效的数据库字段存的是
- * 「带扩展名的资源相对路径」（`sounds/login_bg.wav`），所以列表必须带上 —— 运营点一下
+ * 「带扩展名的资源相对路径」（`audio/login-bg.wav`），所以列表必须带上 —— 运营点一下
  * 就该得到能直接存库的字符串，不该自己再拼一遍 `.wav`。
  */
 function collectAudio(dir: string): string[] {
@@ -70,7 +70,7 @@ function collectAudio(dir: string): string[] {
 /**
  * 开发期把客户端素材挂到 `/game-resources` 下
  *
- * 对齐工作台要读 `clothes/out/005/stand/stand.{png,plist}` 这类文件（#542 起图集与散帧同路径）。
+ * 对齐工作台要读 `equipment/clothes/out/005/stand/stand.{png,plist}` 这类文件（#542 起图集与散帧同路径）。
  * 生产由管理端 nginx 反代到 game 容器（**同源**：canvas 才不会被污染、`getImageData` 才可用）；
  * 开发期没有 nginx，就在这里直读本地素材 —— 两边是同一个 URL 前缀，
  * 页面代码不需要为环境分支，也就不会出现「本地调好了、部署上去 404」。
@@ -81,7 +81,7 @@ function collectAudio(dir: string): string[] {
  * 不需要先重新生成清单。两个来源的 JSON 形状相同（见 `collectImages`）。
  *
  * `?audio=1` 是音效配置页（#680）要的清单：同一套扫盘，但返回**带扩展名**的路径
- * （`{ dir, files: ["sounds/login_bg.wav"] }`）—— 那个字段存的就是带扩展名的相对路径。
+ * （`{ dir, files: ["audio/login-bg.wav"] }`）—— 那个字段存的就是带扩展名的相对路径。
  * 生产对应 `resources/audio-manifest.json`，形状一致。
  */
 function gameResources(): Plugin {

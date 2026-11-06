@@ -4,7 +4,7 @@
  *
  * 盯的不变量（改边框系统后必须全绿）：
  * · 资源表与磁盘一致（resources/borders 下每张图集都登记、登记的每张都真实存在、key 唯一）
- * · 前后缀 15 种组合全覆盖、恰好一次，且用的是「前 15 张」边框（sfx_30123_0 ~ sfx_30137_0）
+ * · 前后缀 15 种组合全覆盖、恰好一次，且用的是「前 15 张」边框（border-30123 ~ border-30137）
  * · 取用优先级：自定义表（精确 id → 基础件 key）→ 前后缀表 → 不显示；自定义指向未登记边框时回退
  * · 真实装备表抽查：从 items 总表解析出的装备能查到正确的边框
  * · 素材守卫：帧名末尾序号升序（AnimationHelper 按序号排序 → 播放顺序正确）；
@@ -18,7 +18,7 @@ const fs = require("fs");
 const path = require("path");
 const { PROJECT_ROOT, prepare, check, finish } = require("./lib/configs-sandbox.cjs");
 
-const BORDER_DIR = path.join(PROJECT_ROOT, "assets/resources/borders");
+const BORDER_DIR = path.join(PROJECT_ROOT, "assets/resources/effect/border");
 const outDir = prepare("olua-equipment-border", ["configs/border.ts"]);
 const { borderResources, borders, prefixSuffixBorders, customEquipmentBorders, getEquipmentBorderKey, resolveEquipmentBorder, getAssignedBorders, applyEquipmentAppearance } = require(path.join(outDir, "configs/border.js"));
 const { getEquipment, getItem, items } = require(path.join(outDir, "configs/items.js"));
@@ -36,7 +36,7 @@ const registryKeys = borderResources.map((resource) => resource.key).sort();
 check(registryKeys.length === diskKeys.length, `资源表数量与磁盘一致（${registryKeys.length} 张）`);
 check(JSON.stringify(registryKeys) === JSON.stringify(diskKeys), "资源表与磁盘文件一一对应（无多登/漏登/写错编号）");
 check(new Set(borderResources.map((r) => r.key)).size === borderResources.length, "边框 key 唯一");
-check(borderResources.every((r) => r.atlas === `borders/${r.key}`), "atlas 路径 = borders/<key>（resources 加载口径）");
+check(borderResources.every((r) => r.atlas === `effect/border/${r.key}`), "atlas 路径 = effect/border/<key>（resources 加载口径）");
 check(borders.size === borderResources.length, "key → 资源 Map 与资源表等长");
 
 console.log("\n— B. 前后缀映射表（5 前缀 × 3 后缀 = 15 组合）—");
@@ -53,7 +53,7 @@ check(getAssignedBorders().length === 0, "快照到达前预加载清单为空�
 
 // 测试自建映射：先按后缀分三档、档内按前缀递增，取「前 15 张」编号（与出厂口径同构）
 const APPLIED = [];
-for (let s = 0; s < SUFFIX_COUNT; s++) for (let p = 0; p < PREFIX_COUNT; p++) APPLIED.push({ prefix: p, suffix: s, key: `sfx_${30123 + s * PREFIX_COUNT + p}_0` });
+for (let s = 0; s < SUFFIX_COUNT; s++) for (let p = 0; p < PREFIX_COUNT; p++) APPLIED.push({ prefix: p, suffix: s, key: `border-${30123 + s * PREFIX_COUNT + p}` });
 applyEquipmentAppearance({ borders: APPLIED, customBorders: [] });
 
 check(combos.every((combo) => prefixSuffixBorders.has(combo)), "apply 后 15 种组合全部有映射", `缺：${combos.filter((c) => !prefixSuffixBorders.has(c)).join("、") || "无"}`);
@@ -65,7 +65,7 @@ check(assignedKeys.every((key) => borders.has(key)), "映射到的边框都在�
 
 // 资源清单里没有的 key：丢弃并留日志（配了不存在的编号，整个边框会加载失败）
 applyEquipmentAppearance({
-  borders: APPLIED.slice(0, 14).concat([{ prefix: 4, suffix: 2, key: "sfx_99999_0" }]),
+  borders: APPLIED.slice(0, 14).concat([{ prefix: 4, suffix: 2, key: "border-99999" }]),
   customBorders: [],
 });
 check(prefixSuffixBorders.size === 14 && !prefixSuffixBorders.has("4|2"), "指向未登记图集的组合被丢弃（不进映射）");
@@ -94,7 +94,7 @@ customEquipmentBorders.set("weapon_all", pickOf(CUSTOM_KEY));
 check(borderOf(0, 0, "weapon_other") === first, "没登记的 id 不显示自定义边框");
 check(borderOf(4, 2, "weapon_all_p4s2") === CUSTOM_KEY, "自定义表按基础件 key 命中变体 id（整件装备的全部变体生效）");
 // 指向未登记图集的自定义条目：apply 时就被丢弃（不进 Map），取用回退前后缀表
-applyEquipmentAppearance({ borders: APPLIED, customBorders: [{ equipment: "weapon_bad", key: "sfx_99999_0" }] });
+applyEquipmentAppearance({ borders: APPLIED, customBorders: [{ equipment: "weapon_bad", key: "border-99999" }] });
 check(!customEquipmentBorders.has("weapon_bad"), "自定义条目指向未登记图集 → apply 时丢弃并留日志");
 check(borderOf(0, 0, "weapon_bad") === first, "丢弃后的装备回退前后缀表（不显示成空白）");
 applyEquipmentAppearance({ borders: APPLIED, customBorders: [{ equipment: "weapon_all", key: CUSTOM_KEY }] });

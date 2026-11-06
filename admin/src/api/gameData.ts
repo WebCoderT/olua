@@ -468,7 +468,7 @@ export function mapPreview(id: string): string {
 }
 
 /**
- * 角色头像：按「职业-性别」取图（`avatars/<occupation>-<sex>.png`）
+ * 角色头像：按「职业-性别」取图（`ui/avatar/<occupation>-<sex>.png`）
  *
  * 同样是客户端的取图规则（`configs/layout/images.ts` 的 `avatarImage`）。
  * 注意：角色数据里的 `avatar`（数字）是**头像编号**，不是这张图的下标 ——
@@ -476,7 +476,7 @@ export function mapPreview(id: string): string {
  */
 export function avatarPath(occupation: string, sex: string): string {
   if (!occupation || !sex) return "";
-  return `avatars/${occupation}-${sex}`;
+  return `ui/avatar/${occupation}-${sex}`;
 }
 
 //#endregion

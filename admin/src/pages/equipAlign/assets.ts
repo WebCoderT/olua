@@ -13,8 +13,8 @@
  * 开发走 vite 中间件（`admin/vite.config.ts`），两边是同一个 URL 前缀。
  *
  * 两种图集（#523 起）：
- * - **外观**（`clothes/out/005`，#542 起图集与散帧同路径）：按方向排的站立帧，固定拼 `/stand/stand`；
- * - **内观**（`clothes/in/005`）：循环动画帧（`00000.PNG`…），路径本身就是文件基名，**没有子目录**。
+ * - **外观**（`equipment/clothes/out/005`，#542 起图集与散帧同路径）：按方向排的站立帧，固定拼 `/stand/stand`；
+ * - **内观**（`equipment/clothes/in/005`）：循环动画帧（`00000.PNG`…），路径本身就是文件基名，**没有子目录**。
  */
 
 import type { Atlas, SolidBox } from "./atlas";
@@ -36,7 +36,7 @@ export function atlasUrls(resRoot: string, atlasPath: string): { plist: string; 
 /**
  * 内观图集的地址（#523）
  *
- * 内观素材是**一个路径对应一对文件**（`clothes/in/005` + `.plist` / `.png`），没有
+ * 内观素材是**一个路径对应一对文件**（`equipment/clothes/in/005` + `.plist` / `.png`），没有
  * `stand/stand` 这层目录 —— 它是循环动画的一串帧（`00000.PNG`、`00001.PNG`…），
  * 不是按方向排的站立帧。拼法必须和客户端 `AnimationHelper.playLoopAtlasWithDuration` 一致。
  */

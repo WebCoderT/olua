@@ -7,7 +7,7 @@ agent_created: true
 # 把散落的 UI 位置/尺寸/图片地址收敛成统一配置（Cocos Creator 3.x 项目）
 
 适用场景：项目里 UI 常量散落——每个弹窗组件顶部一堆 `XXX_POSITION / XXX_SIZE`、各种 `new Vec2(...)` 直接写在
-组件里、图片路径以字符串字面量写在各处（`"common/bg"`、`"create_role/bg_dialog"`），
+组件里、图片路径以字符串字面量写在各处（`"ui/common/bg"`、`"ui/create-role/bg-dialog"`），
 改一个界面要翻好几个文件。目标 = **一处可手改的配置 + 组件只引用**。
 
 ## 一、目标结构（本项目已验证的形态）
@@ -54,9 +54,9 @@ export * from "./layout/sizes";
 ```bash
 grep -rn --include="*.ts" -e "new Vec2(" -e "new Size(" assets/ui/components assets/ui/*.ts
 # 图片路径残留：按 resources 下的**目录名前缀**逐个扫，比写一条大正则可靠（见坑 7）
-grep -rn -e '"common/' -e '"main/' -e '"money/' -e '"buttons/' -e '"login/' \
-        -e '"loading/' -e '"create_role/' -e '"effect/' -e '"avatars/' \
-        -e '"bottom-nav-bar/' -e '"small-map/' -e '"tips/' -e '"fonts/' -e '"logo"' assets/ui
+grep -rn -e '"ui/common/' -e '"ui/money/' -e '"ui/button/' -e '"ui/login/' -e '"ui/loading/' \
+        -e '"ui/create-role/' -e '"ui/avatar/' -e '"ui/minimap/' -e '"ui/hud/' -e '"effect/' \
+        -e '"ui/nav/' -e '"ui/tips/' -e '"font/' -e '"logo"' assets/ui
 ```
 
 **允许保留**的两类：

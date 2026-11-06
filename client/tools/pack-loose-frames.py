@@ -3,7 +3,7 @@
 散帧打包器：把散列帧目录打包成 Cocos plist 图集（「动画帧全部 plist」的收尾工具）
 
 - 目标目录：resources 下「同一目录内 >= 2 张散帧 png（无同名 plist 配对）」的目录，
-  目前只剩 titles/sfx_* 与 war-soul/sfx_*（整包循环特效动画）；
+  目前只剩 title/* 与 soul/*（整包循环特效动画）；
   其余多 png 目录（icon / map tileset / 独立图片）不是帧序列，本脚本按显式传入的目录工作，不乱扫。
 - 产物：<目录>/<目录名>.plist + <目录名>.png（帧名 = 原文件名，帧序号排序逻辑不变）。
   帧不裁边（offset 0 / sourceSize = 原始尺寸），打包器只做排布，不碰像素内容。
@@ -11,8 +11,8 @@
 - .meta 由 Cocos 编辑器下次聚焦时自动生成（本脚本不伪造 uuid）。
 
 用法：
-  python3 client/tools/pack-loose-frames.py titles/sfx_13009 war-soul/sfx_13001   # 显式列目录（相对 resources）
-  python3 client/tools/pack-loose-frames.py --all                                 # 打包 titles/ war-soul/ 全部散帧目录
+  python3 client/tools/pack-loose-frames.py title/13009 soul/13001   # 显式列目录（相对 resources）
+  python3 client/tools/pack-loose-frames.py --all                                 # 打包 title/ soul/ 全部散帧目录
 """
 
 import os
@@ -140,7 +140,7 @@ def main() -> None:
     if args[0] == "--all":
         targets = [
             os.path.join(RESOURCES, tree, entry)
-            for tree in ("titles", "war-soul")
+            for tree in ("title", "soul")
             for entry in sorted(os.listdir(os.path.join(RESOURCES, tree)))
             if os.path.isdir(os.path.join(RESOURCES, tree, entry))
         ]

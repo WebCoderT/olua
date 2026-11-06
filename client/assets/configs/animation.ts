@@ -113,7 +113,7 @@ monsterActionSpecs.forEach((spec) => {
 /**
  * 帧号基准（按目录）
  *
- * 素材导出时若与另一套**全局连续编号**（如 role/2 的帧号整体是 role/1 的 +600，
+ * 素材导出时若与另一套**全局连续编号**（如 role/girl 的帧号整体是 role/boy 的 +600，
  * 且两套的空帧位置一一对称），就在这里声明基准值；切割片段时先把帧号减去基准再匹配动作区间
  * —— roleAnimationMap / monsterAnimation 恒按 **0 起**划分，不减基准则该目录一个片段都切不出来
  * （外观整片空白，且是静默失效）。
@@ -122,7 +122,7 @@ monsterActionSpecs.forEach((spec) => {
  */
 export const animationFrameBases = new Map<string, number>();
 
-animationFrameBases.set("role/2", 600);
+animationFrameBases.set("role/girl", 600);
 
 /** 取目录的帧号基准（未登记为 0） */
 export function getAnimationFrameBase(dirSrc: string): number {

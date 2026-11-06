@@ -2,13 +2,13 @@ import type { EQUIPMENT_PREFIX } from "./good";
 
 /**
  * 光柱资源（装备落在地面上时、在装备图标上出现的品质光效）
- * 素材在 resources/effect/light 下：每个光柱是一张 plist 图集（light_<编号>.plist + 同名 png，
+ * 素材在 resources/effect/light 下：每个光柱是一张 plist 图集（light-<编号>.plist + 同名 png，
  * 整包 14~15 帧循环），播放在地面掉落物节点的光柱子节点上（原始 400×400 画布，显示尺寸见 configs/layout/lights）。
  */
 export interface LightResource {
-  /** 光柱 key（= 图集名，如 1 号光柱是 "light_1"；配置表之间用它互相关联） */
+  /** 光柱 key（= 图集名，如 1 号光柱是 "light-1"；配置表之间用它互相关联） */
   key: string;
-  /** 图集资源（resources 下 plist 路径、不含扩展名，如 effect/light/light_1） */
+  /** 图集资源（resources 下 plist 路径、不含扩展名，如 effect/light/light-1） */
   atlas: string;
 }
 

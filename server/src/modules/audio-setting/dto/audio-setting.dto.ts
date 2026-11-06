@@ -6,12 +6,12 @@ import { AUDIO_CATEGORIES, AUDIO_LIMITS } from "../../../common/constants/audio"
  * 音效配置的 DTO（#680）
  *
  * 管的是「用哪个文件 / 多大声 / 循环不循环 / 开不开」，不是音频本体：
- * 文件在客户端资源包里（`client/assets/resources/sounds/`），服务端只存**资源相对路径**。
+ * 文件在客户端资源包里（`client/assets/resources/audio/`），服务端只存**资源相对路径**。
  *
  * 与特效管理（#594）同一取向：**没有新建 / 删除入参**。行由启动 seed 按 `AUDIO_DEFAULTS`
  * 补出来 —— 一个 key 存在的前提是客户端有播它的代码，后台凭空建一行只会得到永远不响的开关。
  *
- * 路径合法性（`sounds/` 前缀、扩展名白名单、不许 `..`）由服务端在 `AudioSettingService`
+ * 路径合法性（`audio/` 前缀、扩展名白名单、不许 `..`）由服务端在 `AudioSettingService`
  * 里校验并给人话提示，不写成 DTO 正则：正则的报错是英文技术串，运营看不懂。
  */
 
@@ -38,7 +38,7 @@ export class AudioSettingDto {
   @ApiProperty({
     description:
       "资源相对路径（带扩展名，相对 client/assets/resources/；空串 = 未配置，这一项不响）",
-    example: "sounds/login_bg.wav",
+    example: "audio/login-bg.wav",
   })
   filePath: string;
 
@@ -95,7 +95,7 @@ export class AudioSettingListDto {
  * - **追账字段不要**（`updatedBy` / `updatedAt` 是运营排障用的，玩家不需要知道是谁改的）；
  * - **分类不要**：分类只决定管理端的 tab，客户端按 key 取用，多一个字段只会让人以为要读它。
  *
- * 路径**保留扩展名**（`sounds/login_bg.wav`）—— 客户端 `resources.load` 前自己去扩展名，
+ * 路径**保留扩展名**（`audio/login-bg.wav`）—— 客户端 `resources.load` 前自己去扩展名，
  * 这样运营看到的与管理端一字不差，不会被「这里要带、那里不要带」绕进去。
  */
 export class AudioConfigDto {
@@ -104,7 +104,7 @@ export class AudioConfigDto {
 
   @ApiProperty({
     description: "资源相对路径（带扩展名，相对 resources/）；空串 = 未配置，这一项不播",
-    example: "sounds/login_bg.wav",
+    example: "audio/login-bg.wav",
   })
   filePath: string;
 

@@ -3,7 +3,7 @@
  * 角色默认外观（未穿衣服时的身体）单测
  *
  * 盯的不变量（改默认外观 / 加性别素材后必须全绿）：
- * · 配置表：男 role/1、女 role/2，字段与装备外观同口径（out / outScale / outPositions）
+ * · 配置表：男 role/boy、女 role/girl，字段与装备外观同口径（out / outScale / outPositions）
  * · 回落：未登记的性别（SEX.ALL、旧存档空值、未知串）一律回落男性 —— 角色任何情况下都必须有身体
  * · 素材对齐：配置的每个目录都在 resources 下，且每个动作都有图集（#235 散帧图集化，帧号在 plist 里）
  * · 接线：外观回退与预加载都按 role.sex 取默认外观（不再是单一常量），且旧常量已彻底清除
@@ -41,8 +41,8 @@ const goodSource = read("assets/types/good.ts");
 
 console.log("\n— A. 配置表：按性别分表 —");
 check(roleDefaultCloths.size === 2, "默认外观表恰好两个性别（男 / 女）", `实际 ${roleDefaultCloths.size}`);
-check(getRoleDefaultCloth(SEX.BOY).out === "role/1", "男性默认外观 = role/1", getRoleDefaultCloth(SEX.BOY).out);
-check(getRoleDefaultCloth(SEX.GRIL).out === "role/2", "女性默认外观 = role/2", getRoleDefaultCloth(SEX.GRIL).out);
+check(getRoleDefaultCloth(SEX.BOY).out === "role/boy", "男性默认外观 = role/boy", getRoleDefaultCloth(SEX.BOY).out);
+check(getRoleDefaultCloth(SEX.GRIL).out === "role/girl", "女性默认外观 = role/girl", getRoleDefaultCloth(SEX.GRIL).out);
 check(getRoleDefaultCloth(SEX.BOY) === roleDefaultCloths.get(SEX.BOY), "getRoleDefaultCloth(男) 取到表里那一项（不是每次新建）");
 check(getRoleDefaultCloth(SEX.GRIL) === roleDefaultCloths.get(SEX.GRIL), "getRoleDefaultCloth(女) 取到表里那一项");
 
@@ -93,8 +93,8 @@ roleDefaultCloths.forEach((cloth, sex) => {
 });
 
 console.log("\n— E. 帧号基准登记（与另一套全局连续编号的素材必须登记）—");
-check(animationFrameBases.get("role/2") === 600, "configs/animation 给 role/2 登记基准 600", String(animationFrameBases.get("role/2")));
-check(getAnimationFrameBase("role/1") === 0, "role/1 从 0 起编号，无需登记（基准 0）");
+check(animationFrameBases.get("role/girl") === 600, "configs/animation 给 role/girl 登记基准 600", String(animationFrameBases.get("role/girl")));
+check(getAnimationFrameBase("role/boy") === 0, "role/boy 从 0 起编号，无需登记（基准 0）");
 check(getAnimationFrameBase("role/9") === 0, "未登记的目录基准为 0（不会因缺登记而崩）");
 
 console.log("\n— F. 接线：回退与预加载都按性别取默认外观 —");
@@ -127,4 +127,4 @@ check(!/this\.clothEquipment|this\.weaponEquipment/.test(appearanceSource), "旧
 check(/this\.clothTransform = cloth \?\? fallback;/.test(appearanceSource), "有衣服用装备变换，没衣服用默认外观变换");
 check(/applyOutTransform\(this\.cloth, this\.clothTransform\)/.test(appearanceSource), "play 里应用的是 clothTransform（换向时默认外观也跟着走）");
 
-finish("PASS：默认外观按性别分表（男 role/1、女 role/2），未知性别回落男性，素材按帧号基准全部可切，接线与旧常量清除均一致。");
+finish("PASS：默认外观按性别分表（男 role/boy、女 role/girl），未知性别回落男性，素材按帧号基准全部可切，接线与旧常量清除均一致。");

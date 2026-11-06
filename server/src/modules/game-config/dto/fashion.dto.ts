@@ -21,7 +21,7 @@ export const FASHION_DESCRIPTION_MAX = 500;
  * 资源路径的长度上限
  *
  * 只是**防御性上限**（挡住超长请求），不是资源路径的业务规则 —— 路径合法与否由素材目录决定，
- * 服务端不扫盘。给 200 是因为 `clothes/out/001` 这类最长的也就二十几个字符。
+ * 服务端不扫盘。给 200 是因为 `equipment/clothes/out/001` 这类最长的也就二十几个字符。
  */
 export const FASHION_RES_MAX = 200;
 

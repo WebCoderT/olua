@@ -98,7 +98,7 @@ try {
     /bindPointerAction\(rankingEntry, \(\) => this\.leaderboardDialog\.open\(\), this\)/.test(smallMap),
     "小地图那颗「排行榜」标签绑了点击（美术稿里本来就有的入口）",
   );
-  check(/uiImages\.smallMapRankingList/.test(smallMap), "入口用的是 small-map/ranking-list 这张现成图（不新增素材）");
+  check(/uiImages\.smallMapRankingList/.test(smallMap), "入口用的是 ui/minimap/ranking-list 这张现成图（不新增素材）");
   check(/LeaderboardStore\.clear\(\)/.test(game), "离开游戏时清榜单缓存（否则底部那行会写上一个角色的名次）");
 
   console.log("\n— F. Store 的网络纪律 —");

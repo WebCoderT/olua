@@ -48,7 +48,7 @@ export class AdminEquipmentBorderController {
       "- `customs`：特殊装备 → 边框 key（装备写变体 id 只影响那一个变体，写基础件 key\n" +
       "  影响其全部变体；**优先于**棋盘）。\n\n" +
       "每条可带 `effect`（x/y 偏移 + scale 倍率，#700），不传 = 默认适配结果。\n" +
-      "key 指向客户端资源包里的素材（如 sfx_30123_0），素材长什么样见客户端\n" +
+      "key 指向客户端资源包里的素材（如 border-30123），素材长什么样见客户端\n" +
       "`tools/border-preview.png`（编号索引图）。服务端只校验 key 格式，**不校验素材存在**。\n\n" +
       "缺行 / 坏数据：映射表整份回落出厂映射、自定义表坏条目丢弃（effect 坏只丢效果），均有日志可查。",
     permissions: [Permission.GAME_CONFIG_READ],
@@ -67,7 +67,7 @@ export class AdminEquipmentBorderController {
       "**整边替换**：提交的 `assignments` + `customs` 就是边框这半边的新配置，不是增量；\n" +
       "**详情背景那半边不受影响**（两页各自保存互不覆盖）。\n\n" +
       "约束：`assignments` 恰好覆盖当前档数的每种组合且不重复（缺哪个组合，哪个品质就没边框）；\n" +
-      "key 形如 `sfx_30123_0`；`effect` 数值在范围内（偏移 ±2000、倍率 0.1~10）；\n" +
+      "key 形如 `border-30123`；`effect` 数值在范围内（偏移 ±2000、倍率 0.1~10）；\n" +
       "自定义表的装备标识唯一、最多 200 条。\n\n" +
       "任何一条不合法 → 40000 且**整边不落库**。\n\n" +
       "改完玩家下次进游戏拉配置快照后生效；已经在游戏里的那一次不会变。",
@@ -82,7 +82,7 @@ export class AdminEquipmentBorderController {
    * 扫描边框资源文件夹（#716「从文件夹同步」的预览）
    *
    * 与 GET 配置的差异：这是去**磁盘**上数素材（`EQUIPMENT_APPEARANCE_RES_DIR` 下的
-   * `borders/`），返回「文件夹有哪些 key、与当前清单的差集」—— 管理端拿它弹
+   * `effect/border/`），返回「文件夹有哪些 key、与当前清单的差集」—— 管理端拿它弹
    * 「将新增 N / 将移除 M」的确认框，确认后才调下面的 sync。
    */
   @Get("resources")
@@ -91,7 +91,7 @@ export class AdminEquipmentBorderController {
     summary: "扫描边框资源文件夹（同步预览）",
     description:
       "扫资源目录（`EQUIPMENT_APPEARANCE_RES_DIR`，缺省 `../client/assets/resources`；线上 compose\n" +
-      "把 `game/resources/` 挂进容器）下的 `borders/`，返回：\n\n" +
+      "把 `game/resources/` 挂进容器）下的 `effect/border/`，返回：\n\n" +
       "- `keys`：文件夹里的全部边框 key（sfx 编号升序；plist + 同名 png 成对才算）\n" +
       "- `added` / `removed`：与当前清单的差集（同步将新增 / 将移除）\n" +
       "- `removedReferenced`：removed 里仍被棋盘 / 绑定引用的 key（同步允许移除，\n" +

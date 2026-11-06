@@ -1,7 +1,7 @@
 import { Graphics, isValid, Label, Node, Size, Sprite, SpriteFrame, UITransform, Vec2, Vec3 } from "cc";
 import { mapLabelOf } from "../../../configs/game-config";
 import { getSmallMapScale, smallMapConfig } from "../../../configs/smallMap";
-import { uiImages, mapPreviewImage, smallMapImage, smallMapLayout } from "../../../configs/hudLayout";
+import { uiImages, mapPreviewImage, uiMinimap, smallMapLayout } from "../../../configs/hudLayout";
 import { buildAnnouncementViews, countUnread } from "../../../configs/announcement";
 import AutoBattle from "../../core/AutoBattle";
 import AnnouncementReadStore from "../../core/AnnouncementReadStore";
@@ -28,7 +28,7 @@ import type RoleDisplay from "../role/RoleDisplay";
  *   按「内容区 ↔ 世界视野」等比缩放后随角色平移（缩放见 configs/smallMap.getSmallMapScale）
  * - 地图正下方：服务器线路与排行榜（横向布局容器，排行榜在左；#400 起「排行榜」可点开全服榜）
  * - 最下方：世界坐标条
- * 位置、尺寸与图片来源全部来自 configs/hudLayout.smallMap（入口图标按名字走 smallMapImage 取图）
+ * 位置、尺寸与图片来源全部来自 configs/hudLayout.smallMap（入口图标按名字走 uiMinimap 取图）
  * 地图区域上实时绘制坐标点：角色黑点固定在内容区中心（底图随之平移，故黑点下方永远是角色真实所在位置），
  * 怪物红点 = 怪物世界坐标与角色的差值 × 缩放，因此红点落在底图上的位置即怪物真实位置，
  * 视野（内容区覆盖的世界范围）之外的怪物不显示；底图与点位共用同一个缩放比例，换图/调视野都不会错位
@@ -60,14 +60,14 @@ export default class SmallMap extends Node {
    * 排行榜弹窗（#400：地图正下方那颗「排行榜」标签打开）
    *
    * 入口放这里而不是底部功能栏：底部那一行已经排满（10 个图标贴着血球与快捷栏），
-   * 而小地图下方这颗「排行榜」标签是**美术稿里本来就有的**（`small-map/ranking-list`），
+   * 而小地图下方这颗「排行榜」标签是**美术稿里本来就有的**（`ui/minimap/ranking-list`），
    * 之前只是装饰图。把它变成可点的，语义与位置都不用再争。
    */
   private leaderboardDialog = new LeaderboardDialog();
   /**
    * 成就面板（#401：左侧竖排入口的第二颗图标「成就」）
    *
-   * 这颗图标美术稿里本来就有（`small-map/achievement`），之前是纯占位 ——
+   * 这颗图标美术稿里本来就有（`ui/minimap/achievement`），之前是纯占位 ——
    * 用现成的入口图，既不新增素材，也不用在挤满的底部功能栏里再塞一格。
    */
   private achievementDialog = new AchievementDialog();
@@ -181,7 +181,7 @@ export default class SmallMap extends Node {
     // 按钮位置由 Layout 统一排列；「世界」打开小地图弹窗、「成就」打开成就面板、
     // 「邮件」打开消息中心（邮件 + 公告入口，见 mailDialog），其余入口暂为占位
     layout.entryIcons.forEach((icon) => {
-      const button = GameUiHelper.createTexturedButton(`small_map_entry_${icon}`, smallMapImage(icon), "", new Vec2(), new Size(layout.entryIconSize, layout.entryIconSize));
+      const button = GameUiHelper.createTexturedButton(`small_map_entry_${icon}`, uiMinimap(icon), "", new Vec2(), new Size(layout.entryIconSize, layout.entryIconSize));
       if (icon === "world") bindPointerAction(button, () => this.openMapPreviewDialog(), this);
       if (icon === "achievement") bindPointerAction(button, () => this.achievementDialog.open(), this);
       if (icon === layout.mailEntry) {

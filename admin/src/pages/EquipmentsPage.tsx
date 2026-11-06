@@ -256,8 +256,8 @@ function EquipmentEditDialog({
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <IconField
             label="图标"
-            hint="resources 相对路径（不含扩展名），如 clothes/icon/005"
-            placeholder="clothes/icon/005"
+            hint="resources 相对路径（不含扩展名），如 equipment/clothes/icon/005"
+            placeholder="equipment/clothes/icon/005"
             value={draft.icon}
             onChange={(path) => patch({ icon: path })}
           />
@@ -265,8 +265,8 @@ function EquipmentEditDialog({
             label="内观图集"
             hint="角色弹窗里穿在身上的那套"
             mode="atlas"
-            rootDir="clothes/in"
-            placeholder="clothes/in/005"
+            rootDir="equipment/clothes/in"
+            placeholder="equipment/clothes/in/005"
             value={draft.inAtlas}
             onChange={(path) => patch({ inAtlas: path })}
           />
@@ -274,8 +274,8 @@ function EquipmentEditDialog({
             label="外观图集"
             hint="场景里跟着角色走的那个（整套动作图集，没有单张封面）"
             mode="atlas"
-            rootDir="clothes/out"
-            placeholder="clothes/out/005"
+            rootDir="equipment/clothes/out"
+            placeholder="equipment/clothes/out/005"
             value={draft.outAtlas}
             onChange={(path) => patch({ outAtlas: path })}
           />

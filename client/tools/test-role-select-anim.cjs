@@ -2,7 +2,7 @@
 /**
  * 选角「选中态」单测（client/tools/test-role-select-anim.cjs，issue #733）
  *
- * 选中一个角色 = 站立帧换成展示帧（show，循环）+ 脚底循环 select_player@0，**不再画白色选中框**。
+ * 选中一个角色 = 站立帧换成展示帧（show，循环）+ 脚底循环 select-player@0，**不再画白色选中框**。
  *
  * ⚠️ **显示效果不写断言**（项目约定）：动画好不好看、特效摆得对不对、尺寸大小、帧率快慢，
  * 一律靠人眼看，任何数值断言都只是把「某一刻的观感」钉死，改配置必红、真出错时又抓不到。
@@ -45,7 +45,8 @@ try {
     const missing = [];
     for (const [occupation, sex] of COMBOS) {
       for (const kind of ["show", "stand"]) {
-        const rel = images.createRoleImage(`plist/create_role_${occupation}_${sex}_${kind}@0`);
+        // #753：选角预览图集收在 ui/create-role/preview 下，命名 <职业>-<性别>-<show|stand>@0
+        const rel = images.uiCreateRole(`preview/${occupation}-${sex}-${kind}@0`);
         for (const ext of [".plist", ".png"]) {
           if (!exists(path.join("assets/resources", `${rel}${ext}`))) missing.push(`${rel}${ext}`);
         }
@@ -61,9 +62,9 @@ try {
   console.log("\n— B. 取图单一来源（拼出来的路径 = 约定的资源目录） —");
   {
     const pairs = [
-      ["createRolePreviewImage", images.createRolePreviewImage("3", "2"), "create_role/plist/create_role_3_2_stand@0"],
-      ["createRoleShowImage", images.createRoleShowImage("3", "2"), "create_role/plist/create_role_3_2_show@0"],
-      ["roleSelectEffectImage", images.roleSelectEffectImage, "create_role/select_player@0"],
+      ["createRolePreviewImage", images.createRolePreviewImage("3", "2"), "ui/create-role/preview/3-2-stand@0"],
+      ["createRoleShowImage", images.createRoleShowImage("3", "2"), "ui/create-role/preview/3-2-show@0"],
+      ["roleSelectEffectImage", images.roleSelectEffectImage, "ui/create-role/select-player@0"],
     ];
     const wrong = pairs.filter(([, actual, expected]) => actual !== expected).map(([name, actual, expected]) => `${name}=${actual}（期望 ${expected}）`);
     check(wrong.length === 0, "取图函数拼的路径与约定一致", wrong.join("; "));

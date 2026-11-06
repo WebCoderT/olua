@@ -121,7 +121,7 @@ export class ContentSizeDto {
 export class MonsterPresentationDto {
   @ApiProperty({ description: "怪物 key（与 MonsterDto.id 一一对应）" })
   id: string;
-  @ApiProperty({ description: "图标路径（monster/icon/<key>_00000 单图）" })
+  @ApiProperty({ description: "图标路径（monster/icon/<key> 单图）" })
   icon: string;
   @ApiProperty({ description: "外观图集目录（monster/out/<key>，帧动画按动作约定拼）" })
   out: string;

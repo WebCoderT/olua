@@ -6,7 +6,7 @@ import { AudioSettingService } from "./audio-setting.service";
  * 音效模块（#680：登录背景音 / 按钮点击音的可配置化）
  *
  * 与特效模块同一取向，但有一处**关键差别**：特效的图集路径是两端约定（`effect/<key>/<key>.plist`），
- * 换美术必须重打包；音效的文件是运营挑的，所以**路径入库**（`sounds/xxx.wav`）——
+ * 换美术必须重打包；音效的文件是运营挑的，所以**路径入库**（`audio/xxx.wav`）——
  * 换一首登录曲只要新文件已经在资源包里，不用重打客户端。
  *
  * 仓储由全局 DatabaseModule 提供；seed 在 `AudioSettingService.onModuleInit`

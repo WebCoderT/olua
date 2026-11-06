@@ -199,43 +199,44 @@ for (const [value, sources] of refs) {
 
 //#region 2. 展开型引用（模板串的取值在数据表数值字段里）
 
-/** 称号：外观目录唯一书写处 = `titles` 表的 `animation` 列（#590 起客户端 title.ts 不再有数据，
- *  #655 起连服务端种子也没有 —— 行在库里）→ `titles/sfx_<id>` 目录 */
+/** 称号：外观路径唯一书写处 = `titles` 表的 `animation` 列（#590 起客户端 title.ts 不再有数据，
+ *  #655 起连服务端种子也没有 —— 行在库里）→ `title/<编号>` 平铺图集 */
 const snapshotText = readSnapshotText();
 const snapshotRows = snapshotText
   ? {
       titles: readRows(snapshotText, "titles"),
       fashions: readRows(snapshotText, "fashions"),
       presentations: readRows(snapshotText, "monster_presentation"),
+      appearances: readRows(snapshotText, "equipment_appearance"),
     }
   : null;
 if (!snapshotRows) failures.push(`展开核对：找不到配置快照 server/data/config-sync.sql（跑一次 make config-export）`);
-const titleDirs = (snapshotRows?.titles ?? []).map((row) => String(row.animation ?? "")).filter(Boolean);
-if (!titleDirs.length) failures.push("展开核对：快照里解析不出称号外观目录（titles.animation 全空？）");
-for (const dir of titleDirs) {
-  if (dirExists(dir)) passed += 1;
-  else failures.push(`称号外观断链：${dir}（titles.animation）`);
+const titleAtlas = (snapshotRows?.titles ?? []).map((row) => String(row.animation ?? "")).filter(Boolean);
+if (!titleAtlas.length) failures.push("展开核对：快照里解析不出称号外观（titles.animation 全空？）");
+for (const atlas of titleAtlas) {
+  if (resourceExists(atlas)) passed += 1;
+  else failures.push(`称号外观断链：${atlas}（titles.animation）`);
 }
 
-/** 详情背景：background.ts 的 detailBackgroundSerials 数组体（编号常多个同行）→ 散帧目录或图集 */
+/** 详情背景：background.ts 的 detailBackgroundSerials 数组体（编号常多个同行）→ effect/background/bg-<编号> */
 const bgSource = stripComments(fs.readFileSync(path.join(ROOT, "client/assets/configs/background.ts"), "utf8"));
 const bgArray = /detailBackgroundSerials(?::\s*number\[\])?\s*=\s*\[([^\]]+)\]/.exec(bgSource);
 const bgSerials = bgArray ? [...bgArray[1].matchAll(/\b(\d{5})\b/g)].map((m) => Number(m[1])) : [];
 if (!bgSerials.length) failures.push("展开核对：background.ts 里解析不出背景编号（写法变了？）");
 for (const serial of bgSerials) {
-  const dir = `backgrounds/sfx_${serial}`;
-  if (dirExists(dir)) passed += 1;
-  else failures.push(`详情背景断链：${dir}（configs/background.ts serial=${serial}）`);
+  const atlas = `effect/background/bg-${serial}`;
+  if (resourceExists(atlas)) passed += 1;
+  else failures.push(`详情背景断链：${atlas}（configs/background.ts serial=${serial}）`);
 }
 
-/** 光柱：light.ts 的 lightSerials → effect/light/light_<n>.plist */
+/** 光柱：light.ts 的 lightSerials → effect/light/light-<n>.plist */
 const lightSource = stripComments(fs.readFileSync(path.join(ROOT, "client/assets/configs/light.ts"), "utf8"));
 const lightSerials = [...lightSource.matchAll(/^\s*const lightSerials: number\[\] = \[([^\]]+)\]/gm)].flatMap((m) =>
   m[1].split(",").map((piece) => Number(piece.trim())).filter((n) => Number.isFinite(n)),
 );
 if (!lightSerials.length) failures.push("展开核对：light.ts 里解析不出光柱编号（写法变了？）");
 for (const serial of lightSerials) {
-  const plist = `effect/light/light_${serial}.plist`;
+  const plist = `effect/light/light-${serial}.plist`;
   if (fileExists(plist)) passed += 1;
   else failures.push(`光柱图集断链：${plist}（configs/light.ts serial=${serial}）`);
 }
@@ -245,13 +246,13 @@ for (const serial of lightSerials) {
 //#region 3. 图集 / 散帧结构对应（磁盘侧自检）
 
 /** 外观树：外观目录 <树>/out/<id> 必须有图集 plist（#542 起图集就在目录里）—— 图集缺 = 外观空白 */
-const OUT_TREES = ["monster", "clothes", "weapons"];
-for (const tree of OUT_TREES) {
-  const outRoot = path.join(RES_ROOT, tree, "out");
-  if (!fs.existsSync(outRoot)) continue;
-  for (const entry of fs.readdirSync(outRoot, { withFileTypes: true })) {
+const OUT_ROOTS = ["monster/out", "equipment/clothes/out", "equipment/weapons/out"];
+for (const outRoot of OUT_ROOTS) {
+  const abs = path.join(RES_ROOT, outRoot);
+  if (!fs.existsSync(abs)) continue;
+  for (const entry of fs.readdirSync(abs, { withFileTypes: true })) {
     if (!entry.isDirectory()) continue;
-    const outDir = `${tree}/out/${entry.name}`;
+    const outDir = `${outRoot}/${entry.name}`;
     // 图集 plist 在动作子目录里（<动作>/<动作>.plist），任意深度命中即算有图集
     const hasPlist = [...diskFiles].some((p) => p.startsWith(`${outDir.toLowerCase()}/`) && p.endsWith(".plist"));
     if (hasPlist) {
@@ -264,27 +265,29 @@ for (const tree of OUT_TREES) {
   }
 }
 
-/** role 本体：role/<n> 目录里必须有图集 plist 或散帧（#542 起图集就在目录里） */
+/** role 本体：role/<性别>（boy / girl）目录里必须有图集 plist 或散帧 */
 for (const entry of fs.readdirSync(path.join(RES_ROOT, "role"), { withFileTypes: true })) {
-  if (!entry.isDirectory() || !/^\d+$/.test(entry.name)) continue;
+  if (!entry.isDirectory()) continue;
   // 图集 plist 在动作子目录里（<动作>/<动作>.plist），任意深度命中即算有图集
   const hasPlist = [...diskFiles].some((p) => p.startsWith(`role/${entry.name.toLowerCase()}/`) && p.endsWith(".plist"));
   const hasLoose = fs.readdirSync(path.join(RES_ROOT, "role", entry.name)).some((name) => EXTS.has(path.extname(name).toLowerCase().slice(1)));
-  const hasContent = hasPlist || hasLoose;
-  if (hasContent) passed += 1;
+  if (hasPlist || hasLoose) passed += 1;
   else failures.push(`role 本体断链：role/${entry.name} 既无图集也无散帧`);
 }
 
-/** npc / backgrounds：单循环图集 plist（#542 起与目录同路径）或散帧目录必须其一有内容 */
-for (const [tree, dirPattern] of [["npc", /^npc_\w+$/], ["backgrounds", /^sfx_\w+$/]]) {
+/**
+ * 单循环图集（npc / 详情背景）：平铺的 `<name>.plist` 必须配一张同名 `.png`。
+ * 这两类素材在本轮整理里都从「目录 + 内部同名图集」拉平成平铺图集了，
+ * 所以判据从「目录里有东西」改成「plist 有贴图」——只认结构，不认目录。
+ */
+for (const tree of ["npc", "effect/background"]) {
   const root = path.join(RES_ROOT, tree);
   if (!fs.existsSync(root)) continue;
   for (const entry of fs.readdirSync(root, { withFileTypes: true })) {
-    if (!entry.isDirectory() || !dirPattern.test(entry.name)) continue;
-    const plist = `${tree}/${entry.name}/${entry.name}.plist`;
-    const loose = fs.readdirSync(path.join(root, entry.name)).some((name) => EXTS.has(path.extname(name).toLowerCase().slice(1)));
-    if (loose || fileExists(plist)) passed += 1;
-    else failures.push(`单循环动画断链：${tree}/${entry.name} 既无散帧也无图集 plist（${plist}）`);
+    if (!entry.isFile() || !entry.name.endsWith(".plist")) continue;
+    const base = entry.name.slice(0, -".plist".length);
+    if (fileExists(`${tree}/${base}.png`)) passed += 1;
+    else failures.push(`单循环图集断链：${tree}/${base}.plist 没有同名 png`);
   }
 }
 
@@ -332,12 +335,52 @@ for (const row of monsterRows) {
   failures.push(`怪物表现断链：${out}（monster_presentation.id=${row.id}，客户端按 out 拼外观路径）`);
 }
 
+/**
+ * 装备外观映射的 key（`border-30123` / `bg-16000`）必须在资源包里真有对应图集。
+ *
+ * 这一层是最容易漏的：key 存在 JSON 列里，格式校验只卡「长得像 border-数字」，
+ * 不卡「资源包里有没有」—— 运营在管理端填一个资源包没打的编号，客户端表现为
+ * 「整个边框/背景消失」，而库里一切正常。所以拿快照里的每个 key 去磁盘点名。
+ */
+const APPEARANCE_COLUMN_DIRS = {
+  borders: "effect/border",
+  border_items: "effect/border",
+  custom_borders: "effect/border",
+  backgrounds: "effect/background",
+  background_items: "effect/background",
+  custom_backgrounds: "effect/background",
+};
+let appearanceKeys = 0;
+for (const row of snapshotRows?.appearances ?? []) {
+  for (const [column, dir] of Object.entries(APPEARANCE_COLUMN_DIRS)) {
+    const raw = row[column];
+    if (typeof raw !== "string" || !raw) continue;
+    let items;
+    try {
+      items = JSON.parse(raw);
+    } catch {
+      failures.push(`装备外观：${column} 不是合法 JSON（快照被手改过？）`);
+      continue;
+    }
+    for (const item of Array.isArray(items) ? items : []) {
+      const key = typeof item?.key === "string" ? item.key : "";
+      if (!key) continue;
+      appearanceKeys += 1;
+      if (fileExists(`${dir}/${key}.plist`)) passed += 1;
+      else failures.push(`装备外观 key 断链：${column} 里的 ${key}（${dir}/${key}.plist 不存在）`);
+    }
+  }
+}
+if (appearanceKeys === 0) failures.push("装备外观：快照里一条 key 都没解析出来（equipment_appearance 全空？）");
+
 //#endregion
 
 //#region 汇总
 
-const auditCount = refs.size + titleDirs.length + bgSerials.length + lightSerials.length;
-console.log(`扫描 ${SCAN_DIRS.length} 个源码目录：静态引用 ${refs.size} · 称号 ${titleDirs.length} · 详情背景 ${bgSerials.length} · 光柱 ${lightSerials.length}，加磁盘结构核对共 ${passed} 处命中`);
+const auditCount = refs.size + titleAtlas.length + bgSerials.length + lightSerials.length;
+console.log(
+  `扫描 ${SCAN_DIRS.length} 个源码目录：静态引用 ${refs.size} · 称号 ${titleAtlas.length} · 详情背景 ${bgSerials.length} · 光柱 ${lightSerials.length} · 装备外观 key ${appearanceKeys}，加磁盘结构核对共 ${passed} 处命中`,
+);
 
 if (failures.length === 0) {
   console.log(`\n✔ 资源引用与磁盘素材一致（核对 ${passed} 处）`);

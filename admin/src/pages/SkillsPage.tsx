@@ -276,7 +276,7 @@ function SkillEditDialog({
           hint="特效图集（一套动画）；空 = 无特效"
           mode="atlas"
           rootDir="effect/skill"
-          placeholder="effect/skill/s_1001@0"
+          placeholder="effect/skill/1001@0"
           value={form.effect}
           onChange={(path) => set("effect", path)}
         />
@@ -405,7 +405,7 @@ function emptyCreateForm() {
     category: "0",
     targetType: "1",
     action: "attack_skill_1",
-    effect: "effect/skill/s_1008@0",
+    effect: "effect/skill/1008@0",
     cooldown: "8",
     distance: "80",
     castLockMs: "800",
@@ -547,7 +547,7 @@ function SkillCreateDialog({
           hint="特效图集（一套动画）；空 = 无特效"
           mode="atlas"
           rootDir="effect/skill"
-          placeholder="effect/skill/s_1001@0"
+          placeholder="effect/skill/1001@0"
           value={form.effect}
           onChange={(path) => set("effect", path)}
         />

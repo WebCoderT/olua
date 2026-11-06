@@ -397,7 +397,7 @@ export const bagDialogLayout = {
 /**
  * 商城弹窗布局（组件见 ui/components/dialogs/MallDialog）
  *
- * 弹窗即商城背景图（resources/mall/bg，门面样式）：商品卡片区摆在背景图的「橱窗开口」里
+ * 弹窗即商城背景图（resources/ui/mall/bg，门面样式）：商品卡片区摆在背景图的「橱窗开口」里
  * （图中暗色门面区域，避开门面两侧的灯笼与龙柱），分页页脚压在开口下沿，绑定元宝余额落在柜台（橱窗下方）。
  * 换背景图时：size 要跟着图片实际尺寸改，各部件几何对着新图重新调。
  */

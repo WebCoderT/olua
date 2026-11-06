@@ -41,7 +41,7 @@ export function describeEffect(effect: AppearanceEffectValue | undefined | null)
 }
 
 export function AppearanceEffectWorkbench(props: {
-  /** 图集路径（GameFrame 同口径：borders/sfx_x 或 backgrounds/sfx_x，两级尝试自动命中） */
+  /** 图集路径（GameFrame 同口径：effect/border/border-x 或 effect/background/bg-x，两级尝试自动命中） */
   atlas: string;
   /** 基准外框（游戏像素）：边框 = 56×56 外框 / 背景 = 详情弹窗面板 */
   box: { width: number; height: number };

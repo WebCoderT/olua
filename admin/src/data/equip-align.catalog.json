@@ -22,7 +22,7 @@
   },
   "inShow": {
     "background": {
-      "image": "common/personal-information-bg",
+      "image": "ui/common/personal-information-bg",
       "position": [
         -78,
         -19
@@ -45,8 +45,8 @@
     {
       "id": "1",
       "label": "男裸模",
-      "src": "role/1",
-      "atlas": "role/1",
+      "src": "role/boy",
+      "atlas": "role/boy",
       "outScale": 1,
       "outPositions": [
         [
@@ -95,8 +95,8 @@
     {
       "id": "2",
       "label": "女裸模",
-      "src": "role/2",
-      "atlas": "role/2",
+      "src": "role/girl",
+      "atlas": "role/girl",
       "outScale": 1,
       "outPositions": [
         [
@@ -148,9 +148,9 @@
       "key": "cloth_1",
       "label": "* 唯一深爱(衣) *",
       "slot": "cloth",
-      "out": "clothes/out/005",
-      "atlas": "clothes/out/005",
-      "in": "clothes/in/005",
+      "out": "equipment/clothes/out/005",
+      "atlas": "equipment/clothes/out/005",
+      "in": "equipment/clothes/in/005",
       "outScale": 1,
       "outPositions": [
         [
@@ -200,9 +200,9 @@
       "key": "cloth_10",
       "label": "钢铁战甲",
       "slot": "cloth",
-      "out": "clothes/out/010",
-      "atlas": "clothes/out/010",
-      "in": "clothes/in/010",
+      "out": "equipment/clothes/out/010",
+      "atlas": "equipment/clothes/out/010",
+      "in": "equipment/clothes/in/010",
       "outScale": 1,
       "outPositions": [
         [
@@ -252,9 +252,9 @@
       "key": "cloth_14",
       "label": "青铜重甲",
       "slot": "cloth",
-      "out": "clothes/out/014",
-      "atlas": "clothes/out/014",
-      "in": "clothes/in/014",
+      "out": "equipment/clothes/out/014",
+      "atlas": "equipment/clothes/out/014",
+      "in": "equipment/clothes/in/014",
       "outScale": 1,
       "outPositions": [
         [
@@ -304,9 +304,9 @@
       "key": "cloth_15",
       "label": "紫蓑浪人",
       "slot": "cloth",
-      "out": "clothes/out/015",
-      "atlas": "clothes/out/015",
-      "in": "clothes/in/015",
+      "out": "equipment/clothes/out/015",
+      "atlas": "equipment/clothes/out/015",
+      "in": "equipment/clothes/in/015",
       "outScale": 1,
       "outPositions": [
         [
@@ -356,9 +356,9 @@
       "key": "cloth_17",
       "label": "苍龙宝甲",
       "slot": "cloth",
-      "out": "clothes/out/017",
-      "atlas": "clothes/out/017",
-      "in": "clothes/in/017",
+      "out": "equipment/clothes/out/017",
+      "atlas": "equipment/clothes/out/017",
+      "in": "equipment/clothes/in/017",
       "outScale": 1,
       "outPositions": [
         [
@@ -408,9 +408,9 @@
       "key": "cloth_21",
       "label": "紫电黑衣",
       "slot": "cloth",
-      "out": "clothes/out/021",
-      "atlas": "clothes/out/021",
-      "in": "clothes/in/021",
+      "out": "equipment/clothes/out/021",
+      "atlas": "equipment/clothes/out/021",
+      "in": "equipment/clothes/in/021",
       "outScale": 1,
       "outPositions": [
         [
@@ -460,9 +460,9 @@
       "key": "cloth_23",
       "label": "白霜猫灵",
       "slot": "cloth",
-      "out": "clothes/out/023",
-      "atlas": "clothes/out/023",
-      "in": "clothes/in/023",
+      "out": "equipment/clothes/out/023",
+      "atlas": "equipment/clothes/out/023",
+      "in": "equipment/clothes/in/023",
       "outScale": 1,
       "outPositions": [
         [
@@ -512,9 +512,9 @@
       "key": "cloth_26",
       "label": "幽影夜行",
       "slot": "cloth",
-      "out": "clothes/out/026",
-      "atlas": "clothes/out/026",
-      "in": "clothes/in/026",
+      "out": "equipment/clothes/out/026",
+      "atlas": "equipment/clothes/out/026",
+      "in": "equipment/clothes/in/026",
       "outScale": 1,
       "outPositions": [
         [
@@ -564,9 +564,9 @@
       "key": "cloth_29",
       "label": "伏魔圣僧",
       "slot": "cloth",
-      "out": "clothes/out/029",
-      "atlas": "clothes/out/029",
-      "in": "clothes/in/029",
+      "out": "equipment/clothes/out/029",
+      "atlas": "equipment/clothes/out/029",
+      "in": "equipment/clothes/in/029",
       "outScale": 1,
       "outPositions": [
         [
@@ -616,9 +616,9 @@
       "key": "cloth_30",
       "label": "夜雨黑衣",
       "slot": "cloth",
-      "out": "clothes/out/030",
-      "atlas": "clothes/out/030",
-      "in": "clothes/in/030",
+      "out": "equipment/clothes/out/030",
+      "atlas": "equipment/clothes/out/030",
+      "in": "equipment/clothes/in/030",
       "outScale": 1,
       "outPositions": [
         [
@@ -668,9 +668,9 @@
       "key": "cloth_31",
       "label": "鎏金圣衣",
       "slot": "cloth",
-      "out": "clothes/out/031",
-      "atlas": "clothes/out/031",
-      "in": "clothes/in/031",
+      "out": "equipment/clothes/out/031",
+      "atlas": "equipment/clothes/out/031",
+      "in": "equipment/clothes/in/031",
       "outScale": 1,
       "outPositions": [
         [
@@ -720,9 +720,9 @@
       "key": "cloth_32",
       "label": "赤裙猫娘",
       "slot": "cloth",
-      "out": "clothes/out/032",
-      "atlas": "clothes/out/032",
-      "in": "clothes/in/032",
+      "out": "equipment/clothes/out/032",
+      "atlas": "equipment/clothes/out/032",
+      "in": "equipment/clothes/in/032",
       "outScale": 1,
       "outPositions": [
         [
@@ -774,9 +774,9 @@
       "key": "weapon_1",
       "label": "菲奥娜de蓝钢佩剑",
       "slot": "weapon",
-      "out": "weapons/out/001",
-      "atlas": "weapons/out/001",
-      "in": "weapons/in/001",
+      "out": "equipment/weapons/out/001",
+      "atlas": "equipment/weapons/out/001",
+      "in": "equipment/weapons/in/001",
       "outScale": 1,
       "outPositions": [
         [
@@ -826,9 +826,9 @@
       "key": "weapon_2",
       "label": "暗夜雷光剑",
       "slot": "weapon",
-      "out": "weapons/out/002",
-      "atlas": "weapons/out/002",
-      "in": "weapons/in/002",
+      "out": "equipment/weapons/out/002",
+      "atlas": "equipment/weapons/out/002",
+      "in": "equipment/weapons/in/002",
       "outScale": 1,
       "outPositions": [
         [
@@ -878,9 +878,9 @@
       "key": "weapon_3",
       "label": "圣天使之剑",
       "slot": "weapon",
-      "out": "weapons/out/003",
-      "atlas": "weapons/out/003",
-      "in": "weapons/in/003",
+      "out": "equipment/weapons/out/003",
+      "atlas": "equipment/weapons/out/003",
+      "in": "equipment/weapons/in/003",
       "outScale": 1,
       "outPositions": [
         [
@@ -930,9 +930,9 @@
       "key": "weapon_4",
       "label": "青龙破军剑",
       "slot": "weapon",
-      "out": "weapons/out/004",
-      "atlas": "weapons/out/004",
-      "in": "weapons/in/004",
+      "out": "equipment/weapons/out/004",
+      "atlas": "equipment/weapons/out/004",
+      "in": "equipment/weapons/in/004",
       "outScale": 1,
       "outPositions": [
         [
@@ -982,9 +982,9 @@
       "key": "weapon_6",
       "label": "焚天赤金刃",
       "slot": "weapon",
-      "out": "weapons/out/006",
-      "atlas": "weapons/out/006",
-      "in": "weapons/in/006",
+      "out": "equipment/weapons/out/006",
+      "atlas": "equipment/weapons/out/006",
+      "in": "equipment/weapons/in/006",
       "outScale": 1,
       "outPositions": [
         [
@@ -1034,9 +1034,9 @@
       "key": "weapon_7",
       "label": "玄铁惊雷剑",
       "slot": "weapon",
-      "out": "weapons/out/007",
-      "atlas": "weapons/out/007",
-      "in": "weapons/in/007",
+      "out": "equipment/weapons/out/007",
+      "atlas": "equipment/weapons/out/007",
+      "in": "equipment/weapons/in/007",
       "outScale": 1,
       "outPositions": [
         [
@@ -1086,9 +1086,9 @@
       "key": "weapon_8",
       "label": "嗜血魔刃",
       "slot": "weapon",
-      "out": "weapons/out/008",
-      "atlas": "weapons/out/008",
-      "in": "weapons/in/008",
+      "out": "equipment/weapons/out/008",
+      "atlas": "equipment/weapons/out/008",
+      "in": "equipment/weapons/in/008",
       "outScale": 1,
       "outPositions": [
         [
@@ -1138,9 +1138,9 @@
       "key": "weapon_9",
       "label": "紫电青霜剑",
       "slot": "weapon",
-      "out": "weapons/out/009",
-      "atlas": "weapons/out/009",
-      "in": "weapons/in/009",
+      "out": "equipment/weapons/out/009",
+      "atlas": "equipment/weapons/out/009",
+      "in": "equipment/weapons/in/009",
       "outScale": 1,
       "outPositions": [
         [
@@ -1190,9 +1190,9 @@
       "key": "weapon_10",
       "label": "朱雀羽刃",
       "slot": "weapon",
-      "out": "weapons/out/010",
-      "atlas": "weapons/out/010",
-      "in": "weapons/in/010",
+      "out": "equipment/weapons/out/010",
+      "atlas": "equipment/weapons/out/010",
+      "in": "equipment/weapons/in/010",
       "outScale": 1,
       "outPositions": [
         [
@@ -1242,9 +1242,9 @@
       "key": "weapon_11",
       "label": "炽焰双头杖",
       "slot": "weapon",
-      "out": "weapons/out/011",
-      "atlas": "weapons/out/011",
-      "in": "weapons/in/011",
+      "out": "equipment/weapons/out/011",
+      "atlas": "equipment/weapons/out/011",
+      "in": "equipment/weapons/in/011",
       "outScale": 1,
       "outPositions": [
         [
@@ -1294,9 +1294,9 @@
       "key": "weapon_12",
       "label": "圣光十字剑",
       "slot": "weapon",
-      "out": "weapons/out/012",
-      "atlas": "weapons/out/012",
-      "in": "weapons/in/012",
+      "out": "equipment/weapons/out/012",
+      "atlas": "equipment/weapons/out/012",
+      "in": "equipment/weapons/in/012",
       "outScale": 1,
       "outPositions": [
         [
@@ -1346,9 +1346,9 @@
       "key": "weapon_13",
       "label": "炎皇圣剑",
       "slot": "weapon",
-      "out": "weapons/out/013",
-      "atlas": "weapons/out/013",
-      "in": "weapons/in/013",
+      "out": "equipment/weapons/out/013",
+      "atlas": "equipment/weapons/out/013",
+      "in": "equipment/weapons/in/013",
       "outScale": 1,
       "outPositions": [
         [
@@ -1398,9 +1398,9 @@
       "key": "weapon_14",
       "label": "紫翼金冠刃",
       "slot": "weapon",
-      "out": "weapons/out/014",
-      "atlas": "weapons/out/014",
-      "in": "weapons/in/014",
+      "out": "equipment/weapons/out/014",
+      "atlas": "equipment/weapons/out/014",
+      "in": "equipment/weapons/in/014",
       "outScale": 1,
       "outPositions": [
         [
@@ -1450,9 +1450,9 @@
       "key": "weapon_15",
       "label": "屠龙金纹剑",
       "slot": "weapon",
-      "out": "weapons/out/015",
-      "atlas": "weapons/out/015",
-      "in": "weapons/in/015",
+      "out": "equipment/weapons/out/015",
+      "atlas": "equipment/weapons/out/015",
+      "in": "equipment/weapons/in/015",
       "outScale": 1,
       "outPositions": [
         [
@@ -1502,9 +1502,9 @@
       "key": "weapon_16",
       "label": "青莲业火剑",
       "slot": "weapon",
-      "out": "weapons/out/016",
-      "atlas": "weapons/out/016",
-      "in": "weapons/in/016",
+      "out": "equipment/weapons/out/016",
+      "atlas": "equipment/weapons/out/016",
+      "in": "equipment/weapons/in/016",
       "outScale": 1,
       "outPositions": [
         [
@@ -1554,9 +1554,9 @@
       "key": "weapon_17",
       "label": "紫晶魔剑",
       "slot": "weapon",
-      "out": "weapons/out/017",
-      "atlas": "weapons/out/017",
-      "in": "weapons/in/017",
+      "out": "equipment/weapons/out/017",
+      "atlas": "equipment/weapons/out/017",
+      "in": "equipment/weapons/in/017",
       "outScale": 1,
       "outPositions": [
         [
@@ -1606,9 +1606,9 @@
       "key": "weapon_18",
       "label": "紫翼神冠刃",
       "slot": "weapon",
-      "out": "weapons/out/018",
-      "atlas": "weapons/out/018",
-      "in": "weapons/in/018",
+      "out": "equipment/weapons/out/018",
+      "atlas": "equipment/weapons/out/018",
+      "in": "equipment/weapons/in/018",
       "outScale": 1,
       "outPositions": [
         [
@@ -1658,9 +1658,9 @@
       "key": "weapon_19",
       "label": "燃金圣剑",
       "slot": "weapon",
-      "out": "weapons/out/019",
-      "atlas": "weapons/out/019",
-      "in": "weapons/in/019",
+      "out": "equipment/weapons/out/019",
+      "atlas": "equipment/weapons/out/019",
+      "in": "equipment/weapons/in/019",
       "outScale": 1,
       "outPositions": [
         [
@@ -1710,9 +1710,9 @@
       "key": "weapon_20",
       "label": "焚世巨剑",
       "slot": "weapon",
-      "out": "weapons/out/020",
-      "atlas": "weapons/out/020",
-      "in": "weapons/in/020",
+      "out": "equipment/weapons/out/020",
+      "atlas": "equipment/weapons/out/020",
+      "in": "equipment/weapons/in/020",
       "outScale": 1,
       "outPositions": [
         [

@@ -65,7 +65,7 @@ export class AudioSettingRepository {
    *
    * 为什么需要：`INSERT OR IGNORE` 只在「没有这行」时插入，已经存在的行一个字段都不动 ——
    * 于是代码里改出厂值（#685 那批文件按用途改名 / 换文件 / 调默认音量）在老库上完全不生效，
-   * 表里还指着 `sounds/login_bg.wav`，而资源已经叫 `login_bgm.wav` → 一进游戏全都没声音，
+   * 表里还指着 `audio/login-bg.wav`，而资源已经叫 `login_bgm.wav` → 一进游戏全都没声音，
    * 且看不出原因（服务端不查文件存在性）。
    *
    * 边界：**只动 `updated_at = 0` 的行**（= 运营从没改过）。改过的行是运营的决定，

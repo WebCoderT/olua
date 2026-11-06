@@ -17,8 +17,8 @@ description: 处理 Cocos Creator 项目里「特效图集带黑色背景」的�
 ## 判据与禁区（关键，别误伤）
 
 - 纯黑占比 > 5%（实际项目里黑底图都在 30%+，正常图是 0%）→ 处理；
-- **UI 图标里的黑色是设计的一部分，绝不能动**：`slots/*`（25% 是按键底）、`bottom-nav-bar/bg`、
-  `small-map/*`、`main/ui/*`、`item/*`、`skill/icon/*`、`common/*` 等的黑色是描边/半透明底。
+- **UI 图标里的黑色是设计的一部分，绝不能动**：`ui/slot/*`（25% 是按键底）、`ui/nav/bg`、
+  `ui/minimap/*`、`ui/*`、`item/*`、`skill/icon/*` 等的黑色是描边/半透明底。
   这些特征是软边 alpha + 纯黑占比 5%~27%，和特效图（二值 alpha + 30%+）明显分层；
 - 范围限定在特效目录（本项目是 `resources/effect/**`），**先全量扫描再按目录圈定**，
   不要拿一个全局阈值去扫整包 resources。

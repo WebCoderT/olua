@@ -13,7 +13,7 @@ export interface BackgroundPick {
 /**
  * 装备详情背景（品质背景动画）
  *
- * 素材：resources/backgrounds 下 41 个帧序列目录（每个目录 6~20 帧 png，整包循环），
+ * 素材：resources/effect/background 下 41 张图集（bg-<编号>.plist + 同名 png，整包 6~20 帧循环），
  * 播放在物品详情弹窗自身的精灵上（唯一挂点 = GameUiHelper.createGoodDetailDialog，见 applyEquipmentDetailBackground）。
  *
  * ## #695：映射表搬到服务端了
@@ -31,7 +31,7 @@ export interface BackgroundPick {
  */
 
 /**
- * 背景帧序列目录编号（resources/backgrounds/sfx_<编号>_0；与磁盘目录一一对应，增删背景改这里，
+ * 背景图集编号（resources/effect/background/bg-<编号>；与磁盘文件一一对应，增删背景改这里，
  * test-equipment-detail-background.cjs 会拿它与磁盘实际目录比对，写错会当场报出来）
  */
 const detailBackgroundSerials: number[] = [
@@ -48,10 +48,10 @@ const detailBackgroundSerials: number[] = [
   16039, 16040,
 ];
 
-/** 背景资源表（数组为源 + 尾部建 Map）：key = 帧序列目录名，dir = resources 加载路径 */
+/** 背景资源表（数组为源 + 尾部建 Map）：key = 图集名，dir = resources 加载路径（不含扩展名） */
 export const detailBackgroundResources: DetailBackgroundResource[] = detailBackgroundSerials.map((serial) => ({
-  key: `sfx_${serial}`,
-  dir: `backgrounds/sfx_${serial}`,
+  key: `bg-${serial}`,
+  dir: `effect/background/bg-${serial}`,
 }));
 
 /** 背景 key → 资源（按 key 查表用；查不到 = 配置写错了，显示层会安静跳过） */

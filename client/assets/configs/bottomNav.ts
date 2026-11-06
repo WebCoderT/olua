@@ -1,4 +1,4 @@
-import { bottomNavImage } from "./layout/images";
+import { uiNav } from "./layout/images";
 
 /**
  * 底部功能入口（按键区的数据表）
@@ -18,7 +18,7 @@ export interface BottomNavItem {
   key: string;
   /** 功能名称（未解锁提示与按钮名使用） */
   label: string;
-  /** 图标资源（取图口径见 layout/images 的 bottomNavImage） */
+  /** 图标资源（取图口径见 layout/images 的 uiNav） */
   icon: string;
   /** 解锁等级（角色等级低于该值时图标置灰、点击只提示所需等级） */
   openLevel: number;
@@ -35,10 +35,10 @@ export interface BottomNavItem {
 }
 
 export const bottomNavItems: BottomNavItem[] = [
-  { key: "role", label: "角色", icon: bottomNavImage("role"), openLevel: 1, shortcutKey: "C", comingSoon: false },
-  { key: "bag", label: "背包", icon: bottomNavImage("bag"), openLevel: 1, shortcutKey: "B", comingSoon: false },
-  { key: "friend", label: "好友", icon: bottomNavImage("friend"), openLevel: 10, shortcutKey: "F", comingSoon: true },
-  { key: "group", label: "组队", icon: bottomNavImage("group"), openLevel: 10, shortcutKey: "G", comingSoon: false },
-  { key: "skill", label: "技能", icon: bottomNavImage("skill"), openLevel: 1, shortcutKey: "K", comingSoon: false },
-  { key: "mall", label: "商城", icon: bottomNavImage("mall"), openLevel: 1, shortcutKey: "M", comingSoon: false },
+  { key: "role", label: "角色", icon: uiNav("role"), openLevel: 1, shortcutKey: "C", comingSoon: false },
+  { key: "bag", label: "背包", icon: uiNav("bag"), openLevel: 1, shortcutKey: "B", comingSoon: false },
+  { key: "friend", label: "好友", icon: uiNav("friend"), openLevel: 10, shortcutKey: "F", comingSoon: true },
+  { key: "group", label: "组队", icon: uiNav("group"), openLevel: 10, shortcutKey: "G", comingSoon: false },
+  { key: "skill", label: "技能", icon: uiNav("skill"), openLevel: 1, shortcutKey: "K", comingSoon: false },
+  { key: "mall", label: "商城", icon: uiNav("mall"), openLevel: 1, shortcutKey: "M", comingSoon: false },
 ];

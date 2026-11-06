@@ -244,7 +244,7 @@ export function entityImage(kind: EntityKind, id: string): EntityImage {
       return icon ? { icon } : {};
     }
     case "npc": {
-      // NPC 的素材是图集动画目录（`npc/npc_2125`），缩略图取首帧
+      // NPC 的素材是图集动画目录（`npc/2125`），缩略图取首帧
       const src = npcInfo(id)?.src ?? "";
       return src ? { frame: src } : {};
     }
@@ -390,12 +390,12 @@ export function filterOptions(options: EntityOption[], keyword: string, group: s
  * 装备外观（边框 / 详情背景）：清单条目 → 同一套 EntityOption（#749）
  * =========================================================================== */
 
-/** 外观清单的两种素材；素材目录名与客户端资源同口径（边框 `borders/`、背景 `backgrounds/`） */
+/** 外观清单的两种素材；素材目录与客户端资源同口径（边框 `effect/border`、背景 `effect/background`） */
 export type AppearanceKind = "border" | "background";
 
 const APPEARANCE_RES_DIR: Record<AppearanceKind, string> = {
-  border: "borders",
-  background: "backgrounds",
+  border: "effect/border",
+  background: "effect/background",
 };
 
 /** 没有分组的条目落到这一组：分组 chips 里永远有它，不会出现「选了全部却少几条」 */

@@ -13,8 +13,8 @@
 /** 资源根（开发期由 vite 中间件挂，生产由管理端 nginx 反代 game 容器）；末尾不带斜杠 */
 export const DEFAULT_RES_ROOT = "/game-resources";
 
-/** 音效文件所在目录（resources 相对；用户定：音效都放 sounds/） */
-export const AUDIO_ROOT = "sounds";
+/** 音效文件所在目录（resources 相对；用户定：音效都放 audio/） */
+export const AUDIO_ROOT = "audio";
 
 /**
  * 拼一个可试听的地址
@@ -27,7 +27,7 @@ export function audioUrlOf(resRoot: string, filePath: string): string {
 }
 
 /**
- * 可选的音频文件清单（带扩展名，如 `sounds/login_bg.wav`）
+ * 可选的音频文件清单（带扩展名，如 `audio/login-bg.wav`）
  *
  * 两个来源同形状（与图片选择器一个道理）：
  * 1. **生产**：`audio-manifest.json`（`make image-manifest` 一并生成，随资源包走）；

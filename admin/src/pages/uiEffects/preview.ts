@@ -9,7 +9,7 @@
  * | 族 | key | 图集（两端约定） | 参考层 |
  * |---|---|---|---|
  * | 升级特效 | `upgrade` | `effect/<key>/<key>` | 裸模（脚下 = 原点，画布中心按对齐清单微调） |
- * | 掉落光效 | `light_1`…`light_6` | `effect/light/<key>` | 掉落物图标 40×40（与图标**同心**，光柱画在下层） |
+ * | 掉落光效 | `light-1`…`light-6` | `effect/light/<key>` | 掉落物图标 40×40（与图标**同心**，光柱画在下层） |
  *
  * 两族的共同口径：**特效节点中心 = 原点 + (offsetX, offsetY)**（y 向上，与客户端
  * `createUpgradeEffect` / `createEquipmentLight` 的摆位语义一致），缩放 / 旋转 / 时长都来自
@@ -35,14 +35,14 @@ const DROP_ICON_SIZE = 40;
 /** 预览族：参考层是「人」还是「地上的掉落物」 */
 export type PreviewKind = "role" | "dropItem";
 
-/** 一个特效 key 属于哪一族（掉落光效的 key 从 #634 起就是素材名 `light_<编号>`） */
+/** 一个特效 key 属于哪一族（掉落光效的 key 从 #634 起就是素材名 `light-<编号>`） */
 export function previewKindOf(effectKey: string): PreviewKind {
-  return effectKey.startsWith("light_") ? "dropItem" : "role";
+  return effectKey.startsWith("light-") ? "dropItem" : "role";
 }
 
-/** 裸模图集路径（对齐清单 role[0] = 男裸模 `role/1`；资源根由页面传） */
+/** 裸模图集路径（对齐清单 role[0] = 男裸模 `role/boy`；资源根由页面传） */
 export function roleAtlasPath(): string {
-  return ROLE_CATALOG[0]?.atlas ?? "role/1";
+  return ROLE_CATALOG[0]?.atlas ?? "role/boy";
 }
 
 /** 裸模画布中心相对脚下原点的微调（outPositions 的正面那项） */
@@ -66,7 +66,7 @@ export function effectAtlasPath(key: string): string {
 export async function loadPreviewAtlases(resRoot: string, effectKey: string): Promise<{ role: Atlas | null; effect: Atlas }> {
   const effect = loadInAtlas(resRoot, effectAtlasPath(effectKey));
   if (previewKindOf(effectKey) === "dropItem") return { role: null, effect: await effect };
-  // 裸模是**站立图集**（`role/1` → `role/1/stand/stand`，带 stand 子目录），
+  // 裸模是**站立图集**（`role/boy` → `role/boy/stand/stand`，带 stand 子目录），
   // 用 loadAtlas；特效是循环动画图集（无子目录），用 loadInAtlas —— 两种拼法不能混
   const [role, loaded] = await Promise.all([loadAtlas(resRoot, roleAtlasPath()), effect]);
   return { role, effect: loaded };

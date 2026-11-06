@@ -153,8 +153,8 @@ export function GameConfigDialog({
               label="动画资源目录"
               hint="resources 相对路径；左侧即这套动画的首帧预览"
               mode="atlas"
-              rootDir={kind === "soul" ? "war-soul" : "titles"}
-              placeholder={kind === "soul" ? "war-soul/sfx_13001" : "titles/sfx_13009"}
+              rootDir={kind === "soul" ? "soul" : "title"}
+              placeholder={kind === "soul" ? "soul/13001" : "title/13009"}
               value={animation}
               onChange={setAnimation}
             />

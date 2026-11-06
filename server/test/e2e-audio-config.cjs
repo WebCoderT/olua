@@ -8,7 +8,7 @@
  * 二、seed：**12 项**按 `AUDIO_KEYS` 登记顺序（分类成组）补出、四个分类各有项、
  *     每行形状对（展示名 / 分类 / 分类名 / 音量范围 / 路径合法 / 两个布尔 / 无追账）；
  *     **没有新建 / 删除接口**（POST / DELETE 404：key 由客户端播放代码决定）
- * 三、路径判据：只认 `sounds/` 下、扩展名白名单、不许 `..` / 绝对路径 / 中文与空格；
+ * 三、路径判据：只认 `audio/` 下、扩展名白名单、不许 `..` / 绝对路径 / 中文与空格；
  *     空串合法（= 未配置，这一项不响）；反斜杠会被规范成正斜杠
  * 四、音量边界：0 / 100 收，-1 / 101 / 小数被拒
  * 五、保存：整份覆盖 + 追账字段（updatedBy / updatedAt > 0）+ 再读一次还在
@@ -84,7 +84,7 @@ async function api(method, path, options = {}) {
 function saveAudio(key, token, body) {
   return api("PATCH", `admin/audio-settings/${key}`, {
     token,
-    body: { filePath: "sounds/login_bgm.wav", volume: 60, loop: true, enabled: true, ...body },
+    body: { filePath: "audio/login-bgm.wav", volume: 60, loop: true, enabled: true, ...body },
   });
 }
 
@@ -195,8 +195,8 @@ function saveAudio(key, token, body) {
         row.volume,
       );
       check(
-        row.filePath === "" || /^sounds\/[A-Za-z0-9_\-/]+\.[A-Za-z0-9]+$/.test(row.filePath),
-        `${row.key}：路径合法（sounds/ 下英文名）或未配置`,
+        row.filePath === "" || /^audio\/[A-Za-z0-9_\-/]+\.[A-Za-z0-9]+$/.test(row.filePath),
+        `${row.key}：路径合法（audio/ 下英文名）或未配置`,
         JSON.stringify(row.filePath),
       );
       check(typeof row.loop === "boolean" && typeof row.enabled === "boolean", `${row.key}：两个布尔开关`, `${row.loop}/${row.enabled}`);
@@ -228,15 +228,15 @@ function saveAudio(key, token, body) {
 
     //#region 三、路径判据
 
-    console.log("— 三、路径判据：只认 sounds/ 下、扩展名白名单、不许 .. / 绝对路径 —");
+    console.log("— 三、路径判据：只认 audio/ 下、扩展名白名单、不许 .. / 绝对路径 —");
 
     const badPaths = [
-      { filePath: "images/login_bg.wav", why: "不在 sounds/ 下" },
-      { filePath: "/sounds/login_bgm.wav", why: "绝对路径（相对 resources 才是对的）" },
-      { filePath: "sounds/../secrets.wav", why: "出现 .." },
-      { filePath: "sounds/login_bg.txt", why: "扩展名不在白名单" },
-      { filePath: "sounds/login bg.wav", why: "文件名带空格" },
-      { filePath: "sounds/战士普攻.wav", why: "文件名带中文（用户定：只允许英文名）" },
+      { filePath: "images/login_bg.wav", why: "不在 audio/ 下" },
+      { filePath: "/audio/login-bgm.wav", why: "绝对路径（相对 resources 才是对的）" },
+      { filePath: "audio/../secrets.wav", why: "出现 .." },
+      { filePath: "audio/login_bg.txt", why: "扩展名不在白名单" },
+      { filePath: "audio/login bg.wav", why: "文件名带空格" },
+      { filePath: "audio/战士普攻.wav", why: "文件名带中文（用户定：只允许英文名）" },
     ];
     for (const { filePath, why } of badPaths) {
       const rejected = await saveAudio("login_bgm", adminToken, { filePath });
@@ -252,12 +252,12 @@ function saveAudio(key, token, body) {
     check(cleared.code === 0 && cleared.data.filePath === "", "空串合法（= 未配置，不是错误）", `${cleared.status}/${cleared.code}`);
 
     // 反斜杠（Windows 上复制来的路径）会被规范成正斜杠，而不是被拒
-    const backslash = await saveAudio("login_bgm", adminToken, { filePath: "sounds\\login_bgm.wav" });
-    check(backslash.code === 0 && backslash.data.filePath === "sounds/login_bgm.wav", "反斜杠规范成正斜杠", JSON.stringify(backslash.data?.filePath));
+    const backslash = await saveAudio("login_bgm", adminToken, { filePath: "audio\\login-bgm.wav" });
+    check(backslash.code === 0 && backslash.data.filePath === "audio/login-bgm.wav", "反斜杠规范成正斜杠", JSON.stringify(backslash.data?.filePath));
 
     // 多级目录合法（以后分场景建子目录不用改判据）
-    const nested = await saveAudio("login_bgm", adminToken, { filePath: "sounds/login/bgm_main.wav" });
-    check(nested.code === 0, "sounds/ 下多级目录合法", `${nested.status}/${nested.message}`);
+    const nested = await saveAudio("login_bgm", adminToken, { filePath: "audio/login/bgm_main.wav" });
+    check(nested.code === 0, "audio/ 下多级目录合法", `${nested.status}/${nested.message}`);
 
     //#endregion
 
@@ -282,7 +282,7 @@ function saveAudio(key, token, body) {
     console.log("— 五、保存：整份覆盖 + 追账 + 再读一次还在 —");
 
     const saved = await saveAudio("login_bgm", adminToken, {
-      filePath: "sounds/login_bgm.wav",
+      filePath: "audio/login-bgm.wav",
       volume: 35,
       loop: false,
       enabled: false,

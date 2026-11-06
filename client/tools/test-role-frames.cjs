@@ -6,14 +6,14 @@
  * #235 起散帧全部图集化，本文件随之改写
  * ===========================================================================
  * 改写前它数的是 `_loose_frames_archive/role` 下那批逐帧 PNG（416 帧 / 全局连续编号 /
- * role/2 从 600 起）。那批文件已经打包进 `assets/resources/role/<n>/<action>/<action>.plist`
+ * role/girl 从 600 起）。那批文件已经打包进 `assets/resources/role/<boy|girl>/<action>/<action>.plist`
  * 并从仓库移出，于是判据换成图集口径 —— 事故（外观整片空白）的真正成因是**帧匹配**，
  * 与「帧在磁盘上是不是散着放」无关，所以这几条仍然必须成立：
  *
  * · 每个动作的图集 PNG 是合法 PNG（ext 与真实格式一致，历史上踩过 `.PNG` 大写扩展名）
  * · 每个动作的 plist 里有帧、帧名能解析出「方向 + 帧序号」，且每帧都真的在图集里
  * · 每个动作覆盖 8 个方向、每个方向的帧号从 0 起连续（切片段时按 0 基下标取）
- * · 男 role/1 与女 role/2 两套同规格（缺一套就是「换个性别整片空白」）
+ * · 男 role/boy 与女 role/girl 两套同规格（缺一套就是「换个性别整片空白」）
  * · 动画表 88 组（11 动作 × 8 方向）都能在对应动作图集里找到帧
  *
  * 用法：node client/tools/test-role-frames.cjs
@@ -22,7 +22,7 @@ const fs = require("fs");
 const path = require("path");
 const { PROJECT_ROOT, prepare, check, finish, fail } = require("./lib/configs-sandbox.cjs");
 
-const ROLE_DIRS = ["1", "2"];
+const ROLE_DIRS = ["boy", "girl"];
 const RES_ROOT = path.join(PROJECT_ROOT, "assets", "resources");
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 

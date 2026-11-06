@@ -2,13 +2,13 @@ import type { EQUIPMENT_PREFIX, EQUIPMENT_SUFFIX } from "./good";
 
 /**
  * 边框资源（装备品质光效框）
- * 素材在 resources/borders 下：每个边框是一张 TexturePacker 图集（plist 与同名 png 成对），
+ * 素材在 resources/effect/border 下：每个边框是一张 TexturePacker 图集（plist 与同名 png 成对），
  * 整包帧循环播放（原始尺寸随素材家族而异，显示尺寸的适配见 configs/layout/borders）。
  */
 export interface BorderResource {
-  /** 边框 key（= 图集文件名，如 sfx_30123_0；配置表之间用它互相关联） */
+  /** 边框 key（= 图集文件名，如 border-30123；配置表之间用它互相关联） */
   key: string;
-  /** 图集资源路径（resources 下、不含扩展名，如 borders/sfx_30123_0） */
+  /** 图集资源路径（resources 下、不含扩展名，如 effect/border/border-30123） */
   atlas: string;
 }
 

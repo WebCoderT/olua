@@ -68,7 +68,7 @@ export interface InItem {
   kind: "cloth" | "weapon";
   key: string;
   label: string;
-  /** 内观图集路径（`clothes/in/005`），为空 = 没有内观素材 */
+  /** 内观图集路径（`equipment/clothes/in/005`），为空 = 没有内观素材 */
   inPath: string;
   base: InGeometry;
 }

@@ -2,7 +2,7 @@
 
 > 这份文件是**索引**，不是权威：字段含义看代码注释，接口契约看 `server/openapi.json`。
 > 目的只有一个 —— 想改某个东西时，能一眼看出「它现在归谁、改哪儿、客户端什么时候拿到」。
-> 最后更新：2026-11-03（#634：掉落光效 `light_1`…`light_6` 纳入 `ui_effects`，摆位 / 缩放 / 旋转 / 时长 / 开关改由服务端下发；此前 #626 已把 21 个快照域文件合并为 `configs/game-config.ts`）。
+> 最后更新：2026-11-03（#634：掉落光效 `light-1`…`light-6` 纳入 `ui_effects`，摆位 / 缩放 / 旋转 / 时长 / 开关改由服务端下发；此前 #626 已把 21 个快照域文件合并为 `configs/game-config.ts`）。
 
 ## 一、一句话规则
 
@@ -75,7 +75,7 @@
 | `fashions` | `applyFashionRows`（→ `applyFashionData`，整表重建） | `game-config` 区 14 `fashionData`（空数组）+ 取源规则 | `config-sync.sql` → `fashions` 表 | `/fashions` |
 | `mallPrices` / `mallSettings` | `applyMallPrices` / `applyMallPricing` | `game-config` 区 17（特殊价 + 统一价，客户端无出厂值） | `config-sync.sql` → `mall_settings`；特殊价只在表里 | `/mall-pricing` |
 | `maps` / `mapTypes` | `applyMapRows` | `game-config` 区 18 `maps`、`mapTypeGroups` | `config-sync.sql` → `maps` 表 | `/maps` |
-| `uiEffects` | `applyUiEffectRows` | `game-config` 区 19 `uiEffects`（升级特效 `upgrade` + 掉落光效 `light_1`…`light_6` 七行） | `ui_effects` 表 | `/ui-effects` |
+| `uiEffects` | `applyUiEffectRows` | `game-config` 区 19 `uiEffects`（升级特效 `upgrade` + 掉落光效 `light-1`…`light-6` 七行） | `ui_effects` 表 | `/ui-effects` |
 | `runtimeParams` | `applyRuntimeParams`（→ `applyDropRuntime` / `applyAutoBattleParams`） | `configs/drop.ts` `dropRuntime`（对象引用不变）、`configs/autoBattle.ts` `autoBattle`（只覆写行为参数，`routeLine` 样式不动） | `config-sync.sql` → `runtime_params` 表 | `/runtime-params` |
 | `guideSteps` | `applyGuideSteps`（整表替换） | `configs/guide.ts` `guideSteps`（表现层：遮罩配色 / 节点名 / 排版仍在客户端） | `config-sync.sql` → `guide_settings` 表 | `/guide-steps` |
 
@@ -148,7 +148,7 @@
 
 | 文件 / 区 | 剩下什么 | 为什么不入库 |
 |---|---|---|
-| `role.ts` | `occupations`（3 行职业介绍）、移动速度、体型 / 碰撞盒、摇杆与鼠标死区、背包行列、快捷键布局、动作速度倍率 | 职业名的权威副本已在公共数据（生成物 `OCCUPATION_LABELS`）；介绍图路径按职业码可推导（`create_role/tips_<码>`），尺寸是素材量出来的；其余全是手感 / 布局参数（`client/README` 的「表现层」） |
+| `role.ts` | `occupations`（3 行职业介绍）、移动速度、体型 / 碰撞盒、摇杆与鼠标死区、背包行列、快捷键布局、动作速度倍率 | 职业名的权威副本已在公共数据（生成物 `OCCUPATION_LABELS`）；介绍图路径按职业码可推导（`ui/create-role/tips-<码>`），尺寸是素材量出来的；其余全是手感 / 布局参数（`client/README` 的「表现层」） |
 | `game-config` 区 15 | `monsterDefaultSpeedRate`（11 个动作的动画速度倍率） | 纯演出（帧率）。**行为参数（出手间隔 / 停下出手距离 / 待机游走节奏 / 击退时长）已随 #670 搬去服务端** `runtime_params.monster_ai`，客户端一个字都不留 —— 留着就等于默许本地再长出第二套 AI，而同图两个客户端各跑一套正是「画面不一致」的成因。怪物真正的数值（血量 / 六项攻防 / 掉落）早在 `monsters` 表 |
 
 > 判据沿用项目既定三条：**能按 id 推导的资源路径不入库**、**素材尺寸不是运营数值**、
