@@ -89,6 +89,33 @@ static die(node): boolean                                       // 死亡动画�
 **没有** `push_distance` 这种蛇形列名。写 `Number(skill.push_distance)` 拿到 `undefined`，
 击退会静默失效且不报错。要加技能字段：`SkillSource` 补列 → `applySkillOverrides` 映射 → 消费方读驼峰。
 
+### 观测出口：`onLog` 单向回调（#745）
+
+管理端的「每一下伤害 / 追击起止」不靠快照差分，靠 AI 自己往外说。这一条也是排查线上
+「怪为什么追着我不放 / 怎么突然不追了」的唯一线索：
+
+```ts
+export type MonsterAiLogEvent =
+  | { type: "chase"; instanceId; monsterKey; label; x; y; target; targetAccountId;
+      phase: "start" | "end"; reason: string; distance: number }
+  | { type: "cast"; ...; skillId; skillLabel; target; targetAccountId; damage; hp; maxHp }
+  | { type: "hit";  ...; target; targetAccountId; damage; hp; maxHp };
+
+onLog: ((event: MonsterAiLogEvent) => void) | null = null;   // 未接线则无人听
+```
+
+- **不能改成注入 `MapMonitorService`**：监控服务构造时已经依赖 AI（采样要读 `livePositionOf`），
+  反向注入立刻循环依赖。与 `onBroadcast` 同一手法，宿主在 bootstrap 里赋值、销毁时置 `null`；
+- **回调必须吞异常只 warn**：写日志失败不能影响战斗，`emitLog` 里自己 `try/catch`；
+- **身份四件套进运行时**（`zoneId / mapId / instanceId / monsterKey`）：`MonsterRuntime` 不随重生
+  保留，重生时重建，所以这些是**快照值**而不是每次去 `world` 里查；
+- **技能名在读库时就带进 `CastPlan`**（`buildCastPlan` 返回 `label`），不在 tick 里查库；
+- **「目标丢了」的四种成因分开写**（`目标离线` / `目标倒下` / `目标换图` / `位置上报超时`）：
+  页面上这是四个完全不同的故事。判定顺序就是 `!position` → `hp<=0` → 区图不同 → 超时；
+- **每个结局都要有终点**：`forgetTarget`（出手结算不出来）与 `onMonsterKilled`（怪被打死）也要补
+  一条 `chase.end`，否则文字流里会留下永远没有结局的追击；
+- start 的成因只有两种：`进入检测范围` 与 `被打之后记恨`（`runtime.provoked === best` 判定）。
+
 ## 四、位移与碰撞（客户端）
 
 ```ts
@@ -168,6 +195,9 @@ private static playAction(animate, state, action, direction) {
 3. 客户端 `make client-check`（0 错）+ `make client-test`；`make audit`（`audit-world-authority` 守着
    「AI 参数不许回到客户端配置」，`BEHAVIOR_FIELDS` 是反向白名单）。
 4. 显示效果（帧率/尺寸/坐标/颜色/对齐）不写断言，人眼看。
+5. 监控日志（#745）走 `npm run test:e2e:map-monitor` 的「二·五」段：站到怪身上 → 打一下 →
+   断言 `damage`（血量自洽 `hpBefore - hpAfter === amount`）、`chase.start`（成因 `被打之后记恨`）、
+   `hit`、`chase.end`（停报 3s 后成因变 `位置上报超时`）。管理端界面只做 build + 人眼看。
 
 ## 九、已知限制（提前跟用户讲清，别当成 bug）
 
