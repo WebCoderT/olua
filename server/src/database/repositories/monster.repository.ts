@@ -79,10 +79,16 @@ export class MonsterRepository {
     );
   }
 
+  /**
+   * 管理端写口（部分更新在 service 里合并成整行，这里整行落库）
+   *
+   * `tier` 从 #751 起也可写：它不参与数值展开（血量 / 攻防才是结算依据），
+   * 但决定「BOSS 判定」—— 击杀 BOSS 才会发的邮件读它。
+   */
   update(row: MonsterRow): { changes: number } {
     return this.db.execute(
       `UPDATE monsters SET
-         label = ?, level = ?, max_hp = ?,
+         label = ?, tier = ?, level = ?, max_hp = ?,
          physical_attack_min = ?, physical_attack_max = ?, magic_attack_min = ?, magic_attack_max = ?,
          taoist_attack_min = ?, taoist_attack_max = ?, physical_defense_min = ?, physical_defense_max = ?,
          magic_defense_min = ?, magic_defense_max = ?, taoist_defense_min = ?, taoist_defense_max = ?,
@@ -90,6 +96,7 @@ export class MonsterRepository {
        WHERE id = ?`,
       [
         row.label,
+        row.tier,
         row.level,
         row.max_hp,
         row.physical_attack_min,

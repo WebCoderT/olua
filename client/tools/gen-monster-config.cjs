@@ -2,15 +2,16 @@
 /**
  * 怪物表现几何导入工具（图集 → `monster_presentation` 表的几何列）
  *
- * **#655 起数据库是唯一权威**：怪物表现行（icon / out / 移动 / AI 参数 / 速度倍率）
+ * **#655 起数据库是唯一权威**：怪物表现行（icon / out / 几何 / 移动 / AI 参数 / 速度倍率）
  * 就住在 `monster_presentation` 表里，本工具只负责**测量素材**并写回那几列几何：
  *
  *   out_offset_x / out_offset_y     ← 图集基准帧的 `spriteOffset`（双轴取反）
  *   content_width / content_height  ← 图集基准帧的 `spriteSize`（可见身体尺寸）
- *   aggressive                      ← tier = boss 或可见身体宽 ≥ AGGRESSIVE_BODY_WIDTH
  *
- * 其余列（icon / out / move_speed / detect_range / speed_rate）**一律不动** ——
+ * 其余列（icon / out / move_speed / aggressive / detect_range / speed_rate）**一律不动** ——
  * 它们是运营数据（管理端「怪物配置」可改），重跑本工具不该把它们抹回去。
+ * `aggressive` 曾经跟着几何一起写（#751 之前按「身体宽 ≥ 250 或 boss」推算），现在只**打印建议值**
+ * 供对账：一只怪主不主动是玩法决定，不是素材决定，写口在管理端。
  *
  * 几何口径（与引擎渲染一致，消费点 `GameUiHelper.createMonsterBody`）：
  * - contentSize = spriteSize（裁剪区尺寸）= 可见身体尺寸；碰撞盒、点击选中、头顶血条的
@@ -43,7 +44,8 @@ const DEFAULT_DB = path.join(REPO, "server/data/olua.db");
 // #235 起帧动画是图集（stand.png + stand.plist），不再有散帧 meta
 const OUT_DIR = path.join(ROOT, "assets/resources/monster/out");
 
-/** 规则：可见身体宽达到该值（像素）判主动怪（220 只怪身体宽 p75 ≈ 250，即约四分之一大体型 + BOSS 主动） */
+/** 建议规则：可见身体宽达到该值（像素）判主动怪（220 只怪身体宽 p75 ≈ 250，即约四分之一大体型 + BOSS 主动）。
+ * **只用于打印建议**，不写库 —— 一只怪主不主动是玩法决定（#751） */
 const AGGRESSIVE_BODY_WIDTH = 250;
 /** 几何基准帧：图集 stand 是 8 向 × 4 帧，帧名 d<方向>_<序号>；方向 4 = 正面（DOWN）第 0 帧 */
 const STAND_BASE_FRAME = "d4_00.png";
@@ -94,7 +96,9 @@ function main() {
   const { DatabaseSync } = require("node:sqlite");
   const db = new DatabaseSync(dbPath);
   try {
-    const presentation = db.prepare("SELECT id, out FROM monster_presentation ORDER BY CAST(id AS INTEGER)").all();
+    const presentation = db
+      .prepare("SELECT id, out, aggressive FROM monster_presentation ORDER BY CAST(id AS INTEGER)")
+      .all();
     if (presentation.length === 0) throw new Error("monster_presentation 一行都没有，中止（防止误清空）");
     const tiers = new Map(
       db
@@ -122,11 +126,21 @@ function main() {
       const out = String(row.out ?? "");
       if (!out) throw new Error(`怪物 ${id} 的 out 字段是空的（资源路径是运营数据，本工具只量几何）`);
       const trim = readTrim(out);
-      rows.push({ id, trim, aggressive: tiers.get(id) === "boss" || trim.width >= AGGRESSIVE_BODY_WIDTH });
+      rows.push({
+        id,
+        trim,
+        // 建议值：tier=boss 或体型够大。**不写库**，只在对账时提示差异
+        suggestedAggressive: tiers.get(id) === "boss" || trim.width >= AGGRESSIVE_BODY_WIDTH,
+        currentAggressive: Number(row.aggressive) === 1,
+      });
     }
 
-    const aggressiveCount = rows.filter((row) => row.aggressive).length;
-    console.log(`主动怪: ${aggressiveCount}/${rows.length}（身体宽 ≥ ${AGGRESSIVE_BODY_WIDTH} 或 tier=boss）`);
+    const aggressiveCount = rows.filter((row) => row.suggestedAggressive).length;
+    console.log(`主动怪建议：${aggressiveCount}/${rows.length}（身体宽 ≥ ${AGGRESSIVE_BODY_WIDTH} 或 tier=boss，仅供参考）`);
+    const diverged = rows.filter((row) => row.suggestedAggressive !== row.currentAggressive).map((row) => row.id);
+    if (diverged.length > 0) {
+      console.log(`  与库里现状不同：${diverged.join(", ")}（要改去管理端「怪物配置」勾「主动攻击」）`);
+    }
     const widths = rows.map((row) => row.trim.width).sort((a, b) => a - b);
     console.log(`身体宽 min/median/max: ${widths[0]}/${widths[Math.floor(widths.length / 2)]}/${widths[widths.length - 1]}`);
 
@@ -138,7 +152,7 @@ function main() {
     db.exec("BEGIN");
     const update = db.prepare(
       `UPDATE monster_presentation
-         SET out_offset_x = ?, out_offset_y = ?, content_width = ?, content_height = ?, aggressive = ?, updated_at = ?
+         SET out_offset_x = ?, out_offset_y = ?, content_width = ?, content_height = ?, updated_at = ?
        WHERE id = ?`,
     );
     const now = Date.now();
@@ -149,7 +163,6 @@ function main() {
         -row.trim.offsetY,
         row.trim.width,
         row.trim.height,
-        row.aggressive ? 1 : 0,
         now,
         row.id,
       );
@@ -157,7 +170,7 @@ function main() {
     }
     db.exec("COMMIT");
     console.log(`\n已写入 ${dbPath}`);
-    console.log(`  monster_presentation 几何：${changed} 行（icon / out / 速度 / AI 参数未动）`);
+    console.log(`  monster_presentation 几何：${changed} 行（icon / out / 行为参数一律未动）`);
     console.log("\n下一步：make config-export（把值带进 server/data/config-sync.sql）");
   } finally {
     db.close();

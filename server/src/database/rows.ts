@@ -881,7 +881,7 @@ export interface MonsterRow {
   id: string;
   /** 名称（头顶名牌，后台可改） */
   label: string;
-  /** 定位（normal / elite / boss；只作标注，已展开数值才是结算依据，不开放编辑） */
+  /** 定位（normal / elite / boss；不参与数值展开，但决定 BOSS 判定 —— 击杀 BOSS 才发的邮件读它。#751 起可改） */
   tier: string;
   /** 等级（客户端按它排怪显示；可编辑） */
   level: number;
@@ -986,7 +986,12 @@ export interface RuntimeParamsRow {
  * 怪物表现 / 资源（`monster_presentation` 表；#655）
  *
  * 一行 = 一只怪的图集路径 + 基准帧几何 + AI 视觉参数。数值在 `monsters`，这里只有
- * 「长什么样、怎么动」—— 所以这张表**没有管理端写入口**，是资源侧生成物。
+ * 「长什么样、怎么动」——
+ *
+ * - **几何**（`icon` / `out` / 偏移 / 身体尺寸）是素材事实：只有 `client/tools/gen-monster-config.cjs`
+ *   实测图集后写，管理端只读；
+ * - **行为**（`move_speed` / `aggressive` / `detect_range` / `speed_rate`）是运营旋钮（#751）：
+ *   管理端 PATCH /admin/monsters/:id 的 `presentation` 段写，服务端 AI 与客户端表现各读一份。
  */
 export interface MonsterPresentationRow {
   id: string;
@@ -1003,6 +1008,12 @@ export interface MonsterPresentationRow {
   speed_rate: string;
   updated_at: number;
 }
+
+/** `monster_presentation` 的**可写子集**（#751：行为参数；几何列一律不在这里，别顺手加进来） */
+export type MonsterBehaviorRow = Pick<
+  MonsterPresentationRow,
+  "id" | "aggressive" | "detect_range" | "move_speed" | "speed_rate" | "updated_at"
+>;
 
 /**
  * 战斗力权重（#605）：`combat_weights` 表的一行 = 一个属性

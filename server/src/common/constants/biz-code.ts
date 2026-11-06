@@ -284,6 +284,17 @@ export const BizCode = {
   AUDIO_KEY_NOT_FOUND: 50037,
   //#endregion
 
+  //#region 怪物行为参数（#751）
+  /**
+   * 这只怪没有表现行
+   *
+   * `monster_presentation` 的行由几何生成器按图集建（与 `monsters` 一一对应）。缺行意味着
+   * 素材没量过 —— 此时改行为参数没有落点，也不该由后台凭空造一行（icon / out 是素材事实）。
+   * 与「怪物不存在」（50019）分开：怪在，缺的是它的资源行。
+   */
+  MONSTER_PRESENTATION_NOT_FOUND: 50038,
+  //#endregion
+
   //#region 任务（#396）
   /** 任务不存在（配置表里没有这个 id） */
   QUEST_NOT_FOUND: 50031,

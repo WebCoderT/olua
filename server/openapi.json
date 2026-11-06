@@ -6893,7 +6893,7 @@
     },
     "/admin/monsters": {
       "get": {
-        "description": "key 清单固定（seed 自客户端 configs/monster 的 220 只），**没有创建 / 删除**。`keyword` 模糊匹配 key / 名称，`tier` 按定位筛。\n\n战斗数值是「monsterStats(level, tier) 打底 + 条目覆盖」的**展开结果**——改这里的值即时生效（世界播种与伤害结算直读 monsters 表）；`level` 是显示用元数据，改它**不会**重算数值。\n\n**排序**：`sort` 取 `id` / `label` / `tier` / `level` / `maxHp` / `updatedAt`，`order` 取 asc / desc（默认等级升序）。\n\n每行带 `drop` 掉落摘要（来源 / 具名表 id / 抽取次数 / 内联条目数）—— 掉落就在这一页改，完整条目池走 `GET /admin/monster-drops/:monsterKey`，写入仍只有 `PATCH /admin/monster-drops/:monsterKey` 一条路。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
+        "description": "key 清单固定（seed 自客户端 configs/monster 的 220 只），**没有创建 / 删除**。`keyword` 模糊匹配 key / 名称，`tier` 按定位筛。\n\n战斗数值是「monsterStats(level, tier) 打底 + 条目覆盖」的**展开结果**——改这里的值即时生效（世界播种与伤害结算直读 monsters 表）；`level` 是显示用元数据，改它**不会**重算数值。\n\n**排序**：`sort` 取 `id` / `label` / `tier` / `level` / `maxHp` / `updatedAt`，`order` 取 asc / desc（默认等级升序）。\n\n每行带 `drop` 掉落摘要（来源 / 具名表 id / 抽取次数 / 内联条目数）与 `presentation` 表现参数（几何只读、行为可改，#751）—— 掉落就在这一页改，完整条目池走 `GET /admin/monster-drops/:monsterKey`，写入仍只有 `PATCH /admin/monster-drops/:monsterKey` 一条路。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
         "operationId": "adminMonster.list",
         "parameters": [
           {
@@ -7011,7 +7011,7 @@
     },
     "/admin/monsters/{id}": {
       "patch": {
-        "description": "**部分更新**：只改请求体里出现的字段。改完即时生效（世界播种与伤害结算直读 monsters 表）——已活着的世界实例血量上限沿用出生时的值，重生后用新值。\n\n- `label`：名称（头顶名牌）。\n- `level`：显示用元数据，改它**不会**重算战斗数值。\n- `maxHp`：生命上限（已展开值，≥1）。\n- `attributes`：六项攻防区间，**整份提交、整份替换**（0 ≤ min ≤ max）。\n- `tier` 不开放编辑（仅作标注，改它不影响已展开数值）。\n- `id` 不存在 → 404（`50019`）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
+        "description": "**部分更新**：只改请求体里出现的字段。\n\n**基础数值与定位**（落在 `monsters` 表，改完即时生效 —— 世界播种与伤害结算直读它）：\n- `label`：名称（头顶名牌）。\n- `level`：显示用元数据，改它**不会**重算战斗数值。\n- `maxHp`：生命上限（已展开值，≥1）。已活着的世界实例沿用出生时的值，重生后用新值。\n- `attributes`：六项攻防区间，**整份提交、整份替换**（0 ≤ min ≤ max）。\n- `tier`：定位 normal / elite / boss。**不**重算已展开的血量 / 攻防，但决定 BOSS 判定（击杀 BOSS 才发的邮件读它）；掉落不随它变（看 `monster_drops` 那张表）。\n\n**行为参数**（落在 `monster_presentation` 表，服务端 AI 有 1 秒缓存 → 最迟 1 秒生效）：\n- `presentation.aggressive`：是否主动攻击玩家。关掉后只游走，被打才记恨。\n- `presentation.detectRange`：检测范围（像素半径），主动怪在这个距离内发现玩家。\n- `presentation.moveSpeed`：移动速度（刚体线速度单位，出厂 2，与角色步行同口径）。\n- `presentation.speedRate`：动作速度覆盖（动作键 → 每秒循环数）。键只认 stand / walk / run / injured / die（怪物素材只有这五个动作有帧）；**传 `{}` = 清空回客户端默认，不传 = 不改**。\n\n**生效时间三档**：基础数值即时；行为参数 ≤1 秒（实时进程 AI 缓存 TTL）；**画面表现**（动作速度、外观）要客户端重进地图才会拿到新快照。\n\n- `id` 不存在 → 404（`50019`）；传了 `presentation` 但这只怪没有资源表现行 → 404（`50038`，先去跑几何生成器）。\n- 动作键不在白名单 / 数值越界 → 400（`40000`）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
         "operationId": "adminMonster.update",
         "parameters": [
           {
@@ -7036,7 +7036,7 @@
         },
         "responses": {
           "200": {
-            "description": "更新后的怪物基础数据（含掉落摘要，与列表同形）",
+            "description": "更新后的怪物（含掉落摘要与表现参数，与列表同形）",
             "content": {
               "application/json": {
                 "schema": {
@@ -7062,7 +7062,7 @@
             "admin": []
           }
         ],
-        "summary": "编辑怪物基础数据",
+        "summary": "编辑怪物（数值 / 定位 / 行为参数）",
         "tags": [
           "管理端"
         ],
@@ -15858,6 +15858,34 @@
           "taoistDefense"
         ]
       },
+      "UpdateMonsterPresentationDto": {
+        "type": "object",
+        "properties": {
+          "aggressive": {
+            "type": "boolean",
+            "description": "是否主动攻击玩家（不传则不改）"
+          },
+          "detectRange": {
+            "type": "number",
+            "description": "检测范围（像素半径；主动怪在这个距离内发现玩家）。不传则不改",
+            "minimum": 0,
+            "maximum": 5000
+          },
+          "moveSpeed": {
+            "type": "number",
+            "description": "移动速度（刚体线速度单位；出厂 2，与角色步行同口径）。不传则不改",
+            "minimum": 0,
+            "maximum": 100
+          },
+          "speedRate": {
+            "type": "object",
+            "description": "动作速度覆盖（动作键 → 每秒循环数）。**传 `{}` = 清空回客户端默认，不传 = 不改**；动作键只认 stand / walk / run / injured / die（其余动作没有帧）",
+            "additionalProperties": {
+              "type": "number"
+            }
+          }
+        }
+      },
       "UpdateMonsterDto": {
         "type": "object",
         "properties": {
@@ -15865,6 +15893,10 @@
             "type": "string",
             "description": "名称（不传则不改）",
             "maxLength": 50
+          },
+          "tier": {
+            "type": "string",
+            "description": "定位（normal / elite / boss，不传则不改）。不重算已展开数值，但会改变 BOSS 判定（击杀 BOSS 邮件）"
           },
           "level": {
             "type": "number",
@@ -15883,6 +15915,14 @@
             "allOf": [
               {
                 "$ref": "#/components/schemas/MonsterAttributesDto"
+              }
+            ]
+          },
+          "presentation": {
+            "description": "行为参数（主动攻击 / 检测范围 / 移动速度 / 动作速度；不传则整段不改）",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/UpdateMonsterPresentationDto"
               }
             ]
           }
@@ -22149,7 +22189,7 @@
           },
           "tier": {
             "type": "string",
-            "description": "定位（normal / elite / boss；仅作标注，不开放编辑）"
+            "description": "定位（normal / elite / boss）。改它**不会**重算已展开的血量 / 攻防，但会改变 BOSS 判定（击杀 BOSS 才发的邮件）"
           },
           "level": {
             "type": "number",
@@ -22226,6 +22266,104 @@
           "entryCount"
         ]
       },
+      "OutOffsetDto": {
+        "type": "object",
+        "properties": {
+          "x": {
+            "type": "number",
+            "description": "x（向右为正）"
+          },
+          "y": {
+            "type": "number",
+            "description": "y（向上为正）"
+          }
+        },
+        "required": [
+          "x",
+          "y"
+        ]
+      },
+      "ContentSizeDto": {
+        "type": "object",
+        "properties": {
+          "width": {
+            "type": "number",
+            "description": "宽（像素）"
+          },
+          "height": {
+            "type": "number",
+            "description": "高（像素）"
+          }
+        },
+        "required": [
+          "width",
+          "height"
+        ]
+      },
+      "MonsterPresentationDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "怪物 key（与 MonsterDto.id 一一对应）"
+          },
+          "icon": {
+            "type": "string",
+            "description": "图标路径（monster/icon/<key>_00000 单图）"
+          },
+          "out": {
+            "type": "string",
+            "description": "外观图集目录（monster/out/<key>，帧动画按动作约定拼）"
+          },
+          "outOffset": {
+            "description": "外观节点摆放偏移（把可见身体中心对准节点原点）",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/OutOffsetDto"
+              }
+            ]
+          },
+          "contentSize": {
+            "description": "可见身体尺寸（碰撞盒 / 点击选中 / 头顶血条位置都由它决定）",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ContentSizeDto"
+              }
+            ]
+          },
+          "moveSpeed": {
+            "type": "number",
+            "description": "移动速度（刚体线速度单位）"
+          },
+          "aggressive": {
+            "type": "boolean",
+            "description": "是否主动攻击玩家（服务端权威 AI 读它决定要不要扑人；关掉后只游走、被打才记恨）"
+          },
+          "detectRange": {
+            "type": "number",
+            "description": "检测范围（像素半径）：主动怪在这个距离内发现玩家"
+          },
+          "speedRate": {
+            "type": "object",
+            "description": "动作速度覆盖（只写要改的动作，每秒循环数；缺省走客户端 monsterDefaultSpeedRate）",
+            "nullable": true,
+            "additionalProperties": {
+              "type": "number"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "icon",
+          "out",
+          "outOffset",
+          "contentSize",
+          "moveSpeed",
+          "aggressive",
+          "detectRange",
+          "speedRate"
+        ]
+      },
       "AdminMonsterDto": {
         "type": "object",
         "properties": {
@@ -22239,7 +22377,7 @@
           },
           "tier": {
             "type": "string",
-            "description": "定位（normal / elite / boss；仅作标注，不开放编辑）"
+            "description": "定位（normal / elite / boss）。改它**不会**重算已展开的血量 / 攻防，但会改变 BOSS 判定（击杀 BOSS 才发的邮件）"
           },
           "level": {
             "type": "number",
@@ -22270,6 +22408,16 @@
                 "$ref": "#/components/schemas/MonsterDropSummaryDto"
               }
             ]
+          },
+          "presentation": {
+            "description": "资源与行为参数（几何只读、行为可改；null 表示这行表现数据还没生成）",
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/MonsterPresentationDto"
+              }
+            ]
           }
         },
         "required": [
@@ -22280,7 +22428,8 @@
           "maxHp",
           "attributes",
           "updatedAt",
-          "drop"
+          "drop",
+          "presentation"
         ]
       },
       "MonsterPageDto": {
@@ -22302,7 +22451,7 @@
             "example": 20
           },
           "list": {
-            "description": "当前页的怪物基础数据（含掉落摘要）",
+            "description": "当前页的怪物基础数据（含掉落摘要与表现参数）",
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/AdminMonsterDto"
@@ -23727,104 +23876,6 @@
             ]
           }
         }
-      },
-      "OutOffsetDto": {
-        "type": "object",
-        "properties": {
-          "x": {
-            "type": "number",
-            "description": "x（向右为正）"
-          },
-          "y": {
-            "type": "number",
-            "description": "y（向上为正）"
-          }
-        },
-        "required": [
-          "x",
-          "y"
-        ]
-      },
-      "ContentSizeDto": {
-        "type": "object",
-        "properties": {
-          "width": {
-            "type": "number",
-            "description": "宽（像素）"
-          },
-          "height": {
-            "type": "number",
-            "description": "高（像素）"
-          }
-        },
-        "required": [
-          "width",
-          "height"
-        ]
-      },
-      "MonsterPresentationDto": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string",
-            "description": "怪物 key（与 MonsterDto.id 一一对应）"
-          },
-          "icon": {
-            "type": "string",
-            "description": "图标路径（monster/icon/<key>_00000 单图）"
-          },
-          "out": {
-            "type": "string",
-            "description": "外观图集目录（monster/out/<key>，帧动画按动作约定拼）"
-          },
-          "outOffset": {
-            "description": "外观节点摆放偏移（把可见身体中心对准节点原点）",
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/OutOffsetDto"
-              }
-            ]
-          },
-          "contentSize": {
-            "description": "可见身体尺寸（碰撞盒 / 点击选中 / 头顶血条位置都由它决定）",
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/ContentSizeDto"
-              }
-            ]
-          },
-          "moveSpeed": {
-            "type": "number",
-            "description": "移动速度（刚体线速度单位）"
-          },
-          "aggressive": {
-            "type": "boolean",
-            "description": "是否主动攻击玩家（表现与客户端 AI 口径；服务端权威 AI 读同一行）"
-          },
-          "detectRange": {
-            "type": "number",
-            "description": "检测范围（像素半径）"
-          },
-          "speedRate": {
-            "type": "object",
-            "description": "动作速度覆盖（只写要改的动作，每秒循环数；缺省走客户端 monsterDefaultSpeedRate）",
-            "nullable": true,
-            "additionalProperties": {
-              "type": "number"
-            }
-          }
-        },
-        "required": [
-          "id",
-          "icon",
-          "out",
-          "outOffset",
-          "contentSize",
-          "moveSpeed",
-          "aggressive",
-          "detectRange",
-          "speedRate"
-        ]
       },
       "LevelDto": {
         "type": "object",

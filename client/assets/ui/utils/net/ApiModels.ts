@@ -1268,11 +1268,34 @@ export type MonsterAttributes = {
   taoistDefense: AttributeRange;
 };
 
+export type UpdateMonsterPresentation = {
+  /**
+   * 是否主动攻击玩家（不传则不改）
+   */
+  aggressive?: boolean;
+  /**
+   * 检测范围（像素半径；主动怪在这个距离内发现玩家）。不传则不改
+   */
+  detectRange?: number;
+  /**
+   * 移动速度（刚体线速度单位；出厂 2，与角色步行同口径）。不传则不改
+   */
+  moveSpeed?: number;
+  /**
+   * 动作速度覆盖（动作键 → 每秒循环数）。**传 `{}` = 清空回客户端默认，不传 = 不改**；动作键只认 stand / walk / run / injured / die（其余动作没有帧）
+   */
+  speedRate?: Record<string, number>;
+};
+
 export type UpdateMonster = {
   /**
    * 名称（不传则不改）
    */
   label?: string;
+  /**
+   * 定位（normal / elite / boss，不传则不改）。不重算已展开数值，但会改变 BOSS 判定（击杀 BOSS 邮件）
+   */
+  tier?: string;
   /**
    * 等级（显示用元数据，不传则不改）
    */
@@ -1285,6 +1308,10 @@ export type UpdateMonster = {
    * 六项攻防区间（**整份提交、整份替换**，不传则不改；要求 0 ≤ min ≤ max）
    */
   attributes?: MonsterAttributes;
+  /**
+   * 行为参数（主动攻击 / 检测范围 / 移动速度 / 动作速度；不传则整段不改）
+   */
+  presentation?: UpdateMonsterPresentation;
 };
 
 export type MonsterSkillItem = {
@@ -5227,7 +5254,7 @@ export type Monster = {
    */
   label: string;
   /**
-   * 定位（normal / elite / boss；仅作标注，不开放编辑）
+   * 定位（normal / elite / boss）。改它**不会**重算已展开的血量 / 攻防，但会改变 BOSS 判定（击杀 BOSS 才发的邮件）
    */
   tier: string;
   /**
@@ -5267,6 +5294,67 @@ export type MonsterDropSummary = {
   entryCount: number;
 };
 
+export type OutOffset = {
+  /**
+   * x（向右为正）
+   */
+  x: number;
+  /**
+   * y（向上为正）
+   */
+  y: number;
+};
+
+export type ContentSize = {
+  /**
+   * 宽（像素）
+   */
+  width: number;
+  /**
+   * 高（像素）
+   */
+  height: number;
+};
+
+export type MonsterPresentation = {
+  /**
+   * 怪物 key（与 MonsterDto.id 一一对应）
+   */
+  id: string;
+  /**
+   * 图标路径（monster/icon/<key>_00000 单图）
+   */
+  icon: string;
+  /**
+   * 外观图集目录（monster/out/<key>，帧动画按动作约定拼）
+   */
+  out: string;
+  /**
+   * 外观节点摆放偏移（把可见身体中心对准节点原点）
+   */
+  outOffset: OutOffset;
+  /**
+   * 可见身体尺寸（碰撞盒 / 点击选中 / 头顶血条位置都由它决定）
+   */
+  contentSize: ContentSize;
+  /**
+   * 移动速度（刚体线速度单位）
+   */
+  moveSpeed: number;
+  /**
+   * 是否主动攻击玩家（服务端权威 AI 读它决定要不要扑人；关掉后只游走、被打才记恨）
+   */
+  aggressive: boolean;
+  /**
+   * 检测范围（像素半径）：主动怪在这个距离内发现玩家
+   */
+  detectRange: number;
+  /**
+   * 动作速度覆盖（只写要改的动作，每秒循环数；缺省走客户端 monsterDefaultSpeedRate）
+   */
+  speedRate: Record<string, number> | null;
+};
+
 export type AdminMonster = {
   /**
    * 怪物 key（configs/monster 的关联键，如 "1"）
@@ -5277,7 +5365,7 @@ export type AdminMonster = {
    */
   label: string;
   /**
-   * 定位（normal / elite / boss；仅作标注，不开放编辑）
+   * 定位（normal / elite / boss）。改它**不会**重算已展开的血量 / 攻防，但会改变 BOSS 判定（击杀 BOSS 才发的邮件）
    */
   tier: string;
   /**
@@ -5300,6 +5388,10 @@ export type AdminMonster = {
    * 掉落摘要（与怪物一一对应；null 表示这一行还没 seed 出来）
    */
   drop: MonsterDropSummary | null;
+  /**
+   * 资源与行为参数（几何只读、行为可改；null 表示这行表现数据还没生成）
+   */
+  presentation: MonsterPresentation | null;
 };
 
 export type MonsterPage = {
@@ -5316,7 +5408,7 @@ export type MonsterPage = {
    */
   size: number;
   /**
-   * 当前页的怪物基础数据（含掉落摘要）
+   * 当前页的怪物基础数据（含掉落摘要与表现参数）
    */
   list: AdminMonster[];
 };
@@ -6176,67 +6268,6 @@ export type MonsterDropQuery = {
    * 按来源筛（不落 schema 以免枚举键进两端生成物）
    */
   source?: "table" | "entries" | "none";
-};
-
-export type OutOffset = {
-  /**
-   * x（向右为正）
-   */
-  x: number;
-  /**
-   * y（向上为正）
-   */
-  y: number;
-};
-
-export type ContentSize = {
-  /**
-   * 宽（像素）
-   */
-  width: number;
-  /**
-   * 高（像素）
-   */
-  height: number;
-};
-
-export type MonsterPresentation = {
-  /**
-   * 怪物 key（与 MonsterDto.id 一一对应）
-   */
-  id: string;
-  /**
-   * 图标路径（monster/icon/<key>_00000 单图）
-   */
-  icon: string;
-  /**
-   * 外观图集目录（monster/out/<key>，帧动画按动作约定拼）
-   */
-  out: string;
-  /**
-   * 外观节点摆放偏移（把可见身体中心对准节点原点）
-   */
-  outOffset: OutOffset;
-  /**
-   * 可见身体尺寸（碰撞盒 / 点击选中 / 头顶血条位置都由它决定）
-   */
-  contentSize: ContentSize;
-  /**
-   * 移动速度（刚体线速度单位）
-   */
-  moveSpeed: number;
-  /**
-   * 是否主动攻击玩家（表现与客户端 AI 口径；服务端权威 AI 读同一行）
-   */
-  aggressive: boolean;
-  /**
-   * 检测范围（像素半径）
-   */
-  detectRange: number;
-  /**
-   * 动作速度覆盖（只写要改的动作，每秒循环数；缺省走客户端 monsterDefaultSpeedRate）
-   */
-  speedRate: Record<string, number> | null;
 };
 
 export type Level = {

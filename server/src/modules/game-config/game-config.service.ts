@@ -14,6 +14,7 @@ import { FashionRepository, FashionListOptions } from "../../database/repositori
 import { ItemRepository, ItemListOptions } from "../../database/repositories/item.repository";
 import { MonsterRepository, MonsterListOptions } from "../../database/repositories/monster.repository";
 import { MonsterDropRepository } from "../../database/repositories/monster-drop.repository";
+import { MonsterPresentationRepository } from "../../database/repositories/monster-presentation.repository";
 import { SkillRepository, SkillListOptions } from "../../database/repositories/skill.repository";
 import { MonsterSkillRepository } from "../../database/repositories/monster-skill.repository";
 import { StatusRepository, StatusListOptions } from "../../database/repositories/status.repository";
@@ -36,6 +37,8 @@ import {
   FashionRow,
   ItemRow,
   MonsterRow,
+  MonsterBehaviorRow,
+  MonsterPresentationRow,
   MonsterSkillRow,
   NpcRow,
   QuestRow,
@@ -63,7 +66,18 @@ import {
 import { DrugDto, DrugQueryDto, UpdateDrugDto } from "./dto/drug.dto";
 import { FashionDto, FashionQueryDto, UpdateFashionDto } from "./dto/fashion.dto";
 import { ItemDto, ItemQueryDto, UpdateItemDto } from "./dto/item.dto";
-import { AdminMonsterDto, MonsterAttributesDto, MonsterDto, MonsterQueryDto, UpdateMonsterDto, monsterAttributesFromRow } from "./dto/monster.dto";
+import {
+  AdminMonsterDto,
+  MONSTER_ACTION_KEYS,
+  MONSTER_SPEED_RATE_MAX,
+  MONSTER_SPEED_RATE_MIN,
+  MonsterAttributesDto,
+  MonsterDto,
+  MonsterQueryDto,
+  UpdateMonsterDto,
+  UpdateMonsterPresentationDto,
+  monsterAttributesFromRow,
+} from "./dto/monster.dto";
 import { NpcDto, NpcQueryDto, UpdateNpcDto } from "./dto/npc.dto";
 import { CreateQuestDto, parseRewardItems, QuestDto, QuestQueryDto, UpdateQuestDto } from "./dto/quest.dto";
 import {
@@ -114,6 +128,7 @@ export class GameConfigService {
     private readonly items: ItemRepository,
     private readonly monstersRepo: MonsterRepository,
     private readonly monsterDropsRepo: MonsterDropRepository,
+    private readonly monsterPresentations: MonsterPresentationRepository,
     private readonly npcsRepo: NpcRepository,
     private readonly fashionsRepo: FashionRepository,
     private readonly skillsRepo: SkillRepository,
@@ -665,17 +680,20 @@ export class GameConfigService {
   }
 
   /**
-   * 管理端怪物列表（= 基础数据 + 掉落摘要）
+   * 管理端怪物列表（= 基础数据 + 掉落摘要 + 表现参数）
    *
-   * 摘要只补这一页的 20 只：`listByKeys` 一次 IN 查完再按 key 对齐，
-   * 不要逐只 `findByKey`（一页 20 次单查）。玩家侧快照走 `listMonsters`，不带摘要。
+   * 后两段只补这一页的行：各自的 `listByKeys` 一次 IN 查完再按 key 对齐，
+   * 不要逐只 `findByKey`（一页 20 次单查 × 两张表）。玩家侧快照走 `listMonsters`，不带这两段。
    */
   listAdminMonsters(query: MonsterQueryDto): PageResult<AdminMonsterDto> {
     const page = this.listMonsters(query);
-    const drops = new Map(
-      this.monsterDropsRepo.listByKeys(page.list.map((item) => item.id)).map((row) => [row.monster_key, row]),
-    );
-    return { ...page, list: page.list.map((item) => AdminMonsterDto.withDrop(item, drops.get(item.id))) };
+    const keys = page.list.map((item) => item.id);
+    const drops = new Map(this.monsterDropsRepo.listByKeys(keys).map((row) => [row.monster_key, row]));
+    const presentations = new Map(this.monsterPresentations.listByKeys(keys).map((row) => [row.id, row]));
+    return {
+      ...page,
+      list: page.list.map((item) => AdminMonsterDto.withDrop(item, drops.get(item.id), presentations.get(item.id))),
+    };
   }
 
   /**
@@ -684,23 +702,44 @@ export class GameConfigService {
    */
   updateMonsterAdmin(id: string, dto: UpdateMonsterDto): AdminMonsterDto {
     const saved = this.updateMonster(id, dto);
-    return AdminMonsterDto.withDrop(saved, this.monsterDropsRepo.findByKey(id));
+    return AdminMonsterDto.withDrop(saved, this.monsterDropsRepo.findByKey(id), this.monsterPresentations.getById(id) ?? undefined);
   }
 
+  /**
+   * 编辑怪物（基础数值 + 定位 + 行为参数，#751）
+   *
+   * 两段分别落在 `monsters` 与 `monster_presentation`：服务端权威 AI 与伤害结算直读库，
+   * 所以数值改完**即时生效**；行为参数走 AI 的 1 秒 TTL，最迟 1 秒生效；
+   * 客户端表现要重进地图重拉快照。
+   *
+   * **校验全部放在写之前**：`presentation` 缺行、`speedRate` 键非法都在这里就抛，
+   * 不会出现「基础数值写进去了、行为参数报错」这种半截提交。
+   */
   updateMonster(id: string, dto: UpdateMonsterDto): MonsterDto {
     const existing = this.requireMonster(id);
     const attributes = dto.attributes ?? monsterAttributesFromRow(existing);
     assertMonsterAttributeRanges(attributes);
 
+    // 行为参数：先取现值（缺行直接 404）+ 校验，再动手写
+    const currentPresentation = dto.presentation ? this.requireMonsterPresentation(id) : null;
+    if (dto.presentation?.speedRate) assertMonsterSpeedRate(dto.presentation.speedRate);
+
     const next: MonsterRow = {
       ...existing,
       label: dto.label ?? existing.label,
+      tier: dto.tier ?? existing.tier,
       level: dto.level ?? existing.level,
       max_hp: dto.maxHp ?? existing.max_hp,
       ...monsterAttributeColumns(attributes),
       updated_at: Date.now(),
     };
     this.monstersRepo.update(next);
+
+    if (dto.presentation && currentPresentation) {
+      this.monsterPresentations.updateBehavior(
+        mergeMonsterBehavior(currentPresentation, dto.presentation),
+      );
+    }
     return MonsterDto.from(this.requireMonster(id));
   }
 
@@ -1242,6 +1281,20 @@ export class GameConfigService {
     return row;
   }
 
+  /**
+   * 取怪物的表现行（改行为参数的前提）
+   *
+   * 行由几何生成器按图集建，与 `monsters` 一一对应；缺行说明这只怪还没量过素材，
+   * 后台也不该凭空造一行（icon / out 是素材事实）—— 直接 404 让运营去跑生成器。
+   */
+  private requireMonsterPresentation(id: string): MonsterPresentationRow {
+    const row = this.monsterPresentations.getById(id);
+    if (!row) {
+      throw BizException.notFound(BizCode.MONSTER_PRESENTATION_NOT_FOUND, `怪物 ${id} 没有资源表现行，先跑几何生成器`);
+    }
+    return row;
+  }
+
   private requireNpc(id: string): NpcRow {
     const row = this.npcsRepo.findByKey(id);
     if (!row) throw BizException.notFound(BizCode.NPC_NOT_FOUND, `NPC ${id} 不存在`);
@@ -1458,6 +1511,54 @@ function assertMonsterAttributeRanges(attributes: MonsterAttributesDto): void {
       throw new BizException(BizCode.PARAM_INVALID, "属性下限不能大于上限");
     }
   }
+}
+
+/**
+ * 动作速度覆盖的键 / 值校验（#751）
+ *
+ * 两种错都只在「跑起来才看得见」，所以宁可写不进去：
+ * - **键不在白名单**：怪物素材只有 stand / walk / run / injured / die 五个动作有帧，
+ *   给 `attackNear` 配了速度也不会播（客户端回退待机）—— 存进去等于假装生效；
+ * - **值越界**：0 会让帧不动、负数会让 `AnimationState` 行为未定义。
+ *
+ * 空对象合法（= 清空回客户端 `monsterDefaultSpeedRate`），所以这里不看「有没有键」。
+ */
+function assertMonsterSpeedRate(speedRate: Record<string, number>): void {
+  const unknown = Object.keys(speedRate).filter((key) => !MONSTER_ACTION_KEYS.includes(key));
+  if (unknown.length > 0) {
+    throw new BizException(
+      BizCode.PARAM_INVALID,
+      `动作「${unknown.join("、")}」在怪物素材里没有帧，只能覆盖 ${MONSTER_ACTION_KEYS.join(" / ")}`,
+    );
+  }
+  for (const [key, value] of Object.entries(speedRate)) {
+    const rate = Number(value);
+    if (!Number.isFinite(rate) || rate < MONSTER_SPEED_RATE_MIN || rate > MONSTER_SPEED_RATE_MAX) {
+      throw new BizException(
+        BizCode.PARAM_INVALID,
+        `动作「${key}」的速度倍率需在 ${MONSTER_SPEED_RATE_MIN}~${MONSTER_SPEED_RATE_MAX} 之间`,
+      );
+    }
+  }
+}
+
+/**
+ * 行为参数的部分更新 → 整行（#751）
+ *
+ * 缺省字段补成库里现值：`aggressive` / `detectRange` / `moveSpeed` 不传就不改；
+ * `speedRate` **不传 = 不改、传 `{}` = 清空回默认**（客户端是
+ * `{...monsterDefaultSpeedRate, ...行里的覆盖}`，清空 = 让覆盖为空）。
+ * 几何列一个都不在这里出现 —— 那是生成器的地盘。
+ */
+function mergeMonsterBehavior(current: MonsterPresentationRow, patch: UpdateMonsterPresentationDto): MonsterBehaviorRow {
+  return {
+    id: current.id,
+    aggressive: patch.aggressive === undefined ? current.aggressive : patch.aggressive ? 1 : 0,
+    detect_range: patch.detectRange ?? current.detect_range,
+    move_speed: patch.moveSpeed ?? current.move_speed,
+    speed_rate: patch.speedRate === undefined ? current.speed_rate : JSON.stringify(patch.speedRate),
+    updated_at: Date.now(),
+  };
 }
 
 /**
