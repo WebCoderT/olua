@@ -39,7 +39,7 @@ export const uiDialog = (name: string) => `ui/dialog/${name}`;
 export const uiMall = (name: string) => `ui/mall/${name}`;
 /** resources/ui/create-role：选角 / 创建角色界面资源（预览图集在 preview/ 下） */
 export const uiCreateRole = (name: string) => `ui/create-role/${name}`;
-/** resources/effect：特效图集（border / background / light / skill / status / transform / select / upgrade） */
+/** resources/effect：特效图集（border / background / light / skill / status / aura / select / upgrade） */
 export const effectImage = (name: string) => `effect/${name}`;
 /** resources/map/<地图id>/preview：地图预览图（小地图弹窗底图，每个地图文件夹下一张） */
 export const mapPreviewImage = (id: string) => `map/${id}/preview`;
@@ -49,8 +49,13 @@ export const avatarImage = (occupation: string, sex: string) => `ui/avatar/${occ
 export const createRolePreviewImage = (occupation: string, sex: string) => uiCreateRole(`preview/${occupation}-${sex}-stand@0`);
 /** 选角界面的角色展示帧动画图集（按「职业-性别」取图；选中时循环播放，与站立图集同一块 800×800 画布，切换不位移） */
 export const createRoleShowImage = (occupation: string, sex: string) => uiCreateRole(`preview/${occupation}-${sex}-show@0`);
-/** 选角界面的「已选中」脚下特效图集（select-player@0：一圈地面光标） */
-export const roleSelectEffectImage = uiCreateRole("select-player@0");
+/**
+ * 选中光标图集：**角色选中与怪物选中放在一起**（`effect/select/`），
+ * 一个 `player@0`（选角界面脚下一圈地面光标）、一个 `monster@0`（地图上点中的怪）
+ */
+export const effectSelectImage = (name: string) => effectImage(`select/${name}`);
+/** 选角界面的「已选中」脚下特效图集（effect/select/player@0：一圈地面光标） */
+export const roleSelectEffectImage = effectSelectImage("player@0");
 
 //#endregion
 

@@ -21,7 +21,7 @@
 | 目录 | 装什么 | 代码入口 |
 | --- | --- | --- |
 | `audio/` | 12 个音效 / 音乐（`wav` / `mp3`，**文件路径入库**，运营在管理端挑） | `configs/audio`（快照 `audio` 段）→ `ui/core/SoundManager` |
-| `effect/` | 特效图集，按用途八分：`background` / `border` / `light` / `select` / `skill` / `status` / `transform` / `upgrade` | `configs/layout/images.effectImage`、`configs/{border,background,light}` |
+| `effect/` | 特效图集，按用途八分：`background` / `border` / `light` / `select` / `skill` / `status` / `aura`（氛围光环）/ `upgrade`。`select/` 收**两种地面光标**：`player@0`（选角界面选中角色）与 `monster@0`（地图上点中怪），同类放一起 | `configs/layout/images.effectImage`、`effectSelectImage`、`configs/{border,background,light}` |
 | `equipment/` | 装备：`clothes/` 与 `weapons/` 各三套（`icon` 图标 / `in` 内观 / `out` 外观） | 快照 `equipments.{icon,in_atlas,out_atlas}` |
 | `font/` | `msyh.ttf`（Label 未指定字体时的默认字体） | `uiImages.defaultFont` |
 | `item/` | 物品与药品图标（68 张；`drug-hp-1` 这类语义名 + 美术稿号两种） | 快照 `drugs.icon` / `items.icon` |
