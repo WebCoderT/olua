@@ -1,251 +1,179 @@
 ---
 name: cocos-monster-ai
-description: Cocos Creator 3.x 里给怪物/NPC 加「AI 行为」的成套做法：待机（原地换动作 + 偶尔小范围游走）、主动攻击（玩家进入检测范围追人、离开就停在原地）、普攻（含动画与伤害结算）、技能击退；以及一组必踩的引擎坑——AI 位移必须用运动学刚体 + linearVelocity（静态刚体挪不动）、运动学刚体会把动态刚体主角顶开（要"谁都不推动谁"得用 collider.sensor + MoveBlocking 手动阻挡预测）、Collider2D 的夹具在下一次物理步之后才建（addComponent 同帧写 size/sensor 有效，之后再改必须 apply()）、AnimationHelper 切出的 clip 是 WrapMode.Normal 只能靠 FINISHED 续播（每帧 play 会永远停在第 1 帧）、受伤这类一次性动作要单独回待机否则一直续播、怪物帧资源常常只有 stand/walk/run 齐全必须 getState 守卫并回退待机。触发场景：用户提到"怪物 AI"、"怪物追人"、"主动攻击"、"仇恨/检测范围"、"待机游走/巡逻"、"怪物移动速度"、"怪物打玩家"、"NPC 走动"、"怪物推动角色/被怪物挤开"、"角色不能穿过怪物"、"技能击退/击退怪物"、"怪物动画不播放/卡在第一帧"等。
+description: 怪物 / NPC 行为（待机游走、追击、普攻、技能、击退）在这个项目里的做法：**行为全部在服务端模拟**（server/src/modules/realtime/monster-ai.service.ts），客户端只做位置趋近与动作播放，多用户画面一致靠「world 快照带实时坐标 + monster-ai 帧带位置与血量 + 客户端零决策」三件事。也收录一组必踩的引擎坑——怪物位移必须运动学刚体（静态体挪不动）、运动学刚体会把动态刚体主角顶开（要"谁都不推动谁"得用 collider.sensor + MoveBlocking 手动阻挡预测）、Collider2D 夹具在下一次物理步之后才建（改 size/sensor 必须 apply()）、AnimationHelper 切出的 clip 是 WrapMode.Normal 只能靠 FINISHED 续播（每帧 play 会永远停在第 1 帧）、一次性动作要单独回待机、怪物帧资源常常只有 stand/walk/run 齐全必须 getState 守卫。触发场景：用户提到"怪物 AI"、"怪物追人"、"主动攻击"、"仇恨/检测范围"、"待机游走/巡逻"、"怪物打玩家/对着尸体放技能"、"怪物移动速度"、"多端画面不一致"、"技能击退/击退怪物"、"怪物动画不播放/卡在第一帧"等。
 agent_created: true
 ---
 
-# Cocos Creator 怪物 AI（待机游走 / 追击玩家 / 普攻）
+# 怪物 AI（#670 起：行为在服务端，客户端只演）
 
-> **前置认知（#323 起）**：怪物行为权威已经搬到服务端 `MonsterAiService` —— 客户端**不再跑本地 AI**，
-> 下面的「本地状态机」只剩两个用途：① 理解历史实现的语义（服务端那套是同口径重写）；
-> ② `MonsterAI.stepServer` 做**位置趋近演出**（服务端发什么就走向哪，不做决策）。
+> **一句话**：客户端**没有任何**怪物行为决策。目标选择、待机游走、追击、普攻、技能、击退
+> 全在 `server/src/modules/realtime/monster-ai.service.ts`；客户端 `ui/core/MonsterAI.ts`
+> 只剩「朝服务端坐标趋近 + 按事件播动作」。
 >
-> **#372 起怪物还会放技能**，客户端要做的三件事：
-> - `monster-ai` 帧的 **`casts`**（`{instanceId, skillId, statusId?}`）= 放技能了 → 播动作 + 特效。
->   动作取技能配置的 `action`（`MonsterManager.playServerCast` → `MonsterAI.playServerAction`），
->   特效走 `EffectManager.playAt`（`SkillEffectConfig` / `SkillEffectActor` 是 `Pick<>` 收窄过的类型，
->   让 `SkillData`（没有 `onClick`）也能传）；
-> - **普攻没有单独的出手事件**：用同帧 `hits` 反推，凡是没被 `casts` 覆盖的 instanceId 补播
->   `ACTION.ATTACK_NEAR`（用 `castIds` 集合去重，别让一次出手播两遍动作）；
-> - **状态型技能**（如狂怒 / 硬化皮肤）没有伤害，只有 `casts.statusId` → 在怪物身上挂一份
->   循环特效节点（子节点，随怪物移动 / 销毁），台账放 `MonsterManager.statusEffects`，
->   每帧按 `expireAt` 清理。**不要复用 `StatusManager`**：它是「单 owner + 图标栏」的形状，
->   怪物需要每只一份且没有图标栏。
->
-> **#689 起怪物被击杀也有跨端事件**：`monster-ai` 帧的 **`kills`**（`{instanceId, accountId, x, y, drops[]}`）
-> = 有玩家（`accountId`）打死了这只怪 → 观看者据此做死亡清场（走既有「无奖励死亡清场」路径）
-> 与掉落铺场（`DropManager.spawnRemoteDrops`：纯演出、无 pick 定位不可拾取 —— 账本在击杀者名下）。
-> **自己的击杀按 accountId 跳过**：击杀者那份已由 settle 帧的 reward 演过，重复处理会双份掉落。
+> 之前并存过一套本地 AI，只在「实时通道没连上」时跑。代价是同图两个客户端各跑一套随机行为：
+> A 屏幕上怪在东边打人、B 屏幕上同一只怪在西边遛弯，而血量又都是服务端权威 —— 看起来像
+> 「怪在远程打人」。删掉本地 AI 是为了**画面一致**，不是为了省代码。
 
+## 一、三条一致性链路（少一条两端就不同步）
 
-## 一、先分好层：数据归管理器，行为归 AI 静态类
+| 链路 | 机制 | 缺了会怎样 |
+| --- | --- | --- |
+| 位置 | world 快照发出前用 AI 实时坐标覆盖 `x/y`（`withLiveMonsterPositions`）+ `monster-ai` 增量帧 | 晚进图的人先看到**出生点**再等帧纠正；站着不动的怪永远不进增量帧（判据是「有变化才发」）→ 永远停在出生点 |
+| 血量 | `monster-ai` 帧的 `hp/maxHp`（必填），血量变化本身也算「有变化」 | `hits` 只发给**结算给出手者本人**，别人打的伤害收不到 → 别人屏幕上怪满血 |
+| 行为 | 客户端零决策，只有一条演出路径 | 两套 AI 各自游走/选目标，位置与动作都对不上 |
 
-- **管理器（如 MonsterManager）只管数据与生命周期**：把服务端下发的实例落成节点、节点↔数据映射（`Map<Node, Monster>`）、查询、受击表现、换图 reset。**不生成怪物**（#581：实例由服务端按 `map_spawn_areas` 播种，客户端进图只 `sendWorldJoin`）。不要往里塞行为逻辑。
-- **AI 单独一个静态类（如 `ui/core/MonsterAI.ts`）管行为与动画**：
-  - 入口 `static tick(monsters, player)`，由**组合根**（Game.update）每帧调用；`static replayCurrent(node)` 由怪物动画的 FINISHED 事件调用。
-  - 每只怪的状态放 `private static states = new WeakMap<Node, MonsterAIState>()`，**节点销毁自动回收**，怪物数据对象上不挂运行时字段（数据要能直接存档/序列化）。
-  - **参数由 tick 显式传入，不要做 provider 注入**：静态类跨场景活着，模块级持有节点/回调引用会留悬挂引用；`tick(map, this.roleDisplay)` 这种写法最省事。
-  - 依赖方向保持单向：AI 不 import 管理器（`Game` 同时 import 两者并接线）。否则管理器 → AI → 管理器成环。
+- `monster-ai` 帧的必发判据：`moved || turn || hurt`（位置变了 / 移动标记变了 / 血量变了）。
+  **站着的怪不发第二遍**，所以「站着不动」这件事必须靠 world 快照的首帧正确。
+- world 快照的 `x/y` 注释写的是「出生点」—— 那是**存库的出生点**，不是「他现在在哪」；
+  通道发出前会被覆盖。改这块别按「出生点」理解。
+- 客户端 `MonsterAiEntry.hp/maxHp` 是可选字段（旧服务端不发时不刷血条），服务端侧是必填。
 
-状态字段（时间一律用 `Date.now()` 毫秒时间戳，比累加 deltaTime 好调试）：
+## 二、客户端表现层（`ui/core/MonsterAI.ts`，静态类）
 
 ```ts
-interface MonsterAIState {
-  action: ACTION; direction: DIRECTION;      // 当前动作/朝向（动画续播要用）
-  anchor: Vec3;                              // 停留点（生成位置 / 失去玩家时的位置）
-  nextIdleAnimationAt: number;               // 下次换动作
-  nextIdleMoveAt: number;                    // 下次随机走动
-  idleMoveEndAt: number;                     // 本次走动结束（已过期=没在走）
-  idleMoveDirection: Vec2;
-  attackEndAt: number; nextAttackAt: number; attackPending: boolean;
-}
+static tick(monsters: Map<Node, Monster>)                       // Game.update 每帧，只剩一条路
+static applyServerState(node, x, y, moving)                     // 收到 monster-ai 帧：记目标点，首帧直接吸附
+static playServerAction(node, action, direction?)               // hits / casts 事件：播动作
+static replayCurrent(node)                                      // FINISHED 续播（一次性动作除外）
+static die(node): boolean                                       // 死亡动画，播完销毁节点
 ```
 
-## 二、位移：必须运动学刚体（Kinematic）+ linearVelocity
+- **首帧吸附**：`serverX === null` 时直接 `setWorldPosition`（服务端可能已经模拟了一段），
+  之后才交给 `stepServer` 按帧趋近 —— 否则新刷出来的怪会从出生点「走」到真实位置。
+- **同速趋近 + 差距大时追赶**：步长 = `max(monster.moveSpeed, distance / SERVER_CATCHUP_SECONDS)`，
+  `SERVER_CATCHUP_SECONDS = 0.2`（一个广播周期）。只按 `moveSpeed` 走的话，一次 120px 的
+  击退要拖一秒多才补齐，看起来像慢动作回放。
+- **朝向由位移差量自算**（`getDirectionByVector(offsetX, offsetY)`），服务端不发朝向。
+- 数据归 `MonsterManager`（节点↔数据、生命周期、血条、受击表现），行为归本类；
+  AI 不 import 管理器（`Game` 同时 import 两者并接线），否则成环。
+- 状态放 `WeakMap<Node, MonsterAIState>`（节点销毁自动回收），怪物数据对象上不挂运行时字段。
+- `MonsterAIState` 只有表现字段：`action / dead / direction / serverX / serverY / serverMoving / serverStepAt`。
+  `moveSpeed / aggressive / detectRange` 只是**服务端 AI 参数在客户端的只读副本**（快照下发，渲染用不到也别本地判）。
+
+### 刻意不做（想做就得先让服务端知道）
+
+- **待机随机换动作 / 随机小走**：会让同一只怪在两个人屏幕上动得不一样。待机 = 服务端说停就站定，游走由服务端模拟并广播。
+- **击退位移**：服务端模拟（`MonsterAiService.applyPush`），落点走普通位置广播；客户端只趋近。本地自己推一下，别人屏幕上怪根本不动。
+- **玩家侧伤害结算**：怪打人的伤害由服务端算（`hits` 帧）。`MonsterManager.onPlayerServerHit` 是**唯一入口**
+  （`StorageManager.applyMonsterHit` + 飘字 + 红闪 + `playInjured`）；`BattleMath.applyHitDamage` 现在
+  没有生产调用方，保留为「玩家状态参与结算」的口径规格（`test-status-combat` 覆盖）。
+
+## 三、服务端 AI 的形状（`server/src/modules/realtime/monster-ai.service.ts`）
+
+- **tick 住 realtime 模块**（每 `MONSTER_AI_TICK_MS`），广播每 `MONSTER_AI_BROADCAST_MS`。
+  每只**有人看的图**上的存活怪一份 `MonsterRuntime`；没人看的图整份清掉。
+- **目标选择**：主动怪常驻发现；被动怪被打伤后记恨打它的人（结算侧 `provoke`）；
+  玩家离开检测范围即丢失目标（记恨不清，回来继续被追）。
+- **⚠️ 出手结算不出来 = 目标作废**（#670 的真正修法）：`RolesService.applyMonsterHit` 返回 `null`
+  意味着这具尸体再也打不动（玩家已倒下 / 不在线）。以前只当「这一下落空」→ `runtime.target`
+  不清、位置缓存里那条 hp>0 的记录不删 → 下一拍又把尸体选成目标，客户端就在演
+  「怪对着尸体放技能」。现在一律 `forgetTarget(accountId)`：删位置缓存 + 清掉**所有**怪身上
+  指向该账号的 `target`。
+- **先结算再落账**：`castSkill()` 拿不到 hit 就整次作废 —— 不记冷却、不进硬直、不发 `casts`，
+  返回 `false`；`tryCast()` 据此判断「是否还要再试普攻」。冷却/硬直只写在成功路径上。
+- **击退在服务端**：结算侧（`CombatSettlementService.settleNew` 非击杀分支）读 `skill.pushDistance`，
+  调 `applyPush(instanceId, fromAccountId, distance)`；方向 = 施法者 → 怪，时长取
+  `runtime_params.monster_ai.pushDuration`（出厂 200ms）。`stepMonster` 里击退**优先于**施法硬直。
+  **不需要新协议帧**，落点跟位置广播走。
+- **参数全在库里**：`runtime_params.monster_ai`（attackInterval / attackRange / attackActionTime /
+  pushDuration / idleMoveInterval / idleMoveDuration / idleMoveSpeedScale / wanderRadius）+
+  `monster_presentation`（aggressive / detectRange / moveSpeed）。代码里的 `FALLBACK_AI` 只是
+  读不出数据时的兜底（全部取 0 会每 tick 出手一次，比不跑更糟），不是出厂值的第二份。
+- **缓存 1 秒 TTL**：管理端与实时是**两个进程**，只能靠共享 SQLite 交换改动，没法通知；
+  每 tick 查三张表在几十只怪时是纯浪费。
+- **位置不落盘**：坐标的持久真相是出生点，重启后怪回出生点重新游走 —— 几秒钟的表现层状态不值得加表。
+
+### 键名陷阱：`skillOf()` 返回的是归一化后的驼峰对象
+
+`applySkillOverrides` 之后字段是 `damageCoefficients / castLockMs / pushDistance`，
+**没有** `push_distance` 这种蛇形列名。写 `Number(skill.push_distance)` 拿到 `undefined`，
+击退会静默失效且不报错。要加技能字段：`SkillSource` 补列 → `applySkillOverrides` 映射 → 消费方读驼峰。
+
+## 四、位移与碰撞（客户端）
 
 ```ts
 // ui/utils/physics/MonsterCollider.ts
-export function addMonsterCollider(node: Node) {
-  const rigidBody = node.addComponent(RigidBody2D);
-  rigidBody.type = ERigidBody2DType.Kinematic;       // ← 关键：静态体挪不动
-  const collider = node.addComponent(BoxCollider2D);
-  collider.size = node.getComponent(UITransform).contentSize;
-}
+const rigidBody = node.addComponent(RigidBody2D);
+rigidBody.type = ERigidBody2DType.Kinematic;       // ← 静态体挪不动
+const collider = node.addComponent(BoxCollider2D);
+collider.size = node.getComponent(UITransform).contentSize;
 ```
 
-```ts
-// 移动/停下（与主角 RoleDisplay 同一套做法）
-const body = node.getComponent(RigidBody2D);
-body.linearVelocity = new Vec2(dir.x * speed, dir.y * speed); // dir 为单位向量
-body.linearVelocity = Vec2.ZERO;                              // 停下
-```
-
-- **别用静态刚体（Static）做会动的怪**：`addObstacleCollider`（Static）只能当不动的障碍，必须在节点上设 `linearVelocity` 才会位移。
-- **⚠️ 运动学刚体会把主角顶开**（本技能早期版本写反了）：主角是**动态刚体**（`RigidBody2D` 默认 Dynamic + `gravityScale = 0`），Box2D 里运动学体质量无限大，撞上动态体时会**把它挤开**。两个人都在动就是"怪推着角色滑"。要"谁都不推动谁"必须走第三条（传感器 + 手动阻挡）。
-- 两个非动态刚体之间确实**不产生碰撞**：怪彼此不互相阻挡、也不会被静态障碍挡住（跑动时会穿树穿墙，见"已知限制"）。
-- 速度单位 = 刚体线速度（引擎 1 米 = 32 像素，与主角的 `ROLE_WALK_SPEED` 同口径即可直接比较快慢：怪 2、角色走 2、角色跑 4 → 跑能脱战）。**检测范围/攻击距离这类"地图尺度"的东西用像素**（地图与点位坐标本来就是像素，服务端下发的世界坐标也是），不要和线速度混用一套单位。
-- 每帧 `Vec2.ZERO` 与 `new Vec2(...)` 反复赋值是安全的（Box2D `SetLinearVelocity` 非零时会唤醒休眠体）。
+- **别用静态刚体（Static）做会动的怪**。两个非动态刚体之间也**不产生碰撞**：怪彼此不阻挡、也不被静态障碍挡住（会穿树穿墙，见「已知限制」）。
+- **⚠️ 运动学刚体会把主角顶开**：主角是动态刚体（`gravityScale = 0`），Box2D 里运动学体质量无限大。
+  要"谁都不推动谁"必须 `collider.sensor = true` + 手动阻挡预测。
+- 现在的位移来源是 `setWorldPosition`（趋近），`stopMoving` 只兜住残留速度（`linearVelocity = Vec2.ZERO`）。
 
 ### 碰撞盒属性什么时候生效（必踩）
 
-`Collider2D` 的夹具不是在 `addComponent` 时建的：`onLoad` 只 `createShape()` 建壳，**真正的夹具在 `onEnable → PhysicsSystem2D._callAfterStep(this._init)`（下一次物理步之后）才创建**，`_init` 里一次性读走 `comp.size / comp.offset / comp.sensor / comp.group`。
+`Collider2D` 的夹具不在 `addComponent` 时建：`onEnable → PhysicsSystem2D._callAfterStep` 才 `_init`，
+一次性读走 `size / offset / sensor / group`。
 
-- 所以 `addComponent` 之后**同一帧内**接着写 `collider.size = ...`、`collider.sensor = true` 是有效的（现有 `addObstacleCollider` / 角色碰撞体都靠这个）；
-- 但如果夹具已经建好了再改：`set size` / `set sensor` **只改组件字段、不碰夹具**（`set size (v) { this._size = v; }`），必须显式 `collider.apply()`（内部 `_destroy()` + `_init()` 重建夹具）。
-- `worldAABB`/`getWorldPoints` 读的是**实际夹具**，不会被组件字段骗到；反之调试显示若只读 `collider.size`，就可能和真实夹具不一致。
+- `addComponent` 之后**同一帧内**写 `collider.size / sensor` 有效；
+- 夹具已建好再改：只改组件字段、不碰夹具，必须显式 `collider.apply()`；
+- `worldAABB` / `getWorldPoints` 读的是**实际夹具**，不会被组件字段骗到。
 
-## 三、谁推动谁（角色 ↔ 怪物的碰撞关系）
-
-需求常见表述："怪不会推动角色，追到就停下攻击；角色和怪都推不动对方，只有技能能推动"。三条物理关系分开处理：
+## 五、谁推动谁
 
 | 关系 | 做法 |
 | --- | --- |
-| 静态障碍（树/墙/NPC） | 静态刚体 `addObstacleCollider`，引擎自带阻挡，角色推不动它 |
-| 怪物 ↔ 角色 | 怪物 `Kinematic` + **`collider.sensor = true`**（无碰撞响应，谁都不推动谁）+ **手动阻挡预测** |
-| 技能击退 | 唯一能推动位置的途径，脚本位移（见第五节） |
+| 静态障碍（树/墙/NPC） | 静态刚体 `addObstacleCollider`，引擎自带阻挡 |
+| 怪物 ↔ 角色 | 怪物 `Kinematic` + `collider.sensor = true`（谁都不推动谁）+ **手动阻挡预测** |
+| 技能击退 | 服务端模拟位移，客户端只趋近（见第二节） |
+
+手动阻挡在 `ui/utils/physics/MoveBlocking.ts`（纯函数，角色与怪物共用）。`resolveBlockedMove` 两条关键规则：
+
+1. **只挡「本来没重叠、这一步会重叠」的移动** —— 已重叠直接放行，否则贴身后任何方向都被判碰撞、永久卡死。
+2. **整体位移被挡就依次试单轴**（`(dx,0)` / `(0,dy)`）→ 贴着侧滑而不是整帧停住。
+   `Rect.intersects` 用严格 `<`，边贴边也算相交 → 正好停在贴身处。
+
+**追击不套阻挡**（服务端做，客户端不掺和）：`attackRange` 常常小于双方体积之和，一按体积挡就会
+停在攻击距离外永远打不到人。**已知取舍**：怪贴上来时与角色是重叠的，角色可以走开也可以穿过去。
+
+## 六、动画状态机（最容易做错的地方）
+
+**引擎事实**：`AnimationHelper.createAnimation` 建出的 clip 一律 `WrapMode.Normal`（播一次就停），
+**播放器不会自己循环**。循环靠 `FINISHED` 事件重新 `play(当前动作名)` 实现（`replayCurrent`）。
 
 ```ts
-// 怪物：形状要留着（攻击距离判定读 worldAABB、调试显示读 size），但不要碰撞响应
-collider.sensor = true;
-```
-
-手动阻挡放在 `ui/utils/physics/MoveBlocking.ts`（纯函数，角色与怪物共用）：
-
-```ts
-/** 速度驱动型移动的统一入口：用速度×帧时长预估位移，撞上就取消/沿单轴滑开，再换算回速度 */
-export function resolveBlockedVelocity(node: Node, velocity: Vec2, blockings: Rect[]): Vec2 {
-  if (!blockings.length || (velocity.x === 0 && velocity.y === 0)) return velocity;
-  const self = getWorldColliderRect(node);                  // 自身 BoxCollider2D.worldAABB 的副本
-  if (!self) return velocity;
-  const step = Math.min(game.deltaTime, 0.05);              // 卡顿帧封顶，别一口气跳过阻挡物
-  const allowed = resolveBlockedMove(self, new Vec2(velocity.x * step, velocity.y * step), blockings);
-  return new Vec2(allowed.x / step, allowed.y / step);
-}
-```
-
-`resolveBlockedMove` 的两条关键规则（缺一条都会出 bug）：
-
-1. **只挡"本来没重叠、这一步会重叠"的移动**：已经重叠的阻挡物直接放行 —— 否则怪贴到角色身上时，角色任何方向都被判碰撞，被永久卡死。
-2. **整体位移被挡就依次试单轴**（`(dx,0)` / `(0,dy)`）→ 贴着怪侧滑，而不是整帧停住。
-   `Rect.intersects` 用严格 `<` 比较，**边贴边也算相交** → 正好停在贴身处、不会穿模。
-
-角色侧（`RoleDisplay.updateWorldPosition`）：`rigidBody.linearVelocity = resolveBlockedVelocity(this, 期望速度, MonsterManager.getBlockingRects())`；管理器只是把 `monsterMap` 里存活怪的 `worldAABB` 收集成 `Rect[]`（每帧几十个小对象，开销可忽略）。
-
-**追击不要套阻挡**：`attackRange`（如 60px）常常**小于双方体积之和**（怪 100×100 + 角色 40 → 中心距要 ≥70 才不重叠），一按体积挡，大体积怪会停在攻击距离之外、永远打不到人。要被推的只有"怪踩到人身上"，所以只在**待机随机走动**时避开玩家，追击照旧直线贴近。同理，怪物被击退时也**不做阻挡**（击退就是要位移穿过去）。
-
-**已知取舍**：怪贴上来时和角色是**重叠**的（不再互相挤开）；此时角色仍能走开（已重叠放行），但也可以从怪身上穿过去 —— 这是"不推动"约束下的必然结果。
-
-### 技能击退（唯一能推动位置的途径）
-
-击退写成"状态 + 时长"，而不是一次性设位置（否则撞上别的逻辑会被覆盖）：
-
-```ts
-// MonsterAIState 增加：pushEndAt / pushDirection(单位向量) / pushSpeed
-static push(node, direction, distance, duration = monsterAI.pushDuration) {
-  const len = Math.hypot(direction.x, direction.y);
-  if (!isValid(node) || len <= 0 || distance <= 0 || duration <= 0) return;
-  const state = this.getState(node);
-  state.pushDirection = new Vec2(direction.x / len, direction.y / len);
-  state.pushSpeed = distance / (duration / 1000);   // 距离/时长 = 匀速速度
-  state.pushEndAt = Date.now() + duration;
-  state.attackEndAt = 0; state.attackPending = false;   // 打断手上的普攻（被推着还打人很怪）
-}
-```
-
-- `tickMonster` 里**击退判定放最前面**（优先级高于"普攻动作中"），击退期间 `return`，不推进任何别的行为（否则 AI 会立刻把速度改回追击/待机）；击退期间照旧更新 `anchor`（落点成为新的游走中心）。
-- 触发链建议：技能配置上加可选字段 `push?: { distance; duration? }` → `SkillManager.release` 在调用技能实现后统一处理（方向 = 施法者 → 目标），技能实现里也能自行 `monsters.push(...)`（群体/区域技能）。`SkillMonsterProvider` 加 `push(...)` 即可，怪物管理器转发给 AI。
-- **一次性动作要单独处理**：击退期间播的是受伤动作（`ACTION.INJURED`），它播完会被 `replayCurrent` 当成循环动作**一直续播受伤**（看着像怪卡在挨打）。在 `replayCurrent` 里维护一个 `ONCE_ACTIONS` 名单（`[ACTION.INJURED]`），命中就切回该朝向的 stand 并改 `state.action`，不要 `play` 回去。
-- 早期 `Array.prototype.includes` 在本题库的 `tsconfig.check.json`（lib 低于 es2016）会报 TS2550，用 `indexOf(...) >= 0`。
-
-## 四、动画状态机（最容易做错的地方）
-
-**引擎事实**：`AnimationHelper.createAnimation` 建出的 clip 一律 `WrapMode.Normal`（播一次就停），**播放器不会自己循环**。循环是靠 `FINISHED` 事件里重新 `play(当前动作名)` 实现的（RoleAppearance 就是这么做的）。
-
-所以 AI 里：
-
-```ts
-/** 只有动作或朝向变了才切；缺帧回退待机；播完由 FINISHED → replayCurrent 续播 */
-private static playAction(animate: Animation, state: MonsterAIState, action: ACTION, direction: DIRECTION) {
+private static playAction(animate, state, action, direction) {
   const resolved = animate.getState(getAnimationName(action, direction)) ? action : ACTION.STAND;
   if (state.action === resolved && state.direction === direction) return;   // ← 不加这句必卡第 1 帧
   state.action = resolved; state.direction = direction;
   animate.crossFade(getAnimationName(resolved, direction), 0.2);
 }
-
-static replayCurrent(node: Node) {   // 挂在动画节点的 FINISHED 上
-  const animate = this.getAnimate(node); if (!animate) return;
-  const s = this.states.get(node);
-  const name = getAnimationName(s?.action ?? ACTION.STAND, s?.direction ?? DIRECTION.DOWN);
-  if (animate.getState(name)) animate.play(name);
-}
 ```
 
-- **绝不能每帧 `play()/crossFade()`**：每帧重启 → 动画永远停在第一帧（症状就是"怪走路像贴图"）。
-- `Animation.getState(name)` 在 clip 不存在时**返回 null（.d.ts 骗人说是 AnimationState）**，一定要用它做守卫，否则 `play()` 刷 "animation not found" 警告，且动画停留在最后一帧不动。
-- 切换动作前先问"这个方向有帧吗"：实测 220 个怪物帧目录里**只有 stand/walk/run/test1 八向齐全**，`attack_near` 只有部分方向，`attack_skill_1/test3/attack_far/injured/a1/die` 全无 → 缺帧一律回退该朝向的 stand。查帧是否齐全用 bin 目录里 PNG 的序号区间（一个动作占 `8 方向 × 10 帧 = 80` 个序号，方向顺序 UP、RIGHT_UP、RIGHT、RIGHT_DOWN、DOWN、LEFT_DOWN、LEFT、LEFT_UP）。
+- **绝不能每帧 `play()/crossFade()`**：每帧重启 → 动画永远停在第一帧（"怪走路像贴图"）。
+- `Animation.getState(name)` 在 clip 不存在时**返回 null（.d.ts 骗人说是 AnimationState）**，必须用它做守卫。
+- 切动作前先问"这个方向有帧吗"：220 个怪物帧目录里**只有 stand/walk/run/test1 八向齐全**，
+  `attack_near` 只有部分方向，`attack_skill_1/test3/attack_far/injured/a1/die` 全无 → 缺帧回退该朝向的 stand。
+- **一次性动作**（`ONCE_ACTIONS = [ACTION.INJURED]`）播完要切回待机，不能 `play` 回受伤动作（否则怪卡在挨打）。
 
-## 五、行为循环的形态
+## 七、客户端怎么消费三类帧（`MonsterManager`）
 
-```ts
-tickMonster(node, monster, player) {
-  if (!isValid(node) || monster.hp <= 0) return;            // 死亡/销毁的怪直接跳过
-  const animate = getAnimate(node); if (!animate) return;
-  const now = Date.now(); const state = getState(node);
-  if (now < state.attackEndAt) { stop(node); return; }      // 出手期间站定把动作打完
-  if (state.attackPending) { state.attackPending = false; hitPlayer(...); }
-  const d = player ? distance(node, player) : Infinity;
-  if (monster.aggressive && player && d <= monster.detectRange) {
-    state.anchor.set(当前坐标);                             // 停留点跟着走 → 失去目标即停在这
-    state.idleMoveEndAt = 0;                                // 打断正在进行的游走
-    state.nextIdleMoveAt = Math.max(state.nextIdleMoveAt, now + idleMoveInterval[0]);
-    return chase(...);
-  }
-  stayIdle(node, monster, state, animate, now);
-}
-```
+- **位置 + 血量**（`applyServerAi`）：先刷血条再趋近。`entry.hp <= 0` 走死亡清场；否则 `monster.hp = entry.hp`、`updateHead`、再 `MonsterAI.applyServerState`。
+- **`casts`**（`{instanceId, skillId, statusId?}`）= 放技能了 → 播动作（取技能配置的 `action`）+ 特效（`EffectManager.playAt`）。
+  `SkillEffectConfig` / `SkillEffectActor` 是 `Pick<>` 收窄过的类型，让 `SkillData`（没有 `onClick`）也能传。
+- **普攻没有单独事件**：用同帧 `hits` 反推，凡没被 `casts` 覆盖的 instanceId 补播 `ACTION.ATTACK_NEAR`（用 `castIds` 去重，别让一次出手播两遍）。
+- **状态型技能**（狂怒 / 硬化皮肤）没有伤害，只有 `casts.statusId` → 挂一份循环特效子节点（随怪移动/销毁），台账 `MonsterManager.statusEffects`，每帧按 `expireAt` 清理。**不要复用 `StatusManager`**（它是「单 owner + 图标栏」的形状）。
+- **`kills`**（#689 `{instanceId, accountId, x, y, drops[]}`）= 有玩家打死了它 → 观看者做死亡清场 + 掉落铺场（`DropManager.spawnRemoteDrops`：纯演出、不可拾取）。
+  **自己的击杀按 accountId 跳过**（击杀者那份已由 settle 帧的 reward 演过，重复处理会双份掉落）。
 
-- **追击**：`d > attackRange` → 朝玩家移动 + `WALK` 朝玩家；`d <= attackRange` → 停下 + 按 `attackInterval` 出手（出手期间 `attackEndAt` 锁住移动，避免边打边走）。
-- **伤害在动作播完后结算**（与角色打怪一致：挥击 → 结算），用一个 `attackPending` 标记；结算时再校验一次距离，玩家跑掉就落空。
-- **待机**：站定 + 到点随机换动作（动作与朝向都随机，动作池可配）+ 到点朝随机方向小走一段（减速倍率）。随机走动要**限制在停留点附近**：
+## 八、验证清单
 
-```ts
-// 离 anchor 超过 wanderRadius 就朝回走，否则完全随机 → 怪不会越走越远
-const dx = p.x - anchor.x, dy = p.y - anchor.y, len = Math.hypot(dx, dy);
-const dir = len > wanderRadius ? new Vec2(-dx / len, -dy / len) : randomUnitVector();
-```
-
-- 进入追击时把待机计时往后推（`Math.max`），这样玩家跑掉后怪会先原地站一会儿再游走，观感更像"停下来张望"。
-
-## 六、怪打玩家（结算 + 刷新）
-
-```ts
-const role = StorageManager.findOnlineRole();              // ← 只在结算时读，别每帧读（localStorage 反序列化）
-if (!role || role.hp <= 0) return;
-const damage = applyHitDamage(role, monster);              // 与角色打怪同一套 BattleMath
-GameUiHelper.showDamageText(player, damage);
-StorageManager.updateOnlineRole(role);                     // 落盘
-StorageManager.updateUi(role);                             // 血球/信息栏
-```
-
-## 七、给配置加字段（批量改 200+ 条）
-
-怪物配置按 id 一条条手写时，加字段用脚本插到每条固定行之后（本例插在 `label:` 行后），并按 `monsters.set("id"` 跟踪当前 id 以便给个别怪开特殊值：
-
-```python
-cur = {"id": None}
-for line in src.split("\n"):
-    m = re.match(r'monsters\.set\("(\d+)"', line)
-    if m: cur["id"] = m.group(1)
-    out.append(line)
-    if re.match(r'^\s*label: "', line):
-        out += ["  moveSpeed: 2,", f'  aggressive: {"true" if cur["id"] in ON else "false"},', "  detectRange: 200,"]
-```
-
-- 字段设成**必填**（接口不写 `?`）能靠 tsc 兜住"新增怪忘配"；批量插入后跑一次 tsc 就知道了。
-- 行为节奏这类**全员共用**的参数不要塞进每条配置，另外导出一个 `monsterAI = {...}` 常量块（普攻间隔/距离/动作时长、待机动作池、游走间隔与半径），文档注释写清单位。
-
-## 八、验证清单（Cocos 项目专用）
-
-1. `NODE_PATH=... node .../typescript/bin/tsc -p /tmp/tsconfig.check.json`，**看总数是否等于基线**（本机基线 63 条全是引擎 cc.d.ts/jsb.d.ts 噪声），过滤出非引擎行必须为空。
-2. 新增 assets 文件必须补 `.meta`（复制同类型模板、随机 uuid、检查与既有 uuid 不重复），否则编辑器重分配 uuid。
-3. 批量改动后计数校验：`grep -c "moveSpeed: 2,"` 应等于配置条目数。
-4. **Cocos 编辑器运行时会周期性把旧内容回写覆盖外部修改** → 改完 `sleep 10~15` 后再复检一次（异常症状：同一次编辑里靠前的改动被覆盖、行号对不上）。
-5. 多模式搜索用 `grep -E`（本环境 shell 的 grep 不支持 `\|` 交替，会静默假阴性，容易误判"改动被回写"），或直接用编辑器的 Grep 工具。
+1. 服务端改完 `npm run build`（e2e 跑 `dist/`），再 `npm run test:e2e:monster-ai`。
+2. 该套件用 `pickPointInArea(cx, cy, 0, 0)`（恒定落在中心点）把怪钉死，位置断言才可复现；
+   断言「停稳后再量距离」（连续两拍位移 < 0.5px），别在半路量 —— 广播 100ms 一拍、击退 200ms，量到的常是推了一半的帧。
+3. 客户端 `make client-check`（0 错）+ `make client-test`；`make audit`（`audit-world-authority` 守着
+   「AI 参数不许回到客户端配置」，`BEHAVIOR_FIELDS` 是反向白名单）。
+4. 显示效果（帧率/尺寸/坐标/颜色/对齐）不写断言，人眼看。
 
 ## 九、已知限制（提前跟用户讲清，别当成 bug）
 
-- **无寻路**：直线追击。Kinematic 刚体**不与静态障碍（树/墙）发生碰撞解析** → 怪可能穿树穿墙；要绕障得引入寻路或射线避让。
-- 检测只针对**传入的那个玩家节点**；多玩家需把 tick 的 player 改成"返回最近玩家"的查询。
-- 玩家死亡流程若未实现，血量到 0 后怪不再造成伤害但仍会追（可自行在 hitPlayer 里对 hp<=0 提前返回）。
-- 怪物 `contentSize` 若是 `new Size()`（0×0），碰撞盒与点击区就是个点——这是配置缺口，不是 AI 的问题。**注意 0×0 的怪既不会推人、也几乎挡不住角色**（传感器形状退化成一个点），用户报"怪推人"时先看是哪几只（`contentSize` 有实尺寸的那几只才是元凶）。
-- 传感器碰撞盒不能让角色穿过怪，但**角色从别的怪身上"被压住"时允许走开**（MoveBlocking 的已重叠放行）——所以视觉上会看到角色与怪重叠，这是设计取舍，不是漏判。
+- **无寻路**：直线追击。运动学刚体不与静态障碍碰撞解析 → 怪可能穿树穿墙。
+- **位置重启归位**：重启后怪回出生点重新游走（位置不落盘）。
+- **玩家侧状态数值不参与服务端结算**（格挡/防御修正仍是客户端 StatusManager 的本地增益），服务端按裸属性算。
+- **怪物不消耗魔法值**：技能表的 `mpCost` 只对角色生效。
+- 怪物 `contentSize` 是 `new Size()`（0×0）时碰撞盒退化成一个点 —— 配置缺口，不是 AI 的问题。
+- 客户端 `serverX === null` 期间（还没收到第一帧）怪原地站着，这是设计（不猜）。
