@@ -10,7 +10,8 @@
  * · key 双向对账：资源行（monster_presentation）与数值行（monsters）一一对应（生成器断言，这里复核）；
  * · 动作速度：经 applyMonsterPresentation 落运行时表后，每只怪 speedRate 都是**完整 11 个动作**
  *   且 >0（快照覆盖与 monsterDefaultSpeedRate 在落表时合成）；
- * · 主动怪规则：tier=boss 或身体宽 ≥ 阈值（与生成器头部常量一致）；
+ * · 主动怪取值：每只怪都有明确的布尔值，且快照里至少有一只主动（#751 起「谁主动」归运营，
+ *   生成器只按体型 / tier 打印建议、不写库 —— 所以不再断言快照符合体型规则）；
  * · 老怪行为不回退：1~4 号 moveSpeed 2 / detectRange 200 / stand 速度 1；
  * · 资源在位：每只怪的 icon 与 out 图集都真实存在；
  * · 接线：createMonsterBody 消费 outOffset；运行时表消费方不再 import configs/game-config 的怪物 Map
@@ -31,8 +32,6 @@ const GEN_SRC = fs.readFileSync(path.join(PROJECT_ROOT, "tools/gen-monster-confi
 const RUNTIME_SRC = fs.readFileSync(path.join(PROJECT_ROOT, "assets/configs/game-config.ts"), "utf8");
 const OUT_RES = path.join(PROJECT_ROOT, "assets/resources/monster/out");
 
-/** 主动怪的身体宽阈值（与 gen-monster-config.cjs 头部的 AGGRESSIVE_BODY_WIDTH 同源，改一处要同步另一处） */
-const AGGRESSIVE_BODY_WIDTH = 250;
 /** 几何基准帧（与生成器一致）：图集 stand 是 8 向 × 4 帧，方向 4 = 正面第 0 帧 */
 const STAND_BASE_FRAME = "d4_00.png";
 /** 动作全集（ACTION 枚举的**值**，运行时 speedRate 的键就是它们） */
@@ -91,9 +90,16 @@ check(
   "monsterDefaultSpeedRate 覆盖全部 11 个动作",
 );
 
-const ruleBroken = [...rows].filter(([key, m]) => m.aggressive !== (tierByKey.get(key) === "boss" || m.contentSize.width >= AGGRESSIVE_BODY_WIDTH));
-check(ruleBroken.length === 0, `主动怪规则一致（种子 boss 或身体宽 ≥ ${AGGRESSIVE_BODY_WIDTH}px）`, ruleBroken.map(([key]) => key).slice(0, 5).join(","));
-check([...rows.values()].filter((m) => m.aggressive).length > 0 && [...rows.values()].filter((m) => !m.aggressive).length > 0, "主动 / 被动两类都有（规则真的铺开了）", `主动 ${[...rows.values()].filter((m) => m.aggressive).length}/220`);
+// #751：主动与否是**玩法决定**，归运营（管理端「怪物配置」勾选）。生成器只按体型 / tier
+// **打印建议**、不再写库，所以这里不再断言「快照符合体型规则」—— 运营把一只小怪改成主动是合法的。
+check(
+  [...rows.values()].every((m) => typeof m.aggressive === "boolean"),
+  "每只怪都有明确的主动 / 被动取值（布尔）",
+);
+{
+  const aggressiveCount = [...rows.values()].filter((m) => m.aggressive).length;
+  check(aggressiveCount > 0, "快照里至少有一只主动怪（规则真的铺开过）", `主动 ${aggressiveCount}/220`);
+}
 
 check(
   [1, 2, 3, 4].every((index) => {
@@ -116,6 +122,10 @@ check(resMissing.length === 0, "每只怪的图集与 icon 资源都在磁盘上
 
 check(/animationNode\.setPosition\(monster\.outOffset\.x,\s*monster\.outOffset\.y,\s*0\)/.test(HELPER_SRC), "createMonsterBody 消费 outOffset（身体中心对准节点原点）");
 check(/const AGGRESSIVE_BODY_WIDTH = 250;/.test(GEN_SRC), "生成器阈值与测试同源（250）");
+check(
+  !/SET[^`]*aggressive\s*=/.test(GEN_SRC),
+  "生成器不再写 aggressive（写口在管理端 PATCH /admin/monsters/:id，重跑几何不许抹掉运营的值）",
+);
 check(GEN_SRC.includes(`"${STAND_BASE_FRAME}"`), `生成器几何基准帧 = ${STAND_BASE_FRAME}`);
 // 客户端不许再 import configs/game-config 的怪物 Map（那个 Map 已经删了；谁抄旧代码这里红）
 check(!/from "\.\.\/\.\.\/configs\/monster"/.test(fs.readFileSync(path.join(PROJECT_ROOT, "assets/ui/core/MonsterManager.ts"), "utf8")), "MonsterManager 不再 import configs/game-config（数据全走 monsterRuntime）");
