@@ -22,7 +22,8 @@ agent_created: true
 | 装备的 15 档前后缀变体（555 行） | `equipment_variants` | 装备变体 | 每行自带 `label` / `level` / 八项属性 / **`sell_price`（回收价就在这一列）** |
 | 前后缀倍率与文案 | `equipment_meta`（单行） | 装备槽位与规则 | 只影响「一张基础件展开成几档」与名字拼接 |
 | 怪物数值 | `monsters` | 怪物配置 | 逐只配好，不再四元组 + 曲线展开 |
-| 怪物资源表现（几何） | `monster_presentation` | — | `client/tools/gen-monster-config.cjs` 从图集 plist 基准帧实测写回几何列 |
+| 怪物行为参数（主动攻击 / 检测范围 / 移动速度 / 动作速度） | `monster_presentation` | 怪物配置 → 编辑 | #751 起可改。服务端 AI 1 秒 TTL，**画面表现要重进地图**；`speed_rate` 只认有帧的五个动作（stand / walk / run / injured / die），传 `{}` = 清空回默认 |
+| 怪物资源几何（icon / out / 偏移 / 身体尺寸） | `monster_presentation` | —（只读） | 素材事实：`client/tools/gen-monster-config.cjs` 从图集 plist 基准帧实测写回；生成器**不再**碰 `aggressive`（写口在管理端） |
 | 称号 / 战魂 / 军衔各阶属性 | `titles` / `souls` / `ranks` | 对应页面 | 逐阶配好；成长链顺序由 `upgrade_order` 决定 |
 | 掉落 | `monster_drops`（每怪）/ `drop_tables`（具名 + 兜底） | 怪物配置 → 掉落 | 见第二节 |
 | 技能 / 状态 / 物品 / 药品 / 时装 | `skills` / `statuses` / `items` / `drugs` / `fashions` | 对应页面 | 只许改、不许增删（key 是客户端枚举） |
