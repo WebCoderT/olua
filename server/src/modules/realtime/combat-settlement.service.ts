@@ -45,7 +45,8 @@ import type { RealtimeKillReward, RealtimePickedData, RealtimeSettleData } from 
  * 击杀奖励（经验 + 掉落）也在这里结算（#316）：经验入账走存档服务（RolesService.applyKillExp），
  * 掉落读 monster_drops / drop_tables 表抽取，结果以 settle 帧的 `reward` 发回 ——
  * 客户端只负责演（经验飘字、升级表现、地面掉落物），不再自己决定掉什么、给多少经验。
- * 怪打人（MonsterAI → applyHitDamage）仍 由客户端 AI 驱动 —— 那是后续刀的事。
+ * 怪打人已由服务端的怪物 AI 结算（#323 起在 `MonsterAiService.attack`，走 `RolesService.applyMonsterHit`），
+ * 客户端不再有本地伤害路径（#670 删掉了最后那一份 `MonsterAI.hitPlayer`）。
  *
  * ===========================================================================
  * 幂等
@@ -262,6 +263,11 @@ export class CombatSettlementService {
       });
     } else {
       this.monsterAi.provoke(cast.targetId, accountId);
+      // 技能击退（#670）：位移只能由服务端产生 —— 客户端推一下只在本机生效，同图其他人
+      // 看到的怪还在原地，落点就已经不一致了。方向（施法者 → 怪）与时长都由 AI 侧决定，
+      // 这里只给「推多远」（`skills.push_distance`，管理端可改）。
+      const pushDistance = Number(skill.pushDistance) || 0;
+      if (pushDistance > 0) this.monsterAi.applyPush(cast.targetId, accountId, pushDistance);
     }
 
     // 玩家动作事件（#693）：观看者据此播「他出手了」的攻击/技能动画 —— settle 只回出手者

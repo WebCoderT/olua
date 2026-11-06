@@ -114,6 +114,8 @@ export interface SkillSource {
   cast_lock_ms: number;
   require_target: number;
   can_auto: number;
+  /** 击退距离（#670：客户端不再有这份配置，结算后用它在服务端位移怪物） */
+  push_distance: number;
 }
 
 /** 药品行（背包叠加 / 用药回复） */
@@ -291,6 +293,7 @@ export function applySkillOverrides(rows: SkillSource[]): void {
       castLockMs: numberOr(row.cast_lock_ms),
       requireTarget: row.require_target === 1,
       canAuto: row.can_auto === 1,
+      pushDistance: numberOr(row.push_distance),
     });
   }
   skillRows = map;

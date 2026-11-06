@@ -38,6 +38,10 @@ export interface WorldMonsterSnapshot {
   hp: number;
   maxHp: number;
   alive: boolean;
+  /**
+   * 出生点（世界坐标）。**这不是「他现在在哪」** —— 世界层不持有走动，怪的位置只有怪物 AI
+   * 运行时知道；通道把快照发出去之前会按运行时坐标覆盖它（#670，见 RealtimeService）。
+   */
   x: number;
   y: number;
   respawnInMs?: number;
