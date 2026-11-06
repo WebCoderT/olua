@@ -23,6 +23,7 @@ export function EntityPickerList({
   hint,
   max = 120,
   emptyHint = "没有匹配的项",
+  imageSize = 32,
   resetKey,
 }: {
   options: EntityOption[];
@@ -35,6 +36,13 @@ export function EntityPickerList({
   hint?: string;
   max?: number;
   emptyHint?: string;
+  /**
+   * 图标边长（默认 32）
+   *
+   * 装备 / 技能这类「图 + 名字」认得出就够，32 一屏能多摆几项；而**装备边框 / 详情背景**
+   * 挑的就是那张图本身（#749），32px 看不出边框粗细与光效，调用方给 48~56。
+   */
+  imageSize?: number;
   /** 变化时清空搜索与分组（弹窗每次打开传一个新值，避免残留上一次的筛选） */
   resetKey?: unknown;
 }) {
@@ -105,7 +113,7 @@ export function EntityPickerList({
                       : "border-slate-800 bg-slate-900/60 hover:border-slate-600 hover:bg-slate-800/60"
                   }`}
                 >
-                  <EntityImage image={option.image} alt={option.label} size={32} />
+                  <EntityImage image={option.image} alt={option.label} size={imageSize} />
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-xs text-slate-100">{option.label}</span>
                     <span className="block truncate text-[10px] text-slate-500">{option.note}</span>

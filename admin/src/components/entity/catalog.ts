@@ -55,6 +55,7 @@ import {
   titleMeta,
   titleText,
 } from "../../api";
+import type { AppearanceItem } from "../../api";
 
 /** 有「清单」可挑的实体种类 */
 export type EntityKind = "equipment" | "item" | "skill" | "drug" | "fashion" | "map" | "monster" | "npc";
@@ -62,12 +63,17 @@ export type EntityKind = "equipment" | "item" | "skill" | "drug" | "fashion" | "
 /** 有「阶梯」可挑的养成等级种类（下标从 1 起 = 第一档） */
 export type LevelKind = "title" | "soul" | "rank";
 
-/** 图标：单图（`icon` 是 resources 相对路径）或图集首帧（`frame` 是图集目录） */
+/** 图标：单图（`icon` 是 resources 相对路径）或图集（`frame` 是图集目录，默认取首帧） */
 export interface EntityImage {
   icon?: string;
   /** 单图扩展名（地图预览图是 jpg，不写默认 png） */
   ext?: "png" | "jpg";
   frame?: string;
+  /**
+   * 图集是否**循环播放**（#749）：只给「挑素材本身」的清单用（装备边框 / 详情背景），
+   * 光效与流动感看首帧判断不了。缺省 false = 静态首帧，列表页几十行不该都起播放器。
+   */
+  animate?: boolean;
 }
 
 /** 选择器里的一项；也是卡片能渲染的最小信息 */
@@ -377,6 +383,50 @@ export function filterOptions(options: EntityOption[], keyword: string, group: s
   return options.filter((option) => {
     if (group && option.group !== group) return false;
     return !needle || option.search.includes(needle);
+  });
+}
+
+/* ===========================================================================
+ * 装备外观（边框 / 详情背景）：清单条目 → 同一套 EntityOption（#749）
+ * =========================================================================== */
+
+/** 外观清单的两种素材；素材目录名与客户端资源同口径（边框 `borders/`、背景 `backgrounds/`） */
+export type AppearanceKind = "border" | "background";
+
+const APPEARANCE_RES_DIR: Record<AppearanceKind, string> = {
+  border: "borders",
+  background: "backgrounds",
+};
+
+/** 没有分组的条目落到这一组：分组 chips 里永远有它，不会出现「选了全部却少几条」 */
+export const APPEARANCE_NO_GROUP = "未分组";
+
+/**
+ * 边框 / 背景清单 → 可视化选择器的候选
+ *
+ * 与「实体目录」里其他 kind 的区别：那些是**游戏数据表**（名字 / 图标由 id 查出来），
+ * 这里的候选是**运营自己维护的素材清单**（`border_items` / `background_items`），
+ * 别名与分组本来就是管理端属性 —— 正好直接当选择器里的 label / group 用。
+ *
+ * - `id` = key（要落到库里的就是它，客户端只认这个）；
+ * - `label` = 别名（没起别名就退回 key，让人能一眼看出「这条还没取名」）；
+ * - `note` = key · 分组（有别名时 key 必须在，不然挑中后不知道存的是什么）；
+ * - `image.animate` = 逐帧播放：边框光效 / 背景动画看首帧判断不了。
+ */
+export function appearanceOptions(kind: AppearanceKind, items: AppearanceItem[]): EntityOption[] {
+  return items.map((item) => {
+    const key = item.key.trim();
+    const name = (item.name ?? "").trim();
+    const group = (item.group ?? "").trim();
+    const note = name ? [key, group].filter(Boolean).join(" · ") : group ? `${group} · 未起别名` : "未起别名";
+    return {
+      id: key,
+      label: name || key,
+      note: brief(note),
+      group: group || APPEARANCE_NO_GROUP,
+      image: { frame: `${APPEARANCE_RES_DIR[kind]}/${key}`, animate: true },
+      search: `${key} ${name} ${group}`.toLowerCase(),
+    };
   });
 }
 
