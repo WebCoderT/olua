@@ -1,11 +1,20 @@
 import { Injectable, Logger, OnApplicationBootstrap, OnApplicationShutdown } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import { MapMonitorDrop, MapMonitorEvent, MapMonitorMonster, MapMonitorSnapshot } from "../../common/map-monitor";
+import {
+  MapMonitorChaseEvent,
+  MapMonitorDamageEvent,
+  MapMonitorDrop,
+  MapMonitorEvent,
+  MapMonitorMonsterCastEvent,
+  MapMonitorMonsterHitEvent,
+  MapMonitorMonster,
+  MapMonitorSnapshot,
+} from "../../common/map-monitor";
 import { itemLabelOf } from "../../common/runtime-config-cache";
 import { MapMonitorRepository } from "../../database/repositories/map-monitor.repository";
 import { MonsterRepository } from "../../database/repositories/monster.repository";
 import { WorldMonster, WorldService } from "../world/world.service";
-import { MonsterAiService } from "./monster-ai.service";
+import { MonsterAiLogEvent, MonsterAiService } from "./monster-ai.service";
 import { PlayerPresenceService } from "./player-presence.service";
 
 /** 一次击杀要记的东西（结算侧在 `applied.killed` 分支调用） */
@@ -25,6 +34,30 @@ export interface KillRecord {
   drops: Array<{ goodId: string; count: number }>;
   /** 预定重生时刻（毫秒） */
   respawnAt: number;
+}
+
+/** 一次「玩家 → 怪」的伤害（结算侧每次都调；#745 起才是精细日志的主体） */
+export interface DamageRecord {
+  instanceId: string;
+  monsterKey: string;
+  label: string;
+  zoneId: number;
+  mapId: string;
+  /** 怪被打时所在位置（世界坐标） */
+  x: number;
+  y: number;
+  /** 出手者角色名 */
+  attacker: string;
+  skillId: string;
+  skillLabel: string;
+  /** 这一下掉了多少血（服务端算的伤害；世界层扣完可能与它不等时以 hpAfter 为准） */
+  amount: number;
+  /** 扣完之后的血量（前血量 = hpAfter + amount，两者相减恒等于 amount） */
+  hpAfter: number;
+  maxHp: number;
+  killed: boolean;
+  /** 这一下把怪推开了多远（像素；0 = 没推） */
+  pushDistance: number;
 }
 
 /**
@@ -55,7 +88,8 @@ export interface KillRecord {
  * ## 事件不落内存环形缓冲的理由
  *
  * 管理端可能「刚打开页面」：它需要知道**它没看见的那几分钟**发生过什么。内存缓冲对
- * 后来的人等于不存在；行数按图裁剪（默认 300 条）就够看一阵，也不会把库撑大。
+ * 后来的人等于不存在；行数按图裁剪（默认 2000 条，#745 起细到每一下伤害，条数消耗快一个数量级）
+ * 就够看一阵，也不会把库撑大。
  */
 @Injectable()
 export class MapMonitorService implements OnApplicationBootstrap, OnApplicationShutdown {
@@ -68,6 +102,14 @@ export class MapMonitorService implements OnApplicationBootstrap, OnApplicationS
   private readonly lastPosition = new Map<string, Map<string, { x: number; y: number }>>();
   /** `zone:mapId` → 距上次裁剪又新增了几条事件（攒够再删，免得每杀一只都 DELETE） */
   private readonly pendingTrim = new Map<string, number>();
+  /**
+   * 账号 → 角色名（#745：事件里要写「谁」）
+   *
+   * 为什么自己缓存一份：`identityOf` 只在**在场表里还有这个人**时给名字，而「目标离线」
+   * 恰恰是那个人已经不在表里的那一刻 —— 不缓存的话，最需要看清的那条日志恰好没有名字。
+   * 账号数量有界（在线玩家），重启即清，不构成泄漏。
+   */
+  private readonly names = new Map<string, string>();
 
   constructor(
     private readonly config: ConfigService,
@@ -79,6 +121,9 @@ export class MapMonitorService implements OnApplicationBootstrap, OnApplicationS
   ) {}
 
   onApplicationBootstrap(): void {
+    // AI 侧的细粒度事件（追击起止 / 技能 / 普攻命中）走单向往回调：本服务依赖 AI（采样要读
+    // 实时坐标），构造注入反过来就成了循环依赖（#745）
+    this.monsterAi.onLog = (event) => this.recordAi(event);
     this.timer = setInterval(() => this.sample(), this.intervalMs()).unref();
     this.logger.log(`实时地图监控采集已启动（每 ${this.intervalMs()}ms 采样一次，事件每图保留 ${this.keep()} 条）`);
   }
@@ -86,6 +131,7 @@ export class MapMonitorService implements OnApplicationBootstrap, OnApplicationS
   onApplicationShutdown(): void {
     if (this.timer) clearInterval(this.timer);
     this.timer = null;
+    this.monsterAi.onLog = null;
   }
 
   //#region 采样（每秒一帧）
@@ -214,6 +260,119 @@ export class MapMonitorService implements OnApplicationBootstrap, OnApplicationS
     this.appendEvent(record.zoneId, record.mapId, event);
   }
 
+  /**
+   * 记一次「玩家打怪」的伤害（#745）
+   *
+   * 结算侧每算完一次就调 —— 这是「怪物血量减少多少」唯一的书写处：数字来自服务端结算，
+   * 不是从两次快照差分猜的（差分只能告诉你「掉了血」，说不出「谁打的、用什么打的、这一下多少」）。
+   */
+  recordDamage(record: DamageRecord): void {
+    const event: MapMonitorDamageEvent = {
+      kind: "damage",
+      at: Date.now(),
+      instanceId: record.instanceId,
+      monsterKey: record.monsterKey,
+      label: record.label,
+      x: record.x,
+      y: record.y,
+      attacker: record.attacker,
+      skillId: record.skillId,
+      skillLabel: record.skillLabel,
+      amount: record.amount,
+      // 前血量反推：让「200 → 137（-63）」三个数在页面上永远自洽
+      hpBefore: record.hpAfter + record.amount,
+      hpAfter: record.hpAfter,
+      maxHp: record.maxHp,
+      killed: record.killed,
+      pushDistance: record.pushDistance,
+    };
+    this.appendEvent(record.zoneId, record.mapId, event);
+  }
+
+  //#endregion
+
+  //#region AI 事件（追击起止 / 技能 / 普攻命中；#745）
+
+  /**
+   * 把 AI 回调翻成一行文字
+   *
+   * 三条口径：
+   * - **名字在这里解析**（AI 只有账号 id）：AI 不该为了写日志去查在场表；
+   * - **血量前后自己算**：命中事件只有「打完之后的 hp」，前血量 = hp + damage；
+   * - **写库失败不影响游戏**：`emitLog` 已经兜住监听方抛错，这里再兜一层坏数据（没有图键）。
+   */
+  private recordAi(event: MonsterAiLogEvent): void {
+    const label = this.labelOf(event.monsterKey);
+    if (event.type === "chase") {
+      const chase: MapMonitorChaseEvent = {
+        kind: "chase",
+        at: event.at,
+        instanceId: event.instanceId,
+        monsterKey: event.monsterKey,
+        label,
+        x: event.x,
+        y: event.y,
+        target: this.nameOf(event.accountId),
+        targetAccountId: event.accountId,
+        phase: event.phase,
+        reason: event.reason,
+        distance: event.distance,
+      };
+      this.appendEvent(event.zoneId, event.mapId, chase);
+      return;
+    }
+    if (event.type === "cast") {
+      const cast: MapMonitorMonsterCastEvent = {
+        kind: "cast",
+        at: event.at,
+        instanceId: event.instanceId,
+        monsterKey: event.monsterKey,
+        label,
+        x: event.x,
+        y: event.y,
+        skillId: event.skillId,
+        skillLabel: event.skillLabel,
+        target: this.nameOf(event.accountId),
+        targetAccountId: event.accountId,
+        damage: event.damage,
+        hpBefore: event.hp + event.damage,
+        hpAfter: event.hp,
+        maxHp: event.maxHp,
+        killed: event.damage > 0 && event.hp <= 0,
+      };
+      this.appendEvent(event.zoneId, event.mapId, cast);
+      return;
+    }
+    const hit: MapMonitorMonsterHitEvent = {
+      kind: "hit",
+      at: event.at,
+      instanceId: event.instanceId,
+      monsterKey: event.monsterKey,
+      label,
+      x: event.x,
+      y: event.y,
+      target: this.nameOf(event.accountId),
+      targetAccountId: event.accountId,
+      damage: event.damage,
+      hpBefore: event.hp + event.damage,
+      hpAfter: event.hp,
+      maxHp: event.maxHp,
+      killed: event.hp <= 0,
+    };
+    this.appendEvent(event.zoneId, event.mapId, hit);
+  }
+
+  /** 账号 → 角色名（在场表优先，取不到退回缓存；都没有给空串） */
+  private nameOf(accountId: string): string {
+    if (!accountId) return "";
+    const live = this.presence.identityOf(accountId)?.username;
+    if (live) {
+      this.names.set(accountId, live);
+      return live;
+    }
+    return this.names.get(accountId) ?? "";
+  }
+
   //#endregion
 
   //#region 事件写入与裁剪
@@ -250,7 +409,7 @@ export class MapMonitorService implements OnApplicationBootstrap, OnApplicationS
   }
 
   private keep(): number {
-    return this.config.get<number>("mapMonitorEventKeep") ?? 300;
+    return this.config.get<number>("mapMonitorEventKeep") ?? 2000;
   }
 
   /** 攒够多少条新事件才裁剪一次（每杀一只都 DELETE 会让 WAL 白涨） */

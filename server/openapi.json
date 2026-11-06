@@ -26860,11 +26860,11 @@
           },
           "at": {
             "type": "number",
-            "description": "事件时刻（毫秒时间戳）"
+            "description": "事件时刻（毫秒时间戳；页面显示到毫秒）"
           },
           "kind": {
             "type": "string",
-            "description": "事件类型：kill 击杀 / respawn 刷新"
+            "description": "事件类型：kill 击杀 / respawn 刷新 / damage 伤害 / chase 追击起止 / cast 怪物技能 / hit 怪物普攻命中"
           },
           "instanceId": {
             "type": "string",
@@ -26880,7 +26880,7 @@
           },
           "x": {
             "type": "number",
-            "description": "发生地点 x（世界坐标）：击杀 = 死亡点，刷新 = 出生点"
+            "description": "发生地点 x（世界坐标）：击杀 = 死亡点，刷新 = 出生点，其余 = 那一刻的位置"
           },
           "y": {
             "type": "number",
@@ -26888,10 +26888,10 @@
           },
           "killer": {
             "type": "string",
-            "description": "击杀者角色名（刷新事件为空串）"
+            "description": "击杀者角色名（只有 kill 有；其余为空串）"
           },
           "drops": {
-            "description": "掉落（刷新事件为空数组）",
+            "description": "掉落（只有 kill 有；其余为空数组）",
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/MapMonitorDropDto"
@@ -26899,7 +26899,63 @@
           },
           "respawnAt": {
             "type": "number",
-            "description": "这只怪下次刷新时刻（毫秒时间戳；刷新事件为 0）"
+            "description": "这只怪下次刷新时刻（毫秒时间戳；只有 kill 有，其余为 0）"
+          },
+          "attacker": {
+            "type": "string",
+            "description": "出手者角色名（damage；其余为空串）"
+          },
+          "skillId": {
+            "type": "string",
+            "description": "技能 id（damage / cast；普攻就是 1000）"
+          },
+          "skillLabel": {
+            "type": "string",
+            "description": "技能名（damage / cast；取不到为空串）"
+          },
+          "amount": {
+            "type": "number",
+            "description": "这一次掉了多少血（damage = 怪物掉血，hit = 玩家掉血；其余为 0）"
+          },
+          "hpBefore": {
+            "type": "number",
+            "description": "变化前的血量（damage = 怪物，hit = 玩家；其余为 0）"
+          },
+          "hpAfter": {
+            "type": "number",
+            "description": "变化后的血量（damage / hit）"
+          },
+          "maxHp": {
+            "type": "number",
+            "description": "血量上限（damage / hit）"
+          },
+          "killed": {
+            "type": "boolean",
+            "description": "这一下是否致死（damage = 打死怪，hit = 打倒玩家）"
+          },
+          "pushDistance": {
+            "type": "number",
+            "description": "这一下把怪推开的距离（像素；damage 才有，0 = 没推）"
+          },
+          "target": {
+            "type": "string",
+            "description": "被追 / 被放弃 / 被打的角色名（chase / cast / hit；其余为空串）"
+          },
+          "targetAccountId": {
+            "type": "string",
+            "description": "被追 / 被放弃 / 被打的账号 id（页面据此「只看这个人的日志」）"
+          },
+          "phase": {
+            "type": "string",
+            "description": "chase 的阶段：start 开始追击 / end 结束追击（其余为空串）"
+          },
+          "reason": {
+            "type": "string",
+            "description": "chase 的成因：进入检测范围 / 被打之后记恨 / 走出检测范围 / 目标倒下 / 目标离线 / 目标换图 / 位置上报超时 / 怪物被击杀"
+          },
+          "distance": {
+            "type": "number",
+            "description": "chase 那一刻双方的距离（像素，取整；0 = 目标位置已不可知）"
           }
         },
         "required": [
@@ -26913,7 +26969,21 @@
           "y",
           "killer",
           "drops",
-          "respawnAt"
+          "respawnAt",
+          "attacker",
+          "skillId",
+          "skillLabel",
+          "amount",
+          "hpBefore",
+          "hpAfter",
+          "maxHp",
+          "killed",
+          "pushDistance",
+          "target",
+          "targetAccountId",
+          "phase",
+          "reason",
+          "distance"
         ]
       },
       "MapMonitorDto": {

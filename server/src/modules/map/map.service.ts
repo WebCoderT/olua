@@ -261,9 +261,71 @@ export class MapService {
       dto.label = parsed.label;
       dto.x = parsed.x;
       dto.y = parsed.y;
-      dto.killer = parsed.kind === "kill" ? parsed.killer : "";
-      dto.drops = parsed.kind === "kill" ? parsed.drops : [];
-      dto.respawnAt = parsed.kind === "kill" ? parsed.respawnAt : 0;
+      // 不适用的字段一律给默认值（DTO 注释里的同一口径）：前端不必为每种 kind 判 undefined
+      dto.killer = "";
+      dto.drops = [];
+      dto.respawnAt = 0;
+      dto.attacker = "";
+      dto.skillId = "";
+      dto.skillLabel = "";
+      dto.amount = 0;
+      dto.hpBefore = 0;
+      dto.hpAfter = 0;
+      dto.maxHp = 0;
+      dto.killed = false;
+      dto.pushDistance = 0;
+      dto.target = "";
+      dto.targetAccountId = "";
+      dto.phase = "";
+      dto.reason = "";
+      dto.distance = 0;
+      switch (parsed.kind) {
+        case "kill":
+          dto.killer = parsed.killer;
+          dto.drops = parsed.drops;
+          dto.respawnAt = parsed.respawnAt;
+          break;
+        case "damage":
+          dto.attacker = parsed.attacker;
+          dto.skillId = parsed.skillId;
+          dto.skillLabel = parsed.skillLabel;
+          dto.amount = parsed.amount;
+          dto.hpBefore = parsed.hpBefore;
+          dto.hpAfter = parsed.hpAfter;
+          dto.maxHp = parsed.maxHp;
+          dto.killed = parsed.killed;
+          dto.pushDistance = parsed.pushDistance;
+          break;
+        case "chase":
+          dto.target = parsed.target;
+          dto.targetAccountId = parsed.targetAccountId;
+          dto.phase = parsed.phase;
+          dto.reason = parsed.reason;
+          dto.distance = parsed.distance;
+          break;
+        case "cast":
+          dto.skillId = parsed.skillId;
+          dto.skillLabel = parsed.skillLabel;
+          dto.target = parsed.target;
+          dto.targetAccountId = parsed.targetAccountId;
+          dto.amount = parsed.damage;
+          dto.hpBefore = parsed.hpBefore;
+          dto.hpAfter = parsed.hpAfter;
+          dto.maxHp = parsed.maxHp;
+          dto.killed = parsed.killed;
+          break;
+        case "hit":
+          dto.target = parsed.target;
+          dto.targetAccountId = parsed.targetAccountId;
+          dto.amount = parsed.damage;
+          dto.hpBefore = parsed.hpBefore;
+          dto.hpAfter = parsed.hpAfter;
+          dto.maxHp = parsed.maxHp;
+          dto.killed = parsed.killed;
+          break;
+        default:
+          break;
+      }
       events.push(dto);
     }
 

@@ -21,10 +21,12 @@
  * 1. **没人看的图没有快照**：`sampledAt = null`、三个数组空 —— 而不是报错或编一帧空世界出来。
  *    页面据此显示「还没有世界快照」，这跟「图里没怪」是两句不同的话；
  * 2. **有人看就每秒采一帧**：怪物点位 / 血量 / 存活、玩家在哪、`updatedAt` 会走；
+ * 2.5 **精细日志（#745）**：每次结算一行 `damage`（谁用什么打了多少、怪还剩多少）、
+ *     怪物开始 / 结束追击各一行 `chase`（带目标、成因、那一刻的距离）、怪物普攻命中一行 `hit`；
  * 3. **击杀入流**：打死怪之后文字流里出现 `kill`，带击杀者、死亡点、掉落（含落点）、下次刷新时刻；
  * 4. **死怪留在倒下处**：快照里那只怪 `alive=false` 并且**位置不再跳动**（不是回出生点）；
  * 5. **重生入流**：`respawn` 事件与击杀同一个实例，且快照回满血、`respawnInMs` 回到 null；
- * 6. **游标**：`since` 增量、空页原样回传、按 id 升序（页面靠它不重画 300 行）；
+ * 6. **游标**：`since` 增量、空页原样回传、按 id 升序（页面靠它不重画整页事件）；
  * 7. **裁剪**：事件不会无限长（保留条数来自环境变量，本套调到 3 以便快速看见）；
  * 8. **采集会停**：最后一个观看者离开后不再采样，`staleMs` 持续增长 —— 这就是页面上
  *    「采集已停 / 最后采样 N 秒前」的来源。**陈旧必须可观测**，否则停更会被读成「图里什么都没有」。
@@ -358,6 +360,93 @@ async function main() {
 
     //#endregion
 
+    //#region 二·五、精细日志：开始追击 / 普攻命中 / 一次伤害的明细（#745）
+
+    group("二·五、精细日志：怪物开始追击谁、打了谁多少、被打掉多少血");
+
+    // 站到怪身上（它是 passive：aggressive=0，只有挨打才会记恨并开始追）
+    const nearX = Math.round(target.x);
+    const nearY = Math.round(target.y - 20);
+    session.reportPos("1", nearX, nearY);
+    // 真实客户端 4Hz 上报，这里 800ms 一次：位置超时是 3 秒，停报就会被判「目标离线」
+    const keepPos = setInterval(() => session.reportPos("1", nearX, nearY), 800);
+
+    const poke = await session.cast({ skillId: "1000", targetId: target.instanceId, monsterKey: "1" });
+    check(poke?.ok === true, "准备：先打它一下（被动怪被打才记恨）", `damage=${poke?.damage}`);
+
+    const damageRow = await waitFor(
+      "文字流出现「这一次伤害」",
+      async () => {
+        const response = await api(base, "GET", "/api/admin/maps/1/monitor?since=0&limit=3", { token: rootToken });
+        return (response.body?.data?.events ?? []).find((event) => event.kind === "damage") ?? null;
+      },
+      8_000,
+    );
+    check(Boolean(damageRow), "每次结算都落一行 damage（不是靠快照差分猜出来的）");
+    checkEqual(damageRow?.attacker, "看图的角色", "attacker = 出手者角色名");
+    checkEqual(damageRow?.skillId, "1000", "带技能 id（普攻也是技能）");
+    check(typeof damageRow?.skillLabel === "string" && damageRow.skillLabel.length > 0, "带技能名（页面显示「用 XX 打了多少」）", damageRow?.skillLabel);
+    checkEqual(damageRow?.amount, poke?.damage, "amount = 这次结算的伤害（日志与 settle 帧同一个来源）");
+    check(
+      damageRow?.hpBefore - damageRow?.hpAfter === damageRow?.amount,
+      "前血量 - 后血量 = 掉血量（三个数永远自洽）",
+      `${damageRow?.hpBefore} → ${damageRow?.hpAfter}（-${damageRow?.amount}）`,
+    );
+    check(damageRow?.hpAfter >= 0 && damageRow?.maxHp > 0, "带剩余血量与上限（页面画百分比）", `${damageRow?.hpAfter}/${damageRow?.maxHp}`);
+    checkEqual(damageRow?.killed, false, "这一下没打死 → killed=false");
+    checkEqual(damageRow?.pushDistance, 0, "普攻不击退 → pushDistance=0");
+    check(Number.isFinite(damageRow?.x) && Number.isFinite(damageRow?.y), "带这一下发生的位置（世界坐标）", `(${Math.round(damageRow?.x)},${Math.round(damageRow?.y)})`);
+
+    const chaseStart = await waitFor(
+      "文字流出现「开始追击」",
+      async () => {
+        const response = await api(base, "GET", "/api/admin/maps/1/monitor?since=0&limit=3", { token: rootToken });
+        return (response.body?.data?.events ?? []).find((event) => event.kind === "chase" && event.phase === "start") ?? null;
+      },
+      10_000,
+    );
+    check(Boolean(chaseStart), "怪物开始追击会入流（chase.start）");
+    checkEqual(chaseStart?.target, "看图的角色", "带被追的角色名（页面写「开始追 X」）");
+    checkEqual(chaseStart?.reason, "被打之后记恨", "带成因（被动怪：被打之后记恨；主动怪会是「进入检测范围」）");
+    check(Number.isInteger(chaseStart?.distance) && chaseStart.distance >= 0, "带那一刻的距离（像素）", `${chaseStart?.distance}px`);
+    checkEqual(chaseStart?.phase, "start", "phase=start");
+
+    const hitRow = await waitFor(
+      "文字流出现「怪物普攻命中」",
+      async () => {
+        const response = await api(base, "GET", "/api/admin/maps/1/monitor?since=0&limit=3", { token: rootToken });
+        return (response.body?.data?.events ?? []).find((event) => event.kind === "hit") ?? null;
+      },
+      25_000,
+    );
+    check(Boolean(hitRow), "怪物打到玩家会入流（hit）");
+    checkEqual(hitRow?.target, "看图的角色", "带被打的角色名");
+    check(hitRow?.amount > 0, "带这一下打掉多少血", `-${hitRow?.amount}`);
+    check(
+      hitRow?.hpBefore - hitRow?.hpAfter === hitRow?.amount && hitRow.hpAfter >= 0,
+      "玩家血量前后自洽（页面显示「800 → 755」）",
+      `${hitRow?.hpBefore} → ${hitRow?.hpAfter}`,
+    );
+    check(hitRow?.maxHp > 0, "带玩家血量上限（画百分比要分母）", String(hitRow?.maxHp));
+
+    // 走开 + 停报（3 秒后服务端判「位置上报超时」→ 结束追击，这条必须有，否则日志里全是没头没尾的追击）
+    clearInterval(keepPos);
+    session.reportPos("1", 1000, -2000);
+    const chaseEnd = await waitFor(
+      "文字流出现「结束追击」",
+      async () => {
+        const response = await api(base, "GET", "/api/admin/maps/1/monitor?since=0&limit=3", { token: rootToken });
+        return (response.body?.data?.events ?? []).find((event) => event.kind === "chase" && event.phase === "end") ?? null;
+      },
+      15_000,
+    );
+    check(Boolean(chaseEnd), "结束追击会入流（chase.end）");
+    checkEqual(chaseEnd?.phase, "end", "phase=end");
+    check(typeof chaseEnd?.reason === "string" && chaseEnd.reason.length > 0, "带结束原因（页面直接显示这句话）", chaseEnd?.reason);
+    check(Number.isInteger(chaseEnd?.distance) && chaseEnd.distance >= 0, "带结束那一刻的距离", `${chaseEnd?.distance}px`);
+
+    //#endregion
+
     //#region 三、击杀入流
 
     group("三、击杀入流：一行字说清「谁打死了什么、掉了什么、几点刷」");
@@ -527,19 +616,23 @@ async function main() {
       async () => {
         const response = await api(base, "GET", "/api/admin/maps/1/monitor?since=0&limit=60", { token: rootToken });
         const events = response.body?.data?.events ?? [];
-        return events.filter((event) => event.kind === "kill").length >= 2 ? events : null;
+        // 判据是「比第一轮那次更新」，不是「同时存在两条 kill」：保留 3 条时第一轮早被裁掉了
+        return events.some((event) => event.kind === "kill" && event.id > killEvent.id) ? events : null;
       },
       10_000,
     );
     check(Boolean(secondKill), "第二轮击杀出现在文字流里");
+    const secondKillId = (secondKill ?? []).filter((event) => event.kind === "kill").reduce((max, event) => Math.max(max, event.id), 0);
 
-    // 等第二轮的重生也入流：这时是第 4 条事件，刚好越过 KEEP=3 → 裁剪必然已经跑过
+    // 等第二轮的重生也入流：这时事件已经越过 KEEP=3 → 裁剪必然已经跑过。
+    // 判据用「id 在这次击杀之后」而不是「数到两条 respawn」—— #745 起伤害 / 追击也占行，
+    // 保留 3 条时第一条 respawn 早被裁掉了，数数量会永远等不到。
     await waitFor(
       "第二轮重生入流（触发裁剪）",
       async () => {
         const response = await api(base, "GET", "/api/admin/maps/1/monitor?since=0&limit=60", { token: rootToken });
         const events = response.body?.data?.events ?? [];
-        return events.filter((event) => event.kind === "respawn").length >= 2 ? events : null;
+        return events.some((event) => event.kind === "respawn" && event.id > secondKillId) ? events : null;
       },
       20_000,
     );
@@ -654,6 +747,18 @@ async function main() {
       schemas.MapMonitorEventDto?.properties?.drops?.items?.$ref,
       "#/components/schemas/MapMonitorDropDto",
       "事件的 drops 指向 MapMonitorDropDto（落点坐标也在这个形状里）",
+    );
+    const eventFields = schemas.MapMonitorEventDto?.properties ?? {};
+    check(
+      ["attacker", "skillId", "skillLabel", "amount", "hpBefore", "hpAfter", "maxHp", "killed", "pushDistance", "target", "targetAccountId", "phase", "reason", "distance"].every(
+        (key) => Boolean(eventFields[key]),
+      ),
+      "精细日志的 14 个字段都在文档里（伤害 / 追击 / 技能 / 命中四类事件共用同一个形状）",
+    );
+    check(
+      (eventFields.kind?.description ?? "").includes("chase") && (eventFields.kind?.description ?? "").includes("damage"),
+      "kind 的描述列出了全部六种事件（生成物里前端能直接看到）",
+      eventFields.kind?.description,
     );
 
     //#endregion
