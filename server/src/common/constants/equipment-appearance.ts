@@ -4,8 +4,8 @@
  * ## 管的是什么
  *
  * 「**哪个前后缀组合用哪个边框 / 详情背景**」+「**哪件特殊装备单独用哪个**」。
- * 边框与背景的**素材本体**在客户端资源包里（`resources/borders/` 的图集、
- * `resources/backgrounds/` 的帧序列目录），**资源清单**（哪些 sfx 编号存在）是两端
+ * 边框与背景的**素材本体**在客户端资源包里（`resources/effect/border/` 的图集、
+ * `resources/effect/background/` 的图集），**资源清单**（哪些编号存在）是两端
  * 资源约定，留在客户端 `configs/border` / `configs/background`（那里有与磁盘文件
  * 一一对应的守卫）。服务端只存 key 字符串 —— 与音效「路径入库」同一取向：
  * 运营换个组合不用重打客户端包，只要新 key 指向的素材在资源包里。
@@ -38,11 +38,11 @@ export const EQUIPMENT_TIER_MAX = 10;
 
 /** 装备外观配置的取值范围（DTO 校验、服务端兜底、管理端表单提示共用） */
 export const EQUIPMENT_APPEARANCE_LIMITS = {
-  /** 边框 key 格式（= resources/borders 下的图集文件名，如 sfx_30123_0） */
-  borderKeySource: "^sfx_\\d+_0$",
-  /** 详情背景 key 格式（= resources/backgrounds 下的帧序列目录名，如 sfx_16000） */
-  backgroundKeySource: "^sfx_\\d+$",
-  /** key 最大长度（sfx_ 编号撑死了十几字符，200 是防手滑贴一整段文本） */
+  /** 边框 key 格式（= resources/effect/border 下的图集文件名，如 border-30123） */
+  borderKeySource: "^border-\\d+$",
+  /** 详情背景 key 格式（= resources/effect/background 下的图集文件名，如 bg-16000） */
+  backgroundKeySource: "^bg-\\d+$",
+  /** key 最大长度（border-30123 这种撑死了十几字符，200 是防手滑贴一整段文本） */
   keyMaxLength: 32,
   /** 特殊装备标识最大长度（物品 id 如 weapon_20_p4s2，或基础件 key 如 weapon_20） */
   equipmentIdMaxLength: 64,
@@ -52,7 +52,7 @@ export const EQUIPMENT_APPEARANCE_LIMITS = {
   customMax: 200,
   /** 边框 / 背景清单（#714 实体注册表）的最大条数（素材是有限的，100 远够用） */
   itemMax: 100,
-  /** 清单条目别名（#718）的最大长度：sfx 编号记不住，别名给人看，32 字够起名了 */
+  /** 清单条目别名（#718）的最大长度：编号记不住，别名给人看，32 字够起名了 */
   nameMaxLength: 32,
   /** 清单条目分组名（#718）的最大长度：按素材系列 / 品质系列归组过滤用 */
   groupMaxLength: 32,
@@ -85,7 +85,7 @@ export interface CustomAppearanceSeed {
  * 服务端保存时传播进引用处。
  */
 export interface AppearanceItemSeed {
-  /** 边框 / 背景 key（客户端资源清单里的 sfx 编号） */
+  /** 边框 / 背景 key（客户端资源清单里的编号（border-30123 / bg-16000）） */
   key: string;
   /** 显示效果（缺省 = {0,0,1} 客户端默认适配） */
   effect?: AppearanceEffect;
@@ -111,9 +111,9 @@ export interface EquipmentAppearanceSeed {
  * 出厂映射（按档数展开，#697 起参数化）
  *
  * 沿用客户端 2026-11 之前的口径：**先按后缀分档、档内按前缀递增**，依次取边框
- * （sfx_30123_0 起）与背景（sfx_16000 起）—— 后缀越强整体越靠后，档内前缀越强越靠后。
+ * （border-30123 起）与背景（bg-16000 起）—— 后缀越强整体越靠后，档内前缀越强越靠后。
  *
- * 档数扩到出厂值之外时公式照样外推（sfx 编号顺延）——新编号在客户端资源清单里
+ * 档数扩到出厂值之外时公式照样外推（编号顺延）——新编号在客户端资源清单里
  * 多半不存在，客户端 apply 会把不认识的 key 丢掉（那个组合暂时没边框），
  * 运营在「装备外观」页把真实素材 key 填上即可。
  */
@@ -123,8 +123,8 @@ export function buildAppearanceDefaults(prefixCount: number, suffixCount: number
   for (let suffix = 0; suffix < suffixCount; suffix++) {
     for (let prefix = 0; prefix < prefixCount; prefix++) {
       const slot = suffix * prefixCount + prefix;
-      borders.push({ prefix, suffix, key: `sfx_${30123 + slot}_0` });
-      backgrounds.push({ prefix, suffix, key: `sfx_${16000 + slot}` });
+      borders.push({ prefix, suffix, key: `border-${30123 + slot}` });
+      backgrounds.push({ prefix, suffix, key: `bg-${16000 + slot}` });
     }
   }
   return { borders, backgrounds, customBorders: [], customBackgrounds: [] };
@@ -142,8 +142,8 @@ export function appearanceKeyProblem(rawKey: string, kind: "border" | "backgroun
   const source = kind === "border" ? EQUIPMENT_APPEARANCE_LIMITS.borderKeySource : EQUIPMENT_APPEARANCE_LIMITS.backgroundKeySource;
   if (!new RegExp(source).test(key)) {
     return kind === "border"
-      ? `边框 key 要形如 sfx_30123_0（resources/borders 下的图集文件名），拿到「${rawKey}」`
-      : `背景 key 要形如 sfx_16000（resources/backgrounds 下的帧序列目录名），拿到「${rawKey}」`;
+      ? `边框 key 要形如 border-30123（resources/effect/border 下的图集文件名），拿到「${rawKey}」`
+      : `背景 key 要形如 bg-16000（resources/effect/background 下的图集文件名），拿到「${rawKey}」`;
   }
   return null;
 }

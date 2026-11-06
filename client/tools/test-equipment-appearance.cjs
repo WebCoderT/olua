@@ -56,7 +56,7 @@ const { roleAnimationMap, directions, roleActionAtlas } = require(path.join(outD
 
 check(getFrameIndex("00000") === 0, "纯数字帧名取到序号 0（0 是合法帧序号，不是「取不到」）");
 check(getFrameIndex("00000.PNG") === 0, "大写扩展名帧名（事故形态）也能取到序号 0");
-check(getFrameIndex("sfx_13001_0_0003") === 3, "前缀名取末尾连续数字");
+check(getFrameIndex("13009_0_0003") === 3, "前缀名取末尾连续数字");
 check(getFrameIndex("1002/attack/00001.png") === 1, "带目录与扩展名的帧名取末段序号");
 check(getFrameIndex("auto_attack/00000") === 0, "图集帧名（前缀/序号）取末段序号");
 check(getFrameIndex("npc_a") === null, "取不到数字返回 null（区别于 0）");
@@ -102,7 +102,7 @@ function inspectOut(outSrc) {
   return problems;
 }
 
-const sample = inspectOut("clothes/out/005");
+const sample = inspectOut("equipment/clothes/out/005");
 check(sample.length === 0, "衣服 005 的 11 个动作图集齐全、各覆盖 8 向且帧号从 0 起连续", sample.slice(0, 5).join("；"));
 
 //#endregion

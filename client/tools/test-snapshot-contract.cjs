@@ -37,9 +37,9 @@ const equipmentRow = () => ({
   description: "测试描述",
   occupation: "4",
   sex: "3",
-  icon: "clothes/icon/1",
-  inAtlas: "clothes/in/1",
-  outAtlas: "clothes/out/1",
+  icon: "equipment/clothes/icon/1",
+  inAtlas: "equipment/clothes/in/1",
+  outAtlas: "equipment/clothes/out/1",
   tags: [],
   outScale: 1,
   inScaleX: 1,
@@ -183,11 +183,11 @@ function completeSnapshot(over = {}) {
     // #605：新手引导步骤（数组顺序 = 体验顺序）
     guideSteps: [{ id: "move", title: "先动起来", desc: "走两步。", spot: "joystick", trigger: "move" }],
     // #683：音效（客户端形状只有播放要用的五个字段）
-    audio: [{ key: "login_bgm", filePath: "sounds/login_bg.wav", volume: 60, loop: true, enabled: true }],
+    audio: [{ key: "bgm", filePath: "audio/bg.wav", volume: 60, loop: true, enabled: true }],
     // #695：装备外观（四组映射；服务端保证 15 组合覆盖，客户端契约只看数组在不在）
     equipmentAppearance: {
-      borders: Array.from({ length: 15 }, (_, i) => ({ prefix: i % 5, suffix: Math.floor(i / 5), key: `sfx_${30123 + i}_0` })),
-      backgrounds: Array.from({ length: 15 }, (_, i) => ({ prefix: i % 5, suffix: Math.floor(i / 5), key: `sfx_${16000 + i}` })),
+      borders: Array.from({ length: 15 }, (_, i) => ({ prefix: i % 5, suffix: Math.floor(i / 5), key: `border-${30123 + i}` })),
+      backgrounds: Array.from({ length: 15 }, (_, i) => ({ prefix: i % 5, suffix: Math.floor(i / 5), key: `bg-${16000 + i}` })),
       customBorders: [],
       customBackgrounds: [],
       updatedAt: 0,

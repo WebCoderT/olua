@@ -58,7 +58,7 @@ export const bottomBarLayout = {
   /**
    * 单个功能按键：图标尺寸 + 快捷键字母
    *
-   * 字母放**右上角**：`bottom-nav-bar/*.png` 这些图标素材把中文名（角色/背包/好友…）画在图底部，
+   * 字母放**右上角**：`ui/nav/*.png` 这些图标素材把中文名（角色/背包/好友…）画在图底部，
    * 原来放在右下方 (15,-15) 正好压住最后一个字（真机上是「好友F」「组队G」这种，见 #466）。
    */
   navButton: {
@@ -141,9 +141,9 @@ export const smallMapLayout = {
   size: new Size(280, 250),
   position: new Vec2(818, 403),
   /**
-   * 功能入口图标：单列竖排，图标资源即 names 里的名字（small-map 目录）
+   * 功能入口图标：单列竖排，图标资源即 names 里的名字（ui/minimap 目录）
    *
-   * **每一项都必须在 `resources/small-map/` 有同名图**：这里写名字、图缺失时引擎只在控制台报一句
+   * **每一项都必须在 `resources/ui/minimap/` 有同名图**：这里写名字、图缺失时引擎只在控制台报一句
    * `Bundle resources doesn't contain ...`，界面上表现为那一格是空的（不会报错、也不会挡住别的）。
    * 原来末尾那颗占位 `"屏蔽 副本"` 就是这样 —— 配置写的是正常中文名，而 Release 包里的文件名
    * 已是乱码（`灞忚斀 鍓?湰.png`），每次进游戏必报一条 error、入口列少一颗（#457）。

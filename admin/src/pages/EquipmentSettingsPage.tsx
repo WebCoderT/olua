@@ -79,9 +79,9 @@ function SlotEditDialog({
         </Field>
         <IconField
           label="底图"
-          hint="resources 相对路径（不含扩展名），如 slots/cloth"
-          rootDir="slots"
-          placeholder="slots/cloth"
+          hint="resources 相对路径（不含扩展名），如 ui/slot/cloth"
+          rootDir="ui/slot"
+          placeholder="ui/slot/cloth"
           value={imageSrc}
           onChange={setImageSrc}
         />

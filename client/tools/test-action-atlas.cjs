@@ -18,7 +18,7 @@ const { PROJECT_ROOT, prepare, check, finish, fail } = require("./lib/configs-sa
 
 const RES_ROOT = path.join(PROJECT_ROOT, "assets/resources");
 /** 试点目录：怪物一个 + 衣服/武器各一个（怪物不保证出现，装备外观进游戏必可见） */
-const PILOTS = ["monster/out/1", "clothes/out/001", "weapons/out/001"];
+const PILOTS = ["monster/out/1", "equipment/clothes/out/001", "equipment/weapons/out/001"];
 const DIRECTION_COUNT = 8;
 
 let outDir;
@@ -153,7 +153,7 @@ check(/kind === "monster" \? monsterActionAtlas : roleActionAtlas/.test(helperSo
 {
   // 单循环接线：playLoopWithDir / playLoopDir 都改走 loadLoopFrames（图集优先 + 空帧过滤 + 散帧回退）
   const loopBody = helperSource.slice(helperSource.indexOf("static async loadLoopFrames"), helperSource.indexOf("片段缓存键"));
-  check(/resources\.getDirWithPath\(dirSrc, SpriteAtlas\)/.test(loopBody), "单循环图集探测走 getDirWithPath（图集与目录同路径，未打包不报错刷屏）");
+  check(/resources\.getInfoWithPath\(candidate, SpriteAtlas\)/.test(loopBody), "单循环图集探测走 getInfoWithPath（平铺图集 / 目录内同名图集两种形态，缺图集也不报错刷屏）");
   check(/this\.isSolidFrame\(frame\)/.test(loopBody), "单循环图集空帧过滤与动作路径同口径（isSolidFrame，占位空图不进播放序列）");
   check(/this\.loadFrames\(dirSrc\)/.test(loopBody), "单循环未打包时回退散帧目录（行为不变）");
   check(/playLoopWithDir[\s\S]*?this\.loadLoopFrames\(dirSrc\)/.test(helperSource), "playLoopWithDir（NPC 外观）已接入图集优先帧来源");
@@ -165,7 +165,7 @@ console.log("\n— E. 单循环图集守卫（npc 外观 / 装备详情背景）
   const isDir = (p) => { try { return fs.statSync(p).isDirectory(); } catch { return false; } };
   // 散帧已移出 assets（#235），源帧数以打包暂存区为准（client/tools/_stage_action_atlas，gitignored）
   const stageRoot = path.join(PROJECT_ROOT, "tools", "_stage_action_atlas");
-  for (const [srcTree, atlasTree] of [["npc", "npc"], ["backgrounds", "backgrounds"]]) {
+  for (const [srcTree, atlasTree] of [["npc", "npc"], ["backgrounds", "effect/background"]]) {
     const stageTree = path.join(stageRoot, srcTree);
     if (!isDir(stageTree)) {
       console.log(`  [跳过] ${srcTree}：打包暂存区不存在（${stageTree}），跳过帧数比对`);
@@ -176,8 +176,9 @@ console.log("\n— E. 单循环图集守卫（npc 外观 / 装备详情背景）
     let checked = 0;
     for (const name of sourceDirs) {
       const sourceFrames = fs.readdirSync(path.join(stageTree, name)).filter((f) => f.toLowerCase().endsWith(".png")).length;
-      const plistPath = path.join(RES_ROOT, atlasTree, name, `${name}.plist`);
-      const pngPath = path.join(RES_ROOT, atlasTree, name, `${name}.png`);
+      // #753：单循环图集是**平铺**的（npc/2108.plist、effect/background/bg-16000.plist）
+      const plistPath = path.join(RES_ROOT, atlasTree, `${name}.plist`);
+      const pngPath = path.join(RES_ROOT, atlasTree, `${name}.png`);
       if (!fs.existsSync(plistPath) || !fs.existsSync(pngPath)) {
         check(false, `${srcTree}/${name} 单循环图集 plist + png 成对存在`, "缺文件");
         continue;
@@ -192,10 +193,10 @@ console.log("\n— E. 单循环图集守卫（npc 外观 / 装备详情背景）
   }
 }
 
-console.log("\n— F. role 本体动作图集守卫（role/1、role/2）—");
+console.log("\n— F. role 本体动作图集守卫（role/boy、role/girl）—");
 {
   // 空槽位（素材缺帧）允许：组内帧号严格递增、去重后落在 [0, 每方向帧数) 即可；总帧数 = 416（600 槽位 - 184 空槽）
-  for (const roleId of ["1", "2"]) {
+  for (const roleId of ["boy", "girl"]) {
     const atlasDir = path.join(RES_ROOT, `role/${roleId}`);
     let total = 0;
     let cursor = 0;

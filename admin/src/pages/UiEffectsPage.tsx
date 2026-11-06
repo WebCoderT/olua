@@ -25,12 +25,12 @@ import {
  */
 const EFFECT_LABELS: Record<string, string> = {
   upgrade: "升级特效",
-  light_1: "掉落光效 1 号",
-  light_2: "掉落光效 2 号",
-  light_3: "掉落光效 3 号",
-  light_4: "掉落光效 4 号",
-  light_5: "掉落光效 5 号",
-  light_6: "掉落光效 6 号（预留）",
+  "light-1": "掉落光效 1 号",
+  "light-2": "掉落光效 2 号",
+  "light-3": "掉落光效 3 号",
+  "light-4": "掉落光效 4 号",
+  "light-5": "掉落光效 5 号",
+  "light-6": "掉落光效 6 号（预留）",
 };
 
 /** 页签（一族一个）：掉落光效六档不各占一个页签，档位在页内容里选 */
@@ -40,7 +40,7 @@ type EffectTab = "upgrade" | "drop";
 const TAB_ORDER: EffectTab[] = ["upgrade", "drop"];
 const TAB_LABELS: Record<EffectTab, string> = { upgrade: "升级特效", drop: "掉落光效" };
 
-/** key 归哪个页签（判据与预览参考层同一条：掉落光效 = `light_*`） */
+/** key 归哪个页签（判据与预览参考层同一条：掉落光效 = `light-*`） */
 const tabOf = (key: string): EffectTab => (previewKindOf(key) === "dropItem" ? "drop" : "upgrade");
 
 const PREVIEW_PREFS_KEY = "olua.uiEffects.prefs.v1";
@@ -91,7 +91,7 @@ function readResRoot(): string {
  * 特效预览画布：参考层按族取（升级特效 = 裸模正面站立第一帧；掉落光效 = 掉落物图标 40×40），
  * 特效按表单当前值叠放并逐帧播放
  *
- * 素材经 `resRoot` 读（同装备对齐工作台）：裸模 = `role/1/stand/stand` 的正面第一帧，
+ * 素材经 `resRoot` 读（同装备对齐工作台）：裸模 = `role/boy/stand/stand` 的正面第一帧，
  * 特效 = `upgrade` 的 `effect/<key>/<key>`、掉落光效的 `effect/light/<key>`。读不到素材就给一句
  * 人话提示，不渲染半个残影（掉落光效的图标是画出来的占位框，没有素材依赖）。
  */
@@ -201,7 +201,7 @@ function EffectPreview({
  * 特效管理（#594 升级特效 / #634 掉落光效）
  *
  * 页面按「一族一个页签」组织：升级特效一个页签，掉落光效一个页签 —— 掉落光效的六个档位
- * （`light_1`…`light_6`）在页内容顶部的下拉框里选，选中哪档就改哪档、看哪档的预览。
+ * （`light-1`…`light-6`）在页内容顶部的下拉框里选，选中哪档就改哪档、看哪档的预览。
  * 一档一个页签会排到七个，把「升级特效」挤到最右边，与「同一件事的六个档」这个事实也不符。
  *
  * 页签与下拉项都来自服务端 seed 出来的行：新登记一个 key，这里自动多一项，页面结构不用动。

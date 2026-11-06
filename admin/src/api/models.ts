@@ -1170,7 +1170,7 @@ export type UpdateDrug = {
    */
   description?: string;
   /**
-   * 图标（resources 相对路径，如 item/fs_2；空串 = 不显示图标）。**这是少数允许下发的资源路径** —— 药品图标与 id 之间没有可推导的约定，只能存表
+   * 图标（resources 相对路径，如 item/drug-hp-1；空串 = 不显示图标）。**这是少数允许下发的资源路径** —— 药品图标与 id 之间没有可推导的约定，只能存表
    */
   icon?: string;
   /**
@@ -1875,7 +1875,7 @@ export type AppearanceAssignment = {
    */
   suffix: number;
   /**
-   * 边框 / 背景 key（客户端资源清单里的 sfx 编号）
+   * 边框 / 背景 key（客户端资源清单里的编号）
    */
   key: string;
   /**
@@ -1901,7 +1901,7 @@ export type CustomAppearance = {
 
 export type AppearanceItem = {
   /**
-   * 边框 / 背景 key（客户端资源清单里的 sfx 编号）
+   * 边框 / 背景 key（客户端资源清单里的编号）
    */
   key: string;
   /**
@@ -4711,7 +4711,7 @@ export type Equipment = {
    */
   sex: string;
   /**
-   * 图标（resources 相对路径，如 clothes/icon/005；管理端列表缩略图与客户端图标共用）
+   * 图标（resources 相对路径，如 equipment/clothes/icon/005；管理端列表缩略图与客户端图标共用）
    */
   icon: string;
   /**
@@ -4852,7 +4852,7 @@ export type EquipmentVariant = {
    */
   sex: string;
   /**
-   * 图标（resources 相对路径，如 clothes/icon/005；管理端列表缩略图与客户端图标共用）
+   * 图标（resources 相对路径，如 equipment/clothes/icon/005；管理端列表缩略图与客户端图标共用）
    */
   icon: string;
   /**
@@ -5022,7 +5022,7 @@ export type AppearanceResourceScan = {
    */
   dir: string;
   /**
-   * 文件夹里的全部 key（按 sfx 编号升序）
+   * 文件夹里的全部 key（按编号升序）
    */
   keys: string[];
   /**
@@ -5076,7 +5076,7 @@ export type Drug = {
    */
   description: string;
   /**
-   * 图标资源路径（resources 相对路径，如 item/fs_2）
+   * 图标资源路径（resources 相对路径，如 item/drug-hp-1）
    */
   icon: string;
   /**
@@ -5322,7 +5322,7 @@ export type MonsterPresentation = {
    */
   id: string;
   /**
-   * 图标路径（monster/icon/<key>_00000 单图）
+   * 图标路径（monster/icon/<key> 单图）
    */
   icon: string;
   /**
@@ -6553,7 +6553,7 @@ export type EquipmentSlot = {
    */
   label: string;
   /**
-   * 槽位底图（resources 相对路径，如 slots/cloth）
+   * 槽位底图（resources 相对路径，如 ui/slot/cloth）
    */
   imageSrc: string;
   /**
@@ -8353,7 +8353,7 @@ export type MapMonitorQuery = {
 
 export type UiEffect = {
   /**
-   * 特效 key（升级特效 = upgrade、掉落光效 = light_1~light_6；取值域见 UI_EFFECT_KEYS）
+   * 特效 key（升级特效 = upgrade、掉落光效 = light-1~light-6；取值域见 UI_EFFECT_KEYS）
    */
   key: string;
   /**

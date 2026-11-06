@@ -10,7 +10,7 @@
  * | 族 | key | 图集 | 挂在哪 |
  * |---|---|---|---|
  * | 升级特效 | `upgrade` | `effect/<key>/<key>.plist` | UI 层，相对 UI 锚点摆位 |
- * | 掉落光效 | `light_1` ~ `light_6` | `effect/light/<key>.plist` | 掉落物节点上，相对**图标中心**摆位 |
+ * | 掉落光效 | `light-1` ~ `light-6` | `effect/light/<key>.plist` | 掉落物节点上，相对**图标中心**摆位 |
  *
  * 掉落光效一档一个 key（不是合成一个 `dropLight`）：六张图集是六份美术，谁想单独放大某一档
  * 都该能做到；而且 key 直接取素材名，客户端 `getEquipmentLightKey()` 返回的就是它，两端不用
@@ -33,7 +33,7 @@
  */
 
 /** 特效 key（唯一来源；加新特效 = 客户端有消费代码 + 这里登记 + DEFAULTS 给出厂值） */
-export const UI_EFFECT_KEYS = ["upgrade", "light_1", "light_2", "light_3", "light_4", "light_5", "light_6"] as const;
+export const UI_EFFECT_KEYS = ["upgrade", "light-1", "light-2", "light-3", "light-4", "light-5", "light-6"] as const;
 
 export type UiEffectKey = (typeof UI_EFFECT_KEYS)[number];
 
@@ -69,7 +69,7 @@ export interface UiEffectDefault {
  * `upgrade` 那行就是「升级特效」写死在 `GameUiHelper.createUpgradeEffect` 里的那组数
  * （摆位 (0, 90)、原尺寸、1 秒一轮）—— 搬家不改行为，只是把「改它要发版」变成「管理端点保存」。
  *
- * `light_*` 那六行是「装备掉落光柱」的原值（`configs/layout/lights` 的 400×400 + 10fps、
+ * `light-*` 那六行是「装备掉落光柱」的原值（`configs/layout/lights` 的 400×400 + 10fps、
  * 挂在图标中心）：
  * - 偏移 (0, 0) = **与掉落物图标同心**（客户端把它加到 `dropItemLayout.iconOffsetY` 上）；
  * - 缩放 1 = 素材原始 400×400 画布；
@@ -79,12 +79,12 @@ export interface UiEffectDefault {
  */
 export const UI_EFFECT_DEFAULTS: Record<UiEffectKey, UiEffectDefault> = {
   upgrade: { offsetX: 0, offsetY: 90, scaleX: 1, scaleY: 1, rotate: 0, durationMs: 1000, enabled: true },
-  light_1: { offsetX: 0, offsetY: 0, scaleX: 1, scaleY: 1, rotate: 0, durationMs: 1400, enabled: true },
-  light_2: { offsetX: 0, offsetY: 0, scaleX: 1, scaleY: 1, rotate: 0, durationMs: 1500, enabled: true },
-  light_3: { offsetX: 0, offsetY: 0, scaleX: 1, scaleY: 1, rotate: 0, durationMs: 1500, enabled: true },
-  light_4: { offsetX: 0, offsetY: 0, scaleX: 1, scaleY: 1, rotate: 0, durationMs: 1500, enabled: true },
-  light_5: { offsetX: 0, offsetY: 0, scaleX: 1, scaleY: 1, rotate: 0, durationMs: 1500, enabled: true },
-  light_6: { offsetX: 0, offsetY: 0, scaleX: 1, scaleY: 1, rotate: 0, durationMs: 1500, enabled: true },
+  "light-1": { offsetX: 0, offsetY: 0, scaleX: 1, scaleY: 1, rotate: 0, durationMs: 1400, enabled: true },
+  "light-2": { offsetX: 0, offsetY: 0, scaleX: 1, scaleY: 1, rotate: 0, durationMs: 1500, enabled: true },
+  "light-3": { offsetX: 0, offsetY: 0, scaleX: 1, scaleY: 1, rotate: 0, durationMs: 1500, enabled: true },
+  "light-4": { offsetX: 0, offsetY: 0, scaleX: 1, scaleY: 1, rotate: 0, durationMs: 1500, enabled: true },
+  "light-5": { offsetX: 0, offsetY: 0, scaleX: 1, scaleY: 1, rotate: 0, durationMs: 1500, enabled: true },
+  "light-6": { offsetX: 0, offsetY: 0, scaleX: 1, scaleY: 1, rotate: 0, durationMs: 1500, enabled: true },
 };
 
 /** 有出厂值的 key（seed 用） */

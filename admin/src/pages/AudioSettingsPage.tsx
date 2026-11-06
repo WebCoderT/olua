@@ -12,7 +12,7 @@ import { AUDIO_ROOT, DEFAULT_RES_ROOT, audioUrlOf, loadAudioFiles } from "./audi
  *
  * ## 管的是什么
  *
- * 四个数：**用哪个文件**（`sounds/xxx.wav`，相对 `client/assets/resources/`）、**多大声**
+ * 四个数：**用哪个文件**（`audio/xxx.wav`，相对 `client/assets/resources/`）、**多大声**
  * （0~100）、**循环不循环**、**开不开**。音频本体在客户端资源包里，所以「换一首登录曲」
  * 只要新文件已经在资源包中，后台改一个路径就行 —— 这是它和特效管理（图集路径是两端约定、
  * 换美术必须重打包）最大的差别。
@@ -80,7 +80,7 @@ const isDirty = (form: AudioForm, row: AudioSetting) =>
 /**
  * 路径预检（返回人话；null = 通过）
  *
- * 与服务端 `audioPathProblem` 同一条判据的页面副本：空串合法（= 未配置）、必须 `sounds/` 开头、
+ * 与服务端 `audioPathProblem` 同一条判据的页面副本：空串合法（= 未配置）、必须 `audio/` 开头、
  * 扩展名在白名单、不许 `..` / 绝对路径、文件名只允许英文（用户 2026-11-04 定：资源目录里临时放的
  * 中文名要先改成英文名再配 —— 选择器会把不合规的文件名挡在列表外）。
  */
@@ -92,7 +92,7 @@ function pathProblem(rawPath: string): string | null {
   if (!path.startsWith(`${AUDIO_ROOT}/`)) return `只能选 ${AUDIO_ROOT}/ 下的文件`;
   const ext = path.slice(path.lastIndexOf(".")).toLowerCase();
   if (!path.includes(".") || !AUDIO_EXTS.includes(ext)) return `只支持 ${AUDIO_EXTS.join(" / ")}`;
-  if (!/^sounds\/[A-Za-z0-9_\-/]+\.[A-Za-z0-9]+$/.test(path)) return "只能用字母、数字、下划线、短横线与斜杠（中文名请先改成英文名）";
+  if (!/^audio\/[A-Za-z0-9_\-/]+\.[A-Za-z0-9]+$/.test(path)) return "只能用字母、数字、下划线、短横线与斜杠（中文名请先改成英文名）";
   return null;
 }
 
@@ -291,7 +291,7 @@ export function AudioSettingsPage() {
     <div className="flex flex-col gap-4">
       <PageHeader
         title="音效配置"
-        description="11 个音效项，按分类分组。配的是「用哪个文件 / 多大声 / 循环不循环 / 开不开」—— 文件在客户端资源包 sounds/ 里，服务端只存相对路径，所以换曲子不用重打客户端包。"
+        description="11 个音效项，按分类分组。配的是「用哪个文件 / 多大声 / 循环不循环 / 开不开」—— 文件在客户端资源包 audio/ 里，服务端只存相对路径，所以换曲子不用重打客户端包。"
         actions={
           <>
             {dirtyCount > 0 ? <Badge tone="amber">{dirtyCount} 项未保存</Badge> : null}
@@ -320,7 +320,7 @@ export function AudioSettingsPage() {
           </Field>
           <p className="pb-1 text-xs text-slate-500">
             可选的音频文件：
-            {usableFiles.length > 0 ? `${usableFiles.length} 个（来自 sounds/ 目录清单）` : "清单读不到 —— 直接手填路径，用试听确认"}
+            {usableFiles.length > 0 ? `${usableFiles.length} 个（来自 audio/ 目录清单）` : "清单读不到 —— 直接手填路径，用试听确认"}
             {skippedFiles > 0 ? ` · 另有 ${skippedFiles} 个文件名不是英文（未列入，改名后重新进页面即可）` : ""}
           </p>
         </div>
@@ -527,7 +527,7 @@ export function AudioSettingsPage() {
       )}
 
       <Notice tone="slate" title="路径规则与「为什么只能试听」">
-        只能填 <code className="text-slate-200">sounds/</code> 下的文件，带扩展名（{AUDIO_EXTS.join(" / ")}），文件名只允许英文、数字、下划线、短横线。
+        只能填 <code className="text-slate-200">audio/</code> 下的文件，带扩展名（{AUDIO_EXTS.join(" / ")}），文件名只允许英文、数字、下划线、短横线。
         服务端**不检查文件是否存在** —— 资源包不在服务器上，查了只会掩盖「本机有、线上没有」；
         所以每次改完路径请点一次<strong>试听</strong>，那就是这条链路唯一的验证手段。
       </Notice>

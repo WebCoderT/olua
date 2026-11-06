@@ -238,7 +238,7 @@ try {
   check(/this\.entryDot\.active = this\.mailUnread \+ this\.announcementUnread > 0/.test(smallMap), "红点按「邮件待处理 + 未读公告」合计显隐");
   check(/await GameMailApi\.mine\(\{ silent: true \}\)/.test(smallMap), "进游戏静默探一次邮件（拉不到不弹提示）");
   check(/this\.setMailUnread\(box \? box\.unread \+ box\.unclaimed : 0\)/.test(smallMap), "探测口径与面板回调一致（未读 + 未领）");
-  check(/mailEntry: "mail"/.test(hud), "入口图标名在配置里（复用现成 small-map/mail 素材）");
+  check(/mailEntry: "mail"/.test(hud), "入口图标名在配置里（复用现成 ui/minimap/mail 素材）");
   check(/entryDot: \{ position: new Vec2\(9, 9\), size: new Size\(9, 9\) \}/.test(hud), "红点几何在配置里");
 
   const game = read(CLIENT_GAME);

@@ -3,7 +3,7 @@
  * 称号系统单测（client/tools/test-title.cjs）
  *
  * 盯的不变量（改称号系统后必须全绿）：
- * · 等级序列与磁盘一致（resources/titles 下每个帧目录都对应一个等级、无多登/漏登）
+ * · 等级序列与磁盘一致（resources/title 下每个图集都对应一个等级、无多登/漏登）
  * · 数据链路（#655）：客户端是**空运行时表**，唯一数据来源 = 服务端 `titles` 表（经快照整表下发）；
  *   每阶的属性与升级价都是表里那一行（不再有 rate / priceBase 曲线）
  * · 存档迁移（旧档 title 补 0）与升级链路接线、属性加成在服务端权威重算（#541）、头顶常显、预加载
@@ -17,7 +17,7 @@ const path = require("path");
 const { PROJECT_ROOT, prepare, seedRuntimeTables, check, finish } = require("./lib/configs-sandbox.cjs");
 const factory = require("./lib/factory-data.cjs");
 
-const TITLE_DIR = path.join(PROJECT_ROOT, "assets/resources/titles");
+const TITLE_DIR = path.join(PROJECT_ROOT, "assets/resources/title");
 const outDir = prepare("olua-title", ["configs/game-config.ts"]);
 seedRuntimeTables(outDir);
 /** 出厂值：称号 / 战魂 / 等级表（都来自 server/data/config-sync.sql） */
@@ -37,12 +37,13 @@ function pngSize(file) {
 console.log("\n— A. 等级序列与磁盘一致 —");
 const diskDirs = fs
   .readdirSync(TITLE_DIR, { withFileTypes: true })
-  .filter((entry) => entry.isDirectory() && /^sfx_\d+$/.test(entry.name))
-  .map((entry) => entry.name)
+  .filter((entry) => entry.isFile() && /^\d+\.plist$/.test(entry.name))
+  .map((entry) => entry.name.replace(/\.plist$/, ""))
+  .filter((key) => fs.existsSync(path.join(TITLE_DIR, `${key}.png`)))
   .sort();
-const registryDirs = titleLevels.map((config) => config.animation.replace(/^titles\//, "")).sort();
+const registryDirs = titleLevels.map((config) => config.animation.replace(/^title\//, "")).sort();
 check(registryDirs.length === diskDirs.length, `等级序列数量与磁盘一致（${registryDirs.length} 个）`);
-check(JSON.stringify(registryDirs) === JSON.stringify(diskDirs), "等级序列与磁盘目录一一对应（无多登/漏登/写错编号）");
+check(JSON.stringify(registryDirs) === JSON.stringify(diskDirs), "等级序列与磁盘图集一一对应（无多登/漏登/写错编号）");
 check(titleLevels.every((config, index) => config.level === index + 1), "等级从 1 起连续（下标 + 1 即等级）");
 check(titleMaxLevel() === titleLevels.length, "titleMaxLevel() 与序列等长");
 check(titleLevels.length === titleRows.length, "客户端运行时表行数 = 服务端种子行数（#590 整表重建）");
@@ -66,8 +67,8 @@ const seedMismatch = titleLevels.filter((config, index) => {
 });
 check(!seedMismatch.length, "客户端每行与服务端种子逐行一致（属性/价格/文案/动画）", seedMismatch.map((config) => config.level).join("、") || "34 级全部命中");
 check(new Set(titleLevels.map((config) => config.label)).size === titleLevels.length, "称号名称唯一");
-check(titleLevels.every((config) => config.animation.startsWith("titles/sfx_")), "动画路径 = titles/<目录名>（resources 加载口径）");
-check(titleLevels.every((config) => fs.existsSync(path.join(TITLE_DIR, config.animation.replace(/^titles\//, "")))), "每个称号的帧目录都真实存在");
+check(titleLevels.every((config) => config.animation.startsWith("title/")), "动画路径 = title/<编号>（resources 加载口径）");
+check(titleLevels.every((config) => fs.existsSync(path.join(TITLE_DIR, `${config.animation.replace(/^title\//, "")}.plist`))), "每个称号的图集都真实存在");
 check(getTitleLevel(0) === null && getTitleLevel(-1) === null && getTitleLevel(1)?.level === 1, "getTitleLevel：0/负数返回 null（未激活），1 起有效");
 
 console.log("\n— B. 属性形态（每阶一行，表里怎么配就是什么）—");
@@ -96,9 +97,8 @@ function parsePackedPlist(file) {
 let fewest = null;
 let checkedFrames = 0;
 for (const dir of diskDirs) {
-  const dirPath = path.join(TITLE_DIR, dir);
-  const plistPath = path.join(dirPath, `${dir}.plist`);
-  const pngPath = path.join(dirPath, `${dir}.png`);
+  const plistPath = path.join(TITLE_DIR, `${dir}.plist`);
+  const pngPath = path.join(TITLE_DIR, `${dir}.png`);
   if (!fs.existsSync(plistPath) || !fs.existsSync(pngPath)) {
     check(false, `${dir} 打包图集 plist + png 成对存在`, "缺文件（散帧目录必须打成同名 plist 图集，工具 client/tools/pack-loose-frames.py）");
     continue;

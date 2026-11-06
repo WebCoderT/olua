@@ -14,7 +14,7 @@ import { UI_EFFECT_LIMITS } from "../../../common/constants/ui-effect";
 
 /** 管理端列表 / 保存返回的一行（含追账字段） */
 export class UiEffectDto {
-  @ApiProperty({ description: "特效 key（升级特效 = upgrade、掉落光效 = light_1~light_6；取值域见 UI_EFFECT_KEYS）", example: "upgrade" })
+  @ApiProperty({ description: "特效 key（升级特效 = upgrade、掉落光效 = light-1~light-6；取值域见 UI_EFFECT_KEYS）", example: "upgrade" })
   key: string;
 
   @ApiProperty({ description: `摆位偏移 X（像素，相对挂点：升级特效 = UI 层锚点、掉落光效 = 掉落物图标中心，${UI_EFFECT_LIMITS.offsetMin}~${UI_EFFECT_LIMITS.offsetMax}）` })

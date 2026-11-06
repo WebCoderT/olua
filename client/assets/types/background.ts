@@ -2,13 +2,13 @@ import type { EQUIPMENT_PREFIX, EQUIPMENT_SUFFIX } from "./good";
 
 /**
  * 详情背景资源（装备品质背景动画）
- * 素材在 resources/backgrounds 下：每个背景是一个帧序列目录（同名编号文件夹，整包 6~20 帧循环），
+ * 素材在 resources/effect/background 下：每张背景是一个图集（bg-<编号>.plist + 同名 png，整包 6~20 帧循环），
  * 播放在物品详情弹窗自身的精灵上（原始尺寸随素材家族而异，显示尺寸跟随弹窗面板，见 configs/layout/backgrounds）。
  */
 export interface DetailBackgroundResource {
-  /** 背景 key（= 帧序列目录名，如 sfx_16000_0；配置表之间用它互相关联） */
+  /** 背景 key（= 帧序列目录名，如 bg-16000；配置表之间用它互相关联） */
   key: string;
-  /** 帧序列目录（resources 下路径、不含扩展名，如 backgrounds/sfx_16000_0） */
+  /** 图集路径（resources 下 plist 路径、不含扩展名，如 effect/background/bg-16000） */
   dir: string;
 }
 

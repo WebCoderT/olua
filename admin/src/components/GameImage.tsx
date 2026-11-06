@@ -210,8 +210,8 @@ function parseFirstFrame(xml: string): { x: number; y: number; w: number; h: num
 
 /**
  * 图集首帧加载（模块级缓存：列表一屏几十行，同目录只解析一次）。
- * 路径拼法两级尝试：`目录/同名`（titles/sfx_13009 → titles/sfx_13009/sfx_13009.png）
- * 优先，退回「路径即基名」（clothes/in/005 → clothes/in/005.png）；plist 都没有
+ * 路径拼法两级尝试：`目录/同名`（title/13009 → title/13009/13009.png）
+ * 优先，退回「路径即基名」（equipment/clothes/in/005 → equipment/clothes/in/005.png）；plist 都没有
  * 就当单图整张缩放 —— 称号 / 战魂 / NPC 三种来源都罩得住。
  */
 export function loadFirstFrame(atlasPath: string): Promise<FirstFrame | null> {

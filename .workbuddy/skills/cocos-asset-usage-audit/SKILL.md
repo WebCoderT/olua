@@ -13,11 +13,11 @@ agent_created: true
 
 | 形态 | 例子 | 判定 |
 |---|---|---|
-| 路径字面量 | `"common/mp"`、`"item/fs_2"` | 相等即命中（写代码时都不带扩展名） |
-| 模板串前缀 | `` `clothes/in/${id}` `` | 取 `${` 之前作前缀 |
+| 路径字面量 | `"ui/common/mp"`、`"item/drug-hp-1"` | 相等即命中（写代码时都不带扩展名） |
+| 模板串前缀 | `` `equipment/clothes/in/${id}` `` | 取 `${` 之前作前缀 |
 | 图集分页 | 代码写 `skill/plist/s_1102@0`，目录里有 `@0/@1` | 同基名（去 `@N`）的 `plist` 与 `png` **成对同活**，任一方被引用则两个都算用到 |
-| 目录加载 | `loadDir("clothes/out/001")` | 资源路径以「引用值 + `/`」开头 |
-| **按名字取图** | `` commonImage(name) => `common/${name}` `` | ⚠️ **不能用模板前缀判**（模板对目录下每个文件都成立 = 等于没判）。必须收集「代码里真正被点名的名字」，逐个比对 basename |
+| 目录加载 | `loadDir("equipment/clothes/out/001")` | 资源路径以「引用值 + `/`」开头 |
+| **按名字取图** | `` uiCommon(name) => `ui/common/${name}` `` | ⚠️ **不能用模板前缀判**（模板对目录下每个文件都成立 = 等于没判）。必须收集「代码里真正被点名的名字」，逐个比对 basename |
 | 依赖链 | `map/0.tmx` → `<tileset source="x.tsx">` → `<image source="y.png">` | 从 tmx 与 tsx 原文正则抽出 source，递归传播 |
 | 编辑器 uuid 引用 | 场景/prefab 里写 uuid | 先建 `uuid → 路径` 表（.meta 的 `uuid` 与 `subMetas[*].uuid`），再在 `.scene/.prefab/.json/.ts` 全文里搜 uuid 是否出现 |
 
@@ -60,7 +60,7 @@ agent_created: true
 ## 六、脚本骨架（Python，直接改着用）
 
 ```python
-# 1. 收集待审资源（可按用户要求排除某些顶层目录，如 npc/monster/weapons/clothes）
+# 1. 收集待审资源（可按用户要求排除某些顶层目录，如 npc/monster/equipment）
 # 2. 从 .meta 建 uuid -> 路径（含 subMetas）
 # 3. 遍历 assets（**排除 resources 自身**）读 .ts/.scene/.prefab/.json 全文
 #    用 re.findall(r"""(['"`])((?:\\.|(?!\1).)*?)\1""", text) 抽字符串字面量

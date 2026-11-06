@@ -17,7 +17,7 @@
  *
  * 用法：node tools/gen-image-manifest.cjs   （或 make image-manifest）
  *
- * #680 起它同时产出**音效清单** `audio-manifest.json`（`{ dir: "sounds", files }`，带扩展名）：
+ * #680 起它同时产出**音效清单** `audio-manifest.json`（`{ dir: "audio", files }`，带扩展名）：
  * 音效配置页的「选文件」在生产环境也要有数据源，道理与图片选择器一样。两个文件一起生成，
  * 免得出现「图片清单刷新了、音效清单还是旧的」。
  */
@@ -33,13 +33,13 @@ const IMAGE_EXTS = [".png", ".jpg", ".jpeg"];
  * 音效清单（#680，`audio-manifest.json`）
  *
  * 音效配置页要「有哪些音频可选」，生产同样没有目录列表能力 —— 与图片清单一个道理。
- * 形状是 `{ generatedAt, dir: "sounds", files }`，`files` **带扩展名**：数据库 `file_path`
- * 存的就是 `sounds/login_bg.wav` 这种带扩展名的相对路径，选择器拿到就能直接存。
+ * 形状是 `{ generatedAt, dir: "audio", files }`，`files` **带扩展名**：数据库 `file_path`
+ * 存的就是 `audio/login-bg.wav` 这种带扩展名的相对路径，选择器拿到就能直接存。
  * 开发期不依赖这份清单（vite 中间件扫盘 `?audio=1`），它只为生产准备。
  */
 const AUDIO_OUTPUT = path.join(RESOURCES, "audio-manifest.json");
 const AUDIO_EXTS = [".wav", ".mp3", ".ogg", ".m4a"];
-const AUDIO_DIR = "sounds";
+const AUDIO_DIR = "audio";
 
 function collect(dir) {
   const images = [];
@@ -84,7 +84,7 @@ function main() {
   console.log(`图片清单已生成：${path.relative(process.cwd(), OUTPUT)}（共 ${images.length} 张）`);
   console.log(`  ${summary}`);
 
-  // 音效清单：只扫 sounds/（音效就该放这儿），带扩展名
+  // 音效清单：只扫 audio/（音效就该放这儿），带扩展名
   const audioDir = path.join(RESOURCES, AUDIO_DIR);
   const files = fs.existsSync(audioDir)
     ? fs

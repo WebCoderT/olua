@@ -28,7 +28,7 @@ export class UiEffectRepository {
   /**
    * 全部行，按 **seed 顺序**（= `UI_EFFECT_KEYS` 的登记顺序，升级特效在最前、掉落光效按档排）
    *
-   * 不用 `ORDER BY effect_key`：字典序会把 `light_1…light_6` 排在 `upgrade` 前面，
+   * 不用 `ORDER BY effect_key`：字典序会把 `light-1…light-6` 排在 `upgrade` 前面，
    * 管理端第一个页签就变成「掉落光效 1 号」，而升级特效才是这张页面的主特效。
    * 行只来自 seed，`rowid` 就是登记顺序；后来新增的特效自然排在最后（新特效追加到末尾，符合直觉）。
    */

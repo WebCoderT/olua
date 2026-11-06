@@ -605,8 +605,8 @@ function toAssignmentRows(rows: { prefix: number; suffix: number; key: string; e
 
 /** 每种素材在 resources 下的子目录与 key → 文件名（去扩展名）的规则 */
 const RES_FOLDER_SPECS: Record<AppearanceKind, { subdir: string; filePattern: RegExp }> = {
-  border: { subdir: "borders", filePattern: /^sfx_\d+_0$/ },
-  background: { subdir: "backgrounds", filePattern: /^sfx_\d+$/ },
+  border: { subdir: "effect/border", filePattern: /^border-\d+$/ },
+  background: { subdir: "effect/background", filePattern: /^bg-\d+$/ },
 };
 
 /**
@@ -619,17 +619,17 @@ function appearanceResDir(): string {
   return configured || path.resolve(process.cwd(), "..", "client", "assets", "resources");
 }
 
-/** 从 key 里抠 sfx 编号（排序用；抠不到排最前，反正格式校验在别处） */
+/** 从 key 里抠编号（排序用；抠不到排最前，反正格式校验在别处） */
 function appearanceSerialOf(key: string): number {
-  return Number(key.match(/sfx_(\d+)/)?.[1] ?? 0);
+  return Number(key.match(/(\d+)/)?.[1] ?? 0);
 }
 
 /**
- * 扫资源文件夹拿全部 key（按 sfx 编号升序）
+ * 扫资源文件夹拿全部 key（按编号升序）
  *
- * - 边框 = `borders/sfx_N_0.plist` **且同名 png 存在**（有图集定义没图是坏素材，跳过）；
- * - 背景 = `backgrounds/sfx_N/` 帧序列目录；
- * - `.meta`（Cocos 的杂鱼文件）天然不匹配任何规则，不用特判。
+ * 边框与背景**都是平铺图集**（`border-30123.plist` / `bg-16000.plist` + 同名 png），
+ * 所以规则一致：认 `.plist` 且同名 png 存在（有图集定义没图是坏素材，跳过）。
+ * `.meta`（Cocos 的杂鱼文件）天然不匹配任何规则，不用特判。
  */
 function scanAppearanceFolder(kind: AppearanceKind): { dir: string; keys: string[] } {
   const spec = RES_FOLDER_SPECS[kind];
@@ -645,19 +645,12 @@ function scanAppearanceFolder(kind: AppearanceKind): { dir: string; keys: string
     );
   }
   const keys: string[] = [];
-  if (kind === "border") {
-    for (const entry of entries) {
-      if (!entry.isFile() || !entry.name.endsWith(".plist")) continue;
-      const key = entry.name.slice(0, -".plist".length);
-      if (!spec.filePattern.test(key)) continue;
-      if (!entries.some((other) => other.isFile() && other.name === `${key}.png`)) continue;
-      keys.push(key);
-    }
-  } else {
-    for (const entry of entries) {
-      if (!entry.isDirectory() || !spec.filePattern.test(entry.name)) continue;
-      keys.push(entry.name);
-    }
+  for (const entry of entries) {
+    if (!entry.isFile() || !entry.name.endsWith(".plist")) continue;
+    const key = entry.name.slice(0, -".plist".length);
+    if (!spec.filePattern.test(key)) continue;
+    if (!entries.some((other) => other.isFile() && other.name === `${key}.png`)) continue;
+    keys.push(key);
   }
   keys.sort((a, b) => appearanceSerialOf(a) - appearanceSerialOf(b));
   return { dir, keys };

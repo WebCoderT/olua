@@ -183,7 +183,7 @@ export const roleSelectorLayout = {
      * 创建按钮（默认置灰，输入名称后可用）
      *
      * 用通用红底按钮 + 文字（文案见 configs/texts.label_role_create）：
-     * 原来复用的是"开始游戏"牌匾图（create_role/start_btn.png），字是画在图里的，
+     * 原来复用的是"开始游戏"牌匾图（ui/create-role/start-button.png），字是画在图里的，
      * 于是弹窗里那颗键写着「开始游戏」——图与功能对不上，也没法改文案。
      */
     createButton: { name: "confirm_create_role_button", image: uiImages.middleRedButtonBackground, position: new Vec2(0, -238), size: new Size(190, 48), fontSize: 18 },

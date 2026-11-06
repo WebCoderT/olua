@@ -229,7 +229,7 @@ if (sandbox) {
     });
     [["AnnouncementBoardDialog", boardSource], ["AnnouncementNoticeDialog", noticeSource]].forEach(([name, source]) => {
       const code = strip(source);
-      check(!/["'`](common|main|buttons|tips|small-map|effect|mall)\//.test(code), `${name} 里没有裸资源路径（图片走 configs 的 uiImages）`);
+      check(!/["'`](ui|main|effect|item|monster|equipment|role|title|soul|npc|skill|font|audio|map)\//.test(code), `${name} 里没有裸资源路径（图片走 configs 的 uiImages）`);
       check(!/new Node\(["']/.test(code), `${name} 里没有裸节点名（节点名由配置派生）`);
     });
 
@@ -262,18 +262,18 @@ if (sandbox) {
     check(/item: \{[\s\S]{0,400}itemGap: \d/.test(noticeBlock), "条目间距仍走配置（提醒弹窗一条条纵向摊开；具体数值手调，不断言）");
 
     // 小地图入口与红点
-    check(/mailEntry: "mail"/.test(hudSource), "消息入口指定为 small-map 的 mail 图标（素材已存在，不新增资源）");
+    check(/mailEntry: "mail"/.test(hudSource), "消息入口指定为 ui/minimap 的 mail 图标（素材已存在，不新增资源）");
     check(/entryIcons: \["world", "achievement", "mail", "config", "sound"\]/.test(hudSource), "mail 本来就在入口图标列表里");
-    // #457：入口图标名必须逐个对得上 small-map 目录里的文件。原来末尾那颗占位「屏蔽 副本」在包里
+    // #457：入口图标名必须逐个对得上 ui/minimap 目录里的文件。原来末尾那颗占位「屏蔽 副本」在包里
     // 的文件名是乱码，配置写正常中文名 → 每次进游戏 console.error 一条、入口列少一颗。
     {
       const list = /entryIcons: \[([^\]]+)\]/.exec(hudSource);
       const names = list ? list[1].split(",").map((item) => item.trim().replace(/^"|"$/g, "")).filter(Boolean) : [];
-      const missing = names.filter((icon) => !fs.existsSync(path.join(PROJECT_ROOT, `assets/resources/small-map/${icon}.png`)));
-      check(names.length > 0 && missing.length === 0, "每个入口图标都能在 small-map 目录找到同名图", `缺：${missing.join(" / ") || "无"}`);
+      const missing = names.filter((icon) => !fs.existsSync(path.join(PROJECT_ROOT, `assets/resources/ui/minimap/${icon}.png`)));
+      check(names.length > 0 && missing.length === 0, "每个入口图标都能在 ui/minimap 目录找到同名图", `缺：${missing.join(" / ") || "无"}`);
     }
     check(/entryDot: \{ position: new Vec2\(9, 9\), size: new Size\(9, 9\) \}/.test(hudSource), "未读红点几何在配置里");
-    check(fs.existsSync(path.join(PROJECT_ROOT, "assets/resources/small-map/mail.png")), "公告入口素材存在（resources/small-map/mail.png）");
+    check(fs.existsSync(path.join(PROJECT_ROOT, "assets/resources/ui/minimap/mail.png")), "公告入口素材存在（resources/ui/minimap/mail.png）");
 
     // 新增脚本都带 .meta（进 Cocos 工程的前提）
     [

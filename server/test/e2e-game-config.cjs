@@ -30,14 +30,18 @@ const ADMIN_CODE = "gamecfgadmin-code";
  * 所以「目录坏了 / 空了」的场景都靠现场增删这里的文件来演。
  */
 const appearanceResTmp = fs.mkdtempSync(path.join(os.tmpdir(), "olua-appearance-res-"));
-fs.mkdirSync(path.join(appearanceResTmp, "borders"));
-fs.mkdirSync(path.join(appearanceResTmp, "backgrounds", "sfx_19991"), { recursive: true });
+// 新目录口径（#753）：边框与背景都是 `resources/effect/*` 下的**平铺图集**（.plist + 同名 .png）
+const appearanceBorderDir = path.join(appearanceResTmp, "effect", "border");
+const appearanceBackgroundDir = path.join(appearanceResTmp, "effect", "background");
+fs.mkdirSync(appearanceBorderDir, { recursive: true });
+fs.mkdirSync(appearanceBackgroundDir, { recursive: true });
 for (const serial of [99991, 99992]) {
-  fs.writeFileSync(path.join(appearanceResTmp, "borders", `sfx_${serial}_0.plist`), "");
-  fs.writeFileSync(path.join(appearanceResTmp, "borders", `sfx_${serial}_0.png`), "");
+  fs.writeFileSync(path.join(appearanceBorderDir, `border-${serial}.plist`), "");
+  fs.writeFileSync(path.join(appearanceBorderDir, `border-${serial}.png`), "");
 }
-fs.writeFileSync(path.join(appearanceResTmp, "borders", "sfx_99994_0.plist"), ""); // 没有同名 png：坏素材，扫描必须跳过
-fs.writeFileSync(path.join(appearanceResTmp, "backgrounds", "sfx_19991", "frame_000.png"), "");
+fs.writeFileSync(path.join(appearanceBorderDir, "border-99994.plist"), ""); // 没有同名 png：坏素材，扫描必须跳过
+fs.writeFileSync(path.join(appearanceBackgroundDir, "bg-19991.plist"), "");
+fs.writeFileSync(path.join(appearanceBackgroundDir, "bg-19991.png"), "");
 
 
 // 出厂值的预期来源：配置快照 `server/data/config-sync.sql`
@@ -800,9 +804,9 @@ async function main() {
         description: "e2e 描述",
         occupation: "1",
         sex: "2",
-        icon: "clothes/icon/e2e",
-        inAtlas: "clothes/in/e2e",
-        outAtlas: "clothes/out/e2e",
+        icon: "equipment/clothes/icon/e2e",
+        inAtlas: "equipment/clothes/in/e2e",
+        outAtlas: "equipment/clothes/out/e2e",
         tags: ["第一大陆", "e2e"],
         outScale: 1.25,
         inScaleX: 0.9,
@@ -815,9 +819,9 @@ async function main() {
     });
     checkEqual(equipmentDisplay.status, 200, "PATCH 显示字段成功");
     checkEqual(equipmentDisplay.body?.data?.description, "e2e 描述", "描述已更新");
-    checkEqual(equipmentDisplay.body?.data?.icon, "clothes/icon/e2e", "图标已更新（资源路径现在归服务端）");
-    checkEqual(equipmentDisplay.body?.data?.inAtlas, "clothes/in/e2e", "内观图集已更新");
-    checkEqual(equipmentDisplay.body?.data?.outAtlas, "clothes/out/e2e", "外观图集已更新");
+    checkEqual(equipmentDisplay.body?.data?.icon, "equipment/clothes/icon/e2e", "图标已更新（资源路径现在归服务端）");
+    checkEqual(equipmentDisplay.body?.data?.inAtlas, "equipment/clothes/in/e2e", "内观图集已更新");
+    checkEqual(equipmentDisplay.body?.data?.outAtlas, "equipment/clothes/out/e2e", "外观图集已更新");
     checkEqual(equipmentDisplay.body?.data?.tags?.length, 2, "标签整份替换（2 个）");
     checkEqual(equipmentDisplay.body?.data?.inPosX, -12.5, "内观锚点 x 已更新");
     checkEqual(equipmentDisplay.body?.data?.outPositions?.length, 8, "8 向位置整份替换（8 个）");
@@ -965,7 +969,7 @@ async function main() {
     checkEqual(drugHp1?.effectHp, drugs["drug_hp_1"].effectHp, "drug_hp_1 固定回复量与配置一致（effects 求和）");
     checkEqual(drugHp1?.maxStack, drugs["drug_hp_1"].maxStack, "drug_hp_1 堆叠上限与配置一致");
     checkEqual(drugHp1?.cooldown, drugs["drug_hp_1"].cooldown, "drug_hp_1 冷却与配置一致");
-    // #603 第十域：图标也入库了（客户端不再自带，拼不出 item/fs_2 这类路径）
+    // #603 第十域：图标也入库了（客户端不再自带，拼不出 item/drug-hp-1 这类路径）
     checkEqual(drugHp1?.icon, drugs["drug_hp_1"].icon, "drug_hp_1 图标与配置一致（图标在表里）");
     const drugSun = drugsRes.body?.data?.list?.find((row) => row.id === "drug_sun");
     checkEqual(drugSun?.effectHp, drugs["drug_sun"].effectHp, "drug_sun 固定回血与配置一致");
@@ -1290,9 +1294,9 @@ async function main() {
     // 外观也能改（#603）：改完客户端下次进游戏由快照整表重建
     const npcLook = await api(base, "PATCH", "/api/admin/npcs/0002", {
       token,
-      body: { src: "npc/npc_9999", scaleX: 2, scaleY: 2.5, posX: -8, posY: 6 },
+      body: { src: "npc/9999", scaleX: 2, scaleY: 2.5, posX: -8, posY: 6 },
     });
-    checkEqual(npcLook.body?.data?.src, "npc/npc_9999", "素材目录可改");
+    checkEqual(npcLook.body?.data?.src, "npc/9999", "素材目录可改");
     checkEqual(npcLook.body?.data?.scaleX, 2, "横向缩放可改");
     checkEqual(npcLook.body?.data?.scaleY, 2.5, "纵向缩放可改");
     checkEqual(npcLook.body?.data?.posX, -8, "横向偏移可改（负数可用）");
@@ -1459,12 +1463,12 @@ async function main() {
     // #641：资源路径开放编辑（管理端有可视化图片选择器，素材仍在客户端）
     const fashionRes = await api(base, "PATCH", "/api/admin/fashions/cloth_2", {
       token,
-      body: { icon: "clothes/icon/999", inRes: "clothes/in/030", outRes: "clothes/out/030" },
+      body: { icon: "equipment/clothes/icon/999", inRes: "equipment/clothes/in/030", outRes: "equipment/clothes/out/030" },
     });
     checkEqual(fashionRes.status, 200, "资源路径可以改（图标 / 内观 / 外观）");
-    checkEqual(fashionRes.body?.data?.icon, "clothes/icon/999", "图标按提交值落库");
-    checkEqual(fashionRes.body?.data?.inRes, "clothes/in/030", "内观按提交值落库");
-    checkEqual(fashionRes.body?.data?.outRes, "clothes/out/030", "外观按提交值落库");
+    checkEqual(fashionRes.body?.data?.icon, "equipment/clothes/icon/999", "图标按提交值落库");
+    checkEqual(fashionRes.body?.data?.inRes, "equipment/clothes/in/030", "内观按提交值落库");
+    checkEqual(fashionRes.body?.data?.outRes, "equipment/clothes/out/030", "外观按提交值落库");
     const fashionResEmpty = await api(base, "PATCH", "/api/admin/fashions/cloth_2", {
       token,
       body: { icon: "", inRes: "", outRes: "" },
@@ -1752,7 +1756,7 @@ async function main() {
     {
       // #603 第十域：客户端不带图标了 —— 快照必须带，缺了整套物品显示成白块
       const drugRow = snap.drugs?.find((row) => row.id === "drug_hp_1") ?? {};
-      check(Boolean(drugRow.icon), "快照药品行带图标（客户端拼不出 item/fs_2 这类路径）");
+      check(Boolean(drugRow.icon), "快照药品行带图标（客户端拼不出 item/drug-hp-1 这类路径）");
       const itemRow = snap.items?.find((row) => row.id === "material_hide") ?? {};
       check(Boolean(itemRow.icon && itemRow.type), "快照物品行带图标与大类");
     }
@@ -2580,8 +2584,8 @@ async function main() {
       body: {
         assignments: borderOk,
         customs: [
-          { equipment: "weapon_20", key: "sfx_30206_0" },
-          { equipment: "weapon_20", key: "sfx_30205_0" },
+          { equipment: "weapon_20", key: "border-30206" },
+          { equipment: "weapon_20", key: "border-30205" },
         ],
       },
     });
@@ -2592,7 +2596,7 @@ async function main() {
     const tmp = swapped[0].key;
     swapped[0] = { ...swapped[0], key: swapped[14].key, effect: { x: 3, y: -4, scale: 1.2 } };
     swapped[14] = { ...swapped[14], key: tmp };
-    const customSeedBorder = "sfx_30206_0";
+    const customSeedBorder = "border-30206";
     const borderUpdateRes = await api(base, "PATCH", "/api/admin/equipment-borders", {
       token,
       body: {
@@ -2643,12 +2647,12 @@ async function main() {
     const appearanceNoToken = await api(base, "GET", "/api/game-config/equipment-appearance");
     checkEqual(appearanceNoToken.status, 401, "外观接口需要令牌（与快照同口径）");
 
-    // —— 背景半边也走一遍写路径（背景 key 格式与边框不同：sfx_16000 无 _0）——
+    // —— 背景半边也走一遍写路径（背景 key 形如 bg-16000，与边框的 border-30123 各占一套格式）——
     const backgroundOk = backgroundPage.assignments ?? [];
     const badBgKey = backgroundOk.slice();
-    badBgKey[0] = { ...badBgKey[0], key: "sfx_16000_0" };
+    badBgKey[0] = { ...badBgKey[0], key: "border-30123" };
     const badBgKeyRes = await api(base, "PATCH", "/api/admin/equipment-backgrounds", { token, body: { assignments: badBgKey, customs: [] } });
-    checkEqual(badBgKeyRes.status, 400, "背景 key 带了边框的 _0 尾巴 → 400（两半 key 格式各自卡）");
+    checkEqual(badBgKeyRes.status, 400, "背景 key 填了边框的 key → 400（两半 key 格式各自卡）");
 
     const bgSwapped = backgroundOk.slice();
     const bgTmp = bgSwapped[0].key;
@@ -2676,9 +2680,9 @@ async function main() {
 
     const fsSync = require("node:fs");
     const nodePath = require("node:path");
-    const bordersDir = nodePath.join(appearanceResTmp, "borders");
+    const bordersDir = appearanceBorderDir;
 
-    // 目录坏了（这里把 borders/ 整个搬走模拟挂载缺失）→ 扫描 400
+    // 目录坏了（这里把 effect/border/ 整个搬走模拟挂载缺失）→ 扫描 400
     fsSync.renameSync(bordersDir, `${bordersDir}.bak`);
     const missingDirRes = await api(base, "GET", "/api/admin/equipment-borders/resources", { token });
     checkEqual(missingDirRes.status, 400, "素材目录不存在 → 扫描 400（错误里带路径，排查挂载用）");
@@ -2690,7 +2694,7 @@ async function main() {
       body: {
         assignments: borderOk.map((row) => ({ ...row })),
         customs: [],
-        items: [{ key: "sfx_99991_0", effect: { x: 5, y: 0, scale: 2 }, name: "测试边框甲", group: "e2e组" }, ...borderOk.map((row) => ({ key: row.key }))],
+        items: [{ key: "border-99991", effect: { x: 5, y: 0, scale: 2 }, name: "测试边框甲", group: "e2e组" }, ...borderOk.map((row) => ({ key: row.key }))],
       },
     });
     checkEqual(seedEffectPreset.status, 200, "预置清单：99991 带 effect / 别名 / 分组（同步不得冲掉）");
@@ -2701,11 +2705,11 @@ async function main() {
       body: {
         assignments: borderOk.map((row) => ({ ...row })),
         customs: [],
-        items: [{ key: "sfx_99991_0", effect: { x: 5, y: 0, scale: 2 }, name: "  测试边框甲  ", group: "e2e组" }, ...borderOk.map((row) => ({ key: row.key }))],
+        items: [{ key: "border-99991", effect: { x: 5, y: 0, scale: 2 }, name: "  测试边框甲  ", group: "e2e组" }, ...borderOk.map((row) => ({ key: row.key }))],
       },
     });
     checkEqual(labelRoundTrip.status, 200, "别名 / 分组提交成功（别名带空白、分组非空）");
-    const label99991 = (labelRoundTrip.body?.data?.items ?? []).find((row) => row.key === "sfx_99991_0");
+    const label99991 = (labelRoundTrip.body?.data?.items ?? []).find((row) => row.key === "border-99991");
     checkEqual(label99991?.name, "测试边框甲", "别名 trim 后落库（读出来不带空白）");
     checkEqual(label99991?.group, "e2e组", "分组原样落库");
     // 空串视同没填：再提交一次把两条标签全清掉，读出来字段干净
@@ -2714,11 +2718,11 @@ async function main() {
       body: {
         assignments: borderOk.map((row) => ({ ...row })),
         customs: [],
-        items: [{ key: "sfx_99991_0", effect: { x: 5, y: 0, scale: 2 }, name: "", group: "" }, ...borderOk.map((row) => ({ key: row.key }))],
+        items: [{ key: "border-99991", effect: { x: 5, y: 0, scale: 2 }, name: "", group: "" }, ...borderOk.map((row) => ({ key: row.key }))],
       },
     });
     checkEqual(labelClear.status, 200, "空串别名 / 分组提交成功（视同没填）");
-    const cleared99991 = (labelClear.body?.data?.items ?? []).find((row) => row.key === "sfx_99991_0");
+    const cleared99991 = (labelClear.body?.data?.items ?? []).find((row) => row.key === "border-99991");
     checkEqual(cleared99991?.name, undefined, "空串别名不落库（字段干净）");
     checkEqual(cleared99991?.group, undefined, "空串分组不落库（字段干净）");
     // 摆回同步前提：99991 带 effect / 别名 / 分组
@@ -2727,7 +2731,7 @@ async function main() {
       body: {
         assignments: borderOk.map((row) => ({ ...row })),
         customs: [],
-        items: [{ key: "sfx_99991_0", effect: { x: 5, y: 0, scale: 2 }, name: "测试边框甲", group: "e2e组" }, ...borderOk.map((row) => ({ key: row.key }))],
+        items: [{ key: "border-99991", effect: { x: 5, y: 0, scale: 2 }, name: "测试边框甲", group: "e2e组" }, ...borderOk.map((row) => ({ key: row.key }))],
       },
     });
     checkEqual(relabel.status, 200, "摆回同步前提：99991 带 effect / 别名 / 分组");
@@ -2736,7 +2740,7 @@ async function main() {
       body: {
         assignments: borderOk.map((row) => ({ ...row })),
         customs: [],
-        items: [{ key: "sfx_99991_0", name: "字".repeat(33) }, ...borderOk.map((row) => ({ key: row.key }))],
+        items: [{ key: "border-99991", name: "字".repeat(33) }, ...borderOk.map((row) => ({ key: row.key }))],
       },
     });
     checkEqual(labelTooLong.status, 400, "别名超 32 字 → 400 且整边不落库");
@@ -2744,9 +2748,9 @@ async function main() {
     const borderScanRes = await api(base, "GET", "/api/admin/equipment-borders/resources", { token });
     checkEqual(borderScanRes.status, 200, "扫描边框资源文件夹");
     const borderScan = borderScanRes.body?.data ?? {};
-    checkEqual(borderScan.dir, bordersDir, "扫描目录 = env 下的 borders/");
-    checkEqual(JSON.stringify(borderScan.keys), JSON.stringify(["sfx_99991_0", "sfx_99992_0"]), "keys = 成对素材按编号升序（缺 png 的 99994 被跳过）");
-    checkEqual(JSON.stringify(borderScan.added), JSON.stringify(["sfx_99992_0"]), "added = 文件夹有清单没有（99991 已在受控清单里）");
+    checkEqual(borderScan.dir, bordersDir, "扫描目录 = env 下的 effect/border");
+    checkEqual(JSON.stringify(borderScan.keys), JSON.stringify(["border-99991", "border-99992"]), "keys = 成对素材按编号升序（缺 png 的 99994 被跳过）");
+    checkEqual(JSON.stringify(borderScan.added), JSON.stringify(["border-99992"]), "added = 文件夹有清单没有（99991 已在受控清单里）");
     checkEqual(borderScan.removed?.length, 15, "removed = 清单里的 15 个出厂边框（文件夹里都没有）");
     checkEqual(borderScan.removedReferenced?.length, 15, "removedReferenced = 全部 15 个（都被棋盘引用着）");
 
@@ -2758,7 +2762,7 @@ async function main() {
     checkEqual(borderSync.removed?.length, 15, "本次移除 15 条（文件夹里没有）");
     const borderAfterSync = await api(base, "GET", "/api/admin/equipment-borders", { token });
     const borderAfterSyncItems = borderAfterSync.body?.data?.items ?? [];
-    const item99991 = borderAfterSyncItems.find((row) => row.key === "sfx_99991_0");
+    const item99991 = borderAfterSyncItems.find((row) => row.key === "border-99991");
     checkEqual(item99991?.effect?.x, 5, "存活条目的 effect 原样保留（清单是效果的唯一来源）");
     checkEqual(item99991?.name, "测试边框甲", "存活条目的别名原样保留（#718：与 effect 同一待遇）");
     checkEqual(item99991?.group, "e2e组", "存活条目的分组原样保留");
@@ -2769,24 +2773,24 @@ async function main() {
     const reassignToFolder = await api(base, "PATCH", "/api/admin/equipment-borders", {
       token,
       body: {
-        assignments: borderOk.map((row) => ({ prefix: row.prefix, suffix: row.suffix, key: "sfx_99991_0" })),
-        customs: [{ equipment: "weapon_20", key: "sfx_99992_0" }],
+        assignments: borderOk.map((row) => ({ prefix: row.prefix, suffix: row.suffix, key: "border-99991" })),
+        customs: [{ equipment: "weapon_20", key: "border-99992" }],
       },
     });
     checkEqual(reassignToFolder.status, 200, "棋盘 / 绑定改指文件夹素材");
 
     // 文件夹里删掉 99992 → 再同步：仍被绑定引用的条目也移除
-    fsSync.rmSync(nodePath.join(bordersDir, "sfx_99992_0.plist"));
-    fsSync.rmSync(nodePath.join(bordersDir, "sfx_99992_0.png"));
+    fsSync.rmSync(nodePath.join(bordersDir, "border-99992.plist"));
+    fsSync.rmSync(nodePath.join(bordersDir, "border-99992.png"));
     const borderRescanRes = await api(base, "GET", "/api/admin/equipment-borders/resources", { token });
-    checkEqual(JSON.stringify(borderRescanRes.body?.data?.removed), JSON.stringify(["sfx_99992_0"]), "文件删除后扫描标出 removed");
-    checkEqual(JSON.stringify(borderRescanRes.body?.data?.removedReferenced), JSON.stringify(["sfx_99992_0"]), "removed 里的 99992 仍被绑定引用");
+    checkEqual(JSON.stringify(borderRescanRes.body?.data?.removed), JSON.stringify(["border-99992"]), "文件删除后扫描标出 removed");
+    checkEqual(JSON.stringify(borderRescanRes.body?.data?.removedReferenced), JSON.stringify(["border-99992"]), "removed 里的 99992 仍被绑定引用");
     const borderResyncRes = await api(base, "POST", "/api/admin/equipment-borders/sync", { token });
     checkEqual(borderResyncRes.status, 201, "删除文件后再同步");
     checkEqual(borderResyncRes.body?.data?.removedReferenced?.length, 1, "被引用也照样移除（#716 的分歧点：同步不受「被引用不可删」约束）");
     const borderResyncedItems = (await api(base, "GET", "/api/admin/equipment-borders", { token })).body?.data?.items ?? [];
     checkEqual(borderResyncedItems.length, 2, "清单 = 1 个文件夹素材 + 1 个仍被绑定引用的自动并入");
-    check(borderResyncedItems.some((row) => row.key === "sfx_99992_0"), "被引用的 99992 读取时仍在清单里（引用处显示异常，运营可见）");
+    check(borderResyncedItems.some((row) => row.key === "border-99992"), "被引用的 99992 读取时仍在清单里（引用处显示异常，运营可见）");
 
     // 空目录安全阀：目录在但素材被搬空（多半是挂载配错）→ 拒绝清空清单
     fsSync.mkdirSync(`${bordersDir}.empty`, { recursive: true });
@@ -2802,7 +2806,8 @@ async function main() {
     const bgSyncRes = await api(base, "POST", "/api/admin/equipment-backgrounds/sync", { token });
     checkEqual(bgSyncRes.status, 201, "按文件夹同步背景清单");
     checkEqual(bgSyncRes.body?.data?.kept, 1, "背景清单 = 文件夹里的 1 个素材");
-    checkEqual(bgSyncRes.body?.data?.removed?.length, 15, "背景的 15 个出厂条目被移除");
+    // 清单出厂为空，同步前 GET 里的条目全部来自「棋盘引用处自动并入」→ 移除条数 = 棋盘组合数
+    checkEqual(bgSyncRes.body?.data?.removed?.length, appearanceSeedRow.backgrounds.length, "背景条目全部被移除（条数取快照棋盘，不锁数值）");
     const borderAfterBgSync = await api(base, "GET", "/api/admin/equipment-borders", { token });
     checkEqual(borderAfterBgSync.body?.data?.items?.length, 2, "同步背景不动边框清单（拆边语义在同步路径上同样成立）");
 

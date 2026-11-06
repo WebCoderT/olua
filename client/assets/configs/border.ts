@@ -13,7 +13,7 @@ export interface BorderPick {
 /**
  * 装备边框（品质光效框）
  *
- * 素材：resources/borders 下 84 张图集（plist + 同名 png，整包 8~12 帧循环），
+ * 素材：resources/effect/border 下 84 张图集（border-<编号>.plist + 同名 png，整包 8~12 帧循环），
  * 显示在背包格子与身上装备槽的物品图标上（唯一挂点 = GameUiHelper.createGood，见 applyEquipmentBorder）。
  *
  * ## #695：映射表搬到服务端了
@@ -32,7 +32,7 @@ export interface BorderPick {
  */
 
 /**
- * 边框图集编号（resources/borders/sfx_<编号>_0；与磁盘文件一一对应，增删边框改这里，
+ * 边框图集编号（resources/effect/border/border-<编号>；与磁盘文件一一对应，增删边框改这里，
  * test-equipment-border.cjs 会拿它与磁盘实际文件比对，写错会当场报出来）
  */
 const borderSerials: number[] = [
@@ -60,8 +60,8 @@ const borderSerials: number[] = [
 
 /** 边框资源表（数组为源 + 尾部建 Map）：key = 图集文件名，atlas = resources 加载路径 */
 export const borderResources: BorderResource[] = borderSerials.map((serial) => ({
-  key: `sfx_${serial}_0`,
-  atlas: `borders/sfx_${serial}_0`,
+  key: `border-${serial}`,
+  atlas: `effect/border/border-${serial}`,
 }));
 
 /** 边框 key → 资源（按 key 查表用；查不到 = 配置写错了，显示层会安静跳过） */

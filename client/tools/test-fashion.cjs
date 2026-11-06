@@ -50,12 +50,12 @@ if (sandbox) {
   check(Array.isArray(fashionData) && fashionData.length === 20, `衣柜 20 套时装（实得 ${fashionData.length}）`);
   check(new Set(fashionData.map((item) => item.id)).size === fashionData.length, "时装 id 唯一");
   check(
-    fashionData.every((item) => item.label && item.description && item.icon.startsWith("clothes/")),
+    fashionData.every((item) => item.label && item.description && item.icon.startsWith("equipment/clothes/")),
     "每套都有名称 / 描述 / clothes 目录下的图标",
   );
   check(
-    fashionData.every((item) => !item.out || item.out.startsWith("clothes/out/")) && fashionData.every((item) => !item.in || item.in.startsWith("clothes/in/")),
-    "外观与内观资源都指向 clothes/out|in（路径形状正确）",
+    fashionData.every((item) => !item.out || item.out.startsWith("equipment/clothes/out/")) && fashionData.every((item) => !item.in || item.in.startsWith("equipment/clothes/in/")),
+    "外观与内观资源都指向 equipment/clothes/out|in（路径形状正确）",
   );
   check(fashionData.some((item) => item.out) && fashionData.some((item) => !item.out), "既有带外观的、也有只有内观的（两个分支都要能演）");
   check(getFashion("cloth_2")?.label === "妖绯巫女", "getFashion 按 id 取到配置");

@@ -198,10 +198,10 @@ export function NpcsPage() {
           </Field>
           <IconField
             label="素材目录"
-            hint="resources 下的相对路径（图集动画，如 npc/npc_2125）；空串 = 该 NPC 不显示"
+            hint="resources 下的相对路径（图集动画，如 npc/2125）；空串 = 该 NPC 不显示"
             mode="atlas"
             rootDir="npc"
-            placeholder="npc/npc_2125"
+            placeholder="npc/2125"
             value={form.src}
             onChange={(path) => setForm({ ...form, src: path })}
           />

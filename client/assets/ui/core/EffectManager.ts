@@ -31,7 +31,7 @@ import LayerManager from "./LayerManager";
  *   与角色动作动画的总时长是同一算法（见 AnimationHelper 的片段切割），因此特效与动作同时开始、同时结束
  * - 图集帧由 AnimationHelper 按资源路径缓存，播完自动销毁节点；未配特效或加载失败时静默跳过
  * 特效资源命名约定：resources 下 TexturePacker 图集（plist + png 同名），路径不含扩展名，
- * 形如 "effect/skill/s_1002@0"；同一个特效被切成多页（@0/@1）时由 AnimationHelper 自动合并
+ * 形如 "effect/skill/1002"；同一个特效被切成多页（@0/@1）时由 AnimationHelper 自动合并
  */
 export default class EffectManager {
   /**

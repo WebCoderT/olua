@@ -9,18 +9,18 @@
  *
  * ## 管的是「用哪个文件 + 多大声 + 循环不循环 + 开不开」
  *
- * 音频文件本体在客户端资源包里（`client/assets/resources/sounds/`），服务端不存二进制。
+ * 音频文件本体在客户端资源包里（`client/assets/resources/audio/`），服务端不存二进制。
  * 存的是**资源相对路径**（`file_path`），运营可以换文件 —— 这是本配置的核心：
  * 换一首登录曲不需要重打客户端包，只要新文件已经在资源包里。
  *
  * ## 路径口径（与用户 2026-11-04 的约定一致）
  *
- * - 相对 `client/assets/resources/`，**带扩展名**：`sounds/login_bgm.wav`；
+ * - 相对 `client/assets/resources/`，**带扩展名**：`audio/login-bgm.wav`；
  *   带扩展名的理由：与文件系统一一对应，管理端的目录列表 / 试听地址可以直接拼，
  *   不用「先猜扩展名再试」；客户端对接时按 `resources.load(去掉扩展名的路径, AudioClip)` 读。
- * - 只允许 `sounds/` 开头：音效文件就是放这里的，限制前缀能挡住「误填成图片路径」。
+ * - 只允许 `audio/` 开头：音效文件就是放这里的，限制前缀能挡住「误填成图片路径」。
  * - 空串 = **未配置**（这一项不响），不是错误 —— 新加的音效通常先留空等美术给文件。
- * - **命名约定：文件名与 key 同名**（`ui_click` → `sounds/ui_click.wav`，#685 用户授权改名后统一）。
+ * - **命名约定：文件名与 key 同名**（`ui_click` → `audio/ui-click.wav`，#685 用户授权改名后统一）。
  *   不是校验规则（运营可以换成任何合规文件名），纯粹为了对齐：翻资源目录时一眼看出
  *   「这个文件是哪个配置项」，反过来也一样。改 key 时顺手把文件也改掉。扩展名不统一
  *   （素材给的是 wav 就是 wav），所以路径里必须带扩展名。
@@ -94,7 +94,7 @@ export const AUDIO_LIMITS = {
   /** 路径最大长度（够长到能写下多级目录，又不至于塞进一整段文本） */
   pathMaxLength: 200,
   /** 音效文件的根目录（resources 相对；用户定：音效都放这里） */
-  rootDir: "sounds",
+  rootDir: "audio",
   /** 允许的音频扩展名（Cocos 能直接解码的几种） */
   extensions: [".wav", ".mp3", ".ogg", ".m4a"] as const,
 } as const;
@@ -118,7 +118,7 @@ export interface AudioPreset {
 /**
  * 出厂值
  *
- * 全部指向资源包里**已有**的文件（2026-11-04 运营放进 `sounds/` 的那批，
+ * 全部指向资源包里**已有**的文件（2026-11-04 运营放进 `audio/` 的那批，
  * 其中 `warrior_attack.wav` 原名 `木剑砍击音效.wav`，用户指定它就是战士普攻音）：
  * 指向真实文件的好处是「装完就有声音」，运营只需要改想改的那一项 ——
  * 编一个不存在的文件名只会得到「配置看着对、进游戏没声音」。
@@ -130,7 +130,7 @@ export const AUDIO_DEFAULTS: Record<AudioKey, AudioPreset> = {
   login_bgm: {
     label: "登录场景背景音",
     category: "login",
-    filePath: "sounds/login_bgm.wav",
+    filePath: "audio/login-bgm.wav",
     volume: 60,
     loop: true,
     enabled: true,
@@ -140,7 +140,7 @@ export const AUDIO_DEFAULTS: Record<AudioKey, AudioPreset> = {
     // 展示名跟着真实用途走，运营看到名字就知道改它会波及全站
     label: "按钮点击音",
     category: "login",
-    filePath: "sounds/ui_click.wav",
+    filePath: "audio/ui-click.wav",
     volume: 80,
     loop: false,
     enabled: true,
@@ -148,7 +148,7 @@ export const AUDIO_DEFAULTS: Record<AudioKey, AudioPreset> = {
   warrior_attack: {
     label: "战士普通攻击音",
     category: "combat",
-    filePath: "sounds/warrior_attack.wav",
+    filePath: "audio/warrior-attack.wav",
     volume: 70,
     loop: false,
     enabled: true,
@@ -156,7 +156,7 @@ export const AUDIO_DEFAULTS: Record<AudioKey, AudioPreset> = {
   role_die_man: {
     label: "男角色死亡音",
     category: "combat",
-    filePath: "sounds/role_die_man.wav",
+    filePath: "audio/role-die-man.wav",
     volume: 80,
     loop: false,
     enabled: true,
@@ -164,7 +164,7 @@ export const AUDIO_DEFAULTS: Record<AudioKey, AudioPreset> = {
   role_die_woman: {
     label: "女角色死亡音",
     category: "combat",
-    filePath: "sounds/role_die_woman.wav",
+    filePath: "audio/role-die-woman.wav",
     volume: 80,
     loop: false,
     enabled: true,
@@ -175,7 +175,7 @@ export const AUDIO_DEFAULTS: Record<AudioKey, AudioPreset> = {
     // 这里给 false：运营把这项的循环开关打开也不会改变播放方式（客户端忽略它）
     label: "移动脚步音",
     category: "combat",
-    filePath: "sounds/move.wav",
+    filePath: "audio/move.wav",
     volume: 65,
     loop: false,
     enabled: true,
@@ -183,7 +183,7 @@ export const AUDIO_DEFAULTS: Record<AudioKey, AudioPreset> = {
   item_drop: {
     label: "物品掉落音",
     category: "item",
-    filePath: "sounds/item_drop.wav",
+    filePath: "audio/item-drop.wav",
     volume: 70,
     loop: false,
     enabled: true,
@@ -191,7 +191,7 @@ export const AUDIO_DEFAULTS: Record<AudioKey, AudioPreset> = {
   equip_wear: {
     label: "穿戴装备成功音",
     category: "item",
-    filePath: "sounds/equip_wear.mp3",
+    filePath: "audio/equip-wear.mp3",
     volume: 75,
     loop: false,
     enabled: true,
@@ -199,7 +199,7 @@ export const AUDIO_DEFAULTS: Record<AudioKey, AudioPreset> = {
   money_change: {
     label: "金钱更新音",
     category: "item",
-    filePath: "sounds/money_change.mp3",
+    filePath: "audio/money-change.mp3",
     volume: 70,
     loop: false,
     enabled: true,
@@ -207,7 +207,7 @@ export const AUDIO_DEFAULTS: Record<AudioKey, AudioPreset> = {
   bag_resort: {
     label: "背包整理成功音",
     category: "item",
-    filePath: "sounds/bag_resort.wav",
+    filePath: "audio/bag-resort.wav",
     volume: 65,
     loop: false,
     enabled: true,
@@ -215,7 +215,7 @@ export const AUDIO_DEFAULTS: Record<AudioKey, AudioPreset> = {
   level_up: {
     label: "升级成功音",
     category: "growth",
-    filePath: "sounds/level_up.wav",
+    filePath: "audio/level-up.wav",
     volume: 80,
     loop: false,
     enabled: true,
@@ -223,7 +223,7 @@ export const AUDIO_DEFAULTS: Record<AudioKey, AudioPreset> = {
   map_teleport: {
     label: "传送成功音",
     category: "growth",
-    filePath: "sounds/map_teleport.mp3",
+    filePath: "audio/map-teleport.mp3",
     volume: 75,
     loop: false,
     enabled: true,
@@ -259,13 +259,13 @@ export function audioPathProblem(rawPath: string): string | null {
     return `路径太长（${path.length} 个字符，最多 ${AUDIO_LIMITS.pathMaxLength}）`;
   }
   if (path.startsWith("/")) {
-    return "不要以 / 开头：路径是相对 client/assets/resources/ 的（例如 sounds/login_bgm.wav）";
+    return "不要以 / 开头：路径是相对 client/assets/resources/ 的（例如 audio/login-bgm.wav）";
   }
   if (path.split("/").some((segment) => segment === ".." || segment === ".")) {
     return "路径里不许出现 . 或 ..（只能指向 resources 目录里面）";
   }
   if (!path.startsWith(`${AUDIO_LIMITS.rootDir}/`)) {
-    return `音效只能放在 ${AUDIO_LIMITS.rootDir}/ 下（例如 sounds/login_bgm.wav）`;
+    return `音效只能放在 ${AUDIO_LIMITS.rootDir}/ 下（例如 audio/login-bgm.wav）`;
   }
   const ext = path.slice(path.lastIndexOf(".")).toLowerCase();
   if (!path.includes(".") || !AUDIO_LIMITS.extensions.includes(ext as (typeof AUDIO_LIMITS.extensions)[number])) {
@@ -274,7 +274,7 @@ export function audioPathProblem(rawPath: string): string | null {
   // 文件名只允许英文 / 数字 / 下划线 / 短横线（用户 2026-11-04 定）：
   // Cocos 资源包按路径建索引，中文与空格在打包 / 热更时容易出岔子；资源目录里临时放的中文名
   // 要先改成英文名再配上来（管理端的选择器会把不合规的文件名挡掉）。
-  if (!/^sounds\/[A-Za-z0-9_\-/]+\.[A-Za-z0-9]+$/.test(path)) {
+  if (!/^audio\/[A-Za-z0-9_\-/]+\.[A-Za-z0-9]+$/.test(path)) {
     return "路径只能用字母、数字、下划线、短横线与斜杠（中文或空格的文件名请先改成英文名）";
   }
   return null;

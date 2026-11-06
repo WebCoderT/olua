@@ -43,7 +43,7 @@ function main() {
   const soulUpgradeCosts = soulRows.map((row) => row.bindGold);
 
   console.log("\n=== 数据完整性：两张表与外观序列逐阶对齐 ===");
-  check(soulMaxLevel() === 37, `战魂共 ${soulMaxLevel()} 阶（resources/war-soul 的 37 个外观目录）`);
+  check(soulMaxLevel() === 37, `战魂共 ${soulMaxLevel()} 阶（resources/soul 的 37 个外观目录）`);
   check(soulRows.length === 37, "库里战魂表 37 行");
   check(soulLevels.length === soulRows.length, "客户端运行时表行数 = 快照行数（整表重建）");
   // 属性键序不参与比较（种子行 hpRecover 在末尾、客户端构造顺序不同），属性按固定键序取值再比

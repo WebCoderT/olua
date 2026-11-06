@@ -12,9 +12,9 @@ import {
  *
  * 「哪个前后缀组合用哪个边框 / 详情背景」+「哪件特殊装备单独用哪个」。
  * 边框 / 背景的**素材本体**在客户端资源包里，服务端只存 key 字符串 ——
- * 所以这里没有任何路径类字段，格式校验就是 key 的形状（`sfx_30123_0` / `sfx_16000`）。
+ * 所以这里没有任何路径类字段，格式校验就是 key 的形状（`border-30123` / `bg-16000`）。
  *
- * 取值域的**资源清单**（哪些 sfx 编号真的存在）是两端资源约定，留客户端
+ * 取值域的**资源清单**（哪些编号真的存在）是两端资源约定，留客户端
  * （`configs/border` / `configs/background` 有与磁盘文件一一对应的守卫）；
  * 服务端不校验「素材存不存在」—— 资源包不在服务端，查了只会掩盖
  * 「本地有、线上没有」；填错了客户端会安静跳过并留日志。
@@ -55,7 +55,7 @@ export class AppearanceAssignmentDto {
   @Max(EQUIPMENT_TIER_MAX - 1)
   suffix: number;
 
-  @ApiProperty({ description: "边框 / 背景 key（客户端资源清单里的 sfx 编号）", example: "sfx_30123_0" })
+  @ApiProperty({ description: "边框 / 背景 key（客户端资源清单里的编号）", example: "border-30123" })
   @IsString()
   @Length(1, EQUIPMENT_APPEARANCE_LIMITS.keyMaxLength)
   key: string;
@@ -75,7 +75,7 @@ export class CustomAppearanceDto {
   @Matches(new RegExp(EQUIPMENT_APPEARANCE_LIMITS.equipmentIdSource), { message: "装备标识只能是字母、数字、下划线与短横线" })
   equipment: string;
 
-  @ApiProperty({ description: "边框 / 背景 key", example: "sfx_30206_0" })
+  @ApiProperty({ description: "边框 / 背景 key", example: "border-30206" })
   @IsString()
   @Length(1, EQUIPMENT_APPEARANCE_LIMITS.keyMaxLength)
   key: string;
@@ -94,7 +94,7 @@ export class CustomAppearanceDto {
  * 只**引用**清单里的 key；显示效果等属性改在清单里，服务端保存时传播进引用处。
  */
 export class AppearanceItemDto {
-  @ApiProperty({ description: "边框 / 背景 key（客户端资源清单里的 sfx 编号）", example: "sfx_30123_0" })
+  @ApiProperty({ description: "边框 / 背景 key（客户端资源清单里的编号）", example: "border-30123" })
   @IsString()
   @Length(1, EQUIPMENT_APPEARANCE_LIMITS.keyMaxLength)
   key: string;
@@ -176,7 +176,7 @@ export class EquipmentBorderDto {
   updatedAt: number;
 }
 
-/** 单边配置 · 详情背景（形状与边框一致，key 格式不同：`sfx_16000` 没有 `_0` 尾巴） */
+/** 单边配置 · 详情背景（形状与边框一致，key 格式不同：前缀 border- 与 bg- 不能混用） */
 export class EquipmentBackgroundDto {
   @ApiProperty({ description: "背景清单本体（#714；棋盘与自定义表只引用这里的 key）", type: [AppearanceItemDto] })
   @ValidateNested({ each: true })
@@ -201,7 +201,7 @@ export class EquipmentBackgroundDto {
  * 资源文件夹扫描结果（#716「从文件夹同步」的预览）
  *
  * 服务端去扫 `EQUIPMENT_APPEARANCE_RES_DIR`（默认 `../client/assets/resources`）
- * 下的 `borders/`（sfx_N_0.plist + 同名 png）或 `backgrounds/`（sfx_N 目录），
+ * 下的 `effect/border`（border-N.plist + 同名 png）或 `effect/background`（bg-N.plist），
  * 与当前清单求差集 —— 管理端拿它弹「将新增 / 将移除」的确认框。
  */
 export class AppearanceResourceScanDto {
@@ -209,7 +209,7 @@ export class AppearanceResourceScanDto {
   @IsString()
   dir: string;
 
-  @ApiProperty({ description: "文件夹里的全部 key（按 sfx 编号升序）", example: ["sfx_30123_0"], type: [String] })
+  @ApiProperty({ description: "文件夹里的全部 key（按编号升序）", example: ["border-30123"], type: [String] })
   @IsArray()
   keys: string[];
 
@@ -232,7 +232,7 @@ export class AppearanceResourceScanDto {
 
 /** 同步执行结果（POST .../sync 的响应） */
 export class AppearanceResourceSyncDto {
-  @ApiProperty({ description: "本次新增的 key", example: ["sfx_30183_0"], type: [String] })
+  @ApiProperty({ description: "本次新增的 key", example: ["border-30183"], type: [String] })
   @IsArray()
   added: string[];
 

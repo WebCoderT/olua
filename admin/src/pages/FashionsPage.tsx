@@ -145,8 +145,8 @@ function FashionEditDialog({
         <IconField
           label="图标"
           hint="列表 / 背包里显示的那张小图"
-          rootDir="clothes/icon"
-          placeholder="clothes/icon/001"
+          rootDir="equipment/clothes/icon"
+          placeholder="equipment/clothes/icon/001"
           value={icon}
           onChange={setIcon}
         />
@@ -154,8 +154,8 @@ function FashionEditDialog({
           label="内观"
           hint="角色弹窗里穿在身上的那套"
           mode="atlas"
-          rootDir="clothes/in"
-          placeholder="clothes/in/001"
+          rootDir="equipment/clothes/in"
+          placeholder="equipment/clothes/in/001"
           value={inRes}
           onChange={setInRes}
         />
@@ -163,8 +163,8 @@ function FashionEditDialog({
           label="外观"
           hint="场景里跟着角色走的那套（整套动作图集，没有单张封面）"
           mode="atlas"
-          rootDir="clothes/out"
-          placeholder="clothes/out/001"
+          rootDir="equipment/clothes/out"
+          placeholder="equipment/clothes/out/001"
           value={outRes}
           onChange={setOutRes}
         />

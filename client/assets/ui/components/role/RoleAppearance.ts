@@ -164,7 +164,7 @@ export default class RoleAppearance {
   /** 重新加载衣服动画：无衣服时按性别回退默认外观，保证角色始终有身体 */
   private reloadClothAnimation(source: RoleOutSource) {
     const cloth = getEquipment(source.equipments.cloth);
-    // 未穿衣服时按性别取默认身体（男 role/1、女 role/2），外观变换与穿衣服同口径
+    // 未穿衣服时按性别取默认身体（男 role/boy、女 role/girl），外观变换与穿衣服同口径
     const fallback = getRoleDefaultCloth(source.sex);
     // 取源：时装 > 装备衣服 > 默认身体（#377）。**只有外观帧目录被换掉** ——
     // 缩放/偏移仍按装备（或默认身体）那套几何，所以穿时装不会把角色挪位

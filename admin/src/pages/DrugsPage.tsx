@@ -245,9 +245,9 @@ export function DrugsPage() {
             </Field>
             <IconField
               label="图标"
-              hint="resources 相对路径（如 item/fs_2，不带扩展名）；空串 = 不显示图标"
+              hint="resources 相对路径（如 item/drug-hp-1，不带扩展名）；空串 = 不显示图标"
               rootDir="item"
-              placeholder="item/fs_2"
+              placeholder="item/drug-hp-1"
               value={form.icon}
               onChange={(path) => setForm({ ...form, icon: path })}
             />

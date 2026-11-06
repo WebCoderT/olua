@@ -37,7 +37,7 @@ import { makeAlignWorkbenchActions } from "./equipAlign/workbench-actions";
  * 换件衣服武器就换落点。
  *
  * 所以这里把判断权交回人眼，并且**规定了两个基准**（这是用户定的，不是实现挑的）：
- * - **衣服对着圆盘调**：底图就是弹窗背景（`common/personal-information-bg`），圆盘中心
+ * - **衣服对着圆盘调**：底图就是弹窗背景（`ui/common/personal-information-bg`），圆盘中心
  *   就是「脚该踩的地方」；
  * - **武器对着第一件衣服调**：参照系固定为清单里的第一件衣服（`inShow.baseClothKey`），
  *   19 把武器共用同一个参照，不跟当前选中的衣服漂 —— 这样运行时它们才不会跟着换装跳动。

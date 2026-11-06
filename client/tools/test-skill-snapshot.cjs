@@ -104,7 +104,7 @@ function main() {
         requireTarget: false,
         canAuto: false,
         effectOnSelf: true,
-        effect: "effect/skill/s_1006@0",
+        effect: "effect/skill/1006@0",
         occupation: "2",
         pushDistance: 60,
       }),
@@ -121,7 +121,7 @@ function main() {
     "伤害系数整份替换（下标仍是等级 - 1）",
     JSON.stringify(after.damageCoefficients),
   );
-  check(after.effect === "effect/skill/s_1006@0" && after.effectIsOnSelf === true, "特效与「播在自己身上」已覆写", after.effect);
+  check(after.effect === "effect/skill/1006@0" && after.effectIsOnSelf === true, "特效与「播在自己身上」已覆写", after.effect);
   check(after.oeccupation === "2", "职业归属跟着快照走", after.oeccupation);
   // 快照行带 pushDistance=60，但客户端照旧不带 push —— 击退的唯一执行方是服务端 AI（#670）
   check(after.push === undefined, "快照里的击退距离不下发到客户端（浮空位移由服务端模拟）", String(after.push));

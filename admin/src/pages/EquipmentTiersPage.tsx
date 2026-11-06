@@ -271,7 +271,7 @@ const BOARD_CONFIGS: Record<"border" | "background", BoardConfig> = {
     title: "边框关联",
     listPage: "装备边框",
     noun: "边框",
-    atlasOf: (key) => `borders/${key}`,
+    atlasOf: (key) => `effect/border/${key}`,
     savedToast: "边框关联已保存（玩家下次进游戏拉配置后生效）",
   },
   background: {
@@ -279,7 +279,7 @@ const BOARD_CONFIGS: Record<"border" | "background", BoardConfig> = {
     title: "背景关联",
     listPage: "装备详情背景",
     noun: "背景",
-    atlasOf: (key) => `backgrounds/${key}`,
+    atlasOf: (key) => `effect/background/${key}`,
     savedToast: "背景关联已保存（玩家下次进游戏拉配置后生效）",
   },
 };

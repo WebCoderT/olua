@@ -5,7 +5,7 @@
  * 跑的是**真实配置表与真实派生函数**（configs-sandbox 编译 CommonJS + cc 垫片），不是复刻。
  * 盯的五条口径：
  * · 数据覆写生效 —— 文案 / 价格 / 数值 / 回复量都换成服务端的
- * · 图标跟快照走 —— 装备 / 药品 / 材料的图标在服务端表里（客户端拼不出 `item/fs_2` 这类路径），
+ * · 图标跟快照走 —— 装备 / 药品 / 材料的图标在服务端表里（客户端拼不出 `item/drug-hp-1` 这类路径），
  *   而几何 / 时装资源（in / out）仍以发布素材包为准，不覆写
  * · 整表重建 —— 快照里没有的 id 客户端就不该有（#603 第九 / 十域，客户端没有出厂行）
  * · 装备变体重算 —— 只下发 37 个基础件，555 个变体按前后缀倍率重新展开
@@ -92,9 +92,9 @@ function main() {
     description: "测试描述",
     occupation: "4",
     sex: "3",
-    icon: "clothes/icon/test",
-    inAtlas: "clothes/in/test",
-    outAtlas: "clothes/out/test",
+    icon: "equipment/clothes/icon/test",
+    inAtlas: "equipment/clothes/in/test",
+    outAtlas: "equipment/clothes/out/test",
     tags: ["测试"],
     outScale: 1.5,
     inScaleX: 1.2,
@@ -126,7 +126,7 @@ function main() {
   check(variantAfter.label === "测试衣服", "变体共用同一份文案（基础件与变体共享对象）", variantAfter.label);
   check(variantAfter.sellPirce === 777, "售卖价按服务端值（客户端字段名是 sellPirce）", String(variantAfter.sellPirce));
   check(
-    baseAfter.icon === "clothes/icon/test" && baseAfter.in === "clothes/in/test" && baseAfter.out === "clothes/out/test",
+    baseAfter.icon === "equipment/clothes/icon/test" && baseAfter.in === "equipment/clothes/in/test" && baseAfter.out === "equipment/clothes/out/test",
     "图标 / 内观 / 外观图集跟着快照走（#603 第九域起资源路径归服务端）",
     `${baseBefore.icon} → ${baseAfter.icon}`,
   );
@@ -216,7 +216,7 @@ function main() {
 
   console.log("\n=== 怪物：数值落运行时表 + 资源落运行时表（#588：客户端没有怪物数据文件） ===");
   // 资源行先落（真实路径：applyMonsterPresentation，几何/速度在落表时合成）
-  applyMonsterPresentation("1", { icon: "monster/icon/1_00000", out: "monster/out/1", outOffset: { x: -2, y: -2 }, contentSize: { width: 44, height: 49 }, moveSpeed: 2, aggressive: false, detectRange: 200, speedRate: { stand: 2 } });
+  applyMonsterPresentation("1", { icon: "monster/icon/1", out: "monster/out/1", outOffset: { x: -2, y: -2 }, contentSize: { width: 44, height: 49 }, moveSpeed: 2, aggressive: false, detectRange: 200, speedRate: { stand: 2 } });
   const resourceAfter = monsterResource.get("1");
   check(resourceAfter && resourceAfter.out === "monster/out/1" && resourceAfter.contentSize.width === 44, "资源与表现已落运行时表", resourceAfter && `${resourceAfter.out} / ${resourceAfter.contentSize.width}×${resourceAfter.contentSize.height}`);
   check(resourceAfter.speedRate.stand === 2 && resourceAfter.speedRate.walk === 1, "speedRate 快照覆盖与默认表在落表时合成", `${resourceAfter.speedRate.stand} / ${resourceAfter.speedRate.walk}`);
@@ -256,14 +256,14 @@ function main() {
   snapshotApi.applyContentSnapshot(
     contentSnapshot({
       npcs: [
-        { id: "0002", label: "测试传送官", dialog: "你好", src: "npc/npc_9999", scaleX: 1.5, scaleY: 1.5, posX: 11, posY: 0, updatedAt: 0 },
-        { id: "1001", label: "神装使者", dialog: "", src: "npc/npc_2108", scaleX: 1, scaleY: 1, posX: 0, posY: 0, updatedAt: 0 },
+        { id: "0002", label: "测试传送官", dialog: "你好", src: "npc/9999", scaleX: 1.5, scaleY: 1.5, posX: 11, posY: 0, updatedAt: 0 },
+        { id: "1001", label: "神装使者", dialog: "", src: "npc/2108", scaleX: 1, scaleY: 1, posX: 0, posY: 0, updatedAt: 0 },
       ],
     }),
   );
   const npcAfter = npcs.get("0002");
   check(npcAfter && npcAfter.label === "测试传送官", "NPC 名称取快照", npcAfter && npcAfter.label);
-  check(npcAfter && npcAfter.src === "npc/npc_9999", "素材目录取快照（客户端没有 src 兜底）", npcAfter && npcAfter.src);
+  check(npcAfter && npcAfter.src === "npc/9999", "素材目录取快照（客户端没有 src 兜底）", npcAfter && npcAfter.src);
   check(npcAfter && npcAfter.scale.x === 1.5 && npcAfter.scale.y === 1.5, "缩放取快照", npcAfter && JSON.stringify(npcAfter.scale));
   check(npcAfter && npcAfter.position.x === 11 && npcAfter.position.y === 0, "偏移取快照", npcAfter && JSON.stringify(npcAfter.position));
   check(npcs.size === 2, "整表重建：快照里没有的 NPC 不会残留", `size=${npcs.size}`);
@@ -279,9 +279,9 @@ function main() {
           id: "cloth_2",
           label: "测试时装",
           description: "测试时装描述",
-          icon: "clothes/icon/999",
-          inRes: "clothes/in/999",
-          outRes: "clothes/out/999",
+          icon: "equipment/clothes/icon/999",
+          inRes: "equipment/clothes/in/999",
+          outRes: "equipment/clothes/out/999",
           sellPrice: 4321,
           acquireChannel: "upgrade",
           attributes: attributes(500, 0, 40, 10),
@@ -297,7 +297,7 @@ function main() {
   check(fashionAfter.attributes.maxHp === 500 && fashionAfter.attributes.physicalAttack[1] === 40, "八项属性来自快照（区间 {min,max} → 客户端元组）", JSON.stringify(fashionAfter.attributes));
   // 与地图那套相反：时装 id 与资源目录编号没有可推导的约定，路径只能跟着行走
   check(
-    fashionAfter.icon === "clothes/icon/999" && fashionAfter.in === "clothes/in/999" && fashionAfter.out === "clothes/out/999",
+    fashionAfter.icon === "equipment/clothes/icon/999" && fashionAfter.in === "equipment/clothes/in/999" && fashionAfter.out === "equipment/clothes/out/999",
     "icon / inRes / outRes 也取快照（路径不可按 id 推导，必须入库）",
     `${fashionAfter.icon} / ${fashionAfter.in}`,
   );

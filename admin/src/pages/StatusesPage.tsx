@@ -176,7 +176,7 @@ function StatusEditDialog({
           hint="特效图集（一套动画）；空 = 只在图标栏显示"
           mode="atlas"
           rootDir="effect/status"
-          placeholder="effect/status/s_2004@0"
+          placeholder="effect/status/2004@0"
           value={form.effect}
           onChange={(path) => set("effect", path)}
         />

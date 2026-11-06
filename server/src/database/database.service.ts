@@ -346,8 +346,8 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
       );
 
       -- 音效配置（#680）：一行 = 一个音效项的「用哪个文件 / 多大声 / 循环不循环 / 开不开」。
-      -- 文件本体在客户端资源包里（client/assets/resources/sounds/），这里只存**资源相对路径**
-      -- （带扩展名，如 'sounds/login_bg.wav'）—— 换一首曲子只要新文件已进资源包，不必重打客户端。
+      -- 文件本体在客户端资源包里（client/assets/resources/audio/），这里只存**资源相对路径**
+      -- （带扩展名，如 'audio/login-bg.wav'）—— 换一首曲子只要新文件已进资源包，不必重打客户端。
       -- file_path 允许空串（= 未配置，这一项不响）；行由启动 seed 按 AUDIO_DEFAULTS 补出来，
       -- 一个 key 存在的前提是客户端有播它的代码，所以没有「新建 / 删除音效」接口。
       CREATE TABLE IF NOT EXISTS audio_settings (
@@ -1174,7 +1174,7 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
     this.ensureColumn("equipments", "out_scale", "REAL NOT NULL DEFAULT 1");
     this.ensureColumn("equipments", "out_positions", "TEXT NOT NULL DEFAULT '[]'");
     this.migrateWorldMonsterInstanceIds();
-    // 药品 / 物品图标（#603 第十域）：客户端不再存图标（它拼不出 `item/fs_2` 这类路径，
+    // 药品 / 物品图标（#603 第十域）：客户端不再存图标（它拼不出 `item/drug-hp-1` 这类路径，
     // 与地图 / 特效那种「能按 id 推导」的不同）—— 老库补列后由 seedDrugs / seedItems
     // 的 backfillIcon 一次性回填（只在 icon 还是空串时填）
     this.ensureColumn("drugs", "icon", "TEXT NOT NULL DEFAULT ''");

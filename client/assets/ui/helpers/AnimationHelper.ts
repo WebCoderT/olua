@@ -15,7 +15,7 @@ import { getFrameIndex, getFrameOrder } from "../utils/animation/FrameOrder";
  * 帧与片段在切场景后依然有效，可以放心复用
  *
  * #235 起散帧全部图集化（原始逐帧在仓库根 _loose_frames_archive，gitignored）：
- * monster/clothes/weapons 外观与 role 本体走 prepareActionAtlas 动作图集，
+ * monster 与 equipment 下的外观与 role 本体走 prepareActionAtlas 动作图集，
  * 称号/战魂特效、NPC 外观、装备详情背景走 loadLoopFrames 单循环图集；散帧目录路径保留为**保险回退**
  * （图集缺失时静默回退，本地重新从归档打图集前也不至于整片空白）
  */
@@ -51,7 +51,7 @@ export default class AnimationHelper {
           resolve([]);
           return;
         }
-        // 目录帧名兼容三种形态：纯数字（0000）、前缀名（sfx_13001_0_0003）与大写扩展名（00000.PNG ——
+        // 目录帧名兼容三种形态：纯数字（0000）、前缀名（13009_0_0003）与大写扩展名（00000.PNG ——
         // 导入器不认大写扩展名，子资源名会整串保留），统一「先去扩展名再取末尾连续数字」；
         // 排序复制一份，不改引擎返回的子资源列表
         const frames = Array.from(spriteFrames ?? []).sort((a, b) => getFrameOrder(a.name) - getFrameOrder(b.name));
@@ -86,7 +86,7 @@ export default class AnimationHelper {
     const frames = await this.loadFrames(dirSrc);
     const animationMap = getAnimationMap(kind);
     if (!animationMap || !frames.length) return;
-    // 帧号基准按目录取（如 role/2 的帧号从 600 起）：不减基准则一个动作都匹配不上、整包切不出片段
+    // 帧号基准按目录取（如 role/girl 的帧号从 600 起）：不减基准则一个动作都匹配不上、整包切不出片段
     this.buildClips(animationMap, frames, this.clipKey(dirSrc, kind, speedRate), speedRate, getAnimationFrameBase(dirSrc));
   }
 
@@ -158,18 +158,21 @@ export default class AnimationHelper {
   }
 
   /**
-   * 单循环目录动画（称号/战魂特效、NPC 外观、装备详情背景）的帧来源（公开：GameUiHelper 的
-   * 称号 / 战魂动画节点也用它）：目录里有同名 plist 图集
-   * （图集与散帧目录同路径，见 configs/animation 顶部说明）时取图集帧并过滤空帧，
-   * 否则回退散帧目录——两条路径对调用方完全透明
+   * 单循环动画（称号/战魂特效、NPC 外观、装备详情背景）的帧来源（公开：GameUiHelper 的
+   * 称号 / 战魂动画节点也用它）：按 #753 的资源树，图集有两种磁盘形态，都对调用方透明 ——
+   * 1. **平铺图集**：路径本身就是图集（`title/13009` → `title/13009.plist` + 同名 png）；
+   * 2. **目录里放同名单图集**：`<路径>/<目录名>.plist`（如 `npc/2108/2108.plist`，老形态，保留兼容）；
+   * 3. 都没有才回退散帧目录（本地重新打图集前的保险）。
+   * 用 `getInfoWithPath` 先做同步索引查询：不加载资源、缺图集也不报错，避免「路径写错刷屏 console」。
    * 空帧过滤与 prepareActionAtlas / buildClips 同口径（占位空图 1×1，rect 边长 >1 才算有效帧）
    */
   static async loadLoopFrames(dirSrc: string): Promise<SpriteFrame[]> {
-    if (dirSrc && resources.getDirWithPath(dirSrc, SpriteAtlas).length) {
-      // 图集内 plist 与目录同名：<id>/<id>.plist
-      const frames = await this.loadFramesFromAtlas(`${dirSrc}/${dirSrc.split("/").pop()}`);
-      const valid = frames.filter((frame) => this.isSolidFrame(frame));
-      if (valid.length) return valid;
+    if (!dirSrc) return [];
+    const base = dirSrc.split("/").pop() ?? dirSrc;
+    for (const candidate of [dirSrc, `${dirSrc}/${base}`]) {
+      if (!resources.getInfoWithPath(candidate, SpriteAtlas)) continue;
+      const frames = (await this.loadFramesFromAtlas(candidate)).filter((frame) => this.isSolidFrame(frame));
+      if (frames.length) return frames;
     }
     return this.loadFrames(dirSrc);
   }
@@ -188,7 +191,7 @@ export default class AnimationHelper {
   /**
    * 切割并缓存整包片段（已缓存时直接返回）
    * @param frameBase 帧号基准（目录的帧号起点，见 configs/animation.animationFrameBases）：
-   *   素材与另一套共用全局连续编号时（role/2 = role/1 + 600）必须先减去它再匹配动作区间
+   *   素材与另一套共用全局连续编号时（role/girl = role/boy + 600）必须先减去它再匹配动作区间
    */
   private static buildClips(animationMap: Map<string, number[]>, spriteFrames: SpriteFrame[], cacheKey: string, speedRate?: SpeedRate, frameBase = 0) {
     const cached = this.clipCache.get(cacheKey);
@@ -198,7 +201,7 @@ export default class AnimationHelper {
       // 有效动画帧过滤（帧序号命中该动作，且帧本身不是空图）
       // 帧序号必须经 getFrameIndex 解析：直接 Number(帧名) 在帧名带扩展名时（如外观帧 00000.PNG）
       // 得到 NaN，indexOf 恒 -1 → 一个片段都切不出来，装备外观整个不显示（内观是静态图不受影响）；
-      // 再减帧号基准（frameBase）：role/2 这类从 600 起编号的素材，不减则同样一个片段都切不出来
+      // 再减帧号基准（frameBase）：role/girl 这类从 600 起编号的素材，不减则同样一个片段都切不出来
       const validSpriteFrames = spriteFrames.filter((spriteFrame) => {
         const index = getFrameIndex(spriteFrame.name);
         return index !== null && frameIndexes.indexOf(index - frameBase) >= 0 && this.isSolidFrame(spriteFrame);
@@ -303,8 +306,8 @@ export default class AnimationHelper {
 
   /**
    * 取一个 TexturePacker 图集（plist）里的全部帧（已按帧序号排序；缓存规则与目录帧一致）
-   * 同一个动画被切成多页时（如 s_1102@0 / s_1102@1）会把各页合并成一整条帧序列
-   * @param atlasSrc 图集资源路径（resources 下 plist 的路径，不含扩展名，如 "effect/skill/s_1002@0"）
+   * 同一个动画被切成多页时（如 1102@0 / 1102@1）会把各页合并成一整条帧序列
+   * @param atlasSrc 图集资源路径（resources 下 plist 的路径，不含扩展名，如 "effect/skill/1002@0"）
    */
   static loadFramesFromAtlas(atlasSrc: string): Promise<SpriteFrame[]> {
     const cached = this.atlasFrameCache.get(atlasSrc);
@@ -353,7 +356,7 @@ export default class AnimationHelper {
   }
 
   /**
-   * 取同名图集的全部分页路径（含传入的那一页，如 effect/skill/s_1102@0 / s_1102@1）
+   * 取同名图集的全部分页路径（含传入的那一页，如 effect/skill/1102@0 / 1102@1）
    * 目录索引是同步查询：不加载资源、缺页也不会报错；索引拿不到时只加载传入的那一页
    */
   private static atlasPagePaths(atlasSrc: string): string[] {
@@ -512,7 +515,7 @@ export default class AnimationHelper {
     const animate = this.useAnimation(node);
     return this.loadFramesFromAtlas(atlasSrc).then((spriteFrames) => {
       // 空帧过滤与切片路径同口径（isSolidFrame）：内观图集里同样夹着占位空图
-      // （clothes/in 有 1×1），不滤掉会让内观的衣服/武器周期性闪空
+      // （equipment/clothes/in 有 1×1），不滤掉会让内观的衣服/武器周期性闪空
       const valid = spriteFrames.filter((frame) => this.isSolidFrame(frame));
       if (!isValid(node, true) || !isValid(animate, true) || !valid.length) return;
       this.play(name, node, animate, valid, duration > 0 ? duration : valid.length, AnimationClip.WrapMode.Loop);
@@ -522,7 +525,7 @@ export default class AnimationHelper {
   /**
    * 循环播放一个帧序列目录的全部帧 —— 装备详情背景这类「常驻循环」的目录动画用
    *
-   * 帧来源走 loadLoopFrames：目录有同名单 plist 图集（resources/<目录>/<基名>.plist，#542 起同路径）
+   * 帧来源走 loadLoopFrames：平铺图集（resources/<路径>.plist）或目录内同名单图集（resources/<目录>/<目录名>.plist）
    * 时取图集帧（过滤空帧），否则回退逐帧 png 目录；
    * 片段同样进 loopClipCache（键 = 目录|帧率，目录路径与图集路径不会撞键），
    * 同一背景被反复悬停时共用同一个片段，只在首次加载时付出成本

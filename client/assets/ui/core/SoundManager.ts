@@ -298,7 +298,7 @@ export default class SoundManager {
   /**
    * 取（并缓存）一个音频资源
    *
-   * `sounds/login_bg.wav` → `resources.load("sounds/login_bg", AudioClip)`：
+   * `audio/login-bgm.wav` → `resources.load("audio/login-bgm", AudioClip)`：
    * 服务端存带扩展名的路径（管理端要能拼试听地址），Cocos 认不带扩展名的资源路径，
    * 转换只在 `audioResPathOf` 一处做。
    *

@@ -16,7 +16,7 @@
  * · 主角的移动意图优先级：键盘 > 摇杆 > 鼠标；isManualMoving 也要认摇杆（自动战斗据此让位）
  * · 摇杆节点在 HUD 层（组合根创建并挂 UI 层）、位置由组件自己读配置固定值在构造时一次设好（窗口变化不重排）
  * · 「按压起点在界面元素上」的那次抬起不被世界侧当成点击（ScreenClickInput + Pointer.isUiPressOnUiElement）
- * · 几何自洽：手柄拖到最外圈不溢出底座；素材在 resources/main 且带 meta
+ * · 几何自洽：手柄拖到最外圈不溢出底座；素材在 resources/ui/hud 且带 meta
  *
  * 用法：node client/tools/test-joystick.cjs
  */
@@ -224,7 +224,7 @@ check(joystickBlock.length > 0 && /position:\s*new Vec2\(/.test(joystickBlock), 
 check(/radius:\s*\d+/.test(joystickBlock) && /handleSize:\s*new Size\(/.test(joystickBlock), "摇杆布局含可拖半径与手柄尺寸");
 check(/"bottom-left"/.test(read(path.join(UI, "utils/layout/ScreenLayout.ts"))), "ScreenLayout 仍保留 bottom-left 档（选角等场景继续用）");
 check(/export const joystickMove/.test(roleConfigSrc) && /deadZone/.test(roleConfigSrc) && /runThreshold/.test(roleConfigSrc), "手感参数（死区/跑动阈值）在 configs/role.joystickMove");
-check(/joystickBackground:\s*mainImage\("joystick_bg"\)/.test(imagesSrc) && /joystickHandle:\s*mainImage\("joystick"\)/.test(imagesSrc), "两张摇杆素材都登记在 uiImages（代码里没有裸路径）");
+check(/joystickBackground:\s*uiHud\("joystick-bg"\)/.test(imagesSrc) && /joystickHandle:\s*uiHud\("joystick"\)/.test(imagesSrc), "两张摇杆素材都登记在 uiImages（代码里没有裸路径）");
 
 // ---- 几何自洽 + 素材在位 ----
 if (outDir) {
@@ -236,9 +236,9 @@ if (outDir) {
   check(joystickLayout.radius + joystickLayout.handleSize.height / 2 <= joystickLayout.size.height / 2 + 0.5, "手柄拖到最外圈不溢出底座（纵向）");
 }
 
-for (const asset of ["joystick", "joystick_bg"]) {
-  const png = path.join(PROJECT_ROOT, "assets/resources/main", `${asset}.png`);
-  check(fs.existsSync(png) && fs.existsSync(`${png}.meta`), `素材在位：resources/main/${asset}.png（含 .meta）`);
+for (const asset of ["joystick", "joystick-bg"]) {
+  const png = path.join(PROJECT_ROOT, "assets/resources/ui/hud", `${asset}.png`);
+  check(fs.existsSync(png) && fs.existsSync(`${png}.meta`), `素材在位：resources/ui/hud/${asset}.png（含 .meta）`);
 }
 
 //#endregion

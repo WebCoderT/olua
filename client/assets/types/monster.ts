@@ -49,7 +49,7 @@ export interface MonsterRuntimeStats {
  * icon / out 是素材包里的路径事实，改素材 = 服务端重跑生成器 + 客户端重新进游戏。
  */
 export interface MonsterPresentation {
-  /** 图标（monster/icon/<key>_00000 单图） */
+  /** 图标（monster/icon/<key> 单图） */
   icon: string;
   /** 外观图集目录（monster/out/<key>，帧动画按动作约定拼） */
   out: string;

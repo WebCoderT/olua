@@ -1464,7 +1464,7 @@ export function applySkillRows(rows: SkillRow[]): void {
  * **客户端加载期 `fashionData` 是空的** —— 进游戏前时装弹窗里一套都没有不是 bug，
  * 那只是快照还没到。
  *
- * 资源路径为什么跟着行走：cloth_2 与 clothes/out/001 之间没有可推导的约定
+ * 资源路径为什么跟着行走：cloth_2 与 equipment/clothes/out/001 之间没有可推导的约定
  * （编号与 id 不连续，cloth_13 连内观图都没有），所以路径必须入库；
  * 而地图 `<id>/<id>`、特效 `effect/<key>/<key>.plist` 能按 id 推导，就不入库。
  */
@@ -1473,7 +1473,7 @@ export interface FashionDataEntry {
   id: string;
   label: string;
   description: string;
-  /** 图标资源路径（resources 相对路径，如 clothes/icon/001） */
+  /** 图标资源路径（resources 相对路径，如 equipment/clothes/icon/001） */
   icon: string;
   /** 内观资源路径（空串 = 无） */
   in?: string;
@@ -1999,7 +1999,7 @@ export const statusEffect = {
  */
 export const selectIndicator = {
   /** 光圈图集（resources 路径，不含扩展名；TexturePacker 图集 plist + png 同名） */
-  atlas: "effect/selected/select_monster@0",
+  atlas: "effect/select/monster@0",
   /** 相对怪物节点锚点的世界坐标偏移：怪物节点锚点居中（身体中心），负数向下压向脚底 */
   offset: new Vec2(0, -40),
   /** 循环播放帧率（每秒帧数） */
@@ -2060,7 +2060,7 @@ export function upgradeEffectConfig(): UiEffectConfig | null {
  * 参数语义与升级特效同一套，只有**挂点**不同：偏移是相对**掉落物图标中心**的
  * （客户端把它加到 `dropItemLayout.iconOffsetY` 上，所以 (0,0) = 与图标同心，与 #634 之前一致）。
  *
- * @param lightKey 光柱 key（`light_1`…`light_6`，来自 configs/light 的前缀表 / 自定义表）
+ * @param lightKey 光柱 key（`light-1`…`light-6`，来自 configs/light 的前缀表 / 自定义表）
  * @returns `uiEffects` 表里没有这一行返回 null（不演 —— 服务端没配 / 配置写错了，
  *          都不该拿客户端编的参数演）；`enabled = false` 由调用方判断，与升级特效同一个口径
  */
@@ -2241,7 +2241,7 @@ export function audioConfigOf(key: string): AudioConfigRow | null {
 /**
  * 音效路径 → Cocos 资源路径（**去掉扩展名**）
  *
- * `sounds/login_bg.wav` → `sounds/login_bg`：服务端存的是带扩展名的文件路径（管理端要能直接拼
+ * `audio/login-bgm.wav` → `audio/login-bgm`：服务端存的是带扩展名的文件路径（audio/ 下，kebab 命名）（管理端要能直接拼
  * 试听地址、要和文件系统一一对应），而 `resources.load` 认的是不带扩展名的资源路径。
  * 转换只在这里做一次 —— 别让每个播放点自己 `split(".")`。
  */

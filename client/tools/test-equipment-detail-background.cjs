@@ -3,8 +3,8 @@
  * 装备详情背景单测（client/tools/test-equipment-detail-background.cjs）
  *
  * 盯的不变量（改详情背景系统后必须全绿）：
- * · 资源表与磁盘一致（resources/backgrounds 下每个帧序列目录都登记、登记的每个都真实存在、key 唯一）
- * · 前后缀 15 种组合全覆盖、恰好一次，且用的是「前 15 个」背景（sfx_16000 ~ sfx_16014）
+ * · 资源表与磁盘一致（resources/effect/background 下每个图集都登记、登记的每个都真实存在、key 唯一）
+ * · 前后缀 15 种组合全覆盖、恰好一次，且用的是「前 15 个」背景（bg-16000 ~ bg-16014）
  * · 取用优先级：自定义表（精确 id → 基础件 key）→ 前后缀表 → 不显示；自定义指向未登记背景时回退
  * · 真实装备表抽查：从 items 总表解析出的装备能查到正确的背景
  * · 素材守卫：目录内帧名末尾序号升序（AnimationHelper 按序号排序 → 播放顺序正确）；
@@ -19,8 +19,8 @@ const fs = require("fs");
 const path = require("path");
 const { PROJECT_ROOT, prepare, check, finish } = require("./lib/configs-sandbox.cjs");
 
-// #235 散帧图集化：每个背景一个图集（resources/backgrounds/<key>/<key>.plist + .png）
-const BACKGROUND_DIR = path.join(PROJECT_ROOT, "assets", "resources", "backgrounds");
+// #753 平铺图集：每个背景一个 `<key>.plist` + 同名 png，全部摊在 resources/effect/background 下
+const BACKGROUND_DIR = path.join(PROJECT_ROOT, "assets", "resources", "effect", "background");
 const outDir = prepare("olua-equipment-detail-background", ["configs/background.ts"]);
 const {
   detailBackgroundResources,
@@ -46,15 +46,16 @@ function pngSize(file) {
 console.log("\n— A. 背景资源表 —");
 const diskKeys = fs
   .readdirSync(BACKGROUND_DIR, { withFileTypes: true })
-  .filter((entry) => entry.isDirectory() && /^sfx_\d+$/.test(entry.name))
-  .map((entry) => entry.name)
+  .filter((entry) => entry.isFile() && /^bg-\d+\.plist$/.test(entry.name))
+  .map((entry) => entry.name.replace(/\.plist$/, ""))
+  .filter((key) => fs.existsSync(path.join(BACKGROUND_DIR, `${key}.png`)))
   .sort();
 const registryKeys = detailBackgroundResources.map((resource) => resource.key).sort();
 check(registryKeys.length === diskKeys.length, `资源表数量与磁盘一致（${registryKeys.length} 个）`);
-check(JSON.stringify(registryKeys) === JSON.stringify(diskKeys), "资源表与磁盘目录一一对应（无多登/漏登/写错编号）");
+check(JSON.stringify(registryKeys) === JSON.stringify(diskKeys), "资源表与磁盘图集一一对应（无多登/漏登/写错编号）");
 check(new Set(detailBackgroundResources.map((r) => r.key)).size === detailBackgroundResources.length, "背景 key 唯一");
-check(detailBackgroundResources.every((r) => r.dir === `backgrounds/${r.key}`), "dir 路径 = backgrounds/<key>（resources 加载口径）");
-check(detailBackgroundResources.every((r) => fs.existsSync(path.join(BACKGROUND_DIR, r.key))), "登记的每个背景目录都真实存在");
+check(detailBackgroundResources.every((r) => r.dir === `effect/background/${r.key}`), "dir 路径 = effect/background/<key>（resources 加载口径）");
+check(detailBackgroundResources.every((r) => fs.existsSync(path.join(BACKGROUND_DIR, `${r.key}.plist`))), "登记的每个背景图集都真实存在");
 check(detailBackgrounds.size === detailBackgroundResources.length, "key → 资源 Map 与资源表等长");
 
 console.log("\n— B. 前后缀映射表（5 前缀 × 3 后缀 = 15 组合）—");
@@ -70,7 +71,7 @@ check(customEquipmentDetailBackgrounds.size === 0, "快照到达前自定义表�
 check(getAssignedDetailBackgrounds().length === 0, "快照到达前预加载清单为空（不加载任何背景）");
 
 const APPLIED = [];
-for (let s = 0; s < SUFFIX_COUNT; s++) for (let p = 0; p < PREFIX_COUNT; p++) APPLIED.push({ prefix: p, suffix: s, key: `sfx_${16000 + s * PREFIX_COUNT + p}` });
+for (let s = 0; s < SUFFIX_COUNT; s++) for (let p = 0; p < PREFIX_COUNT; p++) APPLIED.push({ prefix: p, suffix: s, key: `bg-${16000 + s * PREFIX_COUNT + p}` });
 applyEquipmentDetailBackgrounds({ backgrounds: APPLIED, customBackgrounds: [] });
 
 check(combos.every((combo) => prefixSuffixDetailBackgrounds.has(combo)), "apply 后 15 种组合全部有映射", `缺：${combos.filter((c) => !prefixSuffixDetailBackgrounds.has(c)).join("、") || "无"}`);
@@ -79,11 +80,11 @@ const assignedKeys = getAssignedDetailBackgrounds().map((r) => r.key);
 check(new Set(assignedKeys).size === combos.length, "前后缀表用到的背景互不重复");
 check(JSON.stringify(assignedKeys) === JSON.stringify(APPLIED.map((row) => row.key)), "assigned 顺序 = applied 登记顺序（预加载与映射同源）", assignedKeys.join(","));
 check(assignedKeys.every((key) => detailBackgrounds.has(key)), "映射到的背景都在资源表里");
-check(assignedKeys.every((key) => fs.existsSync(path.join(BACKGROUND_DIR, key))), "映射到的背景目录都在磁盘上");
+check(assignedKeys.every((key) => fs.existsSync(path.join(BACKGROUND_DIR, `${key}.plist`))), "映射到的背景图集都在磁盘上");
 
 // 资源清单里没有的 key：丢弃并留日志（配了不存在的编号，背景动画会加载失败）
 applyEquipmentDetailBackgrounds({
-  backgrounds: APPLIED.slice(0, 14).concat([{ prefix: 4, suffix: 2, key: "sfx_99999" }]),
+  backgrounds: APPLIED.slice(0, 14).concat([{ prefix: 4, suffix: 2, key: "bg-99999" }]),
   customBackgrounds: [],
 });
 check(prefixSuffixDetailBackgrounds.size === 14 && !prefixSuffixDetailBackgrounds.has("4|2"), "指向未登记目录的组合被丢弃（不进映射）");
@@ -112,7 +113,7 @@ customEquipmentDetailBackgrounds.set("weapon_all", pickOf(CUSTOM_KEY));
 check(backgroundOf(0, 0, "weapon_other") === first, "没登记的 id 不显示自定义背景");
 check(backgroundOf(4, 2, "weapon_all_p4s2") === CUSTOM_KEY, "自定义表按基础件 key 命中变体 id（整件装备的全部变体生效）");
 // 指向未登记目录的自定义条目：apply 时就被丢弃（不进 Map），取用回退前后缀表
-applyEquipmentDetailBackgrounds({ backgrounds: APPLIED, customBackgrounds: [{ equipment: "weapon_bad", key: "sfx_99999" }] });
+applyEquipmentDetailBackgrounds({ backgrounds: APPLIED, customBackgrounds: [{ equipment: "weapon_bad", key: "bg-99999" }] });
 check(!customEquipmentDetailBackgrounds.has("weapon_bad"), "自定义条目指向未登记目录 → apply 时丢弃并留日志");
 check(backgroundOf(0, 0, "weapon_bad") === first, "丢弃后的装备回退前后缀表（不显示成空白）");
 applyEquipmentDetailBackgrounds({ backgrounds: APPLIED, customBackgrounds: [{ equipment: "weapon_all", key: CUSTOM_KEY }] });
@@ -158,9 +159,8 @@ check(getEquipmentBaseKey("cloth_1_p3s2") === "cloth_1" && getEquipmentBaseKey("
 console.log("\n— E. 素材守卫（图集在位 / 帧序 / 尺寸一致 / 未裁剪）—");
 /** 读一个背景的图集帧（帧名 → 几何），plist 是 cocos2d-v3 格式 */
 function readAtlas(key) {
-  const dir = path.join(BACKGROUND_DIR, key);
-  const plistPath = path.join(dir, `${key}.plist`);
-  const pngPath = path.join(dir, `${key}.png`);
+  const plistPath = path.join(BACKGROUND_DIR, `${key}.plist`);
+  const pngPath = path.join(BACKGROUND_DIR, `${key}.png`);
   if (!fs.existsSync(plistPath) || !fs.existsSync(pngPath)) return null;
   const plist = fs.readFileSync(plistPath, "utf8");
   const frames = [];

@@ -10,12 +10,12 @@
  *   node client/tools/clean-role-empty-frames.cjs            # 预演（只列清单，不动文件）
  *   node client/tools/clean-role-empty-frames.cjs --apply    # 备份 + 删除
  *
- * 备份目录：.workbuddy/backup/role-empty-frames-<时间戳>/（保持 role/1、role/2 结构）
+ * 备份目录：.workbuddy/backup/role-empty-frames-<时间戳>/（保持 role/boy、role/girl 结构）
  */
 const fs = require("fs");
 const path = require("path");
 
-// 散帧已图集化（#235）移出 assets：role/1、role/2 原始逐帧在仓库根 _loose_frames_archive
+// 散帧已图集化（#235）移出 assets：role/boy、role/girl 原始逐帧在仓库根 _loose_frames_archive
 const ROOT = path.join(__dirname, "..", "..", "_loose_frames_archive", "role");
 const APPLY = process.argv.includes("--apply");
 

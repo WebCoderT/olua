@@ -315,9 +315,9 @@ if (sandbox) {
     check(/pageIndicator: \{ name: "mall_page_indicator", position: new Vec2\(0, -105\)/.test(block), "页码几何在配置里（居中于卡片区）");
     check(/firstButton:[\s\S]{0,200}prevButton:[\s\S]{0,200}nextButton:[\s\S]{0,200}lastButton:/.test(block), "首/上/下/末四个翻页按钮几何在配置里");
   }
-  check(/mallBackground: mallImage\("bg"\)/.test(imagesSource), "商城背景图登记在 uiImages（resources/mall/bg）");
-  check(/export const mallImage = \(name: string\) => `mall\/\$\{name\}`;/.test(imagesSource), "取图函数与目录收敛在 layout/images");
-  check(fs.existsSync(path.join(PROJECT_ROOT, "assets/resources/mall/bg.png")), "商城背景图素材存在（resources/mall/bg.png）");
+  check(/mallBackground: uiMall\("bg"\)/.test(imagesSource), "商城背景图登记在 uiImages（resources/ui/mall/bg）");
+  check(/export const uiMall = \(name: string\) => `ui\/mall\/\$\{name\}`;/.test(imagesSource), "取图函数与目录收敛在 layout/images");
+  check(fs.existsSync(path.join(PROJECT_ROOT, "assets/resources/ui/mall/bg.png")), "商城背景图素材存在（resources/ui/mall/bg.png）");
   check(fs.existsSync(path.join(PROJECT_ROOT, "assets/configs/game-config.ts.meta")) && fs.existsSync(path.join(PROJECT_ROOT, "assets/ui/components/dialogs/MallDialog.ts.meta")), "新增的 .ts 都带 .meta（进 Cocos 工程的前提）");
 
   //#endregion

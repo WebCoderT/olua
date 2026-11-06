@@ -336,7 +336,7 @@ export default class GameUiHelper {
     const node = UiHelper.createNode("combat_power", position);
     node.addChild(UiHelper.createSprite("combat_icon", uiImages.combatIcon, new Vec2(), iconSize));
     const labelX = iconSize.width / 2 + labelGap;
-    // 战斗力数字用默认字体（曾引用 fonts/combat 数字图集，素材包里从来没有过这个资源，
+    // 战斗力数字用默认字体（曾引用 font/combat 数字图集，素材包里从来没有过这个资源，
     // 加载恒失败后静默回退——2026-10-26 资源引用审计把它当断链清掉；要上数字图集先补素材）
     const labelNode = UiHelper.createLabel("combat_number", role.combat.toString(), Color.WHITE, 20, new Vec2(labelX, 0), new Size(200, iconSize.height), Label.HorizontalAlign.LEFT);
     labelNode.getComponent(UITransform).setAnchorPoint(0, 0.5);
@@ -1099,11 +1099,11 @@ export default class GameUiHelper {
   /**
    * 给地面掉落物挂上装备光柱（仅装备有；前缀 → 光柱的映射与特殊装备的自定义表在 configs/light）
    *
-   * 光柱是循环播放的 plist 图集动画（resources/effect/light/light_<编号>，400×400 画布），与边框同口径：
+   * 光柱是循环播放的 plist 图集动画（resources/effect/light/light-<编号>，400×400 画布），与边框同口径：
    * 帧偏移由图集的 spriteOffset 保留（打包时逐帧按 alpha 裁剪并记录回贴位置），精灵 trim 保持
    * createSprite 的缺省 false，各帧画布一致、画面帧间不跳。
    *
-   * 表现参数（摆位 / 缩放 / 旋转 / 一轮时长 / 开关）归服务端 `ui_effects` 的 `light_*` 行（#634，
+   * 表现参数（摆位 / 缩放 / 旋转 / 一轮时长 / 开关）归服务端 `ui_effects` 的 `light-*` 行（#634，
    * 管理端「特效管理」可改，与升级特效同一套取向）—— 这里只决定「这张装备用哪张光柱」。
    * 关掉时**连节点都不建**（不是建一个空精灵），与 `createUpgradeEffect` 的 enabled 口径一致。
    *
@@ -1133,7 +1133,7 @@ export default class GameUiHelper {
    * （随掉落物布局走，不在这里另配一套坐标），所以偏移 (0,0) 时与 #634 之前完全一致。
    * 缩放按横纵各自乘、旋转顺时针，与升级特效 / 武器外观同一套语义。
    *
-   * 节点名 = 前缀 + 光柱 key（`drop_light_light_1`）—— key 从 #542 起就是素材名、不含斜杠
+   * 节点名 = 前缀 + 光柱 key（`drop_light_light-1`）—— key 从 #542 起就是素材名、不含斜杠
    * （Cocos 对含 `/` 的节点名会报 `Node name can not include '/'`）。名字同时是
    * playLoopAtlasWithDuration 的动画状态名，改前缀会连带动画名，别单改一边。
    */

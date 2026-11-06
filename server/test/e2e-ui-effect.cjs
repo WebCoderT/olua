@@ -4,7 +4,7 @@
  *
  * 盯的不变量（改特效管理接口 / 快照下发 / seed 后必须全绿）：
  * 一、鉴权：观察员可读不可写（403）/ 玩家令牌 401 —— 改特效是运营动作，不是看数据
- * 二、seed：行由启动 seed 按出厂值补出（upgrade + 掉落光效 light_1~light_6、updatedAt = 0 =
+ * 二、seed：行由启动 seed 按出厂值补出（upgrade + 掉落光效 light-1~light-6、updatedAt = 0 =
  *     从没改过、列表按 seed 顺序而不是字典序）、没有新建 / 删除接口（POST / DELETE 404，
  *     行只来自客户端的消费代码）
  * 三、入参：缩放 / 时长越界 400、key 不认识 404（50145，不是参数错）
@@ -157,19 +157,19 @@ function saveEffect(key, token, body) {
 
     // #634：掉落光效六档也由 seed 补出（一档一行，六张图集是六份美术、各自可调）
     const allRows = list.data.list || [];
-    const lightRows = allRows.filter((row) => row.key.startsWith("light_"));
-    check(lightRows.length === 6, "seed 补出了 6 档掉落光效（light_1~light_6）", lightRows.map((row) => row.key).join("、"));
+    const lightRows = allRows.filter((row) => row.key.startsWith("light-"));
+    check(lightRows.length === 6, "seed 补出了 6 档掉落光效（light-1~light-6）", lightRows.map((row) => row.key).join("、"));
     check(
       lightRows.every((row) => shapeOk(row, MOTION_KEYS)),
       "六档光效的字段格式都正常（摆位数值不锁值，运营改了也照绿）",
       JSON.stringify(lightRows[0] || null),
     );
     check(
-      lightRows.every((row) => row.durationMs === (row.key === "light_1" ? 1400 : 1500)),
+      lightRows.every((row) => row.durationMs === (row.key === "light-1" ? 1400 : 1500)),
       "掉落光效出厂时长 = 帧数 × 100ms（1 号 14 帧 = 1400，2~6 号各 15 帧 = 1500）",
       lightRows.map((row) => `${row.key}:${row.durationMs}`).join(" "),
     );
-    check(allRows[0] && allRows[0].key === "upgrade", "列表按 seed 顺序（升级特效在最前；字典序会把 light_* 顶上来）", allRows[0] && allRows[0].key);
+    check(allRows[0] && allRows[0].key === "upgrade", "列表按 seed 顺序（升级特效在最前；字典序会把 light-* 顶上来）", allRows[0] && allRows[0].key);
 
     //#endregion
 
@@ -216,10 +216,10 @@ function saveEffect(key, token, body) {
     check(relistedRow && relistedRow.offsetX === 12 && relistedRow.enabled === false, "重读列表是新值（不是只改了返回值）", JSON.stringify(relistedRow));
 
     // #634：掉落光效走的是同一套接口与同一套字段（没有「光效专用」的第二条路）
-    const savedLight = await saveEffect("light_4", adminToken, { offsetY: -12, scaleX: 0.5, scaleY: 0.5, rotate: 45, durationMs: 900, enabled: false });
+    const savedLight = await saveEffect("light-4", adminToken, { offsetY: -12, scaleX: 0.5, scaleY: 0.5, rotate: 45, durationMs: 900, enabled: false });
     check(
       savedLight.code === 0 &&
-        savedLight.data.key === "light_4" &&
+        savedLight.data.key === "light-4" &&
         savedLight.data.offsetY === -12 &&
         savedLight.data.scaleX === 0.5 &&
         savedLight.data.rotate === 45 &&
@@ -246,11 +246,11 @@ function saveEffect(key, token, body) {
     check(!("updatedBy" in (snapshotRow || {})), "快照行不带追账字段（玩家侧只需要表现参数）", JSON.stringify(snapshotRow));
 
     // #634：掉落光效的参数也随快照下发（客户端 applyEquipmentLight 就按这一行演）
-    const snapshotLight = (snapshot.data.uiEffects || []).find((row) => row.key === "light_4");
+    const snapshotLight = (snapshot.data.uiEffects || []).find((row) => row.key === "light-4");
     check(!!snapshotLight, "快照里带掉落光效的行", JSON.stringify((snapshot.data.uiEffects || []).map((row) => row.key)));
     check(
       snapshotLight && snapshotLight.offsetY === -12 && snapshotLight.scaleX === 0.5 && snapshotLight.rotate === 45 && snapshotLight.durationMs === 900 && snapshotLight.enabled === false,
-      "快照里的 light_4 就是刚保存的那组参数（enabled=false 时客户端连节点都不建）",
+      "快照里的 light-4 就是刚保存的那组参数（enabled=false 时客户端连节点都不建）",
       JSON.stringify(snapshotLight),
     );
 

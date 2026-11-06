@@ -116,7 +116,7 @@ export class EquipmentDto {
   @ApiProperty({ description: `性别限制（取值域见 SEX_HINT：${SEX_HINT}）` })
   sex: string;
 
-  @ApiProperty({ description: "图标（resources 相对路径，如 clothes/icon/005；管理端列表缩略图与客户端图标共用）" })
+  @ApiProperty({ description: "图标（resources 相对路径，如 equipment/clothes/icon/005；管理端列表缩略图与客户端图标共用）" })
   icon: string;
 
   @ApiProperty({ description: "内观图集（角色弹窗里穿在身上的那套；resources 相对路径）" })
@@ -414,7 +414,7 @@ export class EquipmentSlotDto {
   @ApiProperty({ description: "槽位中文名（如「衣服」）" })
   label: string;
 
-  @ApiProperty({ description: "槽位底图（resources 相对路径，如 slots/cloth）" })
+  @ApiProperty({ description: "槽位底图（resources 相对路径，如 ui/slot/cloth）" })
   imageSrc: string;
 
   @ApiProperty({ description: "在角色弹窗里的位置分组（left / right / bottom / custom）" })

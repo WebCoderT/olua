@@ -24,7 +24,7 @@ export interface TitleLevelConfig {
   description: string;
   /** 升级到该等级消耗的绑定元宝（服务端 `titles.bind_gold`，管理端成长列表可改） */
   bindGold: number;
-  /** 头顶外显与弹窗展示的称号动画（resources 下的散图帧目录，不含扩展名，如 titles/sfx_13009） */
+  /** 头顶外显与弹窗展示的称号动画（resources 下的散图帧目录，不含扩展名，如 title/_13009） */
   animation: string;
   /** 动画每秒帧数 */
   animationFrameRate: number;
