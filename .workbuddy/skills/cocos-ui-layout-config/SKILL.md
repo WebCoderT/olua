@@ -205,6 +205,37 @@ export function textRef(key: string, params?: TextParams): TextRef { return { ke
 **验收组合**（本项目每轮都跑）：`tsc`（0 新错）→ `node tools/audit-config-leak.cjs`（PASS + 文案 key 覆盖 0 漏）→
 `node tools/test-texts.cjs` → 既有单测（背包整理/回收等）→ 与业务无关的旧审计（如点击穿透）→ `sleep 20s` 回写复检。
 
+## 六之二、反向审计：哪些配置项**根本没人读**（#747）
+
+收敛之后配置会长出「写了没人用」的字段（视觉调参时先加成，改完方案又没删；零件拆分后旧字段失去消费者）。
+grep 一个字段名只能证明「这个名字在哪儿出现过」，证明不了「这个配置项被读」。
+
+可靠做法是**枚举对象树 × 枚举访问链**：
+
+1. 用 `tools/lib/configs-sandbox.cjs` 把配置真编译进 node（`prepare(name, ["configs/hudLayout.ts"])`），
+   `require` 出来 `walk()` 枚举每个布局对象的全部路径（叶子 + 中间节点都要，中间节点被整体传出去时不能误判）；
+2. 扫 `assets/ui/**/*.ts` 里的成员访问链 `\b(\w+)((?:\.\w+)+)`，把第一个标识符还原成「相对布局根的路径」；
+3. 差集 = 「没有任何访问链命中」，再逐条人工确认。
+
+还原标识符是全部工作量所在，五个盲区缺一个就会误报一大片（实测从 300+ 条误报收敛到 4 条真死字段）：
+
+- **import 别名**：`import { guildDialogLayout as layout }` —— 别名必须当根，且要在扩展循环**之前**播种，
+  否则第一轮扩展就找不到 base、循环直接收敛；
+- **类属性别名**：`private readonly layout = xxxLayout` / `this.layout.guest...`；
+- **解构**：`const { cornerWidth, pieces } = dialogFrame.background;`（漏掉中间链段会把 `.pieces`
+  错误地绑到根上，症状是「明明解构了却报死」）；
+- **同名不同作用域**：`const row = layout.inviteRow` 与 `const row = layout.row` 在同一文件里先后出现 ——
+  别名要存**候选前缀集合**，不能「先到先得」；
+- **经参数传递**（唯一必须人工判断的一类）：`createTabStrip(dialog, ..., style)` 里读 `style.size`、
+  `createSectionTitle(name, text, geometry)` 里读 `geometry.position`、`ChatBubbles.layout()` 返回一个子对象
+  再读字段 —— 静态扫描看不到，只能看被调方实现。**这类不是死代码，千万别删**。
+
+真死字段的共同特征：注释说明的用途与代码现状已经不符（本项目四处都是这种）——「页签角标小字」后来改成
+往页签原文追加 `·N`、「退出/解散按钮各自的 position」后来统一走 `singleButtonPosition`、
+`createDialogTitle` 的 `defaultPosition` 是整图时代按缺省尺寸推的（九宫化后头行恒定 42px，早已对不上）。
+
+一次性脚本不要挂 CI：误报需要人判断，挂了只会被当噪音；把方法写在这里，下次清配置照着跑一遍。
+
 ## 七、相关
 
 - 素材/脚本文件级移动、`.meta` 成对搬迁与校验脚本：skill `cocos-asset-refactor`
