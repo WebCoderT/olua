@@ -934,31 +934,36 @@ export interface NpcRow {
 }
 
 /**
- * 商城特殊定价（#251）：管理端「商城定价」的行
+ * 商城分类（#758）：运营自建的陈列分组（动态增删行）
  *
- * 主键是商品 id（装备变体 id，如 `cloth_1_p3s2`）——**与配置表相反，这一张允许动态增删**：
- * 定价是运营数据，商品本体（装备清单）来自生成物，不归这里管。不在表里的商品走统一价
- * （`mall_settings` 单行）；「取消特殊价」= 删行。
+ * 分类只是陈列分组，不带任何数值；商品属于哪个分类由 `mall_goods.category_id` 标注。
+ * 删除前 service 层校验分类下没有上架商品。
  */
-export interface MallPriceRow {
-  /** 商品 id（装备变体 id；主键，动态增删） */
+export interface MallCategoryRow {
+  /** 分类 id（自建时生成，如 `mc_xxx`） */
   id: string;
-  /** 特殊售价（绑定元宝/件） */
-  price: number;
+  /** 显示名（管理端与客户端页签共用） */
+  label: string;
+  /** 排序值（小者在先；同值按 id） */
+  sort_order: number;
   updated_at: number;
 }
 
 /**
- * 商城统一价（#251）：单行配置（id 恒为 1）
+ * 商城上架商品（#758）：运营手动上架的装备变体（动态增删行）
  *
- * 全场默认售价（绑定元宝/件）；seed 自生成物 MALL_DEFAULT_PRICE（客户端 configs/mall 的
- * mallPrice），运营可改。特殊价优先于统一价（与客户端 getMallPrice 的取值口径一致）。
+ * 商品本体（名称/图标/部位）是装备数据，不在这里复制 —— 这里只存**售价**与**购买等级**
+ * 两个运营字段。不在表里的商品不在商城售卖（客户端陈列与购买都以这张表为准）。
  */
-export interface MallSettingsRow {
-  /** 恒为 1（单行表） */
-  id: number;
-  /** 全场统一售价（绑定元宝/件） */
-  default_price: number;
+export interface MallGoodRow {
+  /** 商品 id（装备变体 id，如 `cloth_1_p3s2`；主键，一件装备在商城只挂一行） */
+  id: string;
+  /** 所属分类（`mall_categories.id`） */
+  category_id: string;
+  /** 售价（绑定元宝/件；0 = 免费领取也合法） */
+  price: number;
+  /** 购买等级（角色等级不足时客户端禁用购买按钮、服务端拒绝成交） */
+  required_level: number;
   updated_at: number;
 }
 

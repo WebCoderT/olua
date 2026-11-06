@@ -112,14 +112,16 @@ export const uiTexts = {
   mall_good_missing_tip: "该商品已下架",
   /** 商城购买按钮 */
   label_mall_buy: "购 买",
+  /** 购买等级不足时的按钮文案（{level} = 商城配置的购买等级；按钮同时置灰禁点，#758） */
+  mall_level_lock: "Lv.{level} 解锁",
+  /** 当前分类没有商品 / 商城还没建分类时的空提示（#758） */
+  mall_empty_tip: "暂无商品，请稍后再来",
   /**
    * 商城卡片上的价格（{value} = configs/mall.getMallPrice 的结果）
    *
    * 带单位：卡片右侧孤零零一个数字会被读成「数量」而不是「要花多少」。
    */
   mall_price: "{value} 绑元",
-  /** 全场统一价说明（{price} = 服务端下发的统一价，见 configs/mall.getMallPrice） */
-  mall_price_note: "全场装备统一 {price} 绑定元宝",
   /** 商城分页：翻页按钮文案与页码（{page} = 当前页，{total} = 总页数，见 configs/mall.getMallGoods 分页） */
   label_mall_first_page: "首 页",
   label_mall_prev_page: "上一页",

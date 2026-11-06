@@ -1,51 +1,103 @@
 import { Injectable } from "@nestjs/common";
 import { DatabaseService } from "../database.service";
-import { MallPriceRow, MallSettingsRow } from "../rows";
+import { MallCategoryRow, MallGoodRow } from "../rows";
 
 /**
- * 商城定价数据访问（#251）
+ * 商城分类与上架商品数据访问（#758）
  *
- * 与称号 / 战魂等配置表**方向相反**：`mall_prices` **允许动态增删** —— 定价是运营数据，
- * 商品本体（装备清单）来自生成物，不归这里管。`mall_settings` 是单行表（id 恒为 1），
- * seed 自生成物 MALL_DEFAULT_PRICE，运营可改。
+ * 与称号 / 战魂等配置表**方向相反**：这两张表都**允许动态增删** —— 分类是运营自建的
+ * 陈列分组；商品是运营从装备变体里**挑出来上架**的那一部分（商品本体在装备数据里，
+ * 这里只存售价与购买等级）。seed 只在存量库迁移时灌「默认分类」，出厂数据为空：
+ * 商城开张前运营必须先建分类、再上架商品。
  */
 @Injectable()
 export class MallRepository {
   constructor(private readonly db: DatabaseService) {}
 
-  /** seed 统一价单行（已存在则跳过 —— 运营改过的值不会被配置更新覆盖回去） */
-  seedSettings(defaultPrice: number): void {
-    this.db.run(`INSERT OR IGNORE INTO mall_settings (id, default_price, updated_at) VALUES (1, ?, 0)`, [defaultPrice]);
+  //#region 分类
+
+  listCategories(): MallCategoryRow[] {
+    return this.db.all<MallCategoryRow>("SELECT * FROM mall_categories ORDER BY sort_order ASC, id ASC");
   }
 
-  getSettings(): MallSettingsRow | undefined {
-    return this.db.get<MallSettingsRow>("SELECT * FROM mall_settings WHERE id = 1");
+  findCategory(id: string): MallCategoryRow | undefined {
+    return this.db.get<MallCategoryRow>("SELECT * FROM mall_categories WHERE id = ?", [id]);
   }
 
-  updateSettings(defaultPrice: number): void {
-    this.db.run(`UPDATE mall_settings SET default_price = ?, updated_at = ? WHERE id = 1`, [defaultPrice, Date.now()]);
-  }
-
-  /** 全部特殊价行（商品清单在生成物里，列表由 service 合并后内存分页） */
-  listAll(): MallPriceRow[] {
-    return this.db.all<MallPriceRow>("SELECT * FROM mall_prices ORDER BY id ASC");
-  }
-
-  findByKey(goodId: string): MallPriceRow | undefined {
-    return this.db.get<MallPriceRow>("SELECT * FROM mall_prices WHERE id = ?", [goodId]);
-  }
-
-  /** upsert 一条特殊价（存在则改价，不存在则新增 —— 定价行动态增删的「增/改」半边） */
-  upsert(row: MallPriceRow): void {
+  insertCategory(row: MallCategoryRow): void {
     this.db.run(
-      `INSERT INTO mall_prices (id, price, updated_at) VALUES (?, ?, ?)
-       ON CONFLICT(id) DO UPDATE SET price = excluded.price, updated_at = excluded.updated_at`,
-      [row.id, row.price, row.updated_at],
+      "INSERT INTO mall_categories (id, label, sort_order, updated_at) VALUES (?, ?, ?, ?)",
+      [row.id, row.label, row.sort_order, row.updated_at],
     );
   }
 
-  /** 删一条特殊价（商品回到统一价 —— 「删」半边） */
-  remove(goodId: string): { changes: number } {
-    return this.db.execute("DELETE FROM mall_prices WHERE id = ?", [goodId]);
+  updateCategory(id: string, fields: { label?: string; sort_order?: number }): void {
+    const sets: string[] = ["updated_at = ?"];
+    const params: Array<string | number> = [Date.now()];
+    if (fields.label !== undefined) {
+      sets.push("label = ?");
+      params.push(fields.label);
+    }
+    if (fields.sort_order !== undefined) {
+      sets.push("sort_order = ?");
+      params.push(fields.sort_order);
+    }
+    params.push(id);
+    this.db.run(`UPDATE mall_categories SET ${sets.join(", ")} WHERE id = ?`, params);
+  }
+
+  deleteCategory(id: string): { changes: number } {
+    return this.db.execute("DELETE FROM mall_categories WHERE id = ?", [id]);
+  }
+
+  /** 分类下的上架商品数（删除分类前的校验用） */
+  countGoodsInCategory(categoryId: string): number {
+    return this.count("SELECT COUNT(1) AS total FROM mall_goods WHERE category_id = ?", [categoryId]);
+  }
+
+  //#endregion
+
+  //#region 上架商品
+
+  listGoods(): MallGoodRow[] {
+    return this.db.all<MallGoodRow>("SELECT * FROM mall_goods ORDER BY category_id ASC, id ASC");
+  }
+
+  findGood(id: string): MallGoodRow | undefined {
+    return this.db.get<MallGoodRow>("SELECT * FROM mall_goods WHERE id = ?", [id]);
+  }
+
+  insertGood(row: MallGoodRow): void {
+    this.db.run(
+      "INSERT INTO mall_goods (id, category_id, price, required_level, updated_at) VALUES (?, ?, ?, ?, ?)",
+      [row.id, row.category_id, row.price, row.required_level, row.updated_at],
+    );
+  }
+
+  updateGood(id: string, fields: { price?: number; required_level?: number }): void {
+    const sets: string[] = ["updated_at = ?"];
+    const params: Array<string | number> = [Date.now()];
+    if (fields.price !== undefined) {
+      sets.push("price = ?");
+      params.push(fields.price);
+    }
+    if (fields.required_level !== undefined) {
+      sets.push("required_level = ?");
+      params.push(fields.required_level);
+    }
+    params.push(id);
+    this.db.run(`UPDATE mall_goods SET ${sets.join(", ")} WHERE id = ?`, params);
+  }
+
+  /** 删一条上架商品（下架 —— 商品回到「不在商城售卖」状态） */
+  removeGood(id: string): { changes: number } {
+    return this.db.execute("DELETE FROM mall_goods WHERE id = ?", [id]);
+  }
+
+  //#endregion
+
+  private count(sql: string, params: Array<string | number> = []): number {
+    const row = this.db.get<{ total: number }>(sql, params);
+    return Number(row?.total ?? 0);
   }
 }

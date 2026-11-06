@@ -1482,18 +1482,56 @@ export type CreateQuest = {
   id: string;
 };
 
-export type UpdateMallSettings = {
+export type CreateMallCategory = {
   /**
-   * 全场统一售价（绑定元宝/件）
+   * 分类显示名（1~20 字）
    */
-  defaultPrice: number;
+  label: string;
+  /**
+   * 排序值（缺省排到最后）
+   */
+  sortOrder?: number;
 };
 
-export type PutMallPrice = {
+export type UpdateMallCategory = {
   /**
-   * 特殊售价（绑定元宝/件）
+   * 分类显示名（1~20 字）
    */
-  price: number;
+  label?: string;
+  /**
+   * 排序值（小者在先）
+   */
+  sortOrder?: number;
+};
+
+export type CreateMallGood = {
+  /**
+   * 商品 id（装备变体 id，如 cloth_1_p3s2）
+   */
+  id: string;
+  /**
+   * 所属分类 id
+   */
+  categoryId: string;
+  /**
+   * 售价（缺省 0 = 免费）
+   */
+  price?: number;
+  /**
+   * 购买等级（缺省 0 = 不限等级）
+   */
+  requiredLevel?: number;
+};
+
+export type UpdateMallGood = {
+  /**
+   * 售价（绑定元宝/件）
+   */
+  price?: number;
+  /**
+   * 购买等级
+   */
+  requiredLevel?: number;
 };
 
 export type UpdateFashion = {
@@ -5979,24 +6017,51 @@ export type NpcTalkResult = {
   quests: QuestState[];
 };
 
-export type MallSettings = {
+export type MallCategory = {
   /**
-   * 全场统一售价（绑定元宝/件；特殊价优先于它）
+   * 分类 id（自建时由服务端生成）
    */
-  defaultPrice: number;
+  id: string;
+  /**
+   * 显示名（管理端与客户端页签共用）
+   */
+  label: string;
+  /**
+   * 排序值（小者在先）
+   */
+  sortOrder: number;
+  /**
+   * 分类下的上架商品数
+   */
+  goodCount: number;
   /**
    * 最近更新时间（毫秒）
    */
   updatedAt: number;
 };
 
-export type MallPriceItem = {
+export type MallCategoryRemove = {
+  /**
+   * 被删除的分类 id
+   */
+  id: string;
+  /**
+   * 恒为 true（删除成功）
+   */
+  removed: boolean;
+};
+
+export type MallGoodItem = {
   /**
    * 商品 id（装备变体 id，如 cloth_1_p3s2）
    */
   id: string;
   /**
-   * 显示名（生成物已拼好前后缀）
+   * 所属分类 id
+   */
+  categoryId: string;
+  /**
+   * 显示名（装备配置已拼好前后缀）
    */
   label: string;
   /**
@@ -6004,20 +6069,24 @@ export type MallPriceItem = {
    */
   slot: string;
   /**
-   * 等级需求（与基础件一致）
+   * 装备的等级需求（装备数据，只读展示）
    */
   level: number;
   /**
-   * 特殊售价；null = 未定价（走统一价）
+   * 售价（绑定元宝/件；0 = 免费）
    */
-  price: number | null;
+  price: number;
   /**
-   * 特殊价的最近更新时间；未定价为 null
+   * 购买等级（角色等级不足时禁购）
    */
-  updatedAt: number | null;
+  requiredLevel: number;
+  /**
+   * 最近更新时间（毫秒）
+   */
+  updatedAt: number;
 };
 
-export type MallPricePage = {
+export type MallGoodPage = {
   /**
    * 总条数
    */
@@ -6031,12 +6100,12 @@ export type MallPricePage = {
    */
   size: number;
   /**
-   * 当前页的商品定价视图
+   * 当前页的上架商品视图
    */
-  list: MallPriceItem[];
+  list: MallGoodItem[];
 };
 
-export type MallPriceQuery = {
+export type MallGoodQuery = {
   /**
    * 页码，从 1 开始
    */
@@ -6058,24 +6127,43 @@ export type MallPriceQuery = {
    */
   order?: "asc" | "desc";
   /**
+   * 按分类筛（分类 id）
+   */
+  categoryId?: string;
+  /**
    * 按部位筛（取值：other1 / cloth / other2 / weapon / necklace / ring / accessories / shinguard / helmet / scapular / belt / wristband / shoes）
    */
   slot?: string;
-  /**
-   * 按定价状态筛：true 只看特殊价，false 只看未定价（走统一价）的商品
-   */
-  priced?: string;
 };
 
-export type MallPriceRemove = {
+export type MallGoodRemove = {
   /**
-   * 被删除特殊价的商品 id
+   * 被下架的商品 id
    */
   id: string;
   /**
-   * 恒为 true（删除成功）
+   * 恒为 true（下架成功）
    */
   removed: boolean;
+};
+
+export type MallGoodEntry = {
+  /**
+   * 商品 id（装备变体 id）
+   */
+  id: string;
+  /**
+   * 所属分类 id
+   */
+  categoryId: string;
+  /**
+   * 售价（绑定元宝/件）
+   */
+  price: number;
+  /**
+   * 购买等级（0 = 不限）
+   */
+  requiredLevel: number;
 };
 
 export type Fashion = {
@@ -6701,13 +6789,13 @@ export type GameConfigSnapshot = {
    */
   combatWeights: Record<string, number>;
   /**
-   * 商城全部商品定价（price = null 走统一价）
+   * 商城分类（运营自建的陈列分组；出厂数据为空）
    */
-  mallPrices: MallPriceItem[];
+  mallCategories: MallCategory[];
   /**
-   * 商城统一价（单行）
+   * 商城上架商品（id 必须在装备目录；售价与购买等级在此，客户端按此陈列与置灰）
    */
-  mallSettings: MallSettings;
+  mallGoods: MallGoodEntry[];
   /**
    * 具名掉落表（含 default 兜底）
    */

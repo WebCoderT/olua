@@ -4,8 +4,8 @@
 -- 导入：make config-import（整表替换；账号与角色存档不受影响）
 -- 表 36 张 / 行 3407 条
 -- olua config snapshot v1
--- tables: achievements,audio_settings,combat_weights,drop_tables,drugs,equip_aligns,equip_in_aligns,equipment_appearance,equipment_meta,equipment_slots,equipment_variants,equipments,fashions,growth_scalars,guide_settings,items,mall_prices,mall_settings,map_collisions,map_npcs,map_spawn_areas,maps,monster_drops,monster_presentation,monster_skills,monsters,npcs,quests,ranks,role_levels,runtime_params,skills,souls,statuses,titles,ui_effects
--- counts: achievements=24,audio_settings=12,combat_weights=7,drop_tables=5,drugs=11,equip_aligns=32,equip_in_aligns=31,equipment_appearance=1,equipment_meta=1,equipment_slots=13,equipment_variants=555,equipments=37,fashions=20,growth_scalars=6,guide_settings=1,items=5,mall_prices=1,mall_settings=1,map_collisions=1615,map_npcs=11,map_spawn_areas=62,maps=11,monster_drops=220,monster_presentation=220,monster_skills=3,monsters=220,npcs=21,quests=5,ranks=100,role_levels=60,runtime_params=1,skills=15,souls=37,statuses=4,titles=34,ui_effects=7
+-- tables: achievements,audio_settings,combat_weights,drop_tables,drugs,equip_aligns,equip_in_aligns,equipment_appearance,equipment_meta,equipment_slots,equipment_variants,equipments,fashions,growth_scalars,guide_settings,items,mall_categories,mall_goods,map_collisions,map_npcs,map_spawn_areas,maps,monster_drops,monster_presentation,monster_skills,monsters,npcs,quests,ranks,role_levels,runtime_params,skills,souls,statuses,titles,ui_effects
+-- counts: achievements=24,audio_settings=12,combat_weights=7,drop_tables=5,drugs=11,equip_aligns=32,equip_in_aligns=31,equipment_appearance=1,equipment_meta=1,equipment_slots=13,equipment_variants=555,equipments=37,fashions=20,growth_scalars=6,guide_settings=1,items=5,mall_categories=1,mall_goods=1,map_collisions=1615,map_npcs=11,map_spawn_areas=62,maps=11,monster_drops=220,monster_presentation=220,monster_skills=3,monsters=220,npcs=21,quests=5,ranks=100,role_levels=60,runtime_params=1,skills=15,souls=37,statuses=4,titles=34,ui_effects=7
 
 PRAGMA foreign_keys = OFF;
 BEGIN;
@@ -818,13 +818,13 @@ INSERT INTO "items" ("id", "type", "label", "description", "level", "sell_price"
 INSERT INTO "items" ("id", "type", "label", "description", "level", "sell_price", "max_stack", "updated_at", "icon") VALUES ('material_gem', 'material', '宝石', '蕴含灵气的宝石，可用于强化装备。', 10, 50, 99, 0, 'item/2030702');
 INSERT INTO "items" ("id", "type", "label", "description", "level", "sell_price", "max_stack", "updated_at", "icon") VALUES ('material_herb', 'material', '药草', '常见的草药，可用于炼制药品。', 1, 2, 99, 0, 'item/2030810');
 
--- ===== mall_prices（1 行）=====
-DELETE FROM "mall_prices";
-INSERT INTO "mall_prices" ("id", "price", "updated_at") VALUES ('cloth_1', 1111, 1793678868160);
+-- ===== mall_categories（1 行）=====
+DELETE FROM "mall_categories";
+INSERT INTO "mall_categories" ("id", "label", "sort_order", "updated_at") VALUES ('default', '默认分类', 0, 0);
 
--- ===== mall_settings（1 行）=====
-DELETE FROM "mall_settings";
-INSERT INTO "mall_settings" ("id", "default_price", "updated_at") VALUES (1, 1, 0);
+-- ===== mall_goods（1 行）=====
+DELETE FROM "mall_goods";
+INSERT INTO "mall_goods" ("id", "category_id", "price", "required_level", "updated_at") VALUES ('cloth_1', 'default', 1111, 0, 1793678868160);
 
 -- ===== map_collisions（1615 行）=====
 DELETE FROM "map_collisions";

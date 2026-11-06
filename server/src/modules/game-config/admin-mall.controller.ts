@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Patch, Put, Query } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from "@nestjs/common";
 import { ApiParam } from "@nestjs/swagger";
 import { ApiDataResponse } from "../../common/decorators/api-data-response.decorator";
 import { ApiAdminDoc } from "../../common/decorators/api-doc.decorator";
@@ -9,111 +9,156 @@ import { Permission } from "../../common/constants/permission";
 import { PageResult } from "../../common/interfaces/api-envelope.interface";
 import { MallPricingService } from "./mall-pricing.service";
 import {
-  MallPriceItemDto,
-  MallPricePageDto,
-  MallPriceQueryDto,
-  MallPriceRemoveDto,
-  MallSettingsDto,
-  PutMallPriceDto,
-  UpdateMallSettingsDto,
+  CreateMallCategoryDto,
+  CreateMallGoodDto,
+  MallCategoryDto,
+  MallCategoryRemoveDto,
+  MallGoodItemDto,
+  MallGoodPageDto,
+  MallGoodQueryDto,
+  MallGoodRemoveDto,
+  UpdateMallCategoryDto,
+  UpdateMallGoodDto,
 } from "./dto/mall.dto";
 
 /**
- * 管理端 · 商城定价（#251）
+ * 管理端 · 商城分类与上架商品（#251 / #758）
  *
- * **与配置表方向相反**：商品清单来自生成物（装备全量变体），价格才是服务端数据 ——
- * 特殊价行**动态增删**（PUT upsert / DELETE 删行回到统一价），这是全后台唯一允许
- * 「增删行」的定价数据（商品本体不归定价管）。未定价的商品走统一价（单行配置）。
- * 客户端购买以服务端复核价为准（客户端展示价仅用于显示，对接等 #248/#249）。
- * 写操作带 `@AuditTarget("mall")`。
+ * **先建分类，再在分类下上架商品**：分类是运营自建的陈列分组（POST 建行 / PATCH 改名与
+ * 排序 / DELETE 删空分类）；商品是**关联数据** —— 上架时选一件装备变体（id 必须在装备
+ * 目录里），之后**只许改售价与购买等级**，名称/图标/部位归装备管理管。下架 = 删行。
+ * 客户端购买以服务端复核为准（快照只管陈列与按钮置灰）。写操作带 `@AuditTarget("mall")`。
  */
 @ApiAudience("admin")
 @Controller("admin/mall")
 export class AdminMallController {
   constructor(private readonly mallPricingService: MallPricingService) {}
 
-  //#region 统一价
+  //#region 分类
 
-  @Get("settings")
+  @Get("categories")
   @ApiAdminDoc({
-    operationId: "adminMall.getSettings",
-    summary: "查询商城统一价",
+    operationId: "adminMall.listCategories",
+    summary: "商城分类列表",
     description:
-      "全场默认售价（绑定元宝/件），seed 自客户端 configs/mall 的 mallPrice。特殊价优先于统一价" +
-      "（与客户端 getMallPrice 的取值口径一致）。",
+      "运营自建的陈列分组（含每组的上架商品数）。排序 = sort_order 小者在先。" +
+      "出厂数据为空 —— 商城开张前必须先建分类（存量库迁移会带一个「默认分类」接住老特殊价）。",
     permissions: [Permission.GAME_CONFIG_READ],
   })
-  @ApiDataResponse(MallSettingsDto, { description: "统一价配置" })
-  getSettings(): MallSettingsDto {
-    return this.mallPricingService.getSettings();
+  @ApiDataResponse(MallCategoryDto, { description: "分类列表", isArray: true })
+  listCategories(): MallCategoryDto[] {
+    return this.mallPricingService.listCategories();
   }
 
-  @Patch("settings")
+  @Post("categories")
   @AuditTarget("mall")
   @ApiAdminDoc({
-    operationId: "adminMall.updateSettings",
-    summary: "修改商城统一价",
-    description: "全场默认售价（绑定元宝/件，0 = 免费赠送也合法）；**不影响已设置的特殊价**。",
+    operationId: "adminMall.createCategory",
+    summary: "新建分类",
+    description: "分类 id 由服务端生成，运营只给显示名（1~20 字）与排序值（缺省排到最后）。",
     permissions: [Permission.GAME_CONFIG_WRITE],
   })
-  @ApiDataResponse(MallSettingsDto, { description: "更新后的统一价配置" })
-  updateSettings(@Body() dto: UpdateMallSettingsDto): MallSettingsDto {
-    return this.mallPricingService.updateSettings(dto);
+  @ApiDataResponse(MallCategoryDto, { description: "新建的分类" })
+  createCategory(@Body() dto: CreateMallCategoryDto): MallCategoryDto {
+    return this.mallPricingService.createCategory(dto);
+  }
+
+  @Patch("categories/:id")
+  @AuditTarget("mall")
+  @ApiAdminDoc({
+    operationId: "adminMall.updateCategory",
+    summary: "修改分类（名字 / 排序）",
+    description: "分类只是陈列分组，不带任何数值 —— 可改的只有显示名与排序值。",
+    permissions: [Permission.GAME_CONFIG_WRITE],
+  })
+  @ApiParam({ name: "id", description: "分类 id" })
+  @ApiDataResponse(MallCategoryDto, { description: "更新后的分类" })
+  updateCategory(@Param("id") id: string, @Body() dto: UpdateMallCategoryDto): MallCategoryDto {
+    return this.mallPricingService.updateCategory(id, dto);
+  }
+
+  @Delete("categories/:id")
+  @AuditTarget("mall")
+  @ApiAdminDoc({
+    operationId: "adminMall.deleteCategory",
+    summary: "删除分类",
+    description:
+      "分类下还有上架商品 → 409（`50028`）—— 先移走或下架，不静默搬走运营摆好的货。" +
+      "分类不存在 → 404（`50025`）。",
+    permissions: [Permission.GAME_CONFIG_WRITE],
+  })
+  @ApiParam({ name: "id", description: "分类 id" })
+  @ApiDataResponse(MallCategoryRemoveDto, { description: "被删除的分类 id" })
+  deleteCategory(@Param("id") id: string): { id: string; removed: true } {
+    return this.mallPricingService.deleteCategory(id);
   }
 
   //#endregion
 
-  //#region 特殊价（动态增删）
+  //#region 上架商品
 
-  @Get("prices")
+  @Get("goods")
   @ApiAdminDoc({
-    operationId: "adminMall.listPrices",
-    summary: "商城定价列表（商品 × 价格合并视图）",
+    operationId: "adminMall.listGoods",
+    summary: "上架商品列表（商品 × 分类 × 售价合并视图）",
     description:
-      "商品清单 = 生成物里的装备全量变体（555 件，七部位 × 基础件 × 品质变体），**不在数据库里**；" +
-      "`price` 为 null 表示未定价（走统一价）。按 部位序 → 等级 → id 排序（与客户端商城陈列一致）。\n\n" +
-      "`keyword` 模糊匹配商品 id / 显示名，`slot` 按部位筛，`priced=true/false` 只看特殊价 / 未定价。" +
-      "**注意**：这里的列表接口没有 POST/DELETE 语义约束之外的东西 —— 特殊价的增删就是 PUT / DELETE 两条单件路由。",
+      "商品 = 运营手动上架的装备变体（`mall_goods` 行）；名称 / 部位 / 装备等级来自装备数据" +
+      "（**只读展示**），售价与购买等级才是商城字段。`categoryId` / `slot` / `keyword` 组合筛，" +
+      "按 分类序 → 装备等级 → id 排序。上架后装备被删的孤儿行照实列出（名称退回 id），便于清理。",
     permissions: [Permission.GAME_CONFIG_READ],
   })
-  @ApiQueryModel(MallPriceQueryDto)
-  @ApiDataResponse(MallPricePageDto, { description: "分页结果（list/total/page/size）" })
-  listPrices(@Query() query: MallPriceQueryDto): PageResult<MallPriceItemDto> {
-    return this.mallPricingService.listPrices(query);
+  @ApiQueryModel(MallGoodQueryDto)
+  @ApiDataResponse(MallGoodPageDto, { description: "分页结果（list/total/page/size）" })
+  listGoods(@Query() query: MallGoodQueryDto): PageResult<MallGoodItemDto> {
+    return this.mallPricingService.listGoods(query);
   }
 
-  @Put("prices/:id")
+  @Post("goods")
   @AuditTarget("mall")
   @ApiAdminDoc({
-    operationId: "adminMall.putPrice",
-    summary: "设置单件特殊价（upsert）",
+    operationId: "adminMall.createGood",
+    summary: "上架商品",
     description:
-      "**动态增删的「增/改」半边**：商品已有特殊价则改价，没有则新增一行。\n\n" +
-      "- 商品 id 必须在生成物的装备清单里，否则 404（`50021`）。\n" +
-      "- 删除特殊价（回到统一价）用 DELETE。",
+      "把一件装备变体挂到某个分类下（缺省售价 0 = 免费、购买等级 0 = 不限）。\n\n" +
+      "- 商品 id 不在装备目录 → 404（`50021`）；分类不存在 → 404（`50025`）。\n" +
+      "- 已上架再上架 → 409（`50026`，一件装备全商城只能挂一行，换分类先下架）。",
+    permissions: [Permission.GAME_CONFIG_WRITE],
+  })
+  @ApiDataResponse(MallGoodItemDto, { description: "上架后的商品视图" })
+  createGood(@Body() dto: CreateMallGoodDto): MallGoodItemDto {
+    return this.mallPricingService.createGood(dto);
+  }
+
+  @Patch("goods/:id")
+  @AuditTarget("mall")
+  @ApiAdminDoc({
+    operationId: "adminMall.updateGood",
+    summary: "修改商品（只许改售价与购买等级）",
+    description:
+      "**商品是关联数据**：名称 / 图标 / 部位 / 装备等级归装备管理管，这里只开放" +
+      "售价（`price`）与购买等级（`requiredLevel`）两个运营字段；改完立即对购买生效" +
+      "（客户端下次取快照后按钮按新等级置灰）。不在上架清单 → 404（`50021`）。",
     permissions: [Permission.GAME_CONFIG_WRITE],
   })
   @ApiParam({ name: "id", description: "商品 id（装备变体 id，如 cloth_1_p3s2）" })
-  @ApiDataResponse(MallPriceItemDto, { description: "更新后的商品定价视图" })
-  putPrice(@Param("id") id: string, @Body() dto: PutMallPriceDto): MallPriceItemDto {
-    return this.mallPricingService.putPrice(id, dto);
+  @ApiDataResponse(MallGoodItemDto, { description: "更新后的商品视图" })
+  updateGood(@Param("id") id: string, @Body() dto: UpdateMallGoodDto): MallGoodItemDto {
+    return this.mallPricingService.updateGood(id, dto);
   }
 
-  @Delete("prices/:id")
+  @Delete("goods/:id")
   @AuditTarget("mall")
   @ApiAdminDoc({
-    operationId: "adminMall.deletePrice",
-    summary: "删除单件特殊价（回到统一价）",
-    description:
-      "**动态增删的「删」半边**：删掉该商品的特殊价行，之后走统一价。\n\n" +
-      "- 商品 id 不在清单里 → 404（`50021`）。\n" +
-      "- 该商品本来就没有特殊价 → 404（`50021`，删无可删不静默成功）。",
+    operationId: "adminMall.deleteGood",
+    summary: "下架商品",
+    description: "删掉 `mall_goods` 行 = 下架，之后不在商城售卖（装备本体不受影响）。" +
+      "不在上架清单 → 404（`50021`，删无可删不静默成功）。",
     permissions: [Permission.GAME_CONFIG_WRITE],
   })
-  @ApiParam({ name: "id", description: "商品 id（装备变体 id，如 cloth_1_p3s2）" })
-  @ApiDataResponse(MallPriceRemoveDto, { description: "被删除特殊价的商品 id" })
-  removePrice(@Param("id") id: string): { id: string; removed: true } {
-    return this.mallPricingService.removePrice(id);
+  @ApiParam({ name: "id", description: "商品 id（装备变体 id）" })
+  @ApiDataResponse(MallGoodRemoveDto, { description: "被下架的商品 id" })
+  removeGood(@Param("id") id: string): { id: string; removed: true } {
+    return this.mallPricingService.removeGood(id);
   }
 
   //#endregion

@@ -336,7 +336,7 @@ RoleApi.select(id)  →  StorageManager.cacheServerRole(detail)   // 连 revisio
 
 | 路 | 时机 | 数据 |
 |---|---|---|
-| `snapshot` | **进程内只拉一次**（`snapshotLoaded` 守卫） | 十几张表的结构性配置（称号 / 装备 / 怪物 / 商城定价 / 掉落…） |
+| `snapshot` | **进程内只拉一次**（`snapshotLoaded` 守卫） | 十几张表的结构性配置（称号 / 装备 / 怪物 / 商城分类与上架商品 / 掉落…） |
 | `equipAlign` | 每次进图 | 装备外观对齐几何 |
 | `equipInAlign` | 每次进图 + **每次开角色信息弹窗再拉一次**（`refreshInAlign`） | 内观几何 |
 | `equipmentAppearance` | 每次进图 | 边框 / 详情背景的映射与显示效果（`applyAppearanceSection` 一次落两份） |

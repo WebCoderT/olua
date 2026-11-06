@@ -8,7 +8,7 @@ import { EquipmentMetaDto, EquipmentSlotDto, EquipmentVariantDto } from "./equip
 import { FashionDto } from "./fashion.dto";
 import { GrowthScalarDto, LevelDto } from "./growth.dto";
 import { ItemDto } from "./item.dto";
-import { MallPriceItemDto, MallSettingsDto } from "./mall.dto";
+import { MallCategoryDto, MallGoodEntryDto } from "./mall.dto";
 import { MapConfigDto, MapTypeGroupDto } from "../../map/dto/map.dto";
 import { UiEffectConfigDto } from "../../ui-effect/dto/ui-effect.dto";
 import { MonsterDto, MonsterPresentationDto } from "./monster.dto";
@@ -108,14 +108,15 @@ export class GameConfigSnapshotDto {
   })
   combatWeights!: Record<string, number>;
 
-  @ApiProperty({ description: "商城全部商品定价（price = null 走统一价）", type: [MallPriceItemDto] })
-  @Type(() => MallPriceItemDto)
-  mallPrices!: MallPriceItemDto[];
-
-  @ApiProperty({ description: "商城统一价（单行）" })
+  @ApiProperty({ description: "商城分类（运营自建的陈列分组；出厂数据为空）", type: [MallCategoryDto] })
   @ValidateNested()
-  @Type(() => MallSettingsDto)
-  mallSettings!: MallSettingsDto;
+  @Type(() => MallCategoryDto)
+  mallCategories!: MallCategoryDto[];
+
+  @ApiProperty({ description: "商城上架商品（id 必须在装备目录；售价与购买等级在此，客户端按此陈列与置灰）", type: [MallGoodEntryDto] })
+  @ValidateNested()
+  @Type(() => MallGoodEntryDto)
+  mallGoods!: MallGoodEntryDto[];
 
   @ApiProperty({ description: "具名掉落表（含 default 兜底）", type: [DropTableDto] })
   @Type(() => DropTableDto)

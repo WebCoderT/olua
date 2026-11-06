@@ -39,19 +39,18 @@ const SELL_PRICES = {
 };
 
 /**
- * 商城实付价（与 `MallService` 同口径：`mall_prices` 有行且非 null 用那一行的价，
- * 否则用 `mall_settings.default_price`）
+ * 商城实付价（与 `MallPricingService` 同口径：`mall_goods` 上架行的 price）
  *
- * 这里**不能假定「统一价」**：`cloth_1` 在快照里带着运营设的特殊价 1111，
- * 按统一价算预算就会在「准备：从商城买一件 cloth_1」这一步买不起 —— 假红。
+ * 这里**不能假定任何出厂价**：`cloth_1` 是迁移带过来的上架商品，售价以
+ * `mall_goods` 行为准（#758：上架行就是唯一价格，没有统一价/特殊价两层）——
+ * 不在上架清单里的商品购买直接 404。
  */
-const MALL_PRICES = Object.fromEntries(
+const MALL_GOODS = new Map(
   snap
-    .rows("mall_prices")
-    .map((row) => [row.id, row.price === null || row.price === undefined ? null : Number(row.price)]),
+    .optionalRows("mall_goods")
+    .map((row) => [row.id, Number(row.price)]),
 );
-const MALL_DEFAULT_PRICE = Number(snap.rows("mall_settings")[0]?.defaultPrice ?? 0);
-const mallPriceOf = (id) => MALL_PRICES[id] ?? MALL_DEFAULT_PRICE;
+const mallPriceOf = (id) => MALL_GOODS.get(id) ?? 0;
 
 /** 管理员注册码（#597 起造背包状态只能走管理端 PATCH） */
 const ADMIN_CODE = "e2e-sell-admin";

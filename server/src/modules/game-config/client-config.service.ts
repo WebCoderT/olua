@@ -65,8 +65,8 @@ export class ClientConfigService {
       // `combat_weights` 表（管理端「战斗力权重」页可改）。客户端本地只留空 Map ——
       // 「这件装备是不是更好」的提示与服务端算战力用同一组数字
       combatWeights: this.combatWeights.weights(),
-      mallPrices: this.mall.listPrices({ ...ALL }).list,
-      mallSettings: this.mall.getSettings(),
+      mallCategories: this.mall.listCategories(),
+      mallGoods: this.mall.snapshotGoods(),
       dropTables: this.drop.listTables().list,
       monsterDrops: this.drop.listMonsterDrops({ ...ALL }).list,
       // #367：技能与状态的整份配置（角色 + 怪物），客户端按 owner 分流消费

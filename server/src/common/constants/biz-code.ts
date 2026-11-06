@@ -209,8 +209,16 @@ export const BizCode = {
   MONSTER_NOT_FOUND: 50019,
   /** NPC 不存在（id 清单由客户端配置 seed 固定，不可增删行） */
   NPC_NOT_FOUND: 50020,
-  /** 商城商品不存在（商品清单 = 生成物的装备全量，id 不在清单里不能定价） */
+  /** 商城商品不在上架清单（#758 起商品 = 运营手动上架的装备变体，清单在 `mall_goods` 表） */
   MALL_GOOD_NOT_FOUND: 50021,
+  /** 商城分类不存在（分类由运营自建，id 在 `mall_categories`） */
+  MALL_CATEGORY_NOT_FOUND: 50025,
+  /** 商城商品已上架（同一件装备变体在商城只能挂一行；换分类先删再上） */
+  MALL_GOOD_ALREADY_LISTED: 50026,
+  /** 购买等级不足（服务端权威校验；客户端按钮只是提前置灰） */
+  MALL_LEVEL_NOT_ENOUGH: 50027,
+  /** 商城分类非空（分类下还有上架商品，先移走或下架再删） */
+  MALL_CATEGORY_NOT_EMPTY: 50028,
   /** 时装不存在（id 清单由客户端配置 seed 固定，不可增删行） */
   FASHION_NOT_FOUND: 50022,
   /** 具名掉落表不存在（seed 有 common/elite/boss/default，可动态增删） */

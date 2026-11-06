@@ -124,7 +124,7 @@ const NAV_GROUPS: NavBranch[] = [
           { to: "/items", label: "物品配置", permission: PERMISSION.GAME_CONFIG_READ },
           { to: "/drugs", label: "药品配置", permission: PERMISSION.GAME_CONFIG_READ },
           { to: "/fashions", label: "时装配置", permission: PERMISSION.GAME_CONFIG_READ },
-          { to: "/mall", label: "商城定价", permission: PERMISSION.GAME_CONFIG_READ },
+          { to: "/mall", label: "商城", permission: PERMISSION.GAME_CONFIG_READ },
         ],
       },
       {
