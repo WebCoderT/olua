@@ -3,6 +3,7 @@ import { equipmentsApi, equipmentSlotKeys, equipmentVariantsApi, formatTime, OCC
 import type { ConfigAttributes, Equipment, EquipmentVariantRebuildResult, PageResult } from "../api";
 import { AttributesGrid, crossedRangeKeys } from "../components/AttributesEditor";
 import { ConfirmDialog } from "../components/ConfirmDialog";
+import { FrameAnimation } from "../components/FrameAnimation";
 import { GameIcon } from "../components/GameImage";
 import { IconField } from "../components/ImagePicker";
 import { anyPickerOpen } from "../components/pickerStack";
@@ -552,7 +553,12 @@ export function EquipmentsPage() {
               {data?.list.map((item) => (
                 <tr key={item.id} className="transition hover:bg-slate-800/30">
                   <td className={tdClass}>
-                    <GameIcon path={item.icon ?? ""} alt={item.label} />
+                    {item.outAtlas ? (
+                      // 外观站立动画筛 d0（8 方向挤一张表）；没配外观的装备退回静态图标
+                      <FrameAnimation atlas={`${item.outAtlas}/stand`} alt={item.label} framePrefix="d0" />
+                    ) : (
+                      <GameIcon path={item.icon ?? ""} alt={item.label} />
+                    )}
                   </td>
                   <td className={`${tdClass} font-mono text-xs text-slate-300`}>{item.id}</td>
                   <td className={tdClass}>

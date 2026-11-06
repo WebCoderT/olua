@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { ACQUIRE_CHANNEL_LABELS, formatTime, PERMISSION, titleAnimation, titlesApi } from "../api";
 import type { PageResult, Title, TitleQuery } from "../api";
 import { GameConfigDialog } from "../components/GameConfigDialog";
-import { GameFrame } from "../components/GameImage";
+import { FrameAnimation } from "../components/FrameAnimation";
 import type { GameConfigFormValue } from "../components/GameConfigDialog";
 import { GameGrowthListDialog } from "../components/GameGrowthListDialog";
 import { Pagination } from "../components/Pagination";
@@ -172,7 +172,7 @@ export function TitlesPage() {
               {data?.list.map((item) => (
                 <tr key={item.level} className="transition hover:bg-slate-800/30">
                   <td className={tdClass}>
-                    <GameFrame atlas={titleAnimation(item.level)} alt={item.label} />
+                    <FrameAnimation atlas={titleAnimation(item.level)} alt={item.label} />
                   </td>
                   <td className={tdClass}>{item.level}</td>
                   <td className={tdClass}>

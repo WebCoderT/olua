@@ -17,6 +17,7 @@ import {
   drugText,
   equipmentBaseId,
   equipmentIcon,
+  equipmentOutAtlas,
   equipmentIds,
   equipmentLevel,
   equipmentName,
@@ -39,6 +40,7 @@ import {
   MONSTER_TIER_LABELS,
   monsterIcon,
   monsterInfo,
+  monsterOut,
   monsterRows,
   npcInfo,
   npcRows,
@@ -70,10 +72,16 @@ export interface EntityImage {
   ext?: "png" | "jpg";
   frame?: string;
   /**
-   * 图集是否**循环播放**（#749）：只给「挑素材本身」的清单用（装备边框 / 详情背景），
-   * 光效与流动感看首帧判断不了。缺省 false = 静态首帧，列表页几十行不该都起播放器。
+   * 图集是否**循环播放**：边框 / 背景的光效流动（#749）、称号 / 战魂 / NPC 的整段动画、
+   * 怪物 / 装备的站立动作 —— 首帧都判断不了「动起来长什么样」。
+   * 开了这一档 `EntityImage` 会优先播 `frame`（没有 `icon` 时才轮到静态首帧）。
    */
   animate?: boolean;
+  /**
+   * 只播帧名以它开头的帧：怪物 / 装备的 `stand` 表把 8 个方向挤在一张图集里
+   * （`d0_00 … d7_xx`），筛 `d0` 才是客户端里「朝下站立」那一条循环。
+   */
+  framePrefix?: string;
 }
 
 /** 选择器里的一项；也是卡片能渲染的最小信息 */
@@ -217,7 +225,12 @@ export function entityImage(kind: EntityKind, id: string): EntityImage {
     case "equipment": {
       const base = equipmentBaseId(id);
       const icon = base ? equipmentIcon(base) : "";
-      return icon ? { icon } : {};
+      // 外观站立动画：同款变体共用一套外观，基础件剥回来查（没配外观的退静态图标）
+      const outAtlas = equipmentOutAtlas(id);
+      return {
+        ...(icon ? { icon } : {}),
+        ...(outAtlas ? { frame: `${outAtlas}/stand`, animate: true, framePrefix: "d0" } : {}),
+      };
     }
     case "item": {
       const icon = itemLikeIcon(id);
@@ -240,13 +253,18 @@ export function entityImage(kind: EntityKind, id: string): EntityImage {
       return preview ? { icon: preview, ext: "jpg" } : {};
     }
     case "monster": {
+      // 站立动画（`monster/out/<key>/stand` 筛 `d0`）优先；缺演示行的怪退回静态头像
       const icon = monsterIcon(id);
-      return icon ? { icon } : {};
+      const out = monsterOut(id);
+      return {
+        ...(icon ? { icon } : {}),
+        ...(out ? { frame: `${out}/stand`, animate: true, framePrefix: "d0" } : {}),
+      };
     }
     case "npc": {
-      // NPC 的素材是图集动画目录（`npc/2125`），缩略图取首帧
+      // NPC 的素材是图集动画目录（`npc/2125`），整段循环播
       const src = npcInfo(id)?.src ?? "";
-      return src ? { frame: src } : {};
+      return src ? { frame: src, animate: true } : {};
     }
     default:
       return {};
@@ -473,11 +491,11 @@ export function levelNote(kind: LevelKind, level: number): string {
 export function levelImage(kind: LevelKind, level: number): EntityImage {
   if (kind === "title") {
     const meta = titleMeta(level);
-    return meta?.animation ? { frame: meta.animation } : {};
+    return meta?.animation ? { frame: meta.animation, animate: true } : {};
   }
   if (kind === "soul") {
     const meta = soulMeta(level);
-    return meta?.animation ? { frame: meta.animation } : {};
+    return meta?.animation ? { frame: meta.animation, animate: true } : {};
   }
   // 军衔没有动画资源（客户端也只显示名字）
   return {};
