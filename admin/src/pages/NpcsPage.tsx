@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { formatTime, npcsApi, PERMISSION } from "../api";
 import type { Npc, PageResult } from "../api";
-import { GameFrame } from "../components/GameImage";
+import { FrameAnimation } from "../components/FrameAnimation";
 import { IconField } from "../components/ImagePicker";
 import { anyPickerOpen } from "../components/pickerStack";
 import { Modal } from "../components/Modal";
@@ -144,7 +144,7 @@ export function NpcsPage() {
               {data?.list.map((item) => (
                 <tr key={item.id} className="transition hover:bg-slate-800/30">
                   <td className={tdClass}>
-                    <GameFrame atlas={item.src} alt={item.label} />
+                    <FrameAnimation atlas={item.src} alt={item.label} />
                   </td>
                   <td className={`${tdClass} font-mono text-xs text-slate-300`}>{item.id}</td>
                   <td className={`${tdClass} font-medium text-slate-100`}>{item.label}</td>

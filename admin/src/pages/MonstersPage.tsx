@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
-import { dropApi, formatTime, MONSTER_TIER_LABELS, monsterIcon, monstersApi, PERMISSION, skillsApi } from "../api";
+import { dropApi, formatTime, MONSTER_TIER_LABELS, monsterIcon, monsterOut, monstersApi, PERMISSION, skillsApi } from "../api";
 import type { AdminMonster, DropTable, Monster, MonsterAttributes, PageResult, Skill, UpdateMonster } from "../api";
 import { AttributesGrid, crossedRangeKeys } from "../components/AttributesEditor";
+import { FrameAnimation } from "../components/FrameAnimation";
 import { GameIcon } from "../components/GameImage";
 import { Modal } from "../components/Modal";
 import { Pagination } from "../components/Pagination";
@@ -699,7 +700,12 @@ export function MonstersPage() {
               {data?.list.map((item) => (
                 <tr key={item.id} className="transition hover:bg-slate-800/30">
                   <td className={tdClass}>
-                    <GameIcon path={monsterIcon(item.id)} alt={item.label} />
+                    {monsterOut(item.id) ? (
+                      // 站立动画筛 d0（客户端里「朝下站立」那条循环）；没配外观的怪退回静态头像
+                      <FrameAnimation atlas={`${monsterOut(item.id)}/stand`} alt={item.label} framePrefix="d0" />
+                    ) : (
+                      <GameIcon path={monsterIcon(item.id)} alt={item.label} />
+                    )}
                   </td>
                   <td className={`${tdClass} font-mono text-xs text-slate-300`}>{item.id}</td>
                   <td className={`${tdClass} font-medium text-slate-100`}>{item.label}</td>

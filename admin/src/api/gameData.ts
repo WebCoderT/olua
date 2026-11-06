@@ -64,12 +64,14 @@ export interface GrowthStepMeta {
   animation: string;
 }
 
-/** 怪物的一行（选择器 / 任务目标 / 成就条件共用） */
+/** 怪物的一行（选择器 / 任务目标 / 成就条件共用；`out` 供帧动画预览） */
 export interface MonsterInfo {
   id: string;
   label: string;
   level: number;
   tier: string;
+  /** 外观图集目录（`monster/out/<key>`；缺演示行的怪是空串） */
+  out: string;
 }
 
 /** NPC 的一行（`src` 是图集动画目录，选择器拿它当缩略图） */
@@ -85,6 +87,8 @@ interface BaseInfo {
   level: number;
   icon: string;
   slot: string;
+  /** 外观图集目录（帧动画预览用；同款变体共用一套外观） */
+  outAtlas: string;
 }
 
 let loaded = false;
@@ -101,6 +105,7 @@ let statuses = new Map<string, Status>();
 let fashions = new Map<string, Fashion>();
 let monsterList: MonsterInfo[] = [];
 let monsterIconOf = new Map<string, string>();
+let monsterOutOf = new Map<string, string>();
 let npcList: NpcInfo[] = [];
 let titles: Title[] = [];
 let souls: Soul[] = [];
@@ -140,7 +145,7 @@ function index(data: GameConfigSnapshot): void {
   for (const row of data.equipments) {
     // 前缀 0 + 后缀 0 的行显示字段 = 基础件本身（同一次快照里一定有这一行，见 equipment-variant 展开规则）
     if (row.prefix !== 0 || row.suffix !== 0) continue;
-    bases.set(row.baseId, { label: row.label, level: row.level, icon: row.icon, slot: row.slot });
+    bases.set(row.baseId, { label: row.label, level: row.level, icon: row.icon, slot: row.slot, outAtlas: row.outAtlas });
   }
 
   slotLabels = new Map(data.equipmentSlots.map((row) => [row.key, row.label]));
@@ -157,8 +162,15 @@ function index(data: GameConfigSnapshot): void {
   ranks = [...data.ranks].sort((a, b) => a.level - b.level);
 
   monsterIconOf = new Map(data.monsterPresentations.map((row) => [row.id, row.icon]));
+  monsterOutOf = new Map(data.monsterPresentations.map((row) => [row.id, row.out]));
   monsterList = data.monsters
-    .map((row) => ({ id: row.id, label: row.label, level: row.level, tier: row.tier }))
+    .map((row) => ({
+      id: row.id,
+      label: row.label,
+      level: row.level,
+      tier: row.tier,
+      out: monsterOutOf.get(row.id) ?? "",
+    }))
     // 排序不用字典序：怪 id 是 "1" / "2" / "10"，字典序会把 10 排在 2 前面，
     // 按等级排才符合「打怪的推进顺序」
     .sort((a, b) => a.level - b.level || Number(a.id) - Number(b.id));
@@ -224,6 +236,17 @@ export function equipmentText(id: string): string {
 /** 装备基础件 id → 图标（商城商品 = 装备，同一份） */
 export function equipmentIcon(id: string): string {
   return variants.get(id)?.icon ?? bases.get(id)?.icon ?? "";
+}
+
+/**
+ * 装备 id → 外观图集目录（`equipment/clothes/out/005`；管理端帧动画预览用）
+ *
+ * 外观挂在基础件上（同款变体共用一套），变体 id 先剥回基础件再查。
+ * 库里没配外观的装备返回空串 —— 调用方落回静态图标。
+ */
+export function equipmentOutAtlas(id: string): string {
+  const base = equipmentBaseId(id);
+  return variants.get(base ?? "")?.outAtlas ?? bases.get(base ?? "")?.outAtlas ?? "";
 }
 
 /** 全部装备 id（基础件 + 全部前后缀变体，与角色身上穿的 id 同一形态） */
@@ -440,6 +463,11 @@ export function monsterInfo(id: string): MonsterInfo | null {
 /** 怪物 key → 图标（`monster_presentation` 表；数值在 `monsters` 表） */
 export function monsterIcon(id: string): string {
   return monsterIconOf.get(id) ?? "";
+}
+
+/** 怪物 key → 外观图集目录（`monster/out/<key>`；管理端帧动画预览用，缺演示行返回空串） */
+export function monsterOut(id: string): string {
+  return monsterOutOf.get(id) ?? "";
 }
 
 /** 全部 NPC（按编号；同一批「未激活」的也照实列出来 —— 地图上引用得到就选得到） */

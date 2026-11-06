@@ -28,6 +28,8 @@ const BLANK_FRAME_MAX_AREA = 4;
 
 /** 一帧：图集里的打包区域 + 摆放信息（rotated = 打包时转了 90°） */
 export type AtlasFrame = {
+  /** plist frames 里的帧名（前缀过滤用，如怪物 stand 表的 `d0_00.png`） */
+  key: string;
   x: number;
   y: number;
   w: number;
@@ -98,6 +100,7 @@ export function parseAtlasFrames(xml: string): AtlasFrame[] | null {
     let source = rectNumbers(valueOf(node, "sourceSize"));
     if (source.length < 2) source = [placed[2], placed[3]];
     frames.push({
+      key: node.previousElementSibling?.textContent ?? "",
       x: rect[0],
       y: rect[1],
       w: rect[2],
@@ -118,10 +121,15 @@ export function parseAtlasFrames(xml: string): AtlasFrame[] | null {
  * 载入一份图集动画（模块级缓存）：路径拼法两级尝试（`目录/同名` 优先、退回「路径即基名」），
  * 与 `GameFrame.loadFirstFrame` 同一套 —— 边框 `effect/border/border-30123` 与背景
  * `effect/background/bg-16000` 都是「`目录/同名` 优先、退回「路径即基名」」两级尝试。全都不存在返回 null。
+ *
+ * `framePrefix`：只播 plist 文档序里帧名以它开头的帧。怪物 / 装备的 `stand` 表把
+ * **8 个方向挤在一张图集里**（`d0_00 … d7_xx`），不筛就八方向来回翻；筛 `d0` 才是
+ * 客户端里「朝下站立」那一条循环。缓存键带上前缀，同一图集可以同时播多个方向。
  */
-export function loadAtlasAnimation(atlasPath: string): Promise<AtlasAnimation | null> {
+export function loadAtlasAnimation(atlasPath: string, framePrefix = ""): Promise<AtlasAnimation | null> {
   const base = atlasPath.replace(/^\/+|\/+$/g, "");
-  const cached = animationCache.get(base);
+  const cacheKey = `${base}#${framePrefix}`;
+  const cached = animationCache.get(cacheKey);
   if (cached) return cached;
   const name = base.split("/").pop() ?? base;
   const task = (async () => {
@@ -129,8 +137,10 @@ export function loadAtlasAnimation(atlasPath: string): Promise<AtlasAnimation | 
       try {
         const response = await fetch(`${GAME_RES_ROOT}/${candidate}.plist`, { cache: "force-cache" });
         if (!response.ok) continue;
-        const frames = parseAtlasFrames(await response.text());
-        if (!frames) continue;
+        const parsed = parseAtlasFrames(await response.text());
+        if (!parsed) continue;
+        const frames = framePrefix ? parsed.filter((frame) => frame.key.startsWith(framePrefix)) : parsed;
+        if (frames.length === 0) continue;
         const image = await loadImage(`${GAME_RES_ROOT}/${candidate}.png`);
         return { image, frames };
       } catch {
@@ -139,7 +149,7 @@ export function loadAtlasAnimation(atlasPath: string): Promise<AtlasAnimation | 
     }
     return null;
   })();
-  animationCache.set(base, task);
+  animationCache.set(cacheKey, task);
   return task;
 }
 
@@ -200,6 +210,7 @@ export function FrameAnimation({
   alt,
   size = 40,
   frameRate = 10,
+  framePrefix,
   zoomable = true,
 }: {
   atlas: string;
@@ -208,6 +219,8 @@ export function FrameAnimation({
   size?: number;
   /** 每秒帧数（与客户端同素材的播放帧率保持一致，边框 / 背景都是 10） */
   frameRate?: number;
+  /** 只播帧名以它开头的帧（怪物 / 装备 stand 表按方向切，见 loadAtlasAnimation） */
+  framePrefix?: string;
   zoomable?: boolean;
 }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -220,7 +233,7 @@ export function FrameAnimation({
     let animation: AtlasAnimation | null = null;
     let unsubscribe: (() => void) | null = null;
     let lastSlot = -1;
-    void loadAtlasAnimation(atlas).then((loaded) => {
+    void loadAtlasAnimation(atlas, framePrefix).then((loaded) => {
       if (cancelled) return;
       if (!loaded) {
         setFailed(true);
@@ -249,7 +262,7 @@ export function FrameAnimation({
       cancelled = true;
       unsubscribe?.();
     };
-  }, [atlas, size, frameRate]);
+  }, [atlas, size, frameRate, framePrefix]);
 
   if (!atlas || failed) {
     return (
@@ -278,7 +291,9 @@ export function FrameAnimation({
       <Zoomable alt={alt} onZoom={() => setZoom(true)}>
         {canvas}
       </Zoomable>
-      {zoom ? <AnimationLightbox atlas={atlas} alt={alt} frameRate={frameRate} onClose={() => setZoom(false)} /> : null}
+      {zoom ? (
+        <AnimationLightbox atlas={atlas} alt={alt} frameRate={frameRate} framePrefix={framePrefix} onClose={() => setZoom(false)} />
+      ) : null}
     </>
   );
 }
@@ -288,11 +303,13 @@ function AnimationLightbox({
   atlas,
   alt,
   frameRate,
+  framePrefix,
   onClose,
 }: {
   atlas: string;
   alt?: string;
   frameRate: number;
+  framePrefix?: string;
   onClose: () => void;
 }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -300,7 +317,7 @@ function AnimationLightbox({
     let cancelled = false;
     let unsubscribe: (() => void) | null = null;
     let lastSlot = -1;
-    void loadAtlasAnimation(atlas).then((loaded) => {
+    void loadAtlasAnimation(atlas, framePrefix).then((loaded) => {
       if (cancelled || !loaded) return;
       const canvas = canvasRef.current;
       if (!canvas) return;
@@ -323,7 +340,7 @@ function AnimationLightbox({
       cancelled = true;
       unsubscribe?.();
     };
-  }, [atlas, frameRate]);
+  }, [atlas, frameRate, framePrefix]);
   return (
     <Lightbox alt={alt} onClose={onClose}>
       <canvas

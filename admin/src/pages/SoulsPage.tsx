@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { formatTime, PERMISSION, soulAnimation, soulsApi } from "../api";
 import type { PageResult, Soul } from "../api";
 import { GameConfigDialog } from "../components/GameConfigDialog";
-import { GameFrame } from "../components/GameImage";
+import { FrameAnimation } from "../components/FrameAnimation";
 import type { GameConfigFormValue } from "../components/GameConfigDialog";
 import { GameGrowthListDialog } from "../components/GameGrowthListDialog";
 import { Pagination } from "../components/Pagination";
@@ -147,7 +147,7 @@ export function SoulsPage() {
               {data?.list.map((item) => (
                 <tr key={item.level} className="transition hover:bg-slate-800/30">
                   <td className={tdClass}>
-                    <GameFrame atlas={soulAnimation(item.level)} alt={item.label} />
+                    <FrameAnimation atlas={soulAnimation(item.level)} alt={item.label} />
                   </td>
                   <td className={tdClass}>{item.level}</td>
                   <td className={tdClass}>
