@@ -33,6 +33,7 @@ export function EntityPicker({
   current,
   emptyHint,
   multiple = false,
+  imageSize,
   onSelect,
   onSelectMany,
   onClose,
@@ -46,6 +47,8 @@ export function EntityPicker({
   emptyHint?: string;
   /** 多选：勾若干项后一次性交回 */
   multiple?: boolean;
+  /** 候选图标的边长（默认 32；挑边框 / 背景这种「图本身就是内容」的给大一点，见 EntityPickerList） */
+  imageSize?: number;
   /** 单选回调（多选时不需要，走 `onSelectMany`） */
   onSelect?: (id: string) => void;
   /** 多选时的提交回调（与 `onSelect` 二选一，`multiple` 时用它） */
@@ -99,6 +102,7 @@ export function EntityPicker({
         current={current}
         selected={multiple ? picked : undefined}
         emptyHint={emptyHint}
+        imageSize={imageSize}
         resetKey={open}
         onPick={(id) => {
           if (multiple) {

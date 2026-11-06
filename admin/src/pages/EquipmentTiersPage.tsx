@@ -1,8 +1,11 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { equipmentBackgroundApi, equipmentBorderApi, equipmentMetaApi, PERMISSION } from "../api";
 import type { AppearanceAssignment, AppearanceItem, CustomAppearance, EquipmentMeta } from "../api";
-import { GameFrame } from "../components/GameImage";
-import { Button, Card, Input, Select, Spinner } from "../components/ui";
+import { FrameAnimation } from "../components/FrameAnimation";
+import { EntityPicker } from "../components/entity/EntityPicker";
+import { appearanceOptions } from "../components/entity/catalog";
+import type { EntityOption } from "../components/entity/catalog";
+import { Button, Card, Input, Spinner } from "../components/ui";
 import { PageHeader } from "../components/PageHeader";
 import { hasPermission } from "../store/session";
 import { toastSuccess } from "../store/toast";
@@ -25,6 +28,12 @@ import { toastSuccess } from "../store/toast";
  *
  * 棋盘保存仍是**整边替换**：本页只改 assignments，items 与 customs **原样带回**，
  * 与清单页互不覆盖的性质不变。
+ *
+ * ## 格子挑法（#749）
+ * 每格不再给 key 下拉框：格子本身是「帧动画预览 + 别名 + key」的按钮，点开是
+ * `EntityPicker`（搜索 key / 别名 / 分组 + 分组 chips + 大图标），与管理端挑装备、
+ * 挑物品用的是同一个选择器。候选池由 `appearanceOptions()` 从清单条目派生 ——
+ * 别名当 label、分组当 group，运营不用背 sfx 编号。
  */
 
 //#region 档位定义（#697 的 TiersDialog 迁出为页内卡片）
@@ -251,7 +260,7 @@ interface BoardConfig {
   /** 清单所在页的名字（引导语用） */
   listPage: string;
   noun: string;
-  /** 棋盘格首帧预览路径 */
+  /** 棋盘格帧动画预览路径（resources 相对目录） */
   atlasOf: (key: string) => string;
   savedToast: string;
 }
@@ -308,6 +317,8 @@ function AssociationBoard({ config, metaVersion }: { config: BoardConfig; metaVe
   const prefixLabels = meta?.prefixLabels ?? [];
   const suffixLabels = meta?.suffixLabels ?? [];
   const prefixCount = Math.max(prefixLabels.length, 1);
+  /** 候选池（#749）：清单条目 → 可视化选项，格子里点开选择器用 */
+  const options = useMemo(() => appearanceOptions(config.kind, items ?? []), [config.kind, items]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -377,7 +388,7 @@ function AssociationBoard({ config, metaVersion }: { config: BoardConfig; metaVe
   return (
     <Card
       title={config.title}
-      description={`哪个前后缀品质用哪个${config.noun}。每格从${config.noun}清单里选一个 —— 清单与显示效果在「${config.listPage}」页管理；每格都必须选：缺哪格，哪个品质就没有${config.noun}。`}
+      description={`哪个前后缀品质用哪个${config.noun}。点格子挑 —— 预览会动，名字是清单里起的别名、底下一行是真实 key（搜索 key / 别名 / 分组都能找到）。清单与显示效果在「${config.listPage}」页管理；每格都必须选：缺哪格，哪个品质就没有${config.noun}。`}
       actions={
         loading ? (
           <Spinner />
@@ -413,20 +424,18 @@ function AssociationBoard({ config, metaVersion }: { config: BoardConfig; metaVe
                     <td className="text-xs text-slate-400">{suffix}</td>
                     {prefixLabels.map((_, p) => {
                       const combo = s * prefixCount + p;
-                      const key = board[combo] ?? "";
                       return (
                         <td key={combo} className="align-top">
-                          <div className="flex flex-col items-stretch gap-1 rounded border border-slate-800/80 p-1.5">
-                            <GameFrame atlas={key ? config.atlasOf(key) : ""} size={44} alt={`${suffix}·${prefixLabels[p]}`} />
-                            <Select value={key} disabled={!canWrite} className="text-xs" onChange={(event) => setCell(combo, event.target.value)}>
-                              <option value="">（选择{config.noun}）</option>
-                              {items.map((item) => (
-                                <option key={item.key} value={item.key}>
-                                  {item.name?.trim() ? `${item.name.trim()}（${item.key}）` : item.key}
-                                </option>
-                              ))}
-                            </Select>
-                          </div>
+                          <AppearanceCell
+                            value={board[combo] ?? ""}
+                            options={options}
+                            atlasOf={config.atlasOf}
+                            noun={config.noun}
+                            listPage={config.listPage}
+                            disabled={!canWrite}
+                            alt={`${suffix}·${prefixLabels[p]}`}
+                            onPick={(key) => setCell(combo, key)}
+                          />
                         </td>
                       );
                     })}
@@ -442,6 +451,91 @@ function AssociationBoard({ config, metaVersion }: { config: BoardConfig; metaVe
 }
 
 //#endregion
+
+/**
+ * 棋盘里的一格（#749）：预览 + 点名，点开就是可视化选择器
+ *
+ * 以前这里是「44px 静态首帧 + 一个 84 项的 key 下拉框」—— 挑边框变成了认编号。现在：
+ * - **帧动画**预览（光效 / 流动感看首帧判断不了），下面一行别名、一行 key；
+ * - 点整格开 `EntityPicker`（搜索 + 分组 chips + 大图标，与其他页面同一套选择器）；
+ * - 没选时是虚线框 + 「点这里挑」，一眼能看出「这一格还空着」（棋盘每格必选，空着会被拦）。
+ *
+ * key 不在清单里（清单页「从文件夹同步」把素材删了）时照实显示那个 key 并标黄 ——
+ * 这时格子看着有值、客户端却会安静跳过，得让运营看见「该重挑」而不是装作没事。
+ */
+function AppearanceCell({
+  value,
+  options,
+  atlasOf,
+  noun,
+  listPage,
+  disabled,
+  alt,
+  onPick,
+}: {
+  value: string;
+  options: EntityOption[];
+  atlasOf: (key: string) => string;
+  noun: string;
+  /** 清单所在页的名字（选择器里的引导语用） */
+  listPage: string;
+  disabled: boolean;
+  alt: string;
+  onPick: (key: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const option = options.find((row) => row.id === value);
+  const unknown = Boolean(value) && !option;
+
+  return (
+    <>
+      <button
+        type="button"
+        disabled={disabled}
+        title={value ? `${option?.label ?? value}（${value}）—— 点击换一个${noun}` : `点击挑一个${noun}`}
+        onClick={() => setOpen(true)}
+        className={`flex w-full flex-col items-center gap-1 rounded border p-1.5 transition disabled:cursor-not-allowed disabled:opacity-60 ${
+          unknown
+            ? "border-amber-700/60 bg-amber-500/5 hover:border-amber-600"
+            : value
+              ? "border-slate-800/80 hover:border-indigo-500/70 hover:bg-slate-800/40"
+              : "border-dashed border-slate-700 bg-slate-900/30 hover:border-slate-600"
+        }`}
+      >
+        {value ? (
+          <FrameAnimation atlas={atlasOf(value)} size={56} alt={alt} zoomable={false} />
+        ) : (
+          <span
+            aria-hidden="true"
+            className="rounded border border-dashed border-slate-800 bg-slate-950/40"
+            style={{ width: 56, height: 56 }}
+          />
+        )}
+        <span className={`w-full truncate text-center text-[11px] ${value ? "text-slate-100" : "text-slate-500"}`}>
+          {option?.label ?? (value || `点这里挑${noun}`)}
+        </span>
+        <span
+          className={`w-full truncate text-center font-mono text-[10px] ${unknown ? "text-amber-300/90" : "text-slate-500"}`}
+        >
+          {unknown ? "清单里没有" : value || "未选"}
+        </span>
+      </button>
+      {open ? (
+        <EntityPicker
+          open
+          title={`选择${noun}`}
+          hint={`点一项即选中。列表里的名字是清单条目上的「别名」，key 是客户端真正要的编号；清单与显示效果都在「${listPage}」页管理。`}
+          options={options}
+          current={value}
+          imageSize={56}
+          emptyHint={`清单里还没有${noun} —— 先去「${listPage}」页添加，或在那里点「从文件夹同步」。`}
+          onSelect={onPick}
+          onClose={() => setOpen(false)}
+        />
+      ) : null}
+    </>
+  );
+}
 
 export function EquipmentTiersPage() {
   /** 档位保存后棋盘行列会变：版本号 +1 触发两块棋盘按新档数重拉 */

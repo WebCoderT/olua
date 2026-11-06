@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { equipmentBackgroundApi, equipmentBorderApi, formatTime, PERMISSION } from "../api";
 import type { AppearanceAssignment, AppearanceEffect, AppearanceItem, AppearanceResourceScan, CustomAppearance } from "../api";
 import { FrameAnimation } from "../components/FrameAnimation";
+import { EntityPickButton } from "../components/entity/EntityPickButton";
+import { appearanceOptions } from "../components/entity/catalog";
 import { AppearanceEffectWorkbench, DEFAULT_EFFECT, describeEffect, isDefaultEffect } from "../components/AppearanceEffectWorkbench";
 import type { AppearanceEffectValue } from "../components/AppearanceEffectWorkbench";
 import { Modal } from "../components/Modal";
@@ -231,6 +233,9 @@ function EquipmentAppearanceKindPage({ config }: { config: KindConfig }) {
   /** 逐项体检：清单 key 格式 / 唯一、绑定装备唯一且引用存在 —— 服务端也会拒，先在这里拦按钮 */
   const invalid = useMemo(() => describeInvalid(items, customs, config), [items, customs, config]);
 
+  /** 特殊装备绑定那一列的候选池（#749）：与前后缀棋盘同一套可视化选项 */
+  const appearanceChoices = useMemo(() => appearanceOptions(config.kind, items ?? []), [config.kind, items]);
+
   const save = async () => {
     if (!items || !customs || !assignments || invalid) return;
     setSaving(true);
@@ -439,7 +444,7 @@ function EquipmentAppearanceKindPage({ config }: { config: KindConfig }) {
       {customs ? (
         <Card
           title={`特殊装备绑定（${customs.length} 条）`}
-          description={`优先于前后缀棋盘。装备填变体 id（如 weapon_20_p4s2）只影响那一个变体；填基础件 key（如 weapon_20）影响它的全部变体。${config.noun}从清单里选 —— 显示效果在清单那条上改。`}
+          description={`优先于前后缀棋盘。装备填变体 id（如 weapon_20_p4s2）只影响那一个变体；填基础件 key（如 weapon_20）影响它的全部变体。${config.noun}点按钮可视化挑（列表里是别名 + 会动的预览，底下一行才是 key）—— 显示效果在清单那条上改。`}
           actions={
             canWrite ? (
               <Button variant="ghost" onClick={appendCustom}>
@@ -467,14 +472,19 @@ function EquipmentAppearanceKindPage({ config }: { config: KindConfig }) {
                         <Input value={row.equipment} disabled={!canWrite} className="w-56 font-mono" onChange={(event) => setCustom(index, { equipment: event.target.value })} />
                       </td>
                       <td className={tdClass}>
-                        <Select value={row.key} disabled={!canWrite} className="w-52 font-mono" onChange={(event) => setCustom(index, { key: event.target.value })}>
-                          <option value="">（选择{config.noun}）</option>
-                          {(items ?? []).map((item) => (
-                            <option key={item.key} value={item.key}>
-                              {item.name?.trim() ? `${item.name.trim()}（${item.key}）` : item.key}
-                            </option>
-                          ))}
-                        </Select>
+                        {/* 定宽包裹：表格是 auto 宽度，`truncate` 需要外面给一个约束，否则长别名会把列撑开 */}
+                        <div className="w-60">
+                          <EntityPickButton
+                            value={row.key}
+                            options={appearanceChoices}
+                            onChange={(key) => setCustom(index, { key })}
+                            disabled={!canWrite}
+                            pickerTitle={`选择${config.noun}`}
+                            placeholder={`点这里挑${config.noun}`}
+                            hint="点一项即选中；名字是清单条目的别名，key 是客户端要的编号。清单与显示效果在本页上方的表格里管。"
+                            emptyHint={`清单里还没有${config.noun} —— 先在上方添加一条，或点「从文件夹同步」。`}
+                          />
+                        </div>
                       </td>
                       <td className={tdClass}>
                         {canWrite ? (
