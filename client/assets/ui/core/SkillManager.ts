@@ -1,6 +1,6 @@
-import { isValid, Node, Vec2 } from "cc";
+import { isValid } from "cc";
 import { skills } from "../../configs/skill";
-import { SkillContextInput, SkillId, SkillPushConfig, SkillTargetType } from "../../types/skill";
+import { SkillContextInput, SkillId, SkillTargetType } from "../../types/skill";
 import GameUiHelper from "../helpers/GameUiHelper";
 import { canAttackTarget } from "../utils/battle/BattleMath";
 import MpHelper from "../utils/battle/MpHelper";
@@ -12,10 +12,13 @@ import StorageManager from "./StorageManager";
 /**
  * 技能管理器
  * 技能触发的统一入口：学习校验 → 冷却校验 → 单体目标补全/距离校验 → 记录冷却 → 调用技能实现（动画与结算由技能实现自行处理）
- * 技能配置了 push 时，单体技能在命中后由本类统一把目标击退（场上唯一能推动怪物的途径）
  * 玩家手动释放（release）时，canAuto 技能没有可打目标/目标超出距离会委托 AutoBattle 自动接战（快速攻击）；
  * 自动战斗出手（releaseAuto）则不再委托，避免互相递归
  * 施法上下文由组合根（Game）通过 setContextProvider 注入（来源为 RoleDisplay，天然持有角色/目标/怪物容器）
+ *
+ * 客户端**不做**任何位移与伤害：怪物的位置归服务端 AI（#670），伤害归服务端结算（#34/#541）。
+ * 技能击退（`push_distance`）也由服务端模拟：结算侧算出伤害后让怪物 AI 位移并广播，
+ * 客户端只按广播的位置趋近 —— 本地推一下只在本机生效，同图其他人看到的怪还在原地。
  */
 export default class SkillManager {
   /** 施法上下文提供者（由组合根注入） */
@@ -111,17 +114,7 @@ export default class SkillManager {
     // 区域（PLACE）技能例外：特效位置由技能实现决定（如十步一杀播在突进落点），不在施法起点代播
     if (config.targetType !== SkillTargetType.PLACE) EffectManager.play(config, context.caster, target, context.role);
     config.onClick({ ...context, target, config, level });
-    // 技能击退：配置了 push 的单体技能把目标推开（方向 = 施法者指向目标）
-    if (config.push && target && isValid(target)) this.pushTarget(context, target, config.push);
     return true;
-  }
-
-  /** 按技能配置击退单体目标（方向 = 施法者 → 目标；两者完全重叠时取不到方向，不作位移） */
-  private static pushTarget(context: SkillContextInput, target: Node, push: SkillPushConfig) {
-    const casterPosition = context.caster.getWorldPosition();
-    const targetPosition = target.getWorldPosition();
-    const direction = new Vec2(targetPosition.x - casterPosition.x, targetPosition.y - casterPosition.y);
-    context.monsters.push(target, direction, push.distance, push.duration);
   }
 
   /** 技能实际冷却时间（秒）：技能配置冷却 / 角色对应动作的速度倍率（倍率 <= 0 视为 1，即不加速） */

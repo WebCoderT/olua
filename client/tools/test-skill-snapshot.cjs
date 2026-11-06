@@ -80,7 +80,9 @@ function main() {
 
   const before = skillData.find((item) => item.id === "1000");
   check(before.oeccupation === "1", "职业归属来自快照（客户端不再手写这份映射）", String(before.oeccupation));
-  check(before.push === undefined, "没配击退时 push 是 undefined（不是 {distance:0}，否则会走一遍击退流程）", String(before.push));
+  // #670：击退改成服务端模拟（MonsterAiService.applyPush），客户端技能数据里**不再有**击退字段，
+  // 快照里的 push_distance 也刻意不落到客户端 —— 这里同时守「没冒出来」与「没被顺手带进来」
+  check(before.push === undefined && before.pushDistance === undefined, "客户端技能数据不带击退（击退在服务端模拟，#670）", `${String(before.push)} / ${String(before.pushDistance)}`);
   check(oeccupationSkills.get("1")?.length === 12 && oeccupationSkills.get("2")?.length === 0, "职业技能映射按快照行重建（战士 12 / 法师空）", String(oeccupationSkills.get("1")?.length));
 
   snapshotApi.applySkillSnapshot({
@@ -120,7 +122,9 @@ function main() {
     JSON.stringify(after.damageCoefficients),
   );
   check(after.effect === "effect/skill/s_1006@0" && after.effectIsOnSelf === true, "特效与「播在自己身上」已覆写", after.effect);
-  check(after.oeccupation === "2" && after.push?.distance === 60, "职业归属与击退距离跟着快照走", `${after.oeccupation} / ${JSON.stringify(after.push)}`);
+  check(after.oeccupation === "2", "职业归属跟着快照走", after.oeccupation);
+  // 快照行带 pushDistance=60，但客户端照旧不带 push —— 击退的唯一执行方是服务端 AI（#670）
+  check(after.push === undefined, "快照里的击退距离不下发到客户端（浮空位移由服务端模拟）", String(after.push));
   check(
     oeccupationSkills.get("2")?.length === 1 && oeccupationSkills.get("1")?.length === 0,
     "改了职业归属，技能栏映射立刻跟着变（派生视图，不是第二份清单）",

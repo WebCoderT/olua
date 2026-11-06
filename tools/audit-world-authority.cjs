@@ -176,8 +176,9 @@ requirePatterns(SETTLEMENT, [
 // 五、怪物数值的归属：服务端独有，客户端零副本（#588，取代 #586 的「出厂兜底」口径）
 // ---------------------------------------------------------------------------
 // #586 那版审「覆写全不全」；#588 把客户端的本地副本整个删了 —— 数值唯一来源是
-// 服务端 monsters 表，资源表现唯一来源是服务端 monster-presentation 生成物，
-// 客户端 configs/monster 只剩全局行为常量（monsterAI / 默认移速倍率）。
+// 服务端 monsters 表，资源表现唯一来源是服务端 monster-presentation 生成物。
+// #670 起连「怪物手感参数（monsterAI）」也搬去了服务端（`runtime_params.monster_ai`）：
+// 客户端不再跑怪物行为，这一区只剩**表现层**的默认动作速度倍率。
 // 副本没了，「覆写漏字段」这类 bug 从根上消失；新的坏法是**运行时表没人填**
 // （表空 = 全场怪退化为 key 名字 + 攻防 0，看起来像「快照没生效」），所以这里钉两层：
 //   静态层 —— 客户端 configs/types 里不许再长出怪物数值与资源字段；
@@ -206,10 +207,17 @@ function regionOf(source, index) {
     const NUMERIC_FIELDS = ["maxHp", "physicalAttack", "magicAttack", "taoistAttack", "physicalDefense", "magicDefense", "taoistDefense"];
     const leaked = NUMERIC_FIELDS.filter((field) => new RegExp(`\\b${field}\\b`).test(code));
     if (leaked.length > 0) {
-      problem(MONSTER_CONFIG, 0, `configs/monster 又出现了怪物数值字段（${leaked.join("/")}）—— #588 起数值服务端独有，这里只许有 monsterAI 与默认移速倍率`);
+      problem(MONSTER_CONFIG, 0, `configs/monster 又出现了怪物数值字段（${leaked.join("/")}）—— #588 起数值服务端独有，这里只许有默认移速倍率`);
     }
-    if (!/\bmonsterAI\b/.test(monsterConfig)) {
-      problem(GAME_CONFIG, 0, "game-config 的怪物手感参数区连 monsterAI 都没了 —— 被删过头了，全局行为常量还住在这里");
+    if (!/\bmonsterDefaultSpeedRate\b/.test(monsterConfig)) {
+      problem(GAME_CONFIG, 0, "game-config 的怪物表现参数区连 monsterDefaultSpeedRate 都没了 —— 被删过头了，动作速度还住在这里");
+    }
+    // 怪物行为参数（出手间隔 / 移动节奏 / 激怒）已整体归服务端（#670）：
+    // 客户端一旦又长出这些常量，通常意味着本地 AI 也跟着回来了 —— 那正是「两个人的怪在打架」的根源
+    const BEHAVIOR_FIELDS = ["attackInterval", "attackRange", "idleMoveInterval", "wanderRadius", "pushDuration"];
+    const behavior = BEHAVIOR_FIELDS.filter((field) => new RegExp(`\\b${field}\\b`).test(code));
+    if (behavior.length > 0) {
+      problem(GAME_CONFIG, 0, `怪物行为参数又回到客户端了（${behavior.join("/")}）—— #670 起 AI 全在服务端，改参数请改 runtime_params.monster_ai`);
     }
   }
 

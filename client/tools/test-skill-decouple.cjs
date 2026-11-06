@@ -54,7 +54,7 @@ const sortDeep = (value) => {
  *
  * 以前这些字段只在需要时才写，现在整行由服务端表下发、字段总是齐全 ——
  * 不归一就会把「同一组数值换了个写法」判成数值漂移（假红）。归一之后
- * `push` / `level` / 倍率 / 描述这些**真数值**仍然逐个钉死。
+ * `level` / 倍率 / 描述这些**真数值**仍然逐个钉死。
  */
 const dropDefaults = (value) => {
   const out = { ...value };
@@ -84,7 +84,7 @@ const RATES_1000 = [1, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 2].map((valu
  */
 const EXPECTED = {
   "1000": { id: "1000", label: "‌基础剑术", icon: "skill/icon/1001", cooldown: 1, mpCost: 0, targetType: "1", oeccupation: "1", level: 1, description: "普通单体攻击技能，通过挥砍手中武器，对敌人直接造成普通物理伤害，伤害与物理攻击相关", type: "0", distance: 10, damageCoefficients: RATES_1000, action: "attack_near", canAuto: true },
-  "1001": { id: "1001", label: "烈火剑法", icon: "skill/icon/1006", cooldown: 1, mpCost: 8, targetType: "1", oeccupation: "1", level: 10, description: "战士标志性爆发技能，10级可造成‌280%~560%‌ 攻击伤害，附带15%暴击率，觉醒后还会附加灼烧效果，是PK秒杀、打BOSS爆发的核心招式", type: "0", distance: 10, damageCoefficients: rates(3, 4), action: "attack_skill_1", push: { distance: 120 }, canAuto: false, effect: "effect/skill/s_1006@0", effectIsOnSelf: true },
+  "1001": { id: "1001", label: "烈火剑法", icon: "skill/icon/1006", cooldown: 1, mpCost: 8, targetType: "1", oeccupation: "1", level: 10, description: "战士标志性爆发技能，10级可造成‌280%~560%‌ 攻击伤害，附带15%暴击率，觉醒后还会附加灼烧效果，是PK秒杀、打BOSS爆发的核心招式", type: "0", distance: 10, damageCoefficients: rates(3, 4), action: "attack_skill_1", canAuto: false, effect: "effect/skill/s_1006@0", effectIsOnSelf: true },
   "1002": { id: "1002", label: "刺杀剑术", icon: "skill/icon/1003", cooldown: 1, mpCost: 6, targetType: "1", oeccupation: "1", level: 10, description: "公认的破防神技，隔位释放的第二格剑气为无属性攻击，可无视目标防御，直接穿透法师的魔法盾，是克制远程职业、挑战高防BOSS的必备技能", type: "0", distance: 0, damageCoefficients: rates(3, 4), action: "stand", canAuto: false, effect: "effect/skill/s_1002@0", effectIsOnSelf: true },
   "1003": { id: "1003", label: "莲月剑法", icon: "skill/icon/2003", cooldown: 1, mpCost: 6, targetType: "1", oeccupation: "1", level: 10, description: "传奇3版本特色技能，可打出两段连击，总伤害达300%，目标防御越高伤害增幅越明显，适合团战持续黏人输出、残血收割", type: "0", distance: 0, damageCoefficients: rates(3, 4), action: "stand", canAuto: false, effect: "effect/skill/s_1002@0", effectIsOnSelf: true },
   "1004": { id: "1004", label: "‌擒龙手‌", icon: "skill/icon/3010", cooldown: 1, mpCost: 10, targetType: "1", oeccupation: "1", level: 10, description: "高阶特色技能，可将远处的目标直接拉到身边并附加眩晕，同时给自己增加攻击buff，是团战中强切敌方后排的神技", type: "0", distance: 100000, damageCoefficients: rates(3, 4), action: "attack_far", canAuto: false, effect: "effect/skill/s_1002@0", effectIsOnSelf: false },
@@ -265,10 +265,12 @@ if (!tsc) {
       }
       check(JSON.stringify([...wired.skills.keys()]) === JSON.stringify(Object.keys(HANDLERS)), "skills Map 键序 = 1000→1011（消费方按 id 取，不依赖顺序，但钉住防漂移）");
 
-      // 接线后的消费方视图：数值透传没被 spread 弄丢（抽 1001 的 push 与 1008 的空系数）
+      // 接线后的消费方视图：数值透传没被 spread 弄丢（抽 1001 的 effectIsOnSelf 与 1008 的空系数）
       const skill1001 = wired.skills.get("1001");
       const skill1008 = wired.skills.get("1008");
-      check(skill1001.push?.distance === 120 && skill1001.effectIsOnSelf === true, "接线后 1001 的 push / effectIsOnSelf 原样透传");
+      // #670：击退不再是客户端字段（服务端 MonsterAiService.applyPush 模拟位移），
+      // 这里反向守住「别把 push 又加回客户端技能数据」
+      check(skill1001.effectIsOnSelf === true && skill1001.push === undefined, "接线后 1001 的 effectIsOnSelf 原样透传，且不带 push（击退在服务端）");
       check(Array.isArray(skill1008.damageCoefficients) && skill1008.damageCoefficients.length === 0, "接线后 1008 的伤害系数仍是空数组（区域突进技能）");
       // spread 之后的完整字段集 = A 段期望 + onClick 函数（JSON 会忽略函数值，onClick 的有无由上面同一性断言负责）
       const skill1000 = wired.skills.get("1000");

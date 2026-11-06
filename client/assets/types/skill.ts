@@ -1,4 +1,4 @@
-import type { Node, Vec2, Vec3 } from "cc";
+import type { Node, Vec3 } from "cc";
 import type { Role } from "../entities/Role";
 import type { ACTION, DIRECTION } from "./animation";
 import type { Monster } from "./monster";
@@ -39,17 +39,13 @@ export interface DamageCoefficient {
 }
 
 /**
- * 技能击退配置（技能对目标的位移）
- * 怪物与角色之间谁都不会推动谁走，技能击退是场上唯一能推动位置的途径：
- * 单体技能在技能配置里写上 push 即可生效（由 SkillManager 统一处理），
- * 群体/区域技能在技能实现里自行调用 monsters.push
+ * 技能击退配置（#670 起客户端不再有这个东西）
+ *
+ * 击退的距离来源是服务端 `skills.push_distance`，**模拟也在服务端**：结算成功后
+ * `MonsterAiService.applyPush` 按「施法者 → 目标」方向位移并随位置广播下发。
+ * 客户端只做趋近演出（见 core/MonsterAI 的 stepServer）—— 本地推一下只在本机生效，
+ * 同图其他人看到的怪还在原地，那正是 #670 要消灭的不一致。
  */
-export interface SkillPushConfig {
-  /** 击退距离（像素） */
-  distance: number;
-  /** 击退时长（毫秒，缺省取 configs/monster 的 monsterAI.pushDuration） */
-  duration?: number;
-}
 
 /** 施法者能力（由 RoleDisplay 实现） */
 export interface SkillCaster extends Node {
@@ -65,17 +61,12 @@ export interface SkillCaster extends Node {
   setWorldPositionByTransfer(worldPosition: Vec3): void;
 }
 
-/** 怪物管理器为技能提供的能力（由 MonsterManager 实现） */
+/** 怪物管理器为技能提供的能力（由 MonsterManager 实现；#670 起只剩「查目标」两件，没有位移） */
 export interface SkillMonsterProvider {
   /** 获取以 position 为中心、distance 范围内最近的存活怪物节点（distance <= 0 不限距离） */
   getNearestMonster(position: Vec3, distance: number): Node | null;
   /** 获取目标节点的怪物数据 */
   getMonsterData(target: Node): Monster | null;
-  /**
-   * 击退目标（direction 为世界坐标下的方向向量，无需归一化；distance 像素，duration 毫秒）
-   * 这是场上唯一能推动怪物的途径
-   */
-  push(target: Node, direction: Vec2, distance: number, duration?: number): void;
 }
 
 /** 技能释放上下文（技能实现只依赖此对象，不反查全局） */
@@ -125,11 +116,6 @@ export interface SkillConfig {
   distance: number;
   /** 对应动画 */
   action: ACTION;
-  /**
-   * 击退配置：配置后该技能命中会击退目标（单体技能由 SkillManager 统一处理，
-   * 群体/区域技能在技能实现里自行调用 monsters.push）
-   */
-  push?: SkillPushConfig;
   /** 释放技能方法（入参为技能上下文） */
   onClick: (context: SkillContext) => void;
   /** 是否可自动释放 */

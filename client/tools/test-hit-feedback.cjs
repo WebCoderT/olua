@@ -11,7 +11,8 @@
  * 2. 接线层（读源码静态断言，跑不了引擎就盯住关键行）：
  *    · 受击动作的优先级守卫（施法/死亡不播）在 RoleDisplay.playInjured 里真实存在
  *    · RoleAppearance.playInjured 不改写宿主动作状态（否则受击会被 FINISHED 续播无限重播）
- *    · MonsterAI 命中玩家后调用 onPlayerHit 与红闪；组合根 Game 接线并在卸载时摘除
+ *    · 受击出口 MonsterManager.onPlayerServerHit 由组合根 Game 接线（血量入账 + 飘字 + 红闪 +
+ *      受击动作）并在卸载时摘除 —— #670 删掉本地怪物 AI 后，这是玩家挨打的唯一一条路
  *
  * 用法：node client/tools/test-hit-feedback.cjs
  */
@@ -78,12 +79,15 @@ function main() {
   check(!!appearanceBody, "RoleAppearance.playInjured 存在");
   check(!!appearanceBody && !/this\.action\s*=/.test(appearanceBody), "受击不改写宿主动作状态（否则 FINISHED 续播会把受击无限重播）");
   check(!!appearanceBody && /getState\(animationName\)/.test(appearanceBody) && /isPlaying/.test(appearanceBody), "已在受击动画中时不重启（连环挨打不抖成筛子）");
-  const monsterAiSrc = readSrc("ui/core/MonsterAI.ts");
-  check(/onPlayerHit\?\.\(player\)/.test(monsterAiSrc), "MonsterAI 命中玩家后触发 onPlayerHit 接线");
-  check(/showHitScreenFlash\(\)/.test(monsterAiSrc), "MonsterAI 命中玩家后触发屏幕红闪");
+  const monsterManagerSrc = readSrc("ui/core/MonsterManager.ts");
+  check(/static onPlayerServerHit/.test(monsterManagerSrc), "MonsterManager 暴露受击出口（服务端 hits 帧的落点）");
   const gameSrc = readSrc("ui/Game.ts");
-  check(/MonsterAI\.onPlayerHit = /.test(gameSrc), "组合根 Game 接线受击出口");
-  check(/MonsterAI\.onPlayerHit = null/.test(gameSrc), "场景卸载时摘除受击出口（避免跨场景残留）");
+  check(/MonsterManager\.onPlayerServerHit = /.test(gameSrc), "组合根 Game 接线受击出口");
+  check(/MonsterManager\.onPlayerServerHit = null/.test(gameSrc), "场景卸载时摘除受击出口（避免跨场景残留）");
+  // 受击三件套都挂在同一条回调上（#670：本地怪物 AI 删除后这是玩家挨打的唯一一条路）
+  check(/showHitScreenFlash\(\)/.test(gameSrc), "受击回调触发屏幕红闪");
+  check(/playInjured\(\)/.test(gameSrc), "受击回调触发受击动作");
+  check(/applyMonsterHit\(hit\)/.test(gameSrc), "受击回调把服务端血量入账（客户端不自算）");
 
   finish("PASS：受击反馈三件套配置齐全、受击动画链路真实可用、优先级守卫与组合根接线在位。");
 }

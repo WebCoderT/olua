@@ -70,19 +70,18 @@ export interface MonsterPresentation {
    */
   speedRate: SpeedRate;
   /**
-   * 移动速度：与 configs/role 的 ROLE_WALK_SPEED 同一单位（刚体线速度），
-   * 追击玩家与原地随机走动都用它（随机走动会乘一个减速倍率，见 configs/monster 的 monsterAI）
+   * 移动速度：与 configs/role 的 ROLE_WALK_SPEED 同一单位（像素/秒）。
+   * 客户端只用它算「向服务端坐标趋近」的步长（#670：游走与追击都是服务端模拟的），
+   * 服务端用它模拟同一只怪同样的速度 —— 两边同速，画面才不会忽快忽慢
    */
   moveSpeed: number;
   /**
-   * 是否主动攻击玩家：
-   * true 时玩家进入 detectRange 就追人，追到 attackRange 内站定普攻；
-   * false 时只待机游走，但被玩家打伤后会被激怒（见 MonsterAI.provoke），
-   * 之后与主动怪一样在 detectRange 内追击普攻；
-   * 玩家离开 detectRange 就停在原地（不返回出生点），原地待机时会换动作并偶尔小走一下
+   * 是否主动攻击玩家（服务端 AI 的参数，随表现快照下发）：
+   * true 时玩家进入 detectRange 服务端就让这只怪追人、追到攻击距离内出手；
+   * false 时只游走，被打伤后记恨打它的人（记恨在服务端，见 monster-ai.service）
    */
   aggressive: boolean;
-  /** 检测范围（像素半径，以怪物自身为圆心；主动怪常驻使用，被动怪被激怒后同样使用） */
+  /** 检测范围（像素半径，以怪物自身为圆心；服务端 AI 的目标发现距离，客户端只用于展示/预览） */
   detectRange: number;
 }
 
@@ -111,41 +110,20 @@ export interface Monster extends MonsterPresentation, MonsterRuntimeStats {
 }
 
 /**
- * 怪物 AI 运行时状态
+ * 怪物表现状态
  * 每个怪物一份，由 MonsterAI 按怪物节点维护（节点销毁即回收），不参与任何存档
- * 时间字段一律为时间戳（毫秒），到点即触发；追人、待机、击退三套计时互不干扰
+ *
+ * #670 起客户端不再跑怪物行为（目标 / 移动 / 出手全在服务端），这里只剩「服务端说在哪、
+ * 在干什么」与「本地怎么演」两件事 —— 表里的字段就是这两件事的全部。反过来说：
+ * 想在这里加一个「待机随机换动作」之类的字段，先问一句服务端知不知道这件事。
  */
 export interface MonsterAIState {
   /** 当前动作（动画播完据此续播；缺帧的动作会回退成待机） */
   action: ACTION;
   /** 死亡标记：死亡动画播放期间不再续播/接管任何行为，节点由 MonsterManager 在动画播完后移除 */
   dead: boolean;
-  /** 激怒标记：被动攻击的怪物被玩家打过后置位，之后在检测范围内与主动怪一样追击普攻（主动怪恒为 true 效果） */
-  provoked: boolean;
-  /** 当前朝向 */
+  /** 当前朝向（由位移差量与事件方向决定） */
   direction: DIRECTION;
-  /** 停留点（生成位置或失去玩家时的位置，原地随机走动围绕它进行） */
-  anchor: Vec3;
-  /** 下次更换待机动作的时间戳 */
-  nextIdleAnimationAt: number;
-  /** 下次原地随机走动的时间戳 */
-  nextIdleMoveAt: number;
-  /** 本次随机走动的结束时间戳（已过期表示当前没有在走动） */
-  idleMoveEndAt: number;
-  /** 本次随机走动的方向（单位向量） */
-  idleMoveDirection: Vec2;
-  /** 普攻动作结束的时间戳（出手期间站定不移动） */
-  attackEndAt: number;
-  /** 下次可普攻的时间戳 */
-  nextAttackAt: number;
-  /** 是否有一次普攻待结算（普攻动作播放完成后结算伤害） */
-  attackPending: boolean;
-  /** 击退结束的时间戳（已过期表示当前没有被击退） */
-  pushEndAt: number;
-  /** 击退方向（单位向量，世界坐标） */
-  pushDirection: Vec2;
-  /** 击退速度（像素/秒，由击退距离与时长换算，见 MonsterAI.push） */
-  pushSpeed: number;
   /** 服务端权威位置（#323：monster-ai 帧的最新坐标；null = 还没收到过服务端位置） */
   serverX: number | null;
   /** 服务端权威位置 y（与 serverX 成对出现） */

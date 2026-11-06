@@ -31,7 +31,9 @@ import RealtimeClient from "../utils/net/RealtimeClient";
  * 死亡后由服务端 tick 到点重生并以 world 帧广播，客户端按快照补场）。#581 删掉了
  * 「通道不可用时本地按区域一次性生成」那条回滚 —— 它让「断线 = 自己造怪」成为可能，
  * 而造出来的怪没有服务端实例 id，打死了也结算不了（见 applyWorldState 的离线兜底）
- * 怪物的行为与动画（待机游走/追击玩家/普攻/被击退）由 MonsterAI 每帧驱动，本类只管数据与生命周期
+ * 怪物的行为（目标选择 / 游走 / 追击 / 普攻 / 技能）**全在服务端**（#670），客户端只有演出：
+ * MonsterAI 把节点朝服务端坐标同速趋近并播走路/待机，出手动作由 monster-ai 帧的事件驱动。
+ * 本类只管数据、生命周期与「把服务端说的事演出来」。
  * 所有怪物节点一律挂载到 LayerManager 怪物层（Layer.MONSTER）
  *
  * 伤害结算（#34）：玩家打怪的伤害由服务端算（见 utils/net/CombatChannel），本类的
@@ -39,8 +41,9 @@ import RealtimeClient from "../utils/net/RealtimeClient";
  * 与合法带对账。#581 起连「技能本地下手」也没有了（怪物只在服务端生成，断线时场上无怪可打）。
  *
  * 世界权威（#35）：进图由 GameMap 直接发 worldJoin，本类 applyWorldState 按服务端
- * 快照做差量合并（实例 id 服务端发牌、出生点以快照为准）；游走/追击仍是本地表现层，
- * 服务端持有的「坐标」是出生点。断线重连后 CombatChannel 会自动重发进图登记。
+ * 快照做差量合并（实例 id 服务端发牌）；#670 起快照里的坐标已经是怪物 AI 的**实时位置**
+ * （服务端在发帧前覆盖出生点），晚进图的人与里面的人看到的是同一处。断线重连后
+ * CombatChannel 会自动重发进图登记。
  */
 export default class MonsterManager {
   /** 已生成怪物：怪物节点 -> 怪物运行时数据 */
@@ -57,17 +60,7 @@ export default class MonsterManager {
   /** 实例 id 发牌器（会话内单调递增；世界权威 #35 后只服务回滚路径，正常发牌归服务端） */
   private static instanceSeq = 0;
 
-  /**
-   * 服务端 AI 权威（#323）：本会话收到过 world 帧（说明实时通道在线且进图登记过）。
-   * 怪物的目标选择 / 移动 / 普攻与玩家受击都改由服务端 monster-ai 帧驱动，
-   * 本地 MonsterAI 停用（组合根据此切换每帧驱动分支）；断线时 CombatChannel.active
-   * 变 false，自动退回本地口径（回滚路径）。
-   */
-  static get serverAuthority(): boolean {
-    return this.worldSeen && CombatChannel.active;
-  }
-
-  /** 本会话是否收到过 world 帧（见 serverAuthority；换图清场时重置） */
+  /** 本会话是否收到过 world 帧（只用于那一条「进入服务端权威模式」的一次性日志；换图清场时重置） */
   private static worldSeen = false;
 
   /** 玩家被服务端 AI 普攻命中的出口（#323；组合根接线：飘字 / 红闪 / 受击动作 / 血量入账） */
@@ -201,25 +194,26 @@ export default class MonsterManager {
   }
 
   /**
-   * 击退怪物（技能造成的位移，场上唯一能推动位置的途径，由 SkillManager 按技能配置 push 调用）
-   * @param target 怪物节点
-   * @param direction 击退方向（世界坐标，无需归一化）
-   * @param distance 击退距离（像素）
-   * @param duration 击退时长（毫秒，缺省取 configs/monster 的 monsterAI.pushDuration）
-   */
-  static push(target: Node, direction: Vec2, distance: number, duration?: number) {
-    if (!this.monsterMap.has(target)) return;
-    MonsterAI.push(target, direction, distance, duration);
-  }
-
-  /**
-   * 服务端 AI 广播的落点（#323）：位置增量交给 MonsterAI 趋近演出，
-   * 命中事件里属于自己的那份交给组合根接线（别人的受击在玩家互见之前不演）。
+   * 服务端 AI 广播的落点（#323）：位置增量交给 MonsterAI 趋近演出，血量刷新血条，
+   * 命中事件里属于自己的那份交给组合根接线（别人的受击不演红闪，但血条要看）。
    */
   static applyServerAi(data: MonsterAiFrame) {
     for (const entry of data.monsters) {
       const node = this.instanceIndex.get(entry.instanceId);
       if (!node) continue; // 还没生成的怪（重生广播的 world 帧会先落场），下一帧再对齐
+      // 血量（#670）：别人打的伤害也走这一条 —— 血条不能只在自己出手时才动
+      const monster = this.monsterMap.get(node);
+      if (monster && entry.hp !== undefined && entry.hp !== monster.hp) {
+        if (entry.hp <= 0) {
+          // 血量归零却没等到 kill 事件（迟到的旧帧 / 别人的击杀事件丢了）：
+          // 按与「世界快照兜底清场」同一口径演死亡，不给奖励（那不是本机的一次击杀）
+          this.applyDamage(node, monster, 0, 0, true);
+          continue;
+        }
+        monster.hp = entry.hp;
+        if (entry.maxHp !== undefined) monster.maxHp = entry.maxHp;
+        this.updateHead(node, monster);
+      }
       MonsterAI.applyServerState(node, entry.x, entry.y, entry.moving);
     }
     // 技能释放（#372）：动作 + 特效 + 自身状态特效，全部由服务端驱动
@@ -432,12 +426,7 @@ export default class MonsterManager {
     if (damage > 0) GameUiHelper.showDamageText(target, damage);
     monster.hp = Math.max(0, hp);
     this.updateHead(target, monster);
-    if (monster.hp > 0 && !killed) {
-      // 存活即激怒：被动攻击的怪物被打后记恨攻击者，之后在检测范围内与主动怪一样追击普攻
-      // （怪物伤害来源当前只有玩家，攻击者即玩家；主动怪此调用无副作用）
-      MonsterAI.provoke(target);
-      return;
-    }
+    if (monster.hp > 0 && !killed) return;
     // 死亡：先结算击杀奖励再注销数据（经验飘字要借还活着的节点定位）
     //
     // 这里**只有**服务端结算这一条路（#550 删掉了「本地口径」那条）：客户端没有伤害结算能力，
