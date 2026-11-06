@@ -1,5 +1,5 @@
 {
- "version": "2026-11-06-1",
+ "version": "2026-11-06-3",
  "files": [
   [
    "audio/bag-resort.wav",
@@ -123,13 +123,93 @@
   ],
   [
    "audio-manifest.json",
-   "c93f5f21164574241523d147ddde9c5258749c07",
+   "b4b88a5778eab804a6c91c45a6c13c4a64d464a4",
    421
   ],
   [
    "audio-manifest.json.meta",
    "d7928b7565f33ff9a36fd30c334c3b3203dc2705",
    179
+  ],
+  [
+   "effect/aura/blue@0.plist",
+   "08e8b58e72a7a2fe61d25e747b09e4a1ad702e68",
+   8712
+  ],
+  [
+   "effect/aura/blue@0.plist.meta",
+   "9ae05990adbf53f87de38d7928f33c98deda0c03",
+   19090
+  ],
+  [
+   "effect/aura/blue@0.png",
+   "383403eeb36c5477e1c9c03b6cfb9c41fecfce49",
+   598759
+  ],
+  [
+   "effect/aura/blue@0.png.meta",
+   "03e9d10d5bd4b476007ed4ae6e44420d8e20fedf",
+   2933
+  ],
+  [
+   "effect/aura/done@0.plist",
+   "e3caaa75d4406c3be53aade360f232e386cc1e17",
+   6142
+  ],
+  [
+   "effect/aura/done@0.plist.meta",
+   "e99467c070382de85d70aa9104b31c926c815492",
+   13238
+  ],
+  [
+   "effect/aura/done@0.png",
+   "358dd32e4c7a51c6f30e62ebaa94a3a2d083d139",
+   179989
+  ],
+  [
+   "effect/aura/done@0.png.meta",
+   "b11f5ffec8ec8793e0a771cd269eb68180bd6cc6",
+   2985
+  ],
+  [
+   "effect/aura/purple@0.plist",
+   "02df024ac92b4e154dad1b8627cc5c3607cf352b",
+   8699
+  ],
+  [
+   "effect/aura/purple@0.plist.meta",
+   "2b31e219061121b097e26bb5f1e533ab5d2d5ab9",
+   19109
+  ],
+  [
+   "effect/aura/purple@0.png",
+   "9e6684f7f5db1f9ab6d055e30d654274f4ac9609",
+   606638
+  ],
+  [
+   "effect/aura/purple@0.png.meta",
+   "70ee5a9bcb1380d13170df130e37541f47472fca",
+   3016
+  ],
+  [
+   "effect/aura/red@0.plist",
+   "a28d894a2871c8ab84894bde5bc2a7a68b5e19f3",
+   8644
+  ],
+  [
+   "effect/aura/red@0.plist.meta",
+   "d75304dda3eae20249ead9eb61d97f6b14de8622",
+   19057
+  ],
+  [
+   "effect/aura/red@0.png",
+   "03bafbd1275c4e999607ec58a569a6ea458c9f24",
+   624109
+  ],
+  [
+   "effect/aura/red@0.png.meta",
+   "171beeec26e0ba1ac0a97e3cdceaa30940f53ade",
+   3011
   ],
   [
    "effect/background/bg-16000.plist",
@@ -2777,6 +2857,26 @@
    2981
   ],
   [
+   "effect/select/player@0.plist",
+   "82d95f230a56ecd126d0741aa73e161198b4d828",
+   4754
+  ],
+  [
+   "effect/select/player@0.plist.meta",
+   "353e29f3c1556b26020322cbc051cd1100e05e05",
+   9688
+  ],
+  [
+   "effect/select/player@0.png",
+   "d9aa573420ccc232d000bf5280808fbe9b38df8b",
+   71956
+  ],
+  [
+   "effect/select/player@0.png.meta",
+   "f32ae7e0a3922c20ac085634433678983b4cbe1e",
+   2877
+  ],
+  [
    "effect/skill/1002@0.plist",
    "f09c7565b49dcfa7d678141474b191f90740a786",
    20204
@@ -3425,86 +3525,6 @@
    "effect/status.meta",
    "b909b86005749875aa3ee321a810de6c420b3065",
    169
-  ],
-  [
-   "effect/transform/blue@0.plist",
-   "08e8b58e72a7a2fe61d25e747b09e4a1ad702e68",
-   8712
-  ],
-  [
-   "effect/transform/blue@0.plist.meta",
-   "9ae05990adbf53f87de38d7928f33c98deda0c03",
-   19090
-  ],
-  [
-   "effect/transform/blue@0.png",
-   "383403eeb36c5477e1c9c03b6cfb9c41fecfce49",
-   598759
-  ],
-  [
-   "effect/transform/blue@0.png.meta",
-   "03e9d10d5bd4b476007ed4ae6e44420d8e20fedf",
-   2933
-  ],
-  [
-   "effect/transform/done@0.plist",
-   "e3caaa75d4406c3be53aade360f232e386cc1e17",
-   6142
-  ],
-  [
-   "effect/transform/done@0.plist.meta",
-   "e99467c070382de85d70aa9104b31c926c815492",
-   13238
-  ],
-  [
-   "effect/transform/done@0.png",
-   "358dd32e4c7a51c6f30e62ebaa94a3a2d083d139",
-   179989
-  ],
-  [
-   "effect/transform/done@0.png.meta",
-   "b11f5ffec8ec8793e0a771cd269eb68180bd6cc6",
-   2985
-  ],
-  [
-   "effect/transform/purple@0.plist",
-   "02df024ac92b4e154dad1b8627cc5c3607cf352b",
-   8699
-  ],
-  [
-   "effect/transform/purple@0.plist.meta",
-   "2b31e219061121b097e26bb5f1e533ab5d2d5ab9",
-   19109
-  ],
-  [
-   "effect/transform/purple@0.png",
-   "9e6684f7f5db1f9ab6d055e30d654274f4ac9609",
-   606638
-  ],
-  [
-   "effect/transform/purple@0.png.meta",
-   "70ee5a9bcb1380d13170df130e37541f47472fca",
-   3016
-  ],
-  [
-   "effect/transform/red@0.plist",
-   "a28d894a2871c8ab84894bde5bc2a7a68b5e19f3",
-   8644
-  ],
-  [
-   "effect/transform/red@0.plist.meta",
-   "d75304dda3eae20249ead9eb61d97f6b14de8622",
-   19057
-  ],
-  [
-   "effect/transform/red@0.png",
-   "03bafbd1275c4e999607ec58a569a6ea458c9f24",
-   624109
-  ],
-  [
-   "effect/transform/red@0.png.meta",
-   "171beeec26e0ba1ac0a97e3cdceaa30940f53ade",
-   3011
   ],
   [
    "effect/upgrade/upgrade.plist",
@@ -16068,8 +16088,8 @@
   ],
   [
    "image-manifest.json",
-   "a4a1433dac72a7ad9bf605e1729fc5de41ec5dd6",
-   92604
+   "8e25b28ae53fc3423e149bc035b2d58bc027da59",
+   92576
   ],
   [
    "image-manifest.json.meta",
@@ -56890,26 +56910,6 @@
    "ui/create-role/preview/3-2-stand@0.png.meta",
    "7d49903257170a41422693aa510b2271984daebc",
    3008
-  ],
-  [
-   "ui/create-role/select-player@0.plist",
-   "95368cf0b81b840860df2851fd6b410cfb099d03",
-   4768
-  ],
-  [
-   "ui/create-role/select-player@0.plist.meta",
-   "353e29f3c1556b26020322cbc051cd1100e05e05",
-   9688
-  ],
-  [
-   "ui/create-role/select-player@0.png",
-   "d9aa573420ccc232d000bf5280808fbe9b38df8b",
-   71956
-  ],
-  [
-   "ui/create-role/select-player@0.png.meta",
-   "f32ae7e0a3922c20ac085634433678983b4cbe1e",
-   2877
   ],
   [
    "ui/create-role/sex-boy-off.png",

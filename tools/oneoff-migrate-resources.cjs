@@ -109,7 +109,8 @@ const LAYOUT = [
       "tips-1": "tips-1",
       "tips-2": "tips-2",
       "tips-3": "tips-3",
-      "select-player@0": "select-player@0",
+      // select-player@0 当时留在原地；之后（同日）搬到 effect/select/player@0，
+      // 与地图上的怪物选中光标 monster@0 放在一起 —— 见文件末尾「追加搬迁」一节
     },
   },
   { from: "fonts", to: "font" },
@@ -119,7 +120,7 @@ const LAYOUT = [
   { from: "effect/borders", to: "effect/border", file: (rel) => rel.replace(/^sfx_(\d+)_0$/, "border-$1") },
   { from: "effect/backgrounds", to: "effect/background", file: (rel) => rel.replace(/^sfx_(\d+)$/, "bg-$1") },
   { from: "effect/light", to: "effect/light", file: (rel) => rel.replace(/^light_(\d+)$/, "$1") },
-  { from: "effect/plist", to: "effect/transform", file: (rel) => rel.replace(/^transform_/, "") },
+  { from: "effect/plist", to: "effect/aura", file: (rel) => rel.replace(/^transform_/, "") },
   { from: "effect/selected", to: "effect/select", file: (rel) => rel.replace(/^select_/, "") },
   { from: "effect/skill", to: "effect/skill", file: (rel) => rel.replace(/^s_/, "") },
   { from: "effect/status", to: "effect/status", file: (rel) => rel.replace(/^s_/, "") },
@@ -399,3 +400,17 @@ if (logPath) {
   fs.writeFileSync(logPath, `${JSON.stringify(records, null, 1)}\n`, "utf8");
   console.log(`日志：${logPath}（${records.length} 条）`);
 }
+
+/**
+ * 追加搬迁（同日两处，用户点名要的语义归位；不在上面的规则表里，因为都是「单体搬一格」）
+ *
+ * 1. `effect/transform/` → `effect/aura/`：四个图集是蓝色 / 紫色 / 红色光柱与一圈落地光环，
+ *    语义是**氛围光环**，`transform` 这个名字是当初从 `effect/plist/transform_*` 继承下来的误称。
+ * 2. `ui/create-role/select-player@0` → `effect/select/player@0`：**角色选中**与**怪物选中**
+ *    是同一类东西（地面光标），放一起才好找；顺手把 `select-player` 收成 `player`，
+ *    因为目录已经叫 select 了。同目录另一个是 `monster@0`。
+ *
+ * 落盘时同步做了三件事（脚本不重跑，仅作记录）：plist 内 `realTextureFileName` /
+ * `textureFileName` 跟改、`configs/layout/images.ts` 的 `roleSelectEffectImage` 改走
+ * `effectSelectImage`、`resources.manifest.json` 升版本。
+ */
