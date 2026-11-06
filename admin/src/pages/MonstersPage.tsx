@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import type { ReactNode } from "react";
 import { dropApi, formatTime, MONSTER_TIER_LABELS, monsterIcon, monstersApi, PERMISSION, skillsApi } from "../api";
-import type { AdminMonster, DropTable, Monster, MonsterAttributes, PageResult, Skill } from "../api";
+import type { AdminMonster, DropTable, Monster, MonsterAttributes, PageResult, Skill, UpdateMonster } from "../api";
 import { AttributesGrid, crossedRangeKeys } from "../components/AttributesEditor";
 import { GameIcon } from "../components/GameImage";
 import { Modal } from "../components/Modal";
 import { Pagination } from "../components/Pagination";
-import { Badge, Button, Card, EmptyState, Field, Input, Select, Spinner, tableClass, tdClass, thClass, theadClass } from "../components/ui";
+import { Badge, Button, Card, EmptyState, Field, Input, Notice, Select, Spinner, tableClass, tdClass, thClass, theadClass } from "../components/ui";
 import { MonsterDropDialog } from "../components/drop/MonsterDropDialog";
 import { DROP_SOURCE_LABELS, DROP_SOURCE_TONE, dropSummaryText } from "../components/drop/DropEditors";
 import { hasPermission } from "../store/session";
@@ -28,12 +29,47 @@ function attributeSummary(item: Monster): string {
 }
 
 /**
- * 怪物基础数据编辑弹窗（#258）
+ * 可以覆盖播放速度的动作（#751）
  *
- * 开放「名称 + 等级 + 生命上限 + 六项攻防区间」；`tier` 不开放编辑（已展开数值才是
- * 结算依据）。属性**整份提交、整份替换**（服务端口径），六项全部展示、全部回填。
- * 改完即时生效：世界播种与伤害结算直读 monsters 表。
- * 校验分工：min ≤ max 在这里做即时提示，权威在服务端（DTO 校验 + 50019/40000）。
+ * 与服务端 `MONSTER_ACTION_KEYS` / 客户端 `monsterActionSpecs` 逐字一致：怪物素材只有这五个
+ * 动作有帧，其余动作（攻击 / 技能 / 测试动作）播放时回退待机 —— 所以界面只给这五个输入框。
+ */
+const ACTION_SPEED_KEYS: { key: string; label: string }[] = [
+  { key: "stand", label: "待机" },
+  { key: "walk", label: "行走" },
+  { key: "run", label: "奔跑" },
+  { key: "injured", label: "受击" },
+  { key: "die", label: "死亡" },
+];
+
+/** 动作速度覆盖的合法区间（与服务端 MONSTER_SPEED_RATE_MIN/MAX 同一口径） */
+const SPEED_RATE_MIN = 0.1;
+const SPEED_RATE_MAX = 10;
+
+/** 弹窗里的一节（基础 / 行为 / 资源）：分隔线 + 标题 + 一句限定说明 */
+function Section({ title, note, children }: { title: string; note?: string; children: ReactNode }) {
+  return (
+    <section className="mt-4 border-t border-slate-800 pt-4 first:mt-0 first:border-0 first:pt-0">
+      <div className="mb-2 flex flex-wrap items-baseline gap-2">
+        <span className="text-xs font-semibold tracking-wide text-slate-200">{title}</span>
+        {note ? <span className="text-xs text-slate-500">{note}</span> : null}
+      </div>
+      {children}
+    </section>
+  );
+}
+
+/**
+ * 怪物编辑弹窗（#258 / #751）
+ *
+ * 一张怪的数据分两处，**弹窗里都摆出来**：
+ * - `monsters`（基础）：名称 / 定位 / 等级 / 生命上限 / 六项攻防 —— 属性**整份提交、整份替换**；
+ * - `monster_presentation`（行为）：主动攻击 / 检测范围 / 移动速度 / 动作速度覆盖；
+ * - 同一张表里的**几何**（icon / out / 偏移 / 身体尺寸）是素材实测值，只读展示 ——
+ *   改了图就对不上，只能重跑 `client/tools/gen-monster-config.cjs`。
+ *
+ * 生效时间三档写进 hint：基础数值即时、行为参数 ≤1 秒（AI 缓存 TTL）、画面表现要重进地图。
+ * 校验分工：区间交叉 / 数值区间在这里做即时提示，权威在服务端（DTO 校验 + 40000 / 50019 / 50038）。
  */
 function MonsterEditDialog({
   open,
@@ -42,21 +78,39 @@ function MonsterEditDialog({
   onSubmit,
 }: {
   open: boolean;
-  initial: Monster | null;
+  initial: AdminMonster | null;
   onCancel: () => void;
-  onSubmit: (value: { label: string; level: number; maxHp: number; attributes: MonsterAttributes }) => Promise<boolean>;
-}) {  const [label, setLabel] = useState("");
+  onSubmit: (value: UpdateMonster) => Promise<boolean>;
+}) {
+  const [label, setLabel] = useState("");
+  const [tier, setTier] = useState<string>("normal");
   const [level, setLevel] = useState("1");
   const [maxHp, setMaxHp] = useState("1");
   const [attributes, setAttributes] = useState<MonsterAttributes | null>(null);
+  const [aggressive, setAggressive] = useState(false);
+  const [detectRange, setDetectRange] = useState("0");
+  const [moveSpeed, setMoveSpeed] = useState("0");
+  /** 动作键 → 输入框里的字符串（空串 = 不覆盖，用客户端默认） */
+  const [speedRates, setSpeedRates] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     if (!open) return;
     setLabel(initial?.label ?? "");
+    setTier(initial?.tier ?? "normal");
     setLevel(initial ? String(initial.level) : "1");
     setMaxHp(initial ? String(initial.maxHp) : "1");
     setAttributes(initial?.attributes ? { ...initial.attributes } : null);
+    const presentation = initial?.presentation ?? null;
+    setAggressive(presentation?.aggressive ?? false);
+    setDetectRange(String(presentation?.detectRange ?? 0));
+    setMoveSpeed(String(presentation?.moveSpeed ?? 0));
+    const rates: Record<string, string> = {};
+    for (const { key } of ACTION_SPEED_KEYS) {
+      const value = presentation?.speedRate?.[key];
+      rates[key] = typeof value === "number" ? String(value) : "";
+    }
+    setSpeedRates(rates);
     setSubmitting(false);
   }, [open, initial]);
 
@@ -65,13 +119,53 @@ function MonsterEditDialog({
 
   if (!open || !attributes || !initial) return null;
 
+  /** 表现行缺失 = 这只怪还没量过素材：行为参数没有落点（服务端 50038），整段禁用 */
+  const presentation = initial.presentation;
+  const behaviorEditable = presentation !== null;
+
   const levelValid = Number.isInteger(Number(level)) && Number(level) >= 1;
   const maxHpValid = Number.isInteger(Number(maxHp)) && Number(maxHp) >= 1;
-  const canSubmit = label.trim().length > 0 && levelValid && maxHpValid && crossedKeys.length === 0 && !submitting;
+  const detectValid = /^\d+$/.test(detectRange.trim());
+  const moveValid = Number.isFinite(Number(moveSpeed)) && Number(moveSpeed) >= 0;
+  const rateProblems = ACTION_SPEED_KEYS.filter(({ key }) => {
+    const raw = (speedRates[key] ?? "").trim();
+    if (raw === "") return false;
+    const value = Number(raw);
+    return !Number.isFinite(value) || value < SPEED_RATE_MIN || value > SPEED_RATE_MAX;
+  }).map(({ label: actionLabel }) => actionLabel);
+
+  const canSubmit =
+    label.trim().length > 0 &&
+    levelValid &&
+    maxHpValid &&
+    crossedKeys.length === 0 &&
+    (!behaviorEditable || (detectValid && moveValid && rateProblems.length === 0)) &&
+    !submitting;
 
   const submit = async () => {
     setSubmitting(true);
-    await onSubmit({ label: label.trim(), level: Number(level), maxHp: Number(maxHp), attributes });
+    /** 只把填了的动作写进覆盖表；一个都没填 = 空对象 = 清空回客户端默认 */
+    const speedRate: Record<string, number> = {};
+    for (const { key } of ACTION_SPEED_KEYS) {
+      const raw = (speedRates[key] ?? "").trim();
+      if (raw !== "") speedRate[key] = Number(raw);
+    }
+    const value: UpdateMonster = {
+      label: label.trim(),
+      tier,
+      level: Number(level),
+      maxHp: Number(maxHp),
+      attributes,
+    };
+    if (behaviorEditable) {
+      value.presentation = {
+        aggressive,
+        detectRange: Number(detectRange),
+        moveSpeed: Number(moveSpeed),
+        speedRate,
+      };
+    }
+    await onSubmit(value);
     setSubmitting(false);
   };
 
@@ -79,34 +173,174 @@ function MonsterEditDialog({
     <Modal
       open
       title={<>编辑怪物 · {initial.id}</>}
-      hint={<>定位 {TIER_LABELS[initial.tier] ?? initial.tier}（不可改）。改完即时生效：世界播种与伤害结算直读 monsters 表；
-          已活着的世界实例血量上限沿用出生时的值，重生后用新值。</>}
-      size="md"
+      hint={
+        <>
+          三档生效时间：<span className="text-slate-300">基础数值即时</span>（世界播种与伤害结算直读库，
+          已活着的实例血量上限沿用出生值、重生后生效）· <span className="text-slate-300">行为参数 ≤1 秒</span>
+          （实时进程的 AI 缓存）· <span className="text-slate-300">画面表现要重进地图</span>（客户端重拉快照）。
+        </>
+      }
+      size="lg"
       onClose={onCancel}
-      footer={<>
-        <Button variant="outline" disabled={submitting} onClick={onCancel}>
-          取消
-        </Button>
-        <Button disabled={!canSubmit} loading={submitting} onClick={() => void submit()}>
-          保存修改
-        </Button>
-      </>}
+      footer={
+        <>
+          <Button variant="outline" disabled={submitting} onClick={onCancel}>
+            取消
+          </Button>
+          <Button disabled={!canSubmit} loading={submitting} onClick={() => void submit()}>
+            保存修改
+          </Button>
+        </>
+      }
     >
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <Field label="名称">
-          <Input value={label} onChange={(event) => setLabel(event.target.value)} />
-        </Field>
-        <Field label="等级" hint="显示用元数据；改它不会重算战斗数值">
-          <Input type="number" min={1} value={level} onChange={(event) => setLevel(event.target.value)} />
-        </Field>
-        <Field label="生命上限">
-          <Input type="number" min={1} value={maxHp} onChange={(event) => setMaxHp(event.target.value)} />
-        </Field>
-      </div>
-      <AttributesGrid attributes={attributes} onChange={setAttributes} header="六项攻防区间（整份替换）" crossed={crossedKeys} />
+      <Section title="基础数值" note="改完即时生效">
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+          <Field label="名称" width="col-span-2">
+            <Input value={label} onChange={(event) => setLabel(event.target.value)} />
+          </Field>
+          <Field label="定位" hint="不重算数值">
+            <Select value={tier} onChange={(event) => setTier(event.target.value)}>
+              {TIER_OPTIONS.map(([value, text]) => (
+                <option key={value} value={value}>
+                  {text}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <Field label="等级" hint="显示用元数据">
+            <Input type="number" min={1} value={level} onChange={(event) => setLevel(event.target.value)} />
+          </Field>
+          <Field label="生命上限" width="col-span-2">
+            <Input type="number" min={1} value={maxHp} onChange={(event) => setMaxHp(event.target.value)} />
+          </Field>
+        </div>
+        <div className="mt-4">
+          <AttributesGrid
+            attributes={attributes}
+            onChange={setAttributes}
+            header="六项攻防区间（整份替换）"
+            crossed={crossedKeys}
+          />
+        </div>
+        <p className="mt-2 text-xs text-slate-500">
+          改定位不重算已展开的血量 / 攻防，但会改变 BOSS 判定（击杀 BOSS 才发的邮件）；掉落看「掉落」弹窗，不随定位变。
+        </p>
+      </Section>
+
+      <Section title="行为参数" note="服务端 AI ≤1 秒生效；画面表现要客户端重进地图">
+        {behaviorEditable ? (
+          <div className="rounded-xl border border-slate-800 bg-slate-950/40 p-3">
+            <label className="flex items-center gap-2 text-xs text-slate-200">
+              <input
+                type="checkbox"
+                className="h-4 w-4 accent-indigo-500"
+                checked={aggressive}
+                onChange={(event) => setAggressive(event.target.checked)}
+              />
+              主动攻击玩家（关掉后只游走，被打才记恨）
+            </label>
+            <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <Field label="检测范围" hint="像素半径；主动怪在这个距离内发现玩家">
+                <Input
+                  type="number"
+                  min={0}
+                  value={detectRange}
+                  onChange={(event) => setDetectRange(event.target.value)}
+                />
+              </Field>
+              <Field label="移动速度" hint="刚体线速度单位；出厂 2，与角色步行同口径">
+                <Input
+                  type="number"
+                  min={0}
+                  step={0.1}
+                  value={moveSpeed}
+                  onChange={(event) => setMoveSpeed(event.target.value)}
+                />
+              </Field>
+            </div>
+            <div className="mt-3">
+              <span className="mb-1 block text-xs font-medium text-slate-400">
+                动作速度覆盖（每秒循环数，留空 = 用客户端默认）
+              </span>
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+                {ACTION_SPEED_KEYS.map(({ key, label: actionLabel }) => (
+                  <Field key={key} label={actionLabel} hint={key}>
+                    <Input
+                      type="number"
+                      min={SPEED_RATE_MIN}
+                      max={SPEED_RATE_MAX}
+                      step={0.1}
+                      placeholder="默认"
+                      aria-label={`${actionLabel}速度`}
+                      value={speedRates[key] ?? ""}
+                      onChange={(event) => setSpeedRates({ ...speedRates, [key]: event.target.value })}
+                    />
+                  </Field>
+                ))}
+              </div>
+              <p className="mt-1 text-xs text-slate-500">
+                只有这五个动作有帧；攻击 / 技能动作在素材里没有帧，播放时回退待机，所以不给入口。
+              </p>
+            </div>
+          </div>
+        ) : (
+          <Notice tone="amber" title="这只怪还没有资源表现行">
+            行为参数存在 `monster_presentation` 表里，行由几何生成器按图集建。先跑
+            <code className="mx-1 text-slate-200">node client/tools/gen-monster-config.cjs</code>
+            把几何量出来，再回来改行为。
+          </Notice>
+        )}
+      </Section>
+
+      <Section title="资源与几何（只读）" note="素材实测值，改了图要重跑几何生成器">
+        {presentation ? (
+          <dl className="grid grid-cols-2 gap-x-4 gap-y-1.5 rounded-xl border border-slate-800 bg-slate-950/40 p-3 text-xs sm:grid-cols-3">
+            <div>
+              <dt className="text-slate-500">图标</dt>
+              <dd className="break-all font-mono text-slate-300">{presentation.icon}</dd>
+            </div>
+            <div>
+              <dt className="text-slate-500">外观图集</dt>
+              <dd className="break-all font-mono text-slate-300">{presentation.out}</dd>
+            </div>
+            <div>
+              <dt className="text-slate-500">摆放偏移</dt>
+              <dd className="font-mono text-slate-300">
+                {presentation.outOffset.x}, {presentation.outOffset.y}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-slate-500">身体尺寸</dt>
+              <dd className="font-mono text-slate-300">
+                {presentation.contentSize.width} × {presentation.contentSize.height}
+              </dd>
+            </div>
+          </dl>
+        ) : (
+          <p className="rounded-lg border border-slate-800 bg-slate-950/40 px-3 py-2 text-xs text-slate-500">
+            没有资源表现行（地图上这只怪会画不出来，直到跑几何生成器）。
+          </p>
+        )}
+      </Section>
+
       {!levelValid || !maxHpValid ? (
-        <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-200">
+        <p className="mt-3 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-200">
           等级与生命上限需为 ≥1 的整数。
+        </p>
+      ) : null}
+      {behaviorEditable && !detectValid ? (
+        <p className="mt-3 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-200">
+          检测范围需为 ≥0 的整数（像素半径）。
+        </p>
+      ) : null}
+      {behaviorEditable && !moveValid ? (
+        <p className="mt-3 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-200">
+          移动速度需为 ≥0 的数字。
+        </p>
+      ) : null}
+      {behaviorEditable && rateProblems.length > 0 ? (
+        <p className="mt-3 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-200">
+          动作速度需在 {SPEED_RATE_MIN}~{SPEED_RATE_MAX} 之间：{rateProblems.join(" / ")}。
         </p>
       ) : null}
     </Modal>
@@ -310,11 +544,12 @@ function MonsterSkillsDialog({
 }
 
 /**
- * 怪物配置管理（#258，养成配置第六页）
+ * 怪物配置管理（#258 / #751）
  *
  * key 清单固定（被地图刷怪点 / 掉落表 / 技能引用，启动时 seed 落库）——
- * **没有「新建」「删除」**，只有「编辑」；tier 不开放编辑。按关键字 / 定位筛选。
- * 战斗数值是客户端 monsterStats 打底 + 条目覆盖的展开结果，改这里即时生效。
+ * **没有「新建」「删除」**，只有「编辑」。按关键字 / 定位筛选。
+ * 一张怪的数据分两处：`monsters`（数值 / 定位 / 名称，改完即时生效）与
+ * `monster_presentation`（几何只读 + 行为可改，服务端 AI ≤1 秒生效）；两段都在编辑弹窗里。
  * 技能挂载（#372）与每怪掉落（#584）各一个弹窗，都是整份替换 —— 掉落在这一页就能改，
  * 不需要再去「掉落配置」页对着 key 找同一只怪。
  * 写操作要 `gameConfig:write`。
@@ -386,11 +621,11 @@ export function MonstersPage() {
   };
 
   /** 编辑弹窗提交（部分更新：只发弹窗里有的字段；属性整份替换） */
-  const submitDialog = async (value: { label: string; level: number; maxHp: number; attributes: MonsterAttributes }): Promise<boolean> => {
+  const submitDialog = async (value: UpdateMonster): Promise<boolean> => {
     if (!editing) return false;
     try {
       await monstersApi.update(editing.id, value);
-      toastSuccess(`怪物「${value.label}」已更新`);
+      toastSuccess(`怪物「${value.label ?? editing.label}」已更新`);
       setDialogOpen(false);
       setEditing(null);
       await load();
@@ -404,8 +639,9 @@ export function MonstersPage() {
     <div className="flex flex-col gap-4">
       <PageHeader
         title="怪物配置"
-        description={<>key 清单固定（被地图刷怪点 / 掉落表 / 技能引用），只可编辑、不可新增 / 删除；定位不开放编辑。
-            改名称与战斗数值即时生效（世界播种与伤害结算直读 monsters 表）。<span className="text-slate-300">死后掉什么就在这一页改</span>（
+        description={<>key 清单固定（被地图刷怪点 / 掉落表 / 技能引用），只可编辑、不可新增 / 删除。
+            数值与定位改完即时生效；<span className="text-slate-300">是否主动攻击 / 检测范围 / 移动速度 / 动作速度</span>
+            也在编辑弹窗里（服务端 AI ≤1 秒生效，画面表现要重进地图）。资源几何是素材实测值，只读。<span className="text-slate-300">死后掉什么就在这一页改</span>（
             引用具名表 / 内联条目池 / 清空走兜底，三选一，服务端抽表并入包）。</>}
       />
 
@@ -468,7 +704,18 @@ export function MonstersPage() {
                   <td className={`${tdClass} font-mono text-xs text-slate-300`}>{item.id}</td>
                   <td className={`${tdClass} font-medium text-slate-100`}>{item.label}</td>
                   <td className={tdClass}>
-                    <Badge tone={item.tier === "boss" ? "red" : item.tier === "elite" ? "amber" : "slate"}>{TIER_LABELS[item.tier] ?? item.tier}</Badge>
+                    <div className="flex items-center gap-1.5 whitespace-nowrap">
+                      <Badge tone={item.tier === "boss" ? "red" : item.tier === "elite" ? "amber" : "slate"}>
+                        {TIER_LABELS[item.tier] ?? item.tier}
+                      </Badge>
+                      {item.presentation ? (
+                        <Badge tone={item.presentation.aggressive ? "red" : "slate"}>
+                          {item.presentation.aggressive ? "主动" : "被动"}
+                        </Badge>
+                      ) : (
+                        <span className="text-xs text-slate-500">无表现行</span>
+                      )}
+                    </div>
                   </td>
                   <td className={tdClass}>{item.level}</td>
                   <td className={tdClass}>{item.maxHp}</td>
