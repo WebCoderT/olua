@@ -232,6 +232,23 @@ cd .. && make audit    # 跨端审计，含 tools/audit-admin-ui.cjs
   卸载退订，最后一个退订时停表；素材（plist 解析 + 图片解码）按路径缓存，翻页来回不打网络。
 - **trim 偏移按 `spriteSourceSize` 摆**，画布取全帧最大原始尺寸 —— 裁剪过的帧不会左右抖。
 
+## 八点六、清单型候选：别名 / 分组直接当 label / group（#749）
+
+运营自己维护的清单（`border_items` / `background_items`）没有游戏数据表可查，但它的
+`name` / `group` 本来就是管理端属性 —— `catalog.appearanceOptions(kind, items)` 直接把清单条目
+映射成 `EntityOption`：**id = key**（客户端只认它）、**label = 别名 || key**、**group = 分组**
+（缺省给「未分组」，否则分组 chips 会漏掉这些条目）、**note = `key · 分组`**、检索串含三者。
+
+三个开关，都是为「图本身就是内容」开的，缺省不动其他页面：
+
+- `image.animate = true` → `EntityImage` 走 `FrameAnimation`（边框光效 / 背景流动看首帧判断不了）；
+- `EntityPicker` / `EntityPickerList` 的 `imageSize`（默认 32，这类给 56）；
+- 棋盘格 / 表单字段用「预览 + 别名 + key」的**整块按钮**，不用 `<Select>`：84 条 key 的下拉
+  等于让人背编号，而且 `<Select>` 里放不了图。
+
+反向的一条：**引用已不在清单里时照实显示 key 并标黄**（清单页「从文件夹同步」会连被引用的
+素材一起删）—— 客户端对坏 key 是安静跳过，界面装作没事就等于把「哪个品质没边框」藏起来了。
+
 ## 九、禁用清单（= `tools/audit-admin-ui.cjs` 的规则）
 
 页面（`admin/src/pages/**`）里不许出现：
