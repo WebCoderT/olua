@@ -95,7 +95,120 @@ export interface MapMonitorRespawnEvent {
   y: number;
 }
 
-export type MapMonitorEvent = MapMonitorKillEvent | MapMonitorRespawnEvent;
+/**
+ * 一次「玩家打怪」的伤害（#745：从「谁死了」细到「这一下掉了多少血」）
+ *
+ * 一行 = 一个 castId 的结算结果。伤害是服务端算的（`CombatSettlementService.settleNew`），
+ * 所以这里的数字与客户端飘字、与怪物血条**必然同一个来源** —— 不需要二次对账。
+ *
+ * `hpBefore` 由 `hpAfter + amount` 反推（世界服务只回结果血量），两者相减恒等于 `amount`：
+ * 页面上「200 → 137（-63）」这三个数永远自洽，不会出现「掉了 63 但差值是 62」。
+ */
+export interface MapMonitorDamageEvent {
+  kind: "damage";
+  at: number;
+  instanceId: string;
+  monsterKey: string;
+  label: string;
+  /** 怪被打时所在的位置（世界坐标） */
+  x: number;
+  y: number;
+  /** 出手者角色名（取不到为空串） */
+  attacker: string;
+  /** 技能 id / 名称（普攻就是 "1000" 基础剑术） */
+  skillId: string;
+  skillLabel: string;
+  /** 这一下掉了多少血（= hpBefore - hpAfter，恒等） */
+  amount: number;
+  hpBefore: number;
+  hpAfter: number;
+  maxHp: number;
+  /** 这一下打死了（与随后的 kill 事件同时出现，前者是「过程」后者是「结果」） */
+  killed: boolean;
+  /** 这一下把怪推开了多远（技能配了 push_distance 才有；0 = 没推） */
+  pushDistance: number;
+}
+
+/**
+ * 怪物开始 / 结束追击
+ *
+ * 两端都要有：只看「开始」不知道它是不是一直在追一只已经跑远的目标；只看「结束」不知道
+ * 它为什么停下。`reason` 是服务端算出来的**唯一解释**（页面上直接显示这几个字）。
+ */
+export interface MapMonitorChaseEvent {
+  kind: "chase";
+  at: number;
+  instanceId: string;
+  monsterKey: string;
+  label: string;
+  /** 追到 / 放弃的那一刻它站在哪（世界坐标） */
+  x: number;
+  y: number;
+  /** 被追的角色名（取不到为空串） */
+  target: string;
+  /** 被追的账号（页面据此「只看这个人的日志」） */
+  targetAccountId: string;
+  phase: "start" | "end";
+  /** start：进入视野 / 记恨；end：走出检测范围 / 目标倒下 / 目标离线 / 目标换图 / 怪被击杀 */
+  reason: string;
+  /** 这一刻双方的距离（像素，取整） */
+  distance: number;
+}
+
+/** 怪物放了一次技能（状态型没有目标也没有伤害） */
+export interface MapMonitorMonsterCastEvent {
+  kind: "cast";
+  at: number;
+  instanceId: string;
+  monsterKey: string;
+  label: string;
+  x: number;
+  y: number;
+  skillId: string;
+  skillLabel: string;
+  /** 目标角色名；状态型技能（给自己上 buff）为空串 */
+  target: string;
+  targetAccountId: string;
+  /** 这一下对玩家造成的伤害（状态型为 0） */
+  damage: number;
+  /** 挨打之后玩家的血量与上限（状态型为 0） */
+  hpBefore: number;
+  hpAfter: number;
+  maxHp: number;
+  /** 这一下把玩家打倒 */
+  killed: boolean;
+}
+
+/** 怪物打中了一次玩家（普攻；技能命中走 cast） */
+export interface MapMonitorMonsterHitEvent {
+  kind: "hit";
+  at: number;
+  instanceId: string;
+  monsterKey: string;
+  label: string;
+  x: number;
+  y: number;
+  /** 被打的角色名 */
+  target: string;
+  targetAccountId: string;
+  damage: number;
+  hpBefore: number;
+  hpAfter: number;
+  maxHp: number;
+  /** 这一下把玩家打倒 */
+  killed: boolean;
+}
+
+export type MapMonitorEvent =
+  | MapMonitorKillEvent
+  | MapMonitorRespawnEvent
+  | MapMonitorDamageEvent
+  | MapMonitorChaseEvent
+  | MapMonitorMonsterCastEvent
+  | MapMonitorMonsterHitEvent;
+
+/** 全部事件类型（解析时按它白名单校验；页面按同一份清单做筛选项） */
+export const MAP_MONITOR_EVENT_KINDS = ["kill", "respawn", "damage", "chase", "cast", "hit"] as const;
 
 /**
  * 解析快照 JSON
@@ -126,7 +239,8 @@ export function parseMonitorEvent(text: string): MapMonitorEvent | null {
     const parsed: unknown = JSON.parse(text);
     if (!parsed || typeof parsed !== "object") return null;
     const value = parsed as { kind?: unknown };
-    if (value.kind !== "kill" && value.kind !== "respawn") return null;
+    // 白名单而不是「有 kind 就收」：库里存过一版后来废掉的 kind 时，读侧只会跳过它
+    if (typeof value.kind !== "string" || !(MAP_MONITOR_EVENT_KINDS as readonly string[]).includes(value.kind)) return null;
     return parsed as MapMonitorEvent;
   } catch {
     return null;

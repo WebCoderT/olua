@@ -8153,11 +8153,11 @@ export type MapMonitorEvent = {
    */
   id: number;
   /**
-   * 事件时刻（毫秒时间戳）
+   * 事件时刻（毫秒时间戳；页面显示到毫秒）
    */
   at: number;
   /**
-   * 事件类型：kill 击杀 / respawn 刷新
+   * 事件类型：kill 击杀 / respawn 刷新 / damage 伤害 / chase 追击起止 / cast 怪物技能 / hit 怪物普攻命中
    */
   kind: string;
   /**
@@ -8173,7 +8173,7 @@ export type MapMonitorEvent = {
    */
   label: string;
   /**
-   * 发生地点 x（世界坐标）：击杀 = 死亡点，刷新 = 出生点
+   * 发生地点 x（世界坐标）：击杀 = 死亡点，刷新 = 出生点，其余 = 那一刻的位置
    */
   x: number;
   /**
@@ -8181,17 +8181,73 @@ export type MapMonitorEvent = {
    */
   y: number;
   /**
-   * 击杀者角色名（刷新事件为空串）
+   * 击杀者角色名（只有 kill 有；其余为空串）
    */
   killer: string;
   /**
-   * 掉落（刷新事件为空数组）
+   * 掉落（只有 kill 有；其余为空数组）
    */
   drops: MapMonitorDrop[];
   /**
-   * 这只怪下次刷新时刻（毫秒时间戳；刷新事件为 0）
+   * 这只怪下次刷新时刻（毫秒时间戳；只有 kill 有，其余为 0）
    */
   respawnAt: number;
+  /**
+   * 出手者角色名（damage；其余为空串）
+   */
+  attacker: string;
+  /**
+   * 技能 id（damage / cast；普攻就是 1000）
+   */
+  skillId: string;
+  /**
+   * 技能名（damage / cast；取不到为空串）
+   */
+  skillLabel: string;
+  /**
+   * 这一次掉了多少血（damage = 怪物掉血，hit = 玩家掉血；其余为 0）
+   */
+  amount: number;
+  /**
+   * 变化前的血量（damage = 怪物，hit = 玩家；其余为 0）
+   */
+  hpBefore: number;
+  /**
+   * 变化后的血量（damage / hit）
+   */
+  hpAfter: number;
+  /**
+   * 血量上限（damage / hit）
+   */
+  maxHp: number;
+  /**
+   * 这一下是否致死（damage = 打死怪，hit = 打倒玩家）
+   */
+  killed: boolean;
+  /**
+   * 这一下把怪推开的距离（像素；damage 才有，0 = 没推）
+   */
+  pushDistance: number;
+  /**
+   * 被追 / 被放弃 / 被打的角色名（chase / cast / hit；其余为空串）
+   */
+  target: string;
+  /**
+   * 被追 / 被放弃 / 被打的账号 id（页面据此「只看这个人的日志」）
+   */
+  targetAccountId: string;
+  /**
+   * chase 的阶段：start 开始追击 / end 结束追击（其余为空串）
+   */
+  phase: string;
+  /**
+   * chase 的成因：进入检测范围 / 被打之后记恨 / 走出检测范围 / 目标倒下 / 目标离线 / 目标换图 / 位置上报超时 / 怪物被击杀
+   */
+  reason: string;
+  /**
+   * chase 那一刻双方的距离（像素，取整；0 = 目标位置已不可知）
+   */
+  distance: number;
 };
 
 export type MapMonitor = {

@@ -310,9 +310,15 @@ export interface AppConfiguration {
    * 加写放大；再慢（> 3 秒）图上就要靠猜了。
    */
   mapMonitorMs: number;
-  /** 每区每图保留多少条文字事件（击杀 / 刷新）：滚到更早的事该去看运维日志，不是监控页 */
+  /**
+   * 每区每图保留多少条文字事件（击杀 / 刷新 / 伤害 / 追击 / 技能 / 命中）
+   *
+   * #745 起日志细到「每一下伤害一行」，条数消耗比原来快一个数量级：300 条在激烈战斗里
+   * 只够十几秒。2000 条 ≈ 几分钟的可追溯窗口，单行几百字节，几十张图也就几 MB。
+   * 再往前的事该去看运维日志，不是监控页。
+   */
   mapMonitorEventKeep: number;
-  /** 攒够多少条新事件才裁一次旧记录（每杀一只都 DELETE 会让 WAL 白涨） */
+  /** 攒够多少条新事件才裁一次旧记录（每杀一只都 DELETE 会让 WAL 白涨；细粒度日志同理） */
   mapMonitorTrimEvery: number;
   //#endregion
 
@@ -472,8 +478,8 @@ export default function configuration(): AppConfiguration {
     playerAppearanceRefreshMs: Number(process.env.PLAYER_APPEARANCE_REFRESH_MS ?? 5000),
     playerPosMaxSpeed: Number(process.env.PLAYER_POS_MAX_SPEED ?? 1000),
     mapMonitorMs: Number(process.env.MAP_MONITOR_MS ?? 1000),
-    mapMonitorEventKeep: Number(process.env.MAP_MONITOR_EVENT_KEEP ?? 300),
-    mapMonitorTrimEvery: Number(process.env.MAP_MONITOR_TRIM_EVERY ?? 25),
+    mapMonitorEventKeep: Number(process.env.MAP_MONITOR_EVENT_KEEP ?? 2000),
+    mapMonitorTrimEvery: Number(process.env.MAP_MONITOR_TRIM_EVERY ?? 100),
     guildMemberLimit: Number(process.env.GUILD_MEMBER_LIMIT ?? 50),
     socialFriendLimit: Number(process.env.SOCIAL_FRIEND_LIMIT ?? 100),
     socialBlockLimit: Number(process.env.SOCIAL_BLOCK_LIMIT ?? 100),

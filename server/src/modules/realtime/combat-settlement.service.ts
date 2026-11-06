@@ -212,9 +212,11 @@ export class CombatSettlementService {
     //
     // 死亡点要在清运行时**之前**取（#665 实时地图监控）：AI 运行时一删，这只怪「倒在哪」
     // 就只剩出生点了；取不到（图没人看 / AI 还没跑过）退回出生点，那是服务端唯一稳定的坐标。
-    const deathSpot = applied.killed
-      ? (this.monsterAi.livePositionOf(cast.targetId) ?? { x: target.x, y: target.y })
-      : null;
+    // 同一次取到的坐标也是「这一下打在哪」—— 伤害日志用它标点（#745）。
+    const hitSpot = this.monsterAi.livePositionOf(cast.targetId) ?? { x: target.x, y: target.y };
+    const deathSpot = applied.killed ? hitSpot : null;
+    /** 这一下把怪推开了多远（#670；击杀时不推，所以默认 0） */
+    let pushDistance = 0;
 
     // 击杀奖励（#316）：经验入账与掉落抽取都在服务端 —— 经验入账失败（打到一半被踢等）
     // 只跳过 reward，不回滚这次击杀：世界状态是权威，经验少记一笔可接受
@@ -266,9 +268,30 @@ export class CombatSettlementService {
       // 技能击退（#670）：位移只能由服务端产生 —— 客户端推一下只在本机生效，同图其他人
       // 看到的怪还在原地，落点就已经不一致了。方向（施法者 → 怪）与时长都由 AI 侧决定，
       // 这里只给「推多远」（`skills.push_distance`，管理端可改）。
-      const pushDistance = Number(skill.pushDistance) || 0;
+      pushDistance = Number(skill.pushDistance) || 0;
       if (pushDistance > 0) this.monsterAi.applyPush(cast.targetId, accountId, pushDistance);
     }
+
+    // 实时地图监控（#745）：一次伤害一行 —— 「谁、用什么、打了多少、怪还剩多少」。
+    // 数字全部来自这次结算本身（不是两次快照差分）：差分只能说「掉了血」，
+    // 说不出是谁打的、用什么打的、这一下多少，而管理端要的正是这几件事。
+    this.monitor.recordDamage({
+      instanceId: cast.targetId,
+      monsterKey: cast.monsterKey,
+      label: stats.label,
+      zoneId: target.zoneId,
+      mapId: target.mapId,
+      x: hitSpot.x,
+      y: hitSpot.y,
+      attacker: this.roleNameOf(role),
+      skillId: cast.skillId,
+      skillLabel: String(skill.label ?? ""),
+      amount: damage,
+      hpAfter: applied.hp,
+      maxHp: target.maxHp,
+      killed: applied.killed,
+      pushDistance,
+    });
 
     // 玩家动作事件（#693）：观看者据此播「他出手了」的攻击/技能动画 —— settle 只回出手者
     // 本人，不记这条，别人的屏幕上他永远站着发呆。普攻与技能同一形状（普攻也是技能）。

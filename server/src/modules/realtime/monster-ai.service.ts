@@ -73,6 +73,8 @@ const SKILL_CACHE_TTL_MS = 1000;
  */
 interface CastPlan {
   skillId: string;
+  /** 技能名（事件日志要显示「放了什么」，读库时就带上，别在 tick 里查） */
+  label: string;
   /** 分类原值：0 主动（打伤害）/ 2 状态（给自己挂 buff）。其它分类不参与怪物 AI */
   category: string;
   priority: number;
@@ -92,6 +94,12 @@ interface CastPlan {
 
 /** 一只怪的服务端 AI 运行时（内存态，**不落盘**：坐标的持久真相是出生点，见 world.service） */
 interface MonsterRuntime {
+  /** 身份三件套 + 实例 id：事件日志要带「哪张图哪只怪」
+   *  （运行时不随重生保留 —— 重生即重建，所以这里是快照值而不是引用） */
+  zoneId: number;
+  mapId: string;
+  instanceId: string;
+  monsterKey: string;
   /** 当前模拟坐标（世界坐标；首次创建时 = 出生点） */
   x: number;
   y: number;
@@ -205,6 +213,7 @@ function buildCastPlan(skill: SkillRow, priority: number, cooldownOverride: numb
   if (skill.category === "2" && (!status || !skill.status_id)) return null;
   return {
     skillId: skill.id,
+    label: String(skill.label ?? ""),
     category: skill.category,
     priority,
     cooldown: cooldownOverride ?? (Number(skill.cooldown) || 0),
@@ -216,6 +225,70 @@ function buildCastPlan(skill: SkillRow, priority: number, cooldownOverride: numb
     statusDuration: status ? Number(status.duration) || 0 : 0,
   };
 }
+
+/**
+ * AI 侧发生的事（#745：给「实时地图监控」用的进程内回调）
+ *
+ * 为什么不用协议帧：这些是**给人看的日志**，客户端一个字节都不需要 —— 走 `monster-ai` 帧
+ * 会把每一下伤害都塞进 200ms 一拍的广播里，几十只怪时是纯浪费带宽。回调只喂给
+ * `MapMonitorService`（同一进程），它转成 `map_monitor_events` 的一行文字。
+ *
+ * 为什么不注入 `MapMonitorService`：那个服务本身依赖本服务（采样要读实时坐标），
+ * 构造注入就成了循环依赖。用 `onLog` 这种单向回调（与 `onBroadcast` 同一手法），
+ * 谁需要谁在 `onApplicationBootstrap` 里接线，AI 不关心有没有人听。
+ */
+export type MonsterAiLogEvent =
+  | {
+      type: "chase";
+      at: number;
+      phase: "start" | "end";
+      zoneId: number;
+      mapId: string;
+      instanceId: string;
+      monsterKey: string;
+      x: number;
+      y: number;
+      /** 被追 / 被放弃的账号 */
+      accountId: string;
+      /** 结束原因由 AI 判定（页面直接显示这几个字，不再让前端猜） */
+      reason: string;
+      /** 这一刻双方距离（像素，取整） */
+      distance: number;
+    }
+  | {
+      type: "cast";
+      at: number;
+      zoneId: number;
+      mapId: string;
+      instanceId: string;
+      monsterKey: string;
+      x: number;
+      y: number;
+      /** 目标账号（状态型技能给自己上 buff，取当前目标或空串） */
+      accountId: string;
+      skillId: string;
+      skillLabel: string;
+      /** 对玩家造成的伤害（状态型为 0） */
+      damage: number;
+      /** 挨打之后玩家的血量与上限（状态型为 0） */
+      hp: number;
+      maxHp: number;
+    }
+  | {
+      type: "hit";
+      at: number;
+      zoneId: number;
+      mapId: string;
+      instanceId: string;
+      monsterKey: string;
+      x: number;
+      y: number;
+      accountId: string;
+      damage: number;
+      /** 挨打之后玩家的血量与上限 */
+      hp: number;
+      maxHp: number;
+    };
 
 /**
  * 怪物 AI（#323：目标选择 / 移动 / 普攻与玩家受击的权威都在服务端；#372 起还会放技能）
@@ -296,6 +369,12 @@ export class MonsterAiService implements OnApplicationBootstrap, OnApplicationSh
   private skillCacheLoadedAt = 0;
   /** 只在第一次读到兜底参数时喊一次，别每 tick 刷日志 */
   private aiFallbackWarned = false;
+
+  /**
+   * 监控日志出口（#745：实时地图监控的「精细日志」）。MapMonitorService 启动时接线；
+   * 未接线时事件照常产生、只是没人记 —— 与 `onBroadcast` 同一条理由。
+   */
+  onLog: ((event: MonsterAiLogEvent) => void) | null = null;
 
   /**
    * 广播出口（发给谁、怎么发是通道的事）。RealtimeService 启动时接线；
@@ -400,7 +479,13 @@ export class MonsterAiService implements OnApplicationBootstrap, OnApplicationSh
     instanceId: string,
     kill?: { zoneId: number; mapId: string; accountId: string; x: number; y: number; drops: Array<{ goodId: string; count: number }> },
   ): void {
-    for (const map of this.runtimes.values()) map.delete(instanceId);
+    const now = Date.now();
+    for (const map of this.runtimes.values()) {
+      const runtime = map.get(instanceId);
+      // 它正在追人的话，这一死就是那次追击的结局（日志里否则会留下一条没有结束的追击）
+      if (runtime?.target) this.logChaseEnd(runtime, runtime.target, "怪物被击杀", now, this.positions.get(runtime.target) ?? null);
+      map.delete(instanceId);
+    }
     if (!kill) return;
     const key = worldKey(kill.zoneId, kill.mapId);
     const list = this.pendingKills.get(key) ?? [];
@@ -561,7 +646,18 @@ export class MonsterAiService implements OnApplicationBootstrap, OnApplicationSh
     if (runtime.target) {
       const position = this.positions.get(runtime.target);
       const fresh = position && position.hp > 0 && Date.now() - position.updatedAt <= this.posStaleMs();
-      if (!fresh) runtime.target = null;
+      if (!fresh) {
+        // 结束追击要能解释「为什么」：这四种成因在页面上是完全不同的故事
+        const reason = !position
+          ? "目标离线"
+          : position.hp <= 0
+            ? "目标倒下"
+            : position.zoneId !== runtime.zoneId || position.mapId !== runtime.mapId
+              ? "目标换图"
+              : "位置上报超时";
+        this.logChaseEnd(runtime, runtime.target, reason, now, position ?? null);
+        runtime.target = null;
+      }
     }
     // 目标获取：主动怪发现检测范围内最近玩家；被动怪只认记恨的那个人
     if (!runtime.target) {
@@ -581,6 +677,21 @@ export class MonsterAiService implements OnApplicationBootstrap, OnApplicationSh
         runtime.anchorX = runtime.x;
         runtime.anchorY = runtime.y;
         runtime.idleMoveEndAt = 0;
+        this.emitLog({
+          type: "chase",
+          at: now,
+          phase: "start",
+          zoneId: runtime.zoneId,
+          mapId: runtime.mapId,
+          instanceId: monster.instanceId,
+          monsterKey: runtime.monsterKey,
+          x: runtime.x,
+          y: runtime.y,
+          accountId: best,
+          // 「主动怪看见人」与「被动怪挨打之后记恨」是两种不同的因果，日志里要分开
+          reason: runtime.provoked === best ? "被打之后记恨" : "进入检测范围",
+          distance: Math.round(bestDistance),
+        });
       }
     }
 
@@ -596,8 +707,24 @@ export class MonsterAiService implements OnApplicationBootstrap, OnApplicationSh
         if (now >= runtime.nextAttackAt) {
           runtime.nextAttackAt = now + this.ai.attackInterval;
           const hit = this.attack(monster, runtime.target);
-          if (hit) this.pushHit(mapKey, hit);
-          else this.forgetTarget(runtime.target);
+          if (hit) {
+            this.pushHit(mapKey, hit);
+            // 普攻命中：一行「谁被打了多少」（技能命中走 cast，别在这里重复记两条）
+            this.emitLog({
+              type: "hit",
+              at: now,
+              zoneId: runtime.zoneId,
+              mapId: runtime.mapId,
+              instanceId: monster.instanceId,
+              monsterKey: runtime.monsterKey,
+              x: runtime.x,
+              y: runtime.y,
+              accountId: runtime.target,
+              damage: hit.damage,
+              hp: hit.hp,
+              maxHp: hit.maxHp,
+            });
+          } else this.forgetTarget(runtime.target);
         }
         return;
       }
@@ -703,6 +830,23 @@ export class MonsterAiService implements OnApplicationBootstrap, OnApplicationSh
     list.push(cast);
     this.pendingCasts.set(mapKey, list);
     if (hit) this.pushHit(mapKey, hit);
+    // 技能释放入日志（#745）：带技能名与这一下的伤害 —— 页面「怪物放了什么、打掉多少血」
+    this.emitLog({
+      type: "cast",
+      at: now,
+      zoneId: runtime.zoneId,
+      mapId: runtime.mapId,
+      instanceId: monster.instanceId,
+      monsterKey: runtime.monsterKey,
+      x: runtime.x,
+      y: runtime.y,
+      accountId: runtime.target ?? "",
+      skillId: plan.skillId,
+      skillLabel: plan.label,
+      damage: hit?.damage ?? 0,
+      hp: hit?.hp ?? 0,
+      maxHp: hit?.maxHp ?? 0,
+    });
     this.logger.debug(
       `怪物 ${monster.instanceId}(${monster.monsterKey}) 释放技能 ${plan.skillId}（${plan.category === "2" ? `状态 ${plan.statusId}` : `伤害倍率 ${plan.rate}`}）`,
     );
@@ -762,10 +906,57 @@ export class MonsterAiService implements OnApplicationBootstrap, OnApplicationSh
    */
   private forgetTarget(accountId: string): void {
     this.positions.delete(accountId);
+    const now = Date.now();
     for (const runtimes of this.runtimes.values()) {
       for (const runtime of runtimes.values()) {
-        if (runtime.target === accountId) runtime.target = null;
+        if (runtime.target !== accountId) continue;
+        // 每个被清掉的目标都是一次「结束追击」，日志里要能对上它当初那次「开始」（#745）
+        this.logChaseEnd(runtime, accountId, "目标倒下或不在线（出手结算不出来）", now, null);
+        runtime.target = null;
       }
+    }
+  }
+
+  //#endregion
+
+  //#region 日志出口（#745：实时地图监控）
+
+  /**
+   * 记一次「结束追击」
+   *
+   * 结束时的距离按**最后已知位置**算（目标可能已经下线，位置缓存为空 → 0）：
+   * 「0」在读日志时明确表示「不知道他跑多远了」，不是「贴在一起」。
+   */
+  private logChaseEnd(
+    runtime: MonsterRuntime,
+    accountId: string,
+    reason: string,
+    now: number,
+    position: { x: number; y: number } | null,
+  ): void {
+    this.emitLog({
+      type: "chase",
+      at: now,
+      phase: "end",
+      zoneId: runtime.zoneId,
+      mapId: runtime.mapId,
+      instanceId: runtime.instanceId,
+      monsterKey: runtime.monsterKey,
+      x: runtime.x,
+      y: runtime.y,
+      accountId,
+      reason,
+      distance: position ? Math.round(Math.hypot(position.x - runtime.x, position.y - runtime.y)) : 0,
+    });
+  }
+
+  /** 把事件交给接线方（没接线 = 没人听；监听方抛错绝不能打断 AI tick） */
+  private emitLog(event: MonsterAiLogEvent): void {
+    if (!this.onLog) return;
+    try {
+      this.onLog(event);
+    } catch (error) {
+      this.logger.warn(`监控日志写入失败（${event.type}）：${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
@@ -912,6 +1103,10 @@ export class MonsterAiService implements OnApplicationBootstrap, OnApplicationSh
     const existed = map.get(monster.instanceId);
     if (existed) return existed;
     const runtime: MonsterRuntime = {
+      zoneId: monster.zoneId,
+      mapId: monster.mapId,
+      instanceId: monster.instanceId,
+      monsterKey: monster.monsterKey,
       x: monster.x,
       y: monster.y,
       target: null,
