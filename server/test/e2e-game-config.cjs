@@ -1145,8 +1145,93 @@ async function main() {
     checkEqual(monsterGhost.status, 404, "改不存在的怪物 → 404");
     checkEqual(monsterGhost.body?.code, 50019, "怪物未找到用专属业务码 50019");
     const monsterStructural = await api(base, "PATCH", "/api/admin/monsters/1", { token, body: { tier: "boss" } });
-    checkEqual(monsterStructural.status, 200, "PATCH 结构字段不报错（白名单剥离）");
-    checkEqual(monsterStructural.body?.data?.tier, monsterSeed1.tier, "tier 不可编辑（已展开数值才是结算依据）");
+    checkEqual(monsterStructural.status, 200, "PATCH tier → 200（#751 起定位可改）");
+    checkEqual(monsterStructural.body?.data?.tier, "boss", "定位已改成 boss");
+    checkEqual(monsterStructural.body?.data?.maxHp, 500, "改定位不重算已展开的血量上限");
+    const monsterTierBack = await api(base, "PATCH", "/api/admin/monsters/1", { token, body: { tier: monsterSeed1.tier } });
+    checkEqual(monsterTierBack.body?.data?.tier, monsterSeed1.tier, "定位改回种子值");
+    const monsterBadTier = await api(base, "PATCH", "/api/admin/monsters/1", { token, body: { tier: "legend" } });
+    checkEqual(monsterBadTier.status, 400, "定位取值不合法 → 400（白名单外的值不再是「静默忽略」）");
+    checkEqual(monsterBadTier.body?.code, 40000, "非法定位用 40000");
+
+    // 表现参数（#751）：管理端行要带 presentation 段，几何只读、行为可写
+    // 快照行是扁平 camelCase 列（快照解析器只做列名驼峰化，不还原嵌套结构）
+    const presentationSeed1 = presentations.find((row) => row.id === "1");
+    check(Boolean(presentationSeed1), "配置快照里有怪物 1 的表现行");
+    const seed1Aggressive = Number(presentationSeed1.aggressive) === 1;
+    checkEqual(monster1?.presentation?.moveSpeed, presentationSeed1.moveSpeed, "管理端行的 moveSpeed 与库里的表现行一致");
+    checkEqual(monster1?.presentation?.detectRange, presentationSeed1.detectRange, "管理端行的 detectRange 与库里的表现行一致");
+    checkEqual(monster1?.presentation?.aggressive, seed1Aggressive, "aggressive 以布尔下发（库里是 0/1）");
+    check(Boolean(monster1?.presentation?.icon), "表现段带图标路径（客户端画怪要用）");
+
+    const behaviorPatched = await api(base, "PATCH", "/api/admin/monsters/1", {
+      token,
+      body: {
+        presentation: {
+          aggressive: !seed1Aggressive,
+          detectRange: 321,
+          moveSpeed: 3.5,
+          speedRate: { walk: 2 },
+        },
+      },
+    });
+    checkEqual(behaviorPatched.status, 200, "PATCH 行为参数成功（主动攻击 / 检测范围 / 移动速度 / 动作速度一起改）");
+    checkEqual(behaviorPatched.body?.data?.presentation?.aggressive, !seed1Aggressive, "主动攻击已翻转");
+    checkEqual(behaviorPatched.body?.data?.presentation?.detectRange, 321, "检测范围已更新");
+    checkEqual(behaviorPatched.body?.data?.presentation?.moveSpeed, 3.5, "移动速度已更新（小数保留）");
+    checkEqual(behaviorPatched.body?.data?.presentation?.speedRate?.walk, 2, "动作速度覆盖已写入");
+    checkEqual(
+      behaviorPatched.body?.data?.presentation?.outOffset?.x,
+      presentationSeed1.outOffsetX,
+      "只改行为不动几何：摆放偏移不变",
+    );
+    checkEqual(
+      behaviorPatched.body?.data?.presentation?.contentSize?.width,
+      presentationSeed1.contentWidth,
+      "只改行为不动几何：身体宽不变",
+    );
+    checkEqual(behaviorPatched.body?.data?.maxHp, 500, "只传 presentation 不动上一次改的生命上限");
+
+    // 部分更新语义：只传一个字段，其余保持（且 speedRate 不被顺手清空）
+    const behaviorPartial = await api(base, "PATCH", "/api/admin/monsters/1", {
+      token,
+      body: { presentation: { detectRange: 250 } },
+    });
+    checkEqual(behaviorPartial.body?.data?.presentation?.moveSpeed, 3.5, "只传 detectRange 时移动速度保留（合并语义）");
+    checkEqual(behaviorPartial.body?.data?.presentation?.speedRate?.walk, 2, "只传 detectRange 时动作速度覆盖保留");
+
+    const behaviorBadAction = await api(base, "PATCH", "/api/admin/monsters/1", {
+      token,
+      body: { presentation: { speedRate: { attack_near: 2 } } },
+    });
+    checkEqual(behaviorBadAction.status, 400, "给没有帧的动作配速度 → 400（不装作生效）");
+    checkEqual(behaviorBadAction.body?.code, 40000, "非法动作键用 40000");
+    const behaviorBadRate = await api(base, "PATCH", "/api/admin/monsters/1", {
+      token,
+      body: { presentation: { speedRate: { walk: 0 } } },
+    });
+    checkEqual(behaviorBadRate.status, 400, "动作速度为 0 → 400（帧不动）");
+    const behaviorBadRange = await api(base, "PATCH", "/api/admin/monsters/1", { token, body: { presentation: { detectRange: -1 } } });
+    checkEqual(behaviorBadRange.status, 400, "检测范围为负 → 400");
+
+    // 传 {} = 清空回客户端默认（与「不传 = 不改」区分开）
+    const behaviorCleared = await api(base, "PATCH", "/api/admin/monsters/1", { token, body: { presentation: { speedRate: {} } } });
+    checkEqual(behaviorCleared.status, 200, "动作速度传 {} → 200");
+    checkEqual(behaviorCleared.body?.data?.presentation?.speedRate, undefined, "传 {} 清空回默认（speedRate 不再下发）");
+    checkEqual(behaviorCleared.body?.data?.presentation?.moveSpeed, 3.5, "清空动作速度不影响移动速度");
+
+    // 复原种子值（后面的断言与其它套件都按出厂行看）
+    const behaviorRestored = await api(base, "PATCH", "/api/admin/monsters/1", {
+      token,
+      body: {
+        presentation: {
+          aggressive: seed1Aggressive,
+          detectRange: presentationSeed1.detectRange,
+          moveSpeed: presentationSeed1.moveSpeed,
+        },
+      },
+    });
+    checkEqual(behaviorRestored.body?.data?.presentation?.moveSpeed, presentationSeed1.moveSpeed, "行为参数已复原成种子值");
     const postMonster = await api(base, "POST", "/api/admin/monsters", { token, body: { id: "999" } });
     checkEqual(postMonster.status, 404, "POST 怪物 → 404（路由不存在）");
     const deleteMonster = await api(base, "DELETE", "/api/admin/monsters/1", { token });

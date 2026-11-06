@@ -60,7 +60,14 @@ import { EquipmentDto, EquipmentPageDto, EquipmentQueryDto, EquipmentVariantDto,
 import { AppearanceAssignmentDto, AppearanceEffectDto, AppearanceItemDto, AppearanceResourceScanDto, AppearanceResourceSyncDto, CustomAppearanceDto, EquipmentBackgroundDto, EquipmentBorderDto, UpdateEquipmentBackgroundDto, UpdateEquipmentBorderDto } from "../modules/game-config/dto/equipment-appearance.dto";
 import { DrugDto, DrugPageDto, DrugQueryDto, UpdateDrugDto } from "../modules/game-config/dto/drug.dto";
 import { ItemDto, ItemPageDto, ItemQueryDto, UpdateItemDto } from "../modules/game-config/dto/item.dto";
-import { MonsterDto, MonsterPageDto, MonsterQueryDto, UpdateMonsterDto } from "../modules/game-config/dto/monster.dto";
+import {
+  MonsterDto,
+  MonsterPageDto,
+  MonsterPresentationDto,
+  MonsterQueryDto,
+  UpdateMonsterDto,
+  UpdateMonsterPresentationDto,
+} from "../modules/game-config/dto/monster.dto";
 import { NpcDto, NpcPageDto, NpcQueryDto, UpdateNpcDto } from "../modules/game-config/dto/npc.dto";
 import { CreateSkillDto, DamageCoefficientDto, SkillDto, SkillPageDto, SkillQueryDto, UpdateSkillDto } from "../modules/game-config/dto/skill.dto";
 import { MonsterSkillDto, MonsterSkillItemDto, MonsterSkillListDto, ReplaceMonsterSkillsDto } from "../modules/game-config/dto/monster-skill.dto";
@@ -356,11 +363,13 @@ export const SWAGGER_MODELS = [
   ItemPageDto,
   ItemQueryDto,
   UpdateItemDto,
-  // 养成配置（怪物 #258）
+  // 养成配置（怪物 #258 / 行为参数可写 #751）
   MonsterDto,
   MonsterPageDto,
+  MonsterPresentationDto,
   MonsterQueryDto,
   UpdateMonsterDto,
+  UpdateMonsterPresentationDto,
   // 养成配置（NPC #258）
   NpcDto,
   NpcPageDto,

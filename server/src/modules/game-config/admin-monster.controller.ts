@@ -13,12 +13,15 @@ import { AdminMonsterDto, MonsterPageDto, MonsterQueryDto, UpdateMonsterDto } fr
 import { MonsterSkillListDto, ReplaceMonsterSkillsDto } from "./dto/monster-skill.dto";
 
 /**
- * 管理端 · 怪物基础数据（#258）
+ * 管理端 · 怪物基础数据（#258 / #751）
  *
  * 与称号 / 战魂 / 军衔 / 装备基础件同一取向：**只有 list / update，没有 create / remove** ——
  * 怪物 key 被地图刷怪点 / 掉落表 / 技能引用，清单固定（seed 自客户端 configs/monster 的
- * 220 只），e2e 会固化「POST/DELETE 404」。`tier` 不开放编辑（已展开数值才是结算依据）。
- * **改完即时生效**：世界播种与伤害结算直读 monsters 表（两进程共享同一个 SQLite 文件）。
+ * 220 只），e2e 会固化「POST/DELETE 404」。
+ *
+ * 一张怪的数据分两张表：`monsters`（数值 + 定位 + 名称）与 `monster_presentation`
+ * （资源几何 + 行为参数）。前者整份可写；后者**只有行为那四列可写**（#751），几何是素材事实。
+ * 基础数值**改完即时生效**（世界播种与伤害结算直读库），行为参数走实时进程 AI 的 1 秒 TTL。
  * 怪物技能的**挂载**在本控制器（`/monsters/:id/skills`，#372，整份替换）；
  * 技能行本身在 `/admin/skills`（同表 owner=monster）；刷怪点位属世界层，不在这里。
  * 写操作带 `@AuditTarget("monster")`。
@@ -39,7 +42,8 @@ export class AdminMonsterController {
       "改这里的值即时生效（世界播种与伤害结算直读 monsters 表）；" +
       "`level` 是显示用元数据，改它**不会**重算数值。\n\n" +
       `**排序**：\`sort\` 取 ${sortFieldNames(MONSTER_SORT)}，\`order\` 取 asc / desc（默认等级升序）。\n\n` +
-      "每行带 `drop` 掉落摘要（来源 / 具名表 id / 抽取次数 / 内联条目数）—— 掉落就在这一页改，" +
+      "每行带 `drop` 掉落摘要（来源 / 具名表 id / 抽取次数 / 内联条目数）与 `presentation` 表现参数" +
+      "（几何只读、行为可改，#751）—— 掉落就在这一页改，" +
       "完整条目池走 `GET /admin/monster-drops/:monsterKey`，写入仍只有 `PATCH /admin/monster-drops/:monsterKey` 一条路。",
     permissions: [Permission.GAME_CONFIG_READ],
   })
@@ -53,20 +57,30 @@ export class AdminMonsterController {
   @AuditTarget("monster")
   @ApiAdminDoc({
     operationId: "adminMonster.update",
-    summary: "编辑怪物基础数据",
+    summary: "编辑怪物（数值 / 定位 / 行为参数）",
     description:
-      "**部分更新**：只改请求体里出现的字段。改完即时生效（世界播种与伤害结算直读 monsters 表）——" +
-      "已活着的世界实例血量上限沿用出生时的值，重生后用新值。\n\n" +
+      "**部分更新**：只改请求体里出现的字段。\n\n" +
+      "**基础数值与定位**（落在 `monsters` 表，改完即时生效 —— 世界播种与伤害结算直读它）：\n" +
       "- `label`：名称（头顶名牌）。\n" +
       "- `level`：显示用元数据，改它**不会**重算战斗数值。\n" +
-      "- `maxHp`：生命上限（已展开值，≥1）。\n" +
+      "- `maxHp`：生命上限（已展开值，≥1）。已活着的世界实例沿用出生时的值，重生后用新值。\n" +
       "- `attributes`：六项攻防区间，**整份提交、整份替换**（0 ≤ min ≤ max）。\n" +
-      "- `tier` 不开放编辑（仅作标注，改它不影响已展开数值）。\n" +
-      "- `id` 不存在 → 404（`50019`）。",
+      "- `tier`：定位 normal / elite / boss。**不**重算已展开的血量 / 攻防，但决定 BOSS 判定" +
+      "（击杀 BOSS 才发的邮件读它）；掉落不随它变（看 `monster_drops` 那张表）。\n\n" +
+      "**行为参数**（落在 `monster_presentation` 表，服务端 AI 有 1 秒缓存 → 最迟 1 秒生效）：\n" +
+      "- `presentation.aggressive`：是否主动攻击玩家。关掉后只游走，被打才记恨。\n" +
+      "- `presentation.detectRange`：检测范围（像素半径），主动怪在这个距离内发现玩家。\n" +
+      "- `presentation.moveSpeed`：移动速度（刚体线速度单位，出厂 2，与角色步行同口径）。\n" +
+      "- `presentation.speedRate`：动作速度覆盖（动作键 → 每秒循环数）。键只认 " +
+      "stand / walk / run / injured / die（怪物素材只有这五个动作有帧）；**传 `{}` = 清空回客户端默认，不传 = 不改**。\n\n" +
+      "**生效时间三档**：基础数值即时；行为参数 ≤1 秒（实时进程 AI 缓存 TTL）；" +
+      "**画面表现**（动作速度、外观）要客户端重进地图才会拿到新快照。\n\n" +
+      "- `id` 不存在 → 404（`50019`）；传了 `presentation` 但这只怪没有资源表现行 → 404（`50038`，先去跑几何生成器）。\n" +
+      "- 动作键不在白名单 / 数值越界 → 400（`40000`）。",
     permissions: [Permission.GAME_CONFIG_WRITE],
   })
   @ApiParam({ name: "id", description: "怪物 key（configs/monster 的关联键，如 \"1\"）" })
-  @ApiDataResponse(AdminMonsterDto, { description: "更新后的怪物基础数据（含掉落摘要，与列表同形）" })
+  @ApiDataResponse(AdminMonsterDto, { description: "更新后的怪物（含掉落摘要与表现参数，与列表同形）" })
   update(@Param("id") id: string, @Body() dto: UpdateMonsterDto): AdminMonsterDto {
     return this.gameConfigService.updateMonsterAdmin(id, dto);
   }
