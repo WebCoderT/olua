@@ -16,16 +16,13 @@ import { uiSize } from "./sizes";
 export const dialogFrame = {
   /** 缺省弹窗尺寸（createDialog 不传尺寸时使用） */
   size: new Size(600, 500),
-  /** 标题：距弹窗上边缘的内缩、文本高度、宽度两侧内缩、字号与颜色 */
+  /** 标题：距弹窗上边缘的内缩、文本高度、宽度两侧内缩、字号与颜色（摆放见 GameUiHelper.createDialog） */
   title: {
     insetTop: 15,
     height: 30,
     widthPadding: 60,
     fontSize: 14,
     color: new Color("#FF8B8B"),
-    /** 独立使用 createDialogTitle 时的缺省位置与文本框尺寸（按缺省弹窗尺寸推得） */
-    defaultPosition: new Vec2(0, 228),
-    defaultSize: new Size(300, 30),
   },
   /** 关闭按钮：尺寸（公共尺寸，见 sizes.uiSize）+ 距弹窗上/右边缘的内缩 */
   closeButton: { size: uiSize.closeButtonSize, inset: 15 },
@@ -761,8 +758,9 @@ export const guildDialogLayout = {
     memberList: { name: "guild_member_list", position: new Vec2(0, 14), size: new Size(556, 168) },
     applicantTitle: { position: new Vec2(0, -88), size: new Size(560, 20), fontSize: 13, color: new Color(255, 214, 102) },
     applicantList: { name: "guild_applicant_list", position: new Vec2(0, -158), size: new Size(556, 116) },
-    leaveButton: { name: "guild_leave_button", text: "退出帮会", position: new Vec2(-70, -232), small: true },
-    disbandButton: { name: "guild_disband_button", text: "解散帮会", position: new Vec2(70, -232), small: true },
+    /** 退出 / 解散二选一（帮主只能解散、成员只能退出），一律摆 singleButtonPosition */
+    leaveButton: { name: "guild_leave_button", text: "退出帮会", small: true },
+    disbandButton: { name: "guild_disband_button", text: "解散帮会", small: true },
     /** 只剩一个按钮时（帮主只能解散、成员只能退出）居中摆放，避免偏在一边 */
     singleButtonPosition: new Vec2(0, -232),
   },
@@ -1179,7 +1177,7 @@ export const questDialogLayout = {
   name: "quest_dialog",
   title: "任 务",
   size: new Size(600, 560),
-  /** 页签（两枚，比聊天弹窗的三枚更宽一点） */
+  /** 页签（两枚，与聊天弹窗同款式；角标直接在页签文案后追加「·N」，不另设小字样式） */
   tabs: {
     y: 232,
     size: new Size(140, 32),
@@ -1217,9 +1215,6 @@ export const questDialogLayout = {
     metaSize: new Size(360, 18),
     buttonX: 214,
   },
-  /** 页签角标（可交付数 / 可接数）用的小字 */
-  titleColor: new Color(255, 214, 102, 255),
-  titleFontSize: 12,
   /** 文案 */
   texts: {
     tabs: ["进行中", "可 接"],
@@ -1321,8 +1316,6 @@ export const partyDialogLayout = {
     leave: new Vec2(0, -244),
     disband: new Vec2(150, -244),
   },
-  titleColor: new Color(255, 214, 102, 255),
-  titleFontSize: 12,
   /** 文案 */
   texts: {
     tabs: ["队 员", "邀 请"],

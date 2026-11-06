@@ -1259,20 +1259,6 @@ export default class GameUiHelper {
   }
 
   /**
-   * 创建游戏通用弹窗标题
-   */
-  static createDialogTitle(name: string, title: string, position: Vec2 = dialogFrame.title.defaultPosition) {
-    return UiHelper.createLabel(name, title, dialogFrame.title.color, dialogFrame.title.fontSize, position, dialogFrame.title.defaultSize);
-  }
-
-  /**
-   * 创建游戏通用关闭按钮
-   */
-  static createCloseButton(name: string, position: Vec2 = new Vec2(), size: Size = dialogFrame.closeButton.size) {
-    return UiHelper.createButton(name, dialogFrame.closeImage, position, size);
-  }
-
-  /**
    * 创建通用弹窗
    */
   static createDialog(name: string, title: string, position: Vec2 = new Vec2(), size: Size = dialogFrame.size) {
