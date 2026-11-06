@@ -156,9 +156,6 @@ export class Game extends Component {
     };
     // 伤害结算上移服务端（#34）：settle 帧的结果由怪物管理器落到目标身上（扣血/飘字/死亡）
     CombatChannel.onSettle = MonsterManager.applyServerSettle.bind(MonsterManager);
-    // 玩家受击反馈（#13）：怪物普攻命中后播受击动作（优先级规则在 RoleDisplay.playInjured：
-    // 施法/死亡不播，其余情况一次性抖一下不打断任何事）；屏幕红闪在 MonsterAI 内直接触发
-    MonsterAI.onPlayerHit = () => this.roleDisplay?.playInjured();
     // 世界权威（#35）：world 帧的快照由怪物管理器与场上节点做差量合并（播种落场/重生补场）
     CombatChannel.onWorld = MonsterManager.applyWorldState.bind(MonsterManager);
     // 怪物 AI 权威（#323）：monster-ai 帧由怪物管理器落点（位置趋近演出 + 自己的受击事件），
@@ -213,6 +210,10 @@ export class Game extends Component {
     // 不接这条的话动作被拒等于没反应（玩家只会反复点），所以文案直接用服务端的 message。
     // 用**错误色**（#498）：拒绝不是普通提示，绿色小字和「已邀请」「经验 +N」混在一起分不出来。
     CombatChannel.onServerError = (error) => GameUiHelper.createErrorTipText(error.message);
+    // 玩家受击反馈（#13 / #323）：怪物普攻命中由**服务端**判定（monster-ai 帧的 hits），
+    // 这里做血量入账 + 飘字 + 红闪 + 受击动作（优先级规则在 RoleDisplay.playInjured：
+    // 施法/死亡不播，其余情况一次性抖一下不打断任何事）。#670 删掉本地怪物 AI 后，
+    // 这是玩家挨打的**唯一**一条路 —— 本地既不结算也不再自己判断命中
     MonsterManager.onPlayerServerHit = (hit) => {
       StorageManager.applyMonsterHit(hit);
       if (!this.roleDisplay) return;
@@ -388,7 +389,6 @@ export class Game extends Component {
     CombatChannel.onExpGain = null;
     CombatChannel.onServerError = null;
     MonsterManager.onPlayerServerHit = null;
-    MonsterAI.onPlayerHit = null;
     OtherPlayerManager.reset();
     // 社交快照（好友 / 敌人 / 帮会）是「这个角色」的，离开游戏就不该留给下一个角色
     SocialStore.clear();
@@ -475,17 +475,13 @@ export class Game extends Component {
     AutoBattleTips.update(this.roleDisplay);
     // 路线指示线（自动寻路期间在大地图地面上画出「角色 → 目标」的路线；无路线时清空）
     RouteIndicator.update(this.roleDisplay);
-    // 怪物 AI 每帧驱动（待机游走 / 追击玩家 / 普攻，玩家节点由组合根传入；
-    // 玩家死亡后不再给怪物提供玩家节点——尸体不会被追击与普攻）。
-    // 服务端 AI 权威（#323）：实时通道在线且进过图时，怪物行为 / 位置以 monster-ai 帧为准，
-    // 本地只演（向服务端位置趋近）；同时按节流上报自身位置（AI 的目标检测输入）
-    if (MonsterManager.serverAuthority) {
-      MonsterAI.tick(MonsterManager.getMonsterMap(), null, true);
-      OtherPlayerManager.tick(deltaTime);
-      this.reportPosition(deltaTime);
-    } else {
-      MonsterAI.tick(MonsterManager.getMonsterMap(), this.roleDisplay && !this.roleDisplay.isDead() ? this.roleDisplay : null);
-    }
+    // 怪物表现每帧驱动（#670：位置趋近 + 走路/待机；目标选择 / 游走 / 追击 / 普攻全在服务端，
+    // 客户端不再有第二套 AI —— 两套并存时同图两个人看到的怪在两个地方）
+    MonsterAI.tick(MonsterManager.getMonsterMap());
+    // 玩家互见（#324）每帧驱动：向广播位置插值 + 按位移差量定朝向/动作
+    OtherPlayerManager.tick(deltaTime);
+    // 自身位置上报（服务端 AI 的目标检测输入 + 互见数据源；通道没连上时是空操作）
+    this.reportPosition(deltaTime);
     // 小地图每帧驱动（内部按刷新间隔节流：地图名称/世界坐标文本与角色黑点/怪物红点重绘）
     this.smallMap?.update();
     // 掉落物自动拾取（角色走到掉落物上即收入背包，用位移后的最新位置判定）

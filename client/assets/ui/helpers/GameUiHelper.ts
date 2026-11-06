@@ -894,8 +894,8 @@ export default class GameUiHelper {
 
   /**
    * 受击屏幕反馈：全屏薄红闪一下（挂特效层、以相机为中心铺满可视区，淡入即淡出后自毁）
-   * 由怪物普攻命中玩家时调用（见 core/MonsterAI 的 onPlayerHit 接线）；
-   * 按配置限频 —— 被围殴时不重触发，避免红屏常驻。参数见 configs/effect.hitScreenFlash
+   * 由怪物普攻命中玩家时调用（服务端 monster-ai 帧的 hits → MonsterManager.onPlayerServerHit，
+   * 接线在 Game.start）；按配置限频 —— 被围殴时不重触发，避免红屏常驻。参数见 configs/effect.hitScreenFlash
    */
   static showHitScreenFlash() {
     const config = hitScreenFlash;

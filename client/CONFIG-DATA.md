@@ -130,7 +130,7 @@
 | 11 / 12 | `questData` / `quests`（派生注册表） | `applyQuestRows` → `rebuildQuests()` | `quest-data.ts` / `quest.ts` |
 | 13 | `skillData`（**空数组**）+ `oeccupationSkills`（按行派生） | `applySkillRows` → `applySkillData` | `skill-data.ts` |
 | 14 | `fashionData`（**空数组**）+ 外观取源规则（`getFashionOut` / `getFashionIn`） | `applyFashionRows` → `applyFashionData` | `fashionClothes.ts` |
-| 15 | `monsterAI` / `monsterDefaultSpeedRate`（**客户端手感**，见 4.2） | —（常量） | `monster.ts` |
+| 15 | `monsterDefaultSpeedRate`（**纯演出**：动作速度倍率，见 4.2） | —（常量） | `monster.ts` |
 | 16 | `monsterRuntime` / `monsterResource` | `applyMonsterRows` / `applyMonsterPresentations` | `monsterRuntime.ts` |
 | 17 | 特殊价 / 统一价（**无出厂值**） | `applyMallPricing` | `mall.ts` |
 | 18 | `maps` / `mapTypeGroups` + 资源约定（`mapSrcOf` / Tiled 名） | `applyMapRows` | `map.ts` |
@@ -149,7 +149,7 @@
 | 文件 / 区 | 剩下什么 | 为什么不入库 |
 |---|---|---|
 | `role.ts` | `occupations`（3 行职业介绍）、移动速度、体型 / 碰撞盒、摇杆与鼠标死区、背包行列、快捷键布局、动作速度倍率 | 职业名的权威副本已在公共数据（生成物 `OCCUPATION_LABELS`）；介绍图路径按职业码可推导（`create_role/tips_<码>`），尺寸是素材量出来的；其余全是手感 / 布局参数（`client/README` 的「表现层」） |
-| `game-config` 区 15 | `monsterAI`（普攻间隔 / 停下出手距离 / 待机游走节奏 / 击退时长）、`monsterDefaultSpeedRate` | 动画节奏与手感；服务端 tick 读的 6 个数值已由生成器收进 `MONSTER_AI`（**两端同源，不是两份**）。怪物真正的数值（血量 / 六项攻防 / 掉落）早在 `monsters` 表 |
+| `game-config` 区 15 | `monsterDefaultSpeedRate`（11 个动作的动画速度倍率） | 纯演出（帧率）。**行为参数（出手间隔 / 停下出手距离 / 待机游走节奏 / 击退时长）已随 #670 搬去服务端** `runtime_params.monster_ai`，客户端一个字都不留 —— 留着就等于默许本地再长出第二套 AI，而同图两个客户端各跑一套正是「画面不一致」的成因。怪物真正的数值（血量 / 六项攻防 / 掉落）早在 `monsters` 表 |
 
 > 判据沿用项目既定三条：**能按 id 推导的资源路径不入库**、**素材尺寸不是运营数值**、
 > **客户端只留资源约定与手感参数**。为了「搬完」而给 3 行 UI 文案建表 + 建页面，
@@ -197,11 +197,12 @@
 `drop`（具名表 + 兜底表）、`battle`（战斗力权重）、`npc`、`mall`（默认售价）、
 **`equipments` + `growth`（第九域：装备/槽位/倍率/回收价曲线，含 1080 行装备数据）**、
 **`items` / `material` / `drug`（第十域：图标随行入库，物品总表只剩索引）**、
-**`skill-data`（第十一域：15 条技能行 + 职业归属 / 击退距离，`oeccupationSkills` 改为派生）**、
+**`skill-data`（第十一域：15 条技能行 + 职业归属，`oeccupationSkills` 改为派生）**、
 **`fashionClothes`（第十二域：20 套时装，含 icon / in / out 资源路径与 `acquireChannel` 获得渠道 —— 路径不可按 id 推导，必须入库；渠道随 #596 收权进表，`upgrade` 且有价才可购买）**。
 
 **`role` / `monster`（第十三域）：复核后判定不搬** —— 剩下的全是表现层（职业介绍图路径可推导、
-尺寸取素材、AI 节奏与移动手感），判据见 4.2。至此 #603 的「运营数据进库」全部收口。
+尺寸取素材、动画速度倍率）。AI 节奏原先也留在这里，**#670 起随「怪物 AI 整体上移服务端」一并搬走**
+（`runtime_params.monster_ai`）。至此 #603 的「运营数据进库」全部收口。
 
 > 第九域的三层切分值得记住：**显示与规则**进 `equipments` / `equipment_slots` / `equipment_meta` 三张表；
 > **八项战斗属性**在 `equipment_variants` 表里逐条写明（#655：555 行，运行时零现算，回收价也在这张表）；

@@ -24,6 +24,8 @@ interface MonsterAiParams {
   attackRange: number;
   /** 施法硬直兜底（毫秒）：技能没配 castLockMs 时用它 */
   attackActionTime: number;
+  /** 击退时长（毫秒，技能只配距离时用它换算击退速度；#670 从客户端 monsterAI.pushDuration 搬来） */
+  pushDuration: number;
   idleMoveInterval: [number, number];
   idleMoveDuration: [number, number];
   idleMoveSpeedScale: number;
@@ -41,6 +43,7 @@ const FALLBACK_AI: MonsterAiParams = {
   attackInterval: 2000,
   attackRange: 60,
   attackActionTime: 400,
+  pushDuration: 200,
   idleMoveInterval: [4000, 9000],
   idleMoveDuration: [300, 800],
   idleMoveSpeedScale: 0.5,
@@ -119,6 +122,23 @@ interface MonsterRuntime {
   statuses: Map<string, number>;
   /** 施法硬直到期时刻（毫秒）：期间既不移动也不出手（#372） */
   castEndAt: number;
+  /** 击退结束时刻（毫秒；#670 技能击退，期间只按击退方向位移） */
+  pushEndAt: number;
+  /** 击退方向（单位向量，世界坐标） */
+  pushDirX: number;
+  pushDirY: number;
+  /** 击退速度（像素/秒，由击退距离与时长换算） */
+  pushSpeed: number;
+  /**
+   * 上一拍 tick 读到的血量与上限（#670：随位置一起广播，观看者据此刷血条）
+   *
+   * 世界观层的血量是权威（玩家打怪走 settle 落账），AI 只是**读者**：每 tick 抄一份到
+   * 运行时里，广播时不必再去世界层逐只反查（200ms 一拍，几十只怪）。
+   */
+  hp: number;
+  maxHp: number;
+  /** 上次广播出去的血量（增量广播的第三个判据；-1 = 还没广播过） */
+  sentHp: number;
 }
 
 /** 一个玩家的位置上报（AI 的目标检测输入；移动预测仍在客户端，服务端不做位置的权威） */
@@ -206,6 +226,8 @@ function buildCastPlan(skill: SkillRow, priority: number, cooldownOverride: numb
  * 每只**有人看的图**上的存活怪，跑一套与客户端旧 MonsterAI 同口径的状态机：
  * - 目标选择：主动怪常驻发现；被动怪被打伤后记恨打它的人（结算侧 provoke 进来）；
  *   玩家离开检测范围即丢失目标（记恨不清，回来继续被追 —— 与客户端语义一致）；
+ *   **出手结算不出来（玩家已经倒下 / 不在线）即当作目标作废**（#670）：清记恨、清位置缓存，
+ *   并且这次出手整次不发 —— 包括技能（见 `forgetTarget`）；
  * - 移动：待机游走（停留点 + 随机方向 + 活动半径）与追击（直线趋近，不做寻路），
  *   速度用快照里每只怪的 `moveSpeed`（像素/秒，与客户端同一数值）；
  * - 出手：进入距离后**先试技能、再普攻**（#372，见下节）；普攻伤害 = 怪物物攻区间随机值
@@ -242,7 +264,7 @@ function buildCastPlan(skill: SkillRow, priority: number, cooldownOverride: numb
  * ===========================================================================
  * 广播
  * ===========================================================================
- * 按 `MONSTER_AI_BROADCAST_MS` 节流：只发**有变化**的怪（位置变了或移动标记变了）
+ * 按 `MONSTER_AI_BROADCAST_MS` 节流：只发**有变化**的怪（位置变了、移动标记变了或血量变了）
  * 加上这段时间的命中事件、技能释放与玩家击杀（#689）—— 站着的怪不发第二遍。帧形状见 protocol 的
  * `RealtimeMonsterAiMessage`；发谁由观看者集合决定（RealtimeService 接线）。
  */
@@ -335,6 +357,38 @@ export class MonsterAiService implements OnApplicationBootstrap, OnApplicationSh
     if (!monster) return;
     const runtime = this.runtimeOf(monster);
     runtime.provoked = accountId;
+  }
+
+  /**
+   * 技能击退（#670：位移也只能由服务端产生，否则同图两个人看到的落点不一样）
+   *
+   * 由结算侧在「带 `push_distance` 的技能打中」之后调用。方向 = 施法者 → 怪（取不到施法者
+   * 位置就放弃这次击退：位置上报还没到，宁可不推也不要推错方向）。
+   *
+   * 语义与客户端旧版 `MonsterAI.push` 一致：按「距离 / 时长」换算匀速位移，期间只走击退、
+   * 不出手、不受硬直影响 —— 击退本身就是打断。落点会随普通的位置广播发给所有人，
+   * 客户端照常趋近（`MonsterAI.stepServer`），因此**不需要新的协议帧**。
+   */
+  applyPush(instanceId: string, fromAccountId: string, distance: number): void {
+    if (!(distance > 0)) return;
+    const monster = this.world.find(instanceId);
+    if (!monster || !monster.alive) return;
+    const from = this.positions.get(fromAccountId);
+    if (!from) return;
+    const runtime = this.runtimeOf(monster);
+    const offsetX = runtime.x - from.x;
+    const offsetY = runtime.y - from.y;
+    const length = Math.hypot(offsetX, offsetY);
+    // 完全重叠时没有方向可推（与旧口径一致：站在一起的怪不会被「推」到自己身上）
+    if (length <= 0.001) return;
+    const duration = this.ai.pushDuration;
+    runtime.pushDirX = offsetX / length;
+    runtime.pushDirY = offsetY / length;
+    runtime.pushSpeed = distance / (duration / 1000);
+    runtime.pushEndAt = Date.now() + duration;
+    // 击退打断手上的动作：硬直清零，落点后重新开始（下一次出手仍受普攻间隔约束）
+    runtime.castEndAt = 0;
+    runtime.movingNow = true;
   }
 
   /**
@@ -460,6 +514,9 @@ export class MonsterAiService implements OnApplicationBootstrap, OnApplicationSh
         const config = this.presentationByKey.get(monster.monsterKey);
         if (!config) continue;
         const runtime = this.runtimeOf(monster);
+        // 血量抄一份到运行时（#670）：世界层是权威，AI 只读 —— 广播拿它判断「这一拍要不要发」
+        runtime.hp = monster.hp;
+        runtime.maxHp = monster.maxHp;
         this.stepMonster(runtime, monster, config, players, now, key);
       }
     }
@@ -483,6 +540,16 @@ export class MonsterAiService implements OnApplicationBootstrap, OnApplicationSh
     now: number,
     mapKey: string,
   ): void {
+    // 击退优先于一切（#670）：期间只按击退方向位移，目标 / 技能 / 硬直都往后放 ——
+    // 被推着的怪继续放技能会看起来像「飘着打人」，而且落点会与施法者的预期错开
+    if (now < runtime.pushEndAt) {
+      const step = (runtime.pushSpeed * this.tickMs()) / 1000;
+      runtime.x += runtime.pushDirX * step;
+      runtime.y += runtime.pushDirY * step;
+      runtime.movingNow = true;
+      return;
+    }
+
     // 施法硬直：动作没播完之前既不移动也不出手（与客户端动作锁同一语义）。
     // 放在目标校验之前 —— 硬直期间不该因为目标丢失而中断这次释放的收尾。
     if (now < runtime.castEndAt) {
@@ -530,6 +597,7 @@ export class MonsterAiService implements OnApplicationBootstrap, OnApplicationSh
           runtime.nextAttackAt = now + this.ai.attackInterval;
           const hit = this.attack(monster, runtime.target);
           if (hit) this.pushHit(mapKey, hit);
+          else this.forgetTarget(runtime.target);
         }
         return;
       }
@@ -587,8 +655,10 @@ export class MonsterAiService implements OnApplicationBootstrap, OnApplicationSh
       // 伤害型要够得着；状态型不看距离（追击路上也能给自己上 buff）
       if (plan.category === "0" && distance > Math.max(plan.distance, this.ai.attackRange)) continue;
       if (plan.category === "2" && runtime.statuses.has(plan.statusId) && (runtime.statuses.get(plan.statusId) ?? 0) > now) continue;
-      this.castSkill(runtime, monster, plan, now, mapKey);
-      return true;
+      if (this.castSkill(runtime, monster, plan, now, mapKey)) return true;
+      // 释放失败只可能是「目标刚倒下了」（见 castSkill）：目标已经丢掉，这一拍不会再放
+      // 任何需要目标的技能，直接回落到「没有目标」的分支
+      if (!runtime.target) return false;
     }
     return false;
   }
@@ -599,8 +669,24 @@ export class MonsterAiService implements OnApplicationBootstrap, OnApplicationSh
    * 伤害型：按倍率算一次伤害，命中事件照旧走 `hits`（客户端只演数字）；
    * 状态型：给自己挂状态（同状态重复获得 = 刷新到期时间，不叠层），不发命中事件。
    * 两种都发 `casts`（客户端据此播动作 + 特效）。
+   *
+   * **伤害型先结算再落账**（#670）：结算不出来（目标已经倒下 / 不在线）就整次释放作废 ——
+   * 冷却不消耗、硬直不进入、`casts` 不发。原来的顺序是先记冷却与硬直、再把 casts 塞进队列，
+   * 命中与否都发：目标已经倒在地上，客户端还在播「怪物对着尸体放技能」，两边都停不下来。
+   *
+   * @returns 是否真的放出来了（false = 这次尝试作废，调用方不该当它放过了）
    */
-  private castSkill(runtime: MonsterRuntime, monster: WorldMonster, plan: CastPlan, now: number, mapKey: string): void {
+  private castSkill(runtime: MonsterRuntime, monster: WorldMonster, plan: CastPlan, now: number, mapKey: string): boolean {
+    let hit: RealtimeMonsterHit | null = null;
+    if (plan.category !== "2") {
+      if (!runtime.target) return false;
+      hit = this.attack(monster, runtime.target, plan.rate);
+      if (!hit) {
+        this.forgetTarget(runtime.target);
+        return false;
+      }
+    }
+
     runtime.movingNow = false;
     runtime.skillReadyAt.set(plan.skillId, now + plan.cooldown * 1000);
     // 硬直：配置值优先；0 回落到普攻动作时长（服务端不知道客户端动画有多长）
@@ -612,16 +698,15 @@ export class MonsterAiService implements OnApplicationBootstrap, OnApplicationSh
     if (plan.category === "2") {
       runtime.statuses.set(plan.statusId, now + plan.statusDuration * 1000);
       cast.statusId = plan.statusId;
-    } else if (runtime.target) {
-      const hit = this.attack(monster, runtime.target, plan.rate);
-      if (hit) this.pushHit(mapKey, hit);
     }
     const list = this.pendingCasts.get(mapKey) ?? [];
     list.push(cast);
     this.pendingCasts.set(mapKey, list);
+    if (hit) this.pushHit(mapKey, hit);
     this.logger.debug(
       `怪物 ${monster.instanceId}(${monster.monsterKey}) 释放技能 ${plan.skillId}（${plan.category === "2" ? `状态 ${plan.statusId}` : `伤害倍率 ${plan.rate}`}）`,
     );
+    return true;
   }
 
   //#endregion
@@ -633,6 +718,10 @@ export class MonsterAiService implements OnApplicationBootstrap, OnApplicationSh
    *
    * 伤害 = round(怪物物攻区间随机值 × 攻击倍率 × 技能倍率 − 玩家物防区间随机值)，下限 0；
    * 攻击倍率来自身上的状态（#372）。玩家侧状态不参与（见类注释的「刻意不做的」）。
+   *
+   * @returns null = 这一下打不出去（玩家已经倒下 / 不在线，或怪物缺数值行）。
+   *          调用方**必须**把它当成「目标作废」处理（见 `forgetTarget`）—— 只当成本次落空会让
+   *          记恨一直挂着，怪继续对尸体出手（#670）。
    */
   private attack(monster: WorldMonster, accountId: string, rate = 1): RealtimeMonsterHit | null {
     const role = this.roles.online(accountId);
@@ -658,6 +747,28 @@ export class MonsterAiService implements OnApplicationBootstrap, OnApplicationSh
     this.pendingHits.set(mapKey, list);
   }
 
+  /**
+   * 丢掉一个已经打不了的目标（#670 的根因就在这里）
+   *
+   * `RolesService.applyMonsterHit` 在**玩家已经倒下**或**不在线**时返回 null，而 AI 原来只把
+   * 它当「这一下落空」：记恨不清、下一拍继续放技能，客户端于是看见一只怪对着尸体连放技能
+   * （服务端返回 null，AI 不知道）。
+   *
+   * 两件事一起做，缺一条都还会复发：
+   * - 清掉所有怪身上指向他的目标（同一具尸体常被几只怪同时盯着，一处发现就全图清）；
+   * - 删掉位置缓存。目标检测读的是 `positions` 里的 hp，而「我已死亡」这条信息不会经上报
+   *   反向传播（客户端死后照旧上报位置）—— 不删的话下一轮 tick 又把这具尸体选成目标。
+   *   删掉是安全的：活着的玩家 250ms 内会重新上报一条（客户端 `pos` 帧），死人不该再被选。
+   */
+  private forgetTarget(accountId: string): void {
+    this.positions.delete(accountId);
+    for (const runtimes of this.runtimes.values()) {
+      for (const runtime of runtimes.values()) {
+        if (runtime.target === accountId) runtime.target = null;
+      }
+    }
+  }
+
   //#endregion
 
   //#region 广播：只发有变化的怪 + 攒下的命中与技能释放
@@ -678,11 +789,21 @@ export class MonsterAiService implements OnApplicationBootstrap, OnApplicationSh
       for (const [instanceId, runtime] of runtimes) {
         const moved = Math.abs(runtime.x - runtime.sentX) > 0.01 || Math.abs(runtime.y - runtime.sentY) > 0.01;
         const turn = runtime.movingNow !== runtime.sentMoving;
-        if (!moved && !turn) continue;
-        monsters.push({ instanceId, x: Math.round(runtime.x * 100) / 100, y: Math.round(runtime.y * 100) / 100, moving: runtime.movingNow });
+        // 血量也是「有变化」（#670）：站着不动的怪被别人打了一下，也该让所有人看见血条掉
+        const hurt = runtime.hp !== runtime.sentHp;
+        if (!moved && !turn && !hurt) continue;
+        monsters.push({
+          instanceId,
+          x: Math.round(runtime.x * 100) / 100,
+          y: Math.round(runtime.y * 100) / 100,
+          moving: runtime.movingNow,
+          hp: runtime.hp,
+          maxHp: runtime.maxHp,
+        });
         runtime.sentX = runtime.x;
         runtime.sentY = runtime.y;
         runtime.sentMoving = runtime.movingNow;
+        runtime.sentHp = runtime.hp;
       }
       if (monsters.length === 0 && hits.length === 0 && casts.length === 0 && kills.length === 0) continue;
       this.onBroadcast?.(zoneId, mapId, { mapId, monsters, hits, casts, kills });
@@ -754,6 +875,7 @@ export class MonsterAiService implements OnApplicationBootstrap, OnApplicationSh
       attackInterval: positiveOr(parsed?.attackInterval, FALLBACK_AI.attackInterval),
       attackRange: positiveOr(parsed?.attackRange, FALLBACK_AI.attackRange),
       attackActionTime: positiveOr(parsed?.attackActionTime, FALLBACK_AI.attackActionTime),
+      pushDuration: positiveOr(parsed?.pushDuration, FALLBACK_AI.pushDuration),
       idleMoveInterval: rangeOr(parsed?.idleMoveInterval, FALLBACK_AI.idleMoveInterval),
       idleMoveDuration: rangeOr(parsed?.idleMoveDuration, FALLBACK_AI.idleMoveDuration),
       idleMoveSpeedScale: positiveOr(parsed?.idleMoveSpeedScale, FALLBACK_AI.idleMoveSpeedScale),
@@ -808,6 +930,13 @@ export class MonsterAiService implements OnApplicationBootstrap, OnApplicationSh
       skillReadyAt: new Map<string, number>(),
       statuses: new Map<string, number>(),
       castEndAt: 0,
+      pushEndAt: 0,
+      pushDirX: 0,
+      pushDirY: 0,
+      pushSpeed: 0,
+      hp: monster.hp,
+      maxHp: monster.maxHp,
+      sentHp: -1,
     };
     map.set(monster.instanceId, runtime);
     return runtime;

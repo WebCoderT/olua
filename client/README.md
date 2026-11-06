@@ -169,8 +169,10 @@ cd client
 
 ## 数据归属：怪物数据客户端为零（#588）
 
-怪物的一切数据都在服务端，客户端只剩两个全局行为常量
-（`configs/game-config.ts` 区 15 的 `monsterAI`：普攻间隔 / 距离；`monsterDefaultSpeedRate`：11 动作移速倍率打底）。
+怪物的一切数据都在服务端，客户端只剩一个纯演出的常量
+（`configs/game-config.ts` 区 15 的 `monsterDefaultSpeedRate`：11 个动作的移速倍率打底）。
+**行为参数（出手间隔 / 攻击距离 / 施法硬直 / 待机游走节奏 / 击退时长）已随 #670 整体上移服务端**，
+唯一来源是库里 `runtime_params.monster_ai` 那一行 —— 客户端留一份就等于默许本地再长出第二套 AI。
 **改之前先分清数据是哪一类**：
 
 | 类别 | 字段 | 唯一来源 | 改完怎么生效 |

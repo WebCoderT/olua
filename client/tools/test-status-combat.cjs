@@ -5,7 +5,11 @@
  * 覆盖三层：
  * 1. configs/game-config 的 combat 数值语义（格挡概率/系数、防御乘法）与文案一致
  * 2. BattleMath 纯函数：collectStatusCombatModifiers 叠加口径、resolveIncomingDamage 判定
- * 3. applyHitDamage 接线：状态修正真的进了伤害公式（大防御系数 → 伤害归零）
+ * 3. applyHitDamage 口径：状态修正真的进了伤害公式（大防御系数 → 伤害归零）
+ *
+ * #670 起这两个函数**没有生产调用方**：怪物打人的结算在服务端（monster-ai.service 的
+ * attack），服务端刻意不读玩家侧状态。本测试保留为这套口径的规格 —— 若哪天服务端要接
+ * 玩家状态，公式照这里实现；在那之前，客户端不该在本地兜一层假装它生效。
  *
  * BattleMath 依赖 cc 的 BoxCollider2D/Node（类型位 + getComponent 实参），
  * 沙箱垫片缺这两个导出，用 ccExtra 补上（本测试不会真的调碰撞判定）。
@@ -97,12 +101,10 @@ check(blockedHit.blocked && blockedHit.damage === 50 && brace.hp === before - 50
 console.log("\n=== 接线静态断言（读源码）===");
 const root = path.join(__dirname, "..");
 const fs = require("fs");
-const monsterAi = fs.readFileSync(path.join(root, "assets/ui/core/MonsterAI.ts"), "utf8");
-check(
-  monsterAi.includes("collectStatusCombatModifiers(StatusManager.getActiveIds())"),
-  "MonsterAI.hitPlayer 每次受击都从进行中的状态汇总修正",
-);
-check(monsterAi.includes("showDamageText(player, damage, blocked)"), "格挡结果传给飘字展示");
+// 注意（#670）：`applyHitDamage` / `collectStatusCombatModifiers` 现在**没有生产调用方** ——
+// 怪物打人的结算在服务端（monster-ai.service 的 attack），而服务端刻意不读玩家侧状态
+// （见那边的「刻意不做的」）。这两个纯函数留着当这套口径的规格（上面那一整段断言就是它），
+// 「玩家状态要不要参与服务端结算」是另一个 issue，不该靠客户端本地兜一层假装它生效。
 const hoverTip = fs.readFileSync(path.join(root, "assets/ui/core/HoverTipManager.ts"), "utf8");
 check(hoverTip.includes('getText("hover_status_block"') && hoverTip.includes('getText("hover_status_defense"'), "悬停详情把 combat 语义翻成数值行");
 const statusManager = fs.readFileSync(path.join(root, "assets/ui/core/StatusManager.ts"), "utf8");

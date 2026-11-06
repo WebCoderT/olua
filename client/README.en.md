@@ -163,9 +163,11 @@ Worth knowing before changing client code (pitfalls are detailed in [FAQ.en.md](
 
 ## Data ownership: the client holds zero monster data (#588)
 
-Every piece of monster data lives on the server; the client keeps only two global
-behaviour constants (region 15 of `configs/game-config.ts`: `monsterAI` = attack interval / range,
-`monsterDefaultSpeedRate` = the 11-action speed-rate baseline). **Before changing anything, be clear which kind of data you are touching**:
+Every piece of monster data lives on the server; the client keeps only one purely presentational
+constant (region 15 of `configs/game-config.ts`: `monsterDefaultSpeedRate` = the 11-action speed-rate
+baseline). **Behaviour parameters (attack interval / range / cast lock / idle wander rhythm / push
+duration) moved to the server in #670** — their single source is the `runtime_params.monster_ai` row,
+and keeping a copy on the client would only invite a second AI to grow back locally. **Before changing anything, be clear which kind of data you are touching**:
 
 | Kind | Fields | Single source | How a change takes effect |
 |---|---|---|---|

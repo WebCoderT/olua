@@ -245,7 +245,10 @@ export interface RealtimeWorldMonster {
   maxHp: number;
   /** 是否存活（false = 死亡等重生，客户端不生成这只怪） */
   alive: boolean;
-  /** 出生点（世界坐标；客户端在此落怪，游走是本地表现） */
+  /**
+   * 坐标（世界坐标）。世界层给的是**出生点**，通道发出去之前按怪物 AI 的实时位置覆盖
+   * （#670，见 RealtimeService.withLiveMonsterPositions）—— 客户端拿到的就是「它现在在哪」
+   */
   x: number;
   y: number;
   /** 距重生还剩多少毫秒（死亡中的怪才有；客户端可据此显示重生倒计时之类） */
@@ -292,7 +295,7 @@ export interface RealtimePositionMessage {
   };
 }
 
-/** 怪物 AI 广播帧里的一只怪（只发有变化的：位置变了或移动标记变了） */
+/** 怪物 AI 广播帧里的一只怪（只发有变化的：位置变了、移动标记变了或血量变了） */
 export interface RealtimeMonsterAiEntry {
   instanceId: string;
   /** 服务端模拟出的当前坐标（世界坐标；与 world 帧的出生点同一坐标系） */
@@ -300,6 +303,16 @@ export interface RealtimeMonsterAiEntry {
   y: number;
   /** 是否在移动（客户端据此播走路 / 待机；方向由客户端按位移差量自算） */
   moving: boolean;
+  /**
+   * 当前血量与上限（#670）
+   *
+   * 血量权威是世界层的（玩家打怪走 settle 帧，只发给出手的那个人），同图**其他人**原本
+   * 收不到这只怪掉的血 —— 别人打怪时他看到的血条不动。这里把「这只怪现在多少血」跟着
+   * 位置一起广播出去：观看者据此刷血条，与谁在打无关。改了血量会让这只怪在本拍必发
+   * （见 MonsterAiService.broadcast），所以站着被打的怪也会立刻出现。
+   */
+  hp: number;
+  maxHp: number;
 }
 
 /** 怪物 AI 广播帧里的一次普攻命中（玩家受击的权威结果） */
@@ -329,7 +342,7 @@ export interface RealtimeMonsterCast {
   statusId?: string;
 }
 
-/** 服务端 → 客户端：怪物 AI 广播（位置增量 + 普攻/技能命中事件 + 技能释放 + 玩家击杀，按地图分发给观看者） */
+/** 服务端 → 客户端：怪物 AI 广播（位置/血量增量 + 普攻/技能命中事件 + 技能释放 + 玩家击杀，按地图分发给观看者） */
 export interface RealtimeMonsterAiMessage {
   type: "monster-ai";
   data: {

@@ -8,7 +8,7 @@ import { BoxCollider2D, ERigidBody2DType, Node, RigidBody2D, UITransform } from 
  *   这样怪撞上角色时不会把角色顶开，角色也推不动怪 —— 谁都不会推动谁走
  * - 形状本身仍有两处用途：攻击距离/朝向判定读 worldAABB（见 BattleMath）、调试范围显示读 size
  * - 怪与角色之间"不可穿越"由 MoveBlocking 手动补上（只取消移动，不挤开对方）；
- *   场上唯一能推动位置的途径是技能击退（见 MonsterAI.push）
+ *   #670 起没有任何东西能推动怪物（位置只由服务端 AI 广播决定，见 core/MonsterAI）
  * 碰撞范围与节点尺寸一致，与静态障碍（addObstacleCollider）区分开
  */
 export function addMonsterCollider(node: Node) {

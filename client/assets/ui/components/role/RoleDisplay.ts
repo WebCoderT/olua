@@ -418,7 +418,7 @@ export default class RoleDisplay extends Node {
   //#region 受击反馈
 
   /**
-   * 受击动作（怪物普攻命中玩家时由组合根接线触发，见 core/MonsterAI.onPlayerHit 与 Game.start）
+   * 受击动作（怪物普攻命中玩家时由组合根接线触发，见 MonsterManager.onPlayerServerHit 与 Game.start）
    *
    * 优先级规则（issue #13：受击不能随便打断玩家正在做的事）：
    * - 正在施法/普攻（attacking 锁）→ 不播：被小怪碰一下就断技能，比没有反馈更糟；

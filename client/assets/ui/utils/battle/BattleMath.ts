@@ -115,6 +115,12 @@ export function getDirectionToTarget(target: Node, self: Node): DIRECTION {
 
 /**
  * 结算一次受击：按「攻击区间随机值 - 防御区间随机值」扣减 self 的血量
+ *
+ * **#670 起没有生产调用方**：怪物打人的结算在服务端（`monster-ai.service` 的 attack），
+ * 客户端只照搬 `hits` 帧里的数值。这个函数留着当「玩家侧状态参与结算」的口径规格
+ * （`test-status-combat` 覆盖），服务端哪天要接玩家状态就照它实现 —— 在那之前不要在
+ * 本地再调一次：两边各算一次的结果不会相等。
+ *
  * @param modifiers 状态带来的防御修正（无状态传缺省值，行为与旧口径完全一致）
  * @returns 本次实际扣除的血量（血量不会被扣成负数）与是否触发了格挡
  */

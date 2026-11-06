@@ -83,6 +83,9 @@ export interface MonsterAiEntry {
   y: number;
   /** 是否在移动（客户端据此播走路 / 待机；方向由位移差量自算） */
   moving: boolean;
+  /** 当前血量与上限（#670：别人打的伤害也要看见；旧服务端不带时按缺省处理） */
+  hp?: number;
+  maxHp?: number;
 }
 
 /** 怪物 AI 广播帧里的一次普攻命中（玩家受击的权威结果，服务端已落账） */

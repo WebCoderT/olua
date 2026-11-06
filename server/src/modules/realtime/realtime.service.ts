@@ -659,7 +659,8 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
         return;
       }
       const zoneId = this.accounts.findById(socket.identity.id)?.zone_id ?? 1;
-      const snapshot = this.world.join(zoneId, socket.identity.id, join.mapId);
+      // 快照里的坐标按 AI 实时位置覆盖（#670）：出生点不是「他现在在哪」，见 withLiveMonsterPositions
+      const snapshot = this.withLiveMonsterPositions(this.world.join(zoneId, socket.identity.id, join.mapId));
       // 位置以「被接受的 join」为准写回存档（#606）：客户端报 OnMap 是客户端的事，
       // 服务端只记自己放行过的图 —— 下次登录拿它当「他本来就在这」的判据
       this.roles.setMapAt(socket.identity.id, join.mapId);
@@ -729,11 +730,34 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
   private broadcastWorld(zoneId: number, mapId: string): void {
     const snapshot = this.world.snapshot(zoneId, mapId);
     if (!snapshot) return;
-    const frame: RealtimeWorldMessage = { type: "world", data: snapshot };
+    const frame: RealtimeWorldMessage = { type: "world", data: this.withLiveMonsterPositions(snapshot) };
     for (const accountId of this.world.viewersOf(zoneId, mapId)) {
       const socket = this.connections.get(accountId);
       if (socket) this.send(socket, frame);
     }
+  }
+
+  /**
+   * 把怪物 AI 的实时坐标并进 world 快照（#670）
+   *
+   * world 帧里的 `x/y` 是**出生点** —— 世界层只管生死与血量，怪的走动归 AI 运行时
+   * （边界见 world.service 的类注释）。这对「一直在图里的人」没影响（他跟着 monster-ai 帧走），
+   * 对**晚进图 / 重连**的人却是致命的：他拿到的是一群站在出生点的怪，而 AI 帧只发**有变化的**
+   * 怪 —— 一直在原地站着的那只永远不发，于是两个人屏幕上同一只怪在两个地方。
+   *
+   * 所以这里补一刀：快照照旧由世界层出，坐标按 AI 运行时覆盖。没有运行时的怪（图刚被第一个
+   * 人加载 / 刚重生的怪）保持出生点 —— 那一刻两者本来就相等，AI tick 下一拍会建出来。
+   *
+   * 就地改而不是复制：world 每次调用都新建对象（`snapshotOf` 逐只 new），改返回值的字段安全。
+   */
+  private withLiveMonsterPositions<T extends { monsters: Array<{ instanceId: string; x: number; y: number }> }>(data: T): T {
+    for (const entry of data.monsters) {
+      const live = this.monsterAi.livePositionOf(entry.instanceId);
+      if (!live) continue;
+      entry.x = live.x;
+      entry.y = live.y;
+    }
+    return data;
   }
 
   /**

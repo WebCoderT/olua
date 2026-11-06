@@ -529,6 +529,37 @@ test/e2e-equip-in-align.cjs      装备内观几何专项（73 条断言，#523�
 - **排障顺序**（用户报「管理端对、客户端不对」时）：① 先比两边公式与素材（口径）→ ② 再查数据是否一致（库表 vs 接口）→
   ③ 最后查**生效时机**。#739 就是只差第 ③ 步被当成 ① 的一天。
 
+### 四之十三、怪物 AI 全在服务端（#670）：多端画面一致靠三条链路
+
+`realtime/monster-ai.service.ts` 是**唯一的行为决策处**（目标选择 / 待机游走 / 追击 / 普攻 /
+技能 / 击退）。客户端 `ui/core/MonsterAI.ts` 只剩「朝服务端坐标趋近 + 按事件播动作」——
+它以前并存过一套本地 AI（只在实时通道断开时跑），代价是同一只怪在两个人屏幕上走两条路。
+
+| 链路 | 机制 | 缺了会怎样 |
+|---|---|---|
+| 位置 | `RealtimeService.withLiveMonsterPositions()` 在 **world 帧**（`worldJoin` 应答与 `broadcastWorld`）发出前，用 `monsterAi.livePositionOf()` 覆盖 `x/y`；增量靠 `monster-ai` 帧 | 晚进图的人先看到**出生点**再等帧纠正（world 快照里的 `x/y` 是存库的出生点），而**站着不动的怪永远不进增量帧**（判据是「有变化才发」）→ 永远停在出生点 |
+| 血量 | `monster-ai` 帧带必填 `hp/maxHp`；血量变化本身也算「有变化」（`moved \|\| turn \|\| hurt`） | `hits` 只发给**结算给出手者本人**，别人打的伤害收不到 → 别人屏幕上怪满血 |
+| 行为 | 客户端零决策 | 两套 AI 各自游走/选目标，位置与动作都对不上 |
+
+**#670 的本体（「怪对着尸体放技能」）根因与修法**：`applyMonsterHit` 在玩家已倒下 / 不在线时
+返回 `null`，而 AI 只把它当「这一下落空」→ `runtime.target` 不清、位置缓存里那条 hp>0 的记录
+不删 → 下一拍又把尸体选成目标。修法不是去读血量缓存，而是**认结算结果**：
+`forgetTarget(accountId)` 删位置记录 + 清掉所有怪身上指向该账号的 `target`；`castSkill()` 改成
+**先结算再落账**（伤害型拿不到 hit → 不记冷却、不进硬直、不发 `casts`，返回 `false`）。
+
+**击退也在服务端**：结算侧（`CombatSettlementService` 非击杀分支）读技能行的 `pushDistance`
+调 `applyPush()`，方向 = 施法者 → 怪，时长取 `runtime_params.monster_ai.pushDuration`，
+`stepMonster` 里击退优先于施法硬直，落点走普通位置广播（**不需要新协议帧**）。
+
+**键名陷阱**：`skillOf()` 返回 `applySkillOverrides` 归一化后的**驼峰**对象
+（`damageCoefficients / castLockMs / pushDistance`），写 `skill.push_distance` 拿到 `undefined`
+→ 击退静默失效、不报错。加技能字段的顺序：`SkillSource` 补列 → 缓存里映射成驼峰 → 消费方读驼峰。
+
+**e2e 写法**（`server/test/e2e-monster-ai.cjs`）：用 `pickPointInArea(cx, cy, 0, 0)` 把怪钉在
+中心点，位置才可复现；量距离前先等**停稳**（连续两拍位移 < 0.5px）—— 广播 100ms 一拍、
+击退 200ms，急着量只会量到推了一半的帧。死者场景用「客户端持续上报 hp=100 假装活着」把
+「AI 不读客户端血量、只认结算结果」这个前提钉死。
+
 ## 五、运营与安全底座（口令 / 令牌作废 / 限流 / 审计 / 踢下线 / 公告 / 邮件 / 备份）
 
 这几件事互相咬合，**改动时基本必须一起看**：

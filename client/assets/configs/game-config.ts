@@ -86,7 +86,7 @@ import type {
  * | 12 | 任务注册表 | —（11 区派生） | `rebuildQuests` |
  * | 13 | 技能数据 | `skills` | `applySkillRows` → `applySkillData` |
  * | 14 | 时装 | `fashions` | `applyFashionRows` → `applyFashionData` |
- * | 15 | 怪物手感参数 | —（**客户端手感**，`monsterAI` 与生成物同源） | —（常量） |
+ * | 15 | 怪物表现参数 | —（**纯演出**：动作速度倍率；行为参数已上服务端，见 #670） | —（常量） |
  * | 16 | 怪物运行时表 | `monsters` / `monsterPresentations` | `applyMonsterRows` / `applyMonsterPresentations` |
  * | 17 | 商城定价 | `mallPrices` / `mallSettings` | `applyMallPricing` |
  * | 18 | 地图 | `maps` / `mapTypes` | `applyMapRows` |
@@ -1359,7 +1359,6 @@ export const skillTargetTypeLabels: Record<SkillTargetType, string> = {
 
 /** 服务端行 → 客户端数值行（不含 onClick：释放实现由 configs/skill 按 id 接上） */
 function toSkillData(row: SkillSeedLike): SkillData & { id: SkillId } {
-  const pushDistance = Number(row.pushDistance) || 0;
   return {
     id: row.id as SkillId,
     // 归属缺省 role：绝大多数技能是角色技能，只有怪物 AI 放的才显式写 monster
@@ -1381,8 +1380,8 @@ function toSkillData(row: SkillSeedLike): SkillData & { id: SkillId } {
     ),
     distance: Number(row.distance) || 0,
     action: row.action as ACTION,
-    // 0 = 不击退（不是「击退 0 像素」）：留着空对象会让 SkillManager 走一遍击退流程
-    push: pushDistance > 0 ? { distance: pushDistance } : undefined,
+    // 击退（row.pushDistance）**不在客户端**：#670 起位移由服务端模拟并广播，
+    // 客户端连字段都不需要 —— 留着它就等于给本地再开一条推动怪物的路
     canAuto: row.canAuto === true,
     effect: row.effect || undefined,
     effectIsOnSelf: row.effectOnSelf === true,
@@ -1611,11 +1610,12 @@ export function applyFashionRows(rows: FashionRow[]): void {
 //#endregion
 //#endregion
 
-//#region 15 · 怪物手感参数（原 configs/monster.ts）
+//#region 15 · 怪物表现参数（原 configs/monster.ts）
 
 /**
- * 怪物全局行为常量（本区就是全部内容 —— **没有怪物条目，#588 数据归属收口**）
+ * 怪物表现参数（本区只剩「客户端怎么演」：没有怪物条目，也没有任何行为参数）
  *
+ * ## 数据在哪（#588 数据归属收口）
  * 怪物的数据客户端一份都不存：
  * - **数值**（label / level / tier / maxHp / 六项攻防）唯一来源 = 服务端 `monsters` 表
  *   （出厂 = `server/data/config-sync.sql` 里 `monsters` 那批行，逐只配好，管理端可改），随 `GET /game-config`
@@ -1626,39 +1626,17 @@ export function applyFashionRows(rows: FashionRow[]): void {
  * - 怪物的「有没有数据」由快照决定：快照失败时场上**没有怪**（生成需要资源行），
  *   不像旧口径那样回落本地出厂值演 —— 断网时服务端也不发怪，两边一致。
  *
- * 这里剩下的常量是**客户端演出的手感参数**。服务端 AI 的节奏（攻击间隔 / 攻击距离 /
- * 漫游速度倍率这些）**不在这里**：它们在库里的 `runtime_params.monster_ai` 单行表上，
- * 管理端「运行时参数」页可改，服务端 tick 直接读那一列 —— 客户端改了也不会影响服务端。
+ * ## 行为参数不在这里了（#670）
+ * 出手间隔 / 攻击距离 / 施法硬直 / 待机游走的间隔与半径 / 击退时长这些原本叫 `monsterAI`
+ * 的常量，已随「怪物 AI 整体上移服务端」一起搬走：唯一来源是库里 `runtime_params.monster_ai`
+ * 那一行（管理端「运行时参数」页可改），服务端 tick 直接读。
  *
- * #603 第十三域复核结论：这一整块**不搬到表里** —— 它是动画节奏与手感（普攻间隔 / 停下出手的距离 /
- * 待机游走），不是运营数值；怪物真正的数值（血量 / 六项攻防 / 掉落）早已在 `monsters` 表。
+ * 为什么不留在客户端：客户端现在**不跑** AI（位置 / 追击 / 出手由服务端广播），这些常量在
+ * 这里一个字也不会影响服务端；更要紧的是，留着它们就等于默许本地再长出一套行为 ——
+ * 那正是「同图两个人屏幕上同一只怪在两个地方打架」的成因。
+ *
+ * 余下唯一的东西是动作速度倍率：纯演出（帧率），与服务端无关。
  */
-
-export const monsterAI = {
-  /** 普攻间隔（毫秒）——怪物只会普攻，没有技能，技能以后再考虑 */
-  attackInterval: 2000,
-  /** 普攻距离（像素）：追到这个距离就停下出手 */
-  attackRange: 60,
-  /** 普攻动作时长（毫秒）：出手期间站定不移动，动作播完才结算伤害 */
-  attackActionTime: 600,
-  /** 待机时可随机切换的动作池（想加动作往这里加，例如 ACTION.RUN / ACTION.A1） */
-  idleActions: [ACTION.STAND, ACTION.WALK] as ACTION[],
-  /** 待机时更换动作的随机间隔（毫秒） */
-  idleAnimationInterval: [2000, 5000] as [number, number],
-  /** 待机时触发一次随机走动的随机间隔（毫秒） */
-  idleMoveInterval: [4000, 9000] as [number, number],
-  /** 每次随机走动的持续时间（毫秒） */
-  idleMoveDuration: [300, 800] as [number, number],
-  /** 随机走动的速度倍率（相对怪物自身 moveSpeed，比追击慢一点） */
-  idleMoveSpeedScale: 0.5,
-  /** 随机走动的活动半径（像素）：离停留点超过这个距离就往回走，避免越走越远 */
-  wanderRadius: 60,
-  /**
-   * 击退默认时长（毫秒）：技能击退是场上唯一能推动位置的途径，
-   * 技能配置里只写距离时用这个时长换算击退速度（距离 / 时长），改这里可统一调整击退手感
-   */
-  pushDuration: 200,
-};
 
 /**
  * 怪物默认动作速度（**每秒循环数**，片段总时长 = 1 / 该值，见 AnimationHelper.createClip）
