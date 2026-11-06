@@ -86,7 +86,7 @@ import type {
  * | 12 | 任务注册表 | —（11 区派生） | `rebuildQuests` |
  * | 13 | 技能数据 | `skills` | `applySkillRows` → `applySkillData` |
  * | 14 | 时装 | `fashions` | `applyFashionRows` → `applyFashionData` |
- * | 15 | 怪物手感参数 | —（**客户端手感**，`monsterAI` 与生成物同源） | —（常量） |
+ * | 15 | 怪物表现参数 | —（**纯演出**：动作速度倍率；行为参数已上服务端，见 #670） | —（常量） |
  * | 16 | 怪物运行时表 | `monsters` / `monsterPresentations` | `applyMonsterRows` / `applyMonsterPresentations` |
  * | 17 | 商城定价 | `mallPrices` / `mallSettings` | `applyMallPricing` |
  * | 18 | 地图 | `maps` / `mapTypes` | `applyMapRows` |

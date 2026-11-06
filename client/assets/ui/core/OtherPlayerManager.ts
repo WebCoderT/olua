@@ -217,7 +217,7 @@ export default class OtherPlayerManager {
     for (const accountId of blocked) this.remove(accountId);
   }
 
-  /** 每帧驱动：向广播位置插值 + 按位移差量定朝向 / 动作（Game.update 的 serverAuthority 分支里调用） */
+  /** 每帧驱动：向广播位置插值 + 按位移差量定朝向 / 动作（Game.update 里与 MonsterAI.tick 并排调用） */
   static tick(deltaTime: number): void {
     if (this.others.size === 0) return;
     // 插值系数按帧长折算：约 0.15s 追上目标位置 —— 比广播节拍（200ms）略慢半拍，视觉上是「匀速滑动」
