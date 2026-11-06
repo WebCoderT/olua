@@ -1815,7 +1815,7 @@ export function applyMallCatalog(
   const map = new Map<string, { categoryId: string; price: number; requiredLevel: number }>();
   goods.forEach((entry) => map.set(entry.id, { categoryId: entry.categoryId, price: entry.price, requiredLevel: entry.requiredLevel }));
   mallGoods = map;
-  mallCategories = [...categories].sort((a, b) => a.sortOrder - b.sortOrder || (a.id < b.id ? -1 : 1));
+  mallCategories = Array.from(categories).sort((a, b) => a.sortOrder - b.sortOrder || (a.id < b.id ? -1 : 1));
 }
 
 /** 商城分类（页签陈列用；快照没到返回空数组） */
