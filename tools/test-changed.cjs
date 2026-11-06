@@ -171,6 +171,11 @@ function buildPlan(files) {
         plan.audits.add("audit-shared-data");
         serverNeedsAllE2E = true;
         plan.notes.push("server/data/config-sync.sql 改动 → e2e 全量（配置数据影响面无法静态收敛）");
+      } else if (rel.startsWith("server/test/lib/")) {
+        // 测试共享库（config-snapshot.cjs 等）：被多个 e2e require，不是可执行套件 ——
+        // 直接按它自己跑会撞上不存在的 `test:<名>` 脚本（#758 实测），回落 e2e 全量。
+        serverNeedsAllE2E = true;
+        plan.notes.push(`server/test/lib 改动（${rel}）→ e2e 全量（共享期望值解析，影响面无法静态收敛）`);
       } else if (rel.startsWith("server/test/")) {
         // 直接改了某个测试：跑它自己。
         // e2e-*.cjs → `test:e2e:<名>`；其余（config-sync.cjs）→ `test:<名>`，它们不起服务

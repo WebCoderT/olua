@@ -739,19 +739,24 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
         updated_at INTEGER NOT NULL DEFAULT 0
       );
 
-      -- 商城特殊定价（#251）：主键是商品 id（装备变体 id）；**允许动态增删** ——
-      -- 定价是运营数据，商品本体（装备清单）来自生成物；不在表里的商品走统一价
-      CREATE TABLE IF NOT EXISTS mall_prices (
+      -- 商城分类（#758）：**运营自建**（动态增删行）—— 分类只是陈列分组，不带数值；
+      -- 删除前 service 层校验分类下没有上架商品
+      CREATE TABLE IF NOT EXISTS mall_categories (
         id         TEXT    PRIMARY KEY,
-        price      INTEGER NOT NULL DEFAULT 0,
+        label      TEXT    NOT NULL DEFAULT '',
+        sort_order INTEGER NOT NULL DEFAULT 0,
         updated_at INTEGER NOT NULL DEFAULT 0
       );
 
-      -- 商城统一价（#251）：单行表（id 恒为 1），seed 自生成物 MALL_DEFAULT_PRICE，运营可改
-      CREATE TABLE IF NOT EXISTS mall_settings (
-        id            INTEGER PRIMARY KEY CHECK (id = 1),
-        default_price INTEGER NOT NULL DEFAULT 1,
-        updated_at    INTEGER NOT NULL DEFAULT 0
+      -- 商城上架商品（#758）：主键是商品 id（装备变体 id），**运营手动上架/下架** ——
+      -- 商品本体（名称/图标/部位）是装备数据，这里只存售价与购买等级两个运营字段；
+      -- 不在表里的商品不在商城售卖（客户端陈列与购买都以这张表为准）
+      CREATE TABLE IF NOT EXISTS mall_goods (
+        id             TEXT    PRIMARY KEY,
+        category_id    TEXT    NOT NULL,
+        price          INTEGER NOT NULL DEFAULT 0,
+        required_level INTEGER NOT NULL DEFAULT 0,
+        updated_at     INTEGER NOT NULL DEFAULT 0
       );
 
       -- 时装配置（#257）：主键是时装 id（config-sync.sql），清单固定不可增删行；
@@ -1222,7 +1227,30 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
     this.ensureColumn("maps", "content", `TEXT NOT NULL DEFAULT '{"layers":[],"groups":[]}'`);
     // 怪物 AI 参数（#655）：原本是生成物 `MONSTER_AI` 的六个常量，现在并进运行时参数单行表
     this.ensureColumn("runtime_params", "monster_ai", "TEXT NOT NULL DEFAULT '{}'");
+    this.migrateLegacyMallPricing();
     this.ensureSuperAdmin();
+  }
+
+  /**
+   * 商城改版一次性迁移（#758，幂等）：老的「统一价 + 特殊价」模型搬进新模型
+   *
+   * 老表还在（存量库）就把特殊价行搬进「默认分类」（购买等级 0，运营随后自行调整），然后
+   * 删掉两张老表 —— 表没了这个迁移自然不会再跑，无需额外标记。新库没有老表，全程跳过。
+   */
+  private migrateLegacyMallPricing(): void {
+    const hasLegacy =
+      this.count("SELECT COUNT(1) AS total FROM sqlite_master WHERE type = 'table' AND name = 'mall_prices'") > 0;
+    if (!hasLegacy) return;
+    this.run(
+      "INSERT OR IGNORE INTO mall_categories (id, label, sort_order, updated_at) VALUES ('default', '默认分类', 0, 0)",
+    );
+    this.db.exec(
+      "INSERT OR IGNORE INTO mall_goods (id, category_id, price, required_level, updated_at) " +
+        "SELECT id, 'default', price, 0, updated_at FROM mall_prices",
+    );
+    this.db.exec("DROP TABLE IF EXISTS mall_prices; DROP TABLE IF EXISTS mall_settings;");
+    const moved = this.count("SELECT COUNT(1) AS total FROM mall_goods");
+    this.logger.log(`商城改版迁移完成：老特殊价已并入「默认分类」（当前上架 ${moved} 件），老表已删除`);
   }
 
   /**

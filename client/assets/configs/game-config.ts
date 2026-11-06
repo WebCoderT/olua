@@ -88,7 +88,7 @@ import type {
  * | 14 | 时装 | `fashions` | `applyFashionRows` → `applyFashionData` |
  * | 15 | 怪物表现参数 | —（**纯演出**：动作速度倍率；行为参数已上服务端，见 #670） | —（常量） |
  * | 16 | 怪物运行时表 | `monsters` / `monsterPresentations` | `applyMonsterRows` / `applyMonsterPresentations` |
- * | 17 | 商城定价 | `mallPrices` / `mallSettings` | `applyMallPricing` |
+ * | 17 | 商城分类与上架商品 | `mallCategories` / `mallGoods` | `applyMallCatalog` |
  * | 18 | 地图 | `maps` / `mapTypes` | `applyMapRows` |
  * | 19 | 界面特效（升级特效 + 掉落光效） | `uiEffects` | `applyUiEffectRows` |
  * | 20 | 装备几何锚点 | `equip-align` / `equip-in-align`（另两个接口） | `applyEquipAlignRows`（在 apply-snapshot） |
@@ -165,8 +165,8 @@ export const SNAPSHOT_SECTIONS: SnapshotSectionSpec[] = [
   { key: "levels", label: "等级表", kind: "array", minRows: 1 },
   { key: "growthScalars", label: "成长标量", kind: "array" },
   { key: "combatWeights", label: "战斗力权重", kind: "object" },
-  { key: "mallPrices", label: "商城定价", kind: "array" },
-  { key: "mallSettings", label: "商城统一价", kind: "object" },
+  { key: "mallCategories", label: "商城分类", kind: "array" },
+  { key: "mallGoods", label: "商城上架商品", kind: "array" },
   // 下面三段客户端**不消费**（掉落结算在服务端、成就进度走 /achievements/me），
   // 但照样列进契约：它们少发说明 `snapshot()` 的 return 被人动过 ——
   // 那是「所有段都可能缺」的早期信号，比事后追某一段为什么没到便宜得多。
@@ -228,11 +228,6 @@ export function checkSnapshotContract(snapshot: unknown): SnapshotProblem[] {
     }
     // 单值对象目前只有三段，各自的形状要求写在这里（比泛型写法好读）
     if (spec.key === "equipmentMeta") collectEquipmentMetaProblems(raw as Record<string, unknown>, problems);
-    if (spec.key === "mallSettings") {
-      if (typeof (raw as Record<string, unknown>).defaultPrice !== "number") {
-        problems.push({ key: "mallSettings", label: spec.label, reason: "缺少 defaultPrice（统一价），商城会算不出价" });
-      }
-    }
     if (spec.key === "equipmentAppearance") collectEquipmentAppearanceProblems(raw as Record<string, unknown>, problems);
   }
   return problems;
@@ -1787,57 +1782,78 @@ export function applyMonsterPresentations(rows: MonsterPresentationRow[]): void 
 
 //#endregion
 
-//#region 17 · 商城定价（原 configs/mall.ts）
+//#region 17 · 商城（分类 + 上架商品）
 
 /**
- * 商城定价表
+ * 商城分类与上架商品（#758）
  *
- * **#603 第八域起客户端不存任何价格**：统一价与特殊价都在服务端（`mall_settings` /
- * `mall_prices` 两张表，管理端「商城定价」可改），进游戏由 `GET /game-config` 快照下发，
- * 这里只做落表与取价。以前在客户端写死的 `mallPrice = 1` 已删 —— 那份常量与服务端
- * `MALL.defaultPrice` 是同一件事，两边各改一次迟早漂移。
+ * **客户端不存任何商城数据**：分类与商品都由服务端 `mall_categories` / `mall_goods`
+ * 两张表经快照下发，管理端「商城」页可改（建分类 → 在分类下上架装备变体 → 改售价与
+ * 购买等级）。商品本体（名称 / 图标 / 部位）是装备数据 —— 这份查询在 `configs/equipments`
+ * （`getMallGoods` 等按 id 解析装备配置），本区只落**分类、售价、购买等级**三样。
  *
- * 「商品 = 系统内的全部装备」那份查询（`getMallGoods`）在 `configs/equipments` —— 它要读
- * 七个部位表，而部位表由装备段建起来，放在这里会形成 `game-config → equipments → game-config`。
+ * 旧模型（全装备自动陈列 + 统一价/特殊价两层）已随 #758 退场：不在上架清单里的
+ * 装备不在商城售卖。
  */
 
-/** 特殊价（商品 id → 绑定元宝）：快照 `mallPrices` 段整表重建 */
-let specialPrices = new Map<string, number>();
+/** 上架商品（快照 `mallGoods` 段整表重建）：id → 分类、售价与购买等级 */
+let mallGoods = new Map<string, { categoryId: string; price: number; requiredLevel: number }>();
 
-/** 统一价（快照 `mallSettings.defaultPrice`）；null = 快照还没到 */
-let defaultPrice: number | null = null;
+/** 分类（快照 `mallCategories` 段整表重建，服务端已按 sort_order 排好）；null = 快照还没到 */
+let mallCategories: Array<{ id: string; label: string; sortOrder: number }> | null = null;
 
-/** 只 warn 一次：快照没到就问价，说明调用时序错了（正常路径 `Game.start` 已 await 过配置） */
+/** 只 warn 一次：快照没到就问商城数据，说明调用时序错了（正常路径 `Game.start` 已 await 过配置） */
 let warnedMissing = false;
 
 /**
- * 接入服务端定价（`configs/apply-snapshot` 调用）：defaultPrice = mall_settings 统一价，
- * prices = mall_prices 全量目录（price 为 null 的行是未定价，不入 Map）
+ * 接入服务端商城（`configs/apply-snapshot` 调用）：分类整表 + 上架商品整表
  */
-export function applyMallPricing(nextDefaultPrice: number, prices: Array<{ id: string; price: number | null }>): void {
-  const map = new Map<string, number>();
-  prices.forEach((entry) => {
-    if (entry.price != null) map.set(entry.id, entry.price);
-  });
-  specialPrices = map;
-  defaultPrice = nextDefaultPrice;
+export function applyMallCatalog(
+  categories: Array<{ id: string; label: string; sortOrder: number }>,
+  goods: Array<{ id: string; categoryId: string; price: number; requiredLevel: number }>,
+): void {
+  const map = new Map<string, { categoryId: string; price: number; requiredLevel: number }>();
+  goods.forEach((entry) => map.set(entry.id, { categoryId: entry.categoryId, price: entry.price, requiredLevel: entry.requiredLevel }));
+  mallGoods = map;
+  mallCategories = [...categories].sort((a, b) => a.sortOrder - b.sortOrder || (a.id < b.id ? -1 : 1));
+}
+
+/** 商城分类（页签陈列用；快照没到返回空数组） */
+export function getMallCategories(): Array<{ id: string; label: string; sortOrder: number }> {
+  return mallCategories ?? [];
+}
+
+/** 某件商品是否已上架（不在上架清单里的装备不在商城陈列/售卖） */
+export function isMallGoodListed(id: string): boolean {
+  return mallGoods.has(id);
+}
+
+/** 某件商品属于哪个分类（未上架返回 null） */
+export function mallGoodCategoryOf(id: string): string | null {
+  return mallGoods.get(id)?.categoryId ?? null;
 }
 
 /**
- * 取某件物品在商城的售价（绑定元宝 / 件）：**特殊价优先，未定价走统一价**
+ * 取某件商品的售价（绑定元宝 / 件）
  *
- * 与结算口径一致（服务端扣款用的就是这套规则）。快照没到就返回 0 并 warn 一次 ——
+ * 与服务端成交口径一致（扣款用的就是上架时的 `price`）。快照没到返回 0 并 warn 一次 ——
  * 不在这里兜一个「出厂价」，那等于又在客户端存一份价格。
  */
 export function getMallPrice(good: Goods): number {
-  if (defaultPrice == null) {
+  const row = mallGoods.get(good.id ?? "");
+  if (!row) {
     if (!warnedMissing) {
       warnedMissing = true;
-      console.warn("[mall] 商城定价快照还没到就取价了（返回 0）：检查调用时序，正常应在 Loading 场景的 loadGameConfig（#604）之后");
+      console.warn("[mall] 商城快照还没到（或商品未上架）就取价了（返回 0）：检查调用时序，正常应在 Loading 场景的 loadGameConfig（#604）之后");
     }
     return 0;
   }
-  return specialPrices.get(good.id ?? "") ?? defaultPrice;
+  return row.price;
+}
+
+/** 取某件商品的购买等级（0 = 不限；未上架返回 Number.MAX_SAFE_INTEGER 让调用方按「禁购」处理） */
+export function getMallRequiredLevel(id: string): number {
+  return mallGoods.get(id)?.requiredLevel ?? Number.MAX_SAFE_INTEGER;
 }
 
 //#endregion

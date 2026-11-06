@@ -6,7 +6,7 @@ import type {
   EquipInAlign,
   GameConfigSnapshot,
   GrowthScalar,
-  MallPriceItem,
+  MallCategory,
 } from "../ui/utils/net/ApiModels";
 import type { BattleAttributes } from "../types/common";
 import { GOOD_TYPE } from "../types/good";
@@ -20,7 +20,7 @@ import {
   applyFashionRows,
   applyItemRows,
   applyLevelRows,
-  applyMallPricing,
+  applyMallCatalog,
   applyMapRows,
   applyMonsterPresentations,
   applyMonsterRows,
@@ -82,9 +82,9 @@ import { SEX } from "../types/role";
  * 仍用本地数据 —— 这正是设计意图：预加载走本地资源路径，玩法数值走服务端。
  * （称号 / 战魂的动画目录是快照下发里的例外——它们本来就是服务端种子的字段，#590。） */
 
-/** 商城定价：统一价 + 特殊价表（price = null 的行 = 未定价，走统一价） */
-function applyMallPrices(prices: MallPriceItem[], defaultPrice: number): void {
-  applyMallPricing(defaultPrice, prices);
+/** 商城：分类 + 上架商品（#758，售价与购买等级都在商品行里） */
+function applyMallCatalogSnapshot(categories: MallCategory[], goods: GameConfigSnapshot["mallGoods"]): void {
+  applyMallCatalog(categories, goods);
 }
 
 /**
@@ -263,7 +263,7 @@ export function applyConfigSnapshot(snapshot: GameConfigSnapshot): void {
   applyTitleRows(snapshot.titles);
   applySoulRows(snapshot.souls);
   applyRankRows(snapshot.ranks);
-  applyMallPrices(snapshot.mallPrices, snapshot.mallSettings.defaultPrice);
+  applyMallCatalogSnapshot(snapshot.mallCategories, snapshot.mallGoods);
   applyGrowthSnapshot(snapshot);
   applyContentSnapshot(snapshot);
   applySkillSnapshot(snapshot);

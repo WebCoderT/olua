@@ -73,7 +73,7 @@
 | `skills` | `applySkillRows`（→ `applySkillData`，整表重建） | `game-config` 区 13 `skillData` + `oeccupationSkills`（按行派生的职业映射） | `config-sync.sql` → `skills` 表 | `/skills` |
 | `statuses` | `applyStatusRows` | `game-config` 区 7 `statuses` | `config-sync.sql` | `/statuses` |
 | `fashions` | `applyFashionRows`（→ `applyFashionData`，整表重建） | `game-config` 区 14 `fashionData`（空数组）+ 取源规则 | `config-sync.sql` → `fashions` 表 | `/fashions` |
-| `mallPrices` / `mallSettings` | `applyMallPrices` / `applyMallPricing` | `game-config` 区 17（特殊价 + 统一价，客户端无出厂值） | `config-sync.sql` → `mall_settings`；特殊价只在表里 | `/mall-pricing` |
+| `mallCategories` / `mallGoods` | `applyMallCatalogSnapshot` | `game-config` 区 17（分类 + 上架商品，客户端无出厂值） | `config-sync.sql` → `mall_categories` / `mall_goods` | `/mall` |
 | `maps` / `mapTypes` | `applyMapRows` | `game-config` 区 18 `maps`、`mapTypeGroups` | `config-sync.sql` → `maps` 表 | `/maps` |
 | `uiEffects` | `applyUiEffectRows` | `game-config` 区 19 `uiEffects`（升级特效 `upgrade` + 掉落光效 `light-1`…`light-6` 七行） | `ui_effects` 表 | `/ui-effects` |
 | `runtimeParams` | `applyRuntimeParams`（→ `applyDropRuntime` / `applyAutoBattleParams`） | `configs/drop.ts` `dropRuntime`（对象引用不变）、`configs/autoBattle.ts` `autoBattle`（只覆写行为参数，`routeLine` 样式不动） | `config-sync.sql` → `runtime_params` 表 | `/runtime-params` |
@@ -132,7 +132,7 @@
 | 14 | `fashionData`（**空数组**）+ 外观取源规则（`getFashionOut` / `getFashionIn`） | `applyFashionRows` → `applyFashionData` | `fashionClothes.ts` |
 | 15 | `monsterDefaultSpeedRate`（**纯演出**：动作速度倍率，见 4.2） | —（常量） | `monster.ts` |
 | 16 | `monsterRuntime` / `monsterResource` | `applyMonsterRows` / `applyMonsterPresentations` | `monsterRuntime.ts` |
-| 17 | 特殊价 / 统一价（**无出厂值**） | `applyMallPricing` | `mall.ts` |
+| 17 | 商城分类 + 上架商品（**无出厂值**） | `applyMallCatalog` | `mall.ts` |
 | 18 | `maps` / `mapTypeGroups` + 资源约定（`mapSrcOf` / Tiled 名） | `applyMapRows` | `map.ts` |
 | 19 | `uiEffects`（升级特效 + 掉落光效六档）+ 技能/状态/选中/受击闪屏四个表现常量 | `applyUiEffectRows` | `effect.ts` |
 | 20 | 几何基线 / 手势锚点算法 | `applyEquipAlignRows`（在 `apply-snapshot`） | `equipAlign.ts` |

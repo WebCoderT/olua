@@ -90,10 +90,10 @@ const statuses = configSnapshot.index("statuses");
 const mounts = configSnapshot.group("monster_skills", "monsterKey");
 const dropTables = configSnapshot.index("drop_tables");
 const monsterDrops = configSnapshot.index("monster_drops", "monsterKey");
-const mall = configSnapshot.rows("mall_settings")[0];
-/** 商城特殊价：出厂状态就是 0 行（全走统一价），有人定过价才有行 */
-const mallPriceRows = optionalRows("mall_prices");
-const mallCloth1 = mallPriceRows.find((row) => row.id === "cloth_1") ?? null;
+/** 商城分类（#758）：出厂带一个「默认分类」接住存量迁移的特殊价 */
+const mallCategories = optionalRows("mall_categories");
+/** 商城上架商品（#758）：出厂只有迁移带过来的一行（cloth_1） */
+const mallGoodsSeed = optionalRows("mall_goods");
 
 //#region 断言小工具（与其余几套同一骨架）
 
@@ -1320,74 +1320,96 @@ async function main() {
 
     //#endregion
 
-    //#region 十三、商城定价（#251）：统一价 seed / 特殊价动态增删 / 商品清单来自生成物 / 未定价走统一价
+    //#region 十三、商城分类与上架商品（#758）：先建分类再上架 / 商品是关联数据只改售价与等级
 
-    group("十三、商城定价");
+    group("十三、商城分类与上架商品");
 
-    const mallGoodsTotal = Object.keys(variants).length;
-    const mallSettings = await api(base, "GET", "/api/admin/mall/settings", { token });
-    checkEqual(mallSettings.status, 200, "统一价可读");
-    checkEqual(mallSettings.body?.data?.defaultPrice, mall.defaultPrice, `统一价 seed 与配置一致（${mall.defaultPrice}）`);
+    // 出厂状态：config-sync 自带「默认分类」+ 迁移过来的 cloth_1 一行
+    const mallCatList = await api(base, "GET", "/api/admin/mall/categories", { token });
+    checkEqual(mallCatList.status, 200, "分类列表可读");
+    checkEqual(mallCatList.body?.data?.length, mallCategories.length, `分类数 = 出厂（${mallCategories.length}）`);
+    checkEqual(mallCatList.body?.data?.[0]?.label, mallCategories[0]?.label, "首个分类显示名与出厂一致");
+    checkEqual(mallCatList.body?.data?.[0]?.goodCount, mallGoodsSeed.length, "默认分类的商品数 = 出厂上架行数");
 
-    const mallSettingsPatched = await api(base, "PATCH", "/api/admin/mall/settings", { token, body: { defaultPrice: 3 } });
-    checkEqual(mallSettingsPatched.status, 200, "PATCH 统一价成功");
-    checkEqual(mallSettingsPatched.body?.data?.defaultPrice, 3, "响应里的统一价已更新");
-    const mallSettingsReread = await api(base, "GET", "/api/admin/mall/settings", { token });
-    checkEqual(mallSettingsReread.body?.data?.defaultPrice, 3, "重新读取统一价已是新值");
-    const mallBadPrice = await api(base, "PATCH", "/api/admin/mall/settings", { token, body: { defaultPrice: -1 } });
-    checkEqual(mallBadPrice.status, 400, "统一价负数 → 400");
+    // 建分类：id 服务端生成（mc_ 前缀），缺省排到最后
+    const mallCatCreate = await api(base, "POST", "/api/admin/mall/categories", { token, body: { label: "热卖推荐" } });
+    checkEqual(mallCatCreate.status, 201, "新建分类成功");
+    const mallCatId = mallCatCreate.body?.data?.id;
+    check(typeof mallCatId === "string" && mallCatId.startsWith("mc_"), "分类 id 由服务端生成（mc_ 前缀）");
 
-    const mallPrices = await api(base, "GET", "/api/admin/mall/prices", { token });
-    checkEqual(mallPrices.status, 200, "定价列表可读");
-    checkEqual(mallPrices.body?.data?.total, mallGoodsTotal, `商品数 = 生成物装备全量（${mallGoodsTotal}）`);
-    checkEqual(mallPrices.body?.data?.list?.length, 20, "默认每页 20 条");
-    const mallFirst = mallPrices.body?.data?.list?.[0];
-    checkEqual(mallFirst?.id, "cloth_1", "首行是有货部位里最靠前的商品（部位序 → 等级 → id）");
-    checkEqual(mallFirst?.price, mallCloth1?.price ?? null, "首行定价 = 快照（没配过就是 null，走统一价）");
-    checkEqual(mallFirst?.updatedAt, mallCloth1?.updatedAt ?? null, "定过价才有更新时间，没配过是 null");
-    checkEqual(mallFirst?.label, variants["cloth_1"].label, "商品显示名来自生成物（前后缀已拼好）");
-    const mallLastPage = await api(base, "GET", "/api/admin/mall/prices?page=28&size=20", { token });
-    checkEqual(mallLastPage.body?.data?.list?.length, mallGoodsTotal - 27 * 20, "末页补齐剩余商品");
+    // 名字越界 → 400
+    const mallCatBad = await api(base, "POST", "/api/admin/mall/categories", { token, body: { label: "" } });
+    checkEqual(mallCatBad.status, 400, "空分类名 → 400");
 
-    const mallPut = await api(base, "PUT", "/api/admin/mall/prices/cloth_1", { token, body: { price: 99 } });
-    checkEqual(mallPut.status, 200, "PUT 单件特殊价成功（upsert 的「增」）");
-    checkEqual(mallPut.body?.data?.price, 99, "响应里的特殊价已设置");
-    check(mallPut.body?.data?.updatedAt !== null, "特殊价的更新时间已落");
-    const mallPriced = await api(base, "GET", "/api/admin/mall/prices?priced=true", { token });
-    checkEqual(mallPriced.body?.data?.total, 1, "priced=true 只看到这一条特殊价");
-    const mallPricedKeyword = await api(base, "GET", "/api/admin/mall/prices?priced=true&keyword=cloth_1", { token });
-    checkEqual(mallPricedKeyword.body?.data?.total, 1, "关键字 + 定价状态组合筛命中");
-    const mallPricedWeapon = await api(base, "GET", "/api/admin/mall/prices?slot=weapon&priced=true", { token });
-    checkEqual(mallPricedWeapon.body?.data?.total, 0, "按部位 + 定价状态组合筛：武器部没有特殊价");
-    const mallPutAgain = await api(base, "PUT", "/api/admin/mall/prices/cloth_1", { token, body: { price: 88 } });
-    checkEqual(mallPutAgain.status, 200, "再次 PUT 同一商品成功（upsert 的「改」）");
-    checkEqual(mallPutAgain.body?.data?.price, 88, "改价生效");
-    const mallPricedAfterUpsert = await api(base, "GET", "/api/admin/mall/prices?priced=true", { token });
-    checkEqual(mallPricedAfterUpsert.body?.data?.total, 1, "upsert 不会长出第二行");
+    // 改名与排序
+    const mallCatRename = await api(base, "PATCH", `/api/admin/mall/categories/${mallCatId}`, { token, body: { label: "热卖（改）", sortOrder: -1 } });
+    checkEqual(mallCatRename.status, 200, "PATCH 分类成功");
+    checkEqual(mallCatRename.body?.data?.label, "热卖（改）", "响应里的分类名已更新");
+    const mallCatOrder = (await api(base, "GET", "/api/admin/mall/categories", { token })).body?.data;
+    checkEqual(mallCatOrder?.[0]?.id, mallCatId, "排序值小者在先（-1 排到最前）");
 
-    const mallPutGhost = await api(base, "PUT", "/api/admin/mall/prices/nope", { token, body: { price: 1 } });
-    checkEqual(mallPutGhost.status, 404, "给清单外的 id 定价 → 404");
-    checkEqual(mallPutGhost.body?.code, 50021, "商品不存在用专属业务码 50021");
-    const mallPutNegative = await api(base, "PUT", "/api/admin/mall/prices/cloth_1", { token, body: { price: -5 } });
-    checkEqual(mallPutNegative.status, 400, "特殊价负数 → 400");
+    // 上架：非装备 id → 404 50021；分类不存在 → 404 50025
+    const mallGhostGood = await api(base, "POST", "/api/admin/mall/goods", { token, body: { id: "nope", categoryId: mallCatId } });
+    checkEqual(mallGhostGood.status, 404, "给装备目录外的 id 上架 → 404");
+    checkEqual(mallGhostGood.body?.code, 50021, "商品不存在用专属业务码 50021");
+    const mallNoCat = await api(base, "POST", "/api/admin/mall/goods", { token, body: { id: "cloth_1_p0s1", categoryId: "mc_nope" } });
+    checkEqual(mallNoCat.status, 404, "分类不存在上架 → 404");
+    checkEqual(mallNoCat.body?.code, 50025, "分类不存在用专属业务码 50025");
 
-    const mallDelete = await api(base, "DELETE", "/api/admin/mall/prices/cloth_1", { token });
-    checkEqual(mallDelete.status, 200, "DELETE 特殊价成功（动态增删的「删」）");
-    const mallPricedAfterDelete = await api(base, "GET", "/api/admin/mall/prices?priced=true", { token });
-    checkEqual(mallPricedAfterDelete.body?.data?.total, 0, "删除后回到未定价（走统一价）");
-    const mallDeleteAgain = await api(base, "DELETE", "/api/admin/mall/prices/cloth_1", { token });
-    checkEqual(mallDeleteAgain.status, 404, "删无可删 → 404（不静默成功）");
-    checkEqual(mallDeleteAgain.body?.code, 50021, "删无可删也用 50021");
+    // 正常上架（售价 777 / 购买等级 3），重复上架 → 409 50026
+    const mallListed = await api(base, "POST", "/api/admin/mall/goods", {
+      token,
+      body: { id: "cloth_1_p0s1", categoryId: mallCatId, price: 777, requiredLevel: 3 },
+    });
+    checkEqual(mallListed.status, 201, "上架成功");
+    checkEqual(mallListed.body?.data?.label, variants["cloth_1_p0s1"].label, "商品显示名来自装备数据（前后缀已拼好）");
+    checkEqual(mallListed.body?.data?.price, 777, "售价已落");
+    checkEqual(mallListed.body?.data?.requiredLevel, 3, "购买等级已落");
+    const mallListedAgain = await api(base, "POST", "/api/admin/mall/goods", { token, body: { id: "cloth_1_p0s1", categoryId: mallCatId } });
+    checkEqual(mallListedAgain.status, 409, "重复上架 → 409（一件装备只能挂一行）");
+    checkEqual(mallListedAgain.body?.code, 50026, "重复上架用专属业务码 50026");
 
-    const viewerMallSettingsRead = await api(base, "GET", "/api/admin/mall/settings", { token: viewerToken });
-    checkEqual(viewerMallSettingsRead.body?.code, 0, "观察员能看统一价");
-    const viewerMallSettingsWrite = await api(base, "PATCH", "/api/admin/mall/settings", { token: viewerToken, body: { defaultPrice: 9 } });
-    checkEqual(viewerMallSettingsWrite.status, 403, "观察员改统一价 → 403");
-    checkEqual(viewerMallSettingsWrite.body?.code, 30006, "观察员改统一价 → 30006（权限点不足）");
-    const viewerMallPut = await api(base, "PUT", "/api/admin/mall/prices/cloth_1", { token: viewerToken, body: { price: 9 } });
-    checkEqual(viewerMallPut.status, 403, "观察员设特殊价 → 403");
-    const viewerMallDelete = await api(base, "DELETE", "/api/admin/mall/prices/cloth_1", { token: viewerToken });
-    checkEqual(viewerMallDelete.status, 403, "观察员删特殊价 → 403");
+    // 列表：分类筛 / 关键字筛
+    const mallGoodList = await api(base, "GET", `/api/admin/mall/goods?categoryId=${mallCatId}`, { token });
+    checkEqual(mallGoodList.body?.data?.total, 1, "按分类筛命中这一件");
+    const mallGoodKeyword = await api(base, "GET", "/api/admin/mall/goods?keyword=p0s1", { token });
+    checkEqual(mallGoodKeyword.body?.data?.total, 1, "关键字命中商品 id");
+
+    // 改售价与购买等级（只开放这两个字段）；负数 → 400
+    const mallGoodPatch = await api(base, "PATCH", "/api/admin/mall/goods/cloth_1_p0s1", { token, body: { price: 888, requiredLevel: 0 } });
+    checkEqual(mallGoodPatch.status, 200, "PATCH 商品成功");
+    checkEqual(mallGoodPatch.body?.data?.price, 888, "售价已更新");
+    checkEqual(mallGoodPatch.body?.data?.requiredLevel, 0, "购买等级已更新");
+    const mallGoodNegative = await api(base, "PATCH", "/api/admin/mall/goods/cloth_1_p0s1", { token, body: { price: -5 } });
+    checkEqual(mallGoodNegative.status, 400, "售价负数 → 400");
+
+    // 非空分类拒删 → 409 50028；删空分类成功，再删 → 404 50025
+    const mallCatNotEmpty = await api(base, "DELETE", `/api/admin/mall/categories/${mallCatId}`, { token });
+    checkEqual(mallCatNotEmpty.status, 409, "分类下还有商品 → 409");
+    checkEqual(mallCatNotEmpty.body?.code, 50028, "非空分类用专属业务码 50028");
+    const mallCatDelete = await api(base, "DELETE", `/api/admin/mall/categories/${mallCatId}`, { token });
+    checkEqual(mallCatDelete.status, 409, "（上面那件还没下架，分类仍然非空）");
+
+    // 下架后再删分类：删行 = 下架（装备本体不受影响）
+    const mallDelist = await api(base, "DELETE", "/api/admin/mall/goods/cloth_1_p0s1", { token });
+    checkEqual(mallDelist.status, 200, "下架成功（删行）");
+    const mallDelistAgain = await api(base, "DELETE", "/api/admin/mall/goods/cloth_1_p0s1", { token });
+    checkEqual(mallDelistAgain.status, 404, "下架无不可下架 → 404（不静默成功）");
+    checkEqual(mallDelistAgain.body?.code, 50021, "下架无不可下架也用 50021");
+    const mallCatDelete2 = await api(base, "DELETE", `/api/admin/mall/categories/${mallCatId}`, { token });
+    checkEqual(mallCatDelete2.status, 200, "空分类删除成功");
+    const mallCatDelete3 = await api(base, "DELETE", `/api/admin/mall/categories/${mallCatId}`, { token });
+    checkEqual(mallCatDelete3.status, 404, "删无可删的分类 → 404");
+    checkEqual(mallCatDelete3.body?.code, 50025, "分类不存在用 50025");
+
+    // 观察员：能读，不能写（分类与商品两条链都要挡）
+    const viewerMallRead = await api(base, "GET", "/api/admin/mall/categories", { token: viewerToken });
+    checkEqual(viewerMallRead.body?.code, 0, "观察员能看分类");
+    const viewerMallCatWrite = await api(base, "POST", "/api/admin/mall/categories", { token: viewerToken, body: { label: "x" } });
+    checkEqual(viewerMallCatWrite.status, 403, "观察员建分类 → 403");
+    checkEqual(viewerMallCatWrite.body?.code, 30006, "观察员建分类 → 30006（权限点不足）");
+    const viewerMallGoodWrite = await api(base, "POST", "/api/admin/mall/goods", { token: viewerToken, body: { id: "cloth_1", categoryId: "default" } });
+    checkEqual(viewerMallGoodWrite.status, 403, "观察员上架 → 403");
 
     //#endregion
 
@@ -1704,8 +1726,8 @@ async function main() {
       );
       checkEqual(emptySections.length, 0, `关键段都非空（${emptySections.join("、") || "levels / equipmentSlots / maps / mapTypes"}）`);
       check(
-        Boolean(snap.equipmentMeta && snap.mallSettings && snap.combatWeights),
-        "三个单值段都在（装备规则 / 商城统一价 / 战斗力权重）",
+        Boolean(snap.equipmentMeta && snap.combatWeights && Array.isArray(snap.mallCategories) && Array.isArray(snap.mallGoods)),
+        "装备规则 / 战斗力权重 / 商城分类与上架商品段都在",
       );
       check(
         Array.isArray(snap.equipmentMeta?.prefixRates) && snap.equipmentMeta.prefixRates.length > 0,
@@ -1789,8 +1811,8 @@ async function main() {
     );
     check(snap.growthSegments === undefined && snap.levelExps === undefined, "旧段（growthSegments / levelExps）已随 #590 移出快照");
     check(Boolean(Array.isArray(snap.growthScalars) && snap.growthScalars.length > 0), "快照带成长标量参数");
-    check(Boolean(snap.mallSettings?.defaultPrice > 0), "快照带商城统一价");
-    check(Boolean(Array.isArray(snap.mallPrices) && snap.mallPrices.length > 0), "快照带商城定价目录");
+    check(Boolean(Array.isArray(snap.mallCategories) && snap.mallCategories.length > 0), "快照带商城分类（出厂默认分类）");
+    check(Boolean(Array.isArray(snap.mallGoods) && snap.mallGoods.length > 0), "快照带商城上架商品");
     checkEqual(snap.dropTables?.length, seedTableCount, `快照具名掉落表张数 = seed（${seedTableCount}）`);
     checkEqual(snap.monsterDrops?.length, Object.keys(monsterDrops).length, "快照每怪掉落行数 = 生成物（220）");
     checkEqual(snap.skills?.length, Object.keys(skills).length, "快照技能行数 = 生成物（含释放限制字段）");
@@ -1807,7 +1829,7 @@ async function main() {
     const firstTitleRow = adminTitles.body?.data?.list?.find((row) => row.level === snap.titles[0].level);
     checkEqual(snap.titles[0].acquireChannel, firstTitleRow?.acquireChannel, "快照称号渠道字段与列表接口同形状");
     check(Boolean(snap.monsters?.[0]?.attributes?.physicalAttack?.min !== undefined), "快照怪物行带嵌套区间属性（attributes.physicalAttack.min）");
-    check(Boolean(snap.mallPrices?.[0]?.price === null || typeof snap.mallPrices?.[0]?.price === "number"), "快照定价行带 price（null = 统一价）");
+    check(Boolean(typeof snap.mallGoods?.[0]?.price === "number" && typeof snap.mallGoods?.[0]?.requiredLevel === "number"), "快照上架商品行带 price 与 requiredLevel");
 
     // 改值进快照：管理端 PATCH 后，重新拉快照反映新值
     const patchLabel = await api(base, "PATCH", `/api/admin/titles/${snap.titles[0].level}`, {
@@ -2005,6 +2027,13 @@ async function main() {
     const stuffedMall = await api(base, "PATCH", `/api/admin/roles/${mallRoleId}`, { token, body: { bag: fullBagCells } });
     checkEqual(stuffedMall.status, 200, "管理端把背包塞满（4×6 全满）");
 
+    // #758：先上架（默认分类、售价 777）—— 不在上架清单里的商品购买直接 404
+    const listForBuy = await api(base, "POST", "/api/admin/mall/goods", {
+      token,
+      body: { id: "cloth_1_p0s1", categoryId: "default", price: 777 },
+    });
+    checkEqual(listForBuy.status, 201, "上架 cloth_1_p0s1（默认分类、售价 777）");
+
     // 商品不在目录（非装备变体）→ 404 复用 50021
     const badGood = await api(base, "POST", `/api/roles/${mallRoleId}/mall-purchase`, {
       token: mallPlayer,
@@ -2039,9 +2068,9 @@ async function main() {
     checkEqual(poorBuy.status, 409, "元宝不足购买 → 409");
     checkEqual(poorBuy.body?.code, 20011, "绑定元宝不足 → 20011");
 
-    // 管理端给 cloth_1_p0s1 设特殊价 777（改价对购买即时生效的直接证明）
-    const setPrice = await api(base, "PUT", "/api/admin/mall/prices/cloth_1_p0s1", { token, body: { price: 777 } });
-    checkEqual(setPrice.status, 200, "管理端设特殊价 777");
+    // 管理端把售价改成 888（#758：上架行就是唯一价格，改价对购买即时生效）
+    const setPrice = await api(base, "PATCH", "/api/admin/mall/goods/cloth_1_p0s1", { token, body: { price: 888 } });
+    checkEqual(setPrice.status, 200, "管理端改价 888");
 
     const recharge = await api(base, "PATCH", `/api/admin/roles/${mallRoleId}`, {
       token,
@@ -2057,22 +2086,34 @@ async function main() {
     checkEqual(staleBuy.status, 409, "带旧修订号购买 → 409");
     checkEqual(staleBuy.body?.code, 20006, "乐观锁冲突 → 20006");
 
+    // 购买等级服务端权威校验（#758）：拉到 999 后购买 → 409 50027，归零后才能买
+    const lockLevel = await api(base, "PATCH", "/api/admin/mall/goods/cloth_1_p0s1", { token, body: { requiredLevel: 999 } });
+    checkEqual(lockLevel.status, 200, "管理端把购买等级拉到 999");
+    const levelLockedBuy = await api(base, "POST", `/api/roles/${mallRoleId}/mall-purchase`, {
+      token: mallPlayer,
+      body: { goodId: "cloth_1_p0s1", revision: staleRev },
+    });
+    checkEqual(levelLockedBuy.status, 409, "等级不足购买 → 409");
+    checkEqual(levelLockedBuy.body?.code, 50027, "购买等级不足 → 50027");
+    const unlockLevel = await api(base, "PATCH", "/api/admin/mall/goods/cloth_1_p0s1", { token, body: { requiredLevel: 0 } });
+    checkEqual(unlockLevel.status, 200, "管理端把购买等级归零");
+
     const bought = await api(base, "POST", `/api/roles/${mallRoleId}/mall-purchase`, {
       token: mallPlayer,
       body: { goodId: "cloth_1_p0s1", revision: staleRev },
     });
     checkEqual(bought.status, 200, "购买成功 → 200");
-    checkEqual(bought.body?.data?.consumed, 777, "consumed = 特殊价 777（管理端改价即时生效）");
-    checkEqual(bought.body?.data?.data?.bindGold, 1000 - 777, "存档 bindGold 扣减到位");
+    checkEqual(bought.body?.data?.consumed, 888, "consumed = 售价 888（管理端改价即时生效）");
+    checkEqual(bought.body?.data?.data?.bindGold, 1000 - 888, "存档 bindGold 扣减到位");
     checkEqual(bought.body?.data?.revision, staleRev + 1, "revision 原子 +1");
     const bagAfter = bought.body?.data?.data?.bag;
     check(Array.isArray(bagAfter), "返回存档带 bag 网格");
     checkEqual(bagAfter?.[0]?.[0]?.id, "cloth_1_p0s1", "物品放在网格首个空格（行优先）");
     checkEqual(bagAfter?.[0]?.[0]?.count, 1, "放入数量 = 1");
 
-    // 清掉特殊价（还原统一价前提，避免污染后续）
-    const clearPrice = await api(base, "DELETE", "/api/admin/mall/prices/cloth_1_p0s1", { token });
-    checkEqual(clearPrice.status, 200, "清掉特殊价（还原统一价）");
+    // 下架（还原出厂前提，避免污染后续）
+    const clearPrice = await api(base, "DELETE", "/api/admin/mall/goods/cloth_1_p0s1", { token });
+    checkEqual(clearPrice.status, 200, "下架商品（还原出厂）");
 
     //#endregion
 

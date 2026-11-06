@@ -5,8 +5,8 @@
  * 盯的不变量（改商城后必须全绿）：
  * · 商品表 = 系统内全部装备（七个部位的装备 Map 全量，含 15 品质变体），无重复、id 都能解析回同一对象
  * · 排序稳定：部位序 → 等级 → 前缀 → 后缀
- * · 价格：#603 第八域起客户端**不存任何价格** —— 统一价与特殊价都由服务端快照下发
- *   （本测试模拟快照：统一价 1、无特殊价），getMallPrice 全场返回统一价；
+ * · 价格与上架清单：#603 第八域起客户端不存任何价格；#758 起分类与上架清单也都在服务端
+ *   （本测试模拟快照：一个分类、上架一件售价 1 的装备），getMallPrice 按上架行取价；
  *   快照没到就取价 → 0 且只 warn 一次（不兜出厂价）
  * · 购买链路（在沙箱里跑**真实的 StorageManager**）：客户端只发 { goodId, revision }，
  *   扣款与入包都以**服务端返回的那份**为准（#304 收权后本地不再自算）；
@@ -32,7 +32,7 @@ if (sandbox) {
   void (async () => {
   const { StorageManager, Role, outDir, RoleApi } = sandbox;
   const { getItem, getItemsByType } = require(path.join(outDir, "configs/items.js"));
-  const { getMallPrice, applyMallPricing } = require(path.join(outDir, "configs/game-config.js"));
+  const { getMallPrice, getMallRequiredLevel, getMallCategories, isMallGoodListed, applyMallCatalog } = require(path.join(outDir, "configs/game-config.js"));
   // 「商品 = 全部装备」那份查询读七个部位表，所以住在 equipments（#626，见该函数注释）
   const { getMallGoods, equipmentSlotOrder } = require(path.join(outDir, "configs/equipments.js"));
 
@@ -68,14 +68,16 @@ if (sandbox) {
   }
 
   /**
-   * 服务端替身：商城购买的**权威**在服务端（#304 收权），这里按服务端同一套规则演一遍 ——
-   * 认装备 → 扣绑定元宝 → 落第一个空格 → 回整份背包与余额；任何一步不满足就拒绝（客户端只负责把拒绝变成 false）
+   * 服务端替身：商城购买的**权威**在服务端（#304 收权；#758 起上架清单与购买等级也在服务端），
+   * 这里按服务端同一套规则演一遍 —— 认上架商品 → 校购买等级 → 扣绑定元宝 → 落第一个空格 →
+   * 回整份背包与余额；任何一步不满足就拒绝（客户端只负责把拒绝变成 false）
    */
   const equipmentIds = new Set(getItemsByType("equipment").map((good) => good.id));
   RoleApi.handlers.mallPurchase = (roleId, body) => {
     const role = StorageManager.findOnlineRole();
-    if (!equipmentIds.has(body.goodId)) throw new Error("已下架");
+    if (!equipmentIds.has(body.goodId) || !isMallGoodListed(body.goodId)) throw new Error("已下架");
     const price = getMallPrice(getItem(body.goodId));
+    if (Number(role.level ?? 1) < getMallRequiredLevel(body.goodId)) throw new Error("购买等级不足");
     if (role.bindGold < price) throw new Error("绑定元宝不足");
     const bag = role.bag.map((row) => row.map((cell) => (cell ? { ...cell } : null)));
     let placed = false;
@@ -144,17 +146,18 @@ if (sandbox) {
 
   //#endregion
 
-  //#region B. 价格：全部来自服务端快照
+  //#region B. 商城目录：分类、售价与购买等级全部来自服务端快照
 
-  console.log("\n— B. 价格（快照下发，客户端不存）—");
+  console.log("\n— B. 商城目录（快照下发，客户端不存）—");
   check(getMallPrice(mallGoods[0]) === 0, "快照没到就取价 = 0（客户端不兜出厂价）", String(getMallPrice(mallGoods[0])));
-  applyMallPricing(1, []);
-  check(getMallPrice(mallGoods[0]) === 1, "统一价 1 全部生效", String(getMallPrice(mallGoods[0])));
-  check(mallGoods.every((good) => getMallPrice(good) === 1), "全场商品 getMallPrice 都返回统一价");
-  applyMallPricing(1, [{ id: mallGoods[0].id, price: 999 }]);
-  check(getMallPrice(mallGoods[0]) === 999, "特殊价优先于统一价", String(getMallPrice(mallGoods[0])));
-  check(getMallPrice(mallGoods[1]) === 1, "未定价的商品仍走统一价", String(getMallPrice(mallGoods[1])));
-  applyMallPricing(1, []);
+  check(getMallRequiredLevel(mallGoods[0].id) === Number.MAX_SAFE_INTEGER, "未上架的商品按禁购处理（购买等级给上限）");
+  // 上架一件（售价 1、不限等级），分类一个 —— 后续购买链路都以这份目录为准
+  applyMallCatalog([{ id: "c1", label: "测试分类", sortOrder: 0 }], [{ id: mallGoods[0].id, categoryId: "c1", price: 1, requiredLevel: 0 }]);
+  check(getMallPrice(mallGoods[0]) === 1, "上架售价生效（上架行就是唯一价格，不再有统一价/特殊价两层）");
+  check(getMallPrice(mallGoods[1]) === 0, "未上架的装备取价 0（不在商城陈列/售卖）");
+  check(getMallRequiredLevel(mallGoods[0].id) === 0, "购买等级 0 = 不限等级");
+  check(isMallGoodListed(mallGoods[0].id) && !isMallGoodListed(mallGoods[1].id), "上架清单判定：只认快照 mallGoods 段");
+  check(getMallCategories().length === 1 && getMallCategories()[0].label === "测试分类", "分类落库（页签陈列用）");
 
   //#endregion
 
@@ -216,6 +219,13 @@ if (sandbox) {
   const reloaded = StorageManager.findOnlineRole();
   check(reloaded !== null && reloaded.bag[0][0]?.id === equipment.id && reloaded.bindGold === 2, "购买结果已落盘（重新读档可见）");
 
+  // 7. 购买等级不足：服务端拒（客户端按钮置灰只是提前提示，数据层照样发请求）
+  applyMallCatalog([{ id: "c1", label: "测试分类", sortOrder: 0 }], [{ id: equipment.id, categoryId: "c1", price: 1, requiredLevel: 99 }]);
+  seed([], 10);
+  check(await StorageManager.buyMallGood(equipment.id) === false, "购买等级不足时购买失败");
+  check(online().bindGold === 10 && filledCells().length === 0, "被拒的购买不改余额与背包");
+  applyMallCatalog([{ id: "c1", label: "测试分类", sortOrder: 0 }], [{ id: equipment.id, categoryId: "c1", price: 1, requiredLevel: 0 }]);
+
   //#endregion
 
   //#region D. 界面接线与配置
@@ -243,9 +253,11 @@ if (sandbox) {
   // 分页：每页只建一页的卡片（取代「一次性建满 + 滚动虚拟化」，打开商城不再建几百个节点）
   check(!/getComponent\(ScrollView\)|createScrollView|ScrollView\.EventType/.test(mallSource), "不再用 ScrollView（分页取代滚动，整条滚动链路去掉）");
   check(/layout\.pagination\.rowsPerPage/.test(mallSource), "每页行数取配置（每页件数 = 列数 × 每页行数）");
-  check(/this\.goods\.slice\(start, start \+ this\.pageSize\(\)\)/.test(mallSource), "只按当前页切商品表建卡片（不再遍历全表）");
+  check(/pageGoods\.forEach\(/.test(mallSource), "只按当前分类的当前页切商品建卡片（不再遍历全表）");
   check(/card\.removeFromParent\(\);\s*card\.destroy\(\);/.test(mallSource), "翻页先摘出父节点再销毁上一页卡片（节点数恒定为一页）");
   check(/this\.page = Math\.min\(Math\.max\(page, 0\), this\.pageCount - 1\)/.test(mallSource), "页码夹在合法范围内（首/末页越界点击不生效）");
+  check(/goodsOf\(this\.activeCategory\)/.test(mallSource) && /switchCategory\(/.test(mallSource), "商品按分类页签过滤陈列（#758）");
+  check(/getMallRequiredLevel\(good\.id \?\? ""\)/.test(mallSource) && /interactable = false/.test(mallSource), "购买等级不足的按钮置灰禁点（服务端同样校验）");
   check(/this\.setPageButtonEnabled\(this\.nextPageButton, !atLastPage\)/.test(mallSource), "到末页时「下一页/末页」按钮置灰且点不动");
   check(/trackUiPress\(icon\)/.test(mallSource), "悬停图标登记了按压起点（见 utils/input/Pointer）");
   // 卡片网格：一行 3 张（几何全由 layout.card 推导）
@@ -253,7 +265,7 @@ if (sandbox) {
   check(!/layout\.row/.test(mallSource), "不再引用已删除的 layout.row（旧的整行口径已清干净）");
 
   // 价格必须画在卡片上（#491）：玩家点「购买」之前得先看到要花多少
-  check(/getMallPrice\(good\)/.test(mallSource), "卡片价格取 configs/game-config.getMallPrice（特殊价优先、未定价走统一价，卡片不自己算钱）");
+  check(/getMallPrice\(good\)/.test(mallSource), "卡片价格取 configs/game-config.getMallPrice（上架行就是唯一价格，卡片不自己算钱）");
   check(/getText\("mall_price", \{ value: getMallPrice\(good\) \}\)/.test(mallSource), "价格文案走 configs/texts 的 mall_price（带「绑元」单位，裸数字会被读成数量）");
   check(/mall_card_price_\$\{good\.id\}/.test(mallSource), "每张卡片都建价格节点（mall_card_price_<id>）");
   check(/Label\.HorizontalAlign\.RIGHT/.test(mallSource), "价格右对齐贴卡片右缘（与左对齐的品质行分列两侧）");
@@ -289,6 +301,8 @@ if (sandbox) {
     "mall_gold_not_enough_tip",
     "mall_good_missing_tip",
     "label_mall_buy",
+    "mall_level_lock",
+    "mall_empty_tip",
     "mall_price",
     "label_mall_first_page",
     "label_mall_prev_page",
@@ -303,7 +317,7 @@ if (sandbox) {
     const end = dialogsSource.indexOf("//#endregion", start);
     const block = dialogsSource.slice(start, end > start ? end : undefined);
     check(start > 0, "能定位 mallDialogLayout 配置块");
-    ["background", "size", "closeButton", "bindGold", "list", "card", "pagination"].forEach((key) =>
+    ["background", "size", "closeButton", "bindGold", "tabs", "list", "emptyTip", "card", "pagination"].forEach((key) =>
       check(new RegExp(`${key}:`).test(block), `mallDialogLayout 配了 ${key}`),
     );
     check(/columns: 3/.test(block), "一行 3 张卡片（列数在配置里）");

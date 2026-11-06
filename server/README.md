@@ -285,8 +285,8 @@ git pull && make config-import       # 整表替换配置；账号与角色存�
 | `statuses` | 状态配置（#367） | 主键是状态 id（被 `skills.status_id` 引用）；`owner` 同上分流；时长 / 来源 / 图标 / 身上特效 / `combat`（JSON：格挡概率、格挡系数、防御倍率、**攻击倍率**，缺省 = 该维度不参与）——**角色侧公式在客户端 `BattleMath`，怪物侧在服务端 `MonsterAiService`**（#372：狂怒乘出手伤害、硬化皮肤乘防御项）；id 清单固定，只可改不可增删 |
 | `monster_skills` | 怪物技能挂载（#372） | 复合主键（`monster_key` + `skill_id`）；一只怪放哪些技能、`priority`（越小越先）、`cooldown`（秒，NULL = 用技能自身的冷却）；**整份替换**（PUT 这份清单就是全部，空数组 = 只普攻）；校验技能必须存在且 `owner=monster`、同怪不重复挂 |
 | `fashions` | 时装配置（#257） | 主键是时装 id（出厂在 `config-sync.sql`，如 `cloth_2`）；名称 / 描述 / 售卖价 / 获得渠道（复用 AcquireChannel，seed 默认 unavailable）/ 八项属性（seed 全 0）；`icon` / `in_res` / `out_res` 资源路径可改（管理端图片选择器）；id 清单固定，只可改不可增删；**角色存档的 `fashionCloth` 存的就是这里的 id**（#377 穿戴系统，null = 没穿） |
-| `mall_prices` | 商城特殊定价（#251） | 主键是商品 id（装备变体 id，商品清单来自生成物）；**全库唯一允许动态增删的配置表**（PUT upsert / DELETE 回统一价）；未定价商品走 `mall_settings` 的统一价 |
-| `mall_settings` | 商城统一价（#251） | 单行表（id 恒为 1）；全场默认售价 seed 自生成物 MALL_DEFAULT_PRICE（出厂 `config-sync.sql` 的 `MALL_DEFAULT_PRICE`，客户端一个价格都不存），运营可改 |
+| `mall_categories` | 商城分类（#758） | 运营自建的陈列分组（id 服务端生成 `mc_*`），只带显示名与排序；**允许动态增删**的配置表，分类下还有上架商品时拒删（409 50028） |
+| `mall_goods` | 商城上架商品（#758） | 主键是商品 id（装备变体 id）；运营手动上架/下架，只存**售价**与**购买等级**两个运营字段（名称/图标/部位是装备数据）；购买链路与快照同读这张表；**允许动态增删**（同分类一起接手老 mall_prices 的「唯一可增删」定位） |
 | `drop_tables` | 掉落表（#254） | 主键是表 id（`[a-z][a-z0-9_]{0,49}`）；`picks`（捞取次数）与 `entries`（goodId / 权重 / 概率 / 数量区间）都是 JSON 列，结构校验在 service（goodId 必须在生成物 ITEM_LABELS 里）；**允许动态增删的配置表**（同 mall_prices 定位），被 `monster_drops.table_id` 引用中的行拒删；seed 三张具名表 common / elite / boss + default 兜底 |
 | `monster_drops` | 怪物掉落（#254） | 主键是怪物 key（怪物种子 `monster-seed.ts` 关联键）；`source` 三选一：`table`（引用 drop_tables）/ `entries`（内联条目 + 必填 picks）/ `none`（清空）；key 与怪物一一对应，只有 list + PATCH 整份替换，不可增删 |
 

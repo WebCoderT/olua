@@ -592,38 +592,56 @@ export const routes = {
      */
     templates: "/admin/mails/templates",
   },
-  /** adminMall 模块（5 个接口） */
+  /** adminMall 模块（8 个接口） */
   adminMall: {
     /**
-     * 商城定价列表（商品 × 价格合并视图）（GET /admin/mall/prices）
+     * 商城分类列表（GET /admin/mall/categories）
      *
-     * 商品清单 = 生成物里的装备全量变体（555 件，七部位 × 基础件 × 品质变体），**不在数据库里**；`price` 为 null 表示未定价（走统一价）。按 部位序 → 等级 → id 排序（与客户端商城陈列一致）。
+     * 运营自建的陈列分组（含每组的上架商品数）。排序 = sort_order 小者在先。出厂数据为空 —— 商城开张前必须先建分类（存量库迁移会带一个「默认分类」接住老特殊价）。
      */
-    listPrices: "/admin/mall/prices",
+    listCategories: "/admin/mall/categories",
     /**
-     * 删除单件特殊价（回到统一价）（DELETE /admin/mall/prices/{id}）
+     * 新建分类（POST /admin/mall/categories）
      *
-     * **动态增删的「删」半边**：删掉该商品的特殊价行，之后走统一价。
+     * 分类 id 由服务端生成，运营只给显示名（1~20 字）与排序值（缺省排到最后）。
      */
-    deletePrice: (id: string) => `/admin/mall/prices/${encodeURIComponent(id)}`,
+    createCategory: "/admin/mall/categories",
     /**
-     * 设置单件特殊价（upsert）（PUT /admin/mall/prices/{id}）
+     * 删除分类（DELETE /admin/mall/categories/{id}）
      *
-     * **动态增删的「增/改」半边**：商品已有特殊价则改价，没有则新增一行。
+     * 分类下还有上架商品 → 409（`50028`）—— 先移走或下架，不静默搬走运营摆好的货。分类不存在 → 404（`50025`）。
      */
-    putPrice: (id: string) => `/admin/mall/prices/${encodeURIComponent(id)}`,
+    deleteCategory: (id: string) => `/admin/mall/categories/${encodeURIComponent(id)}`,
     /**
-     * 查询商城统一价（GET /admin/mall/settings）
+     * 修改分类（名字 / 排序）（PATCH /admin/mall/categories/{id}）
      *
-     * 全场默认售价（绑定元宝/件），seed 自客户端 configs/mall 的 mallPrice。特殊价优先于统一价（与客户端 getMallPrice 的取值口径一致）。
+     * 分类只是陈列分组，不带任何数值 —— 可改的只有显示名与排序值。
      */
-    getSettings: "/admin/mall/settings",
+    updateCategory: (id: string) => `/admin/mall/categories/${encodeURIComponent(id)}`,
     /**
-     * 修改商城统一价（PATCH /admin/mall/settings）
+     * 上架商品列表（商品 × 分类 × 售价合并视图）（GET /admin/mall/goods）
      *
-     * 全场默认售价（绑定元宝/件，0 = 免费赠送也合法）；**不影响已设置的特殊价**。
+     * 商品 = 运营手动上架的装备变体（`mall_goods` 行）；名称 / 部位 / 装备等级来自装备数据（**只读展示**），售价与购买等级才是商城字段。`categoryId` / `slot` / `keyword` 组合筛，按 分类序 → 装备等级 → id 排序。上架后装备被删的孤儿行照实列出（名称退回 id），便于清理。
      */
-    updateSettings: "/admin/mall/settings",
+    listGoods: "/admin/mall/goods",
+    /**
+     * 上架商品（POST /admin/mall/goods）
+     *
+     * 把一件装备变体挂到某个分类下（缺省售价 0 = 免费、购买等级 0 = 不限）。
+     */
+    createGood: "/admin/mall/goods",
+    /**
+     * 下架商品（DELETE /admin/mall/goods/{id}）
+     *
+     * 删掉 `mall_goods` 行 = 下架，之后不在商城售卖（装备本体不受影响）。不在上架清单 → 404（`50021`，删无可删不静默成功）。
+     */
+    deleteGood: (id: string) => `/admin/mall/goods/${encodeURIComponent(id)}`,
+    /**
+     * 修改商品（只许改售价与购买等级）（PATCH /admin/mall/goods/{id}）
+     *
+     * **商品是关联数据**：名称 / 图标 / 部位 / 装备等级归装备管理管，这里只开放售价（`price`）与购买等级（`requiredLevel`）两个运营字段；改完立即对购买生效（客户端下次取快照后按钮按新等级置灰）。不在上架清单 → 404（`50021`）。
+     */
+    updateGood: (id: string) => `/admin/mall/goods/${encodeURIComponent(id)}`,
   },
   /** adminMap 模块（15 个接口） */
   adminMap: {

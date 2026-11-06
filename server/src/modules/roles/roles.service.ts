@@ -382,8 +382,16 @@ export class RolesService {
       throw BizException.conflict(BizCode.ROLE_REVISION_CONFLICT, "该角色已在别处被修改，请先同步最新数据");
     }
 
-    // 商品不存在（不在装备目录）→ 404，消息经请求层弹给玩家
+    // 商品不存在（不在上架清单）→ 404，消息经请求层弹给玩家
     const price = this.mallPricing.priceOf(dto.goodId);
+    // 购买等级服务端权威校验（#758）：客户端按钮置灰只是提前提示，不是防线
+    const requiredLevel = this.mallPricing.requiredLevelOf(dto.goodId);
+    if (requiredLevel > existing.level) {
+      throw BizException.conflict(
+        BizCode.MALL_LEVEL_NOT_ENOUGH,
+        `购买等级不足：该商品需要 Lv.${requiredLevel}，当前 Lv.${existing.level}`,
+      );
+    }
 
     const data = decodeStoredRoleData(existing.data);
     const bindGold = Math.max(0, Math.floor(Number(data.bindGold) || 0));

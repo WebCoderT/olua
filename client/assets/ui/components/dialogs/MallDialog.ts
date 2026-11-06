@@ -7,7 +7,7 @@ import { Draggable } from "../input/Draggable";
 import { blockClickThrough } from "../../utils/input/UiHit";
 import { trackUiPress } from "../../utils/input/Pointer";
 import { mallDialogLayout, uiImages } from "../../../configs/hudLayout";
-import { getMallPrice } from "../../../configs/game-config";
+import { getMallCategories, getMallPrice, getMallRequiredLevel, isMallGoodListed, mallGoodCategoryOf } from "../../../configs/game-config";
 import { getEquipmentNameParts, getMallGoods } from "../../../configs/equipments";
 import { getText } from "../../../configs/texts";
 import { Equipment } from "../../../types/good";
@@ -18,14 +18,16 @@ const layout = mallDialogLayout;
 /**
  * 商城弹窗
  *
- * 商品 = 系统内全部装备（含 15 品质变体，见 configs/mall.getMallGoods），统一 1 绑定元宝/件，
- * 买下直接进背包（第一个空格）。本类只做陈列与交互，商品表/价格/扣款入包都在数据层：
- * - 列表：分页陈列全部商品，每页 3 列 × rowsPerPage 行卡片；单张卡片 = 图标（鼠标悬停看完整详情）
+ * 商品 = 运营在管理端**手动上架**的装备（#758：分类 + 上架清单都在服务端，快照下发），
+ * 售价与购买等级每件各自配置。本类只做陈列与交互，商品表/价格/扣款入包都在数据层：
+ * - 分类：顶部页签按快照 `mallCategories` 陈列，点页签切到该分类的商品（没建分类就显示空提示）
+ * - 列表：当前分类内分页陈列，每页 3 列 × rowsPerPage 行卡片；单张卡片 = 图标（鼠标悬停看完整详情）
  *   + 名称两段式 + 「购买」按钮；页脚 = 首页 / 上一页 / 页码 / 下一页 / 末页
- * - 购买：StorageManager.buyMallGood（余额不足/背包满/商品下架都会给出提示，失败时余额与背包都不动）
+ * - 购买：StorageManager.buyMallGood（余额不足/背包满/商品下架都会给出提示，失败时余额与背包都不动）；
+ *   **角色等级不够购买等级时按钮置灰禁点**（服务端同样校验，这里只是提前提示）
  * - 绑定元宝余额（购买成功后原地刷新）
  *
- * **分页而不是滚动**：商品有几百件。早先的做法是「一次性建满 + 滚动虚拟化」，打开商城时就要把
+ * **分页而不是滚动**：商品可能上百件。早先的做法是「一次性建满 + 滚动虚拟化」，打开商城时就要把
  * 几百张卡片（每张含 Graphics、图标、两个文字、按钮）全建出来 → 打开明显卡顿。改成分页后每页
  * 只建一页的卡片（columns × rowsPerPage 张），翻页时整页销毁重建 —— 节点数恒定为一页，
  * 打开商城只付一页的成本。
@@ -39,7 +41,12 @@ export default class MallDialog {
   private cardArea: Node | null = null;
   /** 当前页的卡片（翻页整批销毁重建，任何时刻只有一页的节点） */
   private cards: Node[] = [];
-  /** 商品表（打开时取一次，翻页只切当前这一页，不遍历全表建节点） */
+  /** 分类（打开时取一次，服务端已排好序）与当前页签 */
+  private categories: Array<{ id: string; label: string }> = [];
+  private activeCategory = "";
+  /** 分类页签节点（切换页签时改底色/透明度，不重建） */
+  private tabNodes: Node[] = [];
+  /** 当前分类的商品（打开时取一次上架清单，切页签/翻页只切当前这一页，不遍历全表建节点） */
   private goods: Equipment[] = [];
   /** 当前页码（0 起）与总页数 */
   private page = 0;
@@ -52,6 +59,8 @@ export default class MallDialog {
   private lastPageButton: Node | null = null;
   /** 绑定元宝余额标签（购买成功后刷新） */
   private bindGoldLabel: Node | null = null;
+  /** 空分类提示（当前分类没有商品 / 还没建分类时显示） */
+  private emptyTip: Node | null = null;
   /** 悬停详情（同一时刻最多一个：换悬停、翻页、关弹窗都会先收掉它） */
   private detailDialog: Node | null = null;
 
@@ -71,6 +80,9 @@ export default class MallDialog {
     this.closeDetail();
     this.cards = [];
     this.goods = [];
+    this.categories = [];
+    this.tabNodes = [];
+    this.activeCategory = "";
     this.page = 0;
     this.pageCount = 1;
     this.cardArea = null;
@@ -80,6 +92,7 @@ export default class MallDialog {
     this.nextPageButton = null;
     this.lastPageButton = null;
     this.bindGoldLabel = null;
+    this.emptyTip = null;
     this.dialog?.destroy();
     this.dialog = null;
   }
@@ -104,11 +117,19 @@ export default class MallDialog {
     const area = UiHelper.createNode(layout.list.name, layout.list.position, layout.list.size);
     this.cardArea = area;
     dialog.addChild(area);
+    // 空分类提示（还没建分类 / 当前分类没有上架商品；renderPage 里按内容显隐）
+    this.emptyTip = UiHelper.createLabel(layout.emptyTip.name, getText("mall_empty_tip"), layout.emptyTip.color, layout.emptyTip.fontSize, layout.emptyTip.position, layout.emptyTip.size);
+    this.emptyTip.active = false;
+    dialog.addChild(this.emptyTip);
     // 页脚翻页控件（首页 / 上一页 / 页码 / 下一页 / 末页）
     this.buildPagination(area);
-    // 商品表取一次，按页陈列（打开只建第一页，翻页时整页重建）
-    this.goods = getMallGoods();
-    this.pageCount = Math.max(1, Math.ceil(this.goods.length / this.pageSize()));
+    // 分类页签（挂在弹窗上、卡片区外 —— 换分类时页签不重建，卡片整页重建）
+    this.buildTabs(dialog);
+    // 上架清单取一次（不在上架清单里的装备不陈列），按当前分类陈列
+    this.categories = getMallCategories().map((row) => ({ id: row.id, label: row.label }));
+    this.activeCategory = this.categories[0]?.id ?? "";
+    this.goods = getMallGoods().filter((good) => isMallGoodListed(good.id ?? ""));
+    this.pageCount = this.pageCountOf(this.activeCategory);
     this.renderPage(0);
     this.refreshBindGold();
     this.dialog = dialog;
@@ -118,8 +139,9 @@ export default class MallDialog {
   /**
    * 创建单张商品卡片：图标（悬停看详情）+ 名称两段式（本体一行 + 前缀/后缀一行）+ 「购买」按钮
    * 卡片内几何全部由布局配置推导（顶边距 → 图标 → 名称 → 前后缀 → 按钮），界面里不写死像素
+   * @param roleLevel 角色当前等级（购买等级不足时按钮置灰禁点，文案换「Lv.X 解锁」）
    */
-  private createCard(good: Equipment, width: number) {
+  private createCard(good: Equipment, width: number, roleLevel: number) {
     const height = layout.card.height;
     const card = UiHelper.createNode(`mall_card_${good.id}`, new Vec2(), new Size(width, height));
     // 卡片底：Graphics 自绘（深色填充 + 细金边）。橱窗底色本来就深，描一圈金边把卡片勾出来；
@@ -186,9 +208,28 @@ export default class MallDialog {
         Label.HorizontalAlign.RIGHT,
       ),
     );
-    // 购买：规则判定与提示都在数据层（余额不足/背包满/下架都不会改数据），成功后只刷余额
+    // 购买：规则判定与提示都在数据层（余额不足/背包满/下架都不会改数据），成功后只刷余额。
+    // 购买等级不足（#758）：按钮置灰禁点、文案换「Lv.X 解锁」—— 服务端同样校验（50027），
+    // 这里置灰只是让玩家不用点了才被告知
+    const requiredLevel = getMallRequiredLevel(good.id ?? "");
+    const levelLocked = requiredLevel > roleLevel;
     const button = UiHelper.createButton(`mall_buy_${good.id}`, uiImages.smallButtonBackground, new Vec2(0, buttonY), layout.card.buyButton.size);
-    button.addChild(UiHelper.createLabel(`${button.name}_label`, getText("label_mall_buy"), Color.WHITE, layout.card.buyButton.fontSize, new Vec2(), layout.card.buyButton.size));
+    button.addChild(
+      UiHelper.createLabel(
+        `${button.name}_label`,
+        levelLocked ? getText("mall_level_lock", { level: requiredLevel }) : getText("label_mall_buy"),
+        Color.WHITE,
+        layout.card.buyButton.fontSize,
+        new Vec2(),
+        layout.card.buyButton.size,
+      ),
+    );
+    if (levelLocked) {
+      const buttonComp = button.getComponent(Button);
+      if (buttonComp) buttonComp.interactable = false;
+      const opacity = button.addComponent(UIOpacity);
+      opacity.opacity = 110;
+    }
     button.on(
       Node.EventType.TOUCH_END,
       async () => {
@@ -198,6 +239,58 @@ export default class MallDialog {
     );
     card.addChild(button);
     return card;
+  }
+
+  //#endregion
+
+  //#region 分类页签
+
+  /** 当前分类的商品（没建分类 = 全空；快照没到同样空） */
+  private goodsOf(categoryId: string): Equipment[] {
+    if (!categoryId) return [];
+    return this.goods.filter((good) => mallGoodCategoryOf(good.id ?? "") === categoryId);
+  }
+
+  /** 某分类的总页数（空分类也按 1 页算，页脚显示「第 1 / 1 页」） */
+  private pageCountOf(categoryId: string): number {
+    return Math.max(1, Math.ceil(this.goodsOf(categoryId).length / this.pageSize()));
+  }
+
+  /** 分类页签（横向一排：几何与配色见 mallDialogLayout.tabs；换分类只重刷卡片与页签高亮） */
+  private buildTabs(dialog: Node) {
+    const t = layout.tabs;
+    this.tabNodes = this.categories.map((category, index) => {
+      const position = new Vec2(
+        t.position.x + (index - (this.categories.length - 1) / 2) * (t.size.width + t.gap),
+        t.position.y,
+      );
+      const tab = UiHelper.createButton(`mall_tab_${category.id}`, uiImages.smallButtonBackground, position, t.size);
+      tab.addChild(UiHelper.createLabel(`${tab.name}_label`, category.label, Color.WHITE, t.fontSize, new Vec2(), t.size));
+      tab.on(Node.EventType.TOUCH_END, () => this.switchCategory(category.id), this);
+      dialog.addChild(tab);
+      return tab;
+    });
+    this.refreshTabs();
+  }
+
+  /** 切到某分类：换当前页签高亮、重算页数并回到第一页 */
+  private switchCategory(categoryId: string) {
+    if (this.activeCategory === categoryId) return;
+    this.activeCategory = categoryId;
+    this.refreshTabs();
+    this.pageCount = this.pageCountOf(categoryId);
+    this.renderPage(0);
+  }
+
+  /** 页签高亮：当前分类全亮，其余压暗（不重建节点，切页签零 GC） */
+  private refreshTabs() {
+    const t = layout.tabs;
+    this.tabNodes.forEach((tab, index) => {
+      if (!isValid(tab)) return;
+      const active = this.categories[index]?.id === this.activeCategory;
+      const opacity = tab.getComponent(UIOpacity) ?? tab.addComponent(UIOpacity);
+      opacity.opacity = active ? 255 : t.inactiveOpacity;
+    });
   }
 
   //#endregion
@@ -253,8 +346,11 @@ export default class MallDialog {
     // 卡片宽 = 卡片区宽均分（扣掉列间距）；y 按行从卡片区顶部往下排（卡片区锚点在中心）
     const cardWidth = (layout.list.size.width - (columns - 1) * layout.card.gapX) / columns;
     const start = this.page * this.pageSize();
-    this.goods.slice(start, start + this.pageSize()).forEach((good, index) => {
-      const card = this.createCard(good, cardWidth);
+    const roleLevel = StorageManager.findOnlineRole()?.level ?? 0;
+    const pageGoods = this.goodsOf(this.activeCategory).slice(start, start + this.pageSize());
+    if (this.emptyTip && isValid(this.emptyTip)) this.emptyTip.active = pageGoods.length === 0;
+    pageGoods.forEach((good, index) => {
+      const card = this.createCard(good, cardWidth, roleLevel);
       card.setPosition(
         (index % columns - (columns - 1) / 2) * (cardWidth + layout.card.gapX),
         layout.list.size.height / 2 - (Math.floor(index / columns) * pitch + layout.card.height / 2),

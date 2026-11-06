@@ -139,8 +139,8 @@ function completeSnapshot(over = {}) {
     ],
     growthScalars: [{ key: "roleMaxLevel", value: 3, description: "", updatedAt: 0 }],
     combatWeights: { maxHp: 1, physicalAttack: 2 },
-    mallPrices: [{ id: "cloth_1", price: null, updatedAt: 0 }],
-    mallSettings: { defaultPrice: 5, updatedAt: 0 },
+    mallCategories: [{ id: "default", label: "默认分类", sortOrder: 0, goodCount: 1, updatedAt: 0 }],
+    mallGoods: [{ id: "cloth_1", categoryId: "default", price: 5, requiredLevel: 0 }],
     dropTables: [],
     monsterDrops: [],
     skills: [skillRow("1000", "1")],
@@ -245,7 +245,7 @@ function main() {
   check(statuses.size === 1 && statuses.has("1"), "状态表落库（statuses 段）", `${statuses.size} 条`);
   check(questData.length === 1 && questData[0].id === "q1", "任务表落库（quests 段）", `${questData.length} 条`);
   check(maps.size === 1 && mapTypeGroups.length === 1, "地图与类型分组落库", `${maps.size} 张 / ${mapTypeGroups.length} 组`);
-  check(getMallPrice({ id: "cloth_1" }) === 5, "商城统一价落库（mallSettings.defaultPrice）", String(getMallPrice({ id: "cloth_1" })));
+  check(getMallPrice({ id: "cloth_1" }) === 5, "商城售价落库（mallGoods.price）", String(getMallPrice({ id: "cloth_1" })));
 
   console.log("\n=== 缺任意一段 → 抛错并点名（逐段扫）===");
   let missingOk = 0;
@@ -265,10 +265,6 @@ function main() {
   console.log("\n=== 形状不对 → 抛错（不是「跳过这一段」）===");
   check(thrown(() => snapshotApi.applyConfigSnapshot(completeSnapshot({ skills: null }))).indexOf("skills") >= 0, "数组段给 null → 抛错");
   check(thrown(() => snapshotApi.applyConfigSnapshot(completeSnapshot({ maps: {} }))).indexOf("maps") >= 0, "数组段给对象 → 抛错");
-  check(
-    thrown(() => snapshotApi.applyConfigSnapshot(completeSnapshot({ mallSettings: [] }))).indexOf("mallSettings") >= 0,
-    "对象段给数组 → 抛错",
-  );
   check(thrown(() => snapshotApi.applyConfigSnapshot(null)).length > 0, "整份快照是 null → 抛错");
   check(thrown(() => snapshotApi.applyConfigSnapshot([])).length > 0, "整份快照是数组 → 抛错");
 

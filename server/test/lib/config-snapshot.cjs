@@ -69,4 +69,10 @@ function count(table) {
   return rows(table).length;
 }
 
-module.exports = { SNAPSHOT_FILE, rows, index, group, count };
+/** 某张表的全部行，表不在快照里（或 0 行）时返回空数组 —— 允许为空的运营表用 */
+function optionalRows(table) {
+  const result = readRowsCamel(readSnapshotText(), table);
+  return Array.isArray(result) ? result : [];
+}
+
+module.exports = { SNAPSHOT_FILE, rows, index, group, count, optionalRows };

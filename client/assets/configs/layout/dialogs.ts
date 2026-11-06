@@ -409,8 +409,17 @@ export const mallDialogLayout = {
   closeButton: { position: new Vec2(357, 171), size: uiSize.closeButtonSize },
   /** 绑定元宝余额（柜台正中） */
   bindGold: { position: new Vec2(0, -182), size: new Size(220, 18), fontSize: 12, color: new Color(255, 214, 102) },
-  /** 商品卡片区（橱窗开口内；分页显示，每页只建 columns × rowsPerPage 张卡片） */
-  list: { name: "mall_list", position: new Vec2(0, -33), size: new Size(395, 248) },
+  /**
+   * 分类页签（#758：一排横排按钮，居中均分；挂在弹窗上、卡片区外 —— 换分类时页签不重建）
+   *
+   * 摆在橱窗开口上沿（卡片区顶边再往上 12）：页签高 24，卡片区高度随之收窄给页签让位。
+   * 分类个数不定，页签从中心向两侧均分（index − (n−1)/2) × (宽 + gap)。
+   */
+  tabs: { position: new Vec2(0, 100), size: new Size(64, 24), fontSize: 12, gap: 8, inactiveOpacity: 110 },
+  /** 商品卡片区（橱窗开口内、页签之下；分页显示，每页只建 columns × rowsPerPage 张卡片） */
+  list: { name: "mall_list", position: new Vec2(0, -40), size: new Size(395, 234) },
+  /** 分类下没有商品时的空提示（居中，与页签/卡片同层） */
+  emptyTip: { name: "mall_empty_tip", position: new Vec2(0, -40), size: new Size(300, 20), fontSize: 12, color: new Color(170, 160, 150) },
   /** 商品卡片（一行 columns 张均分列表宽：图标 → 名称 → 前后缀 → 购买按钮，几何都由这里推） */
   card: {
     columns: 3,
