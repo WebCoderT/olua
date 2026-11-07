@@ -57,6 +57,7 @@ import {
   CreateEquipmentResultDto,
   EQUIPMENT_DIRECTIONS,
   EquipmentDto,
+  EquipmentListItemDto,
   EquipmentMetaDto,
   EquipmentQueryDto,
   EquipmentSlotDto,
@@ -370,15 +371,15 @@ export class GameConfigService {
       size: query.size ?? DEFAULT_PAGE_SIZE,
       baseId: query.baseId,
       keyword: query.keyword,
-      slot: query.slot,
-      minLevel: query.minLevel,
-      maxLevel: query.maxLevel,
       sort: query.sort,
       order: query.order,
     };
-    const bases = new Map(this.equipments.list({ page: 1, size: 1_000_000 }).map((row) => [row.id, row]));
+    const rows = this.equipmentVariants.list(options);
+    // 只补这一页真正引用的基础件（显示字段从基础件复制）；查不到的那几行直接跳过 ——
+    // 基础件已被删除的孤儿变体不该在管理端露出来
+    const bases = new Map(this.equipments.listByIds(Array.from(new Set(rows.map((row) => row.base_id)))).map((row) => [row.id, row]));
     const list: EquipmentVariantDto[] = [];
-    for (const row of this.equipmentVariants.list(options)) {
+    for (const row of rows) {
       const base = bases.get(row.base_id);
       if (base) list.push(EquipmentVariantDto.fromVariant(base, row));
     }
@@ -414,7 +415,7 @@ export class GameConfigService {
    * - 名称 / 穿戴等级 = 基础件（前后缀文案由客户端拼在名字前后，不入 label）；
    * - **卖价保留原值**：出厂价签来自已下架的回收价曲线，公式复算不出来，运营逐条调过
    *   的价也不该被一键覆盖。只有新出现的组合（扩档后重建）没有原值可保，按
-   *   `round(10 × 等级 × 前缀倍率 × 后缀倍率)` 垫底（之后可在「装备变体」页逐条调）。
+   *   `round(10 × 等级 × 前缀倍率 × 后缀倍率)` 垫底（之后可在装备列表的「N 个变体」弹窗里逐条调）。
    *
    * 档位缩小后，被删组合的变体行在这里消失 —— 背包 / 穿戴 / 掉落表里还引用那些 id
    * 的装备会变成无效引用（属性 / 卖价查不到、名字回落基础件名）。这是确认弹窗必须
@@ -444,7 +445,7 @@ export class GameConfigService {
 
   // —— 装备基础件（#252 可改数值；#773 起可新建 / 删除；变体见上面的 #655 区）——
 
-  listEquipments(query: EquipmentQueryDto): PageResult<EquipmentDto> {
+  listEquipments(query: EquipmentQueryDto): PageResult<EquipmentListItemDto> {
     const options: EquipmentListOptions = {
       page: query.page ?? 1,
       size: query.size ?? DEFAULT_PAGE_SIZE,
@@ -457,7 +458,9 @@ export class GameConfigService {
     };
     const rows = this.equipments.list(options);
     const total = this.equipments.count(options);
-    return { list: rows.map(EquipmentDto.from), total, page: options.page, size: options.size };
+    // 变体件数只查当前页这几十个基础件（#781：列表要显示「有几个变体」）
+    const counts = new Map(this.equipmentVariants.countByBaseIds(rows.map((row) => row.id)).map((row) => [row.baseId, row.count]));
+    return { list: rows.map((row) => EquipmentListItemDto.of(row, counts.get(row.id) ?? 0)), total, page: options.page, size: options.size };
   }
 
   updateEquipment(id: string, dto: UpdateEquipmentDto): EquipmentDto {

@@ -5539,7 +5539,7 @@
     },
     "/admin/equipments": {
       "get": {
-        "description": "**只收基础件**（如 `cloth_1`），变体（`cloth_1_p3s2`）在 `admin/equipment-variants` 单独管。\n\n`keyword` 模糊匹配 id 与名称；`slot` 按部位筛（other1 / cloth / other2 / weapon / necklace / ring / accessories / shinguard / helmet / scapular / belt / wristband / shoes）；`minLevel` / `maxLevel` 按穿戴需求等级段筛（均含端）。\n\n`sellPrice` 是客户端条目的售卖价（0 = 不可售卖），**商城售价归商城定价管理**，不在这里。\n\n**排序**：`sort` 取 `id` / `slot` / `level` / `sellPrice` / `updatedAt`，`order` 取 asc / desc（默认 level 升序）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
+        "description": "**只收基础件**（如 `cloth_1`），变体（`cloth_1_p3s2`）在 `admin/equipment-variants` 单独管（管理端是列表里的「N 个变体」弹窗）。\n\n`keyword` 模糊匹配 id 与名称；`slot` 按部位筛（other1 / cloth / other2 / weapon / necklace / ring / accessories / shinguard / helmet / scapular / belt / wristband / shoes）；`minLevel` / `maxLevel` 按穿戴需求等级段筛（均含端）。\n\n`sellPrice` 是客户端条目的售卖价（0 = 不可售卖），**商城售价归商城定价管理**，不在这里。\n\n每行带 `variantCount`（这件基础件有几个变体行，出厂 15 = 5 前缀 × 3 后缀）。\n\n**排序**：`sort` 取 `id` / `slot` / `level` / `sellPrice` / `updatedAt`，`order` 取 asc / desc（默认 level 升序）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
         "operationId": "adminEquipment.list",
         "parameters": [
           {
@@ -5899,7 +5899,7 @@
     },
     "/admin/equipment-variants": {
       "get": {
-        "description": "每件基础件展开 5 前缀 × 3 后缀 = 15 行（行数随基础件浮动）。`baseId` 只看某一件基础件的 15 个变体；`keyword` 模糊匹配变体 id 与名称；`slot` 按部位筛（部位取自基础件）、`minLevel` / `maxLevel` 取穿戴等级段（含两端）。\n\n**这是唯一能改单个变体数值的地方** —— 以前改基础件会连带 15 个变体按倍率一起变，现在每个变体是独立的一行。\n\n**排序**：`sort` 取 `id` / `baseId` / `level` / `sellPrice` / `updatedAt`，`order` 取 asc / desc（默认 baseId 升序）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
+        "description": "每件基础件展开 5 前缀 × 3 后缀 = 15 行（行数随基础件浮动）。`baseId` 只看某一件基础件的全部变体（管理端「装备配置」列表里点「N 个变体」弹出的就是它）；`keyword` 模糊匹配变体 id 与名称。\n\n**这是唯一能改单个变体数值的地方** —— 以前改基础件会连带 15 个变体按倍率一起变，现在每个变体是独立的一行。\n\n**排序**：`sort` 取 `id` / `baseId` / `level` / `sellPrice` / `updatedAt`，`order` 取 asc / desc（默认 baseId 升序）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
         "operationId": "adminEquipmentVariant.list",
         "parameters": [
           {
@@ -5964,38 +5964,9 @@
             "name": "baseId",
             "required": false,
             "in": "query",
-            "description": "只列某个基础件的 15 个变体（如 cloth_1）",
+            "description": "只列某个基础件的变体（如 cloth_1；弹窗就靠它）",
             "schema": {
               "type": "string"
-            }
-          },
-          {
-            "name": "slot",
-            "required": false,
-            "in": "query",
-            "description": "按部位筛（取值：other1 / cloth / other2 / weapon / necklace / ring / accessories / shinguard / helmet / scapular / belt / wristband / shoes）；部位取自基础件（变体表只存 base_id）",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "minLevel",
-            "required": false,
-            "in": "query",
-            "description": "穿戴等级下限（含）",
-            "schema": {
-              "minimum": 1,
-              "type": "number"
-            }
-          },
-          {
-            "name": "maxLevel",
-            "required": false,
-            "in": "query",
-            "description": "穿戴等级上限（含）",
-            "schema": {
-              "minimum": 1,
-              "type": "number"
             }
           }
         ],
@@ -22056,6 +22027,133 @@
           "updatedAt"
         ]
       },
+      "EquipmentListItemDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "装备基础件 id（如 cloth_1；变体 id 带 _pXsY 不进管理端）"
+          },
+          "slot": {
+            "type": "string",
+            "description": "部位（EQUIPMENT_TYPE 的枚举值，如 cloth）"
+          },
+          "level": {
+            "type": "number",
+            "description": "穿戴需求等级（装备定强的锚点）"
+          },
+          "sellPrice": {
+            "type": "number",
+            "description": "售卖价（0 = 不可售卖；商城售价归商城定价管理，不在这里）"
+          },
+          "label": {
+            "type": "string",
+            "description": "名称（如「青铜重甲」；前后缀由客户端拼在名字前后）"
+          },
+          "description": {
+            "type": "string",
+            "description": "描述（装备详情弹窗正文）"
+          },
+          "occupation": {
+            "type": "string",
+            "description": "职业限制（取值域见 OCCUPATION_HINT：1 战士 / 2 魔法师 / 3 道士 / 4 全职业）"
+          },
+          "sex": {
+            "type": "string",
+            "description": "性别限制（取值域见 SEX_HINT：1 男 / 2 女 / 3 全性别）"
+          },
+          "icon": {
+            "type": "string",
+            "description": "图标（resources 相对路径，如 equipment/clothes/icon/005；管理端列表缩略图与客户端图标共用）"
+          },
+          "inAtlas": {
+            "type": "string",
+            "description": "内观图集（角色弹窗里穿在身上的那套；resources 相对路径）"
+          },
+          "outAtlas": {
+            "type": "string",
+            "description": "外观图集（场景里跟着角色走的那个；resources 相对路径）"
+          },
+          "tags": {
+            "description": "标签（如「第一大陆」；详情弹窗展示，无逻辑含义）",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "outScale": {
+            "type": "number",
+            "description": "外观缩放（1 = 原尺寸）"
+          },
+          "inScaleX": {
+            "type": "number",
+            "description": "内观横向缩放（1 = 原尺寸）"
+          },
+          "inScaleY": {
+            "type": "number",
+            "description": "内观纵向缩放（1 = 原尺寸）"
+          },
+          "inRotate": {
+            "type": "number",
+            "description": "内观旋转角度（度，0 = 不转）"
+          },
+          "inPosX": {
+            "type": "number",
+            "description": "内观锚点 x（弹窗坐标系，原点 = 弹窗中心、y 向上）"
+          },
+          "inPosY": {
+            "type": "number",
+            "description": "内观锚点 y（弹窗坐标系，y 向上）"
+          },
+          "outPositions": {
+            "description": "外观 8 向绝对位置（相对角色脚底锚点，y 向上；顺序 up / right_up / right / right_down / down / left_down / left / left_up）。**这是出厂值**：管理端「装备对齐」工作台调过的结果在 equip_aligns 表、每次进图另发",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EquipmentPointDto"
+            }
+          },
+          "attributes": {
+            "description": "八项基础属性（普通的·人级那一件自己的值；#655 起变体各自成行，不再由它乘倍率现算）",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ConfigAttributesDto"
+              }
+            ]
+          },
+          "updatedAt": {
+            "type": "number",
+            "description": "最近更新时间（毫秒）"
+          },
+          "variantCount": {
+            "type": "number",
+            "description": "这件基础件的变体行数（= 前缀档数 × 后缀档数；出厂 15）"
+          }
+        },
+        "required": [
+          "id",
+          "slot",
+          "level",
+          "sellPrice",
+          "label",
+          "description",
+          "occupation",
+          "sex",
+          "icon",
+          "inAtlas",
+          "outAtlas",
+          "tags",
+          "outScale",
+          "inScaleX",
+          "inScaleY",
+          "inRotate",
+          "inPosX",
+          "inPosY",
+          "outPositions",
+          "attributes",
+          "updatedAt",
+          "variantCount"
+        ]
+      },
       "EquipmentPageDto": {
         "type": "object",
         "properties": {
@@ -22078,7 +22176,7 @@
             "description": "当前页的装备基础件配置",
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/EquipmentDto"
+              "$ref": "#/components/schemas/EquipmentListItemDto"
             }
           }
         },
@@ -22433,21 +22531,7 @@
           },
           "baseId": {
             "type": "string",
-            "description": "只列某个基础件的 15 个变体（如 cloth_1）"
-          },
-          "slot": {
-            "type": "string",
-            "description": "按部位筛（取值：other1 / cloth / other2 / weapon / necklace / ring / accessories / shinguard / helmet / scapular / belt / wristband / shoes）；部位取自基础件（变体表只存 base_id）"
-          },
-          "minLevel": {
-            "type": "number",
-            "description": "穿戴等级下限（含）",
-            "minimum": 1
-          },
-          "maxLevel": {
-            "type": "number",
-            "description": "穿戴等级上限（含）",
-            "minimum": 1
+            "description": "只列某个基础件的变体（如 cloth_1；弹窗就靠它）"
           }
         }
       },

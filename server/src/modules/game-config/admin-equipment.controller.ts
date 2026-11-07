@@ -13,6 +13,7 @@ import {
   CreateEquipmentDto,
   CreateEquipmentResultDto,
   EquipmentDto,
+  EquipmentListItemDto,
   EquipmentPageDto,
   EquipmentQueryDto,
   EquipmentSlotSummaryDto,
@@ -29,7 +30,7 @@ import {
 /**
  * 管理端 · 装备基础件配置（#252 / #773）
  *
- * **管的是基础件**（如 `cloth_1`，37 件）：显示字段（图标 / 图集 / 几何 / 职业限制）与它
+ * **管的是基础件**（如 `cloth_1`）：显示字段（图标 / 图集 / 几何 / 职业限制）与它
  * 自己的数值。变体（`_pXsY`，每件基础件 15 行）**各自是一行、单独可改**，入口在
  * `admin/equipment-variants`（#655）。
  *
@@ -51,17 +52,18 @@ export class AdminEquipmentController {
     operationId: "adminEquipment.list",
     summary: "装备基础件配置列表",
     description:
-      "**只收基础件**（如 `cloth_1`），变体（`cloth_1_p3s2`）在 `admin/equipment-variants` 单独管。\n\n" +
+      "**只收基础件**（如 `cloth_1`），变体（`cloth_1_p3s2`）在 `admin/equipment-variants` 单独管（管理端是列表里的「N 个变体」弹窗）。\n\n" +
       "`keyword` 模糊匹配 id 与名称；`slot` 按部位筛（" +
       EQUIPMENT_SLOT_KEYS.join(" / ") +
       "）；`minLevel` / `maxLevel` 按穿戴需求等级段筛（均含端）。\n\n" +
       "`sellPrice` 是客户端条目的售卖价（0 = 不可售卖），**商城售价归商城定价管理**，不在这里。\n\n" +
+      "每行带 `variantCount`（这件基础件有几个变体行，出厂 15 = 5 前缀 × 3 后缀）。\n\n" +
       `**排序**：\`sort\` 取 ${sortFieldNames(EQUIPMENT_SORT)}，\`order\` 取 asc / desc（默认 level 升序）。`,
     permissions: [Permission.GAME_CONFIG_READ],
   })
   @ApiQueryModel(EquipmentQueryDto)
   @ApiDataResponse(EquipmentPageDto, { description: "分页结果（list/total/page/size）" })
-  list(@Query() query: EquipmentQueryDto): PageResult<EquipmentDto> {
+  list(@Query() query: EquipmentQueryDto): PageResult<EquipmentListItemDto> {
     return this.gameConfigService.listEquipments(query);
   }
 
@@ -123,7 +125,7 @@ export class AdminEquipmentController {
       "- `level`：穿戴需求等级（装备定强的锚点）。\n" +
       "- `sellPrice`：售卖价（0 = 不可售卖）；**商城售价不在这里** —— 唯一写入口归商城定价管理。\n" +
       "- `attributes`：八项基础属性，**整份提交、整份替换**；区间型要求 0 ≤ min ≤ max（跨字段校验在服务端）。" +
-      "改基础件**不再带动变体**（#655 起变体各自成行）；要改某一档前缀/后缀的数值去「装备变体」页。\n" +
+      "改基础件**不再带动变体**（#655 起变体各自成行）；要改某一档前缀/后缀的数值去列表上的「N 个变体」弹窗。\n" +
       "- `slot` / `id` 不开放编辑（部位结构与引用键固定）—— 要换部位就新建一件（`POST`）再下架旧的。\n" +
       "- `id` 不存在 → 404（`50016`）。",
     permissions: [Permission.GAME_CONFIG_WRITE],
@@ -181,8 +183,8 @@ export class AdminEquipmentVariantController {
     operationId: "adminEquipmentVariant.list",
     summary: "装备变体列表",
     description:
-      "每件基础件展开 5 前缀 × 3 后缀 = 15 行（行数随基础件浮动）。`baseId` 只看某一件基础件的 15 个变体；" +
-      "`keyword` 模糊匹配变体 id 与名称；`slot` 按部位筛（部位取自基础件）、`minLevel` / `maxLevel` 取穿戴等级段（含两端）。\n\n" +
+      "每件基础件展开 5 前缀 × 3 后缀 = 15 行（行数随基础件浮动）。`baseId` 只看某一件基础件的全部变体" +
+      "（管理端「装备配置」列表里点「N 个变体」弹出的就是它）；`keyword` 模糊匹配变体 id 与名称。\n\n" +
       "**这是唯一能改单个变体数值的地方** —— 以前改基础件会连带 15 个变体按倍率一起变，" +
       "现在每个变体是独立的一行。\n\n" +
       `**排序**：\`sort\` 取 ${sortFieldNames(EQUIPMENT_VARIANT_SORT)}，\`order\` 取 asc / desc（默认 baseId 升序）。`,

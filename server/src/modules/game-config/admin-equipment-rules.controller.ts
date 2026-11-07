@@ -78,7 +78,7 @@ export class AdminEquipmentRulesController {
       "- `prefixLabels` / `suffixLabels`：名称里显示的品质文案（必须与倍率等长）。\n" +
       "- `prefixColors` / `suffixColors`：品质文字颜色（#720，`#RRGGBB`，与文案等长；空数组 = 客户端内置色）。\n\n" +
       "**回收价不在这里**（#655 下架）：每件变体的回收价是 `equipment_variants.sell_price` 一列，\n" +
-      "服务端结算（`sellPriceOf`）与客户端背包都读那一列 —— 要调价就去「装备变体」页改那一行。",
+      "服务端结算（`sellPriceOf`）与客户端背包都读那一列 —— 要调价就去「装备配置」页点这件装备的「N 个变体」，在弹窗里改那一行。",
     permissions: [Permission.GAME_CONFIG_READ],
   })
   @ApiDataResponse(EquipmentMetaDto, { description: "装备规则" })

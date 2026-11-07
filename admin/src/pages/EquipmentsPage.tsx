@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { equipmentsApi, equipmentVariantsApi, formatTime, OCCUPATION_LABELS, PERMISSION, SEX_LABELS, slotLabel } from "../api";
 import type {
   ConfigAttributes,
   CreateEquipment,
   Equipment,
+  EquipmentListItem,
   EquipmentSlotSummary,
   EquipmentVariantRebuildResult,
   PageResult,
@@ -13,6 +13,7 @@ import { AttributesGrid, crossedRangeKeys } from "../components/AttributesEditor
 import { EntityPickButton } from "../components/entity/EntityPickButton";
 import { entityOptions } from "../components/entity/catalog";
 import { ConfirmDialog } from "../components/ConfirmDialog";
+import { EquipmentVariantsDialog } from "../components/EquipmentVariantsDialog";
 import { FrameAnimation } from "../components/FrameAnimation";
 import { GameIcon } from "../components/GameImage";
 import { IconField } from "../components/ImagePicker";
@@ -599,7 +600,7 @@ function EquipmentEditDialog({
  * 装备配置管理（#252 只能改；#773 起可新建 / 删除，列表按部位拆页签）
  *
  * **只收基础件**（如 `cloth_1`）：变体（`_pXsY`）是基础件乘前后缀倍率展开的，运营通常只改
- * 基础件这一份（要逐档微调去「装备变体」页）。
+ * 基础件这一份（要逐档微调在列表上点「N 个变体」）。
  *
  * 三件事：
  * - **页签**按部位切（`summary` 给的件数），顺序 = 槽位表 `sort_order`；
@@ -611,7 +612,6 @@ function EquipmentEditDialog({
  */
 export function EquipmentsPage() {
   const canWrite = hasPermission(PERMISSION.GAME_CONFIG_WRITE);
-  const navigate = useNavigate();
   /** 页签：空串 = 全部部位 */
   const [activeSlot, setActiveSlot] = useState("");
   const [summary, setSummary] = useState<EquipmentSlotSummary | null>(null);
@@ -619,9 +619,11 @@ export function EquipmentsPage() {
   const [query, setQuery] = useState({ keyword: "", minLevel: "", maxLevel: "" });
   const [page, setPage] = useState(1);
   const [size, setSize] = useState(20);
-  const [data, setData] = useState<PageResult<Equipment> | null>(null);
+  const [data, setData] = useState<PageResult<EquipmentListItem> | null>(null);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<Equipment | null>(null);
+  /** 变体弹窗（#781：变体不再单开一页，从列表的「N 个变体」点开） */
+  const [variantsOf, setVariantsOf] = useState<Equipment | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [creating, setCreating] = useState(false);
   const [deleting, setDeleting] = useState<Equipment | null>(null);
@@ -791,9 +793,9 @@ export function EquipmentsPage() {
           ) : null
         }
         description={<>只收基础件（如 cloth_1），变体（_pXsY）是基础件乘前后缀倍率展开的 —— 通常只改基础件这一份，
-            要逐档微调去「装备变体」页（每行的「变体」按钮直接带着这件跳过去）。列表按部位分页签；新建一件会连带展开它的全部变体，删除会连带删掉变体与工作台几何
-            （商城还在架时不许删，先下架）。名称 / 描述 / 职业性别 / 图标与图集 / 标签 / 缩放 / 锚点 / 8 向位置都在编辑弹窗里；
-            商城售价归「商城」页，不在这里。</>}
+            要逐档微调就在列表里点「N 个变体」，弹窗里能看能改每一档。列表按部位分页签；新建一件会连带展开它的全部变体，
+            删除会连带删掉变体与工作台几何（商城还在架时不许删，先下架）。名称 / 描述 / 职业性别 / 图标与图集 / 标签 / 缩放 / 锚点 /
+            8 向位置都在编辑弹窗里；商城售价归「商城」页，不在这里。</>}
       />
 
       <Card>
@@ -849,6 +851,7 @@ export function EquipmentsPage() {
                 <th className={thClass}>名称</th>
                 <th className={thClass}>等级</th>
                 <th className={thClass}>售卖价</th>
+                <th className={thClass}>变体</th>
                 <th className={thClass}>属性摘要</th>
                 <th className={thClass}>更新时间</th>
                 <th className={`${thClass} text-right`}>操作</th>
@@ -872,20 +875,23 @@ export function EquipmentsPage() {
                   <td className={`${tdClass} font-medium text-slate-100`}>{item.label}</td>
                   <td className={tdClass}>{item.level}</td>
                   <td className={tdClass}>{item.sellPrice}</td>
+                  <td className={tdClass}>
+                    {/* 件数就是入口（#781）：点开是这个变体的弹窗，不再跳独立页 */}
+                    <button
+                      type="button"
+                      title="看这件装备的全部变体"
+                      className="rounded-md border border-slate-700 px-2 py-0.5 text-xs text-slate-300 transition hover:border-indigo-500/60 hover:bg-indigo-500/10 hover:text-indigo-200"
+                      onClick={() => setVariantsOf(item)}
+                    >
+                      {item.variantCount ?? 0} 个
+                    </button>
+                  </td>
                   <td className={`${tdClass} text-xs text-slate-400`}>{attributeSummary(item)}</td>
                   <td className={`${tdClass} text-xs text-slate-400`}>{formatTime(item.updatedAt)}</td>
                   <td className={`${tdClass} text-right`}>
-                    {/* 跳过去带上 baseId：变体页把 15 行筛好，不用再手输 id（#779） */}
-                    <Button
-                      variant="ghost"
-                      className="px-2.5 py-1 text-xs"
-                      onClick={() => navigate(`/equipment-variants?baseId=${encodeURIComponent(item.id)}`)}
-                    >
-                      变体
-                    </Button>
                     <Button
                       variant="outline"
-                      className="ml-1 px-2.5 py-1 text-xs"
+                      className="px-2.5 py-1 text-xs"
                       disabled={!canWrite}
                       onClick={() => {
                         setEditing(item);
@@ -927,6 +933,12 @@ export function EquipmentsPage() {
           setEditing(null);
         }}
         onSubmit={submitDialog}
+      />
+
+      <EquipmentVariantsDialog
+        equipment={variantsOf}
+        onClose={() => setVariantsOf(null)}
+        onChanged={() => void load()}
       />
 
       <EquipmentCreateDialog

@@ -252,10 +252,31 @@ export class EquipmentQueryDto extends PageQueryDto {  @ApiPropertyOptional({ de
   maxLevel?: number;
 }
 
+/**
+ * 装备基础件列表行（`EquipmentDto` + 变体行数）
+ *
+ * 加这一层而不是往 `EquipmentDto` 里塞 `variantCount`：变体 DTO 继承自 `EquipmentDto`
+ * （`EquipmentVariantDto`），基类带个「我有几个变体」的字段在变体行上毫无意义，
+ * 契约里也会多出一个永远为 0 的字段。
+ *
+ * 件数由装备列表接口一次带出（`GROUP BY base_id` 的子查询），管理端列表因此能直接显示
+ * 「这件装备有几个变体」—— 变体本身在弹窗里看，不再单开一页。
+ */
+export class EquipmentListItemDto extends EquipmentDto {
+  @ApiProperty({ description: "这件基础件的变体行数（= 前缀档数 × 后缀档数；出厂 15）" })
+  variantCount: number;
+
+  static of(row: EquipmentRow, variantCount: number): EquipmentListItemDto {
+    const dto = Object.assign(new EquipmentListItemDto(), EquipmentDto.from(row));
+    dto.variantCount = variantCount;
+    return dto;
+  }
+}
+
 /** 装备分页结果 */
 export class EquipmentPageDto extends PageMetaDto {
-  @ApiProperty({ description: "当前页的装备基础件配置", type: [EquipmentDto] })
-  list: EquipmentDto[];
+  @ApiProperty({ description: "当前页的装备基础件配置", type: [EquipmentListItemDto] })
+  list: EquipmentListItemDto[];
 }
 
 /**
@@ -768,15 +789,14 @@ function parseNumberArray(text: string): number[] {
 //#region 装备变体（#655：逐行配置）
 
 /**
- * 装备变体列表查询入参（管理端「装备变体」页）
+ * 装备变体列表查询入参（管理端「装备配置」页的变体弹窗）
  *
- * `slot` / `minLevel` / `maxLevel` 是 #779 补的：一件基础件 15 行、全库上万行，
- * 光靠关键字翻不动。**部位不在变体表里**（变体行只有 `base_id`），所以按部位筛要走
- * `base_id IN (SELECT id FROM equipments WHERE slot = ?)` 子查询 —— 这条也顺带保证了
- * 「变体行指向一个不存在的基础件」时不会被筛出来（那种行在列表里本来就该消失）。
+ * 变体不再单开一页（#781）：从这里进去的入口只有「某一件基础件的全部变体」，
+ * 所以只要 `baseId` + 关键字 + 排序 —— 按部位 / 等级段收窄是列表页才需要的能力，
+ * 跟着那一页一起下线了。
  */
 export class EquipmentVariantQueryDto extends PageQueryDto {
-  @ApiPropertyOptional({ description: "只列某个基础件的 15 个变体（如 cloth_1）" })
+  @ApiPropertyOptional({ description: "只列某个基础件的变体（如 cloth_1；弹窗就靠它）" })
   @IsOptional()
   @IsString({ message: "基础件 id 必须是字符串" })
   declare baseId?: string;
@@ -785,28 +805,6 @@ export class EquipmentVariantQueryDto extends PageQueryDto {
   @IsOptional()
   @IsString({ message: "关键字必须是字符串" })
   declare keyword?: string;
-
-  @ApiPropertyOptional({
-    description: "按部位筛（取值：" + EQUIPMENT_SLOT_KEYS.join(" / ") + "）；部位取自基础件（变体表只存 base_id）",
-  })
-  @IsOptional()
-  @IsString({ message: "部位必须是字符串" })
-  @IsIn(EQUIPMENT_SLOT_KEYS, { message: "部位取值不合法" })
-  slot?: string;
-
-  @ApiPropertyOptional({ description: "穿戴等级下限（含）", minimum: EQUIPMENT_LEVEL_MIN })
-  @IsOptional()
-  @Type(() => Number)
-  @IsInt({ message: "等级下限必须是整数" })
-  @Min(EQUIPMENT_LEVEL_MIN, { message: `等级下限不能小于 ${EQUIPMENT_LEVEL_MIN}` })
-  minLevel?: number;
-
-  @ApiPropertyOptional({ description: "穿戴等级上限（含）", minimum: EQUIPMENT_LEVEL_MIN })
-  @IsOptional()
-  @Type(() => Number)
-  @IsInt({ message: "等级上限必须是整数" })
-  @Min(EQUIPMENT_LEVEL_MIN, { message: `等级上限不能小于 ${EQUIPMENT_LEVEL_MIN}` })
-  maxLevel?: number;
 }
 
 /** 装备变体分页结果 */

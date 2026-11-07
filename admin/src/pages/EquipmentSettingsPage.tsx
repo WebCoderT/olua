@@ -122,7 +122,7 @@ function toMetaDraft(meta: EquipmentMeta): MetaDraft {
  * 这一页收的是「以前写死在客户端源码里的两样东西」：
  * - **槽位表**（13 行）：名称 / 底图 / 位置分组 / 排序 —— 排序同时是背包「一键整理」的部位序；
  * - **装备规则**（单行）：前后缀倍率与文案（展开 15 个变体的依据）。
- *   回收价 #655 起不在这一页 —— 逐条在「装备变体」页改 `sellPrice`。
+ *   回收价 #655 起不在这一页 —— 逐条在装备列表的「N 个变体」弹窗里改 `sellPrice`。
  *
  * 两个「不能做」的边界写在页面上：槽位不能新增 / 删除（key 是客户端枚举），
  * 倍率不能只改一半（倍率与文案必须等长，服务端会拒）。
@@ -314,7 +314,7 @@ export function EquipmentSettingsPage() {
 
       <Card
         title="回收价"
-        description="逐条配置（#655）：每件变体的回收价在「装备变体」页改 sellPrice 那一列，服务端结算与客户端背包读的是同一列 —— 这里不再有「按等级取曲线价」。改价去那一页，改完记得 make config-export。"
+        description="逐条配置（#655）：每件变体的回收价在装备列表的「N 个变体」弹窗里改 sellPrice 那一列，服务端结算与客户端背包读的是同一列 —— 这里不再有「按等级取曲线价」。改价去那一页，改完记得 make config-export。"
       >
         <div className="mt-4 flex items-center justify-between gap-3">
           <p className="text-xs text-slate-500">

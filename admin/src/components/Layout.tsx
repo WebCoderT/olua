@@ -64,7 +64,6 @@ const NAV_GROUPS: NavBranch[] = [
         children: [
           { to: "/equipments", label: "装备配置", permission: PERMISSION.GAME_CONFIG_READ },
           { to: "/equipment-tiers", label: "前后缀管理", permission: PERMISSION.GAME_CONFIG_READ },
-          { to: "/equipment-variants", label: "装备变体", permission: PERMISSION.GAME_CONFIG_READ },
           { to: "/equipment-settings", label: "槽位与规则", permission: PERMISSION.GAME_CONFIG_READ },
           { to: "/equipment-borders", label: "装备边框", permission: PERMISSION.GAME_CONFIG_READ },
           { to: "/equipment-backgrounds", label: "装备详情背景", permission: PERMISSION.GAME_CONFIG_READ },

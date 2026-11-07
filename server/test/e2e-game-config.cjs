@@ -3143,43 +3143,46 @@ async function main() {
 
     //#endregion
 
-    //#region 二十四、变体列表筛选（#779）：部位取自基础件、等级段含两端、排序可选
+    //#region 二十四、装备列表的变体件数 + 变体弹窗口径（#781）
 
-    group("二十四、变体列表筛选：部位 / 等级段 / 排序");
+    group("二十四、装备列表带 variantCount、变体按 baseId 取（弹窗口径）");
 
-    const clothVariantsRes = await api(base, "GET", "/api/admin/equipment-variants?slot=cloth&page=1&size=100", { token });
-    checkEqual(clothVariantsRes.status, 200, "按部位筛 → 200");
-    const clothRows = clothVariantsRes.body?.data?.list ?? [];
-    check(clothRows.length > 0, "按部位筛有结果");
-    check(clothRows.every((row) => row.slot === "cloth"), "筛出来的每一行都属于该部位（部位取自基础件，不是变体表的列）");
-    const clothBasesRes = await api(base, "GET", "/api/admin/equipments?slot=cloth&page=1&size=1", { token });
-    checkEqual(
-      clothVariantsRes.body?.data?.total,
-      (clothBasesRes.body?.data?.total ?? 0) * rebuild.combos,
-      "部位变体数 = 该部位基础件数 × 组合数（与「基础件 × 15」同一口径）",
-    );
+    // 整表把 variantCount 加起来 == 变体总行数：件数不是前端猜的、也不是写死的 15，
+    // 而是 countByBaseIds 真查出来的（漏 join / 漏并发分页都会在这里露出来）
+    let countedVariants = 0;
+    let countedBases = 0;
+    let countedPages = 0;
+    for (let pageNo = 1; pageNo <= 20; pageNo++) {
+      const listRes = await api(base, "GET", `/api/admin/equipments?page=${pageNo}&size=100`, { token });
+      const rows = listRes.body?.data?.list ?? [];
+      countedBases += rows.length;
+      countedVariants += rows.reduce((sum, row) => sum + (row.variantCount ?? 0), 0);
+      countedPages += 1;
+      if (pageNo * 100 >= (listRes.body?.data?.total ?? 0)) break;
+    }
+    checkEqual(countedVariants, variantsTotalBefore, `各基础件的 variantCount 之和 = 变体总行数（${countedPages} 页 / ${countedBases} 件）`);
+    checkEqual(countedBases, Math.round(variantsTotalBefore / rebuild.combos), "基础件件数 = 变体行数 ÷ 组合数");
 
-    const emptyLevelRes = await api(base, "GET", "/api/admin/equipment-variants?minLevel=9999&page=1&size=1", { token });
-    checkEqual(emptyLevelRes.body?.data?.total, 0, "等级段超出上限 → 0 行");
+    const oneBaseRes = await api(base, "GET", "/api/admin/equipments?keyword=cloth_1&page=1&size=10", { token });
+    const oneBase = (oneBaseRes.body?.data?.list ?? []).find((row) => row.id === "cloth_1");
+    checkEqual(oneBase?.variantCount, rebuild.combos, "单件装备报出的变体件数 = 组合数（出厂 15）");
 
-    const anchorLevel = anchorAfter?.level ?? 0;
-    const exactLevelRes = await api(
-      base,
-      "GET",
-      `/api/admin/equipment-variants?baseId=cloth_1&minLevel=${anchorLevel}&maxLevel=${anchorLevel}&page=1&size=100`,
-      { token },
-    );
-    checkEqual(exactLevelRes.body?.data?.total, rebuild.combos, "等级段含两端：卡在基础件等级上时，正好筛出这件基础件的全部变体");
+    const modalVariantsRes = await api(base, "GET", "/api/admin/equipment-variants?baseId=cloth_1&page=1&size=100", { token });
+    checkEqual(modalVariantsRes.status, 200, "变体弹窗按 baseId 取 → 200");
+    const modalVariants = modalVariantsRes.body?.data?.list ?? [];
+    checkEqual(modalVariants.length, rebuild.combos, "弹窗拿到的行数 = 列表上写的件数（同一口径，不是两套算法）");
+    checkEqual(modalVariantsRes.body?.data?.total, rebuild.combos, "总数与当前页行数一致（一屏看完，不分页）");
+    check(modalVariants.every((row) => row.baseId === "cloth_1"), "弹窗里每一行都属于这件基础件");
 
-    const sortedLevelsRes = await api(base, "GET", "/api/admin/equipment-variants?slot=cloth&sort=level&order=desc&page=1&size=100", { token });
-    const sortedLevels = (sortedLevelsRes.body?.data?.list ?? []).map((row) => row.level);
+    const sortedVariantsRes = await api(base, "GET", "/api/admin/equipment-variants?baseId=cloth_1&sort=level&order=desc&page=1&size=100", { token });
+    const sortedLevels = (sortedVariantsRes.body?.data?.list ?? []).map((row) => row.level);
     check(
       sortedLevels.length > 1 && sortedLevels.every((value, index) => index === 0 || sortedLevels[index - 1] >= value),
       "sort=level&order=desc 按等级降序（排序字段是服务端白名单，不是任凭拼 SQL）",
     );
 
-    const badSlotRes = await api(base, "GET", "/api/admin/equipment-variants?slot=not_a_slot", { token });
-    checkEqual(badSlotRes.status, 400, "部位取值不合法 → 400（与装备列表同一个取值域）");
+    const ghostBaseRes = await api(base, "GET", "/api/admin/equipment-variants?baseId=not_a_real_base&page=1&size=10", { token });
+    checkEqual(ghostBaseRes.body?.data?.total, 0, "基础件不存在 → 0 行（孤儿变体行不会在弹窗里露出来）");
 
     //#endregion
   } finally {

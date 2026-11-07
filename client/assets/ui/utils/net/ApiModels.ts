@@ -4861,6 +4861,97 @@ export type Equipment = {
   updatedAt: number;
 };
 
+export type EquipmentListItem = {
+  /**
+   * 装备基础件 id（如 cloth_1；变体 id 带 _pXsY 不进管理端）
+   */
+  id: string;
+  /**
+   * 部位（EQUIPMENT_TYPE 的枚举值，如 cloth）
+   */
+  slot: string;
+  /**
+   * 穿戴需求等级（装备定强的锚点）
+   */
+  level: number;
+  /**
+   * 售卖价（0 = 不可售卖；商城售价归商城定价管理，不在这里）
+   */
+  sellPrice: number;
+  /**
+   * 名称（如「青铜重甲」；前后缀由客户端拼在名字前后）
+   */
+  label: string;
+  /**
+   * 描述（装备详情弹窗正文）
+   */
+  description: string;
+  /**
+   * 职业限制（取值域见 OCCUPATION_HINT：1 战士 / 2 魔法师 / 3 道士 / 4 全职业）
+   */
+  occupation: string;
+  /**
+   * 性别限制（取值域见 SEX_HINT：1 男 / 2 女 / 3 全性别）
+   */
+  sex: string;
+  /**
+   * 图标（resources 相对路径，如 equipment/clothes/icon/005；管理端列表缩略图与客户端图标共用）
+   */
+  icon: string;
+  /**
+   * 内观图集（角色弹窗里穿在身上的那套；resources 相对路径）
+   */
+  inAtlas: string;
+  /**
+   * 外观图集（场景里跟着角色走的那个；resources 相对路径）
+   */
+  outAtlas: string;
+  /**
+   * 标签（如「第一大陆」；详情弹窗展示，无逻辑含义）
+   */
+  tags: string[];
+  /**
+   * 外观缩放（1 = 原尺寸）
+   */
+  outScale: number;
+  /**
+   * 内观横向缩放（1 = 原尺寸）
+   */
+  inScaleX: number;
+  /**
+   * 内观纵向缩放（1 = 原尺寸）
+   */
+  inScaleY: number;
+  /**
+   * 内观旋转角度（度，0 = 不转）
+   */
+  inRotate: number;
+  /**
+   * 内观锚点 x（弹窗坐标系，原点 = 弹窗中心、y 向上）
+   */
+  inPosX: number;
+  /**
+   * 内观锚点 y（弹窗坐标系，y 向上）
+   */
+  inPosY: number;
+  /**
+   * 外观 8 向绝对位置（相对角色脚底锚点，y 向上；顺序 up / right_up / right / right_down / down / left_down / left / left_up）。**这是出厂值**：管理端「装备对齐」工作台调过的结果在 equip_aligns 表、每次进图另发
+   */
+  outPositions: EquipmentPoint[];
+  /**
+   * 八项基础属性（普通的·人级那一件自己的值；#655 起变体各自成行，不再由它乘倍率现算）
+   */
+  attributes: ConfigAttributes;
+  /**
+   * 最近更新时间（毫秒）
+   */
+  updatedAt: number;
+  /**
+   * 这件基础件的变体行数（= 前缀档数 × 后缀档数；出厂 15）
+   */
+  variantCount: number;
+};
+
 export type EquipmentPage = {
   /**
    * 总条数
@@ -4877,7 +4968,7 @@ export type EquipmentPage = {
   /**
    * 当前页的装备基础件配置
    */
-  list: Equipment[];
+  list: EquipmentListItem[];
 };
 
 export type EquipmentQuery = {
@@ -5107,21 +5198,9 @@ export type EquipmentVariantQuery = {
    */
   order?: "asc" | "desc";
   /**
-   * 只列某个基础件的 15 个变体（如 cloth_1）
+   * 只列某个基础件的变体（如 cloth_1；弹窗就靠它）
    */
   baseId?: string;
-  /**
-   * 按部位筛（取值：other1 / cloth / other2 / weapon / necklace / ring / accessories / shinguard / helmet / scapular / belt / wristband / shoes）；部位取自基础件（变体表只存 base_id）
-   */
-  slot?: string;
-  /**
-   * 穿戴等级下限（含）
-   */
-  minLevel?: number;
-  /**
-   * 穿戴等级上限（含）
-   */
-  maxLevel?: number;
 };
 
 export type EquipmentVariantRebuildResult = {
