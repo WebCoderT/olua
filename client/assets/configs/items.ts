@@ -1,18 +1,6 @@
 import { BagCell, BagCellPos, DrugEffect, Equipment, EQUIPMENT_TYPE, GOOD_TYPE, Goods, isEquipment } from "../types/good";
 import { drugs } from "./game-config";
-import {
-  belts,
-  clothes,
-  equipmentCombatValue,
-  equipmentSlotOrder,
-  getMallGoods,
-  getRecyclePrice,
-  helmets,
-  nicklaces,
-  rings,
-  shoes,
-  weapons,
-} from "./equipments";
+import { equipmentCombatValue, equipmentSlotOrder, getAllEquipmentVariants, getMallGoods, getRecyclePrice } from "./equipments";
 import { materials } from "./game-config";
 
 /**
@@ -49,11 +37,12 @@ export function registerItems(list: Goods[], prefix: string) {
  */
 export function rebuildItemIndex(): void {
   items.clear();
-  // 装备：七张部位表（由 applyEquipmentData 从基础件展开成 555 个变体）
-  [clothes, weapons, rings, nicklaces, shoes, helmets, belts].forEach((map) => {
-    map.forEach((good) => {
-      if (good.id) items.set(good.id, good);
-    });
+  // 装备：**全部位**（getAllEquipmentVariants 读 equipmentBySlot —— 13 个部位的变体都在里面）。
+  // 别改成遍历 clothes / weapons / … 七张具名表：那只是 7 个部位的部分视图，#777 起
+  // wristband / necklace / accessories 等部位也有装备了，按具名表收集会让它们整批缺席
+  // 物品总表（症状：背包格空白、回收单测件数对不上，且不报错）
+  getAllEquipmentVariants().forEach((good) => {
+    if (good.id) items.set(good.id, good);
   });
   registerItems(drugs, "drug");
   registerItems(materials, "material");

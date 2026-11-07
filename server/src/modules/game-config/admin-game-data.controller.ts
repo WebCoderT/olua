@@ -26,7 +26,7 @@ import { GameConfigSnapshotDto } from "./dto/client-config.dto";
  * - 路径在 `/admin/` 下，走管理员令牌 + `gameConfig:read` 权限点（客户端那份要玩家令牌）；
  * - 文档归类为管理端（`@ApiAudience("admin")`）。
  *
- * 数据量约 1MB（555 件装备变体是大头）。只读、无副作用、无参数，前端缓存到会话结束。
+ * 数据量约几 MB（装备变体是大头）。只读、无副作用、无参数，前端缓存到会话结束。
  */
 @ApiAudience("admin")
 @Controller("admin/game-data")
@@ -42,7 +42,7 @@ export class AdminGameDataController {
       "怪物表现 / NPC / 时装 / 技能 / 状态 / 任务 / 成就 / 地图 / 等级表 / 成长标量 / 商城价 / 掉落表。\n\n" +
       "管理端登录后拉一次存内存，用于「角色背包里那件装备叫什么」「掉落引用了哪只怪」这类" +
       "**同步查表**的展示；名字与 id 都来自数据库，代码里不再有第二份数据副本。\n\n" +
-      "只读、无副作用、无参数。数据量约 1MB（555 件装备变体是大头），不要在每次渲染时调用。",
+      "只读、无副作用、无参数。数据量约几 MB（装备变体是大头），不要在每次渲染时调用。",
     permissions: [Permission.GAME_CONFIG_READ],
   })
   @ApiDataResponse(GameConfigSnapshotDto, { description: "全部运营配置（与客户端快照同形）" })

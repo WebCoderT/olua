@@ -22,9 +22,9 @@
 | --- | --- | --- |
 | `audio/` | 12 个音效 / 音乐（`wav` / `mp3`，**文件路径入库**，运营在管理端挑） | `configs/audio`（快照 `audio` 段）→ `ui/core/SoundManager` |
 | `effect/` | 特效图集，按用途八分：`background` / `border` / `light` / `select` / `skill` / `status` / `aura`（氛围光环）/ `upgrade`。`select/` 收**两种地面光标**：`player@0`（选角界面选中角色）与 `monster@0`（地图上点中怪），同类放一起 | `configs/layout/images.effectImage`、`effectSelectImage`、`configs/{border,background,light}` |
-| `equipment/` | 装备：`clothes/` 与 `weapons/` 各三套（`icon` 图标 / `in` 内观 / `out` 外观） | 快照 `equipments.{icon,in_atlas,out_atlas}` |
+| `equipment/` | 装备，**一个部位一个目录**（目录名用复数）：`clothes/`、`weapons/` 各三套（`icon` 图标 / `in` 内观 / `out` 外观）；`belts/`、`helmets/`、`necklaces/`、`rings/`、`shoes/`、`wristbands/` 只有扁平图标（这批素材没给内外观）。图标一律 `<编号>.png`，编号即装备 id 的数字部分 | 快照 `equipments.{icon,in_atlas,out_atlas}` |
 | `font/` | `msyh.ttf`（Label 未指定字体时的默认字体） | `uiImages.defaultFont` |
-| `item/` | 物品与药品图标（68 张；`drug-hp-1` 这类语义名 + 美术稿号两种） | 快照 `drugs.icon` / `items.icon` |
+| `item/` | 物品图标，按**大类**分层：`consumable/drugs/` 收全部药品（`drug-hp-1` 这类语义名）。装备图标不放这里 —— 那是 `equipment/<部位>/` 的事（#777 迁走） | 快照 `drugs.icon` / `items.icon` |
 | `map/` | 每张地图一个目录：`<id>.tmx` + 图块 `*.tsx` / `*.jpg` + `preview.jpg` | `images.mapPreviewImage`；`map/` **不参与改名**（Tiled 工程内部互相引用） |
 | `monster/` | `icon/` 头像 + `out/` 地图上的八方向动作 | 快照 `monster_presentation.{icon,out}` |
 | `npc/` | NPC 外观图集（`2108.plist` 平铺） | 快照 `npcs.src` |
@@ -66,7 +66,7 @@
 | 一套画多张表时加 `@<序号>` | `wing_100004@0` / `@1`、`monster@0` | 序号是**表**的序号，不是帧号 |
 | 语义前缀代替原始编号 | `border-30123` / `bg-16000` / `light-1` | 原来是 `sfx_30123_0`（`sfx` = sound effect，被错用在图上）；现在前缀说清用途，编号（美术资产号）保留 |
 | 光柱六档 | `light-1` … `light-6` | key 同时是 `ui_effects` 的行键与素材名，**不含斜杠**（会拼进节点名） |
-| 纯数字名保留 | `title/13009`、`soul/13001`、`npc/2108`、`item/2010210`、`monster/1`、`skill/icon/1001`、`map/1` | 这些编号是配置里的 id，改名等于改数据；只把它们**收进有意义的目录** |
+| 纯数字名保留 | `title/13009`、`soul/13001`、`npc/2108`、`equipment/rings/2010210`、`monster/1`、`skill/icon/1001`、`map/1` | 这些编号是配置里的 id（装备的编号就是 id 的数字部分），改名等于改数据；只把它们**收进有意义的目录** |
 | 禁止出现的东西 | `sfx_` 前缀、非 ASCII、空格 | 审计会拦 |
 
 ## 三、图集在磁盘上有两种形态

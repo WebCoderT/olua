@@ -228,7 +228,7 @@ Implemented features only; each side's README covers its own capabilities in mor
 | --- | --- |
 | Equip / unequip with attribute totals | Validates level / gender / class, recomputed on every change |
 | Appearance and inner view | 8-direction appearance position and scale; a gender-based default body when no clothes are worn |
-| Prefix and suffix variants | 5 prefixes × 3 suffixes, 15 variants per base item, 555 items in total |
+| Prefix and suffix variants | 5 prefixes × 3 suffixes, 15 variants per base item (each base item adds 15 rows; no fixed total) |
 | Quality borders and detail backgrounds | Border and background animations chosen by the prefix / suffix combination |
 | Drops | The server rolls the weighted tables and writes the bag; the client only plays the ring scatter and pickup |
 | Per-monster drop tables | One list per monster, each entry with weight / chance / count |

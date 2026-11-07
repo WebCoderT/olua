@@ -684,7 +684,7 @@ export class EquipmentVariantRebuildResultDto {
   @ApiProperty({ description: "前后缀组合数（前缀档数 × 后缀档数）", example: 15 })
   combos: number;
 
-  @ApiProperty({ description: "重建后的变体总行数（= 基础件数 × 组合数）", example: 555 })
+  @ApiProperty({ description: "重建后的变体总行数（= 基础件数 × 组合数）", example: 10275 })
   variants: number;
 }
 
@@ -765,7 +765,7 @@ function parseNumberArray(text: string): number[] {
 
 //#endregion
 
-//#region 装备变体（#655：555 行逐一配置）
+//#region 装备变体（#655：逐行配置）
 
 /** 装备变体列表查询入参（管理端「装备变体」页） */
 export class EquipmentVariantQueryDto extends PageQueryDto {

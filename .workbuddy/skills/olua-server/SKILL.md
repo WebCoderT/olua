@@ -166,7 +166,7 @@ test/e2e-equip-in-align.cjs      装备内观几何专项（73 条断言，#523�
 
 **4.0 游戏数据的唯一权威 = 数据库**（#603 逐域上移，#655 收口）
 
-`server/data/config-sync.sql` 是**全部配置表的出厂快照**（32 张；等级 60 行、装备变体 555 行、
+`server/data/config-sync.sql` 是**全部配置表的出厂快照**（32 张；等级 60 行、装备变体行、
 怪物 / 掉落 / 地图 / 刷怪区 / 特效 / 运行时参数都在里面）。空库启动时 `bootstrapConfigSnapshot()`
 整表灌入，之后运营在管理端改库，`make config-export` 把库重导回那份 SQL 提交 —— **多机同步靠 SQL，不靠种子**。
 
@@ -175,7 +175,7 @@ test/e2e-equip-in-align.cjs      装备内观几何专项（73 条断言，#523�
   （`common/runtime-config-cache.ts`），客户端 `configs/*` 是空的运行时表（快照整表重建），
   管理端直接调 `/admin/*` 读写库 —— 三方都不 import 任何生成物。
 - **派生值也落库**（#655）：`role_levels`（每级裸属性 + exp + maxMp + hpRecover）、
-  `equipment_variants`（555 行，含前后缀名 / 八项属性 / sell_price）、`equip_aligns`（32）/
+  `equipment_variants`（含前后缀名 / 八项属性 / sell_price）、`equip_aligns`（32）/
   `equip_in_aligns`（31）。运行时**零现算**：`roleLevelAttributesOf` / `equipmentAttributesOf` /
   `sellPriceOf` 只读表，不回落到任何公式（旧兜底是 bug：生成物给的是 `[min,max]` 元组，读方按 `{min,max}` 取）。
 - **曲线全部下架**：`growth_segments` / `level_exps` 启动即 `DROP TABLE IF EXISTS`（老库收尾，新库空操作）。

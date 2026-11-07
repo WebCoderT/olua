@@ -7,7 +7,7 @@
  * ===========================================================================
  * #655 之前装备数值是**运行时按公式算**的（`growth-seed.equipmentStats(level, slot)`），
  * 本文件那时逐条验证公式性质。现在公式整条下线：每件装备的八项属性 + 回收价都是
- * `equipment_variants` 表里的一行（555 行），由管理端逐条可改。
+ * `equipment_variants` 表里的一行（每件基础件展开 15 个前后缀变体），由管理端逐条可改。
  *
  * 所以这里改成验证**表本身的性质** —— 公式没了，但这些体感约定还得成立，
  * 改坏了照样是玩家能立刻感觉到的那种错：
@@ -17,9 +17,13 @@
  * · 低等级小份额部位保底 1（不因取整把项链的防御抹成 0）
  * · 同部位属性随装备等级单调不减（等级升属性不降）
  * · 低级与高级装备拉开明显差距（成长可感知）
- * · 前后缀阶梯严格递增且等于「基础 × 前缀倍率 × 后缀倍率」
+ * · 前后缀阶梯里每件基础件的 15 个变体行都在（值不比对，见 #655）
  * · 客户端从快照拿到的那件 = 表里那行（灌表链路真的接通了）
- * · 缺口如实记录：头盔/腰带/鞋/项链/戒指只有 1 级件（issue #18）
+ * · 每个部位的等级覆盖不断层（#777 补完 #18 的缺口后，至少一处够得着等级上限）
+ *
+ * ⚠️ 一律不锁件数与数值：#777 起基础件从 37 件扩到 685 件（按素材目录批量生成，
+ * 占位名 + 等级按编号线性映射），其中 648 件的八项属性还是 0（等运营配）——
+ * 「曲线单调」「部位强度差」这类断言只在**已配数值**的件上成立，见 hasStats。
  *
  * 用法：node client/tools/test-equipment-growth.cjs
  */
@@ -53,11 +57,25 @@ function main() {
 
   /** 基础件（无前缀无后缀）—— 部位与等级的「标准件」 */
   const bases = variants.filter((row) => row.prefix === 0 && row.suffix === 0);
-  const baseOf = (slot, level) => bases.find((row) => row.slot === slot && row.level === level);
+  /**
+   * 是否「已经配了数值」的基础件
+   *
+   * #777 起按素材目录批量新增了 648 件占位件（八项属性全 0、卖价按等级垫底）——
+   * 它们存在、能穿、能上架，但数值还没人配。曲线类的断言只对**已配数值**的件成立：
+   * 拿占位件去比单调性只会得到「等级 2 的 0 攻击低于等级 1 的 21 攻击」这种噪音。
+   * 运营给占位件填了数之后它们自动纳入断言（那时违反才是真错）。
+   */
+  const hasStats = (row) => Boolean(row.attributes.maxHp || upper(row.attributes.physicalAttack) || upper(row.attributes.physicalDefense));
+  // 同等级可能有多件（占位件与手调件混在一起），取「配了数值」的那件当该部位该级的代表
+  const baseOf = (slot, level) => bases.find((row) => row.slot === slot && row.level === level && hasStats(row));
   const baseOfSlot = (slot) => bases.filter((row) => row.slot === slot).sort((a, b) => a.level - b.level);
 
   console.log("\n=== 表规模：每个部位都有基础件 ===");
-  check(variants.length === 555, `装备变体 ${variants.length} 行（12 件衣服 + 20 把武器 + 5 个单级部位，各 15 个前后缀变体）`);
+  // 不锁件数（运营随时加装备）：锁的是「每件基础件展开成 前缀档 × 后缀档 个变体」这条展开规则
+  check(
+    bases.length > 0 && variants.length === bases.length * prefixRates.length * suffixRates.length,
+    `装备变体 ${variants.length} 行 = ${bases.length} 件基础件 × ${prefixRates.length} 前缀 × ${suffixRates.length} 后缀`,
+  );
   const missingSlot = SLOTS.filter((slot) => !bases.some((row) => row.slot === slot));
   check(missingSlot.length === 0, "七个部位都有基础件", missingSlot.join(","));
 
@@ -78,14 +96,17 @@ function main() {
 
   console.log("\n=== 全表性质：固定值 / 保底 ===");
   const notFixed = variants.filter((row) => RANGE_KEYS.some((key) => lower(row.attributes[key]) !== upper(row.attributes[key])));
-  check(notFixed.length === 0, "全部 555 行的属性都是固定值（区间两端同数，详情弹窗只显示一个数）", notFixed.slice(0, 3).map((row) => row.id).join(","));
+  check(notFixed.length === 0, `全部 ${variants.length} 行的属性都是固定值（区间两端同数，详情弹窗只显示一个数）`, notFixed.slice(0, 3).map((row) => row.id).join(","));
   check(lv1.necklace.attributes.physicalDefense.min >= 1, "1 级项链防御 ≥ 1（取整不会把首饰的防御抹成 0）");
 
   console.log("\n=== 曲线性质：同部位随等级单调不减 ===");
   let monotonicOk = true;
   const broken = [];
+  const curvePoints = {};
   for (const slot of SLOTS) {
-    const rows = baseOfSlot(slot);
+    // 只看配了数值的件（占位件不参与，见 hasStats 的说明）
+    const rows = baseOfSlot(slot).filter(hasStats);
+    curvePoints[slot] = rows.length;
     for (let index = 1; index < rows.length; index++) {
       const prev = rows[index - 1];
       const next = rows[index];
@@ -96,6 +117,13 @@ function main() {
     }
   }
   check(monotonicOk, "同部位属性随装备等级单调不减（逐级校验，含档界）", broken.slice(0, 5).join(","));
+  // 防止上一条变成空断言：一旦所有件都成了占位件（或曲线被删空），「单调」会退化成永真
+  const curveSlots = SLOTS.filter((slot) => curvePoints[slot] >= 5);
+  check(
+    curveSlots.length >= 2,
+    `至少两个部位有成型的等级曲线（各 ≥ 5 个已配数值的等级点，实际 ${curveSlots.join("/") || "无"}）`,
+    SLOTS.map((slot) => `${slot}:${curvePoints[slot]}`).join(" "),
+  );
 
   console.log("\n=== 成长差距：低级 vs 高级 / 前后缀阶梯 ===");
   const weapon1 = baseOf("weapon", 1);
@@ -146,17 +174,12 @@ function main() {
       return [slot, rows.length > 0 ? rows[rows.length - 1].level : 0];
     }),
   );
-  const sparseSlots = activeSlots.filter((slot) => reachable[slot] < 60);
-  check(
-    sparseSlots.length > 0,
-    `缺口如实记录：${sparseSlots.join("/")} 的最高装备等级 = ${sparseSlots.map((slot) => reachable[slot]).join("/")}（不到 60 级，见 issue #18）`,
-  );
-  // 补齐之后的天花板 = 每件都取到 60 级件；现在只有两个部位够得着
-  check(
-    activeSlots.filter((slot) => reachable[slot] === 60).length === 2,
-    "目前只有 weapon / cloth 有 60 级件（其余五个部位 1 级封顶）",
-    activeSlots.filter((slot) => reachable[slot] === 60).join("/"),
-  );
+  const levelReport = activeSlots.map((slot) => `${slot}@${reachable[slot]}`).join(" ");
+  // issue #18 的「五个部位 1 级封顶」缺口已由 #777 按素材补齐 —— 现在锁的是「别再退回断层」：
+  // 每个部位都得有能穿到中后期的件，且至少一处够得着等级上限附近
+  check(activeSlots.every((slot) => reachable[slot] >= 50), "每个部位的最高装备等级都已成型（≥ 50 级）", levelReport);
+  const topSlots = activeSlots.filter((slot) => reachable[slot] >= 59);
+  check(topSlots.length >= 1, `至少一个部位够得着等级上限（≥ 59 级：${topSlots.join("/") || "无"}）`, levelReport);
 
   finish("PASS：装备数值表的部位强度差 / 前后缀阶梯 / 等级成长 / 单调性 / 灌表链路全部成立。");
 }

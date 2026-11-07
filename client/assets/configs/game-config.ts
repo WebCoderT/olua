@@ -55,7 +55,7 @@ import type {
  * 2. **不许反向 import** `items` / `equipments` / `skill` / `apply-snapshot`。
  *    依赖方向永远是 `apply-snapshot → game-config → types`：`items` 要读药品 / 材料表、
  *    `equipments` 要读装备规则与战斗力权重，反过来引就成环。
- *    （`getMallGoods` 因此住在 `configs/equipments` —— 它读七个部位表。）
+ *    （`getMallGoods` 因此住在 `configs/equipments` —— 它要遍历装备的全部位索引。）
  * 3. **加载期这些表都是空的**（唯一书写处是数据库，出厂那份 = `server/data/config-sync.sql`）。
  *    填充只有一条路：`Loading` 场景 `await loadGameConfig()` → 契约校验 →
  *    `applyConfigSnapshot`（见 `configs/apply-snapshot`）。**没有本地兜底数据**。

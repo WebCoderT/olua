@@ -33,7 +33,7 @@ if (sandbox) {
   const { StorageManager, Role, outDir, RoleApi } = sandbox;
   const { getItem, getItemsByType, getSellableGoods } = require(path.join(outDir, "configs/items.js"));
   const { getMallPrice, getMallRequiredLevel, getMallCategories, isMallGoodListed, applyMallCatalog } = require(path.join(outDir, "configs/game-config.js"));
-  // 「商品 = 全部装备」那份查询读七个部位表，所以住在 equipments（#626，见该函数注释）
+  // 「商品 = 全部装备」那份查询要遍历全部位装备索引，所以住在 equipments（#626，见该函数注释）
   const { getMallGoods, equipmentSlotOrder } = require(path.join(outDir, "configs/equipments.js"));
 
   const read = (rel) => fs.readFileSync(path.join(PROJECT_ROOT, rel), "utf8");

@@ -52,7 +52,7 @@
 ### 3.1 玩家侧快照（`GET /game-config`）
 
 > 客户端表分两处住：**快照域全在 `configs/game-config.ts`**（按 `//#region` 分局，下表「区 N」就是它），
-> 装备七张部位表与物品总表仍在 `configs/equipments.ts` / `configs/items.ts`（它们是「按 id 展开的算法」，不是快照段）。
+> 装备部位索引与物品总表仍在 `configs/equipments.ts` / `configs/items.ts`（它们是「按 id 展开的算法」，不是快照段）。
 
 | 快照段 | 落库函数 | 落到哪个客户端表 | 服务端出厂（唯一书写处） | 管理端页面 |
 |---|---|---|---|---|
@@ -61,7 +61,7 @@
 | `souls` | `applySoulRows` | `game-config` 区 2 `soulLevels`（全量）+ `soulUpgradeChain`（全量，按 `upgradeOrder`） | `config-sync.sql` → `souls` 表 | `/souls` |
 | `ranks` | `applyRankRows` | `game-config` 区 3 `rankLevels`（100 阶按阶就是链） | `config-sync.sql` → `ranks` 表 | `/ranks` |
 | `levels` / `growthScalars` | `applyLevelRows` / `applyGrowthScalars` | `game-config` 区 4 `levelMap`、区 6 `roleMaxLevel` | `config-sync.sql` | `/growth` |
-| `equipments` | `applyEquipments`（→ `applyEquipmentData`） | `configs/equipments.ts` 七张部位表 + `configs/items.ts` 的装备条目（基础件展开 555 变体） | `config-sync.sql` → `equipments` 表 | `/equipments` |
+| `equipments` | `applyEquipments`（→ `applyEquipmentData`） | `configs/equipments.ts` 全部位装备索引 `equipmentBySlot`（`getAllEquipmentVariants`）+ `configs/items.ts` 的装备条目（每件基础件展开 15 个前后缀变体） | `config-sync.sql` → `equipments` 表 | `/equipments` |
 | `equipmentSlots` | `applyEquipmentSlots` | `configs/equipments.ts` `equipmentSlots` / `equipmentSlotOrder` | `config-sync.sql` → `equipment_slots` 表 | `/equipment-settings` |
 | `equipmentMeta` | `applyEquipmentRules`（区 6）/ `applyEquipmentQualityLabels`（equipments） | `game-config` 区 6 的前后缀倍率 + 回收价曲线、`configs/equipments.ts` 的品质文案 | `config-sync.sql` → `equipment_meta` 表 | `/equipment-settings` |
 | `items` | `applyItemRows`（→ `applyItemBaseData`，整表重建） | `game-config` 区 9 `materials` | `config-sync.sql` → `items` 表 | `/items` |
@@ -141,7 +141,7 @@
 
 | 文件 | 内容 |
 |---|---|
-| `equipments.ts` | 七张部位表 / `equipmentSlots` / `equipmentSlotOrder` / 品质文案 / 装备展开与几何纯函数 / `getMallGoods`（唯一要读七张表的读取函数，放这里避免成环） |
+| `equipments.ts` | 全部位装备索引 `equipmentBySlot`（`clothes` / `weapons` / … 七张具名表只是 7 个部位的**部分视图**，遍历全集一律走 `getAllEquipmentVariants`）/ `equipmentSlots` / `equipmentSlotOrder` / 品质文案 / 装备展开与几何纯函数 / `getMallGoods`（唯一要遍历全部位装备的读取函数，放这里避免成环） |
 | `items.ts` | `items` 总表 = 装备 + 药品 + 材料的「id → 物品」索引（`rebuildItemIndex()` 按装备 → 药品 → 材料） |
 
 ### 4.2 复核后判定「不搬」（#603 第十三域的结论）
@@ -205,7 +205,7 @@
 （`runtime_params.monster_ai`）。至此 #603 的「运营数据进库」全部收口。
 
 > 第九域的三层切分值得记住：**显示与规则**进 `equipments` / `equipment_slots` / `equipment_meta` 三张表；
-> **八项战斗属性**在 `equipment_variants` 表里逐条写明（#655：555 行，运行时零现算，回收价也在这张表）；
+> **八项战斗属性**在 `equipment_variants` 表里逐条写明（#655：每件基础件 × 前后缀档数，运行时零现算，回收价也在这张表）；
 > **几何**（内观锚点 / 外观 8 向）在表里是**出厂值**，工作台结果在 `equip_aligns` / `equip_in_aligns`、每次进图另发。
 
 > 注：成就（`achievements`）虽然也在快照里，但客户端**不落表** —— 成就面板走
@@ -226,7 +226,7 @@
    （`client/tools/lib/configs-sandbox.cjs` 只实现这四个类的构造函数），引一个 UI 组件就整条加载不起来。
    → 守点 `client/tools/test-skill-decouple.cjs`（import 白名单）。
 2. **不许反向 import** `items` / `equipments` / `skill` / `apply-snapshot`：依赖方向永远是
-   `apply-snapshot → game-config → types`。唯一例外是 `getMallGoods`（要读七个部位表）——
+   `apply-snapshot → game-config → types`。唯一例外是 `getMallGoods`（要遍历装备部位索引）——
    它按语义住在 `equipments.ts`，不进 `game-config`。
 3. **`//#region N · 标签（原 configs/xxx.ts）`** 是分区标识，编号稳定：守点按编号取区
    （`audit-world-authority` 的 `regionOf(source, 15)`）。**新增函数要放进它自己的分区里**，

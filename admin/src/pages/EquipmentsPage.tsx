@@ -9,6 +9,8 @@ import type {
   PageResult,
 } from "../api";
 import { AttributesGrid, crossedRangeKeys } from "../components/AttributesEditor";
+import { EntityPickButton } from "../components/entity/EntityPickButton";
+import { entityOptions } from "../components/entity/catalog";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { FrameAnimation } from "../components/FrameAnimation";
 import { GameIcon } from "../components/GameImage";
@@ -77,6 +79,10 @@ function SlotTabs({
  *
  * `id` 留空由服务端按 `部位_序号` 生成（该部位最大序号 + 1），不填就对了；要固定 id
  *（比如资源目录名已经按它起好）才手填。
+ *
+ * **等级 / 售价留空 = 跟模板**（#777）：这两格一旦有值就会盖掉模板的值，所以空串按
+ * 「不传」处理。以前是「加载模板后把第一件的等级售价填进输入框」，看起来像跟模板，
+ * 其实换了模板也不刷新 —— 改一个部位就得手动改两次。
  */
 function EquipmentCreateDialog({
   open,
@@ -92,12 +98,12 @@ function EquipmentCreateDialog({
   onSubmit: (value: CreateEquipment) => Promise<boolean>;
 }) {
   const [slot, setSlot] = useState(defaultSlot);
-  const [templates, setTemplates] = useState<Equipment[]>([]);
   const [templateId, setTemplateId] = useState("");
   const [id, setId] = useState("");
   const [label, setLabel] = useState("");
-  const [level, setLevel] = useState("1");
-  const [sellPrice, setSellPrice] = useState("0");
+  // 空串 = 跟模板（服务端 `dto.level ?? template.level`）；填了才覆盖
+  const [level, setLevel] = useState("");
+  const [sellPrice, setSellPrice] = useState("");
   const [occupation, setOccupation] = useState("4");
   const [sex, setSex] = useState("3");
   const [submitting, setSubmitting] = useState(false);
@@ -107,53 +113,55 @@ function EquipmentCreateDialog({
     setSlot(defaultSlot || slots[0]?.slot || "");
     setId("");
     setLabel("");
-    setLevel("1");
-    setSellPrice("0");
+    setLevel("");
+    setSellPrice("");
     setOccupation("4");
     setSex("3");
     setSubmitting(false);
   }, [open, defaultSlot, slots]);
 
-  // 模板候选 = 同部位现有装备（换部位就重拉；顺带把等级 / 售价按第一件预填，省两次手改）
+  /**
+   * 模板候选 = 选中部位的全部装备。
+   *
+   * 走 `catalog` 而不是拉接口：一个部位已经有 100+ 件（戒指 136），列表接口的 `size`
+   * 上限就是 100 —— 拉不全，而且下拉里翻 130 项找一件装备本身也没法用。选择器自带
+   * 关键字搜索与分组，正好。
+   */
+  const templateOptions = useMemo(() => {
+    const group = slots.find((row) => row.slot === slot)?.label ?? slotLabel(slot);
+    return entityOptions("equipment").filter((option) => option.group === group);
+  }, [slot, slots]);
+
+  /**
+   * 换部位就把模板换成该部位第一件（图标 / 图集 / 几何都靠它带出来）。
+   *
+   * 只在**部位真的变了**时动 `templateId` —— 用 `templateSlot` 记住上次为哪个部位挑过，
+   * 这样运营手动选「空白」之后不会被下一帧又塞回第一件。
+   */
+  const [templateSlot, setTemplateSlot] = useState("");
   useEffect(() => {
-    if (!open || !slot) return;
-    let alive = true;
-    void equipmentsApi
-      .list({ slot, page: 1, size: 500 })
-      .then((result) => {
-        if (!alive) return;
-        setTemplates(result.list);
-        const first = result.list[0];
-        setTemplateId(first?.id ?? "");
-        if (first) {
-          setLevel(String(first.level));
-          setSellPrice(String(first.sellPrice));
-        }
-      })
-      .catch(() => {
-        /* 错误已由请求层统一提示；模板为空也能建（白纸装备） */
-      });
-    return () => {
-      alive = false;
-    };
-  }, [open, slot]);
+    if (!open || templateSlot === slot) return;
+    setTemplateSlot(slot);
+    setTemplateId(templateOptions[0]?.id ?? "");
+  }, [open, slot, templateOptions, templateSlot]);
 
   if (!open) return null;
 
-  const levelValid = Number.isInteger(Number(level)) && Number(level) >= 1;
-  const priceValid = Number.isInteger(Number(sellPrice)) && Number(sellPrice) >= 0;
+  // 空串 = 跟模板，所以「空」是合法值；填了才校验
+  const levelValid = level.trim() === "" || (Number.isInteger(Number(level)) && Number(level) >= 1);
+  const priceValid = sellPrice.trim() === "" || (Number.isInteger(Number(sellPrice)) && Number(sellPrice) >= 0);
   const canSubmit = label.trim().length > 0 && levelValid && priceValid && slot !== "" && !submitting;
 
   const submit = async () => {
     setSubmitting(true);
     const ok = await onSubmit({
-      // 空串一律当「不传」：服务端按部位生成 id / 用默认值，比传空串语义清楚
+      // 空串一律当「不传」：服务端按部位生成 id、按模板补等级售价，比传空串 / 0 语义清楚
       id: id.trim() || undefined,
       slot,
       label: label.trim(),
       templateId: templateId || undefined,
-      level: Number(level),
-      sellPrice: Number(sellPrice),
+      level: level.trim() ? Number(level) : undefined,
+      sellPrice: sellPrice.trim() ? Number(sellPrice) : undefined,
       occupation,
       sex,
     });
@@ -190,15 +198,17 @@ function EquipmentCreateDialog({
               ))}
             </Select>
           </Field>
-          <Field label="模板" hint="复制图标 / 图集 / 几何 / 职业性别 / 描述 / 八项属性；不选就是白纸（客户端看不到外观）">
-            <Select value={templateId} onChange={(event) => setTemplateId(event.target.value)}>
-              <option value="">空白（复制默认值）</option>
-              {templates.map((row) => (
-                <option key={row.id} value={row.id}>
-                  {row.label}（{row.id}）
-                </option>
-              ))}
-            </Select>
+          <Field label="模板" hint="复制图标 / 图集 / 几何 / 职业性别 / 描述 / 八项属性；选「空白」就是白纸（客户端看不到外观）">
+            <EntityPickButton
+              value={templateId}
+              options={templateOptions}
+              onChange={setTemplateId}
+              kind="equipment"
+              pickerTitle={`选择模板（${slots.find((row) => row.slot === slot)?.label ?? slot}）`}
+              hint="只列这个部位的装备；模板决定新装备长什么样"
+              emptyHint="这个部位还没有装备 —— 先建一件，或用「空白」建个不带外观的"
+              placeholder="空白（复制默认值）"
+            />
           </Field>
           <Field label="装备 id" hint="留空自动生成（如 cloth_33）；只能小写字母开头 + 小写字母/数字/下划线">
             <Input value={id} placeholder="留空自动生成" onChange={(event) => setId(event.target.value)} />
@@ -206,11 +216,23 @@ function EquipmentCreateDialog({
           <Field label="名称" hint="≤50 字；前后缀由客户端拼在名字前后">
             <Input value={label} placeholder="如 玄铁重甲" onChange={(event) => setLabel(event.target.value)} />
           </Field>
-          <Field label="穿戴需求等级" hint="装备定强的锚点">
-            <Input type="number" min={1} value={level} onChange={(event) => setLevel(event.target.value)} />
+          <Field label="穿戴需求等级" hint="留空 = 跟模板；装备定强的锚点">
+            <Input
+              type="number"
+              min={1}
+              value={level}
+              placeholder="跟模板"
+              onChange={(event) => setLevel(event.target.value)}
+            />
           </Field>
-          <Field label="售卖价" hint="0 = 不可售卖；商城售价归「商城」页，不在这里">
-            <Input type="number" min={0} value={sellPrice} onChange={(event) => setSellPrice(event.target.value)} />
+          <Field label="售卖价" hint="留空 = 跟模板；0 = 不可售卖（商城售价归「商城」页）">
+            <Input
+              type="number"
+              min={0}
+              value={sellPrice}
+              placeholder="跟模板"
+              onChange={(event) => setSellPrice(event.target.value)}
+            />
           </Field>
           <Field label="职业限制">
             <Select value={occupation} onChange={(event) => setOccupation(event.target.value)}>

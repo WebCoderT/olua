@@ -200,7 +200,7 @@ const REPO_EDGES = {
   // 装备基础件（#252）：同称号 / 战魂 / 军衔，只在 game-config 模块内读写；
   // 战斗结算读的是 `equipment_variants` 的快照覆盖层，不直连这两个仓储
   "database/repositories/equipment.repository.ts": ["modules/game-config"],
-  // 装备变体（#655）：555 行逐一配置，只有 game-config 读写（管理端 + 快照）；
+  // 装备变体（#655）：逐行配置，只有 game-config 读写（管理端 + 快照）；
   // 战斗结算走 `common/runtime-overrides` 的覆盖层，不直连仓储
   "database/repositories/equipment-variant.repository.ts": ["modules/game-config"],
   // 角色等级表（#655）：60 行属性 + 经验，只有 game-config 读写；结算同样走覆盖层（同上）

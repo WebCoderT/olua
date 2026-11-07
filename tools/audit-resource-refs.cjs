@@ -208,6 +208,12 @@ const snapshotRows = snapshotText
       fashions: readRows(snapshotText, "fashions"),
       presentations: readRows(snapshotText, "monster_presentation"),
       appearances: readRows(snapshotText, "equipment_appearance"),
+      // #777：装备改成按素材目录批量生成（一件一条图标路径），这几张表的 icon 列
+      // 从此是「运营手填得出来、但没有任何编译期报错」的地方 —— 断链的表现是
+      // 装备格 / 材料格 / 药品格一律空白，不报错
+      equipments: readRows(snapshotText, "equipments"),
+      items: readRows(snapshotText, "items"),
+      drugs: readRows(snapshotText, "drugs"),
     }
   : null;
 if (!snapshotRows) failures.push(`展开核对：找不到配置快照 server/data/config-sync.sql（跑一次 make config-export）`);
@@ -307,6 +313,20 @@ for (const row of snapshotRows?.fashions ?? []) {
       passed += 1;
     } else {
       failures.push(`库内时装断链：fashions.${row.id}.${field} = ${value}（管理端时装页会引用）`);
+    }
+  }
+}
+
+// 装备 / 材料 / 药品的图标（#777）：三张表都是「一行一个 icon 路径」，运营在管理端能改。
+// **空 icon 不算断链** —— 白纸装备（新建时选了「空白」模板）本来就没有外观，客户端照实空着。
+for (const table of ["equipments", "items", "drugs"]) {
+  for (const row of snapshotRows?.[table] ?? []) {
+    const icon = String(row.icon ?? "");
+    if (!icon) continue;
+    if (resourceExists(icon)) {
+      passed += 1;
+    } else {
+      failures.push(`库内图标断链：${table}.${row.id}.icon = ${icon}（装备格 / 材料格 / 药品格会空着）`);
     }
   }
 }
