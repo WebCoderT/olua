@@ -34,7 +34,7 @@ function main() {
 
   seedRuntimeTables(outDir);
   const soulRows = factory.souls();
-  const roleLevels = factory.levels();
+  const roleLevels = factory.levelRows();
   const { soulLevels, soulMaxLevel, getSoulLevel } = require(path.join(outDir, "configs/game-config.js"));
   const { titleLevels } = require(path.join(outDir, "configs/game-config.js"));
   const { rankLevels } = require(path.join(outDir, "configs/game-config.js"));

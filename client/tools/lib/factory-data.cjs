@@ -119,11 +119,63 @@ function ranks() {
     }));
 }
 
-/** 角色等级表（每级裸属性 + 升级经验；行数 = 等级上限） */
-function levels() {
-  return rows("role_levels")
-    .sort((a, b) => a.level - b.level)
-    .map((row) => ({ level: row.level, maxHp: row.maxHp, maxMp: row.maxMp, hpRecover: row.hpRecover, ...ranges(row), exp: row.exp }));
+/**
+ * 等级曲线段（#786：4 条 × 6 段 = 24 行，取代原来的逐级表）
+ *
+ * 断言里**不在测试侧重算公式** —— 「第 N 级多少血」是行为契约，直接写期望值
+ * （1 级 100、60 级 98720…），公式本身由 `test-level-curve` 与服务端逐年比对。
+ */
+function levelCurves() {
+  return rows("role_level_curves")
+    .sort((a, b) => (a.curve === b.curve ? a.seq - b.seq : String(a.curve).localeCompare(String(b.curve))))
+    .map((row) => ({
+      curve: row.curve,
+      seq: row.seq,
+      fromLevel: row.fromLevel,
+      toLevel: row.toLevel,
+      startValue: row.startValue,
+      perLevel: row.perLevel,
+      accel: row.accel,
+      updatedAt: row.updatedAt,
+    }));
+}
+
+/** 曲线求值（与 `client/assets/configs/game-config.ts` 的 `curveValueOf` 同一公式，只给测试当基准） */
+function curveAt(segments, curve, level) {
+  let picked = null;
+  for (const row of segments) {
+    if (row.curve !== curve || row.fromLevel > level) continue;
+    if (!picked || row.fromLevel > picked.fromLevel) picked = row;
+  }
+  if (!picked) return null;
+  const k = level - picked.fromLevel;
+  return Math.round(picked.startValue + picked.perLevel * k + (picked.accel * k * (k - 1)) / 2);
+}
+
+/**
+ * 前 `limit` 级的裸属性阶梯（默认 60 级 = 旧逐级表的对照区间）
+ *
+ * 标题 / 军衔 / 战魂那几个测试要拿「角色本体裸血」当上限基准 ——
+ * 用 60 级这一档做基准，与 #786 之前完全一致（上限改成 100 万不影响「次级成长线不该盖过本体」）。
+ */
+function levelRows(limit = 60) {
+  const segments = levelCurves();
+  const list = [];
+  for (let level = 1; level <= limit; level += 1) {
+    const hp = curveAt(segments, "hp", level);
+    const attackMax = curveAt(segments, "attack_max", level);
+    const defenseMax = curveAt(segments, "defense_max", level);
+    const exp = curveAt(segments, "exp", level);
+    if (hp === null || attackMax === null || defenseMax === null || exp === null) continue;
+    list.push({
+      level,
+      maxHp: hp,
+      maxMp: Math.round(hp / 2),
+      hpRecover: Math.round(hp / 100),
+      exp,
+    });
+  }
+  return list;
 }
 
 /**
@@ -230,8 +282,47 @@ function items() {
   }));
 }
 
-/** 怪物（数值已逐条落库，六项区间在 attributes 里） */
-function monsters() {
+/**
+ * 货币道具（#785）：绑定元宝 / 元宝 / 银子
+ *
+ * 与药品同一套字段（快照 DTO 就是表行的驼峰版），多带 `currency`（入账到哪个账本字段）
+ * 与 `amount`（一件加多少）。
+ */
+function moneyItems() {
+  return rows("money_items").map((row) => ({
+    id: row.id,
+    label: row.label,
+    description: row.description,
+    icon: row.icon,
+    currency: row.currency,
+    amount: row.amount,
+    maxStack: row.maxStack,
+    sellPrice: row.sellPrice,
+    updatedAt: row.updatedAt,
+  }));
+}
+
+/**
+ * 升级卷轴（#787）：与快照 `levelScrolls` 段同形（表行的驼峰版）
+ *
+ * 多带两列等级区间（`minLevel` / `maxLevel`）—— 客户端只用于本地预检与陈列，
+ * 真正的 +1 与区间判定在服务端（`role.levelScrollUse`）。
+ */
+function levelScrolls() {
+  return rows("level_scrolls").map((row) => ({
+    id: row.id,
+    label: row.label,
+    description: row.description,
+    icon: row.icon,
+    minLevel: row.minLevel,
+    maxLevel: row.maxLevel,
+    maxStack: row.maxStack,
+    sellPrice: row.sellPrice,
+    updatedAt: row.updatedAt,
+  }));
+}
+
+/** 怪物（数值已逐条落库，六项区间在 attributes 里） */function monsters() {
   return rows("monsters")
     .sort((a, b) => Number(a.id) - Number(b.id))
     .map((row) => ({
@@ -419,12 +510,16 @@ module.exports = {
   titles,
   souls,
   ranks,
-  levels,
+  levelCurves,
+  curveAt,
+  levelRows,
   equipmentVariants,
   equipmentSlots,
   equipmentMeta,
   drugs,
   items,
+  moneyItems,
+  levelScrolls,
   monsters,
   monsterPresentations,
   npcs,

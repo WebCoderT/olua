@@ -252,6 +252,28 @@ export const ACQUIRE_CHANNEL_LABELS: Record<string, string> = {
   [ACQUIRE_CHANNEL.UNAVAILABLE]: "无法获取",
 };
 
+/**
+ * 货币道具的三种货币（服务端 `common/constants/money-items.ts` 的镜像）
+ *
+ * 取值就是**角色存档里的账本字段名**（`gold` / `bindGold` / `silver`）—— 货币道具
+ * 使用后直接把面值加进对应字段，所以「币种」没有独立枚举，字段名本身即是标识。
+ * 与 PERMISSION 同一约定：这份只是界面展示用的镜像，权威在服务端。
+ */
+export const MONEY_KIND = {
+  BIND_GOLD: "bindGold",
+  GOLD: "gold",
+  SILVER: "silver",
+} as const;
+
+export const MONEY_KIND_LABELS: Record<string, string> = {
+  [MONEY_KIND.BIND_GOLD]: "绑定元宝",
+  [MONEY_KIND.GOLD]: "元宝",
+  [MONEY_KIND.SILVER]: "银子",
+};
+
+/** 货币下拉选项（顺序即界面上的排列顺序：绑定元宝 → 元宝 → 银子，与服务端 MONEY_KINDS 一致） */
+export const MONEY_KIND_OPTIONS = Object.keys(MONEY_KIND_LABELS);
+
 /** 权限点中文名（未登记的原样显示） */
 export function permissionLabel(permission: string): string {
   return PERMISSION_LABELS[permission] ?? permission;
@@ -475,6 +497,8 @@ export const AUDIT_TARGET_LABELS: Record<string, string> = {
   rank: "军衔配置",
   equipment: "装备配置",
   drug: "药品配置",
+  moneyItem: "货币物品",
+  levelScroll: "升级卷轴",
   item: "物品配置",
   monster: "怪物配置",
   npc: "NPC 配置",
@@ -485,6 +509,7 @@ export const AUDIT_TARGET_LABELS: Record<string, string> = {
   skill: "技能配置",
   status: "状态配置",
   growthScalar: "成长参数",
+  levelCurve: "等级曲线",
   guild: "帮会",
   equipAlign: "装备外观对齐",
   equipInAlign: "装备内观对齐",
@@ -532,6 +557,9 @@ export const AUDIT_ACTION_LABELS: Record<string, string> = {
   "adminMail.retry": "重投邮件",
   "adminGameMail.send": "补发游戏消息",
   "adminUiEffect.save": "保存特效参数",
+  "adminMoneyItem.create": "新建货币物品",
+  "adminMoneyItem.update": "编辑货币物品",
+  "adminMoneyItem.delete": "删除货币物品",
   "role.create": "创建角色",
   "role.save": "保存角色进度",
   "role.remove": "删除角色",

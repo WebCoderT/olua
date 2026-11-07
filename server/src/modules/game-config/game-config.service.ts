@@ -15,6 +15,8 @@ import { EquipAlignRepository } from "../../database/repositories/equip-align.re
 import { EquipInAlignRepository } from "../../database/repositories/equip-in-align.repository";
 import { FashionRepository, FashionListOptions } from "../../database/repositories/fashion.repository";
 import { ItemRepository, ItemListOptions } from "../../database/repositories/item.repository";
+import { MoneyItemRepository, MoneyItemListOptions } from "../../database/repositories/money-item.repository";
+import { LevelScrollRepository, LevelScrollListOptions } from "../../database/repositories/level-scroll.repository";
 import { MonsterRepository, MonsterListOptions } from "../../database/repositories/monster.repository";
 import { MonsterDropRepository } from "../../database/repositories/monster-drop.repository";
 import { MonsterPresentationRepository } from "../../database/repositories/monster-presentation.repository";
@@ -31,6 +33,8 @@ import { RoleAchievementRepository } from "../../database/repositories/role-achi
 import { QuestProgressRepository } from "../../database/repositories/quest-progress.repository";
 import { SoulRepository, SoulListOptions } from "../../database/repositories/soul.repository";
 import { TitleRepository, TitleListOptions } from "../../database/repositories/title.repository";
+import { moneyItemSeedOf } from "../../common/constants/money-items";
+import { levelScrollDraftOf } from "../../common/constants/level-scrolls";
 import { itemExists } from "../../common/runtime-config-cache";
 import { RuntimeConfigService } from "./runtime-config.service";
 import {
@@ -39,6 +43,8 @@ import {
   EquipmentVariantRow,
   FashionRow,
   ItemRow,
+  LevelScrollRow,
+  MoneyItemRow,
   MonsterRow,
   MonsterBehaviorRow,
   MonsterPresentationRow,
@@ -75,6 +81,20 @@ import {
 import { DrugDto, DrugQueryDto, UpdateDrugDto } from "./dto/drug.dto";
 import { FashionDto, FashionQueryDto, UpdateFashionDto } from "./dto/fashion.dto";
 import { ItemDto, ItemQueryDto, UpdateItemDto } from "./dto/item.dto";
+import {
+  CreateMoneyItemDto,
+  MoneyItemDto,
+  MoneyItemQueryDto,
+  RemoveMoneyItemResultDto,
+  UpdateMoneyItemDto,
+} from "./dto/money-item.dto";
+import {
+  CreateLevelScrollDto,
+  LevelScrollDto,
+  LevelScrollQueryDto,
+  RemoveLevelScrollResultDto,
+  UpdateLevelScrollDto,
+} from "./dto/level-scroll.dto";
 import {
   AdminMonsterDto,
   MONSTER_ACTION_KEYS,
@@ -140,6 +160,8 @@ export class GameConfigService {
     private readonly equipInAligns: EquipInAlignRepository,
     private readonly drugs: DrugRepository,
     private readonly items: ItemRepository,
+    private readonly moneyItems: MoneyItemRepository,
+    private readonly levelScrolls: LevelScrollRepository,
     private readonly monstersRepo: MonsterRepository,
     private readonly monsterDropsRepo: MonsterDropRepository,
     private readonly monsterPresentations: MonsterPresentationRepository,
@@ -780,6 +802,183 @@ export class GameConfigService {
     return ItemDto.from(this.requireItem(id));
   }
 
+  // —— 货币物品（#785：使用后直接入账；与药品 / 物品不同，**可以增删改行**）——
+
+  listMoneyItems(query: MoneyItemQueryDto): PageResult<MoneyItemDto> {
+    const options: MoneyItemListOptions = {
+      page: query.page ?? 1,
+      size: query.size ?? DEFAULT_PAGE_SIZE,
+      keyword: query.keyword,
+      currency: query.currency,
+      sort: query.sort,
+      order: query.order,
+    };
+    const rows = this.moneyItems.list(options);
+    const total = this.moneyItems.count(options);
+    return { list: rows.map(MoneyItemDto.from), total, page: options.page, size: options.size };
+  }
+
+  /** 配置快照用：全部行（货币 → 面值；客户端按这个顺序陈列背包 / 图鉴） */
+  listMoneyItemRows(): MoneyItemRow[] {
+    return this.moneyItems.listAll();
+  }
+
+  /**
+   * 新建货币物品
+   *
+   * 面值相同的「同一种货币」只能有一条：id 按 `money_<货币>_<面值>` 派生（可手填），
+   * 撞 id 直接 409 —— 否则背包里同一个 id 指到哪一种面值就说不清了。
+   */
+  createMoneyItem(dto: CreateMoneyItemDto): MoneyItemDto {
+    const seed = moneyItemSeedOf(dto.currency, dto.amount);
+    const id = (dto.id ?? "").trim() || seed.id;
+    if (this.moneyItems.findByKey(id)) {
+      throw BizException.conflict(BizCode.MONEY_ITEM_ALREADY_EXISTS, `货币物品 ${id} 已存在`);
+    }
+    const row: MoneyItemRow = {
+      id,
+      // 名称 / 描述 / 图标缺省都按「货币 + 面值」派生：运营只想开一档面值时不用填 4 个字段
+      label: dto.label !== undefined ? dto.label : seed.label,
+      description: dto.description !== undefined ? dto.description : seed.description,
+      icon: dto.icon !== undefined ? dto.icon : seed.icon,
+      currency: dto.currency,
+      amount: dto.amount,
+      max_stack: dto.maxStack ?? seed.maxStack,
+      sell_price: dto.sellPrice ?? seed.sellPrice,
+      updated_at: Date.now(),
+    };
+    this.moneyItems.insert(row);
+    this.touchRuntime();
+    return MoneyItemDto.from(this.requireMoneyItem(id));
+  }
+
+  updateMoneyItem(id: string, dto: UpdateMoneyItemDto): MoneyItemDto {
+    const existing = this.requireMoneyItem(id);
+    const next: MoneyItemRow = {
+      ...existing,
+      label: dto.label ?? existing.label,
+      description: dto.description ?? existing.description,
+      icon: dto.icon ?? existing.icon,
+      currency: dto.currency ?? existing.currency,
+      amount: dto.amount ?? existing.amount,
+      max_stack: dto.maxStack ?? existing.max_stack,
+      sell_price: dto.sellPrice ?? existing.sell_price,
+      updated_at: Date.now(),
+    };
+    this.moneyItems.update(next);
+    this.touchRuntime();
+    return MoneyItemDto.from(this.requireMoneyItem(id));
+  }
+
+  /**
+   * 删除货币物品
+   *
+   * **不碰玩家存档**：背包里还引用这个 id 的格子会变成「认不出的道具」——
+   * 客户端与结算都只是跳过（与删装备同一条口径），不报错也不会崩。
+   * 所以这里只删配置行，返回删掉了几行。
+   */
+  removeMoneyItem(id: string): RemoveMoneyItemResultDto {
+    this.requireMoneyItem(id);
+    const { changes } = this.moneyItems.remove(id);
+    this.touchRuntime();
+    return { id, removed: changes };
+  }
+
+  // —— 升级卷轴（#787：使用后硬性 +1 级，带等级区间；可增删改行）——
+
+  listLevelScrolls(query: LevelScrollQueryDto): PageResult<LevelScrollDto> {
+    const options: LevelScrollListOptions = {
+      page: query.page ?? 1,
+      size: query.size ?? DEFAULT_PAGE_SIZE,
+      keyword: query.keyword,
+      sort: query.sort,
+      order: query.order,
+    };
+    const rows = this.levelScrolls.list(options);
+    const total = this.levelScrolls.count(options);
+    return { list: rows.map(LevelScrollDto.from), total, page: options.page, size: options.size };
+  }
+
+  /** 配置快照用：全部行（等级下限升序 —— 卷轴天生有序，别按 id 字符串排） */
+  listLevelScrollRows(): LevelScrollRow[] {
+    return this.levelScrolls.listAll();
+  }
+
+  /**
+   * 新建升级卷轴
+   *
+   * 只填两列等级区间就能建：id / 名称 / 描述 / 图标缺省按区间派生（见 `levelScrollDraftOf`）。
+   * **`minLevel > maxLevel` 直接 400**（40000）—— 一卷不可能「下限比上限高」，
+   * 存进去的结果是「任何等级都用不了」，比报错难查得多。
+   *
+   * 区间重叠**不拦**：两卷都能用是运营的自由（比如活动期发一卷「1~10000 通用」），
+   * 不会产生数据问题，只是客户端会按等级挑到区间里任意一卷。
+   */
+  createLevelScroll(dto: CreateLevelScrollDto): LevelScrollDto {
+    if (dto.minLevel > dto.maxLevel) {
+      throw new BizException(
+        BizCode.PARAM_INVALID,
+        `等级下限（${dto.minLevel}）不能大于上限（${dto.maxLevel}）`,
+      );
+    }
+    const draft = levelScrollDraftOf(dto.minLevel, dto.maxLevel);
+    const id = (dto.id ?? "").trim() || draft.id;
+    if (this.levelScrolls.findByKey(id)) {
+      throw BizException.conflict(BizCode.LEVEL_SCROLL_ALREADY_EXISTS, `升级卷轴 ${id} 已存在`);
+    }
+    const row: LevelScrollRow = {
+      id,
+      label: dto.label !== undefined ? dto.label : draft.label,
+      description: dto.description !== undefined ? dto.description : draft.description,
+      icon: dto.icon !== undefined ? dto.icon : draft.icon,
+      min_level: dto.minLevel,
+      max_level: dto.maxLevel,
+      max_stack: dto.maxStack ?? 999,
+      sell_price: dto.sellPrice ?? 0,
+      updated_at: Date.now(),
+    };
+    this.levelScrolls.insert(row);
+    this.touchRuntime();
+    return LevelScrollDto.from(this.requireLevelScroll(id));
+  }
+
+  updateLevelScroll(id: string, dto: UpdateLevelScrollDto): LevelScrollDto {
+    const existing = this.requireLevelScroll(id);
+    const minLevel = dto.minLevel ?? existing.min_level;
+    const maxLevel = dto.maxLevel ?? existing.max_level;
+    // 改完的**合成结果**也要校验：只改下限也可能把区间改反（原本 1000~1999，下限填 3000）
+    if (minLevel > maxLevel) {
+      throw new BizException(BizCode.PARAM_INVALID, `等级下限（${minLevel}）不能大于上限（${maxLevel}）`);
+    }
+    const next: LevelScrollRow = {
+      ...existing,
+      label: dto.label ?? existing.label,
+      description: dto.description ?? existing.description,
+      icon: dto.icon ?? existing.icon,
+      min_level: minLevel,
+      max_level: maxLevel,
+      max_stack: dto.maxStack ?? existing.max_stack,
+      sell_price: dto.sellPrice ?? existing.sell_price,
+      updated_at: Date.now(),
+    };
+    this.levelScrolls.update(next);
+    this.touchRuntime();
+    return LevelScrollDto.from(this.requireLevelScroll(id));
+  }
+
+  /**
+   * 删除升级卷轴
+   *
+   * **不碰玩家存档**：背包里还引用这个 id 的格子会变成「认不出的道具」——
+   * 客户端与结算都只是跳过（用不了，也不报错），与删装备 / 删货币道具同一条口径。
+   */
+  removeLevelScroll(id: string): RemoveLevelScrollResultDto {
+    this.requireLevelScroll(id);
+    const { changes } = this.levelScrolls.remove(id);
+    this.touchRuntime();
+    return { id, removed: changes };
+  }
+
   // —— 怪物基础数据（#258：key 清单固定只改数值与名称；世界播种 / 伤害结算直读本表）——
 
   listMonsters(query: MonsterQueryDto): PageResult<MonsterDto> {
@@ -1389,6 +1588,18 @@ export class GameConfigService {
   private requireItem(id: string): ItemRow {
     const row = this.items.findByKey(id);
     if (!row) throw BizException.notFound(BizCode.ITEM_NOT_FOUND, `物品 ${id} 不存在`);
+    return row;
+  }
+
+  private requireMoneyItem(id: string): MoneyItemRow {
+    const row = this.moneyItems.findByKey(id);
+    if (!row) throw BizException.notFound(BizCode.MONEY_ITEM_NOT_FOUND, `货币物品 ${id} 不存在`);
+    return row;
+  }
+
+  private requireLevelScroll(id: string): LevelScrollRow {
+    const row = this.levelScrolls.findByKey(id);
+    if (!row) throw BizException.notFound(BizCode.LEVEL_SCROLL_NOT_FOUND, `升级卷轴 ${id} 不存在`);
     return row;
   }
 

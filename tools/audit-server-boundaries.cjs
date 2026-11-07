@@ -203,8 +203,9 @@ const REPO_EDGES = {
   // 装备变体（#655）：逐行配置，只有 game-config 读写（管理端 + 快照）；
   // 战斗结算走 `common/runtime-overrides` 的覆盖层，不直连仓储
   "database/repositories/equipment-variant.repository.ts": ["modules/game-config"],
-  // 角色等级表（#655）：60 行属性 + 经验，只有 game-config 读写；结算同样走覆盖层（同上）
-  "database/repositories/role-level.repository.ts": ["modules/game-config"],
+  // 等级曲线（#786）：4 条 × 6 段参数，只有 game-config 读写；结算同样走覆盖层（同上）。
+  // 逐级表 role_levels 已删 —— 等级不再是一张表，所以这里也就没有「第二个域要读它」。
+  "database/repositories/role-level-curve.repository.ts": ["modules/game-config"],
   // 装备对齐几何（#513）：只属于 game-config —— 它存的是客户端布局，服务端不参与任何计算，
   // 也就没有第二个域该读它（客户端那条路走的是快照接口，不经过仓储）
   "database/repositories/equip-align.repository.ts": ["modules/game-config"],
@@ -212,6 +213,12 @@ const REPO_EDGES = {
   "database/repositories/equip-in-align.repository.ts": ["modules/game-config"],
   // 药品（#253）：game-config 读写；用药收权（#308）后存档域（roles）也读回复量
   "database/repositories/drug.repository.ts": ["modules/game-config", "modules/roles"],
+  // 货币道具（#785）：game-config 读写（管理端增删改 + 快照下发）；
+  // 使用收权后存档域（roles）也读面值与币种 —— 客户端报的金额一律不算数
+  "database/repositories/money-item.repository.ts": ["modules/game-config", "modules/roles"],
+  // 升级卷轴（#787）：同货币道具 —— game-config 读写 + 快照下发；使用收权后 roles 也读区间
+  // （客户端报「用哪一格」，能不能用由服务端按等级判）
+  "database/repositories/level-scroll.repository.ts": ["modules/game-config", "modules/roles"],
   // 物品与材料（#255）：同上，只在 game-config 模块内读写
   "database/repositories/item.repository.ts": ["modules/game-config"],
   // 怪物基础数据（#258）：game-config 读写之外，世界播种（world）与伤害结算（realtime）

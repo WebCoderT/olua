@@ -15,9 +15,11 @@ import { GuideSettingsRepository } from "./repositories/guide-settings.repositor
 import { RankRepository } from "./repositories/rank.repository";
 import { EquipmentRepository } from "./repositories/equipment.repository";
 import { EquipmentVariantRepository } from "./repositories/equipment-variant.repository";
-import { RoleLevelRepository } from "./repositories/role-level.repository";
+import { RoleLevelCurveRepository } from "./repositories/role-level-curve.repository";
 import { DrugRepository } from "./repositories/drug.repository";
 import { ItemRepository } from "./repositories/item.repository";
+import { MoneyItemRepository } from "./repositories/money-item.repository";
+import { LevelScrollRepository } from "./repositories/level-scroll.repository";
 import { MallRepository } from "./repositories/mall.repository";
 import { MonsterRepository } from "./repositories/monster.repository";
 import { MonsterPresentationRepository } from "./repositories/monster-presentation.repository";
@@ -81,9 +83,11 @@ import { EquipmentAppearanceRepository } from "./repositories/equipment-appearan
     RankRepository,
     EquipmentRepository,
     EquipmentVariantRepository,
-    RoleLevelRepository,
+    RoleLevelCurveRepository,
     DrugRepository,
     ItemRepository,
+    MoneyItemRepository,
+    LevelScrollRepository,
     MonsterRepository,
     MonsterPresentationRepository,
     MallRepository,
@@ -134,9 +138,11 @@ import { EquipmentAppearanceRepository } from "./repositories/equipment-appearan
     RankRepository,
     EquipmentRepository,
     EquipmentVariantRepository,
-    RoleLevelRepository,
+    RoleLevelCurveRepository,
     DrugRepository,
     ItemRepository,
+    MoneyItemRepository,
+    LevelScrollRepository,
     MonsterRepository,
     MonsterPresentationRepository,
     MallRepository,

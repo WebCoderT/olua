@@ -1,4 +1,4 @@
-import { levelMap } from "../../../configs/game-config";
+import { levelConfigOf } from "../../../configs/game-config";
 import type { Role } from "../../../entities/Role";
 
 /**
@@ -16,10 +16,10 @@ import type { Role } from "../../../entities/Role";
 export default class HpHelper {
   /** 补齐血量相关字段（新建角色自带；兼容每秒回血上线前创建的旧存档） */
   static ensureDefaults(role: Role) {
-    if (typeof role.maxHp !== "number") role.maxHp = levelMap.get(role.level)?.maxHp ?? 0;
+    if (typeof role.maxHp !== "number") role.maxHp = levelConfigOf(role.level)?.maxHp ?? 0;
     if (typeof role.hp !== "number") role.hp = role.maxHp;
     // 旧存档没有这一项：先按等级裸回血兜底（够用就不会显示 0），完整值由服务端 roleUpdate 帧覆盖
-    if (typeof role.hpRecover !== "number") role.hpRecover = levelMap.get(role.level)?.hpRecover ?? 0;
+    if (typeof role.hpRecover !== "number") role.hpRecover = levelConfigOf(role.level)?.hpRecover ?? 0;
     if (typeof role.hpRecoverAccumulator !== "number") role.hpRecoverAccumulator = 0;
   }
 

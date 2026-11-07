@@ -36,40 +36,45 @@ function main() {
   const rank = require(path.join(outDir, "configs/game-config.js"));
   const snapshotApi = require(path.join(outDir, "configs/apply-snapshot.js"));
 
-  const { levelMap } = level;
   const { titleLevels } = title;
   const { soulLevels } = soul;
   const { rankLevels } = rank;
   // roleMaxLevel 是 `export let`：CommonJS 下解构会拷成快照，必须按属性读
   const maxLevel = () => growth.roleMaxLevel;
 
-  const levelMapRows = new Map(factory.levels().map((row) => [row.level, row]));
-  const roleMaxLevelValue = factory.levels().length;
+  // #786：等级不再逐级下发，快照只给 4 条曲线 × 6 段；「第 N 级多少」由 levelConfigOf 现算
+  const levelConfigOf = (n) => level.levelConfigOf(n);
+  const levelCurves = level.levelCurves;
 
-  const levelRows = (scale = 1) =>
-    factory.levels().map((row) => ({ ...row, maxHp: Math.round(row.maxHp * scale) }));
+  /** 模拟运营改了 hp 曲线（起始值与每级增量整体放大）后下发的新参数 */
+  const curveRows = (hpScale = 1) =>
+    factory.levelCurves().map((row) =>
+      row.curve === "hp"
+        ? { ...row, startValue: Math.round(row.startValue * hpScale), perLevel: Math.round(row.perLevel * hpScale) }
+        : row,
+    );
   const titleRows = () => factory.titles().map(({ updatedAt, ...row }) => row);
   const soulRows = () => factory.souls().map(({ updatedAt, ...row }) => row);
   const rankRows = () => factory.ranks().map(({ updatedAt, ...row }) => row);
 
   console.log("\n=== 零本地数据：加载期全是空表 ===");
-  check(levelMap.size === 0, "levelMap 加载期为空（等级数据唯一来源 = 快照 levels 段）", String(levelMap.size));
+  check(levelCurves.length === 0, "levelCurves 加载期为空（等级唯一来源 = 快照 levelCurves 段）", String(levelCurves.length));
+  check(levelConfigOf(1) === null, "曲线没到 → levelConfigOf 返回 null（不凭空造属性）");
   check(titleLevels.length === 0, "titleLevels 加载期为空");
   check(soulLevels.length === 0, "soulLevels 加载期为空");
   check(rankLevels.length === 0, "rankLevels 加载期为空");
 
-  console.log("\n=== levels 段整表重建（引用不变）===");
-  const mapRef = levelMap;
-  snapshotApi.applyGrowthSnapshot({ growthScalars: [], levels: levelRows() });
-  check(mapRef === levelMap, "levelMap 引用不变（消费方拿到的还是同一个 Map）");
-  check(levelMap.size === roleMaxLevelValue, "行数 = 服务端 roleMaxLevel", `${levelMap.size}`);
-  check(levelMap.get(1).maxHp === levelMapRows.get(1).maxHp, "1 级 maxHp = 种子展开值", String(levelMap.get(1).maxHp));
-  check(levelMap.get(1).exp === levelMapRows.get(1).exp, "1 级升级经验 = 快照下发的最终值（客户端不再派生）", String(levelMap.get(1).exp));
-  check(Array.isArray(levelMap.get(1).physicalAttack), "区间对象转回客户端元组 [min, max]", JSON.stringify(levelMap.get(1).physicalAttack));
+  console.log("\n=== levelCurves 段整表重建 ===");
+  snapshotApi.applyGrowthSnapshot({ growthScalars: [], levelCurves: curveRows() });
+  check(levelCurves.length === factory.levelCurves().length, "段数 = 快照行数（4 条 × 6 段）", String(levelCurves.length));
+  check(levelConfigOf(1).maxHp === 100, "1 级生命 = 出厂值（曲线复现旧逐级表）", String(levelConfigOf(1).maxHp));
+  check(levelConfigOf(60).maxHp === 98720, "60 级生命 = 旧表末值（曲线与旧 60 行零误差）", String(levelConfigOf(60).maxHp));
+  check(levelConfigOf(1).exp === 100, "1 级升级经验 = 出厂值", String(levelConfigOf(1).exp));
+  check(Array.isArray(levelConfigOf(1).physicalAttack), "区间转回客户端元组 [min, max]", JSON.stringify(levelConfigOf(1).physicalAttack));
 
-  // 模拟服务端改曲线后下发的新值：同一份行数据整体放大
-  snapshotApi.applyGrowthSnapshot({ growthScalars: [], levels: levelRows(2) });
-  check(levelMap.get(1).maxHp === levelMapRows.get(1).maxHp * 2, "第二份快照整表替换（不是只增量补行）", String(levelMap.get(1).maxHp));
+  // 模拟服务端改曲线后下发的新值：hp 段起始值与增量整体放大一倍
+  snapshotApi.applyGrowthSnapshot({ growthScalars: [], levelCurves: curveRows(2) });
+  check(levelConfigOf(1).maxHp === 200, "第二份快照整表替换（曲线改了，算出来的值跟着变）", String(levelConfigOf(1).maxHp));
 
   console.log("\n=== 三条成长线：titles / souls / ranks 段 ===");
   title.applyTitleRows(titleRows());
@@ -111,35 +116,38 @@ function main() {
   snapshotApi.applyGrowthScalars([{ key: "soakExpPerTick", value: 2.7, description: "", updatedAt: 0 }]);
   check(growth.soakExpPerTick === 2, "小数向下取整（每拍经验是整数点）", String(growth.soakExpPerTick));
 
-  console.log("\n=== 缩表：服务端把上限调小 ===");
-  const shrunken = levelRows().filter((row) => row.level <= 50);
-  snapshotApi.applyGrowthSnapshot({ growthScalars: [], levels: shrunken });
-  check(levelMap.size === 50, "整表重建后行数跟着缩（管理端调小上限，客户端没有幽灵等级）", String(levelMap.size));
-  check(!levelMap.has(51) && !levelMap.has(70), "50 级以上已清空");
+  console.log("\n=== 100 万级与边界 ===");
+  snapshotApi.applyGrowthSnapshot({ growthScalars: [], levelCurves: curveRows() });
+  const top = levelConfigOf(1000000);
+  check(top !== null && Number.isFinite(top.maxHp) && top.maxHp > 0, "100 万级算得出且不是 Infinity", String(top && top.maxHp));
+  check(Number.isFinite(top.exp) && top.exp > 0, "100 万级的升级经验也是有限数", String(top && top.exp));
+  check(levelConfigOf(0) === null && levelConfigOf(-5) === null, "0 级与负数级返回 null（不参与结算）");
+  check(levelConfigOf(2000000) !== null, "超出末段自动外推（调大上限不用改曲线）");
 
   console.log("\n=== 契约（#604）：空快照必须炸，不再「保留当前值」 ===");
-  snapshotApi.applyGrowthSnapshot({ growthScalars: [], levels: levelRows() });
-  const hpBefore = levelMap.get(1).maxHp;
+  snapshotApi.applyGrowthSnapshot({ growthScalars: [], levelCurves: curveRows() });
+  const hpBefore = levelConfigOf(1).maxHp;
   let contractError = "";
   try {
     snapshotApi.applyConfigSnapshot({});
   } catch (error) {
     contractError = String((error && error.message) || error);
   }
-  check(contractError.indexOf("levels") >= 0, "空快照抛错，错误里点名 levels 段", contractError.slice(0, 60));
-  check(levelMap.get(1).maxHp === hpBefore, "抛错前不落库（等级表还是上一份快照的样子）");
+  check(contractError.indexOf("levelCurves") >= 0 || contractError.indexOf("等级曲线") >= 0,
+    "空快照抛错，错误里点名 levelCurves 段", contractError.slice(0, 60));
+  check(levelConfigOf(1).maxHp === hpBefore, "抛错前不落库（曲线还是上一份快照的样子）");
   check(maxLevel() === 70, "抛错不动等级上限", String(maxLevel()));
 
   const reapply = () => {
-    snapshotApi.applyGrowthSnapshot({ growthScalars: [], levels: levelRows(2) });
+    snapshotApi.applyGrowthSnapshot({ growthScalars: [], levelCurves: curveRows(2) });
     title.applyTitleRows(titleRows());
     soul.applySoulRows(soulRows());
     rank.applyRankRows(rankRows());
   };
   reapply();
-  const once = JSON.stringify([...levelMap.entries()]);
+  const once = JSON.stringify([levelCurves, levelConfigOf(1), levelConfigOf(999999)]);
   reapply();
-  const twice = JSON.stringify([...levelMap.entries()]);
+  const twice = JSON.stringify([levelCurves, levelConfigOf(1), levelConfigOf(999999)]);
   check(once === twice, "同一份快照连续覆写两次结果一致（幂等，重进游戏不会滚雪球）");
   check(titleLevels.length === titleRows().length && rankLevels.length === rankRows().length, "幂等同样覆盖三条成长线");
 

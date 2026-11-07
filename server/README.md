@@ -217,7 +217,7 @@ server/
 所以配置走**导入导出 SQL**，不碰种子、也不碰运行时数据：
 
 ```bash
-make config-export     # 管理端改完 → 把库里 31 张配置表覆盖写入 data/config-sync.sql
+make config-export     # 管理端改完 → 把库里 38 张配置表覆盖写入 data/config-sync.sql
 git add server/data/config-sync.sql && git commit
 # —— 另一台机器 ——
 git pull && make config-import       # 整表替换配置；账号与角色存档原样保留
@@ -230,7 +230,7 @@ git pull && make config-import       # 整表替换配置；账号与角色存�
 | `make config-import` | `data/config-sync.sql` → 库（整表替换，一个事务） |
 | `make config-check` | 快照是否落后于当前库（落后退出码 1，报「哪张表第几行」） |
 
-**哪些表进文件**：唯一分类处是 `scripts/lib/config-tables.cjs` —— 31 张配置表 + 21 张
+**哪些表进文件**：唯一分类处是 `scripts/lib/config-tables.cjs` —— 38 张配置表 + 24 张
 运行时表。账号 / 角色存档 / 审计 / 世界怪物实例永远不进。库里出现**没归类的表**时导出
 直接报错（新加表忘了分类，比漏同步更难查）。
 
@@ -273,13 +273,14 @@ git pull && make config-import       # 整表替换配置；账号与角色存�
 | `role_mails` | 游戏内邮件（#429 / 频道 #436 / 保质期 #439） | `id` 主键 + `role_id`（外键级联）；`channel`（四枚举：system / reward / social / combat，默认 system，与来源标签 `kind` 分工）/ `kind` / `title` / `body` / 附件（`gold` / `exp` / `attachments` JSON 列）+ `read_at` / `claimed_at` + `expires_at`（毫秒时间戳，NULL = 永不过期，由投递方在 send 时给 `ttlMs`）。**与 `mail_queue` 无关**（那张是外发 SMTP 投递队列，其 `MAIL_RETENTION_DAYS` 是投递记录的保留期，与收件箱保质期是两件事）。附件在领取时才入包；`claimed_at` 为空且带附件的行拒绝删除；**带未领附件的行即使过期也不清理**（过期不等于替玩家扔奖励），清理任务每轮最多删 `MAIL_PURGE_BATCH` 条；索引 `(role_id, created_at DESC)` 取箱、`(role_id, claimed_at)` 数未领 |
 | `world_meta` | 世界代际（#295 阶段二） | 单行表（id 恒为 1）；合并区时 `epoch`+1，两个进程的世界内存靠轮询它作废旧状态（跨进程的「库被改写过」信号） |
 | `map_spawn_areas` | 刷怪区（#295 阶段一 / #667 后台绘制） | **管理端地图页拖框绘制**（`POST/PATCH/DELETE /admin/maps/:id/spawn-areas`），TMX 的 monster 组不再是来源；每区域按 max 在矩形内随机落点播种，worldJoin 只收 mapId。改动在该图世界实例重新加载后生效 |
-| `level_exps` | 升级经验（#256） | 等级序列固定（1..roleMaxLevel），只可改不可增删；一行 = 升到下一级所需经验（出厂 = growth-seed 的曲线展开，#590） |
-| `growth_segments` | 成长曲线分段（#256） | 四条分段线性曲线 × 段；改段必须保持连续覆盖 1..roleMaxLevel（跨行校验）；出厂 = growth-seed（#590 起曲线唯一书写处在服务端种子） |
-| `growth_scalars` | 成长标量参数（#256） | 等级上限 / 属性区间倍率 / 经验节奏；各键取值域见服务端常量 |
+| `role_level_curves` | 角色等级曲线（#786） | 主键 `(curve, seq)`：4 条独立曲线（`exp` / `hp` / `attack_max` / `defense_max`）× 6 段，每行 = 一段的 `from_level` / `to_level` / `start_value` / `per_level` / `accel`；段内 `start + per_level×k + accel×k(k-1)/2`（`k = level - from_level`），超出末段外推，所以上限调大不用改曲线。蓝 = 血/2、回血 = 血/100、攻防下限 = 上限×0.7、三系同值全是派生的。**只可改不可增删**（非末段改 `to_level` 会联动下一段 `from_level`）。旧的 `level_exps` / `growth_segments` / `role_levels`（#655 逐级 60 行）已随 #786 下线并 `DROP TABLE` |
+| `growth_scalars` | 成长标量参数（#256） | 等级上限 / 属性区间倍率 / 经验节奏；各键取值域见服务端常量；改 `roleMaxLevel` 会把四条曲线末段 `to_level` 一起拉平 |
 | `ranks` | 军衔配置（#250） | 阶数序列固定（1..100），只可改不可增删；衔名 / 大段名 / 晋升价格 / 八项属性（出厂 = rank-seed 展开，#590） |
 | `equipments` | 装备基础件配置（#252 / #773） | 主键是基础件 id（如 `cloth_1`，变体在 `equipment_variants`）；部位 / 等级需求 / 售卖价 / 八项属性；**可新建 / 删除**（新建连带展开全部变体，删除连带删变体与工作台几何；商城在架时拒删） |
 | `drugs` | 药品配置（#253） | 主键是药品 id（如 `drug_hp_1`，被掉落表与背包引用）；名称 / 描述 / 售卖价 / 堆叠 / 冷却 / 四项回复量（effects 按键求和）；id 清单固定，只可改不可增删 |
 | `items` | 物品与材料配置（#255） | 主键是物品 id（如 `material_hide`，被掉落表与脚本引用）；只收 MATERIAL / OTHER 大类；名称 / 描述 / 售卖价 / 堆叠；id 清单固定，只可改不可增删 |
+| `money_items` | 货币道具（#785） | 主键是道具 id（如 `money_gold_100`，派生自「币种 + 面值」）；`currency`（gold / bindGold / silver，**就是存档账本字段名**）/ `amount`（面值）/ 名称 / 描述 / 图标 / 堆叠 / 售价；使用走 `POST roles/:id/money-use`，金额与币种**直读本表**（客户端只报格子）；**允许增删改**（运营道具表），删行后背包旧格子变 `20023`「认不出的道具」 |
+| `level_scrolls` | 升级卷轴（#787） | 主键是道具 id（`level_scroll_1` … 出厂 7 卷，或按区间派生的 `level_scroll_<下限>_<上限>`）；`min_level` / `max_level` 是**可用等级区间**（两列可改的数，「每 1000 级一卷」只是出厂切法）；`max_stack` / `sell_price` / 描述 / 图标。使用走 `POST roles/:id/level-scroll-use`：**硬性 +1 级、不扣经验**，区间与 +1 一律读本表；区间外 `20025`、到等级上限 `20026`、格子不是卷轴或区间配置坏 `20024`；**允许增删改**，改区间即时生效，`id` 不可改（改 id = 换一件物品） |
 | `monsters` | 怪物基础数据（#258） | 主键是怪物 key（怪物种子 `monster-seed.ts` 的关联键，被地图刷怪点 / 掉落表引用；#588 起客户端无副本，数值随快照下发）；名称 / 等级 / 定位 / 生命 / 六项攻防区间；**世界播种与伤害结算直读本表（改值即时生效）**；key 清单固定，只可改不可增删 |
 | `npcs` | NPC 基础数据（#258） | 主键是 NPC id（Tiled 对象组的关联键）；名称 / 对话文案（seed 为空串，客户端暂无对话数据形态）；id 清单固定，只可改不可增删 |
 | `skills` | 技能配置（#367） | 主键是技能 id；**角色与怪物同表**，`owner`（`role` / `monster`）区分并可按归属筛选；分类 / 目标类型 / 动作 / 特效 / 冷却 / 耗蓝 / 距离 / 等级 / 伤害系数（JSON，下标 = 等级 - 1）/ 挂载状态 `status_id` / **释放限制**（`cast_lock_ms` 动作锁、`require_target`）；跨字段约束在 service（状态型必须挂状态、主动至少一条倍率、`status_id` 必须存在）；**怪物技能（9000 段）可增删**（角色技能清单固定，id 被技能栏 / 快捷键 / 存档引用；被怪物挂载引用中的行拒删） |

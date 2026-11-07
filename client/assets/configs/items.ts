@@ -1,5 +1,5 @@
-import { BagCell, BagCellPos, DrugEffect, Equipment, EQUIPMENT_TYPE, GOOD_TYPE, Goods, isEquipment } from "../types/good";
-import { drugs } from "./game-config";
+import { BagCell, BagCellPos, DrugEffect, Equipment, EQUIPMENT_TYPE, GOOD_TYPE, Goods, isEquipment, MoneyCurrency } from "../types/good";
+import { drugs, levelScrolls, moneyItems } from "./game-config";
 import { equipmentCombatValue, equipmentSlotOrder, getAllEquipmentVariants, getMallGoods, getRecyclePrice } from "./equipments";
 import { materials } from "./game-config";
 
@@ -27,7 +27,8 @@ export function registerItems(list: Goods[], prefix: string) {
 }
 
 /**
- * 重建物品总表（#603 第十域）：**装备 → 药品 → 材料**，整表清空后按这个顺序登记
+ * 重建物品总表（#603 第十域；#785 起多一张货币道具表）：**装备 → 药品 → 货币 → 材料**，
+ * 整表清空后按这个顺序登记
  *
  * 顺序有语义：`getItemsByType` 的注释写的就是「注册顺序 = 装备 → 药品 → 材料」,
  * 图鉴 / 商店 / 背包整理都按这个顺序呈现；顺序变了列表会悄悄换个排法。
@@ -45,6 +46,12 @@ export function rebuildItemIndex(): void {
     if (good.id) items.set(good.id, good);
   });
   registerItems(drugs, "drug");
+  // #785：货币道具（绑定元宝 / 元宝 / 银子）—— 与药品同属「可使用的消耗品」，
+  // 但走的是账本链路（useMoneyItem），不是血蓝
+  registerItems(moneyItems, "money");
+  // #787：升级卷轴（硬性 +1 级，带等级区间）—— 也是「可使用的消耗品」，
+  // 走的是等级链路（useLevelScroll），不是血蓝也不是账本
+  registerItems(levelScrolls, "level_scroll");
   registerItems(materials, "material");
 }
 
@@ -99,6 +106,18 @@ export function resolveDrugRecovery(
   return { hp: Math.round(hp), mp: Math.round(mp) };
 }
 
+/**
+ * 三种货币的中文名（提示文案 / 图鉴用）
+ *
+ * 与角色存档的账本字段同名（gold / bindGold / silver），服务端 `MONEY_KIND_LABELS`
+ * 是同一份文案 —— 客户端只用来显示，金额与币种的实际结算在服务端。
+ */
+export const MONEY_CURRENCY_LABELS: Record<MoneyCurrency, string> = {
+  gold: "元宝",
+  bindGold: "绑定元宝",
+  silver: "银子",
+};
+
 /** 按 id 获取物品（返回副本，避免运行时数量等数据污染配置表；无此物品返回 null） */
 export function getItem(id: string): Goods | null {
   const item = items.get(id);
@@ -131,7 +150,14 @@ export function getItemsByType(type: GOOD_TYPE): Goods[] {
  * 一键整理的大类先后（数组为源 + 尾部建 Map）：装备在最前（换装最关心），其后药品、材料、其他
  * 新增物品大类时在此补一项；没登记的大类统一排到最后（不是丢物品，只是排在末尾）
  */
-const bagTidyTypeOrderData: GOOD_TYPE[] = [GOOD_TYPE.EQUIPMENT, GOOD_TYPE.DRUG, GOOD_TYPE.MATERIAL, GOOD_TYPE.OTHER];
+const bagTidyTypeOrderData: GOOD_TYPE[] = [
+  GOOD_TYPE.EQUIPMENT,
+  GOOD_TYPE.DRUG,
+  GOOD_TYPE.MONEY,
+  GOOD_TYPE.SCROLL,
+  GOOD_TYPE.MATERIAL,
+  GOOD_TYPE.OTHER,
+];
 
 /** 物品大类 → 整理序号（小的排前面；未登记的大类排到最后） */
 export const bagTidyTypeOrder = new Map<GOOD_TYPE, number>();
@@ -147,7 +173,7 @@ function getTidyOrder<K>(order: Map<K, number>, key: K): number {
  * 背包整理的排序比较器（纯函数，给 Array.sort 用；不读配置表之外的状态）
  *
  * 排序键（从主到次）：
- * 1. 大类：装备 → 药品 → 材料 → 其他（见 bagTidyTypeOrder）
+ * 1. 大类：装备 → 药品 → 货币 → 材料 → 其他（见 bagTidyTypeOrder）
  * 2. 装备：等级**降序**（高级在前）→ 部位顺序（见 configs/equipments.equipmentSlotOrder）
  *    → 前缀降序（超神→普通）→ 后缀降序（神级→人级）
  * 3. 非装备（药品/材料）：等级降序

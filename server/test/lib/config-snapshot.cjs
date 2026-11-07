@@ -34,7 +34,7 @@ function rows(table) {
 /**
  * 按某列索引成对象（`obj[key]` 直接取行）
  *
- * 键一律转成字符串：`npcs` 的 id 是 `'0002'`，`role_levels.level` 是数字 ——
+ * 键一律转成字符串：`npcs` 的 id 是 `'0002'`，`titles.level` 是数字 ——
  * 两种都能用同一个写法取。
  *
  * @param {string} table 表名
@@ -75,4 +75,28 @@ function optionalRows(table) {
   return Array.isArray(result) ? result : [];
 }
 
-module.exports = { SNAPSHOT_FILE, rows, index, group, count, optionalRows };
+/**
+ * 等级曲线求值（#786）：`role_level_curves` 的段参数 → 某条曲线在某一级的值
+ *
+ * 等级不再是「一级一行」，等级 / 60 这样的取法没了 —— 要某个等级的出厂值就在这里算。
+ * 公式与 `src/common/constants/role-level-curve.ts` 的 `curveValueAt` 同一套
+ * （段内二阶、超出末段外推），**故意另写一份当对照基准**：服务端那份写错了，
+ * 接口返回值与本函数对不上就会被 e2e 抓到（绝对值另有 `e2e-level-curve` 钉住）。
+ *
+ * @param {string} curve 曲线键（exp / hp / attack_max / defense_max）
+ * @param {number} level 等级（1 起）
+ * @returns {number | null} 该级的值；曲线缺失或等级 < 1 时 null
+ */
+function curveValue(curve, level) {
+  if (!(level >= 1)) return null;
+  let picked = null;
+  for (const row of optionalRows("role_level_curves")) {
+    if (row.curve !== curve || Number(row.fromLevel) > level) continue;
+    if (!picked || Number(row.fromLevel) > Number(picked.fromLevel)) picked = row;
+  }
+  if (!picked) return null;
+  const k = level - Number(picked.fromLevel);
+  return Math.round(Number(picked.startValue) + Number(picked.perLevel) * k + (Number(picked.accel) * k * (k - 1)) / 2);
+}
+
+module.exports = { SNAPSHOT_FILE, rows, index, group, count, optionalRows, curveValue };

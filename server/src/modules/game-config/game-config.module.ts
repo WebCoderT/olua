@@ -13,8 +13,10 @@ import { AdminEquipmentRulesController } from "./admin-equipment-rules.controlle
 import { AdminEquipAlignController } from "./admin-equip-align.controller";
 import { AdminEquipInAlignController } from "./admin-equip-in-align.controller";
 import { AdminFashionController } from "./admin-fashion.controller";
-import { AdminGrowthScalarController, AdminRoleLevelController } from "./admin-growth.controller";
+import { AdminGrowthScalarController, AdminLevelCurveController } from "./admin-growth.controller";
 import { AdminItemController } from "./admin-item.controller";
+import { AdminMoneyItemController } from "./admin-money-item.controller";
+import { AdminLevelScrollController } from "./admin-level-scroll.controller";
 import { AdminMallController } from "./admin-mall.controller";
 import { AdminMonsterController } from "./admin-monster.controller";
 import { AdminNpcController } from "./admin-npc.controller";
@@ -54,7 +56,7 @@ import { EquipmentAppearanceService } from "./equipment-appearance.service";
   // 特效（#594 升级特效 / #634 掉落光效）：配置快照要下发它（客户端特效按服务端参数演）
   // 音效（#683）：配置快照要下发它（客户端按 key 播 / 不播）—— 只借它的 service，不借控制器
   imports: [MapModule, UiEffectModule, AudioSettingModule],
-  controllers: [AdminAchievementController, AdminTitleController, AdminSoulController, AdminRankController, AdminSkillController, AdminStatusController, AdminEquipmentController, AdminEquipmentVariantController, AdminEquipmentRulesController, AdminEquipAlignController, AdminEquipInAlignController, AdminDrugController, AdminItemController, AdminMonsterController, AdminNpcController, AdminQuestController, AdminMallController, AdminFashionController, AdminDropController, AdminRoleLevelController, AdminGrowthScalarController, ClientConfigController, AdminRuntimeParamsController, AdminCombatWeightsController, AdminGuideController, AdminEquipmentBorderController, AdminEquipmentBackgroundController, AdminGameDataController],
+  controllers: [AdminAchievementController, AdminTitleController, AdminSoulController, AdminRankController, AdminSkillController, AdminStatusController, AdminEquipmentController, AdminEquipmentVariantController, AdminEquipmentRulesController, AdminEquipAlignController, AdminEquipInAlignController, AdminDrugController, AdminItemController, AdminMoneyItemController, AdminLevelScrollController, AdminMonsterController, AdminNpcController, AdminQuestController, AdminMallController, AdminFashionController, AdminDropController, AdminLevelCurveController, AdminGrowthScalarController, ClientConfigController, AdminRuntimeParamsController, AdminCombatWeightsController, AdminGuideController, AdminEquipmentBorderController, AdminEquipmentBackgroundController, AdminGameDataController],
   providers: [GameConfigService, EquipmentAppearanceService, EquipAlignService, EquipInAlignService, DropConfigService, GrowthConfigService, MallPricingService, ClientConfigService, RuntimeConfigService, RuntimeParamsService, CombatWeightsService, GuideSettingsService],
   // 商城购买收权（#304）：存档域（roles）读这里的成交价
   // 运行时参数（#605）：社交域（social）的帮会规则门槛要读同一份配置

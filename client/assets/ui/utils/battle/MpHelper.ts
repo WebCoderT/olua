@@ -1,4 +1,4 @@
-import { levelMap } from "../../../configs/game-config";
+import { levelConfigOf } from "../../../configs/game-config";
 import { mpRecoverPerSecond } from "../../../configs/role";
 import type { Role } from "../../../entities/Role";
 
@@ -11,7 +11,7 @@ import type { Role } from "../../../entities/Role";
 export default class MpHelper {
   /** 补齐魔法值字段（新建角色自带；兼容魔法值上线前创建的旧存档） */
   static ensureDefaults(role: Role) {
-    if (typeof role.maxMp !== "number") role.maxMp = levelMap.get(role.level)?.maxMp ?? 0;
+    if (typeof role.maxMp !== "number") role.maxMp = levelConfigOf(role.level)?.maxMp ?? 0;
     if (typeof role.mp !== "number") role.mp = role.maxMp;
     if (typeof role.mpRecoverAccumulator !== "number") role.mpRecoverAccumulator = 0;
   }

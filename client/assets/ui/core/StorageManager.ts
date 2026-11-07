@@ -5,7 +5,7 @@ import SkillManager from "./SkillManager";
 import SoundManager from "./SoundManager";
 import { initialShortcutKeys, bagRow, bagCol } from "../../configs/role";
 import { Role } from "../../entities/Role";
-import { BagCell, EQUIPMENT_TYPE, Equipment, getGoodCount, Goods, isDrug, isEquipment } from "../../types/good";
+import { BagCell, EQUIPMENT_TYPE, Equipment, getGoodCount, Goods, isDrug, isEquipment, isLevelScroll, isMoneyItem, MoneyCurrency } from "../../types/good";
 import { MapId } from "../../types/map";
 import { NeedSetShortcutKeyConfig } from "../../types/role";
 import { SkillId } from "../../types/skill";
@@ -15,7 +15,7 @@ import LayerManager from "./LayerManager";
 import MpHelper from "../utils/battle/MpHelper";
 import HpHelper from "../utils/battle/HpHelper";
 import { skills } from "../../configs/skill";
-import { getEquipment, getItem, moveBagCellGrid, normalizeBagGrid, resolveDrugRecovery, summarizeBagRecycle, tidyBagGrid, findBagEquipmentUpgrade } from "../../configs/items";
+import { MONEY_CURRENCY_LABELS, getEquipment, getItem, moveBagCellGrid, normalizeBagGrid, resolveDrugRecovery, summarizeBagRecycle, tidyBagGrid, findBagEquipmentUpgrade } from "../../configs/items";
 import { getMallPrice } from "../../configs/game-config";
 import { getFashion, fashionData } from "../../configs/game-config";
 import { getEquipmentNameParts } from "../../configs/equipments";
@@ -27,7 +27,7 @@ import Session from "../utils/net/Session";
 import { RoleApi } from "../utils/net/Api";
 import CombatChannel from "../utils/net/CombatChannel";
 import type { CombatKillReward, MapEnterResult, RoleAuthorityUpdate } from "../utils/net/CombatChannel";
-import type { BagOp, BagOpResult, DrugUseResult, GrowthUpgradeResult, MallPurchaseResult, SellGoodsResult } from "../utils/net/ApiModels";
+import type { BagOp, BagOpResult, DrugUseResult, GrowthUpgradeResult, LevelScrollUseResult, MallPurchaseResult, MoneyUseResult, SellGoodsResult } from "../utils/net/ApiModels";
 import { normalizeGuideProgress } from "../utils/guide/guide-progress";
 import { guideStepCount } from "../../configs/guide";
 
@@ -616,7 +616,8 @@ export default class StorageManager {
   /**
    * 使用背包物品（统一入口：背包左键、快捷键等一切「使用物品」都走这里）
    * 按物品大类分发，新增物品类型时在此补一条分支并实现对应的 useXxx：
-   * 装备 → 穿戴、药品 → 服用、材料/其他 → 暂未开放（后续合成、任务用途在此扩展）
+   * 装备 → 穿戴、药品 → 服用、货币道具 → 入账（#785）、升级卷轴 → 硬性 +1 级（#787）、
+   * 材料/其他 → 暂未开放（后续合成、任务用途在此扩展）
    * @param row 背包行
    * @param col 背包列
    * @returns 是否成功使用
@@ -629,6 +630,8 @@ export default class StorageManager {
     if (!good) return false;
     if (isEquipment(good)) return await this.equipFromBag(row, col);
     if (isDrug(good)) return await this.useDrug(row, col);
+    if (isMoneyItem(good)) return await this.useMoneyItem(row, col);
+    if (isLevelScroll(good)) return await this.useLevelScroll(row, col);
     GameUiHelper.createTip("good_unsupported_tip");
     return false;
   }
@@ -1297,6 +1300,128 @@ export default class StorageManager {
     this.updateOnlineRole(role);
     this.updateUi(role);
     RoleUIManager.refreshBag();
+    return true;
+  }
+
+  /**
+   * 使用货币物品（当前在线角色）：**入账与格子扣减都在服务端**（role.moneyUse，#785）
+   *
+   * 金额与币种一律读服务端 `money_items` 表 —— 客户端只报「用哪一格」，报什么都不算数；
+   * 管理端改面值 / 删掉一条，玩家手上的旧格子要么按新面值入账、要么被服务端判「用不了」。
+   * 本地预检（空格 / 非货币道具）只做即时 UX，服务端结果为准。
+   *
+   * 成功后以服务端返回为准刷新本地存档（对应账本字段 / bag / revision），再走既有落盘与 UI 链路
+   * （防抖推回 revision 与服务端一致，幂等）。入账不改战斗属性，无需重算。
+   * @param row 背包行
+   * @param col 背包列
+   * @returns 是否成功使用（失败原因已用浮动提示告知）
+   */
+  static async useMoneyItem(row: number, col: number): Promise<boolean> {
+    const role = this.findOnlineRole();
+    const cell = role?.bag[row]?.[col];
+    if (!role || !cell) return false;
+    // 格子只存物品 key，数据实时解析（不是货币道具就当不了钱用）
+    const good = getItem(cell.id);
+    if (!good || !isMoneyItem(good)) {
+      GameUiHelper.createTip("money_use_invalid_tip");
+      return false;
+    }
+    let result: MoneyUseResult;
+    try {
+      // 修订号带上做乐观锁：后台改过这个角色时（20006）服务端拒绝使用
+      result = await RoleApi.moneyUse(role.id, { row, col, revision: role.revision });
+    } catch {
+      return false; // 失败提示已由请求层弹过（非 silent 请求）
+    }
+    // `result` 是接口 DTO（本次明细 + 修订号），`result.data` 才是角色存档本身
+    // （账本字段 / bag 都在里面）
+    const data = (result.data ?? {}) as Record<string, unknown>;
+    const currency = String(result.currency ?? "") as MoneyCurrency;
+    // 账本三字段与快照同源：只认服务端给的那一个字段，其余不动
+    if (currency === "gold" || currency === "bindGold" || currency === "silver") {
+      role[currency] = Number(data[currency] ?? role[currency]);
+    }
+    // 服务端已扣减格子：以服务端那份为准整体替换（格子只存 key + 数量，无引用关系）
+    if (Array.isArray(data.bag)) role.bag = data.bag as typeof role.bag;
+    role.revision = result.revision;
+    // 保存并刷新（HUD 金钱 + 背包）
+    this.updateOnlineRole(role);
+    this.updateUi(role);
+    RoleUIManager.refreshBag();
+    GameUiHelper.createTip("money_use_success_tip", {
+      name: this.getGoodDisplayName(good),
+      amount: Number(result.amount ?? 0),
+      currency: MONEY_CURRENCY_LABELS[currency] ?? "",
+      balance: Number(result.balance ?? 0),
+    });
+    return true;
+  }
+
+  /**
+   * 使用升级卷轴（当前在线角色）：**等级 +1 与属性重算都在服务端**（role.levelScrollUse，#787）
+   *
+   * 等级区间读服务端 `level_scrolls` 表 —— 客户端这份（`configs/game-config` 的 `levelScrolls`）
+   * 只用来**先说一句**：等级不在区间里就不发请求（省一个往返），并提示当前该用哪一卷。
+   * 服务端仍会照自己的库再判一次，改包跳过这一步也跳不出区间。
+   *
+   * 成功后以服务端返回为准刷新本地存档：等级 / 经验 / 血蓝上限与当前值（升级补满）/ 战斗力 / bag /
+   * revision。**不本地 +1** —— 自增一版就会与服务端落库值漂开（下次存档被回填，表现成「等级弹回去」）。
+   * @param row 背包行
+   * @param col 背包列
+   * @returns 是否成功使用（失败原因已用浮动提示告知）
+   */
+  static async useLevelScroll(row: number, col: number): Promise<boolean> {
+    const role = this.findOnlineRole();
+    const cell = role?.bag[row]?.[col];
+    if (!role || !cell) return false;
+    const good = getItem(cell.id);
+    if (!good || !isLevelScroll(good)) {
+      GameUiHelper.createTip("level_scroll_use_invalid_tip");
+      return false;
+    }
+    const level = Math.max(1, Math.floor(Number(role.level) || 1));
+    if (level < good.minLevel || level > good.maxLevel) {
+      // 这一句是玩家的主要反馈：卷轴不对口时他要立刻知道「该换哪一卷」
+      GameUiHelper.createTip("level_scroll_level_out_of_range_tip", {
+        name: this.getGoodDisplayName(good),
+        min: good.minLevel,
+        max: good.maxLevel,
+        level,
+      });
+      return false;
+    }
+    let result: LevelScrollUseResult;
+    try {
+      // 修订号带上做乐观锁：后台改过这个角色时（20006）服务端拒绝使用
+      result = await RoleApi.levelScrollUse(role.id, { row, col, revision: role.revision });
+    } catch {
+      return false; // 失败提示已由请求层弹过（非 silent 请求）
+    }
+    // `result` 是接口 DTO（跳级明细 + 修订号），`result.data` 才是角色存档本身
+    const data = (result.data ?? {}) as Record<string, unknown>;
+    // 服务端已经把「升级后」的整份数值算好：照搬，不在这里再推一遍
+    // 等级读 **DTO 顶层**那一列：`row.level` 是唯一权威，存档里的 level 升级时不跟着写
+    // （与击杀升级 `applyKillExp` 同一纪律），读存档那份会拿到「升级前的旧等级」
+    if (typeof result.level === "number") role.level = result.level;
+    if (typeof data.exp === "number") role.exp = data.exp;
+    if (typeof data.maxHp === "number") role.maxHp = data.maxHp;
+    if (typeof data.maxMp === "number") role.maxMp = data.maxMp;
+    if (typeof data.hpRecover === "number") role.hpRecover = data.hpRecover;
+    if (typeof data.combat === "number") role.combat = data.combat;
+    if (typeof data.hp === "number") role.hp = data.hp;
+    if (typeof data.mp === "number") role.mp = data.mp;
+    // 服务端已扣减格子：以服务端那份为准整体替换（格子只存 key + 数量，无引用关系）
+    if (Array.isArray(data.bag)) role.bag = data.bag as typeof role.bag;
+    role.revision = result.revision;
+    // 保存并刷新（等级 / 血条上限 / 背包）
+    this.updateOnlineRole(role);
+    this.updateUi(role);
+    RoleUIManager.refreshBag();
+    GameUiHelper.createTip("level_scroll_use_success_tip", {
+      name: this.getGoodDisplayName(good),
+      from: Number(result.fromLevel ?? level),
+      level: Number(result.toLevel ?? role.level),
+    });
     return true;
   }
 

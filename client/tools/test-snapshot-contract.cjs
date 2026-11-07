@@ -6,7 +6,7 @@
  * · 完整快照 → 校验通过，且每段都真的落进了运行时表；
  * · 缺任意一段 → **抛错**并点名（key + 中文名），不再「缺段静默跳过、回落本地」；
  * · 形状不对（null / 对象当数组 / 数组当对象）→ 抛错；
- * · 关键段空表（levels / equipmentSlots）→ 抛错；业务段空表（drugs / skills / quests…）**允许**
+ * · 关键段空表（levelCurves / equipmentSlots）→ 抛错；业务段空表（drugs / skills / quests…）**允许**
  *   —— 运营把一张表清空是合法数据状态，不是服务端 bug；
  * · 装备规则的倍率数组 → 空 / 非正数 / 与文案不同长都要报（#603 第九域踩过：倍率空了装备表全空还不报错）；
  * · 先校验后落库 → 抛错时表一点没动（不能出现「校验失败但前几段已经写进去了」）。
@@ -107,7 +107,7 @@ const questRow = (id) => ({
  * 一份**完整合法**的快照（每段都在、形状都对）
  *
  * 只放最少必要的行（契约只要求「段在 + 形状对」，内容多少是数据问题不是契约问题）——
- * 除 levels / equipmentSlots 这两个关键段外，其余数组都可以是空的。
+ * 除 levelCurves / equipmentSlots 这两个关键段外，其余数组都可以是空的。
  */
 function completeSnapshot(over = {}) {
   return {
@@ -116,26 +116,20 @@ function completeSnapshot(over = {}) {
     ranks: [],
     equipments: [equipmentRow()],
     drugs: [],
+    moneyItems: [],
+    // #787：升级卷轴（业务段，空表也合法 —— 运营可以一卷都不开）
+    levelScrolls: [],
     items: [],
     monsters: [],
     monsterPresentations: [],
     npcs: [],
     fashions: [],
-    levels: [
-      {
-        level: 1,
-        maxHp: 100,
-        maxMp: 10,
-        hpRecover: 1,
-        physicalAttack: { min: 1, max: 2 },
-        magicAttack: { min: 0, max: 0 },
-        taoistAttack: { min: 0, max: 0 },
-        physicalDefense: { min: 0, max: 0 },
-        magicDefense: { min: 0, max: 0 },
-        taoistDefense: { min: 0, max: 0 },
-        exp: 10,
-        updatedAt: 0,
-      },
+    // #786：等级段是 4 条曲线（每条至少一段）—— 少一条就有一个等级算不出属性
+    levelCurves: [
+      { curve: "exp", seq: 1, fromLevel: 1, toLevel: 1000000, startValue: 10, perLevel: 0, accel: 0, updatedAt: 0 },
+      { curve: "hp", seq: 1, fromLevel: 1, toLevel: 1000000, startValue: 100, perLevel: 0, accel: 0, updatedAt: 0 },
+      { curve: "attack_max", seq: 1, fromLevel: 1, toLevel: 1000000, startValue: 2, perLevel: 0, accel: 0, updatedAt: 0 },
+      { curve: "defense_max", seq: 1, fromLevel: 1, toLevel: 1000000, startValue: 2, perLevel: 0, accel: 0, updatedAt: 0 },
     ],
     growthScalars: [{ key: "roleMaxLevel", value: 3, description: "", updatedAt: 0 }],
     combatWeights: { maxHp: 1, physicalAttack: 2 },
@@ -217,7 +211,7 @@ function main() {
 
   const contract = require(path.join(outDir, "configs/game-config.js"));
   const snapshotApi = require(path.join(outDir, "configs/apply-snapshot.js"));
-  const { levelMap } = require(path.join(outDir, "configs/game-config.js"));
+  const { levelCurves, levelConfigOf } = require(path.join(outDir, "configs/game-config.js"));
   const { equipmentSlots } = require(path.join(outDir, "configs/equipments.js"));
   const { skillData } = require(path.join(outDir, "configs/game-config.js"));
   const { statuses } = require(path.join(outDir, "configs/game-config.js"));
@@ -238,7 +232,7 @@ function main() {
   console.log("\n=== 完整快照：通过且真的落了库 ===");
   check(contract.checkSnapshotContract(completeSnapshot()).length === 0, "完整快照没有问题项");
   check(thrown(() => snapshotApi.applyConfigSnapshot(completeSnapshot())) === "", "applyConfigSnapshot 不抛错");
-  check(levelMap.size === 1 && levelMap.get(1).maxHp === 100, "等级表落库（levels 段）", `${levelMap.size} 行`);
+  check(levelCurves.length === 4 && levelConfigOf(1).maxHp === 100, "等级曲线落库（levelCurves 段，1 级 = 100 血）", `${levelCurves.length} 段`);
   check(equipmentSlots.size === 1, "槽位表落库（equipmentSlots 段）", `${equipmentSlots.size} 个槽位`);
   check(items.size === 15, "装备展开成 15 个变体（装备规则已先装）", `items=${items.size}`);
   check(skillData.length === 1 && skillData[0].id === "1000", "技能表落库（skills 段）", `${skillData.length} 条`);
@@ -269,7 +263,12 @@ function main() {
   check(thrown(() => snapshotApi.applyConfigSnapshot([])).length > 0, "整份快照是数组 → 抛错");
 
   console.log("\n=== 关键段空表 → 抛错；业务段空表 → 允许 ===");
-  check(thrown(() => snapshotApi.applyConfigSnapshot(completeSnapshot({ levels: [] }))).indexOf("levels") >= 0, "levels 空表 → 抛错（血蓝全 0 的游戏没法玩）");
+  check(
+    ["levelCurves", "等级曲线"].some((key) =>
+      thrown(() => snapshotApi.applyConfigSnapshot(completeSnapshot({ levelCurves: [] }))).includes(key),
+    ),
+    "levelCurves 空表 → 抛错（血蓝全 0 的游戏没法玩）",
+  );
   check(
     thrown(() => snapshotApi.applyConfigSnapshot(completeSnapshot({ equipmentSlots: [] }))).indexOf("equipmentSlots") >= 0,
     "equipmentSlots 空表 → 抛错（背包没有装备格）",
@@ -292,9 +291,9 @@ function main() {
 
   console.log("\n=== 先校验后落库：失败时表一点没动 ===");
   snapshotApi.applyConfigSnapshot(completeSnapshot());
-  const before = JSON.stringify([levelMap.size, equipmentSlots.size, skillData.length, statuses.size, questData.length, items.size]);
-  thrown(() => snapshotApi.applyConfigSnapshot(completeSnapshot({ levels: [] })));
-  const after = JSON.stringify([levelMap.size, equipmentSlots.size, skillData.length, statuses.size, questData.length, items.size]);
+  const before = JSON.stringify([levelCurves.length, equipmentSlots.size, skillData.length, statuses.size, questData.length, items.size]);
+  thrown(() => snapshotApi.applyConfigSnapshot(completeSnapshot({ levelCurves: [] })));
+  const after = JSON.stringify([levelCurves.length, equipmentSlots.size, skillData.length, statuses.size, questData.length, items.size]);
   check(before === after, "契约不过时不会写进任何一段（不是「先写前几段再报错」）", after);
 
   console.log("\n=== 整表重建：快照里没有的客户端就没有 ===");

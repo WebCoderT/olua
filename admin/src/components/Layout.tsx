@@ -114,7 +114,6 @@ const NAV_GROUPS: NavBranch[] = [
           { to: "/souls", label: "战魂配置", permission: PERMISSION.GAME_CONFIG_READ },
           { to: "/ranks", label: "军衔配置", permission: PERMISSION.GAME_CONFIG_READ },
           { to: "/growth", label: "成长参数", permission: PERMISSION.GAME_CONFIG_READ },
-          { to: "/role-levels", label: "角色等级", permission: PERMISSION.GAME_CONFIG_READ },
         ],
       },
       {
@@ -122,6 +121,8 @@ const NAV_GROUPS: NavBranch[] = [
         children: [
           { to: "/items", label: "物品配置", permission: PERMISSION.GAME_CONFIG_READ },
           { to: "/drugs", label: "药品配置", permission: PERMISSION.GAME_CONFIG_READ },
+          { to: "/money-items", label: "货币道具", permission: PERMISSION.GAME_CONFIG_READ },
+          { to: "/level-scrolls", label: "升级卷轴", permission: PERMISSION.GAME_CONFIG_READ },
           { to: "/fashions", label: "时装配置", permission: PERMISSION.GAME_CONFIG_READ },
           { to: "/mall", label: "商城", permission: PERMISSION.GAME_CONFIG_READ },
         ],

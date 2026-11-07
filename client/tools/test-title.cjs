@@ -23,7 +23,7 @@ seedRuntimeTables(outDir);
 /** 出厂值：称号 / 战魂 / 等级表（都来自 server/data/config-sync.sql） */
 const titleRows = factory.titles();
 const soulRows = factory.souls();
-const roleLevels = factory.levels();
+const roleLevels = factory.levelRows();
 const { titleLevels, titleMaxLevel, getTitleLevel, titleAttributeLabels } = require(path.join(outDir, "configs/game-config.js"));
 
 const read = (rel) => fs.readFileSync(path.join(PROJECT_ROOT, rel), "utf8");

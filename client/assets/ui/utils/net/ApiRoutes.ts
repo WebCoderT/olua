@@ -250,7 +250,7 @@ export const ApiRoutes = {
      */
     ticket: "/realtime/ticket",
   },
-  /** role 模块（15 个接口） */
+  /** role 模块（17 个接口） */
   role: {
     /**
      * 角色列表（GET /roles）
@@ -313,11 +313,23 @@ export const ApiRoutes = {
      */
     growthUpgrade: (id: string) => `/roles/${encodeURIComponent(id)}/growth-upgrade`,
     /**
+     * 使用升级卷轴（硬性 +1 级，带等级区间）（POST /roles/{id}/level-scroll-use）
+     *
+     * 使用后**等级直接 +1**（不看经验够不够，经验原样保留），并按新等级重算战斗属性、补满血蓝。
+     */
+    levelScrollUse: (id: string) => `/roles/${encodeURIComponent(id)}/level-scroll-use`,
+    /**
      * 商城购买（扣费与入包都在服务端）（POST /roles/{id}/mall-purchase）
      *
      * 价格与商城定价管理端同源（特殊价优先，未定价走统一价）；商品只卖装备变体（不在目录 → 404 50021）。
      */
     mallPurchase: (id: string) => `/roles/${encodeURIComponent(id)}/mall-purchase`,
+    /**
+     * 使用货币道具（入账与扣减都在服务端）（POST /roles/{id}/money-use）
+     *
+     * 货币道具（绑定元宝 / 元宝 / 银子）使用后直接给角色账本入账：金额与币种读服务端 `money_items` 表，**客户端报「用哪一格」，不报金额**。
+     */
+    moneyUse: (id: string) => `/roles/${encodeURIComponent(id)}/money-use`,
     /**
      * 复活：血蓝补到上限（满血由服务端落账）（POST /roles/{id}/revive）
      *

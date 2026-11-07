@@ -4,7 +4,7 @@ import type { TitleAcquireChannel, TitleAttributes, TitleLevelConfig } from "../
 import type { SoulAttributes, SoulLevelConfig } from "../types/soul";
 import type { RankAttributes, RankLevelConfig } from "../types/rank";
 import type { StatusConfig, StatusId, StatusSource } from "../types/status";
-import type { Drug, DrugEffect, Goods, Material } from "../types/good";
+import type { Drug, DrugEffect, Goods, LevelScroll, Material, MoneyCurrency, MoneyItem } from "../types/good";
 import { GOOD_TYPE } from "../types/good";
 import type { MapConfig, MapId, NpcData } from "../types/map";
 import { OECCUPATION } from "../types/role";
@@ -19,9 +19,11 @@ import type {
   Fashion as FashionRow,
   GameConfigSnapshot,
   Item as ItemRow,
-  Level as LevelRow,
+  LevelCurve as LevelCurveRow,
   MapConfig as MapConfigRow,
   MapTypeGroup as MapTypeGroupRow,
+  LevelScroll as LevelScrollRow,
+  MoneyItem as MoneyItemRow,
   Monster as MonsterRow,
   MonsterPresentation as MonsterPresentationRow,
   Npc as NpcRow,
@@ -80,6 +82,7 @@ import type {
  * | 6 | 装备规则与成长 | `equipmentMeta` / `growthScalars` | `applyEquipmentRules` |
  * | 7 | 状态 | `statuses` | `applyStatusRows` |
  * | 8 | 药品 | `drugs` | `applyDrugRows` → `applyDrugData` |
+ * | 8b | 货币道具 | `moneyItems` | `applyMoneyItemRows` → `applyMoneyItemData` |
  * | 9 | 材料与其它物品 | `items` | `applyItemRows` → `applyItemBaseData` |
  * | 10 | NPC | `npcs` | `applyNpcRows` |
  * | 11 | 任务数据 | `quests` | `applyQuestRows` |
@@ -157,12 +160,14 @@ export const SNAPSHOT_SECTIONS: SnapshotSectionSpec[] = [
   { key: "ranks", label: "军衔配置", kind: "array" },
   { key: "equipments", label: "装备基础件", kind: "array" },
   { key: "drugs", label: "药品配置", kind: "array" },
+  { key: "moneyItems", label: "货币道具", kind: "array" },
+  { key: "levelScrolls", label: "升级卷轴", kind: "array" },
   { key: "items", label: "物品与材料", kind: "array" },
   { key: "monsters", label: "怪物基础数据", kind: "array" },
   { key: "monsterPresentations", label: "怪物资源与表现", kind: "array" },
   { key: "npcs", label: "NPC 数据", kind: "array" },
   { key: "fashions", label: "时装配置", kind: "array" },
-  { key: "levels", label: "等级表", kind: "array", minRows: 1 },
+  { key: "levelCurves", label: "等级曲线", kind: "array", minRows: 1 },
   { key: "growthScalars", label: "成长标量", kind: "array" },
   { key: "combatWeights", label: "战斗力权重", kind: "object" },
   { key: "mallCategories", label: "商城分类", kind: "array" },
@@ -679,50 +684,118 @@ export function nextRankUpgrade(current: number): GrowthStep<RankLevelConfig> {
 //#region 4 · 等级（原 configs/level.ts）
 
 /**
- * 等级运行时表（#590 起客户端**零本地数据**）
+ * 等级（#786：**曲线参数下发，客户端按需求值**）
  *
- * 数据唯一来源是服务端快照 `levels` 段（#590 新增）：每级的裸属性由服务端
- * `growth-seed` 按曲线当场展开，升级经验取 `level_exps` 表（管理端可改的最终权威）。
- * 客户端不再派生（曲线 / 标量 / 经验公式已全部随 #590 移出客户端）。
- *
- * 口径与称号 / 战魂 / 军衔（#590）一致：
- * - **整表重建**（先 clear 再按行填，`levelMap` 引用不变）——快照没有的等级客户端就没有，
- *   「管理端把上限调小」后多出来的等级会自动消失；
- * - **快照先于预载必到**（`Loading` 场景里 `loadGameConfig()` 在 `PreloadManager` 之前，#604），
- *   `levelMap` 的消费方（`entities/Role`、经验条）全部在进游戏后才读它。
+ * 客户端本地**一个数字都不存**：快照 `levelCurves` 段给 4 条曲线 × 6 段的参数，
+ * `levelConfigOf(level)` 现算 —— 100 万级也不可能整表塞进内存。
+ * 快照先于预载必到（`Loading` 场景里 `loadGameConfig()` 在 `PreloadManager` 之前，#604），
+ * 消费方（`entities/Role`、经验条、`HpHelper`）全部在进游戏后才读。
  */
 
-/** 等级配置map（1 ~ roleMaxLevel；快照到达前为空表） */
-export const levelMap = new Map<number, LevelConfig>();
+/** 等级曲线段（快照 `levelCurves` 段原样存；4 条 × 6 段 = 24 行，`levelConfigOf` 按需算） */
+export const levelCurves: LevelCurveRow[] = [];
 
 /**
- * 快照 `levels` 段 → 运行时表（**整表重建**；消费方拿到的 `levelMap` 引用不变）
+ * 快照 `levelCurves` 段 → 运行时曲线表（**整表重建**）
  *
- * 快照行属性是 {min,max} 区间对象，这里转回客户端一直用的元组 `[min, max]`。
+ * #786：等级不再是「一级一行」，而是 4 条曲线（经验 / 生命 / 物攻上限 / 物防上限）各若干段。
+ * 100 万级整表下发要 250MB，客户端也不可能存 100 万个对象 —— 所以快照只发 24 行段参数，
+ * 具体某一级的数值由 `levelConfigOf()` 现算，公式与服务端
+ * `common/constants/role-level-curve.ts` **一字不差**（改了要两边一起改，
+ * `test-level-curve` 逐年比对守着）。
+ *
+ * 坏行（缺 curve / 等级非正）整条丢弃：留下的半截段会让某个等级区间算出 0 属性，
+ * 比「这一级没配」更难排查（与货币道具丢弃坏币种同一条口径）。
  */
-export function applyLevelRows(rows: LevelRow[]): void {
-  levelMap.clear();
+export function applyLevelCurves(rows: LevelCurveRow[]): void {
+  levelCurves.length = 0;
+  levelCurveMemo.clear();
   for (const row of rows) {
-    if (!row || typeof row.level !== "number") continue;
-    const range = (source: { min: number; max: number }): [number, number] => [source.min, source.max];
-    levelMap.set(row.level, {
-      exp: Number(row.exp) || 1,
-      maxHp: Number(row.maxHp) || 0,
-      maxMp: Number(row.maxMp) || 0,
-      hpRecover: Number(row.hpRecover) || 0,
-      physicalAttack: range(row.physicalAttack ?? { min: 0, max: 0 }),
-      magicAttack: range(row.magicAttack ?? { min: 0, max: 0 }),
-      taoistAttack: range(row.taoistAttack ?? { min: 0, max: 0 }),
-      physicalDefense: range(row.physicalDefense ?? { min: 0, max: 0 }),
-      magicDefense: range(row.magicDefense ?? { min: 0, max: 0 }),
-      taoistDefense: range(row.taoistDefense ?? { min: 0, max: 0 }),
+    if (!row || typeof row.curve !== "string" || !row.curve) continue;
+    const fromLevel = Number(row.fromLevel);
+    if (!Number.isFinite(fromLevel) || fromLevel < 1) continue;
+    levelCurves.push({
+      curve: row.curve,
+      seq: Number(row.seq) || 0,
+      fromLevel,
+      toLevel: Number(row.toLevel) || 0,
+      startValue: Number(row.startValue) || 0,
+      perLevel: Number(row.perLevel) || 0,
+      accel: Number(row.accel) || 0,
+      updatedAt: Number(row.updatedAt) || 0,
     });
   }
+  levelCurves.sort((a, b) => a.curve.localeCompare(b.curve) || a.fromLevel - b.fromLevel || a.seq - b.seq);
 }
 
-// 计算当前等级经验进度0-1
+/** 求值 memo（同一级在一次界面刷新里会被问好几次；封顶 4096，超了整体清空） */
+const levelCurveMemo = new Map<number, LevelConfig | null>();
+
+/** 派生比例（与服务端 `ROLE_LEVEL_RATIOS` 同值：蓝 = 血/2、回血 = 血/100、下限 = 上限×0.7） */
+const LEVEL_RATIO_MP_OF_HP = 0.5;
+const LEVEL_RATIO_HP_RECOVER_OF_HP = 0.01;
+const LEVEL_RATIO_FLOOR_OF_MAX = 0.7;
+
+/**
+ * 某条曲线在某一级的值
+ *
+ * 取「`fromLevel` 不超过该级的最后一段」：段与段之间允许跳变（原数据每 10 级跳一次），
+ * 超出最后一段按该段公式继续外推（等级上限调大不用改曲线）。
+ */
+function curveValueOf(curve: string, level: number): number | null {
+  let picked: LevelCurveRow | null = null;
+  for (const row of levelCurves) {
+    if (row.curve !== curve) continue;
+    if (row.fromLevel > level) continue;
+    if (!picked || row.fromLevel > picked.fromLevel) picked = row;
+  }
+  if (!picked) return null;
+  const k = level - picked.fromLevel;
+  return Math.round(picked.startValue + picked.perLevel * k + (picked.accel * k * (k - 1)) / 2);
+}
+
+/**
+ * 某一级的等级配置（**客户端唯一的等级取值入口**）
+ *
+ * 四个基础值都来自曲线，其余全是派生的；四条曲线里任一缺了这一级就返回 null
+ * （半截属性比「没配」更难查）。快照没到时也是 null —— 调用方按「这一级没配」处理，
+ * 与 #724「客户端零兜底」一致。
+ */
+export function levelConfigOf(level: number): LevelConfig | null {
+  const target = Math.trunc(Number(level));
+  if (!Number.isFinite(target) || target < 1) return null;
+  if (levelCurveMemo.has(target)) return levelCurveMemo.get(target) ?? null;
+  const exp = curveValueOf("exp", target);
+  const hp = curveValueOf("hp", target);
+  const attackMax = curveValueOf("attack_max", target);
+  const defenseMax = curveValueOf("defense_max", target);
+  let config: LevelConfig | null = null;
+  if (exp !== null && hp !== null && attackMax !== null && defenseMax !== null) {
+    const attackMin = Math.round(attackMax * LEVEL_RATIO_FLOOR_OF_MAX);
+    const defenseMin = Math.round(defenseMax * LEVEL_RATIO_FLOOR_OF_MAX);
+    config = {
+      exp,
+      maxHp: hp,
+      maxMp: Math.round(hp * LEVEL_RATIO_MP_OF_HP),
+      hpRecover: Math.round(hp * LEVEL_RATIO_HP_RECOVER_OF_HP),
+      physicalAttack: [attackMin, attackMax],
+      magicAttack: [attackMin, attackMax],
+      taoistAttack: [attackMin, attackMax],
+      physicalDefense: [defenseMin, defenseMax],
+      magicDefense: [defenseMin, defenseMax],
+      taoistDefense: [defenseMin, defenseMax],
+    };
+  }
+  if (levelCurveMemo.size >= 4096) levelCurveMemo.clear();
+  levelCurveMemo.set(target, config);
+  return config;
+}
+
+/** 当前等级的经验进度 0-1（这一级没配经验时返回 0，不抛错 —— 面板显示 0% 比崩好） */
 export function getCurrentLevelExpRate(level: number, exp: number): number {
-  return exp / levelMap.get(level).exp;
+  const need = levelConfigOf(level)?.exp ?? 0;
+  if (need <= 0) return 0;
+  return Math.max(0, Math.min(1, exp / need));
 }
 //#endregion
 
@@ -985,6 +1058,136 @@ export function applyDrugData(rows: DrugSeedLike[]): void {
  */
 export function applyDrugRows(rows: DrugRow[]): void {
   applyDrugData(rows);
+}
+
+//#endregion
+
+//#region 8b · 货币道具（#785）
+
+/**
+ * 货币道具（物品大类 GOOD_TYPE.MONEY）—— **客户端没有出厂数据**
+ *
+ * 名称 / 描述 / 图标 / 币种 / 面值的唯一书写处是服务端 `money_items` 表
+ * （管理端「货币物品」页可增删改）→ `GET /game-config` 快照的 `moneyItems` 段 →
+ * 这里整表重建。客户端只负责**陈列与「用哪一格」**：入账金额一律由服务端读库结算，
+ * 改这里的一个数字不会凭空多出钱。
+ */
+
+/** 服务端货币道具行（快照 `moneyItems` 段） */
+export interface MoneyItemSeedLike {
+  id: string;
+  label: string;
+  description: string;
+  icon: string;
+  currency: string;
+  amount: number;
+  maxStack: number;
+  sellPrice: number;
+}
+
+/** 货币道具运行时表（内容全部来自服务端；加载期为空） */
+export const moneyItems: MoneyItem[] = [];
+
+/** 三种账本币种（不认识的币种走不了账，见下面的丢弃分支） */
+const MONEY_CURRENCIES: MoneyCurrency[] = ["gold", "bindGold", "silver"];
+
+/**
+ * 整表重建货币道具
+ *
+ * 币种不在三种之内的行**直接丢弃**：服务端结算会拒用（20023），留在背包里只是
+ * 「点了没反应」的幽灵道具 —— 与「管理端删了一个面值」同一口径（客户端少一条）。
+ */
+export function applyMoneyItemData(rows: MoneyItemSeedLike[]): void {
+  moneyItems.length = 0;
+  for (const row of rows) {
+    if (!row || typeof row.id !== "string" || !row.id) continue;
+    const currency = MONEY_CURRENCIES.find((kind) => kind === row.currency);
+    if (!currency) continue;
+    moneyItems.push({
+      id: row.id,
+      type: GOOD_TYPE.MONEY,
+      label: String(row.label ?? ""),
+      description: String(row.description ?? ""),
+      icon: String(row.icon ?? ""),
+      // 货币道具没有使用等级（等级只影响背包排序，这里统一按 1 排在最前）
+      level: 1,
+      sellPirce: Number(row.sellPrice) || 0,
+      // 货币道具全部可叠加：单格上限由服务端下发的 maxStack 决定
+      stackable: true,
+      maxStack: Number(row.maxStack) || 999,
+      currency,
+      amount: Math.max(0, Math.floor(Number(row.amount) || 0)),
+    });
+  }
+}
+
+/** 覆写货币道具（快照段落库入口；整表重建，理由与药品相同） */
+export function applyMoneyItemRows(rows: MoneyItemRow[]): void {
+  applyMoneyItemData(rows);
+}
+
+//#endregion
+
+//#region 8c · 升级卷轴（#787）
+
+/**
+ * 升级卷轴（物品大类 GOOD_TYPE.SCROLL）—— **客户端没有出厂数据**
+ *
+ * 名称 / 描述 / 图标 / 等级区间的唯一书写处是服务端 `level_scrolls` 表
+ * （管理端「升级卷轴」页可增删改）→ `GET /game-config` 快照的 `levelScrolls` 段 →
+ * 这里整表重建。
+ *
+ * 客户端只用区间做**本地预检与详情展示**（这一段该用哪卷、现在能不能用），
+ * 真正的 +1 与区间判定在服务端（`role.levelScrollUse`，读库）—— 改包跳不过去。
+ */
+export interface LevelScrollSeedLike {
+  id: string;
+  label: string;
+  description: string;
+  icon: string;
+  minLevel: number;
+  maxLevel: number;
+  maxStack: number;
+  sellPrice: number;
+}
+
+/** 升级卷轴运行时表（内容全部来自服务端；加载期为空） */
+export const levelScrolls: LevelScroll[] = [];
+
+/**
+ * 整表重建升级卷轴
+ *
+ * 区间坏掉的行（`minLevel < 1` 或 `maxLevel < minLevel`）**整条丢弃**：
+ * 服务端会拒用（20024），留在背包里只是「点了没反应」的幽灵道具 ——
+ * 与「管理端删了一卷」同一口径（客户端少一条）。
+ */
+export function applyLevelScrollData(rows: LevelScrollSeedLike[]): void {
+  levelScrolls.length = 0;
+  for (const row of rows) {
+    if (!row || typeof row.id !== "string" || !row.id) continue;
+    const minLevel = Math.floor(Number(row.minLevel) || 0);
+    const maxLevel = Math.floor(Number(row.maxLevel) || 0);
+    if (minLevel < 1 || maxLevel < minLevel) continue;
+    levelScrolls.push({
+      id: row.id,
+      type: GOOD_TYPE.SCROLL,
+      label: String(row.label ?? ""),
+      description: String(row.description ?? ""),
+      icon: String(row.icon ?? ""),
+      // 卷轴自己没有「使用等级」（规则是区间）；`level` 只给背包排序用，取下限
+      level: minLevel,
+      sellPirce: Number(row.sellPrice) || 0,
+      stackable: true,
+      maxStack: Number(row.maxStack) || 999,
+      minLevel,
+      maxLevel,
+    });
+  }
+}
+
+/** 覆写升级卷轴（快照段落库入口；整表重建，理由与药品 / 货币道具相同） */
+export function applyLevelScrollRows(rows: LevelScrollRow[]): void {
+  applyLevelScrollData(rows);
 }
 
 //#endregion

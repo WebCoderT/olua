@@ -13,7 +13,8 @@
  * · 权限：只读观察员调写接口一律 403 / 30006
  * · 派生属性：详情带服务端重算的战斗属性；与客户端上报值比对；
  *   **#541 起服务端权威重算落库**：建号与存档都会把属性/战斗力覆盖成服务端算的（离谱上报不落库）；
- *   管理端改等级后立即重算；列表**不带**（只有详情带）；等级不在曲线里时如实给 null
+ *   管理端改等级后立即重算；列表**不带**（只有详情带）；等级 0（脏数据）时如实给 null
+ *   （#786 起等级走参数化曲线，末段外推 —— 没有「等级不在表里」这种情形了）
  * · 文档：新接口落在「管理端」分组且带权限点标注
  *
  * 用法：先 `npm run build`，再 `node test/e2e-roles.cjs`
@@ -31,6 +32,8 @@ const { AppModule } = require("../dist/app.module");
 const { AllExceptionsFilter } = require("../dist/common/filters/all-exceptions.filter");
 const { TransformInterceptor } = require("../dist/common/interceptors/transform.interceptor");
 const { setupSwagger } = require("../dist/swagger/setup");
+/** 脏数据路径（等级 0）在接口层进不去（PatchRoleDto 有 @Min(1)），直接喂给同一个 DTO 入口 */
+const { RoleDerivedDto } = require("../dist/modules/roles/dto/role.dto");
 
 //#region 断言小工具
 
@@ -589,13 +592,27 @@ async function raiseLevel(roleId, level, token) {
     JSON.stringify(warnLines.slice(-3)),
   );
 
-  // 等级不在成长曲线里 → 服务端无处可取旧值，如实给 null，而不是静默算成 0
-  const outOfCurve = await api("PATCH", `admin/roles/${roleD1Id}`, { token: adminToken, body: { level: 999 } });
-  check(outOfCurve.data.derived.attributes === null, "等级不在成长曲线里 → attributes 为 null（不静默给 0）", JSON.stringify(outOfCurve.data.derived.attributes));
+  // #786：等级改成参数化曲线后**没有硬边界**了 —— 远超旧上限 60 的等级照样算得出来（末段外推）
+  const farLevel = await api("PATCH", `admin/roles/${roleD1Id}`, { token: adminToken, body: { level: 999 } });
   check(
-    outOfCurve.data.derived.comparable === false && outOfCurve.data.derived.mismatch === false,
+    Boolean(farLevel.data.derived.attributes) && farLevel.data.derived.attributes.maxHp > 0,
+    "远超旧上限（999 级）→ 曲线外推照样算得出属性（不再有「等级不在表里」）",
+    JSON.stringify(farLevel.data.derived.attributes && farLevel.data.derived.attributes.maxHp),
+  );
+  check(
+    farLevel.data.derived.comparable === true,
+    "算得出来就参与比对（comparable=true）",
+    `comparable=${farLevel.data.derived.comparable}`,
+  );
+
+  // 「算不出来」现在只剩脏数据一种（等级 < 1）：DTO 层如实给 null，而不是静默算成 0。
+  // 管理端接口本身不允许 level=0（PatchRoleDto 的 @Min(1)），所以这里直接喂脏等级给同一个入口。
+  const dirtyDerived = RoleDerivedDto.from(0, {});
+  check(dirtyDerived.attributes === null, "等级 0（脏存档）→ attributes 为 null（不静默给 0）", JSON.stringify(dirtyDerived.attributes));
+  check(
+    dirtyDerived.comparable === false && dirtyDerived.mismatch === false,
     "算不出来时 comparable=false 且 mismatch=false（没比成 ≠ 不一致）",
-    `comparable=${outOfCurve.data.derived.comparable} mismatch=${outOfCurve.data.derived.mismatch}`,
+    `comparable=${dirtyDerived.comparable} mismatch=${dirtyDerived.mismatch}`,
   );
 
   // 列表不带派生字段：列表页不展示战斗力，给它算就是白算，还会让响应无谓变胖

@@ -34,7 +34,7 @@ export const AUDIT_TARGET_TYPES = [
   "fashion",
   "dropTable",
   "monsterDrop",
-  "roleLevel",
+  "levelCurve",
   "equipmentVariant",
   "growthScalar",
   "skill",
@@ -52,6 +52,8 @@ export const AUDIT_TARGET_TYPES = [
   "combatWeights",
   "guideSteps",
   "equipmentAppearance",
+  "moneyItem",
+  "levelScroll",
 ] as const;
 
 /** 审计目标类型（与 AuditLogRow.target_type 一致；界面按它决定怎么展示目标） */

@@ -16,10 +16,12 @@ import {
   applyAudioRows,
   applyCombatWeights,
   applyDrugRows,
+  applyLevelScrollRows,
+  applyMoneyItemRows,
   applyEquipmentRules,
   applyFashionRows,
   applyItemRows,
-  applyLevelRows,
+  applyLevelCurves,
   applyMallCatalog,
   applyMapRows,
   applyMonsterPresentations,
@@ -116,13 +118,13 @@ export function applyGrowthScalars(rows: GrowthScalar[]): void {
  * 成长底座的覆写总入口（#361；#590 重写）
  *
  * #590 前是「曲线 + 标量下发 → 客户端重建 levelMap → 经验表覆盖」；
- * #590 起客户端不派生：快照 `levels` 段就是每级的最终属性与经验（服务端展开），
- * 这里只剩「标量里的上限先落、再整表重建 levelMap」两步。
- * 顺序有讲究：上限变了 levelMap 行数跟着变（整表重建自然裁掉多出来的等级）。
+ * #655 一度改成「逐级表整份下发」，但 100 万级下发不动（250MB）；
+ * **#786 回到曲线**：快照只给 4 条曲线 × 6 段参数（24 行），`levelConfigOf()` 按需算。
+ * 这里只剩「标量里的上限先落、再整表重建曲线表」两步。
  */
 export function applyGrowthSnapshot(snapshot: GameConfigSnapshot): void {
   applyGrowthScalars(snapshot.growthScalars);
-  applyLevelRows(snapshot.levels);
+  applyLevelCurves(snapshot.levelCurves);
 }
 
 //#region 内容表（#363）
@@ -217,6 +219,12 @@ export function applySkillSnapshot(snapshot: GameConfigSnapshot): void {
 export function applyContentSnapshot(snapshot: GameConfigSnapshot): void {
   applyEquipments(snapshot.equipments);
   applyDrugRows(snapshot.drugs);
+  // #785：货币道具（绑定元宝 / 元宝 / 银子）—— 必须在 rebuildItemIndex 之前落库，
+  // 否则物品总表里没有它们（背包格能存 id、界面却解析不出名字与图标）
+  applyMoneyItemRows(snapshot.moneyItems);
+  // #787：升级卷轴（硬性 +1 级，带等级区间）—— 同样必须在 rebuildItemIndex 之前落库，
+  // 否则背包格里解析不出名字与图标（能存 id、却点不动）
+  applyLevelScrollRows(snapshot.levelScrolls);
   applyItemRows(snapshot.items);
   // #603 第十域：三张物品表都落完，再一次性重建「id → 物品」总表 ——
   // 放在这里而不是各自 apply 里，是因为顺序（装备 → 药品 → 材料）只该有一处实现

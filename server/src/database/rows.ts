@@ -582,24 +582,40 @@ export interface SoulRow {
 //#region 成长曲线（#256）
 
 /**
- * 角色等级一行（`role_levels` 表；#655）
+ * 角色等级曲线的一段（`role_level_curves` 表；#786）
  *
- * 一行 = 一个等级的**最终裸属性 + 升级经验**。曲线（`growth_segments`）已从运行时移除，
- * 这 60 行随出厂快照灌进库，之后只由管理端逐行改 —— 运行时与快照都只读它。
+ * 一行 = 一条曲线在某段等级上的线性/二阶公式：
+ * `value(level) = start_value + per_level * k + accel * k * (k - 1) / 2`（k = level - from_level）。
+ * 4 条曲线（exp / hp / attack_max / defense_max）× 6 段 = 24 行就把 1..100 万级全定义了；
+ * 求值见 `common/constants/role-level-curve.ts`。
  */
-/**
- * 升级经验（**不是一张表**：#655 起经验并进 `role_levels.exp`，这个形状只用来
- * 在仓储与业务之间传「某一级要多少经验」三列，写法与其它 Row 保持一致）
- */
-export interface LevelExpRow {
-  level: number;
-  exp: number;
+export interface RoleLevelCurveRow {
+  /** 曲线 key（exp / hp / attack_max / defense_max；登记在 ROLE_LEVEL_CURVES） */
+  curve: string;
+  /** 段序号（同一曲线内 1 起，段按 from_level 升序且首尾相接） */
+  seq: number;
+  from_level: number;
+  /** 结束等级；最后一段是出厂上限（超出的等级按该段公式继续外推） */
+  to_level: number;
+  /** `from_level` 处的值 */
+  start_value: number;
+  /** 每级增量 */
+  per_level: number;
+  /** 每级增量的增量（二阶；exp 用，其余为 0） */
+  accel: number;
   updated_at: number;
 }
 
+/**
+ * 某一级的**求值结果**（#786：**不是表行**）
+ *
+ * 由 `buildRoleLevelRow()` 按 4 条曲线现算出来的形状 —— 结算、快照、管理端计算器
+ * 都吃这一种形状，好处是「算出来的」与「存进去的」在类型上没有区别。
+ * 数据库里没有对应表：`role_levels` 已随 #786 删除（100 万级存不下）。
+ */
 export interface RoleLevelRow {
   level: number;
-  /** 升到下一级所需经验（原 level_exps.exp；主键同级一一对应） */
+  /** 升到下一级所需经验（曲线 `exp` 的值） */
   exp: number;
   max_hp: number;
   max_mp: number;
@@ -865,6 +881,65 @@ export interface ItemRow {
   sell_price: number;
   /** 最大叠加数量 */
   max_stack: number;
+  updated_at: number;
+}
+
+/**
+ * 货币物品（#785）：背包里「使用后直接入账」的道具
+ *
+ * 与药品 / 物品的区别就在 `currency` + `amount` 两列：使用时不结算血蓝、也不进商城售价体系，
+ * 而是给角色账本的 `gold` / `bindGold` / `silver` 加一笔（服务端权威，见 `RolesService.useMoneyItem`）。
+ *
+ * **可增删行**（与药品 / 物品的「id 清单固定」不同）：运营在管理端「货币物品」页自己开面值。
+ * 删行不碰玩家存档 —— 背包里还引用已删 id 的格子只是「认不出的道具」，用不了也不报错。
+ */
+export interface MoneyItemRow {
+  /** 物品 id（如 `money_bind_gold_10`；主键） */
+  id: string;
+  /** 名称（如「绑定元宝（10）」） */
+  label: string;
+  /** 描述（运营文案） */
+  description: string;
+  /** 图标资源路径（resources 相对路径，如 `item/currency/bind-gold-10`） */
+  icon: string;
+  /** 入账到哪个账本字段（gold / bindGold / silver） */
+  currency: string;
+  /** 单件入账金额（> 0） */
+  amount: number;
+  /** 最大叠加数量 */
+  max_stack: number;
+  /** 售卖价（0 = 不可出售；货币道具默认 0） */
+  sell_price: number;
+  updated_at: number;
+}
+
+/**
+ * 升级卷轴（#787）：使用后**硬性提升 1 级**，带等级区间限制
+ *
+ * 与货币道具同形（可增删行的道具表），区别是两列等级区间：
+ * `min_level ~ max_level` 之内的角色才能用 —— Lv1 只在 1~999 级可用，
+ * 升到 1000 级就得换 Lv2（见 `common/constants/level-scrolls.ts` 的出厂切法）。
+ *
+ * 区间列**不随等级上限自动改写**：运营调 `roleMaxLevel` 只是在后面多出可升的空间，
+ * 想让人升到 8000 级还得自己再开一卷（或把末卷的 max 调大）。
+ */
+export interface LevelScrollRow {
+  /** 物品 id（如 `level_scroll_1`；主键，背包按它引用） */
+  id: string;
+  /** 名称（如「升级卷轴 Lv1」） */
+  label: string;
+  /** 描述（运营文案） */
+  description: string;
+  /** 图标资源路径（resources 相对路径，如 `item/scroll/level-scroll`） */
+  icon: string;
+  /** 可用等级下限（含） */
+  min_level: number;
+  /** 可用等级上限（含） */
+  max_level: number;
+  /** 最大叠加数量 */
+  max_stack: number;
+  /** 售卖价（0 = 不可出售；出厂 0） */
+  sell_price: number;
   updated_at: number;
 }
 

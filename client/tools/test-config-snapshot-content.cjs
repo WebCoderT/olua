@@ -39,6 +39,9 @@ const attributes = (maxHp, hpRecover, attack, defense) => ({
 const contentSnapshot = (over = {}) => ({
   equipments: [],
   drugs: [],
+  moneyItems: [],
+  // #787：升级卷轴（`applyContentSnapshot` 的必需段；内容在别的单测里验）
+  levelScrolls: [],
   items: [],
   monsters: [],
   monsterPresentations: [],

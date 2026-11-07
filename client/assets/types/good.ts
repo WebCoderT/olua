@@ -13,6 +13,8 @@ export enum GOOD_TYPE {
   EQUIPMENT = "equipment", // 装备
   DRUG = "drug", // 药品
   MATERIAL = "material", // 材料
+  MONEY = "money", // 货币道具（使用后直接给账本入账：绑定元宝 / 元宝 / 银子）
+  SCROLL = "scroll", // 升级卷轴（使用后硬性 +1 级，带等级区间；#787）
   OTHER = "other", // 其他
 }
 
@@ -224,12 +226,44 @@ export interface Drug extends Good {
   cooldown?: number;
 }
 
+/**
+ * 货币道具（#785）：使用后直接给角色账本入账
+ *
+ * 与药品是两条链路：不结算血蓝，而是把 `amount` 加到 `currency` 对应的账本字段上
+ * （服务端 `role.moneyUse`，金额读库里的表 —— 客户端这两个字段只用于陈列与提示）。
+ */
+export interface MoneyItem extends Good {
+  type: GOOD_TYPE.MONEY;
+  /** 入账到哪个账本字段：gold（元宝）/ bindGold（绑定元宝）/ silver（银子） */
+  currency: MoneyCurrency;
+  /** 单件入账金额 */
+  amount: number;
+}
+
+/** 三种货币（与角色存档的账本字段同名，服务端 `SERVER_LEDGER_FIELDS` 是同一份） */
+export type MoneyCurrency = "gold" | "bindGold" | "silver";
+
+/**
+ * 升级卷轴（#787）：使用后**硬性 +1 级**，带等级区间
+ *
+ * 与服务端是两条链路：不结算经验（等级 +1 不看 `exp` 够不够），也不进账本。
+ * `minLevel` / `maxLevel` 只用于**本地预检与详情展示**（能不能用、该换哪一卷），
+ * 真正的判定与 +1 在服务端（`role.levelScrollUse`，读库）—— 客户端这份是快照的副本。
+ */
+export interface LevelScroll extends Good {
+  type: GOOD_TYPE.SCROLL;
+  /** 可用等级下限（含） */
+  minLevel: number;
+  /** 可用等级上限（含）：用完这一卷就超出这段，要换下一卷 */
+  maxLevel: number;
+}
+
 /** 材料（合成/任务等用途） */
 export interface Material extends Good {
   type: GOOD_TYPE.MATERIAL;
 }
 
-export type Goods = Equipment | Drug | Material;
+export type Goods = Equipment | Drug | Material | MoneyItem | LevelScroll;
 
 /**
  * 背包格子：只存物品 key 与数量，物品数据经 configs/items 实时解析
@@ -256,6 +290,16 @@ export function isEquipment(good: Goods): good is Equipment {
 /** 是否为药品 */
 export function isDrug(good: Goods): good is Drug {
   return good.type === GOOD_TYPE.DRUG;
+}
+
+/** 是否为货币道具 */
+export function isMoneyItem(good: Goods): good is MoneyItem {
+  return good.type === GOOD_TYPE.MONEY;
+}
+
+/** 是否为升级卷轴（#787：使用后硬性 +1 级） */
+export function isLevelScroll(good: Goods): good is LevelScroll {
+  return good.type === GOOD_TYPE.SCROLL;
 }
 
 /** 获取物品数量（不可叠加物品恒为 1） */

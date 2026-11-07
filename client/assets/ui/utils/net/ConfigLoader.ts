@@ -192,7 +192,7 @@ function applyLoadedSnapshot(snapshot: GameConfigSnapshot): GameConfigLoadResult
   // 技能与状态覆写的是数据表，而消费者读的是 configs/skill 的 Map ——
   // 不重建就还是旧副本（#367）
   rebuildSkills();
-  console.log(`[config] 配置快照已落库（${snapshot.skills.length} 技能 / ${snapshot.equipments.length} 基础件 / ${snapshot.levels.length} 级）`);
+  console.log(`[config] 配置快照已落库（${snapshot.skills.length} 技能 / ${snapshot.equipments.length} 基础件 / ${snapshot.levelCurves.length} 段等级曲线）`);
   return { ok: true };
 }
 

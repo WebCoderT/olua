@@ -805,6 +805,134 @@
         }
       }
     },
+    "/roles/{id}/money-use": {
+      "post": {
+        "description": "货币道具（绑定元宝 / 元宝 / 银子）使用后直接给角色账本入账：金额与币种读服务端 `money_items` 表，**客户端报「用哪一格」，不报金额**。\n使用后扣减背包格子数量（减到 0 清格），revision 原子 +1。\n\n不结算血蓝、不判「已满」、无冷却（与药品是两条链路）。\n\n失败路径：20023 格子为空 / 不是货币道具 / 该行没有配置入账金额；带上 revision 时乐观锁语义与 role.save 相同（20006 / 20007）。\n\n---\n\n**鉴权**：客户端令牌（`player`），只能操作令牌所属账号自己的数据。",
+        "operationId": "role.moneyUse",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "角色 id",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MoneyUseDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "使用后的角色（含本次入账金额与余额）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/MoneyUseResultDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "player": []
+          }
+        ],
+        "summary": "使用货币道具（入账与扣减都在服务端）",
+        "tags": [
+          "客户端"
+        ],
+        "x-olua-audience": "player",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/MoneyUseResultDto"
+        }
+      }
+    },
+    "/roles/{id}/level-scroll-use": {
+      "post": {
+        "description": "使用后**等级直接 +1**（不看经验够不够，经验原样保留），并按新等级重算战斗属性、补满血蓝。\n区间与等级上限读服务端 `level_scrolls` 表：Lv1 只在 1~999 级可用，用出这段就返回 20025（该换 Lv2 了）。\n**客户端报「用哪一格」，不报等级与跳级数** —— 改包也跳不出区间。\n\n失败路径：20024 格子为空 / 不是升级卷轴 / 区间配置不合法；20025 等级不在区间内；20026 已达等级上限；带上 revision 时乐观锁语义与 role.save 相同（20006 / 20007）。\n\n---\n\n**鉴权**：客户端令牌（`player`），只能操作令牌所属账号自己的数据。",
+        "operationId": "role.levelScrollUse",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "角色 id",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LevelScrollUseDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "使用后的角色（含使用前后等级与经验）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/LevelScrollUseResultDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "player": []
+          }
+        ],
+        "summary": "使用升级卷轴（硬性 +1 级，带等级区间）",
+        "tags": [
+          "客户端"
+        ],
+        "x-olua-audience": "player",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/LevelScrollUseResultDto"
+        }
+      }
+    },
     "/roles/{id}/revive": {
       "post": {
         "description": "死亡状态（hp ≤ 0）时把血蓝补到服务端重算的上限、清零自然回复累加器；未死亡时拒收（20015）。\n\n客户端死亡弹窗的两个选项（原地 / 回城复活）都调它，差别只在**复活位置**（纯演出），\n满血这件事只在服务端发生 —— 改包上报满血存档是无效的（血蓝在 save 时被服务端结算值覆盖）。\n\nrevision 不推进（与受击同一纪律：血量型写入走实时帧），返回值带上限供客户端照搬。\n\n---\n\n**鉴权**：客户端令牌（`player`），只能操作令牌所属账号自己的数据。",
@@ -2203,7 +2331,7 @@
             "description": "最低等级（含）",
             "schema": {
               "minimum": 1,
-              "maximum": 1000,
+              "maximum": 10000000,
               "type": "number"
             }
           },
@@ -2214,7 +2342,7 @@
             "description": "最高等级（含）",
             "schema": {
               "minimum": 1,
-              "maximum": 1000,
+              "maximum": 10000000,
               "type": "number"
             }
           }
@@ -3136,7 +3264,7 @@
                 "fashion",
                 "dropTable",
                 "monsterDrop",
-                "roleLevel",
+                "levelCurve",
                 "equipmentVariant",
                 "growthScalar",
                 "skill",
@@ -3153,7 +3281,9 @@
                 "runtimeParams",
                 "combatWeights",
                 "guideSteps",
-                "equipmentAppearance"
+                "equipmentAppearance",
+                "moneyItem",
+                "levelScroll"
               ]
             }
           },
@@ -3423,7 +3553,7 @@
                 "fashion",
                 "dropTable",
                 "monsterDrop",
-                "roleLevel",
+                "levelCurve",
                 "equipmentVariant",
                 "growthScalar",
                 "skill",
@@ -3440,7 +3570,9 @@
                 "runtimeParams",
                 "combatWeights",
                 "guideSteps",
-                "equipmentAppearance"
+                "equipmentAppearance",
+                "moneyItem",
+                "levelScroll"
               ]
             }
           },
@@ -5777,7 +5909,7 @@
     },
     "/admin/equipments/{id}": {
       "patch": {
-        "description": "**部分更新**：只改请求体里出现的字段。\n\n- `level`：穿戴需求等级（装备定强的锚点）。\n- `sellPrice`：售卖价（0 = 不可售卖）；**商城售价不在这里** —— 唯一写入口归商城定价管理。\n- `attributes`：八项基础属性，**整份提交、整份替换**；区间型要求 0 ≤ min ≤ max（跨字段校验在服务端）。改基础件**不再带动变体**（#655 起变体各自成行）；要改某一档前缀/后缀的数值去「装备变体」页。\n- `slot` / `id` 不开放编辑（部位结构与引用键固定）—— 要换部位就新建一件（`POST`）再下架旧的。\n- `id` 不存在 → 404（`50016`）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
+        "description": "**部分更新**：只改请求体里出现的字段。\n\n- `level`：穿戴需求等级（装备定强的锚点）。\n- `sellPrice`：售卖价（0 = 不可售卖）；**商城售价不在这里** —— 唯一写入口归商城定价管理。\n- `attributes`：八项基础属性，**整份提交、整份替换**；区间型要求 0 ≤ min ≤ max（跨字段校验在服务端）。改基础件**不再带动变体**（#655 起变体各自成行）；要改某一档前缀/后缀的数值去列表上的「N 个变体」弹窗。\n- `slot` / `id` 不开放编辑（部位结构与引用键固定）—— 要换部位就新建一件（`POST`）再下架旧的。\n- `id` 不存在 → 404（`50016`）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
         "operationId": "adminEquipment.update",
         "parameters": [
           {
@@ -6251,7 +6383,7 @@
     },
     "/admin/equipment-meta": {
       "get": {
-        "description": "单行配置。客户端 `configs/equipments` 展开 15 个变体时读它。\n\n- `prefixRates` / `suffixRates`：属性倍率（下标 = 前后缀序号），变体总倍率是两者相乘。\n- `prefixLabels` / `suffixLabels`：名称里显示的品质文案（必须与倍率等长）。\n- `prefixColors` / `suffixColors`：品质文字颜色（#720，`#RRGGBB`，与文案等长；空数组 = 客户端内置色）。\n\n**回收价不在这里**（#655 下架）：每件变体的回收价是 `equipment_variants.sell_price` 一列，\n服务端结算（`sellPriceOf`）与客户端背包都读那一列 —— 要调价就去「装备变体」页改那一行。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
+        "description": "单行配置。客户端 `configs/equipments` 展开 15 个变体时读它。\n\n- `prefixRates` / `suffixRates`：属性倍率（下标 = 前后缀序号），变体总倍率是两者相乘。\n- `prefixLabels` / `suffixLabels`：名称里显示的品质文案（必须与倍率等长）。\n- `prefixColors` / `suffixColors`：品质文字颜色（#720，`#RRGGBB`，与文案等长；空数组 = 客户端内置色）。\n\n**回收价不在这里**（#655 下架）：每件变体的回收价是 `equipment_variants.sell_price` 一列，\n服务端结算（`sellPriceOf`）与客户端背包都读那一列 —— 要调价就去「装备配置」页点这件装备的「N 个变体」，在弹窗里改那一行。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
         "operationId": "adminEquipmentMeta.get",
         "parameters": [],
         "responses": {
@@ -7042,6 +7174,587 @@
         "x-olua-data-nullable": false,
         "x-olua-data-schema": {
           "$ref": "#/components/schemas/ItemDto"
+        },
+        "x-olua-permissions": [
+          "gameConfig:write"
+        ]
+      }
+    },
+    "/admin/money-items": {
+      "get": {
+        "description": "面值表（出厂 3 种货币 × 8 档 = 24 条）。`keyword` 模糊匹配 id / 名称 / 描述；`currency` 只看某种货币（bindGold = 绑定元宝 / gold = 元宝 / silver = 银子）。\n\n`sellPrice` 是客户端条目的售卖价（0 = 不可售卖），**商城售价归商城定价管理**，不在这里。\n\n**排序**：`sort` 取 `id` / `label` / `currency` / `amount` / `sellPrice` / `updatedAt`，`order` 取 asc / desc（默认货币升序，同货币按面值升序）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
+        "operationId": "adminMoneyItem.list",
+        "parameters": [
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "description": "页码，从 1 开始",
+            "schema": {
+              "minimum": 1,
+              "default": 1,
+              "example": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "size",
+            "required": false,
+            "in": "query",
+            "description": "每页条数（1~100）",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
+              "example": 20,
+              "type": "number"
+            }
+          },
+          {
+            "name": "keyword",
+            "required": false,
+            "in": "query",
+            "description": "关键字：模糊匹配 id / 名称 / 描述",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sort",
+            "required": false,
+            "in": "query",
+            "description": "排序字段（取值见各接口说明，未登记的值会退回默认排序）",
+            "schema": {
+              "example": "createdAt",
+              "type": "string"
+            }
+          },
+          {
+            "name": "order",
+            "required": false,
+            "in": "query",
+            "description": "排序方向：asc 升序 / desc 降序",
+            "schema": {
+              "default": "desc",
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ]
+            }
+          },
+          {
+            "name": "currency",
+            "required": false,
+            "in": "query",
+            "description": "只看某种货币（bindGold / gold / silver）",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "分页结果（list/total/page/size）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/MoneyItemPageDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "货币物品列表",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/MoneyItemPageDto"
+        },
+        "x-olua-permissions": [
+          "gameConfig:read"
+        ],
+        "x-olua-query-schema": {
+          "$ref": "#/components/schemas/MoneyItemQueryDto"
+        }
+      },
+      "post": {
+        "description": "**只填货币类型与面值就能建**：`id` / 名称 / 描述 / 图标都可省，缺省按「货币 + 面值」派生（`money_gold_100` / 「元宝（100）」/ `item/currency/gold-100`）。\n\n- `id` 手填撞已有行 → 409（`50042`）—— 同一个 id 指到哪一档面值就说不清了。\n- `currency` 必须是 bindGold / gold / silver；`amount` 1 ~ 1000000。\n- `icon` 是 resources 相对路径（不带扩展名），素材放 `client/assets/resources/item/currency/`。\n\n建完客户端下次拉快照就能在背包里看到并使用了。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
+        "operationId": "adminMoneyItem.create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateMoneyItemDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "新建的货币物品",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/MoneyItemDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "新建货币物品（一种货币的一档面值）",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/MoneyItemDto"
+        },
+        "x-olua-permissions": [
+          "gameConfig:write"
+        ]
+      }
+    },
+    "/admin/money-items/{id}": {
+      "patch": {
+        "description": "**部分更新**：只改请求体里出现的字段。\n\n- `label` / `description` / `icon`：文案与图标。\n- `currency` / `amount`：入账到哪个账本、加多少 —— **改完立刻生效**（使用结算读库，不读快照）。\n- `maxStack` / `sellPrice`：堆叠上限 / 售卖价（0 = 不可出售）。\n- **`id` 不可改**（路径参数就是主键）：改 id 等于换一件物品，玩家背包里的旧 id 会全变成认不出的格子。\n- `id` 不存在 → 404（`50041`）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
+        "operationId": "adminMoneyItem.update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "货币物品 id（如 money_bind_gold_10）",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateMoneyItemDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "更新后的货币物品",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/MoneyItemDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "编辑货币物品",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/MoneyItemDto"
+        },
+        "x-olua-permissions": [
+          "gameConfig:write"
+        ]
+      },
+      "delete": {
+        "description": "只删配置行。**不碰玩家存档**：背包里还引用这个 id 的格子会变成「认不出的道具」——客户端与结算都只是安静跳过（用不了，也不报错）。\n\n`id` 不存在 → 404（`50041`）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
+        "operationId": "adminMoneyItem.delete",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "货币物品 id（如 money_silver_10）",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "删掉了几行",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/RemoveMoneyItemResultDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "删除货币物品",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/RemoveMoneyItemResultDto"
+        },
+        "x-olua-permissions": [
+          "gameConfig:write"
+        ]
+      }
+    },
+    "/admin/level-scrolls": {
+      "get": {
+        "description": "出厂 7 卷：Lv1（1~999）/ Lv2（1000~1999）/ … / Lv7（6000~6999）。`keyword` 模糊匹配 id / 名称 / 描述。\n\n**区间是两列可改的数**（`minLevel` / `maxLevel`），「每 1000 级换一卷」只是出厂切法 —— 运营完全可以开一卷「500~800」的怪卷，也可以两卷重叠（不会报错，只会有两卷都能用）。\n\n`sellPrice` 是回收价（0 = 不可回收），**商城上架归商城定价管理**，不在这里。\n\n**排序**：`sort` 取 `id` / `label` / `minLevel` / `maxLevel` / `sellPrice` / `updatedAt`，`order` 取 asc / desc（默认按等级下限升序）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
+        "operationId": "adminLevelScroll.list",
+        "parameters": [
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "description": "页码，从 1 开始",
+            "schema": {
+              "minimum": 1,
+              "default": 1,
+              "example": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "size",
+            "required": false,
+            "in": "query",
+            "description": "每页条数（1~100）",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
+              "example": 20,
+              "type": "number"
+            }
+          },
+          {
+            "name": "keyword",
+            "required": false,
+            "in": "query",
+            "description": "关键字：模糊匹配 id / 名称 / 描述",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sort",
+            "required": false,
+            "in": "query",
+            "description": "排序字段（取值见各接口说明，未登记的值会退回默认排序）",
+            "schema": {
+              "example": "createdAt",
+              "type": "string"
+            }
+          },
+          {
+            "name": "order",
+            "required": false,
+            "in": "query",
+            "description": "排序方向：asc 升序 / desc 降序",
+            "schema": {
+              "default": "desc",
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "分页结果（list/total/page/size）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/LevelScrollPageDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "升级卷轴列表",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/LevelScrollPageDto"
+        },
+        "x-olua-permissions": [
+          "gameConfig:read"
+        ],
+        "x-olua-query-schema": {
+          "$ref": "#/components/schemas/LevelScrollQueryDto"
+        }
+      },
+      "post": {
+        "description": "**只填等级区间就能建**：`id` / 名称 / 描述 / 图标都可省 —— 区间正好落在出厂切法（1~999 / 1000~1999 / …）时派生 `level_scroll_<卷号>`，否则派生 `level_scroll_<下限>_<上限>`。\n\n- `minLevel` / `maxLevel` 取值 1 ~ 10000000，且下限不能大于上限（否则 400 / 40000）。\n- `id` 手填撞已有行 → 409（`50044`）—— 同一个 id 指到哪一卷就说不清了。\n- `icon` 是 resources 相对路径（不带扩展名），素材放 `client/assets/resources/item/scroll/`。\n\n建完客户端下次拉快照就能在背包里看到并使用了。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
+        "operationId": "adminLevelScroll.create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateLevelScrollDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "新建的升级卷轴",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/LevelScrollDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "新建升级卷轴（一段等级一卷）",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/LevelScrollDto"
+        },
+        "x-olua-permissions": [
+          "gameConfig:write"
+        ]
+      }
+    },
+    "/admin/level-scrolls/{id}": {
+      "patch": {
+        "description": "**部分更新**：只改请求体里出现的字段。\n\n- `minLevel` / `maxLevel`：可用等级区间 —— **改完立刻生效**（使用结算读库，不读快照）。只改一个也会按「合成后的区间」校验，下限大于上限 → 400（`40000`）。\n- `label` / `description` / `icon`：文案与图标。\n- `maxStack` / `sellPrice`：堆叠上限 / 回收价（0 = 不可回收）。\n- **`id` 不可改**（路径参数就是主键）：改 id 等于换一件物品，玩家背包里的旧 id 会全变成认不出的格子。\n- `id` 不存在 → 404（`50043`）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
+        "operationId": "adminLevelScroll.update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "升级卷轴 id（如 level_scroll_1）",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateLevelScrollDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "更新后的升级卷轴",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/LevelScrollDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "编辑升级卷轴",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/LevelScrollDto"
+        },
+        "x-olua-permissions": [
+          "gameConfig:write"
+        ]
+      },
+      "delete": {
+        "description": "只删配置行。**不碰玩家存档**：背包里还引用这个 id 的格子会变成「认不出的道具」——客户端与结算都只是安静跳过（用不了，也不报错）。\n\n`id` 不存在 → 404（`50043`）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
+        "operationId": "adminLevelScroll.delete",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "升级卷轴 id（如 level_scroll_7）",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "删掉了几行",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/RemoveLevelScrollResultDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "删除升级卷轴",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/RemoveLevelScrollResultDto"
         },
         "x-olua-permissions": [
           "gameConfig:write"
@@ -9164,73 +9877,14 @@
         ]
       }
     },
-    "/admin/role-levels": {
+    "/admin/level-curves": {
       "get": {
-        "description": "等级序列固定（1..roleMaxLevel），**没有创建 / 删除**：一行 = 该级的裸属性（血 / 蓝 / 回血 / 六项攻防区间）+ 升级经验。\n\n这是战斗结算与客户端等级表的**唯一来源** —— 曲线已从运行时移除，想调哪一级就改哪一行。\n\n`keyword` 按等级号模糊匹配。\n\n**排序**：`sort` 取 `level` / `exp` / `maxHp` / `maxMp` / `updatedAt`，`order` 取 asc / desc（默认 level 升序）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
-        "operationId": "adminRoleLevel.list",
-        "parameters": [
-          {
-            "name": "page",
-            "required": false,
-            "in": "query",
-            "description": "页码，从 1 开始",
-            "schema": {
-              "minimum": 1,
-              "default": 1,
-              "example": 1,
-              "type": "number"
-            }
-          },
-          {
-            "name": "size",
-            "required": false,
-            "in": "query",
-            "description": "每页条数（1~100）",
-            "schema": {
-              "minimum": 1,
-              "maximum": 100,
-              "default": 20,
-              "example": 20,
-              "type": "number"
-            }
-          },
-          {
-            "name": "keyword",
-            "required": false,
-            "in": "query",
-            "description": "关键字：按等级号模糊匹配",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "sort",
-            "required": false,
-            "in": "query",
-            "description": "排序字段（取值见各接口说明，未登记的值会退回默认排序）",
-            "schema": {
-              "example": "createdAt",
-              "type": "string"
-            }
-          },
-          {
-            "name": "order",
-            "required": false,
-            "in": "query",
-            "description": "排序方向：asc 升序 / desc 降序",
-            "schema": {
-              "default": "desc",
-              "type": "string",
-              "enum": [
-                "asc",
-                "desc"
-              ]
-            }
-          }
-        ],
+        "description": "全部曲线段（4 条 × 6 段 = 24 行，**不分页**）。\n\n曲线：`exp`（升级经验） / `hp`（生命上限） / `attack_max`（物攻上限） / `defense_max`（物防上限）。\n\n段内公式：`value = startValue + perLevel * k + accel * k * (k - 1) / 2`（`k = level - fromLevel`）。`accel` 只有 `exp` 用（经验越涨越快），其余曲线为 0。\n\n最后一段的 `toLevel` 就是等级上限；超出上限的等级按该段公式继续外推。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
+        "operationId": "adminLevelCurve.list",
+        "parameters": [],
         "responses": {
           "200": {
-            "description": "分页结果（list/total/page/size）",
+            "description": "全部曲线段（list）",
             "content": {
               "application/json": {
                 "schema": {
@@ -9241,7 +9895,7 @@
                     {
                       "properties": {
                         "data": {
-                          "$ref": "#/components/schemas/RoleLevelPageDto"
+                          "$ref": "#/components/schemas/LevelCurveListDto"
                         }
                       }
                     }
@@ -9256,33 +9910,97 @@
             "admin": []
           }
         ],
-        "summary": "角色等级表",
+        "summary": "等级曲线段",
         "tags": [
           "管理端"
         ],
         "x-olua-audience": "admin",
         "x-olua-data-nullable": false,
         "x-olua-data-schema": {
-          "$ref": "#/components/schemas/RoleLevelPageDto"
+          "$ref": "#/components/schemas/LevelCurveListDto"
         },
         "x-olua-permissions": [
           "gameConfig:read"
-        ],
-        "x-olua-query-schema": {
-          "$ref": "#/components/schemas/RoleLevelQueryDto"
-        }
+        ]
       }
     },
-    "/admin/role-levels/{level}": {
-      "patch": {
-        "description": "**部分更新**：只改传了的字段（等级本身不可改）。\n\n- 六个区间都是 `xxxMin` / `xxxMax` 两个字段，校验「下限 ≤ 上限」（合并后判断）。\n- 改完立刻重装结算层，**服务端下一次结算就用新值**（不用重启）。\n- 客户端下次拉配置快照时生效 —— 已经进游戏的玩家要重进。\n- 等级不存在 → 404（`50012`）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
-        "operationId": "adminRoleLevel.update",
+    "/admin/level-curves/preview": {
+      "get": {
+        "description": "输入等级，算出该级的**基础属性**（不含装备 / 称号 / 战魂 / 军衔加成）：\n生命 / 魔法 / 回血 / 六项攻防区间 / 升到下一级所需经验。\n\n等级可以超过当前上限（按末段外推）—— 用来预演「开到 200 万级会是什么数值」。\n\n曲线没覆盖到该级 → 404（`50013`，四条曲线里至少有一条的段配置断了）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
+        "operationId": "adminLevelCurve.preview",
         "parameters": [
           {
             "name": "level",
             "required": true,
+            "in": "query",
+            "description": "要计算的等级（1 起；可超过上限，按末段外推）",
+            "schema": {
+              "example": 1000,
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "该等级的基础属性",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/LevelAttributesDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "等级属性计算器",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/LevelAttributesDto"
+        },
+        "x-olua-permissions": [
+          "gameConfig:read"
+        ]
+      }
+    },
+    "/admin/level-curves/{curve}/{seq}": {
+      "patch": {
+        "description": "**部分更新**：只改传了的字段（`curve` / `seq` / `fromLevel` 不可改）。\n\n- `toLevel`：本段结束等级；非末段改它会**连带把下一段的起点挪到 `toLevel + 1`**，但不能把下一段挤空（否则 400）。\n- `startValue` / `perLevel` / `accel`：段的值与斜率。`accel` 只有 `exp` 有意义。\n- 改完立刻重装结算层，**服务端下一次结算就用新值**（不用重启）；客户端重进游戏拉快照后生效。\n- 曲线键未登记 / 段不存在 → 404（`50013`）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
+        "operationId": "adminLevelCurve.update",
+        "parameters": [
+          {
+            "name": "curve",
+            "required": true,
             "in": "path",
-            "description": "等级（1 起）",
+            "description": "曲线键：exp / hp / attack_max / defense_max",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "seq",
+            "required": true,
+            "in": "path",
+            "description": "段序号（1 起）",
             "schema": {
               "type": "number"
             }
@@ -9293,14 +10011,14 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/UpdateRoleLevelDto"
+                "$ref": "#/components/schemas/UpdateLevelCurveDto"
               }
             }
           }
         },
         "responses": {
           "200": {
-            "description": "更新后的等级行",
+            "description": "更新后的曲线段",
             "content": {
               "application/json": {
                 "schema": {
@@ -9311,7 +10029,7 @@
                     {
                       "properties": {
                         "data": {
-                          "$ref": "#/components/schemas/RoleLevelDto"
+                          "$ref": "#/components/schemas/LevelCurveDto"
                         }
                       }
                     }
@@ -9326,14 +10044,14 @@
             "admin": []
           }
         ],
-        "summary": "编辑角色等级",
+        "summary": "编辑曲线段",
         "tags": [
           "管理端"
         ],
         "x-olua-audience": "admin",
         "x-olua-data-nullable": false,
         "x-olua-data-schema": {
-          "$ref": "#/components/schemas/RoleLevelDto"
+          "$ref": "#/components/schemas/LevelCurveDto"
         },
         "x-olua-permissions": [
           "gameConfig:write"
@@ -9342,7 +10060,7 @@
     },
     "/admin/growth-scalars": {
       "get": {
-        "description": "可调的数值参数（键 × 说明，**没有创建 / 删除**）：等级上限 / 属性区间倍率 / 经验节奏。\n\n`keyword` 模糊匹配参数键与说明。\n\n**排序**：`sort` 取 `key` / `value` / `updatedAt`，`order` 取 asc / desc（默认 key 升序）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
+        "description": "可调的全局参数（键 × 说明，**没有创建 / 删除**）：等级上限 / 经验节奏 / 自然回蓝 / 泡点。\n\n每级涨多少不在这里 —— 那是「等级曲线」的事（4 条曲线 × 6 段）。\n\n`keyword` 模糊匹配参数键与说明。\n\n**排序**：`sort` 取 `key` / `value` / `updatedAt`，`order` 取 asc / desc（默认 key 升序）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
         "operationId": "adminGrowthScalar.list",
         "parameters": [
           {
@@ -9451,7 +10169,7 @@
     },
     "/admin/growth-scalars/{key}": {
       "patch": {
-        "description": "只改 `value`；每个键的取值域服务端单独校验：roleMaxLevel ∈ [1, 200]（整数），expGain.expPerLevel ∈ [1, 100000]（整数），expGain.maxLevelGap ∈ [0, 100]（整数），mpRecoverPerSecond ∈ [0, 1000]，soakExpPerTick ∈ [0, 1000000]（整数），soakTickSeconds ∈ [1, 3600]（整数）。\n\n- `roleMaxLevel` 还有跨表校验：**四条曲线的末段必须都覆盖到新值**，否则拒收 —— 先改曲线末段，再来抬上限。\n- **改参数会影响军衔等效强度**（#250 的映射基准）。\n- 参数键不存在 → 404（`50014`）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
+        "description": "只改 `value`；每个键的取值域服务端单独校验：roleMaxLevel ∈ [1, 10000000]（整数），expGain.expPerLevel ∈ [1, 100000]（整数），expGain.maxLevelGap ∈ [0, 100]（整数），mpRecoverPerSecond ∈ [0, 1000]，soakExpPerTick ∈ [0, 1000000]（整数），soakTickSeconds ∈ [1, 3600]（整数）。\n\n- `roleMaxLevel`：改完会把四条曲线的末段 `toLevel` 一起拉到新值（两处数字永远一致）。\n- **改参数会影响军衔等效强度**（#250 的映射基准）。\n- 参数键不存在 → 404（`50014`）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
         "operationId": "adminGrowthScalar.update",
         "parameters": [
           {
@@ -14503,6 +15221,62 @@
           "col"
         ]
       },
+      "MoneyUseDto": {
+        "type": "object",
+        "properties": {
+          "row": {
+            "type": "number",
+            "description": "背包行",
+            "minimum": 0,
+            "maximum": 99,
+            "example": 0
+          },
+          "col": {
+            "type": "number",
+            "description": "背包列",
+            "minimum": 0,
+            "maximum": 99,
+            "example": 0
+          },
+          "revision": {
+            "type": "number",
+            "description": "修订号（乐观锁）：带上了就校验，与服务端当前值不一致时 20006；与 role.save 同一语义",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "row",
+          "col"
+        ]
+      },
+      "LevelScrollUseDto": {
+        "type": "object",
+        "properties": {
+          "row": {
+            "type": "number",
+            "description": "背包行",
+            "minimum": 0,
+            "maximum": 99,
+            "example": 0
+          },
+          "col": {
+            "type": "number",
+            "description": "背包列",
+            "minimum": 0,
+            "maximum": 99,
+            "example": 0
+          },
+          "revision": {
+            "type": "number",
+            "description": "修订号（乐观锁）：带上了就校验，与服务端当前值不一致时 20006；与 role.save 同一语义",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "row",
+          "col"
+        ]
+      },
       "FashionBuyDto": {
         "type": "object",
         "properties": {
@@ -14863,7 +15637,7 @@
             "type": "number",
             "description": "等级",
             "minimum": 1,
-            "maximum": 1000
+            "maximum": 10000000
           },
           "gold": {
             "type": "number",
@@ -16341,6 +17115,195 @@
           }
         }
       },
+      "CreateMoneyItemDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "物品 id（缺省 = money_<货币>_<面值>，如 money_gold_100）；小写字母开头、字母数字下划线",
+            "maxLength": 64
+          },
+          "currency": {
+            "type": "string",
+            "description": "货币类型：bindGold（绑定元宝）/ gold（元宝）/ silver（银子）"
+          },
+          "amount": {
+            "type": "number",
+            "description": "单件入账金额（1 ~ 1000000）",
+            "minimum": 1,
+            "maximum": 1000000,
+            "example": 100
+          },
+          "label": {
+            "type": "string",
+            "description": "名称（缺省 = 「货币中文名（面值）」）",
+            "maxLength": 20
+          },
+          "description": {
+            "type": "string",
+            "description": "描述（缺省 = 「使用后获得 N 点…」）",
+            "maxLength": 200
+          },
+          "icon": {
+            "type": "string",
+            "description": "图标资源路径（缺省 = item/currency/<货币>-<面值>）",
+            "maxLength": 200
+          },
+          "maxStack": {
+            "type": "number",
+            "description": "最大叠加数量（缺省 999）",
+            "minimum": 1,
+            "maximum": 999
+          },
+          "sellPrice": {
+            "type": "number",
+            "description": "售卖价（0 = 不可出售；缺省 0）",
+            "minimum": 0,
+            "maximum": 100000000
+          }
+        },
+        "required": [
+          "currency",
+          "amount"
+        ]
+      },
+      "UpdateMoneyItemDto": {
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": "string",
+            "description": "名称（不传则不改）",
+            "maxLength": 20
+          },
+          "description": {
+            "type": "string",
+            "description": "描述（不传则不改）",
+            "maxLength": 200
+          },
+          "icon": {
+            "type": "string",
+            "description": "图标资源路径（不传则不改）",
+            "maxLength": 200
+          },
+          "currency": {
+            "type": "string",
+            "description": "货币类型（不传则不改）"
+          },
+          "amount": {
+            "type": "number",
+            "description": "单件入账金额（不传则不改）",
+            "minimum": 1,
+            "maximum": 1000000
+          },
+          "maxStack": {
+            "type": "number",
+            "description": "最大叠加数量（不传则不改）",
+            "minimum": 1,
+            "maximum": 999
+          },
+          "sellPrice": {
+            "type": "number",
+            "description": "售卖价（不传则不改）",
+            "minimum": 0,
+            "maximum": 100000000
+          }
+        }
+      },
+      "CreateLevelScrollDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "物品 id（缺省按等级区间派生）；小写字母开头、字母数字下划线",
+            "maxLength": 64
+          },
+          "minLevel": {
+            "type": "number",
+            "description": "可用等级下限（含）",
+            "minimum": 1,
+            "example": 7000
+          },
+          "maxLevel": {
+            "type": "number",
+            "description": "可用等级上限（含），必须不小于下限",
+            "minimum": 1,
+            "example": 7999
+          },
+          "label": {
+            "type": "string",
+            "description": "名称（缺省按等级区间派生）",
+            "maxLength": 20
+          },
+          "description": {
+            "type": "string",
+            "description": "描述（缺省按等级区间生成）",
+            "maxLength": 200
+          },
+          "icon": {
+            "type": "string",
+            "description": "图标资源路径（缺省 = item/scroll/level-scroll）",
+            "maxLength": 200
+          },
+          "maxStack": {
+            "type": "number",
+            "description": "最大叠加数量（缺省 999）",
+            "minimum": 1,
+            "maximum": 999
+          },
+          "sellPrice": {
+            "type": "number",
+            "description": "售卖价（0 = 不可出售；缺省 0）",
+            "minimum": 0,
+            "maximum": 100000000
+          }
+        },
+        "required": [
+          "minLevel",
+          "maxLevel"
+        ]
+      },
+      "UpdateLevelScrollDto": {
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": "string",
+            "description": "名称（不传则不改）",
+            "maxLength": 20
+          },
+          "description": {
+            "type": "string",
+            "description": "描述（不传则不改）",
+            "maxLength": 200
+          },
+          "icon": {
+            "type": "string",
+            "description": "图标资源路径（不传则不改）",
+            "maxLength": 200
+          },
+          "minLevel": {
+            "type": "number",
+            "description": "可用等级下限（不传则不改）",
+            "minimum": 1
+          },
+          "maxLevel": {
+            "type": "number",
+            "description": "可用等级上限（不传则不改）",
+            "minimum": 1
+          },
+          "maxStack": {
+            "type": "number",
+            "description": "最大叠加数量（不传则不改）",
+            "minimum": 1,
+            "maximum": 999
+          },
+          "sellPrice": {
+            "type": "number",
+            "description": "售卖价（不传则不改）",
+            "minimum": 0,
+            "maximum": 100000000
+          }
+        }
+      },
       "AttributeRange": {
         "type": "object",
         "properties": {
@@ -16983,87 +17946,27 @@
           }
         }
       },
-      "UpdateRoleLevelDto": {
+      "UpdateLevelCurveDto": {
         "type": "object",
         "properties": {
-          "exp": {
+          "toLevel": {
             "type": "number",
-            "description": "升到下一级所需经验（≥ 1）",
+            "description": "结束等级（含）；不能小于本段起始等级",
             "minimum": 1
           },
-          "maxHp": {
+          "startValue": {
             "type": "number",
-            "description": "生命上限（≥ 0）",
+            "description": "起始等级处的值（≥ 0）",
             "minimum": 0
           },
-          "maxMp": {
+          "perLevel": {
             "type": "number",
-            "description": "魔法上限（≥ 0）",
+            "description": "每级增量（≥ 0；经验段建议 ≥ 1）",
             "minimum": 0
           },
-          "hpRecover": {
+          "accel": {
             "type": "number",
-            "description": "每秒回血（≥ 0）",
-            "minimum": 0
-          },
-          "physicalAttackMin": {
-            "type": "number",
-            "description": "物攻下限（≥ 0）",
-            "minimum": 0
-          },
-          "physicalAttackMax": {
-            "type": "number",
-            "description": "物攻上限（≥ 0）",
-            "minimum": 0
-          },
-          "magicAttackMin": {
-            "type": "number",
-            "description": "魔攻下限（≥ 0）",
-            "minimum": 0
-          },
-          "magicAttackMax": {
-            "type": "number",
-            "description": "魔攻上限（≥ 0）",
-            "minimum": 0
-          },
-          "taoistAttackMin": {
-            "type": "number",
-            "description": "道攻下限（≥ 0）",
-            "minimum": 0
-          },
-          "taoistAttackMax": {
-            "type": "number",
-            "description": "道攻上限（≥ 0）",
-            "minimum": 0
-          },
-          "physicalDefenseMin": {
-            "type": "number",
-            "description": "物防下限（≥ 0）",
-            "minimum": 0
-          },
-          "physicalDefenseMax": {
-            "type": "number",
-            "description": "物防上限（≥ 0）",
-            "minimum": 0
-          },
-          "magicDefenseMin": {
-            "type": "number",
-            "description": "魔防下限（≥ 0）",
-            "minimum": 0
-          },
-          "magicDefenseMax": {
-            "type": "number",
-            "description": "魔防上限（≥ 0）",
-            "minimum": 0
-          },
-          "taoistDefenseMin": {
-            "type": "number",
-            "description": "道防下限（≥ 0）",
-            "minimum": 0
-          },
-          "taoistDefenseMax": {
-            "type": "number",
-            "description": "道防上限（≥ 0）",
+            "description": "每级增量的增量（≥ 0；只有 exp 有意义，其余曲线请留 0）",
             "minimum": 0
           }
         }
@@ -18634,6 +19537,89 @@
           "recoveredMp"
         ]
       },
+      "MoneyUseResultDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "角色 id"
+          },
+          "accountId": {
+            "type": "string",
+            "description": "所属账号 id"
+          },
+          "name": {
+            "type": "string",
+            "description": "角色名"
+          },
+          "occupation": {
+            "type": "string",
+            "description": "职业：1 战士 / 2 魔法师 / 3 道士 / 4 全职业"
+          },
+          "sex": {
+            "type": "string",
+            "description": "性别：1 男 / 2 女 / 3 全性别"
+          },
+          "level": {
+            "type": "number",
+            "description": "等级"
+          },
+          "online": {
+            "type": "boolean",
+            "description": "是否当前选中（在线）角色"
+          },
+          "revision": {
+            "type": "number",
+            "description": "修订号（每次落库 +1；客户端保存进度时带上它做乐观锁）"
+          },
+          "createdAt": {
+            "type": "number",
+            "description": "创建时间（毫秒）"
+          },
+          "updatedAt": {
+            "type": "number",
+            "description": "最近更新时间（毫秒）"
+          },
+          "data": {
+            "type": "object",
+            "description": "角色完整数据（客户端 entities/Role 的 JSON 快照，服务端按不透明文档存取；管理端只编辑其中的常用字段）",
+            "additionalProperties": true
+          },
+          "itemId": {
+            "type": "string",
+            "description": "使用的货币物品 id（如 money_gold_100）"
+          },
+          "currency": {
+            "type": "string",
+            "description": "入账的账本字段：gold / bindGold / silver"
+          },
+          "amount": {
+            "type": "number",
+            "description": "本次入账金额（读服务端表，客户端报的不算数）"
+          },
+          "balance": {
+            "type": "number",
+            "description": "入账后的余额（客户端飘字「+100 元宝（共 300）」用）"
+          }
+        },
+        "required": [
+          "id",
+          "accountId",
+          "name",
+          "occupation",
+          "sex",
+          "level",
+          "online",
+          "revision",
+          "createdAt",
+          "updatedAt",
+          "data",
+          "itemId",
+          "currency",
+          "amount",
+          "balance"
+        ]
+      },
       "ReviveResultDto": {
         "type": "object",
         "properties": {
@@ -18820,6 +19806,378 @@
         "required": [
           "ticket",
           "expiresIn"
+        ]
+      },
+      "MoneyItemDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "物品 id（如 money_bind_gold_10；背包按它引用）"
+          },
+          "label": {
+            "type": "string",
+            "description": "名称（如「绑定元宝（10）」）"
+          },
+          "description": {
+            "type": "string",
+            "description": "描述"
+          },
+          "icon": {
+            "type": "string",
+            "description": "图标资源路径（resources 相对路径，如 item/currency/bind-gold-10）"
+          },
+          "currency": {
+            "type": "string",
+            "description": "入账到哪个账本字段：bindGold = 绑定元宝 / gold = 元宝 / silver = 银子"
+          },
+          "amount": {
+            "type": "number",
+            "description": "单件入账金额（使用一个就加这么多）"
+          },
+          "maxStack": {
+            "type": "number",
+            "description": "最大叠加数量"
+          },
+          "sellPrice": {
+            "type": "number",
+            "description": "售卖价（0 = 不可出售）"
+          },
+          "updatedAt": {
+            "type": "number",
+            "description": "最近更新时间（毫秒）"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "description",
+          "icon",
+          "currency",
+          "amount",
+          "maxStack",
+          "sellPrice",
+          "updatedAt"
+        ]
+      },
+      "MoneyItemPageDto": {
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "number",
+            "description": "总条数",
+            "example": 42
+          },
+          "page": {
+            "type": "number",
+            "description": "当前页码（从 1 开始）",
+            "example": 1
+          },
+          "size": {
+            "type": "number",
+            "description": "每页条数",
+            "example": 20
+          },
+          "list": {
+            "description": "当前页的货币物品",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MoneyItemDto"
+            }
+          }
+        },
+        "required": [
+          "total",
+          "page",
+          "size",
+          "list"
+        ]
+      },
+      "MoneyItemQueryDto": {
+        "type": "object",
+        "properties": {
+          "page": {
+            "type": "number",
+            "description": "页码，从 1 开始",
+            "example": 1,
+            "default": 1,
+            "minimum": 1
+          },
+          "size": {
+            "type": "number",
+            "description": "每页条数（1~100）",
+            "example": 20,
+            "default": 20,
+            "minimum": 1,
+            "maximum": 100
+          },
+          "keyword": {
+            "type": "string",
+            "description": "关键字：模糊匹配 id / 名称 / 描述"
+          },
+          "sort": {
+            "type": "string",
+            "description": "排序字段（取值见各接口说明，未登记的值会退回默认排序）",
+            "example": "createdAt"
+          },
+          "order": {
+            "type": "string",
+            "description": "排序方向：asc 升序 / desc 降序",
+            "enum": [
+              "asc",
+              "desc"
+            ],
+            "default": "desc"
+          },
+          "currency": {
+            "type": "string",
+            "description": "只看某种货币（bindGold / gold / silver）"
+          }
+        }
+      },
+      "RemoveMoneyItemResultDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "被删除的物品 id"
+          },
+          "removed": {
+            "type": "number",
+            "description": "实际删除的行数（正常为 1；0 说明刚被别人删掉了）"
+          }
+        },
+        "required": [
+          "id",
+          "removed"
+        ]
+      },
+      "LevelScrollDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "物品 id（如 level_scroll_1；背包按它引用）"
+          },
+          "label": {
+            "type": "string",
+            "description": "名称（如「升级卷轴 Lv1」）"
+          },
+          "description": {
+            "type": "string",
+            "description": "描述"
+          },
+          "icon": {
+            "type": "string",
+            "description": "图标资源路径（resources 相对路径，如 item/scroll/level-scroll）"
+          },
+          "minLevel": {
+            "type": "number",
+            "description": "可用等级下限（含）：角色等级低于它就用不了"
+          },
+          "maxLevel": {
+            "type": "number",
+            "description": "可用等级上限（含）：用完之后角色就会超出这段，需要换下一卷"
+          },
+          "maxStack": {
+            "type": "number",
+            "description": "最大叠加数量"
+          },
+          "sellPrice": {
+            "type": "number",
+            "description": "售卖价（0 = 不可出售）"
+          },
+          "updatedAt": {
+            "type": "number",
+            "description": "最近更新时间（毫秒）"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "description",
+          "icon",
+          "minLevel",
+          "maxLevel",
+          "maxStack",
+          "sellPrice",
+          "updatedAt"
+        ]
+      },
+      "LevelScrollPageDto": {
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "number",
+            "description": "总条数",
+            "example": 42
+          },
+          "page": {
+            "type": "number",
+            "description": "当前页码（从 1 开始）",
+            "example": 1
+          },
+          "size": {
+            "type": "number",
+            "description": "每页条数",
+            "example": 20
+          },
+          "list": {
+            "description": "当前页的升级卷轴",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LevelScrollDto"
+            }
+          }
+        },
+        "required": [
+          "total",
+          "page",
+          "size",
+          "list"
+        ]
+      },
+      "LevelScrollQueryDto": {
+        "type": "object",
+        "properties": {
+          "page": {
+            "type": "number",
+            "description": "页码，从 1 开始",
+            "example": 1,
+            "default": 1,
+            "minimum": 1
+          },
+          "size": {
+            "type": "number",
+            "description": "每页条数（1~100）",
+            "example": 20,
+            "default": 20,
+            "minimum": 1,
+            "maximum": 100
+          },
+          "keyword": {
+            "type": "string",
+            "description": "关键字：模糊匹配 id / 名称 / 描述"
+          },
+          "sort": {
+            "type": "string",
+            "description": "排序字段（取值见各接口说明，未登记的值会退回默认排序）",
+            "example": "createdAt"
+          },
+          "order": {
+            "type": "string",
+            "description": "排序方向：asc 升序 / desc 降序",
+            "enum": [
+              "asc",
+              "desc"
+            ],
+            "default": "desc"
+          }
+        }
+      },
+      "RemoveLevelScrollResultDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "被删除的卷轴 id"
+          },
+          "removed": {
+            "type": "number",
+            "description": "实际删除的行数（正常为 1；0 说明刚被别人删掉了）"
+          }
+        },
+        "required": [
+          "id",
+          "removed"
+        ]
+      },
+      "LevelScrollUseResultDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "角色 id"
+          },
+          "accountId": {
+            "type": "string",
+            "description": "所属账号 id"
+          },
+          "name": {
+            "type": "string",
+            "description": "角色名"
+          },
+          "occupation": {
+            "type": "string",
+            "description": "职业：1 战士 / 2 魔法师 / 3 道士 / 4 全职业"
+          },
+          "sex": {
+            "type": "string",
+            "description": "性别：1 男 / 2 女 / 3 全性别"
+          },
+          "level": {
+            "type": "number",
+            "description": "等级"
+          },
+          "online": {
+            "type": "boolean",
+            "description": "是否当前选中（在线）角色"
+          },
+          "revision": {
+            "type": "number",
+            "description": "修订号（每次落库 +1；客户端保存进度时带上它做乐观锁）"
+          },
+          "createdAt": {
+            "type": "number",
+            "description": "创建时间（毫秒）"
+          },
+          "updatedAt": {
+            "type": "number",
+            "description": "最近更新时间（毫秒）"
+          },
+          "data": {
+            "type": "object",
+            "description": "角色完整数据（客户端 entities/Role 的 JSON 快照，服务端按不透明文档存取；管理端只编辑其中的常用字段）",
+            "additionalProperties": true
+          },
+          "itemId": {
+            "type": "string",
+            "description": "使用的升级卷轴 id（如 level_scroll_1）"
+          },
+          "fromLevel": {
+            "type": "number",
+            "description": "使用前的等级"
+          },
+          "toLevel": {
+            "type": "number",
+            "description": "使用后的等级（恒为 fromLevel + 1）"
+          },
+          "exp": {
+            "type": "number",
+            "description": "当前经验（卷轴不消耗经验，原样保留）"
+          },
+          "expNeed": {
+            "type": "number",
+            "description": "升到下一级所需经验（客户端进度条用；满级为 0）"
+          }
+        },
+        "required": [
+          "id",
+          "accountId",
+          "name",
+          "occupation",
+          "sex",
+          "level",
+          "online",
+          "revision",
+          "createdAt",
+          "updatedAt",
+          "data",
+          "itemId",
+          "fromLevel",
+          "toLevel",
+          "exp",
+          "expNeed"
         ]
       },
       "ZoneDto": {
@@ -19943,7 +21301,7 @@
               "fashion",
               "dropTable",
               "monsterDrop",
-              "roleLevel",
+              "levelCurve",
               "equipmentVariant",
               "growthScalar",
               "skill",
@@ -19960,7 +21318,9 @@
               "runtimeParams",
               "combatWeights",
               "guideSteps",
-              "equipmentAppearance"
+              "equipmentAppearance",
+              "moneyItem",
+              "levelScroll"
             ]
           },
           "targetId": {
@@ -20119,13 +21479,13 @@
             "type": "number",
             "description": "最低等级（含）",
             "minimum": 1,
-            "maximum": 1000
+            "maximum": 10000000
           },
           "maxLevel": {
             "type": "number",
             "description": "最高等级（含）",
             "minimum": 1,
-            "maximum": 1000
+            "maximum": 10000000
           }
         }
       },
@@ -21239,16 +22599,78 @@
           }
         }
       },
-      "RoleLevelDto": {
+      "LevelCurveDto": {
+        "type": "object",
+        "properties": {
+          "curve": {
+            "type": "string",
+            "description": "曲线 key：exp（升级经验）/ hp（生命上限）/ attack_max（物攻上限）/ defense_max（物防上限）"
+          },
+          "seq": {
+            "type": "number",
+            "description": "段序号（同一曲线内 1 起；段的起点由上一段终点决定，不可改）"
+          },
+          "fromLevel": {
+            "type": "number",
+            "description": "起始等级（含）"
+          },
+          "toLevel": {
+            "type": "number",
+            "description": "结束等级（含）；最后一段是等级上限，超出按该段公式继续外推"
+          },
+          "startValue": {
+            "type": "number",
+            "description": "fromLevel 处的值"
+          },
+          "perLevel": {
+            "type": "number",
+            "description": "每级增量"
+          },
+          "accel": {
+            "type": "number",
+            "description": "每级增量的增量（二阶；只有 exp 用，其余为 0）"
+          },
+          "updatedAt": {
+            "type": "number",
+            "description": "最近更新时间（毫秒）"
+          }
+        },
+        "required": [
+          "curve",
+          "seq",
+          "fromLevel",
+          "toLevel",
+          "startValue",
+          "perLevel",
+          "accel",
+          "updatedAt"
+        ]
+      },
+      "LevelCurveListDto": {
+        "type": "object",
+        "properties": {
+          "list": {
+            "description": "全部曲线段（按曲线 → 段序）",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LevelCurveDto"
+            }
+          }
+        },
+        "required": [
+          "list"
+        ]
+      },
+      "LevelAttributesDto": {
         "type": "object",
         "properties": {
           "level": {
             "type": "number",
-            "description": "等级（1 起；序列固定，不可增删行）"
+            "description": "等级"
           },
           "exp": {
             "type": "number",
-            "description": "升到下一级所需经验（≥ 1）"
+            "description": "升到下一级所需经验"
           },
           "maxHp": {
             "type": "number",
@@ -21256,14 +22678,14 @@
           },
           "maxMp": {
             "type": "number",
-            "description": "魔法上限（裸属性）"
+            "description": "魔法上限（= 生命上限 × 0.5）"
           },
           "hpRecover": {
             "type": "number",
-            "description": "每秒回血（裸属性）"
+            "description": "每秒回血（= 生命上限 ÷ 100，四舍五入）"
           },
           "physicalAttack": {
-            "description": "物攻区间",
+            "description": "物攻区间（三系攻同值）",
             "allOf": [
               {
                 "$ref": "#/components/schemas/ConfigAttributeRangeDto"
@@ -21287,7 +22709,7 @@
             ]
           },
           "physicalDefense": {
-            "description": "物防区间",
+            "description": "物防区间（三系防同值）",
             "allOf": [
               {
                 "$ref": "#/components/schemas/ConfigAttributeRangeDto"
@@ -21309,10 +22731,6 @@
                 "$ref": "#/components/schemas/ConfigAttributeRangeDto"
               }
             ]
-          },
-          "updatedAt": {
-            "type": "number",
-            "description": "最近更新时间（毫秒）"
           }
         },
         "required": [
@@ -21326,80 +22744,8 @@
           "taoistAttack",
           "physicalDefense",
           "magicDefense",
-          "taoistDefense",
-          "updatedAt"
+          "taoistDefense"
         ]
-      },
-      "RoleLevelPageDto": {
-        "type": "object",
-        "properties": {
-          "total": {
-            "type": "number",
-            "description": "总条数",
-            "example": 42
-          },
-          "page": {
-            "type": "number",
-            "description": "当前页码（从 1 开始）",
-            "example": 1
-          },
-          "size": {
-            "type": "number",
-            "description": "每页条数",
-            "example": 20
-          },
-          "list": {
-            "description": "当前页的角色等级",
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/RoleLevelDto"
-            }
-          }
-        },
-        "required": [
-          "total",
-          "page",
-          "size",
-          "list"
-        ]
-      },
-      "RoleLevelQueryDto": {
-        "type": "object",
-        "properties": {
-          "page": {
-            "type": "number",
-            "description": "页码，从 1 开始",
-            "example": 1,
-            "default": 1,
-            "minimum": 1
-          },
-          "size": {
-            "type": "number",
-            "description": "每页条数（1~100）",
-            "example": 20,
-            "default": 20,
-            "minimum": 1,
-            "maximum": 100
-          },
-          "keyword": {
-            "type": "string",
-            "description": "关键字：按等级号模糊匹配"
-          },
-          "sort": {
-            "type": "string",
-            "description": "排序字段（取值见各接口说明，未登记的值会退回默认排序）",
-            "example": "createdAt"
-          },
-          "order": {
-            "type": "string",
-            "description": "排序方向：asc 升序 / desc 降序",
-            "enum": [
-              "asc",
-              "desc"
-            ],
-            "default": "desc"
-          }
-        }
       },
       "GrowthScalarDto": {
         "type": "object",
@@ -24948,92 +26294,6 @@
           }
         }
       },
-      "LevelDto": {
-        "type": "object",
-        "properties": {
-          "level": {
-            "type": "number",
-            "description": "等级（1 起，连续到 roleMaxLevel）"
-          },
-          "maxHp": {
-            "type": "number",
-            "description": "生命上限（裸属性）"
-          },
-          "maxMp": {
-            "type": "number",
-            "description": "魔法上限（= maxHp × mpRate）"
-          },
-          "hpRecover": {
-            "type": "number",
-            "description": "每秒回血（裸属性）"
-          },
-          "physicalAttack": {
-            "description": "物攻区间",
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/ConfigAttributeRangeDto"
-              }
-            ]
-          },
-          "magicAttack": {
-            "description": "魔攻区间",
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/ConfigAttributeRangeDto"
-              }
-            ]
-          },
-          "taoistAttack": {
-            "description": "道攻区间",
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/ConfigAttributeRangeDto"
-              }
-            ]
-          },
-          "physicalDefense": {
-            "description": "物防区间",
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/ConfigAttributeRangeDto"
-              }
-            ]
-          },
-          "magicDefense": {
-            "description": "魔防区间",
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/ConfigAttributeRangeDto"
-              }
-            ]
-          },
-          "taoistDefense": {
-            "description": "道防区间",
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/ConfigAttributeRangeDto"
-              }
-            ]
-          },
-          "exp": {
-            "type": "number",
-            "description": "升到下一级所需经验（`role_levels.exp` 的最终值）"
-          }
-        },
-        "required": [
-          "level",
-          "maxHp",
-          "maxMp",
-          "hpRecover",
-          "physicalAttack",
-          "magicAttack",
-          "taoistAttack",
-          "physicalDefense",
-          "magicDefense",
-          "taoistDefense",
-          "exp"
-        ]
-      },
       "AchievementConditionDto": {
         "type": "object",
         "properties": {
@@ -25613,6 +26873,20 @@
               "$ref": "#/components/schemas/DrugDto"
             }
           },
+          "moneyItems": {
+            "description": "货币物品（#785：绑定元宝 / 元宝 / 银子 × 各档面值）。使用后直接给角色账本入账 —— 金额与货币类型读服务端表，客户端只负责陈列与「用哪一格」",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MoneyItemDto"
+            }
+          },
+          "levelScrolls": {
+            "description": "升级卷轴（#787：使用后硬性 +1 级，带等级区间 minLevel ~ maxLevel）。区间与 +1 的判定读服务端表，客户端只用区间做本地预检与陈列",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LevelScrollDto"
+            }
+          },
           "items": {
             "description": "物品与材料配置（MATERIAL / OTHER 大类）",
             "type": "array",
@@ -25648,11 +26922,11 @@
               "$ref": "#/components/schemas/FashionDto"
             }
           },
-          "levels": {
-            "description": "等级表（#655：1..roleMaxLevel 每级的裸属性与升级经验）。**客户端不再自己派生** —— `role_levels` 一行就是一级的最终值（属性与 exp 都在同一行，管理端可改）；客户端 levelMap 整表由这段填充，曲线与换算比率都不再下发",
+          "levelCurves": {
+            "description": "等级曲线（#786：4 条 × 6 段 = 24 行，定义 1..100 万级）。**等级不再逐级下发** —— 逐级表在 100 万级要 250MB JSON。客户端按下发顺序自建曲线表，用 `levelConfigOf(level)` 按需求值（与服务端 `common/constants/role-level-curve.ts` 同一套公式）；派生列（蓝 / 回血 / 攻防下限）两端各自按同一比例算",
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/LevelDto"
+              "$ref": "#/components/schemas/LevelCurveDto"
             }
           },
           "growthScalars": {
@@ -25798,12 +27072,14 @@
           "ranks",
           "equipments",
           "drugs",
+          "moneyItems",
+          "levelScrolls",
           "items",
           "monsters",
           "monsterPresentations",
           "npcs",
           "fashions",
-          "levels",
+          "levelCurves",
           "growthScalars",
           "combatWeights",
           "mallCategories",

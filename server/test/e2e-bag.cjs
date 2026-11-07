@@ -191,10 +191,9 @@ async function registerAdmin(baseUrl, username, password) {
 
 /** 属性与门槛的出厂值来源：配置快照（#655 后数据只有库里一份，快照是它的逐行投影） */
 const snap = require("./lib/config-snapshot.cjs");
-/** 裸模血量逐级不同 —— 等级表在 `role_levels`，别拿 1 级那份去比 10 级 */
-const roleLevels = snap.index("role_levels", "level");
-const BARE_MAX_HP = roleLevels[1].maxHp;
-const BARE_MAX_HP_AT_10 = roleLevels[10].maxHp;
+/** 裸模血量逐级不同 —— 等级曲线的 `hp` 那一条决定它，别拿 1 级那份去比 10 级 */
+const BARE_MAX_HP = snap.curveValue("hp", 1);
+const BARE_MAX_HP_AT_10 = snap.curveValue("hp", 10);
 /** 装备属性也在库里逐条展开（基础件 = 前后缀都为 0 的那一行） */
 const equipBases = snap.index("equipments");
 const CLOTH_1_MAX_HP = equipBases["cloth_1"].maxHp;

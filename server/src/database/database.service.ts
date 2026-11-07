@@ -5,6 +5,9 @@ import { dirname } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { AdminRole } from "../common/constants/permission";
 import { AnnouncementLevel } from "../common/constants/announcement";
+import { MONEY_ITEM_SEEDS } from "../common/constants/money-items";
+import { LEVEL_SCROLL_SEEDS } from "../common/constants/level-scrolls";
+import { ROLE_LEVEL_CURVE_SEEDS } from "../common/constants/role-level-curve";
 import { bootstrapConfigSnapshot } from "./config-snapshot";
 
 /** 可绑定的参数值（node:sqlite 支持的类型） */
@@ -481,30 +484,26 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
         updated_at           INTEGER NOT NULL DEFAULT 0
       );
 
-      -- 角色等级表（#655）：一行 = 一个等级的**最终裸属性 + 升级经验**。
-      -- 这是「移除成长曲线」后的唯一书写处：曲线（growth_segments）不再参与运行时，
-      -- 60 行数值由 server/scripts/migrate-derived-tables.cjs 一次性展开写入，
-      -- 之后只由管理端「角色等级」页逐行改。运行时 / 快照都只读这张表。
-      CREATE TABLE IF NOT EXISTS role_levels (
-        level                INTEGER PRIMARY KEY,
-        exp                  INTEGER NOT NULL DEFAULT 1,
-        max_hp               INTEGER NOT NULL DEFAULT 0,
-        max_mp               INTEGER NOT NULL DEFAULT 0,
-        hp_recover           INTEGER NOT NULL DEFAULT 0,
-        physical_attack_min  INTEGER NOT NULL DEFAULT 0,
-        physical_attack_max  INTEGER NOT NULL DEFAULT 0,
-        magic_attack_min     INTEGER NOT NULL DEFAULT 0,
-        magic_attack_max     INTEGER NOT NULL DEFAULT 0,
-        taoist_attack_min    INTEGER NOT NULL DEFAULT 0,
-        taoist_attack_max    INTEGER NOT NULL DEFAULT 0,
-        physical_defense_min INTEGER NOT NULL DEFAULT 0,
-        physical_defense_max INTEGER NOT NULL DEFAULT 0,
-        magic_defense_min    INTEGER NOT NULL DEFAULT 0,
-        magic_defense_max    INTEGER NOT NULL DEFAULT 0,
-        taoist_defense_min   INTEGER NOT NULL DEFAULT 0,
-        taoist_defense_max   INTEGER NOT NULL DEFAULT 0,
-        updated_at           INTEGER NOT NULL DEFAULT 0
+      -- 角色等级曲线（#786）：一行 = 一条曲线（exp / hp / attack_max / defense_max）的一段。
+      -- 公式：value(level) = start_value + per_level*k + accel*k*(k-1)/2（k = level - from_level）。
+      -- 4 条 × 6 段 = 24 行就定义了 1..100 万级 —— #786 起**不再逐级存表**：
+      -- 旧的 role_levels（60 行）已删除，逐级存 100 万行要 60MB 库 / 1.5GB 快照，不可行。
+      -- 求值在 common/constants/role-level-curve.ts（服务端与生成脚本共用同一份）。
+      CREATE TABLE IF NOT EXISTS role_level_curves (
+        curve       TEXT    NOT NULL,
+        seq         INTEGER NOT NULL,
+        from_level  INTEGER NOT NULL,
+        to_level    INTEGER NOT NULL,
+        start_value INTEGER NOT NULL DEFAULT 0,
+        per_level   INTEGER NOT NULL DEFAULT 0,
+        accel       INTEGER NOT NULL DEFAULT 0,
+        updated_at  INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (curve, seq)
       );
+
+      -- #786：逐级表已废弃（等级改由曲线派生）。存量库把这张表删掉 ——
+      -- 留着它没有读方，但会让人以为「改这里有用」。
+      DROP TABLE IF EXISTS role_levels;
 
       -- 装备变体表（#655）：一行 = 一件**具体可掉落/可穿戴**的装备（基础件 × 前后缀，
       -- 基础件数 × 15 行）。这是「移除变体倍率」后的唯一书写处：不再由基础件乘倍率现算，
@@ -536,8 +535,8 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
       CREATE INDEX IF NOT EXISTS idx_equipment_variants_base ON equipment_variants(base_id);
 
       -- 成长标量（#256）：等级上限 / 区间倍率 / 经验节奏 / 回蓝这类**非曲线**参数。
-      -- 曲线（growth_segments）与旧经验表（level_exps）已在 #655 删除 —— 经验并进
-      -- role_levels.exp，属性逐级写在 role_levels，运行时不再采样插值。
+      -- #786 起等级本身也回到曲线（role_level_curves）：这里是「全线一个数」的那几个，
+      -- 每级涨多少由曲线段决定。
       CREATE TABLE IF NOT EXISTS growth_scalars (
         key         TEXT PRIMARY KEY,
         value       REAL    NOT NULL,
@@ -681,6 +680,33 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
         updated_at   INTEGER NOT NULL DEFAULT 0
       );
 
+      -- 货币物品（#785）：使用后直接给角色账本入账（gold / bindGold / silver）
+      -- 与药品 / 物品不同，**可以增删行** —— 面值由运营在「货币物品」页自己开
+      CREATE TABLE IF NOT EXISTS money_items (
+        id          TEXT    PRIMARY KEY,
+        label       TEXT    NOT NULL DEFAULT '',
+        description TEXT    NOT NULL DEFAULT '',
+        icon        TEXT    NOT NULL DEFAULT '',
+        currency    TEXT    NOT NULL DEFAULT 'silver',
+        amount      INTEGER NOT NULL DEFAULT 0,
+        max_stack   INTEGER NOT NULL DEFAULT 999,
+        sell_price  INTEGER NOT NULL DEFAULT 0,
+        updated_at  INTEGER NOT NULL DEFAULT 0
+      );
+
+      -- 升级卷轴（#787）：使用后硬性 +1 级，带等级区间（min_level ~ max_level）
+      -- 与货币物品同一取向 —— **可以增删行**：等级上限调大后运营自己再开一卷
+      CREATE TABLE IF NOT EXISTS level_scrolls (
+        id          TEXT    PRIMARY KEY,
+        label       TEXT    NOT NULL DEFAULT '',
+        description TEXT    NOT NULL DEFAULT '',
+        icon        TEXT    NOT NULL DEFAULT '',
+        min_level   INTEGER NOT NULL DEFAULT 1,
+        max_level   INTEGER NOT NULL DEFAULT 1,
+        max_stack   INTEGER NOT NULL DEFAULT 999,
+        sell_price  INTEGER NOT NULL DEFAULT 0,
+        updated_at  INTEGER NOT NULL DEFAULT 0
+      );
       -- 怪物基础数据（#258）：主键是怪物 key（configs/monster 的关联键），清单固定不可增删行；
       -- 战斗数值 seed 自生成物 MONSTERS，世界播种与伤害结算直读本表（改值即时生效）
       CREATE TABLE IF NOT EXISTS monsters (
@@ -1229,6 +1255,125 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
     this.ensureColumn("runtime_params", "monster_ai", "TEXT NOT NULL DEFAULT '{}'");
     this.migrateLegacyMallPricing();
     this.ensureSuperAdmin();
+    this.seedMoneyItemsOnce();
+    this.seedLevelScrollsOnce();
+    this.seedLevelCurvesOnce();
+  }
+
+  /**
+   * 存量库补「货币物品」出厂 24 条（#785）
+   *
+   * 这张表是后加的：已经跑过很久的库不会再自举（`config_meta.bootstrap_at` 有值），
+   * 只改 `config-sync.sql` 的话存量库重启后表是空的 —— 管理端「货币物品」页空白、
+   * 玩家用货币道具也入不了账，而且没有任何报错。
+   *
+   * **只跑一次**，靠 `config_meta` 的 marker 判定：否则运营删掉一条面值，下次重启它又回来了
+   * （INSERT OR IGNORE 只在「已存在」时跳过，管不了「被删过」）。空库不用管 ——
+   * `config_meta` 还不存在时直接跳过，随后自举会把快照整份灌进去（DELETE + INSERT）。
+   */
+  private seedMoneyItemsOnce(): void {
+    const hasMeta =
+      this.count("SELECT COUNT(1) AS total FROM sqlite_master WHERE type = 'table' AND name = 'config_meta'") > 0;
+    if (!hasMeta) return;
+    if (this.get<{ value: string }>("SELECT value FROM config_meta WHERE key = ?", ["money_items_seeded"])) return;
+    let added = 0;
+    // 时间戳取补数据这一刻：管理端「更新时间」列显示 —（1970）会被当成 bug 来报
+    const now = Date.now();
+    for (const item of MONEY_ITEM_SEEDS) {
+      added += this.execute(
+        `INSERT OR IGNORE INTO money_items
+           (id, label, description, icon, currency, amount, max_stack, sell_price, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [item.id, item.label, item.description, item.icon, item.currency, item.amount, item.maxStack, item.sellPrice, now],
+      ).changes;
+    }
+    this.run("INSERT OR REPLACE INTO config_meta (key, value) VALUES (?, ?)", [
+      "money_items_seeded",
+      `count:${added}`,
+    ]);
+    this.logger.log(`存量库补货币物品出厂数据：新增 ${added} 条`);
+  }
+
+  /**
+   * 存量库补「升级卷轴」出厂 7 卷（#787）
+   *
+   * 与货币物品同一个套路（表是后加的，存量库不会再自举）。漏了的表现是
+   * 管理端「升级卷轴」页空白、玩家拿到卷轴点不动，且没有任何报错。
+   *
+   * **只跑一次**（`config_meta.level_scrolls_seeded`）：否则运营调过的区间 / 删掉的卷
+   * 会在下次重启被出厂值悄悄改回去。
+   */
+  private seedLevelScrollsOnce(): void {
+    const hasMeta =
+      this.count("SELECT COUNT(1) AS total FROM sqlite_master WHERE type = 'table' AND name = 'config_meta'") > 0;
+    if (!hasMeta) return;
+    if (this.get<{ value: string }>("SELECT value FROM config_meta WHERE key = ?", ["level_scrolls_seeded"])) return;
+    let added = 0;
+    const now = Date.now();
+    for (const scroll of LEVEL_SCROLL_SEEDS) {
+      added += this.execute(
+        `INSERT OR IGNORE INTO level_scrolls
+           (id, label, description, icon, min_level, max_level, max_stack, sell_price, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          scroll.id,
+          scroll.label,
+          scroll.description,
+          scroll.icon,
+          scroll.minLevel,
+          scroll.maxLevel,
+          scroll.maxStack,
+          scroll.sellPrice,
+          now,
+        ],
+      ).changes;
+    }
+    this.run("INSERT OR REPLACE INTO config_meta (key, value) VALUES (?, ?)", [
+      "level_scrolls_seeded",
+      `count:${added}`,
+    ]);
+    this.logger.log(`存量库补升级卷轴出厂数据：新增 ${added} 条`);
+  }
+
+  /**
+   * 存量库补「等级曲线」出厂 24 段（#786）
+   *
+   * 与货币物品同一个套路：表是后加的，存量库不会再自举；只改 `config-sync.sql`
+   * 的话重启后 `role_level_curves` 是空的 —— 全服角色属性算成 0、升级永远升不动，
+   * 而且没有任何报错（`refreshAll` 只 warn 一行）。
+   *
+   * **只跑一次**（`config_meta.role_level_curves_seeded`）：否则运营调过的段
+   * 会在下次重启被出厂值悄悄改回去。
+   */
+  private seedLevelCurvesOnce(): void {
+    const hasMeta =
+      this.count("SELECT COUNT(1) AS total FROM sqlite_master WHERE type = 'table' AND name = 'config_meta'") > 0;
+    if (!hasMeta) return;
+    if (this.get<{ value: string }>("SELECT value FROM config_meta WHERE key = ?", ["role_level_curves_seeded"])) return;
+    const now = Date.now();
+    let added = 0;
+    for (const segment of ROLE_LEVEL_CURVE_SEEDS) {
+      added += this.execute(
+        `INSERT OR IGNORE INTO role_level_curves
+           (curve, seq, from_level, to_level, start_value, per_level, accel, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          segment.curve,
+          segment.seq,
+          segment.from_level,
+          segment.to_level,
+          segment.start_value,
+          segment.per_level,
+          segment.accel,
+          now,
+        ],
+      ).changes;
+    }
+    this.run("INSERT OR REPLACE INTO config_meta (key, value) VALUES (?, ?)", [
+      "role_level_curves_seeded",
+      `count:${added}`,
+    ]);
+    this.logger.log(`存量库补等级曲线出厂数据：新增 ${added} 段`);
   }
 
   /**

@@ -14,7 +14,6 @@ import { TitlesPage } from "./pages/TitlesPage";
 import { SoulsPage } from "./pages/SoulsPage";
 import { RanksPage } from "./pages/RanksPage";
 import { EquipmentsPage } from "./pages/EquipmentsPage";
-import { RoleLevelsPage } from "./pages/RoleLevelsPage";
 import { EquipmentSettingsPage } from "./pages/EquipmentSettingsPage";
 import { RuntimeParamsPage } from "./pages/RuntimeParamsPage";
 import { CombatWeightsPage } from "./pages/CombatWeightsPage";
@@ -24,6 +23,8 @@ import { EquipmentTiersPage } from "./pages/EquipmentTiersPage";
 import { EquipAlignPage } from "./pages/EquipAlignPage";
 import { EquipInAlignPage } from "./pages/EquipInAlignPage";
 import { DrugsPage } from "./pages/DrugsPage";
+import { MoneyItemsPage } from "./pages/MoneyItemsPage";
+import { LevelScrollsPage } from "./pages/LevelScrollsPage";
 import { ItemsPage } from "./pages/ItemsPage";
 import { MonstersPage } from "./pages/MonstersPage";
 import { NpcsPage } from "./pages/NpcsPage";
@@ -271,6 +272,22 @@ export function App() {
             }
           />
           <Route
+            path="money-items"
+            element={
+              <RequirePermission permission={PERMISSION.GAME_CONFIG_READ}>
+                <MoneyItemsPage />
+              </RequirePermission>
+            }
+          />
+          <Route
+            path="level-scrolls"
+            element={
+              <RequirePermission permission={PERMISSION.GAME_CONFIG_READ}>
+                <LevelScrollsPage />
+              </RequirePermission>
+            }
+          />
+          <Route
             path="monsters"
             element={
               <RequirePermission permission={PERMISSION.GAME_CONFIG_READ}>
@@ -339,14 +356,6 @@ export function App() {
             element={
               <RequirePermission permission={PERMISSION.GAME_CONFIG_READ}>
                 <DropConfigPage />
-              </RequirePermission>
-            }
-          />
-          <Route
-            path="role-levels"
-            element={
-              <RequirePermission permission={PERMISSION.GAME_CONFIG_READ}>
-                <RoleLevelsPage />
               </RequirePermission>
             }
           />

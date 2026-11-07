@@ -516,13 +516,13 @@ export const routes = {
     /**
      * 成长标量参数列表（GET /admin/growth-scalars）
      *
-     * 可调的数值参数（键 × 说明，**没有创建 / 删除**）：等级上限 / 属性区间倍率 / 经验节奏。
+     * 可调的全局参数（键 × 说明，**没有创建 / 删除**）：等级上限 / 经验节奏 / 自然回蓝 / 泡点。
      */
     list: "/admin/growth-scalars",
     /**
      * 编辑标量参数（PATCH /admin/growth-scalars/{key}）
      *
-     * 只改 `value`；每个键的取值域服务端单独校验：roleMaxLevel ∈ [1, 200]（整数），expGain.expPerLevel ∈ [1, 100000]（整数），expGain.maxLevelGap ∈ [0, 100]（整数），mpRecoverPerSecond ∈ [0, 1000]，soakExpPerTick ∈ [0, 1000000]（整数），soakTickSeconds ∈ [1, 3600]（整数）。
+     * 只改 `value`；每个键的取值域服务端单独校验：roleMaxLevel ∈ [1, 10000000]（整数），expGain.expPerLevel ∈ [1, 100000]（整数），expGain.maxLevelGap ∈ [0, 100]（整数），mpRecoverPerSecond ∈ [0, 1000]，soakExpPerTick ∈ [0, 1000000]（整数），soakTickSeconds ∈ [1, 3600]（整数）。
      */
     update: (key: string) => `/admin/growth-scalars/${encodeURIComponent(key)}`,
   },
@@ -582,6 +582,54 @@ export const routes = {
      * **部分更新**：只改请求体里出现的字段。
      */
     update: (id: string) => `/admin/items/${encodeURIComponent(id)}`,
+  },
+  /** adminLevelCurve 模块（3 个接口） */
+  adminLevelCurve: {
+    /**
+     * 等级曲线段（GET /admin/level-curves）
+     *
+     * 全部曲线段（4 条 × 6 段 = 24 行，**不分页**）。
+     */
+    list: "/admin/level-curves",
+    /**
+     * 编辑曲线段（PATCH /admin/level-curves/{curve}/{seq}）
+     *
+     * **部分更新**：只改传了的字段（`curve` / `seq` / `fromLevel` 不可改）。
+     */
+    update: (curve: string, seq: string) => `/admin/level-curves/${encodeURIComponent(curve)}/${encodeURIComponent(seq)}`,
+    /**
+     * 等级属性计算器（GET /admin/level-curves/preview）
+     *
+     * 输入等级，算出该级的**基础属性**（不含装备 / 称号 / 战魂 / 军衔加成）：
+     */
+    preview: "/admin/level-curves/preview",
+  },
+  /** adminLevelScroll 模块（4 个接口） */
+  adminLevelScroll: {
+    /**
+     * 升级卷轴列表（GET /admin/level-scrolls）
+     *
+     * 出厂 7 卷：Lv1（1~999）/ Lv2（1000~1999）/ … / Lv7（6000~6999）。`keyword` 模糊匹配 id / 名称 / 描述。
+     */
+    list: "/admin/level-scrolls",
+    /**
+     * 新建升级卷轴（一段等级一卷）（POST /admin/level-scrolls）
+     *
+     * **只填等级区间就能建**：`id` / 名称 / 描述 / 图标都可省 —— 区间正好落在出厂切法（1~999 / 1000~1999 / …）时派生 `level_scroll_<卷号>`，否则派生 `level_scroll_<下限>_<上限>`。
+     */
+    create: "/admin/level-scrolls",
+    /**
+     * 删除升级卷轴（DELETE /admin/level-scrolls/{id}）
+     *
+     * 只删配置行。**不碰玩家存档**：背包里还引用这个 id 的格子会变成「认不出的道具」——客户端与结算都只是安静跳过（用不了，也不报错）。
+     */
+    delete: (id: string) => `/admin/level-scrolls/${encodeURIComponent(id)}`,
+    /**
+     * 编辑升级卷轴（PATCH /admin/level-scrolls/{id}）
+     *
+     * **部分更新**：只改请求体里出现的字段。
+     */
+    update: (id: string) => `/admin/level-scrolls/${encodeURIComponent(id)}`,
   },
   /** adminMail 模块（4 个接口） */
   adminMail: {
@@ -760,6 +808,33 @@ export const routes = {
      */
     updateSpawnArea: (id: string, areaId: string) => `/admin/maps/${encodeURIComponent(id)}/spawn-areas/${encodeURIComponent(areaId)}`,
   },
+  /** adminMoneyItem 模块（4 个接口） */
+  adminMoneyItem: {
+    /**
+     * 货币物品列表（GET /admin/money-items）
+     *
+     * 面值表（出厂 3 种货币 × 8 档 = 24 条）。`keyword` 模糊匹配 id / 名称 / 描述；`currency` 只看某种货币（bindGold = 绑定元宝 / gold = 元宝 / silver = 银子）。
+     */
+    list: "/admin/money-items",
+    /**
+     * 新建货币物品（一种货币的一档面值）（POST /admin/money-items）
+     *
+     * **只填货币类型与面值就能建**：`id` / 名称 / 描述 / 图标都可省，缺省按「货币 + 面值」派生（`money_gold_100` / 「元宝（100）」/ `item/currency/gold-100`）。
+     */
+    create: "/admin/money-items",
+    /**
+     * 删除货币物品（DELETE /admin/money-items/{id}）
+     *
+     * 只删配置行。**不碰玩家存档**：背包里还引用这个 id 的格子会变成「认不出的道具」——客户端与结算都只是安静跳过（用不了，也不报错）。
+     */
+    delete: (id: string) => `/admin/money-items/${encodeURIComponent(id)}`,
+    /**
+     * 编辑货币物品（PATCH /admin/money-items/{id}）
+     *
+     * **部分更新**：只改请求体里出现的字段。
+     */
+    update: (id: string) => `/admin/money-items/${encodeURIComponent(id)}`,
+  },
   /** adminMonster 模块（4 个接口） */
   adminMonster: {
     /**
@@ -852,21 +927,6 @@ export const routes = {
      * 按举报时间倒序（新举报在前，同毫秒以 id 兜底，翻页稳定）。
      */
     list: "/admin/reports",
-  },
-  /** adminRoleLevel 模块（2 个接口） */
-  adminRoleLevel: {
-    /**
-     * 角色等级表（GET /admin/role-levels）
-     *
-     * 等级序列固定（1..roleMaxLevel），**没有创建 / 删除**：一行 = 该级的裸属性（血 / 蓝 / 回血 / 六项攻防区间）+ 升级经验。
-     */
-    list: "/admin/role-levels",
-    /**
-     * 编辑角色等级（PATCH /admin/role-levels/{level}）
-     *
-     * **部分更新**：只改传了的字段（等级本身不可改）。
-     */
-    update: (level: string) => `/admin/role-levels/${encodeURIComponent(level)}`,
   },
   /** adminRole 模块（6 个接口） */
   adminRole: {

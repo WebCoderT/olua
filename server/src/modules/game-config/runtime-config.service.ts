@@ -6,8 +6,10 @@ import {
   applyEquipmentVariants,
   applyGrowthScalars,
   applyItemOverrides,
+  applyLevelScrollOverrides,
+  applyMoneyItemOverrides,
   applyRankOverrides,
-  applyRoleLevels,
+  applyRoleLevelCurves,
   applySkillOverrides,
   applySoulOverrides,
   applyTitleOverrides,
@@ -17,8 +19,10 @@ import { EquipmentVariantRepository } from "../../database/repositories/equipmen
 import { EquipmentRepository } from "../../database/repositories/equipment.repository";
 import { GrowthRepository } from "../../database/repositories/growth.repository";
 import { ItemRepository } from "../../database/repositories/item.repository";
+import { LevelScrollRepository } from "../../database/repositories/level-scroll.repository";
+import { MoneyItemRepository } from "../../database/repositories/money-item.repository";
 import { RankRepository } from "../../database/repositories/rank.repository";
-import { RoleLevelRepository } from "../../database/repositories/role-level.repository";
+import { RoleLevelCurveRepository } from "../../database/repositories/role-level-curve.repository";
 import { SkillRepository } from "../../database/repositories/skill.repository";
 import { SoulRepository } from "../../database/repositories/soul.repository";
 import { TitleRepository } from "../../database/repositories/title.repository";
@@ -52,13 +56,15 @@ export class RuntimeConfigService implements OnApplicationBootstrap {
   constructor(
     private readonly equipments: EquipmentRepository,
     private readonly equipmentVariants: EquipmentVariantRepository,
-    private readonly roleLevels: RoleLevelRepository,
+    private readonly levelCurves: RoleLevelCurveRepository,
     private readonly titles: TitleRepository,
     private readonly souls: SoulRepository,
     private readonly ranks: RankRepository,
     private readonly skills: SkillRepository,
     private readonly drugs: DrugRepository,
     private readonly items: ItemRepository,
+    private readonly moneyItems: MoneyItemRepository,
+    private readonly levelScrolls: LevelScrollRepository,
     private readonly growth: GrowthRepository,
   ) {}
 
@@ -76,39 +82,44 @@ export class RuntimeConfigService implements OnApplicationBootstrap {
     const silent = options?.silent === true;
     const equipments = this.equipments.list({ ...ALL });
     const variants = this.equipmentVariants.listAll();
-    const roleLevels = this.roleLevels.listAll();
+    const levelCurves = this.levelCurves.listAll();
     const titles = this.titles.list({ ...ALL });
     const souls = this.souls.list({ ...ALL });
     const ranks = this.ranks.list({ ...ALL });
     const skills = this.skills.listAll();
     const drugs = this.drugs.list({ ...ALL });
     const items = this.items.list({ ...ALL });
+    const moneyItems = this.moneyItems.listAll();
+    const levelScrolls = this.levelScrolls.listAll();
     const scalars = this.growth.listScalars({ ...ALL });
 
     applyEquipmentBases(equipments);
     applyEquipmentSlotKeys(this.equipments.listSlots());
     applyEquipmentVariants(variants);
-    applyRoleLevels(roleLevels);
+    applyRoleLevelCurves(levelCurves);
     applyTitleOverrides(titles);
     applySoulOverrides(souls);
     applyRankOverrides(ranks);
     applySkillOverrides(skills);
     applyDrugOverrides(drugs);
     applyItemOverrides(items);
+    applyMoneyItemOverrides(moneyItems);
+    applyLevelScrollOverrides(levelScrolls);
     applyGrowthScalars(scalars);
 
     // 只记条数不记值：出问题时第一件事就是确认「结算层里到底装没装上」（定期重装静默跳过）
     if (!silent)
       this.logger.log(
-        `运营配置已装载：装备 ${equipments.length} 件 / 变体 ${variants.length} 件 · 角色等级 ${roleLevels.length} 级 · ` +
+        `运营配置已装载：装备 ${equipments.length} 件 / 变体 ${variants.length} 件 · 等级曲线 ${levelCurves.length} 段 · ` +
           `称号 ${titles.length} 级 · 战魂 ${souls.length} 阶 · 军衔 ${ranks.length} 阶 · ` +
-          `技能 ${skills.length} 个 · 药品 ${drugs.length} 种 · 材料 ${items.length} 种 · 成长标量 ${scalars.length} 项`,
+          `技能 ${skills.length} 个 · 药品 ${drugs.length} 种 · 货币道具 ${moneyItems.length} 种 · 升级卷轴 ${levelScrolls.length} 卷 · ` +
+          `材料 ${items.length} 种 · 成长标量 ${scalars.length} 项`,
       );
     // 空表 = 出厂快照没灌进来（`server/data/config-sync.sql`）。必须喊出来：
     // #655 之后没有「回落生成物」这回事了，空表就是「没配」，属性会算成 0
     this.warnIfEmpty("equipments", equipments.length);
     this.warnIfEmpty("equipment_variants", variants.length);
-    this.warnIfEmpty("role_levels", roleLevels.length);
+    this.warnIfEmpty("role_level_curves", levelCurves.length);
     this.warnIfEmpty("growth_scalars", scalars.length);
   }
 

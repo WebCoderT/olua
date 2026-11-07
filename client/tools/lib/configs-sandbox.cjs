@@ -169,10 +169,12 @@ function hydrateSnapshotTables(outDir) {
   equipmentsMod.applyEquipmentQualityLabels(meta.prefixLabels, meta.suffixLabels, meta.prefixColors, meta.suffixColors);
   equipmentsMod.applyEquipmentSlots(factory.equipmentSlots());
 
-  // 内容表一次落完（装备 → 药品 → 材料 → 怪物 → NPC → 任务 → 时装），末尾自带 rebuildItemIndex
+  // 内容表一次落完（装备 → 药品 → 货币 → 卷轴 → 材料 → 怪物 → NPC → 任务 → 时装），末尾自带 rebuildItemIndex
   snap.applyContentSnapshot({
     equipments: factory.equipmentVariants(),
     drugs: factory.drugs(),
+    moneyItems: factory.moneyItems(),
+    levelScrolls: factory.levelScrolls(),
     items: factory.items(),
     monsters: factory.monsters(),
     monsterPresentations: factory.monsterPresentations(),
@@ -204,14 +206,14 @@ function seedRuntimeTables(outDir) {
   // 产物里没有它说明这条测试链根本不消费这些表，直接返回 null（调用方各自按需断言）
   const has = (rel) => fs.existsSync(path.join(outDir, rel));
   if (!has("configs/game-config.js")) {
-    return { levelMap: null, titleLevels: null, soulLevels: null, rankLevels: null };
+    return { levelConfigOf: null, levelCurves: null, titleLevels: null, soulLevels: null, rankLevels: null };
   }
   const factory = require("./factory-data.cjs");
   const cfg = require(path.join(outDir, "configs/game-config.js"));
 
   require(path.join(outDir, "configs/apply-snapshot.js")).applyGrowthSnapshot({
     growthScalars: Object.entries(factory.growthScalars()).map(([key, value]) => ({ key, value })),
-    levels: factory.levels(),
+    levelCurves: factory.levelCurves(),
   });
   cfg.applyTitleRows(factory.titles());
   cfg.applySoulRows(factory.souls());
@@ -222,7 +224,8 @@ function seedRuntimeTables(outDir) {
   // 「#590 起客户端零数据」的运行时表。
 
   return {
-    levelMap: cfg.levelMap,
+    levelConfigOf: cfg.levelConfigOf,
+    levelCurves: cfg.levelCurves,
     titleLevels: cfg.titleLevels,
     soulLevels: cfg.soulLevels,
     rankLevels: cfg.rankLevels,

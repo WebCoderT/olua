@@ -12,12 +12,16 @@ import {
   isEquipmentSlot,
   itemBaseOf,
   itemTypeOf,
+  roleLevelExpOf,
   sellPriceOf,
 } from "../../common/runtime-config-cache";
 import { AccountRepository } from "../../database/repositories/account.repository";
 import { DrugRepository } from "../../database/repositories/drug.repository";
+import { MoneyItemRepository } from "../../database/repositories/money-item.repository";
+import { LevelScrollRepository } from "../../database/repositories/level-scroll.repository";
 import { FashionRepository } from "../../database/repositories/fashion.repository";
 import { AcquireChannel } from "../../common/constants/game-config";
+import { MONEY_KINDS, MoneyKind } from "../../common/constants/money-items";
 import { GrowthRepository } from "../../database/repositories/growth.repository";
 import { RankRepository } from "../../database/repositories/rank.repository";
 import { RoleRepository } from "../../database/repositories/role.repository";
@@ -27,6 +31,8 @@ import { AccountRow, RankRow, RoleRow, SoulRow, TitleRow } from "../../database/
 import { CreateRoleDto, SaveRoleDto } from "./dto/create-role.dto";
 import { BagOpDto, BagOpResultDto } from "./dto/bag-op.dto";
 import { DrugUseDto, DrugUseResultDto } from "./dto/drug-use.dto";
+import { MoneyUseDto, MoneyUseResultDto } from "./dto/money-use.dto";
+import { LevelScrollUseDto, LevelScrollUseResultDto } from "./dto/level-scroll-use.dto";
 import { GrowthUpgradeDto, GrowthKind } from "./dto/growth-upgrade.dto";
 import { GrowthUpgradeResultDto, RoleDto, RoleSummaryDto } from "./dto/role.dto";
 import { MallPurchaseDto, MallPurchaseResultDto } from "./dto/mall-purchase.dto";
@@ -84,6 +90,10 @@ export class RolesService {
     private readonly drugs: DrugRepository,
     private readonly fashions: FashionRepository,
     private readonly growth: GrowthRepository,
+    /** 货币道具（#785）：使用结算读库里的面值与币种 —— 运营改完立刻生效 */
+    private readonly moneyItems: MoneyItemRepository,
+    /** 升级卷轴（#787）：使用结算读库里的等级区间 —— 运营改完立刻生效 */
+    private readonly levelScrolls: LevelScrollRepository,
   ) {}
 
   /** 当前账号的角色列表（按创建时间升序，与客户端站位顺序一致） */
@@ -714,6 +724,153 @@ export class RolesService {
   }
 
   /**
+   * 货币道具使用（玩家侧 #785）：入账与扣减都在服务端
+   *
+   * 三种货币直接对应角色存档的三个账本字段（`role-authority.ts` 的 `SERVER_LEDGER_FIELDS`）：
+   * `gold` / `bindGold` / `silver`。客户端只报「用背包哪一格」，**金额与币种一律读
+   * `money_items` 表** —— 运营把 100000 改成 1，玩家下次使用就只加 1，改包也改不出钱。
+   *
+   * 与用药的区别：不结算血蓝、不判「已满」、无冷却（货币道具是「点一下就到账」）。
+   *
+   * 失败路径：20023 格子为空 / 格子里不是货币道具 / 该行没有配置入账金额；
+   * 带上 revision 时乐观锁语义与 role.save 相同（20006）；被踢下线 20007。
+   */
+  useMoneyItem(accountId: string, roleId: string, dto: MoneyUseDto): MoneyUseResultDto {
+    const account = this.mustAccount(accountId);
+    const existing = this.mustOwnRole(accountId, roleId);
+    // 与用药 / 购买同一纪律：被踢下线的角色不能继续写
+    if (account.online_role_id !== roleId) {
+      throw BizException.conflict(BizCode.ROLE_KICKED, "该角色已被管理员下线，请重新选择角色进入游戏");
+    }
+    if (dto.revision !== undefined && dto.revision !== existing.revision) {
+      throw BizException.conflict(BizCode.ROLE_REVISION_CONFLICT, "该角色已在别处被修改，请先同步最新数据");
+    }
+
+    const data = decodeStoredRoleData(existing.data);
+    const cell = this.readBagCell(
+      data,
+      dto.row,
+      dto.col,
+      BizCode.MONEY_ITEM_USE_TARGET_INVALID,
+      "该格子为空，没有可使用的货币道具",
+    );
+    const item = this.moneyItems.findByKey(cell.id);
+    if (!item) {
+      throw BizException.conflict(BizCode.MONEY_ITEM_USE_TARGET_INVALID, "该格子不是可使用的货币道具");
+    }
+    if (!(MONEY_KINDS as readonly string[]).includes(item.currency)) {
+      // 库里存了三种之外的币种（手改库 / 老数据）→ 拒用而不是往一个不存在的字段上写钱
+      throw BizException.conflict(BizCode.MONEY_ITEM_USE_TARGET_INVALID, "该货币道具的币种不合法");
+    }
+    const currency = item.currency as MoneyKind;
+    const amount = Math.max(0, Math.floor(Number(item.amount) || 0));
+    if (amount <= 0) {
+      throw BizException.conflict(BizCode.MONEY_ITEM_USE_TARGET_INVALID, "该货币道具没有配置入账金额");
+    }
+
+    // 入账（负数存量按 0 起算 —— 与升级 / 购买处的账本读法同一式）
+    const balance = Math.max(0, Math.floor(Number(data[currency]) || 0)) + amount;
+    data[currency] = balance;
+
+    // 扣减格子数量（可叠加，减到 0 清格；格子对象整个换新，避免共享引用）
+    const remaining = Math.max(1, cell.count) - 1;
+    const bagLine = (data.bag as unknown[][])[dto.row] as (Record<string, unknown> | null)[];
+    bagLine[dto.col] = remaining > 0 ? { id: cell.id, count: remaining } : null;
+
+    const row: RoleRow = {
+      ...existing,
+      data: JSON.stringify(data),
+      revision: existing.revision + 1,
+      updated_at: Date.now(),
+    };
+    this.roles.replace(row);
+    return MoneyUseResultDto.fromRow(row, account.online_role_id, item.id, currency, amount, balance);
+  }
+
+  /**
+   * 升级卷轴使用（玩家侧 #787）：**硬性 +1 级**，不扣经验
+   *
+   * 与经验升级的区别就在「不看 `exp` 够不够」：攒够不够是运营的另一条线（打怪 / 泡点），
+   * 卷轴是花钱买的一级 —— 所以经验原样保留（下次打怪入账时继续按曲线判定），也不清零。
+   *
+   * 三条判定，顺序有意义：
+   * 1. **区间**（`min_level ~ max_level`，读库，改完立刻生效）：Lv1 用完正好到 1000 级，
+   *    再点就是 20025「该换卷了」—— 这是卷轴的核心规则，不是配错；
+   * 2. **等级上限**（`roleMaxLevel`）：到顶了给 20026（「抬上限」与「加卷轴」是两件事，
+   *    运维看到码要知道去改哪个）；
+   * 3. 属性重算 + 补满血蓝：与击杀侧 `refillOnLevelUp` 同一惯例（升级就该满血满蓝），
+   *    血蓝上限也跟着新等级走。
+   *
+   * 失败路径：20024 格子为空 / 不是升级卷轴 / 区间配置不合法；20025 等级不在区间内；
+   * 20026 已到等级上限；带 revision 时乐观锁与 role.save 同义（20006）；被踢下线 20007。
+   */
+  useLevelScroll(accountId: string, roleId: string, dto: LevelScrollUseDto): LevelScrollUseResultDto {
+    const account = this.mustAccount(accountId);
+    const existing = this.mustOwnRole(accountId, roleId);
+    // 与用药 / 用货币道具 / 购买同一纪律：被踢下线的角色不能继续写
+    if (account.online_role_id !== roleId) {
+      throw BizException.conflict(BizCode.ROLE_KICKED, "该角色已被管理员下线，请重新选择角色进入游戏");
+    }
+    if (dto.revision !== undefined && dto.revision !== existing.revision) {
+      throw BizException.conflict(BizCode.ROLE_REVISION_CONFLICT, "该角色已在别处被修改，请先同步最新数据");
+    }
+
+    const data = decodeStoredRoleData(existing.data);
+    const cell = this.readBagCell(
+      data,
+      dto.row,
+      dto.col,
+      BizCode.LEVEL_SCROLL_USE_TARGET_INVALID,
+      "该格子为空，没有可使用的升级卷轴",
+    );
+    const scroll = this.levelScrolls.findByKey(cell.id);
+    if (!scroll) {
+      throw BizException.conflict(BizCode.LEVEL_SCROLL_USE_TARGET_INVALID, "该格子不是可使用的升级卷轴");
+    }
+
+    const fromLevel = Math.max(1, Math.floor(existing.level));
+    const minLevel = Math.floor(Number(scroll.min_level) || 0);
+    const maxLevel = Math.floor(Number(scroll.max_level) || 0);
+    // 区间本身坏掉（手改库 / 老数据 0 值）→ 拒用而不是「任何等级都能用」
+    if (minLevel < 1 || maxLevel < minLevel) {
+      throw BizException.conflict(BizCode.LEVEL_SCROLL_USE_TARGET_INVALID, "该升级卷轴的等级区间配置不合法");
+    }
+    if (fromLevel < minLevel || fromLevel > maxLevel) {
+      throw BizException.conflict(
+        BizCode.LEVEL_SCROLL_LEVEL_OUT_OF_RANGE,
+        `「${scroll.label}」只能在 ${minLevel} ~ ${maxLevel} 级使用（当前 ${fromLevel} 级）`,
+      );
+    }
+
+    const cap = this.roleMaxLevel();
+    if (fromLevel >= cap) {
+      throw BizException.conflict(BizCode.LEVEL_SCROLL_MAX_LEVEL_REACHED, `已达到等级上限（${cap} 级），升级卷轴用不了`);
+    }
+
+    const toLevel = fromLevel + 1;
+    const exp = Math.max(0, Math.floor(Number(data.exp) || 0));
+    // 等级变了属性就变：服务端重算写回存档（权威值），血蓝按升级惯例补满
+    this.applyAuthoritativeAttributes(toLevel, data);
+    data.hp = typeof data.maxHp === "number" ? data.maxHp : data.hp;
+    data.mp = typeof data.maxMp === "number" ? data.maxMp : data.mp;
+
+    // 扣减格子数量（可叠加，减到 0 清格；格子对象整个换新，避免共享引用）
+    const remaining = Math.max(1, cell.count) - 1;
+    const bagLine = (data.bag as unknown[][])[dto.row] as (Record<string, unknown> | null)[];
+    bagLine[dto.col] = remaining > 0 ? { id: cell.id, count: remaining } : null;
+
+    const row: RoleRow = {
+      ...existing,
+      level: toLevel,
+      data: JSON.stringify(data),
+      revision: existing.revision + 1,
+      updated_at: Date.now(),
+    };
+    this.roles.replace(row);
+    return LevelScrollUseResultDto.fromRow(row, account.online_role_id, scroll.id, fromLevel, exp, this.expNeedOf(toLevel));
+  }
+
+  /**
    * 背包与穿戴（#556）：穿戴 / 卸下 / 丢弃 / 整理 / 搬运五个动作共用一条写路径
    *
    * **为什么这五个动作要收到服务端**：`bag` / `equipments` 从这一版起进权威清单
@@ -818,12 +975,18 @@ export class RolesService {
   }
 
   /** 读存档背包网格的指定格子（网格不是数组 / 坐标越界 / 格子为空 → 同一个 20013 失败语义） */
-  private readBagCell(data: Record<string, unknown>, row: number, col: number): { id: string; count: number } {
+  private readBagCell(
+    data: Record<string, unknown>,
+    row: number,
+    col: number,
+    code: number = BizCode.DRUG_USE_TARGET_INVALID,
+    message = "该格子为空，没有可使用的药品",
+  ): { id: string; count: number } {
     const bag = data.bag;
     const line = Array.isArray(bag) ? (bag as unknown[])[row] : undefined;
     const cell = Array.isArray(line) ? (line as unknown[])[col] : undefined;
     if (!cell || typeof cell !== "object" || typeof (cell as Record<string, unknown>).id !== "string") {
-      throw BizException.conflict(BizCode.DRUG_USE_TARGET_INVALID, "该格子为空，没有可使用的药品");
+      throw BizException.conflict(code, message);
     }
     const record = cell as Record<string, unknown>;
     return { id: record.id as string, count: Math.max(1, Math.floor(Number(record.count) || 1)) };
@@ -1250,7 +1413,9 @@ export class RolesService {
   }
 
   private expNeedOf(level: number): number {
-    return Math.max(0, Math.floor(Number(this.growth.findLevelExp(level)?.exp) || 0));
+    // #786：经验来自等级曲线（`exp` 那条），不再有 `role_levels` 逐级行。
+    // 走内存里的曲线投影（升级循环里每级问一次，不能每级一条 SELECT）。
+    return Math.max(0, Math.floor(Number(roleLevelExpOf(level)) || 0));
   }
 
   /** 等级上限（growth_scalars 表，管理端可改；表里没有就按 1 级算，宁可卡住也不凭空放大） */
@@ -1282,9 +1447,9 @@ export class RolesService {
    * 保证库里落的一定是服务端公式的结果。等级不在成长曲线里（旧存档边角）时跳过 ——
    * 保留原值总比把属性抹成 0 好。
    *
-   * **跳过时必须留痕**（#554）：`ROLE_LEVEL_MAX` 是 1000、曲线只到 60，
-   * 管理端把等级改到曲线外（或改小了 roleMaxLevel）之后这里会全程静默 ——
-   * 属性从此不再重算，而界面上看不出任何异常。所以打一条 warn 把「没算」说出口。
+   * **跳过时必须留痕**（#554）：曲线外推后「算不出来」只剩等级 < 1（脏存档）一种，
+   * 但脏数据照样会让这里静默 —— 属性从此不再重算，而界面上看不出任何异常。
+   * 所以打一条 warn 把「没算」说出口。
    */
   private applyAuthoritativeAttributes(level: number, data: Record<string, unknown>): void {
     const summary = summarizeRoleAttributes(roleAttributeSourceOf(level, data));
