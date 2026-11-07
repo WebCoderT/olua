@@ -55,6 +55,20 @@ export class MallRepository {
     return this.count("SELECT COUNT(1) AS total FROM mall_goods WHERE category_id = ?", [categoryId]);
   }
 
+  /**
+   * 这一批 id 里有多少行还挂在商城上（#773 删装备前的引用检查）
+   *
+   * 传入的是「基础件 id + 它的全部变体 id」：商城的商品 id 就是装备变体 id，
+   * 所以只要其中任何一个还在架上，这件装备就删不得。
+   */
+  countGoodsAmong(ids: string[]): number {
+    if (ids.length === 0) return 0;
+    return this.count(
+      `SELECT COUNT(1) AS total FROM mall_goods WHERE id IN (${ids.map(() => "?").join(", ")})`,
+      ids,
+    );
+  }
+
   //#endregion
 
   //#region 上架商品

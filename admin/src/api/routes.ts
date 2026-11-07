@@ -445,20 +445,38 @@ export const routes = {
      */
     rebuild: "/admin/equipment-variants/rebuild",
   },
-  /** adminEquipment 模块（2 个接口） */
+  /** adminEquipment 模块（5 个接口） */
   adminEquipment: {
     /**
      * 装备基础件配置列表（GET /admin/equipments）
      *
-     * **只收基础件**（普通的·人级，如 `cloth_1`），变体（`cloth_1_p3s2`）在 `admin/equipment-variants` 单独管。id / 部位结构固定，**没有创建 / 删除**。
+     * **只收基础件**（如 `cloth_1`），变体（`cloth_1_p3s2`）在 `admin/equipment-variants` 单独管。
      */
     list: "/admin/equipments",
+    /**
+     * 新建装备基础件（连带展开全部变体）（POST /admin/equipments）
+     *
+     * **新建只填身份与基础数值** —— 部位 / 名称 / 等级 / 售价 / 职业性别 / 描述 / 标签 / 三个资源路径；缩放、旋转、锚点、8 向位置与八项属性从 `templateId`（同部位的一件现成装备）复制，建完再在编辑弹窗里逐项改。
+     */
+    create: "/admin/equipments",
+    /**
+     * 删除装备基础件（连带变体与工作台几何）（DELETE /admin/equipments/{id}）
+     *
+     * 删掉一件基础件，并**连带删除**：
+     */
+    delete: (id: string) => `/admin/equipments/${encodeURIComponent(id)}`,
     /**
      * 编辑装备基础件配置（PATCH /admin/equipments/{id}）
      *
      * **部分更新**：只改请求体里出现的字段。
      */
     update: (id: string) => `/admin/equipments/${encodeURIComponent(id)}`,
+    /**
+     * 装备件数按部位盘点（GET /admin/equipments/summary）
+     *
+     * 返回装备总数与每个部位的件数，供管理端「按部位拆页签」用。
+     */
+    summary: "/admin/equipments/summary",
   },
   /** adminFashion 模块（2 个接口） */
   adminFashion: {

@@ -953,6 +953,61 @@ export type UpdateStatus = {
   combat?: StatusCombat;
 };
 
+export type CreateEquipment = {
+  /**
+   * 装备 id（可省 —— 缺省按 `部位_序号` 生成，如 cloth_33）。手填要求：小写字母开头，只含小写字母 / 数字 / 下划线，≤40 字符；撞已有 id → 409（`50039`）
+   */
+  id?: string;
+  /**
+   * 部位（EQUIPMENT_TYPE 的枚举值，取值：other1 / cloth / other2 / weapon / necklace / ring / accessories / shinguard / helmet / scapular / belt / wristband / shoes）—— 决定角色弹窗里的槽位
+   */
+  slot: string;
+  /**
+   * 名称（如「青铜重甲」；1~50 字，前后缀由客户端拼在名字前后）
+   */
+  label: string;
+  /**
+   * 模板基础件 id（可省）：复制它的图标 / 内观图集 / 外观图集 / 标签 / 几何（缩放 / 旋转 / 锚点 / 8 向位置）/职业性别 / 描述 / 八项属性 —— 新装备立刻可见可用。不给就是一张白纸（资源与几何全空，客户端看不到外观）
+   */
+  templateId?: string;
+  /**
+   * 穿戴需求等级（不传 = 跟模板；再不行 1）
+   */
+  level?: number;
+  /**
+   * 售卖价（不传 = 跟模板；再不行 0。0 = 不可售卖。**商城售价不在这里**）
+   */
+  sellPrice?: number;
+  /**
+   * 职业限制（不传 = 跟模板；再不行 4 = 不限）
+   */
+  occupation?: string;
+  /**
+   * 性别限制（不传 = 跟模板；再不行 3 = 不限）
+   */
+  sex?: string;
+  /**
+   * 描述（≤500 字）
+   */
+  description?: string;
+  /**
+   * 标签（整份替换；每一项 ≤20 字，最多 8 个）
+   */
+  tags?: string[];
+  /**
+   * 图标（resources 相对路径；不传 = 跟模板）
+   */
+  icon?: string;
+  /**
+   * 内观图集（resources 相对路径；不传 = 跟模板）
+   */
+  inAtlas?: string;
+  /**
+   * 外观图集（resources 相对路径；不传 = 跟模板）
+   */
+  outAtlas?: string;
+};
+
 export type EquipmentPoint = {
   /**
    * x（像素，单轴 ±4000）
@@ -4858,6 +4913,58 @@ export type EquipmentQuery = {
    * 等级段上限（含）
    */
   maxLevel?: number;
+};
+
+export type EquipmentSlotCount = {
+  /**
+   * 部位 key（EQUIPMENT_TYPE 的枚举值）
+   */
+  slot: string;
+  /**
+   * 部位中文名（`equipment_slots.label`）
+   */
+  label: string;
+  /**
+   * 这个部位下的基础件数
+   */
+  count: number;
+};
+
+export type EquipmentSlotSummary = {
+  /**
+   * 装备基础件总数（= 各行 count 之和）
+   */
+  total: number;
+  /**
+   * 按部位分组的件数
+   */
+  slots: EquipmentSlotCount[];
+};
+
+export type CreateEquipmentResult = {
+  /**
+   * 新建出来的装备基础件
+   */
+  equipment: Equipment;
+  /**
+   * 连带展开的变体行数（= 前缀档数 × 后缀档数，出厂 15）
+   */
+  variants: number;
+};
+
+export type RemoveEquipmentResult = {
+  /**
+   * 被删掉的装备基础件 id
+   */
+  id: string;
+  /**
+   * 连带删除的变体行数
+   */
+  variants: number;
+  /**
+   * 连带删除的对齐几何行数（外观 + 内观工作台里指向这件装备的行）
+   */
+  aligns: number;
 };
 
 export type EquipmentVariant = {

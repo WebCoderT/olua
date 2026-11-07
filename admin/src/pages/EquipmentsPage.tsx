@@ -1,6 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { equipmentsApi, equipmentSlotKeys, equipmentVariantsApi, formatTime, OCCUPATION_LABELS, PERMISSION, SEX_LABELS, slotLabel } from "../api";
-import type { ConfigAttributes, Equipment, EquipmentVariantRebuildResult, PageResult } from "../api";
+import { equipmentsApi, equipmentVariantsApi, formatTime, OCCUPATION_LABELS, PERMISSION, SEX_LABELS, slotLabel } from "../api";
+import type {
+  ConfigAttributes,
+  CreateEquipment,
+  Equipment,
+  EquipmentSlotSummary,
+  EquipmentVariantRebuildResult,
+  PageResult,
+} from "../api";
 import { AttributesGrid, crossedRangeKeys } from "../components/AttributesEditor";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { FrameAnimation } from "../components/FrameAnimation";
@@ -21,13 +28,221 @@ function attributeSummary(item: Equipment): string {
 }
 
 /**
- * 部位下拉的选项（id + 中文名）
+ * 部位页签（#773：列表按部位拆开，页签上的件数来自 `GET admin/equipments/summary`）
  *
- * 部位清单与名字都在 `equipment_slots` 表（#655 起代码里不再有第二份），所以**渲染时**才算 ——
- * 模块级那时字典还没拉回来。含暂无装备的 other1 / other2 也无妨（后端也认这两个位）。
+ * 顺序就是服务端 `equipment_slots.sort_order` —— 与角色弹窗的槽位排列、背包「一键整理」
+ * 的部位序同一份，管理端不另排。件数为 0 的部位照样出现（页签上显示 0）：那是「这里
+ * 还空着、可以在这一栏新建」，凭空少一个部位只会让人以为漏了。
  */
-function slotOptions(): [string, string][] {
-  return equipmentSlotKeys().map((key) => [key, slotLabel(key)]);
+function SlotTabs({
+  summary,
+  active,
+  onChange,
+}: {
+  summary: EquipmentSlotSummary | null;
+  active: string;
+  onChange: (slot: string) => void;
+}) {
+  const tabs = [{ slot: "", label: "全部", count: summary?.total ?? 0 }, ...(summary?.slots ?? [])];
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {tabs.map((tab) => {
+        const selected = tab.slot === active;
+        return (
+          <button
+            key={tab.slot || "all"}
+            type="button"
+            onClick={() => onChange(tab.slot)}
+            className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-medium transition ${
+              selected
+                ? "border-indigo-500/60 bg-indigo-500/15 text-indigo-200"
+                : "border-slate-700 text-slate-300 hover:border-slate-500 hover:bg-slate-800/60"
+            }`}
+          >
+            {tab.label}
+            <span className={selected ? "text-indigo-300/80" : "text-slate-500"}>{tab.count}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/**
+ * 新建装备弹窗（#773）
+ *
+ * 只收「身份 + 基础数值」：资源细节（缩放 / 旋转 / 锚点 / 8 向位置）与八项属性一律从
+ * **模板**（同部位的一件现成装备）复制 —— 让运营手抄 8 个方向的位置是折磨，抄错还会把
+ * 新装备画到屏幕外。建完在「编辑」弹窗里逐项改。
+ *
+ * `id` 留空由服务端按 `部位_序号` 生成（该部位最大序号 + 1），不填就对了；要固定 id
+ *（比如资源目录名已经按它起好）才手填。
+ */
+function EquipmentCreateDialog({
+  open,
+  slots,
+  defaultSlot,
+  onCancel,
+  onSubmit,
+}: {
+  open: boolean;
+  slots: Array<{ slot: string; label: string; count: number }>;
+  defaultSlot: string;
+  onCancel: () => void;
+  onSubmit: (value: CreateEquipment) => Promise<boolean>;
+}) {
+  const [slot, setSlot] = useState(defaultSlot);
+  const [templates, setTemplates] = useState<Equipment[]>([]);
+  const [templateId, setTemplateId] = useState("");
+  const [id, setId] = useState("");
+  const [label, setLabel] = useState("");
+  const [level, setLevel] = useState("1");
+  const [sellPrice, setSellPrice] = useState("0");
+  const [occupation, setOccupation] = useState("4");
+  const [sex, setSex] = useState("3");
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    setSlot(defaultSlot || slots[0]?.slot || "");
+    setId("");
+    setLabel("");
+    setLevel("1");
+    setSellPrice("0");
+    setOccupation("4");
+    setSex("3");
+    setSubmitting(false);
+  }, [open, defaultSlot, slots]);
+
+  // 模板候选 = 同部位现有装备（换部位就重拉；顺带把等级 / 售价按第一件预填，省两次手改）
+  useEffect(() => {
+    if (!open || !slot) return;
+    let alive = true;
+    void equipmentsApi
+      .list({ slot, page: 1, size: 500 })
+      .then((result) => {
+        if (!alive) return;
+        setTemplates(result.list);
+        const first = result.list[0];
+        setTemplateId(first?.id ?? "");
+        if (first) {
+          setLevel(String(first.level));
+          setSellPrice(String(first.sellPrice));
+        }
+      })
+      .catch(() => {
+        /* 错误已由请求层统一提示；模板为空也能建（白纸装备） */
+      });
+    return () => {
+      alive = false;
+    };
+  }, [open, slot]);
+
+  if (!open) return null;
+
+  const levelValid = Number.isInteger(Number(level)) && Number(level) >= 1;
+  const priceValid = Number.isInteger(Number(sellPrice)) && Number(sellPrice) >= 0;
+  const canSubmit = label.trim().length > 0 && levelValid && priceValid && slot !== "" && !submitting;
+
+  const submit = async () => {
+    setSubmitting(true);
+    const ok = await onSubmit({
+      // 空串一律当「不传」：服务端按部位生成 id / 用默认值，比传空串语义清楚
+      id: id.trim() || undefined,
+      slot,
+      label: label.trim(),
+      templateId: templateId || undefined,
+      level: Number(level),
+      sellPrice: Number(sellPrice),
+      occupation,
+      sex,
+    });
+    setSubmitting(false);
+    return ok;
+  };
+
+  return (
+    <Modal
+      open
+      title="新建装备"
+      hint="部位与名称是身份；id 留空由服务端按「部位_序号」生成。资源与八项属性从模板复制，建完在「编辑」里逐项改。"
+      size="md"
+      onClose={onCancel}
+      footer={
+        <>
+          <Button variant="outline" disabled={submitting} onClick={onCancel}>
+            取消
+          </Button>
+          <Button disabled={!canSubmit} loading={submitting} onClick={() => void submit()}>
+            新建
+          </Button>
+        </>
+      }
+    >
+      <div className="mt-5 flex flex-col gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <Field label="部位" hint="决定角色弹窗里的槽位；部位清单归「装备槽位」表">
+            <Select value={slot} onChange={(event) => setSlot(event.target.value)}>
+              {slots.map((row) => (
+                <option key={row.slot} value={row.slot}>
+                  {row.label}（{row.count}）
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <Field label="模板" hint="复制图标 / 图集 / 几何 / 职业性别 / 描述 / 八项属性；不选就是白纸（客户端看不到外观）">
+            <Select value={templateId} onChange={(event) => setTemplateId(event.target.value)}>
+              <option value="">空白（复制默认值）</option>
+              {templates.map((row) => (
+                <option key={row.id} value={row.id}>
+                  {row.label}（{row.id}）
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <Field label="装备 id" hint="留空自动生成（如 cloth_33）；只能小写字母开头 + 小写字母/数字/下划线">
+            <Input value={id} placeholder="留空自动生成" onChange={(event) => setId(event.target.value)} />
+          </Field>
+          <Field label="名称" hint="≤50 字；前后缀由客户端拼在名字前后">
+            <Input value={label} placeholder="如 玄铁重甲" onChange={(event) => setLabel(event.target.value)} />
+          </Field>
+          <Field label="穿戴需求等级" hint="装备定强的锚点">
+            <Input type="number" min={1} value={level} onChange={(event) => setLevel(event.target.value)} />
+          </Field>
+          <Field label="售卖价" hint="0 = 不可售卖；商城售价归「商城」页，不在这里">
+            <Input type="number" min={0} value={sellPrice} onChange={(event) => setSellPrice(event.target.value)} />
+          </Field>
+          <Field label="职业限制">
+            <Select value={occupation} onChange={(event) => setOccupation(event.target.value)}>
+              {Object.entries(OCCUPATION_LABELS).map(([code, text]) => (
+                <option key={code} value={code}>
+                  {text}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <Field label="性别限制">
+            <Select value={sex} onChange={(event) => setSex(event.target.value)}>
+              {Object.entries(SEX_LABELS).map(([code, text]) => (
+                <option key={code} value={code}>
+                  {text}
+                </option>
+              ))}
+            </Select>
+          </Field>
+        </div>
+        {!levelValid || !priceValid ? (
+          <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-200">
+            等级需为 ≥1 的整数，售卖价需为 ≥0 的整数。
+          </p>
+        ) : null}
+        <p className="text-xs text-slate-500">
+          新建会<b className="text-slate-400">连带展开这件装备的全部前后缀变体</b>（档数取「装备设置」里的前缀 /
+          后缀档数，出厂 15 个）—— 变体才是客户端真正认得的东西，少了它们商城与掉落都挂不上。
+        </p>
+      </div>
+    </Modal>
+  );
 }
 
 /**
@@ -358,25 +573,50 @@ function EquipmentEditDialog({
 }
 
 /**
- * 装备配置管理（#252，养成配置第四页）
+ * 装备配置管理（#252 只能改；#773 起可新建 / 删除，列表按部位拆页签）
  *
- * **只收基础件**（普通的·人级，37 件）：变体（_pXsY）是基础件乘前后缀倍率展开的，
- * 运营只改基础件这一份。id / 部位结构固定 —— **没有「新建」「删除」**，只有「编辑」，
- * 且部位 / 名称不开放编辑（属客户端资源约定）。按部位 / 等级段筛选定位。
- * 商城售价不在这里（唯一写入口归商城定价 issue）。写操作要 `gameConfig:write`。
+ * **只收基础件**（如 `cloth_1`）：变体（`_pXsY`）是基础件乘前后缀倍率展开的，运营通常只改
+ * 基础件这一份（要逐档微调去「装备变体」页）。
+ *
+ * 三件事：
+ * - **页签**按部位切（`summary` 给的件数），顺序 = 槽位表 `sort_order`；
+ * - **新建**：只填身份 + 基础数值，资源与属性从同部位的模板复制，服务端**连带展开全部变体**；
+ * - **删除**：连带删变体与工作台几何；商城还在架就拒绝（先下架），玩家身上的引用会失效
+ *   （确认弹窗讲清这条）。
+ *
+ * 商城售价不在这里（唯一写入口归「商城」页）。写操作要 `gameConfig:write`。
  */
 export function EquipmentsPage() {
   const canWrite = hasPermission(PERMISSION.GAME_CONFIG_WRITE);
-  const [draft, setDraft] = useState({ keyword: "", slot: "", minLevel: "", maxLevel: "" });
-  const [query, setQuery] = useState({ keyword: "", slot: "", minLevel: "", maxLevel: "" });
+  /** 页签：空串 = 全部部位 */
+  const [activeSlot, setActiveSlot] = useState("");
+  const [summary, setSummary] = useState<EquipmentSlotSummary | null>(null);
+  const [draft, setDraft] = useState({ keyword: "", minLevel: "", maxLevel: "" });
+  const [query, setQuery] = useState({ keyword: "", minLevel: "", maxLevel: "" });
   const [page, setPage] = useState(1);
   const [size, setSize] = useState(20);
   const [data, setData] = useState<PageResult<Equipment> | null>(null);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<Equipment | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [deleting, setDeleting] = useState<Equipment | null>(null);
+  const [deletingBusy, setDeletingBusy] = useState(false);
   const [rebuildOpen, setRebuildOpen] = useState(false);
   const [rebuilding, setRebuilding] = useState(false);
+
+  /** 页签件数（新建 / 删除后要重拉，否则页签上的数会落后于列表） */
+  const loadSummary = useCallback(async () => {
+    try {
+      setSummary(await equipmentsApi.summary());
+    } catch {
+      /* 错误已由请求层统一提示；页签会退回只有「全部」一档 */
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadSummary();
+  }, [loadSummary]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -386,7 +626,7 @@ export function EquipmentsPage() {
           page,
           size,
           keyword: query.keyword || undefined,
-          slot: query.slot || undefined,
+          slot: activeSlot || undefined,
           minLevel: query.minLevel === "" ? undefined : Number(query.minLevel),
           maxLevel: query.maxLevel === "" ? undefined : Number(query.maxLevel),
         }),
@@ -396,7 +636,7 @@ export function EquipmentsPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, size, query]);
+  }, [activeSlot, page, size, query]);
 
   useEffect(() => {
     void load();
@@ -404,13 +644,20 @@ export function EquipmentsPage() {
 
   const submitSearch = () => {
     setPage(1);
-    setQuery({ keyword: draft.keyword.trim(), slot: draft.slot, minLevel: draft.minLevel.trim(), maxLevel: draft.maxLevel.trim() });
+    setQuery({ keyword: draft.keyword.trim(), minLevel: draft.minLevel.trim(), maxLevel: draft.maxLevel.trim() });
   };
 
   const resetSearch = () => {
-    setDraft({ keyword: "", slot: "", minLevel: "", maxLevel: "" });
+    setDraft({ keyword: "", minLevel: "", maxLevel: "" });
+    setActiveSlot("");
     setPage(1);
-    setQuery({ keyword: "", slot: "", minLevel: "", maxLevel: "" });
+    setQuery({ keyword: "", minLevel: "", maxLevel: "" });
+  };
+
+  /** 切页签：筛选条不动（关键字 / 等级段是叠加条件），只回到第一页 —— 页码换了语义 */
+  const switchSlot = (slot: string) => {
+    setActiveSlot(slot);
+    setPage(1);
   };
 
   /** 每页条数变化：回第一页再拉（条数变了页码语义也变了） */
@@ -453,6 +700,43 @@ export function EquipmentsPage() {
     }
   };
 
+  /** 新建（#773）：服务端连带展开全部变体；建完切到该部位的页签，否则新装备会被当前筛选藏起来 */
+  const submitCreate = async (value: CreateEquipment): Promise<boolean> => {
+    try {
+      const result = await equipmentsApi.create(value);
+      toastSuccess(`装备「${result.equipment.label}」已新建（连带 ${result.variants} 个变体）`);
+      setCreating(false);
+      setActiveSlot(result.equipment.slot);
+      setPage(1);
+      await Promise.all([load(), loadSummary()]);
+      return true;
+    } catch {
+      /* 失败保持弹窗打开（错误已由请求层统一提示） */
+      return false;
+    }
+  };
+
+  /** 删除（#773）：连带删变体与工作台几何；商城还在架会 409（请求层把服务端文案弹出来） */
+  const submitDelete = async () => {
+    if (!deleting) return;
+    setDeletingBusy(true);
+    try {
+      const result = await equipmentsApi.delete(deleting.id);
+      toastSuccess(`已删除装备「${deleting.label}」（连带 ${result.variants} 个变体）`);
+      setDeleting(null);
+      // 删空的页签会变成 0 件：留在原页签没意义，回「全部」看全景
+      setActiveSlot((current) => {
+        const remain = summary?.slots.find((row) => row.slot === current);
+        return remain && remain.count <= 1 ? "" : current;
+      });
+      await Promise.all([load(), loadSummary()]);
+    } catch {
+      /* 失败保持弹窗打开 */
+    } finally {
+      setDeletingBusy(false);
+    }
+  };
+
   /** 重建全部装备变体（#697）：按当前前后缀倍率整批重算；卖价保留、属性 / 名称 / 等级覆盖 */
   const submitRebuild = async () => {
     setRebuilding(true);
@@ -460,6 +744,7 @@ export function EquipmentsPage() {
       const result: EquipmentVariantRebuildResult = await equipmentVariantsApi.rebuild();
       toastSuccess(`已重建 ${result.variants} 个装备变体（${result.bases} 基础件 × ${result.combos} 组合）`);
       setRebuildOpen(false);
+      await Promise.all([load(), loadSummary()]);
     } catch {
       /* 错误已由请求层统一提示 */
     } finally {
@@ -473,20 +758,25 @@ export function EquipmentsPage() {
         title="装备配置"
         actions={
           canWrite ? (
-            <Button disabled={rebuilding} onClick={() => setRebuildOpen(true)}>
-              重新生成变体
-            </Button>
+            <div className="flex gap-2">
+              <Button variant="outline" disabled={rebuilding} onClick={() => setRebuildOpen(true)}>
+                重新生成变体
+              </Button>
+              <Button onClick={() => setCreating(true)}>新建装备</Button>
+            </div>
           ) : null
         }
-        description={<>只收基础件（普通的·人级），变体是基础件乘前后缀倍率展开的 —— 改基础件即改全部 15 个变体。
-            名称 / 描述 / 职业性别 / 图标与图集 / 标签 / 缩放 / 内观锚点 / 外观 8 向位置都在编辑弹窗里（#603 从客户端源码搬来）；
-            id 与部位结构固定，只可编辑、不可新增 / 删除；商城售价归「商城定价」管理，不在这里。
-            前后缀档位与外观关联在「前后缀管理」页，变体重建见右上角入口。</>}
+        description={<>只收基础件（如 cloth_1），变体（_pXsY）是基础件乘前后缀倍率展开的 —— 通常只改基础件这一份，
+            要逐档微调去「装备变体」页。列表按部位分页签；新建一件会连带展开它的全部变体，删除会连带删掉变体与工作台几何
+            （商城还在架时不许删，先下架）。名称 / 描述 / 职业性别 / 图标与图集 / 标签 / 缩放 / 锚点 / 8 向位置都在编辑弹窗里；
+            商城售价归「商城」页，不在这里。</>}
       />
 
       <Card>
-        <div className="flex flex-wrap items-end gap-2">
-          <Field width="w-56" label="id / 名称">
+        <div className="flex flex-col gap-3">
+          <SlotTabs summary={summary} active={activeSlot} onChange={switchSlot} />
+          <div className="flex flex-wrap items-end gap-2">
+            <Field width="w-56" label="id / 名称">
               <Input
                 value={draft.keyword}
                 placeholder="支持模糊匹配"
@@ -496,17 +786,7 @@ export function EquipmentsPage() {
                 }}
               />
             </Field>
-          <Field width="w-36" label="部位">
-              <Select value={draft.slot} onChange={(event) => setDraft({ ...draft, slot: event.target.value })}>
-                <option value="">全部</option>
-                {slotOptions().map(([value, text]) => (
-                  <option key={value} value={value}>
-                    {text}
-                  </option>
-                ))}
-              </Select>
-            </Field>
-          <Field width="w-28" label="等级 ≥">
+            <Field width="w-28" label="等级 ≥">
               <Input
                 type="number"
                 min={1}
@@ -514,7 +794,7 @@ export function EquipmentsPage() {
                 onChange={(event) => setDraft({ ...draft, minLevel: event.target.value })}
               />
             </Field>
-          <Field width="w-28" label="等级 ≤">
+            <Field width="w-28" label="等级 ≤">
               <Input
                 type="number"
                 min={1}
@@ -522,10 +802,11 @@ export function EquipmentsPage() {
                 onChange={(event) => setDraft({ ...draft, maxLevel: event.target.value })}
               />
             </Field>
-          <Button onClick={submitSearch}>查询</Button>
-          <Button variant="outline" onClick={resetSearch}>
-            重置
-          </Button>
+            <Button onClick={submitSearch}>查询</Button>
+            <Button variant="outline" onClick={resetSearch}>
+              重置
+            </Button>
+          </div>
         </div>
       </Card>
 
@@ -581,6 +862,14 @@ export function EquipmentsPage() {
                     >
                       编辑
                     </Button>
+                    <Button
+                      variant="ghost"
+                      className="ml-1 px-2.5 py-1 text-xs text-rose-300 hover:bg-rose-500/10"
+                      disabled={!canWrite}
+                      onClick={() => setDeleting(item)}
+                    >
+                      删除
+                    </Button>
                   </td>
                 </tr>
               ))}
@@ -588,7 +877,12 @@ export function EquipmentsPage() {
           </table>
         </div>
 
-        {!loading && data && data.list.length === 0 ? <EmptyState title="没有匹配的装备" description="换个筛选条件试试" /> : null}
+        {!loading && data && data.list.length === 0 ? (
+          <EmptyState
+            title={activeSlot ? `「${slotLabel(activeSlot)}」下还没有装备` : "没有匹配的装备"}
+            description={activeSlot ? "点右上角「新建装备」，部位已按当前页签预选" : "换个筛选条件试试"}
+          />
+        ) : null}
 
         <Pagination page={page} size={size} total={data?.total ?? 0} onChange={setPage} onSizeChange={handleSizeChange} />
       </Card>
@@ -601,6 +895,30 @@ export function EquipmentsPage() {
           setEditing(null);
         }}
         onSubmit={submitDialog}
+      />
+
+      <EquipmentCreateDialog
+        open={creating}
+        slots={summary?.slots ?? []}
+        defaultSlot={activeSlot}
+        onCancel={() => setCreating(false)}
+        onSubmit={submitCreate}
+      />
+
+      <ConfirmDialog
+        open={deleting !== null}
+        title={deleting ? `删除装备「${deleting.label}」？` : "删除装备？"}
+        description={
+          deleting
+            ? `会连带删除 ${deleting.id} 的全部前后缀变体，以及「装备对齐 / 内观对齐」工作台里指向它的几何。` +
+              "背包或身上还引用这件装备的角色，那些格子会变成认不出的路径（属性不再生效）—— 删之前先确认没人穿着。" +
+              "商城还在架时服务端会拒绝，先去「商城」页下架。"
+            : undefined
+        }
+        confirmText="删除"
+        loading={deletingBusy}
+        onConfirm={() => void submitDelete()}
+        onCancel={() => setDeleting(null)}
       />
 
       <ConfirmDialog

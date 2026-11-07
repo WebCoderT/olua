@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, Query } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from "@nestjs/common";
 import { ApiParam } from "@nestjs/swagger";
 import { ApiDataResponse } from "../../common/decorators/api-data-response.decorator";
 import { ApiAdminDoc } from "../../common/decorators/api-doc.decorator";
@@ -10,26 +10,34 @@ import { PageResult } from "../../common/interfaces/api-envelope.interface";
 import { EQUIPMENT_SORT, EQUIPMENT_VARIANT_SORT, sortFieldNames } from "../../database/sort-specs";
 import { GameConfigService } from "./game-config.service";
 import {
+  CreateEquipmentDto,
+  CreateEquipmentResultDto,
   EquipmentDto,
   EquipmentPageDto,
   EquipmentQueryDto,
+  EquipmentSlotSummaryDto,
   EquipmentVariantDto,
   EquipmentVariantPageDto,
   EquipmentVariantQueryDto,
   EquipmentVariantRebuildResultDto,
   EQUIPMENT_SLOT_KEYS,
+  RemoveEquipmentResultDto,
   UpdateEquipmentDto,
   UpdateEquipmentVariantDto,
 } from "./dto/equipment.dto";
 
 /**
- * 管理端 · 装备基础件配置（#252）
+ * 管理端 · 装备基础件配置（#252 / #773）
  *
- * 与称号 / 战魂 / 军衔同一取向：**只有 list / update，没有 create / remove** ——
- * 装备 id / 部位结构固定（一件装备有哪些部位、图标与几何属客户端资源约定），
- * e2e 会固化「POST/DELETE 404」。**这里管的是基础件**（普通的·人级，37 件）：
- * 显示字段（图标 / 图集 / 几何 / 职业限制）与它自己的数值。
- * 变体（`_pXsY`，555 行）**各自是一行、单独可改**，入口在 `admin/equipment-variants`（#655）。
+ * **管的是基础件**（如 `cloth_1`，37 件）：显示字段（图标 / 图集 / 几何 / 职业限制）与它
+ * 自己的数值。变体（`_pXsY`，555 行）**各自是一行、单独可改**，入口在
+ * `admin/equipment-variants`（#655）。
+ *
+ * #773 起多了**新建与删除**（此前是刻意的「只能改」）：
+ * - 新建一件基础件会**连带展开它的全部变体**（档数取 `equipment_meta`）—— 只写 `equipments`
+ *   是不够的，客户端认的是 `equipment_variants` 的行；
+ * - 删除会连带删变体与工作台几何，且**商城还在架就拒删**（先下架）。
+ *
  * **商城售价不在这里**（归商城定价管理），避免一个值两个写入口。
  * 写操作带 `@AuditTarget("equipment")`：改的是全服玩家的数值，必须可追溯。
  */
@@ -43,8 +51,7 @@ export class AdminEquipmentController {
     operationId: "adminEquipment.list",
     summary: "装备基础件配置列表",
     description:
-      "**只收基础件**（普通的·人级，如 `cloth_1`），变体（`cloth_1_p3s2`）在 `admin/equipment-variants` 单独管。" +
-      "id / 部位结构固定，**没有创建 / 删除**。\n\n" +
+      "**只收基础件**（如 `cloth_1`），变体（`cloth_1_p3s2`）在 `admin/equipment-variants` 单独管。\n\n" +
       "`keyword` 模糊匹配 id 与名称；`slot` 按部位筛（" +
       EQUIPMENT_SLOT_KEYS.join(" / ") +
       "）；`minLevel` / `maxLevel` 按穿戴需求等级段筛（均含端）。\n\n" +
@@ -58,6 +65,54 @@ export class AdminEquipmentController {
     return this.gameConfigService.listEquipments(query);
   }
 
+  /**
+   * 部位盘点（#773）
+   *
+   * 管理端列表按部位拆页签，页签上的件数就是这里来的 —— 一次拿全，不用每个部位各发一条
+   * `?slot=` 只为数个数。顺序 = `equipment_slots.sort_order`（与角色弹窗槽位排列同源）。
+   */
+  @Get("summary")
+  @ApiAdminDoc({
+    operationId: "adminEquipment.summary",
+    summary: "装备件数按部位盘点",
+    description:
+      "返回装备总数与每个部位的件数，供管理端「按部位拆页签」用。\n\n" +
+      "- 顺序 = `equipment_slots.sort_order`（与角色弹窗槽位排列、背包整理序同一份）。\n" +
+      "- `equipments` 里出现但槽位表没有的部位补在末尾（`label` 退回 key）—— 历史脏数据也要点得到。\n" +
+      "- 件数为 0 的部位照样返回（页签上显示 0，而不是凭空少一个部位）。",
+    permissions: [Permission.GAME_CONFIG_READ],
+  })
+  @ApiDataResponse(EquipmentSlotSummaryDto, { description: "总数 + 按部位的件数" })
+  summary(): EquipmentSlotSummaryDto {
+    return this.gameConfigService.equipmentSlotSummary();
+  }
+
+  /**
+   * 新建装备基础件（#773）
+   *
+   * 与 `PATCH` 的分界：新建只收「身份 + 基础数值」，资源细节与八项属性从 `templateId` 复制。
+   * 连带展开全部变体，回包带展开行数。
+   */
+  @Post()
+  @AuditTarget("equipment")
+  @ApiAdminDoc({
+    operationId: "adminEquipment.create",
+    summary: "新建装备基础件（连带展开全部变体）",
+    description:
+      "**新建只填身份与基础数值** —— 部位 / 名称 / 等级 / 售价 / 职业性别 / 描述 / 标签 / 三个资源路径；" +
+      "缩放、旋转、锚点、8 向位置与八项属性从 `templateId`（同部位的一件现成装备）复制，建完再在编辑弹窗里逐项改。\n\n" +
+      "- `id` 可省：缺省按 `部位_序号` 生成（该部位现有最大序号 + 1）；手填撞已有 id → 409（`50039`）。\n" +
+      "- `slot` 必须是装备槽位表里的 key（放开的是「这个部位下的装备」，不是新部位）→ 否则 400。\n" +
+      "- `templateId` 不存在 → 404（`50016`）。\n" +
+      "- **连带展开全部变体**（前缀档数 × 后缀档数，出厂 15 行）：不展开的话客户端根本看不到这件装备。\n" +
+      "- 写完立刻重装结算层；客户端下次拉快照生效。",
+    permissions: [Permission.GAME_CONFIG_WRITE],
+  })
+  @ApiDataResponse(CreateEquipmentResultDto, { description: "新建的装备 + 连带展开的变体行数" })
+  create(@Body() dto: CreateEquipmentDto): CreateEquipmentResultDto {
+    return this.gameConfigService.createEquipment(dto);
+  }
+
   @Patch(":id")
   @AuditTarget("equipment")
   @ApiAdminDoc({
@@ -68,8 +123,8 @@ export class AdminEquipmentController {
       "- `level`：穿戴需求等级（装备定强的锚点）。\n" +
       "- `sellPrice`：售卖价（0 = 不可售卖）；**商城售价不在这里** —— 唯一写入口归商城定价管理。\n" +
       "- `attributes`：八项基础属性，**整份提交、整份替换**；区间型要求 0 ≤ min ≤ max（跨字段校验在服务端）。" +
-      "改基础件**不再带动 15 个变体**（#655 起变体各自成行）；要改某一档前缀/后缀的数值去「装备变体」页。\n" +
-      "- `slot` / `label` 不开放编辑（部位结构与文案属客户端资源约定）。\n" +
+      "改基础件**不再带动变体**（#655 起变体各自成行）；要改某一档前缀/后缀的数值去「装备变体」页。\n" +
+      "- `slot` / `id` 不开放编辑（部位结构与引用键固定）—— 要换部位就新建一件（`POST`）再下架旧的。\n" +
       "- `id` 不存在 → 404（`50016`）。",
     permissions: [Permission.GAME_CONFIG_WRITE],
   })
@@ -77,6 +132,33 @@ export class AdminEquipmentController {
   @ApiDataResponse(EquipmentDto, { description: "更新后的装备基础件配置" })
   update(@Param("id") id: string, @Body() dto: UpdateEquipmentDto): EquipmentDto {
     return this.gameConfigService.updateEquipment(id, dto);
+  }
+
+  /**
+   * 删除装备基础件（#773）
+   *
+   * 连带删变体与两套工作台几何；**商城还在架就 409**（先下架）。不碰玩家存档 ——
+   * 已穿戴 / 背包里引用它的格子会变成认不出的路径（属性失效），管理端删除确认里讲这条。
+   */
+  @Delete(":id")
+  @AuditTarget("equipment")
+  @ApiAdminDoc({
+    operationId: "adminEquipment.delete",
+    summary: "删除装备基础件（连带变体与工作台几何）",
+    description:
+      "删掉一件基础件，并**连带删除**：\n\n" +
+      "- 它的**全部变体**（`equipment_variants` 里 `base_id` 对应的行）；\n" +
+      "- 「装备对齐」/「内观对齐」工作台里指向这些 id 的几何行（派生数据，留着只是孤儿行）。\n\n" +
+      "**还在商城上架清单里 → 409（`50040`）**：先下架再删，否则客户端会陈列一件名字退回 id、" +
+      "图标空的幽灵商品。`id` 不存在 → 404（`50016`）。\n\n" +
+      "**不碰玩家存档**：背包 / 身上还引用这些 id 的角色，那些格子会变成认不出的路径" +
+      "（服务端与客户端都只是跳过，不报错，但那件装备的属性不再生效）。删除前请先确认没人穿着。",
+    permissions: [Permission.GAME_CONFIG_WRITE],
+  })
+  @ApiParam({ name: "id", description: "装备基础件 id（如 cloth_1）" })
+  @ApiDataResponse(RemoveEquipmentResultDto, { description: "连带清掉了什么（变体行数 / 几何行数）" })
+  remove(@Param("id") id: string): RemoveEquipmentResultDto {
+    return this.gameConfigService.removeEquipment(id);
   }
 }
 
