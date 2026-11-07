@@ -7900,7 +7900,7 @@
     },
     "/admin/mall/goods": {
       "get": {
-        "description": "商品 = 运营手动上架的装备变体（`mall_goods` 行）；名称 / 部位 / 装备等级来自装备数据（**只读展示**），售价与购买等级才是商城字段。`categoryId` / `slot` / `keyword` 组合筛，按 分类序 → 装备等级 → id 排序。上架后装备被删的孤儿行照实列出（名称退回 id），便于清理。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
+        "description": "商品 = 运营手动上架的装备变体或药品（`mall_goods` 行）；名称 / 图标 / 部位 / 等级来自各自的数据表（**只读展示**），售价与购买等级才是商城字段。`categoryId` / `kind` / `slot` / `keyword` 组合筛，按 分类序 → 等级 → id 排序。上架后本体被删的孤儿行照实列出（名称退回 id），便于清理。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
         "operationId": "adminMall.listGoods",
         "parameters": [
           {
@@ -7978,6 +7978,15 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "kind",
+            "required": false,
+            "in": "query",
+            "description": "按品类筛：equipment（装备）/ drug（药品）",
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -8025,7 +8034,7 @@
         }
       },
       "post": {
-        "description": "把一件装备变体挂到某个分类下（缺省售价 0 = 免费、购买等级 0 = 不限）。\n\n- 商品 id 不在装备目录 → 404（`50021`）；分类不存在 → 404（`50025`）。\n- 已上架再上架 → 409（`50026`，一件装备全商城只能挂一行，换分类先下架）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
+        "description": "把一件装备变体或一种药品挂到某个分类下（缺省售价 0 = 免费、购买等级 0 = 不限）。\n\n- 商品 id 不在目录（装备变体 + drugs）→ 404（`50021`）；分类不存在 → 404（`50025`）。\n- 已上架再上架 → 409（`50026`，一件物品全商城只能挂一行，换分类先下架）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
         "operationId": "adminMall.createGood",
         "parameters": [],
         "requestBody": {
@@ -8078,6 +8087,134 @@
         "x-olua-permissions": [
           "gameConfig:write"
         ]
+      }
+    },
+    "/admin/mall/catalog": {
+      "get": {
+        "description": "上架弹窗的数据源：装备变体（`equipment_variants`）+ 药品（`drugs`）拼成同一形状。\n\n- `category` 是**物品自己的分类**：装备填部位 key（weapon / cloth …），药品填 `drug`，留空 = 全部；\n- `level` 精确匹配等级（留空 = 全部）；`keyword` 模糊匹配 id 与名称；\n- 回包带 `levels`（当前分类下出现过的等级，给等级下拉用）与每行的 `listed`（已在商城上架）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
+        "operationId": "adminMall.listCatalog",
+        "parameters": [
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "description": "页码，从 1 开始",
+            "schema": {
+              "minimum": 1,
+              "default": 1,
+              "example": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "size",
+            "required": false,
+            "in": "query",
+            "description": "每页条数（1~100）",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
+              "example": 20,
+              "type": "number"
+            }
+          },
+          {
+            "name": "keyword",
+            "required": false,
+            "in": "query",
+            "description": "关键字：模糊匹配 id 与名称",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sort",
+            "required": false,
+            "in": "query",
+            "description": "排序字段（取值见各接口说明，未登记的值会退回默认排序）",
+            "schema": {
+              "example": "createdAt",
+              "type": "string"
+            }
+          },
+          {
+            "name": "order",
+            "required": false,
+            "in": "query",
+            "description": "排序方向：asc 升序 / desc 降序",
+            "schema": {
+              "default": "desc",
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ]
+            }
+          },
+          {
+            "name": "category",
+            "required": false,
+            "in": "query",
+            "description": "物品分类：部位 key（other1 / cloth / other2 / weapon / necklace / ring / accessories / shinguard / helmet / scapular / belt / wristband / shoes）或 drug（药品）；留空 = 全部",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "level",
+            "required": false,
+            "in": "query",
+            "description": "精确等级（留空 = 全部等级）",
+            "schema": {
+              "minimum": 0,
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "分页结果（list/total/page/size/levels）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/MallCatalogPageDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "可上架目录（装备 + 药品，按分类与等级筛）",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/MallCatalogPageDto"
+        },
+        "x-olua-permissions": [
+          "gameConfig:read"
+        ],
+        "x-olua-query-schema": {
+          "$ref": "#/components/schemas/MallCatalogQueryDto"
+        }
       }
     },
     "/admin/mall/goods/{id}": {
@@ -23662,24 +23799,172 @@
           "removed"
         ]
       },
+      "MallCatalogItemDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "物品 id（装备变体 id / 药品 id）"
+          },
+          "kind": {
+            "type": "string",
+            "description": "品类：equipment（装备）/ drug（药品）"
+          },
+          "label": {
+            "type": "string",
+            "description": "显示名"
+          },
+          "icon": {
+            "type": "string",
+            "description": "图标（resources 相对路径）"
+          },
+          "slot": {
+            "type": "string",
+            "description": "部位（药品为空串）"
+          },
+          "level": {
+            "type": "number",
+            "description": "等级（装备等级需求 / 药品等级）"
+          },
+          "prefix": {
+            "type": "number",
+            "description": "前缀序号（品质；药品恒 0）"
+          },
+          "suffix": {
+            "type": "number",
+            "description": "后缀序号（阶级；药品恒 0）"
+          },
+          "listed": {
+            "type": "boolean",
+            "description": "是否已在商城上架（一件物品全商城只能挂一行）"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "label",
+          "icon",
+          "slot",
+          "level",
+          "prefix",
+          "suffix",
+          "listed"
+        ]
+      },
+      "MallCatalogPageDto": {
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "number",
+            "description": "总条数",
+            "example": 42
+          },
+          "page": {
+            "type": "number",
+            "description": "当前页码（从 1 开始）",
+            "example": 1
+          },
+          "size": {
+            "type": "number",
+            "description": "每页条数",
+            "example": 20
+          },
+          "list": {
+            "description": "当前页的候选物品",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MallCatalogItemDto"
+            }
+          },
+          "levels": {
+            "description": "当前分类下出现过的等级（升序去重；与关键字无关）",
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          }
+        },
+        "required": [
+          "total",
+          "page",
+          "size",
+          "list",
+          "levels"
+        ]
+      },
+      "MallCatalogQueryDto": {
+        "type": "object",
+        "properties": {
+          "page": {
+            "type": "number",
+            "description": "页码，从 1 开始",
+            "example": 1,
+            "default": 1,
+            "minimum": 1
+          },
+          "size": {
+            "type": "number",
+            "description": "每页条数（1~100）",
+            "example": 20,
+            "default": 20,
+            "minimum": 1,
+            "maximum": 100
+          },
+          "keyword": {
+            "type": "string",
+            "description": "关键字：模糊匹配 id 与名称"
+          },
+          "sort": {
+            "type": "string",
+            "description": "排序字段（取值见各接口说明，未登记的值会退回默认排序）",
+            "example": "createdAt"
+          },
+          "order": {
+            "type": "string",
+            "description": "排序方向：asc 升序 / desc 降序",
+            "enum": [
+              "asc",
+              "desc"
+            ],
+            "default": "desc"
+          },
+          "category": {
+            "type": "string",
+            "description": "物品分类：部位 key（other1 / cloth / other2 / weapon / necklace / ring / accessories / shinguard / helmet / scapular / belt / wristband / shoes）或 drug（药品）；留空 = 全部"
+          },
+          "level": {
+            "type": "number",
+            "description": "精确等级（留空 = 全部等级）",
+            "minimum": 0
+          }
+        }
+      },
       "MallGoodItemDto": {
         "type": "object",
         "properties": {
           "id": {
             "type": "string",
-            "description": "商品 id（装备变体 id，如 cloth_1_p3s2）"
+            "description": "商品 id（装备变体 id，如 cloth_1_p3s2；药品为其 drugs.id）"
           },
           "categoryId": {
             "type": "string",
             "description": "所属分类 id"
           },
+          "kind": {
+            "type": "string",
+            "description": "品类：equipment（装备）/ drug（药品）"
+          },
           "label": {
             "type": "string",
-            "description": "显示名（装备配置已拼好前后缀）"
+            "description": "显示名（装备取变体名，药品取 drugs.label）"
+          },
+          "icon": {
+            "type": "string",
+            "description": "图标（resources 相对路径；装备取基础件图标，药品取 drugs.icon）"
           },
           "slot": {
             "type": "string",
-            "description": "部位（EQUIPMENT_TYPE 的枚举值）"
+            "description": "部位（EQUIPMENT_TYPE 的枚举值；药品为空串）"
           },
           "level": {
             "type": "number",
@@ -23709,7 +23994,9 @@
         "required": [
           "id",
           "categoryId",
+          "kind",
           "label",
+          "icon",
           "slot",
           "level",
           "prefix",
@@ -23795,6 +24082,10 @@
           "slot": {
             "type": "string",
             "description": "按部位筛（取值：other1 / cloth / other2 / weapon / necklace / ring / accessories / shinguard / helmet / scapular / belt / wristband / shoes）"
+          },
+          "kind": {
+            "type": "string",
+            "description": "按品类筛：equipment（装备）/ drug（药品）"
           }
         }
       },

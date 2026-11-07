@@ -11,6 +11,8 @@ import { MallPricingService } from "./mall-pricing.service";
 import {
   CreateMallCategoryDto,
   CreateMallGoodDto,
+  MallCatalogPageDto,
+  MallCatalogQueryDto,
   MallCategoryDto,
   MallCategoryRemoveDto,
   MallGoodItemDto,
@@ -102,9 +104,9 @@ export class AdminMallController {
     operationId: "adminMall.listGoods",
     summary: "上架商品列表（商品 × 分类 × 售价合并视图）",
     description:
-      "商品 = 运营手动上架的装备变体（`mall_goods` 行）；名称 / 部位 / 装备等级来自装备数据" +
-      "（**只读展示**），售价与购买等级才是商城字段。`categoryId` / `slot` / `keyword` 组合筛，" +
-      "按 分类序 → 装备等级 → id 排序。上架后装备被删的孤儿行照实列出（名称退回 id），便于清理。",
+      "商品 = 运营手动上架的装备变体或药品（`mall_goods` 行）；名称 / 图标 / 部位 / 等级来自" +
+      "各自的数据表（**只读展示**），售价与购买等级才是商城字段。`categoryId` / `kind` / `slot` / " +
+      "`keyword` 组合筛，按 分类序 → 等级 → id 排序。上架后本体被删的孤儿行照实列出（名称退回 id），便于清理。",
     permissions: [Permission.GAME_CONFIG_READ],
   })
   @ApiQueryModel(MallGoodQueryDto)
@@ -113,15 +115,32 @@ export class AdminMallController {
     return this.mallPricingService.listGoods(query);
   }
 
+  @Get("catalog")
+  @ApiAdminDoc({
+    operationId: "adminMall.listCatalog",
+    summary: "可上架目录（装备 + 药品，按分类与等级筛）",
+    description:
+      "上架弹窗的数据源：装备变体（`equipment_variants`）+ 药品（`drugs`）拼成同一形状。\n\n" +
+      "- `category` 是**物品自己的分类**：装备填部位 key（weapon / cloth …），药品填 `drug`，留空 = 全部；\n" +
+      "- `level` 精确匹配等级（留空 = 全部）；`keyword` 模糊匹配 id 与名称；\n" +
+      "- 回包带 `levels`（当前分类下出现过的等级，给等级下拉用）与每行的 `listed`（已在商城上架）。",
+    permissions: [Permission.GAME_CONFIG_READ],
+  })
+  @ApiQueryModel(MallCatalogQueryDto)
+  @ApiDataResponse(MallCatalogPageDto, { description: "分页结果（list/total/page/size/levels）" })
+  listCatalog(@Query() query: MallCatalogQueryDto): MallCatalogPageDto {
+    return this.mallPricingService.listCatalog(query);
+  }
+
   @Post("goods")
   @AuditTarget("mall")
   @ApiAdminDoc({
     operationId: "adminMall.createGood",
     summary: "上架商品",
     description:
-      "把一件装备变体挂到某个分类下（缺省售价 0 = 免费、购买等级 0 = 不限）。\n\n" +
-      "- 商品 id 不在装备目录 → 404（`50021`）；分类不存在 → 404（`50025`）。\n" +
-      "- 已上架再上架 → 409（`50026`，一件装备全商城只能挂一行，换分类先下架）。",
+      "把一件装备变体或一种药品挂到某个分类下（缺省售价 0 = 免费、购买等级 0 = 不限）。\n\n" +
+      "- 商品 id 不在目录（装备变体 + drugs）→ 404（`50021`）；分类不存在 → 404（`50025`）。\n" +
+      "- 已上架再上架 → 409（`50026`，一件物品全商城只能挂一行，换分类先下架）。",
     permissions: [Permission.GAME_CONFIG_WRITE],
   })
   @ApiDataResponse(MallGoodItemDto, { description: "上架后的商品视图" })

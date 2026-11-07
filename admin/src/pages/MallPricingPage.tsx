@@ -1,25 +1,28 @@
 import { useCallback, useEffect, useState } from "react";
-import { equipmentIcon, equipmentMetaApi, formatTime, mallApi, PERMISSION, slotLabel } from "../api";
-import type { EquipmentVariant, MallCategory, MallGoodItem, PageResult } from "../api";
-import { equipmentVariantsApi } from "../api";
+import { equipmentMetaApi, equipmentSlotKeys, formatTime, mallApi, PERMISSION, slotLabel } from "../api";
+import type { MallCatalogItem, MallCategory, MallGoodItem, PageResult } from "../api";
 import { GameIcon } from "../components/GameImage";
 import { Modal } from "../components/Modal";
 import { Pagination } from "../components/Pagination";
-import { Badge, Button, Card, EmptyState, Field, Input, Spinner, tableClass, tdClass, thClass, theadClass } from "../components/ui";
+import { Badge, Button, Card, EmptyState, Field, Input, Select, Spinner, tableClass, tdClass, thClass, theadClass } from "../components/ui";
 import { hasPermission } from "../store/session";
 import { toastSuccess } from "../store/toast";
 import { PageHeader } from "../components/PageHeader";
 
 const MALL_PRICE_MAX = 100_000_000;
 const MALL_LEVEL_MAX = 10_000;
+/** 上架弹窗里「分类」下拉表示药品的那一项（服务端同一取值，见 MALL_CATEGORY_DRUG） */
+const DRUG_CATEGORY = "drug";
+/** 上架弹窗候选列表每页条数（566 件装备 + 11 种药，必须分页） */
+const CATALOG_PAGE_SIZE = 8;
 
 /**
- * 商城管理（#251 / #758，运营陈列页）
+ * 商城管理（#251 / #758 / #763，运营陈列页）
  *
  * **先建分类，再在分类下上架商品**：分类是自建的陈列分组（POST 建行 / PATCH 改名与
- * 排序 / DELETE 删空分类）；商品是**关联数据** —— 上架时选一件装备变体，之后只许改
- * 售价与购买等级（名称/图标/部位归装备管理管）。客户端陈列与购买以服务端为准。
- * 写操作要 `gameConfig:write`。
+ * 排序 / DELETE 删空分类）；商品是**关联数据** —— 上架时从「可上架目录」（装备变体 + 药品）
+ * 里按**物品自己的分类与等级**挑一件，之后只许改售价与购买等级（名称/图标/部位归各自的
+ * 配置页管）。客户端陈列与购买以服务端为准。写操作要 `gameConfig:write`。
  */
 export function MallPricingPage() {
   const canWrite = hasPermission(PERMISSION.GAME_CONFIG_WRITE);
@@ -43,12 +46,24 @@ export function MallPricingPage() {
   const [creating, setCreating] = useState(false);
   const [createPrice, setCreatePrice] = useState("0");
   const [createLevel, setCreateLevel] = useState("0");
-  const [variantKeyword, setVariantKeyword] = useState("");
-  const [variantOptions, setVariantOptions] = useState<EquipmentVariant[]>([]);
-  const [pickedVariant, setPickedVariant] = useState<EquipmentVariant | null>(null);
   const [submitting, setSubmitting] = useState(false);
   /** 前后缀中文名（住在 `equipment_meta`，「装备设置」页可改；这里只取来显示） */
   const [tierLabels, setTierLabels] = useState<{ prefix: string[]; suffix: string[] }>({ prefix: [], suffix: [] });
+
+  // —— 上架弹窗的候选目录（装备 + 药品） ——
+  const [variantKeyword, setVariantKeyword] = useState("");
+  /** 已提交的关键字（输入框是草稿，点搜索/回车才生效） */
+  const [catalogKeyword, setCatalogKeyword] = useState("");
+  /** 物品分类：空串 = 全部；部位 key；DRUG_CATEGORY = 药品 */
+  const [catalogCategory, setCatalogCategory] = useState("");
+  /** 等级：空串 = 全部 */
+  const [catalogLevel, setCatalogLevel] = useState("");
+  /** 当前分类下出现过的等级（服务端回，供等级下拉） */
+  const [catalogLevels, setCatalogLevels] = useState<number[]>([]);
+  const [catalogPage, setCatalogPage] = useState(1);
+  const [catalog, setCatalog] = useState<PageResult<MallCatalogItem> | null>(null);
+  const [catalogLoading, setCatalogLoading] = useState(false);
+  const [pickedVariant, setPickedVariant] = useState<MallCatalogItem | null>(null);
 
   const loadCategories = useCallback(async () => {
     const list = await mallApi.listCategories();
@@ -144,23 +159,57 @@ export function MallPricingPage() {
 
   //#region 商品操作
 
-  /** 打开上架弹窗：变体选项按关键字现查（555 件全量下拉太长，搜索着挑） */
-  const openCreate = async () => {
+  /** 打开上架弹窗：清空筛选与已选，回到「全部分类 / 全部等级」的第一页 */
+  const openCreate = () => {
     setPickedVariant(null);
     setVariantKeyword("");
+    setCatalogKeyword("");
+    setCatalogCategory("");
+    setCatalogLevel("");
+    setCatalogLevels([]);
+    setCatalogPage(1);
     setCreatePrice("0");
     setCreateLevel("0");
     setCreating(true);
-    await searchVariants("");
   };
 
-  const searchVariants = async (keyword: string) => {
-    try {
-      const result = await equipmentVariantsApi.list({ page: 1, size: 20, keyword: keyword || undefined });
-      setVariantOptions(result.list);
-    } catch {
-      /* 失败请求层已统一提示 */
-    }
+  /**
+   * 拉候选目录（装备 + 药品）：分类 / 等级 / 关键字 / 页码任一变化都重查
+   *
+   * 服务端回 `levels`（当前分类下出现过的等级），等级下拉照它列 —— 运营不用猜有哪些档。
+   */
+  useEffect(() => {
+    if (!creating) return;
+    let alive = true;
+    setCatalogLoading(true);
+    void (async () => {
+      try {
+        const result = await mallApi.listCatalog({
+          category: catalogCategory || undefined,
+          level: catalogLevel === "" ? undefined : Number(catalogLevel),
+          keyword: catalogKeyword || undefined,
+          page: catalogPage,
+          size: CATALOG_PAGE_SIZE,
+        });
+        if (!alive) return;
+        setCatalog(result);
+        setCatalogLevels(result.levels ?? []);
+      } catch {
+        /* 失败请求层已统一提示 */
+      } finally {
+        if (alive) setCatalogLoading(false);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [creating, catalogCategory, catalogLevel, catalogKeyword, catalogPage]);
+
+  /** 换分类：等级与页码一起归位（不同分类的等级档不一样，留着旧值会筛出空表） */
+  const switchCatalogCategory = (category: string) => {
+    setCatalogCategory(category);
+    setCatalogLevel("");
+    setCatalogPage(1);
   };
 
   /** 上架：商品 id / 分类 / 重复上架服务端都会校验（404 50021/50025、409 50026） */
@@ -253,9 +302,9 @@ export function MallPricingPage() {
         title="商城"
         description={
           <>
-            先建分类，再在分类下上架商品。商品是关联数据 —— 从装备变体里挑一件上架，
-            只能改<strong>售价</strong>与<strong>购买等级</strong>（名称/图标/部位归装备管理管）；
-            下架 = 删行，装备本体不受影响。购买等级不足的玩家，客户端按钮置灰、服务端拒绝成交。
+            先建分类，再在分类下上架商品。商品是关联数据 —— 从<strong>装备变体 / 药品</strong>里挑一件上架，
+            只能改<strong>售价</strong>与<strong>购买等级</strong>（名称/图标/部位归各自的配置页管）；
+            下架 = 删行，本体不受影响。购买等级不足的玩家，客户端按钮置灰、服务端拒绝成交。
           </>
         }
       />
@@ -344,7 +393,7 @@ export function MallPricingPage() {
       <Card
         title={selectedCategory ? `商品 · ${selectedCategory.label}` : "商品"}
         actions={loading ? <Spinner /> : null}
-        description={canWrite ? "点商品名所在行查看；「上架」把装备变体挂进当前分类。" : "当前角色没有「修改养成配置」权限，列表只读。"}
+        description={canWrite ? "点商品名所在行查看；「上架」把装备或药品挂进当前分类。" : "当前角色没有「修改养成配置」权限，列表只读。"}
       >
         {!selectedCategory ? (
           <EmptyState title="先选择一个分类" description="左侧分类表里点分类名切换" />
@@ -373,20 +422,28 @@ export function MallPricingPage() {
                   {goods?.list.map((item) => (
                     <tr key={item.id} className="transition hover:bg-slate-800/30">
                       <td className={tdClass}>
-                        <GameIcon path={equipmentIcon(item.id)} alt={item.label} />
+                        <GameIcon path={item.icon} alt={item.label} />
                       </td>
                       <td className={`${tdClass} font-mono text-xs text-slate-300`}>{item.id}</td>
                       <td className={`${tdClass} max-w-[240px] truncate font-medium text-slate-100`} title={item.label}>
                         {item.label}
                       </td>
                       <td className={tdClass}>
-                        <Badge tone="slate">{item.slot ? slotLabel(item.slot) : "—"}</Badge>
+                        {item.kind === DRUG_CATEGORY ? (
+                          <Badge tone="amber">药品</Badge>
+                        ) : (
+                          <Badge tone="slate">{item.slot ? slotLabel(item.slot) : "—"}</Badge>
+                        )}
                       </td>
                       <td className={tdClass}>
-                        <div className="flex flex-wrap gap-1">
-                          <Badge tone="indigo">{prefixLabelOf(item.prefix)}</Badge>
-                          <Badge tone="slate">{suffixLabelOf(item.suffix)}</Badge>
-                        </div>
+                        {item.kind === DRUG_CATEGORY ? (
+                          <span className="text-xs text-slate-500">—</span>
+                        ) : (
+                          <div className="flex flex-wrap gap-1">
+                            <Badge tone="indigo">{prefixLabelOf(item.prefix)}</Badge>
+                            <Badge tone="slate">{suffixLabelOf(item.suffix)}</Badge>
+                          </div>
+                        )}
                       </td>
                       <td className={`${tdClass} text-slate-400`}>{item.level}</td>
                       <td className={`${tdClass} font-medium text-emerald-300`}>{item.price}</td>
@@ -409,7 +466,7 @@ export function MallPricingPage() {
             </div>
 
             {!loading && goods && goods.list.length === 0 ? (
-              <EmptyState title="这个分类还没有商品" description="点「上架商品」从装备变体里挑一件" />
+              <EmptyState title="这个分类还没有商品" description="点「上架商品」按分类与等级挑一件" />
             ) : null}
 
             <Pagination page={page} size={size} total={goods?.total ?? 0} onChange={setPage} onSizeChange={(next) => { setSize(next); setPage(1); }} />
@@ -440,7 +497,7 @@ export function MallPricingPage() {
         <Modal
           open
           title="上架商品"
-          hint="从装备变体里挑一件挂进当前分类；售价 0 = 免费，购买等级 0 = 不限等级。"
+          hint="先选物品自己的分类与等级缩小范围，再从候选里挑一件挂进当前分类；售价 0 = 免费，购买等级 0 = 不限等级。"
           size="md"
           onClose={() => setCreating(false)}
           footer={<>
@@ -449,45 +506,106 @@ export function MallPricingPage() {
           </>}
         >
           <div className="mt-5 flex flex-col gap-4">
-            <Field label="选装备（按 id / 名称搜索）">
-              <div className="flex gap-2">
-                <Input
-                  value={variantKeyword}
-                  placeholder="如 cloth / 重甲"
-                  onChange={(event) => setVariantKeyword(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter") void searchVariants(variantKeyword.trim());
+            <div className="flex flex-wrap gap-3">
+              <Field width="w-40" label="分类（物品自己的）">
+                <Select value={catalogCategory} onChange={(event) => switchCatalogCategory(event.target.value)}>
+                  <option value="">全部分类</option>
+                  <option value={DRUG_CATEGORY}>药品</option>
+                  {equipmentSlotKeys().map((slot) => (
+                    <option key={slot} value={slot}>
+                      {slotLabel(slot)}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+              <Field width="w-32" label="等级">
+                <Select
+                  value={catalogLevel}
+                  disabled={catalogLevels.length === 0}
+                  onChange={(event) => {
+                    setCatalogLevel(event.target.value);
+                    setCatalogPage(1);
                   }}
-                />
-                <Button variant="outline" onClick={() => void searchVariants(variantKeyword.trim())}>搜索</Button>
-              </div>
-            </Field>
-            <Field label="搜索结果（点选一件）" hint="同一件装备有 15 个变体（名称相同），认准「部位 + 前后缀」再上架。">
-              <div className="max-h-48 overflow-y-auto rounded-lg border border-slate-800">
-                {variantOptions.length === 0 ? (
-                  <p className="px-3 py-3 text-xs text-slate-500">没有匹配的装备变体，换个关键字</p>
+                >
+                  <option value="">全部等级</option>
+                  {catalogLevels.map((level) => (
+                    <option key={level} value={String(level)}>
+                      Lv.{level}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+              <Field width="w-56" label="关键字（id / 名称）">
+                <div className="flex gap-2">
+                  <Input
+                    value={variantKeyword}
+                    placeholder="如 cloth / 重甲 / 金创药"
+                    onChange={(event) => setVariantKeyword(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key !== "Enter") return;
+                      setCatalogKeyword(variantKeyword.trim());
+                      setCatalogPage(1);
+                    }}
+                  />
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setCatalogKeyword(variantKeyword.trim());
+                      setCatalogPage(1);
+                    }}
+                  >
+                    搜索
+                  </Button>
+                </div>
+              </Field>
+            </div>
+
+            <Field
+              label="候选物品（点选一件）"
+              hint="同一件装备有 15 个变体（名称相同），认准「部位 + 前后缀」；带「已上架」的不能再挂第二行。"
+            >
+              <div className="max-h-56 overflow-y-auto rounded-lg border border-slate-800">
+                {catalogLoading ? (
+                  <p className="px-3 py-3 text-xs text-slate-500">查询中…</p>
+                ) : !catalog || catalog.list.length === 0 ? (
+                  <p className="px-3 py-3 text-xs text-slate-500">这个分类与等级下没有物品，换个条件试试</p>
                 ) : (
-                  variantOptions.map((variant) => (
+                  catalog.list.map((item) => (
                     <button
-                      key={variant.id}
+                      key={item.id}
                       type="button"
-                      className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs transition hover:bg-slate-800/60 ${pickedVariant?.id === variant.id ? "bg-slate-800/80" : ""}`}
-                      onClick={() => setPickedVariant(variant)}
+                      disabled={item.listed}
+                      title={item.listed ? `${item.id} 已在商城上架（换分类先下架）` : item.id}
+                      className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs transition ${item.listed ? "cursor-not-allowed opacity-40" : "hover:bg-slate-800/60"} ${pickedVariant?.id === item.id ? "bg-slate-800/80" : ""}`}
+                      onClick={() => setPickedVariant(item)}
                     >
-                      <GameIcon path={equipmentIcon(variant.id)} alt={variant.label} size={24} />
-                      <span className="shrink-0 font-mono text-slate-400">{variant.id}</span>
-                      <span className="truncate text-slate-100" title={variant.label}>{variant.label}</span>
+                      <GameIcon path={item.icon} alt={item.label} size={24} zoomable={false} />
+                      <span className="shrink-0 font-mono text-slate-400">{item.id}</span>
+                      <span className="truncate text-slate-100" title={item.label}>{item.label}</span>
                       <span className="ml-auto flex shrink-0 items-center gap-1">
-                        <Badge tone="slate">{variant.slot ? slotLabel(variant.slot) : "部位未知"}</Badge>
-                        <Badge tone="indigo">{prefixLabelOf(variant.prefix)}</Badge>
-                        <Badge tone="slate">{suffixLabelOf(variant.suffix)}</Badge>
-                        <span className="text-slate-500">Lv.{variant.level}</span>
+                        {item.kind === DRUG_CATEGORY ? (
+                          <Badge tone="amber">药品</Badge>
+                        ) : (
+                          <>
+                            <Badge tone="slate">{item.slot ? slotLabel(item.slot) : "部位未知"}</Badge>
+                            <Badge tone="indigo">{prefixLabelOf(item.prefix)}</Badge>
+                            <Badge tone="slate">{suffixLabelOf(item.suffix)}</Badge>
+                          </>
+                        )}
+                        <span className="text-slate-500">Lv.{item.level}</span>
+                        {item.listed ? <Badge tone="amber">已上架</Badge> : null}
                       </span>
                     </button>
                   ))
                 )}
               </div>
             </Field>
+            <Pagination
+              page={catalogPage}
+              size={CATALOG_PAGE_SIZE}
+              total={catalog?.total ?? 0}
+              onChange={setCatalogPage}
+            />
             <div className="flex gap-3">
               <Field width="w-40" label="售价（绑定元宝/件）">
                 <Input type="number" min={0} value={createPrice} onChange={(event) => setCreatePrice(event.target.value)} />
@@ -498,7 +616,7 @@ export function MallPricingPage() {
             </div>
             {!createValid ? (
               <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-200">
-                先选一件装备；售价 / 购买等级需为 0~{MALL_PRICE_MAX} 的整数。
+                先选一件物品；售价 / 购买等级需为 0~{MALL_PRICE_MAX} 的整数。
               </p>
             ) : null}
           </div>

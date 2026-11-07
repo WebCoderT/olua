@@ -592,8 +592,14 @@ export const routes = {
      */
     templates: "/admin/mails/templates",
   },
-  /** adminMall 模块（8 个接口） */
+  /** adminMall 模块（9 个接口） */
   adminMall: {
+    /**
+     * 可上架目录（装备 + 药品，按分类与等级筛）（GET /admin/mall/catalog）
+     *
+     * 上架弹窗的数据源：装备变体（`equipment_variants`）+ 药品（`drugs`）拼成同一形状。
+     */
+    listCatalog: "/admin/mall/catalog",
     /**
      * 商城分类列表（GET /admin/mall/categories）
      *
@@ -621,13 +627,13 @@ export const routes = {
     /**
      * 上架商品列表（商品 × 分类 × 售价合并视图）（GET /admin/mall/goods）
      *
-     * 商品 = 运营手动上架的装备变体（`mall_goods` 行）；名称 / 部位 / 装备等级来自装备数据（**只读展示**），售价与购买等级才是商城字段。`categoryId` / `slot` / `keyword` 组合筛，按 分类序 → 装备等级 → id 排序。上架后装备被删的孤儿行照实列出（名称退回 id），便于清理。
+     * 商品 = 运营手动上架的装备变体或药品（`mall_goods` 行）；名称 / 图标 / 部位 / 等级来自各自的数据表（**只读展示**），售价与购买等级才是商城字段。`categoryId` / `kind` / `slot` / `keyword` 组合筛，按 分类序 → 等级 → id 排序。上架后本体被删的孤儿行照实列出（名称退回 id），便于清理。
      */
     listGoods: "/admin/mall/goods",
     /**
      * 上架商品（POST /admin/mall/goods）
      *
-     * 把一件装备变体挂到某个分类下（缺省售价 0 = 免费、购买等级 0 = 不限）。
+     * 把一件装备变体或一种药品挂到某个分类下（缺省售价 0 = 免费、购买等级 0 = 不限）。
      */
     createGood: "/admin/mall/goods",
     /**

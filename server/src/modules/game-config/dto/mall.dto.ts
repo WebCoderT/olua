@@ -1,4 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
+import { Type } from "class-transformer";
 import { IsIn, IsInt, IsOptional, IsString, Max, MaxLength, Min, MinLength } from "class-validator";
 import { PageMetaDto, PageQueryDto } from "../../../common/dto/api-envelope.dto";
 import { EQUIPMENT_SLOT_KEYS } from "./equipment.dto";
@@ -7,6 +8,18 @@ import { EQUIPMENT_SLOT_KEYS } from "./equipment.dto";
 export const MALL_PRICE_MAX = 100_000_000;
 /** 购买等级上限（与角色等级表同一量级） */
 export const MALL_LEVEL_MAX = 10_000;
+
+/**
+ * 商城可上架的品类（#763）
+ *
+ * 商品是**关联数据**，所以「能卖什么」由目录决定而不是运营手输：目前两类 ——
+ * 装备变体（`equipment_variants`，555 行）与药品（`drugs`，11 行）。
+ * 材料（`items`）暂不上架：它们没有可用的图标/等级口径，卖了玩家也不知道是干什么的。
+ */
+export const MALL_GOOD_KINDS = ["equipment", "drug"] as const;
+
+/** 上架弹窗「分类」下拉里表示药品的那一项（其余取值 = 装备部位 key） */
+export const MALL_CATEGORY_DRUG = "drug";
 
 /** 商城分类（运营自建的陈列分组） */
 export class MallCategoryDto {
@@ -75,25 +88,31 @@ export class MallCategoryRemoveDto {
 }
 
 /**
- * 一条上架商品视图（商品本体字段来自装备数据，价格与等级来自 mall_goods）
+ * 一条上架商品视图（商品本体字段来自装备 / 药品数据，价格与等级来自 mall_goods）
  *
- * `label / slot / level / prefix / suffix`（装备等级需求、部位、前后缀序号）是**只读展示** ——
+ * `kind / label / icon / slot / level / prefix / suffix` 是**只读展示** ——
  * 商品是关联数据，运营只改 `price`（售价）与 `requiredLevel`（购买等级）。
  *
  * 前后缀只给序号不给中文名：文案住在 `equipment_meta`（「装备设置」页可改），
- * 一处改动全场跟着变，管理端按序号查表显示。
+ * 一处改动全场跟着变，管理端按序号查表显示。药品没有部位与前后缀（`slot` 空、两位 0）。
  */
 export class MallGoodItemDto {
-  @ApiProperty({ description: "商品 id（装备变体 id，如 cloth_1_p3s2）" })
+  @ApiProperty({ description: "商品 id（装备变体 id，如 cloth_1_p3s2；药品为其 drugs.id）" })
   id: string;
 
   @ApiProperty({ description: "所属分类 id" })
   categoryId: string;
 
-  @ApiProperty({ description: "显示名（装备配置已拼好前后缀）" })
+  @ApiProperty({ description: "品类：equipment（装备）/ drug（药品）" })
+  kind: string;
+
+  @ApiProperty({ description: "显示名（装备取变体名，药品取 drugs.label）" })
   label: string;
 
-  @ApiProperty({ description: "部位（EQUIPMENT_TYPE 的枚举值）" })
+  @ApiProperty({ description: "图标（resources 相对路径；装备取基础件图标，药品取 drugs.icon）" })
+  icon: string;
+
+  @ApiProperty({ description: "部位（EQUIPMENT_TYPE 的枚举值；药品为空串）" })
   slot: string;
 
   @ApiProperty({ description: "装备的等级需求（装备数据，只读展示）" })
@@ -134,6 +153,79 @@ export class MallGoodQueryDto extends PageQueryDto {
   @IsString({ message: "部位必须是字符串" })
   @IsIn(EQUIPMENT_SLOT_KEYS, { message: "部位取值不合法" })
   slot?: string;
+
+  @ApiPropertyOptional({ description: "按品类筛：equipment（装备）/ drug（药品）" })
+  @IsOptional()
+  @IsString({ message: "品类必须是字符串" })
+  @IsIn(MALL_GOOD_KINDS, { message: "品类取值不合法" })
+  kind?: string;
+}
+
+/**
+ * 上架弹窗的「可上架目录」查询（#763）
+ *
+ * `category` 是**物品自己的分类**，不是商城的陈列分类：装备填部位 key（weapon / cloth …），
+ * 药品填 `drug`，留空 = 全部。`level` 是精确等级（装备等级需求 / 药品等级），留空 = 全部。
+ */
+export class MallCatalogQueryDto extends PageQueryDto {
+  @ApiPropertyOptional({
+    description: "物品分类：部位 key（" + EQUIPMENT_SLOT_KEYS.join(" / ") + "）或 drug（药品）；留空 = 全部",
+  })
+  @IsOptional()
+  @IsString({ message: "分类必须是字符串" })
+  @IsIn([...EQUIPMENT_SLOT_KEYS, MALL_CATEGORY_DRUG], { message: "分类取值不合法" })
+  category?: string;
+
+  @ApiPropertyOptional({ description: "精确等级（留空 = 全部等级）", minimum: 0 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt({ message: "等级必须是整数" })
+  @Min(0, { message: "等级不能为负" })
+  level?: number;
+
+  @ApiPropertyOptional({ description: "关键字：模糊匹配 id 与名称" })
+  @IsOptional()
+  @IsString({ message: "关键字必须是字符串" })
+  declare keyword?: string;
+}
+
+/** 上架弹窗里的一条候选物品（`listed` 已在商城上架的行也照实列出，好让运营知道别再点） */
+export class MallCatalogItemDto {
+  @ApiProperty({ description: "物品 id（装备变体 id / 药品 id）" })
+  id: string;
+
+  @ApiProperty({ description: "品类：equipment（装备）/ drug（药品）" })
+  kind: string;
+
+  @ApiProperty({ description: "显示名" })
+  label: string;
+
+  @ApiProperty({ description: "图标（resources 相对路径）" })
+  icon: string;
+
+  @ApiProperty({ description: "部位（药品为空串）" })
+  slot: string;
+
+  @ApiProperty({ description: "等级（装备等级需求 / 药品等级）" })
+  level: number;
+
+  @ApiProperty({ description: "前缀序号（品质；药品恒 0）" })
+  prefix: number;
+
+  @ApiProperty({ description: "后缀序号（阶级；药品恒 0）" })
+  suffix: number;
+
+  @ApiProperty({ description: "是否已在商城上架（一件物品全商城只能挂一行）" })
+  listed: boolean;
+}
+
+/** 可上架目录分页结果（`levels` = 当前分类下出现过的等级，给弹窗的等级下拉用） */
+export class MallCatalogPageDto extends PageMetaDto {
+  @ApiProperty({ description: "当前页的候选物品", type: [MallCatalogItemDto] })
+  list: MallCatalogItemDto[];
+
+  @ApiProperty({ description: "当前分类下出现过的等级（升序去重；与关键字无关）", type: [Number] })
+  levels: number[];
 }
 
 /** 商城商品分页结果 */
