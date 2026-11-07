@@ -98,7 +98,7 @@ await authApi.login({ username, password }, { silent: true }); // 表单自己�
 | `RanksPage` | **养成配置**（军衔 #250）：同上模式，无拖动排序（100 阶天然按阶），主列表带大段 Badge；`GameConfigDialog` kind="rank"（无动画栏、加大段名输入） |
 | `GrowthPage` | **养成配置**（成长参数 #256 / #655）：**只剩标量参数一栏**（`roleMaxLevel` / `expGain.*` / `mpRecoverPerSecond` 四个全局数）+ `NumberEditDialog`；升级经验与每级属性搬到「角色等级」页。曲线分段随曲线下架 —— 别再往这页加「一段带动十级」的旋钮 |
 | `RoleLevelsPage` | **角色等级表**（#655）：60 行 = 每级的**最终裸属性 + 升级经验**，是战斗结算与客户端等级表的唯一来源。**逐级改，没有曲线** —— 曲线「改一个参数十级一起变」，改坏要半天才发现；逐级之后改第 30 行就是改第 30 级，服务端立刻按新值结算。数字先按字符串收（空串 ≠ 0） |
-| `EquipmentsPage` | **养成配置**（装备基础件 #252）：部位 / 等级段筛选 + 分页；**只收基础件**（37 件，变体在客户端按倍率展开）；编辑弹窗只开放等级 / 售卖价 / 八项属性（页面内 `EquipmentEditDialog`，不复用 GameConfigDialog —— 字段差异太大） |
+| `EquipmentsPage` | **养成配置**（装备基础件 #252 / #773）：**按部位拆页签**（`GET admin/equipments/summary` 给件数，顺序 = 槽位表 `sort_order`）+ 名称 / 等级段筛选 + 分页；**只收基础件**（变体在 `EquipmentVariantsPage`）。`EquipmentCreateDialog`：部位 / 模板 / id（**留空由服务端按 `部位_序号` 生成**）/ 名称 / 等级 / 售价 / 职业性别 —— 资源与八项属性**从模板复制**（让运营手抄 8 向位置只会抄错），服务端**连带展开全部变体**（档数取 `equipment_meta`）。行内删除走 `ConfirmDialog`：连带删变体与两套对齐几何，**商城在架 → 409 `50040`**，玩家身上的引用会失效（文案必须讲这条）。编辑弹窗仍是页面内的 `EquipmentEditDialog`（字段差异太大，不复用 `GameConfigDialog`） |
 | `EquipmentTiersPage` | **前后缀管理**（#712 / #714）：前后缀**档位定义**（文案 + 属性倍率，1~10 档，`equipment_meta` 单行整份替换；改档数要回「装备变体」页点重建）+ **两张关联棋盘**（前后缀组合 → 边框 / 背景），棋盘每格只是从清单里**选一个 key**。见「五点十六」 |
 | `EquipmentVariantsPage` | **装备变体逐件配置**（#655）：555 行 = 37 基础件 × 5 前缀 × 3 后缀，**每行都是最终值**（改一件的 +4 前缀不再连带其余 14 件）。品质文案从 `equipment_meta` 取（改一次全场跟着变，不动 555 行）；不能新建 / 删除 —— 组合由档位定义决定，增删走「重新生成变体」 |
 | `EquipmentSettingsPage` | **槽位与规则**（#603）：槽位表 13 行（名称 / 底图 / 位置分组 / 排序，排序同时是背包「一键整理」的部位序）+ 装备规则单行。**槽位 key 不可改**（= `EQUIPMENT_TYPE` 枚举值，客户端按它分表与画底图，改 key 等于改代码）；回收价不在这页（逐条在变体页改 `sellPrice`） |
@@ -510,7 +510,7 @@ await authApi.login({ username, password }, { silent: true }); // 表单自己�
 
 | 页面 | 一行 / 一格的语义 | 能不能增删 |
 |---|---|---|
-| `EquipmentsPage` 装备配置 | 一件**基础件**（37 件） | 不能 |
+| `EquipmentsPage` 装备配置 | 一件**基础件**（#773 起可新建，如 `cloth_33`） | 能（新建连带展开全部变体；删除连带删变体 + 工作台几何，商城在架时 409） |
 | `EquipmentTiersPage` 前后缀管理 | **档位定义**（1~10 档文案 + 属性倍率）+ **两张引用棋盘**（组合 → 边框 / 背景 key） | 档位可增删（1~10），棋盘格子只选 key |
 | `EquipmentVariantsPage` 装备变体 | 一个**最终组合**（555 行，每行都是最终值） | 不能直接增删，走「重新生成变体」 |
 | `EquipmentSettingsPage` 槽位与规则 | 一个**槽位**（13 行）+ 一行装备规则 | 不能 |

@@ -8,8 +8,9 @@
  * ## 三条主线
  * 1. **seed 同源**：启动时从配置快照（config-sync.sql）灌库，断言行数（34/37）、默认渠道、
  *    名与价格与客户端配置逐字段一致 —— 运营看到的初始表就是玩家侧数值。
- * 2. **能力边界**：POST / DELETE 路由不存在（404），改不存在的等级 → 404 + 专属业务码；
- *    参数越界（渠道枚举外 / 负价格 / min>max）→ 400。
+ * 2. **能力边界**：装备可以新建 / 删除（#773，连带展开变体、商城在架拒删），称号 / 战魂 /
+ *    军衔 / 槽位仍是「只能改」（POST / DELETE 路由不存在 → 404）；改不存在的行 → 404 + 专属
+ *    业务码；参数越界（渠道枚举外 / 负价格 / min>max）→ 400。
  * 3. **改了真生效**：PATCH 部分更新后 GET 反映；渠道筛选跟着变；观察员可读不可写。
  *
  * 用法：npm run test:e2e:game-config（前置 npm run build）
@@ -850,14 +851,106 @@ async function main() {
     });
     checkEqual(restoreDisplay.status, 200, "显示字段已还原（不污染快照断言）");
     const postEquipment = await api(base, "POST", "/api/admin/equipments", { token, body: { id: "cloth_new" } });
-    checkEqual(postEquipment.status, 404, "POST 装备 → 404（路由不存在）");
-    const deleteEquipment = await api(base, "DELETE", "/api/admin/equipments/cloth_14", { token });
-    checkEqual(deleteEquipment.status, 404, "DELETE 装备 → 404（路由不存在）");
+    checkEqual(postEquipment.status, 400, "POST 装备缺部位 / 名称 → 400（#773 起路由存在，校验拦下）");
+    const deleteEquipment = await api(base, "DELETE", "/api/admin/equipments/cloth_999", { token });
+    checkEqual(deleteEquipment.status, 404, "DELETE 不存在的装备 → 404");
     const viewerEquipmentRead = await api(base, "GET", "/api/admin/equipments", { token: viewerToken });
     checkEqual(viewerEquipmentRead.body?.code, 0, "观察员能看装备配置");
     const viewerEquipmentWrite = await api(base, "PATCH", "/api/admin/equipments/cloth_14", { token: viewerToken, body: { sellPrice: 1 } });
     checkEqual(viewerEquipmentWrite.status, 403, "观察员改装备 → 403");
     checkEqual(viewerEquipmentWrite.body?.code, 30006, "观察员改装备 → 30006（权限点不足）");
+    const viewerEquipmentCreate = await api(base, "POST", "/api/admin/equipments", { token: viewerToken, body: { slot: "cloth", label: "观察员想建" } });
+    checkEqual(viewerEquipmentCreate.status, 403, "观察员新建装备 → 403");
+    const viewerEquipmentDelete = await api(base, "DELETE", "/api/admin/equipments/cloth_14", { token: viewerToken });
+    checkEqual(viewerEquipmentDelete.status, 403, "观察员删除装备 → 403");
+
+    //#endregion
+
+    //#region 八·三、新建与删除装备（#773：以前是刻意的「只能改」，现在放开增删）
+
+    group("八·三、新建与删除装备");
+
+    const combos = equipMeta.prefixRates.length * equipMeta.suffixRates.length;
+
+    // 部位盘点（管理端页签的计数徽章）
+    const summaryBefore = await api(base, "GET", "/api/admin/equipments/summary", { token });
+    checkEqual(summaryBefore.status, 200, "部位盘点可读");
+    checkEqual(summaryBefore.body?.data?.total, equipmentCount, `盘点总数 = 基础件数（${equipmentCount}）`);
+    checkEqual(summaryBefore.body?.data?.slots?.length, slotRows.length, `盘点覆盖全部 ${slotRows.length} 个部位（含空部位）`);
+    checkEqual(summaryBefore.body?.data?.slots?.[0]?.slot, slotRows[0].key, "盘点顺序 = 槽位表 sort_order");
+    checkEqual(summaryBefore.body?.data?.slots?.[0]?.label, slotRows[0].label, "盘点带部位名（管理端不用再查字典）");
+    const clothCountBefore = summaryBefore.body?.data?.slots?.find((row) => row.slot === "cloth")?.count;
+    checkEqual(clothCountBefore, clothSlotCount, "cloth 页签计数 = 该部位件数");
+
+    // 新建：id 省略 → 服务端按 部位_序号 生成；资源 / 属性从模板复制；连带展开全部变体
+    const newEquip = await api(base, "POST", "/api/admin/equipments", {
+      token,
+      body: { slot: "cloth", label: "e2e 新衣", templateId: "cloth_14" },
+    });
+    checkEqual(newEquip.status, 201, "新建装备 → 201");
+    const newEquipId = newEquip.body?.data?.equipment?.id;
+    check(/^cloth_\d+$/.test(newEquipId || ""), `id 按 部位_序号 自动生成（${newEquipId}）`);
+    check(newEquipId !== "cloth_14", "自动生成的 id 不与既有装备重复");
+    checkEqual(newEquip.body?.data?.equipment?.slot, "cloth", "部位已落");
+    checkEqual(newEquip.body?.data?.equipment?.label, "e2e 新衣", "名称已落");
+    checkEqual(newEquip.body?.data?.equipment?.level, cloth14.level, "等级跟模板");
+    checkEqual(newEquip.body?.data?.equipment?.icon, cloth14.icon, "图标跟模板");
+    checkEqual(newEquip.body?.data?.equipment?.outAtlas, cloth14.outAtlas, "外观图集跟模板");
+    checkEqual(newEquip.body?.data?.equipment?.attributes?.maxHp, cloth14.attributes.maxHp, "八项属性跟模板");
+    checkEqual(newEquip.body?.data?.equipment?.outPositions?.length, 8, "8 向位置跟模板（整份 8 个）");
+    checkEqual(newEquip.body?.data?.variants, combos, `连带展开 ${combos} 个变体`);
+
+    const newEquipVariants = await api(base, "GET", `/api/admin/equipment-variants?baseId=${newEquipId}&page=1&size=50`, { token });
+    checkEqual(newEquipVariants.body?.data?.total, combos, "变体行真的进表了（客户端只认这张表）");
+    const newEquipTop = newEquipVariants.body?.data?.list?.find((row) => row.prefix === 0 && row.suffix === 0);
+    checkEqual(newEquipTop?.id, newEquipId, "p0s0 的变体 id 就是基础件 id");
+    checkEqual(newEquipTop?.attributes?.maxHp, cloth14.attributes.maxHp, "p0s0 属性 = 基础值（倍率 1）");
+
+    // 新建的各种拒绝路径
+    const newEquipDup = await api(base, "POST", "/api/admin/equipments", { token, body: { id: newEquipId, slot: "cloth", label: "重复 id" } });
+    checkEqual(newEquipDup.status, 409, "手填撞已有 id → 409");
+    checkEqual(newEquipDup.body?.code, 50039, "撞 id 用 50039");
+    const newEquipBadSlot = await api(base, "POST", "/api/admin/equipments", { token, body: { slot: "cape", label: "非法部位" } });
+    checkEqual(newEquipBadSlot.status, 400, "未知部位 → 400（部位清单归槽位表）");
+    const newEquipBadTemplate = await api(base, "POST", "/api/admin/equipments", { token, body: { slot: "cloth", label: "坏模板", templateId: "cloth_999" } });
+    checkEqual(newEquipBadTemplate.status, 404, "模板不存在 → 404");
+    checkEqual(newEquipBadTemplate.body?.code, 50016, "模板不存在用 50016");
+    const newEquipBadId = await api(base, "POST", "/api/admin/equipments", { token, body: { id: "Cloth-9", slot: "cloth", label: "非法 id" } });
+    checkEqual(newEquipBadId.status, 400, "id 形态非法 → 400");
+
+    // 页面盘点跟着涨
+    const summaryAfter = await api(base, "GET", "/api/admin/equipments/summary", { token });
+    checkEqual(summaryAfter.body?.data?.total, equipmentCount + 1, "盘点总数 +1");
+    checkEqual(
+      summaryAfter.body?.data?.slots?.find((row) => row.slot === "cloth")?.count,
+      clothCountBefore + 1,
+      "cloth 页签 +1",
+    );
+
+    // 商城还在架 → 拒删（先下架）
+    const listedGood = await api(base, "POST", "/api/admin/mall/goods", {
+      token,
+      body: { id: newEquipId, categoryId: "default", price: 12 },
+    });
+    checkEqual(listedGood.status, 201, "把新装备挂上商城（为验证拒删）");
+    const deleteListed = await api(base, "DELETE", `/api/admin/equipments/${newEquipId}`, { token });
+    checkEqual(deleteListed.status, 409, "商城在架 → 拒删");
+    checkEqual(deleteListed.body?.code, 50040, "商城在架用 50040");
+    const unlistedGood = await api(base, "DELETE", `/api/admin/mall/goods/${newEquipId}`, { token });
+    checkEqual(unlistedGood.status, 200, "下架（还原商城）");
+
+    // 删除：连带变体；删完再删 404
+    const removed = await api(base, "DELETE", `/api/admin/equipments/${newEquipId}`, { token });
+    checkEqual(removed.status, 200, "删除装备 → 200");
+    checkEqual(removed.body?.data?.id, newEquipId, "回包 id 就是被删的那件");
+    checkEqual(removed.body?.data?.variants, combos, `连带删掉 ${combos} 个变体`);
+    const removedVariants = await api(base, "GET", `/api/admin/equipment-variants?baseId=${newEquipId}&page=1&size=50`, { token });
+    checkEqual(removedVariants.body?.data?.total, 0, "变体已随之清空");
+    const removedAgain = await api(base, "DELETE", `/api/admin/equipments/${newEquipId}`, { token });
+    checkEqual(removedAgain.status, 404, "再删一次 → 404");
+    checkEqual(removedAgain.body?.code, 50016, "删不存在的装备用 50016");
+    const summaryRestored = await api(base, "GET", "/api/admin/equipments/summary", { token });
+    checkEqual(summaryRestored.body?.data?.total, equipmentCount, "删完盘点回到原数（不污染后续断言）");
 
     //#endregion
 

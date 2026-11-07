@@ -56,7 +56,7 @@ import {
 } from "../modules/game-config/dto/title.dto";
 import { SoulDto, SoulPageDto, SoulQueryDto, UpdateSoulDto } from "../modules/game-config/dto/soul.dto";
 import { RankDto, RankPageDto, RankQueryDto, UpdateRankDto } from "../modules/game-config/dto/rank.dto";
-import { EquipmentDto, EquipmentPageDto, EquipmentQueryDto, EquipmentVariantDto, EquipmentVariantPageDto, EquipmentVariantQueryDto, EquipmentVariantRebuildResultDto, UpdateEquipmentDto, UpdateEquipmentVariantDto } from "../modules/game-config/dto/equipment.dto";
+import { CreateEquipmentDto, CreateEquipmentResultDto, EquipmentDto, EquipmentPageDto, EquipmentQueryDto, EquipmentSlotSummaryDto, EquipmentVariantDto, EquipmentVariantPageDto, EquipmentVariantQueryDto, EquipmentVariantRebuildResultDto, RemoveEquipmentResultDto, UpdateEquipmentDto, UpdateEquipmentVariantDto } from "../modules/game-config/dto/equipment.dto";
 import { AppearanceAssignmentDto, AppearanceEffectDto, AppearanceItemDto, AppearanceResourceScanDto, AppearanceResourceSyncDto, CustomAppearanceDto, EquipmentBackgroundDto, EquipmentBorderDto, UpdateEquipmentBackgroundDto, UpdateEquipmentBorderDto } from "../modules/game-config/dto/equipment-appearance.dto";
 import { DrugDto, DrugPageDto, DrugQueryDto, UpdateDrugDto } from "../modules/game-config/dto/drug.dto";
 import { ItemDto, ItemPageDto, ItemQueryDto, UpdateItemDto } from "../modules/game-config/dto/item.dto";
@@ -342,10 +342,14 @@ export const SWAGGER_MODELS = [
   RankPageDto,
   RankQueryDto,
   UpdateRankDto,
-  // 养成配置（装备基础件 #252）
+  // 养成配置（装备基础件 #252；#773 起可新建 / 删除）
   EquipmentDto,
   EquipmentPageDto,
   EquipmentQueryDto,
+  EquipmentSlotSummaryDto,
+  CreateEquipmentDto,
+  CreateEquipmentResultDto,
+  RemoveEquipmentResultDto,
   UpdateEquipmentDto,
   // 养成配置（装备变体 #655：基础件 × 前后缀，取代运行时倍率展开）
   EquipmentVariantDto,

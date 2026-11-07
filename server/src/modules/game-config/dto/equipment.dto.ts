@@ -13,6 +13,7 @@ import {
   Max,
   MaxLength,
   Min,
+  MinLength,
   ValidateNested,
 } from "class-validator";
 import { PageMetaDto, PageQueryDto } from "../../../common/dto/api-envelope.dto";
@@ -260,9 +261,9 @@ export class EquipmentPageDto extends PageMetaDto {
 /**
  * 编辑装备基础件入参（**部分更新**）
  *
- * **没有 Create / Delete**：装备 id / 部位结构固定（变体生成规则在客户端配置，属代码不是运营数据），
- * 后台只允许改数值 —— 这是有意不提供的能力，不是漏了（e2e 会固化「POST/DELETE 路由不存在」）。
- * `slot` / `label` 不开放编辑（部位结构与文案属客户端资源约定，改了会与两端资源对不上）。
+ * `slot` / `id` 不开放编辑：部位结构属客户端资源约定，id 是背包 / 穿戴 / 掉落表里的引用键 ——
+ * 要换位置就新建一件、下架旧的（#773 起装备可增删，`CreateEquipmentDto` 是入口）。
+ * 名称 / 描述 / 图标 / 图集 / 几何都可改（#603 从客户端源码搬进库）。
  */
 export class UpdateEquipmentDto {
   @ApiPropertyOptional({ description: "名称（不传则不改；≤50 字）", maxLength: 50 })
@@ -397,6 +398,165 @@ export class UpdateEquipmentDto {
   @ValidateNested()
   @Type(() => ConfigAttributesDto)
   attributes?: ConfigAttributesDto;
+}
+
+/**
+ * 新建装备基础件入参（#773）
+ *
+ * 与「编辑」的分界很硬：**新建只填身份与基础数值**（部位 / 名称 / 等级 / 售价 / 职业性别 /
+ * 描述 / 标签 / 三个资源路径），资源细节（缩放 / 旋转 / 锚点 / 8 向位置 / 八项属性）一律
+ * 从 `templateId` 复制 —— 让运营在新建弹窗里手抄 8 个方向的位置是纯粹的折磨，而且抄错
+ * 的话客户端会把这件装备画到屏幕外。建完在「编辑」弹窗里逐项改。
+ *
+ * `id` 可省：缺省按 `部位_序号` 生成（该部位现有最大序号 + 1，如 `cloth_33`）。
+ * `slot` 必须是 `equipment_slots` 里的 key —— 这一刀放开的是「这个部位下的装备」，
+ * 不是「新部位」（新增部位要动客户端槽位表与资源，属代码改动）。
+ */
+export class CreateEquipmentDto {
+  @ApiPropertyOptional({
+    description:
+      "装备 id（可省 —— 缺省按 `部位_序号` 生成，如 cloth_33）。手填要求：小写字母开头，" +
+      "只含小写字母 / 数字 / 下划线，≤40 字符；撞已有 id → 409（`50039`）",
+    maxLength: 40,
+  })
+  @IsOptional()
+  @IsString({ message: "id 必须是字符串" })
+  @MaxLength(40, { message: "id 不能超过 40 字" })
+  @Matches(/^[a-z][a-z0-9_]*$/, { message: "id 只能是小写字母开头的小写字母 / 数字 / 下划线" })
+  id?: string;
+
+  @ApiProperty({
+    description: "部位（EQUIPMENT_TYPE 的枚举值，取值：" + EQUIPMENT_SLOT_KEYS.join(" / ") + "）—— 决定角色弹窗里的槽位",
+  })
+  @IsString({ message: "部位必须是字符串" })
+  @IsIn(EQUIPMENT_SLOT_KEYS, { message: "部位取值不合法" })
+  slot: string;
+
+  @ApiProperty({ description: "名称（如「青铜重甲」；1~50 字，前后缀由客户端拼在名字前后）", maxLength: 50 })
+  @IsString({ message: "名称必须是字符串" })
+  @MinLength(1, { message: "名称不能为空" })
+  @MaxLength(50, { message: "名称不能超过 50 字" })
+  label: string;
+
+  @ApiPropertyOptional({
+    description:
+      "模板基础件 id（可省）：复制它的图标 / 内观图集 / 外观图集 / 标签 / 几何（缩放 / 旋转 / 锚点 / 8 向位置）/" +
+      "职业性别 / 描述 / 八项属性 —— 新装备立刻可见可用。不给就是一张白纸（资源与几何全空，客户端看不到外观）",
+  })
+  @IsOptional()
+  @IsString({ message: "模板 id 必须是字符串" })
+  templateId?: string;
+
+  @ApiPropertyOptional({ description: "穿戴需求等级（不传 = 跟模板；再不行 1）", minimum: EQUIPMENT_LEVEL_MIN, maximum: EQUIPMENT_LEVEL_MAX })
+  @IsOptional()
+  @IsInt({ message: "等级必须是整数" })
+  @Min(EQUIPMENT_LEVEL_MIN, { message: `等级不能小于 ${EQUIPMENT_LEVEL_MIN}` })
+  @Max(EQUIPMENT_LEVEL_MAX, { message: `等级不能大于 ${EQUIPMENT_LEVEL_MAX}` })
+  level?: number;
+
+  @ApiPropertyOptional({
+    description: "售卖价（不传 = 跟模板；再不行 0。0 = 不可售卖。**商城售价不在这里**）",
+    minimum: 0,
+    maximum: EQUIPMENT_SELL_PRICE_MAX,
+  })
+  @IsOptional()
+  @IsInt({ message: "售卖价必须是整数" })
+  @Min(0, { message: "售卖价不能为负" })
+  @Max(EQUIPMENT_SELL_PRICE_MAX, { message: "售卖价超出防御性上限" })
+  sellPrice?: number;
+
+  @ApiPropertyOptional({ description: "职业限制（不传 = 跟模板；再不行 4 = 不限）" })
+  @IsOptional()
+  @IsString({ message: "职业限制必须是字符串" })
+  @IsIn(EQUIPMENT_OCCUPATION_KEYS, { message: "职业限制取值不合法" })
+  occupation?: string;
+
+  @ApiPropertyOptional({ description: "性别限制（不传 = 跟模板；再不行 3 = 不限）" })
+  @IsOptional()
+  @IsString({ message: "性别限制必须是字符串" })
+  @IsIn(EQUIPMENT_SEX_KEYS, { message: "性别限制取值不合法" })
+  sex?: string;
+
+  @ApiPropertyOptional({ description: "描述（≤500 字）", maxLength: 500 })
+  @IsOptional()
+  @IsString({ message: "描述必须是字符串" })
+  @MaxLength(500, { message: "描述不能超过 500 字" })
+  description?: string;
+
+  @ApiPropertyOptional({ description: "标签（整份替换；每一项 ≤20 字，最多 8 个）", type: [String] })
+  @IsOptional()
+  @IsArray({ message: "标签必须是数组" })
+  @ArrayMaxSize(8, { message: "标签最多 8 个" })
+  @IsString({ each: true, message: "每个标签都必须是字符串" })
+  @MaxLength(20, { each: true, message: "每个标签不超过 20 字" })
+  tags?: string[];
+
+  @ApiPropertyOptional({ description: "图标（resources 相对路径；不传 = 跟模板）", maxLength: 200 })
+  @IsOptional()
+  @IsString({ message: "图标必须是字符串" })
+  @MaxLength(200, { message: "图标路径不能超过 200 字" })
+  icon?: string;
+
+  @ApiPropertyOptional({ description: "内观图集（resources 相对路径；不传 = 跟模板）", maxLength: 200 })
+  @IsOptional()
+  @IsString({ message: "内观图集必须是字符串" })
+  @MaxLength(200, { message: "内观图集路径不能超过 200 字" })
+  inAtlas?: string;
+
+  @ApiPropertyOptional({ description: "外观图集（resources 相对路径；不传 = 跟模板）", maxLength: 200 })
+  @IsOptional()
+  @IsString({ message: "外观图集必须是字符串" })
+  @MaxLength(200, { message: "外观图集路径不能超过 200 字" })
+  outAtlas?: string;
+}
+
+/** 新建装备的回包：新建的那件 + 连带展开了多少个变体（档数由 `equipment_meta` 决定） */
+export class CreateEquipmentResultDto {
+  @ApiProperty({ description: "新建出来的装备基础件", type: EquipmentDto })
+  @Type(() => EquipmentDto)
+  equipment: EquipmentDto;
+
+  @ApiProperty({ description: "连带展开的变体行数（= 前缀档数 × 后缀档数，出厂 15）", example: 15 })
+  variants: number;
+}
+
+/** 一个部位的装备件数（管理端部位页签的计数徽章） */
+export class EquipmentSlotCountDto {
+  @ApiProperty({ description: "部位 key（EQUIPMENT_TYPE 的枚举值）" })
+  slot: string;
+
+  @ApiProperty({ description: "部位中文名（`equipment_slots.label`）" })
+  label: string;
+
+  @ApiProperty({ description: "这个部位下的基础件数" })
+  count: number;
+}
+
+/**
+ * 部位盘点（#773：管理端列表按部位拆页签）
+ *
+ * 顺序就是 `equipment_slots.sort_order` —— 与角色弹窗的槽位排列、背包「一键整理」的部位序
+ * 同一份，不另排；`equipments` 里出现了但槽位表没有的部位补在末尾（历史脏数据也要点得到）。
+ */
+export class EquipmentSlotSummaryDto {
+  @ApiProperty({ description: "装备基础件总数（= 各行 count 之和）" })
+  total: number;
+
+  @ApiProperty({ description: "按部位分组的件数", type: [EquipmentSlotCountDto] })
+  @Type(() => EquipmentSlotCountDto)
+  slots: EquipmentSlotCountDto[];
+}
+
+/** 删除装备的回包：连带清掉了什么（盘点给管理端提示用） */
+export class RemoveEquipmentResultDto {
+  @ApiProperty({ description: "被删掉的装备基础件 id" })
+  id: string;
+
+  @ApiProperty({ description: "连带删除的变体行数" })
+  variants: number;
+
+  @ApiProperty({ description: "连带删除的对齐几何行数（外观 + 内观工作台里指向这件装备的行）" })
+  aligns: number;
 }
 
 //#region 装备槽位与规则（#603 第九域）

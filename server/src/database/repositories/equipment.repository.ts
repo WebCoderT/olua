@@ -65,9 +65,10 @@ export interface EquipmentListOptions {
 /**
  * 装备基础件数据访问（#252）
  *
- * 与称号 / 战魂 / 军衔同一取向：**没有 insert / remove 的对外语义** —— 行只能来自启动 seed
- * （`seedRow`，INSERT OR IGNORE 幂等），后台接口不提供创建与删除。
- * id / 部位结构固定（变体生成规则在客户端配置，属代码不是运营数据），运营只改数值。
+ * 行来源有两条：启动 seed（`seedRow`，INSERT OR IGNORE 幂等）与**管理端新建**（`insert`，
+ * 撞 id 由服务端先查再拒，见 `EQUIPMENT_ALREADY_EXISTS`）；删除只有管理端那一个入口
+ * （`remove`），连带清理变体与对齐几何由 service 做。部位（`slot`）仍是槽位表里的固定清单 ——
+ * 新增的是「这个部位下的装备」，不是新部位。
  */
 @Injectable()
 export class EquipmentRepository {
@@ -79,6 +80,27 @@ export class EquipmentRepository {
       `INSERT OR IGNORE INTO equipments (id, ${EQUIPMENT_COLUMNS.join(", ")})
        VALUES (?, ${EQUIPMENT_COLUMNS.map(() => "?").join(", ")})`,
       [row.id, ...EQUIPMENT_COLUMNS.map((column) => row[column])],
+    );
+  }
+
+  /** 新建一行（管理端「新建装备」用；撞 id 会抛 SQLite 的约束错误，调用方先查再插） */
+  insert(row: EquipmentRow): void {
+    this.db.run(
+      `INSERT INTO equipments (id, ${EQUIPMENT_COLUMNS.join(", ")})
+       VALUES (?, ${EQUIPMENT_COLUMNS.map(() => "?").join(", ")})`,
+      [row.id, ...EQUIPMENT_COLUMNS.map((column) => row[column])],
+    );
+  }
+
+  /** 删一行（连带清理由 service 负责：变体 / 对齐几何 / 商城引用检查） */
+  remove(id: string): { changes: number } {
+    return this.db.execute("DELETE FROM equipments WHERE id = ?", [id]);
+  }
+
+  /** 每个部位的装备件数（管理端部位页签的计数徽章；`equipment_slots` 里没有行的部位不出现） */
+  countBySlot(): Array<{ slot: string; count: number }> {
+    return this.db.all<{ slot: string; count: number }>(
+      "SELECT slot, COUNT(1) AS count FROM equipments GROUP BY slot",
     );
   }
 

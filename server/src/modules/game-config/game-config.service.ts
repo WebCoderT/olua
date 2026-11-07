@@ -10,6 +10,9 @@ import {
   EquipmentVariantListOptions,
   EquipmentVariantRepository,
 } from "../../database/repositories/equipment-variant.repository";
+import { MallRepository } from "../../database/repositories/mall.repository";
+import { EquipAlignRepository } from "../../database/repositories/equip-align.repository";
+import { EquipInAlignRepository } from "../../database/repositories/equip-in-align.repository";
 import { FashionRepository, FashionListOptions } from "../../database/repositories/fashion.repository";
 import { ItemRepository, ItemListOptions } from "../../database/repositories/item.repository";
 import { MonsterRepository, MonsterListOptions } from "../../database/repositories/monster.repository";
@@ -50,13 +53,18 @@ import {
   TitleRow,
 } from "../../database/rows";
 import {
+  CreateEquipmentDto,
+  CreateEquipmentResultDto,
+  EQUIPMENT_DIRECTIONS,
   EquipmentDto,
   EquipmentMetaDto,
   EquipmentQueryDto,
   EquipmentSlotDto,
+  EquipmentSlotSummaryDto,
   EquipmentVariantDto,
   EquipmentVariantQueryDto,
   EquipmentVariantRebuildResultDto,
+  RemoveEquipmentResultDto,
   UpdateEquipmentDto,
   UpdateEquipmentMetaDto,
   UpdateEquipmentSlotDto,
@@ -124,6 +132,11 @@ export class GameConfigService {
     private readonly ranks: RankRepository,
     private readonly equipments: EquipmentRepository,
     private readonly equipmentVariants: EquipmentVariantRepository,
+    /** 删装备前查「还在商城架上吗」（#773） */
+    private readonly mall: MallRepository,
+    /** 删装备时连带清掉指向它的工作台几何（#773） */
+    private readonly equipAligns: EquipAlignRepository,
+    private readonly equipInAligns: EquipInAlignRepository,
     private readonly drugs: DrugRepository,
     private readonly items: ItemRepository,
     private readonly monstersRepo: MonsterRepository,
@@ -412,37 +425,9 @@ export class GameConfigService {
     const now = Date.now();
     const rows: EquipmentVariantRow[] = [];
     for (const base of bases) {
-      for (let prefix = 0; prefix < meta.prefixRates.length; prefix++) {
-        for (let suffix = 0; suffix < meta.suffixRates.length; suffix++) {
-          const prefixRate = meta.prefixRates[prefix];
-          const suffixRate = meta.suffixRates[suffix];
-          const scale = (value: number): number => Math.round(value * prefixRate * suffixRate);
-          const id = prefix === 0 && suffix === 0 ? base.id : `${base.id}_p${prefix}s${suffix}`;
-          rows.push({
-            id,
-            base_id: base.id,
-            prefix,
-            suffix,
-            label: base.label,
-            level: base.level,
-            sell_price: pricePreserved.get(id) ?? scale(10 * base.level),
-            max_hp: scale(base.max_hp),
-            hp_recover: scale(base.hp_recover),
-            physical_attack_min: scale(base.physical_attack_min),
-            physical_attack_max: scale(base.physical_attack_max),
-            magic_attack_min: scale(base.magic_attack_min),
-            magic_attack_max: scale(base.magic_attack_max),
-            taoist_attack_min: scale(base.taoist_attack_min),
-            taoist_attack_max: scale(base.taoist_attack_max),
-            physical_defense_min: scale(base.physical_defense_min),
-            physical_defense_max: scale(base.physical_defense_max),
-            magic_defense_min: scale(base.magic_defense_min),
-            magic_defense_max: scale(base.magic_defense_max),
-            taoist_defense_min: scale(base.taoist_defense_min),
-            taoist_defense_max: scale(base.taoist_defense_max),
-            updated_at: now,
-          });
-        }
+      for (const row of variantsOfBase(base, meta, now)) {
+        // 卖价保留原值：重建不改运营逐条调过的价，只有新组合（扩档后）才按公式垫底
+        rows.push({ ...row, sell_price: pricePreserved.get(row.id) ?? row.sell_price });
       }
     }
     this.equipmentVariants.replaceAll(rows);
@@ -454,7 +439,7 @@ export class GameConfigService {
     };
   }
 
-  // —— 装备基础件（#252：id / 部位结构固定，只改数值；变体见上面的 #655 区）——
+  // —— 装备基础件（#252 可改数值；#773 起可新建 / 删除；变体见上面的 #655 区）——
 
   listEquipments(query: EquipmentQueryDto): PageResult<EquipmentDto> {
     const options: EquipmentListOptions = {
@@ -505,6 +490,132 @@ export class GameConfigService {
     this.equipments.update(next);
     this.touchRuntime();
     return EquipmentDto.from(this.requireEquipment(id));
+  }
+
+  /** 部位盘点（管理端部位页签的计数徽章，#773） */
+  equipmentSlotSummary(): EquipmentSlotSummaryDto {
+    const counted = this.equipments.countBySlot();
+    const counts = new Map(counted.map((row) => [row.slot, row.count]));
+    const slots = this.equipments.listSlots().map((row) => ({
+      slot: row.key,
+      label: row.label,
+      count: counts.get(row.key) ?? 0,
+    }));
+    // 槽位表里没有、但 equipments 里有的部位（历史脏数据 / 手改库）补在末尾：
+    // 不补的话那几件永远点不到，运营也看不出「有一批装备挂在野部位上」
+    for (const row of counted) {
+      if (slots.some((slot) => slot.slot === row.slot)) continue;
+      slots.push({ slot: row.slot, label: row.slot, count: row.count });
+    }
+    return { total: slots.reduce((sum, slot) => sum + slot.count, 0), slots };
+  }
+
+  /**
+   * 新建装备基础件（#773）
+   *
+   * 三件事按顺序做，每件都先校验再写库（不留半截数据）：
+   * 1. **身份**：部位必须在槽位表里；id 缺省按 `部位_序号` 生成，撞已有 id 直接 409 ——
+   *    不覆盖（一个 id 两件装备会让背包 / 穿戴 / 掉落表里的引用说不清指谁）。
+   * 2. **模板**：给了 `templateId` 就把它的资源 / 几何 / 职业性别 / 描述 / 属性整份抄过来，
+   *    再让 DTO 里显式给的值盖在上面（等级 / 售价 / 名称 / 资源路径 …）。
+   * 3. **变体**：按 `equipment_meta` 当前档数整批展开（与「重新生成变体」同一份规则），
+   *    否则这件装备在客户端**不存在** —— 客户端只认 `equipment_variants` 的行。
+   *
+   * 写完重装结算层：服务端下一次算属性 / 掉落就能看到它（客户端下次拉快照）。
+   */
+  createEquipment(dto: CreateEquipmentDto): CreateEquipmentResultDto {
+    const slot = this.equipments.findSlot(dto.slot);
+    if (!slot) throw new BizException(BizCode.PARAM_INVALID, `部位 ${dto.slot} 不在装备槽位表里`);
+
+    const template = dto.templateId ? this.requireEquipment(dto.templateId) : undefined;
+    const id = dto.id?.trim() || this.nextEquipmentId(dto.slot);
+    if (this.equipments.findByKey(id)) {
+      throw BizException.conflict(BizCode.EQUIPMENT_ALREADY_EXISTS, `装备 ${id} 已存在（换个 id，或直接编辑它）`);
+    }
+
+    const now = Date.now();
+    const attributes = template
+      ? attributeColumns(attributesFromRow(template as EquipmentRow & SoulRowShape))
+      : zeroAttributeColumns();
+    const row: EquipmentRow = {
+      id,
+      slot: dto.slot,
+      level: dto.level ?? template?.level ?? 1,
+      sell_price: dto.sellPrice ?? template?.sell_price ?? 0,
+      label: dto.label.trim(),
+      occupation: dto.occupation ?? template?.occupation ?? "4",
+      sex: dto.sex ?? template?.sex ?? "3",
+      description: dto.description ?? template?.description ?? "",
+      icon: dto.icon ?? template?.icon ?? "",
+      in_atlas: dto.inAtlas ?? template?.in_atlas ?? "",
+      out_atlas: dto.outAtlas ?? template?.out_atlas ?? "",
+      tags: dto.tags ? JSON.stringify(dto.tags) : (template?.tags ?? "[]"),
+      in_pos_x: template?.in_pos_x ?? 0,
+      in_pos_y: template?.in_pos_y ?? 0,
+      in_scale_x: template?.in_scale_x ?? 1,
+      in_scale_y: template?.in_scale_y ?? 1,
+      in_rotate: template?.in_rotate ?? 0,
+      out_scale: template?.out_scale ?? 1,
+      out_positions: template?.out_positions ?? zeroPositions(),
+      ...attributes,
+      updated_at: now,
+    };
+
+    const variants = variantsOfBase(row, this.getEquipmentMeta(), now);
+    this.equipments.insert(row);
+    for (const variant of variants) this.equipmentVariants.seedRow(variant);
+    this.touchRuntime();
+    return { equipment: EquipmentDto.from(this.requireEquipment(id)), variants: variants.length };
+  }
+
+  /**
+   * 删除装备基础件（#773）
+   *
+   * 连带清掉：这件基础件的**全部变体** + `equip_aligns` / `equip_in_aligns` 里指向它们的
+   * 工作台几何（都是这件装备的派生数据，留着只是孤儿行）。
+   *
+   * **还在商城上架清单里 → 409**：先下架再来删。`mall_goods.id` 就是变体 id，删了会留下
+   * 「名字退回 id、图标空」的幽灵商品，客户端照实陈列 —— 与其留给人以后收拾，不如当场拦。
+   *
+   * **不碰玩家存档**：背包 / 身上还引用这些 id 的角色，那些格子会变成认不出的路径
+   * （服务端 `collectEquipmentBundles` 与客户端取表都只是跳过，不会崩），管理端的删除确认
+   * 必须把这条讲清楚 —— 这是「删装备」真正的代价。
+   */
+  removeEquipment(id: string): RemoveEquipmentResultDto {
+    const base = this.requireEquipment(id);
+    const variants = this.equipmentVariants.listOfBase(base.id);
+    const ids = [base.id, ...variants.map((row) => row.id)];
+
+    const listed = this.mall.countGoodsAmong(ids);
+    if (listed > 0) {
+      throw BizException.conflict(
+        BizCode.EQUIPMENT_LISTED_IN_MALL,
+        `装备 ${id} 还有 ${listed} 行挂在商城上架清单里，先在「商城」页下架再删`,
+      );
+    }
+
+    let aligns = 0;
+    for (const variantId of ids) {
+      // 两套工作台各自一行；没有行就是 0 行受影响，不用先判存在
+      aligns += this.equipAligns.remove(variantId).changes;
+      aligns += this.equipInAligns.remove(variantId).changes;
+    }
+    const removedVariants = this.equipmentVariants.removeOfBase(base.id);
+    this.equipments.remove(base.id);
+    this.touchRuntime();
+    return { id: base.id, variants: removedVariants, aligns };
+  }
+
+  /** 下一个可用 id（`部位_序号`：该部位现有 id 的最大数字序号 + 1；非数字尾缀不参与） */
+  private nextEquipmentId(slot: string): string {
+    const prefix = `${slot}_`;
+    let max = 0;
+    for (const row of this.equipments.list({ page: 1, size: 1_000_000 })) {
+      if (!row.id.startsWith(prefix)) continue;
+      const serial = Number(row.id.slice(prefix.length));
+      if (Number.isInteger(serial) && serial > max) max = serial;
+    }
+    return `${prefix}${max + 1}`;
   }
 
   // —— 装备槽位与规则（#603 第九域：客户端不再存槽位表 / 倍率 / 回收价曲线）——
@@ -1440,6 +1551,80 @@ function attributeColumns(attributes: ConfigAttributesDto): Pick<TitleRow, AttrC
     taoist_defense_min: pair("taoistDefense")[0],
     taoist_defense_max: pair("taoistDefense")[1],
   };
+}
+
+/**
+ * 属性列全零（新建装备不给模板时的底：一件「能吃能穿但没有任何加成」的白装）
+ *
+ * 直接写出 14 个 0 而不是 `attributesFromRow(空对象)` —— 后者要靠 `undefined` → NaN 兜底，
+ * 这里少一层推理：新建的行每一列都是显式的。
+ */
+function zeroAttributeColumns(): Pick<TitleRow, AttrColumnNames> {
+  return {
+    max_hp: 0,
+    hp_recover: 0,
+    physical_attack_min: 0,
+    physical_attack_max: 0,
+    magic_attack_min: 0,
+    magic_attack_max: 0,
+    taoist_attack_min: 0,
+    taoist_attack_max: 0,
+    physical_defense_min: 0,
+    physical_defense_max: 0,
+    magic_defense_min: 0,
+    magic_defense_max: 0,
+    taoist_defense_min: 0,
+    taoist_defense_max: 0,
+  };
+}
+
+/** 8 向位置的零值（新建且不给模板时：客户端按 `(0,0)` 画在脚底锚点上，不会画到屏幕外） */
+function zeroPositions(): string {
+  return JSON.stringify(Array.from({ length: EQUIPMENT_DIRECTIONS }, () => ({ x: 0, y: 0 })));
+}
+
+/**
+ * 一件基础件 → 它当前档数下的**全部变体行**（#773 新建装备 与 #697 整表重建共用这一份展开规则）
+ *
+ * 属性 = `round(基础值 × 前缀倍率 × 后缀倍率)`；名称 / 穿戴等级取基础件（前后缀文案由客户端
+ * 拼在名字前后，不进 `label`）；卖价按 `round(10 × 等级 × 倍率)` 垫底（重建时调用方还会用
+ * 「原值优先」再覆盖一遍）。变体 id 的拼法与客户端 `getEquipmentVariantKey` 逐字符一致
+ * （p0s0 就是基础件 id 本身，不带后缀）。
+ */
+function variantsOfBase(base: EquipmentRow, meta: EquipmentMetaDto, now: number): EquipmentVariantRow[] {
+  const rows: EquipmentVariantRow[] = [];
+  for (let prefix = 0; prefix < meta.prefixRates.length; prefix++) {
+    for (let suffix = 0; suffix < meta.suffixRates.length; suffix++) {
+      const prefixRate = meta.prefixRates[prefix];
+      const suffixRate = meta.suffixRates[suffix];
+      const scale = (value: number): number => Math.round(value * prefixRate * suffixRate);
+      rows.push({
+        id: prefix === 0 && suffix === 0 ? base.id : `${base.id}_p${prefix}s${suffix}`,
+        base_id: base.id,
+        prefix,
+        suffix,
+        label: base.label,
+        level: base.level,
+        sell_price: scale(10 * base.level),
+        max_hp: scale(base.max_hp),
+        hp_recover: scale(base.hp_recover),
+        physical_attack_min: scale(base.physical_attack_min),
+        physical_attack_max: scale(base.physical_attack_max),
+        magic_attack_min: scale(base.magic_attack_min),
+        magic_attack_max: scale(base.magic_attack_max),
+        taoist_attack_min: scale(base.taoist_attack_min),
+        taoist_attack_max: scale(base.taoist_attack_max),
+        physical_defense_min: scale(base.physical_defense_min),
+        physical_defense_max: scale(base.physical_defense_max),
+        magic_defense_min: scale(base.magic_defense_min),
+        magic_defense_max: scale(base.magic_defense_max),
+        taoist_defense_min: scale(base.taoist_defense_min),
+        taoist_defense_max: scale(base.taoist_defense_max),
+        updated_at: now,
+      });
+    }
+  }
+  return rows;
 }
 
 /**

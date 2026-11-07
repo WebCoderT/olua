@@ -22,9 +22,10 @@ export interface EquipmentVariantListOptions {
  * 555 行 = 37 个基础件 × 15 个前后缀组合。以前是「基础件属性 × 倍率」在运行时现算，
  * 现在每行都是独立配置：管理端能逐条改属性 / 卖价 / 穿戴等级，服务端与客户端都只读它。
  *
- * 行的**增删**允许三种来源：迁移脚本（一次性展开）、「基础件新建时连带展开其 15 个变体」
- * （`seedRow` 幂等）、以及管理端「重新生成全部装备变体」端点的整表重建（`replaceAll`，
- * #697 —— 重建按当前前后缀倍率整批重算，是唯一会**删除**既有行的路径）。管理端仍不提供
+ * 行的**增删**允许四种来源：迁移脚本（一次性展开）、「基础件新建时连带展开其全部变体」
+ * （`seedRow` 幂等，档数取 `equipment_meta`，出厂 5 × 3）、管理端「重新生成全部装备变体」端点的
+ * 整表重建（`replaceAll`，#697 —— 重建按当前前后缀倍率整批重算，是唯一会**清空**既有行的路径），
+ * 以及「删除装备时连带删掉这件基础件的全部变体」（`removeOfBase`，#773）。管理端仍不提供
  * 删除单个变体的入口 —— 那样背包里已存在的 id 会变成孤儿。
  */
 @Injectable()
@@ -167,6 +168,16 @@ export class EquipmentVariantRepository {
       "SELECT * FROM equipment_variants WHERE base_id = ? ORDER BY prefix ASC, suffix ASC",
       [baseId],
     );
+  }
+
+  /**
+   * 删掉某基础件的全部变体（#773 删除装备时连带）
+   *
+   * 与 `replaceAll` 的整表重建不同：这里只动一件基础件的行 —— 删装备是「这件不存在了」，
+   * 不是「按新倍率重算全表」。返回删掉的行数，供接口回包盘点。
+   */
+  removeOfBase(baseId: string): number {
+    return this.db.execute("DELETE FROM equipment_variants WHERE base_id = ?", [baseId]).changes;
   }
 
   list(options: EquipmentVariantListOptions): EquipmentVariantRow[] {
