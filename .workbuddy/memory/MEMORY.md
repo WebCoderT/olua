@@ -6,51 +6,37 @@
 
 ## 过程纪律
 - **测试锁「字段格式 + 行为」不锁数值**（运营随时改数）；用户说「数据我改过」= 停追红，改断言口径。
-- **显示效果不写断言**（2026-11-05 明确定）：动画/特效的位置、尺寸、帧率、层级、对齐一律**人眼看**——这类断言只因正常调配置而红，真出错反而抓不到。只留素材存在性、执行顺序、结构接线。
+- **显示效果不写断言**：动画/特效的位置·尺寸·帧率·层级·对齐一律人眼看，只留素材存在性、执行顺序、结构接线。
 - **e2e**：期望值从快照算；播种放 `startServer()` 之后；`checkEqual` 是 `===`；改 `server/src` 先 `npm run build`（e2e 跑 `dist/`）；本机绿 ≠ CI 绿（耦合断言超时盖过冷却周期）；`e2e-quest` 成功静默，判绿看 exit code。
 - **假绿 > 漏检**：扫描器断言模块数、错误精确匹配文案、缓存 TTL 压 0。
-- **新增一张表登记四处**：`config-tables.cjs` 两份清单 + `gen-api.cjs` MODULES + `audit-server-boundaries` REPO_EDGES + `audit-target.decorator` 类型。快照加段 = DTO / `snapshot()` / 客户端 `game-config.ts` 区 0 三处 + `audit-snapshot-contract` 守点。
-- **config-sync.sql 加表**：只拼新增表的节 + 手改表头三行（整份重导有几千行假 diff）；`cp` 库前 `PRAGMA wal_checkpoint(TRUNCATE)`；校验拿「同 schema 库副本」做 `config-import --db`；`make config-check` 红在用户正改的表时别整份 export。
-- 改 DTO 连描述都算改契约 → `swagger:emit` + `node tools/gen-api.cjs`；Response DTO 不在 `swagger/models.ts` 登记就不进 openapi。
-- **一份数据一个来源**（库表 → 快照段 → `apply*` 整表重建）；整表重建后派生 Map 必须重建；**管理端数据客户端零兜底**（初始空 / 0 / false，唯一来源快照，见 #724）。
-- babel loose：`Array.from` 替 `[...map.values()]`；客户端 tsconfig 无 ES2017 不用 `Object.entries`。
+- **新增一张表登记五处**：`config-tables.cjs` 两份清单 + `gen-api.cjs` MODULES + `audit-server-boundaries` REPO_EDGES + `audit-target.decorator` 类型。**快照加段 = DTO / `snapshot()` / 客户端 `game-config.ts` 区 0 三处 + `configs-sandbox` 三处 + `audit-snapshot-contract`**（漏一处 = 几十套客户端单测齐炸）。
+- **新道具表必须让 `sellPriceOf` / `itemLabelOf` / `itemTypeOf` 都认识**，否则回收价与物品解析静默失效；按素材批量加物品还要查 `rebuildItemIndex` / `getMallGoods` 是否覆盖到（#777 曾是「7 部位部分视图」）。
+- **config-sync.sql 加表**：只拼新增表的节 + 手改表头三行（整份重导有几千行假 diff）；`cp` 库前 `PRAGMA wal_checkpoint(TRUNCATE)`；校验拿「同 schema 库副本」做 `config-import --db`；用户正改表时别整份 export。
+- 改 DTO 连描述都算改契约 → `swagger:emit` + `node tools/gen-api.cjs`；Response DTO 不在 `swagger/models.ts` 登记就不进 openapi；`gen-api` 的 query 默认 `= {}` 只在**全字段可选**时给。
+- **一份数据一个来源**（库表 → 快照段 → `apply*` 整表重建）；整表重建后派生 Map 必须重建；**管理端数据客户端零兜底**（初始空 / 0 / false，#724）。
+- **「上限」类常量必须成对检查**（`ROLE_LEVEL_MAX` 与 `GROWTH_SCALAR_SPECS.max` 曾不同步，改一处会把合法值当脏数据拒）。
+- babel loose：`Array.from` 替 `[...map.values()]`；客户端 tsconfig 无 ES2017 不用 `Object.entries`；`Map` 吃不下 `Partial<Record<>>`。
 - 工具链：只信 Grep 工具（BSD grep 交替恒空）；批量替换 `perl -pi -e`（`sed -i ''` 异常）；`curl --noproxy '*'`；起端口前 `lsof`。
 - **并发纪律**：amend 前确认当前分支；工作区异常先 `reflog` + `stash list`。
 
-## 引擎坑（细节 → `cocos-*` 技能）
-指针事件配 `UITransform`；`AnimationState` 手动 stop、`isValid(node, true)`；几何锚点是画布中心；自适应三层；Game 挂 Canvas → 五世界层建好再 `setWorldPosition(0,0,0)`（#692）；**显隐与摆位要跟「片段是否就绪」绑定**（#726）。
+## 引擎坑（→ `cocos-*` 技能）
+指针事件配 `UITransform`；`AnimationState` 手动 stop、`isValid(node, true)`；几何锚点是画布中心；自适应三层；Game 挂 Canvas → 五世界层建好再 `setWorldPosition(0,0,0)`（#692）；**显隐与摆位要绑定「片段是否就绪」**（#726）；`loadLoopFrames` 两形态探测（平铺图集 / 目录内同名图集）。
 
 ## 架构不变量（→ olua-server / olua-admin / olua-client）
-- **服务端权威**；管理端接口 `@ApiAdminDoc({permissions})`、`BizException` 默认 400、乐观锁 409+20006。
+- **服务端权威**；管理端 `@ApiAdminDoc({permissions})`、`BizException` 默认 400、乐观锁 409+20006、参数校验失败 **40000**；客户端零决策。
 - `configs/` / `types/` 不引 UI 组件；方向恒为 `apply-snapshot → game-config → types`。
-- 门禁看 CI（PR 跑一次）；`make test-changed` 定向回归；client-test 基线 4 红（素材未入库）。
+- 门禁看 CI；`make test-changed` 定向回归；`client-test` 基线红先怀疑本地 `network.ts` 硬编码 IP。
 - 部分更新接口加数组字段要区分「显式传」与「存量漂移」，否则扩档旧调用被 400 卡死（#720）。
-- **资源目录口径**（`client/RESOURCES.md`）：14 个顶层**域平铺** + `ui/` 收纳全部界面零件；命名全小写 + 连字符，图集 `.plist`/`.png` 同名成对，一套多表加 `@N`，图集编号用语义前缀（`border-30123`/`bg-16000`/`light-1`），纯数字名是配置 id 不动。**平铺图集与「目录内同名图集」都只走 `AnimationHelper.loadLoopFrames`**（两形态探测）。改名要三处同源：磁盘 + plist 自引用 → 库 19 个路径列 + `config-sync.sql` → 客户端 configs。
+- 资源目录口径见 `client/RESOURCES.md`（14 顶层域平铺 + `ui/`）；改名三处同源：磁盘 + plist 自引用 → 库 19 个路径列 + `config-sync.sql` → 客户端 configs。
+- **客户端只报格子，数值直读表**（#785 货币）；「玩家在哪」= 存档 `data.mapAt`；改 bag 数据收尾必须 `refreshBag()`。
 
 ## 部署（→ olua-deploy）
 - compose 四服务：admin:80（唯一入口）/ game:8080 / server:3100 / realtime:3101。
-- 管理端镜像 context 必须是**仓库根**；出厂快照打进镜像（`.dockerignore` = `data/*` + `!data/config-sync.sql`，compose 给 `CONFIG_SNAPSHOT_PATH`）；卷 `olua_olua-data`，数据在 `-wal`。
-- `game.yimw.cn` 走管理端 nginx 按 server_name 反代 `game:80`；客户端地址由 `DEV_MODE` 开关决定（开发 = `<页面 host>:3100/api`，打包 = 同源 `/api`），**不再按 host 判环境**（#775）。
+- 管理端镜像 context = **仓库根**；出厂快照打进镜像（`.dockerignore` 放行 `data/config-sync.sql`）；卷 `olua_olua-data`（数据在 `-wal`）。
+- `game.yimw.cn` 走管理端 nginx 按 server_name 反代 `game:80`；客户端地址由 `DEV_MODE` 唯一开关决定（#775）。
 - 资源发布：`make resources-manifest/pack/upload VERSION=x`；清单先合 master 再传 Release。
 
-## 进度
-- 收官批（细节见日报 / 技能）：#25~#37 战斗权威 · #259/#564 管理端 · #293 对接 · #387/#394 社交 · #556 背包穿戴 · #566~#586 地图世界 · #437/#439 邮件 · #596 存档权威 · #603/#604/#626 出厂数据上服务端 + 快照层 · #605 运营参数收权 · #643 药品 · #646/#651 选择器体系 · #653 配置同步 · #655 派生数据落库 · #667/#672/#676 刷怪区/NPC/碰撞 · #680/#683/#685 音效 · #689 击杀跨端（观看端掉落纯演出）· #693 玩家动作跨端 · #728 各端图标统一取官网 logo · #733 选角选中态。
-- **装备外观体系 #695→#720**（PR #696/#698/#701/#713/#715/#717/#719/#721）：`equipment_appearance` 单行表 → 拆「前后缀管理 / 装备边框 / 装备详情背景」三页 → 边框背景改**实体清单**（`border_items` / `background_items` 注册表 + 引用处并存，**清单 ∪ 引用**读法零迁移；effect 单一来源写时传播进引用处；被引用禁删，唯「文件夹同步」可绕开）+ 扫盘同步 + 别名/分组/分页 + 档位文字颜色。**快照结构与客户端契约全程不变**，旧客户端安全；**资源清单留客户端**，服务端只存 key 只校格式；坏数据自愈（坏整份回落出厂 / 坏条目丢弃）；客户端要重新打包才可见。
-- **#722 泡点上移服务端**（PR #723 / `0b45e421`）：`SoakPointService` 每秒一醒按 `soakTickSeconds` 给在线角色入账；**tick 必须住 realtime 模块**（RolesModule 两进程都装会双份发经验）；「在线」= online_role_id；存量库拿新标量行靠 database.service 的 DDL 块 `INSERT OR IGNORE`（跑在快照自举之后）。
-- **#724 客户端去兜底**（PR #725 / `71fba1f5`）：删 `BUILTIN_*_COLORS` 与各 `*Fallback*`；「无色」用 `new Color()` 工厂，不共享 Color 常量（会被引用方改）；缺行 = null 不演。
-- **#726 / #730 / #735**（PR #727 `2b23866e` / #731 `ac125bd4` / #736 `3979cb44`）：换装错位靠 `onReady`/`isStale` + `clipsReady`（片段没就绪先藏节点）；**改 bag 数据的入口收尾必须 `refreshBag()`**（`updateUi` 不含背包，`BagDialog.refresh` 未开时 no-op）；战力抖动 = realtime 配置缓存漂移（按 `REALTIME_CONFIG_REFRESH_MS` 定期重装）+ 客户端迟到帧（`applyServerRoleUpdate` revision 守卫整帧丢）。
-- **#606 进图门槛上移服务端**（PR #743 / `dbdcd48f`）：判据唯一一处 `MapService.enterRejectOf()`（不下发中文，文案归客户端 `configs/texts`）；**「玩家在哪」= 存档字段 `data.mapAt`**（进 `SERVER_EXCLUSIVE_FIELDS`，唯一正常写点是被接受的 `worldJoin`，`setMapAt` 不推 revision）。**三条边界缺一就锁人或漏拦**：目标图 == `mapAt` 放行 / `mapAt` 缺失放行 / 图无配置行放行。协议 `mapEnter`（意图）+ `mapEnterResult`（放行与被拒同形），客户端「本地预检 → 请求 → 放行才 `applyMapChange`」，**不能先切图再等拒绝**。
-- **#670 怪物 AI 全上服务端**（PR #744 / `e6e091de`）：`MonsterAiService` 唯一决策处，客户端只剩「趋近 + 按事件播动作」。三条一致性链路 —— 位置（`withLiveMonsterPositions()` 发帧前覆盖，快照里是**存库出生点**且增量帧「有变化才发」）/ 血量（`monster-ai` 帧必填 hp）/ 行为（客户端零决策）。**「对尸体放技能」= 认结算结果**：`applyMonsterHit` 返 null → `forgetTarget`，`castSkill()` 先结算再落账。击退也在服务端（`applyPush`，时长取 `runtime_params.monster_ai.pushDuration`）。坑：`skillOf()` 返回**驼峰**对象；参数缺字段 → `pushEndAt = NaN`。
-- **#745 地图监控精细日志**（PR #746 / `0499f4a7`）：文字流扩到六类（+damage/chase/cast/hit）。**数值来自结算、过程来自 AI**——`hpBefore = hpAfter + amount` 反推保证「65 → 56（-9）」自洽；`onLog` 走**单向回调**（监控服务已依赖 AI，注入即循环依赖）；「目标丢了」四种成因分开；**姓名要自己缓存**（离线那刻在场表已没人）；`mapMonitorEventKeep` 2000。管理端：毫秒 + 间隔、六类分色、类型 chips 带条数、点地图上的怪只看它。
-- **#747 清弹窗死配置**（PR #748 / `85254b79`）：删 `createDialogTitle` / `createCloseButton` 与 4 处死字段（`dialogFrame.title.defaultPosition/defaultSize`、两处 `titleColor/titleFontSize`、`guildDialogLayout.member` 的两个 `position`）。方法 = 真编译配置 × 扫 `assets/ui/**/*.ts` 成员访问链取差集（脚本一次性、不挂 CI，→ `cocos-ui-layout-config` 六之二）；**真死字段的共同特征：注释写的用途已和代码现状不符**；**经参数传递的不许删**。九宫化后 `createDialog` 的标题 / 关闭按钮几何本身没问题。
-- **#749 边框/背景关联改可视化选择器**（PR #750 / `4c105a89`）：棋盘每格 `GameFrame + Select`（84 条原始 key）→ 「帧动画预览 + 别名 + key」整块按钮 + `EntityPicker`。**不新造选择器**：`EntityOption.image.animate` 开逐帧播（缺省仍首帧）、`EntityPicker(List)` 加 `imageSize`（默认 32，这类 56）、`catalog.appearanceOptions()` 把清单条目直接映射成选项（别名当 label、分组当 group，缺省「未分组」否则 chips 漏条）。引用已不在清单里要**照实显示 key 并标黄**（客户端对坏 key 安静跳过）。服务端/快照/客户端零改动。
-- **#751 怪物编辑开放全部可配项**（PR #752 / `3e97ce35`）：一张怪横跨两张表 —— `monsters`（数值 + **tier 也放开了**：不重算数值但决定 BOSS 判定，掉落看 `monster_drops`）与 `monster_presentation`。关键切分：**几何（icon/out/偏移/尺寸）归生成器、行为四列（aggressive / detect_range / move_speed / speed_rate）归运营**，`updateBehavior` 的 SQL 里几何列一个字都不出现。`speedRate` 两种「空」必须分开（不传 = 不改，`{}` = 清空回客户端默认）；动作键只认有帧的五个（stand/walk/run/injured/die），非法键 400 不静默存库；缺表现行 404 `50038`。**校验全部前置再写库**（一次改两张表，别留半截提交）。`gen-monster-config.cjs` 摘掉 `aggressive`（改打印建议），零调用者的整行 `upsert` 一并删。生效时间三档写进弹窗 hint：即时 / ≤1 秒（AI TTL）/ 画面要重进地图。
-- **#753 resources 重整**（分支 `chore/753-resources-layout`）：63 个平级目录 → 14 个顶层域 + `ui/`（15 个子目录），5153 素材 / 2282 移动 / 863 改名 / 70 归档 `_loose_frames_archive/orphans-2026-11/`。**真 bug**：`title`/`soul`/`npc`/`effect/{border,background,light}` 变平铺图集后 `loadLoopFrames` 只认目录内同名图集 → 一律回退散帧失败，改成两形态探测。坑：批量替换误伤 `server/src/common/`→`ui/common/`、文案 key `label_*` 不该跟资源规范、`startsWith("light_")` 前缀判据漏改、e2e 的 `equipment_appearance` 行被跑脏要重写成出厂值。新增 `client/RESOURCES.md`。
-- **#773 装备可新建 / 删除 + 部位页签**（PR #774 / `153eb481`）：推翻 #252「结构固定」；`POST` 必须**连带展开全部变体**（客户端只认变体行，抽 `variantsOfBase` 与整表重建共用一份）；`DELETE` 连带清变体 + 两套工作台几何，**商城在架 409 `50040`**，存档不碰（死引用只失效不崩）；id 派生 `部位_序号`（按数字比）+ 撞 id 409 `50039`；`templateId` 抄同部位外观与 8 向几何。`GET admin/equipments/summary` 供页签带件数（顺序取 `equipment_slots.sort_order`，孤儿部位补末尾）。
-- **#775 局域网真机调试零配置**（PR #776 / `32e6a0c0`）：`SERVER_HOST`（空 = 所有网卡）存**两进程共用**（只放开存档进程 → 能登录、进图掉线）；启动日志 `lanIPv4Addresses()` 直接列地址（日志行被审计豁免，不用开例外）；管理端 `VITE_API_FOLLOW_PAGE_HOST` 把绝对地址主机换成页面主机（生产保持关）；客户端 `devBaseUrlFor(页面主机)`，`DEV_MODE` 仍是唯一开关。
-- **#777 按素材批量生成装备**（PR #778 / `7996caaf`）：648 件基础件（belt 108 / helmet 108 / necklace 110 / ring 135 / shoes 108 / wristband 79）× 15 = 10275 变体，走 `createEquipment()` 生成（**屏蔽 `touchRuntime()` → 0.5 秒**，id 去前导零）；item 根 9 张装备图 → `equipment/<部位>/`、12 张药图 → `item/consumable/drugs/`（库内 21 处路径同源改，素材不入库只提交脚本）。**真 bug：`rebuildItemIndex` / `getMallGoods` 遍历七张具名表 = 只有 7 个部位的部分视图** → 统一 `getAllEquipmentVariants()` 读 `equipmentBySlot`（13 部位），否则 wristband 等整批缺席物品总表与商城且不报错。`audit-resource-refs` 补「库内 icon 逐条查磁盘」层（728 → 1429）。遗留：新件八项属性全 0（占位）、掉落表未重算。
-- **#779 变体列表补字段**（PR #780 / `8b3e2997`）：变体页列表与「装备配置」对齐并多给几列（外观 / 变体 id + 可点基础件 / 前后缀分色的完整名 / 品质 + 合计倍率 / 部位 / 等级 / 回收价 / **八项属性全量** / 职业性别 / 更新时间；「全部字段」再补标签·描述·资源路径），编辑弹窗**下段只读**跟着基础件的字段。**变体表没有 slot 列** → 部位筛走 `base_id IN (SELECT id FROM equipments WHERE slot = ?)`；等级段直接列条件；装备页行内「变体」跳 `?baseId=`（读进筛选后从地址栏摘掉）。口径：部位与排序「选完即生效」、关键字与等级段走「查询」。
-- **#781 变体页并进「装备配置」弹窗**（PR #782 / `bd4eed66`）：独立页 / 路由 / 导航项全删；列表加可点的「N 个变体」列（`GET admin/equipments` 带 `variantCount`，`countByBaseIds` 只查当前页），**DTO 另起 `EquipmentListItemDto`**（基类塞字段会让继承它的变体 DTO 多一个恒 0 字段）；弹窗 `EquipmentVariantsDialog`（`baseId`+`size:100`，嵌套编辑弹窗时外层 `onClose` 直通不理）；`slot`/`minLevel`/`maxLevel` 随页下线，`listVariantPage` 从整表读改 `listByIds`。**`PageQueryDto.size` 上限 100，`size:200` 直接 400**。
-- **#783 648 件新装备按曲线补属性**（PR #784 / `ed3b00dc`）：**全表共用一根曲线**（衣服 12 个点为参照，武器各级正好是它 ~5.25 倍）→ `属性(L) = round(衣服曲线(L) × 部位 1 级系数)`，12 点分段线性插值；**1 级处正好还原出厂件**是判据校验点；护腕无 1 级件取五部位中位数。脚本干跑 / `--apply`，只碰八项全 0 的件，重建变体前**先数漂移**（≠ 基础件 × 倍率则中止）。快照只重拼两节；`ConfigAttributesDto` 在 `dto/title.dto.ts`。
-- open：#669 刷怪区即时生效 · #9 包体积 · #12~#19 素材 · #295 阶段三 · #403 帮会战 · #742 站点 TLS（线上只监听 80）· 掉落表未按新装备重算（放宽 `EQUIP_LEVEL_GAP` / `MAX_TIER_PER_SLOT`）· 本地库有未导出运营改动，`make config-check` 一直红。
+## 进度（细节见 `memory/2026-*.md` 日报与技能）
+- 收官批：#25~#37 战斗权威 · #259/#564 管理端 · #387/#394 社交 · #556 背包 · #566~#586 地图世界 · #596 存档权威 · #603/#626 快照层 · #643 药品 · #646/#651 选择器 · #653 配置同步 · #655 派生落库 · #667~#676 刷怪/NPC/碰撞 · #680~#685 音效 · #689/#693 跨端动作 · #722 泡点 · #724 去兜底 · #726/#730/#735 换装与战力 · #606 进图门槛 · #670 怪物 AI · #745 地图监控 · #747 死配置 · #749 边框选择器 · #751 怪物全配 · #753 资源重整 · #773 装备增删 · #775 局域网调试 · #777 批量装备 · #779 变体字段 · #781 变体并弹窗 · #783 属性曲线 · #785 货币道具 · #786 等级 100 万级曲线 · #787 升级卷轴。
+- open：#669 刷怪区即时生效 · #9 包体积 · #12~#19 素材 · #295 阶段三 · #403 帮会战 · #742 站点 TLS · 掉落表未按新装备重算（`EQUIP_LEVEL_GAP` / `MAX_TIER_PER_SLOT`）· 本地库有未导出运营改动，`make config-check` 常红。
 - 定保持现状：技能 1011 / 快捷键 6 格 / 装备 7 部位。

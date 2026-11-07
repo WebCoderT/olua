@@ -117,6 +117,17 @@ RoleApi.select(id)  →  StorageManager.cacheServerRole(detail)   // 连 revisio
   discard 清格，**只保证「客户端数据层行为自洽」**；真正的守恒校验由服务端 `e2e-bag` 盯。
   新写背包单测时记得装上它，否则 `runBagOp` 拿到 undefined 会一路 return false。
 
+**「使用」道具也是服务端结算（#643 / #785 / #787）**：`StorageManager.useGood` 是唯一分发点 ——
+`isDrug` → `useDrug`（血蓝）、`isMoneyItem` → `useMoneyItem`（账本入账）、`isLevelScroll` → `useLevelScroll`（等级 +1），
+都不匹配才提示「该道具暂时用不了」。三条链路同一个形状：**只报 `{ row, col, revision }`**（金额 / 区间 / 属性一律不往上报），
+成功后**整份抄回**服务端返回的 `bag` / 血蓝 / 战斗力 / `revision`，再 `updateOnlineRole` + `updateUi` + `RoleUIManager.refreshBag()`。
+- **升级卷轴多一道本地预检**：等级不在 `good.minLevel ~ good.maxLevel` 就直接提示「该换哪一卷」，不发请求
+  （服务端仍按 `level_scrolls` 表再判一次，改包跳不过去）。
+- **等级读接口 DTO 顶层的 `level`**，不读 `result.data.level`：行上的 `level` 是唯一权威，存档里的那份升级时不跟着写
+  （与 `applyKillExp` 同一纪律），读存档会拿到「升级前的旧等级」。
+- 失败码要分清：药品/货币/卷轴各有自己的码（如卷轴 `20024` 格子不对、`20025` 等级不在区间、`20026` 到等级上限），
+  提示文案在 `configs/texts`，代码里不写中文。
+
 ## 五之二、实时帧的落点：一条帧 → 一个 Store → 只演不算
 
 服务端推下来的东西（互见 / 怪物 AI / 结算 / 拾取 / 聊天 / 任务 / **队伍**）都走同一条链路：

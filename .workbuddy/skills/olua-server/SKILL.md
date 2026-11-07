@@ -166,24 +166,33 @@ test/e2e-equip-in-align.cjs      装备内观几何专项（73 条断言，#523�
 
 **4.0 游戏数据的唯一权威 = 数据库**（#603 逐域上移，#655 收口）
 
-`server/data/config-sync.sql` 是**全部配置表的出厂快照**（32 张；等级 60 行、装备变体行、
-怪物 / 掉落 / 地图 / 刷怪区 / 特效 / 运行时参数都在里面）。空库启动时 `bootstrapConfigSnapshot()`
+`server/data/config-sync.sql` 是**全部配置表的出厂快照**（38 张；等级曲线 24 段、装备变体行、
+怪物 / 掉落 / 地图 / 刷怪区 / 特效 / 运行时参数 / 货币道具 / 升级卷轴都在里面）。空库启动时 `bootstrapConfigSnapshot()`
 整表灌入，之后运营在管理端改库，`make config-export` 把库重导回那份 SQL 提交 —— **多机同步靠 SQL，不靠种子**。
 
 - **代码里没有第二份数值副本**：`server/src/shared/` 整个目录已删（旧的 `game-data.generated.ts`、
   19 个 `*-seed.ts`、5 个 `*.generated.ts` 全没了）。服务端读库或读启动时建的**内存投影**
   （`common/runtime-config-cache.ts`），客户端 `configs/*` 是空的运行时表（快照整表重建），
   管理端直接调 `/admin/*` 读写库 —— 三方都不 import 任何生成物。
-- **派生值也落库**（#655）：`role_levels`（每级裸属性 + exp + maxMp + hpRecover）、
-  `equipment_variants`（含前后缀名 / 八项属性 / sell_price）、`equip_aligns`（32）/
-  `equip_in_aligns`（31）。运行时**零现算**：`roleLevelAttributesOf` / `equipmentAttributesOf` /
+- **派生值也落库**（#655）：`equipment_variants`（含前后缀名 / 八项属性 / sell_price）、
+  `equip_aligns`（32）/ `equip_in_aligns`（31）。运行时**零现算**：`equipmentAttributesOf` /
   `sellPriceOf` 只读表，不回落到任何公式（旧兜底是 bug：生成物给的是 `[min,max]` 元组，读方按 `{min,max}` 取）。
-- **曲线全部下架**：`growth_segments` / `level_exps` 启动即 `DROP TABLE IF EXISTS`（老库收尾，新库空操作）。
-  管理端只剩「角色等级」60 行 + 「成长参数」四个全局标量（`roleMaxLevel` / `expGain.expPerLevel` /
-  `expGain.maxLevelGap` / `mpRecoverPerSecond`）。`GROWTH_SCALAR_SPECS` 里**不许再挂没有消费方的键** ——
-  `attributeRange.*` 那三个换算比率就是这么死掉的（管理端能改、运行时没人读，改了没反应）。
+  **等级是这条规则的例外（#786）**：100 万级存不下，库里只放段参数，`roleLevelAttributesOf(level)`
+  按需求值并带 memo —— 于是「派生值落库」只剩装备这一条线。
+- **曲线只在等级域**：`role_level_curves`（4 条 × 6 段 = 24 行，主键 `(curve, seq)`）；
+  旧的 `growth_segments` / `level_exps` / `role_levels` 启动即 `DROP TABLE IF EXISTS`（老库收尾，新库空操作）。
+  管理端「成长参数」= 4 张曲线段表 + **等级属性计算器**（`GET admin/level-curves/preview?level=`）
+  + 四个全局标量（`roleMaxLevel` / `expGain.expPerLevel` / `expGain.maxLevelGap` / `mpRecoverPerSecond`）。
+  `GROWTH_SCALAR_SPECS` 里**不许再挂没有消费方的键** —— `attributeRange.*` 那三个换算比率就是这么死掉的。
 - **加一个可配项 = 三件套**：库里的列/行 + 管理端页面（含 DTO 与仓储 UPDATE 列清单，漏一处就是 200 但值不动）
   + 快照段（`createClientConfigDto` 与 `snapshot()` 同步加）。缺任何一件都不算配好。
+- **后加的表要给存量库补数据**（#785 `money_items` / #787 `level_scrolls`）：已经跑过很久的库不会再自举
+  （`config_meta` 里有 marker），只改 `config-sync.sql` 的话老库重启后表是空的 —— 管理端页面空白、玩家拿到道具也用不了，
+  而且**没有任何报错**。做法是 `migrate()` 末尾一段 `INSERT OR IGNORE` + 自己的 marker
+  （`seedMoneyItemsOnce` / `seedLevelScrollsOnce`），与 `common/constants/*-seed` 同源；运营改过的值不会被覆盖。
+- **服务端要认识每张物品表**：`runtime-config-cache.ts` 的 `itemTypeOf` / `itemLabelOf` / `sellPriceOf` 三处
+  加新表（回收价、掉落文案、道具判定都读它）—— 漏一处的表现是「回收价 0 / 名字显示 id / 认不出这个道具」，
+  全都不报错。升级卷轴（#787）还多一条：`useLevelScroll` 判定读库，客户端那份只做本地预检。
 - **`make audit-shared-data` 守的是什么**：配置快照完整（表齐 / 每张非空 / 行数自洽）+ 枚举与客户端逐值一致 +
   业务代码里没有第二份枚举 + 跨端常量对齐。它对的账是 `config-sync.sql`，不是生成物。
 - **旧坑已不适用**：「seed 是 `INSERT OR IGNORE`、改种子不生效」是 #603 时代的问题；现在出厂值本身就是快照
@@ -194,7 +203,7 @@ test/e2e-equip-in-align.cjs      装备内观几何专项（73 条断言，#523�
 
 多人协作各自跑本地时，配置靠 `make config-export` / `make config-import` 对齐（不碰运行时数据）：
 
-- **分类唯一处** `scripts/lib/config-tables.cjs`（32 张配置 + 22 张运行时）。库里出现**没归类的表**，
+- **分类唯一处** `scripts/lib/config-tables.cjs`（38 张配置 + 24 张运行时）。库里出现**没归类的表**，
   导出直接报错 —— 新加表忘了分类由这条守点抓（比「漏同步」好查得多）。
 - **整表替换**（每张表 `DELETE` + 逐行 `INSERT`）：upsert 表达不了删除，会让对方库里删掉的行永远留着。
   代价是文件必须全量，所以导入前校验「表清单完全一致 + 每表恰好一条 DELETE + 不含运行时表」，
@@ -692,7 +701,7 @@ e2e 写法（`test/e2e-map-monitor.cjs` 的「二·五」段）：想稳定看�
   没有在线角色时 `rank = 0`（`LEADERBOARD_NO_RANK`，**不是 404**：榜本身是好的，只是这个人没名次）；
 - **`size` 超 `LEADERBOARD_TOP_N` 夹到上限**（不报错）；非法 `board` 走 `assertBoard` 抛 40000 并**列出可选值**（干巴巴一句「参数错误」等于让人猜）；
 - **条目只有八个字段**：不带 `accountId`、不带 `data`、**不带在线状态** —— 榜上标「在线」等于给人蹲点；
-- **战力算不出来给 0**：等级在 `role_levels` 里没有对应行 / 存档 JSON 坏掉是「这一个角色数据有问题」，不能让全服榜一起没了；战力必须是 `summarizeRoleAttributes().combat`（与角色详情同一个数），**不许在榜里另算一版**；
+- **战力算不出来给 0**：等级 < 1（脏存档）/ 存档 JSON 坏掉是「这一个角色数据有问题」，不能让全服榜一起没了；战力必须是 `summarizeRoleAttributes().combat`（与角色详情同一个数），**不许在榜里另算一版**；
 - 边界审计：`modules/leaderboard` 要读 `modules/combat/role-attributes.ts` 与 `role`/`account` 仓储 → 在 `tools/audit-server-boundaries.cjs` 的 `ALLOWED_EDGES` / `REPO_EDGES` 各补一条边（带注释说明为什么必须是同一个数）。
 
 ## 六、必踩的坑

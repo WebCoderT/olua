@@ -24,8 +24,11 @@
 
 ## 成长线与属性
 
-- **属性不再插值（#655）**：`levels` 段（`role_levels` 60 行）里每级都是最终值，按等级直接取行；
-  原来的「分段曲线 + 两侧整数等级线性插值」随曲线一起下架 —— 想调某一级就改那一行，中间不会再有斜率外推。
+- **等级按需求值（#786）**：快照 `levelCurves` 段只给 4 条曲线 × 6 段的参数，`levelConfigOf(level)`
+  现算（段内 `start + perLevel×k + accel×k(k-1)/2`，超出末段外推），带 memo 封顶 4096。
+  **客户端一个数字都不存** —— 100 万级既不可能整表下发（250MB），也不可能塞进内存。
+  `applyLevelCurves()` 整表重建时顺带清 memo；四条曲线里任一缺这一级就返回 `null`（半截属性比「没配」更难查）。
+  `HpHelper` / `MpHelper` / 经验条全部走这个入口，`levelMap` 已随逐级表删除。
 - **三条成长线同构**（战魂 `soul` 37 阶 / 称号 `title` 34 阶 / 军衔 `rank` 100 阶 = 10 大段 × 10 阶）：
   都 = 「等效等级裸属性 × rate × 系列/大段 factor」（rate 0.5 / 0.3 / 0.35）；都消耗**绑定元宝**、出厂价 = `priceBase × N²`（300 / 200 / 30，管理端成长列表可改）；都计 `GameHelper.combatCalc`、都要 `StorageManager.ensureRoleDefaults` 补 0；升级都走 `StorageManager.upgradeXxx()` → 服务端 `upgradeGrowth`（扣费 / 落阶 / 属性重算全在服务端，客户端只报 `targetLevel`）。
 - **升级路径 = 后台配的成长链**（#635）：称号链**只含 `acquire_channel = upgrade` 的行**，战魂 37 阶全量，军衔按阶；
