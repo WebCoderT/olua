@@ -30,7 +30,7 @@
 ## 部署（→ olua-deploy）
 - compose 四服务：admin:80（唯一入口）/ game:8080 / server:3100 / realtime:3101。
 - 管理端镜像 context 必须是**仓库根**；出厂快照打进镜像（`.dockerignore` = `data/*` + `!data/config-sync.sql`，compose 给 `CONFIG_SNAPSHOT_PATH`）；卷 `olua_olua-data`，数据在 `-wal`。
-- `game.yimw.cn` 走管理端 nginx 按 server_name 反代 `game:80`；客户端 `network.ts` 按 host 判本机/公网。
+- `game.yimw.cn` 走管理端 nginx 按 server_name 反代 `game:80`；客户端地址由 `DEV_MODE` 开关决定（开发 = `<页面 host>:3100/api`，打包 = 同源 `/api`），**不再按 host 判环境**（#775）。
 - 资源发布：`make resources-manifest/pack/upload VERSION=x`；清单先合 master 再传 Release。
 
 ## 进度
@@ -47,5 +47,6 @@
 - **#751 怪物编辑开放全部可配项**（PR #752 / `3e97ce35`）：一张怪横跨两张表 —— `monsters`（数值 + **tier 也放开了**：不重算数值但决定 BOSS 判定，掉落看 `monster_drops`）与 `monster_presentation`。关键切分：**几何（icon/out/偏移/尺寸）归生成器、行为四列（aggressive / detect_range / move_speed / speed_rate）归运营**，`updateBehavior` 的 SQL 里几何列一个字都不出现。`speedRate` 两种「空」必须分开（不传 = 不改，`{}` = 清空回客户端默认）；动作键只认有帧的五个（stand/walk/run/injured/die），非法键 400 不静默存库；缺表现行 404 `50038`。**校验全部前置再写库**（一次改两张表，别留半截提交）。`gen-monster-config.cjs` 摘掉 `aggressive`（改打印建议），零调用者的整行 `upsert` 一并删。生效时间三档写进弹窗 hint：即时 / ≤1 秒（AI TTL）/ 画面要重进地图。
 - **#753 resources 重整**（分支 `chore/753-resources-layout`）：63 个平级目录 → 14 个顶层域 + `ui/`（15 个子目录），5153 素材 / 2282 移动 / 863 改名 / 70 归档 `_loose_frames_archive/orphans-2026-11/`。**真 bug**：`title`/`soul`/`npc`/`effect/{border,background,light}` 变平铺图集后 `loadLoopFrames` 只认目录内同名图集 → 一律回退散帧失败，改成两形态探测。坑：批量替换误伤 `server/src/common/`→`ui/common/`、文案 key `label_*` 不该跟资源规范、`startsWith("light_")` 前缀判据漏改、e2e 的 `equipment_appearance` 行被跑脏要重写成出厂值。新增 `client/RESOURCES.md`。
 - **#773 装备可新建 / 删除 + 部位页签**（PR #774 / `153eb481`）：推翻 #252「结构固定」；`POST` 必须**连带展开全部变体**（客户端只认变体行，抽 `variantsOfBase` 与整表重建共用一份）；`DELETE` 连带清变体 + 两套工作台几何，**商城在架 409 `50040`**，存档不碰（死引用只失效不崩）；id 派生 `部位_序号`（按数字比）+ 撞 id 409 `50039`；`templateId` 抄同部位外观与 8 向几何。`GET admin/equipments/summary` 供页签带件数（顺序取 `equipment_slots.sort_order`，孤儿部位补末尾）。
+- **#775 局域网真机调试零配置**（PR #776 / `32e6a0c0`）：`SERVER_HOST`（空 = 所有网卡）存**两进程共用**（只放开存档进程 → 能登录、进图掉线）；启动日志 `lanIPv4Addresses()` 直接列地址（日志行被审计豁免，不用开例外）；管理端 `VITE_API_FOLLOW_PAGE_HOST` 把绝对地址主机换成页面主机（生产保持关）；客户端 `devBaseUrlFor(页面主机)`，`DEV_MODE` 仍是唯一开关。
 - open：#669 刷怪区即时生效 · #9 包体积 · #12~#19 素材 · #295 阶段三 · #403 帮会战 · #742 站点 TLS（线上只监听 80）。
 - 定保持现状：技能 1011 / 快捷键 6 格 / 装备 7 部位。
