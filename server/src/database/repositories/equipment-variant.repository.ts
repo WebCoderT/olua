@@ -8,20 +8,10 @@ import { resolveSort } from "../sort.util";
 export interface EquipmentVariantListOptions {
   page: number;
   size: number;
-  /** 只列某个基础件的变体（装备页里点开一件基础件时用） */
+  /** 只列某个基础件的变体（管理端「装备配置」页的变体弹窗） */
   baseId?: string;
   /** 关键字：模糊匹配变体 id / 完整名称 */
   keyword?: string;
-  /**
-   * 按部位筛（#779）：变体行只有 `base_id`，部位要回 `equipments` 查
-   *
-   * 不在这里 join 展开：子查询只扫 685 行基础件，比 `LEFT JOIN` 再 `WHERE` 少一次投影，
-   * 而且「基础件不存在」的孤儿变体行天然筛不进来（与列表里查不到基础件就跳过同一口径）。
-   */
-  slot?: string;
-  /** 穿戴等级段（#779；含两端） */
-  minLevel?: number;
-  maxLevel?: number;
   sort?: string;
   order?: string;
 }
@@ -205,24 +195,30 @@ export class EquipmentVariantRepository {
     return this.db.count(`SELECT COUNT(1) AS total FROM equipment_variants ${clause}`, params);
   }
 
+  /**
+   * 一批基础件各有几个变体（#781：装备列表的「变体」列）
+   *
+   * 只查当前页的那几十个 `base_id`（`IN (...)` 走 `base_id` 索引），不整表 `GROUP BY`——
+   * 全库上万行、页大小 20 时整表聚合纯属浪费。回的是数组而不是 Map：仓储层不替调用方
+   * 选数据结构，也免得把 Map 传出去被人就地改。
+   */
+  countByBaseIds(baseIds: string[]): Array<{ baseId: string; count: number }> {
+    if (baseIds.length === 0) return [];
+    const placeholders = baseIds.map(() => "?").join(", ");
+    return this.db.all<{ baseId: string; count: number }>(
+      `SELECT base_id AS baseId, COUNT(1) AS count FROM equipment_variants
+        WHERE base_id IN (${placeholders})
+        GROUP BY base_id`,
+      baseIds,
+    );
+  }
+
   private where(options: EquipmentVariantListOptions): { clause: string; params: SqlParam[] } {
     const where: string[] = [];
     const params: SqlParam[] = [];
     if (options.baseId) {
       where.push("base_id = ?");
       params.push(options.baseId);
-    }
-    if (options.slot) {
-      where.push("base_id IN (SELECT id FROM equipments WHERE slot = ?)");
-      params.push(options.slot);
-    }
-    if (typeof options.minLevel === "number") {
-      where.push("level >= ?");
-      params.push(options.minLevel);
-    }
-    if (typeof options.maxLevel === "number") {
-      where.push("level <= ?");
-      params.push(options.maxLevel);
     }
     if (options.keyword) {
       const like = `%${options.keyword.replace(/[\\%_]/g, "\\$&")}%`;

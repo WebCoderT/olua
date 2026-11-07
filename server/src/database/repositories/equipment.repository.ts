@@ -190,6 +190,18 @@ export class EquipmentRepository {
     return this.db.get<EquipmentRow>("SELECT * FROM equipments WHERE id = ?", [id]);
   }
 
+  /**
+   * 按 id 批量取基础件（#781：变体列表只补它这一页真正引用的基础件）
+   *
+   * 以前变体列表为了拼「显示字段取基础件」把**整张表**读进内存（`list({size: 1_000_000})`），
+   * 685 件时看着无所谓，但那是每次请求都全表投影一遍。这里只取当前页出现的 base_id。
+   */
+  listByIds(ids: string[]): EquipmentRow[] {
+    if (ids.length === 0) return [];
+    const placeholders = ids.map(() => "?").join(", ");
+    return this.db.all<EquipmentRow>(`SELECT * FROM equipments WHERE id IN (${placeholders})`, ids);
+  }
+
   /** 分页检索（默认按等级升序 —— 等级是装备定强的主轴） */
   list(options: EquipmentListOptions): EquipmentRow[] {
     const { clause, params } = this.where(options);

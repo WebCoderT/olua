@@ -429,7 +429,7 @@ export const routes = {
     /**
      * 装备变体列表（GET /admin/equipment-variants）
      *
-     * 每件基础件展开 5 前缀 × 3 后缀 = 15 行（行数随基础件浮动）。`baseId` 只看某一件基础件的 15 个变体；`keyword` 模糊匹配变体 id 与名称；`slot` 按部位筛（部位取自基础件）、`minLevel` / `maxLevel` 取穿戴等级段（含两端）。
+     * 每件基础件展开 5 前缀 × 3 后缀 = 15 行（行数随基础件浮动）。`baseId` 只看某一件基础件的全部变体（管理端「装备配置」列表里点「N 个变体」弹出的就是它）；`keyword` 模糊匹配变体 id 与名称。
      */
     list: "/admin/equipment-variants",
     /**
@@ -450,7 +450,7 @@ export const routes = {
     /**
      * 装备基础件配置列表（GET /admin/equipments）
      *
-     * **只收基础件**（如 `cloth_1`），变体（`cloth_1_p3s2`）在 `admin/equipment-variants` 单独管。
+     * **只收基础件**（如 `cloth_1`），变体（`cloth_1_p3s2`）在 `admin/equipment-variants` 单独管（管理端是列表里的「N 个变体」弹窗）。
      */
     list: "/admin/equipments",
     /**
