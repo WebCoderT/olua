@@ -5,6 +5,7 @@ import {
   clothes,
   equipmentCombatValue,
   equipmentSlotOrder,
+  getMallGoods,
   getRecyclePrice,
   helmets,
   nicklaces,
@@ -56,6 +57,34 @@ export function rebuildItemIndex(): void {
   });
   registerItems(drugs, "drug");
   registerItems(materials, "material");
+}
+
+/**
+ * 商城可售清单（#763）：装备 + 药品，按**陈列顺序**返回
+ *
+ * · 装备在前：部位序 → 等级 → 前缀 → 后缀（`getMallGoods` 排好的）；
+ * · 药品在后：等级 → id。
+ *
+ * **不混排**：药品没有部位，混排会让「武器」和「金创药」交替出现，找东西全靠翻页。
+ * 合并放在本文件而不是 `configs/equipments`：装备与药品在这里都已经 import
+ * （`rebuildItemIndex` 同源），而 equipments 里再 import `drugs` 会多一条
+ * equipments → game-config 的边（那里的注释写着成环风险）。
+ *
+ * 调用方（`ui/components/dialogs/MallDialog`）再按服务端上架清单过滤一次。
+ */
+export function getSellableGoods(): Goods[] {
+  const result: Goods[] = getMallGoods();
+  drugs
+    .slice()
+    .sort((a, b) => {
+      const byLevel = a.level - b.level;
+      if (byLevel !== 0) return byLevel;
+      const left = a.id ?? "";
+      const right = b.id ?? "";
+      return left < right ? -1 : left > right ? 1 : 0;
+    })
+    .forEach((drug) => result.push(drug));
+  return result;
 }
 
 /**

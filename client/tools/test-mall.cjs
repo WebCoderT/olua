@@ -31,7 +31,7 @@ if (sandbox) {
   // 购买链路是 async（#304 之后走服务端接口）→ 整段包进 async IIFE，断言里可以 await
   void (async () => {
   const { StorageManager, Role, outDir, RoleApi } = sandbox;
-  const { getItem, getItemsByType } = require(path.join(outDir, "configs/items.js"));
+  const { getItem, getItemsByType, getSellableGoods } = require(path.join(outDir, "configs/items.js"));
   const { getMallPrice, getMallRequiredLevel, getMallCategories, isMallGoodListed, applyMallCatalog } = require(path.join(outDir, "configs/game-config.js"));
   // 「商品 = 全部装备」那份查询读七个部位表，所以住在 equipments（#626，见该函数注释）
   const { getMallGoods, equipmentSlotOrder } = require(path.join(outDir, "configs/equipments.js"));
@@ -144,6 +144,26 @@ if (sandbox) {
     `${mallGoods.length} 件 / ${equipmentSlotOrder.size} 个部位`,
   );
 
+  // #763：商城还能卖药品 —— 可售清单 = 装备 + 药品，装备在前、药品在后，不混排
+  const sellable = getSellableGoods();
+  const allDrugs = getItemsByType("drug");
+  check(
+    sellable.length === mallGoods.length + allDrugs.length,
+    "可售清单 = 全部装备 + 全部药品",
+    `可售 ${sellable.length} / 装备 ${mallGoods.length} + 药品 ${allDrugs.length}`,
+  );
+  check(
+    sellable.slice(0, mallGoods.length).every((good) => good.type === "equipment") &&
+      sellable.slice(mallGoods.length).every((good) => good.type === "drug"),
+    "装备在前、药品在后（药品没有部位，混排会让武器和药交替出现）",
+  );
+  check(sellable.every((good) => Boolean(good.id) && Boolean(good.icon)), "每件可售物品都有 id 与图标（卡片渲染依赖它们）");
+  const drugTail = sellable.slice(mallGoods.length);
+  check(
+    drugTail.every((good, index) => index === 0 || drugTail[index - 1].level <= good.level),
+    "药品按等级升序（陈列顺序稳定，翻页不会跳来跳去）",
+  );
+
   //#endregion
 
   //#region B. 商城目录：分类、售价与购买等级全部来自服务端快照
@@ -241,7 +261,15 @@ if (sandbox) {
   check(!/"(mall|common|buttons)\//.test(mallCode), "MallDialog 里没有裸资源路径（图片走 configs 的 uiImages）");
 
   // 关键接线
-  check(/getMallGoods\(\)/.test(mallSource), "商品表来自 configs/equipments.getMallGoods（全部装备，按部位序 → 等级 → 前缀 → 后缀）");
+  check(
+    /getSellableGoods\(\)/.test(mallSource) && /from "\.\.\/\.\.\/\.\.\/configs\/items"/.test(mallSource),
+    "商品表来自 configs/items.getSellableGoods（装备 + 药品，装备在前）",
+  );
+  check(
+    /isEquipment\(good\)/.test(mallSource) && /layout\.card\.name\.plainColor/.test(mallSource),
+    "药品走单段名称（非装备分支取 name.plainColor，不共用装备的前缀色）",
+  );
+  check(/getText\("mall_good_kind_drug"\)/.test(mallSource), "药品卡片的品质行写「药品」（文案走 configs/texts）");
   check(/StorageManager\.buyMallGood\(/.test(mallSource), "购买走数据层 StorageManager.buyMallGood");
   check(/mallDialogLayout/.test(mallSource), "几何全部取自 configs/hudLayout.mallDialogLayout");
   check(/getText\("label_mall_buy"\)/.test(mallSource), "购买按钮文案走 configs/texts");
@@ -303,6 +331,7 @@ if (sandbox) {
     "label_mall_buy",
     "mall_level_lock",
     "mall_empty_tip",
+    "mall_good_kind_drug",
     "mall_price",
     "label_mall_first_page",
     "label_mall_prev_page",

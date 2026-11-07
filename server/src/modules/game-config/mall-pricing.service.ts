@@ -3,27 +3,42 @@ import { BizCode } from "../../common/constants/biz-code";
 import { BizException } from "../../common/errors/biz.exception";
 import { equipmentLevelOf, equipmentSlotOf, itemLabelOf } from "../../common/runtime-config-cache";
 import { PageResult } from "../../common/interfaces/api-envelope.interface";
+import { DrugRepository } from "../../database/repositories/drug.repository";
 import { EquipmentRepository } from "../../database/repositories/equipment.repository";
 import { EquipmentVariantRepository } from "../../database/repositories/equipment-variant.repository";
 import { MallRepository } from "../../database/repositories/mall.repository";
 import {
   CreateMallCategoryDto,
   CreateMallGoodDto,
+  MallCatalogItemDto,
+  MallCatalogPageDto,
+  MallCatalogQueryDto,
   MallCategoryDto,
   MallGoodEntryDto,
   MallGoodItemDto,
   MallGoodQueryDto,
+  MALL_CATEGORY_DRUG,
   UpdateMallCategoryDto,
   UpdateMallGoodDto,
 } from "./dto/mall.dto";
 
-/** 商品目录里的一行（商品本体 = 装备全量变体，来自 `equipment_variants` 表；上架时校验与展示共用） */
+/**
+ * 商品目录里的一行（商品本体 = 装备变体 / 药品，来自各自的表；上架校验与展示共用）
+ *
+ * 品类（`kind`）决定展示字段怎么读：装备有部位与前后缀，药品都没有（`slot` 空、两位 0）。
+ */
 interface CatalogEntry {
   id: string;
+  /** equipment（装备变体）/ drug（药品） */
+  kind: string;
   label: string;
+  /** resources 相对路径（装备取基础件图标，药品取 drugs.icon） */
+  icon: string;
+  /** 部位（药品空串） */
   slot: string;
+  /** 装备等级需求 / 药品等级 */
   level: number;
-  /** 前缀序号（品质）—— 同一件装备 15 个变体同名，只有这两个序号能分辨 */
+  /** 前缀序号（品质）—— 同一件装备 15 个变体同名，只有这两个序号能分辨；药品恒 0 */
   prefix: number;
   /** 后缀序号（阶级） */
   suffix: number;
@@ -53,6 +68,7 @@ export class MallPricingService {
     private readonly mall: MallRepository,
     private readonly variants: EquipmentVariantRepository,
     private readonly equipments: EquipmentRepository,
+    private readonly drugs: DrugRepository,
   ) {}
 
   //#region 分类
@@ -114,7 +130,8 @@ export class MallPricingService {
       .filter((row) => {
         if (query.categoryId && row.category_id !== query.categoryId) return false;
         const entry = catalog.get(row.id);
-        if (!entry) return true; // 上架后装备被删了的孤儿行：照实列出（label 退回 id），运营看得见才好处理
+        if (!entry) return true; // 上架后装备/药品被删了的孤儿行：照实列出（label 退回 id），运营看得见才好处理
+        if (query.kind && entry.kind !== query.kind) return false;
         if (query.slot && entry.slot !== query.slot) return false;
         if (keywordLower && !row.id.toLowerCase().includes(keywordLower) && !entry.label.includes(keyword)) return false;
         return true;
@@ -130,6 +147,53 @@ export class MallPricingService {
     const total = rows.length;
     const list = rows.slice((page - 1) * size, page * size);
     return { list, total, page, size };
+  }
+
+  /**
+   * 上架弹窗的候选物品目录（#763）：装备变体 + 药品，按 **分类（部位 / 药品）与等级** 筛
+   *
+   * 弹窗不再自己拼 `equipmentVariantsApi` —— 两类物品的字段口径不同（药品没有部位与前后缀），
+   * 统一在这里拼成同一形状，管理端只认 `kind / slot / level` 三个筛选键。
+   *
+   * `levels` 回的是**当前分类下出现过的等级**（不受关键字影响）：等级下拉需要知道有哪些档，
+   * 让运营照着点，而不是拿键盘试。
+   */
+  listCatalog(query: MallCatalogQueryDto): MallCatalogPageDto {
+    const page = query.page ?? 1;
+    const size = query.size ?? 20;
+    const keyword = query.keyword?.trim() ?? "";
+    const keywordLower = keyword ? keyword.toLowerCase() : "";
+    const inCategory = (entry: CatalogEntry) =>
+      !query.category || (query.category === MALL_CATEGORY_DRUG ? entry.kind === MALL_CATEGORY_DRUG : entry.slot === query.category);
+
+    const catalog = this.catalogEntries();
+    const levels = Array.from(
+      new Set(catalog.filter(inCategory).map((entry) => entry.level)),
+    ).sort((a, b) => a - b);
+    const listed = new Set(this.mall.listGoods().map((row) => row.id));
+
+    const rows = catalog.filter((entry) => {
+      if (!inCategory(entry)) return false;
+      if (query.level !== undefined && entry.level !== query.level) return false;
+      if (keywordLower && !entry.id.toLowerCase().includes(keywordLower) && !entry.label.includes(keyword)) return false;
+      return true;
+    });
+
+    const total = rows.length;
+    const list = rows.slice((page - 1) * size, page * size).map((entry) => {
+      const item = new MallCatalogItemDto();
+      item.id = entry.id;
+      item.kind = entry.kind;
+      item.label = entry.label;
+      item.icon = entry.icon;
+      item.slot = entry.slot;
+      item.level = entry.level;
+      item.prefix = entry.prefix;
+      item.suffix = entry.suffix;
+      item.listed = listed.has(entry.id);
+      return item;
+    });
+    return { list, total, page, size, levels };
   }
 
   /** 上架：商品 id 必须是装备变体（404 50021）、分类必须存在（404 50025）、不能重复上架（409 50026） */
@@ -199,27 +263,51 @@ export class MallPricingService {
     return row;
   }
 
-  /** 装备目录校验（上架时用；目录 = 装备全量变体，现查库） */
+  /**
+   * 目录校验（上架时用；目录 = 装备全量变体 + 药品，现查库）
+   *
+   * 装备先按 runtime cache 判存在（与结算同源），药品查 `drugs` 表 —— 两类物品的
+   * 「在不在目录里」是两张表，不能只留装备那条，否则药品永远上不了架。
+   */
   private requireCatalogEntry(id: string): CatalogEntry {
-    const level = equipmentLevelOf(id);
-    if (level === null) throw BizException.notFound(BizCode.MALL_GOOD_NOT_FOUND, `商品 ${id} 不在装备目录里（商城只卖装备）`);
-    const variant = this.variants.findById(id);
-    return {
-      id,
-      label: itemLabelOf(id) ?? id,
-      slot: equipmentSlotOf(id) ?? "",
-      level,
-      prefix: Number(variant?.prefix) || 0,
-      suffix: Number(variant?.suffix) || 0,
-    };
+    const equipLevel = equipmentLevelOf(id);
+    if (equipLevel !== null) {
+      const variant = this.variants.findById(id);
+      return {
+        id,
+        kind: "equipment",
+        label: itemLabelOf(id) ?? id,
+        icon: this.iconOfBase(variant?.base_id),
+        slot: equipmentSlotOf(id) ?? "",
+        level: equipLevel,
+        prefix: Number(variant?.prefix) || 0,
+        suffix: Number(variant?.suffix) || 0,
+      };
+    }
+    const drug = this.drugs.findByKey(id);
+    if (drug) {
+      return {
+        id,
+        kind: "drug",
+        label: drug.label,
+        icon: drug.icon,
+        slot: "",
+        level: Number(drug.level) || 0,
+        prefix: 0,
+        suffix: 0,
+      };
+    }
+    throw BizException.notFound(BizCode.MALL_GOOD_NOT_FOUND, `商品 ${id} 不在商城目录里（只卖装备与药品）`);
   }
 
-  /** 上架行 + 装备目录 → 展示视图（孤儿行 label 退回 id，照实显示便于运营清理） */
+  /** 上架行 + 目录 → 展示视图（孤儿行 label 退回 id，照实显示便于运营清理） */
   private itemOf(row: { id: string; category_id: string; price: number; required_level: number; updated_at: number }, entry?: CatalogEntry): MallGoodItemDto {
     return {
       id: row.id,
       categoryId: row.category_id,
+      kind: entry?.kind ?? "",
       label: entry?.label ?? row.id,
+      icon: entry?.icon ?? "",
       slot: entry?.slot ?? "",
       level: entry?.level ?? 0,
       prefix: entry?.prefix ?? 0,
@@ -231,28 +319,50 @@ export class MallPricingService {
   }
 
   /**
-   * 装备目录（= 全部变体 + 名称 / 部位 / 等级 / 前后缀序号），每次现查库
+   * 商城目录（= 全部装备变体 + 全部药品 + 名称 / 图标 / 部位 / 等级 / 前后缀序号），每次现查库
    *
-   * 排序口径与客户端一致：部位序（`equipment_slots.sort_order`）→ 等级 → id。
+   * 排序：装备在前（部位序 `equipment_slots.sort_order` → 等级 → id），药品在后（等级 → id）。
+   * 两类不能混着排 —— 药品没有部位，混排会让「武器」和「金创药」交替出现。
    */
   private catalogEntries(): CatalogEntry[] {
     const slotOrder = new Map(this.equipments.listSlots().map((row) => [row.key, Number(row.sort_order) || 0]));
-    const slotOfBase = new Map(this.equipments.list({ ...ALL }).map((row) => [row.id, row.slot]));
-    const entries = this.variants.listAll().map((row) => ({
+    const bases = this.equipments.list({ ...ALL });
+    const slotOfBase = new Map(bases.map((row) => [row.id, row.slot]));
+    const iconOfBase = new Map(bases.map((row) => [row.id, row.icon]));
+    const equipments: CatalogEntry[] = this.variants.listAll().map((row) => ({
       id: row.id,
+      kind: "equipment",
       label: row.label,
+      icon: iconOfBase.get(row.base_id) ?? "",
       slot: slotOfBase.get(row.base_id) ?? "",
       level: Number(row.level) || 0,
       prefix: Number(row.prefix) || 0,
       suffix: Number(row.suffix) || 0,
     }));
-    entries.sort(
+    equipments.sort(
       (a, b) =>
         (slotOrder.get(a.slot) ?? Number.MAX_SAFE_INTEGER) - (slotOrder.get(b.slot) ?? Number.MAX_SAFE_INTEGER) ||
         a.level - b.level ||
         (a.id < b.id ? -1 : 1),
     );
-    return entries;
+    const drugs: CatalogEntry[] = this.drugs.list({ ...ALL }).map((row) => ({
+      id: row.id,
+      kind: "drug",
+      label: row.label,
+      icon: row.icon,
+      slot: "",
+      level: Number(row.level) || 0,
+      prefix: 0,
+      suffix: 0,
+    }));
+    drugs.sort((a, b) => a.level - b.level || (a.id < b.id ? -1 : 1));
+    return equipments.concat(drugs);
+  }
+
+  /** 基础件的图标路径（上架响应里给一件装备时用；查不到返回空串，管理端显示占位图） */
+  private iconOfBase(baseId: string | undefined): string {
+    if (!baseId) return "";
+    return this.equipments.list({ ...ALL }).find((row) => row.id === baseId)?.icon ?? "";
   }
 
   /** 快照段：上架商品（客户端陈列与购买同源） */

@@ -434,8 +434,14 @@ export const mallDialogLayout = {
     paddingX: 6,
     iconSize: new Size(40, 40),
     /** 名称两段式：本体一行（前缀色大字，超长自动缩字）+ 前缀+后缀一行（同色小字）；gapY = 与上一行的间距 */
-    name: { fontSize: 12, lineHeight: 16, gapY: 2 },
-    extra: { fontSize: 10, lineHeight: 12, gapY: 2 },
+    name: { fontSize: 12, lineHeight: 16, gapY: 2, plainColor: new Color(235, 232, 226) },
+    /**
+     * 品质行（10 号字，与价格同行）
+     *
+     * 装备写「前缀 + 后缀」并用前缀色；`kindColor` 是非装备（药品）写在那一行的「药品」二字，
+     * 用中性灰 —— 药品没有品质，不该借用某一档品质的颜色。
+     */
+    extra: { fontSize: 10, lineHeight: 12, gapY: 2, kindColor: new Color(160, 150, 140) },
     /**
      * 价格（与「前缀+后缀」同一行，右侧贴边、金色）
      *

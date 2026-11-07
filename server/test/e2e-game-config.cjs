@@ -1348,9 +1348,32 @@ async function main() {
     const mallCatOrder = (await api(base, "GET", "/api/admin/mall/categories", { token })).body?.data;
     checkEqual(mallCatOrder?.[0]?.id, mallCatId, "排序值小者在先（-1 排到最前）");
 
+    // 可上架目录（#763）：装备变体 + 药品，按「物品自己的分类」与等级筛
+    const catalogAll = await api(base, "GET", "/api/admin/mall/catalog", { token });
+    const catalogTotal = Object.keys(variants).length + Object.keys(drugs).length;
+    checkEqual(catalogAll.body?.data?.total, catalogTotal, `目录 = 装备变体 + 药品（${catalogTotal} 件）`);
+    check(Array.isArray(catalogAll.body?.data?.levels) && catalogAll.body.data.levels.length > 0, "回包带等级清单（给等级下拉）");
+    const catalogWeapon = await api(base, "GET", "/api/admin/mall/catalog?category=weapon", { token });
+    check(
+      catalogWeapon.body?.data?.list?.every((row) => row.kind === "equipment" && row.slot === "weapon"),
+      "按分类筛：武器下只有武器部位的装备",
+    );
+    const catalogDrug = await api(base, "GET", "/api/admin/mall/catalog?category=drug", { token });
+    checkEqual(catalogDrug.body?.data?.total, Object.keys(drugs).length, "按分类筛：药品下只有药品");
+    check(
+      catalogDrug.body?.data?.list?.every((row) => row.kind === "drug" && row.slot === "" && row.prefix === 0),
+      "药品没有部位与前后缀（被选中时管理端不该显示品质徽章）",
+    );
+    const catalogDrugLevel = await api(base, "GET", `/api/admin/mall/catalog?category=drug&level=${drugs["drug_hp_1"].level}`, { token });
+    check(
+      catalogDrugLevel.body?.data?.list?.some((row) => row.id === "drug_hp_1"),
+      "按分类 + 等级筛：命中药物的等级档",
+    );
+    const catalogBadCategory = await api(base, "GET", "/api/admin/mall/catalog?category=nope", { token });
+    checkEqual(catalogBadCategory.status, 400, "分类取值不合法 → 400");
+
     // 上架：非装备 id → 404 50021；分类不存在 → 404 50025
-    const mallGhostGood = await api(base, "POST", "/api/admin/mall/goods", { token, body: { id: "nope", categoryId: mallCatId } });
-    checkEqual(mallGhostGood.status, 404, "给装备目录外的 id 上架 → 404");
+    const mallGhostGood = await api(base, "POST", "/api/admin/mall/goods", { token, body: { id: "nope", categoryId: mallCatId } });    checkEqual(mallGhostGood.status, 404, "给装备目录外的 id 上架 → 404");
     checkEqual(mallGhostGood.body?.code, 50021, "商品不存在用专属业务码 50021");
     const mallNoCat = await api(base, "POST", "/api/admin/mall/goods", { token, body: { id: "cloth_1_p0s1", categoryId: "mc_nope" } });
     checkEqual(mallNoCat.status, 404, "分类不存在上架 → 404");
@@ -2039,12 +2062,12 @@ async function main() {
     });
     checkEqual(listForBuy.status, 201, "上架 cloth_1_p0s1（默认分类、售价 777）");
 
-    // 商品不在目录（非装备变体）→ 404 复用 50021
+    // 商品不在目录（既不是装备变体也不是药品）→ 404 复用 50021
     const badGood = await api(base, "POST", `/api/roles/${mallRoleId}/mall-purchase`, {
       token: mallPlayer,
       body: { goodId: "drug_hp_small" },
     });
-    checkEqual(badGood.status, 404, "非装备 id 购买 → 404（商城只卖装备变体）");
+    checkEqual(badGood.status, 404, "目录之外的 id 购买 → 404（商城只卖装备与药品）");
     checkEqual(badGood.body?.code, 50021, "商品不在目录 → 50021");
 
     // 背包满 → 20012（先于元宝不足：入包前先扣费的设计下顺序是 价→钱→包，但这里钱也不足……先充值再测满包）
@@ -2119,6 +2142,37 @@ async function main() {
     // 下架（还原出厂前提，避免污染后续）
     const clearPrice = await api(base, "DELETE", "/api/admin/mall/goods/cloth_1_p0s1", { token });
     checkEqual(clearPrice.status, 200, "下架商品（还原出厂）");
+
+    // #763：药品也能上架 —— 买两瓶药，**叠在同一格**（maxStack 取自 drugs 表；装备仍一件一格）
+    const drugListed = await api(base, "POST", "/api/admin/mall/goods", {
+      token,
+      body: { id: "drug_hp_1", categoryId: "default", price: 30 },
+    });
+    checkEqual(drugListed.status, 201, "上架药品 drug_hp_1（售价 30）");
+    checkEqual(drugListed.body?.data?.kind, "drug", "商品视图的品类 = drug");
+    checkEqual(drugListed.body?.data?.icon, drugs["drug_hp_1"].icon, "药品图标取 drugs.icon（不走装备图标解析）");
+    checkEqual(drugListed.body?.data?.slot, "", "药品没有部位（管理端该显示「药品」而不是空部位）");
+    const drugReady = await api(base, "PATCH", `/api/admin/roles/${mallRoleId}`, {
+      token,
+      body: { bindGold: 100, bag: [] },
+    });
+    const drugBuy1 = await api(base, "POST", `/api/roles/${mallRoleId}/mall-purchase`, {
+      token: mallPlayer,
+      body: { goodId: "drug_hp_1", revision: drugReady.body?.data?.revision },
+    });
+    checkEqual(drugBuy1.status, 200, "买第一瓶药 → 200");
+    checkEqual(drugBuy1.body?.data?.data?.bag?.[0]?.[0]?.count, 1, "第一瓶占一格");
+    const drugBuy2 = await api(base, "POST", `/api/roles/${mallRoleId}/mall-purchase`, {
+      token: mallPlayer,
+      body: { goodId: "drug_hp_1", revision: drugBuy1.body?.data?.revision },
+    });
+    checkEqual(drugBuy2.status, 200, "买第二瓶药 → 200");
+    const drugBag = drugBuy2.body?.data?.data?.bag;
+    checkEqual(drugBag?.[0]?.[0]?.id, "drug_hp_1", "药品进背包首格");
+    checkEqual(drugBag?.[0]?.[0]?.count, 2, "两瓶叠在同一格（可堆叠物品不另占格子）");
+    checkEqual(drugBuy2.body?.data?.data?.bindGold, 40, "两次共扣 60（100 → 40）");
+    const drugDelist = await api(base, "DELETE", "/api/admin/mall/goods/drug_hp_1", { token });
+    checkEqual(drugDelist.status, 200, "下架药品（还原出厂）");
 
     //#endregion
 

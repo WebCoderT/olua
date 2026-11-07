@@ -6051,9 +6051,102 @@ export type MallCategoryRemove = {
   removed: boolean;
 };
 
+export type MallCatalogItem = {
+  /**
+   * 物品 id（装备变体 id / 药品 id）
+   */
+  id: string;
+  /**
+   * 品类：equipment（装备）/ drug（药品）
+   */
+  kind: string;
+  /**
+   * 显示名
+   */
+  label: string;
+  /**
+   * 图标（resources 相对路径）
+   */
+  icon: string;
+  /**
+   * 部位（药品为空串）
+   */
+  slot: string;
+  /**
+   * 等级（装备等级需求 / 药品等级）
+   */
+  level: number;
+  /**
+   * 前缀序号（品质；药品恒 0）
+   */
+  prefix: number;
+  /**
+   * 后缀序号（阶级；药品恒 0）
+   */
+  suffix: number;
+  /**
+   * 是否已在商城上架（一件物品全商城只能挂一行）
+   */
+  listed: boolean;
+};
+
+export type MallCatalogPage = {
+  /**
+   * 总条数
+   */
+  total: number;
+  /**
+   * 当前页码（从 1 开始）
+   */
+  page: number;
+  /**
+   * 每页条数
+   */
+  size: number;
+  /**
+   * 当前页的候选物品
+   */
+  list: MallCatalogItem[];
+  /**
+   * 当前分类下出现过的等级（升序去重；与关键字无关）
+   */
+  levels: number[];
+};
+
+export type MallCatalogQuery = {
+  /**
+   * 页码，从 1 开始
+   */
+  page?: number;
+  /**
+   * 每页条数（1~100）
+   */
+  size?: number;
+  /**
+   * 关键字：模糊匹配 id 与名称
+   */
+  keyword?: string;
+  /**
+   * 排序字段（取值见各接口说明，未登记的值会退回默认排序）
+   */
+  sort?: string;
+  /**
+   * 排序方向：asc 升序 / desc 降序
+   */
+  order?: "asc" | "desc";
+  /**
+   * 物品分类：部位 key（other1 / cloth / other2 / weapon / necklace / ring / accessories / shinguard / helmet / scapular / belt / wristband / shoes）或 drug（药品）；留空 = 全部
+   */
+  category?: string;
+  /**
+   * 精确等级（留空 = 全部等级）
+   */
+  level?: number;
+};
+
 export type MallGoodItem = {
   /**
-   * 商品 id（装备变体 id，如 cloth_1_p3s2）
+   * 商品 id（装备变体 id，如 cloth_1_p3s2；药品为其 drugs.id）
    */
   id: string;
   /**
@@ -6061,11 +6154,19 @@ export type MallGoodItem = {
    */
   categoryId: string;
   /**
-   * 显示名（装备配置已拼好前后缀）
+   * 品类：equipment（装备）/ drug（药品）
+   */
+  kind: string;
+  /**
+   * 显示名（装备取变体名，药品取 drugs.label）
    */
   label: string;
   /**
-   * 部位（EQUIPMENT_TYPE 的枚举值）
+   * 图标（resources 相对路径；装备取基础件图标，药品取 drugs.icon）
+   */
+  icon: string;
+  /**
+   * 部位（EQUIPMENT_TYPE 的枚举值；药品为空串）
    */
   slot: string;
   /**
@@ -6142,6 +6243,10 @@ export type MallGoodQuery = {
    * 按部位筛（取值：other1 / cloth / other2 / weapon / necklace / ring / accessories / shinguard / helmet / scapular / belt / wristband / shoes）
    */
   slot?: string;
+  /**
+   * 按品类筛：equipment（装备）/ drug（药品）
+   */
+  kind?: string;
 };
 
 export type MallGoodRemove = {

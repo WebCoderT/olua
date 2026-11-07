@@ -598,13 +598,32 @@ export class RolesService {
   }
 
   /**
-   * 往存档的背包网格里放一件商品（行优先找第一个空格；装备不可叠加，每件占一格）
+   * 往存档的背包网格里放一件商品（#763 起支持药品堆叠）
+   *
+   * 顺序：**先找同类未满的格子堆上去**（药品可叠，`drugs.max_stack` 决定上限），
+   * 再行优先找第一个空格。装备不可叠，每件占一格 —— 查不到 maxStack 的物品（装备 / 材料）
+   * 一律按不可叠处理，不会把两件装备塞进同一格。
    *
    * @throws MALL_BAG_FULL 网格里没有空格（或网格结构不合法 —— 结构坏了放东西只会越放越乱，同样拒绝）
    */
   private putGoodIntoBag(data: Record<string, unknown>, goodId: string): void {
     const bag = data.bag;
     if (!Array.isArray(bag)) throw BizException.conflict(BizCode.MALL_BAG_FULL, "背包数据不完整，无法放入商品");
+    const maxStack = Math.max(1, Math.floor(Number(this.drugs.findByKey(goodId)?.max_stack) || 1));
+    if (maxStack > 1) {
+      for (const line of bag) {
+        if (!Array.isArray(line)) continue;
+        for (const cell of line) {
+          if (!cell || typeof cell !== "object") continue;
+          const entry = cell as Record<string, unknown>;
+          if (entry.id !== goodId) continue;
+          const count = Math.max(1, Math.floor(Number(entry.count) || 1));
+          if (count >= maxStack) continue;
+          entry.count = count + 1;
+          return;
+        }
+      }
+    }
     for (const line of bag) {
       if (!Array.isArray(line)) continue;
       for (let col = 0; col < line.length; col++) {

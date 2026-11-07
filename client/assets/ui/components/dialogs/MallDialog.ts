@@ -8,9 +8,10 @@ import { blockClickThrough } from "../../utils/input/UiHit";
 import { trackUiPress } from "../../utils/input/Pointer";
 import { mallDialogLayout, uiImages } from "../../../configs/hudLayout";
 import { getMallCategories, getMallPrice, getMallRequiredLevel, isMallGoodListed, mallGoodCategoryOf } from "../../../configs/game-config";
-import { getEquipmentNameParts, getMallGoods } from "../../../configs/equipments";
+import { getEquipmentNameParts } from "../../../configs/equipments";
+import { getSellableGoods } from "../../../configs/items";
 import { getText } from "../../../configs/texts";
-import { Equipment } from "../../../types/good";
+import { Goods, isEquipment } from "../../../types/good";
 
 /** 弹窗布局（几何、用图与列表参数统一见 configs/hudLayout.mallDialogLayout） */
 const layout = mallDialogLayout;
@@ -18,14 +19,19 @@ const layout = mallDialogLayout;
 /**
  * 商城弹窗
  *
- * 商品 = 运营在管理端**手动上架**的装备（#758：分类 + 上架清单都在服务端，快照下发），
- * 售价与购买等级每件各自配置。本类只做陈列与交互，商品表/价格/扣款入包都在数据层：
+ * 商品 = 运营在管理端**手动上架**的物品（#758：分类 + 上架清单都在服务端，快照下发；
+ * #763 起除了装备变体还有药品）。售价与购买等级每件各自配置。本类只做陈列与交互，
+ * 商品表/价格/扣款入包都在数据层：
  * - 分类：顶部页签按快照 `mallCategories` 陈列，点页签切到该分类的商品（没建分类就显示空提示）
  * - 列表：当前分类内分页陈列，每页 3 列 × rowsPerPage 行卡片；单张卡片 = 图标（鼠标悬停看完整详情）
  *   + 名称两段式 + 「购买」按钮；页脚 = 首页 / 上一页 / 页码 / 下一页 / 末页
  * - 购买：StorageManager.buyMallGood（余额不足/背包满/商品下架都会给出提示，失败时余额与背包都不动）；
  *   **角色等级不够购买等级时按钮置灰禁点**（服务端同样校验，这里只是提前提示）
  * - 绑定元宝余额（购买成功后原地刷新）
+ *
+ * **药品与装备共用卡片骨架**（#763）：图标 + 名称 + 一行小字 + 购买按钮。差别只有两处 ——
+ * 装备的名称是「前缀 + 本体 + 后缀」三段（品质行写前后缀），药品只有单段名称（小字写「药品」）。
+ * 详情弹窗走同一个 `createGoodDetailDialog`，它本来就按 `good.type` 分支。
  *
  * **分页而不是滚动**：商品可能上百件。早先的做法是「一次性建满 + 滚动虚拟化」，打开商城时就要把
  * 几百张卡片（每张含 Graphics、图标、两个文字、按钮）全建出来 → 打开明显卡顿。改成分页后每页
@@ -47,7 +53,7 @@ export default class MallDialog {
   /** 分类页签节点（切换页签时改底色/透明度，不重建） */
   private tabNodes: Node[] = [];
   /** 当前分类的商品（打开时取一次上架清单，切页签/翻页只切当前这一页，不遍历全表建节点） */
-  private goods: Equipment[] = [];
+  private goods: Goods[] = [];
   /** 当前页码（0 起）与总页数 */
   private page = 0;
   private pageCount = 1;
@@ -126,9 +132,10 @@ export default class MallDialog {
     // 分类页签（挂在弹窗上、卡片区外 —— 换分类时页签不重建，卡片整页重建）
     this.buildTabs(dialog);
     // 上架清单取一次（不在上架清单里的装备不陈列），按当前分类陈列
+    // 上架清单取一次（不在上架清单里的物品不陈列）：装备 + 药品（#763），按当前分类陈列
     this.categories = getMallCategories().map((row) => ({ id: row.id, label: row.label }));
     this.activeCategory = this.categories[0]?.id ?? "";
-    this.goods = getMallGoods().filter((good) => isMallGoodListed(good.id ?? ""));
+    this.goods = getSellableGoods().filter((good) => isMallGoodListed(good.id ?? ""));
     this.pageCount = this.pageCountOf(this.activeCategory);
     this.renderPage(0);
     this.refreshBindGold();
@@ -137,11 +144,37 @@ export default class MallDialog {
   }
 
   /**
+   * 卡片上的名称与品质行（#763 两类商品共用一套骨架）
+   *
+   * · 装备：三段名（前缀 + 本体 + 后缀），名称与品质行都用**前缀色** —— 与详情弹窗、地面掉落名同源，
+   *   不在这里另写色表；
+   * · 药品：没有前后缀，名称单段用 `name.plainColor`，品质行写「药品」（`extra.kindColor`）。
+   *   那一行不能空着 —— 空着和「品质配置异常」看起来一样。
+   */
+  private nameOf(good: Goods): { label: string; color: Color; extra: string; extraColor: Color } {
+    if (!isEquipment(good)) {
+      return {
+        label: good.label,
+        color: layout.card.name.plainColor,
+        extra: getText("mall_good_kind_drug"),
+        extraColor: layout.card.extra.kindColor,
+      };
+    }
+    const parts = getEquipmentNameParts(good);
+    return {
+      label: parts.label,
+      color: parts.prefix.color,
+      extra: `${parts.prefix.label}${parts.suffix.label}`,
+      extraColor: parts.prefix.color,
+    };
+  }
+
+  /**
    * 创建单张商品卡片：图标（悬停看详情）+ 名称两段式（本体一行 + 前缀/后缀一行）+ 「购买」按钮
    * 卡片内几何全部由布局配置推导（顶边距 → 图标 → 名称 → 前后缀 → 按钮），界面里不写死像素
    * @param roleLevel 角色当前等级（购买等级不足时按钮置灰禁点，文案换「Lv.X 解锁」）
    */
-  private createCard(good: Equipment, width: number, roleLevel: number) {
+  private createCard(good: Goods, width: number, roleLevel: number) {
     const height = layout.card.height;
     const card = UiHelper.createNode(`mall_card_${good.id}`, new Vec2(), new Size(width, height));
     // 卡片底：Graphics 自绘（深色填充 + 细金边）。橱窗底色本来就深，描一圈金边把卡片勾出来；
@@ -167,13 +200,13 @@ export default class MallDialog {
     card.addChild(icon);
     // 名称两段式：本体一行（大字）+ 前缀/后缀一行（小字）——取段与取色同走 getEquipmentNameParts
     // （与详情弹窗、地面掉落名同源，不另写色表）；卡片窄，本体名超长时自动缩字（SHRINK），
-    // 逐段配色的完整版在悬停详情里
-    const parts = getEquipmentNameParts(good);
+    // 逐段配色的完整版在悬停详情里。药品没有前后缀（#763）：名称单段、品质行写「药品」
+    const parts = this.nameOf(good);
     const textWidth = width - layout.card.paddingX * 2;
     const nameLabel = UiHelper.createLabel(
       `mall_card_name_${good.id}`,
       parts.label,
-      parts.prefix.color,
+      parts.color,
       layout.card.name.fontSize,
       new Vec2(0, nameY),
       new Size(textWidth, layout.card.name.lineHeight),
@@ -186,8 +219,8 @@ export default class MallDialog {
     const leftEdge = -width / 2 + layout.card.paddingX;
     const extraLabel = UiHelper.createLabel(
       `mall_card_extra_${good.id}`,
-      `${parts.prefix.label}${parts.suffix.label}`,
-      parts.prefix.color,
+      parts.extra,
+      parts.extraColor,
       layout.card.extra.fontSize,
       new Vec2(leftEdge + extraWidth / 2, extraY),
       new Size(extraWidth, layout.card.extra.lineHeight),
@@ -246,7 +279,7 @@ export default class MallDialog {
   //#region 分类页签
 
   /** 当前分类的商品（没建分类 = 全空；快照没到同样空） */
-  private goodsOf(categoryId: string): Equipment[] {
+  private goodsOf(categoryId: string): Goods[] {
     if (!categoryId) return [];
     return this.goods.filter((good) => mallGoodCategoryOf(good.id ?? "") === categoryId);
   }
@@ -395,7 +428,7 @@ export default class MallDialog {
   //#region 悬停详情
 
   /** 显示某件商品的完整详情（挂在 UI 层顶层，与物品格子的悬停详情同一套零件） */
-  private openDetail(good: Equipment, anchor: Node) {
+  private openDetail(good: Goods, anchor: Node) {
     this.closeDetail();
     const detail = GameUiHelper.createGoodDetailDialog(good, anchor);
     this.detailDialog = detail;
