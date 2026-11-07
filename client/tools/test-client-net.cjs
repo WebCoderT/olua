@@ -445,11 +445,13 @@ async function expectFailure(action) {
     /export const DEV_MODE = (true|false);/.test(networkSource),
     "configs/network 有唯一的 DEV_MODE 手动开关（开发/打包差异不再自动判断）",
   );
+  // 地址字面量按环境可改（本机 localhost / 局域网真机 IP / 端口），断言只锁**形状**：
+  // 两个常量各一处、baseUrl 只由 DEV_MODE 三元给出 —— 锁死具体地址会让正常换 IP 变红
   check(
     /DEV_MODE \? DEV_BASE_URL : PROD_BASE_URL/.test(networkSource) &&
-      /const DEV_BASE_URL = "http:\/\/localhost:3100\/api";/.test(networkSource) &&
+      /const DEV_BASE_URL = "https?:\/\/[^"\s]+\/api";/.test(networkSource) &&
       /const PROD_BASE_URL = "\/api";/.test(networkSource),
-    "baseUrl 由 DEV_MODE 三元给出（两个字面量都登记在本文件）",
+    "baseUrl 由 DEV_MODE 三元给出（开发地址与同源相对路径各一处）",
   );
   check(
     !/isLocalHost|currentHost|oluaApi/.test(networkSource),

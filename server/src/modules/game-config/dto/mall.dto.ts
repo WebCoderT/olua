@@ -77,8 +77,11 @@ export class MallCategoryRemoveDto {
 /**
  * 一条上架商品视图（商品本体字段来自装备数据，价格与等级来自 mall_goods）
  *
- * `label / slot / level`（装备等级需求）是**只读展示** —— 商品是关联数据，
- * 运营只改 `price`（售价）与 `requiredLevel`（购买等级）。
+ * `label / slot / level / prefix / suffix`（装备等级需求、部位、前后缀序号）是**只读展示** ——
+ * 商品是关联数据，运营只改 `price`（售价）与 `requiredLevel`（购买等级）。
+ *
+ * 前后缀只给序号不给中文名：文案住在 `equipment_meta`（「装备设置」页可改），
+ * 一处改动全场跟着变，管理端按序号查表显示。
  */
 export class MallGoodItemDto {
   @ApiProperty({ description: "商品 id（装备变体 id，如 cloth_1_p3s2）" })
@@ -95,6 +98,12 @@ export class MallGoodItemDto {
 
   @ApiProperty({ description: "装备的等级需求（装备数据，只读展示）" })
   level: number;
+
+  @ApiProperty({ description: "前缀序号（品质；文案在 equipment_meta.prefix_labels，只读展示）" })
+  prefix: number;
+
+  @ApiProperty({ description: "后缀序号（阶级；文案在 equipment_meta.suffix_labels，只读展示）" })
+  suffix: number;
 
   @ApiProperty({ description: "售价（绑定元宝/件；0 = 免费）" })
   price: number;

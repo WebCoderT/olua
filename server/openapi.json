@@ -23685,6 +23685,14 @@
             "type": "number",
             "description": "装备的等级需求（装备数据，只读展示）"
           },
+          "prefix": {
+            "type": "number",
+            "description": "前缀序号（品质；文案在 equipment_meta.prefix_labels，只读展示）"
+          },
+          "suffix": {
+            "type": "number",
+            "description": "后缀序号（阶级；文案在 equipment_meta.suffix_labels，只读展示）"
+          },
           "price": {
             "type": "number",
             "description": "售价（绑定元宝/件；0 = 免费）"
@@ -23704,6 +23712,8 @@
           "label",
           "slot",
           "level",
+          "prefix",
+          "suffix",
           "price",
           "requiredLevel",
           "updatedAt"
