@@ -6073,6 +6073,14 @@ export type MallGoodItem = {
    */
   level: number;
   /**
+   * 前缀序号（品质；文案在 equipment_meta.prefix_labels，只读展示）
+   */
+  prefix: number;
+  /**
+   * 后缀序号（阶级；文案在 equipment_meta.suffix_labels，只读展示）
+   */
+  suffix: number;
+  /**
    * 售价（绑定元宝/件；0 = 免费）
    */
   price: number;

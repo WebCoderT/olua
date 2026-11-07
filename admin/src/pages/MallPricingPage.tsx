@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { equipmentIcon, formatTime, mallApi, PERMISSION, slotLabel } from "../api";
+import { equipmentIcon, equipmentMetaApi, formatTime, mallApi, PERMISSION, slotLabel } from "../api";
 import type { EquipmentVariant, MallCategory, MallGoodItem, PageResult } from "../api";
 import { equipmentVariantsApi } from "../api";
 import { GameIcon } from "../components/GameImage";
@@ -47,6 +47,8 @@ export function MallPricingPage() {
   const [variantOptions, setVariantOptions] = useState<EquipmentVariant[]>([]);
   const [pickedVariant, setPickedVariant] = useState<EquipmentVariant | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  /** 前后缀中文名（住在 `equipment_meta`，「装备设置」页可改；这里只取来显示） */
+  const [tierLabels, setTierLabels] = useState<{ prefix: string[]; suffix: string[] }>({ prefix: [], suffix: [] });
 
   const loadCategories = useCallback(async () => {
     const list = await mallApi.listCategories();
@@ -74,6 +76,22 @@ export function MallPricingPage() {
   useEffect(() => {
     void loadCategories().catch(() => undefined);
   }, [loadCategories]);
+
+  /** 品质文案只拉一次（改文案在「装备设置」页；同一件装备 15 个变体同名，只能靠前后缀分辨） */
+  useEffect(() => {
+    let alive = true;
+    void (async () => {
+      try {
+        const meta = await equipmentMetaApi.get();
+        if (alive) setTierLabels({ prefix: meta.prefixLabels ?? [], suffix: meta.suffixLabels ?? [] });
+      } catch {
+        /* 文案取不到不影响上架与改价，列表回落「前缀 N / 后缀 N」 */
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   useEffect(() => {
     void loadGoods();
@@ -209,6 +227,10 @@ export function MallPricingPage() {
 
   //#endregion
 
+  /** 前后缀序号 → 中文名（`equipment_meta` 里改文案，这里跟着变；序号越界照实报序号） */
+  const prefixLabelOf = (index: number) => tierLabels.prefix[index] ?? `前缀 ${index}`;
+  const suffixLabelOf = (index: number) => tierLabels.suffix[index] ?? `后缀 ${index}`;
+
   const categoryValid = newCategoryLabel.trim().length > 0 && newCategoryLabel.trim().length <= 20;
   const renameValid = renameLabel.trim().length > 0 && renameLabel.trim().length <= 20;
   const editValid =
@@ -334,6 +356,7 @@ export function MallPricingPage() {
                     <th className={thClass}>商品 id</th>
                     <th className={thClass}>名称</th>
                     <th className={thClass}>部位</th>
+                    <th className={thClass}>品质（前缀 / 后缀）</th>
                     <th className={thClass}>装备等级</th>
                     <th className={thClass}>售价</th>
                     <th className={thClass}>购买等级</th>
@@ -353,6 +376,12 @@ export function MallPricingPage() {
                       </td>
                       <td className={tdClass}>
                         <Badge tone="slate">{item.slot ? slotLabel(item.slot) : "—"}</Badge>
+                      </td>
+                      <td className={tdClass}>
+                        <div className="flex flex-wrap gap-1">
+                          <Badge tone="indigo">{prefixLabelOf(item.prefix)}</Badge>
+                          <Badge tone="slate">{suffixLabelOf(item.suffix)}</Badge>
+                        </div>
                       </td>
                       <td className={`${tdClass} text-slate-400`}>{item.level}</td>
                       <td className={`${tdClass} font-medium text-emerald-300`}>{item.price}</td>
@@ -428,7 +457,7 @@ export function MallPricingPage() {
                 <Button variant="outline" onClick={() => void searchVariants(variantKeyword.trim())}>搜索</Button>
               </div>
             </Field>
-            <Field label="搜索结果（点选一件）">
+            <Field label="搜索结果（点选一件）" hint="同一件装备有 15 个变体（名称相同），认准「部位 + 前后缀」再上架。">
               <div className="max-h-48 overflow-y-auto rounded-lg border border-slate-800">
                 {variantOptions.length === 0 ? (
                   <p className="px-3 py-3 text-xs text-slate-500">没有匹配的装备变体，换个关键字</p>
@@ -441,9 +470,14 @@ export function MallPricingPage() {
                       onClick={() => setPickedVariant(variant)}
                     >
                       <GameIcon path={equipmentIcon(variant.id)} alt={variant.label} size={24} />
-                      <span className="font-mono text-slate-400">{variant.id}</span>
-                      <span className="text-slate-100">{variant.label}</span>
-                      <span className="ml-auto text-slate-500">Lv.{variant.level}</span>
+                      <span className="shrink-0 font-mono text-slate-400">{variant.id}</span>
+                      <span className="truncate text-slate-100" title={variant.label}>{variant.label}</span>
+                      <span className="ml-auto flex shrink-0 items-center gap-1">
+                        <Badge tone="slate">{variant.slot ? slotLabel(variant.slot) : "部位未知"}</Badge>
+                        <Badge tone="indigo">{prefixLabelOf(variant.prefix)}</Badge>
+                        <Badge tone="slate">{suffixLabelOf(variant.suffix)}</Badge>
+                        <span className="text-slate-500">Lv.{variant.level}</span>
+                      </span>
                     </button>
                   ))
                 )}

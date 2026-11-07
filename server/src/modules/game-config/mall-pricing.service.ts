@@ -23,6 +23,10 @@ interface CatalogEntry {
   label: string;
   slot: string;
   level: number;
+  /** 前缀序号（品质）—— 同一件装备 15 个变体同名，只有这两个序号能分辨 */
+  prefix: number;
+  /** 后缀序号（阶级） */
+  suffix: number;
 }
 
 /** 全量拉取参数：service 层调用不经过 ValidationPipe，size 不受 HTTP 边界的 100 限制 */
@@ -199,7 +203,15 @@ export class MallPricingService {
   private requireCatalogEntry(id: string): CatalogEntry {
     const level = equipmentLevelOf(id);
     if (level === null) throw BizException.notFound(BizCode.MALL_GOOD_NOT_FOUND, `商品 ${id} 不在装备目录里（商城只卖装备）`);
-    return { id, label: itemLabelOf(id) ?? id, slot: equipmentSlotOf(id) ?? "", level };
+    const variant = this.variants.findById(id);
+    return {
+      id,
+      label: itemLabelOf(id) ?? id,
+      slot: equipmentSlotOf(id) ?? "",
+      level,
+      prefix: Number(variant?.prefix) || 0,
+      suffix: Number(variant?.suffix) || 0,
+    };
   }
 
   /** 上架行 + 装备目录 → 展示视图（孤儿行 label 退回 id，照实显示便于运营清理） */
@@ -210,6 +222,8 @@ export class MallPricingService {
       label: entry?.label ?? row.id,
       slot: entry?.slot ?? "",
       level: entry?.level ?? 0,
+      prefix: entry?.prefix ?? 0,
+      suffix: entry?.suffix ?? 0,
       price: row.price,
       requiredLevel: row.required_level,
       updatedAt: row.updated_at,
@@ -217,7 +231,7 @@ export class MallPricingService {
   }
 
   /**
-   * 装备目录（= 全部变体 + 名称 / 部位 / 等级），每次现查库
+   * 装备目录（= 全部变体 + 名称 / 部位 / 等级 / 前后缀序号），每次现查库
    *
    * 排序口径与客户端一致：部位序（`equipment_slots.sort_order`）→ 等级 → id。
    */
@@ -229,6 +243,8 @@ export class MallPricingService {
       label: row.label,
       slot: slotOfBase.get(row.base_id) ?? "",
       level: Number(row.level) || 0,
+      prefix: Number(row.prefix) || 0,
+      suffix: Number(row.suffix) || 0,
     }));
     entries.sort(
       (a, b) =>

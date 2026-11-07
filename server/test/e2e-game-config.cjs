@@ -1363,6 +1363,10 @@ async function main() {
     });
     checkEqual(mallListed.status, 201, "上架成功");
     checkEqual(mallListed.body?.data?.label, variants["cloth_1_p0s1"].label, "商品显示名来自装备数据（前后缀已拼好）");
+    // 同一件装备 15 个变体同名，管理端只能靠「部位 + 前后缀」分辨 —— 三个只读字段必须跟着下发
+    checkEqual(mallListed.body?.data?.slot, equipBases[variants["cloth_1_p0s1"].baseId].slot, "商品展示带部位（装备数据）");
+    checkEqual(mallListed.body?.data?.prefix, variants["cloth_1_p0s1"].prefix, "商品展示带前缀序号（品质）");
+    checkEqual(mallListed.body?.data?.suffix, variants["cloth_1_p0s1"].suffix, "商品展示带后缀序号（阶级）");
     checkEqual(mallListed.body?.data?.price, 777, "售价已落");
     checkEqual(mallListed.body?.data?.requiredLevel, 3, "购买等级已落");
     const mallListedAgain = await api(base, "POST", "/api/admin/mall/goods", { token, body: { id: "cloth_1_p0s1", categoryId: mallCatId } });
@@ -1372,6 +1376,7 @@ async function main() {
     // 列表：分类筛 / 关键字筛
     const mallGoodList = await api(base, "GET", `/api/admin/mall/goods?categoryId=${mallCatId}`, { token });
     checkEqual(mallGoodList.body?.data?.total, 1, "按分类筛命中这一件");
+    checkEqual(mallGoodList.body?.data?.list?.[0]?.prefix, variants["cloth_1_p0s1"].prefix, "列表行也带前缀序号（品质列）");
     const mallGoodKeyword = await api(base, "GET", "/api/admin/mall/goods?keyword=p0s1", { token });
     checkEqual(mallGoodKeyword.body?.data?.total, 1, "关键字命中商品 id");
 
