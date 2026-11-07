@@ -12,6 +12,16 @@ export interface EquipmentVariantListOptions {
   baseId?: string;
   /** 关键字：模糊匹配变体 id / 完整名称 */
   keyword?: string;
+  /**
+   * 按部位筛（#779）：变体行只有 `base_id`，部位要回 `equipments` 查
+   *
+   * 不在这里 join 展开：子查询只扫 685 行基础件，比 `LEFT JOIN` 再 `WHERE` 少一次投影，
+   * 而且「基础件不存在」的孤儿变体行天然筛不进来（与列表里查不到基础件就跳过同一口径）。
+   */
+  slot?: string;
+  /** 穿戴等级段（#779；含两端） */
+  minLevel?: number;
+  maxLevel?: number;
   sort?: string;
   order?: string;
 }
@@ -201,6 +211,18 @@ export class EquipmentVariantRepository {
     if (options.baseId) {
       where.push("base_id = ?");
       params.push(options.baseId);
+    }
+    if (options.slot) {
+      where.push("base_id IN (SELECT id FROM equipments WHERE slot = ?)");
+      params.push(options.slot);
+    }
+    if (typeof options.minLevel === "number") {
+      where.push("level >= ?");
+      params.push(options.minLevel);
+    }
+    if (typeof options.maxLevel === "number") {
+      where.push("level <= ?");
+      params.push(options.maxLevel);
     }
     if (options.keyword) {
       const like = `%${options.keyword.replace(/[\\%_]/g, "\\$&")}%`;

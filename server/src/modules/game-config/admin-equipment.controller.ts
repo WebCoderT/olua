@@ -182,7 +182,7 @@ export class AdminEquipmentVariantController {
     summary: "装备变体列表",
     description:
       "每件基础件展开 5 前缀 × 3 后缀 = 15 行（行数随基础件浮动）。`baseId` 只看某一件基础件的 15 个变体；" +
-      "`keyword` 模糊匹配变体 id 与名称。\n\n" +
+      "`keyword` 模糊匹配变体 id 与名称；`slot` 按部位筛（部位取自基础件）、`minLevel` / `maxLevel` 取穿戴等级段（含两端）。\n\n" +
       "**这是唯一能改单个变体数值的地方** —— 以前改基础件会连带 15 个变体按倍率一起变，" +
       "现在每个变体是独立的一行。\n\n" +
       `**排序**：\`sort\` 取 ${sortFieldNames(EQUIPMENT_VARIANT_SORT)}，\`order\` 取 asc / desc（默认 baseId 升序）。`,
