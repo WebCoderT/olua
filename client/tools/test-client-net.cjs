@@ -11,6 +11,7 @@
  * · 成功响应只把 data 交出去（包裹留在请求层，业务层见不到 code/message）
  * · 失败一律归一成 ApiError：网络/超时（可重试并重试 networkConfig.retry 次）、非包裹、业务失败（不重试）
  * · 地址只由 configs/network.baseUrl + ApiRoutes 拼成，查询参数空值自动跳过
+ * · 开发模式的接口主机取自当前页面（电脑 localhost、手机局域网 IP 都不用改配置）
  * · 已登录自动注入 Bearer 令牌（唯一注入口在请求层），登录/注册（auth:false）不带令牌
  * · 静默请求失败不弹全局提示，但令牌失效仍然回登录场景
  * · 角色进度同步是防抖的（只推最后一份）、flush 立即推、连续失败只提示一次
@@ -44,7 +45,7 @@ try {
   fail(`沙箱准备失败：${error.message}`);
   return;
 }
-const { HttpClient, ApiError, ApiErrorKind, describeError, Session, Api, ApiRoutes, RoleSync, networkConfig, sys, ROLE_SYNC_BIZ_CODES } = net;
+const { HttpClient, ApiError, ApiErrorKind, describeError, Session, Api, ApiRoutes, RoleSync, networkConfig, sys, ROLE_SYNC_BIZ_CODES, devBaseUrlFor } = net;
 
 //#region XMLHttpRequest 替身（测试逐条断言发出去的东西）
 
@@ -122,6 +123,19 @@ async function expectFailure(action) {
 
 (async () => {
   //#region A. 行为（真实请求层 + XHR 替身）
+
+  // #775：开发模式的接口主机取自**当前页面** —— 电脑上打开是 localhost，手机用局域网 IP
+  // 打开就自动是那个 IP，真机调试不用改配置（localhost 在手机上指的是手机自己）。
+  // 断言只锁形状（主机跟着页面走、路径 /api），不锁具体端口与 IP。
+  const devUrlLan = devBaseUrlFor("192.168.1.7");
+  check(
+    /^http:\/\/192\.168\.1\.7:\d+\/api$/.test(devUrlLan),
+    "开发地址的主机取自页面（手机用局域网 IP 打开就连那个 IP）",
+    devUrlLan,
+  );
+  const devUrlFallback = devBaseUrlFor("");
+  check(/^http:\/\/localhost:\d+\/api$/.test(devUrlFallback), "拿不到页面主机时回落本机（原生包 / 单测沙箱）", devUrlFallback);
+  check(networkConfig.baseUrl === devUrlFallback, "沙箱里没有页面信息，baseUrl 就是回落值", networkConfig.baseUrl);
 
   console.log("— A. 统一响应包裹：成功只交 data，失败归一成 ApiError —");
 
@@ -440,22 +454,22 @@ async function expectFailure(action) {
 
   const networkSource = read(FILE.network);
   // #704：开发/打包差异不自动判断，由唯一的 DEV_MODE 手动开关控制
+  // #775：开关**之内**，开发模式的主机取自当前页面（局域网真机调试零配置）；打包路径仍是
+  //       同源相对地址，不参与任何自动判断 —— 所以「环境自动判定」这条铁律没有被破
   // 铁律不变：地址字面量与开关只住在 configs/network.ts（自查 tools/audit-api-hardcode.cjs）
   check(
     /export const DEV_MODE = (true|false);/.test(networkSource),
     "configs/network 有唯一的 DEV_MODE 手动开关（开发/打包差异不再自动判断）",
   );
-  // 地址字面量按环境可改（本机 localhost / 局域网真机 IP / 端口），断言只锁**形状**：
-  // 两个常量各一处、baseUrl 只由 DEV_MODE 三元给出 —— 锁死具体地址会让正常换 IP 变红
+  // 断言只锁**形状**：开发地址由页面主机派生、打包是相对路径 —— 锁死具体 IP 会让正常换网络变红
   check(
-    /DEV_MODE \? DEV_BASE_URL : PROD_BASE_URL/.test(networkSource) &&
-      /const DEV_BASE_URL = "https?:\/\/[^"\s]+\/api";/.test(networkSource) &&
+    /DEV_MODE \? devBaseUrlFor\(pageHostname\(\)\) : PROD_BASE_URL/.test(networkSource) &&
       /const PROD_BASE_URL = "\/api";/.test(networkSource),
-    "baseUrl 由 DEV_MODE 三元给出（开发地址与同源相对路径各一处）",
+    "baseUrl 由 DEV_MODE 三元给出（开发地址按页面主机派生，打包走同源相对路径）",
   );
   check(
-    !/isLocalHost|currentHost|oluaApi/.test(networkSource),
-    "host 自动判定与页面参数覆盖已移除（不留第二条改变地址的通道）",
+    /if \(typeof window === "undefined" \|\| !window\.location\) return "";/.test(networkSource),
+    "页面信息缺失时返回空串（原生包 / 单测沙箱不会因读 window 报错）",
   );
   //#endregion
 

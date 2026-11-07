@@ -167,6 +167,10 @@ export default defineConfig({
   // 构建（rollup）不受这条限制，它只影响 `npm run dev`。
   server: {
     fs: { allow: [".."] },
+    // 听所有网卡：手机 / 另一台电脑用本机的局域网 IP 就能打开这个 dev server
+    //（接口地址会自动跟着换主机，见 src/api/config.ts 的 followPageHost）。
+    // 只影响 `npm run dev`，构建产物不受影响
+    host: true,
   },
   build: {
     outDir: "dist",

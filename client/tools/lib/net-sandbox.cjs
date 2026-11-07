@@ -184,6 +184,8 @@ function prepareNet(sandboxName) {
     CombatChannel: pick(load("ui/utils/net/CombatChannel.js")),
     /** 实时通道的状态枚举与地址拼装（地址由 configs/network.baseUrl 推导，测试逐种形态断言） */
     RealtimeStatus: load("ui/utils/net/RealtimeClient.js").RealtimeStatus,
+    /** 开发模式的接口地址派生（#775：主机取自页面，测试逐种主机断言） */
+    devBaseUrlFor: network.devBaseUrlFor,
     buildRealtimeUrl: load("ui/utils/net/RealtimeClient.js").buildRealtimeUrl,
     realtimePath: load("ui/utils/net/RealtimeClient.js").realtimePath,
     ApiRoutes: routes.ApiRoutes,

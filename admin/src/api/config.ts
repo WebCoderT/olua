@@ -13,7 +13,33 @@ function readEnv(key: string, fallback: string): string {
 }
 
 /** 接口根地址（默认相对路径 `/api`：同域反向代理下无需任何配置） */
-export const API_BASE_URL = readEnv("VITE_API_BASE_URL", "/api").replace(/\/+$/, "");
+const CONFIGURED_BASE_URL = readEnv("VITE_API_BASE_URL", "/api").replace(/\/+$/, "");
+
+/** 是否让接口地址跟随当前页面的主机（局域网调试用；缺省关，见 .env.example 的说明） */
+const FOLLOW_PAGE_HOST = readEnv("VITE_API_FOLLOW_PAGE_HOST", "false") === "true";
+
+/**
+ * 把接口地址的主机换成「当前页面的主机」（端口 / 路径 / 协议照抄）
+ *
+ * 为什么需要：`.env.development` 里写的是本机地址，但页面可能是从**局域网 IP** 打开的
+ * （手机 / 另一台电脑）。这时页面自己的 host 才是这台电脑，把地址跟着换掉即可直连，
+ * 不用为了调试去改 `.env.development`（改了容易忘记改回来，而且每个人 IP 都不一样）。
+ *
+ * 三种情况原样返回：开关没开 / 地址是相对路径（同源）/ 主机本来就一致。
+ */
+function followPageHost(baseUrl: string): string {
+  if (!FOLLOW_PAGE_HOST) return baseUrl;
+  if (!/^https?:\/\//i.test(baseUrl)) return baseUrl;
+  const pageHost = typeof window === "undefined" ? "" : window.location.hostname;
+  if (!pageHost) return baseUrl;
+  const url = new URL(baseUrl);
+  if (!url.hostname || url.hostname === pageHost) return baseUrl;
+  url.hostname = pageHost;
+  return url.toString().replace(/\/+$/, "");
+}
+
+/** 接口根地址（最终生效值；地址唯一来源仍是 `.env.*`） */
+export const API_BASE_URL = followPageHost(CONFIGURED_BASE_URL);
 
 /** 请求超时（毫秒） */
 export const API_TIMEOUT = Number(readEnv("VITE_API_TIMEOUT", "15000"));

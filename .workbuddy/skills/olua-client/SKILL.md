@@ -51,7 +51,7 @@ Cocos 工程在 **`client/`**（用它打开这个目录；资源在 `client/ass
 
 ## 三、地址与请求的唯一出口
 
-- **地址**：`client/assets/configs/network.ts` 的 `baseUrl`（默认 `http://localhost:3100/api`）。客户端代码里**不允许**再出现任何服务端地址字面量；真机调试改成局域网 IP。
+- **地址**：`client/assets/configs/network.ts` 的 `baseUrl`。环境差异只有 `DEV_MODE` 一个手动开关：开发模式（`true`）走 `devBaseUrlFor(pageHostname())` —— **主机取自当前页面**（电脑 localhost、手机用局域网 IP 打开就是那个 IP，真机调试零配置），打包（`false`）走同源 `/api`。客户端代码里**不允许**再出现任何服务端地址字面量。改这条派生逻辑时记着同步 `client/tools/test-client-net.cjs` 的三条形状断言。
 - **请求**：只能从 `ui/utils/net/HttpClient.ts` 发出。业务层不碰 XHR、不拼令牌、不判状态码。
 - 同一配置文件里还有 `timeout`（单次超时）/ `retry`（**只重试网络层失败**，业务失败不重试）/ `roleSyncDelay`（进度同步防抖）。
 - 守卫：在**仓库根**跑 `node tools/audit-api-hardcode.cjs`。

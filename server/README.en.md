@@ -78,6 +78,7 @@ Literal values of these keys must not appear in code — `node ../tools/audit-ap
 | Variable | Default | Description |
 | --- | --- | --- |
 | `PORT` | `3100` | Listen port |
+| `SERVER_HOST` | empty | Listen address. Empty = all interfaces (needed for on-device LAN debugging and container deploys; the startup log lists the usable addresses). Set `127.0.0.1` to restrict it to this machine. **Shared by the archive process and the realtime process** |
 | `API_PREFIX` | `api` | Global route prefix (Swagger is fixed at `/api-docs`, no prefix) |
 | `DB_PATH` | `data/olua.db` | SQLite file (relative to `server/`); `:memory:` drops on process exit |
 | `JWT_SECRET` | dev placeholder | **Must be a random long string in production** |
@@ -274,6 +275,7 @@ One codebase, two entries, assembled on demand (`AppModule.register({ realtime }
 | | Archive process (`main.ts`) | Realtime process (`main.realtime.ts`) |
 | --- | --- | --- |
 | Port | `PORT` (default 3100) | `REALTIME_PORT` (default 3101) |
+| Listen address | `SERVER_HOST` (empty = all interfaces) | same (**must match**, otherwise a phone gets "login works, entering a map disconnects") |
 | Mounted | all HTTP modules (player / admin / announcements / mail / backup) | realtime channel + ticket endpoint + world authority + settlement |
 | Default form | with `REALTIME_EMBEDDED=true` it **also** mounts the realtime modules (single process — local dev and all e2e) | only started in standalone deployment |
 

@@ -7,6 +7,7 @@ import { AppModule } from "./app.module";
 import { configReader, readConfigSnapshot } from "./config/config-snapshot";
 import { AllExceptionsFilter } from "./common/filters/all-exceptions.filter";
 import { TransformInterceptor } from "./common/interceptors/transform.interceptor";
+import { lanIPv4Addresses } from "./common/utils/net-address.util";
 import { setupSwagger, SWAGGER_PATH } from "./swagger/setup";
 
 /**
@@ -33,6 +34,9 @@ async function bootstrap() {
 
   const prefix = config.get<string>("apiPrefix") ?? "api";
   const port = config.get<number>("port") ?? 3100;
+  // 监听地址：空 = 交给 Node 听所有网卡（局域网真机调试要的就是这个，见 config 里 host 的说明）。
+  // **实时进程要用同一个值**（main.realtime.ts）—— 只改这边的话，手机会「能登录、一进图就掉线」
+  const host = config.get<string>("host") ?? "";
   const corsOrigins = config.get<string[]>("corsOrigins") ?? ["*"];
 
   app.setGlobalPrefix(prefix);
@@ -64,9 +68,16 @@ async function bootstrap() {
     logger.warn(item.advice ?? `${item.key}：${item.value}`);
   }
 
-  await app.listen(port);
+  // 不填就按 Node 默认（听所有网卡）；填了就只在那张网卡上可达
+  if (host) await app.listen(port, host);
+  else await app.listen(port);
 
   logger.log(`服务已启动：http://localhost:${port}/${prefix}（实时通道：${realtimeEmbedded ? "内嵌本进程" : "独立进程（main.realtime）"}）`);
+  // 局域网调试：手机 / 另一台电脑要用这几个地址（localhost 在手机上指的是手机自己）
+  for (const address of lanIPv4Addresses()) {
+    logger.log(`局域网可访问：http://${address}:${port}/${prefix}`);
+  }
+  if (host) logger.log(`监听地址被 SERVER_HOST 限定为：${host}（只在填写它的那个网卡上可达）`);
   logger.log(`接口文档：http://localhost:${port}/${SWAGGER_PATH}`);
 }
 

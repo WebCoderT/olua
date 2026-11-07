@@ -87,6 +87,9 @@ npm run dev              # development (watch mode); or npm run start for the bu
 
 - API docs: <http://localhost:3100/api-docs> (JSON at `/api-docs-json`)
 - Health check: <http://localhost:3100/api/health>
+- **Connecting from a phone or another machine**: leave `SERVER_HOST` empty to listen on all interfaces and the
+  startup log prints the addresses to use; the client and admin UI both derive the API host from the page they
+  are opened on, so no configuration is needed
 - Verify everything with one command: `npm run verify`
 
 ### 2. Client (Cocos)

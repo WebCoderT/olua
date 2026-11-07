@@ -40,10 +40,14 @@
 
 ## 连哪个服务端
 
-**唯一来源是 `assets/configs/network.ts` 的 `baseUrl`**，它按运行环境解析（见 `resolveBaseUrl`）：
-回环地址与私有网段 / 本地域名走 `http://localhost:3100/api`（以局域网 IP 打开的 Cocos 预览也落在这条），
-公网域名才走同源 `/api`。**真机调试是例外**：手机上的 `localhost` 是手机自己，要把 `DEV_BASE_URL`
-的 host 换成电脑的局域网 IP。代码里没有第二处地址字面量 —— 由 `node ../tools/audit-api-hardcode.cjs` 盯着。
+**唯一来源是 `assets/configs/network.ts` 的 `baseUrl`**，环境差异由 `DEV_MODE` 一个开关决定：
+开发模式（`true`）走 `http://<页面 host>:3100/api`，打包（`false`）走同源 `/api`。
+
+**局域网真机调试不用改任何配置**：开发模式的接口主机取自**当前页面** —— 电脑上打开预览就是
+`localhost`，手机用电脑的局域网 IP 打开就自动是那个 IP（`localhost` 在手机上指的是手机自己）。
+服务端那条也要配合：`SERVER_HOST` 留空即听所有网卡，启动日志会直接列出手机该填的地址
+（存档进程与实时进程共用这个值，只放开前者会出现「能登录、一进图就掉线」）。
+代码里没有第二处地址字面量 —— 由 `node ../tools/audit-api-hardcode.cjs` 盯着。
 
 ## 三条铁律
 

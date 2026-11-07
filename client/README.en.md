@@ -41,10 +41,15 @@ sends a pick request — there is no local fallback that "computes it anyway" wh
 
 ## Which server it connects to
 
-**The single source is `baseUrl` in `assets/configs/network.ts`**, resolved per environment (see `resolveBaseUrl`):
-loopback addresses and private-network / local domains use `http://localhost:3100/api` (this also covers a Cocos
-preview opened via a LAN IP); only public domains fall back to same-origin `/api`. **On-device debugging is the
-exception** — `localhost` on a phone is the phone itself, so point `DEV_BASE_URL` at your machine's LAN IP.
+**The single source is `baseUrl` in `assets/configs/network.ts`**, and one switch decides the environment:
+dev mode (`DEV_MODE = true`) uses `http://<page host>:3100/api`, a packaged build uses same-origin `/api`.
+
+**On-device LAN debugging needs no configuration**: in dev mode the API host follows **the current page** —
+opening the preview on your machine gives `localhost`, opening it from a phone via the machine's LAN IP gives
+that IP (`localhost` on a phone means the phone itself). The server side must match: leave `SERVER_HOST`
+empty to listen on all interfaces, and the startup log prints the address to type on the phone
+(the save process and the realtime process share this value — opening up only the former gives you
+"login works, but entering a map disconnects").
 There is no second address literal anywhere in the code — `node ../tools/audit-api-hardcode.cjs` watches that.
 
 ## Three iron rules

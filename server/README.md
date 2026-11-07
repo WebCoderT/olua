@@ -82,6 +82,7 @@ npm run dev              # 开发（ts-node 热启动）；npm run build && npm 
 | 变量 | 默认 | 说明 |
 | --- | --- | --- |
 | `PORT` | `3100` | 监听端口 |
+| `SERVER_HOST` | 空 | 监听地址。空 = 听所有网卡（局域网真机调试 / 容器部署都要这个，启动日志会列出可用地址）；只想本机访问填 `127.0.0.1`。**存档进程与实时进程共用** |
 | `API_PREFIX` | `api` | 全局路由前缀（Swagger 固定在 `/api-docs`，不带前缀） |
 | `DB_PATH` | `data/olua.db` | SQLite 文件（相对 `server/`）；`:memory:` 则进程退出即丢 |
 | `JWT_SECRET` | 开发占位值 | **生产必须换成随机长串** |
@@ -316,6 +317,7 @@ git pull && make config-import       # 整表替换配置；账号与角色存�
 | | 存档进程（`main.ts`） | 实时进程（`main.realtime.ts`） |
 | --- | --- | --- |
 | 端口 | `PORT`（默认 3100） | `REALTIME_PORT`（默认 3101） |
+| 监听地址 | `SERVER_HOST`（空 = 所有网卡） | 同左（**必须一致**，否则手机会「能登录、一进图就掉线」） |
 | 装载 | 全部 HTTP 模块（玩家 / 管理端 / 公告 / 邮件 / 备份） | 实时通道 + 取票 + 世界权威 + 结算 |
 | 默认形态 | `REALTIME_EMBEDDED=true` 时**兼载**实时模块（单进程，本地开发与全部 e2e 的形态） | 只在独立部署时起 |
 

@@ -5,7 +5,10 @@
  * （自查 `node tools/audit-api-hardcode.cjs`）。
  *
  * 开发环境与打包产物的差异**不自动判断**，全部由下面唯一的 `DEV_MODE` 开关手动控制：
- *   - `true`（开发）  → `http://localhost:3100/api`，Cocos 预览直连本机服务端
+ *   - `true`（开发）  → `http://<页面 host>:3100/api`，Cocos 预览直连本机服务端。
+ *     主机**取自当前页面**：电脑上打开是 localhost，手机用局域网 IP 打开就自动是那个 IP
+ *     （见 devBaseUrlFor）—— 真机调试因此不用改配置。`localhost` 在手机上指的是手机自己，
+ *     写死它必然连不上。
  *   - `false`（打包） → `/api`，同源，由 nginx 反代到服务端
  *
  * ## 发布流程里的一步
@@ -28,15 +31,35 @@
  */
 export const DEV_MODE = true;
 
-/** 开发模式连的本机服务端（Cocos 预览 / 局域网真机调试） */
-const DEV_BASE_URL = "http://localhost:3100/api";
+/** 开发模式连的服务端端口（与服务端 `server/.env` 的 PORT 默认值一致） */
+const DEV_PORT = 3100;
+
+/**
+ * 开发模式的接口根地址：主机由**页面**决定
+ *
+ * 页面用 localhost 打开就连 localhost，用局域网 IP 打开就连那个 IP —— 手机真机调试
+ * 不用再去改配置（每个人 IP 不同，写死反而谁都不对）。拿不到页面信息时（原生包、
+ * 单测沙箱）回落 localhost。
+ *
+ * @param pageHostname 当前页面的主机名（可为空）
+ */
+export function devBaseUrlFor(pageHostname: string): string {
+  const host = pageHostname && pageHostname.trim() ? pageHostname.trim() : "localhost";
+  return `http://${host}:${DEV_PORT}/api`;
+}
+
+/** 当前页面的主机名（不在浏览器 / 预览环境里时返回空串） */
+function pageHostname(): string {
+  if (typeof window === "undefined" || !window.location) return "";
+  return window.location.hostname ?? "";
+}
 
 /** 打包产物走的同源地址（nginx 反代到服务端） */
 const PROD_BASE_URL = "/api";
 
 export const networkConfig = {
   /** 接口根地址（后面接 ui/utils/net/ApiRoutes 里登记的路由） */
-  baseUrl: DEV_MODE ? DEV_BASE_URL : PROD_BASE_URL,
+  baseUrl: DEV_MODE ? devBaseUrlFor(pageHostname()) : PROD_BASE_URL,
   /** 单次请求超时（毫秒） */
   timeout: 10000,
   /** 网络层失败（连不上 / 超时）的重试次数；业务失败不重试 */

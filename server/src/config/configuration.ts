@@ -16,6 +16,15 @@ export interface AppConfiguration {
   env: string;
   /** 监听端口 */
   port: number;
+  /**
+   * 监听地址（空串 = 交给 Node 决定，即所有网卡）
+   *
+   * 局域网真机调试必须听所有网卡，手机才连得上；手机上能登录、一进图就掉线
+   * 通常是**实时进程**还只听回环（见 main.realtime.ts）。要收紧成只本机时设
+   * `SERVER_HOST=127.0.0.1`。默认空而不是写死一个地址，是因为代码里不允许出现
+   * 回环 / 通配地址字面量（tools/audit-api-hardcode.cjs 盯着）。
+   */
+  host: string;
   /** 全局路由前缀 */
   apiPrefix: string;
   /** SQLite 数据文件路径（:memory: = 内存库） */
@@ -415,6 +424,8 @@ export default function configuration(): AppConfiguration {
   return {
     env: process.env.NODE_ENV ?? "development",
     port: Number(process.env.PORT ?? 3100),
+    // 不填 = 空串 = 交给 Node 听所有网卡（局域网真机调试要的就是这个）
+    host: process.env.SERVER_HOST ?? "",
     apiPrefix: process.env.API_PREFIX ?? "api",
     dbPath: process.env.DB_PATH ?? join(process.cwd(), "data", "olua.db"),
     jwtSecret,
