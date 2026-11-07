@@ -227,9 +227,14 @@ export function MallPricingPage() {
 
   //#endregion
 
-  /** 前后缀序号 → 中文名（`equipment_meta` 里改文案，这里跟着变；序号越界照实报序号） */
-  const prefixLabelOf = (index: number) => tierLabels.prefix[index] ?? `前缀 ${index}`;
-  const suffixLabelOf = (index: number) => tierLabels.suffix[index] ?? `后缀 ${index}`;
+  /**
+   * 前后缀序号 → 中文名（`equipment_meta` 里改文案，这里跟着变；序号越界照实报序号）
+   *
+   * 序号本身缺失 = 后端还是不带 `prefix` / `suffix` 的旧版本，这时显示「—」：
+   * 宁可空着，也不要把「前缀 undefined」摆给运营看。
+   */
+  const prefixLabelOf = (index: number) => (typeof index === "number" ? (tierLabels.prefix[index] ?? `前缀 ${index}`) : "—");
+  const suffixLabelOf = (index: number) => (typeof index === "number" ? (tierLabels.suffix[index] ?? `后缀 ${index}`) : "—");
 
   const categoryValid = newCategoryLabel.trim().length > 0 && newCategoryLabel.trim().length <= 20;
   const renameValid = renameLabel.trim().length > 0 && renameLabel.trim().length <= 20;
