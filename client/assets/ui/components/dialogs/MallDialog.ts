@@ -129,14 +129,16 @@ export default class MallDialog {
     dialog.addChild(this.emptyTip);
     // 页脚翻页控件（首页 / 上一页 / 页码 / 下一页 / 末页）
     this.buildPagination(area);
-    // 分类页签（挂在弹窗上、卡片区外 —— 换分类时页签不重建，卡片整页重建）
-    this.buildTabs(dialog);
-    // 上架清单取一次（不在上架清单里的装备不陈列），按当前分类陈列
-    // 上架清单取一次（不在上架清单里的物品不陈列）：装备 + 药品（#763），按当前分类陈列
+    // 分类与上架清单各取一次（快照已按 sort_order 排好序）：装备 + 药品（#763），按当前分类陈列
+    //
+    // **必须先于 buildTabs**：页签是按 this.categories 建的，先建页签再取分类，
+    // 建出来的就是零个页签 —— 表现为「客户端商城没有分类」（#765）。
     this.categories = getMallCategories().map((row) => ({ id: row.id, label: row.label }));
     this.activeCategory = this.categories[0]?.id ?? "";
     this.goods = getSellableGoods().filter((good) => isMallGoodListed(good.id ?? ""));
     this.pageCount = this.pageCountOf(this.activeCategory);
+    // 分类页签（挂在弹窗上、卡片区外 —— 换分类时页签不重建，卡片整页重建）
+    this.buildTabs(dialog);
     this.renderPage(0);
     this.refreshBindGold();
     this.dialog = dialog;
@@ -289,16 +291,25 @@ export default class MallDialog {
     return Math.max(1, Math.ceil(this.goodsOf(categoryId).length / this.pageSize()));
   }
 
-  /** 分类页签（横向一排：几何与配色见 mallDialogLayout.tabs；换分类只重刷卡片与页签高亮） */
+  /**
+   * 分类页签（横向一排；几何与配色见 mallDialogLayout.tabs）
+   *
+   * 分类个数不定（运营随时增删），所以页签宽度按个数压缩：先按配置宽度横排，总宽超过
+   * `maxWidth` 就一起收窄，收到 `minWidth` 为止 —— 名字由 Label 的 SHRINK 兜（分类名最长 20 字）。
+   */
   private buildTabs(dialog: Node) {
     const t = layout.tabs;
+    const count = this.categories.length;
+    const pitch = count > 0 ? Math.min(t.size.width + t.gap, (t.maxWidth + t.gap) / count) : t.size.width + t.gap;
+    const width = Math.max(t.minWidth, Math.min(t.size.width, pitch - t.gap));
+    const step = width + t.gap;
     this.tabNodes = this.categories.map((category, index) => {
-      const position = new Vec2(
-        t.position.x + (index - (this.categories.length - 1) / 2) * (t.size.width + t.gap),
-        t.position.y,
-      );
-      const tab = UiHelper.createButton(`mall_tab_${category.id}`, uiImages.smallButtonBackground, position, t.size);
-      tab.addChild(UiHelper.createLabel(`${tab.name}_label`, category.label, Color.WHITE, t.fontSize, new Vec2(), t.size));
+      const position = new Vec2(t.position.x + (index - (count - 1) / 2) * step, t.position.y);
+      const tab = UiHelper.createButton(`mall_tab_${category.id}`, uiImages.smallButtonBackground, position, new Size(width, t.size.height));
+      const label = UiHelper.createLabel(`${tab.name}_label`, category.label, Color.WHITE, t.fontSize, new Vec2(), new Size(width, t.size.height));
+      // 页签收窄后长分类名必须缩字，溢出会糊到隔壁页签上
+      label.getComponent(Label)!.overflow = Label.Overflow.SHRINK;
+      tab.addChild(label);
       tab.on(Node.EventType.TOUCH_END, () => this.switchCategory(category.id), this);
       dialog.addChild(tab);
       return tab;

@@ -833,7 +833,7 @@ export const mallApi = {
   /**
    * 上架商品列表（商品 × 分类 × 售价合并视图）（GET /admin/mall/goods）
    *
-   * 商品 = 运营手动上架的装备变体或药品（`mall_goods` 行）；名称 / 图标 / 部位 / 等级来自各自的数据表（**只读展示**），售价与购买等级才是商城字段。`categoryId` / `kind` / `slot` / `keyword` 组合筛，按 分类序 → 等级 → id 排序。上架后本体被删的孤儿行照实列出（名称退回 id），便于清理。
+   * 商品 = 运营手动上架的装备变体或药品（`mall_goods` 行）；名称 / 图标 / 部位 / 等级来自各自的数据表（**只读展示**），分类 / 售价 / 购买等级才是商城字段。
    *
    * 权限点：gameConfig:read
    */
@@ -855,9 +855,9 @@ export const mallApi = {
    */
   deleteGood: (id: string, options?: Options) => http.del<MallGoodRemove>(routes.adminMall.deleteGood(id), options),
   /**
-   * 修改商品（只许改售价与购买等级）（PATCH /admin/mall/goods/{id}）
+   * 修改商品（分类 / 售价 / 购买等级）（PATCH /admin/mall/goods/{id}）
    *
-   * **商品是关联数据**：名称 / 图标 / 部位 / 装备等级归装备管理管，这里只开放售价（`price`）与购买等级（`requiredLevel`）两个运营字段；改完立即对购买生效（客户端下次取快照后按钮按新等级置灰）。不在上架清单 → 404（`50021`）。
+   * **商品是关联数据**：名称 / 图标 / 部位 / 装备等级归各自的配置页管，这里只开放商城自己的三个字段 —— 所属分类（`categoryId`，在陈列里挪位置）、售价（`price`）、购买等级（`requiredLevel`）；改完立即对购买生效（客户端下次取快照后按钮按新等级置灰）。
    *
    * 权限点：gameConfig:write
    */

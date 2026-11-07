@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { equipmentMetaApi, equipmentSlotKeys, formatTime, mallApi, PERMISSION, slotLabel } from "../api";
-import type { MallCatalogItem, MallCategory, MallGoodItem, PageResult } from "../api";
+import type { MallCatalogItem, MallCatalogPage, MallCategory, MallGoodItem, MallGoodPage } from "../api";
 import { GameIcon } from "../components/GameImage";
 import { Modal } from "../components/Modal";
 import { Pagination } from "../components/Pagination";
@@ -11,86 +11,130 @@ import { PageHeader } from "../components/PageHeader";
 
 const MALL_PRICE_MAX = 100_000_000;
 const MALL_LEVEL_MAX = 10_000;
-/** 上架弹窗里「分类」下拉表示药品的那一项（服务端同一取值，见 MALL_CATEGORY_DRUG） */
+/** 上架弹窗「物品分类」下拉里表示药品的那一项（服务端同一取值，见 MALL_CATEGORY_DRUG） */
 const DRUG_CATEGORY = "drug";
 /** 上架弹窗候选列表每页条数（566 件装备 + 11 种药，必须分页） */
 const CATALOG_PAGE_SIZE = 8;
+/** 新建分类缺省排序值的哨兵（>= 这个值就是「排到最后」，服务端建行时同一个口径） */
+const AUTO_SORT = 900_000_000;
+
+/** 分类管理弹窗里一行的草稿（名称 + 排序；排序空串 = 新建时排到最后 / 修改时不改） */
+interface CategoryDraft {
+  label: string;
+  sortOrder: string;
+}
+
+const sortOrderTextOf = (row: MallCategory) => (row.sortOrder >= AUTO_SORT ? "" : String(row.sortOrder));
+
+/** 分类列表 → 弹窗里的可编辑草稿（每次读写分类后重建，草稿不跨请求残留） */
+function draftsOf(list: MallCategory[]): Record<string, CategoryDraft> {
+  const drafts: Record<string, CategoryDraft> = {};
+  list.forEach((row) => {
+    drafts[row.id] = { label: row.label, sortOrder: sortOrderTextOf(row) };
+  });
+  return drafts;
+}
 
 /**
- * 商城管理（#251 / #758 / #763，运营陈列页）
+ * 商城管理（#251 / #758 / #763 / #765，运营陈列页）
  *
- * **先建分类，再在分类下上架商品**：分类是自建的陈列分组（POST 建行 / PATCH 改名与
- * 排序 / DELETE 删空分类）；商品是**关联数据** —— 上架时从「可上架目录」（装备变体 + 药品）
- * 里按**物品自己的分类与等级**挑一件，之后只许改售价与购买等级（名称/图标/部位归各自的
- * 配置页管）。客户端陈列与购买以服务端为准。写操作要 `gameConfig:write`。
+ * 两件事分开管：
+ * - **分类**是商城的**陈列分组**（与物品自己的分类 —— 武器 / 衣服 / 药品 —— 无关），
+ *   在「管理分类」弹窗里增删改：改名、调排序（值小者在先）、删空分类（非空 409 `50028`）。
+ * - **商品**是**关联数据**：从可上架目录（装备变体 + 药品）里挑一件挂到某个商城分类下，
+ *   之后只许改商城自己的三个字段 —— 所属分类 / 售价 / 购买等级；名称 / 图标 / 部位 / 等级
+ *   归各自的配置页管。下架 = 删行，本体不受影响。
+ *
+ * 主界面就是一张商品表 + 一条检索条（商城分类 / 物品等级 / 名称或 id），
+ * 客户端陈列与购买以服务端为准。写操作要 `gameConfig:write`。
  */
 export function MallPricingPage() {
   const canWrite = hasPermission(PERMISSION.GAME_CONFIG_WRITE);
 
-  // —— 分类 ——
+  // —— 分类（管理弹窗里增删改；主界面只用一个下拉筛） ——
   const [categories, setCategories] = useState<MallCategory[]>([]);
-  const [selectedCategoryId, setSelectedCategoryId] = useState("");
+  const [categoryDialogOpen, setCategoryDialogOpen] = useState(false);
+  const [categoryDrafts, setCategoryDrafts] = useState<Record<string, CategoryDraft>>({});
   const [newCategoryLabel, setNewCategoryLabel] = useState("");
-  const [renaming, setRenaming] = useState<MallCategory | null>(null);
-  const [renameLabel, setRenameLabel] = useState("");
   const [categoryBusy, setCategoryBusy] = useState(false);
 
-  // —— 商品（当前分类下） ——
+  // —— 商品检索（分类 / 等级 / 名称） ——
+  /** 商城分类筛选：空串 = 全部分类 */
+  const [filterCategoryId, setFilterCategoryId] = useState("");
+  /** 物品等级筛选：空串 = 全部等级 */
+  const [filterLevel, setFilterLevel] = useState("");
+  /** 输入框草稿与已提交的关键字（点搜索 / 回车才生效） */
+  const [keywordDraft, setKeywordDraft] = useState("");
+  const [keyword, setKeyword] = useState("");
+  /** 当前分类范围内出现过的物品等级（服务端回，供等级下拉） */
+  const [levels, setLevels] = useState<number[]>([]);
   const [page, setPage] = useState(1);
   const [size, setSize] = useState(20);
-  const [goods, setGoods] = useState<PageResult<MallGoodItem> | null>(null);
+  const [goods, setGoods] = useState<MallGoodPage | null>(null);
   const [loading, setLoading] = useState(true);
+
+  // —— 商品编辑 / 上架 ——
   const [editing, setEditing] = useState<MallGoodItem | null>(null);
   const [editPrice, setEditPrice] = useState("0");
   const [editLevel, setEditLevel] = useState("0");
+  /** 编辑弹窗里选中的**商城分类**（= 陈列分组，与物品自己的分类无关） */
+  const [editCategoryId, setEditCategoryId] = useState("");
   const [creating, setCreating] = useState(false);
   const [createPrice, setCreatePrice] = useState("0");
   const [createLevel, setCreateLevel] = useState("0");
+  /** 上架弹窗里选中的**商城分类**（缺省 = 主界面正在筛的那个） */
+  const [createCategoryId, setCreateCategoryId] = useState("");
   const [submitting, setSubmitting] = useState(false);
   /** 前后缀中文名（住在 `equipment_meta`，「装备设置」页可改；这里只取来显示） */
   const [tierLabels, setTierLabels] = useState<{ prefix: string[]; suffix: string[] }>({ prefix: [], suffix: [] });
 
   // —— 上架弹窗的候选目录（装备 + 药品） ——
   const [variantKeyword, setVariantKeyword] = useState("");
-  /** 已提交的关键字（输入框是草稿，点搜索/回车才生效） */
   const [catalogKeyword, setCatalogKeyword] = useState("");
   /** 物品分类：空串 = 全部；部位 key；DRUG_CATEGORY = 药品 */
   const [catalogCategory, setCatalogCategory] = useState("");
-  /** 等级：空串 = 全部 */
   const [catalogLevel, setCatalogLevel] = useState("");
-  /** 当前分类下出现过的等级（服务端回，供等级下拉） */
   const [catalogLevels, setCatalogLevels] = useState<number[]>([]);
   const [catalogPage, setCatalogPage] = useState(1);
-  const [catalog, setCatalog] = useState<PageResult<MallCatalogItem> | null>(null);
+  const [catalog, setCatalog] = useState<MallCatalogPage | null>(null);
   const [catalogLoading, setCatalogLoading] = useState(false);
   const [pickedVariant, setPickedVariant] = useState<MallCatalogItem | null>(null);
 
   const loadCategories = useCallback(async () => {
     const list = await mallApi.listCategories();
     setCategories(list);
-    // 当前选中的分类被删了（或还没选）→ 落到第一个
-    setSelectedCategoryId((current) => (list.some((row) => row.id === current) ? current : (list[0]?.id ?? "")));
+    setCategoryDrafts(draftsOf(list));
+    // 正在筛的分类被删了 → 回到「全部分类」
+    setFilterCategoryId((current) => (current && !list.some((row) => row.id === current) ? "" : current));
     return list;
   }, []);
 
   const loadGoods = useCallback(async () => {
-    if (!selectedCategoryId) {
-      setGoods({ list: [], total: 0, page: 1, size });
-      return;
-    }
     setLoading(true);
     try {
-      setGoods(await mallApi.listGoods({ categoryId: selectedCategoryId, page, size }));
+      const result = await mallApi.listGoods({
+        categoryId: filterCategoryId || undefined,
+        level: filterLevel === "" ? undefined : Number(filterLevel),
+        keyword: keyword || undefined,
+        page,
+        size,
+      });
+      setGoods(result);
+      setLevels(result.levels ?? []);
     } catch {
       /* 错误已由请求层统一提示 */
     } finally {
       setLoading(false);
     }
-  }, [selectedCategoryId, page, size]);
+  }, [filterCategoryId, filterLevel, keyword, page, size]);
 
   useEffect(() => {
     void loadCategories().catch(() => undefined);
   }, [loadCategories]);
+
+  useEffect(() => {
+    void loadGoods();
+  }, [loadGoods]);
 
   /** 品质文案只拉一次（改文案在「装备设置」页；同一件装备 15 个变体同名，只能靠前后缀分辨） */
   useEffect(() => {
@@ -108,11 +152,7 @@ export function MallPricingPage() {
     };
   }, []);
 
-  useEffect(() => {
-    void loadGoods();
-  }, [loadGoods]);
-
-  //#region 分类操作
+  //#region 分类管理（弹窗）
 
   const createCategory = async () => {
     setCategoryBusy(true);
@@ -128,13 +168,17 @@ export function MallPricingPage() {
     }
   };
 
-  const submitRename = async () => {
-    if (!renaming) return;
+  /** 保存一行的草稿（名称 / 排序）：排序留空 = 不改（新建时留空才是「排到最后」） */
+  const saveCategory = async (row: MallCategory) => {
+    const draft = categoryDrafts[row.id];
+    if (!draft) return;
     setCategoryBusy(true);
     try {
-      await mallApi.updateCategory(renaming.id, { label: renameLabel.trim() });
-      toastSuccess("分类已改名");
-      setRenaming(null);
+      await mallApi.updateCategory(row.id, {
+        label: draft.label.trim(),
+        sortOrder: draft.sortOrder === "" ? undefined : Number(draft.sortOrder),
+      });
+      toastSuccess(`分类「${draft.label.trim()}」已保存`);
       await loadCategories();
     } catch {
       /* 失败保持弹窗打开 */
@@ -143,16 +187,22 @@ export function MallPricingPage() {
     }
   };
 
-  /** 删分类：服务端拒删非空分类（409 50028），运营先移走或下架商品 */
-  const removeCategory = async (category: MallCategory) => {
-    if (!window.confirm(`删除分类「${category.label}」？（分类下不能还有商品）`)) return;
+  /** 删分类：服务端拒删非空分类（409 50028），运营先把商品挪到别的分类或下架 */
+  const removeCategory = async (row: MallCategory) => {
+    if (!window.confirm(`删除分类「${row.label}」？（分类下不能还有商品）`)) return;
     try {
-      await mallApi.deleteCategory(category.id);
-      toastSuccess(`分类「${category.label}」已删除`);
+      await mallApi.deleteCategory(row.id);
+      toastSuccess(`分类「${row.label}」已删除`);
       await loadCategories();
     } catch {
       /* 失败请求层已统一提示 */
     }
+  };
+
+  const categoryDirtyOf = (row: MallCategory) => {
+    const draft = categoryDrafts[row.id];
+    if (!draft) return false;
+    return draft.label.trim() !== row.label || draft.sortOrder !== sortOrderTextOf(row);
   };
 
   //#endregion
@@ -170,6 +220,8 @@ export function MallPricingPage() {
     setCatalogPage(1);
     setCreatePrice("0");
     setCreateLevel("0");
+    // 缺省挂到主界面正在筛的分类（全部分类时取第一个），运营可以在这里改
+    setCreateCategoryId(filterCategoryId || categories[0]?.id || "");
     setCreating(true);
   };
 
@@ -205,7 +257,7 @@ export function MallPricingPage() {
     };
   }, [creating, catalogCategory, catalogLevel, catalogKeyword, catalogPage]);
 
-  /** 换分类：等级与页码一起归位（不同分类的等级档不一样，留着旧值会筛出空表） */
+  /** 换物品分类：等级与页码一起归位（不同分类的等级档不一样，留着旧值会筛出空表） */
   const switchCatalogCategory = (category: string) => {
     setCatalogCategory(category);
     setCatalogLevel("");
@@ -214,17 +266,20 @@ export function MallPricingPage() {
 
   /** 上架：商品 id / 分类 / 重复上架服务端都会校验（404 50021/50025、409 50026） */
   const submitCreate = async () => {
-    if (!pickedVariant) return;
+    if (!pickedVariant || !createCategoryId) return;
     setSubmitting(true);
     try {
       await mallApi.createGood({
         id: pickedVariant.id,
-        categoryId: selectedCategoryId,
+        categoryId: createCategoryId,
         price: Math.max(0, Math.floor(Number(createPrice) || 0)),
         requiredLevel: Math.max(0, Math.floor(Number(createLevel) || 0)),
       });
       toastSuccess(`商品「${pickedVariant.label}」已上架`);
       setCreating(false);
+      // 上到别的分类时把筛选切过去 —— 否则刚上架的商品立刻被筛掉，看着像没成功
+      setFilterCategoryId(createCategoryId);
+      setPage(1);
       await loadGoods();
       await loadCategories();
     } catch {
@@ -238,23 +293,26 @@ export function MallPricingPage() {
     setEditing(item);
     setEditPrice(String(item.price));
     setEditLevel(String(item.requiredLevel));
+    setEditCategoryId(item.categoryId);
     setSubmitting(false);
   };
 
   const closeEdit = () => setEditing(null);
 
-  /** 只提交售价与购买等级两个字段（商品本体是装备数据，接口不接受改） */
+  /** 只提交商城自己的三个字段（分类 / 售价 / 购买等级；本体字段接口不接受改） */
   const submitEdit = async () => {
-    if (!editing) return;
+    if (!editing || !editCategoryId) return;
     setSubmitting(true);
     try {
       await mallApi.updateGood(editing.id, {
+        categoryId: editCategoryId,
         price: Math.max(0, Math.floor(Number(editPrice) || 0)),
         requiredLevel: Math.max(0, Math.floor(Number(editLevel) || 0)),
       });
       toastSuccess(`商品「${editing.label}」已更新`);
       closeEdit();
       await loadGoods();
+      await loadCategories();
     } catch {
       /* 失败保持弹窗打开 */
     } finally {
@@ -263,7 +321,7 @@ export function MallPricingPage() {
   };
 
   const removeGood = async (item: MallGoodItem) => {
-    if (!window.confirm(`下架商品「${item.label}」？（装备本体不受影响，随时可重新上架）`)) return;
+    if (!window.confirm(`下架商品「${item.label}」？（本体不受影响，随时可重新上架）`)) return;
     try {
       await mallApi.deleteGood(item.id);
       toastSuccess(`商品「${item.label}」已下架`);
@@ -284,17 +342,28 @@ export function MallPricingPage() {
    */
   const prefixLabelOf = (index: number) => (typeof index === "number" ? (tierLabels.prefix[index] ?? `前缀 ${index}`) : "—");
   const suffixLabelOf = (index: number) => (typeof index === "number" ? (tierLabels.suffix[index] ?? `后缀 ${index}`) : "—");
+  /** 分类 id → 显示名（列表里挂个「商城分类」列，筛选到全部分类时才知道这行摆在哪） */
+  const categoryLabelOf = (id: string) => categories.find((row) => row.id === id)?.label ?? id;
 
+  const priceOk = (value: string) => Number.isInteger(Number(value)) && Number(value) >= 0 && Number(value) <= MALL_PRICE_MAX;
+  const levelOk = (value: string) => Number.isInteger(Number(value)) && Number(value) >= 0 && Number(value) <= MALL_LEVEL_MAX;
   const categoryValid = newCategoryLabel.trim().length > 0 && newCategoryLabel.trim().length <= 20;
-  const renameValid = renameLabel.trim().length > 0 && renameLabel.trim().length <= 20;
-  const editValid =
-    Number.isInteger(Number(editPrice)) && Number(editPrice) >= 0 && Number(editPrice) <= MALL_PRICE_MAX &&
-    Number.isInteger(Number(editLevel)) && Number(editLevel) >= 0 && Number(editLevel) <= MALL_LEVEL_MAX;
-  const createValid =
-    Boolean(pickedVariant) &&
-    Number.isInteger(Number(createPrice)) && Number(createPrice) >= 0 && Number(createPrice) <= MALL_PRICE_MAX &&
-    Number.isInteger(Number(createLevel)) && Number(createLevel) >= 0 && Number(createLevel) <= MALL_LEVEL_MAX;
-  const selectedCategory = categories.find((row) => row.id === selectedCategoryId) ?? null;
+  const editValid = Boolean(editCategoryId) && priceOk(editPrice) && levelOk(editLevel);
+  const createValid = Boolean(pickedVariant) && Boolean(createCategoryId) && priceOk(createPrice) && levelOk(createLevel);
+
+  /** 检索条里是否有生效条件（决定要不要给「重置」按钮） */
+  const filtering = Boolean(filterCategoryId) || filterLevel !== "" || Boolean(keyword);
+  const applyKeyword = () => {
+    setKeyword(keywordDraft.trim());
+    setPage(1);
+  };
+  const resetFilters = () => {
+    setFilterCategoryId("");
+    setFilterLevel("");
+    setKeywordDraft("");
+    setKeyword("");
+    setPage(1);
+  };
 
   return (
     <div className="flex flex-col gap-4">
@@ -302,106 +371,83 @@ export function MallPricingPage() {
         title="商城"
         description={
           <>
-            先建分类，再在分类下上架商品。商品是关联数据 —— 从<strong>装备变体 / 药品</strong>里挑一件上架，
-            只能改<strong>售价</strong>与<strong>购买等级</strong>（名称/图标/部位归各自的配置页管）；
-            下架 = 删行，本体不受影响。购买等级不足的玩家，客户端按钮置灰、服务端拒绝成交。
+            分类是<strong>商城自己的陈列分组</strong>（与物品的武器/衣服/药品分类无关），在「管理分类」里增删改；
+            商品从<strong>装备变体 / 药品</strong>目录里挑一件上架，只能改<strong>所属分类 / 售价 / 购买等级</strong>
+            （名称、图标、部位、等级归各自的配置页管）。购买等级不足的玩家，客户端按钮置灰、服务端拒绝成交。
           </>
         }
       />
 
       <Card
-        title="分类"
-        description="陈列分组，排序值小者在先；删除前分类下不能还有商品。"
-        actions={categories.length === 0 ? <Badge tone="amber">还没有分类，先建一个</Badge> : null}
-      >
-        <div className="flex flex-wrap items-end gap-2">
-          <Field width="w-56" label="新分类名（1~20 字）">
-            <Input
-              value={newCategoryLabel}
-              placeholder="如：热卖推荐"
-              disabled={!canWrite}
-              onChange={(event) => setNewCategoryLabel(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter" && canWrite && categoryValid) void createCategory();
-              }}
-            />
-          </Field>
-          <Button disabled={!canWrite || !categoryValid || categoryBusy} loading={categoryBusy} onClick={() => void createCategory()}>
-            新建分类
-          </Button>
-        </div>
-
-        <div className="mt-4 overflow-x-auto">
-          <table className={tableClass}>
-            <thead className={theadClass}>
-              <tr>
-                <th className={thClass}>分类</th>
-                <th className={thClass}>排序</th>
-                <th className={thClass}>商品数</th>
-                <th className={thClass}>更新时间</th>
-                <th className={`${thClass} text-right`}>操作</th>
-              </tr>
-            </thead>
-            <tbody>
-              {categories.map((category) => (
-                <tr
-                  key={category.id}
-                  className={`transition hover:bg-slate-800/30 ${category.id === selectedCategoryId ? "bg-slate-800/50" : ""}`}
-                >
-                  <td className={tdClass}>
-                    <button
-                      type="button"
-                      className="font-medium text-sky-300 hover:underline"
-                      onClick={() => {
-                        setSelectedCategoryId(category.id);
-                        setPage(1);
-                      }}
-                    >
-                      {category.label}
-                      {category.id === selectedCategoryId ? <span className="ml-1 text-xs text-slate-400">（当前）</span> : null}
-                    </button>
-                  </td>
-                  <td className={tdClass}>{category.sortOrder >= 900000000 ? "—" : category.sortOrder}</td>
-                  <td className={tdClass}>{category.goodCount}</td>
-                  <td className={`${tdClass} text-xs text-slate-400`}>{formatTime(category.updatedAt)}</td>
-                  <td className={`${tdClass} text-right`}>
-                    <div className="flex justify-end gap-2">
-                      <Button
-                        variant="outline"
-                        className="px-2.5 py-1 text-xs"
-                        disabled={!canWrite}
-                        onClick={() => {
-                          setRenaming(category);
-                          setRenameLabel(category.label);
-                        }}
-                      >
-                        改名
-                      </Button>
-                      <Button variant="outline" className="px-2.5 py-1 text-xs" disabled={!canWrite} onClick={() => void removeCategory(category)}>
-                        删除
-                      </Button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        {categories.length === 0 ? <EmptyState title="没有分类" description="先在上方新建一个分类，商品要挂在分类下" /> : null}
-      </Card>
-
-      <Card
-        title={selectedCategory ? `商品 · ${selectedCategory.label}` : "商品"}
+        title="商品"
         actions={loading ? <Spinner /> : null}
-        description={canWrite ? "点商品名所在行查看；「上架」把装备或药品挂进当前分类。" : "当前角色没有「修改养成配置」权限，列表只读。"}
+        description={canWrite ? "按商城分类 / 物品等级 / 名称检索；「上架」把装备或药品挂到选定的分类下。" : "当前角色没有「修改养成配置」权限，列表只读。"}
       >
-        {!selectedCategory ? (
-          <EmptyState title="先选择一个分类" description="左侧分类表里点分类名切换" />
+        <div className="mb-3 flex flex-wrap items-end gap-2">
+          <Field width="w-40" label="商城分类">
+            <Select
+              value={filterCategoryId}
+              onChange={(event) => {
+                setFilterCategoryId(event.target.value);
+                setPage(1);
+              }}
+            >
+              <option value="">全部分类</option>
+              {categories.map((category) => (
+                <option key={category.id} value={category.id}>
+                  {category.label}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <Field width="w-32" label="物品等级">
+            <Select
+              value={filterLevel}
+              disabled={levels.length === 0}
+              onChange={(event) => {
+                setFilterLevel(event.target.value);
+                setPage(1);
+              }}
+            >
+              <option value="">全部等级</option>
+              {levels.map((level) => (
+                <option key={level} value={String(level)}>
+                  Lv.{level}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <Field width="w-72" label="名称 / id">
+            <div className="flex gap-2">
+              <Input
+                value={keywordDraft}
+                placeholder="如 重甲 / cloth / 金创药"
+                onChange={(event) => setKeywordDraft(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") applyKeyword();
+                }}
+              />
+              <Button variant="outline" onClick={applyKeyword}>搜索</Button>
+            </div>
+          </Field>
+          {filtering ? (
+            <Button variant="ghost" onClick={resetFilters}>重置</Button>
+          ) : null}
+          <div className="ml-auto flex gap-2">
+            <Button variant="outline" onClick={() => setCategoryDialogOpen(true)}>
+              管理分类
+              <Badge tone="slate">{categories.length}</Badge>
+            </Button>
+            <Button disabled={!canWrite || categories.length === 0} title={categories.length === 0 ? "先建一个分类" : undefined} onClick={openCreate}>
+              上架商品
+            </Button>
+          </div>
+        </div>
+
+        {categories.length === 0 ? (
+          <EmptyState title="还没有分类" description="分类是商城的陈列分组，先点「管理分类」建一个，再上架商品" />
         ) : (
           <>
-            <div className="mb-3 flex flex-wrap items-end gap-2">
-              <Button disabled={!canWrite} onClick={() => void openCreate()}>上架商品</Button>
-            </div>
             <div className="overflow-x-auto">
               <table className={tableClass}>
                 <thead className={theadClass}>
@@ -409,9 +455,10 @@ export function MallPricingPage() {
                     <th className={thClass}>图</th>
                     <th className={thClass}>商品 id</th>
                     <th className={thClass}>名称</th>
+                    <th className={thClass}>商城分类</th>
                     <th className={thClass}>部位</th>
                     <th className={thClass}>品质（前缀 / 后缀）</th>
-                    <th className={thClass}>装备等级</th>
+                    <th className={thClass}>物品等级</th>
                     <th className={thClass}>售价</th>
                     <th className={thClass}>购买等级</th>
                     <th className={thClass}>更新时间</th>
@@ -425,8 +472,11 @@ export function MallPricingPage() {
                         <GameIcon path={item.icon} alt={item.label} />
                       </td>
                       <td className={`${tdClass} font-mono text-xs text-slate-300`}>{item.id}</td>
-                      <td className={`${tdClass} max-w-[240px] truncate font-medium text-slate-100`} title={item.label}>
+                      <td className={`${tdClass} max-w-[220px] truncate font-medium text-slate-100`} title={item.label}>
                         {item.label}
+                      </td>
+                      <td className={tdClass}>
+                        <Badge tone="indigo">{categoryLabelOf(item.categoryId)}</Badge>
                       </td>
                       <td className={tdClass}>
                         {item.kind === DRUG_CATEGORY ? (
@@ -452,7 +502,7 @@ export function MallPricingPage() {
                       <td className={`${tdClass} text-right`}>
                         <div className="flex justify-end gap-2">
                           <Button variant="outline" className="px-2.5 py-1 text-xs" disabled={!canWrite} onClick={() => openEdit(item)}>
-                            改售价/等级
+                            编辑
                           </Button>
                           <Button variant="outline" className="px-2.5 py-1 text-xs" disabled={!canWrite} onClick={() => void removeGood(item)}>
                             下架
@@ -466,30 +516,119 @@ export function MallPricingPage() {
             </div>
 
             {!loading && goods && goods.list.length === 0 ? (
-              <EmptyState title="这个分类还没有商品" description="点「上架商品」按分类与等级挑一件" />
+              <EmptyState
+                title={filtering ? "没有符合条件的商品" : "商城还没有商品"}
+                description={filtering ? "换个分类 / 等级，或清空关键字再试" : "点「上架商品」从装备与药品里挑一件"}
+              />
             ) : null}
 
-            <Pagination page={page} size={size} total={goods?.total ?? 0} onChange={setPage} onSizeChange={(next) => { setSize(next); setPage(1); }} />
+            <Pagination
+              page={page}
+              size={size}
+              total={goods?.total ?? 0}
+              onChange={setPage}
+              onSizeChange={(next) => {
+                setSize(next);
+                setPage(1);
+              }}
+            />
           </>
         )}
       </Card>
 
-      {renaming ? (
+      {/* —— 分类管理弹窗（#765：分类不再平铺在页面上，增删改都在这里） —— */}
+      {categoryDialogOpen ? (
         <Modal
           open
-          title={<>改分类名 · {renaming.label}</>}
-          size="md"
-          onClose={() => setRenaming(null)}
-          footer={<>
-            <Button variant="outline" disabled={categoryBusy} onClick={() => setRenaming(null)}>取消</Button>
-            <Button disabled={!renameValid || categoryBusy} loading={categoryBusy} onClick={() => void submitRename()}>保存</Button>
-          </>}
+          title="管理分类"
+          hint="分类只管陈列顺序：客户端商城按这里从上到下排页签。排序值小者在先，留空 = 排在最后；分类下还有商品时不能删。"
+          size="lg"
+          onClose={() => setCategoryDialogOpen(false)}
+          footer={<Button variant="outline" onClick={() => setCategoryDialogOpen(false)}>关闭</Button>}
         >
-          <div className="mt-5">
-            <Field label="分类名（1~20 字）">
-              <Input value={renameLabel} onChange={(event) => setRenameLabel(event.target.value)} />
+          <div className="mt-4 flex flex-wrap items-end gap-2">
+            <Field width="w-56" label="新分类名（1~20 字）">
+              <Input
+                value={newCategoryLabel}
+                placeholder="如：热卖推荐"
+                disabled={!canWrite}
+                onChange={(event) => setNewCategoryLabel(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" && canWrite && categoryValid) void createCategory();
+                }}
+              />
             </Field>
+            <Button disabled={!canWrite || !categoryValid || categoryBusy} loading={categoryBusy} onClick={() => void createCategory()}>
+              新建分类
+            </Button>
           </div>
+
+          <div className="mt-4 overflow-x-auto">
+            <table className={tableClass}>
+              <thead className={theadClass}>
+                <tr>
+                  <th className={thClass}>分类名</th>
+                  <th className={thClass}>排序</th>
+                  <th className={thClass}>商品数</th>
+                  <th className={thClass}>更新时间</th>
+                  <th className={`${thClass} text-right`}>操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                {categories.map((category) => {
+                  const draft = categoryDrafts[category.id] ?? { label: category.label, sortOrder: sortOrderTextOf(category) };
+                  const dirty = categoryDirtyOf(category);
+                  const draftValid = draft.label.trim().length > 0 && draft.label.trim().length <= 20;
+                  return (
+                    <tr key={category.id} className="transition hover:bg-slate-800/30">
+                      <td className={tdClass}>
+                        <Input
+                          className="w-44"
+                          value={draft.label}
+                          disabled={!canWrite}
+                          onChange={(event) =>
+                            setCategoryDrafts((current) => ({ ...current, [category.id]: { ...draft, label: event.target.value } }))
+                          }
+                        />
+                      </td>
+                      <td className={tdClass}>
+                        <Input
+                          className="w-24"
+                          type="number"
+                          placeholder="自动"
+                          value={draft.sortOrder}
+                          disabled={!canWrite}
+                          onChange={(event) =>
+                            setCategoryDrafts((current) => ({ ...current, [category.id]: { ...draft, sortOrder: event.target.value } }))
+                          }
+                        />
+                      </td>
+                      <td className={tdClass}>
+                        {category.goodCount > 0 ? <Badge tone="indigo">{category.goodCount}</Badge> : <span className="text-xs text-slate-500">0</span>}
+                      </td>
+                      <td className={`${tdClass} text-xs text-slate-400`}>{formatTime(category.updatedAt)}</td>
+                      <td className={`${tdClass} text-right`}>
+                        <div className="flex justify-end gap-2">
+                          <Button
+                            variant="outline"
+                            className="px-2.5 py-1 text-xs"
+                            disabled={!canWrite || !dirty || !draftValid || categoryBusy}
+                            onClick={() => void saveCategory(category)}
+                          >
+                            保存
+                          </Button>
+                          <Button variant="outline" className="px-2.5 py-1 text-xs" disabled={!canWrite} onClick={() => void removeCategory(category)}>
+                            删除
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          {categories.length === 0 ? <EmptyState title="还没有分类" description="在上方输入分类名，回车即可创建" /> : null}
         </Modal>
       ) : null}
 
@@ -497,7 +636,7 @@ export function MallPricingPage() {
         <Modal
           open
           title="上架商品"
-          hint="先选物品自己的分类与等级缩小范围，再从候选里挑一件挂进当前分类；售价 0 = 免费，购买等级 0 = 不限等级。"
+          hint="上半部分是「挑哪件」（按物品自己的分类与等级缩小范围），下半部分是「挂到商城的哪个分类、卖多少钱」。"
           size="md"
           onClose={() => setCreating(false)}
           footer={<>
@@ -507,7 +646,7 @@ export function MallPricingPage() {
         >
           <div className="mt-5 flex flex-col gap-4">
             <div className="flex flex-wrap gap-3">
-              <Field width="w-40" label="分类（物品自己的）">
+              <Field width="w-40" label="物品分类（它自己的）">
                 <Select value={catalogCategory} onChange={(event) => switchCatalogCategory(event.target.value)}>
                   <option value="">全部分类</option>
                   <option value={DRUG_CATEGORY}>药品</option>
@@ -518,7 +657,7 @@ export function MallPricingPage() {
                   ))}
                 </Select>
               </Field>
-              <Field width="w-32" label="等级">
+              <Field width="w-32" label="物品等级">
                 <Select
                   value={catalogLevel}
                   disabled={catalogLevels.length === 0}
@@ -575,7 +714,7 @@ export function MallPricingPage() {
                       key={item.id}
                       type="button"
                       disabled={item.listed}
-                      title={item.listed ? `${item.id} 已在商城上架（换分类先下架）` : item.id}
+                      title={item.listed ? `${item.id} 已在商城上架（想换分类直接编辑那件商品）` : item.id}
                       className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs transition ${item.listed ? "cursor-not-allowed opacity-40" : "hover:bg-slate-800/60"} ${pickedVariant?.id === item.id ? "bg-slate-800/80" : ""}`}
                       onClick={() => setPickedVariant(item)}
                     >
@@ -606,17 +745,26 @@ export function MallPricingPage() {
               total={catalog?.total ?? 0}
               onChange={setCatalogPage}
             />
-            <div className="flex gap-3">
-              <Field width="w-40" label="售价（绑定元宝/件）">
+            <div className="flex flex-wrap gap-3 rounded-lg border border-slate-800 bg-slate-900/40 px-3 py-3">
+              <Field width="w-44" label="挂到商城分类">
+                <Select value={createCategoryId} onChange={(event) => setCreateCategoryId(event.target.value)}>
+                  {categories.map((category) => (
+                    <option key={category.id} value={category.id}>
+                      {category.label}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+              <Field width="w-40" label="售价（绑定元宝/件）" hint="0 = 免费">
                 <Input type="number" min={0} value={createPrice} onChange={(event) => setCreatePrice(event.target.value)} />
               </Field>
-              <Field width="w-40" label="购买等级">
+              <Field width="w-40" label="购买等级" hint="0 = 不限等级">
                 <Input type="number" min={0} value={createLevel} onChange={(event) => setCreateLevel(event.target.value)} />
               </Field>
             </div>
             {!createValid ? (
               <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-200">
-                先选一件物品；售价 / 购买等级需为 0~{MALL_PRICE_MAX} 的整数。
+                先选一件物品与商城分类；售价 / 购买等级需为 0~{MALL_PRICE_MAX} 的整数。
               </p>
             ) : null}
           </div>
@@ -626,8 +774,8 @@ export function MallPricingPage() {
       {editing ? (
         <Modal
           open
-          title={<>改售价/等级 · {editing.label}</>}
-          hint={<>{editing.label}（{editing.id}）。商品本体是装备数据，这里只改售价与购买等级；改完立即对购买生效。</>}
+          title={<>编辑商品 · {editing.label}</>}
+          hint={<>{editing.label}（{editing.id}）。商品本体是关联数据，这里只改商城字段：所在分类 / 售价 / 购买等级，改完立即对购买生效。</>}
           size="md"
           onClose={closeEdit}
           footer={<>
@@ -635,7 +783,16 @@ export function MallPricingPage() {
             <Button disabled={!editValid || submitting} loading={submitting} onClick={() => void submitEdit()}>保存</Button>
           </>}
         >
-          <div className="mt-5 flex gap-3">
+          <div className="mt-5 flex flex-wrap gap-3">
+            <Field width="w-44" label="商城分类" hint="换分类 = 在陈列里挪个位置">
+              <Select value={editCategoryId} onChange={(event) => setEditCategoryId(event.target.value)}>
+                {categories.map((category) => (
+                  <option key={category.id} value={category.id}>
+                    {category.label}
+                  </option>
+                ))}
+              </Select>
+            </Field>
             <Field width="w-40" label="售价（绑定元宝/件）" hint="0 = 免费">
               <Input type="number" min={0} value={editPrice} onChange={(event) => setEditPrice(event.target.value)} />
             </Field>
@@ -644,7 +801,9 @@ export function MallPricingPage() {
             </Field>
           </div>
           {!editValid ? (
-            <p className="mt-3 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-200">售价与购买等级需为 ≥0 的整数。</p>
+            <p className="mt-3 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-200">
+              售价 / 购买等级需为 ≥0 的整数，且必须选一个商城分类。
+            </p>
           ) : null}
         </Modal>
       ) : null}
