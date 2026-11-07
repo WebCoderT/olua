@@ -1411,6 +1411,42 @@ async function main() {
     const mallGoodNegative = await api(base, "PATCH", "/api/admin/mall/goods/cloth_1_p0s1", { token, body: { price: -5 } });
     checkEqual(mallGoodNegative.status, 400, "售价负数 → 400");
 
+    // 检索三件套之二：物品等级（#765）—— 回包带可选等级，按等级精确筛
+    const clothLevel = mallListed.body?.data?.level;
+    check(
+      Array.isArray(mallGoodList.body?.data?.levels) && mallGoodList.body.data.levels.includes(clothLevel),
+      "列表回包带物品等级（给检索下拉用）",
+    );
+    const mallGoodByLevel = await api(base, "GET", `/api/admin/mall/goods?level=${clothLevel}`, { token });
+    check(
+      (mallGoodByLevel.body?.data?.list ?? []).length > 0 &&
+        (mallGoodByLevel.body?.data?.list ?? []).every((row) => row.level === clothLevel),
+      "按物品等级筛：回包每一行都是这个等级",
+      `Lv.${clothLevel}`,
+    );
+    const mallGoodByWrongLevel = await api(base, "GET", "/api/admin/mall/goods?level=9999", { token });
+    checkEqual(mallGoodByWrongLevel.body?.data?.total, 0, "等级不符 → 空表（条件是生效的，不是被忽略）");
+
+    // 改分类（#765）：商品在分类之间移动，不必下架重上（售价与购买等级都保留）
+    const mallSecondCat = await api(base, "POST", "/api/admin/mall/categories", { token, body: { label: "武器特卖" } });
+    const mallSecondCatId = mallSecondCat.body?.data?.id;
+    const mallMoveCat = await api(base, "PATCH", "/api/admin/mall/goods/cloth_1_p0s1", { token, body: { categoryId: mallSecondCatId } });
+    checkEqual(mallMoveCat.status, 200, "改分类成功");
+    checkEqual(mallMoveCat.body?.data?.categoryId, mallSecondCatId, "商品挂到了新分类");
+    checkEqual(mallMoveCat.body?.data?.price, 888, "改分类不动售价");
+    const mallOldCatEmpty = await api(base, "GET", `/api/admin/mall/goods?categoryId=${mallCatId}`, { token });
+    checkEqual(mallOldCatEmpty.body?.data?.total, 0, "原分类下已经没有这件");
+    const mallNewCatHas = await api(base, "GET", `/api/admin/mall/goods?categoryId=${mallSecondCatId}`, { token });
+    checkEqual(mallNewCatHas.body?.data?.total, 1, "新分类下命中");
+    const mallMoveBadCat = await api(base, "PATCH", "/api/admin/mall/goods/cloth_1_p0s1", { token, body: { categoryId: "mc_nope" } });
+    checkEqual(mallMoveBadCat.status, 404, "改到不存在的分类 → 404");
+    checkEqual(mallMoveBadCat.body?.code, 50025, "改分类也要校验目标分类存在（50025）");
+    // 移回原分类：后面的「非空分类拒删」仍以 mallCatId 为准；第二个空分类随后删掉，不留脏数据
+    const mallMoveBack = await api(base, "PATCH", "/api/admin/mall/goods/cloth_1_p0s1", { token, body: { categoryId: mallCatId } });
+    checkEqual(mallMoveBack.body?.data?.categoryId, mallCatId, "移回原分类");
+    const mallSecondCatDelete = await api(base, "DELETE", `/api/admin/mall/categories/${mallSecondCatId}`, { token });
+    checkEqual(mallSecondCatDelete.status, 200, "搬空后的分类可删");
+
     // 非空分类拒删 → 409 50028；删空分类成功，再删 → 404 50025
     const mallCatNotEmpty = await api(base, "DELETE", `/api/admin/mall/categories/${mallCatId}`, { token });
     checkEqual(mallCatNotEmpty.status, 409, "分类下还有商品 → 409");

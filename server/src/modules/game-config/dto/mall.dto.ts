@@ -159,6 +159,13 @@ export class MallGoodQueryDto extends PageQueryDto {
   @IsString({ message: "品类必须是字符串" })
   @IsIn(MALL_GOOD_KINDS, { message: "品类取值不合法" })
   kind?: string;
+
+  @ApiPropertyOptional({ description: "按物品等级精确筛（装备等级需求 / 药品等级；留空 = 全部）", minimum: 0 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt({ message: "等级必须是整数" })
+  @Min(0, { message: "等级不能为负" })
+  level?: number;
 }
 
 /**
@@ -228,10 +235,13 @@ export class MallCatalogPageDto extends PageMetaDto {
   levels: number[];
 }
 
-/** 商城商品分页结果 */
+/** 商城商品分页结果（`levels` = 当前分类范围内出现过的物品等级，给检索下拉用） */
 export class MallGoodPageDto extends PageMetaDto {
   @ApiProperty({ description: "当前页的上架商品视图", type: [MallGoodItemDto] })
   list: MallGoodItemDto[];
+
+  @ApiProperty({ description: "当前分类范围内出现过的物品等级（升序去重；与关键字/等级筛选无关）", type: [Number] })
+  levels: number[];
 }
 
 /** 上架商品入参（商品 id 必须是装备变体；一件装备只能挂一行） */
@@ -261,8 +271,19 @@ export class CreateMallGoodDto {
   requiredLevel?: number;
 }
 
-/** 修改商品入参 —— **只许改售价与购买等级**（商品本体是装备数据，归装备管理管） */
+/**
+ * 修改商品入参 —— **只许改商城自己的三个字段**（分类 / 售价 / 购买等级）
+ *
+ * 商品本体是关联数据（装备变体 / 药品），名称 / 图标 / 部位 / 等级归各自的配置页管，
+ * 这里一个字都不接受。`categoryId` 是「在商城陈列里挪个位置」，与本体无关。
+ */
 export class UpdateMallGoodDto {
+  @ApiPropertyOptional({ description: "所属分类 id（改分类 = 在商城陈列里挪个位置）" })
+  @IsOptional()
+  @IsString({ message: "分类 id 必须是字符串" })
+  @MinLength(1, { message: "分类 id 不能为空" })
+  categoryId?: string;
+
   @ApiPropertyOptional({ description: "售价（绑定元宝/件）", minimum: 0, maximum: MALL_PRICE_MAX })
   @IsOptional()
   @IsInt({ message: "售价必须是整数" })

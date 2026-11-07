@@ -6,7 +6,6 @@ import { ApiQueryModel } from "../../common/decorators/api-query-model.decorator
 import { ApiAudience } from "../../common/decorators/audience.decorator";
 import { AuditTarget } from "../../common/decorators/audit-target.decorator";
 import { Permission } from "../../common/constants/permission";
-import { PageResult } from "../../common/interfaces/api-envelope.interface";
 import { MallPricingService } from "./mall-pricing.service";
 import {
   CreateMallCategoryDto,
@@ -27,9 +26,9 @@ import {
  * 管理端 · 商城分类与上架商品（#251 / #758）
  *
  * **先建分类，再在分类下上架商品**：分类是运营自建的陈列分组（POST 建行 / PATCH 改名与
- * 排序 / DELETE 删空分类）；商品是**关联数据** —— 上架时选一件装备变体（id 必须在装备
- * 目录里），之后**只许改售价与购买等级**，名称/图标/部位归装备管理管。下架 = 删行。
- * 客户端购买以服务端复核为准（快照只管陈列与按钮置灰）。写操作带 `@AuditTarget("mall")`。
+ * 排序 / DELETE 删空分类）；商品是**关联数据** —— 上架时从目录里挑一件（装备变体或药品），
+ * 之后只许改商城自己的字段（所属分类 / 售价 / 购买等级），名称/图标/部位归各自的配置页管。
+ * 下架 = 删行。客户端购买以服务端复核为准（快照只管陈列与按钮置灰）。写操作带 `@AuditTarget("mall")`。
  */
 @ApiAudience("admin")
 @Controller("admin/mall")
@@ -105,13 +104,15 @@ export class AdminMallController {
     summary: "上架商品列表（商品 × 分类 × 售价合并视图）",
     description:
       "商品 = 运营手动上架的装备变体或药品（`mall_goods` 行）；名称 / 图标 / 部位 / 等级来自" +
-      "各自的数据表（**只读展示**），售价与购买等级才是商城字段。`categoryId` / `kind` / `slot` / " +
-      "`keyword` 组合筛，按 分类序 → 等级 → id 排序。上架后本体被删的孤儿行照实列出（名称退回 id），便于清理。",
+      "各自的数据表（**只读展示**），分类 / 售价 / 购买等级才是商城字段。\n\n" +
+      "- 检索：`categoryId`（**商城分类**）+ `keyword`（id 与名称）+ `level`（物品等级）+ `kind` / `slot`；\n" +
+      "- 回包带 `levels`（当前分类范围内出现过的物品等级，给等级下拉用）；\n" +
+      "- 排序：分类序 → 物品等级 → id。上架后本体被删的孤儿行照实列出（名称退回 id），便于清理。",
     permissions: [Permission.GAME_CONFIG_READ],
   })
   @ApiQueryModel(MallGoodQueryDto)
-  @ApiDataResponse(MallGoodPageDto, { description: "分页结果（list/total/page/size）" })
-  listGoods(@Query() query: MallGoodQueryDto): PageResult<MallGoodItemDto> {
+  @ApiDataResponse(MallGoodPageDto, { description: "分页结果（list/total/page/size/levels）" })
+  listGoods(@Query() query: MallGoodQueryDto): MallGoodPageDto {
     return this.mallPricingService.listGoods(query);
   }
 
@@ -140,7 +141,7 @@ export class AdminMallController {
     description:
       "把一件装备变体或一种药品挂到某个分类下（缺省售价 0 = 免费、购买等级 0 = 不限）。\n\n" +
       "- 商品 id 不在目录（装备变体 + drugs）→ 404（`50021`）；分类不存在 → 404（`50025`）。\n" +
-      "- 已上架再上架 → 409（`50026`，一件物品全商城只能挂一行，换分类先下架）。",
+      "- 已上架再上架 → 409（`50026`，一件物品全商城只能挂一行；想换分类直接 PATCH 商品的 `categoryId`）。",
     permissions: [Permission.GAME_CONFIG_WRITE],
   })
   @ApiDataResponse(MallGoodItemDto, { description: "上架后的商品视图" })
@@ -152,11 +153,12 @@ export class AdminMallController {
   @AuditTarget("mall")
   @ApiAdminDoc({
     operationId: "adminMall.updateGood",
-    summary: "修改商品（只许改售价与购买等级）",
+    summary: "修改商品（分类 / 售价 / 购买等级）",
     description:
-      "**商品是关联数据**：名称 / 图标 / 部位 / 装备等级归装备管理管，这里只开放" +
-      "售价（`price`）与购买等级（`requiredLevel`）两个运营字段；改完立即对购买生效" +
-      "（客户端下次取快照后按钮按新等级置灰）。不在上架清单 → 404（`50021`）。",
+      "**商品是关联数据**：名称 / 图标 / 部位 / 装备等级归各自的配置页管，这里只开放商城自己的" +
+      "三个字段 —— 所属分类（`categoryId`，在陈列里挪位置）、售价（`price`）、购买等级" +
+      "（`requiredLevel`）；改完立即对购买生效（客户端下次取快照后按钮按新等级置灰）。\n\n" +
+      "商品不在上架清单 → 404（`50021`）；目标分类不存在 → 404（`50025`）。",
     permissions: [Permission.GAME_CONFIG_WRITE],
   })
   @ApiParam({ name: "id", description: "商品 id（装备变体 id，如 cloth_1_p3s2）" })

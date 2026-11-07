@@ -74,9 +74,13 @@ export class MallRepository {
     );
   }
 
-  updateGood(id: string, fields: { price?: number; required_level?: number }): void {
+  updateGood(id: string, fields: { category_id?: string; price?: number; required_level?: number }): void {
     const sets: string[] = ["updated_at = ?"];
     const params: Array<string | number> = [Date.now()];
+    if (fields.category_id !== undefined) {
+      sets.push("category_id = ?");
+      params.push(fields.category_id);
+    }
     if (fields.price !== undefined) {
       sets.push("price = ?");
       params.push(fields.price);

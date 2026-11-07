@@ -2,7 +2,6 @@ import { Injectable } from "@nestjs/common";
 import { BizCode } from "../../common/constants/biz-code";
 import { BizException } from "../../common/errors/biz.exception";
 import { equipmentLevelOf, equipmentSlotOf, itemLabelOf } from "../../common/runtime-config-cache";
-import { PageResult } from "../../common/interfaces/api-envelope.interface";
 import { DrugRepository } from "../../database/repositories/drug.repository";
 import { EquipmentRepository } from "../../database/repositories/equipment.repository";
 import { EquipmentVariantRepository } from "../../database/repositories/equipment-variant.repository";
@@ -16,6 +15,7 @@ import {
   MallCategoryDto,
   MallGoodEntryDto,
   MallGoodItemDto,
+  MallGoodPageDto,
   MallGoodQueryDto,
   MALL_CATEGORY_DRUG,
   UpdateMallCategoryDto,
@@ -112,12 +112,15 @@ export class MallPricingService {
   //#region 上架商品
 
   /**
-   * 上架商品列表 = `mall_goods` LEFT JOIN 装备目录后**内存分页**
+   * 上架商品列表 = `mall_goods` LEFT JOIN 目录后**内存分页**
    *
    * 目录每次现查库（#655 同口径）：管理端改了装备名 / 等级，商城列表立刻反映。
-   * 查询条件：分类 / 关键字（id 与显示名）/ 部位。排序按 分类序 → 部位序 → 等级 → id。
+   * 检索四件套：**商城分类**（陈列分组）/ 关键字（id 与显示名）/ 物品等级 / 品类与部位。
+   *
+   * `levels` 回的是**当前分类范围内**出现过的物品等级（不受关键字与等级筛选影响）——
+   * 等级下拉要有选项可选，跟着筛选结果收缩就只剩当前选中的那一档了。
    */
-  listGoods(query: MallGoodQueryDto): PageResult<MallGoodItemDto> {
+  listGoods(query: MallGoodQueryDto): MallGoodPageDto {
     const page = query.page ?? 1;
     const size = query.size ?? 20;
     const keyword = query.keyword?.trim() ?? "";
@@ -125,28 +128,33 @@ export class MallPricingService {
 
     const catalog = new Map(this.catalogEntries().map((entry) => [entry.id, entry]));
     const categoryOrder = new Map(this.mall.listCategories().map((row, index) => [row.id, index]));
-    const rows = this.mall
+    const scoped = this.mall
       .listGoods()
-      .filter((row) => {
-        if (query.categoryId && row.category_id !== query.categoryId) return false;
-        const entry = catalog.get(row.id);
-        if (!entry) return true; // 上架后装备/药品被删了的孤儿行：照实列出（label 退回 id），运营看得见才好处理
-        if (query.kind && entry.kind !== query.kind) return false;
-        if (query.slot && entry.slot !== query.slot) return false;
-        if (keywordLower && !row.id.toLowerCase().includes(keywordLower) && !entry.label.includes(keyword)) return false;
+      .filter((row) => !query.categoryId || row.category_id === query.categoryId)
+      .map((row) => this.itemOf(row, catalog.get(row.id)));
+    const levels = Array.from(new Set(scoped.map((item) => item.level))).sort((a, b) => a - b);
+
+    const rows = scoped
+      .filter((item) => {
+        // 孤儿行（上架后本体被删）的 kind 为空：照实列出，别拿它去比品类/部位
+        if (item.kind) {
+          if (query.kind && item.kind !== query.kind) return false;
+          if (query.slot && item.slot !== query.slot) return false;
+        }
+        if (keywordLower && !item.id.toLowerCase().includes(keywordLower) && !item.label.includes(keyword)) return false;
+        if (query.level !== undefined && item.level !== query.level) return false;
         return true;
       })
-      .map((row) => this.itemOf(row, catalog.get(row.id)))
       .sort(
         (a, b) =>
           (categoryOrder.get(a.categoryId) ?? Number.MAX_SAFE_INTEGER) - (categoryOrder.get(b.categoryId) ?? Number.MAX_SAFE_INTEGER) ||
-          (catalog.get(a.id)?.level ?? 0) - (catalog.get(b.id)?.level ?? 0) ||
+          a.level - b.level ||
           (a.id < b.id ? -1 : 1),
       );
 
     const total = rows.length;
     const list = rows.slice((page - 1) * size, page * size);
-    return { list, total, page, size };
+    return { list, total, page, size, levels };
   }
 
   /**
@@ -214,10 +222,16 @@ export class MallPricingService {
     return this.itemOf(row, entry);
   }
 
-  /** 改售价 / 购买等级（商品本体字段不接受修改 —— 关联数据只开放这两个运营字段） */
+  /**
+   * 改商城字段：所属分类 / 售价 / 购买等级
+   *
+   * 商品本体字段一概不改 —— 关联数据只开放这三个运营字段。改分类要先确认目标分类存在
+   * （404 50025），否则会留下一条指向不存在分类的孤儿行（客户端页签里看不见它）。
+   */
   updateGood(id: string, dto: UpdateMallGoodDto): MallGoodItemDto {
     this.requireGood(id);
-    this.mall.updateGood(id, { price: dto.price, required_level: dto.requiredLevel });
+    if (dto.categoryId !== undefined) this.requireCategory(dto.categoryId);
+    this.mall.updateGood(id, { category_id: dto.categoryId, price: dto.price, required_level: dto.requiredLevel });
     const catalog = new Map(this.catalogEntries().map((entry) => [entry.id, entry]));
     return this.itemOf(this.mall.findGood(id)!, catalog.get(id));
   }

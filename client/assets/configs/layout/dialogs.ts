@@ -413,9 +413,19 @@ export const mallDialogLayout = {
    * 分类页签（#758：一排横排按钮，居中均分；挂在弹窗上、卡片区外 —— 换分类时页签不重建）
    *
    * 摆在橱窗开口上沿（卡片区顶边再往上 12）：页签高 24，卡片区高度随之收窄给页签让位。
-   * 分类个数不定，页签从中心向两侧均分（index − (n−1)/2) × (宽 + gap)。
+   * 分类个数不定（运营随时增删），页签从中心向两侧均分（index − (n−1)/2) × (宽 + gap)；
+   * 总宽超过 `maxWidth` 时按个数压缩单页签宽度，**最窄不低于 `minWidth`** —— 文字由 SHRINK 兜。
    */
-  tabs: { position: new Vec2(0, 100), size: new Size(64, 24), fontSize: 12, gap: 8, inactiveOpacity: 110 },
+  tabs: {
+    position: new Vec2(0, 100),
+    size: new Size(64, 24),
+    /** 页签宽度上限（= 配置宽度）与下限：分类多到排不下时先压到这个宽度，再窄名字就认不出了 */
+    maxWidth: 380,
+    minWidth: 40,
+    fontSize: 12,
+    gap: 8,
+    inactiveOpacity: 110,
+  },
   /** 商品卡片区（橱窗开口内、页签之下；分页显示，每页只建 columns × rowsPerPage 张卡片） */
   list: { name: "mall_list", position: new Vec2(0, -40), size: new Size(395, 234) },
   /** 分类下没有商品时的空提示（居中，与页签/卡片同层） */

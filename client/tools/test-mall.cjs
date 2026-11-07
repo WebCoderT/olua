@@ -285,6 +285,17 @@ if (sandbox) {
   check(/card\.removeFromParent\(\);\s*card\.destroy\(\);/.test(mallSource), "翻页先摘出父节点再销毁上一页卡片（节点数恒定为一页）");
   check(/this\.page = Math\.min\(Math\.max\(page, 0\), this\.pageCount - 1\)/.test(mallSource), "页码夹在合法范围内（首/末页越界点击不生效）");
   check(/goodsOf\(this\.activeCategory\)/.test(mallSource) && /switchCategory\(/.test(mallSource), "商品按分类页签过滤陈列（#758）");
+  {
+    // 建页签的顺序：buildTabs 按 this.categories 建，**必须在分类赋值之后** ——
+    // 先建页签再取分类，建出来就是零个页签（表现：客户端商城一个分类都看不到，#765）
+    const buildBlock = mallSource.slice(mallSource.indexOf("private build()"), mallSource.indexOf("private nameOf("));
+    const categoriesAt = buildBlock.indexOf("this.categories = getMallCategories()");
+    const tabsAt = buildBlock.indexOf("this.buildTabs(dialog)");
+    check(
+      categoriesAt >= 0 && tabsAt >= 0 && categoriesAt < tabsAt,
+      "分类页签在 this.categories 赋值之后才建（反了就零个页签）",
+    );
+  }
   check(/getMallRequiredLevel\(good\.id \?\? ""\)/.test(mallSource) && /interactable = false/.test(mallSource), "购买等级不足的按钮置灰禁点（服务端同样校验）");
   check(/this\.setPageButtonEnabled\(this\.nextPageButton, !atLastPage\)/.test(mallSource), "到末页时「下一页/末页」按钮置灰且点不动");
   check(/trackUiPress\(icon\)/.test(mallSource), "悬停图标登记了按压起点（见 utils/input/Pointer）");

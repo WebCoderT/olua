@@ -1525,6 +1525,10 @@ export type CreateMallGood = {
 
 export type UpdateMallGood = {
   /**
+   * 所属分类 id（改分类 = 在商城陈列里挪个位置）
+   */
+  categoryId?: string;
+  /**
    * 售价（绑定元宝/件）
    */
   price?: number;
@@ -6212,6 +6216,10 @@ export type MallGoodPage = {
    * 当前页的上架商品视图
    */
   list: MallGoodItem[];
+  /**
+   * 当前分类范围内出现过的物品等级（升序去重；与关键字/等级筛选无关）
+   */
+  levels: number[];
 };
 
 export type MallGoodQuery = {
@@ -6247,6 +6255,10 @@ export type MallGoodQuery = {
    * 按品类筛：equipment（装备）/ drug（药品）
    */
   kind?: string;
+  /**
+   * 按物品等级精确筛（装备等级需求 / 药品等级；留空 = 全部）
+   */
+  level?: number;
 };
 
 export type MallGoodRemove = {

@@ -7900,7 +7900,7 @@
     },
     "/admin/mall/goods": {
       "get": {
-        "description": "商品 = 运营手动上架的装备变体或药品（`mall_goods` 行）；名称 / 图标 / 部位 / 等级来自各自的数据表（**只读展示**），售价与购买等级才是商城字段。`categoryId` / `kind` / `slot` / `keyword` 组合筛，按 分类序 → 等级 → id 排序。上架后本体被删的孤儿行照实列出（名称退回 id），便于清理。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
+        "description": "商品 = 运营手动上架的装备变体或药品（`mall_goods` 行）；名称 / 图标 / 部位 / 等级来自各自的数据表（**只读展示**），分类 / 售价 / 购买等级才是商城字段。\n\n- 检索：`categoryId`（**商城分类**）+ `keyword`（id 与名称）+ `level`（物品等级）+ `kind` / `slot`；\n- 回包带 `levels`（当前分类范围内出现过的物品等级，给等级下拉用）；\n- 排序：分类序 → 物品等级 → id。上架后本体被删的孤儿行照实列出（名称退回 id），便于清理。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
         "operationId": "adminMall.listGoods",
         "parameters": [
           {
@@ -7987,11 +7987,21 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "level",
+            "required": false,
+            "in": "query",
+            "description": "按物品等级精确筛（装备等级需求 / 药品等级；留空 = 全部）",
+            "schema": {
+              "minimum": 0,
+              "type": "number"
+            }
           }
         ],
         "responses": {
           "200": {
-            "description": "分页结果（list/total/page/size）",
+            "description": "分页结果（list/total/page/size/levels）",
             "content": {
               "application/json": {
                 "schema": {
@@ -8034,7 +8044,7 @@
         }
       },
       "post": {
-        "description": "把一件装备变体或一种药品挂到某个分类下（缺省售价 0 = 免费、购买等级 0 = 不限）。\n\n- 商品 id 不在目录（装备变体 + drugs）→ 404（`50021`）；分类不存在 → 404（`50025`）。\n- 已上架再上架 → 409（`50026`，一件物品全商城只能挂一行，换分类先下架）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
+        "description": "把一件装备变体或一种药品挂到某个分类下（缺省售价 0 = 免费、购买等级 0 = 不限）。\n\n- 商品 id 不在目录（装备变体 + drugs）→ 404（`50021`）；分类不存在 → 404（`50025`）。\n- 已上架再上架 → 409（`50026`，一件物品全商城只能挂一行；想换分类直接 PATCH 商品的 `categoryId`）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
         "operationId": "adminMall.createGood",
         "parameters": [],
         "requestBody": {
@@ -8219,7 +8229,7 @@
     },
     "/admin/mall/goods/{id}": {
       "patch": {
-        "description": "**商品是关联数据**：名称 / 图标 / 部位 / 装备等级归装备管理管，这里只开放售价（`price`）与购买等级（`requiredLevel`）两个运营字段；改完立即对购买生效（客户端下次取快照后按钮按新等级置灰）。不在上架清单 → 404（`50021`）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
+        "description": "**商品是关联数据**：名称 / 图标 / 部位 / 装备等级归各自的配置页管，这里只开放商城自己的三个字段 —— 所属分类（`categoryId`，在陈列里挪位置）、售价（`price`）、购买等级（`requiredLevel`）；改完立即对购买生效（客户端下次取快照后按钮按新等级置灰）。\n\n商品不在上架清单 → 404（`50021`）；目标分类不存在 → 404（`50025`）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
         "operationId": "adminMall.updateGood",
         "parameters": [
           {
@@ -8270,7 +8280,7 @@
             "admin": []
           }
         ],
-        "summary": "修改商品（只许改售价与购买等级）",
+        "summary": "修改商品（分类 / 售价 / 购买等级）",
         "tags": [
           "管理端"
         ],
@@ -16549,6 +16559,10 @@
       "UpdateMallGoodDto": {
         "type": "object",
         "properties": {
+          "categoryId": {
+            "type": "string",
+            "description": "所属分类 id（改分类 = 在商城陈列里挪个位置）"
+          },
           "price": {
             "type": "number",
             "description": "售价（绑定元宝/件）",
@@ -24030,13 +24044,21 @@
             "items": {
               "$ref": "#/components/schemas/MallGoodItemDto"
             }
+          },
+          "levels": {
+            "description": "当前分类范围内出现过的物品等级（升序去重；与关键字/等级筛选无关）",
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
           }
         },
         "required": [
           "total",
           "page",
           "size",
-          "list"
+          "list",
+          "levels"
         ]
       },
       "MallGoodQueryDto": {
@@ -24086,6 +24108,11 @@
           "kind": {
             "type": "string",
             "description": "按品类筛：equipment（装备）/ drug（药品）"
+          },
+          "level": {
+            "type": "number",
+            "description": "按物品等级精确筛（装备等级需求 / 药品等级；留空 = 全部）",
+            "minimum": 0
           }
         }
       },
