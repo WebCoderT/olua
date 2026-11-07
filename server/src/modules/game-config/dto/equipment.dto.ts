@@ -767,7 +767,14 @@ function parseNumberArray(text: string): number[] {
 
 //#region 装备变体（#655：逐行配置）
 
-/** 装备变体列表查询入参（管理端「装备变体」页） */
+/**
+ * 装备变体列表查询入参（管理端「装备变体」页）
+ *
+ * `slot` / `minLevel` / `maxLevel` 是 #779 补的：一件基础件 15 行、全库上万行，
+ * 光靠关键字翻不动。**部位不在变体表里**（变体行只有 `base_id`），所以按部位筛要走
+ * `base_id IN (SELECT id FROM equipments WHERE slot = ?)` 子查询 —— 这条也顺带保证了
+ * 「变体行指向一个不存在的基础件」时不会被筛出来（那种行在列表里本来就该消失）。
+ */
 export class EquipmentVariantQueryDto extends PageQueryDto {
   @ApiPropertyOptional({ description: "只列某个基础件的 15 个变体（如 cloth_1）" })
   @IsOptional()
@@ -778,6 +785,28 @@ export class EquipmentVariantQueryDto extends PageQueryDto {
   @IsOptional()
   @IsString({ message: "关键字必须是字符串" })
   declare keyword?: string;
+
+  @ApiPropertyOptional({
+    description: "按部位筛（取值：" + EQUIPMENT_SLOT_KEYS.join(" / ") + "）；部位取自基础件（变体表只存 base_id）",
+  })
+  @IsOptional()
+  @IsString({ message: "部位必须是字符串" })
+  @IsIn(EQUIPMENT_SLOT_KEYS, { message: "部位取值不合法" })
+  slot?: string;
+
+  @ApiPropertyOptional({ description: "穿戴等级下限（含）", minimum: EQUIPMENT_LEVEL_MIN })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt({ message: "等级下限必须是整数" })
+  @Min(EQUIPMENT_LEVEL_MIN, { message: `等级下限不能小于 ${EQUIPMENT_LEVEL_MIN}` })
+  minLevel?: number;
+
+  @ApiPropertyOptional({ description: "穿戴等级上限（含）", minimum: EQUIPMENT_LEVEL_MIN })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt({ message: "等级上限必须是整数" })
+  @Min(EQUIPMENT_LEVEL_MIN, { message: `等级上限不能小于 ${EQUIPMENT_LEVEL_MIN}` })
+  maxLevel?: number;
 }
 
 /** 装备变体分页结果 */

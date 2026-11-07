@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { equipmentsApi, equipmentVariantsApi, formatTime, OCCUPATION_LABELS, PERMISSION, SEX_LABELS, slotLabel } from "../api";
 import type {
   ConfigAttributes,
@@ -610,6 +611,7 @@ function EquipmentEditDialog({
  */
 export function EquipmentsPage() {
   const canWrite = hasPermission(PERMISSION.GAME_CONFIG_WRITE);
+  const navigate = useNavigate();
   /** 页签：空串 = 全部部位 */
   const [activeSlot, setActiveSlot] = useState("");
   const [summary, setSummary] = useState<EquipmentSlotSummary | null>(null);
@@ -789,7 +791,7 @@ export function EquipmentsPage() {
           ) : null
         }
         description={<>只收基础件（如 cloth_1），变体（_pXsY）是基础件乘前后缀倍率展开的 —— 通常只改基础件这一份，
-            要逐档微调去「装备变体」页。列表按部位分页签；新建一件会连带展开它的全部变体，删除会连带删掉变体与工作台几何
+            要逐档微调去「装备变体」页（每行的「变体」按钮直接带着这件跳过去）。列表按部位分页签；新建一件会连带展开它的全部变体，删除会连带删掉变体与工作台几何
             （商城还在架时不许删，先下架）。名称 / 描述 / 职业性别 / 图标与图集 / 标签 / 缩放 / 锚点 / 8 向位置都在编辑弹窗里；
             商城售价归「商城」页，不在这里。</>}
       />
@@ -873,9 +875,17 @@ export function EquipmentsPage() {
                   <td className={`${tdClass} text-xs text-slate-400`}>{attributeSummary(item)}</td>
                   <td className={`${tdClass} text-xs text-slate-400`}>{formatTime(item.updatedAt)}</td>
                   <td className={`${tdClass} text-right`}>
+                    {/* 跳过去带上 baseId：变体页把 15 行筛好，不用再手输 id（#779） */}
+                    <Button
+                      variant="ghost"
+                      className="px-2.5 py-1 text-xs"
+                      onClick={() => navigate(`/equipment-variants?baseId=${encodeURIComponent(item.id)}`)}
+                    >
+                      变体
+                    </Button>
                     <Button
                       variant="outline"
-                      className="px-2.5 py-1 text-xs"
+                      className="ml-1 px-2.5 py-1 text-xs"
                       disabled={!canWrite}
                       onClick={() => {
                         setEditing(item);

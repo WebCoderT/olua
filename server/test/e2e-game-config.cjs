@@ -3142,6 +3142,46 @@ async function main() {
     checkEqual(appearanceRestoredRes.body?.data?.assignments?.length, 15, "还原后外观表回到库存的 15 条（仍覆盖当前档数，不再回落）");
 
     //#endregion
+
+    //#region 二十四、变体列表筛选（#779）：部位取自基础件、等级段含两端、排序可选
+
+    group("二十四、变体列表筛选：部位 / 等级段 / 排序");
+
+    const clothVariantsRes = await api(base, "GET", "/api/admin/equipment-variants?slot=cloth&page=1&size=100", { token });
+    checkEqual(clothVariantsRes.status, 200, "按部位筛 → 200");
+    const clothRows = clothVariantsRes.body?.data?.list ?? [];
+    check(clothRows.length > 0, "按部位筛有结果");
+    check(clothRows.every((row) => row.slot === "cloth"), "筛出来的每一行都属于该部位（部位取自基础件，不是变体表的列）");
+    const clothBasesRes = await api(base, "GET", "/api/admin/equipments?slot=cloth&page=1&size=1", { token });
+    checkEqual(
+      clothVariantsRes.body?.data?.total,
+      (clothBasesRes.body?.data?.total ?? 0) * rebuild.combos,
+      "部位变体数 = 该部位基础件数 × 组合数（与「基础件 × 15」同一口径）",
+    );
+
+    const emptyLevelRes = await api(base, "GET", "/api/admin/equipment-variants?minLevel=9999&page=1&size=1", { token });
+    checkEqual(emptyLevelRes.body?.data?.total, 0, "等级段超出上限 → 0 行");
+
+    const anchorLevel = anchorAfter?.level ?? 0;
+    const exactLevelRes = await api(
+      base,
+      "GET",
+      `/api/admin/equipment-variants?baseId=cloth_1&minLevel=${anchorLevel}&maxLevel=${anchorLevel}&page=1&size=100`,
+      { token },
+    );
+    checkEqual(exactLevelRes.body?.data?.total, rebuild.combos, "等级段含两端：卡在基础件等级上时，正好筛出这件基础件的全部变体");
+
+    const sortedLevelsRes = await api(base, "GET", "/api/admin/equipment-variants?slot=cloth&sort=level&order=desc&page=1&size=100", { token });
+    const sortedLevels = (sortedLevelsRes.body?.data?.list ?? []).map((row) => row.level);
+    check(
+      sortedLevels.length > 1 && sortedLevels.every((value, index) => index === 0 || sortedLevels[index - 1] >= value),
+      "sort=level&order=desc 按等级降序（排序字段是服务端白名单，不是任凭拼 SQL）",
+    );
+
+    const badSlotRes = await api(base, "GET", "/api/admin/equipment-variants?slot=not_a_slot", { token });
+    checkEqual(badSlotRes.status, 400, "部位取值不合法 → 400（与装备列表同一个取值域）");
+
+    //#endregion
   } finally {
     server.kill();
   }

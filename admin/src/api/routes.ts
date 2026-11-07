@@ -429,7 +429,7 @@ export const routes = {
     /**
      * 装备变体列表（GET /admin/equipment-variants）
      *
-     * 每件基础件展开 5 前缀 × 3 后缀 = 15 行（行数随基础件浮动）。`baseId` 只看某一件基础件的 15 个变体；`keyword` 模糊匹配变体 id 与名称。
+     * 每件基础件展开 5 前缀 × 3 后缀 = 15 行（行数随基础件浮动）。`baseId` 只看某一件基础件的 15 个变体；`keyword` 模糊匹配变体 id 与名称；`slot` 按部位筛（部位取自基础件）、`minLevel` / `maxLevel` 取穿戴等级段（含两端）。
      */
     list: "/admin/equipment-variants",
     /**

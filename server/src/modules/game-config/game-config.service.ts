@@ -370,6 +370,9 @@ export class GameConfigService {
       size: query.size ?? DEFAULT_PAGE_SIZE,
       baseId: query.baseId,
       keyword: query.keyword,
+      slot: query.slot,
+      minLevel: query.minLevel,
+      maxLevel: query.maxLevel,
       sort: query.sort,
       order: query.order,
     };

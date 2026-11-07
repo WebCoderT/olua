@@ -5110,6 +5110,18 @@ export type EquipmentVariantQuery = {
    * 只列某个基础件的 15 个变体（如 cloth_1）
    */
   baseId?: string;
+  /**
+   * 按部位筛（取值：other1 / cloth / other2 / weapon / necklace / ring / accessories / shinguard / helmet / scapular / belt / wristband / shoes）；部位取自基础件（变体表只存 base_id）
+   */
+  slot?: string;
+  /**
+   * 穿戴等级下限（含）
+   */
+  minLevel?: number;
+  /**
+   * 穿戴等级上限（含）
+   */
+  maxLevel?: number;
 };
 
 export type EquipmentVariantRebuildResult = {
