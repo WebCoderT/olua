@@ -119,6 +119,10 @@ const MODULES = {
   adminEquipInAlign: { target: "admin", export: "equipInAlignsApi" },
   adminDrug: { target: "admin", export: "drugsApi" },
   adminItem: { target: "admin", export: "itemsApi" },
+  // 货币物品（#785）：绑定元宝 / 元宝 / 银子 × 各档面值（可增删改，与 adminItem 的「id 固定」相反）
+  adminMoneyItem: { target: "admin", export: "moneyItemsApi" },
+  // 升级卷轴（#787）：使用后硬性 +1 级，带等级区间（可增删改，与 adminItem 的「id 固定」相反）
+  adminLevelScroll: { target: "admin", export: "levelScrollsApi" },
   adminMonster: { target: "admin", export: "monstersApi" },
   adminNpc: { target: "admin", export: "npcsApi" },
   // 地图管理（#571）：只读观测台 —— 只有 list / detail，故意没有写接口
@@ -131,7 +135,7 @@ const MODULES = {
   adminFashion: { target: "admin", export: "fashionsApi" },
   adminDrop: { target: "admin", export: "dropApi" },
   // 角色等级表（#655）：60 行属性 + 经验（同表同行，没有独立的「升级经验」接口了）
-  adminRoleLevel: { target: "admin", export: "roleLevelsApi" },
+  adminLevelCurve: { target: "admin", export: "levelCurvesApi" },
   adminGrowthScalar: { target: "admin", export: "growthScalarsApi" },
   // 运行时参数（#605）：掉落手感 / 自动战斗 / 帮会规则，单行三组 JSON
   adminRuntimeParams: { target: "admin", export: "runtimeParamsApi" },
@@ -547,7 +551,12 @@ function synthesizeQueryInterfaces(operations) {
 function argListOf(op) {
   const args = op.pathParams.map((name) => `${name}: string`);
   if (op.bodySchema) args.push(`body: ${op.bodyTypeName ?? "Record<string, unknown>"}`);
-  if (op.queryTypeName) args.push(`query: ${op.queryTypeName} = {}`);
+  if (op.queryTypeName) {
+    // 全部字段可选才给 `= {}`：有必填字段时带上默认值会生成
+    // 「query 有必填属性但默认 {}」这种自相矛盾的签名（调用方与默认值必有一边红）
+    const allOptional = (op.queryParams ?? []).every((param) => !param.required);
+    args.push(`query: ${op.queryTypeName}${allOptional ? " = {}" : ""}`);
+  }
   args.push("options?: Options");
   return args;
 }

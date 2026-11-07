@@ -214,6 +214,8 @@ const snapshotRows = snapshotText
       equipments: readRows(snapshotText, "equipments"),
       items: readRows(snapshotText, "items"),
       drugs: readRows(snapshotText, "drugs"),
+      // #787：升级卷轴（图标由运营在管理端填，出厂指向 item/scroll/level-scroll）
+      levelScrolls: readRows(snapshotText, "level_scrolls"),
     }
   : null;
 if (!snapshotRows) failures.push(`展开核对：找不到配置快照 server/data/config-sync.sql（跑一次 make config-export）`);
@@ -319,7 +321,7 @@ for (const row of snapshotRows?.fashions ?? []) {
 
 // 装备 / 材料 / 药品的图标（#777）：三张表都是「一行一个 icon 路径」，运营在管理端能改。
 // **空 icon 不算断链** —— 白纸装备（新建时选了「空白」模板）本来就没有外观，客户端照实空着。
-for (const table of ["equipments", "items", "drugs"]) {
+for (const table of ["equipments", "items", "drugs", "levelScrolls"]) {
   for (const row of snapshotRows?.[table] ?? []) {
     const icon = String(row.icon ?? "");
     if (!icon) continue;

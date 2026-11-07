@@ -139,18 +139,6 @@ export const LEVEL_EXP_SORT: SortSpec<"level" | "exp" | "updatedAt"> = {
   defaultOrder: "asc",
 };
 
-/** 角色等级表（#655）：默认按等级升序 —— 60 行就是一张逐级的属性价目表 */
-export const ROLE_LEVEL_SORT: SortSpec<"level" | "exp" | "maxHp" | "maxMp" | "updatedAt"> = {
-  columns: {
-    level: "level",
-    exp: "exp",
-    maxHp: "max_hp",
-    maxMp: "max_mp",
-    updatedAt: "updated_at",
-  },
-  default: "level",
-  defaultOrder: "asc",
-};
 
 /** 装备变体列表（#655）：默认按基础件 + 前缀 + 后缀升序（同一件装备的 15 个变体连成一片） */
 export const EQUIPMENT_VARIANT_SORT: SortSpec<"id" | "baseId" | "level" | "sellPrice" | "updatedAt"> = {
@@ -230,6 +218,36 @@ export const DRUG_SORT: SortSpec<"id" | "label" | "level" | "sellPrice" | "updat
     updatedAt: "updated_at",
   },
   default: "id",
+  defaultOrder: "asc",
+};
+
+/** 货币物品列表（#785）：默认按货币升序（bindGold → gold → silver），仓储再补「面值升序」 */
+export const MONEY_ITEM_SORT: SortSpec<"id" | "label" | "currency" | "amount" | "sellPrice" | "updatedAt"> = {
+  columns: {
+    id: "id",
+    label: "label",
+    currency: "currency",
+    amount: "amount",
+    sellPrice: "sell_price",
+    updatedAt: "updated_at",
+  },
+  default: "currency",
+  defaultOrder: "asc",
+};
+
+/** 升级卷轴列表（#787）：默认按**等级下限**升序 —— 卷轴天生有序（Lv1 → Lv7） */
+export const LEVEL_SCROLL_SORT: SortSpec<
+  "id" | "label" | "minLevel" | "maxLevel" | "sellPrice" | "updatedAt"
+> = {
+  columns: {
+    id: "id",
+    label: "label",
+    minLevel: "min_level",
+    maxLevel: "max_level",
+    sellPrice: "sell_price",
+    updatedAt: "updated_at",
+  },
+  default: "minLevel",
   defaultOrder: "asc",
 };
 

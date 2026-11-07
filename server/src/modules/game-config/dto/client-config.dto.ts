@@ -2,11 +2,13 @@ import { ApiProperty } from "@nestjs/swagger";
 import { Type } from "class-transformer";
 import { ValidateNested } from "class-validator";
 import { DrugDto } from "./drug.dto";
+import { MoneyItemDto } from "./money-item.dto";
+import { LevelScrollDto } from "./level-scroll.dto";
 import { RuntimeParamsDto } from "./runtime-params.dto";
 import { DropTableDto, MonsterDropDto } from "./drop.dto";
 import { EquipmentMetaDto, EquipmentSlotDto, EquipmentVariantDto } from "./equipment.dto";
 import { FashionDto } from "./fashion.dto";
-import { GrowthScalarDto, LevelDto } from "./growth.dto";
+import { GrowthScalarDto, LevelCurveDto } from "./growth.dto";
 import { ItemDto } from "./item.dto";
 import { MallCategoryDto, MallGoodEntryDto } from "./mall.dto";
 import { MapConfigDto, MapTypeGroupDto } from "../../map/dto/map.dto";
@@ -60,6 +62,24 @@ export class GameConfigSnapshotDto {
   @Type(() => DrugDto)
   drugs!: DrugDto[];
 
+  @ApiProperty({
+    description:
+      "货币物品（#785：绑定元宝 / 元宝 / 银子 × 各档面值）。使用后直接给角色账本入账 —— " +
+      "金额与货币类型读服务端表，客户端只负责陈列与「用哪一格」",
+    type: [MoneyItemDto],
+  })
+  @Type(() => MoneyItemDto)
+  moneyItems!: MoneyItemDto[];
+
+  @ApiProperty({
+    description:
+      "升级卷轴（#787：使用后硬性 +1 级，带等级区间 minLevel ~ maxLevel）。区间与 +1 的判定读服务端表，" +
+      "客户端只用区间做本地预检与陈列",
+    type: [LevelScrollDto],
+  })
+  @Type(() => LevelScrollDto)
+  levelScrolls!: LevelScrollDto[];
+
   @ApiProperty({ description: "物品与材料配置（MATERIAL / OTHER 大类）", type: [ItemDto] })
   @Type(() => ItemDto)
   items!: ItemDto[];
@@ -87,13 +107,14 @@ export class GameConfigSnapshotDto {
 
   @ApiProperty({
     description:
-      "等级表（#655：1..roleMaxLevel 每级的裸属性与升级经验）。**客户端不再自己派生** —— " +
-      "`role_levels` 一行就是一级的最终值（属性与 exp 都在同一行，管理端可改）；" +
-      "客户端 levelMap 整表由这段填充，曲线与换算比率都不再下发",
-    type: [LevelDto],
+      "等级曲线（#786：4 条 × 6 段 = 24 行，定义 1..100 万级）。**等级不再逐级下发** —— " +
+      "逐级表在 100 万级要 250MB JSON。客户端按下发顺序自建曲线表，用 `levelConfigOf(level)` " +
+      "按需求值（与服务端 `common/constants/role-level-curve.ts` 同一套公式）；" +
+      "派生列（蓝 / 回血 / 攻防下限）两端各自按同一比例算",
+    type: [LevelCurveDto],
   })
-  @Type(() => LevelDto)
-  levels!: LevelDto[];
+  @Type(() => LevelCurveDto)
+  levelCurves!: LevelCurveDto[];
 
   @ApiProperty({ description: "成长标量参数（键值对；客户端只消费 roleMaxLevel，其余键服务端自用）", type: [GrowthScalarDto] })
   @Type(() => GrowthScalarDto)

@@ -23,8 +23,16 @@ export const ROLE_SEXES: string[] = ROLE_SEX_CODES;
 export const ROLE_NAME_MAX_LENGTH = 12;
 /** 角色 id 长度上限（客户端用时间戳字符串，留足冗余） */
 export const ROLE_ID_MAX_LENGTH = 64;
-/** 等级上限（客户端成长曲线 roleMaxLevel 之下，服务端只做防脏数据的上界） */
-export const ROLE_LEVEL_MAX = 1000;
+/**
+ * 等级防脏数据上界
+ *
+ * 真正的运营上限是成长标量 `roleMaxLevel`（出厂 100 万，#786），这里只兜住离谱值。
+ * 曾经写 1000 —— 那时逐级表只有 60 行、上限靠加行；现在曲线外推，1000 会把
+ * 「升级到 1000 级以上」当成脏数据拒掉（存档规整与后台改等级都用它）。
+ * 取值与 `GROWTH_SCALAR_SPECS.roleMaxLevel.max` 对齐：运营能把上限调到多少，
+ * 这里就得允许到多少，否则「上限 100 万」只是块牌子。
+ */
+export const ROLE_LEVEL_MAX = 10_000_000;
 
 /** 服务端从角色数据里提取并落成索引列的字段 */
 export interface RoleIndexFields {

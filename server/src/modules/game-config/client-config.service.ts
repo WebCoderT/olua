@@ -13,7 +13,9 @@ import { GuideSettingsService } from "./guide-settings.service";
 import { EquipmentAppearanceService } from "./equipment-appearance.service";
 import { AudioSettingService } from "../audio-setting/audio-setting.service";
 import { GameConfigSnapshotDto } from "./dto/client-config.dto";
-import { LevelDto } from "./dto/growth.dto";
+import { MoneyItemDto } from "./dto/money-item.dto";
+import { LevelScrollDto } from "./dto/level-scroll.dto";
+import { LevelCurveDto } from "./dto/growth.dto";
 import { MonsterPresentationDto } from "./dto/monster.dto";
 
 /** 快照全量拉取的分页参数：service 层调用不经过 ValidationPipe，size 不受 HTTP 边界 100 的限制 */
@@ -50,6 +52,12 @@ export class ClientConfigService {
       ranks: this.gameConfig.listRanks({ ...ALL }).list,
       equipments: this.gameConfig.listEquipmentVariants(),
       drugs: this.gameConfig.listDrugs({ ...ALL }).list,
+      // #785：货币物品（绑定元宝 / 元宝 / 银子）。客户端背包与图鉴按这段陈列，
+      // 使用结算读库（服务端）—— 运营改面值不用重打客户端包
+      moneyItems: this.gameConfig.listMoneyItemRows().map((row) => MoneyItemDto.from(row)),
+      // #787：升级卷轴（硬性 +1 级，带等级区间）。客户端用区间做本地预检，
+      // 真正的 +1 与区间判定在服务端（读库，改完不用重打客户端包）
+      levelScrolls: this.gameConfig.listLevelScrollRows().map((row) => LevelScrollDto.from(row)),
       items: this.gameConfig.listItems({ ...ALL }).list,
       monsters: this.gameConfig.listMonsters({ ...ALL }).list,
       // #588 / #655：怪物资源与表现读 `monster_presentation` 表（生成器直接写库），
@@ -57,9 +65,10 @@ export class ClientConfigService {
       monsterPresentations: this.monsterPresentations.listAll().map((row) => MonsterPresentationDto.from(row)),
       npcs: this.gameConfig.listNpcs({ ...ALL }).list,
       fashions: this.gameConfig.listFashions({ ...ALL }).list,
-      // #655：等级表直接读 `role_levels`（60 行逐级配置，曲线已从运行时移除）——
-      // 客户端 levelMap 的唯一来源。表为空（迁移没跑）才回落到曲线展开，保证空库能进游戏。
-      levels: this.snapshotLevels(),
+      // #786：等级改回**曲线**下发（4 条 × 6 段 = 24 行）。逐级表已删 ——
+      // 100 万级不可能整表下发（250MB JSON / 客户端几百 MB 内存），
+      // 客户端拿到段参数后自己按需求值（`levelConfigOf`），与服务端同一套公式。
+      levelCurves: this.growth.listLevelCurveRows().map(LevelCurveDto.from),
       growthScalars: this.growth.listScalars({ ...ALL }).list,
       // #603 战斗力权重 / #605 可配化：出厂值在 `config-sync.sql`，当前值在
       // `combat_weights` 表（管理端「战斗力权重」页可改）。客户端本地只留空 Map ——
@@ -102,13 +111,4 @@ export class ClientConfigService {
     };
   }
 
-  /**
-   * 快照 `levels` 段（#655）
-   *
-   * 唯一来源是 `role_levels` 的 60 行（管理端逐行改，改完快照即变）。
-   * 表不会为空：建库 seed 与迁移脚本都保证 60 行（见 `GrowthConfigService.seedRoleLevels`）。
-   */
-  private snapshotLevels(): LevelDto[] {
-    return this.growth.listRoleLevelRows().map(LevelDto.fromRow);
-  }
 }

@@ -119,28 +119,40 @@ async function api(method, path, options = {}) {
   await sleep(2600);
   const soaked = await roleOf(token, roleId);
   // 每次入账 revision +1（本测试没有存档写点，revision 增量 = 入账次数）；
-  // 经验数不断言具体值 —— 速率够大时会沿 role_levels 循环升级把 exp 消耗掉（那是链路正确的表现）
+  // 经验数不断言具体值 —— 速率够大时会沿等级曲线循环升级把 exp 消耗掉（那是链路正确的表现）
   check(soaked.revision - before.revision >= 2, "两拍半至少入账两次（revision 增量 = 入账次数）", `${soaked.revision} vs ${before.revision}`);
   check(soaked.level > before.level || soaked.data.exp > 0, "经验确实在长（升级或积攒）", `level=${soaked.level} exp=${soaked.data.exp}`);
 
   //#endregion
 
-  //#region 三、升满：循环升级 + 满级短路
+  //#region 三、大额入账：循环升级 + 满级短路
 
-  console.log("— 三、速率拉满：循环升级、到顶后短路 —");
-  const revisionBeforeMax = soaked.revision;
+  console.log("— 三、速率拉满：一次入账跨多级（循环升级）—");
   await setScalar("soakExpPerTick", 1000000);
   await sleep(2600);
   const maxed = await roleOf(token, roleId);
-  // 等级上限 = 角色等级表的行数（管理端改上限的唯一正确方式是加行）
-  const maxLevel = (await api("GET", "admin/role-levels?page=1&size=1", { token: adminToken })).data.total;
-  check(maxed.level === maxLevel, "大额经验循环升级直达等级上限", `level=${maxed.level} / cap=${maxLevel}`);
-  const revisionAtCap = maxed.revision;
-  check(revisionAtCap > revisionBeforeMax, "到顶前那一拍确实入过账");
+  // #786 起等级上限是 100 万（曲线外推），一拍 100 万经验远远升不到顶 ——
+  // 这一段的守点因此从「到顶」改成「循环升级」：一次入账必须能连跳好几级，
+  // 而不是把超出的经验丢掉或只升一级。
+  check(maxed.level > soaked.level + 1, "一次大额入账跨多级（循环升级，不是只升一级）", `level ${soaked.level} → ${maxed.level}`);
+  const nextNeed = await api("GET", `admin/level-curves/preview?level=${maxed.level + 1}`, { token: adminToken });
+  check(
+    nextNeed.code === 0 && maxed.data.exp < nextNeed.data.exp,
+    "余数 = 不足下一级的那部分（升级判定与等级属性计算器同一套经验曲线）",
+    `exp=${maxed.data.exp} / 下一级需 ${nextNeed.data && nextNeed.data.exp}`,
+  );
+
+  // 到顶短路：直接把角色顶到上限再观察 —— 真升 100 万级要循环 100 万次，不是测试该干的事
+  const capLevel = (await api("GET", "admin/growth-scalars", { token: adminToken })).data.list.find(
+    (row) => row.key === "roleMaxLevel",
+  ).value;
+  const cappedAt = await api("PATCH", `admin/roles/${roleId}`, { token: adminToken, body: { level: capLevel } });
+  check(cappedAt.code === 0, `三：把角色顶到等级上限（${capLevel}）`, cappedAt.message);
+  const revisionAtCap = (await roleOf(token, roleId)).revision;
   await sleep(2300);
   const capped = await roleOf(token, roleId);
   check(capped.revision === revisionAtCap, "满级后短路：不再写库（revision 不动）", `${capped.revision} vs ${revisionAtCap}`);
-  check(capped.level === maxLevel, "满级后等级不变");
+  check(capped.level === capLevel, "满级后等级不变", `${capped.level}`);
 
   //#endregion
 

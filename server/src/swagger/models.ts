@@ -27,6 +27,10 @@ import { GrowthUpgradeDto } from "../modules/roles/dto/growth-upgrade.dto";
 import { MallPurchaseDto, MallPurchaseResultDto } from "../modules/roles/dto/mall-purchase.dto";
 import { SellEntryDto, SellGoodsDto, SellGoodsResultDto, SellLineDto } from "../modules/roles/dto/sell-goods.dto";
 import { DrugUseDto, DrugUseResultDto } from "../modules/roles/dto/drug-use.dto";
+import { MoneyUseDto, MoneyUseResultDto } from "../modules/roles/dto/money-use.dto";
+import { CreateMoneyItemDto, MoneyItemDto, MoneyItemPageDto, MoneyItemQueryDto, RemoveMoneyItemResultDto, UpdateMoneyItemDto } from "../modules/game-config/dto/money-item.dto";
+import { CreateLevelScrollDto, LevelScrollDto, LevelScrollPageDto, LevelScrollQueryDto, RemoveLevelScrollResultDto, UpdateLevelScrollDto } from "../modules/game-config/dto/level-scroll.dto";
+import { LevelScrollUseDto, LevelScrollUseResultDto } from "../modules/roles/dto/level-scroll-use.dto";
 import { ReviveResultDto } from "../modules/roles/dto/revive.dto";
 import { FashionBuyResultDto, FashionWearResultDto } from "../modules/roles/dto/fashion.dto";
 import { BagOpCellDto, BagOpDto, BagOpResultDto } from "../modules/roles/dto/bag-op.dto";
@@ -96,11 +100,11 @@ import {
   GrowthScalarDto,
   GrowthScalarPageDto,
   GrowthScalarQueryDto,
-  RoleLevelDto,
-  RoleLevelPageDto,
-  RoleLevelQueryDto,
+  LevelAttributesDto,
+  LevelCurveDto,
+  LevelCurveListDto,
   UpdateGrowthScalarDto,
-  UpdateRoleLevelDto,
+  UpdateLevelCurveDto,
 } from "../modules/game-config/dto/growth.dto";
 import {
   AutoBattleParamsDto,
@@ -211,6 +215,7 @@ export const SWAGGER_MODELS = [
   GrowthUpgradeDto,
   MallPurchaseDto,
   DrugUseDto,
+  MoneyUseDto,
   RoleSummaryDto,
   RoleDto,
   GrowthUpgradeResultDto,
@@ -220,6 +225,7 @@ export const SWAGGER_MODELS = [
   SellLineDto,
   SellGoodsResultDto,
   DrugUseResultDto,
+  MoneyUseResultDto,
   ReviveResultDto,
   FashionBuyResultDto,
   FashionWearResultDto,
@@ -227,6 +233,22 @@ export const SWAGGER_MODELS = [
   BagOpCellDto,
   BagOpResultDto,
   RealtimeTicketDto,
+  // 货币道具（#785；可增删改，与药品 / 物品的 id 固定相反）
+  MoneyItemDto,
+  MoneyItemPageDto,
+  MoneyItemQueryDto,
+  CreateMoneyItemDto,
+  UpdateMoneyItemDto,
+  RemoveMoneyItemResultDto,
+  // 升级卷轴（#787；可增删改，带等级区间）
+  LevelScrollDto,
+  LevelScrollPageDto,
+  LevelScrollQueryDto,
+  CreateLevelScrollDto,
+  UpdateLevelScrollDto,
+  RemoveLevelScrollResultDto,
+  LevelScrollUseDto,
+  LevelScrollUseResultDto,
   // 区服（#295 阶段二）
   ZoneDto,
   AdminZoneDto,
@@ -312,10 +334,10 @@ export const SWAGGER_MODELS = [
   ConfigAttributeRangeDto,
   // 养成配置（成长曲线 #256）
   // 养成配置（角色等级逐级配置 #655：取代曲线采样）
-  RoleLevelDto,
-  RoleLevelPageDto,
-  RoleLevelQueryDto,
-  UpdateRoleLevelDto,
+  LevelCurveDto,
+  LevelCurveListDto,
+  LevelAttributesDto,
+  UpdateLevelCurveDto,
   GrowthScalarDto,
   GrowthScalarPageDto,
   GrowthScalarQueryDto,

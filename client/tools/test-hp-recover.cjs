@@ -35,7 +35,7 @@ const outDir = prepare("olua-hp-recover", [
 // #655：曲线 / 装备数值 / 怪物数值全部在库里（快照 = server/data/config-sync.sql）；
 // 三条成长线与装备条目用快照灌进运行时表（客户端加载期是空表 / 零值占位）
 seedRuntimeTables(outDir);
-const roleLevels = factory.levels();
+const roleLevels = factory.levelRows();
 const equipmentVariants = factory.equipmentVariants();
 const { equipmentPrefixRates, equipmentSuffixRates } = require(path.join(outDir, "configs/game-config.js"));
 void equipmentPrefixRates;

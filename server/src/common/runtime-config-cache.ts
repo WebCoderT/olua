@@ -26,6 +26,8 @@
 
 //#region 类型（DB 行的形状；只依赖结构化类型，不引 database 层）
 
+import { buildRoleLevelRow, RoleLevelCurveSegment } from "./constants/role-level-curve";
+
 /** 结算用的一份属性包：单值 + 六项区间元组（键是 camelCase，与客户端配置同形） */
 export type AttributeBundle = Record<string, unknown>;
 
@@ -68,13 +70,6 @@ export interface EquipmentBaseSource {
   slot: string;
   level: number;
   label: string;
-}
-
-/** 角色等级的一行（`role_levels` 表；60 行逐条配置） */
-export interface RoleLevelSource extends AttributeColumns {
-  level: number;
-  exp: number;
-  max_mp: number;
 }
 
 /** 物品 / 材料的一行（`items` 表：叠加上限与卖价参与结算） */
@@ -133,10 +128,42 @@ export interface DrugSource {
   effect_mp_percent: number;
 }
 
+/**
+ * 装载货币道具所需的最小列集（`money_items` 行的投影，#785）
+ *
+ * 进缓存的理由与药品一致：回收价 / 显示名 / 「这个 id 认不认得」都要在**结算层**
+ * 回答，而结算层拿不到仓储。使用入账的金额与币种**不走这里** —— 那条路直读库
+ * （`MoneyItemRepository`），因为入账必须是最新值，不能靠 10 秒一次的重装。
+ */
+export interface MoneyItemSource {
+  id: string;
+  label: string;
+  description: string;
+  currency: string;
+  amount: number;
+  max_stack: number;
+  sell_price: number;
+}
+
+/**
+ * 升级卷轴（#787）：区间 / 显示名 / 这一格「认不认得」
+ *
+ * 与货币道具同样**不做使用裁决**：真正使用时的 +1 与区间判定直读 `level_scrolls` 表
+ * （`RolesService.useLevelScroll`），这里只服务不需要即时性的那几处查询。
+ */
+export interface LevelScrollSource {
+  id: string;
+  label: string;
+  description: string;
+  min_level: number;
+  max_level: number;
+  max_stack: number;
+  sell_price: number;
+}
+
 //#endregion
 
 //#region 存储（null = 还没装载）
-
 /**
  * 装备变体：id → { 属性包, 穿戴等级, 回收价 }
  *
@@ -146,13 +173,25 @@ export interface DrugSource {
 let equipmentVariantRows: Map<string, { bundle: AttributeBundle; level: number; price: number }> | null = null;
 /** 装备基础件：id → { 部位, 等级, 名称 }（变体行缺失时兜底，也是「这件东西能穿哪儿」的来源） */
 let equipmentBases: Map<string, { slot: string; level: number; label: string }> | null = null;
-/** 角色等级：等级 → 属性包（含 maxMp） */
-let roleLevelRows: Map<number, AttributeBundle> | null = null;
+/**
+ * 角色等级曲线（#786：4 条 × 6 段，1..100 万级全靠它算）
+ *
+ * 这是等级的**唯一来源**：`role_levels` 逐级表已随 #786 删除（100 万级存不下），
+ * 覆盖行那套也一起去掉了 —— 想改某一级的数值，改对应段（或把那段切细），
+ * 不再有「某一级单独钉死、曲线改了它不动」这种第二来源。
+ */
+let roleLevelCurveRows: Record<string, RoleLevelCurveSegment[]> | null = null;
+/** 曲线求值的 memo（同一等级在一次结算里会被问好几次；容量封顶，超了就整体清空） */
+const roleLevelCurveMemo = new Map<number, AttributeBundle | null>();
 let titleBundles: Map<number, AttributeBundle> | null = null;
 let soulBundles: Map<number, AttributeBundle> | null = null;
 let rankBundles: Map<number, AttributeBundle> | null = null;
 let skillRows: Map<string, Record<string, unknown>> | null = null;
 let drugRows: Map<string, Record<string, unknown>> | null = null;
+/** 货币道具（#785）：背包格子认得出 / 回收价 / 显示名都要它 */
+let moneyRows: Map<string, Record<string, unknown>> | null = null;
+/** 升级卷轴（#787）：同上；区间也留一份给「道具详情」这类查询用 */
+let levelScrollRows: Map<string, Record<string, unknown>> | null = null;
 let itemRows: Map<string, Record<string, unknown>> | null = null;
 /** 成长标量（`growth_scalars` 表：等级上限 / 属性区间比例 / 经验节奏 / 回蓝） */
 let growthScalars: Map<string, number> | null = null;
@@ -186,21 +225,31 @@ export function attributeBundleOf(row: AttributeColumns): AttributeBundle {
 }
 
 /**
- * 装进角色等级（`role_levels` 表）
+ * 装进角色等级曲线（`role_level_curves` 表；#786）
  *
- * 顺手把 `maxMp` 塞进属性包 —— 下游 `role-attributes` 就按「等级包 + 装备包 +
- * 三条成长线包」统一求和，不用给 maxMp 单开一条路径。
+ * 4 条曲线各自的段按 `seq` 升序排好再存 —— 求值时按 `from_level` 取「不超过该级的
+ * 最后一段」，乱序会让结果随插入顺序漂移（同一个等级有时算 100、有时算 118）。
+ * 一条段都没有 = 曲线没配，`roleLevelAttributesOf` 返回 null（属性会算成 0，
+ * `refreshAll` 会 warn —— 与 #655 起「空表就是没配」的口径一致）。
  */
-export function applyRoleLevels(rows: RoleLevelSource[]): void {
+export function applyRoleLevelCurves(rows: RoleLevelCurveSegment[]): void {
+  roleLevelCurveMemo.clear();
   if (!rows.length) {
-    roleLevelRows = null;
+    roleLevelCurveRows = null;
     return;
   }
-  const map = new Map<number, AttributeBundle>();
+  const map: Record<string, RoleLevelCurveSegment[]> = {};
   for (const row of rows) {
-    map.set(numberOr(row.level), { ...attributeBundleOf(row), maxMp: numberOr(row.max_mp) });
+    const key = String(row.curve ?? "");
+    if (!key) continue;
+    const list = map[key];
+    if (list) list.push(row);
+    else map[key] = [row];
   }
-  roleLevelRows = map;
+  for (const key of Object.keys(map)) {
+    map[key].sort((a, b) => a.from_level - b.from_level || a.seq - b.seq);
+  }
+  roleLevelCurveRows = map;
 }
 
 /** 装进装备变体（`equipment_variants` 表；每件基础件 15 行）—— 不乘任何倍率，一行就是最终值 */
@@ -323,6 +372,56 @@ export function applyDrugOverrides(rows: DrugSource[]): void {
   drugRows = map;
 }
 
+/**
+ * 装进货币道具（#785）：显示名 / 回收价 / 「这个 id 认不认得」
+ *
+ * **不含入账金额的裁决**：使用货币道具时服务端直读 `money_items` 表（`RolesService.useMoneyItem`），
+ * 因为那是「点一下就加钱」，必须是最新值；这里只服务不需要即时性的那几处查询。
+ */
+export function applyMoneyItemOverrides(rows: MoneyItemSource[]): void {
+  if (!rows.length) {
+    moneyRows = null;
+    return;
+  }
+  const map = new Map<string, Record<string, unknown>>();
+  for (const row of rows) {
+    map.set(row.id, {
+      label: row.label,
+      description: row.description,
+      currency: row.currency,
+      amount: numberOr(row.amount),
+      maxStack: numberOr(row.max_stack),
+      sellPrice: numberOr(row.sell_price),
+    });
+  }
+  moneyRows = map;
+}
+
+/**
+ * 装进升级卷轴（#787）：显示名 / 回收价 / 等级区间 / 「这个 id 认不认得」
+ *
+ * **不含使用裁决**：真正 +1 与区间判定直读 `level_scrolls` 表
+ * （`RolesService.useLevelScroll`）—— 运营改了区间，玩家下一次使用就按新区间判。
+ */
+export function applyLevelScrollOverrides(rows: LevelScrollSource[]): void {
+  if (!rows.length) {
+    levelScrollRows = null;
+    return;
+  }
+  const map = new Map<string, Record<string, unknown>>();
+  for (const row of rows) {
+    map.set(row.id, {
+      label: row.label,
+      description: row.description,
+      minLevel: numberOr(row.min_level),
+      maxLevel: numberOr(row.max_level),
+      maxStack: numberOr(row.max_stack),
+      sellPrice: numberOr(row.sell_price),
+    });
+  }
+  levelScrollRows = map;
+}
+
 /** 装进成长标量（`growth_scalars` 表；空表 = 没配 → 读取方拿到 null） */
 export function applyGrowthScalars(rows: Array<{ key: string; value: number }>): void {
   if (!rows.length) {
@@ -368,12 +467,15 @@ export function isEquipmentSlot(slot: string): boolean {
 export function resetRuntimeConfigCache(): void {
   equipmentVariantRows = null;
   equipmentBases = null;
-  roleLevelRows = null;
+  roleLevelCurveRows = null;
+  roleLevelCurveMemo.clear();
   titleBundles = null;
   soulBundles = null;
   rankBundles = null;
   skillRows = null;
   drugRows = null;
+  moneyRows = null;
+  levelScrollRows = null;
   itemRows = null;
   growthScalars = null;
   equipmentSlotKeys = null;
@@ -408,12 +510,43 @@ export function growthScalarsSnapshot(): Map<string, number> | null {
   return growthScalars;
 }
 
-/** 某等级的角色裸属性；表里没有该级返回 null（= 这一级没配） */
+/**
+ * 某等级的角色裸属性（#786：**按曲线求值**）
+ *
+ * - 按 4 条曲线算（`buildRoleLevelRow`），1..100 万级都算得出来；
+ * - 曲线没配（空库 / 迁移没跑）→ null，调用方按「这一级没配」处理（与 #724 的
+ *   「客户端零兜底」同一条口径：没配就是没配，不凭空造一份属性）。
+ *
+ * 结果是 memo 的：一次属性重算里同一级会被问两三次，而 100 万级下没人愿意
+ * 每次重算都过一遍段扫描。缓存容量封顶 4096 条（够装一次战斗涉及的所有等级）。
+ */
 export function roleLevelAttributesOf(level: number | undefined): AttributeBundle | null {
   const value = Number(level);
   if (!Number.isFinite(value) || value < 1) return null;
-  return roleLevelRows?.get(Math.trunc(value)) ?? null;
+  const key = Math.trunc(value);
+  if (roleLevelCurveMemo.has(key)) return roleLevelCurveMemo.get(key) ?? null;
+  const row = roleLevelCurveRows ? buildRoleLevelRow(roleLevelCurveRows, key) : null;
+  const bundle: AttributeBundle | null = row
+    ? { ...attributeBundleOf(row), maxMp: numberOr(row.max_mp), exp: numberOr(row.exp) }
+    : null;
+  if (roleLevelCurveMemo.size >= 4096) roleLevelCurveMemo.clear();
+  roleLevelCurveMemo.set(key, bundle);
+  return bundle;
 }
+
+/**
+ * 升到下一级所需经验（曲线 `exp`）
+ *
+ * 与 `roleLevelAttributesOf` 同一个 memo：升级循环里每一级问一次，
+ * 不能每级一条 SELECT，也不能每次重新扫段。
+ */
+export function roleLevelExpOf(level: number): number | null {
+  const bundle = roleLevelAttributesOf(level);
+  if (!bundle) return null;
+  const exp = Number(bundle.exp);
+  return Number.isFinite(exp) ? exp : null;
+}
+
 
 /** 某件装备（含变体）的当前属性；不是装备 / 没配返回 null */
 export function equipmentAttributesOf(id: string): AttributeBundle | null {
@@ -488,6 +621,16 @@ export function drugOf(id: string): Record<string, unknown> | null {
   return drugRows?.get(id) ?? null;
 }
 
+/** 某个货币道具的当前配置；不是货币道具返回 null */
+export function moneyItemOf(id: string): Record<string, unknown> | null {
+  return moneyRows?.get(id) ?? null;
+}
+
+/** 某个升级卷轴的当前配置（含 minLevel / maxLevel）；不是卷轴返回 null */
+export function levelScrollOf(id: string): Record<string, unknown> | null {
+  return levelScrollRows?.get(id) ?? null;
+}
+
 /** 材料 / 其它物品的当前配置；不是物品返回 null */
 export function itemBaseOf(id: string): Record<string, unknown> | null {
   return itemRows?.get(id) ?? null;
@@ -502,6 +645,10 @@ export function itemBaseOf(id: string): Record<string, unknown> | null {
 export function itemTypeOf(id: string): string | null {
   if (equipmentVariantRows?.has(id) || equipmentBases?.has(id)) return "equipment";
   if (drugRows?.has(id)) return "drug";
+  // 货币道具（#785）：`money` 是客户端 GOOD_TYPE 里的那一档，两端同名
+  if (moneyRows?.has(id)) return "money";
+  // 升级卷轴（#787）：`scroll` 同上 —— 两端同名，客户端靠它分到「使用」分支
+  if (levelScrollRows?.has(id)) return "scroll";
   const item = itemRows?.get(id);
   return item ? String(item.type ?? "") || null : null;
 }
@@ -519,6 +666,10 @@ export function itemLabelOf(id: string): string | null {
   if (base) return base;
   const drug = drugRows?.get(id)?.label;
   if (typeof drug === "string") return drug;
+  const money = moneyRows?.get(id)?.label;
+  if (typeof money === "string") return money;
+  const scroll = levelScrollRows?.get(id)?.label;
+  if (typeof scroll === "string") return scroll;
   const item = itemRows?.get(id)?.label;
   return typeof item === "string" ? item : null;
 }
@@ -536,6 +687,12 @@ export function sellPriceOf(id: string): number | null {
   if (equipment !== undefined) return equipment;
   const drug = drugRows?.get(id)?.sellPrice;
   if (drug !== undefined) return numberOr(drug);
+  // 货币道具（#785）：售价缺省 0 = 不可回收（运营把它当「不能卖的钱」就不会填）
+  const money = moneyRows?.get(id)?.sellPrice;
+  if (money !== undefined) return numberOr(money);
+  // 升级卷轴（#787）：出厂 0 = 不可回收（点一下就升一级的东西，别让它变成印钞机）
+  const scroll = levelScrollRows?.get(id)?.sellPrice;
+  if (scroll !== undefined) return numberOr(scroll);
   const item = itemRows?.get(id)?.sellPrice;
   if (item !== undefined) return numberOr(item);
   return null;

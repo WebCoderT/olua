@@ -48,7 +48,8 @@ export interface GrowthScalarSpec {
 }
 
 export const GROWTH_SCALAR_SPECS: Record<string, GrowthScalarSpec> = {
-  "roleMaxLevel": { min: 1, max: 200, integer: true },
+  // #786：等级改回曲线后没有「表里几行」的物理上限，100 万只是出厂值，留十倍余量给运营
+  "roleMaxLevel": { min: 1, max: 10000000, integer: true },
   "expGain.expPerLevel": { min: 1, max: 100000, integer: true },
   "expGain.maxLevelGap": { min: 0, max: 100, integer: true },
   // 允许小数：回复是「每秒 N 点 × 经过秒数」累加的，0.5 这种半速配置是合法需求（#605）
@@ -60,7 +61,7 @@ export const GROWTH_SCALAR_SPECS: Record<string, GrowthScalarSpec> = {
 
 /** 标量参数的中文说明（管理端列表直接展示；键必须与 GROWTH_SCALARS 一致） */
 export const GROWTH_SCALAR_DESCRIPTIONS: Record<string, string> = {
-  "roleMaxLevel": "角色等级上限（必须等于「角色等级」页的行数：表里有几级就能升到几级）",
+  "roleMaxLevel": "角色等级上限（1..10000000）。改它会把四条曲线的末段结束等级一起拉过去；超过末段的等级按该段公式外推",
   "expGain.expPerLevel": "每级基准经验：同级击杀经验 = (怪物等级+1) × 该值",
   "expGain.maxLevelGap": "角色与怪物等级差达到该值（含）后不再获得经验",
   "mpRecoverPerSecond": "魔法值自然回复速度（点 / 秒，0 = 关闭自然回蓝；由服务端结算，客户端读快照同步）",

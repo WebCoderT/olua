@@ -129,6 +129,36 @@ export type DrugUse = {
   revision?: number;
 };
 
+export type MoneyUse = {
+  /**
+   * 背包行
+   */
+  row: number;
+  /**
+   * 背包列
+   */
+  col: number;
+  /**
+   * 修订号（乐观锁）：带上了就校验，与服务端当前值不一致时 20006；与 role.save 同一语义
+   */
+  revision?: number;
+};
+
+export type LevelScrollUse = {
+  /**
+   * 背包行
+   */
+  row: number;
+  /**
+   * 背包列
+   */
+  col: number;
+  /**
+   * 修订号（乐观锁）：带上了就校验，与服务端当前值不一致时 20006；与 role.save 同一语义
+   */
+  revision?: number;
+};
+
 export type FashionBuy = {
   /**
    * 要买的时装 id（fashions 表主键，如 cloth_2）
@@ -1285,6 +1315,138 @@ export type UpdateItem = {
   maxStack?: number;
 };
 
+export type CreateMoneyItem = {
+  /**
+   * 物品 id（缺省 = money_<货币>_<面值>，如 money_gold_100）；小写字母开头、字母数字下划线
+   */
+  id?: string;
+  /**
+   * 货币类型：bindGold（绑定元宝）/ gold（元宝）/ silver（银子）
+   */
+  currency: string;
+  /**
+   * 单件入账金额（1 ~ 1000000）
+   */
+  amount: number;
+  /**
+   * 名称（缺省 = 「货币中文名（面值）」）
+   */
+  label?: string;
+  /**
+   * 描述（缺省 = 「使用后获得 N 点…」）
+   */
+  description?: string;
+  /**
+   * 图标资源路径（缺省 = item/currency/<货币>-<面值>）
+   */
+  icon?: string;
+  /**
+   * 最大叠加数量（缺省 999）
+   */
+  maxStack?: number;
+  /**
+   * 售卖价（0 = 不可出售；缺省 0）
+   */
+  sellPrice?: number;
+};
+
+export type UpdateMoneyItem = {
+  /**
+   * 名称（不传则不改）
+   */
+  label?: string;
+  /**
+   * 描述（不传则不改）
+   */
+  description?: string;
+  /**
+   * 图标资源路径（不传则不改）
+   */
+  icon?: string;
+  /**
+   * 货币类型（不传则不改）
+   */
+  currency?: string;
+  /**
+   * 单件入账金额（不传则不改）
+   */
+  amount?: number;
+  /**
+   * 最大叠加数量（不传则不改）
+   */
+  maxStack?: number;
+  /**
+   * 售卖价（不传则不改）
+   */
+  sellPrice?: number;
+};
+
+export type CreateLevelScroll = {
+  /**
+   * 物品 id（缺省按等级区间派生）；小写字母开头、字母数字下划线
+   */
+  id?: string;
+  /**
+   * 可用等级下限（含）
+   */
+  minLevel: number;
+  /**
+   * 可用等级上限（含），必须不小于下限
+   */
+  maxLevel: number;
+  /**
+   * 名称（缺省按等级区间派生）
+   */
+  label?: string;
+  /**
+   * 描述（缺省按等级区间生成）
+   */
+  description?: string;
+  /**
+   * 图标资源路径（缺省 = item/scroll/level-scroll）
+   */
+  icon?: string;
+  /**
+   * 最大叠加数量（缺省 999）
+   */
+  maxStack?: number;
+  /**
+   * 售卖价（0 = 不可出售；缺省 0）
+   */
+  sellPrice?: number;
+};
+
+export type UpdateLevelScroll = {
+  /**
+   * 名称（不传则不改）
+   */
+  label?: string;
+  /**
+   * 描述（不传则不改）
+   */
+  description?: string;
+  /**
+   * 图标资源路径（不传则不改）
+   */
+  icon?: string;
+  /**
+   * 可用等级下限（不传则不改）
+   */
+  minLevel?: number;
+  /**
+   * 可用等级上限（不传则不改）
+   */
+  maxLevel?: number;
+  /**
+   * 最大叠加数量（不传则不改）
+   */
+  maxStack?: number;
+  /**
+   * 售卖价（不传则不改）
+   */
+  sellPrice?: number;
+};
+
 export type AttributeRange = {
   /**
    * 下限（含）
@@ -1688,71 +1850,23 @@ export type UpdateMonsterDrop = {
   entries?: DropEntry[];
 };
 
-export type UpdateRoleLevel = {
+export type UpdateLevelCurve = {
   /**
-   * 升到下一级所需经验（≥ 1）
+   * 结束等级（含）；不能小于本段起始等级
    */
-  exp?: number;
+  toLevel?: number;
   /**
-   * 生命上限（≥ 0）
+   * 起始等级处的值（≥ 0）
    */
-  maxHp?: number;
+  startValue?: number;
   /**
-   * 魔法上限（≥ 0）
+   * 每级增量（≥ 0；经验段建议 ≥ 1）
    */
-  maxMp?: number;
+  perLevel?: number;
   /**
-   * 每秒回血（≥ 0）
+   * 每级增量的增量（≥ 0；只有 exp 有意义，其余曲线请留 0）
    */
-  hpRecover?: number;
-  /**
-   * 物攻下限（≥ 0）
-   */
-  physicalAttackMin?: number;
-  /**
-   * 物攻上限（≥ 0）
-   */
-  physicalAttackMax?: number;
-  /**
-   * 魔攻下限（≥ 0）
-   */
-  magicAttackMin?: number;
-  /**
-   * 魔攻上限（≥ 0）
-   */
-  magicAttackMax?: number;
-  /**
-   * 道攻下限（≥ 0）
-   */
-  taoistAttackMin?: number;
-  /**
-   * 道攻上限（≥ 0）
-   */
-  taoistAttackMax?: number;
-  /**
-   * 物防下限（≥ 0）
-   */
-  physicalDefenseMin?: number;
-  /**
-   * 物防上限（≥ 0）
-   */
-  physicalDefenseMax?: number;
-  /**
-   * 魔防下限（≥ 0）
-   */
-  magicDefenseMin?: number;
-  /**
-   * 魔防上限（≥ 0）
-   */
-  magicDefenseMax?: number;
-  /**
-   * 道防下限（≥ 0）
-   */
-  taoistDefenseMin?: number;
-  /**
-   * 道防上限（≥ 0）
-   */
-  taoistDefenseMax?: number;
+  accel?: number;
 };
 
 export type UpdateGrowthScalar = {
@@ -2777,6 +2891,69 @@ export type DrugUseResult = {
   recoveredMp: number;
 };
 
+export type MoneyUseResult = {
+  /**
+   * 角色 id
+   */
+  id: string;
+  /**
+   * 所属账号 id
+   */
+  accountId: string;
+  /**
+   * 角色名
+   */
+  name: string;
+  /**
+   * 职业：1 战士 / 2 魔法师 / 3 道士 / 4 全职业
+   */
+  occupation: string;
+  /**
+   * 性别：1 男 / 2 女 / 3 全性别
+   */
+  sex: string;
+  /**
+   * 等级
+   */
+  level: number;
+  /**
+   * 是否当前选中（在线）角色
+   */
+  online: boolean;
+  /**
+   * 修订号（每次落库 +1；客户端保存进度时带上它做乐观锁）
+   */
+  revision: number;
+  /**
+   * 创建时间（毫秒）
+   */
+  createdAt: number;
+  /**
+   * 最近更新时间（毫秒）
+   */
+  updatedAt: number;
+  /**
+   * 角色完整数据（客户端 entities/Role 的 JSON 快照，服务端按不透明文档存取；管理端只编辑其中的常用字段）
+   */
+  data: Record<string, unknown>;
+  /**
+   * 使用的货币物品 id（如 money_gold_100）
+   */
+  itemId: string;
+  /**
+   * 入账的账本字段：gold / bindGold / silver
+   */
+  currency: string;
+  /**
+   * 本次入账金额（读服务端表，客户端报的不算数）
+   */
+  amount: number;
+  /**
+   * 入账后的余额（客户端飘字「+100 元宝（共 300）」用）
+   */
+  balance: number;
+};
+
 export type ReviveResult = {
   /**
    * 复活后的生命值（= maxHp）
@@ -2898,6 +3075,261 @@ export type RealtimeTicket = {
    * 有效期（毫秒）；过期后必须重新取票
    */
   expiresIn: number;
+};
+
+export type MoneyItem = {
+  /**
+   * 物品 id（如 money_bind_gold_10；背包按它引用）
+   */
+  id: string;
+  /**
+   * 名称（如「绑定元宝（10）」）
+   */
+  label: string;
+  /**
+   * 描述
+   */
+  description: string;
+  /**
+   * 图标资源路径（resources 相对路径，如 item/currency/bind-gold-10）
+   */
+  icon: string;
+  /**
+   * 入账到哪个账本字段：bindGold = 绑定元宝 / gold = 元宝 / silver = 银子
+   */
+  currency: string;
+  /**
+   * 单件入账金额（使用一个就加这么多）
+   */
+  amount: number;
+  /**
+   * 最大叠加数量
+   */
+  maxStack: number;
+  /**
+   * 售卖价（0 = 不可出售）
+   */
+  sellPrice: number;
+  /**
+   * 最近更新时间（毫秒）
+   */
+  updatedAt: number;
+};
+
+export type MoneyItemPage = {
+  /**
+   * 总条数
+   */
+  total: number;
+  /**
+   * 当前页码（从 1 开始）
+   */
+  page: number;
+  /**
+   * 每页条数
+   */
+  size: number;
+  /**
+   * 当前页的货币物品
+   */
+  list: MoneyItem[];
+};
+
+export type MoneyItemQuery = {
+  /**
+   * 页码，从 1 开始
+   */
+  page?: number;
+  /**
+   * 每页条数（1~100）
+   */
+  size?: number;
+  /**
+   * 关键字：模糊匹配 id / 名称 / 描述
+   */
+  keyword?: string;
+  /**
+   * 排序字段（取值见各接口说明，未登记的值会退回默认排序）
+   */
+  sort?: string;
+  /**
+   * 排序方向：asc 升序 / desc 降序
+   */
+  order?: "asc" | "desc";
+  /**
+   * 只看某种货币（bindGold / gold / silver）
+   */
+  currency?: string;
+};
+
+export type RemoveMoneyItemResult = {
+  /**
+   * 被删除的物品 id
+   */
+  id: string;
+  /**
+   * 实际删除的行数（正常为 1；0 说明刚被别人删掉了）
+   */
+  removed: number;
+};
+
+export type LevelScroll = {
+  /**
+   * 物品 id（如 level_scroll_1；背包按它引用）
+   */
+  id: string;
+  /**
+   * 名称（如「升级卷轴 Lv1」）
+   */
+  label: string;
+  /**
+   * 描述
+   */
+  description: string;
+  /**
+   * 图标资源路径（resources 相对路径，如 item/scroll/level-scroll）
+   */
+  icon: string;
+  /**
+   * 可用等级下限（含）：角色等级低于它就用不了
+   */
+  minLevel: number;
+  /**
+   * 可用等级上限（含）：用完之后角色就会超出这段，需要换下一卷
+   */
+  maxLevel: number;
+  /**
+   * 最大叠加数量
+   */
+  maxStack: number;
+  /**
+   * 售卖价（0 = 不可出售）
+   */
+  sellPrice: number;
+  /**
+   * 最近更新时间（毫秒）
+   */
+  updatedAt: number;
+};
+
+export type LevelScrollPage = {
+  /**
+   * 总条数
+   */
+  total: number;
+  /**
+   * 当前页码（从 1 开始）
+   */
+  page: number;
+  /**
+   * 每页条数
+   */
+  size: number;
+  /**
+   * 当前页的升级卷轴
+   */
+  list: LevelScroll[];
+};
+
+export type LevelScrollQuery = {
+  /**
+   * 页码，从 1 开始
+   */
+  page?: number;
+  /**
+   * 每页条数（1~100）
+   */
+  size?: number;
+  /**
+   * 关键字：模糊匹配 id / 名称 / 描述
+   */
+  keyword?: string;
+  /**
+   * 排序字段（取值见各接口说明，未登记的值会退回默认排序）
+   */
+  sort?: string;
+  /**
+   * 排序方向：asc 升序 / desc 降序
+   */
+  order?: "asc" | "desc";
+};
+
+export type RemoveLevelScrollResult = {
+  /**
+   * 被删除的卷轴 id
+   */
+  id: string;
+  /**
+   * 实际删除的行数（正常为 1；0 说明刚被别人删掉了）
+   */
+  removed: number;
+};
+
+export type LevelScrollUseResult = {
+  /**
+   * 角色 id
+   */
+  id: string;
+  /**
+   * 所属账号 id
+   */
+  accountId: string;
+  /**
+   * 角色名
+   */
+  name: string;
+  /**
+   * 职业：1 战士 / 2 魔法师 / 3 道士 / 4 全职业
+   */
+  occupation: string;
+  /**
+   * 性别：1 男 / 2 女 / 3 全性别
+   */
+  sex: string;
+  /**
+   * 等级
+   */
+  level: number;
+  /**
+   * 是否当前选中（在线）角色
+   */
+  online: boolean;
+  /**
+   * 修订号（每次落库 +1；客户端保存进度时带上它做乐观锁）
+   */
+  revision: number;
+  /**
+   * 创建时间（毫秒）
+   */
+  createdAt: number;
+  /**
+   * 最近更新时间（毫秒）
+   */
+  updatedAt: number;
+  /**
+   * 角色完整数据（客户端 entities/Role 的 JSON 快照，服务端按不透明文档存取；管理端只编辑其中的常用字段）
+   */
+  data: Record<string, unknown>;
+  /**
+   * 使用的升级卷轴 id（如 level_scroll_1）
+   */
+  itemId: string;
+  /**
+   * 使用前的等级
+   */
+  fromLevel: number;
+  /**
+   * 使用后的等级（恒为 fromLevel + 1）
+   */
+  toLevel: number;
+  /**
+   * 当前经验（卷轴不消耗经验，原样保留）
+   */
+  exp: number;
+  /**
+   * 升到下一级所需经验（客户端进度条用；满级为 0）
+   */
+  expNeed: number;
 };
 
 export type Zone = {
@@ -3580,7 +4012,7 @@ export type AuditQuery = {
   /**
    * 目标类型筛选
    */
-  targetType?: "account" | "role" | "admin" | "announcement" | "mail" | "title" | "soul" | "rank" | "equipment" | "drug" | "item" | "monster" | "npc" | "mall" | "fashion" | "dropTable" | "monsterDrop" | "roleLevel" | "equipmentVariant" | "growthScalar" | "skill" | "status" | "zone" | "guild" | "quest" | "achievement" | "equipAlign" | "equipInAlign" | "map" | "uiEffect" | "audioSetting" | "runtimeParams" | "combatWeights" | "guideSteps" | "equipmentAppearance";
+  targetType?: "account" | "role" | "admin" | "announcement" | "mail" | "title" | "soul" | "rank" | "equipment" | "drug" | "item" | "monster" | "npc" | "mall" | "fashion" | "dropTable" | "monsterDrop" | "levelCurve" | "equipmentVariant" | "growthScalar" | "skill" | "status" | "zone" | "guild" | "quest" | "achievement" | "equipAlign" | "equipInAlign" | "map" | "uiEffect" | "audioSetting" | "runtimeParams" | "combatWeights" | "guideSteps" | "equipmentAppearance" | "moneyItem" | "levelScroll";
   /**
    * 只看针对某个目标的日志（目标 id）
    */
@@ -4374,13 +4806,55 @@ export type SoulQuery = {
   order?: "asc" | "desc";
 };
 
-export type RoleLevel = {
+export type LevelCurve = {
   /**
-   * 等级（1 起；序列固定，不可增删行）
+   * 曲线 key：exp（升级经验）/ hp（生命上限）/ attack_max（物攻上限）/ defense_max（物防上限）
+   */
+  curve: string;
+  /**
+   * 段序号（同一曲线内 1 起；段的起点由上一段终点决定，不可改）
+   */
+  seq: number;
+  /**
+   * 起始等级（含）
+   */
+  fromLevel: number;
+  /**
+   * 结束等级（含）；最后一段是等级上限，超出按该段公式继续外推
+   */
+  toLevel: number;
+  /**
+   * fromLevel 处的值
+   */
+  startValue: number;
+  /**
+   * 每级增量
+   */
+  perLevel: number;
+  /**
+   * 每级增量的增量（二阶；只有 exp 用，其余为 0）
+   */
+  accel: number;
+  /**
+   * 最近更新时间（毫秒）
+   */
+  updatedAt: number;
+};
+
+export type LevelCurveList = {
+  /**
+   * 全部曲线段（按曲线 → 段序）
+   */
+  list: LevelCurve[];
+};
+
+export type LevelAttributes = {
+  /**
+   * 等级
    */
   level: number;
   /**
-   * 升到下一级所需经验（≥ 1）
+   * 升到下一级所需经验
    */
   exp: number;
   /**
@@ -4388,15 +4862,15 @@ export type RoleLevel = {
    */
   maxHp: number;
   /**
-   * 魔法上限（裸属性）
+   * 魔法上限（= 生命上限 × 0.5）
    */
   maxMp: number;
   /**
-   * 每秒回血（裸属性）
+   * 每秒回血（= 生命上限 ÷ 100，四舍五入）
    */
   hpRecover: number;
   /**
-   * 物攻区间
+   * 物攻区间（三系攻同值）
    */
   physicalAttack: ConfigAttributeRange;
   /**
@@ -4408,7 +4882,7 @@ export type RoleLevel = {
    */
   taoistAttack: ConfigAttributeRange;
   /**
-   * 物防区间
+   * 物防区间（三系防同值）
    */
   physicalDefense: ConfigAttributeRange;
   /**
@@ -4419,52 +4893,6 @@ export type RoleLevel = {
    * 道防区间
    */
   taoistDefense: ConfigAttributeRange;
-  /**
-   * 最近更新时间（毫秒）
-   */
-  updatedAt: number;
-};
-
-export type RoleLevelPage = {
-  /**
-   * 总条数
-   */
-  total: number;
-  /**
-   * 当前页码（从 1 开始）
-   */
-  page: number;
-  /**
-   * 每页条数
-   */
-  size: number;
-  /**
-   * 当前页的角色等级
-   */
-  list: RoleLevel[];
-};
-
-export type RoleLevelQuery = {
-  /**
-   * 页码，从 1 开始
-   */
-  page?: number;
-  /**
-   * 每页条数（1~100）
-   */
-  size?: number;
-  /**
-   * 关键字：按等级号模糊匹配
-   */
-  keyword?: string;
-  /**
-   * 排序字段（取值见各接口说明，未登记的值会退回默认排序）
-   */
-  sort?: string;
-  /**
-   * 排序方向：asc 升序 / desc 降序
-   */
-  order?: "asc" | "desc";
 };
 
 export type GrowthScalar = {
@@ -6681,53 +7109,6 @@ export type MonsterDropQuery = {
   source?: "table" | "entries" | "none";
 };
 
-export type Level = {
-  /**
-   * 等级（1 起，连续到 roleMaxLevel）
-   */
-  level: number;
-  /**
-   * 生命上限（裸属性）
-   */
-  maxHp: number;
-  /**
-   * 魔法上限（= maxHp × mpRate）
-   */
-  maxMp: number;
-  /**
-   * 每秒回血（裸属性）
-   */
-  hpRecover: number;
-  /**
-   * 物攻区间
-   */
-  physicalAttack: ConfigAttributeRange;
-  /**
-   * 魔攻区间
-   */
-  magicAttack: ConfigAttributeRange;
-  /**
-   * 道攻区间
-   */
-  taoistAttack: ConfigAttributeRange;
-  /**
-   * 物防区间
-   */
-  physicalDefense: ConfigAttributeRange;
-  /**
-   * 魔防区间
-   */
-  magicDefense: ConfigAttributeRange;
-  /**
-   * 道防区间
-   */
-  taoistDefense: ConfigAttributeRange;
-  /**
-   * 升到下一级所需经验（`role_levels.exp` 的最终值）
-   */
-  exp: number;
-};
-
 export type AchievementCondition = {
   /**
    * 类型：kill 累计击杀 / quest 累计交付任务（累计型，进度落库）；level 等级 / combat 战力 / collect 持有物品（状态型，查询现算）
@@ -7080,6 +7461,14 @@ export type GameConfigSnapshot = {
    */
   drugs: Drug[];
   /**
+   * 货币物品（#785：绑定元宝 / 元宝 / 银子 × 各档面值）。使用后直接给角色账本入账 —— 金额与货币类型读服务端表，客户端只负责陈列与「用哪一格」
+   */
+  moneyItems: MoneyItem[];
+  /**
+   * 升级卷轴（#787：使用后硬性 +1 级，带等级区间 minLevel ~ maxLevel）。区间与 +1 的判定读服务端表，客户端只用区间做本地预检与陈列
+   */
+  levelScrolls: LevelScroll[];
+  /**
    * 物品与材料配置（MATERIAL / OTHER 大类）
    */
   items: Item[];
@@ -7100,9 +7489,9 @@ export type GameConfigSnapshot = {
    */
   fashions: Fashion[];
   /**
-   * 等级表（#655：1..roleMaxLevel 每级的裸属性与升级经验）。**客户端不再自己派生** —— `role_levels` 一行就是一级的最终值（属性与 exp 都在同一行，管理端可改）；客户端 levelMap 整表由这段填充，曲线与换算比率都不再下发
+   * 等级曲线（#786：4 条 × 6 段 = 24 行，定义 1..100 万级）。**等级不再逐级下发** —— 逐级表在 100 万级要 250MB JSON。客户端按下发顺序自建曲线表，用 `levelConfigOf(level)` 按需求值（与服务端 `common/constants/role-level-curve.ts` 同一套公式）；派生列（蓝 / 回血 / 攻防下限）两端各自按同一比例算
    */
-  levels: Level[];
+  levelCurves: LevelCurve[];
   /**
    * 成长标量参数（键值对；客户端只消费 roleMaxLevel，其余键服务端自用）
    */
@@ -8879,6 +9268,13 @@ export type AudioConfigList = {
    * 全部音效配置，按 AUDIO_KEYS 登记顺序
    */
   list: AudioConfig[];
+};
+
+export type AdminLevelCurvePreviewQuery = {
+  /**
+   * 要计算的等级（1 起；可超过上限，按末段外推）
+   */
+  level: number;
 };
 
 export type AdminMapMonitorQuery = {

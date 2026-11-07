@@ -1,6 +1,6 @@
 import { Injectable } from "@nestjs/common";
 import { DatabaseService, SqlParam } from "../database.service";
-import { GrowthScalarRow, LevelExpRow } from "../rows";
+import { GrowthScalarRow } from "../rows";
 import { GROWTH_SCALAR_SORT } from "../sort-specs";
 import { resolveSort } from "../sort.util";
 
@@ -14,22 +14,15 @@ export interface GrowthScalarListOptions {
 }
 
 /**
- * 升级经验的数据访问（#655：**权威表 = `role_levels.exp`**，与 60 行属性同居一行）
+ * 成长标量的数据访问
  *
- * 为什么还留在这里：`roles.service` 的升级判定走本仓储。以前它读 `level_exps`，
- * 现在读 `role_levels` —— 表没了还留着旧读法就会「管理端改了经验、玩家按旧值升级」。
- * 老库的 `level_exps` / `growth_segments` 由启动时的 `DROP TABLE IF EXISTS` 清掉
- * （数据早就随快照灌进 `role_levels` 了，见 `database.service` 的 ensure 段）。
+ * #786：升级经验与每级属性都不是表了（`role_levels` 已删），改由
+ * `role_level_curves` 的曲线段求值（见 `RoleLevelCurveRepository` 与
+ * `common/constants/role-level-curve.ts`）。这里只剩「全线一个数」的标量参数。
  */
 @Injectable()
 export class GrowthRepository {
   constructor(private readonly db: DatabaseService) {}
-
-  // —— 等级经验 ——
-
-  findLevelExp(level: number): LevelExpRow | undefined {
-    return this.db.get<LevelExpRow>("SELECT level, exp, updated_at FROM role_levels WHERE level = ?", [level]);
-  }
 
   // —— 标量参数 ——
 

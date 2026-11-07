@@ -57,9 +57,8 @@ const configSnapshot = require("./lib/config-snapshot.cjs");
 const titles = configSnapshot.rows("titles").sort((a, b) => a.level - b.level);
 const souls = configSnapshot.rows("souls").sort((a, b) => a.level - b.level);
 const ranks = configSnapshot.rows("ranks").sort((a, b) => a.level - b.level);
-/** 角色等级表（每级一行：裸属性 + 升级所需经验）—— 行数就是等级上限 */
-const roleLevels = configSnapshot.index("role_levels", "level");
-const roleMaxLevel = configSnapshot.count("role_levels");
+/** 角色等级曲线段（#786：4 条 × 6 段；等级上限不再靠「表里有多少行」表达） */
+const levelCurveRows = configSnapshot.rows("role_level_curves");
 /** 成长标量（等级上限 / 属性区间系数 / 每级经验倍率 / 蓝回复） */
 const growthScalars = Object.fromEntries(configSnapshot.rows("growth_scalars").map((row) => [row.key, row.value]));
 const growthScalarKeys = Object.keys(growthScalars);
@@ -490,29 +489,35 @@ async function main() {
 
     //#endregion
 
-    //#region 六、成长（#256 / #655）：曲线下架 + 标量参数
+    //#region 六、成长（#256 / #655 / #786）：等级曲线 + 标量参数
 
-    group("六、成长曲线已下架：旧路由一律 404");
+    group("六、成长：旧路由一律 404，等级改由曲线管");
 
-    // #655：曲线采样换成了 role_levels 逐级配置 —— 旧接口必须彻底消失，
-    // 留着「还能读写但不影响任何东西」的空壳，运营改完只会以为改了生效了。
-    for (const path of ["/api/admin/level-exps", "/api/admin/growth-segments", "/api/admin/growth-segments/maxHp/1"]) {
+    // 旧接口必须彻底消失，留着「还能读写但不影响任何东西」的空壳，运营改完只会以为改了生效了。
+    // #655 下架了曲线采样（level-exps / growth-segments），#786 又下架了逐级表（role-levels）。
+    for (const path of [
+      "/api/admin/level-exps",
+      "/api/admin/growth-segments",
+      "/api/admin/growth-segments/maxHp/1",
+      "/api/admin/role-levels?page=1&size=60",
+    ]) {
       const gone = await api(base, "GET", path, { token });
       checkEqual(gone.status, 404, `${path} 已下架（404）`);
     }
     const expPatchGone = await api(base, "PATCH", "/api/admin/level-exps/1", { token, body: { exp: 1 } });
     checkEqual(expPatchGone.status, 404, "PATCH 舊经验接口 → 404");
-    // 经验本身还在，只是并入 role_levels：改角色等级那一行就改了经验
-    const roleLevelExp = await api(base, "GET", "/api/admin/role-levels?page=1&size=60", { token });
-    checkEqual(roleLevelExp.body?.data?.list?.[0]?.exp, roleLevels[1].exp, "1 级经验与出厂值一致");
-    const expByRoleLevel = await api(base, "PATCH", "/api/admin/role-levels/1", { token, body: { exp: 999 } });
-    checkEqual(expByRoleLevel.status, 200, "改角色等级 1 行的经验成功");
-    checkEqual(expByRoleLevel.body?.data?.exp, 999, "响应里的经验已更新");
-    const roleLevelExpZero = await api(base, "PATCH", "/api/admin/role-levels/1", { token, body: { exp: 0 } });
-    checkEqual(roleLevelExpZero.status, 400, "经验 0 → 400（永远升不上去）");
-    const viewerRoleLevelWrite = await api(base, "PATCH", "/api/admin/role-levels/1", { token: viewerToken, body: { exp: 1 } });
-    checkEqual(viewerRoleLevelWrite.status, 403, "观察员改角色等级 → 403");
-    checkEqual(viewerRoleLevelWrite.body?.code, 30006, "观察员改角色等级 → 30006（权限点不足）");
+    const roleLevelPatchGone = await api(base, "PATCH", "/api/admin/role-levels/1", { token, body: { exp: 1 } });
+    checkEqual(roleLevelPatchGone.status, 404, "PATCH 旧逐级接口 → 404（#786 改成曲线段）");
+
+    // 换成曲线段（#786）：读得到 4 条 × 6 段，改段走 PATCH /level-curves/:curve/:seq。
+    // 曲线的语义（复现旧 60 行 / 计算器 / 结构约束 / 上限联动）在 e2e-level-curve 里逐项验过，
+    // 这里只钉「路由在、行数对、权限对」，免得两套测试重复维护同一批断言。
+    const curveList = await api(base, "GET", "/api/admin/level-curves", { token });
+    checkEqual(curveList.status, 200, "等级曲线可读");
+    checkEqual(curveList.body?.data?.list?.length, levelCurveRows.length, "曲线段数 = 配置行数（4 条 × 6 段）");
+    const viewerCurveWrite = await api(base, "PATCH", "/api/admin/level-curves/hp/1", { token: viewerToken, body: { startValue: 1 } });
+    checkEqual(viewerCurveWrite.status, 403, "观察员改曲线 → 403");
+    checkEqual(viewerCurveWrite.body?.code, 30006, "观察员改曲线 → 30006（权限点不足）");
 
     group("六、成长参数：标量（曲线下架后剩下的全局参数）");
 
@@ -538,8 +543,21 @@ async function main() {
     const mpRecoverZero = await api(base, "PATCH", "/api/admin/growth-scalars/mpRecoverPerSecond", { token, body: { value: 0 } });
     checkEqual(mpRecoverZero.body?.data?.value, 0, "0 合法（关闭自然回蓝）");
     await api(base, "PATCH", "/api/admin/growth-scalars/mpRecoverPerSecond", { token, body: { value: growthScalars.mpRecoverPerSecond } });
-    const maxLevelJump = await api(base, "PATCH", "/api/admin/growth-scalars/roleMaxLevel", { token, body: { value: 61 } });
-    checkEqual(maxLevelJump.status, 400, "抬等级上限但等级表没有那一行 → 400（跨表校验）");
+    // #786：上限不再受「等级表里有几行」约束（曲线外推）—— 61 合法，四条末段跟着拉平
+    const maxLevelDown = await api(base, "PATCH", "/api/admin/growth-scalars/roleMaxLevel", { token, body: { value: 61 } });
+    checkEqual(maxLevelDown.status, 200, "上限改成 61 合法（不再要求等级表有那一行）");
+    const curvesAfterDown = await api(base, "GET", "/api/admin/level-curves", { token });
+    const lastSegments = (curvesAfterDown.body?.data?.list ?? []).filter((row) => row.seq === 6);
+    checkEqual(lastSegments.length, 4, "4 条曲线都有末段");
+    check(
+      lastSegments.every((row) => row.toLevel === 61),
+      "四条曲线末段 toLevel 一起拉平到 61（上限只有一个来源，屏幕上不会两个数）",
+      JSON.stringify(lastSegments.map((row) => row.toLevel)),
+    );
+    const maxLevelOverflow = await api(base, "PATCH", "/api/admin/growth-scalars/roleMaxLevel", { token, body: { value: 10000001 } });
+    checkEqual(maxLevelOverflow.status, 400, "超出取值域上限（1000 万）→ 400");
+    const maxLevelRestore = await api(base, "PATCH", "/api/admin/growth-scalars/roleMaxLevel", { token, body: { value: growthScalars.roleMaxLevel } });
+    checkEqual(maxLevelRestore.status, 200, "复原出厂上限");
     const scalarGhost = await api(base, "PATCH", "/api/admin/growth-scalars/nope", { token, body: { value: 1 } });
     checkEqual(scalarGhost.status, 404, "改不存在的参数键 → 404");
     checkEqual(scalarGhost.body?.code, 50014, "标量参数未找到用专属业务码 50014");
@@ -1883,10 +1901,10 @@ async function main() {
       // 2) 契约里 minRows=1 的几段必须有行（空 = 客户端算不出来：血蓝全 0 / 没有装备格）。
       const undefinedSections = Object.keys(snap).filter((key) => snap[key] === undefined);
       checkEqual(undefinedSections.length, 0, `快照没有 undefined 段（${undefinedSections.join("、") || "无"}）`);
-      const emptySections = ["levels", "equipmentSlots", "maps", "mapTypes"].filter(
+      const emptySections = ["levelCurves", "equipmentSlots", "maps", "mapTypes"].filter(
         (key) => !Array.isArray(snap[key]) || snap[key].length === 0,
       );
-      checkEqual(emptySections.length, 0, `关键段都非空（${emptySections.join("、") || "levels / equipmentSlots / maps / mapTypes"}）`);
+      checkEqual(emptySections.length, 0, `关键段都非空（${emptySections.join("、") || "levelCurves / equipmentSlots / maps / mapTypes"}）`);
       check(
         Boolean(snap.equipmentMeta && snap.combatWeights && Array.isArray(snap.mallCategories) && Array.isArray(snap.mallGoods)),
         "装备规则 / 战斗力权重 / 商城分类与上架商品段都在",
@@ -1966,11 +1984,18 @@ async function main() {
       check(typeof row.posX === "number" && typeof row.posY === "number", "快照 NPC 行带偏移（数字）");
     }
     checkEqual(snap.fashions?.length, Object.keys(fashions).length, "快照时装行数 = 生成物（20）");
-    checkEqual(snap.levels?.length, roleMaxLevel, "快照等级行数 = 等级上限（#590：levels 段替代 levelExps + growthSegments）");
+    checkEqual(snap.levelCurves?.length, levelCurveRows.length, "快照等级曲线段数 = 配置行数（#786：参数化替代逐级 levels 段）");
     check(
-      Boolean(Array.isArray(snap.levels) && snap.levels.length > 0 && typeof snap.levels[0].exp === "number" && typeof snap.levels[0].maxHp === "number"),
-      "快照等级行带最终属性与升级经验（客户端不再派生）",
+      Boolean(
+        Array.isArray(snap.levelCurves) &&
+          snap.levelCurves.length > 0 &&
+          snap.levelCurves.every(
+            (row) => typeof row.curve === "string" && typeof row.fromLevel === "number" && typeof row.startValue === "number",
+          ),
+      ),
+      "曲线段带 curve / fromLevel / startValue / perLevel（客户端现算所需的最小集）",
     );
+    check(snap.levels === undefined, "旧的逐级 levels 段已随 #786 移出快照（100 万级下发要 250MB）");
     check(snap.growthSegments === undefined && snap.levelExps === undefined, "旧段（growthSegments / levelExps）已随 #590 移出快照");
     check(Boolean(Array.isArray(snap.growthScalars) && snap.growthScalars.length > 0), "快照带成长标量参数");
     check(Boolean(Array.isArray(snap.mallCategories) && snap.mallCategories.length > 0), "快照带商城分类（出厂默认分类）");

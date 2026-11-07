@@ -548,12 +548,15 @@ function connect(url) {
     check(!!(killedA2 && killedA2.killed), "A：第二只也打死了");
     checkEqual(readKills(dbPath, killerA.roleId), 2, "A：击杀计数累加到 2（不是被后一次覆盖成 1）");
 
-    // —— B. 升级：role_levels 管理端改值即时生效（#655 经验并入角色等级行）——
+    // —— B. 升级：等级曲线 exp 段管理端改值即时生效（#786 曲线参数化）——
 
-    const roleLevelsBefore = await api(baseUrl, "GET", "admin/role-levels?page=1&size=60", { token: adminToken });
-    const levelOneRow = roleLevelsBefore.data && roleLevelsBefore.data.list.find((row) => row.level === 1);
-    check(!!levelOneRow, "B：读到 1 级角色等级行（含经验）", JSON.stringify(levelOneRow));
-    await api(baseUrl, "PATCH", "admin/role-levels/1", { token: adminToken, body: { exp: 5 } });
+    const curvesBefore = await api(baseUrl, "GET", "admin/level-curves", { token: adminToken });
+    const expSegOne = curvesBefore.data && curvesBefore.data.list.find((row) => row.curve === "exp" && row.seq === 1);
+    check(!!expSegOne, "B：读到经验曲线第 1 段（1 级起）", JSON.stringify(expSegOne));
+    const expOfOne = await api(baseUrl, "GET", "admin/level-curves/preview?level=1", { token: adminToken });
+    check(expOfOne.code === 0 && expOfOne.data.exp === expSegOne.startValue, "B：1 级经验 = 第 1 段起始值（计算器与段参数同源）", JSON.stringify({ preview: expOfOne.data && expOfOne.data.exp, seed: expSegOne.startValue }));
+    const expPatched = await api(baseUrl, "PATCH", "admin/level-curves/exp/1", { token: adminToken, body: { startValue: 5 } });
+    check(expPatched.code === 0, "B：把 1 级经验改成 5 成功");
 
     const killerB = await newPlayer("combat_rwb");
     const mobB2 = await aliveMonster(killerB, "2");
@@ -567,7 +570,7 @@ function connect(url) {
     const roleB = await api(baseUrl, "GET", `roles/${killerB.roleId}`, { token: killerB.token });
     check(roleB.code === 0 && roleB.data.level === 2 && roleB.data.data.exp === expLeftB, `B：服务端已升级（level 列 = 2，data.exp = ${expLeftB}）`, JSON.stringify({ level: roleB.data && roleB.data.level, exp: roleB.data && roleB.data.data && roleB.data.data.exp }));
     // 还原：把 1 级经验改回 seed 值（本库独立，但保持「测试后还原 seed」的纪律）
-    await api(baseUrl, "PATCH", "admin/role-levels/1", { token: adminToken, body: { exp: levelOneRow.exp } });
+    await api(baseUrl, "PATCH", "admin/level-curves/exp/1", { token: adminToken, body: { startValue: expSegOne.startValue } });
 
     // —— C. 确定性掉落：monster_drops 管理端改值即时生效 ——
 
@@ -589,7 +592,7 @@ function connect(url) {
       "C：掉落按改后的表结算（2 次抽取 × 每次 2 个，合并 = drug_hp_1 x4）",
       JSON.stringify(killedC && killedC.reward && killedC.reward.drops),
     );
-    check(!!(killedC && killedC.reward) && killedC.reward.exp === 10 && killedC.reward.leveledUp === false, "C：经验与掉落互不影响（level_exps 已还原，不再升级）");
+    check(!!(killedC && killedC.reward) && killedC.reward.exp === 10 && killedC.reward.leveledUp === false, "C：经验与掉落互不影响（经验曲线已还原，不再升级）");
 
     // 幂等：重发击杀那次的 castId，reward 原样重发（不重掷掉落、不重复入账）
     const killedCastId = castSeq; // killMonster 的最后一发就是击杀那发
@@ -1063,9 +1066,10 @@ function connect(url) {
     // 一发伤害型技能 ≈ 50×1.8×1.5 − 物防 ≈ 130，而 1 级角色只有 100 血 —— 打中就躺；
     // 躺下之后 `applyMonsterHit` 直接返回 null（不再报命中），这一段的 hits 断言就永远等不到。
     // 所以先把 1 级血量抬高（本库独立，段尾还原）。
-    const levelOneBefore = await api(baseUrl, "GET", "admin/role-levels?page=1&size=1", { token: adminToken });
-    const levelOneHp = levelOneBefore.data && levelOneBefore.data.list.find((row) => row.level === 1).maxHp;
-    const hpBoosted = await api(baseUrl, "PATCH", "admin/role-levels/1", { token: adminToken, body: { maxHp: 5000 } });
+    const hpCurvesBefore = await api(baseUrl, "GET", "admin/level-curves", { token: adminToken });
+    const hpSegOne = hpCurvesBefore.data && hpCurvesBefore.data.list.find((row) => row.curve === "hp" && row.seq === 1);
+    const levelOneHp = hpSegOne && hpSegOne.startValue;
+    const hpBoosted = await api(baseUrl, "PATCH", "admin/level-curves/hp/1", { token: adminToken, body: { startValue: 5000 } });
     check(hpBoosted.code === 0, "十：把 1 级血量临时抬高（让沙包活到技能命中）", hpBoosted.message);
 
     const casterB = await newPlayer("combat_rsk");
@@ -1148,7 +1152,7 @@ function connect(url) {
       body: { attributes: monsterRow.attributes },
     });
     check(restoreAttack.code === 0, "十：还原攻击区间（seed 前提复原）", restoreAttack.message);
-    const hpRestored = await api(baseUrl, "PATCH", "admin/role-levels/1", { token: adminToken, body: { maxHp: levelOneHp } });
+    const hpRestored = await api(baseUrl, "PATCH", "admin/level-curves/hp/1", { token: adminToken, body: { startValue: levelOneHp } });
     check(hpRestored.code === 0, "十：还原 1 级血量", hpRestored.message);
 
     //#endregion

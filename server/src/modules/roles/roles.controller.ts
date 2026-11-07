@@ -7,6 +7,8 @@ import { AuthenticatedUser } from "../../common/interfaces/api-envelope.interfac
 import { CreateRoleDto, SaveRoleDto } from "./dto/create-role.dto";
 import { BagOpDto, BagOpResultDto } from "./dto/bag-op.dto";
 import { DrugUseDto, DrugUseResultDto } from "./dto/drug-use.dto";
+import { MoneyUseDto, MoneyUseResultDto } from "./dto/money-use.dto";
+import { LevelScrollUseDto, LevelScrollUseResultDto } from "./dto/level-scroll-use.dto";
 import { GrowthUpgradeDto } from "./dto/growth-upgrade.dto";
 import { GrowthUpgradeResultDto, RoleDto, RoleSummaryDto } from "./dto/role.dto";
 import { MallPurchaseDto, MallPurchaseResultDto } from "./dto/mall-purchase.dto";
@@ -147,6 +149,47 @@ export class RolesController {
   @ApiDataResponse(DrugUseResultDto, { description: "使用后的角色（含本次回复量）" })
   drugUse(@CurrentUser() user: AuthenticatedUser, @Param("id") id: string, @Body() dto: DrugUseDto): DrugUseResultDto {
     return this.rolesService.useDrug(user.id, id, dto);
+  }
+
+  @Post(":id/money-use")
+  @HttpCode(HttpStatus.OK)
+  @ApiPlayerDoc({
+    operationId: "role.moneyUse",
+    summary: "使用货币道具（入账与扣减都在服务端）",
+    description:
+      "货币道具（绑定元宝 / 元宝 / 银子）使用后直接给角色账本入账：金额与币种读服务端 `money_items` 表，" +
+      "**客户端报「用哪一格」，不报金额**。\n" +
+      "使用后扣减背包格子数量（减到 0 清格），revision 原子 +1。\n\n" +
+      "不结算血蓝、不判「已满」、无冷却（与药品是两条链路）。\n\n" +
+      "失败路径：20023 格子为空 / 不是货币道具 / 该行没有配置入账金额；" +
+      "带上 revision 时乐观锁语义与 role.save 相同（20006 / 20007）。",
+  })
+  @ApiParam({ name: "id", description: "角色 id" })
+  @ApiDataResponse(MoneyUseResultDto, { description: "使用后的角色（含本次入账金额与余额）" })
+  moneyUse(@CurrentUser() user: AuthenticatedUser, @Param("id") id: string, @Body() dto: MoneyUseDto): MoneyUseResultDto {
+    return this.rolesService.useMoneyItem(user.id, id, dto);
+  }
+
+  @Post(":id/level-scroll-use")
+  @HttpCode(HttpStatus.OK)
+  @ApiPlayerDoc({
+    operationId: "role.levelScrollUse",
+    summary: "使用升级卷轴（硬性 +1 级，带等级区间）",
+    description:
+      "使用后**等级直接 +1**（不看经验够不够，经验原样保留），并按新等级重算战斗属性、补满血蓝。\n" +
+      "区间与等级上限读服务端 `level_scrolls` 表：Lv1 只在 1~999 级可用，用出这段就返回 20025（该换 Lv2 了）。\n" +
+      "**客户端报「用哪一格」，不报等级与跳级数** —— 改包也跳不出区间。\n\n" +
+      "失败路径：20024 格子为空 / 不是升级卷轴 / 区间配置不合法；20025 等级不在区间内；" +
+      "20026 已达等级上限；带上 revision 时乐观锁语义与 role.save 相同（20006 / 20007）。",
+  })
+  @ApiParam({ name: "id", description: "角色 id" })
+  @ApiDataResponse(LevelScrollUseResultDto, { description: "使用后的角色（含使用前后等级与经验）" })
+  levelScrollUse(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("id") id: string,
+    @Body() dto: LevelScrollUseDto,
+  ): LevelScrollUseResultDto {
+    return this.rolesService.useLevelScroll(user.id, id, dto);
   }
 
   @Post(":id/revive")

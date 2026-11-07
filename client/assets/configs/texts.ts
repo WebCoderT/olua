@@ -90,6 +90,16 @@ export const uiTexts = {
   drug_full_tip: "血量已满",
   /** 魔法值已满 */
   drug_mp_full_tip: "魔法值已满",
+  /** 使用货币道具（{name} 道具名 · {amount} 本次入账 · {currency} 货币名 · {balance} 入账后余额） */
+  money_use_success_tip: "使用「{name}」：+{amount} {currency}（当前 {balance}）",
+  /** 该道具暂时用不了（服务端表里没有这一行 / 面额没配 / 币种认不出） */
+  money_use_invalid_tip: "该道具暂时用不了",
+  /** 使用升级卷轴（{name} 道具名 · {from} 使用前等级 · {level} 使用后等级） */
+  level_scroll_use_success_tip: "使用「{name}」：等级 {from} → {level}",
+  /** 该道具暂时用不了（不是升级卷轴 / 服务端卷轴表里没有这一行） */
+  level_scroll_use_invalid_tip: "该道具暂时用不了",
+  /** 等级不在这一卷的区间里（{name} 道具名 · {min} 下限 · {max} 上限 · {level} 当前等级） */
+  level_scroll_level_out_of_range_tip: "「{name}」只能在 {min} ~ {max} 级使用（当前 {level} 级）",
   /** 复活请求失败（服务端拒绝或网络不通；死亡弹窗保留可重试） */
   revive_failed_tip: "复活失败，请稍后重试",
 
