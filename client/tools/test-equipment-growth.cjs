@@ -22,8 +22,9 @@
  * · 每个部位的等级覆盖不断层（#777 补完 #18 的缺口后，至少一处够得着等级上限）
  *
  * ⚠️ 一律不锁件数与数值：#777 起基础件从 37 件扩到 685 件（按素材目录批量生成，
- * 占位名 + 等级按编号线性映射），其中 648 件的八项属性还是 0（等运营配）——
- * 「曲线单调」「部位强度差」这类断言只在**已配数值**的件上成立，见 hasStats。
+ * 占位名 + 等级按编号线性映射），那 648 件的八项属性当时是 0；#781 已按「衣服曲线 ×
+ * 部位 1 级锚点系数」补齐（见「曲线口径」一节）——现在全库没有全 0 的基础件，
+ * hasStats 保留只是为了「运营新加一件还没配数值」时不误报。
  *
  * 用法：node client/tools/test-equipment-growth.cjs
  */
@@ -60,10 +61,9 @@ function main() {
   /**
    * 是否「已经配了数值」的基础件
    *
-   * #777 起按素材目录批量新增了 648 件占位件（八项属性全 0、卖价按等级垫底）——
-   * 它们存在、能穿、能上架，但数值还没人配。曲线类的断言只对**已配数值**的件成立：
-   * 拿占位件去比单调性只会得到「等级 2 的 0 攻击低于等级 1 的 21 攻击」这种噪音。
-   * 运营给占位件填了数之后它们自动纳入断言（那时违反才是真错）。
+   * #781 之后全库每件基础件都有数值（那批占位件按曲线补齐了），这里留着判据是为了
+   * 「运营在管理端新加一件还没配数值」时曲线类断言不误报 —— 全 0 的件跳过比较，
+   * 而「不该有全 0 的件」由下面的「曲线口径」一节单独断言。
    */
   const hasStats = (row) => Boolean(row.attributes.maxHp || upper(row.attributes.physicalAttack) || upper(row.attributes.physicalDefense));
   // 同等级可能有多件（占位件与手调件混在一起），取「配了数值」的那件当该部位该级的代表
@@ -124,6 +124,47 @@ function main() {
     `至少两个部位有成型的等级曲线（各 ≥ 5 个已配数值的等级点，实际 ${curveSlots.join("/") || "无"}）`,
     SLOTS.map((slot) => `${slot}:${curvePoints[slot]}`).join(" "),
   );
+
+  console.log("\n=== 曲线口径：新部位按衣服曲线等比放大（#781 补齐 #777 的占位件）===");
+  // 全 0 的件不该再存在：这类件在客户端是「穿上没反应」，玩家只会当成 bug
+  const placeholders = bases.filter((row) => !hasStats(row));
+  check(
+    placeholders.length === 0,
+    "没有八项属性全 0 的基础件（#777 的占位件已按曲线补齐）",
+    placeholders.slice(0, 5).map((row) => row.id).join(","),
+  );
+  // 系数 = 该部位 1 级件 ÷ 衣服 1 级件；同部位的每一级都应落在同一个系数上
+  // （取整误差 ±2 或 1%，值的绝对大小不锁）
+  const near = (actual, expect) => Math.abs(actual - expect) <= Math.max(2, Math.round(expect * 0.01));
+  const clothAnchor = baseOf("cloth", 1);
+  const derived = ["helmet", "belt", "shoes", "necklace", "ring"];
+  let ratioOk = true;
+  const ratioBroken = [];
+  for (const slot of derived) {
+    const anchor = baseOf(slot, 1);
+    if (!anchor) continue;
+    const kHp = anchor.attributes.maxHp / clothAnchor.attributes.maxHp;
+    const kAtk = upper(anchor.attributes.physicalAttack) / upper(clothAnchor.attributes.physicalAttack);
+    const kDef = upper(anchor.attributes.physicalDefense) / upper(clothAnchor.attributes.physicalDefense);
+    for (const row of baseOfSlot(slot).filter(hasStats)) {
+      // 衣服只有 12 个等级点：只在「衣服有同等级件」的级上比（其余级是插值出来的）
+      const ref = baseOf("cloth", row.level);
+      if (!ref) continue;
+      if (!near(row.attributes.maxHp, ref.attributes.maxHp * kHp)) {
+        ratioOk = false;
+        ratioBroken.push(`${row.id} hp ${row.attributes.maxHp} ≠ ${Math.round(ref.attributes.maxHp * kHp)}`);
+      }
+      if (!near(upper(row.attributes.physicalAttack), upper(ref.attributes.physicalAttack) * kAtk)) {
+        ratioOk = false;
+        ratioBroken.push(`${row.id} atk`);
+      }
+      if (!near(upper(row.attributes.physicalDefense), upper(ref.attributes.physicalDefense) * kDef)) {
+        ratioOk = false;
+        ratioBroken.push(`${row.id} def`);
+      }
+    }
+  }
+  check(ratioOk, "各部位的每一级都落在「衣服同等级 × 部位 1 级系数」上（曲线是同一根，只差系数）", ratioBroken.slice(0, 4).join(","));
 
   console.log("\n=== 成长差距：低级 vs 高级 / 前后缀阶梯 ===");
   const weapon1 = baseOf("weapon", 1);
