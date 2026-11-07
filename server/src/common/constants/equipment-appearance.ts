@@ -32,7 +32,7 @@ export const EQUIPMENT_COMBO_COUNT = (EQUIPMENT_PREFIX_MAX + 1) * (EQUIPMENT_SUF
  * 前后缀档位的硬上限（#697）
  *
  * equipment_meta 的文案 / 倍率数组长度下限 1、上限 10（DTO 同口径）——
- * 档数决定变体行数（基础件 × 组合），10 档封顶是防手滑把 555 行扩成几万行的护栏。
+ * 档数决定变体行数（基础件 × 组合），10 档封顶是防手滑把变体行再翻几倍的护栏。
  */
 export const EQUIPMENT_TIER_MAX = 10;
 

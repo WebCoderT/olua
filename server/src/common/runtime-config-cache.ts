@@ -51,7 +51,7 @@ export interface AttributeColumns {
   taoist_defense_max: number;
 }
 
-/** 装备变体的一行（`equipment_variants` 表；555 行逐一配置） */
+/** 装备变体的一行（`equipment_variants` 表；逐行配置） */
 export interface EquipmentVariantSource extends AttributeColumns {
   id: string;
   base_id: string;
@@ -203,7 +203,7 @@ export function applyRoleLevels(rows: RoleLevelSource[]): void {
   roleLevelRows = map;
 }
 
-/** 装进装备变体（`equipment_variants` 表；555 行）—— 不乘任何倍率，一行就是最终值 */
+/** 装进装备变体（`equipment_variants` 表；每件基础件 15 行）—— 不乘任何倍率，一行就是最终值 */
 export function applyEquipmentVariants(rows: EquipmentVariantSource[]): void {
   if (!rows.length) {
     equipmentVariantRows = null;

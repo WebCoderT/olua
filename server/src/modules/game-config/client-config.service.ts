@@ -84,7 +84,7 @@ export class ClientConfigService {
       uiEffects: this.uiEffect.configs(),
       // #603 第九域：槽位表与装备规则（前后缀倍率 / 文案 / 回收价曲线）。
       // 客户端 `configs/equipments` 与 `configs/growth` 不再存这两样 ——
-      // 没有它们客户端连 555 个变体都展开不出来（倍率决定展开档数）
+      // 没有它们客户端连变体都展开不出来（倍率决定展开档数）
       equipmentSlots: this.gameConfig.listEquipmentSlots(),
       equipmentMeta: this.gameConfig.getEquipmentMeta(),
       // #605：运行时参数（掉落手感 / 自动战斗 / 帮会规则）—— 原本写死在客户端的两份参数，

@@ -180,8 +180,8 @@ const ZERO_EQUIPMENT_ATTRIBUTES: BattleAttributes = {
  * 1. **线上（快照）**：服务端下发的是**展开后的变体行** —— 每行自带 `prefix` / `suffix`
  *    与最终属性 / 回收价，这里直接建表，**不乘任何倍率**。管理端改某一件变体，
  *    客户端就跟着变（以前只改基础件才会被展开逻辑带过去）。
- * 2. **工具链（`applyEquipmentSeed`）**：传的是 37 个基础件（没有序号），
- *    按 `equipmentPrefixRates × equipmentSuffixRates` 展开成 555 件。
+ * 2. **工具链（`applyEquipmentSeed`）**：传的是基础件（没有序号），
+ *    按 `equipmentPrefixRates × equipmentSuffixRates` 展开成全部变体。
  *    这条只在 Node 里跑（生成器 / 单测沙箱），不进游戏。
  *
  * 判据是「条目有没有带 prefix 序号」—— 不看调用方，避免两条路径各写一份召唤条件。
@@ -331,6 +331,14 @@ export function getEquipmentsByLevel(map: Map<string, Equipment>, level: number)
 
 //#region 部位表（空壳：快照到达后由 applyEquipmentData 整表重建）
 
+/**
+ * ⚠️ 这七张是**部分视图**（只有 7 个部位），不是「全部装备」。
+ * 想遍历全部装备一律用 `getAllEquipmentVariants()`（读 `equipmentBySlot`，全部位）——
+ * 按这七张表收集会漏掉 wristband / necklace / scapular / shinguard / accessories /
+ * other1 / other2（#777 起他们都有装备了）。这七张留着是因为单测与老代码按名取用
+ * （`test-hp-recover` 取 clothes、`test-equip-align` 取 clothes+weapons）。
+ */
+
 /** 衣服 */
 export const clothes = new Map<string, Equipment>();
 /** 武器 */
@@ -445,7 +453,7 @@ export function applyEquipmentQualityLabels(
  * 装载装备（快照 `equipments` 段；**整表重建**）
  *
  * 入参是**基础件条目**（服务端下发的 37 件，属性是「普通的·人级」），客户端按
- * 「前缀 × 后缀」展开成 555 条变体。流程与以前的加载期建表**完全一致**
+ * 「前缀 × 后缀」展开成全部变体。流程与以前的加载期建表**完全一致**
  * （`buildEquipmentMap` 同一个函数），只是数据来源从源码常量换成了快照。
  *
  * 行 → 条目的转换在 `configs/apply-snapshot` 里做（那里已经有 DTO 类型与区间对象转换），
@@ -490,7 +498,7 @@ export function applyEquipmentData(data: EquipmentData[]): Equipment[] {
  * 与那边**同形但不 import**（客户端不能依赖服务端源码，服务端也不能依赖客户端）——
  * 这是一份「客户端读种子时需要的字段」的声明，判据是两端字段名一致。
  * 只有工具链会用它：`client/tools/lib/configs-sandbox.cjs`（配置层单测沙箱）要在
- * Node 里把库里的 555 行摊开成运行时表。
+ * Node 里把库里的装备行摊开成运行时表。
  */
 export interface EquipmentSeedRowLike {
   id: string;
@@ -518,7 +526,7 @@ export interface EquipmentSeedRowLike {
  *
  * 只做三件事：`id` → `key`、`sellPrice` → `sellPirce`（客户端历史拼写）、平面点 → `Vec2`，
  * 然后交给 `applyEquipmentData` 展开。**所以展开规则仍然只有一份** ——
- * 生成器的 555 条与线上客户端的 555 条是同一个函数算出来的，不可能漂移。
+ * 生成器算出的变体与线上客户端的变体是同一个函数算出来的，不可能漂移。
  *
  * 种子行**不带八项属性**（属性由 `growth-seed.equipmentStats(level, slot)` 公式算，见 #590），
  * 所以展开出来的变体属性是 0：生成器用公式现算，测试沙箱随后也重算一遍，谁都不读这个 0。
@@ -555,26 +563,41 @@ export function applyEquipmentSeed(rows: EquipmentSeedRowLike[]): Equipment[] {
 //#region 全部装备（商城商品表）
 
 /**
- * 全部装备：七个部位的装备 Map 全量合并，按 **部位序 → 等级升序 → 前缀 → 后缀** 排序
- * （部位序 = 装备槽配置的先后，见 equipmentSlotOrder；每次调用现算，不怕外部改表）
+ * 全部装备变体（**全部位**，含「没有具名表」的部位）—— 物品总表与商城的唯一取件口
  *
- * 商城拿它当商品目录（`ui/components/dialogs/MallDialog`）。**放在装备表这里而不是
- * `configs/game-config` 的商城区**：这一份要读七个部位表，而部位表在 `growth` / `battle`
- * 之后才建起来 —— 商城区若自己 import 部位表，就会形成 `game-config → equipments →
- * game-config` 的环。查询装备表的函数本来就该和装备表住一起。
+ * 唯一来源是 `equipmentBySlot`：`applyEquipmentData` 按服务端下发的 `slot` 动态分组，
+ * 槽位表里有几个部位，这里就有几个部位。**不要按 `clothes` / `weapons` / … 七张具名表收集**
+ * —— 那七张只是历史遗留的「部分视图」，只覆盖 7 个部位；#777 起 wristband / necklace /
+ * scapular / shinguard / accessories / other1 / other2 也都有装备了，按具名表收集会
+ * **静默漏掉这些部位的变体**（症状：物品总表查不到、商城无货、回收件数对不上，
+ * 而且没有任何报错）。
  *
  * ⚠️ 收集必须用 `map.forEach`：打包 babel loose 会把 `[...map.values()]` 编成 `[].concat(迭代器)`
  * → 恒为空数组（症状 = 商城静默无货，见上面 getBaseEquipments 的注释）
  */
-export function getMallGoods(): Equipment[] {
+export function getAllEquipmentVariants(): Equipment[] {
   const result: Equipment[] = [];
-  [clothes, weapons, rings, nicklaces, shoes, helmets, belts].forEach((map) =>
+  equipmentBySlot.forEach((map) =>
     map.forEach((equipment, key) => {
       // id 由 configs/items 统一登记（登记时回填到同一对象）；这里兜底补一次，脱离 items 也能自洽
       if (!equipment.id) equipment.id = key;
       result.push(equipment);
     }),
   );
+  return result;
+}
+
+/**
+ * 全部装备：`getAllEquipmentVariants()` 全量，按 **部位序 → 等级升序 → 前缀 → 后缀** 排序
+ * （部位序 = 装备槽配置的先后，见 equipmentSlotOrder；每次调用现算，不怕外部改表）
+ *
+ * 商城拿它当商品目录（`ui/components/dialogs/MallDialog`）。**放在装备表这里而不是
+ * `configs/game-config` 的商城区**：这一份要读部位表，而部位表在 `growth` / `battle`
+ * 之后才建起来 —— 商城区若自己 import 部位表，就会形成 `game-config → equipments →
+ * game-config` 的环。查询装备表的函数本来就该和装备表住一起。
+ */
+export function getMallGoods(): Equipment[] {
+  const result = getAllEquipmentVariants();
   const slotOrder = (equipment: Equipment) => equipmentSlotOrder.get(equipment.slot) ?? Number.MAX_SAFE_INTEGER;
   result.sort((a, b) => slotOrder(a) - slotOrder(b) || a.level - b.level || a.prefix - b.prefix || a.suffix - b.suffix);
   return result;

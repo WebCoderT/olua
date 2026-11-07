@@ -50,7 +50,7 @@ export class GameConfigSnapshotDto {
 
   @ApiProperty({
     description:
-      "装备变体（555 件：37 基础件 × 5 前缀 × 3 后缀）。#655 起每件都是最终值，客户端直接建表、不再乘倍率展开",
+      "装备变体（每件基础件展开 5 前缀 × 3 后缀 = 15 行）。#655 起每件都是最终值，客户端直接建表、不再乘倍率展开",
     type: [EquipmentVariantDto],
   })
   @Type(() => EquipmentVariantDto)

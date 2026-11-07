@@ -507,8 +507,8 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
       );
 
       -- 装备变体表（#655）：一行 = 一件**具体可掉落/可穿戴**的装备（基础件 × 前后缀，
-      -- 37 × 15 = 555 行）。这是「移除变体倍率」后的唯一书写处：不再由基础件乘倍率现算，
-      -- 每行的属性 / 卖价 / 穿戴等级都可单独改。equipments 只留 37 个基础件（模板与名称）。
+      -- 基础件数 × 15 行）。这是「移除变体倍率」后的唯一书写处：不再由基础件乘倍率现算，
+      -- 每行的属性 / 卖价 / 穿戴等级都可单独改。equipments 只留基础件（模板与名称）。
       CREATE TABLE IF NOT EXISTS equipment_variants (
         id                   TEXT    PRIMARY KEY,
         base_id              TEXT    NOT NULL,

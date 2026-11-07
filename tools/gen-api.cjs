@@ -107,7 +107,7 @@ const MODULES = {
   adminSoul: { target: "admin", export: "soulsApi" },
   adminRank: { target: "admin", export: "ranksApi" },
   adminEquipment: { target: "admin", export: "equipmentsApi" },
-  // 装备变体（#655）：555 行逐一配置；与 adminEquipment（37 个基础件）不是同一张表
+  // 装备变体（#655）：逐行配置；与 adminEquipment（基础件）不是同一张表
   adminEquipmentVariant: { target: "admin", export: "equipmentVariantsApi" },
   // 装备槽位（#603 第九域）：13 行固定清单，客户端槽位表/整理序的唯一来源
   adminEquipmentSlot: { target: "admin", export: "equipmentSlotsApi" },

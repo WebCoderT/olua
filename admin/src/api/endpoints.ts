@@ -567,9 +567,9 @@ export const equipmentSlotsApi = {
 /** adminEquipmentVariant 模块的接口（3 个，生成） */
 export const equipmentVariantsApi = {
   /**
-   * 装备变体列表（555 件）（GET /admin/equipment-variants）
+   * 装备变体列表（GET /admin/equipment-variants）
    *
-   * 555 行 = 37 基础件 × 5 前缀 × 3 后缀。`baseId` 只看某一件基础件的 15 个变体；`keyword` 模糊匹配变体 id 与名称。
+   * 每件基础件展开 5 前缀 × 3 后缀 = 15 行（行数随基础件浮动）。`baseId` 只看某一件基础件的 15 个变体；`keyword` 模糊匹配变体 id 与名称。
    *
    * 权限点：gameConfig:read
    */

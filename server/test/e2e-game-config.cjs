@@ -70,7 +70,7 @@ const runtime = { drop: runtimeRow.dropParams, autoBattle: runtimeRow.autoBattle
 const weights = Object.fromEntries(configSnapshot.rows("combat_weights").map((row) => [row.key, row.weight]));
 /** 新手引导：整份步骤数组存在单行表里 */
 const guideSteps = configSnapshot.rows("guide_settings")[0].steps;
-/** 装备：37 个基础件 + 555 个变体（前后缀已逐条展开，回收价也在变体行上） */
+/** 装备：基础件 + 每件展开 15 个变体（前后缀已逐条展开，回收价也在变体行上） */
 const equipBases = configSnapshot.index("equipments");
 const variants = configSnapshot.index("equipment_variants");
 const slotRows = configSnapshot.rows("equipment_slots").sort((a, b) => a.sortOrder - b.sortOrder);
@@ -751,8 +751,13 @@ async function main() {
     checkEqual(equipments.status, 200, "装备列表可读");
     const equipmentCount = Object.keys(equipBases).length;
     checkEqual(equipments.body?.data?.total, equipmentCount, `装备行数 = 基础件配置表（${equipmentCount}）`);
-    checkEqual(equipments.body?.data?.list?.length, equipmentCount, "默认一页装下全部基础件");
-    const cloth14 = equipments.body?.data?.list?.find((row) => row.id === "cloth_14");
+    // 装备件数已经超过一页（默认 size = 100）——断言按**分页语义**来，不再假设一次能拿全：
+    // 素材还在往里加，锁「一页装下」只会天天变红
+    checkEqual(equipments.body?.data?.size, 100, "默认每页 100 条");
+    checkEqual(equipments.body?.data?.list?.length, Math.min(100, equipmentCount), "第一页按 size 装满");
+    // cloth_14 不在第一页（默认按等级升序，第一页是最低的那批），按 id 单独查
+    const cloth14Read = await api(base, "GET", "/api/admin/equipments?keyword=cloth_14", { token });
+    const cloth14 = cloth14Read.body?.data?.list?.find((row) => row.id === "cloth_14");
     check(Boolean(cloth14), "列表里有基础件 cloth_14");
     checkEqual(cloth14?.slot, equipBases["cloth_14"].slot, "cloth_14 部位与配置一致");
     checkEqual(cloth14?.level, equipBases["cloth_14"].level, "cloth_14 等级需求与配置一致");
@@ -1896,13 +1901,13 @@ async function main() {
     checkEqual(snap.titles?.length, titles.length, "快照称号行数 = 配置表");
     checkEqual(snap.souls?.length, souls.length, "快照战魂行数 = 配置表");
     checkEqual(snap.ranks?.length, ranks.length, "快照军衔行数 = 配置表（100 阶）");
-    // #655：快照发的是 555 个**变体**（37 基础件 × 5 前缀 × 3 后缀），每行都是最终数值，
+    // #655：快照发的是**变体**（每件基础件 × 5 前缀 × 3 后缀），每行都是最终数值，
     // 客户端不再按倍率展开 —— 所以这里对的是「变体总数」，不是基础件数
     const expectedVariants =
       Object.keys(equipBases).length *
       equipMeta.prefixRates.length *
       equipMeta.suffixRates.length;
-    checkEqual(snap.equipments?.length, expectedVariants, "快照装备 = 全部变体（37 × 5 × 3 = 555）");
+    checkEqual(snap.equipments?.length, expectedVariants, `快照装备 = 全部变体（${Object.keys(equipBases).length} 基础件 × 前缀档 × 后缀档）`);
     {
       // 变体是独立行而不是现算 —— 抽查最强档，确认「迁移/seed 的展开口径」与倍率一致，
       // 否则「管理端改了一件变体」和「客户端看到的数值」会从这里开始分叉

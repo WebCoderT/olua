@@ -9,7 +9,7 @@
  *
  * #655 之前这些名字来自**生成物**（`server/src/shared/game-data.generated.ts`）——
  * 那是「代码里躺着第二份数据」：改一个名字要重新生成，忘了重生成就与库里对不上，
- * 而且 555 件装备的名字在包里再存一遍。
+ * 而且全部装备变体的名字在包里再存一遍。
  *
  * 现在唯一权威是数据库：登录后 `Layout` 调一次 `ensureGameData()`，拉
  * `GET /admin/game-data`（与客户端 `GET /game-config` 同一份快照），本文件把它索引成

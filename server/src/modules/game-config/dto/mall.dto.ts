@@ -13,7 +13,7 @@ export const MALL_LEVEL_MAX = 10_000;
  * 商城可上架的品类（#763）
  *
  * 商品是**关联数据**，所以「能卖什么」由目录决定而不是运营手输：目前两类 ——
- * 装备变体（`equipment_variants`，555 行）与药品（`drugs`，11 行）。
+ * 装备变体（`equipment_variants`，每件基础件 15 行）与药品（`drugs`，11 行）。
  * 材料（`items`）暂不上架：它们没有可用的图标/等级口径，卖了玩家也不知道是干什么的。
  */
 export const MALL_GOOD_KINDS = ["equipment", "drug"] as const;

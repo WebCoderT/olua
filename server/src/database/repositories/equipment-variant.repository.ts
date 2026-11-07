@@ -19,7 +19,7 @@ export interface EquipmentVariantListOptions {
 /**
  * 装备变体表数据访问（#655）
  *
- * 555 行 = 37 个基础件 × 15 个前后缀组合。以前是「基础件属性 × 倍率」在运行时现算，
+ * 每件基础件展开 15 行（5 前缀 × 3 后缀），行数随基础件浮动。以前是「基础件属性 × 倍率」在运行时现算，
  * 现在每行都是独立配置：管理端能逐条改属性 / 卖价 / 穿戴等级，服务端与客户端都只读它。
  *
  * 行的**增删**允许四种来源：迁移脚本（一次性展开）、「基础件新建时连带展开其全部变体」
@@ -155,7 +155,7 @@ export class EquipmentVariantRepository {
     return this.db.get<EquipmentVariantRow>("SELECT * FROM equipment_variants WHERE id = ?", [id]);
   }
 
-  /** 全量（启动装载覆盖层 / 快照用；555 行，按 base + 前后缀序消费） */
+  /** 全量（启动装载覆盖层 / 快照用；全量，按 base + 前后缀序消费） */
   listAll(): EquipmentVariantRow[] {
     return this.db.all<EquipmentVariantRow>(
       "SELECT * FROM equipment_variants ORDER BY base_id ASC, prefix ASC, suffix ASC",

@@ -18,8 +18,8 @@ agent_created: true
 | 想改什么 | 表 | 管理端页面 | 说明 |
 |---|---|---|---|
 | 每级裸属性 / 升级经验 / 魔法上限 / 回血 | `role_levels`（60 行） | 角色等级 | 一行 = 一级的**最终值**，不是增量 |
-| 装备基础件（37 件）的外观与基础属性 | `equipments` | 装备配置 | 平铺列：`max_hp` / `physical_attack_min` / `out_positions`(JSON) / `in_atlas` … |
-| 装备的 15 档前后缀变体（555 行） | `equipment_variants` | 装备变体 | 每行自带 `label` / `level` / 八项属性 / **`sell_price`（回收价就在这一列）** |
+| 装备基础件的外观与基础属性 | `equipments` | 装备配置 | 平铺列：`max_hp` / `physical_attack_min` / `out_positions`(JSON) / `in_atlas` … |
+| 装备的 15 档前后缀变体 | `equipment_variants` | 装备变体 | 每行自带 `label` / `level` / 八项属性 / **`sell_price`（回收价就在这一列）** |
 | 前后缀倍率与文案 | `equipment_meta`（单行） | 装备槽位与规则 | 只影响「一张基础件展开成几档」与名字拼接 |
 | 怪物数值 | `monsters` | 怪物配置 | 逐只配好，不再四元组 + 曲线展开 |
 | 怪物行为参数（主动攻击 / 检测范围 / 移动速度 / 动作速度） | `monster_presentation` | 怪物配置 → 编辑 | #751 起可改。服务端 AI 1 秒 TTL，**画面表现要重进地图**；`speed_rate` 只认有帧的五个动作（stand / walk / run / injured / die），传 `{}` = 清空回默认 |

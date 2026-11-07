@@ -102,7 +102,7 @@ function cleanupWork(work) {
 /**
  * 用**数据库里的出厂数据**把装备表灌进沙箱（#655）
  *
- * 客户端 `configs/equipments` 加载期是空表 —— 装备（37 个基础件 × 15 档 = 555 个变体、
+ * 客户端 `configs/equipments` 加载期是空表 —— 装备（每件基础件 × 15 档、
  * 含属性 / 回收价 / 几何）全部在服务端库里，进游戏由 `GET /game-config` 送下来。
  * 生成器要在 Node 里画一张「所有衣服 / 所有武器」的清单，就得先把它灌回来：
  * 数据来自 `server/data/config-sync.sql`（库的逐行投影），落库走线上同一个

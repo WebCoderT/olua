@@ -187,7 +187,7 @@ export interface Equipment extends Good, BattleAttributes {
  * 写了就覆盖生成值（要单独给某件装备加特例时用）。
  *
  * prefix/suffix/recyclePrice **可以**写在条目里（#655）：服务端快照下发的是
- * 展开后的 555 个变体，每一行自带序号与最终回收价，客户端直接建表、不再乘倍率。
+ * 展开后的全部变体，每一行自带序号与最终回收价，客户端直接建表、不再乘倍率。
  * 工具链（`applyEquipmentSeed`，只给生成器与单测沙箱用）仍然传「基础件」，由
  * `buildEquipmentMap` 按倍率展开 —— 那条路只在 Node 里跑，不进游戏。
  */
