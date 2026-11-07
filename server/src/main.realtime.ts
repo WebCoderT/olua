@@ -6,6 +6,7 @@ import { NestExpressApplication } from "@nestjs/platform-express";
 import { AppModule } from "./app.module";
 import { AllExceptionsFilter } from "./common/filters/all-exceptions.filter";
 import { TransformInterceptor } from "./common/interceptors/transform.interceptor";
+import { lanIPv4Addresses } from "./common/utils/net-address.util";
 
 /**
  * 实时进程入口（#37 拆进程）
@@ -34,6 +35,9 @@ async function bootstrap() {
 
   const prefix = config.get<string>("apiPrefix") ?? "api";
   const port = config.get<number>("realtimePort") ?? 3101;
+  // 监听地址与存档进程**同一个来源、同一个值**：两个进程都得被手机连上，
+  // 只让存档进程听所有网卡的话，客户端会「登录成功、一进图就掉线」（WS 连不上）
+  const host = config.get<string>("host") ?? "";
   const corsOrigins = config.get<string[]>("corsOrigins") ?? ["*"];
 
   app.setGlobalPrefix(prefix);
@@ -51,10 +55,15 @@ async function bootstrap() {
   app.useGlobalFilters(new AllExceptionsFilter());
   app.useGlobalInterceptors(new TransformInterceptor());
 
-  await app.listen(port);
+  // 与存档进程同一口径：不填 = 听所有网卡，填了 = 只在那张网卡上可达
+  if (host) await app.listen(port, host);
+  else await app.listen(port);
 
   const logger = new Logger("Bootstrap");
   logger.log(`实时进程已启动：ws://localhost:${port}/${prefix}/realtime（世界权威 + 伤害结算同进程）`);
+  for (const address of lanIPv4Addresses()) {
+    logger.log(`局域网可访问：ws://${address}:${port}/${prefix}/realtime`);
+  }
 }
 
 void bootstrap();

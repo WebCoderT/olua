@@ -51,8 +51,13 @@ npm run dev                        # 开发（默认 5173）；npm run build 产
 | 变量 | 默认 | 说明 |
 | --- | --- | --- |
 | `VITE_API_BASE_URL` | `http://localhost:3100/api` | **接口地址唯一来源**（`src/api/config.ts` 只读它） |
+| `VITE_API_FOLLOW_PAGE_HOST` | `false`（开发环境 `true`） | 绝对地址的主机换成**当前页面主机**：手机 / 另一台电脑用局域网 IP 打开时自动连那台电脑，不用改配置 |
 | `VITE_API_TIMEOUT` | `15000` | 请求超时（毫秒） |
 | `VITE_APP_TITLE` | `olua 管理端` | 页面标题（顶栏与浏览器标题） |
+
+局域网调试：`npm run dev` 的 dev server 听所有网卡（`vite.config.ts` 的 `server.host: true`），
+手机用电脑的局域网 IP + 端口即可打开；接口地址会跟着页面主机走，服务端那边 `SERVER_HOST` 留空
+（默认听所有网卡，启动日志会打印可用地址）。
 
 ## 目录结构
 

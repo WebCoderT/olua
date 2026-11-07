@@ -51,8 +51,13 @@ No API address literal is allowed in the code — `node ../tools/audit-api-hardc
 | Variable | Default | Notes |
 | --- | --- | --- |
 | `VITE_API_BASE_URL` | `http://localhost:3100/api` | **Single source of truth for the API address** (`src/api/config.ts` is its only reader) |
+| `VITE_API_FOLLOW_PAGE_HOST` | `false` (`true` in development) | Replaces the host of an absolute address with **the current page's host**: opening the admin from a phone or another machine via a LAN IP reaches that machine without touching any config |
 | `VITE_API_TIMEOUT` | `15000` | Request timeout (milliseconds) |
 | `VITE_APP_TITLE` | — | Page title (top bar and browser tab). The default shipped in `.env.example` is written in Chinese; override it here for an English deployment |
+
+LAN debugging: the `npm run dev` server listens on all interfaces (`server.host: true` in `vite.config.ts`),
+so a phone can open it with your machine's LAN IP and port; the API address follows the page host.
+On the server side leave `SERVER_HOST` empty (listen on all interfaces) — the startup log prints the addresses to use.
 
 ## Directory structure
 

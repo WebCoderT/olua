@@ -88,6 +88,8 @@ npm run dev              # 开发（热编译）；或 npm run start 跑已构�
 
 - 接口文档：<http://localhost:3100/api-docs>（JSON 在 `/api-docs-json`）
 - 健康检查：<http://localhost:3100/api/health>
+- **手机 / 另一台电脑连进来**：`SERVER_HOST` 留空即听所有网卡，启动日志会直接列出可用地址；
+  客户端与管理端的接口地址会自动跟着「页面所在主机」走，不需要改任何配置
 - 一条命令全验：`npm run verify`
 
 ### 2. 客户端（Cocos）

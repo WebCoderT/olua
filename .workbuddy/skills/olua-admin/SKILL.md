@@ -27,7 +27,7 @@ npm run dev                        # 开发；npm run build 产出 dist（= tsc 
 | `routes.ts` | **生成**（禁止手改） | 路径表 —— 唯一的接口路径来源 |
 | `models.ts` | **生成** | 实体类型（服务端 DTO 的镜像） |
 | `endpoints.ts` | **生成** | 接口方法：`accountsApi` / `adminsApi` / `announcementsApi` / `auditApi` / `authApi` / `mailsApi` / `rolesApi` / `soulsApi` / `statsApi` / `systemApi` / `titlesApi`（随服务端控制器自动增减，别背清单，以文件为准） |
-| `config.ts` | 手写 | 读 `VITE_API_BASE_URL` + `buildUrl` + `API_TIMEOUT`（地址唯一来源） |
+| `config.ts` | 手写 | 读 `VITE_API_BASE_URL` + `buildUrl` + `API_TIMEOUT`（地址唯一来源）；`VITE_API_FOLLOW_PAGE_HOST=true` 时把绝对地址的主机换成**当前页面主机**（手机 / 另一台电脑用局域网 IP 打开就自动连那台，开发环境默认开） |
 | `http.ts` | 手写 | 请求唯一出口（见下） |
 | `types.ts` | 手写 | **服务端文档里没有的东西**：`ApiEnvelope` / `PageResult<T>` / `ApiError` / `BIZ_CODE` / `RELOGIN_CODES` / `PERMISSION` / 权限点与审计动作的中文名字典 / 时间与输入框换算。**游戏数据不在这里** |
 | `gameData.ts` | 手写（**数据来自接口**） | 游戏数据的唯一查表入口：登录后 `Layout` 调一次 `ensureGameData()` 拉 `GET /admin/game-data`（与客户端快照同形，**源头是库**），索引成几张 Map，之后同步查（`equipmentText` / `skillText` / `itemText` / `soulText` / `titleText` / `rankText` / `occupationLabel` / `sexLabel` / `slotLabel`）；缓存没到回落显示 id 本身 |
@@ -55,6 +55,8 @@ npm run dev                        # 开发；npm run build 产出 dist（= tsc 
 - 页面显示名字**一律过 `gameData.ts` 的查表函数**，不要自己拼（装备显示名含前后缀、部位归属都在
   `equipment_variants` 表里逐条写好了；等级表不是「下标 = 等级 - 1」而是按 `level` 列查）。
 - **dev 模式**要读项目外的枚举文件，`vite.config.ts` 放行了上层目录（`server.fs.allow: [".."]`）；构建不受影响。
+  dev server 同时 `server.host: true`（听所有网卡），手机用局域网 IP 就能打开 —— 配合上面的主机跟随，
+  局域网调试两边都不用改配置；服务端那边 `SERVER_HOST` 留空即听所有网卡（实时进程同值，否则手机会掉线）。
 
 ## 三、请求层口径（`http.ts`）
 
