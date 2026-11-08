@@ -149,12 +149,13 @@ check((await StorageManager.discardBagGood(3, 3)) === true, "未知 id 也能被
 {
   const role = makeRole("r1", "测试角色");
   role.bag[0][0] = { id: equipment.id, count: 1 };
-  role.equipments[equipment.slot] = equipment.id;
+  // #816：槽位存 `{ id, bound?, from? }`（不再只存裸 id）
+  role.equipments[equipment.slot] = { id: equipment.id };
   StorageManager.clear();
   StorageManager.setRoles([role]);
   StorageManager.onlineRole("r1");
   await StorageManager.discardBagGood(0, 0);
-  check(online().equipments[equipment.slot] === equipment.id, "丢弃背包物品后，身上的装备槽原样不动");
+  check(online().equipments[equipment.slot]?.id === equipment.id, "丢弃背包物品后，身上的装备槽原样不动");
 }
 
 // 11. 只动在线角色（别人的背包不受影响）

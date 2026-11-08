@@ -5,7 +5,7 @@ import { monsterResourceOf } from "../../configs/game-config";
 import { maps, npcs } from "../../configs/game-config";
 import { getRoleDefaultCloth } from "../../configs/role";
 import { getTitleLevel } from "../../configs/game-config";
-import { getEquipment } from "../../configs/items";
+import { getEquipment, wornIdOf } from "../../configs/items";
 import { getFashionOut } from "../../configs/game-config";
 import { getAssignedBorders } from "../../configs/border";
 import { getAssignedDetailBackgrounds } from "../../configs/background";
@@ -107,9 +107,10 @@ export default class PreloadManager {
   private static getRoleAnimationTasks(role: Role | null): PreloadTask[] {
     if (!role) return [];
     // 与时装穿戴同口径：时装 > 装备衣服 > 性别默认外观（否则穿时装进图第一帧是旧衣服）
-    const clothOut = getFashionOut(role.fashionCloth) || getEquipment(role.equipments.cloth)?.out || getRoleDefaultCloth(role.sex).out;
+    // 槽位存 `{ id, bound?, from? }`（#816），取 id 统一走 wornIdOf
+    const clothOut = getFashionOut(role.fashionCloth) || getEquipment(wornIdOf(role.equipments.cloth))?.out || getRoleDefaultCloth(role.sex).out;
     const tasks: PreloadTask[] = [{ dir: clothOut, kind: "role", speedRate: role.speedRate }];
-    const weaponOut = getEquipment(role.equipments.weapon)?.out;
+    const weaponOut = getEquipment(wornIdOf(role.equipments.weapon))?.out;
     if (weaponOut) tasks.push({ dir: weaponOut, kind: "role", speedRate: role.speedRate });
     // 称号名牌动画（已激活时头顶常显，进图即出现；未激活跳过）
     const title = getTitleLevel(role.title);

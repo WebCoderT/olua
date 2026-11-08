@@ -15,6 +15,7 @@ import { AccountDto } from "../auth/dto/account.dto";
 import { AdminRoleDetailDto, AdminRoleDto, RoleSummaryDto } from "../roles/dto/role.dto";
 import {
   applyBagCells,
+  mergeWornEquipments,
   normalizeBagCells,
   normalizeEquipments,
   normalizeName,
@@ -326,7 +327,9 @@ export class AdminService {
       next.vitalsSettledAt = Date.now();
     }
     // 运行时数据（结构化；逐项校验在 role-data.util，服务端不认识客户端的配置清单）
-    if (dto.equipments !== undefined) next.equipments = normalizeEquipments(dto.equipments);
+    // 槽位在存档里是 `{ id, bound, from }` 对象（#816），管理端入参仍是「槽位 → id」简表：
+    // 同一个 id 的条目连元数据一起沿用，换了 id 才新建（规则见 mergeWornEquipments）
+    if (dto.equipments !== undefined) next.equipments = mergeWornEquipments(normalizeEquipments(dto.equipments), data.equipments);
     if (dto.skills !== undefined) next.skills = normalizeSkills(dto.skills);
     if (dto.bag !== undefined) next.bag = applyBagCells(data.bag, normalizeBagCells(dto.bag));
 

@@ -65,8 +65,33 @@ export type BagCell = { id: string; count: number; bound?: boolean; from?: BagOr
 /** 背包网格（二维，行优先） */
 export type BagGrid = BagCell[][];
 
-/** 装备槽位表：槽位 → 装备 id（`null` = 该槽位空着） */
-export type WornEquipments = Record<string, string | null>;
+/** 装备槽位表：槽位 → 那件装备（`null` = 该槽位空着） */
+export type WornEquipments = Record<string, WornItem | null>;
+
+/**
+ * 一件穿在身上的装备（#816：槽位不再只存裸 id）
+ *
+ * 为什么要带元数据：属性重算要的是 id，但**绑定与溯源是这件东西的属性**，不是「背包格子
+ * 的属性」。槽位只存 id 时，穿上去那一刻 `bound` / `from` 就丢了 —— 脱下来变成一件未绑定、
+ * 无溯源的新东西，绑定语义整体失效（五瓶绑定药用到剩一瓶就变可交易，是同一个病的背包版）。
+ *
+ * 字段口径与 `BagCell` 完全一致（同一个 `BagOrigin`、同样缺省即未绑定），因为穿脱就是
+ * 「背包格子 ↔ 槽位」之间搬运：搬运不许改值，只许换地方。
+ */
+export interface WornItem {
+  id: string;
+  /** 绑定角色（缺省 = 未绑定）；穿上去按格子里的值搬，脱下来原样带回格子 */
+  bound?: boolean;
+  /** 掉落溯源（只有装备会有，同 `BagOrigin`） */
+  from?: BagOrigin;
+}
+
+/** 槽位里的装备 id（空槽 / 形状不对 → null），读属性与展示的统一入口 */
+export function wornIdOf(entry: WornItem | null | undefined): string | null {
+  if (!entry || typeof entry.id !== "string") return null;
+  const id = entry.id.trim();
+  return id ? id : null;
+}
 
 /**
  * 读背包网格（存档里那一份）
@@ -119,12 +144,39 @@ export function readBagOrigin(raw: unknown): BagOrigin | null {
 }
 
 
-/** 读装备槽位表（缺字段 / 不是对象 → 空表，老存档的边角按「什么都没穿」处理） */
+/**
+ * 读装备槽位表（缺字段 / 不是对象 → 空表，老存档的边角按「什么都没穿」处理）
+ *
+ * 只认 `{ id, ... }` 的新形状；**唯一例外是裸字符串**（v3 迁移之前的老档）——
+ * 那不是「兼容层」，是防呆：迁移漏跑的路径上把它当空槽，等于把玩家身上的装备吃掉。
+ * 这里收下它并转成 `{ id }`，迁移（`role-migration.ts` 的 v2→v3）之后不会再产生这种形状。
+ */
 export function readWornEquipments(raw: unknown): WornEquipments {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
   const result: WornEquipments = {};
   for (const [slot, value] of Object.entries(raw as Record<string, unknown>)) {
-    result[slot] = typeof value === "string" && value.trim() ? value.trim() : null;
+    // 老档（v3 之前）：裸 id
+    if (typeof value === "string") {
+      const id = value.trim();
+      result[slot] = id ? { id } : null;
+      continue;
+    }
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+      result[slot] = null;
+      continue;
+    }
+    const record = value as Record<string, unknown>;
+    const id = typeof record.id === "string" ? record.id.trim() : "";
+    if (!id) {
+      result[slot] = null;
+      continue;
+    }
+    const item: WornItem = { id };
+    // 只认 `true`：写 0 / "1" / 乱七八糟的真值一律当未绑定（宁可少绑，不凭空锁死玩家的东西）
+    if (record.bound === true) item.bound = true;
+    const from = readBagOrigin(record.from);
+    if (from) item.from = from;
+    result[slot] = item;
   }
   return result;
 }
@@ -396,14 +448,12 @@ export function reconcileBagCells(previous: BagGrid, next: BagGrid): BagGrid {
 /**
  * 穿戴：把格子里的装备挪到槽位，原来穿着的放回**刚腾出来的那一格**
  *
- * 格数守恒（换装不会凭空多/少一件）：格子存的是 id + 数量，槽位也是 id。
+ * 格数守恒（换装不会凭空多/少一件）。
  * 调用方负责先校验「这一格里的东西真的是这个槽位的装备、且等级够」。
  *
- * **已知取舍（#789 / #816）**：`bound` / `from` 只活在背包格子上，槽位里只存 id。所以穿上去
- * 再脱下来，那件装备会变成「未绑定、无溯源」。背包那一侧的部分扣减已经修好（#816：只改
- * `count`、元数据原样搬运），**只剩槽位这半** —— 要改得先有存档版本号（#818）好做结构迁移，
- * 它同时是交易系统的前置（交易一开工就必须能拦住绑定件）。当前没有交易系统，绑定只是展示
- * 与预留门禁，故先按此口径记在这里。
+ * **元数据跟着这件东西走**（#816）：穿上去把格子里的 `bound` / `from` 搬进槽位，换下来的
+ * 那件把槽位里的元数据搬回格子 —— 搬运只换地方，不改值。之前槽位只存裸 id，这两项在穿脱
+ * 之间被清掉，等于「穿一次就洗白」（绑定件变可交易、溯源丢失）。
  *
  * @returns 被换下来的旧装备 id（没有就是 null，仅用于日志 / 提示）
  */
@@ -417,9 +467,13 @@ export function equipAt(
   const cell = grid[row]?.[col];
   if (!cell) throw invalid("这一格没有可以穿戴的装备");
   const worn = equipments[slot] ?? null;
-  grid[row][col] = worn ? { id: worn, count: 1 } : null;
-  equipments[slot] = cell.id;
-  return worn;
+  const wornId = wornIdOf(worn);
+  grid[row][col] = worn && wornId ? toBagCell(worn) : null;
+  const wornItem: WornItem = { id: cell.id };
+  if (cell.bound === true) wornItem.bound = true;
+  if (cell.from) wornItem.from = cell.from;
+  equipments[slot] = wornItem;
+  return wornId;
 }
 
 /**
@@ -434,13 +488,22 @@ export function unequipSlot(
   equipments: WornEquipments,
   slot: string,
 ): { equipmentId: string; row: number; col: number } {
-  const equipmentId = equipments[slot];
-  if (!equipmentId) throw invalid("这个槽位是空的，没有可脱下的装备");
+  const worn = equipments[slot] ?? null;
+  const equipmentId = wornIdOf(worn);
+  if (!worn || !equipmentId) throw invalid("这个槽位是空的，没有可脱下的装备");
   const target = firstEmptyCell(grid);
   if (!target) throw BizException.conflict(BizCode.MALL_BAG_FULL, "背包已满，无法脱下装备");
-  grid[target.row][target.col] = { id: equipmentId, count: 1 };
+  grid[target.row][target.col] = toBagCell(worn);
   equipments[slot] = null;
   return { equipmentId, row: target.row, col: target.col };
+}
+
+/** 槽位里的一件 → 背包格子（元数据原样搬，数量恒 1：装备不可堆叠） */
+function toBagCell(item: WornItem): FilledBagCell {
+  const cell: FilledBagCell = { id: item.id, count: 1 };
+  if (item.bound === true) cell.bound = true;
+  if (item.from) cell.from = item.from;
+  return cell;
 }
 
 /** 丢弃：整格置空（不返还任何东西） */
@@ -475,14 +538,16 @@ export function sanitizeEquipments(
   const cleaned: WornEquipments = {};
   const dropped: Array<{ slot: string; id: string; reason: string }> = [];
   const worn = new Set<string>();
-  const take = (slot: string, id: string): boolean => {
-    if (worn.has(id) || cleaned[slot]) return false;
-    worn.add(id);
-    cleaned[slot] = id;
+  const take = (slot: string, item: WornItem): boolean => {
+    if (worn.has(item.id) || cleaned[slot]) return false;
+    worn.add(item.id);
+    cleaned[slot] = item;
     return true;
   };
-  for (const [slot, id] of Object.entries(equipments)) {
-    if (!id) {
+  for (const [slot, item] of Object.entries(equipments)) {
+    // 空槽 / 形状不对（`{}` 没有 id）统一按空槽写回，别把半截对象留在存档里
+    const id = wornIdOf(item);
+    if (!item || !id) {
       cleaned[slot] = null;
       continue;
     }
@@ -491,19 +556,19 @@ export function sanitizeEquipments(
       continue;
     }
     const actual = slotOf(id);
-    // 认不出的 id：服务端快照里没有这件装备，判断不了部位，原样留着
+    // 认不出的 id：服务端快照里没有这件装备，判断不了部位，原样留着（连同元数据）
     if (!actual) {
-      if (take(slot, id)) continue;
+      if (take(slot, item)) continue;
       dropped.push({ slot, id, reason: "槽位已被占用" });
       continue;
     }
     if (actual === slot) {
-      if (take(slot, id)) continue;
+      if (take(slot, item)) continue;
       dropped.push({ slot, id, reason: "槽位已被占用" });
       continue;
     }
     // 部位不符：挪到真正的槽位（空着才挪），挪不过去就是脏数据
-    if (take(actual, id)) continue;
+    if (take(actual, item)) continue;
     dropped.push({ slot, id, reason: `部位不符（实际是 ${actual}，该槽位已被占用）` });
   }
   return { equipments: cleaned, dropped };

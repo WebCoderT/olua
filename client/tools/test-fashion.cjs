@@ -142,10 +142,11 @@ if (sandbox) {
     const clothId = "cloth_1";
     // findOnlineRole 每次都从 localStorage 解析出新对象 —— 改完必须把**同一个**对象交回数据层
     const withCloth = online();
-    withCloth.equipments.cloth = clothId;
+    // #816：槽位存 `{ id, bound?, from? }`
+    withCloth.equipments.cloth = { id: clothId };
     StorageManager.updateOnlineRole(withCloth);
     await StorageManager.wearFashion("cloth_4");
-    check(online().equipments.cloth === clothId, "穿着时装时装备槽里的衣服不丢（只是外观被时装盖住）");
+    check(online().equipments.cloth?.id === clothId, "穿着时装时装备槽里的衣服不丢（只是外观被时装盖住）");
     check(getFashionOut(online().fashionCloth) === getFashion("cloth_4").out, "外观取源：时装优先于装备");
     await StorageManager.unwearFashion();
     check(getFashionOut(online().fashionCloth) === null, "脱下后取源回落到装备衣服（getFashionOut 返回 null）");
@@ -167,7 +168,8 @@ if (sandbox) {
     "装配的数据形状是结构化子集（远端玩家复用同一份代码，见 #383）",
   );
   check(
-    /getFashionOut\(role\.fashionCloth\) \|\| getEquipment\(role\.equipments\.cloth\)\?\.out \|\| getRoleDefaultCloth\(role\.sex\)\.out/.test(preloadSource),
+    // #816：槽位存 `{ id, bound?, from? }`，预载取 id 走 wornIdOf（形状变了，口径不能变）
+    /getFashionOut\(role\.fashionCloth\) \|\| getEquipment\(wornIdOf\(role\.equipments\.cloth\)\)\?\.out \|\| getRoleDefaultCloth\(role\.sex\)\.out/.test(preloadSource),
     "进图预载与场景同一口径（否则第一帧还是旧衣服）",
   );
   check(/getFashionIn\(role\.fashionCloth\)/.test(inShowSource), "弹窗内观用时装的内观资源");

@@ -1,4 +1,4 @@
-import { BagCell, BagCellPos, BagOrigin, DrugEffect, Equipment, EQUIPMENT_TYPE, GOOD_TYPE, Goods, isEquipment, MoneyCurrency } from "../types/good";
+import { BagCell, BagCellPos, BagOrigin, DrugEffect, Equipment, EQUIPMENT_TYPE, GOOD_TYPE, Goods, isEquipment, MoneyCurrency, WornItem } from "../types/good";
 import { drugs, levelScrolls, moneyItems } from "./game-config";
 import { equipmentCombatValue, equipmentSlotOrder, getAllEquipmentVariants, getMallGoods, getRecyclePrice } from "./equipments";
 import { materials } from "./game-config";
@@ -214,8 +214,11 @@ export interface BagCellMeta {
  * 复制 `from` 而不是把引用带走：整理/搬运会造新格子，若新格子与旧格子共用同一个
  * `from` 对象，改一处两处都变（以后做交易时「转移后清空来源」会互相干扰）。
  * `bound` 只认 `true`（存档里出现过 `false` / `1` 这类脏值，一律当未绑定）。
+ *
+ * 参数只要求「有 bound / from 两个可选字段」：背包格子（`BagCell`）与装备槽位
+ * （`WornItem`，#816）都满足 —— 穿脱就是这两种形状之间搬运，元数据口径只该有一份。
  */
-export function bagMetaOf(cell: BagCell): BagCellMeta {
+export function bagMetaOf(cell: { bound?: boolean; from?: BagOrigin } | null): BagCellMeta {
   const meta: BagCellMeta = {};
   if (!cell) return meta;
   if (cell.bound === true) meta.bound = true;
@@ -247,6 +250,50 @@ export function withBagMeta(id: string, count: number, meta: BagCellMeta): BagCe
  */
 export function bagGroupKeyOf(cell: BagCell): string {
   return `${cell && cell.bound === true ? 1 : 0}|${cell ? cell.id : ""}`;
+}
+
+//#endregion
+
+//#region 装备槽位的存法（#816：槽位存 { id, bound?, from? }）
+
+/**
+ * 槽位里的装备 id（空槽 / 形状不对 → null）
+ *
+ * **兼容裸字符串**：老存档（#816 之前）与远端玩家的互见帧都还是「槽位 → id」这一种形状
+ * （`PlayerAppearance` 里就是空串 / id），读的地方不该为此各写一个 if。
+ * 空串与空白串按「没穿」处理 —— 服务端历史上用空串表示空槽。
+ */
+export function wornIdOf(entry: WornItem | string | null | undefined): string | null {
+  if (!entry) return null;
+  const raw = typeof entry === "string" ? entry : entry.id;
+  if (typeof raw !== "string") return null;
+  const id = raw.trim();
+  return id ? id : null;
+}
+
+/**
+ * 把存档里的一个槽位值规整成 `WornItem | null`（读档 / 迁移用）
+ *
+ * 认三种输入：
+ * - `null` / `undefined` / 空串 → 空槽（服务端历史上用空串表示空槽）；
+ * - 裸 id 字符串（#816 之前的存档）；
+ * - `{ id, bound?, from? }`（当前形态）；
+ * - 更早的存档（#597 之前）存的是**完整物品快照对象**，它也有 `id`，落在同一条分支上 ——
+ *   快照里没有绑定/溯源（那时候还没有这两个字段），于是当未绑定处理。
+ *
+ * 元数据一律走 `bagMetaOf` 复制（`from` 不共用引用），理由与背包格子完全相同。
+ */
+export function wornItemOf(raw: unknown): WornItem | null {
+  if (raw === null || raw === undefined) return null;
+  if (typeof raw === "string") {
+    const id = raw.trim();
+    return id ? { id } : null;
+  }
+  if (typeof raw !== "object" || Array.isArray(raw)) return null;
+  const record = raw as { id?: unknown; bound?: unknown; from?: BagOrigin };
+  const id = typeof record.id === "string" ? record.id.trim() : "";
+  if (!id) return null;
+  return { id, ...bagMetaOf({ bound: record.bound === true, from: record.from }) };
 }
 
 //#endregion

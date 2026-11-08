@@ -1,9 +1,9 @@
 import { Animation, Node, Vec2, isValid } from "cc";
-import { OutTransform } from "../../../types/good";
+import { OutTransform, WornItem } from "../../../types/good";
 import { ACTION, DIRECTION, SpeedRate } from "../../../types/animation";
 import { SEX } from "../../../types/role";
 import { actionNeedWeapon, getAnimationName, getDirectionIndex } from "../../../configs/animation";
-import { getEquipment } from "../../../configs/items";
+import { getEquipment, wornIdOf } from "../../../configs/items";
 import { getFashionOut } from "../../../configs/game-config";
 import { getRoleDefaultCloth } from "../../../configs/role";
 import GameUiHelper from "../../helpers/GameUiHelper";
@@ -19,8 +19,13 @@ import AnimationHelper from "../../helpers/AnimationHelper";
 export type RoleOutSource = {
   /** 性别：决定没穿衣服时用哪套默认身体（未知值回落男性，见 configs/role.getRoleDefaultCloth） */
   sex: SEX;
-  /** 已穿戴的衣服 / 武器（槽位只存装备 id，null = 没穿） */
-  equipments: { cloth: string | null; weapon: string | null };
+  /**
+   * 已穿戴的衣服 / 武器（#816 起槽位存 `{ id, bound?, from? }`，null = 没穿）
+   *
+   * 外观只关心 id：这里收整个槽位对象，取 id 统一走 `wornIdOf`（它同时认老形状的裸字符串，
+   * 远端玩家的互见帧就还是一种裸 id 形状的协议，见 OtherPlayerManager.toOutSource）。
+   */
+  equipments: { cloth: WornItem | null; weapon: WornItem | null };
   /** 时装 id（null = 没穿；只换外观不换数值） */
   fashionCloth: string | null;
   /** 动作速度倍率（决定每帧时长；远端玩家取默认值） */
@@ -163,7 +168,7 @@ export default class RoleAppearance {
 
   /** 重新加载衣服动画：无衣服时按性别回退默认外观，保证角色始终有身体 */
   private reloadClothAnimation(source: RoleOutSource) {
-    const cloth = getEquipment(source.equipments.cloth);
+    const cloth = getEquipment(wornIdOf(source.equipments.cloth));
     // 未穿衣服时按性别取默认身体（男 role/boy、女 role/girl），外观变换与穿衣服同口径
     const fallback = getRoleDefaultCloth(source.sex);
     // 取源：时装 > 装备衣服 > 默认身体（#377）。**只有外观帧目录被换掉** ——
@@ -177,7 +182,7 @@ export default class RoleAppearance {
 
   /** 重新加载武器动画：未装备武器或该武器没有外观时不加载（武器节点整节点隐藏） */
   private reloadWeaponAnimation(source: RoleOutSource) {
-    const weapon = getEquipment(source.equipments.weapon);
+    const weapon = getEquipment(wornIdOf(source.equipments.weapon));
     const src = weapon?.out ?? "";
     this.weaponTransform = weapon;
     if (src === this.weaponSrc) return;

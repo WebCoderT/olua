@@ -1038,9 +1038,9 @@ function connect(url) {
 
     //#endregion
 
-    //#region 十一、绑定与溯源（#789）：掉落时判定绑定，入包后可见，背包操作只认服务端那份
+    //#region 十一、绑定与溯源（#789 / #816）：掉落时判定绑定，入包后可见，背包操作与穿脱都只换地方
 
-    group("十一、绑定与溯源：三条规则判绑定、装备记来源、背包操作把元数据认领回来");
+    group("十一、绑定与溯源：三条规则判绑定、装备记来源、背包操作与穿脱把元数据认领回来");
 
     /** 动手前每只怪的掉落配置（还原用；键 = monsterKey） */
     const dropRowsBefore = new Map();
@@ -1292,6 +1292,96 @@ function connect(url) {
       !!matAfter && !!matCell && matAfter.bound === true && matAfter.count === matCell.count - 2,
       "D：卖一半：数量减二、bound 仍在（扣减路径同样不重建格子）",
       JSON.stringify({ matAfter, matCell, code: soldHalf.code, message: soldHalf.message }),
+    );
+
+    // —— E. 装备槽存对象（#816 后半）：绑定与溯源跟着这件东西走，穿脱只是换地方 ——
+
+    // 打一件**强制绑定**的武器（B 段那件 weapon_1 是未绑定的，正好留着一个同 id 的对照）
+    const boundEquipDrop = await killWith(binder, "weapon_1", { bindDrops: true }, [1, 1]);
+    const pickedBoundEquip = boundEquipDrop ? await pick(binder, boundEquipDrop.killed.castId, 0) : null;
+    const boundEquipCell = pickedBoundEquip && pickedBoundEquip.ok ? pickedBoundEquip.placed[0] : null;
+    check(
+      !!boundEquipCell && boundEquipCell.id === "weapon_1" && boundEquipCell.bound === true && !!boundEquipCell.from,
+      "E：绑定武器入包（bound = true 且带溯源，作为穿脱前的基准）",
+      JSON.stringify(boundEquipCell),
+    );
+
+    /** 在网格里找「那件绑定武器」的坐标（同 id 有两件，只认带 bound 的那件） */
+    const findBoundWeapon = (grid) => {
+      let hit = null;
+      grid.forEach((line, row) =>
+        (line || []).forEach((cell, col) => {
+          if (!hit && cell && cell.id === "weapon_1" && cell.bound === true) hit = { row, col };
+        }),
+      );
+      return hit;
+    };
+    const beforeEquipRole = await api(baseUrl, "GET", `roles/${binder.roleId}`, { token: binder.token });
+    const boundEquipPos = findBoundWeapon(beforeEquipRole.data.data.bag);
+    check(!!boundEquipPos, "E：背包里能定位到那件绑定武器", JSON.stringify(boundEquipPos));
+
+    // 穿上：槽位值必须是**对象**（`{ id, bound, from }`），不是裸 id
+    const wornResult = await api(baseUrl, "POST", `roles/${binder.roleId}/bag-op`, {
+      token: binder.token,
+      body: {
+        action: "equip",
+        row: boundEquipPos ? boundEquipPos.row : 0,
+        col: boundEquipPos ? boundEquipPos.col : 0,
+        revision: beforeEquipRole.data.revision,
+      },
+    });
+    check(wornResult.code === 0, "E：穿上那件绑定武器", wornResult.message);
+    const wornSlot = wornResult.code === 0 ? wornResult.data.data.equipments.weapon : null;
+    check(
+      !!wornSlot && typeof wornSlot === "object" && wornSlot.id === "weapon_1",
+      "E：槽位值是对象 { id }（不是裸 id 字符串）",
+      JSON.stringify(wornSlot),
+    );
+    check(!!wornSlot && wornSlot.bound === true, "E：绑定跟着进了槽位（穿上去不洗白）", JSON.stringify(wornSlot));
+    check(
+      !!wornSlot && !!wornSlot.from && wornSlot.from.monster === (boundEquipDrop && boundEquipDrop.mob.monsterKey),
+      "E：溯源也进了槽位（from.monster 仍是那只怪）",
+      JSON.stringify({ slot: wornSlot, mob: boundEquipDrop && boundEquipDrop.mob.monsterKey }),
+    );
+
+    // 存档里也是对象（响应是 DTO 投影，这里确认落库形状一致 —— 客户端/管理端都读存档）
+    const storedWornRole = await api(baseUrl, "GET", `roles/${binder.roleId}`, { token: binder.token });
+    const storedWornSlot = storedWornRole.data.data.equipments && storedWornRole.data.data.equipments.weapon;
+    check(
+      !!storedWornSlot && typeof storedWornSlot === "object" && storedWornSlot.id === "weapon_1" && storedWornSlot.bound === true,
+      "E：存档里的 equipments.weapon 是对象且 bound 为 true",
+      JSON.stringify(storedWornSlot),
+    );
+
+    // 脱下：格子里的 bound / from 必须原样回来（穿一次就洗白 = 绑定语义整体失效）
+    const offResult = await api(baseUrl, "POST", `roles/${binder.roleId}/bag-op`, {
+      token: binder.token,
+      body: { action: "unequip", slot: "weapon", revision: storedWornRole.data.revision },
+    });
+    check(offResult.code === 0, "E：脱下武器（落点由服务端找第一个空格）", offResult.message);
+    // 背包里这时有两件 weapon_1（B 段那件未绑定的 + 刚脱下来的绑定件），只认带 bound 的那件
+    const offCells =
+      offResult.code === 0 ? offResult.data.data.bag.flat().filter((cell) => cell && cell.id === "weapon_1") : [];
+    const offCell = offCells.find((cell) => cell.bound === true) || null;
+    check(
+      offCells.length === 2 && offCells.filter((cell) => cell.bound === true).length === 1,
+      "E：脱下来之后背包里是两件 weapon_1（未绑定的对照件 + 绑定件），绑定态没有扩散到另一件",
+      JSON.stringify(offCells),
+    );
+    check(
+      !!offCell && offCell.count === 1 && offCell.bound === true,
+      "E：脱下来回到背包：绑定仍在（穿脱只换地方，不改值）",
+      JSON.stringify(offCell),
+    );
+    check(
+      !!offCell && !!offCell.from && offCell.from.monster === (boundEquipDrop && boundEquipDrop.mob.monsterKey),
+      "E：脱下来回到背包：溯源仍在",
+      JSON.stringify(offCell && offCell.from),
+    );
+    check(
+      !!(offResult.code === 0 && offResult.data.data.equipments.weapon === null),
+      "E：槽位清空（对象形式下也是 null，不是空串）",
+      JSON.stringify(offResult.code === 0 ? offResult.data.data.equipments.weapon : undefined),
     );
 
     // 还原：这一区改过的每只怪的掉落配置 + 随机绑定概率，都回到改之前那一份

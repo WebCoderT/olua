@@ -85,7 +85,15 @@ try {
   const toSource = /function toOutSource\([\s\S]*?\n\}/.exec(clientManager);
   check(!!toSource, "有 toOutSource（协议 -> 装配数据的唯一转换点）");
   const toSourceBody = toSource ? toSource[0] : "";
-  check((toSourceBody.match(/\|\| null/g) || []).length === 3, "三处空串转 null（衣服 / 武器 / 时装：协议用空串、客户端槽位用 null）");
+  // #816 之后槽位存 `{ id, bound?, from? }`：衣服 / 武器的「空串 → null」变成「空串 → null，有值 → { id }」，
+  // 语义没变（协议仍用空串表示没穿），所以断言按新形状写
+  check(
+    /const worn = \(id: string\) => \(id \? \{ id \} : null\);/.test(toSourceBody) &&
+      /cloth: worn\(appearance\.cloth\)/.test(toSourceBody) &&
+      /weapon: worn\(appearance\.weapon\)/.test(toSourceBody),
+    "衣服 / 武器：空串 → null、有值 → { id }（远端玩家没有元数据，只包 id）",
+  );
+  check(/fashionCloth: appearance\.fashion \|\| null/.test(toSourceBody), "时装：空串 → null（协议用空串表示没穿）");
   check(/sex: appearance\.sex as SEX/.test(toSourceBody), "性别按 SEX 枚举透传（未知值由 getRoleDefaultCloth 回落男性）");
   check(/speedRate: defaultRoleSpeedRate/.test(toSourceBody), "速度倍率取默认值（远端属性不随互见帧下发）");
   check(/DEFAULT_APPEARANCE[^=]*=\s*\{[^}]*sex: SEX\.BOY[^}]*cloth: ""[^}]*weapon: ""[^}]*fashion: ""/.test(clientManager), "有兜底外观（男性 / 没穿没拿），旧服务端不发时也能画出完整身体");

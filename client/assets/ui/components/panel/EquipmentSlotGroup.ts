@@ -1,7 +1,7 @@
 import { Node } from "cc";
-import { Equipment, EQUIPMENT_TYPE } from "../../../types/good";
+import { Equipment, EQUIPMENT_TYPE, WornItem } from "../../../types/good";
 import { equipmentSlots } from "../../../configs/equipments";
-import { getEquipment } from "../../../configs/items";
+import { getEquipment, wornIdOf } from "../../../configs/items";
 import { cursorConfig, getGoodCursorStyle } from "../../../configs/cursor";
 import CursorManager from "../../core/CursorManager";
 import GameUiHelper from "../../helpers/GameUiHelper";
@@ -35,13 +35,14 @@ export default class EquipmentSlotGroup extends Node {
   private onEquipBetter: EquipmentSlotHandler;
 
   /**
-   * @param equipments 已穿戴装备（按槽位存装备 id，未穿戴为 null；装备数据经配置表实时解析）
+   * @param equipments 已穿戴装备（按槽位存 `{ id, bound?, from? }`，未穿戴为 null；
+   *   这里只取 id（`wornIdOf`），装备数据经配置表实时解析）
    * @param onUnequip 槽位右键操作回调
    * @param onEquipBetter 提示角标左键操作回调（是否真有更好的装备由数据层判定）
    */
   constructor(
     side: EquipmentSlotSide,
-    equipments: { [key in EQUIPMENT_TYPE]: string | null },
+    equipments: { [key in EQUIPMENT_TYPE]: WornItem | null },
     onUnequip: EquipmentSlotHandler,
     onEquipBetter: EquipmentSlotHandler,
   ) {
@@ -65,7 +66,7 @@ export default class EquipmentSlotGroup extends Node {
         this,
       );
       this.addChild(slot);
-      this.updateSlot(type, getEquipment(equipments[type]));
+      this.updateSlot(type, getEquipment(wornIdOf(equipments[type])));
     });
   }
 

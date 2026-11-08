@@ -25,14 +25,16 @@ const DEFAULT_APPEARANCE: PlayerAppearance = { sex: SEX.BOY, cloth: "", weapon: 
 /**
  * 互见帧的外观 -> RoleAppearance 的装配数据
  *
- * 协议里「没穿」用空串（跨语言最省事的缺省），客户端的装备槽用 null 表示，在这里转一次；
- * 速度倍率取角色默认值 —— 远端玩家的属性不随互见帧下发，而 speedRate 只影响每帧时长
- * （走动快慢的观感），用默认值反而让所有远端玩家的步频一致。
+ * 协议里「没穿」用空串（跨语言最省事的缺省），客户端主角的装备槽用 `{ id } | null` 表示
+ * （#816：槽位会带绑定与溯源，但**远端玩家只要外观**，这份元数据在互见帧里根本不下发），
+ * 在这里转一次；速度倍率取角色默认值 —— 远端玩家的属性不随互见帧下发，
+ * 而 speedRate 只影响每帧时长（走动快慢的观感），用默认值反而让所有远端玩家的步频一致。
  */
 function toOutSource(appearance: PlayerAppearance): RoleOutSource {
+  const worn = (id: string) => (id ? { id } : null);
   return {
     sex: appearance.sex as SEX,
-    equipments: { cloth: appearance.cloth || null, weapon: appearance.weapon || null },
+    equipments: { cloth: worn(appearance.cloth), weapon: worn(appearance.weapon) },
     fashionCloth: appearance.fashion || null,
     speedRate: defaultRoleSpeedRate,
   };

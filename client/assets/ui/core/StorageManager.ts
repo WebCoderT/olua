@@ -16,7 +16,7 @@ import MpHelper from "../utils/battle/MpHelper";
 import HpHelper from "../utils/battle/HpHelper";
 import { skills } from "../../configs/skill";
 import { BAG_ORIGIN_TEXT_MAX } from "../../types/good";
-import { MONEY_CURRENCY_LABELS, getEquipment, getItem, moveBagCellGrid, normalizeBagGrid, resolveDrugRecovery, summarizeBagRecycle, tidyBagGrid, findBagEquipmentUpgrade, withBagMeta } from "../../configs/items";
+import { MONEY_CURRENCY_LABELS, bagMetaOf, getEquipment, getItem, moveBagCellGrid, normalizeBagGrid, resolveDrugRecovery, summarizeBagRecycle, tidyBagGrid, findBagEquipmentUpgrade, withBagMeta, wornIdOf, wornItemOf } from "../../configs/items";
 import { getMallPrice } from "../../configs/game-config";
 import { getFashion, fashionData } from "../../configs/game-config";
 import { getEquipmentNameParts } from "../../configs/equipments";
@@ -249,26 +249,25 @@ export default class StorageManager {
    * - 血量回复：hpRecover / hpRecoverAccumulator（默认值规则见 utils/battle/HpHelper）
    * - 快捷键：按 configs/role.initialShortcutKeys 的按键码对齐（保留玩家已绑定的技能，补齐新增的按键槽；
    *   存档里多出的按键（如曾有的第 6 格）自然丢弃，减格不报错）
-   * - 装备槽：旧存档存的是装备快照对象，迁移为只存装备 id（新格式经配置表实时解析，改配置重启即生效）
+   * - 装备槽：槽位值一律规整成 `{ id, bound?, from? }`（#816）。老存档是裸 id 或完整快照对象，
+   *   两种都收敛成对象 —— 元数据（绑定 / 溯源）必须跟着走，否则「穿上再脱下」就洗白了
    * - 背包：旧存档格子存的是物品快照对象，迁移为 { id, count }（物品数据经配置表实时解析）
    */
   static ensureRoleDefaults(role: Role) {
     MpHelper.ensureDefaults(role);
     HpHelper.ensureDefaults(role);
     // #597 起服务端建号发空对象（槽位名是客户端枚举的事）—— 按 EQUIPMENT_TYPE 枚举补齐缺失槽；
-    // 旧存档存的是装备快照对象，迁移为只存装备 id（新格式经配置表实时解析，改配置重启即生效）
+    // 槽位值规整成 { id, bound?, from? }（#816）：老存档是裸 id / 完整快照，两种都收敛成对象
     role.equipments ??= {} as Role["equipments"];
     (Object.keys(EQUIPMENT_TYPE) as Array<keyof typeof EQUIPMENT_TYPE>).forEach((key) => {
       const slot = EQUIPMENT_TYPE[key];
-      const value = role.equipments[slot] as unknown;
-      if (value && typeof value === "object") {
-        // 旧快照对象：取它的 id 作为槽位值（快照无 id 或 id 不在配置表时视为空槽）
-        role.equipments[slot] = (value as Goods).id ?? null;
-      } else if (typeof value !== "string") {
-        role.equipments[slot] = null;
-      }
+      // wornItemOf 认裸 id（#816 之前）、完整快照（#597 之前）与对象三种形状；
+      // 认不出的直接清空（脏数据不该让「槽位显示」与「属性」各读一半）
+      role.equipments[slot] = wornItemOf(role.equipments[slot]);
     });
     // 背包格子迁移：旧快照（带 type 的完整物品对象）收敛为 { id, count }；新格式原样规整；无法确定 id 的格子丢弃
+    // **元数据照原样带回**（bound / from，#789）：这里是每次读档都会走的路径，丢了就等于
+    // 「重登一次，身上那件绑定装备的背包版就变可交易了」（详情弹窗的「已绑定」与溯源也会一起消失）
     role.bag = (Array.isArray(role.bag) ? role.bag : []).map((row) =>
       row.map((cell) => {
         if (!cell || typeof cell !== "object") return null;
@@ -277,7 +276,7 @@ export default class StorageManager {
         if (!id) return null;
         // 旧快照带 type 字段：数量按物品叠加规则取（不可叠加恒 1）；新格式直接读 count
         const count = "type" in cell ? getGoodCount(cell as Goods) : Math.max(1, snapshot.count ?? 1);
-        return { id, count };
+        return withBagMeta(id, count, bagMetaOf(cell as BagCell));
       }),
     );
     // 背包尺寸对齐当前配置：旧存档的行/列数可能不是 bagRow × bagCol —— 尺寸不符时整理与拖动会按存档尺寸铺回，
@@ -757,7 +756,7 @@ export default class StorageManager {
    */
   static async unequipToBag(slot: EQUIPMENT_TYPE): Promise<boolean> {
     const role = this.findOnlineRole();
-    if (!role || !role.equipments[slot]) return false;
+    if (!role || !wornIdOf(role.equipments[slot])) return false;
     const result = await this.runBagOp(role, { action: "unequip", slot });
     if (!result) return false;
     this.applyEquipmentChange(role, slot);
@@ -880,7 +879,7 @@ export default class StorageManager {
    * @param slot 装备槽位
    */
   static getWornEquipment(slot: EQUIPMENT_TYPE): Equipment | null {
-    return getEquipment(this.findOnlineRole()?.equipments[slot] ?? null);
+    return getEquipment(wornIdOf(this.findOnlineRole()?.equipments[slot]));
   }
 
   /**
@@ -897,7 +896,7 @@ export default class StorageManager {
       role.bag,
       slot,
       (equipment) => GameHelper.checkRoleCanUseEquipment(equipment),
-      getEquipment(role.equipments[slot]),
+      getEquipment(wornIdOf(role.equipments[slot])),
     );
     return candidate ? { row: candidate.row, col: candidate.col } : null;
   }

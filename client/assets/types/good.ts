@@ -301,6 +301,26 @@ export interface BagCell {
   from?: BagOrigin;
 }
 
+/**
+ * 一件穿在身上的装备（#816：装备槽不再只存裸 id）
+ *
+ * 为什么要带元数据：`bound` / `from` 是**这件东西的属性**，不是「背包格子的属性」。
+ * 槽位只存 id 时，穿上去那一刻绑定与溯源就丢了 —— 脱下来变成一件未绑定、无溯源的新东西
+ * （五瓶绑定药用到剩一瓶就变可交易，是同一个病的背包版，#789 修的是背包那一半）。
+ *
+ * 字段口径与 `BagCell` 完全一致（同一个 `BagOrigin`、同样缺省即未绑定），因为穿脱就是
+ * 「背包格子 ↔ 槽位」之间搬运：**搬运不许改值，只许换地方**。
+ * 客户端只读不判定（服务端在穿脱时搬这份元数据，见 server `role-inventory.ts`）。
+ */
+export interface WornItem {
+  /** 装备 id（configs/items 总表的 key） */
+  id: string;
+  /** 绑定角色（缺省 = 未绑定） */
+  bound?: boolean;
+  /** 掉落溯源（只有装备会有） */
+  from?: BagOrigin;
+}
+
 /** 背包格子的行列坐标（拖动落点、跨格搬运都用它定位） */
 export interface BagCellPos {
   row: number;

@@ -321,12 +321,13 @@ check(cellAt(0, 0)?.count === 1, "无效拖动不改动背包");
 {
   const role = makeRole("r1", "测试角色");
   role.bag[0][0] = { id: equipment.id, count: 1 };
-  role.equipments[equipment.slot] = equipment.id;
+  // #816：槽位存 `{ id, bound?, from? }`（不再只存裸 id）
+  role.equipments[equipment.slot] = { id: equipment.id };
   StorageManager.clear();
   StorageManager.setRoles([role]);
   StorageManager.onlineRole("r1");
   await StorageManager.moveBagGood(0, 0, 1, 1);
-  check(online().equipments[equipment.slot] === equipment.id, "拖动背包物品后，身上的装备槽原样不动");
+  check(online().equipments[equipment.slot]?.id === equipment.id, "拖动背包物品后，身上的装备槽原样不动");
 }
 
 // 7. 连续拖动（拖到 B、再拖到 C）不丢东西

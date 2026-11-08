@@ -1,6 +1,7 @@
 import { HttpStatus, Injectable, Logger } from "@nestjs/common";
 import { BizCode } from "../../common/constants/biz-code";
 import { BizException } from "../../common/errors/biz.exception";
+import { bindOnDropOf } from "../../common/runtime-config-cache";
 import { compareRoleAttributesOfRole } from "../combat/role-attribute-comparison";
 import { roleAttributeSourceOf, summarizeRoleAttributes } from "../combat/role-attributes";
 import { MallPricingService } from "../game-config/mall-pricing.service";
@@ -252,7 +253,9 @@ export class RolesService {
     // **客户端报的版本只决定「跑不跑链」，不构成信任**：迁移链只做形状变换，
     // 哪个字段该由客户端写由 role-authority 判（收权不在这一层）。
     // 版本比代码新（回滚发布）直接拒 20028，不能把新字段当未知键静默丢掉
-    const { fields, data } = parseRoleData(migrateRoleData({ ...dto.data, id: roleId }).data);
+    const { fields, data } = parseRoleData(
+      migrateRoleData({ ...dto.data, id: roleId }, { wornBoundOf: bindOnDropOf }).data,
+    );
 
     if (fields.name !== existing.name && this.roles.findByAccountAndName(accountId, fields.name, roleId)) {
       throw BizException.conflict(BizCode.ROLE_NAME_EXISTS, "该账号下已存在同名角色");
@@ -1729,7 +1732,7 @@ export class RolesService {
       this.roles.markCorrupted(row.id, false);
       this.logger.log(`角色 ${row.id} 的存档已恢复正常，corrupted 标记清除`);
     }
-    const outcome = migrateRoleData(parsed.data);
+    const outcome = migrateRoleData(parsed.data, { wornBoundOf: bindOnDropOf });
     if (!outcome.migrated) return row;
     const data = JSON.stringify(outcome.data);
     this.roles.updateDataKeepRevision(row.id, data, Date.now());

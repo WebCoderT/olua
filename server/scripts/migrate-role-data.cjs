@@ -80,6 +80,32 @@ function describeDistribution(distribution) {
   return versions.map((version) => `v${version} = ${distribution[version]}`).join("，");
 }
 
+/**
+ * v2→v3 的「绑定回填」要问配置（#816）：把装备基础件装进运行时快照，之后 `bindOnDropOf`
+ * 就能回答「这件装备是不是掉落即绑定」。
+ *
+ * 为什么脚本里也要做：`make migrate` 与「玩家登录时的惰性迁移」必须给出**同一份结果** ——
+ * 否则「先跑过脚本的那批角色」穿着强制绑定件会被当成未绑定，而没跑过的那批是对的，
+ * 这种不一致最难查。装不进去（没编译 / 表不在）就退回「不回填」，并明说。
+ */
+function loadWornBoundResolver(db) {
+  try {
+    // eslint-disable-next-line import/no-dynamic-require
+    const runtime = require(path.join(tooling.SERVER_DIR, "dist", "common", "runtime-config-cache.js"));
+    // `SELECT *` 而不是点名要 `bind_on_drop`：库比代码旧（列还没加）时，缺列只是「按未绑定」，
+    // 不该让整段回填直接退化 —— 那种库本来就该先让服务端起一次把列补齐
+    const bases = db.prepare("SELECT * FROM equipments").all();
+    runtime.applyEquipmentBases(bases);
+    return (id) => runtime.bindOnDropOf(id);
+  } catch (error) {
+    console.warn(
+      `读不到装备配置（${error instanceof Error ? error.message : String(error)}）—— ` +
+        "本次迁移**不回填**绑定，装备槽位只做形状变换（裸 id → { id }）。",
+    );
+    return () => false;
+  }
+}
+
 function main() {
   const args = tooling.parseArgs(process.argv.slice(2), { db: "db", "dry-run": "dryRun" });
   const dryRun = args.dryRun === true;
@@ -99,6 +125,8 @@ function main() {
       process.exitCode = 1;
       return;
     }
+
+    const wornBoundOf = loadWornBoundResolver(db);
 
     const rows = db.prepare("SELECT id, name, data FROM roles ORDER BY created_at ASC").all();
     const distribution = {};
@@ -120,7 +148,7 @@ function main() {
         continue;
       }
       try {
-        const outcome = migrateRoleData(parsed.data);
+        const outcome = migrateRoleData(parsed.data, { wornBoundOf });
         pending.push({ id: row.id, name: row.name, from: outcome.from, to: outcome.to, data: JSON.stringify(outcome.data) });
       } catch (error) {
         // 链缺环（代码事故）：与「版本超前」同一条出口 —— 打印出来，退出码 1

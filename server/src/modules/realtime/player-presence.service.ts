@@ -544,12 +544,19 @@ export class PlayerPresenceService implements OnApplicationBootstrap, OnApplicat
   private readAppearance(role: { data?: Record<string, unknown> } | null): RealtimePlayerAppearance {
     const data = (role?.data ?? {}) as Record<string, unknown>;
     const equipments = (data.equipments ?? {}) as Record<string, unknown>;
+    // 槽位值（#816 起是 `{ id }` 对象；迁移前的老档是裸 id —— 这里两种都收，
+    // 外观不该因为存档形状而变成光着身子）
+    const wornId = (slot: string): string => {
+      const entry = equipments[slot];
+      const id = entry && typeof entry === "object" ? (entry as Record<string, unknown>).id : entry;
+      return typeof id === "string" ? id : "";
+    };
     // 性别：客户端 SEX 是字符串枚举（"1" 男 / "2" 女），但历史存档里也见过数字 —— 两种都收
     const sex = data.sex;
     return {
       sex: typeof sex === "string" ? sex : typeof sex === "number" ? String(sex) : "1",
-      cloth: typeof equipments.cloth === "string" ? equipments.cloth : "",
-      weapon: typeof equipments.weapon === "string" ? equipments.weapon : "",
+      cloth: wornId("cloth"),
+      weapon: wornId("weapon"),
       // 时装历史形状是 number（从没人写过），只认字符串；数字一律当没穿
       fashion: typeof data.fashionCloth === "string" ? data.fashionCloth : "",
     };
