@@ -161,6 +161,22 @@ ssh -i "$DEPLOY_KEY" "$DEPLOY_USER@$DEPLOY_HOST" \
 - 改了 `docker-compose.yml` / `admin/nginx.conf` / 任一 `Dockerfile`，先在本机跑 `make audit`
   （其中 `audit-deploy` 会校验服务名、端口、卷、反代前缀、密钥隔离是否还接得上）。
 
+### 4.1 存档迁移（`make migrate`）
+
+存档结构版本（`data.schemaVersion`，见 [33 篇](./33-存档与账号设计.md) 第三节）**落后时会在玩家
+进游戏那一刻自动迁移并落库**，所以漏跑不会把人关在门外。批量跑一次的意义是「让库里的版本号
+真的前进」，并在发布前看清版本分布：
+
+```bash
+ssh ... 'cd /opt/olua && docker compose run --rm server \
+  node --disable-warning=ExperimentalWarning scripts/migrate-role-data.cjs --dry-run'
+# 先看「角色总数 / 版本分布 / 需要迁移」；确认无误再去掉 --dry-run 真跑
+```
+
+- **退出码 1 = 有迁不动的行**（坏档 / 存档版本比代码新，后者通常是回滚发布方向搞反了），
+  脚本一行都不写，先人工处理再发布；
+- 脚本只改 `data` 一列，不动 `revision` 与 `updated_at`，重跑幂等。
+
 ---
 
 ## 5. 回滚

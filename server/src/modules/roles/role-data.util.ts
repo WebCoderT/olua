@@ -1,6 +1,7 @@
 import { BizCode } from "../../common/constants/biz-code";
 import { BizException } from "../../common/errors/biz.exception";
 import { GUIDE_STEP_MAX, ROLE_OCCUPATION_CODES, ROLE_SEX_CODES } from "../../common/constants/game-enums";
+import { ROLE_DATA_VERSION } from "./role-migration";
 
 /**
  * 允许的职业 / 性别
@@ -228,6 +229,10 @@ export function parseRoleData(input: unknown): { fields: RoleIndexFields; data: 
   // revision 是服务端的索引列（乐观锁），客户端把它一起带在快照里 —— 落库前剔掉，
   // 免得文档里留一份与列不同步的旧值（下一句读回来时以列为准，见 RoleDto.from）
   delete data.revision;
+  // 存档结构版本（#818）：**写入路径一律盖当前版本**。客户端交上来的老档已在 save() 里
+  // 先过完迁移链，所以这里盖章不会把「没迁过的形状」标成新版本；反过来，
+  // 版本比代码新在那一步就被拒了，走不到这里
+  data.schemaVersion = ROLE_DATA_VERSION;
   return { fields: { id, name, occupation, sex, level }, data };
 }
 

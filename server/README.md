@@ -253,7 +253,7 @@ git pull && make config-import       # 整表替换配置；账号与角色存�
 | 表 | 存什么 | 关键点 |
 | --- | --- | --- |
 | `accounts` | 玩家账号 | 口令存 scrypt 摘要；`status` 封禁位；**`token_version`** 令牌版本号 |
-| `roles` | 角色 | `data` 列存客户端 `entities/Role` 的 **JSON 字符串**；索引字段（id/name/occupation/sex/level）另落列；**`revision`** 乐观锁版本；`online_role_id` 由账号侧指向当前在线角色 |
+| `roles` | 角色 | `data` 列存客户端 `entities/Role` 的 **JSON 字符串**；索引字段（id/name/occupation/sex/level）另落列；**`revision`** 乐观锁版本；`data.schemaVersion` 是存档结构版本（#818，进游戏时惰性迁移，`make migrate` 批量落库）；`online_role_id` 由账号侧指向当前在线角色 |
 | `admins` | 管理端账号 | 独立于玩家账号体系；`role`（super_admin / admin / viewer）；**`token_version`** |
 | `audit_logs` | 操作日志 | 动作 = 接口 `operationId`；`detail` 落请求体（已打码）；`success` / `status_code` / `actor_name` / `target_id` / `path` |
 | `announcements` | 公告 | 标题 / 正文 / `level`（`important` 优先展示）/ `enabled`；`starts_at` / `ends_at` 组成生效时间窗，**「生效中」的判据就是这三列**（建了 `idx_announcements_window`） |
