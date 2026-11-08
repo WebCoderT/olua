@@ -84,6 +84,8 @@ export interface WorldMonsterSnapshot {
  * 生命周期
  * ===========================================================================
  * - 图实例**惰性加载**：第一个观看者进图时从库里恢复（没有就按刷怪区播种创建）；
+ * - **一个账号同一时刻只在一张图里**（#821）：换图 = 先退出旧分域再登记新分域，
+ *   由 `join` 自己保证，不靠调用方记得先 `leave`；
  * - 玩家全下线不等于立刻卸载：空闲满 `worldMapIdleMs` 才从内存卸载（状态已在库），
  *   卸载期间不跑重生，重新加载时按当前时刻一次性补上到期的；
  * - 优雅关闭：`onApplicationShutdown` 停 tick、全量落盘 —— SQLite 连接在其后由
@@ -141,8 +143,15 @@ export class WorldService implements OnApplicationBootstrap, OnApplicationShutdo
    * 进图登记：惰性加载该区分域的实例（库里恢复或按刷怪区播种），把账号记为观看者，
    * 返回权威快照（`world` 帧的 data）。**重复 join 同一分域是幂等的**（断线重连走这里拿回状态）。
    * 区号由调用方（realtime，从账号行解析）传入 —— 本服务不认识账号。
+   *
+   * **换图也走这条**（#821）：登记前先把账号从所有分域的观看者里退掉。这是世界层的不变量
+   * ——「一个人同一时刻只在一张图里」—— 写在这里就不可能被某个调用方漏掉。漏掉的后果不是
+   * 「少退一条记录」：旧图 `viewers` 永不为空，`viewedMaps()` 永远带着它，于是那张图的怪物
+   * AI 一直跑、监控一直采样、世界频道还在往一个不在那儿的人身上投递，直到进程重启。
    */
   join(zoneId: number, accountId: string, mapId: string): { mapId: string; monsters: WorldMonsterSnapshot[] } {
+    // 幂等：同图重进时这步等于「退掉再登记」，`emptySince` 被下面的 delete 抹掉，不会误回收
+    this.leave(accountId);
     const map = this.loadMap(zoneId, mapId);
     const key = worldKey(zoneId, mapId);
     let viewerSet = this.viewers.get(key);
@@ -155,7 +164,14 @@ export class WorldService implements OnApplicationBootstrap, OnApplicationShutdo
     return { mapId, monsters: [...map.values()].map(snapshotOf) };
   }
 
-  /** 离图（连接断开时由通道调用）：观看者退掉；世界状态照常留着（别的观看者还在玩） */
+  /**
+   * 离图（连接断开 / 被踢下线 / 换图前由 `join` 调用）：观看者从**所有**分域退掉；
+   * 退空的分域记下「从此刻起无人观看」，空闲回收按它算。
+   *
+   * 为什么全表扫而不是维护「账号 → 当前分域」的索引：有观看者的分域本来就只有
+   * 在线人数那个量级，扫一遍比多养一份可能与真相错位的内存便宜；顺带还能纠正
+   * 历史遗留的错位记录（一个人同时挂在两张图上）。世界状态照常留着（别的观看者还在玩）。
+   */
   leave(accountId: string): void {
     for (const [key, viewerSet] of this.viewers) {
       if (!viewerSet.delete(accountId)) continue;

@@ -64,7 +64,7 @@ CREATOR ?= CocosCreator
         client-check client-test client-test-one client-gen-monster client-gen-drops \
         client-clean-frames client-clean-frames-apply client-open client-gen-declarations \
         server-dev server-build server-start server-e2e server-e2e-roles server-e2e-guard \
-        server-e2e-mail server-e2e-account-email server-e2e-realtime server-e2e-combat server-e2e-world server-e2e-dual server-e2e-game-config server-e2e-backup server-e2e-zone server-e2e-guild server-e2e-social server-e2e-chat server-e2e-quest server-e2e-sell server-e2e-bag server-e2e-blocks server-e2e-party server-e2e-rank server-e2e-achievement server-e2e-game-mail server-e2e-equip-align server-e2e-equip-in-align server-e2e-map server-verify db-backup db-restore config-export config-import config-check gen-api \
+        server-e2e-mail server-e2e-account-email server-e2e-realtime server-e2e-combat server-e2e-world server-e2e-world-viewers server-e2e-dual server-e2e-game-config server-e2e-backup server-e2e-zone server-e2e-guild server-e2e-social server-e2e-chat server-e2e-quest server-e2e-sell server-e2e-bag server-e2e-blocks server-e2e-party server-e2e-rank server-e2e-achievement server-e2e-game-mail server-e2e-equip-align server-e2e-equip-in-align server-e2e-map server-verify db-backup db-restore config-export config-import config-check gen-api \
         resources-manifest resources-verify resources-pack resources-upload resources-download image-manifest \
         admin-dev admin-build admin-typecheck admin-preview \
         icons \
@@ -262,6 +262,9 @@ server-e2e-combat: ## 服务端伤害结算专项 e2e（服务端算伤害 / 幂
 
 server-e2e-world: ## 服务端世界权威专项 e2e（22 条：播种 / 共享 / tick 重生 / 优雅关闭与重启恢复；临时文件库）
 	@cd server && $(NPM) run test:e2e:world
+
+server-e2e-world-viewers: ## 服务端世界观看者集合专项 e2e（22 条：换图退出旧图 / 旧图不再采样与卸载 / 卸载不丢状态；临时文件库）
+	@cd server && $(NPM) run test:e2e:world-viewers
 
 server-e2e-dual: ## 服务端双进程形态专项 e2e（14 条：存档/实时分进程 / 跨进程令牌校验 / 踢下线巡检断连 / WAL 跨进程写）
 	@cd server && $(NPM) run test:e2e:dual
