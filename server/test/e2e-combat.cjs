@@ -1227,6 +1227,39 @@ function connect(url) {
       JSON.stringify(cheatBags),
     );
 
+    // —— D. 扣一部分不能把绑定洗白（#816）：只改 count，元数据原样保留 ——
+
+    // 用药：`emptyPos` 上那堆是绑定的 —— 用掉一瓶后 bound 必须还在，
+    // 否则 5 瓶绑定药用到剩 1 瓶就变成可交易的了
+    await api(baseUrl, "PATCH", `admin/roles/${binder.roleId}`, { token: adminToken, body: { hp: 1 } });
+    const usedBound = await api(baseUrl, "POST", `roles/${binder.roleId}/drug-use`, {
+      token: binder.token,
+      body: { row: emptyPos.row, col: emptyPos.col },
+    });
+    const usedCell = usedBound.code === 0 ? usedBound.data.data.bag[emptyPos.row][emptyPos.col] : null;
+    check(
+      !!usedCell && usedCell.bound === true && usedCell.count === boundKept.count - 1,
+      "D：绑定药用掉一瓶：数量减一、bound 仍是 true（#816 的核心断言）",
+      JSON.stringify({ usedCell, code: usedBound.code, message: usedBound.message }),
+    );
+
+    // 出售走的是另一条扣法（takeGoodsFromBag，按 id 点数扣）—— 造一堆绑定材料卖掉一半
+    const boundMat = await killWith(binder, "material_hide", { bindDrops: true }, [4, 4]);
+    const pickedMat = boundMat ? await pick(binder, boundMat.killed.castId, 0) : null;
+    const matCell = pickedMat && pickedMat.ok ? pickedMat.placed[0] : null;
+    check(!!matCell && matCell.bound === true, "D：绑定的材料入包（bound = true）", JSON.stringify(matCell));
+    const soldHalf = await api(baseUrl, "POST", `roles/${binder.roleId}/sell`, {
+      token: binder.token,
+      body: { entries: [{ goodId: "material_hide", count: 2 }] },
+    });
+    const matAfter =
+      soldHalf.code === 0 ? (soldHalf.data.data.bag.flat().find((cell) => cell && cell.id === "material_hide") || null) : null;
+    check(
+      !!matAfter && !!matCell && matAfter.bound === true && matAfter.count === matCell.count - 2,
+      "D：卖一半：数量减二、bound 仍在（扣减路径同样不重建格子）",
+      JSON.stringify({ matAfter, matCell, code: soldHalf.code, message: soldHalf.message }),
+    );
+
     // 还原：这一区改过的每只怪的掉落配置 + 随机绑定概率，都回到改之前那一份
     for (const key of touchedDropKeys) {
       const before = dropRowsBefore.get(key);

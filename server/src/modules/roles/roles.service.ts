@@ -739,10 +739,9 @@ export class RolesService {
     if (healsHp && !hpFull) data.hp = hp + recoveredHp;
     if (healsMp && !mpFull) data.mp = mp + recoveredMp;
 
-    // 扣减格子数量（药品可叠加，减到 0 清格；格子对象整个换新，避免共享引用）
+    // 扣减数量（药品可叠加，减到 0 清格；**只改 count，bound / from 原样保留** —— #816）
     const remaining = Math.max(1, cell.count) - 1;
-    const bagLine = (data.bag as unknown[][])[dto.row] as (Record<string, unknown> | null)[];
-    bagLine[dto.col] = remaining > 0 ? { id: cell.id, count: remaining } : null;
+    this.writeBagCount(data, dto.row, dto.col, remaining);
 
     const row: RoleRow = {
       ...existing,
@@ -803,10 +802,9 @@ export class RolesService {
     const balance = Math.max(0, Math.floor(Number(data[currency]) || 0)) + amount;
     data[currency] = balance;
 
-    // 扣减格子数量（可叠加，减到 0 清格；格子对象整个换新，避免共享引用）
+    // 扣减数量（可叠加，减到 0 清格；**只改 count，bound / from 原样保留** —— #816）
     const remaining = Math.max(1, cell.count) - 1;
-    const bagLine = (data.bag as unknown[][])[dto.row] as (Record<string, unknown> | null)[];
-    bagLine[dto.col] = remaining > 0 ? { id: cell.id, count: remaining } : null;
+    this.writeBagCount(data, dto.row, dto.col, remaining);
 
     const row: RoleRow = {
       ...existing,
@@ -885,10 +883,9 @@ export class RolesService {
     data.hp = typeof data.maxHp === "number" ? data.maxHp : data.hp;
     data.mp = typeof data.maxMp === "number" ? data.maxMp : data.mp;
 
-    // 扣减格子数量（可叠加，减到 0 清格；格子对象整个换新，避免共享引用）
+    // 扣减数量（可叠加，减到 0 清格；**只改 count，bound / from 原样保留** —— #816）
     const remaining = Math.max(1, cell.count) - 1;
-    const bagLine = (data.bag as unknown[][])[dto.row] as (Record<string, unknown> | null)[];
-    bagLine[dto.col] = remaining > 0 ? { id: cell.id, count: remaining } : null;
+    this.writeBagCount(data, dto.row, dto.col, remaining);
 
     const row: RoleRow = {
       ...existing,
@@ -1027,6 +1024,30 @@ export class RolesService {
     }
     const record = cell as Record<string, unknown>;
     return { id: record.id as string, count: Math.max(1, Math.floor(Number(record.count) || 1)) };
+  }
+
+  /**
+   * 改写某格数量，**其余字段原样保留**（#816）
+   *
+   * 以前这里是 `{ id: cell.id, count: remaining }` —— 重建对象等于把这一格上的
+   * `bound` / `from` 一起抹掉：5 瓶「掉落即绑定」的药用到剩 1 瓶就变成可交易的了，
+   * 溯源同理。`bound` 是**格子级**元数据（同一 id 的两堆可以一堆绑定一堆不绑定），
+   * 所以它不能从物品配置反推，只能原样搬运。
+   *
+   * 换新对象而不是原地改 `count`：`readBagCell` 给出去的是副本，就地改不会落回 `data`；
+   * 且换新对象能保证写回的那格与任何外部引用都不共享（沿用原写法）。
+   */
+  private writeBagCount(data: Record<string, unknown>, row: number, col: number, remaining: number): void {
+    const bag = data.bag;
+    const line = Array.isArray(bag) ? (bag as unknown[])[row] : undefined;
+    if (!Array.isArray(line)) return;
+    const cells = line as unknown[];
+    const cell = cells[col];
+    if (remaining <= 0 || !cell || typeof cell !== "object") {
+      cells[col] = null;
+      return;
+    }
+    cells[col] = { ...(cell as Record<string, unknown>), count: remaining };
   }
 
   /**
@@ -1479,7 +1500,8 @@ export class RolesService {
         const current = Math.max(1, Math.floor(Number((cell as Record<string, unknown>).count) || 1));
         const take = Math.min(current, remaining);
         if (take >= current) line[col] = null;
-        else line[col] = { id: goodId, count: current - take };
+        // 部分扣减只改 count：`bound` / `from` 是格子级元数据，重建对象等于把它抹掉（#816）
+        else line[col] = { ...(cell as Record<string, unknown>), count: current - take };
         remaining -= take;
       }
     }
