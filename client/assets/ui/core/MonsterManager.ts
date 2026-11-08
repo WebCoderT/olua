@@ -16,6 +16,7 @@ import EffectManager from "./EffectManager";
 import AnimationHelper from "../helpers/AnimationHelper";
 import GameUiHelper from "../helpers/GameUiHelper";
 import StorageManager from "./StorageManager";
+import StatusManager from "./StatusManager";
 import GuideStore from "./GuideStore";
 import { GUIDE_EVENT } from "../../types/guide";
 import { addMonsterCollider } from "../utils/physics/MonsterCollider";
@@ -353,7 +354,23 @@ export default class MonsterManager {
    * 以 `combat-parity` 标签记到 console —— 服务端权威（#541）下这仍是发现
    * 「属性快照没跟上 / 结算口径异常」的可观测点。
    */
-  static applyServerSettle(data: { castId: number; skillId: string; targetId: string; damage: number; hp: number; killed: boolean; reward?: CombatKillReward }) {
+  static applyServerSettle(data: {
+    castId: number;
+    skillId: string;
+    targetId: string;
+    damage: number;
+    hp: number;
+    killed: boolean;
+    reward?: CombatKillReward;
+    statusOnly?: boolean;
+    statuses?: readonly { id: string; remainingMs: number }[];
+  }) {
+    // 状态快照（#822）：任何一次结算都可能带回「我现在有哪些状态」—— 先刷新图标与身上特效，
+    // 再做伤害表现。状态型技能到这里就结束：它没有目标、不产生伤害，
+    // `damage` / `hp` / `targetId` 都是 0 占位（服务端协议里写明了）
+    if (data.statuses) StatusManager.applyFromServer(data.statuses);
+    if (data.statusOnly) return;
+
     const node = this.instanceIndex.get(data.targetId);
     const monster = node ? this.monsterMap.get(node) : null;
     if (!node || !monster) return; // 换图后到达的迟到结算：目标已不在场，这次出手当作打空

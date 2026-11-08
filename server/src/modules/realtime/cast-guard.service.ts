@@ -72,8 +72,14 @@ export interface CastGuardInput {
   skillId: string;
   /** 角色存档（`RoleDto.data`）：hp / mp / mapAt / speedRate 都在里面 */
   roleData: Record<string, unknown>;
-  /** 目标实例的当前坐标与所在地图（世界服务持有） */
-  target: { mapId: string; x: number; y: number };
+  /**
+   * 目标实例的当前坐标与所在地图（世界服务持有）
+   *
+   * **缺省 = 自身施法**（#822：护体神盾 / 金刚护体这类 `category = "2"` 的 buff）：
+   * 没有目标就没有「跨图打」和「隔图打」这回事，跨图与距离两道直接跳过，
+   * 存活 / 冷却 / 耗蓝 / 频率四道照走（buff 同样能被改包连放）。
+   */
+  target?: { mapId: string; x: number; y: number };
 }
 
 /** 令牌桶容量（A2）：只用来吸收网络抖动，不是「每秒能放几次」 */
@@ -115,7 +121,7 @@ export class CastGuardService {
     // `mapAt` 是 worldJoin 放行时写进去的（#606）；没有这个键（老档 / 刚建号）时不拦，
     // 与进图门槛的纪律一致（那一刻“他在哪”还没有服务端的答案，拦下来只会误伤）。
     const mapAt = typeof input.roleData.mapAt === "string" ? input.roleData.mapAt : "";
-    if (mapAt && mapAt !== input.target.mapId) {
+    if (input.target && mapAt && mapAt !== input.target.mapId) {
       return {
         ok: false,
         rejected: "cross_map",

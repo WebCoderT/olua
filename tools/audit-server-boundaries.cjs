@@ -58,6 +58,10 @@ const ALLOWED_EDGES = [
   { from: "modules/admin", to: "modules/audit/audit.service.ts", why: "管理端写审计" },
   // roles 的属性汇总口径来自 combat 纯函数（存档返回值要带战斗力）
   { from: "modules/roles", to: "modules/combat/role-attributes.ts", why: "属性汇总纯函数" },
+  // 状态数值口径（#822）：角色状态的汇总与格挡公式是纯函数，结算侧与存档侧各用一半 ——
+  // 放在 combat 里是因为它是「三端同源的一份公式」（客户端 BattleMath 是同一套向量的规格），
+  // 任何一侧复制一份都会走成两套数字
+  { from: "modules/roles", to: "modules/combat/status-combat.ts", why: "状态数值口径（结算/受击共用）" },
   // 帮会规则门槛（#605）：建帮 / 改公告的长度校验读运行时参数（与快照下发同一份配置）
   { from: "modules/social", to: "modules/game-config/runtime-params.service.ts", why: "帮会规则门槛读运行时参数" },
   { from: "modules/roles", to: "modules/combat/role-attribute-comparison.ts", why: "属性比对纯函数" },
@@ -67,6 +71,7 @@ const ALLOWED_EDGES = [
   { from: "modules/admin", to: "modules/zone/", why: "区服管理复用 ZoneService 的开区/合并实现" },
   // realtime（gateway+结算）依赖 world 与存档的公开服务，依赖 combat 纯函数
   { from: "modules/realtime", to: "modules/combat/role-attributes.ts", why: "结算取属性汇总" },
+  { from: "modules/realtime", to: "modules/combat/status-combat.ts", why: "受击算格挡与减伤（#822，纯函数）" },
   { from: "modules/realtime", to: "modules/world/world.service.ts", why: "世界权威公开服务" },
   { from: "modules/realtime", to: "modules/roles/roles.service.ts", why: "结算读写存档走存档服务" },
   { from: "modules/realtime", to: "modules/roles/role-data.util.ts", why: "roleUpdate 组帧解码存档（#541）" },
@@ -266,6 +271,11 @@ const REPO_EDGES = {
   // 队伍（#399）：队伍与成员两表唯一写者是 party 域（PartyService）；
   // realtime 只读（伤害结算要问「击杀者的同图队友」，进图补快照要问「他在哪个队」）
   "database/repositories/party.repository.ts": ["modules/party", "modules/realtime"],
+  // 角色状态（#822）：`role_status` 是「谁此刻挂着什么」，施加/到期/清空全在存档域
+  // （RoleStatusService）—— 死亡清在存档进程、结算读在实时进程，实时进程**经
+  // RolesService.statusModifiersOf / statusSnapshotOf 取**，不直连仓储。
+  // 配置侧是 `statuses` 表（上面那条边），两张表不要混。
+  "database/repositories/role-status.repository.ts": ["modules/roles"],
 };
 
 /** 全局守卫回查库是设计行为（两层守卫都住在守卫里），单独开边 */

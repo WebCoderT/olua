@@ -272,7 +272,12 @@ function main() {
   );
 
   const warrior = read("assets/skills/warrior.ts");
-  check(/config\.statusId/.test(warrior), "技能释放实现从配置读 statusId（手写映射表已废除）");
+  // #822 起状态型技能不在客户端挂 buff：只发 cast，status_id 由服务端按 skills 行施加
+  // （客户端自己 apply 等于「服务端不知道的 buff」—— 既不计入结算，也不会出现在别人的屏幕上）
+  check(
+    /skill_1010[\s\S]{0,400}CombatChannel\.sendCast/.test(warrior) && !/skill_1010[\s\S]{0,400}StatusManager\.apply\(/.test(warrior),
+    "状态技能只发 cast 帧、不本地 apply（statusId 由服务端读配置施加）",
+  );
   check(/castLockMs/.test(warrior), "技能释放实现把 castLockMs 传给动作锁");
 
   // 怪物侧（#372）：服务端广播 → 演出。这三处不接上，怪物放技能在画面上什么都没有

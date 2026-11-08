@@ -9,6 +9,7 @@ import { StatusRepository } from "../../database/repositories/status.repository"
 import { SkillRow, StatusRow } from "../../database/rows";
 import { parseCoefficientsJson, parseCombatJson } from "../../common/config-json";
 import { roleAttributeSourceOf, summarizeRoleAttributes } from "../combat/role-attributes";
+import { resolveIncomingDamage } from "../combat/status-combat";
 import { RolesService } from "../roles/roles.service";
 import { WorldService, worldKey, type WorldMonster } from "../world/world.service";
 import type { RealtimeDropEntry, RealtimeMonsterAiEntry, RealtimeMonsterCast, RealtimeMonsterHit, RealtimeMonsterKill } from "./realtime.protocol";
@@ -304,8 +305,8 @@ export type MonsterAiLogEvent =
  * - 移动：待机游走（停留点 + 随机方向 + 活动半径）与追击（直线趋近，不做寻路），
  *   速度用快照里每只怪的 `moveSpeed`（像素/秒，与客户端同一数值）；
  * - 出手：进入距离后**先试技能、再普攻**（#372，见下节）；普攻伤害 = 怪物物攻区间随机值
- *   （monsters 表，#258 起读库即时生效）× 攻击倍率 − 玩家物防区间随机值（服务端重算属性），
- *   受击走 `RolesService.applyMonsterHit` 落账（血量权威在服务端，revision 不推进）。
+ *   （monsters 表，#258 起读库即时生效）× 攻击倍率 − 玩家物防区间随机值 × 玩家防御倍率，
+ *   再过一道格挡（#822），受击走 `RolesService.applyMonsterHit` 落账（血量权威在服务端，revision 不推进）。
  *
  * ===========================================================================
  * 技能（#372）
@@ -326,8 +327,9 @@ export type MonsterAiLogEvent =
  * ===========================================================================
  * 刻意不做的
  * ===========================================================================
- * - **玩家侧状态数值不参与**（格挡 / 防御修正这些仍是客户端 StatusManager 的本地增益）：
- *   服务端按裸属性结算 —— 权威口径宁缺毋滥；怪物侧的状态从 #372 起是真的。
+ * - **玩家侧状态由 `role_status` 提供，不在本服务里存**（#822）：本服务只调
+ *   `RolesService.statusModifiersOf` 拿防御倍率与格挡，状态的施加 / 到期 / 清空都在存档域 ——
+ *   人物的状态要跨进程、跨重启活着，放这里会与存档进程各执一份。
  * - **位置不落盘**：坐标的持久真相是出生点（世界服务的既有边界），重启后怪物回出生点
  *   重新游走 —— 几秒钟的表现层状态，不值得为它加一张表；
  * - 玩家位置不权威：客户端节流上报（`pos` 帧），服务端只把它当 AI 输入；
@@ -860,8 +862,9 @@ export class MonsterAiService implements OnApplicationBootstrap, OnApplicationSh
   /**
    * 结算一次出手（普攻或伤害型技能）
    *
-   * 伤害 = round(怪物物攻区间随机值 × 攻击倍率 × 技能倍率 − 玩家物防区间随机值)，下限 0；
-   * 攻击倍率来自身上的状态（#372）。玩家侧状态不参与（见类注释的「刻意不做的」）。
+   * 伤害 = round(怪物物攻区间随机值 × 攻击倍率 × 技能倍率 − 玩家物防区间随机值 × 防御倍率)，下限 0，
+   * 再过一道格挡（#822）。怪物侧攻击倍率来自它自己的状态（#372）；玩家侧防御倍率与格挡
+   * 来自 `role_status`（护体神盾 30% 格挡减半、金刚护体防御 ×1.5）—— 两边同一套 `combat` 口径。
    *
    * @returns null = 这一下打不出去（玩家已经倒下 / 不在线，或怪物缺数值行）。
    *          调用方**必须**把它当成「目标作废」处理（见 `forgetTarget`）—— 只当成本次落空会让
@@ -874,15 +877,26 @@ export class MonsterAiService implements OnApplicationBootstrap, OnApplicationSh
     if (!stats) return null;
     // RoleDto 要摊平（装备/成长线在 data 里），否则玩家的防御只剩等级那一档
     const summary = summarizeRoleAttributes(roleAttributeSourceOf(role.level, role.data));
+    // 玩家身上的状态（#822）：防御倍率乘在防御项上，格挡在算完之后掷一次
+    const modifiers = this.roles.statusModifiersOf(accountId);
     const attack = rollRange([Number(stats.physical_attack_min) || 0, Number(stats.physical_attack_max) || 0]) * this.attackMultiplierOf(monster.instanceId);
-    const defense = summary ? rollRange(summary.physicalDefense) : 0;
-    const damage = Math.max(0, Math.round(attack * rate - defense));
+    const defense = Math.round((summary ? rollRange(summary.physicalDefense) : 0) * modifiers.defenseMultiplier);
+    // 格挡的随机数在这里掷（`resolveIncomingDamage` 是纯函数，e2e 才敢按固定 roll 断言）
+    const resolved = resolveIncomingDamage(Math.max(0, Math.round(attack * rate - defense)), modifiers, Math.random());
+    const damage = resolved.damage;
     const applied = this.roles.applyMonsterHit(accountId, damage);
     if (!applied) return null;
     // 位置缓存里的血量同步（下轮目标校验用它，不再多打一次库）
     const position = this.positions.get(accountId);
     if (position) position.hp = applied.hp;
-    return { instanceId: monster.instanceId, accountId, damage, hp: applied.hp, maxHp: applied.maxHp };
+    return {
+      instanceId: monster.instanceId,
+      accountId,
+      damage,
+      hp: applied.hp,
+      maxHp: applied.maxHp,
+      ...(resolved.blocked ? { blocked: true } : {}),
+    };
   }
 
   private pushHit(mapKey: string, hit: RealtimeMonsterHit): void {

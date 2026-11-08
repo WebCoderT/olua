@@ -433,6 +433,10 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
         this.world.leave(identity.id);
         this.monsterAi.dropAccount(identity.id);
         this.chat.dropAccount(identity.id);
+        // 离线不保留 buff（#822 / docs/22 §5）：状态会改结算（防御倍率 / 格挡），
+        // 挂在离线角色身上等于「回来白拿 buff」。断线即清，重连后要重新放 ——
+        // 与「离线不保留 buff」的网络游戏惯例一致。
+        this.roles.clearStatusesOf(identity.id);
       }
     });
 
@@ -874,6 +878,7 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
       this.world.leave(accountId);
       this.monsterAi.dropAccount(accountId);
       this.chat.dropAccount(accountId);
+      this.roles.clearStatusesOf(accountId);
     }
   }
 

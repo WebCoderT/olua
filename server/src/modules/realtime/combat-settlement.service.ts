@@ -184,12 +184,81 @@ export class CombatSettlementService {
 
   //#region 内部实现
 
+  /**
+   * 状态型技能（`category = "2"`）：不掷伤害，只给自己挂状态（#822 / docs/22 A4）
+   *
+   * 走这条分支的技能（当前配置里是 1010 护体神盾、1011 金刚护体）以前会被当伤害技能结算 ——
+   * `damageCoefficients` 对状态技能来说是**无意义的遗留数据**（配置里抄了 3.0 倍），
+   * 于是「护体神盾」成了 300% 核弹、玩家的 buff 一次都没落地。
+   *
+   * 与伤害分支的差别只有三点：不查目标、不掷骰、不碰世界状态；六道闸里跟目标无关的
+   * 四道（存活 / 冷却 / 耗蓝 / 频率）照走 —— 状态技能同样能被改包连放。
+   *
+   * `settle` 回执带 `statusOnly: true` 与整份 `statuses`：客户端据此重建图标栏，
+   * **不要**再去读 `damage` / `hp`（那里是 0 占位，不代表任何血量变化）。
+   */
+  private castStatusSkill(accountId: string, cast: ParsedCast, skill: Record<string, unknown>): RealtimeSettleData {
+    const fail = (code: string, message: string): RealtimeSettleData => ({ castId: cast.castId, ok: false, code, message });
+
+    const role = this.roles.online(accountId);
+    if (!role) return fail("no_role", "当前没有在线角色，无法结算");
+    const skillLevel = readSkillLevel(role.data, cast.skillId);
+    if (!skillLevel) return fail("skill_not_learned", `技能 ${cast.skillId} 尚未学习`);
+
+    const statusId = typeof skill.statusId === "string" ? skill.statusId : "";
+    if (!statusId) return fail("bad_request", `技能 ${cast.skillId} 是状态型，但配置里没有 statusId`);
+
+    const verdict = this.guard.guard({ accountId, skill, skillId: cast.skillId, roleData: role.data ?? {} });
+    if (!verdict.ok) {
+      return {
+        castId: cast.castId,
+        ok: false,
+        code: verdict.rejected,
+        message: verdict.message,
+        rejected: verdict.rejected,
+        ...(verdict.remainMs === undefined ? {} : { remainMs: verdict.remainMs }),
+        ...(verdict.need === undefined ? {} : { need: verdict.need }),
+        ...(verdict.have === undefined ? {} : { have: verdict.have }),
+      };
+    }
+
+    const statuses = this.roles.applyStatusToOnlineRole(accountId, statusId, cast.skillId);
+    // null = 配置里没这个状态 / 持续时间配成 0：运营配错要当场报出来，不能静默放行
+    // （静默的后果是「放了技能什么都不发生」，玩家只会以为技能坏了）
+    if (!statuses) return fail("bad_request", `状态 ${statusId} 不存在或持续时间为 0（检查 statuses 表）`);
+
+    this.logger.debug(`状态技能：账号 ${accountId} 技能 ${cast.skillId}(Lv${skillLevel}) → 状态 ${statusId}`);
+    return {
+      castId: cast.castId,
+      ok: true,
+      skillId: cast.skillId,
+      targetId: cast.targetId,
+      damage: 0,
+      hp: 0,
+      maxHp: 0,
+      killed: false,
+      duplicate: false,
+      statusOnly: true,
+      appliedStatus: statusId,
+      statuses,
+    };
+  }
+
   private settleNew(accountId: string, cast: ParsedCast): RealtimeSettleData {
     const fail = (code: string, message: string): RealtimeSettleData => ({ castId: cast.castId, ok: false, code, message });
 
     // 技能：存在 + 已学习 + 该等级有伤害系数（先查运营库覆盖层，没改过就是出厂值）
     const skill = skillOf(cast.skillId);
     if (!skill) return fail("unknown_skill", `技能不存在：${cast.skillId}`);
+
+    // 状态型技能（`category = "2"`）**先分流**（#822）：它不掷伤害、不查目标，只给自己挂状态。
+    // 这条判断必须放在目标校验之前 —— 护体神盾 / 金刚护体是自身 buff（`require_target = 0`），
+    // 客户端送来的目标本来就是空的，走「目标存在」那套会被 unknown_target 拦掉。
+    // 分流之后它仍然过六道闸里跟目标无关的四道（存活 / 冷却 / 耗蓝 / 频率）。
+    if (String(skill.category ?? "") === "2") return this.castStatusSkill(accountId, cast, skill);
+
+    // 伤害型技能必须有目标（状态型已经在上面分流走了）
+    if (!cast.targetId || !cast.monsterKey) return fail("bad_request", `技能 ${cast.skillId} 需要目标（targetId / monsterKey 不能为空）`);
 
     // 目标：战斗数值表里要有这只怪，世界里要有这只实例（instanceId 由服务端发牌，
     // 伪造的 / 已被卸载图的一律 unknown_target），且 key 与实例登记的一致。
@@ -249,7 +318,8 @@ export class CombatSettlementService {
     // 伤害公式与客户端 BattleMath.calcSkillDamage 同一口径：
     //   round(攻击区间随机值 × 倍率 − 防御区间随机值)，下限 0
     // 攻击用哪项属性以**生成物里系数的 baseType** 为准（不信任客户端传参），防御按同名映射取
-    const attack = rollRange(readRange(summary, coefficient.baseType));
+    // 玩家身上的状态修正（#822）：攻击倍率乘在出伤上，与受击侧的防御倍率同一个来源
+    const attack = rollRange(readRange(summary, coefficient.baseType)) * this.roles.statusModifiersOf(accountId).attackMultiplier;
     // 怪物身上的状态修正（#372）：防御 × 状态连乘 —— 没有这条，「硬化皮肤」只是客户端动画
     const defense = Math.round(rollRange(readMonsterRange(stats, coefficient.baseType)) * this.monsterAi.defenseMultiplierOf(cast.targetId));
     const damage = Math.max(0, Math.round(attack * coefficient.baseTypeRate - defense));
@@ -358,7 +428,20 @@ export class CombatSettlementService {
       `结算：账号 ${accountId} 技能 ${cast.skillId}(Lv${skillLevel}) → 目标 ${cast.targetId}(${cast.monsterKey}) 伤害 ${damage}，血量 ${applied.hp}/${target.maxHp}${applied.killed ? "，击杀" : ""}${reward ? `，经验 +${reward.exp}，掉落 ${reward.drops.length} 种` : ""}`,
     );
 
-    const ok: RealtimeSettleData = { castId: cast.castId, ok: true, skillId: cast.skillId, targetId: cast.targetId, damage, hp: applied.hp, maxHp: target.maxHp, killed: applied.killed, duplicate: false };
+    const ok: RealtimeSettleData = {
+      castId: cast.castId,
+      ok: true,
+      skillId: cast.skillId,
+      targetId: cast.targetId,
+      damage,
+      hp: applied.hp,
+      maxHp: target.maxHp,
+      killed: applied.killed,
+      duplicate: false,
+      // 状态快照（#822）：出伤不改变自己的状态，但顺手带上 —— 客户端只有这一条通道能刷新图标，
+      // 缺了它「状态到期后图标还在」就只能靠本地倒计时硬撑
+      statuses: this.roles.statusSnapshotOf(accountId),
+    };
     return reward ? { ...ok, reward } : ok;
   }
 
@@ -616,9 +699,12 @@ function parseCast(raw: unknown): ParsedCast | null {
   const data = raw as Record<string, unknown>;
   const castId = data.castId;
   if (typeof castId !== "number" || !Number.isFinite(castId)) return null;
-  if (typeof data.skillId !== "string" || typeof data.targetId !== "string" || typeof data.monsterKey !== "string") return null;
-  if (!data.skillId || !data.targetId || !data.monsterKey) return null;
-  return { castId, skillId: data.skillId, targetId: data.targetId, monsterKey: data.monsterKey };
+  if (typeof data.skillId !== "string" || !data.skillId) return null;
+  // 目标可以为空（#822）：状态型技能是自身 buff（`require_target = 0`），客户端送空串。
+  // 伤害型技能在后面仍然要求目标存在 —— 那道判断在 settleNew 里，不要在这里一并拦掉。
+  const targetId = typeof data.targetId === "string" ? data.targetId : "";
+  const monsterKey = typeof data.monsterKey === "string" ? data.monsterKey : "";
+  return { castId, skillId: data.skillId, targetId, monsterKey };
 }
 
 /** 解析失败时尽量把 castId 带回去（客户端要靠它把拒绝结果对回某次出手）。

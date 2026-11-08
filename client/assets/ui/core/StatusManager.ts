@@ -15,8 +15,12 @@ import RoleUIManager from "./RoleUIManager";
  * - 身上特效：配置了 effect 的状态在特效层挂一个循环播放的图集帧动画节点，
  *   每帧跟随角色（挂点偏移统一见 configs/effect 的 statusEffect.offset）
  * - 图标：头像下方的状态图标条（见 ui/components/hud/StatusIconBar，经 RoleUIManager 刷新）
- * 技能获得的状态写在技能配置的 statusId 上（configs/skill-data），技能实现释放成功后自己调 apply；
- * 装备/VIP 等来源直接 apply 对应状态编号即可
+ *
+ * **数据来源（#822 起）：技能状态以服务端为准**。放技能只发 `cast` 帧，状态由服务端落库后
+ * 随 `settle` 回执的 `statuses` 整份下发，这里用 `applyFromServer` 整表重建 ——
+ * 客户端不再自己决定「我有没有 buff」（以前本地 `apply` 就亮图标，服务端完全不知道，
+ * 护体神盾既没生效也变成了 300% 核弹）。本地 `apply` 只留给没有服务端来源的状态
+ * （装备 / VIP 这类，目前还没接）。
  */
 export default class StatusManager {
   /** 进行中的状态（状态编号 -> 到期时间戳，毫秒） */
@@ -43,6 +47,39 @@ export default class StatusManager {
     }
     this.expireAt.set(statusId, Date.now() + config.duration * 1000);
     this.ensureEffect(statusId, config);
+    this.refreshIconBar();
+  }
+
+  /**
+   * 按服务端快照整表重建（#822：settle 回执里的 `statuses`）
+   *
+   * **整表替换而不是增量**：快照里没有的状态就是没了（到期 / 被清）。增量协议漏一条的后果是
+   * 图标永远不消失，而整表重建最多错一次、下一帧就纠正。
+   *
+   * `remainingMs` 是服务端算好的剩余时间，这里按本地当前时刻往后推 —— 客户端与服务端时钟
+   * 不共享，只有「还剩多久」是可用的量。代价是每次回执都会把到期时刻往后推一个单程延迟
+   * （几十毫秒），换来的是不掉图标、不提前消失。
+   *
+   * 配置里查不到的状态直接忽略（运营删了状态 / 老客户端拿到新 id）：画不出来，
+   * 也不该让图标栏出现一个空图标。
+   */
+  static applyFromServer(entries: readonly { id: string; remainingMs: number }[]) {
+    const now = Date.now();
+    const next = new Map<StatusId, number>();
+    for (const entry of entries) {
+      const statusId = entry.id as StatusId;
+      if (!statuses.get(statusId)) continue;
+      next.set(statusId, now + Math.max(0, Math.floor(entry.remainingMs)));
+    }
+    // 先摘掉快照里没有的（remove 会改 expireAt，先取键快照再遍历）
+    for (const statusId of Array.from(this.expireAt.keys())) {
+      if (!next.has(statusId)) this.remove(statusId);
+    }
+    // 再摆上快照里的（已存在只改到期时刻，特效与图标不重建）
+    for (const [statusId, expire] of next) {
+      this.expireAt.set(statusId, expire);
+      this.ensureEffect(statusId, statuses.get(statusId)!);
+    }
     this.refreshIconBar();
   }
 

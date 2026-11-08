@@ -36,6 +36,8 @@
 - 资源目录口径见 `client/RESOURCES.md`（14 顶层域平铺 + `ui/`）；改名三处同源：磁盘 + plist 自引用 → 库 19 个路径列 + `config-sync.sql` → 客户端 configs。
 - **客户端只报格子，数值直读表**（#785 货币）；「玩家在哪」= 存档 `data.mapAt`；改 bag 数据收尾必须 `refreshBag()`。
 - **离线发奖缺口**：`grantQuestRewards` 首行 `onlineRoleOrThrow` → 离线发不进去；要补 `grantByRoleId`（32/31 篇的共同前置）。
+- **状态只有一份口径**（#822）：`modules/combat/status-combat.ts`（服务端，纯函数）＝「谁挂着什么」在 `role_status`（运行时表，不进快照/config-sync）。
+  `category = "2"` 的技能**在目标校验之前**分流；客户端不自己 `apply`、不自己数秒。新增状态只加 `statuses` 行，不要另开一套。
 
 ## 引擎坑（→ `cocos-*` 技能）
 > **2026-11-08 起 `cocos-*` 合并成 5 个索引技能**：`cocos-render` / `cocos-input` / `cocos-resource` /

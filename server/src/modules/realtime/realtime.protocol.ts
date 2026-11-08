@@ -110,6 +110,21 @@ export interface RealtimeTargetsResetMessage {
   type: "targetsReset";
 }
 
+/**
+ * 生效中的一个状态（#822）：客户端图标栏的权威数据
+ *
+ * 整份快照下发（不是增量）：客户端 `StatusManager` 按它**整表重建**，不做加加减减 ——
+ * 增量协议里「漏了一条」的后果是图标永远不消失，而整表重建最多错一次。
+ */
+export interface RealtimeStatusEntry {
+  /** 状态 id（statuses.id，客户端据此查图标 / 特效 / 名称） */
+  id: string;
+  /** 层数（本轮恒为 1；叠层规则随 docs/22 §2.3 一起做） */
+  stacks: number;
+  /** 还剩多少毫秒（客户端按它本地倒计时，不必服务端再推一次到期帧） */
+  remainingMs: number;
+}
+
 /** 结算结果（ok = 服务端真的算了一次） */
 export interface RealtimeSettleOk {
   castId: number;
@@ -127,6 +142,21 @@ export interface RealtimeSettleOk {
   reward?: RealtimeKillReward;
   /** true = 同一 castId 的重复投递，结果原样重发、未重复结算 */
   duplicate: boolean;
+  /**
+   * true = 这一发是**状态型技能**（`skills.category = "2"`，护体神盾 / 金刚护体）
+   *
+   * 此时 `damage` / `hp` / `maxHp` 是 0 占位、`targetId` 可能为空 —— 客户端**不要**
+   * 按这帧去改怪的血条，只按 `statuses` 刷新自己的图标（#822）。
+   */
+  statusOnly?: true;
+  /** 这一发施加的状态 id（`statusOnly` 时给；客户端可用来播一次身上的特效） */
+  appliedStatus?: string;
+  /**
+   * 本账号此刻**全部**生效中的状态（#822；整份快照，缺省 = 没变 / 老服务端）
+   *
+   * 出伤与状态型技能都带：客户端只有这一个通道能拿到权威状态，漏了就退回本地硬撑。
+   */
+  statuses?: RealtimeStatusEntry[];
 }
 
 /**
@@ -351,6 +381,13 @@ export interface RealtimeMonsterHit {
   /** 受击后玩家剩余血量（服务端已落账，客户端照搬） */
   hp: number;
   maxHp: number;
+  /**
+   * 这一下被格挡了（#822：护体神盾 `blockChance` / `blockFactor` 在服务端掷骰）
+   *
+   * `damage` 已经是格挡后的值，这个标记只给表现用（飘字 / 音效走既有那些口子，
+   * 本轮不做专门的格挡演出 —— 见 docs/37 B5 的验收）。
+   */
+  blocked?: boolean;
 }
 
 /**
