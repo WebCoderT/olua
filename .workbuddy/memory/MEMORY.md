@@ -19,6 +19,8 @@
 - **e2e**：期望值从快照算；播种放 `startServer()` 之后；`checkEqual` 是 `===`；改 `server/src` 先 `npm run build`（e2e 跑 `dist/`）；本机绿 ≠ CI 绿（耦合断言超时盖过冷却周期）；`e2e-quest` 成功静默，判绿看 exit code。
 - **假绿 > 漏检**：扫描器断言模块数、错误精确匹配文案、缓存 TTL 压 0；**完整性**（有没有东西没登记）只能靠遍历全表查，正确性审计查不出来。
 - **新增一张表登记五处**：`config-tables.cjs` 两份清单 + `gen-api.cjs` MODULES + `audit-server-boundaries` REPO_EDGES + `audit-target.decorator` 类型。**快照加段 = DTO / `snapshot()` / 客户端 `game-config.ts` 区 0 三处 + `configs-sandbox` 三处 + `audit-snapshot-contract`**（漏一处 = 几十套客户端单测齐炸）。
+- **新增一列登记三处**：`CREATE TABLE` / `ensureColumn` / 仓储的**写入列清单**（如 `skills` 的 `SKILL_COLUMNS`）——
+  漏最后一项 = `update()` **静默不写**（PATCH 200 返回、库里一个字没变、结算侧一分不变）。再往下才是 DTO + `from()` + 客户端 types。
 - **新道具表必须让 `sellPriceOf` / `itemLabelOf` / `itemTypeOf` 都认识**，否则回收价与物品解析静默失效；按素材批量加物品还要查 `rebuildItemIndex` / `getMallGoods` 是否覆盖到（#777 曾是「7 部位部分视图」）。
 - **config-sync.sql 加表**：只拼新增表的节 + 手改表头三行（整份重导有几千行假 diff）；`cp` 库前 `PRAGMA wal_checkpoint(TRUNCATE)`；校验拿「同 schema 库副本」做 `config-import --db`；用户正改表时别整份 export。
 - 改 DTO 连描述都算改契约 → `swagger:emit` + `node tools/gen-api.cjs`；Response DTO 不在 `swagger/models.ts` 登记就不进 openapi；`gen-api` 的 query 默认 `= {}` 只在**全字段可选**时给。
@@ -65,7 +67,10 @@
 
 ## 进度
 - 已落地与 open 项的完整清单 → `memory/topics/进度年表.md`（445 条，按日）。
-- 当前 open（截至 2026-11-08）：#669 刷怪区即时生效 · #9 包体积 · #12~#19 素材 · #295 阶段三 · #403 帮会战 · #742 站点 TLS · 掉落表未按新装备重算（`EQUIP_LEVEL_GAP` / `MAX_TIER_PER_SLOT`）· 本地库有未导出运营改动，`make config-check` 常红。
+- 当前 open（截至 2026-11-08）：#669 刷怪区即时生效 · #9 包体积 · #12~#19 素材 · #295 阶段三 · #403 帮会战 · #742 站点 TLS ·
+  **#826 只落了第一批**（暴击 + 破防；撞飞/格挡/灼烧/两段连击/拉人/1009 群体化/删 desc 精确数值/等级压制 sup 待排期）·
+  #905 status-player「到期即消失」段 CI 偶发红（角色被怪打死 → 三连红，重跑即绿）·
+  掉落表未按新装备重算（`EQUIP_LEVEL_GAP` / `MAX_TIER_PER_SLOT`）· 本地库有未导出运营改动，`make config-check` 常红。
   阶段三功能批已收：#822 状态技能 ✅ · #823 物法分离 ✅ · #825 装备汇总自防 ✅（PR #901）· **#824 自身/区域/群体技能 ✅**（PR #902 + #903，合入 `57a0ce2e`）· **#827 幂等账 TTL ✅**（PR #904，合入 `4b5fa551`）；下一批 **#826**（技能描述里的暴击/撞飞/格挡/破防无实现，已拍板：先接既有能力 + 只删精确数值 + 暴击=技能行+角色属性 + 破防=穿透比例）· #905（status-player 在 CI 偶发红：角色先被打死）。
 - 定保持现状：技能 1011 / 快捷键 6 格 / 装备 7 部位。
 - **阶段 2 地基五条进度（2026-11-08 夜）**：#818 存档版本 ✅ / #819 坏档拒登 ✅ / #820 乐观锁基线必填+落库复核 ✅ /
