@@ -29,6 +29,8 @@ const { AppModule } = require("../dist/app.module");
 const { AllExceptionsFilter } = require("../dist/common/filters/all-exceptions.filter");
 const { TransformInterceptor } = require("../dist/common/interceptors/transform.interceptor");
 const { setupSwagger } = require("../dist/swagger/setup");
+// 存档 PUT 的公共帮手（#820 起 revision 必填：先 GET 拿修订号再 PUT）
+const { saveRole } = require("./lib/role-save.cjs");
 
 //#region 断言小工具
 
@@ -126,7 +128,7 @@ function roleData(id, name, occupation, level, overrides = {}) {
   // 提到 5 级，让成长曲线给出非 1 级的 maxHp（断言「上限是服务端重算值」才有区分度）。
   // 先随便存一档再取上限：存档路径做权威重算，取值要在重算之后
   await api("PATCH", `admin/roles/${roleId}`, { token: adminToken, body: { level: 5 } });
-  await api("PUT", `roles/${roleId}`, { token, body: { data: roleData(roleId, "血蓝", "1", 5) } });
+  await saveRole(api, token, roleId, roleData(roleId, "血蓝", "1", 5));
   const detail = await api("GET", `roles/${roleId}`, { token });
   const maxHp = detail.data.data.maxHp;
   const maxMp = detail.data.data.maxMp;
@@ -137,10 +139,7 @@ function roleData(id, name, occupation, level, overrides = {}) {
   console.log("— 一、save：上报血蓝不再照单全收 —");
 
   // 建号即满血；把存活角色「改包」成超上限血量 → 结算基线取库里的满血，夹回上限
-  const inflated = await api("PUT", `roles/${roleId}`, {
-    token,
-    body: { data: roleData(roleId, "血蓝", "1", 5, { hp: maxHp + 99999, mp: maxMp + 99999 }) },
-  });
+  const inflated = await saveRole(api, token, roleId, roleData(roleId, "血蓝", "1", 5, { hp: maxHp + 99999, mp: maxMp + 99999 }));
   check(inflated.code === 0, "超上限血蓝的存档本身被接受（回填而不是拒收，见 role-authority 纪律 1）", inflated.message);
   const afterInflated = await api("GET", `roles/${roleId}`, { token });
   check(afterInflated.data.data.hp <= maxHp, "超上报的血量被夹回上限（当前值以服务端为准）", `${afterInflated.data.data.hp}/${maxHp}`);
@@ -149,10 +148,7 @@ function roleData(id, name, occupation, level, overrides = {}) {
   // 负数同理：基线取库里的值，负上报不会把人扣到负
   // （注意基线不是满血：提级只重算上限，当前血量还是建号时的 1 级满血 —— 结算不凭空补血）
   const baselineHp = afterInflated.data.data.hp;
-  const negative = await api("PUT", `roles/${roleId}`, {
-    token,
-    body: { data: roleData(roleId, "血蓝", "1", 5, { hp: -50, mp: -50 }) },
-  });
+  const negative = await saveRole(api, token, roleId, roleData(roleId, "血蓝", "1", 5, { hp: -50, mp: -50 }));
   check(negative.code === 0, "负数血蓝的存档被接受");
   const afterNegative = await api("GET", `roles/${roleId}`, { token });
   check(afterNegative.data.data.hp >= 0 && afterNegative.data.data.hp <= maxHp, "负上报后血量仍在 [0, 上限]", `${afterNegative.data.data.hp}`);
@@ -161,10 +157,7 @@ function roleData(id, name, occupation, level, overrides = {}) {
 
   // 结算游标：服务端写档后落库，客户端伪造无效
   check(typeof afterNegative.data.data.vitalsSettledAt === "number", "vitalsSettledAt 由服务端落库", JSON.stringify(afterNegative.data.data.vitalsSettledAt));
-  const forged = await api("PUT", `roles/${roleId}`, {
-    token,
-    body: { data: roleData(roleId, "血蓝", "1", 5, { vitalsSettledAt: 1 }) },
-  });
+  const forged = await saveRole(api, token, roleId, roleData(roleId, "血蓝", "1", 5, { vitalsSettledAt: 1 }));
   check(forged.code === 0, "伪造结算游标的存档被接受（游标不是客户端可写字段）");
   const afterForged = await api("GET", `roles/${roleId}`, { token });
   check(
@@ -188,7 +181,7 @@ function roleData(id, name, occupation, level, overrides = {}) {
   const settleAfter = async (waitMs) => {
     await api("PATCH", `admin/roles/${roleId}`, { token: adminToken, body: { mp: lowMp } });
     await sleep(waitMs);
-    await api("PUT", `roles/${roleId}`, { token, body: { data: roleData(roleId, "血蓝", "1", 5) } });
+    await saveRole(api, token, roleId, roleData(roleId, "血蓝", "1", 5));
     const detailAfter = await api("GET", `roles/${roleId}`, { token });
     return detailAfter.data.data.mp;
   };
@@ -221,10 +214,7 @@ function roleData(id, name, occupation, level, overrides = {}) {
   check(killed.code === 0 && killed.data.data.hp === 0, "管理端 PATCH hp=0 生效（运营旁路）", JSON.stringify(killed.data && killed.data.data && killed.data.data.hp));
 
   // 死亡后改包上报满血：save 结算基线取库里的 0，死亡不回复 —— 上报无效
-  const fakeReviveSave = await api("PUT", `roles/${roleId}`, {
-    token,
-    body: { data: roleData(roleId, "血蓝", "1", 5, { hp: maxHp, mp: maxMp }) },
-  });
+  const fakeReviveSave = await saveRole(api, token, roleId, roleData(roleId, "血蓝", "1", 5, { hp: maxHp, mp: maxMp }));
   check(fakeReviveSave.code === 0, "死亡状态下上报满血的存档被接受");
   const afterFake = await api("GET", `roles/${roleId}`, { token });
   check(afterFake.data.data.hp === 0, "死亡状态不回复：上报满血无效（复活必须走接口）", `${afterFake.data.data.hp}`);
@@ -249,7 +239,7 @@ function roleData(id, name, occupation, level, overrides = {}) {
   // 回复量 = hpRecover × 秒。断言「结算不会凭空给血」与「游标在走」，
   // 真实回复由客户端长连接场景验证，e2e 不 sleep。
   await api("PATCH", `admin/roles/${roleId}`, { token: adminToken, body: { hp: 1 } });
-  const hurtSave = await api("PUT", `roles/${roleId}`, { token, body: { data: roleData(roleId, "血蓝", "1", 5, { hp: 1 }) } });
+  const hurtSave = await saveRole(api, token, roleId, roleData(roleId, "血蓝", "1", 5, { hp: 1 }));
   check(hurtSave.code === 0, "准备：残血状态保存成功");
   const hurt = await api("GET", `roles/${roleId}`, { token });
   check(hurt.data.data.hp === 1, "残血基线已落库（结算窗口为 0 时不凭空回血）", `${hurt.data.data.hp}`);

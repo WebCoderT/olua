@@ -297,7 +297,11 @@ async function runSuite(baseUrl) {
 
   const save = await call("PUT", `/api/roles/${role1Id}`, {
     token,
-    body: { data: { ...detail.body.data.data, id: "换掉的id", level: 5, gold: 8888, exp: 120 } },
+    body: {
+      data: { ...detail.body.data.data, id: "换掉的id", level: 5, gold: 8888, exp: 120 },
+      // #820 起 revision 必填：基线就用上面 GET 到的那份
+      revision: detail.body.data.revision,
+    },
   });
   checkEqual(save.status, 200, "保存进度返回 200");
   checkEqual(save.body.data.id, role1Id, "id 以路径为准（请求体里的 id 被忽略）");
@@ -338,7 +342,9 @@ async function runSuite(baseUrl) {
   const stealRead = await call("GET", `/api/roles/${role1Id}`, { token: otherToken });
   checkEqual(stealRead.status, 403, "读别人的角色返回 403");
 
-  const stealWrite = await call("PUT", `/api/roles/${role1Id}`, { token: otherToken, body: { data: {} } });
+  // 基线用**属主**的 token 取：这条验的是「越权 → 403」，不能先在取基线那一步 401 掉（#820）
+  const ownerRev = (await call("GET", `/api/roles/${role1Id}`, { token })).body.data.revision;
+  const stealWrite = await call("PUT", `/api/roles/${role1Id}`, { token: otherToken, body: { data: {}, revision: ownerRev } });
   checkEqual(stealWrite.status, 403, "改别人的角色返回 403");
 
   const stealDelete = await call("DELETE", `/api/roles/${role1Id}`, { token: otherToken });

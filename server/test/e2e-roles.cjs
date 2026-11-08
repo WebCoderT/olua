@@ -32,6 +32,8 @@ const { AppModule } = require("../dist/app.module");
 const { AllExceptionsFilter } = require("../dist/common/filters/all-exceptions.filter");
 const { TransformInterceptor } = require("../dist/common/interceptors/transform.interceptor");
 const { setupSwagger } = require("../dist/swagger/setup");
+// 存档 PUT 的公共帮手（#820 起 revision 必填：先 GET 拿修订号再 PUT）
+const { saveRole, revOfWith } = require("./lib/role-save.cjs");
 /** 脏数据路径（等级 0）在接口层进不去（PatchRoleDto 有 @Min(1)），直接喂给同一个 DTO 入口 */
 const { RoleDerivedDto } = require("../dist/modules/roles/dto/role.dto");
 
@@ -85,6 +87,9 @@ async function api(method, path, options = {}) {
     data: envelope ? envelope.data : null,
   };
 }
+
+/** 取角色当前修订号（#820 / B62：写接口必须带基线，缺了就是 400 / 40000） */
+const revOf = (roleId, token) => revOfWith(api, roleId, token);
 
 /**
  * 造一份合法的**存档文档**（PUT 全量覆盖用）
@@ -175,8 +180,19 @@ async function raiseLevel(roleId, level, token) {
   // 这几次存档用 `onMap`（客户端全权字段）当「改点东西」的载体，**不用 level / exp**：
   // #550 起等级与经验也归服务端（存档里的上报值会被回填成库里的值），
   // 拿它们当载体验修订号的话，验的就不是修订号了
-  const saved1 = await api("PUT", `roles/${roleA1Id}`, { token: tokenA, body: { data: { ...roleData(roleA1Id, "甲一", "1", 1), onMap: "1" } } });
-  check(saved1.code === 0 && saved1.data.revision === 2, "不带 revision 保存仍然可用（向后兼容），revision 递增到 2", JSON.stringify(saved1.data && saved1.data.revision));
+  // #820 起 revision 必填：不带就是 400 / 40000 —— 不再有「最后写入者胜」那条后门
+  const noRevision = await api("PUT", `roles/${roleA1Id}`, {
+    token: tokenA,
+    body: { data: { ...roleData(roleA1Id, "甲一", "1", 1), onMap: "0" } },
+  });
+  check(
+    noRevision.code === 40000 && noRevision.status === 400,
+    "不带 revision 的保存被拒（400 / 40000，不再静默覆盖）",
+    `${noRevision.code}/${noRevision.status}`,
+  );
+
+  const saved1 = await saveRole(api, tokenA, roleA1Id, { ...roleData(roleA1Id, "甲一", "1", 1), onMap: "1" });
+  check(saved1.code === 0 && saved1.data.revision === 2, "带上服务端 revision 保存成功，revision 递增到 2", JSON.stringify(saved1.data && saved1.data.revision));
 
   const saved2 = await api("PUT", `roles/${roleA1Id}`, { token: tokenA, body: { data: { ...roleData(roleA1Id, "甲一", "1", 1), onMap: "2" }, revision: 2 } });
   check(saved2.code === 0 && saved2.data.revision === 3, "带正确 revision 保存成功，revision 到 3", JSON.stringify(saved2.data && saved2.data.revision));
@@ -217,7 +233,7 @@ async function raiseLevel(roleId, level, token) {
 
   // 老档（没有 guide 字段）照样能存，且**服务端不会凭空补一个** ——
   // 客户端正是靠「文档里有没有这个字段」区分老号与新号（无字段 = 引导上线前就在的角色）
-  const legacySaved = await api("PUT", `roles/${roleA1Id}`, { token: tokenA, body: { data: roleData(roleA1Id, "甲一", "1", 1) } });
+  const legacySaved = await saveRole(api, tokenA, roleA1Id, roleData(roleA1Id, "甲一", "1", 1));
   check(legacySaved.code === 0 && legacySaved.data.data.guide === undefined, "没有 guide 字段的老档照常保存，服务端不补默认值", JSON.stringify(legacySaved.data.data && legacySaved.data.data.guide));
 
   //#endregion
@@ -356,12 +372,12 @@ async function raiseLevel(roleId, level, token) {
 
   // 「只有账号当前在线的角色才允许推存档」——不在线的角色推回来一律 20007（踢下线语义）。
   // role_a2 不是账号当前在线角色（先建的是 role_a1），所以这里先验这条判据。
-  const offlineSave = await api("PUT", `roles/${roleA2Id}`, { token: tokenA, body: { data: { notRole: true } } });
+  const offlineSave = await saveRole(api, tokenA, roleA2Id, { notRole: true });
   check(offlineSave.code === 20007, "非在线角色推存档被拒（20007 ROLE_KICKED）", `${offlineSave.code}`);
 
   // 切到 role_a2 再验「坏数据照样被拒」（校验顺序：在线 → 乐观锁 → 数据解析）
   await api("POST", `roles/${roleA2Id}/select`, { token: tokenA });
-  const brokenDoc = await api("PUT", `roles/${roleA2Id}`, { token: tokenA, body: { data: { notRole: true } } });
+  const brokenDoc = await saveRole(api, tokenA, roleA2Id, { notRole: true });
   check(brokenDoc.code === 20003, "坏角色数据被拒（不会把背包清空）", `${brokenDoc.code}`);
   // 切回 role_a1（后面的乐观锁联动用例都围绕它）
   await api("POST", `roles/${roleA1Id}/select`, { token: tokenA });
@@ -717,7 +733,7 @@ async function raiseLevel(roleId, level, token) {
   const hideFactory = snap.index("items")["material_hide"].sellPrice;
   const soldAtFactory = await api("POST", `roles/${roleD1Id}/sell`, {
     token: tokenC,
-    body: { entries: [{ goodId: "material_hide", count: 1 }] },
+    body: { entries: [{ goodId: "material_hide", count: 1 }], revision: await revOf(roleD1Id, tokenC) },
   });
   check(soldAtFactory.data.sold[0].unitPrice === hideFactory, "未改价时按出厂价签成交（库里 seed 值与生成物一致）", soldAtFactory.data.sold[0].unitPrice);
 
@@ -725,14 +741,14 @@ async function raiseLevel(roleId, level, token) {
   check(priceUp.code === 0, "管理端把兽皮卖价改成 77", priceUp.message);
   const soldAtNew = await api("POST", `roles/${roleD1Id}/sell`, {
     token: tokenC,
-    body: { entries: [{ goodId: "material_hide", count: 1 }] },
+    body: { entries: [{ goodId: "material_hide", count: 1 }], revision: await revOf(roleD1Id, tokenC) },
   });
   check(soldAtNew.data.sold[0].unitPrice === 77, "再卖一块立刻按新价（不重启、不清库）", soldAtNew.data.sold[0].unitPrice);
 
   await api("PATCH", "admin/items/material_hide", { token: adminToken, body: { sellPrice: hideFactory } });
   const soldBackToFactory = await api("POST", `roles/${roleD1Id}/sell`, {
     token: tokenC,
-    body: { entries: [{ goodId: "material_hide", count: 1 }] },
+    body: { entries: [{ goodId: "material_hide", count: 1 }], revision: await revOf(roleD1Id, tokenC) },
   });
   check(soldBackToFactory.data.sold[0].unitPrice === hideFactory, "还原后回到出厂价（覆盖层跟着回退，不是一次性的）", soldBackToFactory.data.sold[0].unitPrice);
 
@@ -741,7 +757,7 @@ async function raiseLevel(roleId, level, token) {
   check(putEquip.code === 0, "准备：背包里放一件该装备（基础件）", putEquip.message);
   const soldEquip = await api("POST", `roles/${roleD1Id}/sell`, {
     token: tokenC,
-    body: { entries: [{ goodId: sampleEquip.id, count: 1 }] },
+    body: { entries: [{ goodId: sampleEquip.id, count: 1 }], revision: await revOf(roleD1Id, tokenC) },
   });
   check(
     soldEquip.data.sold[0].unitPrice === variantRow.sellPrice,
@@ -756,7 +772,7 @@ async function raiseLevel(roleId, level, token) {
   await api("PATCH", `admin/roles/${roleD1Id}`, { token: adminToken, body: bagWith(sampleEquip.id, 1) });
   const soldEquip50 = await api("POST", `roles/${roleD1Id}/sell`, {
     token: tokenC,
-    body: { entries: [{ goodId: sampleEquip.id, count: 1 }] },
+    body: { entries: [{ goodId: sampleEquip.id, count: 1 }], revision: await revOf(roleD1Id, tokenC) },
   });
   check(
     soldEquip50.data.sold[0].unitPrice === variantRow.sellPrice,
@@ -774,7 +790,7 @@ async function raiseLevel(roleId, level, token) {
   await api("PATCH", `admin/roles/${roleD1Id}`, { token: adminToken, body: bagWith(sampleEquip.id, 1) });
   const soldEquipNewPrice = await api("POST", `roles/${roleD1Id}/sell`, {
     token: tokenC,
-    body: { entries: [{ goodId: sampleEquip.id, count: 1 }] },
+    body: { entries: [{ goodId: sampleEquip.id, count: 1 }], revision: await revOf(roleD1Id, tokenC) },
   });
   check(
     soldEquipNewPrice.data.sold[0].unitPrice === variantPrice,
@@ -807,9 +823,10 @@ async function raiseLevel(roleId, level, token) {
 
   // 不一致：照常存进去 + 记一条 warn
   const beforeBad = warnLines.length;
-  const badSave = await api("PUT", `roles/${roleE1Id}`, {
-    token: tokenD,
-    body: { data: { ...roleData(roleE1Id, "报一", "1", 1), combat: rightCombat + 123456, maxHp: rightMaxHp } },
+  const badSave = await saveRole(api, tokenD, roleE1Id, {
+    ...roleData(roleE1Id, "报一", "1", 1),
+    combat: rightCombat + 123456,
+    maxHp: rightMaxHp,
   });
   check(badSave.code === 0, "上报值对不上的存档照常收下（日志记录 + 权威覆盖，不打断正常玩法）", `${badSave.code}`);
   check(
@@ -828,7 +845,7 @@ async function raiseLevel(roleId, level, token) {
   // 一致：把服务端刚给的那份原样推回去（真客户端就是从 roleUpdate 帧抄的），一条日志都不该有
   const current = await api("GET", `roles/${roleE1Id}`, { token: tokenD });
   const beforeGood = warnLines.length;
-  const goodSave = await api("PUT", `roles/${roleE1Id}`, { token: tokenD, body: { data: current.data.data } });
+  const goodSave = await saveRole(api, tokenD, roleE1Id, current.data.data);
   check(goodSave.code === 0, "上报值一致的存档照常保存", `${goodSave.code}`);
   check(warnLines.length === beforeGood, "一致时一条日志都不打", JSON.stringify(warnLines.slice(beforeGood)));
 
@@ -872,7 +889,7 @@ async function raiseLevel(roleId, level, token) {
     exp: 424242,
     hp: 999999,
   };
-  const tamperSave = await api("PUT", `roles/${roleF1Id}`, { token: tokenF, body: { data: tampered } });
+  const tamperSave = await saveRole(api, tokenF, roleF1Id, tampered);
   check(tamperSave.code === 0, "改包存档照常收下（回填而不是 409：拦的是「写进去」，不是「发过来」）", tamperSave.message);
 
   const afterTamper = await api("GET", `roles/${roleF1Id}`, { token: tokenF });
@@ -902,10 +919,7 @@ async function raiseLevel(roleId, level, token) {
   );
 
   // 正常客户端：账本与阶位原样上报（它本来就是从 roleUpdate 帧抄回来的），保存照旧
-  const plainSave = await api("PUT", `roles/${roleF1Id}`, {
-    token: tokenF,
-    body: { data: { ...roleData(roleF1Id, "报二", "1", 1), gold: 0 } },
-  });
+  const plainSave = await saveRole(api, tokenF, roleF1Id, { ...roleData(roleF1Id, "报二", "1", 1), gold: 0 });
   check(plainSave.code === 0, "账本一致的存档照常保存（回填对正常客户端是空操作）", plainSave.message);
 
   // #597：建号不再收完整文档，「改包塞九位数金币」这条路连入参都没有了 ——

@@ -30,6 +30,8 @@ const { AppModule } = require("../dist/app.module");
 const { AllExceptionsFilter } = require("../dist/common/filters/all-exceptions.filter");
 const { TransformInterceptor } = require("../dist/common/interceptors/transform.interceptor");
 const { setupSwagger } = require("../dist/swagger/setup");
+// 存档 PUT 的公共帮手（#820 起 revision 必填：先 GET 拿修订号再 PUT）
+const { saveRole, revOfWith } = require("./lib/role-save.cjs");
 
 //#region 断言小工具
 
@@ -78,6 +80,9 @@ async function api(method, path, options = {}) {
   };
 }
 
+/** 取角色当前修订号（#820 / B62：写接口必须带基线，缺了就是 400 / 40000） */
+const revOf = (roleId, token) => revOfWith(api, roleId, token);
+
 /** 存档文档（PUT 全量覆盖用；时装字段会被服务端覆盖，写什么都用来验「上报无效」） */
 function roleData(id, name, overrides = {}) {
   return {
@@ -119,7 +124,7 @@ function roleData(id, name, overrides = {}) {
   const created = await api("POST", "roles", { token, body: { name: "时装", occupation: "1", sex: "1" } });
   const roleId = created.data.id;
   check(created.code === 0, "准备：建号成功", created.message);
-  await api("PUT", `roles/${roleId}`, { token, body: { data: roleData(roleId, "时装") } });
+  await saveRole(api, token, roleId, roleData(roleId, "时装"));
   const detail = await api("GET", `roles/${roleId}`, { token });
   check(detail.data.data.fashionCloth === null, "准备：新号未穿时装", JSON.stringify(detail.data.data.fashionCloth));
   check(detail.data.data.fashionsOwned === undefined, "准备：新号没有拥有清单（老档形状）", JSON.stringify(detail.data.data.fashionsOwned));
@@ -129,10 +134,12 @@ function roleData(id, name, overrides = {}) {
   console.log("— 一、save：时装字段不再照单全收 —");
 
   // 改包自穿 + 自填清单：穿着态被库值回填、独占清单直接删除（新字段无老档，防第一次 PUT 填满清单）
-  const hacked = await api("PUT", `roles/${roleId}`, {
+  const hacked = await saveRole(
+    api,
     token,
-    body: { data: roleData(roleId, "时装", { fashionCloth: "cloth_2", fashionsOwned: ["cloth_2", "cloth_3", "cloth_4"] }) },
-  });
+    roleId,
+    roleData(roleId, "时装", { fashionCloth: "cloth_2", fashionsOwned: ["cloth_2", "cloth_3", "cloth_4"] }),
+  );
   check(hacked.code === 0, "改包上报的存档被接受（回填 / 删除而不是拒收，role-authority 纪律）");
   const afterHack = await api("GET", `roles/${roleId}`, { token });
   check(afterHack.data.data.fashionCloth === null, "上报的穿着态被库值回填（库里没穿就还是没穿）", JSON.stringify(afterHack.data.data.fashionCloth));
@@ -146,7 +153,7 @@ function roleData(id, name, overrides = {}) {
 
   // 老档迁移：管理端直接写穿着态（历史合法来源）→ 清单没建过 → 第一次穿 / 脱把穿着认领进去
   await api("PATCH", `admin/roles/${roleId}`, { token: adminToken, body: { fashionCloth: "cloth_2" } });
-  const wearNothing = await api("POST", `roles/${roleId}/fashion-wear`, { token, body: { fashionId: null } });
+  const wearNothing = await api("POST", `roles/${roleId}/fashion-wear`, { token, body: { fashionId: null, revision: await revOf(roleId, token) } });
   check(wearNothing.code === 0, "老档迁移：无清单时第一次穿 / 脱成功（当前穿着被认领）", wearNothing.message);
   check(
     Array.isArray(wearNothing.data.owned) && wearNothing.data.owned.indexOf("cloth_2") !== -1,
@@ -163,7 +170,7 @@ function roleData(id, name, overrides = {}) {
   );
 
   // 未拥有拒收
-  const wearUnowned = await api("POST", `roles/${roleId}/fashion-wear`, { token, body: { fashionId: "cloth_3" } });
+  const wearUnowned = await api("POST", `roles/${roleId}/fashion-wear`, { token, body: { fashionId: "cloth_3", revision: await revOf(roleId, token) } });
   check(wearUnowned.code === 20017 && wearUnowned.status === 409, "未拥有的时装拒收（20017 / 409）", `${wearUnowned.code}/${wearUnowned.status}`);
 
   // 管理端发放（grant 语义）后可穿
@@ -177,7 +184,7 @@ function roleData(id, name, overrides = {}) {
   );
 
   const revisionBefore = detailAfterGrant.data.revision;
-  const wearOwned = await api("POST", `roles/${roleId}/fashion-wear`, { token, body: { fashionId: "cloth_3" } });
+  const wearOwned = await api("POST", `roles/${roleId}/fashion-wear`, { token, body: { fashionId: "cloth_3", revision: await revOf(roleId, token) } });
   check(wearOwned.code === 0, "拥有后穿上成功", wearOwned.message);
   check(wearOwned.data.fashionCloth === "cloth_3", "穿着态照搬服务端落账值", JSON.stringify(wearOwned.data.fashionCloth));
   check(wearOwned.data.revision === revisionBefore + 1, "穿着态是进度型写入，revision +1", `${wearOwned.data.revision} vs ${revisionBefore}`);
@@ -188,9 +195,9 @@ function roleData(id, name, overrides = {}) {
   check(typeof afterWear.data.data.hp === "number" && afterWear.data.data.hp > 0, "穿上时装不动血量（只换外观）", JSON.stringify(afterWear.data.data.hp));
 
   // 脱下幂等：没穿时再脱一次也是成功
-  const unwear = await api("POST", `roles/${roleId}/fashion-wear`, { token, body: { fashionId: null } });
+  const unwear = await api("POST", `roles/${roleId}/fashion-wear`, { token, body: { fashionId: null, revision: await revOf(roleId, token) } });
   check(unwear.code === 0 && unwear.data.fashionCloth === null, "null 脱下成功");
-  const unwearAgain = await api("POST", `roles/${roleId}/fashion-wear`, { token, body: { fashionId: null } });
+  const unwearAgain = await api("POST", `roles/${roleId}/fashion-wear`, { token, body: { fashionId: null, revision: await revOf(roleId, token) } });
   check(unwearAgain.code === 0 && unwearAgain.data.fashionCloth === null, "没穿时再脱一次仍成功（幂等）", unwearAgain.message);
 
   //#endregion
@@ -200,19 +207,19 @@ function roleData(id, name, overrides = {}) {
   console.log("— 三、购买接口（POST /roles/:id/fashion-buy）—");
 
   // 出厂渠道 unavailable → 拒收
-  const buyLocked = await api("POST", `roles/${roleId}/fashion-buy`, { token, body: { fashionId: "cloth_5" } });
+  const buyLocked = await api("POST", `roles/${roleId}/fashion-buy`, { token, body: { fashionId: "cloth_5", revision: await revOf(roleId, token) } });
   check(buyLocked.code === 20016 && buyLocked.status === 409, "未开放渠道拒收（20016 / 409）", `${buyLocked.code}/${buyLocked.status}`);
 
   // 管理端开放渠道与定价（运营动作），元宝不足拒收
   const openSale = await api("PATCH", "admin/fashions/cloth_5", { token: adminToken, body: { sellPrice: 50, acquireChannel: "upgrade" } });
   check(openSale.code === 0, "管理端开放 cloth_5 购买（价 50）", openSale.message);
-  const buyPoor = await api("POST", `roles/${roleId}/fashion-buy`, { token, body: { fashionId: "cloth_5" } });
+  const buyPoor = await api("POST", `roles/${roleId}/fashion-buy`, { token, body: { fashionId: "cloth_5", revision: await revOf(roleId, token) } });
   check(buyPoor.code === 20011 && buyPoor.status === 409, "绑定元宝不足拒收（20011 / 409）", `${buyPoor.code}/${buyPoor.status}`);
 
   // 管理端发元宝 → 购买成功：扣费、清单、revision 三处落账
   await api("PATCH", `admin/roles/${roleId}`, { token: adminToken, body: { bindGold: 120 } });
   const revisionBeforeBuy = (await api("GET", `roles/${roleId}`, { token })).data.revision;
-  const bought = await api("POST", `roles/${roleId}/fashion-buy`, { token, body: { fashionId: "cloth_5" } });
+  const bought = await api("POST", `roles/${roleId}/fashion-buy`, { token, body: { fashionId: "cloth_5", revision: await revOf(roleId, token) } });
   check(bought.code === 0, "购买成功", bought.message);
   check(bought.data.price === 50 && bought.data.bindGold === 70, "扣费正确（120 - 50 = 70）", JSON.stringify(bought.data));
   check(
@@ -226,7 +233,7 @@ function roleData(id, name, overrides = {}) {
   check(afterBuy.data.data.bindGold === 70, "扣费落库", JSON.stringify(afterBuy.data.data.bindGold));
 
   // 重复购买拒收（不做已拥有转退款）
-  const buyAgain = await api("POST", `roles/${roleId}/fashion-buy`, { token, body: { fashionId: "cloth_5" } });
+  const buyAgain = await api("POST", `roles/${roleId}/fashion-buy`, { token, body: { fashionId: "cloth_5", revision: await revOf(roleId, token) } });
   check(buyAgain.code === 20016, "重复购买拒收（20016）", `${buyAgain.code}`);
 
   // 乐观锁：带旧 revision 的购买拒收（20006）

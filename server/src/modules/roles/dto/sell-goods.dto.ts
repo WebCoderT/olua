@@ -1,6 +1,6 @@
 import { ApiProperty } from "@nestjs/swagger";
 import { Type } from "class-transformer";
-import { ArrayMaxSize, ArrayMinSize, IsArray, IsInt, IsOptional, IsString, Max, MaxLength, Min, ValidateNested } from "class-validator";
+import { ArrayMaxSize, ArrayMinSize, IsArray, IsInt, IsString, Max, MaxLength, Min, ValidateNested } from "class-validator";
 import { ROLE_FIELD_VALUE_MAX_LENGTH } from "../role-data.util";
 import { RoleRow } from "../../../database/rows";
 import { RoleDto } from "./role.dto";
@@ -42,15 +42,13 @@ export class SellGoodsDto {
   entries!: SellEntryDto[];
 
   @ApiProperty({
-    description: "修订号（乐观锁）：带上了就校验，与服务端当前值不一致时 20006；与 role.save 同一语义",
-    required: false,
+    description: "修订号（乐观锁，必填）：客户端读到的值，与服务端不一致时 20006，需先拉最新存档（B62 / #820）",
     minimum: 1,
   })
-  @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(1)
-  revision?: number;
+  revision!: number;
 }
 
 /** 出售结果里的一行结算（客户端提示「卖了什么、一件多少钱」直接用，不自己算） */

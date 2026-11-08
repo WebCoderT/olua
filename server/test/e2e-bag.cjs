@@ -20,6 +20,8 @@
  * 用法：npm run test:e2e:bag
  */
 const { spawn } = require("node:child_process");
+// 写角色接口的基线帮手（#820 / B62：revision 必填）
+const { revOfWith } = require("./lib/role-save.cjs");
 const fs = require("node:fs");
 const net = require("node:net");
 const os = require("node:os");
@@ -130,6 +132,14 @@ async function api(baseUrl, method, route, options = {}) {
 }
 
 /**
+ * 取角色当前修订号（#820 / B62：写接口必须带基线，缺了就是 400 / 40000）
+ *
+ * 本文件的 api() 是「baseUrl 打头」的形态，所以这里也带上 baseUrl。
+ */
+const revOf = (baseUrl, roleId, token) =>
+  revOfWith((method, route, options) => api(baseUrl, method, route, options), roleId, token);
+
+/**
  * 开局注入的四格物品（#597 起建号背包为空，造状态只能走管理端 PATCH）
  *
  * · (0,0) cloth_1   1 级衣服：验证穿戴成功 + 属性重算
@@ -230,7 +240,7 @@ const CLOTH_10_MAX_HP = equipBases["cloth_10"].maxHp;
     //#region 一、穿戴：离包、进槽位、属性当场重算
 
     group("一、穿戴（服务端自己算）");
-    const equipped = await api(baseUrl, "POST", `roles/${roleId}/bag-op`, { token, body: { action: "equip", row: 0, col: 0 } });
+    const equipped = await api(baseUrl, "POST", `roles/${roleId}/bag-op`, { token, body: { action: "equip", row: 0, col: 0, revision: await revOf(baseUrl, roleId, token) } });
     check(equipped.code === 0, "穿上背包第一格的衣服", equipped.message);
     checkEqual(equipped.data.slot, "cloth", "响应带回本次涉及的槽位（客户端据此刷新内观）");
     checkEqual(equipped.data.data.equipments.cloth, "cloth_1", "槽位里是这件衣服");
@@ -246,11 +256,11 @@ const CLOTH_10_MAX_HP = equipBases["cloth_10"].maxHp;
     //#region 二、等级门槛
 
     group("二、等级门槛（1 级穿 10 级衣服）");
-    const tooHigh = await api(baseUrl, "POST", `roles/${roleId}/bag-op`, { token, body: { action: "equip", row: 0, col: 4 } });
+    const tooHigh = await api(baseUrl, "POST", `roles/${roleId}/bag-op`, { token, body: { action: "equip", row: 0, col: 4, revision: await revOf(baseUrl, roleId, token) } });
     checkEqual(tooHigh.code, 20021, "等级不够 → 20021（穿不上）");
     const afterTooHigh = await api(baseUrl, "GET", `roles/${roleId}`, { token });
     checkEqual(countInBag(afterTooHigh.data.data.bag, "cloth_10"), 1, "被拒之后那件衣服还在包里");
-    const emptyCell = await api(baseUrl, "POST", `roles/${roleId}/bag-op`, { token, body: { action: "equip", row: 3, col: 9 } });
+    const emptyCell = await api(baseUrl, "POST", `roles/${roleId}/bag-op`, { token, body: { action: "equip", row: 3, col: 9, revision: await revOf(baseUrl, roleId, token) } });
     checkEqual(emptyCell.code, 20020, "空格子 → 20020（目标不合法）");
 
     //#endregion
@@ -260,7 +270,7 @@ const CLOTH_10_MAX_HP = equipBases["cloth_10"].maxHp;
     group("三、换装（格数守恒）");
     const raised = await api(baseUrl, "PATCH", `admin/roles/${roleId}`, { token: adminToken, body: { level: 10 } });
     checkEqual(raised.code, 0, "管理端把等级提到 10（提级是管理端特权）");
-    const swapped = await api(baseUrl, "POST", `roles/${roleId}/bag-op`, { token, body: { action: "equip", row: 0, col: 4 } });
+    const swapped = await api(baseUrl, "POST", `roles/${roleId}/bag-op`, { token, body: { action: "equip", row: 0, col: 4, revision: await revOf(baseUrl, roleId, token) } });
     check(swapped.code === 0, "穿上 10 级衣服（把身上的换下来）", swapped.message);
     checkEqual(swapped.data.data.equipments.cloth, "cloth_10", "槽位换成了新衣服");
     // 旧衣服回到「刚腾出来的那一格」—— 也就是新衣服原来所在的 (0,4)
@@ -276,7 +286,7 @@ const CLOTH_10_MAX_HP = equipBases["cloth_10"].maxHp;
     //#region 四、卸下
 
     group("四、卸下（服务端自己找第一个空格）");
-    const unequipped = await api(baseUrl, "POST", `roles/${roleId}/bag-op`, { token, body: { action: "unequip", slot: "cloth" } });
+    const unequipped = await api(baseUrl, "POST", `roles/${roleId}/bag-op`, { token, body: { action: "unequip", slot: "cloth", revision: await revOf(baseUrl, roleId, token) } });
     check(unequipped.code === 0, "脱下衣服", unequipped.message);
     checkEqual(unequipped.data.data.equipments.cloth, null, "槽位清空");
     checkEqual(cellAt(unequipped.data.data.bag, 0, 0).id, "cloth_10", "落点是第一个空格（0,0）");
@@ -287,10 +297,10 @@ const CLOTH_10_MAX_HP = equipBases["cloth_10"].maxHp;
     //#region 五、丢弃
 
     group("五、丢弃（整格清空，不返还）");
-    const discarded = await api(baseUrl, "POST", `roles/${roleId}/bag-op`, { token, body: { action: "discard", row: 0, col: 0 } });
+    const discarded = await api(baseUrl, "POST", `roles/${roleId}/bag-op`, { token, body: { action: "discard", row: 0, col: 0, revision: await revOf(baseUrl, roleId, token) } });
     check(discarded.code === 0, "丢掉第一格的装备", discarded.message);
     checkEqual(cellAt(discarded.data.data.bag, 0, 0), null, "那一格空了");
-    const discardEmpty = await api(baseUrl, "POST", `roles/${roleId}/bag-op`, { token, body: { action: "discard", row: 3, col: 9 } });
+    const discardEmpty = await api(baseUrl, "POST", `roles/${roleId}/bag-op`, { token, body: { action: "discard", row: 3, col: 9, revision: await revOf(baseUrl, roleId, token) } });
     checkEqual(discardEmpty.code, 20020, "丢空格子 → 20020");
 
     //#endregion
@@ -305,20 +315,20 @@ const CLOTH_10_MAX_HP = equipBases["cloth_10"].maxHp;
     const inflated = sparseCells(bagNow).map((cell) =>
       cell.id === "material_hide" ? { ...cell, count: cell.count + 1 } : cell,
     );
-    const cheatMore = await api(baseUrl, "POST", `roles/${roleId}/bag-op`, { token, body: { action: "tidy", cells: inflated } });
+    const cheatMore = await api(baseUrl, "POST", `roles/${roleId}/bag-op`, { token, body: { action: "tidy", cells: inflated, revision: await revOf(baseUrl, roleId, token) } });
     checkEqual(cheatMore.code, 20022, "凭空多一件 → 20022（内容对不上）");
 
     // 少一件：把它整个删掉
     const missing = sparseCells(bagNow).filter((cell) => cell.id !== "material_hide");
-    const cheatLess = await api(baseUrl, "POST", `roles/${roleId}/bag-op`, { token, body: { action: "move", cells: missing } });
+    const cheatLess = await api(baseUrl, "POST", `roles/${roleId}/bag-op`, { token, body: { action: "move", cells: missing, revision: await revOf(baseUrl, roleId, token) } });
     checkEqual(cheatLess.code, 20022, "少一件 → 20022");
 
     // 守恒排布：把内容**倒过来**铺一遍（顺序变了、件数一件没变）
     const cellsNow = sparseCells(bagNow);
     const reversed = layoutCells([...cellsNow].reverse());
-    const tidyCall = await api(baseUrl, "POST", `roles/${roleId}/bag-op`, { token, body: { action: "tidy", cells: cellsNow } });
+    const tidyCall = await api(baseUrl, "POST", `roles/${roleId}/bag-op`, { token, body: { action: "tidy", cells: cellsNow, revision: await revOf(baseUrl, roleId, token) } });
     check(tidyCall.code === 0, "守恒排布照收（整理只看件数守恒）", tidyCall.message);
-    const moved = await api(baseUrl, "POST", `roles/${roleId}/bag-op`, { token, body: { action: "move", cells: reversed } });
+    const moved = await api(baseUrl, "POST", `roles/${roleId}/bag-op`, { token, body: { action: "move", cells: reversed, revision: await revOf(baseUrl, roleId, token) } });
     checkEqual((cellAt(moved.data.data.bag, 0, 0) || {}).id, reversed[0].id, "位置真的按客户端那份排布改了（内容还是那几件）");
     checkEqual(countInBag(moved.data.data.bag, "material_hide"), 2, "整理 / 搬运之后材料一件不少");
 
@@ -386,7 +396,9 @@ const CLOTH_10_MAX_HP = equipBases["cloth_10"].maxHp;
       body: { action: "discard", row: 3, col: 3, revision: latest.data.revision - 1 },
     });
     checkEqual(stale.code, 20006, "revision 落后 → 20006");
-    const foreign = await api(baseUrl, "POST", `roles/${roleId}/bag-op`, { token: otherToken, body: { action: "discard", row: 0, col: 0 } });
+    // 基线用**属主**的 token 取：这条验的是「越权 → 40300」，不能让它先在取基线那一步
+    // 403 掉、把请求退化成「缺 revision 的 400」，那样越权判据就被掩盖了（#820）
+    const foreign = await api(baseUrl, "POST", `roles/${roleId}/bag-op`, { token: otherToken, body: { action: "discard", row: 0, col: 0, revision: await revOf(baseUrl, roleId, token) } });
     checkEqual(foreign.code, 40300, "别人的角色 → 40300（越权一律拒绝）");
 
     //#endregion

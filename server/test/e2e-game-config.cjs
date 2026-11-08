@@ -16,6 +16,8 @@
  * 用法：npm run test:e2e:game-config（前置 npm run build）
  */
 const { spawn } = require("node:child_process");
+// 写角色接口的基线帮手（#820 / B62：revision 必填）
+const { revOfWith } = require("./lib/role-save.cjs");
 const fs = require("node:fs");
 const net = require("node:net");
 const os = require("node:os");
@@ -220,6 +222,14 @@ async function api(baseUrl, method, route, options = {}) {
   }
   return { status: response.status, body };
 }
+
+/**
+ * 取角色当前修订号（#820 / B62：写接口必须带基线，缺了就是 400 / 40000）
+ *
+ * 本文件的 api() 是「baseUrl 打头」的形态，所以这里也带上 baseUrl。
+ */
+const revOf = (baseUrl, roleId, token) =>
+  revOfWith((method, route, options) => api(baseUrl, method, route, options), roleId, token, "/api");
 
 /** 注册并登录一个管理员，返回 token（第一个注册者自动是超级管理员） */
 async function registerAdmin(baseUrl, username, password) {
@@ -2110,7 +2120,7 @@ async function main() {
     // seed 后全部称号渠道 unavailable → 升级链为空 → 即使 0 阶也没有下一阶
     const lockedTitle = await api(base, "POST", `/api/roles/${growthRoleId}/growth-upgrade`, {
       token: growthPlayer,
-      body: { kind: "title", targetLevel: 1 },
+      body: { kind: "title", targetLevel: 1, revision: await revOf(base, growthRoleId, growthPlayer) },
     });
     checkEqual(lockedTitle.status, 409, "称号渠道全未开放时升级 → 409");
     checkEqual(lockedTitle.body?.code, 20008, "升级链为空 → 20008（目标不合法：没有下一阶）");
@@ -2123,14 +2133,14 @@ async function main() {
 
     const skipJump = await api(base, "POST", `/api/roles/${growthRoleId}/growth-upgrade`, {
       token: growthPlayer,
-      body: { kind: "title", targetLevel: 2 },
+      body: { kind: "title", targetLevel: 2, revision: await revOf(base, growthRoleId, growthPlayer) },
     });
     checkEqual(skipJump.status, 409, "跳级升 2 阶 → 409");
     checkEqual(skipJump.body?.code, 20008, "跳级 → 20008（下一阶是 1 阶，不是 2 阶）");
 
     const poor = await api(base, "POST", `/api/roles/${growthRoleId}/growth-upgrade`, {
       token: growthPlayer,
-      body: { kind: "title", targetLevel: 1 },
+      body: { kind: "title", targetLevel: 1, revision: await revOf(base, growthRoleId, growthPlayer) },
     });
     checkEqual(poor.status, 409, "绑定元宝不足时升级 → 409");
     checkEqual(poor.body?.code, 20009, "元宝不足 → 20009");
@@ -2224,7 +2234,7 @@ async function main() {
     // kind 越界 → DTO 拒收
     const badKind = await api(base, "POST", `/api/roles/${growthRoleId}/growth-upgrade`, {
       token: growthPlayer,
-      body: { kind: "fashion", targetLevel: 1 },
+      body: { kind: "fashion", targetLevel: 1, revision: await revOf(base, growthRoleId, growthPlayer) },
     });
     checkEqual(badKind.status, 400, "kind 越界 → 400（whitelist 拒收）");
 
@@ -2263,7 +2273,7 @@ async function main() {
     // 商品不在目录（既不是装备变体也不是药品）→ 404 复用 50021
     const badGood = await api(base, "POST", `/api/roles/${mallRoleId}/mall-purchase`, {
       token: mallPlayer,
-      body: { goodId: "drug_hp_small" },
+      body: { goodId: "drug_hp_small", revision: await revOf(base, mallRoleId, mallPlayer) },
     });
     checkEqual(badGood.status, 404, "目录之外的 id 购买 → 404（商城只卖装备与药品）");
     checkEqual(badGood.body?.code, 50021, "商品不在目录 → 50021");
@@ -2444,7 +2454,10 @@ async function main() {
     checkEqual(refillPlaced.status, 200, "补一格药（管理端摆格，血量保持已满）");
     const refillSave = await api(base, "PUT", `/api/roles/${drugRoleId}`, {
       token: drugPlayer,
-      body: { data: { ...drugFresh.body?.data?.data, hp: bigHeal.body?.data?.data?.hp } },
+      body: {
+        data: { ...drugFresh.body?.data?.data, hp: bigHeal.body?.data?.data?.hp },
+        revision: await revOf(base, drugRoleId, drugPlayer),
+      },
     });
     const hpFullUse = await api(base, "POST", `/api/roles/${drugRoleId}/drug-use`, {
       token: drugPlayer,
@@ -2509,7 +2522,7 @@ async function main() {
     checkEqual(equipPlaced.status, 200, "摆好一格装备（管理端摆格）");
     const equipSave = await api(base, "PUT", `/api/roles/${drugRoleId}`, {
       token: drugPlayer,
-      body: { data: { ...drugFresh.body?.data?.data, hp: 10, mp: 10 } },
+      body: { data: { ...drugFresh.body?.data?.data, hp: 10, mp: 10 }, revision: await revOf(base, drugRoleId, drugPlayer) },
     });
     const equipUse = await api(base, "POST", `/api/roles/${drugRoleId}/drug-use`, {
       token: drugPlayer,
@@ -2519,18 +2532,18 @@ async function main() {
     checkEqual(equipUse.body?.code, 20013, "非药品 → 20013");
     const emptyUse = await api(base, "POST", `/api/roles/${drugRoleId}/drug-use`, {
       token: drugPlayer,
-      body: { row: 3, col: 5 },
+      body: { row: 3, col: 5, revision: await revOf(base, drugRoleId, drugPlayer) },
     });
     checkEqual(emptyUse.status, 409, "空格子 → 409");
     checkEqual(emptyUse.body?.code, 20013, "格子为空 → 20013");
     const badRow = await api(base, "POST", `/api/roles/${drugRoleId}/drug-use`, {
       token: drugPlayer,
-      body: { row: -1, col: 0 },
+      body: { row: -1, col: 0, revision: await revOf(base, drugRoleId, drugPlayer) },
     });
     checkEqual(badRow.status, 400, "row 为负 → 400（DTO 拦下）");
     const bigRow = await api(base, "POST", `/api/roles/${drugRoleId}/drug-use`, {
       token: drugPlayer,
-      body: { row: 999, col: 0 },
+      body: { row: 999, col: 0, revision: await revOf(base, drugRoleId, drugPlayer) },
     });
     checkEqual(bigRow.status, 400, "row 越界 → 400（DTO 拦下）");
 

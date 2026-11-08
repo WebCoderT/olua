@@ -21,6 +21,8 @@
  * 用法：npm run test:e2e:money-item
  */
 const { spawn } = require("node:child_process");
+// 写角色接口的基线帮手（#820 / B62：revision 必填）
+const { revOfWith } = require("./lib/role-save.cjs");
 const fs = require("node:fs");
 const net = require("node:net");
 const os = require("node:os");
@@ -129,6 +131,14 @@ async function api(baseUrl, method, route, options = {}) {
   return body;
 }
 
+/**
+ * 取角色当前修订号（#820 / B62：写接口必须带基线，缺了就是 400 / 40000）
+ *
+ * 本文件的 api() 是「baseUrl 打头」的形态，所以这里也带上 baseUrl。
+ */
+const revOf = (baseUrl, roleId, token) =>
+  revOfWith((method, route, options) => api(baseUrl, method, route, options), roleId, token);
+
 /** 背包里某物品的总数（按 id 数格子） */
 function countInBag(bag, goodId) {
   let total = 0;
@@ -235,7 +245,7 @@ const GOLD_ROW = seedOf("gold", 50);
     await seedBag([{ row: 0, col: 0, id: SILVER_ROW.id, count: 2 }]);
     const before = await api(baseUrl, "GET", `roles/${roleId}`, { token });
     const silverBefore = Math.max(0, Number(before.data.data.silver) || 0);
-    const used = await api(baseUrl, "POST", `roles/${roleId}/money-use`, { token, body: { row: 0, col: 0 } });
+    const used = await api(baseUrl, "POST", `roles/${roleId}/money-use`, { token, body: { row: 0, col: 0, revision: await revOf(baseUrl, roleId, token) } });
     checkEqual(used.code, 0, "使用一个银子道具", used.message);
     checkEqual(used.data.currency, "silver", "响应带回入账的账本字段");
     checkEqual(Number(used.data.amount), Number(SILVER_ROW.amount), "入账金额 = 库里的面值");
@@ -243,7 +253,7 @@ const GOLD_ROW = seedOf("gold", 50);
     checkEqual(Number(used.data.data.silver), silverBefore + Number(SILVER_ROW.amount), "角色存档里的 silver 同步加钱");
     checkEqual((cellAt(used.data.data.bag, 0, 0) || {}).count, 1, "背包那一格从 2 个变成 1 个");
     checkEqual(used.data.revision, before.data.revision + 1, "revision +1（客户端据此做乐观锁）");
-    const usedAgain = await api(baseUrl, "POST", `roles/${roleId}/money-use`, { token, body: { row: 0, col: 0 } });
+    const usedAgain = await api(baseUrl, "POST", `roles/${roleId}/money-use`, { token, body: { row: 0, col: 0, revision: await revOf(baseUrl, roleId, token) } });
     checkEqual(usedAgain.code, 0, "再点一次（把手里的用光）", usedAgain.message);
     checkEqual(cellAt(usedAgain.data.data.bag, 0, 0), null, "用光后格子清空");
     checkEqual(
@@ -254,7 +264,7 @@ const GOLD_ROW = seedOf("gold", 50);
 
     group("二·补：入的是别的币种也照规矩走");
     await seedBag([{ row: 0, col: 1, id: GOLD_ROW.id, count: 1 }]);
-    const goldUse = await api(baseUrl, "POST", `roles/${roleId}/money-use`, { token, body: { row: 0, col: 1 } });
+    const goldUse = await api(baseUrl, "POST", `roles/${roleId}/money-use`, { token, body: { row: 0, col: 1, revision: await revOf(baseUrl, roleId, token) } });
     checkEqual(goldUse.code, 0, "使用一个元宝道具", goldUse.message);
     checkEqual(goldUse.data.currency, "gold", "入账字段是 gold（不是 silver）");
     checkEqual(Number(goldUse.data.data.gold), Number(GOLD_ROW.amount), "gold 单独记账，与 silver 互不影响");
@@ -269,10 +279,10 @@ const GOLD_ROW = seedOf("gold", 50);
     //#region 三、失败路径
 
     group("三、失败路径（都不许入账）");
-    const emptyCell = await api(baseUrl, "POST", `roles/${roleId}/money-use`, { token, body: { row: 5, col: 5 } });
+    const emptyCell = await api(baseUrl, "POST", `roles/${roleId}/money-use`, { token, body: { row: 5, col: 5, revision: await revOf(baseUrl, roleId, token) } });
     checkEqual(emptyCell.code, 20023, "空格子 → 20023");
     await seedBag([{ row: 0, col: 0, id: "drug_hp_1", count: 1 }]);
-    const notMoney = await api(baseUrl, "POST", `roles/${roleId}/money-use`, { token, body: { row: 0, col: 0 } });
+    const notMoney = await api(baseUrl, "POST", `roles/${roleId}/money-use`, { token, body: { row: 0, col: 0, revision: await revOf(baseUrl, roleId, token) } });
     checkEqual(notMoney.code, 20023, "格子里是药品 → 20023（不是货币道具就不给钱）");
     const afterNotMoney = await api(baseUrl, "GET", `roles/${roleId}`, { token });
     checkEqual(
@@ -289,9 +299,11 @@ const GOLD_ROW = seedOf("gold", 50);
       body: { row: 0, col: 0, revision: latest.data.revision - 1 },
     });
     checkEqual(stale.code, 20006, "revision 落后 → 20006（乐观锁）");
-    const foreign = await api(baseUrl, "POST", `roles/${roleId}/money-use`, { token: otherToken, body: { row: 0, col: 0 } });
+    // 基线用**属主**的 token 取：这条验的是「越权 → 40300」，不能让它先在取基线那一步
+    // 403 掉、把请求退化成「缺 revision 的 400」，那样越权判据就被掩盖了（#820）
+    const foreign = await api(baseUrl, "POST", `roles/${roleId}/money-use`, { token: otherToken, body: { row: 0, col: 0, revision: await revOf(baseUrl, roleId, token) } });
     checkEqual(foreign.code, 40300, "别人的角色 → 40300");
-    const outOfRange = await api(baseUrl, "POST", `roles/${roleId}/money-use`, { token, body: { row: 100, col: 0 } });
+    const outOfRange = await api(baseUrl, "POST", `roles/${roleId}/money-use`, { token, body: { row: 100, col: 0, revision: await revOf(baseUrl, roleId, token) } });
     checkEqual(outOfRange.code, 40000, "行号越界 → 40000（DTO 上界拦截，不进业务）");
 
     //#endregion
@@ -330,7 +342,7 @@ const GOLD_ROW = seedOf("gold", 50);
     group("五、新建的能入账，改面值即时生效");
     await seedBag([{ row: 0, col: 0, id: "money_gold_8888", count: 2 }]);
     const goldBefore = Number((await api(baseUrl, "GET", `roles/${roleId}`, { token })).data.data.gold);
-    const useNew = await api(baseUrl, "POST", `roles/${roleId}/money-use`, { token, body: { row: 0, col: 0 } });
+    const useNew = await api(baseUrl, "POST", `roles/${roleId}/money-use`, { token, body: { row: 0, col: 0, revision: await revOf(baseUrl, roleId, token) } });
     checkEqual(useNew.code, 0, "新建的道具能直接使用", useNew.message);
     checkEqual(Number(useNew.data.data.gold), goldBefore + 8888, "入账 8888（按库里的面值）");
 
@@ -340,7 +352,7 @@ const GOLD_ROW = seedOf("gold", 50);
     });
     checkEqual(patched.code, 0, "改面值 + 改名", patched.message);
     checkEqual(Number(patched.data.amount), 1234, "面值改成 1234");
-    const usePatched = await api(baseUrl, "POST", `roles/${roleId}/money-use`, { token, body: { row: 0, col: 0 } });
+    const usePatched = await api(baseUrl, "POST", `roles/${roleId}/money-use`, { token, body: { row: 0, col: 0, revision: await revOf(baseUrl, roleId, token) } });
     checkEqual(usePatched.code, 0, "同一个格子再点一次", usePatched.message);
     checkEqual(
       Number(usePatched.data.balance),
@@ -364,7 +376,7 @@ const GOLD_ROW = seedOf("gold", 50);
     checkEqual(listAfterRemove.data.total, SEED_MONEY.length + 1, "列表少了一条（还剩自定义那条）");
     // 背包里那格已经被用光；再放一个旧 id 进去，验证「认不出的道具」不崩也不给钱
     await seedBag([{ row: 0, col: 0, id: "money_gold_8888", count: 1 }]);
-    const useRemoved = await api(baseUrl, "POST", `roles/${roleId}/money-use`, { token, body: { row: 0, col: 0 } });
+    const useRemoved = await api(baseUrl, "POST", `roles/${roleId}/money-use`, { token, body: { row: 0, col: 0, revision: await revOf(baseUrl, roleId, token) } });
     checkEqual(useRemoved.code, 20023, "配置删了之后再用那个格子 → 20023（不白给钱）");
     const afterRemoved = await api(baseUrl, "GET", `roles/${roleId}`, { token });
     checkEqual(countInBag(afterRemoved.data.data.bag, "money_gold_8888"), 1, "那格东西还在（没被吞掉）");

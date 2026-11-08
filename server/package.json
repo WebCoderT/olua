@@ -31,6 +31,7 @@
     "test:e2e:zone": "node --disable-warning=ExperimentalWarning test/e2e-zone.cjs",
     "test:e2e:role-migration": "node --disable-warning=ExperimentalWarning test/e2e-role-migration.cjs",
     "test:e2e:role-corrupted": "node --disable-warning=ExperimentalWarning test/e2e-role-corrupted.cjs",
+    "test:e2e:role-optimistic": "node --disable-warning=ExperimentalWarning test/e2e-role-optimistic.cjs",
     "db:backup": "node --disable-warning=ExperimentalWarning scripts/backup.cjs",
     "db:migrate": "node --disable-warning=ExperimentalWarning scripts/migrate-role-data.cjs",
     "db:restore": "node --disable-warning=ExperimentalWarning scripts/restore.cjs",

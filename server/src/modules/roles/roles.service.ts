@@ -224,9 +224,13 @@ export class RolesService {
   /**
    * 保存角色进度（全量覆盖；id 以路径参数为准，避免换 id 写别人角色）
    *
-   * **乐观锁**：请求带了 revision 且与服务端当前值不一致时拒收（20006）。
-   * 典型场景是玩家在游戏里、管理员在后台改了这个角色 —— 若直接放行，
+   * **乐观锁（B62 / #820 起 revision 必填且原子）**：与服务端当前值不一致即拒收（20006）。
+   * 典型场景是玩家在游戏里、管理员在后台改了这个角色 —— 若放行，
    * 客户端那份「改之前」的存档会把后台的改动整体覆盖掉（谁最后写谁赢，后台改动静默丢失）。
+   *
+   * 比对分两道：本函数先比一次（省掉后面的结算），落库时 SQL 里还有 `WHERE revision = ?`
+   * 再比一次（见 `role.repository.replace`）—— 第一道给正常路径一个清楚的错误，
+   * 第二道保证「读 → 算 → 写」整段之间没有人插进来。
    * 客户端收到 20006 应拉一次角色详情、以最新数据为基线后再继续推（见 utils/net/RoleSync）。
    */
   save(accountId: string, roleId: string, dto: SaveRoleDto): RoleDto {
@@ -240,7 +244,7 @@ export class RolesService {
     if (account.online_role_id !== roleId) {
       throw BizException.conflict(BizCode.ROLE_KICKED, "该角色已被管理员下线，请重新选择角色进入游戏");
     }
-    if (dto.revision !== undefined && dto.revision !== existing.revision) {
+    if (dto.revision !== existing.revision) {
       throw BizException.conflict(BizCode.ROLE_REVISION_CONFLICT, "该角色已在别处被修改，请先同步最新数据");
     }
     // 存档结构版本（#818）：客户端手上那份可能还是老版本（它本地缓存的形状），
@@ -305,7 +309,7 @@ export class RolesService {
       revision: existing.revision + 1,
       updated_at: Date.now(),
     };
-    this.roles.replace(row);
+    this.persistOrConflict(row, existing.revision, "保存存档");
     return RoleDto.from(row, account.online_role_id);
   }
 
@@ -339,7 +343,7 @@ export class RolesService {
     if (account.online_role_id !== roleId) {
       throw BizException.conflict(BizCode.ROLE_KICKED, "该角色已被管理员下线，请重新选择角色进入游戏");
     }
-    if (dto.revision !== undefined && dto.revision !== existing.revision) {
+    if (dto.revision !== existing.revision) {
       throw BizException.conflict(BizCode.ROLE_REVISION_CONFLICT, "该角色已在别处被修改，请先同步最新数据");
     }
 
@@ -371,7 +375,7 @@ export class RolesService {
       revision: existing.revision + 1,
       updated_at: Date.now(),
     };
-    this.roles.replace(row);
+    this.persistOrConflict(row, existing.revision, "成长线升级");
     return GrowthUpgradeResultDto.fromRow(row, account.online_role_id, target.bind_gold, target.level, target.label);
   }
 
@@ -417,7 +421,7 @@ export class RolesService {
     if (account.online_role_id !== roleId) {
       throw BizException.conflict(BizCode.ROLE_KICKED, "该角色已被管理员下线，请重新选择角色进入游戏");
     }
-    if (dto.revision !== undefined && dto.revision !== existing.revision) {
+    if (dto.revision !== existing.revision) {
       throw BizException.conflict(BizCode.ROLE_REVISION_CONFLICT, "该角色已在别处被修改，请先同步最新数据");
     }
 
@@ -451,7 +455,7 @@ export class RolesService {
       revision: existing.revision + 1,
       updated_at: Date.now(),
     };
-    this.roles.replace(row);
+    this.persistOrConflict(row, existing.revision, "购买商品");
     return MallPurchaseResultDto.fromRow(row, account.online_role_id, price, dto.goodId);
   }
 
@@ -479,7 +483,7 @@ export class RolesService {
     if (account.online_role_id !== roleId) {
       throw BizException.conflict(BizCode.ROLE_KICKED, "该角色已被管理员下线，请重新选择角色进入游戏");
     }
-    if (dto.revision !== undefined && dto.revision !== existing.revision) {
+    if (dto.revision !== existing.revision) {
       throw BizException.conflict(BizCode.ROLE_REVISION_CONFLICT, "该角色已在别处被修改，请先同步最新数据");
     }
 
@@ -524,7 +528,7 @@ export class RolesService {
       revision: existing.revision + 1,
       updated_at: Date.now(),
     };
-    this.roles.replace(row);
+    this.persistOrConflict(row, existing.revision, "出售物品");
     return SellGoodsResultDto.fromRow(row, account.online_role_id, sold, total);
   }
 
@@ -564,7 +568,7 @@ export class RolesService {
       revision: existing.revision + 1,
       updated_at: Date.now(),
     };
-    this.roles.replace(row);
+    this.persistOrConflict(row, existing.revision, "拾取物品");
     return { revision: row.revision, placed };
   }
 
@@ -718,7 +722,7 @@ export class RolesService {
     if (account.online_role_id !== roleId) {
       throw BizException.conflict(BizCode.ROLE_KICKED, "该角色已被管理员下线，请重新选择角色进入游戏");
     }
-    if (dto.revision !== undefined && dto.revision !== existing.revision) {
+    if (dto.revision !== existing.revision) {
       throw BizException.conflict(BizCode.ROLE_REVISION_CONFLICT, "该角色已在别处被修改，请先同步最新数据");
     }
 
@@ -767,7 +771,7 @@ export class RolesService {
       revision: existing.revision + 1,
       updated_at: Date.now(),
     };
-    this.roles.replace(row);
+    this.persistOrConflict(row, existing.revision, "使用药品");
     return DrugUseResultDto.fromRow(row, account.online_role_id, drug.id, recoveredHp, recoveredMp);
   }
 
@@ -790,7 +794,7 @@ export class RolesService {
     if (account.online_role_id !== roleId) {
       throw BizException.conflict(BizCode.ROLE_KICKED, "该角色已被管理员下线，请重新选择角色进入游戏");
     }
-    if (dto.revision !== undefined && dto.revision !== existing.revision) {
+    if (dto.revision !== existing.revision) {
       throw BizException.conflict(BizCode.ROLE_REVISION_CONFLICT, "该角色已在别处被修改，请先同步最新数据");
     }
 
@@ -830,7 +834,7 @@ export class RolesService {
       revision: existing.revision + 1,
       updated_at: Date.now(),
     };
-    this.roles.replace(row);
+    this.persistOrConflict(row, existing.revision, "使用货币道具");
     return MoneyUseResultDto.fromRow(row, account.online_role_id, item.id, currency, amount, balance);
   }
 
@@ -858,7 +862,7 @@ export class RolesService {
     if (account.online_role_id !== roleId) {
       throw BizException.conflict(BizCode.ROLE_KICKED, "该角色已被管理员下线，请重新选择角色进入游戏");
     }
-    if (dto.revision !== undefined && dto.revision !== existing.revision) {
+    if (dto.revision !== existing.revision) {
       throw BizException.conflict(BizCode.ROLE_REVISION_CONFLICT, "该角色已在别处被修改，请先同步最新数据");
     }
 
@@ -912,7 +916,7 @@ export class RolesService {
       revision: existing.revision + 1,
       updated_at: Date.now(),
     };
-    this.roles.replace(row);
+    this.persistOrConflict(row, existing.revision, "使用升级卷轴");
     return LevelScrollUseResultDto.fromRow(row, account.online_role_id, scroll.id, fromLevel, exp, this.expNeedOf(toLevel));
   }
 
@@ -938,7 +942,7 @@ export class RolesService {
     if (account.online_role_id !== roleId) {
       throw BizException.conflict(BizCode.ROLE_KICKED, "该角色已被管理员下线，请重新选择角色进入游戏");
     }
-    if (dto.revision !== undefined && dto.revision !== existing.revision) {
+    if (dto.revision !== existing.revision) {
       throw BizException.conflict(BizCode.ROLE_REVISION_CONFLICT, "该角色已在别处被修改，请先同步最新数据");
     }
 
@@ -1022,7 +1026,7 @@ export class RolesService {
       revision: existing.revision + 1,
       updated_at: Date.now(),
     };
-    this.roles.replace(row);
+    this.persistOrConflict(row, existing.revision, "整理背包");
     return BagOpResultDto.fromRow(row, account.online_role_id, dto.action, slot);
   }
 
@@ -1215,7 +1219,7 @@ export class RolesService {
     if (account.online_role_id !== roleId) {
       throw BizException.conflict(BizCode.ROLE_KICKED, "该角色已被管理员下线，请重新选择角色进入游戏");
     }
-    if (dto.revision !== undefined && dto.revision !== existing.revision) {
+    if (dto.revision !== existing.revision) {
       throw BizException.conflict(BizCode.ROLE_REVISION_CONFLICT, "该角色已在别处被修改，请先同步最新数据");
     }
 
@@ -1247,7 +1251,7 @@ export class RolesService {
       revision: existing.revision + 1,
       updated_at: Date.now(),
     };
-    this.roles.replace(row);
+    this.persistOrConflict(row, existing.revision, "购买时装");
     return { fashionId: fashion.id, price, bindGold: bindGoldAfter, owned, revision: row.revision };
   }
 
@@ -1268,7 +1272,7 @@ export class RolesService {
     if (account.online_role_id !== roleId) {
       throw BizException.conflict(BizCode.ROLE_KICKED, "该角色已被管理员下线，请重新选择角色进入游戏");
     }
-    if (dto.revision !== undefined && dto.revision !== existing.revision) {
+    if (dto.revision !== existing.revision) {
       throw BizException.conflict(BizCode.ROLE_REVISION_CONFLICT, "该角色已在别处被修改，请先同步最新数据");
     }
 
@@ -1294,7 +1298,7 @@ export class RolesService {
       revision: existing.revision + 1,
       updated_at: Date.now(),
     };
-    this.roles.replace(row);
+    this.persistOrConflict(row, existing.revision, "更换时装");
     return { fashionCloth: target, owned, revision: row.revision };
   }
 
@@ -1372,7 +1376,14 @@ export class RolesService {
       revision: existing.revision + 1,
       updated_at: Date.now(),
     };
-    this.roles.replace(row);
+    // 经验入账**不抛冲突**（B62 / #820）：这条路径由服务端自己的击杀 / 泡点节拍驱动，
+    // 没有客户端基线可让玩家「重试」。修订号被改动说明这一行的存档刚被别人整体换过
+    // （管理端改数值 / 玩家存档落库），此刻按旧 `existing` 覆盖会把对方的改动盖掉 ——
+    // 丢掉这一笔经验远比丢掉对方的改动便宜，所以记一条 warn 后返回 null（调用方按「没入账」处理）。
+    if (!this.roles.replace(row, existing.revision)) {
+      this.logger.warn(`角色 ${roleId} 经验入账时修订号已被改动（基线 ${existing.revision}），本次 ${gain} 点经验放弃`);
+      return null;
+    }
     return { level, expNow, expNeed, leveledUp, revision: row.revision };
   }
 
@@ -1470,7 +1481,7 @@ export class RolesService {
       revision: existing.revision + 1,
       updated_at: Date.now(),
     };
-    this.roles.replace(row);
+    this.persistOrConflict(row, existing.revision, "发放任务奖励");
     return { level, expNow, expNeed, leveledUp, revision: row.revision };
   }
 
@@ -1753,5 +1764,28 @@ export class RolesService {
       throw new BizException(BizCode.FORBIDDEN, "无权操作该角色", HttpStatus.FORBIDDEN);
     }
     return row;
+  }
+
+  /**
+   * 落库并复核修订号（B62 / #820）
+   *
+   * 每条写入路径都在开头比对过一次 revision，但那只是「读的那一刻」。
+   * 真正的守卫是 `replace` 的 `WHERE id = ? AND revision = ?`：`changes === 0` 意味着
+   * 这一行在读完到写完之间被别人改过（管理端改数值、另一条服务器消息并发落账…），
+   * 此时**必须**放弃写入 —— 强行覆盖正是 B62 那条「管理端刚改的数值被静默盖掉」。
+   *
+   * 单进程 + 同步驱动下这个分支跑不到（`roles.service.ts` 全是同步函数）；
+   * 留着是为了让「读 → 算 → 写」这件事在代码上成立，而不是靠「碰巧没有 await」。
+   *
+   * @param action 动作名，直接拼进错误文案（「保存存档」「购买商品」…），玩家看得懂在做什么
+   * @throws BizException ROLE_REVISION_CONFLICT（409 / 20006）
+   */
+  private persistOrConflict(row: RoleRow, expectedRevision: number, action: string): void {
+    if (this.roles.replace(row, expectedRevision)) return;
+    this.logger.warn(`角色 ${row.id} ${action}时修订号已被改动（基线 ${expectedRevision}），本次写入放弃`);
+    throw BizException.conflict(
+      BizCode.ROLE_REVISION_CONFLICT,
+      `${action}时角色已被其他改动更新，本次操作未生效，请重新同步最新数据`,
+    );
   }
 }

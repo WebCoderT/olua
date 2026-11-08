@@ -1,6 +1,6 @@
 import { ApiProperty } from "@nestjs/swagger";
 import { Type } from "class-transformer";
-import { IsInt, IsOptional, IsString, MaxLength, Min } from "class-validator";
+import { IsInt, IsString, MaxLength, Min } from "class-validator";
 import { ROLE_FIELD_VALUE_MAX_LENGTH } from "../role-data.util";
 import { RoleRow } from "../../../database/rows";
 import { RoleDto } from "./role.dto";
@@ -13,15 +13,13 @@ export class MallPurchaseDto {
   goodId!: string;
 
   @ApiProperty({
-    description: "修订号（乐观锁）：带上了就校验，与服务端当前值不一致时 20006；与 role.save 同一语义",
-    required: false,
+    description: "修订号（乐观锁，必填）：客户端读到的值，与服务端不一致时 20006，需先拉最新存档（B62 / #820）",
     minimum: 1,
   })
-  @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(1)
-  revision?: number;
+  revision!: number;
 }
 
 /** 商城购买结果（购买后的角色 + 本次消耗，客户端刷新余额/背包与提示直接用） */

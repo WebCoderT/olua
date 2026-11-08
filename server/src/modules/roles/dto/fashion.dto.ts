@@ -14,15 +14,13 @@ export class FashionBuyDto {
   fashionId!: string;
 
   @ApiProperty({
-    description: "修订号（乐观锁）：带上了就校验，与服务端当前值不一致时 20006；与 role.save 同一语义",
-    required: false,
+    description: "修订号（乐观锁，必填）：客户端读到的值，与服务端不一致时 20006，需先拉最新存档（B62 / #820）",
     minimum: 1,
   })
-  @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(1)
-  revision?: number;
+  revision!: number;
 }
 
 /** 时装购买结果（扣费后的绑定元宝 + 完整拥有清单） */
@@ -52,15 +50,13 @@ export class FashionWearDto {
   fashionId?: string | null;
 
   @ApiProperty({
-    description: "修订号（乐观锁）：带上了就校验，与服务端当前值不一致时 20006；与 role.save 同一语义",
-    required: false,
+    description: "修订号（乐观锁，必填）：客户端读到的值，与服务端不一致时 20006，需先拉最新存档（B62 / #820）",
     minimum: 1,
   })
-  @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(1)
-  revision?: number;
+  revision!: number;
 }
 
 /** 时装穿 / 脱结果 */
