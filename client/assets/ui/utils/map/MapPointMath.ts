@@ -20,7 +20,7 @@ import { Node, Rect, Size, TiledMap } from "cc";
  * 地图文件里已经没有对象组，服务端下发的点位与碰撞盒本来就是世界坐标。
  *
  * 锚点相关的两个引擎坑（少一步就整屏黑 / 偏半图）见 `GameMap.loadMap` 的注释与
- * 技能 `cocos-tiledmap-objectgroup` 的坑 1 / 坑 4。
+ * 技能 `cocos-resource` → `references/cocos-tiledmap-objectgroup.md` 的坑 1 / 坑 4。
  */
 
 /** 地图像素尺寸（格数 × 单格尺寸）；只有本模块与需要「整图范围」的调用方用得到 */
