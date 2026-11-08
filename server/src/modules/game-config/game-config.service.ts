@@ -1422,10 +1422,13 @@ export class GameConfigService {
    * 删除任务 —— 两条拒绝，与掉落表「被引用中拒删」同一纪律：
    * - 有玩家进度（哪怕只是 accepted）→ 先清进度再删，否则那些角色永远卡在一个不存在的任务上；
    * - 被别的任务当主线链前置 → 先解开那条链再删，否则后继任务永远接不了。
+   *
+   * daily 的 claimed 行不算「卡住」（#815 起日常也保留 claimed 行）：那是「今天领过」的记账，
+   * 拿它拦下架会让日常永远删不掉 —— 每天都有玩家领过。
    */
   deleteQuest(id: string): { deleted: boolean } {
-    this.requireQuest(id);
-    const progress = this.questProgressRepo.countByQuest(id);
+    const quest = this.requireQuest(id);
+    const progress = this.questProgressRepo.countByQuest(id, quest.kind === "daily" ? "claimed" : undefined);
     if (progress > 0) {
       throw new BizException(BizCode.PARAM_INVALID, `任务 ${id} 仍被 ${progress} 个角色的进度引用，先清理进度再删`);
     }

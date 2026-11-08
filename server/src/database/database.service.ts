@@ -8,6 +8,7 @@ import { AnnouncementLevel } from "../common/constants/announcement";
 import { MONEY_ITEM_SEEDS } from "../common/constants/money-items";
 import { LEVEL_SCROLL_SEEDS } from "../common/constants/level-scrolls";
 import { ROLE_LEVEL_CURVE_SEEDS } from "../common/constants/role-level-curve";
+import { resetDayOf } from "../common/utils/daily-clock";
 import { bootstrapConfigSnapshot } from "./config-snapshot";
 
 /** 可绑定的参数值（node:sqlite 支持的类型） */
@@ -1024,7 +1025,8 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
       );
 
       -- 任务进度状态机（#396）：可接 = 无行；accepted 进行中 → ready 可交付 → claimed 已领奖。
-      -- daily 领奖后整行删除（可重接、进度清零）；main 保留 claimed 行作链门控。
+      -- **daily 与 main 一样保留 claimed 行**（#815）：删行就把「今天领过」的证据一起删了，
+      -- 闸门只能另建计数器。保留行 + reset_day（每日 05:00 切日）天然一行一状态、天然可审计。
       -- 不加 REFERENCES quests(id) 外键：任务下架不该连带抹掉玩家进度历史
       CREATE TABLE IF NOT EXISTS quest_progress (
         role_id    TEXT NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
@@ -1032,6 +1034,7 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
         status     TEXT NOT NULL DEFAULT 'accepted',
         progress   INTEGER NOT NULL DEFAULT 0,
         claimed_at INTEGER,
+        reset_day  INTEGER NOT NULL DEFAULT 0,
         created_at INTEGER NOT NULL,
         updated_at INTEGER NOT NULL,
         PRIMARY KEY (role_id, quest_id)
@@ -1272,6 +1275,10 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
     this.ensureColumn("money_items", "bind_on_drop", "INTEGER NOT NULL DEFAULT 0");
     this.ensureColumn("level_scrolls", "bind_on_drop", "INTEGER NOT NULL DEFAULT 0");
     this.ensureColumn("monster_drops", "bind_drops", "INTEGER NOT NULL DEFAULT 0");
+    // 日常日切（#815）：存量库补列后老行都是 0（真实天号在 20000 以上），一次性垫成今天 ——
+    // 昨天接的日常今天还能交一次，而不是凭空从面板上消失。幂等：天号 0 只可能是补列那一批
+    this.ensureColumn("quest_progress", "reset_day", "INTEGER NOT NULL DEFAULT 0");
+    this.db.prepare("UPDATE quest_progress SET reset_day = ? WHERE reset_day = 0").run(resetDayOf(Date.now()));
     this.migrateLegacyMallPricing();
     this.ensureSuperAdmin();
     this.seedMoneyItemsOnce();

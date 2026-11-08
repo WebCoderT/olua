@@ -153,7 +153,8 @@ export default class QuestStore {
    * 可接判定：等级 + 主线链前置
    *
    * `prevQuestId` 只认 claimed（主线领奖后保留 claimed 行就是为这个）；
-   * 日常（daily）没有前置，领奖后行被删掉，于是自然地回到「可接」。
+   * 日常（daily）没有前置，且**日切在服务端做**：领奖后行留成 claimed，过了 05:00 的行
+   * 服务端根本不下发 —— 所以这里看到的日常只有「今天这一轮」，跨天后自然回到可接。
    */
   private static eligible(quest: QuestData): boolean {
     if (this.level > 0 && quest.minLevel > this.level) return false;

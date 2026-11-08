@@ -240,7 +240,7 @@ export const QuestApi = {
   /**
    * 接取任务（POST /quests/accept）
    *
-   * 等级（20016）与主线链前置（20015）在服务端复核；重复接取（含已完成的主线）返回 20015。接取成功返回最新快照。
+   * 等级（20016）与主线链前置（20015）在服务端复核；重复接取（含已完成的主线）返回 20015。日常按**每日 05:00 切日**：今天已领过返回 20027，行属于更早的天则原地覆盖重置（进度清零、回进行中）。接取成功返回最新快照。
    */
   accept: (body: QuestId, options?: Options) => HttpClient.post<MyQuests>(ApiRoutes.quest.accept, body, options),
   /**
@@ -258,7 +258,7 @@ export const QuestApi = {
   /**
    * 交付任务并领奖（POST /quests/submit）
    *
-   * kill/talk 要先到 ready（进度满）；collect 直接查背包 —— 材料不足 20017、奖励物品放不下背包 20012（进度行保持原状，补齐后可再来）。发奖（金币 / 经验 / 物品）与扣材料**一次落库**；日常（daily）领奖后删行可重接，主线（main）保留 claimed 行作链门控。返回最新快照与奖励结算。
+   * kill/talk 要先到 ready（进度满）；collect 直接查背包 —— 材料不足 20017、奖励物品放不下背包 20012（进度行保持原状，补齐后可再来）。发奖（金币 / 经验 / 物品）与扣材料**一次落库**；daily 与 main 领奖后都**保留 claimed 行**（删行会抹掉「今天领过」的证据），日常的下一轮由 `reset_day` 天号判定。返回最新快照与奖励结算。
    */
   submit: (body: QuestId, options?: Options) => HttpClient.post<QuestSubmitResult>(ApiRoutes.quest.submit, body, options),
 };

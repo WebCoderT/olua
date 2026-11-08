@@ -8,7 +8,7 @@
  * B. 协议两端同形：服务端 RealtimeQuestMessage 与客户端 QuestProgressFrame 字段一致，
  *    QuestState 的三个可下发状态与客户端口径一致
  * C. 服务端权威纪律：接取复核等级与前置链、交付按目标类型判定（collect 查背包）、
- *    击杀推进只写给 accepted 行、日常删行 / 主线保留 claimed
+ *    击杀推进只写给 accepted 行、日常日切（今天已领 20027 / 跨天覆盖重置 / 不再删行）
  * D. 客户端消费纪律：quest 帧只喂 QuestStore（单一落点）、点 NPC 即上报对话、
  *    追踪栏点开任务面板、切场景三处都 reset
  *
@@ -175,14 +175,16 @@ try {
     check(serverQuest.includes("role.level < quest.min_level"), "接取复核等级（客户端算的可接只是提前灰按钮）");
     check(serverQuest.includes("quest.prev_quest_id") && serverQuest.includes('prev.status !== "claimed"'), "接取复核主线链前置（claimed 才算完成）");
     check(serverQuest.includes("已经接取了这个任务"), "重复接取被拒");
-    check(serverQuest.includes("已完成的主线不能重复接"), "已完成的主线不能再接（daily 靠删行回到可接）");
+    check(serverQuest.includes("该任务已完成，不能重复接取"), "已完成的主线不能再接");
   });
 
   guard(() => {
     check(serverQuest.includes('quest.objective_type === "collect"'), "交付时 collect 型按目标类型分流");
     check(serverQuest.includes("grantQuestRewards"), "发奖走 RolesService 的单次落库（扣材料 + 发奖励 + 升级）");
-    check(serverQuest.includes("this.progressRepo.remove(role.id, questId)"), "日常领奖后删行（可重接、进度清零）");
-    check(serverQuest.includes("markClaimed"), "主线领奖后保留 claimed 行（作链门控）");
+    check(serverQuest.includes("QUEST_ALREADY_DONE"), "日常今天已领过 → 20027（#815：不再靠删行回到可接）");
+    check(serverQuest.includes("resetForNewDay"), "日常跨天原地覆盖重置（进度清零、回 accepted）");
+    check(!serverQuest.includes("progressRepo.remove(role.id, questId)"), "日常领奖**不再删行**（删了就抹掉「今天领过」的证据）");
+    check(serverQuest.includes("markClaimed"), "领奖一律留 claimed 行（daily 与 main 同处理）");
     check(serverQuest.includes("listByStatus(role.id, \"accepted\")"), "只有 accepted 行会被推进（ready / claimed 不再涨进度）");
   });
 
