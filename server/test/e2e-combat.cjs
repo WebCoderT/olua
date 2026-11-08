@@ -996,6 +996,30 @@ function connect(url) {
     const pickedAfterReset = killedFull ? await pick(picker, killedFull.castId, 0) : null;
     check(!!(pickedAfterReset && pickedAfterReset.ok === false && pickedAfterReset.code === "unknown_drop"), "F：targetsReset 后账本已清（换图旧掉落不再可拾）", JSON.stringify(pickedAfterReset));
 
+    // —— G. 换图即清账：不发 targetsReset，只 worldJoin 也必须清（#817）——
+
+    // F 靠的是客户端主动发 `targetsReset` —— 那是**客户端消息**，改包不发就还能隔图吸掉落。
+    // 判据必须由服务端在放行 worldJoin 时自己给出：换图那一刻账本就没了。
+    // 图 2 有进图门槛，先把等级提上去（picker 此时已经站在图 1，换图要走门槛判定）
+    await api(baseUrl, "PATCH", `admin/roles/${picker.roleId}`, { token: adminToken, body: { level: 60 } });
+    const mobG = await aliveMonster(picker, "1");
+    const killedG = mobG ? await killMonster(picker, mobG.monsterKey, mobG.instanceId) : null;
+    check(!!killedG, "G：在图 1 打出一份掉落（先不拾）", JSON.stringify(killedG && killedG.castId));
+    await picker.session.joinWorld("2");
+    const crossPick = killedG ? await pick(picker, killedG.castId, 0) : null;
+    check(
+      !!crossPick && crossPick.ok === false && crossPick.code === "unknown_drop",
+      "G：换到图 2 后拾图 1 的掉落 → 拒（unknown_drop，服务端自己清的账）",
+      JSON.stringify(crossPick),
+    );
+    await picker.session.joinWorld("1");
+    const backPick = killedG ? await pick(picker, killedG.castId, 0) : null;
+    check(
+      !!backPick && backPick.ok === false && backPick.code === "unknown_drop",
+      "G：换回图 1 也拾不到（账本在换图那一刻就清了，不会因为回去而复活）",
+      JSON.stringify(backPick),
+    );
+
     // 还原怪物 1 的掉落配置（seed 是内联条目池）
     await api(baseUrl, "PATCH", "admin/monster-drops/1", {
       token: adminToken,

@@ -111,7 +111,12 @@ export class CombatSettlementService {
     return result;
   }
 
-  /** 清掉本账号的幂等账（换图 worldJoin / 旧消息 targetsReset 都会走到；世界状态不受影响） */
+  /**
+   * 清掉本账号的幂等账与掉落账本（世界状态不受影响）
+   *
+   * 两个调用方：`worldJoin` 放行时服务端**自己**调（#817：换图清账不能依赖客户端消息），
+   * 以及客户端发来的 `targetsReset`（旧客户端 / 主动清，双保险）。
+   */
   resetTargets(accountId: string): void {
     this.recentSettles.delete(accountId);
     // 掉落账本随之清：换图后旧图的掉落不再可拾（客户端换图也会清掉地面掉落物）
@@ -132,6 +137,17 @@ export class CombatSettlementService {
    * 流程：账本里找到那条掉落 → 已拾过的幂等应答 → 没拾过的交给 RolesService.pickDrop
    * 入包 → 入包成功才在账本上标记已拾。**标记放在入包成功之后**：背包满被拒时地面
    * 掉落物必须还在，玩家腾出格子后同一 castId/index 可以再拾。
+   *
+   * ## 两道归属闸
+   *
+   * - **跨图**（#817）：账本按账号存、`worldJoin` 放行时整份清掉 —— 换图后旧图的 castId
+   *   查不到条目，直接 `unknown_drop`。清账由**服务端**在 join 时做，不看客户端发不发
+   *   `targetsReset`（那条消息改包就能省掉）。
+   * - **距离**：暂时不校验，等 #811 —— 账本里没有记掉落点坐标，而角色坐标是客户端 4Hz
+   *   自报的（`PlayerPresenceService` 的最小仲裁不是权威，客户端还按碰撞盒边缘算），
+   *   拿它当准入会大面积误伤，与技能距离闸（`cast-guard.service.ts` 第三道）同一处境。
+   *   **重开条件**：账本补 `mapId` + 掉落点坐标，且 #811 把位置源收口之后接距离闸；
+   *   拒绝码沿用这里已有的 `code` 风格（新增 `too_far`），不新增帧类型。
    */
   pickDrop(accountId: string, castId: number, index: number): RealtimePickedData {
     const fail = (code: string, message: string): RealtimePickedData => ({ castId, index, ok: false, code, message });
