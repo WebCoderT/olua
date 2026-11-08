@@ -257,7 +257,7 @@ server-e2e-account-email: ## 服务端玩家邮箱字段专项 e2e（可见性 /
 server-e2e-realtime: ## 服务端实时通道专项 e2e（50 条：票据换连接 / 握手拒连 / 心跳 / 顶连接 / 优雅关闭）
 	@cd server && $(NPM) run test:e2e:realtime
 
-server-e2e-combat: ## 服务端伤害结算专项 e2e（32 条：服务端算伤害 / 幂等 / 死亡判定 / 幂等账与世界状态分离）
+server-e2e-combat: ## 服务端伤害结算专项 e2e（服务端算伤害 / 幂等 / 死亡判定 / 掉落拾取 / 绑定与溯源 / 怪物技能）
 	@cd server && $(NPM) run test:e2e:combat
 
 server-e2e-world: ## 服务端世界权威专项 e2e（22 条：播种 / 共享 / tick 重生 / 优雅关闭与重启恢复；临时文件库）
