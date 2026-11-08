@@ -20743,6 +20743,10 @@
             "type": "string",
             "description": "所属账号名",
             "nullable": true
+          },
+          "corrupted": {
+            "type": "boolean",
+            "description": "存档已损坏（进不了游戏，需人工修复 data）"
           }
         },
         "required": [
@@ -20757,7 +20761,8 @@
           "createdAt",
           "updatedAt",
           "data",
-          "accountName"
+          "accountName",
+          "corrupted"
         ]
       },
       "AdminRolePageDto": {
@@ -20985,6 +20990,10 @@
             "description": "所属账号名",
             "nullable": true
           },
+          "corrupted": {
+            "type": "boolean",
+            "description": "存档已损坏（进不了游戏，需人工修复 data）"
+          },
           "derived": {
             "description": "服务端重算的战斗属性（派生字段：不在库里，每次读现算）",
             "allOf": [
@@ -21007,6 +21016,7 @@
           "updatedAt",
           "data",
           "accountName",
+          "corrupted",
           "derived"
         ]
       },

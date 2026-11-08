@@ -6,7 +6,7 @@
  * 一、新号带版本号：建号那一刻 `data.schemaVersion` 就是当前版本（否则版本分布永远挂一档假老档）
  * 二、老档进游戏即迁移：v1（无该字段）→ `select` → 落库 v2，**金币 / 背包原样、revision 不推进**
  * 三、版本超前拒登：v99 → 20028 + 「联系客服」，库里一个字节不动，**在线标记也不置**
- * 四、坏档不洗白：JSON 都解析不出来的行，本闸不碰（那是 #819 的事）——
+ * 四、坏档不洗白：JSON 都解析不出来的行由坏档闸拦下（#819 的 20029），版本闸**不碰**它 ——
  *     绝不能顺手把 `{}` 迁成 v2 写回去，那会把坏档洗成空档、证据一起没了
  * 五、保存路径盖章：客户端交上来的老形状被迁到当前版本才落库；带更新的版本号直接拒
  * 六、迁移脚本：`--dry-run` 只报告不写库；真跑把落后的行迁完；有迁不动的行 → 退出码 1
@@ -255,15 +255,16 @@ function runMigrateScript(dbPath, extraArgs = []) {
 
     //#region 四、坏档不洗白
 
-    group("四、坏档（JSON 解析失败）本闸不碰");
+    group("四、坏档（JSON 解析失败）与版本闸的边界");
     const brokenRaw = '{"id":"' + roleC + '","gold":';
     writeRawData(dbPath, roleC, brokenRaw);
     const brokenSelect = await api(baseUrl, "POST", `roles/${roleC}/select`, { token });
-    // 本闸只判版本：解析不出来就原样放行，坏档闸是 #819 的事。
-    // 这里真正要钉住的是「没有顺手把 {} 迁成 v2 写回去」
-    check(brokenSelect.code === 0 || brokenSelect.code === 20003, "坏档不改判据（放行或按存档非法拒，两者都可接受）", `${brokenSelect.code}`);
+    // 坏档由 #819 的闸负责（20029 拒登）。这一段要钉的是**版本闸不碰它**：
+    // 既不把 `{}` 当成「空档」迁成 v2 写回去（那是把坏档洗成空档，证据一起没了），
+    // 也不该抢在坏档闸前面报一个版本错误
+    checkEqual(brokenSelect.code, 20029, "坏档被坏档闸拦下（20029，不是版本错误）");
     checkEqual(roleRow(dbPath, roleC).data, brokenRaw, "坏档字节原样保留（没有被洗成空档）");
-    // 选角会把在线标记挪到 C 上，后面还要用 A 存档 —— 选回来
+    // 选角被拒不会挪在线标记；这里仍选一次 A，后面的保存路径要用它
     const reselectA = await api(baseUrl, "POST", `roles/${roleA}/select`, { token });
     checkEqual(reselectA.code, 0, "准备：把在线标记选回 A", reselectA.message);
 

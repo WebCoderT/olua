@@ -3702,6 +3702,10 @@ export type AdminRole = {
    * 所属账号名
    */
   accountName: string | null;
+  /**
+   * 存档已损坏（进不了游戏，需人工修复 data）
+   */
+  corrupted: boolean;
 };
 
 export type AdminRolePage = {
@@ -3849,6 +3853,10 @@ export type AdminRoleDetail = {
    * 所属账号名
    */
   accountName: string | null;
+  /**
+   * 存档已损坏（进不了游戏，需人工修复 data）
+   */
+  corrupted: boolean;
   /**
    * 服务端重算的战斗属性（派生字段：不在库里，每次读现算）
    */

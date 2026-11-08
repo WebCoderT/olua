@@ -39,7 +39,7 @@ import { MallPurchaseDto, MallPurchaseResultDto } from "./dto/mall-purchase.dto"
 import { FashionBuyDto, FashionBuyResultDto, FashionWearDto, FashionWearResultDto } from "./dto/fashion.dto";
 import { ReviveResultDto } from "./dto/revive.dto";
 import { SellGoodsDto, SellGoodsResultDto, SellLineDto } from "./dto/sell-goods.dto";
-import { decodeStoredRoleData, normalizeBagCells, normalizeEnum, normalizeLevel, normalizeName, parseRoleData, applyBagCells, ROLE_OCCUPATIONS, ROLE_SEXES } from "./role-data.util";
+import { decodeStoredRoleData, decodeStoredRoleDataStrict, normalizeBagCells, normalizeEnum, normalizeLevel, normalizeName, parseRoleData, applyBagCells, ROLE_OCCUPATIONS, ROLE_SEXES } from "./role-data.util";
 import { migrateRoleData } from "./role-migration";
 import { clampVitals, enforceServerAuthority, settleVitalsAuthority } from "./role-authority";
 import { buildInitialRoleData } from "./initial-role";
@@ -198,6 +198,8 @@ export class RolesService {
       kills: 0,
       data: JSON.stringify(data),
       revision: 1,
+      // 新号不可能是坏档（data 是本进程刚构造的 JSON）
+      corrupted: 0,
       created_at: now,
       updated_at: now,
     };
@@ -253,9 +255,19 @@ export class RolesService {
     }
 
     // 权威边界（见 role-authority.ts）：账本 / 成长线阶位 / 进度以库为准，客户端报上来的一律丢弃；
-    // 老存档里没有这些键时不回填（客户端那份是唯一来源，删掉等于把玩家的钱清零）。
+    // 老存档里没有这些键时按空值回填（#819 起不再「缺字段就采纳客户端那份」）。
     // `level` 另有索引列（`roles.level`）压过文档里的那份 —— 列表排序与筛选读的是列，列才是真相
-    const stored = decodeStoredRoleData(existing.data);
+    //
+    // 解析**必须用严格版**：坏档折成 `{}` 的话，收权会认为「库里什么都没有」，于是客户端
+    // 上报的 gold / bag / equipments 全部放行 —— 那正是 B61 的提权通道（#819 堵的就是它）
+    const storedParsed = decodeStoredRoleDataStrict(existing.data);
+    if (!storedParsed.ok) {
+      this.roles.markCorrupted(roleId, true);
+      this.logger.error(`角色 ${roleId} 的存档无法解析（${storedParsed.reason}），已标记 corrupted 并拒绝这次存档`);
+      throw BizException.conflict(BizCode.ROLE_DATA_CORRUPTED, "存档已损坏，暂时无法保存，请联系客服");
+    }
+    if (existing.corrupted) this.roles.markCorrupted(roleId, false);
+    const stored = storedParsed.data;
     this.enforceAuthority({ ...stored, level: existing.level }, data);
     // 等级可能被上面回填改掉，索引列必须从**回填后**的文档重取：
     // 否则 `row.level`（客户端报的）与 `data.level`（库里的）各说一套，列表与详情对不上
@@ -1688,24 +1700,30 @@ export class RolesService {
    * 用 `updateDataKeepRevision`（不推进修订号，与 `setMapAt` 同一理由）：迁移不是玩家进度，
    * 推进修订号只会让刚读完档的客户端下一次存档白撞 20006。
    *
-   * **坏档不在这里处理**（JSON 都解析不出来）：那是 #819 的闸。更不能顺手把 `{}` 迁成 v2
-   * 写回去 —— 那会把「坏档」洗成「空档」，连证据一起没了。
+   * **坏档也在这道闸里判**（#819）：`data` 解析不出来 → 置 `roles.corrupted=1` 并拒登（20029），
+   * 存档原样保留等人工修。绝不把 `{}` 当成「空档」往下走 —— 空档在收权判定里意味着
+   * 「库里没有这个字段，客户端那份是唯一来源」，那正好是 B61 那条提权通道。
    */
   private migrateBeforeEnter(row: RoleRow): RoleRow {
-    let stored: Record<string, unknown>;
-    try {
-      const parsed: unknown = JSON.parse(row.data);
-      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return row;
-      stored = parsed as Record<string, unknown>;
-    } catch {
-      return row;
+    // 严格解析（#819）：坏档必须能被认出来。`decodeStoredRoleData` 把解析失败折成 `{}`，
+    // 而空对象在收权判定里是「库里没有这个字段 → 客户端那份是唯一来源」—— 那正是提权通道
+    const parsed = decodeStoredRoleDataStrict(row.data);
+    if (!parsed.ok) {
+      this.roles.markCorrupted(row.id, true);
+      this.logger.error(`角色 ${row.id} 的存档无法解析（${parsed.reason}），已标记 corrupted 并拒绝进入游戏`);
+      throw BizException.conflict(BizCode.ROLE_DATA_CORRUPTED, "存档已损坏，暂时无法进入游戏，请联系客服");
     }
-    const outcome = migrateRoleData(stored);
+    // 之前标过坏档、现在能解析了（人工修好 JSON）→ 自动解封，不用运维再点一次
+    if (row.corrupted) {
+      this.roles.markCorrupted(row.id, false);
+      this.logger.log(`角色 ${row.id} 的存档已恢复正常，corrupted 标记清除`);
+    }
+    const outcome = migrateRoleData(parsed.data);
     if (!outcome.migrated) return row;
     const data = JSON.stringify(outcome.data);
     this.roles.updateDataKeepRevision(row.id, data, Date.now());
     this.logger.log(`角色 ${row.id} 的存档已从 v${outcome.from} 迁到 v${outcome.to}`);
-    return { ...row, data };
+    return { ...row, data, corrupted: 0 };
   }
 
   /** 删除角色（删掉的正好是在线角色时，顺带清掉账号上的在线标记） */

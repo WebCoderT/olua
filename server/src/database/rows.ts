@@ -90,6 +90,14 @@ export interface RoleRow {
    * 谁最后写谁赢 —— 后台的改动静默丢失。
    */
   revision: number;
+  /**
+   * 坏档标记（#819 / I6）
+   *
+   * `data` 这列解析不出来时置 1：进入游戏被拒（20029），等人工把 JSON 修好、
+   * 下一次解析成功再自动清回 0。**不删行、不改 data** —— 删行毁证据，改 data
+   * 是把坏档洗成空档（后者正是 B61 里那条提权通道的入口）。
+   */
+  corrupted: number;
   created_at: number;
   updated_at: number;
 }
