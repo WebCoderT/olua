@@ -30,17 +30,17 @@ export class MonsterDropRepository {
   /** seed 一行（已存在则跳过 —— 运营改过的值不会被配置更新覆盖回去） */
   seedRow(row: MonsterDropRow): void {
     this.db.run(
-      `INSERT OR IGNORE INTO monster_drops (monster_key, source, table_id, picks, entries, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?)`,
-      [row.monster_key, row.source, row.table_id, row.picks, row.entries, row.updated_at],
+      `INSERT OR IGNORE INTO monster_drops (monster_key, source, table_id, picks, entries, bind_drops, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [row.monster_key, row.source, row.table_id, row.picks, row.entries, row.bind_drops, row.updated_at],
     );
   }
 
   update(row: MonsterDropRow): void {
     this.db.execute(
-      `UPDATE monster_drops SET source = ?, table_id = ?, picks = ?, entries = ?, updated_at = ?
+      `UPDATE monster_drops SET source = ?, table_id = ?, picks = ?, entries = ?, bind_drops = ?, updated_at = ?
        WHERE monster_key = ?`,
-      [row.source, row.table_id, row.picks, row.entries, row.updated_at, row.monster_key],
+      [row.source, row.table_id, row.picks, row.entries, row.bind_drops, row.updated_at, row.monster_key],
     );
   }
 

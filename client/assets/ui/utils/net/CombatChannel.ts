@@ -197,6 +197,10 @@ export interface PickPlacedCell {
   col: number;
   id: string;
   count: number;
+  /** 绑定角色 = 不可交易（#789：服务端在掉落时判定，客户端只显示） */
+  bound?: boolean;
+  /** 掉落溯源（只有装备会有）：谁掉的 / 什么怪 / 什么时候 */
+  from?: { role?: string; monster?: string; at?: number };
 }
 
 /** 服务端拾取成功（协议见 realtime.protocol 的 RealtimePickedOk） */

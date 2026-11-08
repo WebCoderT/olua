@@ -64,8 +64,8 @@ export class LevelScrollRepository {
   insert(row: LevelScrollRow): void {
     this.db.run(
       `INSERT INTO level_scrolls
-         (id, label, description, icon, min_level, max_level, max_stack, sell_price, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         (id, label, description, icon, min_level, max_level, max_stack, sell_price, bind_on_drop, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         row.id,
         row.label,
@@ -75,6 +75,7 @@ export class LevelScrollRepository {
         row.max_level,
         row.max_stack,
         row.sell_price,
+        row.bind_on_drop,
         row.updated_at,
       ],
     );
@@ -84,7 +85,7 @@ export class LevelScrollRepository {
     return this.db.execute(
       `UPDATE level_scrolls SET
          label = ?, description = ?, icon = ?, min_level = ?, max_level = ?,
-         max_stack = ?, sell_price = ?, updated_at = ?
+         max_stack = ?, sell_price = ?, bind_on_drop = ?, updated_at = ?
        WHERE id = ?`,
       [
         row.label,
@@ -94,6 +95,7 @@ export class LevelScrollRepository {
         row.max_level,
         row.max_stack,
         row.sell_price,
+        row.bind_on_drop,
         row.updated_at,
         row.id,
       ],

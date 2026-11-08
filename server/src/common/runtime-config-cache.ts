@@ -70,6 +70,8 @@ export interface EquipmentBaseSource {
   slot: string;
   level: number;
   label: string;
+  /** 掉落强制绑定（#789）：1 = 这件装备掉出来就绑定角色（变体沿用基础件的设置） */
+  bind_on_drop?: number;
 }
 
 /** 物品 / 材料的一行（`items` 表：叠加上限与卖价参与结算） */
@@ -81,6 +83,8 @@ export interface ItemSource {
   level: number;
   sell_price: number;
   max_stack: number;
+  /** 掉落强制绑定（#789） */
+  bind_on_drop?: number;
 }
 
 /** 称号 / 战魂 / 军衔的一行（level 是主键，1 起） */
@@ -126,6 +130,8 @@ export interface DrugSource {
   effect_mp: number;
   effect_hp_percent: number;
   effect_mp_percent: number;
+  /** 掉落强制绑定（#789） */
+  bind_on_drop?: number;
 }
 
 /**
@@ -143,6 +149,8 @@ export interface MoneyItemSource {
   amount: number;
   max_stack: number;
   sell_price: number;
+  /** 掉落强制绑定（#789） */
+  bind_on_drop?: number;
 }
 
 /**
@@ -159,6 +167,8 @@ export interface LevelScrollSource {
   max_level: number;
   max_stack: number;
   sell_price: number;
+  /** 掉落强制绑定（#789） */
+  bind_on_drop?: number;
 }
 
 //#endregion
@@ -172,7 +182,7 @@ export interface LevelScrollSource {
  */
 let equipmentVariantRows: Map<string, { bundle: AttributeBundle; level: number; price: number }> | null = null;
 /** 装备基础件：id → { 部位, 等级, 名称 }（变体行缺失时兜底，也是「这件东西能穿哪儿」的来源） */
-let equipmentBases: Map<string, { slot: string; level: number; label: string }> | null = null;
+let equipmentBases: Map<string, { slot: string; level: number; label: string; bindOnDrop: boolean }> | null = null;
 /**
  * 角色等级曲线（#786：4 条 × 6 段，1..100 万级全靠它算）
  *
@@ -275,9 +285,14 @@ export function applyEquipmentBases(rows: EquipmentBaseSource[]): void {
     equipmentBases = null;
     return;
   }
-  const map = new Map<string, { slot: string; level: number; label: string }>();
+  const map = new Map<string, { slot: string; level: number; label: string; bindOnDrop: boolean }>();
   for (const row of rows) {
-    map.set(row.id, { slot: String(row.slot ?? ""), level: numberOr(row.level), label: String(row.label ?? "") });
+    map.set(row.id, {
+      slot: String(row.slot ?? ""),
+      level: numberOr(row.level),
+      label: String(row.label ?? ""),
+      bindOnDrop: numberOr(row.bind_on_drop) === 1,
+    });
   }
   equipmentBases = map;
 }
@@ -297,6 +312,7 @@ export function applyItemOverrides(rows: ItemSource[]): void {
       level: numberOr(row.level),
       sellPrice: numberOr(row.sell_price),
       maxStack: numberOr(row.max_stack),
+      bindOnDrop: numberOr(row.bind_on_drop) === 1,
     });
   }
   itemRows = map;
@@ -367,6 +383,7 @@ export function applyDrugOverrides(rows: DrugSource[]): void {
       mp: numberOr(row.effect_mp),
       hpPercent: numberOr(row.effect_hp_percent),
       mpPercent: numberOr(row.effect_mp_percent),
+      bindOnDrop: numberOr(row.bind_on_drop) === 1,
     });
   }
   drugRows = map;
@@ -392,6 +409,7 @@ export function applyMoneyItemOverrides(rows: MoneyItemSource[]): void {
       amount: numberOr(row.amount),
       maxStack: numberOr(row.max_stack),
       sellPrice: numberOr(row.sell_price),
+      bindOnDrop: numberOr(row.bind_on_drop) === 1,
     });
   }
   moneyRows = map;
@@ -417,6 +435,7 @@ export function applyLevelScrollOverrides(rows: LevelScrollSource[]): void {
       maxLevel: numberOr(row.max_level),
       maxStack: numberOr(row.max_stack),
       sellPrice: numberOr(row.sell_price),
+      bindOnDrop: numberOr(row.bind_on_drop) === 1,
     });
   }
   levelScrollRows = map;
@@ -672,6 +691,28 @@ export function itemLabelOf(id: string): string | null {
   if (typeof scroll === "string") return scroll;
   const item = itemRows?.get(id)?.label;
   return typeof item === "string" ? item : null;
+}
+
+/**
+ * 某个物品的**掉落强制绑定**（#789）：`true` = 掉出来就绑定角色、不可交易
+ *
+ * 五张表各有一列 `bind_on_drop`（装备 / 药品 / 物品 / 货币道具 / 升级卷轴）。
+ * 装备按**基础件**读（变体 id 先折回 base_id）—— 绑定是这件装备的属性，
+ * 不是某个前后缀组合的属性（掉落表里写的也全是前后缀 0/0 的光板）。
+ *
+ * 查不到的 id 返回 `false`：绑定只是「多一层限制」，认不出的东西不该被顺便锁死。
+ */
+export function bindOnDropOf(id: string): boolean {
+  const base = equipmentBases?.get(baseKeyOf(id) ?? id);
+  if (base) return base.bindOnDrop;
+  const drug = drugRows?.get(id)?.bindOnDrop;
+  if (drug !== undefined) return drug === true;
+  const money = moneyRows?.get(id)?.bindOnDrop;
+  if (money !== undefined) return money === true;
+  const scroll = levelScrollRows?.get(id)?.bindOnDrop;
+  if (scroll !== undefined) return scroll === true;
+  const item = itemRows?.get(id)?.bindOnDrop;
+  return item === true;
 }
 
 /**

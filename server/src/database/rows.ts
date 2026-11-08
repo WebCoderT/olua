@@ -739,6 +739,15 @@ export interface EquipmentRow {
   taoist_defense_min: number;
   taoist_defense_max: number;
   updated_at: number;
+  /**
+   * 掉落时**强制绑定**（#789）：1 = 这件装备一旦掉出来就绑定角色、不可交易
+   *
+   * 三种绑定判定之一（另两个：怪物侧的 `monster_drops.bind_drops`、`drop_params` 的随机概率），
+   * 任一为真即绑定；三个都不为真时按 `bindChance` 掷一次。
+   * 列**追加在建表语句末尾**，与 `ALTER TABLE ADD COLUMN` 补出来的顺序一致 ——
+   * 否则新库与存量库的 `SELECT *` 列序不同，`make config-check` 会报一整份假 diff。
+   */
+  bind_on_drop: number;
 }
 
 /**
@@ -856,6 +865,8 @@ export interface DrugRow {
   /** 按角色 maxMp 的百分比回复（50 = 50%） */
   effect_mp_percent: number;
   updated_at: number;
+  /** 掉落时强制绑定（语义同 `EquipmentRow.bind_on_drop`；#789） */
+  bind_on_drop: number;
 }
 
 /**
@@ -882,6 +893,8 @@ export interface ItemRow {
   /** 最大叠加数量 */
   max_stack: number;
   updated_at: number;
+  /** 掉落时强制绑定（语义同 `EquipmentRow.bind_on_drop`；#789） */
+  bind_on_drop: number;
 }
 
 /**
@@ -911,6 +924,8 @@ export interface MoneyItemRow {
   /** 售卖价（0 = 不可出售；货币道具默认 0） */
   sell_price: number;
   updated_at: number;
+  /** 掉落时强制绑定（语义同 `EquipmentRow.bind_on_drop`；#789） */
+  bind_on_drop: number;
 }
 
 /**
@@ -930,7 +945,7 @@ export interface LevelScrollRow {
   label: string;
   /** 描述（运营文案） */
   description: string;
-  /** 图标资源路径（resources 相对路径，如 `item/scroll/level-scroll`） */
+  /** 图标资源路径（resources 相对路径，一卷一张：`item/scroll/level-scroll-1` …） */
   icon: string;
   /** 可用等级下限（含） */
   min_level: number;
@@ -941,6 +956,8 @@ export interface LevelScrollRow {
   /** 售卖价（0 = 不可出售；出厂 0） */
   sell_price: number;
   updated_at: number;
+  /** 掉落时强制绑定（语义同 `EquipmentRow.bind_on_drop`；#789） */
+  bind_on_drop: number;
 }
 
 /**
@@ -1190,6 +1207,14 @@ export interface MonsterDropRow {
   /** 内联条目池 JSON（source = entries 时非空） */
   entries: string | null;
   updated_at: number;
+  /**
+   * 这只怪的掉落**整体强制绑定**（#789）：1 = 它掉出来的东西一律绑定角色
+   *
+   * 与物品侧的 `bind_on_drop` 是「或」的关系（用户口径：物品本身有强制绑定、掉它的怪也有
+   * 强制绑定标记，两者都不为真时才随机）。放在每怪这一行而不是掉落条目上：条目池可能是
+   * 多怪共用的具名表，而「这只怪掉的东西绑不绑」是它的属性。
+   */
+  bind_drops: number;
 }
 
 /**

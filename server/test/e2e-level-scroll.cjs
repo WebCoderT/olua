@@ -362,7 +362,8 @@ const expectedRangeOf = (index) => ({
     checkEqual(createdNext.code, 0, "只填区间就能建", createdNext.message);
     checkEqual(createdNext.data.id, "level_scroll_8", "区间落在出厂切法上 → id 按卷号派生");
     checkEqual(createdNext.data.label, "升级卷轴 Lv8", "名称同样按卷号派生");
-    checkEqual(createdNext.data.icon, LV1.icon, "图标缺省与出厂同一张（运营可以逐卷换图）");
+    checkEqual(LV1.icon, "item/scroll/level-scroll-1", "出厂图标一卷一张（按卷号指向素材）");
+    checkEqual(createdNext.data.icon, "item/scroll/level-scroll-8", "图标缺省同样按卷号派生（缺图由 audit-resource-refs 点名，不静默空白）");
     checkEqual(createdNext.data.maxStack, 999, "叠加上限缺省 999");
     checkEqual(createdNext.data.sellPrice, 0, "售价缺省 0（不可出售）");
 

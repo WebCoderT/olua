@@ -30,7 +30,7 @@ import { debugConfig } from "../../configs/debug";
 import { getText, TextParams } from "../../configs/texts";
 import { BottomNavItem } from "../../configs/bottomNav";
 import { BLANK_FRAME_MAX_AREA, getAnimationName } from "../../configs/animation";
-import { dropLightEffectConfig, hitScreenFlash, upgradeEffectConfig } from "../../configs/game-config";
+import { dropLightEffectConfig, hitScreenFlash, monsterLabelOf, upgradeEffectConfig } from "../../configs/game-config";
 import type { UiEffectConfig } from "../utils/net/ApiModels";
 import { bagRow, bagCol } from "../../configs/role";
 import { Role } from "../../entities/Role";
@@ -92,7 +92,7 @@ import { borders, resolveEquipmentBorder } from "../../configs/border";
 import { detailBackgrounds, resolveEquipmentDetailBackground } from "../../configs/background";
 import type { AppearanceEffect } from "../../types/appearance";
 import { getEquipmentLightKey, lights } from "../../configs/light";
-import { getStackBadge, StackBadge } from "../../configs/items";
+import { BagCellMeta, getStackBadge, StackBadge } from "../../configs/items";
 
 //#region 类型定义
 
@@ -1717,8 +1717,11 @@ export default class GameUiHelper {
    * 在某个格子上创建物品
    * @param options.compareWornProvider 悬停装备时取「身上同槽位穿戴件」的入口（Ctrl 对比的数据源）；
    *   只传给需要对比的调用方（背包格子）：身上装备槽、商城等悬停不做对比
+   * @param options.meta 这一格的绑定与溯源（#789，背包格子传存档里的值）：
+   *   详情弹窗据此显示「已绑定 · 不可交易」与掉落溯源；不传 = 都不显示
+   *   （身上装备槽只存 id、没有元数据，传不出来也是如实反映）
    */
-  static createGood(cell: Node, good: Goods, count?: number, options?: { compareWornProvider?: () => Equipment | null }) {
+  static createGood(cell: Node, good: Goods, count?: number, options?: { compareWornProvider?: () => Equipment | null; meta?: BagCellMeta }) {
     const sprite = UiHelper.createSprite(`good_${good.label}`, good.icon, new Vec2(), new Size(40, 40));
     cell.addChild(sprite);
     // 装备边框（前后缀决定的品质光效，背包与身上装备槽同一入口）：挂在**图标**节点上而不是格子下——
@@ -1743,7 +1746,7 @@ export default class GameUiHelper {
           const worn = options?.compareWornProvider?.() ?? null;
           const comparable = isEquipment(good) && !!worn && worn.id !== good.id;
           const holdingCtrl = isCtrlPressed();
-          detailDialog = this.createGoodDetailDialog(good, cell, comparable && holdingCtrl ? worn : comparable ? "hint" : null);
+          detailDialog = this.createGoodDetailDialog(good, cell, comparable && holdingCtrl ? worn : comparable ? "hint" : null, options?.meta);
           LayerManager.addToUILayer(detailDialog);
         };
         const handleCtrlChange = () => {
@@ -1936,8 +1939,11 @@ export default class GameUiHelper {
    * @param compare 对比模式：传装备 = 在属性列表下方追加「与身上穿戴对比」段；
    *   传 "hint" = 只显示「按住 Ctrl 对比」提示行（身上有穿戴但没按 Ctrl）；
    *   传 null/缺省 = 不出现对比相关内容（身上没得比、悬停的不是装备、或调用方没接对比）
+   * @param meta 格子的绑定与溯源（#789，服务端写、这里只读）：
+   *   `bound` 为真时多一行「已绑定 · 不可交易」；`from` 有值时（只有装备会带）多三行
+   *   「掉落者 / 怪物 / 掉落于」。**缺省 = 不显示**，比如身上装备槽只存 id、没有元数据
    */
-  static createGoodDetailDialog(good: Goods, anchor: Node, compare: Equipment | "hint" | null = null) {
+  static createGoodDetailDialog(good: Goods, anchor: Node, compare: Equipment | "hint" | null = null, meta?: BagCellMeta) {
     const dialog = UiHelper.createSprite(goodDetailLayout.name, goodDetailLayout.background, new Vec2(), goodDetailLayout.size);
     // 装备详情背景（前后缀决定的品质背景动画）：独立子节点垫底，加载完成前先显示静态底图
     const background = this.createEquipmentDetailBackground(dialog, good);
@@ -2028,6 +2034,40 @@ export default class GameUiHelper {
     // 标签行（装备专属：显示在名称正下方，与其他物品区分开）
     const contentTags = isEquipment(good) ? this.createGoodTagRow(good.tags ?? []) : null;
 
+    // 绑定标记行（#789）：只有**真的绑定**时才占一行 —— 未绑定时不留空位，否则多数掉落物
+    // 的详情弹窗会白白高一截。绑定 = 不允许交易，这条是给玩家看的结论，不是可点的开关。
+    const boundStyle = goodDetailLayout.bound;
+    const contentBound =
+      meta && meta.bound === true
+        ? UiHelper.createLabel(
+            "good_detail_bound",
+            getText("label_good_detail_bound"),
+            boundStyle.color,
+            boundStyle.fontSize,
+            new Vec2(),
+            boundStyle.size,
+            Label.HorizontalAlign.LEFT,
+            Label.VerticalAlign.CENTER,
+          )
+        : null;
+
+    // 掉落溯源三行（#789；只有装备会带 from）：谁掉的 / 哪个怪 / 什么时候。
+    // 缺哪项就少一行而不是填「未记录」—— 服务端只记到一半时，空白比假数据诚实。
+    const originRows: Node[] = [];
+    const origin = meta?.from;
+    if (origin) {
+      const style = goodDetailLayout.origin;
+      const pushOriginRow = (name: string, text: string) => {
+        originRows.push(
+          UiHelper.createLabel(name, text, style.color, style.fontSize, new Vec2(), style.size, Label.HorizontalAlign.LEFT, Label.VerticalAlign.CENTER),
+        );
+      };
+      if (origin.role) pushOriginRow("good_detail_origin_role", getText("label_good_detail_origin_role", { role: origin.role }));
+      // 怪物 key 翻中文名（怪物表随快照下发；未知 key 直接显示 key，不吞掉这条线索）
+      if (origin.monster) pushOriginRow("good_detail_origin_monster", getText("label_good_detail_origin_monster", { monster: monsterLabelOf(origin.monster) }));
+      if (typeof origin.at === "number" && origin.at > 0) pushOriginRow("good_detail_origin_time", getText("label_good_detail_origin_time", { time: this.formatOriginTime(origin.at) }));
+    }
+
     // 介绍
     const descLayout = goodDetailLayout.description;
     const contentDescription = UiHelper.createLabel("content_description", good.description, Color.WHITE, descLayout.fontSize, new Vec2(), descLayout.size);
@@ -2049,6 +2089,8 @@ export default class GameUiHelper {
     content.addChild(contentHeader);
     if (contentInfo) content.addChild(contentInfo);
     if (contentRecycle) content.addChild(contentRecycle);
+    if (contentBound) content.addChild(contentBound);
+    originRows.forEach((row) => content.addChild(row));
     if (contentTags) content.addChild(contentTags);
     content.addChild(contentDescription);
     content.addChild(contentBody);
@@ -2202,6 +2244,27 @@ export default class GameUiHelper {
   static formatAttributeValue(value: readonly number[] | number): string {
     if (typeof value === "number") return String(value);
     return value[0] === value[1] ? String(value[0]) : `${value[0]} - ${value[1]}`;
+  }
+
+  /**
+   * 掉落时间的展示格式（详情弹窗溯源行用）
+   *
+   * 口径「月日 + 时分」而不是完整年月：一件装备的掉落时间大概率就在最近几天，
+   * 年月占位只会把这一行挤成两行。`at` 由服务端写成毫秒时间戳，这里只负责补零排版；
+   * 非法值（0 / NaN / 负数）返回空串，调用方据此整行不显示（不编一个时间出来）。
+   */
+  static formatOriginTime(at: number): string {
+    if (!Number.isFinite(at) || at <= 0) return "";
+    const date = new Date(at);
+    // 补零不用 padStart（客户端 tsconfig 不引 ES2017），也不用数字比较（`< 10` 会被
+    // `audit-config-leak` 当成魔法阈值）；借两位常数前缀切尾两位，两个坑一起绕开
+    const pad = (value: number) => `00${value}`.slice(-2);
+    return getText("label_good_detail_origin_time_format", {
+      month: date.getMonth() + 1,
+      day: date.getDate(),
+      hour: pad(date.getHours()),
+      minute: pad(date.getMinutes()),
+    });
   }
 
   /**

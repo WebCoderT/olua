@@ -44,11 +44,13 @@ import { clampVitals, enforceServerAuthority, settleVitalsAuthority } from "./ro
 import { buildInitialRoleData } from "./initial-role";
 import {
   BagGrid,
+  BagOrigin,
   cellAt,
   discardAt,
   equipAt,
   readBagGrid,
   readWornEquipments,
+  reconcileBagCells,
   sameBagContent,
   sameGridShape,
   sanitizeEquipments,
@@ -67,7 +69,16 @@ export interface KillExpResult {
 /** 一次拾取入包的结果（picked 帧的 ok 应答据此组装） */
 export interface PickDropResult {
   revision: number;
-  placed: Array<{ row: number; col: number; id: string; count: number }>;
+  /** 实际写入的格子；`bound` / `from` 随格子一起回给客户端（详情弹窗要显示） */
+  placed: Array<{ row: number; col: number; id: string; count: number; bound?: boolean; from?: BagOrigin }>;
+}
+
+/** 拾取时随物品写入格子的元数据（#789：绑定与溯源，由掉落结算判定，客户端说了不算） */
+export interface PickDropMeta {
+  /** 是否绑定角色（不可交易） */
+  bound?: boolean;
+  /** 掉落溯源（只有装备会带） */
+  from?: BagOrigin;
 }
 
 /**
@@ -508,7 +519,7 @@ export class RolesService {
    *
    * @returns 入包后的修订号与实际写入的格子（客户端照搬合并进本地背包 + revision 基线）
    */
-  pickDrop(accountId: string, goodId: string, count: number): PickDropResult {
+  pickDrop(accountId: string, goodId: string, count: number, meta: PickDropMeta = {}): PickDropResult {
     const account = this.mustAccount(accountId);
     const roleId = account.online_role_id;
     if (!roleId) throw BizException.conflict(BizCode.ROLE_NOT_FOUND, "当前没有在线角色，无法拾取");
@@ -523,7 +534,7 @@ export class RolesService {
     if (!itemType) throw BizException.conflict(BizCode.ROLE_DATA_INVALID, `掉落物品不存在：${goodId}`);
 
     const data = decodeStoredRoleData(existing.data);
-    const placed = this.placeGoodsIntoBag(data, goodId, itemType, Math.max(1, Math.floor(count)));
+    const placed = this.placeGoodsIntoBag(data, goodId, itemType, Math.max(1, Math.floor(count)), meta);
 
     const row: RoleRow = {
       ...existing,
@@ -543,6 +554,11 @@ export class RolesService {
    * 放不下整份时抛 20012 —— data 已被就地修改，但调用方在异常路径上不会落库，
    * 存档不受影响。
    *
+   * **#789 起多一条合并条件**：绑定状态不同的两份**不合并**（`bound` 参与判定）。
+   * 否则「捡到一堆绑定的药」会并进未绑定的那堆，绑定就从有变成没有（或反过来 —— 那更糟，
+   * 等于白送一堆可交易品）。同状态的才并堆，于是同一种物品在背包里最多分成两堆。
+   *
+   * @param meta 掉落结算判定的绑定与溯源，原样写进新格子上（`from` 只对装备有意义）
    * @throws MALL_BAG_FULL 背包剩余空间放不下整份（或网格结构不合法）
    */
   private placeGoodsIntoBag(
@@ -550,7 +566,8 @@ export class RolesService {
     goodId: string,
     itemType: string,
     count: number,
-  ): Array<{ row: number; col: number; id: string; count: number }> {
+    meta: PickDropMeta = {},
+  ): Array<{ row: number; col: number; id: string; count: number; bound?: boolean; from?: BagOrigin }> {
     const bag = data.bag;
     if (!Array.isArray(bag)) throw BizException.conflict(BizCode.MALL_BAG_FULL, "背包数据不完整，无法放入物品");
     // 单格上限：装备没有叠加概念（1）；药品/材料从各自的表读 maxStack（#252/#255 起入库），读不到按 99
@@ -559,11 +576,18 @@ export class RolesService {
     const stackRow = stackable ? (drugOf(goodId) ?? itemBaseOf(goodId)) : undefined;
     const maxStack = stackable ? Math.max(1, Math.floor(Number(stackRow && (stackRow as Record<string, unknown>).maxStack) || 99)) : 1;
 
-    const placed: Array<{ row: number; col: number; id: string; count: number }> = [];
+    const placed: Array<{ row: number; col: number; id: string; count: number; bound?: boolean; from?: BagOrigin }> = [];
     let remaining = count;
     const grid = bag as unknown[][];
+    /** 这一份物品自身的元数据（同一份物品写进每一格都一样，除了 count） */
+    const bound = meta.bound === true;
+    const from = itemType === "equipment" && meta.from ? meta.from : undefined;
+    const metaColumns = (): { bound?: boolean; from?: BagOrigin } => ({
+      ...(bound ? { bound: true } : {}),
+      ...(from ? { from } : {}),
+    });
 
-    // 第一轮：吃已有堆（只有可叠加物品走得到）
+    // 第一轮：吃已有堆（只有可叠加物品走得到；**绑定状态不同不并**）
     if (stackable) {
       for (let row = 0; row < grid.length && remaining > 0; row++) {
         const line = grid[row];
@@ -571,12 +595,15 @@ export class RolesService {
         for (let col = 0; col < line.length && remaining > 0; col++) {
           const cell = line[col];
           if (!cell || typeof cell !== "object" || (cell as Record<string, unknown>).id !== goodId) continue;
-          const current = Math.max(1, Math.floor(Number((cell as Record<string, unknown>).count) || 1));
+          const record = cell as Record<string, unknown>;
+          // 绑定状态必须是同一桶才允许并堆（见方法注释）
+          if ((record.bound === true) !== bound) continue;
+          const current = Math.max(1, Math.floor(Number(record.count) || 1));
           const room = maxStack - current;
           if (room <= 0) continue;
           const take = Math.min(room, remaining);
-          line[col] = { id: goodId, count: current + take };
-          placed.push({ row, col, id: goodId, count: current + take });
+          line[col] = { ...record, id: goodId, count: current + take } as Record<string, unknown>;
+          placed.push({ row, col, id: goodId, count: current + take, ...metaColumns() });
           remaining -= take;
         }
       }
@@ -590,8 +617,8 @@ export class RolesService {
         const cell = line[col];
         if (cell && typeof cell === "object" && (cell as Record<string, unknown>).id) continue;
         const take = Math.min(maxStack, remaining);
-        line[col] = { id: goodId, count: take };
-        placed.push({ row, col, id: goodId, count: take });
+        line[col] = { id: goodId, count: take, ...metaColumns() } as Record<string, unknown>;
+        placed.push({ row, col, id: goodId, count: take, ...metaColumns() });
         remaining -= take;
       }
     }
@@ -943,11 +970,17 @@ export class RolesService {
       case "tidy": {
         if (!dto.cells) throw new BizException(BizCode.BAG_TARGET_INVALID, "缺少操作后的背包内容");
         const arranged = applyBagCells(grid, normalizeBagCells(dto.cells)) as BagGrid;
-        // 守恒判据只有两条：形状不变、同 id 总件数不变（搬运的合并 / 交换、整理的重排都满足）
-        if (!sameGridShape(grid, arranged) || !sameBagContent(grid, arranged)) {
+        // 位置听客户端的，**绑定与溯源听服务器的**（#789）：先把旧网格里的元数据认领回来。
+        // 顺序很关键 —— 上报的格子契约里没有 `bound`（客户端只知道 id/count），若拿原始
+        // arranged 去比守恒，绑定的那一堆一挪位置就会被当成「凭空冒出几个可交易的」而拒绝。
+        // 认领之后再比：交叉合并（绑定 2 + 未绑定 4 报成一格 6 个）会因另一桶归零被抓到。
+        const reconciled = reconcileBagCells(grid, arranged);
+        // 守恒判据只有两条：形状不变、（绑定状态 + id）的总件数不变
+        // （搬运的合并 / 交换、整理的重排都满足；绑定堆与未绑定堆互换会被这里拦下）
+        if (!sameGridShape(grid, reconciled) || !sameBagContent(grid, reconciled)) {
           throw new BizException(BizCode.BAG_ARRANGE_INVALID, "背包内容与服务器不一致，请重新打开背包");
         }
-        grid = arranged;
+        grid = reconciled;
         break;
       }
       default: {

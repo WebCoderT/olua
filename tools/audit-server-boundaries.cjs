@@ -70,6 +70,9 @@ const ALLOWED_EDGES = [
   { from: "modules/realtime", to: "modules/world/world.service.ts", why: "世界权威公开服务" },
   { from: "modules/realtime", to: "modules/roles/roles.service.ts", why: "结算读写存档走存档服务" },
   { from: "modules/realtime", to: "modules/roles/role-data.util.ts", why: "roleUpdate 组帧解码存档（#541）" },
+  // 掉落溯源（#789）：账本里的 `BagOrigin` 就是背包格子 `BagCell.from` 的形状，只能有一份 ——
+  // 结算侧照抄存档域的格子合约（只 import type，不调它的函数），免得两端各写一个字段名
+  { from: "modules/realtime", to: "modules/roles/role-inventory.ts", why: "掉落溯源沿用背包格子的类型合约（#789）" },
   // 实时进程定期重装运营配置（#732）：管理端写操作后的进程内 refreshAll 跨不过进程边界，
   // 实时进程的属性现算（roleUpdate 帧 + 伤害结算）不吃到新配置就会与存档进程各执一份值 ——
   // 客户端战斗力显示在两个数之间来回翻。这条边是真实合约：实时域本来就消费 game-config 的运行时缓存

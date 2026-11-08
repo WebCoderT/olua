@@ -8,7 +8,7 @@ import { ConfirmDialog } from "../components/ConfirmDialog";
 import { Modal } from "../components/Modal";
 import { Pagination } from "../components/Pagination";
 import { PageHeader } from "../components/PageHeader";
-import { Badge, Button, Card, EmptyState, Field, Input, Spinner, tableClass, tdClass, thClass, theadClass } from "../components/ui";
+import { Badge, Button, Card, EmptyState, Field, Input, Select, Spinner, tableClass, tdClass, thClass, theadClass } from "../components/ui";
 import { hasPermission } from "../store/session";
 import { toastSuccess } from "../store/toast";
 
@@ -28,6 +28,8 @@ type ScrollForm = {
   maxLevel: number;
   maxStack: number;
   sellPrice: number;
+  /** 掉落时强制绑定角色（绑定后不可交易）；不勾则由怪物标记 / 掉落参数随机决定 */
+  bindOnDrop: boolean;
 };
 
 /**
@@ -42,11 +44,14 @@ function emptyForm(minLevel = 1): ScrollForm {
     id: "",
     label: "",
     description: "",
-    icon: "item/scroll/level-scroll",
+    // 空串 = 不显示图标：卷轴图标是**一卷一张**（item/scroll/level-scroll-1 … -7），
+    // 给个「不带序号」的默认值只会让新卷轴指到不存在的路径（`audit-resource-refs` 会点名）
+    icon: "",
     minLevel,
     maxLevel: minLevel + LEVEL_STEP - 1,
     maxStack: 999,
     sellPrice: 0,
+    bindOnDrop: false,
   };
 }
 
@@ -147,6 +152,7 @@ export function LevelScrollsPage() {
       maxLevel: item.maxLevel,
       maxStack: item.maxStack,
       sellPrice: item.sellPrice,
+      bindOnDrop: item.bindOnDrop === true,
     });
   };
 
@@ -162,6 +168,7 @@ export function LevelScrollsPage() {
       maxLevel: form.maxLevel,
       maxStack: form.maxStack,
       sellPrice: form.sellPrice,
+      bindOnDrop: form.bindOnDrop,
     };
     if (form.id.trim()) body.id = form.id.trim();
     if (form.label.trim()) body.label = form.label.trim();
@@ -191,6 +198,7 @@ export function LevelScrollsPage() {
       maxLevel: form.maxLevel,
       maxStack: form.maxStack,
       sellPrice: form.sellPrice,
+      bindOnDrop: form.bindOnDrop,
     };
     setSaving(true);
     try {
@@ -281,6 +289,7 @@ export function LevelScrollsPage() {
                 <th className={thClass}>可用等级</th>
                 <th className={thClass}>堆叠</th>
                 <th className={thClass}>售价</th>
+                <th className={thClass}>掉落绑定</th>
                 <th className={thClass}>更新时间</th>
                 <th className={`${thClass} text-right`}>操作</th>
               </tr>
@@ -305,6 +314,9 @@ export function LevelScrollsPage() {
                   </td>
                   <td className={tdClass}>{item.maxStack}</td>
                   <td className={tdClass}>{item.sellPrice > 0 ? levelText(item.sellPrice) : "不可出售"}</td>
+                  <td className={tdClass}>
+                    <Badge tone={item.bindOnDrop ? "amber" : "slate"}>{item.bindOnDrop ? "强制绑定" : "—"}</Badge>
+                  </td>
                   <td className={`${tdClass} text-xs text-slate-400`}>{formatTime(item.updatedAt)}</td>
                   <td className={`${tdClass} text-right`}>
                     <div className="flex justify-end gap-2">
@@ -415,9 +427,9 @@ export function LevelScrollsPage() {
           </Field>
           <IconField
             label="图标"
-            hint="resources 相对路径（如 item/scroll/level-scroll，不带扩展名）；空串 = 不显示图标"
+            hint="resources 相对路径（如 item/scroll/level-scroll-1，不带扩展名）；空串 = 不显示图标"
             rootDir="item"
-            placeholder="item/scroll/level-scroll"
+            placeholder="item/scroll/level-scroll-1"
             value={form.icon}
             onChange={(path) => setForm({ ...form, icon: path })}
           />
@@ -441,6 +453,13 @@ export function LevelScrollsPage() {
               />
             </Field>
           </div>
+
+          <Field label="掉落绑定" hint="掉落时强制绑定角色（绑定后不可交易）—— 与怪物侧的「掉落整体强制绑定」是「或」的关系">
+            <Select value={form.bindOnDrop ? "true" : "false"} onChange={(event) => setForm({ ...form, bindOnDrop: event.target.value === "true" })}>
+              <option value="false">不强制（按掉落参数随机）</option>
+              <option value="true">强制绑定</option>
+            </Select>
+          </Field>
         </Modal>
       ) : null}
 

@@ -5,7 +5,7 @@ import SkillManager from "./SkillManager";
 import SoundManager from "./SoundManager";
 import { initialShortcutKeys, bagRow, bagCol } from "../../configs/role";
 import { Role } from "../../entities/Role";
-import { BagCell, EQUIPMENT_TYPE, Equipment, getGoodCount, Goods, isDrug, isEquipment, isLevelScroll, isMoneyItem, MoneyCurrency } from "../../types/good";
+import { BagCell, BagOrigin, EQUIPMENT_TYPE, Equipment, getGoodCount, Goods, isDrug, isEquipment, isLevelScroll, isMoneyItem, MoneyCurrency } from "../../types/good";
 import { MapId } from "../../types/map";
 import { NeedSetShortcutKeyConfig } from "../../types/role";
 import { SkillId } from "../../types/skill";
@@ -15,7 +15,8 @@ import LayerManager from "./LayerManager";
 import MpHelper from "../utils/battle/MpHelper";
 import HpHelper from "../utils/battle/HpHelper";
 import { skills } from "../../configs/skill";
-import { MONEY_CURRENCY_LABELS, getEquipment, getItem, moveBagCellGrid, normalizeBagGrid, resolveDrugRecovery, summarizeBagRecycle, tidyBagGrid, findBagEquipmentUpgrade } from "../../configs/items";
+import { BAG_ORIGIN_TEXT_MAX } from "../../types/good";
+import { MONEY_CURRENCY_LABELS, getEquipment, getItem, moveBagCellGrid, normalizeBagGrid, resolveDrugRecovery, summarizeBagRecycle, tidyBagGrid, findBagEquipmentUpgrade, withBagMeta } from "../../configs/items";
 import { getMallPrice } from "../../configs/game-config";
 import { getFashion, fashionData } from "../../configs/game-config";
 import { getEquipmentNameParts } from "../../configs/equipments";
@@ -595,20 +596,44 @@ export default class StorageManager {
    * 新占格 = 原样落位），revision 一并照搬 —— 入包推进了修订号，本地基线不更新的话
    * 下一次防抖存档就会撞乐观锁（与 applyKillReward 同一纪律）。
    * 坐标对不上本地网格（两端配置漂了的边角）就丢掉那一格，等全量同步兜底。
+   *
+   * **绑定与溯源照搬**（#789）：服务端判定「这一件是否绑定角色」并把装备的来源
+   * （谁 / 什么怪 / 什么时候）写在格子上，客户端只负责显示 —— 本地不重算、不补默认值
+   * （补 false 就等于替服务端决定「可交易」，那是交易系统开工时才敢做的事）。
    */
-  static applyPickResult(placed: Array<{ row: number; col: number; id: string; count: number }>, revision: number): void {
+  static applyPickResult(
+    placed: Array<{ row: number; col: number; id: string; count: number; bound?: boolean; from?: BagOrigin }>,
+    revision: number,
+  ): void {
     const role = this.findOnlineRole();
     if (!role) return;
     for (const cell of placed) {
       const line = role.bag[cell.row];
       if (!line || cell.col < 0 || cell.col >= line.length) continue;
-      line[cell.col] = { id: cell.id, count: cell.count };
+      line[cell.col] = withBagMeta(cell.id, cell.count, { bound: cell.bound, from: this.sanitizeOrigin(cell.from) });
     }
     role.revision = revision;
     this.updateOnlineRole(role);
     this.updateUi(role);
     // 背包弹窗开着时实时跟上（updateUi 只刷信息栏/底栏/血条，不含背包）；弹窗没开时是 no-op
     if (placed.length) RoleUIManager.refreshBag();
+  }
+
+  /**
+   * 溯源字段的本地清洗（**只做「脏数据不该上屏」这一层，不改语义**）
+   *
+   * 服务端写入时已经截断过一遍（`BAG_ORIGIN_TEXT_MAX`），这里再截一次是因为存档可能
+   * 来自更早的版本或被外部工具写过 —— 详情弹窗的标签宽度固定，超长字符串会被 CLAMP 截断，
+   * 与其让 Label 截在半个字上，不如按同一个上限先截好。
+   * 时间戳只认正整数（0 / 负数 / NaN 一律当「没记录」，客户端不去编一个时间）。
+   */
+  private static sanitizeOrigin(from?: BagOrigin): BagOrigin | undefined {
+    if (!from) return undefined;
+    const origin: BagOrigin = {};
+    if (from.role) origin.role = from.role.slice(0, BAG_ORIGIN_TEXT_MAX);
+    if (from.monster) origin.monster = from.monster.slice(0, BAG_ORIGIN_TEXT_MAX);
+    if (typeof from.at === "number" && Number.isFinite(from.at) && from.at > 0) origin.at = from.at;
+    return origin.role || origin.monster || origin.at ? origin : undefined;
   }
 
   //#region 背包物品使用
@@ -1183,19 +1208,25 @@ export default class StorageManager {
   //#endregion
 
   /**
-   * 添加物品至背包（拾取掉落物/任务奖励等统一入口）
-   * 可叠加物品优先合并到已有格子，剩余数量再占用空格
+   * 添加物品至背包（本地接口：拾取已改走服务端 `picked` 帧，见 applyPickResult）
+   *
+   * 可叠加物品优先合并到**绑定态相同**的已有格子，剩余数量再占用空格。
+   * 绑定态不同不许并堆（#789）：绑定的那堆不可交易，混进可交易的堆就永远分不开了，
+   * 反过来等于凭空洗白一件。
+   *
    * @param good 物品（取其 id 与叠加规则；格子只存 key + 数量，不存物品数据）
    * @param count 数量，缺省取物品自身数量
+   * @param meta 绑定与溯源（服务端判定好的；缺省 = 未绑定、无溯源）
    * @returns 是否全部放入（背包满时返回 false，可能有部分放入）
    */
-  static addGood(good: Goods, count: number = getGoodCount(good)): boolean {
+  static addGood(good: Goods, count: number = getGoodCount(good), meta: { bound?: boolean; from?: BagOrigin } = {}): boolean {
     const role = this.findOnlineRole();
     // 掉落/奖励链路的物品都经 items 注册表带 id；没有 id 的物品无法入包
     const goodId = good.id;
     if (!role || count <= 0 || !goodId) return false;
     const stackable = !!good.stackable;
     const maxStack = good.maxStack ?? 99;
+    const bound = meta.bound === true;
     let remaining = count;
 
     /** 剩余数量放入空格 */
@@ -1204,7 +1235,7 @@ export default class StorageManager {
         for (let col = 0; col < role.bag[row].length && remaining > 0; col++) {
           if (role.bag[row][col]) continue;
           const add = stackable ? Math.min(maxStack, remaining) : 1;
-          role.bag[row][col] = { id: goodId, count: add };
+          role.bag[row][col] = withBagMeta(goodId, add, { bound: meta.bound, from: meta.from });
           remaining -= add;
         }
       }
@@ -1214,7 +1245,8 @@ export default class StorageManager {
       const stackCells: BagCell[] = [];
       role.bag.forEach((row) =>
         row.forEach((cell) => {
-          if (cell && cell.id === goodId) stackCells.push(cell);
+          // 只并进同绑定态的堆：两侧 `bound` 都按「是否 === true」比，脏值不影响判定
+          if (cell && cell.id === goodId && (cell.bound === true) === bound) stackCells.push(cell);
         }),
       );
       stackCells.forEach((cell) => {

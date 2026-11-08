@@ -50,6 +50,8 @@ export function MonsterDropDialog({
   const [tableId, setTableId] = useState("");
   const [picks, setPicks] = useState<PicksDraft>({ min: "1", max: "" });
   const [drafts, setDrafts] = useState<EntryDraft[]>([emptyEntryDraft()]);
+  /** 掉落整体强制绑定（#789）：这只怪掉出来的东西一律绑定角色 */
+  const [bindDrops, setBindDrops] = useState(false);
   const [tables, setTables] = useState<DropTable[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -64,6 +66,7 @@ export function MonsterDropDialog({
         const [detail, tableList] = await Promise.all([dropApi.getMonsterDrop(monsterKey), dropApi.listTables()]);
         if (!alive) return;
         setTables(tableList.list);
+        setBindDrops(detail.bindDrops === true);
         if (detail.source === "table") {
           setMode("table");
           setTableId(detail.tableId ?? "");
@@ -102,7 +105,11 @@ export function MonsterDropDialog({
 
   const submit = async () => {
     setSaving(true);
-    const body: { tableId: string | null; picks?: number | [number, number]; entries?: DropEntry[] } = { tableId: null };
+    // bindDrops 与「怎么掉」无关，三态切换时都要带上（不传 = 服务端保持原值，改不回去）
+    const body: { tableId: string | null; picks?: number | [number, number]; entries?: DropEntry[]; bindDrops: boolean } = {
+      tableId: null,
+      bindDrops,
+    };
     if (mode === "table") {
       body.tableId = tableId;
       if (picks.min.trim() !== "") body.picks = picksValue;
@@ -159,6 +166,16 @@ export function MonsterDropDialog({
               </Button>
             ))}
           </div>
+
+          <Field
+            label="掉落整体强制绑定"
+            hint="这只怪掉出来的东西一律绑定角色（绑定后不可交易）—— 与物品自身的「掉落强制绑定」是「或」的关系；两个都不为真时按掉落参数里的概率随机。清空走兜底时同样生效"
+          >
+            <Select value={bindDrops ? "true" : "false"} onChange={(event) => setBindDrops(event.target.value === "true")}>
+              <option value="false">不强制（看物品标记 / 掉落参数）</option>
+              <option value="true">强制绑定</option>
+            </Select>
+          </Field>
 
           {mode === "table" ? (
             <div className="flex flex-col gap-3">

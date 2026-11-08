@@ -619,7 +619,11 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
         magic_defense_max    INTEGER NOT NULL DEFAULT 0,
         taoist_defense_min   INTEGER NOT NULL DEFAULT 0,
         taoist_defense_max   INTEGER NOT NULL DEFAULT 0,
-        updated_at           INTEGER NOT NULL DEFAULT 0
+        updated_at           INTEGER NOT NULL DEFAULT 0,
+        -- 掉落强制绑定（#789）：1 = 这件装备掉出来就绑定角色、不可交易。
+        -- **必须放在最后一列**：存量库是 ALTER TABLE ADD COLUMN 补的，只能追加在末尾，
+        -- 新库若把它写在中间，两边的 SELECT * 列序不同，配置导出会是一整份假 diff
+        bind_on_drop         INTEGER NOT NULL DEFAULT 0
       );
 
       -- 装备槽位表（#603 第九域）：13 行，主键是 EQUIPMENT_TYPE 的枚举值。
@@ -663,7 +667,9 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
         effect_mp          INTEGER NOT NULL DEFAULT 0,
         effect_hp_percent  INTEGER NOT NULL DEFAULT 0,
         effect_mp_percent  INTEGER NOT NULL DEFAULT 0,
-        updated_at         INTEGER NOT NULL DEFAULT 0
+        updated_at         INTEGER NOT NULL DEFAULT 0,
+        -- 掉落强制绑定（#789），语义同 equipments.bind_on_drop（同样必须在最后一列）
+        bind_on_drop       INTEGER NOT NULL DEFAULT 0
       );
 
       -- 物品与材料配置（#255）：主键是物品 id（如 material_hide），id 清单固定不可增删行；
@@ -677,7 +683,8 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
         level        INTEGER NOT NULL DEFAULT 1,
         sell_price   INTEGER NOT NULL DEFAULT 0,
         max_stack    INTEGER NOT NULL DEFAULT 99,
-        updated_at   INTEGER NOT NULL DEFAULT 0
+        updated_at   INTEGER NOT NULL DEFAULT 0,
+        bind_on_drop INTEGER NOT NULL DEFAULT 0
       );
 
       -- 货币物品（#785）：使用后直接给角色账本入账（gold / bindGold / silver）
@@ -691,7 +698,8 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
         amount      INTEGER NOT NULL DEFAULT 0,
         max_stack   INTEGER NOT NULL DEFAULT 999,
         sell_price  INTEGER NOT NULL DEFAULT 0,
-        updated_at  INTEGER NOT NULL DEFAULT 0
+        updated_at  INTEGER NOT NULL DEFAULT 0,
+        bind_on_drop INTEGER NOT NULL DEFAULT 0
       );
 
       -- 升级卷轴（#787）：使用后硬性 +1 级，带等级区间（min_level ~ max_level）
@@ -705,7 +713,8 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
         max_level   INTEGER NOT NULL DEFAULT 1,
         max_stack   INTEGER NOT NULL DEFAULT 999,
         sell_price  INTEGER NOT NULL DEFAULT 0,
-        updated_at  INTEGER NOT NULL DEFAULT 0
+        updated_at  INTEGER NOT NULL DEFAULT 0,
+        bind_on_drop INTEGER NOT NULL DEFAULT 0
       );
       -- 怪物基础数据（#258）：主键是怪物 key（configs/monster 的关联键），清单固定不可增删行；
       -- 战斗数值 seed 自生成物 MONSTERS，世界播种与伤害结算直读本表（改值即时生效）
@@ -833,7 +842,9 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
         table_id    TEXT,
         picks       TEXT,
         entries     TEXT,
-        updated_at  INTEGER NOT NULL DEFAULT 0
+        updated_at  INTEGER NOT NULL DEFAULT 0,
+        -- 掉落整体强制绑定（#789）：1 = 这只怪掉出来的东西一律绑定角色（同样必须在最后一列）
+        bind_drops  INTEGER NOT NULL DEFAULT 0
       );
 
       -- 技能（#367）：owner 区分角色 / 怪物，同一张表 —— 技能对两边完全同构，
@@ -1253,6 +1264,14 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
     this.ensureColumn("maps", "content", `TEXT NOT NULL DEFAULT '{"layers":[],"groups":[]}'`);
     // 怪物 AI 参数（#655）：原本是生成物 `MONSTER_AI` 的六个常量，现在并进运行时参数单行表
     this.ensureColumn("runtime_params", "monster_ai", "TEXT NOT NULL DEFAULT '{}'");
+    // 掉落强制绑定（#789）：五张道具表各一列「掉出来就绑定」+ 每怪一列「这只怪掉的东西都绑定」。
+    // 默认 0 = 不强制 —— 存量库补列后行为与之前完全一样（绑定只由 drop_params.bindChance 掷）
+    this.ensureColumn("equipments", "bind_on_drop", "INTEGER NOT NULL DEFAULT 0");
+    this.ensureColumn("drugs", "bind_on_drop", "INTEGER NOT NULL DEFAULT 0");
+    this.ensureColumn("items", "bind_on_drop", "INTEGER NOT NULL DEFAULT 0");
+    this.ensureColumn("money_items", "bind_on_drop", "INTEGER NOT NULL DEFAULT 0");
+    this.ensureColumn("level_scrolls", "bind_on_drop", "INTEGER NOT NULL DEFAULT 0");
+    this.ensureColumn("monster_drops", "bind_drops", "INTEGER NOT NULL DEFAULT 0");
     this.migrateLegacyMallPricing();
     this.ensureSuperAdmin();
     this.seedMoneyItemsOnce();

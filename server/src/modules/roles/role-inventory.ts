@@ -15,8 +15,9 @@
  * | 整理 / 搬运 | 客户端给排布，服务端**只验守恒** | 纯排列、不创造价值；复刻一遍 move/merge/swap 只会让两端慢慢漂开 |
  *
  * 守恒判据只有两条，且都只看「值」不看「顺序」：**网格形状不变**、
- * **同 id 的总件数不变**。搬运合并、交换、整理重排全都满足这两条；
- * 少一件或多一件必然违反其中一条。
+ * **同 id + 同绑定状态的总件数不变**（#789 起把绑定算进分组，见 `bagGroupKeyOf`）。
+ * 搬运合并、交换、整理重排全都满足这两条；少一件、多一件、或者把绑定堆与未绑定堆
+ * 互换成另一堆的数量，必然违反其中一条。
  *
  * 本文件是纯函数（不碰数据库、不读配置表）：装备槽位与等级门槛由调用方以回调传入，
  * 于是它可以在单测里直接跑，也免得这里再长出一份「哪些 id 是装备」的知识。
@@ -25,8 +26,41 @@
 import { BizCode } from "../../common/constants/biz-code";
 import { BizException } from "../../common/errors/biz.exception";
 
-/** 一个背包格子：`null` = 空格（与客户端存档同形状） */
-export type BagCell = { id: string; count: number } | null;
+/** 掉落溯源里两项文字的最大长度（防改包塞几 KB 的字符串进存档） */
+export const BAG_ORIGIN_TEXT_MAX = 64;
+
+/**
+ * 掉落溯源（只有装备会有，见 `BagCell.from`）
+ *
+ * 记的是「掉落**当时**的事实」，所以角色改名 / 怪物改配置都不会追改这里 ——
+ * 玩家在详情弹窗里看到的是「这件东西是我打那只怪掉的」，不是「现在的说法」。
+ */
+export interface BagOrigin {
+  /** 击杀者角色名（掉落那一刻的名字） */
+  role?: string;
+  /** 怪物 key（客户端用怪物配置翻成中文名；服务端不存中文，改名即时生效） */
+  monster?: string;
+  /** 掉落时间（毫秒时间戳） */
+  at?: number;
+}
+
+/** 有内容的格子（`BagCell` 去掉 null） */
+export type FilledBagCell = Exclude<BagCell, null>;
+
+/**
+ * 一个背包格子：`null` = 空格（与客户端存档同形状）
+ *
+ * #789 起多两个**服务端写、客户端只读**的可选字段：
+ * - `bound`：**绑定角色**（不可交易）。掉落时按「物品强制绑定 / 怪物掉落强制绑定 /
+ *   随机」三选一判定后写进格子，从此跟着这一堆走；缺省 = 未绑定。
+ * - `from`：**溯源**，只有装备会有（用户口径：「只有装备会溯源，其他物品只根据是否绑定
+ *   分为两个」）。堆叠物品没有「这一件是谁掉的」的概念，所以不写。
+ *
+ * 为什么放在格子上而不是一张「物品实例表」：掉落链路本来就是纯引用（掉落表只有
+ * `goodId/count`，没有实例 id）。要让绑定与来源跟着**这一堆**走，最省的做法就是长在
+ * 格子上 —— 搬运 / 整理时它跟着格子换位置，服务端 `reconcileBagCells` 负责挂回来。
+ */
+export type BagCell = { id: string; count: number; bound?: boolean; from?: BagOrigin } | null;
 
 /** 背包网格（二维，行优先） */
 export type BagGrid = BagCell[][];
@@ -39,7 +73,9 @@ export type WornEquipments = Record<string, string | null>;
  *
  * 结构不合法直接拒：调用方都是「要动这份数据」的路径，拿一个半坏的对象继续算，
  * 只会把坏数据写到更远的地方（与 `parseStoredRoleData` 对编辑路径不容忍同一理由）。
- * 单格只认 `{ id: string, count: number }`，多出来的字段不管（客户端可能带调试字段）。
+ * 单格只认 `{ id, count }` 两个**必有**字段，多出来的字段不管（客户端可能带调试字段）；
+ * 唯独 `bound` / `from` 例外 —— 它们是服务端自己写进去的元数据，读档要带出来，
+ * 否则每次整理 / 搬运都会把绑定丢掉（绑定的意义就是「丢了就再也拿不回来」）。
  */
 export function readBagGrid(raw: unknown, label = "背包"): BagGrid {
   if (!Array.isArray(raw)) throw invalid(`${label}数据不完整，无法操作`);
@@ -52,10 +88,36 @@ export function readBagGrid(raw: unknown, label = "背包"): BagGrid {
       const id = typeof record.id === "string" ? record.id.trim() : "";
       if (!id) throw invalid(`${label}里有无法识别的格子`);
       const count = Math.max(1, Math.floor(Number(record.count) || 1));
-      return { id, count };
+      const result: FilledBagCell = { id, count };
+      // 只有明确 true 才算绑定：坏值（"1" / 1 / {}）一律当未绑定，不让脏数据变出「不可交易」
+      if (record.bound === true) result.bound = true;
+      const from = readBagOrigin(record.from);
+      if (from) result.from = from;
+      return result;
     });
   });
 }
+
+/**
+ * 读溯源字段（结构不对就当没有）
+ *
+ * **不抛异常**：溯源是展示字段，坏掉最多是详情弹窗少一行，不该让整份背包读不出来
+ * （与 `id`/`count` 的严格口径相反 —— 那两个是业务字段，坏了继续算会出事）。
+ * 文字截断到 `BAG_ORIGIN_TEXT_MAX`，时间戳必须为正值。
+ */
+export function readBagOrigin(raw: unknown): BagOrigin | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const record = raw as Record<string, unknown>;
+  const origin: BagOrigin = {};
+  for (const key of ["role", "monster"] as const) {
+    const value = record[key];
+    if (typeof value === "string" && value.trim()) origin[key] = value.trim().slice(0, BAG_ORIGIN_TEXT_MAX);
+  }
+  const at = Math.floor(Number(record.at) || 0);
+  if (at > 0) origin.at = at;
+  return origin.role || origin.monster || origin.at ? origin : null;
+}
+
 
 /** 读装备槽位表（缺字段 / 不是对象 → 空表，老存档的边角按「什么都没穿」处理） */
 export function readWornEquipments(raw: unknown): WornEquipments {
@@ -88,25 +150,44 @@ export function firstEmptyCell(grid: BagGrid): { row: number; col: number } | nu
   return null;
 }
 
-/** 背包内容指纹：物品 id → 总件数（不看位置，空格不参与） */
+/** 是否为绑定格（`null` / 未写 `bound` 都算未绑定） */
+export function isBoundCell(cell: BagCell): boolean {
+  return !!cell && cell.bound === true;
+}
+
+/**
+ * 守恒分组键：**同 id 且同绑定状态**才算同一种东西
+ *
+ * #789 起把 `bound` 算进来，是因为「整理背包时把绑定堆与未绑定堆互换」是白拿绑定/
+ * 白解绑定的口子（未绑定的那堆被标成绑定 = 玩家亏，绑定的那堆被标成未绑定 = 经济漏洞）。
+ * 两堆各自的数量必须原样保留，互换就是在数量上对不上。
+ *
+ * 键里用 `1|` / `0|` 前缀而不是 `id|bool`：id 是用户可控的字符串，放前面怕撞。
+ */
+export function bagGroupKeyOf(id: string, bound: boolean): string {
+  return `${bound ? "1" : "0"}|${id}`;
+}
+
+/** 背包内容指纹：**（绑定状态, 物品 id）** → 总件数（不看位置，空格不参与） */
 export function bagContentOf(grid: BagGrid): Map<string, number> {
   const content = new Map<string, number>();
   for (const line of grid) {
     for (const cell of line) {
       if (!cell) continue;
-      content.set(cell.id, (content.get(cell.id) ?? 0) + cell.count);
+      const key = bagGroupKeyOf(cell.id, cell.bound === true);
+      content.set(key, (content.get(key) ?? 0) + cell.count);
     }
   }
   return content;
 }
 
-/** 两副网格的**内容**是否一致（只看 id 与总件数） */
+/** 两副网格的**内容**是否一致（只看分组键与总件数，不看顺序） */
 export function sameBagContent(a: BagGrid, b: BagGrid): boolean {
   const left = bagContentOf(a);
   const right = bagContentOf(b);
   if (left.size !== right.size) return false;
-  for (const [id, count] of left) {
-    if (right.get(id) !== count) return false;
+  for (const [key, count] of left) {
+    if (right.get(key) !== count) return false;
   }
   return true;
 }
@@ -120,11 +201,207 @@ export function sameGridShape(a: BagGrid, b: BagGrid): boolean {
   return true;
 }
 
+/** 溯源指纹（用于「搬动之后认领回原来那一件」） */
+function originKeyOf(from: BagOrigin | undefined): string {
+  if (!from) return "";
+  return `${from.role ?? ""}\u0001${from.monster ?? ""}\u0001${from.at ?? 0}`;
+}
+
+/** 旧网格里一个 id 的两个桶：绑定的、未绑定的（同 id 且同绑定状态才算「同一堆」） */
+interface BagBucket {
+  bound: FilledBagCell[];
+  loose: FilledBagCell[];
+}
+
+/** 一堆格子的总件数 */
+function countOf(cells: readonly FilledBagCell[]): number {
+  let total = 0;
+  for (const cell of cells) total += cell.count;
+  return total;
+}
+
+/**
+ * 在若干格子里挑一批，使件数之和**正好**等于 `target`（挑不到返回 `null`）
+ *
+ * 这是「客户端只报格子、绑定由服务端认领」里唯一的数学：重排会改变**每格**的件数
+ * （合并两堆、把一堆拆成两格），但**每个桶的总件数是守恒的**——守恒判据本身就建立在
+ * 这一点上。所以只要找得到「和为旧桶件数」的那一批格子，就说明它是一次合法重排。
+ *
+ * 挑不到就说明客户端把两个桶（绑定 + 未绑定）报成了一格（例如 2 件绑定 + 4 件未绑定
+ * 报成 6 件），调用方随即放弃标记，让 `sameBagContent` 把它拒掉（20022）。
+ *
+ * 深搜 + 记忆化：同一 id 的格子最多几十个，件数最大几百，状态量是 `格子数 × 件数`。
+ */
+function pickSubset(cells: readonly FilledBagCell[], target: number): boolean[] | null {
+  const memo = new Map<string, boolean>();
+  const walk = (index: number, remain: number): boolean => {
+    if (remain === 0) return true;
+    if (index >= cells.length || remain < 0) return false;
+    const key = `${index}|${remain}`;
+    const hit = memo.get(key);
+    if (hit !== undefined) return hit;
+    const ok = walk(index + 1, remain - cells[index].count) || walk(index + 1, remain);
+    memo.set(key, ok);
+    return ok;
+  };
+  if (!walk(0, target)) return null;
+  const picked: boolean[] = [];
+  let remain = target;
+  for (let index = 0; index < cells.length; index++) {
+    const take = remain > 0 && cells[index].count <= remain && walk(index + 1, remain - cells[index].count);
+    picked.push(take);
+    if (take) remain -= cells[index].count;
+  }
+  return remain === 0 ? picked : null;
+}
+
+/**
+ * 把**客户端给的排布**对回**库里的旧网格**，把绑定与溯源挂回去（#789 的核心一步）
+ *
+ * 为什么不能直接采信客户端带回来的 `bound` / `from`：
+ * - `bound` 决定能不能交易 —— 客户端说「这件其实没绑定」，服务端就白送了一个可交易品；
+ * - `from` 是「谁掉的」的展示 —— 伪造一个「GM 掉的」虽然不产生数值收益，但很脏。
+ *
+ * 所以口径是：**客户端只负责「谁在哪个格子」，元数据一律从服务端的旧网格里认领**。
+ * 而 `bag-op` 的格子契约（`BagOpCellDto`）里只有 `row/col/id/count`，连 `bound` 都没有，
+ * 于是「这一格该不该绑定」只能**推**出来：
+ *
+ * 1. 旧网格按 id 分两个桶（绑定 / 未绑定），各桶**总件数**是不变量；
+ * 2. 新网格按 id 归堆，若该 id 只有一个桶 → 整堆照抄那个桶的状态（最省事的多数情形）；
+ * 3. 两个桶都有货时，用 `pickSubset` 找「件数之和 = 绑定桶件数」的那一批新格子，
+ *    挑不出来（把两桶报成一格）就整堆留未绑定，交给 `sameBagContent` 拒掉；
+ * 4. 同样的和可能有多种派法（两堆各 1 件、位置全变），此时按**位置线索**择优：
+ *    落在「旧绑定格原址」的最高优先，落在空格（说明是刚被搬过来的）次之，
+ *    落在「旧未绑定格原址」的最低——玩家拖走一堆之后，被拖走的那堆通常才是原来绑定的那堆。
+ * 5. 最后逐格认领 `from`：优先原位那一件，其次溯源一致的那一件，再次桶里任意一件；
+ *    桶被拆成比旧格子更多的格数时认领不到，那就只保留推出的 `bound`、不编来源。
+ *
+ * 跨桶（绑定 ↔ 未绑定）合并会在第 3 步被 `sameBagContent` 拒掉 —— 能走到第 5 步的排布，
+ * 每个桶的件数都对得上，所以「认领」不会出现「桶里有 5 件却要认领 10 件」的矛盾。
+ */
+export function reconcileBagCells(previous: BagGrid, next: BagGrid): BagGrid {
+  // —— 1. 旧网格分桶 + 记下每个 id 的绑定格位置 ——
+  const buckets = new Map<string, BagBucket>();
+  const boundPositions = new Map<string, Set<string>>();
+  const previousAt = new Map<string, FilledBagCell | null>();
+  previous.forEach((line, row) =>
+    line.forEach((cell, col) => {
+      previousAt.set(`${row},${col}`, cell ?? null);
+      if (!cell) return;
+      let bucket = buckets.get(cell.id);
+      if (!bucket) {
+        bucket = { bound: [], loose: [] };
+        buckets.set(cell.id, bucket);
+      }
+      if (cell.bound === true) {
+        bucket.bound.push(cell);
+        const positions = boundPositions.get(cell.id) ?? new Set<string>();
+        positions.add(`${row},${col}`);
+        boundPositions.set(cell.id, positions);
+      } else {
+        bucket.loose.push(cell);
+      }
+    }),
+  );
+
+  // —— 2. 新网格按 id 归堆（保留原始位置，判定结果按位置回填）——
+  const nextById = new Map<string, Array<{ cell: FilledBagCell; row: number; col: number }>>();
+  next.forEach((line, row) =>
+    line.forEach((cell, col) => {
+      if (!cell) return;
+      const list = nextById.get(cell.id);
+      if (list) list.push({ cell, row, col });
+      else nextById.set(cell.id, [{ cell, row, col }]);
+    }),
+  );
+
+  // —— 3 & 4. 每个 id 定一遍「哪些新格子算绑定的」 ——
+  /** 位置 → 是否绑定（没写 = 判不出来，按未绑定处理，守恒会拒） */
+  const boundAt = new Map<string, boolean>();
+  for (const [id, list] of nextById) {
+    const bucket = buckets.get(id);
+    const nextTotal = countOf(list.map((item) => item.cell));
+    const boundTotal = bucket ? countOf(bucket.bound) : 0;
+    const looseTotal = bucket ? countOf(bucket.loose) : 0;
+    // 件数对不上（凭空多了 / 少了东西，或 id 是客户端编的）→ 不做标记，交给守恒判据拒
+    if (!bucket || nextTotal !== boundTotal + looseTotal) continue;
+    if (looseTotal === 0) {
+      for (const item of list) boundAt.set(`${item.row},${item.col}`, true);
+      continue;
+    }
+    if (boundTotal === 0) continue;
+    const positions = boundPositions.get(id) ?? new Set<string>();
+    const scoreOf = (item: { row: number; col: number }): number => {
+      const key = `${item.row},${item.col}`;
+      if (positions.has(key)) return 2;
+      const previousCell = previousAt.get(key);
+      return previousCell && previousCell.id === id ? 0 : 1;
+    };
+    const ordered = list
+      .slice()
+      .sort((a, b) => scoreOf(b) - scoreOf(a) || b.cell.count - a.cell.count);
+    const picked = pickSubset(
+      ordered.map((item) => item.cell),
+      boundTotal,
+    );
+    // 挑不出来 = 客户端把两个桶报成了一格 → 整堆留未绑定，`sameBagContent` 会拒
+    if (!picked) continue;
+    ordered.forEach((item, index) => {
+      if (picked[index]) boundAt.set(`${item.row},${item.col}`, true);
+    });
+  }
+
+  // —— 5. 逐格认领旧网格里的溯源 ——
+  const claimed = new Set<FilledBagCell>();
+  const claim = (id: string, bound: boolean, row: number, col: number, from?: BagOrigin): FilledBagCell | null => {
+    const bucket = buckets.get(id);
+    if (!bucket) return null;
+    const pool = bound ? bucket.bound : bucket.loose;
+    const take = (match: (cell: FilledBagCell) => boolean): FilledBagCell | null => {
+      for (const cell of pool) {
+        if (claimed.has(cell) || !match(cell)) continue;
+        claimed.add(cell);
+        return cell;
+      }
+      return null;
+    };
+    // ① 原位那一件（没动过）② 溯源一致的那一件（装备被搬到别处）③ 桶里任意一件
+    const samePlace = previousAt.get(`${row},${col}`);
+    if (samePlace && samePlace.id === id && (samePlace.bound === true) === bound && !claimed.has(samePlace)) {
+      claimed.add(samePlace);
+      return samePlace;
+    }
+    if (from) {
+      const want = originKeyOf(from);
+      const byOrigin = take((cell) => originKeyOf(cell.from) === want);
+      if (byOrigin) return byOrigin;
+    }
+    return take(() => true);
+  };
+
+  return next.map((line, row) =>
+    line.map((cell, col) => {
+      if (!cell) return null;
+      const bound = boundAt.get(`${row},${col}`) === true;
+      const source = claim(cell.id, bound, row, col, cell.from);
+      const result: FilledBagCell = { id: cell.id, count: cell.count };
+      // 绑定态来自上面的推断，**不依赖**有没有认领到旧格子（拆堆时第二格认领不到）
+      if (bound) result.bound = true;
+      if (source && source.from) result.from = source.from;
+      return result;
+    }),
+  );
+}
+
 /**
  * 穿戴：把格子里的装备挪到槽位，原来穿着的放回**刚腾出来的那一格**
  *
  * 格数守恒（换装不会凭空多/少一件）：格子存的是 id + 数量，槽位也是 id。
  * 调用方负责先校验「这一格里的东西真的是这个槽位的装备、且等级够」。
+ *
+ * **已知取舍（#789）**：`bound` / `from` 只活在背包格子上，槽位里只存 id。所以穿上去
+ * 再脱下来，那件装备会变成「未绑定、无溯源」。当前没有交易系统，绑定只是展示与
+ * 预留门禁，故先按此口径记在这里；等交易开工时把元数据一并落进 `equipments` 的伴生字段。
  *
  * @returns 被换下来的旧装备 id（没有就是 null，仅用于日志 / 提示）
  */

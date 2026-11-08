@@ -586,10 +586,11 @@ function connect(url) {
     const mobC = await aliveMonster(killerC, "1");
     check(!!mobC, "C：等到了活着的怪", JSON.stringify(mobC));
     const killedC = await killMonster(killerC, mobC.monsterKey, mobC.instanceId);
-    // picks 2 × 每次必掉 2 个 → 合并后恰好 drug_hp_1 x4（权重/概率/数量全确定）
+    // picks 2 × 每次必掉 2 个 → 合并后恰好 drug_hp_1 x4（权重/概率/数量全确定）；
+    // 默认参数下不绑定（bindChance 0 + 物品/怪物都没开强制绑定，#789）
     check(
-      !!(killedC && killedC.reward) && JSON.stringify(killedC.reward.drops) === JSON.stringify([{ goodId: "drug_hp_1", count: 4 }]),
-      "C：掉落按改后的表结算（2 次抽取 × 每次 2 个，合并 = drug_hp_1 x4）",
+      !!(killedC && killedC.reward) && JSON.stringify(killedC.reward.drops) === JSON.stringify([{ goodId: "drug_hp_1", count: 4, bound: false }]),
+      "C：掉落按改后的表结算（2 次抽取 × 每次 2 个，合并 = drug_hp_1 x4，默认不绑定）",
       JSON.stringify(killedC && killedC.reward && killedC.reward.drops),
     );
     check(!!(killedC && killedC.reward) && killedC.reward.exp === 10 && killedC.reward.leveledUp === false, "C：经验与掉落互不影响（经验曲线已还原，不再升级）");
@@ -897,7 +898,7 @@ function connect(url) {
     check(!!mobK, "A：等到了活着的怪", JSON.stringify(mobK));
     const killedK = mobK ? await killMonster(picker, mobK.monsterKey, mobK.instanceId) : null;
     check(
-      !!(killedK && killedK.reward) && JSON.stringify(killedK.reward.drops) === JSON.stringify([{ goodId: "drug_hp_1", count: 2 }]),
+      !!(killedK && killedK.reward) && JSON.stringify(killedK.reward.drops) === JSON.stringify([{ goodId: "drug_hp_1", count: 2, bound: false }]),
       "A：击杀结算带确定的掉落（drug_hp_1 x2，拾取账本与 settle 帧同源）",
       JSON.stringify(killedK && killedK.reward && killedK.reward.drops),
     );
@@ -989,6 +990,244 @@ function connect(url) {
       token: adminToken,
       body: { tableId: null, picks: dropRowOne.picks, entries: dropRowOne.entries },
     });
+
+    //#endregion
+
+    //#region 十一、绑定与溯源（#789）：掉落时判定绑定，入包后可见，背包操作只认服务端那份
+
+    group("十一、绑定与溯源：三条规则判绑定、装备记来源、背包操作把元数据认领回来");
+
+    /** 动手前每只怪的掉落配置（还原用；键 = monsterKey） */
+    const dropRowsBefore = new Map();
+    const dropListBefore = await api(baseUrl, "GET", "admin/monster-drops?page=1&size=100", { token: adminToken });
+    ((dropListBefore.data && dropListBefore.data.list) || []).forEach((row) => dropRowsBefore.set(row.monsterKey, row));
+
+    /**
+     * 把**这只怪**的掉落改成「必掉一份指定物品」（picks 1 × chance 1 → 结果确定）
+     *
+     * 按实际要打的怪物 key 改，而不是写死 "1"：地图 1 上不只一只怪，`aliveMonster`
+     * 挑到哪只取决于重生时序（前面几个 region 各杀过一批），写死 key 会改成一张没人吃的表。
+     */
+    const patchDropOf = (monsterKey, goodId, extra = {}, count = [2, 2]) =>
+      api(baseUrl, "PATCH", `admin/monster-drops/${monsterKey}`, {
+        token: adminToken,
+        body: { tableId: null, picks: 1, entries: [{ goodId, weight: 100, chance: 1, count }], ...extra },
+      });
+
+    /** 改过的怪物掉落（区域末尾统一还原成 seed 行） */
+    const touchedDropKeys = new Set();
+    /** 打一只怪（先把它的掉落改成指定物品），返回击杀结算 */
+    const killWith = async (player, goodId, extra = {}, count = [2, 2]) => {
+      const mob = await aliveMonster(player, "1");
+      if (!mob) return null;
+      touchedDropKeys.add(mob.monsterKey);
+      await patchDropOf(mob.monsterKey, goodId, extra, count);
+      const killed = await killMonster(player, mob.monsterKey, mob.instanceId);
+      return killed && killed.reward ? { killed, drops: killed.reward.drops, mob } : null;
+    };
+
+    /** 新玩家 + 规范化空网格（服务端不扩容：先存一副 4×10 的空背包才有地方放掉落） */
+    async function newGridPlayer(name) {
+      const player = await newPlayer(name);
+      const initial = await api(baseUrl, "GET", `roles/${player.roleId}`, { token: player.token });
+      const emptyGrid = Array.from({ length: 4 }, () => Array.from({ length: 10 }, () => null));
+      await api(baseUrl, "PUT", `roles/${player.roleId}`, {
+        token: player.token,
+        body: { revision: initial.data && initial.data.revision, data: { ...(initial.data.data || {}), bag: emptyGrid } },
+      });
+      return player;
+    }
+
+    // —— A. 三条规则：默认不绑 / 物品侧强制 / 怪物侧强制 / 随机概率 ——
+
+    const binder = await newGridPlayer("combat_rbn1");
+    const plainDrop = await killWith(binder, "drug_hp_1");
+    check(
+      !!plainDrop && plainDrop.drops.length === 1 && plainDrop.drops[0].bound === false,
+      "A：三个开关都关着 → 不绑定（bound = false）",
+      JSON.stringify(plainDrop && plainDrop.drops),
+    );
+
+    // 物品侧：把这件药品自己标成「掉落强制绑定」
+    const drugBindOn = await api(baseUrl, "PATCH", "admin/drugs/drug_hp_1", { token: adminToken, body: { bindOnDrop: true } });
+    check(
+      drugBindOn.code === 0 && drugBindOn.data.bindOnDrop === true,
+      "A：药品标成「掉落强制绑定」（管理端 PATCH 生效）",
+      JSON.stringify(drugBindOn.data && drugBindOn.data.bindOnDrop),
+    );
+    const itemBound = await killWith(binder, "drug_hp_1");
+    check(
+      !!itemBound && itemBound.drops[0].bound === true,
+      "A：物品侧强制绑定生效（这只是药品自己的标记，怪物没开）",
+      JSON.stringify(itemBound && itemBound.drops),
+    );
+    await api(baseUrl, "PATCH", "admin/drugs/drug_hp_1", { token: adminToken, body: { bindOnDrop: false } });
+
+    // 怪物侧：这只怪掉什么都绑
+    const monsterBound = await killWith(binder, "drug_hp_1", { bindDrops: true });
+    check(
+      !!monsterBound && monsterBound.drops[0].bound === true,
+      "A：怪物侧「掉落整体强制绑定」生效（物品侧已还原成不强制）",
+      JSON.stringify(monsterBound && monsterBound.drops),
+    );
+
+    // 随机概率：两个强制都不为真时按参数掷一次；100% 必绑、0% 必不绑
+    const paramsBefore = await api(baseUrl, "GET", "admin/runtime-params", { token: adminToken });
+    const chanceBefore = paramsBefore.data && paramsBefore.data.drop && paramsBefore.data.drop.bindChance;
+    await api(baseUrl, "PATCH", "admin/runtime-params", { token: adminToken, body: { drop: { bindChance: 100 } } });
+    const randomBound = await killWith(binder, "drug_hp_1");
+    check(
+      !!randomBound && randomBound.drops[0].bound === true,
+      "A：随机绑定概率 100% → 必绑（第三道规则）",
+      JSON.stringify(randomBound && randomBound.drops),
+    );
+    await api(baseUrl, "PATCH", "admin/runtime-params", { token: adminToken, body: { drop: { bindChance: 0 } } });
+    const randomOff = await killWith(binder, "drug_hp_1");
+    check(
+      !!randomOff && randomOff.drops[0].bound === false,
+      "A：概率改回 0 → 又回到不绑定（参数即时生效）",
+      JSON.stringify(randomOff && randomOff.drops),
+    );
+
+    // —— B. 装备溯源：谁掉的 / 哪个怪 / 什么时候；非装备不带溯源 ——
+
+    const equipDrop = await killWith(binder, "weapon_1", {}, [1, 1]);
+    check(!!equipDrop && equipDrop.drops.length >= 1, "B：装备掉落已抽取", JSON.stringify(equipDrop && equipDrop.drops));
+    const pickedEquip = equipDrop ? await pick(binder, equipDrop.killed.castId, 0) : null;
+    const equipCell = pickedEquip && pickedEquip.ok ? pickedEquip.placed[0] : null;
+    check(
+      !!equipCell && equipCell.from && equipCell.from.role === "combat_rbn1",
+      "B：装备入包带「谁掉的」（from.role = 击杀者角色名）",
+      JSON.stringify(equipCell && equipCell.from),
+    );
+    check(
+      !!equipCell && equipCell.from && equipCell.from.monster === (equipDrop && equipDrop.mob.monsterKey),
+      "B：带「哪个怪掉的」（from.monster = 怪物 key，客户端翻中文名）",
+      JSON.stringify({ from: equipCell && equipCell.from, mob: equipDrop && equipDrop.mob.monsterKey }),
+    );
+    check(
+      !!equipCell && equipCell.from && typeof equipCell.from.at === "number" && equipCell.from.at > 0,
+      "B：带「什么时候掉的」（from.at = 毫秒时间戳）",
+      JSON.stringify(equipCell && equipCell.from && equipCell.from.at),
+    );
+    check(!!equipCell && equipCell.bound === undefined, "B：这件装备没被强制绑定 → 格子上不写 bound（不占存档体积）");
+
+    // 非装备（药品）不记溯源：用户口径「只有装备会溯源，其他物品只按是否绑定分成两个」
+    const drugDrop = await killWith(binder, "drug_hp_1");
+    const pickedDrug = drugDrop ? await pick(binder, drugDrop.killed.castId, 0) : null;
+    const drugCell = pickedDrug && pickedDrug.ok ? pickedDrug.placed[0] : null;
+    check(!!drugCell && drugCell.id === "drug_hp_1", "B：药品掉落入包", JSON.stringify(drugCell));
+    check(!!drugCell && drugCell.from === undefined, "B：药品不带溯源（只有装备记来源）", JSON.stringify(drugCell && drugCell.from));
+
+    // —— C. 入包后存档里看得见；背包操作只报格子，元数据由服务端认领回来 ——
+
+    const roleAfterEquip = await api(baseUrl, "GET", `roles/${binder.roleId}`, { token: binder.token });
+    const bagAfterEquip = roleAfterEquip.data && roleAfterEquip.data.data && roleAfterEquip.data.data.bag;
+    const storedEquip = Array.isArray(bagAfterEquip)
+      ? bagAfterEquip.reduce((hit, line) => hit || (line || []).find((cell) => cell && cell.id === "weapon_1") || null, null)
+      : null;
+    check(
+      !!storedEquip && !!storedEquip.from && storedEquip.from.role === "combat_rbn1",
+      "C：溯源已落进存档（GET roles 的 data.bag 里那格带 from）",
+      JSON.stringify(storedEquip),
+    );
+
+    // 绑一堆药 + 再掉一堆同种未绑定的药，然后做一次「把绑定堆搬到空格」的整理：
+    // 客户端只报 {row,col,id,count}（契约里没有 bound），服务端必须把绑定态认领回来
+    const boundDrug = await killWith(binder, "drug_hp_1", { bindDrops: true });
+    const pickedBound = boundDrug ? await pick(binder, boundDrug.killed.castId, 0) : null;
+    const boundCell = pickedBound && pickedBound.ok ? pickedBound.placed[0] : null;
+    check(!!boundCell && boundCell.bound === true, "C：绑定的那一堆入包（bound = true）", JSON.stringify(boundCell));
+    const looseDrug = await killWith(binder, "drug_hp_1");
+    const pickedLoose = looseDrug ? await pick(binder, looseDrug.killed.castId, 0) : null;
+    check(!!pickedLoose && pickedLoose.ok, "C：再来一堆同种但未绑定的药", JSON.stringify(pickedLoose && pickedLoose.ok && pickedLoose.placed));
+
+    const roleBeforeMove = await api(baseUrl, "GET", `roles/${binder.roleId}`, { token: binder.token });
+    const gridBeforeMove = roleBeforeMove.data.data.bag;
+    /** 稀疏格子（客户端口径：只有 row / col / id / count，从不带 bound） */
+    const sparse = (grid) => {
+      const cells = [];
+      grid.forEach((line, row) => (line || []).forEach((cell, col) => cell && cells.push({ row, col, id: cell.id, count: cell.count })));
+      return cells;
+    };
+    const beforeCells = sparse(gridBeforeMove);
+
+    // 合法整理：把绑定的那一堆挪到一个空格（位置变了、内容没变）
+    const drugCells = [];
+    gridBeforeMove.forEach((line, row) =>
+      (line || []).forEach((cell, col) => {
+        if (cell && cell.id === "drug_hp_1") drugCells.push({ row, col, id: cell.id, count: cell.count, bound: cell.bound === true });
+      }),
+    );
+    check(drugCells.length === 2, "C：背包里有两堆同种药（绑定一堆 / 未绑定一堆，没有并成一堆）", JSON.stringify(drugCells));
+    const boundOne = drugCells.find((cell) => cell.bound);
+    const looseOne = drugCells.find((cell) => !cell.bound);
+    check(!!boundOne && !!looseOne, "C：两堆里恰好一堆绑、一堆没绑（同 id 不同桶）", JSON.stringify(drugCells));
+
+    // 空格：整理只是换位置，不需要扩大容量
+    let emptyPos = null;
+    gridBeforeMove.forEach((line, row) =>
+      (line || []).forEach((cell, col) => {
+        if (!cell && !emptyPos) emptyPos = { row, col };
+      }),
+    );
+    check(!!emptyPos, "C：4×10 网格里还有空格（搬运的目标位置）", JSON.stringify(emptyPos));
+
+    const movedCells = beforeCells
+      .filter((cell) => !(cell.row === boundOne.row && cell.col === boundOne.col))
+      .concat(boundOne && emptyPos ? [{ row: emptyPos.row, col: emptyPos.col, id: "drug_hp_1", count: boundOne.count }] : []);
+    const movedResult = await api(baseUrl, "POST", `roles/${binder.roleId}/bag-op`, {
+      token: binder.token,
+      body: { action: "move", cells: movedCells, revision: roleBeforeMove.data.revision },
+    });
+    check(movedResult.code === 0, "C：只报格子的整理被接受（服务端只验守恒）", movedResult.message);
+    const boundKept = movedResult.code === 0 && emptyPos ? movedResult.data.data.bag[emptyPos.row][emptyPos.col] : null;
+    check(
+      !!boundKept && boundKept.bound === true && boundKept.count === (boundOne && boundOne.count),
+      "C：绑定态被服务端认领回来（客户端没报 bound 也不会被洗成可交易）",
+      JSON.stringify(boundKept),
+    );
+
+    // 作弊：把两堆（绑定 + 未绑定）报成一格（件数相加）—— 按「绑定态 + id」分组不守恒，必须拒
+    const roleAfterMove = await api(baseUrl, "GET", `roles/${binder.roleId}`, { token: binder.token });
+    const afterMoveCells = sparse(roleAfterMove.data.data.bag);
+    const cheatCells = afterMoveCells
+      .filter((cell) => cell.id !== "drug_hp_1")
+      .concat([{ row: boundOne.row, col: boundOne.col, id: "drug_hp_1", count: boundOne.count + looseOne.count }]);
+    const cheatResult = await api(baseUrl, "POST", `roles/${binder.roleId}/bag-op`, {
+      token: binder.token,
+      body: { action: "tidy", cells: cheatCells, revision: roleAfterMove.data.revision },
+    });
+    check(
+      cheatResult.code === 20022,
+      "C：交叉合并被拒（20022：按绑定态分组后内容不守恒）",
+      JSON.stringify({ code: cheatResult.code, message: cheatResult.message }),
+    );
+    const roleAfterCheat = await api(baseUrl, "GET", `roles/${binder.roleId}`, { token: binder.token });
+    const cheatBags = sparse(roleAfterCheat.data.data.bag);
+    check(
+      !cheatBags.some((cell) => cell.id === "drug_hp_1" && cell.count === boundOne.count + looseOne.count),
+      "C：交叉合并没有落地（存档里不存在「两堆合成一堆」的药）",
+      JSON.stringify(cheatBags),
+    );
+
+    // 还原：这一区改过的每只怪的掉落配置 + 随机绑定概率，都回到改之前那一份
+    for (const key of touchedDropKeys) {
+      const before = dropRowsBefore.get(key);
+      if (!before) continue;
+      // 三态各按自己的形状还原（引用具名表的不带 entries，清空的两样都不带）
+      const restore =
+        before.source === "table"
+          ? { tableId: before.tableId, picks: before.picks === null ? undefined : before.picks, bindDrops: before.bindDrops === true }
+          : {
+              tableId: null,
+              entries: before.source === "entries" ? before.entries : null,
+              picks: before.source === "entries" && before.picks !== null ? before.picks : undefined,
+              bindDrops: before.bindDrops === true,
+            };
+      await api(baseUrl, "PATCH", `admin/monster-drops/${key}`, { token: adminToken, body: restore });
+    }
+    await api(baseUrl, "PATCH", "admin/runtime-params", { token: adminToken, body: { drop: { bindChance: chanceBefore } } });
 
     //#endregion
 

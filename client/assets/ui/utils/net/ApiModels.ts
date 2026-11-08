@@ -1009,6 +1009,10 @@ export type CreateEquipment = {
    */
   sellPrice?: number;
   /**
+   * 掉落时强制绑定（#789；不传 = 跟模板，再不行 false）
+   */
+  bindOnDrop?: boolean;
+  /**
    * 职业限制（不传 = 跟模板；再不行 4 = 不限）
    */
   occupation?: string;
@@ -1122,6 +1126,10 @@ export type UpdateEquipment = {
    * 八项基础属性（**整份提交、整份替换**，不传则不改；区间型要求 0 ≤ min ≤ max）。变体属性 = 基础属性 × 前后缀倍率，在客户端展开
    */
   attributes?: ConfigAttributes;
+  /**
+   * 掉落时强制绑定（#789；不传则不改）
+   */
+  bindOnDrop?: boolean;
 };
 
 export type UpdateEquipmentVariant = {
@@ -1290,6 +1298,10 @@ export type UpdateDrug = {
    * 按 maxMp 的百分比回复，整数（不传则不改；50 = 50%）
    */
   effectMpPercent?: number;
+  /**
+   * 掉落时强制绑定（#789；不传则不改）
+   */
+  bindOnDrop?: boolean;
 };
 
 export type UpdateItem = {
@@ -1313,6 +1325,10 @@ export type UpdateItem = {
    * 最大叠加数量（不传则不改）
    */
   maxStack?: number;
+  /**
+   * 掉落时强制绑定（#789；不传则不改）
+   */
+  bindOnDrop?: boolean;
 };
 
 export type CreateMoneyItem = {
@@ -1348,6 +1364,10 @@ export type CreateMoneyItem = {
    * 售卖价（0 = 不可出售；缺省 0）
    */
   sellPrice?: number;
+  /**
+   * 掉落时强制绑定（#789；缺省 false）
+   */
+  bindOnDrop?: boolean;
 };
 
 export type UpdateMoneyItem = {
@@ -1379,6 +1399,10 @@ export type UpdateMoneyItem = {
    * 售卖价（不传则不改）
    */
   sellPrice?: number;
+  /**
+   * 掉落时强制绑定（#789；不传则不改）
+   */
+  bindOnDrop?: boolean;
 };
 
 export type CreateLevelScroll = {
@@ -1403,7 +1427,7 @@ export type CreateLevelScroll = {
    */
   description?: string;
   /**
-   * 图标资源路径（缺省 = item/scroll/level-scroll）
+   * 图标资源路径（缺省按卷号派生：item/scroll/level-scroll-1 … -7）
    */
   icon?: string;
   /**
@@ -1414,6 +1438,10 @@ export type CreateLevelScroll = {
    * 售卖价（0 = 不可出售；缺省 0）
    */
   sellPrice?: number;
+  /**
+   * 掉落时强制绑定（#789；缺省 false）
+   */
+  bindOnDrop?: boolean;
 };
 
 export type UpdateLevelScroll = {
@@ -1445,6 +1473,10 @@ export type UpdateLevelScroll = {
    * 售卖价（不传则不改）
    */
   sellPrice?: number;
+  /**
+   * 掉落时强制绑定（#789；不传则不改）
+   */
+  bindOnDrop?: boolean;
 };
 
 export type AttributeRange = {
@@ -1848,6 +1880,10 @@ export type UpdateMonsterDrop = {
    * 内联条目池（**整份替换**）
    */
   entries?: DropEntry[];
+  /**
+   * 掉落整体强制绑定（#789；不传则不改）。与「引用表 / 内联条目 / 清空」三态互不影响
+   */
+  bindDrops?: boolean;
 };
 
 export type UpdateLevelCurve = {
@@ -1893,6 +1929,10 @@ export type UpdateDropRuntimeParams = {
    * 服务端拾取应答等待上限（毫秒）
    */
   pickReplyTimeout?: number;
+  /**
+   * 随机绑定概率（百分比 0~100；0 = 从不随机绑定）
+   */
+  bindChance?: number;
 };
 
 export type UpdateAutoBattleParams = {
@@ -3111,6 +3151,10 @@ export type MoneyItem = {
    */
   sellPrice: number;
   /**
+   * 掉落时强制绑定（#789）：true = 掉出来就绑定角色、不可交易
+   */
+  bindOnDrop: boolean;
+  /**
    * 最近更新时间（毫秒）
    */
   updatedAt: number;
@@ -3206,6 +3250,10 @@ export type LevelScroll = {
    * 售卖价（0 = 不可出售）
    */
   sellPrice: number;
+  /**
+   * 掉落时强制绑定（#789）：true = 掉出来就绑定角色、不可交易
+   */
+  bindOnDrop: boolean;
   /**
    * 最近更新时间（毫秒）
    */
@@ -4973,6 +5021,10 @@ export type DropRuntimeParams = {
    * 服务端拾取应答等待上限（毫秒），超时允许重试
    */
   pickReplyTimeout: number;
+  /**
+   * 随机绑定概率（百分比 0~100）：物品与怪物都没有「强制绑定」时，按它掷一次决定这一件是否绑定角色。0 = 从不随机绑定
+   */
+  bindChance: number;
 };
 
 export type AutoBattleParams = {
@@ -5284,6 +5336,10 @@ export type Equipment = {
    */
   attributes: ConfigAttributes;
   /**
+   * 掉落时强制绑定（#789）：true = 这件装备一掉出来就绑定角色、不可交易。三种绑定判定之一（另两个：怪物侧「掉落强制绑定」、掉落参数里的随机概率），任一为真即绑定
+   */
+  bindOnDrop: boolean;
+  /**
    * 最近更新时间（毫秒）
    */
   updatedAt: number;
@@ -5370,6 +5426,10 @@ export type EquipmentListItem = {
    * 八项基础属性（普通的·人级那一件自己的值；#655 起变体各自成行，不再由它乘倍率现算）
    */
   attributes: ConfigAttributes;
+  /**
+   * 掉落时强制绑定（#789）：true = 这件装备一掉出来就绑定角色、不可交易。三种绑定判定之一（另两个：怪物侧「掉落强制绑定」、掉落参数里的随机概率），任一为真即绑定
+   */
+  bindOnDrop: boolean;
   /**
    * 最近更新时间（毫秒）
    */
@@ -5567,6 +5627,10 @@ export type EquipmentVariant = {
    * 八项基础属性（普通的·人级那一件自己的值；#655 起变体各自成行，不再由它乘倍率现算）
    */
   attributes: ConfigAttributes;
+  /**
+   * 掉落时强制绑定（#789）：true = 这件装备一掉出来就绑定角色、不可交易。三种绑定判定之一（另两个：怪物侧「掉落强制绑定」、掉落参数里的随机概率），任一为真即绑定
+   */
+  bindOnDrop: boolean;
   /**
    * 最近更新时间（毫秒）
    */
@@ -5780,6 +5844,10 @@ export type Drug = {
    */
   effectMpPercent: number;
   /**
+   * 掉落时强制绑定（#789）：true = 掉出来就绑定角色、不可交易
+   */
+  bindOnDrop: boolean;
+  /**
    * 最近更新时间（毫秒）
    */
   updatedAt: number;
@@ -5860,6 +5928,10 @@ export type Item = {
    * 最大叠加数量
    */
   maxStack: number;
+  /**
+   * 掉落时强制绑定（#789）：true = 掉出来就绑定角色、不可交易
+   */
+  bindOnDrop: boolean;
   /**
    * 最近更新时间（毫秒）
    */
@@ -5960,6 +6032,10 @@ export type MonsterDropSummary = {
    * 内联条目数（source = entries 时有意义；引用具名表时条目数在 /admin/drop-tables）
    */
   entryCount: number;
+  /**
+   * 掉落整体强制绑定（#789）：true = 这只怪掉出来的东西一律绑定角色。与物品自身的「掉落强制绑定」是「或」的关系
+   */
+  bindDrops: boolean;
 };
 
 export type OutOffset = {
@@ -7057,6 +7133,10 @@ export type MonsterDrop = {
    * 内联条目池（source = entries 时非空）
    */
   entries: DropEntry[] | null;
+  /**
+   * 掉落整体强制绑定（#789）：true = 这只怪掉出来的东西一律绑定角色。与物品自身的「掉落强制绑定」是「或」的关系；两个都不为真时按掉落参数里的概率掷一次
+   */
+  bindDrops: boolean;
   /**
    * 最近更新时间（毫秒）
    */

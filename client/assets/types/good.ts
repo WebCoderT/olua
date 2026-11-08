@@ -269,11 +269,36 @@ export type Goods = Equipment | Drug | Material | MoneyItem | LevelScroll;
  * 背包格子：只存物品 key 与数量，物品数据经 configs/items 实时解析
  * （改物品配置后重启即生效，无需重新拾取）
  */
+/** 掉落溯源里两项文字的最大长度（与服务端 `BAG_ORIGIN_TEXT_MAX` 同数） */
+export const BAG_ORIGIN_TEXT_MAX = 64;
+
+/**
+ * 掉落溯源（只有装备会有，见 `BagCell.from`）
+ *
+ * 记的是掉落**当时**的事实：角色改名、怪物改配置都不会追改这里，
+ * 详情弹窗里显示的就是「这件是我打那只怪掉的」。
+ */
+export interface BagOrigin {
+  /** 击杀者角色名 */
+  role?: string;
+  /** 怪物 key（用怪物配置翻成中文名；未知 key 直接显示 key） */
+  monster?: string;
+  /** 掉落时间（毫秒时间戳） */
+  at?: number;
+}
+
 export interface BagCell {
   /** 物品 id（configs/items 总表的 key） */
   id: string;
   /** 数量（不可叠加物品恒为 1） */
   count: number;
+  /**
+   * **绑定角色**（不可交易）。由服务端在掉落时判定写入，客户端只读：
+   * 搬运 / 整理时原样带回（服务端会拿它验守恒，缺省 = 未绑定），但不能凭空改。
+   */
+  bound?: boolean;
+  /** 掉落溯源，只有装备会有（用户口径：其他物品只按是否绑定分成两种） */
+  from?: BagOrigin;
 }
 
 /** 背包格子的行列坐标（拖动落点、跨格搬运都用它定位） */

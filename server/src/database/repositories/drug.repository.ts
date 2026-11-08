@@ -30,8 +30,8 @@ export class DrugRepository {
     this.db.run(
       `INSERT OR IGNORE INTO drugs
         (id, label, description, icon, level, sell_price, max_stack, cooldown,
-         effect_hp, effect_mp, effect_hp_percent, effect_mp_percent, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         effect_hp, effect_mp, effect_hp_percent, effect_mp_percent, bind_on_drop, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         row.id,
         row.label,
@@ -45,6 +45,7 @@ export class DrugRepository {
         row.effect_mp,
         row.effect_hp_percent,
         row.effect_mp_percent,
+        row.bind_on_drop,
         row.updated_at,
       ],
     );
@@ -66,7 +67,7 @@ export class DrugRepository {
       `UPDATE drugs SET
          label = ?, description = ?, icon = ?, level = ?, sell_price = ?, max_stack = ?, cooldown = ?,
          effect_hp = ?, effect_mp = ?, effect_hp_percent = ?, effect_mp_percent = ?,
-         updated_at = ?
+         bind_on_drop = ?, updated_at = ?
        WHERE id = ?`,
       [
         row.label,
@@ -80,6 +81,7 @@ export class DrugRepository {
         row.effect_mp,
         row.effect_hp_percent,
         row.effect_mp_percent,
+        row.bind_on_drop,
         row.updated_at,
         row.id,
       ],

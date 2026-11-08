@@ -16654,6 +16654,10 @@
             "minimum": 0,
             "maximum": 100000000
           },
+          "bindOnDrop": {
+            "type": "boolean",
+            "description": "掉落时强制绑定（#789；不传 = 跟模板，再不行 false）"
+          },
           "occupation": {
             "type": "string",
             "description": "职业限制（不传 = 跟模板；再不行 4 = 不限）"
@@ -16817,6 +16821,10 @@
                 "$ref": "#/components/schemas/ConfigAttributesDto"
               }
             ]
+          },
+          "bindOnDrop": {
+            "type": "boolean",
+            "description": "掉落时强制绑定（#789；不传则不改）"
           }
         }
       },
@@ -17080,6 +17088,10 @@
             "description": "按 maxMp 的百分比回复，整数（不传则不改；50 = 50%）",
             "minimum": 0,
             "maximum": 100
+          },
+          "bindOnDrop": {
+            "type": "boolean",
+            "description": "掉落时强制绑定（#789；不传则不改）"
           }
         }
       },
@@ -17112,6 +17124,10 @@
             "description": "最大叠加数量（不传则不改）",
             "minimum": 1,
             "maximum": 9999
+          },
+          "bindOnDrop": {
+            "type": "boolean",
+            "description": "掉落时强制绑定（#789；不传则不改）"
           }
         }
       },
@@ -17160,6 +17176,10 @@
             "description": "售卖价（0 = 不可出售；缺省 0）",
             "minimum": 0,
             "maximum": 100000000
+          },
+          "bindOnDrop": {
+            "type": "boolean",
+            "description": "掉落时强制绑定（#789；缺省 false）"
           }
         },
         "required": [
@@ -17206,6 +17226,10 @@
             "description": "售卖价（不传则不改）",
             "minimum": 0,
             "maximum": 100000000
+          },
+          "bindOnDrop": {
+            "type": "boolean",
+            "description": "掉落时强制绑定（#789；不传则不改）"
           }
         }
       },
@@ -17241,7 +17265,7 @@
           },
           "icon": {
             "type": "string",
-            "description": "图标资源路径（缺省 = item/scroll/level-scroll）",
+            "description": "图标资源路径（缺省按卷号派生：item/scroll/level-scroll-1 … -7）",
             "maxLength": 200
           },
           "maxStack": {
@@ -17255,6 +17279,10 @@
             "description": "售卖价（0 = 不可出售；缺省 0）",
             "minimum": 0,
             "maximum": 100000000
+          },
+          "bindOnDrop": {
+            "type": "boolean",
+            "description": "掉落时强制绑定（#789；缺省 false）"
           }
         },
         "required": [
@@ -17301,6 +17329,10 @@
             "description": "售卖价（不传则不改）",
             "minimum": 0,
             "maximum": 100000000
+          },
+          "bindOnDrop": {
+            "type": "boolean",
+            "description": "掉落时强制绑定（#789；不传则不改）"
           }
         }
       },
@@ -17943,6 +17975,10 @@
             "items": {
               "$ref": "#/components/schemas/DropEntryDto"
             }
+          },
+          "bindDrops": {
+            "type": "boolean",
+            "description": "掉落整体强制绑定（#789；不传则不改）。与「引用表 / 内联条目 / 清空」三态互不影响"
           }
         }
       },
@@ -18002,6 +18038,10 @@
           "pickReplyTimeout": {
             "type": "number",
             "description": "服务端拾取应答等待上限（毫秒）"
+          },
+          "bindChance": {
+            "type": "number",
+            "description": "随机绑定概率（百分比 0~100；0 = 从不随机绑定）"
           }
         }
       },
@@ -19843,6 +19883,10 @@
             "type": "number",
             "description": "售卖价（0 = 不可出售）"
           },
+          "bindOnDrop": {
+            "type": "boolean",
+            "description": "掉落时强制绑定（#789）：true = 掉出来就绑定角色、不可交易"
+          },
           "updatedAt": {
             "type": "number",
             "description": "最近更新时间（毫秒）"
@@ -19857,6 +19901,7 @@
           "amount",
           "maxStack",
           "sellPrice",
+          "bindOnDrop",
           "updatedAt"
         ]
       },
@@ -19987,6 +20032,10 @@
             "type": "number",
             "description": "售卖价（0 = 不可出售）"
           },
+          "bindOnDrop": {
+            "type": "boolean",
+            "description": "掉落时强制绑定（#789）：true = 掉出来就绑定角色、不可交易"
+          },
           "updatedAt": {
             "type": "number",
             "description": "最近更新时间（毫秒）"
@@ -20001,6 +20050,7 @@
           "maxLevel",
           "maxStack",
           "sellPrice",
+          "bindOnDrop",
           "updatedAt"
         ]
       },
@@ -22867,13 +22917,19 @@
             "type": "number",
             "description": "服务端拾取应答等待上限（毫秒），超时允许重试",
             "example": 5000
+          },
+          "bindChance": {
+            "type": "number",
+            "description": "随机绑定概率（百分比 0~100）：物品与怪物都没有「强制绑定」时，按它掷一次决定这一件是否绑定角色。0 = 从不随机绑定",
+            "example": 30
           }
         },
         "required": [
           "autoPickupRadius",
           "fullTipInterval",
           "scatterMinDistance",
-          "pickReplyTimeout"
+          "pickReplyTimeout",
+          "bindChance"
         ]
       },
       "AutoBattleParamsDto": {
@@ -23344,6 +23400,10 @@
               }
             ]
           },
+          "bindOnDrop": {
+            "type": "boolean",
+            "description": "掉落时强制绑定（#789）：true = 这件装备一掉出来就绑定角色、不可交易。三种绑定判定之一（另两个：怪物侧「掉落强制绑定」、掉落参数里的随机概率），任一为真即绑定"
+          },
           "updatedAt": {
             "type": "number",
             "description": "最近更新时间（毫秒）"
@@ -23370,6 +23430,7 @@
           "inPosY",
           "outPositions",
           "attributes",
+          "bindOnDrop",
           "updatedAt"
         ]
       },
@@ -23466,6 +23527,10 @@
               }
             ]
           },
+          "bindOnDrop": {
+            "type": "boolean",
+            "description": "掉落时强制绑定（#789）：true = 这件装备一掉出来就绑定角色、不可交易。三种绑定判定之一（另两个：怪物侧「掉落强制绑定」、掉落参数里的随机概率），任一为真即绑定"
+          },
           "updatedAt": {
             "type": "number",
             "description": "最近更新时间（毫秒）"
@@ -23496,6 +23561,7 @@
           "inPosY",
           "outPositions",
           "attributes",
+          "bindOnDrop",
           "updatedAt",
           "variantCount"
         ]
@@ -23762,6 +23828,10 @@
               }
             ]
           },
+          "bindOnDrop": {
+            "type": "boolean",
+            "description": "掉落时强制绑定（#789）：true = 这件装备一掉出来就绑定角色、不可交易。三种绑定判定之一（另两个：怪物侧「掉落强制绑定」、掉落参数里的随机概率），任一为真即绑定"
+          },
           "updatedAt": {
             "type": "number",
             "description": "最近更新时间（毫秒）"
@@ -23800,6 +23870,7 @@
           "inPosY",
           "outPositions",
           "attributes",
+          "bindOnDrop",
           "updatedAt",
           "baseId",
           "prefix",
@@ -24130,6 +24201,10 @@
             "type": "number",
             "description": "按角色 maxMp 的百分比回复（50 = 50%）"
           },
+          "bindOnDrop": {
+            "type": "boolean",
+            "description": "掉落时强制绑定（#789）：true = 掉出来就绑定角色、不可交易"
+          },
           "updatedAt": {
             "type": "number",
             "description": "最近更新时间（毫秒）"
@@ -24148,6 +24223,7 @@
           "effectMp",
           "effectHpPercent",
           "effectMpPercent",
+          "bindOnDrop",
           "updatedAt"
         ]
       },
@@ -24257,6 +24333,10 @@
             "type": "number",
             "description": "最大叠加数量"
           },
+          "bindOnDrop": {
+            "type": "boolean",
+            "description": "掉落时强制绑定（#789）：true = 掉出来就绑定角色、不可交易"
+          },
           "updatedAt": {
             "type": "number",
             "description": "最近更新时间（毫秒）"
@@ -24271,6 +24351,7 @@
           "level",
           "sellPrice",
           "maxStack",
+          "bindOnDrop",
           "updatedAt"
         ]
       },
@@ -24430,13 +24511,18 @@
           "entryCount": {
             "type": "number",
             "description": "内联条目数（source = entries 时有意义；引用具名表时条目数在 /admin/drop-tables）"
+          },
+          "bindDrops": {
+            "type": "boolean",
+            "description": "掉落整体强制绑定（#789）：true = 这只怪掉出来的东西一律绑定角色。与物品自身的「掉落强制绑定」是「或」的关系"
           }
         },
         "required": [
           "source",
           "tableId",
           "picks",
-          "entryCount"
+          "entryCount",
+          "bindDrops"
         ]
       },
       "OutOffsetDto": {
@@ -26200,6 +26286,10 @@
               "$ref": "#/components/schemas/DropEntryDto"
             }
           },
+          "bindDrops": {
+            "type": "boolean",
+            "description": "掉落整体强制绑定（#789）：true = 这只怪掉出来的东西一律绑定角色。与物品自身的「掉落强制绑定」是「或」的关系；两个都不为真时按掉落参数里的概率掷一次"
+          },
           "updatedAt": {
             "type": "number",
             "description": "最近更新时间（毫秒）"
@@ -26211,6 +26301,7 @@
           "tableId",
           "picks",
           "entries",
+          "bindDrops",
           "updatedAt"
         ]
       },

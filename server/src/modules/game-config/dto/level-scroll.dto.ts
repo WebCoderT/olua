@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
-import { IsInt, IsOptional, IsString, Matches, Max, MaxLength, Min, MinLength } from "class-validator";
+import { IsBoolean, IsInt, IsOptional, IsString, Matches, Max, MaxLength, Min, MinLength } from "class-validator";
 import { PageMetaDto, PageQueryDto } from "../../../common/dto/api-envelope.dto";
 import {
   LEVEL_SCROLL_DESCRIPTION_MAX,
@@ -38,6 +38,9 @@ export class LevelScrollDto {
   @ApiProperty({ description: "售卖价（0 = 不可出售）" })
   sellPrice: number;
 
+  @ApiProperty({ description: "掉落时强制绑定（#789）：true = 掉出来就绑定角色、不可交易" })
+  bindOnDrop: boolean;
+
   @ApiProperty({ description: "最近更新时间（毫秒）" })
   updatedAt: number;
 
@@ -51,6 +54,7 @@ export class LevelScrollDto {
     dto.maxLevel = row.max_level;
     dto.maxStack = row.max_stack;
     dto.sellPrice = row.sell_price;
+    dto.bindOnDrop = row.bind_on_drop === 1;
     dto.updatedAt = row.updated_at;
     return dto;
   }
@@ -112,7 +116,7 @@ export class CreateLevelScrollDto {
   @MaxLength(LEVEL_SCROLL_DESCRIPTION_MAX, { message: `描述最长 ${LEVEL_SCROLL_DESCRIPTION_MAX} 个字` })
   description?: string;
 
-  @ApiPropertyOptional({ description: "图标资源路径（缺省 = item/scroll/level-scroll）", maxLength: 200 })
+  @ApiPropertyOptional({ description: "图标资源路径（缺省按卷号派生：item/scroll/level-scroll-1 … -7）", maxLength: 200 })
   @IsOptional()
   @IsString({ message: "图标路径必须是字符串" })
   @MaxLength(200, { message: "图标路径最长 200 个字符" })
@@ -131,6 +135,11 @@ export class CreateLevelScrollDto {
   @Min(0, { message: "售卖价不能为负" })
   @Max(LEVEL_SCROLL_SELL_PRICE_MAX, { message: `售卖价不能超过 ${LEVEL_SCROLL_SELL_PRICE_MAX}` })
   sellPrice?: number;
+
+  @ApiPropertyOptional({ description: "掉落时强制绑定（#789；缺省 false）" })
+  @IsOptional()
+  @IsBoolean({ message: "掉落强制绑定必须是布尔值" })
+  bindOnDrop?: boolean;
 }
 
 /**
@@ -187,6 +196,11 @@ export class UpdateLevelScrollDto {
   @Min(0, { message: "售卖价不能为负" })
   @Max(LEVEL_SCROLL_SELL_PRICE_MAX, { message: `售卖价不能超过 ${LEVEL_SCROLL_SELL_PRICE_MAX}` })
   sellPrice?: number;
+
+  @ApiPropertyOptional({ description: "掉落时强制绑定（#789；不传则不改）" })
+  @IsOptional()
+  @IsBoolean({ message: "掉落强制绑定必须是布尔值" })
+  bindOnDrop?: boolean;
 }
 
 /** 删除升级卷轴的结果（删掉了几行；不碰玩家存档） */

@@ -4,6 +4,7 @@ import {
   ArrayMaxSize,
   ArrayMinSize,
   IsArray,
+  IsBoolean,
   IsIn,
   IsInt,
   IsNumber,
@@ -159,6 +160,13 @@ export class EquipmentDto {
   @ApiProperty({ description: "八项基础属性（普通的·人级那一件自己的值；#655 起变体各自成行，不再由它乘倍率现算）", type: ConfigAttributesDto })
   attributes: ConfigAttributesDto;
 
+  @ApiProperty({
+    description:
+      "掉落时强制绑定（#789）：true = 这件装备一掉出来就绑定角色、不可交易。" +
+      "三种绑定判定之一（另两个：怪物侧「掉落强制绑定」、掉落参数里的随机概率），任一为真即绑定",
+  })
+  bindOnDrop: boolean;
+
   @ApiProperty({ description: "最近更新时间（毫秒）" })
   updatedAt: number;
 
@@ -184,6 +192,7 @@ export class EquipmentDto {
     dto.inPosY = row.in_pos_y;
     dto.outPositions = parsePoints(row.out_positions);
     dto.attributes = attributesFromRow(row as EquipmentRow & SoulRowShape);
+    dto.bindOnDrop = row.bind_on_drop === 1;
     dto.updatedAt = row.updated_at;
     return dto;
   }
@@ -419,6 +428,11 @@ export class UpdateEquipmentDto {
   @ValidateNested()
   @Type(() => ConfigAttributesDto)
   attributes?: ConfigAttributesDto;
+
+  @ApiPropertyOptional({ description: "掉落时强制绑定（#789；不传则不改）" })
+  @IsOptional()
+  @IsBoolean({ message: "掉落强制绑定必须是布尔值" })
+  bindOnDrop?: boolean;
 }
 
 /**
@@ -485,6 +499,11 @@ export class CreateEquipmentDto {
   @Min(0, { message: "售卖价不能为负" })
   @Max(EQUIPMENT_SELL_PRICE_MAX, { message: "售卖价超出防御性上限" })
   sellPrice?: number;
+
+  @ApiPropertyOptional({ description: "掉落时强制绑定（#789；不传 = 跟模板，再不行 false）" })
+  @IsOptional()
+  @IsBoolean({ message: "掉落强制绑定必须是布尔值" })
+  bindOnDrop?: boolean;
 
   @ApiPropertyOptional({ description: "职业限制（不传 = 跟模板；再不行 4 = 不限）" })
   @IsOptional()

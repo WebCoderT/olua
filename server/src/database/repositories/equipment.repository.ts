@@ -43,6 +43,8 @@ const EQUIPMENT_COLUMNS: (keyof EquipmentRow)[] = [
   "magic_defense_max",
   "taoist_defense_min",
   "taoist_defense_max",
+  // 掉落强制绑定（#789）：加在这里，seedRow / insert / update 三条 SQL 自动跟上
+  "bind_on_drop",
   "updated_at",
 ];
 

@@ -70,7 +70,11 @@ function main() {
   check(/export function isCtrlPressed/.test(modifier) && /ctrlListeners\.delete\(listener\)/.test(modifier), "isCtrlPressed 读状态、onCtrlChange 返回退订函数");
 
   const helper = readSrc("ui/helpers/GameUiHelper.ts");
-  check(/createGoodDetailDialog\(good: Goods, anchor: Node, compare: Equipment \| "hint" \| null = null\)/.test(helper), "createGoodDetailDialog 第三参 = 对比模式（装备 / hint / null）");
+  // 第三参恒为「对比模式」（#789 在其后追加了可选的第四参 meta，签名允许带它）
+  check(
+    /createGoodDetailDialog\(good: Goods, anchor: Node, compare: Equipment \| "hint" \| null = null(, meta\?: BagCellMeta)?\)/.test(helper),
+    "createGoodDetailDialog 第三参 = 对比模式（装备 / hint / null）",
+  );
   check(/onCtrlChange\(handleCtrlChange\)/.test(helper) && /unsubscribeCtrl\?\.\(\)/.test(helper), "悬停期间订阅 Ctrl 变化整窗重建，关闭时退订（MOUSE_LEAVE/节点销毁都收）");
   check(/worn\.id !== good\.id/.test(helper), "悬停的就是身上那件 → 不显示对比（全等差值是噪音）");
   check(/createGoodCompareSection\(good as Equipment, compare\)/.test(helper) && /equipmentAttributeDiffs\(goodShowAttributes\.get\(good\.slot\)/.test(helper), "对比段按槽位显示属性逐项出「旧值 → 新值（±差）」");

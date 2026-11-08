@@ -11,7 +11,7 @@ import { parseCoefficientsJson, parseCombatJson } from "../../common/config-json
 import { roleAttributeSourceOf, summarizeRoleAttributes } from "../combat/role-attributes";
 import { RolesService } from "../roles/roles.service";
 import { WorldService, worldKey, type WorldMonster } from "../world/world.service";
-import type { RealtimeMonsterAiEntry, RealtimeMonsterCast, RealtimeMonsterHit, RealtimeMonsterKill } from "./realtime.protocol";
+import type { RealtimeDropEntry, RealtimeMonsterAiEntry, RealtimeMonsterCast, RealtimeMonsterHit, RealtimeMonsterKill } from "./realtime.protocol";
 
 /**
  * 怪物 AI 参数（`runtime_params.monster_ai` 列，管理端「运行时参数」页可改）
@@ -477,7 +477,7 @@ export class MonsterAiService implements OnApplicationBootstrap, OnApplicationSh
    */
   onMonsterKilled(
     instanceId: string,
-    kill?: { zoneId: number; mapId: string; accountId: string; x: number; y: number; drops: Array<{ goodId: string; count: number }> },
+    kill?: { zoneId: number; mapId: string; accountId: string; x: number; y: number; drops: RealtimeDropEntry[] },
   ): void {
     const now = Date.now();
     for (const map of this.runtimes.values()) {

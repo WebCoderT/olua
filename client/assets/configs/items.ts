@@ -1,4 +1,4 @@
-import { BagCell, BagCellPos, DrugEffect, Equipment, EQUIPMENT_TYPE, GOOD_TYPE, Goods, isEquipment, MoneyCurrency } from "../types/good";
+import { BagCell, BagCellPos, BagOrigin, DrugEffect, Equipment, EQUIPMENT_TYPE, GOOD_TYPE, Goods, isEquipment, MoneyCurrency } from "../types/good";
 import { drugs, levelScrolls, moneyItems } from "./game-config";
 import { equipmentCombatValue, equipmentSlotOrder, getAllEquipmentVariants, getMallGoods, getRecyclePrice } from "./equipments";
 import { materials } from "./game-config";
@@ -198,16 +198,74 @@ export function compareBagGoods(a: Goods, b: Goods): number {
   return aId < bId ? -1 : aId > bId ? 1 : 0;
 }
 
+//#region 背包格子的元数据（绑定 + 掉落溯源，#789）
+
+/** 背包格子上的元数据（服务端写、客户端只读；搬运/整理/回收时原样带回） */
+export interface BagCellMeta {
+  /** 绑定角色 = 不可交易 */
+  bound?: boolean;
+  /** 掉落溯源（只有装备会有） */
+  from?: BagOrigin;
+}
+
+/**
+ * 取一格的元数据**副本**
+ *
+ * 复制 `from` 而不是把引用带走：整理/搬运会造新格子，若新格子与旧格子共用同一个
+ * `from` 对象，改一处两处都变（以后做交易时「转移后清空来源」会互相干扰）。
+ * `bound` 只认 `true`（存档里出现过 `false` / `1` 这类脏值，一律当未绑定）。
+ */
+export function bagMetaOf(cell: BagCell): BagCellMeta {
+  const meta: BagCellMeta = {};
+  if (!cell) return meta;
+  if (cell.bound === true) meta.bound = true;
+  const from = cell.from;
+  if (from) {
+    const copy: BagOrigin = {};
+    if (from.role) copy.role = from.role;
+    if (from.monster) copy.monster = from.monster;
+    if (typeof from.at === "number") copy.at = from.at;
+    if (copy.role || copy.monster || typeof copy.at === "number") meta.from = copy;
+  }
+  return meta;
+}
+
+/** 造一个带元数据的格子（元数据为空时不写字段：存档里不多出 `bound: undefined` 这种键） */
+export function withBagMeta(id: string, count: number, meta: BagCellMeta): BagCell {
+  const cell: BagCell = { id, count };
+  if (meta.bound === true) cell.bound = true;
+  if (meta.from) cell.from = meta.from;
+  return cell;
+}
+
+/**
+ * 并堆的判据用的分组键：`1|id` / `0|id`
+ *
+ * **绑定状态不同不能并成一堆**（#789）：绑定的那堆是「不可交易」的，未绑定的可以交易，
+ * 混在一起就分不开了。服务端的守恒校验按同一个键分组（`bagGroupKeyOf`），
+ * 两边键不同步的话，一次整理就会被当成「绑定物凭空消失」而拒绝。
+ */
+export function bagGroupKeyOf(cell: BagCell): string {
+  return `${cell && cell.bound === true ? 1 : 0}|${cell ? cell.id : ""}`;
+}
+
+//#endregion
+
 /**
  * 一键整理的搬运（**纯函数**：不碰存档、不碰 UI，输入输出都是二维背包，便于单测）
  *
  * 三步：
- * 1. 合并：同 id 的可叠加物品并成一堆，超过 maxStack 再拆成多格；不可叠加物品一格一件
+ * 1. 合并：同 id **且绑定状态相同**的可叠加物品并成一堆，超过 maxStack 再拆成多格；
+ *    不可叠加物品一格一件（绑定与溯源原样带走，见 #789）
  * 2. 排序：见 compareBagGoods（装备按等级/部位/前后缀，其余按等级，id 兜底）
  * 3. 铺回：从左上角起按行铺满，空格全部沉到末尾
  *
- * 不变量（单测要盯的）：行列数与入参一致、物品一件不丢（数量总和守恒）、
+ * 不变量（单测要盯的）：行列数与入参一致、物品一件不丢（**按「绑定态 + id」分组**数量守恒）、
  * 解析不出配置的 id 原样保留并排在最后；返回全新数组，不改入参
+ *
+ * 「绑定态 + id 分组」是 #789 加的：绑定堆与未绑定堆互换位置本身是合法整理，但若允许
+ * 它们**并成一堆**，就等于凭空送出一件可交易的（或把可交易的锁死）—— 服务端守恒校验
+ * 按同一个分组键算，两边不同步就会把一次普通整理判成作弊。
  */
 export function tidyBagGrid(bag: BagCell[][]): BagCell[][] {
   // 展平：背包只有 bagRow × bagCol 格，线性扫描即可
@@ -219,25 +277,26 @@ export function tidyBagGrid(bag: BagCell[][]): BagCell[][] {
     }),
   );
 
-  // 1) 合并：同 id 的可叠加物品并进同一堆（都换新格子对象，不动原数组里的引用）
+  // 1) 合并：同 id 且同绑定态的可叠加物品并进同一堆（都换新格子对象，不动原数组里的引用）
   const merged: BagCell[] = [];
   const stackTargets = new Map<string, BagCell>();
   cells.forEach((cell) => {
     const good = getItem(cell.id);
     if (!good) {
-      // 配置表里已不存在的 id：不认识它，就不能替它决定数量，原样保留
-      merged.push({ id: cell.id, count: Math.max(1, cell.count) });
+      // 配置表里已不存在的 id：不认识它，就不能替它决定数量，原样保留（元数据也原样带走）
+      merged.push(withBagMeta(cell.id, Math.max(1, cell.count), bagMetaOf(cell)));
       return;
     }
     if (!good.stackable) {
-      // 不可叠加（装备）：一格一件，数量恒 1
-      merged.push({ id: cell.id, count: 1 });
+      // 不可叠加（装备）：一格一件，数量恒 1；绑定与溯源跟着格子走
+      merged.push(withBagMeta(cell.id, 1, bagMetaOf(cell)));
       return;
     }
-    let target = stackTargets.get(cell.id);
+    const key = bagGroupKeyOf(cell);
+    let target = stackTargets.get(key);
     if (!target) {
-      target = { id: cell.id, count: 0 };
-      stackTargets.set(cell.id, target);
+      target = withBagMeta(cell.id, 0, bagMetaOf(cell));
+      stackTargets.set(key, target);
       merged.push(target);
     }
     target.count += Math.max(1, cell.count);
@@ -249,17 +308,19 @@ export function tidyBagGrid(bag: BagCell[][]): BagCell[][] {
     const good = getItem(cell.id);
     // 解析不出配置的物品（已下架）：不知道它能不能叠加、上限多少 —— 原样一格，不能替它拆
     if (!good) {
-      packed.push({ id: cell.id, count: cell.count });
+      packed.push(withBagMeta(cell.id, cell.count, bagMetaOf(cell)));
       return;
     }
     const maxStack = good.stackable ? Math.max(1, good.maxStack ?? 99) : 1;
     let remain = cell.count;
     while (remain > 0) {
       const take = Math.min(maxStack, remain);
-      packed.push({ id: cell.id, count: take });
+      // 拆出来的每一堆都带着同一份元数据副本（绑定态与溯源属于「这件/这堆物品」）
+      packed.push(withBagMeta(cell.id, take, bagMetaOf(cell)));
       remain -= take;
     }
   });
+
 
   // 3) 排序：逐个 id 解析一次配置（getItem 返回副本，缓存起来免得比较里反复拷贝）
   const goodCache = new Map<string, Goods | null>();
@@ -365,11 +426,15 @@ export function getStackBadge(good: Goods | null, count: number | undefined): St
  *
  * 落点规则（按这个顺序判）：
  * 1. 起点没东西 / 起终点是同一格 / 越界 → 什么都不动（moved = false）；
- * 2. 落点是空格 → **整格搬过去**（数量不变）；
- * 3. 落点是同种**可叠加**物品 → **合并**：按单格上限 maxStack 吃，吃不完的留在原格（部分合并）；
- * 4. 其余情况（不同种物品 / 装备这类不可叠加 / 配置表里认不出的 id）→ **两格交换**。
+ * 2. 落点是空格 → **整格搬过去**（数量与绑定/溯源元数据一起搬）；
+ * 3. 落点是同种**可叠加**且**绑定态相同**的物品 → **合并**：按单格上限 maxStack 吃，
+ *    吃不完的留在原格（部分合并）；
+ * 4. 其余情况（不同种物品 / 绑定态不同 / 装备这类不可叠加 / 配置表里认不出的 id）→ **两格交换**。
  *
- * 不变量（单测要盯的）：物品一件不丢（按 id 汇总数量守恒）；除「起点、落点」两格外，
+ * 绑定态不同不许合并（#789）：绑定的那堆不可交易、未绑定的可以，混成一堆就再也分不开了。
+ * 交换是安全的 —— 两堆各自整体换位置，绑定态跟着格子走，谁也没被洗白或锁死。
+ *
+ * 不变量（单测要盯的）：物品一件不丢（按「绑定态 + id」分组数量守恒）；除「起点、落点」两格外，
  * 其余格子一律不动；恒返回新数组，不改入参里的格子对象
  */
 export function moveBagCellGrid(bag: BagCell[][], from: BagCellPos, to: BagCellPos): BagMoveResult {
@@ -380,26 +445,28 @@ export function moveBagCellGrid(bag: BagCell[][], from: BagCellPos, to: BagCellP
   // 起点为空、或落点越界：没得搬
   if (!source || target === undefined) return { bag: result, moved: false };
 
-  // 2) 落点是空格：整格搬过去
+  // 2) 落点是空格：整格搬过去（元数据跟着走，否则一挪就「解绑」了）
   if (!target) {
-    result[to.row][to.col] = { id: source.id, count: Math.max(1, source.count) };
+    result[to.row][to.col] = withBagMeta(source.id, Math.max(1, source.count), bagMetaOf(source));
     result[from.row][from.col] = null;
     return { bag: result, moved: true };
   }
 
   // 3) 落点是同种可叠加物：合并（超过单格上限的部分留在原格）
-  const maxStack = getMergeMaxStack(source.id, target.id);
+  const sameBound = (source.bound === true) === (target.bound === true);
+  const maxStack = sameBound ? getMergeMaxStack(source.id, target.id) : 0;
   if (maxStack > 0) {
     const total = Math.max(1, source.count) + Math.max(1, target.count);
     const merged = Math.min(maxStack, total);
-    result[to.row][to.col] = { id: target.id, count: merged };
-    result[from.row][from.col] = total > merged ? { id: source.id, count: total - merged } : null;
+    // 并堆后留在落点的这堆沿用落点格的元数据（同绑定态；可叠加物没有溯源）
+    result[to.row][to.col] = withBagMeta(target.id, merged, bagMetaOf(target));
+    result[from.row][from.col] = total > merged ? withBagMeta(source.id, total - merged, bagMetaOf(source)) : null;
     return { bag: result, moved: true };
   }
 
-  // 4) 其余情况：两格交换
-  result[from.row][from.col] = { id: target.id, count: Math.max(1, target.count) };
-  result[to.row][to.col] = { id: source.id, count: Math.max(1, source.count) };
+  // 4) 其余情况：两格交换（元数据各自跟着自己的格子换位置）
+  result[from.row][from.col] = withBagMeta(target.id, Math.max(1, target.count), bagMetaOf(target));
+  result[to.row][to.col] = withBagMeta(source.id, Math.max(1, source.count), bagMetaOf(source));
   return { bag: result, moved: true };
 }
 
@@ -472,8 +539,9 @@ export function normalizeBagGrid(bag: BagCell[][], rows: number, cols: number): 
     const line: BagCell[] = [];
     for (let col = 0; col < cols; col++) {
       const cell = sourceLine[col];
-      // 只认有 id 的格子（初值缺失的脏数据当空格，数量至少 1）
-      line.push(cell && cell.id ? { id: cell.id, count: Math.max(1, cell.count ?? 1) } : null);
+      // 只认有 id 的格子（初值缺失的脏数据当空格，数量至少 1）；
+      // 绑定与溯源照抄（#789：读档对齐不该顺手把绑定物洗成可交易的）
+      line.push(cell && cell.id ? withBagMeta(cell.id, Math.max(1, cell.count ?? 1), bagMetaOf(cell)) : null);
     }
     for (let col = cols; col < sourceLine.length; col++) if (sourceLine[col]) dropped += 1;
     result.push(line);

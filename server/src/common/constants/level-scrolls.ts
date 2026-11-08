@@ -71,8 +71,17 @@ export interface LevelScrollSeed {
   sellPrice: number;
 }
 
-/** 全部卷轴共用的图标（#787：出厂只做了一张；运营可以在管理端逐卷换图） */
-export const LEVEL_SCROLL_ICON = "item/scroll/level-scroll";
+/**
+ * 某一卷的图标（**一卷一张**：`item/scroll/level-scroll-1` … `-7`）
+ *
+ * #787 出厂时 7 卷共用一张 `item/scroll/level-scroll`，而素材实际是按卷号分开的
+ * `level-scroll-1…7.png` —— 于是 7 个道具的图标都是断链（`audit-resource-refs` 点名，
+ * 客户端格子里也是空的）。缺省值改成按卷号派生，新建第 8 卷缺图时同样会被审计点出来，
+ * 而不是静默空白。
+ */
+export function levelScrollIconOf(index: number): string {
+  return `item/scroll/level-scroll-${index}`;
+}
 
 /**
  * 按卷号生成一条出厂行（卷号从 1 开始）
@@ -87,7 +96,7 @@ export function levelScrollSeedOf(index: number): LevelScrollSeed {
     id: `level_scroll_${index}`,
     label: `升级卷轴 Lv${index}`,
     description: `等级 ${from} ~ ${to} 时可用：使用后等级直接 +1（不消耗经验）。超出这段等级就用不了，需要换更高阶的卷轴。`,
-    icon: LEVEL_SCROLL_ICON,
+    icon: levelScrollIconOf(index),
     minLevel: from,
     maxLevel: to,
     maxStack: LEVEL_SCROLL_STACK_MAX,
@@ -122,6 +131,7 @@ export function levelScrollDraftOf(minLevel: number, maxLevel: number): {
     id: aligned ? `level_scroll_${step}` : `level_scroll_${minLevel}_${maxLevel}`,
     label: aligned ? `升级卷轴 Lv${step}` : `升级卷轴 ${minLevel}~${maxLevel}`,
     description: `等级 ${minLevel} ~ ${maxLevel} 时可用：使用后等级直接 +1（不消耗经验）。超出这段等级就用不了，需要换更高阶的卷轴。`,
-    icon: LEVEL_SCROLL_ICON,
+    // 非出厂切法的区间（如 500~800）没有专属素材，沿用起点所在那一卷的图
+    icon: levelScrollIconOf(step),
   };
 }

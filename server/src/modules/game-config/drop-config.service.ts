@@ -141,6 +141,9 @@ export class DropConfigService {
       table_id: source === "table" ? (tableId as string) : null,
       picks: picksJson,
       entries: entriesJson,
+      // 掉落强制绑定（#789）：这个开关**与「怎么掉」无关**，所以三态切换时不影响它；
+      // 缺省保持原值（老管理端页面不传这个字段，不该把它悄悄关掉）
+      bind_drops: dto.bindDrops === undefined ? existing.bind_drops : dto.bindDrops ? 1 : 0,
       updated_at: Date.now(),
     };
     this.monsterDropsRepo.update(next);
