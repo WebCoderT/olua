@@ -291,7 +291,7 @@ export class LeaderboardService implements OnApplicationShutdown {
     if (!data) return 0;
     const summary = summarizeRoleAttributes({
       level: row.level,
-      equipments: (data.equipments as Record<string, string | null> | undefined) ?? null,
+      equipments: (data.equipments as Record<string, { id?: unknown } | null> | undefined) ?? null,
       soulOfWar: typeof data.soulOfWar === "number" ? data.soulOfWar : undefined,
       title: typeof data.title === "number" ? data.title : undefined,
       rank: typeof data.rank === "number" ? data.rank : undefined,

@@ -330,7 +330,12 @@ async function raiseLevel(roleId, level, token) {
     },
   });
   check(runtime.code === 0, "改装备 / 技能 / 背包成功", runtime.message);
-  check(runtime.data.data.equipments.WEAPON === "1001" && runtime.data.data.equipments.HELMET === null, "装备表：空串规整成 null（卸下）");
+  // #816：槽位存 `{ id, bound?, from? }`（管理端入参仍是「槽位 → id」，由服务端翻成对象）
+  check(
+    runtime.data.data.equipments.WEAPON.id === "1001" && runtime.data.data.equipments.HELMET === null,
+    "装备表：写入的 id 包成对象、空串规整成 null（卸下）",
+    JSON.stringify(runtime.data.data.equipments),
+  );
   check(runtime.data.data.skills["1001"] === 3 && runtime.data.data.skills["1002"] === 0, "技能表按 id 写等级");
   check(runtime.data.data.bag.length === 4 && runtime.data.data.bag[0].length === 5, "背包网格按最远的格子自动扩到刚好放下", `${runtime.data.data.bag.length}×${runtime.data.data.bag[0].length}`);
   check(runtime.data.data.bag[0][1].id === "2001" && runtime.data.data.bag[0][1].count === 5, "背包物品落在正确的格子上");

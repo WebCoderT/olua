@@ -1,6 +1,6 @@
 import { Node } from "cc";
 import { Role } from "../../../entities/Role";
-import { getEquipment } from "../../../configs/items";
+import { getEquipment, wornIdOf } from "../../../configs/items";
 import { getFashionIn } from "../../../configs/game-config";
 import GameUiHelper from "../../helpers/GameUiHelper";
 import { roleInShowLayout } from "../../../configs/hudLayout";
@@ -10,7 +10,7 @@ import { EQUIP_ALIGN, placeInShowWeapon } from "../../../configs/game-config";
  * 角色内观组件（角色信息弹窗中的衣服 + 武器内观）
  * 本组件为原点包装节点，内部内观节点保持弹窗坐标系下的原有位置（尺寸见 configs/hudLayout.roleInShowLayout）
  * 换装时对应内观按新装备重建（未装备则移除）
- * 装备槽只存 id，每次刷新都经 configs/items 实时解析，改配置后重开弹窗即生效
+ * 装备槽存 `{ id, bound?, from? }`（#816），每次刷新取 id 后经 configs/items 实时解析，改配置后重开弹窗即生效
  *
  * **武器位置默认是算出来的**（2026-10-29）：素材内观画布 212×375 ~ 420×420、身体 100×100 ~ 400×400，
  * 写死一个 inPosition 只能对上一件。改成「读身体内观当前帧的内容 bbox，把武器缩放到它的 1.15 倍、
@@ -57,7 +57,7 @@ export default class RoleInShowView extends Node {
   updateCloth(role: Role) {
     if (this.clothInShow) this.clothInShow.destroy();
     this.clothInShow = null;
-    const cloth = getEquipment(role.equipments.cloth);
+    const cloth = getEquipment(wornIdOf(role.equipments.cloth));
     const fashionIn = getFashionIn(role.fashionCloth);
     if (!cloth && !fashionIn) return;
     const source = fashionIn ? { ...(cloth ?? {}), in: fashionIn } : cloth;
@@ -71,7 +71,7 @@ export default class RoleInShowView extends Node {
   updateWeapon(role: Role) {
     if (this.weaponInShow) this.weaponInShow.destroy();
     this.weaponInShow = null;
-    const weapon = getEquipment(role.equipments.weapon);
+    const weapon = getEquipment(wornIdOf(role.equipments.weapon));
     if (!weapon) {
       this.weaponManual = false;
       return;

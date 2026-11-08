@@ -4,12 +4,14 @@
  *
  * 盯的不变量（改存档结构 / 迁移链 / 选角链路后必须全绿）：
  * 一、新号带版本号：建号那一刻 `data.schemaVersion` 就是当前版本（否则版本分布永远挂一档假老档）
- * 二、老档进游戏即迁移：v1（无该字段）→ `select` → 落库 v2，**金币 / 背包原样、revision 不推进**
+ * 二、老档进游戏即迁移：v1（无该字段）→ `select` → 落库当前版本，**金币 / 背包原样、revision 不推进**；
+ *     装备槽的裸 id 顺手迁成 `{ id }`（v2→v3，#816）
  * 三、版本超前拒登：v99 → 20028 + 「联系客服」，库里一个字节不动，**在线标记也不置**
  * 四、坏档不洗白：JSON 都解析不出来的行由坏档闸拦下（#819 的 20029），版本闸**不碰**它 ——
  *     绝不能顺手把 `{}` 迁成 v2 写回去，那会把坏档洗成空档、证据一起没了
  * 五、保存路径盖章：客户端交上来的老形状被迁到当前版本才落库；带更新的版本号直接拒
- * 六、迁移脚本：`--dry-run` 只报告不写库；真跑把落后的行迁完；有迁不动的行 → 退出码 1
+ * 六、迁移脚本：`--dry-run` 只报告不写库；真跑把落后的行迁完（含按库里 `bind_on_drop` 回填
+ *     `{ id, bound: true }` —— 与惰性迁移同一份结果）；有迁不动的行 → 退出码 1
  *
  * 走的是 `dist/`，所以前置是 `npm run build`（迁移脚本也 require dist 里的同一条链）。
  * 用法：npm run test:e2e:role-migration
@@ -24,8 +26,12 @@ const SERVER_DIR = path.join(__dirname, "..");
 const ENTRY = path.join(SERVER_DIR, "dist", "main.js");
 const SCRIPT = path.join(SERVER_DIR, "scripts", "migrate-role-data.cjs");
 
-/** 与 ROLE_DATA_VERSION 对齐；写死是有意的 —— 版本号变了测试必须跟着改（顺便提醒改文档） */
-const CURRENT_VERSION = 2;
+/**
+ * 与 ROLE_DATA_VERSION 对齐；写死是有意的 —— 版本号变了测试必须跟着改（顺便提醒改文档）
+ *
+ * v3 = 装备槽位从裸 id 改成 `{ id, bound?, from? }`（#816）
+ */
+const CURRENT_VERSION = 3;
 
 //#region 断言小工具（与 e2e-quest 同款口径）
 
@@ -151,6 +157,16 @@ function writeRawData(dbPath, roleId, raw) {
   withDb(dbPath, (db) => db.prepare("UPDATE roles SET data = ? WHERE id = ?").run(raw, roleId));
 }
 
+/**
+ * 改装备基础件的「掉落强制绑定」（v2→v3 的绑定回填要问这一列）
+ *
+ * **直接改库**而不是走管理端：这一段测的是**迁移脚本**（独立进程，自己按库重装运行时配置），
+ * 走接口反而会把「脚本读到的是不是库里那份」这个要点遮住。
+ */
+function setEquipmentBindOnDrop(dbPath, equipmentId, value) {
+  withDb(dbPath, (db) => db.prepare("UPDATE equipments SET bind_on_drop = ? WHERE id = ?").run(value, equipmentId));
+}
+
 /** 读存档对象并做一次改动后写回（保留其它字段，模拟「某版本之前的老档」） */
 function mutateData(dbPath, roleId, mutate) {
   const row = roleRow(dbPath, roleId);
@@ -217,6 +233,8 @@ function runMigrateScript(dbPath, extraArgs = []) {
       delete data.schemaVersion;
       data.gold = 12345;
       data.bag = [[{ id: "drug_hp_1", count: 5 }, null], [null, null]];
+      // v2 形状的装备槽：裸 id + 空串（服务端历史上用空串表示空槽）
+      data.equipments = { cloth: "cloth_1", weapon: "" };
     });
     const beforeSelect = roleRow(dbPath, roleA);
     check(!("schemaVersion" in JSON.parse(beforeSelect.data)), "造档：库里确实没有 schemaVersion（v1）");
@@ -230,6 +248,11 @@ function runMigrateScript(dbPath, extraArgs = []) {
     checkEqual(migrated.gold, 12345, "迁移不动账本（金币原样）");
     checkEqual(JSON.stringify(migrated.bag), JSON.stringify([[{ id: "drug_hp_1", count: 5 }, null], [null, null]]), "迁移不动背包");
     checkEqual(afterSelect.revision, beforeSelect.revision, "迁移不推进 revision（否则客户端下次存档白撞 20006）");
+    checkEqual(
+      JSON.stringify(migrated.equipments),
+      JSON.stringify({ cloth: { id: "cloth_1" }, weapon: null }),
+      "v2→v3：装备槽裸 id → { id }、空串 → null（这件装备没标强制绑定，故不写 bound）",
+    );
 
     const detail = await api(baseUrl, "GET", `roles/${roleA}`, { token });
     checkEqual(detail.data && detail.data.data && detail.data.data.schemaVersion, CURRENT_VERSION, "详情接口拿到的也是当前版本");
@@ -307,7 +330,10 @@ function runMigrateScript(dbPath, extraArgs = []) {
     // 造一次「库里有落后的行」：A 退回 v1
     mutateData(dbPath, roleA, (data) => {
       delete data.schemaVersion;
+      // 顺带把**这一轮**的真跑当成 v2→v3 的绑定回填用例：裸 id 装备 + 库里标着强制绑定
+      data.equipments = { cloth: "cloth_1", weapon: "" };
     });
+    setEquipmentBindOnDrop(dbPath, "cloth_1", 1);
 
     const dryRun = await runMigrateScript(dbPath, ["--dry-run"]);
     checkEqual(dryRun.code, 0, "dry-run 退出码 0（有落后行不算失败）", dryRun.output.split("\n").slice(-4).join(" / "));
@@ -336,6 +362,14 @@ function runMigrateScript(dbPath, extraArgs = []) {
     check(clean.output.includes("已迁移：1"), "真跑把落后的行迁掉（已迁移：1）", clean.output);
     checkEqual(JSON.parse(roleRow(dbPath, roleA).data).schemaVersion, CURRENT_VERSION, "脚本把 A 写成当前版本");
     checkEqual(JSON.parse(roleRow(dbPath, roleA).data).soulShow, true, "脚本不动其它字段（soulShow 仍是保存时的值）");
+    // v2→v3 的绑定回填：**按库里的配置**（bind_on_drop）补 bound —— 与惰性迁移同一份结果。
+    // 这是 #816 里最容易两边漂开的一处：脚本进程不跑 Nest，得自己把装备表装进运行时快照。
+    checkEqual(
+      JSON.stringify(JSON.parse(roleRow(dbPath, roleA).data).equipments),
+      JSON.stringify({ cloth: { id: "cloth_1", bound: true }, weapon: null }),
+      "脚本按配置回填绑定（强制绑定的件 → { id, bound: true }；空串 → null）",
+    );
+    setEquipmentBindOnDrop(dbPath, "cloth_1", 0);
 
     const rerun = await runMigrateScript(dbPath);
     checkEqual(rerun.code, 0, "重跑退出码 0（幂等）");

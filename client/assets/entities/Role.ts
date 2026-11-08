@@ -1,6 +1,6 @@
 import { SpeedRate } from "../types/animation";
 import { BattleAttributes } from "../types/common";
-import { EQUIPMENT_TYPE, BagCell } from "../types/good";
+import { EQUIPMENT_TYPE, BagCell, WornItem } from "../types/good";
 import { NeedSetShortcutKeyConfig, OECCUPATION, RELATION_SHIP, SEX } from "../types/role";
 import { SkillId } from "../types/skill";
 import { MapId } from "../types/map";
@@ -73,9 +73,15 @@ export class Role implements BattleAttributes {
   magicDefense: [number, number] = [0, 0];
   taoistDefense: [number, number] = [0, 0];
   onMap: MapId = "0";
-  /** 已穿戴装备：槽位只存装备 id（items 总表的 key），装备数据一律经 configs/items.getEquipment 实时解析，
-   *  因此调整装备配置后重启即可生效，无需重新穿戴；旧存档快照由 StorageManager.ensureRoleDefaults 迁移 */
-  equipments: { [key in EQUIPMENT_TYPE]: string | null } = {
+  /**
+   * 已穿戴装备（#816 起槽位存 `{ id, bound?, from? }`，不再只存裸 id）
+   *
+   * 装备数据一律经 configs/items.getEquipment 实时解析（取 id 用 `wornIdOf`），
+   * 因此调整装备配置后重启即可生效，无需重新穿戴；
+   * 位里的 `bound` / `from` 是**这件东西的属性**（穿上时从背包格子搬过来、脱下时原样搬回去），
+   * 客户端只读不判定。老存档（裸 id / 完整快照）由 StorageManager.ensureRoleDefaults 迁移。
+   */
+  equipments: { [key in EQUIPMENT_TYPE]: WornItem | null } = {
     [EQUIPMENT_TYPE.CLOTH]: null,
     [EQUIPMENT_TYPE.ACCESSORIES]: null,
     [EQUIPMENT_TYPE.BELT]: null,

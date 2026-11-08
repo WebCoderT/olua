@@ -243,7 +243,13 @@ const CLOTH_10_MAX_HP = equipBases["cloth_10"].maxHp;
     const equipped = await api(baseUrl, "POST", `roles/${roleId}/bag-op`, { token, body: { action: "equip", row: 0, col: 0, revision: await revOf(baseUrl, roleId, token) } });
     check(equipped.code === 0, "穿上背包第一格的衣服", equipped.message);
     checkEqual(equipped.data.slot, "cloth", "响应带回本次涉及的槽位（客户端据此刷新内观）");
-    checkEqual(equipped.data.data.equipments.cloth, "cloth_1", "槽位里是这件衣服");
+    // #816 起槽位存 `{ id, bound?, from? }` 对象，不是裸 id
+    checkEqual((equipped.data.data.equipments.cloth || {}).id, "cloth_1", "槽位里是这件衣服（槽位值是对象，id 指向它）");
+    check(
+      typeof equipped.data.data.equipments.cloth === "object" && !Array.isArray(equipped.data.data.equipments.cloth),
+      "槽位值是对象而不是裸字符串（#816 的存档形状）",
+      JSON.stringify(equipped.data.data.equipments.cloth),
+    );
     checkEqual(cellAt(equipped.data.data.bag, 0, 0), null, "那一格已经空了（装备离包）");
     checkEqual(
       equipped.data.data.maxHp,
@@ -272,7 +278,7 @@ const CLOTH_10_MAX_HP = equipBases["cloth_10"].maxHp;
     checkEqual(raised.code, 0, "管理端把等级提到 10（提级是管理端特权）");
     const swapped = await api(baseUrl, "POST", `roles/${roleId}/bag-op`, { token, body: { action: "equip", row: 0, col: 4, revision: await revOf(baseUrl, roleId, token) } });
     check(swapped.code === 0, "穿上 10 级衣服（把身上的换下来）", swapped.message);
-    checkEqual(swapped.data.data.equipments.cloth, "cloth_10", "槽位换成了新衣服");
+    checkEqual((swapped.data.data.equipments.cloth || {}).id, "cloth_10", "槽位换成了新衣服");
     // 旧衣服回到「刚腾出来的那一格」—— 也就是新衣服原来所在的 (0,4)
     checkEqual((cellAt(swapped.data.data.bag, 0, 4) || {}).id, "cloth_1", "旧装备回到刚腾出的格子（换装不吞装备）");
     checkEqual(
@@ -288,7 +294,7 @@ const CLOTH_10_MAX_HP = equipBases["cloth_10"].maxHp;
     group("四、卸下（服务端自己找第一个空格）");
     const unequipped = await api(baseUrl, "POST", `roles/${roleId}/bag-op`, { token, body: { action: "unequip", slot: "cloth", revision: await revOf(baseUrl, roleId, token) } });
     check(unequipped.code === 0, "脱下衣服", unequipped.message);
-    checkEqual(unequipped.data.data.equipments.cloth, null, "槽位清空");
+    checkEqual(unequipped.data.data.equipments.cloth, null, "槽位清空（对象形式下也是 null）");
     checkEqual(cellAt(unequipped.data.data.bag, 0, 0).id, "cloth_10", "落点是第一个空格（0,0）");
     checkEqual(unequipped.data.data.maxHp, BARE_MAX_HP_AT_10, "属性回落到裸模（10 级那条曲线）");
 

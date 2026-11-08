@@ -43,8 +43,13 @@ import {
 export interface RoleAttributeSource {
   /** 角色等级（等级曲线里没有这个等级时算不出属性，返回 null） */
   level: number;
-  /** 已穿戴装备：槽位 → 装备 id（客户端就是这么存的；查不到的 id 会被跳过） */
-  equipments?: Record<string, string | null> | null;
+  /**
+   * 已穿戴装备：槽位 → `{ id }` 对象（#816 起槽位存对象，不再只存裸 id；查不到的 id 会被跳过）
+   *
+   * 这里只声明**结构上够用**的那部分（`id`），不 import `roles/role-inventory` 的
+   * `WornItem`：战斗模块读的是「存档里有什么」，与背包算子不该有编译期依赖。
+   */
+  equipments?: Record<string, { id?: unknown } | null> | null;
   /** 战魂等级（0 = 未激活） */
   soulOfWar?: number;
   /** 称号等级（0 = 未激活） */
@@ -69,7 +74,7 @@ export function roleAttributeSourceOf(level: number, data: Record<string, unknow
     level,
     equipments:
       data.equipments && typeof data.equipments === "object" && !Array.isArray(data.equipments)
-        ? (data.equipments as Record<string, string | null>)
+        ? (data.equipments as Record<string, { id?: unknown } | null>)
         : null,
     soulOfWar: typeof data.soulOfWar === "number" ? data.soulOfWar : undefined,
     title: typeof data.title === "number" ? data.title : undefined,
@@ -223,8 +228,11 @@ function rangeOf(bundle: GeneratedBundle, key: string): [number, number] | null 
 function collectEquipmentBundles(equipments: RoleAttributeSource["equipments"], notes: RoleAttributeNotes): GeneratedBundle[] {
   if (!equipments || typeof equipments !== "object") return [];
   const bundles: GeneratedBundle[] = [];
-  for (const id of Object.values(equipments)) {
-    if (typeof id !== "string" || id === "") continue; // 空槽位
+  for (const entry of Object.values(equipments)) {
+    // 空槽位 / 形状不对（`{}` 没有 id）一律跳过：宁可少算一件，也不让 NaN 混进属性
+    const raw = entry && typeof entry === "object" ? entry.id : entry;
+    const id = typeof raw === "string" ? raw.trim() : "";
+    if (!id) continue;
     // 先查运营库覆盖层（管理端改过就是新值），没有再提出厂属性 —— 两端同一份数字
     const bundle = equipmentAttributesOf(id);
     if (!bundle) {

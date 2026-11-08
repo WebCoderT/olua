@@ -122,6 +122,43 @@ export function normalizeEquipments(input: unknown): Record<string, string | nul
   return result;
 }
 
+/**
+ * 运营改装备槽位：把「槽位 → 裸 id」的入参并进**已有的对象表**（#816）
+ *
+ * 管理端 `PATCH /admin/roles/:id` 的 `equipments` 一直是「槽位 → id 或 null」的简表 ——
+ * 运营要的是「把这个槽位换成这件」，不该被迫在表单里填 `bound` / `from`。所以入参形状不变，
+ * 由这里翻译成存档的新形状：
+ *
+ * - 同一个 id 原样留着 → **沿用现有条目的元数据**（否则运营改个无关字段就顺手把绑定洗白了）；
+ * - 换成了别的 id → `{ id }`（不凭空加绑定：运营发的东西默认按未绑定，与掉落链路各管各的）；
+ * - `null` / 空串 → 空槽。
+ */
+export function mergeWornEquipments(
+  incoming: Record<string, string | null>,
+  existing: unknown,
+): Record<string, { id: string; bound?: true; from?: unknown } | null> {
+  const before = (existing && typeof existing === "object" && !Array.isArray(existing)
+    ? existing
+    : {}) as Record<string, unknown>;
+  const result: Record<string, { id: string; bound?: true; from?: unknown } | null> = {};
+  for (const [slot, id] of Object.entries(incoming)) {
+    if (!id) {
+      result[slot] = null;
+      continue;
+    }
+    const previous = before[slot];
+    if (previous && typeof previous === "object" && !Array.isArray(previous)) {
+      const record = previous as Record<string, unknown>;
+      if (record.id === id) {
+        result[slot] = previous as { id: string; bound?: true; from?: unknown };
+        continue;
+      }
+    }
+    result[slot] = { id };
+  }
+  return result;
+}
+
 /** 规整技能等级表（技能 id → 等级）；技能 id 的合法性同样由客户端配置定义 */
 export function normalizeSkills(input: unknown): Record<string, number> {
   const source = asRecord(input, "技能数据");

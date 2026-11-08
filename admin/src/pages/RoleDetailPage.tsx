@@ -97,7 +97,9 @@ function readNumber(data: Record<string, unknown>, key: string): string {
 }
 
 /**
- * 装备槽位：`equipments` 是「槽位 → 装备 id | null」
+ * 装备槽位：`equipments` 是「槽位 → 装备」—— #816 起值是 `{ id, bound?, from? }`（槽位带绑定与溯源），
+ * 更早的存档是裸 id 字符串。管理端只编辑「穿哪件」，所以两种形状都收敛成 id：
+ * 绑定 / 溯源是服务端在穿脱与掉落时写的事实，**运营不该在这里改**（改了就成刷可交易装备的通道）。
  *
  * 键来自**角色自己的数据**（不是管理端硬编码的清单）：部位表在生成物里有（`EquipSlots`
  * 按它排序），但角色实际有哪些键仍以数据为准 —— 旧存档带了个已经删掉的部位时，
@@ -108,7 +110,13 @@ function readEquipments(data: Record<string, unknown>): Record<string, string | 
   if (!source || typeof source !== "object" || Array.isArray(source)) return {};
   const rows: Record<string, string | null> = {};
   for (const [slot, value] of Object.entries(source as Record<string, unknown>)) {
-    rows[slot] = typeof value === "string" && value ? value : null;
+    if (typeof value === "string") {
+      rows[slot] = value ? value : null;
+      continue;
+    }
+    // { id, bound?, from? }：只取 id（服务端 PATCH 收到 id 后会保留原有的绑定与溯源）
+    const id = value && typeof value === "object" ? (value as { id?: unknown }).id : null;
+    rows[slot] = typeof id === "string" && id ? id : null;
   }
   return rows;
 }
