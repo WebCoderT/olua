@@ -664,6 +664,10 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
       // 位置以「被接受的 join」为准写回存档（#606）：客户端报 OnMap 是客户端的事，
       // 服务端只记自己放行过的图 —— 下次登录拿它当「他本来就在这」的判据
       this.roles.setMapAt(socket.identity.id, join.mapId);
+      // 换图即清掉落账本与幂等账（#817）：**必须由服务端自己清**，不能指望客户端发
+      // `targetsReset` —— 那是一条客户端消息，改包不发就能把上一张图的地面掉落吸进包。
+      // 世界状态不受影响（怪物的血量与位置是共享的，不随谁换图而重置）
+      this.combat.resetTargets(socket.identity.id);
       const frame: RealtimeWorldMessage = { type: "world", data: snapshot };
       this.send(socket, frame);
       // 玩家互见（#324）：随 world 应答发一份同图全量快照（增量帮不上「刚进图的人」）
