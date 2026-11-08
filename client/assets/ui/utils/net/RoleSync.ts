@@ -28,6 +28,15 @@ import { ROLE_SYNC_BIZ_CODES } from "./ApiCodes";
  * 什么时候必须 flush：会重建/销毁游戏场景的时机（切地图、退出），
  * 否则防抖窗口里那点改动会随场景一起没掉（见 ui/Game.onDestroy）。
  */
+
+/**
+ * `refreshFromServer` 的两种触发场景
+ *
+ * 只传标签不传中文：面向玩家的文案要沉到 configs（见 tools/audit-config-leak.cjs），
+ * 而这里是开发期日志 —— 文案写在 `console.warn` 那一行里，审计才不会把它当外泄项。
+ */
+type RefreshReason = "conflict" | "noRevision";
+
 export default class RoleSync {
   /** 同步失败提示出口（不接则只打日志） */
   static onFailed: ((error: ApiError) => void) | null = null;
@@ -63,14 +72,21 @@ export default class RoleSync {
     const role = this.pending;
     this.pending = null;
     if (!role) return;
-    // 版本号未知（这次改动之前没拿到过服务端版本，比如旧存档）就不带它：
-    // 不带 = 服务端按旧行为处理（最后写入者胜），比拿一个瞎猜的版本号去撞乐观锁强
-    const revision = typeof role.revision === "number" ? role.revision : undefined;
+    // 修订号未知（#820 起服务端**不接受**不带基线的存档，缺了就是 400/40000）：
+    // 「不带」不再是「按旧行为放行」，所以不能硬推。
+    // 本地这份没有基线 → 无法证明它是基于哪个版本改的，只能「服务端优先」：
+    // 拉一次详情把基线补上，本轮改动丢弃（与撞 20006 同一出口）。
+    // 这是保守方向：宁可丢这 1.5 秒的本地改动，也不能拿瞎猜的基线去盖后台改动。
+    if (typeof role.revision !== "number") {
+      console.warn(`[RoleSync] 本地没有服务端修订号（${role.id}），本轮不推送，先拉一次详情补基线`);
+      await this.refreshFromServer(role.id, "noRevision");
+      return;
+    }
     try {
       const saved = await RoleApi.save(
         role.id,
         // 角色对象是 entities/Role 的实例，服务端只把它当不透明文档，所以按记录类型交给请求层
-        { data: role as unknown as Record<string, unknown>, revision },
+        { data: role as unknown as Record<string, unknown>, revision: role.revision },
         { silent: true },
       );
       if (saved && typeof saved.revision === "number") {
@@ -109,17 +125,34 @@ export default class RoleSync {
     }
     if (error.code !== ROLE_SYNC_BIZ_CODES.revisionConflict) return false;
     // 撞版本：以服务端最新数据为基线（后台改动优先），本轮这份改动丢弃
+    await this.refreshFromServer(role.id, "conflict");
+    return true;
+  }
+
+  /**
+   * 拉一次服务端最新数据、把本地基线换成它（服务端优先）
+   *
+   * 撞乐观锁与「本地没有修订号」共用这个出口：两种情况下本地这份都证明不了自己是基于
+   * 哪个版本改的，能做的只有「以服务端为准」。成功时 `onConflict(fresh)` 会把新修订号
+   * 写回本地，**下一轮防抖推送自然就成功了**（pending 已清空，不会原地循环）。
+   *
+   * **为什么不「拉完再重推一次」**：#820 的验收原文是「重拉存档再重试（只重试一次）」，
+   * 但这条接口是**全量覆盖** —— 拿刚拉下来的新修订号把本地那份旧数据推上去，等于把后台
+   * 改动原样盖回去，正是 B62 要防的事。真要重试得先有「按字段合并」，那是另一个量级的
+   * 改造，暂时放置（重开条件：存档改成按字段增量上报，或服务端提供三方合并）。
+   */
+  private static async refreshFromServer(roleId: string, reason: RefreshReason): Promise<void> {
     try {
       // 静默：这条请求是「自愈流程」的一部分，失败提示由本流程统一给（见下面的 console.warn），
       // 走默认出口会在玩家已经看到「已同步最新」之后又弹一条报错
-      const fresh = await RoleApi.detail(role.id, { silent: true });
-      console.warn(`[RoleSync] 角色已在后台被修改（${role.id}），已同步到最新数据`);
+      const fresh = await RoleApi.detail(roleId, { silent: true });
+      if (reason === "conflict") console.warn(`[RoleSync] 角色已在后台被修改（${roleId}），已同步到最新数据`);
+      else console.warn(`[RoleSync] 本地没有服务端修订号（${roleId}），已按服务端数据重建基线`);
       this.onConflict?.(fresh);
       this.notified = false;
     } catch (detailError) {
       // 拉最新数据也失败：留给下一轮改动重试（这里不再提示，避免刷屏）
-      console.warn(`[RoleSync] 冲突后拉取最新数据失败：${detailError instanceof ApiError ? detailError.kind : String(detailError)}`);
+      console.warn(`[RoleSync] 同步基线失败（${reason}）：${detailError instanceof ApiError ? detailError.kind : String(detailError)}`);
     }
-    return true;
   }
 }

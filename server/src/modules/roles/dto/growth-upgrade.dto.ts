@@ -1,6 +1,6 @@
 import { ApiProperty } from "@nestjs/swagger";
 import { Type } from "class-transformer";
-import { IsIn, IsInt, IsOptional, Max, Min } from "class-validator";
+import { IsIn, IsInt, Max, Min } from "class-validator";
 
 /** 成长线种类（三条线同构：称号 / 战魂 / 军衔） */
 export const GROWTH_KINDS = ["title", "soul", "rank"] as const;
@@ -23,13 +23,11 @@ export class GrowthUpgradeDto {
   targetLevel!: number;
 
   @ApiProperty({
-    description: "修订号（乐观锁）：带上了就校验，与服务端当前值不一致时 20006；与 role.save 同一语义",
-    required: false,
+    description: "修订号（乐观锁，必填）：客户端读到的值，与服务端不一致时 20006，需先拉最新存档（B62 / #820）",
     minimum: 1,
   })
-  @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(1)
-  revision?: number;
+  revision!: number;
 }

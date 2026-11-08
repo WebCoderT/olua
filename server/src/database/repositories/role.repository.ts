@@ -82,12 +82,21 @@ export class RoleRepository {
    * 全量覆盖（玩家保存进度：data 与索引字段一起换，并推进修订号）
    *
    * 修订号用 `revision + 1` 而不是「读出来加一再写回」：并发下后者会丢计数。
+   *
+   * **`WHERE revision = ?` 是这条 SQL 的重点（B62 / #820）**：调用方在业务层已经比对过一次
+   * 修订号，但「比对」与「写」之间隔着整段结算逻辑（技能 / 掉落 / 属性重算）。把期望修订号
+   * 压进 WHERE，一致性问题就交给数据库用一条语句判掉 —— `changes === 0` 恰好等于「这一行
+   * 在我读完之后被别人改过」，调用方据此返回 20006，而不是把别人的改动静默盖掉。
+   *
+   * 单进程 + 同步驱动下巴别塔其实不会倒（`roles.service.ts` 全是同步函数，事件循环跑不进来），
+   * 这条守卫防的是**将来**：一旦有人在这条路径上加了 `await`、或者部署改成多实例共享库，
+   * 少这一句就是「管理端刚改的数值被客户端存档静默覆盖」原样复发。
    */
-  replace(row: RoleRow): boolean {
+  replace(row: RoleRow, expectedRevision: number): boolean {
     return (
       this.db.execute(
-        `UPDATE roles SET name = ?, occupation = ?, sex = ?, level = ?, data = ?, revision = revision + 1, updated_at = ? WHERE id = ?`,
-        [row.name, row.occupation, row.sex, row.level, row.data, row.updated_at, row.id],
+        `UPDATE roles SET name = ?, occupation = ?, sex = ?, level = ?, data = ?, revision = revision + 1, updated_at = ? WHERE id = ? AND revision = ?`,
+        [row.name, row.occupation, row.sex, row.level, row.data, row.updated_at, row.id, expectedRevision],
       ).changes > 0
     );
   }

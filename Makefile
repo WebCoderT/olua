@@ -301,6 +301,9 @@ server-e2e-role-migration: ## 服务端存档版本 e2e（老档进游戏即迁�
 server-e2e-role-corrupted: ## 服务端坏档 e2e（坏档拒登 20029 与 corrupted 标记 / 修好自动解封 / 缺字段不再采信客户端）
 	@cd server && env -u NODE_OPTIONS npm run test:e2e:role-corrupted
 
+server-e2e-role-optimistic: ## 服务端乐观锁 e2e（不带 revision 一律 400 / 过期基线 20006 / 并发只一个赢家 / UPDATE 带 revision 条件）
+	@cd server && env -u NODE_OPTIONS npm run test:e2e:role-optimistic
+
 server-e2e-party: ## 服务端队伍专项 e2e（87 条：邀请即建队 / 满员与重复 / 权限与转让 / 队长退出移交 / 屏蔽优先 / 互见 partyId / 经验分成 / 等级门槛）
 	@echo "==> 服务端队伍 e2e（87 条）"
 	@cd server && env -u NODE_OPTIONS npm run test:e2e:party

@@ -25,6 +25,8 @@
  * 用法：npm run test:e2e:level-scroll
  */
 const { spawn } = require("node:child_process");
+// 写角色接口的基线帮手（#820 / B62：revision 必填）
+const { revOfWith } = require("./lib/role-save.cjs");
 const fs = require("node:fs");
 const net = require("node:net");
 const os = require("node:os");
@@ -132,6 +134,14 @@ async function api(baseUrl, method, route, options = {}) {
   }
   return body;
 }
+
+/**
+ * 取角色当前修订号（#820 / B62：写接口必须带基线，缺了就是 400 / 40000）
+ *
+ * 本文件的 api() 是「baseUrl 打头」的形态，所以这里也带上 baseUrl。
+ */
+const revOf = (baseUrl, roleId, token) =>
+  revOfWith((method, route, options) => api(baseUrl, method, route, options), roleId, token);
 
 /** 背包里某物品的总数（按格子里的 count 累加） */
 function countInBag(bag, goodId) {
@@ -276,7 +286,7 @@ const expectedRangeOf = (index) => ({
     checkEqual(before.level, 999, "角色已摆到 999 级");
     checkEqual(Number(before.data.exp), 777, "经验已摆成 777（便于验证卷轴不扣经验）");
 
-    const used = await api(baseUrl, "POST", `roles/${roleId}/level-scroll-use`, { token, body: { row: 0, col: 0 } });
+    const used = await api(baseUrl, "POST", `roles/${roleId}/level-scroll-use`, { token, body: { row: 0, col: 0, revision: await revOf(baseUrl, roleId, token) } });
     checkEqual(used.code, 0, "使用一个 Lv1 卷轴", used.message);
     checkEqual(used.data.itemId, LV1.id, "响应带回用的是哪一卷");
     checkEqual(used.data.fromLevel, 999, "fromLevel = 使用前等级");
@@ -300,7 +310,7 @@ const expectedRangeOf = (index) => ({
     //#region 三、区间：同一格在 1000 级就用不了了
 
     group("三、等级区间（用完就该换卷了）");
-    const wrongRange = await api(baseUrl, "POST", `roles/${roleId}/level-scroll-use`, { token, body: { row: 0, col: 0 } });
+    const wrongRange = await api(baseUrl, "POST", `roles/${roleId}/level-scroll-use`, { token, body: { row: 0, col: 0, revision: await revOf(baseUrl, roleId, token) } });
     checkEqual(wrongRange.code, 20025, "1000 级再用 Lv1 → 20025（等级不在区间内）");
     check(
       typeof wrongRange.message === "string" && wrongRange.message.includes(LV1.label),
@@ -312,7 +322,7 @@ const expectedRangeOf = (index) => ({
     checkEqual(countInBag(afterWrong.data.bag, LV1.id), 2, "被拒之后卷轴还在包里（没被吞掉）");
 
     await seedBag([{ row: 0, col: 1, id: LV2.id, count: 1 }]);
-    const useLv2 = await api(baseUrl, "POST", `roles/${roleId}/level-scroll-use`, { token, body: { row: 0, col: 1 } });
+    const useLv2 = await api(baseUrl, "POST", `roles/${roleId}/level-scroll-use`, { token, body: { row: 0, col: 1, revision: await revOf(baseUrl, roleId, token) } });
     checkEqual(useLv2.code, 0, "换成 Lv2 就能用了", useLv2.message);
     checkEqual(useLv2.data.fromLevel, 1000, "fromLevel = 1000");
     checkEqual(useLv2.data.toLevel, 1001, "toLevel = 1001");
@@ -328,13 +338,13 @@ const expectedRangeOf = (index) => ({
     //#region 四、失败路径
 
     group("四、失败路径（都不许升级）");
-    const emptyCell = await api(baseUrl, "POST", `roles/${roleId}/level-scroll-use`, { token, body: { row: 5, col: 5 } });
+    const emptyCell = await api(baseUrl, "POST", `roles/${roleId}/level-scroll-use`, { token, body: { row: 5, col: 5, revision: await revOf(baseUrl, roleId, token) } });
     checkEqual(emptyCell.code, 20024, "空格子 → 20024");
     await seedBag([
       { row: 0, col: 0, id: LV1.id, count: 2 },
       { row: 0, col: 2, id: "drug_hp_1", count: 1 },
     ]);
-    const notScroll = await api(baseUrl, "POST", `roles/${roleId}/level-scroll-use`, { token, body: { row: 0, col: 2 } });
+    const notScroll = await api(baseUrl, "POST", `roles/${roleId}/level-scroll-use`, { token, body: { row: 0, col: 2, revision: await revOf(baseUrl, roleId, token) } });
     checkEqual(notScroll.code, 20024, "格子里是药品 → 20024（不是卷轴就不给升级）");
     const afterNotScroll = await readRole();
     checkEqual(afterNotScroll.level, 1001, "被拒之后一级都没涨");
@@ -345,9 +355,11 @@ const expectedRangeOf = (index) => ({
       body: { row: 0, col: 0, revision: afterNotScroll.revision - 1 },
     });
     checkEqual(stale.code, 20006, "revision 落后 → 20006（乐观锁）");
-    const foreign = await api(baseUrl, "POST", `roles/${roleId}/level-scroll-use`, { token: otherToken, body: { row: 0, col: 0 } });
+    // 基线用**属主**的 token 取：这条验的是「越权 → 40300」，不能让它先在取基线那一步
+    // 403 掉、把请求退化成「缺 revision 的 400」，那样越权判据就被掩盖了（#820）
+    const foreign = await api(baseUrl, "POST", `roles/${roleId}/level-scroll-use`, { token: otherToken, body: { row: 0, col: 0, revision: await revOf(baseUrl, roleId, token) } });
     checkEqual(foreign.code, 40300, "别人的角色 → 40300");
-    const outOfRange = await api(baseUrl, "POST", `roles/${roleId}/level-scroll-use`, { token, body: { row: 100, col: 0 } });
+    const outOfRange = await api(baseUrl, "POST", `roles/${roleId}/level-scroll-use`, { token, body: { row: 100, col: 0, revision: await revOf(baseUrl, roleId, token) } });
     checkEqual(outOfRange.code, 40000, "行号越界 → 40000（DTO 上界拦截，不进业务）");
 
     //#endregion
@@ -411,7 +423,7 @@ const expectedRangeOf = (index) => ({
     group("六、改区间即时生效（同一个格子按新区间判）");
     await seedBag([{ row: 0, col: 3, id: "level_scroll_8", count: 1 }]);
     const levelNow = (await readRole()).level;
-    const beforePatch8 = await api(baseUrl, "POST", `roles/${roleId}/level-scroll-use`, { token, body: { row: 0, col: 3 } });
+    const beforePatch8 = await api(baseUrl, "POST", `roles/${roleId}/level-scroll-use`, { token, body: { row: 0, col: 3, revision: await revOf(baseUrl, roleId, token) } });
     checkEqual(beforePatch8.code, 20025, `当前 ${levelNow} 级用 Lv8（7000~7999）→ 20025`);
     const patched8 = await api(baseUrl, "PATCH", "admin/level-scrolls/level_scroll_8", {
       token: adminToken,
@@ -419,7 +431,7 @@ const expectedRangeOf = (index) => ({
     });
     checkEqual(patched8.code, 0, "把 Lv8 的区间改到 1000~1999", patched8.message);
     checkEqual(Number(patched8.data.minLevel), 1000, "改完的下限立即回显");
-    const useAfterPatch = await api(baseUrl, "POST", `roles/${roleId}/level-scroll-use`, { token, body: { row: 0, col: 3 } });
+    const useAfterPatch = await api(baseUrl, "POST", `roles/${roleId}/level-scroll-use`, { token, body: { row: 0, col: 3, revision: await revOf(baseUrl, roleId, token) } });
     checkEqual(useAfterPatch.code, 0, "同一个格子再点就能用了（区间读库，不用重启）", useAfterPatch.message);
     checkEqual(useAfterPatch.data.toLevel, levelNow + 1, "等级 +1");
 
@@ -429,7 +441,7 @@ const expectedRangeOf = (index) => ({
       body: { minLevel: 7000, maxLevel: 7999 },
     });
     checkEqual(patched8Back.code, 0, "把区间改回去（7000~7999）", patched8Back.message);
-    const useAfterPatchBack = await api(baseUrl, "POST", `roles/${roleId}/level-scroll-use`, { token, body: { row: 0, col: 4 } });
+    const useAfterPatchBack = await api(baseUrl, "POST", `roles/${roleId}/level-scroll-use`, { token, body: { row: 0, col: 4, revision: await revOf(baseUrl, roleId, token) } });
     checkEqual(useAfterPatchBack.code, 20025, "改回去之后立刻又用不了 → 20025");
     const patchReversed = await api(baseUrl, "PATCH", "admin/level-scrolls/level_scroll_8", {
       token: adminToken,
@@ -461,7 +473,7 @@ const expectedRangeOf = (index) => ({
     ]);
     await patchRole({ level: CAP_LEVEL });
     checkEqual((await readRole()).level, CAP_LEVEL, `角色已摆到等级上限（${CAP_LEVEL}）`);
-    const atCap = await api(baseUrl, "POST", `roles/${roleId}/level-scroll-use`, { token, body: { row: 0, col: 5 } });
+    const atCap = await api(baseUrl, "POST", `roles/${roleId}/level-scroll-use`, { token, body: { row: 0, col: 5, revision: await revOf(baseUrl, roleId, token) } });
     checkEqual(atCap.code, 20026, "在等级上限再用 → 20026（与「换一卷」不是同一件事）");
     checkEqual(countInBag((await readRole()).data.bag, capScrollId), 1, "被拒之后卷轴还在包里");
 
@@ -475,7 +487,7 @@ const expectedRangeOf = (index) => ({
     checkEqual(Number(removed.data.removed), 1, "实际删了 1 行");
     const removeAgain = await api(baseUrl, "DELETE", "admin/level-scrolls/level_scroll_8", { token: adminToken });
     checkEqual(removeAgain.code, 50043, "再删一次 → 50043（已经没了）");
-    const useRemoved = await api(baseUrl, "POST", `roles/${roleId}/level-scroll-use`, { token, body: { row: 0, col: 4 } });
+    const useRemoved = await api(baseUrl, "POST", `roles/${roleId}/level-scroll-use`, { token, body: { row: 0, col: 4, revision: await revOf(baseUrl, roleId, token) } });
     checkEqual(useRemoved.code, 20024, "配置删了之后再用那个格子 → 20024（不白升级）");
     checkEqual(countInBag((await readRole()).data.bag, "level_scroll_8"), 2, "那格东西还在（没被吞掉）");
     const snapshotAfter = await api(baseUrl, "GET", "game-config", { token });

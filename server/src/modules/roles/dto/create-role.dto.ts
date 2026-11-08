@@ -1,5 +1,5 @@
-import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
-import { IsInt, IsObject, IsOptional, IsString, Min } from "class-validator";
+import { ApiProperty } from "@nestjs/swagger";
+import { IsInt, IsObject, IsString, Min } from "class-validator";
 
 /**
  * 创建角色入参（#597：建号职责整体搬到服务端）
@@ -29,18 +29,20 @@ export class SaveRoleDto {
   data: Record<string, unknown>;
 
   /**
-   * 客户端读到的修订号（可选）
+   * 客户端读到的修订号（**必填**，B62 / #820 起）
    *
-   * 带上它 = 开启乐观锁：与服务端当前值不一致时接口会拒收（20006），
-   * 客户端应拉一次角色详情再继续（见客户端 utils/net/RoleSync）。
-   * 不传 = 旧行为（最后写入者胜），给还没升级的客户端留后路。
+   * 它是这份存档的「基准」：与服务端当前值不一致时接口拒收（20006），客户端应拉一次
+   * 角色详情再继续（见客户端 utils/net/RoleSync）。
+   *
+   * 为什么必填：不传等于「最后写入者胜」——管理端刚改的数值会被客户端那份旧存档整体
+   * 覆盖，既查不到也不报错。缺了就 400（40000），不再有静默降级。
    */
-  @ApiPropertyOptional({
-    description: "客户端读到的修订号（带上即开启乐观锁：与服务端不一致时返回 20006，需先拉最新数据）",
+  @ApiProperty({
+    description: "客户端读到的修订号（必填；与服务端不一致时返回 20006，需先拉最新数据）",
     example: 3,
+    minimum: 0,
   })
-  @IsOptional()
   @IsInt({ message: "修订号必须是整数" })
   @Min(0, { message: "修订号不能为负" })
-  revision?: number;
+  revision!: number;
 }

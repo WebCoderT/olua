@@ -226,9 +226,10 @@ async function expectFailure(action) {
   responder = () => ({ kind: "ok", status: 200, text: envelope(0, "ok", {}) });
 
   reset();
-  RoleSync.schedule({ id: "role_1", level: 2, exp: 10 });
-  RoleSync.schedule({ id: "role_1", level: 3, exp: 20 });
-  RoleSync.schedule({ id: "role_1", level: 4, exp: 30 });
+  // #820 起推送必须带基线（服务端缺了就是 400），所以夹具里都带上 revision
+  RoleSync.schedule({ id: "role_1", level: 2, exp: 10, revision: 7 });
+  RoleSync.schedule({ id: "role_1", level: 3, exp: 20, revision: 7 });
+  RoleSync.schedule({ id: "role_1", level: 4, exp: 30, revision: 7 });
   await delay(60);
   check(requests.length === 1, "连续改动只推最后一份（打怪升级不会每级发一次请求）", `${requests.length} 次`);
   check(requests[0].method === "PUT" && requests[0].url === `${networkConfig.baseUrl}${ApiRoutes.role.save("role_1")}`, "保存走 PUT + ApiRoutes.role.save(id)", requests[0].url);
@@ -236,7 +237,7 @@ async function expectFailure(action) {
   check(pushed.data && pushed.data.level === 4 && pushed.data.exp === 30, "推的是最后一份数据", JSON.stringify(pushed.data));
 
   reset();
-  RoleSync.schedule({ id: "role_1", level: 5, exp: 40 });
+  RoleSync.schedule({ id: "role_1", level: 5, exp: 40, revision: 8 });
   await RoleSync.flush();
   check(requests.length === 1, "flush() 立即推，不等防抖窗口");
   await delay(60);
@@ -246,18 +247,18 @@ async function expectFailure(action) {
   responder = () => ({ kind: "error" });
   let notified = 0;
   RoleSync.onFailed = () => (notified += 1);
-  RoleSync.schedule({ id: "role_1", level: 6, exp: 50 });
+  RoleSync.schedule({ id: "role_1", level: 6, exp: 50, revision: 9 });
   await delay(60);
-  RoleSync.schedule({ id: "role_1", level: 7, exp: 60 });
+  RoleSync.schedule({ id: "role_1", level: 7, exp: 60, revision: 9 });
   await delay(60);
   check(notified === 1, "同步连续失败只提示一次（后端挂了也不刷屏）", `${notified} 次`);
   check(failures.length === 0, "同步请求本身是静默的（提示走 RoleSync.onFailed，不重复弹）", `${failures.length} 次`);
 
   responder = () => ({ kind: "ok", status: 200, text: envelope(0, "ok", {}) });
-  RoleSync.schedule({ id: "role_1", level: 8, exp: 70 });
+  RoleSync.schedule({ id: "role_1", level: 8, exp: 70, revision: 10 });
   await delay(60);
   responder = () => ({ kind: "error" });
-  RoleSync.schedule({ id: "role_1", level: 9, exp: 80 });
+  RoleSync.schedule({ id: "role_1", level: 9, exp: 80, revision: 10 });
   await delay(60);
   check(notified === 2, "中间成功过一次之后，新的失败会重新提示（notified 复位）", `${notified} 次`);
   RoleSync.onFailed = null;
@@ -276,15 +277,24 @@ async function expectFailure(action) {
   check(savedRevision === "role_1:9", "onSaved 交回角色 id 与新修订号（存储层据此更新基线）", String(savedRevision));
   RoleSync.onSaved = null;
 
+  // #820 起「不带 revision」不再是「向后兼容」，而是 400 —— 客户端也**不能**硬推：
+  // 没有基线就证明不了本地这份基于哪个版本，只能服务端优先（拉详情、换基线、丢弃本轮）
   reset();
-  responder = () => ({ kind: "ok", status: 200, text: envelope(0, "ok", {}) });
+  responder = (request) =>
+    request.method === "GET"
+      ? { kind: "ok", status: 200, text: envelope(0, "ok", { id: "role_1", revision: 21, data: { id: "role_1", level: 42 } }) }
+      : { kind: "ok", status: 200, text: envelope(0, "ok", { id: "role_1", revision: 22 }) };
+  let baselineFresh = null;
+  RoleSync.onConflict = (fresh) => (baselineFresh = fresh);
   RoleSync.schedule({ id: "role_1", level: 2, exp: 10 });
   await delay(60);
   check(
-    Object.prototype.hasOwnProperty.call(JSON.parse(requests[0].body), "revision") === false,
-    "版本未知（旧存档里没有 revision）时不带该字段，服务端按旧行为处理（向后兼容）",
-    requests[0].body,
+    requests.length === 1 && requests[0].method === "GET",
+    "版本未知（没有基线）时不硬推，只发一次详情请求补基线",
+    `${requests.length} 次 / ${requests[0] && requests[0].method}`,
   );
+  check(baselineFresh && baselineFresh.revision === 21, "补到的基线交给 onConflict（服务端优先，本地这份丢弃）", JSON.stringify(baselineFresh));
+  RoleSync.onConflict = null;
 
   console.log("— A. 角色进度同步：后台改动 / 角色被删的自愈 —");
 
@@ -434,10 +444,14 @@ async function expectFailure(action) {
   );
 
   const roleSyncSource = read(path.join(ASSETS, "ui/utils/net/RoleSync.ts"));
-  check(/RoleApi\.save\(\s*role\.id,[\s\S]*?\{ data: role as unknown as Record<string, unknown>, revision \},[\s\S]*?\{ silent: true \},?\s*\)/.test(roleSyncSource), "推送时把修订号交给请求层（乐观锁的唯一来源）");
+  check(/RoleApi\.save\(\s*role\.id,[\s\S]*?\{ data: role as unknown as Record<string, unknown>, revision: role\.revision \},[\s\S]*?\{ silent: true \},?\s*\)/.test(roleSyncSource), "推送时把修订号交给请求层（乐观锁的唯一来源）");
   check(
-    /ROLE_SYNC_BIZ_CODES\.revisionConflict/.test(roleSyncSource) && /await RoleApi\.detail\(role\.id, \{ silent: true \}\)/.test(roleSyncSource),
+    /ROLE_SYNC_BIZ_CODES\.revisionConflict/.test(roleSyncSource) && /refreshFromServer\(role\.id, "conflict"\)/.test(roleSyncSource),
     "撞乐观锁时先静默拉一次最新数据再交给上层（不重试、不覆盖、不额外弹错误）",
+  );
+  check(
+    /typeof role\.revision !== "number"[\s\S]*?refreshFromServer\(role\.id, "noRevision"\)/.test(roleSyncSource),
+    "没有基线时不硬推：改为拉详情补基线（服务端优先），而不是发一个缺 revision 的请求撞 400",
   );
   check(/ROLE_SYNC_BIZ_CODES\.missing/.test(roleSyncSource) && /this\.onMissing\?\.\(role\.id\)/.test(roleSyncSource), "角色不存在的分支交给上层自愈");
   check(/ROLE_SYNC_BIZ_CODES\.kicked/.test(roleSyncSource) && /this\.onKicked\?\.\(role\.id\)/.test(roleSyncSource), "角色被下线的分支单独走 onKicked（与「角色不存在」分开：一个清缓存、一个只清在线标记）");

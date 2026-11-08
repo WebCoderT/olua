@@ -15098,12 +15098,14 @@
           },
           "revision": {
             "type": "number",
-            "description": "客户端读到的修订号（带上即开启乐观锁：与服务端不一致时返回 20006，需先拉最新数据）",
-            "example": 3
+            "description": "客户端读到的修订号（必填；与服务端不一致时返回 20006，需先拉最新数据）",
+            "example": 3,
+            "minimum": 0
           }
         },
         "required": [
-          "data"
+          "data",
+          "revision"
         ]
       },
       "GrowthUpgradeDto": {
@@ -15126,13 +15128,14 @@
           },
           "revision": {
             "type": "number",
-            "description": "修订号（乐观锁）：带上了就校验，与服务端当前值不一致时 20006；与 role.save 同一语义",
+            "description": "修订号（乐观锁，必填）：客户端读到的值，与服务端不一致时 20006，需先拉最新存档（B62 / #820）",
             "minimum": 1
           }
         },
         "required": [
           "kind",
-          "targetLevel"
+          "targetLevel",
+          "revision"
         ]
       },
       "MallPurchaseDto": {
@@ -15145,12 +15148,13 @@
           },
           "revision": {
             "type": "number",
-            "description": "修订号（乐观锁）：带上了就校验，与服务端当前值不一致时 20006；与 role.save 同一语义",
+            "description": "修订号（乐观锁，必填）：客户端读到的值，与服务端不一致时 20006，需先拉最新存档（B62 / #820）",
             "minimum": 1
           }
         },
         "required": [
-          "goodId"
+          "goodId",
+          "revision"
         ]
       },
       "SellEntryDto": {
@@ -15185,12 +15189,13 @@
           },
           "revision": {
             "type": "number",
-            "description": "修订号（乐观锁）：带上了就校验，与服务端当前值不一致时 20006；与 role.save 同一语义",
+            "description": "修订号（乐观锁，必填）：客户端读到的值，与服务端不一致时 20006，需先拉最新存档（B62 / #820）",
             "minimum": 1
           }
         },
         "required": [
-          "entries"
+          "entries",
+          "revision"
         ]
       },
       "DrugUseDto": {
@@ -15212,13 +15217,14 @@
           },
           "revision": {
             "type": "number",
-            "description": "修订号（乐观锁）：带上了就校验，与服务端当前值不一致时 20006；与 role.save 同一语义",
+            "description": "修订号（乐观锁，必填）：客户端读到的值，与服务端不一致时 20006，需先拉最新存档（B62 / #820）",
             "minimum": 1
           }
         },
         "required": [
           "row",
-          "col"
+          "col",
+          "revision"
         ]
       },
       "MoneyUseDto": {
@@ -15240,13 +15246,14 @@
           },
           "revision": {
             "type": "number",
-            "description": "修订号（乐观锁）：带上了就校验，与服务端当前值不一致时 20006；与 role.save 同一语义",
+            "description": "修订号（乐观锁，必填）：客户端读到的值，与服务端不一致时 20006，需先拉最新存档（B62 / #820）",
             "minimum": 1
           }
         },
         "required": [
           "row",
-          "col"
+          "col",
+          "revision"
         ]
       },
       "LevelScrollUseDto": {
@@ -15268,13 +15275,14 @@
           },
           "revision": {
             "type": "number",
-            "description": "修订号（乐观锁）：带上了就校验，与服务端当前值不一致时 20006；与 role.save 同一语义",
+            "description": "修订号（乐观锁，必填）：客户端读到的值，与服务端不一致时 20006，需先拉最新存档（B62 / #820）",
             "minimum": 1
           }
         },
         "required": [
           "row",
-          "col"
+          "col",
+          "revision"
         ]
       },
       "FashionBuyDto": {
@@ -15287,12 +15295,13 @@
           },
           "revision": {
             "type": "number",
-            "description": "修订号（乐观锁）：带上了就校验，与服务端当前值不一致时 20006；与 role.save 同一语义",
+            "description": "修订号（乐观锁，必填）：客户端读到的值，与服务端不一致时 20006，需先拉最新存档（B62 / #820）",
             "minimum": 1
           }
         },
         "required": [
-          "fashionId"
+          "fashionId",
+          "revision"
         ]
       },
       "FashionWearDto": {
@@ -15305,12 +15314,13 @@
           },
           "revision": {
             "type": "number",
-            "description": "修订号（乐观锁）：带上了就校验，与服务端当前值不一致时 20006；与 role.save 同一语义",
+            "description": "修订号（乐观锁，必填）：客户端读到的值，与服务端不一致时 20006，需先拉最新存档（B62 / #820）",
             "minimum": 1
           }
         },
         "required": [
-          "fashionId"
+          "fashionId",
+          "revision"
         ]
       },
       "BagOpCellDto": {
@@ -15390,12 +15400,13 @@
           },
           "revision": {
             "type": "number",
-            "description": "修订号（乐观锁）：带上了就校验，与服务端当前值不一致时 20006；与 role.save 同一语义",
+            "description": "修订号（乐观锁，必填）：客户端读到的值，与服务端不一致时 20006，需先拉最新存档（B62 / #820）",
             "minimum": 1
           }
         },
         "required": [
-          "action"
+          "action",
+          "revision"
         ]
       },
       "AdminRegisterDto": {

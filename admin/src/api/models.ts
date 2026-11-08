@@ -61,9 +61,9 @@ export type SaveRole = {
    */
   data: Record<string, unknown>;
   /**
-   * 客户端读到的修订号（带上即开启乐观锁：与服务端不一致时返回 20006，需先拉最新数据）
+   * 客户端读到的修订号（必填；与服务端不一致时返回 20006，需先拉最新数据）
    */
-  revision?: number;
+  revision: number;
 };
 
 export type GrowthUpgrade = {
@@ -76,9 +76,9 @@ export type GrowthUpgrade = {
    */
   targetLevel: number;
   /**
-   * 修订号（乐观锁）：带上了就校验，与服务端当前值不一致时 20006；与 role.save 同一语义
+   * 修订号（乐观锁，必填）：客户端读到的值，与服务端不一致时 20006，需先拉最新存档（B62 / #820）
    */
-  revision?: number;
+  revision: number;
 };
 
 export type MallPurchase = {
@@ -87,9 +87,9 @@ export type MallPurchase = {
    */
   goodId: string;
   /**
-   * 修订号（乐观锁）：带上了就校验，与服务端当前值不一致时 20006；与 role.save 同一语义
+   * 修订号（乐观锁，必填）：客户端读到的值，与服务端不一致时 20006，需先拉最新存档（B62 / #820）
    */
-  revision?: number;
+  revision: number;
 };
 
 export type SellEntry = {
@@ -109,9 +109,9 @@ export type SellGoods = {
    */
   entries: SellEntry[];
   /**
-   * 修订号（乐观锁）：带上了就校验，与服务端当前值不一致时 20006；与 role.save 同一语义
+   * 修订号（乐观锁，必填）：客户端读到的值，与服务端不一致时 20006，需先拉最新存档（B62 / #820）
    */
-  revision?: number;
+  revision: number;
 };
 
 export type DrugUse = {
@@ -124,9 +124,9 @@ export type DrugUse = {
    */
   col: number;
   /**
-   * 修订号（乐观锁）：带上了就校验，与服务端当前值不一致时 20006；与 role.save 同一语义
+   * 修订号（乐观锁，必填）：客户端读到的值，与服务端不一致时 20006，需先拉最新存档（B62 / #820）
    */
-  revision?: number;
+  revision: number;
 };
 
 export type MoneyUse = {
@@ -139,9 +139,9 @@ export type MoneyUse = {
    */
   col: number;
   /**
-   * 修订号（乐观锁）：带上了就校验，与服务端当前值不一致时 20006；与 role.save 同一语义
+   * 修订号（乐观锁，必填）：客户端读到的值，与服务端不一致时 20006，需先拉最新存档（B62 / #820）
    */
-  revision?: number;
+  revision: number;
 };
 
 export type LevelScrollUse = {
@@ -154,9 +154,9 @@ export type LevelScrollUse = {
    */
   col: number;
   /**
-   * 修订号（乐观锁）：带上了就校验，与服务端当前值不一致时 20006；与 role.save 同一语义
+   * 修订号（乐观锁，必填）：客户端读到的值，与服务端不一致时 20006，需先拉最新存档（B62 / #820）
    */
-  revision?: number;
+  revision: number;
 };
 
 export type FashionBuy = {
@@ -165,9 +165,9 @@ export type FashionBuy = {
    */
   fashionId: string;
   /**
-   * 修订号（乐观锁）：带上了就校验，与服务端当前值不一致时 20006；与 role.save 同一语义
+   * 修订号（乐观锁，必填）：客户端读到的值，与服务端不一致时 20006，需先拉最新存档（B62 / #820）
    */
-  revision?: number;
+  revision: number;
 };
 
 export type FashionWear = {
@@ -176,9 +176,9 @@ export type FashionWear = {
    */
   fashionId: string | null;
   /**
-   * 修订号（乐观锁）：带上了就校验，与服务端当前值不一致时 20006；与 role.save 同一语义
+   * 修订号（乐观锁，必填）：客户端读到的值，与服务端不一致时 20006，需先拉最新存档（B62 / #820）
    */
-  revision?: number;
+  revision: number;
 };
 
 export type BagOpCell = {
@@ -222,9 +222,9 @@ export type BagOp = {
    */
   cells?: BagOpCell[];
   /**
-   * 修订号（乐观锁）：带上了就校验，与服务端当前值不一致时 20006；与 role.save 同一语义
+   * 修订号（乐观锁，必填）：客户端读到的值，与服务端不一致时 20006，需先拉最新存档（B62 / #820）
    */
-  revision?: number;
+  revision: number;
 };
 
 export type AdminRegister = {

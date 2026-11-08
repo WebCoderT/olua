@@ -21,6 +21,8 @@
  * 用法：npm run test:e2e:combat
  */
 const { spawn } = require("node:child_process");
+// 写角色接口的基线帮手（#820 / B62：revision 必填）
+const { revOfWith } = require("./lib/role-save.cjs");
 const fs = require("node:fs");
 const net = require("node:net");
 const os = require("os");
@@ -220,6 +222,14 @@ async function api(baseUrl, method, route, options = {}) {
   }
   return body;
 }
+
+/**
+ * 取角色当前修订号（#820 / B62：写接口必须带基线，缺了就是 400 / 40000）
+ *
+ * 本文件的 api() 是「baseUrl 打头」的形态，所以这里也带上 baseUrl。
+ */
+const revOf = (baseUrl, roleId, token) =>
+  revOfWith((method, route, options) => api(baseUrl, method, route, options), roleId, token);
 
 const waitFor = async (label, predicate, timeoutMs = 5_000) => {
   const deadline = Date.now() + timeoutMs;
@@ -1258,7 +1268,7 @@ function connect(url) {
     await api(baseUrl, "PATCH", `admin/roles/${binder.roleId}`, { token: adminToken, body: { hp: 1 } });
     const usedBound = await api(baseUrl, "POST", `roles/${binder.roleId}/drug-use`, {
       token: binder.token,
-      body: { row: emptyPos.row, col: emptyPos.col },
+      body: { row: emptyPos.row, col: emptyPos.col, revision: await revOf(baseUrl, binder.roleId, binder.token) },
     });
     const usedCell = usedBound.code === 0 ? usedBound.data.data.bag[emptyPos.row][emptyPos.col] : null;
     check(
@@ -1274,7 +1284,7 @@ function connect(url) {
     check(!!matCell && matCell.bound === true, "D：绑定的材料入包（bound = true）", JSON.stringify(matCell));
     const soldHalf = await api(baseUrl, "POST", `roles/${binder.roleId}/sell`, {
       token: binder.token,
-      body: { entries: [{ goodId: "material_hide", count: 2 }] },
+      body: { entries: [{ goodId: "material_hide", count: 2 }], revision: await revOf(baseUrl, binder.roleId, binder.token) },
     });
     const matAfter =
       soldHalf.code === 0 ? (soldHalf.data.data.bag.flat().find((cell) => cell && cell.id === "material_hide") || null) : null;

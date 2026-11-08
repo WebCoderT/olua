@@ -253,7 +253,7 @@ git pull && make config-import       # 整表替换配置；账号与角色存�
 | 表 | 存什么 | 关键点 |
 | --- | --- | --- |
 | `accounts` | 玩家账号 | 口令存 scrypt 摘要；`status` 封禁位；**`token_version`** 令牌版本号 |
-| `roles` | 角色 | `data` 列存客户端 `entities/Role` 的 **JSON 字符串**；索引字段（id/name/occupation/sex/level）另落列；**`revision`** 乐观锁版本；`data.schemaVersion` 是存档结构版本（#818，进游戏时惰性迁移，`make migrate` 批量落库）；**`corrupted`** 标记坏档（#819，置 1 时该角色进不了游戏，修好 JSON 自动清）；`online_role_id` 由账号侧指向当前在线角色 |
+| `roles` | 角色 | `data` 列存客户端 `entities/Role` 的 **JSON 字符串**；索引字段（id/name/occupation/sex/level）另落列；**`revision`** 乐观锁版本（#820 起请求**必须**带基线，缺了 400/40000；落库再由 `WHERE id = ? AND revision = ?` 复核，不一致 20006）；`data.schemaVersion` 是存档结构版本（#818，进游戏时惰性迁移，`make migrate` 批量落库）；**`corrupted`** 标记坏档（#819，置 1 时该角色进不了游戏，修好 JSON 自动清）；`online_role_id` 由账号侧指向当前在线角色 |
 | `admins` | 管理端账号 | 独立于玩家账号体系；`role`（super_admin / admin / viewer）；**`token_version`** |
 | `audit_logs` | 操作日志 | 动作 = 接口 `operationId`；`detail` 落请求体（已打码）；`success` / `status_code` / `actor_name` / `target_id` / `path` |
 | `announcements` | 公告 | 标题 / 正文 / `level`（`important` 优先展示）/ `enabled`；`starts_at` / `ends_at` 组成生效时间窗，**「生效中」的判据就是这三列**（建了 `idx_announcements_window`） |
@@ -458,7 +458,7 @@ admin/src/api/{routes,models,endpoints}.ts
 
 ## 测试与回归
 
-二十九套测试里，二十八套 e2e 都是**真实起服务进程 + 真实 HTTP 请求**（不是 mock），
+四十七套测试里，四十六套 e2e 都是**真实起服务进程 + 真实 HTTP 请求**（不是 mock），
 外加一套 `config-sync` 是纯脚本测试（配置快照不经过 HTTP，起服务只会把两类问题混在一起）：
 
 | 脚本 | 断言数 | 覆盖 |
@@ -467,6 +467,9 @@ admin/src/api/{routes,models,endpoints}.ts
 | `test/e2e-roles.cjs` | **150** | 角色管理专项：修订号乐观锁 / 六维筛选 / 结构化字段校验 / 批量与整账号删除 / 只读观察员越权 / 文档 |
 | `test/e2e-role-vitals.cjs` | **28** | 血蓝收权（#596）：save 上报血蓝一律被服务端结算值覆盖（超上限夹回、负上报不动基线、结算游标伪造无效）/ 复活接口（未死亡 20015、死亡满血、revision 不推进）/ 死亡状态不回复（改包上报满血无效）/ 自然回复 lazy 结算（累加器保留零头）/ 管理端 PATCH hp·mp 运营旁路 / openapi 契约 |
 | `test/e2e-role-fashion.cjs` | **35** | 时装收权（#596）：save 上报穿着被库值回填、拥有清单（独占字段）整份删除 / 老档迁移把当前穿着认领进清单 / 穿·脱接口（未拥有 20017、进度型 revision+1、null 脱下幂等、不动数值）/ 购买接口（未开放渠道 20016、元宝不足 20011、扣费与清单落账、重复购买拒收、乐观锁）/ 管理端 PATCH fashionsOwned 发放 / openapi 契约 |
+| `test/e2e-role-migration.cjs` | **39** | 存档版本（#818）：新号带 `schemaVersion` / 老档进游戏即迁移并落库（金币·背包·revision 都不变）/ 版本比代码新 → 20028 拒登且不置在线标记 / `make migrate` 的 dry-run 版本分布与「全有或全无」 |
+| `test/e2e-role-corrupted.cjs` | **22** | 坏档（#819）：坏 JSON 拒登 20029 + `corrupted=1` + 字节原样保留 / 修好自动解封 / 在线期间变坏档写入被拒 / 缺字段按空值回填（不再采信客户端那份） |
+| `test/e2e-role-optimistic.cjs` | **27** | 乐观锁（#820）：不带 `revision` → 400/40000（存档 + 商城 + 背包 + 成长线四条路径）/ 过期基线 → 20006 且一行不写库 / 并发两次只有一次成功、revision 只 +1 / `UPDATE … WHERE id = ? AND revision = ?` 的静态断言 |
 | `test/e2e-guard.cjs` | **283** | 运营与安全底座：口令重置与令牌作废 / 自助改密 / 操作日志落库·打码·筛选·导出 / 用户名与 IP 双维度限流 / 踢下线 / 封禁闭环 / 看板 / 列表排序 / 系统信息与启动自检 |
 | `test/e2e-mail.cjs` | **120** | 邮件通道：入队即返回 / 后台投递到已发送 / **指数退避重试与用尽上限后标失败**（原因可查）/ 手动重投把次数归零 / 未配置 SMTP 时整体禁用 / 密钥只报形态 / 模板必填变量缺失即拒发。用**可注入的假发信器**（`MAIL_TRANSPORT=fake|fail`），不需要真实 SMTP |
 | `test/e2e-account-email.cjs` | **28** | 玩家邮箱字段：只读观察员看不到也改不了 / 补录·查看·清空 / 格式校验与同邮去重（大小写不敏感）/ 发信按关联账号邮箱兜底 / 契约权限点标注 |

@@ -15,6 +15,8 @@
  * 用法：npm run test:e2e:sell
  */
 const { spawn } = require("node:child_process");
+// 写角色接口的基线帮手（#820 / B62：revision 必填）
+const { revOfWith } = require("./lib/role-save.cjs");
 const fs = require("node:fs");
 const net = require("node:net");
 const os = require("node:os");
@@ -154,6 +156,14 @@ async function api(baseUrl, method, route, options = {}) {
 }
 
 /**
+ * 取角色当前修订号（#820 / B62：写接口必须带基线，缺了就是 400 / 40000）
+ *
+ * 本文件的 api() 是「baseUrl 打头」的形态，所以这里也带上 baseUrl。
+ */
+const revOf = (baseUrl, roleId, token) =>
+  revOfWith((method, route, options) => api(baseUrl, method, route, options), roleId, token);
+
+/**
  * 开局注入的四格物品（#597 起建号背包为空，造状态只能走管理端 PATCH）
  *
  * · cloth_1 ×1（1 级衣服，回收价 = 曲线 10）
@@ -224,7 +234,7 @@ function countInBag(bag, goodId) {
     const revisionBefore = before.data.revision;
     const clothPrice = SELL_PRICES["cloth_1"];
 
-    const sold = await api(baseUrl, "POST", `roles/${roleId}/sell`, { token, body: { entries: [{ goodId: "cloth_1", count: 1 }] } });
+    const sold = await api(baseUrl, "POST", `roles/${roleId}/sell`, { token, body: { entries: [{ goodId: "cloth_1", count: 1 }], revision: await revOf(baseUrl, roleId, token) } });
     check(sold.code === 0, "卖出一件 cloth_1 成功", sold.message);
     checkEqual(Number((sold.data.data || {}).bindGold || 0), bindGoldBefore + clothPrice, "绑定元宝按快照价入账");
     checkEqual(sold.data.sold[0].unitPrice, clothPrice, "结算明细里的单价 = 共享快照价");
@@ -240,7 +250,7 @@ function countInBag(bag, goodId) {
     const hidePrice = SELL_PRICES["material_hide"];
     const merged = await api(baseUrl, "POST", `roles/${roleId}/sell`, {
       token,
-      body: { entries: [{ goodId: "material_hide", count: 2 }, { goodId: "material_hide", count: 3 }] },
+      body: { entries: [{ goodId: "material_hide", count: 2 }, { goodId: "material_hide", count: 3 }], revision: await revOf(baseUrl, roleId, token) },
     });
     check(merged.code === 0, "两格兽皮（2 + 3）一起卖成功", merged.message);
     checkEqual(merged.data.sold.length, 1, "同 id 合成一行结算");
@@ -256,7 +266,7 @@ function countInBag(bag, goodId) {
     const ironPrice = SELL_PRICES["material_iron"];
     const cheat = await api(baseUrl, "POST", `roles/${roleId}/sell`, {
       token,
-      body: { entries: [{ goodId: "material_iron", count: 1, price: 999999, unitPrice: 999999 }], total: 999999 },
+      body: { entries: [{ goodId: "material_iron", count: 1, price: 999999, unitPrice: 999999 }], total: 999999, revision: await revOf(baseUrl, roleId, token) },
     });
     check(cheat.code === 0, "多带 price / unitPrice / total 也照常出售（白名单剥掉未知字段）", cheat.message);
     checkEqual(cheat.data.total, ironPrice, "结算金额仍是快照价（客户端报的 999999 无效）");
@@ -266,7 +276,7 @@ function countInBag(bag, goodId) {
     //#region 四、不可卖
 
     group("四、不可卖（快照里没有价签）");
-    const notSellable = await api(baseUrl, "POST", `roles/${roleId}/sell`, { token, body: { entries: [{ goodId: "no_such_good", count: 1 }] } });
+    const notSellable = await api(baseUrl, "POST", `roles/${roleId}/sell`, { token, body: { entries: [{ goodId: "no_such_good", count: 1 }], revision: await revOf(baseUrl, roleId, token) } });
     checkEqual(notSellable.code, 20018, "没有价签的物品 → 20018");
     const afterNotSellable = await api(baseUrl, "GET", `roles/${roleId}`, { token });
     checkEqual(afterNotSellable.data.revision, cheat.data.revision, "被拒的请求不改存档（revision 没动）");
@@ -285,12 +295,12 @@ function countInBag(bag, goodId) {
       const topped = await api(baseUrl, "PATCH", `admin/roles/${roleId}`, { token: adminToken, body: { bindGold: refillPrice } });
       check(topped.code === 0, `准备：绑定元宝补到 ${refillPrice}（= 快照里的商城价）`, topped.message);
     }
-    const refill = await api(baseUrl, "POST", `roles/${roleId}/mall-purchase`, { token, body: { goodId: "cloth_1" } });
+    const refill = await api(baseUrl, "POST", `roles/${roleId}/mall-purchase`, { token, body: { goodId: "cloth_1", revision: await revOf(baseUrl, roleId, token) } });
     check(refill.code === 0, "准备：从商城买一件 cloth_1（补回背包）", refill.message);
 
     const mixed = await api(baseUrl, "POST", `roles/${roleId}/sell`, {
       token,
-      body: { entries: [{ goodId: "cloth_1", count: 1 }, { goodId: "cloth_1", count: 99 }] },
+      body: { entries: [{ goodId: "cloth_1", count: 1 }, { goodId: "cloth_1", count: 99 }], revision: await revOf(baseUrl, roleId, token) },
     });
     checkEqual(mixed.code, 20019, "持有 1 件却报 100 件 → 20019");
     const afterMixed = await api(baseUrl, "GET", `roles/${roleId}`, { token });
@@ -313,7 +323,9 @@ function countInBag(bag, goodId) {
     //#region 七、归属
 
     group("七、归属（拿别人的角色 id 卖）");
-    const foreign = await api(baseUrl, "POST", `roles/${roleId}/sell`, { token: otherToken, body: { entries: [{ goodId: "cloth_1", count: 1 }] } });
+    // 基线用**属主**的 token 取：这条验的是「越权 → 40300」，不能让它先在取基线那一步
+    // 403 掉、把请求退化成「缺 revision 的 400」，那样越权判据就被掩盖了（#820）
+    const foreign = await api(baseUrl, "POST", `roles/${roleId}/sell`, { token: otherToken, body: { entries: [{ goodId: "cloth_1", count: 1 }], revision: await revOf(baseUrl, roleId, token) } });
     checkEqual(foreign.code, 40300, "别人的角色 → 40300（越权一律拒绝）");
 
     //#endregion
