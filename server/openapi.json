@@ -17766,8 +17766,8 @@
           },
           "price": {
             "type": "number",
-            "description": "售价（缺省 0 = 免费）",
-            "minimum": 0,
+            "description": "售价（绑定元宝/件，下限 1；缺省按 1 上架）",
+            "minimum": 1,
             "maximum": 100000000
           },
           "requiredLevel": {
@@ -17791,8 +17791,8 @@
           },
           "price": {
             "type": "number",
-            "description": "售价（绑定元宝/件）",
-            "minimum": 0,
+            "description": "售价（绑定元宝/件，下限 1）",
+            "minimum": 1,
             "maximum": 100000000
           },
           "requiredLevel": {

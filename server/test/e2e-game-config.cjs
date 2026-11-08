@@ -951,9 +951,13 @@ async function main() {
     );
 
     // 商城还在架 → 拒删（先下架）
+    // 售价要过定价不变式（#814：回收价 ≤ 售价 × 50%）—— 新装备的回收价按它自己的变体算，
+    // 不给价（缺省 1）会被 409 拦下（那正是「不能靠漏填价格上架」的行为）
+    const newEquipVariantRows = await api(base, "GET", `/api/admin/equipment-variants?baseId=${newEquipId}&page=1&size=50`, { token });
+    const newEquipRecycle = Math.max(0, ...(newEquipVariantRows.body?.data?.list ?? []).map((row) => Number(row.sellPrice) || 0));
     const listedGood = await api(base, "POST", "/api/admin/mall/goods", {
       token,
-      body: { id: newEquipId, categoryId: "default", price: 12 },
+      body: { id: newEquipId, categoryId: "default", price: Math.max(1, newEquipRecycle * 2) },
     });
     checkEqual(listedGood.status, 201, "把新装备挂上商城（为验证拒删）");
     const deleteListed = await api(base, "DELETE", `/api/admin/equipments/${newEquipId}`, { token });
@@ -1526,6 +1530,41 @@ async function main() {
     checkEqual(mallGoodPatch.body?.data?.requiredLevel, 0, "购买等级已更新");
     const mallGoodNegative = await api(base, "PATCH", "/api/admin/mall/goods/cloth_1_p0s1", { token, body: { price: -5 } });
     checkEqual(mallGoodNegative.status, 400, "售价负数 → 400");
+
+    // —— 定价不变式（#814 / C3）：售价下限 1 + 回收价 ≤ 售价 × 50% ——
+    // 期望值从快照里的回收价算出来，不写死（运营调价后这里不该变红）
+    const recycle = Math.max(0, Math.floor(Number(variants["cloth_1_p0s1"].sellPrice) || 0));
+    const mallGoodFree = await api(base, "PATCH", "/api/admin/mall/goods/cloth_1_p0s1", { token, body: { price: 0 } });
+    checkEqual(mallGoodFree.status, 400, "把售价改成 0 → 400（免费商品是印钞的前提）");
+    // 售价 1：回收价 > 0 时必被拒（上限 floor(1 × 50%) = 0）
+    const mallGoodOne = await api(base, "PATCH", "/api/admin/mall/goods/cloth_1_p0s1", { token, body: { price: 1 } });
+    if (recycle > 0) {
+      checkEqual(mallGoodOne.status, 409, `售价压到 1（回收价 ${recycle}）→ 409`);
+      checkEqual(mallGoodOne.body?.code, 50045, "回收价高于售价 50% 用专属业务码 50045");
+    } else {
+      checkEqual(mallGoodOne.status, 200, "回收价为 0 的商品可以标 1 元（不产金币，不算印钞）");
+    }
+    // 售价 = 回收价：上限是它的一半，必被拒；售价 = 回收价 × 2：上限刚好等于回收价，放行
+    const mallGoodTight = await api(base, "PATCH", "/api/admin/mall/goods/cloth_1_p0s1", { token, body: { price: Math.max(1, recycle) } });
+    checkEqual(mallGoodTight.status, 409, `售价 = 回收价（${recycle}）→ 409（买进卖出不亏就是漏洞）`);
+    const mallGoodEdge = await api(base, "PATCH", "/api/admin/mall/goods/cloth_1_p0s1", { token, body: { price: Math.max(2, recycle * 2) } });
+    checkEqual(mallGoodEdge.status, 200, `售价 = 回收价 × 2（${Math.max(2, recycle * 2)}）→ 放行（上限刚好等于回收价）`);
+    checkEqual(mallGoodEdge.body?.data?.price, Math.max(2, recycle * 2), "边界值原样落库，没有被悄悄夹取");
+    // 新上架（不带价）走缺省价 1：回收价 > 0 的装备因此上不了架，必须显式给价
+    await api(base, "DELETE", "/api/admin/mall/goods/cloth_1_p0s1", { token });
+    const mallGoodDefaultPrice = await api(base, "POST", "/api/admin/mall/goods", { token, body: { id: "cloth_1_p0s1", categoryId: mallCatId } });
+    if (recycle > 0) {
+      checkEqual(mallGoodDefaultPrice.status, 409, "上架不带价（缺省 1）+ 回收价 > 0 → 409（不能靠漏填价格上架）");
+      const mallGoodPriced = await api(base, "POST", "/api/admin/mall/goods", { token, body: { id: "cloth_1_p0s1", categoryId: mallCatId, price: 777 } });
+      checkEqual(mallGoodPriced.status, 201, "显式给足价（777）后上架成功");
+      checkEqual(mallGoodPriced.body?.data?.price, 777, "售价按运营给的值落库");
+    } else {
+      checkEqual(mallGoodDefaultPrice.status, 201, "回收价为 0 的商品缺省价 1 上架成功");
+      checkEqual(mallGoodDefaultPrice.body?.data?.price, 1, "缺省售价 = 1（不是 0）");
+    }
+    // 还原成 888：后面的「改分类不动售价」要用同一个基线
+    const mallGoodRestore = await api(base, "PATCH", "/api/admin/mall/goods/cloth_1_p0s1", { token, body: { price: 888 } });
+    checkEqual(mallGoodRestore.status, 200, "还原售价 888（后续段落沿用这个基线）");
 
     // 检索三件套之二：物品等级（#765）—— 回包带可选等级，按等级精确筛
     const clothLevel = mallListed.body?.data?.level;

@@ -1,7 +1,7 @@
 import { Injectable } from "@nestjs/common";
 import { BizCode } from "../../common/constants/biz-code";
 import { BizException } from "../../common/errors/biz.exception";
-import { equipmentLevelOf, equipmentSlotOf, itemLabelOf } from "../../common/runtime-config-cache";
+import { equipmentLevelOf, equipmentSlotOf, itemLabelOf, sellPriceOf } from "../../common/runtime-config-cache";
 import { DrugRepository } from "../../database/repositories/drug.repository";
 import { EquipmentRepository } from "../../database/repositories/equipment.repository";
 import { EquipmentVariantRepository } from "../../database/repositories/equipment-variant.repository";
@@ -18,6 +18,8 @@ import {
   MallGoodPageDto,
   MallGoodQueryDto,
   MALL_CATEGORY_DRUG,
+  MALL_PRICE_MIN,
+  MALL_RECYCLE_RATIO_MAX,
   UpdateMallCategoryDto,
   UpdateMallGoodDto,
 } from "./dto/mall.dto";
@@ -214,7 +216,8 @@ export class MallPricingService {
     const row = {
       id: dto.id,
       category_id: dto.categoryId,
-      price: dto.price ?? 0,
+      // 缺省价是 1 而不是 0：见 MALL_PRICE_MIN 的注释（0 = 免费印钞）
+      price: this.ensurePriceSane(dto.id, Math.max(MALL_PRICE_MIN, dto.price ?? MALL_PRICE_MIN)),
       required_level: dto.requiredLevel ?? 0,
       updated_at: Date.now(),
     };
@@ -231,7 +234,9 @@ export class MallPricingService {
   updateGood(id: string, dto: UpdateMallGoodDto): MallGoodItemDto {
     this.requireGood(id);
     if (dto.categoryId !== undefined) this.requireCategory(dto.categoryId);
-    this.mall.updateGood(id, { category_id: dto.categoryId, price: dto.price, required_level: dto.requiredLevel });
+    // 改价同样过定价不变式：只改分类时跳过（价格没动，不需要重判）
+    const price = dto.price === undefined ? undefined : this.ensurePriceSane(id, Math.max(MALL_PRICE_MIN, dto.price));
+    this.mall.updateGood(id, { category_id: dto.categoryId, price, required_level: dto.requiredLevel });
     const catalog = new Map(this.catalogEntries().map((entry) => [entry.id, entry]));
     return this.itemOf(this.mall.findGood(id)!, catalog.get(id));
   }
@@ -262,6 +267,37 @@ export class MallPricingService {
   }
 
   // —— 内部 ——
+
+  /**
+   * 定价不变式（#814 / C3）：**回收价 ≤ 售价 × 50%**
+   *
+   * 为什么必须在写配置时就拦，而不是只在结算时兜：回收价是客户端展示的价签
+   * （`sell_price` 列，背包「一键回收」与详情弹窗都读它），服务端结算又按同一列付钱 ——
+   * 若在付款时才夹取，玩家看到 100 实得 50，就退回 #545「价签不对」那类投诉。
+   * 所以这里让**配置本身**不合法，价签与结算永远同一个数。
+   *
+   * 与「售价下限 1」是同一条不变式的两半：只压回收价（价 0 / 回收 0）虽然免费但不产金币，
+   * 只抬售价（价 1 / 回收 1）仍然不亏 —— 合起来才有「买进卖出净亏一半」。
+   * 推论要提前知道：售价 1 的商品 `floor(1 × 0.5) = 0`，也就是**卖不掉**；
+   * 想让某件能回收 20，售价至少得 40。
+   *
+   * 回收价取自 `sellPriceOf`（与结算同一来源：运营库覆盖层 → 出厂价签），不另查一份表，
+   * 否则两边漂移时校验形同虚设。
+   *
+   * @param raw 待校验的售价（写配置传运营输入，购买链路传库里那行的现值）
+   * @returns 规范化后的售价（不会自行夹到 ≥ 1：购买链路要看到库里的真值）
+   */
+  ensurePriceSane(goodId: string, raw: number): number {
+    const price = Math.max(0, Math.floor(raw));
+    const recycle = Math.max(0, Math.floor(sellPriceOf(goodId) ?? 0));
+    if (recycle > price * MALL_RECYCLE_RATIO_MAX) {
+      throw BizException.conflict(
+        BizCode.MALL_PRICE_INVALID,
+        `定价不合法：${goodId} 的回收价 ${recycle} 高于售价 ${price} 的 ${MALL_RECYCLE_RATIO_MAX * 100}%（上限 ${Math.floor(price * MALL_RECYCLE_RATIO_MAX)}）—— 这样的商品买进卖出就能刷金币`,
+      );
+    }
+    return price;
+  }
 
   /** 分类必须存在（404 50025） */
   private requireCategory(id: string): void {

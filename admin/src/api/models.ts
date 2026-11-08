@@ -1763,7 +1763,7 @@ export type CreateMallGood = {
    */
   categoryId: string;
   /**
-   * 售价（缺省 0 = 免费）
+   * 售价（绑定元宝/件，下限 1；缺省按 1 上架）
    */
   price?: number;
   /**
@@ -1778,7 +1778,7 @@ export type UpdateMallGood = {
    */
   categoryId?: string;
   /**
-   * 售价（绑定元宝/件）
+   * 售价（绑定元宝/件，下限 1）
    */
   price?: number;
   /**
