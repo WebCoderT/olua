@@ -50,6 +50,14 @@ export interface CombatSettleOk {
   hp: number;
   maxHp: number;
   killed: boolean;
+  /**
+   * true = 这一发打出了暴击（#826）
+   *
+   * **只影响表现**：伤害数值已经由服务端放大过了，客户端不要再乘任何倍率。
+   * 目前客户端还没有伤害飘字 / 暴击特写，所以这里只是把协议留住 ——
+   * 做飘字时读它换颜色或加特写，不要回退成「客户端自己掷暴击」。
+   */
+  critical?: boolean;
   /** 击杀奖励（仅 killed 时携带；无此字段 = 旧服务端或本地口径回滚路径） */
   reward?: CombatKillReward;
   duplicate: boolean;

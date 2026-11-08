@@ -116,6 +116,12 @@ export interface SkillSource {
   can_auto: number;
   /** 击退距离（#670：客户端不再有这份配置，结算后用它在服务端位移怪物） */
   push_distance: number;
+  /** 技能自带暴击率（0~1；#826，与角色暴击率相加） */
+  crit_rate: number;
+  /** 技能自带暴击倍率（> 1 才生效；0 = 用角色那一份） */
+  crit_damage: number;
+  /** 无视防御比例（0~1；#826） */
+  def_ignore: number;
 }
 
 /**
@@ -379,6 +385,10 @@ export function applySkillOverrides(rows: SkillSource[]): void {
       requireTarget: row.require_target === 1,
       canAuto: row.can_auto === 1,
       pushDistance: numberOr(row.push_distance),
+      // #826：暴击与破防。结算读 `skillOf` 拿这三项，缺字段一律按「不生效」处理
+      critRate: numberOr(row.crit_rate),
+      critDamage: numberOr(row.crit_damage),
+      defIgnore: numberOr(row.def_ignore),
     });
   }
   skillRows = map;

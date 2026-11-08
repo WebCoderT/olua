@@ -77,7 +77,8 @@
     "test:e2e:levelup": "node --disable-warning=ExperimentalWarning test/e2e-levelup.cjs",
     "test:e2e:equip-sanitize": "node --disable-warning=ExperimentalWarning test/e2e-equip-sanitize.cjs",
     "test:e2e:element-damage": "node --disable-warning=ExperimentalWarning test/e2e-element-damage.cjs",
-    "test:e2e:area-skill": "node --disable-warning=ExperimentalWarning test/e2e-area-skill.cjs"
+    "test:e2e:area-skill": "node --disable-warning=ExperimentalWarning test/e2e-area-skill.cjs",
+    "test:e2e:crit": "node --disable-warning=ExperimentalWarning test/e2e-crit.cjs"
   },
   "dependencies": {
     "@nestjs/common": "^12.1.2",

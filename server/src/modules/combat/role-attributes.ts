@@ -34,6 +34,7 @@ import {
   combatWeightsOf,
   equipmentAttributesOf,
   equipmentSlotOf,
+  growthScalarOf,
   rankAttributesOf,
   roleLevelAttributesOf,
   soulAttributesOf,
@@ -83,7 +84,7 @@ export function roleAttributeSourceOf(level: number, data: Record<string, unknow
   };
 }
 
-/** 汇总结果（八项战斗属性 + 战斗力） */
+/** 汇总结果（八项战斗属性 + 战斗力 + 暴击两项） */
 export interface RoleAttributeSummary {
   maxHp: number;
   hpRecover: number;
@@ -95,6 +96,16 @@ export interface RoleAttributeSummary {
   magicDefense: [number, number];
   taoistDefense: [number, number];
   combat: number;
+  /**
+   * 角色基础暴击率（0~1；#826）
+   *
+   * 来源是 `growth_scalars.critRate`（运营在「成长参数」页调），**不是装备词条** ——
+   * 24 篇的装备洗练没上线，先让这条链路有真实来源、可调、可测。
+   * 与技能自带的 `skills.crit_rate` **相加**（`desc` 里「附带 15% 暴击率」是叠加）。
+   */
+  critRate: number;
+  /** 角色基础暴击倍率（#826；`growth_scalars.critDamage`，缺行/非法 → 1.5） */
+  critDamage: number;
 }
 
 /**
@@ -192,9 +203,27 @@ export function summarizeRoleAttributesWithNotes(source: RoleAttributeSource): {
       //   ① 区间属性取**两端之和**（不是平均、也不是上限）
       //   ② maxHp 走另一条分支，取单值本身
       combat: computeCombat(maxHp, ranges),
+      // 暴击两项（#826）：来自成长标量，与技能自带的暴击相加 / 取技能倍率。
+      // 缺行时给 0 / 1.5 —— 「新号不暴击」是 22 篇定的默认，不是兜底巧合
+      critRate: clamp01(growthScalarOf("critRate") ?? 0),
+      critDamage: positiveOr(growthScalarOf("critDamage"), DEFAULT_CRIT_DAMAGE),
     },
     notes,
   };
+}
+
+/** 暴击倍率的出厂值（`growth_scalars.critDamage` 缺行 / 非法时用它） */
+export const DEFAULT_CRIT_DAMAGE = 1.5;
+
+/** 把任意数收进 [0, 1]；非有限值按 0（运营手滑写了 NaN 不该让整条链路炸） */
+function clamp01(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+  return Math.min(1, Math.max(0, value));
+}
+
+/** 大于 1 才认，否则回落（倍率 0 会让暴击打出 0 伤害，那不是「没配」该有的样子） */
+function positiveOr(value: number | null, fallback: number): number {
+  return typeof value === "number" && Number.isFinite(value) && value > 1 ? value : fallback;
 }
 
 //#region 内部实现

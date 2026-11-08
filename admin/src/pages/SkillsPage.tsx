@@ -67,6 +67,12 @@ interface SkillForm {
   occupation: string;
   /** 击退距离（像素，0 = 不击退）：场上唯一能推动怪物的途径 */
   pushDistance: string;
+  /** 技能自带暴击率（0~1，与角色暴击率相加；#826） */
+  critRate: string;
+  /** 技能自带暴击倍率（> 1 才生效；0 = 用角色那一份） */
+  critDamage: string;
+  /** 无视防御比例（0~1，1 = 完全无视） */
+  defIgnore: string;
   description: string;
   coefficients: DamageCoefficient[];
 }
@@ -91,6 +97,9 @@ function toForm(item: Skill): SkillForm {
     statusId: item.statusId,
     occupation: item.occupation,
     pushDistance: String(item.pushDistance),
+    critRate: String(item.critRate),
+    critDamage: String(item.critDamage),
+    defIgnore: String(item.defIgnore),
     description: item.description,
     coefficients: item.damageCoefficients.map((entry) => ({ ...entry })),
   };
@@ -161,6 +170,9 @@ function SkillEditDialog({
     checkNumber(form.levelReq, { name: "等级需求", min: 1, max: 200, int: true }),
     checkNumber(form.castLockMs, { name: "动作锁", min: 0, max: 10_000, int: true }),
     checkNumber(form.pushDistance, { name: "击退距离", min: 0, max: 2_000, int: true }),
+    checkNumber(form.critRate, { name: "暴击率", min: 0, max: 1 }),
+    checkNumber(form.critDamage, { name: "暴击倍率", min: 0, max: 10 }),
+    checkNumber(form.defIgnore, { name: "无视防御比例", min: 0, max: 1 }),
   ];
   for (const message of numberChecks) {
     if (message) problems.push(message);
@@ -195,6 +207,9 @@ function SkillEditDialog({
       statusId: form.statusId,
       occupation: form.occupation as UpdateSkill["occupation"],
       pushDistance: Number(form.pushDistance),
+      critRate: Number(form.critRate),
+      critDamage: Number(form.critDamage),
+      defIgnore: Number(form.defIgnore),
       description: form.description.trim(),
       damageCoefficients: form.coefficients.map((entry) => ({ baseType: entry.baseType, baseTypeRate: entry.baseTypeRate })),
     });
@@ -319,6 +334,36 @@ function SkillEditDialog({
               min={0}
               value={form.pushDistance}
               onChange={(event) => set("pushDistance", event.target.value)}
+            />
+          </Field>
+          <Field label="暴击率" hint="0~1（0.15 = 15%）；与角色基础暴击率**相加**，不是替换">
+            <Input
+              type="number"
+              min={0}
+              max={1}
+              step={0.01}
+              value={form.critRate}
+              onChange={(event) => set("critRate", event.target.value)}
+            />
+          </Field>
+          <Field label="暴击倍率" hint="> 1 才生效（如 2 = 双倍）；留 0 = 用角色那一份（出厂 1.5）">
+            <Input
+              type="number"
+              min={0}
+              max={10}
+              step={0.1}
+              value={form.critDamage}
+              onChange={(event) => set("critDamage", event.target.value)}
+            />
+          </Field>
+          <Field label="无视防御比例" hint="0~1（1 = 完全无视目标防御）；只影响这一发">
+            <Input
+              type="number"
+              min={0}
+              max={1}
+              step={0.05}
+              value={form.defIgnore}
+              onChange={(event) => set("defIgnore", event.target.value)}
             />
           </Field>
           <div className="flex flex-col justify-center gap-2">

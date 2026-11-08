@@ -1188,6 +1188,10 @@ export class GameConfigService {
     // #603 第十一域：职业归属与击退距离也可改（前者决定技能栏归谁，后者只对单体技能生效）
     if (dto.occupation !== undefined) next.occupation = dto.occupation;
     if (dto.pushDistance !== undefined) next.push_distance = dto.pushDistance;
+    // #826：暴击与破防。三个都只影响「这一发怎么算伤害」，不参与跨字段校验
+    if (dto.critRate !== undefined) next.crit_rate = dto.critRate;
+    if (dto.critDamage !== undefined) next.crit_damage = dto.critDamage;
+    if (dto.defIgnore !== undefined) next.def_ignore = dto.defIgnore;
     // 跨字段约束放在写库之前：状态必须真实存在、主动技能得能打出伤害、状态型技能得挂到状态。
     // 只在本次请求**动了分类 / 倍率 / 状态**时才校验 —— 这三个字段之外的部分（名字、冷却、
     // 动作锁……）与约束无关；而且库里存在「分类是主动但没配倍率」的历史行（如 1008 十步一杀，
@@ -1244,6 +1248,10 @@ export class GameConfigService {
       // 怪物技能没有「归哪个职业」的语义（服务端 AI 释放），一律全职业；击退默认不配
       occupation: dto.occupation ?? "4",
       push_distance: dto.pushDistance ?? 0,
+      // 暴击 / 破防默认 0：新建的技能在运营配之前行为与改动前一致
+      crit_rate: dto.critRate ?? 0,
+      crit_damage: dto.critDamage ?? 0,
+      def_ignore: dto.defIgnore ?? 0,
       updated_at: Date.now(),
     };
     this.assertSkillConsistency(row);

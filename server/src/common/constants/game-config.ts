@@ -57,6 +57,9 @@ export const GROWTH_SCALAR_SPECS: Record<string, GrowthScalarSpec> = {
   // 泡点活动（#722）：rate=0 是合法且是出厂值 —— 活动默认关闭，运营在管理端开
   "soakExpPerTick": { min: 0, max: 1000000, integer: true },
   "soakTickSeconds": { min: 1, max: 3600, integer: true },
+  // 暴击（#826）：两个都是角色基础值，技能自带的暴击在 skills.crit_rate / crit_damage 上
+  "critRate": { min: 0, max: 1, integer: false },
+  "critDamage": { min: 0, max: 10, integer: false },
 };
 
 /** 标量参数的中文说明（管理端列表直接展示；键必须与 GROWTH_SCALARS 一致） */
@@ -67,6 +70,8 @@ export const GROWTH_SCALAR_DESCRIPTIONS: Record<string, string> = {
   "mpRecoverPerSecond": "魔法值自然回复速度（点 / 秒，0 = 关闭自然回蓝；由服务端结算，客户端读快照同步）",
   "soakExpPerTick": "泡点活动：在线角色每拍获得的经验（0 = 活动关闭；服务端定时发放，走击杀同一套升级链路）",
   "soakTickSeconds": "泡点活动：发经验的拍间隔（秒；与上一条配合出「每 M 秒发 N 点」的速率）",
+  "critRate": "角色基础暴击率（0~1；与技能自带的暴击率**相加**。出厂 0 = 新号不暴击）",
+  "critDamage": "角色基础暴击倍率（> 1 才生效；技能配了自己的倍率时以技能为准。出厂 1.5 倍）",
 };
 
 /**
