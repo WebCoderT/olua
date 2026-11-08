@@ -55,16 +55,23 @@ import type { RealtimeKillReward, RealtimePickedData, RealtimeSettleData, Realti
  * ===========================================================================
  * 幂等
  * ===========================================================================
- * 同一 `castId` 的重复投递（网络重传 / 客户端重发）**不重复结算**：每个账号记最近
- * `CAST_DEDUPE_CAPACITY` 次结果，重复的原样重发（`duplicate: true`），血量不会扣两次。
- * 序号由客户端按会话单调递增生成；断线重连 / 换图（worldJoin）后清掉旧账重新计数。
+ * 同一 `castId` 的重复投递（网络重传 / 客户端重发）**不重复结算**：每个账号按
+ * `roleId:mapId:castId` 记住结果，重复的原样重发（`duplicate: true`），血量不会扣两次。
+ * 账目**按时间过期**（`CAST_DEDUPE_TTL_MS`，≥ 最长技能冷却），不再靠「只留 256 条、
+ * 超出挤掉最旧」—— 挤掉最旧等于「打得够久，早先的出手就能重放一遍」（#827）。
+ * 序号由客户端按会话单调递增生成；换图（worldJoin）与断线仍整份清掉（见 `resetTargets`）。
  */
 @Injectable()
 export class CombatSettlementService {
   private readonly logger = new Logger(CombatSettlementService.name);
 
-  /** 每个账号最近的结算结果（castId → 结果，幂等重发用） */
-  private readonly recentSettles = new Map<string, Map<number, RealtimeSettleData>>();
+  /**
+   * 每个账号最近的结算结果（`roleId:mapId:castId` → 结果 + 写入时刻，幂等重发用）
+   *
+   * 键里带角色与地图（#827，F1 口径）：同一账号换角色 / 换图后 castId 可能从头数，
+   * 只按 castId 记会让新图的第一发命中旧账、把别的角色或上一次战斗的结果原样发回去。
+   */
+  private readonly recentSettles = new Map<string, Map<string, RecentSettle>>();
 
   /**
    * 掉落账本（#325）：账号 → castId → 该次击杀的掉落条目（picked 标记是否已拾）
@@ -105,13 +112,14 @@ export class CombatSettlementService {
     }
 
     // 幂等：同一 castId 原样重发，不重复结算
-    const previous = this.recentSettles.get(accountId)?.get(cast.castId);
-    if (previous) {
-      return previous.ok ? { ...previous, duplicate: true } : previous;
+    const dedupeKey = this.dedupeKeyOf(accountId, cast.castId);
+    const previous = this.recentSettles.get(accountId)?.get(dedupeKey);
+    if (previous && Date.now() - previous.at <= CAST_DEDUPE_TTL_MS) {
+      return previous.result.ok ? { ...previous.result, duplicate: true } : previous.result;
     }
 
     const result = this.settleNew(accountId, cast);
-    this.remember(accountId, cast.castId, result);
+    this.remember(accountId, dedupeKey, result);
     return result;
   }
 
@@ -122,6 +130,9 @@ export class CombatSettlementService {
    * 以及客户端发来的 `targetsReset`（旧客户端 / 主动清，双保险）。
    */
   resetTargets(accountId: string): void {
+    // 幂等账照样清（#827）：键里虽然带了 `roleId:mapId`，但客户端换图 / 换角色后是否重置
+    // `castSeq` 不由服务端决定 —— 万一它归 0，不清账就会把上一场的结果当成「重复」发回去。
+    // 「换图不会撞」由键保证，「castSeq 归 0 也不撞」由这里保证，两道都要。
     this.recentSettles.delete(accountId);
     // 掉落账本随之清：换图后旧图的掉落不再可拾（客户端换图也会清掉地面掉落物）
     this.dropLedgers.delete(accountId);
@@ -904,18 +915,37 @@ export class CombatSettlementService {
     }
   }
 
-  /** 记住一次结算结果（每账号限量，超出挤掉最旧的） */
-  private remember(accountId: string, castId: number, result: RealtimeSettleData): void {
+  /**
+   * 幂等键：`roleId:mapId:castId`（#827）
+   *
+   * 拿不到角色 / 位置（老档、刚建号、离线结算）就用空串占位 —— 空串只会让键更粗，
+   * 不会让两条不同的出手撞在一起（castId 本身是单调递增的）。
+   */
+  private dedupeKeyOf(accountId: string, castId: number): string {
+    const role = this.roles.online(accountId);
+    const roleId = role?.id ?? "";
+    const mapAt = typeof role?.data?.mapAt === "string" ? role.data.mapAt : "";
+    return `${roleId}:${mapAt}:${castId}`;
+  }
+
+  /** 记住一次结算结果（按时间过期 + 容量上限兜底，超容量挤掉最旧的） */
+  private remember(accountId: string, key: string, result: RealtimeSettleData): void {
     let book = this.recentSettles.get(accountId);
     if (!book) {
-      book = new Map<number, RealtimeSettleData>();
+      book = new Map<string, RecentSettle>();
       this.recentSettles.set(accountId, book);
+    }
+    const now = Date.now();
+    // Map 保持插入顺序 = 时间顺序，从头剔到第一个未过期为止
+    for (const [entryKey, entry] of book) {
+      if (now - entry.at <= CAST_DEDUPE_TTL_MS) break;
+      book.delete(entryKey);
     }
     if (book.size >= CAST_DEDUPE_CAPACITY) {
       const oldest = book.keys().next().value;
       if (oldest !== undefined) book.delete(oldest);
     }
-    book.set(castId, result);
+    book.set(key, { result, at: now });
   }
 
   /**
@@ -941,7 +971,7 @@ export class CombatSettlementService {
       book = new Map<number, DropLedgerEntry[]>();
       this.dropLedgers.set(accountId, book);
     }
-    if (book.size >= CAST_DEDUPE_CAPACITY) {
+    if (book.size >= DROP_LEDGER_CAPACITY) {
       const oldest = book.keys().next().value;
       if (oldest !== undefined) book.delete(oldest);
     }
@@ -971,6 +1001,13 @@ interface KillOrigin {
   monsterKey: string;
 }
 
+/** 幂等账的一条（#827：结果 + 写入时刻，供 TTL 剔除） */
+interface RecentSettle {
+  result: RealtimeSettleData;
+  /** 写入时刻（`Date.now()`） */
+  at: number;
+}
+
 /** 掉落账本里的一条（#325 账本 + #789 绑定与溯源） */
 interface DropLedgerEntry {
   goodId: string;
@@ -995,8 +1032,28 @@ interface ParsedCast {
 }
 
 // 三系攻击属性与「攻击 → 防御」映射在 common/constants/game-enums（怪物 AI 侧同一份，#823）
-/** 幂等账本容量：足够盖住任何合理的重传窗口，又不会随游玩时长无限涨 */
-const CAST_DEDUPE_CAPACITY = 256;
+/**
+ * 幂等账有效期（#827）：**≥ 最长技能冷却** —— 冷却内的重复投递一律拒，冷却走完再重放
+ * 本来也打不出第二发（`cast-guard` 的冷却闸会拦）。`skills.cooldown` 现在最长 60s（1010），
+ * 取 2 倍留余量；改技能表时要跟着看这里。
+ */
+const CAST_DEDUPE_TTL_MS = 120_000;
+
+/**
+ * 幂等账容量（#827）：TTL 内可能写多少条，就留多少位置 ——
+ * 客户端最快约 250ms 一发，120s ≈ 480 发，留一倍余量取 1024。
+ * **这个数只是内存兜底**，过期才是主逻辑；256 那种固定值会让「打得久」变成可重放。
+ */
+const CAST_DEDUPE_CAPACITY = 1024;
+
+/**
+ * 掉落账本容量（#827 起与幂等账同量级，但**不按时间过期**）
+ *
+ * 一次施放占一个槽（不管掉了几件）。过期在这里不合适 —— 地上的东西还在屏幕上，
+ * 账先没了就是「看得见捡不起来」（`unknown_drop`）。所以掉落账本只靠容量兜底：
+ * 换图 / 断线会整份清，剩下的上限按 1024 次施放算（远超一波刷怪的规模）。
+ */
+const DROP_LEDGER_CAPACITY = 1024;
 
 /**
  * 一次区域 / 群体施放最多命中几只（#824）
