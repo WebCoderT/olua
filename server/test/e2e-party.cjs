@@ -25,6 +25,7 @@ const net = require("node:net");
 const os = require("node:os");
 const path = require("node:path");
 const WebSocket = require("ws");
+const { paceCast } = require("./lib/cast-pace.cjs");
 
 const SERVER_DIR = path.join(__dirname, "..");
 const ENTRY = path.join(SERVER_DIR, "dist", "main.js");
@@ -634,6 +635,8 @@ function snap(snapshot) {
     /** 连打到这只怪死为止（返回那次 killed 的 settle 帧） */
     const kill = async (session, mob) => {
       for (let i = 0; i < 40; i += 1) {
+        // 每次出手前等一个间隔（#813 冷却闸：服务端按真客户端口径判 250ms/刀）
+        await paceCast();
         castSeq += 1;
         const id = castSeq;
         session.send("cast", { castId: id, skillId: "1000", targetId: mob.instanceId, monsterKey: mob.monsterKey });

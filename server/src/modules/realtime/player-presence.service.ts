@@ -346,6 +346,22 @@ export class PlayerPresenceService implements OnApplicationBootstrap, OnApplicat
   }
 
   /**
+   * 这个账号最近一次**被接受**的坐标（#813 距离闸的输入；不修改任何状态）
+   *
+   * 与 `identityOf` 分开：聊天只要「在哪张图」，距离闸要的是「离怪多远」，而坐标只有
+   * 真的上报过才有（`worldJoin` 本身不带坐标）。返回 null = 还没收到过 pos 帧 ——
+   * 调用方**不能**把 null 当原点，那会把刚进图的玩家判成「隔着整张图出手」。
+   *
+   * 坐标是客户端自报 + 最小仲裁（#596）的结果，**不是权威**：谎报仍可绕过距离闸，
+   * 那是 #811（位置源收口）要解决的事，这里的职责只是「明显不合理的拒绝掉」。
+   */
+  positionOf(accountId: string): { zoneId: number; mapId: string; x: number; y: number; at: number } | null {
+    const entry = this.entries.get(accountId);
+    if (!entry) return null;
+    return { zoneId: entry.zoneId, mapId: entry.mapId, x: entry.x, y: entry.y, at: entry.updatedAt };
+  }
+
+  /**
    * 按角色找在线连接（#399：队伍快照的「在线 / 同图」与队友经验分成的「同图才分」都要它）
    *
    * 线性扫一遍在线表：队伍最多 4 人、每次击杀查一次，这个规模上完全够。

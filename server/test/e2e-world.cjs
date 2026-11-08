@@ -19,6 +19,7 @@ const net = require("net");
 const os = require("os");
 const path = require("path");
 const WebSocket = require("ws");
+const { paceCast } = require("./lib/cast-pace.cjs");
 
 const SERVER_DIR = path.join(__dirname, "..");
 const ENTRY = path.join(SERVER_DIR, "dist", "main.js");
@@ -277,14 +278,23 @@ function connect(url) {
     const sessionB = await connectAs(tokenB);
     check(sessionA.opened && sessionB.opened, "准备：两条实时连接已建立");
 
-    /** 发一次 cast（castId 每条会话独立计数） */
+    /**
+     * 发一次 cast（castId 每条会话独立计数）
+     *
+     * 发送推迟一个出手间隔（`lib/cast-pace.cjs`）：#813 起服务端按真客户端口径判冷却，
+     * 连发会拿到 `rejected: "cooldown"`。形状仍是同步返回 `{ id, promise }`
+     */
     const makeCast = () => {
       let castSeq = 0;
       return (session_, body) => {
         castSeq += 1;
         const id = castSeq;
-        session_.socket.send(JSON.stringify({ type: "cast", data: { castId: id, ...body } }));
-        return { id, promise: session_.waitForSettle(id) };
+        const promise = (async () => {
+          await paceCast();
+          session_.socket.send(JSON.stringify({ type: "cast", data: { castId: id, ...body } }));
+          return session_.waitForSettle(id);
+        })();
+        return { id, promise };
       };
     };
     const castA = makeCast();

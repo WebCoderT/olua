@@ -21,6 +21,7 @@ const net = require("node:net");
 const os = require("node:os");
 const path = require("node:path");
 const WebSocket = require("ws");
+const { paceCast } = require("./lib/cast-pace.cjs");
 
 const SERVER_DIR = path.join(__dirname, "..");
 const ENTRY = path.join(SERVER_DIR, "dist", "main.js");
@@ -272,11 +273,17 @@ function setRoleLevel(dbPath, roleId, level) {
     //#endregion
 
     let castSeq = 0;
+    // 发送推迟一个出手间隔（`lib/cast-pace.cjs`）：#813 起服务端按真客户端口径判冷却，
+    // 连发会拿到 `rejected: "cooldown"`。形状仍是同步返回 { id, promise }
     const cast = (body) => {
       castSeq += 1;
       const id = castSeq;
-      session.socket.send(JSON.stringify({ type: "cast", data: { castId: id, ...body } }));
-      return { id, promise: session.waitForSettle(id) };
+      const promise = (async () => {
+        await paceCast();
+        session.socket.send(JSON.stringify({ type: "cast", data: { castId: id, ...body } }));
+        return session.waitForSettle(id);
+      })();
+      return { id, promise };
     };
     /** 连杀一只（自带重试：刷怪区只有 2 槽、重生 1.5s，只取一次快照会空手返回） */
     const killOne = async (attempts = 30) => {

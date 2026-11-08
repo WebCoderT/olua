@@ -25,6 +25,7 @@ const net = require("node:net");
 const os = require("node:os");
 const path = require("node:path");
 const WebSocket = require("ws");
+const { paceCast } = require("./lib/cast-pace.cjs");
 
 const SERVER_DIR = path.join(__dirname, "..");
 const ENTRY = path.join(SERVER_DIR, "dist", "main.js");
@@ -184,7 +185,14 @@ function connect(url) {
     sendPos(mapId, x, y, hp) {
       session.socket.send(JSON.stringify({ type: "pos", data: { mapId, x, y, hp, moving: false } }));
     },
-    cast(skillId, targetId, monsterKey) {
+    /**
+     * 发一次出手并等它的 settle 帧
+     *
+     * 出手前等一个间隔（`lib/cast-pace.cjs`）：#813 起服务端按真客户端口径判冷却，
+     * 连发会拿到 `rejected: "cooldown"`。改成 async 之后调用点本来就在 `await`，形状不变。
+     */
+    async cast(skillId, targetId, monsterKey) {
+      await paceCast();
       session.castSeq += 1;
       const castId = session.castSeq;
       session.socket.send(JSON.stringify({ type: "cast", data: { castId, skillId, targetId, monsterKey } }));

@@ -47,6 +47,7 @@ const net = require("node:net");
 const os = require("node:os");
 const path = require("node:path");
 const WebSocket = require("ws");
+const { paceCast } = require("./lib/cast-pace.cjs");
 
 const SERVER_DIR = path.join(__dirname, "..");
 const ENTRY = path.join(SERVER_DIR, "dist", "main.js");
@@ -217,6 +218,8 @@ function connect(url) {
     castSeq: 0,
     /** 发一次 cast 并等它的 settle 应答 */
     async cast(body, timeoutMs = 5_000) {
+      // 出手前等一个间隔（#813 冷却闸：服务端按真客户端口径判 250ms/刀）
+      await paceCast();
       session.castSeq += 1;
       const castId = session.castSeq;
       socket.send(JSON.stringify({ type: "cast", data: { castId, ...body } }));

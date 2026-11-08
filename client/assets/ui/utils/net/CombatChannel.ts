@@ -746,4 +746,17 @@ export interface CombatSettleError {
   ok: false;
   code: string;
   message: string;
+  /**
+   * 判定链（#813）的拒绝分类：`dead` / `cross_map` / `range` / `cooldown` / `mp` / `rate`
+   *
+   * 只在**闸拒绝**时出现（协议错 / 未知目标这些仍只有 `code`）。客户端目前只记日志：
+   * 正常客户端自己就守着冷却与蓝耗，收到这些说明本地状态已经和服务端漂了 ——
+   * 该做的是下一次心跳 / 存档同步回正，而不是给玩家弹一排红字。
+   */
+  rejected?: "dead" | "cross_map" | "range" | "cooldown" | "mp" | "rate";
+  /** 冷却闸专用：还要等多少毫秒 */
+  remainMs?: number;
+  /** 耗蓝闸专用：需要多少法力 / 当前多少（可飘「蓝不足 40/12」） */
+  need?: number;
+  have?: number;
 }
