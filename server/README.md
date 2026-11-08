@@ -61,8 +61,7 @@ npm run dev              # 开发（ts-node 热启动）；npm run build && npm 
 | `npm run test:e2e:levelup` | 升级路径统一专项（33 条；#899：四条路径共用 `settleLevelUp` / `data.level` 同步 / 满级经验封顶 / 上限缺失兜底） |
 | `npm run test:e2e:equip-sanitize` | 装备槽位清洗专项（19 条；#825：同件穿多槽只算一次 / 部位不符不计 / 管理端同口径 / 写入侧仍修档） |
 | `npm run test:e2e:element-damage` | 物法分离专项（12 条；#823：物理打物防 / 法术打魔防 / 法攻配 0 时跳过技能并 warn） |
-| `npm run test:e2e:equip-sanitize` | 装备槽位清洗专项（19 条；#825：同件穿多槽只算一次 / 部位不符不计 / 管理端同口径 / 写入侧仍修档） |
-| `npm run test:e2e:element-damage` | 物法分离专项（12 条；#823：物理打物防 / 法术打魔防 / 法攻 0 时跳过技能并 warn） |
+| `npm run test:e2e:area-skill` | 自身 / 区域 / 群体技能专项（30 条；#824：非单体技能能过结算 / 服务端算命中集合 / 落点夹取 / 逐只奖励与合并掉落账本） |
 | `npm run test:e2e:admin-mail` | 管理端消息补发专项（29 条；#437：鉴权 / 频道收窄 / 附件领到手 / 离线收件 / 审计留痕） |
 | `npm run test:e2e:mail-expiry` | 收件箱保质期专项（15 条；#439：ttl 写入 / 读口即时消失 / 清理判据 / 批量上限） |
 | `npm run test:e2e:ui-effect` | 特效专项（34 条；#594 升级特效 + #634 掉落光效六档：可读不可写 / 出厂值 seed 顺序 / 无新建·删除 / 数值边界 / 快照即最新 / 审计与文档契约） |
@@ -74,7 +73,7 @@ npm run dev              # 开发（ts-node 热启动）；npm run build && npm 
 | `npm run config:check` | 检查快照是否落后于当前库（落后时退出码 1） |
 | `npm run test:config-sync` | 配置快照导出 / 导入测试（不起服务） |
 | `npm run verify:api` | `swagger:emit` + 生成物一致性审计 |
-| `npm run verify` | **一条命令全验**：编译 + 全部 e2e（1 主套 + 50 专项，清单派生自 `package.json`） + 生成物审计 |
+| `npm run verify` | **一条命令全验**：编译 + 全部 e2e（1 主套 + 51 专项，清单派生自 `package.json`） + 生成物审计 |
 
 > 仓库根的 `make` 是这些脚本的快捷方式：`make server-dev` / `make server-verify` /
 > `make gen-api` / `make server-e2e-guard` 等，`make help` 看全部。
@@ -196,6 +195,7 @@ server/
 │   ├── e2e-levelup.cjs（升级路径统一 #899：四条路共用 settleLevelUp / data.level 同步 / 满级经验封顶 / 上限缺失兜底）
 │   ├── e2e-equip-sanitize.cjs（装备槽位清洗 #825：同件多槽只算一次 / 部位不符不计 / 管理端同口径 / 写入侧仍修档）
 │   ├── e2e-element-damage.cjs（物法分离 #823：物理打物防 / 法术打魔防 / 法攻配 0 时跳过技能并 warn）
+│   ├── e2e-area-skill.cjs（自身 / 区域 / 群体技能 #824：非单体技能过结算 / 服务端算命中集合 / 落点夹取 / 逐只奖励与合并掉落账本）
 │   ├── e2e-world.cjs（世界权威：服务端按刷怪区自播种 / 结算落世界 / tick 重生 / 关闭落盘 / 重启恢复）
 │   ├── e2e-world-viewers.cjs（观看者集合：换图退出旧图 / 旧图不再投递与采样 / 空闲卸载 / 卸载不丢状态）
 │   ├── e2e-dual.cjs（双进程形态：存档与实时分进程 / 跨进程令牌校验 / 踢下线巡检断连 / WAL 跨进程写）

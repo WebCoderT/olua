@@ -195,6 +195,18 @@ export class WorldService implements OnApplicationBootstrap, OnApplicationShutdo
   }
 
   /**
+   * 一个分域里的一只只实例（#824 群体技能的候选池；只读，别改血量）
+   *
+   * 只给出**出生点**，不筛距离：几何口径属于战斗（半径、命中上限、用不用 AI 运行时坐标）
+   * 而不属于世界层 —— 这里一旦长出 `near(x, y, r)`，世界层就要认识「技能半径」这件事。
+   * 图不在内存（未加载）返回空数组，调用方按「一个都打不到」处理。
+   */
+  monstersOf(zoneId: number, mapId: string): WorldMonster[] {
+    const map = this.maps.get(worldKey(zoneId, mapId));
+    return map ? [...map.values()] : [];
+  }
+
+  /**
    * 当前**有人看**的分域列表（#323：怪物 AI tick 只驱动有人看的图 —— 没人看的图
    * 没有广播对象，纯空转）。怪物实例表是权威状态本体，调用方只读、别改血量。
    */

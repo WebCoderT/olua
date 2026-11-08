@@ -64,6 +64,8 @@ const WEIGHT = {
   "test:e2e:chat": 2,
   "test:e2e:rank": 2,
   "test:e2e:quest": 2,
+  // 两张图各起一次世界、三段区域施放中间都要等群体技能的冷却（1.3s × 3）
+  "test:e2e:area-skill": 3,
 };
 
 function weightOf(script) {

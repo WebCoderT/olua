@@ -57,6 +57,11 @@ export function skill_1010(context: SkillContext) {
  * - 悬停点在范围外：沿「角色 → 悬停点」方向取距离上限处为落点
  * 落点先吸附到最近可行走位置（避免扎进墙/障碍），瞬移后面向突进方向播放技能动作，
  * 并在落点播放一次特效（区域技能的特效位置由技能实现决定，SkillManager 不代播）
+ *
+ * **出手也要报给服务端**（#824）：这个技能 `damage_coefficients` 是空数组（纯位移、不掷伤害），
+ * 但冷却与法力是服务端的账 —— 不报等于「服务端不知道他放过这一手」，改包就能无限突进。
+ * 服务端按 `target_type = 0` 走区域那条路：不查目标、不掷伤害，只过六道闸并回 `noDamage`。
+ * 位移本身仍在本地（落点校验要等 #811 位置源收口，服务端现在没有权威坐标可比）。
  */
 export function skill_1008(context: SkillContext) {
   const { config, role, caster } = context;
@@ -81,4 +86,7 @@ export function skill_1008(context: SkillContext) {
   caster.setWorldPositionByTransfer(landing);
   caster.playSkillAttack(config.action, getDirectionByVector(offset));
   EffectManager.playAt(config, landing, role);
+  // 落点一并上报：服务端会按施法距离再夹一次（与上面 travel 的截断同一口径），
+  // 所以两端算出的是同一个点；改包报一个远处落点也打不到射程外
+  CombatChannel.sendCast(config.id, "", "", { x: landing.x, y: landing.y });
 }
