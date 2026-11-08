@@ -33,6 +33,7 @@ import { COMBAT_RANGE_KEYS } from "../../common/constants/game-enums";
 import {
   combatWeightsOf,
   equipmentAttributesOf,
+  equipmentSlotOf,
   rankAttributesOf,
   roleLevelAttributesOf,
   soulAttributesOf,
@@ -107,6 +108,14 @@ export interface RoleAttributeSummary {
 export interface RoleAttributeNotes {
   /** 查不到属性的装备 id（顺序即槽位遍历顺序） */
   unknownEquipmentIds: string[];
+  /**
+   * 部位不符、因此没算进属性的槽位（#825）
+   *
+   * 正常存档里恒为空 —— 穿戴算子只往合法槽位写。出现即说明是脏档（老存档 / 运营 PATCH /
+   * 改包），此时按「宁可少算」处理：这件装备不计属性，但**不改写存档**（修档是
+   * `sanitizeEquipments` 的职责，发生在读档写档路径上）。
+   */
+  misfitEquipmentSlots: Array<{ slot: string; id: string; actualSlot: string }>;
 }
 
 /**
@@ -134,7 +143,7 @@ export function summarizeRoleAttributes(source: RoleAttributeSource): RoleAttrib
  * 想要知道这次汇总有没有踩到未知装备时用这个（例如给运营看的那份角色详情）。
  */
 export function summarizeRoleAttributesWithNotes(source: RoleAttributeSource): { summary: RoleAttributeSummary | null; notes: RoleAttributeNotes } {
-  const notes: RoleAttributeNotes = { unknownEquipmentIds: [] };
+  const notes: RoleAttributeNotes = { unknownEquipmentIds: [], misfitEquipmentSlots: [] };
 
   const levelBundle = roleLevelAttributesOf(source.level);
   if (!levelBundle) return { summary: null, notes };
@@ -224,15 +233,44 @@ function rangeOf(bundle: GeneratedBundle, key: string): [number, number] | null 
   return [low, high];
 }
 
-/** 收集穿戴装备的属性包（查不到的 id 跳过，但记进 notes） */
+/**
+ * 收集穿戴装备的属性包（同一件只算一次；查不到 / 部位不符的跳过但记进 notes）
+ *
+ * **这里必须自己去重与校验部位（#825）**：属性是「遍历 `equipments` 的所有值」累加出来的，
+ * 不看键。于是同一件顶级武器同时写进 5 个槽位就能把属性算 5 遍 —— 改包、运营 PATCH 存档、
+ * 老存档都能造出这种档，而写入侧的 `sanitizeEquipments` 只在**读档写档**那两条路上，
+ * 结算 / 互见 / 榜单 / 成就读的是同一个 `data`，谁都没兜住。
+ *
+ * 两条处置口径（与 `sanitizeEquipments` 一致，只是这里不改写存档）：
+ * - **同一件出现多次**：只算一次，且优先采用「槽位对得上」的那一处（脏档常把正确槽位写在后面）；
+ * - **部位不符**：直接不计（记进 `notes.misfitEquipmentSlots`），挪槽是修档的职责。
+ */
 function collectEquipmentBundles(equipments: RoleAttributeSource["equipments"], notes: RoleAttributeNotes): GeneratedBundle[] {
   if (!equipments || typeof equipments !== "object") return [];
-  const bundles: GeneratedBundle[] = [];
-  for (const entry of Object.values(equipments)) {
+  // 第一遍：按 id 收口，同一件只留一处 —— 槽位对的优先
+  const chosen = new Map<string, { slot: string; actualSlot: string | null }>();
+  for (const [slot, entry] of Object.entries(equipments)) {
     // 空槽位 / 形状不对（`{}` 没有 id）一律跳过：宁可少算一件，也不让 NaN 混进属性
-    const raw = entry && typeof entry === "object" ? entry.id : entry;
+    const raw = entry && typeof entry === "object" ? (entry as { id?: unknown }).id : entry;
     const id = typeof raw === "string" ? raw.trim() : "";
     if (!id) continue;
+    const actualSlot = equipmentSlotOf(id);
+    const kept = chosen.get(id);
+    if (!kept) {
+      chosen.set(id, { slot, actualSlot });
+      continue;
+    }
+    // 已有同名件：当前这处部位对得上、而留存那处对不上 → 换成这一处
+    if (!slotMatches(kept.actualSlot, kept.slot) && slotMatches(actualSlot, slot)) chosen.set(id, { slot, actualSlot });
+  }
+
+  // 第二遍：出属性包（查不到的 id 跳过，但记进 notes）
+  const bundles: GeneratedBundle[] = [];
+  for (const [id, { slot, actualSlot }] of chosen) {
+    if (actualSlot !== null && !slotMatches(actualSlot, slot)) {
+      notes.misfitEquipmentSlots.push({ slot, id, actualSlot });
+      continue;
+    }
     // 先查运营库覆盖层（管理端改过就是新值），没有再提出厂属性 —— 两端同一份数字
     const bundle = equipmentAttributesOf(id);
     if (!bundle) {
@@ -242,6 +280,21 @@ function collectEquipmentBundles(equipments: RoleAttributeSource["equipments"], 
     bundles.push(bundle as unknown as GeneratedBundle);
   }
   return bundles;
+}
+
+/**
+ * 槽位名是否对得上
+ *
+ * **大小写不敏感**：老存档 / 管理端历史入参里槽位是大写（`WEAPON`），库里的部位键是小写
+ * （`weapon`）。`sanitizeEquipments` 会在下次存盘时把键改成小写，但「改存档之前」的这段时间
+ * 属性也必须照常算 —— 否则一次升级会让老号的装备凭空失效。
+ *
+ * `actualSlot === null` = 认不出的 id（服务端快照里没有这件）：判断不了部位，一律放行，
+ * 由 `equipmentAttributesOf` 查不到再跳过（与修档口径一致：认不出的不删）。
+ */
+function slotMatches(actualSlot: string | null, slot: string): boolean {
+  if (actualSlot === null) return true;
+  return actualSlot.toLowerCase() === String(slot).toLowerCase();
 }
 
 //#endregion

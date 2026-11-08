@@ -35,6 +35,11 @@
 - 部分更新接口加数组字段要区分「显式传」与「存量漂移」，否则扩档旧调用被 400 卡死（#720）。
 - 资源目录口径见 `client/RESOURCES.md`（14 顶层域平铺 + `ui/`）；改名三处同源：磁盘 + plist 自引用 → 库 19 个路径列 + `config-sync.sql` → 客户端 configs。
 - **客户端只报格子，数值直读表**（#785 货币）；「玩家在哪」= 存档 `data.mapAt`；改 bag 数据收尾必须 `refreshBag()`。
+- **物法分离看 `baseType`**（#823）：攻击类型来自技能系数 `damageCoefficients[].baseType`（`physicalAttack` / `magicAttack` / `taoistAttack`），
+  不另开 `damage_type` 列。两张映射表 `DEFENSE_BY_ATTACK` / `MONSTER_STAT_COLUMN` 在 `common/constants/game-enums` 由结算与怪物 AI **两侧共用**；
+  怪物该项攻击上限 = 0 视为**未配** → 跳过该技能并 warn（不派生、不刷数据）。抗性分系暂时放置。
+- **装备属性汇总要自防**（#825）：`collectEquipmentBundles` 是所有读者的公共入口（结算 / 互见 / 榜 / 成就 / 管理端详情），
+  同一件只算一次 + 部位不符不计（`slotMatches` 大小写不敏感，`actualSlot === null` 放行）—— 修在这里一处生效，且只算属性**不改写存档**（修档是 `sanitizeEquipments` 的活）。
 - **离线发奖缺口**：`grantQuestRewards` 首行 `onlineRoleOrThrow` → 离线发不进去；要补 `grantByRoleId`（32/31 篇的共同前置）。
 - **状态只有一份口径**（#822）：`modules/combat/status-combat.ts`（服务端，纯函数）＝「谁挂着什么」在 `role_status`（运行时表，不进快照/config-sync）。
   `category = "2"` 的技能**在目标校验之前**分流；客户端不自己 `apply`、不自己数秒。新增状态只加 `statuses` 行，不要另开一套。

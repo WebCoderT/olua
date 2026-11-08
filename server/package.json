@@ -74,7 +74,9 @@
     "test:e2e:money-item": "node --disable-warning=ExperimentalWarning test/e2e-money-item.cjs",
     "test:e2e:level-curve": "node --disable-warning=ExperimentalWarning test/e2e-level-curve.cjs",
     "test:e2e:level-scroll": "node --disable-warning=ExperimentalWarning test/e2e-level-scroll.cjs",
-    "test:e2e:levelup": "node --disable-warning=ExperimentalWarning test/e2e-levelup.cjs"
+    "test:e2e:levelup": "node --disable-warning=ExperimentalWarning test/e2e-levelup.cjs",
+    "test:e2e:equip-sanitize": "node --disable-warning=ExperimentalWarning test/e2e-equip-sanitize.cjs",
+    "test:e2e:element-damage": "node --disable-warning=ExperimentalWarning test/e2e-element-damage.cjs"
   },
   "dependencies": {
     "@nestjs/common": "^12.1.2",
