@@ -6,7 +6,7 @@ import { IconField } from "../components/ImagePicker";
 import { anyPickerOpen } from "../components/pickerStack";
 import { Modal } from "../components/Modal";
 import { Pagination } from "../components/Pagination";
-import { Badge, Button, Card, EmptyState, Field, Input, Spinner, tableClass, tdClass, thClass, theadClass } from "../components/ui";
+import { Badge, Button, Card, EmptyState, Field, Input, Select, Spinner, tableClass, tdClass, thClass, theadClass } from "../components/ui";
 import { hasPermission } from "../store/session";
 import { toastSuccess } from "../store/toast";
 import { PageHeader } from "../components/PageHeader";
@@ -101,6 +101,7 @@ export function DrugsPage() {
         effectMp: form.effectMp,
         effectHpPercent: form.effectHpPercent,
         effectMpPercent: form.effectMpPercent,
+        bindOnDrop: form.bindOnDrop === true,
       });
       toastSuccess(`药品「${form.label}」已更新`);
       closeEdit();
@@ -166,6 +167,7 @@ export function DrugsPage() {
                 <th className={thClass}>冷却</th>
                 <th className={thClass}>售价</th>
                 <th className={thClass}>堆叠</th>
+                <th className={thClass}>掉落绑定</th>
                 <th className={thClass}>更新时间</th>
                 <th className={`${thClass} text-right`}>操作</th>
               </tr>
@@ -189,6 +191,9 @@ export function DrugsPage() {
                   <td className={tdClass}>{item.sellPrice}</td>
                   <td className={tdClass}>
                     <Badge tone="slate">{item.maxStack}</Badge>
+                  </td>
+                  <td className={tdClass}>
+                    <Badge tone={item.bindOnDrop ? "amber" : "slate"}>{item.bindOnDrop ? "强制绑定" : "—"}</Badge>
                   </td>
                   <td className={`${tdClass} text-xs text-slate-400`}>{formatTime(item.updatedAt)}</td>
                   <td className={`${tdClass} text-right`}>
@@ -259,6 +264,15 @@ export function DrugsPage() {
               {numberField("百分比回复蓝（%）", "按角色 maxMp 的百分比，50 = 50%", "effectMpPercent", 0, 100)}
               {numberField("使用冷却（秒）", "0 = 无冷却", "cooldown", 0, 3600)}
               {numberField("堆叠上限", "背包里最多叠多少个", "maxStack", 1, 9999)}
+              <Field label="掉落绑定" hint="掉落时强制绑定角色（绑定后不可交易）">
+                <Select
+                  value={form.bindOnDrop ? "true" : "false"}
+                  onChange={(event) => setForm({ ...form, bindOnDrop: event.target.value === "true" })}
+                >
+                  <option value="false">不强制（按掉落参数随机）</option>
+                  <option value="true">强制绑定</option>
+                </Select>
+              </Field>
             </div>
           </Modal>
         </>

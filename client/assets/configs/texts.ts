@@ -279,6 +279,14 @@ export const uiTexts = {
   label_good_detail_compare_hint: "按住 Ctrl 与身上装备对比",
   /** 装备对比：属性名（战斗力行用，与角色信息弹窗的战斗力图标同一个词） */
   label_combat: "战斗力",
+  /** 物品详情：已绑定（绑定角色 = 不允许交易；#789 只做标记与展示，交易系统另行开工） */
+  label_good_detail_bound: "已绑定 · 不可交易",
+  /** 物品详情：掉落溯源三段（只有装备带溯源；{role} 击杀者 · {monster} 怪物 · {time} 掉落时间） */
+  label_good_detail_origin_role: "掉落者 {role}",
+  label_good_detail_origin_monster: "怪物 {monster}",
+  label_good_detail_origin_time: "掉落于 {time}",
+  /** 物品详情：溯源时间格式（MM-DD HH:mm，日期跨天时要看得见） */
+  label_good_detail_origin_time_format: "{month}月{day}日 {hour}:{minute}",
 
   //#region 界面标签：背包操作按钮（文案在这里，几何见 configs/layout/dialogs.bagDialogLayout）
   /** 「一键整理」按钮 */

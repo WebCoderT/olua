@@ -12,7 +12,7 @@ import { Type } from "class-transformer";
  * 与成长曲线「DTO 管单字段、service 管跨行」同一分工。
  */
 
-/** 掉落物手感参数（`configs/drop.ts` 里那四个数） */
+/** 掉落参数（手感那四个数归客户端；`bindChance` 是**服务端掉落结算**读的） */
 export class DropRuntimeParamsDto {
   @ApiProperty({ description: "自动拾取半径（像素）：脚底距离小于它即拾取", example: 40 })
   @IsInt()
@@ -37,6 +37,17 @@ export class DropRuntimeParamsDto {
   @Min(100)
   @Max(60000)
   pickReplyTimeout: number;
+
+  @ApiProperty({
+    description:
+      "随机绑定概率（百分比 0~100）：物品与怪物都没有「强制绑定」时，按它掷一次决定这一件是否绑定角色。" +
+      "0 = 从不随机绑定",
+    example: 30,
+  })
+  @IsInt()
+  @Min(0)
+  @Max(100)
+  bindChance: number;
 }
 
 /** 自动战斗 / 寻路参数（`configs/autoBattle.ts` 的行为部分，样式与颜色不在其中） */
@@ -206,6 +217,13 @@ export class UpdateDropRuntimeParamsDto {
   @Min(100)
   @Max(60000)
   pickReplyTimeout?: number;
+
+  @ApiPropertyOptional({ description: "随机绑定概率（百分比 0~100；0 = 从不随机绑定）" })
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(100)
+  bindChance?: number;
 }
 
 /** 部分更新：自动战斗分组 */

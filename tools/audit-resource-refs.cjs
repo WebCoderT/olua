@@ -214,7 +214,7 @@ const snapshotRows = snapshotText
       equipments: readRows(snapshotText, "equipments"),
       items: readRows(snapshotText, "items"),
       drugs: readRows(snapshotText, "drugs"),
-      // #787：升级卷轴（图标由运营在管理端填，出厂指向 item/scroll/level-scroll）
+      // #787：升级卷轴（图标由运营在管理端填，出厂按卷号指向 item/scroll/level-scroll-N）
       levelScrolls: readRows(snapshotText, "level_scrolls"),
     }
   : null;

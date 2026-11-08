@@ -62,8 +62,8 @@ export class MoneyItemRepository {
   insert(row: MoneyItemRow): void {
     this.db.run(
       `INSERT INTO money_items
-         (id, label, description, icon, currency, amount, max_stack, sell_price, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         (id, label, description, icon, currency, amount, max_stack, sell_price, bind_on_drop, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         row.id,
         row.label,
@@ -73,6 +73,7 @@ export class MoneyItemRepository {
         row.amount,
         row.max_stack,
         row.sell_price,
+        row.bind_on_drop,
         row.updated_at,
       ],
     );
@@ -82,7 +83,7 @@ export class MoneyItemRepository {
     return this.db.execute(
       `UPDATE money_items SET
          label = ?, description = ?, icon = ?, currency = ?, amount = ?,
-         max_stack = ?, sell_price = ?, updated_at = ?
+         max_stack = ?, sell_price = ?, bind_on_drop = ?, updated_at = ?
        WHERE id = ?`,
       [
         row.label,
@@ -92,6 +93,7 @@ export class MoneyItemRepository {
         row.amount,
         row.max_stack,
         row.sell_price,
+        row.bind_on_drop,
         row.updated_at,
         row.id,
       ],

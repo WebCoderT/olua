@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
-import { IsInt, IsOptional, IsString, Max, MaxLength, Min, MinLength } from "class-validator";
+import { IsBoolean, IsInt, IsOptional, IsString, Max, MaxLength, Min, MinLength } from "class-validator";
 import { PageMetaDto, PageQueryDto } from "../../../common/dto/api-envelope.dto";
 import { DrugRow } from "../../../database/rows";
 
@@ -59,6 +59,9 @@ export class DrugDto {
   @ApiProperty({ description: "按角色 maxMp 的百分比回复（50 = 50%）" })
   effectMpPercent: number;
 
+  @ApiProperty({ description: "掉落时强制绑定（#789）：true = 掉出来就绑定角色、不可交易" })
+  bindOnDrop: boolean;
+
   @ApiProperty({ description: "最近更新时间（毫秒）" })
   updatedAt: number;
 
@@ -76,6 +79,7 @@ export class DrugDto {
     dto.effectMp = row.effect_mp;
     dto.effectHpPercent = row.effect_hp_percent;
     dto.effectMpPercent = row.effect_mp_percent;
+    dto.bindOnDrop = row.bind_on_drop === 1;
     dto.updatedAt = row.updated_at;
     return dto;
   }
@@ -191,4 +195,9 @@ export class UpdateDrugDto {
   @Min(0, { message: "百分比不能为负" })
   @Max(100, { message: "百分比不能超过 100" })
   effectMpPercent?: number;
+
+  @ApiPropertyOptional({ description: "掉落时强制绑定（#789；不传则不改）" })
+  @IsOptional()
+  @IsBoolean({ message: "掉落强制绑定必须是布尔值" })
+  bindOnDrop?: boolean;
 }

@@ -30,11 +30,23 @@ type MoneyForm = {
   amount: number;
   maxStack: number;
   sellPrice: number;
+  /** 掉落时强制绑定角色（绑定后不可交易）；不勾则由怪物标记 / 掉落参数随机决定 */
+  bindOnDrop: boolean;
 };
 
 /** 空表单（新建默认落「绑定元宝 100」，最常见的一种，改两下就能建） */
 function emptyForm(): MoneyForm {
-  return { id: "", label: "", description: "", icon: "", currency: MONEY_KIND_OPTIONS[0], amount: 100, maxStack: 999, sellPrice: 0 };
+  return {
+    id: "",
+    label: "",
+    description: "",
+    icon: "",
+    currency: MONEY_KIND_OPTIONS[0],
+    amount: 100,
+    maxStack: 999,
+    sellPrice: 0,
+    bindOnDrop: false,
+  };
 }
 
 /** 面值带千分位（100000 → 100,000；表里几万面值一眼看得清位数） */
@@ -122,6 +134,7 @@ export function MoneyItemsPage() {
       amount: item.amount,
       maxStack: item.maxStack,
       sellPrice: item.sellPrice,
+      bindOnDrop: item.bindOnDrop === true,
     });
   };
 
@@ -137,6 +150,7 @@ export function MoneyItemsPage() {
       amount: form.amount,
       maxStack: form.maxStack,
       sellPrice: form.sellPrice,
+      bindOnDrop: form.bindOnDrop,
     };
     if (form.id.trim()) body.id = form.id.trim();
     if (form.label.trim()) body.label = form.label.trim();
@@ -166,6 +180,7 @@ export function MoneyItemsPage() {
       amount: form.amount,
       maxStack: form.maxStack,
       sellPrice: form.sellPrice,
+      bindOnDrop: form.bindOnDrop,
     };
     setSaving(true);
     try {
@@ -261,6 +276,7 @@ export function MoneyItemsPage() {
                 <th className={thClass}>面值</th>
                 <th className={thClass}>堆叠</th>
                 <th className={thClass}>售价</th>
+                <th className={thClass}>掉落绑定</th>
                 <th className={thClass}>更新时间</th>
                 <th className={`${thClass} text-right`}>操作</th>
               </tr>
@@ -286,6 +302,9 @@ export function MoneyItemsPage() {
                   <td className={`${tdClass} font-mono text-sm text-amber-200`}>+{amountText(item.amount)}</td>
                   <td className={tdClass}>{item.maxStack}</td>
                   <td className={tdClass}>{item.sellPrice > 0 ? amountText(item.sellPrice) : "不可出售"}</td>
+                  <td className={tdClass}>
+                    <Badge tone={item.bindOnDrop ? "amber" : "slate"}>{item.bindOnDrop ? "强制绑定" : "—"}</Badge>
+                  </td>
                   <td className={`${tdClass} text-xs text-slate-400`}>{formatTime(item.updatedAt)}</td>
                   <td className={`${tdClass} text-right`}>
                     <div className="flex justify-end gap-2">
@@ -410,6 +429,13 @@ export function MoneyItemsPage() {
               />
             </Field>
           </div>
+
+          <Field label="掉落绑定" hint="掉落时强制绑定角色（绑定后不可交易）—— 与怪物侧的「掉落整体强制绑定」是「或」的关系">
+            <Select value={form.bindOnDrop ? "true" : "false"} onChange={(event) => setForm({ ...form, bindOnDrop: event.target.value === "true" })}>
+              <option value="false">不强制（按掉落参数随机）</option>
+              <option value="true">强制绑定</option>
+            </Select>
+          </Field>
         </Modal>
       ) : null}
 

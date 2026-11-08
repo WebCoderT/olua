@@ -598,6 +598,20 @@ export const goodDetailLayout = {
   info: { fontSize: 12, size: new Size(220, 18), color: new Color("#9A9A9A") },
   /** 回收价行：字号与配色（金色，与绑定元宝呼应） */
   recycle: { fontSize: 12, size: new Size(220, 18), color: new Color("#FFD700") },
+  /**
+   * 绑定标记行（「已绑定 · 不可交易」，#789）
+   *
+   * 只在**这件物品确实绑定**时出现：颜色取琥珀色（与标签行同调但更醒目），排版占一行。
+   * 不绑定时不占位 —— 多数掉落物没绑定，留一行空位会让详情弹窗白白变高。
+   */
+  bound: { fontSize: 12, size: new Size(220, 18), color: new Color(255, 178, 92) },
+  /**
+   * 掉落溯源段（谁掉的 / 哪个怪 / 什么时间，#789；只有装备带溯源）
+   *
+   * 三行弱灰字，排在回收价下方：颜色比正文淡（它是背景信息，不是玩家要拿它做决策的数据）。
+   * 行高 15 与字号 11 配套，三行合计约 45 像素，弹窗仍在一块可见区内。
+   */
+  origin: { fontSize: 11, lineHeight: 15, size: new Size(220, 15), color: new Color(150, 150, 150) },
   /** 介绍文本 */
   description: { fontSize: 12, size: new Size(220, 50), lineHeight: 16 },
   /**

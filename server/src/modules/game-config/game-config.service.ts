@@ -512,6 +512,8 @@ export class GameConfigService {
       out_positions: dto.outPositions
         ? JSON.stringify(dto.outPositions.map((point) => ({ x: point.x, y: point.y })))
         : existing.out_positions,
+      // 掉落强制绑定（#789）：库里是 0/1，DTO 是 boolean，缺省 = 不改
+      bind_on_drop: dto.bindOnDrop === undefined ? existing.bind_on_drop : dto.bindOnDrop ? 1 : 0,
       ...attributeColumns(attributes),
       updated_at: Date.now(),
     };
@@ -585,6 +587,8 @@ export class GameConfigService {
       in_rotate: template?.in_rotate ?? 0,
       out_scale: template?.out_scale ?? 1,
       out_positions: template?.out_positions ?? zeroPositions(),
+      // 掉落强制绑定（#789）：跟着模板走，DTO 显式给了就以 DTO 为准
+      bind_on_drop: dto.bindOnDrop === undefined ? (template?.bind_on_drop ?? 0) : dto.bindOnDrop ? 1 : 0,
       ...attributes,
       updated_at: now,
     };
@@ -763,6 +767,8 @@ export class GameConfigService {
       effect_mp: dto.effectMp ?? existing.effect_mp,
       effect_hp_percent: dto.effectHpPercent ?? existing.effect_hp_percent,
       effect_mp_percent: dto.effectMpPercent ?? existing.effect_mp_percent,
+      // 掉落强制绑定（#789）：库里是 0/1，DTO 是 boolean，缺省 = 不改
+      bind_on_drop: dto.bindOnDrop === undefined ? existing.bind_on_drop : dto.bindOnDrop ? 1 : 0,
       updated_at: Date.now(),
     };
     this.drugs.update(next);
@@ -795,6 +801,8 @@ export class GameConfigService {
       icon: dto.icon ?? existing.icon,
       sell_price: dto.sellPrice ?? existing.sell_price,
       max_stack: dto.maxStack ?? existing.max_stack,
+      // 掉落强制绑定（#789）：库里是 0/1，DTO 是 boolean，缺省 = 不改
+      bind_on_drop: dto.bindOnDrop === undefined ? existing.bind_on_drop : dto.bindOnDrop ? 1 : 0,
       updated_at: Date.now(),
     };
     this.items.update(next);
@@ -845,6 +853,8 @@ export class GameConfigService {
       amount: dto.amount,
       max_stack: dto.maxStack ?? seed.maxStack,
       sell_price: dto.sellPrice ?? seed.sellPrice,
+      // 掉落强制绑定（#789）：新建默认不强制
+      bind_on_drop: dto.bindOnDrop ? 1 : 0,
       updated_at: Date.now(),
     };
     this.moneyItems.insert(row);
@@ -863,6 +873,8 @@ export class GameConfigService {
       amount: dto.amount ?? existing.amount,
       max_stack: dto.maxStack ?? existing.max_stack,
       sell_price: dto.sellPrice ?? existing.sell_price,
+      // 掉落强制绑定（#789）：库里是 0/1，DTO 是 boolean，缺省 = 不改
+      bind_on_drop: dto.bindOnDrop === undefined ? existing.bind_on_drop : dto.bindOnDrop ? 1 : 0,
       updated_at: Date.now(),
     };
     this.moneyItems.update(next);
@@ -935,6 +947,8 @@ export class GameConfigService {
       max_level: dto.maxLevel,
       max_stack: dto.maxStack ?? 999,
       sell_price: dto.sellPrice ?? 0,
+      // 掉落强制绑定（#789）：新建默认不强制
+      bind_on_drop: dto.bindOnDrop ? 1 : 0,
       updated_at: Date.now(),
     };
     this.levelScrolls.insert(row);
@@ -959,6 +973,8 @@ export class GameConfigService {
       max_level: maxLevel,
       max_stack: dto.maxStack ?? existing.max_stack,
       sell_price: dto.sellPrice ?? existing.sell_price,
+      // 掉落强制绑定（#789）：库里是 0/1，DTO 是 boolean，缺省 = 不改
+      bind_on_drop: dto.bindOnDrop === undefined ? existing.bind_on_drop : dto.bindOnDrop ? 1 : 0,
       updated_at: Date.now(),
     };
     this.levelScrolls.update(next);

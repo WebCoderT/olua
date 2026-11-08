@@ -10,7 +10,9 @@
  * 不必再同步一个 TS 常量。
  */
 
-/** 掉落物手感参数（客户端消费；服务端只负责下发） */
+/**
+ * 掉落参数（手感那四个客户端消费；`bindChance` **服务端结算消费**）
+ */
 export interface DropRuntimeParams {
   /** 自动拾取半径（像素）：角色脚底与掉落物距离小于该值即拾取 */
   autoPickupRadius: number;
@@ -20,6 +22,14 @@ export interface DropRuntimeParams {
   scatterMinDistance: number;
   /** 服务端拾取应答的等待上限（毫秒）：超时视为本轮失败，允许重新拾取 */
   pickReplyTimeout: number;
+  /**
+   * 随机绑定概率（百分比 0~100，#789）
+   *
+   * 判定顺序见 `combat-settlement.service.rollDrops`：物品侧强制绑定、怪物侧强制绑定
+   * 任一为真就直接绑；**两个都不为真**时才按这个概率掷一次。
+   * 0 = 从不随机绑定（出厂值，等于「只有配置写死的那几件会绑」）。
+   */
+  bindChance: number;
 }
 
 /** 自动战斗 / 寻路参数（客户端消费；服务端只负责下发） */
@@ -75,7 +85,7 @@ export interface RuntimeParams {
 
 /** 三组的键清单（**启动自检用**：库里少了哪个键就点名报错，不静默补默认值） */
 export const RUNTIME_PARAM_KEYS: Record<keyof RuntimeParams, string[]> = {
-  drop: ["autoPickupRadius", "fullTipInterval", "scatterMinDistance", "pickReplyTimeout"],
+  drop: ["autoPickupRadius", "fullTipInterval", "scatterMinDistance", "pickReplyTimeout", "bindChance"],
   autoBattle: [
     "maxTargetDistance",
     "moveByRun",

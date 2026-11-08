@@ -137,6 +137,19 @@ export interface RealtimeSettleOk {
  * - 掉落：读 monster_drops / drop_tables 表（管理端改值即时生效）按权重/概率/数量抽取，
  *   客户端只负责把列表铺到地面演拾取，「掉什么、掉多少」不再是客户端的决定。
  */
+/**
+ * 一次击杀掉落里的一件（#789 起带绑定）
+ *
+ * `bound` 由服务端在抽取时判定（物品强制 / 怪物强制 / 随机三选一），客户端只用来
+ * 在飘落与地面上做展示；真正的绑定写在背包格子上，拾取时随 `picked` 帧回来。
+ */
+export interface RealtimeDropEntry {
+  goodId: string;
+  count: number;
+  /** 是否绑定角色（不可交易） */
+  bound: boolean;
+}
+
 export interface RealtimeKillReward {
   /** 本次入账的经验（等级差过大无经验时为 0） */
   exp: number;
@@ -151,7 +164,7 @@ export interface RealtimeKillReward {
   /** 经验入账后的角色修订号（exp = 0 时与入账前相同） */
   revision: number;
   /** 掉落结果（同一物品已合并数量；可为空数组——这次什么都没掉） */
-  drops: Array<{ goodId: string; count: number }>;
+  drops: RealtimeDropEntry[];
 }
 
 /** 结算被拒（ok = false；网络层连接不受影响） */
@@ -372,7 +385,7 @@ export interface RealtimeMonsterKill {
   x: number;
   y: number;
   /** 掉落结果（同一物品已合并数量；可为空数组 —— 这次什么都没掉，但死亡清场仍要走） */
-  drops: Array<{ goodId: string; count: number }>;
+  drops: RealtimeDropEntry[];
 }
 
 //#endregion
@@ -517,6 +530,10 @@ export interface RealtimePlacedCell {
   col: number;
   id: string;
   count: number;
+  /** 绑定角色（#789）：客户端照搬进本地背包，详情弹窗据此显示「已绑定」 */
+  bound?: boolean;
+  /** 掉落溯源（#789，只有装备会有）：谁杀的 / 哪个怪 / 什么时候 */
+  from?: { role?: string; monster?: string; at?: number };
 }
 
 /** 拾取成功（含幂等重放：该掉落此前已拾取过，placed 为空、revision 原样） */

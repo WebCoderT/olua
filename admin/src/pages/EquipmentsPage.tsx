@@ -108,6 +108,7 @@ function EquipmentCreateDialog({
   const [sellPrice, setSellPrice] = useState("");
   const [occupation, setOccupation] = useState("4");
   const [sex, setSex] = useState("3");
+  const [bindOnDrop, setBindOnDrop] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
@@ -119,6 +120,7 @@ function EquipmentCreateDialog({
     setSellPrice("");
     setOccupation("4");
     setSex("3");
+    setBindOnDrop(false);
     setSubmitting(false);
   }, [open, defaultSlot, slots]);
 
@@ -166,6 +168,7 @@ function EquipmentCreateDialog({
       sellPrice: sellPrice.trim() ? Number(sellPrice) : undefined,
       occupation,
       sex,
+      bindOnDrop,
     });
     setSubmitting(false);
     return ok;
@@ -254,6 +257,12 @@ function EquipmentCreateDialog({
               ))}
             </Select>
           </Field>
+          <Field label="掉落绑定" hint="掉落时强制绑定角色（绑定后不可交易）；不强制时由怪物标记 / 掉落参数随机决定">
+            <Select value={bindOnDrop ? "true" : "false"} onChange={(event) => setBindOnDrop(event.target.value === "true")}>
+              <option value="false">不强制（按掉落参数随机）</option>
+              <option value="true">强制绑定</option>
+            </Select>
+          </Field>
         </div>
         {!levelValid || !priceValid ? (
           <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-200">
@@ -301,6 +310,8 @@ type EquipmentDraft = {
   inPosY: string;
   outPositions: Array<{ x: string; y: string }>;
   attributes: ConfigAttributes;
+  /** 掉落时强制绑定角色（绑定后不可交易）；不勾则由怪物标记 / 掉落参数随机决定 */
+  bindOnDrop: boolean;
 };
 
 /** 与服务端 `EQUIPMENT_DIRECTIONS` 同序：up / right_up / right / right_down / down / left_down / left / left_up */
@@ -334,6 +345,7 @@ function toDraft(item: Equipment): EquipmentDraft {
     inPosY: String(item.inPosY ?? 0),
     outPositions: padPositions(item.outPositions),
     attributes: { ...item.attributes },
+    bindOnDrop: item.bindOnDrop === true,
   };
 }
 
@@ -368,6 +380,7 @@ function EquipmentEditDialog({
     level: number;
     sellPrice: number;
     attributes: ConfigAttributes;
+    bindOnDrop: boolean;
   }) => Promise<boolean>;
 }) {
   const [draft, setDraft] = useState<EquipmentDraft | null>(null);
@@ -416,6 +429,7 @@ function EquipmentEditDialog({
       level: Number(draft.level),
       sellPrice: Number(draft.sellPrice),
       attributes: draft.attributes,
+      bindOnDrop: draft.bindOnDrop,
     });
     setSubmitting(false);
     if (!ok) return;
@@ -479,6 +493,12 @@ function EquipmentEditDialog({
           </Field>
           <Field label="售卖价" hint="0 = 不可售卖；商城售价归「商城定价」管理，不在这里">
             <Input type="number" min={0} value={draft.sellPrice} onChange={(event) => patch({ sellPrice: event.target.value })} />
+          </Field>
+          <Field label="掉落绑定" hint="掉落时强制绑定角色（绑定后不可交易）—— 与怪物侧的「掉落整体强制绑定」是「或」的关系">
+            <Select value={draft.bindOnDrop ? "true" : "false"} onChange={(event) => patch({ bindOnDrop: event.target.value === "true" })}>
+              <option value="false">不强制（按掉落参数随机）</option>
+              <option value="true">强制绑定</option>
+            </Select>
           </Field>
         </div>
         <Field label="描述" hint="≤500 字；空 = 清空（详情弹窗正文）">
@@ -712,6 +732,7 @@ export function EquipmentsPage() {
     level: number;
     sellPrice: number;
     attributes: ConfigAttributes;
+    bindOnDrop: boolean;
   }): Promise<boolean> => {
     if (!editing) return false;
     try {
@@ -853,6 +874,7 @@ export function EquipmentsPage() {
                 <th className={thClass}>售卖价</th>
                 <th className={thClass}>变体</th>
                 <th className={thClass}>属性摘要</th>
+                <th className={thClass}>掉落绑定</th>
                 <th className={thClass}>更新时间</th>
                 <th className={`${thClass} text-right`}>操作</th>
               </tr>
@@ -887,6 +909,9 @@ export function EquipmentsPage() {
                     </button>
                   </td>
                   <td className={`${tdClass} text-xs text-slate-400`}>{attributeSummary(item)}</td>
+                  <td className={tdClass}>
+                    <Badge tone={item.bindOnDrop ? "amber" : "slate"}>{item.bindOnDrop ? "强制绑定" : "—"}</Badge>
+                  </td>
                   <td className={`${tdClass} text-xs text-slate-400`}>{formatTime(item.updatedAt)}</td>
                   <td className={`${tdClass} text-right`}>
                     <Button

@@ -732,6 +732,7 @@ export function MonstersPage() {
                         {DROP_SOURCE_LABELS[item.drop?.source ?? "none"] ?? "兜底"}
                       </Badge>
                       <span className="text-xs text-slate-400">{dropSummaryText(item.drop, tablesById)}</span>
+                      {item.drop?.bindDrops ? <Badge tone="amber">掉落绑定</Badge> : null}
                     </div>
                   </td>
                   <td className={`${tdClass} text-xs text-slate-400`}>{formatTime(item.updatedAt)}</td>

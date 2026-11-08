@@ -1,5 +1,5 @@
 import { Injectable, Logger } from "@nestjs/common";
-import { growthScalarOf, skillOf } from "../../common/runtime-config-cache";
+import { bindOnDropOf, growthScalarOf, itemTypeOf, skillOf } from "../../common/runtime-config-cache";
 import { BizCode } from "../../common/constants/biz-code";
 import { BizException } from "../../common/errors/biz.exception";
 import { AccountRepository } from "../../database/repositories/account.repository";
@@ -7,9 +7,11 @@ import { DropTableRepository } from "../../database/repositories/drop-table.repo
 import { GrowthRepository } from "../../database/repositories/growth.repository";
 import { MonsterDropRepository } from "../../database/repositories/monster-drop.repository";
 import { MonsterRepository } from "../../database/repositories/monster.repository";
+import { RuntimeParamsRepository } from "../../database/repositories/runtime-params.repository";
 import { MonsterRow } from "../../database/rows";
 import { roleAttributeSourceOf, summarizeRoleAttributes } from "../combat/role-attributes";
 import { RolesService } from "../roles/roles.service";
+import type { BagOrigin } from "../roles/role-inventory";
 import { GameEventsService } from "../../common/events/game-events.service";
 import { PartyService } from "../party/party.service";
 import { WorldService } from "../world/world.service";
@@ -69,7 +71,7 @@ export class CombatSettlementService {
    * 归属校验因此天然成立（伪造的 castId 在这里查不到账）。账目随幂等账一起清理
    * （换图 / 断线），容量与幂等账同一上限：掉落长期不拾本来就该消失，内存不能陪它涨。
    */
-  private readonly dropLedgers = new Map<string, Map<number, Array<{ goodId: string; count: number; picked: boolean }>>>();
+  private readonly dropLedgers = new Map<string, Map<number, DropLedgerEntry[]>>();
 
   constructor(
     private readonly roles: RolesService,
@@ -84,6 +86,8 @@ export class CombatSettlementService {
     private readonly party: PartyService,
     private readonly presence: PlayerPresenceService,
     private readonly monitor: MapMonitorService,
+    /** 掉落参数（#789：随机绑定概率）。与怪物数值同一取向 —— 现读库，管理端改完下一刀生效 */
+    private readonly runtimeParams: RuntimeParamsRepository,
   ) {}
 
   /** 结算一次出手（结果直接作为 settle 帧的 data 发回） */
@@ -138,7 +142,7 @@ export class CombatSettlementService {
     }
 
     try {
-      const result = this.roles.pickDrop(accountId, entry.goodId, entry.count);
+      const result = this.roles.pickDrop(accountId, entry.goodId, entry.count, { bound: entry.bound, from: entry.from });
       entry.picked = true;
       return { castId, index, ok: true, revision: result.revision, placed: result.placed, alreadyPicked: false };
     } catch (error) {
@@ -226,7 +230,10 @@ export class CombatSettlementService {
       // 击杀计数（#400）：排行榜的原料。与经验分开记 —— 等级差过大时经验为 0，但这一杀算数
       this.roles.recordKill(role.id);
       // 掉落记账（#325）：只在新结算路径记 —— 幂等重发走 recentSettles 原样重放，不重复入账
-      this.rememberDrops(accountId, cast.castId, reward.drops);
+      this.rememberDrops(accountId, cast.castId, reward.drops, {
+        killerName: this.roleNameOf(role),
+        monsterKey: cast.monsterKey,
+      });
       // 击杀事件（#401 起走总线）：任务进度与成就进度都是订阅方，各自兜异常 ——
       // 任何一方写库失败都不回滚这次击杀（世界状态是权威，少记一笔进度可接受）
       this.events.emit("monster:killed", {
@@ -417,8 +424,15 @@ export class CombatSettlementService {
    * 三选一与 #254 管理端语义一致：table = 引用具名表（行内 picks 可覆盖件数）、
    * entries = 内联条目池、none/缺行 = 兜底表 default。抽取算法与客户端 DropRoller
    * 同一口径：权重随机（可重复命中）、命中后再过概率、数量取区间随机、同物品合并。
+   *
+   * **绑定判定（#789）**在每个条目上单独做，三条规则按「先硬后软」：
+   * 1. 物品侧 `bind_on_drop` 为真 → 绑定；
+   * 2. 怪物侧 `monster_drops.bind_drops` 为真 → 绑定（这只怪掉什么都绑）；
+   * 3. 两个都不为真 → 按 `drop_params.bindChance`（百分比）掷一次。
+   * 判定放在抽取这一侧而不是拾取那一侧：同一次击杀的同一份掉落，掉落账本与
+   * 客户端拿到的 reward 必须说同一件事，拾取时再算一次就可能前后不一致。
    */
-  private rollDrops(monsterKey: string): Array<{ goodId: string; count: number }> {
+  private rollDrops(monsterKey: string): Array<{ goodId: string; count: number; bound: boolean }> {
     const row = this.monsterDrops.findByKey(monsterKey);
     let table: { picks: number | [number, number]; entries: DropEntryRow[] } | null = null;
     if (row && row.source === "table" && row.table_id) {
@@ -436,7 +450,32 @@ export class CombatSettlementService {
       table = fallback ? { picks: JSON.parse(fallback.picks), entries: JSON.parse(fallback.entries) } : null;
     }
     if (!table) return [];
-    return rollDropTable(table);
+    const monsterBind = row?.bind_drops === 1;
+    const bindChance = this.dropBindChance();
+    return rollDropTable(table).map((drop) => ({
+      ...drop,
+      bound: monsterBind || bindOnDropOf(drop.goodId) || Math.random() * 100 < bindChance,
+    }));
+  }
+
+  /**
+   * 随机绑定概率（百分比 0~100，读 `runtime_params.drop_params.bindChance`）
+   *
+   * 缺键 / 坏值 → 0（不随机绑定）：绑定会限制交易，配漏了就该「不生效」而不是
+   * 「所有掉落都被锁」，前者只是少一个玩法，后者是玩家集体投诉。
+   */
+  private dropBindChance(): number {
+    const raw = this.runtimeParams.get()?.drop_params;
+    if (!raw) return 0;
+    try {
+      const parsed: unknown = JSON.parse(raw);
+      if (!parsed || typeof parsed !== "object") return 0;
+      const value = Number((parsed as Record<string, unknown>).bindChance);
+      if (!Number.isFinite(value)) return 0;
+      return Math.min(100, Math.max(0, value));
+    } catch {
+      return 0;
+    }
   }
 
   /** 记住一次结算结果（每账号限量，超出挤掉最旧的） */
@@ -453,25 +492,61 @@ export class CombatSettlementService {
     book.set(castId, result);
   }
 
-  /** 记住一次击杀的掉落（#325；容量与幂等账同一上限，超出挤掉最旧的一次击杀） */
-  private rememberDrops(accountId: string, castId: number, drops: Array<{ goodId: string; count: number }>): void {
+  /**
+   * 记住一次击杀的掉落（#325；容量与幂等账同一上限，超出挤掉最旧的一次击杀）
+   *
+   * #789 起账本条目多两件事：**绑定**（拾取时原样写进背包格子）与**溯源**（谁杀的 /
+   * 哪个怪 / 什么时候）。溯源只给装备 —— 用户口径是「只有装备会溯源，其他物品只按是否
+   * 绑定分成两种」，一堆药记「谁掉的」没有意义，而且会让存档无谓变大。
+   */
+  private rememberDrops(accountId: string, castId: number, drops: Array<{ goodId: string; count: number; bound: boolean }>, origin: KillOrigin): void {
     if (!drops.length) return;
     let book = this.dropLedgers.get(accountId);
     if (!book) {
-      book = new Map<number, Array<{ goodId: string; count: number; picked: boolean }>>();
+      book = new Map<number, DropLedgerEntry[]>();
       this.dropLedgers.set(accountId, book);
     }
     if (book.size >= CAST_DEDUPE_CAPACITY) {
       const oldest = book.keys().next().value;
       if (oldest !== undefined) book.delete(oldest);
     }
-    book.set(castId, drops.map((drop) => ({ goodId: drop.goodId, count: drop.count, picked: false })));
+    const at = Date.now();
+    book.set(
+      castId,
+      drops.map((drop) => ({
+        goodId: drop.goodId,
+        count: drop.count,
+        bound: drop.bound,
+        from: itemTypeOf(drop.goodId) === "equipment" ? { role: origin.killerName, monster: origin.monsterKey, at } : undefined,
+        picked: false,
+      })),
+    );
   }
 
   //#endregion
 }
 
 //#region 类型与小工具（纯函数，e2e 可对照）
+
+/** 一次击杀的身份信息（掉落溯源用：#789） */
+interface KillOrigin {
+  /** 击杀者角色名（掉落那一刻的名字） */
+  killerName: string;
+  /** 怪物 key —— 客户端用怪物配置翻成中文名 */
+  monsterKey: string;
+}
+
+/** 掉落账本里的一条（#325 账本 + #789 绑定与溯源） */
+interface DropLedgerEntry {
+  goodId: string;
+  count: number;
+  /** 是否绑定角色（拾取时原样写进背包格子） */
+  bound: boolean;
+  /** 溯源，只有装备会有 */
+  from?: BagOrigin;
+  /** 是否已被拾取（幂等：同一次击杀的同一件不能入包两次） */
+  picked: boolean;
+}
 
 /** 客户端 cast 消息解析后的形状 */
 interface ParsedCast {

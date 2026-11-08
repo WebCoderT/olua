@@ -31,9 +31,9 @@ export class ItemRepository {
   seedRow(row: ItemRow): void {
     this.db.run(
       `INSERT OR IGNORE INTO items
-        (id, type, label, description, icon, level, sell_price, max_stack, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [row.id, row.type, row.label, row.description, row.icon, row.level, row.sell_price, row.max_stack, row.updated_at],
+        (id, type, label, description, icon, level, sell_price, max_stack, bind_on_drop, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [row.id, row.type, row.label, row.description, row.icon, row.level, row.sell_price, row.max_stack, row.bind_on_drop, row.updated_at],
     );
   }
 
@@ -48,9 +48,9 @@ export class ItemRepository {
   update(row: ItemRow): { changes: number } {
     return this.db.execute(
       `UPDATE items SET
-         label = ?, description = ?, icon = ?, sell_price = ?, max_stack = ?, updated_at = ?
+         label = ?, description = ?, icon = ?, sell_price = ?, max_stack = ?, bind_on_drop = ?, updated_at = ?
        WHERE id = ?`,
-      [row.label, row.description, row.icon, row.sell_price, row.max_stack, row.updated_at, row.id],
+      [row.label, row.description, row.icon, row.sell_price, row.max_stack, row.bind_on_drop, row.updated_at, row.id],
     );
   }
 

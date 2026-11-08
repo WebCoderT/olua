@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
 import { Type } from "class-transformer";
-import { ArrayMaxSize, ArrayMinSize, IsArray, IsIn, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, Matches, Max, Min, ValidateNested } from "class-validator";
+import { ArrayMaxSize, ArrayMinSize, IsArray, IsBoolean, IsIn, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, Matches, Max, Min, ValidateNested } from "class-validator";
 import { PageMetaDto, PageQueryDto } from "../../../common/dto/api-envelope.dto";
 import { DropTableRow, MonsterDropRow } from "../../../database/rows";
 
@@ -152,6 +152,13 @@ export class MonsterDropDto {
   @ApiProperty({ description: "内联条目池（source = entries 时非空）", nullable: true, type: [DropEntryDto] })
   entries: DropEntryDto[] | null;
 
+  @ApiProperty({
+    description:
+      "掉落整体强制绑定（#789）：true = 这只怪掉出来的东西一律绑定角色。" +
+      "与物品自身的「掉落强制绑定」是「或」的关系；两个都不为真时按掉落参数里的概率掷一次",
+  })
+  bindDrops: boolean;
+
   @ApiProperty({ description: "最近更新时间（毫秒）" })
   updatedAt: number;
 
@@ -162,6 +169,7 @@ export class MonsterDropDto {
     dto.tableId = row.table_id;
     dto.picks = row.picks === null ? null : JSON.parse(row.picks);
     dto.entries = row.entries === null ? null : JSON.parse(row.entries);
+    dto.bindDrops = row.bind_drops === 1;
     dto.updatedAt = row.updated_at;
     return dto;
   }
@@ -193,12 +201,16 @@ export class MonsterDropSummaryDto {
   @ApiProperty({ description: "内联条目数（source = entries 时有意义；引用具名表时条目数在 /admin/drop-tables）" })
   entryCount: number;
 
+  @ApiProperty({ description: "掉落整体强制绑定（#789）：true = 这只怪掉出来的东西一律绑定角色。与物品自身的「掉落强制绑定」是「或」的关系" })
+  bindDrops: boolean;
+
   static from(row: MonsterDropRow): MonsterDropSummaryDto {
     const dto = new MonsterDropSummaryDto();
     dto.source = row.source;
     dto.tableId = row.table_id;
     dto.picks = row.picks === null ? null : JSON.parse(row.picks);
     dto.entryCount = row.entries === null ? 0 : (JSON.parse(row.entries) as unknown[]).length;
+    dto.bindDrops = row.bind_drops === 1;
     return dto;
   }
 }
@@ -228,4 +240,11 @@ export class UpdateMonsterDropDto {
   @ValidateNested({ each: true })
   @Type(() => DropEntryDto)
   entries?: DropEntryDto[];
+
+  @ApiPropertyOptional({
+    description: "掉落整体强制绑定（#789；不传则不改）。与「引用表 / 内联条目 / 清空」三态互不影响",
+  })
+  @IsOptional()
+  @IsBoolean({ message: "掉落强制绑定必须是布尔值" })
+  bindDrops?: boolean;
 }

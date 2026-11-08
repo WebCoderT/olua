@@ -98,19 +98,19 @@ export function RuntimeParamsPage() {
       />
 
       <Card
-        title="掉落手感"
+        title="掉落手感与绑定"
         actions={
           loading ? (
             <Spinner />
           ) : canWrite ? (
             <Button disabled={!draft || saving !== null} loading={saving === "drop"} onClick={() => void save("drop")}>
-              保存掉落手感
+              保存掉落参数
             </Button>
           ) : null
         }
         description={
           canWrite
-            ? "拾取半径按「图标半宽 20 + 脚部容差 20」定标；散落间距小于图标尺寸时图标会叠在一起。"
+            ? "拾取半径按「图标半宽 20 + 脚部容差 20」定标；散落间距小于图标尺寸时图标会叠在一起。随机绑定概率由服务端掉落结算读取（0 = 从不随机绑定）。"
             : "当前角色没有「修改养成配置」权限，本页只读。"
         }
       >
@@ -223,6 +223,7 @@ const DROP_FIELDS: FieldSpec[] = [
   { key: "scatterMinDistance", label: "散落最小间距（像素）", hint: "多件掉落物的同心环间距" },
   { key: "pickReplyTimeout", label: "拾取应答超时（毫秒）", hint: "超时视为本轮失败，允许重拾" },
   { key: "fullTipInterval", label: "背包满提示间隔（毫秒）", hint: "防止自动拾取时每帧刷屏" },
+  { key: "bindChance", label: "随机绑定概率（%）", hint: "物品与怪物都没写「强制绑定」时，按它掷一次（服务端掉落结算读它）" },
 ];
 
 const AUTO_FIELDS: FieldSpec[] = [
@@ -259,6 +260,7 @@ function toDraft(row: RuntimeParams): Draft {
       scatterMinDistance: String(row.drop.scatterMinDistance),
       pickReplyTimeout: String(row.drop.pickReplyTimeout),
       fullTipInterval: String(row.drop.fullTipInterval),
+      bindChance: String(row.drop.bindChance ?? 0),
     },
     autoBattle: {
       moveByRun: row.autoBattle.moveByRun ? "true" : "false",
@@ -310,8 +312,17 @@ function buildPayload(
     const scatterMinDistance = num("scatterMinDistance");
     const pickReplyTimeout = num("pickReplyTimeout");
     const fullTipInterval = num("fullTipInterval");
-    if (autoPickupRadius === null || scatterMinDistance === null || pickReplyTimeout === null || fullTipInterval === null) return null;
-    return { drop: { autoPickupRadius, scatterMinDistance, pickReplyTimeout, fullTipInterval } };
+    const bindChance = num("bindChance");
+    if (
+      autoPickupRadius === null ||
+      scatterMinDistance === null ||
+      pickReplyTimeout === null ||
+      fullTipInterval === null ||
+      bindChance === null
+    ) {
+      return null;
+    }
+    return { drop: { autoPickupRadius, scatterMinDistance, pickReplyTimeout, fullTipInterval, bindChance } };
   }
   if (group === "guild") {
     const nameMin = num("nameMin");

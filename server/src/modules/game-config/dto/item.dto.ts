@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
-import { IsIn, IsInt, IsOptional, IsString, Max, MaxLength, Min, MinLength } from "class-validator";
+import { IsBoolean, IsIn, IsInt, IsOptional, IsString, Max, MaxLength, Min, MinLength } from "class-validator";
 import { PageMetaDto, PageQueryDto } from "../../../common/dto/api-envelope.dto";
 import { ItemRow } from "../../../database/rows";
 import { GOOD_TYPE_VALUES } from "../../../common/constants/game-config";
@@ -38,6 +38,9 @@ export class ItemDto {
   @ApiProperty({ description: "最大叠加数量" })
   maxStack: number;
 
+  @ApiProperty({ description: "掉落时强制绑定（#789）：true = 掉出来就绑定角色、不可交易" })
+  bindOnDrop: boolean;
+
   @ApiProperty({ description: "最近更新时间（毫秒）" })
   updatedAt: number;
 
@@ -51,6 +54,7 @@ export class ItemDto {
     dto.level = row.level;
     dto.sellPrice = row.sell_price;
     dto.maxStack = row.max_stack;
+    dto.bindOnDrop = row.bind_on_drop === 1;
     dto.updatedAt = row.updated_at;
     return dto;
   }
@@ -128,4 +132,9 @@ export class UpdateItemDto {
   @Min(1, { message: "堆叠上限至少为 1" })
   @Max(ITEM_MAX_STACK_MAX, { message: "堆叠上限超出防御性上限" })
   maxStack?: number;
+
+  @ApiPropertyOptional({ description: "掉落时强制绑定（#789；不传则不改）" })
+  @IsOptional()
+  @IsBoolean({ message: "掉落强制绑定必须是布尔值" })
+  bindOnDrop?: boolean;
 }

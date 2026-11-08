@@ -137,8 +137,10 @@ export default class BagGridView extends Node {
         const cell = this.cells[rowIndex][colIndex];
         // 传格子数量 → 可叠加物右下角画数量角标（画不画、画多少由 configs/items.getStackBadge 决定）
         // compareWornProvider → 悬停装备按住 Ctrl 时与身上同槽位穿戴对比（身上装备槽不传，不对比）
+        // meta → 这一格的绑定与掉落溯源（#789，详情弹窗据此显示「已绑定」与掉落来源）
         GameUiHelper.createGood(cell, good, bagCell.count, {
           compareWornProvider: () => (isEquipment(good) ? StorageManager.getWornEquipment(good.slot) : null),
+          meta: { bound: bagCell.bound, from: bagCell.from },
         });
         // 拖动手势（只有有物品的格子才需要：空格没什么可拖的，落点则用指针位置单独判定）。
         // 结束收尾 END 与 CANCEL 都接到 onCellTouchEnd：引擎把「松手在认领节点之外」改判成

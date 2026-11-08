@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
-import { IsIn, IsInt, IsOptional, IsString, Matches, Max, MaxLength, Min, MinLength } from "class-validator";
+import { IsBoolean, IsIn, IsInt, IsOptional, IsString, Matches, Max, MaxLength, Min, MinLength } from "class-validator";
 import { PageMetaDto, PageQueryDto } from "../../../common/dto/api-envelope.dto";
 import {
   MONEY_AMOUNT_MAX,
@@ -44,6 +44,9 @@ export class MoneyItemDto {
   @ApiProperty({ description: "售卖价（0 = 不可出售）" })
   sellPrice: number;
 
+  @ApiProperty({ description: "掉落时强制绑定（#789）：true = 掉出来就绑定角色、不可交易" })
+  bindOnDrop: boolean;
+
   @ApiProperty({ description: "最近更新时间（毫秒）" })
   updatedAt: number;
 
@@ -57,6 +60,7 @@ export class MoneyItemDto {
     dto.amount = row.amount;
     dto.maxStack = row.max_stack;
     dto.sellPrice = row.sell_price;
+    dto.bindOnDrop = row.bind_on_drop === 1;
     dto.updatedAt = row.updated_at;
     return dto;
   }
@@ -142,6 +146,11 @@ export class CreateMoneyItemDto {
   @Min(0, { message: "售卖价不能为负" })
   @Max(MONEY_ITEM_SELL_PRICE_MAX, { message: `售卖价不能超过 ${MONEY_ITEM_SELL_PRICE_MAX}` })
   sellPrice?: number;
+
+  @ApiPropertyOptional({ description: "掉落时强制绑定（#789；缺省 false）" })
+  @IsOptional()
+  @IsBoolean({ message: "掉落强制绑定必须是布尔值" })
+  bindOnDrop?: boolean;
 }
 
 /**
@@ -196,6 +205,11 @@ export class UpdateMoneyItemDto {
   @Min(0, { message: "售卖价不能为负" })
   @Max(MONEY_ITEM_SELL_PRICE_MAX, { message: `售卖价不能超过 ${MONEY_ITEM_SELL_PRICE_MAX}` })
   sellPrice?: number;
+
+  @ApiPropertyOptional({ description: "掉落时强制绑定（#789；不传则不改）" })
+  @IsOptional()
+  @IsBoolean({ message: "掉落强制绑定必须是布尔值" })
+  bindOnDrop?: boolean;
 }
 
 /** 删除货币物品的结果（删掉了几行；不碰玩家存档） */
