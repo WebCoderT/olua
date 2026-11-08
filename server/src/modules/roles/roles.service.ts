@@ -405,6 +405,10 @@ export class RolesService {
 
     // 商品不存在（不在上架清单）→ 404，消息经请求层弹给玩家
     const price = this.mallPricing.priceOf(dto.goodId);
+    // 定价不变式（#814 / C3）：上架与改价时已经拦过，这里兜的是**导入 / 历史脏行** ——
+    // `config-import` 与直接改库都能造出「售价 ≤ 回收价」的行，而那一行就是印钞机。
+    // 拒绝购买而不是夹取价格：夹取会让客户端看到的价与实扣不一致（#545 的老问题）。
+    this.mallPricing.ensurePriceSane(dto.goodId, price);
     // 购买等级服务端权威校验（#758）：客户端按钮置灰只是提前提示，不是防线
     const requiredLevel = this.mallPricing.requiredLevelOf(dto.goodId);
     if (requiredLevel > existing.level) {

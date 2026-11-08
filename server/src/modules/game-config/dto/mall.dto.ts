@@ -6,6 +6,20 @@ import { EQUIPMENT_SLOT_KEYS } from "./equipment.dto";
 
 /** 售价与购买等级的防御性上限（绑定元宝计价；与装备售卖价同一量级） */
 export const MALL_PRICE_MAX = 100_000_000;
+/**
+ * 售价下限（#814 / C3）
+ *
+ * **0 是最贵的一种定价**：售价 0 + 回收价 > 0 = 无限买 → 无限卖，玩家不需要改包，
+ * 只需要点两次按钮。所以商城价从 1 起，不接受「免费上架」。
+ */
+export const MALL_PRICE_MIN = 1;
+/**
+ * 回收价相对售价的上限比例（#814 / C3）
+ *
+ * 与「售价下限 1」是**同一条不变式**的两半：只要 `回收价 ≤ 售价 × 50%`，任何买进卖出
+ * 都亏一半，刷不出正向收益；只看其中一条都能绕过（价 1 / 回收 1 仍然不亏）。
+ */
+export const MALL_RECYCLE_RATIO_MAX = 0.5;
 /** 购买等级上限（与角色等级表同一量级） */
 export const MALL_LEVEL_MAX = 10_000;
 
@@ -256,10 +270,10 @@ export class CreateMallGoodDto {
   @MinLength(1, { message: "分类 id 不能为空" })
   categoryId!: string;
 
-  @ApiPropertyOptional({ description: "售价（缺省 0 = 免费）", minimum: 0, maximum: MALL_PRICE_MAX })
+  @ApiPropertyOptional({ description: "售价（绑定元宝/件，下限 1；缺省按 1 上架）", minimum: MALL_PRICE_MIN, maximum: MALL_PRICE_MAX })
   @IsOptional()
   @IsInt({ message: "售价必须是整数" })
-  @Min(0, { message: "售价不能为负" })
+  @Min(MALL_PRICE_MIN, { message: "售价不能低于 1（免费商品 + 回收价 = 无限金币，#814）" })
   @Max(MALL_PRICE_MAX, { message: "售价超出防御性上限" })
   price?: number;
 
@@ -284,10 +298,10 @@ export class UpdateMallGoodDto {
   @MinLength(1, { message: "分类 id 不能为空" })
   categoryId?: string;
 
-  @ApiPropertyOptional({ description: "售价（绑定元宝/件）", minimum: 0, maximum: MALL_PRICE_MAX })
+  @ApiPropertyOptional({ description: "售价（绑定元宝/件，下限 1）", minimum: MALL_PRICE_MIN, maximum: MALL_PRICE_MAX })
   @IsOptional()
   @IsInt({ message: "售价必须是整数" })
-  @Min(0, { message: "售价不能为负" })
+  @Min(MALL_PRICE_MIN, { message: "售价不能低于 1（免费商品 + 回收价 = 无限金币，#814）" })
   @Max(MALL_PRICE_MAX, { message: "售价超出防御性上限" })
   price?: number;
 
