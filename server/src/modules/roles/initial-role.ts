@@ -1,4 +1,5 @@
 import { playerSkillIds } from "../../common/runtime-config-cache";
+import { ROLE_DATA_VERSION } from "./role-migration";
 
 /**
  * 新角色的初始数据（#597：建号职责整体搬到服务端）
@@ -48,6 +49,9 @@ export function buildInitialRoleData(id: string, name: string, occupation: strin
     occupation,
     sex,
     level: 1,
+    // 存档结构版本（#818）：新号从第一天就带当前版本 —— 否则「刚建的号」在库里是 v1，
+    // 版本分布会永远挂着一档假的「老档」
+    schemaVersion: ROLE_DATA_VERSION,
     exp: 0,
     // 账本从零起（#597）：不再有「初始金币」这种出厂馈赠
     gold: 0,

@@ -295,6 +295,9 @@ server-e2e-bag: ## 服务端背包与穿戴专项 e2e（38 条：五个背包操
 server-e2e-quest: ## 服务端任务专项 e2e（接取门控 / talk·kill·collect 三目标推进 / daily 日切闸门 / 配置守卫）
 	@cd server && $(NPM) run test:e2e:quest
 
+server-e2e-role-migration: ## 服务端存档版本 e2e（老档进游戏即迁移落库 / 版本超前拒登 20028 / 迁移脚本 dry-run 分布）
+	@cd server && env -u NODE_OPTIONS npm run test:e2e:role-migration
+
 server-e2e-party: ## 服务端队伍专项 e2e（87 条：邀请即建队 / 满员与重复 / 权限与转让 / 队长退出移交 / 屏蔽优先 / 互见 partyId / 经验分成 / 等级门槛）
 	@echo "==> 服务端队伍 e2e（87 条）"
 	@cd server && env -u NODE_OPTIONS npm run test:e2e:party
@@ -354,6 +357,9 @@ db-restore: ## 恢复数据（用法：make db-restore FILE=server/backups/olua-
 
 db-migrate-map-collisions: ## 一次性：把 maps.content 里的碰撞矩形灌进 map_collisions（#676）
 	cd server && $(NODE) --disable-warning=ExperimentalWarning scripts/migrate-map-collisions.cjs
+
+migrate: server-build ## 存档结构迁移到当前 schemaVersion（发布前跑；ARGS="--dry-run" 只看分布）
+	@cd server && $(NODE) --disable-warning=ExperimentalWarning scripts/migrate-role-data.cjs $(ARGS)
 
 map-strip-objects: ## 把 TMX 里的对象组整组删掉（地图文件只留瓦片；#676）
 	$(NODE) tools/strip-map-objects.cjs

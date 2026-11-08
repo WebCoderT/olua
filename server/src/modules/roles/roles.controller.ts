@@ -78,7 +78,14 @@ export class RolesController {
 
   @Post(":id/select")
   @HttpCode(HttpStatus.OK)
-  @ApiPlayerDoc({ operationId: "role.select", summary: "选中（进入）角色", description: "把该角色设为账号的在线角色。" })
+  @ApiPlayerDoc({
+    operationId: "role.select",
+    summary: "选中（进入）角色",
+    description:
+      "把该角色设为账号的在线角色。**进入游戏即存档版本闸**：老版本存档当场迁到当前版本并落库" +
+      "（迁移不推进修订号）；存档版本比服务端新、或迁移链缺环时拒登（20028，提示联系客服），" +
+      "此时在线标记不变、存档一个字节都不动。",
+  })
   @ApiParam({ name: "id", description: "角色 id" })
   @ApiDataResponse(RoleDto, { description: "被选中的角色" })
   select(@CurrentUser() user: AuthenticatedUser, @Param("id") id: string): RoleDto {

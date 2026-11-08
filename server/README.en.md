@@ -211,7 +211,7 @@ Data tables are all created by `DatabaseService` at startup via `CREATE TABLE IF
 | Table | Stores | Key points |
 | --- | --- | --- |
 | `accounts` | player accounts | password is a scrypt digest; `status` ban bit; **`token_version`** token version |
-| `roles` | characters | `data` column stores a **JSON string** of the client's `entities/Role`; index fields (id/name/occupation/sex/level) are also separate columns; **`revision`** optimistic-lock version; `online_role_id` points from the account side to the current online character |
+| `roles` | characters | `data` column stores a **JSON string** of the client's `entities/Role`; index fields (id/name/occupation/sex/level) are also separate columns; **`revision`** optimistic-lock version; `data.schemaVersion` is the save-schema version (#818, lazily migrated on entering the game, batch-applied by `make migrate`); `online_role_id` points from the account side to the current online character |
 | `admins` | admin accounts | independent of the player-account system; `role` (super_admin / admin / viewer); **`token_version`** |
 | `audit_logs` | operation log | action = interface `operationId`; `detail` holds the request body (masked); `success` / `status_code` / `actor_name` / `target_id` / `path` |
 | `announcements` | announcements | title / body / `level` (`important` shown first) / `enabled`; `starts_at` / `ends_at` form the effective window, **"active" is judged by exactly these three columns** (built `idx_announcements_window`) |

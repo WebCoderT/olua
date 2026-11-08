@@ -40,6 +40,7 @@ import { FashionBuyDto, FashionBuyResultDto, FashionWearDto, FashionWearResultDt
 import { ReviveResultDto } from "./dto/revive.dto";
 import { SellGoodsDto, SellGoodsResultDto, SellLineDto } from "./dto/sell-goods.dto";
 import { decodeStoredRoleData, normalizeBagCells, normalizeEnum, normalizeLevel, normalizeName, parseRoleData, applyBagCells, ROLE_OCCUPATIONS, ROLE_SEXES } from "./role-data.util";
+import { migrateRoleData } from "./role-migration";
 import { clampVitals, enforceServerAuthority, settleVitalsAuthority } from "./role-authority";
 import { buildInitialRoleData } from "./initial-role";
 import {
@@ -240,7 +241,12 @@ export class RolesService {
     if (dto.revision !== undefined && dto.revision !== existing.revision) {
       throw BizException.conflict(BizCode.ROLE_REVISION_CONFLICT, "该角色已在别处被修改，请先同步最新数据");
     }
-    const { fields, data } = parseRoleData({ ...dto.data, id: roleId });
+    // 存档结构版本（#818）：客户端手上那份可能还是老版本（它本地缓存的形状），
+    // 先按链迁到当前再规整 —— 否则老形状会被当成「当前版本」写回去，版本号就永远不前进。
+    // **客户端报的版本只决定「跑不跑链」，不构成信任**：迁移链只做形状变换，
+    // 哪个字段该由客户端写由 role-authority 判（收权不在这一层）。
+    // 版本比代码新（回滚发布）直接拒 20028，不能把新字段当未知键静默丢掉
+    const { fields, data } = parseRoleData(migrateRoleData({ ...dto.data, id: roleId }).data);
 
     if (fields.name !== existing.name && this.roles.findByAccountAndName(accountId, fields.name, roleId)) {
       throw BizException.conflict(BizCode.ROLE_NAME_EXISTS, "该账号下已存在同名角色");
@@ -1660,9 +1666,46 @@ export class RolesService {
   /** 选中（在线）角色（#547：标记与心跳一起置上，宽限期从这一刻起算） */
   select(accountId: string, roleId: string): RoleDto {
     this.mustAccount(accountId);
-    const row = this.mustOwnRole(accountId, roleId);
+    // 存档版本闸（#818）：**进入游戏**是唯一该判「这份档还能不能玩」的地方。
+    // 被拒时不置在线标记 —— 客户端会停在选角界面，飘字由网络层统一给出（20028）
+    const row = this.migrateBeforeEnter(this.mustOwnRole(accountId, roleId));
     this.accounts.setOnlineRole(accountId, row.id);
     return RoleDto.from(row, row.id);
+  }
+
+  /**
+   * 进入游戏前的存档版本闸（#818 / B60）
+   *
+   * 落后 → 当场迁到当前版本并**落一次库**，返回迁移后的行；已是当前版本 → 原样返回；
+   * 迁不动（版本比代码新 / 链缺环）→ 抛 20028，库里一个字节都不动。
+   *
+   * 为什么在选角落库，而不是像 33 篇 3.1 原稿那样「等下次正常存档一起落」：
+   * 服务端的读口有十几处（战斗 / 任务 / 拾取 / 实时快照…），内存里迁完只对**这一条路径**
+   * 生效；紧接着一次用药、一次受击就会把库里的老形状原样写回去，版本号永远不前进，
+   * 于是每次进入游戏都要重跑一遍链。落一次库的代价是每个角色一次 UPDATE，
+   * 而它换来的是「库里那份从此就是当前版本」—— 后续所有读路径不需要知道迁移这回事。
+   *
+   * 用 `updateDataKeepRevision`（不推进修订号，与 `setMapAt` 同一理由）：迁移不是玩家进度，
+   * 推进修订号只会让刚读完档的客户端下一次存档白撞 20006。
+   *
+   * **坏档不在这里处理**（JSON 都解析不出来）：那是 #819 的闸。更不能顺手把 `{}` 迁成 v2
+   * 写回去 —— 那会把「坏档」洗成「空档」，连证据一起没了。
+   */
+  private migrateBeforeEnter(row: RoleRow): RoleRow {
+    let stored: Record<string, unknown>;
+    try {
+      const parsed: unknown = JSON.parse(row.data);
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return row;
+      stored = parsed as Record<string, unknown>;
+    } catch {
+      return row;
+    }
+    const outcome = migrateRoleData(stored);
+    if (!outcome.migrated) return row;
+    const data = JSON.stringify(outcome.data);
+    this.roles.updateDataKeepRevision(row.id, data, Date.now());
+    this.logger.log(`角色 ${row.id} 的存档已从 v${outcome.from} 迁到 v${outcome.to}`);
+    return { ...row, data };
   }
 
   /** 删除角色（删掉的正好是在线角色时，顺带清掉账号上的在线标记） */
