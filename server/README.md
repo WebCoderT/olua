@@ -61,7 +61,7 @@ npm run dev              # 开发（ts-node 热启动）；npm run build && npm 
 | `npm run test:e2e:levelup` | 升级路径统一专项（33 条；#899：四条路径共用 `settleLevelUp` / `data.level` 同步 / 满级经验封顶 / 上限缺失兜底） |
 | `npm run test:e2e:equip-sanitize` | 装备槽位清洗专项（19 条；#825：同件穿多槽只算一次 / 部位不符不计 / 管理端同口径 / 写入侧仍修档） |
 | `npm run test:e2e:element-damage` | 物法分离专项（12 条；#823：物理打物防 / 法术打魔防 / 法攻配 0 时跳过技能并 warn） |
-| `npm run test:e2e:area-skill` | 自身 / 区域 / 群体技能专项（30 条；#824：非单体技能能过结算 / 服务端算命中集合 / 落点夹取 / 逐只奖励与合并掉落账本） |
+| `npm run test:e2e:area-skill` | 自身 / 区域 / 群体技能专项（31 条；#824：非单体技能能过结算 / 服务端算命中集合 / 落点夹取与跨图闸 / 逐只奖励与合并掉落账本） |
 | `npm run test:e2e:admin-mail` | 管理端消息补发专项（29 条；#437：鉴权 / 频道收窄 / 附件领到手 / 离线收件 / 审计留痕） |
 | `npm run test:e2e:mail-expiry` | 收件箱保质期专项（15 条；#439：ttl 写入 / 读口即时消失 / 清理判据 / 批量上限） |
 | `npm run test:e2e:ui-effect` | 特效专项（34 条；#594 升级特效 + #634 掉落光效六档：可读不可写 / 出厂值 seed 顺序 / 无新建·删除 / 数值边界 / 快照即最新 / 审计与文档契约） |
