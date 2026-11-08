@@ -257,12 +257,16 @@ function connect(url) {
     group("一、状态型技能不掷伤害：护体神盾不再是 300% 核弹");
 
     // 先把 2001 的格挡改成 100%（后面第五段要确定性验证「状态数值进了受击结算」）：
-    // 概率 1 就是必中，不靠掷骰碰运气
+    // 概率 1 就是必中，不靠掷骰碰运气。
+    // duration 同时拉到 60 秒（#905）：出厂 10 秒在 CI 慢时钟下会在「等格挡帧」的中途过期，
+    // blocked 帧从此不再出现，这一段只能等到超时。断言读回执里的 duration，不锁 10。
     const patched = await api(baseUrl, "PATCH", "admin/statuses/2001", {
       token: adminToken,
-      body: { combat: { blockChance: 1, blockFactor: 0.5 } },
+      body: { combat: { blockChance: 1, blockFactor: 0.5 }, duration: 60 },
     });
     checkEqual(patched && patched.data && patched.data.combat && patched.data.combat.blockChance, 1, "管理端把 2001 改成 100% 格挡（写操作触发 refreshAll，即时生效）");
+    const durationMs = (patched && patched.data && patched.data.duration || 0) * 1000;
+    check(durationMs >= 60_000, "duration 已拉到 60 秒（等格挡帧的窗口内 buff 不会过期）", `${durationMs}ms`);
 
     const hpBefore = mob.hp;
     // 故意**带上目标**（老客户端就是这么发的）：服务端必须按 category 分流，
@@ -285,9 +289,9 @@ function connect(url) {
     check(!!shield, "role_status 里多了一行 2001", JSON.stringify(rows));
     checkEqual(shield && shield.stacks, 1, "层数 1（本轮不做叠层）");
     checkEqual(shield && shield.source_skill, "1010", "source_skill 记了技能 id（复盘用）");
-    // 2001 的 duration 是 10 秒（config-sync 出厂值）：允许 9.5~10.5 秒的误差
+    // duration 从管理端回执读（#905：不锁出厂的 10 秒），允许 1 秒误差
     const remainMs = shield ? shield.expire_at - Date.now() : 0;
-    check(remainMs > 9_000 && remainMs <= 10_500, "expire_at 约等于「现在 + 10 秒」", `${remainMs}ms`);
+    check(remainMs > durationMs - 1_000 && remainMs <= durationMs + 500, "expire_at 约等于「现在 + duration」", `${remainMs}ms / duration=${durationMs}ms`);
     check(!!(buff && buff.statuses && buff.statuses.some((entry) => entry.id === "2001")), "回执的 statuses 里有 2001（客户端图标的权威来源）", JSON.stringify(buff && buff.statuses));
     //#endregion
 
@@ -318,6 +322,9 @@ function connect(url) {
     const reporter = (async () => {
       while (keepReporting) {
         a.sendPos(TEST_MAP, mob.x, mob.y, hpMax);
+        // 格挡不是免伤：blocked 帧的伤害是原伤害 × blockFactor（实测 ~67/刀，100 血两刀就死），
+        // 怪物最快 10 刀/秒 —— 补血必须每轮做，隔 2 秒补一次都来得及死两回（#905：CI 慢时钟下曾被打死）
+        setRoleHp(dbPath, roleId, hpMax);
         await sleep(100);
       }
     })();

@@ -57,7 +57,7 @@ npm run dev              # 开发（ts-node 热启动）；npm run build && npm 
 | `npm run test:e2e:rank` | 排行榜专项（56 条；三榜名次与数值 / 并列竞赛排名 / 分页与 `me` / 快照与定时重算） |
 | `npm run test:e2e:backup` | 备份 / 恢复专项（87 条） |
 | `npm run test:e2e:bag` | 背包与穿戴专项（40 条；穿戴 / 卸下 / 丢弃 / 整理搬运守恒 / 权威边界 / 网格尺寸 / 槽位存对象） |
-| `npm run test:e2e:status-player` | 角色状态层专项（28 条；#822：状态技能不掷伤害 / `role_status` 落库与刷新 / 格挡 `blocked` / 到期惰性清理 / 死亡清空） |
+| `npm run test:e2e:status-player` | 角色状态层专项（29 条；#822：状态技能不掷伤害 / `role_status` 落库与刷新 / 格挡 `blocked` / 到期惰性清理 / 死亡清空；#905：格挡段 duration 拉到 60s + 每轮补满血，CI 慢时钟不再偶发红） |
 | `npm run test:e2e:levelup` | 升级路径统一专项（33 条；#899：四条路径共用 `settleLevelUp` / `data.level` 同步 / 满级经验封顶 / 上限缺失兜底） |
 | `npm run test:e2e:equip-sanitize` | 装备槽位清洗专项（19 条；#825：同件穿多槽只算一次 / 部位不符不计 / 管理端同口径 / 写入侧仍修档） |
 | `npm run test:e2e:element-damage` | 物法分离专项（12 条；#823：物理打物防 / 法术打魔防 / 法攻配 0 时跳过技能并 warn） |
