@@ -81,10 +81,20 @@ export class RoleDto extends RoleSummaryDto {
   @ApiProperty({ description: "所属账号名", type: "string", nullable: true })
   accountName: string | null;
 
+  /**
+   * 存档是否已损坏（#819 / I6）
+   *
+   * `true` = `roles.data` 解析不出来：这个角色**进不了游戏**（20029），等人工修好 JSON、
+   * 下一次解析成功会自动清掉。给运营一个能看见的位置 —— 没有它，坏档只能靠查库发现。
+   */
+  @ApiProperty({ description: "存档已损坏（进不了游戏，需人工修复 data）" })
+  corrupted: boolean;
+
   static fromRow(row: RoleWithAccountRow, onlineRoleId: string | null): AdminRoleDto {
     const dto = new AdminRoleDto();
     Object.assign(dto, RoleDto.from(row, onlineRoleId));
     dto.accountName = row.account_name;
+    dto.corrupted = row.corrupted === 1;
     return dto;
   }
 }

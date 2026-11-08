@@ -22,9 +22,12 @@
  * 1. **回填而不是拒收**：客户端推上来的账本值与库里不一致时，用库里的值覆盖、继续落库。
  *    拒收（409）会把「客户端少收了一帧」这种无害情况变成玩不了；回填则下一次 `roleUpdate`
  *    就自动纠正。真正要拦的是「写进去」，不是「发过来」。
- * 2. **库里没有这个字段就放行**：老存档（服务端接管之前的本地档）第一次上传时，文档里
- *    没有 `bindGold` 这类键 —— 这时客户端那份就是唯一来源，删掉等于把玩家的钱清零。
- *    所以只在「服务端写过这个字段」之后才执行回填，其余情况原样放行并记一条 warn。
+ * 2. **库里没有这个字段也不采信客户端那份**（#819 起）：一律按该字段的空值回填。
+ *    老规则是「库里没有就放行，客户端那份是唯一来源」—— 它保的是服务端接管之前的本地档，
+ *    但同一条规则也是「坏档 → 空档」的提权入口：`data` 解析失败被折成 `{}` 之后，
+ *    每个字段都「库里没有」，改包只要制造一次坏档就能自己写金币 / 背包 / 装备。
+ *    坏档现在在入口就被拦住（`decodeStoredRoleDataStrict` + 20029），这条通道没有了；
+ *    真要救一个字段缺失的老号，走管理端 PATCH（人工决定），不要留一条自动通道。
  *
  * 建号（#597 起）不再是「客户端推一份初始存档」：入参只有名称 / 职业 / 性别，
  * 初始文档由服务端构造（`initial-role.ts`）—— 上面这条规则里「建号没有旧值可比」的
@@ -134,6 +137,21 @@ function hasOwn(target: Record<string, unknown>, key: string): boolean {
   return Object.prototype.hasOwnProperty.call(target, key);
 }
 
+/**
+ * 某个服务端字段「空着」时该写什么（#819：库里没有这个键时的回填值）
+ *
+ * 每次都返回**新对象**：`bag` / `equipments` / `skills` 是会被后续步骤就地改写的结构，
+ * 共享一个常量会把两个角色的数据串到一起。
+ */
+function emptyServerValueOf(field: string): unknown {
+  if (field === "bag") return [];
+  if (field === "equipments" || field === "skills") return {};
+  if (field === "fashionCloth") return null;
+  // 等级的空值是 1 而不是 0：`normalizeLevel` 的合法区间从 1 起，写 0 会让整次存档 400
+  if (field === "level") return 1;
+  return 0;
+}
+
 /** 值的比较：存档里的都是标量（数字 / 字符串 / 布尔），JSON 化后逐字比即可 */
 function sameValue(a: unknown, b: unknown): boolean {
   if (a === b) return true;
@@ -172,10 +190,14 @@ export function enforceServerAuthority(
 ): AuthorityDrift[] {
   const drift: AuthorityDrift[] = [];
   for (const field of SERVER_OWNED_FIELDS) {
-    // 服务端从没写过这个字段（老存档首次上传）→ 客户端那份是唯一来源，放行
-    if (!hasOwn(stored, field)) continue;
-    if (sameValue(stored[field], incoming[field])) continue;
+    const present = hasOwn(stored, field);
+    if (present && sameValue(stored[field], incoming[field])) continue;
     drift.push({ field, stored: stored[field], reported: incoming[field] });
+    if (!present) {
+      // 库里没有这个字段（#819：不再放行客户端那份）→ 按空值回填，并记一条 drift 供排查
+      incoming[field] = emptyServerValueOf(field);
+      continue;
+    }
     incoming[field] = field === "bag" ? reconcileBag(stored[field], incoming[field]) : stored[field];
   }
   for (const field of SERVER_EXCLUSIVE_FIELDS) {

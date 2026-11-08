@@ -80,7 +80,7 @@ function collectChangedFiles() {
  */
 const SERVER_MODULE_E2E = [
   ["src/modules/auth", ["guard"]],
-  ["src/modules/roles", ["roles"]],
+  ["src/modules/roles", ["roles", "role-migration", "role-corrupted"]],
   ["src/modules/mail", ["mail", "game-mail"]],
   ["src/modules/realtime", ["realtime", "combat", "world", "soak", "map-enter", "monster-ai"]],
   ["src/modules/world", ["world"]],

@@ -112,6 +112,7 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
         kills      INTEGER NOT NULL DEFAULT 0,
         data       TEXT NOT NULL,
         revision   INTEGER NOT NULL DEFAULT 1,
+        corrupted  INTEGER NOT NULL DEFAULT 0,
         created_at INTEGER NOT NULL,
         updated_at INTEGER NOT NULL
       );
@@ -1195,6 +1196,10 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
     // 击杀数（#400）：排行榜的原料。放在 roles 行上而不是独立表 —— 写路径唯一（结算时 +1），
     // 客户端的存档覆盖（PUT /roles/:id 换 data）压根碰不到这一列，多一张表只会多一次 join。
     this.ensureColumn("roles", "kills", "INTEGER NOT NULL DEFAULT 0");
+    // 坏档标记（#819 / I6）：`data` 这列解析不出来时置 1，进入游戏直接被拒（20029），
+    // 等人工把 JSON 修好、下一次解析成功再自动清掉。**不删行、不改 data** ——
+    // 删行是「毁掉证据」，改 data 是「把坏档洗成空档」，两者都让事后查不清发生了什么
+    this.ensureColumn("roles", "corrupted", "INTEGER NOT NULL DEFAULT 0");
     // NPC 外观（#603 第七域）：客户端不再存素材目录 / 缩放 / 偏移，老库补列；
     // src 先落空串，随后由 GameConfigService.seedNpcs 的 backfillAppearance 填（只在空串时填）
     this.ensureColumn("npcs", "src", "TEXT NOT NULL DEFAULT ''");

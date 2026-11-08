@@ -298,6 +298,9 @@ server-e2e-quest: ## 服务端任务专项 e2e（接取门控 / talk·kill·coll
 server-e2e-role-migration: ## 服务端存档版本 e2e（老档进游戏即迁移落库 / 版本超前拒登 20028 / 迁移脚本 dry-run 分布）
 	@cd server && env -u NODE_OPTIONS npm run test:e2e:role-migration
 
+server-e2e-role-corrupted: ## 服务端坏档 e2e（坏档拒登 20029 与 corrupted 标记 / 修好自动解封 / 缺字段不再采信客户端）
+	@cd server && env -u NODE_OPTIONS npm run test:e2e:role-corrupted
+
 server-e2e-party: ## 服务端队伍专项 e2e（87 条：邀请即建队 / 满员与重复 / 权限与转让 / 队长退出移交 / 屏蔽优先 / 互见 partyId / 经验分成 / 等级门槛）
 	@echo "==> 服务端队伍 e2e（87 条）"
 	@cd server && env -u NODE_OPTIONS npm run test:e2e:party

@@ -102,6 +102,16 @@ export class RoleRepository {
     return this.db.execute(`UPDATE roles SET data = ?, updated_at = ? WHERE id = ?`, [data, updatedAt, id]).changes > 0;
   }
 
+  /**
+   * 标记 / 清除坏档（#819 / I6）
+   *
+   * 只动 `corrupted` 一列：既不碰 `data`（坏 JSON 原样留着，事后才能查「坏在哪」），
+   * 也不推进 `revision`（这不是玩家的进度变化，客户端没有理由被迫重拉存档）。
+   */
+  markCorrupted(id: string, corrupted: boolean): void {
+    this.db.run("UPDATE roles SET corrupted = ? WHERE id = ?", [corrupted ? 1 : 0, id]);
+  }
+
   /** 局部更新（管理端只改某几个字段时用；同样推进修订号） */
   updateById(    id: string,
     patch: { name?: string; occupation?: string; sex?: string; level?: number; data?: string; updated_at?: number },

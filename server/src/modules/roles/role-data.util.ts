@@ -264,6 +264,35 @@ export function parseStoredRoleData(raw: string): Record<string, unknown> {
   return parsed;
 }
 
+/** 严格解析的结果：坏档**必须能被区分出来**，不能和「空对象」混成一个值 */
+export type StoredRoleDataResult =
+  | { ok: true; data: Record<string, unknown> }
+  | { ok: false; reason: string };
+
+/**
+ * 严格解析存档（#819 / B61）
+ *
+ * `decodeStoredRoleData` 把「解析失败」折成 `{}` —— 那是给**展示**路径用的（一行坏数据
+ * 不该打断整个列表）。但「能不能让他进游戏 / 能不能拿库里的值去收权」这两件事上，
+ * 空对象是个**有权限的空档**：`enforceServerAuthority` 会说「库里没有 gold，客户端那份是
+ * 唯一来源」，于是改包只要触发一次坏档就能自己写金币 / 背包 / 装备。
+ *
+ * 所以入口处一律用这个版本：坏档 → `ok: false` → 标记 `corrupted` + 拒登（20029）。
+ * 传进来的 `raw` 只能是 `roles.data` 列（不是客户端上报，客户端那条已经过 DTO 校验）。
+ */
+export function decodeStoredRoleDataStrict(raw: string): StoredRoleDataResult {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (error) {
+    return { ok: false, reason: error instanceof Error ? error.message : String(error) };
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    return { ok: false, reason: `不是对象（${Array.isArray(parsed) ? "数组" : typeof parsed}）` };
+  }
+  return { ok: true, data: parsed as Record<string, unknown> };
+}
+
 /**
  * 规整新手引导进度（#402）
  *
