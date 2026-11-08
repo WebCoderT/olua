@@ -443,6 +443,34 @@ function connect(url) {
     const afterReplay = await cast(session, { skillId: "1000", targetId: mobA ? mobA.instanceId : "m1_1", monsterKey: "1" }).promise;
     check(!!(afterReplay && afterReplay.ok) && afterReplay.hp === beforeIdempotent - afterReplay.damage, "重放没有多扣血（第三击只扣一次）", `hp=${afterReplay.hp}`);
 
+    // #827：幂等账按时间过期，不再「只留 256 条、超出挤掉最旧」。先灌 300 条
+    // 解析得通但技能不存在的出手（每个都会被记进幂等账），再重放第一发 —— 仍在 TTL 内，
+    // 必须判重复；容量定 256 的实现会在这里把它挤掉，于是「打得够久就能重放」。
+    const FLOOD = 300;
+    for (let i = 0; i < FLOOD; i++) {
+      session.socket.send(JSON.stringify({
+        type: "cast",
+        data: { castId: 900000 + i, skillId: "9999", targetId: mobA ? mobA.instanceId : "m1_1", monsterKey: "1" },
+      }));
+    }
+    await sleep(800);
+    const settleCountAfterFlood = session.settles.length;
+    session.socket.send(JSON.stringify({
+      type: "cast",
+      data: { castId: firstShot.id, skillId: "1000", targetId: mobA ? mobA.instanceId : "m1_1", monsterKey: "1" },
+    }));
+    const replayAfterFlood = await waitFor(`灌 ${FLOOD} 条后重放首发的 settle`, async () => {
+      const hits = session.settles
+        .slice(settleCountAfterFlood)
+        .filter((frame) => frame.castId === firstShot.id);
+      return hits.length > 0 ? hits[hits.length - 1] : null;
+    });
+    check(
+      !!(replayAfterFlood && replayAfterFlood.duplicate === true),
+      `灌 ${FLOOD} 条之后首发仍判重复（不再被容量挤掉，TTL 内一律拒）`,
+      JSON.stringify(replayAfterFlood),
+    );
+
     //#endregion
 
     //#region 四、死亡判定
@@ -493,6 +521,27 @@ function connect(url) {
     const back = await session.joinWorld("1");
     const backA = back && back.monsters.find((m) => m.instanceId === (mobA ? mobA.instanceId : "m1_1"));
     check(!!backA && backA.alive === false && backA.hp === 0, "换图往返后旧图实例状态保持（世界状态不随会话清）");
+
+    // #827：换图往返（图 1 → 图 0 → 图 1）后重投**图 1 上那一次**的 castId。
+    // 账必须已经不在了：要么随 worldJoin 清掉，要么键里的 mapId 让它不匹配 ——
+    // 总之不能把换图前那份「ok + 有伤害」原样发回来（那等于让玩家重放一整场战斗）。
+    // 这里的怪早被打死，所以重新校验的正确结果就是 target_dead。
+    const settleCountBeforeStale = session.settles.length;
+    session.socket.send(JSON.stringify({
+      type: "cast",
+      data: { castId: firstShot.id, skillId: "1000", targetId: mobA ? mobA.instanceId : "m1_1", monsterKey: "1" },
+    }));
+    const staleReplay = await waitFor(`castId=${firstShot.id} 换图往返后的重投`, async () => {
+      const hits = session.settles
+        .slice(settleCountBeforeStale)
+        .filter((frame) => frame.castId === firstShot.id);
+      return hits.length > 0 ? hits[hits.length - 1] : null;
+    });
+    check(
+      !!(staleReplay && staleReplay.duplicate !== true && staleReplay.code === "target_dead"),
+      "换图往返后同 castId 不命中旧账（重新校验而不是回放换图前的结果）",
+      JSON.stringify(staleReplay),
+    );
 
     session.socket.close();
     await waitFor("旧连接断开", async () => (session.closed ? session : null));
