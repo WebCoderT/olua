@@ -447,6 +447,15 @@ async function standAt(session, mapId, point) {
       "落点报到 2000px 外仍然打得到身边的怪（服务端把落点夹到作用半径内；不夹则一只都打不到）",
       far && JSON.stringify(farHitIds),
     );
+    // 跨图：作用点的地图来自客户端自报的 pos 帧 —— 不比对服务端记下的 mapAt，
+    // 改包就能站主城清空另一张图的怪
+    await standAt(session, KILL_MAP, { x: 0, y: 0 });
+    await paceAoe();
+    const crossCastId = session.fire({ skillId: AOE_SKILL, targetId: "", monsterKey: "", x: 0, y: 0 });
+    const cross = await session.settleOf(crossCastId);
+    checkEqual(cross && cross.rejected, "cross_map", "报一张服务端没放行过的图 → 判跨图（区域技能不能跨图打）");
+    // 回到图 1：后面的用例还要在这张图上出手
+    await standAt(session, HIT_MAP, HIT_CLUSTER.points[0]);
     //#endregion
 
     //#region 四、一次施放打死多只：逐只奖励 + 掉落账本合并
