@@ -111,6 +111,46 @@ export const COMBAT_RANGE_KEYS: string[] = [
 /** 单值型战斗属性。`maxHp` 参与战斗力，`hpRecover` 不参与 */
 export const COMBAT_SINGLE_KEYS: string[] = ["maxHp", "hpRecover"];
 
+/** 三系攻击属性（技能 `damageCoefficients[].baseType` 的全部合法取值） */
+export const ATTACK_ATTRIBUTES = ["physicalAttack", "magicAttack", "taoistAttack"] as const;
+export type AttackAttribute = (typeof ATTACK_ATTRIBUTES)[number];
+
+/**
+ * 攻击属性 → 它对抗的防御属性（物攻打物防、法攻打法防、道攻打道防）
+ *
+ * 三系攻击是技能 `damageCoefficients[].baseType` 的取值。**玩家打怪与怪打玩家必须用同一张表**：
+ * 少一处就会出现「法术怪被高物防挡掉」「法攻打物防」这类只有数值层面能看出来的错（#823 / docs/22 A6）。
+ */
+export const DEFENSE_BY_ATTACK: Record<string, string> = {
+  physicalAttack: "physicalDefense",
+  magicAttack: "magicDefense",
+  taoistAttack: "taoistDefense",
+};
+
+/**
+ * 战斗属性 → `monsters` 表里的列前缀（行里是拍平的 `*_min` / `*_max` 两列）
+ *
+ * 表里没有 JSON 列，六项攻防各占两列，列名就是属性名的下划线形式；
+ * 集中在这里是为了让「攻击取哪列、防御取哪列」只有一处可改。
+ */
+export type MonsterStatColumn =
+  | "physical_attack"
+  | "magic_attack"
+  | "taoist_attack"
+  | "physical_defense"
+  | "magic_defense"
+  | "taoist_defense";
+
+/** 战斗属性 → 列前缀（`MonsterStatColumn` 是字面量联合，`\`${col}_min\`` 才能被 TS 认成 `MonsterRow` 的键） */
+export const MONSTER_STAT_COLUMN: Record<string, MonsterStatColumn> = {
+  physicalAttack: "physical_attack",
+  magicAttack: "magic_attack",
+  taoistAttack: "taoist_attack",
+  physicalDefense: "physical_defense",
+  magicDefense: "magic_defense",
+  taoistDefense: "taoist_defense",
+};
+
 //#endregion
 
 //#region 新手引导（#605）

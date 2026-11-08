@@ -657,7 +657,14 @@ async function raiseLevel(roleId, level, token) {
   const sampleEquip = equipList.data.list[0];
   check(!!sampleEquip && sampleEquip.attributes.maxHp > 0, "准备：取一件 maxHp > 0 的基础件", JSON.stringify(sampleEquip && sampleEquip.attributes));
 
-  const wearIt = await api("PATCH", `admin/roles/${roleD1Id}`, { token: adminToken, body: { level: 10, equipments: { WEAPON: sampleEquip.id } } });
+  // 槽位名用这件装备的**真实部位**（大写写法是历史习惯，服务端比较时大小写不敏感）。
+  // 以前这里固定写 WEAPON：那时属性汇总不看键，穿在哪个槽位都算；
+  // #825 起部位不符的条目**不计属性**（同件穿多槽 / 一槽一件错位装备都能刷战力），
+  // 所以「穿一件衣服」必须写 cloth，不能借 WEAPON 的壳。
+  const wearIt = await api("PATCH", `admin/roles/${roleD1Id}`, {
+    token: adminToken,
+    body: { level: 10, equipments: { [sampleEquip.slot.toUpperCase()]: sampleEquip.id } },
+  });
   const baseMaxHp = wearIt.data.derived.attributes.maxHp;
   check(typeof baseMaxHp === "number", "穿上后取到含装备加成的 maxHp", String(baseMaxHp));
 
@@ -697,7 +704,10 @@ async function raiseLevel(roleId, level, token) {
   const variantId = `${sampleEquip.id}_p4s2`;
   const topVariant = (variantList.data.list || []).find((item) => item.id === variantId);
   check(!!topVariant, "准备：同一件的 p4s2 变体也在表里", JSON.stringify((variantList.data.list || []).map((item) => item.id)));
-  const wearVariant = await api("PATCH", `admin/roles/${roleD1Id}`, { token: adminToken, body: { equipments: { WEAPON: variantId } } });
+  const wearVariant = await api("PATCH", `admin/roles/${roleD1Id}`, {
+    token: adminToken,
+    body: { equipments: { [sampleEquip.slot.toUpperCase()]: variantId } },
+  });
   check(wearVariant.code === 0, "准备：把同一件的变体穿上（p4s2）", wearVariant.message);
   // 等级那部分加成没变，减掉它剩下的就是装备加成
   const variantBonus = wearVariant.data.derived.attributes.maxHp - (baseMaxHp - sampleEquip.attributes.maxHp);
@@ -712,7 +722,10 @@ async function raiseLevel(roleId, level, token) {
   check(restoreVariant.code === 0, "还原该变体的属性", restoreVariant.message);
   const restoredEquip = await api("PATCH", `admin/equipments/${sampleEquip.id}`, { token: adminToken, body: { attributes: sampleEquip.attributes } });
   check(restoredEquip.code === 0, "还原该基础件的属性", restoredEquip.message);
-  const backToNormal = await api("PATCH", `admin/roles/${roleD1Id}`, { token: adminToken, body: { equipments: { WEAPON: sampleEquip.id } } });
+  const backToNormal = await api("PATCH", `admin/roles/${roleD1Id}`, {
+    token: adminToken,
+    body: { equipments: { [sampleEquip.slot.toUpperCase()]: sampleEquip.id } },
+  });
   check(
     backToNormal.data.derived.attributes.maxHp === baseMaxHp,
     "还原后回到原值（覆盖层跟着回退，不是一次性的）",

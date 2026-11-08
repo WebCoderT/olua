@@ -59,6 +59,8 @@ npm run dev              # dev (ts-node hot reload); npm run build && npm run st
 | `npm run test:e2e:bag` | Bag and worn equipment (equip / unequip / discard / tidy-and-move conservation / authority boundary / grid size) |
 | `npm run test:e2e:status-player` | Player status layer (28 assertions, #822: status skills deal no damage / `role_status` persistence and refresh / block returns `blocked` / lazy expiry / cleared on death) |
 | `npm run test:e2e:levelup` | Unified level-up paths (33 assertions, #899: all four paths share `settleLevelUp` / `data.level` kept in sync / exp capped at max level / fallback when the cap row is missing) |
+| `npm run test:e2e:equip-sanitize` | Worn equipment sanitising (19 assertions, #825: the same item in several slots counts once / slot mismatch ignored / admin PATCH shares the rule / the save path still repairs) |
+| `npm run test:e2e:element-damage` | Physical vs magic damage (12 assertions, #823: physical hits physical defence / magic hits magic defence / a monster with zero magic attack skips the skill and warns) |
 | `npm run test:e2e:admin-mail` | Admin message top-up (#437 auth / channel narrowing / attachments claimable / offline recipient / audit trail) |
 | `npm run test:e2e:mail-expiry` | Inbox expiry (#439 ttl write / instant disappearance at read / purge criteria / batch cap) |
 | `npm run test:e2e:ui-effect` | Effects (#594 level-up + #634 six drop lights): read-only for viewers / seeded factory values in seed order / no create or delete / numeric bounds / snapshot is fresh / audit and doc contract (34 assertions) |
@@ -66,7 +68,7 @@ npm run dev              # dev (ts-node hot reload); npm run build && npm run st
 | `npm run db:backup` | Backup the data file (`VACUUM INTO`, can run while the service is up) |
 | `npm run db:restore` | Restore from backup (with "service may be running" detection and old-db archiving) |
 | `npm run verify:api` | `swagger:emit` + generated-file consistency audit |
-| `npm run verify` | **one command for everything**: compile + all e2e (1 main + 48 focused suites, list derived from `package.json`) + generated-file audit |
+| `npm run verify` | **one command for everything**: compile + all e2e (1 main + 50 focused suites, list derived from `package.json`) + generated-file audit |
 
 > The repo-root `make` is a shortcut for these: `make server-dev` / `make server-verify` /
 > `make gen-api` / `make server-e2e-guard`, etc.; `make help` lists them all.
@@ -187,6 +189,8 @@ server/
 │   ├── e2e-cast-guard.cjs (cast gate chain: alive / cross-map / range / cooldown / mp / rate, including the ordering of mp deduction and idempotency)
 │   ├── e2e-status-player.cjs (player status layer #822: status skills deal no damage / role_status persistence and refresh / block returns blocked / lazy expiry / cleared on death)
 │   ├── e2e-levelup.cjs (unified level-up paths #899: all four share settleLevelUp / data.level in sync / exp capped at max level / fallback when the cap row is missing)
+│   ├── e2e-equip-sanitize.cjs (worn equipment #825: same item in several slots counts once / slot mismatch ignored / admin PATCH shares the rule / save path still repairs)
+│   ├── e2e-element-damage.cjs (physical vs magic #823: physical hits physical defence / magic hits magic defence / zero magic attack skips the skill with a warning)
 │   ├── e2e-world.cjs (world authority: server-side seeding from spawn areas / settlement lands in world / tick respawn / graceful flush / restart recovery)
 │   ├── e2e-world-viewers.cjs (viewer set: switching maps leaves the old map / old map stops receiving and sampling / idle unload / unload keeps state)
 │   ├── e2e-dual.cjs (dual-process form: archive vs realtime processes / cross-process token checks / kick-poll disconnect / WAL cross-process writes)

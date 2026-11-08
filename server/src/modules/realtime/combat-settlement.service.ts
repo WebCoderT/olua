@@ -1,6 +1,7 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { bindOnDropOf, growthScalarOf, itemTypeOf, skillOf } from "../../common/runtime-config-cache";
 import { BizCode } from "../../common/constants/biz-code";
+import { ATTACK_ATTRIBUTES, DEFENSE_BY_ATTACK, MONSTER_STAT_COLUMN, type AttackAttribute } from "../../common/constants/game-enums";
 import { BizException } from "../../common/errors/biz.exception";
 import { AccountRepository } from "../../database/repositories/account.repository";
 import { DropTableRepository } from "../../database/repositories/drop-table.repository";
@@ -321,7 +322,7 @@ export class CombatSettlementService {
     // 玩家身上的状态修正（#822）：攻击倍率乘在出伤上，与受击侧的防御倍率同一个来源
     const attack = rollRange(readRange(summary, coefficient.baseType)) * this.roles.statusModifiersOf(accountId).attackMultiplier;
     // 怪物身上的状态修正（#372）：防御 × 状态连乘 —— 没有这条，「硬化皮肤」只是客户端动画
-    const defense = Math.round(rollRange(readMonsterRange(stats, coefficient.baseType)) * this.monsterAi.defenseMultiplierOf(cast.targetId));
+    const defense = Math.round(rollRange(monsterDefenseRange(stats, coefficient.baseType)) * this.monsterAi.defenseMultiplierOf(cast.targetId));
     const damage = Math.max(0, Math.round(attack * coefficient.baseTypeRate - defense));
 
     // 扣血与世界状态（血量 / 死亡判定都在世界服务里，这里只拿结果演）
@@ -688,9 +689,7 @@ interface ParsedCast {
   monsterKey: string;
 }
 
-type AttackAttribute = "physicalAttack" | "magicAttack" | "taoistAttack";
-
-const ATTACK_ATTRIBUTES: AttackAttribute[] = ["physicalAttack", "magicAttack", "taoistAttack"];
+// 三系攻击属性与「攻击 → 防御」映射在 common/constants/game-enums（怪物 AI 侧同一份，#823）
 /** 幂等账本容量：足够盖住任何合理的重传窗口，又不会随游玩时长无限涨 */
 const CAST_DEDUPE_CAPACITY = 256;
 
@@ -745,10 +744,15 @@ function readRange(source: object, attribute: AttackAttribute): [number, number]
   return [Number(value[0]) || 0, Number(value[1]) || 0];
 }
 
-/** 怪物战斗数值里的攻防区间（攻与防同名：物理攻击对物理防御——客户端 defenseAttributeByAttack 的映射关系；行里是拍平的 *_min/*_max 列） */
-function readMonsterRange(stats: MonsterRow, attribute: AttackAttribute): [number, number] {
-  const prefix = attribute === "physicalAttack" ? "physical_defense" : attribute === "magicAttack" ? "magic_defense" : "taoist_defense";
-  return [Number(stats[`${prefix}_min`]) || 0, Number(stats[`${prefix}_max`]) || 0];
+/**
+ * 怪物侧该吃哪一项防御（物攻打物防 / 法攻打法防 / 道攻打道防）
+ *
+ * 映射表在 `game-enums`：怪物 AI 打玩家时读的是同一张（#823），两边各写一份就会分裂成
+ * 「玩家打怪按物防、怪打玩家按魔防」这种只在数值层面才看得出来的错。
+ */
+function monsterDefenseRange(stats: MonsterRow, attribute: AttackAttribute): [number, number] {
+  const column = MONSTER_STAT_COLUMN[DEFENSE_BY_ATTACK[attribute]] ?? "physical_defense";
+  return [Number(stats[`${column}_min`]) || 0, Number(stats[`${column}_max`]) || 0];
 }
 
 /**

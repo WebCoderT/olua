@@ -6,8 +6,9 @@ import { RuntimeParamsRepository } from "../../database/repositories/runtime-par
 import { MonsterSkillRepository } from "../../database/repositories/monster-skill.repository";
 import { SkillRepository } from "../../database/repositories/skill.repository";
 import { StatusRepository } from "../../database/repositories/status.repository";
-import { SkillRow, StatusRow } from "../../database/rows";
+import { MonsterRow, SkillRow, StatusRow } from "../../database/rows";
 import { parseCoefficientsJson, parseCombatJson } from "../../common/config-json";
+import { DEFENSE_BY_ATTACK, MONSTER_STAT_COLUMN } from "../../common/constants/game-enums";
 import { roleAttributeSourceOf, summarizeRoleAttributes } from "../combat/role-attributes";
 import { resolveIncomingDamage } from "../combat/status-combat";
 import { RolesService } from "../roles/roles.service";
@@ -188,6 +189,29 @@ function rangeOr(value: unknown, fallback: [number, number]): [number, number] {
 
 function randomBetween(range: [number, number]): number {
   return range[0] + Math.random() * (range[1] - range[0]);
+}
+
+/**
+ * 怪物「该项攻击」的区间（行里是拍平的 `*_attack_min` / `*_attack_max` 两列）
+ *
+ * `baseType` 来自技能系数；普攻与认不出的值都按物理 —— 与 `readMonsterRange`（玩家打怪那侧）
+ * 相反的方向、同一张映射表（`game-enums`）。
+ */
+function monsterAttackRange(stats: MonsterRow, baseType: string): [number, number] {
+  const column = MONSTER_STAT_COLUMN[baseType] ?? "physical_attack";
+  return [Number(stats[`${column}_min`]) || 0, Number(stats[`${column}_max`]) || 0];
+}
+
+/**
+ * 这只怪「该项攻击」配没配（上限 > 0 才算配了）
+ *
+ * 用途是挡住「法攻全是 0 的怪挂了法术技能」——放出去伤害恒等于 −防御→0，玩家看到的是
+ * 「怪对着我放了个法术，我一点血没掉」。宁可这只怪不放这个技能（回落到普攻并 warn），
+ * 也不要留一颗哑弹（#823 拍板口径：法/道攻由运营配，0 = 未配）。
+ */
+function hasAttackFor(stats: MonsterRow | undefined, baseType: string): boolean {
+  if (!stats) return false;
+  return monsterAttackRange(stats, baseType)[1] > 0;
 }
 
 /** 属性区间随机取整数（与结算侧 rollRange 同一口径：含两端、自动纠正颠倒） */
@@ -371,6 +395,8 @@ export class MonsterAiService implements OnApplicationBootstrap, OnApplicationSh
   private skillCacheLoadedAt = 0;
   /** 只在第一次读到兜底参数时喊一次，别每 tick 刷日志 */
   private aiFallbackWarned = false;
+  /** 已经为「法术技能但法攻打 0」告警过的 `monsterKey:skillId`（缓存每秒重建，不去重就是刷屏） */
+  private readonly warnedNoAttack = new Set<string>();
 
   /**
    * 监控日志出口（#745：实时地图监控的「精细日志」）。MapMonitorService 启动时接线；
@@ -809,7 +835,7 @@ export class MonsterAiService implements OnApplicationBootstrap, OnApplicationSh
     let hit: RealtimeMonsterHit | null = null;
     if (plan.category !== "2") {
       if (!runtime.target) return false;
-      hit = this.attack(monster, runtime.target, plan.rate);
+      hit = this.attack(monster, runtime.target, plan.rate, plan.baseType);
       if (!hit) {
         this.forgetTarget(runtime.target);
         return false;
@@ -862,15 +888,19 @@ export class MonsterAiService implements OnApplicationBootstrap, OnApplicationSh
   /**
    * 结算一次出手（普攻或伤害型技能）
    *
-   * 伤害 = round(怪物物攻区间随机值 × 攻击倍率 × 技能倍率 − 玩家物防区间随机值 × 防御倍率)，下限 0，
-   * 再过一道格挡（#822）。怪物侧攻击倍率来自它自己的状态（#372）；玩家侧防御倍率与格挡
+   * 伤害 = round(怪物「该项攻击」区间随机值 × 攻击倍率 × 技能倍率 − 玩家「该项防御」区间随机值 × 防御倍率)，
+   * 下限 0，再过一道格挡（#822）。怪物侧攻击倍率来自它自己的状态（#372）；玩家侧防御倍率与格挡
    * 来自 `role_status`（护体神盾 30% 格挡减半、金刚护体防御 ×1.5）—— 两边同一套 `combat` 口径。
+   *
+   * **物法分离（#823 / docs/22 A6）**：`baseType` 决定读怪物的哪一项攻击（`physical_attack` /
+   * `magic_attack` / `taoist_attack`）与玩家的哪一项防御（`physicalDefense` / `magicDefense` /
+   * `taoistDefense`）。普攻没有技能系数 → 恒物理。映射表在 `game-enums`，与玩家打怪那份同一张。
    *
    * @returns null = 这一下打不出去（玩家已经倒下 / 不在线，或怪物缺数值行）。
    *          调用方**必须**把它当成「目标作废」处理（见 `forgetTarget`）—— 只当成本次落空会让
    *          记恨一直挂着，怪继续对尸体出手（#670）。
    */
-  private attack(monster: WorldMonster, accountId: string, rate = 1): RealtimeMonsterHit | null {
+  private attack(monster: WorldMonster, accountId: string, rate = 1, baseType: string = "physicalAttack"): RealtimeMonsterHit | null {
     const role = this.roles.online(accountId);
     if (!role) return null;
     const stats = this.monsterConfigs.findByKey(monster.monsterKey);
@@ -879,8 +909,10 @@ export class MonsterAiService implements OnApplicationBootstrap, OnApplicationSh
     const summary = summarizeRoleAttributes(roleAttributeSourceOf(role.level, role.data));
     // 玩家身上的状态（#822）：防御倍率乘在防御项上，格挡在算完之后掷一次
     const modifiers = this.roles.statusModifiersOf(accountId);
-    const attack = rollRange([Number(stats.physical_attack_min) || 0, Number(stats.physical_attack_max) || 0]) * this.attackMultiplierOf(monster.instanceId);
-    const defense = Math.round((summary ? rollRange(summary.physicalDefense) : 0) * modifiers.defenseMultiplier);
+    const attack = rollRange(monsterAttackRange(stats, baseType)) * this.attackMultiplierOf(monster.instanceId);
+    const defenseKey = DEFENSE_BY_ATTACK[baseType] ?? "physicalDefense";
+    const defenseRange = summary ? (summary[defenseKey as keyof typeof summary] as [number, number]) : null;
+    const defense = Math.round((defenseRange ? rollRange(defenseRange) : 0) * modifiers.defenseMultiplier);
     // 格挡的随机数在这里掷（`resolveIncomingDamage` 是纯函数，e2e 才敢按固定 roll 断言）
     const resolved = resolveIncomingDamage(Math.max(0, Math.round(attack * rate - defense)), modifiers, Math.random());
     const damage = resolved.damage;
@@ -1057,6 +1089,19 @@ export class MonsterAiService implements OnApplicationBootstrap, OnApplicationSh
       if (!skill || skill.owner !== "monster") continue;
       const plan = buildCastPlan(skill, mount.priority, mount.cooldown, statuses.get(skill.status_id));
       if (!plan) continue;
+      // 法/道攻打 0 = 运营还没给这只怪配该项数值（#823 拍板口径）：伤害会恒 0，
+      // 放出来只会让玩家看到「怪放了个法术、我一点血没掉」。跳过并 warn 一次，
+      // 该怪回落到普攻；等运营把数值配上去，下一次缓存重建就自动恢复。
+      if (plan.category === "0" && !hasAttackFor(this.monsterConfigs.findByKey(mount.monster_key), plan.baseType)) {
+        const ticket = `${mount.monster_key}:${plan.skillId}`;
+        if (!this.warnedNoAttack.has(ticket)) {
+          this.warnedNoAttack.add(ticket);
+          this.logger.warn(
+            `怪物 ${mount.monster_key} 的技能 ${plan.skillId}（${plan.label}）按 ${plan.baseType} 结算，但该项攻击配成 0 —— 已跳过该技能（回落到普攻）`,
+          );
+        }
+        continue;
+      }
       const list = plans.get(mount.monster_key) ?? [];
       list.push(plan);
       plans.set(mount.monster_key, list);
