@@ -13,6 +13,7 @@ import {
   isEquipmentSlot,
   itemBaseOf,
   itemTypeOf,
+  roleLevelCurveMaxLevel,
   roleLevelExpOf,
   sellPriceOf,
 } from "../../common/runtime-config-cache";
@@ -46,6 +47,7 @@ import { decodeStoredRoleData, decodeStoredRoleDataStrict, normalizeBagCells, no
 import { migrateRoleData } from "./role-migration";
 import { clampVitals, enforceServerAuthority, settleVitalsAuthority } from "./role-authority";
 import { buildInitialRoleData } from "./initial-role";
+import { resolveLevelUp, type LevelUpOutcome } from "./level-up";
 import {
   BagGrid,
   BagOrigin,
@@ -94,6 +96,9 @@ export interface PickDropMeta {
 @Injectable()
 export class RolesService {
   private readonly logger = new Logger(RolesService.name);
+
+  /** 等级上限缺失的 error 是否已经打过（#832：每级查一次，不节流等于没有日志） */
+  private maxLevelWarned = false;
 
   constructor(
     private readonly roles: RoleRepository,
@@ -856,8 +861,8 @@ export class RolesService {
    *    再点就是 20025「该换卷了」—— 这是卷轴的核心规则，不是配错；
    * 2. **等级上限**（`roleMaxLevel`）：到顶了给 20026（「抬上限」与「加卷轴」是两件事，
    *    运维看到码要知道去改哪个）；
-   * 3. 属性重算 + 补满血蓝：与击杀侧 `refillOnLevelUp` 同一惯例（升级就该满血满蓝），
-   *    血蓝上限也跟着新等级走。
+   * 3. 属性重算 + 补满血蓝：与经验升级同一个惯例（A7「升级统一回满」，四条路径一致），
+   *    血蓝上限也跟着新等级走；同时把 `data.level` 与列一起写（B11）。
    *
    * 失败路径：20024 格子为空 / 不是升级卷轴 / 区间配置不合法；20025 等级不在区间内；
    * 20026 已到等级上限；带 revision 时乐观锁与 role.save 同义（20006）；被踢下线 20007。
@@ -907,7 +912,10 @@ export class RolesService {
 
     const toLevel = fromLevel + 1;
     const exp = Math.max(0, Math.floor(Number(data.exp) || 0));
-    // 等级变了属性就变：服务端重算写回存档（权威值），血蓝按升级惯例补满
+    // 等级变了属性就变：服务端重算写回存档（权威值），血蓝按升级惯例补满。
+    // `data.level` 也要一起写（B11）—— 卷轴以前只改列，文档里那份停在旧等级，
+    // 管理端详情与客户端本地看到的就是两个数字
+    data.level = toLevel;
     this.applyAuthoritativeAttributes(toLevel, data);
     data.hp = typeof data.maxHp === "number" ? data.maxHp : data.hp;
     data.mp = typeof data.maxMp === "number" ? data.maxMp : data.mp;
@@ -1387,45 +1395,28 @@ export class RolesService {
   /**
    * 击杀经验入账（#316：经验的结算在服务端）
    *
-   * 结算侧算出本次经验后交给这里落账：累加进存档 `data.exp`，按 **role_levels.exp**（#655
-   * 60 行逐级配好，管理端可改、即时生效）判定升级、循环升到 `growth_scalars.roleMaxLevel` 封顶，
+   * 结算侧算出本次经验后交给这里落账：累加进存档 `data.exp`，按 **等级曲线**（#786 的
+   * `exp` 那条，管理端可改、即时生效）判定升级、循环升到 `growth_scalars.roleMaxLevel` 封顶，
    * `roles.level` 索引列与 revision 原子推进。
+   *
+   * 升级算法本身在 `./level-up`（纯函数）：击杀 / 泡点 / 队友分账 / 发奖四条路共用同一份，
+   * 上一版是「击杀一份、发奖再抄一份」，抄着抄着就漂成了「击杀补满血、发奖不补」（B13）。
    *
    * @returns 入账后的角色状态（level / expNow / expNeed / leveledUp / revision）；
    *          角色已被踢下线等无法落账的情况返回 null（调用方跳过奖励，不视为错误）
    */
-  applyKillExp(accountId: string, roleId: string, exp: number, options: { refillOnLevelUp?: boolean } = {}): KillExpResult | null {
+  applyKillExp(accountId: string, roleId: string, exp: number): KillExpResult | null {
     const account = this.accounts.findById(accountId);
     const existing = account ? this.roles.findById(roleId) : undefined;
     // 与升级 / 购买同一纪律：被踢下线的角色不能再推进度（结算进行到一半被踢是正常情况）
     if (!account || !existing || existing.account_id !== accountId || account.online_role_id !== roleId) return null;
 
     const data = decodeStoredRoleData(existing.data);
-    const gain = Math.max(0, Math.floor(exp));
-    let level = Math.max(1, existing.level);
-    let expNow = Math.max(0, Math.floor(Number(data.exp) || 0)) + gain;
-    let leveledUp = false;
-    const maxLevel = this.roleMaxLevel();
-    let expNeed = this.expNeedOf(level);
-    while (level < maxLevel && expNeed > 0 && expNow >= expNeed) {
-      expNow -= expNeed;
-      level += 1;
-      leveledUp = true;
-      expNeed = this.expNeedOf(level);
-    }
+    const outcome = this.settleLevelUp(existing.level, data.exp, exp, data);
 
-    data.exp = expNow;
-    // 等级变了属性就变：服务端重算并写回存档（权威值，客户端那份只是演）
-    this.applyAuthoritativeAttributes(level, data);
-    // 击杀者侧的升级惯例：补满血蓝（队友分经验路径**不补** —— 队友打怪不是我在挨打，
-    // 与客户端 applyPartyExpGain 的纪律一致；refillOnLevelUp 由调用方按路径传）
-    if (leveledUp && options.refillOnLevelUp) {
-      data.hp = data.maxHp;
-      data.mp = data.maxMp;
-    }
     const row: RoleRow = {
       ...existing,
-      level,
+      level: outcome.level,
       data: JSON.stringify(data),
       revision: existing.revision + 1,
       updated_at: Date.now(),
@@ -1435,10 +1426,16 @@ export class RolesService {
     // （管理端改数值 / 玩家存档落库），此刻按旧 `existing` 覆盖会把对方的改动盖掉 ——
     // 丢掉这一笔经验远比丢掉对方的改动便宜，所以记一条 warn 后返回 null（调用方按「没入账」处理）。
     if (!this.roles.replace(row, existing.revision)) {
-      this.logger.warn(`角色 ${roleId} 经验入账时修订号已被改动（基线 ${existing.revision}），本次 ${gain} 点经验放弃`);
+      this.logger.warn(`角色 ${roleId} 经验入账时修订号已被改动（基线 ${existing.revision}），本次经验放弃`);
       return null;
     }
-    return { level, expNow, expNeed, leveledUp, revision: row.revision };
+    return {
+      level: outcome.level,
+      expNow: outcome.exp,
+      expNeed: this.expNeedOf(outcome.level),
+      leveledUp: outcome.leveledUp,
+      revision: row.revision,
+    };
   }
 
   /**
@@ -1512,31 +1509,25 @@ export class RolesService {
     // 3) 金币（都在 data JSON 里，没有专用列）
     data.gold = Math.max(0, Math.floor(Number(data.gold) || 0)) + Math.max(0, Math.floor(rewards.gold ?? 0));
 
-    // 4) 经验 + 升级（与 applyKillExp 同一算法：role_levels.exp 判定、循环升到等级上限）
-    let level = Math.max(1, existing.level);
-    let expNow = Math.max(0, Math.floor(Number(data.exp) || 0)) + Math.max(0, Math.floor(rewards.exp ?? 0));
-    let leveledUp = false;
-    const maxLevel = this.roleMaxLevel();
-    let expNeed = this.expNeedOf(level);
-    while (level < maxLevel && expNeed > 0 && expNow >= expNeed) {
-      expNow -= expNeed;
-      level += 1;
-      leveledUp = true;
-      expNeed = this.expNeedOf(level);
-    }
-    data.exp = expNow;
-    // 升级（或任何写档）后属性以服务端重算为准；不补血蓝 —— 发奖路径没有「升级回满」的惯例
-    this.applyAuthoritativeAttributes(level, data);
+    // 4) 经验 + 升级：与击杀 / 泡点共用 `settleLevelUp`（等级曲线判定、上限封顶、
+    //    `data.level` 同步、升级回满血蓝）
+    const outcome = this.settleLevelUp(existing.level, data.exp, Math.max(0, Math.floor(rewards.exp ?? 0)), data);
 
     const row: RoleRow = {
       ...existing,
-      level,
+      level: outcome.level,
       data: JSON.stringify(data),
       revision: existing.revision + 1,
       updated_at: Date.now(),
     };
     this.persistOrConflict(row, existing.revision, "发放任务奖励");
-    return { level, expNow, expNeed, leveledUp, revision: row.revision };
+    return {
+      level: outcome.level,
+      expNow: outcome.exp,
+      expNeed: this.expNeedOf(outcome.level),
+      leveledUp: outcome.leveledUp,
+      revision: row.revision,
+    };
   }
 
   /** 背包网格里某物品的总数 */
@@ -1603,6 +1594,45 @@ export class RolesService {
     return existing;
   }
 
+  /**
+   * 升级结算的唯一实现（A7 / A8 / B11 / B12 / B13）
+   *
+   * 四条会改等级的路径全走这里：击杀经验、泡点、队友分账（后两者都经 `applyKillExp`）、
+   * 发奖（任务 / 成就 / 邮件领取）。上一版是两条各抄一份循环，抄出来的差别是
+   * 「击杀升级满血、发奖升级不满」—— 同一个「升级」，玩家看出规律就没有规律。
+   *
+   * 三件事一起做，缺一件就会留下一个「两个真相」：
+   * 1. `data.level` 与列同步（B11）—— 只写列的话，任何读文档 `level` 的地方都停在旧值；
+   * 2. 属性重算（`data` 里的攻防血蓝上限由服务端公式覆盖）；
+   * 3. 升级回满血蓝（A7）。
+   *
+   * 满级后经验封顶（A8）在 `resolveLevelUp` 里做，这里不重复判。
+   *
+   * @param currentLevel `roles.level` 列（权威）
+   * @param currentExp   `data.exp`（可能是脏值/缺失）
+   * @param gain         本次入账的经验
+   * @param data         就地写的存档文档（`data.level` / `data.exp` / 属性 / 血蓝）
+   */
+  private settleLevelUp(currentLevel: number, currentExp: unknown, gain: number, data: Record<string, unknown>): LevelUpOutcome {
+    const outcome = resolveLevelUp({
+      level: currentLevel,
+      exp: Number(currentExp) || 0,
+      gain,
+      maxLevel: this.roleMaxLevel(),
+      expNeedOf: (level) => this.expNeedOf(level),
+    });
+    data.level = outcome.level;
+    data.exp = outcome.exp;
+    // 等级变了属性就变：服务端重算并写回存档（权威值，客户端那份只是演）
+    this.applyAuthoritativeAttributes(outcome.level, data);
+    if (outcome.leveledUp) {
+      // 上限由上面那步算出；算不出来（等级在曲线外）时保持原值，不把血写成 undefined
+      if (typeof data.maxHp === "number") data.hp = data.maxHp;
+      if (typeof data.maxMp === "number") data.mp = data.maxMp;
+    }
+    return outcome;
+  }
+
   /** 升到下一级所需经验（`role_levels.exp`；升级路径与实时进程 roleUpdate 帧共用；表里没有那一级回落 0） */
   expNeedAt(level: number): number {
     return this.expNeedOf(level);
@@ -1614,12 +1644,43 @@ export class RolesService {
     return Math.max(0, Math.floor(Number(roleLevelExpOf(level)) || 0));
   }
 
-  /** 等级上限（growth_scalars 表，管理端可改；表里没有就按 1 级算，宁可卡住也不凭空放大） */
+  /**
+   * 等级上限（`growth_scalars` 表，管理端可改）
+   *
+   * 三级兜底（#832 / B14）：以前读不到就按 **1 级**算 —— 库缺一行（迁移没跑 / 被误删）
+   * 的后果是**全服永久 1 级**：谁都不掉经验、谁都升不了级，而日志只有一条 warn，
+   * 玩家侧看不到任何报错。所以兜底改成：
+   *
+   * 1. `growth_scalars.roleMaxLevel`（权威，每次现查库）；
+   * 2. 运行时缓存里的同一个键（刚改完还没落库的窗口 / 读库失败）；
+   * 3. **曲线配到的最高级**（`role_level_curves` 末段 `to_level`）—— 曲线能算到哪，
+   *    人就能升到哪，比凭空写一个常数保守；
+   * 4. 连曲线都没有（空库首启、迁移没跑）：才回到 1，并且**记 error**（不是 warn）——
+   *    这是「玩法已经坏了」，不是「小事一桩」。
+   */
   private roleMaxLevel(): number {
     const fromDb = Number(this.growth.findScalar("roleMaxLevel")?.value);
     if (Number.isFinite(fromDb) && fromDb >= 1) return Math.floor(fromDb);
     const fromCache = growthScalarOf("roleMaxLevel");
-    return Math.max(1, Math.floor(fromCache ?? 1));
+    if (Number.isFinite(fromCache) && (fromCache as number) >= 1) return Math.floor(fromCache as number);
+
+    const fromCurve = roleLevelCurveMaxLevel();
+    if (fromCurve !== null && fromCurve >= 1) {
+      this.warnMissingMaxLevel(`已按曲线末段 ${fromCurve} 级兜底`);
+      return fromCurve;
+    }
+    this.warnMissingMaxLevel("曲线也没装载，暂按 1 级（**此时无法升级**）");
+    return 1;
+  }
+
+  /** 等级上限缺失的告警只打一次：每级查一次、每拍打一条等于没有日志 */
+  private warnMissingMaxLevel(extra: string): void {
+    if (this.maxLevelWarned) return;
+    this.maxLevelWarned = true;
+    this.logger.error(
+      `[roles] growth_scalars 缺 roleMaxLevel（曲线与缓存都没读到），${extra}。` +
+        `请在管理端「成长参数」页补上这一行（出厂值 1000000）`,
+    );
   }
 
   /**

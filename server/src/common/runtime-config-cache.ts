@@ -603,6 +603,26 @@ export function roleLevelExpOf(level: number): number | null {
   return Number.isFinite(exp) ? exp : null;
 }
 
+/**
+ * 曲线**配到**的最高级（各条曲线末段 `to_level` 的最大值；没装载返回 null）
+ *
+ * 用途只有一个：`growth_scalars.roleMaxLevel` 那行缺失时的兜底（#832 / B14）。
+ * 它不等于「运营设的等级上限」—— 那个仍然只在 `growth_scalars` 里，
+ * 求值本身按末段外推（见 `role-level-curve.ts`），所以这里给的是「曲线明确覆盖到哪」，
+ * 拿它当兜底是保守的：不会比配过的数据更激进。
+ */
+export function roleLevelCurveMaxLevel(): number | null {
+  if (!roleLevelCurveRows) return null;
+  let max = 0;
+  for (const segments of Object.values(roleLevelCurveRows)) {
+    for (const segment of segments) {
+      const to = Number(segment.to_level);
+      if (Number.isFinite(to) && to > max) max = to;
+    }
+  }
+  return max > 0 ? max : null;
+}
+
 
 /** 某件装备（含变体）的当前属性；不是装备 / 没配返回 null */
 export function equipmentAttributesOf(id: string): AttributeBundle | null {

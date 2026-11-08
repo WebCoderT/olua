@@ -464,7 +464,7 @@ export class CombatSettlementService {
   ): RealtimeKillReward {
     const exp = this.killExpFor(roleLevel, stats.level);
     // 无经验（等级差过大）不入账不推 revision；有经验但落账失败（打到一半被踢）跳过奖励
-    const applied = exp > 0 ? this.roles.applyKillExp(accountId, roleId, exp, { refillOnLevelUp: true }) : null;
+    const applied = exp > 0 ? this.roles.applyKillExp(accountId, roleId, exp) : null;
     if (exp > 0 && !applied) {
       this.logger.warn(`击杀奖励入账失败：账号 ${accountId} 角色 ${roleId}（可能已被下线），本次经验 ${exp} 未记`);
       return { exp: 0, level: roleLevel, expNow: 0, expNeed: 0, leveledUp: false, revision: roleRevision, drops: [] };
