@@ -10169,7 +10169,7 @@
     },
     "/admin/growth-scalars/{key}": {
       "patch": {
-        "description": "只改 `value`；每个键的取值域服务端单独校验：roleMaxLevel ∈ [1, 10000000]（整数），expGain.expPerLevel ∈ [1, 100000]（整数），expGain.maxLevelGap ∈ [0, 100]（整数），mpRecoverPerSecond ∈ [0, 1000]，soakExpPerTick ∈ [0, 1000000]（整数），soakTickSeconds ∈ [1, 3600]（整数）。\n\n- `roleMaxLevel`：改完会把四条曲线的末段 `toLevel` 一起拉到新值（两处数字永远一致）。\n- **改参数会影响军衔等效强度**（#250 的映射基准）。\n- 参数键不存在 → 404（`50014`）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
+        "description": "只改 `value`；每个键的取值域服务端单独校验：roleMaxLevel ∈ [1, 10000000]（整数），expGain.expPerLevel ∈ [1, 100000]（整数），expGain.maxLevelGap ∈ [0, 100]（整数），mpRecoverPerSecond ∈ [0, 1000]，soakExpPerTick ∈ [0, 1000000]（整数），soakTickSeconds ∈ [1, 3600]（整数），critRate ∈ [0, 1]，critDamage ∈ [0, 10]。\n\n- `roleMaxLevel`：改完会把四条曲线的末段 `toLevel` 一起拉到新值（两处数字永远一致）。\n- **改参数会影响军衔等效强度**（#250 的映射基准）。\n- 参数键不存在 → 404（`50014`）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
         "operationId": "adminGrowthScalar.update",
         "parameters": [
           {
@@ -16413,6 +16413,24 @@
             "description": "命中后的击退距离（像素；0 = 不击退；只对单体技能生效）",
             "minimum": 0,
             "maximum": 2000
+          },
+          "critRate": {
+            "type": "number",
+            "description": "技能自带暴击率（0~1；与角色暴击率相加。`desc` 写「附带 15% 暴击率」就配 0.15）",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "critDamage": {
+            "type": "number",
+            "description": "技能自带暴击倍率（> 1 才生效；0 = 用角色那一份。它替换的是倍率，不是概率）",
+            "minimum": 0,
+            "maximum": 10
+          },
+          "defIgnore": {
+            "type": "number",
+            "description": "无视防御比例（0~1；1 = 完全无视目标防御，0 = 正常吃防御）",
+            "minimum": 0,
+            "maximum": 1
           }
         }
       },
@@ -16532,6 +16550,24 @@
             "description": "命中后的击退距离（像素；0 = 不击退；只对单体技能生效）",
             "minimum": 0,
             "maximum": 2000
+          },
+          "critRate": {
+            "type": "number",
+            "description": "技能自带暴击率（0~1；与角色暴击率相加。`desc` 写「附带 15% 暴击率」就配 0.15）",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "critDamage": {
+            "type": "number",
+            "description": "技能自带暴击倍率（> 1 才生效；0 = 用角色那一份。它替换的是倍率，不是概率）",
+            "minimum": 0,
+            "maximum": 10
+          },
+          "defIgnore": {
+            "type": "number",
+            "description": "无视防御比例（0~1；1 = 完全无视目标防御，0 = 正常吃防御）",
+            "minimum": 0,
+            "maximum": 1
           },
           "id": {
             "type": "string",
@@ -25016,6 +25052,24 @@
             "type": "number",
             "description": "命中后的击退距离（像素；0 = 不击退。只对单体技能生效）"
           },
+          "critRate": {
+            "type": "number",
+            "description": "技能自带暴击率（0~1；与角色暴击率**相加**，不是替换）。#826：`desc` 里「附带 15% 暴击率」就配 0.15",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "critDamage": {
+            "type": "number",
+            "description": "技能自带暴击倍率（> 1 才生效；0 = 用角色那一份。它替换的是倍率而不是概率）",
+            "minimum": 0,
+            "maximum": 10
+          },
+          "defIgnore": {
+            "type": "number",
+            "description": "无视防御比例（0~1；1 = 完全无视目标防御，0 = 正常吃防御。只影响这一发）",
+            "minimum": 0,
+            "maximum": 1
+          },
           "updatedAt": {
             "type": "number",
             "description": "最近更新时间（毫秒）"
@@ -25043,6 +25097,9 @@
           "canAuto",
           "occupation",
           "pushDistance",
+          "critRate",
+          "critDamage",
+          "defIgnore",
           "updatedAt"
         ]
       },

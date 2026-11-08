@@ -10,7 +10,7 @@ import { MonsterDropRepository } from "../../database/repositories/monster-drop.
 import { MonsterRepository } from "../../database/repositories/monster.repository";
 import { RuntimeParamsRepository } from "../../database/repositories/runtime-params.repository";
 import { MonsterRow } from "../../database/rows";
-import { roleAttributeSourceOf, summarizeRoleAttributes } from "../combat/role-attributes";
+import { DEFAULT_CRIT_DAMAGE, roleAttributeSourceOf, summarizeRoleAttributes } from "../combat/role-attributes";
 import { RolesService } from "../roles/roles.service";
 import type { BagOrigin } from "../roles/role-inventory";
 import { GameEventsService } from "../../common/events/game-events.service";
@@ -385,11 +385,17 @@ export class CombatSettlementService {
       // 数值表里没有这只 = 不是可战对象（配置漏了），跳过而不是按 0 防算出一刀秒杀
       if (!stats) continue;
 
-      // 每一只独立掷骰：攻击区间各自随机，防御也吃各自的状态修正。
+      // 每一只独立掷骰：攻击区间各自随机，防御也吃各自的状态修正，暴击也各掷一次。
       // 拿一次掷骰套到 N 只身上，会让「同一刀打死五只」变成可预测的结果。
-      const attack = rollRange(readRange(summary, coefficient.baseType)) * this.roles.statusModifiersOf(accountId).attackMultiplier;
-      const defense = Math.round(rollRange(monsterDefenseRange(stats, coefficient.baseType)) * this.monsterAi.defenseMultiplierOf(entry.monster.instanceId));
-      const damage = Math.max(0, Math.round(attack * coefficient.baseTypeRate - defense));
+      const { damage, critical } = rollCastDamage({
+        attackRange: readRange(summary, coefficient.baseType),
+        attackMultiplier: this.roles.statusModifiersOf(accountId).attackMultiplier,
+        rate: coefficient.baseTypeRate,
+        defenseRange: monsterDefenseRange(stats, coefficient.baseType),
+        defenseMultiplier: this.monsterAi.defenseMultiplierOf(entry.monster.instanceId),
+        defIgnore: readNumber(skill, "defIgnore"),
+        crit: critProfileOf(summary, skill),
+      });
 
       const applied = this.world.applyDamage(entry.monster.instanceId, damage);
       if (!applied) continue;
@@ -458,6 +464,9 @@ export class CombatSettlementService {
         hp: applied.hp,
         maxHp: entry.monster.maxHp,
         killed: applied.killed,
+        // 暴击逐只标（#826）：一次区域施放里可能只爆一只 —— 客户端按 hit 播特效，
+        // 不能拿顶层那一个标志去染整片
+        ...(critical ? { critical: true } : {}),
       };
       if (reward) hit.reward = reward;
       hits.push(hit);
@@ -491,6 +500,8 @@ export class CombatSettlementService {
       duplicate: false,
       hits,
       statuses,
+      // 顶层 = 主目标那一只的暴击（与 damage / hp 同一口径：只认最近那只）
+      ...(primary?.critical ? { critical: true } : {}),
     };
     return primary?.reward ? { ...ok, reward: primary.reward } : ok;
   }
@@ -624,10 +635,17 @@ export class CombatSettlementService {
     //   round(攻击区间随机值 × 倍率 − 防御区间随机值)，下限 0
     // 攻击用哪项属性以**生成物里系数的 baseType** 为准（不信任客户端传参），防御按同名映射取
     // 玩家身上的状态修正（#822）：攻击倍率乘在出伤上，与受击侧的防御倍率同一个来源
-    const attack = rollRange(readRange(summary, coefficient.baseType)) * this.roles.statusModifiersOf(accountId).attackMultiplier;
-    // 怪物身上的状态修正（#372）：防御 × 状态连乘 —— 没有这条，「硬化皮肤」只是客户端动画
-    const defense = Math.round(rollRange(monsterDefenseRange(stats, coefficient.baseType)) * this.monsterAi.defenseMultiplierOf(cast.targetId));
-    const damage = Math.max(0, Math.round(attack * coefficient.baseTypeRate - defense));
+    // 暴击与破防（#826）收在 `rollCastDamage` 里，与区域路径共用一条公式
+    const modifiers = this.roles.statusModifiersOf(accountId);
+    const { damage, critical } = rollCastDamage({
+      attackRange: readRange(summary, coefficient.baseType),
+      attackMultiplier: modifiers.attackMultiplier,
+      rate: coefficient.baseTypeRate,
+      defenseRange: monsterDefenseRange(stats, coefficient.baseType),
+      defenseMultiplier: this.monsterAi.defenseMultiplierOf(cast.targetId),
+      defIgnore: readNumber(skill, "defIgnore"),
+      crit: critProfileOf(summary, skill),
+    });
 
     // 扣血与世界状态（血量 / 死亡判定都在世界服务里，这里只拿结果演）
     const applied = this.world.applyDamage(cast.targetId, damage);
@@ -746,6 +764,8 @@ export class CombatSettlementService {
       // 状态快照（#822）：出伤不改变自己的状态，但顺手带上 —— 客户端只有这一条通道能刷新图标，
       // 缺了它「状态到期后图标还在」就只能靠本地倒计时硬撑
       statuses: this.roles.statusSnapshotOf(accountId),
+      // 暴击（#826）：只在真触发时出现 —— 客户端用它换飘字 / 特效，缺字段就是没暴击
+      ...(critical ? { critical: true } : {}),
     };
     return reward ? { ...ok, reward } : ok;
   }
@@ -1162,6 +1182,70 @@ function rollRange(range: [number, number]): number {
   const minimum = Math.ceil(Math.min(range[0], range[1]));
   const maximum = Math.floor(Math.max(range[0], range[1]));
   return minimum + Math.floor(Math.random() * (maximum - minimum + 1));
+}
+
+/** 从配置行里读一个数字（缺字段 / 非数字 / NaN → `fallback`） */
+function readNumber(source: object | null | undefined, key: string, fallback = 0): number {
+  const value = Number((source as Record<string, unknown> | null | undefined)?.[key]);
+  return Number.isFinite(value) ? value : fallback;
+}
+
+/** 一次出手的暴击参数（角色基础 + 技能自带合成后的结果，#826） */
+interface CritProfile {
+  /** 触发概率（0~1） */
+  rate: number;
+  /** 触发后的倍率（> 1） */
+  damage: number;
+}
+
+/**
+ * 合成这一次出手的暴击参数（#826）
+ *
+ * - 概率**相加**：`desc` 里「附带 15% 暴击率」是叠加在角色暴击之上的 15 个百分点，
+ *   不是替换。相加后裁到 1 —— 角色和技能都配满也不会变成「必然暴击」的意外。
+ * - 倍率**技能优先、不相乘**：技能配了 > 1 就用自己的，否则用角色那 1.5。
+ *   相乘会让「技能倍率」变成角色倍率的放大器 —— 调角色一个数，所有技能的暴击一起变。
+ */
+function critProfileOf(summary: object, skill: object): CritProfile {
+  const rate = readNumber(summary, "critRate") + readNumber(skill, "critRate");
+  const skillDamage = readNumber(skill, "critDamage");
+  const roleDamage = readNumber(summary, "critDamage");
+  return {
+    rate: Math.min(1, Math.max(0, rate)),
+    damage: skillDamage > 1 ? skillDamage : roleDamage > 1 ? roleDamage : DEFAULT_CRIT_DAMAGE,
+  };
+}
+
+/**
+ * 一次出手的伤害（#826：暴击与破防都收在这里，单体与区域共用一条公式）
+ *
+ * ```
+ * 防御 = round(掷防御区间 × 怪物状态倍率 × (1 − 破防比例))
+ * 基础 = max(0, round(掷攻击区间 × 状态攻击倍率 × 技能倍率 − 防御))
+ * 暴击 = 基础 > 0 && rand < 暴击率  →  伤害 = round(基础 × 暴击倍率)
+ * ```
+ *
+ * 三处顺序都是刻意的：
+ * - **破防削的是防御那一项**，不是最终伤害 —— 「无视防御」对高防目标收益更大，
+ *   与 `desc` 里「目标防御越高增幅越明显」是同一个方向。
+ * - **基础伤害为 0 时不判暴击**（22 篇第 26 条）：0 伤害暴击只会让客户端播一个空特效。
+ * - **暴击乘在最后**（22 篇第 23 条）：受击侧的格挡乘在它之后，顺序固定两端才不会算出不同数。
+ */
+function rollCastDamage(input: {
+  attackRange: [number, number];
+  attackMultiplier: number;
+  rate: number;
+  defenseRange: [number, number];
+  defenseMultiplier: number;
+  defIgnore: number;
+  crit: CritProfile;
+}): { damage: number; critical: boolean } {
+  const attack = rollRange(input.attackRange) * input.attackMultiplier;
+  const ignore = Math.min(1, Math.max(0, input.defIgnore));
+  const defense = Math.round(rollRange(input.defenseRange) * input.defenseMultiplier * (1 - ignore));
+  const base = Math.max(0, Math.round(attack * input.rate - defense));
+  const critical = base > 0 && input.crit.rate > 0 && Math.random() < input.crit.rate;
+  return { damage: critical ? Math.round(base * input.crit.damage) : base, critical };
 }
 
 /** 掉落条目（drop_tables.entries / monster_drops.entries JSON 解析后的形状；库内已全显式，缺省只为容错） */

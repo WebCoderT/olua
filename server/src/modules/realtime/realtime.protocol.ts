@@ -150,6 +150,13 @@ export interface RealtimeSettleHit {
   hp: number;
   maxHp: number;
   killed: boolean;
+  /**
+   * true = 这一只被打出了暴击（#826）
+   *
+   * 逐只标：一次区域施放里可能只爆一只，客户端按 hit 播特效。缺字段就是没暴击
+   * （不写 `false` —— 省带宽，也让「服务端没实现暴击」与「这一发没爆」在抓包时区分得开）。
+   */
+  critical?: true;
   /** 这一只被击杀时的奖励（只有 killed 才带） */
   reward?: RealtimeKillReward;
 }
@@ -167,6 +174,13 @@ export interface RealtimeSettleOk {
   maxHp: number;
   /** 目标是否死亡（由服务端判，客户端据此走死亡表现与掉落） */
   killed: boolean;
+  /**
+   * true = 这一发打出了暴击（#826）
+   *
+   * 只在真触发时出现。区域技能里它等于 `hits[0].critical`（只认主目标那只），
+   * 逐只的结果看 `hits[i]` —— 顶层这一个只为「旧客户端 / 单体技能」方便。
+   */
+  critical?: true;
   /** 击杀奖励（#316 起由服务端结算；仅 killed 时携带——经验入账与掉落内容都以此为准） */
   reward?: RealtimeKillReward;
   /** true = 同一 castId 的重复投递，结果原样重发、未重复结算 */

@@ -121,6 +121,28 @@ export class SkillDto {
   @ApiProperty({ description: "命中后的击退距离（像素；0 = 不击退。只对单体技能生效）" })
   pushDistance: number;
 
+  @ApiProperty({
+    description:
+      "技能自带暴击率（0~1；与角色暴击率**相加**，不是替换）。#826：`desc` 里「附带 15% 暴击率」就配 0.15",
+    minimum: 0,
+    maximum: 1,
+  })
+  critRate: number;
+
+  @ApiProperty({
+    description: "技能自带暴击倍率（> 1 才生效；0 = 用角色那一份。它替换的是倍率而不是概率）",
+    minimum: 0,
+    maximum: 10,
+  })
+  critDamage: number;
+
+  @ApiProperty({
+    description: "无视防御比例（0~1；1 = 完全无视目标防御，0 = 正常吃防御。只影响这一发）",
+    minimum: 0,
+    maximum: 1,
+  })
+  defIgnore: number;
+
   @ApiProperty({ description: "最近更新时间（毫秒）" })
   updatedAt: number;
 
@@ -147,6 +169,9 @@ export class SkillDto {
     dto.canAuto = row.can_auto === 1;
     dto.occupation = row.occupation;
     dto.pushDistance = row.push_distance;
+    dto.critRate = row.crit_rate;
+    dto.critDamage = row.crit_damage;
+    dto.defIgnore = row.def_ignore;
     dto.updatedAt = row.updated_at;
     return dto;
   }
@@ -295,6 +320,39 @@ export class UpdateSkillDto {
   @Min(0, { message: "pushDistance 不能小于 0" })
   @Max(2000, { message: "pushDistance 不能大于 2000" })
   pushDistance?: number;
+
+  @ApiPropertyOptional({
+    description: "技能自带暴击率（0~1；与角色暴击率相加。`desc` 写「附带 15% 暴击率」就配 0.15）",
+    minimum: 0,
+    maximum: 1,
+  })
+  @IsOptional()
+  @IsNumber({}, { message: "critRate 必须是数字" })
+  @Min(0, { message: "critRate 不能小于 0" })
+  @Max(1, { message: "critRate 不能大于 1（100%）" })
+  critRate?: number;
+
+  @ApiPropertyOptional({
+    description: "技能自带暴击倍率（> 1 才生效；0 = 用角色那一份。它替换的是倍率，不是概率）",
+    minimum: 0,
+    maximum: 10,
+  })
+  @IsOptional()
+  @IsNumber({}, { message: "critDamage 必须是数字" })
+  @Min(0, { message: "critDamage 不能小于 0" })
+  @Max(10, { message: "critDamage 不能大于 10（十倍伤害）" })
+  critDamage?: number;
+
+  @ApiPropertyOptional({
+    description: "无视防御比例（0~1；1 = 完全无视目标防御，0 = 正常吃防御）",
+    minimum: 0,
+    maximum: 1,
+  })
+  @IsOptional()
+  @IsNumber({}, { message: "defIgnore 必须是数字" })
+  @Min(0, { message: "defIgnore 不能小于 0" })
+  @Max(1, { message: "defIgnore 不能大于 1（100% 无视）" })
+  defIgnore?: number;
 }
 
 /**

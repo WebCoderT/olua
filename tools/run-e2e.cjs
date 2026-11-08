@@ -66,6 +66,8 @@ const WEIGHT = {
   "test:e2e:quest": 2,
   // 两张图各起一次世界、三段区域施放中间都要等群体技能的冷却（1.3s × 3）
   "test:e2e:area-skill": 3,
+  // 三组共 18 刀，每刀前都要先 PATCH 一次技能行（写库 + 刷快照），刀数不多但来回多
+  "test:e2e:crit": 3,
 };
 
 function weightOf(script) {

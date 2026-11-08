@@ -551,7 +551,11 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
       -- 管理端「成长参数」页才改得到（updateScalar 对不存在的键是 404）。
       INSERT OR IGNORE INTO growth_scalars (key, value, description, updated_at) VALUES
         ('soakExpPerTick', 0, '泡点活动：在线角色每拍获得的经验（0 = 活动关闭；服务端定时发放，走击杀同一套升级链路）', 0),
-        ('soakTickSeconds', 10, '泡点活动：发经验的拍间隔（秒；与上一条配合出「每 M 秒发 N 点」的速率）', 0);
+        ('soakTickSeconds', 10, '泡点活动：发经验的拍间隔（秒；与上一条配合出「每 M 秒发 N 点」的速率）', 0),
+        -- 暴击（#826）：出厂 0（新号不暴击，22 篇口径）/ 1.5 倍。
+        -- 这两行同样是 INSERT OR IGNORE —— 存量库也能在「成长参数」页改到
+        ('critRate', 0, '角色基础暴击率（0~1；与技能自带的暴击率相加。出厂 0 = 新号不暴击）', 0),
+        ('critDamage', 1.5, '角色基础暴击倍率（> 1 才生效；技能配了自己的倍率则以技能为准。出厂 1.5 倍）', 0);
 
       -- 军衔配置（#250）：与 titles / souls 同构（100 阶全量就是成长链，顺序天然按阶，
       -- 没有 upgrade_order 列 —— 军衔不拖动排序）；多 tier 列（大段名），少 animation 两列。
@@ -875,6 +879,11 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
         can_auto            INTEGER NOT NULL DEFAULT 0,
         occupation          TEXT    NOT NULL DEFAULT '4',
         push_distance       REAL    NOT NULL DEFAULT 0,
+        -- 暴击与破防（#826）：技能自带的暴击率 / 暴击倍率 / 无视防御比例。
+        -- crit_damage = 0 表示「用角色那一份」，不覆盖角色属性；def_ignore = 1 等于无视全部防御。
+        crit_rate           REAL    NOT NULL DEFAULT 0,
+        crit_damage         REAL    NOT NULL DEFAULT 0,
+        def_ignore          REAL    NOT NULL DEFAULT 0,
         updated_at          INTEGER NOT NULL DEFAULT 0
       );
 
@@ -1178,6 +1187,10 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
     // 出厂空表，读取时自动把被引用的 key 补进清单（老数据与 config-sync 出厂数据都不用迁移）
     this.ensureColumn("equipment_appearance", "border_items", "TEXT NOT NULL DEFAULT '[]'");
     this.ensureColumn("equipment_appearance", "background_items", "TEXT NOT NULL DEFAULT '[]'");
+    // 暴击 / 破防（#826）：存量库补列后默认 0 —— 老行等于「不暴击、不破防」，行为与改动前一致
+    this.ensureColumn("skills", "crit_rate", "REAL NOT NULL DEFAULT 0");
+    this.ensureColumn("skills", "crit_damage", "REAL NOT NULL DEFAULT 0");
+    this.ensureColumn("skills", "def_ignore", "REAL NOT NULL DEFAULT 0");
     this.ensureColumn("admins", "role", `TEXT NOT NULL DEFAULT '${AdminRole.ADMIN}'`);
     // 修订号（乐观锁）：存量库补列后老角色都是 1，客户端读到 1 推回来也是 1，不会误判冲突
     this.ensureColumn("roles", "revision", "INTEGER NOT NULL DEFAULT 1");
