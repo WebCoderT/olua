@@ -2,10 +2,11 @@ import { Injectable, Logger, OnModuleInit } from "@nestjs/common";
 import { BizCode } from "../../common/constants/biz-code";
 import { BizException } from "../../common/errors/biz.exception";
 import { GameEventsService, MonsterKilledEvent } from "../../common/events/game-events.service";
+import { todayResetDay } from "../../common/utils/daily-clock";
 import { NpcRepository } from "../../database/repositories/npc.repository";
 import { QuestProgressRepository } from "../../database/repositories/quest-progress.repository";
 import { QuestRepository } from "../../database/repositories/quest.repository";
-import { QuestRow } from "../../database/rows";
+import { QuestProgressRow, QuestRow } from "../../database/rows";
 import { parseRewardItems } from "../game-config/dto/quest.dto";
 import { RolesService } from "../roles/roles.service";
 import {
@@ -62,16 +63,37 @@ export class QuestService implements OnModuleInit {
     return { quests: this.statesOf(accountId) };
   }
 
-  /** 接取（等级 / 主线链前置在服务端复核，客户端的判断只是提前灰按钮） */
+  /**
+   * 接取（等级 / 主线链前置在服务端复核，客户端的判断只是提前灰按钮）
+   *
+   * **日常的日切闸门在这**（#815）：行还在就不再是「可接」，要看它属于哪一天 ——
+   * - 今天的行已领奖 → `already_done`（今天到此为止，明天 05:00 后自然可再接）；
+   * - 今天的行还没领 → 「已经接取了这个任务」；
+   * - 行属于更早的天 → 原地覆盖重置（进度清零、回 accepted），玩家看到的还是「今天这一轮」。
+   *
+   * 最后一条同时覆盖了「昨天接了没做完，今天重新接」与「昨天接了没交，跨天后照常可接」——
+   * 过期行在 `statesOf` 里不下发，客户端看到的本来就是可接态，这里补的是服务端那一半。
+   */
   accept(accountId: string, questId: string): MyQuestsDto {
     const quest = this.requireQuest(questId);
     const role = this.onlineRole(accountId);
     if (role.level < quest.min_level) {
       throw BizException.conflict(BizCode.QUEST_LEVEL_LOW, `等级达到 ${quest.min_level} 级才能接取「${quest.label}」`);
     }
+    const today = todayResetDay();
     const existing = this.progressRepo.findByKey(role.id, questId);
     if (existing) {
-      // daily 领奖后行已删除，能查到的 claimed 一定是主线 —— 已完成的主线不能重复接
+      if (quest.kind === "daily" && existing.reset_day < today) {
+        this.progressRepo.resetForNewDay(role.id, questId, today);
+        return this.mine(accountId);
+      }
+      if (quest.kind === "daily" && existing.status === "claimed") {
+        throw BizException.conflict(
+          BizCode.QUEST_ALREADY_DONE,
+          `今天的「${quest.label}」已经完成过了，明天 05:00 之后再来`,
+        );
+      }
+      // 剩下的都是「行在这、今天动不了」：日常已接未交 / 主线已接或已领
       throw BizException.conflict(
         BizCode.QUEST_STATE_INVALID,
         existing.status === "claimed" ? "该任务已完成，不能重复接取" : "已经接取了这个任务",
@@ -90,6 +112,7 @@ export class QuestService implements OnModuleInit {
       status: "accepted",
       progress: 0,
       claimed_at: null,
+      reset_day: today,
       created_at: now,
       updated_at: now,
     });
@@ -125,9 +148,9 @@ export class QuestService implements OnModuleInit {
     };
     const settled = this.roles.grantQuestRewards(accountId, role.id, consume, rewards);
 
-    // daily 删行（可重接、进度清零）；main 保留 claimed 行作链门控
-    if (quest.kind === "daily") this.progressRepo.remove(role.id, questId);
-    else this.progressRepo.markClaimed(role.id, questId);
+    // daily 与 main 一样只改状态、不删行（#815）：删行会把「今天领过」的证据一起删掉，
+    // 于是 accept 无从判断，一条日常能被刷上千次。日切靠 reset_day，跨天由 accept 覆盖重置。
+    this.progressRepo.markClaimed(role.id, questId);
 
     // 交付成功 → 广播（成就的「累计交付 N 个任务」由此记账；订阅方失败不影响本次交付）
     this.events.emit("quest:claimed", { accountId, roleId: role.id, questId, kind: quest.kind });
@@ -163,11 +186,12 @@ export class QuestService implements OnModuleInit {
     }
 
     // NPC 名下全部任务的状态（可接未接的返回 available 态 —— 客户端据此亮出「接取」按钮）
+    const today = todayResetDay();
     const quests: QuestStateDto[] = [];
     for (const quest of this.questsRepo.listAll()) {
       if (quest.npc_id !== npcId) continue;
       const row = this.progressRepo.findByKey(role.id, quest.id);
-      if (row) {
+      if (row && !this.isStaleDaily(quest, row, today)) {
         quests.push(this.stateOf(accountId, quest, row.status, row.progress));
       } else {
         quests.push(QuestStateDto.from(quest.id, "available", 0, quest.objective_count));
@@ -205,13 +229,26 @@ export class QuestService implements OnModuleInit {
   private statesOf(accountId: string): QuestStateDto[] {
     const role = this.roles.online(accountId);
     if (!role) return [];
+    const today = todayResetDay();
     const out: QuestStateDto[] = [];
     for (const row of this.progressRepo.listByRole(role.id)) {
       const quest = this.questsRepo.findByKey(row.quest_id);
       if (!quest) continue;
+      if (this.isStaleDaily(quest, row, today)) continue;
       out.push(this.stateOf(accountId, quest, row.status, row.progress));
     }
     return out;
+  }
+
+  /**
+   * 过期日常行：属于更早的天，对外**等价于可接**
+   *
+   * 不下发而不是删掉 —— 行留着是「今天领过」的证据（删了就无从判断，这正是 #815 的洞），
+   * 但对外它已经是可接态。客户端「没有进度行 = 可接」的判断因此一行都不用改；
+   * 真正的重置发生在 `accept`（覆盖成新一天的 accepted）。
+   */
+  private isStaleDaily(quest: QuestRow, row: QuestProgressRow, today: number): boolean {
+    return quest.kind === "daily" && row.reset_day < today;
   }
 
   private stateOf(accountId: string, quest: QuestRow, status: string, progress: number): QuestStateDto {

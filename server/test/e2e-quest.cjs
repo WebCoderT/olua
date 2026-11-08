@@ -10,7 +10,8 @@
  * 四、kill 进度：击杀结算递进（唯一发生在 realtime 侧的进度变化），逐格 +1、到量 ready、
  *     quest 帧只推本人；奖励（金币 / 经验 / 物品）一次落库
  * 五、collect：交付时查背包（不足 20017 整单拒绝、行保持原状），够就扣走并发奖
- * 六、daily：领奖后**删行**（可重接、进度清零）—— 与 main 的 claimed 行语义相对
+ * 六、daily 日切：领奖**不删行**（改 claimed），今天再接返 20027，跨天（改 reset_day）可再接
+ *     并覆盖重置 —— 删行会把「今天领过」的证据一起删掉，#815 的洞就是这么来的
  * 七、管理端配置：动态增删 + 四条跨字段守卫（重复 id / 目标不存在 / 前置链成环 /
  *     被进度或链前置引用中拒删）
  *
@@ -220,10 +221,22 @@ function progressRows(dbPath, roleId, questId) {
   const { DatabaseSync } = require("node:sqlite");
   const db = new DatabaseSync(dbPath);
   const rows = questId
-    ? db.prepare("SELECT status, progress FROM quest_progress WHERE role_id = ? AND quest_id = ?").all(roleId, questId)
-    : db.prepare("SELECT quest_id, status, progress FROM quest_progress WHERE role_id = ?").all(roleId);
+    ? db.prepare("SELECT status, progress, reset_day FROM quest_progress WHERE role_id = ? AND quest_id = ?").all(roleId, questId)
+    : db.prepare("SELECT quest_id, status, progress, reset_day FROM quest_progress WHERE role_id = ?").all(roleId);
   db.close();
   return rows;
+}
+
+/**
+ * 把某一行的 `reset_day` 挪到别的天（#815）
+ *
+ * e2e 里没有假时钟，跨 05:00 只能靠改行模拟 —— 服务端读的是同一张表，改完立刻生效。
+ */
+function setResetDay(dbPath, roleId, questId, day) {
+  const { DatabaseSync } = require("node:sqlite");
+  const db = new DatabaseSync(dbPath);
+  db.prepare("UPDATE quest_progress SET reset_day = ? WHERE role_id = ? AND quest_id = ?").run(day, roleId, questId);
+  db.close();
 }
 
 (async () => {
@@ -458,22 +471,56 @@ function progressRows(dbPath, roleId, questId) {
 
     //#endregion
 
-    //#region 六、daily 重接（领奖后删行）
+    //#region 六、daily 日切（#815：领奖不删行，今天不能再接）
 
-    group("六、daily 领奖后删行可重接");
+    group("六、daily 领奖后不删行，今天不能再接");
+    const roleGold = async () => (((await api(baseUrl, "GET", `roles/${roleId}`, { token })).data || {}).data || {}).gold;
     await api(baseUrl, "PATCH", "admin/quests/8101", { token: adminToken, body: { objective: { type: "kill", target: "1", count: 1 } } });
+    const goldBeforeDaily = await roleGold();
     const dailyKill = await killOne();
     check(!!(dailyKill && dailyKill.killed), "日常目标（改后杀 1 只怪物 1）达成");
     const dailyReady = await myQuest("8101");
     check(!!dailyReady && dailyReady.status === "ready", "日常进度到量 → ready", JSON.stringify(dailyReady));
     const submitDaily = await api(baseUrl, "POST", "quests/submit", { token, body: { questId: "8101" } });
     check(submitDaily.code === 0 && submitDaily.data.reward.gold === 500, "交付日常：奖励照发", JSON.stringify(submitDaily.data && submitDaily.data.reward));
+
     const dailyAfter = await myQuest("8101");
-    check(dailyAfter === null, "daily 领奖后**行被删除**（me 里没有 8101）", JSON.stringify(dailyAfter));
+    check(!!dailyAfter && dailyAfter.status === "claimed", "daily 领奖后**行还在**（claimed，不再是删行）", JSON.stringify(dailyAfter));
     const dailyRows = progressRows(dbPath, roleId, "8101");
-    check(dailyRows.length === 0, "开库核对：8101 无行（可重接、进度清零）", JSON.stringify(dailyRows));
+    check(
+      dailyRows.length === 1 && dailyRows[0].status === "claimed",
+      "开库核对：8101 一行 claimed（「今天领过」的证据留着，闸门才有依据）",
+      JSON.stringify(dailyRows),
+    );
+    check(
+      dailyRows.length === 1 && dailyRows[0].reset_day > 0,
+      "开库核对：reset_day 是真实天号（不是补列时的 0）",
+      JSON.stringify(dailyRows),
+    );
+
     const reAcceptDaily = await api(baseUrl, "POST", "quests/accept", { token, body: { questId: "8101" } });
-    check(reAcceptDaily.code === 0, "重接成功（新一轮开始，进度 0）", JSON.stringify(reAcceptDaily.message));
+    check(reAcceptDaily.code === 20027, "今天再接同一日常 → already_done（20027）", JSON.stringify(reAcceptDaily));
+
+    // 连交 3 次只有第一次发奖（旧实现领奖删行，接 → 杀 → 交 一天能刷上千次）
+    for (let i = 0; i < 3; i += 1) {
+      const dup = await api(baseUrl, "POST", "quests/submit", { token, body: { questId: "8101" } });
+      check(dup.code !== 0, `第 ${i + 2} 次交付日常 → 拒（${dup.code}）`, JSON.stringify(dup.message));
+    }
+    checkEqual((await roleGold()) - goldBeforeDaily, 500, "金币只涨了一次奖励（连交没有重复发）");
+
+    // 跨 05:00：把这一行挪到昨天 —— 视作可再接，accept 时覆盖重置
+    const staleDay = dailyRows[0].reset_day - 1;
+    setResetDay(dbPath, roleId, "8101", staleDay);
+    const staleState = await myQuest("8101");
+    check(staleState === null, "跨天后过期行不下载（客户端「没有行 = 可接」的判断不用改）", JSON.stringify(staleState));
+    const acceptNextDay = await api(baseUrl, "POST", "quests/accept", { token, body: { questId: "8101" } });
+    check(acceptNextDay.code === 0, "跨天后可再接（覆盖重置，不是重插一行）", JSON.stringify(acceptNextDay.message));
+    const resetRows = progressRows(dbPath, roleId, "8101");
+    check(
+      resetRows.length === 1 && resetRows[0].status === "accepted" && resetRows[0].progress === 0 && resetRows[0].reset_day > staleDay,
+      "覆盖重置：仍是同一行，状态回 accepted、进度清零、天号推进到今天",
+      JSON.stringify(resetRows),
+    );
 
     //#endregion
 
@@ -517,6 +564,8 @@ function progressRows(dbPath, roleId, questId) {
       console.log("\n服务端日志尾部：");
       console.log(server.logs().split("\n").slice(-30).join("\n"));
       process.exitCode = 1;
+    } else {
+      console.log(`\n✅ 任务 e2e：${passed} 通过 / 0 失败`);
     }
   } finally {
     if (serverChild) serverChild.kill("SIGTERM");

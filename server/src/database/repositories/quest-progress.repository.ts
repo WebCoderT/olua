@@ -3,11 +3,11 @@ import { DatabaseService } from "../database.service";
 import { QuestProgressRow } from "../rows";
 
 /**
- * 任务进度数据访问（#396）
+ * 任务进度数据访问（#396 / #815）
  *
  * 双进程共享（同 monsters 读库模式）：realtime 进程的击杀结算直写进度
  * （`onMonsterKilled` → bumpProgress），HTTP 进程的接取 / 交付读写同一张表。
- * 状态机与删行语义见 `QuestProgressRow` 注释。
+ * 状态机、`reset_day` 日切口径、以及「daily 也保留 claimed 行」的理由见 `QuestProgressRow` 注释。
  */
 @Injectable()
 export class QuestProgressRepository {
@@ -17,9 +17,18 @@ export class QuestProgressRepository {
   insert(row: QuestProgressRow): void {
     this.db.run(
       `INSERT INTO quest_progress
-         (role_id, quest_id, status, progress, claimed_at, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [row.role_id, row.quest_id, row.status, row.progress, row.claimed_at, row.created_at, row.updated_at],
+         (role_id, quest_id, status, progress, claimed_at, reset_day, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        row.role_id,
+        row.quest_id,
+        row.status,
+        row.progress,
+        row.claimed_at,
+        row.reset_day,
+        row.created_at,
+        row.updated_at,
+      ],
     );
   }
 
@@ -69,7 +78,7 @@ export class QuestProgressRepository {
     );
   }
 
-  /** 领奖（main 保留 claimed 行作链门控） */
+  /** 领奖（daily 与 main 同一处理：#815 起都不删行，「今天领过没有」由 reset_day 判定） */
   markClaimed(roleId: string, questId: string): void {
     this.db.run(
       "UPDATE quest_progress SET status = 'claimed', claimed_at = ?, updated_at = ? WHERE role_id = ? AND quest_id = ?",
@@ -77,13 +86,34 @@ export class QuestProgressRepository {
     );
   }
 
-  /** 领奖（daily 删行 → 可重接、进度清零） */
-  remove(roleId: string, questId: string): void {
-    this.db.run("DELETE FROM quest_progress WHERE role_id = ? AND quest_id = ?", [roleId, questId]);
+  /**
+   * 日常跨天重新接取（#815）：覆盖重置成新一天的 accepted
+   *
+   * 不复用 `insert` —— 行还在（主键冲突），只能原地改。`claimed_at` 一并清掉：
+   * 它记的是「上一轮哪一刻领的」，留到今天会让人误读成「今天领过」。
+   */
+  resetForNewDay(roleId: string, questId: string, day: number): void {
+    this.db.run(
+      `UPDATE quest_progress
+       SET status = 'accepted', progress = 0, claimed_at = NULL, reset_day = ?, updated_at = ?
+       WHERE role_id = ? AND quest_id = ?`,
+      [day, Date.now(), roleId, questId],
+    );
   }
 
-  /** 某任务被多少角色引用（管理端删除守卫） */
-  countByQuest(questId: string): number {
+  /**
+   * 某任务被多少角色引用（管理端删除守卫）
+   *
+   * `excludeStatus` 给日常用：daily 的 claimed 行是「今天领过」的记账，不是「卡在这个任务上」，
+   * 拿它拦下架会让日常永远删不掉（每天都有行）。main 不传 —— claimed 行是链门控，删了就断链。
+   */
+  countByQuest(questId: string, excludeStatus?: string): number {
+    if (excludeStatus) {
+      return this.db.count("SELECT COUNT(1) AS total FROM quest_progress WHERE quest_id = ? AND status <> ?", [
+        questId,
+        excludeStatus,
+      ]);
+    }
     return this.db.count("SELECT COUNT(1) AS total FROM quest_progress WHERE quest_id = ?", [questId]);
   }
 

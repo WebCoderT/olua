@@ -1596,7 +1596,11 @@ export interface QuestRow {
  *
  * 状态机：可接 = 无行 → accepted 进行中 → ready 可交付 → claimed 已领奖。
  * collect 任务没有独立 ready 态：交付时查背包判定，够就一步到 claimed。
- * daily 领奖后**整行删除**（可重接、进度清零）；main 保留 claimed 行作链门控。
+ *
+ * **daily 与 main 一样保留 claimed 行**（#815）：领奖只改状态，不删行。
+ * 「今天领过没有」由 `reset_day`（每日 05:00 切日，见 `common/utils/daily-clock`）判定 ——
+ * 删行会把证据一起删掉，闸门就只能靠另建计数器，而计数器与进度行迟早对不上。
+ * `reset_day` 落后于今天的日常行**等价于可接**（不删也不清，`accept` 时覆盖重置）。
  */
 export interface QuestProgressRow {
   role_id: string;
@@ -1605,6 +1609,8 @@ export interface QuestProgressRow {
   status: string;
   progress: number;
   claimed_at: number | null;
+  /** 这一行属于哪一天（05:00 切日的天号）；main 不参与比较，只是同列同源 */
+  reset_day: number;
   created_at: number;
   updated_at: number;
 }

@@ -371,6 +371,13 @@ export const BizCode = {
   QUEST_LEVEL_LOW: 20016,
   /** 收集型任务材料不足（交付时背包里没有足够的目标物品） */
   QUEST_MATERIAL_SHORT: 20017,
+  /**
+   * 今天的日常已经领过奖了（#815）
+   *
+   * 与「任务状态非法」（20015）分开：这里不是玩家做错了什么，而是**今天这一轮结束了** ——
+   * 客户端可以照文案提示「明日再来」，而不是当成异常。日切口径见 `common/utils/daily-clock`。
+   */
+  QUEST_ALREADY_DONE: 20027,
   //#endregion
 
   //#region 经济：出售 / 回收（#397）
