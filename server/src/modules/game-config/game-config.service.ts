@@ -180,8 +180,8 @@ export class GameConfigService {
   /**
    * 写完库立刻把运营库的当前值装进结算层（#544）
    *
-   * 「管理端保存 → 服务端下一次结算就按新值」靠这一行成立。只在这六张表（称号 / 战魂 /
-   * 军衔 / 装备 / 药品 / 技能）的写操作后调用 —— 它们进了 `shared/runtime-overrides`
+   * 「管理端保存 → 服务端下一次结算就按新值」靠这一行成立。只在这些表（称号 / 战魂 /
+   * 军衔 / 装备 / 药品 / 技能 / 状态）的写操作后调用 —— 它们进了 `shared/runtime-overrides`
    * 的覆盖层；其余表（怪物 / 掉落 / 商城 / 成长）本来就是**直读库**的，不需要刷新。
    *
    * 全量重装而不是增量：数据量是「37 件装备 + 34 级称号 + …」这个级别，几十毫秒，
@@ -1342,6 +1342,9 @@ export class GameConfigService {
     if (dto.combat !== undefined) next.combat = serializeCombat(dto.combat);
     next.updated_at = Date.now();
     this.statusesRepo.update(next);
+    // 状态的 combat 从 #822 起进了结算层（`runtime-config-cache` 的 statusOf）——
+    // 不重装就是「管理端把格挡改成 100%、服务端还按老值掷骰」，而且没有任何报错
+    this.touchRuntime();
     return StatusDto.from(this.requireStatus(id));
   }
 

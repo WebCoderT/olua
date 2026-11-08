@@ -25,6 +25,7 @@
     "test:e2e:realtime": "node --disable-warning=ExperimentalWarning test/e2e-realtime.cjs",
     "test:e2e:combat": "node --disable-warning=ExperimentalWarning test/e2e-combat.cjs",
     "test:e2e:cast-guard": "node --disable-warning=ExperimentalWarning test/e2e-cast-guard.cjs",
+    "test:e2e:status-player": "node --disable-warning=ExperimentalWarning test/e2e-status-player.cjs",
     "test:e2e:world": "node --disable-warning=ExperimentalWarning test/e2e-world.cjs",
     "test:e2e:world-viewers": "node --disable-warning=ExperimentalWarning test/e2e-world-viewers.cjs",
     "test:e2e:dual": "node --disable-warning=ExperimentalWarning test/e2e-dual.cjs",

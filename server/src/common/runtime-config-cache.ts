@@ -27,6 +27,7 @@
 //#region 类型（DB 行的形状；只依赖结构化类型，不引 database 层）
 
 import { buildRoleLevelRow, RoleLevelCurveSegment } from "./constants/role-level-curve";
+import { CombatValue, parseCombatJson } from "./config-json";
 
 /** 结算用的一份属性包：单值 + 六项区间元组（键是 camelCase，与客户端配置同形） */
 export type AttributeBundle = Record<string, unknown>;
@@ -117,9 +118,26 @@ export interface SkillSource {
   push_distance: number;
 }
 
-/** 药品行（背包叠加 / 用药回复） */
-export interface DrugSource {
+/**
+ * 状态行（#822：角色侧状态要在结算层回答「防御倍率 / 格挡多少」）
+ *
+ * 只进结算要用的几列。怪物 AI 另有一份整表缓存（它还要 duration 来给怪挂状态、按状态
+ * 类型排序），两份读的是**同一张表的同一批行**、解析走同一个 `parseCombatJson`，
+ * 口径不会分叉 —— 分开的原因是加载时机不同（AI 用 1 秒 TTL 自取，结算层跟着管理端写操作重装）。
+ */
+export interface StatusSource {
   id: string;
+  owner: string;
+  label: string;
+  icon: string;
+  /** 持续时间（秒；重复获得从头计时） */
+  duration: number;
+  /** 战斗数值修正（JSON 字符串，解析走 parseCombatJson） */
+  combat: string;
+}
+
+/** 药品行（背包叠加 / 用药回复） */
+export interface DrugSource {  id: string;
   label: string;
   description: string;
   level: number;
@@ -197,6 +215,8 @@ let titleBundles: Map<number, AttributeBundle> | null = null;
 let soulBundles: Map<number, AttributeBundle> | null = null;
 let rankBundles: Map<number, AttributeBundle> | null = null;
 let skillRows: Map<string, Record<string, unknown>> | null = null;
+/** 状态定义（#822）：结算层要回答「防御倍率 / 格挡多少」，拿不到仓储 */
+let statusRows: Map<string, StatusSource & { combatValue: CombatValue }> | null = null;
 let drugRows: Map<string, Record<string, unknown>> | null = null;
 /** 货币道具（#785）：背包格子认得出 / 回收价 / 显示名都要它 */
 let moneyRows: Map<string, Record<string, unknown>> | null = null;
@@ -364,6 +384,22 @@ export function applySkillOverrides(rows: SkillSource[]): void {
   skillRows = map;
 }
 
+/**
+ * 装进状态定义（#822：角色侧状态参与结算）
+ *
+ * 与怪物 AI 各自持有一份的理由见 `StatusSource` 的注释。这里预先解析 `combat` 列：
+ * 结算里每次受击都要问一次，JSON.parse 放在装载时做，读的时候只剩字段访问。
+ */
+export function applyStatusOverrides(rows: StatusSource[]): void {
+  if (!rows.length) {
+    statusRows = null;
+    return;
+  }
+  const map = new Map<string, StatusSource & { combatValue: CombatValue }>();
+  for (const row of rows) map.set(row.id, { ...row, combatValue: parseCombatJson(row.combat) });
+  statusRows = map;
+}
+
 /** 装进药品（背包叠加 / 用药回复 / 出售价） */
 export function applyDrugOverrides(rows: DrugSource[]): void {
   if (!rows.length) {
@@ -492,6 +528,7 @@ export function resetRuntimeConfigCache(): void {
   soulBundles = null;
   rankBundles = null;
   skillRows = null;
+  statusRows = null;
   drugRows = null;
   moneyRows = null;
   levelScrollRows = null;
@@ -633,6 +670,15 @@ export function playerSkillIds(): string[] {
 /** 某个技能的当前配置；没配返回 null（结算会报缺配置，而不是按 0 冷却放技能） */
 export function skillOf(id: string): Record<string, unknown> | null {
   return skillRows?.get(id) ?? null;
+}
+
+/**
+ * 状态定义（#822）：`null` = 没这个状态（没装载 / 配置里删了）
+ *
+ * 返回 `combatValue` 已解析好；`duration` 用秒，调用方自己乘 1000 换成到期时刻。
+ */
+export function statusOf(id: string): (StatusSource & { combatValue: CombatValue }) | null {
+  return statusRows?.get(id) ?? null;
 }
 
 /** 某个药品的当前配置；不是药品返回 null */

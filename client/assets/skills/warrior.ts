@@ -6,7 +6,6 @@ import CursorManager from "../ui/core/CursorManager";
 import EffectManager from "../ui/core/EffectManager";
 import LayerManager from "../ui/core/LayerManager";
 import SoundManager from "../ui/core/SoundManager";
-import StatusManager from "../ui/core/StatusManager";
 import CombatChannel from "../ui/utils/net/CombatChannel";
 import { getDirectionByVector, getDirectionToTarget } from "../ui/utils/battle/BattleMath";
 import { HAS_MOUSE } from "../ui/utils/input/Pointer";
@@ -38,13 +37,18 @@ export function skill_1001(context: SkillContext) {
 }
 
 /**
- * 状态型技能（护体神盾 / 金刚护体等）：给自身挂技能配置里的 statusId（#367）
- * 挂哪个状态由配置决定，不再在代码里写死技能 id —— 后台改 statusId 即换状态，
- * 新增状态型技能也不用改这里。没配 statusId 时什么都不做（配置型技能的合理空缺）。
+ * 状态型技能（护体神盾 / 金刚护体等）：只发一次出手，状态由服务端施加（#822）
+ *
+ * 以前这里是本地 `StatusManager.apply(statusId)` —— 客户端自己亮图标，服务端完全不知道，
+ * 于是「护体神盾」既没真正生效（受击不吃格挡），又在结算里被当伤害技能打成了 300% 核弹。
+ * 现在服务端按 `skills.category = "2"` 分流：不掷伤害，只把 `status_id` 挂到自己身上，
+ * 回执里带回整份状态快照，客户端照它重建图标（`StatusManager.applyFromServer`）。
+ *
+ * 没有目标：`requireTarget = false` 的技能在 `SkillManager.tryCast` 里本来就不找目标，
+ * 这里送空串，服务端也不按目标校验（自身施法）。
  */
 export function skill_1010(context: SkillContext) {
-  const statusId = context.config.statusId;
-  if (statusId) StatusManager.apply(statusId);
+  CombatChannel.sendCast(context.config.id, "", "");
 }
 
 /**

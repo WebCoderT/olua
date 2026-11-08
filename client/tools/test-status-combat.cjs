@@ -7,9 +7,10 @@
  * 2. BattleMath 纯函数：collectStatusCombatModifiers 叠加口径、resolveIncomingDamage 判定
  * 3. applyHitDamage 口径：状态修正真的进了伤害公式（大防御系数 → 伤害归零）
  *
- * #670 起这两个函数**没有生产调用方**：怪物打人的结算在服务端（monster-ai.service 的
- * attack），服务端刻意不读玩家侧状态。本测试保留为这套口径的规格 —— 若哪天服务端要接
- * 玩家状态，公式照这里实现；在那之前，客户端不该在本地兜一层假装它生效。
+ * #670 起怪物打人的结算在服务端；#822 起**玩家状态也真的进了服务端结算**
+ * （`role_status` + `server/src/modules/combat/status-combat.ts`，与这里同一套公式与向量）。
+ * 所以客户端这两个函数仍然没有生产调用方 —— 它们是「规格」，服务端照它们实现；
+ * 客户端不该在本地再算一遍假装它生效（两边各算一次的结果不会相等）。
  *
  * BattleMath 依赖 cc 的 BoxCollider2D/Node（类型位 + getComponent 实参），
  * 沙箱垫片缺这两个导出，用 ccExtra 补上（本测试不会真的调碰撞判定）。
@@ -101,13 +102,30 @@ check(blockedHit.blocked && blockedHit.damage === 50 && brace.hp === before - 50
 console.log("\n=== 接线静态断言（读源码）===");
 const root = path.join(__dirname, "..");
 const fs = require("fs");
-// 注意（#670）：`applyHitDamage` / `collectStatusCombatModifiers` 现在**没有生产调用方** ——
-// 怪物打人的结算在服务端（monster-ai.service 的 attack），而服务端刻意不读玩家侧状态
-// （见那边的「刻意不做的」）。这两个纯函数留着当这套口径的规格（上面那一整段断言就是它），
-// 「玩家状态要不要参与服务端结算」是另一个 issue，不该靠客户端本地兜一层假装它生效。
+// 注意（#670 / #822）：`applyHitDamage` / `collectStatusCombatModifiers` 仍然**没有生产调用方** ——
+// 怪物打人的结算在服务端，而 #822 起服务端也开始读玩家状态（`role_status` →
+// `server/src/modules/combat/status-combat.ts`）。这两个纯函数留着当这套口径的规格
+// （上面那一整段断言就是它），客户端不该在本地兜一层假装它生效。
 const hoverTip = fs.readFileSync(path.join(root, "assets/ui/core/HoverTipManager.ts"), "utf8");
 check(hoverTip.includes('getText("hover_status_block"') && hoverTip.includes('getText("hover_status_defense"'), "悬停详情把 combat 语义翻成数值行");
 const statusManager = fs.readFileSync(path.join(root, "assets/ui/core/StatusManager.ts"), "utf8");
 check(statusManager.includes("static getActiveIds()"), "StatusManager 暴露进行中的状态编号");
+
+// —— #822：状态图标改成「服务端说了算」——
+check(statusManager.includes("static applyFromServer("), "StatusManager 有服务端快照入口 applyFromServer");
+check(
+  statusManager.includes("if (!next.has(statusId)) this.remove(statusId)") &&
+    statusManager.includes("for (const [statusId, expire] of next)"),
+  "applyFromServer 是**整表重建**（快照里没有的摘掉、有的摆上），不是增量叠加",
+);
+const monsterManager = fs.readFileSync(path.join(root, "assets/ui/core/MonsterManager.ts"), "utf8");
+check(monsterManager.includes("StatusManager.applyFromServer(data.statuses)"), "结算回执里的状态快照会刷新图标（MonsterManager 接线）");
+check(/if \(data\.statusOnly\) return;/.test(monsterManager), "statusOnly 的结算不碰怪物血条（状态技能没有目标）");
+const warrior = fs.readFileSync(path.join(root, "assets/skills/warrior.ts"), "utf8");
+const skill1010 = warrior.slice(warrior.indexOf("export function skill_1010"));
+check(skill1010.includes('CombatChannel.sendCast(context.config.id, "", "")'), "状态技能只发 cast 帧（状态由服务端施加）");
+check(!/skill_1010[\s\S]{0,400}StatusManager\.apply\(/.test(warrior), "状态技能不再本地 apply（服务端不知道的 buff 等于没有）");
+const combatChannel = fs.readFileSync(path.join(root, "assets/ui/utils/net/CombatChannel.ts"), "utf8");
+check(combatChannel.includes("statusOnly?: boolean") && combatChannel.includes("statuses?: CombatStatusEntry[]"), "settle 帧形状声明了 statusOnly / statuses");
 
 finish("#14 状态数值参与伤害结算：全部断言通过");

@@ -1153,6 +1153,24 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
         background_items    TEXT    NOT NULL DEFAULT '[]',
         updated_at          INTEGER NOT NULL DEFAULT 0
       );
+
+      -- 角色身上生效中的状态（#822 / docs/22 A4）：**运行时表**，不是配置表 ——
+      -- 不进快照、不进 config-sync，也不参与存档 v3 的迁移（存档里的 roles.data 没有它）。
+      -- 一条 = 一个角色身上的一个状态（同 id 不并存：重复获得是叠层 + 刷新到期，不是新增行），
+      -- 到期由读取方惰性清理 + 服务端每 5 秒扫一次（见 RoleStatusService）。
+      -- 为什么落库而不是进程内 Map：怪物那份状态是「这只怪这一轮的表现」，掉线/重启丢掉无所谓；
+      -- 角色状态会改结算（防御倍率 / 格挡），重启后凭空消失等于「登录即被白打一刀」，
+      -- 而它又要跨两个进程读（存档进程死亡清、实时进程结算读），只能落库。
+      CREATE TABLE IF NOT EXISTS role_status (
+        role_id      TEXT    NOT NULL,
+        status_id    TEXT    NOT NULL,
+        stacks       INTEGER NOT NULL DEFAULT 1,
+        expire_at    INTEGER NOT NULL,          -- 毫秒；服务端权威时间，不看客户端时钟
+        source_skill TEXT    NOT NULL DEFAULT '',
+        PRIMARY KEY (role_id, status_id)
+      );
+      -- 清扫与「这个角色现在还有什么」都按这两列走
+      CREATE INDEX IF NOT EXISTS idx_role_status_expire ON role_status(expire_at);
     `);
 
     // 存量库补列（CREATE TABLE IF NOT EXISTS 不会改已有表结构）

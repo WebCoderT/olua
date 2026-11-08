@@ -53,6 +53,24 @@ export interface CombatSettleOk {
   /** 击杀奖励（仅 killed 时携带；无此字段 = 旧服务端或本地口径回滚路径） */
   reward?: CombatKillReward;
   duplicate: boolean;
+  /**
+   * 这一发是**状态型技能**（#822：护体神盾 / 金刚护体）
+   *
+   * 为 true 时 `damage` / `hp` / `maxHp` 是 0 占位、`targetId` 可能为空 ——
+   * **不要**拿它去改怪的血条，只按 `statuses` 刷新自己的图标与身上特效。
+   */
+  statusOnly?: boolean;
+  /** 这一发施加的状态 id（statusOnly 时给） */
+  appliedStatus?: string;
+  /** 本账号此刻全部生效中的状态（整份快照；缺省 = 旧服务端，按本地已有状态不动） */
+  statuses?: CombatStatusEntry[];
+}
+
+/** 生效中的一个状态（协议见 realtime.protocol 的 RealtimeStatusEntry） */
+export interface CombatStatusEntry {
+  id: string;
+  stacks: number;
+  remainingMs: number;
 }
 
 /** 服务端世界快照里的一只怪（协议见 realtime.protocol 的 RealtimeWorldMonster） */

@@ -12,6 +12,7 @@ import {
   applyRoleLevelCurves,
   applySkillOverrides,
   applySoulOverrides,
+  applyStatusOverrides,
   applyTitleOverrides,
 } from "../../common/runtime-config-cache";
 import { DrugRepository } from "../../database/repositories/drug.repository";
@@ -25,6 +26,7 @@ import { RankRepository } from "../../database/repositories/rank.repository";
 import { RoleLevelCurveRepository } from "../../database/repositories/role-level-curve.repository";
 import { SkillRepository } from "../../database/repositories/skill.repository";
 import { SoulRepository } from "../../database/repositories/soul.repository";
+import { StatusRepository } from "../../database/repositories/status.repository";
 import { TitleRepository } from "../../database/repositories/title.repository";
 
 /** 全量拉取参数：service 层调用不经过 ValidationPipe，size 不受 HTTP 边界的 100 限制 */
@@ -66,6 +68,8 @@ export class RuntimeConfigService implements OnApplicationBootstrap {
     private readonly moneyItems: MoneyItemRepository,
     private readonly levelScrolls: LevelScrollRepository,
     private readonly growth: GrowthRepository,
+    /** 状态定义（#822）：角色侧状态要在结算里生效，与技能同一套「写操作后重装」 */
+    private readonly statuses: StatusRepository,
   ) {}
 
   onApplicationBootstrap(): void {
@@ -92,6 +96,7 @@ export class RuntimeConfigService implements OnApplicationBootstrap {
     const moneyItems = this.moneyItems.listAll();
     const levelScrolls = this.levelScrolls.listAll();
     const scalars = this.growth.listScalars({ ...ALL });
+    const statuses = this.statuses.listAll();
 
     applyEquipmentBases(equipments);
     applyEquipmentSlotKeys(this.equipments.listSlots());
@@ -106,6 +111,7 @@ export class RuntimeConfigService implements OnApplicationBootstrap {
     applyMoneyItemOverrides(moneyItems);
     applyLevelScrollOverrides(levelScrolls);
     applyGrowthScalars(scalars);
+    applyStatusOverrides(statuses);
 
     // 只记条数不记值：出问题时第一件事就是确认「结算层里到底装没装上」（定期重装静默跳过）
     if (!silent)
@@ -113,7 +119,7 @@ export class RuntimeConfigService implements OnApplicationBootstrap {
         `运营配置已装载：装备 ${equipments.length} 件 / 变体 ${variants.length} 件 · 等级曲线 ${levelCurves.length} 段 · ` +
           `称号 ${titles.length} 级 · 战魂 ${souls.length} 阶 · 军衔 ${ranks.length} 阶 · ` +
           `技能 ${skills.length} 个 · 药品 ${drugs.length} 种 · 货币道具 ${moneyItems.length} 种 · 升级卷轴 ${levelScrolls.length} 卷 · ` +
-          `材料 ${items.length} 种 · 成长标量 ${scalars.length} 项`,
+          `材料 ${items.length} 种 · 成长标量 ${scalars.length} 项 · 状态 ${statuses.length} 个`,
       );
     // 空表 = 出厂快照没灌进来（`server/data/config-sync.sql`）。必须喊出来：
     // #655 之后没有「回落生成物」这回事了，空表就是「没配」，属性会算成 0
@@ -121,6 +127,7 @@ export class RuntimeConfigService implements OnApplicationBootstrap {
     this.warnIfEmpty("equipment_variants", variants.length);
     this.warnIfEmpty("role_level_curves", levelCurves.length);
     this.warnIfEmpty("growth_scalars", scalars.length);
+    this.warnIfEmpty("statuses", statuses.length);
   }
 
   private warnIfEmpty(table: string, count: number): void {

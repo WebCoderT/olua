@@ -26,6 +26,8 @@ import { MONEY_KINDS, MoneyKind } from "../../common/constants/money-items";
 import { GrowthRepository } from "../../database/repositories/growth.repository";
 import { RankRepository } from "../../database/repositories/rank.repository";
 import { RoleRepository } from "../../database/repositories/role.repository";
+import { RoleStatusService } from "./role-status.service";
+import { NO_STATUS_MODIFIERS, RoleStatusModifiers } from "../combat/status-combat";
 import { SoulRepository } from "../../database/repositories/soul.repository";
 import { TitleRepository } from "../../database/repositories/title.repository";
 import { AccountRow, RankRow, RoleRow, SoulRow, TitleRow } from "../../database/rows";
@@ -107,6 +109,8 @@ export class RolesService {
     private readonly moneyItems: MoneyItemRepository,
     /** 升级卷轴（#787）：使用结算读库里的等级区间 —— 运营改完立刻生效 */
     private readonly levelScrolls: LevelScrollRepository,
+    /** 角色状态（#822）：结算读数值，死亡 / 下线清空 —— 都在这个域里，不跨域 */
+    private readonly statuses: RoleStatusService,
   ) {}
 
   /** 当前账号的角色列表（按创建时间升序，与客户端站位顺序一致） */
@@ -1117,8 +1121,55 @@ export class RolesService {
     data.hp = hp;
     // 不推进修订号（见方法注释）：血量以实时帧为准，revision 留给进度型写入
     this.roles.updateDataKeepRevision(existing.id, JSON.stringify(data), Date.now());
+    // 死了就把状态清空（docs/22 §5）：复活后不该带着旧 buff，也不该让「死了还挂加速」成立。
+    // 放在落库之后：清状态失败不该影响这一刀的血量（它是演出侧的事实，血量是权威）
+    if (hp <= 0) this.statuses.clearOfRole(existing.id);
     return { hp, maxHp };
   }
+
+  //#region 角色状态（#822：结算与受击的权威数值来源）
+
+  /**
+   * 本账号在线角色此刻生效中的状态（settle 帧与客户端图标栏的权威快照）
+   *
+   * 不在线返回空数组而不是抛错：调用方（结算 / 受击）只关心「有没有 buff」，
+   * 人不在线时那就是没有。
+   */
+  statusSnapshotOf(accountId: string): Array<{ id: string; stacks: number; remainingMs: number }> {
+    const row = this.onlineRoleRow(accountId);
+    return row ? this.statuses.snapshotOf(row.id) : [];
+  }
+
+  /**
+   * 给本账号在线角色施加一个状态（状态型技能的唯一落点）
+   *
+   * @returns 施加后的完整快照；`null` = 不在线，或配置里没有这个状态 / 持续时间配成 0
+   *          （后者是运营配错，调用方应当当场报错而不是静默放行）
+   */
+  applyStatusToOnlineRole(accountId: string, statusId: string, skillId: string): Array<{ id: string; stacks: number; remainingMs: number }> | null {
+    const row = this.onlineRoleRow(accountId);
+    if (!row) return null;
+    const applied = this.statuses.apply(row.id, statusId, { skillId });
+    return applied ? this.statuses.snapshotOf(row.id) : null;
+  }
+
+  /**
+   * 本账号在线角色的状态数值修正（受击算格挡 / 防御倍率、出伤算攻击倍率）
+   *
+   * 不在线 → 中性值（没人可打，调用方前面的闸已经拒了，这里只是不给 undefined）
+   */
+  statusModifiersOf(accountId: string): RoleStatusModifiers {
+    const row = this.onlineRoleRow(accountId);
+    return row ? this.statuses.modifiersOf(row.id) : { ...NO_STATUS_MODIFIERS };
+  }
+
+  /** 清空本账号在线角色的状态（下线 / 被踢；换图不清 —— 换图不是死亡） */
+  clearStatusesOf(accountId: string): void {
+    const row = this.onlineRoleRow(accountId);
+    if (row) this.statuses.clearOfRole(row.id);
+  }
+
+  //#endregion
 
   /**
    * 当前血蓝（服务端权威值；把自然回复算进去，但**不落库**）

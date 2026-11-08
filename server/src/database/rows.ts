@@ -1758,6 +1758,28 @@ export interface EquipInAlignRow {
 
 //#endregion
 
+//#region 契约类型：角色身上生效中的状态（#822 / docs/22 A4）
+
+/**
+ * 一行 = 一个角色身上的一个状态（`role_status`，**运行时表**）
+ *
+ * 与 `StatusRow`（配置表，定义「这个状态是什么」）分开：这里是「谁此刻挂着它、还剩多久」。
+ * `stacks` 目前恒为 1（A4 只落了叠加所需的列，层数封顶规则等 docs/22 §2.3 的周期/控制类状态
+ * 一起做 —— 重开条件写在那篇的落地顺序里）。
+ */
+export interface RoleStatusRow {
+  role_id: string;
+  /** 状态 id（statuses.id） */
+  status_id: string;
+  stacks: number;
+  /** 到期时刻（毫秒，服务端时钟） */
+  expire_at: number;
+  /** 挂上它的技能 id（复盘用；同一状态被换技能刷新时记最后一个） */
+  source_skill: string;
+}
+
+//#endregion
+
 //#region 契约类型：筛选条件（住在类型层而不是仓储文件里，好让 DTO 层只引类型不引实现）
 
 /** 角色筛选条件（管理端列表 / 批量操作共用） */

@@ -90,6 +90,7 @@ const CONFIG_TABLES = Object.freeze([
  * - 投递：mail_queue
  * - 监控投影：map_monitor_state / map_monitor_events（#665 实时地图监控，重启丢也无所谓）
  * - 世界：world_monsters / world_meta / zones
+ * - 状态：role_status（#822，在线角色身上生效中的状态；配置侧是 `statuses`）
  */
 const RUNTIME_TABLES = Object.freeze([
   "accounts",
@@ -112,6 +113,7 @@ const RUNTIME_TABLES = Object.freeze([
   "role_friends",
   "role_mails",
   "role_reports",
+  "role_status",
   "roles",
   "world_meta",
   "world_monsters",
@@ -127,7 +129,7 @@ const TABLES_LINE_PREFIX = "-- tables: ";
 /**
  * 校验库里每张表都已归类
  *
- * `options` 只给测试用（注入一份小规模清单，省得在测试里建 52 张表）。
+ * `options` 只给测试用（注入一份小规模清单，省得在测试里建 63 张表）。
  * **生产路径不传**：全量清单是守点，不能被调用方随手缩小 —— 传了就等于自己关掉检查。
  *
  * @param {string[]} actualTables 库里实际存在的表（sqlite_master，已排除 sqlite_%）
