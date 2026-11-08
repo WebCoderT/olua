@@ -174,6 +174,20 @@ export interface RealtimeSettleError {
   /** 机器可读的拒绝原因（unknown_skill / skill_not_learned / unknown_target / target_dead / no_role / bad_request …） */
   code: string;
   message: string;
+  /**
+   * 判定链的六道闸拒绝原因（#813 / A3）：`dead` / `cross_map` / `range` / `cooldown` / `mp` / `rate`
+   *
+   * 与 `code` 的关系：`code` 是老字段、什么都可能是（协议错、未知目标、闸拒绝）；
+   * `rejected` 只在**闸拒绝**时出现，取值为上面六个之一 —— 客户端按它决定表现
+   * （`cooldown` 可转圈，其余当作这一发没打出去）。闸拒绝时两者同值，不新增帧类型。
+   */
+  rejected?: "dead" | "cross_map" | "range" | "cooldown" | "mp" | "rate";
+  /** 冷却闸专用：还要等多少毫秒（`rejected: "cooldown"` 时给） */
+  remainMs?: number;
+  /** 耗蓝闸专用：这一发需要多少法力（`rejected: "mp"` 时给，客户端可飘「蓝不足 40/12」） */
+  need?: number;
+  /** 耗蓝闸专用：当前法力（与 `need` 一起给） */
+  have?: number;
 }
 
 export type RealtimeSettleData = RealtimeSettleOk | RealtimeSettleError;

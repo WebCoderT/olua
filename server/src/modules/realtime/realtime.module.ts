@@ -6,6 +6,7 @@ import { PartyModule } from "../party/party.module";
 import { WorldModule } from "../world/world.module";
 import { MapModule } from "../map/map.module";
 import { BlockService } from "./block.service";
+import { CastGuardService } from "./cast-guard.service";
 import { ChatService } from "./chat.service";
 import { CombatSettlementService } from "./combat-settlement.service";
 import { MapMonitorService } from "./map-monitor.service";
@@ -45,6 +46,9 @@ import { SoakPointService } from "./soak-point.service";
   providers: [
     RealtimeService,
     CombatSettlementService,
+    // 出手判定链（#813）：存活 / 跨图 / 距离 / 冷却 / 耗蓝 / 频率。
+    // 状态（冷却表、令牌桶）是进程内内存态 —— 只有实时进程会判出手，所以只该有一份
+    CastGuardService,
     MonsterAiService,
     PlayerPresenceService,
     MapMonitorService,

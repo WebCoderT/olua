@@ -22,6 +22,7 @@ const os = require("node:os");
 const path = require("node:path");
 // 实时通道用 ws 包（Node 内置的 WebSocket 只有 addEventListener，没有 .on）
 const WebSocket = require("ws");
+const { paceCast } = require("./lib/cast-pace.cjs");
 
 const SERVER_DIR = path.join(__dirname, "..");
 const ENTRY = path.join(SERVER_DIR, "dist", "main.js");
@@ -573,6 +574,8 @@ function achievementTimestamps(dbPath, roleId, achievementId) {
     await waitFor("握手成功", async () => (session.opened ? session : null));
     let castSeq = 0;
     const castAt = async (mob) => {
+      // 出手前等一个间隔（#813 冷却闸：服务端按真客户端口径判 250ms/刀）
+      await paceCast();
       castSeq += 1;
       const castId = castSeq;
       session.socket.send(

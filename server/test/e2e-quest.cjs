@@ -23,6 +23,7 @@ const net = require("node:net");
 const os = require("os");
 const path = require("path");
 const WebSocket = require("ws");
+const { paceCast } = require("./lib/cast-pace.cjs");
 
 const SERVER_DIR = path.join(__dirname, "..");
 const ENTRY = path.join(SERVER_DIR, "dist", "main.js");
@@ -268,13 +269,23 @@ function progressRows(dbPath, roleId, questId) {
     const questList = await api(baseUrl, "GET", "admin/quests?page=1&size=50", { token: adminToken });
     check(questList.code === 0 && questList.data.list.length === 5, "准备：任务配置 seed 了 5 条（8001~8004 主线 + 8101 日常）", JSON.stringify(questList.data && questList.data.total));
 
-    /** 连续出手直到目标死亡，返回带 killed 的那次结算（打不死 / 被拒返回 null） */
+    /**
+     * 连续出手直到目标死亡，返回带 killed 的那次结算（打不死 / 被拒返回 null）
+     *
+     * 发送推迟一个出手间隔（`lib/cast-pace.cjs`）：服务端 #813 起按真客户端口径判冷却
+     * （基础剑术 250ms 一刀），连发会拿到 `rejected: "cooldown"`。形状仍是同步返回
+     * `{ id, promise }`，调用点不用改。
+     */
     let castSeq = 0;
     const cast = (body) => {
       castSeq += 1;
       const id = castSeq;
-      session.socket.send(JSON.stringify({ type: "cast", data: { castId: id, ...body } }));
-      return { id, promise: session.waitForSettle(id) };
+      const promise = (async () => {
+        await paceCast();
+        session.socket.send(JSON.stringify({ type: "cast", data: { castId: id, ...body } }));
+        return session.waitForSettle(id);
+      })();
+      return { id, promise };
     };
     /**
      * 连续出手直到目标死亡，返回带 killed 的那次结算（实在打不到才返回 null）。

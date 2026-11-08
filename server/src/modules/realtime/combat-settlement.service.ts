@@ -18,6 +18,7 @@ import { WorldService } from "../world/world.service";
 import { MapMonitorService } from "./map-monitor.service";
 import { MonsterAiService } from "./monster-ai.service";
 import { PlayerPresenceService } from "./player-presence.service";
+import { CastGuardService } from "./cast-guard.service";
 import type { RealtimeKillReward, RealtimePickedData, RealtimeSettleData } from "./realtime.protocol";
 
 /**
@@ -86,6 +87,8 @@ export class CombatSettlementService {
     private readonly party: PartyService,
     private readonly presence: PlayerPresenceService,
     private readonly monitor: MapMonitorService,
+    /** 出手判定链（#813：存活 / 跨图 / 距离 / 冷却 / 耗蓝 / 频率） */
+    private readonly guard: CastGuardService,
     /** 掉落参数（#789：随机绑定概率）。与怪物数值同一取向 —— 现读库，管理端改完下一刀生效 */
     private readonly runtimeParams: RuntimeParamsRepository,
   ) {}
@@ -119,6 +122,8 @@ export class CombatSettlementService {
   dropAccount(accountId: string): void {
     this.recentSettles.delete(accountId);
     this.dropLedgers.delete(accountId);
+    // 判定链的进程内状态一起清（#813）：冷却与令牌桶是「这条会话的节奏」，人走了就不必留着
+    this.guard.dropAccount(accountId);
   }
 
   /**
@@ -199,6 +204,32 @@ export class CombatSettlementService {
     const coefficient = readDamageCoefficient(skill, skillLevel);
     if (coefficient === null) return fail("bad_request", `技能 ${cast.skillId} 等级 ${skillLevel} 没有伤害系数`);
 
+    // 判定链六道闸（#813 / A1）：存活 → 跨图 → 距离 → 冷却 → 耗蓝 → 频率。
+    // 位置在「配置与目标都对上」之后、掷随机数之前：前面任何一步失败都不该记冷却 / 扣令牌，
+    // 而伤害一旦掷了骰子就没法回滚。闸的副作用（扣蓝、记冷却、扣令牌）在它内部最后一步统一提交。
+    const targetSpot = this.monsterAi.livePositionOf(cast.targetId) ?? { x: target.x, y: target.y };
+    const verdict = this.guard.guard({
+      accountId,
+      skill,
+      skillId: cast.skillId,
+      roleData: role.data ?? {},
+      target: { mapId: target.mapId, x: targetSpot.x, y: targetSpot.y },
+    });
+    if (!verdict.ok) {
+      // `code` 是老字段（一直存在），`rejected` 是 A3 的六道闸分类；闸拒绝时两者同值。
+      // remainMs / need / have 是给客户端做表现用的附带字段（缺了也不影响判定）
+      return {
+        castId: cast.castId,
+        ok: false,
+        code: verdict.rejected,
+        message: verdict.message,
+        rejected: verdict.rejected,
+        ...(verdict.remainMs === undefined ? {} : { remainMs: verdict.remainMs }),
+        ...(verdict.need === undefined ? {} : { need: verdict.need }),
+        ...(verdict.have === undefined ? {} : { have: verdict.have }),
+      };
+    }
+
     // 伤害公式与客户端 BattleMath.calcSkillDamage 同一口径：
     //   round(攻击区间随机值 × 倍率 − 防御区间随机值)，下限 0
     // 攻击用哪项属性以**生成物里系数的 baseType** 为准（不信任客户端传参），防御按同名映射取
@@ -217,7 +248,9 @@ export class CombatSettlementService {
     // 死亡点要在清运行时**之前**取（#665 实时地图监控）：AI 运行时一删，这只怪「倒在哪」
     // 就只剩出生点了；取不到（图没人看 / AI 还没跑过）退回出生点，那是服务端唯一稳定的坐标。
     // 同一次取到的坐标也是「这一下打在哪」—— 伤害日志用它标点（#745）。
-    const hitSpot = this.monsterAi.livePositionOf(cast.targetId) ?? { x: target.x, y: target.y };
+    // 取值在闸之前就做了（距离闸要用同一份坐标），这里直接复用，避免两次读到不同的位置
+    const hitSpot = targetSpot;
+
     const deathSpot = applied.killed ? hitSpot : null;
     /** 这一下把怪推开了多远（#670；击杀时不推，所以默认 0） */
     let pushDistance = 0;

@@ -43,6 +43,7 @@ const ADMIN_CODE = "e2e-combat-admin";
  * 运营在后台调一次数值，这里就整片红 —— 而那并不是缺陷。
  */
 const configSnapshot = require("./lib/config-snapshot.cjs");
+const { paceCast } = require("./lib/cast-pace.cjs");
 
 const SPAWN_AREAS = configSnapshot.rows("map_spawn_areas");
 const MONSTER_ROWS = configSnapshot.rows("monsters");
@@ -336,13 +337,23 @@ function connect(url) {
     await waitFor("握手成功", async () => (session.opened ? session : null));
     check(session.opened, "准备：实时连接已建立");
 
-    /** 发一次 cast：返回 { id, promise }（id 是本次的 castId，promise 等它自己的 settle 帧） */
+    /**
+     * 发一次 cast：返回 { id, promise }（id 是本次的 castId，promise 等它自己的 settle 帧）
+     *
+     * 发送推迟一个出手间隔（`lib/cast-pace.cjs`）：服务端 #813 起按真客户端口径判冷却
+     * （基础剑术 250ms 一刀），连发会被 `rejected: "cooldown"` 拒掉。形状保持同步返回
+     * `{ id, promise }`，调用点不用改。
+     */
     let castSeq = 0;
     const cast = (session_, body) => {
       castSeq += 1;
       const id = castSeq;
-      session_.socket.send(JSON.stringify({ type: "cast", data: { castId: id, ...body } }));
-      return { id, promise: session_.waitForSettle(id) };
+      const promise = (async () => {
+        await paceCast();
+        session_.socket.send(JSON.stringify({ type: "cast", data: { castId: id, ...body } }));
+        return session_.waitForSettle(id);
+      })();
+      return { id, promise };
     };
 
     /** 进图播种：地图 1 上的刷怪区按 `max` 铺满（maxHp / 物防都来自 `monsters` 表），拿回服务端发的实例 id */
@@ -1007,11 +1018,16 @@ function connect(url) {
      *
      * 按实际要打的怪物 key 改，而不是写死 "1"：地图 1 上不只一只怪，`aliveMonster`
      * 挑到哪只取决于重生时序（前面几个 region 各杀过一批），写死 key 会改成一张没人吃的表。
+     *
+     * `bindDrops` **每次显式写**（缺省 false）：`monster_drops.bind_drops` 是行上的持久开关，
+     * 上一刀给某只怪开过「整体强制绑定」后，若这一刀又挑到同一只怪（图 1 只有两只，
+     * 重生时序一变就会重复），不显式关掉就会把「随机概率 0% → 不绑定」这条判成绑定。
+     * 这不是服务端行为，是测试自己留下的脏状态（#813 加出手间隔后暴露出来的）。
      */
     const patchDropOf = (monsterKey, goodId, extra = {}, count = [2, 2]) =>
       api(baseUrl, "PATCH", `admin/monster-drops/${monsterKey}`, {
         token: adminToken,
-        body: { tableId: null, picks: 1, entries: [{ goodId, weight: 100, chance: 1, count }], ...extra },
+        body: { tableId: null, picks: 1, entries: [{ goodId, weight: 100, chance: 1, count }], bindDrops: false, ...extra },
       });
 
     /** 改过的怪物掉落（区域末尾统一还原成 seed 行） */

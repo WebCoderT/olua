@@ -1075,6 +1075,60 @@ export class RolesService {
   }
 
   /**
+   * 当前血蓝（服务端权威值；把自然回复算进去，但**不落库**）
+   *
+   * 给施法前的「血够不够 / 蓝够不够」判据用（#813）。与 `applyMonsterHit` 同一套结算：
+   * 先 `settleVitalsAuthority` 把两次写入之间攒的回复算上，再夹上限 —— 否则「刚回满蓝」
+   * 的玩家在库里还是旧值，蓝耗闸会把合法出手误判成蓝不足。
+   *
+   * 只读：算出来的值不写回存档；真正扣蓝走 `spendCastMp`（它才写库）。
+   * 读不到在线角色返回 null（调用方据此拒绝，不要拿 0 当“没蓝”以外的东西）。
+   */
+  vitalsOf(accountId: string): { hp: number; mp: number; maxHp: number; maxMp: number } | null {
+    const row = this.onlineRoleRow(accountId);
+    if (!row) return null;
+    const stored = decodeStoredRoleData(row.data);
+    const { maxHp, maxMp } = this.resolveResourceLimits(row, stored);
+    // 上限要先进 incoming 再结算：settleVitalsAuthority 用 incoming 里的上限做夹取
+    const incoming: Record<string, unknown> = { ...stored, maxHp, maxMp };
+    settleVitalsAuthority(stored, incoming, Date.now(), this.mpRecoverPerSecond());
+    return {
+      hp: Math.max(0, Math.floor(Number(incoming.hp) || 0)),
+      mp: Math.max(0, Math.floor(Number(incoming.mp) || 0)),
+      maxHp,
+      maxMp,
+    };
+  }
+
+  /**
+   * 施法扣蓝（#813 的耗蓝闸：法力归服务端，客户端改包上报无效）
+   *
+   * 顺序：先结算自然回复（攒的那部分不能被这一次消耗吃掉），再比、再扣、再落库。
+   * - 蓝不足 → null，且**不写库**：回复累加器还在存档里，下次结算照旧算对；
+   * - `cost <= 0` → 不写库（绝大多数技能不耗蓝，每次出手写一遍库没有必要）；
+   * - **刻意不推进 revision**：与 `applyMonsterHit` 同一纪律 —— 法力是实时型状态，
+   *   推进会跟客户端的防抖存档撞乐观锁，玩家反而一直存档失败。
+   */
+  spendCastMp(accountId: string, cost: number): { mp: number; maxMp: number } | null {
+    const account = this.accounts.findById(accountId);
+    const existing = account && account.online_role_id ? this.roles.findById(account.online_role_id) : undefined;
+    if (!account || !existing) return null;
+
+    const data = decodeStoredRoleData(existing.data);
+    settleVitalsAuthority(data, data, Date.now(), this.mpRecoverPerSecond());
+    const { maxMp } = this.resolveResourceLimits(existing, data);
+    const price = Math.max(0, Math.floor(cost));
+    const current = Math.max(0, Math.floor(Number(data.mp) || 0));
+    if (current < price) return null;
+    if (price <= 0) return { mp: current, maxMp };
+
+    const remaining = current - price;
+    data.mp = remaining;
+    this.roles.updateDataKeepRevision(existing.id, JSON.stringify(data), Date.now());
+    return { mp: remaining, maxMp };
+  }
+
+  /**
    * 复活（#596：满血由服务端落账，客户端改包上报满血无效）
    *
    * 死亡状态（hp ≤ 0）时把血蓝补到服务端重算的上限、清零两个回复累加器并重置结算游标；
