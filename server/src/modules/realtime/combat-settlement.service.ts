@@ -337,6 +337,21 @@ export class CombatSettlementService {
       return fail("bad_request", "服务端还没收到你的位置，无法验证区域技能的作用点（先移动一下再放）");
     }
 
+    // 跨图闸（与单体路径同一道，但判据不同）：单体是「目标在哪张图」，
+    // 区域是「**你以为自己在哪张图**」—— 作用点的地图来自客户端自报的 pos 帧，
+    // 不比对服务端记下的 mapAt，改包就能站主城清空另一张图的怪。
+    // mapAt 缺失（老档 / 刚建号）时放行，与 `CastGuardService` 第二道同一取向。
+    const mapAt = typeof role.data?.mapAt === "string" ? role.data.mapAt : "";
+    if (mapAt && mapAt !== spot.mapId) {
+      return {
+        castId: cast.castId,
+        ok: false,
+        code: "cross_map",
+        message: `你说自己在 ${spot.mapId}，但服务端只放行过你在 ${mapAt}`,
+        rejected: "cross_map",
+      };
+    }
+
     // 候选：同区同图、存活、半径内，按距离升序取最近的一批。
     // 位置优先用 AI 运行时坐标（怪会游走，出生点可能早就不在原地了），与单体路径同一取向。
     const candidates = this.world
