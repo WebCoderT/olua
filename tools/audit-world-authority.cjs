@@ -144,7 +144,11 @@ requirePatterns(MONSTER_MANAGER, [
 ]);
 
 requirePatterns(DROP_MANAGER, [
-  { pattern: /static spawnResults\(results: DropResult\[\], position: Vec3, castId: number\)/, hint: "spawnResults 的 castId 必须必填 —— 可选参数就是「本地口径的掉落」" },
+  // `indexBase`（#824）是一次施放打中多只时的**掉落下标起点**，只在服务端账本按施放合并
+  // （多只怪的掉落记在同一份账里，第二只起的下标要接着第一只数）时才有值。
+  // 它必须留默认值 0：单目标路径不传，等于「这份掉落就是账本的头几件」。
+  // castId 仍然必填 —— 下面还有一条专门盯着 `castId?:` 不许出现。
+  { pattern: /static spawnResults\(results: DropResult\[\], position: Vec3, castId: number, indexBase = 0\)/, hint: "spawnResults 的 castId 必须必填 —— 可选参数就是「本地口径的掉落」" },
   { pattern: /StorageManager\.applyPickResult\(/, hint: "入包要照搬服务端落的格子（applyPickResult）" },
 ]);
 

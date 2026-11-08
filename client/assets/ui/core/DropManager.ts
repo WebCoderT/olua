@@ -92,16 +92,18 @@ export default class DropManager {
    * @param position 掉落位置（一般取怪物死亡时的世界坐标）
    * @param castId 结算的出手序号（**必填**：#581 起掉落物一律带服务端账本定位，
    *               拾取走 pick 帧、入包以 picked 帧为准）
+   * @param indexBase 掉落在服务端账本里的起始下标（#824：一次区域施放打中多只怪时，
+   *                  服务端把所有掉落记在**同一份**账本里，第二只起的下标要接着第一只数）
    * @returns 原样返回 results（便于日志/统计）
    */
-  static spawnResults(results: DropResult[], position: Vec3, castId: number): DropResult[] {
+  static spawnResults(results: DropResult[], position: Vec3, castId: number, indexBase = 0): DropResult[] {
     return this.spawnAt(results, position, (result, index, offsets) => {
       const good = getItem(result.goodId);
       if (!good) {
         console.warn(`掉落物品不存在：${result.goodId}`);
         return;
       }
-      this.createDropNode(good, result.count, position, offsets[index], { castId, index });
+      this.createDropNode(good, result.count, position, offsets[index], { castId, index: indexBase + index });
     });
   }
 

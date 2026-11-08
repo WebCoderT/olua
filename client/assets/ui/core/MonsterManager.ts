@@ -21,7 +21,7 @@ import GuideStore from "./GuideStore";
 import { GUIDE_EVENT } from "../../types/guide";
 import { addMonsterCollider } from "../utils/physics/MonsterCollider";
 import { getWorldColliderRect } from "../utils/physics/MoveBlocking";
-import CombatChannel, { CombatKillReward, MonsterAiFrame, MonsterCastEntry, MonsterHitEntry, MonsterKillEntry, WorldSnapshot } from "../utils/net/CombatChannel";
+import CombatChannel, { CombatKillReward, CombatSettleHit, MonsterAiFrame, MonsterCastEntry, MonsterHitEntry, MonsterKillEntry, WorldSnapshot } from "../utils/net/CombatChannel";
 import RealtimeClient from "../utils/net/RealtimeClient";
 
 /**
@@ -364,12 +364,41 @@ export default class MonsterManager {
     reward?: CombatKillReward;
     statusOnly?: boolean;
     statuses?: readonly { id: string; remainingMs: number }[];
+    /** 群体 / 区域技能的逐只结果（#824；有它就走多目标那条路） */
+    hits?: readonly CombatSettleHit[];
+    /** 这一发本来就不掷伤害（自身 / 位移技能） */
+    noDamage?: boolean;
+    /** 掉落下标起点（#824：一次施放打中多只时，第二只起的掉落要接着第一只数） */
+    dropIndexBase?: number;
   }) {
     // 状态快照（#822）：任何一次结算都可能带回「我现在有哪些状态」—— 先刷新图标与身上特效，
     // 再做伤害表现。状态型技能到这里就结束：它没有目标、不产生伤害，
     // `damage` / `hp` / `targetId` 都是 0 占位（服务端协议里写明了）
     if (data.statuses) StatusManager.applyFromServer(data.statuses);
     if (data.statusOnly) return;
+    // 区域 / 群体（#824）：一条 settle 帧带多只的结果，逐只走同一条落账路径。
+    // `dropIndexBase` 是**跨目标累计**的掉落下标：服务端把一次施放的所有掉落记在同一份
+    // 账本里（拾取帧只有 castId + index），所以第二只怪的掉落要从第一只的末尾接着数 ——
+    // 每只都从 0 数会让「拾第二只的掉落」指到第一只身上（#325 的账本语义）。
+    if (data.hits && data.hits.length > 0) {
+      let dropIndexBase = 0;
+      for (const hit of data.hits) {
+        this.applyServerSettle({
+          castId: data.castId,
+          skillId: data.skillId,
+          targetId: hit.targetId,
+          damage: hit.damage,
+          hp: hit.hp,
+          killed: hit.killed,
+          reward: hit.reward,
+          dropIndexBase,
+        });
+        dropIndexBase += hit.reward?.drops.length ?? 0;
+      }
+      return;
+    }
+    // 位移 / 自身技能：本来就没有伤害，不要拿 0 去改血条
+    if (data.noDamage) return;
 
     const node = this.instanceIndex.get(data.targetId);
     const monster = node ? this.monsterMap.get(node) : null;
@@ -390,7 +419,7 @@ export default class MonsterManager {
         );
       }
     }
-    this.applyDamage(node, monster, data.damage, data.hp, data.killed, data.reward, data.castId);
+    this.applyDamage(node, monster, data.damage, data.hp, data.killed, data.reward, data.castId, data.dropIndexBase ?? 0);
   }
 
   /**
@@ -437,8 +466,9 @@ export default class MonsterManager {
    * @param killed 是否死亡（以服务端判定为准）
    * @param reward 击杀奖励（#316：服务端结算的入账结果；缺省 = 兜底清场，无奖励）
    * @param castId 结算的出手序号（#325：随掉落物记账，拾取帧靠它定位服务端账本）
+   * @param dropIndexBase 掉落在服务端账本里的起始下标（#824：AOE 一次打中多只时逐只偏移）
    */
-  private static applyDamage(target: Node, monster: Monster, damage: number, hp: number, killed?: boolean, reward?: CombatKillReward, castId?: number) {
+  private static applyDamage(target: Node, monster: Monster, damage: number, hp: number, killed?: boolean, reward?: CombatKillReward, castId?: number, dropIndexBase = 0) {
     // 受伤飘字（需在死亡销毁节点前显示；0 伤不飘 —— 世界快照的兜底清理不是一次真实受击）
     if (damage > 0) GameUiHelper.showDamageText(target, damage);
     monster.hp = Math.max(0, hp);
@@ -456,7 +486,7 @@ export default class MonsterManager {
         GameUiHelper.showExpGain(target, reward.exp);
       }
       // 掉落铺场时带上 castId（#325）：拾取要拿「castId + 下标」向服务端发 pick 帧
-      DropManager.spawnResults(reward.drops, target.getWorldPosition(), castId);
+      DropManager.spawnResults(reward.drops, target.getWorldPosition(), castId, dropIndexBase);
     }
     // 注销数据与悬停注册（信息面板/选中光圈/阻挡/点击判定随之失效），
     // 然后播放死亡动画，动画播完才移除节点；缺死亡帧资源的怪直接移除（不播动画也不永久残留）

@@ -61,6 +61,7 @@ npm run dev              # dev (ts-node hot reload); npm run build && npm run st
 | `npm run test:e2e:levelup` | Unified level-up paths (33 assertions, #899: all four paths share `settleLevelUp` / `data.level` kept in sync / exp capped at max level / fallback when the cap row is missing) |
 | `npm run test:e2e:equip-sanitize` | Worn equipment sanitising (19 assertions, #825: the same item in several slots counts once / slot mismatch ignored / admin PATCH shares the rule / the save path still repairs) |
 | `npm run test:e2e:element-damage` | Physical vs magic damage (12 assertions, #823: physical hits physical defence / magic hits magic defence / a monster with zero magic attack skips the skill and warns) |
+| `npm run test:e2e:area-skill` | Self / area / group skills (30 assertions, #824: non-single-target casts settle / the server computes the hit set / cast point is clamped to range / per-target rewards with a merged drop ledger) |
 | `npm run test:e2e:admin-mail` | Admin message top-up (#437 auth / channel narrowing / attachments claimable / offline recipient / audit trail) |
 | `npm run test:e2e:mail-expiry` | Inbox expiry (#439 ttl write / instant disappearance at read / purge criteria / batch cap) |
 | `npm run test:e2e:ui-effect` | Effects (#594 level-up + #634 six drop lights): read-only for viewers / seeded factory values in seed order / no create or delete / numeric bounds / snapshot is fresh / audit and doc contract (34 assertions) |
@@ -191,6 +192,7 @@ server/
 │   ├── e2e-levelup.cjs (unified level-up paths #899: all four share settleLevelUp / data.level in sync / exp capped at max level / fallback when the cap row is missing)
 │   ├── e2e-equip-sanitize.cjs (worn equipment #825: same item in several slots counts once / slot mismatch ignored / admin PATCH shares the rule / save path still repairs)
 │   ├── e2e-element-damage.cjs (physical vs magic #823: physical hits physical defence / magic hits magic defence / zero magic attack skips the skill with a warning)
+│   ├── e2e-area-skill.cjs (self / area / group skills #824: non-single-target casts settle / server-side hit set / cast point clamping / per-target rewards and a merged drop ledger)
 │   ├── e2e-world.cjs (world authority: server-side seeding from spawn areas / settlement lands in world / tick respawn / graceful flush / restart recovery)
 │   ├── e2e-world-viewers.cjs (viewer set: switching maps leaves the old map / old map stops receiving and sampling / idle unload / unload keeps state)
 │   ├── e2e-dual.cjs (dual-process form: archive vs realtime processes / cross-process token checks / kick-poll disconnect / WAL cross-process writes)

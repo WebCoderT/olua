@@ -102,6 +102,16 @@ export interface RealtimeCastMessage {
     targetId: string;
     /** 目标怪物 key（configs/monster 的关联键，如 "1"；服务端据此查战斗数值表） */
     monsterKey: string;
+    /**
+     * 区域 / 群体技能的作用点（世界坐标；#824）
+     *
+     * 只有 `target_type` 不是单体（0 区域 / 2 群体）时才有意义 —— 这类技能的「目标」
+     * 是一块地，不是一只怪。**服务端不信这个坐标**：会先按施法者位置把它夹到
+     * `skills.distance` 半径内再算命中集合（与客户端 `skill_1008` 的 `Math.min(travel, distance)`
+     * 同一口径），所以改包报一个远处落点也打不到半径外的东西。
+     */
+    x?: number;
+    y?: number;
   };
 }
 
@@ -125,6 +135,25 @@ export interface RealtimeStatusEntry {
   remainingMs: number;
 }
 
+/**
+ * 群体 / 区域技能命中的一只（#824）
+ *
+ * 一次施放可能打中多只，每一只的伤害都是独立掷的（各自的攻击区间随机、各自吃自己的防御），
+ * 所以这里必须逐只给结果 —— 拿一次掷骰的结果套到 N 只身上会让「同一刀打死五只」变得可预测。
+ * 击杀奖励也逐只算（经验各自按击杀者与那只怪的等级差算，掉落各自抽），所以 `reward` 在这个
+ * 层级而不是顶层。
+ */
+export interface RealtimeSettleHit {
+  targetId: string;
+  monsterKey: string;
+  damage: number;
+  hp: number;
+  maxHp: number;
+  killed: boolean;
+  /** 这一只被击杀时的奖励（只有 killed 才带） */
+  reward?: RealtimeKillReward;
+}
+
 /** 结算结果（ok = 服务端真的算了一次） */
 export interface RealtimeSettleOk {
   castId: number;
@@ -142,6 +171,22 @@ export interface RealtimeSettleOk {
   reward?: RealtimeKillReward;
   /** true = 同一 castId 的重复投递，结果原样重发、未重复结算 */
   duplicate: boolean;
+  /**
+   * 群体 / 区域技能命中的每一只（#824）
+   *
+   * **单体技能不带这个字段**（继续读顶层 `targetId` / `damage` / `killed`）。
+   * 区域技能一定带：打空时是空数组 —— 客户端据此区分「没打中」与「这是单体技能」。
+   * 顶层那几个字段在区域技能里等于 `hits[0]`（最近的一只），只为旧客户端不炸而保留。
+   */
+  hits?: RealtimeSettleHit[];
+  /**
+   * true = 这一发**不掷伤害**（#824：自身技能 / 位移技能 / 没配伤害系数的区域技能）
+   *
+   * 此时 `damage` / `hp` / `maxHp` 是 0 占位，`hits` 为空数组。客户端**不要**拿它去改血条。
+   * 与 `statusOnly` 的分工：那个是「挂了状态」（#822），这个是「这一发本来就没有伤害」——
+   * 十步一杀（1008）就是纯位移，配置里 `damage_coefficients` 是空数组。
+   */
+  noDamage?: true;
   /**
    * true = 这一发是**状态型技能**（`skills.category = "2"`，护体神盾 / 金刚护体）
    *

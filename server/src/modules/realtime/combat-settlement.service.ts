@@ -20,7 +20,7 @@ import { MapMonitorService } from "./map-monitor.service";
 import { MonsterAiService } from "./monster-ai.service";
 import { PlayerPresenceService } from "./player-presence.service";
 import { CastGuardService } from "./cast-guard.service";
-import type { RealtimeKillReward, RealtimePickedData, RealtimeSettleData } from "./realtime.protocol";
+import type { RealtimeKillReward, RealtimePickedData, RealtimeSettleData, RealtimeSettleHit, RealtimeSettleOk } from "./realtime.protocol";
 
 /**
  * 伤害结算（#34：客户端发指令，服务端算结果）
@@ -74,6 +74,9 @@ export class CombatSettlementService {
    * （换图 / 断线），容量与幂等账同一上限：掉落长期不拾本来就该消失，内存不能陪它涨。
    */
   private readonly dropLedgers = new Map<string, Map<number, DropLedgerEntry[]>>();
+
+  /** 已经报过「群体技能没配作用半径」的技能 id（缓存 1 秒重建，不去重会刷屏） */
+  private readonly warnedNoRadius = new Set<string>();
 
   constructor(
     private readonly roles: RolesService,
@@ -245,6 +248,275 @@ export class CombatSettlementService {
     };
   }
 
+  /**
+   * 自身 / 区域 / 群体技能（#824）
+   *
+   * ===========================================================================
+   * 为什么单开一条路
+   * ===========================================================================
+   * 单体技能的「目标」是一只怪（`targetId` + `monsterKey`，身份由服务端发牌）。
+   * 自身 / 区域 / 群体技能的「目标」是**一块地**或**自己** —— 客户端送来的 `targetId`
+   * 本来就是空的。原来那条路第一句就是「没有目标 → bad_request」，于是这类技能
+   * 一次也放不出来（1008 十步一杀因此等于不存在）。
+   *
+   * 命中集合**由服务端算**：以作用点为中心、`skills.distance` 为半径，扫服务端自己持有的
+   * 怪物实例（同区同图、存活、按距离排序、取最近的 `AOE_MAX_TARGETS` 只）。客户端只发意图
+   * 与落点，打中谁、打多少都不由它决定。
+   *
+   * **落点不信客户端**：先按施法者当前坐标（`presence.positionOf`，4Hz 自报 + 最小仲裁）
+   * 把落点夹到 `distance` 半径内 —— 与客户端 `skill_1008` 自己那段
+   * `Math.min(travel, config.distance)` 同一口径，所以正常玩家两边界算出的落点一致。
+   * 拿不到施法者坐标就**拒绝**而不是「信落点」：没有参照点就没法判断落点是不是在半个地图外。
+   *
+   * ===========================================================================
+   * 三种「没有伤害」的情形
+   * ===========================================================================
+   * - `target_type = 3`（自身）：本来就是给自己用的，不掷伤害；
+   * - `damage_coefficients` 为空数组：这不是配置坏了，而是「这个技能不掷伤害」——
+   *   1008 十步一杀是纯位移（客户端本地瞬移 + 落点特效），配置里就该是空。
+   *   **只有单体系数缺失才算坏配置**（那条判断留在单体路径里）；
+   * - 半径内一只怪都没有（打空）：`hits` 是空数组，不是错误。
+   *
+   * 这三种都**照常过六道闸**（存活 / 冷却 / 耗蓝 / 频率）：区域技能一样能被改包连放，
+   * 而位移技能的一次瞬移同样要付冷却与法力。
+   */
+  private castAreaSkill(accountId: string, cast: ParsedCast, skill: Record<string, unknown>): RealtimeSettleData {
+    const fail = (code: string, message: string): RealtimeSettleData => ({ castId: cast.castId, ok: false, code, message });
+
+    const role = this.roles.online(accountId);
+    if (!role) return fail("no_role", "当前没有在线角色，无法结算");
+    const summary = summarizeRoleAttributes(roleAttributeSourceOf(role.level, role.data));
+    if (!summary) return fail("no_role", `角色等级 ${role.level} 不在成长曲线里，算不出属性`);
+    const skillLevel = readSkillLevel(role.data, cast.skillId);
+    if (!skillLevel) return fail("skill_not_learned", `技能 ${cast.skillId} 尚未学习`);
+
+    // 六道闸：**不传 target** —— 中心是一块地，不存在「跨图打」与「隔图打」这回事
+    // （落点已经被夹到施法者周围了）。存活 / 冷却 / 耗蓝 / 频率四道照走。
+    const verdict = this.guard.guard({ accountId, skill, skillId: cast.skillId, roleData: role.data ?? {} });
+    if (!verdict.ok) {
+      return {
+        castId: cast.castId,
+        ok: false,
+        code: verdict.rejected,
+        message: verdict.message,
+        rejected: verdict.rejected,
+        ...(verdict.remainMs === undefined ? {} : { remainMs: verdict.remainMs }),
+        ...(verdict.need === undefined ? {} : { need: verdict.need }),
+        ...(verdict.have === undefined ? {} : { have: verdict.have }),
+      };
+    }
+
+    const coefficient = readDamageCoefficient(skill, skillLevel);
+    const targetType = String(skill.targetType ?? "1");
+    const statuses = this.roles.statusSnapshotOf(accountId);
+
+    // 自身技能 / 不掷伤害的区域技能（位移、纯表现）：过闸记账就结束
+    if (targetType === "3" || coefficient === null) {
+      this.logger.debug(
+        `无伤害技能：账号 ${accountId} 技能 ${cast.skillId}(Lv${skillLevel}) target_type=${targetType}` +
+          `${coefficient === null ? "（配置里没有伤害系数）" : ""}`,
+      );
+      return {
+        castId: cast.castId,
+        ok: true,
+        skillId: cast.skillId,
+        targetId: "",
+        damage: 0,
+        hp: 0,
+        maxHp: 0,
+        killed: false,
+        duplicate: false,
+        noDamage: true,
+        hits: [],
+        statuses,
+      };
+    }
+
+    const spot = this.areaSpotOf(accountId, cast, skill);
+    if (!spot) {
+      return fail("bad_request", "服务端还没收到你的位置，无法验证区域技能的作用点（先移动一下再放）");
+    }
+
+    // 候选：同区同图、存活、半径内，按距离升序取最近的一批。
+    // 位置优先用 AI 运行时坐标（怪会游走，出生点可能早就不在原地了），与单体路径同一取向。
+    const candidates = this.world
+      .monstersOf(spot.zoneId, spot.mapId)
+      .map((monster) => {
+        const live = this.monsterAi.livePositionOf(monster.instanceId) ?? { x: monster.x, y: monster.y };
+        return { monster, x: live.x, y: live.y, distance: Math.hypot(live.x - spot.x, live.y - spot.y) };
+      })
+      .filter((entry) => entry.monster.alive && entry.distance <= spot.radius)
+      .sort((a, b) => a.distance - b.distance)
+      .slice(0, AOE_MAX_TARGETS);
+
+    const killerName = this.roleNameOf(role);
+    const hits: RealtimeSettleHit[] = [];
+    /** 这一发打出来的所有掉落（多只怪各掉各的，但账本按**一次施放**记一份：拾取帧只有 castId） */
+    const drops: Array<{ goodId: string; count: number; bound: boolean; monsterKey: string }> = [];
+
+    for (const entry of candidates) {
+      const stats = this.monsterConfigs.findByKey(entry.monster.monsterKey);
+      // 数值表里没有这只 = 不是可战对象（配置漏了），跳过而不是按 0 防算出一刀秒杀
+      if (!stats) continue;
+
+      // 每一只独立掷骰：攻击区间各自随机，防御也吃各自的状态修正。
+      // 拿一次掷骰套到 N 只身上，会让「同一刀打死五只」变成可预测的结果。
+      const attack = rollRange(readRange(summary, coefficient.baseType)) * this.roles.statusModifiersOf(accountId).attackMultiplier;
+      const defense = Math.round(rollRange(monsterDefenseRange(stats, coefficient.baseType)) * this.monsterAi.defenseMultiplierOf(entry.monster.instanceId));
+      const damage = Math.max(0, Math.round(attack * coefficient.baseTypeRate - defense));
+
+      const applied = this.world.applyDamage(entry.monster.instanceId, damage);
+      if (!applied) continue;
+
+      let reward: RealtimeKillReward | undefined;
+      if (applied.killed) {
+        // 击杀奖励逐只算：经验按「击杀者等级 vs 这一只的等级」各自算，掉落各自抽
+        reward = this.settleKillReward(accountId, role.id, role.level, role.revision, stats, entry.monster.monsterKey, killerName);
+        this.roles.recordKill(role.id);
+        for (const drop of reward.drops) drops.push({ ...drop, monsterKey: entry.monster.monsterKey });
+        this.events.emit("monster:killed", {
+          accountId,
+          roleId: role.id,
+          monsterKey: entry.monster.monsterKey,
+          monsterLabel: stats.label,
+          monsterTier: stats.tier,
+        });
+        this.monitor.recordKill({
+          instanceId: entry.monster.instanceId,
+          monsterKey: entry.monster.monsterKey,
+          label: stats.label,
+          zoneId: entry.monster.zoneId,
+          mapId: entry.monster.mapId,
+          x: entry.x,
+          y: entry.y,
+          killer: killerName,
+          drops: reward.drops,
+          respawnAt: entry.monster.respawnAt ?? Date.now(),
+        });
+        this.monsterAi.onMonsterKilled(entry.monster.instanceId, {
+          zoneId: entry.monster.zoneId,
+          mapId: entry.monster.mapId,
+          accountId,
+          x: entry.x,
+          y: entry.y,
+          drops: reward.drops,
+        });
+      } else {
+        // 打伤 = 记恨这一手（与单体路径同一取向：谁打的找谁）
+        this.monsterAi.provoke(entry.monster.instanceId, accountId);
+      }
+
+      this.monitor.recordDamage({
+        instanceId: entry.monster.instanceId,
+        monsterKey: entry.monster.monsterKey,
+        label: stats.label,
+        zoneId: entry.monster.zoneId,
+        mapId: entry.monster.mapId,
+        x: entry.x,
+        y: entry.y,
+        attacker: killerName,
+        skillId: cast.skillId,
+        skillLabel: String(skill.label ?? ""),
+        amount: damage,
+        hpAfter: applied.hp,
+        maxHp: entry.monster.maxHp,
+        killed: applied.killed,
+        // 击退只对单体生效（docs/22：AOE 把一片怪同时推开会让落点校验雪崩），AOE 恒 0
+        pushDistance: 0,
+      });
+
+      const hit: RealtimeSettleHit = {
+        targetId: entry.monster.instanceId,
+        monsterKey: entry.monster.monsterKey,
+        damage,
+        hp: applied.hp,
+        maxHp: entry.monster.maxHp,
+        killed: applied.killed,
+      };
+      if (reward) hit.reward = reward;
+      hits.push(hit);
+    }
+
+    // 掉落账本按「一次施放」记一份（拾取帧只有 castId + index，没有 targetId）；
+    // 每一条自带 monsterKey 溯源，所以多只怪的掉落混在一份账里也不会认错来源
+    if (drops.length) {
+      this.rememberDrops(accountId, cast.castId, drops, { killerName, monsterKey: hits[0]?.monsterKey ?? "" });
+    }
+
+    // 观看者只看到「他放了一个技能」：一次出手记一次，目标取最近的那只（打空时为空串）
+    this.presence.recordAction(spot.zoneId, spot.mapId, { accountId, skillId: cast.skillId, targetId: hits[0]?.targetId ?? "" });
+
+    const primary = hits[0];
+    this.logger.debug(
+      `区域结算：账号 ${accountId} 技能 ${cast.skillId}(Lv${skillLevel}) 作用点 (${Math.round(spot.x)}, ${Math.round(spot.y)}) 半径 ${Math.round(spot.radius)} → 命中 ${hits.length} 只` +
+        `${primary ? `，主目标 ${primary.targetId}(${primary.monsterKey}) 伤害 ${primary.damage}` : "（打空）"}`,
+    );
+
+    const ok: RealtimeSettleOk = {
+      castId: cast.castId,
+      ok: true,
+      skillId: cast.skillId,
+      // 顶层字段 = 最近的那一只（旧客户端只认这几个字段，不至于因为 AOE 而「什么都不显示」）
+      targetId: primary?.targetId ?? "",
+      damage: primary?.damage ?? 0,
+      hp: primary?.hp ?? 0,
+      maxHp: primary?.maxHp ?? 0,
+      killed: primary?.killed ?? false,
+      duplicate: false,
+      hits,
+      statuses,
+    };
+    return primary?.reward ? { ...ok, reward: primary.reward } : ok;
+  }
+
+  /**
+   * 区域技能的作用点与半径（#824）
+   *
+   * 落点来自客户端（`cast.x / cast.y`），但**只当意图**：
+   * - 半径与可达距离共用 `skills.distance`（配 0 → `AOE_DEFAULT_RADIUS` 并 warn 一次）；
+   * - 落点按施法者坐标夹到可达距离内，方向保留 —— 与客户端 `skill_1008` 的截断口径一致；
+   * - 客户端没给落点（自身周围 AOE / 老客户端）→ 以施法者脚下为中心；
+   * - 拿不到施法者坐标 → null，调用方拒绝（没有参照点就没法判断落点是否合法）。
+   */
+  private areaSpotOf(
+    accountId: string,
+    cast: ParsedCast,
+    skill: Record<string, unknown>,
+  ): { zoneId: number; mapId: string; x: number; y: number; radius: number } | null {
+    const position = this.presence.positionOf(accountId);
+    if (!position) return null;
+
+    const configured = Number(skill.distance);
+    let radius = Number.isFinite(configured) && configured > 0 ? configured : 0;
+    if (radius <= 0) {
+      // 群体技能配 0 = 不限施法距离，那个语义对「一块地」是灾难（等于全图 AOE），
+      // 所以退回默认半径并报一次配置问题 —— 静默按无限大会让运营永远不知道自己配错了
+      radius = AOE_DEFAULT_RADIUS;
+      const ticket = `${cast.skillId}`;
+      if (!this.warnedNoRadius.has(ticket)) {
+        this.warnedNoRadius.add(ticket);
+        this.logger.warn(`技能 ${cast.skillId} 是区域 / 群体技能，但 skills.distance 配成 0（不限距离）—— 已按默认半径 ${AOE_DEFAULT_RADIUS} 处理，请在管理端配上作用半径`);
+      }
+    }
+
+    let x = position.x;
+    let y = position.y;
+    if (typeof cast.x === "number" && typeof cast.y === "number") {
+      const dx = cast.x - position.x;
+      const dy = cast.y - position.y;
+      const distance = Math.hypot(dx, dy);
+      if (distance > radius) {
+        x = position.x + (dx / distance) * radius;
+        y = position.y + (dy / distance) * radius;
+      } else {
+        x = cast.x;
+        y = cast.y;
+      }
+    }
+
+    return { zoneId: position.zoneId, mapId: position.mapId, x, y, radius };
+  }
+
   private settleNew(accountId: string, cast: ParsedCast): RealtimeSettleData {
     const fail = (code: string, message: string): RealtimeSettleData => ({ castId: cast.castId, ok: false, code, message });
 
@@ -258,7 +530,13 @@ export class CombatSettlementService {
     // 分流之后它仍然过六道闸里跟目标无关的四道（存活 / 冷却 / 耗蓝 / 频率）。
     if (String(skill.category ?? "") === "2") return this.castStatusSkill(accountId, cast, skill);
 
-    // 伤害型技能必须有目标（状态型已经在上面分流走了）
+    // 自身 / 区域 / 群体技能（#824）：它们的「目标」不是一只怪，走另一条路。
+    // 判据读 `skills.target_type` + `require_target` —— 这两个字段以前**没人读**：
+    // 服务端靠「客户端送的 targetId 空不空」间接猜，于是任何非单体技能都进不来结算
+    // （1008 十步一杀就是被这一条挡在门外的）。
+    if (!needsMonsterTarget(skill)) return this.castAreaSkill(accountId, cast, skill);
+
+    // 伤害型单体技能必须有目标（状态型 / 区域型已经在上面分流走了）
     if (!cast.targetId || !cast.monsterKey) return fail("bad_request", `技能 ${cast.skillId} 需要目标（targetId / monsterKey 不能为空）`);
 
     // 目标：战斗数值表里要有这只怪，世界里要有这只实例（instanceId 由服务端发牌，
@@ -631,8 +909,17 @@ export class CombatSettlementService {
    * #789 起账本条目多两件事：**绑定**（拾取时原样写进背包格子）与**溯源**（谁杀的 /
    * 哪个怪 / 什么时候）。溯源只给装备 —— 用户口径是「只有装备会溯源，其他物品只按是否
    * 绑定分成两种」，一堆药记「谁掉的」没有意义，而且会让存档无谓变大。
+   *
+   * #824 起条目自己带 `monsterKey`：一次区域施放可能同时打死三只不同的怪，账本却只有
+   * 一份（拾取帧只有 `castId` + `index`，没有 targetId）。不逐条记来源，三只怪的掉落
+   * 就都溯源成「第一只」了。
    */
-  private rememberDrops(accountId: string, castId: number, drops: Array<{ goodId: string; count: number; bound: boolean }>, origin: KillOrigin): void {
+  private rememberDrops(
+    accountId: string,
+    castId: number,
+    drops: Array<{ goodId: string; count: number; bound: boolean; monsterKey?: string }>,
+    origin: KillOrigin,
+  ): void {
     if (!drops.length) return;
     let book = this.dropLedgers.get(accountId);
     if (!book) {
@@ -650,7 +937,7 @@ export class CombatSettlementService {
         goodId: drop.goodId,
         count: drop.count,
         bound: drop.bound,
-        from: itemTypeOf(drop.goodId) === "equipment" ? { role: origin.killerName, monster: origin.monsterKey, at } : undefined,
+        from: itemTypeOf(drop.goodId) === "equipment" ? { role: origin.killerName, monster: drop.monsterKey ?? origin.monsterKey, at } : undefined,
         picked: false,
       })),
     );
@@ -687,11 +974,48 @@ interface ParsedCast {
   skillId: string;
   targetId: string;
   monsterKey: string;
+  /** 区域 / 群体技能的作用点（#824；单体技能没有，缺省 = 以施法者为中心） */
+  x?: number;
+  y?: number;
 }
 
 // 三系攻击属性与「攻击 → 防御」映射在 common/constants/game-enums（怪物 AI 侧同一份，#823）
 /** 幂等账本容量：足够盖住任何合理的重传窗口，又不会随游玩时长无限涨 */
 const CAST_DEDUPE_CAPACITY = 256;
+
+/**
+ * 一次区域 / 群体施放最多命中几只（#824）
+ *
+ * 不是「玩法上限」而是**防爆量**：一份 cast 帧打中几百只怪 = 一次结算写几百行日志、
+ * 几百次 AI 记恨、几百条掉落记账，一条改包帧就能把进程拖住。8 只盖住当前所有近战横扫
+ * 的合理范围（刷怪区密度下，半径 200 内很少超过 5 只）。
+ * 要按技能调这个数时再给 `skills` 加列 —— 现在全表零个群体技能，加一列没人填的字段
+ * 只会多一处「配了没生效」的怀疑对象。
+ */
+const AOE_MAX_TARGETS = 8;
+
+/**
+ * 区域技能配了 `distance = 0`（不限距离）时退回的作用半径（#824）
+ *
+ * 「不限施法距离」对单体技能是合理的（擒龙手就是全图抓），对「一块地」则是全图 AOE。
+ * 所以配 0 时按这个半径算并 warn 一次：静默按无限大处理，运营永远不知道自己配错了。
+ * 取 200 是因为十步一杀的突进距离就是 200，近战横扫的量级一致。
+ */
+const AOE_DEFAULT_RADIUS = 200;
+
+/**
+ * 这个技能要不要点一只怪当目标（#824）
+ *
+ * 判据 = `target_type === "1"`（单体）且 `require_target` 没关（`#822` 起状态型技能配 0）。
+ * 与客户端 `SkillManager.tryCast` 的判断同一口径
+ * （`config.targetType === SINGLE && config.requireTarget !== false`）——
+ * 两边各写一套的结果是「客户端去找目标、服务端说不用」，或者反过来。
+ */
+function needsMonsterTarget(skill: Record<string, unknown>): boolean {
+  const targetType = String(skill.targetType ?? "1");
+  if (targetType !== "1") return false;
+  return skill.requireTarget !== false;
+}
 
 function parseCast(raw: unknown): ParsedCast | null {
   if (!raw || typeof raw !== "object") return null;
@@ -703,7 +1027,11 @@ function parseCast(raw: unknown): ParsedCast | null {
   // 伤害型技能在后面仍然要求目标存在 —— 那道判断在 settleNew 里，不要在这里一并拦掉。
   const targetId = typeof data.targetId === "string" ? data.targetId : "";
   const monsterKey = typeof data.monsterKey === "string" ? data.monsterKey : "";
-  return { castId, skillId: data.skillId, targetId, monsterKey };
+  // 落点（#824）：只有区域 / 群体技能会带。非数字 / NaN 一律当没给 ——
+  // 区域技能那时退回「以施法者为中心」，而不是拒绝整帧
+  const x = typeof data.x === "number" && Number.isFinite(data.x) ? data.x : undefined;
+  const y = typeof data.y === "number" && Number.isFinite(data.y) ? data.y : undefined;
+  return { castId, skillId: data.skillId, targetId, monsterKey, ...(x === undefined || y === undefined ? {} : { x, y }) };
 }
 
 /** 解析失败时尽量把 castId 带回去（客户端要靠它把拒绝结果对回某次出手）。

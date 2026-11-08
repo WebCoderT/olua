@@ -64,6 +64,27 @@ export interface CombatSettleOk {
   appliedStatus?: string;
   /** 本账号此刻全部生效中的状态（整份快照；缺省 = 旧服务端，按本地已有状态不动） */
   statuses?: CombatStatusEntry[];
+  /**
+   * 群体 / 区域技能命中的每一只（#824；单体技能不带）
+   *
+   * 有它就**只按它逐只落账**，不要再读顶层 `targetId` / `damage`：那些字段在 AOE 里
+   * 只是最近那一只的副本，照它演会让另外几只「血条不动」。
+   */
+  hits?: CombatSettleHit[];
+  /** true = 这一发本来就不掷伤害（自身 / 位移技能）：不要拿它改任何血条 */
+  noDamage?: boolean;
+}
+
+/** 群体 / 区域技能命中的一只（协议见 realtime.protocol 的 RealtimeSettleHit） */
+export interface CombatSettleHit {
+  targetId: string;
+  monsterKey: string;
+  damage: number;
+  hp: number;
+  maxHp: number;
+  killed: boolean;
+  /** 这一只被击杀时的奖励（只有 killed 才带；经验与掉落各自算） */
+  reward?: CombatKillReward;
 }
 
 /** 生效中的一个状态（协议见 realtime.protocol 的 RealtimeStatusEntry） */
@@ -464,12 +485,19 @@ export default class CombatChannel {
   /**
    * 发起一次出手（调用前先判 `active`）
    * @param skillId 技能 id（真实 id —— 多个技能共用实现时不能拿实现函数猜）
-   * @param targetId 目标实例 id（**服务端发的牌**，来自 world 快照）
-   * @param monsterKey 目标怪物 key（服务端据此查它的战斗数值表）
+   * @param targetId 目标实例 id（**服务端发的牌**，来自 world 快照；非单体技能传空串）
+   * @param monsterKey 目标怪物 key（服务端据此查它的战斗数值表；非单体技能传空串）
+   * @param spot 区域 / 群体技能的作用点（世界坐标；#824）。服务端会按施法距离夹取，
+   *   所以这里给「玩家想去的位置」就行，超出射程由服务端截断（与本地截断同一口径）
    */
-  static sendCast(skillId: string, targetId: string, monsterKey: string): void {
+  static sendCast(skillId: string, targetId: string, monsterKey: string, spot?: { x: number; y: number }): void {
     this.castSeq += 1;
-    RealtimeClient.send({ type: "cast", data: { castId: this.castSeq, skillId, targetId, monsterKey } });
+    RealtimeClient.send({
+      type: "cast",
+      data: spot
+        ? { castId: this.castSeq, skillId, targetId, monsterKey, x: spot.x, y: spot.y }
+        : { castId: this.castSeq, skillId, targetId, monsterKey },
+    });
   }
 
   /**
