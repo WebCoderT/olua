@@ -1,4 +1,4 @@
-import { Injectable, Logger, OnApplicationBootstrap } from "@nestjs/common";
+import { Injectable, Logger, OnApplicationBootstrap, OnApplicationShutdown } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { BizCode } from "../../common/constants/biz-code";
 import {
@@ -6,8 +6,10 @@ import {
   PARTY_EXP_MATE_SHARE_DEFAULT,
   PARTY_ID_PREFIX,
   PARTY_INVITE_TTL_MS_DEFAULT,
+  PARTY_LEADER_OFFLINE_MS_DEFAULT,
   PARTY_MEMBER_LIMIT_DEFAULT,
   PARTY_MIN_LEVEL_DEFAULT,
+  PARTY_SWEEP_INTERVAL_MS_DEFAULT,
 } from "../../common/constants/social";
 import { PartyRepository } from "../../database/repositories/party.repository";
 import { PartyMemberWithRoleRow, PartyRow } from "../../database/rows";
@@ -75,7 +77,7 @@ interface PartyInvite {
  * 与私聊同一纪律）。
  */
 @Injectable()
-export class PartyService implements OnApplicationBootstrap {
+export class PartyService implements OnApplicationBootstrap, OnApplicationShutdown {
   private readonly logger = new Logger(PartyService.name);
 
   /** 热路径索引：角色 → 队伍（唯一写者是本服务，所以不需要 TTL 刷新） */
@@ -83,6 +85,18 @@ export class PartyService implements OnApplicationBootstrap {
 
   /** 待处理的邀请：被邀请人角色 id → 他收到的邀请（最多几条，正常状态是一条） */
   private readonly invites = new Map<string, PartyInvite[]>();
+
+  /** 离线接管扫描定时器（#875；`OnApplicationShutdown` 里清掉） */
+  private sweepTimer: NodeJS.Timeout | null = null;
+
+  /**
+   * 离线计时（#875）：队伍 id → 两个计时起点
+   *
+   * 「离线多久了」库里没有记录（没有 last_seen 列），只能由扫描器自己记账：这一拍发现
+   * 队长离线且账上没有起点 → 记下当前时刻；发现他回来了 → 清账。代价是进程重启后
+   * 计时从零开始（重启本身就是稀有事，晚一轮接管无所谓），换来的是不用动表结构。
+   */
+  private readonly offlineSince = new Map<string, { leaderSince: number; allSince: number }>();
 
   /**
    * 发送出口（RealtimeService 启动时接线）
@@ -124,6 +138,22 @@ export class PartyService implements OnApplicationBootstrap {
     } catch (error) {
       // 起服失败不该挡启动：索引是缓存，读失败只意味着「重启后第一次查询会读库」
       this.logger.warn(`恢复队伍索引失败（重启后按需读库）：${(error as Error).message}`);
+    }
+
+    // 离线接管扫描（#875）：队长离线满阈值自动移交、全队离线自动解散。
+    // unref 让定时器不挡进程退出 —— 扫描是锦上添花，不该变成「关不掉服务」的原因。
+    const interval = this.sweepIntervalMs();
+    if (interval > 0 && this.leaderOfflineMs() > 0) {
+      this.sweepTimer = setInterval(() => this.sweepOffline(), interval);
+      this.sweepTimer.unref?.();
+    }
+  }
+
+  /** 优雅关闭：停掉扫描定时器（服务本身无状态可刷） */
+  onApplicationShutdown(): void {
+    if (this.sweepTimer) {
+      clearInterval(this.sweepTimer);
+      this.sweepTimer = null;
     }
   }
 
@@ -480,8 +510,12 @@ export class PartyService implements OnApplicationBootstrap {
   private createParty(leaderRoleId: string): string {
     const id = `${PARTY_ID_PREFIX}${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
     try {
-      this.parties.insertParty({ id, leader_role_id: leaderRoleId, created_at: Date.now() });
-      this.parties.insertMember({ party_id: id, role_id: leaderRoleId, joined_at: Date.now() });
+      // 两行必须同生共死（#874）：不包事务时，成员行撞唯一约束（并发下别处刚把他加进队）
+      // 会留下「有队零成员」的孤儿队伍 —— 占列表还删不掉。包进来后整体回滚，无残留。
+      this.parties.transaction(() => {
+        this.parties.insertParty({ id, leader_role_id: leaderRoleId, created_at: Date.now() });
+        this.parties.insertMember({ party_id: id, role_id: leaderRoleId, joined_at: Date.now() });
+      });
     } catch (error) {
       this.logger.warn(`建队写库失败（队长 ${leaderRoleId}）：${(error as Error).message}`);
       return "";
@@ -613,6 +647,85 @@ export class PartyService implements OnApplicationBootstrap {
 
   //#endregion
 
+  //#region 离线接管（#875）
+
+  /**
+   * 离线扫描（每 `sweepIntervalMs()` 一拍）
+   *
+   * 两件事，同一阈值（`leaderOfflineMs()`）：
+   * - **全队离线** → 解散：全都不在线的队伍等不到任何动作入口（邀请 / 转让 / 解散都要在线的人发），
+   *   不清的话它就永远挂在列表里。成员回线时收到的是空快照（重连补发的那份）。
+   * - **队长离线（有其他人在场）** → 移交给最早加入的成员：与「队长退队自动移交」同一口径
+   *   （`membersOf` 按 `joined_at` 排序，取队长之外的第一个人）。
+   *
+   * 都要等满阈值才动手：「网抖一下」五分钟内回来不算离线；起算点由 `offlineSince` 记账。
+   */
+  private sweepOffline(): void {
+    const now = Date.now();
+    const threshold = this.leaderOfflineMs();
+    for (const party of this.parties.allParties()) {
+      const members = this.parties.membersOf(party.id);
+      if (members.length === 0) {
+        // 孤儿队伍（历史遗留或库被手改）：顺手清掉，别让它占着一辈列表
+        this.parties.deleteParty(party.id);
+        this.offlineSince.delete(party.id);
+        this.logger.warn(`清扫孤儿队伍 ${party.id}（零成员）`);
+        continue;
+      }
+
+      const online = members.filter((member) => (this.locationOf?.(member.role_id) ?? null) !== null);
+      if (online.length === 0) {
+        const since = this.markOffline(party.id, "allSince", now);
+        if (now - since >= threshold) this.disbandBySweep(party.id, members.map((member) => member.role_id));
+        continue;
+      }
+
+      // 有人在线：全队离线的账清掉，再看队长本人在不在
+      this.clearOffline(party.id, "allSince");
+      if (online.some((member) => member.role_id === party.leader_role_id)) {
+        this.clearOffline(party.id, "leaderSince");
+        continue;
+      }
+
+      const since = this.markOffline(party.id, "leaderSince", now);
+      if (now - since < threshold) continue;
+      const next = members.find((member) => member.role_id !== party.leader_role_id);
+      if (!next) continue; // 理论不可达：队长是唯一成员时上面「全队离线」分支已经接住
+      this.parties.setLeader(party.id, next.role_id);
+      this.offlineSince.delete(party.id);
+      this.broadcast(party.id);
+      this.logger.log(`队长离线接管：队伍 ${party.id} 的队长 ${party.leader_role_id} 离线满 ${Math.round(threshold / 1000)} 秒，移交 ${next.role_id}（${next.role_name}）`);
+    }
+  }
+
+  /** 扫描器专用解散：全员离线所以没有「广播给谁」的问题，收尾与 `disband` 一致 */
+  private disbandBySweep(partyId: string, roleIds: string[]): void {
+    this.parties.deleteParty(partyId);
+    for (const roleId of roleIds) this.partyOfRole.delete(roleId);
+    for (const roleId of roleIds) this.invites.delete(roleId);
+    this.offlineSince.delete(partyId);
+    this.sendSnapshotTo(roleIds); // 全员离线时是空操作；半路有人回线也能收到空快照
+    this.logger.log(`全队离线解散：队伍 ${partyId}（${roleIds.length} 人）离线满阈值`);
+  }
+
+  /** 记账：取某支队伍某个计时起点，没有就以 `now` 起算 */
+  private markOffline(partyId: string, key: "leaderSince" | "allSince", now: number): number {
+    const entry = this.offlineSince.get(partyId) ?? { leaderSince: 0, allSince: 0 };
+    if (!entry[key]) entry[key] = now;
+    this.offlineSince.set(partyId, entry);
+    return entry[key];
+  }
+
+  /** 清账：某个计时起点归零（人回来了） */
+  private clearOffline(partyId: string, key: "leaderSince" | "allSince"): void {
+    const entry = this.offlineSince.get(partyId);
+    if (!entry || !entry[key]) return;
+    entry[key] = 0;
+    if (!entry.leaderSince && !entry.allSince) this.offlineSince.delete(partyId);
+  }
+
+  //#endregion
+
   //#region 内部：小工具与配置
 
   private fail(actor: PartyActor, code: number, message: string): void {
@@ -655,6 +768,18 @@ export class PartyService implements OnApplicationBootstrap {
   expMateShare(): number {
     const raw = Number(this.config.get<number>("partyExpMateShare"));
     return Number.isFinite(raw) && raw >= 0 && raw <= 1 ? raw : PARTY_EXP_MATE_SHARE_DEFAULT;
+  }
+
+  /** 队长离线接管阈值（毫秒；脏值回落默认 5 分钟） */
+  leaderOfflineMs(): number {
+    const raw = Number(this.config.get<number>("partyLeaderOfflineMs"));
+    return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : PARTY_LEADER_OFFLINE_MS_DEFAULT;
+  }
+
+  /** 离线扫描周期（毫秒；脏值回落默认 30 秒） */
+  sweepIntervalMs(): number {
+    const raw = Number(this.config.get<number>("partySweepIntervalMs"));
+    return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : PARTY_SWEEP_INTERVAL_MS_DEFAULT;
   }
 
   //#endregion

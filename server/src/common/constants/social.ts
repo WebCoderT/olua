@@ -162,6 +162,23 @@ export const PARTY_EXP_MATE_SHARE_DEFAULT = 0.5;
 export const PARTY_MIN_LEVEL_DEFAULT = 10;
 
 /**
+ * 队长离线接管阈值（默认 5 分钟；可用 `PARTY_LEADER_OFFLINE_MS` 覆盖，#875）
+ *
+ * 队长掉线不回来时，队伍不能永远卡在「只有队长能踢人 / 解散」的状态。5 分钟是
+ * 「掉线重连来得及、恶意挂机不趁心」的折中：太短会把「网抖一下」的队长赶下台，
+ * 太长则玩家等不起。全队离线的自动解散沿用同一个阈值（见 `PartyService.sweepOffline`）。
+ */
+export const PARTY_LEADER_OFFLINE_MS_DEFAULT = 5 * 60_000;
+
+/**
+ * 离线接管扫描周期（默认 30 秒；可用 `PARTY_SWEEP_INTERVAL_MS` 覆盖，#875）
+ *
+ * 扫描本身很轻（队伍表规模 = 在线玩家数 / 队伍人数，一次整表读）；周期只影响
+ * 「接管 / 解散晚到多久」，30 秒粒度对 5 分钟的阈值来说足够。e2e 会把它压到几百毫秒。
+ */
+export const PARTY_SWEEP_INTERVAL_MS_DEFAULT = 30_000;
+
+/**
  * 队伍各动作（协议 `party` 帧的 action；协议与服务的合法值同源，别在别处再写一遍）
  */
 export const PARTY_ACTION = {

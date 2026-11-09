@@ -387,6 +387,21 @@ export interface AppConfiguration {
   partyExpMateShare: number;
 
   /**
+   * 队长离线接管阈值（毫秒，默认 300000 = 5 分钟，#875）
+   *
+   * 队长离线满这个时长，自动把队长转给最早加入的成员；全队都离线满这个时长则解散。
+   * 脏值（非数字 / ≤0）回落默认：读错不该让「掉线接管」静默失效。
+   */
+  partyLeaderOfflineMs: number;
+
+  /**
+   * 离线接管扫描周期（毫秒，默认 30000，#875）
+   *
+   * 只影响接管 / 解散晚到多久；e2e 压到几百毫秒。
+   */
+  partySweepIntervalMs: number;
+
+  /**
    * 组队的最低等级（默认 10，`PARTY_MIN_LEVEL`）
    *
    * 与客户端底部导航「组队」入口的 `openLevel` 必须相等（`tools/audit-party-level.cjs`
@@ -498,6 +513,8 @@ export default function configuration(): AppConfiguration {
     partyMemberLimit: Number(process.env.PARTY_MEMBER_LIMIT ?? 4),
     partyInviteTtlMs: Number(process.env.PARTY_INVITE_TTL_MS ?? 30000),
     partyExpMateShare: Number(process.env.PARTY_EXP_MATE_SHARE ?? 0.5),
+    partyLeaderOfflineMs: Number(process.env.PARTY_LEADER_OFFLINE_MS ?? 300000),
+    partySweepIntervalMs: Number(process.env.PARTY_SWEEP_INTERVAL_MS ?? 30000),
     partyMinLevel: Number(process.env.PARTY_MIN_LEVEL ?? PARTY_MIN_LEVEL_DEFAULT),
     leaderboardRefreshMs: Number(process.env.LEADERBOARD_REFRESH_MS ?? 60000),
     leaderboardTopN: Number(process.env.LEADERBOARD_TOP_N ?? 100),
