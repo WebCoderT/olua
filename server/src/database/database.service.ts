@@ -879,6 +879,7 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
         can_auto            INTEGER NOT NULL DEFAULT 0,
         occupation          TEXT    NOT NULL DEFAULT '4',
         push_distance       REAL    NOT NULL DEFAULT 0,
+        push_chance         REAL    NOT NULL DEFAULT 1,
         -- 暴击与破防（#826）：技能自带的暴击率 / 暴击倍率 / 无视防御比例。
         -- crit_damage = 0 表示「用角色那一份」，不覆盖角色属性；def_ignore = 1 等于无视全部防御。
         crit_rate           REAL    NOT NULL DEFAULT 0,
@@ -1264,6 +1265,8 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
     // push_distance 以前只写在客户端配置里（快照不覆盖它），不补列这两项会一起丢
     this.ensureColumn("skills", "occupation", "TEXT NOT NULL DEFAULT '4'");
     this.ensureColumn("skills", "push_distance", "REAL NOT NULL DEFAULT 0");
+    // 撞飞概率（#826 第二批）：0 = 从不撞飞，1 = 必撞；带 DEFAULT，存量行自动补 1（必推，与旧行为一致）
+    this.ensureColumn("skills", "push_chance", "REAL NOT NULL DEFAULT 1");
     // 世界坐标口径（#566）：存量库补列时落到旧口径 'center'，紧接着由 migrateMapCoordinateOrigin 抹平
     this.ensureColumn("world_meta", "coord_origin", "TEXT NOT NULL DEFAULT 'center'");
     this.migrateMapCoordinateOrigin();

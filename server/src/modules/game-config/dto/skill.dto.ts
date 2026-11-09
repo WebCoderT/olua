@@ -122,6 +122,13 @@ export class SkillDto {
   pushDistance: number;
 
   @ApiProperty({
+    description: "撞飞概率（0~1；0 = 从不撞飞，1 = 必撞。#826：撞飞还要求施法者等级 > 怪物等级）",
+    minimum: 0,
+    maximum: 1,
+  })
+  pushChance: number;
+
+  @ApiProperty({
     description:
       "技能自带暴击率（0~1；与角色暴击率**相加**，不是替换）。#826：`desc` 里「附带 15% 暴击率」就配 0.15",
     minimum: 0,
@@ -169,6 +176,7 @@ export class SkillDto {
     dto.canAuto = row.can_auto === 1;
     dto.occupation = row.occupation;
     dto.pushDistance = row.push_distance;
+    dto.pushChance = row.push_chance;
     dto.critRate = row.crit_rate;
     dto.critDamage = row.crit_damage;
     dto.defIgnore = row.def_ignore;
@@ -320,6 +328,17 @@ export class UpdateSkillDto {
   @Min(0, { message: "pushDistance 不能小于 0" })
   @Max(2000, { message: "pushDistance 不能大于 2000" })
   pushDistance?: number;
+
+  @ApiPropertyOptional({
+    description: "撞飞概率（0~1；0 = 从不撞飞，1 = 必撞。撞飞还要求施法者等级 > 怪物等级）",
+    minimum: 0,
+    maximum: 1,
+  })
+  @IsOptional()
+  @IsNumber({}, { message: "pushChance 必须是数字" })
+  @Min(0, { message: "pushChance 不能小于 0" })
+  @Max(1, { message: "pushChance 不能大于 1（100%）" })
+  pushChance?: number;
 
   @ApiPropertyOptional({
     description: "技能自带暴击率（0~1；与角色暴击率相加。`desc` 写「附带 15% 暴击率」就配 0.15）",

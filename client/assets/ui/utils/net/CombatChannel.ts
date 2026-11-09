@@ -58,6 +58,13 @@ export interface CombatSettleOk {
    * 做飘字时读它换颜色或加特写，不要回退成「客户端自己掷暴击」。
    */
   critical?: boolean;
+  /**
+   * 这一下把目标撞飞了多远（像素；#826 第二批）
+   *
+   * 只在真推了时出现（缺字段 = 没推）。**只影响表现**：怪的实际位移由服务端位置广播驱动
+   * （客户端照常趋近），这个数不要拿来自己挪怪 —— 做击退特效时读它定强度。
+   */
+  pushDistance?: number;
   /** 击杀奖励（仅 killed 时携带；无此字段 = 旧服务端或本地口径回滚路径） */
   reward?: CombatKillReward;
   duplicate: boolean;
