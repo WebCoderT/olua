@@ -275,7 +275,7 @@ server-e2e-game-config: ## 服务端养成配置专项 e2e（44 条：seed 同�
 server-e2e-zone: ## 服务端区服专项 e2e（32 条：注册选区 / 合并区边界 / 世界按区隔离 / 合并生效与代际失效）
 	@cd server && $(NPM) run test:e2e:zone
 
-server-e2e-guild: ## 服务端帮会专项 e2e（60 条：建帮与重名 / 申请覆盖 / 审批权限 / 上限 / 踢人转让退出 / 解散级联）
+server-e2e-guild: ## 服务端帮会专项 e2e（79 条：建帮与重名 / 申请覆盖 / 审批权限 / 人数上限 / 踢人转让退出 / 解散级联 / 申请限额）
 	@cd server && $(NPM) run test:e2e:guild
 
 server-e2e-social: ## 服务端社交专项 e2e（47 条：好友申请与互加 / 拒绝不留痕 / 撤回删除 / 敌人单向 / 镜像行 / 互见帧身份）

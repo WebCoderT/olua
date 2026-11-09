@@ -338,6 +338,27 @@ export interface AppConfiguration {
    * 与帮会等级解耦：等级这一刀没有业务，别让它悄悄决定真实容量（见 common/constants/social）。
    */
   guildMemberLimit: number;
+
+  /**
+   * 每帮待处理申请上限（默认 50，#873）
+   *
+   * 申请无上限时一人可向全服帮会各写一条，帮主面板被刷满。脏值回落默认。
+   */
+  guildApplicationLimitPerGuild: number;
+
+  /**
+   * 每角色同时挂着的申请数上限（默认 5，#873）
+   *
+   * 广撒网有限度。脏值回落默认。
+   */
+  guildApplicationLimitPerRole: number;
+
+  /**
+   * 入帮申请有效期（毫秒，默认 24h，#873）
+   *
+   * 过期走懒清理（申请 / 审批 / 看名单时顺手删），不挂定时器。
+   */
+  guildApplicationTtlMs: number;
   /**
    * 好友数量上限（默认 100，#389）
    *
@@ -507,6 +528,9 @@ export default function configuration(): AppConfiguration {
     mapMonitorEventKeep: Number(process.env.MAP_MONITOR_EVENT_KEEP ?? 2000),
     mapMonitorTrimEvery: Number(process.env.MAP_MONITOR_TRIM_EVERY ?? 100),
     guildMemberLimit: Number(process.env.GUILD_MEMBER_LIMIT ?? 50),
+    guildApplicationLimitPerGuild: Number(process.env.GUILD_APPLICATION_LIMIT_PER_GUILD ?? 50),
+    guildApplicationLimitPerRole: Number(process.env.GUILD_APPLICATION_LIMIT_PER_ROLE ?? 5),
+    guildApplicationTtlMs: Number(process.env.GUILD_APPLICATION_TTL_MS ?? 86400000),
     socialFriendLimit: Number(process.env.SOCIAL_FRIEND_LIMIT ?? 100),
     socialBlockLimit: Number(process.env.SOCIAL_BLOCK_LIMIT ?? 100),
     socialBlockCacheMs: Number(process.env.SOCIAL_BLOCK_CACHE_MS ?? 2000),
