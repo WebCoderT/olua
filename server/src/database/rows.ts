@@ -1332,6 +1332,8 @@ export interface SkillRow {
   occupation: string;
   /** 命中后的击退距离（像素；0 = 不击退。只对单体技能生效） */
   push_distance: number;
+  /** 撞飞概率（0~1；0 = 从不撞飞，1 = 必撞。#826 第二批：还要求施法者等级 > 怪物等级） */
+  push_chance: number;
   /**
    * 技能自带的暴击率（0~1，与角色暴击率**相加**；#826）
    *

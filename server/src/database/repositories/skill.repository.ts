@@ -45,6 +45,8 @@ const SKILL_COLUMNS: Array<[string, (row: SkillRow) => SqlParam]> = [
   ["can_auto", (row) => row.can_auto],
   ["occupation", (row) => row.occupation],
   ["push_distance", (row) => row.push_distance],
+  // 撞飞概率（#826）：漏登记同样是「PATCH 200 但库没变」
+  ["push_chance", (row) => row.push_chance],
   // 暴击 / 破防（#826）：漏登记这两行不会报错 —— `update()` 只写清单里的列，
   // 表现是「管理端 PATCH 成功返回，结算侧一分没变」
   ["crit_rate", (row) => row.crit_rate],

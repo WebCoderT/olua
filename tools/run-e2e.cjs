@@ -68,6 +68,8 @@ const WEIGHT = {
   "test:e2e:area-skill": 3,
   // 三组共 18 刀，每刀前都要先 PATCH 一次技能行（写库 + 刷快照），刀数不多但来回多
   "test:e2e:crit": 3,
+  // 撞飞端点四轮 PATCH + 等级闸两次等怪物 TTL + 群体段两次冷却，来回偏多
+  "test:e2e:push": 3,
 };
 
 function weightOf(script) {

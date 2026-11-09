@@ -115,6 +115,13 @@ function seedSpawnAreas(dbPath) {
   for (const [index, spot] of [BRUISER, BOSS].entries()) {
     insert.run("1", `${index + 1}号点位`, spot.key, 0, 1, spot.x, spot.y, 0, 0, now);
   }
+  // 击退参数不在这里直改库：技能配置是「启动装载 + 管理端写操作触发刷新」的缓存，
+  // 直改库结算读不到（map_spawn_areas 能直改是因为播种 1 秒 TTL 现取库，两者口径不同）。
+  // 1001 的 push_distance / push_chance 由主流程走管理端 PATCH（#826 第二批起不再锁出厂值）。
+  // 怪物等级压到 0：撞飞有「施法者等级 > 怪物等级」的等级闸（#826），出厂干尸行者 level=2
+  // 会把 1 级玩家的击退拦掉 —— 这套要测的是位移本身。怪物数值 1 秒 TTL 现取库，直改生效。
+  // 血量拉到 10 万：79 血会被暴击一刀带走（killed 分支没有 push，二、三段全部连锁红）
+  db.prepare("UPDATE monsters SET level = 0, max_hp = 100000 WHERE id IN ('3', '200')").run();
   db.close();
 }
 
@@ -130,6 +137,7 @@ async function startServer(dbPath) {
       PORT: String(port),
       API_PREFIX: "api",
       DB_PATH: dbPath,
+      ADMIN_REGISTER_CODE: "test-mai-code",
       JWT_SECRET: "e2e-monster-ai-secret",
       JWT_EXPIRES_IN: "1h",
       LOG_REQUESTS: "false",
@@ -307,6 +315,17 @@ function connect(url) {
 
     //#region 二、击退由服务端模拟（#670）
     group("二、技能击退由服务端模拟：落点随普通位置广播下发");
+    // 撞飞参数走管理端 PATCH（#826 第二批：出厂 push_distance 是运营数据，测试自配不锁值；
+    // 管理端写操作触发 refreshAll，下一刀生效）
+    const adminReg = await api(baseUrl, "POST", "admin/auth/register", {
+      body: { username: "gm_mai", password: "pass1234", registerCode: "test-mai-code" },
+    });
+    check(adminReg.code === 0 && !!adminReg.data.token, "准备：注册管理员（撞飞参数要走 PATCH）");
+    const patched = await api(baseUrl, "PATCH", "admin/skills/1001", {
+      token: adminReg.data && adminReg.data.token,
+      body: { pushDistance: 120, pushChance: 1 },
+    });
+    check(patched.code === 0, "1001 的击退距离配成 120px、概率 1（必撞）");
     const framesBeforePush = sessionA.aiFrames.length;
     const pushed = await sessionA.cast("1001", bruiser.instanceId, BRUISER.key);
     check(!!pushed && pushed.ok, "带 push 的技能（1001，push_distance = 120）结算成功", JSON.stringify(pushed));
@@ -332,7 +351,10 @@ function connect(url) {
       8_000,
     );
     const pushDistance = settledEntry ? BRUISER.x - settledEntry.x : 0;
-    check(pushDistance >= 60 && pushDistance <= 180, "击退距离 = push_distance（120px）+ 一个 tick 的余量", `实测 ${pushDistance.toFixed(1)}px`);
+    // 击退位移按「已推游标」补齐（#826 第二批）：无论 AI tick 几时落，窗口走完后总位移
+    // 恒等于 push_distance —— 原实现按整个 tick 算步长，位移量 = 配置距离 ± 一个 tick
+    // （tick 100ms 时是 0.5~2.5 倍），全看 tick 几时落。容差 ±15 吸收广播采样时机。
+    check(pushDistance >= 105 && pushDistance <= 135, "击退距离 = push_distance（120px，位移不再随 tick 抖动）", `实测 ${pushDistance.toFixed(1)}px`);
     //#endregion
 
     //#region 三、晚进图的人看到同一处（#455）

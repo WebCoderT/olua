@@ -134,6 +134,10 @@ interface MonsterRuntime {
   castEndAt: number;
   /** 击退结束时刻（毫秒；#670 技能击退，期间只按击退方向位移） */
   pushEndAt: number;
+  /** 击退开始时刻（毫秒）：与 pushedUntil 一起把位移按 tick 补齐（#826 第二批） */
+  pushStartAt: number;
+  /** 已按击退位移推进到的时刻（毫秒）：tick 粒度比击退窗口粗时靠它补齐、不重复不遗漏 */
+  pushedUntil: number;
   /** 击退方向（单位向量，世界坐标） */
   pushDirX: number;
   pushDirY: number;
@@ -492,7 +496,9 @@ export class MonsterAiService implements OnApplicationBootstrap, OnApplicationSh
     runtime.pushDirX = offsetX / length;
     runtime.pushDirY = offsetY / length;
     runtime.pushSpeed = distance / (duration / 1000);
+    runtime.pushStartAt = Date.now();
     runtime.pushEndAt = Date.now() + duration;
+    runtime.pushedUntil = runtime.pushStartAt;
     // 击退打断手上的动作：硬直清零，落点后重新开始（下一次出手仍受普攻间隔约束）
     runtime.castEndAt = 0;
     runtime.movingNow = true;
@@ -654,13 +660,24 @@ export class MonsterAiService implements OnApplicationBootstrap, OnApplicationSh
     mapKey: string,
   ): void {
     // 击退优先于一切（#670）：期间只按击退方向位移，目标 / 技能 / 硬直都往后放 ——
-    // 被推着的怪继续放技能会看起来像「飘着打人」，而且落点会与施法者的预期错开
-    if (now < runtime.pushEndAt) {
-      const step = (runtime.pushSpeed * this.tickMs()) / 1000;
-      runtime.x += runtime.pushDirX * step;
-      runtime.y += runtime.pushDirY * step;
-      runtime.movingNow = true;
-      return;
+    // 被推着的怪继续放技能会看起来像「飘着打人」，而且落点会与施法者的预期错开。
+    //
+    // 位移按「已推游标 → min(窗口尾, 本次 tick)」补齐（#826 第二批）：tick 粒度可能比
+    // 击退时长粗（测试把 tick 拉到 1s，击退窗口只有 200ms）—— 原实现按整个 tick 算步长，
+    // tick 落在窗口内会一次推出数倍于配置的距离，落在窗口外又一步不推，位移量全看运气。
+    // 游标保证：无论 tick 几时落，窗口走完后总位移恒等于配置的击退距离，不重复不遗漏。
+    if (runtime.pushedUntil < runtime.pushEndAt) {
+      const upto = Math.min(runtime.pushEndAt, now);
+      const advanceMs = upto - runtime.pushedUntil;
+      if (advanceMs > 0) {
+        const step = (runtime.pushSpeed * advanceMs) / 1000;
+        runtime.x += runtime.pushDirX * step;
+        runtime.y += runtime.pushDirY * step;
+        runtime.movingNow = true;
+        runtime.pushedUntil = upto;
+        if (runtime.pushedUntil >= runtime.pushEndAt) return; // 击退走完，本拍到此为止
+      }
+      if (now < runtime.pushEndAt) return; // 还在窗口内：不追不出手
     }
 
     // 施法硬直：动作没播完之前既不移动也不出手（与客户端动作锁同一语义）。
@@ -1185,6 +1202,8 @@ export class MonsterAiService implements OnApplicationBootstrap, OnApplicationSh
       statuses: new Map<string, number>(),
       castEndAt: 0,
       pushEndAt: 0,
+      pushStartAt: 0,
+      pushedUntil: 0,
       pushDirX: 0,
       pushDirY: 0,
       pushSpeed: 0,

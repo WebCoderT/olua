@@ -16414,6 +16414,12 @@
             "minimum": 0,
             "maximum": 2000
           },
+          "pushChance": {
+            "type": "number",
+            "description": "撞飞概率（0~1；0 = 从不撞飞，1 = 必撞。撞飞还要求施法者等级 > 怪物等级）",
+            "minimum": 0,
+            "maximum": 1
+          },
           "critRate": {
             "type": "number",
             "description": "技能自带暴击率（0~1；与角色暴击率相加。`desc` 写「附带 15% 暴击率」就配 0.15）",
@@ -16550,6 +16556,12 @@
             "description": "命中后的击退距离（像素；0 = 不击退；只对单体技能生效）",
             "minimum": 0,
             "maximum": 2000
+          },
+          "pushChance": {
+            "type": "number",
+            "description": "撞飞概率（0~1；0 = 从不撞飞，1 = 必撞。撞飞还要求施法者等级 > 怪物等级）",
+            "minimum": 0,
+            "maximum": 1
           },
           "critRate": {
             "type": "number",
@@ -25052,6 +25064,12 @@
             "type": "number",
             "description": "命中后的击退距离（像素；0 = 不击退。只对单体技能生效）"
           },
+          "pushChance": {
+            "type": "number",
+            "description": "撞飞概率（0~1；0 = 从不撞飞，1 = 必撞。#826：撞飞还要求施法者等级 > 怪物等级）",
+            "minimum": 0,
+            "maximum": 1
+          },
           "critRate": {
             "type": "number",
             "description": "技能自带暴击率（0~1；与角色暴击率**相加**，不是替换）。#826：`desc` 里「附带 15% 暴击率」就配 0.15",
@@ -25097,6 +25115,7 @@
           "canAuto",
           "occupation",
           "pushDistance",
+          "pushChance",
           "critRate",
           "critDamage",
           "defIgnore",

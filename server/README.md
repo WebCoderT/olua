@@ -63,6 +63,7 @@ npm run dev              # 开发（ts-node 热启动）；npm run build && npm 
 | `npm run test:e2e:element-damage` | 物法分离专项（12 条；#823：物理打物防 / 法术打魔防 / 法攻配 0 时跳过技能并 warn） |
 | `npm run test:e2e:area-skill` | 自身 / 区域 / 群体技能专项（31 条；#824：非单体技能能过结算 / 服务端算命中集合 / 落点夹取与跨图闸 / 逐只奖励与合并掉落账本） |
 | `npm run test:e2e:crit` | 暴击与破防专项（30 条；#826：`def_ignore` 削的是防御那一项 / `crit_rate` 必爆时伤害整体翻倍 / 角色属性与技能行相加） |
+| `npm run test:e2e:push` | 撞飞与群体化专项（25 条；#826：`push_chance` 与等级闸三道闸逐个验 / 回执带 `pushDistance` 且 AI 侧真的推走 / 击杀不推 / 1009 群体化一发多中） |
 | `npm run test:e2e:admin-mail` | 管理端消息补发专项（29 条；#437：鉴权 / 频道收窄 / 附件领到手 / 离线收件 / 审计留痕） |
 | `npm run test:e2e:mail-expiry` | 收件箱保质期专项（15 条；#439：ttl 写入 / 读口即时消失 / 清理判据 / 批量上限） |
 | `npm run test:e2e:ui-effect` | 特效专项（34 条；#594 升级特效 + #634 掉落光效六档：可读不可写 / 出厂值 seed 顺序 / 无新建·删除 / 数值边界 / 快照即最新 / 审计与文档契约） |
@@ -198,6 +199,7 @@ server/
 │   ├── e2e-element-damage.cjs（物法分离 #823：物理打物防 / 法术打魔防 / 法攻配 0 时跳过技能并 warn）
 │   ├── e2e-area-skill.cjs（自身 / 区域 / 群体技能 #824：非单体技能过结算 / 服务端算命中集合 / 落点夹取 / 逐只奖励与合并掉落账本）
 │   ├── e2e-crit.cjs（暴击与破防 #826：def_ignore 削防御那一项 / crit_rate 必爆翻倍 / 角色属性与技能行相加）
+│   ├── e2e-push.cjs（撞飞与群体化 #826：push_chance + 等级闸 / 击退位移游标补齐 / 击杀不推 / 1009 群体化）
 │   ├── e2e-world.cjs（世界权威：服务端按刷怪区自播种 / 结算落世界 / tick 重生 / 关闭落盘 / 重启恢复）
 │   ├── e2e-world-viewers.cjs（观看者集合：换图退出旧图 / 旧图不再投递与采样 / 空闲卸载 / 卸载不丢状态）
 │   ├── e2e-dual.cjs（双进程形态：存档与实时分进程 / 跨进程令牌校验 / 踢下线巡检断连 / WAL 跨进程写）

@@ -1188,6 +1188,7 @@ export class GameConfigService {
     // #603 第十一域：职业归属与击退距离也可改（前者决定技能栏归谁，后者只对单体技能生效）
     if (dto.occupation !== undefined) next.occupation = dto.occupation;
     if (dto.pushDistance !== undefined) next.push_distance = dto.pushDistance;
+    if (dto.pushChance !== undefined) next.push_chance = dto.pushChance;
     // #826：暴击与破防。三个都只影响「这一发怎么算伤害」，不参与跨字段校验
     if (dto.critRate !== undefined) next.crit_rate = dto.critRate;
     if (dto.critDamage !== undefined) next.crit_damage = dto.critDamage;
@@ -1248,6 +1249,8 @@ export class GameConfigService {
       // 怪物技能没有「归哪个职业」的语义（服务端 AI 释放），一律全职业；击退默认不配
       occupation: dto.occupation ?? "4",
       push_distance: dto.pushDistance ?? 0,
+      // 撞飞概率默认 1（必撞）：push_distance 配了却没有概率列的旧行为就是必撞
+      push_chance: dto.pushChance ?? 1,
       // 暴击 / 破防默认 0：新建的技能在运营配之前行为与改动前一致
       crit_rate: dto.critRate ?? 0,
       crit_damage: dto.critDamage ?? 0,

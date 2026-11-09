@@ -717,8 +717,17 @@ export class CombatSettlementService {
       // 技能击退（#670）：位移只能由服务端产生 —— 客户端推一下只在本机生效，同图其他人
       // 看到的怪还在原地，落点就已经不一致了。方向（施法者 → 怪）与时长都由 AI 侧决定，
       // 这里只给「推多远」（`skills.push_distance`，管理端可改）。
-      pushDistance = Number(skill.pushDistance) || 0;
-      if (pushDistance > 0) this.monsterAi.applyPush(cast.targetId, accountId, pushDistance);
+      // #826 第二批：撞飞还要过两道闸 —— ① 概率（`push_chance`，0 = 从不撞，1 = 必撞，
+      // 缺字段按必撞处理，与旧行为一致）；② 等级（desc 写「等级低于自身的目标撞飞」，
+      // 严格小于：施法者等级必须**大于**怪物等级）。两道闸都没过就不推，
+      // 回执与监控里的 pushDistance 都是 0 —— 推没推只有服务端知道，客户端不自己掷。
+      const wantPush = Number(skill.pushDistance) || 0;
+      const chance = Number(skill.pushChance);
+      const passedChance = Math.random() < (Number.isFinite(chance) ? chance : 1);
+      if (wantPush > 0 && passedChance && role.level > stats.level) {
+        pushDistance = wantPush;
+        this.monsterAi.applyPush(cast.targetId, accountId, pushDistance);
+      }
     }
 
     // 实时地图监控（#745）：一次伤害一行 —— 「谁、用什么、打了多少、怪还剩多少」。
@@ -766,6 +775,9 @@ export class CombatSettlementService {
       statuses: this.roles.statusSnapshotOf(accountId),
       // 暴击（#826）：只在真触发时出现 —— 客户端用它换飘字 / 特效，缺字段就是没暴击
       ...(critical ? { critical: true } : {}),
+      // 撞飞（#826 第二批）：只在真推了时出现。位移本身走位置广播（#670 不加协议帧），
+      // 回执带这个数是给客户端表现用的确定性信号（击退方向 = 施法者 → 怪），缺字段就是没推
+      ...(pushDistance > 0 ? { pushDistance } : {}),
     };
     return reward ? { ...ok, reward } : ok;
   }

@@ -67,6 +67,8 @@ interface SkillForm {
   occupation: string;
   /** 击退距离（像素，0 = 不击退）：场上唯一能推动怪物的途径 */
   pushDistance: string;
+  /** 撞飞概率（0~1，1 = 必撞；撞飞还要求施法者等级 > 怪物等级） */
+  pushChance: string;
   /** 技能自带暴击率（0~1，与角色暴击率相加；#826） */
   critRate: string;
   /** 技能自带暴击倍率（> 1 才生效；0 = 用角色那一份） */
@@ -97,6 +99,7 @@ function toForm(item: Skill): SkillForm {
     statusId: item.statusId,
     occupation: item.occupation,
     pushDistance: String(item.pushDistance),
+    pushChance: String(item.pushChance),
     critRate: String(item.critRate),
     critDamage: String(item.critDamage),
     defIgnore: String(item.defIgnore),
@@ -170,6 +173,7 @@ function SkillEditDialog({
     checkNumber(form.levelReq, { name: "等级需求", min: 1, max: 200, int: true }),
     checkNumber(form.castLockMs, { name: "动作锁", min: 0, max: 10_000, int: true }),
     checkNumber(form.pushDistance, { name: "击退距离", min: 0, max: 2_000, int: true }),
+    checkNumber(form.pushChance, { name: "撞飞概率", min: 0, max: 1 }),
     checkNumber(form.critRate, { name: "暴击率", min: 0, max: 1 }),
     checkNumber(form.critDamage, { name: "暴击倍率", min: 0, max: 10 }),
     checkNumber(form.defIgnore, { name: "无视防御比例", min: 0, max: 1 }),
@@ -207,6 +211,7 @@ function SkillEditDialog({
       statusId: form.statusId,
       occupation: form.occupation as UpdateSkill["occupation"],
       pushDistance: Number(form.pushDistance),
+      pushChance: Number(form.pushChance),
       critRate: Number(form.critRate),
       critDamage: Number(form.critDamage),
       defIgnore: Number(form.defIgnore),
@@ -334,6 +339,16 @@ function SkillEditDialog({
               min={0}
               value={form.pushDistance}
               onChange={(event) => set("pushDistance", event.target.value)}
+            />
+          </Field>
+          <Field label="撞飞概率" hint="0~1（0.65 = 65%）；还要满足「施法者等级 > 怪物等级」才会真的撞飞">
+            <Input
+              type="number"
+              min={0}
+              max={1}
+              step={0.01}
+              value={form.pushChance}
+              onChange={(event) => set("pushChance", event.target.value)}
             />
           </Field>
           <Field label="暴击率" hint="0~1（0.15 = 15%）；与角色基础暴击率**相加**，不是替换">
