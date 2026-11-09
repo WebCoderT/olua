@@ -35,6 +35,30 @@ export const GUILD_RANK_LABELS: Record<string, string> = {
  */
 export const GUILD_MEMBER_LIMIT_DEFAULT = 50;
 
+/**
+ * 每帮待处理申请上限（默认 50；可用 `GUILD_APPLICATION_LIMIT_PER_GUILD` 覆盖，#873）
+ *
+ * 申请没有它就是无底洞：一人可向全服帮会各写一条，帮主面板被刷满。50 = 一屏翻两页
+ * 能看完，防刷又不误伤热闹帮会；满了拒 50146（新申请进不来，审批腾出名额即可）。
+ */
+export const GUILD_APPLICATION_LIMIT_PER_GUILD_DEFAULT = 50;
+
+/**
+ * 每角色同时挂着的申请数上限（默认 5；可用 `GUILD_APPLICATION_LIMIT_PER_ROLE` 覆盖，#873）
+ *
+ * 广撒网可以，撒满半个服务器的帮会不行。5 个够覆盖「多试几家」，脏值回落默认。
+ */
+export const GUILD_APPLICATION_LIMIT_PER_ROLE_DEFAULT = 5;
+
+/**
+ * 入帮申请有效期（默认 24 小时；可用 `GUILD_APPLICATION_TTL_MS` 覆盖，#873）
+ *
+ * 申请是「我现在还想进」的表态，挂一整天的申请多半本人都忘了。过期走**懒清理**：
+ * 申请 / 审批 / 看名单时顺手删，不挂定时器（与队伍邀请表同一口径 —— 帮会表很小，
+ * 一次全表 DELETE 不心疼）。
+ */
+export const GUILD_APPLICATION_TTL_MS_DEFAULT = 24 * 60 * 60_000;
+
 /** 帮会 id 前缀（`g_` + 时间戳 + 随机段；与账号 / 角色的命名习惯一致，肉眼可辨类型） */
 export const GUILD_ID_PREFIX = "g_";
 

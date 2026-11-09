@@ -445,6 +445,8 @@ export const BizCode = {
   GUILD_FULL: 50107,
   /** 目标不合法（转让/踢人/审批的对象不是本帮成员，或指向自己） */
   GUILD_TARGET_INVALID: 50108,
+  /** 入帮申请被限额拒（#873：本帮待处理满 / 我挂的申请满；文案区分是哪一种） */
+  GUILD_APPLICATION_LIMIT: 50146,
   //#endregion
 
   //#region 社交：好友与敌人（#389）

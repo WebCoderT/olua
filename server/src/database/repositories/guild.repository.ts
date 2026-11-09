@@ -169,6 +169,21 @@ export class GuildRepository {
     ]);
   }
 
+  /** 某帮当前待处理的申请数（#873：每帮上限的判断依据） */
+  countApplicationsOfGuild(guildId: string): number {
+    return this.db.count("SELECT COUNT(1) AS total FROM guild_applications WHERE guild_id = ?", [guildId]);
+  }
+
+  /** 某角色当前挂着的申请数（#873：每角色上限的判断依据） */
+  countApplicationsOfRole(roleId: string): number {
+    return this.db.count("SELECT COUNT(1) AS total FROM guild_applications WHERE role_id = ?", [roleId]);
+  }
+
+  /** 删掉过期申请（#873 懒清理：写 / 读申请的入口顺手调一次，不挂定时器） */
+  removeApplicationsOlderThan(cutoff: number): void {
+    this.db.run("DELETE FROM guild_applications WHERE created_at < ?", [cutoff]);
+  }
+
   /** 写一条申请（已存在则覆盖留言与时间；「重复申请」不该堆出两条，只会更新） */
   upsertApplication(guildId: string, roleId: string, message: string, now: number): void {
     this.db.run(

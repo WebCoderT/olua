@@ -3,6 +3,9 @@ import { ConfigService } from "@nestjs/config";
 import { randomUUID } from "node:crypto";
 import { BizCode } from "../../common/constants/biz-code";
 import {
+  GUILD_APPLICATION_LIMIT_PER_GUILD_DEFAULT,
+  GUILD_APPLICATION_LIMIT_PER_ROLE_DEFAULT,
+  GUILD_APPLICATION_TTL_MS_DEFAULT,
   GUILD_ID_PREFIX,
   GUILD_MEMBER_LIMIT_DEFAULT,
   GUILD_RANK,
@@ -59,6 +62,34 @@ export class GuildService {
   private get memberLimit(): number {
     const value = Number(this.config.get<number>("guildMemberLimit") ?? GUILD_MEMBER_LIMIT_DEFAULT);
     return Number.isFinite(value) && value > 0 ? Math.floor(value) : GUILD_MEMBER_LIMIT_DEFAULT;
+  }
+
+  /** 每帮待处理申请上限（#873；脏值回落默认） */
+  private get applicationLimitPerGuild(): number {
+    const value = Number(this.config.get<number>("guildApplicationLimitPerGuild"));
+    return Number.isFinite(value) && value > 0 ? Math.floor(value) : GUILD_APPLICATION_LIMIT_PER_GUILD_DEFAULT;
+  }
+
+  /** 每角色同时挂着的申请数上限（#873；脏值回落默认） */
+  private get applicationLimitPerRole(): number {
+    const value = Number(this.config.get<number>("guildApplicationLimitPerRole"));
+    return Number.isFinite(value) && value > 0 ? Math.floor(value) : GUILD_APPLICATION_LIMIT_PER_ROLE_DEFAULT;
+  }
+
+  /** 入帮申请有效期（#873；脏值回落默认 24h） */
+  private get applicationTtlMs(): number {
+    const value = Number(this.config.get<number>("guildApplicationTtlMs"));
+    return Number.isFinite(value) && value > 0 ? Math.floor(value) : GUILD_APPLICATION_TTL_MS_DEFAULT;
+  }
+
+  /**
+   * 申请过期懒清理（#873）：申请 / 看名单 / 审批的入口顺手清一次
+   *
+   * 全表 DELETE 很轻（申请表规模 = 待处理申请总数），不挂定时器 —— 与队伍邀请表的
+   * 懒清理同一口径：过期数据留着唯一的害处是「帮主看到一条 24 小时前的旧申请」。
+   */
+  private pruneExpiredApplications(): void {
+    this.guilds.removeApplicationsOlderThan(Date.now() - this.applicationTtlMs);
   }
 
   /**
@@ -122,7 +153,7 @@ export class GuildService {
       myRank: membership.rank,
       members,
       // 非干部看不到申请名单：谁在申请是给管理人员看的待办，不是公共信息
-      applicants: officer ? this.guilds.applications(guild.id) : [],
+      applicants: officer ? (this.pruneExpiredApplications(), this.guilds.applications(guild.id)) : [],
     };
     return this.toMyGuild(parts);
   }
@@ -161,9 +192,17 @@ export class GuildService {
     return this.mustMine(accountId);
   }
 
-  /** 申请加入（重复申请覆盖留言，不堆两条；已在帮会里直接拒） */
+  /**
+   * 申请加入（重复申请覆盖留言，不堆两条；已在帮会里直接拒）
+   *
+   * 顺序有讲究（#873）：**同帮已有申请的覆盖留言走在配额之前** —— 我已经挂着这个帮的
+   * 申请，改个留言不新增任何行，不该被「我挂的申请数」卡死。配额只拦**新增**：
+   * 先每帮待处理上限、再每角色申请数上限；同一码 50146、文案区分是哪一种 ——
+   * 客户端只需要一个「申请被拒」提示，但玩家得知道自己为什么被拒。
+   */
   apply(accountId: string, guildId: string, message: string): void {
     const role = this.onlineRole(accountId);
+    this.pruneExpiredApplications();
     if (this.guilds.membershipOf(role.id)) {
       throw BizException.conflict(BizCode.GUILD_ALREADY_IN, "你已经在一个帮会里了，先退出才能申请别的");
     }
@@ -174,6 +213,21 @@ export class GuildService {
     }
     const trimmed = message.trim();
     this.assertApplicationMessage(trimmed);
+    const existing = this.guilds.findApplication(guildId, role.id);
+    if (!existing) {
+      if (this.guilds.countApplicationsOfGuild(guildId) >= this.applicationLimitPerGuild) {
+        throw BizException.conflict(
+          BizCode.GUILD_APPLICATION_LIMIT,
+          "这个帮会的申请名额已满，等帮主处理后再试",
+        );
+      }
+      if (this.guilds.countApplicationsOfRole(role.id) >= this.applicationLimitPerRole) {
+        throw BizException.conflict(
+          BizCode.GUILD_APPLICATION_LIMIT,
+          `你同时最多申请 ${this.applicationLimitPerRole} 个帮会，先等之前的申请有结果（24 小时未处理会自动过期）`,
+        );
+      }
+    }
     this.guilds.upsertApplication(guildId, role.id, trimmed, Date.now());
   }
 
@@ -183,9 +237,10 @@ export class GuildService {
     if (!isOfficer(membership.rank)) {
       throw BizException.forbidden(BizCode.GUILD_PERMISSION_DENIED, "只有帮主和副帮主能审批入帮申请");
     }
+    this.pruneExpiredApplications();
     const application = this.guilds.findApplication(guild.id, targetRoleId);
     if (!application) {
-      throw BizException.notFound(BizCode.GUILD_TARGET_INVALID, "这个申请已经不存在了（可能已被处理）");
+      throw BizException.notFound(BizCode.GUILD_TARGET_INVALID, "这个申请已经不存在了（可能已被处理或已过期）");
     }
     if (!approve) {
       this.guilds.removeApplication(guild.id, targetRoleId);

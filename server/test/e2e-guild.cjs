@@ -13,6 +13,9 @@
  *     转让是**双方职位互换**，且 `leaderId` 同步改；帮主不能直接退出（50106）
  * 五、解散：管理端强制解散时成员与**待审批申请一并清除**（外键级联），玩家侧 mine 立刻变 null；
  *     删过的 id 再删是 50101
+ * 六、申请限额（#873，独立进程压小上限）：每帮待处理上限（第 4 条被拒 50146）、
+ *     每角色同时申请上限、重复申请不涨数（幂等）、TTL 过期（懒清理：名单消失 /
+ *     名额腾出 / 审批过期申请 50108）
  *
  * 与 e2e-zone 同款：**临时文件库**（要直接查 guild_members / guild_applications 确认级联）。
  */
@@ -69,8 +72,8 @@ function freePort() {
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-/** 起一台服务（文件库；ADMIN_REGISTER_CODE 让 e2e 能开超级管理员） */
-async function startServer(dbPath) {
+/** 起一台服务（文件库；ADMIN_REGISTER_CODE 让 e2e 能开超级管理员；extraEnv 覆盖单条配置） */
+async function startServer(dbPath, extraEnv = {}) {
   const port = await freePort();
   const baseUrl = `http://127.0.0.1:${port}`;
   const child = spawn(process.execPath, ["--disable-warning=ExperimentalWarning", ENTRY], {
@@ -87,6 +90,7 @@ async function startServer(dbPath) {
       ADMIN_REGISTER_CODE: "guild-admin-code",
       // 人数上限压到 3：验的是「上限读配置」而不是那个默认值
       GUILD_MEMBER_LIMIT: String(MEMBER_LIMIT),
+      ...extraEnv,
     },
     stdio: ["ignore", "pipe", "pipe"],
   });
@@ -397,6 +401,87 @@ async function preparePlayer(baseUrl, username, roleName) {
 
     const patchMissing = await api(baseUrl, "PATCH", "admin/guilds/g_not_exists", { token: adminToken, body: { notice: "x" } });
     checkEqual(patchMissing.code, 50101, "改不存在的帮会 = 50101", patchMissing.message);
+
+    //#endregion
+
+    //#region 六、申请限额（#873，独立进程压小上限）
+
+    // 上限与 TTL 都压小才能在测试里踩到边界：每帮 3 / 每人 2 / TTL 800ms（真值 50 / 5 / 24h
+    // 的「读配置」由本套第一台服务间接保证 —— memberLimit 同款口径，生产值由 .env.example 登记）。
+    // 「24h 过期」的假时钟就是压 TTL：过期判断读的是同一个 Date.now()，压短等价于把时钟拨快。
+    group("六、申请限额（#873）：每帮上限 / 每人上限 / TTL 过期（独立进程）");
+    const limitDbPath = path.join(os.tmpdir(), `olua-e2e-guild-limit-${Date.now()}.db`);
+    const limitServer = await startServer(limitDbPath, {
+      GUILD_APPLICATION_LIMIT_PER_GUILD: "3",
+      GUILD_APPLICATION_LIMIT_PER_ROLE: "2",
+      GUILD_APPLICATION_TTL_MS: "800",
+    });
+    try {
+      const lb = limitServer.baseUrl;
+      const L1 = await preparePlayer(lb, "guild_limit_l1", "一帮帮主");
+      const L2 = await preparePlayer(lb, "guild_limit_l2", "二帮帮主");
+      const L3 = await preparePlayer(lb, "guild_limit_l3", "三帮帮主");
+      const g1 = await api(lb, "POST", "guilds", { token: L1.token, body: { name: "一帮" } });
+      const g2 = await api(lb, "POST", "guilds", { token: L2.token, body: { name: "二帮" } });
+      const g3 = await api(lb, "POST", "guilds", { token: L3.token, body: { name: "三帮" } });
+      const g1id = g1.data && g1.data.id;
+      const g2id = g2.data && g2.data.id;
+      const g3id = g3.data && g3.data.id;
+      check(!!g1id && !!g2id && !!g3id, "三个帮会就绪");
+
+      const P1 = await preparePlayer(lb, "guild_limit_p1", "申请一");
+      const P2 = await preparePlayer(lb, "guild_limit_p2", "申请二");
+      const P3 = await preparePlayer(lb, "guild_limit_p3", "申请三");
+      const P4 = await preparePlayer(lb, "guild_limit_p4", "申请四");
+
+      // —— 每帮待处理上限：第 4 条被拒 ——
+      const a1 = await api(lb, "POST", `guilds/${g1id}/applications`, { token: P1.token, body: { message: "1" } });
+      const a2 = await api(lb, "POST", `guilds/${g1id}/applications`, { token: P2.token, body: { message: "2" } });
+      const a3 = await api(lb, "POST", `guilds/${g1id}/applications`, { token: P3.token, body: { message: "3" } });
+      check(a1.code === 0 && a2.code === 0 && a3.code === 0, "前三条申请都进得来（配额 3）");
+      const a4 = await api(lb, "POST", `guilds/${g1id}/applications`, { token: P4.token, body: { message: "4" } });
+      check(
+        a4.code === 50146 && typeof a4.message === "string" && a4.message.includes("名额已满"),
+        "第 4 条申请被拒（GUILD_APPLICATION_LIMIT 50146，文案指向本帮名额）",
+        `${a4.code} ${a4.message}`,
+      );
+
+      // —— 每角色同时申请上限：P1 已挂 G1 一条，再挂 G2 可以，挂 G3 被拒 ——
+      const p1g2 = await api(lb, "POST", `guilds/${g2id}/applications`, { token: P1.token, body: { message: "也想去二帮" } });
+      checkEqual(p1g2.code, 0, "P1 挂第二个帮的申请成功（每人配额 2）");
+      const p1g3 = await api(lb, "POST", `guilds/${g3id}/applications`, { token: P1.token, body: { message: "三帮也要" } });
+      check(
+        p1g3.code === 50146 && typeof p1g3.message === "string" && p1g3.message.includes("同时最多申请 2 个"),
+        "P1 挂第三个帮的申请被拒（50146，文案指向自己的申请数）",
+        `${p1g3.code} ${p1g3.message}`,
+      );
+
+      // —— 幂等回归：重复申请只覆盖留言，配额不涨 ——
+      const p1g2again = await api(lb, "POST", `guilds/${g2id}/applications`, { token: P1.token, body: { message: "改留言" } });
+      checkEqual(p1g2again.code, 0, "重复申请仍然成功（幂等）");
+      const mineL2 = await api(lb, "GET", "guilds/me", { token: L2.token });
+      check(
+        mineL2.data && mineL2.data.applicants.length === 1 && mineL2.data.applicants[0].message === "改留言",
+        "二帮帮主仍只看到一条，且留言是最新的（配额没被重复申请吃掉）",
+        JSON.stringify(mineL2.data && mineL2.data.applicants.map((item) => item.message)),
+      );
+
+      // —— TTL 过期（懒清理）：等过 TTL，名单清空、名额腾出、审批过期申请 50108 ——
+      await sleep(1200);
+      const mineL2after = await api(lb, "GET", "guilds/me", { token: L2.token });
+      check(
+        mineL2after.data && mineL2after.data.applicants.length === 0,
+        "超过 TTL 后帮主名单里的过期申请消失（看名单时懒清理）",
+        JSON.stringify(mineL2after.data && mineL2after.data.applicants && mineL2after.data.applicants.length),
+      );
+      const p4retry = await api(lb, "POST", `guilds/${g1id}/applications`, { token: P4.token, body: { message: "4" } });
+      checkEqual(p4retry.code, 0, "过期申请不再占配额：P4 现在申请得进来");
+      const reviewExpired = await api(lb, "POST", `guilds/me/applications/${P1.roleId}/review`, { token: L2.token, body: { approve: true } });
+      checkEqual(reviewExpired.code, 50108, "审批一条已过期的申请 = 50108（当作不存在）", reviewExpired.message);
+    } finally {
+      limitServer.child.kill();
+      await sleep(100);
+    }
 
     //#endregion
   } finally {
