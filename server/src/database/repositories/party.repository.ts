@@ -23,6 +23,14 @@ import { PartyMemberRow, PartyMemberWithRoleRow, PartyRow } from "../rows";
 export class PartyRepository {
   constructor(private readonly db: DatabaseService) {}
 
+  /**
+   * 事务透传（#874）：建队的「队伍行 + 成员行」必须同生共死 —— 只包住第一次写，
+   * 成员行撞唯一约束时就会留下「有队零成员」的孤儿队伍（占列表还删不掉）。
+   */
+  transaction<T>(work: () => T): T {
+    return this.db.transaction(work);
+  }
+
   /** 我的队伍（不在队伍里返回 undefined；一次 JOIN 拿全，省得业务层查两次） */
   findPartyOf(roleId: string): PartyRow | undefined {
     return this.db.get<PartyRow>(

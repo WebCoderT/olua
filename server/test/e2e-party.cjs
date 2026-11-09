@@ -16,6 +16,10 @@
  * 十、上限脏值回落（直接 new 服务类验，不起第二台服务）+ 门槛脏值回落
  * 十一、等级门槛（#497）：默认 10 级下，低等级发起 / 邀请低等级目标都拒 50144，
  *      被拒的邀请不送达、够级的照常组队（独立进程 + 默认配置，主进程把门槛压成 1）
+ * 十二、建队事务（#874）：成员行写失败 → 两行一起回滚，不留「有队零成员」的孤儿队伍；
+ *      正常建队两行都在 + 内存索引登记（回归）
+ * 十三、离线接管（#875）：队长掉线满阈值自动移交给在场成员、全队掉线满阈值自动解散
+ *      （独立进程把阈值压到 1.5 秒、扫描压到 200 毫秒）
  *
  * 走的是 `dist/`，所以前置是 `npm run build`。
  * 用法：npm run test:e2e:party
@@ -777,6 +781,149 @@ function snap(snapshot) {
       check(!!paired && paired.members.length === 2, "两个够级的角色照常组队（门槛不误伤）", snap(paired));
     } finally {
       levelServer.child.kill("SIGKILL");
+      await sleep(100);
+    }
+
+    //#endregion
+
+    //#region 十二、建队事务（#874）
+
+    // 真 SQLite（内存库）+ 真仓储：成员行注入失败，验「队伍行跟着回滚」。
+    // 不用假仓储模拟回滚 —— 那只是把我们想验的东西又演一遍；这里走的是真的
+    // BEGIN / COMMIT / ROLLBACK，回滚成立与否由 SQLite 说了算。
+    group("十二、建队事务（#874）：成员行写失败整体回滚，不留孤儿队伍");
+    const { DatabaseSync } = require("node:sqlite");
+    const { DatabaseService } = require(path.join(SERVER_DIR, "dist", "database", "database.service.js"));
+    const { PartyRepository } = require(path.join(SERVER_DIR, "dist", "database", "repositories", "party.repository.js"));
+    const txDb = new DatabaseService({ get: () => undefined });
+    txDb.db = new DatabaseSync(":memory:");
+    txDb.db.exec(`
+      CREATE TABLE roles (id TEXT PRIMARY KEY);
+      CREATE TABLE parties (
+        id             TEXT PRIMARY KEY,
+        leader_role_id TEXT NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
+        created_at     INTEGER NOT NULL
+      );
+      CREATE TABLE party_members (
+        party_id  TEXT NOT NULL REFERENCES parties(id) ON DELETE CASCADE,
+        role_id   TEXT NOT NULL UNIQUE REFERENCES roles(id) ON DELETE CASCADE,
+        joined_at INTEGER NOT NULL,
+        PRIMARY KEY (party_id, role_id)
+      );
+    `);
+    // FK 是 ON 的（与真实库同口径）：队长必须真实存在，「队伍行成功、成员行失败」才成立 ——
+    // 若 insertParty 自己就挂在 FK 上，回滚等于没被验到（假绿）。
+    txDb.db.exec("PRAGMA foreign_keys = ON;");
+    txDb.db.exec("INSERT INTO roles (id) VALUES ('role-1'), ('role-2');");
+    const txRepo = new PartyRepository(txDb);
+    const failingRepo = Object.create(txRepo);
+    failingRepo.insertMember = () => {
+      throw new Error("inject: 成员行写失败");
+    };
+    const failingSvc = new PartyService(failingRepo, {}, { get: () => undefined });
+    failingSvc.locationOf = null;
+    const failedId = failingSvc.createParty("role-1");
+    checkEqual(failedId, "", "成员行写失败 → 建队整体失败（返回空串）");
+    checkEqual(
+      txDb.get("SELECT COUNT(1) AS total FROM parties").total,
+      0,
+      "回滚后没有孤儿队伍（队伍行没留下来）",
+    );
+    checkEqual(txDb.get("SELECT COUNT(1) AS total FROM party_members").total, 0, "成员表也干净");
+
+    const txOkSvc = new PartyService(txRepo, {}, { get: () => undefined });
+    txOkSvc.locationOf = null;
+    const okId = txOkSvc.createParty("role-2");
+    check(okId !== "" && okId.startsWith("p_"), "正常建队返回队伍 id（回归）", okId);
+    checkEqual(txDb.get("SELECT COUNT(1) AS total FROM parties").total, 1, "正常建队队伍行在");
+    checkEqual(txDb.get("SELECT COUNT(1) AS total FROM party_members").total, 1, "正常建队成员行在");
+    checkEqual(txOkSvc.partyIdOfRole("role-2"), okId, "内存索引照常登记（热路径还能查到）");
+
+    //#endregion
+
+    //#region 十三、离线接管（#875）
+
+    // 独立进程把阈值压到 1.5 秒、扫描压到 200 毫秒：真实链路（真断线 → 真扫描 → 真移交/解散）
+    group("十三、离线接管（#875）：队长掉线满阈值自动移交、全队掉线满阈值自动解散");
+    const offlineDbPath = path.join(os.tmpdir(), `olua-e2e-party-offline-${Date.now()}.db`);
+    seedSpawnAreas(offlineDbPath);
+    const offlineServer = await startServer(offlineDbPath, {
+      PARTY_MIN_LEVEL: "1",
+      PARTY_SWEEP_INTERVAL_MS: "200",
+      PARTY_LEADER_OFFLINE_MS: "1500",
+    });
+    try {
+      const offlineBase = offlineServer.baseUrl;
+      const offlineWs = offlineBase.replace("http", "ws");
+
+      // —— A：队长掉线移交 ——
+      const L = await preparePlayer(offlineBase, "party_offline_leader", "离线队长");
+      const M = await preparePlayer(offlineBase, "party_offline_mate", "接任队友");
+      const [tL, tM] = await Promise.all(
+        [L, M].map((player) => api(offlineBase, "POST", "realtime/ticket", { token: player.token })),
+      );
+      const sL = connect(`${offlineWs}/api/realtime?ticket=${encodeURIComponent(tL.data.ticket)}`);
+      const sM = connect(`${offlineWs}/api/realtime?ticket=${encodeURIComponent(tM.data.ticket)}`);
+      await waitFor("两人握手", async () => (sL.welcomes.length > 0 && sM.welcomes.length > 0 ? true : null));
+      sL.send("worldJoin", { mapId: "1" });
+      sL.send("pos", { mapId: "1", x: 100, y: 200, hp: 100, moving: false });
+      sM.send("worldJoin", { mapId: "1" });
+      sM.send("pos", { mapId: "1", x: 140, y: 200, hp: 100, moving: false });
+      await sleep(300);
+      sL.partyAction("invite", M.roleId);
+      await waitInvite(sM, "M 收到邀请（离线组）");
+      const offlinePair = await expectSnapshot(sM, () => sM.partyAction("accept"), "M 入队");
+      check(!!offlinePair && offlinePair.members.length === 2, "组好 2 人队（队长 L、成员 M）", snap(offlinePair));
+
+      sL.socket.close();
+      const takeover = await waitFor("M 收到自动移交后的快照", async () => {
+        const frame = sM.partyFrames.filter((entry) => entry.isLeader && entry.members.length === 2).slice(-1)[0];
+        return frame || null;
+      }, 8000);
+      check(!!takeover && takeover.leaderRoleId === M.roleId, "队长掉线满阈值后，队长自动移交给在场成员", snap(takeover));
+      const leaderEntry = takeover && takeover.members.find((member) => member.roleId === L.roleId);
+      check(!!leaderEntry && leaderEntry.online === false, "掉线的原队长还留在队里（只是标记离线，不是被踢）", leaderEntry && String(leaderEntry.online));
+      check(!!takeover && takeover.members.find((member) => member.roleId === M.roleId && member.leader), "新队长标记正确");
+
+      // —— B：全队掉线解散 ——
+      const X = await preparePlayer(offlineBase, "party_offline_x", "全离甲");
+      const Y = await preparePlayer(offlineBase, "party_offline_y", "全离乙");
+      const [tX, tY] = await Promise.all(
+        [X, Y].map((player) => api(offlineBase, "POST", "realtime/ticket", { token: player.token })),
+      );
+      const sX = connect(`${offlineWs}/api/realtime?ticket=${encodeURIComponent(tX.data.ticket)}`);
+      const sY = connect(`${offlineWs}/api/realtime?ticket=${encodeURIComponent(tY.data.ticket)}`);
+      await waitFor("X/Y 握手", async () => (sX.welcomes.length > 0 && sY.welcomes.length > 0 ? true : null));
+      sX.send("worldJoin", { mapId: "1" });
+      sX.send("pos", { mapId: "1", x: 180, y: 200, hp: 100, moving: false });
+      sY.send("worldJoin", { mapId: "1" });
+      sY.send("pos", { mapId: "1", x: 220, y: 200, hp: 100, moving: false });
+      await sleep(300);
+      sX.partyAction("invite", Y.roleId);
+      await waitInvite(sY, "Y 收到邀请（全离组）");
+      const offlineAll = await expectSnapshot(sY, () => sY.partyAction("accept"), "Y 入队（全离组）");
+      check(!!offlineAll && offlineAll.members.length === 2, "全离组 2 人队就绪", snap(offlineAll));
+
+      sX.socket.close();
+      sY.socket.close();
+      // 阈值 1.5 秒 + 扫描 200 毫秒，放宽到 3 秒再重连
+      await sleep(3000);
+
+      const tY2 = await api(offlineBase, "POST", "realtime/ticket", { token: Y.token });
+      const sY2 = connect(`${offlineWs}/api/realtime?ticket=${encodeURIComponent(tY2.data.ticket)}`);
+      await waitFor("Y 重连握手", async () => (sY2.welcomes.length > 0 ? true : null));
+      sY2.send("worldJoin", { mapId: "1" });
+      const disbanded = await waitFor("Y 重连后收到空队伍快照", async () =>
+        sY2.partyFrames.length > 0 ? sY2.partyFrames[0] : null,
+      );
+      check(
+        !!disbanded && disbanded.partyId === "" && disbanded.members.length === 0,
+        "全队掉线满阈值后队伍被自动解散（回线看到的是「没有队伍」）",
+        snap(disbanded),
+      );
+      sY2.socket.close();
+    } finally {
+      offlineServer.child.kill("SIGKILL");
       await sleep(100);
     }
 
