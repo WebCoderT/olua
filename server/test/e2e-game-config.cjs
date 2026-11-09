@@ -2598,7 +2598,13 @@ async function main() {
     checkEqual(skill1000?.occupation, "1", "普攻归战士（技能栏按 occupation 重建）");
     const skill1001 = roleSkills.body?.data?.list?.find((row) => row.id === "1001");
     checkEqual(skill1001?.pushDistance, skills["1001"].pushDistance, "击退距离 seed 与配置一致");
-    checkEqual(skill1001?.pushDistance, 120, "烈火剑法击退 120 像素（场上唯一能推动怪物的途径）");
+    // 击退距离是运营数据（#826 第二批起出厂把 1001 清 0、1005 配 512）：只锁「字段在、是数字、
+    // 界内」，不锁具体值 —— 真正的撞飞行为在 e2e-push 里用 PATCH 自配验证
+    check(
+      typeof skill1001?.pushDistance === "number" && skill1001.pushDistance >= 0 && skill1001.pushDistance <= 2000,
+      "击退距离字段在快照里且是 0~2000 的数字（不锁运营值）",
+      `实际 ${skill1001?.pushDistance}`,
+    );
     checkEqual(skill1010?.pushDistance, 0, "没配击退的技能是 0（不是「击退 0 像素」）");
 
     const skillKeyword = await api(base, "GET", "/api/admin/skills?keyword=" + encodeURIComponent("逐日"), { token });
