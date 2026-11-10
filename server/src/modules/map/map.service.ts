@@ -249,6 +249,33 @@ export class MapService {
     return this.maps.getById(mapId)?.label ?? mapId;
   }
 
+  /**
+   * 一张图的**可行走几何**（#854：怪物 AI 的移动碰撞与边界钳制要用）
+   *
+   * 返回世界坐标口径的尺寸与碰撞矩形：一张图占 `x ∈ [0, width]`、`y ∈ [-height, 0]`
+   * （左上角原点、y 轴向上，与刷怪区的 `pointInBounds` 同一套约定）；`boxes` 就是
+   * `map_collisions` 的矩形（中心 + 宽高），客户端建静态碰撞体用的是同一批数据。
+   *
+   * **为什么由地图域给**：可行走区是地图的事实，不是 AI 的事实。AI 自己拼一份
+   * 「图多大、墙在哪」，早晚会和客户端那一份对不上（客户端撞不过去的地方，怪能穿过去）。
+   *
+   * 没有几何列（`pixel_width = 0`，导入工具没跑）时返回 `null`：调用方按「不判碰撞」处理，
+   * 与 `sizeOf` 的既有兜底一致 —— 拿 0 当图宽会把所有怪钳到原点。
+   */
+  walkGeometryOf(mapId: string): {
+    width: number;
+    height: number;
+    boxes: Array<{ cx: number; cy: number; w: number; h: number }>;
+  } | null {
+    const row = this.maps.getById(mapId);
+    if (!row || !(row.pixel_width > 0) || !(row.pixel_height > 0)) return null;
+    return {
+      width: row.pixel_width,
+      height: row.pixel_height,
+      boxes: this.collisions.listByMap(mapId).map((box) => ({ cx: box.cx, cy: box.cy, w: box.w, h: box.h })),
+    };
+  }
+
   //#endregion
 
   /**

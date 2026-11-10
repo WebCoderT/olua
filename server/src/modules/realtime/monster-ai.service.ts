@@ -9,30 +9,23 @@ import { StatusRepository } from "../../database/repositories/status.repository"
 import { MonsterRow, SkillRow, StatusRow } from "../../database/rows";
 import { parseCoefficientsJson, parseCombatJson } from "../../common/config-json";
 import { DEFENSE_BY_ATTACK, MONSTER_STAT_COLUMN } from "../../common/constants/game-enums";
+import type { MonsterAiRuntimeParams } from "../../common/constants/runtime-params";
 import { roleAttributeSourceOf, summarizeRoleAttributes } from "../combat/role-attributes";
 import { resolveIncomingDamage } from "../combat/status-combat";
 import { RolesService } from "../roles/roles.service";
 import { WorldService, worldKey, type WorldMonster } from "../world/world.service";
+import { MapService } from "../map/map.service";
+import { PlayerPresenceService } from "./player-presence.service";
 import type { RealtimeDropEntry, RealtimeMonsterAiEntry, RealtimeMonsterCast, RealtimeMonsterHit, RealtimeMonsterKill } from "./realtime.protocol";
 
 /**
  * 怪物 AI 参数（`runtime_params.monster_ai` 列，管理端「运行时参数」页可改）
  *
- * 这一组值决定「怪出手多快、走多快、游走多远」—— 它们是**运营数据**，出厂值在
- * `server/data/config-sync.sql` 里，代码不存第二份。
+ * 形状定义在 `common/constants/runtime-params`（那里是键清单的唯一来源，
+ * 管理端 DTO 也用它）；这一组值是**运营数据**，出厂值在 `server/data/config-sync.sql`，
+ * 代码不存第二份。
  */
-interface MonsterAiParams {
-  attackInterval: number;
-  attackRange: number;
-  /** 施法硬直兜底（毫秒）：技能没配 castLockMs 时用它 */
-  attackActionTime: number;
-  /** 击退时长（毫秒，技能只配距离时用它换算击退速度；#670 从客户端 monsterAI.pushDuration 搬来） */
-  pushDuration: number;
-  idleMoveInterval: [number, number];
-  idleMoveDuration: [number, number];
-  idleMoveSpeedScale: number;
-  wanderRadius: number;
-}
+type MonsterAiParams = MonsterAiRuntimeParams;
 
 /**
  * 表里缺列 / 坏列时的**最小可用**参数
@@ -50,7 +43,43 @@ const FALLBACK_AI: MonsterAiParams = {
   idleMoveDuration: [300, 800],
   idleMoveSpeedScale: 0.5,
   wanderRadius: 60,
+  // 三个默认值与 docs/27 §2.5.1 的表一致：600px 远大于普攻距离（60）又远小于图宽，
+  // 1.5 倍速让「拖着怪遛」不再是稳赚的策略，20 秒是「被墙角卡死」的兜底时长
+  leashRange: 600,
+  returnSpeedRate: 1.5,
+  returnTimeoutMs: 20000,
 };
+
+/**
+ * 到家判定（像素）：离出生点这么近就算回去了
+ *
+ * 取 16 而不是 0：坐标是浮点运算出来的，直线走过去永远差一点点；用 0 会让怪在出生点
+ * 附近来回微调，看起来像抽搐（docs/27 §2.5.1 就是这个数）。
+ */
+const HOME_ARRIVE_PX = 16;
+
+/** 卡住判定：连续这么多帧**一步都没动**（不足 0.01px）才算卡住（单帧抖动不算） */
+const STUCK_FRAMES = 3;
+/** 卡住后换切线的次数上限（每侧 ±60°，两次都失败就停在原地待机） */
+const STUCK_TURNS = 2;
+/** 换切线的角度（弧度，±60°） */
+const DETOUR_ANGLE = Math.PI / 3;
+/** 换切线后按新方向走的帧数（够它绕过矩形的一个角；走完还没进展就再换） */
+const DETOUR_TICKS = 6;
+/** 同一个目标连续出手失败几次之后放弃（#856：计数按目标维度存在**这一只怪**身上） */
+const FAIL_LIMIT = 3;
+
+/**
+ * 冻结多久之后回收运行时（#857）
+ *
+ * 冻结期内存的是「血量之外的战斗状态」（buff 计时、击退游标、索敌目标）—— 十分钟没人
+ * 看过这张图，那些东西已经不再有意义（人都换了一批），而运行时本来就不落盘，
+ * 回收不需要任何持久化动作。**不是**「无人就看就删」：那正是刷血的来源。
+ */
+const FREEZE_RECYCLE_MS = 10 * 60 * 1000;
+
+/** 地图几何缓存的 TTL（#854）：碰撞盒是管理端画的低频数据，5 秒足够跟上改动 */
+const GEOMETRY_CACHE_TTL_MS = 5000;
 
 /** 一只怪的 AI 视觉参数（`monster_presentation` 表的一行，摊平成 AI 用得上的三个字段） */
 interface MonsterAiConfig {
@@ -109,6 +138,34 @@ interface MonsterRuntime {
   target: string | null;
   /** 最后一次打伤过这只怪的账号（被动怪的记恨；主动怪不依赖它） */
   provoked: string | null;
+  /**
+   * 状态机的当前态（#853）
+   *
+   * `return` 是新增的一档：**回家途中不索敌、不接受新威胁**，只朝出生点直线走。
+   * 没有它的话「脱战」只是把 target 置空，怪会停在玩家把它拉到的位置继续游走 ——
+   * 下一个人过来看到的是一只离出生点半张图的怪。
+   */
+  state: "idle" | "chase" | "return";
+  /** 开始回家的时刻（毫秒）；`state !== "return"` 时为 0（判超时吸附用） */
+  returningSince: number;
+  /**
+   * 连续出手失败的次数（账号 → 次数；#856）
+   *
+   * 按**目标维度**存在这一只怪身上，不是全局共享的一张表：某个玩家结算不出来
+   * （下线瞬间 / 已倒下）只该让**这只怪**放弃他，不该让全图的怪一起掉头（旧实现
+   * 是把整张 `positions` 里那个人删掉，全图所有盯他的怪同时脱战）。
+   * 累计到 `FAIL_LIMIT` 就把记恨一并清掉 —— 那是「这个人现在打不了」的结论。
+   */
+  failCounts: Map<string, number>;
+  /** 卡住判定的连续无位移帧数（#854） */
+  stuckFrames: number;
+  /** 本轮卡住已经换过几次切线（0~`STUCK_TURNS`） */
+  stuckTurns: number;
+  /** 换切线后的剩余帧数（> 0 时按 `detourDir` 走，而不是朝目标直线走） */
+  detourTicks: number;
+  /** 换切线方向（单位向量） */
+  detourDirX: number;
+  detourDirY: number;
   /** 下一次可普攻的时刻（毫秒） */
   nextAttackAt: number;
   /** 待机游走的停留点（追击结束从这里重新游走） */
@@ -155,15 +212,8 @@ interface MonsterRuntime {
   sentHp: number;
 }
 
-/** 一个玩家的位置上报（AI 的目标检测输入；移动预测仍在客户端，服务端不做位置的权威） */
-interface PlayerPosition {
-  zoneId: number;
-  mapId: string;
-  x: number;
-  y: number;
-  hp: number;
-  updatedAt: number;
-}
+/** 一张图的可行走几何（`MapService.walkGeometryOf` 的形状；`null` = 不用判碰撞） */
+type WalkGeometry = { width: number; height: number; boxes: Array<{ cx: number; cy: number; w: number; h: number }> };
 
 /** 读一列 JSON 对象（坏数据返回 null，由调用方决定兜底） */
 function parseJsonObject(text: string | undefined): Record<string, unknown> | null {
@@ -327,10 +377,21 @@ export type MonsterAiLogEvent =
  * ===========================================================================
  * 每只**有人看的图**上的存活怪，跑一套与客户端旧 MonsterAI 同口径的状态机：
  * - 目标选择：主动怪常驻发现；被动怪被打伤后记恨打它的人（结算侧 provoke 进来）；
- *   玩家离开检测范围即丢失目标（记恨不清，回来继续被追 —— 与客户端语义一致）；
- *   **出手结算不出来（玩家已经倒下 / 不在线）即当作目标作废**（#670）：清记恨、清位置缓存，
- *   并且这次出手整次不发 —— 包括技能（见 `forgetTarget`）；
- * - 移动：待机游走（停留点 + 随机方向 + 活动半径）与追击（直线趋近，不做寻路），
+ *   **坐标一律读在场表**（`PlayerPresenceService`，#855）—— AI 自己不再存一份原始坐标，
+ *   位置仲裁（#596）不通过的人根本不会出现在候选里；
+ *   **出手结算不出来（玩家已经倒下 / 不在线）即当作目标作废**（#670）：清记恨、
+ *   且这次出手整次不发 —— 包括技能（见 `forgetTarget`）；
+ * - 脱战与回家（#853 / docs/27 E3）：目标距离 > `leashRange`（默认 600px）→ 脱战，
+ *   清目标与记恨（#858），直线走回**出生点**（速度 × `returnSpeedRate`），途中不索敌、
+ *   不接受新威胁；16px 内算到家，恢复待机。回家超过 `returnTimeoutMs`（默认 20 秒）还没走到
+ *   （被地形挡住 / 出生点本身在碰撞盒里）→ 直接吸附到出生点，不许永久卡在半路；
+ * - 移动与碰撞（#854 / docs/27 E4）：直线趋近 + 碰撞滑行（撞墙保留平行分量），
+ *   连续 3 帧一步都没动（不足 0.01px）→ 换切线方向（±60°）重试 2 次，仍不行就停在那里待机；
+ *   门槛不能定成「1px」：出厂 `move_speed` 是个位数，2px/s 的怪每帧只走 0.1px，
+ *   坐标恒钳在 `[0, mapWidth] × [-mapHeight, 0]`；击退也走同一套碰撞（被挡则原地）。
+ *   **不做 A\***：一张图的障碍是十几个矩形，直线 + 滑行已经够用，寻路是另一个量级的东西；
+ * - 无人看就**冻结**（#857）：不推进、不删运行时 —— 删掉等于「反复进出图免费回血回 buff」。
+ *   冻结超过 `FREEZE_RECYCLE_MS` 才回收（运行时本来不落盘，回收不需要持久化）；
  *   速度用快照里每只怪的 `moveSpeed`（像素/秒，与客户端同一数值）；
  * - 出手：进入距离后**先试技能、再普攻**（#372，见下节）；普攻伤害 = 怪物物攻区间随机值
  *   （monsters 表，#258 起读库即时生效）× 攻击倍率 − 玩家物防区间随机值 × 玩家防御倍率，
@@ -358,10 +419,12 @@ export type MonsterAiLogEvent =
  * - **玩家侧状态由 `role_status` 提供，不在本服务里存**（#822）：本服务只调
  *   `RolesService.statusModifiersOf` 拿防御倍率与格挡，状态的施加 / 到期 / 清空都在存档域 ——
  *   人物的状态要跨进程、跨重启活着，放这里会与存档进程各执一份。
+ * - **位置只有一份**（#855）：在场表（`PlayerPresenceService`）是位置与血量的唯一副本，
+ *   本服务只读不存。曾经这里也有一张 `positions`，问题是它存的是**客户端原始坐标** ——
+ *   一份伪造的 `pos` 同时骗过互见与索敌，位置仲裁（#596）等于白做；
  * - **位置不落盘**：坐标的持久真相是出生点（世界服务的既有边界），重启后怪物回出生点
  *   重新游走 —— 几秒钟的表现层状态，不值得为它加一张表；
- * - 玩家位置不权威：客户端节流上报（`pos` 帧），服务端只把它当 AI 输入；
- *   超时没上报的玩家视作离场，怪物丢失目标；
+ * - 超时没上报的玩家视作离场，怪物丢失目标（判据在在场表里，`aiTargetsOn` 已过滤）；
  * - 怪物不消耗魔法值：技能表的 `mpCost` 只对角色生效（怪物没有资源系统）。
  *
  * ===========================================================================
@@ -375,10 +438,12 @@ export type MonsterAiLogEvent =
 export class MonsterAiService implements OnApplicationBootstrap, OnApplicationShutdown {
   private readonly logger = new Logger(MonsterAiService.name);
 
-  /** `zone:mapId` → 该图各怪的 AI 运行时（与世界服务的分域键同构；没人看的图整份清掉） */
+  /** `zone:mapId` → 该图各怪的 AI 运行时（与世界服务的分域键同构；没人看的图**冻结**不删，#857） */
   private readonly runtimes = new Map<string, Map<string, MonsterRuntime>>();
-  /** 账号 → 最近一次位置上报 */
-  private readonly positions = new Map<string, PlayerPosition>();
+  /** `zone:mapId` → 冻结起始时刻（毫秒；#857 回收阈值用） */
+  private readonly frozenAt = new Map<string, number>();
+  /** mapId → 可行走几何（#854；碰撞盒是低频数据，5 秒 TTL） */
+  private readonly geometryCache = new Map<string, { at: number; geo: WalkGeometry | null }>();
   private aiTimer: NodeJS.Timeout | null = null;
   private broadcastTimer: NodeJS.Timeout | null = null;
   /** 本轮 tick 攒下的命中事件（`zone:mapId` → hits），广播时一并发出 */
@@ -436,6 +501,10 @@ export class MonsterAiService implements OnApplicationBootstrap, OnApplicationSh
     private readonly monsterSkillsRepo: MonsterSkillRepository,
     private readonly presentationRepo: MonsterPresentationRepository,
     private readonly runtimeParamsRepo: RuntimeParamsRepository,
+    // #855：位置与血量的唯一副本就是在场表 —— AI 只读它，不再自己存一份原始坐标
+    private readonly presence: PlayerPresenceService,
+    // #854：可行走几何（图多大、墙在哪）属于地图域，AI 不自己拼
+    private readonly maps: MapService,
   ) {}
 
   onApplicationBootstrap(): void {
@@ -451,14 +520,12 @@ export class MonsterAiService implements OnApplicationBootstrap, OnApplicationSh
     this.broadcastTimer = null;
   }
 
-  //#region 输入（通道侧调用）
+  //#region 输入（结算侧调用）
 
-  /**
-   * 记录一次玩家位置上报（不校验图是否加载：上报先到、worldJoin 后到是正常时序）
-   */
-  updatePosition(accountId: string, zoneId: number, mapId: string, x: number, y: number, hp: number): void {
-    this.positions.set(accountId, { zoneId, mapId, x, y, hp, updatedAt: Date.now() });
-  }
+  // 这里**曾经**有 `updatePosition` / `dropAccount` 两个入口（#855 之前 AI 自己存一份
+  // 玩家坐标与血量）。现在位置只在 `PlayerPresenceService` 里有一份：`pos` 帧由通道
+  // 直接喂在场表，断线由通道直接调 `presence.dropAccount` —— AI 侧不再需要任何入口，
+  // 也就不存在「两份坐标谁更新」的问题。
 
   /**
    * 被动怪的记恨（结算侧在玩家打伤怪后调用）：之后这只怪在检测范围内会追击这个玩家
@@ -468,6 +535,14 @@ export class MonsterAiService implements OnApplicationBootstrap, OnApplicationSh
     if (!monster) return;
     const runtime = this.runtimeOf(monster);
     runtime.provoked = accountId;
+    // 又被打了一下 = 重新给一次机会（#856 的失败账本按目标维度清）：
+    // 之前因为「连着几次结算不出来」被跳过的玩家，只要还能打中这只怪就重新进候选
+    runtime.failCounts.delete(accountId);
+    // 记恨意味着刚被打过：它此刻可能正在回家（脱战），得回到战斗态才追得上去
+    if (runtime.state === "return") {
+      runtime.state = "idle";
+      runtime.returningSince = 0;
+    }
   }
 
   /**
@@ -484,8 +559,13 @@ export class MonsterAiService implements OnApplicationBootstrap, OnApplicationSh
     if (!(distance > 0)) return;
     const monster = this.world.find(instanceId);
     if (!monster || !monster.alive) return;
-    const from = this.positions.get(fromAccountId);
-    if (!from) return;
+    // 位置只有一份（#855）：推方向要用「被接受过的」玩家坐标，不能用客户端原始值
+    const from = this.presence.positionOf(fromAccountId);
+    if (!from) {
+      // 在场表里没有他 = 从没报过位置，或已经超时被当离场（客户端正常 4Hz，走不到这里）
+      this.logger.debug(`怪物 ${instanceId} 的击退作废：施法者 ${fromAccountId} 没有可用的在场位置`);
+      return;
+    }
     const runtime = this.runtimeOf(monster);
     const offsetX = runtime.x - from.x;
     const offsetY = runtime.y - from.y;
@@ -517,7 +597,7 @@ export class MonsterAiService implements OnApplicationBootstrap, OnApplicationSh
     for (const map of this.runtimes.values()) {
       const runtime = map.get(instanceId);
       // 它正在追人的话，这一死就是那次追击的结局（日志里否则会留下一条没有结束的追击）
-      if (runtime?.target) this.logChaseEnd(runtime, runtime.target, "怪物被击杀", now, this.positions.get(runtime.target) ?? null);
+      if (runtime?.target) this.logChaseEnd(runtime, runtime.target, "怪物被击杀", now, this.presence.positionOf(runtime.target));
       map.delete(instanceId);
     }
     if (!kill) return;
@@ -527,12 +607,8 @@ export class MonsterAiService implements OnApplicationBootstrap, OnApplicationSh
     this.pendingKills.set(key, list);
   }
 
-  /** 连接断开 / 被踢：位置上报作废（该玩家的目标下轮 tick 自然丢失） */
-  dropAccount(accountId: string): void {
-    this.positions.delete(accountId);
-  }
-
   /**
+
    * 一只怪此刻的模拟坐标（#665 实时地图监控用；没跑过 AI 的怪返回 null）
    *
    * 为什么监控要就地读它：`world_monsters.x/y` 是**出生点**（世界里唯一稳定的真相），
@@ -612,21 +688,20 @@ export class MonsterAiService implements OnApplicationBootstrap, OnApplicationSh
     for (const { zoneId, mapId, monsters } of viewed) {
       const key = worldKey(zoneId, mapId);
       viewedKeys.add(key);
+      // 有人看：解除冻结（#857）。冻结期间什么都没推进，回来直接接着跑
+      this.frozenAt.delete(key);
       let runtimes = this.runtimes.get(key);
       if (!runtimes) {
         runtimes = new Map<string, MonsterRuntime>();
         this.runtimes.set(key, runtimes);
       }
-      // 这张图上「位置新鲜且活着」的玩家（AI 的目标候选）
-      const players: Array<[string, PlayerPosition]> = [];
-      for (const [accountId, position] of this.positions) {
-        if (position.zoneId !== zoneId || position.mapId !== mapId) continue;
-        if (now - position.updatedAt > this.posStaleMs() || position.hp <= 0) continue;
-        players.push([accountId, position]);
-      }
-
+      // 这张图上「位置新鲜且活着」的玩家（AI 的目标候选）—— **只读在场表**（#855）：
+      // 用的是仲裁之后被接受的坐标，伪造的 `pos` 帧在这里已经被挡掉了
+      const players = this.presence.aiTargetsOn(zoneId, mapId);
+      const geometry = this.geometryOf(mapId);
       for (const monster of monsters.values()) {
         if (!monster.alive) {
+          // 死了的怪没有运行时可言（重生回出生点后按新的一轮重新开始）
           runtimes.delete(monster.instanceId);
           continue;
         }
@@ -636,28 +711,42 @@ export class MonsterAiService implements OnApplicationBootstrap, OnApplicationSh
         // 血量抄一份到运行时（#670）：世界层是权威，AI 只读 —— 广播拿它判断「这一拍要不要发」
         runtime.hp = monster.hp;
         runtime.maxHp = monster.maxHp;
-        this.stepMonster(runtime, monster, config, players, now, key);
+        this.stepMonster(runtime, monster, config, players, now, key, geometry);
       }
     }
 
-    // 没人看的分域：AI 运行时整份清掉（重进图时按出生点重建；身上的状态也一并作废）；
-    // 攒着没发出去的击杀事件随分域一起作废（没有观看者 = 没有人需要这场演出）
+    // 没人看的分域：**冻结**，不删（#857）。删掉运行时 = 下次进图按出生点重建，
+    // buff 计时、击退游标、索敌目标全部作废 —— 反复进出图就成了免费回血回 buff。
+    // 冻结够久（`FREEZE_RECYCLE_MS`）才回收：那时图里换了一批人，旧状态已经没有意义。
     for (const key of [...this.runtimes.keys()]) {
-      if (!viewedKeys.has(key)) {
-        this.runtimes.delete(key);
-        this.pendingKills.delete(key);
+      if (viewedKeys.has(key)) continue;
+      const since = this.frozenAt.get(key);
+      if (since === undefined) {
+        this.frozenAt.set(key, now);
+        continue;
       }
+      if (now - since < FREEZE_RECYCLE_MS) continue;
+      this.runtimes.delete(key);
+      this.frozenAt.delete(key);
+      // 没人看的时候攒下的击杀事件没人需要（与冻结回收同一笔账）
+      this.pendingKills.delete(key);
     }
   }
 
-  /** 推进一只怪：先校验/获取目标，再按「有目标技能或普攻 / 没目标待机游走」走一步 */
+  /**
+   * 推进一只怪（#853 起是一个显式状态机：`idle` / `chase` / `return`）
+   *
+   * 每一拍只走其中一条路：
+   * 击退 → 施法硬直 → 回家 → 目标校验 → 脱战判定 → 索敌 → 出手/追击 → 待机游走
+   */
   private stepMonster(
     runtime: MonsterRuntime,
     monster: WorldMonster,
     config: { aggressive: boolean; detectRange: number; moveSpeed: number },
-    players: Array<[string, PlayerPosition]>,
+    players: Array<{ accountId: string; x: number; y: number; hp: number; at: number }>,
     now: number,
     mapKey: string,
+    geometry: WalkGeometry | null,
   ): void {
     // 击退优先于一切（#670）：期间只按击退方向位移，目标 / 技能 / 硬直都往后放 ——
     // 被推着的怪继续放技能会看起来像「飘着打人」，而且落点会与施法者的预期错开。
@@ -671,8 +760,10 @@ export class MonsterAiService implements OnApplicationBootstrap, OnApplicationSh
       const advanceMs = upto - runtime.pushedUntil;
       if (advanceMs > 0) {
         const step = (runtime.pushSpeed * advanceMs) / 1000;
-        runtime.x += runtime.pushDirX * step;
-        runtime.y += runtime.pushDirY * step;
+        // 击退也走碰撞（#854 / docs/27 E4）：被墙挡住就**原地不动**，不滑行 ——
+        // 滑行会让「被推开」看起来像「自己绕开了」，而且推的方向是施法者决定的，
+        // 怪没有资格替那一下选一条路。窗口照旧推进（这一下作废，不在墙前反复试）
+        this.pushPoint(runtime, runtime.pushDirX * step, runtime.pushDirY * step, geometry);
         runtime.movingNow = true;
         runtime.pushedUntil = upto;
         if (runtime.pushedUntil >= runtime.pushEndAt) return; // 击退走完，本拍到此为止
@@ -687,41 +778,67 @@ export class MonsterAiService implements OnApplicationBootstrap, OnApplicationSh
       return;
     }
 
-    // 目标校验：上报超时 / 换图 / 死亡都算丢失（记恨不清，与客户端旧语义一致）
+    // 回家（#853 E3）：脱战之后只朝出生点直线走，**不索敌、不接受新威胁**。
+    // 放在目标校验之前 —— 这一段本来就没有目标可言，走完就结束这一拍
+    if (runtime.state === "return") {
+      this.returnHome(runtime, monster, config, now, geometry);
+      return;
+    }
+
+    // 目标校验：上报超时 / 换图 / 死亡都算丢失，**记恨也一并清掉**（#858）——
+    // 「玩家跑开就永久记恨」等于被动怪锁死第一个打它的人，别人再也拉不走
     if (runtime.target) {
-      const position = this.positions.get(runtime.target);
-      const fresh = position && position.hp > 0 && Date.now() - position.updatedAt <= this.posStaleMs();
+      const position = this.presence.positionOf(runtime.target);
+      const fresh = !!position && position.hp > 0 && now - position.at <= this.posStaleMs();
       if (!fresh) {
-        // 结束追击要能解释「为什么」：这四种成因在页面上是完全不同的故事
-        const reason = !position
-          ? "目标离线"
-          : position.hp <= 0
+        // 结束追击要能解释「为什么」：这四种成因在页面上是完全不同的故事。
+        // 在场表按超时删条目（#855 之后它是唯一副本），所以「没有位置」有两种可能：
+        // 人真离线了，还是只是这一阵没上报 —— 用在线存档区分，别把掉线的人说成超时
+        const reason = position
+          ? position.hp <= 0
             ? "目标倒下"
             : position.zoneId !== runtime.zoneId || position.mapId !== runtime.mapId
               ? "目标换图"
-              : "位置上报超时";
-        this.logChaseEnd(runtime, runtime.target, reason, now, position ?? null);
-        runtime.target = null;
+              : "位置上报超时"
+          : this.roles.online(runtime.target)
+            ? "位置上报超时"
+            : "目标离线";
+        this.endChase(runtime, runtime.target, reason, now, position);
+      }
+    }
+
+    // 脱战（#853 E3）：目标还在，但已经被拉出牵引半径 —— 放弃并回家。
+    // 判据放在出手之前：600px 外的目标连远程技能都不该摸到。
+    if (runtime.target) {
+      const target = this.presence.positionOf(runtime.target);
+      if (target) {
+        const leash = Math.hypot(target.x - runtime.x, target.y - runtime.y);
+        if (leash > this.ai.leashRange) {
+          this.endChase(runtime, runtime.target, `超出牵引范围（${this.ai.leashRange}px）`, now, target);
+        }
       }
     }
     // 目标获取：主动怪发现检测范围内最近玩家；被动怪只认记恨的那个人
     if (!runtime.target) {
       let best: string | null = null;
       let bestDistance = Infinity;
-      for (const [accountId, position] of players) {
-        if (!config.aggressive && runtime.provoked !== accountId) continue;
-        const distance = Math.hypot(position.x - runtime.x, position.y - runtime.y);
+      for (const player of players) {
+        if (!config.aggressive && runtime.provoked !== player.accountId) continue;
+        // 出手连着失败过的人不再选（#856）：计数按「这只怪 + 这个人」存，
+        // 别的怪爱追他是别人的事
+        if ((runtime.failCounts.get(player.accountId) ?? 0) >= FAIL_LIMIT) continue;
+        const distance = Math.hypot(player.x - runtime.x, player.y - runtime.y);
         if (distance <= config.detectRange && distance < bestDistance) {
-          best = accountId;
+          best = player.accountId;
           bestDistance = distance;
         }
       }
       if (best) {
         runtime.target = best;
-        // 进入追击：停留点定在当前位置，待机游走计时归零（与客户端 followAnchor 同语义）
-        runtime.anchorX = runtime.x;
-        runtime.anchorY = runtime.y;
+        runtime.state = "chase";
+        // 待机游走计时归零：追赶期间不再按停留点乱晃
         runtime.idleMoveEndAt = 0;
+        runtime.detourTicks = 0;
         this.emitLog({
           type: "chase",
           at: now,
@@ -741,18 +858,24 @@ export class MonsterAiService implements OnApplicationBootstrap, OnApplicationSh
     }
 
     if (runtime.target) {
-      const position = this.positions.get(runtime.target);
+      const position = this.presence.positionOf(runtime.target);
       if (!position) return;
       const distance = Math.hypot(position.x - runtime.x, position.y - runtime.y);
       // 技能优先（#372）：进入战斗才有意义 —— 没有敌人时给自己上 buff 没有价值
       if (this.tryCast(runtime, monster, distance, now, mapKey)) return;
+      // 技能尝试里可能已经把目标作废了（结算不出来 → `forgetTarget`）：这一拍的追击与普攻
+      // 都跟着作废，否则会拿一个 null 目标去结算（`attack` 的入参是 string）
+      const chasing = runtime.target;
+      if (!chasing) return;
       if (distance <= this.ai.attackRange) {
         // 站定出手：按普攻间隔结算一次
         runtime.movingNow = false;
         if (now >= runtime.nextAttackAt) {
           runtime.nextAttackAt = now + this.ai.attackInterval;
-          const hit = this.attack(monster, runtime.target);
+          const hit = this.attack(monster, chasing);
           if (hit) {
+            // 打得动：这一个目标的失败账本清零
+            runtime.failCounts.delete(chasing);
             this.pushHit(mapKey, hit);
             // 普攻命中：一行「谁被打了多少」（技能命中走 cast，别在这里重复记两条）
             this.emitLog({
@@ -764,20 +887,19 @@ export class MonsterAiService implements OnApplicationBootstrap, OnApplicationSh
               monsterKey: runtime.monsterKey,
               x: runtime.x,
               y: runtime.y,
-              accountId: runtime.target,
+              accountId: chasing,
               damage: hit.damage,
               hp: hit.hp,
               maxHp: hit.maxHp,
             });
-          } else this.forgetTarget(runtime.target);
+          } else {
+            this.forgetTarget(runtime, chasing, now, this.presence.positionOf(chasing));
+          }
         }
         return;
       }
-      // 追击：直线趋近（不做寻路，与客户端旧口径一致）
-      const step = Math.min(distance, (config.moveSpeed * this.tickMs()) / 1000);
-      runtime.x += ((position.x - runtime.x) / distance) * step;
-      runtime.y += ((position.y - runtime.y) / distance) * step;
-      runtime.movingNow = true;
+      // 追击：直线趋近 + 碰撞滑行（#854，不做寻路）
+      this.stepToward(runtime, position.x, position.y, config.moveSpeed, geometry, now);
       return;
     }
 
@@ -797,16 +919,248 @@ export class MonsterAiService implements OnApplicationBootstrap, OnApplicationSh
         runtime.idleMoveDirectionX = Math.cos(angle);
         runtime.idleMoveDirectionY = Math.sin(angle);
       }
+      // 新的游走方向 = 新的一次机会：上一轮卡住的账本清零
+      runtime.stuckFrames = 0;
+      runtime.stuckTurns = 0;
+      runtime.detourTicks = 0;
     }
     if (runtime.idleMoveEndAt > now) {
       const speed = config.moveSpeed * this.ai.idleMoveSpeedScale;
-      runtime.x += runtime.idleMoveDirectionX * ((speed * this.tickMs()) / 1000);
-      runtime.y += runtime.idleMoveDirectionY * ((speed * this.tickMs()) / 1000);
-      runtime.movingNow = true;
+      this.stepAlong(runtime, runtime.idleMoveDirectionX, runtime.idleMoveDirectionY, (speed * this.tickMs()) / 1000, geometry, now);
     } else {
       runtime.movingNow = false;
     }
   }
+
+  /**
+   * 回家（#853 E3）
+   *
+   * 到达判定用 `HOME_ARRIVE_PX`；超时（`returnTimeoutMs`，默认 20 秒）还没到就**吸附**到出生点 ——
+   * 被地形挡住、或者出生点本身就落在碰撞盒里（运营画刷怪区时没对齐）都会让直线回家永远走不到，
+   * 不吸附的话这只怪会永久卡在半路，既不打人也不回巢。
+   */
+  private returnHome(
+    runtime: MonsterRuntime,
+    monster: WorldMonster,
+    config: { moveSpeed: number },
+    now: number,
+    geometry: WalkGeometry | null,
+  ): void {
+    if (runtime.returningSince > 0 && now - runtime.returningSince > this.ai.returnTimeoutMs) {
+      runtime.x = monster.x;
+      runtime.y = monster.y;
+      this.arriveHome(runtime, monster, now);
+      return;
+    }
+    if (Math.hypot(monster.x - runtime.x, monster.y - runtime.y) <= HOME_ARRIVE_PX) {
+      this.arriveHome(runtime, monster, now);
+      return;
+    }
+    this.stepToward(runtime, monster.x, monster.y, config.moveSpeed * this.ai.returnSpeedRate, geometry, now);
+  }
+
+  /** 到家：回到待机（停留点重新锚在出生点，游走计时重掷） */
+  private arriveHome(runtime: MonsterRuntime, monster: WorldMonster, now: number): void {
+    runtime.state = "idle";
+    runtime.returningSince = 0;
+    runtime.anchorX = monster.x;
+    runtime.anchorY = monster.y;
+    runtime.idleMoveEndAt = 0;
+    runtime.nextIdleMoveAt = now + randomBetween(this.ai.idleMoveInterval);
+    runtime.movingNow = false;
+    runtime.stuckFrames = 0;
+    runtime.stuckTurns = 0;
+    runtime.detourTicks = 0;
+  }
+
+  //#endregion
+
+  //#region 移动与碰撞（#854 / docs/27 E4）
+
+  /**
+   * 朝一个点走一步（追击 / 回家共用）
+   *
+   * 到点了就只把移动标记放下 —— 距离为 0 时除以它会得到 NaN，那是能让整只怪从图上消失的写法。
+   */
+  private stepToward(
+    runtime: MonsterRuntime,
+    targetX: number,
+    targetY: number,
+    speed: number,
+    geometry: WalkGeometry | null,
+    now: number,
+  ): void {
+    const offsetX = targetX - runtime.x;
+    const offsetY = targetY - runtime.y;
+    const distance = Math.hypot(offsetX, offsetY);
+    if (distance <= 0.01) {
+      runtime.movingNow = false;
+      return;
+    }
+    // 一步不跨过目标点（否则会在目标两侧来回跳）
+    const step = Math.min(distance, Math.max(0, (speed * this.tickMs()) / 1000));
+    this.stepAlong(runtime, offsetX / distance, offsetY / distance, step, geometry, now);
+  }
+
+  /**
+   * 沿一个单位方向走 `step` 像素，并做卡住判定
+   *
+   * 卡住判定的口径是**实际位移**（不是「想走的距离」）：贴着墙走的时候想走的距离永远正常，
+   * 实际位移才是 0。连续 `STUCK_FRAMES` 帧一步都没动 → 换切线 ±60° 试 `DETOUR_TICKS` 帧，
+   * 两次都不行就停在这里待机（`docs/27` E4：不许抽搐，也不许原地空转烧 CPU）。
+   * 「没动」的门槛是浮点误差级（0.01px），不是 1px —— 见下面那行注释。
+   */
+  private stepAlong(
+    runtime: MonsterRuntime,
+    dirX: number,
+    dirY: number,
+    step: number,
+    geometry: WalkGeometry | null,
+    now: number,
+  ): void {
+    // 卡住后正在走切线：方向换成切线方向，帧数走完自动放掉
+    const detouring = runtime.detourTicks > 0;
+    const useX = detouring ? runtime.detourDirX : dirX;
+    const useY = detouring ? runtime.detourDirY : dirY;
+    if (detouring) runtime.detourTicks -= 1;
+
+    const moved = this.slideMove(runtime, useX * step, useY * step, geometry);
+    // 「动了」的绝对下限只能是浮点误差级（0.01px），**不能拿 1px 当门槛**：
+    // 出厂 `monster_presentation.move_speed` 是个位数（2px/s 的怪每帧只走 0.1px），
+    // 1px 的绝对门槛会把所有慢速怪都判成「卡住」—— 它们既不报 moving（客户端不播走路），
+    // 还会在 3 帧后开始无意义地拐弯。真正被墙挡住的怪 `slideMove` 返回的是 0。
+    if (moved >= 0.01) {
+      runtime.movingNow = true;
+      runtime.stuckFrames = 0;
+      if (!detouring) runtime.stuckTurns = 0;
+      return;
+    }
+    runtime.movingNow = false;
+    // 切线还没走完就先不计数：换方向之后的头几帧本来就可能是原地打转
+    if (detouring) return;
+    runtime.stuckFrames += 1;
+    if (runtime.stuckFrames < STUCK_FRAMES) return;
+    runtime.stuckFrames = 0;
+    if (runtime.stuckTurns >= STUCK_TURNS) {
+      // 两条切线都不通：停在这里待机，等下一轮 idle 计时换个方向
+      runtime.idleMoveEndAt = 0;
+      runtime.nextIdleMoveAt = now + randomBetween(this.ai.idleMoveInterval);
+      runtime.stuckTurns = 0;
+      return;
+    }
+    // 换切线：第一次 +60°，第二次 −60°（左右各试一次，只往一边拐会一直贴着同一面墙）
+    runtime.stuckTurns += 1;
+    const signed = runtime.stuckTurns % 2 === 1 ? DETOUR_ANGLE : -DETOUR_ANGLE;
+    const cos = Math.cos(signed);
+    const sin = Math.sin(signed);
+    runtime.detourDirX = dirX * cos - dirY * sin;
+    runtime.detourDirY = dirX * sin + dirY * cos;
+    runtime.detourTicks = DETOUR_TICKS;
+  }
+
+  /**
+   * 一次带碰撞的位移（#854）
+   *
+   * @returns 实际位移（像素）
+   *
+   * 三档退让：整步走得通就走；撞墙则拆成两个分量各试一次（走通的那个照走 = **滑行**，
+   * 撞墙保留平行分量）；都不通就原地不动，交给卡住判定换切线。
+   *
+   * 为什么是滑行而不是「撞了就停」：撞停会让怪卡在墙角抽搐，滑行看起来像「贴着墙追」——
+   * CPU 最省、观感最不难看的做法（docs/27 E4）。**不做 A\***：一张图十几个矩形，
+   * 直线 + 滑行已经够用。
+   *
+   * 最后一律钳进图内（`clampToMap`）：墙画在图外，被击退出图之后世界坐标里没有「图外」，
+   * 客户端也不会渲染 —— 不钳就是永久消失。
+   */
+  private slideMove(runtime: MonsterRuntime, dx: number, dy: number, geometry: WalkGeometry | null): number {
+    if (geometry === null) {
+      // 没有几何（导入工具没跑）：不判碰撞也不钳边界，退回「直接改坐标」的老行为
+      runtime.x += dx;
+      runtime.y += dy;
+      return Math.hypot(dx, dy);
+    }
+    const fromX = runtime.x;
+    const fromY = runtime.y;
+    if (!this.blockedIn(runtime.x + dx, runtime.y + dy, geometry)) {
+      runtime.x += dx;
+      runtime.y += dy;
+    } else {
+      // 先试位移更大的那个分量（它是「主方向」），再试另一个
+      const order: Array<[number, number]> = Math.abs(dx) >= Math.abs(dy)
+        ? [[dx, 0], [0, dy]]
+        : [[0, dy], [dx, 0]];
+      let slid = false;
+      for (const [stepX, stepY] of order) {
+        if (stepX === 0 && stepY === 0) continue;
+        if (this.blockedIn(runtime.x + stepX, runtime.y + stepY, geometry)) continue;
+        runtime.x += stepX;
+        runtime.y += stepY;
+        slid = true;
+        break;
+      }
+      if (!slid) return 0;
+    }
+    this.clampToMap(runtime, geometry);
+    // 钳完还在盒里（外墙就画在图边）→ 这一小步等于撞进墙，整步作废。
+    // 单帧位移只有 0.1~6px，退回原地不会让「贴墙走」变成抽搐
+    if (this.blockedIn(runtime.x, runtime.y, geometry)) {
+      runtime.x = fromX;
+      runtime.y = fromY;
+      return 0;
+    }
+    return Math.hypot(runtime.x - fromX, runtime.y - fromY);
+  }
+
+  /**
+   * 击退位移（#854）：被挡就**原地不动**，不做滑行
+   *
+   * 「被挡」包括「被地图边界挡住」：先钳再判 —— 外墙通常就画在图边（`cx = 0, w = 128`），
+   * 钳到 `x = 0` 的落点正好在墙里，直接落上去等于被撞进墙。钳完还在盒里就整次作废。
+   */
+  private pushPoint(runtime: MonsterRuntime, dx: number, dy: number, geometry: WalkGeometry | null): void {
+    if (geometry === null) {
+      runtime.x += dx;
+      runtime.y += dy;
+      return;
+    }
+    const targetX = Math.min(geometry.width, Math.max(0, runtime.x + dx));
+    const targetY = Math.min(0, Math.max(-geometry.height, runtime.y + dy));
+    if (this.blockedIn(targetX, targetY, geometry)) return;
+    runtime.x = targetX;
+    runtime.y = targetY;
+  }
+
+  /** 这个点在不在某个碰撞矩形里（`map_collisions` 的矩形：中心 + 宽高） */
+  private blockedIn(x: number, y: number, geometry: WalkGeometry): boolean {
+    for (const box of geometry.boxes) {
+      if (Math.abs(x - box.cx) <= box.w / 2 && Math.abs(y - box.cy) <= box.h / 2) return true;
+    }
+    return false;
+  }
+
+  /** 钳进图内：`x ∈ [0, width]`、`y ∈ [-height, 0]`（左上角原点、y 轴向上） */
+  private clampToMap(runtime: MonsterRuntime, geometry: WalkGeometry): void {
+    runtime.x = Math.min(geometry.width, Math.max(0, runtime.x));
+    runtime.y = Math.min(0, Math.max(-geometry.height, runtime.y));
+  }
+
+  /** 一张图的可行走几何（5 秒 TTL；读库失败按「不判碰撞」处理，不中断 AI） */
+  private geometryOf(mapId: string): WalkGeometry | null {
+    const now = Date.now();
+    const cached = this.geometryCache.get(mapId);
+    if (cached && now - cached.at < GEOMETRY_CACHE_TTL_MS) return cached.geo;
+    let geo: WalkGeometry | null = null;
+    try {
+      geo = this.maps.walkGeometryOf(mapId);
+    } catch (error) {
+      this.logger.warn(`读取地图 ${mapId} 的可行走几何失败（本轮不判碰撞）：${error instanceof Error ? error.message : String(error)}`);
+    }
+    this.geometryCache.set(mapId, { at: now, geo });
+    return geo;
+  }
+
+  //#endregion
 
   //#endregion
 
@@ -854,7 +1208,8 @@ export class MonsterAiService implements OnApplicationBootstrap, OnApplicationSh
       if (!runtime.target) return false;
       hit = this.attack(monster, runtime.target, plan.rate, plan.baseType);
       if (!hit) {
-        this.forgetTarget(runtime.target);
+        const target = runtime.target;
+        this.forgetTarget(runtime, target, now, this.presence.positionOf(target));
         return false;
       }
     }
@@ -935,9 +1290,9 @@ export class MonsterAiService implements OnApplicationBootstrap, OnApplicationSh
     const damage = resolved.damage;
     const applied = this.roles.applyMonsterHit(accountId, damage);
     if (!applied) return null;
-    // 位置缓存里的血量同步（下轮目标校验用它，不再多打一次库）
-    const position = this.positions.get(accountId);
-    if (position) position.hp = applied.hp;
+    // 权威血量回填到在场表（#855）：AI 与互见帧都只读那一份 —— 不写的话，
+    // 打到 0 血之后还要等客户端下一帧上报，中间几拍会继续对着尸体出手（#670 复发）
+    this.presence.markHp(accountId, applied.hp);
     return {
       instanceId: monster.instanceId,
       accountId,
@@ -955,29 +1310,59 @@ export class MonsterAiService implements OnApplicationBootstrap, OnApplicationSh
   }
 
   /**
-   * 丢掉一个已经打不了的目标（#670 的根因就在这里）
+   * 丢一个「已经打不了」的目标（#670 的根因；#856 收窄到这一只怪）
    *
    * `RolesService.applyMonsterHit` 在**玩家已经倒下**或**不在线**时返回 null，而 AI 原来只把
    * 它当「这一下落空」：记恨不清、下一拍继续放技能，客户端于是看见一只怪对着尸体连放技能
    * （服务端返回 null，AI 不知道）。
    *
-   * 两件事一起做，缺一条都还会复发：
-   * - 清掉所有怪身上指向他的目标（同一具尸体常被几只怪同时盯着，一处发现就全图清）；
-   * - 删掉位置缓存。目标检测读的是 `positions` 里的 hp，而「我已死亡」这条信息不会经上报
-   *   反向传播（客户端死后照旧上报位置）—— 不删的话下一轮 tick 又把这具尸体选成目标。
-   *   删掉是安全的：活着的玩家 250ms 内会重新上报一条（客户端 `pos` 帧），死人不该再被选。
+   * 旧实现把「全图所有盯着他的怪」一起清了，还顺手删掉位置缓存 —— 于是一个玩家的单点结算
+   * 失败会让**整张图的怪同时掉头**（玩家看到的是集体脱战）。现在只清**这只怪**这一条目标，
+   * 并在它自己身上记一次失败；别的怪各自在真的打不动时才发现。
+   *
+   * 位置不再需要「删缓存」：在场表里血量会被 `markHp` 同步成权威值（0），`aiTargetsOn`
+   * 直接把尸体过滤掉，不会又被选回来（#855）。
    */
-  private forgetTarget(accountId: string): void {
-    this.positions.delete(accountId);
-    const now = Date.now();
-    for (const runtimes of this.runtimes.values()) {
-      for (const runtime of runtimes.values()) {
-        if (runtime.target !== accountId) continue;
-        // 每个被清掉的目标都是一次「结束追击」，日志里要能对上它当初那次「开始」（#745）
-        this.logChaseEnd(runtime, accountId, "目标倒下或不在线（出手结算不出来）", now, null);
-        runtime.target = null;
-      }
+  private forgetTarget(
+    runtime: MonsterRuntime,
+    accountId: string,
+    now: number,
+    position: { x: number; y: number } | null,
+  ): void {
+    const fails = (runtime.failCounts.get(accountId) ?? 0) + 1;
+    runtime.failCounts.set(accountId, fails);
+    if (fails >= FAIL_LIMIT && runtime.provoked === accountId) {
+      // 连着几次都结算不出来 = 这个人现在真打不了：连记恨一起放下，
+      // 否则被动怪会一直盯着一个打不动的目标（#858 的另一半）
+      runtime.provoked = null;
     }
+    this.endChase(runtime, accountId, "目标倒下或不在线（出手结算不出来）", now, position);
+  }
+
+  /**
+   * 结束一次追击（#853 / #858 的唯一收口）
+   *
+   * 三件事必须一起做，缺一条就复发：
+   * - 清目标（不然下一拍继续对着他已经打不了一帧）；
+   * - 清记恨（#858：`provoked` 原来只写不清，被动怪永久锁死第一个打它的人）；
+   * - 转「回家」（#853：只清目标的话，怪会停在玩家把它拉到的位置继续游走，
+   *   下一个人过来看到的是一只离出生点半张图的怪）。
+   */
+  private endChase(
+    runtime: MonsterRuntime,
+    accountId: string,
+    reason: string,
+    now: number,
+    position: { x: number; y: number } | null,
+  ): void {
+    this.logChaseEnd(runtime, accountId, reason, now, position);
+    runtime.target = null;
+    runtime.provoked = null;
+    runtime.state = "return";
+    runtime.returningSince = now;
+    runtime.detourTicks = 0;
+    runtime.stuckFrames = 0;
+    runtime.stuckTurns = 0;
   }
 
   //#endregion
@@ -1147,6 +1532,9 @@ export class MonsterAiService implements OnApplicationBootstrap, OnApplicationSh
       idleMoveDuration: rangeOr(parsed?.idleMoveDuration, FALLBACK_AI.idleMoveDuration),
       idleMoveSpeedScale: positiveOr(parsed?.idleMoveSpeedScale, FALLBACK_AI.idleMoveSpeedScale),
       wanderRadius: positiveOr(parsed?.wanderRadius, FALLBACK_AI.wanderRadius),
+      leashRange: positiveOr(parsed?.leashRange, FALLBACK_AI.leashRange),
+      returnSpeedRate: positiveOr(parsed?.returnSpeedRate, FALLBACK_AI.returnSpeedRate),
+      returnTimeoutMs: positiveOr(parsed?.returnTimeoutMs, FALLBACK_AI.returnTimeoutMs),
     };
     // 判据是「这一列里没有这个键」，不是「算出来的值等于兜底值」—— 出厂值本来就等于兜底
     // （攻击间隔 2000 / 攻击距离 60 / 漫游速度倍率 0.5），拿值相等当判据会让每次启动都喊缺参数，
@@ -1187,6 +1575,14 @@ export class MonsterAiService implements OnApplicationBootstrap, OnApplicationSh
       y: monster.y,
       target: null,
       provoked: null,
+      state: "idle",
+      returningSince: 0,
+      failCounts: new Map<string, number>(),
+      stuckFrames: 0,
+      stuckTurns: 0,
+      detourTicks: 0,
+      detourDirX: 0,
+      detourDirY: 0,
       nextAttackAt: 0,
       anchorX: monster.x,
       anchorY: monster.y,

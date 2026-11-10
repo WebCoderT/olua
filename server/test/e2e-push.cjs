@@ -292,8 +292,21 @@ function connect(url) {
     if (!pushTarget || !fragile) throw new Error("靶子没播种，后面没法测");
 
     // 玩家位置报到撞飞靶旁边（5px < 1000 的施法距离 10，距离闸放行；applyPush 也靠它取方向）
-    session.sendPos(PUSH_TARGET.x + 5, PUSH_TARGET.y, 1_000_000);
-    await sleep(300);
+    // **站在怪的 −x 侧**：击退的方向是「施法者 → 怪」，站右边就会一路往左推 —— 而左边 400px
+    // 外就是图边（外墙 `cx = 0, w = 128`），#854 起击退走碰撞、被墙挡住原地不动，
+    // 那几刀就再也推不出位移了。站左边往右推，走廊 y = −400 一路到 x = 3000 都是空的
+    let playerPos = { x: PUSH_TARGET.x - 5, y: PUSH_TARGET.y };
+    const stand = async (x, y) => {
+      playerPos = { x, y };
+      // 连发三帧：位置仲裁按速度上限拒「瞬移」帧，但**连续两帧超速就信任并重置基线**
+      // （#861 / `POS_TRUST_STREAK`）。只发一帧的话人还站在上一处，区域技能的作用点
+      // 就会跟着错位（本套踩过：`1009` 一发命中 0 只）
+      for (let index = 0; index < 3; index += 1) {
+        session.sendPos(x, y, 1_000_000);
+        await sleep(120);
+      }
+    };
+    await stand(playerPos.x, playerPos.y);
 
     const patchSkill = async (skillId, body) => {
       const result = await api(baseUrl, "PATCH", `admin/skills/${skillId}`, { token: adminToken, body });
@@ -306,6 +319,10 @@ function connect(url) {
       const results = [];
       while (results.length < count) {
         await paceCast();
+        // 出手前补一帧位置：在场表 3 秒收不到 `pos` 就把人当离场删掉（#861 的口径），
+        // 而 `applyPush` 的推方向**只认在场表**（#855）—— 不补的话第二刀起就静默不推了。
+        // 真实客户端 4Hz 上报，走不到这个缺口；测试的 `paceCast` 比它慢得多
+        session.sendPos(playerPos.x, playerPos.y, 1_000_000);
         const castId = session.fire({ skillId: SKILL, targetId: target.instanceId, monsterKey: target.monsterKey });
         const settle = await session.settleOf(castId);
         if (settle && settle.ok) {
@@ -313,6 +330,7 @@ function connect(url) {
           continue;
         }
         await sleep(600);
+        session.sendPos(playerPos.x, playerPos.y, 1_000_000);
         const retryId = session.fire({ skillId: SKILL, targetId: target.instanceId, monsterKey: target.monsterKey });
         const retry = await session.settleOf(retryId);
         if (retry && retry.ok) results.push(retry);
@@ -396,8 +414,8 @@ function connect(url) {
       5_000,
     );
     if (afterPush && beforePos) {
-      // 方向 = 施法者 → 怪（玩家在怪的 +x 侧，推走 = x 更小）。不锁具体位移量
-      check(afterPush.entry.x < beforePos.x, "怪真的被推走且方向背离施法者", `移动 ${Math.round(afterPush.moved)}px，x ${Math.round(beforePos.x)} → ${Math.round(afterPush.entry.x)}`);
+      // 方向 = 施法者 → 怪（玩家在怪的 −x 侧，推走 = x 更大）。不锁具体位移量
+      check(afterPush.entry.x > beforePos.x, "怪真的被推走且方向背离施法者", `移动 ${Math.round(afterPush.moved)}px，x ${Math.round(beforePos.x)} → ${Math.round(afterPush.entry.x)}`);
     }
     //#endregion
 
@@ -406,8 +424,7 @@ function connect(url) {
 
     // 脆怪在 (200,-400)，距玩家 205px > 1000 的施法距离 10 —— 距离闸会拒；
     // 先把玩家位置挪到脆怪旁边
-    session.sendPos(FRAGILE.x + 5, FRAGILE.y, 1_000_000);
-    await sleep(300);
+    await stand(FRAGILE.x + 5, FRAGILE.y);
     // 1 级角色的伤害区间跨 hp=10（实测 8~20+）：多打几刀直到打死，锁的是「击杀帧的行为」
     // 而不是「第几刀打死」—— 不与数值曲线耦合
     let killFrame = null;
@@ -423,8 +440,7 @@ function connect(url) {
     group("四、1009 半月弯刀：target_type 改区域后，一发命中半径内多只怪");
 
     // 玩家挪到群体靶中心：区 B 两只怪都在 320 半径内
-    session.sendPos(GROUP_CENTER.x, GROUP_CENTER.y, 1_000_000);
-    await sleep(300);
+    await stand(GROUP_CENTER.x, GROUP_CENTER.y);
     const areaCastId = session.fire({ skillId: AREA_SKILL });
     const areaSettle = await session.settleOf(areaCastId);
     check(!!(areaSettle && areaSettle.ok), "区域 cast（不带 targetId / monsterKey）结算成功", areaSettle && areaSettle.message);

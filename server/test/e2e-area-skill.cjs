@@ -457,8 +457,18 @@ async function standAt(session, mapId, point) {
     // 所以这里不能再去断 `rejected === "cross_map"` —— 那正好是「洞在上游被堵住」的证据。
     const worldsBeforeForge = session.worlds.length;
     await standAt(session, KILL_MAP, { x: 0, y: 0 });
+    // 在场表 3 秒收不到**有效** pos 就把条目当离场删掉（伪造帧不刷新 `updatedAt`，
+    // 那正是 #861 的要点），而这条用例前后两个 `paceAoe` 加起来已经够 3 秒 ——
+    // 不补一帧有效位置，`areaSpotOf` 拿到的是 null，断到的就成了「人超时离场」而不是
+    // 「伪造帧被丢弃」。补的这一帧回的是原来的坐标，作用点没被挪动
+    session.sendPos(HIT_MAP, center.x, center.y);
+    await sleep(80);
     await paceAoe();
-    const crossCastId = session.fire({ skillId: AOE_SKILL, targetId: "", monsterKey: "", x: 0, y: 0 });
+    // 落点报「中心 +400」（会被夹到 +200，与上面「报远」那一段同一落点）：这一段要断的是
+    // **作用点的地图**有没有被伪造帧搬走，不是「报 (0,0) 还能不能打到人」——
+    // 报 (0,0) 会把作用点整体挪到另一个方向，靶子可能一只都不在半径内，
+    // 断到的就成了「没打到」而不是「打到了图 1 的怪」
+    const crossCastId = session.fire({ skillId: AOE_SKILL, targetId: "", monsterKey: "", x: center.x + 400, y: center.y });
     const cross = await session.settleOf(crossCastId);
     check(
       !!cross && cross.ok === true && cross.rejected === undefined,

@@ -434,7 +434,6 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
         this.combat.dropAccount(identity.id);
         this.presence.dropAccount(identity.id);
         this.world.leave(identity.id);
-        this.monsterAi.dropAccount(identity.id);
         this.chat.dropAccount(identity.id);
         // 离线不保留 buff（#822 / docs/22 §5）：状态会改结算（防御倍率 / 格挡），
         // 挂在离线角色身上等于「回来白拿 buff」。断线即清，重连后要重新放 ——
@@ -621,7 +620,8 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
       const position = parsePosition(parsed.data);
       if (!position) return;
       const zoneId = this.accounts.findById(socket.identity.id)?.zone_id ?? 1;
-      this.monsterAi.updatePosition(socket.identity.id, zoneId, position.mapId, position.x, position.y, position.hp);
+      // 只喂在场表（#855）：它仲裁之后的那份坐标就是 AI 索敌与互见广播的唯一来源，
+      // 以前这里还同时喂怪物 AI 一份原始坐标 —— 一份伪造的 pos 骗两边，仲裁形同虚设
       this.presence.updatePosition(
         socket.identity.id,
         socket.identity.username,
@@ -901,7 +901,6 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
       this.combat.dropAccount(accountId);
       this.presence.dropAccount(accountId);
       this.world.leave(accountId);
-      this.monsterAi.dropAccount(accountId);
       this.chat.dropAccount(accountId);
       this.roles.clearStatusesOf(accountId);
     }

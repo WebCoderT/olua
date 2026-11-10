@@ -5,7 +5,7 @@ import { ApiDataResponse } from "../../common/decorators/api-data-response.decor
 import { AuditTarget } from "../../common/decorators/audit-target.decorator";
 import { Permission } from "../../common/constants/permission";
 import { RuntimeParamsService } from "./runtime-params.service";
-import { RuntimeParamsDto, UpdateRuntimeParamsDto } from "./dto/runtime-params.dto";
+import { MonsterAiParamsDto, RuntimeParamsDto, UpdateMonsterAiParamsDto, UpdateRuntimeParamsDto } from "./dto/runtime-params.dto";
 
 /**
  * 管理端 · 客户端运行时参数（#605）
@@ -56,5 +56,38 @@ export class AdminRuntimeParamsController {
   @ApiDataResponse(RuntimeParamsDto, { description: "更新后的生效值" })
   update(@Body() dto: UpdateRuntimeParamsDto): RuntimeParamsDto {
     return this.runtimeParamsService.update(dto);
+  }
+
+  @Get("monster-ai")
+  @ApiAdminDoc({
+    operationId: "adminRuntimeParams.getMonsterAi",
+    summary: "怪物 AI 参数",
+    description:
+      "怪物 AI 的手感参数（`runtime_params.monster_ai` 列）。**单独一条接口**，不并进上面那三组：\n\n" +
+      "- 这三组会随配置快照下发客户端，AI 参数不下发（客户端一字节都用不上）；\n" +
+      "- 这一组是纯服务端消费 —— 攻速 / 距离 / 游走 / 脱战牵引 / 回家速度，改完 AI 在 1 秒内生效。\n\n" +
+      "缺键时 AI 用最小可用值兜住并在服务端 warn，不会让本接口失败。",
+    permissions: [Permission.GAME_CONFIG_READ],
+  })
+  @ApiDataResponse(MonsterAiParamsDto, { description: "当前生效值" })
+  getMonsterAi(): MonsterAiParamsDto {
+    return this.runtimeParamsService.monsterAi() as unknown as MonsterAiParamsDto;
+  }
+
+  @Patch("monster-ai")
+  @AuditTarget("runtimeParams")
+  @ApiAdminDoc({
+    operationId: "adminRuntimeParams.updateMonsterAi",
+    summary: "编辑怪物 AI 参数",
+    description:
+      "**部分更新**：只提交改动过的字段，没提交的保持原值。\n\n" +
+      "跨字段约束由服务端判（违反 → 40000）：两组区间要满足最小 ≤ 最大；" +
+      "`leashRange` 必须大于 `attackRange`（否则怪刚看见玩家就脱战）。\n\n" +
+      "生效时机：怪物 AI 每 tick 读一次（1 秒 TTL），保存后 1 秒内生效，**不需要重启、也不需要玩家重进**。",
+    permissions: [Permission.GAME_CONFIG_WRITE],
+  })
+  @ApiDataResponse(MonsterAiParamsDto, { description: "更新后的生效值" })
+  updateMonsterAi(@Body() dto: UpdateMonsterAiParamsDto): MonsterAiParamsDto {
+    return this.runtimeParamsService.updateMonsterAi(dto) as unknown as MonsterAiParamsDto;
   }
 }

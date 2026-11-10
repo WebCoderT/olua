@@ -120,10 +120,12 @@ import {
   AutoBattleParamsDto,
   DropRuntimeParamsDto,
   GuildRuleParamsDto,
+  MonsterAiParamsDto,
   RuntimeParamsDto,
   UpdateAutoBattleParamsDto,
   UpdateDropRuntimeParamsDto,
   UpdateGuildRuleParamsDto,
+  UpdateMonsterAiParamsDto,
   UpdateRuntimeParamsDto,
 } from "../modules/game-config/dto/runtime-params.dto";
 import {
@@ -375,6 +377,9 @@ export const SWAGGER_MODELS = [
   UpdateDropRuntimeParamsDto,
   UpdateAutoBattleParamsDto,
   UpdateGuildRuleParamsDto,
+  // 怪物 AI 参数（#853 / #854：单独一组、单独两条接口，不下发客户端）
+  MonsterAiParamsDto,
+  UpdateMonsterAiParamsDto,
   // 战斗力权重（#605）
   CombatWeightsDto,
   CombatWeightsResponseDto,

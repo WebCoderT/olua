@@ -612,8 +612,18 @@ e2e 写法（`test/e2e-map-monitor.cjs` 的「二·五」段）：想稳定看�
 **#670 的本体（「怪对着尸体放技能」）根因与修法**：`applyMonsterHit` 在玩家已倒下 / 不在线时
 返回 `null`，而 AI 只把它当「这一下落空」→ `runtime.target` 不清、位置缓存里那条 hp>0 的记录
 不删 → 下一拍又把尸体选成目标。修法不是去读血量缓存，而是**认结算结果**：
-`forgetTarget(accountId)` 删位置记录 + 清掉所有怪身上指向该账号的 `target`；`castSkill()` 改成
-**先结算再落账**（伤害型拿不到 hit → 不记冷却、不进硬直、不发 `casts`，返回 `false`）。
+`castSkill()` 改成**先结算再落账**（伤害型拿不到 hit → 不记冷却、不进硬直、不发 `casts`，返回 `false`），
+拿不到 hit 时走 `endChase()`（清 target + 清记恨 + 转回家）。#856 起失败只记在
+「这只怪 + 这个人」这一对身上（`failCounts`，累计 3 次才在索敌时跳过），**不再牵连全图**。
+
+**e2e 写法**（`server/test/e2e-monster-ai.cjs`）：用 `pickPointInArea(cx, cy, 0, 0)` 把怪钉在
+中心点，位置才可复现；量距离前先等**停稳**（连续两拍位移 < 0.5px）—— 广播 100ms 一拍、
+击退 200ms，急着量只会量到推了一半的帧。死者场景用「客户端持续上报 hp=100 假装活着」把
+「AI 不读客户端血量、只认结算结果」这个前提钉死，**命中帧必须按 `hit.accountId` 过滤** ——
+`hits` 是全图广播的，不过滤会把「同图另一个人被打死」当成本次用例的死。
+
+**出厂 `move_speed` 是占位值**：`monster_presentation.move_speed` 大批是 2（2px/s）。凡是要「看它走过来」
+的用例（脱战、追击、撞墙）都得先用管理端 / 直接改库把它调到 100+，否则 600px 的牵引半径一辈子走不出去。
 
 **击退也在服务端**：结算侧（`CombatSettlementService` 非击杀分支）读技能行的 `pushDistance`
 调 `applyPush()`，方向 = 施法者 → 怪，时长取 `runtime_params.monster_ai.pushDuration`，
@@ -623,10 +633,30 @@ e2e 写法（`test/e2e-map-monitor.cjs` 的「二·五」段）：想稳定看�
 （`damageCoefficients / castLockMs / pushDistance`），写 `skill.push_distance` 拿到 `undefined`
 → 击退静默失效、不报错。加技能字段的顺序：`SkillSource` 补列 → 缓存里映射成驼峰 → 消费方读驼峰。
 
-**e2e 写法**（`server/test/e2e-monster-ai.cjs`）：用 `pickPointInArea(cx, cy, 0, 0)` 把怪钉在
-中心点，位置才可复现；量距离前先等**停稳**（连续两拍位移 < 0.5px）—— 广播 100ms 一拍、
-击退 200ms，急着量只会量到推了一半的帧。死者场景用「客户端持续上报 hp=100 假装活着」把
-「AI 不读客户端血量、只认结算结果」这个前提钉死。
+### 四之十三补、脱战 / 碰撞 / 位置源（#853~#858）：六条一起改的东西
+
+这六条是同一个函数（`stepMonster`）里的六个决定，动一条先看另外五条 ——
+`e2e-monster-ai`（38 条）就是它们的共同出口。
+
+| 决定 | 现状 | 别退回 |
+|---|---|---|
+| 位置源 | **只有 `PlayerPresenceService` 一份**；AI 用 `presence.aiTargetsOn()` 拿候选，`attack()` 打中后 `markHp()` 把权威血量写回（**不刷 `updatedAt`**） | AI 自存 `positions`：「一份 `pos` 骗两边」+ 打完还要等客户端下一帧才知道人死了（#855 / #670） |
+| 状态机 | `runtime.state = idle \| chase \| return`；`endChase()` 是脱战的**唯一**收口（清 target + 清 `provoked` + 转 return） | 只清 target：怪会停在玩家把它拉到的位置继续游走，看起来像原地抽搐；`provoked` 不清则脱战后一有目标就立刻回来（#858） |
+| 判序 | 击退 → 施法硬直 → 回家 → 目标校验 → **牵引半径** → 索敌 → 出手 / 追击 → 待机 | 牵引判定放到出手之后 = 「不追但远程照打」 |
+| 回家 | 独立一档；`returnTimeoutMs`（20s）到点**吸附**回出生点 | 超时不吸附：出生点在碰撞盒里 / 被地形挡住时这只怪永久卡在半路 |
+| 移动 | `slideMove` 三档（整步 → 拆分量滑行 → 原地）+ `clampToMap`；击退走 `pushPoint`（被挡原地，不滑行）；卡住换 ±60° 切线 | 直接改坐标 = 穿墙、被击退出图（#854） |
+| 冻结 | 没人看只记 `frozenAt`，10 分钟（= `worldMapIdleMs`）后才回收运行时 | 当场删 = 反复进出图免费回血回出生点（#857） |
+
+**「卡住」的门槛是 0.01px，不是 1px** —— 这是实现时踩到的坑，务必别再改回去：
+出厂 `monster_presentation.move_speed` 大批是 2（2px/s），每帧只走 0.1px，1px 的绝对门槛会把
+**所有慢速怪**判成卡住（既不报 `moving`，客户端不播走路动画，又 3 帧后开始无意义拐弯）。
+症状是 `e2e-combat` 的「追击中的位置增量」「收到移动中的位置增量」「怪物朝玩家方向移动」三条一起红，
+而 `e2e-monster-ai` 全绿（那一套为了量位置把速度调到了 120+）。
+
+**参数**：`leashRange` / `returnSpeedRate` / `returnTimeoutMs` 在 `runtime_params.monster_ai`，
+走**另外两条**接口 `GET|PATCH /admin/runtime-params/monster-ai`。**别并进 `RuntimeParamsDto`** ——
+那是客户端快照 `runtimeParams` 段的形状，加一段要同步 DTO / `snapshot()` / 客户端 `game-config` /
+`configs-sandbox` / `audit-snapshot-contract` 五处，而 AI 参数纯服务端消费、客户端一处都不读。
 
 ### 四之十四、商城限购与库存（#846）：配置只记额度，运行数另存两张表
 

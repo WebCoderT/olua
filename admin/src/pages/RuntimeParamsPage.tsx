@@ -1,6 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { formatTime, PERMISSION, runtimeParamsApi } from "../api";
-import type { RuntimeParams, UpdateAutoBattleParams, UpdateDropRuntimeParams, UpdateGuildRuleParams } from "../api";
+import type {
+  MonsterAiParams,
+  RuntimeParams,
+  UpdateAutoBattleParams,
+  UpdateDropRuntimeParams,
+  UpdateGuildRuleParams,
+  UpdateMonsterAiParams,
+} from "../api";
 import { Button, Card, Field, Input, Select, Spinner } from "../components/ui";
 import { PageHeader } from "../components/PageHeader";
 import { hasPermission } from "../store/session";
@@ -33,6 +40,10 @@ export function RuntimeParamsPage() {
   const [draft, setDraft] = useState<Draft | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<GroupKey | null>(null);
+  // 怪物 AI 那一组走**另一条接口**（不下发客户端），草稿与保存状态也就分开一份。
+  // 不单独存「生效值」：这一页只需要草稿，保存后回读的结果直接转成新草稿
+  const [aiDraft, setAiDraft] = useState<Record<string, string> | null>(null);
+  const [aiSaving, setAiSaving] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -40,6 +51,8 @@ export function RuntimeParamsPage() {
       const row = await runtimeParamsApi.get();
       setParams(row);
       setDraft(toDraft(row));
+      const ai = await runtimeParamsApi.getMonsterAi();
+      setAiDraft(toAiDraft(ai));
     } catch {
       /* 错误已由请求层统一提示 */
     } finally {
@@ -82,6 +95,29 @@ export function RuntimeParamsPage() {
     const max = Number(draft.guild.nameMax);
     return Number.isFinite(min) && Number.isFinite(max) && min > max;
   }, [draft]);
+
+  const setAiField = (key: string, value: string) => {
+    setAiDraft((current) => (current ? { ...current, [key]: value } : current));
+  };
+
+  const aiInvalid = useMemo(() => (aiDraft ? aiProblemOf(aiDraft) : null), [aiDraft]);
+
+  const saveAi = async () => {
+    if (!aiDraft) return;
+    const payload = buildAiPayload(aiDraft);
+    if (!payload) return;
+    setAiSaving(true);
+    try {
+      const row = await runtimeParamsApi.updateMonsterAi(payload);
+      setAiDraft(toAiDraft(row));
+      // 这一组不走快照，AI 每 tick 读库（1 秒 TTL）—— 保存即生效，不用等玩家重进
+      toastSuccess("怪物 AI 参数已保存（1 秒内生效，不需要玩家重进）");
+    } catch {
+      /* 错误已由请求层统一提示 */
+    } finally {
+      setAiSaving(false);
+    }
+  };
 
   return (
     <div className="flex flex-col gap-4">
@@ -201,6 +237,42 @@ export function RuntimeParamsPage() {
           </div>
         ) : null}
       </Card>
+
+      <Card
+        title="怪物 AI 与脱战"
+        actions={
+          loading ? (
+            <Spinner />
+          ) : canWrite ? (
+            <Button disabled={!aiDraft || aiSaving || aiInvalid !== null} loading={aiSaving} onClick={() => void saveAi()}>
+              保存怪物 AI 参数
+            </Button>
+          ) : null
+        }
+        description={
+          canWrite
+            ? "这一组是**服务端**在跑的手感：怪多久打一下、追多远就放弃、放弃之后多快走回出生点。保存后 1 秒内生效（AI 每 tick 读一次库），不需要重启也不需要玩家重进。"
+            : "当前角色没有「修改养成配置」权限，本页只读。"
+        }
+      >
+        {aiDraft ? (
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {AI_FIELDS.map((field) => (
+              <Field key={field.key} label={field.label} hint={field.hint}>
+                <Input
+                  type="number"
+                  min={0}
+                  step={field.step ?? 1}
+                  value={aiDraft[field.key] ?? ""}
+                  disabled={!canWrite}
+                  onChange={(event) => setAiField(field.key, event.target.value)}
+                />
+              </Field>
+            ))}
+            {aiInvalid ? <p className="text-xs text-amber-400 sm:col-span-2 lg:col-span-4">{aiInvalid}</p> : null}
+          </div>
+        ) : null}
+      </Card>
     </div>
   );
 }
@@ -249,6 +321,28 @@ const GUILD_FIELDS: FieldSpec[] = [
   { key: "applicationMessageMax", label: "申请留言最长（字）", hint: "0 = 不限" },
 ];
 
+/**
+ * 怪物 AI 的字段（`runtime_params.monster_ai`，#853 / #854）
+ *
+ * 两组区间在库里是 `[最小, 最大]` 数组，页面上拆成两个输入框（`idleMoveIntervalMin` /
+ * `idleMoveIntervalMax`），草稿是平的字符串表 —— 与另外三组共用同一个编辑器。
+ */
+const AI_FIELDS: Array<FieldSpec & { step?: number }> = [
+  { key: "attackInterval", label: "普攻间隔（毫秒）", hint: "两次普攻之间至少隔这么久" },
+  { key: "attackRange", label: "普攻距离（像素）", hint: "进入这个距离才站定出手" },
+  { key: "attackActionTime", label: "施法硬直兜底（毫秒）", hint: "技能没配 cast_lock_ms 时用它" },
+  { key: "pushDuration", label: "击退时长（毫秒）", hint: "技能只配距离时用它换算击退速度" },
+  { key: "idleMoveIntervalMin", label: "游走间隔最小（毫秒）", hint: "待机时两次走动之间至少隔多久" },
+  { key: "idleMoveIntervalMax", label: "游走间隔最大（毫秒）", hint: "必须 ≥ 最小" },
+  { key: "idleMoveDurationMin", label: "单次游走时长最小（毫秒）", hint: "一次待机游走走多久" },
+  { key: "idleMoveDurationMax", label: "单次游走时长最大（毫秒）", hint: "必须 ≥ 最小" },
+  { key: "idleMoveSpeedScale", label: "游走速度倍率", hint: "乘在怪物自身 moveSpeed 上（0.5 = 半速晃）", step: 0.1 },
+  { key: "wanderRadius", label: "游走半径（像素）", hint: "围绕出生点，走出半径就往回走" },
+  { key: "leashRange", label: "牵引半径（像素）", hint: "目标跑出这个距离就脱战回家；必须大于普攻距离", step: 10 },
+  { key: "returnSpeedRate", label: "回家速度倍率", hint: "比追击快，免得被玩家拖着遛", step: 0.1 },
+  { key: "returnTimeoutMs", label: "回家超时（毫秒）", hint: "到点还没走回出生点就直接吸附回去", step: 1000 },
+];
+
 //#endregion
 
 //#region 草稿 ↔ 生效值
@@ -289,7 +383,6 @@ function toDraft(row: RuntimeParams): Draft {
 
 /**
  * 草稿 → 一个分组的提交体
- *
  * **逐字段显式列**而不是 `Object.fromEntries`：拼错一个键会被服务端的白名单静默剥掉，
  * 结果就是「保存成功但没生效」—— 那是最难查的一类问题。显式列出来，拼错在类型层就红。
  * 任何一个字段不是数字就整组不提交（返回 null，按钮本来就是 disabled 状态）。
@@ -379,6 +472,64 @@ function buildPayload(
       teleportSnapRadius,
       dashSnapRadius,
     },
+  };
+}
+
+//#endregion
+
+//#region 怪物 AI 草稿（另一条接口，字段拆开存）
+
+/** 生效值 → 草稿（两组区间拆成 最小 / 最大 两个输入框） */
+function toAiDraft(row: MonsterAiParams): Record<string, string> {
+  return {
+    attackInterval: String(row.attackInterval),
+    attackRange: String(row.attackRange),
+    attackActionTime: String(row.attackActionTime),
+    pushDuration: String(row.pushDuration),
+    idleMoveIntervalMin: String(row.idleMoveInterval?.[0] ?? ""),
+    idleMoveIntervalMax: String(row.idleMoveInterval?.[1] ?? ""),
+    idleMoveDurationMin: String(row.idleMoveDuration?.[0] ?? ""),
+    idleMoveDurationMax: String(row.idleMoveDuration?.[1] ?? ""),
+    idleMoveSpeedScale: String(row.idleMoveSpeedScale),
+    wanderRadius: String(row.wanderRadius),
+    leashRange: String(row.leashRange),
+    returnSpeedRate: String(row.returnSpeedRate),
+    returnTimeoutMs: String(row.returnTimeoutMs),
+  };
+}
+
+/**
+ * 草稿里的跨字段问题（没有返回 null）
+ *
+ * 与另外三组同一分工：单字段上下限由服务端 DTO 校验，这里只挡「保存了必然 40000」的组合，
+ * 让运营在点按钮之前就看到哪里不对。服务端仍然会再判一次 —— 页面只是提前反馈。
+ */
+function aiProblemOf(values: Record<string, string>): string | null {
+  const num = (key: string): number => Number(values[key]);
+  const keys = AI_FIELDS.map((field) => field.key);
+  const missing = keys.filter((key) => values[key] === undefined || values[key].trim() === "" || !Number.isFinite(num(key)));
+  if (missing.length > 0) return `还有 ${missing.length} 个字段没填或不是数字，填完再保存。`;
+  if (num("idleMoveIntervalMin") > num("idleMoveIntervalMax")) return "游走间隔的最小值不能大于最大值。";
+  if (num("idleMoveDurationMin") > num("idleMoveDurationMax")) return "单次游走时长的最小值不能大于最大值。";
+  if (num("leashRange") <= num("attackRange")) return "牵引半径必须大于普攻距离，否则怪刚看见人就脱战。";
+  return null;
+}
+
+/** 草稿 → 提交体（逐字段显式列，拼错在类型层就红；有一处不合法就整组不提交） */
+function buildAiPayload(values: Record<string, string>): UpdateMonsterAiParams | null {
+  if (aiProblemOf(values) !== null) return null;
+  return {
+    attackInterval: Number(values.attackInterval),
+    attackRange: Number(values.attackRange),
+    attackActionTime: Number(values.attackActionTime),
+    pushDuration: Number(values.pushDuration),
+    idleMoveInterval: [Number(values.idleMoveIntervalMin), Number(values.idleMoveIntervalMax)],
+    idleMoveDuration: [Number(values.idleMoveDurationMin), Number(values.idleMoveDurationMax)],
+    idleMoveSpeedScale: Number(values.idleMoveSpeedScale),
+    wanderRadius: Number(values.wanderRadius),
+    leashRange: Number(values.leashRange),
+    returnSpeedRate: Number(values.returnSpeedRate),
+    returnTimeoutMs: Number(values.returnTimeoutMs),
   };
 }
 
