@@ -59,7 +59,13 @@
   `SkillManager.tryCast` 同口径）；区域 / 群体由**服务端**算命中集合（落点夹到 `skills.distance` 内 ＝ 半径，
   最近 `AOE_MAX_TARGETS = 8` 只，每只独立掷骰），回执带 `hits[]`，空系数 = `noDamage`（1008 位移）。
   奖励逐只、掉落账本按一次施放合并（客户端 `dropIndexBase` 累计下标）。`max_targets` 还没进表（常量 + 重开条件见 docs/07 §2.1）。
-- **离线发奖缺口**：`grantQuestRewards` 首行 `onlineRoleOrThrow` → 离线发不进去；要补 `grantByRoleId`（32/31 篇的共同前置）。
+- **离线发奖 ✅ 已补**（#867）：`RolesService.grantByRoleId(roleId, rewards)` —— 发奖主体抽成私有 `applyRewards(existing, consume, rewards, source)`，
+  两条入口只差「怎么拿到角色行」（在线 `onlineRoleOrThrow` / 离线 `findById`）；**`accountId` 从行上取（`account_id`），不信入参**。
+  `grantQuestRewards` 签名与行为不变。排行赛结算（31 篇）可以直接用。
+- **邮件过期两条腿必须成对**（#867）：`GameMailAutoClaimService`（到期前 3 天、**主人离线**、有奖励 → 入包成功才 `auto_claimed_at`）
+  + `purgeExpired`（只删「已领 / 三样都没有」）。**单改清理判据＝把行永久留在库里**，玩家依旧看不到。
+  失败计数 `auto_attempts` **写在事务外**（回滚会抹掉）；跨进程互斥靠 `markClaimed` 的 `WHERE claimed_at IS NULL`，不靠内存锁。
+  保质期三态：不传 = 30 天 · `0` = 永久（运营补发显式传）· `> 0` = 指定。
 - **配置版本链（#881/#882/#883）三条硬口径**：① 写配置 +1 的判据是**权限点 `gameConfig:write`**
   （71 个写接口散在 4 个模块，按路径列清单必漏，漏了＝「改了但客户端永远 304」且无日志）；
   ② 304 必须 `@Res()` 非 passthrough 自己 `status().end()`（passthrough 返回 null 会被适配器
@@ -85,9 +91,8 @@
 - 资源发布：`make resources-manifest/pack/upload VERSION=x`；清单先合 master 再传 Release。
 
 ## 进度
-- 已落地与 open 项的完整清单 → `memory/topics/进度年表.md`（448 条，按日）。
-- 当前 open（截至 2026-11-10）：**#867 邮件过期自动入包**（口径已定：过期不删、自动入包；前置离线落库
-  `grantByRoleId`）· #669 刷怪区即时生效 · #9 包体积 · #12~#19 素材 · #295 阶段三 · #403 帮会战 · #742 站点 TLS ·
+- 已落地与 open 项的完整清单 → `memory/topics/进度年表.md`（449 条，按日）。
+- 当前 open（截至 2026-11-10）：#669 刷怪区即时生效 · #9 包体积 · #12~#19 素材 · #295 阶段三 · #403 帮会战 · #742 站点 TLS ·
   **#826 已落两批**（暴击+破防 PR #906；撞飞三道闸 + 1009 群体化 + desc 删数值 PR #908；余：眩晕/麻痹/灼烧/两段连击/拉人/等级压制 sup）·
   掉落表未按新装备重算（`EQUIP_LEVEL_GAP` / `MAX_TIER_PER_SLOT`）· 本地库有未导出运营改动，`make config-check` 常红。
   阶段三功能批已收：#822 状态技能 ✅ · #823 物法分离 ✅ · #825 装备汇总自防 ✅（PR #901）· **#824 自身/区域/群体技能 ✅**（PR #902 + #903，合入 `57a0ce2e`）· **#827 幂等账 TTL ✅**（PR #904，合入 `4b5fa551`）；（#826 第一二批已收，见上；desc 数值已删）· #905 ✅（PR #907，合入 `3df1f93f`：格挡是减半不是免伤，站桩等帧要逐轮补血）。
@@ -106,6 +111,11 @@
   （`hasUnclaimedReward()` 一处判据）· #868 先标已发 + 同事务（`markClaimed` 命中 0 行 = 闸门，
   兼 API/实时两进程互斥）· #869 未领角标只数有奖励的（公告不贡献红点）· #870 一键领取逐封容错 + `failures[]`
   （客户端三态提示）。**#867 过期自动入包仍未做**（见下）。
+- **#867 过期前自动入包 ✅（2026-11-10，PR #919 合入 `0833e9d4`）**：issue 原文「带未领物品的过期邮件永不删」
+  实测**是取舍不是 bug**（真洞在另一半：`attachments='[]'` 的纯金币/经验邮件未领就被物理删）。
+  落地＝离线发奖 `grantByRoleId` + `GameMailAutoClaimService`（每小时 / 到期前 3 天 / 只对离线 / 逐封事务）
+  + `purgeExpired` 判据扩到「三样都没有」+ 保质期三态（不传 30 天 / `0` 永久 / `>0` 指定）。
+  新 e2e `e2e-mail-auto-claim` 32 条（总数 56 → **57 套**），`e2e-mail-expiry` 17 条。三条反证见 docs/37 B49。
 - **`db.transaction()` 现在可重入**（#868 连带）：已在事务里就并入外层，不再发第二个 `BEGIN`。
   起因：`EventLogService.recordMany` 行数 > 1 时自己包一层事务，且它「写失败只 warn」——
   于是「发奖事务里记流水」静默丢数据（`event_logs` 一行没有，主流程照样成功；审计查不出来，
