@@ -324,8 +324,8 @@ function connect(url) {
     group("二、暴击：crit_rate 必爆时伤害整体翻倍（靶子零防）");
 
     await patchSkill({ critRate: 0, critDamage: 0 });
-    const plain = await strike(clean, 6);
-    checkEqual(plain.length, 6, "非暴击基线六刀都结算成功");
+    const plain = await strike(clean, 8);
+    checkEqual(plain.length, 8, "非暴击基线八刀都结算成功");
     check(
       plain.every((settle) => settle.critical === undefined),
       "没配暴击时回执不带 critical 字段",
@@ -335,8 +335,8 @@ function connect(url) {
     const plainMax = Math.max(...plain.map((settle) => settle.damage));
 
     await patchSkill({ critRate: 1, critDamage: 2 });
-    const burst = await strike(clean, 6);
-    checkEqual(burst.length, 6, "必爆六刀都结算成功");
+    const burst = await strike(clean, 8);
+    checkEqual(burst.length, 8, "必爆八刀都结算成功");
     check(
       burst.every((settle) => settle.critical === true),
       "crit_rate = 1 时每一刀都带 critical: true",
@@ -349,12 +349,18 @@ function connect(url) {
       `暴击 ${burstMin}..${Math.max(...burst.map((s) => s.damage))} vs 非暴击 ${plainMin}..${plainMax}`,
     );
     const burstMax = Math.max(...burst.map((settle) => settle.damage));
-    // 两次采样来自不同掷骰，不能拿「这一次的最小值」去比「那一次的最小值 × 2」；
-    // 要看的是**倍率语义**：暴击伤害除以 2 必须落回非暴击那一档（取整误差 ±1）
+    // 两次采样来自不同掷骰：拿「这一次的最小值」去比「那一次的最小值 × 2」等于在比运气 ——
+    // 攻击伤害是 [attackMin, attackMax] 上均匀掷的，6 刀很容易漏掉区间底端（CI 上真的红过：
+    // 非暴击 17..19、暴击 28..36，28 ÷ 2 = 14 落在 17 之外，差的恰恰是「没掷到 14」）。
+    // 改比**均值**：均匀掷骰的均值收敛得快（8 刀误差约 ±0.5），±10% 的带宽到能抓住
+    // 「倍率配错（1.5 / 3）」与「根本没乘」，又窄不到被运气绊倒。
+    const plainMean = plain.reduce((sum, settle) => sum + settle.damage, 0) / plain.length;
+    const burstMean = burst.reduce((sum, settle) => sum + settle.damage, 0) / burst.length;
     check(
-      burstMin / 2 >= plainMin - 2.5 && burstMax / 2 <= plainMax + 2.5,
-      "暴击伤害正好是基础伤害的 2 倍（÷2 落回非暴击区间，取整误差 ±1）",
-      `暴击 ${burstMin}..${burstMax} ÷2 = ${burstMin / 2}..${burstMax / 2} vs 非暴击 ${plainMin}..${plainMax}`,
+      Math.abs(burstMean / 2 - plainMean) <= plainMean * 0.1,
+      "暴击伤害的均值是基础伤害的 2 倍（±10%：比均值不比极值，两次采样不同掷骰）",
+      `暴击均值 ${burstMean.toFixed(2)} ÷2 = ${(burstMean / 2).toFixed(2)} vs 非暴击均值 ${plainMean.toFixed(2)}` +
+        `；极值 暴击 ${burstMin}..${burstMax} vs 非暴击 ${plainMin}..${plainMax}`,
     );
     //#endregion
 
