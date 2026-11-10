@@ -130,6 +130,25 @@ export class AuthService {
     return AccountDto.from(account);
   }
 
+  /**
+   * 登出（#880 / I5）：把 `token_version` 推一格，**这台设备与其他设备上的令牌一起作废**
+   *
+   * 令牌是无状态的，服务端没有一张「有效令牌表」可以删 —— 能吊销它的唯一手段就是
+   * 让守卫手里的版本号对不上（`AuthGuard` 每次请求都回查库比对 `ver`）。
+   * 所以「只登出这一台设备」这种语义在没有会话表之前做不到，也不该假装能做到：
+   * 想要多设备共存，得先有会话表（暂时放置，重开条件：真的出现「一台设备登出、
+   * 另一台还该活着」的需求时，改成按会话 id 吊销）。
+   *
+   * 不清在线角色标记：那是「在游戏里」的状态，由心跳与在线清算管（#547）；
+   * 登出只回答「这个令牌还能不能用」。玩家下次登录会拿到新令牌（版本号已是新的）。
+   *
+   * 幂等：重复登出不报错（客户端可能在 401 之后又补一次）。
+   */
+  logout(accountId: string): null {
+    this.accounts.bumpTokenVersion(accountId);
+    return null;
+  }
+
   /** 签发令牌 + 组装返回体 */
   private issue(account: AccountRow): AuthTokenDto {
     const dto = new AuthTokenDto();

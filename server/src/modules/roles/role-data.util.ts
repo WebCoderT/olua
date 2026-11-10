@@ -240,13 +240,31 @@ export function applyBagCells(currentBag: unknown, cells: BagCellInput[]): Array
  * 服务端不复制那套配置（复制必然漂移）。服务端只保证：
  * 1. 结构是个对象；2. 索引字段（id / 名称 / 职业 / 性别 / 等级）合法；3. 归属与数量上限。
  * 于是游戏侧改配置（加装备、调初始金币…）不必同步改服务端。
+ *
+ * @param identity 身份三字段的**权威来源**（#879 / I4）：给了就先把客户端上报的
+ *   `name` / `occupation` / `sex` 覆盖掉，再做校验与回写。存档路径一律传库里的值 ——
+ *   这样「改包转职 / 改名」在解析这一步就不存在，也不会因为报了个非法职业被 20003 卡死。
+ *   建号路径不传（那时没有任何「库里那份」，职业与性别正是玩家这一次的选择）。
  * @throws BizException ROLE_DATA_INVALID
  */
-export function parseRoleData(input: unknown): { fields: RoleIndexFields; data: Record<string, unknown> } {
+export function parseRoleData(
+  input: unknown,
+  identity?: { name: string; occupation: string; sex: string },
+): { fields: RoleIndexFields; data: Record<string, unknown> } {
   if (!input || typeof input !== "object" || Array.isArray(input)) {
     throw new BizException(BizCode.ROLE_DATA_INVALID, "角色数据格式不正确");
   }
   const source = { ...(input as Record<string, unknown>) };
+  // 身份三字段归服务端（#879）：进来的值一律不看，用库里那份盖掉。
+  // 职业 / 性别只在库值**本身合法**时才盖 —— 存量库里有 `create` 收权之前写进去的空串
+  // （那批行从没校验过），照盖会让这些老角色每次存档都撞 20003（等于永久登不上）。
+  // 库值是空串时退回客户端那份：对他们来说这是「唯一已知的合法来源」，
+  // 而改包也只能在「本来就没人管」的老行上动手，收不到新收益。
+  if (identity) {
+    source.name = identity.name;
+    if (ROLE_OCCUPATIONS.includes(identity.occupation)) source.occupation = identity.occupation;
+    if (ROLE_SEXES.includes(identity.sex)) source.sex = identity.sex;
+  }
 
   const id = typeof source.id === "string" ? source.id.trim() : "";
   if (!id || id.length > ROLE_ID_MAX_LENGTH) throw new BizException(BizCode.ROLE_DATA_INVALID, "角色 id 不合法");

@@ -16,6 +16,9 @@
  *   管理端改等级后立即重算；列表**不带**（只有详情带）；等级 0（脏数据）时如实给 null
  *   （#786 起等级走参数化曲线，末段外推 —— 没有「等级不在表里」这种情形了）
  * · 文档：新接口落在「管理端」分组且带权限点标注
+ * · 角色数上限（#878）：一账号 6 个、第 7 个 400 / 20018、`UNIQUE(account_id, name)` 真的在库里
+ * · 身份字段独占（#879）：存档改不了 name / occupation / sex（非法职业也不拦存档）
+ * · 登出（#880）：吊销该账号全部令牌（另一台设备的也一起失效），重新登录照常
  *
  * 用法：先 `npm run build`，再 `node test/e2e-roles.cjs`
  */
@@ -23,6 +26,9 @@ process.env.DB_PATH = ":memory:";
 process.env.ADMIN_REGISTER_CODE = "test-admin-code";
 process.env.JWT_SECRET = "test-secret";
 process.env.LOG_REQUESTS = "false";
+// 角色数上限钉成出厂默认（#878）：**本机 `server/.env` 里配的值不该影响断言的数字** ——
+// 否则同一条用例在「本地改过 .env」和 CI 上会给出两种结论
+process.env.ROLE_MAX_PER_ACCOUNT = "6";
 
 process.env.CORS_ORIGINS = "*";
 
@@ -34,6 +40,8 @@ const { TransformInterceptor } = require("../dist/common/interceptors/transform.
 const { setupSwagger } = require("../dist/swagger/setup");
 // 存档 PUT 的公共帮手（#820 起 revision 必填：先 GET 拿修订号再 PUT）
 const { saveRole, revOfWith } = require("./lib/role-save.cjs");
+/** 直连库：验「表上的唯一索引真的建了」（#878）—— 接口层验不出索引在不在 */
+const { DatabaseService } = require("../dist/database/database.service");
 /** 脏数据路径（等级 0）在接口层进不去（PatchRoleDto 有 @Min(1)），直接喂给同一个 DTO 入口 */
 const { RoleDerivedDto } = require("../dist/modules/roles/dto/role.dto");
 
@@ -175,7 +183,7 @@ async function raiseLevel(roleId, level, token) {
   const roleA2Id = roleA2.data.id;
   const roleA3 = await api("POST", "roles", { token: tokenA, body: { name: "甲三", occupation: "3", sex: "1" } });
   const roleA3Id = roleA3.data.id;
-  check(roleA2.code === 0 && roleA3.code === 0, "同一账号可连续创建多个角色（数量不设上限）");
+  check(roleA2.code === 0 && roleA3.code === 0, "同一账号可连续创建多个角色（上限 6，见第十段 #878）");
 
   // 这几次存档用 `onMap`（客户端全权字段）当「改点东西」的载体，**不用 level / exp**：
   // #550 起等级与经验也归服务端（存档里的上报值会被回填成库里的值），
@@ -382,7 +390,10 @@ async function raiseLevel(roleId, level, token) {
 
   // 切到 role_a2 再验「坏数据照样被拒」（校验顺序：在线 → 乐观锁 → 数据解析）
   await api("POST", `roles/${roleA2Id}/select`, { token: tokenA });
-  const brokenDoc = await saveRole(api, tokenA, roleA2Id, { notRole: true });
+  // 注意载体：#879 起 name / occupation / sex 由服务端覆盖，**一份「缺字段」的文档不再是坏数据**
+  // （收权会用库里的值把背包 / 装备 / 技能一起回填，`{ notRole: true }` 现在是合法的空文档）。
+  // 这里改用「数值越界」当坏数据的载体：它仍然走 20003，验的还是「解析失败不落库」
+  const brokenDoc = await saveRole(api, tokenA, roleA2Id, { level: 0 });
   check(brokenDoc.code === 20003, "坏角色数据被拒（不会把背包清空）", `${brokenDoc.code}`);
   // 切回 role_a1（后面的乐观锁联动用例都围绕它）
   await api("POST", `roles/${roleA1Id}/select`, { token: tokenA });
@@ -972,6 +983,112 @@ async function raiseLevel(roleId, level, token) {
     "引导从第 0 步开始（新号天然弹引导；老号「无字段 = 已完成」判定不受影响）",
     JSON.stringify(richDoc.guide),
   );
+
+  //#endregion
+
+  //#region 十、角色数上限 / 身份字段独占 / 登出（#878 / #879 / #880）
+
+  console.log("— 十、角色数上限 / 身份字段独占 / 登出（#878 / #879 / #880） —");
+
+  const playerG = await api("POST", "auth/register", { body: { username: "role_player_g", password: "pass1234" } });
+  const tokenG = playerG.data.token;
+  const accountG = playerG.data.account.id;
+
+  // #878：一账号 6 个（`ROLE_MAX_PER_ACCOUNT` 默认 6）
+  const created = [];
+  for (let index = 1; index <= 6; index += 1) {
+    created.push(await api("POST", "roles", { token: tokenG, body: { name: `上限${index}`, occupation: "1", sex: "1" } }));
+  }
+  check(
+    created.every((item) => item.code === 0),
+    "同一账号前 6 个角色全部建成功（上限内不拦）",
+    created.map((item) => item.code).join(","),
+  );
+  const seventh = await api("POST", "roles", { token: tokenG, body: { name: "上限7", occupation: "1", sex: "1" } });
+  check(
+    seventh.status === 400 && seventh.code === 20018,
+    "第 7 个建号被拒（400 / 20018，不再是「数量不设上限」）",
+    `${seventh.code}/${seventh.status}`,
+  );
+  check(seventh.message.includes("6"), "拒绝文案里带上限数字（客户端据此提示，不必自己存一份）", seventh.message);
+  const listG = await api("GET", "roles", { token: tokenG });
+  check(listG.data.length === 6, "库里仍只有 6 个（被拒的那次没有落半行）", `${listG.data && listG.data.length}`);
+
+  // 表上的唯一索引：接口层验不出来（应用层查重会先拦），只能直接看 schema
+  const db = app.get(DatabaseService);
+  const uniqueIndex = db.all(
+    "SELECT name FROM sqlite_master WHERE type = 'index' AND name = 'idx_roles_account_name'",
+  );
+  check(uniqueIndex.length === 1, "UNIQUE(account_id, name) 索引已建立（并发同名由数据库兜底）", JSON.stringify(uniqueIndex));
+  let duplicateRejected = false;
+  let duplicateMessage = "";
+  try {
+    db.run(
+      `INSERT INTO roles (id, account_id, name, occupation, sex, level, kills, data, revision, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ["dup-role-id", accountG, "上限1", "1", "1", 1, 0, "{}", 1, Date.now(), Date.now()],
+    );
+  } catch (error) {
+    duplicateRejected = true;
+    duplicateMessage = error instanceof Error ? error.message : String(error);
+  }
+  check(
+    duplicateRejected && /UNIQUE/i.test(duplicateMessage),
+    "同账号同名直接插库被数据库拒绝（索引真的在拦，不只是应用层查重）",
+    duplicateMessage,
+  );
+  // 应用层那条闸也在（顺序在「上限」之前：重名先给 20005 这个能自己解决的理由，而不是「去删一个」）
+  const sameName = await api("POST", "roles", { token: tokenG, body: { name: "上限1", occupation: "1", sex: "1" } });
+  check(sameName.code === 20005, "同账号重名仍是 20005（且先于上限判定）", `${sameName.code}`);
+
+  // #879：身份三字段归服务端 —— 存档里报什么都不看，一律按库里的写回
+  const playerH = await api("POST", "auth/register", { body: { username: "role_player_h", password: "pass1234" } });
+  const tokenH = playerH.data.token;
+  const roleH1 = await api("POST", "roles", { token: tokenH, body: { name: "身一", occupation: "1", sex: "1" } });
+  const roleH1Id = roleH1.data.id;
+  const renamed = await saveRole(api, tokenH, roleH1Id, { ...roleData(roleH1Id, "改包改名", "3", 1), sex: "2" });
+  check(renamed.code === 0, "带假身份字段的存档照常保存（忽略，不是拒收）", `${renamed.code}/${renamed.message}`);
+  check(renamed.data.name === "身一", "存档改不了名字（响应里还是库里的名字）", renamed.data.name);
+  check(renamed.data.occupation === "1", "存档改不了职业（转职只能走将来的转职接口）", renamed.data.occupation);
+  check(renamed.data.sex === "1", "存档改不了性别", renamed.data.sex);
+  check(
+    renamed.data.data.name === "身一" && renamed.data.data.occupation === "1" && renamed.data.data.sex === "1",
+    "文档里那份也被盖成了库值（否则「列表里的名字」与「详情里的名字」会各说一套）",
+    JSON.stringify({ name: renamed.data.data.name, occupation: renamed.data.data.occupation, sex: renamed.data.data.sex }),
+  );
+  // 非法职业不该把整份存档卡死 —— 这正是「先盖后校验」而不是「解析完再覆盖」的理由
+  const bogusOccupation = await saveRole(api, tokenH, roleH1Id, { ...roleData(roleH1Id, "身一", "99", 1) });
+  check(
+    bogusOccupation.code === 0,
+    "存档里塞一个不存在的职业码也照常保存（不认的字段不该拦下整次存档）",
+    `${bogusOccupation.code}/${bogusOccupation.message}`,
+  );
+  check(bogusOccupation.data.occupation === "1", "……而且职业仍是库里的那个", bogusOccupation.data.occupation);
+
+  // #880：登出吊销该账号**全部**令牌（同一账号另一台设备签的也一起失效）
+  // 同一秒内两次登录签出来的令牌**可能逐字相同**（载荷只有 sub / ver / iat，而 iat 只到秒），
+  // 所以这里不比较两个令牌是否不同 —— 要比的是「登出后两台设备都失效」
+  const secondLogin = await api("POST", "auth/login", { body: { username: "role_player_h", password: "pass1234" } });
+  const tokenH2 = secondLogin.data.token;
+  check(secondLogin.code === 0 && !!tokenH2, "准备：同一账号再登录一次拿到第二个令牌（模拟第二台设备）", secondLogin.message);
+  const meBefore = await api("GET", "auth/me", { token: tokenH2 });
+  check(meBefore.code === 0, "准备：第二个令牌登出前是可用的", `${meBefore.code}`);
+  const logout = await api("POST", "auth/logout", { token: tokenH });
+  check(logout.code === 0 && logout.data === null, "登出成功（data 为 null）", `${logout.code}`);
+  const meAfter = await api("GET", "auth/me", { token: tokenH });
+  check(meAfter.status === 401 && meAfter.code === 40103, "登出后旧令牌立刻失效（401 / 40103，不必等 7 天到期）", `${meAfter.code}/${meAfter.status}`);
+  const meOtherDevice = await api("GET", "auth/me", { token: tokenH2 });
+  check(
+    meOtherDevice.status === 401 && meOtherDevice.code === 40103,
+    "另一台设备的令牌也失效（没有会话表，吊销只能整账号一起）",
+    `${meOtherDevice.code}/${meOtherDevice.status}`,
+  );
+  const relogin = await api("POST", "auth/login", { body: { username: "role_player_h", password: "pass1234" } });
+  check(relogin.code === 0, "登出后重新登录照常（只是换了一版令牌，不是把号锁掉）", relogin.message);
+  const meNewToken = await api("GET", "auth/me", { token: relogin.data.token });
+  check(meNewToken.code === 0, "新令牌可用（版本号已对齐）", `${meNewToken.code}`);
+  const anonymousLogout = await api("POST", "auth/logout");
+  check(anonymousLogout.status === 401 && anonymousLogout.code === 40100, "不带令牌调登出是 401 / 40100（不是公共接口）", `${anonymousLogout.code}/${anonymousLogout.status}`);
 
   //#endregion
 

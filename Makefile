@@ -239,7 +239,7 @@ server-start: ## 跑服务端已构建产物（需先 make server-build）
 server-e2e: ## 服务端主 e2e
 	@cd server && $(NPM) run test:e2e
 
-server-e2e-roles: ## 服务端角色管理专项 e2e（110 条）
+server-e2e-roles: ## 服务端角色管理专项 e2e（186 条）
 	@cd server && $(NPM) run test:e2e:roles
 
 server-e2e-guard: ## 服务端运营与安全底座专项 e2e（283 条）

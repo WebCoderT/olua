@@ -1,4 +1,5 @@
 import { join } from "node:path";
+import { ROLE_MAX_PER_ACCOUNT_DEFAULT } from "../common/constants/role";
 import { PARTY_EXP_SHARE_DISTANCE_DEFAULT, PARTY_MIN_LEVEL_DEFAULT } from "../common/constants/social";
 
 /** 内置的开发用 JWT 密钥（生产必须换掉；唯一出现处，比较也只用 `jwtSecretIsDefault`） */
@@ -437,6 +438,16 @@ export interface AppConfiguration {
   partyMinLevel: number;
   //#endregion
 
+  //#region 角色
+  /**
+   * 一个账号最多几个角色（默认 6，`ROLE_MAX_PER_ACCOUNT`，#878 / I3）
+   *
+   * 以前这里没有这条闸：建号只校验结构与重名，脚本可以给一个账号刷出上万行角色。
+   * 脏值（非数字 / 小于 1）回落默认 —— 读错不该让「建号」变成「一个也建不了」。
+   */
+  roleMaxPerAccount: number;
+  //#endregion
+
   //#region 排行榜（#400）
 
   /**
@@ -547,6 +558,7 @@ export default function configuration(): AppConfiguration {
     partyLeaderOfflineMs: Number(process.env.PARTY_LEADER_OFFLINE_MS ?? 300000),
     partySweepIntervalMs: Number(process.env.PARTY_SWEEP_INTERVAL_MS ?? 30000),
     partyMinLevel: Number(process.env.PARTY_MIN_LEVEL ?? PARTY_MIN_LEVEL_DEFAULT),
+    roleMaxPerAccount: Number(process.env.ROLE_MAX_PER_ACCOUNT ?? ROLE_MAX_PER_ACCOUNT_DEFAULT),
     leaderboardRefreshMs: Number(process.env.LEADERBOARD_REFRESH_MS ?? 60000),
     leaderboardTopN: Number(process.env.LEADERBOARD_TOP_N ?? 100),
   };

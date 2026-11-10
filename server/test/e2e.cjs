@@ -106,6 +106,9 @@ async function main() {
       JWT_SECRET: "e2e-secret-key",
       JWT_EXPIRES_IN: "1h",
       ADMIN_REGISTER_CODE: ADMIN_CODE,
+      // 角色数上限钉成出厂默认（#878）：**本机 `server/.env` 里配的值不该改变断言的数字**
+      // （这一份用例建 4 个角色，本机若配成 3 就会在这里红，看起来像功能坏了）
+      ROLE_MAX_PER_ACCOUNT: "6",
 
       LOG_REQUESTS: "false",
     },
@@ -274,7 +277,7 @@ async function runSuite(baseUrl) {
   const role3Id = role3.body.data.id;
 
   const role4 = await call("POST", "/api/roles", { token, body: { name: "小强", occupation: "1", sex: "1" } });
-  checkEqual(role4.status, 201, "创建第四个角色成功（角色数量不设上限）");
+  checkEqual(role4.status, 201, "创建第四个角色成功（上限 6 之内，见 e2e-roles 第十段）");
 
   const list = await call("GET", "/api/roles", { token });
   checkEqual(list.body.data.length, 4, "角色列表 4 个");
@@ -385,7 +388,7 @@ async function runSuite(baseUrl) {
   const stats = await call("GET", "/api/admin/stats", { token: adminToken });
   checkEqual(stats.status, 200, "概览统计可访问");
   checkEqual(stats.body.data.accountCount, 2, "账号总数 = 2");
-  checkEqual(stats.body.data.roleCount, 4, "角色总数 = 4（角色数量不设上限，第四个也建成了）");
+  checkEqual(stats.body.data.roleCount, 4, "角色总数 = 4（四个都在上限 6 之内）");
   checkEqual(stats.body.data.adminCount, 1, "管理员数 = 1");
 
   const accounts = await call("GET", "/api/admin/accounts?page=1&size=10", { token: adminToken });
