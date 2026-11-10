@@ -97,6 +97,8 @@ const RUNTIME_TABLES = Object.freeze([
   "admins",
   "announcements",
   "audit_logs",
+  // 玩家行为流水（#886）：纯运行时，绝不进同步文件（几万行玩家流水混进配置 diff 会让导出不可读）
+  "event_logs",
   "config_meta",
   // 配置版本链（#881 / #882）：版本计数器与回滚历史 —— 每台机器各写各的，绝不进同步文件
   // （进了文件就变成「别人的版本号盖掉我的」，而且 payload 里装着整份配置，文件会翻几倍）

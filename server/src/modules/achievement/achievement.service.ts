@@ -97,11 +97,13 @@ export class AchievementService implements OnModuleInit {
     let settled: { level: number; leveledUp: boolean };
     let mailId: string | null = null;
     try {
-      settled = this.roles.grantQuestRewards(accountId, role.id, null, {
-        gold: row.reward_gold,
-        exp: row.reward_exp,
-        items,
-      });
+      settled = this.roles.grantQuestRewards(
+        accountId,
+        role.id,
+        null,
+        { gold: row.reward_gold, exp: row.reward_exp, items },
+        "achievement",
+      );
     } catch (error) {
       // 背包满：整份奖励（金币 / 经验 / 物品）转邮件，而不是让玩家先去猜是哪件东西放不下（#429）
       if (!isBizCode(error, BizCode.MALL_BAG_FULL)) throw error;

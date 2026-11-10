@@ -36,6 +36,8 @@ import { TitleRepository } from "../../database/repositories/title.repository";
 import { AccountRow, RankRow, RoleRow, SoulRow, TitleRow } from "../../database/rows";
 import { CreateRoleDto, SaveRoleDto } from "./dto/create-role.dto";
 import { BagOpDto, BagOpResultDto } from "./dto/bag-op.dto";
+import { EventLogService } from "../event-log/event-log.service";
+import { EVENT_TYPE } from "../../common/constants/event-type";
 import { DrugUseDto, DrugUseResultDto } from "./dto/drug-use.dto";
 import { MoneyUseDto, MoneyUseResultDto } from "./dto/money-use.dto";
 import { LevelScrollUseDto, LevelScrollUseResultDto } from "./dto/level-scroll-use.dto";
@@ -120,6 +122,8 @@ export class RolesService {
     private readonly statuses: RoleStatusService,
     /** 配置（#878 起用它读 `ROLE_MAX_PER_ACCOUNT`：上限进配置，e2e 才压得小） */
     private readonly config: ConfigService,
+    /** 玩家行为流水（#886）：拾取 / 获得 / 消耗在各自的写入口记一条 */
+    private readonly eventLogs: EventLogService,
   ) {}
 
   /**
@@ -130,6 +134,17 @@ export class RolesService {
   private roleLimitPerAccount(): number {
     const raw = Number(this.config.get<number>("roleMaxPerAccount") ?? ROLE_MAX_PER_ACCOUNT_DEFAULT);
     return Number.isFinite(raw) && raw >= 1 ? Math.floor(raw) : ROLE_MAX_PER_ACCOUNT_DEFAULT;
+  }
+
+  /**
+   * 存档里服务端自己记下的位置（`data.mapAt`）
+   *
+   * 行为流水用它标「在哪」—— 位置只认服务端记的那一份（#606 定的口径：客户端报 OnMap 是
+   * 客户端的事），读不到就是 null，不拿别的字段猜。
+   */
+  private mapAtOf(data: Record<string, unknown>): string | null {
+    const value = data.mapAt;
+    return typeof value === "string" && value ? value : null;
   }
 
   /** 当前账号的角色列表（按创建时间升序，与客户端站位顺序一致） */
@@ -496,6 +511,17 @@ export class RolesService {
       updated_at: Date.now(),
     };
     this.persistOrConflict(row, existing.revision, "购买商品");
+    // 行为流水（#886）：购买是「非拾取途径的物品入账」—— 地上捡的走 pick，这里走 gain
+    this.eventLogs.record({
+      type: EVENT_TYPE.GAIN,
+      accountId,
+      roleId,
+      roleName: existing.name,
+      mapId: this.mapAtOf(data),
+      target: dto.goodId,
+      amount: 1,
+      detail: { source: "mall", price },
+    });
     return MallPurchaseResultDto.fromRow(row, account.online_role_id, price, dto.goodId);
   }
 
@@ -569,6 +595,21 @@ export class RolesService {
       updated_at: Date.now(),
     };
     this.persistOrConflict(row, existing.revision, "出售物品");
+    // 行为流水（#886）：一件一行（「卖了哪几件、各多少、什么价」事后要能逐条对账）。
+    // 整单一次 recordMany —— 一键回收会报上几十条，逐条提交等于几十次 WAL 提交
+    const mapId = this.mapAtOf(data);
+    this.eventLogs.recordMany(
+      sold.map((line) => ({
+        type: EVENT_TYPE.CONSUME,
+        accountId,
+        roleId,
+        roleName: existing.name,
+        mapId,
+        target: line.goodId,
+        amount: line.count,
+        detail: { reason: "sell", unitPrice: line.unitPrice, total: line.total },
+      })),
+    );
     return SellGoodsResultDto.fromRow(row, account.online_role_id, sold, total);
   }
 
@@ -609,6 +650,18 @@ export class RolesService {
       updated_at: Date.now(),
     };
     this.persistOrConflict(row, existing.revision, "拾取物品");
+    // 行为流水（#886）：记「捡到了什么」。地图取存档里服务端自己记下的位置 ——
+    // pick 的入参里没有坐标（客户端只报 goodId 与数量），位置从 mapAt 读
+    this.eventLogs.record({
+      type: EVENT_TYPE.PICK,
+      accountId,
+      roleId,
+      roleName: existing.name,
+      mapId: this.mapAtOf(data),
+      target: goodId,
+      amount: Math.max(1, Math.floor(count)),
+      detail: meta.bound ? { bound: true } : null,
+    });
     return { revision: row.revision, placed };
   }
 
@@ -812,6 +865,17 @@ export class RolesService {
       updated_at: Date.now(),
     };
     this.persistOrConflict(row, existing.revision, "使用药品");
+    // 行为流水（#886）：药是消耗品，「用了什么、回了多少」记一条
+    this.eventLogs.record({
+      type: EVENT_TYPE.CONSUME,
+      accountId,
+      roleId,
+      roleName: existing.name,
+      mapId: this.mapAtOf(data),
+      target: drug.id,
+      amount: 1,
+      detail: { reason: "drug", hp: recoveredHp, mp: recoveredMp },
+    });
     return DrugUseResultDto.fromRow(row, account.online_role_id, drug.id, recoveredHp, recoveredMp);
   }
 
@@ -1002,6 +1066,8 @@ export class RolesService {
     }
     const worn = cleaned.equipments;
     let slot: string | null = null;
+    /** 丢弃的物品（#886）：记在 switch 里、落库**之后**再写流水 —— 乐观锁失败时不能留假记录 */
+    let discarded: { id: string; count: number } | null = null;
 
     switch (dto.action) {
       case "equip": {
@@ -1029,7 +1095,7 @@ export class RolesService {
         break;
       }
       case "discard": {
-        discardAt(grid, Number(dto.row), Number(dto.col));
+        discarded = discardAt(grid, Number(dto.row), Number(dto.col));
         break;
       }
       case "move":
@@ -1070,6 +1136,19 @@ export class RolesService {
       updated_at: Date.now(),
     };
     this.persistOrConflict(row, existing.revision, "整理背包");
+    // 行为流水（#886）：只有「丢弃」是物品离手（穿戴 / 卸下 / 整理只是位置变化，不记）
+    if (discarded) {
+      this.eventLogs.record({
+        type: EVENT_TYPE.CONSUME,
+        accountId,
+        roleId,
+        roleName: existing.name,
+        mapId: this.mapAtOf(data),
+        target: discarded.id,
+        amount: Math.max(1, Math.floor(Number(discarded.count) || 1)),
+        detail: { reason: "discard" },
+      });
+    }
     return BagOpResultDto.fromRow(row, account.online_role_id, dto.action, slot);
   }
 
@@ -1518,6 +1597,13 @@ export class RolesService {
     roleId: string,
     consume: { goodId: string; count: number } | null,
     rewards: { gold: number; exp: number; items: Array<{ goodId: string; count: number }> },
+    /**
+     * 奖励来源（写进行为流水的 `detail.source`）
+     *
+     * 任务 / 成就 / 邮件三个调用方共用这个方法，而流水里「这批东西是哪来的」正是运营
+     * 最常问的一句 —— 默认值只是兜底，真正的调用方都应该传。
+     */
+    source = "deliver",
   ): KillExpResult {
     const existing = this.onlineRoleOrThrow(accountId, roleId);
     const data = decodeStoredRoleData(existing.data);
@@ -1549,6 +1635,45 @@ export class RolesService {
       updated_at: Date.now(),
     };
     this.persistOrConflict(row, existing.revision, "发放任务奖励");
+    // 行为流水（#886）：奖励**物品与金币**各记一条（经验不记 —— 那是成长曲线的事，
+    // 击杀 / 泡点早就各自记过了）。source 写 "deliver" 是因为任务与成就共用这个方法
+    const gained = [] as Array<{
+      type: string;
+      accountId: string;
+      roleId: string;
+      roleName: string;
+      mapId: string | null;
+      target: string;
+      amount: number;
+      detail: { source: string };
+    }>;
+    const mapId = this.mapAtOf(data);
+    const gold = Math.max(0, Math.floor(rewards.gold ?? 0));
+    if (gold > 0) {
+      gained.push({
+        type: EVENT_TYPE.GAIN,
+        accountId,
+        roleId,
+        roleName: existing.name,
+        mapId,
+        target: "gold",
+        amount: gold,
+        detail: { source },
+      });
+    }
+    for (const item of rewards.items ?? []) {
+      gained.push({
+        type: EVENT_TYPE.GAIN,
+        accountId,
+        roleId,
+        roleName: existing.name,
+        mapId,
+        target: item.goodId,
+        amount: Math.max(1, Math.floor(item.count)),
+        detail: { source },
+      });
+    }
+    this.eventLogs.recordMany(gained);
     return {
       level: outcome.level,
       expNow: outcome.exp,

@@ -153,7 +153,7 @@ export class AdminAccountsController {
     @Body() dto: UpdateAccountStatusDto,
     @CurrentUser() user: AuthenticatedUser,
   ): AccountDto {
-    return this.adminService.updateAccountStatus(id, dto, user.username);
+    return this.adminService.updateAccountStatus(id, dto, user);
   }
 
   @Post("accounts/batch-status")
@@ -172,7 +172,7 @@ export class AdminAccountsController {
   })
   @ApiDataResponse(BatchStatusResultDto, { description: "操作结果（requested / updated / ids / clearedOnlineAccountIds）" })
   batchStatus(@Body() dto: BatchUpdateAccountStatusDto, @CurrentUser() user: AuthenticatedUser): BatchStatusResultDto {
-    return this.adminService.batchUpdateAccountStatus(dto, user.username);
+    return this.adminService.batchUpdateAccountStatus(dto, user);
   }
 
   @Patch("accounts/:id/password")

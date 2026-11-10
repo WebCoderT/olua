@@ -5,6 +5,7 @@ import { QuestModule } from "../quest/quest.module";
 import { PartyModule } from "../party/party.module";
 import { WorldModule } from "../world/world.module";
 import { MapModule } from "../map/map.module";
+import { EventLogModule } from "../event-log/event-log.module";
 import { BlockService } from "./block.service";
 import { CastGuardService } from "./cast-guard.service";
 import { ChatService } from "./chat.service";
@@ -41,7 +42,7 @@ import { SoakPointService } from "./soak-point.service";
 @Module({
   // GameConfigModule（#732）：RealtimeService 注入 RuntimeConfigService 做定期重装 ——
   // RolesModule 虽然也 import 了它，但 Nest 的 provider 不随间接 import 透传，这里要自己挂
-  imports: [GameConfigModule, RolesModule, QuestModule, WorldModule, PartyModule, MapModule],
+  imports: [GameConfigModule, RolesModule, QuestModule, WorldModule, PartyModule, MapModule, EventLogModule],
   controllers: [RealtimeController],
   providers: [
     RealtimeService,

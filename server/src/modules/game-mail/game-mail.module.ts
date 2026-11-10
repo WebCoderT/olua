@@ -1,5 +1,6 @@
 import { Module } from "@nestjs/common";
 import { RolesModule } from "../roles/roles.module";
+import { EventLogModule } from "../event-log/event-log.module";
 import { AdminGameMailController } from "./admin-game-mail.controller";
 import { GameMailController } from "./game-mail.controller";
 import { GameMailEventsService } from "./game-mail-events.service";
@@ -18,7 +19,8 @@ import { GameMailService } from "./game-mail.service";
  * 别和 `MailModule` 搞混：那个是外发 SMTP 投递队列（发到玩家注册邮箱）。
  */
 @Module({
-  imports: [RolesModule],
+  // 行为流水（#886）：领取邮件要记一条（附件本身由 RolesService 记成 gain）
+  imports: [RolesModule, EventLogModule],
   controllers: [GameMailController, AdminGameMailController],
   providers: [GameMailService, GameMailEventsService, GameMailPurgeService],
   exports: [GameMailService],

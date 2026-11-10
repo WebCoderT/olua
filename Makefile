@@ -64,7 +64,7 @@ CREATOR ?= CocosCreator
         client-check client-test client-test-one client-gen-monster client-gen-drops \
         client-clean-frames client-clean-frames-apply client-open client-gen-declarations \
         server-dev server-build server-start server-e2e server-e2e-roles server-e2e-guard \
-        server-e2e-mail server-e2e-account-email server-e2e-realtime server-e2e-combat server-e2e-world server-e2e-world-viewers server-e2e-dual server-e2e-game-config server-e2e-config-version server-e2e-backup server-e2e-zone server-e2e-guild server-e2e-social server-e2e-chat server-e2e-quest server-e2e-sell server-e2e-bag server-e2e-blocks server-e2e-party server-e2e-rank server-e2e-achievement server-e2e-game-mail server-e2e-equip-align server-e2e-equip-in-align server-e2e-map server-verify db-backup db-restore config-export config-import config-check gen-api \
+        server-e2e-mail server-e2e-account-email server-e2e-realtime server-e2e-combat server-e2e-world server-e2e-world-viewers server-e2e-dual server-e2e-game-config server-e2e-config-version server-e2e-event-log server-e2e-backup server-e2e-zone server-e2e-guild server-e2e-social server-e2e-chat server-e2e-quest server-e2e-sell server-e2e-bag server-e2e-blocks server-e2e-party server-e2e-rank server-e2e-achievement server-e2e-game-mail server-e2e-equip-align server-e2e-equip-in-align server-e2e-map server-verify db-backup db-restore config-export config-import config-check gen-api \
         resources-manifest resources-verify resources-pack resources-upload resources-download image-manifest \
         admin-dev admin-build admin-typecheck admin-preview \
         icons \
@@ -274,6 +274,9 @@ server-e2e-game-config: ## 服务端养成配置专项 e2e（44 条：seed 同�
 
 server-e2e-config-version: ## 服务端配置版本链专项 e2e（57 条：版本 +1 / ETag 304 / 历史节流 / 一键回滚 / 保留 20 层）
 	@cd server && $(NPM) run test:e2e:config-version
+
+server-e2e-event-log: ## 服务端流水与审计专项 e2e（121 条：注册留痕 / 八类事件落库 / 批量明细 / 日志表故障不影响主流程）
+	@cd server && $(NPM) run test:e2e:event-log
 
 server-e2e-zone: ## 服务端区服专项 e2e（32 条：注册选区 / 合并区边界 / 世界按区隔离 / 合并生效与代际失效）
 	@cd server && $(NPM) run test:e2e:zone

@@ -4127,6 +4127,157 @@ export type AuditQuery = {
   to?: number;
 };
 
+export type EventLog = {
+  /**
+   * 流水 id
+   */
+  id: string;
+  /**
+   * 事件类型（login / enter_map / kill / pick / gain / consume / mail / quest…）
+   */
+  type: string;
+  /**
+   * 事件类型的中文名（未知类型回显原值）
+   */
+  typeLabel: string;
+  /**
+   * 账号 id（登录失败时为 null）
+   */
+  accountId: string | null;
+  /**
+   * 角色 id（没有在线角色的行为为 null）
+   */
+  roleId: string | null;
+  /**
+   * 角色名（冗余存下来，角色被删后仍可追溯）
+   */
+  roleName: string | null;
+  /**
+   * 区服 id
+   */
+  zoneId: number | null;
+  /**
+   * 地图 id（进图 / 拾取 / 击杀带）
+   */
+  mapId: string | null;
+  /**
+   * 关键对象：击杀=怪物 key / 拾取与获得与消耗=物品 id / 任务=任务 id / 邮件=邮件 id
+   */
+  target: string | null;
+  /**
+   * 数量 / 经验 / 金额（该事件没有「多少」这个维度时为 null）
+   */
+  amount: number | null;
+  /**
+   * 其余上下文（坐标、技能、绑定状态等；JSON 对象，无则 null）
+   */
+  detail: Record<string, unknown> | null;
+  /**
+   * 来源 IP（登录带；反向代理下需 TRUST_PROXY=true 才准）
+   */
+  ip: string | null;
+  /**
+   * 是否成功（目前只有登录失败会为 false）
+   */
+  success: boolean;
+  /**
+   * 发生时间（毫秒）
+   */
+  createdAt: number;
+};
+
+export type EventLogPage = {
+  /**
+   * 总条数
+   */
+  total: number;
+  /**
+   * 当前页码（从 1 开始）
+   */
+  page: number;
+  /**
+   * 每页条数
+   */
+  size: number;
+  /**
+   * 当前页的流水
+   */
+  list: EventLog[];
+};
+
+export type EventLogQuery = {
+  /**
+   * 页码，从 1 开始
+   */
+  page?: number;
+  /**
+   * 每页条数（1~100）
+   */
+  size?: number;
+  /**
+   * 关键字：模糊匹配角色名 / 目标 / 载荷
+   */
+  keyword?: string;
+  /**
+   * 排序字段（取值见各接口说明，未登记的值会退回默认排序）
+   */
+  sort?: string;
+  /**
+   * 排序方向：asc 升序 / desc 降序
+   */
+  order?: "asc" | "desc";
+  /**
+   * 事件类型（取值见 /admin/event-logs/types）
+   */
+  type?: string;
+  /**
+   * 只看某个角色（角色 id）
+   */
+  roleId?: string;
+  /**
+   * 只看某个账号（账号 id）
+   */
+  accountId?: string;
+  /**
+   * 只看某张地图（地图 id）
+   */
+  mapId?: string;
+  /**
+   * 结果筛选：true 只看成功 / false 只看失败
+   */
+  success?: "true" | "false";
+  /**
+   * 起始时间（毫秒时间戳，含）
+   */
+  from?: number;
+  /**
+   * 结束时间（毫秒时间戳，含）
+   */
+  to?: number;
+};
+
+export type EventType = {
+  /**
+   * 类型值（落库值）
+   */
+  value: string;
+  /**
+   * 中文名
+   */
+  label: string;
+  /**
+   * 该类型当前的记录条数（0 表示这条链路还没有埋上）
+   */
+  total: number;
+};
+
+export type EventTypeList = {
+  /**
+   * 全部事件类型（含当前 0 条的）
+   */
+  types: EventType[];
+};
+
 export type AccountQuery = {
   /**
    * 页码，从 1 开始

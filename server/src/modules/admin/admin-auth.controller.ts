@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Ip, Patch, Post } from "@nestjs/common";
+import { Body, Controller, Get, Headers, HttpCode, HttpStatus, Ip, Patch, Post } from "@nestjs/common";
 import { ApiDataResponse } from "../../common/decorators/api-data-response.decorator";
 import { ApiAdminDoc, ApiPublicDoc } from "../../common/decorators/api-doc.decorator";
 import { AuditTarget } from "../../common/decorators/audit-target.decorator";
@@ -28,11 +28,18 @@ export class AdminAuthController {
     operationId: "adminAuth.register",
     summary: "注册管理员",
     description:
-      "注册许可由两件配置决定：配了 `ADMIN_REGISTER_CODE` 就必须带对注册码；没配则要求 `ADMIN_REGISTER_OPEN=true`（**默认关闭** —— 忘记配注册码不该等于人人可开后台）。**第一个**注册的管理员自动成为超级管理员，之后注册的一律是普通管理员。",
+      "注册许可由两件配置决定：配了 `ADMIN_REGISTER_CODE` 就必须带对注册码；没配则要求 `ADMIN_REGISTER_OPEN=true`（**默认关闭** —— 忘记配注册码不该等于人人可开后台）。**第一个**注册的管理员自动成为超级管理员，之后注册的一律是普通管理员。\n\n" +
+      "**注册会写操作日志**（#884）：这条接口是公开的、走不了「已认证管理员」那套拦截器，" +
+      "所以注册路径自己记 —— 成功记下账号 / 角色（首个为 SUPER）/ 来源 IP / UA，失败记下原因。" +
+      "「第一个 SUPER 是谁开的」必须能查。",
   })
   @ApiDataResponse(AdminTokenDto, { status: HttpStatus.CREATED, description: "注册成功" })
-  register(@Body() dto: AdminRegisterDto): AdminTokenDto {
-    return this.adminAuthService.register(dto);
+  register(
+    @Body() dto: AdminRegisterDto,
+    @Ip() ip: string,
+    @Headers("user-agent") userAgent?: string,
+  ): AdminTokenDto {
+    return this.adminAuthService.register(dto, { ip, userAgent });
   }
 
   @Public()

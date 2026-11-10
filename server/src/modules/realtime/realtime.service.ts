@@ -6,6 +6,7 @@ import { STATUS_CODES, type IncomingMessage, type Server as HttpServer } from "n
 import type { Duplex } from "node:stream";
 import { WebSocket, WebSocketServer, type RawData } from "ws";
 import { BizCode } from "../../common/constants/biz-code";
+import { EVENT_TYPE } from "../../common/constants/event-type";
 import type { ApiEnvelope, AuthenticatedUser } from "../../common/interfaces/api-envelope.interface";
 import { AccountRepository } from "../../database/repositories/account.repository";
 import type { RoleRow } from "../../database/rows";
@@ -18,6 +19,7 @@ import { decodeStoredRoleData } from "../roles/role-data.util";
 import { RealtimeTicketDto } from "./dto/realtime.dto";
 import { BlockService } from "./block.service";
 import { PartyService } from "../party/party.service";
+import { EventLogService } from "../event-log/event-log.service";
 import { ChatService } from "./chat.service";
 import { CombatSettlementService } from "./combat-settlement.service";
 import { MonsterAiService } from "./monster-ai.service";
@@ -142,6 +144,7 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
     private readonly accounts: AccountRepository,
     private readonly roles: RolesService,
     private readonly runtimeConfig: RuntimeConfigService,
+    private readonly eventLogs: EventLogService,
   ) {}
 
   //#region 取票据（HTTP 接口调用）
@@ -681,6 +684,17 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
       // 而在场表里没条目就查不到「这个角色挂在谁的连接上」，队伍状态会假死到下一次变化
       const onlineRoleId = this.accounts.findById(socket.identity.id)?.online_role_id ?? "";
       if (onlineRoleId) this.party.pushSnapshotToAccount(socket.identity.id, onlineRoleId, join.mapId);
+      // 进图流水（#886）：记的是「**真的站进去了**」这一步，不是 `mapEnter` 的意图 ——
+      // 被门槛拒的那次上面已经 return，改包绕过 mapEnter 直发 worldJoin 的也走不到这里
+      const enterRole = onlineRoleId ? this.roles.onlineRoleRow(socket.identity.id) : null;
+      this.eventLogs.record({
+        type: EVENT_TYPE.ENTER_MAP,
+        accountId: socket.identity.id,
+        roleId: onlineRoleId || null,
+        roleName: enterRole?.name ?? null,
+        zoneId,
+        mapId: join.mapId,
+      });
       return;
     }
     this.send(socket, { type: "error", data: { message: `不认识的消息类型：${String(parsed?.type)}` } });

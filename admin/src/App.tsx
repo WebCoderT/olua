@@ -42,6 +42,7 @@ import { FashionsPage } from "./pages/FashionsPage";
 import { DropConfigPage } from "./pages/DropConfigPage";
 import { GrowthPage } from "./pages/GrowthPage";
 import { AuditPage } from "./pages/AuditPage";
+import { EventLogsPage } from "./pages/EventLogsPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { LoginPage } from "./pages/LoginPage";
 import { MailsPage } from "./pages/MailsPage";
@@ -446,6 +447,14 @@ export function App() {
             element={
               <RequirePermission permission={PERMISSION.AUDIT_READ}>
                 <AuditPage />
+              </RequirePermission>
+            }
+          />
+          <Route
+            path="event-logs"
+            element={
+              <RequirePermission permission={PERMISSION.EVENT_READ}>
+                <EventLogsPage />
               </RequirePermission>
             }
           />

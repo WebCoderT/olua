@@ -90,8 +90,13 @@ function detailOf(request: AuditRequest): unknown {
   return body;
 }
 
-/** 从异常里取业务码 / HTTP 状态 / 可展示文案 */
-function describeError(error: unknown): { statusCode: number; errorCode: number; errorMessage: string } {
+/**
+ * 从异常里取业务码 / HTTP 状态 / 可展示文案
+ *
+ * **导出**是给「拦截器管不到的那些写操作」用的（#884 管理员注册是 `@Public()`，
+ * 整个拦截器都跳过；它要自己记一条，就得用同一套异常映射 —— 各写一份必然漂移）。
+ */
+export function describeError(error: unknown): { statusCode: number; errorCode: number; errorMessage: string } {
   if (error instanceof BizException) {
     return { statusCode: error.getStatus(), errorCode: error.code, errorMessage: error.message };
   }

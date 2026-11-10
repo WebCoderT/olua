@@ -56,6 +56,15 @@ const ALLOWED_EDGES = [
   // 审计是横切能力：登录（auth）与管理端（admin）都要写操作日志（经 AuditModule 导出的服务）
   { from: "modules/auth", to: "modules/audit/audit.service.ts", why: "登录写审计" },
   { from: "modules/admin", to: "modules/audit/audit.service.ts", why: "管理端写审计" },
+  // 玩家行为流水（#886）与审计同理是横切能力：登录（auth）、领取（game-mail）、
+  // 进图（realtime）、拾取 / 获得 / 消耗（roles）各在自己的**成功点**写一笔 ——
+  // 这条边只有 `record` 一个方法（同步写、永不抛），不构成「域之间互相依赖业务逻辑」。
+  // 另两条（击杀 / 任务）走事件总线订阅（`EventLogListener`），**没有**反向 import：
+  // 结算与任务域不需要知道流水的存在。
+  { from: "modules/auth", to: "modules/event-log/event-log.service.ts", why: "登录成功与失败写流水（#886）" },
+  { from: "modules/game-mail", to: "modules/event-log/event-log.service.ts", why: "邮件领取写流水（#886）" },
+  { from: "modules/realtime", to: "modules/event-log/event-log.service.ts", why: "进图成功写流水（#886）" },
+  { from: "modules/roles", to: "modules/event-log/event-log.service.ts", why: "拾取 / 获得 / 消耗写流水（#886）" },
   // roles 的属性汇总口径来自 combat 纯函数（存档返回值要带战斗力）
   { from: "modules/roles", to: "modules/combat/role-attributes.ts", why: "属性汇总纯函数" },
   // 状态数值口径（#822）：角色状态的汇总与格挡公式是纯函数，结算侧与存档侧各用一半 ——
@@ -191,6 +200,9 @@ const REPO_EDGES = {
   // `DELETE FROM ?` 在 SQLite 里不成立 —— 只能运行期拼串，所以这段 SQL 必须在仓储里。
   // 只有 game-config 摸它：写版本在拦截器（属该模块），回滚在 ConfigRevisionService。
   "database/repositories/config-revision.repository.ts": ["modules/game-config"],
+  // 玩家行为流水（#886）：只有 event-log 域读写 `event_logs`。写入口分散在
+  // auth / roles / realtime / game-mail —— 但它们都经 `EventLogService`，不直连仓储。
+  "database/repositories/event-log.repository.ts": ["modules/event-log"],
   // 注：音效配置进快照（#683）之后，game-config **没有**加进这一行 —— 它注入的是
   // AudioSettingService（AudioSettingModule 导出），不直接摸表。仓储边保持只有音效域，
   // 「谁能读这张表」与「谁能拿到配音效服务」是两件事，别把后者的便利当理由放开前者。

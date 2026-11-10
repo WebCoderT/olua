@@ -141,6 +141,7 @@ const NAV_GROUPS: NavBranch[] = [
     children: [
       { to: "/admins", label: "管理员", permission: PERMISSION.ADMIN_READ },
       { to: "/audit-logs", label: "操作日志", permission: PERMISSION.AUDIT_READ },
+      { to: "/event-logs", label: "玩家行为流水", permission: PERMISSION.EVENT_READ },
       { to: "/config-versions", label: "配置版本", permission: PERMISSION.CONFIG_READ },
       { to: "/system", label: "系统信息", permission: PERMISSION.SYSTEM_READ },
     ],

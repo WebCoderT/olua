@@ -79,9 +79,9 @@ function collectChangedFiles() {
  * 新增模块/新增 e2e 时补一行；改了表外的东西宁可全量跑，也不静默漏。
  */
 const SERVER_MODULE_E2E = [
-  ["src/modules/auth", ["guard"]],
+  ["src/modules/auth", ["guard", "event-log"]],
   ["src/modules/roles", ["roles", "role-migration", "role-corrupted", "role-optimistic"]],
-  ["src/modules/mail", ["mail", "game-mail"]],
+  ["src/modules/mail", ["mail", "game-mail", "event-log"]],
   ["src/modules/realtime", ["realtime", "combat", "world", "world-viewers", "soak", "map-enter", "monster-ai", "crit", "push", "area-skill", "cast-guard"]],
   ["src/modules/world", ["world", "world-viewers", "map-monitor"]],
   ["src/modules/combat", ["combat", "roles"]],
@@ -90,14 +90,16 @@ const SERVER_MODULE_E2E = [
   ["src/modules/guild", ["guild"]],
   ["src/modules/social", ["social"]],
   ["src/modules/chat", ["chat"]],
-  ["src/modules/quest", ["quest"]],
+  ["src/modules/quest", ["quest", "event-log"]],
   ["src/modules/sell", ["sell"]],
   ["src/modules/blocks", ["blocks"]],
   ["src/modules/party", ["party", "realtime"]],
   ["src/modules/leaderboard", ["rank"]],
-  ["src/modules/achievement", ["achievement"]],
+  ["src/modules/achievement", ["achievement", "event-log"]],
   ["src/modules/map", ["map", "map-enter"]],
-  ["src/modules/admin", ["guard"]],
+  ["src/modules/admin", ["guard", "event-log"]],
+  // 流水模块自己（#886）：改写入路径就重跑流水专项
+  ["src/modules/event-log", ["event-log"]],
   // 建库 / 进程装配是「所有套件的底座」—— 动了就全量
   ["src/database", "ALL"],
   ["src/common", "ALL"],

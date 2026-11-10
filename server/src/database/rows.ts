@@ -187,6 +187,35 @@ export interface AuditLogWithNameRow extends AuditLogRow {
 }
 
 /**
+ * 玩家行为流水行（#886 / J3）
+ *
+ * 与 `AuditLogRow` 的差别是「主语不同」：这张表的主语是**玩家角色**，所以没有
+ * actor/action/path 那一套管理端字段，换成 role / map / target / amount 这类
+ * 「做了什么、对谁、多少」的业务维度。
+ */
+export interface EventLogRow {
+  id: string;
+  /** 事件类型（见 common/constants/event-type 的 EVENT_TYPE） */
+  type: string;
+  account_id: string | null;
+  role_id: string | null;
+  /** 角色名（冗余：角色可能被删，只留 id 事后认不出是谁） */
+  role_name: string | null;
+  zone_id: number | null;
+  map_id: string | null;
+  /** 关键对象：怪物 key / 物品 id / 任务 id / 邮件 id（各类型语义不同，见 DTO 注释） */
+  target: string | null;
+  /** 数量 / 经验 / 金额（该类型有「多少」这个维度时才有值） */
+  amount: number | null;
+  /** 其余载荷（JSON 字符串） */
+  detail: string | null;
+  ip: string | null;
+  /** 1 成功 / 0 失败（目前只有登录失败会写 0） */
+  success: number;
+  created_at: number;
+}
+
+/**
  * 公告行
  *
  * 时间窗用**两个可空列**表达，而不是「必填的起止时间」：
