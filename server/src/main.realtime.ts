@@ -7,6 +7,7 @@ import { AppModule } from "./app.module";
 import { AllExceptionsFilter } from "./common/filters/all-exceptions.filter";
 import { TransformInterceptor } from "./common/interceptors/transform.interceptor";
 import { lanIPv4Addresses } from "./common/utils/net-address.util";
+import { ModularLogger } from "./common/logger/modular-logger";
 
 /**
  * 实时进程入口（#37 拆进程）
@@ -29,7 +30,7 @@ async function bootstrap() {
   // 显式声明成 Express 应用（与 main.ts 同口径，见那边注释）
   const app = await NestFactory.create<NestExpressApplication>(
     AppModule.register({ realtime: true }),
-    { logger: ["log", "warn", "error"] },
+    { logger: new ModularLogger() },
   );
   const config = app.get(ConfigService);
 

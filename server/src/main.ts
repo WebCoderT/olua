@@ -8,6 +8,7 @@ import { configReader, readConfigSnapshot } from "./config/config-snapshot";
 import { AllExceptionsFilter } from "./common/filters/all-exceptions.filter";
 import { TransformInterceptor } from "./common/interceptors/transform.interceptor";
 import { lanIPv4Addresses } from "./common/utils/net-address.util";
+import { ModularLogger } from "./common/logger/modular-logger";
 import { setupSwagger, SWAGGER_PATH } from "./swagger/setup";
 
 /**
@@ -28,7 +29,7 @@ async function bootstrap() {
   const realtimeEmbedded = process.env.REALTIME_EMBEDDED !== "false";
   // 显式声明成 Express 应用：`app.set("trust proxy", ...)` 只有 Express 适配器才有
   const app = await NestFactory.create<NestExpressApplication>(AppModule.register({ realtime: realtimeEmbedded }), {
-    logger: ["log", "warn", "error"],
+    logger: new ModularLogger(),
   });
   const config = app.get(ConfigService);
 
