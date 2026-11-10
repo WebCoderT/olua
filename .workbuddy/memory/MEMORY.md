@@ -62,6 +62,12 @@
 - **离线发奖 ✅ 已补**（#867）：`RolesService.grantByRoleId(roleId, rewards)` —— 发奖主体抽成私有 `applyRewards(existing, consume, rewards, source)`，
   两条入口只差「怎么拿到角色行」（在线 `onlineRoleOrThrow` / 离线 `findById`）；**`accountId` 从行上取（`account_id`），不信入参**。
   `grantQuestRewards` 签名与行为不变。排行赛结算（31 篇）可以直接用。
+- **道具冷却三口径**（#847/#848，`roles/use-cooldown.ts`）：① 判在业务前置**之后**（药品在「血蓝已满 20014」之后，
+  满血点药不该吃冷却）；② **占位在写库之前**（否则并发都过检查），落库失败用 `persistOrConflictGuarded` **退掉占位**；
+  ③ 内存不落库 —— 用道具只走 HTTP，两个进程各一份也不会被绕过。**别给 `money_items`/`drugs` 这类快照表加冷却列**
+  （加一列要动 DTO / `snapshot()` / 客户端 `game-config` / 管理端表单 / `configs-sandbox` 五处）。
+- **改既有行为要同步跟改既有套件**：加服务端冷却后，`e2e-money-item`（同一道具连点两次）与 `e2e-game-config`
+  （用药段把 `drugs.cooldown` 改成过 2 秒）直接红 —— 前者补等待，后者**动态读库算等待时长**，别写死 1.25s。
 - **邮件过期两条腿必须成对**（#867）：`GameMailAutoClaimService`（到期前 3 天、**主人离线**、有奖励 → 入包成功才 `auto_claimed_at`）
   + `purgeExpired`（只删「已领 / 三样都没有」）。**单改清理判据＝把行永久留在库里**，玩家依旧看不到。
   失败计数 `auto_attempts` **写在事务外**（回滚会抹掉）；跨进程互斥靠 `markClaimed` 的 `WHERE claimed_at IS NULL`，不靠内存锁。
@@ -91,7 +97,7 @@
 - 资源发布：`make resources-manifest/pack/upload VERSION=x`；清单先合 master 再传 Release。
 
 ## 进度
-- 已落地与 open 项的完整清单 → `memory/topics/进度年表.md`（449 条，按日）。
+- 已落地与 open 项的完整清单 → `memory/topics/进度年表.md`（450 条，按日）。
 - 当前 open（截至 2026-11-10）：#669 刷怪区即时生效 · #9 包体积 · #12~#19 素材 · #295 阶段三 · #403 帮会战 · #742 站点 TLS ·
   **#826 已落两批**（暴击+破防 PR #906；撞飞三道闸 + 1009 群体化 + desc 删数值 PR #908；余：眩晕/麻痹/灼烧/两段连击/拉人/等级压制 sup）·
   掉落表未按新装备重算（`EQUIP_LEVEL_GAP` / `MAX_TIER_PER_SLOT`）· 本地库有未导出运营改动，`make config-check` 常红。
@@ -111,6 +117,10 @@
   （`hasUnclaimedReward()` 一处判据）· #868 先标已发 + 同事务（`markClaimed` 命中 0 行 = 闸门，
   兼 API/实时两进程互斥）· #869 未领角标只数有奖励的（公告不贡献红点）· #870 一键领取逐封容错 + `failures[]`
   （客户端三态提示）。**#867 过期自动入包仍未做**（见下）。
+- **经济与道具冷却 ✅（2026-11-10，PR #920 合入 `d6aeb8fc`）**：#845 **实测不成立**（`sellGoods` 入账本来就是 `bindGold`，
+  绑定件与未绑定件同一条路径 → 只补断言锁住「`gold`/`silver` 一分不动」）· #847 货币道具冷却（常量 1 秒，20031）·
+  #848 药品冷却（读 `drugs.cooldown` 秒，20030）。共用 `roles/use-cooldown.ts`（进程内 Map，键「角色 + 道具 id」）；
+  错误信封起支持 `details`（`remainingMs`/`cooldownMs`，**别借 `data` 夹带**）。新 e2e `use-cooldown` 32 条（58 套）。
 - **#867 过期前自动入包 ✅（2026-11-10，PR #919 合入 `0833e9d4`）**：issue 原文「带未领物品的过期邮件永不删」
   实测**是取舍不是 bug**（真洞在另一半：`attachments='[]'` 的纯金币/经验邮件未领就被物理删）。
   落地＝离线发奖 `grantByRoleId` + `GameMailAutoClaimService`（每小时 / 到期前 3 天 / 只对离线 / 逐封事务）
