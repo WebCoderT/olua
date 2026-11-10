@@ -30,9 +30,10 @@ async function bootstrap() {
   // 显式声明成 Express 应用（与 main.ts 同口径，见那边注释）
   const app = await NestFactory.create<NestExpressApplication>(
     AppModule.register({ realtime: true }),
-    { logger: new ModularLogger() },
+    { bufferLogs: true },
   );
   const config = app.get(ConfigService);
+  app.useLogger(new ModularLogger(config.get<string>("logDir") ?? "logs"));
 
   const prefix = config.get<string>("apiPrefix") ?? "api";
   const port = config.get<number>("realtimePort") ?? 3101;

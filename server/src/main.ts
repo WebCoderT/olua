@@ -29,9 +29,10 @@ async function bootstrap() {
   const realtimeEmbedded = process.env.REALTIME_EMBEDDED !== "false";
   // 显式声明成 Express 应用：`app.set("trust proxy", ...)` 只有 Express 适配器才有
   const app = await NestFactory.create<NestExpressApplication>(AppModule.register({ realtime: realtimeEmbedded }), {
-    logger: new ModularLogger(),
+    bufferLogs: true,
   });
   const config = app.get(ConfigService);
+  app.useLogger(new ModularLogger(config.get<string>("logDir") ?? "logs"));
 
   const prefix = config.get<string>("apiPrefix") ?? "api";
   const port = config.get<number>("port") ?? 3100;

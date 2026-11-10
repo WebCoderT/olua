@@ -98,6 +98,7 @@ npm run dev              # 开发（ts-node 热启动）；npm run build && npm 
 | `CORS_ORIGINS` | `*` | 允许的跨域来源，逗号分隔 |
 | `NODE_ENV` | `development` | 只影响标记，不改变行为 |
 | `LOG_REQUESTS` | `true` | 是否打印每请求日志（只打方法/路径/耗时，**不打请求体**） |
+| `LOG_DIR` | `logs` | 模块日志文件目录（相对 `server/` 工作目录） |
 | `TRUST_PROXY` | `false` | 是否信任反代传来的客户端 IP（**双向陷阱，见下**） |
 | `LOGIN_MAX_FAILURES` | `5` | 同一用户名连续失败多少次锁定 |
 | `LOGIN_LOCK_MS` | `600000` | 用户名维度锁定时长（10 分钟） |
