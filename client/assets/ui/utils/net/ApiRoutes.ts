@@ -198,7 +198,7 @@ export const ApiRoutes = {
     /**
      * 删除邮件（DELETE /mails/{id}）
      *
-     * **附件没领不能删**（50143）—— 删了等于替玩家扔掉奖励。已领或无附件的邮件可以删。
+     * **奖励没领不能删**（50143）—— 删了等于替玩家扔掉奖励。「有奖励」= 金币 / 经验 / 附件任一（#866）：纯金币邮件即使 `attachments` 为空也拒删。已领的、以及三样都没有的纯公告可以删。
      */
     remove: (id: string) => `/mails/${encodeURIComponent(id)}`,
     /**
@@ -216,7 +216,7 @@ export const ApiRoutes = {
     /**
      * 一键领取（POST /mails/claim-all）
      *
-     * 按发出的时间正序逐封领取，**领到背包满为止**：已领的照常落库，`stoppedByBag` 为 true 表示还有剩。
+     * 按发出的时间正序逐封领取，**一封失败不拖累其他封**（#870）：每封一个独立事务 + 独立 try/catch，背包满 / 物品不存在 / 已被人领走都只影响那一封，其余照领。
      */
     claimAll: "/mails/claim-all",
     /**

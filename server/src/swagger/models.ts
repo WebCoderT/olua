@@ -87,7 +87,7 @@ import { CreateQuestDto, QuestDto, QuestObjectiveDto, QuestPageDto, QuestQueryDt
 import { MyQuestsDto, NpcTalkDto, NpcTalkResultDto, QuestIdDto, QuestRewardResultDto, QuestStateDto, QuestSubmitResultDto } from "../modules/quest/dto/quest-state.dto";
 import { AchievementConditionDto, AchievementDto, AchievementPageDto, AchievementQueryDto, AchievementRewardItemDto, AchievementRewardsDto, CreateAchievementDto, UpdateAchievementDto } from "../modules/game-config/dto/achievement.dto";
 import { AchievementClaimResultDto, AchievementIdDto, AchievementSummaryDto, AchievementViewDto, MyAchievementsDto } from "../modules/achievement/dto/achievement.dto";
-import { AdminSendMailDto, MailAttachmentDto, MailBoxDto, MailChannelSummaryDto, MailClaimAllResultDto, MailClaimResultDto, MailViewDto } from "../modules/game-mail/dto/game-mail.dto";
+import { AdminSendMailDto, MailAttachmentDto, MailBoxDto, MailChannelSummaryDto, MailClaimAllResultDto, MailClaimFailureDto, MailClaimResultDto, MailViewDto } from "../modules/game-mail/dto/game-mail.dto";
 import {
   MallCatalogItemDto,
   MallCatalogPageDto,
@@ -538,6 +538,8 @@ export const SWAGGER_MODELS = [
   MailChannelSummaryDto,
   MailClaimResultDto,
   MailClaimAllResultDto,
+  // 一键领取的「哪几封没领到」（#870）
+  MailClaimFailureDto,
   // 管理端游戏消息补发（#437）
   AdminSendMailDto,
   // 装备对齐几何（#513）

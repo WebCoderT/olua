@@ -68,7 +68,10 @@ export class GameMailController {
     operationId: "gameMail.claimAll",
     summary: "一键领取",
     description:
-      "按发出的时间正序逐封领取，**领到背包满为止**：已领的照常落库，`stoppedByBag` 为 true 表示还有剩。\n\n" +
+      "按发出的时间正序逐封领取，**一封失败不拖累其他封**（#870）：每封一个独立事务 + 独立 try/catch，" +
+      "背包满 / 物品不存在 / 已被人领走都只影响那一封，其余照领。\n\n" +
+      "返回 `failures[]`（`mailId` / `code` / `reason`）说明哪几封没领到、为什么；" +
+      "`stoppedByBag` 为 true 表示**至少有一封**是因为背包满没领到（纯金币 / 纯经验邮件不受影响）。\n\n" +
       "`channel` 可选：传了就只领这一栏（面板在「奖励」页签点一键领取时，不该顺手动到社交栏），" +
       "不传 = 全部频道；传了非法值 → 40000。",
   })
@@ -86,7 +89,10 @@ export class GameMailController {
   @ApiPlayerDoc({
     operationId: "gameMail.remove",
     summary: "删除邮件",
-    description: "**附件没领不能删**（50143）—— 删了等于替玩家扔掉奖励。已领或无附件的邮件可以删。",
+    description:
+      "**奖励没领不能删**（50143）—— 删了等于替玩家扔掉奖励。" +
+      "「有奖励」= 金币 / 经验 / 附件任一（#866）：纯金币邮件即使 `attachments` 为空也拒删。" +
+      "已领的、以及三样都没有的纯公告可以删。",
   })
   @ApiParam({ name: "id", description: "邮件 id" })
   @ApiDataResponse(MailBoxDto, { description: "删除后的收件箱" })
