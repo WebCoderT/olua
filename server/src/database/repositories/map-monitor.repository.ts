@@ -87,4 +87,18 @@ export class MapMonitorRepository {
       [zoneId, mapId, zoneId, mapId, keep],
     ).changes;
   }
+
+  /**
+   * 按**时间**删掉过期事件（#887），返回删了几行
+   *
+   * 与上面 `trimEvents`（每图条数）是两道独立的闸，取先到：
+   * - 条数闸在**写入时**触发 —— 它天然管不住「这张图从此没人进」，因为没有写入就没有裁剪；
+   * - 时间闸扫全表、与图无关 —— 死图的那 2000 条到点就走，不需要有人来往里写东西。
+   *
+   * 走 `idx_map_monitor_events_at`（`at` 单列索引）：删除条件只按时间，用不上
+   * `(zone_id, map_id, id)` 那条的前缀。
+   */
+  trimOlderThan(cutoff: number): number {
+    return this.db.execute("DELETE FROM map_monitor_events WHERE at < ?", [cutoff]).changes;
+  }
 }

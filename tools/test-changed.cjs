@@ -82,7 +82,7 @@ const SERVER_MODULE_E2E = [
   ["src/modules/auth", ["guard", "event-log"]],
   ["src/modules/roles", ["roles", "role-migration", "role-corrupted", "role-optimistic"]],
   ["src/modules/mail", ["mail", "game-mail", "event-log"]],
-  ["src/modules/realtime", ["realtime", "combat", "world", "world-viewers", "soak", "map-enter", "monster-ai", "crit", "push", "area-skill", "cast-guard"]],
+  ["src/modules/realtime", ["realtime", "combat", "world", "world-viewers", "soak", "map-enter", "monster-ai", "crit", "push", "area-skill", "cast-guard", "map-monitor"]],
   ["src/modules/world", ["world", "world-viewers", "map-monitor"]],
   ["src/modules/combat", ["combat", "roles"]],
   ["src/modules/game-config", ["game-config"]],

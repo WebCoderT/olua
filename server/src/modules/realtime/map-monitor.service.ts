@@ -71,14 +71,16 @@ export interface DamageRecord {
  *
  * 所以这里把两件事写进库：
  * - `map_monitor_state`：每秒一帧快照（每区每图一行，覆盖写）；
- * - `map_monitor_events`：一次击杀 / 一次刷新一行（按 (区, 图) 裁到上限）。
+ * - `map_monitor_events`：一次击杀 / 一次刷新一行（两道保留闸，见下）。
  *
  * 它是**运行时的投影，不是权威**：删掉这两张表不影响游戏，重启后第一次采样就会补上。
  *
  * ## 采样的三个口径
  *
  * 1. **只采有人看的图**（`world.viewedMaps()`）：没人看的图没有 AI 在跑、也没有广播对象，
- *    采它等于给空气写库；这类图的监控页会显示「最后采样 N 秒前」，那正是事实；
+ *    采它等于给空气写库；这类图的监控页会显示「最后采样 N 秒前」，那正是事实。
+ *    「有人看」的判据是**玩家连接**（`world.join` 登记观看者），不是「管理端开着监控页」——
+ *    所以玩家在图里打怪，这张图一定在被采样；
  * 2. **活怪用 AI 实时坐标，死怪用死亡点**：AI 运行时在击杀时就被清掉（重生要回出生点），
  *    所以死怪的位置取「上一次采到的位置」并留到重生 —— 图上那颗灰色残点因此落在
  *    它真正倒下的地方，而不是出生点；
@@ -88,13 +90,27 @@ export interface DamageRecord {
  * ## 事件不落内存环形缓冲的理由
  *
  * 管理端可能「刚打开页面」：它需要知道**它没看见的那几分钟**发生过什么。内存缓冲对
- * 后来的人等于不存在；行数按图裁剪（默认 2000 条，#745 起细到每一下伤害，条数消耗快一个数量级）
+ * 后来的人等于不存在；行按图裁剪（默认 2000 条，#745 起细到每一下伤害，条数消耗快一个数量级）
  * 就够看一阵，也不会把库撑大。
+ *
+ * ## 两道保留闸（#887：取先到）
+ *
+ * - **条数闸**：`appendEvent` 里攒够 `trimEvery` 条就裁到每图 `keep` 条。它只在**写入时**
+ *   触发 —— 也就天然管不住「这张图从此没人进」：没有写入，就没有裁剪，那 2000 条永远躺着；
+ * - **时间闸**：独立定时器按 `at` 删超过 `MAP_MONITOR_RETENTION_DAYS` 的行，与有没有人看、
+ *   有没有人在写**都无关**。它在启动时也补跑一次。
+ *
+ * 为什么时间闸不挂在采样循环里：`sample()` 只遍历「有人看的图」，全服没人时它一次循环都不进
+ * —— 那正是最需要清理的时刻（死图只会越来越多）。
  */
 @Injectable()
 export class MapMonitorService implements OnApplicationBootstrap, OnApplicationShutdown {
   private readonly logger = new Logger(MapMonitorService.name);
   private timer: NodeJS.Timeout | null = null;
+  /** 时间闸的定时器（#887：独立于采样，全服没人时也照常清） */
+  private pruneTimer: NodeJS.Timeout | null = null;
+  /** 「时间闸已关闭」这条 warn 只打一次（每 6 小时重复一遍等于没打） */
+  private lastPruneWarned = false;
 
   /** `zone:mapId` → 上一帧的存活表（重生差分用） */
   private readonly aliveBefore = new Map<string, Map<string, boolean>>();
@@ -125,12 +141,19 @@ export class MapMonitorService implements OnApplicationBootstrap, OnApplicationS
     // 实时坐标），构造注入反过来就成了循环依赖（#745）
     this.monsterAi.onLog = (event) => this.recordAi(event);
     this.timer = setInterval(() => this.sample(), this.intervalMs()).unref();
-    this.logger.log(`实时地图监控采集已启动（每 ${this.intervalMs()}ms 采样一次，事件每图保留 ${this.keep()} 条）`);
+    // 启动就先清一次：上次进程退出到这次启动之间可能已经隔了几天（死图不会自己变干净）
+    this.prune();
+    this.pruneTimer = setInterval(() => this.prune(), this.pruneMs()).unref();
+    this.logger.log(
+      `实时地图监控采集已启动（每 ${this.intervalMs()}ms 采样一次，事件每图保留 ${this.keep()} 条 / 超过 ${this.retentionDays()} 天清理）`,
+    );
   }
 
   onApplicationShutdown(): void {
     if (this.timer) clearInterval(this.timer);
     this.timer = null;
+    if (this.pruneTimer) clearInterval(this.pruneTimer);
+    this.pruneTimer = null;
     this.monsterAi.onLog = null;
   }
 
@@ -396,6 +419,36 @@ export class MapMonitorService implements OnApplicationBootstrap, OnApplicationS
     if (removed > 0) this.logger.debug(`地图 ${mapId}（区 ${zoneId}）监控事件裁剪：删掉 ${removed} 条旧记录（保留 ${this.keep()}）`);
   }
 
+  /**
+   * 时间闸：删掉超过保留期的文字事件（#887）
+   *
+   * 与 `appendEvent` 里的条数闸是两道独立的闸（取先到）：那一道只在写入时跑，管不住
+   * 「从此没人进的图」；这一道按 `at` 扫全表，与有没有人在写、有没有人在看都无关。
+   *
+   * 三处刻意的处理：
+   * - **保留期 ≤ 0 视为关闭**（不是「保留 0 天 = 全删」）：运维想留全量时把它设成 0，
+   *   而不是看着它把库清空；关闭时打一条 warn，免得「怎么一直在长」变成谜；
+   * - **失败只 warn**：监控是投影，清理失败不该让实时进程掉出去；
+   * - **`<=` 用 `<`**：到点那一刻的行不算过期，避免边界上反复删/留。
+   */
+  private prune(): void {
+    const days = this.retentionDays();
+    if (days <= 0) {
+      if (this.lastPruneWarned === false) {
+        this.logger.warn("MAP_MONITOR_RETENTION_DAYS ≤ 0：监控事件的时间闸已关闭，只按每图条数裁剪");
+        this.lastPruneWarned = true;
+      }
+      return;
+    }
+    const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
+    try {
+      const removed = this.monitor.trimOlderThan(cutoff);
+      if (removed > 0) this.logger.log(`监控事件时间闸：删掉 ${removed} 条超过 ${days} 天的旧记录`);
+    } catch (error) {
+      this.logger.warn(`监控事件时间闸失败：${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
   //#endregion
 
   //#region 配置与小工具
@@ -415,6 +468,16 @@ export class MapMonitorService implements OnApplicationBootstrap, OnApplicationS
   /** 攒够多少条新事件才裁剪一次（每杀一只都 DELETE 会让 WAL 白涨） */
   private trimEvery(): number {
     return this.config.get<number>("mapMonitorTrimEvery") ?? 25;
+  }
+
+  /** 时间闸的保留期（天；≤ 0 = 关闭时间闸） */
+  private retentionDays(): number {
+    return this.config.get<number>("mapMonitorRetentionDays") ?? 7;
+  }
+
+  /** 时间闸多久扫一次（毫秒） */
+  private pruneMs(): number {
+    return this.config.get<number>("mapMonitorPruneMs") ?? 6 * 60 * 60 * 1000;
   }
 
   //#endregion

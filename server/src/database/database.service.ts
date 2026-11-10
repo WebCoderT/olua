@@ -260,6 +260,9 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
         payload TEXT    NOT NULL
       );
       CREATE INDEX IF NOT EXISTS idx_map_monitor_events_map ON map_monitor_events(zone_id, map_id, id);
+      -- 时间闸（#887）按 at 扫全表：没有这条索引就是「每次清理全表读一遍」，图越多越慢。
+      -- 上面那条是 (zone_id, map_id, id)，前缀用不上 —— 时间闸与图无关。
+      CREATE INDEX IF NOT EXISTS idx_map_monitor_events_at ON map_monitor_events(at);
 
       -- 刷怪区（#295 阶段一 / #667 后台绘制）：一行 = 地图上一个矩形区域。
       -- #667 起由**管理端地图页拖框建/改/删**（POST/PATCH/DELETE /admin/maps/:id/spawn-areas），
