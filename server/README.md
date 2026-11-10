@@ -62,7 +62,7 @@ npm run dev              # 开发（ts-node 热启动）；npm run build && npm 
 | `npm run test:e2e:equip-sanitize` | 装备槽位清洗专项（19 条；#825：同件穿多槽只算一次 / 部位不符不计 / 管理端同口径 / 写入侧仍修档） |
 | `npm run test:e2e:element-damage` | 物法分离专项（12 条；#823：物理打物防 / 法术打魔防 / 法攻配 0 时跳过技能并 warn） |
 | `npm run test:e2e:area-skill` | 自身 / 区域 / 群体技能专项（31 条；#824：非单体技能能过结算 / 服务端算命中集合 / 落点夹取与跨图闸 / 逐只奖励与合并掉落账本） |
-| `npm run test:e2e:crit` | 暴击与破防专项（30 条；#826：`def_ignore` 削的是防御那一项 / `crit_rate` 必爆时伤害整体翻倍 / 角色属性与技能行相加） |
+| `npm run test:e2e:crit` | 暴击与破防专项（36 条；#826：`def_ignore` 削的是防御那一项 / `crit_rate` 必爆时伤害整体翻倍 / 角色属性与技能行相加） |
 | `npm run test:e2e:push` | 撞飞与群体化专项（25 条；#826：`push_chance` 与等级闸三道闸逐个验 / 回执带 `pushDistance` 且 AI 侧真的推走 / 击杀不推 / 1009 群体化一发多中） |
 | `npm run test:e2e:admin-mail` | 管理端消息补发专项（29 条；#437：鉴权 / 频道收窄 / 附件领到手 / 离线收件 / 审计留痕） |
 | `npm run test:e2e:mail-expiry` | 收件箱保质期专项（15 条；#439：ttl 写入 / 读口即时消失 / 清理判据 / 批量上限） |
