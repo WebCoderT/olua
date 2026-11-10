@@ -8,6 +8,7 @@ import { configReader, readConfigSnapshot } from "./config/config-snapshot";
 import { AllExceptionsFilter } from "./common/filters/all-exceptions.filter";
 import { TransformInterceptor } from "./common/interceptors/transform.interceptor";
 import { lanIPv4Addresses } from "./common/utils/net-address.util";
+import { ModularLogger } from "./common/logger/modular-logger";
 import { setupSwagger, SWAGGER_PATH } from "./swagger/setup";
 
 /**
@@ -26,11 +27,14 @@ async function bootstrap() {
   // 接口由 main.realtime.ts 单独的实时进程承担）。这是**启动期**的依赖图选择，
   // 所以直接读环境变量而不是等 ConfigService —— 模块工厂必须在配置装载前拿到答案。
   const realtimeEmbedded = process.env.REALTIME_EMBEDDED !== "false";
+  const modularLogger = new ModularLogger();
   // 显式声明成 Express 应用：`app.set("trust proxy", ...)` 只有 Express 适配器才有
   const app = await NestFactory.create<NestExpressApplication>(AppModule.register({ realtime: realtimeEmbedded }), {
-    logger: ["log", "warn", "error"],
+    logger: modularLogger,
+    bufferLogs: true,
   });
   const config = app.get(ConfigService);
+  modularLogger.setLogDirectory(config.get<string>("logDir") ?? "logs");
 
   const prefix = config.get<string>("apiPrefix") ?? "api";
   const port = config.get<number>("port") ?? 3100;

@@ -62,6 +62,8 @@ export interface AppConfiguration {
   corsOrigins: string[];
   /** 是否打印详细日志 */
   logRequests: boolean;
+  /** 模块日志目录（相对当前工作目录） */
+  logDir: string;
   /**
    * 是否信任反向代理传来的客户端 IP（`X-Forwarded-For`）
    *
@@ -479,6 +481,7 @@ export default function configuration(): AppConfiguration {
       .map((item) => item.trim())
       .filter(Boolean),
     logRequests: (process.env.LOG_REQUESTS ?? "true") === "true",
+    logDir: process.env.LOG_DIR ?? join(process.cwd(), "logs"),
     trustProxy: (process.env.TRUST_PROXY ?? "false") === "true",
     loginMaxFailures: Number(process.env.LOGIN_MAX_FAILURES ?? 5),
     loginLockMs: Number(process.env.LOGIN_LOCK_MS ?? 10 * 60 * 1000),

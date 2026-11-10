@@ -92,6 +92,7 @@ Literal values of these keys must not appear in code — `node ../tools/audit-ap
 | `CORS_ORIGINS` | `*` | Allowed CORS origins, comma-separated |
 | `NODE_ENV` | `development` | Only affects flags, does not change behavior |
 | `LOG_REQUESTS` | `true` | Whether to log each request (method/path/latency only, **no request body**) |
+| `LOG_DIR` | `logs` | Directory for per-context log files (relative to the `server/` working directory) |
 | `TRUST_PROXY` | `false` | Whether to trust the client IP from a reverse proxy (**two-way trap, see below**) |
 | `LOGIN_MAX_FAILURES` | `5` | How many consecutive failures on one username before lockout |
 | `LOGIN_LOCK_MS` | `600000` | Username-dimension lock duration (10 minutes) |
