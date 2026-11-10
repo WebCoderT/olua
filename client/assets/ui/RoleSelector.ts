@@ -10,7 +10,7 @@ import { getText } from "../configs/texts";
 import { RoleApi } from "./utils/net/Api";
 import type { RoleSummary } from "./utils/net/Api";
 import ApiError, { describeError, ApiErrorKind } from "./utils/net/ApiError";
-import { installNetwork, returnToLogin } from "./utils/net/NetworkSetup";
+import { installNetwork, logoutToLogin, returnToLogin } from "./utils/net/NetworkSetup";
 const { ccclass } = _decorator;
 
 /** 删除角色按钮的节点名前缀（按钮文字挂在 `<节点名>_label` 上，改文案时按它取；节点名带角色 id 便于排查） */
@@ -233,12 +233,13 @@ export class RoleSelector extends Component {
     beginGameButton.getComponent(Sprite).grayscale = true;
     beginGameButton.on(Node.EventType.TOUCH_END, () => this.beginGame());
     bottomBar.addChild(beginGameButton);
-    // 常驻返回按钮（左下）：点击清本地会话回登录场景（换账号 / 误进选角都能用），
-    // 与「需要重新登录」兜底共用 NetworkSetup.returnToLogin —— 退出只有一条路，行为不会漂移。
+    // 常驻返回按钮（左下）：主动退出登录（换账号 / 误进选角都能用）。
+    // 走 NetworkSetup.logoutToLogin —— 先请求服务端吊销令牌（#880）再清本地会话回登录场景；
+    // 「需要重新登录」兜底仍走 returnToLogin，两条路只差「先不先吊销」这一步，终点同一个。
     // 创建角色弹窗的关闭在弹窗右上角（closeButton），不走这颗按钮
     const backLayout = layout.backButton;
     const backButton = GameUiHelper.createTexturedButton(backLayout.name, backLayout.image, "", backLayout.position, backLayout.size);
-    backButton.on(Node.EventType.TOUCH_END, () => returnToLogin());
+    backButton.on(Node.EventType.TOUCH_END, () => logoutToLogin());
     this.stage!.addChild(backButton);
     // 角色滚动网格：一排 7 个、排满换行、超出视口上下滚。排布全交给引擎 Layout
     // （GRID + 横向起始轴 + CONTAINER：换行点 = 内容宽，CONTAINER 只撑高不改宽），

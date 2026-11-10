@@ -368,6 +368,14 @@ async function expectFailure(action) {
   const setupSource = read(FILE.setup);
   check(/let installed = false/.test(setupSource) && /if \(installed\) return/.test(setupSource), "installNetwork 幂等（登录/游戏场景都调也只接一次）");
   check(/HttpClient\.setUnauthorizedHandler\(/.test(setupSource) && /Session\.clear\(\)/.test(setupSource) && /loadScene\("Login"\)/.test(setupSource), "重登出口 = 清会话 + 回登录场景");
+  check(
+    /AuthApi\.logout\(\{ silent: true \}\)/.test(setupSource) && /export function logoutToLogin/.test(setupSource) && /if \(leaving\) return/.test(setupSource),
+    "主动退出先吊销令牌（#880）：logoutToLogin 发 auth/logout 后再清会话，且挡住重登兜底（否则登录场景被重载两次）",
+  );
+  check(
+    /backButton\.on\(Node\.EventType\.TOUCH_END, \(\) => logoutToLogin\(\)\)/.test(read(FILE.selector)),
+    "选角「返回登录」走吊销路径（不是只清本地：令牌无状态，删本地副本不影响泄漏出去那份）",
+  );
   check(/HttpClient\.setFailureHandler\(/.test(setupSource) && /createErrorTipText\(describeError\(error\)\)/.test(setupSource), "失败出口 = 统一飘字（文案由 ApiError 归一）");
   check(/installNetwork\(\)/.test(read(FILE.login)), "登录场景调 installNetwork");
   check(/installNetwork\(\)/.test(read(FILE.selector)), "选角场景调 installNetwork");
@@ -409,7 +417,7 @@ async function expectFailure(action) {
   check(removeIndex > 0 && deleteIndex > removeIndex, "删除角色：先服务端删成功，再清本地缓存（顺序反了角色会复活）");
   check(
     /ROLE_CELL_PREFIX|role_cell_/.test(selectorSource) && /Layout\.Type\.GRID/.test(selectorSource) && !/role_create_limit_tip/.test(selectorSource),
-    "角色数量不设上限：站位按滚动网格 Layout 排（一排 6 个、排满换行、超出滚动），创建前不再拦截",
+    "角色上限不落客户端：站位按滚动网格 Layout 排（一排 6 个、排满换行、超出滚动），创建前不预拦（上限在服务端，#878）",
   );
 
   const gameSource = read(FILE.game);

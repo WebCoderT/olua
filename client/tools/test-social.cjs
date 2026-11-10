@@ -253,7 +253,13 @@ try {
   check(/this\.logger\.warn\(/.test(blockService) && /沿用上一次的过滤快照/.test(blockService), "读库失败保留旧缓存（屏蔽读失败不该让聊天与互见整体停摆）");
 
   const chat = readRepo("server/src/modules/realtime/chat.service.ts");
-  check(/private reachable\(/.test(chat) && count(chat, "this.reachable(") === 2, "世界 / 帮会两条频道都逐收件人过滤拉黑");
+  // #876 起频道从两条变三条（世界 / 同图 / 帮会），所以不数总数 —— 按方法名逐个查：
+  // 「每个广播型发件人内部都过 reachable」才是这条断言要守的东西，加频道不必回来改数字
+  const saySenders = ["sayWorld", "sayMap", "sayGuild"];
+  check(
+    /private reachable\(/.test(chat) && saySenders.every((name) => new RegExp(`private ${name}\\([^]*?this\\.reachable\\(`).test(chat)),
+    "世界 / 同图 / 帮会三条频道都逐收件人过滤拉黑",
+  );
   check(/blocks\.hiddenFor\(target\.id, identity\.roleId\)/.test(chat), "私聊：被拉黑的一方只看到「不在线」（不暴露屏蔽）");
   check(/blocks\.hiddenFor\(identity\.roleId, target\.id\)/.test(chat), "私聊：拉黑者这边明说原因（那是自己的设置）");
 

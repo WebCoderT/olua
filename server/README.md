@@ -122,8 +122,9 @@ npm run dev              # 开发（ts-node 热启动）；npm run build && npm 
 > 登录限流会把全部玩家当成同一个人、一起锁死；反过来**直连暴露时必须保持 `false`** —— 开着等于允许调用方
 > 随便伪造 `X-Forwarded-For` 绕过 IP 限流。这一条在 `.env.example` 里也写明了。
 
-> **角色数量不设上限**：创建角色只校验结构与重名；客户端选角界面按网格自动排列
-> （`configs/layout/scenes` 的 `roleSelectorLayout.roleGrid`，从左到右排满一行再往下一行）。
+> **一个账号 6 个角色**（`ROLE_MAX_PER_ACCOUNT`，默认 6）：超限建号 400 / 20018，文案带上限数字；
+> 客户端选角界面按网格自动排列（`configs/layout/scenes` 的 `roleSelectorLayout.roleGrid`），
+> 但**不存这个数字、也不预拦** —— 上限只在服务端一处（#878）。
 
 ## 目录结构
 

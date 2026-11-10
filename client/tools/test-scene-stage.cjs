@@ -287,8 +287,8 @@ console.log("\n== E. 源码接线断言（不再有分辨率适配） ==");
     "RoleSelector：创建弹窗首次渲染显式传 view（首次调用时 this.createView 还没赋值，读它会空手而归 → 描述与预览打开全空）",
   );
   check(
-    /const backLayout = layout\.backButton/.test(selector) && /backButton\.on\(Node\.EventType\.TOUCH_END, \(\) => returnToLogin\(\)\)/.test(selector) && !/backToLoginButton/.test(selector),
-    "RoleSelector：返回按钮常驻（进场景即建，不随弹窗开关），点击清会话回登录（走 NetworkSetup.returnToLogin，与 401 兜底同一条路）",
+    /const backLayout = layout\.backButton/.test(selector) && /backButton\.on\(Node\.EventType\.TOUCH_END, \(\) => logoutToLogin\(\)\)/.test(selector) && !/backToLoginButton/.test(selector),
+    "RoleSelector：返回按钮常驻（进场景即建，不随弹窗开关），点击主动登出（logoutToLogin：先吊销令牌 #880 再回登录）",
   );
   check(
     /closeLayout = layout\.closeButton/.test(selector) && /dialog\.addChild\(closeButton\)/.test(selector) && /cancelCreateRoleUI\(\)/.test(selector),

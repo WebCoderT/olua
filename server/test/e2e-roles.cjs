@@ -1048,13 +1048,13 @@ async function raiseLevel(roleId, level, token) {
   const roleH1Id = roleH1.data.id;
   const renamed = await saveRole(api, tokenH, roleH1Id, { ...roleData(roleH1Id, "改包改名", "3", 1), sex: "2" });
   check(renamed.code === 0, "带假身份字段的存档照常保存（忽略，不是拒收）", `${renamed.code}/${renamed.message}`);
-  check(renamed.data.name === "身一", "存档改不了名字（响应里还是库里的名字）", renamed.data.name);
-  check(renamed.data.occupation === "1", "存档改不了职业（转职只能走将来的转职接口）", renamed.data.occupation);
-  check(renamed.data.sex === "1", "存档改不了性别", renamed.data.sex);
+  check(renamed.data?.name === "身一", "存档改不了名字（响应里还是库里的名字）", renamed.data?.name);
+  check(renamed.data?.occupation === "1", "存档改不了职业（转职只能走将来的转职接口）", renamed.data?.occupation);
+  check(renamed.data?.sex === "1", "存档改不了性别", renamed.data?.sex);
   check(
-    renamed.data.data.name === "身一" && renamed.data.data.occupation === "1" && renamed.data.data.sex === "1",
+    renamed.data?.data?.name === "身一" && renamed.data?.data?.occupation === "1" && renamed.data?.data?.sex === "1",
     "文档里那份也被盖成了库值（否则「列表里的名字」与「详情里的名字」会各说一套）",
-    JSON.stringify({ name: renamed.data.data.name, occupation: renamed.data.data.occupation, sex: renamed.data.data.sex }),
+    JSON.stringify({ name: renamed.data?.data?.name, occupation: renamed.data?.data?.occupation, sex: renamed.data?.data?.sex }),
   );
   // 非法职业不该把整份存档卡死 —— 这正是「先盖后校验」而不是「解析完再覆盖」的理由
   const bogusOccupation = await saveRole(api, tokenH, roleH1Id, { ...roleData(roleH1Id, "身一", "99", 1) });
@@ -1063,7 +1063,7 @@ async function raiseLevel(roleId, level, token) {
     "存档里塞一个不存在的职业码也照常保存（不认的字段不该拦下整次存档）",
     `${bogusOccupation.code}/${bogusOccupation.message}`,
   );
-  check(bogusOccupation.data.occupation === "1", "……而且职业仍是库里的那个", bogusOccupation.data.occupation);
+  check(bogusOccupation.data?.occupation === "1", "……而且职业仍是库里的那个", bogusOccupation.data?.occupation);
 
   // #880：登出吊销该账号**全部**令牌（同一账号另一台设备签的也一起失效）
   // 同一秒内两次登录签出来的令牌**可能逐字相同**（载荷只有 sub / ver / iat，而 iat 只到秒），
