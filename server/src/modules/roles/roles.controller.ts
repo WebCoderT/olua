@@ -12,6 +12,7 @@ import { LevelScrollUseDto, LevelScrollUseResultDto } from "./dto/level-scroll-u
 import { GrowthUpgradeDto } from "./dto/growth-upgrade.dto";
 import { GrowthUpgradeResultDto, RoleDto, RoleSummaryDto } from "./dto/role.dto";
 import { MallPurchaseDto, MallPurchaseResultDto } from "./dto/mall-purchase.dto";
+import { MallLimitsDto } from "../game-config/dto/mall.dto";
 import { FashionBuyDto, FashionBuyResultDto, FashionWearDto, FashionWearResultDto } from "./dto/fashion.dto";
 import { ReviveResultDto } from "./dto/revive.dto";
 import { SellGoodsDto, SellGoodsResultDto } from "./dto/sell-goods.dto";
@@ -116,13 +117,31 @@ export class RolesController {
     summary: "商城购买（扣费与入包都在服务端）",
     description:
       "价格与商城定价管理端同源（特殊价优先，未定价走统一价）；商品只卖装备变体（不在目录 → 404 50021）。\n" +
-      "扣绑定元宝后物品进背包（存档 bag 网格里找空格，装备每件占一格；没有空格 → 20012）。\n\n" +
-      "失败路径：20011 绑定元宝不足 / 20012 背包已满；带上 revision 时乐观锁语义与 role.save 相同（20006 / 20007）。",
+      "扣绑定元宝后物品进背包（存档 bag 网格里找空格，装备每件占一格；没有空格 → 20012）。\n" +
+      "每日限购与全服库存在同一事务里占位（#846）：买满 → 50029、售罄 → 50030，两种都不扣钱不发货。\n\n" +
+      "失败路径：20011 绑定元宝不足 / 20012 背包已满 / 50029 今日限购已满 / 50030 售罄；" +
+      "带上 revision 时乐观锁语义与 role.save 相同（20006 / 20007）。",
   })
   @ApiParam({ name: "id", description: "角色 id" })
-  @ApiDataResponse(MallPurchaseResultDto, { description: "购买后的角色（含本次消耗）" })
+  @ApiDataResponse(MallPurchaseResultDto, { description: "购买后的角色（含本次消耗与买完之后的限购/库存数）" })
   mallPurchase(@CurrentUser() user: AuthenticatedUser, @Param("id") id: string, @Body() dto: MallPurchaseDto): MallPurchaseResultDto {
     return this.rolesService.purchaseMallGood(user.id, id, dto);
+  }
+
+  @Get(":id/mall-limits")
+  @ApiPlayerDoc({
+    operationId: "role.mallLimits",
+    summary: "商城的每日限购与库存（只读，客户端打开商城时拉一遍）",
+    description:
+      "一次返回**全部上架商品**的运行时数字：今天已买几件、每日限购、全服已售、全服库存，以及一个 " +
+      "`purchasable`（只看限购与库存，等级与余额客户端另有判据）。\n\n" +
+      "快照里只有配置（`dailyLimit` / `stock`），「今天买了几个」随角色与时刻变，不能进快照 —— 走这个接口。\n" +
+      "天号每日 05:00 切（与日常任务同一把尺子），跨天不需要任何结算动作。",
+  })
+  @ApiParam({ name: "id", description: "角色 id" })
+  @ApiDataResponse(MallLimitsDto, { description: "逐件商品的限购与库存" })
+  mallLimits(@CurrentUser() user: AuthenticatedUser, @Param("id") id: string): MallLimitsDto {
+    return this.rolesService.mallLimits(user.id, id);
   }
 
   @Post(":id/sell")

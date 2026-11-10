@@ -700,7 +700,7 @@ export const routes = {
      */
     templates: "/admin/mails/templates",
   },
-  /** adminMall 模块（9 个接口） */
+  /** adminMall 模块（10 个接口） */
   adminMall: {
     /**
      * 可上架目录（装备 + 药品，按分类与等级筛）（GET /admin/mall/catalog）
@@ -741,7 +741,7 @@ export const routes = {
     /**
      * 上架商品（POST /admin/mall/goods）
      *
-     * 把一件装备变体或一种药品挂到某个分类下（缺省售价 0 = 免费、购买等级 0 = 不限）。
+     * 把一件装备变体或一种药品挂到某个分类下（缺省售价 1、购买等级 0 = 不限、每日限购 0 = 不限购、库存 -1 = 不限量）。
      */
     createGood: "/admin/mall/goods",
     /**
@@ -751,11 +751,17 @@ export const routes = {
      */
     deleteGood: (id: string) => `/admin/mall/goods/${encodeURIComponent(id)}`,
     /**
-     * 修改商品（分类 / 售价 / 购买等级）（PATCH /admin/mall/goods/{id}）
+     * 修改商品（分类 / 售价 / 购买等级 / 每日限购 / 库存）（PATCH /admin/mall/goods/{id}）
      *
-     * **商品是关联数据**：名称 / 图标 / 部位 / 装备等级归各自的配置页管，这里只开放商城自己的三个字段 —— 所属分类（`categoryId`，在陈列里挪位置）、售价（`price`）、购买等级（`requiredLevel`）；改完立即对购买生效（客户端下次取快照后按钮按新等级置灰）。
+     * **商品是关联数据**：名称 / 图标 / 部位 / 装备等级归各自的配置页管，这里只开放商城自己的字段 —— 所属分类（`categoryId`，在陈列里挪位置）、售价（`price`）、购买等级（`requiredLevel`）、每日限购（`dailyLimit`，0 = 不限购）、库存（`stock`，-1 = 不限量、0 = 售罄停售）；改完立即对购买生效（购买链路现查库）。
      */
     updateGood: (id: string) => `/admin/mall/goods/${encodeURIComponent(id)}`,
+    /**
+     * 重置库存（已售件数清零，商品重新可买）（POST /admin/mall/goods/{id}/stock-reset）
+     *
+     * 限量商品卖完之后运营手动续货：把**已售件数**清零，`stock`（总库存）保持不变。
+     */
+    resetStock: (id: string) => `/admin/mall/goods/${encodeURIComponent(id)}/stock-reset`,
   },
   /** adminMap 模块（15 个接口） */
   adminMap: {

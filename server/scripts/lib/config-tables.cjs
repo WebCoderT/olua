@@ -91,6 +91,7 @@ const CONFIG_TABLES = Object.freeze([
  * - 监控投影：map_monitor_state / map_monitor_events（#665 实时地图监控，重启丢也无所谓）
  * - 世界：world_monsters / world_meta / zones
  * - 状态：role_status（#822，在线角色身上生效中的状态；配置侧是 `statuses`）
+ * - 商城计数：mall_sales / mall_stock（#846，每日限购次数与全服已售件数；配置侧是 `mall_goods` 的两列）
  */
 const RUNTIME_TABLES = Object.freeze([
   "accounts",
@@ -108,6 +109,10 @@ const RUNTIME_TABLES = Object.freeze([
   "guild_members",
   "guilds",
   "mail_queue",
+  // 商城计数（#846）：配置只有 daily_limit / stock，「今天买了几个 / 全服卖了几件」是运行时状态 ——
+  // 写进同步文件就等于「别人机器上的销量盖掉我的」，而这个数本来就该各机器不同
+  "mall_sales",
+  "mall_stock",
   "map_monitor_events",
   "map_monitor_state",
   "parties",

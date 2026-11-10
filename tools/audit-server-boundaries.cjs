@@ -76,6 +76,9 @@ const ALLOWED_EDGES = [
   { from: "modules/roles", to: "modules/combat/role-attribute-comparison.ts", why: "属性比对纯函数" },
   // 商城购买收权（#304）：扣费与入包在存档域，成交价读 game-config 的定价服务（特殊价/统一价同源）
   { from: "modules/roles", to: "modules/game-config/mall-pricing.service.ts", why: "商城购买读成交价" },
+  // 限购 / 库存视图（#846）：购买回执与 GET mall-limits 返回的是 game-config 定义的同一个形状，
+  // 在 roles 里重新声明一份就等于有了两个会漂移的「限购视图」
+  { from: "modules/roles", to: "modules/game-config/dto/mall.dto.ts", why: "商城限购 / 库存视图形状复用（#846）" },
   // 区服（#295）：管理端开区/合并区直接复用 ZoneService 的一份实现（admin 控制器只做鉴权与审计）
   { from: "modules/admin", to: "modules/zone/", why: "区服管理复用 ZoneService 的开区/合并实现" },
   // realtime（gateway+结算）依赖 world 与存档的公开服务，依赖 combat 纯函数
@@ -255,7 +258,9 @@ const REPO_EDGES = {
   // #672：地图域放点位时要校验 npcId 存在并取名字（只读一行），与 monster.repository 同一理由
   "database/repositories/npc.repository.ts": ["modules/game-config", "modules/quest", "modules/map"],
   // 商城定价（#251）：同上，只在 game-config 模块内读写（特殊价行动态增删，商品清单来自生成物）
-  "database/repositories/mall.repository.ts": ["modules/game-config"],
+  // 商城（#758）：配置读写都在 game-config；**购买链路（#846）在 roles** ——
+  // 限购与库存要在同一个事务里占位，事务透传在仓储上（业务 service 不摸 DatabaseService）
+  "database/repositories/mall.repository.ts": ["modules/game-config", "modules/roles"],
   // 时装配置（#257）：同称号 / 战魂 / 军衔 / 装备，只在 game-config 模块内读写；
   // 时装收权（#596）后购买 / 穿脱（roles）也直读 —— 「拥有才给穿」与渠道校验都在服务端
   "database/repositories/fashion.repository.ts": ["modules/game-config", "modules/roles"],

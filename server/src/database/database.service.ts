@@ -820,12 +820,43 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
       -- 商城上架商品（#758）：主键是商品 id（装备变体 id），**运营手动上架/下架** ——
       -- 商品本体（名称/图标/部位）是装备数据，这里只存售价与购买等级两个运营字段；
       -- 不在表里的商品不在商城售卖（客户端陈列与购买都以这张表为准）
+      --
+      -- 限购与库存（#846）是**纯配置**，卖出去的计数不在这张表里（见下面 mall_sales / mall_stock）：
+      -- 这张表进 config-sync.sql，把 sold 写进来会被「导入 / 回滚 / 另一台机器的快照」盖回去。
+      -- 语义：daily_limit = 0 = 不限购（与 drugs.cooldown = 0 同口径）；stock = -1 = 不限量，
+      -- 0 才是「售罄停售」—— 两者默认值不同是因为「限购 0 次」没有意义，而「库存 0 件」有。
       CREATE TABLE IF NOT EXISTS mall_goods (
         id             TEXT    PRIMARY KEY,
         category_id    TEXT    NOT NULL,
         price          INTEGER NOT NULL DEFAULT 0,
         required_level INTEGER NOT NULL DEFAULT 0,
+        daily_limit    INTEGER NOT NULL DEFAULT 0,
+        stock          INTEGER NOT NULL DEFAULT -1,
         updated_at     INTEGER NOT NULL DEFAULT 0
+      );
+
+      -- 每日限购计数（#846）：**运行时**表，不进 config-sync.sql
+      -- 主键 (role_id, good_id, day)：一个角色一件商品一天一行，天号来自 common/utils/daily-clock
+      -- （每日 05:00 切日，与日常任务同一把尺子）。跨天不需要结算 —— 天号对不上就是新的一天，
+      -- 旧行由购买链路顺手清掉（限购只对今天有意义，留着也没人读）。
+      CREATE TABLE IF NOT EXISTS mall_sales (
+        role_id    TEXT    NOT NULL,
+        good_id    TEXT    NOT NULL,
+        day        INTEGER NOT NULL,
+        count      INTEGER NOT NULL DEFAULT 0,
+        updated_at INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (role_id, good_id, day)
+      );
+      CREATE INDEX IF NOT EXISTS idx_mall_sales_day ON mall_sales(day);
+
+      -- 全服库存计数（#846）：**运行时**表，不进 config-sync.sql
+      -- 只记「卖了几件」，总量在 mall_goods.stock（运营改小 = 立刻停售，改大 = 续货）。
+      -- 单独一张表而不是 mall_goods 一列：同上的快照覆盖问题，且这样「重置库存」= 把这里清零，
+      -- 与「改配置」是两件不同的事（后者会让客户端配置版本 +1）。
+      CREATE TABLE IF NOT EXISTS mall_stock (
+        good_id    TEXT    PRIMARY KEY,
+        sold       INTEGER NOT NULL DEFAULT 0,
+        updated_at INTEGER NOT NULL DEFAULT 0
       );
 
       -- 时装配置（#257）：主键是时装 id（config-sync.sql），清单固定不可增删行；
@@ -1357,6 +1388,10 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
     this.ensureColumn("money_items", "bind_on_drop", "INTEGER NOT NULL DEFAULT 0");
     this.ensureColumn("level_scrolls", "bind_on_drop", "INTEGER NOT NULL DEFAULT 0");
     this.ensureColumn("monster_drops", "bind_drops", "INTEGER NOT NULL DEFAULT 0");
+    // 商城限购与库存（#846）：两列都是**配置**，老库存量行补成「不限购 / 不限量」——
+    // 与加列前的行为完全一致（否则上线瞬间所有商品都会变成买不了）
+    this.ensureColumn("mall_goods", "daily_limit", "INTEGER NOT NULL DEFAULT 0");
+    this.ensureColumn("mall_goods", "stock", "INTEGER NOT NULL DEFAULT -1");
     // 日常日切（#815）：存量库补列后老行都是 0（真实天号在 20000 以上），一次性垫成今天 ——
     // 昨天接的日常今天还能交一次，而不是凭空从面板上消失。幂等：天号 0 只可能是补列那一批
     this.ensureColumn("quest_progress", "reset_day", "INTEGER NOT NULL DEFAULT 0");

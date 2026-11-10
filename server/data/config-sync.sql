@@ -11205,7 +11205,7 @@ INSERT INTO "mall_categories" ("id", "label", "sort_order", "updated_at") VALUES
 
 -- ===== mall_goods（1 行）=====
 DELETE FROM "mall_goods";
-INSERT INTO "mall_goods" ("id", "category_id", "price", "required_level", "updated_at") VALUES ('cloth_1', 'default', 1111, 0, 1793678868160);
+INSERT INTO "mall_goods" ("id", "category_id", "price", "required_level", "daily_limit", "stock", "updated_at") VALUES ('cloth_1', 'default', 1111, 0, 0, -1, 1793678868160);
 
 -- ===== map_collisions（1615 行）=====
 DELETE FROM "map_collisions";

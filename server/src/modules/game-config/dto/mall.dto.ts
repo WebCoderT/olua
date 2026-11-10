@@ -24,6 +24,19 @@ export const MALL_RECYCLE_RATIO_MAX = 0.5;
 export const MALL_LEVEL_MAX = 10_000;
 
 /**
+ * 每日限购的防御性上限（#846）
+ *
+ * 0 = 不限购（与 `drugs.cooldown = 0` 同口径）。上限只是防手滑输入天文数字，
+ * 不是玩法约束 —— 想「一人一天一亿件」也是运营的自由，只是没人这么配。
+ */
+export const MALL_DAILY_LIMIT_MAX = 100_000;
+
+/** 库存「不限量」的哨兵值（#846）：-1 = 不限量，0 = 售罄停售 */
+export const MALL_STOCK_UNLIMITED = -1;
+/** 库存数量的防御性上限（#846） */
+export const MALL_STOCK_MAX = 100_000_000;
+
+/**
  * 商城可上架的品类（#763）
  *
  * 商品是**关联数据**，所以「能卖什么」由目录决定而不是运营手输：目前两类 ——
@@ -143,6 +156,15 @@ export class MallGoodItemDto {
 
   @ApiProperty({ description: "购买等级（角色等级不足时禁购）" })
   requiredLevel: number;
+
+  @ApiProperty({ description: "每日限购件数（0 = 不限购）" })
+  dailyLimit: number;
+
+  @ApiProperty({ description: "全服库存件数（-1 = 不限量，0 = 售罄）" })
+  stock: number;
+
+  @ApiProperty({ description: "已售件数（运行时计数，不进快照；不限量商品恒 0）" })
+  sold: number;
 
   @ApiProperty({ description: "最近更新时间（毫秒）" })
   updatedAt: number;
@@ -283,13 +305,36 @@ export class CreateMallGoodDto {
   @Min(0, { message: "购买等级不能为负" })
   @Max(MALL_LEVEL_MAX, { message: "购买等级超出防御性上限" })
   requiredLevel?: number;
+
+  @ApiPropertyOptional({
+    description: "每日限购件数（0 / 留空 = 不限购；按角色按 05:00 切日计）",
+    minimum: 0,
+    maximum: MALL_DAILY_LIMIT_MAX,
+  })
+  @IsOptional()
+  @IsInt({ message: "每日限购必须是整数" })
+  @Min(0, { message: "每日限购不能为负（0 = 不限购）" })
+  @Max(MALL_DAILY_LIMIT_MAX, { message: "每日限购超出防御性上限" })
+  dailyLimit?: number;
+
+  @ApiPropertyOptional({
+    description: "全服库存件数（-1 / 留空 = 不限量；0 = 售罄停售）",
+    minimum: MALL_STOCK_UNLIMITED,
+    maximum: MALL_STOCK_MAX,
+  })
+  @IsOptional()
+  @IsInt({ message: "库存必须是整数" })
+  @Min(MALL_STOCK_UNLIMITED, { message: "库存不能小于 -1（-1 = 不限量）" })
+  @Max(MALL_STOCK_MAX, { message: "库存超出防御性上限" })
+  stock?: number;
 }
 
 /**
- * 修改商品入参 —— **只许改商城自己的三个字段**（分类 / 售价 / 购买等级）
+ * 修改商品入参 —— **只许改商城自己的五个字段**（分类 / 售价 / 购买等级 / 每日限购 / 库存）
  *
  * 商品本体是关联数据（装备变体 / 药品），名称 / 图标 / 部位 / 等级归各自的配置页管，
  * 这里一个字都不接受。`categoryId` 是「在商城陈列里挪个位置」，与本体无关。
+ * `dailyLimit` / `stock` 是运营手段（限购、限量），改完立即对下一次购买生效（购买链路现查库）。
  */
 export class UpdateMallGoodDto {
   @ApiPropertyOptional({ description: "所属分类 id（改分类 = 在商城陈列里挪个位置）" })
@@ -311,6 +356,28 @@ export class UpdateMallGoodDto {
   @Min(0, { message: "购买等级不能为负" })
   @Max(MALL_LEVEL_MAX, { message: "购买等级超出防御性上限" })
   requiredLevel?: number;
+
+  @ApiPropertyOptional({
+    description: "每日限购件数（0 = 不限购）",
+    minimum: 0,
+    maximum: MALL_DAILY_LIMIT_MAX,
+  })
+  @IsOptional()
+  @IsInt({ message: "每日限购必须是整数" })
+  @Min(0, { message: "每日限购不能为负（0 = 不限购）" })
+  @Max(MALL_DAILY_LIMIT_MAX, { message: "每日限购超出防御性上限" })
+  dailyLimit?: number;
+
+  @ApiPropertyOptional({
+    description: "全服库存件数（-1 = 不限量，0 = 售罄停售）",
+    minimum: MALL_STOCK_UNLIMITED,
+    maximum: MALL_STOCK_MAX,
+  })
+  @IsOptional()
+  @IsInt({ message: "库存必须是整数" })
+  @Min(MALL_STOCK_UNLIMITED, { message: "库存不能小于 -1（-1 = 不限量）" })
+  @Max(MALL_STOCK_MAX, { message: "库存超出防御性上限" })
+  stock?: number;
 }
 
 /** 下架商品的响应 */
@@ -335,4 +402,61 @@ export class MallGoodEntryDto {
 
   @ApiProperty({ description: "购买等级（0 = 不限）" })
   requiredLevel: number;
+
+  @ApiProperty({
+    description:
+      "每日限购件数（0 = 不限购）。**只有配置，没有「今天买了几个」** —— " +
+      "运行时计数走 `GET /roles/:roleId/mall-limits`，那是随角色变的，不能进快照",
+  })
+  dailyLimit: number;
+
+  @ApiProperty({ description: "全服库存件数（-1 = 不限量，0 = 售罄）。已售件数同样走 mall-limits" })
+  stock: number;
+}
+
+/**
+ * 「我这件商品还能买几件」（#846）
+ *
+ * 一件商品的**运行时**限购 / 库存视图。配置（`dailyLimit` / `stock`）也在里面回一份：
+ * 客户端打开商城时只调这一个接口，不必把快照里的配置和这里的运行数拼起来看。
+ */
+export class MallLimitDto {
+  @ApiProperty({ description: "商品 id" })
+  goodId: string;
+
+  @ApiProperty({ description: "今天已买几件（05:00 切日）" })
+  dailyBought: number;
+
+  @ApiProperty({ description: "每日限购（0 = 不限购）" })
+  dailyLimit: number;
+
+  @ApiProperty({ description: "全服已售件数（不限量商品恒 0）" })
+  sold: number;
+
+  @ApiProperty({ description: "全服库存（-1 = 不限量，0 = 售罄）" })
+  stock: number;
+
+  @ApiProperty({ description: "现在能不能买（等级 / 余额另有判据，这里只看限购与库存）" })
+  purchasable: boolean;
+}
+
+/** 当前角色在全部上架商品上的限购 / 库存视图 */
+export class MallLimitsDto {
+  @ApiProperty({ description: "当前天号（05:00 切日；客户端不需要解释它，只用于排查）" })
+  day: number;
+
+  @ApiProperty({ description: "逐件商品的限购与库存", type: [MallLimitDto] })
+  list: MallLimitDto[];
+}
+
+/** 重置库存的响应（运营手动续货） */
+export class MallStockResetDto {
+  @ApiProperty({ description: "商品 id" })
+  id: string;
+
+  @ApiProperty({ description: "重置后的已售件数（恒 0）" })
+  sold: number;
+
+  @ApiProperty({ description: "恒为 true（重置成功）" })
+  reset: boolean;
 }

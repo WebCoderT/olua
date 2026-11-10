@@ -17,12 +17,19 @@ import {
   MallGoodItemDto,
   MallGoodPageDto,
   MallGoodQueryDto,
+  MallLimitDto,
+  MallLimitsDto,
+  MallStockResetDto,
   MALL_CATEGORY_DRUG,
+  MALL_DAILY_LIMIT_MAX,
   MALL_PRICE_MIN,
   MALL_RECYCLE_RATIO_MAX,
+  MALL_STOCK_MAX,
+  MALL_STOCK_UNLIMITED,
   UpdateMallCategoryDto,
   UpdateMallGoodDto,
 } from "./dto/mall.dto";
+import { todayResetDay } from "../../common/utils/daily-clock";
 
 /**
  * 商品目录里的一行（商品本体 = 装备变体 / 药品，来自各自的表；上架校验与展示共用）
@@ -130,10 +137,11 @@ export class MallPricingService {
 
     const catalog = new Map(this.catalogEntries().map((entry) => [entry.id, entry]));
     const categoryOrder = new Map(this.mall.listCategories().map((row, index) => [row.id, index]));
+    const sold = this.mall.soldMap();
     const scoped = this.mall
       .listGoods()
       .filter((row) => !query.categoryId || row.category_id === query.categoryId)
-      .map((row) => this.itemOf(row, catalog.get(row.id)));
+      .map((row) => this.itemOf(row, catalog.get(row.id), sold.get(row.id) ?? 0));
     const levels = Array.from(new Set(scoped.map((item) => item.level))).sort((a, b) => a - b);
 
     const rows = scoped
@@ -219,33 +227,67 @@ export class MallPricingService {
       // 缺省价是 1 而不是 0：见 MALL_PRICE_MIN 的注释（0 = 免费印钞）
       price: this.ensurePriceSane(dto.id, Math.max(MALL_PRICE_MIN, dto.price ?? MALL_PRICE_MIN)),
       required_level: dto.requiredLevel ?? 0,
+      // 缺省 = 不限购 / 不限量：与加这两列之前的行为一致（新上架的商品不该默认买不了）
+      daily_limit: this.ensureDailyLimit(dto.dailyLimit),
+      stock: this.ensureStock(dto.stock),
       updated_at: Date.now(),
     };
     this.mall.insertGood(row);
-    return this.itemOf(row, entry);
+    return this.itemOf(row, entry, 0);
   }
 
   /**
-   * 改商城字段：所属分类 / 售价 / 购买等级
+   * 改商城字段：所属分类 / 售价 / 购买等级 / 每日限购 / 库存
    *
-   * 商品本体字段一概不改 —— 关联数据只开放这三个运营字段。改分类要先确认目标分类存在
+   * 商品本体字段一概不改 —— 关联数据只开放这几个运营字段。改分类要先确认目标分类存在
    * （404 50025），否则会留下一条指向不存在分类的孤儿行（客户端页签里看不见它）。
+   *
+   * 限购与库存改完**立即生效**：购买链路现查库（`priceOf` 同源），不缓存。
    */
   updateGood(id: string, dto: UpdateMallGoodDto): MallGoodItemDto {
     this.requireGood(id);
     if (dto.categoryId !== undefined) this.requireCategory(dto.categoryId);
     // 改价同样过定价不变式：只改分类时跳过（价格没动，不需要重判）
     const price = dto.price === undefined ? undefined : this.ensurePriceSane(id, Math.max(MALL_PRICE_MIN, dto.price));
-    this.mall.updateGood(id, { category_id: dto.categoryId, price, required_level: dto.requiredLevel });
+    this.mall.updateGood(id, {
+      category_id: dto.categoryId,
+      price,
+      required_level: dto.requiredLevel,
+      daily_limit: dto.dailyLimit === undefined ? undefined : this.ensureDailyLimit(dto.dailyLimit),
+      stock: dto.stock === undefined ? undefined : this.ensureStock(dto.stock),
+    });
     const catalog = new Map(this.catalogEntries().map((entry) => [entry.id, entry]));
-    return this.itemOf(this.mall.findGood(id)!, catalog.get(id));
+    return this.itemOf(this.mall.findGood(id)!, catalog.get(id), this.mall.soldOf(id));
   }
 
-  /** 下架（删行）：不在上架清单 → 404 50021（删无可删不静默成功） */
+  /**
+   * 下架（删行）：不在上架清单 → 404 50021（删无可删不静默成功）
+   *
+   * **同时清掉已售计数**：下架 = 这一轮售卖结束，重新上架是一件新商品。
+   * 不清的话，卖满 100 件的商品重新上架时会沿用旧的 `sold = 100`，配一个 `stock = 50`
+   * 就变成「刚上架就售罄」，运营只会以为是 bug。
+   */
   removeGood(id: string): { id: string; removed: true } {
     this.requireGood(id);
     this.mall.removeGood(id);
+    this.mall.resetStock(id);
     return { id, removed: true };
+  }
+
+  /**
+   * 重置库存（#846 运营手动续货）：把已售件数清零，商品重新可买
+   *
+   * 与「把 `stock` 改大」的区别在**数据**上：改 `stock` 是改配置（快照内容变了），
+   * 重置销量只动运行时计数（快照一个字节不变）。
+   *
+   * 注意配置版本：这个接口带 `gameConfig:write` 权限点，而版本 +1 的判据就是这个权限点
+   * （`ConfigVersionInterceptor`），所以它**照样会让版本 +1**、客户端重拉一次快照。
+   * 不为这一个动作新开权限点 —— 「能改全服配置」本来就只有一个门槛，多开一个只会多一处漏配。
+   */
+  resetStock(id: string): MallStockResetDto {
+    this.requireGood(id);
+    this.mall.resetStock(id);
+    return { id, sold: 0, reset: true };
   }
 
   //#endregion
@@ -264,6 +306,42 @@ export class MallPricingService {
   /** 读一件商品的购买等级（购买链路的等级校验用） */
   requiredLevelOf(id: string): number {
     return this.requireGood(id).required_level;
+  }
+
+  /** 读限购与库存配置（购买链路的判据；0 / -1 都表示「这条规则不生效」） */
+  limitsOfGood(id: string): { dailyLimit: number; stock: number } {
+    const row = this.requireGood(id);
+    return { dailyLimit: Number(row.daily_limit) || 0, stock: Number.isFinite(row.stock) ? Number(row.stock) : MALL_STOCK_UNLIMITED };
+  }
+
+  /**
+   * 当前角色在**全部上架商品**上的限购 / 库存视图（#846，客户端打开商城时拉一遍）
+   *
+   * 一次给全量而不是按商品拉：商城弹窗一屏就要陈列十几件，逐件请求既慢又会出现
+   * 「一半是旧数一半是新数」的中途态。上架商品是运营手挑的（出厂 1 行、几十行的量级），
+   * 整份返回不心疼。
+   */
+  limitsOf(roleId: string): MallLimitsDto {
+    const day = todayResetDay();
+    const bought = new Map(this.mall.listSalesOf(roleId, day).map((row) => [row.good_id, Number(row.count) || 0]));
+    const sold = this.mall.soldMap();
+    const dto = new MallLimitsDto();
+    dto.day = day;
+    dto.list = this.mall.listGoods().map((row) => {
+      const item = new MallLimitDto();
+      const dailyLimit = Number(row.daily_limit) || 0;
+      const stock = Number.isFinite(row.stock) ? Number(row.stock) : MALL_STOCK_UNLIMITED;
+      const soldCount = sold.get(row.id) ?? 0;
+      item.goodId = row.id;
+      item.dailyBought = bought.get(row.id) ?? 0;
+      item.dailyLimit = dailyLimit;
+      item.sold = soldCount;
+      item.stock = stock;
+      // 只看限购与库存：等级 / 余额是「这个角色此刻的另一个维度」，客户端另有判据（置灰同理）
+      item.purchasable = (dailyLimit <= 0 || item.dailyBought < dailyLimit) && (stock < 0 || soldCount < stock);
+      return item;
+    });
+    return dto;
   }
 
   // —— 内部 ——
@@ -351,7 +429,11 @@ export class MallPricingService {
   }
 
   /** 上架行 + 目录 → 展示视图（孤儿行 label 退回 id，照实显示便于运营清理） */
-  private itemOf(row: { id: string; category_id: string; price: number; required_level: number; updated_at: number }, entry?: CatalogEntry): MallGoodItemDto {
+  private itemOf(
+    row: { id: string; category_id: string; price: number; required_level: number; daily_limit: number; stock: number; updated_at: number },
+    entry?: CatalogEntry,
+    sold = 0,
+  ): MallGoodItemDto {
     return {
       id: row.id,
       categoryId: row.category_id,
@@ -364,8 +446,32 @@ export class MallPricingService {
       suffix: entry?.suffix ?? 0,
       price: row.price,
       requiredLevel: row.required_level,
+      dailyLimit: Number(row.daily_limit) || 0,
+      stock: Number.isFinite(row.stock) ? Number(row.stock) : MALL_STOCK_UNLIMITED,
+      sold,
       updatedAt: row.updated_at,
     };
+  }
+
+  /**
+   * 每日限购规范化：缺省 0（不限购），负数当 0 —— 与 `DO` 层校验同一口径
+   *
+   * 服务端这里只做「夹到合法区间的整数」而不抛错：DTO 已经把 HTTP 入参拦住了，
+   * 走到这里还越界只可能是内部调用（例如迁移脚本），那里不该因为一个默认值炸掉。
+   */
+  private ensureDailyLimit(raw: number | undefined): number {
+    if (raw === undefined) return 0;
+    const value = Math.floor(Number(raw));
+    if (!Number.isFinite(value) || value <= 0) return 0;
+    return Math.min(value, MALL_DAILY_LIMIT_MAX);
+  }
+
+  /** 库存规范化：缺省 -1（不限量），`0` 是合法值（售罄停售） */
+  private ensureStock(raw: number | undefined): number {
+    if (raw === undefined) return MALL_STOCK_UNLIMITED;
+    const value = Math.floor(Number(raw));
+    if (!Number.isFinite(value) || value < 0) return MALL_STOCK_UNLIMITED;
+    return Math.min(value, MALL_STOCK_MAX);
   }
 
   /**
@@ -415,13 +521,20 @@ export class MallPricingService {
     return this.equipments.list({ ...ALL }).find((row) => row.id === baseId)?.icon ?? "";
   }
 
-  /** 快照段：上架商品（客户端陈列与购买同源） */
+  /**
+   * 快照段：上架商品（客户端陈列与购买同源）
+   *
+   * 只带**配置**（售价 / 等级 / 限购 / 库存）。「今天买了几个」「已售几件」是运行时数字，
+   * 随角色与时刻变，走 `limitsOf`（`GET /roles/:roleId/mall-limits`）。
+   */
   snapshotGoods(): MallGoodEntryDto[] {
     return this.mall.listGoods().map((row) => ({
       id: row.id,
       categoryId: row.category_id,
       price: row.price,
       requiredLevel: row.required_level,
+      dailyLimit: Number(row.daily_limit) || 0,
+      stock: Number.isFinite(row.stock) ? Number(row.stock) : MALL_STOCK_UNLIMITED,
     }));
   }
 }

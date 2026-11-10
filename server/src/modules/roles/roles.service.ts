@@ -2,6 +2,7 @@ import { HttpStatus, Injectable, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { BizCode } from "../../common/constants/biz-code";
 import { ROLE_MAX_PER_ACCOUNT_DEFAULT } from "../../common/constants/role";
+import { todayResetDay } from "../../common/utils/daily-clock";
 import { BizException } from "../../common/errors/biz.exception";
 import { bindOnDropOf } from "../../common/runtime-config-cache";
 import { compareRoleAttributesOfRole } from "../combat/role-attribute-comparison";
@@ -23,6 +24,7 @@ import { AccountRepository } from "../../database/repositories/account.repositor
 import { DrugRepository } from "../../database/repositories/drug.repository";
 import { MoneyItemRepository } from "../../database/repositories/money-item.repository";
 import { LevelScrollRepository } from "../../database/repositories/level-scroll.repository";
+import { MallRepository } from "../../database/repositories/mall.repository";
 import { FashionRepository } from "../../database/repositories/fashion.repository";
 import { AcquireChannel } from "../../common/constants/game-config";
 import { MONEY_KINDS, MoneyKind } from "../../common/constants/money-items";
@@ -45,6 +47,7 @@ import { LevelScrollUseDto, LevelScrollUseResultDto } from "./dto/level-scroll-u
 import { GrowthUpgradeDto, GrowthKind } from "./dto/growth-upgrade.dto";
 import { GrowthUpgradeResultDto, RoleDto, RoleSummaryDto } from "./dto/role.dto";
 import { MallPurchaseDto, MallPurchaseResultDto } from "./dto/mall-purchase.dto";
+import { MallLimitsDto } from "../game-config/dto/mall.dto";
 import { FashionBuyDto, FashionBuyResultDto, FashionWearDto, FashionWearResultDto } from "./dto/fashion.dto";
 import { ReviveResultDto } from "./dto/revive.dto";
 import { SellGoodsDto, SellGoodsResultDto, SellLineDto } from "./dto/sell-goods.dto";
@@ -115,6 +118,14 @@ export class RolesService {
   private maxLevelWarned = false;
 
   /**
+   * 上次清理「更早天号」限购计数的天号（#846）
+   *
+   * 限购只对今天有意义，历史行没人读；但每买一件都跑一次全表 DELETE 就太浪费了 ——
+   * 记住上次跑过的天号，一天只跑一次（进程重启会再跑一次，重复执行也无害）。
+   */
+  private lastSalesPurgeDay = 0;
+
+  /**
    * 道具使用的服务端冷却（#847 / #848）
    *
    * 药品按各自的 `drugs.cooldown`（秒）算，货币道具用下面那个常量；
@@ -130,6 +141,14 @@ export class RolesService {
     private readonly souls: SoulRepository,
     private readonly ranks: RankRepository,
     private readonly mallPricing: MallPricingService,
+    /**
+     * 商城限购 / 库存计数（#846）：购买要在**同一个事务**里占库存 + 占今日名额 + 扣款入包。
+     *
+     * 事务透传放在仓储上（`MallRepository.transaction()`）—— 业务 service 不直接注入
+     * `DatabaseService`，那是 `audit-server-boundaries` 的白名单规则。与时装同一取向：
+     * 「拥有才给穿」与「买得着才卖」都必须在服务端判。
+     */
+    private readonly malls: MallRepository,
     private readonly drugs: DrugRepository,
     private readonly fashions: FashionRepository,
     private readonly growth: GrowthRepository,
@@ -514,34 +533,97 @@ export class RolesService {
       );
     }
 
-    const data = decodeStoredRoleData(existing.data);
-    const bindGold = Math.max(0, Math.floor(Number(data.bindGold) || 0));
-    if (bindGold < price) {
-      throw BizException.conflict(BizCode.MALL_GOLD_NOT_ENOUGH, `绑定元宝不足：还需 ${price - bindGold}`);
-    }
+    // 限购与库存（#846）：配置读库（改完立刻生效），计数在运行时表
+    const { dailyLimit, stock } = this.mallPricing.limitsOfGood(dto.goodId);
+    const day = todayResetDay();
+    this.purgeStaleSales(day);
 
-    data.bindGold = bindGold - price;
-    this.putGoodIntoBag(data, dto.goodId);
+    // 占位与扣款**同一个事务**：库存占上了但扣款失败（背包满 / 乐观锁冲突），
+    // 必须把名额退回去 —— 否则一次失败购买就白吃一个名额，限量商品会被空转吃光。
+    return this.malls.transaction(() => {
+      const data = decodeStoredRoleData(existing.data);
+      const bindGold = Math.max(0, Math.floor(Number(data.bindGold) || 0));
+      if (bindGold < price) {
+        throw BizException.conflict(BizCode.MALL_GOLD_NOT_ENOUGH, `绑定元宝不足：还需 ${price - bindGold}`);
+      }
 
-    const row: RoleRow = {
-      ...existing,
-      data: JSON.stringify(data),
-      revision: existing.revision + 1,
-      updated_at: Date.now(),
-    };
-    this.persistOrConflict(row, existing.revision, "购买商品");
-    // 行为流水（#886）：购买是「非拾取途径的物品入账」—— 地上捡的走 pick，这里走 gain
-    this.eventLogs.record({
-      type: EVENT_TYPE.GAIN,
-      accountId,
-      roleId,
-      roleName: existing.name,
-      mapId: this.mapAtOf(data),
-      target: dto.goodId,
-      amount: 1,
-      detail: { source: "mall", price },
+      // 库存：条件自增（`sold < stock` 才 +1），卖完就 false
+      if (!this.malls.reserveStock(dto.goodId, stock)) {
+        throw new BizException(
+          BizCode.MALL_OUT_OF_STOCK,
+          `该商品已售罄（全服 ${stock} 件已卖完）`,
+          HttpStatus.BAD_REQUEST,
+          { sold: this.malls.soldOf(dto.goodId), stock },
+        );
+      }
+      // 今日限购：条件自增，买满就 false。`dailyLimit <= 0` = 不限购（不占位也不计数）
+      if (!this.malls.reserveDaily(roleId, dto.goodId, day, dailyLimit)) {
+        throw new BizException(
+          BizCode.MALL_DAILY_LIMIT,
+          `这件商品每天限购 ${dailyLimit} 件，明天 05:00 之后再来`,
+          HttpStatus.BAD_REQUEST,
+          { bought: this.malls.dailyCountOf(roleId, dto.goodId, day), dailyLimit },
+        );
+      }
+
+      data.bindGold = bindGold - price;
+      this.putGoodIntoBag(data, dto.goodId);
+
+      const row: RoleRow = {
+        ...existing,
+        data: JSON.stringify(data),
+        revision: existing.revision + 1,
+        updated_at: Date.now(),
+      };
+      this.persistOrConflict(row, existing.revision, "购买商品");
+      // 行为流水（#886）：购买是「非拾取途径的物品入账」—— 地上捡的走 pick，这里走 gain
+      this.eventLogs.record({
+        type: EVENT_TYPE.GAIN,
+        accountId,
+        roleId,
+        roleName: existing.name,
+        mapId: this.mapAtOf(data),
+        target: dto.goodId,
+        amount: 1,
+        detail: { source: "mall", price },
+      });
+      // 回执带上买完之后的三个运行数：客户端据此就地更新「今日 2/3」「仅剩 5 件」，
+      // 不用为了刷新再拉一次 mall-limits
+      return MallPurchaseResultDto.fromRow(row, account.online_role_id, price, dto.goodId, {
+        dailyBought: this.malls.dailyCountOf(roleId, dto.goodId, day),
+        dailyLimit,
+        sold: this.malls.soldOf(dto.goodId),
+        stock,
+      });
     });
-    return MallPurchaseResultDto.fromRow(row, account.online_role_id, price, dto.goodId);
+  }
+
+  /**
+   * 清掉更早天号的限购计数（#846）：一天一次，失败只 warn
+   *
+   * 不清的后果是每个角色每天每件商品留一行，玩家越多长得越快；但这属于「卫生」而非
+   * 「正确性」—— 表长大了也不能让购买失败，所以吞掉异常继续卖。
+   */
+  private purgeStaleSales(day: number): void {
+    if (this.lastSalesPurgeDay === day) return;
+    this.lastSalesPurgeDay = day;
+    try {
+      this.malls.purgeSalesBefore(day);
+    } catch (error) {
+      this.logger.warn(`清理过期限购计数失败（不影响购买）：${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  /**
+   * 商城的限购 / 库存视图（#846）：客户端打开商城弹窗时拉一遍
+   *
+   * 只读、不动存档，所以不校验在线标记也不校验 revision —— 「能不能买」由购买链路自己判。
+   * 返回**全部上架商品**（运营手挑的几十行），不按商品逐个查：一屏陈列十几件，
+   * 逐件请求会出现「一半旧数一半新数」的中途态。
+   */
+  mallLimits(accountId: string, roleId: string): MallLimitsDto {
+    this.mustOwnRole(accountId, roleId);
+    return this.mallPricing.limitsOf(roleId);
   }
 
   /**

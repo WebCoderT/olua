@@ -1802,6 +1802,14 @@ export type CreateMallGood = {
    * 购买等级（缺省 0 = 不限等级）
    */
   requiredLevel?: number;
+  /**
+   * 每日限购件数（0 / 留空 = 不限购；按角色按 05:00 切日计）
+   */
+  dailyLimit?: number;
+  /**
+   * 全服库存件数（-1 / 留空 = 不限量；0 = 售罄停售）
+   */
+  stock?: number;
 };
 
 export type UpdateMallGood = {
@@ -1817,6 +1825,14 @@ export type UpdateMallGood = {
    * 购买等级
    */
   requiredLevel?: number;
+  /**
+   * 每日限购件数（0 = 不限购）
+   */
+  dailyLimit?: number;
+  /**
+   * 全服库存件数（-1 = 不限量，0 = 售罄停售）
+   */
+  stock?: number;
 };
 
 export type UpdateFashion = {
@@ -2824,6 +2840,22 @@ export type MallPurchaseResult = {
    * 买到的商品 id
    */
   goodId: string;
+  /**
+   * 这件商品今天已买几件（含本次；05:00 切日，#846）
+   */
+  dailyBought: number;
+  /**
+   * 这件商品的每日限购（0 = 不限购）
+   */
+  dailyLimit: number;
+  /**
+   * 全服已售件数（含本次；不限量商品恒 0）
+   */
+  sold: number;
+  /**
+   * 全服库存（-1 = 不限量）
+   */
+  stock: number;
 };
 
 export type SellLine = {
@@ -7103,6 +7135,18 @@ export type MallGoodItem = {
    */
   requiredLevel: number;
   /**
+   * 每日限购件数（0 = 不限购）
+   */
+  dailyLimit: number;
+  /**
+   * 全服库存件数（-1 = 不限量，0 = 售罄）
+   */
+  stock: number;
+  /**
+   * 已售件数（运行时计数，不进快照；不限量商品恒 0）
+   */
+  sold: number;
+  /**
    * 最近更新时间（毫秒）
    */
   updatedAt: number;
@@ -7198,6 +7242,67 @@ export type MallGoodEntry = {
    * 购买等级（0 = 不限）
    */
   requiredLevel: number;
+  /**
+   * 每日限购件数（0 = 不限购）。**只有配置，没有「今天买了几个」** —— 运行时计数走 `GET /roles/:roleId/mall-limits`，那是随角色变的，不能进快照
+   */
+  dailyLimit: number;
+  /**
+   * 全服库存件数（-1 = 不限量，0 = 售罄）。已售件数同样走 mall-limits
+   */
+  stock: number;
+};
+
+export type MallLimit = {
+  /**
+   * 商品 id
+   */
+  goodId: string;
+  /**
+   * 今天已买几件（05:00 切日）
+   */
+  dailyBought: number;
+  /**
+   * 每日限购（0 = 不限购）
+   */
+  dailyLimit: number;
+  /**
+   * 全服已售件数（不限量商品恒 0）
+   */
+  sold: number;
+  /**
+   * 全服库存（-1 = 不限量，0 = 售罄）
+   */
+  stock: number;
+  /**
+   * 现在能不能买（等级 / 余额另有判据，这里只看限购与库存）
+   */
+  purchasable: boolean;
+};
+
+export type MallLimits = {
+  /**
+   * 当前天号（05:00 切日；客户端不需要解释它，只用于排查）
+   */
+  day: number;
+  /**
+   * 逐件商品的限购与库存
+   */
+  list: MallLimit[];
+};
+
+export type MallStockReset = {
+  /**
+   * 商品 id
+   */
+  id: string;
+  /**
+   * 重置后的已售件数（恒 0）
+   */
+  sold: number;
+  /**
+   * 恒为 true（重置成功）
+   */
+  reset: boolean;
 };
 
 export type Fashion = {

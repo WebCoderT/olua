@@ -144,6 +144,21 @@ export const uiTexts = {
   label_mall_next_page: "下一页",
   label_mall_last_page: "末 页",
   mall_page_indicator: "第 {page} / {total} 页",
+  /**
+   * 限购与库存（#846）
+   *
+   * 卡片只有 100 高、塞不下第四行，所以这两条挤在**品质行左侧**（品质行让出价格那一段宽度
+   * 之后还剩一截），由 SHRINK 兜长文案：
+   * - `mall_daily_bought`：今天买了几件 / 每天限购几件（只有配置了限购才显示）
+   * - `mall_stock_left`：全服还剩几件（只有配置了库存才显示）
+   * - `mall_extra_sep`：两条同时存在时的分隔符
+   */
+  mall_daily_bought: "今日{bought}/{limit}",
+  mall_stock_left: "剩{count}",
+  mall_extra_sep: " · ",
+  /** 限购 / 库存用尽时按钮文案（按钮同时置灰禁点；服务端仍是权威，50029 / 50030） */
+  mall_sold_out: "已售罄",
+  mall_daily_full: "今日买满",
 
   //#region 浮动提示：技能
   /** 技能未学习（{skill}） */

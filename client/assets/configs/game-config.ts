@@ -1999,8 +1999,11 @@ export function applyMonsterPresentations(rows: MonsterPresentationRow[]): void 
  * 装备不在商城售卖。
  */
 
-/** 上架商品（快照 `mallGoods` 段整表重建）：id → 分类、售价与购买等级 */
-let mallGoods = new Map<string, { categoryId: string; price: number; requiredLevel: number }>();
+/** 上架商品（快照 `mallGoods` 段整表重建）：id → 分类、售价、购买等级、每日限购与全服库存 */
+let mallGoods = new Map<
+  string,
+  { categoryId: string; price: number; requiredLevel: number; dailyLimit: number; stock: number }
+>();
 
 /** 分类（快照 `mallCategories` 段整表重建，服务端已按 sort_order 排好）；null = 快照还没到 */
 let mallCategories: Array<{ id: string; label: string; sortOrder: number }> | null = null;
@@ -2013,10 +2016,25 @@ let warnedMissing = false;
  */
 export function applyMallCatalog(
   categories: Array<{ id: string; label: string; sortOrder: number }>,
-  goods: Array<{ id: string; categoryId: string; price: number; requiredLevel: number }>,
+  goods: Array<{
+    id: string;
+    categoryId: string;
+    price: number;
+    requiredLevel: number;
+    dailyLimit: number;
+    stock: number;
+  }>,
 ): void {
-  const map = new Map<string, { categoryId: string; price: number; requiredLevel: number }>();
-  goods.forEach((entry) => map.set(entry.id, { categoryId: entry.categoryId, price: entry.price, requiredLevel: entry.requiredLevel }));
+  const map = new Map<string, { categoryId: string; price: number; requiredLevel: number; dailyLimit: number; stock: number }>();
+  goods.forEach((entry) =>
+    map.set(entry.id, {
+      categoryId: entry.categoryId,
+      price: entry.price,
+      requiredLevel: entry.requiredLevel,
+      dailyLimit: entry.dailyLimit ?? 0,
+      stock: entry.stock ?? -1,
+    }),
+  );
   mallGoods = map;
   mallCategories = Array.from(categories).sort((a, b) => a.sortOrder - b.sortOrder || (a.id < b.id ? -1 : 1));
 }
@@ -2057,6 +2075,22 @@ export function getMallPrice(good: Goods): number {
 /** 取某件商品的购买等级（0 = 不限；未上架返回 Number.MAX_SAFE_INTEGER 让调用方按「禁购」处理） */
 export function getMallRequiredLevel(id: string): number {
   return mallGoods.get(id)?.requiredLevel ?? Number.MAX_SAFE_INTEGER;
+}
+
+/**
+ * 取某件商品的每日限购（#846）：`0` = 不限购（未上架也返回 0 —— 未上架另有 404 兜着，
+ * 这里不该再表达第二层含义）
+ *
+ * **只有配置**。「今天已经买了几件」是运行时数字，走 `StorageManager.loadMallLimits`
+ * （`GET /roles/:id/mall-limits`），不能进快照。
+ */
+export function getMallDailyLimit(id: string): number {
+  return mallGoods.get(id)?.dailyLimit ?? 0;
+}
+
+/** 取某件商品的全服库存（#846）：`-1` = 不限量，`0` = 售罄（未上架返回 -1，理由同上） */
+export function getMallStock(id: string): number {
+  return mallGoods.get(id)?.stock ?? -1;
 }
 
 //#endregion

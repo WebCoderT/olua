@@ -18,6 +18,7 @@ import {
   MallGoodPageDto,
   MallGoodQueryDto,
   MallGoodRemoveDto,
+  MallStockResetDto,
   UpdateMallCategoryDto,
   UpdateMallGoodDto,
 } from "./dto/mall.dto";
@@ -27,8 +28,9 @@ import {
  *
  * **先建分类，再在分类下上架商品**：分类是运营自建的陈列分组（POST 建行 / PATCH 改名与
  * 排序 / DELETE 删空分类）；商品是**关联数据** —— 上架时从目录里挑一件（装备变体或药品），
- * 之后只许改商城自己的字段（所属分类 / 售价 / 购买等级），名称/图标/部位归各自的配置页管。
- * 下架 = 删行。客户端购买以服务端复核为准（快照只管陈列与按钮置灰）。写操作带 `@AuditTarget("mall")`。
+ * 之后只许改商城自己的字段（所属分类 / 售价 / 购买等级 / 每日限购 / 库存），
+ * 名称/图标/部位归各自的配置页管。下架 = 删行（顺带清已售计数）。
+ * 客户端购买以服务端复核为准（快照只管陈列与按钮置灰）。写操作带 `@AuditTarget("mall")`。
  */
 @ApiAudience("admin")
 @Controller("admin/mall")
@@ -139,7 +141,8 @@ export class AdminMallController {
     operationId: "adminMall.createGood",
     summary: "上架商品",
     description:
-      "把一件装备变体或一种药品挂到某个分类下（缺省售价 0 = 免费、购买等级 0 = 不限）。\n\n" +
+      "把一件装备变体或一种药品挂到某个分类下（缺省售价 1、购买等级 0 = 不限、" +
+      "每日限购 0 = 不限购、库存 -1 = 不限量）。\n\n" +
       "- 商品 id 不在目录（装备变体 + drugs）→ 404（`50021`）；分类不存在 → 404（`50025`）。\n" +
       "- 已上架再上架 → 409（`50026`，一件物品全商城只能挂一行；想换分类直接 PATCH 商品的 `categoryId`）。",
     permissions: [Permission.GAME_CONFIG_WRITE],
@@ -153,18 +156,39 @@ export class AdminMallController {
   @AuditTarget("mall")
   @ApiAdminDoc({
     operationId: "adminMall.updateGood",
-    summary: "修改商品（分类 / 售价 / 购买等级）",
+    summary: "修改商品（分类 / 售价 / 购买等级 / 每日限购 / 库存）",
     description:
       "**商品是关联数据**：名称 / 图标 / 部位 / 装备等级归各自的配置页管，这里只开放商城自己的" +
-      "三个字段 —— 所属分类（`categoryId`，在陈列里挪位置）、售价（`price`）、购买等级" +
-      "（`requiredLevel`）；改完立即对购买生效（客户端下次取快照后按钮按新等级置灰）。\n\n" +
-      "商品不在上架清单 → 404（`50021`）；目标分类不存在 → 404（`50025`）。",
+      "字段 —— 所属分类（`categoryId`，在陈列里挪位置）、售价（`price`）、购买等级" +
+      "（`requiredLevel`）、每日限购（`dailyLimit`，0 = 不限购）、库存（`stock`，-1 = 不限量、" +
+      "0 = 售罄停售）；改完立即对购买生效（购买链路现查库）。\n\n" +
+      "商品不在上架清单 → 404（`50021`）；目标分类不存在 → 404（`50025`）。" +
+      "库存卖完要续货，用「重置库存」而不是把 `stock` 改大 —— 后者会改配置、让客户端重拉快照。",
     permissions: [Permission.GAME_CONFIG_WRITE],
   })
   @ApiParam({ name: "id", description: "商品 id（装备变体 id，如 cloth_1_p3s2）" })
   @ApiDataResponse(MallGoodItemDto, { description: "更新后的商品视图" })
   updateGood(@Param("id") id: string, @Body() dto: UpdateMallGoodDto): MallGoodItemDto {
     return this.mallPricingService.updateGood(id, dto);
+  }
+
+  @Post("goods/:id/stock-reset")
+  @AuditTarget("mall")
+  @ApiAdminDoc({
+    operationId: "adminMall.resetStock",
+    summary: "重置库存（已售件数清零，商品重新可买）",
+    description:
+      "限量商品卖完之后运营手动续货：把**已售件数**清零，`stock`（总库存）保持不变。\n\n" +
+      "- 与「把 `stock` 改大」的区别：改 `stock` 是改配置（快照内容变了）；重置销量只动运行时计数。" +
+      "两者都会让配置版本 +1（版本判据是 `gameConfig:write` 这个权限点，不为单个动作开例外）。\n" +
+      "- 不限量商品（`stock = -1`）不需要它，调了也是把 0 改成 0。\n" +
+      "- 商品不在上架清单 → 404（`50021`）；下架时会自动清零（重新上架 = 新的一轮）。",
+    permissions: [Permission.GAME_CONFIG_WRITE],
+  })
+  @ApiParam({ name: "id", description: "商品 id（装备变体 id）" })
+  @ApiDataResponse(MallStockResetDto, { description: "重置后的已售件数（恒 0）" })
+  resetStock(@Param("id") id: string): MallStockResetDto {
+    return this.mallPricingService.resetStock(id);
   }
 
   @Delete("goods/:id")

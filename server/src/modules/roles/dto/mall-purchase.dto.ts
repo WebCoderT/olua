@@ -30,11 +30,33 @@ export class MallPurchaseResultDto extends RoleDto {
   @ApiProperty({ description: "买到的商品 id" })
   goodId: string;
 
-  static fromRow(row: RoleRow, onlineRoleId: string | null, consumed: number, goodId: string): MallPurchaseResultDto {
+  @ApiProperty({ description: "这件商品今天已买几件（含本次；05:00 切日，#846）" })
+  dailyBought: number;
+
+  @ApiProperty({ description: "这件商品的每日限购（0 = 不限购）" })
+  dailyLimit: number;
+
+  @ApiProperty({ description: "全服已售件数（含本次；不限量商品恒 0）" })
+  sold: number;
+
+  @ApiProperty({ description: "全服库存（-1 = 不限量）" })
+  stock: number;
+
+  static fromRow(
+    row: RoleRow,
+    onlineRoleId: string | null,
+    consumed: number,
+    goodId: string,
+    limits: { dailyBought: number; dailyLimit: number; sold: number; stock: number },
+  ): MallPurchaseResultDto {
     const dto = new MallPurchaseResultDto();
     Object.assign(dto, RoleDto.from(row, onlineRoleId));
     dto.consumed = consumed;
     dto.goodId = goodId;
+    dto.dailyBought = limits.dailyBought;
+    dto.dailyLimit = limits.dailyLimit;
+    dto.sold = limits.sold;
+    dto.stock = limits.stock;
     return dto;
   }
 }

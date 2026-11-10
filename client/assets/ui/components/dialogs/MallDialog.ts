@@ -7,11 +7,12 @@ import { Draggable } from "../input/Draggable";
 import { blockClickThrough } from "../../utils/input/UiHit";
 import { trackUiPress } from "../../utils/input/Pointer";
 import { mallDialogLayout, uiImages } from "../../../configs/hudLayout";
-import { getMallCategories, getMallPrice, getMallRequiredLevel, isMallGoodListed, mallGoodCategoryOf } from "../../../configs/game-config";
+import { getMallCategories, getMallDailyLimit, getMallPrice, getMallRequiredLevel, getMallStock, isMallGoodListed, mallGoodCategoryOf } from "../../../configs/game-config";
 import { getEquipmentNameParts } from "../../../configs/equipments";
 import { getSellableGoods } from "../../../configs/items";
 import { getText } from "../../../configs/texts";
 import { Goods, isEquipment } from "../../../types/good";
+import type { MallLimit } from "../../utils/net/ApiModels";
 
 /** 弹窗布局（几何、用图与列表参数统一见 configs/hudLayout.mallDialogLayout） */
 const layout = mallDialogLayout;
@@ -69,6 +70,13 @@ export default class MallDialog {
   private emptyTip: Node | null = null;
   /** 悬停详情（同一时刻最多一个：换悬停、翻页、关弹窗都会先收掉它） */
   private detailDialog: Node | null = null;
+  /**
+   * 限购 / 库存（#846）：`goodId → 今日已购 / 已售 / 库存`
+   *
+   * 打开时异步拉一次（`StorageManager.loadMallLimits`），拉到后重绘当前页；购买回执里也带同一组数，
+   * 买完就地更新。**空 Map 也能正常陈列与购买** —— 拉失败只是卡片上少了那几个小字。
+   */
+  private limits = new Map<string, MallLimit>();
 
   /** 打开/关闭弹窗 */
   open() {
@@ -99,6 +107,7 @@ export default class MallDialog {
     this.lastPageButton = null;
     this.bindGoldLabel = null;
     this.emptyTip = null;
+    this.limits = new Map();
     this.dialog?.destroy();
     this.dialog = null;
   }
@@ -143,6 +152,18 @@ export default class MallDialog {
     this.refreshBindGold();
     this.dialog = dialog;
     LayerManager.addDialogToUILayer(dialog);
+    // 限购 / 库存在快照里只有配置，「今天买了几个」得问服务端（#846）：
+    // 先按配置把卡片画出来，拉到运行数再重绘一次当前页 —— 不阻塞打开，商城不会因为一次失败请求打不开
+    void this.loadLimits();
+  }
+
+  /** 拉一次限购 / 库存并重绘当前页（失败时保持着配置视图，不影响陈列与购买） */
+  private async loadLimits() {
+    const limits = await StorageManager.loadMallLimits();
+    // 弹窗已经关掉 / 被场景切换销毁：别再往一个不存在的节点上画
+    if (!this.dialog || !isValid(this.dialog)) return;
+    this.limits = limits;
+    this.renderPage(this.page);
   }
 
   /**
@@ -169,6 +190,26 @@ export default class MallDialog {
       extra: `${parts.prefix.label}${parts.suffix.label}`,
       extraColor: parts.prefix.color,
     };
+  }
+
+  /**
+   * 卡片品质行里追加的「今日 2/3 · 剩 5」(#846)
+   *
+   * 配置从快照读（`getMallDailyLimit` / `getMallStock`），运行数从 `this.limits` 读（接口/回执）；
+   * 接口还没回来时按「今天买了 0 件、已售 0 件」显示配置那半 —— 不让卡片在两次渲染之间变空白。
+   * 不限购（0）与不限量（-1）一个字都不加：没配这两条的商城与加字段之前长得一模一样。
+   */
+  private limitBitsOf(good: Goods): string {
+    const id = good.id ?? "";
+    const limit = this.limits.get(id);
+    const dailyLimit = limit?.dailyLimit ?? getMallDailyLimit(id);
+    const dailyBought = limit?.dailyBought ?? 0;
+    const stock = limit?.stock ?? getMallStock(id);
+    const sold = limit?.sold ?? 0;
+    const bits: string[] = [];
+    if (dailyLimit > 0) bits.push(getText("mall_daily_bought", { bought: dailyBought, limit: dailyLimit }));
+    if (stock >= 0) bits.push(getText("mall_stock_left", { count: Math.max(0, stock - sold) }));
+    return bits.join(getText("mall_extra_sep"));
   }
 
   /**
@@ -205,6 +246,10 @@ export default class MallDialog {
     // 逐段配色的完整版在悬停详情里。药品没有前后缀（#763）：名称单段、品质行写「药品」
     const parts = this.nameOf(good);
     const textWidth = width - layout.card.paddingX * 2;
+    // 限购 / 库存（#846）：卡片只有 100 高、塞不下第四行，所以挤在品质行左侧（右侧还有价格）。
+    // 只显示「配置生效」的那些：不限购 / 不限量时一个字都不加，卡片与加这两个字段之前一模一样
+    const limitOf = this.limitBitsOf(good);
+    const extraText = limitOf ? `${parts.extra}${getText("mall_extra_sep")}${limitOf}` : parts.extra;
     const nameLabel = UiHelper.createLabel(
       `mall_card_name_${good.id}`,
       parts.label,
@@ -221,7 +266,7 @@ export default class MallDialog {
     const leftEdge = -width / 2 + layout.card.paddingX;
     const extraLabel = UiHelper.createLabel(
       `mall_card_extra_${good.id}`,
-      parts.extra,
+      extraText,
       parts.extraColor,
       layout.card.extra.fontSize,
       new Vec2(leftEdge + extraWidth / 2, extraY),
@@ -245,21 +290,32 @@ export default class MallDialog {
     );
     // 购买：规则判定与提示都在数据层（余额不足/背包满/下架都不会改数据），成功后只刷余额。
     // 购买等级不足（#758）：按钮置灰禁点、文案换「Lv.X 解锁」—— 服务端同样校验（50027），
-    // 这里置灰只是让玩家不用点了才被告知
+    // 这里置灰只是让玩家不用点了才被告知。限购买满 / 库存售罄（#846）同理：服务端 50029 / 50030
     const requiredLevel = getMallRequiredLevel(good.id ?? "");
     const levelLocked = requiredLevel > roleLevel;
+    const limit = this.limits.get(good.id ?? "");
+    const soldOut = limit ? limit.stock >= 0 && limit.sold >= limit.stock : getMallStock(good.id ?? "") === 0;
+    const dailyFull = limit ? limit.dailyLimit > 0 && limit.dailyBought >= limit.dailyLimit : false;
+    const locked = levelLocked || soldOut || dailyFull;
+    const buttonText = levelLocked
+      ? getText("mall_level_lock", { level: requiredLevel })
+      : soldOut
+        ? getText("mall_sold_out")
+        : dailyFull
+          ? getText("mall_daily_full")
+          : getText("label_mall_buy");
     const button = UiHelper.createButton(`mall_buy_${good.id}`, uiImages.smallButtonBackground, new Vec2(0, buttonY), layout.card.buyButton.size);
     button.addChild(
       UiHelper.createLabel(
         `${button.name}_label`,
-        levelLocked ? getText("mall_level_lock", { level: requiredLevel }) : getText("label_mall_buy"),
+        buttonText,
         Color.WHITE,
         layout.card.buyButton.fontSize,
         new Vec2(),
         layout.card.buyButton.size,
       ),
     );
-    if (levelLocked) {
+    if (locked) {
       const buttonComp = button.getComponent(Button);
       if (buttonComp) buttonComp.interactable = false;
       const opacity = button.addComponent(UIOpacity);
@@ -268,7 +324,12 @@ export default class MallDialog {
     button.on(
       Node.EventType.TOUCH_END,
       async () => {
-        if (await StorageManager.buyMallGood(good.id ?? "")) this.refreshBindGold();
+        const limits = await StorageManager.buyMallGood(good.id ?? "");
+        if (!limits) return;
+        // 回执带着买完之后的数：就地更新并按新状态重绘当前页（买满 / 售罄的按钮要立刻置灰）
+        this.limits.set(limits.goodId, limits);
+        this.refreshBindGold();
+        this.renderPage(this.page);
       },
       this,
     );
