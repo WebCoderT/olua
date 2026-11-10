@@ -9,17 +9,30 @@ import { Injectable, Logger } from "@nestjs/common";
 export interface MonsterKilledEvent {
   accountId: string;
   roleId: string;
+  /**
+   * 击杀者角色名（#886 加的：行为流水要冗余存名字 —— 角色被删后只留 id 谁也认不出是谁）
+   *
+   * 定为**必填**而不是可选：payload 少一个字段，落库就少一列，而这种缺失没有任何报错，
+   * 只有事后翻流水时才发现一整类记录都没有主语。
+   */
+  roleName: string;
   /** 怪物 key（不是实例 id：任务与成就都按种类判） */
   monsterKey: string;
   /** 怪物名（战斗频道写消息用 —— 订阅方不必为了一个名字再查一次库） */
   monsterLabel: string;
   /** 定位：normal / elite / boss（战斗频道只对 boss 落一条，普通怪不刷屏） */
   monsterTier: string;
+  /** 死亡地点（#886：流水要能回答「在哪杀的」；同样是必填，见 roleName 的理由） */
+  mapId: string;
+  x: number;
+  y: number;
 }
 
 export interface QuestClaimedEvent {
   accountId: string;
   roleId: string;
+  /** 交付者角色名（#886 加，理由同 MonsterKilledEvent.roleName） */
+  roleName: string;
   questId: string;
   /** main | daily（成就的累计口径不分类，但订阅方要打日志时用得上） */
   kind: string;

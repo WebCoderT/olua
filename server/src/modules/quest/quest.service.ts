@@ -146,14 +146,14 @@ export class QuestService implements OnModuleInit {
       exp: quest.reward_exp,
       items: parseRewardItems(quest.reward_items),
     };
-    const settled = this.roles.grantQuestRewards(accountId, role.id, consume, rewards);
+    const settled = this.roles.grantQuestRewards(accountId, role.id, consume, rewards, "quest");
 
     // daily 与 main 一样只改状态、不删行（#815）：删行会把「今天领过」的证据一起删掉，
     // 于是 accept 无从判断，一条日常能被刷上千次。日切靠 reset_day，跨天由 accept 覆盖重置。
     this.progressRepo.markClaimed(role.id, questId);
 
     // 交付成功 → 广播（成就的「累计交付 N 个任务」由此记账；订阅方失败不影响本次交付）
-    this.events.emit("quest:claimed", { accountId, roleId: role.id, questId, kind: quest.kind });
+    this.events.emit("quest:claimed", { accountId, roleId: role.id, roleName: role.name, questId, kind: quest.kind });
 
     const reward: QuestRewardResultDto = {
       gold: rewards.gold,

@@ -10,6 +10,7 @@ import { hashPassword, verifyPassword } from "../../common/utils/password.util";
 import { AdminRepository } from "../../database/repositories/admin.repository";
 import { AdminRow } from "../../database/rows";
 import { AuditService } from "../audit/audit.service";
+import { describeError } from "../../common/interceptors/audit.interceptor";
 import { TokenService } from "../token/token.service";
 import { AdminRegisterDto, AdminLoginDto } from "./dto/admin-auth.dto";
 import { AdminDto, AdminTokenDto } from "./dto/admin.dto";
@@ -56,27 +57,52 @@ export class AdminAuthService implements OnModuleInit {
    * - **第一个**管理员自动是超级管理员（否则没人能管管理员），之后注册的一律是普通管理员，
    *   要提权得由超管在管理端改（PATCH /admin/admins/:id）
    */
-  register(dto: AdminRegisterDto): AdminTokenDto {
-    this.assertRegistrationAllowed(dto);
+  register(dto: AdminRegisterDto, meta: { ip?: string; userAgent?: string } = {}): AdminTokenDto {
     const username = dto.username.trim();
-    if (this.admins.findByUsername(username)) throw BizException.conflict(BizCode.ADMIN_EXISTS, "该管理员账号已存在");
-
-    const isFirstAdmin = this.admins.countAll() === 0;
-    const now = Date.now();
-    const admin: AdminRow = {
-      id: randomUUID(),
-      username,
-      password: hashPassword(dto.password),
-      status: ENTITY_STATUS.ACTIVE,
-      role: isFirstAdmin ? AdminRole.SUPER : AdminRole.ADMIN,
-      token_version: 0,
-      created_at: now,
-      updated_at: now,
-      last_login_at: now,
+    // 注册接口是 `@Public()` —— 全局审计拦截器整个跳过（那时还没有「已认证的操作人」）。
+    // 但「第一个注册的人自动成为 SUPER」恰恰是最该留痕的一件事：谁能开后台、从哪开的，
+    // 事后必须查得到（#884）。所以这里自己记，成功与**每一种失败**都记。
+    const base = {
+      action: "adminAuth.register",
+      ip: meta.ip ?? null,
+      method: "POST",
+      path: "admin/auth/register",
+      detail: { username, userAgent: meta.userAgent ?? null },
     };
-    this.admins.insert(admin);
-    if (isFirstAdmin) this.logger.log(`首个管理员 ${username} 已自动设为超级管理员`);
-    return this.issue(admin);
+    try {
+      this.assertRegistrationAllowed(dto);
+      if (this.admins.findByUsername(username)) throw BizException.conflict(BizCode.ADMIN_EXISTS, "该管理员账号已存在");
+
+      const isFirstAdmin = this.admins.countAll() === 0;
+      const now = Date.now();
+      const admin: AdminRow = {
+        id: randomUUID(),
+        username,
+        password: hashPassword(dto.password),
+        status: ENTITY_STATUS.ACTIVE,
+        role: isFirstAdmin ? AdminRole.SUPER : AdminRole.ADMIN,
+        token_version: 0,
+        created_at: now,
+        updated_at: now,
+        last_login_at: now,
+      };
+      this.admins.insert(admin);
+      if (isFirstAdmin) this.logger.log(`首个管理员 ${username} 已自动设为超级管理员`);
+      this.audit.record({
+        ...base,
+        actor: { id: admin.id, username: admin.username, role: admin.role },
+        targetType: "admin",
+        targetId: admin.id,
+        detail: { username, role: admin.role, firstAdmin: isFirstAdmin, userAgent: meta.userAgent ?? null },
+        statusCode: 201,
+        success: true,
+      });
+      return this.issue(admin);
+    } catch (error) {
+      const info = describeError(error);
+      this.audit.record({ ...base, success: false, ...info });
+      throw error;
+    }
   }
 
   /**

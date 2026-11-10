@@ -9,6 +9,7 @@ import { AuthenticatedUser, PageResult } from "../../common/interfaces/api-envel
 import { AccountListOptions, AccountRepository } from "../../database/repositories/account.repository";
 import { AdminListOptions, AdminRepository } from "../../database/repositories/admin.repository";
 import { AuditRepository } from "../../database/repositories/audit.repository";
+import { AuditService } from "../audit/audit.service";
 import { RoleRepository } from "../../database/repositories/role.repository";
 import { AccountRow, AdminRow, RoleRow, RoleWithAccountRow } from "../../database/rows";
 import { AccountDto } from "../auth/dto/account.dto";
@@ -49,6 +50,9 @@ import {
  * 玩家侧靠「令牌里的 accountId + 归属校验」，管理侧靠「@ApiAudience("admin") 守卫」，
  * 所以管理端接口一旦少了守卫就是越权漏洞（见 admin.module 的控制器注解）。
  */
+/** 操作人（写审计明细用；`username` 同时会落进 `banned_by` 这类冗余列） */
+export type AdminActor = { id: string; username: string; role?: string };
+
 @Injectable()
 export class AdminService {
   private readonly logger = new Logger(AdminService.name);
@@ -58,6 +62,14 @@ export class AdminService {
     private readonly roles: RoleRepository,
     private readonly admins: AdminRepository,
     private readonly audit: AuditRepository,
+    /**
+     * 操作日志**写入**（#885）：批量操作要按目标逐条记明细
+     *
+     * 与上面的 `audit`（仓储，只读查询）不是一回事 —— 那个给管理端日志页用，
+     * 这个是给拦截器之外的手写留痕用（批量操作一条请求改了 N 个目标，
+     * 拦截器只能记到「一次操作」，记不到「哪几个」）。
+     */
+    private readonly auditLog: AuditService,
   ) {}
 
   //#region 账号
@@ -126,9 +138,9 @@ export class AdminService {
    * 每次请求都算），定时器另负责把库里的状态扫回去（见 BanSchedulerService）——
    * 两者互不依赖，服务端停过一段时间再起来也不会漏掉解封。
    */
-  updateAccountStatus(id: string, dto: UpdateAccountStatusDto, operator?: string): AccountDto {
+  updateAccountStatus(id: string, dto: UpdateAccountStatusDto, actor?: AdminActor): AccountDto {
     this.mustAccount(id);
-    this.accounts.updateById(id, this.statusPatch(dto, operator, Date.now()));
+    this.accounts.updateById(id, this.statusPatch(dto, actor?.username, Date.now()));
     return AccountDto.from(this.mustAccount(id));
   }
 
@@ -140,15 +152,31 @@ export class AdminService {
    *
    * 幂等：已不存在的 id 静默跳过，返回实际改到的条数（与批量删角色同一口径）。
    */
-  batchUpdateAccountStatus(dto: BatchUpdateAccountStatusDto, operator?: string): BatchStatusResultDto {
+  batchUpdateAccountStatus(dto: BatchUpdateAccountStatusDto, actor?: AdminActor): BatchStatusResultDto {
     const ids = [...new Set(dto.ids.map((item) => item.trim()).filter(Boolean))];
-    const patch = this.statusPatch(dto, operator, Date.now());
+    const patch = this.statusPatch(dto, actor?.username, Date.now());
     const rows = this.accounts.findManyByIds(ids);
     const clearedOnlineAccountIds: string[] = [];
     for (const row of rows) {
       // 封禁会把在线角色标记清掉，记下来供界面提示「有 N 个正在玩的被踢下线」
       if (patch.status === ENTITY_STATUS.DISABLED && row.online_role_id) clearedOnlineAccountIds.push(row.id);
       this.accounts.updateById(row.id, patch);
+      // 按目标补一条明细（#885）：拦截器那条只记到「一次批量操作、目标 id 为空」，
+      // 于是「批量封了谁」永远查不出来。明细行的 action 与主行相同，靠 target_id 区分
+      this.auditLog.record({
+        actor: actor ?? null,
+        action: "adminAccount.batchStatus",
+        targetType: "account",
+        targetId: row.id,
+        detail: {
+          item: true,
+          status: patch.status,
+          reason: patch.ban_reason ?? null,
+          until: patch.ban_until ?? null,
+          batchSize: rows.length,
+        },
+        success: true,
+      });
     }
     return {
       requested: dto.ids.length,
@@ -352,11 +380,22 @@ export class AdminService {
    * 幂等：已不存在的 id 静默跳过（管理端列表可能已过期，为一条陈旧 id 整体失败更难用）。
    * 删到某个账号的在线角色时顺带清掉在线标记 —— 与单条删除同一套收尾（见 removeRole）。
    */
-  batchRemoveRoles(dto: BatchDeleteRolesDto): BatchDeleteResultDto {
+  batchRemoveRoles(dto: BatchDeleteRolesDto, actor?: AdminActor): BatchDeleteResultDto {
     const ids = [...new Set(dto.ids.map((item) => item.trim()).filter(Boolean))];
     const found = this.roles.findManyByIds(ids);
     const clearedOnlineAccountIds = this.clearOnlineMarkers(found);
     const deleted = this.roles.deleteByIds(found.map((row) => row.id));
+    // 按目标补明细（#885）：同一个理由，主行只记到「批量删了一次」
+    for (const row of found) {
+      this.auditLog.record({
+        actor: actor ?? null,
+        action: "adminRole.batchRemove",
+        targetType: "role",
+        targetId: row.id,
+        detail: { item: true, name: row.name, level: row.level, batchSize: found.length },
+        success: true,
+      });
+    }
     return {
       requested: dto.ids.length,
       deleted,

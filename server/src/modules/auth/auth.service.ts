@@ -11,6 +11,8 @@ import { AccountRepository } from "../../database/repositories/account.repositor
 import { ZoneRepository } from "../../database/repositories/zone.repository";
 import { AccountRow } from "../../database/rows";
 import { AuditService } from "../audit/audit.service";
+import { EventLogService } from "../event-log/event-log.service";
+import { EVENT_TYPE } from "../../common/constants/event-type";
 import { TokenService } from "../token/token.service";
 import { AccountDto } from "./dto/account.dto";
 import { AuthTokenDto } from "./dto/auth-token.dto";
@@ -26,6 +28,7 @@ export class AuthService {
     private readonly config: ConfigService,
     private readonly throttle: LoginThrottleService,
     private readonly audit: AuditService,
+    private readonly eventLogs: EventLogService,
   ) {}
 
   /** 注册（账号名唯一；成功后直接返回令牌，客户端免二次登录） */
@@ -89,6 +92,7 @@ export class AuthService {
         errorCode: BizCode.PASSWORD_WRONG,
         errorMessage: "账号或密码错误",
       });
+      this.recordLoginEvent({ accountId: account?.id ?? null, username, ip, ok: false, reason: "账号或密码错误" });
       throw new BizException(BizCode.PASSWORD_WRONG, "账号或密码错误", HttpStatus.UNAUTHORIZED);
     }
     // 封禁判定：到期的临时封禁会被判为「未封禁」，直接放行（见 ban.util）
@@ -104,6 +108,7 @@ export class AuthService {
         errorMessage: banMessage,
         statusCode: HttpStatus.FORBIDDEN,
       });
+      this.recordLoginEvent({ accountId: account.id, username: account.username, ip, ok: false, reason: banMessage });
       throw new BizException(BizCode.ACCOUNT_DISABLED, banMessage, HttpStatus.FORBIDDEN);
     }
     // 走到这里说明封禁已到期（临时封禁）：顺手把库里的状态扫回去，
@@ -120,7 +125,33 @@ export class AuthService {
     account.last_login_at = Date.now();
     this.accounts.updateById(account.id, { last_login_at: account.last_login_at });
     this.audit.recordLoginAttempt({ action: "auth.login", route: "auth/login", username: account.username, ip, ok: true });
+    this.recordLoginEvent({ accountId: account.id, username: account.username, ip, ok: true });
     return this.issue(account);
+  }
+
+  /**
+   * 登录事件写进行为流水（#886）
+   *
+   * 与上面那条 `audit.recordLoginAttempt` **不是重复**：
+   * - `audit_logs` 是**安全线**（谁在扫号、哪个 IP 爆破），查询入口是操作日志页；
+   * - `event_logs` 是**行为线**（这个账号什么时候上线的），与进图 / 击杀 / 拾取连成一条时序。
+   *
+   * 失败也记：`success = 0`，`roleId` 为空（那时候还没有角色），原因放 `detail.reason`。
+   */
+  private recordLoginEvent(input: {
+    accountId: string | null;
+    username: string;
+    ip?: string;
+    ok: boolean;
+    reason?: string;
+  }): void {
+    this.eventLogs.record({
+      type: EVENT_TYPE.LOGIN,
+      accountId: input.accountId,
+      ip: input.ip ?? null,
+      success: input.ok,
+      detail: input.reason ? { username: input.username, reason: input.reason } : { username: input.username },
+    });
   }
 
   /** 当前登录账号（守卫已确认存在且状态正常） */

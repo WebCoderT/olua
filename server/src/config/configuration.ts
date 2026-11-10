@@ -93,6 +93,18 @@ export interface AppConfiguration {
   /** 一次最多导出多少条操作日志（防止一次「全部条件」导出把几万行塞进内存与响应体） */
   auditExportMaxRows: number;
 
+  //#region 玩家行为流水（#886）
+  /**
+   * 行为流水保留条数上限（超出清最旧；0 = 不按条数清理）
+   *
+   * 比 `auditLogMaxRows`（2 万）大一个量级：一次群攻就是 8 条击杀、一次批量回收是 N 条消耗，
+   * 这张表的写入量是审计表的几十倍。10 万行约 20MB，仍属「一个 SQLite 文件能随手备份」的范围。
+   */
+  eventLogMaxRows: number;
+  /** 行为流水保留天数（早于该天数的记录会被清理；0 = 不按时间清理） */
+  eventLogRetentionDays: number;
+  //#endregion
+
   //#region 邮件通道
   /** SMTP 主机（空 = 未配置） */
   smtpHost: string;
@@ -521,6 +533,8 @@ export default function configuration(): AppConfiguration {
     auditLogMaxRows: Number(process.env.AUDIT_LOG_MAX_ROWS ?? 20000),
     auditRetentionDays: Number(process.env.AUDIT_RETENTION_DAYS ?? 90),
     auditExportMaxRows: Number(process.env.AUDIT_EXPORT_MAX_ROWS ?? 5000),
+    eventLogMaxRows: Number(process.env.EVENT_LOG_MAX_ROWS ?? 100000),
+    eventLogRetentionDays: Number(process.env.EVENT_LOG_RETENTION_DAYS ?? 30),
     smtpHost: process.env.SMTP_HOST ?? "",
     smtpPort: Number(process.env.SMTP_PORT ?? 465),
     smtpSecure: (process.env.SMTP_SECURE ?? "true") === "true",

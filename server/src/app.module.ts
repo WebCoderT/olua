@@ -12,6 +12,7 @@ import { AdminModule } from "./modules/admin/admin.module";
 import { AnnouncementModule } from "./modules/announcement/announcement.module";
 import { GameConfigModule } from "./modules/game-config/game-config.module";
 import { AuditModule } from "./modules/audit/audit.module";
+import { EventLogModule } from "./modules/event-log/event-log.module";
 import { AuthModule } from "./modules/auth/auth.module";
 import { HealthModule } from "./modules/health/health.module";
 import { MailModule } from "./modules/mail/mail.module";
@@ -69,6 +70,8 @@ export class AppModule {
         RolesModule,
         AdminModule,
         AuditModule,
+        // 玩家行为流水（#886）：两个进程都要有 —— 进图事件在实时进程写，其余在 API 进程写
+        EventLogModule,
         SystemModule,
         AnnouncementModule,
         GameConfigModule,

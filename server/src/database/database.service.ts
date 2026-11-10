@@ -152,6 +152,29 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
       CREATE INDEX IF NOT EXISTS idx_audit_actor ON audit_logs(actor_id);
       CREATE INDEX IF NOT EXISTS idx_audit_target ON audit_logs(target_type, target_id);
 
+      -- 玩家行为流水（#886 / J3）。与 audit_logs 刻意分开：
+      -- audit_logs 回答「**管理员**点了什么」，event_logs 回答「**玩家**做了什么」——
+      -- 操作人、目标、保留期、查询页、权限点全不同，合表会让审计页被拾取流水刷没。
+      -- role_name 冗余存名字：角色被删后只留 id 谁也认不出这条记的是谁。
+      CREATE TABLE IF NOT EXISTS event_logs (
+        id         TEXT PRIMARY KEY,
+        type       TEXT NOT NULL,
+        account_id TEXT,
+        role_id    TEXT,
+        role_name  TEXT,
+        zone_id    INTEGER,
+        map_id     TEXT,
+        target     TEXT,
+        amount     INTEGER,
+        detail     TEXT,
+        ip         TEXT,
+        success    INTEGER NOT NULL DEFAULT 1,
+        created_at INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_event_created ON event_logs(created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_event_role ON event_logs(role_id, created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_event_type ON event_logs(type, created_at DESC);
+
       CREATE TABLE IF NOT EXISTS announcements (
         id         TEXT PRIMARY KEY,
         title      TEXT NOT NULL,

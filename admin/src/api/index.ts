@@ -19,6 +19,7 @@ export {
   adminsApi,
   rolesApi,
   auditApi,
+  eventsApi,
   statsApi,
   systemApi,
   mailsApi,

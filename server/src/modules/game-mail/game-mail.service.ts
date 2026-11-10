@@ -6,6 +6,8 @@ import { RewardItem, parseRewardItems } from "../../common/utils/reward-items.ut
 import { RoleMailRow } from "../../database/rows";
 import { RoleMailRepository } from "../../database/repositories/role-mail.repository";
 import { RolesService } from "../roles/roles.service";
+import { EventLogEntryInput, EventLogService } from "../event-log/event-log.service";
+import { EVENT_TYPE } from "../../common/constants/event-type";
 import {
   AdminSendMailDto,
   MailAttachmentDto,
@@ -77,13 +79,17 @@ export class GameMailService {
   constructor(
     private readonly mails: RoleMailRepository,
     private readonly roles: RolesService,
+    /** 玩家行为流水（#886）：领取记一条（附件本身由 `grantQuestRewards` 记成 gain） */
+    private readonly eventLogs: EventLogService,
   ) {}
 
   /** 我的收件箱 */
   box(accountId: string): MailBoxDto {
     const role = this.requireOnlineRole(accountId);
     return this.boxOf(role.id);
-  }  /** 标已读（重复标不动 `read_at`：第一次看到的时刻才有意义） */
+  }
+
+  /** 标已读（重复标不动 `read_at`：第一次看到的时刻才有意义） */
   read(accountId: string, mailId: string): MailBoxDto {
     const role = this.requireOnlineRole(accountId);
     const mail = this.ownedMail(role.id, mailId);
@@ -110,6 +116,11 @@ export class GameMailService {
     this.mails.markClaimed(mail.id, now);
     // 领了等于看过：不让「已领但仍是未读」这种状态挂在红点上
     this.mails.markRead(mail.id, now);
+
+    // 行为流水（#886）：一条记「领了哪封信」。附件本身已由 grantQuestRewards 记成
+    // `gain`（source = mail）—— 两件事分开记，才能回答「这封补偿有没有人领」和
+    // 「这批东西哪来的」这两个不同的问题
+    this.eventLogs.record(this.claimEntryOf(accountId, role, mail, items));
 
     const box = this.boxOf(role.id);
     const result = new MailClaimResultDto();
@@ -140,12 +151,14 @@ export class GameMailService {
     const pending = this.mails.listUnclaimed(role.id, scope, Date.now());
 
     const lines: Array<{ gold: number; exp: number; items: RewardItem[] }> = [];
+    /** 领到的邮件（#886）：循环里收着，末尾一次 recordMany —— 一键领取可能几十封 */
+    const claimedMails: Array<{ mail: RoleMailRow; items: RewardItem[] }> = [];
     let claimedCount = 0;
     let stoppedByBag = false;
     for (const mail of pending) {
       const items = parseRewardItems(mail.attachments);
       try {
-        this.roles.grantQuestRewards(accountId, role.id, null, { gold: mail.gold, exp: mail.exp, items });
+        this.roles.grantQuestRewards(accountId, role.id, null, { gold: mail.gold, exp: mail.exp, items }, "mail");
       } catch (error) {
         // 背包满：已领的照常落库，这一封原样留在箱里
         if (isBizCode(error, BizCode.MALL_BAG_FULL)) {
@@ -158,8 +171,11 @@ export class GameMailService {
       this.mails.markClaimed(mail.id, now);
       this.mails.markRead(mail.id, now);
       lines.push({ gold: mail.gold, exp: mail.exp, items });
+      claimedMails.push({ mail, items });
       claimedCount += 1;
     }
+
+    this.eventLogs.recordMany(claimedMails.map((line) => this.claimEntryOf(accountId, role, line.mail, line.items)));
 
     // 等级读「领完之后」的线上角色（经验可能触发升级）
     const level = this.roles.online(accountId)?.level ?? role.level;
@@ -301,6 +317,29 @@ export class GameMailService {
   }
 
   /**
+   * 一条「领取邮件」流水（#886）
+   *
+   * `target` 是邮件 id（不是标题）：查「这封补偿有没有人领」要按 id 精确匹配。
+   * 标题与附件放进 `detail`，人眼看时才有信息量。
+   */
+  private claimEntryOf(
+    accountId: string,
+    role: { id: string; name: string },
+    mail: RoleMailRow,
+    items: RewardItem[],
+  ): EventLogEntryInput {
+    return {
+      type: EVENT_TYPE.MAIL,
+      accountId,
+      roleId: role.id,
+      roleName: role.name,
+      target: mail.id,
+      amount: items.length,
+      detail: { title: mail.title, channel: mail.channel, gold: mail.gold, exp: mail.exp, items },
+    };
+  }
+
+  /**
    * 发奖并返回「发完之后」的角色状态
    *
    * 一封奖励都没有的邮件（纯文本系统邮件）**不碰角色存档**：否则「读了封公告」也会把
@@ -318,7 +357,7 @@ export class GameMailService {
       const role = this.roles.online(accountId);
       return { level: role?.level ?? 1, leveledUp: false };
     }
-    const settled = this.roles.grantQuestRewards(accountId, roleId, null, { gold, exp, items });
+    const settled = this.roles.grantQuestRewards(accountId, roleId, null, { gold, exp, items }, "mail");
     return { level: settled.level, leveledUp: settled.leveledUp };
   }
 

@@ -505,6 +505,21 @@ export const routes = {
      */
     summary: "/admin/equipments/summary",
   },
+  /** adminEvent 模块（2 个接口） */
+  adminEvent: {
+    /**
+     * 玩家行为流水（GET /admin/event-logs）
+     *
+     * 按时间倒序返回玩家侧的行为记录（登录 / 进图 / 击杀 / 拾取 / 获得 / 消耗 / 邮件 / 任务）。
+     */
+    list: "/admin/event-logs",
+    /**
+     * 事件类型清单（GET /admin/event-logs/types）
+     *
+     * 返回全部事件类型（字典 ∪ 库里出现过的），每条带中文名与当前记录条数。
+     */
+    types: "/admin/event-logs/types",
+  },
   /** adminFashion 模块（2 个接口） */
   adminFashion: {
     /**

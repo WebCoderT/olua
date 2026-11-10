@@ -6,7 +6,8 @@ import { AuditTarget } from "../../common/decorators/audit-target.decorator";
 import { ApiQueryModel } from "../../common/decorators/api-query-model.decorator";
 import { ApiAudience } from "../../common/decorators/audience.decorator";
 import { Permission } from "../../common/constants/permission";
-import { PageResult } from "../../common/interfaces/api-envelope.interface";
+import { CurrentUser } from "../../common/decorators/current-user.decorator";
+import { AuthenticatedUser, PageResult } from "../../common/interfaces/api-envelope.interface";
 import { ROLE_SORT, sortFieldNames } from "../../database/sort-specs";
 import { AdminRoleDetailDto, AdminRoleDto } from "../roles/dto/role.dto";
 import { BatchDeleteResultDto, BatchDeleteRolesDto } from "./dto/batch-role.dto";
@@ -49,8 +50,8 @@ export class AdminRolesController {
     permissions: [Permission.ROLE_DELETE],
   })
   @ApiDataResponse(BatchDeleteResultDto, { description: "删除结果（requested / deleted / ids / clearedOnlineAccountIds）" })
-  batchRemove(@Body() dto: BatchDeleteRolesDto): BatchDeleteResultDto {
-    return this.adminService.batchRemoveRoles(dto);
+  batchRemove(@Body() dto: BatchDeleteRolesDto, @CurrentUser() user: AuthenticatedUser): BatchDeleteResultDto {
+    return this.adminService.batchRemoveRoles(dto, user);
   }
 
   @Get(":id")

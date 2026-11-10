@@ -94,6 +94,14 @@ export const Permission = {
   AUDIT_READ: "audit:read",
 
   /**
+   * 查看玩家行为流水（#886）
+   *
+   * 与 `audit:read` 同理，**观察员不给**：这张表记的是「某个玩家什么时候在哪做了什么」
+   * （含来源 IP、捡了什么、杀了什么），是查人用的，不是业务数据。
+   */
+  EVENT_READ: "event:read",
+
+  /**
    * 查看系统信息（版本 / 运行时长 / 数据库体积与行数 / 脱敏配置快照）
    *
    * 同样不给只读观察员：这一页暴露部署形态（数据文件路径、限流与保留策略的具体阈值），
@@ -237,6 +245,7 @@ export const PERMISSION_LABELS: Record<PermissionValue, string> = {
   [Permission.ADMIN_READ]: "查看管理员",
   [Permission.ADMIN_MANAGE]: "管理管理员",
   [Permission.AUDIT_READ]: "查看操作日志",
+  [Permission.EVENT_READ]: "查看玩家行为流水",
   [Permission.SYSTEM_READ]: "查看系统信息",
   [Permission.GAME_CONFIG_READ]: "查看养成配置",
   [Permission.GAME_CONFIG_WRITE]: "修改养成配置",

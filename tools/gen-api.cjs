@@ -99,6 +99,8 @@ const MODULES = {
   adminAdmin: { target: "admin", export: "adminsApi" },
   adminRole: { target: "admin", export: "rolesApi" },
   adminAudit: { target: "admin", export: "auditApi" },
+  // 玩家行为流水（#886）：管理端只读查询，无写接口
+  adminEvent: { target: "admin", export: "eventsApi" },
   adminStats: { target: "admin", export: "statsApi" },
   adminSystem: { target: "admin", export: "systemApi" },
   adminAnnouncement: { target: "admin", export: "announcementsApi" },

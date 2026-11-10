@@ -418,9 +418,14 @@ export class CombatSettlementService {
         this.events.emit("monster:killed", {
           accountId,
           roleId: role.id,
+          roleName: this.roleNameOf(role),
           monsterKey: entry.monster.monsterKey,
           monsterLabel: stats.label,
           monsterTier: stats.tier,
+          // 死亡点 = 这只怪的实时坐标（群攻每只各自记，不然 8 条流水全指向同一个点）
+          mapId: spot.mapId,
+          x: entry.x,
+          y: entry.y,
         });
         this.monitor.recordKill({
           instanceId: entry.monster.instanceId,
@@ -694,9 +699,16 @@ export class CombatSettlementService {
       this.events.emit("monster:killed", {
         accountId,
         roleId: role.id,
+        roleName: this.roleNameOf(role),
         monsterKey: cast.monsterKey,
         monsterLabel: stats.label,
         monsterTier: stats.tier,
+        // 与上面那处同一口径：死亡点用「这一下打在哪」（hitSpot 已在闸之前取好）。
+        // 图取**目标怪所在的图**而不是在场表：单体出手不要求玩家先报 pos，
+        // 拿 `presence` 会得到一个空串（#886 的 e2e 就是被这个抓到过）
+        mapId: target.mapId,
+        x: hitSpot.x,
+        y: hitSpot.y,
       });
       // 实时地图监控（#665）：这条文字（谁在哪打死了什么、掉了什么、几时刷新）给管理端看。
       // 只在这一条「新结算」路径记 —— 幂等重发在上面早退，不会重复记两条。

@@ -37,6 +37,8 @@ import { MapRepository } from "./repositories/map.repository";
 import { ZoneRepository } from "./repositories/zone.repository";
 // 配置版本链（#881 / #882）：`config_version` / `config_revisions` + 38 张配置表的整表 dump / 替换
 import { ConfigRevisionRepository } from "./repositories/config-revision.repository";
+// 玩家行为流水（#886）：`event_logs` 一张表，只给 event-log 模块用
+import { EventLogRepository } from "./repositories/event-log.repository";
 import { SkillRepository } from "./repositories/skill.repository";
 import { StatusRepository } from "./repositories/status.repository";
 import { MonsterSkillRepository } from "./repositories/monster-skill.repository";
@@ -69,6 +71,7 @@ import { RoleStatusRepository } from "./repositories/role-status.repository";
   providers: [
     DatabaseService,
     ConfigRevisionRepository,
+    EventLogRepository,
     AccountRepository,
     RoleRepository,
     AdminRepository,
@@ -126,6 +129,7 @@ import { RoleStatusRepository } from "./repositories/role-status.repository";
   exports: [
     DatabaseService,
     ConfigRevisionRepository,
+    EventLogRepository,
     AccountRepository,
     RoleRepository,
     AdminRepository,
