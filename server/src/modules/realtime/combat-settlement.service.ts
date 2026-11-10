@@ -1,7 +1,9 @@
 import { Injectable, Logger } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
 import { bindOnDropOf, growthScalarOf, itemTypeOf, skillOf } from "../../common/runtime-config-cache";
 import { BizCode } from "../../common/constants/biz-code";
 import { ATTACK_ATTRIBUTES, DEFENSE_BY_ATTACK, MONSTER_STAT_COLUMN, type AttackAttribute } from "../../common/constants/game-enums";
+import { PARTY_EXP_SHARE_DISTANCE_DEFAULT } from "../../common/constants/social";
 import { BizException } from "../../common/errors/biz.exception";
 import { AccountRepository } from "../../database/repositories/account.repository";
 import { DropTableRepository } from "../../database/repositories/drop-table.repository";
@@ -102,6 +104,8 @@ export class CombatSettlementService {
     private readonly guard: CastGuardService,
     /** 掉落参数（#789：随机绑定概率）。与怪物数值同一取向 —— 现读库，管理端改完下一刀生效 */
     private readonly runtimeParams: RuntimeParamsRepository,
+    /** 分成距离阈值（#877 的 PARTY_EXP_SHARE_DISTANCE）走配置，e2e 压小用 */
+    private readonly config: ConfigService,
   ) {}
 
   /** 结算一次出手（结果直接作为 settle 帧的 data 发回） */
@@ -402,8 +406,13 @@ export class CombatSettlementService {
 
       let reward: RealtimeKillReward | undefined;
       if (applied.killed) {
-        // 击杀奖励逐只算：经验按「击杀者等级 vs 这一只的等级」各自算，掉落各自抽
-        reward = this.settleKillReward(accountId, role.id, role.level, role.revision, stats, entry.monster.monsterKey, killerName);
+        // 击杀奖励逐只算：经验按「击杀者等级 vs 这一只的等级」各自算，掉落各自抽。
+        // 击杀点 = 这只怪的实时坐标（倒下的地方）；分成距离闸（#877）以它为参照
+        reward = this.settleKillReward(accountId, role.id, role.level, role.revision, stats, entry.monster.monsterKey, killerName, {
+          mapId: spot.mapId,
+          x: entry.x,
+          y: entry.y,
+        });
         this.roles.recordKill(role.id);
         for (const drop of reward.drops) drops.push({ ...drop, monsterKey: entry.monster.monsterKey });
         this.events.emit("monster:killed", {
@@ -668,7 +677,11 @@ export class CombatSettlementService {
     // 只跳过 reward，不回滚这次击杀：世界状态是权威，经验少记一笔可接受
     let reward: RealtimeKillReward | undefined;
     if (applied.killed) {
-      reward = this.settleKillReward(accountId, role.id, role.level, role.revision, stats, cast.monsterKey, this.roleNameOf(role));
+      reward = this.settleKillReward(accountId, role.id, role.level, role.revision, stats, cast.monsterKey, this.roleNameOf(role), {
+        mapId: this.presence.identityOf(accountId)?.mapId ?? "",
+        x: hitSpot.x,
+        y: hitSpot.y,
+      });
       // 击杀计数（#400）：排行榜的原料。与经验分开记 —— 等级差过大时经验为 0，但这一杀算数
       this.roles.recordKill(role.id);
       // 掉落记账（#325）：只在新结算路径记 —— 幂等重发走 recentSettles 原样重放，不重复入账
@@ -798,6 +811,7 @@ export class CombatSettlementService {
     stats: MonsterRow,
     monsterKey: string,
     killerName: string,
+    killSpot: { mapId: string; x: number; y: number },
   ): RealtimeKillReward {
     const exp = this.killExpFor(roleLevel, stats.level);
     // 无经验（等级差过大）不入账不推 revision；有经验但落账失败（打到一半被踢）跳过奖励
@@ -808,7 +822,7 @@ export class CombatSettlementService {
     }
     // 队友分成（#399）：与击杀者的入账分开走 —— 击杀者那份照旧全额，
     // 队友那份按他自己的等级差算，失败也不该影响击杀者的这一笔
-    this.sharePartyExp(accountId, roleId, stats.level, killerName);
+    this.sharePartyExp(accountId, roleId, killerName, killSpot, stats.level);
     return {
       exp,
       level: applied ? applied.level : roleLevel,
@@ -823,16 +837,25 @@ export class CombatSettlementService {
   /**
    * 队友经验分成（#399）
    *
-   * 规则（写进 #399 认领留言的第 4 条）：**同图在线的队友**每人得
+   * 规则（写进 #399 认领留言的第 4 条）：**同图且距击杀点足够近的在线队友**每人得
    * `floor(killExp(他自己的等级, 怪物等级) × PARTY_EXP_MATE_SHARE)`，击杀者拿全额。
    *
    * - 不均分：击杀者不该因为带人变慢（那会让「组队」变成一种惩罚）；
    * - 不加成：加成会引出「多开小号刷经验」，而这一刀没有反多开的机制；
    * - 队友那份走**他自己的等级差**：高等级带小号打高级怪时，小号对那只怪的基数是 0，
    *   乘任何比例还是 0 —— 拉小号这件事被公式本身挡住，不需要另加规则；
-   * - 离线 / 不同图 / 等级差过大的队友**不发帧**（没有经验可演），也不写库。
+   * - 离线 / 不同图 / 等级差过大的队友**不发帧**（没有经验可演），也不写库；
+   * - **距离闸（#877）**：同图但距击杀点超过 `PARTY_EXP_SHARE_DISTANCE`（默认 800px）的
+   *   队友同样不分 —— 站城里挂机的小号不该白拿一半经验。同图与距离读的是同一份
+   *   在场位置（`presence.positionOf`），判定收在 `withinShareDistance` 一处。
    */
-  private sharePartyExp(killerAccountId: string, killerRoleId: string, monsterLevel: number, killerName: string): void {
+  private sharePartyExp(
+    killerAccountId: string,
+    killerRoleId: string,
+    killerName: string,
+    killSpot: { mapId: string; x: number; y: number },
+    monsterLevel: number,
+  ): void {
     const share = this.party.expMateShare();
     if (share <= 0) return;
     const mapId = this.presence.identityOf(killerAccountId)?.mapId ?? "";
@@ -842,6 +865,7 @@ export class CombatSettlementService {
       const role = this.roles.online(mate.accountId);
       // 在线角色不是他（切角色 / 连接还没换过来）就跳过：入账必须落在**当前在线角色**上
       if (!role || role.id !== mate.roleId) continue;
+      if (!this.withinShareDistance(mate.accountId, killSpot)) continue;
       const gain = Math.floor(this.killExpFor(role.level, monsterLevel) * share);
       if (gain <= 0) continue;
       const applied = this.roles.applyKillExp(mate.accountId, mate.roleId, gain);
@@ -857,6 +881,21 @@ export class CombatSettlementService {
         from: { roleId: killerRoleId, username: killerName },
       });
     }
+  }
+
+  /**
+   * 分成距离闸（#877）：同图 + 距击杀点 `PARTY_EXP_SHARE_DISTANCE` 内
+   *
+   * 同图与距离读**同一份**在场位置（`presence.positionOf`，4Hz 自报 + 最小仲裁）——
+   * 判定收在这一处，别处（sameMapMates 的 locationOf）只做粗筛；位置还没上报过
+   * （pos 帧一帧都没来）按「不在场」处理：没有参照坐标的距离是无意义的。
+   */
+  private withinShareDistance(mateAccountId: string, killSpot: { mapId: string; x: number; y: number }): boolean {
+    const position = this.presence.positionOf(mateAccountId);
+    if (!position) return false;
+    if (position.mapId !== killSpot.mapId) return false;
+    const limit = Math.max(0, Number(this.config.get<number>("partyExpShareDistance") ?? PARTY_EXP_SHARE_DISTANCE_DEFAULT));
+    return Math.hypot(position.x - killSpot.x, position.y - killSpot.y) <= limit;
   }
 
   /** 击杀者的显示名（`from` 字段用；取不到就空串，客户端飘字会退化成「队友击杀」） */
