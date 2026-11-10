@@ -11,7 +11,7 @@ import type { ApiEnvelope, AuthenticatedUser } from "../../common/interfaces/api
 import { AccountRepository } from "../../database/repositories/account.repository";
 import type { RoleRow } from "../../database/rows";
 import { WorldService } from "../world/world.service";
-import { MapService, type MapEnterReject } from "../map/map.service";
+import { MapService, START_MAP_ID, type MapEnterReject } from "../map/map.service";
 import { roleAttributeSourceOf, summarizeRoleAttributes } from "../combat/role-attributes";
 import { RuntimeConfigService } from "../game-config/runtime-config.service";
 import { RolesService } from "../roles/roles.service";
@@ -713,8 +713,10 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
    * 反过来，「运营刚把门槛调高、人还站在里面」这种事故也由这条挡住 —— 他所在的位置
    * 与目标一致，放行，不会黑屏。
    *
-   * 位置记录还没有（`mapAt` 缺失：刚建号 / 老档第一次上线）时**不拦**：那一刻他在哪
-   * 由客户端决定，拦下来只会让新号被自己的配置挡在新手村外面（详见 MapService 顶部）。
+   * 位置记录还没有（`mapAt` 缺失：刚建号 / 老档第一次上线）时**只准进新手村**（#859）：
+   * 以前是一律放行 —— 那一刻客户端说在哪就在哪，于是「新号直接落到任意图」成了门槛的
+   * 永久后门（并且 `setMapAt` 会把这次放行记下来，下一次就按新位置判了）。
+   * 限制成新手村不会挡住任何人：新号本来就在那儿，客户端默认位置也是 `0`。
    */
   private mapEnterRejectOf(accountId: string, mapId: string): MapEnterReject | null {
     const row = this.roles.onlineRoleRow(accountId);
@@ -722,7 +724,16 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
     if (!row) return null;
     const data = decodeStoredRoleData(row.data);
     const current = typeof data.mapAt === "string" ? data.mapAt : "";
-    if (!current || current === mapId) return null;
+    // 不认识的图直接拒（#859），且排在「只准进新手村」之前：拼错 id / 地图被删都该报
+    // `unknown`（「没有这张图」），而不是 `start`（「你不在新手村」）—— 后者会把人往错的方向引
+    if (!this.maps.exists(mapId)) return { field: "unknown", need: 0, mapLabel: mapId };
+    // 还没有位置记录：只准进新手村（#859）。这一点比「按门槛判」更严 —— 新号 1 级本来也
+    // 只够进 0 图 / 3 图，但那两张不值得开先例：位置从哪来只能由服务端记
+    if (!current) {
+      if (mapId === START_MAP_ID) return null;
+      return { field: "start", need: 0, mapLabel: this.maps.labelOf(mapId) };
+    }
+    if (current === mapId) return null;
     // 战斗力按服务端口径现算（与 roleUpdate 帧同一个函数）：存档里的 combat 可能落后一帧。
     // 等级在成长曲线之外算不出来（理论上到不了，曲线改坏才会）→ 用存档里那份：
     // 它同样是服务端写进去的（`applyAuthoritativeAttributes`），不是客户端自报

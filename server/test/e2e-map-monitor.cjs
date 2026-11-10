@@ -48,6 +48,7 @@ const fs = require("node:fs");
 const net = require("node:net");
 const os = require("node:os");
 const path = require("node:path");
+const { placeRolesAt } = require("./lib/place-role.cjs");
 const WebSocket = require("ws");
 const { paceCast } = require("./lib/cast-pace.cjs");
 
@@ -338,6 +339,9 @@ async function main() {
       body: { name: "看图的角色", occupation: "1", sex: "1" },
     });
     check(role.status === 200 || role.status === 201, "准备：游戏角色已创建", `status=${role.status}`);
+    // #859 起「没有位置记录」的角色只准进新手村 —— 这一套要进 1 图，
+    // 准备段先按运营摆位把位置写进去（等价管理端 PATCH onMap，见 lib/place-role.cjs）
+    placeRolesAt(dbPath, "1");
 
     const ticket = await api(base, "POST", "/api/realtime/ticket", { token: playerToken });
     const session = connect(`${base.replace("http", "ws")}/api/realtime?ticket=${encodeURIComponent(ticket.body?.data?.ticket)}`);

@@ -23,6 +23,7 @@ const { spawn } = require("node:child_process");
 const net = require("node:net");
 const os = require("node:os");
 const path = require("node:path");
+const { placeRolesAt } = require("./lib/place-role.cjs");
 const WebSocket = require("ws");
 const { paceCast } = require("./lib/cast-pace.cjs");
 
@@ -221,6 +222,10 @@ function connect(url) {
     });
     const adminToken = adminReg.data && adminReg.data.token;
     checkEqual(adminReg.data && adminReg.data.admin.role, "super_admin", "准备：超级管理员已注册");
+    // #859 起服务端不再对「还没有位置记录」的角色一律放行（只准进新手村），
+    // 这里的角色都是 1 级、要进的图又高于新手村 —— 先按运营摆位把位置写进去
+    // （等价管理端 PATCH /admin/roles/:id { onMap }，见 lib/place-role.cjs）
+    placeRolesAt(dbPath, TEST_MAP);
 
     const ticket = await api(baseUrl, "POST", "realtime/ticket", { token });
     const a = connect(`${baseUrl.replace("http", "ws")}/api/realtime?ticket=${encodeURIComponent(ticket.data.ticket)}`);
@@ -313,6 +318,10 @@ function connect(url) {
     const regB = await api(baseUrl, "POST", "auth/register", { body: { username: "guard_other", password: "pass1234" } });
     const tokenB = regB.data && regB.data.token;
     await api(baseUrl, "POST", "roles", { token: tokenB, body: { name: "跨图陪跑", occupation: "1", sex: "1" } });
+    // #859 起服务端不再对「还没有位置记录」的角色一律放行（只准进新手村），
+    // 这里的角色都是 1 级、要进的图又高于新手村 —— 先按运营摆位把位置写进去
+    // （等价管理端 PATCH /admin/roles/:id { onMap }，见 lib/place-role.cjs）
+    placeRolesAt(dbPath, OTHER_MAP, ["跨图陪跑"]);
     const ticketB = await api(baseUrl, "POST", "realtime/ticket", { token: tokenB });
     const b = connect(`${baseUrl.replace("http", "ws")}/api/realtime?ticket=${encodeURIComponent(ticketB.data.ticket)}`);
     await waitFor("第二条连接握手", async () => (b.opened ? true : null));

@@ -263,6 +263,11 @@ async function spawnPlayer(baseUrl, adminToken, name) {
   if (created.code !== 0) throw new Error(`建号 ${name} 失败：${created.message}`);
   const roleId = created.data.id;
 
+  // #859：新号没有位置记录时只准进新手村，而这一套全程在图 1 上打 ——
+  // 用运营摆位（`onMap` 一并写 `mapAt`）把人放过去，比直接改库更贴近真实链路
+  const placed = await api(baseUrl, "PATCH", `admin/roles/${roleId}`, { token: adminToken, body: { onMap: "1" } });
+  if (placed.code !== 0) throw new Error(`摆位失败：${placed.message}`);
+
   const worn = await api(baseUrl, "PATCH", `admin/roles/${roleId}`, { token: adminToken, body: { equipments: { [GEAR.slot]: GEAR.id } } });
   if (worn.code !== 0) throw new Error(`穿装备失败：${worn.message}`);
 

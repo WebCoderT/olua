@@ -24,6 +24,7 @@ const fs = require("node:fs");
 const net = require("node:net");
 const os = require("node:os");
 const path = require("node:path");
+const { placeRolesAt } = require("./lib/place-role.cjs");
 const WebSocket = require("ws");
 const { paceCast } = require("./lib/cast-pace.cjs");
 
@@ -279,6 +280,9 @@ function connect(url) {
       players[name] = { token, session };
     }
     check(!!players.a.session.opened && !!players.b.session.opened && !!players.c.session.opened, "准备：三个账号各自建好角色并连上实时通道");
+    // #859 起「没有位置记录」的角色只准进新手村 —— 这一套要进 1 图，
+    // 准备段先按运营摆位把位置写进去（等价管理端 PATCH onMap，见 lib/place-role.cjs）
+    placeRolesAt(dbPath, "1");
 
     const sessionA = players.a.session;
     const sessionB = players.b.session;

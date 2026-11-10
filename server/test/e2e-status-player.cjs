@@ -25,6 +25,7 @@ const fs = require("node:fs");
 const net = require("node:net");
 const os = require("node:os");
 const path = require("node:path");
+const { placeRolesAt } = require("./lib/place-role.cjs");
 const WebSocket = require("ws");
 
 const SERVER_DIR = path.join(__dirname, "..");
@@ -241,6 +242,10 @@ function connect(url) {
     });
     const adminToken = adminReg.data && adminReg.data.token;
     checkEqual(adminReg.data && adminReg.data.admin.role, "super_admin", "准备：超级管理员已注册");
+    // #859 起服务端不再对「还没有位置记录」的角色一律放行（只准进新手村），
+    // 这里的角色都是 1 级、要进的图又高于新手村 —— 先按运营摆位把位置写进去
+    // （等价管理端 PATCH /admin/roles/:id { onMap }，见 lib/place-role.cjs）
+    placeRolesAt(dbPath, TEST_MAP);
 
     const ticket = await api(baseUrl, "POST", "realtime/ticket", { token });
     const a = connect(`${baseUrl.replace("http", "ws")}/api/realtime?ticket=${encodeURIComponent(ticket.data.ticket)}`);

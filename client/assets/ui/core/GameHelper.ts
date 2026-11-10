@@ -93,12 +93,15 @@ export default class GameHelper {
    * `field` 认不出来（服务端加了新门槛而客户端还没更新）时返回 null：宁可不提示，
    * 也不显示一句「地图进不去」这种什么都没说的废话。
    */
-  static mapEnterRejectText(result: { field?: "level" | "combat" | "soul"; need?: number; mapLabel?: string }): TextRef | null {
+  static mapEnterRejectText(result: { field?: "level" | "combat" | "soul" | "unknown" | "start"; need?: number; mapLabel?: string }): TextRef | null {
     const map = result.mapLabel ?? "";
     const need = result.need ?? 0;
     if (result.field === "level") return textRef("reject_map_level", { map, level: need });
     if (result.field === "combat") return textRef("reject_map_combat", { map, combat: need });
     if (result.field === "soul") return textRef("reject_map_soul", { map, soul: need });
+    // 两种「不是数值门槛」的拒绝（#859）：图不存在 / 还没有位置记录（只准进新手村）
+    if (result.field === "unknown") return textRef("reject_map_missing");
+    if (result.field === "start") return textRef("reject_map_start");
     return null;
   }
 

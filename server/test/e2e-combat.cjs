@@ -27,6 +27,7 @@ const fs = require("node:fs");
 const net = require("node:net");
 const os = require("os");
 const path = require("path");
+const { placeRolesAt } = require("./lib/place-role.cjs");
 const WebSocket = require("ws");
 
 const SERVER_DIR = path.join(__dirname, "..");
@@ -331,6 +332,9 @@ function connect(url) {
     const created = await api(baseUrl, "POST", "roles", { token, body: { name: "斗战者", occupation: "1", sex: "1" } });
     const roleId = created.data && created.data.id;
     check(created.code === 0 && created.data.online === true, "准备：角色已创建并自动在线", created.message);
+    // #859 起「没有位置记录」的角色只准进新手村，而这一套全程在图 1 / 图 2 上跑：
+    // 先按运营摆位把主角放到图 1（等价管理端 PATCH onMap，见 lib/place-role.cjs）
+    placeRolesAt(dbPath, "1");
 
     // 管理端令牌：技能 / 装备 / 背包 从 #556 起是服务端权威，玩家侧存档已经改不动它们了
     // （客户端上报会被库里那份回填），所以测试要造这些状态只能走管理端结构化编辑。
@@ -570,10 +574,12 @@ function connect(url) {
       const registered = await api(baseUrl, "POST", "auth/register", { body: { username: name, password: "pass1234" } });
       const playerToken = registered.data && registered.data.token;
       const createdRole = await api(baseUrl, "POST", "roles", { token: playerToken, body: { name, occupation: "1", sex: "1" } });
+      // #859：新号没有位置记录只准进新手村 —— 建号后立刻摆到图 1（这一套的默认战场）
+      placeRolesAt(dbPath, "1", [name]);
       const ticket = await api(baseUrl, "POST", "realtime/ticket", { token: playerToken });
       const playerSession = connect(`${baseUrl.replace("http", "ws")}/api/realtime?ticket=${encodeURIComponent(ticket.data.ticket)}`);
       await waitFor(`${name} 握手成功`, async () => (playerSession.opened ? playerSession : null));
-      return { token: playerToken, roleId: createdRole.data && createdRole.data.id, session: playerSession };
+      return { token: playerToken, roleId: createdRole.data && createdRole.data.id, name, session: playerSession };
     }
 
     /** 连续出手直到目标死亡，返回带 killed 的那次结算（打不死 / 被拒返回 null） */
@@ -586,10 +592,21 @@ function connect(url) {
       return null;
     }
 
+    /**
+     * 进某张图：先把人摆过去再 join（#859）
+     *
+     * 进图闸只在「换图」时判等级 / 战力 / 战魂，而这一套验的是进图之后的东西 ——
+     * 角色该站在哪张图上本来就该由准备段决定（等价管理端 PATCH onMap）。
+     */
+    const enterAt = async (player, mapId) => {
+      placeRolesAt(dbPath, mapId, [player.name]);
+      return player.session.joinWorld(mapId);
+    };
+
     /** 等某张图上出现活着的怪（WORLD_RESPAWN_MS = 5s，前面的 region 杀过图 1 的怪） */
     async function aliveMonster(player, mapId) {
       return waitFor(`mapId=${mapId} 有活着的怪`, async () => {
-        const snap = await player.session.joinWorld(mapId);
+        const snap = await enterAt(player, mapId);
         return (snap && snap.monsters.find((m) => m.alive)) || null;
       }, 15_000);
     }
@@ -806,7 +823,7 @@ function connect(url) {
     await sleep(500);
 
     // —— A. 快照兜底：companion 进图立刻拿到一份同图全量 ——
-    await companion.session.joinWorld("2");
+    await enterAt(companion, "2");
     const fullFrame = await waitFor("companion 的互见快照", async () => {
       return companion.session.players.find((frame) => frame.full === true) || null;
     }, 5_000);
@@ -911,7 +928,7 @@ function connect(url) {
     );
 
     // —— F. 换图离开：旧图的同伴收到 left（客户端才拆得掉旧节点）——
-    await companion.session.joinWorld("1");
+    await enterAt(companion, "1");
     const switchLeft = await waitFor("fighter 收到 companion 换图离开", async () => {
       return fighter.session.players.find((frame) => (frame.left || []).includes(companionAccountId)) || null;
     }, 5_000);
@@ -1064,14 +1081,14 @@ function connect(url) {
     const mobG = await aliveMonster(picker, "1");
     const killedG = mobG ? await killMonster(picker, mobG.monsterKey, mobG.instanceId) : null;
     check(!!killedG, "G：在图 1 打出一份掉落（先不拾）", JSON.stringify(killedG && killedG.castId));
-    await picker.session.joinWorld("2");
+    await enterAt(picker, "2");
     const crossPick = killedG ? await pick(picker, killedG.castId, 0) : null;
     check(
       !!crossPick && crossPick.ok === false && crossPick.code === "unknown_drop",
       "G：换到图 2 后拾图 1 的掉落 → 拒（unknown_drop，服务端自己清的账）",
       JSON.stringify(crossPick),
     );
-    await picker.session.joinWorld("1");
+    await enterAt(picker, "1");
     const backPick = killedG ? await pick(picker, killedG.castId, 0) : null;
     check(
       !!backPick && backPick.ok === false && backPick.code === "unknown_drop",
@@ -1540,7 +1557,7 @@ function connect(url) {
     const sandbagHp = Number(sandbag.data && sandbag.data.data && sandbag.data.data.maxHp) || 0;
     check(sandbagHp >= 1000, "十：沙包按抬高后的血量建号（血量口径已生效）", `maxHp=${sandbagHp}`);
     // 必须先 joinWorld：monster-ai 帧按「谁在看这张图」派发，没进图的连接收不到广播
-    const worldB = await casterB.session.joinWorld("2");
+    const worldB = await enterAt(casterB, "2");
     const mobNow = worldB && worldB.monsters.find((entry) => entry.instanceId === castMob.instanceId);
     check(!!(mobNow && mobNow.alive), "十：这只怪还活着（阶段 A 只被打过一记，没被打死）", JSON.stringify(mobNow));
     // 用当前坐标（阶段 A 里它追过玩家，早就离开出生点了）

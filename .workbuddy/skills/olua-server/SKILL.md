@@ -654,6 +654,44 @@ e2e 写法（`test/e2e-map-monitor.cjs` 的「二·五」段）：想稳定看�
   只往大扩 —— 想让商城购买成功，先用 `PATCH /admin/roles/:id` 送 `{bag: [{row:3, col:5, id, count}]}`
   把网格换成 4×6，否则 `putGoodIntoBag` 一格都找不到，直接 20012（`e2e-mall-limit` 开场就是这么铺的）。
 
+### 四之十五、进图权威与位置伪造（#859 / #860 / #861）：三条判据都从「客户端说」挪到「服务端记」
+
+这三条是一组，动其中一条先看另外两条。
+
+**1. 进图判序（#859）** —— `RealtimeService.mapEnterRejectOf` 的顺序就是语义：
+
+```
+① maps.exists(mapId)                否 → { field: "unknown", need: 0 }
+② roles.mapAtOfOnlineRole(accountId) 空 → 只准进 START_MAP_ID("0")，其余 { field: "start", need: 0 }
+③ 位置 == 目标图                     是 → 放行（运营事后调高门槛不锁人，#573）
+④ 才轮到等级 / 战力 / 战魂阶（MapService.enterRejectOf）
+```
+
+- **① 必须排在 ② 之前**：拼错 / 被删的图该报「没有这张图」，报成「你不在新手村」会把人往错的方向引。
+  以前未知图是**放行并建一张空图** —— 没地形没怪没复活点，运营永远不知道有人在那儿。
+- **② 是原来的永久后门**：`mapAt` 缺失时一律放行，而 `setMapAt` 会把这次放行记下来 → 新号一次报任意图就永久合法。
+- 代价两条：**加新图必须先配 `maps` 行**；**e2e 里「1 级新号直接进 1/2/3 图」的后门没了** ——
+  准备段用 `test/lib/place-role.cjs` 的 `placeRolesAt(dbPath, mapId[, names])` 摆位（等价管理端 `PATCH onMap`）。
+- 客户端两个新 key：`reject_map_missing`（unknown）/ `reject_map_start`（start），`need` 恒 0。
+
+**2. 换图清账（#860）** —— 两道都要，缺一不可：
+
+- 幂等键 `roleId:mapAt:castId`（`dedupeKeyOf`）：换图 / 换角色后 `castId` 从 1 重计也撞不上；
+- `worldJoin` 放行时**服务端自己** `resetTargets()`：键挡「撞」，这道挡「客户端 `castSeq` 归 0」；
+  同时清掉落账本（否则换图还能拾上一张图的地面掉落）。
+
+**3. 位置帧防伪造（#861）** —— 在场条目里的图**只由 `join()` 写**：
+
+- `updatePosition` 里 `existed.zoneId/mapId` 与登记的不一致 → **整帧丢弃**，连 `updatedAt` 都不刷
+  （刷了伪造帧就能让幽灵玩家在别人屏幕上永不过期）；
+- **首帧也要对齐服务端位置**（`roles.mapAtOfOnlineRole`，无记录时只认新手村）—— 少了这条，
+  等条目过期（几秒不报）再发一帧伪造的图又能注入，前面的丢弃等于白做；
+- `join()` 换图要重置位置仲裁基线（`trustedX/Y/At`、`posRejects`），否则新图第一帧被当瞬移拒掉。
+
+**e2e 观察口**：在场表在服务端内存里，只有**互见帧**能看（`players` 帧）。
+`e2e-map-enter` 第七段用「第二个连接当看客」验证：伪造帧不改坐标/血量、不把人踢下线、
+只发伪造帧照样超时离场（`updatedAt` 没被刷）、真上报能接回。
+
 ## 五、运营与安全底座（口令 / 令牌作废 / 限流 / 审计 / 踢下线 / 公告 / 邮件 / 备份）
 
 这几件事互相咬合，**改动时基本必须一起看**：

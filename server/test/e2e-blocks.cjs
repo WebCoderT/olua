@@ -20,6 +20,7 @@ const { spawn } = require("child_process");
 const net = require("net");
 const os = require("os");
 const path = require("path");
+const { placeRolesAt } = require("./lib/place-role.cjs");
 const WebSocket = require("ws");
 
 const SERVER_DIR = path.join(__dirname, "..");
@@ -209,6 +210,9 @@ function playerEntries(session, roleId) {
     const A = await preparePlayer(baseUrl, "blocks_player_a", "甲玩家");
     const B = await preparePlayer(baseUrl, "blocks_player_b", "乙玩家");
     const C = await preparePlayer(baseUrl, "blocks_player_c", "丙玩家");
+    // #859 起「没有位置记录」的角色只准进新手村 —— 这一套要进 1 图，
+    // 准备段先按运营摆位把位置写进去（等价管理端 PATCH onMap，见 lib/place-role.cjs）
+    placeRolesAt(dbPath, "1");
     check(!!(A.token && B.token && C.token), "三个玩家账号都注册并建好在线角色");
 
     const adminReg = await api(baseUrl, "POST", "admin/auth/register", {

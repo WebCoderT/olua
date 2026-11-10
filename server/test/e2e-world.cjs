@@ -18,6 +18,7 @@ const fs = require("fs");
 const net = require("net");
 const os = require("os");
 const path = require("path");
+const { placeRolesAt } = require("./lib/place-role.cjs");
 const WebSocket = require("ws");
 const { paceCast } = require("./lib/cast-pace.cjs");
 
@@ -267,6 +268,10 @@ function connect(url) {
     check(!!tokenA && !!tokenB, "准备：两个玩家账号已注册", playerA.message || playerB.message);
     await api(baseUrl, "POST", "roles", { token: tokenA, body: { name: "斩世界A", occupation: "1", sex: "1" } });
     await api(baseUrl, "POST", "roles", { token: tokenB, body: { name: "斩世界B", occupation: "1", sex: "1" } });
+    // #859 起服务端不再对「还没有位置记录」的角色一律放行（只准进新手村），
+    // 这里的角色都是 1 级、要进的图又高于新手村 —— 先按运营摆位把位置写进去
+    // （等价管理端 PATCH /admin/roles/:id { onMap }，见 lib/place-role.cjs）
+    placeRolesAt(dbPath, "1");
 
     const connectAs = async (token) => {
       const ticket = await api(baseUrl, "POST", "realtime/ticket", { token });
