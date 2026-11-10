@@ -628,6 +628,32 @@ e2e 写法（`test/e2e-map-monitor.cjs` 的「二·五」段）：想稳定看�
 击退 200ms，急着量只会量到推了一半的帧。死者场景用「客户端持续上报 hp=100 假装活着」把
 「AI 不读客户端血量、只认结算结果」这个前提钉死。
 
+### 四之十四、商城限购与库存（#846）：配置只记额度，运行数另存两张表
+
+| 谁 | 在哪 | 备忘 |
+|---|---|---|
+| 额度配置 | `mall_goods.daily_limit`（`0` = 不限购）/ `stock`（`-1` = 不限量，`0` = 立刻停售） | 进快照与 `config-sync.sql`，客户端 `game-config.mallGoods` 读它显示 |
+| 今日已购 | `mall_sales(role_id, good_id, day)` | 天号 = `todayResetDay()`（05:00 切日）；**跨天不需要任何结算动作**，天号对不上就是新的一天 |
+| 全服已售 | `mall_stock(good_id, sold)` | 总量仍是配置里的 `stock`，这里只记分子 |
+
+- **两个哨兵值的语义必须相反**：`daily_limit = 0` 是「不限购」（限购 0 次没意义），`stock = 0` 是「售罄」
+  （库存 0 件有意义，运营想立刻停售改 0 比下架轻 —— 下架会丢分类与售价，还得重新上架）。
+- **只准条件自增占位，不准先查再写**：`UPDATE mall_stock SET sold = sold + 1 WHERE good_id = ? AND sold < ?`
+  与 `INSERT … ON CONFLICT DO UPDATE … WHERE mall_sales.count < ?`，靠 `changes > 0` 判成没成。
+  先查再写在 API / 实时两个进程之间留缝 —— 那一道缝就是「限量款凭空多卖一件」。
+- **占位与扣款必须同一个事务**：走 `MallRepository.transaction()`（业务 service 不许注入 `DatabaseService`）。
+  背包满 20012 / 乐观锁 20006 时，已占的库存与名额要跟着回滚 —— 否则一次失败购买白吃一个名额，
+  限量款会被空转吃光。这条只有「背包满再买」的用例能钉住，正常购买路径永远是绿的。
+- **下架要顺手清 `sold`**（`removeGood` 里 `resetStock`）：不清就沿用旧值，重新上架配个小 `stock`
+  立刻「刚上架就售罄」，运营只会以为是 bug。
+- 限购**按角色**不按账号（钱包 `bindGold` 本身就按角色），理由与重开条件见 `docs/26` §2.7.0。
+- 客户端：`GET /roles/:id/mall-limits` 一次拿全部上架商品的已购 / 限购 / 已售 / 库存；购买回执也回带
+  三个数（就地刷新，不用再拉一次）。失败要带数量时走信封的 `details`：
+  50029 `{bought, dailyLimit}` / 50030 `{sold, stock}`，**别借 `data` 夹带**。
+- **e2e 建号陷阱**：`buildInitialRoleData` 里 `bag: []`（#597 不赠送任何物品），而管理端「稀疏背包」
+  只往大扩 —— 想让商城购买成功，先用 `PATCH /admin/roles/:id` 送 `{bag: [{row:3, col:5, id, count}]}`
+  把网格换成 4×6，否则 `putGoodIntoBag` 一格都找不到，直接 20012（`e2e-mall-limit` 开场就是这么铺的）。
+
 ## 五、运营与安全底座（口令 / 令牌作废 / 限流 / 审计 / 踢下线 / 公告 / 邮件 / 备份）
 
 这几件事互相咬合，**改动时基本必须一起看**：
