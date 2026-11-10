@@ -99,6 +99,9 @@ import {
   MallGoodPageDto,
   MallGoodQueryDto,
   MallGoodRemoveDto,
+  MallLimitDto,
+  MallLimitsDto,
+  MallStockResetDto,
 } from "../modules/game-config/dto/mall.dto";
 import { FashionDto, FashionPageDto, FashionQueryDto, UpdateFashionDto } from "../modules/game-config/dto/fashion.dto";
 import { CreateDropTableDto, DropEntryDto, DropTableDto, DropTableListDto, MonsterDropDto, MonsterDropPageDto, MonsterDropQueryDto, UpdateDropTableDto, UpdateMonsterDropDto } from "../modules/game-config/dto/drop.dto";
@@ -477,6 +480,9 @@ export const SWAGGER_MODELS = [
   MallGoodQueryDto,
   MallGoodRemoveDto,
   MallGoodEntryDto,
+  MallLimitDto,
+  MallLimitsDto,
+  MallStockResetDto,
   FashionDto,
   FashionPageDto,
   FashionQueryDto,

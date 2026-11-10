@@ -658,7 +658,7 @@
     },
     "/roles/{id}/mall-purchase": {
       "post": {
-        "description": "价格与商城定价管理端同源（特殊价优先，未定价走统一价）；商品只卖装备变体（不在目录 → 404 50021）。\n扣绑定元宝后物品进背包（存档 bag 网格里找空格，装备每件占一格；没有空格 → 20012）。\n\n失败路径：20011 绑定元宝不足 / 20012 背包已满；带上 revision 时乐观锁语义与 role.save 相同（20006 / 20007）。\n\n---\n\n**鉴权**：客户端令牌（`player`），只能操作令牌所属账号自己的数据。",
+        "description": "价格与商城定价管理端同源（特殊价优先，未定价走统一价）；商品只卖装备变体（不在目录 → 404 50021）。\n扣绑定元宝后物品进背包（存档 bag 网格里找空格，装备每件占一格；没有空格 → 20012）。\n每日限购与全服库存在同一事务里占位（#846）：买满 → 50029、售罄 → 50030，两种都不扣钱不发货。\n\n失败路径：20011 绑定元宝不足 / 20012 背包已满 / 50029 今日限购已满 / 50030 售罄；带上 revision 时乐观锁语义与 role.save 相同（20006 / 20007）。\n\n---\n\n**鉴权**：客户端令牌（`player`），只能操作令牌所属账号自己的数据。",
         "operationId": "role.mallPurchase",
         "parameters": [
           {
@@ -683,7 +683,7 @@
         },
         "responses": {
           "200": {
-            "description": "购买后的角色（含本次消耗）",
+            "description": "购买后的角色（含本次消耗与买完之后的限购/库存数）",
             "content": {
               "application/json": {
                 "schema": {
@@ -717,6 +717,60 @@
         "x-olua-data-nullable": false,
         "x-olua-data-schema": {
           "$ref": "#/components/schemas/MallPurchaseResultDto"
+        }
+      }
+    },
+    "/roles/{id}/mall-limits": {
+      "get": {
+        "description": "一次返回**全部上架商品**的运行时数字：今天已买几件、每日限购、全服已售、全服库存，以及一个 `purchasable`（只看限购与库存，等级与余额客户端另有判据）。\n\n快照里只有配置（`dailyLimit` / `stock`），「今天买了几个」随角色与时刻变，不能进快照 —— 走这个接口。\n天号每日 05:00 切（与日常任务同一把尺子），跨天不需要任何结算动作。\n\n---\n\n**鉴权**：客户端令牌（`player`），只能操作令牌所属账号自己的数据。",
+        "operationId": "role.mallLimits",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "角色 id",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "逐件商品的限购与库存",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/MallLimitsDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "player": []
+          }
+        ],
+        "summary": "商城的每日限购与库存（只读，客户端打开商城时拉一遍）",
+        "tags": [
+          "客户端"
+        ],
+        "x-olua-audience": "player",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/MallLimitsDto"
         }
       }
     },
@@ -9193,7 +9247,7 @@
         }
       },
       "post": {
-        "description": "把一件装备变体或一种药品挂到某个分类下（缺省售价 0 = 免费、购买等级 0 = 不限）。\n\n- 商品 id 不在目录（装备变体 + drugs）→ 404（`50021`）；分类不存在 → 404（`50025`）。\n- 已上架再上架 → 409（`50026`，一件物品全商城只能挂一行；想换分类直接 PATCH 商品的 `categoryId`）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
+        "description": "把一件装备变体或一种药品挂到某个分类下（缺省售价 1、购买等级 0 = 不限、每日限购 0 = 不限购、库存 -1 = 不限量）。\n\n- 商品 id 不在目录（装备变体 + drugs）→ 404（`50021`）；分类不存在 → 404（`50025`）。\n- 已上架再上架 → 409（`50026`，一件物品全商城只能挂一行；想换分类直接 PATCH 商品的 `categoryId`）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
         "operationId": "adminMall.createGood",
         "parameters": [],
         "requestBody": {
@@ -9378,7 +9432,7 @@
     },
     "/admin/mall/goods/{id}": {
       "patch": {
-        "description": "**商品是关联数据**：名称 / 图标 / 部位 / 装备等级归各自的配置页管，这里只开放商城自己的三个字段 —— 所属分类（`categoryId`，在陈列里挪位置）、售价（`price`）、购买等级（`requiredLevel`）；改完立即对购买生效（客户端下次取快照后按钮按新等级置灰）。\n\n商品不在上架清单 → 404（`50021`）；目标分类不存在 → 404（`50025`）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
+        "description": "**商品是关联数据**：名称 / 图标 / 部位 / 装备等级归各自的配置页管，这里只开放商城自己的字段 —— 所属分类（`categoryId`，在陈列里挪位置）、售价（`price`）、购买等级（`requiredLevel`）、每日限购（`dailyLimit`，0 = 不限购）、库存（`stock`，-1 = 不限量、0 = 售罄停售）；改完立即对购买生效（购买链路现查库）。\n\n商品不在上架清单 → 404（`50021`）；目标分类不存在 → 404（`50025`）。库存卖完要续货，用「重置库存」而不是把 `stock` 改大 —— 后者会改配置、让客户端重拉快照。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
         "operationId": "adminMall.updateGood",
         "parameters": [
           {
@@ -9429,7 +9483,7 @@
             "admin": []
           }
         ],
-        "summary": "修改商品（分类 / 售价 / 购买等级）",
+        "summary": "修改商品（分类 / 售价 / 购买等级 / 每日限购 / 库存）",
         "tags": [
           "管理端"
         ],
@@ -9492,6 +9546,63 @@
         "x-olua-data-nullable": false,
         "x-olua-data-schema": {
           "$ref": "#/components/schemas/MallGoodRemoveDto"
+        },
+        "x-olua-permissions": [
+          "gameConfig:write"
+        ]
+      }
+    },
+    "/admin/mall/goods/{id}/stock-reset": {
+      "post": {
+        "description": "限量商品卖完之后运营手动续货：把**已售件数**清零，`stock`（总库存）保持不变。\n\n- 与「把 `stock` 改大」的区别：改 `stock` 是改配置（快照内容变了）；重置销量只动运行时计数。两者都会让配置版本 +1（版本判据是 `gameConfig:write` 这个权限点，不为单个动作开例外）。\n- 不限量商品（`stock = -1`）不需要它，调了也是把 0 改成 0。\n- 商品不在上架清单 → 404（`50021`）；下架时会自动清零（重新上架 = 新的一轮）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
+        "operationId": "adminMall.resetStock",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "商品 id（装备变体 id）",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "重置后的已售件数（恒 0）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/MallStockResetDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "重置库存（已售件数清零，商品重新可买）",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/MallStockResetDto"
         },
         "x-olua-permissions": [
           "gameConfig:write"
@@ -18388,6 +18499,18 @@
             "description": "购买等级（缺省 0 = 不限等级）",
             "minimum": 0,
             "maximum": 10000
+          },
+          "dailyLimit": {
+            "type": "number",
+            "description": "每日限购件数（0 / 留空 = 不限购；按角色按 05:00 切日计）",
+            "minimum": 0,
+            "maximum": 100000
+          },
+          "stock": {
+            "type": "number",
+            "description": "全服库存件数（-1 / 留空 = 不限量；0 = 售罄停售）",
+            "minimum": -1,
+            "maximum": 100000000
           }
         },
         "required": [
@@ -18413,6 +18536,18 @@
             "description": "购买等级",
             "minimum": 0,
             "maximum": 10000
+          },
+          "dailyLimit": {
+            "type": "number",
+            "description": "每日限购件数（0 = 不限购）",
+            "minimum": 0,
+            "maximum": 100000
+          },
+          "stock": {
+            "type": "number",
+            "description": "全服库存件数（-1 = 不限量，0 = 售罄停售）",
+            "minimum": -1,
+            "maximum": 100000000
           }
         }
       },
@@ -19986,6 +20121,22 @@
           "goodId": {
             "type": "string",
             "description": "买到的商品 id"
+          },
+          "dailyBought": {
+            "type": "number",
+            "description": "这件商品今天已买几件（含本次；05:00 切日，#846）"
+          },
+          "dailyLimit": {
+            "type": "number",
+            "description": "这件商品的每日限购（0 = 不限购）"
+          },
+          "sold": {
+            "type": "number",
+            "description": "全服已售件数（含本次；不限量商品恒 0）"
+          },
+          "stock": {
+            "type": "number",
+            "description": "全服库存（-1 = 不限量）"
           }
         },
         "required": [
@@ -20001,7 +20152,11 @@
           "updatedAt",
           "data",
           "consumed",
-          "goodId"
+          "goodId",
+          "dailyBought",
+          "dailyLimit",
+          "sold",
+          "stock"
         ]
       },
       "SellLineDto": {
@@ -26761,6 +26916,18 @@
             "type": "number",
             "description": "购买等级（角色等级不足时禁购）"
           },
+          "dailyLimit": {
+            "type": "number",
+            "description": "每日限购件数（0 = 不限购）"
+          },
+          "stock": {
+            "type": "number",
+            "description": "全服库存件数（-1 = 不限量，0 = 售罄）"
+          },
+          "sold": {
+            "type": "number",
+            "description": "已售件数（运行时计数，不进快照；不限量商品恒 0）"
+          },
           "updatedAt": {
             "type": "number",
             "description": "最近更新时间（毫秒）"
@@ -26778,6 +26945,9 @@
           "suffix",
           "price",
           "requiredLevel",
+          "dailyLimit",
+          "stock",
+          "sold",
           "updatedAt"
         ]
       },
@@ -26912,13 +27082,102 @@
           "requiredLevel": {
             "type": "number",
             "description": "购买等级（0 = 不限）"
+          },
+          "dailyLimit": {
+            "type": "number",
+            "description": "每日限购件数（0 = 不限购）。**只有配置，没有「今天买了几个」** —— 运行时计数走 `GET /roles/:roleId/mall-limits`，那是随角色变的，不能进快照"
+          },
+          "stock": {
+            "type": "number",
+            "description": "全服库存件数（-1 = 不限量，0 = 售罄）。已售件数同样走 mall-limits"
           }
         },
         "required": [
           "id",
           "categoryId",
           "price",
-          "requiredLevel"
+          "requiredLevel",
+          "dailyLimit",
+          "stock"
+        ]
+      },
+      "MallLimitDto": {
+        "type": "object",
+        "properties": {
+          "goodId": {
+            "type": "string",
+            "description": "商品 id"
+          },
+          "dailyBought": {
+            "type": "number",
+            "description": "今天已买几件（05:00 切日）"
+          },
+          "dailyLimit": {
+            "type": "number",
+            "description": "每日限购（0 = 不限购）"
+          },
+          "sold": {
+            "type": "number",
+            "description": "全服已售件数（不限量商品恒 0）"
+          },
+          "stock": {
+            "type": "number",
+            "description": "全服库存（-1 = 不限量，0 = 售罄）"
+          },
+          "purchasable": {
+            "type": "boolean",
+            "description": "现在能不能买（等级 / 余额另有判据，这里只看限购与库存）"
+          }
+        },
+        "required": [
+          "goodId",
+          "dailyBought",
+          "dailyLimit",
+          "sold",
+          "stock",
+          "purchasable"
+        ]
+      },
+      "MallLimitsDto": {
+        "type": "object",
+        "properties": {
+          "day": {
+            "type": "number",
+            "description": "当前天号（05:00 切日；客户端不需要解释它，只用于排查）"
+          },
+          "list": {
+            "description": "逐件商品的限购与库存",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MallLimitDto"
+            }
+          }
+        },
+        "required": [
+          "day",
+          "list"
+        ]
+      },
+      "MallStockResetDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "商品 id"
+          },
+          "sold": {
+            "type": "number",
+            "description": "重置后的已售件数（恒 0）"
+          },
+          "reset": {
+            "type": "boolean",
+            "description": "恒为 true（重置成功）"
+          }
+        },
+        "required": [
+          "id",
+          "sold",
+          "reset"
         ]
       },
       "FashionDto": {

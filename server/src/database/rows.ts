@@ -1093,6 +1093,48 @@ export interface MallGoodRow {
   price: number;
   /** 购买等级（角色等级不足时客户端禁用购买按钮、服务端拒绝成交） */
   required_level: number;
+  /**
+   * 每日限购件数（#846）：`0` = 不限购。
+   *
+   * 计数不在这一行（`mall_sales` 按「角色 + 商品 + 天号」记），这里的值只是**上限**。
+   * 与 `drugs.cooldown = 0` 同口径：0 表示「这条规则不生效」。
+   */
+  daily_limit: number;
+  /**
+   * 全服库存件数（#846）：`-1` = 不限量，`0` = 售罄停售。
+   *
+   * 与 `daily_limit` 的默认值不同是**故意的**：限购 0 次没有意义（所以 0 = 无限购），
+   * 而库存 0 件有意义（运营想立刻停售时把它改成 0 比下架更轻）。已卖件数在 `mall_stock`。
+   */
+  stock: number;
+  updated_at: number;
+}
+
+/**
+ * 每日限购计数（#846，**运行时**表 `mall_sales`，不进 config-sync.sql）
+ *
+ * 一行 = 一个角色在某一天买了某件商品几次。天号来自 `common/utils/daily-clock`
+ * （每日 05:00 切日，与日常任务同尺）：天号对不上就是新的一天，不需要任何结算动作。
+ */
+export interface MallSaleRow {
+  role_id: string;
+  good_id: string;
+  /** 天号（`resetDayOf` 的结果；绝对值无意义，只做比较） */
+  day: number;
+  /** 这一天买了几件 */
+  count: number;
+  updated_at: number;
+}
+
+/**
+ * 全服库存计数（#846，**运行时**表 `mall_stock`，不进 config-sync.sql）
+ *
+ * 只记「卖了几件」，总量在 `mall_goods.stock`。运营把 stock 改小 = 立刻停售；
+ * 「重置库存」= 把这行的 sold 清零（与改配置是两件事，后者会让客户端配置版本 +1）。
+ */
+export interface MallStockRow {
+  good_id: string;
+  sold: number;
   updated_at: number;
 }
 

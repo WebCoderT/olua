@@ -262,7 +262,7 @@ export const ApiRoutes = {
      */
     ticket: "/realtime/ticket",
   },
-  /** role 模块（17 个接口） */
+  /** role 模块（18 个接口） */
   role: {
     /**
      * 角色列表（GET /roles）
@@ -330,6 +330,12 @@ export const ApiRoutes = {
      * 使用后**等级直接 +1**（不看经验够不够，经验原样保留），并按新等级重算战斗属性、补满血蓝。
      */
     levelScrollUse: (id: string) => `/roles/${encodeURIComponent(id)}/level-scroll-use`,
+    /**
+     * 商城的每日限购与库存（只读，客户端打开商城时拉一遍）（GET /roles/{id}/mall-limits）
+     *
+     * 一次返回**全部上架商品**的运行时数字：今天已买几件、每日限购、全服已售、全服库存，以及一个 `purchasable`（只看限购与库存，等级与余额客户端另有判据）。
+     */
+    mallLimits: (id: string) => `/roles/${encodeURIComponent(id)}/mall-limits`,
     /**
      * 商城购买（扣费与入包都在服务端）（POST /roles/{id}/mall-purchase）
      *

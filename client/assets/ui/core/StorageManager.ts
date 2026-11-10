@@ -28,7 +28,7 @@ import Session from "../utils/net/Session";
 import { RoleApi } from "../utils/net/Api";
 import CombatChannel from "../utils/net/CombatChannel";
 import type { CombatKillReward, MapEnterResult, RoleAuthorityUpdate } from "../utils/net/CombatChannel";
-import type { BagOp, BagOpResult, DrugUseResult, GrowthUpgradeResult, LevelScrollUseResult, MallPurchaseResult, MoneyUseResult, SellGoodsResult } from "../utils/net/ApiModels";
+import type { BagOp, BagOpResult, DrugUseResult, GrowthUpgradeResult, LevelScrollUseResult, MallLimit, MallPurchaseResult, MoneyUseResult, SellGoodsResult } from "../utils/net/ApiModels";
 import { normalizeGuideProgress } from "../utils/guide/guide-progress";
 import { guideStepCount } from "../../configs/guide";
 
@@ -1183,30 +1183,30 @@ export default class StorageManager {
    *
    * 成功后以服务端返回为准刷新本地存档（bindGold / bag / revision），再走既有落盘与 UI 链路
    * （防抖推回 revision 与服务端一致，幂等）。买装备不改战斗属性，无需重算。
-   * @returns 是否购买成功（失败原因已用浮动提示告知）
+   * @returns 买完之后的限购/库存视图（调用方据它就地刷新卡片）；失败返回 null（原因已用浮动提示告知）
    */
-  static async buyMallGood(id: string): Promise<boolean> {
+  static async buyMallGood(id: string): Promise<MallLimit | null> {
     const good = getItem(id);
     // 解析不出配置 = 已下架 / 本体被删（本地预检，省一次请求）；品类不再在这里卡（#763 起有药品）
     if (!good) {
       GameUiHelper.createTip("mall_good_missing_tip");
-      return false;
+      return null;
     }
     const role = this.findOnlineRole();
     if (!role) {
       GameUiHelper.createTip("mall_good_missing_tip");
-      return false;
+      return null;
     }
     if (role.bindGold < getMallPrice(good)) {
       GameUiHelper.createTip("mall_gold_not_enough_tip");
-      return false;
+      return null;
     }
     let result: MallPurchaseResult;
     try {
       // 修订号带上做乐观锁：后台改过这个角色时（20006）服务端拒绝购买
       result = await RoleApi.mallPurchase(role.id, { goodId: id, revision: role.revision });
     } catch {
-      return false; // 失败提示已由请求层弹过（非 silent 请求）
+      return null; // 失败提示已由请求层弹过（非 silent 请求）
     }
     const data = result.data as Record<string, unknown>;
     role.bindGold = Number(data.bindGold ?? role.bindGold);
@@ -1216,7 +1216,37 @@ export default class StorageManager {
     this.updateOnlineRole(role);
     this.updateUi(role);
     GameUiHelper.createTip("mall_buy_success_tip", { name: this.getGoodDisplayName(good), price: result.consumed });
-    return true;
+    // 回执里带着买完之后的「今日已购 / 已售 / 库存」：调用方就地更新卡片，不用再拉一次 mall-limits
+    return {
+      goodId: result.goodId,
+      dailyBought: result.dailyBought,
+      dailyLimit: result.dailyLimit,
+      sold: result.sold,
+      stock: result.stock,
+      // 回执没有 purchasable（那是读取侧的合成分支），这里按同一判据现算：改完这一件之后还能不能再买
+      purchasable:
+        (result.dailyLimit <= 0 || result.dailyBought < result.dailyLimit) && (result.stock < 0 || result.sold < result.stock),
+    };
+  }
+
+  /**
+   * 商城的限购与库存（#846）：打开商城弹窗时拉一遍
+   *
+   * 快照里只有配置（`dailyLimit` / `stock`），「今天买了几个」「全服卖了几个」是运行时数字，
+   * 服务端单独给一个只读接口。**失败返回空 Map**：商城陈列与购买不依赖它（服务端仍是权威），
+   * 拿不到就只是不显示那几个小字，不该因此让商城打不开。
+   */
+  static async loadMallLimits(): Promise<Map<string, MallLimit>> {
+    const role = this.findOnlineRole();
+    if (!role) return new Map();
+    try {
+      const result = await RoleApi.mallLimits(role.id);
+      const map = new Map<string, MallLimit>();
+      (result.list ?? []).forEach((row) => map.set(row.goodId, row));
+      return map;
+    } catch {
+      return new Map();
+    }
   }
 
   /** 物品展示名（装备 = 前缀 + 名称 + 后缀，段文案与配色同走 getEquipmentNameParts，与详情/地面掉落一致） */

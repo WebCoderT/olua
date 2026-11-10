@@ -11,6 +11,11 @@ import { PageHeader } from "../components/PageHeader";
 
 const MALL_PRICE_MAX = 100_000_000;
 const MALL_LEVEL_MAX = 10_000;
+/** 每日限购上限（服务端 MALL_DAILY_LIMIT_MAX 同一口径；0 = 不限购） */
+const MALL_DAILY_LIMIT_MAX = 100_000;
+/** 库存上限（服务端 MALL_STOCK_MAX 同一口径）；-1 = 不限量，0 = 售罄停售 */
+const MALL_STOCK_MAX = 100_000_000;
+const MALL_STOCK_UNLIMITED = -1;
 /** 上架弹窗「物品分类」下拉里表示药品的那一项（服务端同一取值，见 MALL_CATEGORY_DRUG） */
 const DRUG_CATEGORY = "drug";
 /** 上架弹窗候选列表每页条数（566 件装备 + 11 种药，必须分页） */
@@ -36,13 +41,32 @@ function draftsOf(list: MallCategory[]): Record<string, CategoryDraft> {
 }
 
 /**
+ * 草稿字符串 → 提交值（#846 每日限购 / 库存）
+ *
+ * 空串按默认值算：限购 0（不限购）、库存 -1（不限量）。运营清空输入框的意思通常是
+ * 「这条规则不要了」，不是「卖 0 件」—— 真要停售是把库存填 0，那个写法在提示里说了。
+ * 负数（库存）与非数字一律按默认值：宁可少一条限制，也不要把商品配成买不了。
+ */
+const dailyLimitOf = (text: string): number => {
+  const value = Math.floor(Number(text));
+  if (text.trim() === "" || !Number.isFinite(value) || value <= 0) return 0;
+  return Math.min(value, MALL_DAILY_LIMIT_MAX);
+};
+
+const stockOf = (text: string): number => {
+  const value = Math.floor(Number(text));
+  if (text.trim() === "" || !Number.isFinite(value) || value < 0) return MALL_STOCK_UNLIMITED;
+  return Math.min(value, MALL_STOCK_MAX);
+};
+
+/**
  * 商城管理（#251 / #758 / #763 / #765，运营陈列页）
  *
  * 两件事分开管：
  * - **分类**是商城的**陈列分组**（与物品自己的分类 —— 武器 / 衣服 / 药品 —— 无关），
  *   在「管理分类」弹窗里增删改：改名、调排序（值小者在先）、删空分类（非空 409 `50028`）。
  * - **商品**是**关联数据**：从可上架目录（装备变体 + 药品）里挑一件挂到某个商城分类下，
- *   之后只许改商城自己的三个字段 —— 所属分类 / 售价 / 购买等级；名称 / 图标 / 部位 / 等级
+ *   之后只许改商城自己的字段 —— 所属分类 / 售价 / 购买等级 / 每日限购 / 库存；名称 / 图标 / 部位 / 等级
  *   归各自的配置页管。下架 = 删行，本体不受影响。
  *
  * 主界面就是一张商品表 + 一条检索条（商城分类 / 物品等级 / 名称或 id），
@@ -77,11 +101,16 @@ export function MallPricingPage() {
   const [editing, setEditing] = useState<MallGoodItem | null>(null);
   const [editPrice, setEditPrice] = useState("0");
   const [editLevel, setEditLevel] = useState("0");
+  /** 每日限购 / 库存（#846）：草稿是字符串，空串按默认值（不限购 / 不限量）提交 */
+  const [editDailyLimit, setEditDailyLimit] = useState("0");
+  const [editStock, setEditStock] = useState("-1");
   /** 编辑弹窗里选中的**商城分类**（= 陈列分组，与物品自己的分类无关） */
   const [editCategoryId, setEditCategoryId] = useState("");
   const [creating, setCreating] = useState(false);
   const [createPrice, setCreatePrice] = useState("0");
   const [createLevel, setCreateLevel] = useState("0");
+  const [createDailyLimit, setCreateDailyLimit] = useState("0");
+  const [createStock, setCreateStock] = useState("-1");
   /** 上架弹窗里选中的**商城分类**（缺省 = 主界面正在筛的那个） */
   const [createCategoryId, setCreateCategoryId] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -274,6 +303,8 @@ export function MallPricingPage() {
         categoryId: createCategoryId,
         price: Math.max(0, Math.floor(Number(createPrice) || 0)),
         requiredLevel: Math.max(0, Math.floor(Number(createLevel) || 0)),
+        dailyLimit: dailyLimitOf(createDailyLimit),
+        stock: stockOf(createStock),
       });
       toastSuccess(`商品「${pickedVariant.label}」已上架`);
       setCreating(false);
@@ -293,6 +324,8 @@ export function MallPricingPage() {
     setEditing(item);
     setEditPrice(String(item.price));
     setEditLevel(String(item.requiredLevel));
+    setEditDailyLimit(String(item.dailyLimit));
+    setEditStock(String(item.stock));
     setEditCategoryId(item.categoryId);
     setSubmitting(false);
   };
@@ -308,6 +341,8 @@ export function MallPricingPage() {
         categoryId: editCategoryId,
         price: Math.max(0, Math.floor(Number(editPrice) || 0)),
         requiredLevel: Math.max(0, Math.floor(Number(editLevel) || 0)),
+        dailyLimit: dailyLimitOf(editDailyLimit),
+        stock: stockOf(editStock),
       });
       toastSuccess(`商品「${editing.label}」已更新`);
       closeEdit();
@@ -332,6 +367,18 @@ export function MallPricingPage() {
     }
   };
 
+  /** 重置库存（#846）：已售清零，总库存不变 —— 限量款补货用这个，别靠把 stock 改大 */
+  const resetStock = async (item: MallGoodItem) => {
+    if (!window.confirm(`把「${item.label}」的已售 ${item.sold} 件清零？（总库存 ${item.stock} 不变，商品重新可买）`)) return;
+    try {
+      await mallApi.resetStock(item.id);
+      toastSuccess(`「${item.label}」库存已重置`);
+      await loadGoods();
+    } catch {
+      /* 失败请求层已统一提示 */
+    }
+  };
+
   //#endregion
 
   /**
@@ -347,9 +394,16 @@ export function MallPricingPage() {
 
   const priceOk = (value: string) => Number.isInteger(Number(value)) && Number(value) >= 0 && Number(value) <= MALL_PRICE_MAX;
   const levelOk = (value: string) => Number.isInteger(Number(value)) && Number(value) >= 0 && Number(value) <= MALL_LEVEL_MAX;
+  /** 留空 = 不限（0 / -1），填了就必须是区间内的整数 —— 与 `dailyLimitOf` / `stockOf` 同一口径 */
+  const dailyOk = (value: string) =>
+    value.trim() === "" || (Number.isInteger(Number(value)) && Number(value) >= 0 && Number(value) <= MALL_DAILY_LIMIT_MAX);
+  const stockOk = (value: string) =>
+    value.trim() === "" ||
+    (Number.isInteger(Number(value)) && Number(value) >= MALL_STOCK_UNLIMITED && Number(value) <= MALL_STOCK_MAX);
   const categoryValid = newCategoryLabel.trim().length > 0 && newCategoryLabel.trim().length <= 20;
-  const editValid = Boolean(editCategoryId) && priceOk(editPrice) && levelOk(editLevel);
-  const createValid = Boolean(pickedVariant) && Boolean(createCategoryId) && priceOk(createPrice) && levelOk(createLevel);
+  const editValid = Boolean(editCategoryId) && priceOk(editPrice) && levelOk(editLevel) && dailyOk(editDailyLimit) && stockOk(editStock);
+  const createValid =
+    Boolean(pickedVariant) && Boolean(createCategoryId) && priceOk(createPrice) && levelOk(createLevel) && dailyOk(createDailyLimit) && stockOk(createStock);
 
   /** 检索条里是否有生效条件（决定要不要给「重置」按钮） */
   const filtering = Boolean(filterCategoryId) || filterLevel !== "" || Boolean(keyword);
@@ -461,6 +515,7 @@ export function MallPricingPage() {
                     <th className={thClass}>物品等级</th>
                     <th className={thClass}>售价</th>
                     <th className={thClass}>购买等级</th>
+                    <th className={thClass}>限购 / 库存</th>
                     <th className={thClass}>更新时间</th>
                     <th className={`${thClass} text-right`}>操作</th>
                   </tr>
@@ -498,12 +553,32 @@ export function MallPricingPage() {
                       <td className={`${tdClass} text-slate-400`}>{item.level}</td>
                       <td className={`${tdClass} font-medium text-emerald-300`}>{item.price}</td>
                       <td className={tdClass}>{item.requiredLevel > 0 ? `Lv.${item.requiredLevel}` : "—"}</td>
+                      <td className={tdClass}>
+                        <div className="flex flex-col gap-1 text-xs">
+                          <span className={item.dailyLimit > 0 ? "text-amber-300" : "text-slate-500"}>
+                            {item.dailyLimit > 0 ? `限购 ${item.dailyLimit}/日` : "不限购"}
+                          </span>
+                          <span className={item.stock >= 0 ? (item.sold >= item.stock ? "text-rose-300" : "text-emerald-300") : "text-slate-500"}>
+                            {item.stock >= 0 ? `${item.sold}/${item.stock} 已售` : "不限量"}
+                          </span>
+                        </div>
+                      </td>
                       <td className={`${tdClass} text-xs text-slate-400`}>{formatTime(item.updatedAt)}</td>
                       <td className={`${tdClass} text-right`}>
                         <div className="flex justify-end gap-2">
                           <Button variant="outline" className="px-2.5 py-1 text-xs" disabled={!canWrite} onClick={() => openEdit(item)}>
                             编辑
                           </Button>
+                          {item.stock >= 0 ? (
+                            <Button
+                              variant="outline"
+                              className="px-2.5 py-1 text-xs"
+                              disabled={!canWrite || item.sold === 0}
+                              onClick={() => void resetStock(item)}
+                            >
+                              重置库存
+                            </Button>
+                          ) : null}
                           <Button variant="outline" className="px-2.5 py-1 text-xs" disabled={!canWrite} onClick={() => void removeGood(item)}>
                             下架
                           </Button>
@@ -755,16 +830,22 @@ export function MallPricingPage() {
                   ))}
                 </Select>
               </Field>
-              <Field width="w-40" label="售价（绑定元宝/件）" hint="0 = 免费">
+              <Field width="w-40" label="售价（绑定元宝/件）" hint="至少 1（0 会被拒：免费商品 = 印钞）">
                 <Input type="number" min={0} value={createPrice} onChange={(event) => setCreatePrice(event.target.value)} />
               </Field>
               <Field width="w-40" label="购买等级" hint="0 = 不限等级">
                 <Input type="number" min={0} value={createLevel} onChange={(event) => setCreateLevel(event.target.value)} />
               </Field>
+              <Field width="w-36" label="每日限购" hint="每个角色每天几件；0 / 留空 = 不限购">
+                <Input type="number" min={0} value={createDailyLimit} onChange={(event) => setCreateDailyLimit(event.target.value)} />
+              </Field>
+              <Field width="w-36" label="全服库存" hint="-1 / 留空 = 不限量；0 = 售罄停售">
+                <Input type="number" min={-1} value={createStock} onChange={(event) => setCreateStock(event.target.value)} />
+              </Field>
             </div>
             {!createValid ? (
               <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-200">
-                先选一件物品与商城分类；售价 / 购买等级需为 0~{MALL_PRICE_MAX} 的整数。
+                先选一件物品与商城分类；售价 / 购买等级 / 每日限购 / 库存需为合法整数（限购 0 与库存 -1 表示不限）。
               </p>
             ) : null}
           </div>
@@ -775,7 +856,7 @@ export function MallPricingPage() {
         <Modal
           open
           title={<>编辑商品 · {editing.label}</>}
-          hint={<>{editing.label}（{editing.id}）。商品本体是关联数据，这里只改商城字段：所在分类 / 售价 / 购买等级，改完立即对购买生效。</>}
+          hint={<>{editing.label}（{editing.id}）。商品本体是关联数据，这里只改商城字段：所在分类 / 售价 / 购买等级 / 每日限购 / 库存，改完立即对购买生效。</>}
           size="md"
           onClose={closeEdit}
           footer={<>
@@ -793,16 +874,22 @@ export function MallPricingPage() {
                 ))}
               </Select>
             </Field>
-            <Field width="w-40" label="售价（绑定元宝/件）" hint="0 = 免费">
+            <Field width="w-40" label="售价（绑定元宝/件）" hint="至少 1（0 会被拒：免费商品 = 印钞）">
               <Input type="number" min={0} value={editPrice} onChange={(event) => setEditPrice(event.target.value)} />
             </Field>
             <Field width="w-40" label="购买等级" hint="角色等级不足时禁购">
               <Input type="number" min={0} value={editLevel} onChange={(event) => setEditLevel(event.target.value)} />
             </Field>
+            <Field width="w-36" label="每日限购" hint="每个角色每天几件；0 / 留空 = 不限购">
+              <Input type="number" min={0} value={editDailyLimit} onChange={(event) => setEditDailyLimit(event.target.value)} />
+            </Field>
+            <Field width="w-36" label="全服库存" hint={`-1 / 留空 = 不限量；0 = 售罄。已售 ${editing.sold} 件，卖完要补货用「重置库存」`}>
+              <Input type="number" min={-1} value={editStock} onChange={(event) => setEditStock(event.target.value)} />
+            </Field>
           </div>
           {!editValid ? (
             <p className="mt-3 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-200">
-              售价 / 购买等级需为 ≥0 的整数，且必须选一个商城分类。
+              售价 / 购买等级 / 每日限购 / 库存需为合法整数（限购 0 与库存 -1 表示不限），且必须选一个商城分类。
             </p>
           ) : null}
         </Modal>
