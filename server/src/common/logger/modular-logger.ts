@@ -15,10 +15,14 @@ const COLOR_RESET = "\u001b[0m";
 
 /** 将所有模块日志汇总到控制台，并按 Logger context 分文件追加保存。 */
 export class ModularLogger implements LoggerService {
-  private readonly logDirectory: string;
+  private logDirectory: string;
   private levels = new Set<LogLevel>(DEFAULT_LEVELS);
 
-  constructor(logDirectory: string) {
+  constructor(logDirectory = join(process.cwd(), "logs")) {
+    this.logDirectory = resolve(logDirectory);
+  }
+
+  setLogDirectory(logDirectory: string): void {
     this.logDirectory = resolve(logDirectory);
   }
 
@@ -67,7 +71,6 @@ export class ModularLogger implements LoggerService {
       : consoleOutput.join("\n");
 
     if (level === "error" || level === "fatal") console.error(formattedConsoleOutput);
-    else if (level === "warn") console.warn(formattedConsoleOutput);
     else console.log(formattedConsoleOutput);
 
     try {

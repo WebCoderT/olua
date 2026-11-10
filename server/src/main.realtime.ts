@@ -27,13 +27,14 @@ import { ModularLogger } from "./common/logger/modular-logger";
  * - **不挂 Swagger**：本进程不是契约源，接口文档只从存档进程生成一份。
  */
 async function bootstrap() {
+  const modularLogger = new ModularLogger();
   // 显式声明成 Express 应用（与 main.ts 同口径，见那边注释）
   const app = await NestFactory.create<NestExpressApplication>(
     AppModule.register({ realtime: true }),
-    { bufferLogs: true },
+    { logger: modularLogger, bufferLogs: true },
   );
   const config = app.get(ConfigService);
-  app.useLogger(new ModularLogger(config.get<string>("logDir") ?? "logs"));
+  modularLogger.setLogDirectory(config.get<string>("logDir") ?? "logs");
 
   const prefix = config.get<string>("apiPrefix") ?? "api";
   const port = config.get<number>("realtimePort") ?? 3101;
