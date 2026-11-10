@@ -281,7 +281,7 @@ server-e2e-guild: ## 服务端帮会专项 e2e（79 条：建帮与重名 / 申�
 server-e2e-social: ## 服务端社交专项 e2e（47 条：好友申请与互加 / 拒绝不留痕 / 撤回删除 / 敌人单向 / 镜像行 / 互见帧身份）
 	@cd server && $(NPM) run test:e2e:social
 
-server-e2e-chat: ## 服务端聊天专项 e2e（35 条：世界同图广播 / 净化 / 限频 / 帮会准入 / 私聊与离线拒绝）
+server-e2e-chat: ## 服务端聊天专项 e2e（38 条：世界全服广播 / 同图频道 / 净化 / 限频 / 帮会准入 / 私聊与离线拒绝）
 	@cd server && $(NPM) run test:e2e:chat
 
 server-e2e-blocks: ## 服务端屏蔽与举报专项 e2e（50 条：拉黑单向 / 快照不外泄「谁拉黑了我」/ 聊天与互见过滤 / 解除恢复 / 好友被剪 / 举报落库 + 管理端只读列表）

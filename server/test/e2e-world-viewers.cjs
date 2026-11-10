@@ -7,7 +7,7 @@
  * 「谁在看这张图」是世界层唯一的一份名单（`world.viewers`）。它同时是四件事的依据：
  *
  * ```
- * 1. 广播收件人     viewersOf()  → monster-ai / world / 世界频道的投递对象
+ * 1. 广播收件人     viewersOf()  → monster-ai / world / 同图频道（#876 的 map）的投递对象
  * 2. 怪物 AI 驱动   viewedMaps() → 没人看的图不跑 AI（#323）
  * 3. 监控采样       viewedMaps() → 没人看的图不写 map_monitor_state（#665）
  * 4. 空闲卸载       emptySince   → 没人看满阈值就把实例从内存卸掉
@@ -15,12 +15,13 @@
  *
  * 修之前 `join` 只往新集合里加人、`leave` 只在断线时调用 —— **换图不退出旧图**。于是
  * 一个人从图 A 走到图 B，图 A 的名单里还留着他：图 A 永远「有人看」，AI 一直跑、
- * 采样一直写、世界频道还在往一个不在那儿的人身上投递，内存只增不减，直到进程重启。
+ * 采样一直写、同图频道还在往一个不在那儿的人身上投递，内存只增不减，直到进程重启。
  *
  * ## 四条主线
  *
- * 1. **换图即退出旧图**：A 从图 0 换到图 3 后，图 0 的世界频道不再投递给 A（投递对象
- *    就是那份名单，这是名单最可观测的一面）；B 在同一张图里说话仍是「同图可见」；
+ * 1. **换图即退出旧图**：A 从图 0 换到图 3 后，图 0 的**同图频道**不再投递给 A（#876 起
+ *    world 改全服在场者广播、不再按图投递，观看者名单最可观测的一面换 map 探针；
+ *    投递对象就是那份名单）；B 在同一张图里说话仍是「同图可见」；
  * 2. **旧图不再被采样**：最后一个人离开后 `map_monitor_state` 的时间戳定住不动，
  *    同时另一张有人的图照常在走（对照组，避免把「采集器挂了」误判成修好了）；
  * 3. **旧图按空闲阈值卸载**：服务端日志出现「无人观看已空闲」，还有人在看的图不出现；
@@ -323,18 +324,19 @@ function connect(url) {
     const awayA = await sessionA.joinWorld(AWAY_MAP);
     check(!!(awayA && awayA.mapId === AWAY_MAP), "A 换图到另一张图，拿到新图的权威快照");
 
-    // 世界频道的收件人就是这份观看者名单：还留在名单里 = 还会收到旧图的消息
+    // 同图频道的收件人就是这份观看者名单（#876 起 world 改全服在场者，探针换 map）：
+    // 还留在名单里 = 还会收到旧图的消息
     const probe = `换图探针 ${Date.now()}`;
     const markB = sessionB.chats.length;
     const markA = sessionA.chats.length;
-    sessionB.send("chat", { channel: "world", text: probe });
-    const echoB = await waitFor("B 收到自己的世界频道回显", async () =>
+    sessionB.send("chat", { channel: "map", text: probe });
+    const echoB = await waitFor("B 收到自己的同图频道回显", async () =>
       sessionB.chatsSince(markB).find((entry) => entry.text === probe) || null,
     );
-    check(!!echoB, "B 在起点图发的世界频道自己收到回显（探针本身有效）");
+    check(!!echoB, "B 在起点图发的同图频道自己收到回显（探针本身有效）");
     await sleep(600);
     const leaked = sessionA.chatsSince(markA).filter((entry) => entry.text === probe);
-    check(leaked.length === 0, "A 已不在起点图，收不到起点图的世界频道（换图时退出了旧图的观看者）", JSON.stringify(leaked.map((entry) => entry.text)));
+    check(leaked.length === 0, "A 已不在起点图，收不到起点图的同图频道（换图时退出了旧图的观看者）", JSON.stringify(leaked.map((entry) => entry.text)));
 
     //#endregion
 

@@ -281,8 +281,8 @@ export interface PickError {
 /** 服务端拾取结果（协议见 realtime.protocol 的 RealtimePickedData） */
 export type PickResult = PickOk | PickError;
 
-/** 聊天频道（#395：与 server realtime.protocol 的 CHAT_CHANNELS 同形） */
-export const CHAT_CHANNELS = ["world", "guild", "private"] as const;
+/** 聊天频道（#395 / #876：与 server realtime.protocol 的 CHAT_CHANNELS 同形） */
+export const CHAT_CHANNELS = ["world", "map", "guild", "private"] as const;
 export type ChatChannel = (typeof CHAT_CHANNELS)[number];
 
 /** 服务端聊天广播帧里的一条消息（协议见 realtime.protocol 的 RealtimeChatEntry） */

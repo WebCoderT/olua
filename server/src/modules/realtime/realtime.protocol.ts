@@ -691,15 +691,17 @@ export interface RealtimePickedMessage {
 
 //#region 聊天（#395：世界 / 帮会 / 私聊，权威在服务端的转发与限流）
 
-/** 聊天频道（协议里的取值就这三个；客户端 configs/chat 的频道口径与这里同形） */
-export const CHAT_CHANNELS = ["world", "guild", "private"] as const;
+/** 聊天频道（协议里的取值就这四个；客户端 configs/chat 的频道口径与这里同形） */
+export const CHAT_CHANNELS = ["world", "map", "guild", "private"] as const;
 export type ChatChannel = (typeof CHAT_CHANNELS)[number];
 
 /**
  * 客户端 → 服务端：发一条聊天消息
  *
- * 三种频道共用一条消息：
- * - `world`：广播给**同图观看者**（复用互见的观看者集合，见 #395 issue 里的口径决定）；
+ * 四种频道共用一条消息（#876：世界与同图拆开，各走各的路由）：
+ * - `world`：广播给**全服在场者**（所有进过图的在线账号，不限图）——名实相符，
+ *   不同图的玩家互相看得到世界消息；
+ * - `map`：广播给**同图观看者**（复用互见的观看者集合，#876 前的 world 就是它）；
  * - `guild`：转发给帮会全部**在线**成员（帮会成员身份以库为准，不信任客户端自称）；
  * - `private`：定向发给 `toRoleId` 对应账号（**仅在线可达**，不落库——离线转 mail 是后续刀）。
  *
@@ -740,7 +742,7 @@ export interface RealtimeChatEntry {
   };
 }
 
-/** 服务端 → 客户端：一条聊天消息（世界 / 帮会 / 私聊同形；发送者自己也会收到回显） */
+/** 服务端 → 客户端：一条聊天消息（四个频道同形；发送者自己也会收到回显） */
 export interface RealtimeChatBroadcast {
   type: "chat";
   data: RealtimeChatEntry;

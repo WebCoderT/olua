@@ -6,9 +6,9 @@
  * A. 消息仓（**跑真类**）：回显即成功（自己的消息不计未读）、未读按频道累计与清除、
  *    每频道 50 条封顶、私聊会话双向过滤、会话对象最近优先且去重
  * B. 协议两端同形：服务端 RealtimeChatEntry 与客户端 ChatEntry 字段一致，
- *    CHAT_CHANNELS 三频道两端一致
- * C. 服务端转发纪律：世界频道复用互见观看者（不做全服连接索引）、帮会准入每次查库、
- *    私聊离线整条拒绝、回显即成功（客户端不在发送时本地追加）
+ *    CHAT_CHANNELS 四频道两端一致
+ * C. 服务端转发纪律：世界频道广播全服在场者、同图频道复用互见观看者（#876）、
+ *    帮会准入每次查库、私聊离线整条拒绝、回显即成功（客户端不在发送时本地追加）
  * D. 客户端消费纪律：CombatChannel.onChat 只喂 ChatStore（单一落点）、
  *    弹窗开着挂起气泡、切场景 ChatStore/ChatBubbles 都 reset
  *
@@ -138,8 +138,8 @@ try {
     const serverChannels = stringArray(serverProtocol, "CHAT_CHANNELS");
     const clientChannels = stringArray(clientChannel, "CHAT_CHANNELS");
     check(
-      JSON.stringify(serverChannels) === JSON.stringify(clientChannels) && serverChannels.join(",") === "world,guild,private",
-      "CHAT_CHANNELS 两端一致（world / guild / private）",
+      JSON.stringify(serverChannels) === JSON.stringify(clientChannels) && serverChannels.join(",") === "world,map,guild,private",
+      "CHAT_CHANNELS 两端一致（world / map / guild / private）",
       JSON.stringify(serverChannels),
     );
   });
@@ -173,7 +173,8 @@ try {
   const serverChat = readRepo(SERVER_CHAT);
   const serverRealtime = readRepo(SERVER_REALTIME);
 
-  check(/viewersOf\(identity\.zoneId, identity\.mapId\)/.test(serverChat), "世界频道复用互见的观看者集合（不为聊天另建全服连接索引）");
+  check(/presentAccountIds\(\)/.test(serverChat), "世界频道广播全服在场者（presence 的在场表就是名单，#876）");
+  check(/viewersOf\(identity\.zoneId, identity\.mapId\)/.test(serverChat), "同图频道复用互见的观看者集合（不为聊天另建按图索引）");
   check(/guildOfRole\(identity\.roleId\)/.test(serverChat) && !/identity\.guildId/.test(serverChat.split("sayGuild")[1] || ""), "帮会准入每次查库（不用在场的懒刷新缓存）");
   check(/isConnected\(target\.account_id\)/.test(serverChat), "私聊收件人不在线整条拒绝（不制造发出去但没人收到的消息）");
   check(/对方不在线/.test(serverChat), "离线拒绝有明确文案（玩家得知道为什么没发出去）");
