@@ -1605,7 +1605,49 @@ export class RolesService {
      */
     source = "deliver",
   ): KillExpResult {
-    const existing = this.onlineRoleOrThrow(accountId, roleId);
+    return this.applyRewards(this.onlineRoleOrThrow(accountId, roleId), consume, rewards, source);
+  }
+
+  /**
+   * 按 `roleId` 直接发奖，**不要求角色在线**（#867 邮件过期自动入包）
+   *
+   * 与 {@link grantQuestRewards} 共用同一段发奖主体（`applyRewards`），差别只有前置：
+   * 那个走 `onlineRoleOrThrow`（要「这个账号此刻在玩的就是这个角色」），这个只按 id 取行。
+   *
+   * 三个边界：
+   * - **乐观锁照旧**（`persistOrConflict`）：自动入包与玩家自己保存撞上了就 409，
+   *   调用方按「下一轮再试」处理，不在这里重试；
+   * - **`accountId` 从角色行上取**（不是入参）：行为流水的 `accountId` 不能因为调用方
+   *   传错而对到别的账号；
+   * - **只在离线时用**：在线角色的存档在客户端手里，服务端改了库会被下一次全量覆盖冲掉 ——
+   *   「要不要入包」由调用方（`GameMailAutoClaimService`）判，这里不判（KISS：
+   *   这个方法就是个发奖原语，不背在线语义）。
+   */
+  grantByRoleId(
+    roleId: string,
+    rewards: { gold: number; exp: number; items: Array<{ goodId: string; count: number }> },
+    source = "mail-auto",
+  ): KillExpResult {
+    const existing = this.roles.findById(roleId);
+    if (!existing) throw BizException.notFound(BizCode.ROLE_NOT_FOUND, "角色不存在");
+    return this.applyRewards(existing, null, rewards, source);
+  }
+
+  /**
+   * 发奖主体（**两个入口共用**：在线交付 / 离线按 id 发）
+   *
+   * 抽出来是为了不让「在线版」和「离线版」各抄一份循环 —— 上一版击杀经验与任务发奖
+   * 各抄一份的教训是「升级补血一边补一边不补」。这里所有校验都在落库之前跑完
+   * （材料不足 20017 / 背包放不下 20012），异常路径存档一个字节不动。
+   */
+  private applyRewards(
+    existing: RoleRow,
+    consume: { goodId: string; count: number } | null,
+    rewards: { gold: number; exp: number; items: Array<{ goodId: string; count: number }> },
+    source: string,
+  ): KillExpResult {
+    // `accountId` 从角色行上取（不是入参）：行为流水的 accountId 不能因为调用方传错而对到别的账号
+    const { account_id: accountId, id: roleId } = existing;
     const data = decodeStoredRoleData(existing.data);
 
     // 1) collect 材料：先点数再扣（不够整单拒绝，不做部分扣除）

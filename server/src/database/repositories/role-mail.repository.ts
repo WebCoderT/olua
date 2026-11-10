@@ -116,12 +116,17 @@ export class RoleMailRepository {
   }
 
   /**
-   * 清理一批过期的收件箱行（#439）
+   * 清理一批过期的收件箱行（#439 / #867）
    *
    * 判据全在 SQL 里，与玩家侧「删一封」的 `remove` 同一个理由的两面：
    * - `expires_at <= ?`：真的过期了（NULL = 永不过期，永远不进来）；
-   * - **`claimed_at IS NOT NULL OR attachments = '[]'`**：已领或无附件 ——
-   *   带未领附件的行**不允许过期**（过期等于替玩家扔掉奖励，与「未领不能删」50143 同一个理由）。
+   * - **`claimed_at IS NOT NULL OR 三样奖励都没有`**：已领、或者压根没奖励 ——
+   *   只要还有**没领的奖励**（金币 / 经验 / 附件任一），就不允许物理删除。
+   *
+   * #867 之前这里写的是 `attachments = '[]'`，于是「纯金币 / 纯经验」的补偿邮件
+   * **未领就被删掉**（奖励凭空蒸发）。现在改成与 `hasUnclaimedReward()` 同源的判据：
+   * 那种行只能靠 `GameMailAutoClaimService` 入包后（`claimed_at` 非空）再被清掉；
+   * 入包一直失败（背包满到上限）的行会一直留着 —— 那是**有意的**，等人工。
    *
    * 分批：先按 `LIMIT` 选出这一批的 id 再删（`DELETE ... LIMIT` 依赖 SQLite 的编译开关，
    * 不默认可用），一次大清理不长时间占着写锁 —— 剩下的下一轮再清，
@@ -133,12 +138,62 @@ export class RoleMailRepository {
     const batch = this.db.all<{ id: string }>(
       `SELECT id FROM role_mails
         WHERE expires_at IS NOT NULL AND expires_at <= ?
-          AND (claimed_at IS NOT NULL OR attachments = '[]')
+          AND (claimed_at IS NOT NULL
+               OR (gold <= 0 AND exp <= 0 AND (attachments = '[]' OR attachments = '')))
         LIMIT ?`,
       [now, limit],
     );
     if (batch.length === 0) return 0;
     const placeholders = batch.map(() => "?").join(", ");
     return this.db.execute(`DELETE FROM role_mails WHERE id IN (${placeholders})`, batch.map((row) => row.id)).changes;
+  }
+
+  /**
+   * 挑一批「快过期、还没领、有奖励、且主人此刻离线」的邮件（#867）
+   *
+   * 三个判据写在 SQL 里，缺一个都会出事：
+   * - **`expires_at <= ?`（传入 now + 提前量）**：只扫快过期的，早就不动；
+   * - **`(gold > 0 OR exp > 0 OR attachments 非空)`**：与 `hasUnclaimedReward()` 同源 ——
+   *   只认 `attachments` 会漏掉纯金币那批（那正是 #867 要救的）；
+   * - **主人离线**（`accounts.online_role_id` 不是这个角色）：在线角色的存档在客户端手里，
+   *   服务端改了库会被下一次全量覆盖冲掉，入包等于白做还可能丢东西。
+   *
+   * `auto_attempts` 到上限的不再入选：反复失败的行每轮都重试等于把 5 次机会几分钟用光。
+   */
+  listAutoClaimCandidates(deadline: number, maxAttempts: number, limit: number): RoleMailRow[] {
+    return this.db.all<RoleMailRow>(
+      `SELECT m.* FROM role_mails m
+         JOIN roles r    ON r.id = m.role_id
+         LEFT JOIN accounts a ON a.id = r.account_id
+        WHERE m.claimed_at IS NULL
+          AND m.expires_at IS NOT NULL AND m.expires_at <= ?
+          AND m.auto_claimed_at = 0
+          AND m.auto_attempts < ?
+          AND (m.gold > 0 OR m.exp > 0 OR (m.attachments <> '[]' AND m.attachments <> ''))
+          AND (a.online_role_id IS NULL OR a.online_role_id <> m.role_id)
+        ORDER BY m.expires_at ASC, m.id ASC
+        LIMIT ?`,
+      [deadline, maxAttempts, limit],
+    );
+  }
+
+  /** 标「这批奖励是系统自动入包的」（#867；成功后立刻写，与 `markClaimed` 同一个事务） */
+  markAutoClaimed(id: string, now: number): boolean {
+    return this.db.execute("UPDATE role_mails SET auto_claimed_at = ? WHERE id = ?", [now, id]).changes > 0;
+  }
+
+  /**
+   * 自动入包失败一次（#867）
+   *
+   * **必须在事务外面调**：失败时事务已经回滚，写在里面会一起被抹掉，于是
+   * `auto_attempts` 永远是 0、每轮都重试同一封（背包满的行会把整轮预算吃光）。
+   */
+  bumpAutoAttempts(id: string): number {
+    return this.db.execute("UPDATE role_mails SET auto_attempts = auto_attempts + 1 WHERE id = ?", [id]).changes;
+  }
+
+  /** 往正文末尾追加一行（#867：入包成功后告诉玩家一句，**不改原文**） */
+  appendBody(id: string, line: string): number {
+    return this.db.execute("UPDATE role_mails SET body = body || ? WHERE id = ?", [line, id]).changes;
   }
 }

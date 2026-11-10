@@ -1,4 +1,5 @@
 import { Injectable } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
 import { randomUUID } from "node:crypto";
 import { BizCode } from "../../common/constants/biz-code";
 import { BizException, isBizCode } from "../../common/errors/biz.exception";
@@ -47,9 +48,15 @@ export interface SendMailInput {
   exp?: number;
   items?: RewardItem[];
   /**
-   * 保质期（#439，毫秒）：`expires_at = 发送时刻 + ttlMs`；不传 = 永不过期。
-   * 由**投递方**给 —— 不同来源的保质期不同（BOSS 战报 7 天、运营补发永久），
-   * 集中在清理任务里算就表达不了这个差异。带未领附件的行不会因此被清（判据在清理 SQL）。
+   * 保质期（#439 / #867，毫秒）：`expires_at = 发送时刻 + ttlMs`
+   *
+   * 三种取值，语义各不相同：
+   * - **不传** → 用默认 30 天（`MAIL_DEFAULT_TTL_MS`）。#867 之前这里是「不传 = 永久」，
+   *   结果是「谁忘了给 TTL，那封邮件就永远挂在箱子里」，实际没人敢忘，也就没人给；
+   * - **`0`** → 显式永久。人工补发（运营的实物补偿）走这条，补偿不该过期；
+   * - **> 0** → 显式 TTL（BOSS 战报 7 天这类）。
+   *
+   * 到期前 3 天由 `GameMailAutoClaimService` 自动入包（#867），入包成功才允许物理清理。
    */
   ttlMs?: number;
 }
@@ -82,6 +89,8 @@ export class GameMailService {
     private readonly roles: RolesService,
     /** 玩家行为流水（#886）：领取记一条（附件本身由 `grantQuestRewards` 记成 gain） */
     private readonly eventLogs: EventLogService,
+    /** 默认保质期（#867）：投递方不给 TTL 时按 30 天算，读 `MAIL_DEFAULT_TTL_MS` */
+    private readonly config: ConfigService,
   ) {}
 
   /** 我的收件箱 */
@@ -266,8 +275,10 @@ export class GameMailService {
       attachments: JSON.stringify(input.items ?? []),
       read_at: null,
       claimed_at: null,
-      // 保质期由投递方声明（#439）：不传 = 永不过期（运营补发的实物补偿通常就是这类）
-      expires_at: input.ttlMs && input.ttlMs > 0 ? created_at + Math.floor(input.ttlMs) : null,
+      // 保质期（#867）：不传 = 默认 30 天；`0` = 显式永久（人工补发走这条）；> 0 = 投递方指定
+      expires_at: this.expiresAtOf(input.ttlMs, created_at),
+      auto_claimed_at: 0,
+      auto_attempts: 0,
       created_at,
     };
     this.mails.insert(row);
@@ -285,6 +296,9 @@ export class GameMailService {
    * - **频道语义**（400）：DTO 的 `@IsIn` 管形状，这里再拦一道兜底（直连调用方绕不过）。
    *
    * 不要求收件人在线：邮件本来就是异步的，离线角色的行等他下次上线自然看到。
+   *
+   * **保质期显式给 `0`（永久）**（#867）：补发是运营对人做的补偿，不该因为它躺在箱子里
+   * 30 天就消失。与「默认 30 天」相反 —— 默认值是给系统自动投递用的。
    */
   sendFromAdmin(roleId: string, dto: AdminSendMailDto): MailViewDto {
     if (!(dto.channel as string) || !ADMIN_SEND_CHANNELS.includes(dto.channel as (typeof ADMIN_SEND_CHANNELS)[number])) {
@@ -301,11 +315,26 @@ export class GameMailService {
       gold: dto.gold,
       exp: dto.exp,
       items: dto.items,
+      ttlMs: 0,
     });
     return MailViewDto.of(row);
   }
 
   //#region 内部
+
+  /**
+   * 发送时刻 → 过期时刻（#867）
+   *
+   * 三种入参三种语义，别合并（合并就分不清「忘了给」和「故意永久」）：
+   * - `undefined` → 默认 30 天（`MAIL_DEFAULT_TTL_MS`）；
+   * - `0` → `null` = 永久（人工补发）；
+   * - `> 0` → 指定天数（BOSS 战报 7 天）。
+   */
+  private expiresAtOf(ttlMs: number | undefined, createdAt: number): number | null {
+    if (ttlMs === 0) return null;
+    const ttl = ttlMs ?? Number(this.config.get<number>("mailDefaultTtlMs") ?? 30 * 24 * 60 * 60 * 1000);
+    return createdAt + Math.max(1, Math.floor(ttl));
+  }
 
   /**
    * 收件箱快照（未读数 / 未领数 / 频道角标都从同一份列表算）

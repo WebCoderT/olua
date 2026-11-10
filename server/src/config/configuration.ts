@@ -160,6 +160,25 @@ export interface AppConfiguration {
   mailPurgeBatch: number;
   /** 收件箱过期清理的扫描间隔（毫秒；≤ 0 = 不启动清理任务） */
   mailPurgeIntervalMs: number;
+  /**
+   * 过期前自动入包的扫描间隔（毫秒；≤ 0 = 不启动，#867）
+   *
+   * 默认 1 小时：提前量是「3 天」，扫得再勤也没有额外收益；扫太勤只会反复打同一批
+   * 背包满的行（失败也要记 `auto_attempts`，扫勤了等于把 5 次机会几分钟用光）。
+   */
+  mailAutoClaimIntervalMs: number;
+  /** 过期前多久开始自动入包（毫秒，默认 3 天）：`expires_at - 这个数 <= now` 就排上（#867） */
+  mailAutoClaimLeadMs: number;
+  /** 自动入包的批大小（#867）：一轮最多处理这么多行 */
+  mailAutoClaimBatch: number;
+  /** 自动入包失败重试上限（#867）：到这次数就停手，邮件留着等人工，**不删** */
+  mailAutoClaimMaxAttempts: number;
+  /**
+   * 收件箱默认保质期（毫秒，#867）
+   *
+   * 投递方不显式给 TTL 时用它（30 天）。**人工补发走 0 = 永久**：运营发的补偿不该过期。
+   */
+  mailDefaultTtlMs: number;
 
   //#region 自动备份
   /**
@@ -567,6 +586,11 @@ export default function configuration(): AppConfiguration {
     mailQueueMaxRows: Number(process.env.MAIL_QUEUE_MAX_ROWS ?? 20000),
     mailPurgeBatch: Number(process.env.MAIL_PURGE_BATCH ?? 500),
     mailPurgeIntervalMs: Number(process.env.MAIL_PURGE_INTERVAL_MS ?? 60 * 1000),
+    mailAutoClaimIntervalMs: Number(process.env.MAIL_AUTO_CLAIM_INTERVAL_MS ?? 60 * 60 * 1000),
+    mailAutoClaimLeadMs: Number(process.env.MAIL_AUTO_CLAIM_LEAD_MS ?? 3 * 24 * 60 * 60 * 1000),
+    mailAutoClaimBatch: Number(process.env.MAIL_AUTO_CLAIM_BATCH ?? 200),
+    mailAutoClaimMaxAttempts: Number(process.env.MAIL_AUTO_CLAIM_MAX_ATTEMPTS ?? 5),
+    mailDefaultTtlMs: Number(process.env.MAIL_DEFAULT_TTL_MS ?? 30 * 24 * 60 * 60 * 1000),
     backupIntervalHours: Number(process.env.BACKUP_INTERVAL_HOURS ?? 24),
     backupKeepCount: Number(process.env.BACKUP_KEEP_COUNT ?? 7),
     backupRetentionDays: Number(process.env.BACKUP_RETENTION_DAYS ?? 30),
