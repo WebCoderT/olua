@@ -18,7 +18,11 @@
 - **显示效果不写断言**：动画/特效的位置·尺寸·帧率·层级·对齐一律人眼看，只留素材存在性、执行顺序、结构接线。
 - **e2e**：期望值从快照算；播种放 `startServer()` 之后；`checkEqual` 是 `===`；改 `server/src` 先 `npm run build`（e2e 跑 `dist/`）；本机绿 ≠ CI 绿（耦合断言超时盖过冷却周期）；`e2e-quest` 成功静默，判绿看 exit code。
 - **假绿 > 漏检**：扫描器断言模块数、错误精确匹配文案、缓存 TTL 压 0；**完整性**（有没有东西没登记）只能靠遍历全表查，正确性审计查不出来。
-- **新增一张表登记五处**：`config-tables.cjs` 两份清单 + `gen-api.cjs` MODULES + `audit-server-boundaries` REPO_EDGES + `audit-target.decorator` 类型。**快照加段 = DTO / `snapshot()` / 客户端 `game-config.ts` 区 0 三处 + `configs-sandbox` 三处 + `audit-snapshot-contract`**（漏一处 = 几十套客户端单测齐炸）。
+- **新增一张表登记五处**：`config-tables.cjs` 两份清单 + `gen-api.cjs` MODULES + `audit-server-boundaries` REPO_EDGES + `audit-target.decorator` 类型。
+  **新开模块且被别的域 import（横切服务，如 `event-log`）要再加一处 `ALLOWED_EDGES`** —— 只登记 REPO_EDGES 时
+  `audit-server-boundaries` 会列「跨域 import 不在白名单」，而它在 `make audit` 里、不在 `npm run verify` 里（容易漏跑）。
+  controller 的 `description` **别贴接口路径字面量**（`/admin/xxx`），`audit-api-hardcode` 判 `[apiPath]` 硬编码；
+  **同一毫秒多行的排序兜底键用 `rowid` 不用随机 uuid `id`**（后者让同一次操作的行在列表里颠来倒去）。**快照加段 = DTO / `snapshot()` / 客户端 `game-config.ts` 区 0 三处 + `configs-sandbox` 三处 + `audit-snapshot-contract`**（漏一处 = 几十套客户端单测齐炸）。
 - **新增一列登记三处**：`CREATE TABLE` / `ensureColumn` / 仓储的**写入列清单**（如 `skills` 的 `SKILL_COLUMNS`）——
   漏最后一项 = `update()` **静默不写**（PATCH 200 返回、库里一个字没变、结算侧一分不变）。再往下才是 DTO + `from()` + 客户端 types。
 - **新道具表必须让 `sellPriceOf` / `itemLabelOf` / `itemTypeOf` 都认识**，否则回收价与物品解析静默失效；按素材批量加物品还要查 `rebuildItemIndex` / `getMallGoods` 是否覆盖到（#777 曾是「7 部位部分视图」）。
@@ -72,13 +76,17 @@
 - 资源发布：`make resources-manifest/pack/upload VERSION=x`；清单先合 master 再传 Release。
 
 ## 进度
-- 已落地与 open 项的完整清单 → `memory/topics/进度年表.md`（445 条，按日）。
+- 已落地与 open 项的完整清单 → `memory/topics/进度年表.md`（446 条，按日）。
 - 当前 open（截至 2026-11-08）：#669 刷怪区即时生效 · #9 包体积 · #12~#19 素材 · #295 阶段三 · #403 帮会战 · #742 站点 TLS ·
   **#826 已落两批**（暴击+破防 PR #906；撞飞三道闸 + 1009 群体化 + desc 删数值 PR #908；余：眩晕/麻痹/灼烧/两段连击/拉人/等级压制 sup）·
   掉落表未按新装备重算（`EQUIP_LEVEL_GAP` / `MAX_TIER_PER_SLOT`）· 本地库有未导出运营改动，`make config-check` 常红。
   阶段三功能批已收：#822 状态技能 ✅ · #823 物法分离 ✅ · #825 装备汇总自防 ✅（PR #901）· **#824 自身/区域/群体技能 ✅**（PR #902 + #903，合入 `57a0ce2e`）· **#827 幂等账 TTL ✅**（PR #904，合入 `4b5fa551`）；（#826 第一二批已收，见上；desc 数值已删）· #905 ✅（PR #907，合入 `3df1f93f`：格挡是减半不是免伤，站桩等帧要逐轮补血）。
 - **阶段 4 配置版本链 ✅（2026-11-10，PR #915 合入 `626efa83`）**：#881 版本+ETag/304 ✅ · #882 20 层全量回滚 ✅ ·
   #883 导入版本闸 ✅。**客户端侧（轮询 / `configDirty`）暂时放置**，重开条件在 docs/34 §八。
+- **阶段 4 行为流水与审计补口 ✅（2026-11-10，PR #916 合入 `55c9b81c`）**：#884 注册留痕 ✅ · #885 批量逐条明细 ✅ ·
+  **#886 玩家行为流水 ✅**（`event_logs` 与 `audit_logs` 分表；八类实做、trade/enhance 只登记类型；
+  同步写 + `recordMany` 合并；写失败只 warn；管理端 `/event-logs` + `event:read`）。
+  36 篇的**聚合层**（`event_daily`）/ 信号 / 处置**暂时放置**，逐项重开条件在 docs/36 §2.1.1。
 - 定保持现状：技能 1011 / 快捷键 6 格 / 装备 7 部位。
 - **阶段 2 地基五条进度（2026-11-08 夜）**：#818 存档版本 ✅ / #819 坏档拒登 ✅ / #820 乐观锁基线必填+落库复核 ✅ /
   #821 换图退出旧图观看者 ✅；**#816 后半**（装备槽存 `{id,bound,from}`）与 **#817 后半**（拾取距离闸，
