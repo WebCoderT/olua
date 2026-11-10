@@ -61,7 +61,7 @@ README（仓库根） → 01 总览（认路）
 | 10 | [任务、成就、排行与社交](./10-任务成就排行与社交.md) | 257 | 事件总线、任务状态机、累计 vs 状态型成就、三榜、邮件、队伍 | 进度不涨 / 榜不变 / 邮件没收到 |
 | 11 | [客户端](./11-客户端.md) | 298 | 四场景、六图层、30 个 Manager、网络三件套、Cocos 已知坑 | 表现层问题 / 换装 / 引导 / 打包 |
 | 12 | [管理端](./12-管理端.md) | 196 | 49 条路由、三级导航、`gameData` 查表、操作日志五条设计、玩家行为流水与操作日志的分表口径 | 运营改数 / 权限 / 审计 |
-| 13 | [部署、运维与质量门禁](./13-部署运维与质量门禁.md) | 511 | 五个容器、`deploy.sh` 五模式、三套备份、CI 两 job、57 套 e2e、15 项审计 | 上线 / 回滚 / 排线上故障 |
+| 13 | [部署、运维与质量门禁](./13-部署运维与质量门禁.md) | 511 | 五个容器、`deploy.sh` 五模式、三套备份、CI 两 job、58 套 e2e、15 项审计 | 上线 / 回滚 / 排线上故障 |
 | 14 | [接口清单](./14-接口清单.md) | 253 | **自动生成**：235 个 operationId 全表 | 查某个接口叫什么、在哪个 tag |
 | 15 | [数据表清单](./15-数据表清单.md) | 627 | 66 张表：38 配置 + 28 运行时，字段级 + 用途 + 谁读写 | 查字段 / 加表 / 对不上列名 |
 | 16 | [配置位置总表](./16-配置位置总表.md) | 621 | **38 张表 ↔ 页面双向索引**、藏在弹窗里的入口、四类生效通道、只能改库的配置 | 「这个配置在哪儿改」「改了怎么没生效」 |
@@ -185,7 +185,7 @@ README（仓库根） → 01 总览（认路）
 | 66 张表 / 各表行数 | `sqlite3 server/data/olua.db "SELECT count(*) FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%';"` |
 | 38 配置 / 28 运行时 | `server/scripts/lib/config-tables.cjs` 的 `CONFIG_TABLES` / `RUNTIME_TABLES` |
 | 235 个接口 | `server/openapi.json` 的 `paths` 展开后的 operationId 数；或直接看 [14](./14-接口清单.md) 的标题 |
-| 57 套 e2e | `node -e "console.log(Object.keys(require('./server/package.json').scripts).filter(k=>k.startsWith('test:e2e')).length)"` |
+| 58 套 e2e | `node -e "console.log(Object.keys(require('./server/package.json').scripts).filter(k=>k.startsWith('test:e2e')).length)"` |
 | 15 项审计 | `ls tools/audit-*.cjs \| wc -l` |
 | 30 个客户端 Manager | `ls client/assets/ui/core/*.ts \| wc -l` |
 | 48 个管理端页面 / 49 条路由 | `ls admin/src/pages/*.tsx \| wc -l` / `grep -o 'path="[^"]*"' admin/src/App.tsx \| sort -u \| wc -l` |

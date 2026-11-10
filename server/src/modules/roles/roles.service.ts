@@ -30,6 +30,7 @@ import { GrowthRepository } from "../../database/repositories/growth.repository"
 import { RankRepository } from "../../database/repositories/rank.repository";
 import { RoleRepository } from "../../database/repositories/role.repository";
 import { RoleStatusService } from "./role-status.service";
+import { UseCooldown } from "./use-cooldown";
 import { NO_STATUS_MODIFIERS, RoleStatusModifiers } from "../combat/status-combat";
 import { SoulRepository } from "../../database/repositories/soul.repository";
 import { TitleRepository } from "../../database/repositories/title.repository";
@@ -92,6 +93,15 @@ export interface PickDropMeta {
 }
 
 /**
+ * 货币道具的最小使用间隔（#847，毫秒）
+ *
+ * 写成常量而不是 `money_items` 的配置列：那张表进快照，加一列要动
+ * DTO / `snapshot()` / 客户端 `game-config` / 管理端表单 / `configs-sandbox` 五处，
+ * 只为「点一下别太快」不划算。C1 之后这些 legacy 币种本来就不再投放。
+ */
+const MONEY_ITEM_COOLDOWN_MS = 1000;
+
+/**
  * 角色业务（玩家侧）
  *
  * 所有方法都带 accountId：**归属校验在这里**（越权访问别人的角色一律 403），
@@ -103,6 +113,15 @@ export class RolesService {
 
   /** 等级上限缺失的 error 是否已经打过（#832：每级查一次，不节流等于没有日志） */
   private maxLevelWarned = false;
+
+  /**
+   * 道具使用的服务端冷却（#847 / #848）
+   *
+   * 药品按各自的 `drugs.cooldown`（秒）算，货币道具用下面那个常量；
+   * 键是「角色 + 道具 id」，所以红的喝完了不影响蓝的。**进程内一份**，
+   * 重启即丢（代价只是重登后能立刻用一次，没有数据后果）。
+   */
+  private readonly useCooldowns = new UseCooldown();
 
   constructor(
     private readonly roles: RoleRepository,
@@ -586,6 +605,10 @@ export class RolesService {
     }
 
     // 3) 入账（绑定元宝，与背包「一键回收」的展示口径一致）
+    // **绑定件与未绑定件都进 `bindGold`**（#845 / B2）：绑定物品可以卖店，给的是绑定金；
+    // 所以这里不需要看格子的 `bound` —— 写进 `gold`（流通）才是「洗白出口」，而这条路
+    // 从 #845 收窄后一直不存在（C2：金币不可流通，玩家之间只能以物易物）。
+    // e2e-sell 里有一条断言盯着「卖绑定件后 gold / silver 一分不动」。
     data.bindGold = Math.max(0, Math.floor(Number(data.bindGold) || 0)) + total;
 
     const row: RoleRow = {
@@ -805,8 +828,9 @@ export class RolesService {
    * 等级不在成长曲线里（重算不出）时退回存档里客户端上报的那份 —— 用药是恢复性操作，
    * 兜底比拒绝更符合玩家预期。
    *
-   * 失败路径：20013 格子为空 / 非药品 / 无生效回复量；20014 血蓝均已满（回复不动任何一项）。
-   * 冷却（drugs.cooldown）目前仍归客户端快捷键节流管，服务端不计时 —— 与客户端现状一致。
+   * 失败路径：20013 格子为空 / 非药品 / 无生效回复量；20014 血蓝均已满（回复不动任何一项）；
+   * 20030 冷却中（读 `drugs.cooldown`，单位秒，键是「角色 + 药品」）。冷却由**服务端**计时，
+   * 客户端那份节流只是省往返 —— 改包绕不过服务端（#848）。
    */
   useDrug(accountId: string, roleId: string, dto: DrugUseDto): DrugUseResultDto {
     const account = this.mustAccount(accountId);
@@ -845,6 +869,20 @@ export class RolesService {
       throw BizException.conflict(BizCode.DRUG_RESOURCE_FULL, healsHp ? "血量已满，无需使用" : "魔法值已满，无需使用");
     }
 
+    // 服务端冷却（#848）：`drugs.cooldown` 单位是**秒**，0 = 无冷却；键是「角色 + 药品」。
+    // 放在「已满」判定之后 —— 满血点药本来就该被 20014 拒，不该顺带吃掉一个冷却。
+    const cooldownMs = Math.max(0, Math.floor(Number(drug.cooldown) || 0)) * 1000;
+    const cooldownKey = `drug:${roleId}:${drug.id}`;
+    const cooling = this.useCooldowns.take(cooldownKey, cooldownMs);
+    if (cooling > 0) {
+      throw new BizException(
+        BizCode.DRUG_COOLING,
+        `药品冷却中：还需 ${(cooling / 1000).toFixed(1)} 秒`,
+        HttpStatus.BAD_REQUEST,
+        { remainingMs: cooling, cooldownMs },
+      );
+    }
+
     // 未封顶期望回复量（负值按 0 —— 配置写错不会倒扣血蓝）
     const expectHp = healsHp ? Math.max(0, Math.round(drug.effect_hp + (drug.effect_hp_percent / 100) * maxHp)) : 0;
     const expectMp = healsMp ? Math.max(0, Math.round(drug.effect_mp + (drug.effect_mp_percent / 100) * maxMp)) : 0;
@@ -864,7 +902,7 @@ export class RolesService {
       revision: existing.revision + 1,
       updated_at: Date.now(),
     };
-    this.persistOrConflict(row, existing.revision, "使用药品");
+    this.persistOrConflictGuarded(row, existing.revision, "使用药品", cooldownKey);
     // 行为流水（#886）：药是消耗品，「用了什么、回了多少」记一条
     this.eventLogs.record({
       type: EVENT_TYPE.CONSUME,
@@ -886,9 +924,11 @@ export class RolesService {
    * `gold` / `bindGold` / `silver`。客户端只报「用背包哪一格」，**金额与币种一律读
    * `money_items` 表** —— 运营把 100000 改成 1，玩家下次使用就只加 1，改包也改不出钱。
    *
-   * 与用药的区别：不结算血蓝、不判「已满」、无冷却（货币道具是「点一下就到账」）。
+   * 与用药的区别：不结算血蓝、不判「已满」；冷却固定 1 秒（`MONEY_ITEM_COOLDOWN_MS`，
+   * 键是「角色 + 道具」），以前这里完全没有间隔 —— 改包能把 999 个道具在一秒内变现（#847）。
    *
    * 失败路径：20023 格子为空 / 格子里不是货币道具 / 该行没有配置入账金额；
+   * 20031 冷却中；
    * 带上 revision 时乐观锁语义与 role.save 相同（20006）；被踢下线 20007。
    */
   useMoneyItem(accountId: string, roleId: string, dto: MoneyUseDto): MoneyUseResultDto {
@@ -924,6 +964,19 @@ export class RolesService {
       throw BizException.conflict(BizCode.MONEY_ITEM_USE_TARGET_INVALID, "该货币道具没有配置入账金额");
     }
 
+    // 服务端冷却（#847）：以前这里完全没有间隔，改包就能把 999 个道具在一秒内变现。
+    // 校验全部通过之后才占位，失败（乐观锁 / 写入异常）由 persistOrConflictGuarded 退掉。
+    const cooldownKey = `money:${roleId}:${item.id}`;
+    const cooling = this.useCooldowns.take(cooldownKey, MONEY_ITEM_COOLDOWN_MS);
+    if (cooling > 0) {
+      throw new BizException(
+        BizCode.MONEY_ITEM_COOLING,
+        `这个道具用得有点快：还需 ${(cooling / 1000).toFixed(1)} 秒`,
+        HttpStatus.BAD_REQUEST,
+        { remainingMs: cooling, cooldownMs: MONEY_ITEM_COOLDOWN_MS },
+      );
+    }
+
     // 入账（负数存量按 0 起算 —— 与升级 / 购买处的账本读法同一式）
     const balance = Math.max(0, Math.floor(Number(data[currency]) || 0)) + amount;
     data[currency] = balance;
@@ -938,7 +991,7 @@ export class RolesService {
       revision: existing.revision + 1,
       updated_at: Date.now(),
     };
-    this.persistOrConflict(row, existing.revision, "使用货币道具");
+    this.persistOrConflictGuarded(row, existing.revision, "使用货币道具", cooldownKey);
     return MoneyUseResultDto.fromRow(row, account.online_role_id, item.id, currency, amount, balance);
   }
 
@@ -2097,5 +2150,21 @@ export class RolesService {
       BizCode.ROLE_REVISION_CONFLICT,
       `${action}时角色已被其他改动更新，本次操作未生效，请重新同步最新数据`,
     );
+  }
+
+  /**
+   * 落库失败就把冷却占位退掉（#847 / #848）
+   *
+   * 冷却是在写库**之前**占的（否则并发两个请求都能过检查）；这里补上反向动作：
+   * 409 / 任何写入失败都意味着「这次没真的用掉」，让玩家白等一秒没有道理。
+   * 只给用药与用道具用，其余写入口不涉及冷却。
+   */
+  private persistOrConflictGuarded(row: RoleRow, expectedRevision: number, action: string, cooldownKey: string): void {
+    try {
+      this.persistOrConflict(row, expectedRevision, action);
+    } catch (error) {
+      this.useCooldowns.release(cooldownKey);
+      throw error;
+    }
   }
 }

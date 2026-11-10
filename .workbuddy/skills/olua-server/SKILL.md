@@ -109,6 +109,7 @@ test/e2e-rank.cjs                排行榜专项（全服榜单）
 test/e2e-achievement.cjs         成就专项（累计 / 状态两种存储 / 背包满转邮件）
 test/e2e-game-mail.cjs           游戏内邮件专项（领奖 / 拒删看金币经验附件 / 先标后发同事务 / 一键领取逐封容错 / 频道与两处投递；71 条断言）
 test/e2e-mail-auto-claim.cjs     过期前自动入包专项（到点才动 / 纯金币也入包 / 在线不动 / 背包满记次数 / 幂等 / 清理闸；32 条断言）
+test/e2e-use-cooldown.cjs         道具冷却专项（药品按 drugs.cooldown / 换药不误伤 / 20014 与 20006 不吃冷却 / 货币道具 1 秒；32 条断言）
 test/e2e-equip-align.cjs         装备对齐几何专项（#513）
 test/e2e-equip-in-align.cjs      装备内观几何专项（73 条断言，#523）
 ```
@@ -411,6 +412,13 @@ test/e2e-equip-in-align.cjs      装备内观几何专项（73 条断言，#523�
   反过来「先发后标」在崩溃后会重发一份。这也是 API 与实时两进程同跑定时器时唯一的互斥手段；
 - **一键领取逐封发，不合并**（#870）：每封一个独立事务 + 独立 `try/catch`，背包满**跳过继续**而不是 break
   （它只挡「要放物品」的那几封），回执带 `failedCount` + `failures[]`（`mailId` / `code` / `reason`）；
+- **道具冷却只有一处实现**（#847 / #848）：`roles/use-cooldown.ts` 的 `UseCooldown`（进程内 Map，键「角色 + 道具 id」）。
+  药品时长读 `drugs.cooldown`（**秒**，0 = 无冷却），货币道具用常量 `MONEY_ITEM_COOLDOWN_MS`（1 秒，**别加 `money_items` 配置列** ——
+  那张表进快照，加一列要动 DTO / `snapshot()` / 客户端 `game-config` / 管理端表单 / `configs-sandbox` 五处）。
+  三条顺序口径：① 冷却判在「业务前置」之后（药品是「血蓝已满 20014」之后，满血点药不该吃冷却）；
+  ② 占位在写库之前（否则并发都过检查），落库失败用 `persistOrConflictGuarded` **退掉占位**；
+  ③ 失败走 `BizException(..., details)`，错误信封会带 `details`（`remainingMs` / `cooldownMs`）——
+  **别借 `data` 夹带**，`data: null` 是成功形状的一部分。
 - **成就的背包满兜底**：捕获 20012 → 整份奖励（金币 / 经验 / 物品）转一封 `channel: "reward"` / `kind: "achievement"` 的邮件、
   **照常写 `claimed_at`**、返回 `mailId`。不写 `claimed_at` 就能反复点领取刷邮件。
   判业务码统一用 `isBizCode(error, code)`（`common/errors/biz.exception.ts`），不要各处手写 `instanceof`。

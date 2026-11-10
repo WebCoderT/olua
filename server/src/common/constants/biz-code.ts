@@ -175,6 +175,23 @@ export const BizCode = {
    * 人工修好后下一次解析成功会自动清掉标记。
    */
   ROLE_DATA_CORRUPTED: 20029,
+  /**
+   * 药品还在冷却里（#848）
+   *
+   * 冷却时长读 `drugs.cooldown`（**秒**，0 = 无冷却），按「角色 + 药品 id」计。
+   * 响应体 `details` 带 `remainingMs` / `cooldownMs`：客户端据此把快捷栏按钮灰掉，
+   * 而不是干等一句「操作太快」。
+   *
+   * 与「血蓝已满」（20014）分开：那是「现在不用喝」，这是「喝得太快」。
+   */
+  DRUG_COOLING: 20030,
+  /**
+   * 货币道具还在冷却里（#847）
+   *
+   * 与药品同一个引擎（`UseCooldown`），但间隔是常量 `MONEY_ITEM_COOLDOWN_MS` ——
+   * `money_items` 是配置表，为一列冷却去动快照三处 + 管理端表单不划算（#847 的结论）。
+   */
+  MONEY_ITEM_COOLING: 20031,
 
   //#region 管理端
   /** 管理员账号已存在 */

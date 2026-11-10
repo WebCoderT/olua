@@ -2434,7 +2434,12 @@ async function main() {
 
     // 管理端改回复量即时生效（#253 数值读库，与怪物数值同一取向）
     const editDrug = await api(base, "PATCH", "/api/admin/drugs/drug_hp_1", { token, body: { effectHp: 100000 } });
-    checkEqual(editDrug.status, 200, "管理端把回复量改成 100000");
+    checkEqual(editDrug.status, 200, "管理端把恢复量改成 100000");
+    // 服务端药品冷却（#848，读 `drugs.cooldown` 秒）：紧挨着再点会被 20030 挡。
+    // 冷却值动态读库 —— 第九域把这个药的 cooldown 改成过 2 秒，别在这里写死时长。
+    const cooldownNow = await api(base, "GET", "/api/admin/drugs?keyword=drug_hp_1", { token });
+    const drugCooldownS = Math.max(0, Number(cooldownNow.body?.data?.list?.find((row) => row.id === "drug_hp_1")?.cooldown) || 0);
+    await new Promise((resolve) => setTimeout(resolve, drugCooldownS * 1000 + 250));
     const bigHeal = await api(base, "POST", `/api/roles/${drugRoleId}/drug-use`, {
       token: drugPlayer,
       body: { row: 0, col: 0, revision: drugUsed.body?.data?.revision },
