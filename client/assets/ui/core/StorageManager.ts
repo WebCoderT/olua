@@ -42,6 +42,27 @@ import { guideStepCount } from "../../configs/guide";
 const TELEPORT_MARK_TTL_MS = 60000;
 
 /**
+ * 道具使用的连点节流（#847 / #848）
+ *
+ * **权威冷却在服务端**（药品读 `drugs.cooldown` 秒、货币道具固定 1 秒，超了回 20030 / 20031
+ * 带剩余毫秒）。这里只做一件小事：一秒内对**同一个道具**的重复点击不再发请求，
+ * 免得玩家连点时被同一个提示刷屏。键里带物品 id，所以先红后蓝照样能用。
+ *
+ * 用 1 秒而不是读配置：客户端快照里没有 `drugs.cooldown` 这一列，
+ * 而猜短一点只是「偶尔被服务端拒一次」，猜长才会挡住正常操作。
+ */
+const USE_GUARD_MS = 1000;
+const useGuardUntil = new Map<string, number>();
+
+/** 一秒内重复点同一个道具 → false（不发请求，也不弹提示） */
+function guardRepeatedUse(key: string): boolean {
+  const now = Date.now();
+  if ((useGuardUntil.get(key) ?? 0) > now) return false;
+  useGuardUntil.set(key, now + USE_GUARD_MS);
+  return true;
+}
+
+/**
  * 存储管理器
  * 负责本地角色数据的读写，以及数据变更后的属性重算、UI刷新与外观更新
  *
@@ -1316,6 +1337,8 @@ export default class StorageManager {
       return false;
     }
     let result: DrugUseResult;
+    // 连点节流（#848）：同一瓶药一秒内只发一次请求，冷却本身由服务端裁
+    if (!guardRepeatedUse(`drug:${cell.id}`)) return false;
     try {
       // 修订号带上做乐观锁：后台改过这个角色时（20006）服务端拒绝用药
       result = await RoleApi.drugUse(role.id, { row, col, revision: role.revision });
@@ -1359,6 +1382,8 @@ export default class StorageManager {
       return false;
     }
     let result: MoneyUseResult;
+    // 连点节流（#847）：同一个道具一秒内只发一次请求（服务端另有 1 秒权威冷却）
+    if (!guardRepeatedUse(`money:${cell.id}`)) return false;
     try {
       // 修订号带上做乐观锁：后台改过这个角色时（20006）服务端拒绝使用
       result = await RoleApi.moneyUse(role.id, { row, col, revision: role.revision });

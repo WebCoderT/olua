@@ -330,12 +330,44 @@ function countInBag(bag, goodId) {
 
     //#endregion
 
+    //#region 八、入账只进绑定金（#845 / B2）
+
+    group("八、入账只进绑定金，流通钱包一分不动（#845 / B2）");
+    // #845 报的是「绑定装备卖店直接给流通币」。实测 `sellGoods` 一直写的是 `bindGold`，
+    // 真正要盯住的是「以后的改动别把它写成 gold / silver」—— 这条断言就是那道闸。
+    // 绑定与非绑定走的是同一条入账路径（`takeGoodsFromBag` 不读 bound），所以用普通装备
+    // 也验得到；绑定件本身能不能卖由 e2e-combat 的绑定段单独覆盖。
+    const seeded845 = await api(baseUrl, "PATCH", `admin/roles/${roleId}`, {
+      token: adminToken,
+      body: { bag: [{ row: 0, col: 0, id: "cloth_1", count: 1 }], gold: 500, silver: 300 },
+    });
+    check(seeded845.code === 0, "准备：补一件 cloth_1，并把 gold / silver 设为 500 / 300", seeded845.message);
+    const before845 = await api(baseUrl, "GET", `roles/${roleId}`, { token });
+    const bindBefore845 = Number((before845.data.data || {}).bindGold || 0);
+    const sold845 = await api(baseUrl, "POST", `roles/${roleId}/sell`, {
+      token,
+      body: { entries: [{ goodId: "cloth_1", count: 1 }], revision: await revOf(baseUrl, roleId, token) },
+    });
+    check(sold845.code === 0, "卖出一件 cloth_1", sold845.message);
+    checkEqual(
+      Number((sold845.data.data || {}).bindGold || 0),
+      bindBefore845 + clothPrice,
+      "绑定元宝增加一份回收价（入账走 bindGold）",
+    );
+    checkEqual(Number((sold845.data.data || {}).gold || 0), 500, "**流通元宝一分没动**（仍是 500）");
+    checkEqual(Number((sold845.data.data || {}).silver || 0), 300, "银子一分没动（仍是 300）");
+
+    //#endregion
+
     if (failed > 0) {
       console.log(`\n❌ 出售 e2e：${failed} 项断言不通过`);
       failures.forEach((label) => console.log(`  - ${label}`));
       console.log("\n服务端日志尾部：");
       console.log(server.logs().split("\n").slice(-30).join("\n"));
       process.exitCode = 1;
+    } else {
+      // 成功也报条数：`docs/13` 的「规模参考」要抄这个数，别让人去数断言
+      console.log(`\n✅ 出售 e2e 全绿（共 ${passed} 条断言）`);
     }
   } finally {
     if (serverChild) serverChild.kill("SIGTERM");

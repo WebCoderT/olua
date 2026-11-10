@@ -253,8 +253,13 @@ const GOLD_ROW = seedOf("gold", 50);
     checkEqual(Number(used.data.data.silver), silverBefore + Number(SILVER_ROW.amount), "角色存档里的 silver 同步加钱");
     checkEqual((cellAt(used.data.data.bag, 0, 0) || {}).count, 1, "背包那一格从 2 个变成 1 个");
     checkEqual(used.data.revision, before.data.revision + 1, "revision +1（客户端据此做乐观锁）");
+    // 服务端冷却（#847）：同一个道具 1 秒内只能点一次 —— 先撞一下闸，再等过去
+    const tooFast = await api(baseUrl, "POST", `roles/${roleId}/money-use`, { token, body: { row: 0, col: 0, revision: await revOf(baseUrl, roleId, token) } });
+    checkEqual(tooFast.code, 20031, "紧接着再点同一个道具 → 20031 冷却中", tooFast.message);
+    check(Number(tooFast.details && tooFast.details.remainingMs) > 0, "冷却回执带剩余毫秒（客户端据此灰按钮）");
+    await sleep(1250);
     const usedAgain = await api(baseUrl, "POST", `roles/${roleId}/money-use`, { token, body: { row: 0, col: 0, revision: await revOf(baseUrl, roleId, token) } });
-    checkEqual(usedAgain.code, 0, "再点一次（把手里的用光）", usedAgain.message);
+    checkEqual(usedAgain.code, 0, "等过冷却后再点一次（把手里的用光）", usedAgain.message);
     checkEqual(cellAt(usedAgain.data.data.bag, 0, 0), null, "用光后格子清空");
     checkEqual(
       Number(usedAgain.data.data.silver),
@@ -352,6 +357,7 @@ const GOLD_ROW = seedOf("gold", 50);
     });
     checkEqual(patched.code, 0, "改面值 + 改名", patched.message);
     checkEqual(Number(patched.data.amount), 1234, "面值改成 1234");
+    await sleep(1250); // 同一个道具 1 秒冷却（#847），等过去再看「改完即时生效」
     const usePatched = await api(baseUrl, "POST", `roles/${roleId}/money-use`, { token, body: { row: 0, col: 0, revision: await revOf(baseUrl, roleId, token) } });
     checkEqual(usePatched.code, 0, "同一个格子再点一次", usePatched.message);
     checkEqual(
