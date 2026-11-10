@@ -2,6 +2,7 @@ import { Color, Graphics, Label, Layout, Node, ScrollView, Size, Vec2, isValid }
 import GameUiHelper from "../../helpers/GameUiHelper";
 import LayerManager from "../../core/LayerManager";
 import MailStore from "../../core/MailStore";
+import type { MailClaimAllOutcome } from "../../core/MailStore";
 import SoundManager from "../../core/SoundManager";
 import UiHelper from "../../helpers/UiHelper";
 import { items } from "../../../configs/items";
@@ -414,12 +415,28 @@ export default class MailDialog {
     const result = await MailStore.claimAll();
     if (!this.isOpen()) return;
     if (result.ok) {
-      GameUiHelper.createTipText(
-        result.stoppedByBag ? texts.claimAllStopped : texts.claimAllDone.split("{count}").join(`${result.claimedCount}`),
-      );
+      GameUiHelper.createTipText(this.claimAllTip(result));
       return;
     }
     GameUiHelper.createTipText(result.code === CODE_BAG_FULL ? texts.claimBagFull : texts.claimFailed);
+  }
+
+  /**
+   * 一键领取飘什么字（#870）
+   *
+   * 一键领取是**逐封**的，所以「领了 2 封、1 封没领到」是正常结果。只说「已领取 2 封」
+   * 会让玩家以为清完了 —— 而箱里还留着一封，且它多半正是背包满了的那封。
+   * 三种情况分开说：全领到 / 部分领到 / 一封都没领到。
+   */
+  private claimAllTip(result: MailClaimAllOutcome): string {
+    if (result.failedCount === 0) {
+      return texts.claimAllDone.split("{count}").join(`${result.claimedCount}`);
+    }
+    if (result.claimedCount === 0) {
+      // 一封都没领到：背包满是唯一「值得让玩家去清格子」的原因，其余给通用文案
+      return result.stoppedByBag ? texts.claimAllStopped : texts.claimFailed;
+    }
+    return texts.claimAllPartial.split("{ok}").join(`${result.claimedCount}`).split("{fail}").join(`${result.failedCount}`);
   }
 
   private async onRemove(row: MailView, removable: boolean) {

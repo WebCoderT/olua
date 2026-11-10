@@ -8616,6 +8616,21 @@ export type MailClaimResult = {
   leveledUp: boolean;
 };
 
+export type MailClaimFailure = {
+  /**
+   * 没领到的那封邮件 id
+   */
+  mailId: string;
+  /**
+   * 失败原因的业务码（0 = 未知异常，详见服务端日志）
+   */
+  code: number;
+  /**
+   * 失败原因（可直接展示给玩家）
+   */
+  reason: string;
+};
+
 export type MailClaimAllResult = {
   /**
    * 领取后的收件箱
@@ -8658,9 +8673,17 @@ export type MailClaimAllResult = {
    */
   leveledUp: boolean;
   /**
-   * 是否因为背包满而提前停下（true = 还有没领的）
+   * 是否至少有一封因背包满没领到（true = 清出格子后还能再领）
    */
   stoppedByBag: boolean;
+  /**
+   * 没领到的封数（= failures.length）
+   */
+  failedCount: number;
+  /**
+   * 没领到的明细（一封失败不影响其他封）
+   */
+  failures: MailClaimFailure[];
 };
 
 export type EquipAlign = {

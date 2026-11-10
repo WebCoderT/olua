@@ -23,10 +23,17 @@ export interface MailActionResult {
   code: number;
 }
 
-/** 一键领取的结果（多两个字段：领了几封、是不是被背包满中断） */
+/**
+ * 一键领取的结果（多几个字段：领了几封、有没有被背包挡、几封没领到）
+ *
+ * `failedCount` 来自服务端的失败清单（#870）：一键领取是**逐封**的，一封失败
+ * 不影响其他封 —— 所以「领了 3 封 + 2 封没领到」是一种合法结果，不是失败。
+ */
 export interface MailClaimAllOutcome extends MailActionResult {
   claimedCount: number;
   stoppedByBag: boolean;
+  /** 没领到的封数（0 = 全部领到） */
+  failedCount: number;
 }
 
 /**
@@ -98,7 +105,7 @@ export default class MailStore {
    * `busyId` 用 `"*"` 占位：它和单封操作互斥（同一封邮件被两条路径同时发奖是完全可以避免的）。
    */
   static async claimAll(): Promise<MailClaimAllOutcome> {
-    if (this.state.busyId) return { ok: false, code: 0, claimedCount: 0, stoppedByBag: false };
+    if (this.state.busyId) return { ok: false, code: 0, claimedCount: 0, stoppedByBag: false, failedCount: 0 };
     const channel = this.state.channel === "all" ? undefined : this.state.channel;
     this.state = { ...this.state, busyId: "*" };
     this.emit();
@@ -106,11 +113,19 @@ export default class MailStore {
       const result = await GameMailApi.claimAll(channel ? { channel } : {});
       this.state = { ...this.state, data: toBox(result), loading: false, failed: false, busyId: "" };
       this.emit();
-      return { ok: true, code: 0, claimedCount: result.claimedCount, stoppedByBag: result.stoppedByBag };
+      // `ok: true` 表示「这次请求本身成功了」；哪几封没领到要看 failedCount ——
+      // 部分成功也是成功，不该走失败提示（那会让玩家以为一封都没领到）
+      return {
+        ok: true,
+        code: 0,
+        claimedCount: result.claimedCount,
+        stoppedByBag: result.stoppedByBag,
+        failedCount: result.failedCount,
+      };
     } catch (error) {
       this.state = { ...this.state, busyId: "" };
       this.emit();
-      return { ok: false, code: codeOf(error), claimedCount: 0, stoppedByBag: false };
+      return { ok: false, code: codeOf(error), claimedCount: 0, stoppedByBag: false, failedCount: 0 };
     }
   }
 

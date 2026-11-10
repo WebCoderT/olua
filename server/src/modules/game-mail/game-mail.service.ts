@@ -14,6 +14,7 @@ import {
   MailBoxDto,
   MailChannelSummaryDto,
   MailClaimAllResultDto,
+  MailClaimFailureDto,
   MailClaimResultDto,
   MailViewDto,
 } from "./dto/game-mail.dto";
@@ -100,7 +101,14 @@ export class GameMailService {
   /**
    * 领一封
    *
-   * 顺序：校验 → 发奖 → 标已领。发奖抛错（背包满 20012）时 `claimed_at` 一个字节都没动，
+   * **顺序：先标已领，再发奖，两步在同一个事务里**（#868）。
+   *
+   * 反过来（先发后标）的漏洞是：发完奖、还没落 `claimed_at` 时进程崩溃 → 重试再发一次，
+   * 奖励翻倍。改成先标之后，`markClaimed` 的 `WHERE claimed_at IS NULL` 就成了**闸门**：
+   * 命中 0 行说明这封已经被别人（并发请求 / 另一个进程的自动入包）领走了，直接抛
+   * 50142 并整体回滚 —— 奖励一个字节都没发出去。
+   *
+   * 事务里发奖抛错（背包满 20012 / 乐观锁 409）时同样整体回滚：`claimed_at` 回到 NULL，
    * 玩家清出格子再点一次就领到了。
    */
   claim(accountId: string, mailId: string): MailClaimResultDto {
@@ -110,12 +118,17 @@ export class GameMailService {
       throw BizException.conflict(BizCode.MAIL_ALREADY_CLAIMED, "这封邮件的附件已经领过了");
     }
     const items = parseRewardItems(mail.attachments);
-    const granted = this.grantAll(accountId, role.id, [{ gold: mail.gold, exp: mail.exp, items }]);
-
     const now = Date.now();
-    this.mails.markClaimed(mail.id, now);
-    // 领了等于看过：不让「已领但仍是未读」这种状态挂在红点上
-    this.mails.markRead(mail.id, now);
+
+    const granted = this.mails.transaction(() => {
+      if (!this.mails.markClaimed(mail.id, now)) {
+        throw BizException.conflict(BizCode.MAIL_ALREADY_CLAIMED, "这封邮件的附件已经领过了");
+      }
+      const settled = this.grantAll(accountId, role.id, [{ gold: mail.gold, exp: mail.exp, items }]);
+      // 领了等于看过：不让「已领但仍是未读」这种状态挂在红点上
+      this.mails.markRead(mail.id, now);
+      return settled;
+    });
 
     // 行为流水（#886）：一条记「领了哪封信」。附件本身已由 grantQuestRewards 记成
     // `gain`（source = mail）—— 两件事分开记，才能回答「这封补偿有没有人领」和
@@ -137,13 +150,25 @@ export class GameMailService {
   }
 
   /**
-   * 一键领取（按发出的时间正序，领到背包满为止）
+   * 一键领取（按发出的时间正序，逐封领取）
    *
    * 逐封发奖而不是合并成一次：每封邮件是独立的奖励来源（可能来自不同玩法），
    * 合并会让「哪封进了背包」变得无法回溯，也让背包满时的中断点变得随意。
    *
    * `channel` 传了就只领这一栏（面板在「奖励」页签点一键领取时，不该把社交栏的消息也动了）；
    * 不传 = 全部频道。
+   *
+   * ## 一封失败不拖累其他封（#870）
+   *
+   * 老实现只 catch 背包满、其余异常直接往上抛 —— 结果是「前几封已领、后面的全部没处理，
+   * 客户端只看到一句报错」。现在**每封一个独立事务 + 独立 try/catch**：
+   *
+   * - 背包满 → 记进 `failures`，**继续往后领**：它只挡「要放物品」的那几封，
+   *   排在后面的纯金币 / 纯经验邮件照样能到手（这正是「一箱补偿里能领的先领完」）；
+   * - 其他异常（奖励物品不存在 20003 / 乐观锁 409 / 已被人领走 50142）→ 同样只影响这一封。
+   *
+   * 失败清单透传给客户端（`failures[]` + `failedCount`），玩家能知道「领了 3 封、2 封没领到」，
+   * 而不是只看到一句「领取失败」。
    */
   claimAll(accountId: string, channel?: string): MailClaimAllResultDto {
     const role = this.requireOnlineRole(accountId);
@@ -153,23 +178,28 @@ export class GameMailService {
     const lines: Array<{ gold: number; exp: number; items: RewardItem[] }> = [];
     /** 领到的邮件（#886）：循环里收着，末尾一次 recordMany —— 一键领取可能几十封 */
     const claimedMails: Array<{ mail: RoleMailRow; items: RewardItem[] }> = [];
+    /** 没领到的（#870）：一封一条，随结果透传给客户端 */
+    const failures: MailClaimFailureDto[] = [];
     let claimedCount = 0;
     let stoppedByBag = false;
     for (const mail of pending) {
       const items = parseRewardItems(mail.attachments);
-      try {
-        this.roles.grantQuestRewards(accountId, role.id, null, { gold: mail.gold, exp: mail.exp, items }, "mail");
-      } catch (error) {
-        // 背包满：已领的照常落库，这一封原样留在箱里
-        if (isBizCode(error, BizCode.MALL_BAG_FULL)) {
-          stoppedByBag = true;
-          break;
-        }
-        throw error;
-      }
       const now = Date.now();
-      this.mails.markClaimed(mail.id, now);
-      this.mails.markRead(mail.id, now);
+      try {
+        // 每封一个事务（#868）：先标已领再发奖，标不上（已被别人领走）就整体回滚
+        this.mails.transaction(() => {
+          if (!this.mails.markClaimed(mail.id, now)) {
+            throw BizException.conflict(BizCode.MAIL_ALREADY_CLAIMED, "这封邮件的附件已经领过了");
+          }
+          this.roles.grantQuestRewards(accountId, role.id, null, { gold: mail.gold, exp: mail.exp, items }, "mail");
+          this.mails.markRead(mail.id, now);
+        });
+      } catch (error) {
+        // 背包满：它不是「整单失败」，只挡这一封；后面的纯金币邮件仍能领（#870）
+        if (isBizCode(error, BizCode.MALL_BAG_FULL)) stoppedByBag = true;
+        failures.push(failureOf(mail.id, error));
+        continue;
+      }
       lines.push({ gold: mail.gold, exp: mail.exp, items });
       claimedMails.push({ mail, items });
       claimedCount += 1;
@@ -192,15 +222,25 @@ export class GameMailService {
     result.level = level;
     result.leveledUp = level > role.level;
     result.stoppedByBag = stoppedByBag;
+    result.failedCount = failures.length;
+    result.failures = failures;
     return result;
   }
 
-  /** 删除（附件没领就不能删） */
+  /**
+   * 删除（还有没领的奖励就不能删）
+   *
+   * 判据是 {@link hasUnclaimedReward}：**金币 / 经验 / 附件任一未领就拒**（#866）。
+   * 老实现只数 `attachments`，于是一封「补偿 5000 金币」的邮件在没领时就能被删掉，
+   * 奖励直接消失 —— 而玩家点删除时多半以为「这封我看过了」，没有「我在扔钱」的预期。
+   *
+   * 纯文本 / 公告邮件没有奖励，删它不拦（那才是「看过了，清掉」的正常语义）。
+   */
   remove(accountId: string, mailId: string): MailBoxDto {
     const role = this.requireOnlineRole(accountId);
     const mail = this.ownedMail(role.id, mailId);
-    if (mail.claimed_at === null && parseRewardItems(mail.attachments).length > 0) {
-      throw BizException.conflict(BizCode.MAIL_UNCLAIMED, "这封邮件还有没领的附件，先领取再删除");
+    if (hasUnclaimedReward(mail)) {
+      throw BizException.conflict(BizCode.MAIL_UNCLAIMED, "这封邮件还有没领的奖励，先领取再删除");
     }
     this.mails.remove(mail.id);
     return this.boxOf(role.id);
@@ -272,13 +312,18 @@ export class GameMailService {
    *
    * 一次取回再本地聚合，而不是发几条 COUNT：多次查询之间可能插进新消息，
    * 「列表里 5 封未读、角标写 4」这种自相矛盾比多一次遍历难查得多。
+   *
+   * `unclaimed` 用 {@link hasUnclaimedReward} 而不是「`claimed_at IS NULL`」（#869）：
+   * 公告 / 系统通知这类**没有奖励**的消息永远领不了，把它算进「待领」
+   * 等于给玩家一个永远清不掉的红点，也让「一键领取」按钮永远亮着。
+   * 它们只贡献 `unread`（点开就减），这才是「有没有新的」该有的语义。
    */
   private boxOf(roleId: string): MailBoxDto {
     const rows = this.mails.listByRole(roleId, Date.now());
     const dto = new MailBoxDto();
     dto.mails = rows.map((row) => MailViewDto.of(row));
     dto.unread = rows.filter((row) => row.read_at === null).length;
-    dto.unclaimed = rows.filter((row) => row.claimed_at === null).length;
+    dto.unclaimed = rows.filter(hasUnclaimedReward).length;
     // 四个频道固定出现（没有消息的频道也要有条目，客户端才能画出 0 角标的页签）
     dto.channels = MAIL_CHANNELS.map((channel) => {
       const summary = new MailChannelSummaryDto();
@@ -286,7 +331,7 @@ export class GameMailService {
       const own = rows.filter((row) => row.channel === channel);
       summary.total = own.length;
       summary.unread = own.filter((row) => row.read_at === null).length;
-      summary.unclaimed = own.filter((row) => row.claimed_at === null).length;
+      summary.unclaimed = own.filter(hasUnclaimedReward).length;
       return summary;
     });
     return dto;
@@ -373,6 +418,44 @@ export class GameMailService {
 /** 是否已过保质期（#439）：读口与单封操作的同一把尺子（NULL = 永不过期） */
 function isExpired(row: RoleMailRow, now: number): boolean {
   return row.expires_at !== null && row.expires_at <= now;
+}
+
+/**
+ * 这封邮件带奖励吗（金币 / 经验 / 附件任一存在）
+ *
+ * **三个都是奖励载体**。老实现处处只认 `attachments`，于是「补偿 5000 金币」这种邮件
+ * 在系统眼里是一封「空信」—— 能删（#866）、不算待领（#869）、过期就被清（#867）。
+ * 判据收在这一个函数里，三处读同一个答案。
+ *
+ * 与 `role-mail.repository.ts` 的 `purgeExpired` 是同一个口径，那边只能写成 SQL
+ * （`gold > 0 OR exp > 0 OR attachments != '[]'`），改一处必须同时改另一边。
+ */
+function hasReward(row: RoleMailRow): boolean {
+  return row.gold > 0 || row.exp > 0 || parseRewardItems(row.attachments).length > 0;
+}
+
+/** 还有没到手的奖励吗（已领过的一律不算） */
+function hasUnclaimedReward(row: RoleMailRow): boolean {
+  return row.claimed_at === null && hasReward(row);
+}
+
+/**
+ * 一封没领到的邮件 → 给客户端的一条失败记录（#870）
+ *
+ * 只有 `BizException` 的 message 能直接展示（那个类约定「message 一定是人话」）；
+ * 其他异常可能是英文技术细节，一律换成通用文案，真实原因留在 `code = 0` 让运维按日志查。
+ */
+function failureOf(mailId: string, error: unknown): MailClaimFailureDto {
+  const dto = new MailClaimFailureDto();
+  dto.mailId = mailId;
+  if (error instanceof BizException) {
+    dto.code = error.code;
+    dto.reason = error.message;
+  } else {
+    dto.code = 0;
+    dto.reason = "领取失败，稍后再试";
+  }
+  return dto;
 }
 
 /** 同 id 的附件合并成一行（一键领取的展示口径：别给客户端一串重复 id） */

@@ -3,14 +3,17 @@
  * 游戏内邮件专项 e2e（server/test/e2e-game-mail.cjs，issue #429）
  *
  * 盯的不变量（改邮件表 / 领取路径 / 成就兜底后必须全绿）：
- * 一、收件箱：整份下发、未读数与未领数各算各的、新的在前
+ * 一、收件箱：整份下发、未读数与未领数各算各的 —— **待领 = 未领且有奖励**，
+ *     公告 / 纯文本邮件不算（#869，否则红点永远清不掉），新的在前
  * 二、已读：重复标已读不改写第一次的时刻
  * 三、领取：金币 / 经验 / 物品一次落库（走与任务交付同一个发奖入口）；重复领 50142、不存在 50141、
- *     纯文本邮件（没有附件）领取不碰角色存档
- * 四、删除：**附件没领不能删**（50143），已领的可以删
- * 五、一键领取：逐封领到背包满为止 —— 已领的照常落库，`stoppedByBag` 说明还有剩
- * 六、成就兜底：领奖时背包满 → 整份奖励转成一封邮件、成就照常记已领，清包后从邮件领到手
- * 七、频道（#436）：四个频道角标固定且与列表一致、按频道一键领取不越界、非法频道 40000、
+ *     纯文本邮件（没有奖励）领取不碰角色存档
+ * 四、删除：**金币 / 经验 / 附件任一未领就不能删**（#866，50143）；纯公告可以删，已领的可以删
+ * 五、一键领取：逐封领取，全部成功时 `failedCount` 为 0
+ * 六、一封失败不拖累其他封（#870）：非背包异常（20003）与背包满（20012）都**只挡那一封**，
+ *     排在后面的纯金币邮件照样到手；「标已领」与发奖在同一事务里（#868），失败不留标记
+ * 七、成就兜底：领奖时背包满 → 整份奖励转成一封邮件、成就照常记已领，清包后从邮件领到手
+ * 八、频道（#436）：四个频道角标固定且与列表一致、按频道一键领取不越界、非法频道 40000、
  *     好友申请落社交频道、BOSS 击杀落战斗频道（普通怪不落）
  *
  * 走的是 `dist/`，所以前置是 `npm run build`。
@@ -370,7 +373,12 @@ function achievementTimestamps(dbPath, roleId, achievementId) {
     const box = await api(baseUrl, "GET", "mails/me", { token });
     checkEqual(box.data.mails.length, 3, "插 3 封 → 接口给 3 封");
     checkEqual(box.data.unread, 3, "未读数 3（三封都没读过）");
-    checkEqual(box.data.unclaimed, 2, "未领数 2（已领过的那封不算）");
+    // #869：待领的判据是「未领 **且** 有奖励」。停机公告没有金币/经验/附件，
+    // 它永远领不了 —— 算进待领等于给玩家一个清不掉的红点、一个永远亮着的一键领取按钮
+    checkEqual(box.data.unclaimed, 1, "未领数 1（公告没有奖励不算待领，已领过的那封也不算）");
+    const systemChannel = box.data.channels.find((row) => row.channel === "system");
+    checkEqual(systemChannel.unclaimed, 1, "频道角标同一口径（系统栏只数那封有奖励的）");
+    checkEqual(systemChannel.total, 3, "频道 total 仍按「有几封」算，不受待领口径影响");
     checkEqual(box.data.mails[0].id, "mail_done", "新的在前（created_at 倒序）");
     const rewardView = box.data.mails.find((row) => row.id === "mail_reward");
     check(
@@ -419,7 +427,7 @@ function achievementTimestamps(dbPath, roleId, achievementId) {
 
     //#region 四、删除
 
-    group("四、删除：附件没领不能删");
+    group("四、删除：还有没领的奖励就不能删（金币也算奖励，纯公告可以删）");
     insertMail(dbPath, {
       id: "mail_keep",
       roleId,
@@ -429,15 +437,28 @@ function achievementTimestamps(dbPath, roleId, achievementId) {
     });
     const keepDelete = await api(baseUrl, "DELETE", "mails/mail_keep", { token });
     checkEqual(keepDelete && keepDelete.code, 50143, "有未领附件 → 拒删（50143）");
+
+    // #866：判据是「金币 / 经验 / 附件任一未领」，不是「附件非空」。
+    // 老实现会把「补偿 500 金币」当成一封空信，玩家一点删除奖励就没了。
+    insertMail(dbPath, { id: "mail_gold_only", roleId, title: "只补金币", gold: 500 });
+    const goldOnlyDelete = await api(baseUrl, "DELETE", "mails/mail_gold_only", { token });
+    checkEqual(goldOnlyDelete && goldOnlyDelete.code, 50143, "只带金币、没有附件 → 同样拒删（#866）");
+    checkEqual(mailTimestamps(dbPath, "mail_gold_only")?.claimed_at, null, "拒删后库里那行原样还在");
+
+    // 反面：没有奖励的公告必须能删 —— 否则玩家永远清不掉的正是这种信
+    insertMail(dbPath, { id: "mail_notice", roleId, title: "纯公告", body: "周五维护。" });
+    const noticeDelete = await api(baseUrl, "DELETE", "mails/mail_notice", { token });
+    checkEqual(noticeDelete && noticeDelete.code, 0, "纯公告没有奖励 → 可以删");
+
     const doneDelete = await api(baseUrl, "DELETE", "mails/mail_done", { token });
     checkEqual(doneDelete && doneDelete.code, 0, "已领的邮件可以删");
-    checkEqual(doneDelete.data.mails.length, 3, "删除后箱子剩 3 封");
+    checkEqual(doneDelete.data.mails.length, 4, "删除后箱子剩 4 封");
 
     //#endregion
 
     //#region 五、一键领取
 
-    group("五、一键领取：逐封领到背包满为止");
+    group("五、一键领取：逐封领取，全部成功时 failedCount 为 0");
     const batchAt = Date.now();
     insertMail(dbPath, { id: "mail_b1", roleId, title: "批量 1", gold: 120, createdAt: batchAt + 1 });
     insertMail(dbPath, {
@@ -450,9 +471,11 @@ function achievementTimestamps(dbPath, roleId, achievementId) {
     });
     const batch = await api(baseUrl, "POST", "mails/claim-all", { token });
     checkEqual(batch && batch.code, 0, "一键领取成功");
-    checkEqual(batch.data.claimedCount, 3, "三封未领的都领了（含还没领的 mail_keep）");
-    checkEqual(batch.data.stoppedByBag, false, "背包没满 → 没被中断");
-    checkEqual(batch.data.gold, 300, "金币合计 120 + 80 + 100");
+    checkEqual(batch.data.claimedCount, 4, "四封未领的都领了（mail_keep / mail_gold_only / 两封批量）");
+    checkEqual(batch.data.failedCount, 0, "全部领到 → 失败清单为空（#870）");
+    checkEqual(batch.data.failures.length, 0, "failures 数组也是空");
+    checkEqual(batch.data.stoppedByBag, false, "背包没满 → stoppedByBag 为 false");
+    checkEqual(batch.data.gold, 800, "金币合计 120 + 80 + 100 + 500");
     check(
       batch.data.items.some((item) => item.goodId === "material_herb" && item.count === 3),
       "物品合计按 id 合并后给出",
@@ -464,7 +487,36 @@ function achievementTimestamps(dbPath, roleId, achievementId) {
 
     //#region 六、背包满
 
-    group("六、背包满：一键领取领到满为止，单封领取 20012");
+    group("六、一封失败不拖累其他封：跳过继续领，标已领随发奖回滚（#870 / #868）");
+
+    // ① 非背包原因：附件里放一个配置不存在的物品 → 20003。老实现会直接往上抛，
+    //    前面已领的落库、后面的一封没动，客户端只看到一句「领取失败」。
+    insertMail(dbPath, {
+      id: "mail_bad_item",
+      roleId,
+      title: "附件配错了",
+      attachments: [{ goodId: "no_such_item", count: 1 }],
+      createdAt: Date.now(),
+    });
+    insertMail(dbPath, { id: "mail_after_bad", roleId, title: "排它后面", gold: 500, createdAt: Date.now() + 1 });
+    const skipped = await api(baseUrl, "POST", "mails/claim-all", { token });
+    checkEqual(skipped && skipped.code, 0, "一键领取整体成功（不再整单抛错）");
+    // 下面几行一律用可选链：整单抛错时 data 是 null，断言该优雅失败而不是抛 TypeError
+    checkEqual(skipped.data?.claimedCount, 1, "坏附件那封失败，排在它后面的照领");
+    checkEqual(skipped.data?.failedCount, 1, "失败清单 1 条");
+    checkEqual(skipped.data?.failures?.[0]?.mailId, "mail_bad_item", "失败清单指名道姓（mailId）");
+    checkEqual(skipped.data?.failures?.[0]?.code, 20003, "失败码是 20003（奖励物品不存在）");
+    check(
+      typeof skipped.data?.failures?.[0]?.reason === "string" && skipped.data.failures[0].reason.length > 0,
+      "失败原因可直接展示（不是空串）",
+      JSON.stringify(skipped.data?.failures?.[0]),
+    );
+    checkEqual(skipped.data?.gold, 500, "后面那封的金币到手");
+    checkEqual(mailTimestamps(dbPath, "mail_bad_item")?.claimed_at, null, "失败那封的「已领」已随事务回滚（#868）");
+
+    // ② 背包满：只挡「要放物品」的，纯金币照样领到 —— 这才是「跳过继续」与老 break 的区别
+    // ① 造的那封坏附件信验完就清掉：它仍然未领，会继续在 ② 里算一条失败，把「几封被挡」的账搅乱
+    clearMails(dbPath, roleId);
     const fullBag = Array.from({ length: 4 }, () => Array.from({ length: 10 }, () => ({ id: "material_hide", count: 99 })));
     const stuffed = stuffBag(dbPath, roleId, fullBag);
     checkEqual(
@@ -472,27 +524,33 @@ function achievementTimestamps(dbPath, roleId, achievementId) {
       40,
       "准备：背包塞满（40 格兽皮，直接落库）",
     );
+    const fullAt = Date.now();
     insertMail(dbPath, {
       id: "mail_full_a",
       roleId,
       title: "满了 1",
       attachments: [{ goodId: "material_gem", count: 1 }],
-      createdAt: Date.now(),
+      createdAt: fullAt,
     });
+    insertMail(dbPath, { id: "mail_full_gold", roleId, title: "满了但只给钱", gold: 300, createdAt: fullAt + 1 });
     insertMail(dbPath, {
       id: "mail_full_b",
       roleId,
       title: "满了 2",
       attachments: [{ goodId: "material_gem", count: 2 }],
-      createdAt: Date.now() + 1,
+      createdAt: fullAt + 2,
     });
     const blocked = await api(baseUrl, "POST", "mails/claim-all", { token });
     checkEqual(blocked && blocked.code, 0, "一键领取不是整单失败");
     checkEqual(blocked.data.stoppedByBag, true, "背包满 → stoppedByBag 为 true");
-    checkEqual(blocked.data.claimedCount, 0, "一封都没领到（每封都要物品）");
-    checkEqual(blocked.data.unclaimed, 2, "两封原样留在箱里");
+    checkEqual(blocked.data.claimedCount, 1, "只有纯金币那封领到（要物品的两封被挡）");
+    checkEqual(blocked.data.failedCount, 2, "失败清单 2 条");
+    checkEqual(blocked.data.gold, 300, "纯金币那封的 300 真的到手了");
+    checkEqual(blocked.data.unclaimed, 2, "两封要物品的原样留在箱里");
+    checkEqual(mailTimestamps(dbPath, "mail_full_a")?.claimed_at, null, "失败那封没留下「已领」标记（事务回滚）");
     const singleBlocked = await api(baseUrl, "POST", "mails/mail_full_a/claim", { token });
     checkEqual(singleBlocked && singleBlocked.code, 20012, "单封领取撞背包满 → 20012");
+    checkEqual(mailTimestamps(dbPath, "mail_full_a")?.claimed_at, null, "单封领取失败同样不留「已领」标记");
 
     //#endregion
 

@@ -20,6 +20,17 @@ import { RoleMailRow } from "../rows";
 export class RoleMailRepository {
   constructor(private readonly db: DatabaseService) {}
 
+  /**
+   * 事务透传（#868）：「标已领 + 发奖 + 标已读」必须同生共死。
+   *
+   * 只透传 `DatabaseService.transaction`，业务侧不碰 SQL —— 与 `PartyRepository` /
+   * `SocialRepository` 同一写法（`audit-server-boundaries` 只许仓储注入 `DatabaseService`）。
+   * 事务里要改的角色存档走 `RolesService`，同一个连接，所以跨表没问题。
+   */
+  transaction<T>(work: () => T): T {
+    return this.db.transaction(work);
+  }
+
   insert(row: RoleMailRow): void {
     this.db.run(
       `INSERT INTO role_mails
@@ -60,10 +71,15 @@ export class RoleMailRepository {
     return this.db.count("SELECT COUNT(*) AS n FROM role_mails WHERE role_id = ? AND read_at IS NULL", [roleId]);
   }
 
-  /** 未领数（「一键领取」按钮与红点用） */
-  countUnclaimed(roleId: string): number {
-    return this.db.count("SELECT COUNT(*) AS n FROM role_mails WHERE role_id = ? AND claimed_at IS NULL", [roleId]);
-  }
+  /*
+   * 这里**没有** `countUnclaimed`（#869 删掉）。
+   *
+   * 「待领」的判据是「未领 **且** 金币/经验/附件任一存在」—— 一条 `claimed_at IS NULL`
+   * 的 COUNT 把它简化成「未领」，于是公告邮件永远算待领，红点清不掉、一键领取永远亮着。
+   * 这个判据需要解析 JSON 附件，SQL 写不干净，所以它只存在于
+   * `game-mail.service.ts` 的 `hasUnclaimedReward()`（与 `hasReward()` 同源），
+   * 由 `boxOf()` 从同一份列表算出来。别在这里再加一个简化版 COUNT。
+   */
 
   /**
    * 一键领取的候选（按发出的时间正序：先来的先领，背包满时停下的是最新的那几封）

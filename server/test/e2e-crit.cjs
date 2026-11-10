@@ -323,9 +323,21 @@ function connect(url) {
     //#region 二、暴击
     group("二、暴击：crit_rate 必爆时伤害整体翻倍（靶子零防）");
 
-    await patchSkill({ critRate: 0, critDamage: 0 });
-    const plain = await strike(clean, 6);
-    checkEqual(plain.length, 6, "非暴击基线六刀都结算成功");
+    // **交错采样**而不是「先打 16 刀非暴击、再打 16 刀必爆」：攻击伤害是
+    // `[attackMin, attackMax]` 上均匀掷的，而连打会把角色的经验 / 等级 / 属性推着走
+    // （实测必爆那一段的基础值平均比非暴击那一段高 0.5~1.1）。四轮各打 4 刀，两段样本
+    // 覆盖同一段时间窗，漂移在两边同时发生就抵掉了。
+    const ROUNDS = 4;
+    const PER_ROUND = 4;
+    const plain = [];
+    const burst = [];
+    for (let round = 0; round < ROUNDS; round += 1) {
+      await patchSkill({ critRate: 0, critDamage: 0 });
+      plain.push(...(await strike(clean, PER_ROUND)));
+      await patchSkill({ critRate: 1, critDamage: 2 });
+      burst.push(...(await strike(clean, PER_ROUND)));
+    }
+    checkEqual(plain.length, ROUNDS * PER_ROUND, `非暴击基线 ${ROUNDS * PER_ROUND} 刀都结算成功`);
     check(
       plain.every((settle) => settle.critical === undefined),
       "没配暴击时回执不带 critical 字段",
@@ -334,9 +346,7 @@ function connect(url) {
     const plainMin = Math.min(...plain.map((settle) => settle.damage));
     const plainMax = Math.max(...plain.map((settle) => settle.damage));
 
-    await patchSkill({ critRate: 1, critDamage: 2 });
-    const burst = await strike(clean, 6);
-    checkEqual(burst.length, 6, "必爆六刀都结算成功");
+    checkEqual(burst.length, ROUNDS * PER_ROUND, `必爆 ${ROUNDS * PER_ROUND} 刀都结算成功`);
     check(
       burst.every((settle) => settle.critical === true),
       "crit_rate = 1 时每一刀都带 critical: true",
@@ -349,12 +359,22 @@ function connect(url) {
       `暴击 ${burstMin}..${Math.max(...burst.map((s) => s.damage))} vs 非暴击 ${plainMin}..${plainMax}`,
     );
     const burstMax = Math.max(...burst.map((settle) => settle.damage));
-    // 两次采样来自不同掷骰，不能拿「这一次的最小值」去比「那一次的最小值 × 2」；
-    // 要看的是**倍率语义**：暴击伤害除以 2 必须落回非暴击那一档（取整误差 ±1）
+    // 两条断言各管一件事，都不锁具体数值：
+    // 1. `burstMin > plainMax` —— 倍率真的乘上去了（不是只回了个 `critical: true` 标记）；
+    // 2. 均值比 —— 倍率**是 critDamage 那个数**。
+    //
+    // 为什么不能用极值比：`rollCastDamage` 里攻击伤害是在 `[attackMin, attackMax]` 上掷的，
+    // 两次采样是不同掷骰，6 刀的区间经常盖不满。CI 上真的红过两次（非暴击 17..19、暴击 28..36，
+    // 28 ÷ 2 = 14 落在 17 之外，差的只是「这一把没掷到 14」）。
+    // 改成**交错采样 + 比均值**之后噪声已经压到 ±1.0 量级，容差留 ±20%（本档约 ±3.4）：
+    // 「倍率配错」（配成 1.5 → 偏离 25%）仍然一定红，实测反证见提交说明。
+    const plainMean = plain.reduce((sum, settle) => sum + settle.damage, 0) / plain.length;
+    const burstMean = burst.reduce((sum, settle) => sum + settle.damage, 0) / burst.length;
     check(
-      burstMin / 2 >= plainMin - 2.5 && burstMax / 2 <= plainMax + 2.5,
-      "暴击伤害正好是基础伤害的 2 倍（÷2 落回非暴击区间，取整误差 ±1）",
-      `暴击 ${burstMin}..${burstMax} ÷2 = ${burstMin / 2}..${burstMax / 2} vs 非暴击 ${plainMin}..${plainMax}`,
+      Math.abs(burstMean / 2 - plainMean) <= plainMean * 0.2,
+      "暴击伤害的均值是基础伤害的 2 倍（±20%：比均值不比极值，两次采样不同掷骰）",
+      `暴击均值 ${burstMean.toFixed(2)} ÷2 = ${(burstMean / 2).toFixed(2)} vs 非暴击均值 ${plainMean.toFixed(2)}` +
+        `；极值 暴击 ${burstMin}..${burstMax} vs 非暴击 ${plainMin}..${plainMax}`,
     );
     //#endregion
 

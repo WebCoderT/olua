@@ -35,10 +35,12 @@ export const mailTexts = {
   claimSuccess: "附件已领取",
   claimBagFull: "背包放不下，先清出格子",
   claimAllDone: "已领取 {count} 封",
+  /** 部分成功（#870）：一键领取是逐封的，领到几封、几封没领到要分开说 */
+  claimAllPartial: "领了 {ok} 封，{fail} 封没领到",
   claimAllStopped: "背包满了，先清出格子再领",
   claimFailed: "领取失败，稍后再试",
   removeFailed: "删除失败，稍后再试",
-  removeUnclaimed: "附件还没领，先领取再删",
+  removeUnclaimed: "还有没领的奖励，先领取再删",
   /** 附件摘要：金币 / 经验 / 物品（{name} 换成共享快照里的物品名） */
   gold: "金币 {count}",
   exp: "经验 {count}",

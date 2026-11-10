@@ -190,10 +190,30 @@ export class MailClaimResultDto {
 }
 
 /**
+ * 一键领取里「没领到」的一封（#870）
+ *
+ * 失败**不影响其他封**：`claimAll` 逐封独立事务，一封失败只记一条，继续领下一封。
+ * `code` 是业务码（`MALL_BAG_FULL` 20012 / `MAIL_ALREADY_CLAIMED` 50142 /
+ * `ROLE_REVISION_CONFLICT` 20006 …），0 = 非业务异常（原因只在服务端日志里）。
+ * `reason` 可以直接展示 —— 它来自 `BizException.message`，那个类约定写人话。
+ */
+export class MailClaimFailureDto {
+  @ApiProperty({ description: "没领到的那封邮件 id" })
+  mailId: string;
+
+  @ApiProperty({ description: "失败原因的业务码（0 = 未知异常，详见服务端日志）" })
+  code: number;
+
+  @ApiProperty({ description: "失败原因（可直接展示给玩家）" })
+  reason: string;
+}
+
+/**
  * 一键领取结果
  *
- * `stoppedByBag` 是关键字段：背包满时**不是整单失败**，而是「领到满为止」——
- * 已经领到的照常落库，客户端据此提示「背包满了，剩下的领不了」。
+ * `stoppedByBag` 与 `failures[]` 是两个粒度：前者回答「有没有被背包挡住」，
+ * 后者回答「具体哪几封、为什么」。**背包满不是整单失败** —— 需要放物品的那几封
+ * 留在箱里，纯金币 / 纯经验的照样到手（#870）。
  */
 export class MailClaimAllResultDto {
   @ApiProperty({ description: "领取后的收件箱", type: [MailViewDto] })
@@ -226,6 +246,12 @@ export class MailClaimAllResultDto {
   @ApiProperty({ description: "本次是否升级了" })
   leveledUp: boolean;
 
-  @ApiProperty({ description: "是否因为背包满而提前停下（true = 还有没领的）" })
+  @ApiProperty({ description: "是否至少有一封因背包满没领到（true = 清出格子后还能再领）" })
   stoppedByBag: boolean;
+
+  @ApiProperty({ description: "没领到的封数（= failures.length）" })
+  failedCount: number;
+
+  @ApiProperty({ description: "没领到的明细（一封失败不影响其他封）", type: [MailClaimFailureDto] })
+  failures: MailClaimFailureDto[];
 }
