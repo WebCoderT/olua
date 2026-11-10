@@ -65,6 +65,14 @@ export const BizCode = {
   /** 同一账号下角色重名 */
   ROLE_NAME_EXISTS: 20005,
   /**
+   * 该账号的角色数已达上限（#878 / I3）
+   *
+   * 上限读 `ROLE_MAX_PER_ACCOUNT`（默认 6，见 common/constants/role.ts）。
+   * 与「重名」（20005）分开：那是换个名字就行，这个是「先去删一个」——
+   * 客户端应当提示上限数字，而不是让玩家反复试名字。
+   */
+  ROLE_LIMIT_EXCEEDED: 20018,
+  /**
    * 角色已被别处修改（乐观锁冲突）
    *
    * 客户端推送进度时带的 revision 与服务端当前值不一致 —— 典型场景是玩家在游戏里，

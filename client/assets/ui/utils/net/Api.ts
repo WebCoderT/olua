@@ -55,7 +55,7 @@ export const AnnouncementApi = {
   active: (options?: Options) => HttpClient.get<ActiveAnnouncement[]>(ApiRoutes.announcement.active, { auth: false, ...options }),
 };
 
-/** auth 模块的接口（3 个，生成） */
+/** auth 模块的接口（4 个，生成） */
 export const AuthApi = {
   /**
    * 账号登录（POST /auth/login）
@@ -63,6 +63,12 @@ export const AuthApi = {
    * 账号不存在与密码错误返回同一句提示（不暴露账号是否存在）。
    */
   login: (body: Login, options?: Options) => HttpClient.post<AuthResult>(ApiRoutes.auth.login, body, { auth: false, ...options }),
+  /**
+   * 登出（吊销当前账号的全部令牌）（POST /auth/logout）
+   *
+   * 把账号的令牌版本号 +1，**这台设备与其他设备上已签发的令牌全部失效**（401 / 40103）。
+   */
+  logout: (options?: Options) => HttpClient.post<null>(ApiRoutes.auth.logout, undefined, options),
   /**
    * 获取当前登录账号（GET /auth/me）
    *

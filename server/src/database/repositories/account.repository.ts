@@ -108,6 +108,19 @@ export class AccountRepository {
     ]);
   }
 
+  /**
+   * 只作废已签发令牌（`token_version + 1`，不动密码）—— 玩家主动登出走这里（#880）
+   *
+   * 与 `updatePasswordAndBumpVersion` 分开：登出不是改密，不该把口令列也写一遍
+   * （写错一次就把玩家锁在门外）。自增同样写在 SQL 里，并发下两次登出不会互相覆盖。
+   */
+  bumpTokenVersion(id: string): boolean {
+    return (
+      this.db.execute("UPDATE accounts SET token_version = token_version + 1, updated_at = ? WHERE id = ?", [Date.now(), id])
+        .changes > 0
+    );
+  }
+
   /** 删除账号（角色由外键级联删除） */
   deleteById(id: string): boolean {
     return this.db.execute("DELETE FROM accounts WHERE id = ?", [id]).changes > 0;

@@ -1319,10 +1319,38 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
     this.ensureColumn("quest_progress", "reset_day", "INTEGER NOT NULL DEFAULT 0");
     this.db.prepare("UPDATE quest_progress SET reset_day = ? WHERE reset_day = 0").run(resetDayOf(Date.now()));
     this.migrateLegacyMallPricing();
+    this.ensureRoleNameUnique();
     this.ensureSuperAdmin();
     this.seedMoneyItemsOnce();
     this.seedLevelScrollsOnce();
     this.seedLevelCurvesOnce();
+  }
+
+  /**
+   * 角色名唯一索引：`UNIQUE(account_id, name)`（#878 / I3）
+   *
+   * 以前重名只靠 `RolesService.create` 里的一次「查了再插」—— 两条并发请求可以双双查到
+   * 「没有」，然后各插一行。表上没有约束，应用层的检查就只是**概率**上的检查。
+   *
+   * 为什么先查重复再建索引：存量库若有并发残留的重复行，直接 `CREATE UNIQUE INDEX` 会抛，
+   * 而这一步在 `onModuleInit` 里 —— 崩的是整个进程（服起不来），代价远大于收益。
+   * 所以这里的取舍是**不擅自改玩家名字**：报一条 ERROR 把账号与名字列出来、本次不建索引
+   * （应用层查重照旧），人工在管理端改名后重启即自动补上。
+   */
+  private ensureRoleNameUnique(): void {
+    const duplicates = this.db
+      .prepare("SELECT account_id, name, COUNT(1) AS total FROM roles GROUP BY account_id, name HAVING COUNT(1) > 1")
+      .all() as { account_id: string; name: string; total: number }[];
+    if (duplicates.length > 0) {
+      const detail = duplicates.map((row) => `${row.account_id} / ${row.name} ×${row.total}`).join("；");
+      this.logger.error(
+        `角色名唯一索引未建立：库里有 ${duplicates.length} 组同账号同名角色（${detail}）。` +
+          "这是并发建号留下的重复行 —— 在管理端把这些角色改名后重启即可自动建索引；" +
+          "在此之前重名只有应用层查重这一道闸",
+      );
+      return;
+    }
+    this.db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_roles_account_name ON roles(account_id, name)");
   }
 
   /**

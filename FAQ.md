@@ -40,7 +40,7 @@
 几条容易搞混的：
 
 - **角色数据的内容（背包里有什么、装备数值）不归服务端管**。服务端只校验结构、归属与重名，内容原样存 —— 因为那套配置的真相在 `client/assets/configs`。详见 [server/FAQ.md](server/FAQ.md#服务端为什么不校验角色数据的内容)。
-- **角色数量不设上限**：服务端创建只校验结构与重名，客户端选角界面按网格自动排列（`roleSelectorLayout.roleGrid`，从左到右排满一行再往下一行）—— 曾经的两份上限数字（`maxRoleCount` 与 `ROLE_MAX_PER_ACCOUNT`）已删掉，见 [server/FAQ.md](server/FAQ.md#角色数量为什么不设上限)。
+- **一个账号 6 个角色**：上限只在服务端（`ROLE_MAX_PER_ACCOUNT`，默认 6），超限返回 400 / 20018；客户端选角界面按网格自动排列（`roleSelectorLayout.roleGrid`）但不存这个数字、也不预拦 —— 见 [server/FAQ.md](server/FAQ.md#一个账号能有几个角色)。
 - **地址配置三端各一处**，见下一条。
 
 ## 想换后端地址（局域网 / 线上域名），到底要改哪些文件？

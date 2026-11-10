@@ -1,5 +1,5 @@
 import { Body, Controller, Get, HttpCode, HttpStatus, Ip, Post } from "@nestjs/common";
-import { ApiDataResponse } from "../../common/decorators/api-data-response.decorator";
+import { ApiDataResponse, ApiVoidResponse } from "../../common/decorators/api-data-response.decorator";
 import { ApiPlayerDoc, ApiPublicDoc } from "../../common/decorators/api-doc.decorator";
 import { CurrentUser } from "../../common/decorators/current-user.decorator";
 import { Public } from "../../common/decorators/public.decorator";
@@ -48,5 +48,27 @@ export class AuthController {
   @ApiDataResponse(AccountDto, { description: "当前账号" })
   me(@CurrentUser() user: AuthenticatedUser): AccountDto {
     return this.authService.me(user.id);
+  }
+
+  /**
+   * 登出（#880 / I5）
+   *
+   * 放在这里而不是客户端「清 localStorage」就完事：令牌是无状态的，客户端删掉本地副本
+   * 只是自己看不见它 —— 泄漏出去的那一份照旧能用满 7 天。真正的吊销只能由服务端做
+   * （`token_version` +1，守卫每次请求回查库比对）。
+   */
+  @Post("logout")
+  @HttpCode(HttpStatus.OK)
+  @ApiPlayerDoc({
+    operationId: "auth.logout",
+    summary: "登出（吊销当前账号的全部令牌）",
+    description:
+      "把账号的令牌版本号 +1，**这台设备与其他设备上已签发的令牌全部失效**（401 / 40103）。\n\n" +
+      "没有「只吊销这一台」：服务端不存会话表，令牌里只有账号 id + 版本号（见 docs/33）。" +
+      "重复调用是幂等的；不影响在线角色标记（那由心跳与在线清算管）。",
+  })
+  @ApiVoidResponse("登出成功（data 为 null）")
+  logout(@CurrentUser() user: AuthenticatedUser): null {
+    return this.authService.logout(user.id);
   }
 }

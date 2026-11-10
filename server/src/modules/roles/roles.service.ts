@@ -1,5 +1,7 @@
 import { HttpStatus, Injectable, Logger } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
 import { BizCode } from "../../common/constants/biz-code";
+import { ROLE_MAX_PER_ACCOUNT_DEFAULT } from "../../common/constants/role";
 import { BizException } from "../../common/errors/biz.exception";
 import { bindOnDropOf } from "../../common/runtime-config-cache";
 import { compareRoleAttributesOfRole } from "../combat/role-attribute-comparison";
@@ -116,7 +118,19 @@ export class RolesService {
     private readonly levelScrolls: LevelScrollRepository,
     /** 角色状态（#822）：结算读数值，死亡 / 下线清空 —— 都在这个域里，不跨域 */
     private readonly statuses: RoleStatusService,
+    /** 配置（#878 起用它读 `ROLE_MAX_PER_ACCOUNT`：上限进配置，e2e 才压得小） */
+    private readonly config: ConfigService,
   ) {}
+
+  /**
+   * 一个账号最多几个角色（#878 / I3）
+   *
+   * 脏值回落出厂默认：上限读错不该让「建号」变成「一个也建不了」。
+   */
+  private roleLimitPerAccount(): number {
+    const raw = Number(this.config.get<number>("roleMaxPerAccount") ?? ROLE_MAX_PER_ACCOUNT_DEFAULT);
+    return Number.isFinite(raw) && raw >= 1 ? Math.floor(raw) : ROLE_MAX_PER_ACCOUNT_DEFAULT;
+  }
 
   /** 当前账号的角色列表（按创建时间升序，与客户端站位顺序一致） */
   list(accountId: string): RoleSummaryDto[] {
@@ -173,7 +187,7 @@ export class RolesService {
    * 输入框与选中态），初始数据（背包 / 装备 / 货币 / 技能 / 引导…）由 `buildInitialRoleData()`
    * 构造 —— 背包、装备、货币全空不赠物品，技能全解锁 1 级，等级钉 1。
    *
-   * 校验顺序：同账号是否重名（角色数量不设上限，选角界面按网格自动排）。
+   * 校验顺序：同账号是否重名 → 该账号角色数是否已达上限（#878：默认 6，`ROLE_MAX_PER_ACCOUNT`）。
    * 第一个角色自动设为在线（与客户端「建完就能进游戏」的体验一致）。
    */
   create(accountId: string, dto: CreateRoleDto): RoleDto {
@@ -183,6 +197,14 @@ export class RolesService {
     const sex = normalizeEnum(dto.sex, ROLE_SEXES, "性别");
 
     if (this.roles.findByAccountAndName(accountId, name)) throw BizException.conflict(BizCode.ROLE_NAME_EXISTS, "该账号下已存在同名角色");
+
+    // 角色数上限（#878 / I3）：先数再插。并发下两道请求可能同时通过这一关 ——
+    // 兜底是表上的 `UNIQUE(account_id, name)`（重名）与「先到先得」的语义：
+    // 真撞上也只是多一个角色，不会变成无限建号（这一道闸挡的是脚本刷行）
+    const limit = this.roleLimitPerAccount();
+    if (this.roles.findByAccount(accountId).length >= limit) {
+      throw new BizException(BizCode.ROLE_LIMIT_EXCEEDED, `每个账号最多 ${limit} 个角色，请先删除一个再建`, HttpStatus.BAD_REQUEST);
+    }
 
     const id = this.generateRoleId();
     const now = Date.now();
@@ -262,13 +284,17 @@ export class RolesService {
     // **客户端报的版本只决定「跑不跑链」，不构成信任**：迁移链只做形状变换，
     // 哪个字段该由客户端写由 role-authority 判（收权不在这一层）。
     // 版本比代码新（回滚发布）直接拒 20028，不能把新字段当未知键静默丢掉
-    const { fields, data } = parseRoleData(
+    //
+    // 身份三字段（#879 / I4）：`name` / `occupation` / `sex` 归服务端独占 —— 存档里报什么都不看，
+    // 一律按库里的值写回文档。所以这里把库里那份**作为解析入参**传进去（而不是解析完再覆盖）：
+    // 否则改包塞一个非法职业（`occupation: "9"`）会先被 `normalizeEnum` 拒成 20003，
+    // 整份存档保存不了 —— 那就不是「忽略」而是「拿一个我们本来不认的字段把玩家卡死」。
+    // 改名暂时放置（重开条件：改名卡道具 / 改名接口落地后，那才是唯一的改名入口）；
+    // 转职同理（重开条件：做转职系统时另设接口，而不是让存档顺手改）。
+    const { data } = parseRoleData(
       migrateRoleData({ ...dto.data, id: roleId }, { wornBoundOf: bindOnDropOf }).data,
+      { name: existing.name, occupation: existing.occupation, sex: existing.sex },
     );
-
-    if (fields.name !== existing.name && this.roles.findByAccountAndName(accountId, fields.name, roleId)) {
-      throw BizException.conflict(BizCode.ROLE_NAME_EXISTS, "该账号下已存在同名角色");
-    }
 
     // 权威边界（见 role-authority.ts）：账本 / 成长线阶位 / 进度以库为准，客户端报上来的一律丢弃；
     // 老存档里没有这些键时按空值回填（#819 起不再「缺字段就采纳客户端那份」）。
@@ -311,9 +337,11 @@ export class RolesService {
     clampVitals(data);
     const row: RoleRow = {
       ...existing,
-      name: fields.name,
-      occupation: fields.occupation,
-      sex: fields.sex,
+      // 身份三字段取库里的（#879）：`fields` 里那份已经把客户端上报值换成了库值，两者同源 ——
+      // 这里显式写 `existing.*` 是为了让「这一列只认库」在行构造处一眼可见
+      name: existing.name,
+      occupation: existing.occupation,
+      sex: existing.sex,
       level,
       data: JSON.stringify(data),
       // 与 replace() 里的 `revision = revision + 1` 对齐：SQL 只是落库，这里要给出**落库后**的值，

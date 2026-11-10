@@ -40,7 +40,7 @@ export const ApiRoutes = {
      */
     active: "/announcements/active",
   },
-  /** auth 模块（3 个接口） */
+  /** auth 模块（4 个接口） */
   auth: {
     /**
      * 账号登录（POST /auth/login）
@@ -48,6 +48,12 @@ export const ApiRoutes = {
      * 账号不存在与密码错误返回同一句提示（不暴露账号是否存在）。
      */
     login: "/auth/login",
+    /**
+     * 登出（吊销当前账号的全部令牌）（POST /auth/logout）
+     *
+     * 把账号的令牌版本号 +1，**这台设备与其他设备上已签发的令牌全部失效**（401 / 40103）。
+     */
+    logout: "/auth/logout",
     /**
      * 获取当前登录账号（GET /auth/me）
      *
