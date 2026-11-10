@@ -108,6 +108,7 @@ test/e2e-party.cjs               队伍专项（邀请 / 权限 / 移交 / 屏�
 test/e2e-rank.cjs                排行榜专项（全服榜单）
 test/e2e-achievement.cjs         成就专项（累计 / 状态两种存储 / 背包满转邮件）
 test/e2e-game-mail.cjs           游戏内邮件专项（领奖 / 拒删看金币经验附件 / 先标后发同事务 / 一键领取逐封容错 / 频道与两处投递；71 条断言）
+test/e2e-mail-auto-claim.cjs     过期前自动入包专项（到点才动 / 纯金币也入包 / 在线不动 / 背包满记次数 / 幂等 / 清理闸；32 条断言）
 test/e2e-equip-align.cjs         装备对齐几何专项（#513）
 test/e2e-equip-in-align.cjs      装备内观几何专项（73 条断言，#523）
 ```
@@ -413,6 +414,15 @@ test/e2e-equip-in-align.cjs      装备内观几何专项（73 条断言，#523�
 - **成就的背包满兜底**：捕获 20012 → 整份奖励（金币 / 经验 / 物品）转一封 `channel: "reward"` / `kind: "achievement"` 的邮件、
   **照常写 `claimed_at`**、返回 `mailId`。不写 `claimed_at` 就能反复点领取刷邮件。
   判业务码统一用 `isBizCode(error, code)`（`common/errors/biz.exception.ts`），不要各处手写 `instanceof`。
+- **过期有两条腿，成对才安全**（#867）：`GameMailAutoClaimService` 在到期前 3 天、主人**离线**时把奖励直接落库
+  （`RolesService.grantByRoleId`，成功才写 `auto_claimed_at`），`purgeExpired` 只删「已领 / 三样都没有」。
+  **单改清理判据等于把行永久留在库里**，奖励对玩家依然不可见；
+  - 只对**离线**做：在线角色存档在客户端手里，服务端改库会被下一次全量覆盖冲掉；
+  - 失败计数 `auto_attempts` **必须写在事务外面**，写在里面会被回滚一起抹掉 → 每轮重试同一封、吃光预算；
+  - 保质期三态：**不传 = 默认 30 天**、`ttlMs: 0` = 永久、`> 0` = 指定。运营补发显式传 `0`，
+    这样「忘了给」与「故意永久」不会混成同一种；
+  - 离线发奖入口是 `grantByRoleId(roleId, rewards)`（内部走私有 `applyRewards`），
+    **`accountId` 从角色行上取**，不信入参 —— 离线调用方手里没有可信的账号 id。
 
 ### 四之八、消息频道：`channel` 是分类，`kind` 是来源（#436）
 

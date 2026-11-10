@@ -2,6 +2,7 @@ import { Module } from "@nestjs/common";
 import { RolesModule } from "../roles/roles.module";
 import { EventLogModule } from "../event-log/event-log.module";
 import { AdminGameMailController } from "./admin-game-mail.controller";
+import { GameMailAutoClaimService } from "./game-mail-auto-claim.service";
 import { GameMailController } from "./game-mail.controller";
 import { GameMailEventsService } from "./game-mail-events.service";
 import { GameMailPurgeService } from "./game-mail-purge.service";
@@ -22,7 +23,7 @@ import { GameMailService } from "./game-mail.service";
   // 行为流水（#886）：领取邮件要记一条（附件本身由 RolesService 记成 gain）
   imports: [RolesModule, EventLogModule],
   controllers: [GameMailController, AdminGameMailController],
-  providers: [GameMailService, GameMailEventsService, GameMailPurgeService],
+  providers: [GameMailService, GameMailEventsService, GameMailPurgeService, GameMailAutoClaimService],
   exports: [GameMailService],
 })
 export class GameMailModule {}

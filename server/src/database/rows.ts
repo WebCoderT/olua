@@ -1755,6 +1755,16 @@ export interface RoleMailRow {
    * 带**未领附件**的行不允许过期（过期等于替玩家扔奖励），判据在清理 SQL 里。
    */
   expires_at: number | null;
+  /**
+   * 自动入包成功时刻（#867；0 = 还没成功过）
+   *
+   * 与 `claimed_at` 是两件事：`claimed_at` 是「奖励发过了」的统一标记（人工领取与自动入包
+   * 都会写），这列只回答「是不是系统替玩家塞进背包的」—— 玩家看邮件时正文里那句
+   * 「附件已于 X 自动入包」就靠它，运营排查「东西怎么自己进包了」也只看它。
+   */
+  auto_claimed_at: number;
+  /** 自动入包失败次数（#867）：背包满 / 乐观锁冲突都算；到上限就停手，等人工 */
+  auto_attempts: number;
   created_at: number;
 }
 

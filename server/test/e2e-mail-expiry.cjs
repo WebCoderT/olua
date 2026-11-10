@@ -3,11 +3,13 @@
  * 收件箱保质期专项 e2e（server/test/e2e-mail-expiry.cjs，issue #439）
  *
  * 盯的不变量（改 expires_at 语义 / 清理 SQL / 读口过滤后必须全绿）：
- * 一、写入：send 的 ttlMs → expires_at = 发送时刻 + ttl；不传 = 永不过期（NULL）
+ * 一、写入：send 的 ttlMs → expires_at = 发送时刻 + ttl；**不传 = 默认 30 天**（#867 起），
+ *     显式 `0` = 永久（NULL）—— 「忘了给」与「故意永久」必须能分开
  * 二、读口：过期的行在收件箱里**立即消失**（不等清理任务），未读 / 未领数跟着不算它；
  *     单封操作（领取）对过期的行按「不存在」处理
- * 三、清理：一次 sweep 只删「已领或无附件且真过期」的行 ——
- *     带未领附件的行**不允许过期**（过期等于替玩家扔奖励，与 50143 同一个理由）；
+ * 三、清理：一次 sweep 只删「已领、或者压根没有奖励」且真过期的行 ——
+ *     **只要还有没领的奖励（金币 / 经验 / 附件任一）就不允许物理删除**（#867 把判据从
+ *     `attachments` 扩到三样任一：纯金币补偿邮件以前会被删掉，奖励凭空蒸发）；
  *     expires_at 为空的行永远不删
  * 四、批量：一轮 sweep 删的条数**不超过 MAIL_PURGE_BATCH**（测试里调成 2 验证跨批）
  *
@@ -143,7 +145,7 @@ function mailRow(dbPath, mailId) {
 
     //#region 一、写入
 
-    console.log("— 一、写入：ttlMs → expires_at，不传 = 永不过期 —");
+    console.log("— 一、写入：ttlMs → expires_at，不传 = 30 天，0 = 永久 —");
 
     const withTtl = mailService.send(roleId, { channel: "system", kind: "system", title: "限时通知", ttlMs: 60_000 });
     check(
@@ -151,8 +153,14 @@ function mailRow(dbPath, mailId) {
       "带 ttlMs 的行：expires_at = 发送时刻 + ttl",
       JSON.stringify(withTtl.expires_at),
     );
-    const withoutTtl = mailService.send(roleId, { channel: "system", kind: "system", title: "永久通知" });
-    check(withoutTtl.expires_at === null, "不带 ttlMs 的行：expires_at 为 NULL（永不过期）");
+    const withoutTtl = mailService.send(roleId, { channel: "system", kind: "system", title: "没给 TTL" });
+    check(
+      withoutTtl.expires_at !== null && Math.abs(withoutTtl.expires_at - (withoutTtl.created_at + 30 * 24 * 60 * 60 * 1000)) < 5,
+      "不传 ttlMs 的行：默认 30 天（#867 起；以前是「永久」—— 谁忘了给就永远挂在箱子里）",
+      JSON.stringify(withoutTtl.expires_at),
+    );
+    const forever = mailService.send(roleId, { channel: "system", kind: "system", title: "显式永久", ttlMs: 0 });
+    check(forever.expires_at === null, "ttlMs: 0 → expires_at 为 NULL（永久，人工补发走这条）");
 
     //#endregion
 
@@ -164,8 +172,12 @@ function mailRow(dbPath, mailId) {
     insertMail(dbPath, { id: "mail_alive", roleId, title: "还没过期", expiresAt: Date.now() + 60_000 });
     const box = await api("GET", "mails/me", { token });
     const ids = (box.data.mails || []).map((row) => row.id);
-    check(!ids.includes("mail_dead") && ids.includes("mail_alive") && ids.includes(withTtl.id), "过期的行不在列表里，未过期的与永久的都在", JSON.stringify(ids));
-    checkEqualUnread(box, 3);
+    check(
+      !ids.includes("mail_dead") && ids.includes("mail_alive") && ids.includes(withTtl.id) && ids.includes(withoutTtl.id),
+      "过期的行不在列表里，未过期的、默认 30 天的与永久的都在",
+      JSON.stringify(ids),
+    );
+    checkEqualUnread(box, 4);
 
     const deadClaim = await api("POST", "mails/mail_dead/claim", { token });
     check(deadClaim.code === 50141, "对过期的行领取 → 按不存在处理（50141）", `${deadClaim.code}`);
@@ -177,11 +189,13 @@ function mailRow(dbPath, mailId) {
 
     //#region 三、清理判据
 
-    console.log("— 三、清理：已领 / 无附件才删，带未领附件的行不允许过期 —");
+    console.log("— 三、清理：已领 / 压根没奖励才删，还有没领奖励的过期行删不掉 —");
 
-    insertMail(dbPath, { id: "mail_pure_dead", roleId, title: "无附件已过期", expiresAt: Date.now() - 2000 });
+    insertMail(dbPath, { id: "mail_pure_dead", roleId, title: "无奖励已过期", expiresAt: Date.now() - 2000 });
     insertMail(dbPath, { id: "mail_claimed_dead", roleId, title: "已领已过期", gold: 100, expiresAt: Date.now() - 2000, claimedAt: Date.now() - 3000 });
     insertMail(dbPath, { id: "mail_reward_dead", roleId, title: "带未领附件已过期", gold: 100, attachments: [{ goodId: "material_iron", count: 1 }], expiresAt: Date.now() - 2000 });
+    // #867：只有金币、没有附件的那批 —— 老判据（`attachments = '[]'`）会把它连奖励一起删掉
+    insertMail(dbPath, { id: "mail_gold_dead", roleId, title: "纯金币未领已过期", gold: 100, expiresAt: Date.now() - 2000 });
     insertMail(dbPath, { id: "mail_forever", roleId, title: "永不过期", expiresAt: null });
 
     // 本节开头已有 3 条可清样本（mail_dead / mail_pure_dead / mail_claimed_dead），
@@ -190,8 +204,9 @@ function mailRow(dbPath, mailId) {
     check(removed === 2, "MAIL_PURGE_BATCH=2 → 一轮正好删 2 条（跨批：还剩 1 条可清）", `${removed}`);
     removed = purge.sweep();
     check(removed === 1, "下一轮把剩下的 1 条清干净", `${removed}`);
-    check(!mailRow(dbPath, "mail_dead") && !mailRow(dbPath, "mail_pure_dead") && !mailRow(dbPath, "mail_claimed_dead"), "无附件已过期 / 已领已过期的行被物理删除");
+    check(!mailRow(dbPath, "mail_dead") && !mailRow(dbPath, "mail_pure_dead") && !mailRow(dbPath, "mail_claimed_dead"), "无奖励已过期 / 已领已过期的行被物理删除");
     check(!!mailRow(dbPath, "mail_reward_dead"), "带未领附件的行即使过期也不删（过期不等于替玩家扔奖励）");
+    check(!!mailRow(dbPath, "mail_gold_dead"), "**纯金币未领**的行即使过期也不删（#867：老判据把它连奖励一起删了）");
     check(!!mailRow(dbPath, "mail_forever"), "expires_at 为空的行永不删");
 
     //#endregion

@@ -1134,11 +1134,19 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
         -- 收件箱保质期（#439）：毫秒时间戳，NULL = 永不过期。
         -- 与 mail_queue 的 MAIL_RETENTION_DAYS（投递记录保留期）是两件事，别混
         expires_at  INTEGER,
+        -- 过期前自动入包（#867）：到期前 3 天由 GameMailAutoClaimService 把奖励塞进背包。
+        -- 只存「结果」两列，不存「计划时刻」—— 那个由 expires_at 减 3 天唯一决定，
+        -- 落库就是第二份真相（改了提前量还得刷全表）。0 = 还没成功过
+        auto_claimed_at     INTEGER NOT NULL DEFAULT 0,
+        -- 失败次数（背包满 / 乐观锁冲突）。到上限就停手，邮件留在箱里等人工 —— 绝不「悄悄删掉」
+        auto_attempts       INTEGER NOT NULL DEFAULT 0,
         created_at  INTEGER NOT NULL DEFAULT 0
       );
       -- 收件箱永远按「这个角色 + 时间倒序」取，未领数也用得上 claimed_at
       CREATE INDEX IF NOT EXISTS idx_role_mails_box ON role_mails(role_id, created_at DESC);
       CREATE INDEX IF NOT EXISTS idx_role_mails_unclaimed ON role_mails(role_id, claimed_at);
+      -- 自动入包的扫描键：只有「有保质期且还没领」的行会被扫到（部分索引，别全表扫）
+      CREATE INDEX IF NOT EXISTS idx_role_mails_auto ON role_mails(expires_at) WHERE claimed_at IS NULL;
 
       -- 客户端运行时参数（#605）：单行表（id 恒为 1），三个分组各一列 JSON。
       -- drop / autoBattle 服务端不消费（只随配置快照下发，客户端用来调手感）；
@@ -1253,6 +1261,13 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
     this.db.exec("UPDATE role_mails SET channel = 'reward' WHERE kind = 'achievement' AND channel = 'system'");
     // 收件箱保质期（#439）：存量行全是 NULL = 永不过期（与「没有该字段」同义，老邮件不因为补列而消失）
     this.ensureColumn("role_mails", "expires_at", "INTEGER");
+    // 过期前自动入包（#867）：两列都是「结果」，0 = 没有过。存量行不动（老邮件按老口径走：
+    // 没 `expires_at` 就不会被扫到）。部分索引也在这里补 —— 老库的 CREATE TABLE 阶段过去了
+    this.ensureColumn("role_mails", "auto_claimed_at", "INTEGER NOT NULL DEFAULT 0");
+    this.ensureColumn("role_mails", "auto_attempts", "INTEGER NOT NULL DEFAULT 0");
+    this.db.exec(
+      "CREATE INDEX IF NOT EXISTS idx_role_mails_auto ON role_mails(expires_at) WHERE claimed_at IS NULL",
+    );
     // 击杀数（#400）：排行榜的原料。放在 roles 行上而不是独立表 —— 写路径唯一（结算时 +1），
     // 客户端的存档覆盖（PUT /roles/:id 换 data）压根碰不到这一列，多一张表只会多一次 join。
     this.ensureColumn("roles", "kills", "INTEGER NOT NULL DEFAULT 0");
