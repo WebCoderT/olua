@@ -223,8 +223,10 @@ export const uiTexts = {
   reject_equip_sex: "{sex}角色才能穿戴",
   /** 装备职业不符 */
   reject_equip_occupation: "职业不符，无法穿戴",
-  /** 地图配置不存在 */
+  /** 地图配置不存在（服务端回 field=unknown：#859 起未知图直接拒） */
   reject_map_missing: "地图不存在",
+  /** 还没有位置记录（新号 / 老档第一次上线）：服务端只准进新手村（#859） */
+  reject_map_start: "还没有落脚点，先回新手村再来",
   /** 地图等级不足（{map} · {level}） */
   reject_map_level: "{map} 需要等级达到 {level} 级",
   /** 地图战斗力不足（{map} · {combat}） */

@@ -29,6 +29,7 @@ const { spawn } = require("node:child_process");
 const net = require("node:net");
 const os = require("node:os");
 const path = require("node:path");
+const { placeRolesAt } = require("./lib/place-role.cjs");
 const WebSocket = require("ws");
 const { paceCast } = require("./lib/cast-pace.cjs");
 
@@ -357,6 +358,11 @@ function snap(snapshot) {
     // F 用「同图但距击杀点太远」这个身份（#877 分成距离闸的靶子）
     const F = await preparePlayer(baseUrl, "party_player_f", "己挂机");
     check(!!(A.token && B.token && C.token && D.token && E.token && F.token), "六个账号都注册并建好在线角色");
+
+    // #859 起「没有位置记录」的角色只准进新手村 —— 这一套要进 1 图 / 2 图，
+    // 准备段先按运营摆位把位置写进去（等价管理端 PATCH onMap，见 lib/place-role.cjs）
+    placeRolesAt(dbPath, "1", ["甲队长", "乙队友", "丁外人", "戊高级", "己挂机"]);
+    placeRolesAt(dbPath, "2", ["丙异图"]);
 
     const tickets = await Promise.all(
       [A, B, C, D, E, F].map((player) => api(baseUrl, "POST", "realtime/ticket", { token: player.token })),
@@ -780,6 +786,8 @@ function snap(snapshot) {
       const low = await preparePlayer(levelBase, "party_level_low", "低级号");
       const highA = await preparePlayer(levelBase, "party_level_high_a", "高级甲", 10);
       const highB = await preparePlayer(levelBase, "party_level_high_b", "高级乙", 10);
+      // #859：等级组三人也都要先有位置记录，否则 worldJoin(1) 直接被「只准进新手村」拒
+      placeRolesAt(levelDbPath, "1");
       const levelTickets = await Promise.all(
         [low, highA, highB].map((player) => api(levelBase, "POST", "realtime/ticket", { token: player.token })),
       );
@@ -900,6 +908,8 @@ function snap(snapshot) {
       // —— A：队长掉线移交 ——
       const L = await preparePlayer(offlineBase, "party_offline_leader", "离线队长");
       const M = await preparePlayer(offlineBase, "party_offline_mate", "接任队友");
+      // #859：离线组同理，先摆到 1 图
+      placeRolesAt(offlineDbPath, "1");
       const [tL, tM] = await Promise.all(
         [L, M].map((player) => api(offlineBase, "POST", "realtime/ticket", { token: player.token })),
       );
@@ -929,6 +939,8 @@ function snap(snapshot) {
       // —— B：全队掉线解散 ——
       const X = await preparePlayer(offlineBase, "party_offline_x", "全离甲");
       const Y = await preparePlayer(offlineBase, "party_offline_y", "全离乙");
+      // #859：X/Y 是这一节才建的号，同样先摆到 1 图（不然 worldJoin(1) 被拒，队伍也建不起来）
+      placeRolesAt(offlineDbPath, "1", ["全离甲", "全离乙"]);
       const [tX, tY] = await Promise.all(
         [X, Y].map((player) => api(offlineBase, "POST", "realtime/ticket", { token: player.token })),
       );

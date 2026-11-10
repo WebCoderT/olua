@@ -29,6 +29,7 @@ const fs = require("node:fs");
 const net = require("node:net");
 const os = require("node:os");
 const path = require("node:path");
+const { placeRolesAt } = require("./lib/place-role.cjs");
 const WebSocket = require("ws");
 const { paceCast } = require("./lib/cast-pace.cjs");
 
@@ -357,6 +358,9 @@ async function standAt(session, mapId, point) {
     const session = connect(`${baseUrl.replace("http", "ws")}/api/realtime?ticket=${encodeURIComponent(ticket.data.ticket)}`);
     await waitFor("实时连接握手", async () => (session.opened ? true : null));
 
+    // #859 起「没有位置记录」的角色只准进新手村 —— 这一套要进 1 图，
+    // 准备段先按运营摆位把位置写进去（等价管理端 PATCH onMap，见 lib/place-role.cjs）
+    placeRolesAt(dbPath, "1");
     const hitWorld = await session.joinWorld(HIT_MAP);
     const hitTargets = ((hitWorld && hitWorld.monsters) || []).filter((mob) => mob.alive);
     checkEqual(hitTargets.length, 3, "图 1 播出了三只靶子（三个 0×0 刷怪区各一只）");
@@ -447,13 +451,24 @@ async function standAt(session, mapId, point) {
       "落点报到 2000px 外仍然打得到身边的怪（服务端把落点夹到作用半径内；不夹则一只都打不到）",
       far && JSON.stringify(farHitIds),
     );
-    // 跨图：作用点的地图来自客户端自报的 pos 帧 —— 不比对服务端记下的 mapAt，
-    // 改包就能站主城清空另一张图的怪
+    // 跨图（#861 之后改断「伪造帧被丢弃」）：作用点的地图来自在场表，而在场表的图
+    // **只由 worldJoin 写** —— 自报换图的 pos 帧会被整帧丢弃，改包再也挪不动作用点。
+    // `cross_map` 那道闸保留为兜底（在场表与服务端位置理论上不会不一致），
+    // 所以这里不能再去断 `rejected === "cross_map"` —— 那正好是「洞在上游被堵住」的证据。
+    const worldsBeforeForge = session.worlds.length;
     await standAt(session, KILL_MAP, { x: 0, y: 0 });
     await paceAoe();
     const crossCastId = session.fire({ skillId: AOE_SKILL, targetId: "", monsterKey: "", x: 0, y: 0 });
     const cross = await session.settleOf(crossCastId);
-    checkEqual(cross && cross.rejected, "cross_map", "报一张服务端没放行过的图 → 判跨图（区域技能不能跨图打）");
+    check(
+      !!cross && cross.ok === true && cross.rejected === undefined,
+      "自报换图的 pos 帧被丢弃：作用点仍在放行过的图（不判 cross_map）",
+      JSON.stringify(cross && { ok: cross.ok, rejected: cross.rejected, hits: (cross.hits || []).length }),
+    );
+    // 作用点还在图 1：打到的仍然是图 1 的靶子（伪造帧没能把作用点搬到 KILL_MAP）
+    const crossHitIds = ((cross && cross.hits) || []).map((hit) => hit.targetId);
+    check(crossHitIds.length > 0 && crossHitIds.every((id) => worldIds.indexOf(id) >= 0), "打中的仍是图 1 的实例（作用点没被搬到别的图）", JSON.stringify(crossHitIds));
+    checkEqual(session.worlds.length, worldsBeforeForge, "伪造帧不触发 world 帧（没进过那张图）");
     // 回到图 1：后面的用例还要在这张图上出手
     await standAt(session, HIT_MAP, HIT_CLUSTER.points[0]);
     //#endregion
@@ -461,6 +476,9 @@ async function standAt(session, mapId, point) {
     //#region 四、一次施放打死多只：逐只奖励 + 掉落账本合并
     group("四、群体击杀（图 2，1 血怪）：逐只 reward + 掉落账本合并成一份");
 
+    // #859 起「没有位置记录」的角色只准进新手村 —— 这一套要进 3 图，
+    // 准备段先按运营摆位把位置写进去（等价管理端 PATCH onMap，见 lib/place-role.cjs）
+    placeRolesAt(dbPath, "3");
     const killWorld = await session.joinWorld(KILL_MAP);
     const killTargets = ((killWorld && killWorld.monsters) || []).filter((mob) => mob.alive);
     checkEqual(killTargets.length, 3, "图 2 播出了三只 1 血靶子");

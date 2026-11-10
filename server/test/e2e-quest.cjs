@@ -23,6 +23,7 @@ const fs = require("node:fs");
 const net = require("node:net");
 const os = require("os");
 const path = require("path");
+const { placeRolesAt } = require("./lib/place-role.cjs");
 const WebSocket = require("ws");
 const { paceCast } = require("./lib/cast-pace.cjs");
 
@@ -255,6 +256,9 @@ function setResetDay(dbPath, roleId, questId, day) {
     const token = registered.data && registered.data.token;
     // #597 起建号只交三样客户端数据（初始技能含击杀要用的 1000，由服务端给齐）
     const created = await api(baseUrl, "POST", "roles", { token, body: { name: "任务者", occupation: "1", sex: "1" } });
+    // #859 起「没有位置记录」的角色只准进新手村 —— 这一套要进 1 图，
+    // 准备段先按运营摆位把位置写进去（等价管理端 PATCH onMap，见 lib/place-role.cjs）
+    placeRolesAt(dbPath, "1");
     const roleId = created.data && created.data.id;
     check(created.code === 0 && created.data.online === true, "准备：角色已创建并自动在线", created.message);
     // 初始 bag 是空数组（没有网格），而服务端不扩容 —— 先存一张规范化空网格（4×10），

@@ -24,6 +24,7 @@ const fs = require("node:fs");
 const net = require("node:net");
 const os = require("node:os");
 const path = require("node:path");
+const { placeRolesAt } = require("./lib/place-role.cjs");
 const WebSocket = require("ws");
 
 const SERVER_DIR = path.join(__dirname, "..");
@@ -157,6 +158,8 @@ function connect(url) {
     opened: false,
     worlds: [],
     results: [],
+    /** 互见帧（`players`，#861：在场表的外部投影 —— 这一段唯一的观察口） */
+    players: [],
     /** 发一条 worldJoin（不等应答） */
     sendJoin(mapId) {
       socket.send(JSON.stringify({ type: "worldJoin", data: { mapId } }));
@@ -164,6 +167,10 @@ function connect(url) {
     /** 发一条换图意图（不等应答） */
     sendMapEnter(mapId) {
       socket.send(JSON.stringify({ type: "mapEnter", data: { mapId } }));
+    },
+    /** 发一条位置上报（不等应答；`mapId` 故意做成可传任意值 —— 这一段要伪造的就是它） */
+    sendPos(mapId, x, y, hp, moving = false) {
+      socket.send(JSON.stringify({ type: "pos", data: { mapId, x, y, hp, moving } }));
     },
     /** 只等「发出去之后到达」的 world 帧（广播与应答同形，按发送时刻切分） */
     async joinWorld(mapId, timeoutMs = 8_000) {
@@ -192,6 +199,7 @@ function connect(url) {
       const frame = JSON.parse(raw.toString());
       if (frame.type === "world") session.worlds.push(frame.data);
       if (frame.type === "mapEnterResult") session.results.push(frame.data);
+      if (frame.type === "players") session.players.push(frame.data);
     } catch {
       /* 非 JSON 帧不记 */
     }
@@ -241,14 +249,31 @@ function connect(url) {
 
     //#endregion
 
-    //#region 一、首次进图：没有位置记录 → 放行，并记下位置
+    //#region 一、首次进图：没有位置记录只准进新手村，未知图直接拒（#859）
 
-    group("一、首次进图：服务端还没有位置记录，放行并落库");
-    const firstWorld = await session.joinWorld("1");
-    check(!!firstWorld && firstWorld.mapId === "1", "首次 worldJoin(1) 拿到 world 帧（1 级进不了 1 图，但还没有位置记录 → 不拦）");
-    check(Array.isArray(firstWorld && firstWorld.monsters), "world 帧带怪物实例列表", JSON.stringify(firstWorld && firstWorld.monsters.length));
-    const afterFirst = await roleData();
-    checkEqual(afterFirst.mapAt, "1", "服务端记下位置：data.mapAt = 1");
+    group("一、首次进图：没有位置记录只准进新手村，未知图直接拒（#859）");
+    {
+      // 以前是「没有位置记录就不拦」—— 那一刻客户端说在哪就在哪，于是新号能直接落到任意图，
+      // 而且 `setMapAt` 会把这次放行记下来，下一次就按新位置判了（门槛的永久后门）。
+      const notStart = await session.waitForResult(() => session.sendJoin("1"), "1");
+      check(!!notStart && notStart.ok === false, "新号 worldJoin(1) 被拒（不再「没有位置记录就放行」）", JSON.stringify(notStart));
+      checkEqual(notStart && notStart.field, "start", "拒绝原因 = start（还没有落脚点，只准进新手村）");
+      checkEqual(notStart && notStart.mapLabel, "卧龙城", "带目标图名（提示要用）");
+      checkEqual((await roleData()).mapAt, undefined, "被拒的那次不写位置");
+
+      // 未知图：以前会放行并给它建一张空图 —— 拼错一个地图 id 就能进没有地形、没有怪、
+      // 没有复活点的表外世界，运营永远不知道有人在那儿
+      const unknown = await session.waitForResult(() => session.sendJoin("99"), "99");
+      check(!!unknown && unknown.ok === false, "未知图 worldJoin(99) 被拒", JSON.stringify(unknown));
+      checkEqual(unknown && unknown.field, "unknown", "拒绝原因 = unknown（图不存在）");
+      checkEqual(unknown && unknown.mapLabel, "99", "mapLabel 回客户端报上来的那个 id");
+      checkEqual(session.worlds.length, 0, "两次被拒都没有 world 帧（世界层没被惊动）");
+
+      const firstWorld = await session.joinWorld("0");
+      check(!!firstWorld && firstWorld.mapId === "0", "新号 worldJoin(0) 放行（新手村）", JSON.stringify(firstWorld && firstWorld.mapId));
+      check(Array.isArray(firstWorld && firstWorld.monsters), "world 帧带怪物实例列表", JSON.stringify(firstWorld && firstWorld.monsters.length));
+      checkEqual((await roleData()).mapAt, "0", "服务端记下位置：data.mapAt = 0");
+    }
 
     //#endregion
 
@@ -270,7 +295,7 @@ function connect(url) {
       // 被拒不该落地：没有 world 帧，观看者身份也没登记
       await sleep(600);
       checkEqual(session.worlds.length, worldsBefore, "被拒后没有收到 world 帧（世界层没被惊动）");
-      checkEqual((await roleData()).mapAt, "1", "位置没有被改动（仍是 1）");
+      checkEqual((await roleData()).mapAt, "0", "位置没有被改动（仍是 0）");
     }
 
     //#endregion
@@ -283,9 +308,9 @@ function connect(url) {
       check(!!rejected && rejected.ok === false && rejected.field === "level" && rejected.need === 40, "mapEnter(2) 被拒且原因同 worldJoin", JSON.stringify(rejected));
       const allowed = await session.waitForResult(() => session.sendMapEnter("3"), "3");
       check(!!allowed && allowed.ok === true, "mapEnter(3) 放行（雪域高原只要 1 级）", JSON.stringify(allowed));
-      const same = await session.waitForResult(() => session.sendMapEnter("1"), "1");
+      const same = await session.waitForResult(() => session.sendMapEnter("0"), "0");
       check(!!same && same.ok === true, "mapEnter(当前图) 放行", JSON.stringify(same));
-      checkEqual((await roleData()).mapAt, "1", "意图不落地：位置仍是 1（只有 worldJoin 才写位置）");
+      checkEqual((await roleData()).mapAt, "0", "意图不落地：位置仍是 0（只有 worldJoin 才写位置）");
     }
 
     //#endregion
@@ -356,6 +381,82 @@ function connect(url) {
       // 位置变了，门槛就重新生效：2 图现在要 99 级，1 级角色从 3 回 2 应该被拒
       const back = await session.waitForResult(() => session.sendJoin("2"), "2");
       check(!!back && back.ok === false && back.need === 99, "位置变成 3 之后，worldJoin(2) 按新门槛被拒（99 级）", JSON.stringify(back));
+    }
+
+    //#endregion
+
+    //#region 七、pos 帧防伪造：自报的图与登记的不一致整帧丢弃（#861）
+
+    group("七、pos 帧防伪造：自报的图与登记的不一致，整帧丢弃（#861）");
+    {
+      // 在场条目里的图**只由 worldJoin 写**。以前 `updatePosition` 遇到「上报的图变了」
+      // 就整份接受 —— 改个包就能把自己搬到任意图：注入幽灵玩家、被那张图的怪选中、
+      // 跨图发世界聊天。这一段靠第二个连接的**眼睛**看：互见帧是在场表的外部投影。
+
+      const watcherReg = await api(baseUrl, "POST", "auth/register", { body: { username: "map_watcher", password: "pass1234" } });
+      const watcherToken = watcherReg.data && watcherReg.data.token;
+      const watcherRole = await api(baseUrl, "POST", "roles", { token: watcherToken, body: { name: "看客", occupation: "1", sex: "1" } });
+      check(!!(watcherToken && watcherRole.data && watcherRole.data.id), "准备：看客账号与角色");
+      // 看客也得先在图 3（#859：没有位置记录只准进新手村），否则看不见这一段的任何东西
+      placeRolesAt(dbPath, "3", ["看客"]);
+      const watcher = await connectAs(watcherToken);
+      const watcherWorld = await watcher.joinWorld("3");
+      check(!!watcherWorld && watcherWorld.mapId === "3", "看客进图 3（与目标同图）");
+
+      // 目标此时在图 3（上一段刚 join 进来），但还没上报过位置 —— 在场条目由 pos 帧建
+      const beforePos = watcher.players.length;
+      session.sendPos("3", 520, 380, 100, true);
+      const seen = await waitFor("看客收到目标的互见条目", async () => {
+        return watcher.players
+          .slice(beforePos)
+          .flatMap((frame) => frame.players || [])
+          .filter((entry) => entry.username === "门槛测试")
+          .pop() || null;
+      }, 5_000);
+      check(!!seen && seen.x === 520 && seen.y === 380, "真上报（mapId = 当前图）被接受：同图玩家看得见", JSON.stringify(seen && { x: seen.x, y: seen.y, hp: seen.hp }));
+      const targetAccountId = seen ? seen.accountId : "";
+      check(!!targetAccountId, "拿得到目标的账号 id（后面按它判离开）");
+
+      // 伪造：换成别的图（1 图）连发几十帧 —— 以前这会把人搬到 1 图，现在整帧丢弃
+      const beforeForge = watcher.players.length;
+      const forgeTimer = setInterval(() => session.sendPos("1", 9_999, 9_999, 1), 150);
+      await sleep(1_200);
+      clearInterval(forgeTimer);
+      const forged = watcher.players
+        .slice(beforeForge)
+        .flatMap((frame) => frame.players || [])
+        .filter((entry) => entry.accountId === targetAccountId);
+      check(forged.length === 0, "伪造帧没有改变任何东西（坐标 / 血量一个字段都没动）", JSON.stringify(forged.slice(-1)[0]));
+      const stillThere = watcher.players
+        .slice(beforeForge)
+        .flatMap((frame) => frame.left || []);
+      check(!stillThere.includes(targetAccountId), "伪造帧也不把人踢下他的图（丢弃 ≠ 离场）");
+
+      // 关键判据：`updatedAt` 也不刷 —— 否则伪造帧能让幽灵玩家在别人的屏幕上永不过期。
+      // 只发伪造帧、不再发真上报，超过位置过期时间后必须收到 left。
+      const forgeOnly = setInterval(() => session.sendPos("1", 9_999, 9_999, 1), 150);
+      const leftFrame = await waitFor("目标超时离场（left）", async () => {
+        return watcher.players.find((frame) => (frame.left || []).includes(targetAccountId)) || null;
+      }, 8_000);
+      clearInterval(forgeOnly);
+      check(!!leftFrame, "只发伪造帧 → 照样按位置过期离场（updatedAt 不被伪造帧刷新）", JSON.stringify(leftFrame && leftFrame.left));
+
+      // 离场之后条目就没了，下一帧走的是「首帧」那条路径 —— 这才是最容易被漏掉的一段：
+      // 只挡「条目还在」的帧，等它过期再发一帧伪造的图，人就被注入到那张图了。
+      const afterLeft = watcher.players.length;
+      session.sendPos("1", 900, 900, 100, false); // 伪造：把自己放到 1 图（此刻没有条目）
+      await sleep(400);                            // 给旧行为留够建条目的时间
+      session.sendPos("3", 300, 300, 100, false);  // 真上报（当前图）
+      const back = await waitFor("目标重新出现", async () => {
+        return watcher.players
+          .slice(afterLeft)
+          .flatMap((frame) => frame.players || [])
+          .find((entry) => entry.accountId === targetAccountId && entry.x === 300) || null;
+      }, 5_000);
+      check(!!back, "首帧也校验位置：伪造帧没能建出条目，真上报把人接回在场表", JSON.stringify(back && { x: back.x, y: back.y }));
+
+      session.socket.close();
+      watcher.socket.close();
     }
 
     //#endregion

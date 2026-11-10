@@ -793,8 +793,8 @@ export default class CombatChannel {
 export interface MapEnterResult {
   mapId: string;
   ok: boolean;
-  /** 缺哪一项（`ok = true` 时没有） */
-  field?: "level" | "combat" | "soul";
+  /** 缺哪一项（`ok = true` 时没有）；`unknown` = 图不存在，`start` = 还没有位置记录、只准进新手村 */
+  field?: "level" | "combat" | "soul" | "unknown" | "start";
   /** 这张图要求的值（`ok = true` 时没有） */
   need?: number;
   /** 图名（提示里要用） */

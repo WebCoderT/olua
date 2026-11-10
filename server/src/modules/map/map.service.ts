@@ -60,18 +60,31 @@ import {
 } from "./dto/map.dto";
 
 /**
+ * 新手村的地图 id
+ *
+ * 客户端新号默认落在这里（`entities/Role.ts` 的 `onMap = "0"`），服务端对「还没有位置记录」
+ * 的号也只准进这张 —— 见 `RealtimeService.mapEnterRejectOf`（#859）。
+ * 配在 `maps` 表里的是它 1 级的门槛（`level = 1`），所以新号自己就走得过。
+ */
+export const START_MAP_ID = "0";
+
+/**
  * 进图被拒的原因（#606）
  *
  * 只给「哪一项 / 差多少 / 图名」，不给完整中文句子：文案归客户端（`configs/texts` 的
- * `reject_map_level` / `reject_map_combat` / `reject_map_soul`），服务端给结构化字段，
- * 换语言 / 改措辞不用改服务端。
+ * `reject_map_level` / `reject_map_combat` / `reject_map_soul` / `reject_map_unknown` /
+ * `reject_map_start`），服务端给结构化字段，换语言 / 改措辞不用改服务端。
+ *
+ * `unknown` / `start` 两个「不是数值门槛」的取值是 #859 加的：前者是「这张图配置里没有」，
+ * 后者是「你还没有位置记录，只能进新手村」。它们跟等级 / 战力 / 战魂不同 —— 没有「差多少」
+ * （`need` 恒 0），客户端只看 `field` 选文案。
  */
 export interface MapEnterReject {
   /** 缺哪一项（决定客户端取哪条文案） */
-  field: "level" | "combat" | "soul";
-  /** 这张图要求的值 */
+  field: "level" | "combat" | "soul" | "unknown" | "start";
+  /** 这张图要求的值（`unknown` / `start` 恒 0） */
   need: number;
-  /** 图名（客户端提示里要用） */
+  /** 图名（客户端提示里要用；`unknown` 时是客户端报上来的那个 id） */
   mapLabel: string;
 }
 
@@ -113,11 +126,17 @@ export interface MapEnterReject {
  * 1. **登录不算换图**：`worldJoin` 的目标图 == 服务端记下的位置（`data.mapAt`）时一律放行，
  *    哪怕运营刚把门槛调到这个人够不着 —— 否则站在图里的低等级玩家下次登录就黑屏，
  *    而且他自己没有任何办法出来。这不是放水，是「他已经在那里」这个事实优先于配置。
- * 2. **服务端还没有位置记录时不拦**（刚建号 / 老档第一次上线）：那一刻玩家在哪由客户端
- *    决定，拦下来只会让「新号进新手村」被自己的配置挡住。位置一旦记下就不再接受客户端的
+ * 2. **服务端还没有位置记录时只准进新手村**（刚建号 / 老档第一次上线，#859）：以前是
+ *    「一律放行」——那一刻玩家在哪由客户端决定，于是「新号直接落到任意图」成了门槛的
+ *    永久后门（`setMapAt` 还会把这次放行记下来，下一次就按新位置判）。收窄成新手村不挡人
+ *    （新号本来就在那儿，客户端默认位置也是 `0`）。位置一旦记下就不再接受客户端的
  *    改口 —— `mapAt` 是服务端独占字段（见 `role-authority.ts`），只有「被接受的 worldJoin」
  *    与「管理端摆位」能写它。
- * 3. **不认识的图不拦**：没有配置行就没有门槛，世界层照样给它建一份空图（历史行为）。
+ * 3. **不认识的图直接拒**（#859）：以前是「没有配置行就没有门槛」+ 世界层给它建一份空图 ——
+ *    等于「拼错一个地图 id 就能进一张没有地形、没有怪、没有复活点的表外世界」，而且运营
+ *    永远不知道有人在那儿。现在拒绝（`field = unknown`）。代价是加新图必须先配 `maps` 行
+ *    （跑 `import-map-resources` / 出厂快照），但那本来就是这张表的唯一入口 ——
+ *    没有 TMX 的图在客户端点开就是黑屏，放行也没意义。
  */
 @Injectable()
 export class MapService {
@@ -204,14 +223,30 @@ export class MapService {
    */
   enterRejectOf(mapId: string, role: { level: number; combat: number; soulOfWar: number }): MapEnterReject | null {
     const row = this.maps.getById(mapId);
-    // 不认识的图：没有配置就没有门槛（世界层会给它建一份空图，历史行为不变）
-    if (!row) return null;
+    // 不认识的图：拒（#859）。放行会让「拼错 id」变成一条进空白世界的通道，见类顶部边界 3
+    if (!row) return { field: "unknown", need: 0, mapLabel: mapId };
     if (row.level > 0 && row.level > role.level) return { field: "level", need: row.level, mapLabel: row.label };
     if (row.combat > 0 && row.combat > role.combat) return { field: "combat", need: row.combat, mapLabel: row.label };
     if (row.soul_of_war > 0 && row.soul_of_war > role.soulOfWar) {
       return { field: "soul", need: row.soul_of_war, mapLabel: row.label };
     }
     return null;
+  }
+
+  /**
+   * 这张图存在吗（#859）
+   *
+   * 进图放行的**第一道**判据要用它，而不是「先查位置再查门槛」：`enterRejectOf` 里那条
+   * `unknown` 只在「换图」时才走到，新号拿着不存在的 id 会先撞上「只准进新手村」，
+   * 报出的原因就成了「你不在新手村」—— 语义完全不对（他压根没说要去哪张图）。
+   */
+  exists(mapId: string): boolean {
+    return !!this.maps.getById(mapId);
+  }
+
+  /** 地图名（客户端提示里要用）；没有这张图就回 id 本身 —— 提示里总要有个能念出来的东西 */
+  labelOf(mapId: string): string {
+    return this.maps.getById(mapId)?.label ?? mapId;
   }
 
   //#endregion

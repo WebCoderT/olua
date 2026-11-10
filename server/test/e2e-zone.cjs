@@ -19,6 +19,7 @@ const { spawn } = require("child_process");
 const net = require("net");
 const os = require("os");
 const path = require("path");
+const { placeRolesAt } = require("./lib/place-role.cjs");
 const WebSocket = require("ws");
 const { paceCast } = require("./lib/cast-pace.cjs");
 
@@ -287,6 +288,10 @@ function connect(url) {
     group("三、世界按区隔离：各播各的怪，互不串门");
     await api(baseUrl, "POST", "roles", { token: tokenA, body: { name: "破界A", occupation: "1", sex: "1" } });
     await api(baseUrl, "POST", "roles", { token: tokenC, body: { name: "破界C", occupation: "1", sex: "1" } });
+    // #859 起服务端不再对「还没有位置记录」的角色一律放行（只准进新手村），
+    // 这里的角色都是 1 级、要进的图又高于新手村 —— 先按运营摆位把位置写进去
+    // （等价管理端 PATCH /admin/roles/:id { onMap }，见 lib/place-role.cjs）
+    placeRolesAt(dbPath, "1");
 
     const ticketA = await api(baseUrl, "POST", "realtime/ticket", { token: tokenA });
     const ticketC = await api(baseUrl, "POST", "realtime/ticket", { token: tokenC });

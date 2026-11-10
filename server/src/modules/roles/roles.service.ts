@@ -2107,6 +2107,22 @@ export class RolesService {
   }
 
   /**
+   * 服务端记下的角色位置（`data.mapAt`）；还没有记录返回空串（#861）
+   *
+   * 只读。在场表（`PlayerPresenceService`）用它给「首帧」定坐标：自报的图必须与它一致，
+   * 否则条目过期（几秒不上报）之后再来一帧伪造的图，又能把人注入到别的图。
+   *
+   * 与 `setMapAt` 同一份口径：「玩家在哪」只有服务端说了算，客户端上报的只算位置样本。
+   * （与上面那个按 `data` 取值的私有 `mapAtOf` 分开命名 —— 那个还没有角色行可查。）
+   */
+  mapAtOfOnlineRole(accountId: string): string {
+    const row = this.onlineRoleRow(accountId);
+    if (!row) return "";
+    const data = decodeStoredRoleData(row.data);
+    return typeof data.mapAt === "string" ? data.mapAt : "";
+  }
+
+  /**
    * 记下「服务端承认的角色位置」（#606：进图门槛拿它当「他现在在哪」）
    *
    * 唯一正常写点是实时通道**接受一次 worldJoin** 的那一刻：客户端报什么不算数，

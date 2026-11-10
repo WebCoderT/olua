@@ -20,6 +20,7 @@ const { spawn } = require("node:child_process");
 const net = require("node:net");
 const os = require("node:os");
 const path = require("node:path");
+const { placeRolesAt } = require("./lib/place-role.cjs");
 const WebSocket = require("ws");
 const { paceCast } = require("./lib/cast-pace.cjs");
 
@@ -280,7 +281,10 @@ function connect(url) {
 
     // 怪物数值 1 秒 TTL：等它过期，播种时才会读到 prepareWorld 写的三只
     await sleep(1_200);
-    const world = await session.joinWorld(MAP_ID);
+    // #859 起「没有位置记录」的角色只准进新手村 —— 这一套要进 1 图，
+  // 准备段先按运营摆位把位置写进去（等价管理端 PATCH onMap，见 lib/place-role.cjs）
+  placeRolesAt(dbPath, "1");
+  const world = await session.joinWorld(MAP_ID);
     const monsters = ((world && world.monsters) || []).filter((mob) => mob.alive);
     const pushTarget = monsters.find((mob) => mob.monsterKey === PUSH_TARGET.key);
     const fragile = monsters.find((mob) => mob.monsterKey === FRAGILE.key);

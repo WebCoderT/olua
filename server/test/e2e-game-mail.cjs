@@ -23,6 +23,7 @@ const { spawn } = require("node:child_process");
 const net = require("node:net");
 const os = require("node:os");
 const path = require("node:path");
+const { placeRolesAt } = require("./lib/place-role.cjs");
 // 实时通道用 ws 包（Node 内置的 WebSocket 只有 addEventListener，没有 .on）
 const WebSocket = require("ws");
 const { paceCast } = require("./lib/cast-pace.cjs");
@@ -332,6 +333,9 @@ function achievementTimestamps(dbPath, roleId, achievementId) {
     const registered = await api(baseUrl, "POST", "auth/register", { body: { username: "mail_player", password: "pass1234" } });
     const token = registered.data && registered.data.token;
     const created = await api(baseUrl, "POST", "roles", { token, body: { name: "收信人", occupation: "1", sex: "1" } });
+    // #859 起「没有位置记录」的角色只准进新手村 —— 这一套要进 1 图，
+    // 准备段先按运营摆位把位置写进去（等价管理端 PATCH onMap，见 lib/place-role.cjs）
+    placeRolesAt(dbPath, "1");
     const roleId = created.data && created.data.id;
     check(created.code === 0 && created.data.online === true, "准备：角色已创建并自动在线", created.message);
     // #597 起初始 bag 是空数组（没有网格），而服务端不扩容 —— 先存一张规范化空网格（4×10），

@@ -2,6 +2,7 @@ import { Injectable, Logger, OnApplicationBootstrap, OnApplicationShutdown } fro
 import { ConfigService } from "@nestjs/config";
 import { GuildRepository } from "../../database/repositories/guild.repository";
 import { roleAttributeSourceOf, summarizeRoleAttributes } from "../combat/role-attributes";
+import { START_MAP_ID } from "../map/map.service";
 import { RolesService } from "../roles/roles.service";
 import type { RealtimePlayerAction, RealtimePlayerAppearance, RealtimePlayerEntry } from "./realtime.protocol";
 
@@ -168,7 +169,18 @@ export class PlayerPresenceService implements OnApplicationBootstrap, OnApplicat
   }
 
   /**
-   * 记录一次玩家位置上报（不校验图是否加载：上报先到、worldJoin 后到是正常时序）
+   * 记录一次玩家位置上报
+   *
+   * 图的校验（#861）：**条目里的图只由 `join()` 写**（worldJoin 时），所以这帧自报的
+   * `mapId` 与登记的不一致，说明他并没有经 worldJoin 进过那张图 —— 整帧丢弃。
+   * 以前这里会「换图就整份接受」，于是改个包就能把自己搬到任意图：注入幽灵玩家、
+   * 被那张图的怪选中、跨图发世界聊天。
+   *
+   * 首帧（还没有条目）也要对齐「服务端记的位置」（`data.mapAt`，见下面 `mapAtOfOnlineRole`）：
+   * 上报先到、worldJoin 后到是正常时序，所以不能要求「一定进过图」，但也不能按上报的图
+   * 建条目 —— 条目过期（几秒不上报）之后再发一帧伪造的图，照样能把人注入到别的图。
+   * 位置还没记下来时只认新手村，与 `worldJoin` 的放行口径一致；代价是「上报先到」那一帧
+   * 会被丢，下个节拍（4Hz）就补回来了。
    *
    * maxHp / 账号名 / 外观只在首次见到该玩家时查一次库（都不常变，不值得每帧查）；
    * 外观另有按 `appearanceRefreshMs` 的懒刷新（#383，换装后要能被别人看到）。
@@ -182,6 +194,13 @@ export class PlayerPresenceService implements OnApplicationBootstrap, OnApplicat
   updatePosition(accountId: string, username: string, zoneId: number, mapId: string, x: number, y: number, hp: number, moving: boolean): void {
     const existed = this.entries.get(accountId);
     if (!existed) {
+      // 首帧也要对齐「服务端记的位置」（#861）：条目过期（几秒不报）之后再来一帧伪造的图，
+      // 否则又能把人注入到别的图 —— 丢弃只挡得住「条目还在」的那些帧。
+      // 位置还没记下来（刚建号）时只认新手村，与 worldJoin 的放行口径一致。
+      // 代价是「上报先到、worldJoin 后到」那一帧会被丢：下个节拍（4Hz）就补回来了，
+      // 换图瞬间最多闪一下 —— 拿它换「幽灵玩家」这条通道很值。
+      const registered = this.roles.mapAtOfOnlineRole(accountId);
+      if (registered ? registered !== mapId : mapId !== START_MAP_ID) return;
       const role = this.roles.online(accountId);
       const summary = role ? summarizeRoleAttributes(roleAttributeSourceOf(role.level, role.data)) : null;
       const maxHp = summary && summary.maxHp > 0 ? summary.maxHp : Math.max(1, hp);
@@ -221,14 +240,12 @@ export class PlayerPresenceService implements OnApplicationBootstrap, OnApplicat
       });
       return;
     }
+    // 换图必须经 worldJoin（#861）：自报的图与登记的不一致 → 整帧丢弃。
+    // 连 `updatedAt` 都不刷 —— 否则伪造帧能让一个「其实不在那张图」的人永远不掉线
+    if (existed.zoneId !== zoneId || existed.mapId !== mapId) return;
     existed.updatedAt = Date.now();
     // —— 位置仲裁（#596）：坐标可信才动 x/y，其余字段照旧 ——
-    // 换图（zoneId/mapId 与基线不同）不仲裁：基线还是上一张图的坐标，跨图距离必然超限，
-    // 而换图本来就该整体接受（worldJoin 会重建上下文），基线随接受重置。
-    const movedMap = existed.zoneId !== zoneId || existed.mapId !== mapId;
-    if (movedMap || this.acceptPosition(existed, x, y)) {
-      existed.zoneId = zoneId;
-      existed.mapId = mapId;
+    if (this.acceptPosition(existed, x, y)) {
       existed.x = x;
       existed.y = y;
     }
@@ -293,6 +310,13 @@ export class PlayerPresenceService implements OnApplicationBootstrap, OnApplicat
       if (movedMap) {
         existed.zoneId = zoneId;
         existed.mapId = mapId;
+        // 换图顺带重置位置仲裁基线（#861）：基线还是上一张图的坐标，跨图距离必然超限，
+        // 不重置的话新图的第一帧上报会被当成瞬移拒掉几帧（看起来是「进图后愣半秒」）。
+        // 换图这件事本身是服务端放行的，坐标该整体接受
+        existed.trustedX = existed.x;
+        existed.trustedY = existed.y;
+        existed.trustedAt = Date.now();
+        existed.posRejects = 0;
       }
     }
     const players: RealtimePlayerEntry[] = [];

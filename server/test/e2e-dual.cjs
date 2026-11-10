@@ -23,6 +23,7 @@ const fs = require("fs");
 const net = require("net");
 const os = require("os");
 const path = require("path");
+const { placeRolesAt } = require("./lib/place-role.cjs");
 const { DatabaseSync } = require("node:sqlite");
 const WebSocket = require("ws");
 const { paceCast } = require("./lib/cast-pace.cjs");
@@ -252,6 +253,10 @@ function seedSpawnAreas(dbPath) {
     });
     const adminToken = adminReg.body.data && adminReg.body.data.token;
     check(!!adminToken, "准备：超管已在存档进程注册", adminReg.body.message);
+    // #859 起服务端不再对「还没有位置记录」的角色一律放行（只准进新手村），
+    // 这里的角色都是 1 级、要进的图又高于新手村 —— 先按运营摆位把位置写进去
+    // （等价管理端 PATCH /admin/roles/:id { onMap }，见 lib/place-role.cjs）
+    placeRolesAt(dbPath, "1");
 
     //#endregion
 
