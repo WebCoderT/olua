@@ -35,7 +35,7 @@ const configSql = require("./lib/config-sql.cjs");
 const { CONFIG_TABLES } = require("./lib/config-tables.cjs");
 
 function main() {
-  const args = tooling.parseArgs(process.argv.slice(2), { file: "file", db: "db", "dry-run": "dryRun" });
+  const args = tooling.parseArgs(process.argv.slice(2), { file: "file", db: "db", "dry-run": "dryRun", force: "force" });
   tooling.loadServerEnv();
   const dbPath = tooling.resolveDbPath(args.db);
   const file = configSql.resolveSqlPath(args.file);
@@ -50,13 +50,19 @@ function main() {
 
   // 证明目标确实是我们的库（不存在 / 损坏 / 拿错文件都在这拦下）
   tooling.inspect(dbPath, { label: "数据文件" });
+
+  // 版本闸（#883）：文件比库旧 → 拒绝（两机互导第二次就撞在这）。
+  // 放在 dry-run 之前：dry run 不该给出一个「看起来能导」的结论
+  const dbVersion = readDbVersion(dbPath);
+  configSql.checkImportVersion(meta.version, dbVersion, { force: args.force });
+
   const before = countRows(dbPath);
 
   if (args.dryRun) {
     const planned = countInserts(text);
     console.log("dry run（不写库）");
-    console.log(`  文件：${file}（${meta.tables.length} 张配置表）`);
-    console.log(`  目标：${dbPath}`);
+    console.log(`  文件：${file}（${meta.tables.length} 张配置表 / 第 ${meta.version} 版）`);
+    console.log(`  目标：${dbPath}（第 ${dbVersion} 版）`);
     report(before, planned);
     return;
   }
@@ -71,6 +77,9 @@ function main() {
     // 服务端在跑时可能占到写锁，等一会儿比直接 SQLITE_BUSY 好用
     db.exec("PRAGMA busy_timeout = 5000");
     db.exec(text);
+    // 跟上文件的版本号：不这么做的话，本机计数会一直落后，
+    // 下一次别人导你的文件就会被版本闸判成「库更新」而拒绝
+    adoptVersion(db, meta.version);
   } catch (error) {
     try {
       db.exec("ROLLBACK");
@@ -98,13 +107,43 @@ function main() {
   console.log(`  文件：${file}`);
   console.log(`  目标：${dbPath}`);
   console.log(`  占用：${stats.tables} 张配置表 / ${stats.rows} 行`);
+  console.log(`  版本：第 ${dbVersion} 版 → 第 ${meta.version} 版`);
   report(before, after);
   console.log(`  导入前的配置已留档：${backup}`);
   console.log("  提醒：服务端正在跑的话要重启一次（进程内存里的配置不会自动刷新）。");
 }
 
-/** 库里每张配置表的行数 */
-function countRows(dbPath) {
+/** 目标库当前的配置版本（只读打开；表不存在 = 0） */
+function readDbVersion(dbPath) {
+  const db = new DatabaseSync(dbPath, { readOnly: true });
+  try {
+    return configSql.readVersion(db);
+  } finally {
+    db.close();
+  }
+}
+
+/**
+ * 导入成功后把库的版本跟到文件那一版
+ *
+ * 只升不降：`--force` 回退导入时**也**不把版本调回去 —— 版本号是「这台机器第几次改动」，
+ * 让它回退会让「文件比库旧」的判据以后永远失真（下次别人导你的文件会误以为更新）。
+ * 内容对不对由导入后的逐字节校验负责，版本号只管「新不新」。
+ */
+function adoptVersion(db, version) {
+  const exists =
+    Number(
+      db.prepare("SELECT COUNT(1) AS total FROM sqlite_master WHERE type = 'table' AND name = 'config_version'").get().total ?? 0,
+    ) > 0;
+  if (!exists) return;
+  db.prepare("UPDATE config_version SET version = ?, updated_at = ? WHERE id = 1 AND version < ?").run(
+    version,
+    Date.now(),
+    version,
+  );
+}
+
+/** 库里每张配置表的行数 */function countRows(dbPath) {
   const db = new DatabaseSync(dbPath, { readOnly: true });
   try {
     const counts = {};

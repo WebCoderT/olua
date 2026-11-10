@@ -17,6 +17,7 @@ import { MoneyItemDto } from "./dto/money-item.dto";
 import { LevelScrollDto } from "./dto/level-scroll.dto";
 import { LevelCurveDto } from "./dto/growth.dto";
 import { MonsterPresentationDto } from "./dto/monster.dto";
+import { ConfigVersionService } from "./config-version.service";
 
 /** 快照全量拉取的分页参数：service 层调用不经过 ValidationPipe，size 不受 HTTP 边界 100 的限制 */
 const ALL = { page: 1, size: 1_000_000 };
@@ -31,6 +32,9 @@ const ALL = { page: 1, size: 1_000_000 };
  */
 @Injectable()
 export class ClientConfigService {
+  /** 按版本缓存（#881）：`{version, dto}` —— 版本没变就复用，见 snapshot() 的注释 */
+  private cache: { version: number; dto: GameConfigSnapshotDto } | null = null;
+
   constructor(
     private readonly gameConfig: GameConfigService,
     private readonly growth: GrowthConfigService,
@@ -44,9 +48,36 @@ export class ClientConfigService {
     private readonly map: MapService,
     private readonly uiEffect: UiEffectService,
     private readonly monsterPresentations: MonsterPresentationRepository,
+    private readonly versions: ConfigVersionService,
   ) {}
 
-  snapshot(): GameConfigSnapshotDto {    return {
+  /** 当前配置版本（快照 ETag 与 `GET /game-config/version` 都用它） */
+  version(): number {
+    return this.versions.current();
+  }
+
+  /**
+   * 快照（**按版本缓存**，#881）
+   *
+   * 以前每次请求都把 12 个 service 的列表重新拼一遍（38 张表 / 约 13k 行）——
+   * 客户端进游戏会连着打十几次，全是重复劳动。现在按 `config_version` 缓存：
+   * 版本没变直接返回同一份物化结果，变了才重拼。
+   *
+   * **为什么不按时间过期**：时间窗内改了配置 → 客户端拿到旧值；一年没改 → 白拼一次。
+   * 版本号是「配置有没有变」的唯一判据（写接口成功后由拦截器 +1，见 ConfigVersionInterceptor）。
+   *
+   * 返回的是同一个对象引用：调用方只做序列化，不许改它。
+   */
+  snapshot(): GameConfigSnapshotDto {
+    const version = this.version();
+    if (this.cache && this.cache.version === version) return this.cache.dto;
+    const dto = this.build();
+    this.cache = { version, dto };
+    return dto;
+  }
+
+  private build(): GameConfigSnapshotDto {
+    return {
       titles: this.gameConfig.listTitles({ ...ALL }).list,
       souls: this.gameConfig.listSouls({ ...ALL }).list,
       ranks: this.gameConfig.listRanks({ ...ALL }).list,
@@ -110,5 +141,4 @@ export class ClientConfigService {
       equipmentAppearance: this.equipmentAppearance.appearance(),
     };
   }
-
 }

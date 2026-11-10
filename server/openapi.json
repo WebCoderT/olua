@@ -3326,7 +3326,8 @@
                 "guideSteps",
                 "equipmentAppearance",
                 "moneyItem",
-                "levelScroll"
+                "levelScroll",
+                "config"
               ]
             }
           },
@@ -3615,7 +3616,8 @@
                 "guideSteps",
                 "equipmentAppearance",
                 "moneyItem",
-                "levelScroll"
+                "levelScroll",
+                "config"
               ]
             }
           },
@@ -10321,6 +10323,50 @@
         }
       }
     },
+    "/game-config/version": {
+      "get": {
+        "description": "当前配置版本号：每次管理端写配置成功 +1（0 = 从没改过）。\n\n客户端拿它跟本地那份比：**不相等**就重拉 `GET /game-config`（不判大小 —— 库被恢复成旧备份时版本会回退）。\n建议 60 秒一次，只在游戏内轮询；拉取失败保留旧表继续用，下一轮再试。\n\n需要玩家令牌（与快照同口径）。\n\n---\n\n**鉴权**：客户端令牌（`player`），只能操作令牌所属账号自己的数据。",
+        "operationId": "gameConfig.version",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "当前配置版本",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/ConfigVersionDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "player": []
+          }
+        ],
+        "summary": "配置版本（轮询用）",
+        "tags": [
+          "客户端"
+        ],
+        "x-olua-audience": "player",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/ConfigVersionDto"
+        }
+      }
+    },
     "/game-config/audio": {
       "get": {
         "description": "全部音效项：`key` / `filePath`（相对 `resources/`，带扩展名）/ `volume`（0~100）/ `loop` / `enabled`。\n\n**不需要令牌** —— 登录场景没有令牌，而登录背景音正是那时要播的（与公告同一口径）。\n进游戏后改用配置快照的 `audio` 段（同形状），客户端不需要第二套读法。\n\n`filePath` 为空 = 这一项没配置（不播），不是错误。\n\n---\n\n**鉴权**：客户端令牌（`player`），只能操作令牌所属账号自己的数据。",
@@ -11239,6 +11285,237 @@
         },
         "x-olua-permissions": [
           "gameConfig:read"
+        ]
+      }
+    },
+    "/admin/config/version": {
+      "get": {
+        "description": "与玩家侧 `GET /game-config/version` 同一个数字：每次管理端写配置成功 +1。\n\n管理端用它做「我看到的页面是不是最新」的判断（另一个管理员改完之后这里会变）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`config:read`（查看配置版本历史；角色：超级管理员 / 管理员）",
+        "operationId": "adminConfig.version",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "当前配置版本",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/ConfigVersionDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "当前配置版本",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/ConfigVersionDto"
+        },
+        "x-olua-permissions": [
+          "config:read"
+        ]
+      }
+    },
+    "/admin/config/revisions": {
+      "get": {
+        "description": "按版本号倒序。每层是一份**全量配置**（38 张表），所以列表只回元信息 + 行数，不回 payload。\n\n`label` 是触发这次改动的接口标识（如 `adminSkill.update`）；`createdBy` 是操作人。\n同一人 `CONFIG_REVISION_THROTTLE_MS`（默认 10 秒）内的连点会合并成一层。\n\n默认保留 20 层（`CONFIG_REVISION_RETAIN`），超出删最老的。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`config:read`（查看配置版本历史；角色：超级管理员 / 管理员）",
+        "operationId": "adminConfig.revisions",
+        "parameters": [
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "取最近多少层（默认 20，上限 100）",
+            "schema": {
+              "example": 20,
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "版本列表（最新在前）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/ConfigRevisionListDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "配置版本历史（最近 N 层）",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/ConfigRevisionListDto"
+        },
+        "x-olua-permissions": [
+          "config:read"
+        ],
+        "x-olua-query-schema": {
+          "$ref": "#/components/schemas/ConfigRevisionQueryDto"
+        }
+      }
+    },
+    "/admin/config/revisions/{from}/diff/{to}": {
+      "get": {
+        "description": "只回**有变化的表**：每张表的行数变化、新增行数、删除行数。\n\n**行级不是字段级**：payload 是不透明 JSON，没有可靠的主键可用 —— 改一行会体现成「一删一加」。\n这样至少绝不谎报「这张表没变」（字段级 diff 需要给 38 张表各写一套主键定义，收益不抵成本）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`config:read`（查看配置版本历史；角色：超级管理员 / 管理员）",
+        "operationId": "adminConfig.diff",
+        "parameters": [
+          {
+            "name": "from",
+            "required": true,
+            "in": "path",
+            "description": "旧版本号",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "required": true,
+            "in": "path",
+            "description": "新版本号",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "逐表差异",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/ConfigRevisionDiffDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "两个版本之间的差异（按表统计行数）",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/ConfigRevisionDiffDto"
+        },
+        "x-olua-permissions": [
+          "config:read"
+        ]
+      }
+    },
+    "/admin/config/revisions/{version}/restore": {
+      "post": {
+        "description": "把这一层的**全量配置**写回库里：38 张配置表逐表 `DELETE` + 逐行 `INSERT`，**一个事务** ——\n要么全回去，要么一行不动。外键检查推到提交时（`defer_foreign_keys`），所以中途状态合法。\n\n- 只写配置表（`config-tables.cjs` 的白名单）；payload 里有、库里没有的表**跳过并告警**，不做结构迁移；\n- 只写 payload 与当前表结构**交集**的列 —— 加过列的老版本也能回；\n- 回滚本身是**一层新版本**（版本 +1、历史不删），所以回滚错了还能再滚回来；\n- **不踢人**：服务端读库，下一跳就是旧值；客户端在下一个安全点换表。\n\n权限点单列（`config:restore`）：这是「一次改 38 张表」，不是普通数值微调。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`config:restore`（配置回滚；角色：超级管理员 / 管理员）",
+        "operationId": "adminConfig.restore",
+        "parameters": [
+          {
+            "name": "version",
+            "required": true,
+            "in": "path",
+            "description": "要回到的版本号",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "回滚结果（新版本号 / 恢复的表与行数 / 跳过的表）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/ConfigRestoreResultDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "回滚到某一版（单事务全量恢复）",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/ConfigRestoreResultDto"
+        },
+        "x-olua-permissions": [
+          "config:restore"
         ]
       }
     },
@@ -21482,7 +21759,8 @@
               "guideSteps",
               "equipmentAppearance",
               "moneyItem",
-              "levelScroll"
+              "levelScroll",
+              "config"
             ]
           },
           "targetId": {
@@ -29897,6 +30175,188 @@
           "total",
           "list"
         ]
+      },
+      "ConfigVersionDto": {
+        "type": "object",
+        "properties": {
+          "version": {
+            "type": "number",
+            "description": "配置版本号：每次管理端写配置成功 +1（0 = 出厂状态，一次都没改过）"
+          }
+        },
+        "required": [
+          "version"
+        ]
+      },
+      "ConfigRevisionDto": {
+        "type": "object",
+        "properties": {
+          "version": {
+            "type": "number",
+            "description": "版本号（这一层是「第几版」，与 config_version 同一个计数）"
+          },
+          "label": {
+            "type": "string",
+            "description": "这一层是什么改动（写接口的 operationId，如 adminSkill.update）"
+          },
+          "byteSize": {
+            "type": "number",
+            "description": "payload 字节数（全量配置 JSON；超过 5MB 说明配置该拆了）"
+          },
+          "tableCount": {
+            "type": "number",
+            "description": "payload 里有几张配置表"
+          },
+          "rowCount": {
+            "type": "number",
+            "description": "payload 里一共多少行"
+          },
+          "createdBy": {
+            "type": "string",
+            "description": "操作人（管理端账号名；同一人 10 秒内的连点会合并成一层）"
+          },
+          "createdAt": {
+            "type": "number",
+            "description": "落层时间（毫秒）"
+          }
+        },
+        "required": [
+          "version",
+          "label",
+          "byteSize",
+          "tableCount",
+          "rowCount",
+          "createdBy",
+          "createdAt"
+        ]
+      },
+      "ConfigRevisionListDto": {
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "number",
+            "description": "保留的层数（默认 20，`CONFIG_REVISION_RETAIN`）",
+            "example": 20
+          },
+          "list": {
+            "description": "按版本号倒序（最新在前）",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ConfigRevisionDto"
+            }
+          }
+        },
+        "required": [
+          "total",
+          "list"
+        ]
+      },
+      "ConfigRevisionTableDiffDto": {
+        "type": "object",
+        "properties": {
+          "table": {
+            "type": "string",
+            "description": "表名（与 config-sync.sql 的节名一致）"
+          },
+          "from": {
+            "type": "number",
+            "description": "这张表在旧版有几行"
+          },
+          "to": {
+            "type": "number",
+            "description": "这张表在新版有几行"
+          },
+          "added": {
+            "type": "number",
+            "description": "新增行数（改一行也会体现成「一删一加」，所以它是行级不是字段级）"
+          },
+          "removed": {
+            "type": "number",
+            "description": "删除行数"
+          }
+        },
+        "required": [
+          "table",
+          "from",
+          "to",
+          "added",
+          "removed"
+        ]
+      },
+      "ConfigRevisionDiffDto": {
+        "type": "object",
+        "properties": {
+          "from": {
+            "type": "number",
+            "description": "旧版本号"
+          },
+          "to": {
+            "type": "number",
+            "description": "新版本号"
+          },
+          "changed": {
+            "type": "number",
+            "description": "有变化的表数（行数一样但值改了也会出现在这个列表里）"
+          },
+          "tables": {
+            "description": "逐表差异，只含有变化的表",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ConfigRevisionTableDiffDto"
+            }
+          }
+        },
+        "required": [
+          "from",
+          "to",
+          "changed",
+          "tables"
+        ]
+      },
+      "ConfigRestoreResultDto": {
+        "type": "object",
+        "properties": {
+          "version": {
+            "type": "number",
+            "description": "回滚后的新版本号（回滚本身也是一层新版本，历史不删）"
+          },
+          "restoredFrom": {
+            "type": "number",
+            "description": "内容取自哪一层"
+          },
+          "tables": {
+            "type": "number",
+            "description": "恢复了多少张表"
+          },
+          "rows": {
+            "type": "number",
+            "description": "恢复了多少行"
+          },
+          "skipped": {
+            "description": "被跳过的表（payload 里有、当前库里没有的表结构 —— 不做结构迁移，跳过并告警）",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "version",
+          "restoredFrom",
+          "tables",
+          "rows",
+          "skipped"
+        ]
+      },
+      "ConfigRevisionQueryDto": {
+        "type": "object",
+        "properties": {
+          "limit": {
+            "type": "number",
+            "description": "取最近多少层（默认 20，上限 100）",
+            "example": 20
+          }
+        }
       }
     }
   }

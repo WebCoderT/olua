@@ -68,6 +68,7 @@ npm run dev              # 开发（ts-node 热启动）；npm run build && npm 
 | `npm run test:e2e:mail-expiry` | 收件箱保质期专项（15 条；#439：ttl 写入 / 读口即时消失 / 清理判据 / 批量上限） |
 | `npm run test:e2e:ui-effect` | 特效专项（34 条；#594 升级特效 + #634 掉落光效六档：可读不可写 / 出厂值 seed 顺序 / 无新建·删除 / 数值边界 / 快照即最新 / 审计与文档契约） |
 | `npm run test:e2e:map` | 地图管理专项（122 条；**玩法配置可改 / 资源本体不可改** / 两套坐标对账 / 无新建·删除 / 权限与文档契约） |
+| `npm run test:e2e:config-version` | 配置版本链专项（57 条；#881/#882/#883：快照 ETag→304 / 按版本缓存 / 写配置 +1 且公告不 +1 / 节流与跨人不合并 / 回滚单事务且历史不删 / 保留 20 层 / 版本行与导入闸） |
 | `npm run db:backup` | 备份数据文件（`VACUUM INTO`，服务运行中也能备） |
 | `npm run db:restore` | 从备份恢复（带「服务可能在跑」检测与旧库留档） |
 | `npm run config:export` | **把当前库的配置表覆盖写入 `data/config-sync.sql`**（提交它 = 同步给别人） |
@@ -75,7 +76,7 @@ npm run dev              # 开发（ts-node 热启动）；npm run build && npm 
 | `npm run config:check` | 检查快照是否落后于当前库（落后时退出码 1） |
 | `npm run test:config-sync` | 配置快照导出 / 导入测试（不起服务） |
 | `npm run verify:api` | `swagger:emit` + 生成物一致性审计 |
-| `npm run verify` | **一条命令全验**：编译 + 全部 e2e（1 主套 + 51 专项，清单派生自 `package.json`） + 生成物审计 |
+| `npm run verify` | 本地串行全验：编译 + e2e（1 主套 + 35 专项，链里手写） + 生成物审计。**`package.json` 里共 1 主套 + 54 专项** —— 没进这条链的那些由 CI 分片跑（分片清单派生自 `package.json`，新增自动进 CI） |
 
 > 仓库根的 `make` 是这些脚本的快捷方式：`make server-dev` / `make server-verify` /
 > `make gen-api` / `make server-e2e-guard` 等，`make help` 看全部。
@@ -105,6 +106,8 @@ npm run dev              # 开发（ts-node 热启动）；npm run build && npm 
 | `LOGIN_IP_MAX_FAILURES` | `20` | 同一 IP 在锁定时长内失败多少次锁定 |
 | `LOGIN_IP_LOCK_MS` | `600000` | IP 维度锁定时长 |
 | `AUDIT_LOG_MAX_ROWS` | `20000` | 操作日志保留上限（超出自动清最旧；`0` = 不清理） |
+| `CONFIG_REVISION_RETAIN` | `20` | 配置回滚历史保留层数（#882，每层是一份全量 38 表 JSON；先删最老再插新） |
+| `CONFIG_REVISION_THROTTLE_MS` | `10000` | 同一操作人的连续写在这一窗口内合并成一层（#882；跨人从不合并，回滚自身不参与节流） |
 | `MAIL_RETENTION_DAYS` | `90` | 投递记录保留天数（早于该天数的自动清理；`0` = 不按时间清理） |
 | `MAIL_QUEUE_MAX_ROWS` | `20000` | 投递记录保留上限（只对已发送 / 已失败生效，避免删掉还没发出去的信；`0` = 不清理） |
 | `MAIL_PURGE_BATCH` | `500` | 收件箱过期清理的一批条数（#439，一次最多删这么多，剩下的下一轮；**与 `MAIL_RETENTION_DAYS` 是两件事**——那个管外发投递记录的保留期，这个管游戏内收件箱的保质期回收） |
@@ -201,6 +204,7 @@ server/
 │   ├── e2e-element-damage.cjs（物法分离 #823：物理打物防 / 法术打魔防 / 法攻配 0 时跳过技能并 warn）
 │   ├── e2e-area-skill.cjs（自身 / 区域 / 群体技能 #824：非单体技能过结算 / 服务端算命中集合 / 落点夹取 / 逐只奖励与合并掉落账本）
 │   ├── e2e-crit.cjs（暴击与破防 #826：def_ignore 削防御那一项 / crit_rate 必爆翻倍 / 角色属性与技能行相加）
+│   ├── e2e-config-version.cjs（配置版本链 #881/#882/#883：ETag 与 304 / 按版本缓存 / 写配置 +1 / 节流 / 回滚 / 保留 20 层 / 导入版本闸）
 │   ├── e2e-push.cjs（撞飞与群体化 #826：push_chance + 等级闸 / 击退位移游标补齐 / 击杀不推 / 1009 群体化）
 │   ├── e2e-world.cjs（世界权威：服务端按刷怪区自播种 / 结算落世界 / tick 重生 / 关闭落盘 / 重启恢复）
 │   ├── e2e-world-viewers.cjs（观看者集合：换图退出旧图 / 旧图不再投递与采样 / 空闲卸载 / 卸载不丢状态）

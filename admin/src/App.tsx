@@ -17,6 +17,7 @@ import { EquipmentsPage } from "./pages/EquipmentsPage";
 import { EquipmentSettingsPage } from "./pages/EquipmentSettingsPage";
 import { RuntimeParamsPage } from "./pages/RuntimeParamsPage";
 import { CombatWeightsPage } from "./pages/CombatWeightsPage";
+import { ConfigRevisionsPage } from "./pages/ConfigRevisionsPage";
 import { GuideStepsPage } from "./pages/GuideStepsPage";
 import { EquipmentBordersPage, EquipmentBackgroundPage } from "./pages/EquipmentAppearanceKindPage";
 import { EquipmentTiersPage } from "./pages/EquipmentTiersPage";
@@ -453,6 +454,14 @@ export function App() {
             element={
               <RequirePermission permission={PERMISSION.SYSTEM_READ}>
                 <SystemPage />
+              </RequirePermission>
+            }
+          />
+          <Route
+            path="config-versions"
+            element={
+              <RequirePermission permission={PERMISSION.CONFIG_READ}>
+                <ConfigRevisionsPage />
               </RequirePermission>
             }
           />

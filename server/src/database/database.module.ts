@@ -35,6 +35,8 @@ import { MapNpcRepository } from "./repositories/map-npc.repository";
 import { MapCollisionRepository } from "./repositories/map-collision.repository";
 import { MapRepository } from "./repositories/map.repository";
 import { ZoneRepository } from "./repositories/zone.repository";
+// 配置版本链（#881 / #882）：`config_version` / `config_revisions` + 38 张配置表的整表 dump / 替换
+import { ConfigRevisionRepository } from "./repositories/config-revision.repository";
 import { SkillRepository } from "./repositories/skill.repository";
 import { StatusRepository } from "./repositories/status.repository";
 import { MonsterSkillRepository } from "./repositories/monster-skill.repository";
@@ -66,6 +68,7 @@ import { RoleStatusRepository } from "./repositories/role-status.repository";
 @Module({
   providers: [
     DatabaseService,
+    ConfigRevisionRepository,
     AccountRepository,
     RoleRepository,
     AdminRepository,
@@ -122,6 +125,7 @@ import { RoleStatusRepository } from "./repositories/role-status.repository";
   ],
   exports: [
     DatabaseService,
+    ConfigRevisionRepository,
     AccountRepository,
     RoleRepository,
     AdminRepository,

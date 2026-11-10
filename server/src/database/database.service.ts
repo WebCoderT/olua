@@ -1318,6 +1318,32 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
     // 昨天接的日常今天还能交一次，而不是凭空从面板上消失。幂等：天号 0 只可能是补列那一批
     this.ensureColumn("quest_progress", "reset_day", "INTEGER NOT NULL DEFAULT 0");
     this.db.prepare("UPDATE quest_progress SET reset_day = ? WHERE reset_day = 0").run(resetDayOf(Date.now()));
+    // 配置版本链（#881 / #882）：两张**运行时**表（不进 config-sync.sql）
+    //
+    // - `config_version`：单行自增计数器。每次配置写成功后 +1（`ConfigVersionService`），
+    //   快照的 ETag 与客户端的「配置是不是变了」都以它为唯一判据 —— 不按时间、不按内容哈希。
+    // - `config_revisions`：每层一份**全量配置 JSON**（38 张配置表整块），保留最近 20 层。
+    //   存全量而不是 diff：回滚要「一键」，diff 回滚需要按顺序重放，任一环失败就是半套配置。
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS config_version (
+        id         INTEGER PRIMARY KEY CHECK (id = 1),
+        version    INTEGER NOT NULL DEFAULT 0,
+        updated_at INTEGER NOT NULL DEFAULT 0,
+        updated_by TEXT NOT NULL DEFAULT ''
+      );
+
+      CREATE TABLE IF NOT EXISTS config_revisions (
+        version     INTEGER PRIMARY KEY,
+        label       TEXT NOT NULL DEFAULT '',
+        payload     TEXT NOT NULL,
+        byte_size   INTEGER NOT NULL DEFAULT 0,
+        table_count INTEGER NOT NULL DEFAULT 0,
+        row_count   INTEGER NOT NULL DEFAULT 0,
+        created_by  TEXT NOT NULL DEFAULT '',
+        created_at  INTEGER NOT NULL
+      );
+    `);
+    this.db.exec("INSERT OR IGNORE INTO config_version (id, version, updated_at, updated_by) VALUES (1, 0, 0, '');");
     this.migrateLegacyMallPricing();
     this.ensureRoleNameUnique();
     this.ensureSuperAdmin();

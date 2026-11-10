@@ -3,6 +3,7 @@
 -- 只含配置表：账号 / 角色存档 / 审计日志 / 世界怪物实例不在这个文件里。
 -- 导入：make config-import（整表替换；账号与角色存档不受影响）
 -- 表 38 张 / 行 13774 条
+-- config-version: 0
 -- olua config snapshot v1
 -- tables: achievements,audio_settings,combat_weights,drop_tables,drugs,equip_aligns,equip_in_aligns,equipment_appearance,equipment_meta,equipment_slots,equipment_variants,equipments,fashions,growth_scalars,guide_settings,items,level_scrolls,mall_categories,mall_goods,map_collisions,map_npcs,map_spawn_areas,maps,money_items,monster_drops,monster_presentation,monster_skills,monsters,npcs,quests,ranks,role_level_curves,runtime_params,skills,souls,statuses,titles,ui_effects
 -- counts: achievements=24,audio_settings=12,combat_weights=7,drop_tables=5,drugs=11,equip_aligns=32,equip_in_aligns=31,equipment_appearance=1,equipment_meta=1,equipment_slots=13,equipment_variants=10275,equipments=685,fashions=20,growth_scalars=8,guide_settings=1,items=5,level_scrolls=7,mall_categories=1,mall_goods=1,map_collisions=1615,map_npcs=11,map_spawn_areas=62,maps=11,money_items=24,monster_drops=220,monster_presentation=220,monster_skills=3,monsters=220,npcs=21,quests=5,ranks=100,role_level_curves=24,runtime_params=1,skills=15,souls=37,statuses=4,titles=34,ui_effects=7

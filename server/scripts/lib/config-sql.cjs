@@ -35,6 +35,7 @@ const {
   FORMAT_TAG,
   RUNTIME_TABLES,
   TABLES_LINE_PREFIX,
+  VERSION_LINE_PREFIX,
   assertAllClassified,
 } = require("./config-tables.cjs");
 
@@ -47,6 +48,23 @@ const BACKUP_DIR = path.join("data", "backups");
 /** 标识符加双引号（表名 / 列名；值一律用 tooling.quoteSqlString） */
 function quoteIdent(name) {
   return `"${String(name).replace(/"/g, '""')}"`;
+}
+
+/**
+ * 库里的配置版本号（#883）
+ *
+ * 表不存在（更早的库 / 只读副本）就是 0 —— 导入校验拿它跟文件头比，
+ * 0 表示「这个库一次都还没改过」，任何文件都能导进来。
+ */
+function readVersion(db) {
+  const exists =
+    Number(
+      db
+        .prepare("SELECT COUNT(1) AS total FROM sqlite_master WHERE type = 'table' AND name = 'config_version'")
+        .get().total ?? 0,
+    ) > 0;
+  if (!exists) return 0;
+  return Number(db.prepare("SELECT version FROM config_version WHERE id = 1").get()?.version ?? 0);
 }
 
 /**
@@ -108,6 +126,7 @@ function build(dbPath, options = {}) {
     // 先做分类校验：有未归类的表就直接炸，不要「导一半」
     const { config } = assertAllClassified(actualTables, { config: configTables });
 
+    const version = readVersion(db);
     const sections = [];
     let totalRows = 0;
     const rowCounts = [];
@@ -144,6 +163,8 @@ function build(dbPath, options = {}) {
       "-- 只含配置表：账号 / 角色存档 / 审计日志 / 世界怪物实例不在这个文件里。",
       "-- 导入：make config-import（整表替换；账号与角色存档不受影响）",
       `-- 表 ${config.length} 张 / 行 ${totalRows} 条`,
+      // 配置版本（#883）：导入时拿它跟目标库比，**文件比库旧就拒绝**（见 checkImportVersion）
+      VERSION_LINE_PREFIX + version,
       FORMAT_TAG,
       TABLES_LINE_PREFIX + config.join(","),
       `-- counts: ${rowCounts.join(",")}`,
@@ -154,13 +175,13 @@ function build(dbPath, options = {}) {
     ].join("\n");
 
     const sql = `${header}${sections.join("\n")}COMMIT;\n`;
-    return { sql, stats: { tables: config.length, rows: totalRows } };
+    return { sql, stats: { tables: config.length, rows: totalRows, version } };
   } finally {
     db.close();
   }
 }
 
-/** 读文件头里的格式标记与表清单 */
+/** 读文件头里的格式标记、表清单与配置版本 */
 function parseMeta(text) {
   const lines = text.split("\n");
   const tag = lines.some((line) => line.trim() === FORMAT_TAG) ? FORMAT_TAG : null;
@@ -172,7 +193,40 @@ function parseMeta(text) {
         .map((name) => name.trim())
         .filter(Boolean)
     : [];
-  return { tag, tables };
+  const versionLine = lines.find((line) => line.startsWith(VERSION_LINE_PREFIX));
+  // 老文件没有这一行 → null（validate 会拒，提示重导；不在这里编一个 0 出来）
+  const version = versionLine ? Number(versionLine.slice(VERSION_LINE_PREFIX.length).trim()) : null;
+  return { tag, tables, version };
+}
+
+/**
+ * 导入前的版本闸（#883）
+ *
+ * 语义只有一条：**文件比库旧就拒绝**。
+ * - 相等 / 更新 → 放行（更新表示对方改过配置，跟上是正常同步）；
+ * - 更旧 → 拒绝，因为导入是整表替换，会把库里更新的那几次改动一起抹掉
+ *   （「两机互导」里第二次就会撞上这条）。
+ *
+ * 为什么不是「相等才放行」：新机器的库是 0 版，别人导出的文件是 42 版 —— 那是最常见的
+ * 首次同步，卡在这里等于让所有人先手动垫版本号。
+ *
+ * @param {number} fileVersion 文件头里的版本
+ * @param {number} dbVersion 目标库当前版本
+ * @param {{force?: boolean}} [options] `--force` = 明确要回退
+ */
+function checkImportVersion(fileVersion, dbVersion, options = {}) {
+  if (options.force) return;
+  if (!Number.isInteger(fileVersion) || fileVersion < 0) {
+    throw new Error(`文件头里的配置版本不是合法整数（${VERSION_LINE_PREFIX}${fileVersion}）—— 重新导出一份。`);
+  }
+  if (fileVersion < dbVersion) {
+    throw new Error(
+      `文件比目标库旧：文件是第 ${fileVersion} 版，库里已经是第 ${dbVersion} 版。\n` +
+        `  导入是整表替换，这次会把库里的配置回退 ${dbVersion - fileVersion} 个版本。\n` +
+        `  要同步到最新：在改配置的那台机器上 make config-export，再传过来。\n` +
+        `  确认就是要回退：重跑并加 --force（回退会先留档，事后也能在管理端「配置版本」里回滚）。`,
+    );
+  }
 }
 
 /** 两份清单是否完全相同（不看顺序，但看数量 —— 少了多了都是问题） */
@@ -199,6 +253,11 @@ function validate(text, meta, tables = CONFIG_TABLES) {
   }
   if (meta.tables.length === 0) {
     throw new Error(`文件头缺少表清单（${TABLES_LINE_PREFIX}…），无法判断它是不是全量的。`);
+  }
+  if (!Number.isInteger(meta.version) || meta.version < 0) {
+    throw new Error(
+      `文件头缺少配置版本（${VERSION_LINE_PREFIX}<数字>）—— 这份文件是旧版工具导出的，重新跑一次 make config-export。`,
+    );
   }
   if (!sameTableSet(meta.tables, tables)) {
     const declared = new Set(meta.tables);
@@ -248,8 +307,12 @@ function validate(text, meta, tables = CONFIG_TABLES) {
  */
 function compare(expectedSql, actualText) {
   if (expectedSql === actualText) return null;
-  const expected = expectedSql.split("\n");
-  const actual = actualText.split("\n");
+  // 版本行是元信息不是内容：两台机器的计数天然不同，剔掉再比（换成空行保持行号不变）
+  const expectedText = stripVersionLine(expectedSql);
+  const actualClean = stripVersionLine(actualText);
+  if (expectedText === actualClean) return null;
+  const expected = expectedText.split("\n");
+  const actual = actualClean.split("\n");
 
   let index = 0;
   while (index < expected.length && index < actual.length && expected[index] === actual[index]) index += 1;
@@ -265,6 +328,14 @@ function compare(expectedSql, actualText) {
   }
 
   return { firstLine: index + 1, section, expectedLines: expected.length, actualLines: actual.length };
+}
+
+/** 把版本行换成空行（保持行号，比较时不比版本） */
+function stripVersionLine(text) {
+  return text
+    .split("\n")
+    .map((line) => (line.startsWith(VERSION_LINE_PREFIX) ? "" : line))
+    .join("\n");
 }
 
 /** 先写临时文件再 rename：中途失败不会留下半截文件被误提交 */
@@ -291,11 +362,14 @@ module.exports = {
   DEFAULT_FILE,
   backupPathForImport,
   build,
+  checkImportVersion,
   compare,
   listTables,
   parseMeta,
   quoteIdent,
+  readVersion,
   resolveSqlPath,
+  stripVersionLine,
   validate,
   writeAtomic,
 };

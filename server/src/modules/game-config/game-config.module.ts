@@ -1,4 +1,5 @@
 import { Module } from "@nestjs/common";
+import { APP_INTERCEPTOR } from "@nestjs/core";
 import { MapModule } from "../map/map.module";
 import { UiEffectModule } from "../ui-effect/ui-effect.module";
 import { AudioSettingModule } from "../audio-setting/audio-setting.module";
@@ -7,6 +8,10 @@ import { AdminGameDataController } from "./admin-game-data.controller";
 import { AdminDropController } from "./admin-drop.controller";
 import { ClientConfigController } from "./client-config.controller";
 import { ClientConfigService } from "./client-config.service";
+import { AdminConfigController } from "./admin-config.controller";
+import { ConfigRevisionService } from "./config-revision.service";
+import { ConfigVersionInterceptor } from "./config-version.interceptor";
+import { ConfigVersionService } from "./config-version.service";
 import { AdminDrugController } from "./admin-drug.controller";
 import { AdminEquipmentController, AdminEquipmentVariantController } from "./admin-equipment.controller";
 import { AdminEquipmentRulesController } from "./admin-equipment-rules.controller";
@@ -56,8 +61,12 @@ import { EquipmentAppearanceService } from "./equipment-appearance.service";
   // 特效（#594 升级特效 / #634 掉落光效）：配置快照要下发它（客户端特效按服务端参数演）
   // 音效（#683）：配置快照要下发它（客户端按 key 播 / 不播）—— 只借它的 service，不借控制器
   imports: [MapModule, UiEffectModule, AudioSettingModule],
-  controllers: [AdminAchievementController, AdminTitleController, AdminSoulController, AdminRankController, AdminSkillController, AdminStatusController, AdminEquipmentController, AdminEquipmentVariantController, AdminEquipmentRulesController, AdminEquipAlignController, AdminEquipInAlignController, AdminDrugController, AdminItemController, AdminMoneyItemController, AdminLevelScrollController, AdminMonsterController, AdminNpcController, AdminQuestController, AdminMallController, AdminFashionController, AdminDropController, AdminLevelCurveController, AdminGrowthScalarController, ClientConfigController, AdminRuntimeParamsController, AdminCombatWeightsController, AdminGuideController, AdminEquipmentBorderController, AdminEquipmentBackgroundController, AdminGameDataController],
-  providers: [GameConfigService, EquipmentAppearanceService, EquipAlignService, EquipInAlignService, DropConfigService, GrowthConfigService, MallPricingService, ClientConfigService, RuntimeConfigService, RuntimeParamsService, CombatWeightsService, GuideSettingsService],
+  controllers: [AdminAchievementController, AdminTitleController, AdminSoulController, AdminRankController, AdminSkillController, AdminStatusController, AdminEquipmentController, AdminEquipmentVariantController, AdminEquipmentRulesController, AdminEquipAlignController, AdminEquipInAlignController, AdminDrugController, AdminItemController, AdminMoneyItemController, AdminLevelScrollController, AdminMonsterController, AdminNpcController, AdminQuestController, AdminMallController, AdminFashionController, AdminDropController, AdminLevelCurveController, AdminGrowthScalarController, ClientConfigController, AdminRuntimeParamsController, AdminCombatWeightsController, AdminGuideController, AdminEquipmentBorderController, AdminEquipmentBackgroundController, AdminGameDataController, AdminConfigController],
+  providers: [GameConfigService, EquipmentAppearanceService, EquipAlignService, EquipInAlignService, DropConfigService, GrowthConfigService, MallPricingService, ClientConfigService, RuntimeConfigService, RuntimeParamsService, CombatWeightsService, GuideSettingsService, ConfigVersionService, ConfigRevisionService,
+    // 配置版本链（#881）：写接口成功后 +1 并落一层历史 —— **一处做**，不在 50 个 service 里写。
+    // 注册成全局拦截器（放在本模块是因为它要注入上面两个服务；GameConfigModule 在实时进程里也装载，
+    // 但拦截器只在 HTTP 请求链上跑，实时进程没有 HTTP 写接口，无副作用）
+    { provide: APP_INTERCEPTOR, useClass: ConfigVersionInterceptor }],
   // 商城购买收权（#304）：存档域（roles）读这里的成交价
   // 运行时参数（#605）：社交域（social）的帮会规则门槛要读同一份配置
   // 战斗力权重（#605）：不需要对外导出 —— 服务端结算经 `shared/runtime-overrides` 的覆盖层读，

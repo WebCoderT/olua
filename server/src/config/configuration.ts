@@ -448,6 +448,26 @@ export interface AppConfiguration {
   roleMaxPerAccount: number;
   //#endregion
 
+  //#region 配置版本链（#881 / #882）
+
+  /**
+   * 回滚历史保留层数（默认 20，`CONFIG_REVISION_RETAIN`）
+   *
+   * payload 是**全量配置 JSON**（38 张表），每层约几 MB —— 20 层 ≤ 100MB 是可接受的代价，
+   * 换来的是「一键回到 10 分钟前」不需要按 diff 顺序重放。
+   */
+  configRevisionRetain: number;
+
+  /**
+   * 同一操作人的连点合并窗口（毫秒，默认 10000，`CONFIG_REVISION_THROTTLE_MS`）
+   *
+   * 管理端「保存」按钮连点 8 次不该吃掉 8 层历史：窗口内同一人的多次写**合并成一层**
+   * （保留最新内容、沿用最新版本号）。跨人的改动从不合并 —— 合并会丢掉一方的 diff 归属。
+   * 压到 0 = 每次写都单独成层（e2e 用它验「一层一次改动」）。
+   */
+  configRevisionThrottleMs: number;
+  //#endregion
+
   //#region 排行榜（#400）
 
   /**
@@ -559,6 +579,9 @@ export default function configuration(): AppConfiguration {
     partySweepIntervalMs: Number(process.env.PARTY_SWEEP_INTERVAL_MS ?? 30000),
     partyMinLevel: Number(process.env.PARTY_MIN_LEVEL ?? PARTY_MIN_LEVEL_DEFAULT),
     roleMaxPerAccount: Number(process.env.ROLE_MAX_PER_ACCOUNT ?? ROLE_MAX_PER_ACCOUNT_DEFAULT),
+    // 配置版本链（#881 / #882）：回滚历史保留层数与「同一人连点合并」的节流窗
+    configRevisionRetain: Number(process.env.CONFIG_REVISION_RETAIN ?? 20),
+    configRevisionThrottleMs: Number(process.env.CONFIG_REVISION_THROTTLE_MS ?? 10 * 1000),
     leaderboardRefreshMs: Number(process.env.LEADERBOARD_REFRESH_MS ?? 60000),
     leaderboardTopN: Number(process.env.LEADERBOARD_TOP_N ?? 100),
   };

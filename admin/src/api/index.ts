@@ -56,6 +56,7 @@ export {
   runtimeParamsApi,
   combatWeightsApi,
   guideStepsApi,
+  configApi,
   equipmentBorderApi,
   equipmentBackgroundApi,
   gameDataApi,

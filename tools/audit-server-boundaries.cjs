@@ -186,6 +186,11 @@ const REPO_EDGES = {
   // 本轮还**没有**下发配置快照，所以也没有第二个模块连这张表 —— 客户端对接后
   // 若走 ClientConfigService 下发，那条边在这里补 "modules/game-config"
   "database/repositories/audio-setting.repository.ts": ["modules/audio-setting"],
+  // 配置版本链（#881 / #882）：`config_version` / `config_revisions` 两张运行时表 +
+  // **38 张配置表的整表 dump / 替换**。表名是数据（清单在 scripts/lib/config-tables.cjs），
+  // `DELETE FROM ?` 在 SQLite 里不成立 —— 只能运行期拼串，所以这段 SQL 必须在仓储里。
+  // 只有 game-config 摸它：写版本在拦截器（属该模块），回滚在 ConfigRevisionService。
+  "database/repositories/config-revision.repository.ts": ["modules/game-config"],
   // 注：音效配置进快照（#683）之后，game-config **没有**加进这一行 —— 它注入的是
   // AudioSettingService（AudioSettingModule 导出），不直接摸表。仓储边保持只有音效域，
   // 「谁能读这张表」与「谁能拿到配音效服务」是两件事，别把后者的便利当理由放开前者。
