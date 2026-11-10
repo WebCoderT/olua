@@ -107,7 +107,7 @@ test/e2e-blocks.cjs              屏蔽与举报专项（聊天与互见按 role
 test/e2e-party.cjs               队伍专项（邀请 / 权限 / 移交 / 屏蔽优先 / 经验分成）
 test/e2e-rank.cjs                排行榜专项（全服榜单）
 test/e2e-achievement.cjs         成就专项（累计 / 状态两种存储 / 背包满转邮件）
-test/e2e-game-mail.cjs           游戏内邮件专项（附件领取 / 拒删 / 一键领取到背包满 / 频道与两处投递）
+test/e2e-game-mail.cjs           游戏内邮件专项（领奖 / 拒删看金币经验附件 / 先标后发同事务 / 一键领取逐封容错 / 频道与两处投递；71 条断言）
 test/e2e-equip-align.cjs         装备对齐几何专项（#513）
 test/e2e-equip-in-align.cjs      装备内观几何专项（73 条断言，#523）
 ```
