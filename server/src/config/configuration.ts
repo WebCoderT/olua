@@ -1,5 +1,5 @@
 import { join } from "node:path";
-import { PARTY_MIN_LEVEL_DEFAULT } from "../common/constants/social";
+import { PARTY_EXP_SHARE_DISTANCE_DEFAULT, PARTY_MIN_LEVEL_DEFAULT } from "../common/constants/social";
 
 /** 内置的开发用 JWT 密钥（生产必须换掉；唯一出现处，比较也只用 `jwtSecretIsDefault`） */
 const DEFAULT_JWT_SECRET = "olua-dev-secret-please-change-me";
@@ -407,6 +407,9 @@ export interface AppConfiguration {
    */
   partyExpMateShare: number;
 
+  /** 队友分成的距离阈值（px，默认 800，#877）：距击杀点超过它的队友不分 */
+  partyExpShareDistance: number;
+
   /**
    * 队长离线接管阈值（毫秒，默认 300000 = 5 分钟，#875）
    *
@@ -537,6 +540,7 @@ export default function configuration(): AppConfiguration {
     partyMemberLimit: Number(process.env.PARTY_MEMBER_LIMIT ?? 4),
     partyInviteTtlMs: Number(process.env.PARTY_INVITE_TTL_MS ?? 30000),
     partyExpMateShare: Number(process.env.PARTY_EXP_MATE_SHARE ?? 0.5),
+    partyExpShareDistance: Number(process.env.PARTY_EXP_SHARE_DISTANCE ?? PARTY_EXP_SHARE_DISTANCE_DEFAULT),
     partyLeaderOfflineMs: Number(process.env.PARTY_LEADER_OFFLINE_MS ?? 300000),
     partySweepIntervalMs: Number(process.env.PARTY_SWEEP_INTERVAL_MS ?? 30000),
     partyMinLevel: Number(process.env.PARTY_MIN_LEVEL ?? PARTY_MIN_LEVEL_DEFAULT),

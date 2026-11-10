@@ -11,8 +11,9 @@
  * 六、解散：三方都收到空快照（客户端据此清面板与队标）
  * 七、屏蔽优先：他拉黑我 → 「不在线」（不说破）；我拉黑他 → 明说先解除（50130）
  * 八、互见帧带 partyId：组队立刻反映到别人的屏幕上（队友金色名字 + 队标），解散后变回空串
- * 九、经验分成：击杀者全额（settle.reward）、同图队友 50%（expGain 帧 + revision）、
- *     异图队友与等级差过大的队友都分不到（没有帧）、击杀者自己不会收到 expGain
+ * 九、经验分成：击杀者全额（settle.reward）、同图贴身队友 50%（expGain 帧 + revision）、
+ *     异图队友 / **同图但距击杀点 > 800px 的队友**（#877）/ 等级差过大的队友都分不到（没有帧）、
+ *     击杀者自己不会收到 expGain
  * 十、上限脏值回落（直接 new 服务类验，不起第二台服务）+ 门槛脏值回落
  * 十一、等级门槛（#497）：默认 10 级下，低等级发起 / 邀请低等级目标都拒 50144，
  *      被拒的邀请不送达、够级的照常组队（独立进程 + 默认配置，主进程把门槛压成 1）
@@ -100,6 +101,14 @@ async function waitFor(label, probe, timeoutMs = 5_000) {
  *
  * 地图 1 放 4 只怪物 1（等级 1、maxHp 65），够经验分组连杀几次；
  * 地图 2 放 1 只，给「队友在另一张图」用。
+ *
+ * ⚠️ 必须在 `startServer` **之后**调用：空库首启会把出厂快照（含出厂刷怪区）整份灌进来
+ * （哨兵表是 `skills`，只建 map_spawn_areas 不算「跑过」），先插的行会被出厂区一起用上 ——
+ * 怪就从两个区域随机刷，A 打中的可能是出厂区边上的那只。所以这里先**清掉这两张图的
+ * 全部区域**再插测试自己的（#877 起分成有 800px 距离闸，怪落在哪直接决定断言真假）。
+ *
+ * 图 1 是 8192×8192；(1000, -4000) 这块空地距出厂的两个区域（y≈-704 与 y≈-7552）都 > 800，
+ * 图内坐标口径是 x∈[0,W]、y∈[-H,0]（#566）。
  */
 function seedSpawnAreas(dbPath) {
   const { DatabaseSync } = require("node:sqlite");
@@ -117,13 +126,18 @@ function seedSpawnAreas(dbPath) {
         h           REAL    NOT NULL,
         updated_at  INTEGER NOT NULL DEFAULT 0
       );`);
+  // 出厂区域整份清掉（图 1 / 2）：测试只认自己插的那几块，断言的坐标才可预测
+  db.exec("DELETE FROM map_spawn_areas WHERE map_id IN ('1', '2');");
   const insert = db.prepare(
     `INSERT INTO map_spawn_areas (map_id, name, monster_key, min, max, cx, cy, w, h, updated_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   );
   const now = Date.now();
-  insert.run("1", "赤焰斗鸡区", "1", 0, 4, 400, 400, 800, 800, now);
-  insert.run("2", "赤焰斗鸡区", "1", 0, 1, 100, 100, 200, 200, now);
+  // 图 1 的刷怪区压小压紧（#877 分成距离闸 800px）：怪刷在 (900..1100, -4100..-3900)，
+  // 贴身的 A/B/D/E 站 (980..1080, -4020..-3960) 距任何刷出点 ≤ 150px 稳分到；
+  // 远处的小号 F 站 (8000, -4000) 距任何点 > 800 稳分不到
+  insert.run("1", "赤焰斗鸡区", "1", 0, 4, 1000, -4000, 200, 200, now);
+  insert.run("2", "赤焰斗鸡区", "1", 0, 1, 640, -4096, 200, 200, now);
   db.close();
 }
 
@@ -319,61 +333,67 @@ function snap(snapshot) {
 
 (async () => {
   const dbPath = path.join(os.tmpdir(), `olua-e2e-party-${Date.now()}.db`);
-  seedSpawnAreas(dbPath);
   const server = await startServer(dbPath, {
     // 组队门槛压到 1（#497）：本套的队伍动作全用 **1 级角色** —— 因为经验分成那组要
     // 「1 级打 1 级怪」才凑得出等级差 0 的干净数值。门槛留在默认 10 会让 79 条全变成
     // 「等级不足」。门槛本身（默认 10）由第十一组用**独立进程 + 默认配置**验。
     PARTY_MIN_LEVEL: "1",
   });
+  // 刷怪区必须在服务起来之后灌（见 seedSpawnAreas 注释）：空库首启会把出厂区域一起带进来
+  seedSpawnAreas(dbPath);
   try {
     const { baseUrl } = server;
     const wsBase = baseUrl.replace("http", "ws");
 
-    //#region 准备：五个账号（A/B/D/E 同图 1，C 在图的 2）
+    //#region 准备：六个账号（A/B/D/E/F 同图 1，C 在图的 2；F 站地图另一头）
 
-    group("准备：五个账号（A/B/D/E 同图 1，C 在图的 2）");
+    group("准备：六个账号（A/B/D/E 同图 1，F 同图但站远处，C 在图的 2）");
     const A = await preparePlayer(baseUrl, "party_player_a", "甲队长");
     const B = await preparePlayer(baseUrl, "party_player_b", "乙队友");
     const C = await preparePlayer(baseUrl, "party_player_c", "丙异图");
     const D = await preparePlayer(baseUrl, "party_player_d", "丁外人");
     // E 用「等级差过大」这个身份：怪物 1 是 1 级，差 11 ≥ maxLevelGap(6) → 队友基数为 0
     const E = await preparePlayer(baseUrl, "party_player_e", "戊高级", 12);
-    check(!!(A.token && B.token && C.token && D.token && E.token), "五个账号都注册并建好在线角色");
+    // F 用「同图但距击杀点太远」这个身份（#877 分成距离闸的靶子）
+    const F = await preparePlayer(baseUrl, "party_player_f", "己挂机");
+    check(!!(A.token && B.token && C.token && D.token && E.token && F.token), "六个账号都注册并建好在线角色");
 
     const tickets = await Promise.all(
-      [A, B, C, D, E].map((player) => api(baseUrl, "POST", "realtime/ticket", { token: player.token })),
+      [A, B, C, D, E, F].map((player) => api(baseUrl, "POST", "realtime/ticket", { token: player.token })),
     );
-    check(tickets.every((ticket) => ticket.data && ticket.data.ticket), "五个账号都取到实时票据");
-    const [sA, sB, sC, sD, sE] = tickets.map((ticket) => connect(`${wsBase}/api/realtime?ticket=${encodeURIComponent(ticket.data.ticket)}`));
+    check(tickets.every((ticket) => ticket.data && ticket.data.ticket), "六个账号都取到实时票据");
+    const [sA, sB, sC, sD, sE, sF] = tickets.map((ticket) => connect(`${wsBase}/api/realtime?ticket=${encodeURIComponent(ticket.data.ticket)}`));
     const welcomed = await waitFor(
-      "五条连接都收到 welcome",
-      async () => ([sA, sB, sC, sD, sE].every((session) => session.welcomes.length > 0) ? true : null),
+      "六条连接都收到 welcome",
+      async () => ([sA, sB, sC, sD, sE, sF].every((session) => session.welcomes.length > 0) ? true : null),
     );
-    check(!!welcomed, "五条实时连接都握手成功");
+    check(!!welcomed, "六条实时连接都握手成功");
 
-    // 进图 + 位置上报：队伍的身份（角色 / 地图）与「在线」都来自在场表
+    // 进图 + 位置上报：队伍的身份（角色 / 地图）与「在线」都来自在场表。
+    // A/B/D/E 挤在刷怪区旁（怪刷在 900..1100, -4100..-3900）；F 站 (8000,-4000) —— 距任何刷出点都 > 800
     sA.send("worldJoin", { mapId: "1" });
-    sA.send("pos", { mapId: "1", x: 100, y: 200, hp: 100, moving: false });
+    sA.send("pos", { mapId: "1", x: 980, y: -4020, hp: 100, moving: false });
     sB.send("worldJoin", { mapId: "1" });
-    sB.send("pos", { mapId: "1", x: 140, y: 200, hp: 100, moving: false });
+    sB.send("pos", { mapId: "1", x: 1020, y: -4000, hp: 100, moving: false });
     sD.send("worldJoin", { mapId: "1" });
-    sD.send("pos", { mapId: "1", x: 180, y: 200, hp: 100, moving: false });
+    sD.send("pos", { mapId: "1", x: 1060, y: -3980, hp: 100, moving: false });
     sE.send("worldJoin", { mapId: "1" });
-    sE.send("pos", { mapId: "1", x: 220, y: 200, hp: 100, moving: false });
+    sE.send("pos", { mapId: "1", x: 1080, y: -3960, hp: 100, moving: false });
+    sF.send("worldJoin", { mapId: "1" });
+    sF.send("pos", { mapId: "1", x: 8000, y: -4000, hp: 100, moving: false });
     sC.send("worldJoin", { mapId: "2" });
-    sC.send("pos", { mapId: "2", x: 100, y: 200, hp: 100, moving: false });
-    const joined = await waitFor("五个会话都拿到所在图的权威快照", async () =>
-      sA.worlds > 0 && sB.worlds > 0 && sC.worlds > 0 && sD.worlds > 0 && sE.worlds > 0 ? true : null,
+    sC.send("pos", { mapId: "2", x: 640, y: -4096, hp: 100, moving: false });
+    const joined = await waitFor("六个会话都拿到所在图的权威快照", async () =>
+      sA.worlds > 0 && sB.worlds > 0 && sC.worlds > 0 && sD.worlds > 0 && sE.worlds > 0 && sF.worlds > 0 ? true : null,
     );
-    check(!!joined, "五个会话都拿到了所在图的权威快照");
+    check(!!joined, "六个会话都拿到了所在图的权威快照");
 
     // 进图补一份空快照（#399）：客户端一进游戏就知道「我在不在队伍里」，不需要额外拉一次
     const baseline = await waitFor("每人进图后都收到一份队伍快照", async () =>
-      [sA, sB, sC, sD, sE].every((session) => session.party !== null) ? true : null,
+      [sA, sB, sC, sD, sE, sF].every((session) => session.party !== null) ? true : null,
     );
     check(
-      !!baseline && [sA, sB, sC, sD, sE].every((session) => session.party.partyId === "" && session.party.members.length === 0),
+      !!baseline && [sA, sB, sC, sD, sE, sF].every((session) => session.party.partyId === "" && session.party.members.length === 0),
       "进图后的首份快照是「没有队伍」（空 partyId + 空成员）",
       [sA, sB, sC, sD, sE].map((session) => snap(session.party)).join(" | "),
     );
@@ -615,8 +635,8 @@ function snap(snapshot) {
 
     //#region 九、经验分成
 
-    group("九、经验分成：击杀者全额、同图队友 50%、异图与等级差过大的分不到");
-    // 队伍：A（击杀者，1 级）+ B（同图，1 级）+ C（异图，1 级）
+    group("九、经验分成：击杀者全额、同图贴身队友 50%、异图 / 远处 / 等级差过大的分不到");
+    // 队伍：A（击杀者，1 级）+ B（同图贴身，1 级）+ C（异图，1 级）+ F（同图远处，1 级）
     // 邀请与同意是两条独立连接上的帧：**跨连接的到达顺序没有保证**，
     // 所以每次同意前都要先等到邀请真的到了（后面几条同理）
     sA.partyAction("invite", B.roleId);
@@ -628,7 +648,7 @@ function snap(snapshot) {
     const expInviteC = await waitInvite(sC, "C 收到异图的邀请");
     check(!!expInviteC, "C 收到组队邀请（异图那一位）");
     const expC = await expectSnapshot(sC, () => sC.partyAction("accept"), "C 入队（异图）");
-    check(!!expC && expC.members.length === 3, "经验组：C 入队后 3 人（A/B 同图、C 在另一张图）", snap(expC));
+    check(!!expC && expC.members.length === 3, "经验组：C 入队后 3 人（A/B 同图、C 在另一张图）—— 本套上限压成 3，F 用独立小队验", snap(expC));
 
     // 队友的角色修订号基线（那笔入账要比它大 1）
     const bBefore = await api(baseUrl, "GET", `roles/${B.roleId}`, { token: B.token });
@@ -685,6 +705,27 @@ function snap(snapshot) {
       !sA.expGains.some((gain) => gain.from.roleId === A.roleId),
       "击杀者自己不会收到 expGain（settle 里已经带了 reward，两条路会重复加经验）",
     );
+
+    // 距离闸（#877）：A 与 F 组独立小队，F 同图但站 (4000,4000)，距任何刷出点 > 800
+    sA.partyAction("disband");
+    await waitFor("A 解散第一队", async () => (sA.party && sA.party.partyId === "" ? true : null));
+    sA.partyAction("invite", F.roleId);
+    const distInviteF = await waitInvite(sF, "F 收到距离组的邀请");
+    check(!!distInviteF, "F 收到组队邀请（距离组）");
+    const distF = await expectSnapshot(sF, () => sF.partyAction("accept"), "F 入队（距离组）");
+    check(!!distF && distF.members.length === 2, "A 与 F 组成 2 人队（F 同图但站远处）", snap(distF));
+    const fMark = sF.expGains.length;
+    worldMark = sA.worldFrames.length;
+    sA.send("worldJoin", { mapId: "1" });
+    const worldDist = await waitFor("A 的距离组 world 快照", async () =>
+      sA.worldFrames.length > worldMark ? sA.worldFrames[sA.worldFrames.length - 1] : null,
+    );
+    const mobDist = worldDist && worldDist.monsters.find((monster) => monster.alive);
+    check(!!mobDist, "距离组还有活着的怪物可打", mobDist && mobDist.instanceId);
+    const killDist = await kill(sA, mobDist);
+    check(!!killDist && !!killDist.reward && killDist.reward.exp > 0, "距离组：击杀者照旧拿到经验");
+    await sleep(300);
+    checkEqual(sF.expGains.length, fMark, "同图但距击杀点 > 800px 的队友一条 expGain 都没有（#877：城里挂机小号白拿经验的路断了）");
 
     // 等级差过大：E 是 12 级，对 1 级怪的基数是 0，乘任何比例还是 0
     await api(baseUrl, "DELETE", `social/blocks/${E.roleId}`, { token: A.token });

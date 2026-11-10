@@ -174,6 +174,15 @@ export const PARTY_INVITE_TTL_MS_DEFAULT = 30_000;
 export const PARTY_EXP_MATE_SHARE_DEFAULT = 0.5;
 
 /**
+ * 队友分成的距离阈值（默认 800px；可用 `PARTY_EXP_SHARE_DISTANCE` 覆盖，#877）
+ *
+ * 队友距**击杀点**超过这个距离就不分：同图还不够——图很大，站地图另一头的小号
+ * 「同图在线」但不参与战斗，白拿一半经验就是多开挂机的温床。800 ≈ 屏幕两屏宽，
+ * 站在附近跟着打的队友不受影响，挂机在城里的小号一分不得。
+ */
+export const PARTY_EXP_SHARE_DISTANCE_DEFAULT = 800;
+
+/**
  * 组队的最低等级（默认 10；可用 `PARTY_MIN_LEVEL` 覆盖）
  *
  * **这也是客户端底部导航「组队」入口的解锁等级**（`client/assets/configs/bottomNav.ts`
