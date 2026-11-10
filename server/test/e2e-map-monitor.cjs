@@ -30,6 +30,8 @@
  * 7. **裁剪**：事件不会无限长（保留条数来自环境变量，本套调到 3 以便快速看见）；
  * 8. **采集会停**：最后一个观看者离开后不再采样，`staleMs` 持续增长 —— 这就是页面上
  *    「采集已停 / 最后采样 N 秒前」的来源。**陈旧必须可观测**，否则停更会被读成「图里什么都没有」。
+ * 8.5 **时间闸（#887）**：往一张「再没人进的图」里塞 8 天前的行，时间闸自己把它的删掉；
+ *    3 天前的行一动不动。这一条与「有没有人在写」无关，是条数闸（只在写入时跑）管不到的那半。
  *
  * 另外钉住权限（无令牌 401、观察员可读）与文档契约（operationId / 权限点 / DTO 字段）。
  *
@@ -53,6 +55,14 @@ const SERVER_DIR = path.join(__dirname, "..");
 const ENTRY = path.join(SERVER_DIR, "dist", "main.js");
 const ADMIN_CODE = "monitor-code";
 const KEEP = 3;
+/**
+ * 时间闸（#887）的保留期与扫描间隔
+ *
+ * 保留期用**默认的 7 天**（不为了测试改口径），靠「把行的时间戳造到 8 天前」来触发；
+ * 扫描间隔调到 200ms，一条断言不用等 6 小时。
+ */
+const RETENTION_DAYS = 7;
+const PRUNE_MS = 200;
 
 //#region 断言小工具（与 e2e-world 同款口径）
 
@@ -136,6 +146,31 @@ function countEvents(dbPath, mapId) {
   return Number(row?.total ?? 0);
 }
 
+/**
+ * 直接往库里塞几行「某张死图的历史事件」（#887 的时间闸要用）
+ *
+ * 为什么绕过服务写：时间闸要验的是「**没有人再往这张图写东西时**，旧行也会到点消失」——
+ * 走接口造数据就等于证明不了这一条。`at` 由调用方给，好造出「8 天前」。
+ */
+function insertEventsAt(dbPath, zoneId, mapId, count, at) {
+  const { DatabaseSync } = require("node:sqlite");
+  const db = new DatabaseSync(dbPath);
+  const insert = db.prepare("INSERT INTO map_monitor_events (zone_id, map_id, at, kind, payload) VALUES (?, ?, ?, ?, ?)");
+  for (let index = 0; index < count; index += 1) {
+    insert.run(zoneId, mapId, at + index, "kill", JSON.stringify({ kind: "kill", at: at + index, label: "历史的" }));
+  }
+  db.close();
+}
+
+/** 某张表上有没有这条索引（时间闸靠它不全表扫，属于「建了没有」的事实检查） */
+function hasIndex(dbPath, name) {
+  const { DatabaseSync } = require("node:sqlite");
+  const db = new DatabaseSync(dbPath);
+  const row = db.prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND name = ?").get(name);
+  db.close();
+  return Boolean(row);
+}
+
 async function startServer(dbPath) {
   const port = await freePort();
   const baseUrl = `http://127.0.0.1:${port}`;
@@ -155,6 +190,8 @@ async function startServer(dbPath) {
       MAP_MONITOR_MS: "150",
       MAP_MONITOR_EVENT_KEEP: String(KEEP),
       MAP_MONITOR_TRIM_EVERY: "1",
+      MAP_MONITOR_RETENTION_DAYS: String(RETENTION_DAYS),
+      MAP_MONITOR_PRUNE_MS: String(PRUNE_MS),
       WORLD_TICK_MS: "300",
       WORLD_PERSIST_MS: "500",
       WORLD_RESPAWN_MS: "1200",
@@ -670,6 +707,36 @@ async function main() {
     );
     check(secondIdle.body?.data?.sampledAt === firstIdle.body?.data?.sampledAt, "停更期间快照内容不变（不是被清空）");
     check((secondIdle.body?.data?.monsters ?? []).length > 0, "停更也照原样给最后一帧的怪（页面画的是「最后看到的画面」）");
+
+    //#endregion
+
+    //#region 八·五、时间闸（#887）
+
+    group("八·五、时间闸：死图的历史事件到点就走，不靠有人来往里写");
+
+    check(hasIndex(dbPath, "idx_map_monitor_events_at"), "at 上有单列索引（时间闸不必全表扫）");
+
+    const dayMs = 24 * 60 * 60 * 1000;
+    // 99 号图 = 一张「从此没人进」的死图：8 天前攒下的 3 条，之后再没有任何人往里写 ——
+    // 这正是条数闸管不住的场景（它只在写入时跑）
+    insertEventsAt(dbPath, 1, "99", 3, Date.now() - (RETENTION_DAYS + 1) * dayMs);
+    // 98 号图 = 还在保留期内（3 天前）的对照：时间闸不该碰它
+    insertEventsAt(dbPath, 1, "98", 2, Date.now() - 3 * dayMs);
+    check(countEvents(dbPath, "99") === 3, "准备：死图上塞了 3 条 8 天前的记录", `实际 ${countEvents(dbPath, "99")}`);
+    check(countEvents(dbPath, "98") === 2, "准备：对照图上塞了 2 条 3 天前的记录", `实际 ${countEvents(dbPath, "98")}`);
+
+    await waitFor("时间闸扫到并删掉过期行", async () => (countEvents(dbPath, "99") === 0 ? true : null), 5_000);
+    check(
+      countEvents(dbPath, "99") === 0,
+      `超过 ${RETENTION_DAYS} 天的记录被删掉（这张图再没人进、再没人写也一样）`,
+      `实际 ${countEvents(dbPath, "99")}`,
+    );
+    check(countEvents(dbPath, "98") === 2, "保留期内的记录一动不动", `实际 ${countEvents(dbPath, "98")}`);
+    check(
+      countEvents(dbPath, "1") > 0,
+      "图 1 当前的事件还在 —— 时间闸按时间判，不按图判，不误伤新数据",
+      `实际 ${countEvents(dbPath, "1")}`,
+    );
 
     //#endregion
 

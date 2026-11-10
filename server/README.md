@@ -70,6 +70,7 @@ npm run dev              # 开发（ts-node 热启动）；npm run build && npm 
 | `npm run test:e2e:map` | 地图管理专项（122 条；**玩法配置可改 / 资源本体不可改** / 两套坐标对账 / 无新建·删除 / 权限与文档契约） |
 | `npm run test:e2e:config-version` | 配置版本链专项（57 条；#881/#882/#883：快照 ETag→304 / 按版本缓存 / 写配置 +1 且公告不 +1 / 节流与跨人不合并 / 回滚单事务且历史不删 / 保留 20 层 / 版本行与导入闸） |
 | `npm run test:e2e:event-log` | 玩家行为流水与审计补口专项（121 条；#884 注册留痕含两种失败 / #885 批量逐条明细 / #886 八类事件落库与三种筛选 + 十类字典 + 日志表故障不影响主流程） |
+| `npm run test:e2e:map-monitor` | 实时地图监控专项（135 条；#665 采样投影 / #745 精细日志四类 / #887 时间闸（死图的历史事件到点就走，落点由行的时间戳决定，不经服务写入）） |
 | `npm run db:backup` | 备份数据文件（`VACUUM INTO`，服务运行中也能备） |
 | `npm run db:restore` | 从备份恢复（带「服务可能在跑」检测与旧库留档） |
 | `npm run config:export` | **把当前库的配置表覆盖写入 `data/config-sync.sql`**（提交它 = 同步给别人） |
@@ -77,7 +78,7 @@ npm run dev              # 开发（ts-node 热启动）；npm run build && npm 
 | `npm run config:check` | 检查快照是否落后于当前库（落后时退出码 1） |
 | `npm run test:config-sync` | 配置快照导出 / 导入测试（不起服务） |
 | `npm run verify:api` | `swagger:emit` + 生成物一致性审计 |
-| `npm run verify` | 本地串行全验：编译 + e2e（1 主套 + 35 专项，链里手写） + 生成物审计。**`package.json` 里共 1 主套 + 54 专项** —— 没进这条链的那些由 CI 分片跑（分片清单派生自 `package.json`，新增自动进 CI） |
+| `npm run verify` | 本地串行全验：编译 + e2e（1 主套 + 37 专项，链里手写） + 生成物审计。**`package.json` 里共 1 主套 + 55 专项** —— 没进这条链的那些由 CI 分片跑（分片清单派生自 `package.json`，新增自动进 CI） |
 
 > 仓库根的 `make` 是这些脚本的快捷方式：`make server-dev` / `make server-verify` /
 > `make gen-api` / `make server-e2e-guard` 等，`make help` 看全部。
@@ -109,6 +110,8 @@ npm run dev              # 开发（ts-node 热启动）；npm run build && npm 
 | `AUDIT_LOG_MAX_ROWS` | `20000` | 操作日志保留上限（超出自动清最旧；`0` = 不清理） |
 | `EVENT_LOG_MAX_ROWS` | `100000` | 玩家行为流水保留上限（#886；超出自动清最旧，`0` = 不清理。这张表比审计写得快，所以上限默认高一个量级） |
 | `EVENT_LOG_RETENTION_DAYS` | `30` | 玩家行为流水保留天数（#886；与条数上限两道独立闸） |
+| `MAP_MONITOR_RETENTION_DAYS` | `7` | 地图监控文字流的时间闸（#887；按 `at` 删，与有没有人在看 / 有没有人在写无关。`0` = 关闭，只按每图条数裁剪） |
+| `MAP_MONITOR_PRUNE_MS` | `21600000` | 时间闸扫描间隔（#887，6 小时；独立定时器，启动时也补跑一次） |
 | `CONFIG_REVISION_RETAIN` | `20` | 配置回滚历史保留层数（#882，每层是一份全量 38 表 JSON；先删最老再插新） |
 | `CONFIG_REVISION_THROTTLE_MS` | `10000` | 同一操作人的连续写在这一窗口内合并成一层（#882；跨人从不合并，回滚自身不参与节流） |
 | `MAIL_RETENTION_DAYS` | `90` | 投递记录保留天数（早于该天数的自动清理；`0` = 不按时间清理） |

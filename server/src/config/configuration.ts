@@ -344,6 +344,23 @@ export interface AppConfiguration {
   mapMonitorEventKeep: number;
   /** 攒够多少条新事件才裁一次旧记录（每杀一只都 DELETE 会让 WAL 白涨；细粒度日志同理） */
   mapMonitorTrimEvery: number;
+  /**
+   * 文字事件的**时间**保留期（天；#887）
+   *
+   * 条数上限（`mapMonitorEventKeep`）只在**写入时**触发裁剪，它管不住一种情况：某张图
+   * 从此没人进，那 2000 条就永远躺在库里 —— 没有人在写，也就没有人去裁。所以再加一道
+   * 时间闸，按 `at` 删除，与图有没有人看无关。
+   *
+   * 两道闸**取先到**：条数闸保活跃图不无限长，时间闸保死图不会永远占着库。
+   */
+  mapMonitorRetentionDays: number;
+  /**
+   * 时间闸多久扫一次（毫秒；默认 6 小时）
+   *
+   * 独立定时器，不挂在采样上：采样循环只遍历「有人看的图」，全服没人时一次都不进循环，
+   * 挂在它里面就等于「没人玩时永远不清」。
+   */
+  mapMonitorPruneMs: number;
   //#endregion
 
   //#region 社交（#388：帮会 / #389：好友与敌人）
@@ -578,6 +595,8 @@ export default function configuration(): AppConfiguration {
     mapMonitorMs: Number(process.env.MAP_MONITOR_MS ?? 1000),
     mapMonitorEventKeep: Number(process.env.MAP_MONITOR_EVENT_KEEP ?? 2000),
     mapMonitorTrimEvery: Number(process.env.MAP_MONITOR_TRIM_EVERY ?? 100),
+    mapMonitorRetentionDays: Number(process.env.MAP_MONITOR_RETENTION_DAYS ?? 7),
+    mapMonitorPruneMs: Number(process.env.MAP_MONITOR_PRUNE_MS ?? 6 * 60 * 60 * 1000),
     guildMemberLimit: Number(process.env.GUILD_MEMBER_LIMIT ?? 50),
     guildApplicationLimitPerGuild: Number(process.env.GUILD_APPLICATION_LIMIT_PER_GUILD ?? 50),
     guildApplicationLimitPerRole: Number(process.env.GUILD_APPLICATION_LIMIT_PER_ROLE ?? 5),
