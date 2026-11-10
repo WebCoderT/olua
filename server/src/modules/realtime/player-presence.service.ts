@@ -82,8 +82,9 @@ const POS_TRUST_STREAK = 2;
  * ===========================================================================
  * 服务端做什么
  * ===========================================================================
- * 维护一张「谁在哪」的在场表（数据来自客户端的 `pos` 帧，与怪物 AI 共用同一输入、
- * 各自持有 —— AI 关心的是目标检测，这里关心的是转发；字段语义不同，不共表）：
+ * 维护一张「谁在哪」的在场表（数据来自客户端的 `pos` 帧），**它是位置的唯一副本**：
+ * 怪物 AI 的索敌 / 追击直接读这张表（#855 —— AI 曾经自己存过一份原始坐标，一份 `pos`
+ * 骗两边的洞就出在那儿）。这里负责仲裁与转发，AI 只读，谁也不许再存第二份：
  * - **增量广播**：按 `PLAYER_SYNC_BROADCAST_MS` 节流，只发「位置 / 移动标记 / 血量变了」
  *   的玩家，按观看者集合发给同图的人 —— 与 monster-ai 帧同一套分发模式；
  * - **快照兜底**：worldJoin 应答之后立刻发给刚进图的连接一份全量（`full = true`），
@@ -379,10 +380,50 @@ export class PlayerPresenceService implements OnApplicationBootstrap, OnApplicat
    * 坐标是客户端自报 + 最小仲裁（#596）的结果，**不是权威**：谎报仍可绕过距离闸，
    * 那是 #811（位置源收口）要解决的事，这里的职责只是「明显不合理的拒绝掉」。
    */
-  positionOf(accountId: string): { zoneId: number; mapId: string; x: number; y: number; at: number } | null {
+  positionOf(accountId: string): { zoneId: number; mapId: string; x: number; y: number; hp: number; at: number } | null {
     const entry = this.entries.get(accountId);
     if (!entry) return null;
-    return { zoneId: entry.zoneId, mapId: entry.mapId, x: entry.x, y: entry.y, at: entry.updatedAt };
+    return { zoneId: entry.zoneId, mapId: entry.mapId, x: entry.x, y: entry.y, hp: entry.hp, at: entry.updatedAt };
+  }
+
+  /**
+   * 一张图上「此刻还能当目标」的玩家（#855：怪物 AI 的目标候选**唯一来源**）
+   *
+   * 与 `playersOn`（#665 监控用）的三点差别，都是 AI 的语义而不是监控的：
+   * - 位置超时（`monsterAiPosStaleMs`，与 AI 的时效口径同一个配置键）的不算 ——
+   *   人可能已经掉线，怪不该对着一具「几秒前的位置」追；
+   * - 血量 <= 0 的不算 —— 尸体不该被选成目标（#670 的老问题）；
+   * - 不带名字与移动标记（AI 不用，省一次用户名查表）。
+   *
+   * 只读：不改在场表、不触发广播。
+   */
+  aiTargetsOn(zoneId: number, mapId: string): Array<{ accountId: string; x: number; y: number; hp: number; at: number }> {
+    const now = Date.now();
+    const staleMs = this.posStaleMs();
+    const rows: Array<{ accountId: string; x: number; y: number; hp: number; at: number }> = [];
+    for (const [accountId, entry] of this.entries) {
+      if (entry.zoneId !== zoneId || entry.mapId !== mapId) continue;
+      if (entry.hp <= 0) continue;
+      if (now - entry.updatedAt > staleMs) continue;
+      rows.push({ accountId, x: entry.x, y: entry.y, hp: entry.hp, at: entry.updatedAt });
+    }
+    return rows;
+  }
+
+  /**
+   * 回填一次**权威**血量（怪物打中玩家之后由 AI 调；#670 的目标作废判据）
+   *
+   * 为什么这一层可以写 hp：血量本来就有自己的权威链路（`RolesService.applyMonsterHit`
+   * 落账），在场表只是它的副本 —— 这里不仲裁任何东西，只是让副本立刻跟上权威值。
+   * 不写的话，怪物把玩家打到 0 血之后还要等客户端下一帧 `pos` 上报才「发现」人死了，
+   * 中间那几拍会继续对着尸体放技能（#670 复发）。
+   *
+   * 不刷新 `updatedAt`：这不是一次位置上报，不该让一个「位置其实已经超时」的人续命。
+   */
+  markHp(accountId: string, hp: number): void {
+    const entry = this.entries.get(accountId);
+    if (!entry) return;
+    entry.hp = Number.isFinite(hp) ? Math.max(0, hp) : 0;
   }
 
   /**

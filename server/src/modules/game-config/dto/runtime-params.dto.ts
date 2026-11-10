@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
-import { IsBoolean, IsInt, IsOptional, IsString, Max, Min, ValidateNested } from "class-validator";
+import { ArrayMaxSize, ArrayMinSize, IsArray, IsBoolean, IsInt, IsNumber, IsOptional, IsString, Max, Min, ValidateNested } from "class-validator";
 import { Type } from "class-transformer";
 
 /**
@@ -7,6 +7,9 @@ import { Type } from "class-transformer";
  *
  * 三个分组各自可**部分更新**（管理端一次只提交改动过的字段），共用一份出厂值
  * （`config-sync.sql`）——缺键回落出厂，所以加参数不用给存量库补列。
+ *
+ * 第四组**怪物 AI 参数**（#853 / #854）也在这个文件里，但走**另外两条接口**：
+ * 它是纯服务端手感，不下发客户端，见 `MonsterAiParamsDto` 上的说明。
  *
  * 取值域写在 DTO 上（单字段），跨字段约束（`nameMin ≤ nameMax`）在 service 里判，
  * 与成长曲线「DTO 管单字段、service 管跨行」同一分工。
@@ -354,6 +357,168 @@ export class UpdateGuildRuleParamsDto {
   @Min(0)
   @Max(500)
   applicationMessageMax?: number;
+}
+
+/**
+ * 怪物 AI 参数（`runtime_params.monster_ai` 列，**服务端消费，不下发客户端**）
+ *
+ * 单独一组、单独两条接口，而不是并进 `RuntimeParamsDto`：那个 DTO 就是客户端快照
+ * `runtimeParams` 段的形状，往里加东西等于「快照多一段」（DTO / snapshot / 客户端
+ * `game-config` / `configs-sandbox` 四处一起改）。AI 手感客户端一个字节都用不上。
+ */
+export class MonsterAiParamsDto {
+  @ApiProperty({ description: "普攻间隔（毫秒）", example: 2000 })
+  @IsInt()
+  @Min(100)
+  @Max(60000)
+  attackInterval: number;
+
+  @ApiProperty({ description: "普攻距离（像素）", example: 60 })
+  @IsInt()
+  @Min(1)
+  @Max(2000)
+  attackRange: number;
+
+  @ApiProperty({ description: "施法硬直兜底（毫秒）：技能没配 cast_lock_ms 时用它", example: 400 })
+  @IsInt()
+  @Min(0)
+  @Max(5000)
+  attackActionTime: number;
+
+  @ApiProperty({ description: "击退时长（毫秒）：技能只配距离时用它换算击退速度", example: 200 })
+  @IsInt()
+  @Min(50)
+  @Max(5000)
+  pushDuration: number;
+
+  @ApiProperty({ description: "待机游走间隔区间（毫秒，[最小, 最大]）", example: [4000, 9000], isArray: true, type: Number })
+  @IsArray()
+  @ArrayMinSize(2)
+  @ArrayMaxSize(2)
+  @IsInt({ each: true })
+  idleMoveInterval: [number, number];
+
+  @ApiProperty({ description: "待机游走每次走多久（毫秒，[最小, 最大]）", example: [300, 800], isArray: true, type: Number })
+  @IsArray()
+  @ArrayMinSize(2)
+  @ArrayMaxSize(2)
+  @IsInt({ each: true })
+  idleMoveDuration: [number, number];
+
+  @ApiProperty({ description: "游走速度倍率（乘在怪物 moveSpeed 上）", example: 0.5 })
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0.1)
+  @Max(5)
+  idleMoveSpeedScale: number;
+
+  @ApiProperty({ description: "游走活动半径（像素，围绕出生点）", example: 60 })
+  @IsInt()
+  @Min(1)
+  @Max(2000)
+  wanderRadius: number;
+
+  @ApiProperty({
+    description: "牵引半径（像素）：目标跑出这个距离就脱战回家。必须大于普攻距离，否则怪永远追不上就脱战",
+    example: 600,
+  })
+  @IsInt()
+  @Min(100)
+  @Max(5000)
+  leashRange: number;
+
+  @ApiProperty({ description: "回家速度倍率（乘在 moveSpeed 上；比追击快，免得被拖着遛）", example: 1.5 })
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0.1)
+  @Max(5)
+  returnSpeedRate: number;
+
+  @ApiProperty({ description: "回家超时（毫秒）：到点还没走回去就吸附到出生点", example: 20000 })
+  @IsInt()
+  @Min(1000)
+  @Max(300000)
+  returnTimeoutMs: number;
+}
+
+/** 怪物 AI 参数的部分更新（只提交改动过的字段） */
+export class UpdateMonsterAiParamsDto {
+  @ApiPropertyOptional({ description: "普攻间隔（毫秒）" })
+  @IsOptional()
+  @IsInt()
+  @Min(100)
+  @Max(60000)
+  attackInterval?: number;
+
+  @ApiPropertyOptional({ description: "普攻距离（像素）" })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(2000)
+  attackRange?: number;
+
+  @ApiPropertyOptional({ description: "施法硬直兜底（毫秒）" })
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(5000)
+  attackActionTime?: number;
+
+  @ApiPropertyOptional({ description: "击退时长（毫秒）" })
+  @IsOptional()
+  @IsInt()
+  @Min(50)
+  @Max(5000)
+  pushDuration?: number;
+
+  @ApiPropertyOptional({ description: "待机游走间隔区间（毫秒，[最小, 最大]）", isArray: true, type: Number })
+  @IsOptional()
+  @IsArray()
+  @ArrayMinSize(2)
+  @ArrayMaxSize(2)
+  @IsInt({ each: true })
+  idleMoveInterval?: [number, number];
+
+  @ApiPropertyOptional({ description: "待机游走每次走多久（毫秒，[最小, 最大]）", isArray: true, type: Number })
+  @IsOptional()
+  @IsArray()
+  @ArrayMinSize(2)
+  @ArrayMaxSize(2)
+  @IsInt({ each: true })
+  idleMoveDuration?: [number, number];
+
+  @ApiPropertyOptional({ description: "游走速度倍率" })
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0.1)
+  @Max(5)
+  idleMoveSpeedScale?: number;
+
+  @ApiPropertyOptional({ description: "游走活动半径（像素）" })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(2000)
+  wanderRadius?: number;
+
+  @ApiPropertyOptional({ description: "牵引半径（像素，必须大于普攻距离）" })
+  @IsOptional()
+  @IsInt()
+  @Min(100)
+  @Max(5000)
+  leashRange?: number;
+
+  @ApiPropertyOptional({ description: "回家速度倍率" })
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0.1)
+  @Max(5)
+  returnSpeedRate?: number;
+
+  @ApiPropertyOptional({ description: "回家超时（毫秒）" })
+  @IsOptional()
+  @IsInt()
+  @Min(1000)
+  @Max(300000)
+  returnTimeoutMs?: number;
 }
 
 /** 运行时参数的部分更新请求（组可选、组内字段可选） */

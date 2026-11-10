@@ -83,6 +83,56 @@ export interface RuntimeParams {
   guild: GuildRuleParams;
 }
 
+/**
+ * 怪物 AI 参数（`runtime_params.monster_ai` 列）
+ *
+ * **服务端消费，不进客户端快照**：客户端一个字节都用不上（它只演服务端发下来的坐标与动作），
+ * 所以这一组刻意不放进 `RuntimeParams` —— 混进去等于让「快照多一段」跟着一起变，
+ * 而快照加段要动四处（DTO / snapshot / 客户端 `game-config` / `configs-sandbox`）。
+ *
+ * 出厂值在 `config-sync.sql`；代码里的 `FALLBACK_AI`（monster-ai.service）只是**读不出来时
+ * 兜住进程**的最小可用值，不是第二份出厂值。
+ */
+export interface MonsterAiRuntimeParams {
+  /** 普攻间隔（毫秒） */
+  attackInterval: number;
+  /** 普攻距离（像素） */
+  attackRange: number;
+  /** 施法硬直兜底（毫秒）：技能没配 `cast_lock_ms` 时用它 */
+  attackActionTime: number;
+  /** 击退时长（毫秒）：技能只配距离时用它换算击退速度 */
+  pushDuration: number;
+  /** 待机游走的间隔区间（毫秒，[min, max]） */
+  idleMoveInterval: [number, number];
+  /** 待机游走每次走多久（毫秒，[min, max]） */
+  idleMoveDuration: [number, number];
+  /** 游走速度倍率（乘在怪物 `moveSpeed` 上） */
+  idleMoveSpeedScale: number;
+  /** 游走活动半径（像素，围绕出生点） */
+  wanderRadius: number;
+  /** 牵引半径（像素）：目标跑出这个距离就脱战回家（#853） */
+  leashRange: number;
+  /** 回家速度倍率（乘在 `moveSpeed` 上；比追击快，免得玩家拖着怪遛） */
+  returnSpeedRate: number;
+  /** 回家超时（毫秒）：到点还没走回去就吸附到出生点 */
+  returnTimeoutMs: number;
+}
+
+/** 怪物 AI 参数的键清单（管理端「保存后回读」与启动自检用） */
+export const MONSTER_AI_PARAM_KEYS: Array<keyof MonsterAiRuntimeParams> = [
+  "attackInterval",
+  "attackRange",
+  "attackActionTime",
+  "pushDuration",
+  "idleMoveInterval",
+  "idleMoveDuration",
+  "idleMoveSpeedScale",
+  "wanderRadius",
+  "leashRange",
+  "returnSpeedRate",
+  "returnTimeoutMs",
+];
+
 /** 三组的键清单（**启动自检用**：库里少了哪个键就点名报错，不静默补默认值） */
 export const RUNTIME_PARAM_KEYS: Record<keyof RuntimeParams, string[]> = {
   drop: ["autoPickupRadius", "fullTipInterval", "scatterMinDistance", "pickReplyTimeout", "bindChance"],

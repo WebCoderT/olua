@@ -12,7 +12,14 @@
  * 三、**晚进图的人看到同一处**（#455）：C 在推完之后才进图，它的 world 快照坐标必须是
  *     怪**现在**的位置 —— 世界层给的出生点在通道发帧前被 AI 运行时坐标覆盖
  *     （站住不动的怪永远不会出现在增量帧里，只靠 monster-ai 帧的人会永远停在出生点）
- * 四、**目标倒下即放弃**（#454）：玩家被怪打死后再也收不到这只怪的命中，伤害型技能也
+/**
+ * 四、**脱战与回家**（#853 / #858）：目标跑出牵引半径（600px）就放弃，直线走回出生点，
+ *     途中不索敌；到家后回复待机 —— 而且**记恨一起清掉**（原来 `provoked` 只写不清，
+ *     被动怪永久锁死第一个打它的人）
+ * 五、**移动不穿墙**（#854）：击退也走碰撞，撞墙被挡则原地不动，任何一帧都不许进碰撞盒
+ * 六、**无人看只冻结不删**（#857）：进出图不该白回血、白回出生点
+ * 七、**AI 只吃仲裁后的坐标**（#855）：一份伪造的 `pos` 骗不动索敌
+ * 八、**目标倒下即放弃**（#454）：玩家被怪打死后再也收不到这只怪的命中，伤害型技能也
  *     不再 `casts`。关键在于**客户端还在上报 hp > 0**（伪造「我还活着」）——
  *     服务端不能靠客户端上报的血量判断目标是否还能打，只能认「结算返回 null」
  *
@@ -32,7 +39,7 @@ const SERVER_DIR = path.join(__dirname, "..");
 const ENTRY = path.join(SERVER_DIR, "dist", "main.js");
 
 /** 两只有点位的怪：3 = 干尸行者（普通，65~79 血，够挨两下不死），200 = 长尾跳鼠怪（BOSS，主动、会放技能） */
-const BRUISER = { key: "3", x: 100, y: -200 };
+const BRUISER = { key: "3", x: 200, y: -200 };
 const BOSS = { key: "200", x: 400, y: -400 };
 
 //#region 断言小工具（与 e2e-world / e2e-combat 同款口径）
@@ -125,6 +132,49 @@ function seedSpawnAreas(dbPath) {
   db.prepare("UPDATE monsters SET level = 0, max_hp = 100000 WHERE id IN ('3', '200')").run();
   db.close();
 }
+
+/**
+ * 改一只怪的移动速度（`monster_presentation.move_speed`，AI 1 秒 TTL 现取库）
+ *
+ * 出厂表里 220 行怪几乎全是 `move_speed = 2`（占位值，运营还没配）——2px/s 的怪连
+ * 600px 的牵引半径都走不出去，脱战与回家这两件事根本测不出来。这一套只把参与断言的
+ * 两只怪调到「人跑得掉、怪走得回」的量级，不改数值断言（不锁具体速度）。
+ */
+function setMonsterSpeed(dbPath, monsterKey, moveSpeed) {
+  const { DatabaseSync } = require("node:sqlite");
+  const db = new DatabaseSync(dbPath);
+  try {
+    db.prepare("UPDATE monster_presentation SET move_speed = ? WHERE id = ?").run(moveSpeed, monsterKey);
+  } finally {
+    db.close();
+  }
+}
+
+/**
+ * 分步走到目标点（**不能瞬移**）
+ *
+ * 在场表有最小仲裁（#596，`playerPosMaxSpeed` 默认 1000px/s）：一帧跨几百像素会被整帧
+ * 丢掉，AI 也就看不到这个人离开。60px / 110ms ≈ 545px/s，稳定被接受。
+ */
+async function walk(session, from, to, hp, stepPx = 60, intervalMs = 110) {
+  const dx = to[0] - from[0];
+  const dy = to[1] - from[1];
+  const distance = Math.hypot(dx, dy);
+  const frames = Math.max(1, Math.ceil(distance / stepPx));
+  for (let index = 1; index <= frames; index += 1) {
+    session.sendPos("1", from[0] + (dx * index) / frames, from[1] + (dy * index) / frames, hp);
+    await sleep(intervalMs);
+  }
+}
+
+/**
+ * 地图 1 的**左外墙**（`map_collisions` 里本来就有的四道围墙之一：`cx=0 / w=128`）
+ *
+ * 用它测「不穿墙」不用另造地形：墙就在出生点左边 136px，把怪往左推一定撞上。
+ * 口径与 `map.service.walkGeometryOf` 一致（中心 + 宽高，含边界）。
+ */
+const LEFT_WALL = { cx: 0, cy: -4096, w: 128, h: 8320 };
+const inLeftWall = (x, y) => Math.abs(x - LEFT_WALL.cx) <= LEFT_WALL.w / 2 && Math.abs(y - LEFT_WALL.cy) <= LEFT_WALL.h / 2;
 
 /** 起一台服务（临时文件库：seedSpawnAreas 要能从外面改库）；AI tick/广播都调快，等待才不用按秒算 */
 async function startServer(dbPath) {
@@ -371,31 +421,248 @@ function connect(url) {
     check(!!seenByC && Math.abs(seenByC.x - liveX) <= 15, "C 的坐标与 A 屏幕上的一致（同图两个人看到同一处）", seenByC && `C=${seenByC.x} / A=${liveX}`);
     //#endregion
 
-    //#region 四、目标倒下即放弃（#454）
-    group("四、目标倒下即放弃：玩家死了就不再被命中，伤害型技能也不再释放");
+    //#region 四、脱战与回家（#853 E3 / #858）
+    group("四、脱战与回家：跑出牵引半径就放弃、走回出生点，记恨一起清掉");
+    // 怪的速度调到 120px/s（出厂 2px/s 是占位值，走不出牵引半径，这一组只能空转）。
+    // A 报位置的速度约 545px/s —— 人跑得掉、怪走得回，两边都够得着断言
+    setMonsterSpeed(dbPath, BRUISER.key, 120);
+    await sleep(1_300); // 展示缓存 1 秒 TTL
+    const chaseFrom = sessionA.aiFrames.length;
+    // 基准取**这一段开始那一刻**的位置：上一段把它推离了出生点，之后它又走回了家 ——
+    // 拿出生点当基准会让阈值落在一个刚好够不着的距离上。必须在 A 开跑之前取
+    const chaseBaseX = (sessionA.latestAi(bruiser.instanceId, 0) || { x: BRUISER.x }).x;
+    const walkStartX = BRUISER.x + 150;
+    sessionA.sendPos("1", walkStartX, BRUISER.y, aHp);
+    await sleep(300);
+    // 先打一下 = 重新记恨。**被动怪不会主动索敌**，而「有没有记恨」这种东西会在
+    // 「目标上报超时 → `endChase`」时被一起清掉（#858 的另一个方向）—— 上一段的两次出手
+    // 距今已经十几秒，靠它残留的记恨等于靠运气。不先记恨，「怪跟着走出来」这段会退化成
+    // 「它在往出生点走」，脱战断言也就白断了
+    const reProvokeBeforeChase = await sessionA.cast("1000", bruiser.instanceId, BRUISER.key);
+    check(!!reProvokeBeforeChase && reProvokeBeforeChase.ok, "准备：跑开之前先打它一下（这一段要有记恨可脱）");
+    // A 从 350 一路走到 1050（700px > 600px 牵引半径）
+    await walk(sessionA, [walkStartX, BRUISER.y], [walkStartX + 700, BRUISER.y], aHp);
+    // 判据走**帧历史**而不是「最新一帧」：`monster-ai` 帧只发有变化的怪，而这条用例等的
+    // 是「路过出生点」这一瞬间 —— 回家的最后 20px 只走一两帧（180px/s），只读最新帧基本必错过。
+    // 「走出来」的基准也取**这一段开始时的实际位置**（上一段把它推离了出生点，拿出生点当基线
+    // 会让阈值落在一个刚好够不着的距离上）
+    const entriesFrom = (from) => sessionA.aiEntries(bruiser.instanceId, from);
+    const chased = await waitFor(
+      "怪跟着走出来了一段（确实进入了追击）",
+      async () => entriesFrom(chaseFrom).find((entry) => entry.x > chaseBaseX + 20) ?? null,
+      8_000,
+    );
+    check(
+      !!chased,
+      "A 走开的过程中怪确实跟了过来（不是原地没动，否则脱战断言就没有意义）",
+      chased && `x=${chased.x}（本段起点 ${chaseBaseX.toFixed(1)}）`,
+    );
+    const homeEntry = await waitFor(
+      "脱战后走回出生点",
+      async () =>
+        entriesFrom(chaseFrom).find(
+          (entry) => Math.abs(entry.x - BRUISER.x) <= 20 && Math.abs(entry.y - BRUISER.y) <= 20,
+        ) ?? null,
+      10_000,
+    );
+    check(
+      !!homeEntry,
+      "目标超出牵引半径后怪放弃追击并直线走回出生点（#853：原来会跨整图无限追下去）",
+      homeEntry && `落点 ${homeEntry.x.toFixed(1)},${homeEntry.y.toFixed(1)} / 出生点 ${BRUISER.x},${BRUISER.y}`,
+    );
+
+    // #858：记恨跟着脱战一起清 —— 被动怪不该永久锁死第一个打它的人。
+    // 判据用「有没有挨打」而不是「怪的坐标」：`monster-ai` 帧只发**有变化**的怪，
+    // 站着不动的怪根本不会出现在帧里（读到 null 会把「没动」误判成「测试没跑」）。
+    // 有记恨的话它会以 120px/s 从 150px 处走到 60px 再出手，1.5 秒内必有一次命中
+    const calmFrom = sessionA.aiFrames.length;
+    await walk(sessionA, [walkStartX + 700, BRUISER.y], [BRUISER.x + 150, BRUISER.y], aHp);
+    for (let index = 0; index < 21; index += 1) {
+      sessionA.sendPos("1", BRUISER.x + 150, BRUISER.y, aHp);
+      await sleep(120);
+    }
+    const noChaseHits = sessionA.hitsFrom(calmFrom).filter((hit) => hit.instanceId === bruiser.instanceId);
+    check(
+      noChaseHits.length === 0,
+      "脱战后 A 站回来（150px，在检测范围 200 内）怪**不再**主动追他（记恨已清，#858）",
+      `命中 ${noChaseHits.length} 条`,
+    );
+
+    // 再打一下 = 重新记恨：被动怪仍然要能被触发（清记恨不能清成「以后都不理人」）
+    const reProvokeFrom = sessionA.aiFrames.length;
+    const reProvoke = await sessionA.cast("1000", bruiser.instanceId, BRUISER.key);
+    check(!!reProvoke && reProvoke.ok, "A 再打它一下（重新记恨）", JSON.stringify(reProvoke && reProvoke.ok));
+    const reProvokedHit = await waitFor(
+      "被动怪重新追上来并打人",
+      async () => sessionA.hitsFrom(reProvokeFrom).find((hit) => hit.instanceId === bruiser.instanceId) ?? null,
+      12_000,
+    );
+    check(!!reProvokedHit, "重新记恨之后它又追上来打人了（#858 清的是「脱战后的旧账」，不是把人永久拉黑）", reProvokedHit && `damage=${reProvokedHit.damage}`);
+    //#endregion
+
+    //#region 五、移动不穿墙（#854 E4）
+    group("五、移动不穿墙：击退也走碰撞，撞墙被挡就原地不动");
+    // 撞飞距离放到 300px：怪在出生点附近（离左外墙 ~136px），这一下必然撞墙
+    const pushedIntoWall = await api(baseUrl, "PATCH", "admin/skills/1001", {
+      token: adminReg.data.token,
+      body: { pushDistance: 300, pushChance: 1 },
+    });
+    check(pushedIntoWall.code === 0, "1001 的击退距离改成 300px（必然撞上左外墙）");
+    const wallFrom = sessionA.aiFrames.length;
+    const wallPush = await sessionA.cast("1001", bruiser.instanceId, BRUISER.key);
+    check(!!wallPush && wallPush.ok, "带 300px 击退的技能结算成功");
+    // 这一段要持续给 A 报位置：超过 3 秒没上报，AI 会按「位置上报超时」把他当离场（很正常的设计），
+    // 但下一段要它有目标可追 —— 断供会让目标在观众不知情的情况下被清掉
+    for (let index = 0; index < 6; index += 1) {
+      sessionA.sendPos("1", BRUISER.x + 150, BRUISER.y, aHp);
+      await sleep(120);
+    }
+    const wallEntries = sessionA.aiEntries(bruiser.instanceId, wallFrom);
+    const enteredWall = wallEntries.filter((entry) => inLeftWall(entry.x, entry.y));
+    check(enteredWall.length === 0, "没有任何一帧落在碰撞盒里（穿墙 = 帧出现在墙内）", `越界帧 ${enteredWall.length} 条`);
+    const wallSettled = sessionA.latestAi(bruiser.instanceId, wallFrom);
+    check(
+      !!wallSettled && wallSettled.x >= LEFT_WALL.cx + LEFT_WALL.w / 2 - 1,
+      "被墙挡住之后停在墙外（没有 300px 的位移，因为前面没路了）",
+      wallSettled && `x=${wallSettled.x.toFixed(1)} 墙面 x=${LEFT_WALL.cx + LEFT_WALL.w / 2}`,
+    );
+    // 把撞飞距离改回来：后面的用例还要用它量「推得动」
+    await api(baseUrl, "PATCH", "admin/skills/1001", { token: adminReg.data.token, body: { pushDistance: 120, pushChance: 1 } });
+    //#endregion
+
+    //#region 六、无人看只冻结不删（#857）
+    group("六、无人看只冻结不删：进出图不该白回血、白回出生点");
+    // 先打掉一点血、再让它「在追击中」被冻结：这两样都是运行时里的东西，删掉重建就全没了。
+    // 等它走到 A 身边（350 - 攻击距离 60 ≈ 290，离出生点 90px）再冻 —— 位置要明显离开出生点，
+    // 断言才有区分力（否则「保留」与「重建回出生点」看起来一样）
+    sessionA.sendPos("1", BRUISER.x + 150, BRUISER.y, aHp);
+    const frozenHurt = await sessionA.cast("1000", bruiser.instanceId, BRUISER.key);
+    check(!!frozenHurt && frozenHurt.ok, "冻结前先打它一下（血量要比满血低）", frozenHurt && `hp=${frozenHurt.hp}`);
+    // 一边等它走过来、一边持续上报（上报断了它会丢掉目标，见五那段的说明）
+    for (let index = 0; index < 15; index += 1) {
+      sessionA.sendPos("1", BRUISER.x + 150, BRUISER.y, aHp);
+      await sleep(120);
+    }
+    const beforeFreeze = sessionA.latestAi(bruiser.instanceId, 0);
+    check(
+      !!beforeFreeze && Math.abs(beforeFreeze.x - BRUISER.x) >= 40,
+      "冻结前怪已经追到 A 身边（位置明显离开出生点，后面的断言才有区分力）",
+      beforeFreeze && `x=${beforeFreeze.x.toFixed(1)} 出生点 ${BRUISER.x}`,
+    );
+    // 三个人全部断开：这张图就没有观看者了 → AI 冻结（而不是把运行时删掉）。
+    // B 也要断 —— 留一个人在图里就永远不触发冻结，这段就白测了
+    for (const player of Object.values(players)) player.session.socket.close();
+    await sleep(1_500);
+    // A、B 各自换一条新连接重新进图（B 是后面「仲裁」那段要用的）
+    const reTicket = await api(baseUrl, "POST", "realtime/ticket", { token: players.a.token });
+    const backSession = connect(`${baseUrl.replace("http", "ws")}/api/realtime?ticket=${encodeURIComponent(reTicket.data.ticket)}`);
+    await waitFor("A 重连握手", async () => (backSession.opened ? backSession : null));
+    const reTicketB = await api(baseUrl, "POST", "realtime/ticket", { token: players.b.token });
+    const backB = connect(`${baseUrl.replace("http", "ws")}/api/realtime?ticket=${encodeURIComponent(reTicketB.data.ticket)}`);
+    await waitFor("B 重连握手", async () => (backB.opened ? backB : null));
+    await backB.joinWorld("1");
+    const worldBack = await backSession.joinWorld("1");
+    const thawed = worldBack && worldBack.monsters.find((m) => m.instanceId === bruiser.instanceId);
+    check(!!thawed, "重连之后同一只怪还在（实例 id 稳定）", thawed && thawed.instanceId);
+    check(
+      !!thawed && !!beforeFreeze && thawed.hp === beforeFreeze.hp,
+      "冻结期间血量原地保留（进出图不白回血，#857）",
+      thawed && beforeFreeze && `重连前 ${beforeFreeze.hp} / 重连后 ${thawed.hp}`,
+    );
+    check(
+      !!thawed && !!beforeFreeze && Math.abs(thawed.x - beforeFreeze.x) <= 15,
+      "冻结期间**位置也保留**（不是按出生点重建运行时 —— 这一条才真正区分「冻结」与「删掉重来」）",
+      thawed && beforeFreeze && `重连前 x=${beforeFreeze.x.toFixed(1)} / 重连后 x=${thawed.x.toFixed(1)} / 出生点 ${BRUISER.x}`,
+    );
+    //#endregion
+
+    //#region 七、AI 只吃仲裁后的坐标（#855）
+    group("七、AI 只吃仲裁后的坐标：伪造的 pos 骗不动索敌，正常移动照样被看见");
+    // BOSS 调快：它是不是在「朝伪造点走」必须看得出来（2px/s 的话两公里外也看不出差别）
+    setMonsterSpeed(dbPath, BOSS.key, 300);
+    await sleep(1_300);
+    // A 挪远，别让 BOSS 的目标候选里混进他；B 先站到 1500px 外（在 BOSS 检测范围 200 之外）。
+    // **两个都用「连发三帧」瞬移过去，不走过去**：BOSS 就站在 y = −400 这条线上，
+    // 一步步走过去必然从它脸上经过 —— 主动怪会一路追着人跑（实测追到 x = 1451），
+    // 等伪造帧那一拍它早就不在出生点附近，这条断言也就没有区分力了。
+    // 位置仲裁对单帧瞬移拒收、**连续两帧超速就信任并重置基线**（#861），所以发三帧
+    const teleport = async (session, x, y) => {
+      for (let index = 0; index < 3; index += 1) {
+        session.sendPos("1", x, y, aHp);
+        await sleep(120);
+      }
+    };
+    await teleport(backSession, BRUISER.x + 900, BRUISER.y);
+    const bFarX = BOSS.x + 1_100;
+    await teleport(backB, bFarX, BOSS.y);
+    await sleep(400);
+    const forgedFrom = backB.aiFrames.length;
+    // 伪造一帧「瞬移到 BOSS 的检测范围边缘」（1100px / 110ms ≈ 10000px/s，远超仲裁上限，整帧丢弃）。
+    // 落点选在**检测范围 200 内、攻击距离 60 外**：老实现（AI 读原始坐标）会当场追过去，
+    // 而它追过去这件事只能从「位置朝那个点移动」看出来 —— 落在攻击距离内的话它一步都不用走
+    backB.sendPos("1", BOSS.x + 150, BOSS.y, aHp);
+    await sleep(120);
+    backB.sendPos("1", bFarX, BOSS.y, aHp);
+    await sleep(1_500);
+    const forgedEntries = backB.aiEntries(boss.instanceId, forgedFrom);
+    const movedTowardForge = forgedEntries.some((entry) => entry.x > BOSS.x + 60);
+    check(
+      !movedTowardForge,
+      "伪造帧之后 BOSS 没有朝那个点走过去（AI 读的是仲裁后的坐标，#855）",
+      `这段窗口里 ${forgedEntries.length} 帧，最远 x=${forgedEntries.reduce((max, entry) => Math.max(max, entry.x), BOSS.x).toFixed(1)}`,
+    );
+    const forgedHits = backB.hitsFrom(forgedFrom).filter((hit) => hit.instanceId === boss.instanceId);
+    check(forgedHits.length === 0, "也没有对这个「瞬移过来的」玩家出手", `命中 ${forgedHits.length} 条`);
+    // 回归：正常走过去还是会被发现（闸不能把所有人都挡住）
+    const legitFrom = backB.aiFrames.length;
+    await walk(backB, [bFarX, BOSS.y], [BOSS.x + 40, BOSS.y], aHp);
+    const legitHit = await waitFor(
+      "正常走近之后 BOSS 出手",
+      async () => backB.hitsFrom(legitFrom).find((hit) => hit.instanceId === boss.instanceId) ?? null,
+      12_000,
+    );
+    check(!!legitHit, "正常一步步走近的玩家仍然会被索敌并挨打（仲裁没有误杀正常移动）", legitHit && `damage=${legitHit.damage}`);
+    // B 的任务到此为止：它站在 BOSS 身边会一直挨打，留着会让下一段「尸体期不许有命中」混进它的命中
+    backB.socket.close();
+    //#endregion
+
+    //#region 八、目标倒下即放弃（#454）
+    group("八、目标倒下即放弃：玩家死了就不再被命中，伤害型技能也不再释放");
     // 走到 BOSS 身边（主动怪，40px 在攻击距离 60 内）：让它开打；hp 一律报「满血」——
-    // 这正是 #670 的现场：客户端的上报不可信，服务端只能认结算结果
+    // 这正是 #670 的现场：客户端的上报不可信，服务端只能认结算结果。
+    // 注意这里用的是**重连之后的**连接（六那段把 A 断开又接回来了）
     const bossX = BOSS.x + 40;
+    // 命中帧是**全图广播**的：不按受击账号过滤，就会把「B 在上一段被打死」当成 A 的死，
+    // 于是「尸体期」从 A 还活着的时候开始算，窗口最后一条正好是 A 真正的死亡（假红）
+    const meA = await api(baseUrl, "GET", "auth/me", { token: players.a.token });
+    const aAccountId = meA.data && meA.data.id;
+    check(typeof aAccountId === "string" && aAccountId.length > 0, "准备：拿到 A 的账号 id（下面按受击账号过滤命中帧）");
+    const hitsOnA = (fromIndex) =>
+      backSession.hitsFrom(fromIndex).filter((hit) => hit.instanceId === boss.instanceId && hit.accountId === aAccountId);
     let keepReporting = true;
     const reporter = (async () => {
       while (keepReporting) {
-        sessionA.sendPos("1", bossX, BOSS.y, aHp);
+        backSession.sendPos("1", bossX, BOSS.y, aHp);
         await sleep(120);
       }
     })();
     const deathHit = await waitFor(
       "A 被 BOSS 打死（命中帧里 hp = 0）",
-      async () => sessionA.hitsFrom(0).find((hit) => hit.instanceId === boss.instanceId && hit.hp === 0) ?? null,
+      async () => hitsOnA(0).find((hit) => hit.hp === 0) ?? null,
       25_000,
     );
     check(!!deathHit, "玩家被 BOSS 打到 hp = 0（服务端结算出来的死亡）", deathHit && `damage=${deathHit.damage}`);
     // 从这里开始算「尸体期」：A 继续上报 hp = 100（假装还活着），但服务端已经知道他死了。
     // 观察窗口要跨过至少一个完整的普攻间隔（出厂 2000ms）—— 少了就只是「还没来得及出手」
-    const corpseFrom = sessionA.aiFrames.length;
+    const corpseFrom = backSession.aiFrames.length;
     await sleep(5_000);
-    const lateHits = sessionA.hitsFrom(corpseFrom);
-    check(lateHits.length === 0, "目标倒下之后不再有命中（结算返回 null → 服务端把目标作废，不依赖客户端上报的血量）", `尸体期命中 ${lateHits.length} 条`);
-    const lateDamageCasts = sessionA.castsFrom(corpseFrom).filter((cast) => cast.instanceId === boss.instanceId && cast.skillId === "9001");
+    const lateHits = hitsOnA(corpseFrom);
+    check(
+      lateHits.length === 0,
+      "目标倒下之后不再有命中（结算返回 null → 服务端把目标作废，不依赖客户端上报的血量）",
+      `尸体期命中 ${lateHits.length} 条${lateHits.length > 0 ? `（${lateHits.map((hit) => `${hit.instanceId}→${hit.hp}`).join(", ")}）` : ""}`,
+    );
+    const lateDamageCasts = backSession.castsFrom(corpseFrom).filter((cast) => cast.instanceId === boss.instanceId && cast.skillId === "9001");
     check(lateDamageCasts.length === 0, "也不再释放伤害型技能 9001（原来的实现是「结算不出来照样播 casts」）", `尸体期释放 ${lateDamageCasts.length} 次`);
     keepReporting = false;
     await reporter;

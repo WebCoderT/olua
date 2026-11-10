@@ -10990,6 +10990,108 @@
         ]
       }
     },
+    "/admin/runtime-params/monster-ai": {
+      "get": {
+        "description": "怪物 AI 的手感参数（`runtime_params.monster_ai` 列）。**单独一条接口**，不并进上面那三组：\n\n- 这三组会随配置快照下发客户端，AI 参数不下发（客户端一字节都用不上）；\n- 这一组是纯服务端消费 —— 攻速 / 距离 / 游走 / 脱战牵引 / 回家速度，改完 AI 在 1 秒内生效。\n\n缺键时 AI 用最小可用值兜住并在服务端 warn，不会让本接口失败。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
+        "operationId": "adminRuntimeParams.getMonsterAi",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "当前生效值",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/MonsterAiParamsDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "怪物 AI 参数",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/MonsterAiParamsDto"
+        },
+        "x-olua-permissions": [
+          "gameConfig:read"
+        ]
+      },
+      "patch": {
+        "description": "**部分更新**：只提交改动过的字段，没提交的保持原值。\n\n跨字段约束由服务端判（违反 → 40000）：两组区间要满足最小 ≤ 最大；`leashRange` 必须大于 `attackRange`（否则怪刚看见玩家就脱战）。\n\n生效时机：怪物 AI 每 tick 读一次（1 秒 TTL），保存后 1 秒内生效，**不需要重启、也不需要玩家重进**。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
+        "operationId": "adminRuntimeParams.updateMonsterAi",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateMonsterAiParamsDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "更新后的生效值",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/MonsterAiParamsDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "编辑怪物 AI 参数",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/MonsterAiParamsDto"
+        },
+        "x-olua-permissions": [
+          "gameConfig:write"
+        ]
+      }
+    },
     "/admin/combat-weights": {
       "get": {
         "description": "当前生效的七项倍率 + 最后修改时间（**单行配置，没有分页**）。\n\n口径（客户端与服务端一致）：区间属性（三系攻击 / 三系防御）按**上下限之和**乘倍率，生命按单值乘倍率，最后求和。`hpRecover`（每秒回血）**不计入** —— 回血不改变输出与承伤上限，\n算进来会凭空抬高所有地图的门槛。\n\n缺行回落出厂值（`config-sync.sql`），所以这张表不需要迁移。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
@@ -18908,6 +19010,61 @@
           }
         }
       },
+      "UpdateMonsterAiParamsDto": {
+        "type": "object",
+        "properties": {
+          "attackInterval": {
+            "type": "number",
+            "description": "普攻间隔（毫秒）"
+          },
+          "attackRange": {
+            "type": "number",
+            "description": "普攻距离（像素）"
+          },
+          "attackActionTime": {
+            "type": "number",
+            "description": "施法硬直兜底（毫秒）"
+          },
+          "pushDuration": {
+            "type": "number",
+            "description": "击退时长（毫秒）"
+          },
+          "idleMoveInterval": {
+            "description": "待机游走间隔区间（毫秒，[最小, 最大]）",
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          },
+          "idleMoveDuration": {
+            "description": "待机游走每次走多久（毫秒，[最小, 最大]）",
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          },
+          "idleMoveSpeedScale": {
+            "type": "number",
+            "description": "游走速度倍率"
+          },
+          "wanderRadius": {
+            "type": "number",
+            "description": "游走活动半径（像素）"
+          },
+          "leashRange": {
+            "type": "number",
+            "description": "牵引半径（像素，必须大于普攻距离）"
+          },
+          "returnSpeedRate": {
+            "type": "number",
+            "description": "回家速度倍率"
+          },
+          "returnTimeoutMs": {
+            "type": "number",
+            "description": "回家超时（毫秒）"
+          }
+        }
+      },
       "UpdateCombatWeightsDto": {
         "type": "object",
         "properties": {
@@ -24104,6 +24261,91 @@
           "autoBattle",
           "guild",
           "updatedAt"
+        ]
+      },
+      "MonsterAiParamsDto": {
+        "type": "object",
+        "properties": {
+          "attackInterval": {
+            "type": "number",
+            "description": "普攻间隔（毫秒）",
+            "example": 2000
+          },
+          "attackRange": {
+            "type": "number",
+            "description": "普攻距离（像素）",
+            "example": 60
+          },
+          "attackActionTime": {
+            "type": "number",
+            "description": "施法硬直兜底（毫秒）：技能没配 cast_lock_ms 时用它",
+            "example": 400
+          },
+          "pushDuration": {
+            "type": "number",
+            "description": "击退时长（毫秒）：技能只配距离时用它换算击退速度",
+            "example": 200
+          },
+          "idleMoveInterval": {
+            "description": "待机游走间隔区间（毫秒，[最小, 最大]）",
+            "example": [
+              4000,
+              9000
+            ],
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          },
+          "idleMoveDuration": {
+            "description": "待机游走每次走多久（毫秒，[最小, 最大]）",
+            "example": [
+              300,
+              800
+            ],
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          },
+          "idleMoveSpeedScale": {
+            "type": "number",
+            "description": "游走速度倍率（乘在怪物 moveSpeed 上）",
+            "example": 0.5
+          },
+          "wanderRadius": {
+            "type": "number",
+            "description": "游走活动半径（像素，围绕出生点）",
+            "example": 60
+          },
+          "leashRange": {
+            "type": "number",
+            "description": "牵引半径（像素）：目标跑出这个距离就脱战回家。必须大于普攻距离，否则怪永远追不上就脱战",
+            "example": 600
+          },
+          "returnSpeedRate": {
+            "type": "number",
+            "description": "回家速度倍率（乘在 moveSpeed 上；比追击快，免得被拖着遛）",
+            "example": 1.5
+          },
+          "returnTimeoutMs": {
+            "type": "number",
+            "description": "回家超时（毫秒）：到点还没走回去就吸附到出生点",
+            "example": 20000
+          }
+        },
+        "required": [
+          "attackInterval",
+          "attackRange",
+          "attackActionTime",
+          "pushDuration",
+          "idleMoveInterval",
+          "idleMoveDuration",
+          "idleMoveSpeedScale",
+          "wanderRadius",
+          "leashRange",
+          "returnSpeedRate",
+          "returnTimeoutMs"
         ]
       },
       "CombatWeightsDto": {

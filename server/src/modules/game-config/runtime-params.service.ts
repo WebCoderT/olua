@@ -4,6 +4,7 @@ import {
   AutoBattleParams,
   DropRuntimeParams,
   GuildRuleParams,
+  MonsterAiRuntimeParams,
   RUNTIME_PARAM_KEYS,
   RuntimeParams,
 } from "../../common/constants/runtime-params";
@@ -13,6 +14,7 @@ import { RuntimeParamsRow } from "../../database/rows";
 import {
   DropRuntimeParamsDto,
   RuntimeParamsDto,
+  UpdateMonsterAiParamsDto,
   UpdateRuntimeParamsDto,
 } from "./dto/runtime-params.dto";
 
@@ -111,6 +113,53 @@ export class RuntimeParamsService implements OnApplicationBootstrap {
     return this.get();
   }
 
+  /**
+   * 怪物 AI 参数（`monster_ai` 列；#853 / #854 起有管理端入口）
+   *
+   * 返回原样 JSON（不补默认值）：缺键由 AI 服务自己 warn 并用最小可用值兜住 ——
+   * 这里补一份默认值就成了「代码里的第二份出厂值」，与那一列的权威定值打架。
+   */
+  monsterAi(): MonsterAiRuntimeParams {
+    return parseGroup(this.repository.get()?.monster_ai) as unknown as MonsterAiRuntimeParams;
+  }
+
+  /**
+   * 更新怪物 AI 参数（部分更新；与三组共用一行的 `update` 分开）
+   *
+   * 合并规则与 `update` 一样用 `definedOnly`：DTO 实例没提交的字段是 `undefined`，
+   * 直接展开会把现值清掉。落库时**另外三列必须原样写回** —— `update` 是整行 UPDATE。
+   */
+  updateMonsterAi(dto: UpdateMonsterAiParamsDto): MonsterAiRuntimeParams {
+    const existing = this.repository.get();
+    const current = parseGroup(existing?.monster_ai);
+    const patch = definedOnly(dto);
+    const next = { ...current, ...patch } as Record<string, unknown>;
+
+    // 跨字段：区间两端、牵引半径与普攻距离的大小关系（DTO 只管单字段上下限）
+    assertRange(next.idleMoveInterval, "待机游走间隔");
+    assertRange(next.idleMoveDuration, "待机游走时长");
+    const attackRange = Number(next.attackRange);
+    const leashRange = Number(next.leashRange);
+    if (Number.isFinite(attackRange) && Number.isFinite(leashRange) && leashRange <= attackRange) {
+      throw new BizException(
+        BizCode.PARAM_INVALID,
+        `牵引半径 ${leashRange}px 必须大于普攻距离 ${attackRange}px（否则怪刚看见人就脱战）`,
+      );
+    }
+
+    const row: RuntimeParamsRow = {
+      id: 1,
+      // 三列原样保留：这一行的形状由 config-sync.sql 定义，改 AI 参数不该顺手重写别组
+      drop_params: existing?.drop_params ?? "{}",
+      auto_battle: existing?.auto_battle ?? "{}",
+      guild_rules: existing?.guild_rules ?? "{}",
+      monster_ai: JSON.stringify(next),
+      updated_at: Date.now(),
+    };
+    this.repository.update(row);
+    return this.monsterAi();
+  }
+
   /** 三列 JSON → 生效值（坏 JSON 当空对象；缺键就是缺键，不补默认值） */
   private parseAll(row: RuntimeParamsRow | undefined): RuntimeParams {
     return {
@@ -129,6 +178,19 @@ function definedOnly<T extends object>(value: T | undefined): Partial<T> {
     if (value[key] !== undefined) out[key] = value[key];
   }
   return out;
+}
+
+/** 区间类参数必须是「两个有限数字且 min ≤ max」（怪物 AI 的两组区间用它） */
+function assertRange(value: unknown, label: string): void {
+  if (value === undefined) return;
+  if (!Array.isArray(value) || value.length < 2) {
+    throw new BizException(BizCode.PARAM_INVALID, `${label}必须是「[最小, 最大]」两个数`);
+  }
+  const min = Number(value[0]);
+  const max = Number(value[1]);
+  if (!Number.isFinite(min) || !Number.isFinite(max) || min <= 0 || max < min) {
+    throw new BizException(BizCode.PARAM_INVALID, `${label}的区间不合法（最小 ${min} / 最大 ${max}）`);
+  }
 }
 
 /** 解析一列 JSON 对象（坏数据 / 空列 → 空对象） */

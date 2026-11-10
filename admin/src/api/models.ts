@@ -2080,6 +2080,53 @@ export type UpdateRuntimeParams = {
   note?: string;
 };
 
+export type UpdateMonsterAiParams = {
+  /**
+   * 普攻间隔（毫秒）
+   */
+  attackInterval?: number;
+  /**
+   * 普攻距离（像素）
+   */
+  attackRange?: number;
+  /**
+   * 施法硬直兜底（毫秒）
+   */
+  attackActionTime?: number;
+  /**
+   * 击退时长（毫秒）
+   */
+  pushDuration?: number;
+  /**
+   * 待机游走间隔区间（毫秒，[最小, 最大]）
+   */
+  idleMoveInterval?: number[];
+  /**
+   * 待机游走每次走多久（毫秒，[最小, 最大]）
+   */
+  idleMoveDuration?: number[];
+  /**
+   * 游走速度倍率
+   */
+  idleMoveSpeedScale?: number;
+  /**
+   * 游走活动半径（像素）
+   */
+  wanderRadius?: number;
+  /**
+   * 牵引半径（像素，必须大于普攻距离）
+   */
+  leashRange?: number;
+  /**
+   * 回家速度倍率
+   */
+  returnSpeedRate?: number;
+  /**
+   * 回家超时（毫秒）
+   */
+  returnTimeoutMs?: number;
+};
+
 export type UpdateCombatWeights = {
   /**
    * 生命上限权重
@@ -5345,6 +5392,53 @@ export type RuntimeParams = {
    * 最后修改时间（毫秒）
    */
   updatedAt: number;
+};
+
+export type MonsterAiParams = {
+  /**
+   * 普攻间隔（毫秒）
+   */
+  attackInterval: number;
+  /**
+   * 普攻距离（像素）
+   */
+  attackRange: number;
+  /**
+   * 施法硬直兜底（毫秒）：技能没配 cast_lock_ms 时用它
+   */
+  attackActionTime: number;
+  /**
+   * 击退时长（毫秒）：技能只配距离时用它换算击退速度
+   */
+  pushDuration: number;
+  /**
+   * 待机游走间隔区间（毫秒，[最小, 最大]）
+   */
+  idleMoveInterval: number[];
+  /**
+   * 待机游走每次走多久（毫秒，[最小, 最大]）
+   */
+  idleMoveDuration: number[];
+  /**
+   * 游走速度倍率（乘在怪物 moveSpeed 上）
+   */
+  idleMoveSpeedScale: number;
+  /**
+   * 游走活动半径（像素，围绕出生点）
+   */
+  wanderRadius: number;
+  /**
+   * 牵引半径（像素）：目标跑出这个距离就脱战回家。必须大于普攻距离，否则怪永远追不上就脱战
+   */
+  leashRange: number;
+  /**
+   * 回家速度倍率（乘在 moveSpeed 上；比追击快，免得被拖着遛）
+   */
+  returnSpeedRate: number;
+  /**
+   * 回家超时（毫秒）：到点还没走回去就吸附到出生点
+   */
+  returnTimeoutMs: number;
 };
 
 export type CombatWeights = {
