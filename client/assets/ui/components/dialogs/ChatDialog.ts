@@ -16,14 +16,21 @@ import GuideStore from "../../core/GuideStore";
 import { GUIDE_EVENT } from "../../../types/guide";
 import { createTabStrip, paintTabStrip } from "./tab-kit";
 
-/** 聊天弹窗的三个页签（与协议频道同名，切换零映射） */
+/** 聊天弹窗的四个页签（与协议频道同名，切换零映射） */
 type ChatTab = ChatChannel;
 
 /** 页签顺序（与 layout.tabs.columns / layout.texts.tabs 一一对应，改这里就三处一起改） */
-const TABS: ChatTab[] = ["world", "guild", "private"];
+const TABS: ChatTab[] = ["world", "map", "guild", "private"];
+
+/** 各频道的输入框占位（private 走会话模板；其余按这里查） */
+const INPUT_PLACEHOLDER: Record<Exclude<ChatTab, "private">, string> = {
+  world: "inputWorld",
+  map: "inputMap",
+  guild: "inputGuild",
+};
 
 /**
- * 聊天弹窗（#395：世界 / 帮会 / 私聊）
+ * 聊天弹窗（#395：世界 / 同图 / 帮会 / 私聊）
  *
  * ## 数据从哪来
  * 全部来自 `ChatStore`（服务端帧的唯一落点）：这里不发请求、不存消息，
@@ -105,7 +112,7 @@ export default class ChatDialog {
 
   //#region 页签
 
-  /** 建三个页签（几何与社交弹窗同款） */
+  /** 建四个页签（几何与社交弹窗同款） */
   private createTabs() {
     const dialog = this.dialog;
     if (!dialog) return;
@@ -289,9 +296,7 @@ export default class ChatDialog {
   private addInputRow(body: Node) {
     const placeholder = this.tab === "private" && this.privatePeer
       ? layout.texts.inputPrivate.split("{name}").join(this.privatePeer.username)
-      : this.tab === "guild"
-        ? layout.texts.inputGuild
-        : layout.texts.inputWorld;
+      : layout.texts[INPUT_PLACEHOLDER[this.tab as Exclude<ChatTab, "private">]];
     const field = layout.inputRow.input;
     // 输入条底板：没有它，占位文字就是「飘在窗体上的一行字」，看不出哪里能点（#477 顺带发现）
     const frame = UiHelper.createNode("chat_input_frame", field.position, field.size);

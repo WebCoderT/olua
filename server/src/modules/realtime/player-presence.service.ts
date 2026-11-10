@@ -362,6 +362,19 @@ export class PlayerPresenceService implements OnApplicationBootstrap, OnApplicat
   }
 
   /**
+   * 全服此刻所有「进过图」的账号 id（#876 世界频道的收件人口径）
+   *
+   * 在场表本身就是这张名单：worldJoin 进、断线/超时出，不需要另维护一张
+   * 「全服在线」索引 —— 那又是一个要在四条路径上同步的东西。聊天是限频后的
+   * 低频操作，全量拷贝一份 keys 完全不贵。
+   *
+   * 只读：不改在场表、不触发广播。
+   */
+  presentAccountIds(): string[] {
+    return Array.from(this.entries.keys());
+  }
+
+  /**
    * 按角色找在线连接（#399：队伍快照的「在线 / 同图」与队友经验分成的「同图才分」都要它）
    *
    * 线性扫一遍在线表：队伍最多 4 人、每次击杀查一次，这个规模上完全够。

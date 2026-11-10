@@ -18,16 +18,19 @@ interface SpeakerIdentity {
 }
 
 /**
- * 聊天服务（#395：世界 / 帮会 / 私聊三种频道的转发与限流）
+ * 聊天服务（#395：世界 / 同图 / 帮会 / 私聊四种频道的转发与限流）
  *
  * ## 权威边界
  * 聊天是**转发**不是存储：服务端不留历史（连内存都不留，见 issue #395 的取舍），
  * 只对每一条消息做四件事——身份核实、正文净化、限频、按频道选收件人。客户端的校验
  * （长度、频道名）只是省一次往返，**全部以这里为准**。
  *
- * ## 三个频道的口径
- * - `world`：广播给**同图观看者**（复用互见的观看者集合 `world.viewersOf`）。不做区服级
- *   全服广播——那需要维护「账号 → 区」的连接索引，首版规模用不上（issue #395 的口径决定）；
+ * ## 四个频道的口径（#876：世界与同图拆开，名实相符）
+ * - `world`：广播给**全服在场者**（`presence.presentAccountIds`，进过图的在线账号，
+ *   不限图）——原来 world 按图广播是名不副实，不同图的人互相看不到；世界消息天然
+ *   低频（限频压着），全服广播的代价可以接受；
+ * - `map`：广播给**同图观看者**（复用互见的观看者集合 `world.viewersOf`）——
+ *   #876 之前的 world 就是它，拆出来后「就近说话」的语义有了自己的频道；
  * - `guild`：转发给帮会全部在线成员。帮会身份**每次查库**（`guildOfRole` / `members`），
  *   不用在场的懒刷新缓存——准入判断错一次（刚退帮的人还能喊一嗓子）比一次 DB 读贵得多，
  *   而聊天本来就是限频之后的低频操作；
@@ -36,7 +39,7 @@ interface SpeakerIdentity {
  *   比「发不出去」更伤体验。
  *
  * ## 屏蔽过滤（#398）
- * 世界 / 帮会在投递前逐收件人判一次「他有没有拉黑发送者」，拉黑了就不发（`reachable`）。
+ * 世界 / 同图 / 帮会在投递前逐收件人判一次「他有没有拉黑发送者」，拉黑了就不发（`reachable`）。
  * 过滤**必须在服务端**：客户端根本不知道「谁拉黑了我」，让它过滤等于让它猜。
  *
  * ## 回显
@@ -105,6 +108,9 @@ export class ChatService implements OnApplicationShutdown {
       case "world":
         this.sayWorld(accountId, identity, text);
         return;
+      case "map":
+        this.sayMap(accountId, identity, text);
+        return;
       case "guild":
         this.sayGuild(accountId, identity, text);
         return;
@@ -116,12 +122,21 @@ export class ChatService implements OnApplicationShutdown {
     }
   }
 
-  //#region 三个频道
+  //#region 四个频道
 
-  /** 世界频道：同图观看者（发送者也在观看者集合里，天然带回显） */
+  /** 世界频道：全服在场者（发送者一定在集合里，天然带回显；屏蔽过滤照走） */
   private sayWorld(accountId: string, identity: SpeakerIdentity, text: string): void {
-    this.deliver(this.reachable([...this.world.viewersOf(identity.zoneId, identity.mapId)], accountId, identity), accountId, identity, {
+    this.deliver(this.reachable(this.presence.presentAccountIds(), accountId, identity), accountId, identity, {
       channel: "world",
+      text,
+      from: { guildName: identity.guildName },
+    });
+  }
+
+  /** 同图频道：同图观看者（发送者也在观看者集合里，天然带回显） */
+  private sayMap(accountId: string, identity: SpeakerIdentity, text: string): void {
+    this.deliver(this.reachable([...this.world.viewersOf(identity.zoneId, identity.mapId)], accountId, identity), accountId, identity, {
+      channel: "map",
       text,
       from: { guildName: identity.guildName },
     });
@@ -208,7 +223,7 @@ export class ChatService implements OnApplicationShutdown {
   /**
    * 投递一帧（组好完整的 entry 交给出口；接收方是否真的连着由 RealtimeService 判）
    *
-   * 接收方列表里必须包含发送者自己（世界 / 帮会天然如此；私聊显式带上）——
+   * 接收方列表里必须包含发送者自己（世界 / 同图 / 帮会天然如此；私聊显式带上）——
    * 客户端只在收到帧时上屏，回显就是「服务端确认过的成功」。
    */
   private deliver(

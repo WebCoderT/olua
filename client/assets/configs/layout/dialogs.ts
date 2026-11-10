@@ -1086,11 +1086,11 @@ export const chatDialogLayout = {
     borderWidth: 1.5,
     padding: 20,
   },
-  /** 页签（三个：世界 / 帮会 / 私聊；贴窗顶一排） */
+  /** 页签（四个：世界 / 同图 / 帮会 / 私聊；贴窗顶一排。#876 起四页签压窄排开） */
   tabs: {
     y: 116,
-    size: new Size(124, 26),
-    columns: [-136, 0, 136],
+    size: new Size(98, 26),
+    columns: [-153, -51, 51, 153],
     radius: 6,
     activeFill: new Color(255, 200, 80, 230),
     activeText: new Color(38, 30, 12, 255),
@@ -1174,8 +1174,9 @@ export const chatDialogLayout = {
   titleFontSize: 12,
   /** 文案 */
   texts: {
-    tabs: ["世 界", "帮 会", "私 聊"],
+    tabs: ["世 界", "同 图", "帮 会", "私 聊"],
     worldEmpty: "（还没有人说第一句——输入框在下面）",
+    mapEmpty: "（同图频道还没有消息；跟眼前的人打个招呼）",
     guildEmpty: "（帮会频道还没有消息；没有帮会时发不出去）",
     /** 私聊**选人页**的空态（还没挑对象） */
     privateEmpty: "（还没有私聊：先点「选人」挑一个对象）",
@@ -1186,7 +1187,8 @@ export const chatDialogLayout = {
      * 再让他去挑就是自相矛盾（#495，与 #491 的组队空态同一类错误）。
      */
     privateChatEmpty: "（还没有私聊消息，说点什么吧）",
-    inputWorld: "对同图的人说点什么…",
+    inputWorld: "对全世界说点什么…",
+    inputMap: "对同图的人说点什么…",
     inputGuild: "对帮会的伙伴说点什么…",
     inputPrivate: "对「{name}」说…",
     send: "发送",

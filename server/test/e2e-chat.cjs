@@ -3,13 +3,14 @@
  * 聊天专项 e2e（server/test/e2e-chat.cjs，issue #395）
  *
  * 盯的不变量（改聊天转发 / 限频 / 频道准入后必须全绿）：
- * 一、世界频道：同图广播（发送者自己收到回显，**另一张图的人收不到**）；from 带
+ * 一、世界频道：**全服在场者广播**（#876：另一张图的人也能收到，名实相符）；from 带
  *     accountId / roleId / username（客户端据此上色），正文经过净化（连续空白折叠）
- * 二、格式与限频：空消息 / 超长 / 不认识的频道 / 缺字段都被拒（error 帧，连接不断）；
+ * 二、同图频道（#876 拆出来的）：同图的人收到、另一张图的收不到（不外泄）
+ * 三、格式与限频：空消息 / 超长 / 不认识的频道 / 缺字段都被拒（error 帧，连接不断）；
  *     限频读配置（本套压到 3 条 / 1 秒），窗口过了又能发
- * 三、帮会频道：没帮会发不出去；帮会成员（含发送者）都收到、同图的外人收不到；
+ * 四、帮会频道：没帮会发不出去；帮会成员（含发送者）都收到、同图的外人收不到；
  *     from.guildName 是库里现查的帮会名
- * 四、私聊：双方都收到同一条帧（to 带收件人三件套）；查无此人 / 私聊自己 /
+ * 五、私聊：双方都收到同一条帧（to 带收件人三件套）；查无此人 / 私聊自己 /
  *     缺对象 / **对方不在线**整条拒绝（发送者连回显都拿不到）
  *
  * 与 e2e-social 同款：**临时文件库**，票据走 HTTP、业务走 WS 帧。
@@ -231,7 +232,7 @@ function connect(url) {
 
     //#region 一、世界频道
 
-    group("一、世界频道：同图广播 + 自己的回显 + 净化");
+    group("一、世界频道：全服在场者广播 + 自己的回显 + 净化");
     sessionA.chats = [];
     sessionB.chats = [];
     sessionC.chats = [];
@@ -248,17 +249,46 @@ function connect(url) {
     );
     checkEqual(worldEcho && worldEcho.text, "大家好， 世界频道", "正文被净化（首尾与连续空白折叠成一个空格）");
 
-    const worldAtB = await waitFor("B 收到同图的世界消息", async () =>
+    const worldAtB = await waitFor("B 收到世界消息", async () =>
       sessionB.chats.find((entry) => entry.channel === "world" && entry.from.username === "甲玩家") || null,
     );
     check(!!worldAtB, "同图的 B 收到世界消息");
     checkEqual(worldAtB && worldAtB.from.roleId, A.roleId, "帧带 roleId（客户端拿它做关系上色）");
-    await sleep(150);
-    checkEqual(sessionC.chats.length, 0, "另一张图的 C 收不到（世界频道 = 同图广播，issue 口径）");
+    // #876 验收项：世界频道不再按图广播——另一张图的 C 也能收到
+    const worldAtC = await waitFor("C 收到世界消息", async () =>
+      sessionC.chats.find((entry) => entry.channel === "world" && entry.from.username === "甲玩家") || null,
+    );
+    check(!!worldAtC, "另一张图的 C 也收到世界消息（#876：世界 = 全服在场者）");
 
     //#endregion
 
-    //#region 二、格式与限频
+    //#region 二、同图频道
+
+    group("二、同图频道：同图广播、另一张图不外泄");
+    // 限频是全局的（allowSend 在频道分发之前）：组一的消息还在滑窗里，先等窗口清空
+    await sleep(RATE_WINDOW_MS + 100);
+    sessionA.chats = [];
+    sessionB.chats = [];
+    sessionC.chats = [];
+    sessionA.send("chat", { channel: "map", text: "同图的朋友看过来" });
+    const mapEcho = await waitFor("A 收到自己的同图回显", async () =>
+      sessionA.chats.find((entry) => entry.channel === "map" && entry.text.includes("看过来")) || null,
+    );
+    check(!!mapEcho, "A 收到同图频道的回显（发送者天然在观看者集合里）");
+    const mapAtB = await waitFor("B 收到同图消息", async () =>
+      sessionB.chats.find((entry) => entry.channel === "map" && entry.from.username === "甲玩家") || null,
+    );
+    check(!!mapAtB, "同图的 B 收到同图频道消息");
+    await sleep(150);
+    checkEqual(
+      sessionC.chats.filter((entry) => entry.channel === "map").length,
+      0,
+      "另一张图的 C 收不到同图频道（就近说话不外泄，#876 回归）",
+    );
+
+    //#endregion
+
+    //#region 三、格式与限频
 
     group("二、格式与限频：坏消息被拒、连接不断、上限读配置");
     sessionA.errors = [];
@@ -307,7 +337,7 @@ function connect(url) {
 
     //#region 三、帮会频道
 
-    group("三、帮会频道：准入查库、成员广播、外人收不到");
+    group("四、帮会频道：准入查库、成员广播、外人收不到");
     sessionA.errors = [];
     sessionA.chats = [];
     sessionA.send("chat", { channel: "guild", text: "还没帮会就想喊话" });
@@ -341,7 +371,7 @@ function connect(url) {
 
     //#region 四、私聊
 
-    group("四、私聊：双方同帧、目标校验、离线整条拒绝");
+    group("五、私聊：双方同帧、目标校验、离线整条拒绝");
     // 这一组的每一步都会被限频计数（allowSend 在频道分发之前）：
     // 步与步之间等窗口清空，否则后面的「拒绝」可能是限频的假阳性（判据纪律：错误消息要精确匹配）
     sessionA.chats = [];
