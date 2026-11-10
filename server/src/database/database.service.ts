@@ -28,6 +28,8 @@ const WORLD_INSTANCE_OLD_FORMAT = /^m(.+)_(\d+)$/;
 export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
   private readonly logger = new Logger(DatabaseService.name);
   private db!: DatabaseSync;
+  /** 当前事务嵌套深度（见 `transaction`）：0 = 不在事务里，> 0 = 已在事务里，再调并入外层 */
+  private txDepth = 0;
 
   constructor(private readonly config: ConfigService) {}
 
@@ -1683,9 +1685,22 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
     return Number(value ?? 0);
   }
 
-  /** 事务（回调内抛异常会整体回滚） */
+  /**
+   * 事务（回调内抛异常会整体回滚）
+   *
+   * **可重入**（#868）：已经在事务里再调一次不会发第二个 `BEGIN` —— SQLite 对嵌套 BEGIN
+   * 直接报 `cannot start a transaction within a transaction`，而调用方往往把这个异常
+   * 当「日志写失败」warn 吞掉，结果就是**静默丢数据**（`EventLogService.recordMany`
+   * 内部自己包了一层事务，行数 > 1 时走的就是那条路；e2e-event-log 抓到过
+   * 「邮件附件另记 gain」四条全空）。现在内层并入外层：回滚只有一个，由最外层决定。
+   *
+   * 需要「内层失败但外层继续」请用 `SAVEPOINT`，这里刻意不做 —— 现有调用方都不需要，
+   * 加了反而让人以为内层能单独回滚。
+   */
   transaction<T>(work: () => T): T {
+    if (this.txDepth > 0) return work();
     this.db.exec("BEGIN");
+    this.txDepth += 1;
     try {
       const result = work();
       this.db.exec("COMMIT");
@@ -1693,6 +1708,8 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
     } catch (error) {
       this.db.exec("ROLLBACK");
       throw error;
+    } finally {
+      this.txDepth -= 1;
     }
   }
 }
