@@ -67,7 +67,7 @@ export const ApiRoutes = {
      */
     register: "/auth/register",
   },
-  /** gameConfig 模块（5 个接口） */
+  /** gameConfig 模块（6 个接口） */
   gameConfig: {
     /**
      * 玩家侧配置快照（GET /game-config）
@@ -99,6 +99,12 @@ export const ApiRoutes = {
      * `borders`：前后缀组合 → 边框 key + 显示效果（键 = `prefix|suffix`）；
      */
     equipmentAppearance: "/game-config/equipment-appearance",
+    /**
+     * 配置版本（轮询用）（GET /game-config/version）
+     *
+     * 当前配置版本号：每次管理端写配置成功 +1（0 = 从没改过）。
+     */
+    version: "/game-config/version",
   },
   /** guild 模块（10 个接口） */
   guild: {

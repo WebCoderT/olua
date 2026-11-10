@@ -154,6 +154,21 @@ export const Permission = {
    * 这一刀只有读（没有处置写接口），所以也只加一个点。
    */
   REPORT_READ: "report:read",
+
+  /**
+   * 查看配置版本历史与 diff（#882）
+   *
+   * **不给只读观察员**：历史里有「谁在什么时候改了什么」（`created_by` + 操作标识），
+   * 与 `audit:read` 同属「查人」的信息，而观察员的定位是看业务数据。
+   */
+  CONFIG_READ: "config:read",
+  /**
+   * 配置回滚（#882）
+   *
+   * 回滚是「一次改 38 张表」的动作，敏感度高于任何单表写权限（`gameConfig:write` 改一行，
+   * 它改一整套），所以单列一个点 —— 想让某人只能微调数值、不能整体回退时，这一条就是闸。
+   */
+  CONFIG_RESTORE: "config:restore",
 } as const;
 
 export type PermissionValue = (typeof Permission)[keyof typeof Permission];
@@ -230,6 +245,8 @@ export const PERMISSION_LABELS: Record<PermissionValue, string> = {
   [Permission.GUILD_READ]: "查看帮会",
   [Permission.GUILD_WRITE]: "改帮会公告 / 解散帮会",
   [Permission.REPORT_READ]: "查看玩家举报",
+  [Permission.CONFIG_READ]: "查看配置版本历史",
+  [Permission.CONFIG_RESTORE]: "配置回滚",
 };
 
 /** 是否是合法的管理员角色（注册入参 / 数据列兜底用） */

@@ -37,7 +37,7 @@ function main() {
   console.log("配置快照已导出");
   console.log(`  源文件：${dbPath}`);
   console.log(`  写入：  ${target}`);
-  console.log(`  内容：  ${stats.tables} 张配置表 / ${stats.rows} 行 / ${tooling.formatBytes(Buffer.byteLength(sql))}`);
+  console.log(`  内容：  ${stats.tables} 张配置表 / ${stats.rows} 行 / ${tooling.formatBytes(Buffer.byteLength(sql))} / 第 ${stats.version} 版`);
   console.log("  下一步：git add 这个文件并提交；别人 pull 后跑 make config-import");
 }
 

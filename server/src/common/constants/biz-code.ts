@@ -579,4 +579,17 @@ export const BizCode = {
    */
   UI_EFFECT_KEY_NOT_FOUND: 50145,
   //#endregion
+
+  //#region 配置版本链（#881 / #882）
+
+  /** 回滚历史里没有这一版（层被保留策略删掉了，或者版本号抄错） */
+  CONFIG_REVISION_NOT_FOUND: 50146,
+  /**
+   * 这一层的 payload 解析不出来 / 不是本工具写的
+   *
+   * 与「404 那一版」分开：行在、内容是坏的 —— 说明这行被人工改过，或写入时被截断。
+   * 回滚要**拒绝**而不是尽量恢复，半套配置比不回滚更难查。
+   */
+  CONFIG_REVISION_PAYLOAD_INVALID: 50147,
+  //#endregion
 } as const;

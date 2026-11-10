@@ -238,6 +238,33 @@ export const routes = {
      */
     update: "/admin/combat-weights",
   },
+  /** adminConfig 模块（4 个接口） */
+  adminConfig: {
+    /**
+     * 配置版本历史（最近 N 层）（GET /admin/config/revisions）
+     *
+     * 按版本号倒序。每层是一份**全量配置**（38 张表），所以列表只回元信息 + 行数，不回 payload。
+     */
+    revisions: "/admin/config/revisions",
+    /**
+     * 两个版本之间的差异（按表统计行数）（GET /admin/config/revisions/{from}/diff/{to}）
+     *
+     * 只回**有变化的表**：每张表的行数变化、新增行数、删除行数。
+     */
+    diff: (from: string, to: string) => `/admin/config/revisions/${encodeURIComponent(from)}/diff/${encodeURIComponent(to)}`,
+    /**
+     * 回滚到某一版（单事务全量恢复）（POST /admin/config/revisions/{version}/restore）
+     *
+     * 把这一层的**全量配置**写回库里：38 张配置表逐表 `DELETE` + 逐行 `INSERT`，**一个事务** ——
+     */
+    restore: (version: string) => `/admin/config/revisions/${encodeURIComponent(version)}/restore`,
+    /**
+     * 当前配置版本（GET /admin/config/version）
+     *
+     * 与玩家侧 `GET /game-config/version` 同一个数字：每次管理端写配置成功 +1。
+     */
+    version: "/admin/config/version",
+  },
   /** adminDrop 模块（7 个接口） */
   adminDrop: {
     /**

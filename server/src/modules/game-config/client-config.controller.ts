@@ -1,10 +1,13 @@
-import { Controller, Get } from "@nestjs/common";
+import { Controller, Get, HttpStatus, Req, Res } from "@nestjs/common";
+import { Request, Response } from "express";
 import { ApiDataResponse } from "../../common/decorators/api-data-response.decorator";
 import { ApiPlayerDoc } from "../../common/decorators/api-doc.decorator";
 import { Public } from "../../common/decorators/public.decorator";
+import { apiEnvelope } from "../../common/interceptors/transform.interceptor";
 import { AudioSettingService } from "../audio-setting/audio-setting.service";
 import { AudioConfigListDto } from "../audio-setting/dto/audio-setting.dto";
 import { ClientConfigService } from "./client-config.service";
+import { ConfigVersionDto } from "./dto/config-revision.dto";
 import { EquipAlignService } from "./equip-align.service";
 import { EquipInAlignService } from "./equip-in-align.service";
 import { EquipmentAppearanceService } from "./equipment-appearance.service";
@@ -42,8 +45,47 @@ export class ClientConfigController {
       "「只覆写管理端能改的数值字段」这条约束，走下面的 `GET /game-config/equip-align` 单独下发。",
   })
   @ApiDataResponse(GameConfigSnapshotDto, { description: "全部运营配置快照" })
-  snapshot(): GameConfigSnapshotDto {
-    return this.clientConfig.snapshot();
+  snapshot(@Req() request: Request, @Res() response: Response): void {
+    // 版本 → ETag（#881）。客户端带 `If-None-Match` 且版本没变 → 304 空体（省掉几 MB 传输）
+    const version = this.clientConfig.version();
+    const etag = etagOf(version);
+    response.setHeader("ETag", etag);
+    // `no-cache` 不是「不缓存」：允许存，但每次用之前必须回来问一句（那正是 304 的作用）。
+    // 不能给 max-age —— 配置改完客户端最多等一个 max-age 才看见。
+    response.setHeader("Cache-Control", "no-cache");
+    if (matchesEtag(request.headers["if-none-match"], etag)) {
+      // **必须自己写响应**：`@Res({passthrough:true})` 的交还给 Nest 之后，
+      // 适配器会用路由默认状态码（GET = 200）覆盖掉这里的 304（见 express-adapter.reply）
+      response.status(HttpStatus.NOT_MODIFIED).end();
+      return;
+    }
+    response.json(apiEnvelope(this.clientConfig.snapshot()));
+  }
+
+  /**
+   * 配置版本（#881）
+   *
+   * 客户端轮询用的就是它：约 20 字节，比重新拉一份几 MB 的快照便宜三个数量级。
+   * 版本**不等于**本地值就重拉快照（不判大小 —— DB 被恢复成旧备份时版本会回退，
+   * 判大小会让客户端永远停在「我这份更新」）。
+   *
+   * 与 `GET /game-config` 的关系：那边响应头里有同值的 `ETag`，这边只是把它单独取出来；
+   * 快照体里**没有** version 字段 —— 那是客户端的契约清单（`SNAPSHOT_SECTIONS`），
+   * 为一个已经在响应头里的数字去改客户端的整份契约不值得。
+   */
+  @Get("version")
+  @ApiPlayerDoc({
+    operationId: "gameConfig.version",
+    summary: "配置版本（轮询用）",
+    description:
+      "当前配置版本号：每次管理端写配置成功 +1（0 = 从没改过）。\n\n" +
+      "客户端拿它跟本地那份比：**不相等**就重拉 `GET /game-config`（不判大小 —— 库被恢复成旧备份时版本会回退）。\n" +
+      "建议 60 秒一次，只在游戏内轮询；拉取失败保留旧表继续用，下一轮再试。\n\n" +
+      "需要玩家令牌（与快照同口径）。",
+  })
+  @ApiDataResponse(ConfigVersionDto, { description: "当前配置版本" })
+  version(): ConfigVersionDto {
+    return ConfigVersionDto.of(this.clientConfig.version());
   }
 
   /**
@@ -153,4 +195,32 @@ export class ClientConfigController {
   equipmentAppearanceData(): EquipmentAppearanceDto {
     return this.equipmentAppearance.appearance();
   }
+}
+
+/**
+ * 快照的 ETag（#881）：**只由版本号决定**
+ *
+ * 用弱校验（`W/`）而不是内容哈希：版本号是配置「有没有变」的唯一判据（写接口成功后 +1），
+ * 而算一遍几 MB 的 SHA256 比直接序列化还贵 —— 那等于把省下来的物化成本又花回去。
+ * 代价是「绕过管理端直接改库」不会换 ETag（`config-import` 本来就要求重启进程，
+ * 重启后版本号照旧，但客户端连的是新进程 —— 这条路不靠 ETag 兜底）。
+ */
+function etagOf(version: number): string {
+  return `W/"cfg-${version}"`;
+}
+
+/**
+ * `If-None-Match` 是否命中
+ *
+ * 支持逗号列表与 `*`（RFC 9110 允许，浏览器 / 客户端库会这么发）；
+ * 比较前把两边的弱前缀 `W/` 都去掉 —— 强弱标记不该影响「是不是同一份」。
+ */
+function matchesEtag(header: string | undefined, etag: string): boolean {
+  if (!header) return false;
+  const normalize = (value: string) => value.trim().replace(/^W\//, "");
+  const target = normalize(etag);
+  return header.split(",").some((item) => {
+    const candidate = item.trim();
+    return candidate === "*" || normalize(candidate) === target;
+  });
 }

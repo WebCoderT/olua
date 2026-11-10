@@ -379,11 +379,83 @@ check(diff !== null, "内容不一致时返回差异");
 checkEqual(diff?.section, "items", "差异定位到 items 表");
 check(typeof diff?.firstLine === "number" && diff.firstLine > 0, "差异带行号");
 
+// 版本行是元信息：两台机器的计数天然不同，不能因此判「快照落后」
+const versionDrifted = good.replace(/^-- config-version: .*$/m, "-- config-version: 999");
+checkEqual(configSql.compare(versionDrifted, good), null, "只有版本号不同时 compare 不算差异（否则 config-check 天天误报）");
+
+//#endregion
+
+//#region 七 · 版本线（#883）
+
+group("七 · 版本线（文件比库旧就拒绝）");
+
+check(exported.sql.includes("-- config-version: 0"), "导出的文件头带版本行（测试库没有 config_version 表 → 0）");
+checkEqual(configSql.parseMeta(exported.sql).version, 0, "parseMeta 读得出版本号");
+
+check(
+  (() => {
+    try {
+      configSql.checkImportVersion(5, 5);
+      configSql.checkImportVersion(6, 5);
+      return true;
+    } catch {
+      return false;
+    }
+  })(),
+  "同版本 / 文件更新都放行（首次同步：新库 0 版导别人的 42 版）",
+);
+
+checkThrows(
+  () => configSql.checkImportVersion(4, 5),
+  "文件比目标库旧",
+  "文件比库旧被拒绝（两机互导第二次就撞这条）",
+);
+
+check(
+  (() => {
+    try {
+      configSql.checkImportVersion(4, 5, { force: true });
+      return true;
+    } catch {
+      return false;
+    }
+  })(),
+  "--force 明确要回退时放行",
+);
+
+checkThrows(
+  validateVariant((text) => text.replace(/^-- config-version: .*$/m, "")),
+  "缺少配置版本",
+  "没有版本行的旧文件被拒绝（提示重导）",
+);
+
+// 版本行由真库里的 config_version 表决定
+const versioned = createDb(path.join(TEMP_DIR, "versioned.db"));
+exec(versioned, exported.sql);
+exec(versioned, "CREATE TABLE config_version (id INTEGER PRIMARY KEY CHECK (id = 1), version INTEGER NOT NULL DEFAULT 0, updated_at INTEGER NOT NULL DEFAULT 0, updated_by TEXT NOT NULL DEFAULT '');");
+exec(versioned, "INSERT INTO config_version (id, version) VALUES (1, 42);");
+checkEqual(
+  (() => {
+    const handle = new DatabaseSync(versioned);
+    try {
+      return configSql.readVersion(handle);
+    } finally {
+      handle.close();
+    }
+  })(),
+  42,
+  "readVersion 读的是 config_version.version",
+);
+const versionedSql = configSql.build(versioned, { tables: TEST_TABLES });
+checkEqual(versionedSql.stats.version, 42, "stats 里带版本号（导出时打印）");
+check(versionedSql.sql.includes("-- config-version: 42"), "导出文件头写的是库里的版本");
+checkEqual(configSql.compare(versionedSql.sql, exported.sql), null, "版本号变了但内容没变 → compare 仍视作一致");
+
 //#endregion
 
 //#region 七 · 落盘
 
-group("七 · 落盘（先写临时文件再 rename）");
+group("八 · 落盘（先写临时文件再 rename）");
 
 const outFile = path.join(TEMP_DIR, "out", "config-sync.sql");
 configSql.writeAtomic(outFile, exported.sql);

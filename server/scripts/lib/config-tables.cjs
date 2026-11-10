@@ -98,6 +98,10 @@ const RUNTIME_TABLES = Object.freeze([
   "announcements",
   "audit_logs",
   "config_meta",
+  // 配置版本链（#881 / #882）：版本计数器与回滚历史 —— 每台机器各写各的，绝不进同步文件
+  // （进了文件就变成「别人的版本号盖掉我的」，而且 payload 里装着整份配置，文件会翻几倍）
+  "config_revisions",
+  "config_version",
   "guild_applications",
   "guild_members",
   "guilds",
@@ -125,6 +129,15 @@ const FORMAT_TAG = "-- olua config snapshot v1";
 
 /** 文件里的表清单行（`-- tables: a,b,c`）—— 导入时靠它判断「这份文件是全量的」 */
 const TABLES_LINE_PREFIX = "-- tables: ";
+
+/**
+ * 文件里的配置版本行（`-- config-version: 42`，#883）
+ *
+ * 这是**元信息不是内容**：`config-check` / 导入后的逐字节校验都会把它剔掉再比 ——
+ * 两台机器的版本计数天然不同（各写各的），拿它比内容会天天误报「快照落后了」。
+ * 它只在导入时用一次：文件比目标库旧就拒绝（见 `checkImportVersion`）。
+ */
+const VERSION_LINE_PREFIX = "-- config-version: ";
 
 /**
  * 校验库里每张表都已归类
@@ -170,5 +183,6 @@ module.exports = {
   FORMAT_TAG,
   RUNTIME_TABLES,
   TABLES_LINE_PREFIX,
+  VERSION_LINE_PREFIX,
   assertAllClassified,
 };

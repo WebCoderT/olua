@@ -4100,7 +4100,7 @@ export type AuditQuery = {
   /**
    * 目标类型筛选
    */
-  targetType?: "account" | "role" | "admin" | "announcement" | "mail" | "title" | "soul" | "rank" | "equipment" | "drug" | "item" | "monster" | "npc" | "mall" | "fashion" | "dropTable" | "monsterDrop" | "levelCurve" | "equipmentVariant" | "growthScalar" | "skill" | "status" | "zone" | "guild" | "quest" | "achievement" | "equipAlign" | "equipInAlign" | "map" | "uiEffect" | "audioSetting" | "runtimeParams" | "combatWeights" | "guideSteps" | "equipmentAppearance" | "moneyItem" | "levelScroll";
+  targetType?: "account" | "role" | "admin" | "announcement" | "mail" | "title" | "soul" | "rank" | "equipment" | "drug" | "item" | "monster" | "npc" | "mall" | "fashion" | "dropTable" | "monsterDrop" | "levelCurve" | "equipmentVariant" | "growthScalar" | "skill" | "status" | "zone" | "guild" | "quest" | "achievement" | "equipAlign" | "equipInAlign" | "map" | "uiEffect" | "audioSetting" | "runtimeParams" | "combatWeights" | "guideSteps" | "equipmentAppearance" | "moneyItem" | "levelScroll" | "config";
   /**
    * 只看针对某个目标的日志（目标 id）
    */
@@ -9404,6 +9404,127 @@ export type AudioConfigList = {
    * 全部音效配置，按 AUDIO_KEYS 登记顺序
    */
   list: AudioConfig[];
+};
+
+export type ConfigVersion = {
+  /**
+   * 配置版本号：每次管理端写配置成功 +1（0 = 出厂状态，一次都没改过）
+   */
+  version: number;
+};
+
+export type ConfigRevision = {
+  /**
+   * 版本号（这一层是「第几版」，与 config_version 同一个计数）
+   */
+  version: number;
+  /**
+   * 这一层是什么改动（写接口的 operationId，如 adminSkill.update）
+   */
+  label: string;
+  /**
+   * payload 字节数（全量配置 JSON；超过 5MB 说明配置该拆了）
+   */
+  byteSize: number;
+  /**
+   * payload 里有几张配置表
+   */
+  tableCount: number;
+  /**
+   * payload 里一共多少行
+   */
+  rowCount: number;
+  /**
+   * 操作人（管理端账号名；同一人 10 秒内的连点会合并成一层）
+   */
+  createdBy: string;
+  /**
+   * 落层时间（毫秒）
+   */
+  createdAt: number;
+};
+
+export type ConfigRevisionList = {
+  /**
+   * 保留的层数（默认 20，`CONFIG_REVISION_RETAIN`）
+   */
+  total: number;
+  /**
+   * 按版本号倒序（最新在前）
+   */
+  list: ConfigRevision[];
+};
+
+export type ConfigRevisionTableDiff = {
+  /**
+   * 表名（与 config-sync.sql 的节名一致）
+   */
+  table: string;
+  /**
+   * 这张表在旧版有几行
+   */
+  from: number;
+  /**
+   * 这张表在新版有几行
+   */
+  to: number;
+  /**
+   * 新增行数（改一行也会体现成「一删一加」，所以它是行级不是字段级）
+   */
+  added: number;
+  /**
+   * 删除行数
+   */
+  removed: number;
+};
+
+export type ConfigRevisionDiff = {
+  /**
+   * 旧版本号
+   */
+  from: number;
+  /**
+   * 新版本号
+   */
+  to: number;
+  /**
+   * 有变化的表数（行数一样但值改了也会出现在这个列表里）
+   */
+  changed: number;
+  /**
+   * 逐表差异，只含有变化的表
+   */
+  tables: ConfigRevisionTableDiff[];
+};
+
+export type ConfigRestoreResult = {
+  /**
+   * 回滚后的新版本号（回滚本身也是一层新版本，历史不删）
+   */
+  version: number;
+  /**
+   * 内容取自哪一层
+   */
+  restoredFrom: number;
+  /**
+   * 恢复了多少张表
+   */
+  tables: number;
+  /**
+   * 恢复了多少行
+   */
+  rows: number;
+  /**
+   * 被跳过的表（payload 里有、当前库里没有的表结构 —— 不做结构迁移，跳过并告警）
+   */
+  skipped: string[];
+};
+
+export type ConfigRevisionQuery = {
+  /**
+   * 取最近多少层（默认 20，上限 100）
+   */
+  limit?: number;
 };
 
 export type AdminLevelCurvePreviewQuery = {

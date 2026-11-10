@@ -194,6 +194,15 @@ import {
   AudioSettingListDto,
   SaveAudioSettingDto,
 } from "../modules/audio-setting/dto/audio-setting.dto";
+import {
+  ConfigRestoreResultDto,
+  ConfigRevisionDiffDto,
+  ConfigRevisionDto,
+  ConfigRevisionListDto,
+  ConfigRevisionQueryDto,
+  ConfigRevisionTableDiffDto,
+  ConfigVersionDto,
+} from "../modules/game-config/dto/config-revision.dto";
 
 /**
  * Swagger 文档要注册的模型清单
@@ -576,4 +585,12 @@ export const SWAGGER_MODELS = [
   SaveAudioSettingDto,
   AudioConfigDto,
   AudioConfigListDto,
+  // 配置版本链（#881 / #882）
+  ConfigVersionDto,
+  ConfigRevisionDto,
+  ConfigRevisionListDto,
+  ConfigRevisionTableDiffDto,
+  ConfigRevisionDiffDto,
+  ConfigRestoreResultDto,
+  ConfigRevisionQueryDto,
 ];

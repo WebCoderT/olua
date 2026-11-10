@@ -172,6 +172,19 @@ export const PERMISSION = {
    */
   GAME_CONFIG_WRITE: "gameConfig:write",
   /**
+   * 查看配置版本历史与 diff（#882）
+   *
+   * 与 `AUDIT_READ` 同一档：历史里有「谁在什么时候改了什么」，只读观察员没有这一项。
+   */
+  CONFIG_READ: "config:read",
+  /**
+   * 配置回滚（#882）
+   *
+   * 回滚是「一次改 38 张表」，敏感度高于任何单表写权限 —— 想让某人只能微调数值、
+   * 不能整体回退时，这一条就是闸。
+   */
+  CONFIG_RESTORE: "config:restore",
+  /**
    * 查看区服（区服清单是注册侧的公开信息，运营侧同样要看得见账号分布）
    *
    * 只读观察员**也给**：读区服列表不等于能改 —— 开区 / 合并走 `ZONE_WRITE` 单独管控。
@@ -232,6 +245,8 @@ export const PERMISSION_LABELS: Record<string, string> = {
   [PERMISSION.GUILD_READ]: "查看帮会",
   [PERMISSION.GUILD_WRITE]: "改帮会公告 / 解散帮会",
   [PERMISSION.REPORT_READ]: "查看玩家举报",
+  [PERMISSION.CONFIG_READ]: "查看配置版本历史",
+  [PERMISSION.CONFIG_RESTORE]: "配置回滚",
 };
 
 /**
@@ -517,6 +532,8 @@ export const AUDIT_TARGET_LABELS: Record<string, string> = {
   runtimeParams: "运行时参数",
   combatWeights: "战斗力权重",
   guideSteps: "新手引导步骤",
+  /** 配置版本（#882）：回滚的目标类型 —— 一次改 38 张表，不是任何单张表的日志 */
+  config: "配置版本",
 };
 
 /** 目标类型中文名（未知类型原样显示） */
@@ -560,6 +577,7 @@ export const AUDIT_ACTION_LABELS: Record<string, string> = {
   "adminMoneyItem.create": "新建货币物品",
   "adminMoneyItem.update": "编辑货币物品",
   "adminMoneyItem.delete": "删除货币物品",
+  "adminConfig.restore": "回滚配置到某一版",
   "role.create": "创建角色",
   "role.save": "保存角色进度",
   "role.remove": "删除角色",

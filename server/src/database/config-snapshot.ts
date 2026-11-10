@@ -96,8 +96,14 @@ export function bootstrapConfigSnapshot(db: DatabaseSync, logger: Logger): Boots
   db.exec(text);
   // 快照里关掉了外键（自己按顺序插入），这里必须打开回来 —— 否则后面删账号不级联
   db.exec("PRAGMA foreign_keys = ON;");
+  // 跟上文件头里的配置版本（#883）：不跟的话新库从 0 开始，别人导你导出的文件时
+  // 版本闸会判成「库更新」而拒绝。空库场景，直接取值即可
+  const version = countVersion(text);
+  if (version > 0) {
+    db.prepare("UPDATE config_version SET version = ?, updated_at = ? WHERE id = 1").run(version, Date.now());
+  }
   writeMarker(db, `imported:${rows}`);
-  logger.log(`出厂数据已从 config-sync.sql 灌入：${rows} 行 / ${countTables(text)} 张配置表`);
+  logger.log(`出厂数据已从 config-sync.sql 灌入：${rows} 行 / ${countTables(text)} 张配置表 / 第 ${version} 版`);
   return { status: "imported", rows };
 }
 
@@ -118,6 +124,19 @@ function countRows(text: string): number {
 function countTables(text: string): number {
   const line = text.split("\n", 12).find((item) => item.startsWith("-- tables: "));
   return line ? line.slice("-- tables: ".length).split(",").length : 0;
+}
+
+/**
+ * 文件头里的配置版本（`-- config-version: 42`，#883）
+ *
+ * 缺这一行（旧文件）就当 0：不写版本号比写一个假版本号安全 ——
+ * 假的高版本会让导入闸永远误判「库更新」。
+ */
+function countVersion(text: string): number {
+  const prefix = "-- config-version: ";
+  const line = text.split("\n", 12).find((item) => item.startsWith(prefix));
+  const value = line ? Number(line.slice(prefix.length).trim()) : 0;
+  return Number.isInteger(value) && value > 0 ? value : 0;
 }
 
 function writeMarker(db: DatabaseSync, value: string): void {
