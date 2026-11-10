@@ -399,12 +399,17 @@ test/e2e-equip-in-align.cjs      装备内观几何专项（73 条断言，#523�
 
 - **附件在「领取」那一刻才入包**，且必须走 `RolesService.grantQuestRewards` —— 任务交付 / 成就领奖 / 邮件附件
   共用同一个发奖入口（一次落库 + revision +1），否则「邮件里的东西」与「背包里的东西」会出现差额；
-- **未领附件的邮件不能删**（`MAIL_UNCLAIMED 50143`）：删了等于替玩家扔掉奖励。已领或本来就没附件才可删；
+- **未领奖励的邮件不能删**（`MAIL_UNCLAIMED 50143`）：删了等于替玩家扔掉奖励。
+  「有奖励」= **金币 / 经验 / 附件任一**（#866，判据是 `hasUnclaimedReward()` 一处）——
+  只看 `attachments` 会让「纯金币补偿邮件」被删掉；三样都没有的纯公告照常可删；
 - **没有奖励的邮件不碰角色存档**：否则读一封公告也会顶 revision，客户端下一次保存撞乐观锁；
 - **幂等写进 SQL**，不要先查再写：`UPDATE … WHERE id = ? AND claimed_at IS NULL`，`changes > 0` 才算真领到
   （并发点两次只发一份）；已读同理 `WHERE read_at IS NULL` —— 只留第一次看到的时刻；
-- **一键领取逐封发，不合并**：遇 `MALL_BAG_FULL` 停下并如实回报 `stoppedByBag`，已领的照常落库 ——
-  不是整单失败，也不是整单回滚；
+- **发奖与标已领在同一事务里，且先标后发**（#868）：`BEGIN → markClaimed → grantQuestRewards → markRead → COMMIT`。
+  先标后发让 `markClaimed` 命中 0 行成为**闸门**（并发请求 / 另一个进程的自动入包都拦得住 → 50142 整体回滚）；
+  反过来「先发后标」在崩溃后会重发一份。这也是 API 与实时两进程同跑定时器时唯一的互斥手段；
+- **一键领取逐封发，不合并**（#870）：每封一个独立事务 + 独立 `try/catch`，背包满**跳过继续**而不是 break
+  （它只挡「要放物品」的那几封），回执带 `failedCount` + `failures[]`（`mailId` / `code` / `reason`）；
 - **成就的背包满兜底**：捕获 20012 → 整份奖励（金币 / 经验 / 物品）转一封 `channel: "reward"` / `kind: "achievement"` 的邮件、
   **照常写 `claimed_at`**、返回 `mailId`。不写 `claimed_at` 就能反复点领取刷邮件。
   判业务码统一用 `isBizCode(error, code)`（`common/errors/biz.exception.ts`），不要各处手写 `instanceof`。
@@ -722,6 +727,7 @@ e2e 写法（`test/e2e-map-monitor.cjs` 的「二·五」段）：想稳定看�
 12. **子类覆写基类同名字段要加 `declare`**：`AuditQueryDto` 想给继承来的 `keyword` 换一条更具体的文档描述时，写成 `keyword?: string` 会 `TS2612`（will overwrite the base property）；改成 `declare keyword?: string;` 即可（装饰器照样生效，运行时不多一个字段）。
 13. **`app.set("trust proxy", ...)` 需要 `NestFactory.create<NestExpressApplication>`**：普通 `INestApplication` 上没有 `set`（`TS2339`），而 `trust proxy` 又只对 Express 适配器有意义。
 14. **拦截器要注册在它依赖的服务所在的那个模块**：`AuditInterceptor` 挂在 `AuditModule` 的 `providers` 里（`APP_INTERCEPTOR`）并 export `AuditService` —— 放 `AppModule` 容易出现「拦截器装了但服务没导出」的运行期问题。
+15. **`db.transaction()` 现在可重入，但「吞异常」的写入在里面会静默丢数据**（#868 踩到）：SQLite 对嵌套 `BEGIN` 直接报错，而 `EventLogService.recordMany` 恰好是「写失败只 warn 绝不抛」—— 于是「发奖事务里记流水」看着成功、`event_logs` 一行没有（行数 > 1 时它自己会 `.transaction()` 包一层，行数为 1 走普通 `INSERT` 才碰巧没事）。`DatabaseService.transaction()` 已加深度计数：已在事务里就并入外层，不再发第二个 `BEGIN`。新写「事务里调别的事务」的代码时，**先确认被调方没有自己吞异常** —— 吞掉的那条路审计查不出来，只有 e2e 直读表能看见。
 15. **`success` 这类筛选参数同样用字符串 `"true" | "false"`**（与 `online` 同一个坑：class-transformer 会把 `"false"` 变成 `true`）。
 16. **`keyword` 忘了在仓储层实现就是静默无效**：生成物里字段一直都在（继承自 `PageQueryDto`），请求带上它也不报错，只是不筛。要么实现，要么从 DTO 里去掉 —— 别留一个「看起来能用」的空壳参数。
 17. **两个进程之间没有通知通道**：管理端在存档进程改表，实时进程（AI / 结算）只能自己回查 —— 所以读「运营能改的配置」一律 **读库 + 短 TTL 缓存**（`MonsterAiService` 的 `SKILL_CACHE_TTL_MS = 1000` 读 skills / statuses / monster_skills 三表）。e2e 断言「改完生效」要留 ≥ TTL 的等待窗口，否则测的是缓存而不是逻辑。
