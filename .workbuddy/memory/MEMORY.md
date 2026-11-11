@@ -34,6 +34,8 @@
 - **锁格式与行为，不锁数值**（运营随时改数）；**显示效果不写断言**（人眼看，只留素材存在性与接线）。
 - **假绿 > 漏检**：断言模块数 / 精确匹配文案 / TTL 压 0 比漏检危险；**完整性**只能遍历全表查。
 - **帧只发「有变化」的东西**：断「路过某点」要扫**帧历史**；命中帧全图广播，先按 `hit.accountId` 过滤。
+- **源码断言钉在方法体上**（`methodBody(src, "submit")`），别用全文件 `includes` —— 新加的同名调用会误伤
+  （#865 的 `abandon()` 删行，让「领奖不删行」假红）。断言口径过期比红更危险：会让人对红免疫。
 - 工具链：只信 Grep 工具（BSD grep 交替恒空、遇含 NUL 文件空手）；批量替换 `perl -pi -e`；`curl --noproxy '*'`；
   `ps`/`pgrep` 被禁，判进程用 `kill -0`；并发异常先 `reflog` + `stash list`。
 
@@ -71,6 +73,13 @@
   同一事务；下架清 `sold`；`daily_limit=0` 不限购 / `stock=0` 售罄 / `-1` 不限量。
 - **进图权威（#859/#861）**：`mapAt` 缺失只准进 `START_MAP_ID("0")`，未知图直接拒（`unknown` 先于 `start`）；在场条目的
   图只由 `join()` 写，`updatePosition` 图不一致整帧丢弃；`join()` 换图重置仲裁基线。
+- **任务交互与周期（#862~#865，见 `olua-server` 任务章）**：`accept` / `npcTalk` 共用 `requireNearNpc`
+  （`QUEST_NPC_RADIUS` 120px + `QUEST_POS_STALE_MS` 10s，返 **20032**）；位置读 `role_positions` —— **唯一写者是实时进程**
+  （`broadcast()` 里 `flushPositions()`，1s 节流 + 坐标指纹不变不写 + `join()` 即写 + `dropAccount()` 删行），
+  **查不到 / 太旧一律拒绝**（放行等于给「不上报位置」开开关）。`map_npcs` 本图查不到要分两种：`countByNpc > 0`（只摆在别的图）
+  拒；`= 0`（配置缺口，现网 8004→9002 就是）**放行 + 告警一次**，点位补上自动生效。周期一把尺子：`reset_day` = **本轮起点
+  天号**（日常 `resetDayOf` / 周常 `weekStartDayOf`，都 05:00 切），`isStale` 一处覆盖 接取/下发/交付/推进度；
+  `abandon` 只删非 `claimed`（那是「本轮领过」的唯一证据）；超时**不加列**，跨轮交付 **20033**。
 - 乐观锁客户端口径「拉最新 + 丢弃本轮」，**不重推**。
 
 ## 引擎坑（→ `cocos-render` / `-input` / `-resource` / `-gameplay` / `-build-test`，旧技能原文在各自 `references/`）
@@ -90,6 +99,9 @@ compose **五个**服务：admin:80（唯一入口）/ game:8080 / server:3100 /
   `cost_bind_gold` / `GROWTH_BIND_GOLD_NOT_ENOUGH` / `mall_bind_gold_not_enough_tip` / `{bindGold}` / `bind-gold` 三套写法
   按层固定；存量库用 `renameColumnIfExists` 幂等改名（不删列重建，保已发奖励）；只有 `LEGACY_LEDGER_FIELDS` 留 gold 字面量。·
   #930 世界刷怪四条（`866fded3`，PR #931；#849~#852 已关）：见下「刷怪密度」条。
+- #932 任务域四缺口（`01b42dd0`，PR #933；#862~#865 已关）：NPC 距离闸 120px + `role_positions` 位置快照 ·
+  放弃接口 `POST /quests/abandon` · 跨轮交付 20033 · 周常周一 05:00 切。新套件 `e2e-quest-authority` 44 条。
+  **客户端「放弃任务」按钮暂时放置**（服务端先行；重开条件 = 任务面板改版或玩家反馈要主动放弃）。
 - **刷怪密度（#930，落地口径）**：表单只有「数量」= `max`，`min` 恒 0（老库 `min = max` 一次性抹平，否则下限顶死
   系数）；目标 `clamp(round(max × 时段系数 × 人数系数), min, max × density_peak)`，人数取**本图观看者**；tick 每秒
   差量对齐、每 tick 至多补 2 只、超出裁「死等重生 → 最久没被攻击」的，`lastDamagedAt` 5 秒内不裁；统计用**实例数**
@@ -108,6 +120,6 @@ compose **五个**服务：admin:80（唯一入口）/ game:8080 / server:3100 /
   与 `client/assets/resources/**`（大资源）都被 gitignore，worktree 里没有 → `prepare()` 直接抛「配置表编译失败」，
   脚本 crash 后 grep `[!!]` 得 0 条，**看起来全绿**；资源存在性断言则假红。判基线必须先
   `cp -R client/temp/declarations /tmp/<wt>/client/temp/` 并接受资源类断言不可比。
-- **`docs/37` 是最高优先单一来源**（72 条 B/G + 50 条 D 已拍板，本批 D-08/D-09 标已落）。推翻旧设计的四条：
+- **`docs/37` 是最高优先单一来源**（72 条 B/G + 50 条 D 已拍板；B46/B47/G6/G7 与 D-13 已落 #932，D-08/D-09 已落）。推翻旧设计的四条：
   删元宝/银子且金币不可流通（C1 落地口径 2026-11-11 三处修改见 33 篇 3.4）、存档版本不符**拒登录**、
   换图即移除旧图观看者、补种改每秒按密度补缺（已落 #931）。
