@@ -35,6 +35,10 @@ const { DatabaseSync } = require("node:sqlite");
 function placeRolesAt(dbPath, mapId, roleNames) {
   const db = new DatabaseSync(dbPath);
   try {
+    // 这是对**运行中服务端**的库做直写：服务端正握着写锁（世界持久化 / 存档落库）时，
+    // 没有等待就直接抛「database is locked」—— 本机快、CI 慢，偶发假红（PR #924 分片 2）。
+    // busy_timeout 让这次写入等服务端放锁；再兜一层重试防极端。
+    db.exec("PRAGMA busy_timeout = 10000");
     const rows =
       roleNames && roleNames.length > 0
         ? db
@@ -52,7 +56,15 @@ function placeRolesAt(dbPath, mapId, roleNames) {
       }
       if (!data || typeof data !== "object") continue;
       data.mapAt = mapId;
-      db.prepare("UPDATE roles SET data = ? WHERE id = ?").run(JSON.stringify(data), row.id);
+      for (let attempt = 1; ; attempt++) {
+        try {
+          db.prepare("UPDATE roles SET data = ? WHERE id = ?").run(JSON.stringify(data), row.id);
+          break;
+        } catch (error) {
+          if (attempt >= 3 || !/locked/i.test(String(error && error.message))) throw error;
+          Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 200 * attempt);
+        }
+      }
       changed += 1;
     }
     return changed;
