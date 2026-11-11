@@ -64,8 +64,12 @@ export const SERVER_PROGRESS_FIELDS = ["level", "exp"] as const;
  * `skills` 与 `skillPoints`（#828）：技能等级只能由 `POST /roles/:id/skill-upgrade` 推进，
  * 技能点只能由升级（每级 +1）产出 —— 两者都是**数值的输入**（伤害系数按等级取档），
  * 所以与背包同权。清单宁可比写点宽一格：宽了只是不允许本地改，窄了就是留一个没人看着的口子。
+ *
+ * `attrs` 与 `attrPoints`（#833）同理：四维直接乘进面板（物攻 / 生命 / 物防 / 法力），
+ * 属性点只能由升级（每级 +1）产出、由 `POST /roles/:id/attrs/allocate` 分配 ——
+ * 客户端能写 `attrs` 等于把「加点」变成「改面板」，加点的意义就没了。
  */
-export const SERVER_INVENTORY_FIELDS = ["bag", "equipments", "skills", "skillPoints"] as const;
+export const SERVER_INVENTORY_FIELDS = ["bag", "equipments", "skills", "skillPoints", "attrs", "attrPoints"] as const;
 
 /**
  * 时装（#596）：穿着态 `fashionCloth` 与拥有清单 `fashionsOwned` 都归服务端

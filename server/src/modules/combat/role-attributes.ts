@@ -30,6 +30,7 @@
  */
 
 import { COMBAT_RANGE_KEYS } from "../../common/constants/game-enums";
+import { type AttrAllocation, type AttrKey, attrAllocationOf, attrPointRatio } from "../../common/utils/attr-points.util";
 import {
   combatWeightsOf,
   equipmentAttributesOf,
@@ -58,6 +59,13 @@ export interface RoleAttributeSource {
   title?: number;
   /** 军衔阶数（0 = 未授衔） */
   rank?: number;
+  /**
+   * 四维加点（#833；已分配的点数，缺省 = 全 0）
+   *
+   * 与 `equipments` 一样是**数值的输入**：改它就是改面板，所以它在
+   * `role-authority.ts` 的 `SERVER_INVENTORY_FIELDS` 里（客户端不能自己写）。
+   */
+  attrs?: AttrAllocation | null;
 }
 
 /**
@@ -81,6 +89,7 @@ export function roleAttributeSourceOf(level: number, data: Record<string, unknow
     soulOfWar: typeof data.soulOfWar === "number" ? data.soulOfWar : undefined,
     title: typeof data.title === "number" ? data.title : undefined,
     rank: typeof data.rank === "number" ? data.rank : undefined,
+    attrs: attrAllocationOf(data.attrs),
   };
 }
 
@@ -190,21 +199,39 @@ export function summarizeRoleAttributesWithNotes(source: RoleAttributeSource): {
     (bundle): bundle is GeneratedBundle => bundle !== null,
   );
 
+  // 四维（#833）：只放大**等级曲线**那一份，不放大装备 / 战魂 / 称号 / 军衔 ——
+  // 「装备越好加点越值」是滚雪球，而且会让面板数字随换装跳得看不懂。
+  // 系数与映射的唯一说明在 `common/utils/attr-points.util.ts`
+  const attrs = attrAllocationOf(source.attrs);
+  const ratio = attrPointRatio();
+  const strFactor = 1 + ratio * attrs.str;
+  const vitFactor = 1 + ratio * attrs.vit;
+  const spiFactor = 1 + ratio * attrs.spi;
+  // 乘出来的小数按 round 收口：面板与伤害都吃整数，留 100.4999 只会让两处显示不一致
+  const scaled = (value: number, factor: number) => Math.round(value * factor);
+
   // maxHp / hpRecover 是单值，六项攻防是 [下限, 上限] 元组 —— 两条路径，别合并着写
-  let maxHp = singleOf(levelBundle, "maxHp", 0);
-  let hpRecover = singleOf(levelBundle, "hpRecover", 0);
+  let maxHp = scaled(singleOf(levelBundle, "maxHp", 0), vitFactor);
+  // 回血是「生命上限的 1%」（`ROLE_LEVEL_RATIOS.hpRecoverOfHp`），体质放大上限就必须同步放大回血：
+  // 只放大血不放大回血，等于越加体质越「虚」
+  let hpRecover = scaled(singleOf(levelBundle, "hpRecover", 0), vitFactor);
   for (const bundle of [...equipmentBundles, ...extras]) {
     maxHp += singleOf(bundle, "maxHp", 0);
     hpRecover += singleOf(bundle, "hpRecover", 0);
   }
-  // 魔法值只跟等级走（客户端注释：「装备暂不影响魔法值」）
-  const maxMp = singleOf(levelBundle, "maxMp", 0);
+  // 魔法值只跟等级走（客户端注释：「装备暂不影响魔法值」）；精神放大的就是这一份
+  const maxMp = scaled(singleOf(levelBundle, "maxMp", 0), spiFactor);
 
   const ranges: Record<string, [number, number]> = {};
+  const factorOf: Record<AttrKey, number> = { str: strFactor, agi: 1, vit: vitFactor, spi: spiFactor };
   for (const key of COMBAT_RANGE_KEYS) {
-    let low = 0;
-    let high = 0;
-    for (const bundle of [levelBundle, ...equipmentBundles, ...extras]) {
+    // 只有等级曲线那一份吃四维系数（见上面「不放大装备」）；没登记的键按 1 算
+    const base = rangeOf(levelBundle, key);
+    const attrKey = ATTR_RANGE_KEY_OF[key];
+    const factor = attrKey ? factorOf[attrKey] : 1;
+    let low = base ? scaled(base[0], factor) : 0;
+    let high = base ? scaled(base[1], factor) : 0;
+    for (const bundle of [...equipmentBundles, ...extras]) {
       const value = rangeOf(bundle, key);
       if (!value) continue;
       low += value[0];
@@ -229,13 +256,34 @@ export function summarizeRoleAttributesWithNotes(source: RoleAttributeSource): {
       //   ② maxHp 走另一条分支，取单值本身
       combat: computeCombat(maxHp, ranges),
       // 暴击两项（#826）：来自成长标量，与技能自带的暴击相加 / 取技能倍率。
-      // 缺行时给 0 / 1.5 —— 「新号不暴击」是 22 篇定的默认，不是兜底巧合
-      critRate: clamp01(growthScalarOf("critRate") ?? 0),
+      // 缺行时给 0 / 1.5 —— 「新号不暴击」是 22 篇定的默认，不是兜底巧合。
+      // 四维里的敏捷（#833）加的是**绝对百分点**（0.005 = +0.5%），不是百分比放大
+      critRate: clamp01((growthScalarOf("critRate") ?? 0) + ratio * attrs.agi),
       critDamage: positiveOr(growthScalarOf("critDamage"), DEFAULT_CRIT_DAMAGE),
     },
     notes,
   };
 }
+
+/**
+ * 四维 → 面板属性的**放大关系**（#833）
+ *
+ * | 四维 | 放大的属性 | 依据 |
+ * |---|---|---|
+ * | 力量 | 物攻 | `docs/23` §9.1 |
+ * | 体质 | 生命上限 + 物防（回血随之） | 同上 |
+ * | 精神 | 法攻 + 道攻 + 法力上限 | 同上；三系攻同值，所以一项覆盖法 / 道两家职业 |
+ * | 敏捷 | **不加面板属性**，只加暴击率 | 移速那一半按用户口径暂时放置（服务端无移速属性） |
+ *
+ * 没登记的键（法防 / 道防）不受四维影响 —— 它们没有对应的「点」，硬塞一项会让
+ * 「堆哪一项」变成猜谜。
+ */
+const ATTR_RANGE_KEY_OF: Record<string, AttrKey> = {
+  physicalAttack: "str",
+  magicAttack: "spi",
+  taoistAttack: "spi",
+  physicalDefense: "vit",
+};
 
 /** 暴击倍率的出厂值（`growth_scalars.critDamage` 缺行 / 非法时用它） */
 export const DEFAULT_CRIT_DAMAGE = 1.5;

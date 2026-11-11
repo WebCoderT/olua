@@ -6,7 +6,7 @@
 -- config-version: 0
 -- olua config snapshot v1
 -- tables: achievements,audio_settings,combat_weights,drop_tables,drugs,equip_aligns,equip_in_aligns,equipment_appearance,equipment_meta,equipment_slots,equipment_variants,equipments,fashions,growth_scalars,guide_settings,items,level_scrolls,mall_categories,mall_goods,map_collisions,map_npcs,map_spawn_areas,maps,money_items,monster_drops,monster_presentation,monster_skills,monsters,npcs,quests,ranks,role_level_curves,runtime_params,skills,souls,statuses,titles,ui_effects
--- counts: achievements=24,audio_settings=12,combat_weights=7,drop_tables=5,drugs=11,equip_aligns=32,equip_in_aligns=31,equipment_appearance=1,equipment_meta=1,equipment_slots=13,equipment_variants=10275,equipments=685,fashions=20,growth_scalars=8,guide_settings=1,items=5,level_scrolls=7,mall_categories=1,mall_goods=1,map_collisions=1615,map_npcs=11,map_spawn_areas=62,maps=11,money_items=8,monster_drops=220,monster_presentation=220,monster_skills=3,monsters=220,npcs=21,quests=5,ranks=100,role_level_curves=24,runtime_params=1,skills=15,souls=37,statuses=7,titles=34,ui_effects=7
+-- counts: achievements=24,audio_settings=12,combat_weights=7,drop_tables=5,drugs=11,equip_aligns=32,equip_in_aligns=31,equipment_appearance=1,equipment_meta=1,equipment_slots=13,equipment_variants=10275,equipments=685,fashions=20,growth_scalars=10,guide_settings=1,items=5,level_scrolls=7,mall_categories=1,mall_goods=1,map_collisions=1615,map_npcs=11,map_spawn_areas=62,maps=11,money_items=8,monster_drops=220,monster_presentation=220,monster_skills=3,monsters=220,npcs=21,quests=5,ranks=100,role_level_curves=24,runtime_params=1,skills=15,souls=37,statuses=7,titles=34,ui_effects=7
 
 PRAGMA foreign_keys = OFF;
 BEGIN;
@@ -11166,7 +11166,7 @@ INSERT INTO "fashions" ("id", "label", "description", "icon", "in_res", "out_res
 INSERT INTO "fashions" ("id", "label", "description", "icon", "in_res", "out_res", "sell_price", "acquire_channel", "max_hp", "hp_recover", "physical_attack_min", "physical_attack_max", "magic_attack_min", "magic_attack_max", "taoist_attack_min", "taoist_attack_max", "physical_defense_min", "physical_defense_max", "magic_defense_min", "magic_defense_max", "taoist_defense_min", "taoist_defense_max", "updated_at") VALUES ('cloth_27', '金龙帝袍', '金龙盘冠的帝王战袍，举手投足间尽显威仪，似有龙吟环绕。', 'equipment/clothes/icon/027', 'equipment/clothes/in/027', 'equipment/clothes/out/027', 0, 'unavailable', 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
 INSERT INTO "fashions" ("id", "label", "description", "icon", "in_res", "out_res", "sell_price", "acquire_channel", "max_hp", "hp_recover", "physical_attack_min", "physical_attack_max", "magic_attack_min", "magic_attack_max", "taoist_attack_min", "taoist_attack_max", "physical_defense_min", "physical_defense_max", "magic_defense_min", "magic_defense_max", "taoist_defense_min", "taoist_defense_max", "updated_at") VALUES ('cloth_28', '金身财神', '金甲加身的财神爷，周身金光与火光，见者发财。', 'equipment/clothes/icon/028', 'equipment/clothes/in/028', 'equipment/clothes/out/028', 0, 'unavailable', 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
 
--- ===== growth_scalars（8 行）=====
+-- ===== growth_scalars（10 行）=====
 DELETE FROM "growth_scalars";
 INSERT INTO "growth_scalars" ("key", "value", "description", "updated_at") VALUES ('roleMaxLevel', 1000000, '角色等级上限（1..1000000；每级数值由「等级曲线」4 条 × 6 段决定）', 0);
 INSERT INTO "growth_scalars" ("key", "value", "description", "updated_at") VALUES ('expGain.expPerLevel', 5, '每级基准经验：同级击杀经验 = (怪物等级+1) × 该值', 0);
@@ -11176,6 +11176,8 @@ INSERT INTO "growth_scalars" ("key", "value", "description", "updated_at") VALUE
 INSERT INTO "growth_scalars" ("key", "value", "description", "updated_at") VALUES ('soakTickSeconds', 10, '泡点活动：发经验的拍间隔（秒；与上一条配合出「每 M 秒发 N 点」的速率）', 0);
 INSERT INTO "growth_scalars" ("key", "value", "description", "updated_at") VALUES ('critRate', 0, '角色基础暴击率（0~1；与技能自带的暴击率相加。出厂 0 = 新号不暴击）', 0);
 INSERT INTO "growth_scalars" ("key", "value", "description", "updated_at") VALUES ('critDamage', 1.5, '角色基础暴击倍率（> 1 才生效；技能配了自己的倍率则以技能为准。出厂 1.5 倍）', 0);
+INSERT INTO "growth_scalars" ("key", "value", "description", "updated_at") VALUES ('attrPointRatio', 0.005, '属性点：每点加成系数（出厂 0.005 = 每点 0.5%）。力量→物攻、体质→生命+物防、精神→法攻+道攻+法力按等级曲线基础值的百分比放大；敏捷→暴击率按绝对百分点加（0.005 = +0.5%）', 0);
+INSERT INTO "growth_scalars" ("key", "value", "description", "updated_at") VALUES ('attrResetCost', 500, '属性点：洗点花费的绑定元宝（0 = 免费洗点。四维归零、已分配点数全部退还）', 0);
 
 -- ===== guide_settings（1 行）=====
 DELETE FROM "guide_settings";

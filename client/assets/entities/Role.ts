@@ -1,7 +1,7 @@
 import { SpeedRate } from "../types/animation";
 import { BattleAttributes } from "../types/common";
 import { EQUIPMENT_TYPE, BagCell, WornItem } from "../types/good";
-import { NeedSetShortcutKeyConfig, OECCUPATION, RELATION_SHIP, SEX } from "../types/role";
+import { AttrPointKey, NeedSetShortcutKeyConfig, OECCUPATION, RELATION_SHIP, SEX } from "../types/role";
 import { SkillId } from "../types/skill";
 import { MapId } from "../types/map";
 import type { GuideProgress } from "../types/guide";
@@ -39,9 +39,20 @@ export class Role implements BattleAttributes {
    *
    * 归服务端：建号 1 点、之后每升 1 级 +1（含升级卷轴），花在 `POST /roles/:id/skill-upgrade`。
    * 客户端**只显示**，不本地加减（余额的唯一真相在存档里，服务端按它判够不够）。
-   * 老存档没有这个字段时由 `ensureRoleDefaults` 补 0，服务端那边有一次性的按等级补发。
+   * 默认值靠**这个字段声明**给，不在 `ensureRoleDefaults` 里补：那是服务端独占字段，
+   * 客户端写它会被 `audit-role-authority` 判红。老号有一点性补发（服务端按等级）。
    */
   skillPoints: number = 0;
+  /**
+   * 四维加点（#833）：力量 / 敏捷 / 体质 / 精神，已分配的点数
+   *
+   * 归服务端：只能由 `POST /roles/:id/attrs/allocate` 推进，洗点走 `attrs/reset`。
+   * 客户端只显示与发起请求 —— 四维直接乘进面板（物攻 / 生命 / 物防 / 法力），
+   * 本地加一格就等于改面板，加点的意义就没了。
+   */
+  attrs: Record<AttrPointKey, number> = { str: 0, agi: 0, vit: 0, spi: 0 };
+  /** 剩余未分配属性点（#833）：与技能点同一条尺子，建号 1 点、每级 +1，总点数恒等于等级 */
+  attrPoints: number = 0;
   exp: number = 0;
   maxHp: number;
   hp: number;

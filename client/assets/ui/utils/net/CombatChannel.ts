@@ -443,6 +443,14 @@ export interface RoleAuthorityUpdate {
    * （点了却被服务端接受 —— 服务端按库里的余额判，看起来像「面板算错了」）
    */
   skillPoints?: number;
+  /**
+   * 剩余属性点与四维（#833）
+   *
+   * 与技能点同一个理由：升级在本进程结算（每级 +1 点）；`attrs` 一起带是因为
+   * 另一台设备加点后，这一端的四维与面板都要跟上（加点回执只到发起那台设备）。
+   */
+  attrPoints?: number;
+  attrs?: { str: number; agi: number; vit: number; spi: number };
   /** 体验状态（#596 换设备云同步）：快捷键 / 引导进度 / 战魂外显 —— 归客户端书写、服务端存证 */
   shortcutKeys?: Array<{ label: string; key: number; skillId: string | null }>;
   guide?: { step: number; done: boolean; skipped: boolean };

@@ -451,23 +451,32 @@ function connect(url) {
     // 「它在往出生点走」，脱战断言也就白断了
     const reProvokeBeforeChase = await sessionA.cast("1000", bruiser.instanceId, BRUISER.key);
     check(!!reProvokeBeforeChase && reProvokeBeforeChase.ok, "准备：跑开之前先打它一下（这一段要有记恨可脱）");
-    // A 从 350 一路走到 1050（700px > 600px 牵引半径）
-    await walk(sessionA, [walkStartX, BRUISER.y], [walkStartX + 700, BRUISER.y], aHp);
-    // 判据走**帧历史**而不是「最新一帧」：`monster-ai` 帧只发有变化的怪，而这条用例等的
-    // 是「路过出生点」这一瞬间 —— 回家的最后 20px 只走一两帧（180px/s），只读最新帧基本必错过。
+    // 判据走**帧历史**而不是「最新一帧」：`monster-ai` 帧只发有变化的怪，而下面还有一条
+    // 用例等的是「路过出生点」这一瞬间 —— 回家的最后 20px 只走一两帧（180px/s），只读最新帧基本必错过。
     // 「走出来」的基准也取**这一段开始时的实际位置**（上一段把它推离了出生点，拿出生点当基线
     // 会让阈值落在一个刚好够不着的距离上）
     const entriesFrom = (from) => sessionA.aiEntries(bruiser.instanceId, from);
-    const chased = await waitFor(
-      "怪跟着走出来了一段（确实进入了追击）",
-      async () => entriesFrom(chaseFrom).find((entry) => entry.x > chaseBaseX + 20) ?? null,
-      8_000,
-    );
+    // A 先走到牵引半径内的一处**停一下**（500px < 600），等怪确实迈出一步，再跑出去。
+    // 原来是一口气从 150px 跑到 850px：整段窗口只有约 1.1s，满负载并行跑时 AI tick 会被挤后，
+    // 怪可能在这一段里一个 tick 都没拿到 → 一条追击帧都没有，「跟过来」就成了对 CPU 的赌博
+    // （2026-11-12 `make e2e-all` 实测漂过一次，单跑 38 条全绿）。停等的窗口按 tick 挤后
+    // 的余量给到 3.6s，同时也短于「怪从出生点走到 500px 处」的 3.7s —— 不至于先挨打。
+    // 停等期间必须持续上报位置：目标位置上报超时同样会走 `endChase`，把记恨一起清掉。
+    const holdX = BRUISER.x + 500;
+    await walk(sessionA, [walkStartX, BRUISER.y], [holdX, BRUISER.y], aHp);
+    let chased = null;
+    for (let index = 0; index < 30 && !chased; index += 1) {
+      sessionA.sendPos("1", holdX, BRUISER.y, aHp);
+      await sleep(120);
+      chased = entriesFrom(chaseFrom).find((entry) => entry.x > chaseBaseX + 20) ?? null;
+    }
     check(
       !!chased,
       "A 走开的过程中怪确实跟了过来（不是原地没动，否则脱战断言就没有意义）",
       chased && `x=${chased.x}（本段起点 ${chaseBaseX.toFixed(1)}）`,
     );
+    // 再跑出牵引半径：500 → 1050（> 600），后面的「脱战回家」从这一腿开始算
+    await walk(sessionA, [holdX, BRUISER.y], [walkStartX + 700, BRUISER.y], aHp);
     const homeEntry = await waitFor(
       "脱战后走回出生点",
       async () =>

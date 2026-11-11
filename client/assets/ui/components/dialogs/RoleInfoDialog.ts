@@ -14,6 +14,7 @@ import WarSoulDialog from "./WarSoulDialog";
 import RankUpgradeDialog from "./RankUpgradeDialog";
 import FashionDialog from "./FashionDialog";
 import SocialDialog from "./SocialDialog";
+import AttrAllocateDialog from "./AttrAllocateDialog";
 
 /**
  * 角色信息弹窗
@@ -32,6 +33,8 @@ export default class RoleInfoDialog {
   private attributeList: RoleAttributeList | null = null;
   /** 内观（衣服 + 武器） */
   private inShowView: RoleInShowView | null = null;
+  /** 属性加点弹窗（#833；持有实例，「再点一次属性按钮 = 关闭」靠它） */
+  private attrDialog = new AttrAllocateDialog();
 
   /** 打开/关闭弹窗 */
   open() {
@@ -81,9 +84,12 @@ export default class RoleInfoDialog {
       this.inShowView?.updateCloth(latest);
       this.inShowView?.updateWeapon(latest);
     });
-    // 「军衔」「称号」「战魂」「时装」「社交」入口按钮（右侧竖排相邻五格，几何见 roleInfoDialogLayout）
-    // 五者都不走 NPC：入口固定在这里，点击打开各自弹窗，角色信息弹窗保持打开
+    // 「军衔」「称号」「战魂」「时装」「社交」「属性」入口按钮（右侧竖排相邻六格，几何见 roleInfoDialogLayout）
+    // 都不走 NPC：入口固定在这里，点击打开各自弹窗，角色信息弹窗保持打开。
+    // 属性加点（#833）用**持有的实例**而不是每次 new：它自己维护「再点一次是关闭」的开关语义
+    // 与四行的重建引用，每次新建会让连点叠出两层弹窗
     const entryButtons: { layout: { name: string; text: string; position: Vec2 }; open: () => void }[] = [
+      { layout: roleInfoDialogLayout.attrButton, open: () => this.attrDialog.open() },
       { layout: roleInfoDialogLayout.socialButton, open: () => new SocialDialog().open() },
       { layout: roleInfoDialogLayout.fashionButton, open: () => new FashionDialog().open() },
       { layout: roleInfoDialogLayout.rankButton, open: () => new RankUpgradeDialog().open() },
@@ -141,8 +147,9 @@ export default class RoleInfoDialog {
     });
   }
 
-  /** 关闭弹窗 */
+  /** 关闭弹窗（连同属性加点子弹窗一起收掉） */
   close() {
+    this.attrDialog.close();
     if (this.dialog && isValid(this.dialog)) this.dialog.destroy();
     this.reset();
   }
