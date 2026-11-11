@@ -292,6 +292,11 @@ interface FieldSpec {
 
 const DROP_FIELDS: FieldSpec[] = [
   { key: "autoPickupRadius", label: "自动拾取半径（像素）", hint: "脚底距离小于它即拾取" },
+  {
+    key: "pickAcceptRadius",
+    label: "服务端拾取距离闸（像素）",
+    hint: "玩家离掉落点超过它，服务端直接拒绝拾取；0 = 关闭校验（别当出货值）",
+  },
   { key: "scatterMinDistance", label: "散落最小间距（像素）", hint: "多件掉落物的同心环间距" },
   { key: "pickReplyTimeout", label: "拾取应答超时（毫秒）", hint: "超时视为本轮失败，允许重拾" },
   { key: "fullTipInterval", label: "背包满提示间隔（毫秒）", hint: "防止自动拾取时每帧刷屏" },
@@ -319,6 +324,8 @@ const GUILD_FIELDS: FieldSpec[] = [
   { key: "nameMax", label: "帮会名最长（字）", hint: "必须 ≥ 最短" },
   { key: "noticeMax", label: "公告最长（字）", hint: "0 = 不限" },
   { key: "applicationMessageMax", label: "申请留言最长（字）", hint: "0 = 不限" },
+  { key: "createLevelMin", label: "建帮最低等级", hint: "角色等级低于它不能建帮；0 = 不限等级" },
+  { key: "createCostBindGold", label: "建帮消耗（绑定元宝）", hint: "0 = 免费；扣款与建帮同一事务，扣了就一定建成" },
 ];
 
 /**
@@ -351,6 +358,7 @@ function toDraft(row: RuntimeParams): Draft {
   return {
     drop: {
       autoPickupRadius: String(row.drop.autoPickupRadius),
+      pickAcceptRadius: String(row.drop.pickAcceptRadius ?? 0),
       scatterMinDistance: String(row.drop.scatterMinDistance),
       pickReplyTimeout: String(row.drop.pickReplyTimeout),
       fullTipInterval: String(row.drop.fullTipInterval),
@@ -377,6 +385,8 @@ function toDraft(row: RuntimeParams): Draft {
       nameMax: String(row.guild.nameMax),
       noticeMax: String(row.guild.noticeMax),
       applicationMessageMax: String(row.guild.applicationMessageMax),
+      createLevelMin: String(row.guild.createLevelMin ?? 0),
+      createCostBindGold: String(row.guild.createCostBindGold ?? 0),
     },
   };
 }
@@ -402,12 +412,14 @@ function buildPayload(
   };
   if (group === "drop") {
     const autoPickupRadius = num("autoPickupRadius");
+    const pickAcceptRadius = num("pickAcceptRadius");
     const scatterMinDistance = num("scatterMinDistance");
     const pickReplyTimeout = num("pickReplyTimeout");
     const fullTipInterval = num("fullTipInterval");
     const bindChance = num("bindChance");
     if (
       autoPickupRadius === null ||
+      pickAcceptRadius === null ||
       scatterMinDistance === null ||
       pickReplyTimeout === null ||
       fullTipInterval === null ||
@@ -415,15 +427,26 @@ function buildPayload(
     ) {
       return null;
     }
-    return { drop: { autoPickupRadius, scatterMinDistance, pickReplyTimeout, fullTipInterval, bindChance } };
+    return { drop: { autoPickupRadius, pickAcceptRadius, scatterMinDistance, pickReplyTimeout, fullTipInterval, bindChance } };
   }
   if (group === "guild") {
     const nameMin = num("nameMin");
     const nameMax = num("nameMax");
     const noticeMax = num("noticeMax");
     const applicationMessageMax = num("applicationMessageMax");
-    if (nameMin === null || nameMax === null || noticeMax === null || applicationMessageMax === null) return null;
-    return { guild: { nameMin, nameMax, noticeMax, applicationMessageMax } };
+    const createLevelMin = num("createLevelMin");
+    const createCostBindGold = num("createCostBindGold");
+    if (
+      nameMin === null ||
+      nameMax === null ||
+      noticeMax === null ||
+      applicationMessageMax === null ||
+      createLevelMin === null ||
+      createCostBindGold === null
+    ) {
+      return null;
+    }
+    return { guild: { nameMin, nameMax, noticeMax, applicationMessageMax, createLevelMin, createCostBindGold } };
   }
   const maxTargetDistance = num("maxTargetDistance");
   const cellSize = num("cellSize");
