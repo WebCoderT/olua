@@ -827,6 +827,11 @@ export const guildDialogLayout = {
   /** 文案（状态提示与按钮，集中在这里避免散在组件里） */
   texts: {
     guestHint: "你还没有加入帮会：可以自己创建一个，或申请加入下面任意一个",
+    guestHintWithCost: "建帮需 {need}，也可以直接申请加入下面的帮会",
+    /** 建帮门槛的两个分句 + 连接符（门槛数值来自快照，单位词留在这里） */
+    createNeedLevel: "{level} 级",
+    createNeedBindGold: "{amount} 绑定元宝",
+    createNeedJoin: " + ",
     listTitle: "全部帮会（{count}）",
     listEmpty: "还没有人创建帮会，你可以是第一个",
     nameRule: "帮会名要 {min}~{max} 个字",
@@ -850,6 +855,11 @@ export const guildDialogLayout = {
     reject: "拒绝",
     kick: "踢出",
     transfer: "转让",
+    /** 任命 / 卸任副帮主（#871；同一个按钮按目标当前职位换字，所以两个字都得短） */
+    appoint: "任命",
+    demote: "卸任",
+    appointedTip: "已任命为副帮主",
+    demotedTip: "已卸任副帮主",
     noticeSaved: "公告已更新",
     createdTip: "帮会创建成功",
     appliedTip: "申请已提交，等待帮主审批",

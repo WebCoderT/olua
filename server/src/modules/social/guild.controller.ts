@@ -7,6 +7,7 @@ import { AuthenticatedUser } from "../../common/interfaces/api-envelope.interfac
 import { GUILD_MEMBER_LIMIT_DEFAULT } from "../../common/constants/social";
 import {
   ApplyGuildDto,
+  AppointGuildRankDto,
   CreateGuildDto,
   GuildSummaryDto,
   MyGuildDto,
@@ -58,8 +59,10 @@ export class GuildController {
     operationId: "guild.create",
     summary: "创建帮会",
     description:
-      `建帮人自动成为帮主，**免费**；帮会名长度按「运行时参数 · 帮会规则」（出厂 2~12 字）且全局唯一。` +
-      `已在帮会里会返回 50103（一个人只能在一个帮会）。`,
+      `建帮人自动成为帮主。门槛读「运行时参数 · 帮会规则」：角色等级 ≥ \`createLevelMin\`（出厂 10 级）、` +
+      `扣 \`createCostBindGold\` 绑定元宝（出厂 100000，0 = 免费）；帮会名长度 2~12 字且全局唯一。\n\n` +
+      `失败：50147 等级不足 / 20011 绑定元宝不足 / 50102 名字被占用 / 50103 已在帮会里。` +
+      `扣款与建帮在**同一事务**里，失败不会扣钱。`,
   })
   @ApiDataResponse(MyGuildDto, { status: HttpStatus.CREATED, description: "刚创建的帮会（含我的职位 = 帮主）" })
   create(@CurrentUser() user: AuthenticatedUser, @Body() dto: CreateGuildDto): MyGuildDto {
@@ -109,6 +112,21 @@ export class GuildController {
   @ApiDataResponse(MyGuildDto, { description: "处理后的我的帮会" })
   kick(@CurrentUser() user: AuthenticatedUser, @Param("roleId") roleId: string): MyGuildDto {
     return this.guildService.kick(user.id, roleId);
+  }
+
+  @Post("me/rank")
+  @HttpCode(HttpStatus.OK)
+  @ApiPlayerDoc({
+    operationId: "guild.appoint",
+    summary: "任命 / 卸任副帮主",
+    description:
+      "仅帮主可用。`rank = vice` 任命为副帮主、`rank = member` 卸任回普通成员（一个接口两个方向）。\n\n" +
+      "副帮主最多 1 名（50148）；目标必须是本帮成员且不是帮主自己（50108）；" +
+      "换帮主请走「转让」（那要同时改 `guilds.leader_id`）。",
+  })
+  @ApiDataResponse(MyGuildDto, { description: "处理后的我的帮会（成员职位已更新）" })
+  appoint(@CurrentUser() user: AuthenticatedUser, @Body() dto: AppointGuildRankDto): MyGuildDto {
+    return this.guildService.appoint(user.id, dto.roleId, dto.rank);
   }
 
   @Post("me/transfer")

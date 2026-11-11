@@ -106,7 +106,7 @@ export const ApiRoutes = {
      */
     version: "/game-config/version",
   },
-  /** guild 模块（10 个接口） */
+  /** guild 模块（11 个接口） */
   guild: {
     /**
      * 帮会列表（GET /guilds）
@@ -117,7 +117,7 @@ export const ApiRoutes = {
     /**
      * 创建帮会（POST /guilds）
      *
-     * 建帮人自动成为帮主，**免费**；帮会名长度按「运行时参数 · 帮会规则」（出厂 2~12 字）且全局唯一。已在帮会里会返回 50103（一个人只能在一个帮会）。
+     * 建帮人自动成为帮主。门槛读「运行时参数 · 帮会规则」：角色等级 ≥ `createLevelMin`（出厂 10 级）、扣 `createCostBindGold` 绑定元宝（出厂 100000，0 = 免费）；帮会名长度 2~12 字且全局唯一。
      */
     create: "/guilds",
     /**
@@ -162,6 +162,12 @@ export const ApiRoutes = {
      * 帮主 / 副帮主可用；空字符串表示清空公告。
      */
     notice: "/guilds/me/notice",
+    /**
+     * 任命 / 卸任副帮主（POST /guilds/me/rank）
+     *
+     * 仅帮主可用。`rank = vice` 任命为副帮主、`rank = member` 卸任回普通成员（一个接口两个方向）。
+     */
+    appoint: "/guilds/me/rank",
     /**
      * 转让帮主（POST /guilds/me/transfer）
      *

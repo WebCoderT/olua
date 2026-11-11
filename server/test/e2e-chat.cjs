@@ -20,6 +20,7 @@ const net = require("net");
 const os = require("os");
 const path = require("path");
 const { placeRolesAt } = require("./lib/place-role.cjs");
+const { relaxGuildGate } = require("./lib/guild-gate.cjs");
 const WebSocket = require("ws");
 
 const SERVER_DIR = path.join(__dirname, "..");
@@ -207,6 +208,9 @@ function connect(url) {
     // （等价管理端 PATCH /admin/roles/:id { onMap }，见 lib/place-role.cjs）
     placeRolesAt(dbPath, "1", ["甲玩家", "乙玩家"]);
     placeRolesAt(dbPath, "2", ["丙玩家"]);
+    // #872 起建帮要 10 级 + 10 万绑定元宝，而这里的账号都是 1 级 —— 本套只在第四组
+    // 建一个帮来验「帮会频道准入」，门槛自己由 e2e-guild 第六组验，先归零。
+    relaxGuildGate(dbPath);
 
     const tickets = await Promise.all(
       [A, B, C].map((player) => api(baseUrl, "POST", "realtime/ticket", { token: player.token })),

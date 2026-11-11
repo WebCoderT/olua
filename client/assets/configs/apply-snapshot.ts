@@ -47,6 +47,7 @@ import { applyGuideSteps } from "./guide";
 import { applyEquipmentAppearance } from "./border";
 import { applyEquipmentDetailBackgrounds } from "./background";
 import { applyAutoBattleParams } from "./autoBattle";
+import { applyGuildRules } from "./social";
 import { SEX } from "../types/role";
 
 /**
@@ -302,21 +303,23 @@ export function applyAppearanceSection(data: unknown): void {
 }
 
 /**
- * 覆写运行时参数（#605）：掉落手感 + 自动战斗与寻路
+ * 覆写运行时参数（#605）：掉落手感 + 自动战斗与寻路 + 帮会门槛
  *
- * 这两组原本写死在客户端 `configs/drop.ts` / `configs/autoBattle.ts` 里，运营改不了；
- * 现在服务端存一份（`config-sync.sql` → `runtime_params` 表 → 管理端可改），
+ * 这些原本写死在客户端 `configs/drop.ts` / `configs/autoBattle.ts` / `configs/social.ts` 里，
+ * 运营改不了；现在服务端存一份（`config-sync.sql` → `runtime_params` 表 → 管理端可改），
  * 进游戏拉一次快照就覆写到本地参数对象上。
  *
- * **覆写是「改字段」不是「换对象」**：消费方（DropManager / AutoBattle / DropScatter）
- * 持有的是同一个对象的引用，换对象等于把改动写在空气里。
- * `guild` 那组客户端目前不消费（帮会校验在服务端判，客户端只显示服务端返回的提示），
- * 所以这里不接 —— 契约照样要求它下发（少发说明 `snapshot()` 被动过）。
+ * **覆写是「改字段」不是「换对象」**：消费方（DropManager / AutoBattle / DropScatter /
+ * GuildPanel）持有的是同一个对象的引用，换对象等于把改动写在空气里。
+ *
+ * `guild` 那组客户端**只用于提示**（输入框长度、建帮按钮下的门槛说明），判定在服务端 ——
+ * 覆写它只是让提示跟上运营改的值，改不改得动结果由服务端说了算。
  */
 export function applyRuntimeParams(params: GameConfigSnapshot["runtimeParams"]): void {
   if (!params) return;
   applyDropRuntime(params.drop);
   applyAutoBattleParams(params.autoBattle);
+  applyGuildRules(params.guild);
 }
 
 //#region 装备外观几何（#513）

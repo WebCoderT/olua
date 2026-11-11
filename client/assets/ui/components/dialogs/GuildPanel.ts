@@ -103,8 +103,18 @@ export default class GuildPanel {
     if (!body) return;
     const guest = layout.guest;
     const texts = layout.texts;
+    // 建帮门槛（#872）：等级 / 花费随运营配置（`guildRules` 由快照覆写），都为 0 就说原来那句 ——
+    // 有门槛时必须提前说，否则玩家点「创建帮会」才被告知「等级不够」，那一下像按钮坏了
+    const requirement = this.createRequirementText();
     body.addChild(
-      UiHelper.createLabel("guild_guest_hint", texts.guestHint, guest.hint.color, guest.hint.fontSize, guest.hint.position, guest.hint.size),
+      UiHelper.createLabel(
+        "guild_guest_hint",
+        requirement ? this.text(texts.guestHintWithCost, { need: requirement }) : texts.guestHint,
+        guest.hint.color,
+        guest.hint.fontSize,
+        guest.hint.position,
+        guest.hint.size,
+      ),
     );
     // 创建：输入框 + 按钮。长度先按客户端镜像挡一道（guildRules），真判定在服务端
     const nameInput = UiHelper.createInputBox("guild_name_input", guest.nameInput.placeholder, guest.nameInput.position, guest.nameInput.size);
@@ -314,6 +324,18 @@ export default class GuildPanel {
         new Size(170, 18),
       ),
     );
+    // 任命 / 卸任副帮主（#871）：只有帮主能派（服务端算好的 canAppoint）、对方不是自己也不是帮主。
+    // 按钮文字随目标当前职位切换：成员 → 「任命」，副帮主 → 「卸任」（同一个接口，rank 传 vice / member）
+    if (guild.canAppoint && !self && item.rank !== GUILD_RANK.LEADER) {
+      const isVice = item.rank === GUILD_RANK.VICE;
+      const appointButton = GameUiHelper.createSmallButtion(
+        `guild_appoint_${item.roleId}`,
+        isVice ? texts.demote : texts.appoint,
+        new Vec2(row.columns.extra, 0),
+      );
+      appointButton.on(Node.EventType.TOUCH_END, () => void this.appoint(item, isVice), this);
+      node.addChild(appointButton);
+    }
     // 转让：只有帮主、且对方不是自己
     if (guild.myRank === GUILD_RANK.LEADER && !self) {
       const transferButton = GameUiHelper.createSmallButtion(
@@ -414,6 +436,21 @@ export default class GuildPanel {
     return Object.keys(params).reduce((acc, key) => acc.split(`{${key}}`).join(String(params[key])), template);
   }
 
+  /**
+   * 建帮门槛的一句话（#872）：「10 级 + 100000 绑定元宝」，两项都为 0 时返回空串
+   *
+   * 数字来自 `guildRules`（登录时由快照覆写，与服务端同一个来源）。这里只做拼接与
+   * 「哪一项该出现」的判断 —— 门槛本身由服务端判，客户端写错也放不进去人。
+   */
+  private createRequirementText(): string {
+    const texts = layout.texts;
+    const parts: string[] = [];
+    if (guildRules.createLevelMin > 0) parts.push(this.text(texts.createNeedLevel, { level: guildRules.createLevelMin }));
+    if (guildRules.createCostBindGold > 0)
+      parts.push(this.text(texts.createNeedBindGold, { amount: guildRules.createCostBindGold }));
+    return parts.join(texts.createNeedJoin);
+  }
+
   //#endregion
 
   //#region 动作（全部直接打服务端，成功后重画）
@@ -489,6 +526,22 @@ export default class GuildPanel {
       this.render();
     } catch {
       // 同上
+    }
+  }
+
+  /**
+   * 任命 / 卸任副帮主（#871；仅帮主）
+   *
+   * 名额（当前 1 名）由服务端判，满了报 50148 —— 客户端不提前数人数：
+   * 那等于把「几个副帮主算满」写死一遍，运营改上限就漏。
+   */
+  private async appoint(member: GuildMember, dismiss: boolean) {
+    try {
+      this.myGuild = await GuildApi.appoint({ roleId: member.roleId, rank: dismiss ? GUILD_RANK.MEMBER : GUILD_RANK.VICE });
+      GameUiHelper.createTipText(dismiss ? layout.texts.demotedTip : layout.texts.appointedTip);
+      this.render();
+    } catch {
+      // 同上（50148 名额已满 / 50108 目标不合法都由全局出口提示）
     }
   }
 
