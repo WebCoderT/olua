@@ -1237,7 +1237,7 @@ export const questsApi = {
   /**
    * 任务配置列表（GET /admin/quests）
    *
-   * seed 自客户端 configs/quest-data（主线 8000 段 / 日常 8100 段），允许动态增删。`kind` 筛 main / daily，`keyword` 模糊匹配 id / 名称。
+   * seed 自客户端 configs/quest-data（主线 8000 段 / 日常 8100 段 / 周常 8200 段），允许动态增删。`kind` 筛 main / daily / weekly，`keyword` 模糊匹配 id / 名称。
    *
    * 权限点：gameConfig:read
    */

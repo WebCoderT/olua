@@ -1685,7 +1685,7 @@ export type UpdateQuest = {
   /**
    * 类型
    */
-  kind?: "main" | "daily";
+  kind?: "main" | "daily" | "weekly";
   /**
    * 名称（1~50 字）
    */
@@ -1720,7 +1720,7 @@ export type CreateQuest = {
   /**
    * 类型
    */
-  kind?: "main" | "daily";
+  kind?: "main" | "daily" | "weekly";
   /**
    * 名称（1~50 字）
    */
@@ -6902,13 +6902,13 @@ export type QuestRewards = {
 
 export type Quest = {
   /**
-   * 任务 id（主线 8000 段 / 日常 8100 段）
+   * 任务 id（主线 8000 段 / 日常 8100 段 / 周常 8200 段）
    */
   id: string;
   /**
-   * 类型：main 主线（一次性）/ daily 日常（领奖后可重接）
+   * 类型：main 主线（一次性，prev 链门控）/ daily 日常（每日 05:00 后可重接）/ weekly 周常（周一 05:00 后可重接）—— 日常与周常领奖后都保留 claimed 行做「本轮领过」的证据
    */
-  kind: "main" | "daily";
+  kind: "main" | "daily" | "weekly";
   /**
    * 名称
    */
@@ -6984,7 +6984,7 @@ export type QuestQuery = {
    */
   order?: "asc" | "desc";
   /**
-   * 类型筛选：main | daily
+   * 类型筛选：main | daily | weekly
    */
   kind?: string;
 };

@@ -1,6 +1,7 @@
 import { Injectable, Logger, OnApplicationBootstrap, OnApplicationShutdown } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { GuildRepository } from "../../database/repositories/guild.repository";
+import { RolePositionRepository } from "../../database/repositories/role-position.repository";
 import { roleAttributeSourceOf, summarizeRoleAttributes } from "../combat/role-attributes";
 import { START_MAP_ID } from "../map/map.service";
 import { RolesService } from "../roles/roles.service";
@@ -61,6 +62,14 @@ interface PresenceEntry {
   trustedY: number;
   trustedAt: number;
   posRejects: number;
+  /**
+   * 上一份写进 `role_positions` 的坐标指纹（`mapId:x:y`；空串 = 还没写过）
+   *
+   * 用「指纹 + 时刻」两个字段而不是存一份坐标副本：落盘的判据只有一条
+   * 「和上次写进去的不一样」，改了哪个分量都算不一样（含换图）。
+   */
+  persisted: string;
+  persistedAt: number;
 }
 
 function worldKey(zoneId: number, mapId: string): string {
@@ -98,7 +107,10 @@ const POS_TRUST_STREAK = 2;
  * - **不算关系**（#389）：好友 / 敌人 / 同帮这些判定放客户端。服务端要为每个观看者
  *   各算一遍「他对我是什么关系」是 O(n²)，而原料（我的社交快照 + 他的 roleId / guildId）
  *   本来就在两端各有一份 —— 服务端只负责把原料发全，怎么上色是表现层的事；
- * - **不落盘**：位置是几秒钟的表现层状态，持久真相仍在各自存档的出生定位；
+ * - **不落盘（权威不落盘）**：位置是几秒钟的表现层状态，持久真相仍在各自存档的出生定位。
+ *   #862/#863 起额外把**一份带时刻的快照**节流写进 `role_positions`，但那是给存档进程
+ *   做「有没有隔着半张图点 NPC」的判定用的投影：内存这份才是权威，快照随时可以过期
+ *   （见 `flushPositions`）；
  * - **不做视野裁剪**：单图人数上限远小于「同图观看者」规模，按 mapId 分组已足够
  *   （真实裁剪是四叉树 / AOI 的事，等有需求再说）；
  * - **不做插值补偿**：服务端拿到什么就发什么，平滑是各客户端自己的表现层职责。
@@ -141,6 +153,7 @@ export class PlayerPresenceService implements OnApplicationBootstrap, OnApplicat
     private readonly config: ConfigService,
     private readonly roles: RolesService,
     private readonly guilds: GuildRepository,
+    private readonly positions: RolePositionRepository,
   ) {}
 
   onApplicationBootstrap(): void {
@@ -238,6 +251,8 @@ export class PlayerPresenceService implements OnApplicationBootstrap, OnApplicat
         trustedY: y,
         trustedAt: now,
         posRejects: 0,
+        persisted: "",
+        persistedAt: 0,
       });
       return;
     }
@@ -328,6 +343,10 @@ export class PlayerPresenceService implements OnApplicationBootstrap, OnApplicat
       players.push(this.toEntry(otherId, entry));
     }
     this.onSendTo?.(accountId, { mapId, full: true, players, left: [], actions: [] });
+    // 进图立刻落一次位置快照（#862/#863）：不写的话「刚进图那一秒点 NPC」会被判成
+    // 「不知道你在哪」，玩家看到的是「走过去了却接不了任务」。
+    const current = this.entries.get(accountId);
+    if (current) this.persistPosition(current, Date.now());
   }
 
   /**
@@ -340,6 +359,15 @@ export class PlayerPresenceService implements OnApplicationBootstrap, OnApplicat
     if (!entry) return;
     this.entries.delete(accountId);
     this.broadcastLeave(entry.zoneId, entry.mapId, accountId);
+    // 位置快照跟着下线一起删（#862/#863）：留着只会让「他其实已经走了」的一行
+    // 在新鲜窗口内继续放行 NPC 交互
+    if (entry.roleId) {
+      try {
+        this.positions.remove(entry.roleId);
+      } catch (error) {
+        this.logger.warn(`角色位置快照删除失败（${entry.roleId}）：${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
   }
 
   /**
@@ -496,8 +524,11 @@ export class PlayerPresenceService implements OnApplicationBootstrap, OnApplicat
   //#region 广播
 
   private broadcast(): void {
-    if (this.onBroadcast === null && this.onSendTo === null) return;
+    // 位置快照先于「有没有人订阅广播」的判断：即便本进程没接任何广播出口
+    // （理论上不会），存档进程的 NPC 交互仍然得能看到位置
     const now = Date.now();
+    this.flushPositions(now);
+    if (this.onBroadcast === null && this.onSendTo === null) return;
     const staleMs = this.posStaleMs();
     // 按图分组的玩家增量（观看者以图为单位，分组后每个图最多发一帧）
     const changed = new Map<string, RealtimePlayerEntry[]>();
@@ -562,6 +593,46 @@ export class PlayerPresenceService implements OnApplicationBootstrap, OnApplicat
         actions: actionsBy.get(key) ?? [],
       });
     }
+  }
+
+  /**
+   * 把「坐标有变化」的在场条目节流落库（#862/#863）
+   *
+   * 存档进程要做「玩家离 NPC 多远」的判定，而两个进程之间只有 SQLite 一条路 ——
+   * 这条通道同时是 #817（拾取校验距离）的底座。
+   *
+   * 三条判据缺一不可：
+   * - **节流**（`rolePositionPersistMs`，默认 1 秒/角色）：4Hz 上报照抄进库就是每人每秒 4 次写，
+   *   而 NPC 交互只关心「1 秒前你在哪」；
+   * - **坐标真变了才写**：站桩的玩家一分钱写放大都不产生（挂机的人可能占在线的一半）；
+   * - **写失败只告警不抛**：位置是辅助信息，不能因为它把互见广播的节拍搞崩。
+   */
+  private flushPositions(now: number): void {
+    const interval = this.positionPersistMs();
+    for (const entry of this.entries.values()) {
+      if (!entry.roleId) continue;
+      if (now - entry.persistedAt < interval) continue;
+      if (entry.persisted === this.positionKey(entry)) continue;
+      this.persistPosition(entry, now);
+    }
+  }
+
+  /** 写一行位置快照（`role_positions`；失败只记日志，不影响广播） */
+  private persistPosition(entry: PresenceEntry, now: number): void {
+    const key = this.positionKey(entry);
+    try {
+      this.positions.upsert({ role_id: entry.roleId, map_id: entry.mapId, x: entry.x, y: entry.y, updated_at: now });
+      entry.persisted = key;
+      entry.persistedAt = now;
+    } catch (error) {
+      // 连失败时刻一起记：不然每个节拍都会重试同一行、日志刷屏
+      entry.persistedAt = now;
+      this.logger.warn(`角色位置快照写入失败（${entry.roleId}）：${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  private positionKey(entry: PresenceEntry): string {
+    return `${entry.mapId}:${entry.x}:${entry.y}`;
   }
 
   /** 立即广播一次离开（断线 / 被踢走这条；超时离场走广播节拍，见 broadcast） */
@@ -665,6 +736,16 @@ export class PlayerPresenceService implements OnApplicationBootstrap, OnApplicat
 
   private posStaleMs(): number {
     return Math.max(500, Number(this.config.get<number>("monsterAiPosStaleMs") ?? 3000));
+  }
+
+  /**
+   * 位置快照的落库间隔（毫秒/角色，#862/#863）
+   *
+   * 取 1 秒：NPC 交互只关心「1 秒前在哪」，再密就是白写（4Hz 上报照抄 = 每人每秒 4 次）。
+   * 下限 200ms 是防呆 —— 配成 0 会把「每个广播节拍都写一行」打开。
+   */
+  private positionPersistMs(): number {
+    return Math.max(200, Number(this.config.get<number>("rolePositionPersistMs") ?? 1000));
   }
 
   /**

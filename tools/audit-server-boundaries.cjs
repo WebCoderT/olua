@@ -197,7 +197,7 @@ const REPO_EDGES = {
     "modules/map",
   ],
   // NPC 点位（#672）：点位归后台，只有地图域读写（管理端画布 + 配置快照）
-  "database/repositories/map-npc.repository.ts": ["modules/map"],
+  "database/repositories/map-npc.repository.ts": ["modules/map", "modules/quest"],
   // 碰撞盒（#676）：与点位同理 —— 只有地图域读写（画布增删改 + 配置快照下发）；
   // 客户端是从快照里拿矩形自己建碰撞体的，没有第二个模块连这张表
   "database/repositories/map-collision.repository.ts": ["modules/map"],
@@ -291,6 +291,10 @@ const REPO_EDGES = {
   // 击杀推进度（realtime 的 QuestService）与删除守卫（game-config 的 deleteQuest）是两条只读例外
   "database/repositories/quest.repository.ts": ["modules/game-config", "modules/quest"],
   "database/repositories/quest-progress.repository.ts": ["modules/quest", "modules/game-config"],
+  // 角色位置快照（#862/#863）：实时进程是**唯一写者**（在场表按 1 秒节流落一份），
+  // 任务域只读它判「有没有站在 NPC 旁边」。开这条边的正当性就在这里 ——
+  // 存档进程要是也能写它，客户端改个包就能让自己瞬移到 NPC 面前。
+  "database/repositories/role-position.repository.ts": ["modules/realtime", "modules/quest"],
   // 成就（#401）：配置表读写归 game-config（管理端页 + seed），记录表归 achievement 域；
   // game-config 只做删除守卫的只读 count（有玩家记录拒删）
   "database/repositories/achievement.repository.ts": ["modules/game-config", "modules/achievement"],

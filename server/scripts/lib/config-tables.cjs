@@ -124,6 +124,9 @@ const RUNTIME_TABLES = Object.freeze([
   "role_friends",
   "role_mails",
   "role_reports",
+  // 角色位置快照（#862/#863）：实时进程每秒写的「他此刻在哪」，纯运行时投影 ——
+  // 进同步文件等于把「别人的机器上谁站在哪」搬过来，而且重启就会重新填满
+  "role_positions",
   "role_status",
   "roles",
   "world_meta",

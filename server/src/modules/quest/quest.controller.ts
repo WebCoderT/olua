@@ -42,13 +42,29 @@ export class QuestController {
     operationId: "quest.accept",
     summary: "接取任务",
     description:
-      "等级（20016）与主线链前置（20015）在服务端复核；重复接取（含已完成的主线）返回 20015。" +
-      "日常按**每日 05:00 切日**：今天已领过返回 20027，行属于更早的天则原地覆盖重置（进度清零、回进行中）。" +
-      "接取成功返回最新快照。",
+      "等级（20016）、**站在发布 NPC 旁边**（20032，接取与对话都校验位置）、主线链前置（20015）" +
+      "都在服务端复核；重复接取（含已完成的主线）返回 20015。\n\n" +
+      "日常按**每日 05:00 切日**、周常按**周一 05:00 切周**：本轮已领过返回 20027，" +
+      "行属于更早的轮次则原地覆盖重置（进度清零、回进行中）。接取成功返回最新快照。",
   })
   @ApiDataResponse(MyQuestsDto, { description: "接取后的任务快照" })
   accept(@CurrentUser() user: AuthenticatedUser, @Body() dto: QuestIdDto): MyQuestsDto {
     return this.questService.accept(user.id, dto.questId);
+  }
+
+  @Post("abandon")
+  @HttpCode(HttpStatus.OK)
+  @ApiPlayerDoc({
+    operationId: "quest.abandon",
+    summary: "放弃任务（#865）",
+    description:
+      "只放**进行中 / 可交付**的行：已领奖的不能放弃（那是「这一轮领过」的证据，删了日常就能刷）。" +
+      "放弃 = 删掉进度行 = 回到可接态，日常 / 周常本轮**还能再接一次**（没领奖就没占额度）。" +
+      "没接过的任务返回 20015。",
+  })
+  @ApiDataResponse(MyQuestsDto, { description: "放弃后的任务快照" })
+  abandon(@CurrentUser() user: AuthenticatedUser, @Body() dto: QuestIdDto): MyQuestsDto {
+    return this.questService.abandon(user.id, dto.questId);
   }
 
   @Post("submit")
@@ -58,9 +74,10 @@ export class QuestController {
     summary: "交付任务并领奖",
     description:
       "kill/talk 要先到 ready（进度满）；collect 直接查背包 —— 材料不足 20017、" +
-      "奖励物品放不下背包 20012（进度行保持原状，补齐后可再来）。" +
-      "发奖（绑定元宝 / 经验 / 物品）与扣材料**一次落库**；daily 与 main 领奖后都**保留 claimed 行**" +
-      "（删行会抹掉「今天领过」的证据），日常的下一轮由 `reset_day` 天号判定。返回最新快照与奖励结算。",
+      "奖励物品放不下背包 20012（进度行保持原状，补齐后可再来）。\n\n" +
+      "**过期的行不能交付**（20033）：日常 / 周常跨轮之后，旧行不再发奖（以前会白给一轮）。" +
+      "发奖（绑定元宝 / 经验 / 物品）与扣材料**一次落库**；daily / weekly / main 领奖后都" +
+      "**保留 claimed 行**（删行会抹掉「这一轮领过」的证据），下一轮由 `reset_day` 判定。",
   })
   @ApiDataResponse(QuestSubmitResultDto, { description: "交付结果（快照 + 奖励结算）" })
   submit(@CurrentUser() user: AuthenticatedUser, @Body() dto: QuestIdDto): QuestSubmitResultDto {
@@ -73,8 +90,9 @@ export class QuestController {
     operationId: "quest.npcTalk",
     summary: "与 NPC 对话",
     description:
-      "talk 型目标的进度入口：推进进行中的对话任务（到量转 ready）；同时带回该 NPC 名下" +
-      "全部任务的状态（含可接但未接的 `available`）与管理端配置的对话文案。" +
+      "talk 型目标的进度入口：**必须先站到 NPC 旁边**（位置快照超过 10 秒没更新、NPC 不在本图、" +
+      "距离超过 120 像素都返 20032 `not_near_npc`），再推进进行中的对话任务（到量转 ready）；" +
+      "同时带回该 NPC 名下全部任务的状态（含可接但未接的 `available`）与管理端配置的对话文案。" +
       "NPC 不存在返回 50020。",
   })
   @ApiDataResponse(NpcTalkResultDto, { description: "对话结果（文案 + 任务状态）" })

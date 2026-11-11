@@ -63,7 +63,7 @@ README（仓库根） → 01 总览（认路）
 | 12 | [管理端](./12-管理端.md) | 196 | 49 条路由、三级导航、`gameData` 查表、操作日志五条设计、玩家行为流水与操作日志的分表口径 | 运营改数 / 权限 / 审计 |
 | 13 | [部署、运维与质量门禁](./13-部署运维与质量门禁.md) | 511 | 五个容器、`deploy.sh` 五模式、三套备份、CI 两 job、58 套 e2e、15 项审计 | 上线 / 回滚 / 排线上故障 |
 | 14 | [接口清单](./14-接口清单.md) | 253 | **自动生成**：235 个 operationId 全表 | 查某个接口叫什么、在哪个 tag |
-| 15 | [数据表清单](./15-数据表清单.md) | 627 | 66 张表：38 配置 + 28 运行时，字段级 + 用途 + 谁读写 | 查字段 / 加表 / 对不上列名 |
+| 15 | [数据表清单](./15-数据表清单.md) | 627 | 69 张表：38 配置 + 31 运行时，字段级 + 用途 + 谁读写 | 查字段 / 加表 / 对不上列名 |
 | 16 | [配置位置总表](./16-配置位置总表.md) | 621 | **38 张表 ↔ 页面双向索引**、藏在弹窗里的入口、四类生效通道、只能改库的配置 | 「这个配置在哪儿改」「改了怎么没生效」 |
 | 17 | [物品掉落流程](./17-物品掉落流程.md) | 988 | **掉落物的一生**（v1 现状）：三份真相、怎么配、怎么抽、怎么摆在地上、怎么捡、不捡会怎样、刷新后去哪 | 「掉了没捡会消失吗」「东西在地上的捡不起来」 |
 | 18 | [掉落系统重构设计](./18-掉落系统重构设计.md) | 1267 | **v2 设计稿（已定稿）**：世界级掉落实体、归属与队友保护期、180s 过期（**末段零提示**）、不动新手引导、dropId 协议、三张新表、管理端三页 + 清空、归属头像、稀有掉落全服公告 | 「掉落要怎么改成多人可捡」「改哪些文件」 |
@@ -182,7 +182,7 @@ README（仓库根） → 01 总览（认路）
 
 | 数字 | 命令 |
 |---|---|
-| 66 张表 / 各表行数 | `sqlite3 server/data/olua.db "SELECT count(*) FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%';"` |
+| 69 张表 / 各表行数 | `sqlite3 server/data/olua.db "SELECT count(*) FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%';"` |
 | 38 配置 / 28 运行时 | `server/scripts/lib/config-tables.cjs` 的 `CONFIG_TABLES` / `RUNTIME_TABLES` |
 | 235 个接口 | `server/openapi.json` 的 `paths` 展开后的 operationId 数；或直接看 [14](./14-接口清单.md) 的标题 |
 | 58 套 e2e | `node -e "console.log(Object.keys(require('./server/package.json').scripts).filter(k=>k.startsWith('test:e2e')).length)"` |

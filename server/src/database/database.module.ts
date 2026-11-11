@@ -57,6 +57,8 @@ import { UiEffectRepository } from "./repositories/ui-effect.repository";
 import { AudioSettingRepository } from "./repositories/audio-setting.repository";
 import { EquipmentAppearanceRepository } from "./repositories/equipment-appearance.repository";
 import { RoleStatusRepository } from "./repositories/role-status.repository";
+// 角色位置快照（#862/#863）：实时进程节流写、任务域读，双方都只是「一个小 upsert / 一次点查」
+import { RolePositionRepository } from "./repositories/role-position.repository";
 
 /**
  * 数据层（全局模块）
@@ -125,6 +127,7 @@ import { RoleStatusRepository } from "./repositories/role-status.repository";
     AudioSettingRepository,
     EquipmentAppearanceRepository,
     RoleStatusRepository,
+    RolePositionRepository,
   ],
   exports: [
     DatabaseService,
@@ -183,6 +186,7 @@ import { RoleStatusRepository } from "./repositories/role-status.repository";
     AudioSettingRepository,
     EquipmentAppearanceRepository,
     RoleStatusRepository,
+    RolePositionRepository,
   ],
 })
 export class DatabaseModule {}

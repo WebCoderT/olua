@@ -87,10 +87,11 @@ export class QuestProgressRepository {
   }
 
   /**
-   * 日常跨天重新接取（#815）：覆盖重置成新一天的 accepted
+   * 跨轮重新接取（#815 日常 / #864 周常）：覆盖重置成新一轮的 accepted
    *
    * 不复用 `insert` —— 行还在（主键冲突），只能原地改。`claimed_at` 一并清掉：
-   * 它记的是「上一轮哪一刻领的」，留到今天会让人误读成「今天领过」。
+   * 它记的是「上一轮哪一刻领的」，留到这一轮会让人误读成「本轮领过」。
+   * `day` 是**本轮起点天号**：日常传今天、周常传本周周一，与 `reset_day` 同口径。
    */
   resetForNewDay(roleId: string, questId: string, day: number): void {
     this.db.run(
@@ -99,6 +100,16 @@ export class QuestProgressRepository {
        WHERE role_id = ? AND quest_id = ?`,
       [day, Date.now(), roleId, questId],
     );
+  }
+
+  /**
+   * 放弃（#865）：删掉这一行 = 回到「没接过」
+   *
+   * 只删非 claimed 行（调用方先判）：claimed 行是「这一轮领过」的证据，删了就把
+   * 日常 / 周常变回可刷（#815 的洞）。
+   */
+  remove(roleId: string, questId: string): void {
+    this.db.run("DELETE FROM quest_progress WHERE role_id = ? AND quest_id = ?", [roleId, questId]);
   }
 
   /**

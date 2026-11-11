@@ -13,8 +13,8 @@ import { hasPermission } from "../store/session";
 import { toastSuccess } from "../store/toast";
 import { PageHeader } from "../components/PageHeader";
 
-/** 任务类型（与服务端口径一致：main 一次性 / daily 领奖后可重接） */
-const QUEST_KIND_LABELS: Record<string, string> = { main: "主线", daily: "日常" };
+/** 任务类型（与服务端口径一致：main 一次性 / daily 每日 05:00 后可重接 / weekly 周一 05:00 后可重接） */
+const QUEST_KIND_LABELS: Record<string, string> = { main: "主线", daily: "日常", weekly: "周常" };
 
 /** 目标类型 → 中文（决定「目标」下拉框用哪张表） */
 const OBJECTIVE_TYPE_LABELS: Record<string, string> = { kill: "击杀怪物", talk: "与 NPC 对话", collect: "收集物品" };
@@ -596,7 +596,7 @@ export function QuestsPage() {
                   <td className={`${tdClass} font-mono text-xs text-slate-300`}>{item.id}</td>
                   <td className={`${tdClass} font-medium text-slate-100`}>{item.label}</td>
                   <td className={tdClass}>
-                    <Badge tone={item.kind === "daily" ? "amber" : "indigo"}>{QUEST_KIND_LABELS[item.kind] ?? item.kind}</Badge>
+                    <Badge tone={item.kind === "main" ? "indigo" : "amber"}>{QUEST_KIND_LABELS[item.kind] ?? item.kind}</Badge>
                   </td>
                   <td className={`${tdClass} text-xs text-slate-400`}>
                     {item.prevQuestId ? <span className="font-mono">{item.prevQuestId}</span> : <span className="text-slate-600">—</span>}

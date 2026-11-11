@@ -23,7 +23,7 @@ const fs = require("node:fs");
 const net = require("node:net");
 const os = require("os");
 const path = require("path");
-const { placeRolesAt } = require("./lib/place-role.cjs");
+const { placeRolesAt, placeRolesNear } = require("./lib/place-role.cjs");
 const WebSocket = require("ws");
 const { paceCast } = require("./lib/cast-pace.cjs");
 
@@ -259,6 +259,18 @@ function setResetDay(dbPath, roleId, questId, day) {
     // #859 起「没有位置记录」的角色只准进新手村 —— 这一套要进 1 图，
     // 准备段先按运营摆位把位置写进去（等价管理端 PATCH onMap，见 lib/place-role.cjs）
     placeRolesAt(dbPath, "1");
+    /**
+     * 站到任务 NPC 旁边（#862/#863 的距离校验）
+     *
+     * 每次请求前都重摆一次：位置快照 10 秒就过期（`QUEST_POS_STALE_MS`），
+     * 在准备段摆一次然后赌整套跑完不到 10 秒，是那种「本机绿、CI 红」的写法。
+     */
+    const standAtQuestNpc = () => placeRolesNear(dbPath, "1", "0002");
+    /** 以「人在传送官旁边」的状态发任务请求（只有 accept / npc-talk 吃距离校验） */
+    const questApi = (method, path, body = {}) => {
+      standAtQuestNpc();
+      return api(baseUrl, method, path, { token, body });
+    };
     const roleId = created.data && created.data.id;
     check(created.code === 0 && created.data.online === true, "准备：角色已创建并自动在线", created.message);
     // 初始 bag 是空数组（没有网格），而服务端不扩容 —— 先存一张规范化空网格（4×10），
@@ -356,27 +368,27 @@ function setResetDay(dbPath, roleId, questId, day) {
     //#region 二、接取门控（前置 / 重复 / 等级）
 
     group("二、接取门控");
-    const gated = await api(baseUrl, "POST", "quests/accept", { token, body: { questId: "8003" } });
+    const gated = await questApi("POST", "quests/accept", { questId: "8003" });
     check(gated.code === 20015, "主线链前置未完成 → 20015（8002 还没领）", JSON.stringify(gated));
 
     // 未接取时 npc-talk 里是 available（放在接取 8001 之前——可接态来自「无进度行」）
     await api(baseUrl, "PATCH", "admin/npcs/0002", { token: adminToken, body: { dialog: "欢迎来到大陆，年轻人。" } });
-    const talkBefore = await api(baseUrl, "POST", "quests/npc-talk", { token, body: { npcId: "0002" } });
+    const talkBefore = await questApi("POST", "quests/npc-talk", { npcId: "0002" });
     const beforeRow = talkBefore.code === 0 ? (talkBefore.data.quests || []).find((row) => row.questId === "8001") : null;
     check(!!beforeRow && beforeRow.status === "available", "未接取时 npc-talk 里 8001 是 available", JSON.stringify(beforeRow));
 
-    const acceptedMain = await api(baseUrl, "POST", "quests/accept", { token, body: { questId: "8001" } });
+    const acceptedMain = await questApi("POST", "quests/accept", { questId: "8001" });
     const mainRow = acceptedMain.code === 0 ? (acceptedMain.data.quests || []).find((row) => row.questId === "8001") : null;
     check(!!mainRow && mainRow.status === "accepted" && mainRow.progress === 0, "接取 8001 成功（accepted / 进度 0）", JSON.stringify(mainRow));
 
-    const reAccept = await api(baseUrl, "POST", "quests/accept", { token, body: { questId: "8001" } });
+    const reAccept = await questApi("POST", "quests/accept", { questId: "8001" });
     check(reAccept.code === 20015, "重复接取 → 20015", JSON.stringify(reAccept));
 
     await api(baseUrl, "PATCH", "admin/quests/8101", { token: adminToken, body: { minLevel: 99 } });
-    const lowLevel = await api(baseUrl, "POST", "quests/accept", { token, body: { questId: "8101" } });
+    const lowLevel = await questApi("POST", "quests/accept", { questId: "8101" });
     check(lowLevel.code === 20016, "等级不够 → 20016（服务端复核，不信客户端灰按钮）", JSON.stringify(lowLevel));
     await api(baseUrl, "PATCH", "admin/quests/8101", { token: adminToken, body: { minLevel: 1 } });
-    const acceptedDaily = await api(baseUrl, "POST", "quests/accept", { token, body: { questId: "8101" } });
+    const acceptedDaily = await questApi("POST", "quests/accept", { questId: "8101" });
     check(acceptedDaily.code === 0, "等级够（改回 1 级）→ 日常可接（无前置门控）", JSON.stringify(acceptedDaily.message));
 
     const mineAfter = await api(baseUrl, "GET", "quests/me", { token });
@@ -388,7 +400,7 @@ function setResetDay(dbPath, roleId, questId, day) {
     //#region 三、talk 进度与领奖（main 的 claimed 行 = 链门控）
 
     group("三、talk 进度与领奖");
-    const talkOne = await api(baseUrl, "POST", "quests/npc-talk", { token, body: { npcId: "0002" } });
+    const talkOne = await questApi("POST", "quests/npc-talk", { npcId: "0002" });
     check(talkOne.code === 0 && talkOne.data.dialog === "欢迎来到大陆，年轻人。", "对话带回管理端配置的文案", JSON.stringify(talkOne.data && talkOne.data.dialog));
     const mainAfterTalk = await myQuest("8001");
     check(!!mainAfterTalk && mainAfterTalk.status === "ready", "talk 进度 +1 到量 → ready", JSON.stringify(mainAfterTalk));
@@ -409,7 +421,7 @@ function setResetDay(dbPath, roleId, questId, day) {
     //#region 四、kill 进度（realtime 击杀结算递进）
 
     group("四、kill 进度（击杀结算递进）");
-    const acceptedKill = await api(baseUrl, "POST", "quests/accept", { token, body: { questId: "8002" } });
+    const acceptedKill = await questApi("POST", "quests/accept", { questId: "8002" });
     check(acceptedKill.code === 0, "接取 8002（prev 8001 已 claimed）", JSON.stringify(acceptedKill.message));
 
     const firstKill = await killOne();
@@ -453,7 +465,7 @@ function setResetDay(dbPath, roleId, questId, day) {
     group("五、collect（交付时查背包）");
     // 背包恰好 2 张皮（8002 的奖励）：把 8003 的目标数量改成 2，走「够 → 扣走 + 发奖」的完整链
     await api(baseUrl, "PATCH", "admin/quests/8003", { token: adminToken, body: { objective: { type: "collect", target: "material_hide", count: 2 } } });
-    const acceptedCollect = await api(baseUrl, "POST", "quests/accept", { token, body: { questId: "8003" } });
+    const acceptedCollect = await questApi("POST", "quests/accept", { questId: "8003" });
     check(acceptedCollect.code === 0, "接取 8003（prev 8002 已 claimed）", JSON.stringify(acceptedCollect.message));
     const collectProgress = await myQuest("8003");
     check(!!collectProgress && collectProgress.progress === 2, "collect 进度实时算背包持有量（2/2）", JSON.stringify(collectProgress));
@@ -470,7 +482,7 @@ function setResetDay(dbPath, roleId, questId, day) {
     const irons = bagFinal.flat().filter((cell) => cell && cell.id === "material_iron").reduce((sum, cell) => sum + cell.count, 0);
     check(hidesLeft === 0 && irons === 1, "材料扣走（皮清零）、奖励入包（铁料 x1）", JSON.stringify({ hidesLeft, irons }));
 
-    const chainNext = await api(baseUrl, "POST", "quests/accept", { token, body: { questId: "8004" } });
+    const chainNext = await questApi("POST", "quests/accept", { questId: "8004" });
     check(chainNext.code === 0, "链继续：接取 8004（prev 8003 已 claimed）", JSON.stringify(chainNext.message));
 
     //#endregion
@@ -502,7 +514,7 @@ function setResetDay(dbPath, roleId, questId, day) {
       JSON.stringify(dailyRows),
     );
 
-    const reAcceptDaily = await api(baseUrl, "POST", "quests/accept", { token, body: { questId: "8101" } });
+    const reAcceptDaily = await questApi("POST", "quests/accept", { questId: "8101" });
     check(reAcceptDaily.code === 20027, "今天再接同一日常 → already_done（20027）", JSON.stringify(reAcceptDaily));
 
     // 连交 3 次只有第一次发奖（旧实现领奖删行，接 → 杀 → 交 一天能刷上千次）
@@ -517,7 +529,7 @@ function setResetDay(dbPath, roleId, questId, day) {
     setResetDay(dbPath, roleId, "8101", staleDay);
     const staleState = await myQuest("8101");
     check(staleState === null, "跨天后过期行不下载（客户端「没有行 = 可接」的判断不用改）", JSON.stringify(staleState));
-    const acceptNextDay = await api(baseUrl, "POST", "quests/accept", { token, body: { questId: "8101" } });
+    const acceptNextDay = await questApi("POST", "quests/accept", { questId: "8101" });
     check(acceptNextDay.code === 0, "跨天后可再接（覆盖重置，不是重插一行）", JSON.stringify(acceptNextDay.message));
     const resetRows = progressRows(dbPath, roleId, "8101");
     check(
