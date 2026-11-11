@@ -92,8 +92,14 @@ compose **五个**服务：admin:80（唯一入口）/ game:8080 / server:3100 /
 - 当前 open：#669 刷怪区即时生效 · #9 包体积 · #12~#19 素材 · #295 阶段三 · #403 帮会战 · #742 站点 TLS · #826 余项
   （眩晕/麻痹/灼烧/两段连击/拉人/等级压制 sup）· #816 / #817 后半 · #838 装备穿限制（放置）· 掉落表未按新装备重算 ·
   本地库有未导出改动（`make config-check` 常红）。**定保持现状**：技能 1011 / 快捷键 6 格 / 装备 7 部位。
-- **client 单测存量红**（master 就红，与本批无关）：test-mail / test-mall / test-skill-decouple；`make verify` 会卡，
-  server e2e 用 `cd server && npm run verify`。
+- **client 单测已全绿（#928 / `bd772183`，2026-11-11）**：65 通过 / 0 失败。此前两套存量红的根因 ——
+  `test-mall` 6 条是断言还在比 boolean 而 `buyMallGood` 自 #921 起返回 `MallLimit | null`；`test-skill-decouple`
+  7 条是深比较把 `description` 也锁死了（文案归运营，已剔出比较）+ 1009 期望是旧单体形态（已按库对齐）。
+  **`make client-test` 现在能当门禁用，全绿才算过。**
+- **在 git worktree 里跑 client 单测会假绿/假红**（2026-11-11 实测）：`client/temp/declarations/cc.d.ts`（Cocos 生成）
+  与 `client/assets/resources/**`（大资源）都被 gitignore，worktree 里没有 → `prepare()` 直接抛「配置表编译失败」，
+  脚本 crash 后 grep `[!!]` 得 0 条，**看起来全绿**；资源存在性断言则假红。判基线必须先
+  `cp -R client/temp/declarations /tmp/<wt>/client/temp/` 并接受资源类断言不可比。
 - **`docs/37` 是最高优先单一来源**（72 条 B/G + 50 条 D 已拍板，本批 D-08/D-09 标已落）。推翻旧设计的四条：
   删元宝/银子且金币不可流通（C1 落地口径 2026-11-11 三处修改见 33 篇 3.4）、存档版本不符**拒登录**、
   换图即移除旧图观看者、补种改每秒按密度补缺。
