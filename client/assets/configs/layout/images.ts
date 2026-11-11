@@ -93,10 +93,8 @@ export const uiImages = {
   roleInfoBackground: uiCommon("user-info-frame"),
   /** 战斗力图标 */
   combatIcon: uiCommon("combat"),
-  /** 金币 / 绑定金币 / 银币 */
-  gold: uiMoney("gold"),
+  /** 绑定元宝（唯一货币，#843/#844 收敛后 gold / silver 图标映射已删） */
   bindGold: uiMoney("bind-gold"),
-  silver: uiMoney("silver"),
 
   // ---------------- 底部栏 ----------------
   /** 底部栏背景 */

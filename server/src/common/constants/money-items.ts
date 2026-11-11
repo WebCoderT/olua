@@ -1,5 +1,5 @@
 /**
- * 货币物品（绑定元宝 / 元宝 / 银子）—— 出厂清单与取值域
+ * 货币物品（绑定元宝）—— 出厂清单与取值域
  *
  * ===========================================================================
  * 这是什么
@@ -7,11 +7,14 @@
  * 背包里可以「使用」的道具，使用后直接给角色账本入账一笔钱：
  *
  * · `bindGold` → 绑定元宝（`data.bindGold`，商城 / 成长线扣的就是它）
- * · `gold`     → 元宝（`data.gold`）
- * · `silver`   → 银子（`data.silver`）
  *
- * 每种货币 8 种面值（10 / 50 / 100 / 200 / 500 / 1000 / 5000 / 100000），
- * 共 24 条。**行本身归运营**：管理端「货币物品」页可新建 / 删除 / 改数值，
+ * 2026-11-11 货币收敛（#843、#844）：**全局只留 `bindGold` 一种货币**。
+ * 原「元宝（gold）/ 银子（silver）」从代码层面整体移除 —— 存档字段、协议帧、
+ * 出厂货币道具一并删除；旧档里的 gold / silver 余额不迁移（作废），
+ * 持有的 legacy 元宝 / 银子道具成为死道具（使用时按「格子不是货币道具」拒用）。
+ *
+ * 8 种面值（10 / 50 / 100 / 200 / 500 / 1000 / 5000 / 100000）共 8 条。
+ * **行本身归运营**：管理端「货币物品」页可新建 / 删除 / 改数值，
  * 这里的清单只是**出厂快照**（见下面「两处清单」）。
  *
  * ===========================================================================
@@ -24,13 +27,15 @@
  *
  * 所以 `DatabaseService.migrate()` 在建表之后补一段 `INSERT OR IGNORE`（见那里的注释），
  * 那条 DDL 块与这份清单是同一份——新增 / 调面值只改这里。
+ * 另有一段同址的清理：把存量库里遗留的 gold / silver 币种行直接删掉（收敛的一部分）。
  *
  * ⚠ 空库不受影响：自举的 SQL 是「DELETE + INSERT」，会把这条兜底插入的行整表替换掉，
  *   所以两处**不会叠加成双份**。`server/test/config-sync.cjs` 会比对两边逐行一致。
  */
 
-/** 三种货币（取值 = 角色存档 `data` 里的字段名，服务端账本字段也是这三个） */
-export const MONEY_KINDS = ["bindGold", "gold", "silver"] as const;
+/** 货币取值域（取值 = 角色存档 `data` 里的字段名，服务端账本字段也是它）。
+ *  收敛后只剩 bindGold 一种；保留数组形状是为了 DTO 校验 / 管理端下拉共用同一份。 */
+export const MONEY_KINDS = ["bindGold"] as const;
 
 /** 货币类型 */
 export type MoneyKind = (typeof MONEY_KINDS)[number];
@@ -38,8 +43,6 @@ export type MoneyKind = (typeof MONEY_KINDS)[number];
 /** 货币中文名（管理端下拉、客户端提示、出厂名称都用这一份） */
 export const MONEY_KIND_LABELS: Record<MoneyKind, string> = {
   bindGold: "绑定元宝",
-  gold: "元宝",
-  silver: "银子",
 };
 
 /** 出厂面值（8 档；运营可以自己再加别的面值） */
@@ -73,15 +76,11 @@ export interface MoneyItemSeed {
 /** 货币 id 前缀（`money_bind_gold_10` 里的 `bind_gold`） */
 const CURRENCY_ID_PART: Record<MoneyKind, string> = {
   bindGold: "bind_gold",
-  gold: "gold",
-  silver: "silver",
 };
 
 /** 图标文件名前缀（resources 命名纪律：全小写 + 连字符，见 client/RESOURCES.md） */
 const CURRENCY_ICON_PART: Record<MoneyKind, string> = {
   bindGold: "bind-gold",
-  gold: "gold",
-  silver: "silver",
 };
 
 /**
@@ -104,7 +103,7 @@ export function moneyItemSeedOf(currency: MoneyKind, amount: number): MoneyItemS
   };
 }
 
-/** 出厂清单：3 种货币 × 8 档面值 = 24 条（顺序即列表默认顺序：货币 → 面值升序） */
+/** 出厂清单：1 种货币 × 8 档面值 = 8 条（面值升序） */
 export const MONEY_ITEM_SEEDS: MoneyItemSeed[] = MONEY_KINDS.flatMap((currency) =>
   MONEY_AMOUNTS.map((amount) => moneyItemSeedOf(currency, amount)),
 );

@@ -145,7 +145,7 @@ export function MailSendPage() {
         </Field>
 
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="附件金币（可选）">
+          <Field label="附件绑定元宝（可选）">
             <Input type="number" min={0} value={gold} onChange={(event) => setGold(event.target.value)} placeholder="不填 = 没有" disabled={!canSend} />
           </Field>
           <Field label="附件经验（可选）">

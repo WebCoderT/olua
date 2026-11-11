@@ -248,18 +248,18 @@ function writeData(dbPath, roleId, data) {
 
     //#endregion
 
-    //#region 五、客户端改金币仍然被拒（回归）
+    //#region 五、客户端改账本仍然被拒（回归）
 
-    group("五、客户端改金币仍然被拒");
+    group("五、客户端改绑定元宝仍然被拒");
     const ledger = readData(dbPath, roleId);
-    ledger.gold = 100;
+    ledger.bindGold = 100;
     writeData(dbPath, roleId, ledger);
     const cheat = await api(baseUrl, "PUT", `roles/${roleId}`, {
       token,
-      body: { revision: roleRow(dbPath, roleId).revision, data: { ...ledger, gold: 999999 } },
+      body: { revision: roleRow(dbPath, roleId).revision, data: { ...ledger, bindGold: 999999 } },
     });
-    checkEqual(cheat.code, 0, "改金币的存档照常落库（回填而非拒收）", cheat.message);
-    checkEqual(readData(dbPath, roleId).gold, 100, "金币以库里为准（100，不是 999999）");
+    checkEqual(cheat.code, 0, "改账本的存档照常落库（回填而非拒收）", cheat.message);
+    checkEqual(readData(dbPath, roleId).bindGold, 100, "绑定元宝以库里为准（100，不是 999999）");
 
     //#endregion
 

@@ -904,7 +904,7 @@
     },
     "/roles/{id}/money-use": {
       "post": {
-        "description": "货币道具（绑定元宝 / 元宝 / 银子）使用后直接给角色账本入账：金额与币种读服务端 `money_items` 表，**客户端报「用哪一格」，不报金额**。\n使用后扣减背包格子数量（减到 0 清格），revision 原子 +1。\n\n不结算血蓝、不判「已满」、无冷却（与药品是两条链路）。\n\n失败路径：20023 格子为空 / 不是货币道具 / 该行没有配置入账金额；带上 revision 时乐观锁语义与 role.save 相同（20006 / 20007）。\n\n---\n\n**鉴权**：客户端令牌（`player`），只能操作令牌所属账号自己的数据。",
+        "description": "货币道具（绑定元宝，各档面值）使用后直接给角色账本入账：金额与币种读服务端 `money_items` 表，**客户端报「用哪一格」，不报金额**。\n使用后扣减背包格子数量（减到 0 清格），revision 原子 +1。\n\n不结算血蓝、不判「已满」、无冷却（与药品是两条链路）。\n\n失败路径：20023 格子为空 / 不是货币道具 / 该行没有配置入账金额；带上 revision 时乐观锁语义与 role.save 相同（20006 / 20007）。\n\n---\n\n**鉴权**：客户端令牌（`player`），只能操作令牌所属账号自己的数据。",
         "operationId": "role.moneyUse",
         "parameters": [
           {
@@ -2612,7 +2612,7 @@
         ]
       },
       "patch": {
-        "description": "只提交要改的字段，其余原样保留。开放三类：**基础信息**（角色名 / 职业 / 性别 / 等级 / 时装 / 头像 / 所在地图）、**常用数值**（金币 / 绑定元宝 / 银两 / 经验 / 战魂 / 称号 / 军衔）、**运行时数据**（装备穿戴表 / 技能等级表 / 背包格子，结构化编辑，传 `bag: []` 即清空背包）。\n\n角色名仍需满足「同一账号下不重名」。保存后修订号 +1，在线玩家的下一次进度推送会先同步到这里。\n\n返回的 `derived` 是**改完之后**服务端现算的战斗属性：改等级 / 战魂 / 称号 / 军衔 / 装备后，战斗力**立刻**反映新值，不用等客户端同步。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`role:write`（修改角色；角色：超级管理员 / 管理员）",
+        "description": "只提交要改的字段，其余原样保留。开放三类：**基础信息**（角色名 / 职业 / 性别 / 等级 / 时装 / 头像 / 所在地图）、**常用数值**（绑定元宝 / 经验 / 战魂 / 称号 / 军衔）、**运行时数据**（装备穿戴表 / 技能等级表 / 背包格子，结构化编辑，传 `bag: []` 即清空背包）。\n\n角色名仍需满足「同一账号下不重名」。保存后修订号 +1，在线玩家的下一次进度推送会先同步到这里。\n\n返回的 `derived` 是**改完之后**服务端现算的战斗属性：改等级 / 战魂 / 称号 / 军衔 / 装备后，战斗力**立刻**反映新值，不用等客户端同步。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`role:write`（修改角色；角色：超级管理员 / 管理员）",
         "operationId": "adminRole.patch",
         "parameters": [
           {
@@ -7515,7 +7515,7 @@
     },
     "/admin/money-items": {
       "get": {
-        "description": "面值表（出厂 3 种货币 × 8 档 = 24 条）。`keyword` 模糊匹配 id / 名称 / 描述；`currency` 只看某种货币（bindGold = 绑定元宝 / gold = 元宝 / silver = 银子）。\n\n`sellPrice` 是客户端条目的售卖价（0 = 不可售卖），**商城售价归商城定价管理**，不在这里。\n\n**排序**：`sort` 取 `id` / `label` / `currency` / `amount` / `sellPrice` / `updatedAt`，`order` 取 asc / desc（默认货币升序，同货币按面值升序）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
+        "description": "面值表（出厂 3 种货币 × 8 档 = 24 条）。`keyword` 模糊匹配 id / 名称 / 描述；`currency` 只看某种货币（bindGold = 绑定元宝）。\n\n`sellPrice` 是客户端条目的售卖价（0 = 不可售卖），**商城售价归商城定价管理**，不在这里。\n\n**排序**：`sort` 取 `id` / `label` / `currency` / `amount` / `sellPrice` / `updatedAt`，`order` 取 asc / desc（默认货币升序，同货币按面值升序）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
         "operationId": "adminMoneyItem.list",
         "parameters": [
           {
@@ -7580,7 +7580,7 @@
             "name": "currency",
             "required": false,
             "in": "query",
-            "description": "只看某种货币（bindGold / gold / silver）",
+            "description": "只看某种货币（bindGold）",
             "schema": {
               "type": "string"
             }
@@ -7631,7 +7631,7 @@
         }
       },
       "post": {
-        "description": "**只填货币类型与面值就能建**：`id` / 名称 / 描述 / 图标都可省，缺省按「货币 + 面值」派生（`money_gold_100` / 「元宝（100）」/ `item/currency/gold-100`）。\n\n- `id` 手填撞已有行 → 409（`50042`）—— 同一个 id 指到哪一档面值就说不清了。\n- `currency` 必须是 bindGold / gold / silver；`amount` 1 ~ 1000000。\n- `icon` 是 resources 相对路径（不带扩展名），素材放 `client/assets/resources/item/currency/`。\n\n建完客户端下次拉快照就能在背包里看到并使用了。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
+        "description": "**只填货币类型与面值就能建**：`id` / 名称 / 描述 / 图标都可省，缺省按「货币 + 面值」派生（`money_bind_gold_100` / 「绑定元宝（100）」/ `item/currency/bind-gold-100`）。\n\n- `id` 手填撞已有行 → 409（`50042`）—— 同一个 id 指到哪一档面值就说不清了。\n- `currency` 必须是 bindGold；`amount` 1 ~ 1000000。\n- `icon` 是 resources 相对路径（不带扩展名），素材放 `client/assets/resources/item/currency/`。\n\n建完客户端下次拉快照就能在背包里看到并使用了。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
         "operationId": "adminMoneyItem.create",
         "parameters": [],
         "requestBody": {
@@ -16418,17 +16418,9 @@
             "minimum": 1,
             "maximum": 10000000
           },
-          "gold": {
-            "type": "number",
-            "description": "金币"
-          },
           "bindGold": {
             "type": "number",
-            "description": "绑定元宝"
-          },
-          "silver": {
-            "type": "number",
-            "description": "银两"
+            "description": "绑定元宝（唯一货币，gold / silver 已随 #843/#844 收敛删除）"
           },
           "exp": {
             "type": "number",
@@ -17963,12 +17955,12 @@
         "properties": {
           "id": {
             "type": "string",
-            "description": "物品 id（缺省 = money_<货币>_<面值>，如 money_gold_100）；小写字母开头、字母数字下划线",
+            "description": "物品 id（缺省 = money_<货币>_<面值>，如 money_bind_gold_100）；小写字母开头、字母数字下划线",
             "maxLength": 64
           },
           "currency": {
             "type": "string",
-            "description": "货币类型：bindGold（绑定元宝）/ gold（元宝）/ silver（银子）"
+            "description": "货币类型：bindGold（绑定元宝，唯一货币）"
           },
           "amount": {
             "type": "number",
@@ -20553,11 +20545,11 @@
           },
           "itemId": {
             "type": "string",
-            "description": "使用的货币物品 id（如 money_gold_100）"
+            "description": "使用的货币物品 id（如 money_bind_gold_100）"
           },
           "currency": {
             "type": "string",
-            "description": "入账的账本字段：gold / bindGold / silver"
+            "description": "入账的账本字段：bindGold（唯一货币）"
           },
           "amount": {
             "type": "number",
@@ -20565,7 +20557,7 @@
           },
           "balance": {
             "type": "number",
-            "description": "入账后的余额（客户端飘字「+100 元宝（共 300）」用）"
+            "description": "入账后的余额（客户端飘字「+100 绑定元宝（共 300）」用）"
           }
         },
         "required": [
@@ -20795,7 +20787,7 @@
           },
           "currency": {
             "type": "string",
-            "description": "入账到哪个账本字段：bindGold = 绑定元宝 / gold = 元宝 / silver = 银子"
+            "description": "入账到哪个账本字段：bindGold = 绑定元宝"
           },
           "amount": {
             "type": "number",
@@ -20902,7 +20894,7 @@
           },
           "currency": {
             "type": "string",
-            "description": "只看某种货币（bindGold / gold / silver）"
+            "description": "只看某种货币（bindGold）"
           }
         }
       },
@@ -28352,7 +28344,7 @@
             }
           },
           "moneyItems": {
-            "description": "货币物品（#785：绑定元宝 / 元宝 / 银子 × 各档面值）。使用后直接给角色账本入账 —— 金额与货币类型读服务端表，客户端只负责陈列与「用哪一格」",
+            "description": "货币物品（#785：绑定元宝各档面值）。使用后直接给角色账本入账 —— 金额与货币类型读服务端表，客户端只负责陈列与「用哪一格」",
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/MoneyItemDto"

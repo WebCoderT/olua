@@ -478,7 +478,7 @@ function setResetDay(dbPath, roleId, questId, day) {
     //#region 六、daily 日切（#815：领奖不删行，今天不能再接）
 
     group("六、daily 领奖后不删行，今天不能再接");
-    const roleGold = async () => (((await api(baseUrl, "GET", `roles/${roleId}`, { token })).data || {}).data || {}).gold;
+    const roleGold = async () => (((await api(baseUrl, "GET", `roles/${roleId}`, { token })).data || {}).data || {}).bindGold;
     await api(baseUrl, "PATCH", "admin/quests/8101", { token: adminToken, body: { objective: { type: "kill", target: "1", count: 1 } } });
     const goldBeforeDaily = await roleGold();
     const dailyKill = await killOne();

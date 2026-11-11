@@ -83,7 +83,7 @@ export class ClientConfigService {
       ranks: this.gameConfig.listRanks({ ...ALL }).list,
       equipments: this.gameConfig.listEquipmentVariants(),
       drugs: this.gameConfig.listDrugs({ ...ALL }).list,
-      // #785：货币物品（绑定元宝 / 元宝 / 银子）。客户端背包与图鉴按这段陈列，
+      // #785：货币物品（绑定元宝，唯一货币）。客户端背包与图鉴按这段陈列，
       // 使用结算读库（服务端）—— 运营改面值不用重打客户端包
       moneyItems: this.gameConfig.listMoneyItemRows().map((row) => MoneyItemDto.from(row)),
       // #787：升级卷轴（硬性 +1 级，带等级区间）。客户端用区间做本地预检，

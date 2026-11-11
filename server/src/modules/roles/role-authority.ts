@@ -7,7 +7,7 @@
  *
  * | 类别 | 字段 | 权威 | 为什么 |
  * |---|---|---|---|
- * | 账本 | `gold` / `bindGold` / `silver` | **服务端** | 商城、回收、成长线、任务、成就、邮件、后台都有各自的服务端写点；客户端只从 `roleUpdate` 帧照搬，**没有任何本地改写的代码**（`StorageManager.applyServerRoleUpdate` 是唯一入口）|
+ * | 账本 | `bindGold`（唯一货币，#843、#844 收敛后 gold / silver 已删） | **服务端** | 商城、回收、成长线、任务、成就、邮件、后台都有各自的服务端写点；客户端只从 `roleUpdate` 帧照搬，**没有任何本地改写的代码**（`StorageManager.applyServerRoleUpdate` 是唯一入口）|
  * | 成长线阶位 | `title` / `soulOfWar` / `rank` | **服务端** | 只有 `RolesService.upgradeGrowth` 能推进（扣费 + 成长链校验都在那）；客户端 `upgradeGrowthOnServer` 只把服务端返回值抄回来 |
  * | 进度 | `level` / `exp` | **服务端** | 经验只由服务端结算（击杀 / 队友分账 / 任务 / 成就 / 邮件 / 后台），客户端**没有**本地加经验路径（#550 删掉了泡点组件与"实时通道不可用"的兜底；那条路上连伤害都不结算，留着只是给改包留门）|
  * | 背包与穿戴 | `bag` / `equipments` / `skills` | **服务端** | 穿戴 / 卸下 / 丢弃 / 整理 / 搬运五个动作全都走 `POST /roles/:id/bag-op`（#556），客户端不再本地改；`equipments` 还是属性重算的输入 —— 不收权等于把「塞一件没拥有的顶级装备」变成刷战力 |
@@ -36,8 +36,11 @@
 
 import { adoptBagShape, readBagGrid } from "./role-inventory";
 
-/** 账本：只有服务端能改（客户端上报值一律丢弃） */
-export const SERVER_LEDGER_FIELDS = ["gold", "bindGold", "silver"] as const;
+/** 账本：只有服务端能改（客户端上报值一律丢弃）。货币收敛后只有 bindGold 一种（#843、#844） */
+export const SERVER_LEDGER_FIELDS = ["bindGold"] as const;
+
+/** 已删除的 legacy 账本键（#843、#844）：收权时顺手剥掉，不让改包的键随整份存档留在库里 */
+export const LEGACY_LEDGER_FIELDS = ["gold", "silver"] as const;
 
 /** 成长线阶位：只有 `upgradeGrowth` 能推进 */
 export const SERVER_GROWTH_FIELDS = ["title", "soulOfWar", "rank"] as const;
@@ -132,7 +135,7 @@ export interface AuthorityDrift {
 /** 建号等级（#597 起由服务端构造初始文档时直接写死，不再有「客户端上报值」这回事） */
 export const ROLE_INITIAL_LEVEL = 1;
 
-/** 只认自有属性（`data.gold` 与 `data.toString` 不是一回事） */
+/** 只认自有属性（`data.bindGold` 与 `data.toString` 不是一回事） */
 function hasOwn(target: Record<string, unknown>, key: string): boolean {
   return Object.prototype.hasOwnProperty.call(target, key);
 }
@@ -213,6 +216,11 @@ export function enforceServerAuthority(
     if (sameValue(stored[field], incoming[field])) continue;
     drift.push({ field, stored: stored[field], reported: incoming[field] });
     incoming[field] = stored[field];
+  }
+  // legacy 账本键（#843、#844 收敛）：gold / silver 已不是任何字段，上报值不回填也不放行 ——
+  // 直接剥掉。旧档里残留的同名死键会在下一次整份保存时被这一步洗掉。
+  for (const field of LEGACY_LEDGER_FIELDS) {
+    if (hasOwn(incoming, field)) delete incoming[field];
   }
   return drift;
 }

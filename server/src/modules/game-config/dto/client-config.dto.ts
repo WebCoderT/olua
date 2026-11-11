@@ -64,7 +64,7 @@ export class GameConfigSnapshotDto {
 
   @ApiProperty({
     description:
-      "货币物品（#785：绑定元宝 / 元宝 / 银子 × 各档面值）。使用后直接给角色账本入账 —— " +
+      "货币物品（#785：绑定元宝各档面值）。使用后直接给角色账本入账 —— " +
       "金额与货币类型读服务端表，客户端只负责陈列与「用哪一格」",
     type: [MoneyItemDto],
   })

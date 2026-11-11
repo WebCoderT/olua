@@ -11,7 +11,7 @@ export interface MoneyItemListOptions {
   size: number;
   /** 关键字：模糊匹配 id / 名称 / 描述 */
   keyword?: string;
-  /** 只看某种货币（gold / bindGold / silver） */
+  /** 只看某种货币（收敛后只有 bindGold） */
   currency?: string;
   sort?: string;
   order?: string;

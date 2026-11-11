@@ -1088,8 +1088,8 @@ export interface MoneyItemSeedLike {
 /** 货币道具运行时表（内容全部来自服务端；加载期为空） */
 export const moneyItems: MoneyItem[] = [];
 
-/** 三种账本币种（不认识的币种走不了账，见下面的丢弃分支） */
-const MONEY_CURRENCIES: MoneyCurrency[] = ["gold", "bindGold", "silver"];
+/** 账本币种（收敛后只有 bindGold 一种，#843/#844；不认识的币种走不了账，见下面的丢弃分支） */
+const MONEY_CURRENCIES: MoneyCurrency[] = ["bindGold"];
 
 /**
  * 整表重建货币道具

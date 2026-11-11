@@ -52,11 +52,9 @@ import { PageHeader } from "../components/PageHeader";
  * 3. 界面按权限只读（`ROLE_WRITE`），服务端仍会拒。
  */
 
-/** 常用货币与经验（称号 / 战魂 / 军衔走档位选择器，不在这里） */
+/** 常用货币与经验（货币收敛后只有绑定元宝一种；称号 / 战魂 / 军衔走档位选择器，不在这里） */
 const NUMBER_FIELDS: { key: keyof RoleForm; label: string }[] = [
-  { key: "gold", label: "金币" },
   { key: "bindGold", label: "绑定元宝" },
-  { key: "silver", label: "银两" },
   { key: "exp", label: "经验" },
 ];
 
@@ -77,9 +75,7 @@ interface RoleForm {
   fashionCloth: string;
   avatar: string;
   onMap: string;
-  gold: string;
   bindGold: string;
-  silver: string;
   exp: string;
   /** 成长阶位（0 = 未激活） */
   soulOfWar: string;
@@ -166,9 +162,7 @@ function toForm(role: AdminRole): RoleForm {
     fashionCloth: typeof data.fashionCloth === "string" ? data.fashionCloth : "",
     avatar: readNumber(data, "avatar"),
     onMap: typeof data.onMap === "string" ? data.onMap : "",
-    gold: readNumber(data, "gold"),
     bindGold: readNumber(data, "bindGold"),
-    silver: readNumber(data, "silver"),
     exp: readNumber(data, "exp"),
     soulOfWar: readNumber(data, "soulOfWar"),
     title: readNumber(data, "title"),
@@ -232,7 +226,7 @@ function buildPatch(role: AdminRole, form: RoleForm): RolePatchPayload {
     if (form[key] === original[key]) continue;
     const value = toNumber(form[key] as string);
     if (value === undefined) continue;
-    patch[key as "gold" | "bindGold" | "silver" | "exp"] = value;
+    patch[key as "bindGold" | "exp"] = value;
   }
   for (const { key } of GROWTH_FIELDS) {
     if (form[key] === original[key]) continue;

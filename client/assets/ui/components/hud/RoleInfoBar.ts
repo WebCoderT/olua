@@ -6,12 +6,12 @@ import { Role } from "../../../entities/Role";
 import { RELATION_SHIP } from "../../../types/role";
 import { uiImages, roleInfoBarLayout } from "../../../configs/hudLayout";
 
-/** 货币种数（金币 / 绑定金币 / 银币），用于把货币容器宽度等分给每件 */
-const CURRENCY_COUNT = 3;
+/** 货币种数（收敛后只有绑定元宝一种，#843/#844），用于把货币容器宽度等分给每件 */
+const CURRENCY_COUNT = 1;
 
 /**
  * 角色信息栏组件（左上角常驻 HUD）
- * 展示：背景框 + 头像 + 名称 + 等级 + 金币/绑定金币/银币（横向布局容器）+ 战斗力
+ * 展示：背景框 + 头像 + 名称 + 等级 + 绑定元宝（横向布局容器）+ 战斗力
  * 由通用零件（背景/头像/货币/战斗力）拼装而成，本组件负责拼装与数据刷新
  * 位置与尺寸全部来自 configs/hudLayout（各子件坐标以信息栏中心为原点）：
  * 自己的位置是固定值（hudLayout.roleInfoBarLayout.position，创建时调一次 applyFixedPosition）
@@ -21,12 +21,8 @@ export default class RoleInfoBar extends Node {
   private nameLabel: Label;
   /** 等级文本 */
   private levelLabel: Label;
-  /** 金币数量文本 */
-  private goldCountLabel: Label;
-  /** 绑定金币数量文本 */
+  /** 绑定元宝数量文本（唯一货币，#843/#844 收敛后 gold / silver 已删） */
   private bindGoldCountLabel: Label;
-  /** 银币数量文本 */
-  private silverCountLabel: Label;
   /** 战斗力文本 */
   private combatLabel: Label;
   /** 战斗力零件节点（±飘字的挂点） */
@@ -52,18 +48,12 @@ export default class RoleInfoBar extends Node {
     this.addChild(this.levelLabel.node);
     // 头像
     this.addChild(GameUiHelper.createAvatarPortrait(role, layout.portrait.position, layout.portrait.size));
-    // 货币区：三种货币放在同一个横向布局容器里，每件占容器宽度的三分之一、内容各自左对齐
+    // 货币区：唯一货币（绑定元宝）放在横向布局容器里，占容器全宽、内容左对齐
     const currencyBar = GameUiHelper.createRow("role_currency_bar", layout.currencyBar.spacing, layout.currencyBar.position, layout.currencyBar.size);
     const itemSize = new Size(layout.currencyBar.size.width / CURRENCY_COUNT, layout.currencyBar.size.height);
-    const gold = GameUiHelper.createCurrencyItem(uiImages.gold, role.gold, new Vec2(), itemSize);
-    this.goldCountLabel = gold.valueLabel;
-    currencyBar.addChild(gold.node);
     const bindGold = GameUiHelper.createCurrencyItem(uiImages.bindGold, role.bindGold, new Vec2(), itemSize);
     this.bindGoldCountLabel = bindGold.valueLabel;
     currencyBar.addChild(bindGold.node);
-    const silver = GameUiHelper.createCurrencyItem(uiImages.silver, role.silver, new Vec2(), itemSize);
-    this.silverCountLabel = silver.valueLabel;
-    currencyBar.addChild(silver.node);
     this.addChild(currencyBar);
     // 战斗力
     const combat = GameUiHelper.createCombatPower(role, layout.combat.position);
@@ -91,9 +81,7 @@ export default class RoleInfoBar extends Node {
   updateRole(role: Role) {
     this.nameLabel.string = role.name;
     this.levelLabel.string = role.level.toString();
-    this.goldCountLabel.string = role.gold.toString();
     this.bindGoldCountLabel.string = role.bindGold.toString();
-    this.silverCountLabel.string = role.silver.toString();
     this.updateCombat(role.combat);
   }
 

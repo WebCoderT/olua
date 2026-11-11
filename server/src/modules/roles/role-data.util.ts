@@ -44,8 +44,9 @@ export interface RoleIndexFields {
   level: number;
 }
 
-/** 管理端可直接改的「数据内的常用数值字段」（其余字段属于游戏运行时细节，管理端不动） */
-export const ROLE_PATCH_NUMBER_FIELDS = ["gold", "bindGold", "silver", "exp", "soulOfWar", "title", "rank"] as const;
+/** 管理端可直接改的「数据内的常用数值字段」（其余字段属于游戏运行时细节，管理端不动）。
+ *  货币收敛（#843、#844）后只有 bindGold 一种，gold / silver 已删。 */
+export const ROLE_PATCH_NUMBER_FIELDS = ["bindGold", "exp", "soulOfWar", "title", "rank"] as const;
 
 //#region 结构化字段（管理端可改的那部分运行时数据）
 
@@ -338,8 +339,8 @@ export type StoredRoleDataResult =
  *
  * `decodeStoredRoleData` 把「解析失败」折成 `{}` —— 那是给**展示**路径用的（一行坏数据
  * 不该打断整个列表）。但「能不能让他进游戏 / 能不能拿库里的值去收权」这两件事上，
- * 空对象是个**有权限的空档**：`enforceServerAuthority` 会说「库里没有 gold，客户端那份是
- * 唯一来源」，于是改包只要触发一次坏档就能自己写金币 / 背包 / 装备。
+ * 空对象是个**有权限的空档**：`enforceServerAuthority` 会说「库里没有 bindGold，客户端那份是
+ * 唯一来源」，于是改包只要触发一次坏档就能自己写货币 / 背包 / 装备。
  *
  * 所以入口处一律用这个版本：坏档 → `ok: false` → 标记 `corrupted` + 拒登（20029）。
  * 传进来的 `raw` 只能是 `roles.data` 列（不是客户端上报，客户端那条已经过 DTO 校验）。

@@ -53,10 +53,9 @@ export function buildInitialRoleData(id: string, name: string, occupation: strin
     // 版本分布会永远挂着一档假的「老档」
     schemaVersion: ROLE_DATA_VERSION,
     exp: 0,
-    // 账本从零起（#597）：不再有「初始金币」这种出厂馈赠
-    gold: 0,
+    // 账本从零起（#597）：不再有「初始金币」这种出厂馈赠。
+    // 货币收敛（#843、#844）：唯一账本字段 bindGold（绑定元宝）
     bindGold: 0,
-    silver: 0,
     // 装备槽全空（槽位名由客户端枚举补齐）；背包空网格（尺寸由客户端配置铺）
     equipments: {},
     bag: [],

@@ -107,15 +107,13 @@ export function resolveDrugRecovery(
 }
 
 /**
- * 三种货币的中文名（提示文案 / 图鉴用）
+ * 货币的中文名（提示文案 / 图鉴用）
  *
- * 与角色存档的账本字段同名（gold / bindGold / silver），服务端 `MONEY_KIND_LABELS`
+ * 与角色存档的账本字段同名（收敛后只有 bindGold），服务端 `MONEY_KIND_LABELS`
  * 是同一份文案 —— 客户端只用来显示，金额与币种的实际结算在服务端。
  */
 export const MONEY_CURRENCY_LABELS: Record<MoneyCurrency, string> = {
-  gold: "元宝",
   bindGold: "绑定元宝",
-  silver: "银子",
 };
 
 /** 按 id 获取物品（返回副本，避免运行时数量等数据污染配置表；无此物品返回 null） */

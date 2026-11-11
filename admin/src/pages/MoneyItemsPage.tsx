@@ -58,7 +58,7 @@ function amountText(amount: number): string {
  * 货币道具配置（#785）
  *
  * 一张表就是「哪种货币的多少面值」：使用后把 `amount` 加进角色存档的 `currency` 字段
- * （`gold` / `bindGold` / `silver`），格子扣 1。**面值与币种都只在服务端算**，客户端
+ * （收敛后只有 `bindGold`，#843/#844），格子扣 1。**面值与币种都只在服务端算**，客户端
  * 只报「用哪一格」，所以运营在这里改数即时生效（玩家手上的旧道具按新面值入账）。
  *
  * 增删改都在这一页：`id` 是背包引用的键，只在新建时可填（缺省按货币 + 面值派生）；
@@ -295,7 +295,7 @@ export function MoneyItemsPage() {
                     </span>
                   </td>
                   <td className={tdClass}>
-                    <Badge tone={item.currency === "bindGold" ? "slate" : item.currency === "gold" ? "amber" : "green"}>
+                    <Badge tone="slate">
                       {MONEY_KIND_LABELS[item.currency] ?? item.currency}
                     </Badge>
                   </td>
@@ -335,7 +335,7 @@ export function MoneyItemsPage() {
           title={creating ? "新建货币物品" : <>编辑货币物品 · {editing?.id}</>}
           hint={
             creating
-              ? "只填「货币 + 面值」就能建：id / 名称 / 描述 / 图标留空会按「货币 + 面值」自动派生（如 money_gold_100 / 元宝（100）/ item/currency/gold-100）。"
+              ? "只填「货币 + 面值」就能建：id / 名称 / 描述 / 图标留空会按「货币 + 面值」自动派生（如 money_bind_gold_100 / 绑定元宝（100）/ item/currency/bind-gold-100）。"
               : "部分更新：只提交下方字段。id 是背包引用的键，不可修改（改 id 等于换一件物品）。"
           }
           size="md"
@@ -387,7 +387,7 @@ export function MoneyItemsPage() {
 
           {creating ? (
             <Field label="id" hint="留空 = 按「货币 + 面值」派生（推荐）；小写字母开头，只能用小写字母 / 数字 / 下划线">
-              <Input value={form.id} placeholder="留空自动生成，如 money_gold_100" onChange={(event) => setForm({ ...form, id: event.target.value })} />
+              <Input value={form.id} placeholder="留空自动生成，如 money_bind_gold_100" onChange={(event) => setForm({ ...form, id: event.target.value })} />
             </Field>
           ) : (
             <Field label="id" hint="主键，创建后不可修改（背包里按它引用）">
@@ -396,16 +396,16 @@ export function MoneyItemsPage() {
           )}
 
           <Field label="名称" hint={creating ? "留空 = 「货币中文名（面值）」" : undefined}>
-            <Input value={form.label} placeholder={creating ? "留空自动生成，如 元宝（100）" : undefined} onChange={(event) => setForm({ ...form, label: event.target.value })} />
+            <Input value={form.label} placeholder={creating ? "留空自动生成，如 绑定元宝（100）" : undefined} onChange={(event) => setForm({ ...form, label: event.target.value })} />
           </Field>
           <Field label="描述" hint={creating ? "留空 = 「使用后获得 N 点…」" : undefined}>
             <Input value={form.description} placeholder={creating ? "留空自动生成" : undefined} onChange={(event) => setForm({ ...form, description: event.target.value })} />
           </Field>
           <IconField
             label="图标"
-            hint="resources 相对路径（如 item/currency/gold-100，不带扩展名）；空串 = 不显示图标"
+            hint="resources 相对路径（如 item/currency/bind-gold-100，不带扩展名）；空串 = 不显示图标"
             rootDir="item"
-            placeholder="item/currency/gold-100"
+            placeholder="item/currency/bind-gold-100"
             value={form.icon}
             onChange={(path) => setForm({ ...form, icon: path })}
           />

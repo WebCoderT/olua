@@ -112,9 +112,7 @@ function roleData(id, name, occupation, level) {
     occupation,
     sex: "1",
     level,
-    gold: 1000,
     bindGold: 0,
-    silver: 0,
     exp: 0,
     bag: [[null, null], [null, null]],
     equipments: { WEAPON: null, HELMET: null },
@@ -308,12 +306,12 @@ async function raiseLevel(roleId, level, token) {
   // 时装：`fashionCloth` 在 #377 从数字改成**时装 id**（fashions 表主键），管理端也只能填字符串
   const patched = await api("PATCH", `admin/roles/${roleA2Id}`, {
     token: adminToken,
-    body: { name: "甲二改", level: 11, fashionCloth: "cloth_2", avatar: 7, onMap: "12", gold: 8888 },
+    body: { name: "甲二改", level: 11, fashionCloth: "cloth_2", avatar: 7, onMap: "12", bindGold: 8888 },
   });
   check(patched.code === 0, "改基础信息成功", patched.message);
   check(patched.data.name === "甲二改" && patched.data.level === 11, "索引字段同步更新（列表里看到的就是新名字）");
   check(patched.data.data.fashionCloth === "cloth_2" && patched.data.data.avatar === 7 && patched.data.data.onMap === "12", "时装 / 头像 / 所在地图写进角色数据");
-  check(patched.data.data.gold === 8888, "数值字段写进角色数据");
+  check(patched.data.data.bindGold === 8888, "数值字段写进角色数据");
   check(patched.data.revision === 2, "管理端改一次，修订号 +1", JSON.stringify(patched.data.revision));
 
   const numericFashion = await api("PATCH", `admin/roles/${roleA2Id}`, { token: adminToken, body: { fashionCloth: 3 } });
@@ -408,19 +406,19 @@ async function raiseLevel(roleId, level, token) {
 
   const beforePatch = await api("GET", `roles/${roleA1Id}`, { token: tokenA });
   const baseline = beforePatch.data.revision;
-  await api("PATCH", `admin/roles/${roleA1Id}`, { token: adminToken, body: { gold: 777 } });
+  await api("PATCH", `admin/roles/${roleA1Id}`, { token: adminToken, body: { bindGold: 777 } });
   const staleAfterAdmin = await api("PUT", `roles/${roleA1Id}`, {
     token: tokenA,
-    body: { data: { ...roleData(roleA1Id, "甲一", "1", 1), gold: 123 }, revision: baseline },
+    body: { data: { ...roleData(roleA1Id, "甲一", "1", 1), bindGold: 123 }, revision: baseline },
   });
   check(staleAfterAdmin.code === 20006, "玩家拿后台改之前的数据推进会撞上乐观锁（20006）", `${staleAfterAdmin.code}`);
 
   const afterAdmin = await api("GET", `roles/${roleA1Id}`, { token: tokenA });
-  check(afterAdmin.data.data.gold === 777, "后台改的金币还在（没有被玩家那份旧存档覆盖）", JSON.stringify(afterAdmin.data.data.gold));
+  check(afterAdmin.data.data.bindGold === 777, "后台改的绑定元宝还在（没有被玩家那份旧存档覆盖）", JSON.stringify(afterAdmin.data.data.bindGold));
 
   const resume = await api("PUT", `roles/${roleA1Id}`, {
     token: tokenA,
-    body: { data: { ...roleData(roleA1Id, "甲一", "1", 1), gold: 777 }, revision: afterAdmin.data.revision },
+    body: { data: { ...roleData(roleA1Id, "甲一", "1", 1), bindGold: 777 }, revision: afterAdmin.data.revision },
   });
   check(resume.code === 0, "玩家同步到最新 revision 后可以继续保存", resume.message);
 
@@ -911,8 +909,9 @@ async function raiseLevel(roleId, level, token) {
     ...roleData(roleF1Id, "报二", "1", 1),
     // 等级也改（#550）：这是索引列，回填不生效的话列表与详情会按 99 级显示一身神装
     level: 99,
-    gold: 999999,
     bindGold: 88888,
+    // 已删除的 legacy 字段也一起塞（收敛后它们不在账本里，落库必须不带这两个键）
+    gold: 999999,
     silver: 7777,
     title: 9,
     soulOfWar: 9,
@@ -925,11 +924,11 @@ async function raiseLevel(roleId, level, token) {
 
   const afterTamper = await api("GET", `roles/${roleF1Id}`, { token: tokenF });
   const tamperedDoc = afterTamper.data.data;
-  check(tamperedDoc.gold === 0, "金币没被改写（账本以库为准；建号从零起）", `gold=${tamperedDoc.gold}`);
+  check(tamperedDoc.bindGold === 0, "绑定元宝没被改写（账本以库为准；建号从零起）", `bindGold=${tamperedDoc.bindGold}`);
   check(
-    tamperedDoc.bindGold === 0 && tamperedDoc.silver === 0,
-    "绑定元宝 / 银两同样没被改写",
-    `bindGold=${tamperedDoc.bindGold} silver=${tamperedDoc.silver}`,
+    tamperedDoc.gold === undefined && tamperedDoc.silver === undefined,
+    "legacy gold / silver 键不落库（收敛后整体移除）",
+    `gold=${JSON.stringify(tamperedDoc.gold)} silver=${JSON.stringify(tamperedDoc.silver)}`,
   );
   check(
     tamperedDoc.title === 0 && tamperedDoc.soulOfWar === 0 && tamperedDoc.rank === 0,
@@ -950,7 +949,7 @@ async function raiseLevel(roleId, level, token) {
   );
 
   // 正常客户端：账本与阶位原样上报（它本来就是从 roleUpdate 帧抄回来的），保存照旧
-  const plainSave = await saveRole(api, tokenF, roleF1Id, { ...roleData(roleF1Id, "报二", "1", 1), gold: 0 });
+  const plainSave = await saveRole(api, tokenF, roleF1Id, { ...roleData(roleF1Id, "报二", "1", 1), bindGold: 0 });
   check(plainSave.code === 0, "账本一致的存档照常保存（回填对正常客户端是空操作）", plainSave.message);
 
   // #597：建号不再收完整文档，「改包塞九位数金币」这条路连入参都没有了 ——
@@ -961,9 +960,9 @@ async function raiseLevel(roleId, level, token) {
   const richDetail = await api("GET", `roles/${roleF2Id}`, { token: tokenF });
   const richDoc = richDetail.data.data;
   check(
-    richDoc.gold === 0 && richDoc.bindGold === 0 && richDoc.silver === 0,
-    "新角色账本全 0（不再有「初始金币」这种出厂馈赠）",
-    `gold=${richDoc.gold} bindGold=${richDoc.bindGold} silver=${richDoc.silver}`,
+    richDoc.bindGold === 0 && richDoc.gold === undefined && richDoc.silver === undefined,
+    "新角色账本 0 且不带 legacy 键（不再有「初始金币」这种出厂馈赠）",
+    `bindGold=${richDoc.bindGold} gold=${JSON.stringify(richDoc.gold)} silver=${JSON.stringify(richDoc.silver)}`,
   );
   check(
     Array.isArray(richDoc.bag) && richDoc.bag.length === 0,

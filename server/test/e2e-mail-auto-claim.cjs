@@ -130,7 +130,8 @@ function roleState(dbPath, roleId) {
   for (const line of Array.isArray(data.bag) ? data.bag : []) {
     if (Array.isArray(line)) cells.push(...line);
   }
-  return { gold: Number(data.gold) || 0, exp: Number(data.exp) || 0, cells, data };
+  // 邮件的 `gold` 奖励入的是 bindGold（唯一货币，#843/#844）—— 下游断言里的 `.gold` 都读它
+  return { gold: Number(data.bindGold) || 0, exp: Number(data.exp) || 0, cells, data };
 }
 
 /** 写角色存档的背包（塞满 / 清空都走它） */

@@ -938,7 +938,8 @@ export interface ItemRow {
  * 货币物品（#785）：背包里「使用后直接入账」的道具
  *
  * 与药品 / 物品的区别就在 `currency` + `amount` 两列：使用时不结算血蓝、也不进商城售价体系，
- * 而是给角色账本的 `gold` / `bindGold` / `silver` 加一笔（服务端权威，见 `RolesService.useMoneyItem`）。
+ * 而是给角色账本的 `bindGold` 加一笔（唯一货币，#843、#844 收敛后 gold / silver 已删；
+ * 服务端权威，见 `RolesService.useMoneyItem`）。
  *
  * **可增删行**（与药品 / 物品的「id 清单固定」不同）：运营在管理端「货币物品」页自己开面值。
  * 删行不碰玩家存档 —— 背包里还引用已删 id 的格子只是「认不出的道具」，用不了也不报错。
@@ -952,7 +953,7 @@ export interface MoneyItemRow {
   description: string;
   /** 图标资源路径（resources 相对路径，如 `item/currency/bind-gold-10`） */
   icon: string;
-  /** 入账到哪个账本字段（gold / bindGold / silver） */
+  /** 入账到哪个账本字段（收敛后只有 bindGold） */
   currency: string;
   /** 单件入账金额（> 0） */
   amount: number;
