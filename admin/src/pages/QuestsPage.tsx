@@ -174,7 +174,7 @@ function QuestDialog({
   for (const message of [
     checkNumber(form.minLevel, { name: "接取等级", min: 1, max: 999, int: true }),
     checkNumber(form.objectiveCount, { name: "目标数量", min: 1, max: 9999, int: true }),
-    checkNumber(form.gold, { name: "金币奖励", min: 0, max: 999_999_999, int: true }),
+    checkNumber(form.gold, { name: "绑定元宝奖励", min: 0, max: 999_999_999, int: true }),
     checkNumber(form.exp, { name: "经验奖励", min: 0, max: 999_999_999, int: true }),
   ]) {
     if (message) problems.push(message);
@@ -331,7 +331,7 @@ function QuestDialog({
       <div>
         <span className="mb-2 block text-xs font-medium text-slate-400">奖励（交付时直接入包，整份放不下会被拒绝）</span>
         <div className="grid grid-cols-1 gap-3 rounded-xl border border-slate-800 bg-slate-950/40 p-4 sm:grid-cols-2">
-          <Field label="金币">
+          <Field label="绑定元宝">
             <Input type="number" min={0} value={form.gold} onChange={(event) => set("gold", event.target.value)} />
           </Field>
           <Field label="经验">
@@ -611,7 +611,7 @@ export function QuestsPage() {
                     {item.objective.count}
                   </td>
                   <td className={`${tdClass} text-xs text-slate-400`}>
-                    金币 {item.rewards.gold} · 经验 {item.rewards.exp}
+                    绑定元宝 {item.rewards.gold} · 经验 {item.rewards.exp}
                     {item.rewards.items.length > 0
                       ? ` · ${item.rewards.items.map((entry) => `${entityLabel("item", entry.goodId) || entry.goodId}×${entry.count}`).join("、")}`
                       : ""}

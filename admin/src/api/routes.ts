@@ -861,13 +861,13 @@ export const routes = {
     /**
      * 货币物品列表（GET /admin/money-items）
      *
-     * 面值表（出厂 3 种货币 × 8 档 = 24 条）。`keyword` 模糊匹配 id / 名称 / 描述；`currency` 只看某种货币（bindGold = 绑定元宝 / gold = 元宝 / silver = 银子）。
+     * 面值表（出厂 3 种货币 × 8 档 = 24 条）。`keyword` 模糊匹配 id / 名称 / 描述；`currency` 只看某种货币（bindGold = 绑定元宝）。
      */
     list: "/admin/money-items",
     /**
      * 新建货币物品（一种货币的一档面值）（POST /admin/money-items）
      *
-     * **只填货币类型与面值就能建**：`id` / 名称 / 描述 / 图标都可省，缺省按「货币 + 面值」派生（`money_gold_100` / 「元宝（100）」/ `item/currency/gold-100`）。
+     * **只填货币类型与面值就能建**：`id` / 名称 / 描述 / 图标都可省，缺省按「货币 + 面值」派生（`money_bind_gold_100` / 「绑定元宝（100）」/ `item/currency/bind-gold-100`）。
      */
     create: "/admin/money-items",
     /**
@@ -999,7 +999,7 @@ export const routes = {
     /**
      * 修改角色（PATCH /admin/roles/{id}）
      *
-     * 只提交要改的字段，其余原样保留。开放三类：**基础信息**（角色名 / 职业 / 性别 / 等级 / 时装 / 头像 / 所在地图）、**常用数值**（金币 / 绑定元宝 / 银两 / 经验 / 战魂 / 称号 / 军衔）、**运行时数据**（装备穿戴表 / 技能等级表 / 背包格子，结构化编辑，传 `bag: []` 即清空背包）。
+     * 只提交要改的字段，其余原样保留。开放三类：**基础信息**（角色名 / 职业 / 性别 / 等级 / 时装 / 头像 / 所在地图）、**常用数值**（绑定元宝 / 经验 / 战魂 / 称号 / 军衔）、**运行时数据**（装备穿戴表 / 技能等级表 / 背包格子，结构化编辑，传 `bag: []` 即清空背包）。
      */
     patch: (id: string) => `/admin/roles/${encodeURIComponent(id)}`,
     /**

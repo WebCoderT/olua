@@ -496,8 +496,8 @@ function connect(url) {
     // 同一毫秒写入 → 谁排在前面由兜底键决定，所以这里按 target 找，不认「第一条」
     const mailGains = eventsOf(dbPath, "gain").filter((row) => (detailOf(row) || {}).source === "mail");
     check(mailGains.length >= 2, "邮件附件另记 gain（source = mail，金币与物品各一行）", JSON.stringify(mailGains.map((row) => row.target)));
-    const mailGold = mailGains.find((row) => row.target === "gold");
-    checkEqual(mailGold && mailGold.target, "gold", "附件金币记成 gain / target = gold");
+    const mailGold = mailGains.find((row) => row.target === "bindGold");
+    checkEqual(mailGold && mailGold.target, "bindGold", "附件金币记成 gain / target = bindGold（唯一货币）");
     checkEqual(mailGold && mailGold.amount, 100, "附件金币数量正确");
     check(!!mailGains.find((row) => row.target === DROP_GOOD), "附件物品也各记一行 gain");
 

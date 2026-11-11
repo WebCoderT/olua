@@ -330,18 +330,18 @@ function countInBag(bag, goodId) {
 
     //#endregion
 
-    //#region 八、入账只进绑定金（#845 / B2）
+    //#region 八、入账只进绑定元宝（#845 / B2）
 
-    group("八、入账只进绑定金，流通钱包一分不动（#845 / B2）");
+    group("八、入账只进绑定元宝（#845 / B2；收敛后账本只有 bindGold 一种）");
     // #845 报的是「绑定装备卖店直接给流通币」。实测 `sellGoods` 一直写的是 `bindGold`，
-    // 真正要盯住的是「以后的改动别把它写成 gold / silver」—— 这条断言就是那道闸。
+    // 收敛（#843/#844）后连 gold / silver 字段都不存在了 —— 这条断言盯的是入账字段唯一。
     // 绑定与非绑定走的是同一条入账路径（`takeGoodsFromBag` 不读 bound），所以用普通装备
     // 也验得到；绑定件本身能不能卖由 e2e-combat 的绑定段单独覆盖。
     const seeded845 = await api(baseUrl, "PATCH", `admin/roles/${roleId}`, {
       token: adminToken,
-      body: { bag: [{ row: 0, col: 0, id: "cloth_1", count: 1 }], gold: 500, silver: 300 },
+      body: { bag: [{ row: 0, col: 0, id: "cloth_1", count: 1 }] },
     });
-    check(seeded845.code === 0, "准备：补一件 cloth_1，并把 gold / silver 设为 500 / 300", seeded845.message);
+    check(seeded845.code === 0, "准备：补一件 cloth_1", seeded845.message);
     const before845 = await api(baseUrl, "GET", `roles/${roleId}`, { token });
     const bindBefore845 = Number((before845.data.data || {}).bindGold || 0);
     const sold845 = await api(baseUrl, "POST", `roles/${roleId}/sell`, {
@@ -354,8 +354,8 @@ function countInBag(bag, goodId) {
       bindBefore845 + clothPrice,
       "绑定元宝增加一份回收价（入账走 bindGold）",
     );
-    checkEqual(Number((sold845.data.data || {}).gold || 0), 500, "**流通元宝一分没动**（仍是 500）");
-    checkEqual(Number((sold845.data.data || {}).silver || 0), 300, "银子一分没动（仍是 300）");
+    checkEqual((sold845.data.data || {}).gold, undefined, "存档里没有 gold 字段（收敛后已整体移除）");
+    checkEqual((sold845.data.data || {}).silver, undefined, "存档里没有 silver 字段（收敛后已整体移除）");
 
     //#endregion
 

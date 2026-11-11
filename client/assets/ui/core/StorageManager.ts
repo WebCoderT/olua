@@ -561,13 +561,11 @@ export default class StorageManager {
     if (typeof update.revision === "number" && typeof role.revision === "number" && update.revision < role.revision) return;
     // 金钱变化音（#683）：这一帧是所有货币变化的汇合点（任务发奖 / 商城 / 回收 / 后台改动），
     // 所以只在**真的变了**的时候响 —— 每帧都响会盖过其它音效（这条帧每几秒就来一次）
-    const moneyChanged = update.gold !== role.gold || update.bindGold !== role.bindGold || update.silver !== role.silver;
+    const moneyChanged = update.bindGold !== role.bindGold;
     role.level = update.level;
     role.exp = Math.max(0, Math.floor(update.exp));
     role.combat = update.combat;
-    role.gold = update.gold;
     role.bindGold = update.bindGold;
-    role.silver = update.silver;
     role.hp = Math.max(0, Math.floor(update.hp));
     role.mp = Math.max(0, Math.floor(update.mp));
     if (update.maxHp !== undefined) role.maxHp = update.maxHp;
@@ -1424,8 +1422,8 @@ export default class StorageManager {
     // （账本字段 / bag 都在里面）
     const data = (result.data ?? {}) as Record<string, unknown>;
     const currency = String(result.currency ?? "") as MoneyCurrency;
-    // 账本三字段与快照同源：只认服务端给的那一个字段，其余不动
-    if (currency === "gold" || currency === "bindGold" || currency === "silver") {
+    // 账本字段与快照同源：只认服务端给的那一个字段（收敛后只有 bindGold），其余不动
+    if (currency === "bindGold") {
       role[currency] = Number(data[currency] ?? role[currency]);
     }
     // 服务端已扣减格子：以服务端那份为准整体替换（格子只存 key + 数量，无引用关系）

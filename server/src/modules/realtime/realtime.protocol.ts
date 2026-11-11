@@ -895,10 +895,8 @@ export interface RealtimeRoleUpdateMessage {
     /** 当前血量与蓝量（服务端落库值；升级补血 / 用药后的权威值从这里来） */
     hp: number;
     mp: number;
-    /** 金币 / 绑定金币 / 银币（任务 / 邮件 / 后台改完这里都能看到） */
-    gold: number;
+    /** 绑定元宝（唯一货币，#843/#844 收敛后 gold / silver 已从协议删除；任务 / 邮件 / 后台改完这里都能看到） */
     bindGold: number;
-    silver: number;
     /** 战斗力（服务端按权重表现算） */
     combat: number;
     /**

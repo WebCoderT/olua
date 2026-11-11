@@ -262,7 +262,7 @@ async function runSuite(baseUrl) {
   const role1Id = created.body.data.id;
   check(Boolean(role1Id), "返回服务端生成的角色 id");
   checkEqual(created.body.data.online, true, "第一个角色自动设为在线");
-  checkEqual(created.body.data.data.gold, 0, "初始货币由服务端结算（出厂账本全 0）");
+  checkEqual(created.body.data.data.bindGold, 0, "初始货币由服务端结算（出厂账本 0，且只有 bindGold 一种）");
 
   const dupName = await call("POST", "/api/roles", { token, body: { name: "小明", occupation: "1", sex: "1" } });
   checkEqual(dupName.body.code, 20005, "同账号重名被拒");
@@ -301,7 +301,7 @@ async function runSuite(baseUrl) {
   const save = await call("PUT", `/api/roles/${role1Id}`, {
     token,
     body: {
-      data: { ...detail.body.data.data, id: "换掉的id", level: 5, gold: 8888, exp: 120 },
+      data: { ...detail.body.data.data, id: "换掉的id", level: 5, bindGold: 8888, exp: 120 },
       // #820 起 revision 必填：基线就用上面 GET 到的那份
       revision: detail.body.data.revision,
     },
@@ -309,7 +309,7 @@ async function runSuite(baseUrl) {
   checkEqual(save.status, 200, "保存进度返回 200");
   checkEqual(save.body.data.id, role1Id, "id 以路径为准（请求体里的 id 被忽略）");
   checkEqual(save.body.data.level, 1, "等级不接受客户端上报（进度在服务端，见 role-authority.ts）");
-  checkEqual(save.body.data.data.gold, 0, "金币不接受客户端上报（账本在服务端，见 role-authority.ts）");
+  checkEqual(save.body.data.data.bindGold, 0, "绑定元宝不接受客户端上报（账本在服务端，见 role-authority.ts）");
   checkEqual(save.body.data.data.exp, 0, "经验也不接受客户端上报（#550：只剩服务端结算一条路）");
   checkEqual(save.body.data.data.bag.length, 0, "未改动的字段原样保留");
 
@@ -325,7 +325,7 @@ async function runSuite(baseUrl) {
 
   const onlineAfter = await call("GET", "/api/roles/online", { token });
   checkEqual(onlineAfter.body.data.id, role2Id, "在线角色切换为第二个角色");
-  checkEqual(onlineAfter.body.data.data.gold, 0, "在线角色返回完整 data");
+  checkEqual(onlineAfter.body.data.data.bindGold, 0, "在线角色返回完整 data");
 
   const listAfterSelect = await call("GET", "/api/roles", { token });
   checkEqual(listAfterSelect.body.data.filter((item) => item.online).length, 1, "同时只有一个在线角色");
@@ -421,10 +421,10 @@ async function runSuite(baseUrl) {
   checkEqual(roleDetail.body.data.data.bag.length, 0, "管理端角色详情含完整 data（初始背包为空）");
   checkEqual(roleDetail.body.data.accountName, "player001", "管理端角色详情带账号名");
 
-  const patched = await call("PATCH", `/api/admin/roles/${role1Id}`, { token: adminToken, body: { level: 42, gold: 99999, bindGold: 777, exp: 555, title: 3 } });
+  const patched = await call("PATCH", `/api/admin/roles/${role1Id}`, { token: adminToken, body: { level: 42, bindGold: 777, exp: 555, title: 3 } });
   checkEqual(patched.status, 200, "管理端改角色返回 200");
   checkEqual(patched.body.data.level, 42, "等级已改");
-  checkEqual(patched.body.data.data.gold, 99999, "金币已改（写进 data）");
+  checkEqual(patched.body.data.data.bindGold, 777, "绑定元宝已改（写进 data）");
   checkEqual(patched.body.data.data.title, 3, "称号已改");
   checkEqual(patched.body.data.data.bag.length, 0, "未编辑的背包字段原样保留");
 

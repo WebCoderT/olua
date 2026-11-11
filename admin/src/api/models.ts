@@ -356,17 +356,9 @@ export type RolePatchPayload = {
    */
   level?: number;
   /**
-   * 金币
-   */
-  gold?: number;
-  /**
-   * 绑定元宝
+   * 绑定元宝（唯一货币，gold / silver 已随 #843/#844 收敛删除）
    */
   bindGold?: number;
-  /**
-   * 银两
-   */
-  silver?: number;
   /**
    * 经验
    */
@@ -1365,11 +1357,11 @@ export type UpdateItem = {
 
 export type CreateMoneyItem = {
   /**
-   * 物品 id（缺省 = money_<货币>_<面值>，如 money_gold_100）；小写字母开头、字母数字下划线
+   * 物品 id（缺省 = money_<货币>_<面值>，如 money_bind_gold_100）；小写字母开头、字母数字下划线
    */
   id?: string;
   /**
-   * 货币类型：bindGold（绑定元宝）/ gold（元宝）/ silver（银子）
+   * 货币类型：bindGold（绑定元宝，唯一货币）
    */
   currency: string;
   /**
@@ -3088,11 +3080,11 @@ export type MoneyUseResult = {
    */
   data: Record<string, unknown>;
   /**
-   * 使用的货币物品 id（如 money_gold_100）
+   * 使用的货币物品 id（如 money_bind_gold_100）
    */
   itemId: string;
   /**
-   * 入账的账本字段：gold / bindGold / silver
+   * 入账的账本字段：bindGold（唯一货币）
    */
   currency: string;
   /**
@@ -3100,7 +3092,7 @@ export type MoneyUseResult = {
    */
   amount: number;
   /**
-   * 入账后的余额（客户端飘字「+100 元宝（共 300）」用）
+   * 入账后的余额（客户端飘字「+100 绑定元宝（共 300）」用）
    */
   balance: number;
 };
@@ -3246,7 +3238,7 @@ export type MoneyItem = {
    */
   icon: string;
   /**
-   * 入账到哪个账本字段：bindGold = 绑定元宝 / gold = 元宝 / silver = 银子
+   * 入账到哪个账本字段：bindGold = 绑定元宝
    */
   currency: string;
   /**
@@ -3312,7 +3304,7 @@ export type MoneyItemQuery = {
    */
   order?: "asc" | "desc";
   /**
-   * 只看某种货币（bindGold / gold / silver）
+   * 只看某种货币（bindGold）
    */
   currency?: string;
 };
@@ -7947,7 +7939,7 @@ export type GameConfigSnapshot = {
    */
   drugs: Drug[];
   /**
-   * 货币物品（#785：绑定元宝 / 元宝 / 银子 × 各档面值）。使用后直接给角色账本入账 —— 金额与货币类型读服务端表，客户端只负责陈列与「用哪一格」
+   * 货币物品（#785：绑定元宝各档面值）。使用后直接给角色账本入账 —— 金额与货币类型读服务端表，客户端只负责陈列与「用哪一格」
    */
   moneyItems: MoneyItem[];
   /**

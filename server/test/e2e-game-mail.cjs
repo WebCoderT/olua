@@ -408,15 +408,15 @@ function achievementTimestamps(dbPath, roleId, achievementId) {
 
     //#region 三、领取
 
-    group("三、领取：金币 / 经验 / 物品一次落库，三种拒绝");
+    group("三、领取：绑定元宝 / 经验 / 物品一次落库，三种拒绝");
     const beforeClaim = await api(baseUrl, "GET", `roles/${roleId}`, { token });
-    const goldBefore = (beforeClaim.data && beforeClaim.data.data && beforeClaim.data.data.gold) || 0;
+    const goldBefore = (beforeClaim.data && beforeClaim.data.data && beforeClaim.data.data.bindGold) || 0;
     const claimed = await api(baseUrl, "POST", "mails/mail_reward/claim", { token });
     checkEqual(claimed && claimed.code, 0, "领取成功");
     checkEqual(claimed && claimed.data && claimed.data.gold, 500, "本次到手金币 500");
     checkEqual(claimed && claimed.data && claimed.data.items.length, 1, "本次到手物品 1 条");
     const afterClaim = await api(baseUrl, "GET", `roles/${roleId}`, { token });
-    checkEqual((afterClaim.data.data.gold || 0) - goldBefore, 500, "金币真的进了角色存档（差额 500）");
+    checkEqual((afterClaim.data.data.bindGold || 0) - goldBefore, 500, "绑定元宝真的进了角色存档（差额 500）");
     const again = await api(baseUrl, "POST", "mails/mail_reward/claim", { token });
     checkEqual(again && again.code, 50142, "重复领取被拒（50142）");
     const missing = await api(baseUrl, "POST", "mails/mail_nope/claim", { token });

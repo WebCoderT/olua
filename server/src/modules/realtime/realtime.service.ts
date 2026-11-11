@@ -504,9 +504,7 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
         expNeed: this.roles.expNeedAt(row.level),
         hp: Math.max(0, Math.floor(Number(data.hp) || 0)),
         mp: Math.max(0, Math.floor(Number(data.mp) || 0)),
-        gold: Math.max(0, Math.floor(Number(data.gold) || 0)),
         bindGold: Math.max(0, Math.floor(Number(data.bindGold) || 0)),
-        silver: Math.max(0, Math.floor(Number(data.silver) || 0)),
         combat: summary?.combat ?? Math.max(0, Math.floor(Number(data.combat) || 0)),
         // 成长线阶位（#551）：后台改完不重进也能看到。三者都归服务端，取文档里的当前值
         title: Math.max(0, Math.floor(Number(data.title) || 0)),

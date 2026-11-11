@@ -1270,7 +1270,7 @@ export const questDialogLayout = {
     /** 目标行：{type} · {target} ×{count} */
     objective: "{type} · {target} ×{count}",
     /** 交接奖励行 */
-    rewards: "奖励：金币 {gold} · 经验 {exp}",
+    rewards: "奖励：绑定元宝 {gold} · 经验 {exp}",
     /** 接取 / 交付失败的兜底提示（服务端的错误文案更具体，走请求层统一提示） */
     acceptFailed: "接取失败",
     submitFailed: "交付失败",

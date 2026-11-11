@@ -355,7 +355,7 @@ export class RolesService {
     // `level` 另有索引列（`roles.level`）压过文档里的那份 —— 列表排序与筛选读的是列，列才是真相
     //
     // 解析**必须用严格版**：坏档折成 `{}` 的话，收权会认为「库里什么都没有」，于是客户端
-    // 上报的 gold / bag / equipments 全部放行 —— 那正是 B61 的提权通道（#819 堵的就是它）
+    // 上报的 bindGold / bag / equipments 全部放行 —— 那正是 B61 的提权通道（#819 堵的就是它）
     const storedParsed = decodeStoredRoleDataStrict(existing.data);
     if (!storedParsed.ok) {
       this.roles.markCorrupted(roleId, true);
@@ -696,10 +696,9 @@ export class RolesService {
     }
 
     // 3) 入账（绑定元宝，与背包「一键回收」的展示口径一致）
-    // **绑定件与未绑定件都进 `bindGold`**（#845 / B2）：绑定物品可以卖店，给的是绑定金；
-    // 所以这里不需要看格子的 `bound` —— 写进 `gold`（流通）才是「洗白出口」，而这条路
-    // 从 #845 收窄后一直不存在（C2：金币不可流通，玩家之间只能以物易物）。
-    // e2e-sell 里有一条断言盯着「卖绑定件后 gold / silver 一分不动」。
+    // **绑定件与未绑定件都进 `bindGold`**（#845 / B2）：绑定物品可以卖店，给的是绑定元宝。
+    // 这里不需要看格子的 `bound` —— #845 收窄后从未有过「卖进流通货币」这条路
+    // （2026-11-11 货币收敛后连流通货币字段都不存在了）。
     data.bindGold = Math.max(0, Math.floor(Number(data.bindGold) || 0)) + total;
 
     const row: RoleRow = {
@@ -970,8 +969,8 @@ export class RolesService {
   /**
    * 货币道具使用（玩家侧 #785）：入账与扣减都在服务端
    *
-   * 三种货币直接对应角色存档的三个账本字段（`role-authority.ts` 的 `SERVER_LEDGER_FIELDS`）：
-   * `gold` / `bindGold` / `silver`。客户端只报「用背包哪一格」，**金额与币种一律读
+   * 货币直接对应角色存档的唯一账本字段（`role-authority.ts` 的 `SERVER_LEDGER_FIELDS`）：
+   * `bindGold`（绑定元宝；2026-11-11 收敛后 gold / silver 已删，#843、#844）。客户端只报「用背包哪一格」，**金额与币种一律读
    * `money_items` 表** —— 运营把 100000 改成 1，玩家下次使用就只加 1，改包也改不出钱。
    *
    * 与用药的区别：不结算血蓝、不判「已满」；冷却固定 1 秒（`MONEY_ITEM_COOLDOWN_MS`，
@@ -1005,7 +1004,8 @@ export class RolesService {
       throw BizException.conflict(BizCode.MONEY_ITEM_USE_TARGET_INVALID, "该格子不是可使用的货币道具");
     }
     if (!(MONEY_KINDS as readonly string[]).includes(item.currency)) {
-      // 库里存了三种之外的币种（手改库 / 老数据）→ 拒用而不是往一个不存在的字段上写钱
+      // 2026-11-11 货币收敛（#843、#844）：只认 bindGold 一种。库里存的 legacy 币种
+      // （手改库 / 旧元宝银子行没清干净）→ 拒用，不往不存在的字段上写钱。
       throw BizException.conflict(BizCode.MONEY_ITEM_USE_TARGET_INVALID, "该货币道具的币种不合法");
     }
     const currency = item.currency as MoneyKind;
@@ -1774,8 +1774,8 @@ export class RolesService {
       this.placeGoodsIntoBag(data, item.goodId, itemType, Math.max(1, Math.floor(item.count)));
     }
 
-    // 3) 金币（都在 data JSON 里，没有专用列）
-    data.gold = Math.max(0, Math.floor(Number(data.gold) || 0)) + Math.max(0, Math.floor(rewards.gold ?? 0));
+    // 3) 金币（v4 起唯一货币字段是 `bindGold` —— #843、#844；都在 data JSON 里，没有专用列）
+    data.bindGold = Math.max(0, Math.floor(Number(data.bindGold) || 0)) + Math.max(0, Math.floor(rewards.gold ?? 0));
 
     // 4) 经验 + 升级：与击杀 / 泡点共用 `settleLevelUp`（等级曲线判定、上限封顶、
     //    `data.level` 同步、升级回满血蓝）
@@ -1810,7 +1810,7 @@ export class RolesService {
         roleId,
         roleName: existing.name,
         mapId,
-        target: "gold",
+        target: "bindGold",
         amount: gold,
         detail: { source },
       });

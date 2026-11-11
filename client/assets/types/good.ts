@@ -234,14 +234,14 @@ export interface Drug extends Good {
  */
 export interface MoneyItem extends Good {
   type: GOOD_TYPE.MONEY;
-  /** 入账到哪个账本字段：gold（元宝）/ bindGold（绑定元宝）/ silver（银子） */
+  /** 入账到哪个账本字段：bindGold（绑定元宝，唯一货币） */
   currency: MoneyCurrency;
   /** 单件入账金额 */
   amount: number;
 }
 
-/** 三种货币（与角色存档的账本字段同名，服务端 `SERVER_LEDGER_FIELDS` 是同一份） */
-export type MoneyCurrency = "gold" | "bindGold" | "silver";
+/** 货币（唯一 bindGold；#843/#844 收敛后 gold / silver 已删。与角色存档的账本字段同名，服务端 `SERVER_LEDGER_FIELDS` 是同一份） */
+export type MoneyCurrency = "bindGold";
 
 /**
  * 升级卷轴（#787）：使用后**硬性 +1 级**，带等级区间

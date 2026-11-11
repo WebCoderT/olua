@@ -721,14 +721,15 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
         bind_on_drop INTEGER NOT NULL DEFAULT 0
       );
 
-      -- 货币物品（#785）：使用后直接给角色账本入账（gold / bindGold / silver）
+      -- 货币物品（#785）：使用后直接给角色账本入账
+      -- 货币收敛（#843、#844）：唯一币种 bindGold（绑定元宝），gold / silver 已整体移除
       -- 与药品 / 物品不同，**可以增删行** —— 面值由运营在「货币物品」页自己开
       CREATE TABLE IF NOT EXISTS money_items (
         id          TEXT    PRIMARY KEY,
         label       TEXT    NOT NULL DEFAULT '',
         description TEXT    NOT NULL DEFAULT '',
         icon        TEXT    NOT NULL DEFAULT '',
-        currency    TEXT    NOT NULL DEFAULT 'silver',
+        currency    TEXT    NOT NULL DEFAULT 'bindGold',
         amount      INTEGER NOT NULL DEFAULT 0,
         max_stack   INTEGER NOT NULL DEFAULT 999,
         sell_price  INTEGER NOT NULL DEFAULT 0,
@@ -1425,6 +1426,7 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
     this.migrateLegacyMallPricing();
     this.ensureRoleNameUnique();
     this.ensureSuperAdmin();
+    this.purgeLegacyMoneyItems();
     this.seedMoneyItemsOnce();
     this.seedLevelScrollsOnce();
     this.seedLevelCurvesOnce();
@@ -1458,7 +1460,22 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
   }
 
   /**
-   * 存量库补「货币物品」出厂 24 条（#785）
+   * 清掉存量库遗留的 legacy 货币物品行（2026-11-11 货币收敛 #843、#844）
+   *
+   * 货币收敛后 `money_items.currency` 取值域只剩 `bindGold`：旧库里的
+   * 元宝（gold）/ 银子（silver）道具行**直接删除**，不做兼容 —— 玩家背包里
+   * 已持有的这类道具随之变成死道具（使用时按「格子不是货币道具」拒用）。
+   *
+   * **每次启动都跑**（不走 `config_meta` marker）：删除是幂等的，残留行多留一秒
+   * 就多一秒被使用/被管理端看到的机会；删光后此查询零命中，零成本。
+   */
+  private purgeLegacyMoneyItems(): void {
+    const removed = this.execute("DELETE FROM money_items WHERE currency NOT IN ('bindGold')", []).changes;
+    if (removed > 0) this.logger.log(`货币收敛清理：删除 legacy 货币物品 ${removed} 条（gold / silver）`);
+  }
+
+  /**
+   * 存量库补「货币物品」出厂 8 条（#785；2026-11-11 收敛后只留绑定元宝 8 档）
    *
    * 这张表是后加的：已经跑过很久的库不会再自举（`config_meta.bootstrap_at` 有值），
    * 只改 `config-sync.sql` 的话存量库重启后表是空的 —— 管理端「货币物品」页空白、

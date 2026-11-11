@@ -419,7 +419,7 @@ export function AchievementsPage() {
               <option value="1">隐藏</option>
             </Select>
           </Field>
-          <Field label="奖励金币">
+          <Field label="奖励绑定元宝">
             <Input type="number" value={form.gold} onChange={(event) => setForm({ ...form, gold: Number(event.target.value) || 0 })} />
           </Field>
           <Field label="奖励经验">
@@ -529,7 +529,7 @@ export function AchievementsPage() {
                     </span>
                   </td>
                   <td className={`${tdClass} text-xs text-slate-400`}>
-                    {item.rewards.gold} 金 / {item.rewards.exp} 经验
+                    {item.rewards.gold} 绑定元宝 / {item.rewards.exp} 经验
                     {item.rewards.items.length > 0 ? ` / ${item.rewards.items.length} 件物品` : ""}
                   </td>
                   <td className={`${tdClass} text-xs text-slate-400`}>{formatTime(item.updatedAt)}</td>

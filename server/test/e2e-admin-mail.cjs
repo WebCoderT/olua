@@ -202,9 +202,9 @@ function sendMail(roleId, token, body) {
     check(claim.data.items[0] && claim.data.items[0].goodId === "material_iron", "领到手的物品 id 正确（material_iron）", JSON.stringify(claim.data.items));
     const goldAfter = await api("GET", `roles/${roleAId}`, { token: tokenA });
     check(
-      (goldAfter.data.data.gold || 0) - (goldBefore.data.data.gold || 0) === 500,
-      "金币真的进了角色存档（差额 500）",
-      `${goldBefore.data.data.gold} → ${goldAfter.data.data.gold}`,
+      (goldAfter.data.data.bindGold || 0) - (goldBefore.data.data.bindGold || 0) === 500,
+      "绑定元宝真的进了角色存档（差额 500）",
+      `${goldBefore.data.data.bindGold} → ${goldAfter.data.data.bindGold}`,
     );
 
     //#endregion

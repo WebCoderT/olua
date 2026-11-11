@@ -2,11 +2,11 @@
 --
 -- 只含配置表：账号 / 角色存档 / 审计日志 / 世界怪物实例不在这个文件里。
 -- 导入：make config-import（整表替换；账号与角色存档不受影响）
--- 表 38 张 / 行 13774 条
+-- 表 38 张 / 行 13758 条
 -- config-version: 0
 -- olua config snapshot v1
 -- tables: achievements,audio_settings,combat_weights,drop_tables,drugs,equip_aligns,equip_in_aligns,equipment_appearance,equipment_meta,equipment_slots,equipment_variants,equipments,fashions,growth_scalars,guide_settings,items,level_scrolls,mall_categories,mall_goods,map_collisions,map_npcs,map_spawn_areas,maps,money_items,monster_drops,monster_presentation,monster_skills,monsters,npcs,quests,ranks,role_level_curves,runtime_params,skills,souls,statuses,titles,ui_effects
--- counts: achievements=24,audio_settings=12,combat_weights=7,drop_tables=5,drugs=11,equip_aligns=32,equip_in_aligns=31,equipment_appearance=1,equipment_meta=1,equipment_slots=13,equipment_variants=10275,equipments=685,fashions=20,growth_scalars=8,guide_settings=1,items=5,level_scrolls=7,mall_categories=1,mall_goods=1,map_collisions=1615,map_npcs=11,map_spawn_areas=62,maps=11,money_items=24,monster_drops=220,monster_presentation=220,monster_skills=3,monsters=220,npcs=21,quests=5,ranks=100,role_level_curves=24,runtime_params=1,skills=15,souls=37,statuses=4,titles=34,ui_effects=7
+-- counts: achievements=24,audio_settings=12,combat_weights=7,drop_tables=5,drugs=11,equip_aligns=32,equip_in_aligns=31,equipment_appearance=1,equipment_meta=1,equipment_slots=13,equipment_variants=10275,equipments=685,fashions=20,growth_scalars=8,guide_settings=1,items=5,level_scrolls=7,mall_categories=1,mall_goods=1,map_collisions=1615,map_npcs=11,map_spawn_areas=62,maps=11,money_items=8,monster_drops=220,monster_presentation=220,monster_skills=3,monsters=220,npcs=21,quests=5,ranks=100,role_level_curves=24,runtime_params=1,skills=15,souls=37,statuses=4,titles=34,ui_effects=7
 
 PRAGMA foreign_keys = OFF;
 BEGIN;
@@ -12918,7 +12918,7 @@ INSERT INTO "maps" ("map_id", "label", "type", "level", "combat", "soul_of_war",
 INSERT INTO "maps" ("map_id", "label", "type", "level", "combat", "soul_of_war", "updated_by", "updated_at", "grid_cols", "grid_rows", "tile_width", "tile_height", "pixel_width", "pixel_height", "content", "revive_cx", "revive_cy") VALUES ('9', '水乡泽国', '1', 45, 0, 0, '', 0, 64, 64, 128, 128, 8192, 8192, '{"layers":[{"name":"ground","width":64,"height":64},{"name":"wall","width":64,"height":64}],"groups":[]}', 4096, -3456);
 INSERT INTO "maps" ("map_id", "label", "type", "level", "combat", "soul_of_war", "updated_by", "updated_at", "grid_cols", "grid_rows", "tile_width", "tile_height", "pixel_width", "pixel_height", "content", "revive_cx", "revive_cy") VALUES ('10', '桃花源溪', '1', 50, 0, 0, '', 0, 64, 64, 128, 128, 8192, 8192, '{"layers":[{"name":"ground","width":64,"height":64},{"name":"wall","width":64,"height":64}],"groups":[]}', 4096, -3328);
 
--- ===== money_items（24 行）=====
+-- ===== money_items（8 行）=====
 DELETE FROM "money_items";
 INSERT INTO "money_items" ("id", "label", "description", "icon", "currency", "amount", "max_stack", "sell_price", "updated_at", "bind_on_drop") VALUES ('money_bind_gold_10', '绑定元宝（10）', '使用后获得 10 点绑定元宝。', 'item/currency/bind-gold-10', 'bindGold', 10, 999, 0, 1794058275817, 0);
 INSERT INTO "money_items" ("id", "label", "description", "icon", "currency", "amount", "max_stack", "sell_price", "updated_at", "bind_on_drop") VALUES ('money_bind_gold_50', '绑定元宝（50）', '使用后获得 50 点绑定元宝。', 'item/currency/bind-gold-50', 'bindGold', 50, 999, 0, 1794058275817, 0);
@@ -12928,22 +12928,6 @@ INSERT INTO "money_items" ("id", "label", "description", "icon", "currency", "am
 INSERT INTO "money_items" ("id", "label", "description", "icon", "currency", "amount", "max_stack", "sell_price", "updated_at", "bind_on_drop") VALUES ('money_bind_gold_1000', '绑定元宝（1000）', '使用后获得 1000 点绑定元宝。', 'item/currency/bind-gold-1000', 'bindGold', 1000, 999, 0, 1794058275817, 0);
 INSERT INTO "money_items" ("id", "label", "description", "icon", "currency", "amount", "max_stack", "sell_price", "updated_at", "bind_on_drop") VALUES ('money_bind_gold_5000', '绑定元宝（5000）', '使用后获得 5000 点绑定元宝。', 'item/currency/bind-gold-5000', 'bindGold', 5000, 999, 0, 1794058275817, 0);
 INSERT INTO "money_items" ("id", "label", "description", "icon", "currency", "amount", "max_stack", "sell_price", "updated_at", "bind_on_drop") VALUES ('money_bind_gold_100000', '绑定元宝（100000）', '使用后获得 100000 点绑定元宝。', 'item/currency/bind-gold-100000', 'bindGold', 100000, 999, 0, 1794058275817, 0);
-INSERT INTO "money_items" ("id", "label", "description", "icon", "currency", "amount", "max_stack", "sell_price", "updated_at", "bind_on_drop") VALUES ('money_gold_10', '元宝（10）', '使用后获得 10 点元宝。', 'item/currency/gold-10', 'gold', 10, 999, 0, 1794058275817, 0);
-INSERT INTO "money_items" ("id", "label", "description", "icon", "currency", "amount", "max_stack", "sell_price", "updated_at", "bind_on_drop") VALUES ('money_gold_50', '元宝（50）', '使用后获得 50 点元宝。', 'item/currency/gold-50', 'gold', 50, 999, 0, 1794058275817, 0);
-INSERT INTO "money_items" ("id", "label", "description", "icon", "currency", "amount", "max_stack", "sell_price", "updated_at", "bind_on_drop") VALUES ('money_gold_100', '元宝（100）', '使用后获得 100 点元宝。', 'item/currency/gold-100', 'gold', 100, 999, 0, 1794058275817, 0);
-INSERT INTO "money_items" ("id", "label", "description", "icon", "currency", "amount", "max_stack", "sell_price", "updated_at", "bind_on_drop") VALUES ('money_gold_200', '元宝（200）', '使用后获得 200 点元宝。', 'item/currency/gold-200', 'gold', 200, 999, 0, 1794058275817, 0);
-INSERT INTO "money_items" ("id", "label", "description", "icon", "currency", "amount", "max_stack", "sell_price", "updated_at", "bind_on_drop") VALUES ('money_gold_500', '元宝（500）', '使用后获得 500 点元宝。', 'item/currency/gold-500', 'gold', 500, 999, 0, 1794058275817, 0);
-INSERT INTO "money_items" ("id", "label", "description", "icon", "currency", "amount", "max_stack", "sell_price", "updated_at", "bind_on_drop") VALUES ('money_gold_1000', '元宝（1000）', '使用后获得 1000 点元宝。', 'item/currency/gold-1000', 'gold', 1000, 999, 0, 1794058275817, 0);
-INSERT INTO "money_items" ("id", "label", "description", "icon", "currency", "amount", "max_stack", "sell_price", "updated_at", "bind_on_drop") VALUES ('money_gold_5000', '元宝（5000）', '使用后获得 5000 点元宝。', 'item/currency/gold-5000', 'gold', 5000, 999, 0, 1794058275817, 0);
-INSERT INTO "money_items" ("id", "label", "description", "icon", "currency", "amount", "max_stack", "sell_price", "updated_at", "bind_on_drop") VALUES ('money_gold_100000', '元宝（100000）', '使用后获得 100000 点元宝。', 'item/currency/gold-100000', 'gold', 100000, 999, 0, 1794058275817, 0);
-INSERT INTO "money_items" ("id", "label", "description", "icon", "currency", "amount", "max_stack", "sell_price", "updated_at", "bind_on_drop") VALUES ('money_silver_10', '银子（10）', '使用后获得 10 点银子。', 'item/currency/silver-10', 'silver', 10, 999, 0, 1794058275817, 0);
-INSERT INTO "money_items" ("id", "label", "description", "icon", "currency", "amount", "max_stack", "sell_price", "updated_at", "bind_on_drop") VALUES ('money_silver_50', '银子（50）', '使用后获得 50 点银子。', 'item/currency/silver-50', 'silver', 50, 999, 0, 1794058275817, 0);
-INSERT INTO "money_items" ("id", "label", "description", "icon", "currency", "amount", "max_stack", "sell_price", "updated_at", "bind_on_drop") VALUES ('money_silver_100', '银子（100）', '使用后获得 100 点银子。', 'item/currency/silver-100', 'silver', 100, 999, 0, 1794058275817, 0);
-INSERT INTO "money_items" ("id", "label", "description", "icon", "currency", "amount", "max_stack", "sell_price", "updated_at", "bind_on_drop") VALUES ('money_silver_200', '银子（200）', '使用后获得 200 点银子。', 'item/currency/silver-200', 'silver', 200, 999, 0, 1794058275817, 0);
-INSERT INTO "money_items" ("id", "label", "description", "icon", "currency", "amount", "max_stack", "sell_price", "updated_at", "bind_on_drop") VALUES ('money_silver_500', '银子（500）', '使用后获得 500 点银子。', 'item/currency/silver-500', 'silver', 500, 999, 0, 1794058275817, 0);
-INSERT INTO "money_items" ("id", "label", "description", "icon", "currency", "amount", "max_stack", "sell_price", "updated_at", "bind_on_drop") VALUES ('money_silver_1000', '银子（1000）', '使用后获得 1000 点银子。', 'item/currency/silver-1000', 'silver', 1000, 999, 0, 1794058275817, 0);
-INSERT INTO "money_items" ("id", "label", "description", "icon", "currency", "amount", "max_stack", "sell_price", "updated_at", "bind_on_drop") VALUES ('money_silver_5000', '银子（5000）', '使用后获得 5000 点银子。', 'item/currency/silver-5000', 'silver', 5000, 999, 0, 1794058275817, 0);
-INSERT INTO "money_items" ("id", "label", "description", "icon", "currency", "amount", "max_stack", "sell_price", "updated_at", "bind_on_drop") VALUES ('money_silver_100000', '银子（100000）', '使用后获得 100000 点银子。', 'item/currency/silver-100000', 'silver', 100000, 999, 0, 1794058275817, 0);
 
 -- ===== monster_drops（220 行）=====
 DELETE FROM "monster_drops";

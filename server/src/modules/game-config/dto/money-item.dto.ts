@@ -96,7 +96,7 @@ export class MoneyItemPageDto extends PageMetaDto {
  */
 export class CreateMoneyItemDto {
   @ApiPropertyOptional({
-    description: "物品 id（缺省 = money_<货币>_<面值>，如 money_gold_100）；小写字母开头、字母数字下划线",
+    description: "物品 id（缺省 = money_<货币>_<面值>，如 money_bind_gold_100）；小写字母开头、字母数字下划线",
     maxLength: 64,
   })
   @IsOptional()
@@ -104,7 +104,7 @@ export class CreateMoneyItemDto {
   @Matches(MONEY_ITEM_ID_PATTERN, { message: "id 只能用小写字母、数字与下划线，且以字母开头" })
   id?: string;
 
-  @ApiProperty({ description: "货币类型：bindGold（绑定元宝）/ gold（元宝）/ silver（银子）" })
+  @ApiProperty({ description: "货币类型：bindGold（绑定元宝，唯一货币）" })
   @IsIn([...MONEY_KINDS], { message: "货币类型取值不合法" })
   currency: MoneyKind;
 

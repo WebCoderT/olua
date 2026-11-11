@@ -183,7 +183,7 @@ export class RolesController {
     operationId: "role.moneyUse",
     summary: "使用货币道具（入账与扣减都在服务端）",
     description:
-      "货币道具（绑定元宝 / 元宝 / 银子）使用后直接给角色账本入账：金额与币种读服务端 `money_items` 表，" +
+      "货币道具（绑定元宝，各档面值）使用后直接给角色账本入账：金额与币种读服务端 `money_items` 表，" +
       "**客户端报「用哪一格」，不报金额**。\n" +
       "使用后扣减背包格子数量（减到 0 清格），revision 原子 +1。\n\n" +
       "不结算血蓝、不判「已满」、无冷却（与药品是两条链路）。\n\n" +

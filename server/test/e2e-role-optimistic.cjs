@@ -209,18 +209,18 @@ function roleRow(dbPath, roleId) {
     group("二、过期基线：同样是四条路径，全部 20006 且不写库");
     const staleRevision = baseline.revision;
     // 先让服务端自己往前走一步（管理端改数值），让上面那份基线变成「过期」
-    const patched = await api(baseUrl, "PATCH", `admin/roles/${roleId}`, { token: adminToken, body: { gold: 777 } });
-    checkEqual(patched.code, 0, "准备：管理端把金币改成 777（服务端 revision 前进一格）");
+    const patched = await api(baseUrl, "PATCH", `admin/roles/${roleId}`, { token: adminToken, body: { bindGold: 777 } });
+    checkEqual(patched.code, 0, "准备：管理端把绑定元宝改成 777（服务端 revision 前进一格）");
     const afterPatch = roleRow(dbPath, roleId);
     checkEqual(afterPatch.revision, staleRevision + 1, "管理端改数值推进了 revision");
 
     const staleSave = await api(baseUrl, "PUT", `roles/${roleId}`, {
       token,
-      body: { data: { ...baseline.doc, gold: 123 }, revision: staleRevision },
+      body: { data: { ...baseline.doc, bindGold: 123 }, revision: staleRevision },
     });
     checkEqual(staleSave.status, 409, "save 用过期基线 → HTTP 409");
     checkEqual(staleSave.code, 20006, "save 用过期基线 → 20006");
-    check(JSON.parse(roleRow(dbPath, roleId).data).gold === 777, "后台改的金币还在（旧存档没有覆盖它）");
+    check(JSON.parse(roleRow(dbPath, roleId).data).bindGold === 777, "后台改的绑定元宝还在（旧存档没有覆盖它）");
 
     const staleMall = await api(baseUrl, "POST", `roles/${roleId}/mall-purchase`, {
       token,

@@ -351,14 +351,14 @@ async function main() {
       check(Boolean(firstUpdate), "建号后 roleUpdate 帧自动到达（权威基线不用客户端来拉）");
       // 建号上报的是 10 级，帧里必须是出厂值 1 —— 帧带的是**服务端的等级**，不是客户端报的那份（#554）
       checkEqual(firstUpdate?.data?.level, 1, "快照带上服务端等级（#597 起出厂 1 级，服务端造的）");
-      checkEqual(firstUpdate?.data?.gold, 0, "快照带上货币（#597 起出厂账本全 0）");
+      checkEqual(firstUpdate?.data?.bindGold, 0, "快照带上货币（#597 起出厂账本 0；收敛后唯一字段 bindGold）");
       check(Array.isArray(firstUpdate?.data?.physicalAttack) && firstUpdate.data.physicalAttack.length === 2, "快照带八项属性（区间属性是 [下限, 上限]）");
       check(typeof firstUpdate?.data?.combat === "number" && firstUpdate.data.combat > 0, "快照的战斗力是服务端重算的");
       checkEqual(firstUpdate?.data?.revision, created.body?.data?.revision, "快照带上修订号（客户端拿它做存档基线）");
 
       // 改库（save 一份血量被压到 1 的存档 + 被篡改的账本与经验）→ 下一拍再推一次：
-      // #596 起血蓝也归服务端（上报的 hp:1 会被结算基线覆盖），gold / exp 本来就归服务端
-      // 一致存档：GET 最新文档原样带回，只改 hp / gold / exp（三者都归服务端，见 role-authority.ts）
+      // #596 起血蓝也归服务端（上报的 hp:1 会被结算基线覆盖），bindGold / exp 本来就归服务端
+      // 一致存档：GET 最新文档原样带回，只改 hp / bindGold / exp（三者都归服务端，见 role-authority.ts）
       const beforeSave = await api(baseUrl, "GET", `/api/roles/${roleAId}`, { token: tokenA });
       const saved = await api(baseUrl, "PUT", `/api/roles/${roleAId}`, {
         token: tokenA,
@@ -366,7 +366,7 @@ async function main() {
           data: {
             ...(beforeSave.body?.data?.data || {}),
             hp: 1,
-            gold: 5555,
+            bindGold: 5555,
             exp: 777,
             // 体验状态（#596 云同步）：归客户端书写，帧要原样带回
             shortcutKeys: [{ label: "1", key: 49, skillId: "1001" }],
@@ -389,10 +389,10 @@ async function main() {
       check(
         typeof secondUpdate?.data?.combat === "number" &&
           secondUpdate?.data?.revision === saved.body?.data?.revision &&
-          secondUpdate?.data?.gold === 0 &&
+          secondUpdate?.data?.bindGold === 0 &&
           secondUpdate?.data?.exp === 0 &&
           secondUpdate?.data?.hp !== 1,
-        "第二帧仍是服务端权威值（gold 5555 / exp 777 丢弃，血量也以服务端结算为准——上报 1 无效）",
+        "第二帧仍是服务端权威值（bindGold 5555 / exp 777 丢弃，血量也以服务端结算为准——上报 1 无效）",
       );
       // 体验状态原样带回（#596 换设备云同步）：帧不带它们，「另一台设备改了快捷键」就要重选角才看得见
       check(

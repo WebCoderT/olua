@@ -368,7 +368,7 @@ export const RoleApi = {
   /**
    * 使用货币道具（入账与扣减都在服务端）（POST /roles/{id}/money-use）
    *
-   * 货币道具（绑定元宝 / 元宝 / 银子）使用后直接给角色账本入账：金额与币种读服务端 `money_items` 表，**客户端报「用哪一格」，不报金额**。
+   * 货币道具（绑定元宝，各档面值）使用后直接给角色账本入账：金额与币种读服务端 `money_items` 表，**客户端报「用哪一格」，不报金额**。
    */
   moneyUse: (id: string, body: MoneyUse, options?: Options) => HttpClient.post<MoneyUseResult>(ApiRoutes.role.moneyUse(id), body, options),
   /**

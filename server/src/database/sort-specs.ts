@@ -221,7 +221,7 @@ export const DRUG_SORT: SortSpec<"id" | "label" | "level" | "sellPrice" | "updat
   defaultOrder: "asc",
 };
 
-/** 货币物品列表（#785）：默认按货币升序（bindGold → gold → silver），仓储再补「面值升序」 */
+/** 货币物品列表（#785）：默认按货币升序（收敛后只有 bindGold 一种），仓储再补「面值升序」 */
 export const MONEY_ITEM_SORT: SortSpec<"id" | "label" | "currency" | "amount" | "sellPrice" | "updatedAt"> = {
   columns: {
     id: "id",

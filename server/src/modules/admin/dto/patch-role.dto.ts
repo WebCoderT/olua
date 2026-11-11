@@ -50,7 +50,7 @@ export class RoleBagCellDto {
  *
  * 开放三类字段，都是「改哪几个就提交哪几个」（未提交的原样保留）：
  * 1. **基础信息**：角色名 / 职业 / 性别 / 等级 / 时装 / 头像 / 所在地图；
- * 2. **常用数值**：金币 / 绑定元宝 / 银两 / 经验 / 战魂 / 称号 / 军衔；
+ * 2. **常用数值**：绑定元宝 / 经验 / 战魂 / 称号 / 军衔；
  * 3. **运行时数据**：装备穿戴表 / 技能等级表 / 背包格子（**结构化编辑**）。
  *
  * 第 3 类刻意不做「把整个 data 交给你改」：data 里还有大量游戏运行时细节（快捷键绑定、
@@ -83,26 +83,12 @@ export class AdminPatchRoleDto {
   @Max(ROLE_LEVEL_MAX, { message: `等级最大为 ${ROLE_LEVEL_MAX}` })
   level?: number;
 
-  @ApiPropertyOptional({ description: "金币" })
-  @IsOptional()
-  @IsInt({ message: "金币必须是整数" })
-  @Min(0, { message: "金币不能为负" })
-  @Max(ADMIN_NUMBER_FIELD_MAX, { message: "金币数值过大" })
-  gold?: number;
-
-  @ApiPropertyOptional({ description: "绑定元宝" })
+  @ApiPropertyOptional({ description: "绑定元宝（唯一货币，gold / silver 已随 #843/#844 收敛删除）" })
   @IsOptional()
   @IsInt({ message: "绑定元宝必须是整数" })
   @Min(0, { message: "绑定元宝不能为负" })
   @Max(ADMIN_NUMBER_FIELD_MAX, { message: "绑定元宝数值过大" })
   bindGold?: number;
-
-  @ApiPropertyOptional({ description: "银两" })
-  @IsOptional()
-  @IsInt({ message: "银两必须是整数" })
-  @Min(0, { message: "银两不能为负" })
-  @Max(ADMIN_NUMBER_FIELD_MAX, { message: "银两数值过大" })
-  silver?: number;
 
   @ApiPropertyOptional({ description: "经验" })
   @IsOptional()

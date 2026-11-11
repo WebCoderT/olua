@@ -148,8 +148,8 @@ const HP_DRUG_COOLDOWN_S = Math.max(0, Number(DRUGS[HP_DRUG_ID] && DRUGS[HP_DRUG
 const HP_DRUG_WAIT = HP_DRUG_COOLDOWN_S * 1000 + 250;
 /** 货币道具 1 秒冷却（服务端常量 `MONEY_ITEM_COOLDOWN_MS`） */
 const MONEY_WAIT = 1250;
-const SILVER_ROW = MONEY.find((row) => row.currency === "silver");
-const GOLD_ROW = MONEY.find((row) => row.currency === "gold");
+const BIND_ROW = MONEY.find((row) => row.currency === "bindGold" && Number(row.amount) === 100);
+const BIND_ROW_50 = MONEY.find((row) => row.currency === "bindGold" && Number(row.amount) === 50);
 
 (async () => {
   const dbPath = path.join(os.tmpdir(), `olua-e2e-cooldown-${Date.now()}.db`);
@@ -265,25 +265,25 @@ const GOLD_ROW = MONEY.find((row) => row.currency === "gold");
     //#region 四、货币道具冷却
 
     group("四、货币道具冷却 1 秒，不同道具互不影响");
-    check(!!SILVER_ROW && !!GOLD_ROW, "前置：快照里有银子与元宝道具");
+    check(!!BIND_ROW && !!BIND_ROW_50, "前置：快照里有绑定元宝道具（两档面值）");
     await seedBag([
-      { row: 0, col: 0, id: SILVER_ROW.id, count: 2 },
-      { row: 0, col: 1, id: GOLD_ROW.id, count: 1 },
+      { row: 0, col: 0, id: BIND_ROW.id, count: 2 },
+      { row: 0, col: 1, id: BIND_ROW_50.id, count: 1 },
     ]);
-    const silverFirst = await useMoney(0, 0);
-    checkEqual(silverFirst.code, 0, "第一次用银子道具 → 成功", silverFirst.message);
-    const silverFast = await useMoney(0, 0);
-    checkEqual(silverFast.code, 20031, "紧接着再点同一个 → 20031 冷却中", silverFast.message);
-    check(Number(silverFast.details && silverFast.details.remainingMs) > 0, "回执带剩余毫秒");
+    const bindFirst = await useMoney(0, 0);
+    checkEqual(bindFirst.code, 0, "第一次用绑定元宝道具 → 成功", bindFirst.message);
+    const bindFast = await useMoney(0, 0);
+    checkEqual(bindFast.code, 20031, "紧接着再点同一个 → 20031 冷却中", bindFast.message);
+    check(Number(bindFast.details && bindFast.details.remainingMs) > 0, "回执带剩余毫秒");
     const bagAfterFast = await api(baseUrl, "GET", `roles/${roleId}`, { token });
     checkEqual((cellAt(bagAfterFast.data.data.bag, 0, 0) || {}).count, 1, "被拒的那次不扣道具（仍是 1 个）");
 
-    const goldDuring = await useMoney(0, 1);
-    checkEqual(goldDuring.code, 0, "银子冷却期间用元宝道具 → 照常成功（不同道具不同键）", goldDuring.message);
+    const row50During = await useMoney(0, 1);
+    checkEqual(row50During.code, 0, "同一道具冷却期间用另一档面值 → 照常成功（不同道具不同键）", row50During.message);
 
     await sleep(MONEY_WAIT);
-    const silverAgain = await useMoney(0, 0);
-    checkEqual(silverAgain.code, 0, "等 1 秒后银子道具能再用", silverAgain.message);
+    const bindAgain = await useMoney(0, 0);
+    checkEqual(bindAgain.code, 0, "等 1 秒后绑定元宝道具能再用", bindAgain.message);
 
     //#endregion
 
