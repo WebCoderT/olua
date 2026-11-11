@@ -88,8 +88,16 @@ compose **五个**服务：admin:80（唯一入口）/ game:8080 / server:3100 /
   **不迁移直接删字段、legacy 道具 16 条删行不兼容、UI 叫「绑定元宝」**，账本键收权时剥离 LEGACY_LEDGER_FIELDS）·
   #926 货币命名彻底统一（`c1cb0a5e`，PR #927）：`rewards.bindGold` / `role_mails.bind_gold` / `reward_bind_gold` /
   `cost_bind_gold` / `GROWTH_BIND_GOLD_NOT_ENOUGH` / `mall_bind_gold_not_enough_tip` / `{bindGold}` / `bind-gold` 三套写法
-  按层固定；存量库用 `renameColumnIfExists` 幂等改名（不删列重建，保已发奖励）；只有 `LEGACY_LEDGER_FIELDS` 留 gold 字面量。
-- 当前 open：#669 刷怪区即时生效 · #9 包体积 · #12~#19 素材 · #295 阶段三 · #403 帮会战 · #742 站点 TLS · #826 余项
+  按层固定；存量库用 `renameColumnIfExists` 幂等改名（不删列重建，保已发奖励）；只有 `LEGACY_LEDGER_FIELDS` 留 gold 字面量。·
+  #930 世界刷怪四条（`866fded3`，PR #931；#849~#852 已关）：见下「刷怪密度」条。
+- **刷怪密度（#930，落地口径）**：表单只有「数量」= `max`，`min` 恒 0（老库 `min = max` 一次性抹平，否则下限顶死
+  系数）；目标 `clamp(round(max × 时段系数 × 人数系数), min, max × density_peak)`，人数取**本图观看者**；tick 每秒
+  差量对齐、每 tick 至多补 2 只、超出裁「死等重生 → 最久没被攻击」的，`lastDamagedAt` 5 秒内不裁；统计用**实例数**
+  不用存活数（否则打一只变两只）。公式唯一副本 `common/utils/spawn-density.util.ts`（管理端 `targetNow` 与 tick 共用）。
+  `world_monsters.area_id` 记归属（老档 `findAreaAt` 回填），删区按它清孤儿。代际作废只对「有人看且库里有行」的分域
+  重载（0 行不重播，否则合区白做），合区后 5 分钟只补不裁。越界区不整区丢弃：先取「区域 ∩ 地图」，整块在图外才退回
+  原区域取点再 `clampPointToMap`。
+- 当前 open：#9 包体积 · #12~#19 素材 · #295 阶段三 · #403 帮会战 · #742 站点 TLS · #826 余项
   （眩晕/麻痹/灼烧/两段连击/拉人/等级压制 sup）· #816 / #817 后半 · #838 装备穿限制（放置）· 掉落表未按新装备重算 ·
   本地库有未导出改动（`make config-check` 常红）。**定保持现状**：技能 1011 / 快捷键 6 格 / 装备 7 部位。
 - **client 单测已全绿（#928 / `bd772183`，2026-11-11）**：65 通过 / 0 失败。此前两套存量红的根因 ——
@@ -102,4 +110,4 @@ compose **五个**服务：admin:80（唯一入口）/ game:8080 / server:3100 /
   `cp -R client/temp/declarations /tmp/<wt>/client/temp/` 并接受资源类断言不可比。
 - **`docs/37` 是最高优先单一来源**（72 条 B/G + 50 条 D 已拍板，本批 D-08/D-09 标已落）。推翻旧设计的四条：
   删元宝/银子且金币不可流通（C1 落地口径 2026-11-11 三处修改见 33 篇 3.4）、存档版本不符**拒登录**、
-  换图即移除旧图观看者、补种改每秒按密度补缺。
+  换图即移除旧图观看者、补种改每秒按密度补缺（已落 #931）。
