@@ -253,6 +253,32 @@ export function sameGridShape(a: BagGrid, b: BagGrid): boolean {
   return true;
 }
 
+/**
+ * 找第一个超过单格叠加上限的格子（没有返回 null）
+ *
+ * #842：move / tidy 只验「同 id + 同绑定态的总件数守恒」，把 10 格 99 件报成一格 999 件
+ * 也守恒 —— `maxStack` 不变式（后续所有堆叠逻辑的地基）就是从这儿破的。上报排布落定后
+ * 用它扫一遍，`maxStackOf` 由调用方注入（本文件是纯函数，不读配置表）。
+ *
+ * 装备格 `count > 1` 走的也是这条检查（`resolveMaxStack` 对装备恒 1，#837 口径
+ * 「装备在任何情况下都不允许重叠」）—— 一次扫描同时守住两个不变式。
+ */
+export function findOverstackedCell(
+  grid: BagGrid,
+  maxStackOf: (id: string) => number,
+): { row: number; col: number; id: string; count: number; max: number } | null {
+  for (let row = 0; row < grid.length; row++) {
+    const line = grid[row];
+    for (let col = 0; col < line.length; col++) {
+      const cell = line[col];
+      if (!cell) continue;
+      const max = Math.max(1, Math.floor(maxStackOf(cell.id) || 1));
+      if (cell.count > max) return { row, col, id: cell.id, count: cell.count, max };
+    }
+  }
+  return null;
+}
+
 /** 溯源指纹（用于「搬动之后认领回原来那一件」） */
 function originKeyOf(from: BagOrigin | undefined): string {
   if (!from) return "";
@@ -455,6 +481,12 @@ export function reconcileBagCells(previous: BagGrid, next: BagGrid): BagGrid {
  * 那件把槽位里的元数据搬回格子 —— 搬运只换地方，不改值。之前槽位只存裸 id，这两项在穿脱
  * 之间被清掉，等于「穿一次就洗白」（绑定件变可交易、溯源丢失）。
  *
+ * **装备堆叠格就地拆散**（#837，口径「装备在任何情况下都不允许重叠」）：一格多件装备只可能
+ * 是改包或史前老档造出来的脏数据 —— 正常写路径（拾取 / 购买 / 发奖 / 搬运校验）都保证装备
+ * 一格一件。穿戴是玩家唯一的自愈路径：穿走一件，换下来的旧装备占原格，**剩下的逐件拆进
+ * 空格**；空格不够就整步失败（20012，调用方不落库，背包原样）—— 绝不把「装备叠在一格」
+ * 的状态写回存档，操作成功后背包必然满足不变式。
+ *
  * @returns 被换下来的旧装备 id（没有就是 null，仅用于日志 / 提示）
  */
 export function equipAt(
@@ -468,11 +500,24 @@ export function equipAt(
   if (!cell) throw invalid("这一格没有可以穿戴的装备");
   const worn = equipments[slot] ?? null;
   const wornId = wornIdOf(worn);
+  // 这堆装备的公共元数据（同一格里每一件都一样）：拆散成单件时原样跟着走
+  const meta: { bound?: true; from?: BagOrigin } = {};
+  if (cell.bound === true) meta.bound = true;
+  if (cell.from) meta.from = cell.from;
+  // 穿走一件进槽位，剩余的从堆里拆出来
+  const pieces: WornItem[] = Array.from({ length: Math.max(1, Math.floor(cell.count)) }, () => ({
+    id: cell.id,
+    ...meta,
+  }));
+  const head = pieces.shift() as WornItem;
   grid[row][col] = worn && wornId ? toBagCell(worn) : null;
-  const wornItem: WornItem = { id: cell.id };
-  if (cell.bound === true) wornItem.bound = true;
-  if (cell.from) wornItem.from = cell.from;
-  equipments[slot] = wornItem;
+  // 剩余件 + 原格已被旧装备占着 → 每件找一个空格；找不到 = 背包放不下，整步失败
+  for (const piece of pieces) {
+    const target = firstEmptyCell(grid);
+    if (!target) throw BizException.conflict(BizCode.MALL_BAG_FULL, "背包已满，无法拆开这堆装备");
+    grid[target.row][target.col] = toBagCell(piece);
+  }
+  equipments[slot] = head;
   return wornId;
 }
 

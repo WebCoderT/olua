@@ -722,6 +722,38 @@ e2e 写法（`test/e2e-map-monitor.cjs` 的「二·五」段）：想稳定看�
 `e2e-map-enter` 第七段用「第二个连接当看客」验证：伪造帧不改坐标/血量、不把人踢下线、
 只发伪造帧照样超时离场（`updatedAt` 没被刷）、真上报能接回。
 
+### 四之十六、背包守恒与装备不重叠（#835~#842）：三条不变式与一个唯一出口
+
+用户口径（2026-11-11）：**装备在任何情况下都不允许重叠** —— 这不是「校验后拒绝」，是把
+「装备格 count 恒 1」立成硬不变式。三条不变式与一个出口：
+
+| 不变式 | 守在哪儿 | 别退回 |
+|---|---|---|
+| 装备格 count 恒 1 | `resolveMaxStack` 装备恒 1；管理端 PATCH bag 塞 count>1 装备 → **20003**；move/tidy 报 count>1 → **20022**（同一条 `findOverstackedCell` 检查） | 「兼容堆叠格」：任何写路径造出它就是漏洞；存量脏格唯一出路是**穿戴拆散**（`equipAt`：穿走一件、旧装备占原格、剩余逐件进空格，空格不够**整步失败 20012** 不落库） |
+| 单格 count ≤ maxStack | `resolveMaxStack(id)`（`runtime-config-cache`）是**唯一出口**：装备 1、药品/材料/货币/卷轴各读自己表的 `max_stack`、认不出按 99；入包与校验全走它 | 就地写默认值（历史上购买按 1、拾取按 99，两处必然漂移）；money_items/level_scrolls 的 999 不读 = 白配 |
+| move/tidy 三层判据 | ① `sameGridShape` → ② `sameBagContent`（绑定态+id 分组守恒）→ ③ `findOverstackedCell`（超上限拒 20022） | 只做①②：把 10 格 99 件报成一格 999 件也「守恒」，maxStack 就破了 |
+
+**管理端 PATCH 角色的三条收口（#836）**，动 `patchRole` 时别绕开：
+
+1. **装备写入走裁决**：槽位键先大小写归一（历史习惯 `WEAPON` → `weapon`，属性汇总那边一直
+   大小写不敏感）→ `equipmentSlotOf` 查存在性与部位 → 不存在 / 部位不符 **20003**。之前编的
+   id（3001/4001）静默落库，等下次清洗 = 物品凭空消失。
+2. **PATCH 完属性当场重算**：与玩家侧共用 `summarizeRoleAttributes` + `applyAttributeSummary`
+   （写回也抽成纯函数，两处各抄一份必然漂移）+ `clampVitals`。之前落库沿用旧值，管理端详情的
+   `mismatch` 恒 true 还被当成「正常」。
+3. **PATCH bag 不再整体按未绑定重写**：`applyBagCells` 只写 `{id,count}`，运营一改包全员绑定件
+   洗白 —— 改成与玩家同一套 `reconcileBagCells` 元数据认领（件数没改的格子 bound/from 原样保留；
+   运营真要洗白改一个件数即可）。语义口径：**件数对不上就不认领**，这是特性不是 bug。
+
+**边界与测试的三个注意**：
+
+- admin 引 `role-inventory.ts` / `role-authority.ts` / `combat/role-attributes.ts` 是**新增白名单边**
+  （`tools/audit-server-boundaries.cjs` 的 `ALLOWED_EDGES`），理由都写了「#836」；漏登记 = `make audit` FAIL。
+- **接口层已造不出装备堆叠格**，`equipAt` 拆散的验收只能 require `dist/modules/roles/role-inventory.js`
+  直测纯函数（e2e-map 直调 spawn-area-bounds 的先例）；「创建侧堵死」走管理端 20003 断言。
+- 改了大写槽位入参的旧测试别急着改断言 —— 归一之后 `WEAPON` 合法；要改的是「编造 id」的那批
+  （e2e-roles 三段 / e2e-combat H 段改用真实 id，血条分母的期望值要连装备加成一起算）。
+
 ## 五、运营与安全底座（口令 / 令牌作废 / 限流 / 审计 / 踢下线 / 公告 / 邮件 / 备份）
 
 这几件事互相咬合，**改动时基本必须一起看**：

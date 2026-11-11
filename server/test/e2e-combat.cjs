@@ -891,38 +891,42 @@ function connect(url) {
 
     // —— H. 换装（#383）：改存档后站在不动也要被别人看到（在场表按 refresh 间隔重读）——
     // 装备栏自 #556 起是服务端权威：玩家侧上报的 equipments 会被库里那份回填，
-    // 换装只能走管理端结构化编辑（等价于运营改档）
+    // 换装只能走管理端结构化编辑（等价于运营改档）。
+    // #836 起管理端 PATCH 也校验部位与存在性 —— 之前随手写的 3001/4001（库里没有）
+    // 现在会 20003，改用真实装备 id（cloth_1 +60 maxHp，正好给下面的血条分母断言垫差值）
     const redressed = await api(baseUrl, "PATCH", `admin/roles/${companion.roleId}`, {
       token: adminToken,
-      body: { equipments: { cloth: "3001", weapon: "4001" } },
+      body: { equipments: { cloth: "cloth_1", weapon: "weapon_1" } },
     });
     check(redressed.code === 0, "H：换装已写进存档（服务端权威数据变了，实时进程没被告知）", redressed.message);
     const dressedFrame = await waitFor("fighter 收到 companion 的换装帧", async () => {
       return (
         fighter.session.players.find((frame) =>
-          frame.players.some((entry) => entry.accountId === companionAccountId && entry.appearance && entry.appearance.cloth === "3001"),
+          frame.players.some((entry) => entry.accountId === companionAccountId && entry.appearance && entry.appearance.cloth === "cloth_1"),
         ) || null
       );
     }, 8_000);
     const dressedEntry = dressedFrame && dressedFrame.players.find((entry) => entry.accountId === companionAccountId);
     check(
-      !!dressedEntry && dressedEntry.appearance.cloth === "3001" && dressedEntry.appearance.weapon === "4001",
+      !!dressedEntry && dressedEntry.appearance.cloth === "cloth_1" && dressedEntry.appearance.weapon === "weapon_1",
       "H：换装后收到外观变化帧（坐标 / 血量都没变也广播，不用等他动一下）",
       JSON.stringify(dressedEntry && dressedEntry.appearance),
     );
 
-    // 血条分母跟着存档走：升到 10 级（体力上限 100 → 262），别人看到的分母要跟上 ——
-    // maxHp 只在首见时算过一次，不并进懒刷新就会被冻在那一刻（换装加体力也会撞这条）。
+    // 血条分母跟着存档走：升到 10 级（裸模 100 → 262，再加 cloth_1 的 60 = 322），别人看到的
+    // 分母要跟上 —— maxHp 只在首见时算过一次，不并进懒刷新就会被冻在那一刻（换装加体力也撞这条）。
+    // 等级走管理端 PATCH（#550 起存档改不动等级），装备保持不动，只有 maxHp 会变
     // 等级走管理端 PATCH（#550 起存档改不动等级），装备保持不动，只有 maxHp 会变
     const maxHpBefore = dressedEntry ? dressedEntry.maxHp : 0;
     const leveled = await api(baseUrl, "PATCH", `admin/roles/${companion.roleId}`, { token: adminToken, body: { level: 10 } });
     check(leveled.code === 0, "H：等级已改（管理端 PATCH 到 10 级，体力上限随之变化）", leveled.message);
     const maxHpFrame = await waitFor("fighter 收到 companion 的血条分母变化", async () => {
-      return fighter.session.players.find((frame) => frame.players.some((entry) => entry.accountId === companionAccountId && entry.maxHp !== maxHpBefore)) || null;
+      // 直接等新值出现：等「≠ 旧值」会被更早的入图快照帧（裸模 100）抢先满足
+      return fighter.session.players.find((frame) => frame.players.some((entry) => entry.accountId === companionAccountId && entry.maxHp === 322)) || null;
     }, 8_000);
     const maxHpEntry = maxHpFrame && maxHpFrame.players.find((entry) => entry.accountId === companionAccountId);
     check(
-      !!maxHpEntry && maxHpEntry.maxHp === 262,
+      !!maxHpEntry && maxHpEntry.maxHp === 322,
       `H：血条分母跟着存档走（${maxHpBefore} → ${maxHpEntry && maxHpEntry.maxHp}，不会被冻在首见那一刻）`,
       JSON.stringify(maxHpEntry),
     );
@@ -1358,6 +1362,42 @@ function connect(url) {
       !!matAfter && !!matCell && matAfter.bound === true && matAfter.count === matCell.count - 2,
       "D：卖一半：数量减二、bound 仍在（扣减路径同样不重建格子）",
       JSON.stringify({ matAfter, matCell, code: soldHalf.code, message: soldHalf.message }),
+    );
+
+    // —— D2. 管理端 PATCH 背包不再整体按未绑定重写（#836）：件数没改的格子把绑定认领回来 ——
+
+    const roleBeforeAdminBag = await api(baseUrl, "GET", `roles/${binder.roleId}`, { token: binder.token });
+    const gridBeforeAdminBag = roleBeforeAdminBag.data.data.bag;
+    let adminBoundPos = null;
+    let adminEmptyPos = null;
+    gridBeforeAdminBag.forEach((line, row) =>
+      (line || []).forEach((cell, col) => {
+        if (cell && cell.id === "material_hide" && cell.bound === true && !adminBoundPos) adminBoundPos = { row, col };
+        if (!cell && !adminEmptyPos) adminEmptyPos = { row, col };
+      }),
+    );
+    check(
+      !!adminBoundPos && !!adminEmptyPos,
+      "D2：绑定材料与空格都在（管理端改包的前置）",
+      JSON.stringify({ adminBoundPos, adminEmptyPos }),
+    );
+    // 运营把那格绑定材料挪到空格：件数一件没改，bound 必须跟着走
+    const adminBagCells = sparse(gridBeforeAdminBag).map((cell) =>
+      adminBoundPos && cell.row === adminBoundPos.row && cell.col === adminBoundPos.col
+        ? { row: adminEmptyPos.row, col: adminEmptyPos.col, id: cell.id, count: cell.count }
+        : cell,
+    );
+    const adminBagPatched = await api(baseUrl, "PATCH", `admin/roles/${binder.roleId}`, {
+      token: adminToken,
+      body: { bag: adminBagCells },
+    });
+    check(adminBagPatched.code === 0, "D2：管理端 PATCH bag 挪动绑定材料成功", adminBagPatched.message);
+    const adminMovedCell =
+      adminBagPatched.code === 0 && adminEmptyPos ? adminBagPatched.data.data.bag[adminEmptyPos.row][adminEmptyPos.col] : null;
+    check(
+      !!adminMovedCell && adminMovedCell.bound === true,
+      "D2：管理端 PATCH 后绑定仍在（#836 之前整体按未绑定重写 = 运营一改包全员绑定件洗白）",
+      JSON.stringify(adminMovedCell),
     );
 
     // —— E. 装备槽存对象（#816 后半）：绑定与溯源跟着这件东西走，穿脱只是换地方 ——

@@ -59,6 +59,15 @@ export const ROLE_EQUIPMENT_SLOT_MAX = 64;
 export const ROLE_SKILL_ENTRY_MAX = 128;
 export const ROLE_BAG_CELL_MAX = 512;
 export const ROLE_BAG_AXIS_MAX = 64;
+/**
+ * 单格件数的粗上限（#842）
+ *
+ * 这只是 DTO / 入参层的**结构**护栏（挡「count: 1e9」这种垃圾值），真正的语义上限是
+ * `resolveMaxStack`（#841：按物品所属表读，装备恒 1）。出厂最大的 `max_stack` 是 999
+ * （`money_items` / `level_scrolls`），取 9999 给运营留改表余量 —— 语义上限真被改过
+ * 这条粗上限时，改这里一个常量就够。
+ */
+export const ROLE_BAG_COUNT_MAX = 9999;
 export const ROLE_FIELD_KEY_MAX_LENGTH = 64;
 export const ROLE_FIELD_VALUE_MAX_LENGTH = 128;
 
@@ -202,8 +211,8 @@ export function normalizeBagCells(input: unknown): BagCellInput[] {
     if (seen.has(key)) throw new BizException(BizCode.ROLE_DATA_INVALID, `背包格子（第 ${row + 1} 行第 ${col + 1} 列）重复`);
     seen.add(key);
     const count = Number(cell.count);
-    if (!Number.isInteger(count) || count < 1 || count > 999_999) {
-      throw new BizException(BizCode.ROLE_DATA_INVALID, "背包物品数量需为 1 ~ 999999 的整数");
+    if (!Number.isInteger(count) || count < 1 || count > ROLE_BAG_COUNT_MAX) {
+      throw new BizException(BizCode.ROLE_DATA_INVALID, `背包物品数量需为 1 ~ ${ROLE_BAG_COUNT_MAX} 的整数`);
     }
     if (typeof cell.id !== "string" || !cell.id.trim() || cell.id.length > ROLE_FIELD_VALUE_MAX_LENGTH) {
       throw new BizException(BizCode.ROLE_DATA_INVALID, "背包物品 id 不合法");

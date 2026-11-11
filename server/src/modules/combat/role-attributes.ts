@@ -149,6 +149,31 @@ export function summarizeRoleAttributes(source: RoleAttributeSource): RoleAttrib
 }
 
 /**
+ * 把汇总结果写回存档字段（属性重算的**写回**步骤，#836 抽出）
+ *
+ * 之前这段八项赋值只存在于 `RolesService.applyAuthoritativeAttributes` 一处；管理端
+ * `patchRole` 也要在改完装备 / 等级后落一份「服务端算的」属性 —— 复制一份必然漂移
+ * （管理端少写一项，面板现算与落库值就分裂，下次存档脏装备被清时物品凭空消失）。
+ * 所以写回也收进这个纯函数：`summarizeRoleAttributes` 算、`applyAttributeSummary` 写，
+ * 玩家侧与管理端共用同一对，谁都不能只抄一半。
+ *
+ * 与 `summarizeRoleAttributes` 同约定：**不碰传入对象之外的东西**，调用方拿到 data 后
+ * 自己 JSON.stringify 落库。
+ */
+export function applyAttributeSummary(data: Record<string, unknown>, summary: RoleAttributeSummary): void {
+  data.maxHp = summary.maxHp;
+  data.hpRecover = summary.hpRecover;
+  data.maxMp = summary.maxMp;
+  data.physicalAttack = Array.from(summary.physicalAttack);
+  data.magicAttack = Array.from(summary.magicAttack);
+  data.taoistAttack = Array.from(summary.taoistAttack);
+  data.physicalDefense = Array.from(summary.physicalDefense);
+  data.magicDefense = Array.from(summary.magicDefense);
+  data.taoistDefense = Array.from(summary.taoistDefense);
+  data.combat = summary.combat;
+}
+
+/**
  * 同上，但把「哪几个装备 id 查不到」一起交出来
  *
  * 想要知道这次汇总有没有踩到未知装备时用这个（例如给运营看的那份角色详情）。
