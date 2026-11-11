@@ -41,7 +41,7 @@ export const Permission = {
 
   /** 查看角色列表 / 详情（含完整 data） */
   ROLE_READ: "role:read",
-  /** 修改角色属性（等级 / 金币 / 经验 / 战魂 / 称号 / 军衔…） */
+  /** 修改角色属性（等级 / 绑定元宝 / 经验 / 战魂 / 称号 / 军衔…） */
   ROLE_WRITE: "role:write",
   /** 切换账号的在线角色 */
   ROLE_SELECT: "role:select",

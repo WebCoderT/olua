@@ -722,7 +722,7 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
       );
 
       -- 货币物品（#785）：使用后直接给角色账本入账
-      -- 货币收敛（#843、#844）：唯一币种 bindGold（绑定元宝），gold / silver 已整体移除
+      -- 货币收敛（#843、#844）：唯一币种 bindGold（绑定元宝），旧币种字段已整体移除
       -- 与药品 / 物品不同，**可以增删行** —— 面值由运营在「货币物品」页自己开
       CREATE TABLE IF NOT EXISTS money_items (
         id          TEXT    PRIMARY KEY,
@@ -1089,7 +1089,7 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
         objective_type  TEXT    NOT NULL DEFAULT 'kill',
         objective_target TEXT   NOT NULL DEFAULT '',
         objective_count INTEGER NOT NULL DEFAULT 1,
-        reward_gold     INTEGER NOT NULL DEFAULT 0,
+        reward_bind_gold INTEGER NOT NULL DEFAULT 0,
         reward_exp      INTEGER NOT NULL DEFAULT 0,
         reward_items    TEXT    NOT NULL DEFAULT '[]',
         updated_at      INTEGER NOT NULL DEFAULT 0
@@ -1123,7 +1123,7 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
         condition_type   TEXT    NOT NULL DEFAULT 'kill',
         condition_target TEXT    NOT NULL DEFAULT '',
         condition_count  INTEGER NOT NULL DEFAULT 1,
-        reward_gold      INTEGER NOT NULL DEFAULT 0,
+        reward_bind_gold INTEGER NOT NULL DEFAULT 0,
         reward_exp       INTEGER NOT NULL DEFAULT 0,
         reward_items     TEXT    NOT NULL DEFAULT '[]',
         sort_order       INTEGER NOT NULL DEFAULT 0,
@@ -1149,7 +1149,7 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
 
       -- 游戏内邮件（#429）：与上面的 mail_queue（外发 SMTP 投递队列）**不是一回事** ——
       -- 那张表是「把信发到玩家注册邮箱」，这张表是「玩家在游戏里打开的收件箱」。
-      -- 附件（gold / exp / attachments）在**领取时**才入包：先领后删，未领的邮件带着附件留在箱里。
+      -- 附件（绑定元宝 / 经验 / attachments）在**领取时**才入包：先领后删，未领的邮件带着附件留在箱里。
       CREATE TABLE IF NOT EXISTS role_mails (
         id          TEXT    PRIMARY KEY,
         role_id     TEXT    NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
@@ -1158,7 +1158,7 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
         kind        TEXT    NOT NULL DEFAULT 'system',
         title       TEXT    NOT NULL DEFAULT '',
         body        TEXT    NOT NULL DEFAULT '',
-        gold        INTEGER NOT NULL DEFAULT 0,
+        bind_gold   INTEGER NOT NULL DEFAULT 0,
         exp         INTEGER NOT NULL DEFAULT 0,
         attachments TEXT    NOT NULL DEFAULT '[]',
         read_at     INTEGER,
@@ -1396,6 +1396,11 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
     // 日常日切（#815）：存量库补列后老行都是 0（真实天号在 20000 以上），一次性垫成今天 ——
     // 昨天接的日常今天还能交一次，而不是凭空从面板上消失。幂等：天号 0 只可能是补列那一批
     this.ensureColumn("quest_progress", "reset_day", "INTEGER NOT NULL DEFAULT 0");
+
+    // 货币统一命名（#843、#844）：奖励列与邮件附件列统一挂 bindGold 语汇（存量库一次性改名，幂等）
+    this.renameColumnIfExists("quests", "reward_gold", "reward_bind_gold");
+    this.renameColumnIfExists("achievements", "reward_gold", "reward_bind_gold");
+    this.renameColumnIfExists("role_mails", "gold", "bind_gold");
     this.db.prepare("UPDATE quest_progress SET reset_day = ? WHERE reset_day = 0").run(resetDayOf(Date.now()));
     // 配置版本链（#881 / #882）：两张**运行时**表（不进 config-sync.sql）
     //
@@ -1463,7 +1468,7 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
    * 清掉存量库遗留的 legacy 货币物品行（2026-11-11 货币收敛 #843、#844）
    *
    * 货币收敛后 `money_items.currency` 取值域只剩 `bindGold`：旧库里的
-   * 元宝（gold）/ 银子（silver）道具行**直接删除**，不做兼容 —— 玩家背包里
+   * 旧币种道具行**直接删除**，不做兼容 —— 玩家背包里
    * 已持有的这类道具随之变成死道具（使用时按「格子不是货币道具」拒用）。
    *
    * **每次启动都跑**（不走 `config_meta` marker）：删除是幂等的，残留行多留一秒
@@ -1471,7 +1476,7 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
    */
   private purgeLegacyMoneyItems(): void {
     const removed = this.execute("DELETE FROM money_items WHERE currency NOT IN ('bindGold')", []).changes;
-    if (removed > 0) this.logger.log(`货币收敛清理：删除 legacy 货币物品 ${removed} 条（gold / silver）`);
+    if (removed > 0) this.logger.log(`货币收敛清理：删除旧币种货币物品  条`);
   }
 
   /**
@@ -1713,6 +1718,14 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
     if (!columns.some((item) => item.name === column)) return;
     this.db.exec(`ALTER TABLE ${table} DROP COLUMN ${column}`);
     this.logger.log(`表 ${table} 删列：${column}（已无消费方）`);
+  }
+
+  /** 给已有表改列名（新列名已存在则不动；货币统一命名 #843、#844 的存量迁移用） */
+  private renameColumnIfExists(table: string, from: string, to: string): void {
+    const columns = this.db.prepare(`PRAGMA table_info(${table})`).all() as unknown as { name: string }[];
+    if (!columns.some((item) => item.name === from) || columns.some((item) => item.name === to)) return;
+    this.db.exec(`ALTER TABLE ${table} RENAME COLUMN ${from} TO ${to}`);
+    this.logger.log(`表 ${table} 改列名：${from} → ${to}`);
   }
 
   /** 执行写语句（无返回） */

@@ -86,7 +86,7 @@ function DropTableDialog({
     >
       <div className="flex items-end gap-4">
         <Field label="表 id">
-          <Input value={id} disabled={!creating} className="font-mono text-xs" placeholder="如 event_gold" onChange={(event) => setId(event.target.value)} />
+          <Input value={id} disabled={!creating} className="font-mono text-xs" placeholder="如 event_bind_gold" onChange={(event) => setId(event.target.value)} />
         </Field>
         <PicksEditor draft={picks} onChange={setPicks} />
       </div>

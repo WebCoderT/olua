@@ -219,7 +219,7 @@ export function applySkillSnapshot(snapshot: GameConfigSnapshot): void {
 export function applyContentSnapshot(snapshot: GameConfigSnapshot): void {
   applyEquipments(snapshot.equipments);
   applyDrugRows(snapshot.drugs);
-  // #785：货币道具（绑定元宝 / 元宝 / 银子）—— 必须在 rebuildItemIndex 之前落库，
+  // #785：货币道具（绑定元宝，唯一货币）—— 必须在 rebuildItemIndex 之前落库，
   // 否则物品总表里没有它们（背包格能存 id、界面却解析不出名字与图标）
   applyMoneyItemRows(snapshot.moneyItems);
   // #787：升级卷轴（硬性 +1 级，带等级区间）—— 同样必须在 rebuildItemIndex 之前落库，

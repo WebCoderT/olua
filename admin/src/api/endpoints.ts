@@ -1145,7 +1145,7 @@ export const moneyItemsApi = {
   /**
    * 货币物品列表（GET /admin/money-items）
    *
-   * 面值表（出厂 3 种货币 × 8 档 = 24 条）。`keyword` 模糊匹配 id / 名称 / 描述；`currency` 只看某种货币（bindGold = 绑定元宝）。
+   * 面值表（出厂绑定元宝 8 档 = 8 条，唯一货币）。`keyword` 模糊匹配 id / 名称 / 描述；`currency` 只看某种货币（bindGold = 绑定元宝）。
    *
    * 权限点：gameConfig:read
    */

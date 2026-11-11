@@ -9,7 +9,7 @@
  * 三、累计型（quest）：交付一个任务 → `quest:claimed` → 任务型成就 +1
  * 四、状态型（level / collect）：**不落进度**，查询按当前状态现算 ——
  *     改库把等级提到门槛就达成；背包里塞够物品就达成（不需要任何事件）
- * 五、领取：金币 / 经验 / 物品一次落库；重复领 50133、未达成 50132、不存在 50131
+ * 五、领取：绑定元宝 / 经验 / 物品一次落库；重复领 50133、未达成 50132、不存在 50131
  * 六、背包满：20012 **且不消耗领取资格** —— 清一格后还能再领
  * 七、管理端配置：列表 / 编辑 / 新建 / 目标键不存在 40000 / 有玩家记录时拒删
  *
@@ -354,7 +354,7 @@ function setRoleLevel(dbPath, roleId, level) {
 
     //#endregion
 
-    //#region 五、领取：金币 / 经验一次落库；三种拒绝
+    //#region 五、领取：绑定元宝 / 经验一次落库；三种拒绝
 
     group("五、领取：发奖一次落库，重复领 / 未达成 / 不存在各自报错");
     // 门槛是 10：把剩下 7 只打完（成就只有在跨过门槛那一刻才翻成「可领」）
@@ -363,7 +363,7 @@ function setRoleLevel(dbPath, roleId, level) {
     checkEqual(reachedView && reachedView.achieved, true, "累计到 10 只 → 成就翻成已达成（事件驱动）");
     const claimed = await api(baseUrl, "POST", "achievements/claim", { token, body: { achievementId: "ach_kill_10" } });
     checkEqual(claimed && claimed.code, 0, "达成后可以领奖");
-    checkEqual(claimed && claimed.data && claimed.data.gold, 500, "金币奖励到账（500）");
+    checkEqual(claimed && claimed.data && claimed.data.bindGold, 500, "绑定元宝奖励到账（500）");
     checkEqual(claimed && claimed.data && claimed.data.exp, 100, "经验奖励到账（100）");
     const again = await api(baseUrl, "POST", "achievements/claim", { token, body: { achievementId: "ach_kill_10" } });
     checkEqual(again && again.code, 50133, "重复领取被拒（50133）");
@@ -395,8 +395,8 @@ function setRoleLevel(dbPath, roleId, level) {
     const mailBox = await api(baseUrl, "GET", "mails/me", { token });
     const rewardMail = (mailBox.data.mails || []).find((row) => row.id === (bagFull.data && bagFull.data.mailId));
     check(
-      !!rewardMail && rewardMail.kind === "achievement" && rewardMail.gold === 1000 && rewardMail.attachments.length === 1,
-      "邮件内容是那份成就奖励（kind = achievement / 金币 1000 / 1 条物品）",
+      !!rewardMail && rewardMail.kind === "achievement" && rewardMail.bindGold === 1000 && rewardMail.attachments.length === 1,
+      "邮件内容是那份成就奖励（kind = achievement / 绑定元宝 1000 / 1 条物品）",
       JSON.stringify(rewardMail),
     );
     // 清出一格（只剩 (0,0) 一件）：同样靠管理端摆格，客户端存档改不动背包内容

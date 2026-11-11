@@ -401,7 +401,7 @@ export interface RoleAuthorityUpdate {
   expNeed: number;
   hp: number;
   mp: number;
-  /** 绑定元宝（唯一货币，#843/#844 收敛后 gold / silver 已从协议删除） */
+  /** 绑定元宝（唯一货币，唯一货币） */
   bindGold: number;
   combat: number;
   /** 成长线阶位（#551）：称号 / 战魂 / 军衔 —— 后台改完不重进也能看到 */

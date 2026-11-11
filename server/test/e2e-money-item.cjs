@@ -229,8 +229,8 @@ const BIND_ROW_50 = seedOf("bindGold", 50);
       "筛选结果里没有别的币种",
       bindOnly.data.list.map((item) => item.currency).join(","),
     );
-    const badCurrencyFilter = await api(baseUrl, "GET", "admin/money-items?page=1&size=100&currency=gold", { token: adminToken });
-    checkEqual(badCurrencyFilter.code, 40000, "按已删除的币种（gold）筛 → 40000（取值域校验把 legacy 币种挡在门外）");
+    const badCurrencyFilter = await api(baseUrl, "GET", "admin/money-items?page=1&size=100&currency=legacy", { token: adminToken });
+    checkEqual(badCurrencyFilter.code, 40000, "未知币种筛 → 40000（取值域只有 bindGold）");
     const keywordHit = await api(baseUrl, "GET", "admin/money-items?page=1&size=100&keyword=money_bind_gold", { token: adminToken });
     checkEqual(keywordHit.data.total, 8, "关键字模糊匹配 id 前缀（money_bind_gold → 8 条）");
     const snapshot = await api(baseUrl, "GET", "game-config", { token });
@@ -327,16 +327,16 @@ const BIND_ROW_50 = seedOf("bindGold", 50);
     checkEqual(duplicate.code, 50042, "同货币同面值再建一次 → 50042（id 撞了）");
     const badCurrency = await api(baseUrl, "POST", "admin/money-items", { token: adminToken, body: { currency: "diamond", amount: 10 } });
     checkEqual(badCurrency.code, 40000, "币种不在取值域之内 → 40000（参数校验）");
-    const legacyCurrency = await api(baseUrl, "POST", "admin/money-items", { token: adminToken, body: { currency: "gold", amount: 10 } });
-    checkEqual(legacyCurrency.code, 40000, "legacy 币种（gold）也进不来 → 40000（收敛后取值域只有 bindGold）");
+    const legacyCurrency = await api(baseUrl, "POST", "admin/money-items", { token: adminToken, body: { id: "money_legacy_coin", currency: "legacy", amount: 10 } });
+    checkEqual(legacyCurrency.code, 40000, "未知币种进不来 → 40000（取值域只有 bindGold）");
     const badAmount = await api(baseUrl, "POST", "admin/money-items", { token: adminToken, body: { currency: "bindGold", amount: 0 } });
     checkEqual(badAmount.code, 40000, "面值 0 → 40000（参数校验）");
     const customId = await api(baseUrl, "POST", "admin/money-items", {
       token: adminToken,
-      body: { id: "money_test_custom", currency: "bindGold", amount: 7, label: "七枚小元宝" },
+      body: { id: "money_test_custom", currency: "bindGold", amount: 7, label: "七枚小绑定元宝" },
     });
     checkEqual(customId.code, 0, "也可以自己指定 id 与名称", customId.message);
-    checkEqual(customId.data.label, "七枚小元宝", "指定了名称就用指定的");
+    checkEqual(customId.data.label, "七枚小绑定元宝", "指定了名称就用指定的");
     const badId = await api(baseUrl, "POST", "admin/money-items", { token: adminToken, body: { id: "Money-BAD", currency: "bindGold", amount: 9 } });
     checkEqual(badId.code, 40000, "id 大写 / 连字符 → 40000（只许小写字母数字下划线）");
 

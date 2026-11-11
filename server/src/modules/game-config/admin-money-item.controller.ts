@@ -42,7 +42,7 @@ export class AdminMoneyItemController {
     operationId: "adminMoneyItem.list",
     summary: "货币物品列表",
     description:
-      "面值表（出厂 3 种货币 × 8 档 = 24 条）。`keyword` 模糊匹配 id / 名称 / 描述；" +
+      "面值表（出厂绑定元宝 8 档 = 8 条，唯一货币）。`keyword` 模糊匹配 id / 名称 / 描述；" +
       "`currency` 只看某种货币（" +
       MONEY_KINDS.map((kind) => `${kind} = ${MONEY_KIND_LABELS[kind]}`).join(" / ") +
       "）。\n\n" +
@@ -108,7 +108,7 @@ export class AdminMoneyItemController {
       "`id` 不存在 → 404（`50041`）。",
     permissions: [Permission.GAME_CONFIG_WRITE],
   })
-  @ApiParam({ name: "id", description: "货币物品 id（如 money_silver_10）" })
+  @ApiParam({ name: "id", description: "货币物品 id（如 money_bind_gold_10）" })
   @ApiDataResponse(RemoveMoneyItemResultDto, { description: "删掉了几行" })
   remove(@Param("id") id: string): RemoveMoneyItemResultDto {
     return this.gameConfigService.removeMoneyItem(id);

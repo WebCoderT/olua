@@ -36,8 +36,8 @@ export class MyQuestsDto {
 
 /** 交付结果（进度快照 + 奖励结算） */
 export class QuestRewardResultDto {
-  @ApiProperty({ description: "金币" })
-  gold: number;
+  @ApiProperty({ description: "绑定元宝" })
+  bindGold: number;
 
   @ApiProperty({ description: "经验" })
   exp: number;

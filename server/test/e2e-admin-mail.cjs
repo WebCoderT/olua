@@ -173,11 +173,11 @@ function sendMail(roleId, token, body) {
 
     console.log("— 三、补发成功：落库同形、附件可领到手 —");
 
-    const goldBefore = await api("GET", `roles/${roleAId}`, { token: tokenA });
+    const bindGoldBefore = await api("GET", `roles/${roleAId}`, { token: tokenA });
     const sent = await sendMail(roleAId, adminToken, {
       title: "开服补偿",
       body: "感谢支持。",
-      gold: 500,
+      bindGold: 500,
       exp: 200,
       items: [{ goodId: "material_iron", count: 2 }],
     });
@@ -188,8 +188,8 @@ function sendMail(roleId, token, body) {
       JSON.stringify(sent.data),
     );
     check(
-      sent.data.gold === 500 && sent.data.exp === 200 && sent.data.attachments.length === 1 && sent.data.attachments[0].count === 2,
-      "附件（金币 / 经验 / 物品）原样落库并下发",
+      sent.data.bindGold === 500 && sent.data.exp === 200 && sent.data.attachments.length === 1 && sent.data.attachments[0].count === 2,
+      "附件（绑定元宝 / 经验 / 物品）原样落库并下发",
       JSON.stringify(sent.data.attachments),
     );
 
@@ -198,13 +198,13 @@ function sendMail(roleId, token, body) {
     check(!!inBox && inBox.claimed === false, "玩家收件箱里就是那一封（未领取）");
 
     const claim = await api("POST", `mails/${sent.data.id}/claim`, { token: tokenA });
-    check(claim.code === 0 && claim.data.gold === 500 && claim.data.items.length === 1, "领取成功：金币 500 + 物品 1 条", claim.message);
+    check(claim.code === 0 && claim.data.bindGold === 500 && claim.data.items.length === 1, "领取成功：绑定元宝 500 + 物品 1 条", claim.message);
     check(claim.data.items[0] && claim.data.items[0].goodId === "material_iron", "领到手的物品 id 正确（material_iron）", JSON.stringify(claim.data.items));
-    const goldAfter = await api("GET", `roles/${roleAId}`, { token: tokenA });
+    const bindGoldAfter = await api("GET", `roles/${roleAId}`, { token: tokenA });
     check(
-      (goldAfter.data.data.bindGold || 0) - (goldBefore.data.data.bindGold || 0) === 500,
+      (bindGoldAfter.data.data.bindGold || 0) - (bindGoldBefore.data.data.bindGold || 0) === 500,
       "绑定元宝真的进了角色存档（差额 500）",
-      `${goldBefore.data.data.bindGold} → ${goldAfter.data.data.bindGold}`,
+      `${bindGoldBefore.data.data.bindGold} → ${bindGoldAfter.data.data.bindGold}`,
     );
 
     //#endregion

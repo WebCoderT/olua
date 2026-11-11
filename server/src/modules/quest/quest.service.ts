@@ -142,7 +142,7 @@ export class QuestService implements OnModuleInit {
     }
 
     const rewards = {
-      gold: quest.reward_gold,
+      bindGold: quest.reward_bind_gold,
       exp: quest.reward_exp,
       items: parseRewardItems(quest.reward_items),
     };
@@ -156,7 +156,7 @@ export class QuestService implements OnModuleInit {
     this.events.emit("quest:claimed", { accountId, roleId: role.id, roleName: role.name, questId, kind: quest.kind });
 
     const reward: QuestRewardResultDto = {
-      gold: rewards.gold,
+      bindGold: rewards.bindGold,
       exp: rewards.exp,
       items: rewards.items,
       level: settled.level,

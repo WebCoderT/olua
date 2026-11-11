@@ -289,8 +289,8 @@ function countInBag(bag, goodId) {
     // 重新放一件装备进包，用来验证「合法那条也不会被扣」。
     // 先把余额补够：商城单价来自快照（cloth_1 有特殊价），硬编码一个「够用」的数迟早过期
     const refillPrice = mallPriceOf("cloth_1");
-    const goldNow = await api(baseUrl, "GET", `roles/${roleId}`, { token });
-    const bindGoldNow = Number((goldNow.data.data || {}).bindGold || 0);
+    const walletNow = await api(baseUrl, "GET", `roles/${roleId}`, { token });
+    const bindGoldNow = Number((walletNow.data.data || {}).bindGold || 0);
     if (bindGoldNow < refillPrice) {
       const topped = await api(baseUrl, "PATCH", `admin/roles/${roleId}`, { token: adminToken, body: { bindGold: refillPrice } });
       check(topped.code === 0, `准备：绑定元宝补到 ${refillPrice}（= 快照里的商城价）`, topped.message);
@@ -334,7 +334,7 @@ function countInBag(bag, goodId) {
 
     group("八、入账只进绑定元宝（#845 / B2；收敛后账本只有 bindGold 一种）");
     // #845 报的是「绑定装备卖店直接给流通币」。实测 `sellGoods` 一直写的是 `bindGold`，
-    // 收敛（#843/#844）后连 gold / silver 字段都不存在了 —— 这条断言盯的是入账字段唯一。
+    // 收敛（#843/#844）后存档里只剩这一个账本字段 —— 这条断言盯的是入账字段唯一。
     // 绑定与非绑定走的是同一条入账路径（`takeGoodsFromBag` 不读 bound），所以用普通装备
     // 也验得到；绑定件本身能不能卖由 e2e-combat 的绑定段单独覆盖。
     const seeded845 = await api(baseUrl, "PATCH", `admin/roles/${roleId}`, {
@@ -354,8 +354,11 @@ function countInBag(bag, goodId) {
       bindBefore845 + clothPrice,
       "绑定元宝增加一份回收价（入账走 bindGold）",
     );
-    checkEqual((sold845.data.data || {}).gold, undefined, "存档里没有 gold 字段（收敛后已整体移除）");
-    checkEqual((sold845.data.data || {}).silver, undefined, "存档里没有 silver 字段（收敛后已整体移除）");
+    checkEqual((sold845.data.data || {}).bindGold, bindBefore845 + clothPrice, "存档里的账本就是 bindGold（唯一货币）");
+    // 收敛前的两个旧账本键（字面量只用于「不存在」断言，不是现役字段）
+    for (const key of ["gold", "silver"]) {
+      checkEqual((sold845.data.data || {})[key], undefined, `存档里没有旧账本键 ${key}（收敛后已整体移除）`);
+    }
 
     //#endregion
 

@@ -295,7 +295,7 @@ export class CreateMallGoodDto {
   @ApiPropertyOptional({ description: "售价（绑定元宝/件，下限 1；缺省按 1 上架）", minimum: MALL_PRICE_MIN, maximum: MALL_PRICE_MAX })
   @IsOptional()
   @IsInt({ message: "售价必须是整数" })
-  @Min(MALL_PRICE_MIN, { message: "售价不能低于 1（免费商品 + 回收价 = 无限金币，#814）" })
+  @Min(MALL_PRICE_MIN, { message: "售价不能低于 1（免费商品 + 回收价 = 无限绑定元宝，#814）" })
   @Max(MALL_PRICE_MAX, { message: "售价超出防御性上限" })
   price?: number;
 
@@ -346,7 +346,7 @@ export class UpdateMallGoodDto {
   @ApiPropertyOptional({ description: "售价（绑定元宝/件，下限 1）", minimum: MALL_PRICE_MIN, maximum: MALL_PRICE_MAX })
   @IsOptional()
   @IsInt({ message: "售价必须是整数" })
-  @Min(MALL_PRICE_MIN, { message: "售价不能低于 1（免费商品 + 回收价 = 无限金币，#814）" })
+  @Min(MALL_PRICE_MIN, { message: "售价不能低于 1（免费商品 + 回收价 = 无限绑定元宝，#814）" })
   @Max(MALL_PRICE_MAX, { message: "售价超出防御性上限" })
   price?: number;
 

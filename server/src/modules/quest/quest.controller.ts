@@ -59,7 +59,7 @@ export class QuestController {
     description:
       "kill/talk 要先到 ready（进度满）；collect 直接查背包 —— 材料不足 20017、" +
       "奖励物品放不下背包 20012（进度行保持原状，补齐后可再来）。" +
-      "发奖（金币 / 经验 / 物品）与扣材料**一次落库**；daily 与 main 领奖后都**保留 claimed 行**" +
+      "发奖（绑定元宝 / 经验 / 物品）与扣材料**一次落库**；daily 与 main 领奖后都**保留 claimed 行**" +
       "（删行会抹掉「今天领过」的证据），日常的下一轮由 `reset_day` 天号判定。返回最新快照与奖励结算。",
   })
   @ApiDataResponse(QuestSubmitResultDto, { description: "交付结果（快照 + 奖励结算）" })

@@ -67,7 +67,7 @@ try {
     hidden: row.hidden,
     order: row.sortOrder,
     condition: { type: row.conditionType, target: row.conditionTarget, count: row.conditionCount },
-    rewards: { gold: row.rewardGold, exp: row.rewardExp, items: row.rewardItems ?? [] },
+    rewards: { bindGold: row.rewardBindGold, exp: row.rewardExp, items: row.rewardItems ?? [] },
   }));
 
   const monsterKeys = new Set(factory.monsters().map((row) => String(row.id)));
@@ -123,7 +123,7 @@ try {
   const badReward = achievementData.filter((item) => item.rewards.items.some((reward) => !itemKeys.has(reward.goodId)));
   check(badReward.length === 0, "奖励里的物品都真实存在（发不出去的奖励到领取那一步才炸）", badReward.map((item) => item.id).join(","));
   check(
-    achievementData.every((item) => item.rewards.gold > 0 || item.rewards.exp > 0 || item.rewards.items.length > 0),
+    achievementData.every((item) => item.rewards.bindGold > 0 || item.rewards.exp > 0 || item.rewards.items.length > 0),
     "每条都有奖励（空奖励的成就领了等于没反应）",
   );
   check(

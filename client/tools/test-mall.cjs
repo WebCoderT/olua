@@ -337,7 +337,7 @@ if (sandbox) {
   // 文案 key
   [
     "mall_buy_success_tip",
-    "mall_gold_not_enough_tip",
+    "mall_bind_gold_not_enough_tip",
     "mall_good_missing_tip",
     "label_mall_buy",
     "mall_level_lock",

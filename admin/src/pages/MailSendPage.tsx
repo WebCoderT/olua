@@ -52,7 +52,7 @@ export function MailSendPage() {
   const [channel, setChannel] = useState<string>("system");
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
-  const [gold, setGold] = useState("");
+  const [bindGold, setBindGold] = useState("");
   const [exp, setExp] = useState("");
   const [items, setItems] = useState<ItemLine[]>([]);
   const [sending, setSending] = useState(false);
@@ -74,7 +74,7 @@ export function MailSendPage() {
       channel: channel as "system" | "reward",
       title: title.trim(),
       body: body.trim() || undefined,
-      gold: numeric(gold),
+      bindGold: numeric(bindGold),
       exp: numeric(exp),
       items: items
         .filter((line) => line.goodId.trim() && Number(line.count) >= 1)
@@ -93,7 +93,7 @@ export function MailSendPage() {
       // 发完清空内容但保留收件人：连续给同一个号补发是常态
       setTitle("");
       setBody("");
-      setGold("");
+      setBindGold("");
       setExp("");
       setItems([]);
     } catch {
@@ -146,7 +146,7 @@ export function MailSendPage() {
 
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="附件绑定元宝（可选）">
-            <Input type="number" min={0} value={gold} onChange={(event) => setGold(event.target.value)} placeholder="不填 = 没有" disabled={!canSend} />
+            <Input type="number" min={0} value={bindGold} onChange={(event) => setBindGold(event.target.value)} placeholder="不填 = 没有" disabled={!canSend} />
           </Field>
           <Field label="附件经验（可选）">
             <Input type="number" min={0} value={exp} onChange={(event) => setExp(event.target.value)} placeholder="不填 = 没有" disabled={!canSend} />
@@ -161,7 +161,7 @@ export function MailSendPage() {
             </Button>
           </div>
           {items.length === 0 ? (
-            <p className="text-xs text-slate-600">没有物品附件 —— 只发金币 / 经验 / 纯文本也可以。</p>
+            <p className="text-xs text-slate-600">没有物品附件 —— 只发绑定元宝 / 经验 / 纯文本也可以。</p>
           ) : (
             items.map((line, index) => (
               <div key={index} className="flex items-center gap-2">
@@ -206,7 +206,7 @@ export function MailSendPage() {
           <p className="text-sm font-medium text-emerald-400">已落进收件箱</p>
           <p className="text-xs text-slate-400">
             邮件 id <span className="font-mono text-slate-200">{sent.id}</span> · 频道 {sent.channel} · 标题「{sent.title}」
-            {sent.gold > 0 || sent.exp > 0 || sent.attachments.length > 0 ? " · 附件待玩家领取" : " · 纯文本通知"}
+            {sent.bindGold > 0 || sent.exp > 0 || sent.attachments.length > 0 ? " · 附件待玩家领取" : " · 纯文本通知"}
           </p>
         </Card>
       ) : null}

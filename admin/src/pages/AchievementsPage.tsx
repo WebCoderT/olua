@@ -49,7 +49,7 @@ interface Draft {
   conditionType: ConditionType;
   conditionTarget: string;
   conditionCount: number;
-  gold: number;
+  bindGold: number;
   exp: number;
   items: RewardItemDraft[];
   sortOrder: number;
@@ -66,7 +66,7 @@ function toDraft(item: Achievement): Draft {
     conditionType: item.condition.type as ConditionType,
     conditionTarget: item.condition.target,
     conditionCount: item.condition.count,
-    gold: item.rewards.gold,
+    bindGold: item.rewards.bindGold,
     exp: item.rewards.exp,
     items: item.rewards.items.map((entry) => ({ goodId: entry.goodId, count: String(entry.count) })),
     sortOrder: item.sortOrder,
@@ -84,7 +84,7 @@ function emptyDraft(): Draft {
     conditionType: "kill",
     conditionTarget: "*",
     conditionCount: 10,
-    gold: 0,
+    bindGold: 0,
     exp: 0,
     items: [],
     sortOrder: 0,
@@ -213,7 +213,7 @@ export function AchievementsPage() {
       label: form.label.trim(),
       description: form.description.trim(),
       condition: { type: form.conditionType, target: form.conditionTarget.trim(), count: form.conditionCount },
-      rewards: { gold: form.gold, exp: form.exp, items },
+      rewards: { bindGold: form.bindGold, exp: form.exp, items },
       sortOrder: form.sortOrder,
       hidden: form.hidden,
     };
@@ -420,7 +420,7 @@ export function AchievementsPage() {
             </Select>
           </Field>
           <Field label="奖励绑定元宝">
-            <Input type="number" value={form.gold} onChange={(event) => setForm({ ...form, gold: Number(event.target.value) || 0 })} />
+            <Input type="number" value={form.bindGold} onChange={(event) => setForm({ ...form, bindGold: Number(event.target.value) || 0 })} />
           </Field>
           <Field label="奖励经验">
             <Input type="number" value={form.exp} onChange={(event) => setForm({ ...form, exp: Number(event.target.value) || 0 })} />
@@ -438,7 +438,7 @@ export function AchievementsPage() {
               </Button>
             </div>
             {form.items.length === 0 ? (
-              <p className="text-xs text-slate-500">没有物品奖励：只发金币与经验。</p>
+              <p className="text-xs text-slate-500">没有物品奖励：只发绑定元宝与经验。</p>
             ) : (
               <div className="flex flex-col gap-2 rounded-xl border border-slate-800 bg-slate-950/40 p-3">
                 {form.items.map((entry, index) => (
@@ -529,7 +529,7 @@ export function AchievementsPage() {
                     </span>
                   </td>
                   <td className={`${tdClass} text-xs text-slate-400`}>
-                    {item.rewards.gold} 绑定元宝 / {item.rewards.exp} 经验
+                    {item.rewards.bindGold} 绑定元宝 / {item.rewards.exp} 经验
                     {item.rewards.items.length > 0 ? ` / ${item.rewards.items.length} 件物品` : ""}
                   </td>
                   <td className={`${tdClass} text-xs text-slate-400`}>{formatTime(item.updatedAt)}</td>

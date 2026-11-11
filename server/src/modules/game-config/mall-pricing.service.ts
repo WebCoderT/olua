@@ -354,7 +354,7 @@ export class MallPricingService {
    * 若在付款时才夹取，玩家看到 100 实得 50，就退回 #545「价签不对」那类投诉。
    * 所以这里让**配置本身**不合法，价签与结算永远同一个数。
    *
-   * 与「售价下限 1」是同一条不变式的两半：只压回收价（价 0 / 回收 0）虽然免费但不产金币，
+   * 与「售价下限 1」是同一条不变式的两半：只压回收价（价 0 / 回收 0）虽然免费但不产绑定元宝，
    * 只抬售价（价 1 / 回收 1）仍然不亏 —— 合起来才有「买进卖出净亏一半」。
    * 推论要提前知道：售价 1 的商品 `floor(1 × 0.5) = 0`，也就是**卖不掉**；
    * 想让某件能回收 20，售价至少得 40。
@@ -371,7 +371,7 @@ export class MallPricingService {
     if (recycle > price * MALL_RECYCLE_RATIO_MAX) {
       throw BizException.conflict(
         BizCode.MALL_PRICE_INVALID,
-        `定价不合法：${goodId} 的回收价 ${recycle} 高于售价 ${price} 的 ${MALL_RECYCLE_RATIO_MAX * 100}%（上限 ${Math.floor(price * MALL_RECYCLE_RATIO_MAX)}）—— 这样的商品买进卖出就能刷金币`,
+        `定价不合法：${goodId} 的回收价 ${recycle} 高于售价 ${price} 的 ${MALL_RECYCLE_RATIO_MAX * 100}%（上限 ${Math.floor(price * MALL_RECYCLE_RATIO_MAX)}）—— 这样的商品买进卖出就能刷绑定元宝`,
       );
     }
     return price;

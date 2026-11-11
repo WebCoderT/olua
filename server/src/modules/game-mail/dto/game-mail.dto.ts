@@ -41,12 +41,12 @@ export class AdminSendMailDto {
   @MaxLength(1000)
   body?: string;
 
-  @ApiProperty({ description: "附件金币（不传 = 没有）", required: false })
+  @ApiProperty({ description: "附件绑定元宝（不传 = 没有）", required: false })
   @IsOptional()
   @IsInt()
   @Min(0)
   @Max(99_999_999)
-  gold?: number;
+  bindGold?: number;
 
   @ApiProperty({ description: "附件经验（不传 = 没有）", required: false })
   @IsOptional()
@@ -67,7 +67,7 @@ export class AdminSendMailDto {
 /**
  * 收件箱里的一封邮件
  *
- * `gold` / `exp` / `attachments` 是**还没到手**的那份奖励：`claimed` 为 false 时它们
+ * `bindGold` / `exp` / `attachments` 是**还没到手**的那份奖励：`claimed` 为 false 时它们
  * 只是「预告」，点领取之后才真的进角色存档。`read` 与 `claimed` 是两件事 ——
  * 看过不等于领过（`#401` 成就那刀同一条口径：看和拿分开）。
  */
@@ -87,8 +87,8 @@ export class MailViewDto {
   @ApiProperty({ description: "正文（纯文本，换行用 \\n）" })
   body: string;
 
-  @ApiProperty({ description: "附件金币（0 = 没有）" })
-  gold: number;
+  @ApiProperty({ description: "附件绑定元宝（0 = 没有）" })
+  bindGold: number;
 
   @ApiProperty({ description: "附件经验（0 = 没有）" })
   exp: number;
@@ -112,7 +112,7 @@ export class MailViewDto {
     dto.kind = row.kind;
     dto.title = row.title;
     dto.body = row.body;
-    dto.gold = row.gold;
+    dto.bindGold = row.bind_gold;
     dto.exp = row.exp;
     dto.attachments = parseRewardItems(row.attachments);
     dto.read = row.read_at !== null;
@@ -173,8 +173,8 @@ export class MailClaimResultDto {
   @ApiProperty({ description: "每个频道的角标", type: [MailChannelSummaryDto] })
   channels: MailChannelSummaryDto[];
 
-  @ApiProperty({ description: "本次到手的金币" })
-  gold: number;
+  @ApiProperty({ description: "本次到手的绑定元宝" })
+  bindGold: number;
 
   @ApiProperty({ description: "本次到手的经验" })
   exp: number;
@@ -213,7 +213,7 @@ export class MailClaimFailureDto {
  *
  * `stoppedByBag` 与 `failures[]` 是两个粒度：前者回答「有没有被背包挡住」，
  * 后者回答「具体哪几封、为什么」。**背包满不是整单失败** —— 需要放物品的那几封
- * 留在箱里，纯金币 / 纯经验的照样到手（#870）。
+ * 留在箱里，纯绑定元宝 / 纯经验的照样到手（#870）。
  */
 export class MailClaimAllResultDto {
   @ApiProperty({ description: "领取后的收件箱", type: [MailViewDto] })
@@ -231,8 +231,8 @@ export class MailClaimAllResultDto {
   @ApiProperty({ description: "本次成功领取的封数" })
   claimedCount: number;
 
-  @ApiProperty({ description: "本次到手的金币合计" })
-  gold: number;
+  @ApiProperty({ description: "本次到手的绑定元宝合计" })
+  bindGold: number;
 
   @ApiProperty({ description: "本次到手的经验合计" })
   exp: number;

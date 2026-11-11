@@ -32,7 +32,7 @@ export class Role implements BattleAttributes {
   fashionsOwned: string[] = [];
   relationShip: RELATION_SHIP = RELATION_SHIP.SELF;
   avatar: number = 0;
-  /** 绑定元宝（唯一货币，#843/#844 收敛后 gold / silver 已删） */
+  /** 绑定元宝（唯一货币） */
   bindGold: number = 0;
   exp: number = 0;
   maxHp: number;

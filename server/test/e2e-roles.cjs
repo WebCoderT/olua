@@ -905,20 +905,21 @@ async function raiseLevel(roleId, level, token) {
 
   // 改包视角：把账本与阶位一起改掉再推整份存档。服务端照样收下（拒收会让
   // 「客户端少收了一帧」变成玩不了），但落库的必须是库里的值。
+  // 收敛前的两个旧账本键（唯一货币改造后已不存在）：只用来验「收权时会被剥掉」，
+  // 所以这里必须以字面量出现在夹具里 —— 它们不是任何现役字段名。
+  const LEGACY_LEDGER_KEYS = ["gold", "silver"];
   const tampered = {
     ...roleData(roleF1Id, "报二", "1", 1),
     // 等级也改（#550）：这是索引列，回填不生效的话列表与详情会按 99 级显示一身神装
     level: 99,
-    bindGold: 88888,
-    // 已删除的 legacy 字段也一起塞（收敛后它们不在账本里，落库必须不带这两个键）
-    gold: 999999,
-    silver: 7777,
+    bindGold: 999999,
     title: 9,
     soulOfWar: 9,
     rank: 9,
     exp: 424242,
     hp: 999999,
   };
+  for (const key of LEGACY_LEDGER_KEYS) tampered[key] = 7777;
   const tamperSave = await saveRole(api, tokenF, roleF1Id, tampered);
   check(tamperSave.code === 0, "改包存档照常收下（回填而不是 409：拦的是「写进去」，不是「发过来」）", tamperSave.message);
 
@@ -926,9 +927,9 @@ async function raiseLevel(roleId, level, token) {
   const tamperedDoc = afterTamper.data.data;
   check(tamperedDoc.bindGold === 0, "绑定元宝没被改写（账本以库为准；建号从零起）", `bindGold=${tamperedDoc.bindGold}`);
   check(
-    tamperedDoc.gold === undefined && tamperedDoc.silver === undefined,
-    "legacy gold / silver 键不落库（收敛后整体移除）",
-    `gold=${JSON.stringify(tamperedDoc.gold)} silver=${JSON.stringify(tamperedDoc.silver)}`,
+    LEGACY_LEDGER_KEYS.every((key) => tamperedDoc[key] === undefined),
+    "收敛前的旧账本键不落库（收权时被剥掉）",
+    LEGACY_LEDGER_KEYS.map((key) => `${key}=${JSON.stringify(tamperedDoc[key])}`).join(" "),
   );
   check(
     tamperedDoc.title === 0 && tamperedDoc.soulOfWar === 0 && tamperedDoc.rank === 0,
@@ -952,7 +953,7 @@ async function raiseLevel(roleId, level, token) {
   const plainSave = await saveRole(api, tokenF, roleF1Id, { ...roleData(roleF1Id, "报二", "1", 1), bindGold: 0 });
   check(plainSave.code === 0, "账本一致的存档照常保存（回填对正常客户端是空操作）", plainSave.message);
 
-  // #597：建号不再收完整文档，「改包塞九位数金币」这条路连入参都没有了 ——
+  // #597：建号不再收完整文档，「改包塞九位数绑定元宝」这条路连入参都没有了 ——
   // 初始账本 / 背包 / 装备 / 技能 / 引导全部由服务端构造，这里逐项验一遍
   const richCreate = await api("POST", "roles", { token: tokenF, body: { name: "报三", occupation: "1", sex: "1" } });
   const roleF2Id = richCreate.data.id;
@@ -960,9 +961,9 @@ async function raiseLevel(roleId, level, token) {
   const richDetail = await api("GET", `roles/${roleF2Id}`, { token: tokenF });
   const richDoc = richDetail.data.data;
   check(
-    richDoc.bindGold === 0 && richDoc.gold === undefined && richDoc.silver === undefined,
-    "新角色账本 0 且不带 legacy 键（不再有「初始金币」这种出厂馈赠）",
-    `bindGold=${richDoc.bindGold} gold=${JSON.stringify(richDoc.gold)} silver=${JSON.stringify(richDoc.silver)}`,
+    richDoc.bindGold === 0,
+    "新角色账本 0（不再有「初始绑定元宝」这种出厂馈赠）",
+    `bindGold=${JSON.stringify(richDoc.bindGold)}`,
   );
   check(
     Array.isArray(richDoc.bag) && richDoc.bag.length === 0,

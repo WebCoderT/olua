@@ -65,7 +65,7 @@ try {
 
   check(/^\d+$/.test("1") && typeof texts.summary === "string", "文案表导出正常");
   check(texts.summary.includes("{unread}") && texts.summary.includes("{unclaimed}"), "小结同时带未读与未领两个占位符");
-  check(texts.gold.includes("{count}") && texts.exp.includes("{count}"), "金币 / 经验摘要都带数量占位符");
+  check(texts.bindGold.includes("{count}") && texts.exp.includes("{count}"), "绑定元宝 / 经验摘要都带数量占位符");
   check(texts.item.includes("{name}") && texts.item.includes("{count}"), "物品摘要同时带名字与数量（名字来自共享快照）");
   check(texts.claimAllDone.includes("{count}"), "一键领取回执带「领了几封」的占位符");
 
@@ -264,10 +264,16 @@ try {
 
   const service = readRepo(SERVER_SERVICE);
   const controller = readRepo(SERVER_CONTROLLER);
-  check(/grantQuestRewards\(accountId, roleId, null, \{ gold, exp, items \}\)/.test(service), "附件领取走与任务 / 成就同一个发奖入口");
-  check(/if \(gold <= 0 && exp <= 0 && items\.length === 0\)/.test(service), "没有奖励的邮件不碰角色存档（不白顶 revision）");
+  check(
+    /grantQuestRewards\(accountId, role\.id, null, \{ bindGold: mail\.bind_gold, exp: mail\.exp, items \}/.test(service),
+    "附件领取走与任务 / 成就同一个发奖入口",
+  );
+  check(/if \(bindGold <= 0 && exp <= 0 && items\.length === 0\)/.test(service), "没有奖励的邮件不碰角色存档（不白顶 revision）");
   check(/if \(isBizCode\(error, BizCode\.MALL_BAG_FULL\)\)/.test(service), "一键领取遇到背包满就停下（已领的照常落库）");
-  check(/if \(mail\.claimed_at === null && parseRewardItems\(mail\.attachments\)\.length > 0\)/.test(service), "删除守卫：附件没领不能删");
+  check(
+    /if \(hasUnclaimedReward\(mail\)\)/.test(service) && /row\.bind_gold > 0 \|\| row\.exp > 0 \|\|/.test(service),
+    "删除守卫：三样奖励（绑定元宝 / 经验 / 附件）任一没领不能删",
+  );
   check(/send\(roleId: string, input: SendMailInput\): RoleMailRow/.test(service), "对外提供 send（成就兜底 / 好友申请 / 战斗战报都走它）");
   check(/operationId: "gameMail\.(mine|read|claim|claimAll|remove)"/.test(controller), "五个 operationId 都按 gameMail.* 命名（生成器按模块段分文件）");
   check(/@Delete\(":id"\)/.test(controller), "删除走 DELETE /mails/{id}");
@@ -377,7 +383,7 @@ try {
     "boss 击杀落「战斗」栏，kind 记成 boss（来源标签与分类分开）",
   );
   check(
-    !/gold:|exp:|items:/.test(mailEvents),
+    !/bindGold:|exp:|items:/.test(mailEvents),
     "战斗消息不带奖励（隐藏奖励是数值设计的事，不该藏在消息里）",
   );
   check(

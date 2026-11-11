@@ -8,7 +8,7 @@
  * 三、talk 进度：npc-talk 推进 accepted 行（到量转 ready + quest 帧），submit 领奖后
  *     main 保留 claimed 行作链门控；可接未接的任务在 npc-talk 响应里是 available
  * 四、kill 进度：击杀结算递进（唯一发生在 realtime 侧的进度变化），逐格 +1、到量 ready、
- *     quest 帧只推本人；奖励（金币 / 经验 / 物品）一次落库
+ *     quest 帧只推本人；奖励（绑定元宝 / 经验 / 物品）一次落库
  * 五、collect：交付时查背包（不足 20017 整单拒绝、行保持原状），够就扣走并发奖
  * 六、daily 日切：领奖**不删行**（改 claimed），今天再接返 20027，跨天（改 reset_day）可再接
  *     并覆盖重置 —— 删行会把「今天领过」的证据一起删掉，#815 的洞就是这么来的
@@ -346,7 +346,7 @@ function setResetDay(dbPath, roleId, questId, day) {
     );
     const snapMain = snapQuests.find((row) => row.id === "8001");
     check(
-      !!snapMain && snapMain.objective && snapMain.objective.type === "talk" && snapMain.objective.target === "0002" && snapMain.rewards && snapMain.rewards.gold === 500,
+      !!snapMain && snapMain.objective && snapMain.objective.type === "talk" && snapMain.objective.target === "0002" && snapMain.rewards && snapMain.rewards.bindGold === 500,
       "快照任务行形状同管理端（objective / rewards 已展开）",
       JSON.stringify(snapMain),
     );
@@ -397,8 +397,8 @@ function setResetDay(dbPath, roleId, questId, day) {
 
     const submitMain = await api(baseUrl, "POST", "quests/submit", { token, body: { questId: "8001" } });
     check(
-      submitMain.code === 0 && submitMain.data.reward && submitMain.data.reward.gold === 500 && submitMain.data.reward.exp === 100,
-      "交付 8001：奖励按配置结算（金币 500 / 经验 100）",
+      submitMain.code === 0 && submitMain.data.reward && submitMain.data.reward.bindGold === 500 && submitMain.data.reward.exp === 100,
+      "交付 8001：奖励按配置结算（绑定元宝 500 / 经验 100）",
       JSON.stringify(submitMain.data && submitMain.data.reward),
     );
     const mainClaimed = await myQuest("8001");
@@ -432,8 +432,8 @@ function setResetDay(dbPath, roleId, questId, day) {
     const submitKill = await api(baseUrl, "POST", "quests/submit", { token, body: { questId: "8002" } });
     const killReward = submitKill.data && submitKill.data.reward;
     check(
-      submitKill.code === 0 && !!killReward && killReward.gold === 800 && JSON.stringify(killReward.items) === JSON.stringify([{ goodId: "material_hide", count: 2 }]),
-      "交付 8002：金币 800 + 兽皮 x2 一次落库",
+      submitKill.code === 0 && !!killReward && killReward.bindGold === 800 && JSON.stringify(killReward.items) === JSON.stringify([{ goodId: "material_hide", count: 2 }]),
+      "交付 8002：绑定元宝 800 + 兽皮 x2 一次落库",
       JSON.stringify(killReward),
     );
     const roleAfter = await api(baseUrl, "GET", `roles/${roleId}`, { token });
@@ -478,15 +478,15 @@ function setResetDay(dbPath, roleId, questId, day) {
     //#region 六、daily 日切（#815：领奖不删行，今天不能再接）
 
     group("六、daily 领奖后不删行，今天不能再接");
-    const roleGold = async () => (((await api(baseUrl, "GET", `roles/${roleId}`, { token })).data || {}).data || {}).bindGold;
+    const roleBindGold = async () => (((await api(baseUrl, "GET", `roles/${roleId}`, { token })).data || {}).data || {}).bindGold;
     await api(baseUrl, "PATCH", "admin/quests/8101", { token: adminToken, body: { objective: { type: "kill", target: "1", count: 1 } } });
-    const goldBeforeDaily = await roleGold();
+    const bindGoldBeforeDaily = await roleBindGold();
     const dailyKill = await killOne();
     check(!!(dailyKill && dailyKill.killed), "日常目标（改后杀 1 只怪物 1）达成");
     const dailyReady = await myQuest("8101");
     check(!!dailyReady && dailyReady.status === "ready", "日常进度到量 → ready", JSON.stringify(dailyReady));
     const submitDaily = await api(baseUrl, "POST", "quests/submit", { token, body: { questId: "8101" } });
-    check(submitDaily.code === 0 && submitDaily.data.reward.gold === 500, "交付日常：奖励照发", JSON.stringify(submitDaily.data && submitDaily.data.reward));
+    check(submitDaily.code === 0 && submitDaily.data.reward.bindGold === 500, "交付日常：奖励照发", JSON.stringify(submitDaily.data && submitDaily.data.reward));
 
     const dailyAfter = await myQuest("8101");
     check(!!dailyAfter && dailyAfter.status === "claimed", "daily 领奖后**行还在**（claimed，不再是删行）", JSON.stringify(dailyAfter));
@@ -510,7 +510,7 @@ function setResetDay(dbPath, roleId, questId, day) {
       const dup = await api(baseUrl, "POST", "quests/submit", { token, body: { questId: "8101" } });
       check(dup.code !== 0, `第 ${i + 2} 次交付日常 → 拒（${dup.code}）`, JSON.stringify(dup.message));
     }
-    checkEqual((await roleGold()) - goldBeforeDaily, 500, "金币只涨了一次奖励（连交没有重复发）");
+    checkEqual((await roleBindGold()) - bindGoldBeforeDaily, 500, "绑定元宝只涨了一次奖励（连交没有重复发）");
 
     // 跨 05:00：把这一行挪到昨天 —— 视作可再接，accept 时覆盖重置
     const staleDay = dailyRows[0].reset_day - 1;
@@ -533,7 +533,7 @@ function setResetDay(dbPath, roleId, questId, day) {
     group("七、管理端配置纪律");
     const createdQuest = await api(baseUrl, "POST", "admin/quests", {
       token: adminToken,
-      body: { id: "8201", kind: "daily", label: "临时任务", objective: { type: "kill", target: "1", count: 1 }, rewards: { gold: 1, exp: 1, items: [] } },
+      body: { id: "8201", kind: "daily", label: "临时任务", objective: { type: "kill", target: "1", count: 1 }, rewards: { bindGold: 1, exp: 1, items: [] } },
     });
     check(createdQuest.code === 0 && createdQuest.data.id === "8201", "动态新增任务成功", JSON.stringify(createdQuest.message));
     const dupQuest = await api(baseUrl, "POST", "admin/quests", {

@@ -34,7 +34,7 @@ export class AchievementRepository {
     this.db.run(
       `INSERT OR IGNORE INTO achievements
          (id, category, label, description, condition_type, condition_target, condition_count,
-          reward_gold, reward_exp, reward_items, sort_order, hidden, updated_at)
+          reward_bind_gold, reward_exp, reward_items, sort_order, hidden, updated_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         row.id,
@@ -44,7 +44,7 @@ export class AchievementRepository {
         row.condition_type,
         row.condition_target,
         row.condition_count,
-        row.reward_gold,
+        row.reward_bind_gold,
         row.reward_exp,
         row.reward_items,
         row.sort_order,
@@ -59,7 +59,7 @@ export class AchievementRepository {
     this.db.run(
       `INSERT INTO achievements
          (id, category, label, description, condition_type, condition_target, condition_count,
-          reward_gold, reward_exp, reward_items, sort_order, hidden, updated_at)
+          reward_bind_gold, reward_exp, reward_items, sort_order, hidden, updated_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         row.id,
@@ -69,7 +69,7 @@ export class AchievementRepository {
         row.condition_type,
         row.condition_target,
         row.condition_count,
-        row.reward_gold,
+        row.reward_bind_gold,
         row.reward_exp,
         row.reward_items,
         row.sort_order,
@@ -84,7 +84,7 @@ export class AchievementRepository {
       `UPDATE achievements SET
          category = ?, label = ?, description = ?,
          condition_type = ?, condition_target = ?, condition_count = ?,
-         reward_gold = ?, reward_exp = ?, reward_items = ?,
+         reward_bind_gold = ?, reward_exp = ?, reward_items = ?,
          sort_order = ?, hidden = ?, updated_at = ?
        WHERE id = ?`,
       [
@@ -94,7 +94,7 @@ export class AchievementRepository {
         row.condition_type,
         row.condition_target,
         row.condition_count,
-        row.reward_gold,
+        row.reward_bind_gold,
         row.reward_exp,
         row.reward_items,
         row.sort_order,

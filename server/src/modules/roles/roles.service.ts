@@ -263,7 +263,7 @@ export class RolesService {
     const id = this.generateRoleId();
     const now = Date.now();
     // 初始文档由服务端构造（#597）：客户端入参里没有 data，自然也没有「改包开号满级 /
-    // 建号塞金币」这条路 —— 此前的 clampInitialCurrency / pinInitialLevel 随之整体退场
+    // 建号塞绑定元宝」这条路 —— 此前的 clampInitialCurrency / pinInitialLevel 随之整体退场
     const data = buildInitialRoleData(id, name, occupation, sex);
     // 战斗属性与战斗力在落库前由服务端重算（权威值），血蓝按满值起
     this.applyAuthoritativeAttributes(1, data);
@@ -455,7 +455,7 @@ export class RolesService {
 
     const bindGold = Math.max(0, Math.floor(Number(data.bindGold) || 0));
     if (bindGold < target.bind_gold) {
-      throw BizException.conflict(BizCode.GROWTH_GOLD_NOT_ENOUGH, `绑定元宝不足：还需 ${target.bind_gold - bindGold}`);
+      throw BizException.conflict(BizCode.GROWTH_BIND_GOLD_NOT_ENOUGH, `绑定元宝不足：还需 ${target.bind_gold - bindGold}`);
     }
 
     data[field] = target.level;
@@ -545,7 +545,7 @@ export class RolesService {
       const data = decodeStoredRoleData(existing.data);
       const bindGold = Math.max(0, Math.floor(Number(data.bindGold) || 0));
       if (bindGold < price) {
-        throw BizException.conflict(BizCode.MALL_GOLD_NOT_ENOUGH, `绑定元宝不足：还需 ${price - bindGold}`);
+        throw BizException.conflict(BizCode.MALL_BIND_GOLD_NOT_ENOUGH, `绑定元宝不足：还需 ${price - bindGold}`);
       }
 
       // 库存：条件自增（`sold < stock` 才 +1），卖完就 false
@@ -970,7 +970,7 @@ export class RolesService {
    * 货币道具使用（玩家侧 #785）：入账与扣减都在服务端
    *
    * 货币直接对应角色存档的唯一账本字段（`role-authority.ts` 的 `SERVER_LEDGER_FIELDS`）：
-   * `bindGold`（绑定元宝；2026-11-11 收敛后 gold / silver 已删，#843、#844）。客户端只报「用背包哪一格」，**金额与币种一律读
+   * `bindGold`（绑定元宝；2026-11-11 收敛后只剩 bindGold 一种，#843、#844）。客户端只报「用背包哪一格」，**金额与币种一律读
    * `money_items` 表** —— 运营把 100000 改成 1，玩家下次使用就只加 1，改包也改不出钱。
    *
    * 与用药的区别：不结算血蓝、不判「已满」；冷却固定 1 秒（`MONEY_ITEM_COOLDOWN_MS`，
@@ -1005,7 +1005,7 @@ export class RolesService {
     }
     if (!(MONEY_KINDS as readonly string[]).includes(item.currency)) {
       // 2026-11-11 货币收敛（#843、#844）：只认 bindGold 一种。库里存的 legacy 币种
-      // （手改库 / 旧元宝银子行没清干净）→ 拒用，不往不存在的字段上写钱。
+      // （手改库 / 旧币种行没清干净）→ 拒用，不往不存在的字段上写钱。
       throw BizException.conflict(BizCode.MONEY_ITEM_USE_TARGET_INVALID, "该货币道具的币种不合法");
     }
     const currency = item.currency as MoneyKind;
@@ -1519,7 +1519,7 @@ export class RolesService {
 
     const bindGold = Math.max(0, Math.floor(Number(data.bindGold) || 0));
     if (bindGold < price) {
-      throw BizException.conflict(BizCode.MALL_GOLD_NOT_ENOUGH, `绑定元宝不足，购买需要 ${price}`);
+      throw BizException.conflict(BizCode.MALL_BIND_GOLD_NOT_ENOUGH, `绑定元宝不足，购买需要 ${price}`);
     }
     data.bindGold = bindGold - price;
     owned.push(fashion.id);
@@ -1708,7 +1708,7 @@ export class RolesService {
     accountId: string,
     roleId: string,
     consume: { goodId: string; count: number } | null,
-    rewards: { gold: number; exp: number; items: Array<{ goodId: string; count: number }> },
+    rewards: { bindGold: number; exp: number; items: Array<{ goodId: string; count: number }> },
     /**
      * 奖励来源（写进行为流水的 `detail.source`）
      *
@@ -1737,7 +1737,7 @@ export class RolesService {
    */
   grantByRoleId(
     roleId: string,
-    rewards: { gold: number; exp: number; items: Array<{ goodId: string; count: number }> },
+    rewards: { bindGold: number; exp: number; items: Array<{ goodId: string; count: number }> },
     source = "mail-auto",
   ): KillExpResult {
     const existing = this.roles.findById(roleId);
@@ -1755,7 +1755,7 @@ export class RolesService {
   private applyRewards(
     existing: RoleRow,
     consume: { goodId: string; count: number } | null,
-    rewards: { gold: number; exp: number; items: Array<{ goodId: string; count: number }> },
+    rewards: { bindGold: number; exp: number; items: Array<{ goodId: string; count: number }> },
     source: string,
   ): KillExpResult {
     // `accountId` 从角色行上取（不是入参）：行为流水的 accountId 不能因为调用方传错而对到别的账号
@@ -1774,8 +1774,8 @@ export class RolesService {
       this.placeGoodsIntoBag(data, item.goodId, itemType, Math.max(1, Math.floor(item.count)));
     }
 
-    // 3) 金币（v4 起唯一货币字段是 `bindGold` —— #843、#844；都在 data JSON 里，没有专用列）
-    data.bindGold = Math.max(0, Math.floor(Number(data.bindGold) || 0)) + Math.max(0, Math.floor(rewards.gold ?? 0));
+    // 3) 绑定元宝（v4 起唯一货币字段是 `bindGold` —— #843、#844；都在 data JSON 里，没有专用列）
+    data.bindGold = Math.max(0, Math.floor(Number(data.bindGold) || 0)) + Math.max(0, Math.floor(rewards.bindGold ?? 0));
 
     // 4) 经验 + 升级：与击杀 / 泡点共用 `settleLevelUp`（等级曲线判定、上限封顶、
     //    `data.level` 同步、升级回满血蓝）
@@ -1789,7 +1789,7 @@ export class RolesService {
       updated_at: Date.now(),
     };
     this.persistOrConflict(row, existing.revision, "发放任务奖励");
-    // 行为流水（#886）：奖励**物品与金币**各记一条（经验不记 —— 那是成长曲线的事，
+    // 行为流水（#886）：奖励**物品与绑定元宝**各记一条（经验不记 —— 那是成长曲线的事，
     // 击杀 / 泡点早就各自记过了）。source 写 "deliver" 是因为任务与成就共用这个方法
     const gained = [] as Array<{
       type: string;
@@ -1802,8 +1802,8 @@ export class RolesService {
       detail: { source: string };
     }>;
     const mapId = this.mapAtOf(data);
-    const gold = Math.max(0, Math.floor(rewards.gold ?? 0));
-    if (gold > 0) {
+    const bindGold = Math.max(0, Math.floor(rewards.bindGold ?? 0));
+    if (bindGold > 0) {
       gained.push({
         type: EVENT_TYPE.GAIN,
         accountId,
@@ -1811,7 +1811,7 @@ export class RolesService {
         roleName: existing.name,
         mapId,
         target: "bindGold",
-        amount: gold,
+        amount: bindGold,
         detail: { source },
       });
     }

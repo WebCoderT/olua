@@ -356,7 +356,7 @@ export type RolePatchPayload = {
    */
   level?: number;
   /**
-   * 绑定元宝（唯一货币，gold / silver 已随 #843/#844 收敛删除）
+   * 绑定元宝（唯一货币，旧币种字段已随 #843/#844 收敛删除）
    */
   bindGold?: number;
   /**
@@ -531,9 +531,9 @@ export type AchievementRewardItem = {
 
 export type UpdateAchievementRewards = {
   /**
-   * 金币（≥0）
+   * 绑定元宝（≥0）
    */
-  gold?: number;
+  bindGold?: number;
   /**
    * 经验（≥0）
    */
@@ -1668,9 +1668,9 @@ export type QuestRewardItem = {
 
 export type UpdateQuestRewards = {
   /**
-   * 金币（≥0）
+   * 绑定元宝（≥0）
    */
-  gold?: number;
+  bindGold?: number;
   /**
    * 经验（≥0）
    */
@@ -2447,9 +2447,9 @@ export type AdminSendMail = {
    */
   body?: string;
   /**
-   * 附件金币（不传 = 没有）
+   * 附件绑定元宝（不传 = 没有）
    */
-  gold?: number;
+  bindGold?: number;
   /**
    * 附件经验（不传 = 没有）
    */
@@ -6875,9 +6875,9 @@ export type QuestObjective = {
 
 export type QuestRewards = {
   /**
-   * 金币
+   * 绑定元宝
    */
-  gold: number;
+  bindGold: number;
   /**
    * 经验
    */
@@ -7005,9 +7005,9 @@ export type MyQuests = {
 
 export type QuestRewardResult = {
   /**
-   * 金币
+   * 绑定元宝
    */
-  gold: number;
+  bindGold: number;
   /**
    * 经验
    */
@@ -7604,9 +7604,9 @@ export type AchievementCondition = {
 
 export type AchievementRewards = {
   /**
-   * 金币
+   * 绑定元宝
    */
-  gold: number;
+  bindGold: number;
   /**
    * 经验
    */
@@ -8612,9 +8612,9 @@ export type AchievementClaimResult = {
    */
   summary: AchievementSummary;
   /**
-   * 本次发放的金币
+   * 本次发放的绑定元宝
    */
-  gold: number;
+  bindGold: number;
   /**
    * 本次发放的经验
    */
@@ -8705,9 +8705,9 @@ export type MailView = {
    */
   body: string;
   /**
-   * 附件金币（0 = 没有）
+   * 附件绑定元宝（0 = 没有）
    */
-  gold: number;
+  bindGold: number;
   /**
    * 附件经验（0 = 没有）
    */
@@ -8786,9 +8786,9 @@ export type MailClaimResult = {
    */
   channels: MailChannelSummary[];
   /**
-   * 本次到手的金币
+   * 本次到手的绑定元宝
    */
-  gold: number;
+  bindGold: number;
   /**
    * 本次到手的经验
    */
@@ -8844,9 +8844,9 @@ export type MailClaimAllResult = {
    */
   claimedCount: number;
   /**
-   * 本次到手的金币合计
+   * 本次到手的绑定元宝合计
    */
-  gold: number;
+  bindGold: number;
   /**
    * 本次到手的经验合计
    */

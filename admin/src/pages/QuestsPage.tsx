@@ -45,7 +45,7 @@ interface QuestForm {
   objectiveType: string;
   objectiveTarget: string;
   objectiveCount: string;
-  gold: string;
+  bindGold: string;
   exp: string;
   items: QuestRewardItem[];
 }
@@ -62,7 +62,7 @@ function toForm(item: Quest): QuestForm {
     objectiveType: item.objective.type,
     objectiveTarget: item.objective.target,
     objectiveCount: String(item.objective.count),
-    gold: String(item.rewards.gold),
+    bindGold: String(item.rewards.bindGold),
     exp: String(item.rewards.exp),
     items: item.rewards.items.map((entry) => ({ ...entry })),
   };
@@ -80,7 +80,7 @@ function emptyForm(): QuestForm {
     objectiveType: "kill",
     objectiveTarget: "",
     objectiveCount: "1",
-    gold: "0",
+    bindGold: "0",
     exp: "0",
     items: [],
   };
@@ -112,7 +112,7 @@ function keyLabel(kind: EntityKind, key: string): string {
  * 任务编辑 / 新建弹窗（#396）
  *
  * 一次展示**整条任务配置**：身份（id / 类型 / 名称）、接取条件（前置 / 等级 / 发布 NPC）、
- * 单目标（类型 / 目标键 / 数量）与奖励（金币 / 经验 / 物品）。
+ * 单目标（类型 / 目标键 / 数量）与奖励（绑定元宝 / 经验 / 物品）。
  * 部分更新只是协议形态，这里按「整份提交」处理 —— `objective` / `rewards` 传了就整份替换，
  * 少回填一个字段就会出现「只改了数量结果把奖励清零」这类事故。
  *
@@ -174,7 +174,7 @@ function QuestDialog({
   for (const message of [
     checkNumber(form.minLevel, { name: "接取等级", min: 1, max: 999, int: true }),
     checkNumber(form.objectiveCount, { name: "目标数量", min: 1, max: 9999, int: true }),
-    checkNumber(form.gold, { name: "绑定元宝奖励", min: 0, max: 999_999_999, int: true }),
+    checkNumber(form.bindGold, { name: "绑定元宝奖励", min: 0, max: 999_999_999, int: true }),
     checkNumber(form.exp, { name: "经验奖励", min: 0, max: 999_999_999, int: true }),
   ]) {
     if (message) problems.push(message);
@@ -205,7 +205,7 @@ function QuestDialog({
         count: Number(form.objectiveCount),
       },
       rewards: {
-        gold: Number(form.gold),
+        bindGold: Number(form.bindGold),
         exp: Number(form.exp),
         items: form.items.map((entry) => ({ goodId: entry.goodId, count: Number(entry.count) })),
       },
@@ -332,7 +332,7 @@ function QuestDialog({
         <span className="mb-2 block text-xs font-medium text-slate-400">奖励（交付时直接入包，整份放不下会被拒绝）</span>
         <div className="grid grid-cols-1 gap-3 rounded-xl border border-slate-800 bg-slate-950/40 p-4 sm:grid-cols-2">
           <Field label="绑定元宝">
-            <Input type="number" min={0} value={form.gold} onChange={(event) => set("gold", event.target.value)} />
+            <Input type="number" min={0} value={form.bindGold} onChange={(event) => set("bindGold", event.target.value)} />
           </Field>
           <Field label="经验">
             <Input type="number" min={0} value={form.exp} onChange={(event) => set("exp", event.target.value)} />
@@ -351,7 +351,7 @@ function QuestDialog({
           </Button>
         </div>
         <div className="mt-2 flex flex-col gap-2 rounded-xl border border-slate-800 bg-slate-950/40 p-4">
-          {form.items.length === 0 ? <p className="text-xs text-slate-500">没有物品奖励：只发金币与经验。</p> : null}
+          {form.items.length === 0 ? <p className="text-xs text-slate-500">没有物品奖励：只发绑定元宝与经验。</p> : null}
           {form.items.map((entry, index) => (
             <div key={index} className="flex items-center gap-2">
               <div className="min-w-0 flex-1">
@@ -611,7 +611,7 @@ export function QuestsPage() {
                     {item.objective.count}
                   </td>
                   <td className={`${tdClass} text-xs text-slate-400`}>
-                    绑定元宝 {item.rewards.gold} · 经验 {item.rewards.exp}
+                    绑定元宝 {item.rewards.bindGold} · 经验 {item.rewards.exp}
                     {item.rewards.items.length > 0
                       ? ` · ${item.rewards.items.map((entry) => `${entityLabel("item", entry.goodId) || entry.goodId}×${entry.count}`).join("、")}`
                       : ""}

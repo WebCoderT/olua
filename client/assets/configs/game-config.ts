@@ -1345,7 +1345,7 @@ export interface QuestObjective {
 }
 
 export interface QuestRewards {
-  gold: number;
+  bindGold: number;
   exp: number;
   items: Array<{ goodId: string; count: number }>;
 }
@@ -1387,7 +1387,7 @@ function questRowToConfig(row: QuestRow): QuestData {
     npcId: row.npcId ?? "",
     objective: { type, target: `${objective.target ?? ""}`, count: Math.max(1, Math.floor(objective.count || 1)) },
     rewards: {
-      gold: Math.max(0, Math.floor(row.rewards?.gold ?? 0)),
+      bindGold: Math.max(0, Math.floor(row.rewards?.bindGold ?? 0)),
       exp: Math.max(0, Math.floor(row.rewards?.exp ?? 0)),
       items: (row.rewards?.items ?? []).map((entry) => ({ goodId: `${entry.goodId ?? ""}`, count: Math.max(1, Math.floor(entry.count || 1)) })),
     },

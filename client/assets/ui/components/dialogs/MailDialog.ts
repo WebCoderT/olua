@@ -283,10 +283,10 @@ export default class MailDialog {
     return node;
   }
 
-  /** 附件摘要（金币 / 经验 / 物品）；没有附件就显示正文 */
+  /** 附件摘要（绑定元宝 / 经验 / 物品）；没有附件就显示正文 */
   private describe(row: MailView): string {
     const parts: string[] = [];
-    if (row.gold > 0) parts.push(texts.gold.split("{count}").join(`${row.gold}`));
+    if (row.bindGold > 0) parts.push(texts.bindGold.split("{count}").join(`${row.bindGold}`));
     if (row.exp > 0) parts.push(texts.exp.split("{count}").join(`${row.exp}`));
     for (const item of row.attachments) {
       const name = items.get(item.goodId)?.label ?? item.goodId;
@@ -384,7 +384,7 @@ export default class MailDialog {
 
 
   private hasNoAttachment(row: MailView): boolean {
-    return row.gold <= 0 && row.exp <= 0 && row.attachments.length === 0;
+    return row.bindGold <= 0 && row.exp <= 0 && row.attachments.length === 0;
   }
 
   //#endregion

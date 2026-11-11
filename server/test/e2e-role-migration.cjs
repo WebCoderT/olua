@@ -4,7 +4,7 @@
  *
  * 盯的不变量（改存档结构 / 迁移链 / 选角链路后必须全绿）：
  * 一、新号带版本号：建号那一刻 `data.schemaVersion` 就是当前版本（否则版本分布永远挂一档假老档）
- * 二、老档进游戏即迁移：v1（无该字段）→ `select` → 落库当前版本，**金币 / 背包原样、revision 不推进**；
+ * 二、老档进游戏即迁移：v1（无该字段）→ `select` → 落库当前版本，**绑定元宝 / 背包原样、revision 不推进**；
  *     装备槽的裸 id 顺手迁成 `{ id }`（v2→v3，#816）
  * 三、版本超前拒登：v99 → 20028 + 「联系客服」，库里一个字节不动，**在线标记也不置**
  * 四、坏档不洗白：JSON 都解析不出来的行由坏档闸拦下（#819 的 20029），版本闸**不碰**它 ——
@@ -231,7 +231,7 @@ function runMigrateScript(dbPath, extraArgs = []) {
     // 造一份 v1：删掉版本号，塞一个可辨认的账本值与一格背包
     mutateData(dbPath, roleA, (data) => {
       delete data.schemaVersion;
-      data.gold = 12345;
+      data.bindGold = 12345;
       data.bag = [[{ id: "drug_hp_1", count: 5 }, null], [null, null]];
       // v2 形状的装备槽：裸 id + 空串（服务端历史上用空串表示空槽）
       data.equipments = { cloth: "cloth_1", weapon: "" };
@@ -245,7 +245,7 @@ function runMigrateScript(dbPath, extraArgs = []) {
     const afterSelect = roleRow(dbPath, roleA);
     const migrated = JSON.parse(afterSelect.data);
     checkEqual(migrated.schemaVersion, CURRENT_VERSION, "进游戏后落库即为当前版本");
-    checkEqual(migrated.gold, 12345, "迁移不动账本（金币原样）");
+    checkEqual(migrated.bindGold, 12345, "迁移不动账本（绑定元宝原样）");
     checkEqual(JSON.stringify(migrated.bag), JSON.stringify([[{ id: "drug_hp_1", count: 5 }, null], [null, null]]), "迁移不动背包");
     checkEqual(afterSelect.revision, beforeSelect.revision, "迁移不推进 revision（否则客户端下次存档白撞 20006）");
     checkEqual(
@@ -279,7 +279,7 @@ function runMigrateScript(dbPath, extraArgs = []) {
     //#region 四、坏档不洗白
 
     group("四、坏档（JSON 解析失败）与版本闸的边界");
-    const brokenRaw = '{"id":"' + roleC + '","gold":';
+    const brokenRaw = '{"id":"' + roleC + '","bindGold":';
     writeRawData(dbPath, roleC, brokenRaw);
     const brokenSelect = await api(baseUrl, "POST", `roles/${roleC}/select`, { token });
     // 坏档由 #819 的闸负责（20029 拒登）。这一段要钉的是**版本闸不碰它**：
@@ -299,7 +299,7 @@ function runMigrateScript(dbPath, extraArgs = []) {
     const current = roleRow(dbPath, roleA);
     const currentData = JSON.parse(current.data);
     delete currentData.schemaVersion; // 模拟「客户端本地那份还是老形状」
-    // 用一个**客户端书写**的字段验「内容照常生效」：金币 / 经验是服务端账本，
+    // 用一个**客户端书写**的字段验「内容照常生效」：绑定元宝 / 经验是服务端账本，
     // PUT 上来一律按库里的值回填（role-authority 的收权）
     const saved = await api(baseUrl, "PUT", `roles/${roleA}`, {
       token,
@@ -323,7 +323,7 @@ function runMigrateScript(dbPath, extraArgs = []) {
     group("六、迁移脚本（make migrate）");
     // 先把第四段留下的坏档修好（坏档是 #819 的闸，脚本只负责报出来，不该混进版本分布的用例里），
     // 再把第三段造的超前档拉回当前版本 —— 这一段的 dry-run 要验「只有落后行时」的正常路径
-    writeRawData(dbPath, roleC, JSON.stringify({ id: roleC, name: "坏档丙", occupation: "1", sex: "1", level: 1, gold: 0, schemaVersion: CURRENT_VERSION }));
+    writeRawData(dbPath, roleC, JSON.stringify({ id: roleC, name: "坏档丙", occupation: "1", sex: "1", level: 1, bindGold: 0, schemaVersion: CURRENT_VERSION }));
     mutateData(dbPath, roleB, (data) => {
       data.schemaVersion = CURRENT_VERSION;
     });

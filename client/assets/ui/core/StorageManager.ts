@@ -334,7 +334,7 @@ export default class StorageManager {
    *
    * **扣费与阶位推进都在服务端**（role.growthUpgrade）：客户端只报「哪条线、升到哪阶」，
    * 服务端按库里的成长链算下一阶并校验目标一致，扣绑定元宝后原子推进。
-   * 本地预检（上一层的 max / 元宝不足提示）只做即时 UX —— 服务端结果才是权威，
+   * 本地预检（上一层的 max / 绑定元宝不足提示）只做即时 UX —— 服务端结果才是权威，
    * 预检放行但服务端拒绝时（成长链被运营改过、后台并发改动），服务端的提示会经
    * 请求层的失败出口弹给玩家。
    *
@@ -1196,7 +1196,7 @@ export default class StorageManager {
       return null;
     }
     if (role.bindGold < getMallPrice(good)) {
-      GameUiHelper.createTip("mall_gold_not_enough_tip");
+      GameUiHelper.createTip("mall_bind_gold_not_enough_tip");
       return null;
     }
     let result: MallPurchaseResult;

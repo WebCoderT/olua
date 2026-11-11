@@ -57,7 +57,7 @@ export type AudioCategory = (typeof AUDIO_CATEGORIES)[number]["key"];
  * - `role_die_man` / `role_die_woman` → `ui/Game.checkRoleDeath`（按 `role.sex` 选一个）
  * - `item_drop` → `ui/core/DropManager.spawnResults`（掉落物铺到地上）+ `applyPickedFrame`（捡起来）
  * - `equip_wear` → `ui/core/StorageManager.equipFromBag`（服务端接受之后）
- * - `money_change` → `ui/core/StorageManager.applyServerRoleUpdate`（三种货币任一变化）
+ * - `money_change` → `ui/core/StorageManager.applyServerRoleUpdate`（绑定元宝变化）
  * - `bag_resort` → `ui/core/StorageManager.tidyBag`（一键整理）+ `moveBagGood`（拖动搬格）
  * - `level_up` → `ui/core/StorageManager.applyKillReward` / `applyPartyExpGain`（`leveledUp`）
  * - `map_teleport` → `ui/Game.start`（传送后进图、角色显示出来时；不是点传送的瞬间）

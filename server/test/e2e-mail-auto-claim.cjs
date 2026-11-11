@@ -4,8 +4,8 @@
  *
  * 盯的不变量（改自动入包 / 清理判据 / 发奖入口后必须全绿）：
  * 一、**到点才动**：到期还早（10 天后）的邮件一轮下来纹丝不动；到期前 3 天内的
- *     金币 / 经验 / 物品一次进包，邮件同时标已领 + `auto_claimed_at` + 正文追加一句
- * 二、**纯金币也入包**（#867 的核心）：`attachments = '[]'` 但 `gold > 0` 的行也必须在候选里 ——
+ *     绑定元宝 / 经验 / 物品一次进包，邮件同时标已领 + `auto_claimed_at` + 正文追加一句
+ * 二、**纯绑定元宝也入包**（#867 的核心）：`attachments = '[]'` 但 `bindGold > 0` 的行也必须在候选里 ——
  *     只认附件的实现会让这批补偿邮件到期后被 `purgeExpired` 物理删除，奖励凭空蒸发
  * 三、**只对离线角色做**：`accounts.online_role_id` 指着的角色不动（在线存档在客户端手里，
  *     服务端改库会被下一次全量覆盖冲掉）；下线后下一轮才入包
@@ -92,7 +92,7 @@ async function api(method, route, options = {}) {
 function insertMail(dbPath, mail) {
   const db = new DatabaseSync(dbPath);
   db.prepare(
-    `INSERT INTO role_mails (id, role_id, channel, kind, title, body, gold, exp, attachments, read_at, claimed_at, expires_at, created_at)
+    `INSERT INTO role_mails (id, role_id, channel, kind, title, body, bind_gold, exp, attachments, read_at, claimed_at, expires_at, created_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   ).run(
     mail.id,
@@ -101,7 +101,7 @@ function insertMail(dbPath, mail) {
     mail.kind ?? "system",
     mail.title ?? "自动入包样本",
     mail.body ?? "",
-    mail.gold ?? 0,
+    mail.bindGold ?? 0,
     mail.exp ?? 0,
     JSON.stringify(mail.attachments ?? []),
     mail.readAt ?? null,
@@ -120,7 +120,7 @@ function mailRow(dbPath, mailId) {
   return row || null;
 }
 
-/** 角色的金币与背包（发奖是否真的落进存档，只有直读能看见） */
+/** 角色的绑定元宝与背包（发奖是否真的落进存档，只有直读能看见） */
 function roleState(dbPath, roleId) {
   const db = new DatabaseSync(dbPath);
   const row = db.prepare("SELECT data FROM roles WHERE id = ?").get(roleId);
@@ -130,8 +130,8 @@ function roleState(dbPath, roleId) {
   for (const line of Array.isArray(data.bag) ? data.bag : []) {
     if (Array.isArray(line)) cells.push(...line);
   }
-  // 邮件的 `gold` 奖励入的是 bindGold（唯一货币，#843/#844）—— 下游断言里的 `.gold` 都读它
-  return { gold: Number(data.bindGold) || 0, exp: Number(data.exp) || 0, cells, data };
+  // 邮件的 `bindGold` 奖励入的是 bindGold（唯一货币，#843/#844）—— 下游断言里的 `.bindGold` 都读它
+  return { bindGold: Number(data.bindGold) || 0, exp: Number(data.exp) || 0, cells, data };
 }
 
 /** 写角色存档的背包（塞满 / 清空都走它） */
@@ -198,13 +198,13 @@ function fullBag() {
 
     console.log("— 一、到点才动：还早的不碰，3 天内的一次进包 —");
     const now = Date.now();
-    insertMail(dbPath, { id: "mail_later", roleId, title: "还早", gold: 100, expiresAt: now + 10 * DAY });
+    insertMail(dbPath, { id: "mail_later", roleId, title: "还早", bindGold: 100, expiresAt: now + 10 * DAY });
     insertMail(dbPath, {
       id: "mail_soon",
       roleId,
       title: "快到期",
       body: "补偿如下",
-      gold: 500,
+      bindGold: 500,
       exp: 20,
       attachments: [{ goodId: "material_iron", count: 2 }],
       expiresAt: now + 2 * DAY,
@@ -215,7 +215,7 @@ function fullBag() {
     check(round1.claimed === 1 && round1.failed === 0, "快到期那封入包成功", JSON.stringify(round1));
 
     const afterSoon = roleState(dbPath, roleId);
-    check(afterSoon.gold === before.gold + 500, "金币 +500 真的落进存档", `${before.gold} → ${afterSoon.gold}`);
+    check(afterSoon.bindGold === before.bindGold + 500, "绑定元宝 +500 真的落进存档", `${before.bindGold} → ${afterSoon.bindGold}`);
     check(
       afterSoon.cells.filter((cell) => cell && cell.id === "material_iron").reduce((sum, cell) => sum + cell.count, 0) === 2,
       "附件 2 件进背包",
@@ -234,14 +234,14 @@ function fullBag() {
 
     //#endregion
 
-    //#region 二、纯金币也入包
+    //#region 二、纯绑定元宝也入包
 
-    console.log("— 二、纯金币邮件也入包（#867 的核心：只认 attachments 就会漏掉这一批）—");
-    insertMail(dbPath, { id: "mail_gold_only", roleId, title: "纯金币补偿", gold: 300, expiresAt: now + 1 * DAY });
+    console.log("— 二、纯绑定元宝邮件也入包（#867 的核心：只认 attachments 就会漏掉这一批）—");
+    insertMail(dbPath, { id: "mail_bind_gold_only", roleId, title: "纯绑定元宝补偿", bindGold: 300, expiresAt: now + 1 * DAY });
     const round2 = autoClaim.sweep(now);
-    check(round2.claimed === 1, "纯金币那封进了候选并成功入包", JSON.stringify(round2));
-    check(roleState(dbPath, roleId).gold === afterSoon.gold + 300, "金币再 +300", `${roleState(dbPath, roleId).gold}`);
-    check(mailRow(dbPath, "mail_gold_only").claimed_at !== null, "纯金币那封也被标已领");
+    check(round2.claimed === 1, "纯绑定元宝那封进了候选并成功入包", JSON.stringify(round2));
+    check(roleState(dbPath, roleId).bindGold === afterSoon.bindGold + 300, "绑定元宝再 +300", `${roleState(dbPath, roleId).bindGold}`);
+    check(mailRow(dbPath, "mail_bind_gold_only").claimed_at !== null, "纯绑定元宝那封也被标已领");
 
     //#endregion
 
@@ -249,17 +249,17 @@ function fullBag() {
 
     console.log("— 三、在线角色不动（在线存档在客户端手里，服务端改了会被覆盖）—");
     setOnlineRole(dbPath, roleId, true);
-    insertMail(dbPath, { id: "mail_online", roleId, title: "在线时的快到期", gold: 700, expiresAt: now + 1 * DAY });
-    const goldBeforeOnline = roleState(dbPath, roleId).gold;
+    insertMail(dbPath, { id: "mail_online", roleId, title: "在线时的快到期", bindGold: 700, expiresAt: now + 1 * DAY });
+    const bindGoldBeforeOnline = roleState(dbPath, roleId).bindGold;
     const round3 = autoClaim.sweep(now);
     check(round3.scanned === 0 && round3.claimed === 0, "在线角色的快到期邮件不进候选", JSON.stringify(round3));
-    check(roleState(dbPath, roleId).gold === goldBeforeOnline, "金币一分没动", `${roleState(dbPath, roleId).gold}`);
+    check(roleState(dbPath, roleId).bindGold === bindGoldBeforeOnline, "绑定元宝一分没动", `${roleState(dbPath, roleId).bindGold}`);
     check(mailRow(dbPath, "mail_online").claimed_at === null, "邮件仍未被领");
 
     setOnlineRole(dbPath, roleId, false);
     const round4 = autoClaim.sweep(now);
     check(round4.claimed === 1, "下线后下一轮就入包了", JSON.stringify(round4));
-    check(roleState(dbPath, roleId).gold === goldBeforeOnline + 700, "金币 +700", `${roleState(dbPath, roleId).gold}`);
+    check(roleState(dbPath, roleId).bindGold === bindGoldBeforeOnline + 700, "绑定元宝 +700", `${roleState(dbPath, roleId).bindGold}`);
 
     //#endregion
 
@@ -267,12 +267,12 @@ function fullBag() {
 
     console.log("— 四、背包满：记次数、邮件留着，清出格子后自己入包 —");
     setBag(dbPath, roleId, fullBag());
-    const goldBeforeFull = roleState(dbPath, roleId).gold;
+    const bindGoldBeforeFull = roleState(dbPath, roleId).bindGold;
     insertMail(dbPath, {
       id: "mail_full",
       roleId,
       title: "要放物品但包满",
-      gold: 50,
+      bindGold: 50,
       attachments: [{ goodId: "material_iron", count: 1 }],
       expiresAt: now + 1 * DAY,
     });
@@ -281,7 +281,7 @@ function fullBag() {
     const fullRow = mailRow(dbPath, "mail_full");
     check(fullRow && fullRow.auto_attempts === 1, "失败次数记成 1（且没被事务回滚抹掉）", JSON.stringify(fullRow));
     check(fullRow && fullRow.claimed_at === null, "「已领」随事务回滚，仍是未领", JSON.stringify(fullRow));
-    check(roleState(dbPath, roleId).gold === goldBeforeFull, "金币一分没发出去（整封回滚）", `${roleState(dbPath, roleId).gold}`);
+    check(roleState(dbPath, roleId).bindGold === bindGoldBeforeFull, "绑定元宝一分没发出去（整封回滚）", `${roleState(dbPath, roleId).bindGold}`);
 
     const round6 = autoClaim.sweep(now);
     check(round6.failed === 1, "再跑一轮还是失败（包还是满的）", JSON.stringify(round6));
@@ -292,17 +292,17 @@ function fullBag() {
     check(round7.claimed === 1, "清出格子后下一轮自己入包", JSON.stringify(round7));
     const healedRow = mailRow(dbPath, "mail_full");
     check(healedRow.claimed_at !== null && healedRow.auto_attempts === 2, "成功时不再清失败次数（留下「曾经卡过」的痕迹）", JSON.stringify(healedRow));
-    check(roleState(dbPath, roleId).gold === goldBeforeFull + 50, "金币 +50", `${roleState(dbPath, roleId).gold}`);
+    check(roleState(dbPath, roleId).bindGold === bindGoldBeforeFull + 50, "绑定元宝 +50", `${roleState(dbPath, roleId).bindGold}`);
 
     //#endregion
 
     //#region 五、幂等
 
     console.log("— 五、幂等：同一封连跑两轮只发一次 —");
-    const goldBeforeIdem = roleState(dbPath, roleId).gold;
+    const bindGoldBeforeIdem = roleState(dbPath, roleId).bindGold;
     const round8 = autoClaim.sweep(now);
     check(round8.scanned === 0 && round8.claimed === 0, "已领的行不再进候选（claimed_at 非空）", JSON.stringify(round8));
-    check(roleState(dbPath, roleId).gold === goldBeforeIdem, "金币没有第二次入账", `${roleState(dbPath, roleId).gold}`);
+    check(roleState(dbPath, roleId).bindGold === bindGoldBeforeIdem, "绑定元宝没有第二次入账", `${roleState(dbPath, roleId).bindGold}`);
 
     //#endregion
 
@@ -313,11 +313,11 @@ function fullBag() {
       id: "mail_expired_claimed",
       roleId,
       title: "入包后已过期",
-      gold: 10,
+      bindGold: 10,
       expiresAt: now - 1000,
       claimedAt: now - 500,
     });
-    insertMail(dbPath, { id: "mail_expired_unclaimed", roleId, title: "过期但没入包", gold: 10, expiresAt: now - 1000 });
+    insertMail(dbPath, { id: "mail_expired_unclaimed", roleId, title: "过期但没入包", bindGold: 10, expiresAt: now - 1000 });
     purge.sweep(now);
     check(!mailRow(dbPath, "mail_expired_claimed"), "已领的过期行被物理清掉（回收磁盘）");
     check(!!mailRow(dbPath, "mail_expired_unclaimed"), "还有没领奖励的过期行**不允许**删（奖励不能凭空蒸发）");

@@ -9,7 +9,7 @@
  * 三、在线期间变坏档：存档写入也被拒（20029），模拟「管理员改库改坏了」之后的防御
  * 四、缺字段不再采信客户端（#819 的核心回归）：库里没有 `bindGold` 时上报 999999，
  *     落库是空值 0，而不是把客户端那份当唯一来源
- * 五、客户端改金币仍然被拒（老规矩回归，别为了修坏档把收权改松）
+ * 五、客户端改绑定元宝仍然被拒（老规矩回归，别为了修坏档把收权改松）
  *
  * 走的是 `dist/`，所以前置是 `npm run build`。
  * 用法：npm run test:e2e:role-corrupted
@@ -181,7 +181,7 @@ function writeData(dbPath, roleId, data) {
 
     group("一、坏档拒登并标记 isolated");
     const good = readData(dbPath, roleId);
-    const brokenRaw = `{"id":"${roleId}","gold":`;
+    const brokenRaw = `{"id":"${roleId}","bindGold":`;
     writeRawData(dbPath, roleId, brokenRaw);
     const rejected = await api(baseUrl, "POST", `roles/${roleId}/select`, { token });
     checkEqual(rejected.code, 20029, "坏档选角被拒（20029）");
@@ -202,11 +202,11 @@ function writeData(dbPath, roleId, data) {
     //#region 二、修好即解封
 
     group("二、人工修好 JSON 后自动解封");
-    writeData(dbPath, roleId, { ...good, schemaVersion: CURRENT_VERSION, gold: 321 });
+    writeData(dbPath, roleId, { ...good, schemaVersion: CURRENT_VERSION, bindGold: 321 });
     const repaired = await api(baseUrl, "POST", `roles/${roleId}/select`, { token });
     checkEqual(repaired.code, 0, "修好后能正常进游戏", repaired.message);
     checkEqual(roleRow(dbPath, roleId).corrupted, 0, "corrupted 自动清回 0（不用运维再点一次）");
-    checkEqual(readData(dbPath, roleId).gold, 321, "修好的内容原样保留");
+    checkEqual(readData(dbPath, roleId).bindGold, 321, "修好的内容原样保留");
 
     //#endregion
 
@@ -216,7 +216,7 @@ function writeData(dbPath, roleId, data) {
     writeRawData(dbPath, roleId, "{坏掉的档");
     const saveRejected = await api(baseUrl, "PUT", `roles/${roleId}`, {
       token,
-      body: { revision: roleRow(dbPath, roleId).revision, data: { ...good, gold: 1 } },
+      body: { revision: roleRow(dbPath, roleId).revision, data: { ...good, bindGold: 1 } },
     });
     checkEqual(saveRejected.code, 20029, "坏档时存档被拒（20029）");
     checkEqual(roleRow(dbPath, roleId).corrupted, 1, "存档被拒时也标了 corrupted");
@@ -235,12 +235,12 @@ function writeData(dbPath, roleId, data) {
     //#region 四、缺字段不再采信客户端
 
     group("四、库里缺字段 → 按空值回填（不采信客户端那份）");
-    const withoutBindGold = readData(dbPath, roleId);
-    delete withoutBindGold.bindGold;
-    writeData(dbPath, roleId, withoutBindGold);
+    const withoutBindBindGold = readData(dbPath, roleId);
+    delete withoutBindBindGold.bindGold;
+    writeData(dbPath, roleId, withoutBindBindGold);
     const reported = await api(baseUrl, "PUT", `roles/${roleId}`, {
       token,
-      body: { revision: roleRow(dbPath, roleId).revision, data: { ...withoutBindGold, bindGold: 999999 } },
+      body: { revision: roleRow(dbPath, roleId).revision, data: { ...withoutBindBindGold, bindGold: 999999 } },
     });
     checkEqual(reported.code, 0, "缺字段的档可以正常保存（回填而不是拒收）", reported.message);
     checkEqual(readData(dbPath, roleId).bindGold, 0, "落库的是空值 0（客户端上报的 999999 被丢弃）");

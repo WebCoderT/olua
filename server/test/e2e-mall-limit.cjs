@@ -187,7 +187,7 @@ function countOf(bag, goodId) {
     check(!!adminToken, "准备：管理员已登录");
 
     /** 钱包（绑定元宝是唯一货币：#304 商城只扣 bindGold） */
-    const setGold = async (id, bindGold) => {
+    const setBindGold = async (id, bindGold) => {
       const result = await api(baseUrl, "PATCH", `admin/roles/${id}`, { token: adminToken, body: { bindGold } });
       check(result.code === 0, `准备：角色 ${id} 绑定元宝置为 ${bindGold}`, result.message);
     };
@@ -206,8 +206,8 @@ function countOf(bag, goodId) {
     /** 售价取 777：与 e2e-game-config 同一件商品同一档价，定价不变式（回收价 ≤ 售价×50%）已验证过 */
     const PRICE = 777;
     const WALLET = 10_000;
-    await setGold(roleId, WALLET);
-    await setGold(roleId2, WALLET);
+    await setBindGold(roleId, WALLET);
+    await setBindGold(roleId2, WALLET);
     await seedBag(roleId, "囤货的");
     await seedBag(roleId2, "后来的");
 
@@ -247,7 +247,7 @@ function countOf(bag, goodId) {
       check(!!row, `mall-limits 里有 ${GOOD}`);
       return row || {};
     };
-    const goldOf = async (id, tk) => {
+    const bindGoldOf = async (id, tk) => {
       const role = await api(baseUrl, "GET", `roles/${id}`, { token: tk });
       return Number(role.data.data.bindGold) || 0;
     };
@@ -266,19 +266,19 @@ function countOf(bag, goodId) {
     checkEqual(first.data && first.data.dailyBought, 1, "回执带「今天已买 1 件」");
     checkEqual(first.data && first.data.dailyLimit, 2, "回执带「每日限购 2 件」");
     checkEqual(first.data && first.data.stock, -1, "回执带库存 -1（不限量）");
-    checkEqual(await goldOf(roleId, token), WALLET - PRICE, "第 1 件扣了售价那么多绑定元宝");
+    checkEqual(await bindGoldOf(roleId, token), WALLET - PRICE, "第 1 件扣了售价那么多绑定元宝");
     checkEqual(await bagCountOf(roleId, token), 1, "第 1 件进了背包");
 
     const second = await buy(roleId, token);
     checkEqual(second.code, 0, "第 2 件买成功");
     checkEqual(second.data && second.data.dailyBought, 2, "回执带「今天已买 2 件」");
-    checkEqual(await goldOf(roleId, token), WALLET - PRICE * 2, "第 2 件也扣了同样的钱");
+    checkEqual(await bindGoldOf(roleId, token), WALLET - PRICE * 2, "第 2 件也扣了同样的钱");
 
     const third = await buy(roleId, token);
     checkEqual(third.code, 50029, "第 3 件 → 50029（今日限购已满）");
     checkEqual(third.details && third.details.bought, 2, "50029 的 details 带「已买 2 件」");
     checkEqual(third.details && third.details.dailyLimit, 2, "50029 的 details 带「限购 2 件」");
-    checkEqual(await goldOf(roleId, token), WALLET - PRICE * 2, "**被限购拒掉的那次不扣钱**（余额没再减）");
+    checkEqual(await bindGoldOf(roleId, token), WALLET - PRICE * 2, "**被限购拒掉的那次不扣钱**（余额没再减）");
     checkEqual(await bagCountOf(roleId, token), 2, "**被限购拒掉的那次不发货**（仍是 2 件）");
 
     const limitedView = await limitsOf(roleId, token);
@@ -303,16 +303,16 @@ function countOf(bag, goodId) {
     const afterDay = await buy(roleId, token);
     checkEqual(afterDay.code, 0, "跨天后又能买了（天号对不上 = 新的一天，不需要任何结算动作）");
     checkEqual(afterDay.data && afterDay.data.dailyBought, 1, "新的一天从 1 数起");
-    checkEqual(await goldOf(roleId, token), WALLET - PRICE * 3, "这次确实又扣了一次钱");
+    checkEqual(await bindGoldOf(roleId, token), WALLET - PRICE * 3, "这次确实又扣了一次钱");
 
     //#endregion
 
     //#region 三、全服库存
 
     group("三、全服库存：卖完即售罄，重置后重新开卖");
-    await setGold(roleId, WALLET);
+    await setBindGold(roleId, WALLET);
     await patchGood({ dailyLimit: 0, stock: 1 });
-    const goldBefore = await goldOf(roleId2, token2);
+    const bindGoldBefore = await bindGoldOf(roleId2, token2);
     const bagBefore = await bagCountOf(roleId2, token2);
     const stockFirst = await buy(roleId, token);
     checkEqual(stockFirst.code, 0, "库存 1 时第一个人买到");
@@ -324,7 +324,7 @@ function countOf(bag, goodId) {
     checkEqual(stockSecond.details && stockSecond.details.sold, 1, "50030 的 details 带「已售 1 件」");
     checkEqual(stockSecond.details && stockSecond.details.stock, 1, "50030 的 details 带「库存 1 件」");
     // 基线要在这次购买之前取：roleId2 在第一段「换个人照样能买」里已经花过一份钱、拿过一件
-    checkEqual(await goldOf(roleId2, token2), goldBefore, "**售罄被拒的那次一分没扣**");
+    checkEqual(await bindGoldOf(roleId2, token2), bindGoldBefore, "**售罄被拒的那次一分没扣**");
     checkEqual(await bagCountOf(roleId2, token2), bagBefore, "**售罄被拒的那次也没发货**");
 
     const soldOutView = await limitsOf(roleId2, token2);
@@ -361,12 +361,12 @@ function countOf(bag, goodId) {
 
     group("四、不限购不限量（0 / -1）：行为与加字段之前完全一致");
     await patchGood({ dailyLimit: 0, stock: -1 });
-    await setGold(roleId, WALLET);
+    await setBindGold(roleId, WALLET);
     for (let i = 1; i <= 3; i += 1) {
       const result = await buy(roleId, token);
       checkEqual(result.code, 0, `不限购不限量：第 ${i} 次买成功`);
     }
-    checkEqual(await goldOf(roleId, token), WALLET - PRICE * 3, "三次各扣一次钱");
+    checkEqual(await bindGoldOf(roleId, token), WALLET - PRICE * 3, "三次各扣一次钱");
     const freeLimits = await limitsOf(roleId, token);
     checkEqual(freeLimits.dailyLimit, 0, "mall-limits 里限购 0 = 不限购");
     checkEqual(freeLimits.stock, -1, "mall-limits 里库存 -1 = 不限量");
@@ -393,7 +393,7 @@ function countOf(bag, goodId) {
 
     group("六、买失败（背包满 20012）要把库存与今日名额一起退回去");
     const txBaseline = await limitsOf(roleId, token);
-    const txBaselineGold = await goldOf(roleId, token);
+    const txBaselineBindGold = await bindGoldOf(roleId, token);
     const FULL_BAG = [];
     for (let row = 0; row < 4; row += 1) {
       for (let col = 0; col < 6; col += 1) FULL_BAG.push({ row, col, id: "cloth_1_p0s0", count: 1 });
@@ -406,7 +406,7 @@ function countOf(bag, goodId) {
     const afterFail = await limitsOf(roleId, token);
     checkEqual(afterFail.sold, txBaseline.sold, "**失败的那次没吃库存**（sold 退回买入前的数）");
     checkEqual(afterFail.dailyBought, txBaseline.dailyBought, "**失败的那次也没吃今日名额**");
-    checkEqual(await goldOf(roleId, token), txBaselineGold, "失败的那次也没扣钱");
+    checkEqual(await bindGoldOf(roleId, token), txBaselineBindGold, "失败的那次也没扣钱");
 
     // 清空背包（空数组 = 清空，网格保留 4×6）后再买：名额确实还在，不是「占了就没了」
     const emptied = await api(baseUrl, "PATCH", `admin/roles/${roleId}`, { token: adminToken, body: { bag: [] } });

@@ -36,7 +36,7 @@ const TABS: QuestTab[] = ["active", "available"];
  * NPC 头顶点 `!` / `?` 是引导，不是门禁。
  *
  * ## 交付后的奖励
- * 服务端把这次的奖励结算随响应带回（金币 / 经验 / 物品 / 是否升级），这里直接飘字，
+ * 服务端把这次的奖励结算随响应带回（绑定元宝 / 经验 / 物品 / 是否升级），这里直接飘字，
  * 不再自己算一遍 —— 数值口径只有一处。
  */
 export default class QuestDialog {
@@ -262,12 +262,12 @@ export default class QuestDialog {
       const result = await QuestApi.submit({ questId: view.quest.id });
       QuestStore.applyStates(result.quests);
       const reward = layout.texts.rewards
-        .split("{gold}")
-        .join(`${result.reward.gold}`)
+        .split("{bindGold}")
+        .join(`${result.reward.bindGold}`)
         .split("{exp}")
         .join(`${result.reward.exp}`);
       GameUiHelper.createTipText(reward);
-      // 客户端里的金币/经验与等级由存档同步链自己刷新（服务端已落库，下一次同步带回）
+      // 客户端里的绑定元宝/经验与等级由存档同步链自己刷新（服务端已落库，下一次同步带回）
     } catch {
       /* 同上：材料不足 / 背包放不下都由服务端给具体原因 */
     } finally {

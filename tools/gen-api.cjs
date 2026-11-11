@@ -121,7 +121,7 @@ const MODULES = {
   adminEquipInAlign: { target: "admin", export: "equipInAlignsApi" },
   adminDrug: { target: "admin", export: "drugsApi" },
   adminItem: { target: "admin", export: "itemsApi" },
-  // 货币物品（#785）：绑定元宝 / 元宝 / 银子 × 各档面值（可增删改，与 adminItem 的「id 固定」相反）
+  // 货币物品（#785）：绑定元宝 × 各档面值（唯一货币）（可增删改，与 adminItem 的「id 固定」相反）
   adminMoneyItem: { target: "admin", export: "moneyItemsApi" },
   // 升级卷轴（#787）：使用后硬性 +1 级，带等级区间（可增删改，与 adminItem 的「id 固定」相反）
   adminLevelScroll: { target: "admin", export: "levelScrollsApi" },

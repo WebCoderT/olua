@@ -94,7 +94,7 @@ function checkFieldsExist(fields) {
   }
   const roleText = read(CLIENT_ROLE);
   for (const field of fields) {
-    // 客户端 Role 的字段声明形如 `  gold: number = initialGold;`（含 TS 确定性赋值断言 `  skills!: {...}`）
+    // 客户端 Role 的字段声明形如 `  bindGold: number = 0;`（含 TS 确定性赋值断言 `  skills!: {...}`）
     if (!new RegExp(`^\\s{2}${field}[?!]?\\s*:`, "m").test(roleText)) {
       problems.push(`${rel(CLIENT_ROLE)}：客户端角色实体里没有字段 ${field} —— 服务端在保护一个不存在的字段`);
     }
@@ -123,7 +123,7 @@ function checkSaveWired() {
   if (!/buildInitialRoleData\s*\(/.test(slices.create)) {
     problems.push(`${rel(ROLES_SERVICE)}：create() 没有调用 buildInitialRoleData —— 初始存档必须由服务端构造（#597 后客户端入参只有名称 / 职业 / 性别）`);
   }
-  if (/dto\.data|dto\.level|dto\.gold|dto\.exp/.test(slices.create)) {
+  if (/dto\.data|dto\.level|dto\.bindGold|dto\.exp/.test(slices.create)) {
     problems.push(`${rel(ROLES_SERVICE)}：create() 读了 DTO 里的存档字段 —— #597 后建号入参只允许名称 / 职业 / 性别`);
   }
 }
@@ -188,7 +188,7 @@ const ASSIGNMENT_EXCEPTIONS = [
 /** 判据 3：客户端对账本 / 阶位 / 进度的赋值只能来自服务端 */
 function checkClientAssignments(fields) {
   if (!fields.length) return;
-  // 赋值运算符要包含复合赋值：`role.gold -= price` 才是真正常见的翻车写法。
+  // 赋值运算符要包含复合赋值：`role.bindGold -= price` 才是真正常见的翻车写法。
   //
   // 接收者必须叫 `role`（#550 收窄）：`level` 这个词在客户端到处都是 —— 任务目标的
   // `this.level`（QuestStore）、怪物的 `monster.level`、UI 节点的 `layout.title` ——
@@ -204,7 +204,7 @@ function checkClientAssignments(fields) {
       // 右值里**引用**了服务端应答对象就算放行 —— 包一层 `Math.max(0, Math.floor(update.exp))`
       // 也还是照抄服务端，不该因为多了个取整就判红
       const fromServer = /(^|[^\w.])(update|data|result|fresh|saved|detail|reward|gain)\./.test(rhs);
-      // 旧档补默认：`if (typeof role.gold !== "number") role.gold = 0;`
+      // 旧档补默认：`if (typeof role.bindGold !== "number") role.bindGold = 0;`
       const legacyDefault = /^0;?$/.test(rhs) && /typeof\s+\w+\.\w+\s*!==/.test(line);
       if (fromServer || legacyDefault) return;
       const exception = ASSIGNMENT_EXCEPTIONS.findIndex(

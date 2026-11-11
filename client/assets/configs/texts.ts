@@ -117,7 +117,7 @@ export const uiTexts = {
   /** 购买成功（{name} = 物品全名，{price} = 成交价） */
   mall_buy_success_tip: "购买成功：{name}（{price} 绑定元宝）",
   /** 绑定元宝不足 */
-  mall_gold_not_enough_tip: "绑定元宝不足，无法购买",
+  mall_bind_gold_not_enough_tip: "绑定元宝不足，无法购买",
   /** 商品已下架（id 解析不到配置，或该物品不在商城上架范围） */
   mall_good_missing_tip: "该商品已下架",
   /** 商城购买按钮 */

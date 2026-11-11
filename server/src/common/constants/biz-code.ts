@@ -91,11 +91,11 @@ export const BizCode = {
   /** 成长线升级目标不合法（不是升级链上当前阶位的下一阶；防跳级/防并发错位） */
   GROWTH_TARGET_INVALID: 20008,
   /** 成长线升级绑定元宝不足 */
-  GROWTH_GOLD_NOT_ENOUGH: 20009,
+  GROWTH_BIND_GOLD_NOT_ENOUGH: 20009,
   /** 成长线不可经升级获得（称号渠道为 grant / unavailable 时拒绝升级链扣费） */
   GROWTH_CHANNEL_LOCKED: 20010,
   /** 商城购买绑定元宝不足 */
-  MALL_GOLD_NOT_ENOUGH: 20011,
+  MALL_BIND_GOLD_NOT_ENOUGH: 20011,
   /** 商城购买背包已满（装备不可叠加，每件占一格，网格内没有空格） */
   MALL_BAG_FULL: 20012,
   /** 用药目标不合法（格子为空 / 格子里不是药品 / 药品没有任何生效回复量） */
@@ -171,7 +171,7 @@ export const BizCode = {
    *
    * `roles.data` 这列解析不出来（不是合法 JSON / 不是对象）。**拒进游戏**而不是当空档放行 ——
    * 空档在收权判定里是「库里没有这个字段 → 客户端那份是唯一来源」，等于给改包开了一条
-   * 自己写金币 / 背包 / 装备的路。角色行与坏 JSON 都原样保留（标记 `roles.corrupted`），
+   * 自己写绑定元宝 / 背包 / 装备的路。角色行与坏 JSON 都原样保留（标记 `roles.corrupted`），
    * 人工修好后下一次解析成功会自动清掉标记。
    */
   ROLE_DATA_CORRUPTED: 20029,

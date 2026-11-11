@@ -309,8 +309,8 @@ async function main() {
 
     const badChannel = await api(base, "PATCH", "/api/admin/titles/1", { token, body: { acquireChannel: "free" } });
     checkEqual(badChannel.status, 400, "渠道枚举外 → 400");
-    const negativeGold = await api(base, "PATCH", "/api/admin/titles/1", { token, body: { bindGold: -1 } });
-    checkEqual(negativeGold.status, 400, "负升级价格 → 400");
+    const negativeBindGold = await api(base, "PATCH", "/api/admin/titles/1", { token, body: { bindGold: -1 } });
+    checkEqual(negativeBindGold.status, 400, "负升级价格 → 400");
     const badFrameRate = await api(base, "PATCH", "/api/admin/souls/1", { token, body: { animationFrameRate: 0 } });
     checkEqual(badFrameRate.status, 400, "帧率 0 → 400");
     const crossedRange = await api(base, "PATCH", "/api/admin/titles/1", {
@@ -1552,7 +1552,7 @@ async function main() {
       checkEqual(mallGoodOne.status, 409, `售价压到 1（回收价 ${recycle}）→ 409`);
       checkEqual(mallGoodOne.body?.code, 50045, "回收价高于售价 50% 用专属业务码 50045");
     } else {
-      checkEqual(mallGoodOne.status, 200, "回收价为 0 的商品可以标 1 元（不产金币，不算印钞）");
+      checkEqual(mallGoodOne.status, 200, "回收价为 0 的商品可以标 1 元（不产绑定元宝，不算印钞）");
     }
     // 售价 = 回收价：上限是它的一半，必被拒；售价 = 回收价 × 2：上限刚好等于回收价，放行
     const mallGoodTight = await api(base, "PATCH", "/api/admin/mall/goods/cloth_1_p0s1", { token, body: { price: Math.max(1, recycle) } });
@@ -1764,12 +1764,12 @@ async function main() {
 
     const dropTableCreate = await api(base, "POST", "/api/admin/drop-tables", {
       token,
-      body: { id: "event_gold", picks: [2, 4], entries: [{ goodId: "material_iron", weight: 10, count: [2, 5] }] },
+      body: { id: "event_bind_gold", picks: [2, 4], entries: [{ goodId: "material_iron", weight: 10, count: [2, 5] }] },
     });
     checkEqual(dropTableCreate.status, 201, "POST 创建具名表成功（201 Created）");
-    checkEqual(dropTableCreate.body?.data?.id, "event_gold", "响应里的表 id 已落");
+    checkEqual(dropTableCreate.body?.data?.id, "event_bind_gold", "响应里的表 id 已落");
     checkEqual(JSON.stringify(dropTableCreate.body?.data?.entries?.[0]), JSON.stringify({ goodId: "material_iron", weight: 10, chance: 1, count: [2, 5] }), "缺省 chance / count 已规整为全显式");
-    const dropTableDuplicate = await api(base, "POST", "/api/admin/drop-tables", { token, body: { id: "event_gold", entries: [{ goodId: "material_iron" }] } });
+    const dropTableDuplicate = await api(base, "POST", "/api/admin/drop-tables", { token, body: { id: "event_bind_gold", entries: [{ goodId: "material_iron" }] } });
     checkEqual(dropTableDuplicate.status, 400, "重复 id 创建 → 400");
     const dropTableBadId = await api(base, "POST", "/api/admin/drop-tables", { token, body: { id: "Bad_Id!", entries: [{ goodId: "material_iron" }] } });
     checkEqual(dropTableBadId.status, 400, "非法 id（大写/特殊字符）→ 400");
@@ -1783,10 +1783,10 @@ async function main() {
     const dropTableBadPicks = await api(base, "POST", "/api/admin/drop-tables", { token, body: { id: "event_bad3", picks: "lots", entries: [{ goodId: "material_iron" }] } });
     checkEqual(dropTableBadPicks.status, 400, "picks 非数字/区间 → 400");
 
-    const dropTablePatched = await api(base, "PATCH", "/api/admin/drop-tables/event_gold", { token, body: { picks: 3 } });
+    const dropTablePatched = await api(base, "PATCH", "/api/admin/drop-tables/event_bind_gold", { token, body: { picks: 3 } });
     checkEqual(dropTablePatched.body?.data?.picks, 3, "PATCH 抽取次数生效");
     checkEqual(dropTablePatched.body?.data?.entries?.length, 1, "PATCH 不传 entries 时条目保留（合并语义）");
-    const dropTableEntriesPatched = await api(base, "PATCH", "/api/admin/drop-tables/event_gold", {
+    const dropTableEntriesPatched = await api(base, "PATCH", "/api/admin/drop-tables/event_bind_gold", {
       token,
       body: { entries: [{ goodId: "material_gem", weight: 5, chance: 0.5, count: [1, 2] }] },
     });
@@ -1796,9 +1796,9 @@ async function main() {
     checkEqual(dropTableGhost.status, 404, "改不存在的具名表 → 404");
     checkEqual(dropTableGhost.body?.code, 50023, "具名表未找到用专属业务码 50023");
 
-    const dropTableRemoved = await api(base, "DELETE", "/api/admin/drop-tables/event_gold", { token });
+    const dropTableRemoved = await api(base, "DELETE", "/api/admin/drop-tables/event_bind_gold", { token });
     checkEqual(dropTableRemoved.status, 200, "DELETE 未被引用的具名表成功");
-    const dropTableRemovedAgain = await api(base, "DELETE", "/api/admin/drop-tables/event_gold", { token });
+    const dropTableRemovedAgain = await api(base, "DELETE", "/api/admin/drop-tables/event_bind_gold", { token });
     checkEqual(dropTableRemovedAgain.status, 404, "再删已删除的表 → 404");
 
     const monsterDropsList = await api(base, "GET", "/api/admin/monster-drops", { token });
@@ -2143,7 +2143,7 @@ async function main() {
       body: { kind: "title", targetLevel: 1, revision: await revOf(base, growthRoleId, growthPlayer) },
     });
     checkEqual(poor.status, 409, "绑定元宝不足时升级 → 409");
-    checkEqual(poor.body?.code, 20009, "元宝不足 → 20009");
+    checkEqual(poor.body?.code, 20009, "绑定元宝不足 → 20009");
 
     // 充值走**服务端权威写点**（管理端 PATCH）：`role.save` 不接受客户端改账本（#548），
     // 推上去会被回填成库里的值 —— 这也顺带解释了「为什么改包充不了钱」。
@@ -2249,7 +2249,7 @@ async function main() {
 
     const mallPlayer = await registerPlayer("mall_player");
     check(Boolean(mallPlayer), "商城玩家注册成功");
-    // #597：建号只交三样客户端数据；满背包状态走管理端 PATCH（稀疏格子铺满 4×6）+ 0 元宝出厂值
+    // #597：建号只交三样客户端数据；满背包状态走管理端 PATCH（稀疏格子铺满 4×6）+ 0 绑定元宝出厂值
     const mallCreate = await api(base, "POST", "/api/roles", {
       token: mallPlayer,
       body: { name: "商城测试员", occupation: "1", sex: "1" },
@@ -2278,7 +2278,7 @@ async function main() {
     checkEqual(badGood.status, 404, "目录之外的 id 购买 → 404（商城只卖装备与药品）");
     checkEqual(badGood.body?.code, 50021, "商品不在目录 → 50021");
 
-    // 背包满 → 20012（先于元宝不足：入包前先扣费的设计下顺序是 价→钱→包，但这里钱也不足……先充值再测满包）
+    // 背包满 → 20012（先于绑定元宝不足：入包前先扣费的设计下顺序是 价→钱→包，但这里钱也不足……先充值再测满包）
     const richMall = await api(base, "PATCH", `/api/admin/roles/${mallRoleId}`, {
       token,
       body: { bindGold: 999999999 },
@@ -2296,12 +2296,12 @@ async function main() {
       token,
       body: { bindGold: 0, bag: [] },
     });
-    checkEqual(emptied.status, 200, "管理端清空背包 + 归零元宝（故意不足）");
+    checkEqual(emptied.status, 200, "管理端清空背包 + 归零绑定元宝（故意不足）");
     const poorBuy = await api(base, "POST", `/api/roles/${mallRoleId}/mall-purchase`, {
       token: mallPlayer,
       body: { goodId: "cloth_1_p0s1", revision: emptied.body?.data?.revision },
     });
-    checkEqual(poorBuy.status, 409, "元宝不足购买 → 409");
+    checkEqual(poorBuy.status, 409, "绑定元宝不足购买 → 409");
     checkEqual(poorBuy.body?.code, 20011, "绑定元宝不足 → 20011");
 
     // 管理端把售价改成 888（#758：上架行就是唯一价格，改价对购买即时生效）
@@ -2312,7 +2312,7 @@ async function main() {
       token,
       body: { bindGold: 1000 },
     });
-    checkEqual(recharge.status, 200, "管理端充 1000 元宝");
+    checkEqual(recharge.status, 200, "管理端充 1000 绑定元宝");
     const staleRev = recharge.body?.data?.revision;
 
     const staleBuy = await api(base, "POST", `/api/roles/${mallRoleId}/mall-purchase`, {
