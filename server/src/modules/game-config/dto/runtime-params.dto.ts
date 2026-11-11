@@ -23,6 +23,17 @@ export class DropRuntimeParamsDto {
   @Max(500)
   autoPickupRadius: number;
 
+  @ApiProperty({
+    description:
+      "服务端拾取距离闸（像素，#817）：玩家离掉落物落地位置超过它就拒收拾取请求。" +
+      "与 autoPickupRadius 是两把尺子（那是客户端手感，这是服务端权威）；0 = 关闭校验，别当出货值",
+    example: 200,
+  })
+  @IsInt()
+  @Min(0)
+  @Max(2000)
+  pickAcceptRadius: number;
+
   @ApiProperty({ description: "背包已满的提示 / 重试间隔（毫秒）", example: 1500 })
   @IsInt()
   @Min(0)
@@ -168,6 +179,18 @@ export class GuildRuleParamsDto {
   @Min(0)
   @Max(500)
   applicationMessageMax: number;
+
+  @ApiProperty({ description: "建帮所需最低角色等级（0 = 不限等级）", example: 10 })
+  @IsInt()
+  @Min(0)
+  @Max(1000)
+  createLevelMin: number;
+
+  @ApiProperty({ description: "建帮消耗绑定元宝（0 = 免费）", example: 100000 })
+  @IsInt()
+  @Min(0)
+  @Max(100000000)
+  createCostBindGold: number;
 }
 
 /** 三个分组合体（快照 `runtimeParams` 段与 GET 响应的形状） */
@@ -199,6 +222,13 @@ export class UpdateDropRuntimeParamsDto {
   @Min(0)
   @Max(500)
   autoPickupRadius?: number;
+
+  @ApiPropertyOptional({ description: "服务端拾取距离闸（像素；0 = 关闭校验）" })
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(2000)
+  pickAcceptRadius?: number;
 
   @ApiPropertyOptional({ description: "背包已满的提示 / 重试间隔（毫秒）" })
   @IsOptional()
@@ -357,6 +387,20 @@ export class UpdateGuildRuleParamsDto {
   @Min(0)
   @Max(500)
   applicationMessageMax?: number;
+
+  @ApiPropertyOptional({ description: "建帮所需最低角色等级（0 = 不限等级）" })
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(1000)
+  createLevelMin?: number;
+
+  @ApiPropertyOptional({ description: "建帮消耗绑定元宝（0 = 免费）" })
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(100000000)
+  createCostBindGold?: number;
 }
 
 /**

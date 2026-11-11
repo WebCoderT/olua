@@ -12351,7 +12351,7 @@
         }
       },
       "post": {
-        "description": "建帮人自动成为帮主，**免费**；帮会名长度按「运行时参数 · 帮会规则」（出厂 2~12 字）且全局唯一。已在帮会里会返回 50103（一个人只能在一个帮会）。\n\n---\n\n**鉴权**：客户端令牌（`player`），只能操作令牌所属账号自己的数据。",
+        "description": "建帮人自动成为帮主。门槛读「运行时参数 · 帮会规则」：角色等级 ≥ `createLevelMin`（出厂 10 级）、扣 `createCostBindGold` 绑定元宝（出厂 100000，0 = 免费）；帮会名长度 2~12 字且全局唯一。\n\n失败：50147 等级不足 / 20011 绑定元宝不足 / 50102 名字被占用 / 50103 已在帮会里。扣款与建帮在**同一事务**里，失败不会扣钱。\n\n---\n\n**鉴权**：客户端令牌（`player`），只能操作令牌所属账号自己的数据。",
         "operationId": "guild.create",
         "parameters": [],
         "requestBody": {
@@ -12659,6 +12659,60 @@
           }
         ],
         "summary": "踢出成员",
+        "tags": [
+          "客户端"
+        ],
+        "x-olua-audience": "player",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/MyGuildDto"
+        }
+      }
+    },
+    "/guilds/me/rank": {
+      "post": {
+        "description": "仅帮主可用。`rank = vice` 任命为副帮主、`rank = member` 卸任回普通成员（一个接口两个方向）。\n\n副帮主最多 1 名（50148）；目标必须是本帮成员且不是帮主自己（50108）；换帮主请走「转让」（那要同时改 `guilds.leader_id`）。\n\n---\n\n**鉴权**：客户端令牌（`player`），只能操作令牌所属账号自己的数据。",
+        "operationId": "guild.appoint",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AppointGuildRankDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "处理后的我的帮会（成员职位已更新）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/MyGuildDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "player": []
+          }
+        ],
+        "summary": "任命 / 卸任副帮主",
         "tags": [
           "客户端"
         ],
@@ -18926,6 +18980,10 @@
             "type": "number",
             "description": "自动拾取半径（像素）"
           },
+          "pickAcceptRadius": {
+            "type": "number",
+            "description": "服务端拾取距离闸（像素；0 = 关闭校验）"
+          },
           "fullTipInterval": {
             "type": "number",
             "description": "背包已满的提示 / 重试间隔（毫秒）"
@@ -19023,6 +19081,14 @@
           "applicationMessageMax": {
             "type": "number",
             "description": "入帮申请留言最长字数（0 = 不限）"
+          },
+          "createLevelMin": {
+            "type": "number",
+            "description": "建帮所需最低角色等级（0 = 不限等级）"
+          },
+          "createCostBindGold": {
+            "type": "number",
+            "description": "建帮消耗绑定元宝（0 = 免费）"
           }
         }
       },
@@ -19501,6 +19567,29 @@
         },
         "required": [
           "approve"
+        ]
+      },
+      "AppointGuildRankDto": {
+        "type": "object",
+        "properties": {
+          "roleId": {
+            "type": "string",
+            "description": "目标角色 id（必须是本帮成员，且不是帮主）",
+            "example": "role_b2"
+          },
+          "rank": {
+            "type": "string",
+            "description": "目标职位：vice 任命为副帮主 / member 卸任回普通成员",
+            "enum": [
+              "vice",
+              "member"
+            ],
+            "example": "vice"
+          }
+        },
+        "required": [
+          "roleId",
+          "rank"
         ]
       },
       "TransferGuildDto": {
@@ -24138,6 +24227,11 @@
             "description": "自动拾取半径（像素）：脚底距离小于它即拾取",
             "example": 40
           },
+          "pickAcceptRadius": {
+            "type": "number",
+            "description": "服务端拾取距离闸（像素，#817）：玩家离掉落物落地位置超过它就拒收拾取请求。与 autoPickupRadius 是两把尺子（那是客户端手感，这是服务端权威）；0 = 关闭校验，别当出货值",
+            "example": 200
+          },
           "fullTipInterval": {
             "type": "number",
             "description": "背包已满的提示 / 重试间隔（毫秒）",
@@ -24161,6 +24255,7 @@
         },
         "required": [
           "autoPickupRadius",
+          "pickAcceptRadius",
           "fullTipInterval",
           "scatterMinDistance",
           "pickReplyTimeout",
@@ -24280,13 +24375,25 @@
             "type": "number",
             "description": "入帮申请留言最长字数（0 = 不限）",
             "example": 50
+          },
+          "createLevelMin": {
+            "type": "number",
+            "description": "建帮所需最低角色等级（0 = 不限等级）",
+            "example": 10
+          },
+          "createCostBindGold": {
+            "type": "number",
+            "description": "建帮消耗绑定元宝（0 = 免费）",
+            "example": 100000
           }
         },
         "required": [
           "nameMin",
           "nameMax",
           "noticeMax",
-          "applicationMessageMax"
+          "applicationMessageMax",
+          "createLevelMin",
+          "createCostBindGold"
         ]
       },
       "RuntimeParamsDto": {
@@ -28853,6 +28960,11 @@
             "description": "我能不能解散（仅帮主）",
             "example": false
           },
+          "canAppoint": {
+            "type": "boolean",
+            "description": "我能不能任命 / 卸任副帮主（仅帮主，#871）",
+            "example": false
+          },
           "members": {
             "description": "成员列表（帮主 → 副帮主 → 成员，同职位按入帮时间）",
             "type": "array",
@@ -28883,6 +28995,7 @@
           "canReview",
           "canManage",
           "canDisband",
+          "canAppoint",
           "members",
           "applicants"
         ]

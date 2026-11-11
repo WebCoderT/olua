@@ -1537,6 +1537,48 @@ export class RolesService {
   }
 
   /**
+   * 花掉一笔绑定元宝（**服务端内部动作**，不接受客户端上报的 revision，#872）
+   *
+   * 与 `fashionBuy` 的差别只有一处：那边是玩家点「购买」直接改自己的档，基线由请求体带上；
+   * 这里是**别的域的动作顺带扣钱**（建帮），基线只能取服务端自己那份在线快照 ——
+   * 客户端传什么都改不了「扣多少、扣谁的」。
+   *
+   * 扣款与业务写库在**同一个事务**里（调用方负责）：`DatabaseService.transaction()` 可重入，
+   * 抛异常整笔回滚，不会出现「钱扣了帮没建成」。所以这里只写角色行，不自己开事务。
+   *
+   * 金额为 0 时**不写库**（不推进 revision）：免费建帮不该在存档里留一条空改动。
+   *
+   * @param amount 要扣的绑定元宝（负数 / 非数字当 0）
+   * @param reason 动作名，直接拼进错误文案（「创建帮会」…），玩家看得懂在做什么
+   * @throws BizException 20011 绑定元宝不足；20006 并发改写；20007 角色被踢下线
+   */
+  spendBindGold(accountId: string, amount: number, reason: string): { bindGold: number; revision: number } {
+    const cost = Math.max(0, Math.floor(Number(amount) || 0));
+    const account = this.mustAccount(accountId);
+    const roleId = account.online_role_id;
+    // 被踢下线 / 还没选角色：`online_role_id` 是空的，没有「谁的档」可扣
+    if (!roleId) throw BizException.conflict(BizCode.ROLE_NOT_FOUND, "当前没有在线角色，无法扣除绑定元宝");
+    const existing = this.mustOwnRole(accountId, roleId);
+
+    const data = decodeStoredRoleData(existing.data);
+    const bindGold = Math.max(0, Math.floor(Number(data.bindGold) || 0));
+    if (cost === 0) return { bindGold, revision: existing.revision };
+    if (bindGold < cost) {
+      throw BizException.conflict(BizCode.MALL_BIND_GOLD_NOT_ENOUGH, `${reason}需要 ${cost} 绑定元宝，当前只有 ${bindGold}`);
+    }
+
+    data.bindGold = bindGold - cost;
+    const row: RoleRow = {
+      ...existing,
+      data: JSON.stringify(data),
+      revision: existing.revision + 1,
+      updated_at: Date.now(),
+    };
+    this.persistOrConflict(row, existing.revision, reason);
+    return { bindGold: bindGold - cost, revision: row.revision };
+  }
+
+  /**
    * 穿 / 脱时装（#596：穿着态归服务端，「拥有才给穿」在这里校验）
    *
    * 穿时装不改任何数值（时装只换外观，见客户端 `applyFashionChange` 的同一口径），

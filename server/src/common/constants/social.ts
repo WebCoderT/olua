@@ -59,8 +59,18 @@ export const GUILD_APPLICATION_LIMIT_PER_ROLE_DEFAULT = 5;
  */
 export const GUILD_APPLICATION_TTL_MS_DEFAULT = 24 * 60 * 60_000;
 
-/** 帮会 id 前缀（`g_` + 时间戳 + 随机段；与账号 / 角色的命名习惯一致，肉眼可辨类型） */
+/**
+ * 帮会 id 前缀（`g_` + 时间戳 + 随机段；与账号 / 角色的命名习惯一致，肉眼可辨类型）
+ */
 export const GUILD_ID_PREFIX = "g_";
+
+/**
+ * 副帮主名额上限（#871；用户口径 2026-11-11：**1 名**）
+ *
+ * 只有帮主能任命 / 卸任。名额做成常量而不是运行时参数：它改变的是「组织有几层」，
+ * 不是手感数值，运营随手调成 50 会让「副帮主」这个身份失去意义。要放开时改这一处。
+ */
+export const GUILD_VICE_LIMIT_DEFAULT = 1;
 
 //#region 好友（#389）
 

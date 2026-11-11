@@ -1,5 +1,7 @@
-import { EventMouse, Input, input } from "cc";
+import { EventMouse, Input, Node, Vec2, input } from "cc";
 import { basicAttackSkillId } from "../../../configs/skill";
+import { dropRuntime } from "../../../configs/drop";
+import AutoBattle from "../../core/AutoBattle";
 import DropManager from "../../core/DropManager";
 import LayerManager from "../../core/LayerManager";
 import MonsterManager from "../../core/MonsterManager";
@@ -66,7 +68,7 @@ export default class ScreenClickInput {
     if (isAttack) {
       const clickedDrop = DropManager.getClickedDrop(screenPoint);
       if (clickedDrop) {
-        DropManager.pickup(clickedDrop);
+        this.pickupOrWalk(clickedDrop);
         return;
       }
     }
@@ -79,5 +81,27 @@ export default class ScreenClickInput {
     // 左键点怪直接开打：走技能统一入口（冷却/魔法值/距离校验 + 特效 + 伤害结算都在里面），
     // 目标超出距离时由 canAuto 的普攻技能委托 AutoBattle 走过去继续打，冷却期内的连点静默失败
     if (isAttack && clickedNode) SkillManager.release(basicAttackSkillId);
+  }
+
+  /**
+   * 左键点掉落物：脚底已经在拾取半径内就直接拾，否则先走过去（#817）
+   *
+   * 服务端对拾取有距离闸（`drop.pickAcceptRadius`，与客户端的 `autoPickupRadius` 是两把
+   * 尺子）。隔远发 pick 会被拒，而客户端对未知拒绝码只 `console.warn` —— 玩家看到的是
+   * 「点了没反应」。所以远处那一件不再立刻发帧，而是走一遍既有寻路
+   * （`AutoBattle.requestMoveTo`，打断当前攻击与追怪），脚底进半径后由
+   * `DropManager.autoPickup` 发帧 —— 拾取半径两处读同一个值，不会分叉。
+   *
+   * 寻路不受理（主角已死 / 地图还没注册网格）时才退回「直接发一次 pick」：让服务端判，
+   * 比在客户端再造一套距离判定可靠（也不用维护第二份半径）。
+   */
+  private pickupOrWalk(node: Node) {
+    const dropPosition = node.getWorldPosition();
+    const rolePosition = this.roleDisplay.getWorldPosition();
+    const distance = rolePosition
+      ? Math.hypot(dropPosition.x - rolePosition.x, dropPosition.y - rolePosition.y)
+      : Number.POSITIVE_INFINITY;
+    if (distance > dropRuntime.autoPickupRadius && AutoBattle.requestMoveTo(new Vec2(dropPosition.x, dropPosition.y))) return;
+    DropManager.pickup(node);
   }
 }

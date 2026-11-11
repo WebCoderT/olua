@@ -20,6 +20,7 @@ const net = require("net");
 const os = require("os");
 const path = require("path");
 const { placeRolesAt } = require("./lib/place-role.cjs");
+const { relaxGuildGate } = require("./lib/guild-gate.cjs");
 const { DatabaseSync } = require("node:sqlite");
 const WebSocket = require("ws");
 
@@ -200,6 +201,9 @@ function connect(url) {
     // 这里的角色都是 1 级、要进的图又高于新手村 —— 先按运营摆位把位置写进去
     // （等价管理端 PATCH /admin/roles/:id { onMap }，见 lib/place-role.cjs）
     placeRolesAt(dbPath, "1");
+    // #872 起建帮要 10 级 + 10 万绑定元宝，而这里的账号都是 1 级 —— 本套只在第六组建一个帮
+    // 来验「互见帧里的 guildId / guildName」，门槛自己由 e2e-guild 第六组验，先归零。
+    relaxGuildGate(dbPath);
 
     const mineA0 = await api(baseUrl, "GET", "social/me", { token: A.token });
     check(mineA0.code === 0 && mineA0.data.friends.length === 0, "初始快照：好友为空（不是 null）");

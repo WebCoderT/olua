@@ -13,7 +13,11 @@
  *     转让是**双方职位互换**，且 `leaderId` 同步改；帮主不能直接退出（50106）
  * 五、解散：管理端强制解散时成员与**待审批申请一并清除**（外键级联），玩家侧 mine 立刻变 null；
  *     删过的 id 再删是 50101
- * 六、申请限额（#873，独立进程压小上限）：每帮待处理上限（第 4 条被拒 50146）、
+ * 六、建帮门槛（#872）：等级不足 50147、余额不足 20011、**扣款与建帮同一事务**（被拒不落库不扣钱、
+ *     成功恰好推进一次修订号）、花费为 0 时免费且不写钱包
+ * 七、任命副帮主（#871）：仅帮主（成员 50105）、名额 1 个（超出 50148）、帮主自己与非本帮成员 50108、
+ *     重复任命幂等、`rank=member` 即卸任、`rank=leader` 不给走（40000）
+ * 八、申请限额（#873，独立进程压小上限）：每帮待处理上限（第 4 条被拒 50146）、
  *     每角色同时申请上限、重复申请不涨数（幂等）、TTL 过期（懒清理：名单消失 /
  *     名额腾出 / 审批过期申请 50108）
  *
@@ -159,6 +163,19 @@ async function preparePlayer(baseUrl, username, roleName) {
     });
     const adminToken = adminReg.data && adminReg.data.token;
     checkEqual(adminReg.data && adminReg.data.admin.role, "super_admin", "准备：超级管理员已注册");
+
+    // #872：建帮门槛（等级 10 + 10 万绑定元宝）出厂是**开着**的，而下面一到五组验的是帮会
+    // 逻辑本身（建帮 / 申请 / 审批 / 踢人 / 转让 / 解散），不该被门槛挡住 —— 先归零。
+    // 门槛自己由「七、建帮门槛」专门验（那里会重新打开、逐条踩边界），八、九组继续用归零的状态。
+    const relaxGate = await api(baseUrl, "PATCH", "admin/runtime-params", {
+      token: adminToken,
+      body: { guild: { createLevelMin: 0, createCostBindGold: 0 } },
+    });
+    check(
+      relaxGate.code === 0 && relaxGate.data.guild.createLevelMin === 0 && relaxGate.data.guild.createCostBindGold === 0,
+      "准备：建帮门槛先归零（门槛专项在第七组）",
+      JSON.stringify(relaxGate.data && { level: relaxGate.data.guild.createLevelMin, gold: relaxGate.data.guild.createCostBindGold }),
+    );
 
     //#endregion
 
@@ -404,12 +421,161 @@ async function preparePlayer(baseUrl, username, roleName) {
 
     //#endregion
 
-    //#region 六、申请限额（#873，独立进程压小上限）
+    //#region 六、建帮门槛（#872）：等级与绑定元宝，扣款与建帮同一事务
+
+    group("六、建帮门槛（#872）：等级不足 / 余额不足 / 扣款与建帮同一事务");
+
+    /** 帮会表当前行数（判「被拒的建帮一行都没留」） */
+    const guildCount = async () => {
+      const res = await api(baseUrl, "GET", "admin/guilds", { token: adminToken });
+      return Array.isArray(res.data) ? res.data.length : -1;
+    };
+    /** 角色存档里的绑定元宝（读权威那一份，不看接口回显） */
+    const bindGoldOf = async (player) => {
+      const res = await api(baseUrl, "GET", `roles/${player.roleId}`, { token: player.token });
+      return res.data && res.data.data ? Number(res.data.data.bindGold) || 0 : -1;
+    };
+
+    const gateOn = await api(baseUrl, "PATCH", "admin/runtime-params", {
+      token: adminToken,
+      body: { guild: { createLevelMin: 10, createCostBindGold: 100000 } },
+    });
+    check(
+      gateOn.data && gateOn.data.guild.createLevelMin === 10 && gateOn.data.guild.createCostBindGold === 100000,
+      "门槛打开：等级 10 + 绑定元宝 100000（改完即是生效值，不用重启）",
+      JSON.stringify(gateOn.data && gateOn.data.guild),
+    );
+
+    const countBeforeGate = await guildCount();
+    const levelLow = await api(baseUrl, "POST", "guilds", { token: A.token, body: { name: "等级不够帮" } });
+    checkEqual(levelLow.code, 50147, "等级不够建帮被拒（GUILD_CREATE_LEVEL_LOW 50147）", levelLow.message);
+    check(
+      typeof levelLow.message === "string" && levelLow.message.indexOf("10 级") >= 0,
+      "提示里带门槛与当前等级（玩家知道差多少）",
+      levelLow.message,
+    );
+    checkEqual(await guildCount(), countBeforeGate, "等级被拒的建帮没有落库");
+
+    // 等级够了、钱包空的：钱不够是**20011**（与「等级不够」分开，客户端据此提示去攒钱）
+    const raiseLevel = await api(baseUrl, "PATCH", `admin/roles/${A.roleId}`, { token: adminToken, body: { level: 10 } });
+    checkEqual(raiseLevel.code, 0, "管理端把 A 提到 10 级");
+    checkEqual(await bindGoldOf(A), 0, "A 的绑定元宝是 0（余额不足的前提）");
+    const poorCreate = await api(baseUrl, "POST", "guilds", { token: A.token, body: { name: "没钱包" } });
+    checkEqual(poorCreate.code, 20011, "余额不足建帮被拒（MALL_BIND_GOLD_NOT_ENOUGH 20011）", poorCreate.message);
+    checkEqual(await guildCount(), countBeforeGate, "余额不足的建帮没有落库（先判后写）");
+    checkEqual(await bindGoldOf(A), 0, "被拒之后钱包一个子儿都没动（没有半扣）");
+
+    // 钱够：扣款与建帮同一事务 —— 建成的同时余额清零，revision 只推进一次
+    const grantGold = await api(baseUrl, "PATCH", `admin/roles/${A.roleId}`, { token: adminToken, body: { bindGold: 100000 } });
+    checkEqual(grantGold.code, 0, "管理端给 A 充值 100000 绑定元宝");
+    const afterGrant = await api(baseUrl, "GET", `roles/${A.roleId}`, { token: A.token });
+    const revisionBeforeCreate = afterGrant.data && afterGrant.data.revision;
+    const richCreate = await api(baseUrl, "POST", "guilds", { token: A.token, body: { name: "门槛帮" } });
+    const gateGuildId = richCreate.data && richCreate.data.id;
+    checkEqual(richCreate.code, 0, "等级与余额都够时建帮成功（201）", richCreate.message);
+    check(!!gateGuildId && richCreate.data.myRank === "leader", "建帮人自动成为帮主");
+    checkEqual(await bindGoldOf(A), 0, "建成的同时扣掉 100000（余额归零）");
+    checkEqual(await guildCount(), countBeforeGate + 1, "帮会表正好多一行");
+
+    const walletAfter = await api(baseUrl, "GET", `roles/${A.roleId}`, { token: A.token });
+    check(
+      walletAfter.data && walletAfter.data.revision === revisionBeforeCreate + 1,
+      "扣款恰好推进一次修订号（客户端下一次 roleUpdate 拿到新余额）",
+      JSON.stringify({ before: revisionBeforeCreate, after: walletAfter.data && walletAfter.data.revision }),
+    );
+
+    // 花费归零后同一个人（已 10 级、余额 0）再建一个 —— 证明门槛真的每次现读配置
+    const freeAgain = await api(baseUrl, "PATCH", "admin/runtime-params", {
+      token: adminToken,
+      body: { guild: { createCostBindGold: 0 } },
+    });
+    checkEqual(freeAgain.data && freeAgain.data.guild.createCostBindGold, 0, "把建帮花费改成 0（免费）");
+    const cLeave = await api(baseUrl, "POST", "guilds/me/leave", { token: A.token });
+    checkEqual(cLeave.code, 50106, "帮主不能直接退出（先解散，50106）");
+    const disbandGate = await api(baseUrl, "DELETE", "guilds/me", { token: A.token });
+    checkEqual(disbandGate.code, 0, "解散门槛帮（腾出位置给免费那一建）");
+    const freeCreate = await api(baseUrl, "POST", "guilds", { token: A.token, body: { name: "免费帮" } });
+    checkEqual(freeCreate.code, 0, "花费为 0 且等级够时建帮成功（不需要钱）", freeCreate.message);
+    checkEqual(await bindGoldOf(A), 0, "免费建帮不写钱包（余额仍是 0）");
+
+    // 收尾：把门槛恢复成「免费」，后面两组（任命 / 申请限额）不关心门槛
+    const gateOff = await api(baseUrl, "PATCH", "admin/runtime-params", {
+      token: adminToken,
+      body: { guild: { createLevelMin: 0, createCostBindGold: 0 } },
+    });
+    checkEqual(gateOff.code, 0, "门槛复原成 0 / 0（后面两组用免费状态）");
+
+    //#endregion
+
+    //#region 七、任命副帮主（#871）：只有帮主能派、名额 1 个、同一个接口卸任
+
+    group("七、任命副帮主（#871）：仅帮主 / 名额上限 / 卸任 / 幂等");
+
+    const currentGuildId = freeCreate.data && freeCreate.data.id;
+    await api(baseUrl, "POST", `guilds/${currentGuildId}/applications`, { token: B.token, body: { message: "来" } });
+    await api(baseUrl, "POST", `guilds/${currentGuildId}/applications`, { token: C.token, body: { message: "也来" } });
+    const approveB2 = await api(baseUrl, "POST", `guilds/me/applications/${B.roleId}/review`, { token: A.token, body: { approve: true } });
+    checkEqual(approveB2.data && approveB2.data.memberCount, 2, "B 入帮（帮主 + B 两人）");
+    const approveC2 = await api(baseUrl, "POST", `guilds/me/applications/${C.roleId}/review`, { token: A.token, body: { approve: true } });
+    checkEqual(approveC2.data && approveC2.data.memberCount, MEMBER_LIMIT, "C 入帮（到人数上限，任命用例只要 3 人）");
+
+    const rankOf = (guild, roleId) => {
+      const member = guild && Array.isArray(guild.members) ? guild.members.find((item) => item.roleId === roleId) : null;
+      return member ? member.rank : "";
+    };
+
+    const appointByMember = await api(baseUrl, "POST", "guilds/me/rank", { token: B.token, body: { roleId: C.roleId, rank: "vice" } });
+    checkEqual(appointByMember.code, 50105, "普通成员任命副帮主被拒（50105）", appointByMember.message);
+
+    const appointB = await api(baseUrl, "POST", "guilds/me/rank", { token: A.token, body: { roleId: B.roleId, rank: "vice" } });
+    checkEqual(rankOf(appointB.data, B.roleId), "vice", "帮主把 B 任命为副帮主（成员行 rank = vice）");
+    check(
+      appointB.data && appointB.data.canAppoint === true && appointB.data.canDisband === true,
+      "帮主的 canAppoint / canDisband 仍为 true（任命别人不影响自己）",
+      JSON.stringify(appointB.data && { appoint: appointB.data.canAppoint, disband: appointB.data.canDisband }),
+    );
+
+    const appointSecond = await api(baseUrl, "POST", "guilds/me/rank", { token: A.token, body: { roleId: C.roleId, rank: "vice" } });
+    checkEqual(appointSecond.code, 50148, "名额只有 1 个：再任命一个人被拒（GUILD_VICE_LIMIT 50148）", appointSecond.message);
+    checkEqual(rankOf(appointSecond.data, C.roleId), "", "被拒之后 C 的职位没变（响应为空，看原名单）");
+
+    const appointLeader = await api(baseUrl, "POST", "guilds/me/rank", { token: A.token, body: { roleId: A.roleId, rank: "member" } });
+    checkEqual(appointLeader.code, 50108, "帮主自己的职位不能从这里改（50108，换帮主走转让）", appointLeader.message);
+
+    const appointOutsider = await api(baseUrl, "POST", "guilds/me/rank", { token: A.token, body: { roleId: D.roleId, rank: "vice" } });
+    checkEqual(appointOutsider.code, 50108, "任命一个不在本帮的人 = 50108", appointOutsider.message);
+
+    const appointAgain = await api(baseUrl, "POST", "guilds/me/rank", { token: A.token, body: { roleId: B.roleId, rank: "vice" } });
+    checkEqual(appointAgain.code, 0, "对已经是副帮主的人再任命一次是幂等成功（不占两个名额）", appointAgain.message);
+    checkEqual(rankOf(appointAgain.data, B.roleId), "vice", "幂等任命后职位仍是副帮主");
+
+    const mineB7 = await api(baseUrl, "GET", "guilds/me", { token: B.token });
+    check(
+      mineB7.data && mineB7.data.myRank === "vice" && mineB7.data.myRankLabel === "副帮主" && mineB7.data.canManage === true,
+      "B 侧看到自己是副帮主（中文名由服务端给，管理位打开）",
+      JSON.stringify(mineB7.data && { rank: mineB7.data.myRank, label: mineB7.data.myRankLabel }),
+    );
+    check(mineB7.data && mineB7.data.canAppoint === false && mineB7.data.canDisband === false, "副帮主不能任命、不能解散（canAppoint / canDisband 关闭）");
+
+    const demoteB = await api(baseUrl, "POST", "guilds/me/rank", { token: A.token, body: { roleId: B.roleId, rank: "member" } });
+    checkEqual(rankOf(demoteB.data, B.roleId), "member", "帮主把 B 卸任回普通成员（同一接口 rank=member）");
+    const mineB8 = await api(baseUrl, "GET", "guilds/me", { token: B.token });
+    check(mineB8.data && mineB8.data.canManage === false, "卸任后 B 的管理位关闭");
+
+    const appointCAfterDemote = await api(baseUrl, "POST", "guilds/me/rank", { token: A.token, body: { roleId: C.roleId, rank: "vice" } });
+    checkEqual(rankOf(appointCAfterDemote.data, C.roleId), "vice", "卸任腾出名额后可以任命别人（名额是按现有人数算的）");
+
+    const badRank = await api(baseUrl, "POST", "guilds/me/rank", { token: A.token, body: { roleId: B.roleId, rank: "leader" } });
+    checkEqual(badRank.code, 40000, "rank 只认 vice / member（传 leader 是 40000 参数非法，不给绕过转让留缝）", badRank.message);
+
+    //#endregion
+
+    //#region 八、申请限额（#873，独立进程压小上限）
 
     // 上限与 TTL 都压小才能在测试里踩到边界：每帮 3 / 每人 2 / TTL 800ms（真值 50 / 5 / 24h
     // 的「读配置」由本套第一台服务间接保证 —— memberLimit 同款口径，生产值由 .env.example 登记）。
     // 「24h 过期」的假时钟就是压 TTL：过期判断读的是同一个 Date.now()，压短等价于把时钟拨快。
-    group("六、申请限额（#873）：每帮上限 / 每人上限 / TTL 过期（独立进程）");
+    group("八、申请限额（#873）：每帮上限 / 每人上限 / TTL 过期（独立进程）");
     const limitDbPath = path.join(os.tmpdir(), `olua-e2e-guild-limit-${Date.now()}.db`);
     const limitServer = await startServer(limitDbPath, {
       GUILD_APPLICATION_LIMIT_PER_GUILD: "3",
@@ -418,6 +584,19 @@ async function preparePlayer(baseUrl, username, roleName) {
     });
     try {
       const lb = limitServer.baseUrl;
+
+      // #872：这台独立进程读的是**出厂**运行时参数（建帮门槛 10 级 + 10 万绑定元宝是开着的），
+      // 而本组只验申请配额，三个帮主都是刚建号的 1 级：先归零，否则连帮会都建不出来。
+      const limitAdminReg = await api(lb, "POST", "admin/auth/register", {
+        body: { username: "guild_limit_super", password: "super-pass-1", registerCode: "guild-admin-code" },
+      });
+      const limitAdminToken = limitAdminReg.data && limitAdminReg.data.token;
+      const limitGateOff = await api(lb, "PATCH", "admin/runtime-params", {
+        token: limitAdminToken,
+        body: { guild: { createLevelMin: 0, createCostBindGold: 0 } },
+      });
+      check(limitGateOff.code === 0, "（独立进程）建帮门槛先归零（1 级新号才建得了帮）", JSON.stringify(limitGateOff.message));
+
       const L1 = await preparePlayer(lb, "guild_limit_l1", "一帮帮主");
       const L2 = await preparePlayer(lb, "guild_limit_l2", "二帮帮主");
       const L3 = await preparePlayer(lb, "guild_limit_l3", "三帮帮主");

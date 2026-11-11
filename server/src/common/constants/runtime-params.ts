@@ -11,11 +11,22 @@
  */
 
 /**
- * 掉落参数（手感那四个客户端消费；`bindChance` **服务端结算消费**）
+ * 掉落参数（手感那四个客户端消费；`bindChance` 与 `pickAcceptRadius` **服务端消费**）
  */
 export interface DropRuntimeParams {
   /** 自动拾取半径（像素）：角色脚底与掉落物距离小于该值即拾取 */
   autoPickupRadius: number;
+  /**
+   * 服务端拾取距离闸（像素，#817）：玩家与这一幕掉落**掉出来时所在的位置**的距离超过它，
+   * 拾取请求直接拒。
+   *
+   * 与 `autoPickupRadius` 是**两把尺子**：那个是客户端「走到多近就自动发 pick」的手感，
+   * 这个是服务端「认不认这一发 pick」的权威。故意不复用：手感可以调到 200 让大家图省事，
+   * 但不能因此把「隔半张地图捡东西」变成合法操作。
+   *
+   * 0 = 关闭校验（只用于排查问题，出货状态别设 0：等于把 #817 又打开）。
+   */
+  pickAcceptRadius: number;
   /** 背包已满时的提示 / 重试间隔（毫秒） */
   fullTipInterval: number;
   /** 多件掉落物的最小中心间距（像素）：同心环散落用 */
@@ -64,7 +75,7 @@ export interface AutoBattleParams {
   dashSnapRadius: number;
 }
 
-/** 帮会规则门槛（**服务端校验读它**：帮会名 / 公告 / 申请留言长度） */
+/** 帮会规则门槛（**服务端校验读它**：帮会名 / 公告 / 申请留言长度 + 建帮门槛） */
 export interface GuildRuleParams {
   /** 帮会名最短字数 */
   nameMin: number;
@@ -74,6 +85,15 @@ export interface GuildRuleParams {
   noticeMax: number;
   /** 入帮申请留言最长字数 */
   applicationMessageMax: number;
+  /**
+   * 建帮所需最低角色等级（#872）：小于它直接拒。
+   *
+   * 建帮是一次性、不可逆的社交行为，门槛的意义是「让第一天的新号先玩明白游戏」；
+   * 0 = 不限等级（只用于临时放开，别当出货值）。
+   */
+  createLevelMin: number;
+  /** 建帮消耗绑定元宝（#872）：0 = 免费。扣款与建帮同一事务，扣了必然建成 */
+  createCostBindGold: number;
 }
 
 /** 三组一起下发（快照 `runtimeParams` 段就是它的形状） */
@@ -135,7 +155,7 @@ export const MONSTER_AI_PARAM_KEYS: Array<keyof MonsterAiRuntimeParams> = [
 
 /** 三组的键清单（**启动自检用**：库里少了哪个键就点名报错，不静默补默认值） */
 export const RUNTIME_PARAM_KEYS: Record<keyof RuntimeParams, string[]> = {
-  drop: ["autoPickupRadius", "fullTipInterval", "scatterMinDistance", "pickReplyTimeout", "bindChance"],
+  drop: ["autoPickupRadius", "pickAcceptRadius", "fullTipInterval", "scatterMinDistance", "pickReplyTimeout", "bindChance"],
   autoBattle: [
     "maxTargetDistance",
     "moveByRun",
@@ -152,5 +172,5 @@ export const RUNTIME_PARAM_KEYS: Record<keyof RuntimeParams, string[]> = {
     "teleportSnapRadius",
     "dashSnapRadius",
   ],
-  guild: ["nameMin", "nameMax", "noticeMax", "applicationMessageMax"],
+  guild: ["nameMin", "nameMax", "noticeMax", "applicationMessageMax", "createLevelMin", "createCostBindGold"],
 };

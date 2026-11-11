@@ -1,5 +1,5 @@
 import { ApiProperty } from "@nestjs/swagger";
-import { IsBoolean, IsOptional, IsString, Length, MaxLength } from "class-validator";
+import { IsBoolean, IsIn, IsOptional, IsString, Length, MaxLength } from "class-validator";
 import { GuildApplicationWithRoleRow, GuildListRow, GuildMemberWithRoleRow, GuildRow } from "../../../database/rows";
 import { GUILD_RANK_LABELS } from "../../../common/constants/social";
 
@@ -119,8 +119,8 @@ export class GuildApplicationDto {
 /**
  * 我的帮会（`GET /guilds/me`）
  *
- * 带三个「能不能」：`canReview` / `canManage` / `canDisband` —— 由服务端按职位算好，
- * 客户端只负责显隐按钮。**职位规则只写在服务端一处**，客户端不要自己再判一遍 rank，
+ * 带四个「能不能」：`canReview` / `canManage` / `canDisband` / `canAppoint` —— 由服务端按职位
+ * 算好，客户端只负责显隐按钮。**职位规则只写在服务端一处**，客户端不要自己再判一遍 rank，
  * 否则改规则时必然漏一处（典型症状：界面给了按钮，点了报 50105）。
  */
 export class MyGuildDto {
@@ -165,6 +165,9 @@ export class MyGuildDto {
 
   @ApiProperty({ description: "我能不能解散（仅帮主）", example: false })
   canDisband: boolean;
+
+  @ApiProperty({ description: "我能不能任命 / 卸任副帮主（仅帮主，#871）", example: false })
+  canAppoint: boolean;
 
   @ApiProperty({ description: "成员列表（帮主 → 副帮主 → 成员，同职位按入帮时间）", type: [GuildMemberDto] })
   members: GuildMemberDto[];
@@ -257,6 +260,24 @@ export class TransferGuildDto {
   @IsString({ message: "roleId 必须是字符串" })
   @Length(1, 64, { message: "roleId 不合法" })
   roleId: string;
+}
+
+/**
+ * 任命 / 卸任副帮主入参（#871）
+ *
+ * 一个接口两个方向：`rank = vice` 任命、`rank = member` 卸任。不另开「卸任」端点，
+ * 因为两者的前置条件、权限、失败码完全一样，拆开只会多一份要同步的鉴权代码。
+ * `leader` **不能**从这里传 —— 换帮主只走 `/guilds/me/transfer`（那要同时改两处）。
+ */
+export class AppointGuildRankDto {
+  @ApiProperty({ description: "目标角色 id（必须是本帮成员，且不是帮主）", example: "role_b2" })
+  @IsString({ message: "roleId 必须是字符串" })
+  @Length(1, 64, { message: "roleId 不合法" })
+  roleId: string;
+
+  @ApiProperty({ description: "目标职位：vice 任命为副帮主 / member 卸任回普通成员", enum: ["vice", "member"], example: "vice" })
+  @IsIn(["vice", "member"], { message: "rank 只能是 vice 或 member" })
+  rank: string;
 }
 
 /** 管理端改帮会入参（名字与公告都可改；名字仍要全局唯一） */

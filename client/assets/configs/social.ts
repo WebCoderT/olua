@@ -134,17 +134,43 @@ export function getRelationColor(relation: RelationKind): Color {
 //#region 帮会口径（与服务端 common/constants/social.ts 同值）
 
 /**
- * 帮会名长度 / 公告长度 / 人数上限的**客户端镜像**
+ * 帮会门槛的**客户端镜像**（帮会名长度 / 公告长度 / 建帮等级与花费）
  *
- * 为什么会有两份：这份只用于**输入时的即时提示**（超长就标红、按钮置灰），
- * 真正的判定在服务端（DTO 校验 + `GUILD_MEMBER_LIMIT` 配置）。两处不一致时
- * 以服务端为准 —— 客户端最多是「允许你输入但提交被拒」。
+ * 两个用途，都只是「提前告诉玩家」：
+ * - 输入框的 `maxLength` 与「名字要几个字」的即时提示；
+ * - 建帮按钮下方的门槛说明（等级 / 绑定元宝）。
+ *
+ * 真正的判定在服务端（DTO 结构校验 + `GuildService` 按运行时参数判），两处不一致时
+ * 以服务端为准 —— 客户端最多是「允许你输入但提交被拒」，失败文案里写着服务端认的数字。
+ *
+ * **登录拉快照时会整份覆写**（`apply-snapshot.applyRuntimeParams` 的 `guild` 段，运营在
+ * 管理端「运行时参数」页改），所以这里写的初值只在「快照还没到」的那一瞬间有效 ——
+ * 别把它当成第二份配置去改数值（改了也不会影响线上）。
  */
 export const guildRules = {
   nameMin: 2,
   nameMax: 12,
   noticeMax: 200,
+  /** 建帮最低等级（0 = 不限） */
+  createLevelMin: 10,
+  /** 建帮消耗绑定元宝（0 = 免费） */
+  createCostBindGold: 100000,
 };
+
+/**
+ * 用快照覆写上面这份镜像（登录取配置时调一次）
+ *
+ * 逐键覆写、只认有限数字：服务端漏字段 / 坏数据就保持当前值，别把「名字要几个字」覆写成
+ * `NaN` 或 0（0 会让输入框一个字符都打不进去）。**对象引用不变** —— GuildPanel 拿的是同
+ * 一个对象的引用，换对象等于把改动写在空气里（与 `applyDropRuntime` 同一条纪律）。
+ */
+export function applyGuildRules(params: Partial<typeof guildRules> | undefined): void {
+  if (!params) return;
+  (Object.keys(guildRules) as Array<keyof typeof guildRules>).forEach((key) => {
+    const value = Number(params[key]);
+    if (Number.isFinite(value)) guildRules[key] = value;
+  });
+}
 
 /** 帮会职位（与服务端 GUILD_RANK 同值；中文名由服务端下发，这里只用于本地比较） */
 export const GUILD_RANK = {

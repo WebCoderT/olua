@@ -1958,6 +1958,10 @@ export type UpdateDropRuntimeParams = {
    */
   autoPickupRadius?: number;
   /**
+   * 服务端拾取距离闸（像素；0 = 关闭校验）
+   */
+  pickAcceptRadius?: number;
+  /**
    * 背包已满的提示 / 重试间隔（毫秒）
    */
   fullTipInterval?: number;
@@ -2051,6 +2055,14 @@ export type UpdateGuildRuleParams = {
    * 入帮申请留言最长字数（0 = 不限）
    */
   applicationMessageMax?: number;
+  /**
+   * 建帮所需最低角色等级（0 = 不限等级）
+   */
+  createLevelMin?: number;
+  /**
+   * 建帮消耗绑定元宝（0 = 免费）
+   */
+  createCostBindGold?: number;
 };
 
 export type UpdateRuntimeParams = {
@@ -2344,6 +2356,17 @@ export type ReviewGuildApplication = {
    * true 通过 / false 拒绝（拒绝直接删掉申请，不留记录）
    */
   approve: boolean;
+};
+
+export type AppointGuildRank = {
+  /**
+   * 目标角色 id（必须是本帮成员，且不是帮主）
+   */
+  roleId: string;
+  /**
+   * 目标职位：vice 任命为副帮主 / member 卸任回普通成员
+   */
+  rank: "vice" | "member";
 };
 
 export type TransferGuild = {
@@ -5284,6 +5307,10 @@ export type DropRuntimeParams = {
    */
   autoPickupRadius: number;
   /**
+   * 服务端拾取距离闸（像素，#817）：玩家离掉落物落地位置超过它就拒收拾取请求。与 autoPickupRadius 是两把尺子（那是客户端手感，这是服务端权威）；0 = 关闭校验，别当出货值
+   */
+  pickAcceptRadius: number;
+  /**
    * 背包已满的提示 / 重试间隔（毫秒）
    */
   fullTipInterval: number;
@@ -5377,6 +5404,14 @@ export type GuildRuleParams = {
    * 入帮申请留言最长字数（0 = 不限）
    */
   applicationMessageMax: number;
+  /**
+   * 建帮所需最低角色等级（0 = 不限等级）
+   */
+  createLevelMin: number;
+  /**
+   * 建帮消耗绑定元宝（0 = 免费）
+   */
+  createCostBindGold: number;
 };
 
 export type RuntimeParams = {
@@ -8206,6 +8241,10 @@ export type MyGuild = {
    * 我能不能解散（仅帮主）
    */
   canDisband: boolean;
+  /**
+   * 我能不能任命 / 卸任副帮主（仅帮主，#871）
+   */
+  canAppoint: boolean;
   /**
    * 成员列表（帮主 → 副帮主 → 成员，同职位按入帮时间）
    */

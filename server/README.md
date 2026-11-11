@@ -300,7 +300,7 @@ git pull && make config-import       # 整表替换配置；账号与角色存�
 | `world_monsters` | 世界权威的怪物实例 | **服务端持有怪物状态**：instanceId（`m<mapId>_z<zone>_<n>` 发牌、带区段、跨重启稳定）/ zone_id / mapId / monsterKey / 出生点 x,y / hp / alive / killed_at / respawn_at；tick 检查重生 + dirty 批量落盘 |
 | `zones` | 区服（#295 阶段二） | 一行 = 一个游戏区；注册时选定归属区（`accounts.zone_id` 引用）；合并区在 `merged_into` 打去向标记（不删行，历史可查）；一区 seed 恒在（id=1，默认区） |
 | `guilds` | 帮会（#388） | 帮会名**全局唯一**；`leader_id` 是帮主的**第一份身份**（第二份是 `guild_members.rank='leader'` 那行，转让必须同一事务改两处）；`level` / `funds` 只占位（等级与资金业务未做）；人数上限**不在这里**，走 `GUILD_MEMBER_LIMIT` 配置 |
-| `guild_members` | 帮会成员（#388） | `PRIMARY KEY (guild_id, role_id)` + **`role_id` 唯一索引** —— 「一个人只能在一个帮会」是库约束，不是业务自觉（并发两次入帮靠自觉必然留下两条）；`rank`（leader / vice / member） |
+| `guild_members` | 帮会成员（#388） | `PRIMARY KEY (guild_id, role_id)` + **`role_id` 唯一索引** —— 「一个人只能在一个帮会」是库约束，不是业务自觉（并发两次入帮靠自觉必然留下两条）；`rank`（leader / vice / member）。副帮主名额 `GUILD_VICE_LIMIT_DEFAULT = 1`（#871），**任命与卸任同一个接口** `POST guilds/me/rank`，只有帮主能调，`rank=leader` 不收（换帮主必须走转让） |
 | `guild_applications` | 入帮申请（#388） | `PRIMARY KEY (guild_id, role_id)`：**重复申请只覆盖留言**，不会堆出两条待办；拒绝 = 直接删行（不留记录）；通过 = 写成员行 + 删申请 + 清掉申请人挂在别处的申请（同一事务） |
 | `role_friends` | 好友关系（#389） | **镜像两行**：A↔B 各一行（`PRIMARY KEY (role_id, friend_id)`），`status`（pending / accepted）+ `requested_by` 记发起人。所有查询都是一次主键前缀查，不必 `OR` 两方向再判方向；代价是同意 / 拒绝 / 删除要**成对改**（一律走事务）。只有两态，**没有拉黑**（本项目无私聊，多一态只会让每处查询多记一个合法值） |
 | `role_enemies` | 敌人标记（#389） | **单向一行**：`PRIMARY KEY (role_id, enemy_id)`，我标我的，对方既不知道也不受影响（没有通知、不需要事务）。关系优先级里敌意压过同帮与好友 |

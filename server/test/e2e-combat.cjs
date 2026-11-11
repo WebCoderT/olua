@@ -607,7 +607,11 @@ function connect(url) {
     async function aliveMonster(player, mapId) {
       return waitFor(`mapId=${mapId} 有活着的怪`, async () => {
         const snap = await enterAt(player, mapId);
-        return (snap && snap.monsters.find((m) => m.alive)) || null;
+        const alive = (snap && snap.monsters.find((m) => m.alive)) || null;
+        // #817：掉落点在「怪倒下的地方」，拾取距离闸拿它当参照 —— 记住这只怪在哪，
+        // `pick` 之前就把玩家摆到那儿（等价真实客户端「走过去捡」）
+        if (alive) player.lastSpot = { mapId, x: alive.x, y: alive.y };
+        return alive;
       }, 15_000);
     }
 
@@ -960,8 +964,29 @@ function connect(url) {
       body: { tableId: null, picks: 1, entries: [{ goodId: "drug_hp_1", weight: 100, chance: 1, count: [2, 2] }] },
     });
 
-    /** 发一次拾取并等它自己的 picked 帧（只等发送之后到达的：同一 castId 的旧帧不回填） */
-    const pick = (player, castId, index) => {
+    /**
+     * 站到某个点（发一帧 `pos`，#817 的拾取距离闸读的就是在场表里这份坐标）
+     *
+     * 发**两次**：位置仲裁（#596）把单帧瞬移当成作弊，`POS_TRUST_STREAK = 2` 才跟随基线 ——
+     * 真实客户端 4Hz 连续上报，200ms 内自然满足，这里用两帧模拟同一件事。
+     * `hp` 只影响「AI 要不要把这个人当目标」，取个大于 0 的数即可。
+     */
+    const standAtSpot = (player, spot) => {
+      const frame = JSON.stringify({ type: "pos", data: { mapId: spot.mapId, x: spot.x, y: spot.y, hp: 100 } });
+      player.session.socket.send(frame);
+      player.session.socket.send(frame);
+    };
+
+    /**
+     * 发一次拾取并等它自己的 picked 帧（只等发送之后到达的：同一 castId 的旧帧不回填）
+     *
+     * `options.spot` 缺省 = 站到 `player.lastSpot`（这只怪倒下的地方，正常玩家的行为）；
+     * 显式给一个点 = 故意从别处捡（距离闸用例）；`null` = 一帧位置都不报（`no_position` 用例）。
+     * pos 与 pick 走同一条连接、服务端按序处理，所以不会出现「位置还没到、拾取先判」。
+     */
+    const pick = (player, castId, index, options = {}) => {
+      const spot = options.spot === null ? null : options.spot || player.lastSpot;
+      if (spot) standAtSpot(player, spot);
       const before = player.session.pickeds.length;
       player.session.socket.send(JSON.stringify({ type: "pick", data: { castId, index } }));
       return waitFor(`castId=${castId} index=${index} 的 picked 帧`, async () => {
@@ -1099,6 +1124,70 @@ function connect(url) {
       "G：换回图 1 也拾不到（账本在换图那一刻就清了，不会因为回去而复活）",
       JSON.stringify(backPick),
     );
+
+    // —— H. 距离闸（#817）：隔远拒拾、走回来可拾、已拾的幂等放行、0 = 关闭校验 ——
+
+    // 掉落点 = 怪倒下的地方（账本逐条记，区域技能一次三只也各记各的）。闸判三件事：
+    // 有没有位置、是不是同一张图、离掉落点多远；半径是运营可配的 `drop.pickAcceptRadius`。
+    const farPicker = await newGridPlayer("combat_rpf");
+    const mobH = await aliveMonster(farPicker, "1");
+    check(!!mobH, "H：等到了活着的怪", JSON.stringify(mobH));
+    const killedH = mobH ? await killMonster(farPicker, mobH.monsterKey, mobH.instanceId) : null;
+    check(
+      !!(killedH && killedH.reward && killedH.reward.drops.length === 1),
+      "H：击杀结算带一份掉落（拾取距离闸的靶子）",
+      JSON.stringify(killedH && killedH.reward && killedH.reward.drops),
+    );
+    const farSpot = { mapId: "1", x: (mobH ? mobH.x : 0) + 800, y: mobH ? mobH.y : 0 };
+    const pickedFar = killedH ? await pick(farPicker, killedH.castId, 0, { spot: farSpot }) : null;
+    check(
+      !!(pickedFar && pickedFar.ok === false && pickedFar.code === "too_far"),
+      "H：站在 800px 外拾取被拒（too_far，不是静默失败也不是把东西发过来）",
+      JSON.stringify(pickedFar),
+    );
+    const pickedNear = killedH ? await pick(farPicker, killedH.castId, 0) : null;
+    check(
+      !!(pickedNear && pickedNear.ok && pickedNear.alreadyPicked === false),
+      "H：走回掉落点再拾就成功（前面的拒拾没把账本条目吃掉）",
+      JSON.stringify(pickedNear),
+    );
+    const repickFromFar = killedH ? await pick(farPicker, killedH.castId, 0, { spot: farSpot }) : null;
+    check(
+      !!(repickFromFar && repickFromFar.ok && repickFromFar.alreadyPicked === true),
+      "H：已拾的幂等重放不受距离限制（应答丢包后的重发不能被判成作弊）",
+      JSON.stringify(repickFromFar),
+    );
+
+    // 没报过位置：拒绝而不是放行（放行等于给「不上报位置」开一个绕过闸的开关）
+    const noPosPlayer = await newGridPlayer("combat_rpn");
+    const mobN = await aliveMonster(noPosPlayer, "1");
+    const killedN = mobN ? await killMonster(noPosPlayer, mobN.monsterKey, mobN.instanceId) : null;
+    const pickedNoPos = killedN ? await pick(noPosPlayer, killedN.castId, 0, { spot: null }) : null;
+    check(
+      !!(pickedNoPos && pickedNoPos.ok === false && pickedNoPos.code === "no_position"),
+      "H：一帧位置都没报过 → 拒拾（no_position，位置未知不等于站在旁边）",
+      JSON.stringify(pickedNoPos),
+    );
+
+    // 0 = 关闭校验（排查问题用的开关）：改完立刻生效（结算现读库，不等客户端重进）
+    // 出厂值从快照读（`runtime_params.drop_params`，JSON 列已由快照解析器解开）
+    const acceptBefore = configSnapshot.rows("runtime_params")[0].dropParams.pickAcceptRadius;
+    await api(baseUrl, "PATCH", "admin/runtime-params", { token: adminToken, body: { drop: { pickAcceptRadius: 0 } } });
+    const mobH2 = await aliveMonster(farPicker, "1");
+    const killedH2 = mobH2 ? await killMonster(farPicker, mobH2.monsterKey, mobH2.instanceId) : null;
+    const pickedOff = killedH2
+      ? await pick(farPicker, killedH2.castId, 0, { spot: { mapId: "1", x: mobH2.x + 800, y: mobH2.y } })
+      : null;
+    check(
+      !!(pickedOff && pickedOff.ok && pickedOff.alreadyPicked === false),
+      "H：pickAcceptRadius = 0 时闸关闭（同一个人 800px 外也能拾，开关真的有作用）",
+      JSON.stringify(pickedOff),
+    );
+    const restoredP = await api(baseUrl, "PATCH", "admin/runtime-params", {
+      token: adminToken,
+      body: { drop: { pickAcceptRadius: acceptBefore } },
+    });
+    checkEqual(restoredP.data && restoredP.data.drop && restoredP.data.drop.pickAcceptRadius, acceptBefore, "H：拾取半径已还原成出厂值");
 
     // 还原怪物 1 的掉落配置（seed 是内联条目池）
     await api(baseUrl, "PATCH", "admin/monster-drops/1", {

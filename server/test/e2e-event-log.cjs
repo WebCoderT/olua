@@ -417,6 +417,8 @@ function connect(url) {
     check(!!(killDetail && killDetail.tier), "击杀流水带 tier（normal / elite / boss）", JSON.stringify(killDetail && killDetail.tier));
 
     // 拾取：等 picked 帧；账本下标从 0 起
+    // #817 起拾取有距离闸（掉落点在怪倒下的地方），先报一帧位置 —— 真实客户端每 250ms 就有一帧
+    session.socket.send(JSON.stringify({ type: "pos", data: { mapId: MAP_ID, x: mob ? mob.x : 0, y: mob ? mob.y : 0, hp: 100 } }));
     const pickBefore = session.pickeds.length;
     session.socket.send(JSON.stringify({ type: "pick", data: { castId: first && first.castId, index: 0 } }));
     const picked = await waitFor("picked 帧", async () => {

@@ -10,6 +10,7 @@ import {
   GUILD_MEMBER_LIMIT_DEFAULT,
   GUILD_RANK,
   GUILD_RANK_LABELS,
+  GUILD_VICE_LIMIT_DEFAULT,
 } from "../../common/constants/social";
 import { BizException } from "../../common/errors/biz.exception";
 import { GuildRepository } from "../../database/repositories/guild.repository";
@@ -37,8 +38,9 @@ function isOfficer(rank: string): boolean {
  * ## 一件事只在一处判
  * - **一个人只能在一个帮会**：库上是 `guild_members.role_id` 唯一索引，业务里只是把它翻成
  *   可读的错误（50103）—— 靠业务自觉的话，并发两次入帮就会留下两条。
- * - **职位规则**：`isOfficer` 一处；控制器只做鉴权与文档，客户端只按服务端给的
- *   `canReview / canManage / canDisband` 显隐按钮（不自己再判一遍 rank）。
+ * - **职位规则**：`isOfficer` 一处（审批 / 踢人 / 改公告的共同前提）；「只有帮主」的三件事
+ *   （解散 / 转让 / 任命副帮主）各自显式判 rank。控制器只做鉴权与文档，客户端只按服务端给的
+ *   `canReview / canManage / canDisband / canAppoint` 显隐按钮（不自己再判一遍 rank）。
  * - **帮主的身份有两份**：`guilds.leader_id` 与 `guild_members.rank='leader'` 的那一行。
  *   转让时**同一个事务**里改两处，否则会出现「帮主显示是 A、A 却没有帮主权限」。
  *
@@ -158,11 +160,31 @@ export class GuildService {
     return this.toMyGuild(parts);
   }
 
-  /** 建帮（建帮人自动成为帮主；顺手清掉他挂在别的帮会的申请） */
+  /**
+   * 建帮（建帮人自动成为帮主；顺手清掉他挂在别的帮会的申请）
+   *
+   * 门槛两条（#872，运营在管理端「运行时参数」页改，保存即生效）：
+   * - **等级**（`guild.createLevelMin`）：不够就拒 50147，文案带当前等级与门槛；
+   * - **绑定元宝**（`guild.createCostBindGold`）：扣款与建帮**同一个事务**（`DatabaseService.
+   *   transaction()` 可重入），钱扣不动就整笔不做，不会留下「钱没了帮没建成」。
+   *
+   * 顺序：等级 → 名字 → 重名 → 钱。前面几条都是纯读，钱是唯一有副作用的一步，放最后 ——
+   * 名字被占了却先扣钱，玩家要等退款逻辑（而这里根本没有退款通道）。
+   *
+   * 扣完钱**不回传余额**：客户端 1 秒内会收到 `roleUpdate` 帧把整份存档（含 revision 与
+   * `bindGold`）覆盖掉，那是「谁改了钱」的唯一通路（与商城 / 回收 / 邮件同一套）。
+   */
   create(accountId: string, dto: CreateGuildDto): MyGuildDto {
     const role = this.onlineRole(accountId);
     if (this.guilds.membershipOf(role.id)) {
       throw BizException.conflict(BizCode.GUILD_ALREADY_IN, "你已经在一个帮会里了，先退出才能另建");
+    }
+    const { createLevelMin, createCostBindGold } = this.rules();
+    if (createLevelMin > 0 && role.level < createLevelMin) {
+      throw BizException.forbidden(
+        BizCode.GUILD_CREATE_LEVEL_LOW,
+        `创建帮会需要 ${createLevelMin} 级，你当前 ${role.level} 级`,
+      );
     }
     const name = dto.name.trim();
     // 规则先判：长度不合规时说清「现在允许几个字」，比「已占用」更可能是真原因
@@ -184,11 +206,15 @@ export class GuildService {
       updated_at: now,
     };
     this.guilds.transaction(() => {
+      // 扣钱放第一步：余额不足抛 20011，整个事务回滚（帮会一行都不会留）
+      this.roles.spendBindGold(accountId, createCostBindGold, "创建帮会");
       this.guilds.insert(row);
       this.guilds.insertMember(row.id, role.id, GUILD_RANK.LEADER, now);
       this.guilds.removeApplicationsOfRole(role.id);
     });
-    this.logger.log(`帮会创建：${row.name}（${row.id}，帮主 ${role.id}）`);
+    this.logger.log(
+      `帮会创建：${row.name}（${row.id}，帮主 ${role.id}，花费 ${createCostBindGold} 绑定元宝）`,
+    );
     return this.mustMine(accountId);
   }
 
@@ -281,6 +307,43 @@ export class GuildService {
     }
     this.guilds.removeMember(guild.id, targetRoleId);
     this.guilds.removeApplicationsOfRole(targetRoleId);
+    return this.mustMine(accountId);
+  }
+
+  /**
+   * 任命 / 卸任副帮主（#871，仅帮主）
+   *
+   * 一个接口两个方向（`rank = vice | member`）：两者前置条件、权限、失败码完全一样，
+   * 拆两个端点只会多一份要同步的鉴权代码。**换帮主不走这里** —— 那要同时改
+   * `guilds.leader_id` 与成员表两处，只在 `transfer` 里做。
+   *
+   * 名额：`GUILD_VICE_LIMIT_DEFAULT`（1 名，用户 2026-11-11 拍板）。判据是「除目标外
+   * 现有副帮主数」—— 对一个已经是副帮主的人再任命一次不该占两个名额（幂等）。
+   *
+   * 失败路径：50105 不是帮主 / 50108 目标不是本帮成员或就是帮主自己 / 50148 名额已满。
+   */
+  appoint(accountId: string, targetRoleId: string, rank: string): MyGuildDto {
+    const { guild, membership } = this.mustMembership(accountId);
+    if (membership.rank !== GUILD_RANK.LEADER) {
+      throw BizException.forbidden(BizCode.GUILD_PERMISSION_DENIED, "只有帮主能任命或卸任副帮主");
+    }
+    const target = this.requireMember(guild.id, targetRoleId);
+    if (target.rank === GUILD_RANK.LEADER) {
+      throw new BizException(BizCode.GUILD_TARGET_INVALID, "帮主的职位不能在这里改，换帮主请用「转让」");
+    }
+    const next = rank === GUILD_RANK.VICE ? GUILD_RANK.VICE : GUILD_RANK.MEMBER;
+    if (next === target.rank) return this.mustMine(accountId); // 已经是这个职位：幂等，不写库
+    if (next === GUILD_RANK.VICE) {
+      const others = this.guilds.members(guild.id).filter((item) => item.rank === GUILD_RANK.VICE).length;
+      if (others >= GUILD_VICE_LIMIT_DEFAULT) {
+        throw BizException.conflict(
+          BizCode.GUILD_VICE_LIMIT,
+          `副帮主最多 ${GUILD_VICE_LIMIT_DEFAULT} 名，先卸任现任副帮主`,
+        );
+      }
+    }
+    this.guilds.updateRank(guild.id, targetRoleId, next);
+    this.logger.log(`帮会职位变更：${guild.name}（${guild.id}）${targetRoleId} → ${GUILD_RANK_LABELS[next] ?? next}`);
     return this.mustMine(accountId);
   }
 
@@ -435,6 +498,7 @@ export class GuildService {
     dto.canReview = isOfficer(myRank);
     dto.canManage = isOfficer(myRank);
     dto.canDisband = myRank === GUILD_RANK.LEADER;
+    dto.canAppoint = myRank === GUILD_RANK.LEADER;
     dto.members = members.map((item) => ({
       roleId: item.role_id,
       name: item.role_name,

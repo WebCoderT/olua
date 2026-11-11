@@ -502,6 +502,15 @@ export const BizCode = {
   GUILD_TARGET_INVALID: 50108,
   /** 入帮申请被限额拒（#873：本帮待处理满 / 我挂的申请满；文案区分是哪一种） */
   GUILD_APPLICATION_LIMIT: 50146,
+  /**
+   * 建帮门槛不够（#872：等级不到 `guild.createLevelMin`）
+   *
+   * 与 `MALL_BIND_GOLD_NOT_ENOUGH`（20011）分工：钱不够是**钱包**的事，钱够了但等级不够
+   * 才是这一条 —— 客户端据此决定提示「去练级」还是「去攒钱」。
+   */
+  GUILD_CREATE_LEVEL_LOW: 50147,
+  /** 副帮主名额已满（#871；上限见 `GUILD_VICE_LIMIT_DEFAULT`） */
+  GUILD_VICE_LIMIT: 50148,
   //#endregion
 
   //#region 社交：好友与敌人（#389）
