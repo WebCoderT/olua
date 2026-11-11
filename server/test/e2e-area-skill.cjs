@@ -534,6 +534,9 @@ async function standAt(session, mapId, point) {
     checkEqual(dropCount, 3, "三只各掉 1 件，一共 3 件");
 
     const picked = [];
+    // 拾取距离闸（#817）读的是在场表里那份坐标，而结算 / 读档这几步可能已过去几秒 ——
+    // 补一帧（坐标没变，仲裁直接过），别让「位置过期」把这条用例判成 no_position
+    session.sendPos(KILL_MAP, killCenter.x, killCenter.y);
     for (let index = 0; index < dropCount; index += 1) {
       session.sendPick(killCastId, index);
       const result = await session.pickedOf(killCastId, index);
