@@ -19,6 +19,7 @@ import {
   roleLevelCurveMaxLevel,
   roleLevelExpOf,
   sellPriceOf,
+  skillOf,
 } from "../../common/runtime-config-cache";
 import { AccountRepository } from "../../database/repositories/account.repository";
 import { DrugRepository } from "../../database/repositories/drug.repository";
@@ -44,6 +45,7 @@ import { EVENT_TYPE } from "../../common/constants/event-type";
 import { DrugUseDto, DrugUseResultDto } from "./dto/drug-use.dto";
 import { MoneyUseDto, MoneyUseResultDto } from "./dto/money-use.dto";
 import { LevelScrollUseDto, LevelScrollUseResultDto } from "./dto/level-scroll-use.dto";
+import { SkillUpgradeDto, SkillUpgradeResultDto } from "./dto/skill-upgrade.dto";
 import { GrowthUpgradeDto, GrowthKind } from "./dto/growth-upgrade.dto";
 import { GrowthUpgradeResultDto, RoleDto, RoleSummaryDto } from "./dto/role.dto";
 import { MallPurchaseDto, MallPurchaseResultDto } from "./dto/mall-purchase.dto";
@@ -56,6 +58,13 @@ import { migrateRoleData } from "./role-migration";
 import { clampVitals, enforceServerAuthority, settleVitalsAuthority } from "./role-authority";
 import { buildInitialRoleData } from "./initial-role";
 import { resolveLevelUp, type LevelUpOutcome } from "./level-up";
+import {
+  SKILL_POINTS_PER_LEVEL,
+  skillLevelsOf,
+  skillMaxLevelOf,
+  skillPointsOf,
+  skillUpgradeCost,
+} from "../../common/utils/skill-upgrade.util";
 import {
   BagGrid,
   BagOrigin,
@@ -1111,6 +1120,9 @@ export class RolesService {
     // `data.level` 也要一起写（B11）—— 卷轴以前只改列，文档里那份停在旧等级，
     // 管理端详情与客户端本地看到的就是两个数字
     data.level = toLevel;
+    // 硬性 +1 级也是「升一级」：技能点照 +1（#828 的「每级 +1」一把尺子）。
+    // 少了这一步，用卷轴升的级等于白升 —— 玩家看不出差别，但点数就是少了一点
+    data.skillPoints = skillPointsOf(data.skillPoints) + SKILL_POINTS_PER_LEVEL;
     this.applyAuthoritativeAttributes(toLevel, data);
     data.hp = typeof data.maxHp === "number" ? data.maxHp : data.hp;
     data.mp = typeof data.maxMp === "number" ? data.maxMp : data.mp;
@@ -1128,6 +1140,100 @@ export class RolesService {
     };
     this.persistOrConflict(row, existing.revision, "使用升级卷轴");
     return LevelScrollUseResultDto.fromRow(row, account.online_role_id, scroll.id, fromLevel, exp, this.expNeedOf(toLevel));
+  }
+
+  /**
+   * 技能升级（#828）：一条技能点换成一级伤害系数
+   *
+   * 为什么必须收在服务端：`data.skills` 是**伤害系数的下标来源**
+   * （`combat-settlement` 的 `readDamageCoefficient` 取 `damageCoefficients[level - 1]`）。
+   * 客户端能改技能等级 = 能直接把 1 档倍率改成 11 档倍率 —— 与「背包归服务端」同一个理由。
+   *
+   * 客户端只报「升哪个技能」（+ 修订号）：**等级、花费、上限一概不报**。
+   * 报花费就等于让改包自己定价，报等级就等于让它跳级。
+   *
+   * 四条判定，顺序有意义（玩家看到的提示完全不同）：
+   * 1. **技能认不出 / 系数为空**（20034）：1008 十步一杀这类 `damageCoefficients` 为空的技能，
+   *    升上去不会让任何数字变大 —— 允许升就是白吃玩家的点，所以按「目标不合法」拒，
+   *    而不是按「已到顶」拒（后者会让人以为「再加档就能升」）；
+   * 2. **没学过**（20034）：`data.skills` 里没有这个 id；
+   * 3. **已到顶**（20036）：上限 = 系数档数，到顶了再攒点也没用，要运营加档；
+   * 4. **点数不足**（20035）：`details` 带 `need` / `owned`，客户端据此提示差额。
+   *
+   * 成功路径只改两个值：`data.skills[id]` +1、`data.skillPoints` 扣掉花费，
+   * revision 原子 +1（与升级卷轴 / 背包操作同一纪律：失败一律不落库）。
+   * 不重算属性、不补血蓝 —— 技能等级只影响下一次出手的倍率，不影响面板数值。
+   */
+  upgradeSkill(accountId: string, roleId: string, dto: SkillUpgradeDto): SkillUpgradeResultDto {
+    const account = this.mustAccount(accountId);
+    const existing = this.mustOwnRole(accountId, roleId);
+    // 与用药 / 用卷轴 / 背包操作同一纪律：被踢下线的角色不能继续写
+    if (account.online_role_id !== roleId) {
+      throw BizException.conflict(BizCode.ROLE_KICKED, "该角色已被管理员下线，请重新选择角色进入游戏");
+    }
+    if (dto.revision !== existing.revision) {
+      throw BizException.conflict(BizCode.ROLE_REVISION_CONFLICT, "该角色已在别处被修改，请先同步最新数据");
+    }
+
+    const skill = skillOf(dto.skillId);
+    if (!skill) {
+      throw new BizException(BizCode.SKILL_UPGRADE_TARGET_INVALID, `认不出的技能：${dto.skillId}`);
+    }
+    const label = typeof skill.label === "string" && skill.label ? skill.label : dto.skillId;
+    const maxLevel = skillMaxLevelOf(skill.damageCoefficients);
+    if (maxLevel <= 0) {
+      throw new BizException(
+        BizCode.SKILL_UPGRADE_TARGET_INVALID,
+        `「${label}」没有可升的档位（伤害系数为空），升级不会让它变强`,
+      );
+    }
+
+    const data = decodeStoredRoleData(existing.data);
+    const levels = skillLevelsOf(data.skills);
+    const fromLevel = levels[dto.skillId];
+    if (fromLevel === undefined) {
+      throw new BizException(BizCode.SKILL_UPGRADE_TARGET_INVALID, `还没有学会「${label}」，升不了级`);
+    }
+    if (fromLevel >= maxLevel) {
+      throw BizException.conflict(BizCode.SKILL_MAX_LEVEL_REACHED, `「${label}」已经练到顶（${maxLevel} 级）`);
+    }
+
+    const cost = skillUpgradeCost(fromLevel);
+    const owned = skillPointsOf(data.skillPoints);
+    if (owned < cost) {
+      // 400 而不是 409：这是「条件不满足，攒够再来」，不是「你的存档版本过期了」。
+      // `details` 带 need / owned，客户端据此提示差额（而不是干等一句「点数不足」）
+      throw new BizException(
+        BizCode.SKILL_POINTS_NOT_ENOUGH,
+        `技能点不足：把「${label}」升到 ${fromLevel + 1} 级需要 ${cost} 点，当前 ${owned} 点`,
+        HttpStatus.BAD_REQUEST,
+        { need: cost, owned },
+      );
+    }
+
+    const toLevel = fromLevel + 1;
+    levels[dto.skillId] = toLevel;
+    data.skills = levels;
+    const remainPoints = owned - cost;
+    data.skillPoints = remainPoints;
+
+    const row: RoleRow = {
+      ...existing,
+      data: JSON.stringify(data),
+      revision: existing.revision + 1,
+      updated_at: Date.now(),
+    };
+    this.persistOrConflict(row, existing.revision, "技能升级");
+    return SkillUpgradeResultDto.fromRow(row, account.online_role_id, {
+      skillId: dto.skillId,
+      fromLevel,
+      toLevel,
+      cost,
+      remainPoints,
+      // 到顶之后还有没有下一级：有就给下一级的价格，没有给 0（客户端据此去掉「再升一级」的提示）
+      nextCost: toLevel >= maxLevel ? 0 : skillUpgradeCost(toLevel),
+      maxLevel,
+    });
   }
 
   /**
@@ -2048,6 +2154,11 @@ export class RolesService {
     });
     data.level = outcome.level;
     data.exp = outcome.exp;
+    // 技能点（#828）：每升 1 级 +1，与建号那 1 点同一条口径（累计 = 等级）。
+    // 放在**属性重算之前**没有区别，但必须在 `data` 落库前 —— 连升多级时按级数一次加满，
+    // 循环里逐级加容易和「绕过这一层的其它升级路径」（卷轴 #787 是硬性 +1 级）漏对
+    const gained = Math.max(0, outcome.level - currentLevel);
+    if (gained > 0) data.skillPoints = skillPointsOf(data.skillPoints) + gained * SKILL_POINTS_PER_LEVEL;
     // 等级变了属性就变：服务端重算并写回存档（权威值，客户端那份只是演）
     this.applyAuthoritativeAttributes(outcome.level, data);
     if (outcome.leveledUp) {

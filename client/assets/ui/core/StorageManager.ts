@@ -28,7 +28,7 @@ import Session from "../utils/net/Session";
 import { RoleApi } from "../utils/net/Api";
 import CombatChannel from "../utils/net/CombatChannel";
 import type { CombatKillReward, MapEnterResult, RoleAuthorityUpdate } from "../utils/net/CombatChannel";
-import type { BagOp, BagOpResult, DrugUseResult, GrowthUpgradeResult, LevelScrollUseResult, MallLimit, MallPurchaseResult, MoneyUseResult, SellGoodsResult } from "../utils/net/ApiModels";
+import type { BagOp, BagOpResult, DrugUseResult, GrowthUpgradeResult, LevelScrollUseResult, MallLimit, MallPurchaseResult, MoneyUseResult, SellGoodsResult, SkillUpgradeResult } from "../utils/net/ApiModels";
 import { normalizeGuideProgress } from "../utils/guide/guide-progress";
 import { guideStepCount } from "../../configs/guide";
 
@@ -586,6 +586,9 @@ export default class StorageManager {
     if (update.title !== undefined) role.title = update.title;
     if (update.soulOfWar !== undefined) role.soulOfWar = update.soulOfWar;
     if (update.rank !== undefined) role.rank = update.rank;
+    // 技能点（#828）：升级在实时进程结算，帧带回的就是最新余额。技能**等级**不在帧里 ——
+    // 它只会被 HTTP 的升级接口改（应答里整份 data 带回来），帧再带一份就是两个来源
+    if (typeof update.skillPoints === "number") role.skillPoints = Math.max(0, Math.floor(update.skillPoints));
     // 体验状态（#596 换设备云同步）：归客户端书写、服务端存证 —— 另一台设备改了快捷键 /
     // 后台重置了引导，帧带回就进本地档（下次读档 / 界面重建时生效；进行中的引导流程不回头）
     if (Array.isArray(update.shortcutKeys)) role.shortcutKeys = update.shortcutKeys as Role["shortcutKeys"];
@@ -1512,6 +1515,48 @@ export default class StorageManager {
 
   /** 正在等服务端放行的一次换图（`null` = 当前没有；防止连点重复发意图） */
   private static mapEnterPending = false;
+
+  /**
+   * 技能升级（#828）：扣点与等级推进都在服务端
+   *
+   * 客户端只报「升哪个技能」+ 修订号：**报等级就等于让它跳级，报花费就等于让它定价**
+   * （`当前等级` 只在服务端 `skill-upgrade.util` 里）。所以这里没有本地预检 ——
+   * 点数够不够、是不是已经到顶，都由服务端的业务码回答（20035 / 20036 / 20034），
+   * 请求层按码弹提示。
+   *
+   * 成功后照搬服务端那份 `data.skills` / `data.skillPoints`（**不本地 +1**：
+   * 自增一版就会与服务端落库值漂开，下次存档被回填，表现成「刚升的级弹回去」）。
+   *
+   * @param skillId 要升的技能 id
+   * @returns 是否升级成功（失败原因已用浮动提示告知）
+   */
+  static async upgradeSkillOnServer(skillId: string): Promise<boolean> {
+    const role = this.findOnlineRole();
+    if (!role) return false;
+    let result: SkillUpgradeResult;
+    try {
+      // 修订号带上做乐观锁：后台改过这个角色时（20006）服务端拒绝升级
+      result = await RoleApi.skillUpgrade(role.id, { skillId, revision: role.revision });
+    } catch {
+      return false; // 失败提示已由请求层弹过（非 silent 请求）
+    }
+    const data = (result.data ?? {}) as Record<string, unknown>;
+    if (data.skills && typeof data.skills === "object") role.skills = data.skills as Role["skills"];
+    if (typeof data.skillPoints === "number") role.skillPoints = Math.max(0, Math.floor(data.skillPoints));
+    role.revision = result.revision;
+    // 技能等级不影响面板数值（只影响下一次出手的倍率），所以不重算属性、不刷血蓝；
+    // 但仍要走 updateOnlineRole：它负责落盘 + 与服务端对齐 revision
+    this.updateOnlineRole(role);
+    this.updateUi(role);
+    GameUiHelper.createTip("label_skill_upgrade_tip", {
+      // 技能名读客户端配置（`skills` Map 是快照下发的，与服务端同源）
+      skill: skills.get(skillId)?.label ?? skillId,
+      level: result.toLevel,
+      cost: result.cost,
+      remain: result.remainPoints,
+    });
+    return true;
+  }
 
   /**
    * 跳转地图（所有传送入口都经过这里）

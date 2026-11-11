@@ -61,11 +61,11 @@ export const SERVER_PROGRESS_FIELDS = ["level", "exp"] as const;
  * 账本同权：否则「塞一件没拥有的顶级装备进文档」就等于白拿属性 —— #541 把算法收到
  * 服务端之后，这条路的收益反而被做实了。
  *
- * `skills` 目前客户端一个写点都没有（技能升级入口未开），但文档字段本身可写 ——
- * 改包填满级就能吃到伤害公式里。清单宁可比写点宽一格：宽了只是不允许本地改，
- * 窄了就是留一个没人看着的口子。
+ * `skills` 与 `skillPoints`（#828）：技能等级只能由 `POST /roles/:id/skill-upgrade` 推进，
+ * 技能点只能由升级（每级 +1）产出 —— 两者都是**数值的输入**（伤害系数按等级取档），
+ * 所以与背包同权。清单宁可比写点宽一格：宽了只是不允许本地改，窄了就是留一个没人看着的口子。
  */
-export const SERVER_INVENTORY_FIELDS = ["bag", "equipments", "skills"] as const;
+export const SERVER_INVENTORY_FIELDS = ["bag", "equipments", "skills", "skillPoints"] as const;
 
 /**
  * 时装（#596）：穿着态 `fashionCloth` 与拥有清单 `fashionsOwned` 都归服务端

@@ -1505,6 +1505,7 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
     this.seedLevelScrollsOnce();
     this.seedLevelCurvesOnce();
     this.seedCombatStatusesOnce();
+    this.seedSkillPointsOnce();
   }
 
   /**
@@ -1736,6 +1737,57 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
       `statuses:${added},skills:${wired}`,
     ]);
     this.logger.log(`存量库补战斗状态出厂数据：新增状态 ${added} 条，补齐技能接线 ${wired} 处`);
+  }
+
+  /**
+   * 存量库一次性补发技能点（#828）
+   *
+   * 技能点是「每级 +1」的**累计量**（建号 1 点 + 每升 1 级 +1 ≈ 等级），但 #828 之前
+   * 建的老号存档里根本没有 `skillPoints` 这个键 —— 不补的话，一个 60 级的老号手上是
+   * **0 点**：技能面板里每个技能都只能显示「点数不足」，而按口径他本该有 60 点。
+   * 补发量取 `roles.level` 列（权威、且与「每级 +1」同一条尺子），不是「从 0 开始重新攒」。
+   *
+   * 三条边界：
+   * - **已经有这个键的行一律不碰**：那是玩家真的花过点之后的余额（60 级的号学了几级技能、
+   *   只剩 5 点），按等级重算等于把他花掉的点白送回去；
+   * - **存档解析不出来就跳过**（`roles.corrupted` 那批）：坏 JSON 归人工处理，
+   *   自动改写只会把「还能救的档」变成「救不回来的档」；
+   * - **不推修订号**（只动 `updated_at`）：与存档版本迁移同一纪律 —— 玩家没做任何操作，
+   *   不该让他下一次保存撞 20006。改动落库后，下次选角 / 存档回填就会带上新点数。
+   *
+   * **只跑一次**（`config_meta.skill_points_seeded`）：否则玩家把点花光后重启服务，
+   * 点数又回满 —— 那等于无限技能点。
+   */
+  private seedSkillPointsOnce(): void {
+    const hasMeta =
+      this.count("SELECT COUNT(1) AS total FROM sqlite_master WHERE type = 'table' AND name = 'config_meta'") > 0;
+    if (!hasMeta) return;
+    if (this.get<{ value: string }>("SELECT value FROM config_meta WHERE key = ?", ["skill_points_seeded"])) return;
+    const now = Date.now();
+    let roles = 0;
+    let points = 0;
+    for (const row of this.all<{ id: string; level: number; data: string }>("SELECT id, level, data FROM roles")) {
+      let data: Record<string, unknown>;
+      try {
+        const parsed: unknown = JSON.parse(String(row.data ?? ""));
+        // 数组 / null / 标量都不是存档 —— 与 `decodeStoredRoleDataStrict` 同一条判据
+        if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) continue;
+        data = parsed as Record<string, unknown>;
+      } catch {
+        continue;
+      }
+      if (Object.prototype.hasOwnProperty.call(data, "skillPoints")) continue;
+      const level = Math.max(1, Math.floor(Number(row.level) || 1));
+      data.skillPoints = level;
+      this.run("UPDATE roles SET data = ?, updated_at = ? WHERE id = ?", [JSON.stringify(data), now, row.id]);
+      roles += 1;
+      points += level;
+    }
+    this.run("INSERT OR REPLACE INTO config_meta (key, value) VALUES (?, ?)", [
+      "skill_points_seeded",
+      `roles:${roles},points:${points}`,
+    ]);
+    if (roles > 0) this.logger.log(`存量库补发技能点：${roles} 个角色，共 ${points} 点（每级 1 点）`);
   }
 
   /**

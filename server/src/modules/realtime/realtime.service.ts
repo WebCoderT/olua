@@ -16,6 +16,7 @@ import { roleAttributeSourceOf, summarizeRoleAttributes } from "../combat/role-a
 import { RuntimeConfigService } from "../game-config/runtime-config.service";
 import { RolesService } from "../roles/roles.service";
 import { decodeStoredRoleData } from "../roles/role-data.util";
+import { skillPointsOf } from "../../common/utils/skill-upgrade.util";
 import { RealtimeTicketDto } from "./dto/realtime.dto";
 import { BlockService } from "./block.service";
 import { PartyService } from "../party/party.service";
@@ -517,6 +518,8 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
         title: Math.max(0, Math.floor(Number(data.title) || 0)),
         soulOfWar: Math.max(0, Math.floor(Number(data.soulOfWar) || 0)),
         rank: Math.max(0, Math.floor(Number(data.rank) || 0)),
+        // 技能点（#828）：升级在本进程结算，帧不带的活面板会停在旧点数
+        skillPoints: skillPointsOf(data.skillPoints),
         // 体验状态（#596 换设备云同步）：归客户端书写、服务端存证，帧带回让另一台设备 /
         // 后台改动不用重新选角就能看到。形状由客户端配置定义，这里只认「存在且形状对」
         ...(Array.isArray(data.shortcutKeys) ? { shortcutKeys: data.shortcutKeys } : {}),

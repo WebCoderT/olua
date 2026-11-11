@@ -72,6 +72,8 @@ const WEIGHT = {
   "test:e2e:push": 3,
   // 六段各要等一次「怪的下一次出手」（9001 冷却 6 秒）+ 三处 3 秒级观测窗 + 五次 PATCH
   "test:e2e:status": 10,
+  // 起一次实时连接 + 三刀（每刀前按真客户端冷却等 1.1 秒）+ 两次技能 PATCH 与两次 1.2 秒 TTL 等待
+  "test:e2e:skill-upgrade": 4,
 };
 
 function weightOf(script) {

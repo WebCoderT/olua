@@ -9,6 +9,7 @@ import { BagOpDto, BagOpResultDto } from "./dto/bag-op.dto";
 import { DrugUseDto, DrugUseResultDto } from "./dto/drug-use.dto";
 import { MoneyUseDto, MoneyUseResultDto } from "./dto/money-use.dto";
 import { LevelScrollUseDto, LevelScrollUseResultDto } from "./dto/level-scroll-use.dto";
+import { SkillUpgradeDto, SkillUpgradeResultDto } from "./dto/skill-upgrade.dto";
 import { GrowthUpgradeDto } from "./dto/growth-upgrade.dto";
 import { GrowthUpgradeResultDto, RoleDto, RoleSummaryDto } from "./dto/role.dto";
 import { MallPurchaseDto, MallPurchaseResultDto } from "./dto/mall-purchase.dto";
@@ -216,6 +217,31 @@ export class RolesController {
     @Body() dto: LevelScrollUseDto,
   ): LevelScrollUseResultDto {
     return this.rolesService.useLevelScroll(user.id, id, dto);
+  }
+
+  @Post(":id/skill-upgrade")
+  @HttpCode(HttpStatus.OK)
+  @ApiPlayerDoc({
+    operationId: "role.skillUpgrade",
+    summary: "技能升级（技能点与技能等级都在服务端结算）",
+    description:
+      "把**一个**技能从当前等级升到下一级：花费 `当前等级` 技能点（1→2 花 1 点、2→3 花 2 点），等级 +1，" +
+      "伤害倍率随之取 `damageCoefficients` 的下一档。**客户端报「升哪个技能」，不报等级与花费** —— " +
+      "改包也跳不了级、定不了价。\n" +
+      "技能点来源：建号 1 点，之后每升 1 级角色 +1 点（含升级卷轴）。\n" +
+      "上限 = 该技能的伤害系数档数（11 档 = 11 级），到顶后要运营加档才抬得动。\n\n" +
+      "失败路径：20034 目标不合法（技能 id 认不出 / 系数为空没有可升的档 / 还没学会）；" +
+      "20035 技能点不足（`details` 带 need / owned）；20036 该技能已到顶；" +
+      "带上 revision 时乐观锁语义与 role.save 相同（20006 / 20007）。",
+  })
+  @ApiParam({ name: "id", description: "角色 id" })
+  @ApiDataResponse(SkillUpgradeResultDto, { description: "升级后的角色（含本次花费、剩余点数与下一级价格）" })
+  skillUpgrade(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("id") id: string,
+    @Body() dto: SkillUpgradeDto,
+  ): SkillUpgradeResultDto {
+    return this.rolesService.upgradeSkill(user.id, id, dto);
   }
 
   @Post(":id/revive")

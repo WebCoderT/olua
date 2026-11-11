@@ -34,6 +34,14 @@ export class Role implements BattleAttributes {
   avatar: number = 0;
   /** 绑定元宝（唯一货币） */
   bindGold: number = 0;
+  /**
+   * 剩余技能点（#828）
+   *
+   * 归服务端：建号 1 点、之后每升 1 级 +1（含升级卷轴），花在 `POST /roles/:id/skill-upgrade`。
+   * 客户端**只显示**，不本地加减（余额的唯一真相在存档里，服务端按它判够不够）。
+   * 老存档没有这个字段时由 `ensureRoleDefaults` 补 0，服务端那边有一次性的按等级补发。
+   */
+  skillPoints: number = 0;
   exp: number = 0;
   maxHp: number;
   hp: number;

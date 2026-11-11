@@ -159,6 +159,17 @@ export type LevelScrollUse = {
   revision: number;
 };
 
+export type SkillUpgrade = {
+  /**
+   * 要升的技能 id（必须是已学会的技能，见 `data.skills`）
+   */
+  skillId: string;
+  /**
+   * 修订号（乐观锁，必填）：客户端读到的值，与服务端不一致时 20006，需先拉最新存档（B62 / #820）
+   */
+  revision: number;
+};
+
 export type FashionBuy = {
   /**
    * 要买的时装 id（fashions 表主键，如 cloth_2）
@@ -3586,6 +3597,81 @@ export type LevelScrollUseResult = {
    * 升到下一级所需经验（客户端进度条用；满级为 0）
    */
   expNeed: number;
+};
+
+export type SkillUpgradeResult = {
+  /**
+   * 角色 id
+   */
+  id: string;
+  /**
+   * 所属账号 id
+   */
+  accountId: string;
+  /**
+   * 角色名
+   */
+  name: string;
+  /**
+   * 职业：1 战士 / 2 魔法师 / 3 道士 / 4 全职业
+   */
+  occupation: string;
+  /**
+   * 性别：1 男 / 2 女 / 3 全性别
+   */
+  sex: string;
+  /**
+   * 等级
+   */
+  level: number;
+  /**
+   * 是否当前选中（在线）角色
+   */
+  online: boolean;
+  /**
+   * 修订号（每次落库 +1；客户端保存进度时带上它做乐观锁）
+   */
+  revision: number;
+  /**
+   * 创建时间（毫秒）
+   */
+  createdAt: number;
+  /**
+   * 最近更新时间（毫秒）
+   */
+  updatedAt: number;
+  /**
+   * 角色完整数据（客户端 entities/Role 的 JSON 快照，服务端按不透明文档存取；管理端只编辑其中的常用字段）
+   */
+  data: Record<string, unknown>;
+  /**
+   * 升级的技能 id
+   */
+  skillId: string;
+  /**
+   * 升级前的技能等级
+   */
+  fromLevel: number;
+  /**
+   * 升级后的技能等级（恒为 fromLevel + 1）
+   */
+  toLevel: number;
+  /**
+   * 本次消耗的技能点
+   */
+  cost: number;
+  /**
+   * 升级后剩余的技能点
+   */
+  remainPoints: number;
+  /**
+   * 再升一级要多少点（已到顶时为 0）
+   */
+  nextCost: number;
+  /**
+   * 该技能的等级上限（= 伤害系数档数）
+   */
+  maxLevel: number;
 };
 
 export type Zone = {

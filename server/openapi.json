@@ -1030,6 +1030,70 @@
         }
       }
     },
+    "/roles/{id}/skill-upgrade": {
+      "post": {
+        "description": "把**一个**技能从当前等级升到下一级：花费 `当前等级` 技能点（1→2 花 1 点、2→3 花 2 点），等级 +1，伤害倍率随之取 `damageCoefficients` 的下一档。**客户端报「升哪个技能」，不报等级与花费** —— 改包也跳不了级、定不了价。\n技能点来源：建号 1 点，之后每升 1 级角色 +1 点（含升级卷轴）。\n上限 = 该技能的伤害系数档数（11 档 = 11 级），到顶后要运营加档才抬得动。\n\n失败路径：20034 目标不合法（技能 id 认不出 / 系数为空没有可升的档 / 还没学会）；20035 技能点不足（`details` 带 need / owned）；20036 该技能已到顶；带上 revision 时乐观锁语义与 role.save 相同（20006 / 20007）。\n\n---\n\n**鉴权**：客户端令牌（`player`），只能操作令牌所属账号自己的数据。",
+        "operationId": "role.skillUpgrade",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "角色 id",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SkillUpgradeDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "升级后的角色（含本次花费、剩余点数与下一级价格）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/SkillUpgradeResultDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "player": []
+          }
+        ],
+        "summary": "技能升级（技能点与技能等级都在服务端结算）",
+        "tags": [
+          "客户端"
+        ],
+        "x-olua-audience": "player",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/SkillUpgradeResultDto"
+        }
+      }
+    },
     "/roles/{id}/revive": {
       "post": {
         "description": "死亡状态（hp ≤ 0）时把血蓝补到服务端重算的上限、清零自然回复累加器；未死亡时拒收（20015）。\n\n客户端死亡弹窗的两个选项（原地 / 回城复活）都调它，差别只在**复活位置**（纯演出），\n满血这件事只在服务端发生 —— 改包上报满血存档是无效的（血蓝在 save 时被服务端结算值覆盖）。\n\nrevision 不推进（与受击同一纪律：血量型写入走实时帧），返回值带上限供客户端照搬。\n\n---\n\n**鉴权**：客户端令牌（`player`），只能操作令牌所属账号自己的数据。",
@@ -16160,6 +16224,25 @@
           "revision"
         ]
       },
+      "SkillUpgradeDto": {
+        "type": "object",
+        "properties": {
+          "skillId": {
+            "type": "string",
+            "description": "要升的技能 id（必须是已学会的技能，见 `data.skills`）",
+            "example": "1000"
+          },
+          "revision": {
+            "type": "number",
+            "description": "修订号（乐观锁，必填）：客户端读到的值，与服务端不一致时 20006，需先拉最新存档（B62 / #820）",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "skillId",
+          "revision"
+        ]
+      },
       "FashionBuyDto": {
         "type": "object",
         "properties": {
@@ -21416,6 +21499,104 @@
           "toLevel",
           "exp",
           "expNeed"
+        ]
+      },
+      "SkillUpgradeResultDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "角色 id"
+          },
+          "accountId": {
+            "type": "string",
+            "description": "所属账号 id"
+          },
+          "name": {
+            "type": "string",
+            "description": "角色名"
+          },
+          "occupation": {
+            "type": "string",
+            "description": "职业：1 战士 / 2 魔法师 / 3 道士 / 4 全职业"
+          },
+          "sex": {
+            "type": "string",
+            "description": "性别：1 男 / 2 女 / 3 全性别"
+          },
+          "level": {
+            "type": "number",
+            "description": "等级"
+          },
+          "online": {
+            "type": "boolean",
+            "description": "是否当前选中（在线）角色"
+          },
+          "revision": {
+            "type": "number",
+            "description": "修订号（每次落库 +1；客户端保存进度时带上它做乐观锁）"
+          },
+          "createdAt": {
+            "type": "number",
+            "description": "创建时间（毫秒）"
+          },
+          "updatedAt": {
+            "type": "number",
+            "description": "最近更新时间（毫秒）"
+          },
+          "data": {
+            "type": "object",
+            "description": "角色完整数据（客户端 entities/Role 的 JSON 快照，服务端按不透明文档存取；管理端只编辑其中的常用字段）",
+            "additionalProperties": true
+          },
+          "skillId": {
+            "type": "string",
+            "description": "升级的技能 id"
+          },
+          "fromLevel": {
+            "type": "number",
+            "description": "升级前的技能等级"
+          },
+          "toLevel": {
+            "type": "number",
+            "description": "升级后的技能等级（恒为 fromLevel + 1）"
+          },
+          "cost": {
+            "type": "number",
+            "description": "本次消耗的技能点"
+          },
+          "remainPoints": {
+            "type": "number",
+            "description": "升级后剩余的技能点"
+          },
+          "nextCost": {
+            "type": "number",
+            "description": "再升一级要多少点（已到顶时为 0）"
+          },
+          "maxLevel": {
+            "type": "number",
+            "description": "该技能的等级上限（= 伤害系数档数）"
+          }
+        },
+        "required": [
+          "id",
+          "accountId",
+          "name",
+          "occupation",
+          "sex",
+          "level",
+          "online",
+          "revision",
+          "createdAt",
+          "updatedAt",
+          "data",
+          "skillId",
+          "fromLevel",
+          "toLevel",
+          "cost",
+          "remainPoints",
+          "nextCost",
+          "maxLevel"
         ]
       },
       "ZoneDto": {

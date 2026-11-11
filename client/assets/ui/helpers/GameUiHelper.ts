@@ -2903,6 +2903,17 @@ export default class GameUiHelper {
 
   //#region 技能列表
 
+  /**
+   * 创建技能点标签（#828）：弹窗顶部一行「技能点：N」
+   *
+   * 返回**节点**（与其它零件一致），调用方自己 `getComponent(Label)` 拿来改数字 ——
+   * 升级成功后只改这一行 + 重建技能行，不重开弹窗（重开会把滚动位置弹回顶部）。
+   */
+  static createSkillPointsLabel(): Node {
+    const cfg = skillListDialogLayout.points;
+    return UiHelper.createLabel(cfg.name, "", Color.WHITE, cfg.fontSize, cfg.position, cfg.size);
+  }
+
   /** 创建技能列表滚动区（几何见 configs/hudLayout.skillListDialogLayout.list） */
   static createSkillListView(): Node {
     const list = skillListDialogLayout.list;
@@ -2918,8 +2929,14 @@ export default class GameUiHelper {
    *
    * **行内不用水平 Layout**：行高变成 40~82 之后，Layout 会把图标和说明列垂直居中，
    * 图标就浮在行中间、看起来像属于上一条技能。这里手动摆：图标与说明列都**贴行顶**。
+   *
+   * 行尾的升级按钮（#828）：**只有学过的技能才有**。按钮上不写花费 —— `当前等级`
+   * 这条公式只在服务端（`common/utils/skill-upgrade.util`），写到界面上就是第二个真相，
+   * 服务端改一次公式这里就变成骗人的。点了之后花多少、还剩多少由服务端的回执 +
+   * 浮动提示告诉玩家。到顶的技能照样给按钮：玩家点一下收到 20036「已经练到顶」，
+   * 比界面上悄悄少一个按钮更好懂（客户端不知道档数，猜不出来）。
    */
-  static createSkillItem(role: Role, skillId: SkillId, onOpenShortcutKey: () => void): Node {
+  static createSkillItem(role: Role, skillId: SkillId, onOpenShortcutKey: () => void, onUpgrade: () => void): Node {
     const skillConfig = skills.get(skillId);
     const rowCfg = skillListDialogLayout.row;
     const descCfg = rowCfg.desc;
@@ -2933,10 +2950,12 @@ export default class GameUiHelper {
     const left = -rowCfg.width / 2;
     const top = rowHeight / 2;
     const iconCenterX = left + rowCfg.iconSize / 2;
+    // 图标垂直中心：贴行顶（见上方说明，不用 Layout 居中）。升级按钮与它同一水平线
+    const iconCenterY = top - descCfg.paddingY - rowCfg.iconSize / 2;
     const skillIcon = UiHelper.createSprite(
       skillId,
       skillConfig.icon,
-      new Vec2(iconCenterX, top - descCfg.paddingY - rowCfg.iconSize / 2),
+      new Vec2(iconCenterX, iconCenterY),
       new Size(rowCfg.iconSize, rowCfg.iconSize),
     );
     if (!role.skills[skillId]) skillIcon.getComponent(Sprite).grayscale = true;
@@ -2978,6 +2997,29 @@ export default class GameUiHelper {
     descLabel.lineHeight = descCfg.lineHeight;
     description.addChild(skillDesc);
     node.addChild(description);
+    // 升级按钮（#828）：贴行右缘、与图标同一水平线。没学过的技能没有按钮 ——
+    // 「升一个还没学的技能」在服务端也是 20034，界面上不该给这个入口
+    if (role.skills[skillId]) {
+      const upgradeCfg = rowCfg.upgrade;
+      const upgradeButton = UiHelper.createButton(
+        `${skillId}_upgrade_button`,
+        uiImages.smallButtonBackground,
+        new Vec2(rowCfg.width / 2 - upgradeCfg.width / 2, iconCenterY),
+        new Size(upgradeCfg.width, upgradeCfg.height),
+      );
+      upgradeButton.addChild(
+        UiHelper.createLabel(
+          `${skillId}_upgrade_label`,
+          upgradeCfg.label,
+          Color.WHITE,
+          uiSize.smallButtonFontSize,
+          new Vec2(),
+          new Size(upgradeCfg.width, upgradeCfg.height),
+        ),
+      );
+      upgradeButton.on(Node.EventType.TOUCH_END, onUpgrade, this);
+      node.addChild(upgradeButton);
+    }
     return node;
   }
 
