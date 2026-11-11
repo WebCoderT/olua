@@ -44,7 +44,7 @@ export interface SendMailInput {
   kind: string;
   title: string;
   body?: string;
-  gold?: number;
+  bindGold?: number;
   exp?: number;
   items?: RewardItem[];
   /**
@@ -133,7 +133,7 @@ export class GameMailService {
       if (!this.mails.markClaimed(mail.id, now)) {
         throw BizException.conflict(BizCode.MAIL_ALREADY_CLAIMED, "这封邮件的附件已经领过了");
       }
-      const settled = this.grantAll(accountId, role.id, [{ gold: mail.gold, exp: mail.exp, items }]);
+      const settled = this.grantAll(accountId, role.id, [{ bindGold: mail.bind_gold, exp: mail.exp, items }]);
       // 领了等于看过：不让「已领但仍是未读」这种状态挂在红点上
       this.mails.markRead(mail.id, now);
       return settled;
@@ -150,7 +150,7 @@ export class GameMailService {
     result.unread = box.unread;
     result.unclaimed = box.unclaimed;
     result.channels = box.channels;
-    result.gold = mail.gold;
+    result.bindGold = mail.bind_gold;
     result.exp = mail.exp;
     result.items = items;
     result.level = granted.level;
@@ -173,7 +173,7 @@ export class GameMailService {
    * 客户端只看到一句报错」。现在**每封一个独立事务 + 独立 try/catch**：
    *
    * - 背包满 → 记进 `failures`，**继续往后领**：它只挡「要放物品」的那几封，
-   *   排在后面的纯金币 / 纯经验邮件照样能到手（这正是「一箱补偿里能领的先领完」）；
+   *   排在后面的纯绑定元宝 / 纯经验邮件照样能到手（这正是「一箱补偿里能领的先领完」）；
    * - 其他异常（奖励物品不存在 20003 / 乐观锁 409 / 已被人领走 50142）→ 同样只影响这一封。
    *
    * 失败清单透传给客户端（`failures[]` + `failedCount`），玩家能知道「领了 3 封、2 封没领到」，
@@ -184,7 +184,7 @@ export class GameMailService {
     const scope = this.scopeOf(channel);
     const pending = this.mails.listUnclaimed(role.id, scope, Date.now());
 
-    const lines: Array<{ gold: number; exp: number; items: RewardItem[] }> = [];
+    const lines: Array<{ bindGold: number; exp: number; items: RewardItem[] }> = [];
     /** 领到的邮件（#886）：循环里收着，末尾一次 recordMany —— 一键领取可能几十封 */
     const claimedMails: Array<{ mail: RoleMailRow; items: RewardItem[] }> = [];
     /** 没领到的（#870）：一封一条，随结果透传给客户端 */
@@ -200,16 +200,16 @@ export class GameMailService {
           if (!this.mails.markClaimed(mail.id, now)) {
             throw BizException.conflict(BizCode.MAIL_ALREADY_CLAIMED, "这封邮件的附件已经领过了");
           }
-          this.roles.grantQuestRewards(accountId, role.id, null, { gold: mail.gold, exp: mail.exp, items }, "mail");
+          this.roles.grantQuestRewards(accountId, role.id, null, { bindGold: mail.bind_gold, exp: mail.exp, items }, "mail");
           this.mails.markRead(mail.id, now);
         });
       } catch (error) {
-        // 背包满：它不是「整单失败」，只挡这一封；后面的纯金币邮件仍能领（#870）
+        // 背包满：它不是「整单失败」，只挡这一封；后面的纯绑定元宝邮件仍能领（#870）
         if (isBizCode(error, BizCode.MALL_BAG_FULL)) stoppedByBag = true;
         failures.push(failureOf(mail.id, error));
         continue;
       }
-      lines.push({ gold: mail.gold, exp: mail.exp, items });
+      lines.push({ bindGold: mail.bind_gold, exp: mail.exp, items });
       claimedMails.push({ mail, items });
       claimedCount += 1;
     }
@@ -225,7 +225,7 @@ export class GameMailService {
     result.unclaimed = box.unclaimed;
     result.channels = box.channels;
     result.claimedCount = claimedCount;
-    result.gold = lines.reduce((sum, line) => sum + line.gold, 0);
+    result.bindGold = lines.reduce((sum, line) => sum + line.bindGold, 0);
     result.exp = lines.reduce((sum, line) => sum + line.exp, 0);
     result.items = mergeItems(lines.flatMap((line) => line.items));
     result.level = level;
@@ -239,8 +239,8 @@ export class GameMailService {
   /**
    * 删除（还有没领的奖励就不能删）
    *
-   * 判据是 {@link hasUnclaimedReward}：**金币 / 经验 / 附件任一未领就拒**（#866）。
-   * 老实现只数 `attachments`，于是一封「补偿 5000 金币」的邮件在没领时就能被删掉，
+   * 判据是 {@link hasUnclaimedReward}：**绑定元宝 / 经验 / 附件任一未领就拒**（#866）。
+   * 老实现只数 `attachments`，于是一封「补偿 5000 绑定元宝」的邮件在没领时就能被删掉，
    * 奖励直接消失 —— 而玩家点删除时多半以为「这封我看过了」，没有「我在扔钱」的预期。
    *
    * 纯文本 / 公告邮件没有奖励，删它不拦（那才是「看过了，清掉」的正常语义）。
@@ -270,7 +270,7 @@ export class GameMailService {
       kind: input.kind,
       title: input.title,
       body: input.body ?? "",
-      gold: Math.max(0, Math.floor(input.gold ?? 0)),
+      bind_gold: Math.max(0, Math.floor(input.bindGold ?? 0)),
       exp: Math.max(0, Math.floor(input.exp ?? 0)),
       attachments: JSON.stringify(input.items ?? []),
       read_at: null,
@@ -312,7 +312,7 @@ export class GameMailService {
       kind: "admin",
       title: dto.title,
       body: dto.body,
-      gold: dto.gold,
+      bindGold: dto.bindGold,
       exp: dto.exp,
       items: dto.items,
       ttlMs: 0,
@@ -409,7 +409,7 @@ export class GameMailService {
       roleName: role.name,
       target: mail.id,
       amount: items.length,
-      detail: { title: mail.title, channel: mail.channel, gold: mail.gold, exp: mail.exp, items },
+      detail: { title: mail.title, channel: mail.channel, bindGold: mail.bind_gold, exp: mail.exp, items },
     };
   }
 
@@ -422,16 +422,16 @@ export class GameMailService {
   private grantAll(
     accountId: string,
     roleId: string,
-    lines: Array<{ gold: number; exp: number; items: RewardItem[] }>,
+    lines: Array<{ bindGold: number; exp: number; items: RewardItem[] }>,
   ): { level: number; leveledUp: boolean } {
-    const gold = lines.reduce((sum, line) => sum + line.gold, 0);
+    const bindGold = lines.reduce((sum, line) => sum + line.bindGold, 0);
     const exp = lines.reduce((sum, line) => sum + line.exp, 0);
     const items = lines.flatMap((line) => line.items);
-    if (gold <= 0 && exp <= 0 && items.length === 0) {
+    if (bindGold <= 0 && exp <= 0 && items.length === 0) {
       const role = this.roles.online(accountId);
       return { level: role?.level ?? 1, leveledUp: false };
     }
-    const settled = this.roles.grantQuestRewards(accountId, roleId, null, { gold, exp, items }, "mail");
+    const settled = this.roles.grantQuestRewards(accountId, roleId, null, { bindGold, exp, items }, "mail");
     return { level: settled.level, leveledUp: settled.leveledUp };
   }
 
@@ -450,17 +450,17 @@ function isExpired(row: RoleMailRow, now: number): boolean {
 }
 
 /**
- * 这封邮件带奖励吗（金币 / 经验 / 附件任一存在）
+ * 这封邮件带奖励吗（绑定元宝 / 经验 / 附件任一存在）
  *
- * **三个都是奖励载体**。老实现处处只认 `attachments`，于是「补偿 5000 金币」这种邮件
+ * **三个都是奖励载体**。老实现处处只认 `attachments`，于是「补偿 5000 绑定元宝」这种邮件
  * 在系统眼里是一封「空信」—— 能删（#866）、不算待领（#869）、过期就被清（#867）。
  * 判据收在这一个函数里，三处读同一个答案。
  *
  * 与 `role-mail.repository.ts` 的 `purgeExpired` 是同一个口径，那边只能写成 SQL
- * （`gold > 0 OR exp > 0 OR attachments != '[]'`），改一处必须同时改另一边。
+ * （`bindGold > 0 OR exp > 0 OR attachments != '[]'`），改一处必须同时改另一边。
  */
 function hasReward(row: RoleMailRow): boolean {
-  return row.gold > 0 || row.exp > 0 || parseRewardItems(row.attachments).length > 0;
+  return row.bind_gold > 0 || row.exp > 0 || parseRewardItems(row.attachments).length > 0;
 }
 
 /** 还有没到手的奖励吗（已领过的一律不算） */

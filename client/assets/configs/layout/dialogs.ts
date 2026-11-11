@@ -326,7 +326,7 @@ export const fashionDialogLayout = {
     border: new Color(92, 78, 52, 255),
     /** 未穿戴卡片的角标颜色 */
     stateColor: new Color(170, 170, 170, 255),
-    /** 可购买卡片的价格角标色（与元宝同色系） */
+    /** 可购买卡片的价格角标色（与绑定元宝同色系） */
     buyColor: new Color(226, 192, 116, 255),
     /** 未拥有卡片的底色 / 描边 / 图标与名称置灰色（#596：没有的看得到、穿不了） */
     lockedFill: new Color(16, 14, 12, 200),
@@ -339,7 +339,7 @@ export const fashionDialogLayout = {
     wearable: "点击穿上",
     unsupported: "无外观",
     /** 未拥有但可购买（upgrade 渠道且 sellPrice > 0），{price} = 售价 */
-    buyable: "{price} 元宝",
+    buyable: "{price} 绑定元宝",
     /** 未开放获取渠道（grant / unavailable / 0 价 upgrade） */
     locked: "未开放",
   },
@@ -1270,7 +1270,7 @@ export const questDialogLayout = {
     /** 目标行：{type} · {target} ×{count} */
     objective: "{type} · {target} ×{count}",
     /** 交接奖励行 */
-    rewards: "奖励：绑定元宝 {gold} · 经验 {exp}",
+    rewards: "奖励：绑定元宝 {bindGold} · 经验 {exp}",
     /** 接取 / 交付失败的兜底提示（服务端的错误文案更具体，走请求层统一提示） */
     acceptFailed: "接取失败",
     submitFailed: "交付失败",

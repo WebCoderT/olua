@@ -34,7 +34,7 @@ export class RoleMailRepository {
   insert(row: RoleMailRow): void {
     this.db.run(
       `INSERT INTO role_mails
-         (id, role_id, channel, kind, title, body, gold, exp, attachments, read_at, claimed_at, expires_at, created_at)
+         (id, role_id, channel, kind, title, body, bind_gold, exp, attachments, read_at, claimed_at, expires_at, created_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         row.id,
@@ -43,7 +43,7 @@ export class RoleMailRepository {
         row.kind,
         row.title,
         row.body,
-        row.gold,
+        row.bind_gold,
         row.exp,
         row.attachments,
         row.read_at,
@@ -74,7 +74,7 @@ export class RoleMailRepository {
   /*
    * 这里**没有** `countUnclaimed`（#869 删掉）。
    *
-   * 「待领」的判据是「未领 **且** 金币/经验/附件任一存在」—— 一条 `claimed_at IS NULL`
+   * 「待领」的判据是「未领 **且** 绑定元宝/经验/附件任一存在」—— 一条 `claimed_at IS NULL`
    * 的 COUNT 把它简化成「未领」，于是公告邮件永远算待领，红点清不掉、一键领取永远亮着。
    * 这个判据需要解析 JSON 附件，SQL 写不干净，所以它只存在于
    * `game-mail.service.ts` 的 `hasUnclaimedReward()`（与 `hasReward()` 同源），
@@ -121,9 +121,9 @@ export class RoleMailRepository {
    * 判据全在 SQL 里，与玩家侧「删一封」的 `remove` 同一个理由的两面：
    * - `expires_at <= ?`：真的过期了（NULL = 永不过期，永远不进来）；
    * - **`claimed_at IS NOT NULL OR 三样奖励都没有`**：已领、或者压根没奖励 ——
-   *   只要还有**没领的奖励**（金币 / 经验 / 附件任一），就不允许物理删除。
+   *   只要还有**没领的奖励**（绑定元宝 / 经验 / 附件任一），就不允许物理删除。
    *
-   * #867 之前这里写的是 `attachments = '[]'`，于是「纯金币 / 纯经验」的补偿邮件
+   * #867 之前这里写的是 `attachments = '[]'`，于是「纯绑定元宝 / 纯经验」的补偿邮件
    * **未领就被删掉**（奖励凭空蒸发）。现在改成与 `hasUnclaimedReward()` 同源的判据：
    * 那种行只能靠 `GameMailAutoClaimService` 入包后（`claimed_at` 非空）再被清掉；
    * 入包一直失败（背包满到上限）的行会一直留着 —— 那是**有意的**，等人工。
@@ -139,7 +139,7 @@ export class RoleMailRepository {
       `SELECT id FROM role_mails
         WHERE expires_at IS NOT NULL AND expires_at <= ?
           AND (claimed_at IS NOT NULL
-               OR (gold <= 0 AND exp <= 0 AND (attachments = '[]' OR attachments = '')))
+               OR (bind_gold <= 0 AND exp <= 0 AND (attachments = '[]' OR attachments = '')))
         LIMIT ?`,
       [now, limit],
     );
@@ -153,8 +153,8 @@ export class RoleMailRepository {
    *
    * 三个判据写在 SQL 里，缺一个都会出事：
    * - **`expires_at <= ?`（传入 now + 提前量）**：只扫快过期的，早就不动；
-   * - **`(gold > 0 OR exp > 0 OR attachments 非空)`**：与 `hasUnclaimedReward()` 同源 ——
-   *   只认 `attachments` 会漏掉纯金币那批（那正是 #867 要救的）；
+   * - **`(bind_gold > 0 OR exp > 0 OR attachments 非空)`**：与 `hasUnclaimedReward()` 同源 ——
+   *   只认 `attachments` 会漏掉纯绑定元宝那批（那正是 #867 要救的）；
    * - **主人离线**（`accounts.online_role_id` 不是这个角色）：在线角色的存档在客户端手里，
    *   服务端改了库会被下一次全量覆盖冲掉，入包等于白做还可能丢东西。
    *
@@ -169,7 +169,7 @@ export class RoleMailRepository {
           AND m.expires_at IS NOT NULL AND m.expires_at <= ?
           AND m.auto_claimed_at = 0
           AND m.auto_attempts < ?
-          AND (m.gold > 0 OR m.exp > 0 OR (m.attachments <> '[]' AND m.attachments <> ''))
+          AND (m.bind_gold > 0 OR m.exp > 0 OR (m.attachments <> '[]' AND m.attachments <> ''))
           AND (a.online_role_id IS NULL OR a.online_role_id <> m.role_id)
         ORDER BY m.expires_at ASC, m.id ASC
         LIMIT ?`,

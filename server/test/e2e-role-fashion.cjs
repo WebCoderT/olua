@@ -11,7 +11,7 @@
  * · save：上报 fashionCloth 被库值回填、上报 fashionsOwned 被删除
  * · 老档迁移：清单没建过时，第一次穿 / 脱把当前穿着认领进清单
  * · wear：未拥有拒收（20017）；拥有后穿上成功（revision+1）；null 脱下幂等
- * · buy：未开放渠道拒收（20016）；管理端开放后元宝不足拒收（20011）；
+ * · buy：未开放渠道拒收（20016）；管理端开放后绑定元宝不足拒收（20011）；
  *   扣费与清单落账正确；重复购买拒收
  * · 管理端：PATCH fashionsOwned 发放 / 回收（grant 语义）
  * · 文档：fashionBuy / fashionWear 落在「玩家」分组，模型已登记
@@ -187,7 +187,7 @@ function roleData(id, name, overrides = {}) {
   check(wearOwned.data.fashionCloth === "cloth_3", "穿着态照搬服务端落账值", JSON.stringify(wearOwned.data.fashionCloth));
   check(wearOwned.data.revision === revisionBefore + 1, "穿着态是进度型写入，revision +1", `${wearOwned.data.revision} vs ${revisionBefore}`);
 
-  // 穿上不改数值（时装只换外观）：血蓝与元宝都不动
+  // 穿上不改数值（时装只换外观）：血蓝与绑定元宝都不动
   const afterWear = await api("GET", `roles/${roleId}`, { token });
   check(afterWear.data.revision === wearOwned.data.revision, "库里 revision 与应答一致");
   check(typeof afterWear.data.data.hp === "number" && afterWear.data.data.hp > 0, "穿上时装不动血量（只换外观）", JSON.stringify(afterWear.data.data.hp));
@@ -208,13 +208,13 @@ function roleData(id, name, overrides = {}) {
   const buyLocked = await api("POST", `roles/${roleId}/fashion-buy`, { token, body: { fashionId: "cloth_5", revision: await revOf(roleId, token) } });
   check(buyLocked.code === 20016 && buyLocked.status === 409, "未开放渠道拒收（20016 / 409）", `${buyLocked.code}/${buyLocked.status}`);
 
-  // 管理端开放渠道与定价（运营动作），元宝不足拒收
+  // 管理端开放渠道与定价（运营动作），绑定元宝不足拒收
   const openSale = await api("PATCH", "admin/fashions/cloth_5", { token: adminToken, body: { sellPrice: 50, acquireChannel: "upgrade" } });
   check(openSale.code === 0, "管理端开放 cloth_5 购买（价 50）", openSale.message);
   const buyPoor = await api("POST", `roles/${roleId}/fashion-buy`, { token, body: { fashionId: "cloth_5", revision: await revOf(roleId, token) } });
   check(buyPoor.code === 20011 && buyPoor.status === 409, "绑定元宝不足拒收（20011 / 409）", `${buyPoor.code}/${buyPoor.status}`);
 
-  // 管理端发元宝 → 购买成功：扣费、清单、revision 三处落账
+  // 管理端发绑定元宝 → 购买成功：扣费、清单、revision 三处落账
   await api("PATCH", `admin/roles/${roleId}`, { token: adminToken, body: { bindGold: 120 } });
   const revisionBeforeBuy = (await api("GET", `roles/${roleId}`, { token })).data.revision;
   const bought = await api("POST", `roles/${roleId}/fashion-buy`, { token, body: { fashionId: "cloth_5", revision: await revOf(roleId, token) } });

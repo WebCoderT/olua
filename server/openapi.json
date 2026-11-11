@@ -7515,7 +7515,7 @@
     },
     "/admin/money-items": {
       "get": {
-        "description": "面值表（出厂 3 种货币 × 8 档 = 24 条）。`keyword` 模糊匹配 id / 名称 / 描述；`currency` 只看某种货币（bindGold = 绑定元宝）。\n\n`sellPrice` 是客户端条目的售卖价（0 = 不可售卖），**商城售价归商城定价管理**，不在这里。\n\n**排序**：`sort` 取 `id` / `label` / `currency` / `amount` / `sellPrice` / `updatedAt`，`order` 取 asc / desc（默认货币升序，同货币按面值升序）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
+        "description": "面值表（出厂绑定元宝 8 档 = 8 条，唯一货币）。`keyword` 模糊匹配 id / 名称 / 描述；`currency` 只看某种货币（bindGold = 绑定元宝）。\n\n`sellPrice` 是客户端条目的售卖价（0 = 不可售卖），**商城售价归商城定价管理**，不在这里。\n\n**排序**：`sort` 取 `id` / `label` / `currency` / `amount` / `sellPrice` / `updatedAt`，`order` 取 asc / desc（默认货币升序，同货币按面值升序）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
         "operationId": "adminMoneyItem.list",
         "parameters": [
           {
@@ -7760,7 +7760,7 @@
             "name": "id",
             "required": true,
             "in": "path",
-            "description": "货币物品 id（如 money_silver_10）",
+            "description": "货币物品 id（如 money_bind_gold_10）",
             "schema": {
               "type": "string"
             }
@@ -13805,7 +13805,7 @@
     },
     "/quests/submit": {
       "post": {
-        "description": "kill/talk 要先到 ready（进度满）；collect 直接查背包 —— 材料不足 20017、奖励物品放不下背包 20012（进度行保持原状，补齐后可再来）。发奖（金币 / 经验 / 物品）与扣材料**一次落库**；daily 与 main 领奖后都**保留 claimed 行**（删行会抹掉「今天领过」的证据），日常的下一轮由 `reset_day` 天号判定。返回最新快照与奖励结算。\n\n---\n\n**鉴权**：客户端令牌（`player`），只能操作令牌所属账号自己的数据。",
+        "description": "kill/talk 要先到 ready（进度满）；collect 直接查背包 —— 材料不足 20017、奖励物品放不下背包 20012（进度行保持原状，补齐后可再来）。发奖（绑定元宝 / 经验 / 物品）与扣材料**一次落库**；daily 与 main 领奖后都**保留 claimed 行**（删行会抹掉「今天领过」的证据），日常的下一轮由 `reset_day` 天号判定。返回最新快照与奖励结算。\n\n---\n\n**鉴权**：客户端令牌（`player`），只能操作令牌所属账号自己的数据。",
         "operationId": "quest.submit",
         "parameters": [],
         "requestBody": {
@@ -14103,7 +14103,7 @@
     },
     "/achievements/claim": {
       "post": {
-        "description": "未达成 → 50132；已领过 → 50133；成就不存在 → 50131。\n\n发奖走与任务交付同一个入口（金币 / 经验 / 物品一次落库）。**背包放不下时整份奖励转成一封邮件**（#429）：照常记已领，返回的 `mailId` 非空，玩家去收件箱领 —— 不再出现「清包之前这条奖励一直卡在这里」。\n\n---\n\n**鉴权**：客户端令牌（`player`），只能操作令牌所属账号自己的数据。",
+        "description": "未达成 → 50132；已领过 → 50133；成就不存在 → 50131。\n\n发奖走与任务交付同一个入口（绑定元宝 / 经验 / 物品一次落库）。**背包放不下时整份奖励转成一封邮件**（#429）：照常记已领，返回的 `mailId` 非空，玩家去收件箱领 —— 不再出现「清包之前这条奖励一直卡在这里」。\n\n---\n\n**鉴权**：客户端令牌（`player`），只能操作令牌所属账号自己的数据。",
         "operationId": "achievement.claim",
         "parameters": [],
         "requestBody": {
@@ -14157,7 +14157,7 @@
     },
     "/mails/me": {
       "get": {
-        "description": "整份收件箱（新的在前）+ 未读数 + 未领数 + **每个频道的角标**。附件的 `gold` / `exp` / `attachments` 是**还没到手**的那份奖励，点领取之后才进角色存档。\n\n不做频道过滤：一次给全量，客户端本地按 `channel` 筛 —— 切页签不发请求，角标也永远按全量算。\n\n---\n\n**鉴权**：客户端令牌（`player`），只能操作令牌所属账号自己的数据。",
+        "description": "整份收件箱（新的在前）+ 未读数 + 未领数 + **每个频道的角标**。附件的 `bindGold` / `exp` / `attachments` 是**还没到手**的那份奖励，点领取之后才进角色存档。\n\n不做频道过滤：一次给全量，客户端本地按 `channel` 筛 —— 切页签不发请求，角标也永远按全量算。\n\n---\n\n**鉴权**：客户端令牌（`player`），只能操作令牌所属账号自己的数据。",
         "operationId": "gameMail.mine",
         "parameters": [],
         "responses": {
@@ -14255,7 +14255,7 @@
     },
     "/mails/{id}/claim": {
       "post": {
-        "description": "金币 / 经验 / 物品一次落库（与任务交付、成就领奖同一个发奖入口）。\n\n失败路径：50141 邮件不存在 / 50142 已经领过 / **20012 背包已满（邮件原样留着，清包后能再领）**。\n\n---\n\n**鉴权**：客户端令牌（`player`），只能操作令牌所属账号自己的数据。",
+        "description": "绑定元宝 / 经验 / 物品一次落库（与任务交付、成就领奖同一个发奖入口）。\n\n失败路径：50141 邮件不存在 / 50142 已经领过 / **20012 背包已满（邮件原样留着，清包后能再领）**。\n\n---\n\n**鉴权**：客户端令牌（`player`），只能操作令牌所属账号自己的数据。",
         "operationId": "gameMail.claim",
         "parameters": [
           {
@@ -14309,7 +14309,7 @@
     },
     "/mails/claim-all": {
       "post": {
-        "description": "按发出的时间正序逐封领取，**一封失败不拖累其他封**（#870）：每封一个独立事务 + 独立 try/catch，背包满 / 物品不存在 / 已被人领走都只影响那一封，其余照领。\n\n返回 `failures[]`（`mailId` / `code` / `reason`）说明哪几封没领到、为什么；`stoppedByBag` 为 true 表示**至少有一封**是因为背包满没领到（纯金币 / 纯经验邮件不受影响）。\n\n`channel` 可选：传了就只领这一栏（面板在「奖励」页签点一键领取时，不该顺手动到社交栏），不传 = 全部频道；传了非法值 → 40000。\n\n---\n\n**鉴权**：客户端令牌（`player`），只能操作令牌所属账号自己的数据。",
+        "description": "按发出的时间正序逐封领取，**一封失败不拖累其他封**（#870）：每封一个独立事务 + 独立 try/catch，背包满 / 物品不存在 / 已被人领走都只影响那一封，其余照领。\n\n返回 `failures[]`（`mailId` / `code` / `reason`）说明哪几封没领到、为什么；`stoppedByBag` 为 true 表示**至少有一封**是因为背包满没领到（纯绑定元宝 / 纯经验邮件不受影响）。\n\n`channel` 可选：传了就只领这一栏（面板在「奖励」页签点一键领取时，不该顺手动到社交栏），不传 = 全部频道；传了非法值 → 40000。\n\n---\n\n**鉴权**：客户端令牌（`player`），只能操作令牌所属账号自己的数据。",
         "operationId": "gameMail.claimAll",
         "parameters": [
           {
@@ -14363,7 +14363,7 @@
     },
     "/mails/{id}": {
       "delete": {
-        "description": "**奖励没领不能删**（50143）—— 删了等于替玩家扔掉奖励。「有奖励」= 金币 / 经验 / 附件任一（#866）：纯金币邮件即使 `attachments` 为空也拒删。已领的、以及三样都没有的纯公告可以删。\n\n---\n\n**鉴权**：客户端令牌（`player`），只能操作令牌所属账号自己的数据。",
+        "description": "**奖励没领不能删**（50143）—— 删了等于替玩家扔掉奖励。「有奖励」= 绑定元宝 / 经验 / 附件任一（#866）：纯绑定元宝邮件即使 `attachments` 为空也拒删。已领的、以及三样都没有的纯公告可以删。\n\n---\n\n**鉴权**：客户端令牌（`player`），只能操作令牌所属账号自己的数据。",
         "operationId": "gameMail.remove",
         "parameters": [
           {
@@ -14417,7 +14417,7 @@
     },
     "/admin/game-mail/roles/{id}": {
       "post": {
-        "description": "给指定角色发一封游戏内消息（收件箱四栏里的 `system` / `reward` 两栏）。\n\n- `channel` 只允许 `system` / `reward`：`social` / `combat` 是系统自动产生的事实记录，人工往里发会污染语义（传了 → 400）。\n- `gold` / `exp` / `items` 是**可选附件**：玩家在消息中心点「领取」才真的到手，发奖与任务交付走同一个入口；不传就是一封纯文本通知。\n- 收件人**不要求在线**：邮件本来就是异步的，离线角色下次上线自然看到。\n- 角色不存在 → 404；发给谁由路径上的角色 id 决定（角色运营台的「发消息」按钮会带上）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameMail:send`（补发游戏消息；角色：超级管理员 / 管理员）",
+        "description": "给指定角色发一封游戏内消息（收件箱四栏里的 `system` / `reward` 两栏）。\n\n- `channel` 只允许 `system` / `reward`：`social` / `combat` 是系统自动产生的事实记录，人工往里发会污染语义（传了 → 400）。\n- `bindGold` / `exp` / `items` 是**可选附件**：玩家在消息中心点「领取」才真的到手，发奖与任务交付走同一个入口；不传就是一封纯文本通知。\n- 收件人**不要求在线**：邮件本来就是异步的，离线角色下次上线自然看到。\n- 角色不存在 → 404；发给谁由路径上的角色 id 决定（角色运营台的「发消息」按钮会带上）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameMail:send`（补发游戏消息；角色：超级管理员 / 管理员）",
         "operationId": "adminGameMail.send",
         "parameters": [
           {
@@ -16420,7 +16420,7 @@
           },
           "bindGold": {
             "type": "number",
-            "description": "绑定元宝（唯一货币，gold / silver 已随 #843/#844 收敛删除）"
+            "description": "绑定元宝（唯一货币，旧币种字段已随 #843/#844 收敛删除）"
           },
           "exp": {
             "type": "number",
@@ -16699,9 +16699,9 @@
       "UpdateAchievementRewardsDto": {
         "type": "object",
         "properties": {
-          "gold": {
+          "bindGold": {
             "type": "number",
-            "description": "金币（≥0）"
+            "description": "绑定元宝（≥0）"
           },
           "exp": {
             "type": "number",
@@ -18419,9 +18419,9 @@
       "UpdateQuestRewardsDto": {
         "type": "object",
         "properties": {
-          "gold": {
+          "bindGold": {
             "type": "number",
-            "description": "金币（≥0）"
+            "description": "绑定元宝（≥0）"
           },
           "exp": {
             "type": "number",
@@ -19606,9 +19606,9 @@
             "description": "正文（纯文本，换行用 \\n；可空）",
             "maxLength": 1000
           },
-          "gold": {
+          "bindGold": {
             "type": "number",
-            "description": "附件金币（不传 = 没有）"
+            "description": "附件绑定元宝（不传 = 没有）"
           },
           "exp": {
             "type": "number",
@@ -26622,9 +26622,9 @@
       "QuestRewardsDto": {
         "type": "object",
         "properties": {
-          "gold": {
+          "bindGold": {
             "type": "number",
-            "description": "金币"
+            "description": "绑定元宝"
           },
           "exp": {
             "type": "number",
@@ -26639,7 +26639,7 @@
           }
         },
         "required": [
-          "gold",
+          "bindGold",
           "exp",
           "items"
         ]
@@ -26839,9 +26839,9 @@
       "QuestRewardResultDto": {
         "type": "object",
         "properties": {
-          "gold": {
+          "bindGold": {
             "type": "number",
-            "description": "金币"
+            "description": "绑定元宝"
           },
           "exp": {
             "type": "number",
@@ -26864,7 +26864,7 @@
           }
         },
         "required": [
-          "gold",
+          "bindGold",
           "exp",
           "items",
           "level",
@@ -27796,9 +27796,9 @@
       "AchievementRewardsDto": {
         "type": "object",
         "properties": {
-          "gold": {
+          "bindGold": {
             "type": "number",
-            "description": "金币"
+            "description": "绑定元宝"
           },
           "exp": {
             "type": "number",
@@ -27813,7 +27813,7 @@
           }
         },
         "required": [
-          "gold",
+          "bindGold",
           "exp",
           "items"
         ]
@@ -29473,9 +29473,9 @@
               }
             ]
           },
-          "gold": {
+          "bindGold": {
             "type": "number",
-            "description": "本次发放的金币"
+            "description": "本次发放的绑定元宝"
           },
           "exp": {
             "type": "number",
@@ -29505,7 +29505,7 @@
         "required": [
           "achievements",
           "summary",
-          "gold",
+          "bindGold",
           "exp",
           "items",
           "level",
@@ -29611,9 +29611,9 @@
             "type": "string",
             "description": "正文（纯文本，换行用 \\n）"
           },
-          "gold": {
+          "bindGold": {
             "type": "number",
-            "description": "附件金币（0 = 没有）"
+            "description": "附件绑定元宝（0 = 没有）"
           },
           "exp": {
             "type": "number",
@@ -29645,7 +29645,7 @@
           "kind",
           "title",
           "body",
-          "gold",
+          "bindGold",
           "exp",
           "attachments",
           "read",
@@ -29738,9 +29738,9 @@
               "$ref": "#/components/schemas/MailChannelSummaryDto"
             }
           },
-          "gold": {
+          "bindGold": {
             "type": "number",
-            "description": "本次到手的金币"
+            "description": "本次到手的绑定元宝"
           },
           "exp": {
             "type": "number",
@@ -29767,7 +29767,7 @@
           "unread",
           "unclaimed",
           "channels",
-          "gold",
+          "bindGold",
           "exp",
           "items",
           "level",
@@ -29825,9 +29825,9 @@
             "type": "number",
             "description": "本次成功领取的封数"
           },
-          "gold": {
+          "bindGold": {
             "type": "number",
-            "description": "本次到手的金币合计"
+            "description": "本次到手的绑定元宝合计"
           },
           "exp": {
             "type": "number",
@@ -29870,7 +29870,7 @@
           "unclaimed",
           "channels",
           "claimedCount",
-          "gold",
+          "bindGold",
           "exp",
           "items",
           "level",

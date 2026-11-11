@@ -23,7 +23,7 @@ export interface MailAutoClaimSweepResult {
  * ## 解决的问题
  *
  * 邮件到期后**读口就滤掉了**（#439），玩家 30 天没上线回来只看到「邮件没了」。而清理任务
- * 又不敢删带未领奖励的行，于是 `attachments = '[]'` 的**纯金币 / 纯经验补偿邮件**反而被
+ * 又不敢删带未领奖励的行，于是 `attachments = '[]'` 的**纯绑定元宝 / 纯经验补偿邮件**反而被
  * 直接物理删除，奖励凭空蒸发 —— 这是 #867 真正的病灶（不是 issue 原文说的「磁盘只增」）。
  *
  * 口径（已定）：**过期不删、自动入包**。到期前 3 天把附件塞进背包，入包成功才允许清理。
@@ -93,14 +93,14 @@ export class GameMailAutoClaimService implements OnModuleInit, OnModuleDestroy {
           if (!this.mails.markClaimed(mail.id, now)) {
             throw BizException.conflict(BizCode.MAIL_ALREADY_CLAIMED, "这封邮件的附件已经领过了");
           }
-          this.roles.grantByRoleId(mail.role_id, { gold: mail.gold, exp: mail.exp, items }, "mail-auto");
+          this.roles.grantByRoleId(mail.role_id, { bindGold: mail.bind_gold, exp: mail.exp, items }, "mail-auto");
           this.mails.markAutoClaimed(mail.id, now);
           // 领了等于看过，并且告诉玩家东西送哪去了（**追加**，不改原文）
           this.mails.markRead(mail.id, now);
           this.mails.appendBody(mail.id, autoClaimNote(now));
         });
         result.claimed += 1;
-        this.logger.log(`自动入包：角色 ${mail.role_id} 的邮件 ${mail.id}（金币 ${mail.gold} / 经验 ${mail.exp} / 物品 ${items.length} 件）`);
+        this.logger.log(`自动入包：角色 ${mail.role_id} 的邮件 ${mail.id}（绑定元宝 ${mail.bind_gold} / 经验 ${mail.exp} / 物品 ${items.length} 件）`);
       } catch (error) {
         // 失败计数必须写在事务**外面**：事务已回滚，写在里面会被一起抹掉
         try {

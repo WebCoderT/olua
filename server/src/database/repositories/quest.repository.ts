@@ -33,7 +33,7 @@ export class QuestRepository {
       `INSERT OR IGNORE INTO quests
          (id, kind, label, description, prev_quest_id, min_level, npc_id,
           objective_type, objective_target, objective_count,
-          reward_gold, reward_exp, reward_items, updated_at)
+          reward_bind_gold, reward_exp, reward_items, updated_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         row.id,
@@ -46,7 +46,7 @@ export class QuestRepository {
         row.objective_type,
         row.objective_target,
         row.objective_count,
-        row.reward_gold,
+        row.reward_bind_gold,
         row.reward_exp,
         row.reward_items,
         row.updated_at,
@@ -60,7 +60,7 @@ export class QuestRepository {
       `INSERT INTO quests
          (id, kind, label, description, prev_quest_id, min_level, npc_id,
           objective_type, objective_target, objective_count,
-          reward_gold, reward_exp, reward_items, updated_at)
+          reward_bind_gold, reward_exp, reward_items, updated_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         row.id,
@@ -73,7 +73,7 @@ export class QuestRepository {
         row.objective_type,
         row.objective_target,
         row.objective_count,
-        row.reward_gold,
+        row.reward_bind_gold,
         row.reward_exp,
         row.reward_items,
         row.updated_at,
@@ -91,7 +91,7 @@ export class QuestRepository {
       `UPDATE quests SET
          kind = ?, label = ?, description = ?, prev_quest_id = ?, min_level = ?, npc_id = ?,
          objective_type = ?, objective_target = ?, objective_count = ?,
-         reward_gold = ?, reward_exp = ?, reward_items = ?, updated_at = ?
+         reward_bind_gold = ?, reward_exp = ?, reward_items = ?, updated_at = ?
        WHERE id = ?`,
       [
         row.kind,
@@ -103,7 +103,7 @@ export class QuestRepository {
         row.objective_type,
         row.objective_target,
         row.objective_count,
-        row.reward_gold,
+        row.reward_bind_gold,
         row.reward_exp,
         row.reward_items,
         row.updated_at,

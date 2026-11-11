@@ -45,7 +45,7 @@ export interface RoleIndexFields {
 }
 
 /** 管理端可直接改的「数据内的常用数值字段」（其余字段属于游戏运行时细节，管理端不动）。
- *  货币收敛（#843、#844）后只有 bindGold 一种，gold / silver 已删。 */
+ *  货币收敛（#843、#844）后只有 bindGold 一种，旧币种字段已删。 */
 export const ROLE_PATCH_NUMBER_FIELDS = ["bindGold", "exp", "soulOfWar", "title", "rank"] as const;
 
 //#region 结构化字段（管理端可改的那部分运行时数据）
@@ -249,7 +249,7 @@ export function applyBagCells(currentBag: unknown, cells: BagCellInput[]): Array
  * 设计取舍：角色数据（背包、装备、技能、快捷键…）由**客户端配置驱动生成**，
  * 服务端不复制那套配置（复制必然漂移）。服务端只保证：
  * 1. 结构是个对象；2. 索引字段（id / 名称 / 职业 / 性别 / 等级）合法；3. 归属与数量上限。
- * 于是游戏侧改配置（加装备、调初始金币…）不必同步改服务端。
+ * 于是游戏侧改配置（加装备、调初始绑定元宝…）不必同步改服务端。
  *
  * @param identity 身份三字段的**权威来源**（#879 / I4）：给了就先把客户端上报的
  *   `name` / `occupation` / `sex` 覆盖掉，再做校验与回写。存档路径一律传库里的值 ——

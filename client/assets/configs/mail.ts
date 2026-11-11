@@ -42,7 +42,7 @@ export const mailTexts = {
   removeFailed: "删除失败，稍后再试",
   removeUnclaimed: "还有没领的奖励，先领取再删",
   /** 附件摘要：绑定元宝 / 经验 / 物品（{name} 换成共享快照里的物品名） */
-  gold: "绑定元宝 {count}",
+  bindGold: "绑定元宝 {count}",
   exp: "经验 {count}",
   item: "{name}×{count}",
   /** 三段之间的分隔符 */

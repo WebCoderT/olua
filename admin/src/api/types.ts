@@ -276,25 +276,21 @@ export const ACQUIRE_CHANNEL_LABELS: Record<string, string> = {
 };
 
 /**
- * 货币道具的三种货币（服务端 `common/constants/money-items.ts` 的镜像）
+ * 货币道具的币种（服务端 `common/constants/money-items.ts` 的镜像）
  *
- * 取值就是**角色存档里的账本字段名**（`gold` / `bindGold` / `silver`）—— 货币道具
+ * 取值就是**角色存档里的账本字段名**（唯一货币 `bindGold`）—— 货币道具
  * 使用后直接把面值加进对应字段，所以「币种」没有独立枚举，字段名本身即是标识。
  * 与 PERMISSION 同一约定：这份只是界面展示用的镜像，权威在服务端。
  */
 export const MONEY_KIND = {
   BIND_GOLD: "bindGold",
-  GOLD: "gold",
-  SILVER: "silver",
 } as const;
 
 export const MONEY_KIND_LABELS: Record<string, string> = {
   [MONEY_KIND.BIND_GOLD]: "绑定元宝",
-  [MONEY_KIND.GOLD]: "元宝",
-  [MONEY_KIND.SILVER]: "银子",
 };
 
-/** 货币下拉选项（顺序即界面上的排列顺序：绑定元宝 → 元宝 → 银子，与服务端 MONEY_KINDS 一致） */
+/** 货币下拉选项（与服务端 MONEY_KINDS 一致） */
 export const MONEY_KIND_OPTIONS = Object.keys(MONEY_KIND_LABELS);
 
 /** 权限点中文名（未登记的原样显示） */

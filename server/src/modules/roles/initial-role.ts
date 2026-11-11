@@ -8,7 +8,7 @@ import { ROLE_DATA_VERSION } from "./role-migration";
  * 其余一切由这里构造。口径（用户 2026-11-02 定）：
  *
  * - **背包、装备、货币全空，不赠送任何物品** —— 此前客户端 `new Role(...)` 会塞一套
- *   新手装备与初始金币，整体废除；要给某个号发东西走管理端（`PATCH /admin/roles/:id`）。
+ *   新手装备与初始绑定元宝，整体废除；要给某个号发东西走管理端（`PATCH /admin/roles/:id`）。
  * - **技能保持「全部解锁 1 级」**：技能等级是玩法数据不是物品，全 0 会让新角色无法战斗。
  *   玩家技能 = `skills` 表里 `owner = role` 的行（怪物技能不发给玩家）。
  * - **「客户端配置才知道形状」的字段发空壳**：装备槽名（EQUIPMENT_TYPE 枚举）、
@@ -53,7 +53,7 @@ export function buildInitialRoleData(id: string, name: string, occupation: strin
     // 版本分布会永远挂着一档假的「老档」
     schemaVersion: ROLE_DATA_VERSION,
     exp: 0,
-    // 账本从零起（#597）：不再有「初始金币」这种出厂馈赠。
+    // 账本从零起（#597）：不再有「初始绑定元宝」这种出厂馈赠。
     // 货币收敛（#843、#844）：唯一账本字段 bindGold（绑定元宝）
     bindGold: 0,
     // 装备槽全空（槽位名由客户端枚举补齐）；背包空网格（尺寸由客户端配置铺）

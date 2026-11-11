@@ -101,18 +101,18 @@ export class AchievementService implements OnModuleInit {
         accountId,
         role.id,
         null,
-        { gold: row.reward_gold, exp: row.reward_exp, items },
+        { bindGold: row.reward_bind_gold, exp: row.reward_exp, items },
         "achievement",
       );
     } catch (error) {
-      // 背包满：整份奖励（金币 / 经验 / 物品）转邮件，而不是让玩家先去猜是哪件东西放不下（#429）
+      // 背包满：整份奖励（绑定元宝 / 经验 / 物品）转邮件，而不是让玩家先去猜是哪件东西放不下（#429）
       if (!isBizCode(error, BizCode.MALL_BAG_FULL)) throw error;
       const mail = this.mails.send(role.id, {
         channel: "reward",
         kind: "achievement",
         title: `成就奖励：${row.label}`,
         body: `「${row.label}」的奖励因背包已满转入邮箱，清理背包后在这里领取即可。`,
-        gold: row.reward_gold,
+        bindGold: row.reward_bind_gold,
         exp: row.reward_exp,
         items,
       });
@@ -128,7 +128,7 @@ export class AchievementService implements OnModuleInit {
     return {
       achievements: views,
       summary: this.summaryOf(views),
-      gold: row.reward_gold,
+      bindGold: row.reward_bind_gold,
       exp: row.reward_exp,
       items,
       level: settled.level,

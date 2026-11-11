@@ -23,7 +23,7 @@ export class GameMailController {
     operationId: "gameMail.mine",
     summary: "我的收件箱",
     description:
-      "整份收件箱（新的在前）+ 未读数 + 未领数 + **每个频道的角标**。附件的 `gold` / `exp` / `attachments` 是" +
+      "整份收件箱（新的在前）+ 未读数 + 未领数 + **每个频道的角标**。附件的 `bindGold` / `exp` / `attachments` 是" +
       "**还没到手**的那份奖励，点领取之后才进角色存档。\n\n" +
       "不做频道过滤：一次给全量，客户端本地按 `channel` 筛 —— 切页签不发请求，角标也永远按全量算。",
   })
@@ -53,7 +53,7 @@ export class GameMailController {
     operationId: "gameMail.claim",
     summary: "领取附件",
     description:
-      "金币 / 经验 / 物品一次落库（与任务交付、成就领奖同一个发奖入口）。\n\n" +
+      "绑定元宝 / 经验 / 物品一次落库（与任务交付、成就领奖同一个发奖入口）。\n\n" +
       "失败路径：50141 邮件不存在 / 50142 已经领过 / **20012 背包已满（邮件原样留着，清包后能再领）**。",
   })
   @ApiParam({ name: "id", description: "邮件 id" })
@@ -71,7 +71,7 @@ export class GameMailController {
       "按发出的时间正序逐封领取，**一封失败不拖累其他封**（#870）：每封一个独立事务 + 独立 try/catch，" +
       "背包满 / 物品不存在 / 已被人领走都只影响那一封，其余照领。\n\n" +
       "返回 `failures[]`（`mailId` / `code` / `reason`）说明哪几封没领到、为什么；" +
-      "`stoppedByBag` 为 true 表示**至少有一封**是因为背包满没领到（纯金币 / 纯经验邮件不受影响）。\n\n" +
+      "`stoppedByBag` 为 true 表示**至少有一封**是因为背包满没领到（纯绑定元宝 / 纯经验邮件不受影响）。\n\n" +
       "`channel` 可选：传了就只领这一栏（面板在「奖励」页签点一键领取时，不该顺手动到社交栏），" +
       "不传 = 全部频道；传了非法值 → 40000。",
   })
@@ -91,7 +91,7 @@ export class GameMailController {
     summary: "删除邮件",
     description:
       "**奖励没领不能删**（50143）—— 删了等于替玩家扔掉奖励。" +
-      "「有奖励」= 金币 / 经验 / 附件任一（#866）：纯金币邮件即使 `attachments` 为空也拒删。" +
+      "「有奖励」= 绑定元宝 / 经验 / 附件任一（#866）：纯绑定元宝邮件即使 `attachments` 为空也拒删。" +
       "已领的、以及三样都没有的纯公告可以删。",
   })
   @ApiParam({ name: "id", description: "邮件 id" })

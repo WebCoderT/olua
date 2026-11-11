@@ -13,7 +13,7 @@ export enum GOOD_TYPE {
   EQUIPMENT = "equipment", // 装备
   DRUG = "drug", // 药品
   MATERIAL = "material", // 材料
-  MONEY = "money", // 货币道具（使用后直接给账本入账：绑定元宝 / 元宝 / 银子）
+  MONEY = "money", // 货币道具（使用后直接给账本入账：绑定元宝，唯一货币）
   SCROLL = "scroll", // 升级卷轴（使用后硬性 +1 级，带等级区间；#787）
   OTHER = "other", // 其他
 }
@@ -240,7 +240,7 @@ export interface MoneyItem extends Good {
   amount: number;
 }
 
-/** 货币（唯一 bindGold；#843/#844 收敛后 gold / silver 已删。与角色存档的账本字段同名，服务端 `SERVER_LEDGER_FIELDS` 是同一份） */
+/** 货币（唯一 bindGold；唯一货币。与角色存档的账本字段同名，服务端 `SERVER_LEDGER_FIELDS` 是同一份） */
 export type MoneyCurrency = "bindGold";
 
 /**

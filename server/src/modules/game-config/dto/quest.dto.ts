@@ -47,8 +47,8 @@ export class QuestRewardItemDto {
 
 /** 任务奖励 */
 export class QuestRewardsDto {
-  @ApiProperty({ description: "金币" })
-  gold: number;
+  @ApiProperty({ description: "绑定元宝" })
+  bindGold: number;
 
   @ApiProperty({ description: "经验" })
   exp: number;
@@ -56,9 +56,9 @@ export class QuestRewardsDto {
   @ApiProperty({ description: "物品清单", type: [QuestRewardItemDto] })
   items: QuestRewardItemDto[];
 
-  static from(row: { reward_gold: number; reward_exp: number; reward_items: string }): QuestRewardsDto {
+  static from(row: { reward_bind_gold: number; reward_exp: number; reward_items: string }): QuestRewardsDto {
     const dto = new QuestRewardsDto();
-    dto.gold = row.reward_gold;
+    dto.bindGold = row.reward_bind_gold;
     dto.exp = row.reward_exp;
     dto.items = parseRewardItems(row.reward_items);
     return dto;
@@ -164,11 +164,11 @@ export class UpdateQuestObjectiveDto {
 
 /** 任务奖励编辑入参 */
 export class UpdateQuestRewardsDto {
-  @ApiPropertyOptional({ description: "金币（≥0）" })
+  @ApiPropertyOptional({ description: "绑定元宝（≥0）" })
   @IsOptional()
-  @IsInt({ message: "金币必须是整数" })
-  @Min(0, { message: "金币不能为负" })
-  gold?: number;
+  @IsInt({ message: "绑定元宝必须是整数" })
+  @Min(0, { message: "绑定元宝不能为负" })
+  bindGold?: number;
 
   @ApiPropertyOptional({ description: "经验（≥0）" })
   @IsOptional()

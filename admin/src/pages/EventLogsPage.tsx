@@ -330,8 +330,8 @@ function targetNameOf(item: EventLog): string {
     case "pick":
     case "gain":
     case "consume":
-      // 货币没有物品行，直接给中文（bindGold 是唯一货币；旧流水里的 gold 同样读作绑定元宝）；其余走物品名录
-      return target === "gold" || target === "bindGold" ? "绑定元宝" : itemText(target);
+      // 货币没有物品行，直接给中文（bindGold 是唯一货币）；其余走物品名录
+      return target === "bindGold" ? "绑定元宝" : itemText(target);
     case "mail":
       // 邮件 id 本身没有可读名，标题在载荷里
       return typeof item.detail?.title === "string" ? `${item.detail.title}` : target;

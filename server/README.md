@@ -186,7 +186,7 @@ server/
 │   │   ├── achievement/            成就（#401）：累计型（kill / quest）由事件 +1 记账、状态型（level / combat / collect）
 │   │   │                           查询现算不落进度；达成与领取分离（`achieved_at` / `claimed_at`），管理端配置 CRUD
 │   │   ├── game-mail/             游戏内邮件（#429）：玩家收件箱 + 附件领取（走与任务 / 成就同一个发奖入口），
-│   │   │                           **奖励没领不能删**（金币 / 经验 / 附件任一，#866）、
+│   │   │                           **奖励没领不能删**（绑定元宝 / 经验 / 附件任一，#866）、
 │   │   │                           **发奖与标已领同一事务且先标后发**（#868，`markClaimed` 兼跨进程互斥）、
 │   │   │                           未领角标只数「有奖励且未领」（#869）、一键领取逐封容错 + 失败清单（#870）；
 │   │   │                           成就领奖背包满时整份奖励转成一封邮件（服务端内部降级）；
@@ -235,10 +235,10 @@ server/
 │   ├── e2e-party.cjs（队伍：邀请即建队 / 同意拒绝 / 踢人转让 / 队长退出移交 / 解散 / 经验分成（含 800px 距离闸）/ 屏蔽优先 / 建队事务 / 离线接管）
 │   ├── e2e-rank.cjs（排行榜：三榜名次与数值 / 并列竞赛排名 / 分页与 size 夹上限 / me 榜外名次 / 快照与定时重算 / 条目八字段）
 │   ├── e2e-achievement.cjs（成就：快照下发 / 累计型事件记账 / 状态型现算不落进度 / 领取与背包满转邮件 / 管理端配置与拒删）
-│   ├── e2e-game-mail.cjs（游戏内邮件：收件箱与未读·未领（公告不贡献红点）/ 已读幂等 / 领取与三种错误码 / 奖励没领拒删（金币·经验·附件任一）/ 领取与标已领同事务回滚 / 一键领取逐封容错 + 失败清单 / 成就兜底转邮件 / 频道：四栏角标·按栏领取·非法频道 40000·社交与战斗投递；71 条断言）
+│   ├── e2e-game-mail.cjs（游戏内邮件：收件箱与未读·未领（公告不贡献红点）/ 已读幂等 / 领取与三种错误码 / 奖励没领拒删（绑定元宝·经验·附件任一）/ 领取与标已领同事务回滚 / 一键领取逐封容错 + 失败清单 / 成就兜底转邮件 / 频道：四栏角标·按栏领取·非法频道 40000·社交与战斗投递；71 条断言）
 │   ├── e2e-admin-mail.cjs（管理端消息补发 #437：观察员 403 / 玩家令牌 401 / 频道收窄 / 角色不存在 404 / 形状校验 / 附件领到手 / reward 落位 / 离线收件 / 审计留痕 / 文档分组）
-│   ├── e2e-mail-expiry.cjs（收件箱保质期 #439：ttl 三态写入（不传 = 30 天 · 0 = 永久）/ 读口即时消失 / 过期单封操作按不存在 / 清理判据：没领奖励不删（金币也算）·三样都没有才删 / 批量上限跨批；17 条断言）
-│   ├── e2e-mail-auto-claim.cjs（过期前自动入包 #867：到点才动 / 纯金币也入包 / 在线角色不动 / 背包满记次数不删信 / 幂等 / 清理闸 / 默认保质期；32 条断言）
+│   ├── e2e-mail-expiry.cjs（收件箱保质期 #439：ttl 三态写入（不传 = 30 天 · 0 = 永久）/ 读口即时消失 / 过期单封操作按不存在 / 清理判据：没领奖励不删（绑定元宝也算）·三样都没有才删 / 批量上限跨批；17 条断言）
+│   ├── e2e-mail-auto-claim.cjs（过期前自动入包 #867：到点才动 / 纯绑定元宝也入包 / 在线角色不动 / 背包满记次数不删信 / 幂等 / 清理闸 / 默认保质期；32 条断言）
 │   ├── e2e-ui-effect.cjs（特效 #594 升级 + #634 掉落光效六档：观察员可读不可写 / seed 出厂值与顺序 / 没有新建·删除 / 数值边界 / key 404 / 保存追账 / 快照即最新 / 审计 / 文档契约）
 │   ├── config-sync.cjs（配置快照：分类守点 / 值转义 / 往返 / 改动同步 / 坏文件拒绝）
 │   └── backup.cjs（运行中备份 / 恢复留档 / 保护性拒绝 / 自动定时备份）
@@ -304,12 +304,12 @@ git pull && make config-import       # 整表替换配置；账号与角色存�
 | `guild_applications` | 入帮申请（#388） | `PRIMARY KEY (guild_id, role_id)`：**重复申请只覆盖留言**，不会堆出两条待办；拒绝 = 直接删行（不留记录）；通过 = 写成员行 + 删申请 + 清掉申请人挂在别处的申请（同一事务） |
 | `role_friends` | 好友关系（#389） | **镜像两行**：A↔B 各一行（`PRIMARY KEY (role_id, friend_id)`），`status`（pending / accepted）+ `requested_by` 记发起人。所有查询都是一次主键前缀查，不必 `OR` 两方向再判方向；代价是同意 / 拒绝 / 删除要**成对改**（一律走事务）。只有两态，**没有拉黑**（本项目无私聊，多一态只会让每处查询多记一个合法值） |
 | `role_enemies` | 敌人标记（#389） | **单向一行**：`PRIMARY KEY (role_id, enemy_id)`，我标我的，对方既不知道也不受影响（没有通知、不需要事务）。关系优先级里敌意压过同帮与好友 |
-| `quests` | 任务配置（#396） | 单目标（kill / talk / collect）+ 奖励（金币 / 经验 / 物品 JSON 列）；`kind` 分主线（一次性）与日常（领奖删行可重接）；`prev_quest_id` 组线性链，环检测在 service（`assertQuestConsistency`）。管理端可增删改，改完随配置快照下发 |
+| `quests` | 任务配置（#396） | 单目标（kill / talk / collect）+ 奖励（绑定元宝 / 经验 / 物品 JSON 列）；`kind` 分主线（一次性）与日常（领奖删行可重接）；`prev_quest_id` 组线性链，环检测在 service（`assertQuestConsistency`）。管理端可增删改，改完随配置快照下发 |
 | `quest_progress` | 玩家任务进度（#396） | `PRIMARY KEY (role_id, quest_id)`；`status`（accepted / ready / claimed）+ `progress` + `reset_day`。kill 由实时进程发 `monster:killed`、任务服务订阅后写（#401 起走总线），talk 由 NPC 对话推进，collect 在交付时查背包；daily 与 main 领奖后都留 `claimed` 行（#815：删行会抹掉「今天领过」的证据），日切看 `reset_day` 天号（每日 05:00） |
-| `achievements` | 成就配置（#401） | 条件（`condition_type` / `target` / `count`）+ 奖励（金币 / 经验 / 物品 JSON 列）+ `category` / `sort_order` / `hidden`；seed 来自服务端 `config-sync.sql`，管理端可增删改，**有玩家记录拒删** |
+| `achievements` | 成就配置（#401） | 条件（`condition_type` / `target` / `count`）+ 奖励（绑定元宝 / 经验 / 物品 JSON 列）+ `category` / `sort_order` / `hidden`；seed 来自服务端 `config-sync.sql`，管理端可增删改，**有玩家记录拒删** |
 | `role_achievements` | 玩家成就记录（#401） | `PRIMARY KEY (role_id, achievement_id)`；**只有累计型写 `progress`**（状态型查询时现算，故没有行也正常）；`achieved_at` 非空 = 可领、`claimed_at` 非空 = 已领；达成后不再累加，行不会因达成而删除 |
 | `equip_aligns` | 装备外观对齐几何（#513） | 一行 = 一件衣服 / 一把武器 / 一套裸模的**外观**几何：`id` 形如 `cloth:cloth_1` / `weapon:weapon_1` / `role:1`；`out_positions` 是 8 个方向的 `[x, y]` JSON；`out_manual = 1` 表示绝对位置（武器的渐进语义）；**没有行 = 用客户端配置里的值**，所以「重置」就是删行 |
-| `role_mails` | 游戏内邮件（#429 / 频道 #436 / 保质期 #439） | `id` 主键 + `role_id`（外键级联）；`channel`（四枚举：system / reward / social / combat，默认 system，与来源标签 `kind` 分工）/ `kind` / `title` / `body` / 附件（`gold` / `exp` / `attachments` JSON 列）+ `read_at` / `claimed_at` + `expires_at`（毫秒时间戳，NULL = 永不过期，由投递方在 send 时给 `ttlMs`）。**与 `mail_queue` 无关**（那张是外发 SMTP 投递队列，其 `MAIL_RETENTION_DAYS` 是投递记录的保留期，与收件箱保质期是两件事）。附件在领取时才入包；`claimed_at` 为空且带附件的行拒绝删除；**带未领附件的行即使过期也不清理**（过期不等于替玩家扔奖励），清理任务每轮最多删 `MAIL_PURGE_BATCH` 条；索引 `(role_id, created_at DESC)` 取箱、`(role_id, claimed_at)` 数未领 |
+| `role_mails` | 游戏内邮件（#429 / 频道 #436 / 保质期 #439） | `id` 主键 + `role_id`（外键级联）；`channel`（四枚举：system / reward / social / combat，默认 system，与来源标签 `kind` 分工）/ `kind` / `title` / `body` / 附件（`bind_gold` / `exp` / `attachments` JSON 列）+ `read_at` / `claimed_at` + `expires_at`（毫秒时间戳，NULL = 永不过期，由投递方在 send 时给 `ttlMs`）。**与 `mail_queue` 无关**（那张是外发 SMTP 投递队列，其 `MAIL_RETENTION_DAYS` 是投递记录的保留期，与收件箱保质期是两件事）。附件在领取时才入包；`claimed_at` 为空且带附件的行拒绝删除；**带未领附件的行即使过期也不清理**（过期不等于替玩家扔奖励），清理任务每轮最多删 `MAIL_PURGE_BATCH` 条；索引 `(role_id, created_at DESC)` 取箱、`(role_id, claimed_at)` 数未领 |
 | `world_meta` | 世界代际（#295 阶段二） | 单行表（id 恒为 1）；合并区时 `epoch`+1，两个进程的世界内存靠轮询它作废旧状态（跨进程的「库被改写过」信号） |
 | `map_spawn_areas` | 刷怪区（#295 阶段一 / #667 后台绘制） | **管理端地图页拖框绘制**（`POST/PATCH/DELETE /admin/maps/:id/spawn-areas`），TMX 的 monster 组不再是来源；每区域按 max 在矩形内随机落点播种，worldJoin 只收 mapId。改动在该图世界实例重新加载后生效 |
 | `role_level_curves` | 角色等级曲线（#786） | 主键 `(curve, seq)`：4 条独立曲线（`exp` / `hp` / `attack_max` / `defense_max`）× 6 段，每行 = 一段的 `from_level` / `to_level` / `start_value` / `per_level` / `accel`；段内 `start + per_level×k + accel×k(k-1)/2`（`k = level - from_level`），超出末段外推，所以上限调大不用改曲线。蓝 = 血/2、回血 = 血/100、攻防下限 = 上限×0.7、三系同值全是派生的。**只可改不可增删**（非末段改 `to_level` 会联动下一段 `from_level`）。旧的 `level_exps` / `growth_segments` / `role_levels`（#655 逐级 60 行）已随 #786 下线并 `DROP TABLE` |
@@ -318,7 +318,7 @@ git pull && make config-import       # 整表替换配置；账号与角色存�
 | `equipments` | 装备基础件配置（#252 / #773） | 主键是基础件 id（如 `cloth_1`，变体在 `equipment_variants`）；部位 / 等级需求 / 售卖价 / 八项属性；**可新建 / 删除**（新建连带展开全部变体，删除连带删变体与工作台几何；商城在架时拒删） |
 | `drugs` | 药品配置（#253） | 主键是药品 id（如 `drug_hp_1`，被掉落表与背包引用）；名称 / 描述 / 售卖价 / 堆叠 / 冷却 / 四项回复量（effects 按键求和）；id 清单固定，只可改不可增删 |
 | `items` | 物品与材料配置（#255） | 主键是物品 id（如 `material_hide`，被掉落表与脚本引用）；只收 MATERIAL / OTHER 大类；名称 / 描述 / 售卖价 / 堆叠；id 清单固定，只可改不可增删 |
-| `money_items` | 货币道具（#785） | 主键是道具 id（如 `money_gold_100`，派生自「币种 + 面值」）；`currency`（gold / bindGold / silver，**就是存档账本字段名**）/ `amount`（面值）/ 名称 / 描述 / 图标 / 堆叠 / 售价；使用走 `POST roles/:id/money-use`，金额与币种**直读本表**（客户端只报格子）；**允许增删改**（运营道具表），删行后背包旧格子变 `20023`「认不出的道具」 |
+| `money_items` | 货币道具（#785） | 主键是道具 id（如 `money_bind_gold_100`，派生自「币种 + 面值」）；`currency`（恒为 `bindGold`，**就是存档账本字段名**；取值域外的行整条丢弃）/ `amount`（面值）/ 名称 / 描述 / 图标 / 堆叠 / 售价；使用走 `POST roles/:id/money-use`，金额与币种**直读本表**（客户端只报格子）；**允许增删改**（运营道具表），删行后背包旧格子变 `20023`「认不出的道具」 |
 | `level_scrolls` | 升级卷轴（#787） | 主键是道具 id（`level_scroll_1` … 出厂 7 卷，或按区间派生的 `level_scroll_<下限>_<上限>`）；`min_level` / `max_level` 是**可用等级区间**（两列可改的数，「每 1000 级一卷」只是出厂切法）；`max_stack` / `sell_price` / 描述 / 图标。使用走 `POST roles/:id/level-scroll-use`：**硬性 +1 级、不扣经验**，区间与 +1 一律读本表；区间外 `20025`、到等级上限 `20026`、格子不是卷轴或区间配置坏 `20024`；**允许增删改**，改区间即时生效，`id` 不可改（改 id = 换一件物品） |
 | `monsters` | 怪物基础数据（#258） | 主键是怪物 key（怪物种子 `monster-seed.ts` 的关联键，被地图刷怪点 / 掉落表引用；#588 起客户端无副本，数值随快照下发）；名称 / 等级 / 定位 / 生命 / 六项攻防区间；**世界播种与伤害结算直读本表（改值即时生效）**；key 清单固定，只可改不可增删 |
 | `npcs` | NPC 基础数据（#258） | 主键是 NPC id（Tiled 对象组的关联键）；名称 / 对话文案（seed 为空串，客户端暂无对话数据形态）；id 清单固定，只可改不可增删 |
@@ -505,8 +505,8 @@ admin/src/api/{routes,models,endpoints}.ts
 | `test/e2e.cjs` | **248** | 注册登录 / 角色 CRUD 与重名 / 保存与切换在线 / 越权与令牌受众隔离 / 管理端全流程 / **文档三组分类与每个接口的权限标注** / 只读观察员越权 / 超管保护 / **公告的公共拉取与生效时间窗** |
 | `test/e2e-roles.cjs` | **186** | 角色管理专项：修订号乐观锁 / 六维筛选 / 结构化字段校验 / 批量与整账号删除 / 只读观察员越权 / 文档 / 角色上限 / 身份独占 / 登出 |
 | `test/e2e-role-vitals.cjs` | **28** | 血蓝收权（#596）：save 上报血蓝一律被服务端结算值覆盖（超上限夹回、负上报不动基线、结算游标伪造无效）/ 复活接口（未死亡 20015、死亡满血、revision 不推进）/ 死亡状态不回复（改包上报满血无效）/ 自然回复 lazy 结算（累加器保留零头）/ 管理端 PATCH hp·mp 运营旁路 / openapi 契约 |
-| `test/e2e-role-fashion.cjs` | **35** | 时装收权（#596）：save 上报穿着被库值回填、拥有清单（独占字段）整份删除 / 老档迁移把当前穿着认领进清单 / 穿·脱接口（未拥有 20017、进度型 revision+1、null 脱下幂等、不动数值）/ 购买接口（未开放渠道 20016、元宝不足 20011、扣费与清单落账、重复购买拒收、乐观锁）/ 管理端 PATCH fashionsOwned 发放 / openapi 契约 |
-| `test/e2e-role-migration.cjs` | **41** | 存档版本（#818）：新号带 `schemaVersion` / 老档进游戏即迁移并落库（金币·背包·revision 都不变）/ 装备槽裸 id → `{ id }`、空串 → `null`、脚本按库里 `bind_on_drop` 回填 `{ id, bound: true }`（v3 / #816）/ 版本比代码新 → 20028 拒登且不置在线标记 / `make migrate` 的 dry-run 版本分布与「全有或全无」 |
+| `test/e2e-role-fashion.cjs` | **35** | 时装收权（#596）：save 上报穿着被库值回填、拥有清单（独占字段）整份删除 / 老档迁移把当前穿着认领进清单 / 穿·脱接口（未拥有 20017、进度型 revision+1、null 脱下幂等、不动数值）/ 购买接口（未开放渠道 20016、绑定元宝不足 20011、扣费与清单落账、重复购买拒收、乐观锁）/ 管理端 PATCH fashionsOwned 发放 / openapi 契约 |
+| `test/e2e-role-migration.cjs` | **41** | 存档版本（#818）：新号带 `schemaVersion` / 老档进游戏即迁移并落库（绑定元宝·背包·revision 都不变）/ 装备槽裸 id → `{ id }`、空串 → `null`、脚本按库里 `bind_on_drop` 回填 `{ id, bound: true }`（v3 / #816）/ 版本比代码新 → 20028 拒登且不置在线标记 / `make migrate` 的 dry-run 版本分布与「全有或全无」 |
 | `test/e2e-role-corrupted.cjs` | **22** | 坏档（#819）：坏 JSON 拒登 20029 + `corrupted=1` + 字节原样保留 / 修好自动解封 / 在线期间变坏档写入被拒 / 缺字段按空值回填（不再采信客户端那份） |
 | `test/e2e-role-optimistic.cjs` | **27** | 乐观锁（#820）：不带 `revision` → 400/40000（存档 + 商城 + 背包 + 成长线四条路径）/ 过期基线 → 20006 且一行不写库 / 并发两次只有一次成功、revision 只 +1 / `UPDATE … WHERE id = ? AND revision = ?` 的静态断言 |
 | `test/e2e-guard.cjs` | **283** | 运营与安全底座：口令重置与令牌作废 / 自助改密 / 操作日志落库·打码·筛选·导出 / 用户名与 IP 双维度限流 / 踢下线 / 封禁闭环 / 看板 / 列表排序 / 系统信息与启动自检 |

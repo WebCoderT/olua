@@ -478,7 +478,7 @@ function connect(url) {
 
     const mailSent = await api(baseUrl, "POST", `admin/game-mail/roles/${roleId}`, {
       token: adminToken,
-      body: { channel: "reward", title: "e2e 补偿", gold: 100, items: [{ goodId: DROP_GOOD, count: 1 }] },
+      body: { channel: "reward", title: "e2e 补偿", bindGold: 100, items: [{ goodId: DROP_GOOD, count: 1 }] },
     });
     check(mailSent.code === 0, "管理端补发一封带附件的邮件", mailSent.message);
     const mailId = mailSent.data && mailSent.data.id;
@@ -490,15 +490,15 @@ function connect(url) {
     check(!!mailEvent, "领取写下一条 mail");
     checkEqual(mailEvent && mailEvent.target, mailId, "mail 流水的 target 是邮件 id（能回答「这封补偿有没有人领」）");
     checkEqual(detailOf(mailEvent) && detailOf(mailEvent).title, "e2e 补偿", "mail 流水带标题（人眼看时有信息量）");
-    checkEqual(detailOf(mailEvent) && detailOf(mailEvent).gold, 100, "mail 流水带附件金币");
+    checkEqual(detailOf(mailEvent) && detailOf(mailEvent).bindGold, 100, "mail 流水带附件绑定元宝");
 
-    // 一封「金币 + 物品」的邮件会写出**两条** gain（各一行）：金币一行、物品一行，
+    // 一封「绑定元宝 + 物品」的邮件会写出**两条** gain（各一行）：绑定元宝一行、物品一行，
     // 同一毫秒写入 → 谁排在前面由兜底键决定，所以这里按 target 找，不认「第一条」
     const mailGains = eventsOf(dbPath, "gain").filter((row) => (detailOf(row) || {}).source === "mail");
-    check(mailGains.length >= 2, "邮件附件另记 gain（source = mail，金币与物品各一行）", JSON.stringify(mailGains.map((row) => row.target)));
-    const mailGold = mailGains.find((row) => row.target === "bindGold");
-    checkEqual(mailGold && mailGold.target, "bindGold", "附件金币记成 gain / target = bindGold（唯一货币）");
-    checkEqual(mailGold && mailGold.amount, 100, "附件金币数量正确");
+    check(mailGains.length >= 2, "邮件附件另记 gain（source = mail，绑定元宝与物品各一行）", JSON.stringify(mailGains.map((row) => row.target)));
+    const mailBindGold = mailGains.find((row) => row.target === "bindGold");
+    checkEqual(mailBindGold && mailBindGold.target, "bindGold", "附件绑定元宝记成 gain / target = bindGold（唯一货币）");
+    checkEqual(mailBindGold && mailBindGold.amount, 100, "附件绑定元宝数量正确");
     check(!!mailGains.find((row) => row.target === DROP_GOOD), "附件物品也各记一行 gain");
 
     //#endregion

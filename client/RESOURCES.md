@@ -24,7 +24,7 @@
 | `effect/` | 特效图集，按用途八分：`background` / `border` / `light` / `select` / `skill` / `status` / `aura`（氛围光环）/ `upgrade`。`select/` 收**两种地面光标**：`player@0`（选角界面选中角色）与 `monster@0`（地图上点中怪），同类放一起 | `configs/layout/images.effectImage`、`effectSelectImage`、`configs/{border,background,light}` |
 | `equipment/` | 装备，**一个部位一个目录**（目录名用复数）：`clothes/`、`weapons/` 各三套（`icon` 图标 / `in` 内观 / `out` 外观）；`belts/`、`helmets/`、`necklaces/`、`rings/`、`shoes/`、`wristbands/` 只有扁平图标（这批素材没给内外观）。图标一律 `<编号>.png`，编号即装备 id 的数字部分 | 快照 `equipments.{icon,in_atlas,out_atlas}` |
 | `font/` | `msyh.ttf`（Label 未指定字体时的默认字体） | `uiImages.defaultFont` |
-| `item/` | 物品图标，按**大类**分层：`consumable/drugs/` 收全部药品（`drug-hp-1` 这类语义名）、`currency/` 收货币道具（`gold-100` 这类，见下面「六」）、`scroll/` 收升级卷轴（`level-scroll` 一张共用，见下面「七」）。装备图标不放这里 —— 那是 `equipment/<部位>/` 的事（#777 迁走） | 快照 `drugs.icon` / `moneyItems.icon` / `levelScrolls.icon` / `items.icon` |
+| `item/` | 物品图标，按**大类**分层：`consumable/drugs/` 收全部药品（`drug-hp-1` 这类语义名）、`currency/` 收货币道具（`bind-gold-100` 这类，见下面「六」）、`scroll/` 收升级卷轴（`level-scroll` 一张共用，见下面「七」）。装备图标不放这里 —— 那是 `equipment/<部位>/` 的事（#777 迁走） | 快照 `drugs.icon` / `moneyItems.icon` / `levelScrolls.icon` / `items.icon` |
 | `map/` | 每张地图一个目录：`<id>.tmx` + 图块 `*.tsx` / `*.jpg` + `preview.jpg` | `images.mapPreviewImage`；`map/` **不参与改名**（Tiled 工程内部互相引用） |
 | `monster/` | `icon/` 头像 + `out/` 地图上的八方向动作 | 快照 `monster_presentation.{icon,out}` |
 | `npc/` | NPC 外观图集（`2108.plist` 平铺） | 快照 `npcs.src` |
@@ -110,25 +110,22 @@
 
 ## 六、货币道具图标（`item/currency/`，#785）
 
-货币道具（绑定元宝 / 元宝 / 银子）是**可使用的背包道具**，用法与药品同类：格子里的
+货币道具（绑定元宝）是**可使用的背包道具**，用法与药品同类：格子里的
 图标 = 这张图，使用后往角色账本入账。它和 HUD 上那一排「货币数量小图标」
 （`ui/money/`，那是界面零件）是两回事 —— 别放反了。
 
 - **放哪里**：`client/assets/resources/item/currency/`（目录已建好，把图丢进去即可）
 - **叫什么**：`<货币>-<面值>.png`
-  - 货币：`bind-gold`（绑定元宝）/ `gold`（元宝）/ `silver`（银子）
+  - 货币：`bind-gold`（绑定元宝，唯一货币）
   - 面值：`10` / `50` / `100` / `200` / `500` / `1000` / `5000` / `100000`
-- **要几张**：3 × 8 = **24 张**（正好是出厂清单的 24 行）
+- **要几张**：1 × 8 = **8 张**（正好是出厂清单的 8 行）
+- **注意**：HUD 的 `ui/money/` 只有 `bind-gold.png` 一张（界面零件，不是背包道具图标）
 - **格式**：`.png`，透明底，正方形（与 `item/consumable/drugs/` 那批同尺寸即可）
 - 全名清单：
 
 ```
 bind-gold-10.png      bind-gold-50.png      bind-gold-100.png      bind-gold-200.png
 bind-gold-500.png     bind-gold-1000.png    bind-gold-5000.png     bind-gold-100000.png
-gold-10.png           gold-50.png           gold-100.png           gold-200.png
-gold-500.png          gold-1000.png         gold-5000.png          gold-100000.png
-silver-10.png         silver-50.png         silver-100.png         silver-200.png
-silver-500.png        silver-1000.png       silver-5000.png        silver-100000.png
 ```
 
 > 路径不是写死在代码里的：库表 `money_items.icon` 存的就是上面的相对路径（不含扩展名）。

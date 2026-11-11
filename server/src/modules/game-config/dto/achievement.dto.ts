@@ -60,8 +60,8 @@ export class AchievementRewardItemDto {
 
 /** 成就奖励 */
 export class AchievementRewardsDto {
-  @ApiProperty({ description: "金币" })
-  gold: number;
+  @ApiProperty({ description: "绑定元宝" })
+  bindGold: number;
 
   @ApiProperty({ description: "经验" })
   exp: number;
@@ -71,7 +71,7 @@ export class AchievementRewardsDto {
 
   static from(row: AchievementRow): AchievementRewardsDto {
     const dto = new AchievementRewardsDto();
-    dto.gold = row.reward_gold;
+    dto.bindGold = row.reward_bind_gold;
     dto.exp = row.reward_exp;
     // 奖励 JSON 列的解析复用任务的实现：同一个列格式只该有一个解析器
     dto.items = parseRewardItems(row.reward_items);
@@ -172,11 +172,11 @@ export class UpdateAchievementConditionDto {
 
 /** 奖励编辑入参 */
 export class UpdateAchievementRewardsDto {
-  @ApiPropertyOptional({ description: "金币（≥0）" })
+  @ApiPropertyOptional({ description: "绑定元宝（≥0）" })
   @IsOptional()
-  @IsInt({ message: "金币必须是整数" })
-  @Min(0, { message: "金币不能为负" })
-  gold?: number;
+  @IsInt({ message: "绑定元宝必须是整数" })
+  @Min(0, { message: "绑定元宝不能为负" })
+  bindGold?: number;
 
   @ApiPropertyOptional({ description: "经验（≥0）" })
   @IsOptional()
@@ -197,7 +197,7 @@ export class UpdateAchievementRewardsDto {
  * 编辑成就配置入参（**部分更新**）
  *
  * `condition` / `rewards` 逐字段合并（`items` 传了就整份替换）—— 与任务配置同一取向：
- * 只改金币时不至于把物品清单静默清空。
+ * 只改绑定元宝时不至于把物品清单静默清空。
  */
 export class UpdateAchievementDto {
   @ApiPropertyOptional({ description: "分类", enum: ACHIEVEMENT_CATEGORIES })

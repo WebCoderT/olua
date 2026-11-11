@@ -90,8 +90,8 @@ export class AchievementClaimResultDto {
   @ApiProperty({ description: "统计", type: AchievementSummaryDto })
   summary: AchievementSummaryDto;
 
-  @ApiProperty({ description: "本次发放的金币" })
-  gold: number;
+  @ApiProperty({ description: "本次发放的绑定元宝" })
+  bindGold: number;
 
   @ApiProperty({ description: "本次发放的经验" })
   exp: number;

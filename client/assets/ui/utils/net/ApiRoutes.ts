@@ -198,13 +198,13 @@ export const ApiRoutes = {
     /**
      * 删除邮件（DELETE /mails/{id}）
      *
-     * **奖励没领不能删**（50143）—— 删了等于替玩家扔掉奖励。「有奖励」= 金币 / 经验 / 附件任一（#866）：纯金币邮件即使 `attachments` 为空也拒删。已领的、以及三样都没有的纯公告可以删。
+     * **奖励没领不能删**（50143）—— 删了等于替玩家扔掉奖励。「有奖励」= 绑定元宝 / 经验 / 附件任一（#866）：纯绑定元宝邮件即使 `attachments` 为空也拒删。已领的、以及三样都没有的纯公告可以删。
      */
     remove: (id: string) => `/mails/${encodeURIComponent(id)}`,
     /**
      * 领取附件（POST /mails/{id}/claim）
      *
-     * 金币 / 经验 / 物品一次落库（与任务交付、成就领奖同一个发奖入口）。
+     * 绑定元宝 / 经验 / 物品一次落库（与任务交付、成就领奖同一个发奖入口）。
      */
     claim: (id: string) => `/mails/${encodeURIComponent(id)}/claim`,
     /**
@@ -222,7 +222,7 @@ export const ApiRoutes = {
     /**
      * 我的收件箱（GET /mails/me）
      *
-     * 整份收件箱（新的在前）+ 未读数 + 未领数 + **每个频道的角标**。附件的 `gold` / `exp` / `attachments` 是**还没到手**的那份奖励，点领取之后才进角色存档。
+     * 整份收件箱（新的在前）+ 未读数 + 未领数 + **每个频道的角标**。附件的 `bindGold` / `exp` / `attachments` 是**还没到手**的那份奖励，点领取之后才进角色存档。
      */
     mine: "/mails/me",
   },
@@ -249,7 +249,7 @@ export const ApiRoutes = {
     /**
      * 交付任务并领奖（POST /quests/submit）
      *
-     * kill/talk 要先到 ready（进度满）；collect 直接查背包 —— 材料不足 20017、奖励物品放不下背包 20012（进度行保持原状，补齐后可再来）。发奖（金币 / 经验 / 物品）与扣材料**一次落库**；daily 与 main 领奖后都**保留 claimed 行**（删行会抹掉「今天领过」的证据），日常的下一轮由 `reset_day` 天号判定。返回最新快照与奖励结算。
+     * kill/talk 要先到 ready（进度满）；collect 直接查背包 —— 材料不足 20017、奖励物品放不下背包 20012（进度行保持原状，补齐后可再来）。发奖（绑定元宝 / 经验 / 物品）与扣材料**一次落库**；daily 与 main 领奖后都**保留 claimed 行**（删行会抹掉「今天领过」的证据），日常的下一轮由 `reset_day` 天号判定。返回最新快照与奖励结算。
      */
     submit: "/quests/submit",
   },

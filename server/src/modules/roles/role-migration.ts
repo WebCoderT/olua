@@ -19,7 +19,7 @@ import { BizException } from "../../common/errors/biz.exception";
  *
  * 1. 每环只做「从 N 到 N+1」的形状变换，并且**幂等**（链条重跑无害）；
  * 2. 版本号由链条统一盖（`apply` 不要自己写 `schemaVersion`），这样漏写也坏不了链；
- * 3. 上线前必须有 fixture 测试（33 篇 3.2）—— 「迁移把金币清零」是唯一上线前发现不了的事故；
+ * 3. 上线前必须有 fixture 测试（33 篇 3.2）—— 「迁移把绑定元宝清零」是唯一上线前发现不了的事故；
  * 4. **只有形状变了才加版本**：纯粹新增可选字段不用升版本（缺字段本来就能读）。
  */
 export const ROLE_DATA_VERSION = 3;

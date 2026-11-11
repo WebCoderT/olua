@@ -157,8 +157,8 @@ export class CreateMoneyItemDto {
  * 编辑货币物品（部分更新）
  *
  * **`id` 不可改**（路径参数就是主键）：改 id 等于换一件物品，背包里旧 id 会全变成认不出的格子。
- * 改 `currency` / `amount` 不会连带改 id —— id 只是键，运营想保持 `money_gold_10` 这个
- * 名字却也行（不推荐；新建时按面值派生更清楚）。
+ * 改 `amount` 不会连带改 id —— id 只是键，运营想保持 `money_bind_gold_10` 这个
+ * 名字却也行（不推荐；新建时按面值派生更清楚）。`currency` 恒为 `bindGold`，不可改。
  */
 export class UpdateMoneyItemDto {
   @ApiPropertyOptional({ description: "名称（不传则不改）", maxLength: MONEY_ITEM_LABEL_MAX })

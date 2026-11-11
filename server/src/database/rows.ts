@@ -938,7 +938,7 @@ export interface ItemRow {
  * 货币物品（#785）：背包里「使用后直接入账」的道具
  *
  * 与药品 / 物品的区别就在 `currency` + `amount` 两列：使用时不结算血蓝、也不进商城售价体系，
- * 而是给角色账本的 `bindGold` 加一笔（唯一货币，#843、#844 收敛后 gold / silver 已删；
+ * 而是给角色账本的 `bindGold` 加一笔（唯一货币，#843、#844 收敛后 旧币种字段已删；
  * 服务端权威，见 `RolesService.useMoneyItem`）。
  *
  * **可增删行**（与药品 / 物品的「id 清单固定」不同）：运营在管理端「货币物品」页自己开面值。
@@ -1682,7 +1682,7 @@ export interface QuestRow {
   /** kill = monster key / talk = npc id / collect = 物品 id */
   objective_target: string;
   objective_count: number;
-  reward_gold: number;
+  reward_bind_gold: number;
   reward_exp: number;
   /** JSON：[{ goodId, count }] */
   reward_items: string;
@@ -1733,7 +1733,7 @@ export interface AchievementRow {
   condition_target: string;
   /** 门槛值（累计型 = 需要多少次，状态型 = 需要到多少） */
   condition_count: number;
-  reward_gold: number;
+  reward_bind_gold: number;
   reward_exp: number;
   /** JSON：[{ goodId, count }] */
   reward_items: string;
@@ -1783,7 +1783,7 @@ export interface RoleMailRow {
   kind: string;
   title: string;
   body: string;
-  gold: number;
+  bind_gold: number;
   exp: number;
   /** 物品附件（JSON 列，`[{ goodId, count }]`） */
   attachments: string;

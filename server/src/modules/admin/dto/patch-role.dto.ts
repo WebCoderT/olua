@@ -83,7 +83,7 @@ export class AdminPatchRoleDto {
   @Max(ROLE_LEVEL_MAX, { message: `等级最大为 ${ROLE_LEVEL_MAX}` })
   level?: number;
 
-  @ApiPropertyOptional({ description: "绑定元宝（唯一货币，gold / silver 已随 #843/#844 收敛删除）" })
+  @ApiPropertyOptional({ description: "绑定元宝（唯一货币，旧币种字段已随 #843/#844 收敛删除）" })
   @IsOptional()
   @IsInt({ message: "绑定元宝必须是整数" })
   @Min(0, { message: "绑定元宝不能为负" })

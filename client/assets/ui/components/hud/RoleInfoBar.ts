@@ -21,7 +21,7 @@ export default class RoleInfoBar extends Node {
   private nameLabel: Label;
   /** 等级文本 */
   private levelLabel: Label;
-  /** 绑定元宝数量文本（唯一货币，#843/#844 收敛后 gold / silver 已删） */
+  /** 绑定元宝数量文本（唯一货币，*） */
   private bindGoldCountLabel: Label;
   /** 战斗力文本 */
   private combatLabel: Label;

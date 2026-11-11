@@ -99,7 +99,7 @@ const questRow = (id) => ({
   minLevel: 1,
   npcId: "0002",
   objective: { type: "kill", target: "1", count: 3 },
-  rewards: { gold: 0, exp: 0, items: [] },
+  rewards: { bindGold: 0, exp: 0, items: [] },
   updatedAt: 0,
 });
 

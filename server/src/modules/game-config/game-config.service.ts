@@ -1378,7 +1378,7 @@ export class GameConfigService {
   updateQuest(id: string, dto: UpdateQuestDto): QuestDto {
     const existing = this.requireQuest(id);
     // objective / rewards 逐字段合并（items 传了就整份替换）——比「传了就整份替换」宽松一档：
-    // 管理端只改金币时不至于把物品清单静默清空
+    // 管理端只改绑定元宝时不至于把物品清单静默清空
     const objective = dto.objective ?? {};
     const rewards = dto.rewards ?? {};
     const next: QuestRow = {
@@ -1392,7 +1392,7 @@ export class GameConfigService {
       objective_type: objective.type ?? existing.objective_type,
       objective_target: objective.target ?? existing.objective_target,
       objective_count: objective.count ?? existing.objective_count,
-      reward_gold: rewards.gold ?? existing.reward_gold,
+      reward_bind_gold: rewards.bindGold ?? existing.reward_bind_gold,
       reward_exp: rewards.exp ?? existing.reward_exp,
       reward_items: JSON.stringify(
         (rewards.items ?? parseRewardItems(existing.reward_items)).map((item) => ({ goodId: item.goodId, count: item.count })),
@@ -1420,7 +1420,7 @@ export class GameConfigService {
       objective_type: dto.objective?.type ?? "kill",
       objective_target: dto.objective?.target ?? "",
       objective_count: dto.objective?.count ?? 1,
-      reward_gold: dto.rewards?.gold ?? 0,
+      reward_bind_gold: dto.rewards?.bindGold ?? 0,
       reward_exp: dto.rewards?.exp ?? 0,
       reward_items: JSON.stringify(
         (dto.rewards?.items ?? []).map((item) => ({ goodId: item.goodId, count: item.count })),
@@ -1482,7 +1482,7 @@ export class GameConfigService {
       condition_type: condition.type ?? existing.condition_type,
       condition_target: condition.target ?? existing.condition_target,
       condition_count: condition.count ?? existing.condition_count,
-      reward_gold: rewards.gold ?? existing.reward_gold,
+      reward_bind_gold: rewards.bindGold ?? existing.reward_bind_gold,
       reward_exp: rewards.exp ?? existing.reward_exp,
       reward_items: JSON.stringify(
         (rewards.items ?? parseRewardItems(existing.reward_items)).map((item) => ({
@@ -1512,7 +1512,7 @@ export class GameConfigService {
       condition_type: dto.condition?.type ?? "kill",
       condition_target: dto.condition?.target ?? "",
       condition_count: dto.condition?.count ?? 1,
-      reward_gold: dto.rewards?.gold ?? 0,
+      reward_bind_gold: dto.rewards?.bindGold ?? 0,
       reward_exp: dto.rewards?.exp ?? 0,
       reward_items: JSON.stringify(
         (dto.rewards?.items ?? []).map((item) => ({ goodId: item.goodId, count: item.count })),

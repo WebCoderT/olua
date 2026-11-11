@@ -225,7 +225,7 @@ test/e2e-equip-in-align.cjs      装备内观几何专项（73 条断言，#523�
 
 | 类别 | 字段 | 权威 | 依据 |
 |---|---|---|---|
-| 账本 | `gold` / `bindGold` / `silver` | **服务端** | 商城 / 回收 / 成长线 / 任务 / 成就 / 邮件 / 后台各有服务端写点；客户端只有 `applyServerRoleUpdate` 一个入口，**没有任何本地改写** |
+| 账本 | `bindGold`（唯一货币「绑定元宝」） | **服务端** | 商城 / 回收 / 成长线 / 任务 / 成就 / 邮件 / 后台各有服务端写点；客户端只有 `applyServerRoleUpdate` 一个入口，**没有任何本地改写** |
 | 成长线阶位 | `title` / `soulOfWar` / `rank` | **服务端** | 只有 `upgradeGrowth` 能推进（扣费 + 成长链校验都在那） |
 | 派生值 | `combat` / `maxHp` / `hpRecover` / `maxMp` / 六项攻防 | **服务端重算** | `applyAuthoritativeAttributes` 每次写档现算覆盖，不走回填 |
 | 客户端全权 | `bag` / `equipments` / `skills` / `hp` / `mp` / `onMap` / `fashionCloth` / `soulShow` / `avatar` / `shortcutKeys` / `speedRate` / `guide` | 客户端 | 换装、整理背包、丢弃、走图、喝药回血、引导推进都在本地；收权要先补一整套服务端接口 |
@@ -275,7 +275,7 @@ test/e2e-equip-in-align.cjs      装备内观几何专项（73 条断言，#523�
 
 | 类别 | 字段 | 权威 | 落点 |
 |---|---|---|---|
-| 账本 | `gold` / `bindGold` / `silver` | 服务端 | 商城 / 回收 / 成长线 / 任务 / 成就 / 邮件 / 后台各有写点 |
+| 账本 | `bindGold`（唯一货币「绑定元宝」） | 服务端 | 商城 / 回收 / 成长线 / 任务 / 成就 / 邮件 / 后台各有写点 |
 | 成长线阶位 | `title` / `soulOfWar` / `rank` | 服务端 | 只有 `upgradeGrowth` 能推进 |
 | 进度 | `level` / `exp` | 服务端 | 经验只由结算产生（击杀 / 队友分账 / 任务 / 成就 / 邮件 / 后台）|
 | 背包与穿戴 | `bag` / `equipments` / `skills` | 服务端 | `POST /roles/:id/bag-op`（穿戴 / 卸下 / 丢弃 / 整理 / 搬运）；建号首次上传 |

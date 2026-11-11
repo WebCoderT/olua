@@ -46,7 +46,7 @@ export function rebuildItemIndex(): void {
     if (good.id) items.set(good.id, good);
   });
   registerItems(drugs, "drug");
-  // #785：货币道具（绑定元宝 / 元宝 / 银子）—— 与药品同属「可使用的消耗品」，
+  // #785：货币道具（绑定元宝，唯一货币）—— 与药品同属「可使用的消耗品」，
   // 但走的是账本链路（useMoneyItem），不是血蓝
   registerItems(moneyItems, "money");
   // #787：升级卷轴（硬性 +1 级，带等级区间）—— 也是「可使用的消耗品」，

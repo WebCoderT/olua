@@ -8,8 +8,8 @@
  * 二、读口：过期的行在收件箱里**立即消失**（不等清理任务），未读 / 未领数跟着不算它；
  *     单封操作（领取）对过期的行按「不存在」处理
  * 三、清理：一次 sweep 只删「已领、或者压根没有奖励」且真过期的行 ——
- *     **只要还有没领的奖励（金币 / 经验 / 附件任一）就不允许物理删除**（#867 把判据从
- *     `attachments` 扩到三样任一：纯金币补偿邮件以前会被删掉，奖励凭空蒸发）；
+ *     **只要还有没领的奖励（绑定元宝 / 经验 / 附件任一）就不允许物理删除**（#867 把判据从
+ *     `attachments` 扩到三样任一：纯绑定元宝补偿邮件以前会被删掉，奖励凭空蒸发）；
  *     expires_at 为空的行永远不删
  * 四、批量：一轮 sweep 删的条数**不超过 MAIL_PURGE_BATCH**（测试里调成 2 验证跨批）
  *
@@ -89,7 +89,7 @@ async function api(method, path, options = {}) {
 function insertMail(dbPath, mail) {
   const db = new DatabaseSync(dbPath);
   db.prepare(
-    `INSERT INTO role_mails (id, role_id, channel, kind, title, body, gold, exp, attachments, read_at, claimed_at, expires_at, created_at)
+    `INSERT INTO role_mails (id, role_id, channel, kind, title, body, bind_gold, exp, attachments, read_at, claimed_at, expires_at, created_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   ).run(
     mail.id,
@@ -98,7 +98,7 @@ function insertMail(dbPath, mail) {
     mail.kind ?? "system",
     mail.title ?? "保质期样本",
     mail.body ?? "",
-    mail.gold ?? 0,
+    mail.bindGold ?? 0,
     mail.exp ?? 0,
     JSON.stringify(mail.attachments ?? []),
     mail.readAt ?? null,
@@ -192,10 +192,10 @@ function mailRow(dbPath, mailId) {
     console.log("— 三、清理：已领 / 压根没奖励才删，还有没领奖励的过期行删不掉 —");
 
     insertMail(dbPath, { id: "mail_pure_dead", roleId, title: "无奖励已过期", expiresAt: Date.now() - 2000 });
-    insertMail(dbPath, { id: "mail_claimed_dead", roleId, title: "已领已过期", gold: 100, expiresAt: Date.now() - 2000, claimedAt: Date.now() - 3000 });
-    insertMail(dbPath, { id: "mail_reward_dead", roleId, title: "带未领附件已过期", gold: 100, attachments: [{ goodId: "material_iron", count: 1 }], expiresAt: Date.now() - 2000 });
-    // #867：只有金币、没有附件的那批 —— 老判据（`attachments = '[]'`）会把它连奖励一起删掉
-    insertMail(dbPath, { id: "mail_gold_dead", roleId, title: "纯金币未领已过期", gold: 100, expiresAt: Date.now() - 2000 });
+    insertMail(dbPath, { id: "mail_claimed_dead", roleId, title: "已领已过期", bindGold: 100, expiresAt: Date.now() - 2000, claimedAt: Date.now() - 3000 });
+    insertMail(dbPath, { id: "mail_reward_dead", roleId, title: "带未领附件已过期", bindGold: 100, attachments: [{ goodId: "material_iron", count: 1 }], expiresAt: Date.now() - 2000 });
+    // #867：只有绑定元宝、没有附件的那批 —— 老判据（`attachments = '[]'`）会把它连奖励一起删掉
+    insertMail(dbPath, { id: "mail_bind_gold_dead", roleId, title: "纯绑定元宝未领已过期", bindGold: 100, expiresAt: Date.now() - 2000 });
     insertMail(dbPath, { id: "mail_forever", roleId, title: "永不过期", expiresAt: null });
 
     // 本节开头已有 3 条可清样本（mail_dead / mail_pure_dead / mail_claimed_dead），
@@ -206,7 +206,7 @@ function mailRow(dbPath, mailId) {
     check(removed === 1, "下一轮把剩下的 1 条清干净", `${removed}`);
     check(!mailRow(dbPath, "mail_dead") && !mailRow(dbPath, "mail_pure_dead") && !mailRow(dbPath, "mail_claimed_dead"), "无奖励已过期 / 已领已过期的行被物理删除");
     check(!!mailRow(dbPath, "mail_reward_dead"), "带未领附件的行即使过期也不删（过期不等于替玩家扔奖励）");
-    check(!!mailRow(dbPath, "mail_gold_dead"), "**纯金币未领**的行即使过期也不删（#867：老判据把它连奖励一起删了）");
+    check(!!mailRow(dbPath, "mail_bind_gold_dead"), "**纯绑定元宝未领**的行即使过期也不删（#867：老判据把它连奖励一起删了）");
     check(!!mailRow(dbPath, "mail_forever"), "expires_at 为空的行永不删");
 
     //#endregion

@@ -283,7 +283,7 @@ function items() {
 }
 
 /**
- * 货币道具（#785）：绑定元宝 / 元宝 / 银子
+ * 货币道具（#785）：绑定元宝（唯一货币）
  *
  * 与药品同一套字段（快照 DTO 就是表行的驼峰版），多带 `currency`（入账到哪个账本字段）
  * 与 `amount`（一件加多少）。
@@ -438,7 +438,7 @@ function quests() {
     minLevel: row.minLevel,
     npcId: row.npcId,
     objective: { type: row.objectiveType, target: row.objectiveTarget, count: row.objectiveCount },
-    rewards: { gold: row.rewardGold, exp: row.rewardExp, items: row.rewardItems ?? [] },
+    rewards: { bindGold: row.rewardBindGold, exp: row.rewardExp, items: row.rewardItems ?? [] },
     updatedAt: row.updatedAt,
   }));
 }
@@ -453,7 +453,7 @@ function achievements() {
     conditionType: row.conditionType,
     conditionTarget: row.conditionTarget,
     conditionCount: row.conditionCount,
-    rewardGold: row.rewardGold,
+    rewardGold: row.rewardBindGold,
     rewardExp: row.rewardExp,
     rewardItems: row.rewardItems ?? [],
     sortOrder: row.sortOrder,
