@@ -292,6 +292,12 @@ export default class RealtimeClient {
       CombatChannel.dispatchPlayers(frame.data);
       return;
     }
+    if (frame.type === "statuses") {
+      // 本人状态快照（#826 第三批）：被怪物挂上眩晕 / 灼烧时服务端主动推，
+      // 不经过 settle —— 不接这条的话要等下一次出手被拒才知道自己被控了
+      CombatChannel.dispatchStatuses(frame.data);
+      return;
+    }
     if (frame.type === "picked") {
       // 拾取结果（#325）：格子级入包的应答，形状的解释在 CombatChannel
       CombatChannel.dispatchPicked(frame.data);

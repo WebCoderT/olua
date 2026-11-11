@@ -52,6 +52,9 @@ const SKILL_COLUMNS: Array<[string, (row: SkillRow) => SqlParam]> = [
   ["crit_rate", (row) => row.crit_rate],
   ["crit_damage", (row) => row.crit_damage],
   ["def_ignore", (row) => row.def_ignore],
+  // 两段连击 / 拉人（#826 第三批）：同样漏登记就是「PATCH 200 但库没变」
+  ["second_hit_ratio", (row) => row.second_hit_ratio],
+  ["pull_distance", (row) => row.pull_distance],
   ["updated_at", (row) => row.updated_at],
 ];
 

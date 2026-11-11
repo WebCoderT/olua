@@ -7,7 +7,7 @@ import { MonsterSkillRepository } from "../../database/repositories/monster-skil
 import { SkillRepository } from "../../database/repositories/skill.repository";
 import { StatusRepository } from "../../database/repositories/status.repository";
 import { MonsterRow, SkillRow, StatusRow } from "../../database/rows";
-import { parseCoefficientsJson, parseCombatJson } from "../../common/config-json";
+import { parseCoefficientsJson, parseCombatJson, parseControlFlagsJson, parseTickEffectJson } from "../../common/config-json";
 import { DEFENSE_BY_ATTACK, MONSTER_STAT_COLUMN } from "../../common/constants/game-enums";
 import type { MonsterAiRuntimeParams } from "../../common/constants/runtime-params";
 import { roleAttributeSourceOf, summarizeRoleAttributes } from "../combat/role-attributes";
@@ -16,7 +16,7 @@ import { RolesService } from "../roles/roles.service";
 import { WorldService, worldKey, type WorldMonster } from "../world/world.service";
 import { MapService } from "../map/map.service";
 import { PlayerPresenceService } from "./player-presence.service";
-import type { RealtimeDropEntry, RealtimeMonsterAiEntry, RealtimeMonsterCast, RealtimeMonsterHit, RealtimeMonsterKill } from "./realtime.protocol";
+import type { RealtimeDropEntry, RealtimeMonsterAiEntry, RealtimeMonsterCast, RealtimeMonsterHit, RealtimeMonsterKill, RealtimeStatusEntry } from "./realtime.protocol";
 
 /**
  * 怪物 AI 参数（`runtime_params.monster_ai` 列，管理端「运行时参数」页可改）
@@ -81,6 +81,14 @@ const FREEZE_RECYCLE_MS = 10 * 60 * 1000;
 /** 地图几何缓存的 TTL（#854）：碰撞盒是管理端画的低频数据，5 秒足够跟上改动 */
 const GEOMETRY_CACHE_TTL_MS = 5000;
 
+/**
+ * 拉人的终点留多宽（像素，#826 第三批）
+ *
+ * 拉到施法者身上会让两个精灵完全重叠、互相遮挡，看起来像「怪消失了」。40px 大约是一个
+ * 角色身位的一半 —— 与掉落散落距离（52）不是一回事，那个管的是「两件东西不叠在一起」。
+ */
+const PULL_STOP_GAP = 40;
+
 /** 一只怪的 AI 视觉参数（`monster_presentation` 表的一行，摊平成 AI 用得上的三个字段） */
 interface MonsterAiConfig {
   aggressive: boolean;
@@ -96,6 +104,16 @@ interface MonsterAiConfig {
  * 一张图上几十只怪时是纯浪费；1 秒 TTL 换来「改完最多 1 秒生效」，与 #258 的读库口径一致。
  */
 const SKILL_CACHE_TTL_MS = 1000;
+
+/**
+ * 怪物侧周期状态一次最多补几拍（#826 第三批）
+ *
+ * 图没人看时 AI 冻结（进度严格停住），回来时 `tickedAt` 可能落后很多拍。
+ * 一次补齐会让「离开十分钟再回来」变成「怪被烧掉半管血」，所以设上限 ——
+ * 与角色侧 `RoleStatusService.MAX_CATCH_UP_TICKS` 取同一个数（两端口径必须一致，
+ * 否则同一次灼烧在两种实体上算出不同的总伤害）。
+ */
+const MAX_MONSTER_CATCH_UP_TICKS = 5;
 
 /**
  * 一个可释放技能的运行时快照（技能行 + 挂载条目 + 状态行合并后的结果）
@@ -121,6 +139,27 @@ interface CastPlan {
   statusId: string;
   /** 状态持续（秒） */
   statusDuration: number;
+}
+
+/**
+ * 怪物身上一条生效中的状态（#826 第三批）
+ *
+ * 与角色侧 `role_status` 的差别是**不落库**：怪物状态本来就被定义为「这一轮表现」
+ * （见 `RoleStatusService` 类注释的对照），重生即重建、图没人看就冻结 —— 存库反而要
+ * 处理「重启后凭空多一个 buff」与「冻结期间到期算不算」两件事。
+ *
+ * 记 `sourceAccountId` 是为了「谁烧的」能追溯（周期伤害日志与后续接击杀归属都要它）；
+ * 怪物自己放的状态型技能没有施加者，留空串。
+ */
+interface MonsterStatusEffect {
+  /** 到期时刻（毫秒） */
+  expiresAt: number;
+  /** 层数（1 ~ `statuses.max_stacks`） */
+  stacks: number;
+  /** 上一次周期结算的时刻（毫秒；0 = 还没结算过） */
+  tickedAt: number;
+  /** 施加者账号（空串 = 怪物自己 / 无主） */
+  sourceAccountId: string;
 }
 
 /** 一只怪的服务端 AI 运行时（内存态，**不落盘**：坐标的持久真相是出生点，见 world.service） */
@@ -185,8 +224,13 @@ interface MonsterRuntime {
   movingNow: boolean;
   /** 技能冷却（skillId → 可再次释放的时刻，毫秒；#372） */
   skillReadyAt: Map<string, number>;
-  /** 自己身上的状态（statusId → 到期时刻，毫秒；#372 服务端生效，不叠层只刷新） */
-  statuses: Map<string, number>;
+  /**
+   * 自己身上的状态（statusId → 运行时记账；#372 起的自 buff + #826 第三批玩家施加的
+   * 控制 / 灼烧都落在这里）
+   *
+   * 为什么不落库：见 `MonsterStatusEffect` 的说明。
+   */
+  statuses: Map<string, MonsterStatusEffect>;
   /** 施法硬直到期时刻（毫秒）：期间既不移动也不出手（#372） */
   castEndAt: number;
   /** 击退结束时刻（毫秒；#670 技能击退，期间只按击退方向位移） */
@@ -491,6 +535,15 @@ export class MonsterAiService implements OnApplicationBootstrap, OnApplicationSh
       ) => void)
     | null = null;
 
+  /**
+   * 状态推送出口（#826 第三批）：怪物把眩晕 / 灼烧挂到某个玩家身上时，要把**整份**状态
+   * 快照推给他本人 —— 否则那个玩家要等到下一次出手被拒（`stunned`）才知道自己动不了。
+   *
+   * 与 `onBroadcast` 同一条手法：AI 不认识连接，RealtimeService 启动时接线。
+   * 未接线时状态照常生效（服务端权威），只是客户端图标栏晚一步刷新。
+   */
+  onStatuses: ((accountId: string, statuses: RealtimeStatusEntry[]) => void) | null = null;
+
   constructor(
     private readonly config: ConfigService,
     private readonly world: WorldService,
@@ -585,6 +638,51 @@ export class MonsterAiService implements OnApplicationBootstrap, OnApplicationSh
   }
 
   /**
+   * 把怪物朝施法者拉回来（#826 第三批：擒龙手这类「拉人」技能）
+   *
+   * 与 `applyPush` 共用同一套位移运行时（`pushDirX/Y` + `pushedUntil` 游标），只有方向相反：
+   * 推是「怪 → 远离施法者」，拉是「怪 → 朝施法者」。共用而不是另开一套的理由 ——
+   * 位移的执行与边界钳制（`slideMove` / `clampToMap`）已经在那里，再写一份必然漂移。
+   *
+   * **不会拉到重叠**：留 `PULL_STOP_GAP` 的间隔，超出的距离截掉。否则怪会叠在玩家身上，
+   * 客户端画面上两个精灵完全重合并互相遮挡，看起来像「怪消失了」。
+   * 被墙挡住时由 `slideMove` 原地卡住（与推同一行为：位移由服务端算，撞墙就停）。
+   *
+   * @returns 真正要移动的距离（像素）—— 已经贴到 `PULL_STOP_GAP` 内、或拿不到施法者
+   *          位置时是 0。回执的 `pullDistance` 直接用它：**不要**把配置值发回客户端，
+   *          配置 300 而实际只拉了 80 时，按下发数算落点会让客户端把怪画到墙里。
+   */
+  applyPull(instanceId: string, fromAccountId: string, distance: number): number {
+    if (!(distance > 0)) return 0;
+    const monster = this.world.find(instanceId);
+    if (!monster || !monster.alive) return 0;
+    const from = this.presence.positionOf(fromAccountId);
+    if (!from) {
+      this.logger.debug(`怪物 ${instanceId} 的拉人作废：施法者 ${fromAccountId} 没有可用的在场位置`);
+      return 0;
+    }
+    const runtime = this.runtimeOf(monster);
+    // 方向 = 怪 → 施法者（与推相反的符号）
+    const offsetX = from.x - runtime.x;
+    const offsetY = from.y - runtime.y;
+    const length = Math.hypot(offsetX, offsetY);
+    if (length <= 0.001) return 0;
+    const actual = Math.min(distance, Math.max(0, length - PULL_STOP_GAP));
+    if (actual <= 0) return 0;
+    const duration = this.ai.pushDuration;
+    runtime.pushDirX = offsetX / length;
+    runtime.pushDirY = offsetY / length;
+    runtime.pushSpeed = actual / (duration / 1000);
+    runtime.pushStartAt = Date.now();
+    runtime.pushEndAt = Date.now() + duration;
+    runtime.pushedUntil = runtime.pushStartAt;
+    // 被拉的人（怪）手上的动作打断：与推同一口径
+    runtime.castEndAt = 0;
+    runtime.movingNow = true;
+    return actual;
+  }
+
+  /**
    * 怪物被击杀：AI 运行时作废（重生回出生点后按新的一轮游走重新开始，身上的状态一并清掉）；
    * 带击杀事件（#689，结算侧在奖励结算完后调用）时攒进待广播队列，
    * 同图观看者的下一拍 monster-ai 帧会带上 —— 死亡清场与掉落铺场的跨端演出全靠它。
@@ -652,19 +750,136 @@ export class MonsterAiService implements OnApplicationBootstrap, OnApplicationSh
     const runtime = this.findRuntime(instanceId);
     if (!runtime || runtime.statuses.size === 0) return 1;
     this.refreshSkillCache(Date.now());
-    const now = Date.now();
     let multiplier = 1;
-    for (const [statusId, expiresAt] of runtime.statuses) {
-      if (expiresAt <= now) {
+    for (const entry of this.activeStatuses(runtime, Date.now())) {
+      const value = parseCombatJson(entry.row.combat)[key];
+      if (typeof value === "number" && Number.isFinite(value) && value > 0) multiplier *= value;
+    }
+    return multiplier;
+  }
+
+  /**
+   * 怪物身上**当前生效**的状态（顺手剔掉已到期的行）
+   *
+   * 到期判定只在这里做一次：所有消费方（数值修正 / 控制 / 周期结算 / 自 buff 去重）
+   * 都走它，谁也不会读到一条过期状态 —— 各判一次必然有一处忘记判（图标还在、控制还在）。
+   */
+  private activeStatuses(runtime: MonsterRuntime, now: number): Array<{ statusId: string; effect: MonsterStatusEffect; row: StatusRow }> {
+    const list: Array<{ statusId: string; effect: MonsterStatusEffect; row: StatusRow }> = [];
+    for (const [statusId, effect] of runtime.statuses) {
+      if (effect.expiresAt <= now) {
         runtime.statuses.delete(statusId);
         continue;
       }
       const row = this.statusRows.get(statusId);
-      if (!row) continue;
-      const value = parseCombatJson(row.combat)[key];
-      if (typeof value === "number" && Number.isFinite(value) && value > 0) multiplier *= value;
+      // 状态行被删了（运营删配置）→ 当作不存在，同样剔掉：留着它只会在控制判据里
+      // 变成一个「查不到 flags 所以永远不生效」的幽灵行
+      if (!row) {
+        runtime.statuses.delete(statusId);
+        continue;
+      }
+      list.push({ statusId, effect, row });
     }
-    return multiplier;
+    return list;
+  }
+
+  /**
+   * 给怪物挂一个状态（#826 第三批：玩家技能命中时由结算侧调用）
+   *
+   * 与角色侧 `RoleStatusService.apply` 同一套叠层口径：同 id 再加一层 → +1（封顶
+   * `max_stacks`），**刷新到期**，到期按整层一起消失。`tickedAt` 只在第一次挂上时初始化，
+   * 重复施加不重置 —— 否则每刷新一层就多结算一拍，五层 = 五倍伤害的错觉。
+   *
+   * @returns 挂上后的层数与持续时长；`null` = 怪物不在 / 已死 / 状态不存在 / 持续时间为 0
+   *          （后者是配置错误，调用方**不要**静默当成已生效）
+   */
+  applyStatusToMonster(
+    instanceId: string,
+    statusId: string,
+    sourceAccountId = "",
+  ): { statusId: string; stacks: number; durationMs: number } | null {
+    if (!statusId) return null;
+    const monster = this.world.find(instanceId);
+    if (!monster || !monster.alive) return null;
+    this.refreshSkillCache(Date.now());
+    const row = this.statusRows.get(statusId);
+    if (!row) return null;
+    const durationMs = Math.round((Number(row.duration) || 0) * 1000);
+    if (!(durationMs > 0)) return null;
+
+    const now = Date.now();
+    const runtime = this.runtimeOf(monster);
+    const previous = runtime.statuses.get(statusId);
+    const maxStacks = Math.max(1, Math.floor(Number(row.max_stacks) || 1));
+    const stacks = Math.min(maxStacks, Math.max(1, (previous?.stacks ?? 0) + 1));
+    runtime.statuses.set(statusId, {
+      expiresAt: now + durationMs,
+      stacks,
+      tickedAt: previous ? previous.tickedAt : now,
+      // 施加者只在第一次记下：后续叠层的人是同一个人（同一发技能的连击），
+      // 换人叠层时更新成新的施加者会让「谁烧死的」这件事在日志里来回跳
+      sourceAccountId: sourceAccountId || previous?.sourceAccountId || "",
+    });
+    return { statusId, stacks, durationMs };
+  }
+
+  /**
+   * 怪物此刻被控制成什么样（#826 第三批）
+   *
+   * 与角色侧 `RoleStatusService.controlOf` 同一套语义：`stun` 既禁移动也禁出手，
+   * `root` 只禁移动，`silence` 只禁出手（怪物侧的「出手」= 技能 + 普攻）。
+   */
+  private controlOf(runtime: MonsterRuntime, now: number): { stunned: boolean; rooted: boolean; silenced: boolean } {
+    let stunned = false;
+    let rooted = false;
+    let silenced = false;
+    for (const entry of this.activeStatuses(runtime, now)) {
+      const flags = parseControlFlagsJson(entry.row.control_flags);
+      if (flags.stun) stunned = true;
+      if (flags.root) rooted = true;
+      if (flags.silence) silenced = true;
+    }
+    return { stunned, rooted: rooted || stunned, silenced: silenced || stunned };
+  }
+
+  /**
+   * 周期状态结算（#826 第三批）：灼烧这类 DoT 打在怪身上
+   *
+   * 三条口径：
+   * - **补拍**：按 `tickedAt` 算「过了几拍」，最多补 `MAX_MONSTER_CATCH_UP_TICKS` 拍 ——
+   *   图没人看时 AI 冻结，回来一口气补十拍会把怪秒了；
+   * - **不致死**：伤害夹到「至少留 1 血」。理由不是手感而是**归属**：掉落账本按 `castId`
+   *   记账，而状态伤害发生在 tick 里、没有 settle 帧可发 —— 让它打死就只剩「地上有东西
+   *   但客户端不知道 castId」的死账。最后一击必须有人打（重开条件：出现一条不依赖 settle
+   *   帧的掉落下发通道）；
+   * - **层数乘在总量上**：五层灼烧 = 五倍，不是「每拍扣五次」（后者 tickedAt 记不过来）。
+   */
+  private applyStatusTicks(runtime: MonsterRuntime, monster: WorldMonster, now: number): void {
+    if (runtime.statuses.size === 0) return;
+    const entries = this.activeStatuses(runtime, now);
+    if (entries.length === 0) return;
+    let total = 0;
+    for (const entry of entries) {
+      const interval = Math.max(0, Math.floor(Number(entry.row.tick_ms) || 0));
+      if (interval <= 0) continue;
+      const start = entry.effect.tickedAt > 0 ? entry.effect.tickedAt : now;
+      const elapsed = now - start;
+      if (elapsed < interval) continue;
+      const ticks = Math.min(MAX_MONSTER_CATCH_UP_TICKS, Math.floor(elapsed / interval));
+      if (ticks <= 0) continue;
+      const effect = parseTickEffectJson(entry.row.tick_effect);
+      const amount =
+        ((Number(effect.hp) || 0) + Math.round(monster.maxHp * (Number(effect.hpPercent) || 0))) * ticks * entry.effect.stacks;
+      entry.effect.tickedAt = start + ticks * interval;
+      if (amount < 0) total += -amount;
+    }
+    if (total <= 0) return;
+    // 留 1 血：见上面「不致死」那一条
+    const damage = Math.min(Math.floor(total), Math.max(0, monster.hp - 1));
+    if (damage <= 0) return;
+    this.world.applyDamage(monster.instanceId, damage);
+    runtime.hp = Math.max(1, monster.hp);
+    this.logger.debug(`怪物 ${monster.instanceId}(${monster.monsterKey}) 被周期状态扣 ${damage} 血 → ${runtime.hp}/${monster.maxHp}`);
   }
 
   private findRuntime(instanceId: string): MonsterRuntime | undefined {
@@ -748,6 +963,10 @@ export class MonsterAiService implements OnApplicationBootstrap, OnApplicationSh
     mapKey: string,
     geometry: WalkGeometry | null,
   ): void {
+    // 周期状态（#826 第三批）：灼烧这类 DoT 按 `tick_ms` 结算，**与控制无关** ——
+    // 被定住的目标照样在烧。放在最前面：击退 / 硬直 / 回家 / 被控那几条早退都不会漏掉它。
+    this.applyStatusTicks(runtime, monster, now);
+
     // 击退优先于一切（#670）：期间只按击退方向位移，目标 / 技能 / 硬直都往后放 ——
     // 被推着的怪继续放技能会看起来像「飘着打人」，而且落点会与施法者的预期错开。
     //
@@ -771,6 +990,16 @@ export class MonsterAiService implements OnApplicationBootstrap, OnApplicationSh
       if (now < runtime.pushEndAt) return; // 还在窗口内：不追不出手
     }
 
+    // 控制（#826 第三批）：眩晕 = 既不能动也不能出手（用户口径：眩晕与麻痹都禁一切，
+    // 只是来源与图标不同）；定身只禁移动；沉默只禁出手。
+    // 放在击退之后（推是别人的动作，被推的位移该走完）、硬直与索敌之前 ——
+    // 被控的怪不该在这几拍里「顺带」换个目标、或者自己溜达回家。
+    const control = this.controlOf(runtime, now);
+    if (control.stunned) {
+      runtime.movingNow = false;
+      return;
+    }
+
     // 施法硬直：动作没播完之前既不移动也不出手（与客户端动作锁同一语义）。
     // 放在目标校验之前 —— 硬直期间不该因为目标丢失而中断这次释放的收尾。
     if (now < runtime.castEndAt) {
@@ -781,6 +1010,11 @@ export class MonsterAiService implements OnApplicationBootstrap, OnApplicationSh
     // 回家（#853 E3）：脱战之后只朝出生点直线走，**不索敌、不接受新威胁**。
     // 放在目标校验之前 —— 这一段本来就没有目标可言，走完就结束这一拍
     if (runtime.state === "return") {
+      // 定身期间不回家：否则被定住的怪会一边「不能动」一边飘回出生点
+      if (control.rooted) {
+        runtime.movingNow = false;
+        return;
+      }
       this.returnHome(runtime, monster, config, now, geometry);
       return;
     }
@@ -861,8 +1095,10 @@ export class MonsterAiService implements OnApplicationBootstrap, OnApplicationSh
       const position = this.presence.positionOf(runtime.target);
       if (!position) return;
       const distance = Math.hypot(position.x - runtime.x, position.y - runtime.y);
-      // 技能优先（#372）：进入战斗才有意义 —— 没有敌人时给自己上 buff 没有价值
-      if (this.tryCast(runtime, monster, distance, now, mapKey)) return;
+      // 技能优先（#372）：进入战斗才有意义 —— 没有敌人时给自己上 buff 没有价值。
+      // 沉默（#826 第三批）连技能带 buff 一起禁：`silence` 的字面含义就是「放不出技能」，
+      // 只禁伤害型会让「沉默」在怪物身上变成只影响一半的半个状态
+      if (!control.silenced && this.tryCast(runtime, monster, distance, now, mapKey)) return;
       // 技能尝试里可能已经把目标作废了（结算不出来 → `forgetTarget`）：这一拍的追击与普攻
       // 都跟着作废，否则会拿一个 null 目标去结算（`attack` 的入参是 string）
       const chasing = runtime.target;
@@ -898,7 +1134,12 @@ export class MonsterAiService implements OnApplicationBootstrap, OnApplicationSh
         }
         return;
       }
-      // 追击：直线趋近 + 碰撞滑行（#854，不做寻路）
+      // 追击：直线趋近 + 碰撞滑行（#854，不做寻路）。定身（#826 第三批）原地不动，
+      // 但**照常站着打**——定身只禁移动，禁出手的是眩晕与沉默
+      if (control.rooted) {
+        runtime.movingNow = false;
+        return;
+      }
       this.stepToward(runtime, position.x, position.y, config.moveSpeed, geometry, now);
       return;
     }
@@ -924,10 +1165,12 @@ export class MonsterAiService implements OnApplicationBootstrap, OnApplicationSh
       runtime.stuckTurns = 0;
       runtime.detourTicks = 0;
     }
-    if (runtime.idleMoveEndAt > now) {
+    if (runtime.idleMoveEndAt > now && !control.rooted) {
       const speed = config.moveSpeed * this.ai.idleMoveSpeedScale;
       this.stepAlong(runtime, runtime.idleMoveDirectionX, runtime.idleMoveDirectionY, (speed * this.tickMs()) / 1000, geometry, now);
     } else {
+      // 定身期间待机游走同样不推进（但计时照旧流逝：解除控制后重新掷一次方向，
+      // 而不是把「被定住的这 3 秒」补成一次突然的长距离位移）
       runtime.movingNow = false;
     }
   }
@@ -1180,7 +1423,13 @@ export class MonsterAiService implements OnApplicationBootstrap, OnApplicationSh
       if (now < (runtime.skillReadyAt.get(plan.skillId) ?? 0)) continue;
       // 伤害型要够得着；状态型不看距离（追击路上也能给自己上 buff）
       if (plan.category === "0" && distance > Math.max(plan.distance, this.ai.attackRange)) continue;
-      if (plan.category === "2" && runtime.statuses.has(plan.statusId) && (runtime.statuses.get(plan.statusId) ?? 0) > now) continue;
+      // 状态型：这个状态还在身上就不重复放。过期那一条顺手剔掉 —— 不剔的话
+      // `has()` 会一直为真，怪物就再也不给自己补 buff 了（到期行没人读时不会自己消失）
+      if (plan.category === "2") {
+        const existing = runtime.statuses.get(plan.statusId);
+        if (existing && existing.expiresAt > now) continue;
+        if (existing) runtime.statuses.delete(plan.statusId);
+      }
       if (this.castSkill(runtime, monster, plan, now, mapKey)) return true;
       // 释放失败只可能是「目标刚倒下了」（见 castSkill）：目标已经丢掉，这一拍不会再放
       // 任何需要目标的技能，直接回落到「没有目标」的分支
@@ -1204,12 +1453,13 @@ export class MonsterAiService implements OnApplicationBootstrap, OnApplicationSh
    */
   private castSkill(runtime: MonsterRuntime, monster: WorldMonster, plan: CastPlan, now: number, mapKey: string): boolean {
     let hit: RealtimeMonsterHit | null = null;
+    /** 这一发打的是谁（状态要挂到他身上，所以先取出来 —— attack 之后 runtime.target 可能被清） */
+    const victim = runtime.target;
     if (plan.category !== "2") {
-      if (!runtime.target) return false;
-      hit = this.attack(monster, runtime.target, plan.rate, plan.baseType);
+      if (!victim) return false;
+      hit = this.attack(monster, victim, plan.rate, plan.baseType);
       if (!hit) {
-        const target = runtime.target;
-        this.forgetTarget(runtime, target, now, this.presence.positionOf(target));
+        this.forgetTarget(runtime, victim, now, this.presence.positionOf(victim));
         return false;
       }
     }
@@ -1223,8 +1473,20 @@ export class MonsterAiService implements OnApplicationBootstrap, OnApplicationSh
 
     const cast: RealtimeMonsterCast = { instanceId: monster.instanceId, skillId: plan.skillId };
     if (plan.category === "2") {
-      runtime.statuses.set(plan.statusId, now + plan.statusDuration * 1000);
+      // 自己上 buff：走统一的挂状态入口（叠层 / 刷新到期 / tickedAt 三件事只写一份）
+      this.applyStatusToMonster(monster.instanceId, plan.statusId);
       cast.statusId = plan.statusId;
+    } else if (hit && victim && plan.statusId) {
+      // 伤害型技能顺带挂状态（#826 第三批）：眩晕 / 麻痹 / 灼烧是「怪打人」这一侧的效果，
+      // 落在**被打的玩家**身上（角色状态有落库 + 每秒结算，怪物侧只有进程内记账）。
+      // 挂不上（配置里没这个状态 / 持续时间 0）就只当这一发是纯伤害 —— 配置错误由
+      // 管理端的状态页看得见，不该让 AI 每 tick 刷一条日志。
+      const pushed = this.roles.applyStatusToOnlineRole(victim, plan.statusId, plan.skillId);
+      if (pushed) {
+        cast.statusId = plan.statusId;
+        // 整份快照推给本人：不推的话他要等到下一次出手被 `stunned` 拒了才知道自己被控
+        this.onStatuses?.(victim, pushed);
+      }
     }
     const list = this.pendingCasts.get(mapKey) ?? [];
     list.push(cast);
@@ -1595,7 +1857,7 @@ export class MonsterAiService implements OnApplicationBootstrap, OnApplicationSh
       sentMoving: false,
       movingNow: false,
       skillReadyAt: new Map<string, number>(),
-      statuses: new Map<string, number>(),
+      statuses: new Map<string, MonsterStatusEffect>(),
       castEndAt: 0,
       pushEndAt: 0,
       pushStartAt: 0,

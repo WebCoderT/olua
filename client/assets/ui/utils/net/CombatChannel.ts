@@ -59,12 +59,36 @@ export interface CombatSettleOk {
    */
   critical?: boolean;
   /**
+   * true = 这一发吃了等级压制（#826 第三批，`docs/22` §2.2）
+   *
+   * **只影响表现**：伤害已经被服务端压过了，客户端不要再乘任何系数。飘字换成「压制」
+   * 而不是普通伤害；`damage === 0 && suppressed` 是「越级打不动」的确定信号，
+   * 与「防御吃满打出 0」区分得开（后者不带这个字段）。
+   */
+  suppressed?: boolean;
+  /**
+   * 两段连击的第二段伤害（#826 第三批；`skills.second_hit_ratio > 0` 才有）
+   *
+   * 只在真打出第二段时出现。`hp` 已是**两段都结算完**之后的血量：飘字按
+   * `damage` → `secondDamage` 各飘一次（`showDamageText` 自带横向错峰），血条只落一次终值。
+   */
+  secondDamage?: number;
+  /**
    * 这一下把目标撞飞了多远（像素；#826 第二批）
    *
    * 只在真推了时出现（缺字段 = 没推）。**只影响表现**：怪的实际位移由服务端位置广播驱动
    * （客户端照常趋近），这个数不要拿来自己挪怪 —— 做击退特效时读它定强度。
    */
   pushDistance?: number;
+  /**
+   * 这一下把目标拉近了多少（像素；#826 第三批，`skills.pull_distance`）
+   *
+   * 与 `pushDistance` 互斥，方向相反（怪 → 施法者）。给的是**实际**位移量（贴脸会被截断）。
+   * 同样只影响表现：真位移由服务端位置广播驱动。
+   */
+  pullDistance?: number;
+  /** 这一发挂到目标身上的状态 id（#826 第三批；缺省 = 没带状态或目标已死） */
+  targetStatus?: string;
   /** 击杀奖励（仅 killed 时携带；无此字段 = 旧服务端或本地口径回滚路径） */
   reward?: CombatKillReward;
   duplicate: boolean;
@@ -98,6 +122,12 @@ export interface CombatSettleHit {
   hp: number;
   maxHp: number;
   killed: boolean;
+  /** 这一只被打出了暴击（#826；只影响表现） */
+  critical?: boolean;
+  /** 这一只吃了等级压制（#826 第三批；只影响表现） */
+  suppressed?: boolean;
+  /** 这一只被挂上的状态 id（#826 第三批；打死的怪不带） */
+  status?: string;
   /** 这一只被击杀时的奖励（只有 killed 才带；经验与掉落各自算） */
   reward?: CombatKillReward;
 }
@@ -444,6 +474,13 @@ export default class CombatChannel {
   /** 怪物 AI 广播出口（#323；组合根接线到 MonsterManager.applyServerAi，不接时帧被丢弃） */
   static onMonsterAi: ((data: MonsterAiFrame) => void) | null = null;
 
+  /**
+   * 本人状态快照出口（#826 第三批；组合根接线到 StatusManager.applyFromServer）
+   *
+   * 与 settle 回执里的 `statuses` 同一条出口 —— 两处都是「整份快照」，没有理由分两条。
+   */
+  static onStatuses: ((statuses: CombatStatusEntry[]) => void) | null = null;
+
   /** 玩家互见广播出口（#324；组合根接线到 OtherPlayerManager.applyPlayersFrame，不接时帧被丢弃） */
   static onPlayers: ((data: PlayersFrame) => void) | null = null;
 
@@ -586,6 +623,24 @@ export default class CombatChannel {
       return;
     }
     this.onSettle(settle);
+  }
+
+  /**
+   * RealtimeClient 收到 statuses 帧后走这里（#826 第三批）
+   *
+   * 与 settle 里的 `statuses` 是**同一种载荷**（整份快照），所以直接交给同一个
+   * 处理者：`StatusManager.applyFromServer` 整表重建图标栏，不做增量。
+   * 未接线时只记一条 —— 状态在服务端已经生效（出手 / 移动都会被拒），
+   * 丢的只是客户端的图标显示。
+   */
+  static dispatchStatuses(data: unknown): void {
+    const payload = data as { statuses?: CombatStatusEntry[] } | null;
+    if (!payload || !Array.isArray(payload.statuses)) return;
+    if (!this.onStatuses) {
+      console.warn("[combat] 收到状态快照但没有处理者（onStatuses 未接线），快照被丢弃");
+      return;
+    }
+    this.onStatuses(payload.statuses);
   }
 
   /** RealtimeClient 收到 world 帧后走这里（进图应答与重生广播同形） */
@@ -812,8 +867,11 @@ export interface CombatSettleError {
    * 只在**闸拒绝**时出现（协议错 / 未知目标这些仍只有 `code`）。客户端目前只记日志：
    * 正常客户端自己就守着冷却与蓝耗，收到这些说明本地状态已经和服务端漂了 ——
    * 该做的是下一次心跳 / 存档同步回正，而不是给玩家弹一排红字。
+   *
+   * `stunned`（#826 第三批）是「被眩晕 / 麻痹控制着」：这一发没打出去，等状态掉完再放，
+   * 与 `dead` 同类处理。
    */
-  rejected?: "dead" | "cross_map" | "range" | "cooldown" | "mp" | "rate";
+  rejected?: "dead" | "cross_map" | "range" | "cooldown" | "mp" | "rate" | "stunned";
   /** 冷却闸专用：还要等多少毫秒 */
   remainMs?: number;
   /** 耗蓝闸专用：需要多少法力 / 当前多少（可飘「蓝不足 40/12」） */

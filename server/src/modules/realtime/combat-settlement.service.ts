@@ -431,7 +431,7 @@ export class CombatSettlementService {
 
       // 每一只独立掷骰：攻击区间各自随机，防御也吃各自的状态修正，暴击也各掷一次。
       // 拿一次掷骰套到 N 只身上，会让「同一刀打死五只」变成可预测的结果。
-      const { damage, critical } = rollCastDamage({
+      const { damage, critical, suppressed } = rollCastDamage({
         attackRange: readRange(summary, coefficient.baseType),
         attackMultiplier: this.roles.statusModifiersOf(accountId).attackMultiplier,
         rate: coefficient.baseTypeRate,
@@ -439,10 +439,22 @@ export class CombatSettlementService {
         defenseMultiplier: this.monsterAi.defenseMultiplierOf(entry.monster.instanceId),
         defIgnore: readNumber(skill, "defIgnore"),
         crit: critProfileOf(summary, skill),
+        // 等级压制逐只算（#826 第三批）：一片怪里等级可能不同，拿主目标那一份套全片会算错
+        suppression: suppressionOf(role.level, stats.level),
       });
 
       const applied = this.world.applyDamage(entry.monster.instanceId, damage);
       if (!applied) continue;
+
+      // 技能自带的状态（#826 第三批）：逐只挂，与单体路径同一口径（打死的怪不挂）
+      let hitStatus: string | undefined;
+      if (!applied.killed) {
+        const statusId = typeof skill.statusId === "string" ? skill.statusId : "";
+        if (statusId) {
+          const attached = this.monsterAi.applyStatusToMonster(entry.monster.instanceId, statusId, accountId);
+          if (attached) hitStatus = attached.statusId;
+        }
+      }
 
       let reward: RealtimeKillReward | undefined;
       if (applied.killed) {
@@ -524,7 +536,10 @@ export class CombatSettlementService {
         // 暴击逐只标（#826）：一次区域施放里可能只爆一只 —— 客户端按 hit 播特效，
         // 不能拿顶层那一个标志去染整片
         ...(critical ? { critical: true } : {}),
+        // 等级压制同样逐只标（#826 第三批）：一片怪等级可能不同，压制与否也不同
+        ...(suppressed ? { suppressed: true as const } : {}),
       };
+      if (hitStatus) hit.status = hitStatus;
       if (reward) hit.reward = reward;
       hits.push(hit);
     }
@@ -559,6 +574,8 @@ export class CombatSettlementService {
       statuses,
       // 顶层 = 主目标那一只的暴击（与 damage / hp 同一口径：只认最近那只）
       ...(primary?.critical ? { critical: true } : {}),
+      // 顶层 = 主目标那一只的压制（同上；逐只看 hits[i].suppressed）
+      ...(primary?.suppressed ? { suppressed: true as const } : {}),
     };
     return primary?.reward ? { ...ok, reward: primary.reward } : ok;
   }
@@ -694,7 +711,7 @@ export class CombatSettlementService {
     // 玩家身上的状态修正（#822）：攻击倍率乘在出伤上，与受击侧的防御倍率同一个来源
     // 暴击与破防（#826）收在 `rollCastDamage` 里，与区域路径共用一条公式
     const modifiers = this.roles.statusModifiersOf(accountId);
-    const { damage, critical } = rollCastDamage({
+    const { damage, critical, suppressed } = rollCastDamage({
       attackRange: readRange(summary, coefficient.baseType),
       attackMultiplier: modifiers.attackMultiplier,
       rate: coefficient.baseTypeRate,
@@ -702,11 +719,50 @@ export class CombatSettlementService {
       defenseMultiplier: this.monsterAi.defenseMultiplierOf(cast.targetId),
       defIgnore: readNumber(skill, "defIgnore"),
       crit: critProfileOf(summary, skill),
+      // 等级压制（#826 第三批）：单体只算这一只，与区域路径的逐只算法是同一个函数
+      suppression: suppressionOf(role.level, stats.level),
     });
 
     // 扣血与世界状态（血量 / 死亡判定都在世界服务里，这里只拿结果演）
-    const applied = this.world.applyDamage(cast.targetId, damage);
-    if (!applied) return fail("target_dead", `目标 ${cast.targetId}（${cast.monsterKey}）已死亡`);
+    const first = this.world.applyDamage(cast.targetId, damage);
+    if (!first) return fail("target_dead", `目标 ${cast.targetId}（${cast.monsterKey}）已死亡`);
+
+    // 两段连击（#826 第三批）：第一段没打死才补第二段
+    // - 系数是配置列（`skills.second_hit_ratio`，0 = 没有第二段），第二段 = 第一段 × 系数；
+    //   用户口径就是「配置列系数」，所以第二段**不单独掷区间、不单独判暴击** ——
+    //   它是第一段的延续，两段合起来是一条伤害曲线，拆开掷会让同一次出手的方差翻倍。
+    // - 第一段就打死 → 不补（没有「再鞭尸一下」这回事，奖励与掉落也只算一次）；
+    // - 第一段 0 伤害（被等级压制打不动 / 防御吃满）→ 不补：补一下还是 0，
+    //   只会让客户端多播一次空飘字。`secondDamage > 0` 是这两个条件的合流处。
+    const secondRatio = Math.max(0, Number(skill.secondHitRatio) || 0);
+    let secondDamage = 0;
+    let applied = first;
+    if (!first.killed && secondRatio > 0) {
+      const extra = Math.round(damage * secondRatio);
+      if (extra > 0) {
+        const second = this.world.applyDamage(cast.targetId, extra);
+        // 第二段返回 null 只可能是指针指向的那只已经不在世界表里（并发清图）——
+        // 那就是「第二段没落地」，回执不能报一个没生效的数
+        if (second) {
+          applied = second;
+          secondDamage = extra;
+        }
+      }
+    }
+
+    // 技能自带的状态（#826 第三批）：伤害型技能命中后把 `status_id` 挂到怪身上
+    // （眩晕 / 麻痹 / 灼烧这一侧）。状态**先于**死亡判定写：打到残血的怪该被控住，
+    // 打死的怪不写（`!applied.killed`）—— 给尸体挂 buff 只会留在运行时里等重生时被清。
+    // 挂不上（配置里没这个状态 / 持续时间 0）就当这一发是纯伤害，不报错：
+    // 那是运营配置问题，管理端状态页看得见，不该让玩家看到「技能放了但没伤害以外的错」。
+    let targetStatus: string | undefined;
+    if (!applied.killed) {
+      const statusId = typeof skill.statusId === "string" ? skill.statusId : "";
+      if (statusId) {
+        const attached = this.monsterAi.applyStatusToMonster(cast.targetId, statusId, accountId);
+        if (attached) targetStatus = attached.statusId;
+      }
+    }
 
     // 怪物 AI（#323）：打伤 = 被动怪记恨这次出手的人（AI 收权后追击由服务端驱动）；
     // 击杀则清掉它的 AI 运行时（重生回出生点按新一轮游走开始）
@@ -720,6 +776,8 @@ export class CombatSettlementService {
     const deathSpot = applied.killed ? hitSpot : null;
     /** 这一下把怪推开了多远（#670；击杀时不推，所以默认 0） */
     let pushDistance = 0;
+    /** 这一下把怪拉近了多少（#826 第三批；与推互斥，实际值由 AI 侧截断后返回） */
+    let pullDistance = 0;
 
     // 击杀奖励（#316）：经验入账与掉落抽取都在服务端 —— 经验入账失败（打到一半被踢等）
     // 只跳过 reward，不回滚这次击杀：世界状态是权威，经验少记一笔可接受
@@ -802,6 +860,20 @@ export class CombatSettlementService {
         pushDistance = wantPush;
         this.monsterAi.applyPush(cast.targetId, accountId, pushDistance);
       }
+
+      // 拉人（#826 第三批，`skills.pull_distance`）：与撞飞方向相反（怪 → 施法者），
+      // 共用 AI 那套位移运行时。三条口径：
+      // - **与推互斥**：推了就跳过拉 —— 两个都配的话「先撞飞再拉回来」在一帧里播两个
+      //   相反的位移，客户端插值会抖成残影。配了两列的时代价是「推优先」，与字段顺序一致。
+      // - **不判概率也不判等级**：desc 里拉人是「一定拉过来」的技能语义，不是撞飞那类
+      //   「按概率击退」。要按概率就再给一列，别偷偷复用 `push_chance`（配击退概率会
+      //   连带改拉人，运营调一个参数坏两个玩法）。
+      // - **回执给实际值**：贴到 `PULL_STOP_GAP` 内会被截断，下发配置值会让客户端把怪
+      //   画进玩家身上（或墙里）。0 = 没拉（配置为 0 / 已经贴脸 / 拿不到施法者坐标）。
+      const wantPull = Number(skill.pullDistance) || 0;
+      if (pushDistance === 0 && wantPull > 0) {
+        pullDistance = this.monsterAi.applyPull(cast.targetId, accountId, wantPull);
+      }
     }
 
     // 实时地图监控（#745）：一次伤害一行 —— 「谁、用什么、打了多少、怪还剩多少」。
@@ -818,7 +890,9 @@ export class CombatSettlementService {
       attacker: this.roleNameOf(role),
       skillId: cast.skillId,
       skillLabel: String(skill.label ?? ""),
-      amount: damage,
+      // 两段连击算一行：`hpBefore = hpAfter + amount` 是监控页面的自洽前提，
+      // 只记第一段会让「200 → 137（-63）」的减法对不上（少掉第二段那一截）
+      amount: damage + secondDamage,
       hpAfter: applied.hp,
       maxHp: target.maxHp,
       killed: applied.killed,
@@ -831,7 +905,9 @@ export class CombatSettlementService {
     this.presence.recordAction(target.zoneId, target.mapId, { accountId, skillId: cast.skillId, targetId: cast.targetId });
 
     this.logger.debug(
-      `结算：账号 ${accountId} 技能 ${cast.skillId}(Lv${skillLevel}) → 目标 ${cast.targetId}(${cast.monsterKey}) 伤害 ${damage}，血量 ${applied.hp}/${target.maxHp}${applied.killed ? "，击杀" : ""}${reward ? `，经验 +${reward.exp}，掉落 ${reward.drops.length} 种` : ""}`,
+      `结算：账号 ${accountId} 技能 ${cast.skillId}(Lv${skillLevel}) → 目标 ${cast.targetId}(${cast.monsterKey}) 伤害 ${damage}` +
+        `${secondDamage > 0 ? `+${secondDamage}（两段）` : ""}${suppressed ? "（等级压制）" : ""}，血量 ${applied.hp}/${target.maxHp}` +
+        `${applied.killed ? "，击杀" : ""}${reward ? `，经验 +${reward.exp}，掉落 ${reward.drops.length} 种` : ""}`,
     );
 
     const ok: RealtimeSettleData = {
@@ -849,9 +925,20 @@ export class CombatSettlementService {
       statuses: this.roles.statusSnapshotOf(accountId),
       // 暴击（#826）：只在真触发时出现 —— 客户端用它换飘字 / 特效，缺字段就是没暴击
       ...(critical ? { critical: true } : {}),
+      // 等级压制（#826 第三批）：只在系数真的 < 1 时出现。`damage: 0 + suppressed: true`
+      // 是「越 20 级打不动」的确定信号，与「防御吃满打出 0」区分得开
+      ...(suppressed ? { suppressed: true as const } : {}),
+      // 两段连击（#826 第三批）：只在第二段真落地时出现。`hp` 已是两段之后的血量，
+      // 客户端按 damage → secondDamage → hp 的顺序演
+      ...(secondDamage > 0 ? { secondDamage } : {}),
       // 撞飞（#826 第二批）：只在真推了时出现。位移本身走位置广播（#670 不加协议帧），
       // 回执带这个数是给客户端表现用的确定性信号（击退方向 = 施法者 → 怪），缺字段就是没推
       ...(pushDistance > 0 ? { pushDistance } : {}),
+      // 拉人（#826 第三批）：与撞飞互斥，方向相反（怪 → 施法者）。给的是**实际**拉近距离
+      ...(pullDistance > 0 ? { pullDistance } : {}),
+      // 挂到目标身上的状态（#826 第三批）：客户端可据此在怪身上播一次控制 / 燃烧特效。
+      // 缺字段 = 这一发没带状态（或怪已经死了）
+      ...(targetStatus ? { targetStatus } : {}),
     };
     return reward ? { ...ok, reward } : ok;
   }
@@ -1373,17 +1460,34 @@ function critProfileOf(summary: object, skill: object): CritProfile {
 }
 
 /**
+ * 等级压制系数（#826 第三批，docs/22 §2.2 已定「严格压制」）
+ *
+ * `sup = max(0, 1 − 0.05 × max(0, targetLevel − attackerLevel))`
+ *
+ * - **只算目标比攻击者高多少**，不取绝对值：打低级怪既不吃惩罚也不加成；
+ * - 每级 -5%，越 20 级就是 0（打不动），不再有下限保护；
+ * - 与经验侧的 `maxLevelGap` 是两条独立的线，都生效。
+ */
+function suppressionOf(attackerLevel: number, targetLevel: number): number {
+  const gap = Math.max(0, Math.floor(targetLevel) - Math.floor(attackerLevel));
+  return Math.max(0, 1 - 0.05 * gap);
+}
+
+/**
  * 一次出手的伤害（#826：暴击与破防都收在这里，单体与区域共用一条公式）
  *
  * ```
  * 防御 = round(掷防御区间 × 怪物状态倍率 × (1 − 破防比例))
- * 基础 = max(0, round(掷攻击区间 × 状态攻击倍率 × 技能倍率 − 防御))
+ * 基础 = max(0, round(掷攻击区间 × 状态攻击倍率 × 技能倍率 × 等级压制 − 防御))
  * 暴击 = 基础 > 0 && rand < 暴击率  →  伤害 = round(基础 × 暴击倍率)
  * ```
  *
- * 三处顺序都是刻意的：
+ * 四处顺序都是刻意的：
  * - **破防削的是防御那一项**，不是最终伤害 —— 「无视防御」对高防目标收益更大，
  *   与 `desc` 里「目标防御越高增幅越明显」是同一个方向。
+ * - **等级压制乘在扣防之前**（#826 第三批）：先按等级把「能打出多少」压下来，再减防御。
+ *   反过来（先扣防再压制）会让 `sup=0` 时减完防御的 0 变成负数再被夹成 0，
+ *   结果一样但语义混乱 —— 「越 20 级伤害为 0」应该是压制本身的结果。
  * - **基础伤害为 0 时不判暴击**（22 篇第 26 条）：0 伤害暴击只会让客户端播一个空特效。
  * - **暴击乘在最后**（22 篇第 23 条）：受击侧的格挡乘在它之后，顺序固定两端才不会算出不同数。
  */
@@ -1395,13 +1499,21 @@ function rollCastDamage(input: {
   defenseMultiplier: number;
   defIgnore: number;
   crit: CritProfile;
-}): { damage: number; critical: boolean } {
-  const attack = rollRange(input.attackRange) * input.attackMultiplier;
+  /** 等级压制系数（1 = 无压制；0 = 打不动）。缺省 1，老调用方行为不变 */
+  suppression?: number;
+}): { damage: number; critical: boolean; suppressed: boolean } {
+  const suppression = Math.max(0, Math.min(1, input.suppression ?? 1));
+  const attack = rollRange(input.attackRange) * input.attackMultiplier * suppression;
   const ignore = Math.min(1, Math.max(0, input.defIgnore));
   const defense = Math.round(rollRange(input.defenseRange) * input.defenseMultiplier * (1 - ignore));
   const base = Math.max(0, Math.round(attack * input.rate - defense));
   const critical = base > 0 && input.crit.rate > 0 && Math.random() < input.crit.rate;
-  return { damage: critical ? Math.round(base * input.crit.damage) : base, critical };
+  return {
+    damage: critical ? Math.round(base * input.crit.damage) : base,
+    critical,
+    // 「被压制」只看系数是否小于 1：sup=0 是它的极端情况，客户端据此显示「等级压制」而不是「伤害 0」
+    suppressed: suppression < 1,
+  };
 }
 
 /** 掉落条目（drop_tables.entries / monster_drops.entries JSON 解析后的形状；库内已全显式，缺省只为容错） */

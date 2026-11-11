@@ -37,6 +37,25 @@ export interface StatusCombatConfig {
 }
 
 /**
+ * 控制标记（#826 第三批；配置在 `statuses.control_flags`）
+ *
+ * 口径与服务端 `RoleStatusService.controlOf` 完全一致：`stun` 包含 `root` 与 `silence`
+ * 的全部含义（眩晕 / 麻痹 = 既不能动也不能出手，只是来源与图标不同）。
+ *
+ * 客户端只消费「能不能动」这一项（停输入是表现层的双保险）；「能不能出手」由服务端拒
+ * （`rejected: "stunned"`）—— 本地再判一次会多出第二份真相，两边一旦不同步就是
+ * 「客户端不让我放技能」而服务端其实允许。
+ */
+export interface StatusControlConfig {
+  /** 眩晕 / 麻痹：禁止移动与出手 */
+  stun?: boolean;
+  /** 定身：只禁止移动 */
+  root?: boolean;
+  /** 沉默：只禁止出手（客户端不消费，留着与配置对齐） */
+  silence?: boolean;
+}
+
+/**
  * 状态配置（configs/status 注册表的一项）
  * 状态 = 角色身上的一段持续效果：身上循环播放特效（config.effect）+ 信息栏头像下方的图标（config.icon）
  * 同一状态重复获得时只刷新持续时间（不叠加层数）；到期由 StatusManager 自动移除
@@ -58,6 +77,11 @@ export interface StatusConfig {
    * 这里的字段只描述「这个状态在数值上意味着什么」，改口径去 BattleMath
    */
   combat?: StatusCombatConfig;
+  /**
+   * 控制标记（缺省 = 不控制）。`stun` / `root` 会让 StatusManager.isMoveLocked() 为真，
+   * 组合根据此停掉本地输入 —— 服务端同时也在丢弃眩晕期间的 `pos` 帧，这里是表现层双保险
+   */
+  control?: StatusControlConfig;
   /**
    * 身上循环播放的特效图集（resources 下 TexturePacker 图集路径，不含扩展名，
    * 如 "effect/skill/2009"）；不配置则只在图标栏显示、身上不播特效。

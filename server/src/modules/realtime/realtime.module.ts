@@ -16,6 +16,7 @@ import { PlayerPresenceService } from "./player-presence.service";
 import { RealtimeController } from "./realtime.controller";
 import { RealtimeService } from "./realtime.service";
 import { SoakPointService } from "./soak-point.service";
+import { StatusTickService } from "./status-tick.service";
 
 /**
  * 实时模块（服务端侧的 WebSocket 通道）
@@ -58,6 +59,9 @@ import { SoakPointService } from "./soak-point.service";
     // 泡点活动（#722）：在线 tick 发经验。住本模块的理由见服务头注释 ——
     // 拆进程形态里只有实时进程装载本模块，tick 天然只跑一份
     SoakPointService,
+    // 周期状态结算（#826 第三批）：灼烧这类 DoT / HoT 每秒按拍扣血。
+    // 住本模块的理由与泡点完全一致 —— 拆进程形态里只有实时进程装载本模块
+    StatusTickService,
   ],
 })
 export class RealtimeModule {}

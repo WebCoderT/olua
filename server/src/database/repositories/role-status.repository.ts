@@ -27,13 +27,36 @@ export class RoleStatusRepository {
    */
   upsert(row: RoleStatusRow): void {
     this.db.run(
-      `INSERT INTO role_status (role_id, status_id, stacks, expire_at, source_skill)
-       VALUES (?, ?, ?, ?, ?)
+      `INSERT INTO role_status (role_id, status_id, stacks, expire_at, source_skill, ticked_at)
+       VALUES (?, ?, ?, ?, ?, ?)
        ON CONFLICT(role_id, status_id) DO UPDATE SET
          stacks = excluded.stacks,
          expire_at = excluded.expire_at,
-         source_skill = excluded.source_skill`,
-      [row.role_id, row.status_id, row.stacks, row.expire_at, row.source_skill],
+         source_skill = excluded.source_skill,
+         ticked_at = excluded.ticked_at`,
+      [row.role_id, row.status_id, row.stacks, row.expire_at, row.source_skill, row.ticked_at ?? 0],
+    );
+  }
+
+  /**
+   * 只推进周期记账（#826 第三批）
+   *
+   * 单独一条语句而不是复用 `upsert`：tick 与「另一条状态被刷新」是两件独立的事，
+   * 共用 `upsert` 会把对方的 `expire_at` / `stacks` 一起盖掉 —— 那种错只在多状态同时挂着时出现。
+   */
+  markTicked(roleId: string, statusId: string, tickedAt: number): void {
+    this.db.run("UPDATE role_status SET ticked_at = ? WHERE role_id = ? AND status_id = ?", [tickedAt, roleId, statusId]);
+  }
+
+  /** 所有带周期效果的未过期行（`tick_ms > 0`；周期结算的扫描面，#826 第三批） */
+  listTicking(now: number): Array<RoleStatusRow & { tick_ms: number; tick_effect: string }> {
+    return this.db.all<RoleStatusRow & { tick_ms: number; tick_effect: string }>(
+      `SELECT rs.*, st.tick_ms AS tick_ms, st.tick_effect AS tick_effect
+         FROM role_status rs
+         JOIN statuses st ON st.id = rs.status_id
+        WHERE rs.expire_at > ? AND st.tick_ms > 0
+        ORDER BY rs.role_id ASC, rs.status_id ASC`,
+      [now],
     );
   }
 

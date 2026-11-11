@@ -158,6 +158,9 @@ export class Game extends Component {
     CombatChannel.onSettle = MonsterManager.applyServerSettle.bind(MonsterManager);
     // 世界权威（#35）：world 帧的快照由怪物管理器与场上节点做差量合并（播种落场/重生补场）
     CombatChannel.onWorld = MonsterManager.applyWorldState.bind(MonsterManager);
+    // 本人状态快照（#826 第三批）：被怪物挂上眩晕 / 灼烧时服务端主动推，不经过 settle。
+    // 与 settle 回执里的 statuses 走同一个落点（整表重建图标栏），不做增量
+    CombatChannel.onStatuses = (statuses) => StatusManager.applyFromServer(statuses);
     // 怪物 AI 权威（#323）：monster-ai 帧由怪物管理器落点（位置趋近演出 + 自己的受击事件），
     // 受击的血量入账/飘字/红闪在这里做（服务端已落账，客户端只演）
     CombatChannel.onMonsterAi = MonsterManager.applyServerAi.bind(MonsterManager);
@@ -499,6 +502,12 @@ export class Game extends Component {
     this.bottomBar?.updateCooldowns();
     // 状态每帧驱动（到期移除 + 身上特效跟随主角）
     StatusManager.tick();
+    // 控制状态同步到移动层（#826 第三批）：眩晕 / 麻痹 / 定身期间本地停输入 ——
+    // 服务端同时也在丢弃 `pos` 帧，这里是表现层双保险（不加就会出现「本地能走、
+    // 服务端不动、解除瞬间被硬拉回」的鬼畜回弹）
+    if (this.roleDisplay && isValid(this.roleDisplay)) {
+      this.roleDisplay.setControlLocked(StatusManager.isMoveLocked());
+    }
     // 悬停详情弹窗每帧驱动（剩余时间/冷却剩余刷新；图标销毁或状态到期时收起）
     HoverTipManager.tick();
     // 怪物信息面板血量刷新（选中怪物期间一直显示，目标失效时自动销毁）

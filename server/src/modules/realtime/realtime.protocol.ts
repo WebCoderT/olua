@@ -129,7 +129,7 @@ export interface RealtimeTargetsResetMessage {
 export interface RealtimeStatusEntry {
   /** 状态 id（statuses.id，客户端据此查图标 / 特效 / 名称） */
   id: string;
-  /** 层数（本轮恒为 1；叠层规则随 docs/22 §2.3 一起做） */
+  /** 层数（#826 第三批起是真层数，封顶 `statuses.max_stacks`；周期伤害按层数乘总量） */
   stacks: number;
   /** 还剩多少毫秒（客户端按它本地倒计时，不必服务端再推一次到期帧） */
   remainingMs: number;
@@ -157,6 +157,20 @@ export interface RealtimeSettleHit {
    * （不写 `false` —— 省带宽，也让「服务端没实现暴击」与「这一发没爆」在抓包时区分得开）。
    */
   critical?: true;
+  /**
+   * true = 这一只吃了等级压制（#826 第三批）
+   *
+   * 同样逐只标：一片怪里等级可能不同，客户端按 hit 决定要不要飘「压制」字。
+   * 缺字段就是没压制（不写 `false`，理由与 `critical` 一致）。
+   */
+  suppressed?: true;
+  /**
+   * 这一只被挂上的状态 id（#826 第三批；`skills.status_id`，缺省 = 没带状态）
+   *
+   * 打死的那一只**不带**（给尸体挂状态没有意义）。客户端可据此在怪身上播一次
+   * 控制 / 燃烧特效 —— 怪物没有图标栏，状态本身由服务端 AI 认。
+   */
+  status?: string;
   /** 这一只被击杀时的奖励（只有 killed 才带） */
   reward?: RealtimeKillReward;
 }
@@ -182,12 +196,37 @@ export interface RealtimeSettleOk {
    */
   critical?: true;
   /**
+   * true = 这一发吃了等级压制（#826 第三批，`docs/22` §2.2）
+   *
+   * 只在系数真的小于 1 时出现。客户端据此把飘字换成「压制」而不是普通伤害；
+   * `damage: 0` + `suppressed: true` 是「越 20 级打不动」的确定信号，
+   * 与「防御吃满了打出 0」区分得开。
+   */
+  suppressed?: true;
+  /**
+   * 两段连击的第二段伤害（#826 第三批；`skills.second_hit_ratio > 0` 才有）
+   *
+   * 只在真打出第二段时出现 —— 第一段就打死、系数配 0、目标中途消失都**不带**这个字段
+   * （缺字段 = 没有第二段）。`hp` 是**两段都结算完**之后剩下的血量：客户端按
+   * 「damage → secondDamage → hp」的顺序播，中间那一跳自己插值。
+   * 第二段不单独掷区间也不单独判暴击 —— 它是第一段的固定比例（配置列系数）。
+   */
+  secondDamage?: number;
+  /**
    * 这一下把目标撞飞了多远（像素；#826 第二批）
    *
    * 只在真推了时出现（缺字段 = 没推）。位移本体走位置广播（#670：落点随普通位置帧发，
    * 不加新协议帧），这个数只是给客户端表现用的确定性信号 —— 击退方向恒为施法者 → 怪。
    */
   pushDistance?: number;
+  /**
+   * 这一下把目标拉近了多少（像素；#826 第三批，`skills.pull_distance`）
+   *
+   * 与 `pushDistance` 互斥（同一个 else 分支里先后判定，推了就不拉），方向恒为
+   * 怪 → 施法者。**实际拉近距离可能小于配置值**：贴到 `PULL_STOP_GAP` 就停，
+   * 回执给的是真移动了多少，客户端照着算落点。
+   */
+  pullDistance?: number;
   /** 击杀奖励（#316 起由服务端结算；仅 killed 时携带——经验入账与掉落内容都以此为准） */
   reward?: RealtimeKillReward;
   /** true = 同一 castId 的重复投递，结果原样重发、未重复结算 */
@@ -217,6 +256,13 @@ export interface RealtimeSettleOk {
   statusOnly?: true;
   /** 这一发施加的状态 id（`statusOnly` 时给；客户端可用来播一次身上的特效） */
   appliedStatus?: string;
+  /**
+   * 挂到**目标**身上的状态 id（#826 第三批；`skills.status_id`）
+   *
+   * 与 `appliedStatus` 的区别：那个是「挂在自己身上」（状态型技能），这个是「挂在被打的
+   * 怪身上」（烈火剑法的灼烧、擒龙手的眩晕）。缺省 = 这一发没带状态、或目标已经死了。
+   */
+  targetStatus?: string;
   /**
    * 本账号此刻**全部**生效中的状态（#822；整份快照，缺省 = 没变 / 老服务端）
    *
@@ -276,8 +322,11 @@ export interface RealtimeSettleError {
    * 与 `code` 的关系：`code` 是老字段、什么都可能是（协议错、未知目标、闸拒绝）；
    * `rejected` 只在**闸拒绝**时出现，取值为上面六个之一 —— 客户端按它决定表现
    * （`cooldown` 可转圈，其余当作这一发没打出去）。闸拒绝时两者同值，不新增帧类型。
+   *
+   * `stunned`（#826 第三批）是「一·五 控制」这道闸：眩晕 / 麻痹中不能出手。
+   * 它排在 `dead` 之后、`cross_map` 之前，客户端表现与 `dead` 同类（这一发没打出去）。
    */
-  rejected?: "dead" | "cross_map" | "range" | "cooldown" | "mp" | "rate";
+  rejected?: "dead" | "cross_map" | "range" | "cooldown" | "mp" | "rate" | "stunned";
   /** 冷却闸专用：还要等多少毫秒（`rejected: "cooldown"` 时给） */
   remainMs?: number;
   /** 耗蓝闸专用：这一发需要多少法力（`rejected: "mp"` 时给，客户端可飘「蓝不足 40/12」） */
@@ -463,8 +512,9 @@ export interface RealtimeMonsterHit {
  * 而伤害型技能的「动作 + 特效」要靠技能配置里的 action / effect 播 ——
  * 两者都只需要「谁放了什么」，伤害数值仍走 hits（客户端不重算）。
  *
- * `statusId` 有值 = 这次释放给怪物自己挂了这个状态（客户端据此在怪物身上播状态特效）；
- * 服务端已经按状态修正过后续伤害，客户端只演。
+ * `statusId` 有值 = 这次释放要挂载的状态 id，客户端据此在怪身上播状态特效。两种来源都会带它：
+ * ① 状态型技能（如狂怒 9002）；② `skills.status_id` 非空的伤害型技能（如跃鼠猛击 9001 → 2004 眩晕，
+ * 命中且目标活着才真的挂上，见 `castSkill` / `applyStatusTicks`）。服务端已经按状态修正过后续伤害，客户端只演。
  */
 export interface RealtimeMonsterCast {
   instanceId: string;
@@ -940,6 +990,21 @@ export interface RealtimeRoleUpdateMessage {
 
 //#endregion
 
+/**
+ * 服务端 → 客户端：本人身上生效中的状态变了（#826 第三批）
+ *
+ * 为什么需要一条独立帧：`statuses` 在此之前只搭在 `settle` 回执里，而**怪物给你挂眩晕 /
+ * 灼烧**这件事不经过 settle —— 不推的话玩家要等到下一次出手被判 `stunned`、或者血条
+ * 莫名其妙掉了一截，才知道自己被控了。
+ *
+ * 载荷是**整份快照**（与 settle 里的 `statuses` 同形状）：客户端照样整表重建图标栏，
+ * 不做加减。
+ */
+export interface RealtimeStatusMessage {
+  type: "statuses";
+  data: { statuses: RealtimeStatusEntry[] };
+}
+
 /** 服务端会发出的全部消息 */
 export type RealtimeServerMessage =
   | RealtimeWelcomeMessage
@@ -956,7 +1021,8 @@ export type RealtimeServerMessage =
   | RealtimePartySnapshotMessage
   | RealtimePartyInviteMessage
   | RealtimeExpGainMessage
-  | RealtimeRoleUpdateMessage;
+  | RealtimeRoleUpdateMessage
+  | RealtimeStatusMessage;
 
 /**
  * 关闭码

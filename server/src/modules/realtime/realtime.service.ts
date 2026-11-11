@@ -43,6 +43,7 @@ import {
   type RealtimeQuestMessage,
   type RealtimeServerMessage,
   type RealtimeSettleMessage,
+  type RealtimeStatusMessage,
   type RealtimeWorldMessage,
 } from "./realtime.protocol";
 
@@ -221,6 +222,12 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
         const socket = this.connections.get(accountId);
         if (socket) this.send(socket, frame);
       }
+    };
+    // 状态推送（#826 第三批）：怪物把眩晕 / 灼烧挂到某个玩家身上时，整份快照推给他本人。
+    // 不推的话他要等到下一次出手被 `stunned` 拒了才知道自己被控 —— 血条莫名其妙掉一截同理。
+    this.monsterAi.onStatuses = (accountId, statuses) => {
+      const socket = this.connections.get(accountId);
+      if (socket) this.send(socket, { type: "statuses", data: { statuses } } satisfies RealtimeStatusMessage);
     };
     // 玩家互见广播（#324）：在场表攒好一帧，这里按观看者集合发出去；
     // 屏蔽（#398）在这里逐观看者剔一次 —— 一个帧发给多人时，收件人的过滤条件各不相同，

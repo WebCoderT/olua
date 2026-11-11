@@ -848,6 +848,14 @@ export type UpdateSkill = {
    * 无视防御比例（0~1；1 = 完全无视目标防御，0 = 正常吃防御）
    */
   defIgnore?: number;
+  /**
+   * 两段连击的第二段系数（0~1；0 = 没有第二段。第二段伤害 = 第一段 × 系数）
+   */
+  secondHitRatio?: number;
+  /**
+   * 拉人距离（像素；0 = 不拉。方向 = 目标朝施法者）
+   */
+  pullDistance?: number;
 };
 
 export type CreateSkill = {
@@ -944,6 +952,14 @@ export type CreateSkill = {
    */
   defIgnore?: number;
   /**
+   * 两段连击的第二段系数（0~1；0 = 没有第二段。第二段伤害 = 第一段 × 系数）
+   */
+  secondHitRatio?: number;
+  /**
+   * 拉人距离（像素；0 = 不拉。方向 = 目标朝施法者）
+   */
+  pullDistance?: number;
+  /**
    * 技能 id（怪物技能段：9000~9999 的四位数字，如 "9001"）
    */
   id: string;
@@ -970,6 +986,40 @@ export type StatusCombat = {
    * 攻击乘法系数（≥1，1.5 = 攻击 ×1.5；多个状态连乘）
    */
   attackMultiplier?: number;
+};
+
+export type StatusTick = {
+  /**
+   * 每拍掉多少血（负数扣血，正数当治疗）
+   */
+  hp?: number;
+  /**
+   * 每拍回多少蓝（负数扣蓝）
+   */
+  mp?: number;
+  /**
+   * 每拍按最大血量的比例变化（-0.02 = 每拍掉 2%）
+   */
+  hpPercent?: number;
+  /**
+   * 每拍按最大蓝量的比例变化
+   */
+  mpPercent?: number;
+};
+
+export type StatusControl = {
+  /**
+   * 眩晕 / 麻痹：禁止移动与出手（两者在服务端是同一条判据，只是来源与图标不同）
+   */
+  stun?: boolean;
+  /**
+   * 定身：只禁止移动，仍可出手
+   */
+  root?: boolean;
+  /**
+   * 沉默：只禁止出手，仍可移动
+   */
+  silence?: boolean;
 };
 
 export type UpdateStatus = {
@@ -1005,6 +1055,26 @@ export type UpdateStatus = {
    * 战斗数值修正（整份替换：不传则不改）
    */
   combat?: StatusCombat;
+  /**
+   * 分类：buff / damage / control / speed
+   */
+  kind?: "buff" | "damage" | "control" | "speed";
+  /**
+   * 最大层数（1~99，1 = 不叠）
+   */
+  maxStacks?: number;
+  /**
+   * 周期触发间隔（毫秒；0 = 无周期，最小 100）
+   */
+  tickMs?: number;
+  /**
+   * 每拍做什么（整份替换：不传则不改）
+   */
+  tickEffect?: StatusTick;
+  /**
+   * 控制标记（整份替换：不传则不改）
+   */
+  controlFlags?: StatusControl;
 };
 
 export type CreateEquipment = {
@@ -6723,6 +6793,14 @@ export type Skill = {
    */
   defIgnore: number;
   /**
+   * 两段连击的第二段系数（0~1；0 = 没有第二段。第二段伤害 = 第一段 × 这个系数，不再单独掷攻击区间）
+   */
+  secondHitRatio: number;
+  /**
+   * 拉人距离（像素；0 = 不拉。方向 = 目标朝施法者，与 pushDistance 相反）
+   */
+  pullDistance: number;
+  /**
    * 最近更新时间（毫秒）
    */
   updatedAt: number;
@@ -6853,6 +6931,26 @@ export type Status = {
    * 战斗数值修正（缺省 = 纯表现状态）
    */
   combat: StatusCombat;
+  /**
+   * 分类：buff / damage / control / speed（只用于分组，判据看 controlFlags 与 tickMs）
+   */
+  kind: string;
+  /**
+   * 最大层数（1 = 不叠；同 id 再加一层 → +1 并刷新到期）
+   */
+  maxStacks: number;
+  /**
+   * 周期触发间隔（毫秒；0 = 无周期）
+   */
+  tickMs: number;
+  /**
+   * 每拍做什么
+   */
+  tickEffect: StatusTick;
+  /**
+   * 控制标记
+   */
+  controlFlags: StatusControl;
   /**
    * 最近更新时间（毫秒）
    */

@@ -839,13 +839,17 @@ export default class GameUiHelper {
    * @param target 受伤物体节点
    * @param damage 受到的伤害数值
    * @param blocked 是否触发了格挡（#14 状态数值：格挡时文案用 label_damage_block、颜色用 blockedColor）
+   * @param suppressed 是否吃了等级压制（#826 第三批：文案用 label_damage_suppressed；
+   *   数值已经被服务端压过，这里**只换说法**，不乘任何系数）
    */
-  static showDamageText(target: Node, damage: number, blocked = false) {
+  static showDamageText(target: Node, damage: number, blocked = false, suppressed = false) {
     if (!isValid(target)) return;
     const style = uiTheme.floatingText.damage;
     // 受伤为红色扣血飘字；格挡为 blockedColor；未命中（伤害 <= 0）为白色 MISS
     const color = blocked ? style.blockedColor : damage > 0 ? style.color : Color.WHITE;
-    const text = damage > 0 ? getText(blocked ? "label_damage_block" : "label_damage", { value: damage }) : getText("label_damage_miss");
+    // 压制的优先级低于格挡：格挡是「这一下被挡了」，压制是「打不动」，两个都命中时说格挡更准
+    const label = blocked ? "label_damage_block" : suppressed ? "label_damage_suppressed" : "label_damage";
+    const text = damage > 0 ? getText(label, { value: damage }) : getText("label_damage_miss");
     const damageText = UiHelper.createLabel("damage_text", text, color, style.fontSize, new Vec2(), style.size);
     LayerManager.addToEffectLayer(damageText);
     // 位置与受伤物体保持一致；横向按出场次数在 offsetXs 里轮转错峰 ——

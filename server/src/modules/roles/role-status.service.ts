@@ -1,5 +1,5 @@
 import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from "@nestjs/common";
-import { statusOf } from "../../common/runtime-config-cache";
+import { statusOf, StatusTickEffect } from "../../common/runtime-config-cache";
 import { NO_STATUS_MODIFIERS, RoleStatusModifiers } from "../combat/status-combat";
 import { RoleStatusRepository } from "../../database/repositories/role-status.repository";
 import { RoleStatusRow } from "../../database/rows";
@@ -24,8 +24,8 @@ import { RoleStatusRow } from "../../database/rows";
  * ===========================================================================
  * 生命周期（docs/22 §5 已定）
  * ===========================================================================
- * - **重复获得**：刷新到期（本轮 `stacks` 恒为 1 —— 层数封顶 `max_stacks` 与周期效果
- *   一起做，重开条件见 docs/22 §2.3 的落地顺序）；
+ * - **重复获得**：叠一层（封顶 `statuses.max_stacks`）并刷新到期 —— 到期按整层一起消失，
+ *   不按层单独计时（按层计时会让客户端图标栏与结算对不上）；
  * - **到期**：读取前惰性清理（判据绝不吃旧行），另有 5 秒一次的全表清扫兜住没人读的行；
  * - **死亡**：清空（复活不带旧 buff）—— 由 `RolesService.applyMonsterHit` 在血量归零时调；
  * - **下线**：清空（离线不保留 buff）；
@@ -41,6 +41,9 @@ export class RoleStatusService implements OnModuleInit, OnModuleDestroy {
 
   /** 全表清扫间隔：到期判定本身是惰性的，这个只负责把「再没人读过」的行删掉 */
   private static readonly SWEEP_MS = 5_000;
+
+  /** 周期结算一次最多补几拍（进程卡顿 / 重启后 `ticked_at` 会落后好几拍） */
+  private static readonly MAX_CATCH_UP_TICKS = 5;
 
   private sweepTimer: ReturnType<typeof setInterval> | null = null;
 
@@ -73,9 +76,21 @@ export class RoleStatusService implements OnModuleInit, OnModuleDestroy {
     const now = options?.now ?? Date.now();
     const skillId = options?.skillId ?? "";
     const existing = this.repo.listByRole(roleId).find((row) => row.status_id === statusId);
-    // 重复获得：刷新到期，层数本轮恒为 1（叠加规则随 max_stacks 一起做，见类注释）
-    const stacks = existing ? Math.max(1, Number(existing.stacks) || 1) : 1;
-    const row: RoleStatusRow = { role_id: roleId, status_id: statusId, stacks, expire_at: now + durationMs, source_skill: skillId };
+    // 叠层（#826 第三批）：同 id 再加一层 → +1，封顶 `max_stacks`，并**刷新持续时间**；
+    // 到期按整层一起消失（不按层单独计时 —— 按层计时会让客户端显示与结算对不上）
+    const previous = existing ? Math.max(1, Number(existing.stacks) || 1) : 0;
+    const stacks = Math.min(config.maxStacks, Math.max(1, previous + 1));
+    // `ticked_at` 只在**第一次挂上**时初始化；重复获得不重置它 —— 否则每次刷新都把这一拍
+    // 重新计一遍，叠满五层就等于「一拍掉一次血 × 5 次刷新」
+    const tickedAt = existing ? Number(existing.ticked_at) || 0 : now;
+    const row: RoleStatusRow = {
+      role_id: roleId,
+      status_id: statusId,
+      stacks,
+      expire_at: now + durationMs,
+      source_skill: skillId,
+      ticked_at: tickedAt,
+    };
     this.repo.upsert(row);
     return row;
   }
@@ -130,6 +145,68 @@ export class RoleStatusService implements OnModuleInit, OnModuleDestroy {
   clearOfRole(roleId: string): void {
     const { changes } = this.repo.deleteByRole(roleId);
     if (changes > 0) this.logger.debug(`角色 ${roleId} 的状态已清空（${changes} 条）`);
+  }
+
+  /**
+   * 控制判据（#826 第三批）：这个角色此刻能不能动 / 能不能出手
+   *
+   * 眩晕与麻痹在服务端是**同一条判据**（都是 `stun`）—— 用户口径：两者都禁一切，
+   * 只是来源与图标不同。所以这里不区分「眩晕 / 麻痹」，只回答「被什么限制住了」。
+   * 返回值给结算层与移动校验用，`reasons` 非空即被控制（用于回执文案与被谁控的复盘）。
+   */
+  controlOf(roleId: string, now = Date.now()): { stunned: boolean; rooted: boolean; silenced: boolean } {
+    let stunned = false;
+    let rooted = false;
+    let silenced = false;
+    for (const entry of this.snapshotOf(roleId, now)) {
+      const control = statusOf(entry.id)?.control;
+      if (!control) continue;
+      if (control.stun) stunned = true;
+      if (control.root) rooted = true;
+      if (control.silence) silenced = true;
+    }
+    // stun 包含 root 与 silence 的全部含义：既不能动也不能出手
+    return { stunned, rooted: rooted || stunned, silenced: silenced || stunned };
+  }
+
+  /**
+   * 周期效果结算（#826 第三批）：把「从上次结算到现在过了几拍」算出来，交给调用方扣血
+   *
+   * 为什么算拍数而不是「每拍结算一次」：进程卡顿 / 服务重启后，`ticked_at` 会落后好几拍，
+   * 只结算一拍等于**周期效果被时间飘移吃掉**。这里一次补齐，最多补 `MAX_CATCH_UP_TICKS` 拍
+   * （防止一个挂了三天的状态在登录瞬间把角色打死）。
+   *
+   * 返回的是「这一轮要结算的拍」清单，**扣血由调用方做**：血量是角色存档的一部分，
+   * 只有 `RolesService` 有写入通道（且要保证不推 revision），状态层不该自己去改存档。
+   */
+  dueTicks(now = Date.now()): Array<{ roleId: string; statusId: string; stacks: number; ticks: number; effect: StatusTickEffect; nextTickedAt: number }> {
+    const due: Array<{ roleId: string; statusId: string; stacks: number; ticks: number; effect: StatusTickEffect; nextTickedAt: number }> = [];
+    for (const row of this.repo.listTicking(now)) {
+      const interval = Math.max(0, Math.floor(Number(row.tick_ms) || 0));
+      if (interval <= 0) continue;
+      const config = statusOf(row.status_id);
+      if (!config) continue;
+      // 没记过（老行 / 刚挂上）= 从挂上那一刻算；`ticked_at=0` 时用 `expire_at - duration`
+      const start = Number(row.ticked_at) > 0 ? Number(row.ticked_at) : now;
+      const elapsed = now - start;
+      if (elapsed < interval) continue;
+      const ticks = Math.min(RoleStatusService.MAX_CATCH_UP_TICKS, Math.floor(elapsed / interval));
+      if (ticks <= 0) continue;
+      due.push({
+        roleId: row.role_id,
+        statusId: row.status_id,
+        stacks: Math.max(1, Math.floor(Number(row.stacks) || 1)),
+        ticks,
+        effect: config.tickEffect,
+        nextTickedAt: start + ticks * interval,
+      });
+    }
+    return due;
+  }
+
+  /** 记录某个角色某条状态的周期结算点（由调用方在扣血成功后调） */
+  markTicked(roleId: string, statusId: string, tickedAt: number): void {
+    this.repo.markTicked(roleId, statusId, tickedAt);
   }
 
   /** 全表清扫过期行（定时器调用；两个进程各自扫也不会互相踩 —— 只删已过期的） */

@@ -2,8 +2,15 @@ import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
 import { Type } from "class-transformer";
 import { IsBoolean, IsIn, IsNumber, IsOptional, IsString, Max, MaxLength, Min, ValidateNested } from "class-validator";
 import { PageMetaDto, PageQueryDto } from "../../../common/dto/api-envelope.dto";
-import { COMBAT_KEYS, parseCombatJson } from "../../../common/config-json";
-import { SKILL_OWNER_VALUES, STATUS_SOURCE_VALUES } from "../../../common/constants/game-config";
+import {
+  COMBAT_KEYS,
+  CONTROL_FLAG_KEYS,
+  TICK_EFFECT_KEYS,
+  parseCombatJson,
+  parseControlFlagsJson,
+  parseTickEffectJson,
+} from "../../../common/config-json";
+import { SKILL_OWNER_VALUES, STATUS_KIND_VALUES, STATUS_SOURCE_VALUES } from "../../../common/constants/game-config";
 import { StatusRow } from "../../../database/rows";
 
 /**
@@ -48,6 +55,51 @@ export class StatusCombatDto {
   attackMultiplier?: number;
 }
 
+/** 每个周期拍做什么（#826 第三批；全缺省 = 无周期效果） */
+export class StatusTickDto {
+  @ApiPropertyOptional({ description: "每拍掉多少血（负数扣血，正数当治疗）", minimum: -1000000, maximum: 1000000 })
+  @IsOptional()
+  @IsNumber({}, { message: "hp 必须是数字" })
+  hp?: number;
+
+  @ApiPropertyOptional({ description: "每拍回多少蓝（负数扣蓝）", minimum: -1000000, maximum: 1000000 })
+  @IsOptional()
+  @IsNumber({}, { message: "mp 必须是数字" })
+  mp?: number;
+
+  @ApiPropertyOptional({ description: "每拍按最大血量的比例变化（-0.02 = 每拍掉 2%）", minimum: -1, maximum: 1 })
+  @IsOptional()
+  @IsNumber({}, { message: "hpPercent 必须是数字" })
+  @Min(-1, { message: "hpPercent 不能小于 -1" })
+  @Max(1, { message: "hpPercent 不能大于 1" })
+  hpPercent?: number;
+
+  @ApiPropertyOptional({ description: "每拍按最大蓝量的比例变化", minimum: -1, maximum: 1 })
+  @IsOptional()
+  @IsNumber({}, { message: "mpPercent 必须是数字" })
+  @Min(-1, { message: "mpPercent 不能小于 -1" })
+  @Max(1, { message: "mpPercent 不能大于 1" })
+  mpPercent?: number;
+}
+
+/** 控制标记（#826 第三批；stun 既禁移动也禁出手，root 只禁移动，silence 只禁出手） */
+export class StatusControlDto {
+  @ApiPropertyOptional({ description: "眩晕 / 麻痹：禁止移动与出手（两者在服务端是同一条判据，只是来源与图标不同）" })
+  @IsOptional()
+  @IsBoolean({ message: "stun 必须是布尔值" })
+  stun?: boolean;
+
+  @ApiPropertyOptional({ description: "定身：只禁止移动，仍可出手" })
+  @IsOptional()
+  @IsBoolean({ message: "root 必须是布尔值" })
+  root?: boolean;
+
+  @ApiPropertyOptional({ description: "沉默：只禁止出手，仍可移动" })
+  @IsOptional()
+  @IsBoolean({ message: "silence 必须是布尔值" })
+  silence?: boolean;
+}
+
 /** 管理端看到的一条状态配置 */
 export class StatusDto {
   @ApiProperty({ description: "状态 id（技能 statusId 与将来的装备 / 特权引用它）" })
@@ -80,6 +132,21 @@ export class StatusDto {
   @ApiProperty({ description: "战斗数值修正（缺省 = 纯表现状态）", type: StatusCombatDto })
   combat: StatusCombatDto;
 
+  @ApiProperty({ description: "分类：buff / damage / control / speed（只用于分组，判据看 controlFlags 与 tickMs）" })
+  kind: string;
+
+  @ApiProperty({ description: "最大层数（1 = 不叠；同 id 再加一层 → +1 并刷新到期）" })
+  maxStacks: number;
+
+  @ApiProperty({ description: "周期触发间隔（毫秒；0 = 无周期）" })
+  tickMs: number;
+
+  @ApiProperty({ description: "每拍做什么", type: StatusTickDto })
+  tickEffect: StatusTickDto;
+
+  @ApiProperty({ description: "控制标记", type: StatusControlDto })
+  controlFlags: StatusControlDto;
+
   @ApiProperty({ description: "最近更新时间（毫秒）" })
   updatedAt: number;
 
@@ -95,6 +162,11 @@ export class StatusDto {
     dto.effect = row.effect;
     dto.effectHoldLast = row.effect_hold_last === 1;
     dto.combat = parseCombat(row.combat);
+    dto.kind = row.kind || "buff";
+    dto.maxStacks = Math.max(1, Math.floor(Number(row.max_stacks) || 1));
+    dto.tickMs = Math.max(0, Math.floor(Number(row.tick_ms) || 0));
+    dto.tickEffect = parseTick(row.tick_effect);
+    dto.controlFlags = parseControl(row.control_flags);
     dto.updatedAt = row.updated_at;
     return dto;
   }
@@ -172,6 +244,37 @@ export class UpdateStatusDto {
   @ValidateNested()
   @Type(() => StatusCombatDto)
   combat?: StatusCombatDto;
+
+  @ApiPropertyOptional({ description: "分类：buff / damage / control / speed", enum: STATUS_KIND_VALUES })
+  @IsOptional()
+  @IsIn(STATUS_KIND_VALUES, { message: `kind 必须是 ${STATUS_KIND_VALUES.join(" / ")} 之一` })
+  kind?: string;
+
+  @ApiPropertyOptional({ description: "最大层数（1~99，1 = 不叠）", minimum: 1, maximum: 99 })
+  @IsOptional()
+  @IsNumber({}, { message: "maxStacks 必须是数字" })
+  @Min(1, { message: "maxStacks 不能小于 1（1 = 不叠）" })
+  @Max(99, { message: "maxStacks 不能大于 99" })
+  maxStacks?: number;
+
+  @ApiPropertyOptional({ description: "周期触发间隔（毫秒；0 = 无周期，最小 100）", minimum: 0, maximum: 600000 })
+  @IsOptional()
+  @IsNumber({}, { message: "tickMs 必须是数字" })
+  @Min(0, { message: "tickMs 不能小于 0" })
+  @Max(600000, { message: "tickMs 不能大于 10 分钟" })
+  tickMs?: number;
+
+  @ApiPropertyOptional({ description: "每拍做什么（整份替换：不传则不改）", type: StatusTickDto })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => StatusTickDto)
+  tickEffect?: StatusTickDto;
+
+  @ApiPropertyOptional({ description: "控制标记（整份替换：不传则不改）", type: StatusControlDto })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => StatusControlDto)
+  controlFlags?: StatusControlDto;
 }
 
 /** 把落库的 JSON 读成对象（脏数据不炸接口：解析失败按空对象兜底） */
@@ -193,6 +296,48 @@ export function serializeCombat(combat: StatusCombatDto | undefined): string {
     for (const key of COMBAT_KEYS) {
       const value = combat[key];
       if (typeof value === "number") entries[key] = value;
+    }
+  }
+  return Object.keys(entries).length ? JSON.stringify(entries) : "{}";
+}
+
+/** 把落库的 tick_effect 读成 DTO（坏 JSON 按空对象兜底） */
+export function parseTick(raw: string): StatusTickDto {
+  const dto = new StatusTickDto();
+  const value = parseTickEffectJson(raw);
+  for (const key of TICK_EFFECT_KEYS) {
+    const entry = value[key];
+    if (typeof entry === "number") dto[key] = entry;
+  }
+  return dto;
+}
+
+/** 把 DTO 的周期效果压成落库 JSON（显式 null / undefined 都当「不配」） */
+export function serializeTick(tick: StatusTickDto | undefined): string {
+  const entries: Record<string, number> = {};
+  if (tick) {
+    for (const key of TICK_EFFECT_KEYS) {
+      const value = tick[key];
+      if (typeof value === "number" && Number.isFinite(value)) entries[key] = value;
+    }
+  }
+  return Object.keys(entries).length ? JSON.stringify(entries) : "{}";
+}
+
+/** 把落库的 control_flags 读成 DTO */
+export function parseControl(raw: string): StatusControlDto {
+  const dto = new StatusControlDto();
+  const value = parseControlFlagsJson(raw);
+  for (const key of CONTROL_FLAG_KEYS) dto[key] = value[key];
+  return dto;
+}
+
+/** 把 DTO 的控制标记压成落库 JSON（只写 true 的键，读侧补 false） */
+export function serializeControl(control: StatusControlDto | undefined): string {
+  const entries: Record<string, number> = {};
+  if (control) {
+    for (const key of CONTROL_FLAG_KEYS) {
+      if (control[key] === true) entries[key] = 1;
     }
   }
   return Object.keys(entries).length ? JSON.stringify(entries) : "{}";

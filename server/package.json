@@ -83,6 +83,7 @@
     "test:e2e:area-skill": "node --disable-warning=ExperimentalWarning test/e2e-area-skill.cjs",
     "test:e2e:crit": "node --disable-warning=ExperimentalWarning test/e2e-crit.cjs",
     "test:e2e:push": "node --disable-warning=ExperimentalWarning test/e2e-push.cjs",
+    "test:e2e:status": "node --disable-warning=ExperimentalWarning test/e2e-status.cjs",
     "test:e2e:config-version": "node --disable-warning=ExperimentalWarning test/e2e-config-version.cjs",
     "test:e2e:event-log": "node --disable-warning=ExperimentalWarning test/e2e-event-log.cjs",
     "test:e2e:use-cooldown": "node --disable-warning=ExperimentalWarning test/e2e-use-cooldown.cjs",
