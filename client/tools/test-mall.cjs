@@ -190,7 +190,7 @@ if (sandbox) {
 
   // 1. 正常购买：扣款 + 进背包第一个空格
   seed([], 10);
-  check(await StorageManager.buyMallGood(equipment.id) === true, "购买成功返回 true");
+  check((await StorageManager.buyMallGood(equipment.id)) !== null, "购买成功返回限购信息（非 null）");
   check(online().bindGold === 9, "扣掉 1 绑定元宝（10 → 9）");
   check(filledCells().length === 1 && filledCells()[0].id === equipment.id, "商品进了背包");
   check(filledCells()[0].row === 0 && filledCells()[0].col === 0, "优先落在第一个空格 (0,0)");
@@ -212,7 +212,7 @@ if (sandbox) {
 
   // 3. 余额不足：不改数据
   seed([], 0);
-  check(await StorageManager.buyMallGood(equipment.id) === false, "余额不足时购买失败");
+  check((await StorageManager.buyMallGood(equipment.id)) === null, "余额不足时购买失败");
   check(filledCells().length === 0, "余额不足时背包不变");
   check(online().bindGold === 0, "余额不足时不扣钱");
 
@@ -222,15 +222,15 @@ if (sandbox) {
     for (let row = 0; row < 7; row++) for (let col = 0; col < 11; col++) full.push({ row, col, id: drug.id, count: 1 });
     seed(full, 5);
     const before = filledCells().length;
-    check(await StorageManager.buyMallGood(equipment.id) === false, "背包已满时购买失败");
+    check((await StorageManager.buyMallGood(equipment.id)) === null, "背包已满时购买失败");
     check(filledCells().length === before, "背包已满时物品没被塞进去");
     check(online().bindGold === 5, "背包已满时不扣钱（先扣款后入包，入包失败原路退回）");
   }
 
-  // 5. 非装备 / 认不出的 id：都当已下架
+  // 5. 未上架 / 认不出的 id：都当已下架（`buyMallGood` 返回 `MallLimit | null`，null = 没买成）
   seed([{ row: 0, col: 0, id: drug.id, count: 1 }], 5);
-  check(await StorageManager.buyMallGood(drug.id) === false, "非装备（药品）买不了");
-  check(await StorageManager.buyMallGood("no_such_good") === false, "认不出的 id 买不了");
+  check((await StorageManager.buyMallGood(drug.id)) === null, "未上架的（药品）买不了");
+  check((await StorageManager.buyMallGood("no_such_good")) === null, "认不出的 id 买不了");
   check(online().bindGold === 5 && filledCells().length === 1, "被拒的购买不改余额与背包");
 
   // 6. 落盘：换一个新对象读回，数据仍在
@@ -242,7 +242,7 @@ if (sandbox) {
   // 7. 购买等级不足：服务端拒（客户端按钮置灰只是提前提示，数据层照样发请求）
   applyMallCatalog([{ id: "c1", label: "测试分类", sortOrder: 0 }], [{ id: equipment.id, categoryId: "c1", price: 1, requiredLevel: 99 }]);
   seed([], 10);
-  check(await StorageManager.buyMallGood(equipment.id) === false, "购买等级不足时购买失败");
+  check((await StorageManager.buyMallGood(equipment.id)) === null, "购买等级不足时购买失败");
   check(online().bindGold === 10 && filledCells().length === 0, "被拒的购买不改余额与背包");
   applyMallCatalog([{ id: "c1", label: "测试分类", sortOrder: 0 }], [{ id: equipment.id, categoryId: "c1", price: 1, requiredLevel: 0 }]);
 
