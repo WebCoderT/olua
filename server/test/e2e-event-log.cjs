@@ -24,7 +24,7 @@ const fs = require("node:fs");
 const net = require("node:net");
 const os = require("node:os");
 const path = require("node:path");
-const { placeRolesAt } = require("./lib/place-role.cjs");
+const { placeRolesAt, placeRolesNear } = require("./lib/place-role.cjs");
 const { DatabaseSync } = require("node:sqlite");
 const WebSocket = require("ws");
 const { paceCast } = require("./lib/cast-pace.cjs");
@@ -374,6 +374,8 @@ function connect(url) {
     // #859 起「没有位置记录」的角色只准进新手村 —— 这一套要进 1 图，
   // 准备段先按运营摆位把位置写进去（等价管理端 PATCH onMap，见 lib/place-role.cjs）
   placeRolesAt(dbPath, "1");
+  // 任务交互要过 NPC 距离校验（#862/#863）：把位置摆到传送官旁边（map_npcs 的坐标）
+  placeRolesNear(dbPath, "1", "0002");
   const world = await session.joinWorld(MAP_ID);
     check(!!(world && world.monsters.length > 0), "worldJoin 拿到权威快照", JSON.stringify(world && world.monsters.length));
     await sleep(120);

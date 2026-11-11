@@ -1327,8 +1327,8 @@ export function applyNpcRows(rows: NpcRow[]): void {
  * 数组本身在快照到达前是空的 —— 与怪物 / 状态同口径（登录 `loadGameConfig()` 是必经 await）。
  *
  * 字段口径（服务端种子与这里同构）：
- * - `kind`：main = 主线（一次性，`prevQuestId` 线性链门控）；daily = 日常（领奖后可重复接，进度清零；
- *   首版**不做每日重置定时器**，重接即新一轮）；
+ * - `kind`：main = 主线（一次性，`prevQuestId` 线性链门控）；daily = 日常（**每日 05:00 后可重接**）；
+ *   weekly = 周常（**周一 05:00 后可重接**）。轮次判定全在服务端（`reset_day`），客户端只按返回的状态显示；
  * - `npcId`：发布 NPC（客户端头顶 `!` 标记与对话入口的依据）；
  * - `objective`：**单目标**（v1 边界）——kill = 击杀怪物 key、talk = 与 NPC key 对话、
  *   collect = 交付时背包持有物品 id ×count（会扣走）；
@@ -1352,7 +1352,7 @@ export interface QuestRewards {
 
 export interface QuestData {
   id: string;
-  kind: "main" | "daily";
+  kind: "main" | "daily" | "weekly";
   label: string;
   description: string;
   /** 主线链门控：上一环的任务 id（空串 = 无前置） */
@@ -1379,7 +1379,8 @@ function questRowToConfig(row: QuestRow): QuestData {
   const type = objective.type === "talk" || objective.type === "collect" ? objective.type : "kill";
   return {
     id: row.id,
-    kind: row.kind === "daily" ? "daily" : "main",
+    // 认不出的 kind 一律按主线处理：宁可少一个「日常」分类，也不要让任务在面板里消失
+    kind: row.kind === "daily" || row.kind === "weekly" ? row.kind : "main",
     label: row.label,
     description: row.description,
     prevQuestId: row.prevQuestId ?? "",
@@ -1457,6 +1458,7 @@ export const QUEST_OBJECTIVE_LABELS: Record<string, string> = {
 export const QUEST_KIND_LABELS: Record<string, string> = {
   main: "主线",
   daily: "日常",
+  weekly: "周常",
 };
 
 //#endregion

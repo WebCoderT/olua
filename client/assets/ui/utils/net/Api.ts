@@ -247,12 +247,18 @@ export const GameMailApi = {
   mine: (options?: Options) => HttpClient.get<MailBox>(ApiRoutes.gameMail.mine, options),
 };
 
-/** quest 模块的接口（4 个，生成） */
+/** quest 模块的接口（5 个，生成） */
 export const QuestApi = {
+  /**
+   * 放弃任务（#865）（POST /quests/abandon）
+   *
+   * 只放**进行中 / 可交付**的行：已领奖的不能放弃（那是「这一轮领过」的证据，删了日常就能刷）。放弃 = 删掉进度行 = 回到可接态，日常 / 周常本轮**还能再接一次**（没领奖就没占额度）。没接过的任务返回 20015。
+   */
+  abandon: (body: QuestId, options?: Options) => HttpClient.post<MyQuests>(ApiRoutes.quest.abandon, body, options),
   /**
    * 接取任务（POST /quests/accept）
    *
-   * 等级（20016）与主线链前置（20015）在服务端复核；重复接取（含已完成的主线）返回 20015。日常按**每日 05:00 切日**：今天已领过返回 20027，行属于更早的天则原地覆盖重置（进度清零、回进行中）。接取成功返回最新快照。
+   * 等级（20016）、**站在发布 NPC 旁边**（20032，接取与对话都校验位置）、主线链前置（20015）都在服务端复核；重复接取（含已完成的主线）返回 20015。
    */
   accept: (body: QuestId, options?: Options) => HttpClient.post<MyQuests>(ApiRoutes.quest.accept, body, options),
   /**
@@ -264,13 +270,13 @@ export const QuestApi = {
   /**
    * 与 NPC 对话（POST /quests/npc-talk）
    *
-   * talk 型目标的进度入口：推进进行中的对话任务（到量转 ready）；同时带回该 NPC 名下全部任务的状态（含可接但未接的 `available`）与管理端配置的对话文案。NPC 不存在返回 50020。
+   * talk 型目标的进度入口：**必须先站到 NPC 旁边**（位置快照超过 10 秒没更新、NPC 不在本图、距离超过 120 像素都返 20032 `not_near_npc`），再推进进行中的对话任务（到量转 ready）；同时带回该 NPC 名下全部任务的状态（含可接但未接的 `available`）与管理端配置的对话文案。NPC 不存在返回 50020。
    */
   npcTalk: (body: NpcTalk, options?: Options) => HttpClient.post<NpcTalkResult>(ApiRoutes.quest.npcTalk, body, options),
   /**
    * 交付任务并领奖（POST /quests/submit）
    *
-   * kill/talk 要先到 ready（进度满）；collect 直接查背包 —— 材料不足 20017、奖励物品放不下背包 20012（进度行保持原状，补齐后可再来）。发奖（绑定元宝 / 经验 / 物品）与扣材料**一次落库**；daily 与 main 领奖后都**保留 claimed 行**（删行会抹掉「今天领过」的证据），日常的下一轮由 `reset_day` 天号判定。返回最新快照与奖励结算。
+   * kill/talk 要先到 ready（进度满）；collect 直接查背包 —— 材料不足 20017、奖励物品放不下背包 20012（进度行保持原状，补齐后可再来）。
    */
   submit: (body: QuestId, options?: Options) => HttpClient.post<QuestSubmitResult>(ApiRoutes.quest.submit, body, options),
 };

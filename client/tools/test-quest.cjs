@@ -8,7 +8,8 @@
  * B. 协议两端同形：服务端 RealtimeQuestMessage 与客户端 QuestProgressFrame 字段一致，
  *    QuestState 的三个可下发状态与客户端口径一致
  * C. 服务端权威纪律：接取复核等级与前置链、交付按目标类型判定（collect 查背包）、
- *    击杀推进只写给 accepted 行、日常日切（今天已领 20027 / 跨天覆盖重置 / 不再删行）
+ *    击杀推进只写给 accepted 行、周期日切（本轮已领 20027 / 跨轮覆盖重置 / 领奖不删行）、
+ *    #865 放弃接口只删未领过的行
  * D. 客户端消费纪律：quest 帧只喂 QuestStore（单一落点）、点 NPC 即上报对话、
  *    追踪栏点开任务面板、切场景三处都 reset
  *
@@ -31,6 +32,21 @@ const CLIENT_TRACKER = "assets/ui/components/hud/QuestTracker.ts";
 const CLIENT_SPAWNER = "assets/ui/components/map/MapObjectSpawner.ts";
 const CLIENT_BOTTOM_BAR = "assets/ui/components/hud/BottomBar.ts";
 const CLIENT_GAME = "assets/ui/Game.ts";
+
+/**
+ * 抽某个类方法的正文（从 `  name(` 到同缩进的收尾 `\n  }`）
+ *
+ * 为什么需要：全文件 `includes` 会把别的同名调用算进来 —— #865 加了 `abandon()` 之后，
+ * 「领奖不删行」这条断言被 abandon 里的 `progressRepo.remove` 误伤成假红。
+ * 断言要钉在具体方法上，否则改别处就误报（或者更糟：改成别处漏检）。
+ */
+function methodBody(source, name) {
+  const start = new RegExp(`\\n  (?:async )?${name}\\(`).exec(source);
+  if (!start) return null;
+  const from = start.index + start[0].length;
+  const end = source.indexOf("\n  }\n", from);
+  return end < 0 ? null : source.slice(from, end);
+}
 
 /** 从一段源码里抽出某个 interface 的字段名（两空格缩进 + 可选 ?；注释行不匹配） */
 function fieldNames(source, interfaceName) {
@@ -183,7 +199,12 @@ try {
     check(serverQuest.includes("grantQuestRewards"), "发奖走 RolesService 的单次落库（扣材料 + 发奖励 + 升级）");
     check(serverQuest.includes("QUEST_ALREADY_DONE"), "日常今天已领过 → 20027（#815：不再靠删行回到可接）");
     check(serverQuest.includes("resetForNewDay"), "日常跨天原地覆盖重置（进度清零、回 accepted）");
-    check(!serverQuest.includes("progressRepo.remove(role.id, questId)"), "日常领奖**不再删行**（删了就抹掉「今天领过」的证据）");
+    // 领奖走 submit()；#865 起 abandon() 也删行（放弃就是放弃），所以断言只看 submit 的方法体
+    const submitBody = methodBody(serverQuest, "submit");
+    check(!!submitBody, "任务服务里有 submit（交付 + 领奖）");
+    check(!!submitBody && !submitBody.includes("progressRepo.remove"), "领奖**不删行**（删了就抹掉「这一轮领过」的证据）");
+    const abandonBody = methodBody(serverQuest, "abandon");
+    check(!!abandonBody && abandonBody.includes('row.status === "claimed"'), "放弃不删已领过的行（那是「这一轮领过」的唯一证据）");
     check(serverQuest.includes("markClaimed"), "领奖一律留 claimed 行（daily 与 main 同处理）");
     check(serverQuest.includes("listByStatus(role.id, \"accepted\")"), "只有 accepted 行会被推进（ready / claimed 不再涨进度）");
   });
@@ -220,7 +241,7 @@ try {
     check(dialog.includes("QuestApi.mine()"), "弹窗打开时拉一次全量（帧只推变化，可能落后）");
     check(dialog.includes("QuestApi.accept") && dialog.includes("QuestApi.submit"), "接取 / 交付都在弹窗里（响应即最新快照）");
     check(dialog.includes("QuestStore.applyStates(result.quests)"), "交付响应直接覆盖快照（不再请求一次）");
-    check(!/distance|getWorldPosition/.test(dialog), "v1 不做距离校验（位置是客户端权威，拿它当准入等于自己说了算）");
+    check(!/distance|getWorldPosition/.test(dialog), "客户端不做距离校验（#862：距离闸在服务端，客户端拿位置当准入等于自己说了算）");
   });
 
   guard(() => {

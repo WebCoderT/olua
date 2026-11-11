@@ -75,11 +75,16 @@ export { parseRewardItems };
 
 /** 管理端看到的一条任务配置 */
 export class QuestDto {
-  @ApiProperty({ description: "任务 id（主线 8000 段 / 日常 8100 段）" })
+  @ApiProperty({ description: "任务 id（主线 8000 段 / 日常 8100 段 / 周常 8200 段）" })
   id: string;
 
-  @ApiProperty({ description: "类型：main 主线（一次性）/ daily 日常（领奖后可重接）", enum: ["main", "daily"] })
-  kind: "main" | "daily";
+  @ApiProperty({
+    description:
+      "类型：main 主线（一次性，prev 链门控）/ daily 日常（每日 05:00 后可重接）/ " +
+      "weekly 周常（周一 05:00 后可重接）—— 日常与周常领奖后都保留 claimed 行做「本轮领过」的证据",
+    enum: ["main", "daily", "weekly"],
+  })
+  kind: "main" | "daily" | "weekly";
 
   @ApiProperty({ description: "名称" })
   label: string;
@@ -123,9 +128,9 @@ export class QuestDto {
 
 /** 任务列表查询入参 */
 export class QuestQueryDto extends PageQueryDto {
-  @ApiPropertyOptional({ description: "类型筛选：main | daily" })
+  @ApiPropertyOptional({ description: "类型筛选：main | daily | weekly" })
   @IsOptional()
-  @IsIn(["main", "daily"], { message: "类型只能是 main 或 daily" })
+  @IsIn(["main", "daily", "weekly"], { message: "类型只能是 main / daily / weekly" })
   declare kind?: string;
 
   @ApiPropertyOptional({ description: "关键字：模糊匹配 id 与名称" })
@@ -192,10 +197,10 @@ export class UpdateQuestRewardsDto {
  * （链不能成环、collect 的 target 必须是真实物品 id 等）在 service 校验。
  */
 export class UpdateQuestDto {
-  @ApiPropertyOptional({ description: "类型", enum: ["main", "daily"] })
+  @ApiPropertyOptional({ description: "类型", enum: ["main", "daily", "weekly"] })
   @IsOptional()
-  @IsIn(["main", "daily"], { message: "类型只能是 main 或 daily" })
-  kind?: "main" | "daily";
+  @IsIn(["main", "daily", "weekly"], { message: "类型只能是 main / daily / weekly" })
+  kind?: "main" | "daily" | "weekly";
 
   @ApiPropertyOptional({ description: "名称（1~50 字）" })
   @IsOptional()

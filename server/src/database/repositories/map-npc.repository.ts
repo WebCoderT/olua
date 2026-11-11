@@ -26,6 +26,17 @@ export class MapNpcRepository {
     return this.db.get<MapNpcRow>("SELECT * FROM map_npcs WHERE map_id = ? AND npc_id = ?", [mapId, npcId]) ?? null;
   }
 
+  /**
+   * 这个 NPC 在**任何**图上有没有点位（#862/#863 用来区分两种「本图查不到」）
+   *
+   * 任务交互要知道的是：`findByNpc(mapId, npcId)` 返回 null 时，是这个 NPC 全服都没摆
+   * （配置缺口 → 放行并告警），还是只是**没摆在玩家这张图上**（走错图 → 拒绝）。
+   * 两者对玩家的含义完全不同，混成一种就会让「跑到别的图也能交任务」。
+   */
+  countByNpc(npcId: string): number {
+    return this.db.count("SELECT COUNT(1) AS total FROM map_npcs WHERE npc_id = ?", [npcId]);
+  }
+
   /** 插入一行，返回带 id 的完整行（接口要回显，别让客户端再猜一次 id） */
   insert(row: Omit<MapNpcRow, "id">): MapNpcRow {
     const id = this.db.insertReturningId(

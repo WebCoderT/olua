@@ -267,6 +267,25 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
       -- 上面那条是 (zone_id, map_id, id)，前缀用不上 —— 时间闸与图无关。
       CREATE INDEX IF NOT EXISTS idx_map_monitor_events_at ON map_monitor_events(at);
 
+      -- 角色位置快照（#930 的产物，服务 #862/#863 的距离校验）：
+      -- 一行 = 一个进过图的角色的最新坐标 + 那一次的时刻。
+      --
+      -- 为什么要落一份到库：位置唯一副本在**实时进程**的 PlayerPresenceService 内存里，
+      -- 而 NPC 对话 / 接取任务这些 HTTP 接口跑在**存档进程**（3100），两个进程只有 SQLite
+      -- 一条路。不落库的话「玩家隔着半张图点 NPC」根本无从判断（#817 拾取距离也是缺这一块）。
+      --
+      -- 写入方只有实时进程（1 秒节流），读取方是任务域；**运行时投影不是配置**，
+      -- config-sync 的表清单里没有它，重启清空也无所谓（人会重新进图）。
+      -- updated_at 是**判新鲜度的唯一依据**：超过 NPC 交互的新鲜窗口就当「不知道他在哪」，
+      -- 掉线 / 崩溃留下的行不会变成一张永久有效的通行证。
+      CREATE TABLE IF NOT EXISTS role_positions (
+        role_id    TEXT PRIMARY KEY,
+        map_id     TEXT NOT NULL,
+        x          REAL NOT NULL,
+        y          REAL NOT NULL,
+        updated_at INTEGER NOT NULL
+      );
+
       -- 刷怪区（#295 阶段一 / #667 后台绘制）：一行 = 地图上一个矩形区域。
       -- #667 起由**管理端地图页拖框建/改/删**（POST/PATCH/DELETE /admin/maps/:id/spawn-areas），
       -- TMX 的 monster 对象组不再是来源，导入工具也不写这张表（审计守点盯着）。

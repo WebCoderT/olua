@@ -20,7 +20,7 @@ const { spawn } = require("node:child_process");
 const net = require("node:net");
 const os = require("node:os");
 const path = require("node:path");
-const { placeRolesAt } = require("./lib/place-role.cjs");
+const { placeRolesAt, placeRolesNear } = require("./lib/place-role.cjs");
 const WebSocket = require("ws");
 const { paceCast } = require("./lib/cast-pace.cjs");
 
@@ -244,6 +244,8 @@ function setRoleLevel(dbPath, roleId, level) {
     // #859 起「没有位置记录」的角色只准进新手村 —— 这一套要进 1 图，
     // 准备段先按运营摆位把位置写进去（等价管理端 PATCH onMap，见 lib/place-role.cjs）
     placeRolesAt(dbPath, "1");
+    // 任务交互要过 NPC 距离校验（#862/#863）：把位置摆到传送官旁边（map_npcs 的坐标）
+    placeRolesNear(dbPath, "1", "0002");
     const roleId = created.data && created.data.id;
     check(created.code === 0 && created.data.online === true, "准备：角色已创建并自动在线", created.message);
 

@@ -334,6 +334,26 @@ export interface WorldMonsterRow {
 }
 
 /**
+ * 角色位置快照（`role_positions` 表；#862/#863 的距离校验输入）
+ *
+ * 一行 = 一个**进过图**的角色最新被接受的坐标。写入方只有实时进程的
+ * `PlayerPresenceService`（1 秒节流），读取方是任务域 —— 它回答的是
+ * 「这个人在哪张图的哪个点上」，不是权威移动状态：坐标本质上是客户端自报 +
+ * 最小仲裁（#596）的结果，只用来挡「隔着半张图点 NPC」，不做任何结算。
+ *
+ * 判新鲜度只看 `updated_at`：超过窗口就当「不知道他在哪」（拒绝交互），
+ * 免得掉线 / 崩溃留下的最后一行变成永久通行证。
+ */
+export interface RolePositionRow {
+  role_id: string;
+  map_id: string;
+  x: number;
+  y: number;
+  /** 最后一次写入的时刻（毫秒） */
+  updated_at: number;
+}
+
+/**
  * 实时地图监控的一帧镜像（`map_monitor_state` 表；#665）
  *
  * 高频写、只读展示：**不是一个权威来源**，重启后为空也无所谓（实时进程下一次采样就会补上）。
