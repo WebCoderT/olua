@@ -26,6 +26,7 @@ import { ChatService } from "./chat.service";
 import { CombatSettlementService } from "./combat-settlement.service";
 import { MonsterAiService } from "./monster-ai.service";
 import { PlayerPresenceService } from "./player-presence.service";
+import { PathService } from "./path.service";
 import { QuestService } from "../quest/quest.service";
 import {
   CHAT_CHANNELS,
@@ -42,6 +43,8 @@ import {
   type RealtimePlayerAction,
   type RealtimePlayerEntry,
   type RealtimePlayersMessage,
+  type RealtimePosCorrectMessage,
+  type RealtimePathMessage,
   type RealtimeQuestMessage,
   type RealtimeServerMessage,
   type RealtimeSettleMessage,
@@ -66,6 +69,8 @@ interface TrackedSocket extends WebSocket {
    * `undefined` = 还没推过（建连后的首次推送会补上）。
    */
   roleSyncSignature?: string;
+  /** 上一次寻路请求的时刻（#811 防刷节流；挂在连接上，断开即随对象一起回收） */
+  lastPathFindAt?: number;
 }
 
 /** 一张还没被用掉的票据 */
@@ -148,6 +153,7 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
     private readonly roles: RolesService,
     private readonly runtimeConfig: RuntimeConfigService,
     private readonly eventLogs: EventLogService,
+    private readonly paths: PathService,
   ) {}
 
   //#region 取票据（HTTP 接口调用）
@@ -279,6 +285,12 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
     this.quests.onProgress = (accountId, data) => {
       const socket = this.connections.get(accountId);
       if (socket) this.send(socket, { type: "quest", data } satisfies RealtimeQuestMessage);
+    };
+    // 位置修正（#811）：`enforce` 档下判定位移不可信时，定向把权威坐标推回本人。
+    // 走连接表而不是广播：别人本来就只看到权威位置，没有偏差可纠
+    this.presence.onCorrect = (accountId, data) => {
+      const socket = this.connections.get(accountId);
+      if (socket) this.send(socket, { type: "posCorrect", data } satisfies RealtimePosCorrectMessage);
     };
 
     this.logger.log(
@@ -571,6 +583,9 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
     }
     if (parsed?.type === "cast") {
       const data = this.combat.settle(socket.identity.id, parsed.data);
+      // 突进类技能的落点免检额度（#811）：**结算成功之后**才给 —— 给在结算之前等于
+      // 「报个远点就换一次瞬移」，连冷却都没过就能反复要（见 grantCastDisplacement）
+      if (data.ok) this.grantCastDisplacement(socket.identity.id, parsed.data);
       const frame: RealtimeSettleMessage = { type: "settle", data };
       this.send(socket, frame);
       return;
@@ -644,6 +659,19 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
         position.hp,
         position.moving,
       );
+      return;
+    }
+    if (parsed?.type === "pathFind") {
+      // 寻路请求（#811 第三道）：起点用**在场表里被接受的**坐标（自报起点能让路点算进墙里），
+      // 目标点由客户端给。高频帧（客户端每次重寻路一条），格式不对就静默丢弃，不回 error
+      const request = parsePathFind(parsed.data);
+      if (!request) return;
+      const now = Date.now();
+      // 节流：重寻路的节奏在客户端（repathInterval 400ms），这里只防刷 ——
+      // 一条连接 100ms 内重复请求直接丢，回执也就不发了（客户端自己会超时重发）
+      if (typeof socket.lastPathFindAt === "number" && now - socket.lastPathFindAt < PATH_FIND_MIN_INTERVAL_MS) return;
+      socket.lastPathFindAt = now;
+      this.send(socket, this.pathFrameOf(socket.identity.id, request));
       return;
     }
     if (parsed?.type === "mapEnter") {
@@ -927,6 +955,61 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
 
   //#endregion
 
+  //#region 移动（#811）
+
+  /**
+   * 组一帧 `path` 回执
+   *
+   * 起点取在场表里**被接受的**坐标：客户端自报起点能让它把路算到墙里去（「从 (0,0) 出发」），
+   * 而这条路的用途是「让他走过去」，起点错了整条路都是错的。
+   *
+   * 位置还没有（刚进图 pos 未到）或图对不上时回 `unreachable`：客户端此刻本来就在那张图上
+   * 自己走，拿到「不可达」会放弃自动寻路，比给一条从错起点出发的路安全。
+   */
+  private pathFrameOf(accountId: string, request: { mapId: string; to: { x: number; y: number }; seq: number }): RealtimePathMessage {
+    const from = this.presence.positionOf(accountId);
+    if (!from || from.mapId !== request.mapId) {
+      return { type: "path", data: { seq: request.seq, mapId: request.mapId, points: [], unreachable: true, snapped: false } };
+    }
+    const result = this.paths.pathOf(request.mapId, { x: from.x, y: from.y }, request.to);
+    return {
+      type: "path",
+      data: {
+        seq: request.seq,
+        mapId: request.mapId,
+        points: result.points,
+        unreachable: result.unreachable,
+        snapped: result.snapped,
+      },
+    };
+  }
+
+  /**
+   * 突进类技能的落点免检额度（#811）
+   *
+   * 十步一杀这类技能是**瞬移**（客户端 `setWorldPositionByTransfer`），落点随施法帧一起
+   * 上报（`cast.data.x/y`，也就是服务端给区域技能夹射程用的那个点）。不给额度的话，
+   * `enforce` 档会把每一次突进都判成超速再拉回原地 —— 表现为「放技能人弹回去」。
+   *
+   * 额度夹在 `CAST_DISPLACEMENT_MAX` 内，且由在场表按「一次性」消费，攒不起来。
+   *
+   * **只在结算成功之后调用**（调用点在 `onMessage` 的 cast 分支里，判 `data.ok`）：
+   * 若给在结算之前，一个有冷却的技能被拒也能换到额度 → 「连点施法键 = 每帧瞬移 320px」。
+   */
+  private grantCastDisplacement(accountId: string, raw: unknown): void {
+    if (!raw || typeof raw !== "object") return;
+    const data = raw as Record<string, unknown>;
+    const x = Number(data.x);
+    const y = Number(data.y);
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+    const from = this.presence.positionOf(accountId);
+    if (!from) return;
+    const distance = Math.hypot(x - from.x, y - from.y);
+    this.presence.noteDisplacement(accountId, Math.min(distance, CAST_DISPLACEMENT_MAX));
+  }
+
+  //#endregion
+
   //#region 工具
 
   private send(socket: TrackedSocket, message: RealtimeServerMessage): void {
@@ -1044,6 +1127,36 @@ function parsePosition(raw: unknown): ParsedPosition | null {
   if (typeof data.y !== "number" || !Number.isFinite(data.y)) return null;
   if (typeof data.hp !== "number" || !Number.isFinite(data.hp)) return null;
   return { mapId: data.mapId, x: data.x, y: data.y, hp: data.hp, moving: data.moving === true };
+}
+
+/**
+ * 一条连接两次寻路请求的最小间隔（毫秒，#811）
+ *
+ * 客户端重寻路的节奏是 `autoBattle.repathInterval`（出厂 400ms），这里只防刷：
+ * 真有实现要更密的节奏（比如边走边修路），先改这个常量，而不是让服务端裸奔。
+ */
+const PATH_FIND_MIN_INTERVAL_MS = 100;
+
+/**
+ * 突进类技能落点的免检额度上界（像素，#811）
+ *
+ * 现网最远的突进是 200px（十步一杀 `skills.distance`），留一倍余量。
+ * **不能省这条夹逼**：`cast.data.x/y` 是客户端给的，没有上界就等于「报个远点换一次瞬移」。
+ */
+const CAST_DISPLACEMENT_MAX = 320;
+
+/** 解析一条 `pathFind` 帧（字段不全 / 非有限数一律当垃圾帧丢掉） */
+function parsePathFind(raw: unknown): { mapId: string; to: { x: number; y: number }; seq: number } | null {
+  if (!raw || typeof raw !== "object") return null;
+  const data = raw as Record<string, unknown>;
+  if (typeof data.mapId !== "string" || !data.mapId) return null;
+  const to = data.to as Record<string, unknown> | undefined;
+  if (!to || typeof to !== "object") return null;
+  const x = Number(to.x);
+  const y = Number(to.y);
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+  const seq = Number(data.seq);
+  return { mapId: data.mapId, to: { x, y }, seq: Number.isFinite(seq) ? seq : 0 };
 }
 
 //#endregion

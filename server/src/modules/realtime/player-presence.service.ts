@@ -5,6 +5,7 @@ import { RolePositionRepository } from "../../database/repositories/role-positio
 import { roleAttributeSourceOf, summarizeRoleAttributes } from "../combat/role-attributes";
 import { START_MAP_ID } from "../map/map.service";
 import { RolesService } from "../roles/roles.service";
+import { MovementGuardService, MovementRejectReason } from "./movement-guard.service";
 import type { RealtimePlayerAction, RealtimePlayerAppearance, RealtimePlayerEntry } from "./realtime.protocol";
 
 /**
@@ -55,13 +56,22 @@ interface PresenceEntry {
   sentHp: number;
   sentMaxHp: number;
   /**
-   * 位置可信度基线（#596 最小仲裁）：上次**被接受**的上报坐标与时刻、连续异常计数。
+   * 位置可信度基线（#596 最小仲裁 / #811 三道校验）：上次**被接受**的上报坐标与时刻。
    * 只影响 x/y 是否进在场表，hp / moving 不参与 —— 血量有权威落账链路，不在这一层管。
    */
   trustedX: number;
   trustedY: number;
   trustedAt: number;
-  posRejects: number;
+  /**
+   * 本帧的**免检额度**（像素，#811）
+   *
+   * 服务端自己造成的位移必须自己认账（突进类技能报上来的落点），否则 `enforce` 档会把
+   * 每一次「十步一杀」的瞬移都判成作弊再拉回原地。裁决一次即清零 —— 额度不累积，
+   * 不然攒够几帧之后等于没有闸。
+   */
+  posCredit: number;
+  /** 上次发 `posCorrect` 的时刻（节流判据，见 `movement.correctIntervalMs`） */
+  correctedAt: number;
   /**
    * 上一份写进 `role_positions` 的坐标指纹（`mapId:x:y`；空串 = 还没写过）
    *
@@ -75,15 +85,6 @@ interface PresenceEntry {
 function worldKey(zoneId: number, mapId: string): string {
   return `${zoneId}:${mapId}`;
 }
-
-/**
- * 位置仲裁的「连续异常才跟随」阈值（#596 最小仲裁）
- *
- * 低于它：瞬移帧被整体屏蔽（别人的屏幕上不出现跳变）；达到它：视为合法重定位
- * （复活 / 传送 / 客户端纠偏），接受并把速度基线挪过去。1 次太敏感（正常网络乱序
- * 也可能造成一次大距离差），2 次起才有「持续性」可言。
- */
-const POS_TRUST_STREAK = 2;
 
 /**
  * 玩家互见（#324：同图玩家的位置 / 血量 / 移动标记互见）
@@ -156,11 +157,20 @@ export class PlayerPresenceService implements OnApplicationBootstrap, OnApplicat
    */
   partyOfRole: ((roleId: string) => string) | null = null;
 
+  /**
+   * 位置修正出口（#811：`posCorrect` 定向发给本人；RealtimeService 启动时接线）
+   *
+   * 与 `onBroadcast` 分开：这是**只给一个人**的帧，而且它不是「世界状态」的一部分 ——
+   * 别人的屏幕上看不到这次修正（他们本来就只看到权威位置）。
+   */
+  onCorrect: ((accountId: string, data: { x: number; y: number; reason: MovementRejectReason; mapId: string }) => void) | null = null;
+
   constructor(
     private readonly config: ConfigService,
     private readonly roles: RolesService,
     private readonly guilds: GuildRepository,
     private readonly positions: RolePositionRepository,
+    private readonly guard: MovementGuardService,
   ) {}
 
   onApplicationBootstrap(): void {
@@ -206,10 +216,11 @@ export class PlayerPresenceService implements OnApplicationBootstrap, OnApplicat
    * maxHp / 账号名 / 外观只在首次见到该玩家时查一次库（都不常变，不值得每帧查）；
    * 外观另有按 `appearanceRefreshMs` 的懒刷新（#383，换装后要能被别人看到）。
    *
-   * x/y 先过最小仲裁（#596）：非有限数直接丢；单帧速度超过 `posMaxSpeed()` 视作瞬移，
-   * 连续不足 `POS_TRUST_STREAK` 次就丢帧（别人的屏幕上不出现跳变），连续达到则接受并
-   * 重置基线 —— 复活 / 传送这类合法重定位是持续上报，短暂瞬移（作弊）是一次性的，
-   * 用「持续异常才跟随」把两边都兜住。hp 只夹有限与非负（上限不夹：maxHp 懒刷新有滞后，
+   * x/y 先过位移校验（#811 三道里的前两道，见 `MovementGuardService`）：非有限数直接丢；
+   * 单帧位移超过「速度上限 × 容差 × 实际 Δt + 抖动 + 免检额度」判超速；没超速再判有没有
+   * 穿过碰撞盒（swept-AABB）。判失败就丢这一帧，`enforce` 档还会定向回一帧 `posCorrect`
+   * 把客户端拉回权威位置。合法的大位移各有出口：换图（`join` 重置基线）、复活（血从 ≤0
+   * 变 >0）、突进技能（施法帧带落点 → `noteDisplacement` 给额度）。hp 只夹有限与非负（上限不夹：maxHp 懒刷新有滞后，
    * 夹上限会把刚升级玩家的合理血量抹成旧分母）。
    */
   updatePosition(accountId: string, username: string, zoneId: number, mapId: string, x: number, y: number, hp: number, moving: boolean): void {
@@ -257,7 +268,8 @@ export class PlayerPresenceService implements OnApplicationBootstrap, OnApplicat
         trustedX: x,
         trustedY: y,
         trustedAt: now,
-        posRejects: 0,
+        posCredit: 0,
+        correctedAt: 0,
         persisted: "",
         persistedAt: 0,
       });
@@ -277,8 +289,8 @@ export class PlayerPresenceService implements OnApplicationBootstrap, OnApplicat
       existed.moving = false;
       return;
     }
-    // —— 位置仲裁（#596）：坐标可信才动 x/y，其余字段照旧 ——
-    if (this.acceptPosition(existed, x, y)) {
+    // —— 位移校验（#811）：坐标可信才动 x/y，其余字段照旧 ——
+    if (this.acceptPosition(accountId, existed, x, y, hp)) {
       existed.x = x;
       existed.y = y;
     }
@@ -318,28 +330,85 @@ export class PlayerPresenceService implements OnApplicationBootstrap, OnApplicat
   }
 
   /**
-   * 位置最小仲裁（#596）：返回这帧坐标能不能进在场表
+   * 位移裁决（#811）：返回这帧坐标能不能进在场表
    *
-   * 非有限数视为垃圾帧；单帧速度（对**上次被接受的**上报）超过 `posMaxSpeed()` 视作瞬移。
-   * 拒绝的帧只加计数：连续达到 `POS_TRUST_STREAK` 次说明客户端真的重定位了（复活/传送），
-   * 跟随并把基线挪过去，让后续帧恢复正常仲裁 —— 持续异常才跟随，短暂瞬移被整体屏蔽。
+   * 与 #596 的差别是**删掉了「连续 2 帧异常即信任」那条宽容分支**（B44）：那条规则让
+   * 「改个包、连发两帧」就等于合法重定位（约 250ms），闸门形同虚设。现在：
+   *
+   * - **单帧即判**，失败就丢这一帧、基线不动（不再攒计数）；
+   * - `enforce` 档下失败还会**立刻**回一帧 `posCorrect`（把客户端拉回权威位置），
+   *   因为客户端此刻以为自己住在那里，不拉就会一直往那边走、一直失败、无限不同步；
+   * - 合法的大位移各有各的出口，不靠「连发两帧」兜：换图在 `join()` 重置基线、
+   *   突进技能用 `posCredit`（施法帧带上落点）、复活用「血从 ≤0 变 >0」这一条判据。
+   *
+   * 非有限数是协议垃圾（不是「客户端重定位」），永不接受、也不回帧 —— 垃圾坐标广播出去
+   * 就是 NaN 血条，而给它回 `posCorrect` 只会喂给刷帧的人一个免费出口。
    */
-  private acceptPosition(entry: PresenceEntry, x: number, y: number): boolean {
-    // 非有限数是协议垃圾（不是「客户端重定位」），永不接受、也不计入跟随计数 ——
-    // 不然连续两帧 Infinity 会被下面的宽容分支放行，垃圾坐标广播出去就是 NaN 血条
+  private acceptPosition(accountId: string, entry: PresenceEntry, x: number, y: number, hp: number): boolean {
     if (!Number.isFinite(x) || !Number.isFinite(y)) return false;
-    const dt = Math.max(0, (entry.updatedAt - entry.trustedAt) / 1000);
-    const dist = Math.hypot(x - entry.trustedX, y - entry.trustedY);
-    const plausible = dist <= this.posMaxSpeed() * dt;
-    if (plausible || entry.posRejects + 1 >= POS_TRUST_STREAK) {
-      entry.trustedX = x;
-      entry.trustedY = y;
-      entry.trustedAt = entry.updatedAt;
-      entry.posRejects = 0;
+    const now = entry.updatedAt;
+    // 复活（#596 的合法重定位之一）：血从「死」变成「活」的这一帧一律接受并把基线挪过去。
+    // 复活走的是存档进程的 HTTP 接口（`POST /roles/:id/revive`），实时进程不会被告知 ——
+    // 客户端本地瞬移到复活点之后上报的坐标必然超出速度上限，不认这一条就会把人拉回尸体上
+    if (entry.hp <= 0 && Number.isFinite(hp) && hp > 0) {
+      this.resetBaseline(entry, x, y, now);
       return true;
     }
-    entry.posRejects += 1;
+    const verdict = this.guard.judge({
+      mapId: entry.mapId,
+      from: { x: entry.trustedX, y: entry.trustedY },
+      to: { x, y },
+      dtMs: now - entry.trustedAt,
+      credit: entry.posCredit,
+    });
+    // 额度是一次性的：不管这帧过没过都清零（攒额度 = 攒一次瞬移）
+    entry.posCredit = 0;
+    if (verdict.accept) {
+      this.resetBaseline(entry, x, y, now);
+      return true;
+    }
+    this.correctPosition(accountId, entry, verdict.reason, now);
     return false;
+  }
+
+  /** 把基线挪到「这一帧被接受的坐标」（换图 / 复活 / 正常接受都走这一处） */
+  private resetBaseline(entry: PresenceEntry, x: number, y: number, at: number): void {
+    entry.trustedX = x;
+    entry.trustedY = y;
+    entry.trustedAt = at;
+  }
+
+  /**
+   * 把客户端拉回权威位置（#811）
+   *
+   * 只在 `enforce` 档发（`log` 档照旧接受，见 `MovementGuardService` 顶部）；
+   * 节流到 `movement.correctIntervalMs`（出厂 500ms）：4Hz 上报下每帧都可能是拒绝帧，
+   * 不节流等于给刷帧的人一个稳定出口。
+   *
+   * 回的是 `entry.x / entry.y`（**上一次被接受的**坐标），不是「把这一帧夹到上限」——
+   * 夹出来的点可能在墙里，而且会让作弊者「每帧推进一点点」白赚距离。
+   */
+  private correctPosition(accountId: string, entry: PresenceEntry, reason: MovementRejectReason | null, now: number): void {
+    if (reason === null || this.onCorrect === null) return;
+    const interval = this.guard.params().correctIntervalMs;
+    if (now - entry.correctedAt < interval) return;
+    entry.correctedAt = now;
+    this.guard.noteCorrected();
+    this.onCorrect(accountId, { x: entry.x, y: entry.y, reason, mapId: entry.mapId });
+  }
+
+  /**
+   * 记一笔「服务端即将让这个账号合法地位移 N 像素」（#811）
+   *
+   * 目前唯一的调用方是突进类技能的施法帧（`cast` 带落点，如十步一杀）：服务端从施法点
+   * 就知道他要跳到哪，提前给额度，客户端随后上报的落点才不会被判成瞬移。
+   * 额度是**一次性**的，且由调用方负责夹上限（见 `RealtimeService.grantCastDisplacement`）。
+   */
+  noteDisplacement(accountId: string, distance: number): void {
+    const entry = this.entries.get(accountId);
+    if (!entry) return;
+    if (!Number.isFinite(distance) || distance <= 0) return;
+    entry.posCredit = Math.max(entry.posCredit, distance);
   }
 
   /**
@@ -359,13 +428,14 @@ export class PlayerPresenceService implements OnApplicationBootstrap, OnApplicat
       if (movedMap) {
         existed.zoneId = zoneId;
         existed.mapId = mapId;
-        // 换图顺带重置位置仲裁基线（#861）：基线还是上一张图的坐标，跨图距离必然超限，
-        // 不重置的话新图的第一帧上报会被当成瞬移拒掉几帧（看起来是「进图后愣半秒」）。
-        // 换图这件事本身是服务端放行的，坐标该整体接受
+        // 换图顺带重置位移基线（#861 / #811）：基线还是上一张图的坐标，跨图距离必然超限，
+        // 不重置的话新图的第一帧上报会被当成瞬移（看起来是「进图后愣半秒」，`enforce` 档下
+        // 还会白挨一帧 `posCorrect`）。换图这件事本身是服务端放行的，坐标该整体接受
         existed.trustedX = existed.x;
         existed.trustedY = existed.y;
         existed.trustedAt = Date.now();
-        existed.posRejects = 0;
+        existed.posCredit = 0;
+        existed.correctedAt = 0;
       }
     }
     const players: RealtimePlayerEntry[] = [];
@@ -782,19 +852,6 @@ export class PlayerPresenceService implements OnApplicationBootstrap, OnApplicat
    */
   private positionPersistMs(): number {
     return Math.max(200, Number(this.config.get<number>("rolePositionPersistMs") ?? 1000));
-  }
-
-  /**
-   * 位置仲裁的速度上限（像素 / 秒，#596 最小仲裁）
-   *
-   * 取 1000 的理由：这是「荒谬级」阈值，不是贴着真实移速的钳制 —— 客户端跑步速度
-   * 经物理刚体换算后在百像素/秒量级，1000 已经是它的近 10 倍，正常移动（含卡顿后的
-   * 大步追帧）碰不到；而作弊瞬移通常一步跨出生点半径，单帧距离远超 1000 / 0.25s。
-   * 定宽阈值的好处是不依赖各单位（物理 PTM / Tiled 像素）的换算口径，先上线挡住
-   * 「零成本瞬移刷怪」，精确钳制等移速权威进属性汇总后再说。
-   */
-  private posMaxSpeed(): number {
-    return Math.max(100, Number(this.config.get<number>("playerPosMaxSpeed") ?? 1000));
   }
 
   /**

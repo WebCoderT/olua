@@ -2242,6 +2242,33 @@ export type UpdateMonsterAiParams = {
   returnTimeoutMs?: number;
 };
 
+export type UpdateMovementGuardParams = {
+  /**
+   * 档位：off / log / enforce
+   */
+  mode?: "off" | "log" | "enforce";
+  /**
+   * 速度上限（像素/秒）
+   */
+  maxSpeed?: number;
+  /**
+   * 容差倍率
+   */
+  tolerance?: number;
+  /**
+   * 抖动余量（像素）
+   */
+  jitterPx?: number;
+  /**
+   * 是否做穿墙校验
+   */
+  wallCheck?: boolean;
+  /**
+   * 同一连接两次 posCorrect 的最小间隔（毫秒）
+   */
+  correctIntervalMs?: number;
+};
+
 export type UpdateCombatWeights = {
   /**
    * 生命上限权重
@@ -5750,6 +5777,33 @@ export type MonsterAiParams = {
    * 回家超时（毫秒）：到点还没走回去就吸附到出生点
    */
   returnTimeoutMs: number;
+};
+
+export type MovementGuardParams = {
+  /**
+   * 档位：off 完全不校验 / log 只记账放行（出厂）/ enforce 拒绝并拉回
+   */
+  mode: "off" | "log" | "enforce";
+  /**
+   * 速度上限（像素/秒）：单帧位移超过 上限×容差×Δt + 抖动 即判超速
+   */
+  maxSpeed: number;
+  /**
+   * 容差倍率（留给刚体加减速与插值）
+   */
+  tolerance: number;
+  /**
+   * 抖动余量（像素）：抵掉坐标取整与上报相位差
+   */
+  jitterPx: number;
+  /**
+   * 是否做穿墙校验（与档位分开，碰撞数据出问题时可单独止血）
+   */
+  wallCheck: boolean;
+  /**
+   * 同一连接两次 posCorrect 的最小间隔（毫秒）
+   */
+  correctIntervalMs: number;
 };
 
 export type CombatWeights = {

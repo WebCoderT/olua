@@ -153,6 +153,65 @@ export const MONSTER_AI_PARAM_KEYS: Array<keyof MonsterAiRuntimeParams> = [
   "returnTimeoutMs",
 ];
 
+/**
+ * 位移校验参数（`runtime_params.movement` 列，#811）
+ *
+ * **服务端消费，不进客户端快照**：客户端不需要知道闸门开在哪一档 ——
+ * 它只认 `posCorrect` 帧（被拉回时照做）。知道档位等于告诉作弊者「现在关着」。
+ *
+ * 出厂值在 `config-sync.sql`；代码里的 `FALLBACK_MOVEMENT`（`movement-guard.service`）
+ * 只是**读不出来时兜住进程**的最小可用值，不是第二份出厂值 —— 两处刻意不同：
+ * 兜底档位是 `off`（读不到配置就别拦人），出厂档位是 `log`（记账但放行）。
+ */
+export interface MovementGuardParams {
+  /**
+   * 档位（#811 拍板「配置化 + 可热切」）
+   *
+   * - `off`：完全不校验，行为与 #811 之前一模一样（回滚用）；
+   * - `log`：**出厂值**。照常校验、照常采纳，只记流水与计数 —— 上线先跑一周看误伤率；
+   * - `enforce`：校验失败即丢弃该帧 + 立刻回一帧 `posCorrect` 把客户端拉回权威位置。
+   *
+   * 认不出的值按 `log` 处理（拼错不该让全服的人突然被拉回）。
+   */
+  mode: "off" | "log" | "enforce";
+  /**
+   * 速度上限（像素 / 秒，出厂 400）
+   *
+   * 服务端**没有**角色移速属性（移速只存在于客户端刚体与怪物 `move_speed`），
+   * 所以这里是一把**全局尺子**而不是「角色移速 × 1.5」：400 已接近实测跑步速度
+   * （约 128px/s）的 3 倍，正常移动含卡顿追帧都碰不到，瞬移一跨就是几倍。
+   */
+  maxSpeed: number;
+  /** 容差倍率（乘在上限上，出厂 1.35）：留给物理刚体的加减速与插值 */
+  tolerance: number;
+  /** 抖动余量（像素，出厂 24）：抵掉坐标取整与 4Hz 上报的相位差 */
+  jitterPx: number;
+  /**
+   * 穿墙校验开关（出厂 true）
+   *
+   * 与档位分开：碰撞盒数据出问题（某个图漏配 / 多配）时能先关这一项止血，
+   * 不必连速度校验一起关掉。
+   */
+  wallCheck: boolean;
+  /**
+   * 同一连接两次 `posCorrect` 的最小间隔（毫秒，出厂 500）
+   *
+   * 4Hz 上报、每帧都可能是拒绝帧 —— 不节流的话一个作弊客户端每秒收 4 帧拉回，
+   * 而他要的正是「刷帧」。500ms 足够让正常玩家立刻对齐，又不给刷帧留余地。
+   */
+  correctIntervalMs: number;
+}
+
+/** 位移校验参数的键清单（启动自检 + 管理端回读用） */
+export const MOVEMENT_GUARD_KEYS: Array<keyof MovementGuardParams> = [
+  "mode",
+  "maxSpeed",
+  "tolerance",
+  "jitterPx",
+  "wallCheck",
+  "correctIntervalMs",
+];
+
 /** 三组的键清单（**启动自检用**：库里少了哪个键就点名报错，不静默补默认值） */
 export const RUNTIME_PARAM_KEYS: Record<keyof RuntimeParams, string[]> = {
   drop: ["autoPickupRadius", "pickAcceptRadius", "fullTipInterval", "scatterMinDistance", "pickReplyTimeout", "bindChance"],

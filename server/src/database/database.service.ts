@@ -1247,6 +1247,10 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
         -- 的六个常量，服务端权威 AI 每 tick 读它。进这里而不是另开一张表：它同样是
         -- 「一进程一份、运营可调的参数」，与上面三组同性质
         monster_ai  TEXT    NOT NULL DEFAULT '{}',
+        -- 位移校验（#811）：档位 + 速度上限 + 容差 + 穿墙开关 + 拉回节流。
+        -- 与 monster_ai 同性质（一进程一份、运营可调、服务端独占、不进客户端快照），
+        -- 所以进这一行而不是另开一张表
+        movement    TEXT    NOT NULL DEFAULT '{}',
         updated_at  INTEGER NOT NULL DEFAULT 0
       );
 
@@ -1448,6 +1452,9 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
     this.ensureColumn("maps", "content", `TEXT NOT NULL DEFAULT '{"layers":[],"groups":[]}'`);
     // 怪物 AI 参数（#655）：原本是生成物 `MONSTER_AI` 的六个常量，现在并进运行时参数单行表
     this.ensureColumn("runtime_params", "monster_ai", "TEXT NOT NULL DEFAULT '{}'");
+    // 位移校验参数（#811）：存量库补一列空的 '{}'，读取侧缺键按「最小可用值」兜住
+    // （`MovementGuardService`），跑一次 `make config-import` 才有出厂档位 `log`
+    this.ensureColumn("runtime_params", "movement", "TEXT NOT NULL DEFAULT '{}'");
     // 掉落强制绑定（#789）：五张道具表各一列「掉出来就绑定」+ 每怪一列「这只怪掉的东西都绑定」。
     // 默认 0 = 不强制 —— 存量库补列后行为与之前完全一样（绑定只由 drop_params.bindChance 掷）
     this.ensureColumn("equipments", "bind_on_drop", "INTEGER NOT NULL DEFAULT 0");

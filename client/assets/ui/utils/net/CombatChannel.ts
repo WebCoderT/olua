@@ -249,6 +249,32 @@ export interface PlayerEntry {
   appearance?: PlayerAppearance;
 }
 
+/**
+ * 服务端位置修正帧（#811；协议见 realtime.protocol 的 RealtimePosCorrectMessage）
+ *
+ * `reason` 只用于提示分级与排查，**不许据此做任何判断**（不重放、不预测、不回推服务端）。
+ */
+export interface PosCorrectFrame {
+  x: number;
+  y: number;
+  reason: "speed" | "wall";
+  mapId: string;
+}
+
+/**
+ * 服务端寻路回执（#811；协议见 realtime.protocol 的 RealtimePathMessage）
+ *
+ * `points` 不含起点、已按视线拉直。`unreachable` 为真时 `points` 必为空 ——
+ * **不要**退化成直线走（那是穿墙），直接放弃本次寻路。
+ */
+export interface PathFrame {
+  seq: number;
+  mapId: string;
+  points: Array<{ x: number; y: number }>;
+  unreachable: boolean;
+  snapped: boolean;
+}
+
 /** 服务端玩家互见广播帧（协议见 realtime.protocol 的 RealtimePlayersMessage.data） */
 export interface PlayersFrame {
   mapId: string;
@@ -473,6 +499,8 @@ export interface RoleAuthorityUpdate {
 export default class CombatChannel {
   /** 出手序号（会话内单调递增，服务端按它做幂等；断线重连服务端会清账，这里不回绕） */
   private static castSeq = 0;
+  /** 寻路请求序号（会话内单调递增；回执带回来对不上就是过期回执，丢掉） */
+  private static pathSeq = 0;
 
   /** 最近一次进图登记（断线重连成功后自动重发；null = 本会话还没进过图） */
   /** 最近一次进图的地图 id（断线重连重发用；#295 起播种在服务端，客户端只报图 id） */
@@ -524,6 +552,21 @@ export default class CombatChannel {
    * 与消息帧不同，**没接线时打日志而不是静默**：拒绝看不见比日志吵更糟（见 dispatchServerError）。
    */
   static onServerError: ((error: { code: number; message: string }) => void) | null = null;
+
+  /**
+   * 位置修正出口（#811；组合根接线到 `AutoBattle.applyServerCorrection`）
+   *
+   * 服务端只在 `enforce` 档发这条帧，含义是「你客户端现在站的这个地方我不认」。
+   * 没接线时静默丢弃 —— 玩家会看到的只是自己与别人不一致（比崩掉好）。
+   */
+  static onPosCorrect: ((frame: PosCorrectFrame) => void) | null = null;
+
+  /**
+   * 服务端寻路回执出口（#811；组合根接线到 `AutoBattle.applyServerPath`）
+   *
+   * 没接线时静默丢弃：客户端本地的 PathGrid 还在，路照样能走（只是不受服务端认可）。
+   */
+  static onPath: ((frame: PathFrame) => void) | null = null;
 
   /** 位置上报的最小间隔（毫秒）：AI 的目标检测不需要逐帧精度，4Hz 足够 */
   private static POSITION_INTERVAL = 250;
@@ -598,6 +641,21 @@ export default class CombatChannel {
   /** 换图重置位置上报节流（新图的第一帧位置要立刻送上去） */
   static resetPositionThrottle(): void {
     this.lastPositionSentAt = 0;
+  }
+
+  /**
+   * 向服务端要一条到目标点的路（#811 第三道）
+   *
+   * 返回本次请求的序号（回执 `path.seq` 与它对不上就说明是过期回执）；连接不在 OPEN 态返回 0 ——
+   * 调用方据此退回本地 PathGrid 寻路（离线 / 断线时照样能走，只是路点不被服务端认可）。
+   *
+   * 起点**不带**：服务端用它的权威位置算，客户端自报起点能把路算进墙里。
+   */
+  static requestPath(mapId: string, to: { x: number; y: number }): number {
+    if (!this.active) return 0;
+    this.pathSeq += 1;
+    const sent = RealtimeClient.send({ type: "pathFind", data: { mapId, to, seq: this.pathSeq } });
+    return sent ? this.pathSeq : 0;
   }
 
   /** 换图前清掉旧图的幂等账（怪物管理器清场时调用；旧图的世界状态不受影响） */
@@ -763,6 +821,27 @@ export default class CombatChannel {
     if (typeof update.revision !== "number" || typeof update.combat !== "number" || typeof update.level !== "number") return;
     if (!this.onRoleUpdate) return;
     this.onRoleUpdate(update);
+  }
+
+  /** RealtimeClient 收到 posCorrect 帧后走这里（#811：服务端不认我刚才所在的位置） */
+  static dispatchPosCorrect(data: unknown): void {
+    const frame = data as PosCorrectFrame | null;
+    if (!frame || typeof frame !== "object") return;
+    if (typeof frame.x !== "number" || !Number.isFinite(frame.x)) return;
+    if (typeof frame.y !== "number" || !Number.isFinite(frame.y)) return;
+    if (typeof frame.mapId !== "string") return;
+    if (!this.onPosCorrect) return;
+    this.onPosCorrect(frame);
+  }
+
+  /** RealtimeClient 收到 path 帧后走这里（#811：服务端算好的路点，取代本地 A* 的结果） */
+  static dispatchPath(data: unknown): void {
+    const frame = data as PathFrame | null;
+    if (!frame || typeof frame !== "object") return;
+    if (typeof frame.seq !== "number" || !Array.isArray(frame.points)) return;
+    if (typeof frame.unreachable !== "boolean") return;
+    if (!this.onPath) return;
+    this.onPath(frame);
   }
 
   /**

@@ -21,6 +21,22 @@ import RolePointerInput from "../input/RolePointerInput";
 import RoleJoystickInput from "../input/RoleJoystickInput";
 
 /**
+ * 服务端位置修正的瞬移阈值（像素，#811）
+ *
+ * issue 定的 64px：小于它的偏差是「4Hz 上报的相位差」量级（玩家看不出来），静默插值；
+ * 大于等于它的偏差玩家一定看得出，索性瞬移 + 飘一句说明。
+ */
+const SERVER_CORRECTION_SNAP = 64;
+
+/**
+ * 插值每帧逼近的比例（#811）
+ *
+ * 1/3 约 6 帧走完（60fps 下 100ms）：再快就是瞬移、再慢会让玩家觉得「脚下打滑」。
+ * 与帧率无关的写法（按 dt 积分）收益不大 —— 这里只在收到 `posCorrect` 后短暂生效。
+ */
+const SERVER_CORRECTION_RATIO = 0.34;
+
+/**
  * 角色展示组件（自身即主角节点）
  * 负责主角节点的构建与状态机（动作/朝向）、位移、攻击锁与技能上下文组装
  * 具体职责由协作组件承担：外观动画 → RoleAppearance，键盘操控 → RoleKeyboardInput，
@@ -52,6 +68,13 @@ export default class RoleDisplay extends Node {
   private autoMove: Vec2 | null = null;
   /** 自动移动是否使用跑步速度 */
   private autoRun = false;
+  /**
+   * 待走完的服务端位置修正（#811；null = 没有待插值的修正）
+   *
+   * 只承载「差得不多」的那种修正（< `SERVER_CORRECTION_SNAP`）：每帧向目标逼近一点，
+   * 玩家看到的是「被轻轻推了一下」；差得多的直接瞬移（见 `applyServerCorrection`）。
+   */
+  private serverCorrectionTarget: Vec3 | null = null;
 
   /** 当前角色数据 */
   private role: Role;
@@ -230,6 +253,8 @@ export default class RoleDisplay extends Node {
 
   /** 每帧根据按键状态更新角色位移 */
   updateWorldPosition() {
+    // 服务端在纠偏（#811）：插值期间不接管移动，免得刚体速度与插值互相拉扯
+    if (this.advanceServerCorrection()) return;
     const rigidBody = this.getComponent(RigidBody2D);
     // 死亡期间原地躺尸：速度清零，不接受任何位移
     if (this.dead) {
@@ -276,6 +301,63 @@ export default class RoleDisplay extends Node {
   setWorldPositionByTransfer(worldPosition: Vec3) {
     this.setWorldPosition(worldPosition);
     LayerManager.move(this.getWorldPosition());
+  }
+
+  /**
+   * 服务端位置修正（#811 `posCorrect` 帧的落点）
+   *
+   * 分两档（issue 的口径）：
+   * - 差 < `SERVER_CORRECTION_SNAP`（64px）：**静默插值** —— 记下目标点，`update` 每帧逼近
+   *   一点。这种偏差玩家自己看不出来（4Hz 上报的相位差就是这个量级），弹一下反而像卡了；
+   * - 差 ≥ 64px：**瞬移** + 由调用方飘一次「网络波动」（这一档玩家一定看得出来，
+   *   不说一句他只会以为游戏坏了）。
+   *
+   * 两档都**同步刚体**：`setWorldPosition` 只改节点变换，刚体里还留着上一帧的速度，
+   * 不归零的话下一次物理步进会把人往老方向再带一段（表现为「修正完又飘回去半格」）。
+   */
+  applyServerCorrection(x: number, y: number): void {
+    if (!isValid(this)) return;
+    const current = this.getWorldPosition();
+    const distance = Math.hypot(x - current.x, y - current.y);
+    if (distance < SERVER_CORRECTION_SNAP) {
+      this.serverCorrectionTarget = new Vec3(x, y, current.z);
+      return;
+    }
+    this.serverCorrectionTarget = null;
+    this.stopRigidBody();
+    this.setWorldPositionByTransfer(new Vec3(x, y, current.z));
+  }
+
+  /** 当前有没有待走完的修正（组合根据此决定要不要拦一帧输入） */
+  get hasServerCorrection(): boolean {
+    return this.serverCorrectionTarget !== null;
+  }
+
+  /** 把刚体速度清零（瞬移 / 死亡 / 修正时都要，否则物理步进会把人带走一段） */
+  private stopRigidBody(): void {
+    const rigidBody = this.getComponent(RigidBody2D);
+    if (rigidBody) rigidBody.linearVelocity = Vec2.ZERO;
+  }
+
+  /**
+   * 推进一次插值（`update` 每帧调）
+   *
+   * @returns true = 本帧还在修正中，正常移动逻辑应当跳过（不然刚体速度会跟插值打架）
+   */
+  private advanceServerCorrection(): boolean {
+    const target = this.serverCorrectionTarget;
+    if (!target) return false;
+    const current = this.getWorldPosition();
+    const dx = target.x - current.x;
+    const dy = target.y - current.y;
+    if (Math.hypot(dx, dy) <= 1) {
+      this.serverCorrectionTarget = null;
+      return false;
+    }
+    this.stopRigidBody();
+    this.setWorldPosition(current.x + dx * SERVER_CORRECTION_RATIO, current.y + dy * SERVER_CORRECTION_RATIO, current.z);
+    LayerManager.move(this.getWorldPosition());
+    return true;
   }
 
   //#endregion

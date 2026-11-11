@@ -11284,6 +11284,108 @@
         ]
       }
     },
+    "/admin/runtime-params/movement": {
+      "get": {
+        "description": "移动三道校验的闸门参数（`runtime_params.movement` 列，#811）。与怪物 AI 一样**单独一条接口**、不下发客户端：\n\n- `mode`：`off` 不校验（回滚用）/ `log` 只记账放行（**出厂**）/ `enforce` 拒绝该帧并回 `posCorrect` 拉回；\n- `maxSpeed` / `tolerance` / `jitterPx`：单帧位移上限 = `maxSpeed × tolerance × Δt + jitterPx`；\n- `wallCheck`：穿墙校验开关（碰撞数据出问题时可单独关掉，不牵连速度校验）；\n- `correctIntervalMs`：同一连接两次拉回的最小间隔。\n\n`log` 档跑满一周、超速占比 < 0.5% 且穿墙抽样误判为 0 之后再切 `enforce`。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
+        "operationId": "adminRuntimeParams.getMovement",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "当前生效值",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/MovementGuardParamsDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "位移校验参数",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/MovementGuardParamsDto"
+        },
+        "x-olua-permissions": [
+          "gameConfig:read"
+        ]
+      },
+      "patch": {
+        "description": "**部分更新**：只提交改动过的字段，没提交的保持原值。\n\n改完**下一次 pos 帧**就按新值判（不做缓存），切档位不需要重启、也不需要玩家重进。\n\n风险提示：`enforce` 档下被拒的帧会立刻把玩家拉回权威位置 —— 切之前先确认 `log` 档的流水里没有误判。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
+        "operationId": "adminRuntimeParams.updateMovement",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateMovementGuardParamsDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "更新后的生效值",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/MovementGuardParamsDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "编辑位移校验参数",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/MovementGuardParamsDto"
+        },
+        "x-olua-permissions": [
+          "gameConfig:write"
+        ]
+      }
+    },
     "/admin/combat-weights": {
       "get": {
         "description": "当前生效的七项倍率 + 最后修改时间（**单行配置，没有分页**）。\n\n口径（客户端与服务端一致）：区间属性（三系攻击 / 三系防御）按**上下限之和**乘倍率，生命按单值乘倍率，最后求和。`hpRecover`（每秒回血）**不计入** —— 回血不改变输出与承伤上限，\n算进来会凭空抬高所有地图的门槛。\n\n缺行回落出厂值（`config-sync.sql`），所以这张表不需要迁移。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
@@ -19549,6 +19651,40 @@
           }
         }
       },
+      "UpdateMovementGuardParamsDto": {
+        "type": "object",
+        "properties": {
+          "mode": {
+            "type": "string",
+            "description": "档位：off / log / enforce",
+            "enum": [
+              "off",
+              "log",
+              "enforce"
+            ]
+          },
+          "maxSpeed": {
+            "type": "number",
+            "description": "速度上限（像素/秒）"
+          },
+          "tolerance": {
+            "type": "number",
+            "description": "容差倍率"
+          },
+          "jitterPx": {
+            "type": "number",
+            "description": "抖动余量（像素）"
+          },
+          "wallCheck": {
+            "type": "boolean",
+            "description": "是否做穿墙校验"
+          },
+          "correctIntervalMs": {
+            "type": "number",
+            "description": "同一连接两次 posCorrect 的最小间隔（毫秒）"
+          }
+        }
+      },
       "UpdateCombatWeightsDto": {
         "type": "object",
         "properties": {
@@ -25109,6 +25245,54 @@
           "leashRange",
           "returnSpeedRate",
           "returnTimeoutMs"
+        ]
+      },
+      "MovementGuardParamsDto": {
+        "type": "object",
+        "properties": {
+          "mode": {
+            "type": "string",
+            "description": "档位：off 完全不校验 / log 只记账放行（出厂）/ enforce 拒绝并拉回",
+            "enum": [
+              "off",
+              "log",
+              "enforce"
+            ],
+            "example": "log"
+          },
+          "maxSpeed": {
+            "type": "number",
+            "description": "速度上限（像素/秒）：单帧位移超过 上限×容差×Δt + 抖动 即判超速",
+            "example": 400
+          },
+          "tolerance": {
+            "type": "number",
+            "description": "容差倍率（留给刚体加减速与插值）",
+            "example": 1.35
+          },
+          "jitterPx": {
+            "type": "number",
+            "description": "抖动余量（像素）：抵掉坐标取整与上报相位差",
+            "example": 24
+          },
+          "wallCheck": {
+            "type": "boolean",
+            "description": "是否做穿墙校验（与档位分开，碰撞数据出问题时可单独止血）",
+            "example": true
+          },
+          "correctIntervalMs": {
+            "type": "number",
+            "description": "同一连接两次 posCorrect 的最小间隔（毫秒）",
+            "example": 500
+          }
+        },
+        "required": [
+          "mode",
+          "maxSpeed",
+          "tolerance",
+          "jitterPx",
+          "wallCheck",
+          "correctIntervalMs"
         ]
       },
       "CombatWeightsDto": {

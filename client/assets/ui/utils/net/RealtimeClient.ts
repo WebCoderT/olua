@@ -333,6 +333,16 @@ export default class RealtimeClient {
       CombatChannel.dispatchRoleUpdate(frame.data);
       return;
     }
+    if (frame.type === "posCorrect") {
+      // 位置修正（#811）：服务端不认我刚才上报的位置（超速 / 穿墙），权威坐标随帧带回
+      CombatChannel.dispatchPosCorrect(frame.data);
+      return;
+    }
+    if (frame.type === "path") {
+      // 寻路回执（#811）：服务端算好的路点，取代本地 A* 的结果
+      CombatChannel.dispatchPath(frame.data);
+      return;
+    }
     if (frame.type === "error") {
       // 服务端的拒绝（聊天限频 / 组队失败 / 参数不合法…）：**必须让玩家看见**，
       // 否则点完按钮什么都不发生，只能反复点（#495）。形状的解释在 CombatChannel。

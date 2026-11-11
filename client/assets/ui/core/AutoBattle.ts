@@ -10,6 +10,7 @@ import PathGrid from "../utils/map/PathGrid";
 import GameUiHelper from "../helpers/GameUiHelper";
 import MonsterManager from "./MonsterManager";
 import SkillManager from "./SkillManager";
+import CombatChannel from "../utils/net/CombatChannel";
 
 /**
  * 自动战斗（静态类）
@@ -49,6 +50,13 @@ export default class AutoBattle {
   private static pathIndex = 0;
   /** 上次寻路时间戳 */
   private static lastRepathAt = 0;
+  /**
+   * 最近一次向服务端请求寻路的序号（#811；0 = 没在等）
+   *
+   * 回执带回的 `seq` 与它对不上就说明是**过期回执**（中间又重寻过路），直接丢 ——
+   * 照过期路点走会把角色带回上一个目标的方向。
+   */
+  private static pendingPathSeq = 0;
   /** 卡住检测：上次检测时间/位置与连续卡住次数 */
   private static lastStuckCheckAt = 0;
   private static lastStuckX = 0;
@@ -278,6 +286,8 @@ export default class AutoBattle {
     this.path = [];
     this.pathIndex = 0;
     this.stuckCount = 0;
+    // 在途的寻路请求作废（#811）：不清的话它的回执回来会顶掉「下一次」请求的回执
+    this.pendingPathSeq = 0;
   }
 
   /** 目标是否仍可打（节点存活且怪物数据还在、血量大于 0） */
@@ -389,6 +399,43 @@ export default class AutoBattle {
     const from = roleDisplay.getWorldPosition();
     const path = grid.findPath(new Vec2(from.x, from.y), new Vec2(to.x, to.y));
     this.path = path.length > 0 ? path : [new Vec2(to.x, to.y)];
+    // 服务端寻路（#811 第三道）：本地的这一份是**即时预判**（点了就先动，不留 40~80ms 空窗），
+    // 服务端回执一到就用它替换 —— 权威路点才算「我走过去没穿墙」。连接不在时（离线）就只走本地
+    if (this.mapId) this.pendingPathSeq = CombatChannel.requestPath(this.mapId, { x: to.x, y: to.y });
+  }
+
+  /**
+   * 服务端下发的路点（#811；组合根接线到 `CombatChannel.onPath`）
+   *
+   * 只认**最新一次**请求的回执（`seq` 对不上就是过期回执）。不可达时的收尾按「当前在干什么」
+   * 分两路：点击寻路 → 停住并提示走不到；追怪 → 拉黑这只怪换下一个（不然会一直撞墙）。
+   */
+  static applyServerPath(frame: { seq: number; points: Array<{ x: number; y: number }>; unreachable: boolean }): void {
+    if (frame.seq !== this.pendingPathSeq) return;
+    this.pendingPathSeq = 0;
+    if (frame.unreachable) {
+      if (this.pendingPoint) this.giveUpPointMove();
+      else if (this.target) this.giveUpCurrentTarget();
+      return;
+    }
+    if (frame.points.length === 0) return;
+    this.path = frame.points.map((point) => new Vec2(point.x, point.y));
+    this.pathIndex = 0;
+  }
+
+  /**
+   * 服务端位置修正（#811；组合根接线到 `CombatChannel.onPosCorrect`）
+   *
+   * 除了把主角挪过去，**还必须把当前路点作废**：那条路是按「我刚才在错位置」算的，
+   * 起点错了整条路都错；下一次 tick 会按新位置重新请求。
+   */
+  static applyServerCorrection(x: number, y: number): void {
+    this.roleDisplay?.applyServerCorrection(x, y);
+    this.path = [];
+    this.pathIndex = 0;
+    this.lastRepathAt = 0;
+    this.pendingPathSeq = 0;
+    this.stuckCount = 0;
   }
 
   /** 取寻路网格（按当前地图惰性构建；地图未注册/已失效时返回 null） */

@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
-import { ArrayMaxSize, ArrayMinSize, IsArray, IsBoolean, IsInt, IsNumber, IsOptional, IsString, Max, Min, ValidateNested } from "class-validator";
+import { ArrayMaxSize, ArrayMinSize, IsArray, IsBoolean, IsIn, IsInt, IsNumber, IsOptional, IsString, Max, Min, ValidateNested } from "class-validator";
 import { Type } from "class-transformer";
 
 /**
@@ -589,4 +589,91 @@ export class UpdateRuntimeParamsDto {
   @IsOptional()
   @IsString()
   note?: string;
+}
+
+/**
+ * 位移校验参数（`runtime_params.movement` 列，#811，**服务端消费，不下发客户端**）
+ *
+ * 与怪物 AI 参数同一处理：单独一组、单独两条接口，理由也一样 ——
+ * `RuntimeParamsDto` 就是客户端快照 `runtimeParams` 段的形状，往里加东西等于
+ * 「快照多一段」。而且档位**更不能**下发：告诉客户端「现在是 log 档」等于告诉作弊者
+ * 「现在随便瞬移」。
+ */
+export class MovementGuardParamsDto {
+  @ApiProperty({
+    description: "档位：off 完全不校验 / log 只记账放行（出厂）/ enforce 拒绝并拉回",
+    enum: ["off", "log", "enforce"],
+    example: "log",
+  })
+  @IsIn(["off", "log", "enforce"])
+  mode: "off" | "log" | "enforce";
+
+  @ApiProperty({ description: "速度上限（像素/秒）：单帧位移超过 上限×容差×Δt + 抖动 即判超速", example: 400 })
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(10)
+  @Max(20000)
+  maxSpeed: number;
+
+  @ApiProperty({ description: "容差倍率（留给刚体加减速与插值）", example: 1.35 })
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(1)
+  @Max(3)
+  tolerance: number;
+
+  @ApiProperty({ description: "抖动余量（像素）：抵掉坐标取整与上报相位差", example: 24 })
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  @Max(500)
+  jitterPx: number;
+
+  @ApiProperty({ description: "是否做穿墙校验（与档位分开，碰撞数据出问题时可单独止血）", example: true })
+  @IsBoolean()
+  wallCheck: boolean;
+
+  @ApiProperty({ description: "同一连接两次 posCorrect 的最小间隔（毫秒）", example: 500 })
+  @IsInt()
+  @Min(0)
+  @Max(10000)
+  correctIntervalMs: number;
+}
+
+/** 位移校验参数的部分更新（只提交改动过的字段） */
+export class UpdateMovementGuardParamsDto {
+  @ApiPropertyOptional({ description: "档位：off / log / enforce", enum: ["off", "log", "enforce"] })
+  @IsOptional()
+  @IsIn(["off", "log", "enforce"])
+  mode?: "off" | "log" | "enforce";
+
+  @ApiPropertyOptional({ description: "速度上限（像素/秒）" })
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(10)
+  @Max(20000)
+  maxSpeed?: number;
+
+  @ApiPropertyOptional({ description: "容差倍率" })
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(1)
+  @Max(3)
+  tolerance?: number;
+
+  @ApiPropertyOptional({ description: "抖动余量（像素）" })
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  @Max(500)
+  jitterPx?: number;
+
+  @ApiPropertyOptional({ description: "是否做穿墙校验" })
+  @IsOptional()
+  @IsBoolean()
+  wallCheck?: boolean;
+
+  @ApiPropertyOptional({ description: "同一连接两次 posCorrect 的最小间隔（毫秒）" })
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(10000)
+  correctIntervalMs?: number;
 }

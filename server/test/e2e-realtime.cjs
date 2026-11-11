@@ -599,16 +599,27 @@ async function main() {
     }
     //#endregion
 
-    //#region 九、互见位置仲裁（#596）
-    group("九、互见位置仲裁：瞬移帧被屏蔽，持续异常才跟随");
+    //#region 九、互见位置仲裁（#596 → #811 换闸）
+    group("九、互见位置仲裁：瞬移帧被屏蔽（enforce 档），且不再「连发两帧就跟随」");
     {
-      // 独立一台服务：速度上限压到 500 像素/秒、广播 50ms 一拍 —— 瞬移与跟随都不用干等默认值
+      // 独立一台服务：广播 50ms 一拍 —— 逐帧观察不用干等默认值。
+      // 速度上限不再走 env（`PLAYER_POS_MAX_SPEED` 已在 #811 删除），改由 `runtime_params.movement` 热切。
       const presServer = await startServer({
         PLAYER_SYNC_BROADCAST_MS: "50",
-        PLAYER_POS_MAX_SPEED: "500",
       });
       try {
         const pUrl = presServer.baseUrl;
+        // `enforce` 档 + 上限压到 500px/s、容差 1、抖动量 0：这样「跨半张图的瞬移」必然被拒，
+        // 而正常小步必然放行，不用去凑默认的 400×1.35
+        const adminReg = await api(pUrl, "POST", "/api/admin/auth/register", {
+          body: { username: "presence_gm", password: "Admin#1234", registerCode: ADMIN_CODE },
+        });
+        const adminToken = adminReg.body?.data?.token;
+        const patched = await api(pUrl, "PATCH", "/api/admin/runtime-params/movement", {
+          token: adminToken,
+          body: { mode: "enforce", maxSpeed: 500, tolerance: 1, jitterPx: 0 },
+        });
+        checkEqual(patched.body?.data?.mode, "enforce", "准备：档位切到 enforce（PATCH 回执带新值）");
         const tokenE = await registerPlayer(pUrl, "presence_e");
         const tokenF = await registerPlayer(pUrl, "presence_f");
         await api(pUrl, "POST", "/api/roles", { token: tokenE, body: { name: "presence_r1", occupation: "1", sex: "1" } });
@@ -637,35 +648,51 @@ async function main() {
           return null;
         };
 
+        // 锚点取新手村的复活点：那是「玩家出生就站在这里」的坐标，必然不在任何碰撞盒里
+        // （随手挑一个 x/y 很容易撞上外墙 —— 外墙盒是横贯整张图的 8320×128 长条）
+        const AX = 4057.2;
+        const AY = -3688.04;
         // 正常上报：位置进在场表并广播（首见 sentX=NaN 必有增量）
-        mover.socket.send(JSON.stringify({ type: "pos", data: { mapId: "0", x: 100, y: 100, hp: 50, moving: false } }));
+        mover.socket.send(JSON.stringify({ type: "pos", data: { mapId: "0", x: AX, y: AY, hp: 50, moving: false } }));
         const firstSeen = await waitFor("观看者看到移动者", seenPosition, 3_000);
         check(Boolean(firstSeen), "正常上报的位置被互见广播");
-        checkEqual(firstSeen?.x, 100, "首见坐标就是上报值");
+        check(Math.abs((firstSeen?.x ?? 0) - AX) < 1, "首见坐标就是上报值", JSON.stringify(firstSeen));
 
-        // 瞬移（跨半张地图）：速度上限 500px/s，单帧位移 ~56000px 远超 → 帧被屏蔽，
-        // 位置维持旧值 → 增量判据（坐标没变）不触发 → 观看者永远看不到 40000
-        mover.socket.send(JSON.stringify({ type: "pos", data: { mapId: "0", x: 40000, y: 9000, hp: 50, moving: true } }));
+        // 瞬移（跨半张地图）：`enforce` 档下 56000px / 单帧远超 500px/s → 帧被拒、不进在场表
+        // → 位置维持旧值 → 增量判据（坐标没变）不触发 → 观看者永远看不到 40000
+        mover.socket.send(JSON.stringify({ type: "pos", data: { mapId: "0", x: 40000, y: -9000, hp: 50, moving: true } }));
         await sleep(400); // 跨过几个广播节拍
         const afterJump = seenPosition();
-        check(afterJump === null || afterJump.x !== 40000, "瞬移帧被屏蔽（观看者看不到跳变）", JSON.stringify(afterJump));
+        check(afterJump === null || afterJump.x !== 40000, "瞬移帧被拒（观看者看不到跳变）", JSON.stringify(afterJump));
 
-        // 连续第二次同位置上报：达到「持续异常」阈值 → 视作合法重定位（复活/传送），跟随
-        mover.socket.send(JSON.stringify({ type: "pos", data: { mapId: "0", x: 40000, y: 9000, hp: 50, moving: true } }));
-        const followed = await waitFor("持续瞬移被跟随", async () => {
-          const pos = seenPosition();
-          return pos && pos.x === 40000 ? pos : null;
+        // 拒绝时服务端**立刻回一帧 `posCorrect`**（#811 拍板：单帧即回，不攒 3 次），
+        // 回的是「上一次被接受的坐标」而不是把本帧夹到上限
+        const corrected = await waitFor("瞬移被拒后的 posCorrect", async () => {
+          for (let i = mover.messages.length - 1; i >= 0; i -= 1) {
+            const frame = mover.messages[i];
+            if (frame.type === "posCorrect") return frame.data;
+          }
+          return null;
         }, 3_000);
-        check(Boolean(followed), "连续异常达到阈值后跟随（复活 / 传送不被永久锁死）");
+        check(Boolean(corrected), "被拒的帧立刻换回一帧 posCorrect（客户端不用自己猜）");
+        checkEqual(corrected?.reason, "speed", "posCorrect 带 reason=speed");
+        check(Math.abs((corrected?.x ?? 0) - AX) < 1, "回拉坐标 = 上一次被接受的坐标（锚点）", JSON.stringify(corrected));
 
-        // 跟随后的基线已重置：从新位置正常移动不再被拦（先隔一拍，单帧时距给够）
-        await sleep(300);
-        mover.socket.send(JSON.stringify({ type: "pos", data: { mapId: "0", x: 40100, y: 9000, hp: 50, moving: true } }));
-        const movedOn = await waitFor("跟随后的正常移动", async () => {
+        // 再发同一帧：**不再**「连续 2 帧即信任」（B44 删掉的那条宽容分支）——
+        // 否则「连发两次」就是白送的瞬移，而这正是本次要收掉的东西
+        mover.socket.send(JSON.stringify({ type: "pos", data: { mapId: "0", x: 40000, y: -9000, hp: 50, moving: true } }));
+        await sleep(400);
+        const afterSecondJump = seenPosition();
+        check(afterSecondJump === null || afterSecondJump.x !== 40000, "连发第二帧同样被拒（不再有「持续异常即跟随」）", JSON.stringify(afterSecondJump));
+
+        // 被拒之后基线没动，正常小步照常走：给够间隔（1 秒 ≈ 500px 额度）
+        await sleep(600);
+        mover.socket.send(JSON.stringify({ type: "pos", data: { mapId: "0", x: AX + 40, y: AY, hp: 50, moving: true } }));
+        const movedOn = await waitFor("被拒后的正常移动", async () => {
           const pos = seenPosition();
-          return pos && pos.x === 40100 ? pos : null;
+          return pos && Math.abs(pos.x - (AX + 40)) < 1 ? pos : null;
         }, 3_000);
-        check(Boolean(movedOn), "跟随重置基线后正常移动照常广播");
+        check(Boolean(movedOn), "基线没被瞬移带偏：之后 60px 的正常移动照常广播", JSON.stringify(seenPosition()));
 
         // 垃圾帧（非有限数）：永不接受，位置维持旧值；也不消耗跟随计数。
         // 原始字符串发：JSON.stringify 会把 Infinity 变成 null，改包工具手里是任意字节
@@ -674,8 +701,9 @@ async function main() {
         const afterGarbage = seenPosition();
         check(afterGarbage !== null && Number.isFinite(afterGarbage.x), "非有限坐标被拒绝（垃圾帧不进互见广播）", JSON.stringify(afterGarbage));
 
-        // 自报血量的唯一收窄：负数夹 0（死亡判据 <=0 的输入不能被改成负数绕过）
-        mover.socket.send(JSON.stringify({ type: "pos", data: { mapId: "0", x: 40100, y: 9000, hp: -5, moving: false } }));
+        // 自报血量的唯一收窄：负数夹 0（死亡判据 <=0 的输入不能被改成负数绕过）。
+        // 坐标必须与当前位置一致 —— `enforce` 档下顺手带个位移会被拒，血量就永远等不到
+        mover.socket.send(JSON.stringify({ type: "pos", data: { mapId: "0", x: AX + 40, y: AY, hp: -5, moving: false } }));
         const hpSeen = await waitFor("负血量上报", async () => {
           const pos = seenPosition();
           return pos && pos.hp === 0 ? pos : null;

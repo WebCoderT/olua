@@ -1026,6 +1026,67 @@ export interface RealtimeStatusMessage {
   data: { statuses: RealtimeStatusEntry[] };
 }
 
+/**
+ * 服务端 → 客户端：位置被拉回（#811）
+ *
+ * 只在 `runtime_params.movement.mode = enforce` 且该帧位移被判不可信时发出，**定向**发给
+ * 本人（不是广播）—— 别人的屏幕上看不到这次修正（他们本来就只看到权威位置，没有偏差）。
+ *
+ * 客户端表现：差 < 64px 静默插值，≥ 64px 瞬移 + 一次「网络波动」飘字（issue 的口径：
+ * 不明显不一致时就别说，否则玩家以为游戏卡了）。
+ *
+ * `reason` 只用于排查与文案分级，**客户端不许据此做任何判断**（不重放、不预测、不回推）。
+ */
+export interface RealtimePosCorrectMessage {
+  type: "posCorrect";
+  data: {
+    /** 服务端权威坐标（在场表里被接受的那份） */
+    x: number;
+    y: number;
+    /** `speed` 单帧位移超过可信上限 / `wall` 穿过了碰撞盒 */
+    reason: "speed" | "wall";
+    /** 这张图（客户端换图中途收到旧图的修正应先忽略） */
+    mapId: string;
+  };
+}
+
+/**
+ * 客户端 → 服务端：要一条到目标点的路（#811 第三道）
+ *
+ * 起点**不传**：服务端用在场表里被接受的坐标（自报起点能让路点算进墙里）。
+ * 目标点落在墙里时服务端会吸附到最近可站立格，并在回执里带 `snapped`。
+ * 同一条连接 100ms 内的重复请求会被丢弃（重寻路节流在客户端，这里只是防刷）。
+ */
+export interface RealtimePathFindMessage {
+  type: "pathFind";
+  data: {
+    mapId: string;
+    /** 目标点（世界坐标） */
+    to: { x: number; y: number };
+    /** 客户端自增序号（回执原样带回；对不上就是过期回执，丢掉） */
+    seq: number;
+  };
+}
+
+/**
+ * 服务端 → 客户端：一条路点序列（#811 第三道）
+ *
+ * `points` 不含起点、已按视线拉直。`unreachable` 为真时 `points` 必为空 ——
+ * 客户端**不要**退化成直线走（那是穿墙），直接放弃本次寻路并提示。
+ */
+export interface RealtimePathMessage {
+  type: "path";
+  data: {
+    /** 客户端请求里带来的序号 */
+    seq: number;
+    mapId: string;
+    points: Array<{ x: number; y: number }>;
+    unreachable: boolean;
+    /** 目标点被吸附到最近可站立格（客户端可据此决定是否提示「走不到那儿」） */
+    snapped: boolean;
+  };
+}
+
 /** 服务端会发出的全部消息 */
 export type RealtimeServerMessage =
   | RealtimeWelcomeMessage
@@ -1043,7 +1104,9 @@ export type RealtimeServerMessage =
   | RealtimePartyInviteMessage
   | RealtimeExpGainMessage
   | RealtimeRoleUpdateMessage
-  | RealtimeStatusMessage;
+  | RealtimeStatusMessage
+  | RealtimePosCorrectMessage
+  | RealtimePathMessage;
 
 /**
  * 关闭码

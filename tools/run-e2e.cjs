@@ -78,6 +78,10 @@ const WEIGHT = {
   "test:e2e:attr-points": 5,
   // 纯 HTTP：五格播种 + 十来次穿戴/卸下 + 十次配置 PATCH（每次都要重装结算层）
   "test:e2e:equip-rules": 2,
+  // 一条实时连接 + 十几次 pos 帧（每帧等一个 50ms 广播节拍）+ 七次配置 PATCH + 一处 700ms 等待
+  "test:e2e:map-movement": 2,
+  // 一条实时连接 + 六次寻路（每次留 150ms 防刷间隔与一次回执）+ 一次格参数 PATCH
+  "test:e2e:map-path": 2,
 };
 
 function weightOf(script) {
