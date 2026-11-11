@@ -712,15 +712,31 @@ function connect(url) {
 
     const beforeTick = readRole(dbPath, roleId);
     check(!!beforeTick, "读到玩家存档（周期结算的权威值）", beforeTick && `hp=${beforeTick.hp}/${beforeTick.maxHp} revision=${beforeTick.revision}`);
-    // 窗口取 3.2 秒：结算是一秒一拍，而定时器的相位是随机的 —— 2.4 秒可能只覆盖到一拍
-    await sleep(3_200);
+    // 窗口取 6.4 秒，不是 3 秒 —— 两条都在削这个数：
+    // ① 结算是每秒一拍、定时器相位随机，3 秒窗口在慢时钟机器上可能只覆盖到一拍（CI 实测掉 1）；
+    // ② 自然回血（`hpRecoverOfHp` = 1%/秒）会在每次受击结算时把血补回来，血量其实是**锯齿**
+    //    （实测 100 → 98 → 96 → 99 → 97…）。所以「窗口前后净下降多少」根本不是可靠判据 ——
+    //    这里改成**数下降次数**：每拍掉 2 点、回血只会把它补回一部分，数到两次「比上一次低」
+    //    就说明周期结算真的在跑。这一段要断的是「在跑」，不是「2% 这个数字」（数值归运营）
+    const burnTicks = await keepAliveDuring(async () => {
+      let last = beforeTick ? beforeTick.hp : 0;
+      let drops = 0;
+      const deadline = Date.now() + 10_000;
+      while (Date.now() < deadline && drops < 2) {
+        await sleep(300);
+        const sample = readRole(dbPath, roleId);
+        if (!sample) break;
+        if (sample.hp < last) drops += 1;
+        last = sample.hp;
+      }
+      return drops;
+    });
     const afterTick = readRole(dbPath, roleId);
-    const tickDrop = beforeTick && afterTick ? beforeTick.hp - afterTick.hp : 0;
     const tickExpect = beforeTick ? Math.round(beforeTick.maxHp * BURN_HP_PERCENT) : 0;
     check(
-      tickDrop >= tickExpect * 1.5,
-      "血量随时间下降（周期结算真的在跑，不是只挂了个图标）",
-      `掉 ${tickDrop}（每拍 ${tickExpect}，3.2 秒至少两拍）`,
+      burnTicks >= 2,
+      "血量按拍下降（周期结算真的在跑，不是只挂了个图标）",
+      `观测到 ${burnTicks} 次下降（每拍毛 ${tickExpect}，自然回血会补回一部分）`,
     );
     checkEqual(afterTick && afterTick.revision, beforeTick && beforeTick.revision, "血量变化不推 revision（客户端不该把它当成存档被改）");
 
