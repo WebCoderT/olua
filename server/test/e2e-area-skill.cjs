@@ -48,7 +48,9 @@ const HIT_CLUSTER = { key: "1", points: [{ x: 400, y: -400 }, { x: 470, y: -400 
  * 图 3 是 1 级图，刷怪区在 prepareWorld 里整份换成我们要的三只。
  */
 const KILL_MAP = "3";
-const KILL_CLUSTER = { key: "2", points: [{ x: 700, y: 700 }, { x: 760, y: 700 }, { x: 700, y: 760 }] };
+// 坐标必须是**图内**（世界坐标 y ∈ [-H, 0]）：#850 起越界的落点会被钳到图边，
+// 用正 y 铺靶子会被挪到 y = 0 那条线上，离作用点 700px —— 群体技能一只都打不到。
+const KILL_CLUSTER = { key: "2", points: [{ x: 700, y: -700 }, { x: 760, y: -700 }, { x: 700, y: -760 }] };
 /** 群体技能的冷却比 `paceCast()` 那 250ms 长（1009 的 action 是 stand，speedRate 更低）—— 单独等 */
 const paceAoe = () => sleep(1_300);
 /** 区域技能（空系数，纯位移）：服务端必须接受它并只记账 */

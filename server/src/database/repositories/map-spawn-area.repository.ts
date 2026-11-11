@@ -19,9 +19,24 @@ export class MapSpawnAreaRepository {
   /** seed 一行（同图同名已存在则跳过） */
   seedRow(row: Omit<MapSpawnAreaRow, "id">): void {
     this.db.run(
-      `INSERT OR IGNORE INTO map_spawn_areas (map_id, name, monster_key, min, max, cx, cy, w, h, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [row.map_id, row.name, row.monster_key, row.min, row.max, row.cx, row.cy, row.w, row.h, row.updated_at],
+      `INSERT OR IGNORE INTO map_spawn_areas
+         (map_id, name, monster_key, min, max, density_peak, density_off, peak_hours, cx, cy, w, h, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        row.map_id,
+        row.name,
+        row.monster_key,
+        row.min,
+        row.max,
+        row.density_peak,
+        row.density_off,
+        row.peak_hours,
+        row.cx,
+        row.cy,
+        row.w,
+        row.h,
+        row.updated_at,
+      ],
     );
   }
 
@@ -40,9 +55,24 @@ export class MapSpawnAreaRepository {
   /** 插入一行，返回带 id 的完整行（接口要回显，别让客户端再猜一次 id） */
   insert(row: Omit<MapSpawnAreaRow, "id">): MapSpawnAreaRow {
     const id = this.db.insertReturningId(
-      `INSERT INTO map_spawn_areas (map_id, name, monster_key, min, max, cx, cy, w, h, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [row.map_id, row.name, row.monster_key, row.min, row.max, row.cx, row.cy, row.w, row.h, row.updated_at],
+      `INSERT INTO map_spawn_areas
+         (map_id, name, monster_key, min, max, density_peak, density_off, peak_hours, cx, cy, w, h, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        row.map_id,
+        row.name,
+        row.monster_key,
+        row.min,
+        row.max,
+        row.density_peak,
+        row.density_off,
+        row.peak_hours,
+        row.cx,
+        row.cy,
+        row.w,
+        row.h,
+        row.updated_at,
+      ],
     );
     const created = this.findById(id);
     if (!created) throw new Error(`刷怪区刚插入却读不回来（id=${id}），库状态异常`);
@@ -53,9 +83,25 @@ export class MapSpawnAreaRepository {
   update(row: MapSpawnAreaRow): void {
     this.db.run(
       `UPDATE map_spawn_areas
-          SET name = ?, monster_key = ?, min = ?, max = ?, cx = ?, cy = ?, w = ?, h = ?, updated_at = ?
+          SET name = ?, monster_key = ?, min = ?, max = ?,
+              density_peak = ?, density_off = ?, peak_hours = ?,
+              cx = ?, cy = ?, w = ?, h = ?, updated_at = ?
         WHERE id = ?`,
-      [row.name, row.monster_key, row.min, row.max, row.cx, row.cy, row.w, row.h, row.updated_at, row.id],
+      [
+        row.name,
+        row.monster_key,
+        row.min,
+        row.max,
+        row.density_peak,
+        row.density_off,
+        row.peak_hours,
+        row.cx,
+        row.cy,
+        row.w,
+        row.h,
+        row.updated_at,
+        row.id,
+      ],
     );
   }
 

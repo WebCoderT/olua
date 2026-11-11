@@ -311,6 +311,14 @@ export interface WorldMonsterRow {
   zone_id: number;
   /** 怪物 key（configs/monster 的关联键，战斗数值查 monsters 表） */
   monster_key: string;
+  /**
+   * 归属刷怪区（`map_spawn_areas.id`；#852 起播种时写入，之后不变）。
+   *
+   * 为什么要这一列：密度补种要按**区**统计「这一区现在有几只」，而同一 `monster_key`
+   * 可能在多个区复用 —— 按 key 反查会算到隔壁区去。老档（#852 之前播种的行）没有值，
+   * 按出生点反查命中就回填，命中不了（区域已删）保持 null，那几只不计入任何区的配额。
+   */
+  area_id: number | null;
   /** 出生点（世界坐标；重生的落点也是它 —— 播种时由服务端在刷怪区内随机取点） */
   x: number;
   y: number;
@@ -365,10 +373,16 @@ export interface MapSpawnAreaRow {
   name: string;
   /** 怪物 key（configs/monster 的关联键；播种时对照 monsters 表，不认识的跳过） */
   monster_key: string;
-  /** 区域允许的最少怪物数（当前播种按 max 展开，min 留给后续动态补怪用） */
+  /** 区域允许的最少怪物数（密度目标的下限；管理端表单从小程序化起固定写 0） */
   min: number;
-  /** 区域允许的最多怪物数 */
+  /** 区域允许的最多怪物数（密度目标 = max × 时段系数 × 人数系数，仍以它为基准） */
   max: number;
+  /** 高峰系数（null = 1.0；#852 起由 tick 按它算目标数，管理端可改） */
+  density_peak: number | null;
+  /** 低谷系数（null = 1.0） */
+  density_off: number | null;
+  /** 高峰时段（`"19:00-23:00"`，null / 空串 = 无峰谷；跨零点写成 `"22:00-02:00"`） */
+  peak_hours: string | null;
   /** 区域中心 x（世界坐标口径，与快照 x/y 同一坐标系） */
   cx: number;
   /** 区域中心 y（世界坐标口径） */

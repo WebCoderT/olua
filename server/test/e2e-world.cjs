@@ -85,6 +85,9 @@ const waitFor = async (label, predicate, timeoutMs = 15_000) => {
  * **必须在服务端就绪之后调用**：#655 起空库首启会用 `config-sync.sql` 把 32 张配置表整表灌一遍，
  * 启动前写进来的行会被整表替换掉（那正是「出厂值只在库里」的代价）。灌完之后再把地图 1 换成本套的
  * 小矩形，播种才是可控的两只。第三行故意用不存在的怪物 key：验证播种对不认识的 key 跳过不炸。
+ *
+ * 坐标写成**负 y**（`y ∈ [-H, 0]` 才是图内）：#850 起越界区域的落点会被钳到图内，
+ * 用正 y（图上方）铺数据的话，这里断言的就是「钳制后的边界」而不是「区域内的随机落点」。
  */
 function seedSpawnAreas(dbPath) {
   const { DatabaseSync } = require("node:sqlite");
@@ -108,8 +111,8 @@ function seedSpawnAreas(dbPath) {
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   );
   const now = Date.now();
-  insert.run("1", "1号怪物", "1", 0, 1, 100, 200, 400, 400, now);
-  insert.run("1", "2号怪物", "3", 0, 1, 300, 400, 400, 400, now);
+  insert.run("1", "1号怪物", "1", 0, 1, 200, -200, 400, 400, now);
+  insert.run("1", "2号怪物", "3", 0, 1, 400, -400, 400, 400, now);
   insert.run("1", "幽灵区", "999999", 0, 2, 0, 0, 100, 100, now);
   db.close();
 }
@@ -318,7 +321,7 @@ function connect(url) {
     check(/^m1_z1_\d+$/.test(wA1.instanceId) && /^m1_z1_\d+$/.test(wA2.instanceId) && wA1.instanceId !== wA2.instanceId, "实例 id 由服务端发牌且互不相同（一区区段 z1）", `${wA1.instanceId} / ${wA2.instanceId}`);
     check(wA1.hp === 65 && wA1.maxHp === 65 && wA1.alive === true, "实例按服务端表的满血起算（怪物 1 maxHp 65）", `hp=${wA1.hp}`);
     const inRect = (m, cx, cy, size) => Math.abs(m.x - cx) <= size / 2 && Math.abs(m.y - cy) <= size / 2;
-    check(inRect(wA1, 100, 200, 400) && inRect(wA2, 300, 400, 400), "实例落点各自在刷怪区矩形内（服务端随机取点）", `${wA1.x},${wA1.y} / ${wA2.x},${wA2.y}`);
+    check(inRect(wA1, 200, -200, 400) && inRect(wA2, 400, -400, 400), "实例落点各自在刷怪区矩形内（服务端随机取点）", `${wA1.x},${wA1.y} / ${wA2.x},${wA2.y}`);
     check(server.logs().includes("在 monsters 表里不存在"), "不认识的怪物 key 被跳过并留下告警日志（幽灵区）");
 
     const worldA2 = await sessionA.joinWorld("1");
