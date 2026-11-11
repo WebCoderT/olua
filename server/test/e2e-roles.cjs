@@ -329,7 +329,9 @@ async function raiseLevel(roleId, level, token) {
   const runtime = await api("PATCH", `admin/roles/${roleA2Id}`, {
     token: adminToken,
     body: {
-      equipments: { WEAPON: "1001", HELMET: "" },
+      // #836 起管理端 PATCH 也校验装备存在性与部位（之前 1001/3001 这种编的 id 都收）——
+      // 结构性断言（包对象 / 空串规整 null / 背包扩容）改用真实装备 id 保持
+      equipments: { weapon: "weapon_1", helmet: "" },
       skills: { "1001": 3, "1002": 0 },
       bag: [
         { row: 0, col: 1, id: "2001", count: 5 },
@@ -340,7 +342,7 @@ async function raiseLevel(roleId, level, token) {
   check(runtime.code === 0, "改装备 / 技能 / 背包成功", runtime.message);
   // #816：槽位存 `{ id, bound?, from? }`（管理端入参仍是「槽位 → id」，由服务端翻成对象）
   check(
-    runtime.data.data.equipments.WEAPON.id === "1001" && runtime.data.data.equipments.HELMET === null,
+    runtime.data.data.equipments.weapon.id === "weapon_1" && runtime.data.data.equipments.helmet === null,
     "装备表：写入的 id 包成对象、空串规整成 null（卸下）",
     JSON.stringify(runtime.data.data.equipments),
   );
@@ -600,7 +602,11 @@ async function raiseLevel(roleId, level, token) {
     "管理端改等级后，服务端重算的战斗力立刻变（不等客户端同步）",
     `${steadyCombat} → ${bumped.data.derived.attributes.combat}`,
   );
-  check(bumped.data.derived.mismatch === true, "等级一变，客户端那份旧上报值立刻成了不一致（正是 mismatch 要表达的）");
+  check(
+    bumped.data.derived.mismatch === false && bumped.data.derived.reported.combat === bumped.data.derived.attributes.combat,
+    "管理端改等级后存档属性当场重算（#836：落库值就是服务端算的，不再留一份旧的等玩家同步）",
+    JSON.stringify(bumped.data.derived.reported),
+  );
   const reread = await api("GET", `admin/roles/${roleD3Id}`, { token: adminToken });
   check(
     reread.data.derived.attributes.combat === bumped.data.derived.attributes.combat,
@@ -608,20 +614,16 @@ async function raiseLevel(roleId, level, token) {
     `${bumped.data.derived.attributes.combat} vs ${reread.data.derived.attributes.combat}`,
   );
 
-  // 查不到的装备 id：属性会悄悄少一截，所以要作为可读的证据交出来
+  // 查不到的装备 id：#836 起管理端 PATCH 直接拒绝（不再静默落库）——
+  // 「未知装备作为证据交出来」的覆盖挪到 e2e-equip-sanitize（直写库造历史脏档）
   const unknownEquip = await api("PATCH", `admin/roles/${roleD1Id}`, {
     token: adminToken,
-    body: { equipments: { WEAPON: "no_such_equipment", HELMET: null } },
+    body: { equipments: { weapon: "no_such_equipment", helmet: null } },
   });
   check(
-    unknownEquip.data.derived.unknownEquipmentIds.indexOf("no_such_equipment") !== -1,
-    "查不到属性的装备 id 被交出来（而不是静默当作没穿）",
-    JSON.stringify(unknownEquip.data.derived.unknownEquipmentIds),
-  );
-  check(
-    warnLines.some((line) => line.indexOf(String(roleD1Id)) !== -1 && line.indexOf("查不到属性") !== -1),
-    "未知装备同样落到服务端日志",
-    JSON.stringify(warnLines.slice(-3)),
+    unknownEquip.code === 20003,
+    "PATCH 不存在的装备 id → 20003（#836：写入侧收口）",
+    `${unknownEquip.code} ${unknownEquip.message}`,
   );
 
   // #786：等级改成参数化曲线后**没有硬边界**了 —— 远超旧上限 60 的等级照样算得出来（末段外推）

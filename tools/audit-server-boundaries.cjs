@@ -53,6 +53,13 @@ const ALLOWED_EDGES = [
   { from: "modules/admin", to: "modules/auth/dto/", why: "账号 DTO 形状复用" },
   { from: "modules/admin", to: "modules/roles/role-data.util.ts", why: "角色结构校验与文案复用" },
   { from: "modules/admin", to: "modules/roles/dto/", why: "角色 DTO 形状复用" },
+  // 管理端改背包 / 装备与玩家共用同一套算子（#836）：元数据认领与叠加上限校验只能有一份，
+  // 管理端自己抄一份必然漂移（它漏了 bound 认领，运营一改背包全员绑定件变可交易）
+  { from: "modules/admin", to: "modules/roles/role-inventory.ts", why: "背包守恒与元数据认领算子复用（#836）" },
+  { from: "modules/admin", to: "modules/roles/role-authority.ts", why: "血蓝上限夹取与存档域同一把尺（#836）" },
+  // 管理端 PATCH 角色后属性与战斗力当场重算（#836）：与玩家侧 applyAuthoritativeAttributes
+  // 同一对纯函数（summarize + apply），两处各抄一份必然漂移
+  { from: "modules/admin", to: "modules/combat/role-attributes.ts", why: "属性汇总与写回纯函数（#836）" },
   // 审计是横切能力：登录（auth）与管理端（admin）都要写操作日志（经 AuditModule 导出的服务）
   { from: "modules/auth", to: "modules/audit/audit.service.ts", why: "登录写审计" },
   { from: "modules/admin", to: "modules/audit/audit.service.ts", why: "管理端写审计" },

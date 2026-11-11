@@ -2,7 +2,7 @@ import { ApiProperty } from "@nestjs/swagger";
 import { Type } from "class-transformer";
 import { ArrayMaxSize, IsArray, IsIn, IsInt, IsOptional, IsString, Max, MaxLength, Min, ValidateNested } from "class-validator";
 import { RoleRow } from "../../../database/rows";
-import { ROLE_BAG_AXIS_MAX, ROLE_FIELD_VALUE_MAX_LENGTH } from "../role-data.util";
+import { ROLE_BAG_AXIS_MAX, ROLE_BAG_COUNT_MAX, ROLE_FIELD_VALUE_MAX_LENGTH } from "../role-data.util";
 import { RoleDto } from "./role.dto";
 
 /**
@@ -35,10 +35,16 @@ export class BagOpCellDto {
   @MaxLength(ROLE_FIELD_VALUE_MAX_LENGTH)
   id!: string;
 
-  @ApiProperty({ description: "件数", minimum: 1, example: 3 })
+  @ApiProperty({
+    description: "件数（结构粗上限；真实单格上限按物品所属表 max_stack 在服务端判，#841/#842）",
+    minimum: 1,
+    maximum: ROLE_BAG_COUNT_MAX,
+    example: 3,
+  })
   @Type(() => Number)
   @IsInt()
   @Min(1)
+  @Max(ROLE_BAG_COUNT_MAX)
   count!: number;
 }
 

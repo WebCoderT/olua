@@ -1,5 +1,6 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { isEmail } from "class-validator";
+import { EQUIPMENT_SLOT_KEYS } from "../../common/constants/game-enums";
 import { BizCode } from "../../common/constants/biz-code";
 import { AdminRole, isAdminRole, Permission, roleHasPermission } from "../../common/constants/permission";
 import { ENTITY_STATUS } from "../../common/constants/status";
@@ -25,6 +26,10 @@ import {
   parseStoredRoleData,
   ROLE_PATCH_NUMBER_FIELDS,
 } from "../roles/role-data.util";
+import { findOverstackedCell, readBagGrid, reconcileBagCells } from "../roles/role-inventory";
+import { clampVitals } from "../roles/role-authority";
+import { applyAttributeSummary, roleAttributeSourceOf, summarizeRoleAttributes } from "../combat/role-attributes";
+import { equipmentSlotOf, resolveMaxStack } from "../../common/runtime-config-cache";
 import { BatchDeleteResultDto, BatchDeleteRolesDto } from "./dto/batch-role.dto";
 import { BatchStatusResultDto, BatchUpdateAccountStatusDto } from "./dto/batch-account.dto";
 import { AdminDto, AdminUpdateDto } from "./dto/admin.dto";
@@ -357,10 +362,63 @@ export class AdminService {
     // 运行时数据（结构化；逐项校验在 role-data.util，服务端不认识客户端的配置清单）
     // 槽位在存档里是 `{ id, bound, from }` 对象（#816），管理端入参仍是「槽位 → id」简表：
     // 同一个 id 的条目连元数据一起沿用，换了 id 才新建（规则见 mergeWornEquipments）
-    if (dto.equipments !== undefined) next.equipments = mergeWornEquipments(normalizeEquipments(dto.equipments), data.equipments);
+    if (dto.equipments !== undefined) {
+      // 槽位键先归一（历史习惯是大写「WEAPON」，属性汇总那边一直大小写不敏感；
+      // #836 收口之后入参也要认得这套写法 —— 归一成真实部位名再往下走）
+      const canonicalInput: Record<string, string | null> = {};
+      for (const [key, id] of Object.entries(normalizeEquipments(dto.equipments))) {
+        const known = EQUIPMENT_SLOT_KEYS.find((name) => name.toLowerCase() === key.toLowerCase());
+        if (!known) {
+          throw new BizException(BizCode.ROLE_DATA_INVALID, `没有这个装备槽位：${key}`);
+        }
+        canonicalInput[known] = id;
+      }
+      const merged = mergeWornEquipments(canonicalInput, data.equipments);
+      // #836：部位与存在性在这里拦（之前不校验直接落库，脏装备要等下次存档清洗，
+      // 而清洗会把它丢掉 = 物品凭空消失）。与玩家穿戴同一份裁决（equipmentSlotOf）
+      for (const [slot, item] of Object.entries(merged)) {
+        if (!item) continue;
+        const actual = equipmentSlotOf(item.id);
+        if (!actual) {
+          throw new BizException(BizCode.ROLE_DATA_INVALID, `槽位「${slot}」的装备不存在或不是装备：${item.id}`);
+        }
+        if (actual !== slot) {
+          throw new BizException(BizCode.ROLE_DATA_INVALID, `装备 ${item.id} 属于「${actual}」槽位，不能放在「${slot}」`);
+        }
+      }
+      next.equipments = merged;
+    }
     if (dto.skills !== undefined) next.skills = normalizeSkills(dto.skills);
-    if (dto.bag !== undefined) next.bag = applyBagCells(data.bag, normalizeBagCells(dto.bag));
+    // #836：管理端改背包不再整体按未绑定重写 —— 与玩家 move/tidy 同一套元数据认领
+    // （reconcileBagCells：同 id 同总量时把 bound/from 认领回新格子，运营新增的堆照旧未绑定；
+    // 运营真想洗白一件东西，把件数改掉一个即可，件数对不上就不会认领）。
+    // 单格叠加上限在这里一并拦下（装备格 count>1 也算超限，#837 口径）
+    if (dto.bag !== undefined) {
+      const previous = readBagGrid(data.bag);
+      const reconciled = reconcileBagCells(previous, applyBagCells(data.bag, normalizeBagCells(dto.bag)));
+      const over = findOverstackedCell(reconciled, resolveMaxStack);
+      if (over) {
+        throw new BizException(
+          BizCode.ROLE_DATA_INVALID,
+          `「${over.id}」单格最多 ${over.max} 件，这一格放了 ${over.count} 件`,
+        );
+      }
+      next.bag = reconciled;
+    }
 
+    // #836：装备 / 等级 / 背包等重算输入被改后，属性与战斗力必须当场重算 ——
+    // 之前沿用上次算的值落库，面板现算与存档值分裂，下次玩家存档走权威重算时
+    // 「凭空跳变」。与玩家侧 applyAuthoritativeAttributes 同一对算子（纯函数共用）。
+    // 等级不在成长曲线里时跳过并留 warn（与玩家侧同一口径：保留原值好过抹成 0）。
+    const level = patch.level ?? row.level;
+    const summary = summarizeRoleAttributes(roleAttributeSourceOf(level, next));
+    if (summary) {
+      applyAttributeSummary(next, summary);
+      // 血蓝跟着上限夹取（运营把 maxHp 改小后，hp 不能还停在旧上限之上）
+      clampVitals(next);
+    } else {
+      this.logger.warn(`[admin] 角色 ${id} 的等级 ${level} 不在成长曲线内，战斗属性未重算`);
+    }
     patch.data = JSON.stringify(next);
     this.roles.updateById(id, patch);
     return this.roleDetail(id);

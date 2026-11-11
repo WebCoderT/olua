@@ -195,7 +195,7 @@ export type BagOpCell = {
    */
   id: string;
   /**
-   * 件数
+   * 件数（结构粗上限；真实单格上限按物品所属表 max_stack 在服务端判，#841/#842）
    */
   count: number;
 };

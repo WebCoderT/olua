@@ -217,33 +217,46 @@ async function api(method, route, options = {}) {
     //#endregion
 
     //#region 管理端 PATCH 同一口径
-    group("管理端 PATCH：入参仍是「槽位 → id」简表");
-    const patchedBody = {};
-    patchedBody[slot] = eqId;
-    patchedBody[otherSlots[0]] = eqId;
-    const patched = await api("PATCH", `admin/roles/${roleId}`, { token: adminToken, body: { equipments: patchedBody } });
-    check(patched.code === 0, "管理端 PATCH 装备表成功（契约没变）", patched.message);
+    group("管理端 PATCH：简表契约不变，部位与存在性收口（#836）");
+    // #836 起管理端 PATCH 也走「槽位 ↔ id」裁决：之前「同一件塞两个槽位」「不存在的 id」
+    // 都静默落库（等下次清洗），现在创建侧直接拒绝 —— 脏档只能由直写库 / 史前老档造出。
+    const patched = await api("PATCH", `admin/roles/${roleId}`, { token: adminToken, body: { equipments: { [slot]: eqId } } });
+    check(patched.code === 0, "管理端 PATCH 合法简表成功（契约没变）", patched.message);
     check(
-      patched.data.derived.attributes.combat === singleCombat,
-      "PATCH 送两个槽位同一件 → 返回的派生属性也是一倍",
-      `期望 ${singleCombat}，实际 ${patched.data.derived.attributes.combat}`,
+      patched.data && patched.data.derived && patched.data.derived.attributes.combat === singleCombat,
+      "PATCH 合法穿戴 → 派生属性与直接种档完全一致（属性当场重算）",
+      patched.data && patched.data.derived ? String(patched.data.derived.attributes.combat) : "无 derived",
     );
 
-    const unknown = {};
-    unknown[otherSlots[0]] = "no_such_equipment";
-    const unknownPatched = await api("PATCH", `admin/roles/${roleId}`, { token: adminToken, body: { equipments: unknown } });
+    const misfitPatched = await api("PATCH", `admin/roles/${roleId}`, {
+      token: adminToken,
+      body: { equipments: { [otherSlots[0]]: eqId } },
+    });
+    check(misfitPatched.code === 20003, "PATCH 部位不符 → 20003（不再静默落库等清洗）", misfitPatched.message);
+
+    const unknownPatched = await api("PATCH", `admin/roles/${roleId}`, {
+      token: adminToken,
+      body: { equipments: { [otherSlots[0]]: "no_such_equipment" } },
+    });
+    check(unknownPatched.code === 20003, "PATCH 不存在的装备 id → 20003", unknownPatched.message);
+
+    // 「查不到属性的 id 作为证据交出来」改由直写库验证：写入侧已拦，历史脏档仍要可观测
+    writeEquipments(roleId, { [otherSlots[0]]: { id: "no_such_equipment" } });
+    const evidence = await derivedOf(roleId, adminToken);
     check(
-      unknownPatched.data.derived.unknownEquipmentIds.indexOf("no_such_equipment") !== -1,
+      evidence.unknownEquipmentIds.indexOf("no_such_equipment") !== -1,
       "查不到属性的 id 仍然作为证据交出来（没被去重逻辑吞掉）",
-      JSON.stringify(unknownPatched.data.derived.unknownEquipmentIds),
+      JSON.stringify(evidence.unknownEquipmentIds),
     );
     //#endregion
 
     //#region 读档写档仍然修档
     group("回归：写入侧清洗仍在（汇总侧只是自防，不是替代）");
-    const repaired = await api("PATCH", `admin/roles/${roleId}`, { token: adminToken, body: { equipments: patchedBody } });
-    check(repaired.code === 0, "再次 PATCH 成功", repaired.message);
-    writeEquipments(roleId, patchedBody);
+    // 同一件穿多槽现在造不出来只能直写库：种进去，玩家存档路径要把它清成一处
+    const duplicated = {};
+    duplicated[slot] = { id: eqId };
+    duplicated[otherSlots[0]] = { id: eqId };
+    writeEquipments(roleId, duplicated);
     // 玩家侧存档会走 sanitizeEquipments：把同一件的重复槽位清掉
     const currentData = JSON.parse(db.get("SELECT data FROM roles WHERE id = ?", [roleId]).data);
     const saved = await saveRole(api, token, roleId, currentData);

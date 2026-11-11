@@ -818,6 +818,30 @@ export function sellPriceOf(id: string): number | null {
   return null;
 }
 
+/**
+ * 单格叠加上限的**唯一出口**（#841 / B19）
+ *
+ * 之前有两处各查各的表：拾取入包只认 `drugs`/`items`（`money_items` 的 999 / `level_scrolls`
+ * 全部被当成 99），购买入包更糟 —— 只查 `drugs`、查不到一律按 1。两处默认值还不一样（99 vs 1）。
+ * 现在所有入包路径都走这里，按「这件东西属于哪张表」读它自己的 `max_stack`：
+ *
+ * - **装备恒 1**（#837，用户口径「装备在任何情况下都不允许重叠」）：装备不可堆叠不是默认值，
+ *   是不变式 —— 任何写路径都不允许产生 `count > 1` 的装备格；
+ * - 药品 / 材料读 `drugs` / `items`，货币道具读 `money_items`，升级卷轴读 `level_scrolls`；
+ * - 认不出的 id 返回 `BAG_UNKNOWN_MAX_STACK`（99）：认不出多半是客户端配置比服务端快照新，
+ *   按 99 放行不锁玩家的东西 —— 真要收紧等它进了表自然会变。
+ */
+export const BAG_UNKNOWN_MAX_STACK = 99;
+
+export function resolveMaxStack(id: string): number {
+  // 装备（含基础件与变体）：一格一件，永不叠加
+  if (equipmentVariantRows?.has(id) || equipmentBases?.has(id)) return 1;
+  const row = (drugOf(id) ?? moneyItemOf(id) ?? levelScrollOf(id) ?? itemBaseOf(id)) as Record<string, unknown> | null;
+  if (!row) return BAG_UNKNOWN_MAX_STACK;
+  const value = Math.floor(Number(row.maxStack) || 0);
+  return value >= 1 ? value : 1;
+}
+
 //#endregion
 
 //#region 内部实现

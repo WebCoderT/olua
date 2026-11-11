@@ -15,6 +15,9 @@
  * 七、权威边界：把 bag / equipments / skills 塞进存档（PUT）→ 全部按库里的值回填
  * 八、网格尺寸：bag 的尺寸归客户端配置（改大能长个，内容不丢）
  * 九、乐观锁与归属：错 revision → 20006；别人的角色 → 40300
+ * 十、装备堆叠（#837）：「装备任何情况下不允许重叠」—— 纯函数级拆散 + 管理端创建侧堵死
+ * 十一、单格上限（#841/#842）：maxStack 按物品所属表读（money 999 / drug 99），搬运不许超
+ * 十二、管理端 PATCH（#836）：部位与存在性校验、属性当场重算、背包元数据认领与超叠拦截
  *
  * 走的是 `dist/`，所以前置是 `npm run build`。
  * 用法：npm run test:e2e:bag
@@ -406,6 +409,164 @@ const CLOTH_10_MAX_HP = equipBases["cloth_10"].maxHp;
     // 403 掉、把请求退化成「缺 revision 的 400」，那样越权判据就被掩盖了（#820）
     const foreign = await api(baseUrl, "POST", `roles/${roleId}/bag-op`, { token: otherToken, body: { action: "discard", row: 0, col: 0, revision: await revOf(baseUrl, roleId, token) } });
     checkEqual(foreign.code, 40300, "别人的角色 → 40300（越权一律拒绝）");
+
+    //#endregion
+
+    //#region 十、装备堆叠（#837：装备任何情况下都不允许重叠）
+
+    group("十、装备堆叠（#837）");
+    // 创建侧全部堵死之后，接口层造不出 count>1 的装备格 —— 「拆散」修复的是史前老档 /
+    // 改包直改库的历史脏数据，只有纯函数层能构造这个输入（e2e-map 先例：直接调 dist 纯函数）
+    const inv = require(path.join(SERVER_DIR, "dist", "modules", "roles", "role-inventory.js"));
+    const emptyGrid = () => Array.from({ length: 2 }, () => Array.from({ length: 5 }, () => null));
+
+    // ① 一格 3 件 → 穿走一件，其余两件各占一格（元数据原样跟着走）
+    const stackedGrid = emptyGrid();
+    stackedGrid[0][0] = { id: "cloth_1", count: 3, bound: true, from: { monster: "m1", at: 1 } };
+    const stackedWorn = {};
+    const replacedId = inv.equipAt(stackedGrid, stackedWorn, 0, 0, "cloth");
+    checkEqual(replacedId, null, "纯函数：槽位原本是空的（没有换下来的）");
+    check(
+      stackedWorn.cloth && stackedWorn.cloth.id === "cloth_1" && stackedWorn.cloth.bound === true && !!stackedWorn.cloth.from,
+      "纯函数：穿走的那件连 bound / from 一起进槽位",
+      JSON.stringify(stackedWorn.cloth),
+    );
+    const stackedCells = stackedGrid.flat().filter((cell) => cell && cell.id === "cloth_1");
+    check(
+      stackedCells.length === 2 && stackedCells.every((cell) => cell.count === 1),
+      "纯函数：剩余两件被拆散，各占一格（背包里不存在 count>1 的装备格）",
+      JSON.stringify(stackedCells),
+    );
+    check(
+      stackedCells.every((cell) => cell.bound === true && !!cell.from),
+      "纯函数：拆出来的每一件都带着 bound / from（元数据不因拆散丢失）",
+      JSON.stringify(stackedCells),
+    );
+
+    // ② count=1 的正常穿戴不变（换下来的旧装备回到刚腾出的那一格）
+    const normalGrid = emptyGrid();
+    normalGrid[0][0] = { id: "cloth_1", count: 1 };
+    const wornOld = { cloth: { id: "cloth_10" } };
+    const normalReplaced = inv.equipAt(normalGrid, wornOld, 0, 0, "cloth");
+    checkEqual(normalReplaced, "cloth_10", "纯函数：换下来的是 10 级衣服");
+    checkEqual((normalGrid[0][0] || {}).id, "cloth_10", "纯函数：旧装备回到刚腾出的那一格（原有语义不变）");
+
+    // ③ 空格不够拆 → 整步失败（20012），绝不把「装备叠在一格」写回存档
+    const crowdedGrid = emptyGrid();
+    for (let i = 0; i < 9; i++) crowdedGrid[Math.floor(i / 5)][i % 5] = { id: "cloth_1", count: 1 };
+    crowdedGrid[1][4] = { id: "cloth_1", count: 3 };
+    let crowdedError = null;
+    try {
+      inv.equipAt(crowdedGrid, {}, 1, 4, "cloth");
+    } catch (error) {
+      crowdedError = error;
+    }
+    check(
+      !!crowdedError && /背包已满/.test(String(crowdedError.message || "")),
+      "纯函数：空格不够拆散 → 20012 背包已满（操作整体失败）",
+      String(crowdedError && crowdedError.message),
+    );
+
+    // ④ 接口层：创建侧堵死 —— 管理端 PATCH 塞 count>1 的装备直接 20003（#836 的超叠拦截）
+    const stackedRole = await api(baseUrl, "POST", "roles", { token, body: { name: "背包客二", occupation: "1", sex: "1" } });
+    const stackedRoleId = stackedRole.data && stackedRole.data.id;
+    check(stackedRole.code === 0, "准备：第二个角色已创建", stackedRole.message);
+    // 建号只把**第一个**角色置为在线；后面这段要对角色二做背包操作，先把它选成在线角色
+    //（bagOp 有「在线角色才能改背包」的闸，不选就是 20007）
+    const selected2 = await api(baseUrl, "POST", `roles/${stackedRoleId}/select`, { token });
+    checkEqual(selected2.code, 0, "准备：角色二已选为在线角色");
+    const cheatSeed = await api(baseUrl, "PATCH", `admin/roles/${stackedRoleId}`, {
+      token: adminToken,
+      body: { bag: [{ row: 0, col: 0, id: "cloth_1", count: 3 }] },
+    });
+    checkEqual(cheatSeed.code, 20003, "管理端塞 count=3 的装备 → 20003（创建侧不允许造出重叠）");
+    const afterCheatSeed = await api(baseUrl, "GET", `roles/${stackedRoleId}`, { token });
+    checkEqual(countInBag(afterCheatSeed.data.data.bag, "cloth_1"), 0, "被拒的堆叠装备没有落库");
+
+    //#endregion
+
+    //#region 十一、单格上限（#841 按表读 / #842 搬运不许超）
+
+    group("十一、单格上限（#841 / #842）");
+    // 货币道具的表值是 999：两格 500+499 能注入（若 maxStack 还按 99 分堆，500 一格早就被拒）
+    const moneySeed = await api(baseUrl, "PATCH", `admin/roles/${stackedRoleId}`, {
+      token: adminToken,
+      body: { bag: [{ row: 0, col: 0, id: "money_bind_gold_10", count: 500 }, { row: 0, col: 1, id: "money_bind_gold_10", count: 499 }] },
+    });
+    checkEqual(moneySeed.code, 0, "货币道具 500+499 注入成功（#841：money_items 的 999 生效）", moneySeed.message);
+    const moneyMerged = await api(baseUrl, "POST", `roles/${stackedRoleId}/bag-op`, {
+      token,
+      body: {
+        action: "tidy",
+        cells: [{ row: 0, col: 0, id: "money_bind_gold_10", count: 999 }],
+        revision: await revOf(baseUrl, stackedRoleId, token),
+      },
+    });
+    checkEqual(moneyMerged.code, 0, "合并成一格 999（正好贴着表值上限）通过", moneyMerged.message);
+    checkEqual(
+      (cellAt(moneyMerged.data.data.bag, 0, 0) || {}).count,
+      999,
+      "这一格真的装了 999（老实现按 99 早该拒了）",
+    );
+
+    // 药品的表值是 99：两格 99+99 守恒没问题，但报成一格 198 超上限 → 20022
+    const drugSeed = await api(baseUrl, "PATCH", `admin/roles/${stackedRoleId}`, {
+      token: adminToken,
+      body: { bag: [{ row: 0, col: 0, id: "drug_hp_1", count: 99 }, { row: 0, col: 1, id: "drug_hp_1", count: 99 }] },
+    });
+    checkEqual(drugSeed.code, 0, "药品 99+99 注入成功", drugSeed.message);
+    const drugMerged = await api(baseUrl, "POST", `roles/${stackedRoleId}/bag-op`, {
+      token,
+      body: {
+        action: "tidy",
+        cells: [{ row: 0, col: 0, id: "drug_hp_1", count: 198 }],
+        revision: await revOf(baseUrl, stackedRoleId, token),
+      },
+    });
+    checkEqual(drugMerged.code, 20022, "药品 198 压一格 → 20022（搬运不许造出超上限的格子）");
+    const drugAfter = await api(baseUrl, "GET", `roles/${stackedRoleId}`, { token });
+    checkEqual(countInBag(drugAfter.data.data.bag, "drug_hp_1"), 198, "总量一件不少（守恒没有被超限检查破坏）");
+
+    // 管理端同样拦：塞 100 瓶一格 → 20003（#836 与玩家同一把尺）
+    const adminOver = await api(baseUrl, "PATCH", `admin/roles/${stackedRoleId}`, {
+      token: adminToken,
+      body: { bag: [{ row: 0, col: 0, id: "drug_hp_1", count: 100 }] },
+    });
+    checkEqual(adminOver.code, 20003, "管理端塞 100 瓶一格 → 20003（运营也造不出超上限的格子）");
+
+    //#endregion
+
+    //#region 十二、管理端 PATCH（#836：校验 + 属性重算）
+
+    group("十二、管理端 PATCH（#836）");
+    // ① 部位不符：weapon_1 存在，但它是武器不能塞进 cloth 槽
+    const wrongSlot = await api(baseUrl, "PATCH", `admin/roles/${stackedRoleId}`, {
+      token: adminToken,
+      body: { equipments: { cloth: "weapon_1" } },
+    });
+    checkEqual(wrongSlot.code, 20003, "PATCH 装备部位不符 → 20003（不再静默落库等清洗）");
+    // ② 物品不存在 / 不是装备
+    const unknownEquip = await api(baseUrl, "PATCH", `admin/roles/${stackedRoleId}`, {
+      token: adminToken,
+      body: { equipments: { cloth: "cloth_99" } },
+    });
+    checkEqual(unknownEquip.code, 20003, "PATCH 不存在的装备 id → 20003");
+    // ③ 合法 PATCH：属性当场重算（运营改装备后面板现算与落库值不再分裂）
+    const legitPatch = await api(baseUrl, "PATCH", `admin/roles/${stackedRoleId}`, {
+      token: adminToken,
+      body: { equipments: { cloth: "cloth_1" } },
+    });
+    checkEqual(legitPatch.code, 0, "PATCH 合法装备成功", legitPatch.message);
+    checkEqual(
+      legitPatch.data.data.maxHp,
+      BARE_MAX_HP + CLOTH_1_MAX_HP,
+      "PATCH 之后属性当场重算（maxHp = 裸模 + 这件衣服，不是沿用旧值）",
+    );
+    checkEqual(
+      (legitPatch.data.data.equipments.cloth || {}).id,
+      "cloth_1",
+      "落库的槽位值是对象 { id }（#816 形状）",
+    );
 
     //#endregion
 
