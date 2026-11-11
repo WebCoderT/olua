@@ -25,6 +25,10 @@
   放 `migrate()` 末尾；**别删列重建** —— 存量数据（如已发的奖励金额）会丢。改名后 DDL / `rows.ts` / 仓储 SQL / DTO /
   测试字面量五处一起改（#926 货币命名）。
 - controller `description` 别贴 `/admin/xxx`；同毫秒多行排序兜底键用 `rowid`，不用随机 uuid。
+- **新功能的出厂「行」不是加列**：快照只在**空库首启**整份灌一次，所以新增的配置行在存量库里根本不存在
+  （症状：功能静默不生效、无报错）。走一次性补数据 —— `seedXxxOnce()` + `config_meta` marker，取值放
+  `common/constants/*-seed.ts`：**`INSERT OR IGNORE` 补行 + 只在出厂空值 / 0 时才写值**（#826 的
+  `seedCombatStatusesOnce`：三条状态行 + 1001/1004/1007/9001 的 `status_id`、1003 系数、1004 拉人距离）。
 
 ## 测试与门禁
 - **反证前确认 build 真过了**：`npm run build 2>&1 | tail -N && 跑测试` 的退出码来自 `tail`，编译失败照样往下跑 → 反证
@@ -36,6 +40,9 @@
 - **帧只发「有变化」的东西**：断「路过某点」要扫**帧历史**；命中帧全图广播，先按 `hit.accountId` 过滤。
 - **源码断言钉在方法体上**（`methodBody(src, "submit")`），别用全文件 `includes` —— 新加的同名调用会误伤
   （#865 的 `abandon()` 删行，让「领奖不删行」假红）。断言口径过期比红更危险：会让人对红免疫。
+- **血量类断言别用「窗口净变化」**：自然回血（`hpRecoverOfHp` 1%/秒，每次受击结算时补）会把 DoT 曲线变成
+  **锯齿**（100→98→96→99→97），净掉血量随相位漂（CI 实测掉 1、本机掉 5）→ 改成**数「比上一次低」的次数**
+  （#826 的 `e2e-status`）。同理：怪身上有 DoT 时别断「冻结期间血量不变」（补拍会扣），先等 DoT 过期。
 - 工具链：只信 Grep 工具（BSD grep 交替恒空、遇含 NUL 文件空手）；批量替换 `perl -pi -e`；`curl --noproxy '*'`；
   `ps`/`pgrep` 被禁，判进程用 `kill -0`；并发异常先 `reflog` + `stash list`。
 
@@ -51,6 +58,12 @@
 - **战斗（#822~#825）**：① 状态唯一在 `combat/status-combat.ts` + `role_status`，`category="2"` 在目标校验**之前**分流；
   ② 物法分离看系数 `baseType`，不另开 `damage_type` 列；③ 目标形态看 `target_type` + `require_target`，区域/群体命中
   集合由**服务端**算（夹到 `skills.distance`、最近 8 只）；④ `collectEquipmentBundles` 是装备属性公共入口（只算不改档）。
+- **状态层两侧（#826 第三批，见 `olua-server`）**：① 角色状态落 `role_status`（跨进程，`ticked_at` 只初始化一次）、
+  怪物状态在 `MonsterRuntime.statuses`（Map，冻结/重生即重建），两端各一个 `activeStatuses()` 管「刷层/到期/周期/控制」；
+  ② 控制判据两处**各自独立**：出手 `cast-guard` 第「一·五」道 → `rejected: "stunned"`；移动 `presence.movementLocked()`
+  → 只更新 hp + `moving=false`，**仲裁基线不动**；③ 眩晕与麻痹是同一条 `{stun:1}`，只是时长/图标/来源不同；
+  ④ 怪物侧周期伤害**夹到至少留 1 血**（tick 没有 `castId`，打死就是死账）；⑤ 拉人与击退**互斥（推优先）**，
+  回执给 `applyPull` 返回的**实际**位移；⑥ 两段连击 = 第一段 × `second_hit_ratio`，不单独掷区间/判暴击。
 - **怪物 AI（#853~#858，见 `olua-server` 四之十三补）**：位置与血量**唯一副本在 `PlayerPresenceService`**
   （`markHp` 不刷 `updatedAt`）；`state = idle/chase/return`，**牵引半径判定放在出手之前**，`endChase` 是脱战唯一收口
   （清 target + 清 `provoked`）；移动 `slideMove` + `clampToMap`，击退 `pushPoint`（被挡原地）；**卡住门槛 0.01px 不是
@@ -111,6 +124,10 @@ compose **五个**服务：admin:80（唯一入口）/ game:8080 / server:3100 /
 - #932 任务域四缺口（`01b42dd0`，PR #933；#862~#865 已关）：NPC 距离闸 120px + `role_positions` 位置快照 ·
   放弃接口 `POST /quests/abandon` · 跨轮交付 20033 · 周常周一 05:00 切。新套件 `e2e-quest-authority` 44 条。
   **客户端「放弃任务」按钮暂时放置**（服务端先行；重开条件 = 任务面板改版或玩家反馈要主动放弃）。
+- #826 战斗六项收口（`0ae851d2`，PR #936，**已关**）：等级压制 sup · 两段连击 · 拉人 · 眩晕 / 麻痹 / 灼烧，
+  状态**两侧都做**、灼烧按最大生命百分比每秒一拍；新增 `e2e-status` 55 条，`make e2e-all` 62 套 /
+  `make client-test` 65 套全绿。落地口径见「状态层两侧」条；验收口径按用户拍板收窄（desc 不进脚本门禁，
+  改锁「机制 ↔ 配置列 / 状态」的接线断言），1008 十步一杀 desc 去掉「有概率麻痹」。
 - **刷怪密度（#930，落地口径）**：表单只有「数量」= `max`，`min` 恒 0（老库 `min = max` 一次性抹平，否则下限顶死
   系数）；目标 `clamp(round(max × 时段系数 × 人数系数), min, max × density_peak)`，人数取**本图观看者**；tick 每秒
   差量对齐、每 tick 至多补 2 只、超出裁「死等重生 → 最久没被攻击」的，`lastDamagedAt` 5 秒内不裁；统计用**实例数**
@@ -118,9 +135,10 @@ compose **五个**服务：admin:80（唯一入口）/ game:8080 / server:3100 /
   `world_monsters.area_id` 记归属（老档 `findAreaAt` 回填），删区按它清孤儿。代际作废只对「有人看且库里有行」的分域
   重载（0 行不重播，否则合区白做），合区后 5 分钟只补不裁。越界区不整区丢弃：先取「区域 ∩ 地图」，整块在图外才退回
   原区域取点再 `clampPointToMap`。
-- 当前 open：#9 包体积 · #12~#19 素材 · #295 阶段三 · #403 帮会战 · #742 站点 TLS · #826 余项
-  （眩晕/麻痹/灼烧/两段连击/拉人/等级压制 sup）· #816 / #817 后半 · #838 装备穿限制（放置）· 掉落表未按新装备重算 ·
-  本地库有未导出改动（`make config-check` 常红）。**定保持现状**：技能 1011 / 快捷键 6 格 / 装备 7 部位。
+- 当前 open：#9 包体积 · #12~#19 素材 · #295 阶段三 · #403 帮会战 · #742 站点 TLS · #816 / #817 后半 ·
+  #838 装备穿限制（放置）· 掉落表未按新装备重算 · 本地库有未导出改动（`make config-check` 常红，且该库**没有**
+  2003/2004/2005 三条状态行 —— 重启一次 `seedCombatStatusesOnce` 会补上；`make config-import` 会覆盖本地手工调过的值）。
+  **定保持现状**：技能 1011 / 快捷键 6 格 / 装备 7 部位。
 - **client 单测已全绿（#928 / `bd772183`，2026-11-11）**：65 通过 / 0 失败。此前两套存量红的根因 ——
   `test-mall` 6 条是断言还在比 boolean 而 `buyMallGood` 自 #921 起返回 `MallLimit | null`；`test-skill-decouple`
   7 条是深比较把 `description` 也锁死了（文案归运营，已剔出比较）+ 1009 期望是旧单体形态（已按库对齐）。
