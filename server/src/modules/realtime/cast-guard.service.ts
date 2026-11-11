@@ -46,8 +46,13 @@ import { RolesService } from "../roles/roles.service";
  * 「重启清场」同取向。断线清掉（不占内存），**换图不重置**（A2：否则换图刷桶）。
  */
 
-/** 六道闸的拒绝原因（A3：settle 帧的 `rejected` 取值，不新增帧类型） */
-export type CastRejectReason = "dead" | "cross_map" | "range" | "cooldown" | "mp" | "rate";
+/**
+ * 六道闸的拒绝原因（A3：settle 帧的 `rejected` 取值，不新增帧类型）
+ *
+ * `stunned`（#826 第三批）是「控制状态中不能出手」—— 与 docs/22 §2.1 第 6 条同名。
+ * 客户端对未知 `rejected` 只 warn 不崩，所以新增取值不需要改帧结构。
+ */
+export type CastRejectReason = "dead" | "cross_map" | "range" | "cooldown" | "mp" | "rate" | "stunned";
 
 /** 判定结果：放行，或带原因的拒绝 */
 export type CastGuardVerdict =
@@ -115,6 +120,19 @@ export class CastGuardService {
     const hp = Math.floor(Number(input.roleData.hp) || 0);
     if (hp <= 0) {
       return { ok: false, rejected: "dead", message: "角色已死亡，不能出手（先复活）" };
+    }
+
+    // —— 一·五、控制：眩晕 / 麻痹 / 沉默期间不能出手（#826 第三批）——
+    // 放在存活之后、跨图之前：它比后面几道都便宜（一次 role_status 读），而且「人还在、
+    // 但被打得动不了」是这个状态最直接的语义。**移动闸是另一处独立判定**（pos 帧那条路），
+    // 两处各判一次是有意的：一条帧只走一条路，谁也不会替对方判。
+    const control = this.roles.controlOf(input.accountId);
+    if (control.silenced) {
+      return {
+        ok: false,
+        rejected: "stunned",
+        message: control.stunned ? "你正处于眩晕 / 麻痹状态，无法出手" : "你被沉默，无法出手",
+      };
     }
 
     // —— 二、跨图：目标必须在自己**服务端记下的位置**那张图上 ——

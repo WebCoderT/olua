@@ -8,6 +8,11 @@ import { AnnouncementLevel } from "../common/constants/announcement";
 import { MONEY_ITEM_SEEDS } from "../common/constants/money-items";
 import { LEVEL_SCROLL_SEEDS } from "../common/constants/level-scrolls";
 import { ROLE_LEVEL_CURVE_SEEDS } from "../common/constants/role-level-curve";
+import {
+  COMBAT_SKILL_NUMBER_SEEDS,
+  COMBAT_SKILL_STATUS_SEEDS,
+  COMBAT_STATUS_SEEDS,
+} from "../common/constants/combat-status-seed";
 import { resetDayOf } from "../common/utils/daily-clock";
 import { bootstrapConfigSnapshot } from "./config-snapshot";
 
@@ -968,6 +973,13 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
         crit_rate           REAL    NOT NULL DEFAULT 0,
         crit_damage         REAL    NOT NULL DEFAULT 0,
         def_ignore          REAL    NOT NULL DEFAULT 0,
+        -- 两段连击（#826 第三批）：第二段的伤害 = 第一段 × 这个系数，0 = 没有第二段。
+        -- 系数而不是绝对伤害：第一段吃攻击区间随机与暴击，第二段必须跟着同一份随机走，
+        -- 否则「同一次出手两段伤害差得比换装备还多」。
+        second_hit_ratio    REAL    NOT NULL DEFAULT 0,
+        -- 拉人（#826 第三批）：把目标朝施法者拉回多少像素，0 = 不拉。与 push_distance
+        -- 方向相反（推是远离施法者），两者可以同时配（先拉后推这种技能不常见，但语义不冲突）
+        pull_distance       REAL    NOT NULL DEFAULT 0,
         updated_at          INTEGER NOT NULL DEFAULT 0
       );
 
@@ -984,6 +996,17 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
         effect           TEXT    NOT NULL DEFAULT '',
         effect_hold_last INTEGER NOT NULL DEFAULT 0,
         combat           TEXT    NOT NULL DEFAULT '{}',
+        -- 三类状态 + 周期效果 + 控制（#826 第三批，docs/22 §2.3）
+        -- kind：damage（周期伤害）/ control（控制）/ speed（加减速）/ buff（纯数值，默认）
+        kind             TEXT    NOT NULL DEFAULT 'buff',
+        -- 最大层数：1 = 不叠（旧行为）。同 id 再加一层 → +1 并刷新到期，不超过这个数
+        max_stacks       INTEGER NOT NULL DEFAULT 1,
+        -- 周期触发间隔（毫秒，0 = 无周期）与每拍做什么：{hp:-50} / {mp:+20} / {hpPercent:-0.02}
+        tick_ms          INTEGER NOT NULL DEFAULT 0,
+        tick_effect      TEXT    NOT NULL DEFAULT '{}',
+        -- 控制标记：{stun:1, root:1, silence:1}。stun = 禁移动 + 禁出手，root = 只禁移动，
+        -- silence = 只禁出手。眩晕与麻痹在服务端是同一条判据（都是 stun），只是来源 / 图标不同
+        control_flags    TEXT    NOT NULL DEFAULT '{}',
         updated_at       INTEGER NOT NULL DEFAULT 0
       );
 
@@ -1268,6 +1291,9 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
         stacks       INTEGER NOT NULL DEFAULT 1,
         expire_at    INTEGER NOT NULL,          -- 毫秒；服务端权威时间，不看客户端时钟
         source_skill TEXT    NOT NULL DEFAULT '',
+        -- 周期效果的记账（#826 第三批）：上一次结算到的时刻（毫秒）。用「上次结算点 + tick_ms」
+        -- 而不是「到期时间取模」—— 后者在重复获得刷新到期后，会把已经算过的拍子重算一遍
+        ticked_at    INTEGER NOT NULL DEFAULT 0,
         PRIMARY KEY (role_id, status_id)
       );
       -- 清扫与「这个角色现在还有什么」都按这两列走
@@ -1365,6 +1391,17 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
     this.ensureColumn("skills", "push_distance", "REAL NOT NULL DEFAULT 0");
     // 撞飞概率（#826 第二批）：0 = 从不撞飞，1 = 必撞；带 DEFAULT，存量行自动补 1（必推，与旧行为一致）
     this.ensureColumn("skills", "push_chance", "REAL NOT NULL DEFAULT 1");
+    // 两段连击 / 拉人（#826 第三批）：默认 0 = 都没有，存量行行为不变
+    this.ensureColumn("skills", "second_hit_ratio", "REAL NOT NULL DEFAULT 0");
+    this.ensureColumn("skills", "pull_distance", "REAL NOT NULL DEFAULT 0");
+    // 状态的三类 + 层数 + 周期 + 控制（#826 第三批）：默认值都是「旧行为」——
+    // kind=buff（不参与任何分流）、max_stacks=1（不叠）、tick_ms=0（无周期）、flags 空（无控制）
+    this.ensureColumn("statuses", "kind", "TEXT NOT NULL DEFAULT 'buff'");
+    this.ensureColumn("statuses", "max_stacks", "INTEGER NOT NULL DEFAULT 1");
+    this.ensureColumn("statuses", "tick_ms", "INTEGER NOT NULL DEFAULT 0");
+    this.ensureColumn("statuses", "tick_effect", "TEXT NOT NULL DEFAULT '{}'");
+    this.ensureColumn("statuses", "control_flags", "TEXT NOT NULL DEFAULT '{}'");
+    this.ensureColumn("role_status", "ticked_at", "INTEGER NOT NULL DEFAULT 0");
     // 世界坐标口径（#566）：存量库补列时落到旧口径 'center'，紧接着由 migrateMapCoordinateOrigin 抹平
     this.ensureColumn("world_meta", "coord_origin", "TEXT NOT NULL DEFAULT 'center'");
     this.migrateMapCoordinateOrigin();
@@ -1467,6 +1504,7 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
     this.seedMoneyItemsOnce();
     this.seedLevelScrollsOnce();
     this.seedLevelCurvesOnce();
+    this.seedCombatStatusesOnce();
   }
 
   /**
@@ -1625,6 +1663,79 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
       `count:${added}`,
     ]);
     this.logger.log(`存量库补等级曲线出厂数据：新增 ${added} 段`);
+  }
+
+  /**
+   * 存量库补「战斗状态」三条出厂行 + 技能侧的新列取值（#826 第三批）
+   *
+   * 为什么需要：`statuses` 表里 2003 灼烧 / 2004 眩晕 / 2005 麻痹 是这一批新加的**行**，
+   * 而 `config-sync.sql` 只在**空库首启**时整份灌入（`config_meta.bootstrap_at` 有值之后
+   * 再也不灌）。只改快照的话，存量库重启后的表现是：管理端状态页少三条，
+   * 而 1001 / 1004 / 1007 / 9001 的 `status_id` 指向不存在的状态 —— 技能照放、伤害照出，
+   * **就是不挂状态**，而且没有任何报错。同一批的 `skills.second_hit_ratio` /
+   * `pull_distance` 也吃这个亏（列由 `ensureColumn` 补上了，值还是默认 0）。
+   *
+   * 两条口径：
+   * - 状态行 `INSERT OR IGNORE`：运营自己建过同 id 的行就不动它；
+   * - 技能值**只在还是出厂空值时**才写（`status_id = ''` / 系数 = 0 / 距离 = 0），
+   *   运营调过的（比如把 1004 的拉人距离改成 200）一律不覆盖。
+   *
+   * **只跑一次**（`config_meta.combat_statuses_seeded`）：否则运营删掉「眩晕」这条状态，
+   * 下次重启又会冒出来。
+   */
+  private seedCombatStatusesOnce(): void {
+    const hasMeta =
+      this.count("SELECT COUNT(1) AS total FROM sqlite_master WHERE type = 'table' AND name = 'config_meta'") > 0;
+    if (!hasMeta) return;
+    if (this.get<{ value: string }>("SELECT value FROM config_meta WHERE key = ?", ["combat_statuses_seeded"])) return;
+    const now = Date.now();
+    let added = 0;
+    for (const status of COMBAT_STATUS_SEEDS) {
+      added += this.execute(
+        `INSERT OR IGNORE INTO statuses
+           (id, owner, label, icon, duration, source, description, effect, effect_hold_last, combat, updated_at,
+            kind, max_stacks, tick_ms, tick_effect, control_flags)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          status.id,
+          status.owner,
+          status.label,
+          status.icon,
+          status.duration,
+          status.source,
+          status.description,
+          status.effect,
+          status.effectHoldLast,
+          status.combat,
+          now,
+          status.kind,
+          status.maxStacks,
+          status.tickMs,
+          status.tickEffect,
+          status.controlFlags,
+        ],
+      ).changes;
+    }
+    // 技能侧的出厂接线（只在「运营还没配」时补）：两个 UPDATE 各自带默认值判据
+    let wired = 0;
+    for (const entry of COMBAT_SKILL_STATUS_SEEDS) {
+      wired += this.execute("UPDATE skills SET status_id = ? WHERE id = ? AND status_id = ''", [
+        entry.statusId,
+        entry.id,
+      ]).changes;
+    }
+    for (const entry of COMBAT_SKILL_NUMBER_SEEDS) {
+      // 列名来自本文件的字面量清单（不是外部输入），值走参数绑定
+      wired += this.execute(`UPDATE skills SET ${entry.column} = ? WHERE id = ? AND ${entry.column} = 0`, [
+        entry.value,
+        entry.id,
+      ]).changes;
+    }
+    this.run("INSERT OR REPLACE INTO config_meta (key, value) VALUES (?, ?)", [
+      "combat_statuses_seeded",
+      `statuses:${added},skills:${wired}`,
+    ]);
+    this.logger.log(`存量库补战斗状态出厂数据：新增状态 ${added} 条，补齐技能接线 ${wired} 处`);
   }
 
   /**

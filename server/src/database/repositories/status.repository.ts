@@ -31,8 +31,9 @@ export class StatusRepository {
   seedRow(row: StatusRow): void {
     this.db.run(
       `INSERT OR IGNORE INTO statuses
-         (id, owner, label, icon, duration, source, description, effect, effect_hold_last, combat, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         (id, owner, label, icon, duration, source, description, effect, effect_hold_last, combat,
+          kind, max_stacks, tick_ms, tick_effect, control_flags, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         row.id,
         row.owner,
@@ -44,6 +45,11 @@ export class StatusRepository {
         row.effect,
         row.effect_hold_last,
         row.combat,
+        row.kind,
+        row.max_stacks,
+        row.tick_ms,
+        row.tick_effect,
+        row.control_flags,
         row.updated_at,
       ],
     );
@@ -53,7 +59,9 @@ export class StatusRepository {
     return this.db.execute(
       `UPDATE statuses SET
          label = ?, icon = ?, duration = ?, source = ?, description = ?,
-         effect = ?, effect_hold_last = ?, combat = ?, updated_at = ?
+         effect = ?, effect_hold_last = ?, combat = ?,
+         kind = ?, max_stacks = ?, tick_ms = ?, tick_effect = ?, control_flags = ?,
+         updated_at = ?
        WHERE id = ?`,
       [
         row.label,
@@ -64,6 +72,11 @@ export class StatusRepository {
         row.effect,
         row.effect_hold_last,
         row.combat,
+        row.kind,
+        row.max_stacks,
+        row.tick_ms,
+        row.tick_effect,
+        row.control_flags,
         row.updated_at,
         row.id,
       ],

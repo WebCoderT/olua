@@ -1456,6 +1456,15 @@ export interface SkillRow {
   crit_damage: number;
   /** 无视防御比例（0~1；1 = 完全无视，0 = 正常吃防御。只影响这一发） */
   def_ignore: number;
+  /**
+   * 两段连击的第二段系数（#826 第三批；0 = 没有第二段）
+   *
+   * 第二段伤害 = 第一段 × 这个系数，**不再单独掷攻击区间**：同一次出手的两段必须跟同一份
+   * 随机走，否则「两刀差得比换装备还多」。第二段仍各自判命中后的死亡（第一段打死就不打第二段）。
+   */
+  second_hit_ratio: number;
+  /** 拉人距离（像素；0 = 不拉。方向 = 目标朝施法者。与 `push_distance` 方向相反） */
+  pull_distance: number;
   updated_at: number;
 }
 
@@ -1491,6 +1500,21 @@ export interface StatusRow {
   effect_hold_last: number;
   /** 战斗数值修正 JSON（{blockChance, blockFactor, defenseMultiplier, attackMultiplier}） */
   combat: string;
+  /**
+   * 分类（#826 第三批）：`damage` 周期伤害 / `control` 控制 / `speed` 加减速 / `buff` 纯数值
+   *
+   * 只用于分流与前端分组，**判据不靠它**：控制看 `control_flags`、周期看 `tick_ms`。
+   * 分类和实际行为不一致时，行为按 flags / tick 走 —— 那是运营手滑，不该让玩家技能失灵。
+   */
+  kind: string;
+  /** 最大层数（1 = 不叠。同 id 再加一层 → +1 并刷新到期，不超过这个数） */
+  max_stacks: number;
+  /** 周期触发间隔（毫秒；0 = 无周期） */
+  tick_ms: number;
+  /** 每拍做什么 JSON（`{hp:-50}` / `{mp:+20}` / `{hpPercent:-0.02}`；`hpPercent` 按最大血量的比例） */
+  tick_effect: string;
+  /** 控制标记 JSON（`{stun:1, root:1, silence:1}`；stun 既禁移动也禁出手） */
+  control_flags: string;
   updated_at: number;
 }
 
@@ -1910,6 +1934,13 @@ export interface RoleStatusRow {
   expire_at: number;
   /** 挂上它的技能 id（复盘用；同一状态被换技能刷新时记最后一个） */
   source_skill: string;
+  /**
+   * 周期效果结算到哪一刻（毫秒；0 = 还没结算过一次，#826 第三批）
+   *
+   * 记账而不是用 `expire_at` 取模：重复获得会刷新到期时间，取模会把已经算过的拍子重算一遍，
+   * 表现是「叠了一层就多掉一次血」。0 表示「下一次结算从挂上的那一刻开始算」。
+   */
+  ticked_at: number;
 }
 
 //#endregion

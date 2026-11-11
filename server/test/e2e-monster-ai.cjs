@@ -427,6 +427,17 @@ function connect(url) {
     // A 报位置的速度约 545px/s —— 人跑得掉、怪走得回，两边都够得着断言
     setMonsterSpeed(dbPath, BRUISER.key, 120);
     await sleep(1_300); // 展示缓存 1 秒 TTL
+    // 上一段把它推离了出生点，它得靠 `return` 走回家 —— 而**回程中被打一下不会立刻转追击**
+    // （状态机先把这一腿走完，记恨留着）。不等它到家就开跑，这一段会变成「在 return 里被记恨」
+    // 的时序赌博：并行跑全套时实测漂过一次（怪没跟着走，后面「记恨已清」也跟着红）。
+    await waitFor(
+      "怪先走回出生点（本节从 idle 起跑）",
+      async () => {
+        const entry = sessionA.latestAi(bruiser.instanceId, 0);
+        return entry && Math.abs(entry.x - BRUISER.x) <= 20 ? entry : null;
+      },
+      10_000,
+    );
     const chaseFrom = sessionA.aiFrames.length;
     // 基准取**这一段开始那一刻**的位置：上一段把它推离了出生点，之后它又走回了家 ——
     // 拿出生点当基准会让阈值落在一个刚好够不着的距离上。必须在 A 开跑之前取
@@ -535,6 +546,12 @@ function connect(url) {
     // 先打掉一点血、再让它「在追击中」被冻结：这两样都是运行时里的东西，删掉重建就全没了。
     // 等它走到 A 身边（350 - 攻击距离 60 ≈ 290，离出生点 90px）再冻 —— 位置要明显离开出生点，
     // 断言才有区分力（否则「保留」与「重建回出生点」看起来一样）
+    //
+    // 先等上一段的灼烧过期（#826 第三批起 1001 烈火剑法带 `status_id = 2003`）：灼烧每拍掉
+    // 2% 最大生命、持续 5 秒，而且**冻结期间照样补拍**（`MAX_MONSTER_CATCH_UP_TICKS` 最多补 5 拍）。
+    // 不等它过期就取基准，「冻结期间血量原地保留」会红成「血少了 10%」—— 看着像 #857 回归，
+    // 实际是状态在正常掉血。6 秒 = 5 秒时长 + 一拍余量
+    await sleep(6_000);
     sessionA.sendPos("1", BRUISER.x + 150, BRUISER.y, aHp);
     const frozenHurt = await sessionA.cast("1000", bruiser.instanceId, BRUISER.key);
     check(!!frozenHurt && frozenHurt.ok, "冻结前先打它一下（血量要比满血低）", frozenHurt && `hp=${frozenHurt.hp}`);

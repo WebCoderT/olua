@@ -150,6 +150,20 @@ export class SkillDto {
   })
   defIgnore: number;
 
+  @ApiProperty({
+    description: "两段连击的第二段系数（0~1；0 = 没有第二段。第二段伤害 = 第一段 × 这个系数，不再单独掷攻击区间）",
+    minimum: 0,
+    maximum: 2,
+  })
+  secondHitRatio: number;
+
+  @ApiProperty({
+    description: "拉人距离（像素；0 = 不拉。方向 = 目标朝施法者，与 pushDistance 相反）",
+    minimum: 0,
+    maximum: 2000,
+  })
+  pullDistance: number;
+
   @ApiProperty({ description: "最近更新时间（毫秒）" })
   updatedAt: number;
 
@@ -180,6 +194,8 @@ export class SkillDto {
     dto.critRate = row.crit_rate;
     dto.critDamage = row.crit_damage;
     dto.defIgnore = row.def_ignore;
+    dto.secondHitRatio = row.second_hit_ratio;
+    dto.pullDistance = row.pull_distance;
     dto.updatedAt = row.updated_at;
     return dto;
   }
@@ -372,6 +388,28 @@ export class UpdateSkillDto {
   @Min(0, { message: "defIgnore 不能小于 0" })
   @Max(1, { message: "defIgnore 不能大于 1（100% 无视）" })
   defIgnore?: number;
+
+  @ApiPropertyOptional({
+    description: "两段连击的第二段系数（0~1；0 = 没有第二段。第二段伤害 = 第一段 × 系数）",
+    minimum: 0,
+    maximum: 2,
+  })
+  @IsOptional()
+  @IsNumber({}, { message: "secondHitRatio 必须是数字" })
+  @Min(0, { message: "secondHitRatio 不能小于 0" })
+  @Max(2, { message: "secondHitRatio 不能大于 2（第二段最多两倍第一段）" })
+  secondHitRatio?: number;
+
+  @ApiPropertyOptional({
+    description: "拉人距离（像素；0 = 不拉。方向 = 目标朝施法者）",
+    minimum: 0,
+    maximum: 2000,
+  })
+  @IsOptional()
+  @IsNumber({}, { message: "pullDistance 必须是数字" })
+  @Min(0, { message: "pullDistance 不能小于 0" })
+  @Max(2000, { message: "pullDistance 不能大于 2000 像素" })
+  pullDistance?: number;
 }
 
 /**

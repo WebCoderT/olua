@@ -117,7 +117,14 @@ import {
 } from "./dto/achievement.dto";
 import { CreateSkillDto, parseDamageCoefficients, SkillDto, SkillQueryDto, UpdateSkillDto } from "./dto/skill.dto";
 import { MonsterSkillDto, MonsterSkillListDto, ReplaceMonsterSkillsDto } from "./dto/monster-skill.dto";
-import { serializeCombat, StatusDto, StatusQueryDto, UpdateStatusDto } from "./dto/status.dto";
+import {
+  serializeCombat,
+  serializeControl,
+  serializeTick,
+  StatusDto,
+  StatusQueryDto,
+  UpdateStatusDto,
+} from "./dto/status.dto";
 import { RankDto, RankQueryDto, UpdateRankDto } from "./dto/rank.dto";
 import { SoulDto, SoulQueryDto, UpdateSoulDto } from "./dto/soul.dto";
 import {
@@ -1193,6 +1200,9 @@ export class GameConfigService {
     if (dto.critRate !== undefined) next.crit_rate = dto.critRate;
     if (dto.critDamage !== undefined) next.crit_damage = dto.critDamage;
     if (dto.defIgnore !== undefined) next.def_ignore = dto.defIgnore;
+    // #826 第三批：两段连击与拉人。同样只影响「这一发怎么结算」，不参与跨字段校验
+    if (dto.secondHitRatio !== undefined) next.second_hit_ratio = dto.secondHitRatio;
+    if (dto.pullDistance !== undefined) next.pull_distance = dto.pullDistance;
     // 跨字段约束放在写库之前：状态必须真实存在、主动技能得能打出伤害、状态型技能得挂到状态。
     // 只在本次请求**动了分类 / 倍率 / 状态**时才校验 —— 这三个字段之外的部分（名字、冷却、
     // 动作锁……）与约束无关；而且库里存在「分类是主动但没配倍率」的历史行（如 1008 十步一杀，
@@ -1255,6 +1265,9 @@ export class GameConfigService {
       crit_rate: dto.critRate ?? 0,
       crit_damage: dto.critDamage ?? 0,
       def_ignore: dto.defIgnore ?? 0,
+      // 两段连击 / 拉人默认 0：新建的技能在运营配之前与改动前一致
+      second_hit_ratio: dto.secondHitRatio ?? 0,
+      pull_distance: dto.pullDistance ?? 0,
       updated_at: Date.now(),
     };
     this.assertSkillConsistency(row);
@@ -1351,6 +1364,17 @@ export class GameConfigService {
     if (dto.effect !== undefined) next.effect = dto.effect;
     if (dto.effectHoldLast !== undefined) next.effect_hold_last = dto.effectHoldLast ? 1 : 0;
     if (dto.combat !== undefined) next.combat = serializeCombat(dto.combat);
+    // #826 第三批：三类 + 层数 + 周期 + 控制。四组都是「整份替换」，不传不改
+    if (dto.kind !== undefined) next.kind = dto.kind;
+    if (dto.maxStacks !== undefined) next.max_stacks = dto.maxStacks;
+    // tickMs 与 tickEffect 必须成对生效：只配间隔而每拍什么都不做，等于每秒空跑一次扫描。
+    // 这里不做拒绝（运营可能分两次填），但配了间隔却没有效果时 warn 一次，免得静默空转
+    if (dto.tickMs !== undefined) next.tick_ms = dto.tickMs;
+    if (dto.tickEffect !== undefined) next.tick_effect = serializeTick(dto.tickEffect);
+    if (dto.controlFlags !== undefined) next.control_flags = serializeControl(dto.controlFlags);
+    if (next.tick_ms > 0 && next.tick_effect === "{}") {
+      this.logger.warn(`状态 ${id} 配了周期间隔 ${next.tick_ms}ms，但每拍效果是空的 —— 周期扫描会空转，检查「每拍效果」`);
+    }
     next.updated_at = Date.now();
     this.statusesRepo.update(next);
     // 状态的 combat 从 #822 起进了结算层（`runtime-config-cache` 的 statusOf）——

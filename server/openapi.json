@@ -17305,6 +17305,18 @@
             "description": "无视防御比例（0~1；1 = 完全无视目标防御，0 = 正常吃防御）",
             "minimum": 0,
             "maximum": 1
+          },
+          "secondHitRatio": {
+            "type": "number",
+            "description": "两段连击的第二段系数（0~1；0 = 没有第二段。第二段伤害 = 第一段 × 系数）",
+            "minimum": 0,
+            "maximum": 2
+          },
+          "pullDistance": {
+            "type": "number",
+            "description": "拉人距离（像素；0 = 不拉。方向 = 目标朝施法者）",
+            "minimum": 0,
+            "maximum": 2000
           }
         }
       },
@@ -17449,6 +17461,18 @@
             "minimum": 0,
             "maximum": 1
           },
+          "secondHitRatio": {
+            "type": "number",
+            "description": "两段连击的第二段系数（0~1；0 = 没有第二段。第二段伤害 = 第一段 × 系数）",
+            "minimum": 0,
+            "maximum": 2
+          },
+          "pullDistance": {
+            "type": "number",
+            "description": "拉人距离（像素；0 = 不拉。方向 = 目标朝施法者）",
+            "minimum": 0,
+            "maximum": 2000
+          },
           "id": {
             "type": "string",
             "description": "技能 id（怪物技能段：9000~9999 的四位数字，如 \"9001\"）"
@@ -17492,6 +17516,52 @@
             "description": "攻击乘法系数（≥1，1.5 = 攻击 ×1.5；多个状态连乘）",
             "minimum": 0,
             "maximum": 10
+          }
+        }
+      },
+      "StatusTickDto": {
+        "type": "object",
+        "properties": {
+          "hp": {
+            "type": "number",
+            "description": "每拍掉多少血（负数扣血，正数当治疗）",
+            "minimum": -1000000,
+            "maximum": 1000000
+          },
+          "mp": {
+            "type": "number",
+            "description": "每拍回多少蓝（负数扣蓝）",
+            "minimum": -1000000,
+            "maximum": 1000000
+          },
+          "hpPercent": {
+            "type": "number",
+            "description": "每拍按最大血量的比例变化（-0.02 = 每拍掉 2%）",
+            "minimum": -1,
+            "maximum": 1
+          },
+          "mpPercent": {
+            "type": "number",
+            "description": "每拍按最大蓝量的比例变化",
+            "minimum": -1,
+            "maximum": 1
+          }
+        }
+      },
+      "StatusControlDto": {
+        "type": "object",
+        "properties": {
+          "stun": {
+            "type": "boolean",
+            "description": "眩晕 / 麻痹：禁止移动与出手（两者在服务端是同一条判据，只是来源与图标不同）"
+          },
+          "root": {
+            "type": "boolean",
+            "description": "定身：只禁止移动，仍可出手"
+          },
+          "silence": {
+            "type": "boolean",
+            "description": "沉默：只禁止出手，仍可移动"
           }
         }
       },
@@ -17543,6 +17613,44 @@
             "allOf": [
               {
                 "$ref": "#/components/schemas/StatusCombatDto"
+              }
+            ]
+          },
+          "kind": {
+            "type": "string",
+            "description": "分类：buff / damage / control / speed",
+            "enum": [
+              "buff",
+              "damage",
+              "control",
+              "speed"
+            ]
+          },
+          "maxStacks": {
+            "type": "number",
+            "description": "最大层数（1~99，1 = 不叠）",
+            "minimum": 1,
+            "maximum": 99
+          },
+          "tickMs": {
+            "type": "number",
+            "description": "周期触发间隔（毫秒；0 = 无周期，最小 100）",
+            "minimum": 0,
+            "maximum": 600000
+          },
+          "tickEffect": {
+            "description": "每拍做什么（整份替换：不传则不改）",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/StatusTickDto"
+              }
+            ]
+          },
+          "controlFlags": {
+            "description": "控制标记（整份替换：不传则不改）",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/StatusControlDto"
               }
             ]
           }
@@ -26446,6 +26554,18 @@
             "minimum": 0,
             "maximum": 1
           },
+          "secondHitRatio": {
+            "type": "number",
+            "description": "两段连击的第二段系数（0~1；0 = 没有第二段。第二段伤害 = 第一段 × 这个系数，不再单独掷攻击区间）",
+            "minimum": 0,
+            "maximum": 2
+          },
+          "pullDistance": {
+            "type": "number",
+            "description": "拉人距离（像素；0 = 不拉。方向 = 目标朝施法者，与 pushDistance 相反）",
+            "minimum": 0,
+            "maximum": 2000
+          },
           "updatedAt": {
             "type": "number",
             "description": "最近更新时间（毫秒）"
@@ -26477,6 +26597,8 @@
           "critRate",
           "critDamage",
           "defIgnore",
+          "secondHitRatio",
+          "pullDistance",
           "updatedAt"
         ]
       },
@@ -26674,6 +26796,34 @@
               }
             ]
           },
+          "kind": {
+            "type": "string",
+            "description": "分类：buff / damage / control / speed（只用于分组，判据看 controlFlags 与 tickMs）"
+          },
+          "maxStacks": {
+            "type": "number",
+            "description": "最大层数（1 = 不叠；同 id 再加一层 → +1 并刷新到期）"
+          },
+          "tickMs": {
+            "type": "number",
+            "description": "周期触发间隔（毫秒；0 = 无周期）"
+          },
+          "tickEffect": {
+            "description": "每拍做什么",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/StatusTickDto"
+              }
+            ]
+          },
+          "controlFlags": {
+            "description": "控制标记",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/StatusControlDto"
+              }
+            ]
+          },
           "updatedAt": {
             "type": "number",
             "description": "最近更新时间（毫秒）"
@@ -26690,6 +26840,11 @@
           "effect",
           "effectHoldLast",
           "combat",
+          "kind",
+          "maxStacks",
+          "tickMs",
+          "tickEffect",
+          "controlFlags",
           "updatedAt"
         ]
       },

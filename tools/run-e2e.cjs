@@ -70,6 +70,8 @@ const WEIGHT = {
   "test:e2e:crit": 3,
   // 撞飞端点四轮 PATCH + 等级闸两次等怪物 TTL + 群体段两次冷却，来回偏多
   "test:e2e:push": 3,
+  // 六段各要等一次「怪的下一次出手」（9001 冷却 6 秒）+ 三处 3 秒级观测窗 + 五次 PATCH
+  "test:e2e:status": 10,
 };
 
 function weightOf(script) {

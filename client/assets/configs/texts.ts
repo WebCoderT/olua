@@ -326,6 +326,8 @@ export const uiTexts = {
   label_damage: "-{value}",
   /** 格挡飘字（{value} = 格挡后实际扣减的伤害） */
   label_damage_block: "格挡 {value}",
+  /** 等级压制飘字（#826 第三批；{value} = 压制后的实际伤害，可能为 0） */
+  label_damage_suppressed: "压制 {value}",
   /** 闪避飘字 */
   label_damage_miss: "MISS",
   /** 技能释放飘字（{skill}） */

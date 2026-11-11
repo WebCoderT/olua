@@ -379,6 +379,19 @@ export const STATUS_SOURCE_LABELS: Record<string, string> = {
   other: "其他",
 };
 
+/**
+ * 状态分类（#826 第三批；与服务端 `STATUS_KIND_LABELS` 同集合）
+ *
+ * 只用于分组展示：真正决定行为的是 `tickMs`（周期）与 `controlFlags`（控制），
+ * 所以这里不提供「改分类就等于改行为」的暗示。
+ */
+export const STATUS_KIND_LABELS: Record<string, string> = {
+  buff: "增益 / 纯数值",
+  damage: "周期伤害",
+  control: "控制",
+  speed: "加减速",
+};
+
 //#endregion
 
 //#region 展示用的字典

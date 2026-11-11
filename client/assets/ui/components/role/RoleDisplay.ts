@@ -74,6 +74,14 @@ export default class RoleDisplay extends Node {
   private attackTimeout: ReturnType<typeof setTimeout> | null = null;
   /** 死亡标记：死亡动画播完停最后一帧，期间锁全部操控与动作切换，直到复活（见 die / revive） */
   private dead = false;
+  /**
+   * 被控制标记（#826 第三批：眩晕 / 麻痹 / 定身）
+   *
+   * 由组合根每帧按 `StatusManager.isMoveLocked()` 同步 —— 状态的真实来源是服务端下发的
+   * `statuses` 快照，本组件只负责「锁住手感」。**权限不在这一层**：眩晕期间上报的 `pos` 帧
+   * 会被服务端整帧丢弃，所以这里漏判也只是本地多走两步，解除时会被硬拉回
+   */
+  private controlLocked = false;
 
   constructor(role: Role) {
     super("basic_role");
@@ -128,11 +136,27 @@ export default class RoleDisplay extends Node {
 
   //#region 动作与朝向状态机
 
-  /** 操控状态变化（键盘按键/鼠标按下）：死亡/攻击/技能锁期间只记录状态，不改变动作与朝向（解锁后恢复移动） */
+  /** 操控状态变化（键盘按键/鼠标按下）：死亡/攻击/技能锁/控制期间只记录状态，不改变动作与朝向（解锁后恢复移动） */
   private refreshMotion() {
-    if (this.dead || this.attacking) return;
+    if (this.dead || this.attacking || this.controlLocked) return;
     this.updateAction();
     this.updateDirection();
+  }
+
+  /**
+   * 同步「被控制」状态（组合根每帧调；值没变直接返回）
+   *
+   * 锁上时立刻切回待机：不切的话动画还停在跑步帧，人物却寸步不移 —— 看起来像卡住了。
+   * 解除时走 `refreshMotion()`，按当前按键状态恢复走/跑（玩家可能一直按着方向键）。
+   */
+  setControlLocked(locked: boolean) {
+    if (this.controlLocked === locked) return;
+    this.controlLocked = locked;
+    if (locked) {
+      this.action = ACTION.STAND;
+      this.updateAnimationPlay();
+    }
+    this.refreshMotion();
   }
 
   /** 朝向更改（按当前移动意图取八方向；无输入时保持原朝向） */
@@ -214,6 +238,11 @@ export default class RoleDisplay extends Node {
     }
     // 攻击/技能锁期间不可移动，立刻停住
     if (this.attacking) {
+      rigidBody.linearVelocity = Vec2.ZERO;
+      return;
+    }
+    // 被控制（眩晕 / 麻痹 / 定身）期间不可移动，立刻停住（#826 第三批）
+    if (this.controlLocked) {
       rigidBody.linearVelocity = Vec2.ZERO;
       return;
     }

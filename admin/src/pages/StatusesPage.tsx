@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { formatTime, PERMISSION, SKILL_OWNER_LABELS, SKILL_OWNER_OPTIONS, STATUS_SOURCE_LABELS, statusesApi } from "../api";
+import { formatTime, PERMISSION, SKILL_OWNER_LABELS, SKILL_OWNER_OPTIONS, STATUS_KIND_LABELS, STATUS_SOURCE_LABELS, statusesApi } from "../api";
 import type { PageResult, Status, StatusCombat, UpdateStatus } from "../api";
 import { Modal } from "../components/Modal";
 import { Pagination } from "../components/Pagination";
@@ -24,9 +24,26 @@ interface StatusForm {
   blockChance: string;
   blockFactor: string;
   defenseMultiplier: string;
+  /** 分类（#826 第三批）：只用于分组，行为看 tickMs 与 controlFlags */
+  kind: string;
+  /** 最大层数（1 = 不叠） */
+  maxStacks: string;
+  /** 周期触发间隔（毫秒，0 = 无周期） */
+  tickMs: string;
+  /** 每拍的四个修正维度（空串 = 不参与） */
+  tickHp: string;
+  tickMp: string;
+  tickHpPercent: string;
+  tickMpPercent: string;
+  /** 控制标记 */
+  stun: boolean;
+  root: boolean;
+  silence: boolean;
 }
 
 function toForm(item: Status): StatusForm {
+  const tick = item.tickEffect ?? {};
+  const control = item.controlFlags ?? { stun: false, root: false, silence: false };
   return {
     label: item.label,
     icon: item.icon,
@@ -38,6 +55,16 @@ function toForm(item: Status): StatusForm {
     blockChance: item.combat.blockChance === undefined ? "" : String(item.combat.blockChance),
     blockFactor: item.combat.blockFactor === undefined ? "" : String(item.combat.blockFactor),
     defenseMultiplier: item.combat.defenseMultiplier === undefined ? "" : String(item.combat.defenseMultiplier),
+    kind: item.kind || "buff",
+    maxStacks: String(item.maxStacks ?? 1),
+    tickMs: String(item.tickMs ?? 0),
+    tickHp: tick.hp === undefined ? "" : String(tick.hp),
+    tickMp: tick.mp === undefined ? "" : String(tick.mp),
+    tickHpPercent: tick.hpPercent === undefined ? "" : String(tick.hpPercent),
+    tickMpPercent: tick.mpPercent === undefined ? "" : String(tick.mpPercent),
+    stun: control.stun === true,
+    root: control.root === true,
+    silence: control.silence === true,
   };
 }
 
@@ -100,6 +127,26 @@ function StatusEditDialog({
     const message = checkNumber(form.defenseMultiplier, { name: "防御倍率", min: 0, max: 10 });
     if (message) problems.push(message);
   }
+  const maxStacksProblem = checkNumber(form.maxStacks, { name: "最大层数", min: 1, max: 99 });
+  if (maxStacksProblem) problems.push(maxStacksProblem);
+  const tickProblem = checkNumber(form.tickMs, { name: "周期间隔", min: 0, max: 600_000 });
+  if (tickProblem) problems.push(tickProblem);
+  for (const [key, name] of [
+    ["tickHp", "每拍生命变化"],
+    ["tickMp", "每拍法力变化"],
+    ["tickHpPercent", "每拍生命百分比"],
+    ["tickMpPercent", "每拍法力百分比"],
+  ] as const) {
+    if (form[key].trim() === "") continue;
+    const message = checkNumber(form[key], { name, min: -1, max: 1_000_000 });
+    if (message) problems.push(message);
+  }
+  if (Number(form.tickMs) > 0) {
+    const anyTick =
+      form.tickHp.trim() !== "" || form.tickMp.trim() !== "" || form.tickHpPercent.trim() !== "" || form.tickMpPercent.trim() !== "";
+    // 配了间隔却没有任何每拍效果 = 每秒白跑一次扫描（服务端只 warn，运营看不见）
+    if (!anyTick) problems.push("配了周期间隔，但每一拍什么都不做（补一个每拍效果，或把间隔改成 0）");
+  }
 
   const canSubmit = problems.length === 0 && !submitting;
 
@@ -109,6 +156,14 @@ function StatusEditDialog({
     if (form.blockChance.trim() !== "") combat.blockChance = Number(form.blockChance);
     if (form.blockFactor.trim() !== "") combat.blockFactor = Number(form.blockFactor);
     if (form.defenseMultiplier.trim() !== "") combat.defenseMultiplier = Number(form.defenseMultiplier);
+
+    // 周期效果：留空 = 这一项不参与（不是 0）—— 0 会被当成「配了但恒等于 0」，
+    // 而服务端的每拍结算对 0 与缺省的处理是一样的，区别只在导出后看得见
+    const tickEffect: NonNullable<UpdateStatus["tickEffect"]> = {};
+    if (form.tickHp.trim() !== "") tickEffect.hp = Number(form.tickHp);
+    if (form.tickMp.trim() !== "") tickEffect.mp = Number(form.tickMp);
+    if (form.tickHpPercent.trim() !== "") tickEffect.hpPercent = Number(form.tickHpPercent);
+    if (form.tickMpPercent.trim() !== "") tickEffect.mpPercent = Number(form.tickMpPercent);
 
     setSubmitting(true);
     await onSubmit({
@@ -120,6 +175,11 @@ function StatusEditDialog({
       effectHoldLast: form.effectHoldLast,
       description: form.description.trim(),
       combat,
+      kind: form.kind as UpdateStatus["kind"],
+      maxStacks: Number(form.maxStacks),
+      tickMs: Number(form.tickMs),
+      tickEffect,
+      controlFlags: { stun: form.stun, root: form.root, silence: form.silence },
     });
     setSubmitting(false);
   };
@@ -223,6 +283,79 @@ function StatusEditDialog({
           </Field>
         </div>
       </div>
+      <div>
+        <span className="mb-2 block text-xs font-medium text-slate-400">层数与周期（#826 第三批）</span>
+        <div className="grid grid-cols-1 gap-3 rounded-xl border border-slate-800 bg-slate-950/40 p-4 sm:grid-cols-3">
+          <Field label="分类" hint="只用于分组；真正生效的是下面的「周期间隔」与「控制标记」">
+            <Select value={form.kind} onChange={(event) => set("kind", event.target.value)}>
+              {Object.entries(STATUS_KIND_LABELS).map(([value, text]) => (
+                <option key={value} value={value}>
+                  {text}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <Field label="最大层数" hint="1 = 不叠；同 id 再加一层 → +1 并刷新持续时间，到期按整层消失">
+            <Input type="number" min={1} max={99} value={form.maxStacks} onChange={(event) => set("maxStacks", event.target.value)} />
+          </Field>
+          <Field label="周期间隔（毫秒）" hint="0 = 无周期；1000 = 每秒结算一次（层数乘在每拍总量上）">
+            <Input type="number" min={0} step={100} value={form.tickMs} onChange={(event) => set("tickMs", event.target.value)} />
+          </Field>
+          <Field label="每拍生命变化" hint="负数扣血（-50）、正数治疗；留空 = 不参与">
+            <Input
+              type="number"
+              step={1}
+              placeholder="不参与"
+              value={form.tickHp}
+              onChange={(event) => set("tickHp", event.target.value)}
+            />
+          </Field>
+          <Field label="每拍生命百分比" hint="-0.02 = 每拍掉 2% 最大生命；留空 = 不参与">
+            <Input
+              type="number"
+              step={0.01}
+              placeholder="不参与"
+              value={form.tickHpPercent}
+              onChange={(event) => set("tickHpPercent", event.target.value)}
+            />
+          </Field>
+          <Field label="每拍法力变化" hint="负数扣蓝、正数回蓝；留空 = 不参与">
+            <Input
+              type="number"
+              step={1}
+              placeholder="不参与"
+              value={form.tickMp}
+              onChange={(event) => set("tickMp", event.target.value)}
+            />
+          </Field>
+          <Field label="每拍法力百分比" hint="-0.05 = 每拍掉 5% 最大法力；留空 = 不参与">
+            <Input
+              type="number"
+              step={0.01}
+              placeholder="不参与"
+              value={form.tickMpPercent}
+              onChange={(event) => set("tickMpPercent", event.target.value)}
+            />
+          </Field>
+        </div>
+      </div>
+      <div>
+        <span className="mb-2 block text-xs font-medium text-slate-400">控制标记（勾上即生效；眩晕与麻痹在服务端是同一条判据）</span>
+        <div className="grid grid-cols-1 gap-3 rounded-xl border border-slate-800 bg-slate-950/40 p-4 sm:grid-cols-3">
+          <label className="flex items-center gap-2 text-xs text-slate-300">
+            <input type="checkbox" checked={form.stun} onChange={(event) => set("stun", event.target.checked)} />
+            眩晕 / 麻痹（禁止移动与出手）
+          </label>
+          <label className="flex items-center gap-2 text-xs text-slate-300">
+            <input type="checkbox" checked={form.root} onChange={(event) => set("root", event.target.checked)} />
+            定身（只禁止移动）
+          </label>
+          <label className="flex items-center gap-2 text-xs text-slate-300">
+            <input type="checkbox" checked={form.silence} onChange={(event) => set("silence", event.target.checked)} />
+            沉默（只禁止出手）
+          </label>
+        </div>
+      </div>
       <DescriptionField value={form.description} onChange={(value) => set("description", value)} />
       <ProblemList problems={problems} />
     </Modal>
@@ -235,6 +368,23 @@ function combatSummary(combat: StatusCombat): string {
   if (combat.blockChance !== undefined) parts.push(`格挡 ${combat.blockChance}`);
   if (combat.blockFactor !== undefined) parts.push(`格挡系数 ${combat.blockFactor}`);
   if (combat.defenseMultiplier !== undefined) parts.push(`防御 ×${combat.defenseMultiplier}`);
+  return parts.join(" · ");
+}
+
+/**
+ * 层数 / 周期 / 控制的列表摘要（#826 第三批）
+ *
+ * 与 `combatSummary` 分开一列：那三个维度是「受击时怎么算」，这三个是「挂着的这段时间
+ * 会发生什么」—— 混在一格里，运营看不出「这个状态到底每秒做了什么」。
+ */
+function behaviourSummary(status: Status): string {
+  const parts: string[] = [];
+  if (status.maxStacks > 1) parts.push(`最多 ${status.maxStacks} 层`);
+  if (status.tickMs > 0) parts.push(`每 ${Math.round(status.tickMs / 100) / 10}s 结算`);
+  const control = status.controlFlags ?? { stun: false, root: false, silence: false };
+  if (control.stun) parts.push("眩晕");
+  else if (control.root) parts.push("定身");
+  else if (control.silence) parts.push("沉默");
   return parts.join(" · ");
 }
 
@@ -376,6 +526,7 @@ export function StatusesPage() {
                     <td className={tdClass}>{STATUS_SOURCE_LABELS[item.source] ?? item.source}</td>
                     <td className={`${tdClass} text-xs text-slate-400`}>{item.duration}s</td>
                     <td className={`${tdClass} text-xs text-slate-400`}>{summary || <span className="text-slate-600">（纯表现）</span>}</td>
+                    <td className={`${tdClass} text-xs text-slate-400`}>{behaviourSummary(item)}</td>
                     <td className={`${tdClass} max-w-[220px] truncate text-xs text-slate-400`} title={item.effect}>
                       {item.effect ? (
                         <>

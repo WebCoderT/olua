@@ -27,7 +27,12 @@
 //#region 类型（DB 行的形状；只依赖结构化类型，不引 database 层）
 
 import { buildRoleLevelRow, RoleLevelCurveSegment } from "./constants/role-level-curve";
-import { CombatValue, parseCombatJson } from "./config-json";
+import {
+  CombatValue,
+  parseCombatJson,
+  parseControlFlagsJson,
+  parseTickEffectJson,
+} from "./config-json";
 
 /** 结算用的一份属性包：单值 + 六项区间元组（键是 camelCase，与客户端配置同形） */
 export type AttributeBundle = Record<string, unknown>;
@@ -124,10 +129,13 @@ export interface SkillSource {
   crit_damage: number;
   /** 无视防御比例（0~1；#826） */
   def_ignore: number;
+  /** 两段连击的第二段系数（0 = 没有第二段；#826 第三批） */
+  second_hit_ratio: number;
+  /** 拉人距离（像素；0 = 不拉；#826 第三批） */
+  pull_distance: number;
 }
 
-/**
- * 状态行（#822：角色侧状态要在结算层回答「防御倍率 / 格挡多少」）
+/** 状态行（#822：角色侧状态要在结算层回答「防御倍率 / 格挡多少」）
  *
  * 只进结算要用的几列。怪物 AI 另有一份整表缓存（它还要 duration 来给怪挂状态、按状态
  * 类型排序），两份读的是**同一张表的同一批行**、解析走同一个 `parseCombatJson`，
@@ -142,7 +150,45 @@ export interface StatusSource {
   duration: number;
   /** 战斗数值修正（JSON 字符串，解析走 parseCombatJson） */
   combat: string;
+  /** 分类：damage / control / speed / buff（#826 第三批，只用于分组，判据看 flags 与 tick） */
+  kind: string;
+  /** 最大层数（1 = 不叠） */
+  max_stacks: number;
+  /** 周期触发间隔（毫秒；0 = 无周期） */
+  tick_ms: number;
+  /** 每拍做什么（JSON 字符串） */
+  tick_effect: string;
+  /** 控制标记（JSON 字符串：{stun, root, silence}） */
+  control_flags: string;
 }
+
+/** 周期效果的每拍内容（#826 第三批；缺键 = 这一项不生效） */
+export interface StatusTickEffect {
+  /** 每拍掉多少血（负数扣血；正数当治疗） */
+  hp?: number;
+  /** 每拍回多少蓝 */
+  mp?: number;
+  /** 每拍按**最大血量**的比例变化（-0.02 = 每拍掉 2% 最大血量） */
+  hpPercent?: number;
+  /** 每拍按最大蓝量的比例变化 */
+  mpPercent?: number;
+}
+
+/** 控制标记（#826 第三批）：stun 既禁移动也禁出手，root 只禁移动，silence 只禁出手 */
+export interface StatusControlFlags {
+  stun: boolean;
+  root: boolean;
+  silence: boolean;
+}
+
+/** 解析后的状态定义（缓存里放的就是这个形状） */
+export type ResolvedStatus = StatusSource & {
+  combatValue: CombatValue;
+  maxStacks: number;
+  tickMs: number;
+  tickEffect: StatusTickEffect;
+  control: StatusControlFlags;
+};
 
 /** 药品行（背包叠加 / 用药回复） */
 export interface DrugSource {  id: string;
@@ -223,8 +269,14 @@ let titleBundles: Map<number, AttributeBundle> | null = null;
 let soulBundles: Map<number, AttributeBundle> | null = null;
 let rankBundles: Map<number, AttributeBundle> | null = null;
 let skillRows: Map<string, Record<string, unknown>> | null = null;
-/** 状态定义（#822）：结算层要回答「防御倍率 / 格挡多少」，拿不到仓储 */
-let statusRows: Map<string, StatusSource & { combatValue: CombatValue }> | null = null;
+/**
+ * 状态定义（#822 / #826 第三批）：结算层要回答「防御倍率 / 格挡多少 / 能不能动 / 这一拍掉多少」
+ *
+ * `maxStacks` / `tickMs` / `tickEffect` / `control` 是**从 JSON 列解析出来的派生字段**：
+ * 消费方（状态层、出手闸、周期结算）只读这几个 camelCase 字段，不再各自 `JSON.parse` ——
+ * 各写一份必然在「坏 JSON 怎么办」上分叉。
+ */
+let statusRows: Map<string, ResolvedStatus> | null = null;
 let drugRows: Map<string, Record<string, unknown>> | null = null;
 /** 货币道具（#785）：背包格子认得出 / 回收价 / 显示名都要它 */
 let moneyRows: Map<string, Record<string, unknown>> | null = null;
@@ -392,6 +444,9 @@ export function applySkillOverrides(rows: SkillSource[]): void {
       critRate: numberOr(row.crit_rate),
       critDamage: numberOr(row.crit_damage),
       defIgnore: numberOr(row.def_ignore),
+      // #826 第三批：两段连击与拉人。缺字段一律按 0（= 没有这两件事），旧配置行为不变
+      secondHitRatio: numberOr(row.second_hit_ratio),
+      pullDistance: numberOr(row.pull_distance),
     });
   }
   skillRows = map;
@@ -408,8 +463,17 @@ export function applyStatusOverrides(rows: StatusSource[]): void {
     statusRows = null;
     return;
   }
-  const map = new Map<string, StatusSource & { combatValue: CombatValue }>();
-  for (const row of rows) map.set(row.id, { ...row, combatValue: parseCombatJson(row.combat) });
+  const map = new Map<string, ResolvedStatus>();
+  for (const row of rows) {
+    map.set(row.id, {
+      ...row,
+      combatValue: parseCombatJson(row.combat),
+      maxStacks: Math.max(1, Math.floor(numberOr(row.max_stacks) || 1)),
+      tickMs: Math.max(0, Math.floor(numberOr(row.tick_ms) || 0)),
+      tickEffect: parseTickEffectJson(row.tick_effect),
+      control: parseControlFlagsJson(row.control_flags),
+    });
+  }
   statusRows = map;
 }
 
@@ -709,8 +773,9 @@ export function skillOf(id: string): Record<string, unknown> | null {
  * 状态定义（#822）：`null` = 没这个状态（没装载 / 配置里删了）
  *
  * 返回 `combatValue` 已解析好；`duration` 用秒，调用方自己乘 1000 换成到期时刻。
+ * `maxStacks` / `tickMs` / `tickEffect` / `control` 也是解析好的派生字段（#826 第三批）。
  */
-export function statusOf(id: string): (StatusSource & { combatValue: CombatValue }) | null {
+export function statusOf(id: string): ResolvedStatus | null {
   return statusRows?.get(id) ?? null;
 }
 

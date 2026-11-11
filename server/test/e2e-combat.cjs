@@ -1707,7 +1707,15 @@ function connect(url) {
     );
     check(!!damagingFrame, "十：改成伤害型后服务端改放 9001（挂载改动 1 秒内生效）", JSON.stringify(damagingFrame));
     const damagingCast = damagingFrame && (damagingFrame.casts || []).find((entry) => entry.skillId === "9001");
-    check(!!damagingCast && damagingCast.statusId === undefined, "十：伤害型 casts 不带 statusId", JSON.stringify(damagingCast));
+    // 口径变更（#826 第三批）：9001「跃鼠猛击」出厂带 `status_id = 2004`（伤害 + 命中挂眩晕），
+    // 所以伤害型技能的 casts 也会带 statusId —— 原来的「只有状态型技能才带」已经不成立。
+    // 这里断的是「带 status_id 的伤害技能把 id 带出来」，不带的那一类仍由上面的 9002 分支覆盖。
+    check(
+      !!damagingCast && damagingCast.statusId === "2004",
+      "十：伤害型技能带 status_id 时 casts 也带（9001 → 2004 眩晕）",
+      JSON.stringify(damagingCast),
+    );
+    check(!!damagingCast && damagingCast.damage === undefined, "十：伤害型 casts 同样不带伤害（数值权威在 hits 帧）", JSON.stringify(damagingCast));
 
     // 「同帧」这条断言不能钉在**第一帧**上：上一阶段的沙包 A 停了上报之后，服务端的目标校验
     // 还要等位置过期（posStaleMs = 2s）才会丢掉它 —— 这中间怪物完全可能对着 A **放这一发**，

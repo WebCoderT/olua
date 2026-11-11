@@ -103,6 +103,7 @@ export {
   SKILL_OWNER_LABELS,
   SKILL_OWNER_OPTIONS,
   SKILL_TARGET_TYPE_LABELS,
+  STATUS_KIND_LABELS,
   STATUS_SOURCE_LABELS,
 } from "./types";
 // 游戏数据查表（#655）：名字与 id 都在数据库，登录后拉一次快照，之后同步读

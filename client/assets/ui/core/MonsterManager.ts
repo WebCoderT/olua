@@ -368,6 +368,10 @@ export default class MonsterManager {
     hits?: readonly CombatSettleHit[];
     /** 这一发本来就不掷伤害（自身 / 位移技能） */
     noDamage?: boolean;
+    /** 两段连击的第二段伤害（#826 第三批；缺省 = 没有第二段） */
+    secondDamage?: number;
+    /** 这一发吃了等级压制（#826 第三批；只换飘字文案，伤害已由服务端压过） */
+    suppressed?: boolean;
     /** 掉落下标起点（#824：一次施放打中多只时，第二只起的掉落要接着第一只数） */
     dropIndexBase?: number;
   }) {
@@ -391,6 +395,8 @@ export default class MonsterManager {
           hp: hit.hp,
           killed: hit.killed,
           reward: hit.reward,
+          // 压制逐只标（#826 第三批）：一片怪里等级可能不同，飘字也就各不一样
+          suppressed: hit.suppressed,
           dropIndexBase,
         });
         dropIndexBase += hit.reward?.drops.length ?? 0;
@@ -419,7 +425,7 @@ export default class MonsterManager {
         );
       }
     }
-    this.applyDamage(node, monster, data.damage, data.hp, data.killed, data.reward, data.castId, data.dropIndexBase ?? 0);
+    this.applyDamage(node, monster, data.damage, data.hp, data.killed, data.reward, data.castId, data.dropIndexBase ?? 0, data.secondDamage ?? 0, data.suppressed === true);
   }
 
   /**
@@ -468,9 +474,25 @@ export default class MonsterManager {
    * @param castId 结算的出手序号（#325：随掉落物记账，拾取帧靠它定位服务端账本）
    * @param dropIndexBase 掉落在服务端账本里的起始下标（#824：AOE 一次打中多只时逐只偏移）
    */
-  private static applyDamage(target: Node, monster: Monster, damage: number, hp: number, killed?: boolean, reward?: CombatKillReward, castId?: number, dropIndexBase = 0) {
+  private static applyDamage(
+    target: Node,
+    monster: Monster,
+    damage: number,
+    hp: number,
+    killed?: boolean,
+    reward?: CombatKillReward,
+    castId?: number,
+    dropIndexBase = 0,
+    /** 两段连击的第二段（#826 第三批）：单独飘一次，血条只落终值 */
+    secondDamage = 0,
+    /** 等级压制（#826 第三批）：换飘字文案，数值已经压过了 */
+    suppressed = false,
+  ) {
     // 受伤飘字（需在死亡销毁节点前显示；0 伤不飘 —— 世界快照的兜底清理不是一次真实受击）
-    if (damage > 0) GameUiHelper.showDamageText(target, damage);
+    // 两段连击：两段各飘一次（showDamageText 内部有横向错峰轮转，不会叠成一团），
+    // 血量直接用服务端给的**两段之后**的最终值 —— 中间那一跳由飘字交代，血条不插值
+    if (damage > 0) GameUiHelper.showDamageText(target, damage, false, suppressed);
+    if (secondDamage > 0) GameUiHelper.showDamageText(target, secondDamage, false, suppressed);
     monster.hp = Math.max(0, hp);
     this.updateHead(target, monster);
     if (monster.hp > 0 && !killed) return;

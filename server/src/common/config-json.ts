@@ -65,3 +65,72 @@ export function parseCombatJson(raw: string): CombatValue {
     return {};
   }
 }
+
+//#region 周期效果与控制标记（#826 第三批）
+
+/** 周期效果的四个键（顺序 = 写出顺序） */
+export const TICK_EFFECT_KEYS = ["hp", "mp", "hpPercent", "mpPercent"] as const;
+
+/** 控制标记的三个键（顺序 = 写出顺序） */
+export const CONTROL_FLAG_KEYS = ["stun", "root", "silence"] as const;
+
+/** 周期效果（全部可选，缺省 = 这一项不生效） */
+export interface TickEffectValue {
+  hp?: number;
+  mp?: number;
+  hpPercent?: number;
+  mpPercent?: number;
+}
+
+/** 控制标记（stun 既禁移动也禁出手；root 只禁移动；silence 只禁出手） */
+export interface ControlFlagValue {
+  stun: boolean;
+  root: boolean;
+  silence: boolean;
+}
+
+/**
+ * 把 `statuses.tick_effect` 读成对象（只认四个数值键）
+ *
+ * 全 0 / 坏 JSON 都返回空对象 —— 「没有周期效果」与「配错了」在行为上是同一件事：
+ * 这一拍什么都不做。真正的配置错误由运营在管理端看见（字段在那里摆着）。
+ */
+export function parseTickEffectJson(raw: string): TickEffectValue {
+  try {
+    const parsed: unknown = JSON.parse(raw || "{}");
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+    const source = parsed as Record<string, unknown>;
+    const value: TickEffectValue = {};
+    for (const key of TICK_EFFECT_KEYS) {
+      const entry = source[key];
+      if (typeof entry === "number" && Number.isFinite(entry) && entry !== 0) value[key] = entry;
+    }
+    return value;
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * 把 `statuses.control_flags` 读成三个布尔
+ *
+ * 认 `1` 与 `true` 两种写法（管理端表单存 1，手写 SQL 常写 true）；其余一律 false。
+ * **恒返回三个键**：消费方写 `if (control.stun)` 时不必判 undefined。
+ */
+export function parseControlFlagsJson(raw: string): ControlFlagValue {
+  const value: ControlFlagValue = { stun: false, root: false, silence: false };
+  try {
+    const parsed: unknown = JSON.parse(raw || "{}");
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return value;
+    const source = parsed as Record<string, unknown>;
+    for (const key of CONTROL_FLAG_KEYS) {
+      const entry = source[key];
+      value[key] = entry === true || entry === 1 || entry === "1";
+    }
+    return value;
+  } catch {
+    return value;
+  }
+}
+
+//#endregion

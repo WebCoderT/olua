@@ -149,6 +149,23 @@ export const SKILL_TARGET_TYPE_LABELS: Record<string, string> = {
 /** 状态来源（= 客户端 `types/status.StatusSource` 的枚举值） */
 export const STATUS_SOURCE_VALUES = ["skill", "equipment", "privilege", "other"];
 
+/**
+ * 状态分类（#826 第三批）
+ *
+ * 只用于管理端分组与前端展示，**判据不靠它**：控制看 `control_flags`、周期看 `tick_ms`。
+ * 分类与行为不一致（比如 kind=buff 但配了 stun）时行为按 flags 走 —— 那是运营手滑，
+ * 不该让玩家的技能失灵。
+ */
+export const STATUS_KIND_VALUES = ["buff", "damage", "control", "speed"];
+
+/** 状态分类中文名 */
+export const STATUS_KIND_LABELS: Record<string, string> = {
+  buff: "增益 / 纯数值",
+  damage: "持续伤害",
+  control: "控制",
+  speed: "加减速",
+};
+
 /** 状态来源中文名 */
 export const STATUS_SOURCE_LABELS: Record<string, string> = {
   skill: "技能",

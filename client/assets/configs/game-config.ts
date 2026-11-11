@@ -948,6 +948,12 @@ function statusRowToConfig(row: StatusRow): StatusConfig {
       defenseMultiplier: row.combat?.defenseMultiplier,
       attackMultiplier: row.combat?.attackMultiplier,
     },
+    // 控制标记（#826 第三批）：眩晕 / 麻痹 / 定身 → 本地停输入（服务端同时丢弃 pos 帧）
+    control: {
+      stun: row.controlFlags?.stun,
+      root: row.controlFlags?.root,
+      silence: row.controlFlags?.silence,
+    },
   };
 }
 

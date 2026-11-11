@@ -75,6 +75,10 @@ interface SkillForm {
   critDamage: string;
   /** 无视防御比例（0~1，1 = 完全无视） */
   defIgnore: string;
+  /** 两段连击的第二段系数（0 = 只有一段；#826 第三批） */
+  secondHitRatio: string;
+  /** 拉人距离（像素，0 = 不拉；#826 第三批） */
+  pullDistance: string;
   description: string;
   coefficients: DamageCoefficient[];
 }
@@ -103,6 +107,8 @@ function toForm(item: Skill): SkillForm {
     critRate: String(item.critRate),
     critDamage: String(item.critDamage),
     defIgnore: String(item.defIgnore),
+    secondHitRatio: String(item.secondHitRatio),
+    pullDistance: String(item.pullDistance),
     description: item.description,
     coefficients: item.damageCoefficients.map((entry) => ({ ...entry })),
   };
@@ -177,6 +183,8 @@ function SkillEditDialog({
     checkNumber(form.critRate, { name: "暴击率", min: 0, max: 1 }),
     checkNumber(form.critDamage, { name: "暴击倍率", min: 0, max: 10 }),
     checkNumber(form.defIgnore, { name: "无视防御比例", min: 0, max: 1 }),
+    checkNumber(form.secondHitRatio, { name: "两段连击系数", min: 0, max: 2 }),
+    checkNumber(form.pullDistance, { name: "拉人距离", min: 0, max: 2_000, int: true }),
   ];
   for (const message of numberChecks) {
     if (message) problems.push(message);
@@ -215,6 +223,8 @@ function SkillEditDialog({
       critRate: Number(form.critRate),
       critDamage: Number(form.critDamage),
       defIgnore: Number(form.defIgnore),
+      secondHitRatio: Number(form.secondHitRatio),
+      pullDistance: Number(form.pullDistance),
       description: form.description.trim(),
       damageCoefficients: form.coefficients.map((entry) => ({ baseType: entry.baseType, baseTypeRate: entry.baseTypeRate })),
     });
@@ -379,6 +389,24 @@ function SkillEditDialog({
               step={0.05}
               value={form.defIgnore}
               onChange={(event) => set("defIgnore", event.target.value)}
+            />
+          </Field>
+          <Field label="两段连击系数" hint="0 = 只有一段；0.5 = 第一段伤害的一半再打一次。第二段不单独掷区间、不单独判暴击，第一段打死就不补">
+            <Input
+              type="number"
+              min={0}
+              max={2}
+              step={0.05}
+              value={form.secondHitRatio}
+              onChange={(event) => set("secondHitRatio", event.target.value)}
+            />
+          </Field>
+          <Field label="拉人距离（像素）" hint="0 = 不拉；把目标朝施法者拽回来这么多，贴到 40px 就停。与击退互斥（击退优先）">
+            <Input
+              type="number"
+              min={0}
+              value={form.pullDistance}
+              onChange={(event) => set("pullDistance", event.target.value)}
             />
           </Field>
           <div className="flex flex-col justify-center gap-2">
@@ -852,6 +880,8 @@ export function SkillsPage() {
                       冷却 {item.cooldown}s · 蓝 {item.mpCost}
                       {item.distance > 0 ? ` · 距离 ${item.distance}` : ""}
                       {item.pushDistance > 0 ? ` · 击退 ${item.pushDistance}` : ""}
+                      {item.pullDistance > 0 ? ` · 拉人 ${item.pullDistance}` : ""}
+                      {item.secondHitRatio > 0 ? ` · 两段 ×${item.secondHitRatio}` : ""}
                     </td>
                     <td className={`${tdClass} text-xs text-slate-400`}>
                       {first ? `${damageBaseLabel(first.baseType)}×${first.baseTypeRate}（共 ${item.damageCoefficients.length} 级）` : "—"}

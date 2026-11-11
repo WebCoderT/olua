@@ -101,6 +101,39 @@ export default class StatusManager {
     return Array.from(this.expireAt.keys());
   }
 
+  /**
+   * 此刻被控制成什么样（#826 第三批）
+   *
+   * 口径与服务端 `RoleStatusService.controlOf` 逐字一致：`stun` 既禁移动也禁出手，
+   * `root` 只禁移动，`silence` 只禁出手 —— 两者各写一份必然有一边漏判。
+   *
+   * 客户端拿它做**表现层**的双保险（停输入）；权威判据在服务端：眩晕期间上报的 `pos` 帧
+   * 会被整帧丢弃（`PlayerPresenceService.movementLocked`），出手会被 `rejected: "stunned"` 拒。
+   */
+  static controlOf(): { stunned: boolean; rooted: boolean; silenced: boolean } {
+    let stunned = false;
+    let rooted = false;
+    let silenced = false;
+    for (const statusId of this.expireAt.keys()) {
+      const control = statuses.get(statusId)?.control;
+      if (!control) continue;
+      if (control.stun) stunned = true;
+      if (control.root) rooted = true;
+      if (control.silence) silenced = true;
+    }
+    // stun 包含 root 与 silence 的全部含义
+    return { stunned, rooted: rooted || stunned, silenced: silenced || stunned };
+  }
+
+  /**
+   * 能不能移动（眩晕 / 麻痹 / 定身都不行）
+   *
+   * 不做 `silence` 的判断：沉默的人照样能走，把它算进来会让「沉默」变成「定身」。
+   */
+  static isMoveLocked(): boolean {
+    return this.controlOf().rooted;
+  }
+
   /** 状态剩余秒数（没有该状态返回 0） */
   static getRemainingSeconds(statusId: StatusId): number {
     const expire = this.expireAt.get(statusId);

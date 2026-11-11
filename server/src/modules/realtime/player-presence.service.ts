@@ -126,7 +126,14 @@ export class PlayerPresenceService implements OnApplicationBootstrap, OnApplicat
   /** `zone:mapId` → 攒下的离开账号（断线 / 换图时写入，广播时发出并清空） */
   private readonly pendingLeaves = new Map<string, string[]>();
   /** `zone:mapId` → 攒下的玩家动作事件（#693：结算路径写入，广播时发出并清空） */
-  private readonly pendingActions = new Map<string, RealtimePlayerAction[]>();
+  private readonly pendingActions = new Map<string, Array<RealtimePlayerAction>>();
+  /**
+   * 控制状态的短缓存（#826 第三批）：账号 → `{ at, locked }`
+   *
+   * pos 帧是 4Hz、在线几十人，每帧查一次 `role_status` 是几百次/秒的 SQL。控制状态是
+   * 「秒钟级」的事实（状态最短也持续 1 秒），200ms 的缓存不会漏判，而把它压到 5Hz。
+   */
+  private readonly controlCache = new Map<string, { at: number; locked: boolean }>();
   private broadcastTimer: NodeJS.Timeout | null = null;
 
   /**
@@ -260,6 +267,16 @@ export class PlayerPresenceService implements OnApplicationBootstrap, OnApplicat
     // 连 `updatedAt` 都不刷 —— 否则伪造帧能让一个「其实不在那张图」的人永远不掉线
     if (existed.zoneId !== zoneId || existed.mapId !== mapId) return;
     existed.updatedAt = Date.now();
+    // —— 控制期间不接受位移（#826 第三批）——
+    // 眩晕 / 麻痹 / 定身时坐标一律不采纳，**连仲裁基线也不动**：基线一动，解除控制后的
+    // 第一帧就会被判成瞬移（人还在原地，基线却被拽到了「被控期间客户端自己预测的位置」）。
+    // `updatedAt` 上面已经刷过 —— 心跳照旧，不然「站着不能动的人」会被当成掉线。
+    // 客户端本地也停输入（表现层双保险），所以正常玩法下这条只是兜住改包的。
+    if (this.movementLocked(accountId)) {
+      existed.hp = Number.isFinite(hp) ? Math.max(0, hp) : 0;
+      existed.moving = false;
+      return;
+    }
     // —— 位置仲裁（#596）：坐标可信才动 x/y，其余字段照旧 ——
     if (this.acceptPosition(existed, x, y)) {
       existed.x = x;
@@ -282,6 +299,22 @@ export class PlayerPresenceService implements OnApplicationBootstrap, OnApplicat
       existed.guildName = guild.guildName;
       existed.appearanceAt = existed.updatedAt;
     }
+  }
+
+  /**
+   * 这个账号此刻是否被定住（#826 第三批）：眩晕 / 麻痹 / 定身都算，沉默不算
+   *
+   * 200ms 缓存见 `controlCache` 的注释。缓存的是「锁定」这一个布尔，不是完整的控制对象：
+   * 这里只回答「能不能动」，出手那条路自己问 `controlOf`（它要看 silenced）。
+   */
+  private movementLocked(accountId: string): boolean {
+    const now = Date.now();
+    const cached = this.controlCache.get(accountId);
+    if (cached && now - cached.at < 200) return cached.locked;
+    const control = this.roles.controlOf(accountId);
+    const locked = control.rooted || control.stunned;
+    this.controlCache.set(accountId, { at: now, locked });
+    return locked;
   }
 
   /**
@@ -356,6 +389,9 @@ export class PlayerPresenceService implements OnApplicationBootstrap, OnApplicat
    */
   dropAccount(accountId: string): void {
     const entry = this.entries.get(accountId);
+    // 控制缓存跟着会话一起清（#826 第三批）：人走了不该还留着「他被定住」的结论，
+    // 下次登录如果恰好 200ms 内又开始报位置，那一条会被旧缓存挡掉一帧
+    this.controlCache.delete(accountId);
     if (!entry) return;
     this.entries.delete(accountId);
     this.broadcastLeave(entry.zoneId, entry.mapId, accountId);

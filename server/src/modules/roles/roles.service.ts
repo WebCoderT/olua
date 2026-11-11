@@ -1396,6 +1396,82 @@ export class RolesService {
     if (row) this.statuses.clearOfRole(row.id);
   }
 
+  /**
+   * 本账号在线角色此刻能不能动 / 能不能出手（#826 第三批）
+   *
+   * 转发给状态层，让出手闸与移动校验都不必自己引 `RoleStatusService`（那里还没被
+   * 别的模块直接依赖，多一条跨模块边要登记白名单）。不在线按「没被控制」返回：
+   * 那种情况前面的「角色在线」闸早就拒了，这里不该再造一个拒绝理由。
+   */
+  controlOf(accountId: string): { stunned: boolean; rooted: boolean; silenced: boolean } {
+    const row = this.onlineRoleRow(accountId);
+    return row ? this.statuses.controlOf(row.id) : { stunned: false, rooted: false, silenced: false };
+  }
+
+  /**
+   * 周期状态结算（#826 第三批）：把状态层算出的「该结算的拍」扣成血量变化
+   *
+   * 为什么放在 RolesService：血量是存档字段，只有这里有写入通道，而且必须走
+   * **不推 revision** 的写法（`updateDataKeepRevision`）—— 周期伤害每拍推一次 revision，
+   * 客户端那边的 `roleUpdate` 会把「血量变化」当成「存档被改」，滚动条与属性面板一起抖。
+   *
+   * 打死不给经验 / 不判击杀：这是状态伤害，不是谁的一刀，`killer` 无从谈起。
+   * 返回每人扣了多少（实时进程据此决定要不要广播血量帧）。
+   */
+  applyStatusTicks(now = Date.now()): Array<{ accountId: string; roleId: string; hp: number; mp: number; dead: boolean }> {
+    const results: Array<{ accountId: string; roleId: string; hp: number; mp: number; dead: boolean }> = [];
+    const dueRows = this.statuses.dueTicks(now);
+    if (!dueRows.length) return results;
+    // 在线账号一次扫出来建成映射：每条 due 各查一次库在「几十人在线 × 多条状态」时是几百次查询。
+    // 在线真相由 #547 的心跳清算兜着（这里只读它标记出来的结果）
+    const online = new Map<string, { id: string }>();
+    for (const account of this.accounts.listOnline()) {
+      if (account.online_role_id) online.set(account.online_role_id, { id: account.id });
+    }
+    for (const due of dueRows) {
+      // 只有在线角色才结算：离线的人没有「每秒一拍」的时间源，若按挂上的时刻补，
+      // 会在他不在的时候被烧死 —— 那不是玩法，是数据事故
+      const account = online.get(due.roleId);
+      if (!account) continue;
+      const row = this.roles.findById(due.roleId);
+      if (!row) continue;
+      const effect = due.effect;
+      const data = decodeStoredRoleData(row.data);
+      const maxHp = Math.max(1, Math.floor(Number(data.maxHp) || 0) || 1);
+      const maxMp = Math.max(0, Math.floor(Number(data.maxMp) || 0));
+      let hpDelta = (Number(effect.hp) || 0) * due.ticks;
+      let mpDelta = (Number(effect.mp) || 0) * due.ticks;
+      if (Number(effect.hpPercent)) hpDelta += Math.round(maxHp * Number(effect.hpPercent) * due.ticks);
+      if (Number(effect.mpPercent)) mpDelta += Math.round(maxMp * Number(effect.mpPercent) * due.ticks);
+      // 层数乘在总量上：五层灼烧就是五倍，而不是「每拍扣五次」（后者让 ticked_at 记不过来）
+      hpDelta *= due.stacks;
+      mpDelta *= due.stacks;
+      const hpBefore = Math.max(0, Math.floor(Number(data.hp) || 0));
+      const mpBefore = Math.max(0, Math.floor(Number(data.mp) || 0));
+      const hpAfter = Math.max(0, Math.min(maxHp, hpBefore + hpDelta));
+      const mpAfter = Math.max(0, Math.min(maxMp || mpBefore, mpBefore + mpDelta));
+      if (hpAfter === hpBefore && mpAfter === mpBefore) {
+        this.statuses.markTicked(due.roleId, due.statusId, due.nextTickedAt);
+        continue;
+      }
+      data.hp = hpAfter;
+      data.mp = mpAfter;
+      // 不推 revision：血量型写入（与自然回复同一条通道）。写失败只跳过这一拍 ——
+      // 周期伤害晚一拍不会破坏什么，抛出去会让整轮扫描断掉（后面的人全都不结算）
+      const written = this.roles.updateDataKeepRevision(row.id, JSON.stringify(data), Date.now());
+      if (!written) {
+        this.logger.warn(`周期状态结算写库失败（角色 ${due.roleId} / 状态 ${due.statusId}）—— 这一拍跳过`);
+        continue;
+      }
+      this.statuses.markTicked(due.roleId, due.statusId, due.nextTickedAt);
+      // 被烧死 = 与「被怪打死」同一个收尾（docs/22 §5）：清空状态，复活不带旧 buff。
+      // 放在落库之后：清状态失败不影响这一拍的血量（血量是权威，状态是演出侧的事实）
+      if (hpAfter <= 0) this.statuses.clearOfRole(due.roleId);
+      results.push({ accountId: account.id, roleId: row.id, hp: hpAfter, mp: mpAfter, dead: hpAfter <= 0 });
+    }
+    return results;
+  }
+
   //#endregion
 
   /**
