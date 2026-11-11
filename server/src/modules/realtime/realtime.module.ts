@@ -11,7 +11,10 @@ import { CastGuardService } from "./cast-guard.service";
 import { ChatService } from "./chat.service";
 import { CombatSettlementService } from "./combat-settlement.service";
 import { MapMonitorService } from "./map-monitor.service";
+import { MapGeometryService } from "./map-geometry.service";
 import { MonsterAiService } from "./monster-ai.service";
+import { MovementGuardService } from "./movement-guard.service";
+import { PathService } from "./path.service";
 import { PlayerPresenceService } from "./player-presence.service";
 import { RealtimeController } from "./realtime.controller";
 import { RealtimeService } from "./realtime.service";
@@ -53,6 +56,11 @@ import { StatusTickService } from "./status-tick.service";
     CastGuardService,
     MonsterAiService,
     PlayerPresenceService,
+    // 移动三道校验（#811）：几何/网格（两个消费者共用一份副本）、闸门、服务端 A*。
+    // 三者都住本模块 —— 拆进程形态里只有实时进程会判位移与寻路
+    MapGeometryService,
+    MovementGuardService,
+    PathService,
     MapMonitorService,
     ChatService,
     BlockService,

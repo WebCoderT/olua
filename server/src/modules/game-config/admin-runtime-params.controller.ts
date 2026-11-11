@@ -5,7 +5,7 @@ import { ApiDataResponse } from "../../common/decorators/api-data-response.decor
 import { AuditTarget } from "../../common/decorators/audit-target.decorator";
 import { Permission } from "../../common/constants/permission";
 import { RuntimeParamsService } from "./runtime-params.service";
-import { MonsterAiParamsDto, RuntimeParamsDto, UpdateMonsterAiParamsDto, UpdateRuntimeParamsDto } from "./dto/runtime-params.dto";
+import { MonsterAiParamsDto, MovementGuardParamsDto, RuntimeParamsDto, UpdateMonsterAiParamsDto, UpdateMovementGuardParamsDto, UpdateRuntimeParamsDto } from "./dto/runtime-params.dto";
 
 /**
  * 管理端 · 客户端运行时参数（#605）
@@ -89,5 +89,39 @@ export class AdminRuntimeParamsController {
   @ApiDataResponse(MonsterAiParamsDto, { description: "更新后的生效值" })
   updateMonsterAi(@Body() dto: UpdateMonsterAiParamsDto): MonsterAiParamsDto {
     return this.runtimeParamsService.updateMonsterAi(dto) as unknown as MonsterAiParamsDto;
+  }
+
+  @Get("movement")
+  @ApiAdminDoc({
+    operationId: "adminRuntimeParams.getMovement",
+    summary: "位移校验参数",
+    description:
+      "移动三道校验的闸门参数（`runtime_params.movement` 列，#811）。与怪物 AI 一样**单独一条接口**、不下发客户端：\n\n" +
+      "- `mode`：`off` 不校验（回滚用）/ `log` 只记账放行（**出厂**）/ `enforce` 拒绝该帧并回 `posCorrect` 拉回；\n" +
+      "- `maxSpeed` / `tolerance` / `jitterPx`：单帧位移上限 = `maxSpeed × tolerance × Δt + jitterPx`；\n" +
+      "- `wallCheck`：穿墙校验开关（碰撞数据出问题时可单独关掉，不牵连速度校验）；\n" +
+      "- `correctIntervalMs`：同一连接两次拉回的最小间隔。\n\n" +
+      "`log` 档跑满一周、超速占比 < 0.5% 且穿墙抽样误判为 0 之后再切 `enforce`。",
+    permissions: [Permission.GAME_CONFIG_READ],
+  })
+  @ApiDataResponse(MovementGuardParamsDto, { description: "当前生效值" })
+  getMovement(): MovementGuardParamsDto {
+    return this.runtimeParamsService.movement() as unknown as MovementGuardParamsDto;
+  }
+
+  @Patch("movement")
+  @AuditTarget("runtimeParams")
+  @ApiAdminDoc({
+    operationId: "adminRuntimeParams.updateMovement",
+    summary: "编辑位移校验参数",
+    description:
+      "**部分更新**：只提交改动过的字段，没提交的保持原值。\n\n" +
+      "改完**下一次 pos 帧**就按新值判（不做缓存），切档位不需要重启、也不需要玩家重进。\n\n" +
+      "风险提示：`enforce` 档下被拒的帧会立刻把玩家拉回权威位置 —— 切之前先确认 `log` 档的流水里没有误判。",
+    permissions: [Permission.GAME_CONFIG_WRITE],
+  })
+  @ApiDataResponse(MovementGuardParamsDto, { description: "更新后的生效值" })
+  updateMovement(@Body() dto: UpdateMovementGuardParamsDto): MovementGuardParamsDto {
+    return this.runtimeParamsService.updateMovement(dto) as unknown as MovementGuardParamsDto;
   }
 }

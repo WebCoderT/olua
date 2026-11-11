@@ -5,6 +5,7 @@ import {
   DropRuntimeParams,
   GuildRuleParams,
   MonsterAiRuntimeParams,
+  MovementGuardParams,
   RUNTIME_PARAM_KEYS,
   RuntimeParams,
 } from "../../common/constants/runtime-params";
@@ -15,6 +16,7 @@ import {
   DropRuntimeParamsDto,
   RuntimeParamsDto,
   UpdateMonsterAiParamsDto,
+  UpdateMovementGuardParamsDto,
   UpdateRuntimeParamsDto,
 } from "./dto/runtime-params.dto";
 
@@ -107,6 +109,8 @@ export class RuntimeParamsService implements OnApplicationBootstrap {
       // 怪物 AI 不在这套 DTO 里（它归怪物域，没有管理端页面）—— 原样保留，
       // 否则「改掉落参数」会顺手把这一列写成 '{}'（`update` 是整行 UPDATE）
       monster_ai: existing?.monster_ai ?? "{}",
+      // 位移校验同上（#811）：它有自己的两条接口，改三组参数不该动它
+      movement: existing?.movement ?? "{}",
       updated_at: Date.now(),
     };
     this.repository.update(row);
@@ -154,10 +158,50 @@ export class RuntimeParamsService implements OnApplicationBootstrap {
       auto_battle: existing?.auto_battle ?? "{}",
       guild_rules: existing?.guild_rules ?? "{}",
       monster_ai: JSON.stringify(next),
+      // 位移校验那一列原样写回（同一条整行 UPDATE 的纪律）
+      movement: existing?.movement ?? "{}",
       updated_at: Date.now(),
     };
     this.repository.update(row);
     return this.monsterAi();
+  }
+
+  /**
+   * 位移校验参数（`movement` 列，#811）
+   *
+   * 与 `monsterAi()` 同一取向：**原样返回**（缺键不补），兜底由消费方
+   * `MovementGuardService` 做 —— 这里补一份等于「代码里的第二份出厂值」。
+   */
+  movement(): MovementGuardParams {
+    return parseGroup(this.repository.get()?.movement) as unknown as MovementGuardParams;
+  }
+
+  /**
+   * 更新位移校验参数（部分更新；与三组、与怪物 AI 都分开）
+   *
+   * 合并用 `definedOnly`（DTO 实例没提交的字段是 `undefined`），落库时**其余五列原样写回**。
+   * 档位拼错由 DTO 的 `@IsIn` 直接挡住（不会静默落一个不认识的档位进库）。
+   */
+  updateMovement(dto: UpdateMovementGuardParamsDto): MovementGuardParams {
+    const existing = this.repository.get();
+    const current = parseGroup(existing?.movement);
+    const next = { ...current, ...definedOnly(dto) } as Record<string, unknown>;
+    // 跨字段：容差不能小于 1（比上限还严 = 正常移动全被拒），抖动非负 —— DTO 已管单字段，这里防手改库
+    const tolerance = Number(next.tolerance);
+    if (Number.isFinite(tolerance) && tolerance < 1) {
+      throw new BizException(BizCode.PARAM_INVALID, `容差倍率 ${tolerance} 小于 1：比速度上限还严，正常移动会被整片误判`);
+    }
+    const row: RuntimeParamsRow = {
+      id: 1,
+      drop_params: existing?.drop_params ?? "{}",
+      auto_battle: existing?.auto_battle ?? "{}",
+      guild_rules: existing?.guild_rules ?? "{}",
+      monster_ai: existing?.monster_ai ?? "{}",
+      movement: JSON.stringify(next),
+      updated_at: Date.now(),
+    };
+    this.repository.update(row);
+    return this.movement();
   }
 
   /** 三列 JSON → 生效值（坏 JSON 当空对象；缺键就是缺键，不补默认值） */

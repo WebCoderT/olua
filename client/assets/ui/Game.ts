@@ -169,6 +169,14 @@ export class Game extends Component {
     CombatChannel.onPlayers = (frame) => OtherPlayerManager.applyPlayersFrame(frame, RealtimeClient.onlineUserId ?? "");
     // 拾取权威（#325）：picked 帧由掉落管理器落账（入包格子照搬 + 收掉地面节点）
     CombatChannel.onPicked = (data) => DropManager.applyPickedFrame(data);
+    // 位置修正（#811）：服务端不认我刚才上报的位置 → 拉回权威坐标（近距插值 / 远距瞬移 + 飘字）。
+    // 飘字只说一次「网络波动」：不说玩家会以为游戏坏了，多说一句他就会被反复打断
+    CombatChannel.onPosCorrect = (frame) => {
+      AutoBattle.applyServerCorrection(frame.x, frame.y);
+      GameUiHelper.createTip("position_corrected_tip");
+    };
+    // 服务端寻路（#811）：路点由服务端下发，取代本地 A* 的结果（本地那份只作即时预判与离线兜底）
+    CombatChannel.onPath = (frame) => AutoBattle.applyServerPath(frame);
     // 聊天（#395）：chat 帧只喂 ChatStore（回显即成功——自己的消息也从服务端回来），
     // 气泡订阅同一个仓；弹窗开着时它自己挂起气泡并增量上屏
     ChatStore.setSelf(RealtimeClient.onlineUserId ?? "");
@@ -385,6 +393,8 @@ export class Game extends Component {
     CombatChannel.onMonsterAi = null;
     CombatChannel.onPlayers = null;
     CombatChannel.onPicked = null;
+    CombatChannel.onPosCorrect = null;
+    CombatChannel.onPath = null;
     CombatChannel.onChat = null;
     CombatChannel.onQuest = null;
     CombatChannel.onParty = null;

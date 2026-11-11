@@ -341,8 +341,6 @@ export interface AppConfiguration {
    * 让「别人换了衣服」最多迟这么久被看到（换装走 HTTP 存档，实时进程不会被告知）
    */
   playerAppearanceRefreshMs: number;
-  /** 位置仲裁的速度上限（像素/秒，#596 最小仲裁）：单帧位移超过它 × 时距视作瞬移 */
-  playerPosMaxSpeed: number;
   //#endregion
 
   //#region 实时地图监控（#665：把内存里的世界投影成管理端可读的两张表）
@@ -615,7 +613,6 @@ export default function configuration(): AppConfiguration {
     monsterAiPosStaleMs: Number(process.env.MONSTER_AI_POS_STALE_MS ?? 3000),
     playerSyncBroadcastMs: Number(process.env.PLAYER_SYNC_BROADCAST_MS ?? 200),
     playerAppearanceRefreshMs: Number(process.env.PLAYER_APPEARANCE_REFRESH_MS ?? 5000),
-    playerPosMaxSpeed: Number(process.env.PLAYER_POS_MAX_SPEED ?? 1000),
     mapMonitorMs: Number(process.env.MAP_MONITOR_MS ?? 1000),
     mapMonitorEventKeep: Number(process.env.MAP_MONITOR_EVENT_KEEP ?? 2000),
     mapMonitorTrimEvery: Number(process.env.MAP_MONITOR_TRIM_EVERY ?? 100),

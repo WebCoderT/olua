@@ -1015,7 +1015,7 @@ export const routes = {
      */
     batchRemove: "/admin/roles/batch-delete",
   },
-  /** adminRuntimeParams 模块（4 个接口） */
+  /** adminRuntimeParams 模块（6 个接口） */
   adminRuntimeParams: {
     /**
      * 运行时参数（GET /admin/runtime-params）
@@ -1041,6 +1041,18 @@ export const routes = {
      * **部分更新**：只提交改动过的字段，没提交的保持原值。
      */
     updateMonsterAi: "/admin/runtime-params/monster-ai",
+    /**
+     * 位移校验参数（GET /admin/runtime-params/movement）
+     *
+     * 移动三道校验的闸门参数（`runtime_params.movement` 列，#811）。与怪物 AI 一样**单独一条接口**、不下发客户端：
+     */
+    getMovement: "/admin/runtime-params/movement",
+    /**
+     * 编辑位移校验参数（PATCH /admin/runtime-params/movement）
+     *
+     * **部分更新**：只提交改动过的字段，没提交的保持原值。
+     */
+    updateMovement: "/admin/runtime-params/movement",
   },
   /** adminSkill 模块（4 个接口） */
   adminSkill: {

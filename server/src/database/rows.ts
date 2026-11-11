@@ -1190,6 +1190,8 @@ export interface RuntimeParamsRow {
   guild_rules: string;
   /** 怪物 AI 参数（`MonsterAiParams` 的 JSON；服务端权威 AI 每 tick 读它） */
   monster_ai: string;
+  /** 位移校验参数（`MovementGuardParams` 的 JSON；#811，服务端消费、不下发客户端） */
+  movement: string;
   updated_at: number;
 }
 

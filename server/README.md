@@ -453,8 +453,8 @@ git pull && make config-import       # 整表替换配置；账号与角色存�
 | 分组 | 数量 | 令牌要求 |
 | --- | --- | --- |
 | 公共接口 | 7 | 无需令牌（健康检查、玩家注册登录、管理员登录注册、拉取生效中的公告、**拉取活区列表**） |
-| 客户端 | 50 | `player` 令牌，只能操作自己账号的数据 |
-| 管理端 | 113 | `admin` 令牌 + 每个接口各自的权限点 |
+| 客户端 | 65 | `player` 令牌，只能操作自己账号的数据 |
+| 管理端 | 174 | `admin` 令牌 + 每个接口各自的权限点 |
 
 **分组是按「方法」标的，不是按控制器**：一个控制器里常同时有公共与需登录接口（例如 `auth` 的 `register/login` 属公共、`me` 属客户端）。
 所以**控制器不写类级 `@ApiTags`**，统一用 `common/decorators/api-doc.decorator` 的组合装饰器；
@@ -530,7 +530,7 @@ admin/src/api/{routes,models,endpoints}.ts
 
 ## 测试与回归
 
-四十八套测试里，四十七套 e2e 都是**真实起服务进程 + 真实 HTTP 请求**（不是 mock），
+六十八套 e2e 都是**真实起服务进程 + 真实 HTTP 请求**（不是 mock），
 外加一套 `config-sync` 是纯脚本测试（配置快照不经过 HTTP，起服务只会把两类问题混在一起）：
 
 | 脚本 | 断言数 | 覆盖 |
@@ -556,6 +556,8 @@ admin/src/api/{routes,models,endpoints}.ts
 | `test/e2e-bag.cjs` | **40** | 背包与穿戴（#556）：穿戴 / 卸下 / 丢弃 / 整理与搬运全在服务端；**move·tidy 只验两条守恒**（网格形状 + 同 id 总件数）；等级门槛与部位由服务端判（1 级穿 10 级衣服被拒且衣服还在包里）；穿脱当场重算属性（脱掉加血装备血量跟着降）；**装备槽存 `{ id, bound?, from? }`**（#816：槽位值是对象、不再折叠成裸 id）；**`PUT /roles/:id` 改不动背包 / 装备 / 技能**（回填而不是拒收）；**背包尺寸归客户端配置**（改大能长个且不丢东西，存档不重排位置）；错 revision → 20006、别人的角色 → 40300 |
 | `test/e2e-skill-upgrade.cjs` | **54** | 技能升级（#828）：建号 `skillPoints` = 1 且技能全 1 级；升级扣 `当前等级` 点、等级 +1、revision +1（回执与库里同步）；**20035 点数不足时一点都没动**（等级 / 点数 / revision 都不变）；20034 三种目标不合法（怪物技能 / 认不出的 id / 系数为空）；20036 到顶（上限 = 系数档数）；**伤害系数真的取下一档**（把两档改成 1× / 20×，升级前后同一只怪 15 → 400）；`PUT /roles/:id` 带改过的 `skills` / `skillPoints` 被回填成库里的值 |
 | `test/e2e-map.cjs` | **122** | 地图管理（#573，**玩法配置可改、资源本体不可改**）：11 张图按 id **数值**升序（`10` 不排到 `2` 前面）/ 两类计数各归各位（`monsterAreaCount` 是客户端 TMX 的矩形、`spawnAreaCount` 是库表行数）/ **两套坐标对账**（`groups` 是 Tiled 原始口径，`spawnAreas` 是世界坐标 —— 同一个矩形的中心必须对得上）/ **玩法配置保存即生效**（列表 / 详情 / **玩家配置快照**三处同步；请求里塞 `src` 被白名单剥掉，下发方改不到客户端加载哪张图）/ 参数越界（类型 / 等级 / 名称）一律 400 且没写进去 / **POST·PUT·DELETE 一律 404**（没有「新建 / 删除地图」这回事：图存不存在由 TMX 决定）/ 不存在的图 404 + 50032 / 观察员可读、写 403、无令牌 401 / 文档契约与「没有 Map 写模型」 |
+| `test/e2e-map-movement.cjs` | **34** | 移动校验（#811）：`runtime_params.movement` 三档 `mode` 的口子（GET / PATCH / 非法档位 400 / 关掉 `tolerance<1` 的跨字段校验）/ **`log` 档照判照接受**（超速帧仍被采纳，只记账）/ **`enforce` 档单帧即拒 + 立刻回 `posCorrect`**（回的是上一次被接受的坐标，不是本帧夹出来的）/ **正常移动不误判**（4Hz 25px 小步、掉帧 600ms 走 240px 都放行）/ 穿墙判 `reason: "wall"` / 复活（`hp` 从 ≤0 变 >0）那一帧一律接受 / `off` 档完全放行 / 改 `movement` 不清别的分组。观察手段：`players` 帧里**也含自己那一条**，从最近一帧按 `accountId` 取权威 x |
+| `test/e2e-map-path.cjs` | **27** | 服务端寻路（#811）：位置未上报 → `unreachable` / **起点取服务端坐标**（客户端说了不算）/ **逐段 4px 采样证明路点不穿墙**（刻意不复用服务端的 `segmentHitsAabb`，避免自证）/ 拉直有效（开阔直线 < 1.25 倍且 ≤2 个路点）/ 目标在墙里 → `snapped` / 图外 → `unreachable` / `auto_battle.cellSize` 改 80 立刻生效 |
 
 
 ```bash
@@ -563,7 +565,7 @@ cd server && npm run verify          # 编译 + 全套 e2e（清单自动扫 pac
 env -u NODE_OPTIONS npm run verify   # 受限终端里要清掉 NODE_OPTIONS
 ```
 
-改了哪块就优先跑对应那套（改角色接口 → `test:e2e:roles`；改地图 / 刷怪区 → `test:e2e:map`；改口令 / 审计 / 限流 / 踢下线 → `test:e2e:guard`；改邮件 → `test:e2e:mail`；改屏蔽 / 举报 → `test:e2e:blocks`；改排行榜 → `test:e2e:rank`；改实时通道 → `test:e2e:realtime`），
+改了哪块就优先跑对应那套（改角色接口 → `test:e2e:roles`；改地图 / 刷怪区 → `test:e2e:map`；**改移动 / 寻路 / 位置仲裁 → `test:e2e:map-movement` 与 `test:e2e:map-path`**；改口令 / 审计 / 限流 / 踢下线 → `test:e2e:guard`；改邮件 → `test:e2e:mail`；改屏蔽 / 举报 → `test:e2e:blocks`；改排行榜 → `test:e2e:rank`；改实时通道 → `test:e2e:realtime`），
 但**提交前 `npm run verify` 都该过一遍**。
 
 ## 相关文档
