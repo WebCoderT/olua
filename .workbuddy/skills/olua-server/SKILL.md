@@ -754,6 +754,42 @@ e2e 写法（`test/e2e-map-monitor.cjs` 的「二·五」段）：想稳定看�
 - 改了大写槽位入参的旧测试别急着改断言 —— 归一之后 `WEAPON` 合法；要改的是「编造 id」的那批
   （e2e-roles 三段 / e2e-combat H 段改用真实 id，血条分母的期望值要连装备加成一起算）。
 
+### 四之十七、拾取归属与帮会门槛（#817 / #871 / #872）：两把尺子、一个事务
+
+**拾取（#817）** —— 掉落的归属闸从「账本里有没有这一条」扩成「账本 + 人在哪」：
+
+| 闸 | 判据 | 别退回 |
+|---|---|---|
+| 幂等 | `entry.picked` → `alreadyPicked` | **刻意不过距离闸**：拾取成功应答丢包后客户端重发是正常行为，那时人可能已经走开 |
+| 距离 | `presence.positionOf(accountId)` → 图一致 + `hypot ≤ pickAcceptRadius` + 位置不超 `PICK_POS_STALE_MS`(5s) | 位置查不到就**拒绝**而不是放行 —— 放行等于给「不上报位置」开绕过开关（与任务 NPC 距离闸同口径） |
+| 跨图 | `spot.mapId !== entry.mapId` | 不能再只靠 `worldJoin` 清账本兜着 |
+
+- 账本记的是**怪倒下的地方**（`DropLedgerEntry.mapId/x/y`），区域技能**逐条**记各自的落点、单体记
+  `hitSpot`。用施法者坐标会让「站 A 放全屏、跑 B 捡」判合法。
+- `pickAcceptRadius`（`drop_params`，出厂 200，**0 = 关闭校验**）与客户端的 `autoPickupRadius`（40，
+  自动吸物的手感半径）是两把尺子，别合并。参数坏值/负数按 0 放行 —— 闸是加固，配漏了让全服捡不起
+  东西比漏一道闸严重；缺键由 `RuntimeParamsService.onApplicationBootstrap` 点名报错。
+- 客户端侧：超出 `autoPickupRadius` 的点击改成 `AutoBattle.requestMoveTo` 走过去（`ScreenClickInput.pickupOrWalk`）。
+- e2e 里凡是拾取都要先报位置：`pick` helper 用 `standAtSpot` **连发两帧 pos**（`POS_TRUST_STREAK = 2`）。
+
+**帮会门槛（#872）** —— 判序 **等级(50147) → 名字 → 重名 → 扣钱(20011)**：
+
+- `RolesService.spendBindGold(accountId, amount, reason)` 与建帮**同一事务**：`DatabaseService.transaction()`
+  可重入，扣款方法自己不开事务，抛错整笔回滚（被拒既不落库也不扣钱）。
+- **金额 0 不写库、不推 revision** —— 免费建帮不该在存档里留一条空改动。
+- 余额不用接口回传：服务端改完 `revision`，实时进程的 `roleUpdate` 轮询一秒内把新余额推下去。
+
+**副帮主任命（#871）** —— `POST guilds/me/rank`，**任命与卸任同一接口**：
+
+- `rank` 只认 `vice|member`（`@IsIn`），`leader` → 40000（换帮主必须走转让，不给这条留后门）。
+- 仅帮主（成员 50105）；帮主自己 / 外帮成员 50108；重复任命幂等；名额按现有人数判，超出 50148
+  （`GUILD_VICE_LIMIT_DEFAULT = 1`）。
+- 快照给 `canAppoint`（仅帮主），客户端只按它显隐按钮 —— **客户端不自己数副帮主**。
+
+**e2e 准备段的两个坑**：① 1 级号建不了帮（门槛出厂开着）→ `test/lib/guild-gate.cjs` 直接改库归零
+（`RuntimeParamsService` 每次现读库，改即生效，不用重启）；② `e2e-combat` / `e2e-area-skill` /
+`e2e-event-log` 历史上从没上报过 `pos`，加距离闸后 happy path 全红 —— 都要在 pick 前补位置帧。
+
 ## 五、运营与安全底座（口令 / 令牌作废 / 限流 / 审计 / 踢下线 / 公告 / 邮件 / 备份）
 
 这几件事互相咬合，**改动时基本必须一起看**：

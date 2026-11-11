@@ -80,6 +80,15 @@
   拒；`= 0`（配置缺口，现网 8004→9002 就是）**放行 + 告警一次**，点位补上自动生效。周期一把尺子：`reset_day` = **本轮起点
   天号**（日常 `resetDayOf` / 周常 `weekStartDayOf`，都 05:00 切），`isStale` 一处覆盖 接取/下发/交付/推进度；
   `abandon` 只删非 `claimed`（那是「本轮领过」的唯一证据）；超时**不加列**，跨轮交付 **20033**。
+- **拾取归属（#817）**：账本 `DropLedgerEntry` 记**怪倒下的地方**（`mapId/x/y`，区域技能逐条），不是施法者坐标；
+  `pickDrop` 三道闸 幂等 → 距离 → 跨图；`alreadyPicked` **不过距离闸**；`pickDistanceRefusal` 四种拒绝（位置查不到 /
+  超 `PICK_POS_STALE_MS` 5s / 图不一致 / 超 `pickAcceptRadius`）；参数坏值按 **0 = 不校验**（闸是加固，配漏了
+  全服捡不起东西比漏闸严重）。客户端点远处掉落物走 `AutoBattle.requestMoveTo` 过去，不隔空取。
+- **帮会门槛与职位（#871/#872）**：建帮判序 等级(**50147**) → 名字 → 重名 → 钱(**20011**)；`spendBindGold` 与建帮
+  **同一事务**（`transaction()` 可重入，扣款方法自己不开），金额 0 不写库不推 revision。`POST guilds/me/rank`
+  任命+卸任同接口（`rank=vice|member`，`leader` → 40000），仅帮主（成员 50105），名额 `GUILD_VICE_LIMIT_DEFAULT=1`
+  服务端判（**50148**），快照给 `canAppoint`，客户端**不自己数人**。e2e 里 1 级号要建帮的套件用
+  `test/lib/guild-gate.cjs` 把门槛改库归零（`RuntimeParamsService` 每次现读库，改完即生效）。
 - 乐观锁客户端口径「拉最新 + 丢弃本轮」，**不重推**。
 
 ## 引擎坑（→ `cocos-render` / `-input` / `-resource` / `-gameplay` / `-build-test`，旧技能原文在各自 `references/`）
