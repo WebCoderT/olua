@@ -66,6 +66,7 @@ npm run dev              # 开发（ts-node 热启动）；npm run build && npm 
 | `npm run test:e2e:crit` | 暴击与破防专项（36 条；#826：`def_ignore` 削的是防御那一项 / `crit_rate` 必爆时伤害整体翻倍 / 角色属性与技能行相加） |
 | `npm run test:e2e:skill-upgrade` | 技能升级专项（54 条；#828：建号 1 点 + 技能全 1 级 / 升级扣点与 revision +1 / 20035 点数不足且一点没动 / 20034 三种目标不合法 / 20036 到顶 / **伤害系数真的取下一档**（两档改成 1× 与 20×，升级前后两刀 15 → 400）/ PUT 存档改技能表被回填） |
 | `npm run test:e2e:attr-points` | 属性点与自由加点专项（70 条；#833：建号 1 点 + 四维全 0 / 20038 空请求不推 revision / **非法入参 40000 + HTTP 400、白名单外字段被丢掉** / 20037 点数不足且一点没动 / PUT 存档改四维被回填 / **泡点升级后「余点 + 已分配 = 等级」** / 四维真的进面板（系数调大后加点，生命上限变大）/ 洗点 20009 · 20039 与扣费归零 / `attrResetCost = 0` 免费 / 存量库按等级补发且重启不重复） |
+| `npm run test:e2e:level-gap` | 等级差压制系数（45 条；#834：`growth_scalars.levelGapSuppress` 出厂 0.05 / 同级不压制（回归）/ 系数 1 → 越 1 级伤害归零 / 系数 0.5 → gap 1 有伤害 · gap 2 归零（线性）/ 出厂口径越 20 级归零 · 越 19 级还有伤害 / 打低级怪不压制（gap 夹 0）/ 系数 0 = 关闭 / 0~1 之外 40000 + HTTP 400 / **区域路径同一个系数**） |
 | `npm run test:e2e:push` | 撞飞与群体化专项（25 条；#826：`push_chance` 与等级闸三道闸逐个验 / 回执带 `pushDistance` 且 AI 侧真的推走 / 击杀不推 / 1009 群体化一发多中） |
 | `npm run test:e2e:admin-mail` | 管理端消息补发专项（29 条；#437：鉴权 / 频道收窄 / 附件领到手 / 离线收件 / 审计留痕） |
 | `npm run test:e2e:mail-expiry` | 收件箱保质期专项（15 条；#439：ttl 写入 / 读口即时消失 / 清理判据 / 批量上限） |
@@ -227,6 +228,7 @@ server/
 │   ├── e2e-status.cjs（战斗状态 #826 第三批：等级压制 / 两段连击 / 灼烧按拍与不致死 / 眩晕拒出手与 pos 帧不被采纳 / 拉人实际位移 / 怪被控不追不打）
 │   ├── e2e-skill-upgrade.cjs（技能升级 #828：建号 1 点 / 升级扣点与 revision +1 / 20035 · 20034 · 20036 三码 / 伤害系数真的取下一档 / PUT 存档改技能表被回填）
 │   ├── e2e-attr-points.cjs（属性点与自由加点 #833：建号 1 点 / 20038 · 20037 两码 / 四维进面板 / 洗点扣费与归零 / 存量补发幂等）
+│   ├── e2e-level-gap.cjs（等级差压制 #834：系数走配置 / 同级与打低级怪不压制 / 线性与越 20 级归零 / 区域路径同一个系数 / 0~1 之外 40000）
 │   ├── e2e-world.cjs（世界权威：服务端按刷怪区自播种 / 结算落世界 / tick 重生 / 关闭落盘 / 重启恢复）
 │   ├── e2e-world-viewers.cjs（观看者集合：换图退出旧图 / 旧图不再投递与采样 / 空闲卸载 / 卸载不丢状态）
 │   ├── e2e-dual.cjs（双进程形态：存档与实时分进程 / 跨进程令牌校验 / 踢下线巡检断连 / WAL 跨进程写）
@@ -334,7 +336,7 @@ git pull && make config-import       # 整表替换配置；账号与角色存�
 | `world_meta` | 世界代际（#295 阶段二） | 单行表（id 恒为 1）；合并区时 `epoch`+1，两个进程的世界内存靠轮询它作废旧状态（跨进程的「库被改写过」信号） |
 | `map_spawn_areas` | 刷怪区（#295 阶段一 / #667 后台绘制） | **管理端地图页拖框绘制**（`POST/PATCH/DELETE /admin/maps/:id/spawn-areas`），TMX 的 monster 组不再是来源；每区域按**密度目标**（`max × 时段系数 × 人数系数`，`density_peak` / `density_off` / `peak_hours` 三列为空时等于 `max`）在矩形内随机落点播种，`min` 恒为 0；越界区域只告警并把落点钳进图内（#850）。worldJoin 只收 mapId，**改动 1 秒内由 tick 按差量对齐**（补每次最多 2 只、多的删最久没被攻击的，正在打的不删）。实例的归属区记在 `world_monsters.area_id` |
 | `role_level_curves` | 角色等级曲线（#786） | 主键 `(curve, seq)`：4 条独立曲线（`exp` / `hp` / `attack_max` / `defense_max`）× 6 段，每行 = 一段的 `from_level` / `to_level` / `start_value` / `per_level` / `accel`；段内 `start + per_level×k + accel×k(k-1)/2`（`k = level - from_level`），超出末段外推，所以上限调大不用改曲线。蓝 = 血/2、回血 = 血/100、攻防下限 = 上限×0.7、三系同值全是派生的。**只可改不可增删**（非末段改 `to_level` 会联动下一段 `from_level`）。旧的 `level_exps` / `growth_segments` / `role_levels`（#655 逐级 60 行）已随 #786 下线并 `DROP TABLE` |
-| `growth_scalars` | 成长标量参数（#256） | 等级上限 / 经验节奏 / 自然回蓝 / 泡点 / 暴击 / **属性点系数与洗点花费（#833）**；各键取值域见 `GROWTH_SCALAR_SPECS`；改 `roleMaxLevel` 会把四条曲线末段 `to_level` 一起拉平 |
+| `growth_scalars` | 成长标量参数（#256） | 等级上限 / 经验节奏 / 自然回蓝 / 泡点 / 暴击 / **属性点系数与洗点花费（#833）** / **等级差压制系数（#834）**；各键取值域见 `GROWTH_SCALAR_SPECS`；改 `roleMaxLevel` 会把四条曲线末段 `to_level` 一起拉平 |
 | `ranks` | 军衔配置（#250） | 阶数序列固定（1..100），只可改不可增删；衔名 / 大段名 / 晋升价格 / 八项属性（出厂 = rank-seed 展开，#590） |
 | `equipments` | 装备基础件配置（#252 / #773） | 主键是基础件 id（如 `cloth_1`，变体在 `equipment_variants`）；部位 / 等级需求 / 售卖价 / 八项属性；**可新建 / 删除**（新建连带展开全部变体，删除连带删变体与工作台几何；商城在架时拒删） |
 | `drugs` | 药品配置（#253） | 主键是药品 id（如 `drug_hp_1`，被掉落表与背包引用）；名称 / 描述 / 售卖价 / 堆叠 / 冷却 / 四项回复量（effects 按键求和）；id 清单固定，只可改不可增删 |

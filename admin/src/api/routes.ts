@@ -564,7 +564,7 @@ export const routes = {
     /**
      * 编辑标量参数（PATCH /admin/growth-scalars/{key}）
      *
-     * 只改 `value`；每个键的取值域服务端单独校验：roleMaxLevel ∈ [1, 10000000]（整数），expGain.expPerLevel ∈ [1, 100000]（整数），expGain.maxLevelGap ∈ [0, 100]（整数），mpRecoverPerSecond ∈ [0, 1000]，soakExpPerTick ∈ [0, 1000000]（整数），soakTickSeconds ∈ [1, 3600]（整数），critRate ∈ [0, 1]，critDamage ∈ [0, 10]，attrPointRatio ∈ [0, 5]，attrResetCost ∈ [0, 1000000]（整数）。
+     * 只改 `value`；每个键的取值域服务端单独校验：roleMaxLevel ∈ [1, 10000000]（整数），expGain.expPerLevel ∈ [1, 100000]（整数），expGain.maxLevelGap ∈ [0, 100]（整数），mpRecoverPerSecond ∈ [0, 1000]，soakExpPerTick ∈ [0, 1000000]（整数），soakTickSeconds ∈ [1, 3600]（整数），critRate ∈ [0, 1]，critDamage ∈ [0, 10]，attrPointRatio ∈ [0, 5]，attrResetCost ∈ [0, 1000000]（整数），levelGapSuppress ∈ [0, 1]。
      */
     update: (key: string) => `/admin/growth-scalars/${encodeURIComponent(key)}`,
   },
