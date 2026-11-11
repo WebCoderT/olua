@@ -21,6 +21,9 @@
 - **新道具表**要让 `sellPriceOf` / `itemLabelOf` / `itemTypeOf` 都认识，否则回收价与解析静默失效。
 - `config-sync.sql` 加表：只拼新增节的 diff + 手改表头三行；`cp` 库前 `PRAGMA wal_checkpoint(TRUNCATE)`。
 - 改 DTO 连描述都算改契约 → `swagger:emit` + `node tools/gen-api.cjs`；Response DTO 要进 `swagger/models.ts`。
+- **改列名**（不是加列）：`renameColumnIfExists(table, from, to)` 幂等改名（`PRAGMA table_info` 判存在 + 新名已存在则跳），
+  放 `migrate()` 末尾；**别删列重建** —— 存量数据（如已发的奖励金额）会丢。改名后 DDL / `rows.ts` / 仓储 SQL / DTO /
+  测试字面量五处一起改（#926 货币命名）。
 - controller `description` 别贴 `/admin/xxx`；同毫秒多行排序兜底键用 `rowid`，不用随机 uuid。
 
 ## 测试与门禁
@@ -82,7 +85,10 @@ compose **五个**服务：admin:80（唯一入口）/ game:8080 / server:3100 /
 ## 进度
 - 逐批细节 → `memory/topics/进度年表.md`（450+ 条按日）。最近：#921 商城限购 · #922 进图权威三条 · #923 怪物 AI 六条
   （`d2590ac2`）· #924 背包守恒与装备不重叠（`e5b0509d`）· #925 货币收敛唯一 bindGold（`b61e0439`，#843/#844 已关：
-  **不迁移直接删字段、legacy 道具 16 条删行不兼容、UI 叫「绑定元宝」**，账本键收权时剥离 LEGACY_LEDGER_FIELDS）。
+  **不迁移直接删字段、legacy 道具 16 条删行不兼容、UI 叫「绑定元宝」**，账本键收权时剥离 LEGACY_LEDGER_FIELDS）·
+  #926 货币命名彻底统一（`c1cb0a5e`，PR #927）：`rewards.bindGold` / `role_mails.bind_gold` / `reward_bind_gold` /
+  `cost_bind_gold` / `GROWTH_BIND_GOLD_NOT_ENOUGH` / `mall_bind_gold_not_enough_tip` / `{bindGold}` / `bind-gold` 三套写法
+  按层固定；存量库用 `renameColumnIfExists` 幂等改名（不删列重建，保已发奖励）；只有 `LEGACY_LEDGER_FIELDS` 留 gold 字面量。
 - 当前 open：#669 刷怪区即时生效 · #9 包体积 · #12~#19 素材 · #295 阶段三 · #403 帮会战 · #742 站点 TLS · #826 余项
   （眩晕/麻痹/灼烧/两段连击/拉人/等级压制 sup）· #816 / #817 后半 · #838 装备穿限制（放置）· 掉落表未按新装备重算 ·
   本地库有未导出改动（`make config-check` 常红）。**定保持现状**：技能 1011 / 快捷键 6 格 / 装备 7 部位。
