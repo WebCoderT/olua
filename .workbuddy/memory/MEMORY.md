@@ -128,6 +128,15 @@ compose **五个**服务：admin:80（唯一入口）/ game:8080 / server:3100 /
   状态**两侧都做**、灼烧按最大生命百分比每秒一拍；新增 `e2e-status` 55 条，`make e2e-all` 62 套 /
   `make client-test` 65 套全绿。落地口径见「状态层两侧」条；验收口径按用户拍板收窄（desc 不进脚本门禁，
   改锁「机制 ↔ 配置列 / 状态」的接线断言），1008 十步一杀 desc 去掉「有概率麻痹」。
+- **技能升级（#828，`afd620c0`，PR #937，已关）**：账本 `data.skillPoints`（进 `SERVER_INVENTORY_FIELDS`；建号 1 点、
+  `settleLevelUp` 与 `useLevelScroll` 各 +1/级）· **花费 = 当前等级**（原稿 `1 + 当前等级` 与建号 1 点自相矛盾，
+  用户拍板改）· **上限 = `damageCoefficients.length`**（0 → 20034 而非 20036；不加 `skills.max_level` 列）·
+  接口 `POST roles/:id/skill-upgrade`，三码 20034 / 20035（400 + `details{need,owned}`，**不是 409**）/ 20036；
+  规则唯一副本 `common/utils/skill-upgrade.util.ts`。**技能等级可改 = 倍率可改**（`damageCoefficients[level-1]`）故必须收服务端。
+  存量库 `seedSkillPointsOnce()`（marker `skill_points_seeded`，只补缺省不重算 / 不推 revision；**没 marker 就是无限技能点**）。
+  客户端技能行右侧「升级」按钮 + 顶部点数，成功就地 `rebuild()`，**不显示花费**（公式不写第二份）。`e2e-skill-upgrade` 54 条。
+  **客户端不得为服务端独占字段补默认值**（`ensureRoleDefaults` 里补 `skillPoints` 会被 `audit-role-authority` 判红；
+  默认值只能由 `Role` 字段声明给）—— 对所有进 `SERVER_INVENTORY_FIELDS` 的字段都成立。
 - **刷怪密度（#930，落地口径）**：表单只有「数量」= `max`，`min` 恒 0（老库 `min = max` 一次性抹平，否则下限顶死
   系数）；目标 `clamp(round(max × 时段系数 × 人数系数), min, max × density_peak)`，人数取**本图观看者**；tick 每秒
   差量对齐、每 tick 至多补 2 只、超出裁「死等重生 → 最久没被攻击」的，`lastDamagedAt` 5 秒内不裁；统计用**实例数**
