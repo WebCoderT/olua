@@ -274,7 +274,7 @@ export const ApiRoutes = {
      */
     ticket: "/realtime/ticket",
   },
-  /** role 模块（18 个接口） */
+  /** role 模块（19 个接口） */
   role: {
     /**
      * 角色列表（GET /roles）
@@ -378,6 +378,12 @@ export const ApiRoutes = {
      * 价格只认共享快照的出售价表（装备 = 回收价曲线含前后缀倍率，材料 / 药品 = 条目价签），**客户端报「卖什么、卖几件」，不报价**。同 id 的多条先合并；整单结算，任一条不合法都不落库。
      */
     sellGoods: (id: string) => `/roles/${encodeURIComponent(id)}/sell`,
+    /**
+     * 技能升级（技能点与技能等级都在服务端结算）（POST /roles/{id}/skill-upgrade）
+     *
+     * 把**一个**技能从当前等级升到下一级：花费 `当前等级` 技能点（1→2 花 1 点、2→3 花 2 点），等级 +1，伤害倍率随之取 `damageCoefficients` 的下一档。**客户端报「升哪个技能」，不报等级与花费** —— 改包也跳不了级、定不了价。
+     */
+    skillUpgrade: (id: string) => `/roles/${encodeURIComponent(id)}/skill-upgrade`,
     /**
      * 当前在线角色（GET /roles/online）
      *

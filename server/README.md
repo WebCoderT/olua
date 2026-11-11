@@ -64,6 +64,7 @@ npm run dev              # 开发（ts-node 热启动）；npm run build && npm 
 | `npm run test:e2e:element-damage` | 物法分离专项（12 条；#823：物理打物防 / 法术打魔防 / 法攻配 0 时跳过技能并 warn） |
 | `npm run test:e2e:area-skill` | 自身 / 区域 / 群体技能专项（31 条；#824：非单体技能能过结算 / 服务端算命中集合 / 落点夹取与跨图闸 / 逐只奖励与合并掉落账本） |
 | `npm run test:e2e:crit` | 暴击与破防专项（36 条；#826：`def_ignore` 削的是防御那一项 / `crit_rate` 必爆时伤害整体翻倍 / 角色属性与技能行相加） |
+| `npm run test:e2e:skill-upgrade` | 技能升级专项（54 条；#828：建号 1 点 + 技能全 1 级 / 升级扣点与 revision +1 / 20035 点数不足且一点没动 / 20034 三种目标不合法 / 20036 到顶 / **伤害系数真的取下一档**（两档改成 1× 与 20×，升级前后两刀 15 → 400）/ PUT 存档改技能表被回填） |
 | `npm run test:e2e:push` | 撞飞与群体化专项（25 条；#826：`push_chance` 与等级闸三道闸逐个验 / 回执带 `pushDistance` 且 AI 侧真的推走 / 击杀不推 / 1009 群体化一发多中） |
 | `npm run test:e2e:admin-mail` | 管理端消息补发专项（29 条；#437：鉴权 / 频道收窄 / 附件领到手 / 离线收件 / 审计留痕） |
 | `npm run test:e2e:mail-expiry` | 收件箱保质期专项（15 条；#439：ttl 写入 / 读口即时消失 / 清理判据 / 批量上限） |
@@ -223,6 +224,7 @@ server/
 │   ├── e2e-event-log.cjs（流水与审计补口 #884/#885/#886：注册留痕 / 八类事件落库 / 批量明细 / 表故障不影响主流程）
 │   ├── e2e-push.cjs（撞飞与群体化 #826：push_chance + 等级闸 / 击退位移游标补齐 / 击杀不推 / 1009 群体化）
 │   ├── e2e-status.cjs（战斗状态 #826 第三批：等级压制 / 两段连击 / 灼烧按拍与不致死 / 眩晕拒出手与 pos 帧不被采纳 / 拉人实际位移 / 怪被控不追不打）
+│   ├── e2e-skill-upgrade.cjs（技能升级 #828：建号 1 点 / 升级扣点与 revision +1 / 20035 · 20034 · 20036 三码 / 伤害系数真的取下一档 / PUT 存档改技能表被回填）
 │   ├── e2e-world.cjs（世界权威：服务端按刷怪区自播种 / 结算落世界 / tick 重生 / 关闭落盘 / 重启恢复）
 │   ├── e2e-world-viewers.cjs（观看者集合：换图退出旧图 / 旧图不再投递与采样 / 空闲卸载 / 卸载不丢状态）
 │   ├── e2e-dual.cjs（双进程形态：存档与实时分进程 / 跨进程令牌校验 / 踢下线巡检断连 / WAL 跨进程写）
@@ -293,6 +295,11 @@ git pull && make config-import       # 整表替换配置；账号与角色存�
 取值在 `common/constants/*-seed.ts`，靠 `config_meta` 的 marker 只跑一次（跑第二次会把运营
 删掉的行又长回来）。口径统一是 **`INSERT OR IGNORE` 补行 + 只在出厂空值时才写值**。
 
+同一个套路还有一个**不补配置行、补角色存档字段**的：`seedSkillPointsOnce`（#828）——
+老档案没有 `data.skillPoints`，启动时按 `roles.level` 补一次（已有该字段的一律不碰，
+坏 JSON 跳过，不推 revision）。它与上面几个的差别只在「补的是玩家的数据」，
+所以口径要更保守：**只补缺省，绝不重算**（详见 `docs/22` §2.5.1）。
+
 ## 数据模型
 
 数据表全部由 `DatabaseService` 在启动时 `CREATE TABLE IF NOT EXISTS` 建出；**存量库靠 `ensureColumn`（PRAGMA table_info）补列**，不需要迁移脚本。
@@ -331,7 +338,7 @@ git pull && make config-import       # 整表替换配置；账号与角色存�
 | `level_scrolls` | 升级卷轴（#787） | 主键是道具 id（`level_scroll_1` … 出厂 7 卷，或按区间派生的 `level_scroll_<下限>_<上限>`）；`min_level` / `max_level` 是**可用等级区间**（两列可改的数，「每 1000 级一卷」只是出厂切法）；`max_stack` / `sell_price` / 描述 / 图标。使用走 `POST roles/:id/level-scroll-use`：**硬性 +1 级、不扣经验**，区间与 +1 一律读本表；区间外 `20025`、到等级上限 `20026`、格子不是卷轴或区间配置坏 `20024`；**允许增删改**，改区间即时生效，`id` 不可改（改 id = 换一件物品） |
 | `monsters` | 怪物基础数据（#258） | 主键是怪物 key（怪物种子 `monster-seed.ts` 的关联键，被地图刷怪点 / 掉落表引用；#588 起客户端无副本，数值随快照下发）；名称 / 等级 / 定位 / 生命 / 六项攻防区间；**世界播种与伤害结算直读本表（改值即时生效）**；key 清单固定，只可改不可增删 |
 | `npcs` | NPC 基础数据（#258） | 主键是 NPC id（Tiled 对象组的关联键）；名称 / 对话文案（seed 为空串，客户端暂无对话数据形态）；id 清单固定，只可改不可增删 |
-| `skills` | 技能配置（#367） | 主键是技能 id；**角色与怪物同表**，`owner`（`role` / `monster`）区分并可按归属筛选；分类 / 目标类型 / 动作 / 特效 / 冷却 / 耗蓝 / 距离 / 等级 / 伤害系数（JSON，下标 = 等级 - 1）/ 挂载状态 `status_id` / **释放限制**（`cast_lock_ms` 动作锁、`require_target`）/ **战斗扩展**（`crit_rate` / `crit_damage` / `def_ignore` / `push_distance` / `push_chance` / `second_hit_ratio` 两段连击系数 / `pull_distance` 拉人距离，后两者互斥且推优先）；跨字段约束在 service（状态型必须挂状态、主动至少一条倍率、`status_id` 必须存在）；**怪物技能（9000 段）可增删**（角色技能清单固定，id 被技能栏 / 快捷键 / 存档引用；被怪物挂载引用中的行拒删） |
+| `skills` | 技能配置（#367） | 主键是技能 id；**角色与怪物同表**，`owner`（`role` / `monster`）区分并可按归属筛选；分类 / 目标类型 / 动作 / 特效 / 冷却 / 耗蓝 / 距离 / 等级 / 伤害系数（JSON，下标 = 等级 - 1）/ 挂载状态 `status_id` / **释放限制**（`cast_lock_ms` 动作锁、`require_target`）/ **战斗扩展**（`crit_rate` / `crit_damage` / `def_ignore` / `push_distance` / `push_chance` / `second_hit_ratio` 两段连击系数 / `pull_distance` 拉人距离，后两者互斥且推优先）；跨字段约束在 service（状态型必须挂状态、主动至少一条倍率、`status_id` 必须存在）；**怪物技能（9000 段）可增删**（角色技能清单固定，id 被技能栏 / 快捷键 / 存档引用；被怪物挂载引用中的行拒删）；**玩家技能等级只由 `POST /roles/:id/skill-upgrade` 推进**（#828：花费 = 当前等级点、上限 = 伤害系数档数） |
 | `statuses` | 状态配置（#367） | 主键是状态 id（被 `skills.status_id` 引用）；`owner` 同上分流；时长 / 来源 / 图标 / 身上特效 / `combat`（JSON：格挡概率、格挡系数、防御倍率、**攻击倍率**，缺省 = 该维度不参与）——**角色侧公式在客户端 `BattleMath`，怪物侧在服务端 `MonsterAiService`**（#372：狂怒乘出手伤害、硬化皮肤乘防御项）；**周期与控制**（#826 第三批，五列）：`kind`（`buff`/`damage`/`control`/`speed`，只用于分组）/ `max_stacks`（叠层封顶）/ `tick_ms` + `tick_effect`（JSON：`hp` / `mp` / `hpPercent` / `mpPercent`，每秒按拍结算且**不推 revision**）/ `control_flags`（JSON：`stun` / `root` / `silence`）；JSON 列的唯一解析出口是 `common/config-json.ts`；id 清单固定，只可改不可增删 |
 | `monster_skills` | 怪物技能挂载（#372） | 复合主键（`monster_key` + `skill_id`）；一只怪放哪些技能、`priority`（越小越先）、`cooldown`（秒，NULL = 用技能自身的冷却）；**整份替换**（PUT 这份清单就是全部，空数组 = 只普攻）；校验技能必须存在且 `owner=monster`、同怪不重复挂 |
 | `fashions` | 时装配置（#257） | 主键是时装 id（出厂在 `config-sync.sql`，如 `cloth_2`）；名称 / 描述 / 售卖价 / 获得渠道（复用 AcquireChannel，seed 默认 unavailable）/ 八项属性（seed 全 0）；`icon` / `in_res` / `out_res` 资源路径可改（管理端图片选择器）；id 清单固定，只可改不可增删；**角色存档的 `fashionCloth` 存的就是这里的 id**（#377 穿戴系统，null = 没穿） |
@@ -538,11 +545,12 @@ admin/src/api/{routes,models,endpoints}.ts
 | `test/config-sync.cjs` | **43** | 配置快照导出 / 导入（**不起服务**）：分类守点（新表漏归类当场报错）/ 值转义（单引号·换行·NULL）/ 往返逐字节等价 / 改值与删行能同步过去 / 有五种坏文件被拒绝 / `compare` 能定位到落后的是哪张表 |
 | `test/e2e-rank.cjs` | **56** | 排行榜（#400）：**三个榜（等级 / 战力 / 击杀）的名次与数值逐个对** / 并列时同名次（竞赛排名，同分再按 roleId 升序）/ 战力榜与等级榜不同序（证明不是照抄等级）/ 分页切片、空页、`size` 夹上限与非法分页 `/ `me` 榜内榜外名次都真实、当前无在线角色时返回「没有名次」、未登录被拒 / 刷新周期设为零时快照不随存档变、`computedAt` 不动 / 条目恰好八个字段且不带 `accountId`·`data`·在线状态 / 周期定时重算真的换了一份 |
 | `test/e2e-bag.cjs` | **40** | 背包与穿戴（#556）：穿戴 / 卸下 / 丢弃 / 整理与搬运全在服务端；**move·tidy 只验两条守恒**（网格形状 + 同 id 总件数）；等级门槛与部位由服务端判（1 级穿 10 级衣服被拒且衣服还在包里）；穿脱当场重算属性（脱掉加血装备血量跟着降）；**装备槽存 `{ id, bound?, from? }`**（#816：槽位值是对象、不再折叠成裸 id）；**`PUT /roles/:id` 改不动背包 / 装备 / 技能**（回填而不是拒收）；**背包尺寸归客户端配置**（改大能长个且不丢东西，存档不重排位置）；错 revision → 20006、别人的角色 → 40300 |
+| `test/e2e-skill-upgrade.cjs` | **54** | 技能升级（#828）：建号 `skillPoints` = 1 且技能全 1 级；升级扣 `当前等级` 点、等级 +1、revision +1（回执与库里同步）；**20035 点数不足时一点都没动**（等级 / 点数 / revision 都不变）；20034 三种目标不合法（怪物技能 / 认不出的 id / 系数为空）；20036 到顶（上限 = 系数档数）；**伤害系数真的取下一档**（把两档改成 1× / 20×，升级前后同一只怪 15 → 400）；`PUT /roles/:id` 带改过的 `skills` / `skillPoints` 被回填成库里的值 |
 | `test/e2e-map.cjs` | **122** | 地图管理（#573，**玩法配置可改、资源本体不可改**）：11 张图按 id **数值**升序（`10` 不排到 `2` 前面）/ 两类计数各归各位（`monsterAreaCount` 是客户端 TMX 的矩形、`spawnAreaCount` 是库表行数）/ **两套坐标对账**（`groups` 是 Tiled 原始口径，`spawnAreas` 是世界坐标 —— 同一个矩形的中心必须对得上）/ **玩法配置保存即生效**（列表 / 详情 / **玩家配置快照**三处同步；请求里塞 `src` 被白名单剥掉，下发方改不到客户端加载哪张图）/ 参数越界（类型 / 等级 / 名称）一律 400 且没写进去 / **POST·PUT·DELETE 一律 404**（没有「新建 / 删除地图」这回事：图存不存在由 TMX 决定）/ 不存在的图 404 + 50032 / 观察员可读、写 403、无令牌 401 / 文档契约与「没有 Map 写模型」 |
 
 
 ```bash
-cd server && npm run verify          # 编译 + 二十八套 e2e + 生成物一致性，一条命令全验
+cd server && npm run verify          # 编译 + 全套 e2e（清单自动扫 package.json 的 test:e2e*）+ 生成物一致性
 env -u NODE_OPTIONS npm run verify   # 受限终端里要清掉 NODE_OPTIONS
 ```
 

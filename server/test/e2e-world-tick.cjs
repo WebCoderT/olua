@@ -390,7 +390,14 @@ function windowAround(offsetMinutes, spanMinutes) {
       "重载后的实例表与库里一致（数量与 instanceId 都对得上）",
       JSON.stringify(idsAfter),
     );
-    check(server.logs().includes("已按库重载并通知观看者"), "日志点明「重载 + 通知」这条收口（排障时能一眼看到）");
+    // 日志走 stdout 管道、世界帧走 WS —— 两条通道的到达顺序不保证（机器负载高时帧会先到）。
+    // 所以这一条等一会儿再说，别当场断言：`make e2e-all` 串行跑满 60 多套时曾偶发红在这里
+    const reloadLogged = await waitFor(
+      "「已按库重载并通知观看者」日志",
+      async () => (server.logs().includes("已按库重载并通知观看者") ? true : null),
+      3_000,
+    );
+    check(!!reloadLogged, "日志点明「重载 + 通知」这条收口（排障时能一眼看到）");
     //#endregion
 
     console.log(`\n${failed === 0 ? "✅" : "❌"} 世界 tick：#849~#852 —— ${passed} 条通过 / ${failed} 条失败`);

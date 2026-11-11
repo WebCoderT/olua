@@ -494,24 +494,32 @@ export const mallDialogLayout = {
 export const skillListDialogLayout = {
   name: "skill_list_dialog",
   title: "技能",
-  size: new Size(280, 400),
-  /** 技能滚动列表（子件坐标以弹窗中心为原点） */
-  list: { name: "skill_list", position: new Vec2(0, -15), size: new Size(260, 350) },
+  // 宽 350 = 原来的 280 + 升级按钮那一列（#828）
+  size: new Size(350, 400),
   /**
-   * 技能行：图标 + （名称 / 说明）两行文字。
+   * 剩余技能点（#828）：紧贴标题下沿的一行
+   *
+   * 位置 152 = 弹窗半高 200 − 标题占位（insetTop 15 + height 30 + 间隙 3）；
+   * 升级成功后就地改这一行的数字，不重开弹窗（重开会把滚动位置弹回顶部）。
+   */
+  points: { name: "skill_points", position: new Vec2(0, 152), size: new Size(330, 18), fontSize: 12 },
+  /** 技能滚动列表（子件坐标以弹窗中心为原点） */
+  list: { name: "skill_list", position: new Vec2(0, -22), size: new Size(330, 320) },
+  /**
+   * 技能行：图标 + （名称 / 说明）两行文字 + 升级按钮（#828）。
    *
    * 说明必须**换行**：205 宽 × 10 号字一行只放得下 ~20 字，而 `configs/skill-data.ts` 里的说明
    * 普遍 40~73 字 —— 单行 CLAMP 会把后半句直接切掉（#481，真机上看就是「说到一半」）。
    * 行高按估算行数自适应（`TextLayout.wrappedHeight`），最多 `maxLines` 行（实测最长 73 字 → 4 行）。
    */
   row: {
-    /** 行宽 = 图标 + 间距 + 说明列（250 = 40 + 5 + 205） */
-    width: 250,
+    /** 行宽 = 图标 + 间距 + 说明列 + 间距 + 升级按钮（310 = 40 + 5 + 202 + 6.5 + 56.5） */
+    width: 310,
     iconSize: 40,
     gap: 5,
     desc: {
-      /** 说明列宽（= 行宽 − 图标 − 间距） */
-      width: 205,
+      /** 说明列宽（= 行宽 − 图标 − 间距 − 升级按钮 − 按钮左间距） */
+      width: 202,
       /** 名称行与说明之间的间距 */
       gap: 3,
       nameHeight: 20,
@@ -522,6 +530,13 @@ export const skillListDialogLayout = {
       /** 行上下内边距（行高 = 名称 + 间距 + 说明高度 + 2×padding，且不小于图标边长） */
       paddingY: 3,
     },
+    /**
+     * 升级按钮（#828）：贴行右缘、与图标同一水平线
+     *
+     * 尺寸用公共小按钮（56.5 × 24，九宫格不会被压变形）；标注「升级」，
+     * **不显示花费** —— `当前等级` 这条公式只在服务端，写到这里就是第二个真相。
+     */
+    upgrade: { width: 56.5, height: 24, gap: 6.5, label: "升级" },
   },
 };
 

@@ -38,6 +38,7 @@ import { MoneyUseDto, MoneyUseResultDto } from "../modules/roles/dto/money-use.d
 import { CreateMoneyItemDto, MoneyItemDto, MoneyItemPageDto, MoneyItemQueryDto, RemoveMoneyItemResultDto, UpdateMoneyItemDto } from "../modules/game-config/dto/money-item.dto";
 import { CreateLevelScrollDto, LevelScrollDto, LevelScrollPageDto, LevelScrollQueryDto, RemoveLevelScrollResultDto, UpdateLevelScrollDto } from "../modules/game-config/dto/level-scroll.dto";
 import { LevelScrollUseDto, LevelScrollUseResultDto } from "../modules/roles/dto/level-scroll-use.dto";
+import { SkillUpgradeDto, SkillUpgradeResultDto } from "../modules/roles/dto/skill-upgrade.dto";
 import { ReviveResultDto } from "../modules/roles/dto/revive.dto";
 import { FashionBuyResultDto, FashionWearResultDto } from "../modules/roles/dto/fashion.dto";
 import { BagOpCellDto, BagOpDto, BagOpResultDto } from "../modules/roles/dto/bag-op.dto";
@@ -270,6 +271,9 @@ export const SWAGGER_MODELS = [
   RemoveLevelScrollResultDto,
   LevelScrollUseDto,
   LevelScrollUseResultDto,
+  // 技能升级（#828；技能点 = 每级 +1，花费 = 当前等级）
+  SkillUpgradeDto,
+  SkillUpgradeResultDto,
   // 区服（#295 阶段二）
   ZoneDto,
   AdminZoneDto,

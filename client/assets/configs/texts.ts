@@ -337,6 +337,10 @@ export const uiTexts = {
   /** 技能熟练等级前缀（lv.N）/ 未学习 */
   label_skill_level: "lv.{level}",
   label_skill_unlearned: "未学习",
+  /** 剩余技能点（#828 技能升级；{points} = 当前点数） */
+  label_skill_points: "技能点：{points}",
+  /** 技能升级成功的浮动提示（{skill} 技能名 / {level} 新等级 / {cost} 花费 / {remain} 剩余点数） */
+  label_skill_upgrade_tip: "「{skill}」升到 lv.{level}（花 {cost} 点，剩 {remain} 点）",
 
   //#region 悬停详情行模板
   hover_skill_type: "类型：{type}（{target}）",

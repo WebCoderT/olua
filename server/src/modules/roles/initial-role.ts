@@ -11,12 +11,18 @@ import { ROLE_DATA_VERSION } from "./role-migration";
  *   新手装备与初始绑定元宝，整体废除；要给某个号发东西走管理端（`PATCH /admin/roles/:id`）。
  * - **技能保持「全部解锁 1 级」**：技能等级是玩法数据不是物品，全 0 会让新角色无法战斗。
  *   玩家技能 = `skills` 表里 `owner = role` 的行（怪物技能不发给玩家）。
+ * - **技能点给 1 点**（#828）：同样不是物品 —— 1 级时手上正好有「把某一个技能升到 2 级」
+ *   的钱，开局就能看见技能面板里的升级按钮是活的；之后每升 1 级角色再 +1 点
+ *   （`RolesService.settleLevelUp`）。给 0 的话新手第一眼看到的永远是「点数不足」。
  * - **「客户端配置才知道形状」的字段发空壳**：装备槽名（EQUIPMENT_TYPE 枚举）、
  *   背包尺寸（bagRow × bagCol）、快捷键按键码都在客户端配置里，服务端复制必然漂移 ——
  *   发空对象 / 空数组，客户端 `StorageManager.ensureRoleDefaults` 读档时按**当前配置**补齐。
  * - 等级钉 1 级；战斗属性由 `RolesService.applyAuthoritativeAttributes` 重算后回填
  *   （maxHp / 攻防 / 战斗力），`hp / mp` 按满值起。
  */
+
+/** 建号时的技能点（#828，用户 2026-11-12 定「给 1 点」） */
+export const ROLE_INITIAL_SKILL_POINTS = 1;
 
 /** 初始技能等级表：`skills` 表里 owner=role 的技能全部 1 级（怪物技能不发给玩家） */
 function buildInitialSkills(): Record<string, number> {
@@ -60,6 +66,8 @@ export function buildInitialRoleData(id: string, name: string, occupation: strin
     equipments: {},
     bag: [],
     skills: buildInitialSkills(),
+    // 技能点（#828）：技能全是 1 级，这 1 点让开局就能升一级看见效果
+    skillPoints: ROLE_INITIAL_SKILL_POINTS,
     shortcutKeys: [],
     speedRate: { ...DEFAULT_SPEED_RATE },
     fashionCloth: null,

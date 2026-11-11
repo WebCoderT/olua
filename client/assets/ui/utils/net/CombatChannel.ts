@@ -438,6 +438,11 @@ export interface RoleAuthorityUpdate {
   title?: number;
   soulOfWar?: number;
   rank?: number;
+  /**
+   * 剩余技能点（#828）：升级结算发生在实时进程，帧不带它面板会停在旧点数
+   * （点了却被服务端接受 —— 服务端按库里的余额判，看起来像「面板算错了」）
+   */
+  skillPoints?: number;
   /** 体验状态（#596 换设备云同步）：快捷键 / 引导进度 / 战魂外显 —— 归客户端书写、服务端存证 */
   shortcutKeys?: Array<{ label: string; key: number; skillId: string | null }>;
   guide?: { step: number; done: boolean; skipped: boolean };
