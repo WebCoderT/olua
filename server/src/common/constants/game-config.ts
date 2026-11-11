@@ -60,6 +60,10 @@ export const GROWTH_SCALAR_SPECS: Record<string, GrowthScalarSpec> = {
   // 暴击（#826）：两个都是角色基础值，技能自带的暴击在 skills.crit_rate / crit_damage 上
   "critRate": { min: 0, max: 1, integer: false },
   "critDamage": { min: 0, max: 10, integer: false },
+  // 属性点（#833）：每点加成系数与洗点花费。系数四项共用一个键（见 attr-points.util 的文件头），
+  // 上限 5 是防手滑 —— 写个 100 就让「堆一项」直接顶满面板
+  "attrPointRatio": { min: 0, max: 5, integer: false },
+  "attrResetCost": { min: 0, max: 1000000, integer: true },
 };
 
 /** 标量参数的中文说明（管理端列表直接展示；键必须与 GROWTH_SCALARS 一致） */
@@ -72,6 +76,9 @@ export const GROWTH_SCALAR_DESCRIPTIONS: Record<string, string> = {
   "soakTickSeconds": "泡点活动：发经验的拍间隔（秒；与上一条配合出「每 M 秒发 N 点」的速率）",
   "critRate": "角色基础暴击率（0~1；与技能自带的暴击率**相加**。出厂 0 = 新号不暴击）",
   "critDamage": "角色基础暴击倍率（> 1 才生效；技能配了自己的倍率时以技能为准。出厂 1.5 倍）",
+  "attrPointRatio":
+    "属性点：每点加成系数（出厂 0.005 = 每点 0.5%）。力量→物攻、体质→生命+物防、精神→法攻+道攻+法力按**等级曲线基础值**的百分比放大；敏捷→暴击率按**绝对百分点**加（0.005 = +0.5%）",
+  "attrResetCost": "属性点：洗点花费的绑定元宝（0 = 免费洗点。四维归零、已分配点数全部退还）",
 };
 
 /**

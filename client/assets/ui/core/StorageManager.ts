@@ -7,7 +7,7 @@ import { initialShortcutKeys, bagRow, bagCol } from "../../configs/role";
 import { Role } from "../../entities/Role";
 import { BagCell, BagOrigin, EQUIPMENT_TYPE, Equipment, getGoodCount, Goods, isDrug, isEquipment, isLevelScroll, isMoneyItem, MoneyCurrency } from "../../types/good";
 import { MapId } from "../../types/map";
-import { NeedSetShortcutKeyConfig } from "../../types/role";
+import { AttrPointKey, NeedSetShortcutKeyConfig } from "../../types/role";
 import { SkillId } from "../../types/skill";
 import GameHelper from "./GameHelper";
 import GameUiHelper from "../helpers/GameUiHelper";
@@ -18,6 +18,7 @@ import { skills } from "../../configs/skill";
 import { BAG_ORIGIN_TEXT_MAX } from "../../types/good";
 import { MONEY_CURRENCY_LABELS, bagMetaOf, getEquipment, getItem, moveBagCellGrid, normalizeBagGrid, resolveDrugRecovery, summarizeBagRecycle, tidyBagGrid, findBagEquipmentUpgrade, withBagMeta, wornIdOf, wornItemOf } from "../../configs/items";
 import { getMallPrice } from "../../configs/game-config";
+import { getText } from "../../configs/texts";
 import { getFashion, fashionData } from "../../configs/game-config";
 import { getEquipmentNameParts } from "../../configs/equipments";
 import { nextSoulUpgrade } from "../../configs/game-config";
@@ -28,7 +29,7 @@ import Session from "../utils/net/Session";
 import { RoleApi } from "../utils/net/Api";
 import CombatChannel from "../utils/net/CombatChannel";
 import type { CombatKillReward, MapEnterResult, RoleAuthorityUpdate } from "../utils/net/CombatChannel";
-import type { BagOp, BagOpResult, DrugUseResult, GrowthUpgradeResult, LevelScrollUseResult, MallLimit, MallPurchaseResult, MoneyUseResult, SellGoodsResult, SkillUpgradeResult } from "../utils/net/ApiModels";
+import type { AttrChangeResult, BagOp, BagOpResult, DrugUseResult, GrowthUpgradeResult, LevelScrollUseResult, MallLimit, MallPurchaseResult, MoneyUseResult, SellGoodsResult, SkillUpgradeResult } from "../utils/net/ApiModels";
 import { normalizeGuideProgress } from "../utils/guide/guide-progress";
 import { guideStepCount } from "../../configs/guide";
 
@@ -53,6 +54,24 @@ const TELEPORT_MARK_TTL_MS = 60000;
  */
 const USE_GUARD_MS = 1000;
 const useGuardUntil = new Map<string, number>();
+
+/**
+ * 服务端下发的四维 → 本地那份（#833）
+ *
+ * 只做「收口成非负整数、只留四个键」，**不补任何策略**：四维怎么算都在服务端
+ * （`common/utils/attr-points.util.ts`），客户端在这里做一次清洗只是为了让面板
+ * 不出现 `undefined` / `NaN`。抽成函数是因为 `roleUpdate` 帧与加点回执两处都要用，
+ * 抄两遍就会有一处漏掉某个键。
+ */
+function attrAllocationFrom(value: unknown): Record<AttrPointKey, number> {
+  const source = value && typeof value === "object" ? (value as Record<string, unknown>) : {};
+  return {
+    str: Math.max(0, Math.floor(Number(source.str) || 0)),
+    agi: Math.max(0, Math.floor(Number(source.agi) || 0)),
+    vit: Math.max(0, Math.floor(Number(source.vit) || 0)),
+    spi: Math.max(0, Math.floor(Number(source.spi) || 0)),
+  };
+}
 
 /** 一秒内重复点同一个道具 → false（不发请求，也不弹提示） */
 function guardRepeatedUse(key: string): boolean {
@@ -589,6 +608,10 @@ export default class StorageManager {
     // 技能点（#828）：升级在实时进程结算，帧带回的就是最新余额。技能**等级**不在帧里 ——
     // 它只会被 HTTP 的升级接口改（应答里整份 data 带回来），帧再带一份就是两个来源
     if (typeof update.skillPoints === "number") role.skillPoints = Math.max(0, Math.floor(update.skillPoints));
+    // 属性点与四维（#833）：同上 —— 升级给的点、另一台设备加的点，都要在这里落到本地档。
+    // 四维变了面板数值会变，但**不用**在这里重算：服务端已经把重算后的攻防血蓝一起下发
+    if (typeof update.attrPoints === "number") role.attrPoints = Math.max(0, Math.floor(update.attrPoints));
+    if (update.attrs && typeof update.attrs === "object") role.attrs = attrAllocationFrom(update.attrs);
     // 体验状态（#596 换设备云同步）：归客户端书写、服务端存证 —— 另一台设备改了快捷键 /
     // 后台重置了引导，帧带回就进本地档（下次读档 / 界面重建时生效；进行中的引导流程不回头）
     if (Array.isArray(update.shortcutKeys)) role.shortcutKeys = update.shortcutKeys as Role["shortcutKeys"];
@@ -1556,6 +1579,86 @@ export default class StorageManager {
       remain: result.remainPoints,
     });
     return true;
+  }
+
+  /**
+   * 属性加点（#833）：四维只能由服务端推进
+   *
+   * 一次加**一项 1 点**（界面就是四个「+」按钮，点一下加一点）：报增量而不是
+   * 「加完是多少」—— 报绝对值就等于让改包直接改面板。够不够、能不能加，
+   * 全由服务端的业务码回答（20037 点数不足 / 20038 一个都没加 / 20006 存档过期），
+   * 请求层按码弹提示。
+   *
+   * 成功后照搬服务端那份 `attrs` / `attrPoints`，**并立刻刷一次面板**：
+   * 四维是攻防血蓝的乘数，服务端已经在同一次写档里重算过，客户端只负责把新数字画出来。
+   */
+  static async allocateAttrsOnServer(key: AttrPointKey): Promise<boolean> {
+    const role = this.findOnlineRole();
+    if (!role) return false;
+    let result: AttrChangeResult;
+    try {
+      result = await RoleApi.attrsAllocate(role.id, { [key]: 1, revision: role.revision });
+    } catch {
+      return false; // 失败提示已由请求层弹过（非 silent 请求）
+    }
+    this.applyAttrChangeResult(role, result);
+    GameUiHelper.createTip("label_attr_allocate_tip", {
+      attr: getText(`label_attr_${key}`),
+      points: result.attrPoints,
+    });
+    return true;
+  }
+
+  /**
+   * 洗点（#833）：四维归零、点数全退，扣绑定元宝
+   *
+   * 价格只在服务端（`growth_scalars.attrResetCost`）：客户端**不预检余额**，
+   * 不够就由服务端回 20011，提示里带准确金额。成功回执带 `cost` / `refund`，飘字直接用。
+   */
+  static async resetAttrsOnServer(): Promise<boolean> {
+    const role = this.findOnlineRole();
+    if (!role) return false;
+    let result: AttrChangeResult;
+    try {
+      result = await RoleApi.attrsReset(role.id, { revision: role.revision });
+    } catch {
+      return false;
+    }
+    this.applyAttrChangeResult(role, result);
+    GameUiHelper.createTip("label_attr_reset_tip", { refund: result.refund, cost: result.cost });
+    return true;
+  }
+
+  /**
+   * 加点 / 洗点回执的统一收尾（两个接口的回执同形，见 `AttrChangeResultDto`）
+   *
+   * 三条都要做，缺一条就是「数值变了但界面没变」：
+   * 1. 照搬四维 / 余点 / 绑定元宝（**不本地算**：洗点扣了多少钱只有服务端知道）；
+   * 2. 属性面板重算后的数值一起刷（`refreshRoleAttributes`）；
+   * 3. 落盘 + 对齐 revision（否则下一次保存必撞 20006）。
+   */
+  private static applyAttrChangeResult(role: Role, result: AttrChangeResult) {
+    role.attrs = attrAllocationFrom(result.attrs);
+    role.attrPoints = Math.max(0, Math.floor(Number(result.attrPoints) || 0));
+    const data = (result.data ?? {}) as Record<string, unknown>;
+    if (typeof data.bindGold === "number") role.bindGold = Math.max(0, Math.floor(data.bindGold));
+    // 面板数值（攻防 / 上限 / 战斗力 / 回血）由服务端重算，回执里在 data 上 —— 整份抄回来
+    if (typeof data.maxHp === "number") role.maxHp = data.maxHp;
+    if (typeof data.maxMp === "number") role.maxMp = data.maxMp;
+    if (typeof data.hpRecover === "number") role.hpRecover = data.hpRecover;
+    if (typeof data.combat === "number") role.combat = data.combat;
+    if (Array.isArray(data.physicalAttack)) role.physicalAttack = [Number(data.physicalAttack[0]), Number(data.physicalAttack[1])];
+    if (Array.isArray(data.magicAttack)) role.magicAttack = [Number(data.magicAttack[0]), Number(data.magicAttack[1])];
+    if (Array.isArray(data.taoistAttack)) role.taoistAttack = [Number(data.taoistAttack[0]), Number(data.taoistAttack[1])];
+    if (Array.isArray(data.physicalDefense)) role.physicalDefense = [Number(data.physicalDefense[0]), Number(data.physicalDefense[1])];
+    if (Array.isArray(data.magicDefense)) role.magicDefense = [Number(data.magicDefense[0]), Number(data.magicDefense[1])];
+    if (Array.isArray(data.taoistDefense)) role.taoistDefense = [Number(data.taoistDefense[0]), Number(data.taoistDefense[1])];
+    // 洗点会把上限降回去，服务端已经夹过血蓝，这里跟着收一次，免得血条显示超过上限
+    role.hp = Math.min(role.hp, role.maxHp);
+    role.revision = result.revision;
+    this.updateOnlineRole(role);
+    this.updateUi(role);
+    RoleUIManager.refreshRoleAttributes();
   }
 
   /**

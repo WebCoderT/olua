@@ -1094,6 +1094,134 @@
         }
       }
     },
+    "/roles/{id}/attrs/allocate": {
+      "post": {
+        "description": "按**增量**加四维：`{str?, agi?, vit?, spi?}`（缺省 = 这一项不加），一次可以加多点，四项之和不能超过手上余点。**客户端报「加几点」，不报「加完是多少」** —— 报绝对值就等于让它改面板。\n属性点来源：建号 1 点，之后每升 1 级角色 +1 点（含升级卷轴），总点数恒等于等级。\n加成口径（`growth_scalars.attrPointRatio`，出厂每点 0.5%）：力量→物攻、体质→生命 + 物防（回血随之）、精神→法攻 + 道攻 + 法力，均按**等级曲线基础值**放大；敏捷→暴击率按**绝对百分点**加。\n写完当场重算面板（攻防血蓝上限与战斗力），下一次 `roleUpdate` 帧带回。\n\n失败路径：20038 一次一点都没加（四项全 0）；20037 属性点不足（`details` 带 need / owned）；带上 revision 时乐观锁语义与 role.save 相同（20006 / 20007）。\n\n---\n\n**鉴权**：客户端令牌（`player`），只能操作令牌所属账号自己的数据。",
+        "operationId": "role.attrsAllocate",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "角色 id",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AttrAllocateDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "加点后的角色（含四维、剩余点数与本次花费）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/AttrChangeResultDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "player": []
+          }
+        ],
+        "summary": "属性加点（四维只能由这里推进）",
+        "tags": [
+          "客户端"
+        ],
+        "x-olua-audience": "player",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/AttrChangeResultDto"
+        }
+      }
+    },
+    "/roles/{id}/attrs/reset": {
+      "post": {
+        "description": "四维归零并把已分配的点数全部退回，代价是一笔绑定元宝（`growth_scalars.attrResetCost`，出厂 500，0 = 免费）。\n扣钱、归零、退点在**同一次写档**里完成 —— 不会出现「钱扣了点没退」或反过来。\n洗完当场重算面板并把 hp / mp 夹回新上限。\n\n失败路径：20039 还没分配过属性点（不白扣钱）；20011 绑定元宝不足；带上 revision 时乐观锁语义与 role.save 相同（20006 / 20007）。\n\n---\n\n**鉴权**：客户端令牌（`player`），只能操作令牌所属账号自己的数据。",
+        "operationId": "role.attrsReset",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "角色 id",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AttrResetDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "洗点后的角色（含退还点数与本次花费）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/AttrChangeResultDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "player": []
+          }
+        ],
+        "summary": "洗点（四维归零、点数全退，扣绑定元宝）",
+        "tags": [
+          "客户端"
+        ],
+        "x-olua-audience": "player",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/AttrChangeResultDto"
+        }
+      }
+    },
     "/roles/{id}/revive": {
       "post": {
         "description": "死亡状态（hp ≤ 0）时把血蓝补到服务端重算的上限、清零自然回复累加器；未死亡时拒收（20015）。\n\n客户端死亡弹窗的两个选项（原地 / 回城复活）都调它，差别只在**复活位置**（纯演出），\n满血这件事只在服务端发生 —— 改包上报满血存档是无效的（血蓝在 save 时被服务端结算值覆盖）。\n\nrevision 不推进（与受击同一纪律：血量型写入走实时帧），返回值带上限供客户端照搬。\n\n---\n\n**鉴权**：客户端令牌（`player`），只能操作令牌所属账号自己的数据。",
@@ -10623,7 +10751,7 @@
     },
     "/admin/growth-scalars/{key}": {
       "patch": {
-        "description": "只改 `value`；每个键的取值域服务端单独校验：roleMaxLevel ∈ [1, 10000000]（整数），expGain.expPerLevel ∈ [1, 100000]（整数），expGain.maxLevelGap ∈ [0, 100]（整数），mpRecoverPerSecond ∈ [0, 1000]，soakExpPerTick ∈ [0, 1000000]（整数），soakTickSeconds ∈ [1, 3600]（整数），critRate ∈ [0, 1]，critDamage ∈ [0, 10]。\n\n- `roleMaxLevel`：改完会把四条曲线的末段 `toLevel` 一起拉到新值（两处数字永远一致）。\n- **改参数会影响军衔等效强度**（#250 的映射基准）。\n- 参数键不存在 → 404（`50014`）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
+        "description": "只改 `value`；每个键的取值域服务端单独校验：roleMaxLevel ∈ [1, 10000000]（整数），expGain.expPerLevel ∈ [1, 100000]（整数），expGain.maxLevelGap ∈ [0, 100]（整数），mpRecoverPerSecond ∈ [0, 1000]，soakExpPerTick ∈ [0, 1000000]（整数），soakTickSeconds ∈ [1, 3600]（整数），critRate ∈ [0, 1]，critDamage ∈ [0, 10]，attrPointRatio ∈ [0, 5]，attrResetCost ∈ [0, 1000000]（整数）。\n\n- `roleMaxLevel`：改完会把四条曲线的末段 `toLevel` 一起拉到新值（两处数字永远一致）。\n- **改参数会影响军衔等效强度**（#250 的映射基准）。\n- 参数键不存在 → 404（`50014`）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
         "operationId": "adminGrowthScalar.update",
         "parameters": [
           {
@@ -16243,6 +16371,56 @@
           "revision"
         ]
       },
+      "AttrAllocateDto": {
+        "type": "object",
+        "properties": {
+          "str": {
+            "type": "number",
+            "description": "本次加给力量的点数（缺省 = 0）",
+            "minimum": 0,
+            "maximum": 10000
+          },
+          "agi": {
+            "type": "number",
+            "description": "本次加给敏捷的点数（缺省 = 0）",
+            "minimum": 0,
+            "maximum": 10000
+          },
+          "vit": {
+            "type": "number",
+            "description": "本次加给体质的点数（缺省 = 0）",
+            "minimum": 0,
+            "maximum": 10000
+          },
+          "spi": {
+            "type": "number",
+            "description": "本次加给精神的点数（缺省 = 0）",
+            "minimum": 0,
+            "maximum": 10000
+          },
+          "revision": {
+            "type": "number",
+            "description": "修订号（乐观锁，必填）：客户端读到的值，与服务端不一致时 20006，需先拉最新存档（B62 / #820）",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "revision"
+        ]
+      },
+      "AttrResetDto": {
+        "type": "object",
+        "properties": {
+          "revision": {
+            "type": "number",
+            "description": "修订号（乐观锁，必填）：与服务端不一致时 20006，需先拉最新存档（B62 / #820）",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "revision"
+        ]
+      },
       "FashionBuyDto": {
         "type": "object",
         "properties": {
@@ -21597,6 +21775,129 @@
           "remainPoints",
           "nextCost",
           "maxLevel"
+        ]
+      },
+      "AttrAllocationDto": {
+        "type": "object",
+        "properties": {
+          "str": {
+            "type": "number",
+            "description": "力量已分配点数（物攻）",
+            "example": 3
+          },
+          "agi": {
+            "type": "number",
+            "description": "敏捷已分配点数（暴击率）",
+            "example": 1
+          },
+          "vit": {
+            "type": "number",
+            "description": "体质已分配点数（生命上限 + 物防）",
+            "example": 0
+          },
+          "spi": {
+            "type": "number",
+            "description": "精神已分配点数（法攻 + 道攻 + 法力上限）",
+            "example": 0
+          }
+        },
+        "required": [
+          "str",
+          "agi",
+          "vit",
+          "spi"
+        ]
+      },
+      "AttrChangeResultDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "角色 id"
+          },
+          "accountId": {
+            "type": "string",
+            "description": "所属账号 id"
+          },
+          "name": {
+            "type": "string",
+            "description": "角色名"
+          },
+          "occupation": {
+            "type": "string",
+            "description": "职业：1 战士 / 2 魔法师 / 3 道士 / 4 全职业"
+          },
+          "sex": {
+            "type": "string",
+            "description": "性别：1 男 / 2 女 / 3 全性别"
+          },
+          "level": {
+            "type": "number",
+            "description": "等级"
+          },
+          "online": {
+            "type": "boolean",
+            "description": "是否当前选中（在线）角色"
+          },
+          "revision": {
+            "type": "number",
+            "description": "修订号（每次落库 +1；客户端保存进度时带上它做乐观锁）"
+          },
+          "createdAt": {
+            "type": "number",
+            "description": "创建时间（毫秒）"
+          },
+          "updatedAt": {
+            "type": "number",
+            "description": "最近更新时间（毫秒）"
+          },
+          "data": {
+            "type": "object",
+            "description": "角色完整数据（客户端 entities/Role 的 JSON 快照，服务端按不透明文档存取；管理端只编辑其中的常用字段）",
+            "additionalProperties": true
+          },
+          "attrs": {
+            "description": "写库后的四维（已分配点数）",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AttrAllocationDto"
+              }
+            ]
+          },
+          "attrPoints": {
+            "type": "number",
+            "description": "写库后还剩多少未分配属性点"
+          },
+          "spent": {
+            "type": "number",
+            "description": "本次消耗的属性点（洗点恒为 0）"
+          },
+          "refund": {
+            "type": "number",
+            "description": "本次退还的属性点（加点恒为 0）"
+          },
+          "cost": {
+            "type": "number",
+            "description": "本次消耗的绑定元宝（加点恒为 0；洗点取 `growth_scalars.attrResetCost`）"
+          }
+        },
+        "required": [
+          "id",
+          "accountId",
+          "name",
+          "occupation",
+          "sex",
+          "level",
+          "online",
+          "revision",
+          "createdAt",
+          "updatedAt",
+          "data",
+          "attrs",
+          "attrPoints",
+          "spent",
+          "refund",
+          "cost"
         ]
       },
       "ZoneDto": {

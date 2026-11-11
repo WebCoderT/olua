@@ -170,6 +170,36 @@ export type SkillUpgrade = {
   revision: number;
 };
 
+export type AttrAllocate = {
+  /**
+   * 本次加给力量的点数（缺省 = 0）
+   */
+  str?: number;
+  /**
+   * 本次加给敏捷的点数（缺省 = 0）
+   */
+  agi?: number;
+  /**
+   * 本次加给体质的点数（缺省 = 0）
+   */
+  vit?: number;
+  /**
+   * 本次加给精神的点数（缺省 = 0）
+   */
+  spi?: number;
+  /**
+   * 修订号（乐观锁，必填）：客户端读到的值，与服务端不一致时 20006，需先拉最新存档（B62 / #820）
+   */
+  revision: number;
+};
+
+export type AttrReset = {
+  /**
+   * 修订号（乐观锁，必填）：与服务端不一致时 20006，需先拉最新存档（B62 / #820）
+   */
+  revision: number;
+};
+
 export type FashionBuy = {
   /**
    * 要买的时装 id（fashions 表主键，如 cloth_2）
@@ -3672,6 +3702,92 @@ export type SkillUpgradeResult = {
    * 该技能的等级上限（= 伤害系数档数）
    */
   maxLevel: number;
+};
+
+export type AttrAllocation = {
+  /**
+   * 力量已分配点数（物攻）
+   */
+  str: number;
+  /**
+   * 敏捷已分配点数（暴击率）
+   */
+  agi: number;
+  /**
+   * 体质已分配点数（生命上限 + 物防）
+   */
+  vit: number;
+  /**
+   * 精神已分配点数（法攻 + 道攻 + 法力上限）
+   */
+  spi: number;
+};
+
+export type AttrChangeResult = {
+  /**
+   * 角色 id
+   */
+  id: string;
+  /**
+   * 所属账号 id
+   */
+  accountId: string;
+  /**
+   * 角色名
+   */
+  name: string;
+  /**
+   * 职业：1 战士 / 2 魔法师 / 3 道士 / 4 全职业
+   */
+  occupation: string;
+  /**
+   * 性别：1 男 / 2 女 / 3 全性别
+   */
+  sex: string;
+  /**
+   * 等级
+   */
+  level: number;
+  /**
+   * 是否当前选中（在线）角色
+   */
+  online: boolean;
+  /**
+   * 修订号（每次落库 +1；客户端保存进度时带上它做乐观锁）
+   */
+  revision: number;
+  /**
+   * 创建时间（毫秒）
+   */
+  createdAt: number;
+  /**
+   * 最近更新时间（毫秒）
+   */
+  updatedAt: number;
+  /**
+   * 角色完整数据（客户端 entities/Role 的 JSON 快照，服务端按不透明文档存取；管理端只编辑其中的常用字段）
+   */
+  data: Record<string, unknown>;
+  /**
+   * 写库后的四维（已分配点数）
+   */
+  attrs: AttrAllocation;
+  /**
+   * 写库后还剩多少未分配属性点
+   */
+  attrPoints: number;
+  /**
+   * 本次消耗的属性点（洗点恒为 0）
+   */
+  spent: number;
+  /**
+   * 本次退还的属性点（加点恒为 0）
+   */
+  refund: number;
+  /**
+   * 本次消耗的绑定元宝（加点恒为 0；洗点取 `growth_scalars.attrResetCost`）
+   */
+  cost: number;
 };
 
 export type Zone = {

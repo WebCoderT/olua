@@ -285,6 +285,8 @@ export const roleInfoDialogLayout = {
   fashionButton: { name: "role_fashion_button", position: new Vec2(200, -77), text: "时 装" },
   /** 社交（帮会 / 好友）入口，再往上排一格（-77 + 36 + 10 = -31），五格同列等距 */
   socialButton: { name: "role_social_button", position: new Vec2(200, -31), text: "社 交" },
+  /** 属性加点入口（#833），再往上排一格（-31 + 36 + 10 = 15），六格同列等距 */
+  attrButton: { name: "role_attr_button", position: new Vec2(200, 15), text: "属 性" },
 };
 
 /**
@@ -538,6 +540,47 @@ export const skillListDialogLayout = {
      */
     upgrade: { width: 56.5, height: 24, gap: 6.5, label: "升级" },
   },
+};
+
+//#endregion
+
+//#region 属性加点弹窗（#833）
+
+/**
+ * 属性加点弹窗布局
+ *
+ * 四行固定（力量 / 敏捷 / 体质 / 精神），所以不用 ScrollView —— 四行还要滚是给自己找麻烦。
+ * 行内从左到右：名称、已分配点数、作用说明、「+」按钮；底部一枚「洗点」。
+ *
+ * 说明列故意只写「物理攻击」这类短语而不是百分比：系数在服务端
+ * （`growth_scalars.attrPointRatio`，运营随时能改），界面上写死「每点 +0.5%」
+ * 就是第二个真相 —— 改配置那天它会开始骗人。
+ */
+export const attrAllocateDialogLayout = {
+  name: "attr_allocate_dialog",
+  title: "属性点",
+  size: new Size(320, 300),
+  /** 剩余点数（与技能面板同一条：紧贴标题下沿，加完就地改数字，不重开弹窗） */
+  points: { name: "attr_points", position: new Vec2(0, 102), size: new Size(300, 18), fontSize: 12 },
+  /** 四行的容器（锚点左上，子件按行序往下排） */
+  list: { name: "attr_list", position: new Vec2(0, 86), size: new Size(300, 168), gap: 8 },
+  row: {
+    width: 296,
+    height: 34,
+    /** 名称列（左对齐）：力量 / 敏捷 / 体质 / 精神 */
+    nameWidth: 70,
+    nameFontSize: 13,
+    /** 已分配点数（居中，等宽一格，避免数字位数变化时整行跳） */
+    valueWidth: 54,
+    valueFontSize: 13,
+    /** 作用说明（左对齐、小字） */
+    descWidth: 118,
+    descFontSize: 10,
+    /** 「+」按钮：贴行右缘 */
+    add: { width: 30, height: 24, label: "+" },
+  },
+  /** 洗点按钮（四行下方居中） */
+  reset: { name: "attr_reset_button", position: new Vec2(0, -112), width: 120, height: 30, label: "洗 点" },
 };
 
 //#endregion

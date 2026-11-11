@@ -16,6 +16,9 @@ const SCALAR_LABELS: Record<string, string> = {
   mpRecoverPerSecond: "每秒自然回蓝",
   soakExpPerTick: "泡点·每拍经验",
   soakTickSeconds: "泡点·拍间隔秒",
+  // 属性点（#833）：加成的唯一系数与洗点价格都在这里调，客户端只显示四维与余点
+  attrPointRatio: "属性点·每点系数",
+  attrResetCost: "属性点·洗点花费",
 };
 
 /** 曲线键 → 中文名（与服务端 ROLE_LEVEL_CURVE_LABELS 同序同义；未登记的原样显示） */

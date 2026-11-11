@@ -10,6 +10,7 @@ import { DrugUseDto, DrugUseResultDto } from "./dto/drug-use.dto";
 import { MoneyUseDto, MoneyUseResultDto } from "./dto/money-use.dto";
 import { LevelScrollUseDto, LevelScrollUseResultDto } from "./dto/level-scroll-use.dto";
 import { SkillUpgradeDto, SkillUpgradeResultDto } from "./dto/skill-upgrade.dto";
+import { AttrAllocateDto, AttrChangeResultDto, AttrResetDto } from "./dto/attr-points.dto";
 import { GrowthUpgradeDto } from "./dto/growth-upgrade.dto";
 import { GrowthUpgradeResultDto, RoleDto, RoleSummaryDto } from "./dto/role.dto";
 import { MallPurchaseDto, MallPurchaseResultDto } from "./dto/mall-purchase.dto";
@@ -242,6 +243,53 @@ export class RolesController {
     @Body() dto: SkillUpgradeDto,
   ): SkillUpgradeResultDto {
     return this.rolesService.upgradeSkill(user.id, id, dto);
+  }
+
+  @Post(":id/attrs/allocate")
+  @HttpCode(HttpStatus.OK)
+  @ApiPlayerDoc({
+    operationId: "role.attrsAllocate",
+    summary: "属性加点（四维只能由这里推进）",
+    description:
+      "按**增量**加四维：`{str?, agi?, vit?, spi?}`（缺省 = 这一项不加），一次可以加多点，" +
+      "四项之和不能超过手上余点。**客户端报「加几点」，不报「加完是多少」** —— 报绝对值就等于让它改面板。\n" +
+      "属性点来源：建号 1 点，之后每升 1 级角色 +1 点（含升级卷轴），总点数恒等于等级。\n" +
+      "加成口径（`growth_scalars.attrPointRatio`，出厂每点 0.5%）：力量→物攻、体质→生命 + 物防（回血随之）、" +
+      "精神→法攻 + 道攻 + 法力，均按**等级曲线基础值**放大；敏捷→暴击率按**绝对百分点**加。\n" +
+      "写完当场重算面板（攻防血蓝上限与战斗力），下一次 `roleUpdate` 帧带回。\n\n" +
+      "失败路径：20038 一次一点都没加（四项全 0）；20037 属性点不足（`details` 带 need / owned）；" +
+      "带上 revision 时乐观锁语义与 role.save 相同（20006 / 20007）。",
+  })
+  @ApiParam({ name: "id", description: "角色 id" })
+  @ApiDataResponse(AttrChangeResultDto, { description: "加点后的角色（含四维、剩余点数与本次花费）" })
+  attrsAllocate(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("id") id: string,
+    @Body() dto: AttrAllocateDto,
+  ): AttrChangeResultDto {
+    return this.rolesService.allocateAttrs(user.id, id, dto);
+  }
+
+  @Post(":id/attrs/reset")
+  @HttpCode(HttpStatus.OK)
+  @ApiPlayerDoc({
+    operationId: "role.attrsReset",
+    summary: "洗点（四维归零、点数全退，扣绑定元宝）",
+    description:
+      "四维归零并把已分配的点数全部退回，代价是一笔绑定元宝（`growth_scalars.attrResetCost`，出厂 500，0 = 免费）。\n" +
+      "扣钱、归零、退点在**同一次写档**里完成 —— 不会出现「钱扣了点没退」或反过来。\n" +
+      "洗完当场重算面板并把 hp / mp 夹回新上限。\n\n" +
+      "失败路径：20039 还没分配过属性点（不白扣钱）；20011 绑定元宝不足；" +
+      "带上 revision 时乐观锁语义与 role.save 相同（20006 / 20007）。",
+  })
+  @ApiParam({ name: "id", description: "角色 id" })
+  @ApiDataResponse(AttrChangeResultDto, { description: "洗点后的角色（含退还点数与本次花费）" })
+  attrsReset(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("id") id: string,
+    @Body() dto: AttrResetDto,
+  ): AttrChangeResultDto {
+    return this.rolesService.resetAttrs(user.id, id, dto);
   }
 
   @Post(":id/revive")

@@ -24,6 +24,13 @@ import { ROLE_DATA_VERSION } from "./role-migration";
 /** 建号时的技能点（#828，用户 2026-11-12 定「给 1 点」） */
 export const ROLE_INITIAL_SKILL_POINTS = 1;
 
+/**
+ * 建号时的属性点（#833）：与技能点同一条口径 —— 1 级给 1 点，之后每升 1 级 +1
+ *
+ * 总点数因此恒等于「等级」。存量老号由 `DatabaseService.seedAttrPointsOnce` 按等级补发。
+ */
+export const ROLE_INITIAL_ATTR_POINTS = 1;
+
 /** 初始技能等级表：`skills` 表里 owner=role 的技能全部 1 级（怪物技能不发给玩家） */
 function buildInitialSkills(): Record<string, number> {
   const skills: Record<string, number> = {};
@@ -68,6 +75,9 @@ export function buildInitialRoleData(id: string, name: string, occupation: strin
     skills: buildInitialSkills(),
     // 技能点（#828）：技能全是 1 级，这 1 点让开局就能升一级看见效果
     skillPoints: ROLE_INITIAL_SKILL_POINTS,
+    // 属性点（#833）：四维从全 0 起，这 1 点让新号一进游戏就能在加点界面点一下
+    attrs: { str: 0, agi: 0, vit: 0, spi: 0 },
+    attrPoints: ROLE_INITIAL_ATTR_POINTS,
     shortcutKeys: [],
     speedRate: { ...DEFAULT_SPEED_RATE },
     fashionCloth: null,

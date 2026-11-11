@@ -44,6 +44,17 @@ export interface RoleOccupationInfo {
 /** 快捷键（keyCode）：1~5 数字键（快捷栏 5 格） */
 export type ShortcutKeys = 49 | 50 | 51 | 52 | 53;
 
+/**
+ * 属性点四维的键（#833）
+ *
+ * 顺序即加点界面的行序：力量 / 敏捷 / 体质 / 精神。与存档里 `data.attrs` 的键、
+ * 服务端 `ATTR_KEYS` 逐项一致 —— 三处任一处改名，加点回执就对不上面板。
+ */
+export type AttrPointKey = "str" | "agi" | "vit" | "spi";
+
+/** 四维加点界面的行序（渲染顺序的唯一来源） */
+export const ATTR_POINT_KEYS: AttrPointKey[] = ["str", "agi", "vit", "spi"];
+
 /** 需要配置的快捷键接口 */
 export interface NeedSetShortcutKeyConfig {
   /** 名称 */

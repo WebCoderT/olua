@@ -74,6 +74,8 @@ const WEIGHT = {
   "test:e2e:status": 10,
   // 起一次实时连接 + 三刀（每刀前按真客户端冷却等 1.1 秒）+ 两次技能 PATCH 与两次 1.2 秒 TTL 等待
   "test:e2e:skill-upgrade": 4,
+  // 泡点升级要等经验节拍（1 秒一拍）+ 建号后把点数一一点进一项 + 两次重启（存量补发幂等）
+  "test:e2e:attr-points": 5,
 };
 
 function weightOf(script) {

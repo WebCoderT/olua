@@ -341,6 +341,25 @@ export const uiTexts = {
   label_skill_points: "技能点：{points}",
   /** 技能升级成功的浮动提示（{skill} 技能名 / {level} 新等级 / {cost} 花费 / {remain} 剩余点数） */
   label_skill_upgrade_tip: "「{skill}」升到 lv.{level}（花 {cost} 点，剩 {remain} 点）",
+  /** 四维名称（#833 属性加点；键与服务端 ATTR_KEYS / 存档 data.attrs 逐项一致） */
+  label_attr_str: "力量",
+  label_attr_agi: "敏捷",
+  label_attr_vit: "体质",
+  label_attr_spi: "精神",
+  /** 四维的作用（加点界面的行内说明；与 docs/23 §9.1 的映射一致） */
+  label_attr_str_desc: "物理攻击",
+  label_attr_agi_desc: "暴击率",
+  label_attr_vit_desc: "生命上限 / 物防",
+  label_attr_spi_desc: "法术攻击 / 法力",
+  /** 剩余属性点（{points} = 当前可分配点数） */
+  label_attr_points: "属性点：{points}",
+  /** 加点成功的浮动提示（{attr} 四维名 / {points} 剩余点数） */
+  label_attr_allocate_tip: "{attr} +1（剩 {points} 点）",
+  /** 洗点成功的浮动提示（{refund} 退还点数 / {cost} 消耗的绑定元宝） */
+  label_attr_reset_tip: "洗点完成：退还 {refund} 点，消耗 {cost} 绑定元宝",
+  /** 洗点确认弹窗（价格只在服务端：确认框不写金额，成功/失败提示里才有准确数字） */
+  label_attr_reset_title: "洗 点",
+  label_attr_reset_confirm: "洗点会把四项全部归零，已分配的点数全部退还，并消耗一笔绑定元宝。确定要洗点吗？",
 
   //#region 悬停详情行模板
   hover_skill_type: "类型：{type}（{target}）",

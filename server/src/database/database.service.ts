@@ -611,7 +611,11 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
         -- 暴击（#826）：出厂 0（新号不暴击，22 篇口径）/ 1.5 倍。
         -- 这两行同样是 INSERT OR IGNORE —— 存量库也能在「成长参数」页改到
         ('critRate', 0, '角色基础暴击率（0~1；与技能自带的暴击率相加。出厂 0 = 新号不暴击）', 0),
-        ('critDamage', 1.5, '角色基础暴击倍率（> 1 才生效；技能配了自己的倍率则以技能为准。出厂 1.5 倍）', 0);
+        ('critDamage', 1.5, '角色基础暴击倍率（> 1 才生效；技能配了自己的倍率则以技能为准。出厂 1.5 倍）', 0),
+        -- 属性点（#833）：每点加成系数与洗点花费。同样每次启动 INSERT OR IGNORE ——
+        -- 存量库（快照灌库早于这两个键）也能在管理端改到，且改过的值不会被覆盖
+        ('attrPointRatio', 0.005, '属性点：每点加成系数（0.005 = 每点 0.5%；力量→物攻、体质→生命+物防、精神→法攻+道攻+法力按等级曲线基础值放大，敏捷→暴击率按绝对百分点）', 0),
+        ('attrResetCost', 500, '属性点：洗点花费的绑定元宝（0 = 免费洗点；四维归零、已分配点数全部退还）', 0);
 
       -- 军衔配置（#250）：与 titles / souls 同构（100 阶全量就是成长链，顺序天然按阶，
       -- 没有 upgrade_order 列 —— 军衔不拖动排序）；多 tier 列（大段名），少 animation 两列。
@@ -1506,6 +1510,7 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
     this.seedLevelCurvesOnce();
     this.seedCombatStatusesOnce();
     this.seedSkillPointsOnce();
+    this.seedAttrPointsOnce();
   }
 
   /**
@@ -1788,6 +1793,53 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
       `roles:${roles},points:${points}`,
     ]);
     if (roles > 0) this.logger.log(`存量库补发技能点：${roles} 个角色，共 ${points} 点（每级 1 点）`);
+  }
+
+  /**
+   * 存量库一次性补发属性点（#833）
+   *
+   * 与 `seedSkillPointsOnce` 同一个形状、同一个理由：#833 之前的老号存档里没有
+   * `attrPoints`，不补的话 60 级的老号手上是 **0 点** ——「属性点」面板永远是灰的。
+   * 补发量取 `roles.level` 列（与「建号 1 点 + 每级 1 点」同一条尺子，总点数 = 等级）。
+   *
+   * 三条边界与技能点完全一致，只有一处差别值得写下来：
+   * - **只判 `attrPoints` 缺不缺，不看 `attrs`**：`attrs` 缺失本来就等价于「四维全 0」
+   *   （`attrAllocationOf` 按 0 读），补一个全 0 的 `attrs` 进去只是让存档多一行噪音；
+   * - 老号补的是「可分配点数」，**不会**自动帮他加到某一项上 —— 那是玩家的选择。
+   *
+   * **只跑一次**（`config_meta.attr_points_seeded`）：否则玩家点完、洗点、重启，
+   * 点数又按等级补一遍 —— 那等于无限属性点。
+   */
+  private seedAttrPointsOnce(): void {
+    const hasMeta =
+      this.count("SELECT COUNT(1) AS total FROM sqlite_master WHERE type = 'table' AND name = 'config_meta'") > 0;
+    if (!hasMeta) return;
+    if (this.get<{ value: string }>("SELECT value FROM config_meta WHERE key = ?", ["attr_points_seeded"])) return;
+    const now = Date.now();
+    let roles = 0;
+    let points = 0;
+    for (const row of this.all<{ id: string; level: number; data: string }>("SELECT id, level, data FROM roles")) {
+      let data: Record<string, unknown>;
+      try {
+        const parsed: unknown = JSON.parse(String(row.data ?? ""));
+        // 数组 / null / 标量都不是存档 —— 与 `decodeStoredRoleDataStrict` 同一条判据
+        if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) continue;
+        data = parsed as Record<string, unknown>;
+      } catch {
+        continue;
+      }
+      if (Object.prototype.hasOwnProperty.call(data, "attrPoints")) continue;
+      const level = Math.max(1, Math.floor(Number(row.level) || 1));
+      data.attrPoints = level;
+      this.run("UPDATE roles SET data = ?, updated_at = ? WHERE id = ?", [JSON.stringify(data), now, row.id]);
+      roles += 1;
+      points += level;
+    }
+    this.run("INSERT OR REPLACE INTO config_meta (key, value) VALUES (?, ?)", [
+      "attr_points_seeded",
+      `roles:${roles},points:${points}`,
+    ]);
+    if (roles > 0) this.logger.log(`存量库补发属性点：${roles} 个角色，共 ${points} 点（每级 1 点）`);
   }
 
   /**

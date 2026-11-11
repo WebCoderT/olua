@@ -46,6 +46,7 @@ import { DrugUseDto, DrugUseResultDto } from "./dto/drug-use.dto";
 import { MoneyUseDto, MoneyUseResultDto } from "./dto/money-use.dto";
 import { LevelScrollUseDto, LevelScrollUseResultDto } from "./dto/level-scroll-use.dto";
 import { SkillUpgradeDto, SkillUpgradeResultDto } from "./dto/skill-upgrade.dto";
+import { AttrAllocateDto, AttrChangeResultDto, AttrResetDto } from "./dto/attr-points.dto";
 import { GrowthUpgradeDto, GrowthKind } from "./dto/growth-upgrade.dto";
 import { GrowthUpgradeResultDto, RoleDto, RoleSummaryDto } from "./dto/role.dto";
 import { MallPurchaseDto, MallPurchaseResultDto } from "./dto/mall-purchase.dto";
@@ -65,6 +66,15 @@ import {
   skillPointsOf,
   skillUpgradeCost,
 } from "../../common/utils/skill-upgrade.util";
+import {
+  ATTR_POINTS_PER_LEVEL,
+  type AttrAllocation,
+  attrAllocationOf,
+  attrPointsOf,
+  attrResetCost,
+  emptyAttrAllocation,
+  totalAttrPoints,
+} from "../../common/utils/attr-points.util";
 import {
   BagGrid,
   BagOrigin,
@@ -1237,6 +1247,141 @@ export class RolesService {
   }
 
   /**
+   * 属性加点（#833）：四维只能由这里推进
+   *
+   * 与技能升级同一套前置（归属 → 在线 → 乐观锁），差别在**入参是增量**：
+   * 客户端报「这次每项加几点」，不报「加完是多少」—— 报绝对值就等于让改包
+   * 直接把四维写成想要的数字，绕过余额。
+   *
+   * 三条收口：
+   * 1. 增量必须是整数且非负（DTO 管的），**加起来必须 ≥ 1**（20038）——
+   *    一次空请求不该推进 revision；
+   * 2. 总额不能超过手上余点（20037，`details` 带 need / owned）；
+   * 3. 写完**必须重算面板**（`applyAuthoritativeAttributes`）：四维是攻击 / 生命 / 物防的
+   *    乘数，不重算就是「加了点，面板没动」，下次任何一次写档才突然生效。
+   *
+   * 不加点也可以「先加这个再洗」：洗点是独立接口，见 `resetAttrs`。
+   */
+  allocateAttrs(accountId: string, roleId: string, dto: AttrAllocateDto): AttrChangeResultDto {
+    const account = this.mustAccount(accountId);
+    const existing = this.mustOwnRole(accountId, roleId);
+    // 与用药 / 用卷轴 / 背包操作 / 技能升级同一纪律：被踢下线的角色不能继续写
+    if (account.online_role_id !== roleId) {
+      throw BizException.conflict(BizCode.ROLE_KICKED, "该角色已被管理员下线，请重新选择角色进入游戏");
+    }
+    if (dto.revision !== existing.revision) {
+      throw BizException.conflict(BizCode.ROLE_REVISION_CONFLICT, "该角色已在别处被修改，请先同步最新数据");
+    }
+
+    const data = decodeStoredRoleData(existing.data);
+    const owned = attrPointsOf(data.attrPoints);
+    const current = attrAllocationOf(data.attrs);
+    const delta: AttrAllocation = { str: dto.str ?? 0, agi: dto.agi ?? 0, vit: dto.vit ?? 0, spi: dto.spi ?? 0 };
+    const spent = totalAttrPoints(delta);
+    if (spent <= 0) {
+      throw new BizException(BizCode.ATTR_ALLOCATE_INVALID, "这一次一点都没加（四项都是 0）");
+    }
+    if (spent > owned) {
+      // 400 而不是 409：这是「条件不满足，攒够再来」，不是「你的存档版本过期了」
+      throw new BizException(
+        BizCode.ATTR_POINTS_NOT_ENOUGH,
+        `属性点不足：这次要加 ${spent} 点，当前只有 ${owned} 点`,
+        HttpStatus.BAD_REQUEST,
+        { need: spent, owned },
+      );
+    }
+
+    const next: AttrAllocation = {
+      str: current.str + delta.str,
+      agi: current.agi + delta.agi,
+      vit: current.vit + delta.vit,
+      spi: current.spi + delta.spi,
+    };
+    const remainPoints = owned - spent;
+    data.attrs = next;
+    data.attrPoints = remainPoints;
+    this.applyAuthoritativeAttributes(existing.level, data);
+    // 生命上限变大不会让 hp 超上限，但 `clampVitals` 还会顺手夹住 mp / 负数脏值 ——
+    // 与用药 / 升级走同一条收尾，别让血蓝出现「面板 120 / 上限 100」这种状态
+    clampVitals(data);
+
+    const row: RoleRow = {
+      ...existing,
+      data: JSON.stringify(data),
+      revision: existing.revision + 1,
+      updated_at: Date.now(),
+    };
+    this.persistOrConflict(row, existing.revision, "属性加点");
+    return AttrChangeResultDto.fromRow(row, account.online_role_id, {
+      attrs: next,
+      attrPoints: remainPoints,
+      spent,
+      refund: 0,
+      cost: 0,
+    });
+  }
+
+  /**
+   * 洗点（#833）：四维归零、已分配点数全退，扣一笔绑定元宝
+   *
+   * **为什么收钱**（`docs/23` §9.1）：四维的最优解随装备变化（今天该堆攻、明天该堆血），
+   * 免费洗点等于让四维变成「随时重配」，玩家的选择就没有意义了。价格在
+   * `growth_scalars.attrResetCost`（出厂 500，0 = 免费）。
+   *
+   * 三件事在**同一次写档**里完成：扣钱、四维归零、点数退回。不这么做就会出现
+   * 「钱扣了但点没退」（分两次写库，中间挂了）或「点退了钱没扣」（先洗后扣）。
+   *
+   * 两个拒收：还没加过点（20039 —— 照规则要收费，但玩家得到的服务是零）、
+   * 绑定元宝不够（20009，与成长线升级同码）。
+   */
+  resetAttrs(accountId: string, roleId: string, dto: AttrResetDto): AttrChangeResultDto {
+    const account = this.mustAccount(accountId);
+    const existing = this.mustOwnRole(accountId, roleId);
+    if (account.online_role_id !== roleId) {
+      throw BizException.conflict(BizCode.ROLE_KICKED, "该角色已被管理员下线，请重新选择角色进入游戏");
+    }
+    if (dto.revision !== existing.revision) {
+      throw BizException.conflict(BizCode.ROLE_REVISION_CONFLICT, "该角色已在别处被修改，请先同步最新数据");
+    }
+
+    const data = decodeStoredRoleData(existing.data);
+    const current = attrAllocationOf(data.attrs);
+    const refund = totalAttrPoints(current);
+    if (refund <= 0) {
+      throw new BizException(BizCode.ATTR_NOTHING_TO_RESET, "还没有分配过属性点，洗点无意义");
+    }
+    const cost = attrResetCost();
+    const bindGold = Math.max(0, Math.floor(Number(data.bindGold) || 0));
+    if (bindGold < cost) {
+      // 20009 与成长线升级同一个码：都是「成长线消费的钱包不够」。
+      // 不用 20011（商城购买）—— 同一个码只该有一种解释
+      throw BizException.conflict(BizCode.GROWTH_BIND_GOLD_NOT_ENOUGH, `洗点需要 ${cost} 绑定元宝，当前只有 ${bindGold}`);
+    }
+
+    data.bindGold = bindGold - cost;
+    data.attrs = emptyAttrAllocation();
+    data.attrPoints = attrPointsOf(data.attrPoints) + refund;
+    this.applyAuthoritativeAttributes(existing.level, data);
+    // 上限降回去之后 hp / mp 可能超上限 —— 这一步不是可选的
+    clampVitals(data);
+
+    const row: RoleRow = {
+      ...existing,
+      data: JSON.stringify(data),
+      revision: existing.revision + 1,
+      updated_at: Date.now(),
+    };
+    this.persistOrConflict(row, existing.revision, "洗点");
+    return AttrChangeResultDto.fromRow(row, account.online_role_id, {
+      attrs: emptyAttrAllocation(),
+      attrPoints: attrPointsOf(data.attrPoints),
+      spent: 0,
+      refund,
+      cost,
+    });
+  }
+
+  /**
    * 背包与穿戴（#556）：穿戴 / 卸下 / 丢弃 / 整理 / 搬运五个动作共用一条写路径
    *
    * **为什么这五个动作要收到服务端**：`bag` / `equipments` 从这一版起进权威清单
@@ -2159,6 +2304,9 @@ export class RolesService {
     // 循环里逐级加容易和「绕过这一层的其它升级路径」（卷轴 #787 是硬性 +1 级）漏对
     const gained = Math.max(0, outcome.level - currentLevel);
     if (gained > 0) data.skillPoints = skillPointsOf(data.skillPoints) + gained * SKILL_POINTS_PER_LEVEL;
+    // 属性点（#833）：与技能点同一条尺子 —— 每升 1 级 +1，总点数恒等于等级。
+    // 两条升级路径（经验 / 升级卷轴）都会经过这里，所以放在这个共用入口而不是各自的调用点
+    if (gained > 0) data.attrPoints = attrPointsOf(data.attrPoints) + gained * ATTR_POINTS_PER_LEVEL;
     // 等级变了属性就变：服务端重算并写回存档（权威值，客户端那份只是演）
     this.applyAuthoritativeAttributes(outcome.level, data);
     if (outcome.leveledUp) {

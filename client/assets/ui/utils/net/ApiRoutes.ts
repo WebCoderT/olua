@@ -274,7 +274,7 @@ export const ApiRoutes = {
      */
     ticket: "/realtime/ticket",
   },
-  /** role 模块（19 个接口） */
+  /** role 模块（21 个接口） */
   role: {
     /**
      * 角色列表（GET /roles）
@@ -306,6 +306,18 @@ export const ApiRoutes = {
      * 全量覆盖 data；id 以路径为准（请求体里的 id 会被忽略）。
      */
     save: (id: string) => `/roles/${encodeURIComponent(id)}`,
+    /**
+     * 属性加点（四维只能由这里推进）（POST /roles/{id}/attrs/allocate）
+     *
+     * 按**增量**加四维：`{str?, agi?, vit?, spi?}`（缺省 = 这一项不加），一次可以加多点，四项之和不能超过手上余点。**客户端报「加几点」，不报「加完是多少」** —— 报绝对值就等于让它改面板。
+     */
+    attrsAllocate: (id: string) => `/roles/${encodeURIComponent(id)}/attrs/allocate`,
+    /**
+     * 洗点（四维归零、点数全退，扣绑定元宝）（POST /roles/{id}/attrs/reset）
+     *
+     * 四维归零并把已分配的点数全部退回，代价是一笔绑定元宝（`growth_scalars.attrResetCost`，出厂 500，0 = 免费）。
+     */
+    attrsReset: (id: string) => `/roles/${encodeURIComponent(id)}/attrs/reset`,
     /**
      * 背包操作：穿戴 / 卸下 / 丢弃 / 整理 / 搬运（#556）（POST /roles/{id}/bag-op）
      *

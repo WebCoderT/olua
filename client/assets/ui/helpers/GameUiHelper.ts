@@ -34,6 +34,7 @@ import { dropLightEffectConfig, hitScreenFlash, monsterLabelOf, upgradeEffectCon
 import type { UiEffectConfig } from "../utils/net/ApiModels";
 import { bagRow, bagCol } from "../../configs/role";
 import { Role } from "../../entities/Role";
+import type { AttrPointKey } from "../../types/role";
 import { ACTION, DIRECTION, SpeedRate } from "../../types/animation";
 import { BattleAttributes } from "../../types/common";
 import { Equipment, EQUIPMENT_TYPE, Goods, isEquipment } from "../../types/good";
@@ -82,6 +83,7 @@ import {
   roleInfoBarLayout,
   roleSelectorLayout,
   skillListDialogLayout,
+  attrAllocateDialogLayout,
   tipsLayout,
   uiImages,
   uiSize,
@@ -2918,6 +2920,117 @@ export default class GameUiHelper {
   static createSkillListView(): Node {
     const list = skillListDialogLayout.list;
     return UiHelper.createScrollView(list.name, list.position, list.size);
+  }
+
+  /**
+   * 创建属性点标签（#833）：加点弹窗顶部一行「属性点：N」
+   *
+   * 与 `createSkillPointsLabel` 同款：返回节点，调用方自己拿 Label 改数字 ——
+   * 加完点只改这一行 + 重建四行，不重开弹窗。
+   */
+  static createAttrPointsLabel(): Node {
+    const cfg = attrAllocateDialogLayout.points;
+    return UiHelper.createLabel(cfg.name, "", Color.WHITE, cfg.fontSize, cfg.position, cfg.size);
+  }
+
+  /**
+   * 创建四维的一行（#833）：名称 · 已分配点数 · 作用说明 · 「+」
+   *
+   * 作用说明只写短语（「物理攻击」），**不写百分比**：系数在服务端
+   * （`growth_scalars.attrPointRatio`，运营随时改），界面上写死「每点 +0.5%」
+   * 就是第二个真相 —— 改配置那天它会开始骗人。
+   *
+   * 「+」按钮点了就发一次「加 1 点」的请求（服务端判够不够）。点数不足时按钮**不禁用**：
+   * 点一下收到 20037 的提示，比一个悄悄灰掉的按钮好懂（与技能升级同一个取舍）。
+   */
+  static createAttrPointRow(role: Role, key: AttrPointKey, onAdd: () => void): Node {
+    const cfg = attrAllocateDialogLayout.row;
+    const node = UiHelper.createNode(`attr_row_${key}`, new Vec2(), new Size(cfg.width, cfg.height));
+    const left = -cfg.width / 2;
+    // 名称（左对齐）：贴行左缘，宽度按最长的「精神」留
+    const name = UiHelper.createLabel(
+      `${key}_name`,
+      getText(`label_attr_${key}`),
+      Color.WHITE,
+      cfg.nameFontSize,
+      new Vec2(left + cfg.nameWidth / 2, 0),
+      new Size(cfg.nameWidth, cfg.height),
+    );
+    name.getComponent(Label).horizontalAlign = Label.HorizontalAlign.LEFT;
+    node.addChild(name);
+    // 已分配点数：固定一格居中，数字从 1 位涨到 3 位也不会把后面的说明挤走
+    node.addChild(
+      UiHelper.createLabel(
+        `${key}_value`,
+        String(role.attrs?.[key] ?? 0),
+        Color.WHITE,
+        cfg.valueFontSize,
+        new Vec2(left + cfg.nameWidth + cfg.valueWidth / 2, 0),
+        new Size(cfg.valueWidth, cfg.height),
+      ),
+    );
+    // 作用说明（左对齐、小字）
+    const descX = left + cfg.nameWidth + cfg.valueWidth;
+    const desc = UiHelper.createLabel(
+      `${key}_desc`,
+      getText(`label_attr_${key}_desc`),
+      Color.WHITE,
+      cfg.descFontSize,
+      new Vec2(descX + cfg.descWidth / 2, 0),
+      new Size(cfg.descWidth, cfg.height),
+    );
+    desc.getComponent(Label).horizontalAlign = Label.HorizontalAlign.LEFT;
+    node.addChild(desc);
+    // 「+」按钮：贴行右缘
+    const addCfg = cfg.add;
+    const addButton = UiHelper.createButton(
+      `${key}_add_button`,
+      uiImages.smallButtonBackground,
+      new Vec2(cfg.width / 2 - addCfg.width / 2, 0),
+      new Size(addCfg.width, addCfg.height),
+    );
+    addButton.addChild(
+      UiHelper.createLabel(
+        `${key}_add_label`,
+        addCfg.label,
+        Color.WHITE,
+        uiSize.smallButtonFontSize,
+        new Vec2(),
+        new Size(addCfg.width, addCfg.height),
+      ),
+    );
+    addButton.on(Node.EventType.TOUCH_END, onAdd, this);
+    node.addChild(addButton);
+    return node;
+  }
+
+  /**
+   * 创建四维行的容器（#833）
+   *
+   * 不是 ScrollView：只有四行，还要滚就是给自己找麻烦。锚点左上、行由调用方按行序摆
+   * （`createAttrPointRow` 返回的行内部坐标以自己中心为原点）。
+   */
+  static createAttrListView(): Node {
+    const cfg = attrAllocateDialogLayout.list;
+    const node = UiHelper.createNode(cfg.name, cfg.position, cfg.size);
+    node.getComponent(UITransform).setAnchorPoint(0.5, 1);
+    return node;
+  }
+
+  /** 创建洗点按钮（#833）：四行下方居中，点击由调用方弹确认框（洗点要花钱，不能一点就扣） */
+  static createAttrResetButton(onReset: () => void): Node {
+    const cfg = attrAllocateDialogLayout.reset;
+    const button = UiHelper.createButton(
+      cfg.name,
+      uiImages.smallButtonBackground,
+      cfg.position,
+      new Size(cfg.width, cfg.height),
+    );
+    button.addChild(
+      UiHelper.createLabel("attr_reset_label", cfg.label, Color.WHITE, uiSize.smallButtonFontSize, new Vec2(), new Size(cfg.width, cfg.height)),
+    );
+    button.on(Node.EventType.TOUCH_END, onReset, this);
+    return button;
   }
 
   /**

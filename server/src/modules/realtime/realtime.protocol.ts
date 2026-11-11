@@ -960,6 +960,17 @@ export interface RealtimeRoleUpdateMessage {
      */
     skillPoints?: number;
     /**
+     * 剩余属性点与四维（#833）
+     *
+     * 与 `skillPoints` 同一个理由：升级在本进程结算，每级 +1 点 —— 不推的话玩家在野外
+     * 连升三级，回城打开加点界面还是旧点数。`attrs` 一起带是因为另一台设备加点后
+     * 这一端的四维与面板都要跟上（加点接口的回执只到发起那台设备）。
+     *
+     * 可选：老服务端 / 老客户端互认时按「不碰本地值」处理。
+     */
+    attrPoints?: number;
+    attrs?: { str: number; agi: number; vit: number; spi: number };
+    /**
      * 成长线阶位（#551）：称号 / 战魂 / 军衔
      *
      * 运营在后台改了某人的阶位，以前要等到「重新选角 / 重连」才看得见（#548 之前更糟：
