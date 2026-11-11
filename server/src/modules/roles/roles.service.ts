@@ -10,6 +10,8 @@ import { roleAttributeSourceOf, summarizeRoleAttributes, applyAttributeSummary }
 import { MallPricingService } from "../game-config/mall-pricing.service";
 import {
   equipmentLevelOf,
+  equipmentOccupationOf,
+  equipmentSexOf,
   equipmentSlotOf,
   growthScalarOf,
   isEquipmentSlot,
@@ -90,6 +92,7 @@ import {
   sanitizeEquipments,
   unequipSlot,
 } from "./role-inventory";
+import { equipRefusalOf } from "./equip-rules";
 
 /** 一次击杀经验入账后的角色状态（settle 帧的 reward 据此组装） */
 export interface KillExpResult {
@@ -1393,8 +1396,9 @@ export class RolesService {
    * 两端慢慢漂开（本地那份还带着「合并超过上限留在原格」这类细节），所以改成
    * 「客户端给排布、服务端验内容守恒」—— 少一件多一件都过不去，算子见 `role-inventory.ts`。
    *
-   * 失败路径：20020 目标不合法（空格子 / 空槽位）/ 20021 穿不上（不是装备 / 认不出 / 等级不够）
-   * / 20022 排布与库里对不上 / 20012 背包满（卸下时没有空格）。
+   * 失败路径：20020 目标不合法（空格子 / 空槽位）/ 20021 穿不上（不是装备 / 认不出 /
+   * 等级不够 / 性别不符 / 职业不符，判据见 `equip-rules.ts` #838）/ 20022 排布与库里对不上 /
+   * 20012 背包满（卸下时没有空格）。
    */
   bagOp(accountId: string, roleId: string, dto: BagOpDto): BagOpResultDto {
     const account = this.mustAccount(accountId);
@@ -1431,9 +1435,14 @@ export class RolesService {
         if (!equipmentSlot) throw new BizException(BizCode.BAG_EQUIP_REJECTED, "这件物品不是装备，无法穿戴");
         const required = equipmentLevelOf(cell.id);
         if (required === null) throw new BizException(BizCode.BAG_EQUIP_REJECTED, `认不出的装备：${cell.id}`);
-        if (required > existing.level) {
-          throw new BizException(BizCode.BAG_EQUIP_REJECTED, `需要等级 ${required} 才能穿戴这件装备`);
-        }
+        // #838：等级 → 性别 → 职业，判据的唯一副本在 `equip-rules.ts`。
+        // 客户端 `GameHelper.getEquipmentRejectReason` 是同一套顺序的提前提示（可以改包跳过，
+        // 跳过之后照样撞在这里）—— 所以两边的顺序与文案必须一起改。
+        const refusal = equipRefusalOf(
+          { level: required, occupation: equipmentOccupationOf(cell.id), sex: equipmentSexOf(cell.id) },
+          { level: existing.level, occupation: existing.occupation, sex: existing.sex },
+        );
+        if (refusal) throw new BizException(BizCode.BAG_EQUIP_REJECTED, refusal);
         equipAt(grid, worn, Number(dto.row), Number(dto.col), equipmentSlot);
         slot = equipmentSlot;
         break;

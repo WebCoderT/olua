@@ -76,6 +76,15 @@ export interface EquipmentBaseSource {
   slot: string;
   level: number;
   label: string;
+  /**
+   * 职业限制（#838）：`1` 战士 / `2` 魔法师 / `3` 道士 / `4` 全职业
+   *
+   * 只有基础件有这两列（变体表没有），语义上 15 个变体必然同职业 —— 与 `slot` 一样按
+   * 「结构属性归基础件」处理。缺省 / 空串读成 null，穿戴校验按「不限制」放行。
+   */
+  occupation?: string;
+  /** 性别限制（#838）：`1` 男 / `2` 女 / `3` 全性别；缺省 / 空串 = 不限制 */
+  sex?: string;
   /** 掉落强制绑定（#789）：1 = 这件装备掉出来就绑定角色（变体沿用基础件的设置） */
   bind_on_drop?: number;
 }
@@ -254,7 +263,10 @@ export interface LevelScrollSource {
  */
 let equipmentVariantRows: Map<string, { bundle: AttributeBundle; level: number; price: number }> | null = null;
 /** 装备基础件：id → { 部位, 等级, 名称 }（变体行缺失时兜底，也是「这件东西能穿哪儿」的来源） */
-let equipmentBases: Map<string, { slot: string; level: number; label: string; bindOnDrop: boolean }> | null = null;
+let equipmentBases: Map<
+  string,
+  { slot: string; level: number; label: string; bindOnDrop: boolean; occupation: string; sex: string }
+> | null = null;
 /**
  * 角色等级曲线（#786：4 条 × 6 段，1..100 万级全靠它算）
  *
@@ -365,13 +377,19 @@ export function applyEquipmentBases(rows: EquipmentBaseSource[]): void {
     equipmentBases = null;
     return;
   }
-  const map = new Map<string, { slot: string; level: number; label: string; bindOnDrop: boolean }>();
+  const map = new Map<
+    string,
+    { slot: string; level: number; label: string; bindOnDrop: boolean; occupation: string; sex: string }
+  >();
   for (const row of rows) {
     map.set(row.id, {
       slot: String(row.slot ?? ""),
       level: numberOr(row.level),
       label: String(row.label ?? ""),
       bindOnDrop: numberOr(row.bind_on_drop) === 1,
+      // 空串 = 没配（手改库 / 迁移漏跑），穿戴校验按「不限制」处理，见 `equipRefusalOf`
+      occupation: String(row.occupation ?? "").trim(),
+      sex: String(row.sex ?? "").trim(),
     });
   }
   equipmentBases = map;
@@ -731,6 +749,30 @@ export function equipmentSlotOf(id: string): string | null {
   if (baseId === null) return null;
   const slot = equipmentBases?.get(baseId)?.slot;
   return slot ? slot : null;
+}
+
+/**
+ * 某件装备（含变体）的**职业限制**；不是装备 / 没配返回 null（#838）
+ *
+ * 与 `equipmentSlotOf` 同一形状：两列只存在于基础件，15 个变体必然同职业 ——
+ * 只查基础件那一行，改一件不会出现「+1 是战士装、+2 是法师装」。
+ *
+ * 返回 null 与返回 `"4"` 在穿戴校验里是同一件事（不限制），分开只是因为
+ * 「没配」和「配成全职业」在排查时要分得清（与 `equipmentLevelOf` 的 null 口径一致）。
+ */
+export function equipmentOccupationOf(id: string): string | null {
+  const baseId = baseKeyOf(id);
+  if (baseId === null) return null;
+  const occupation = equipmentBases?.get(baseId)?.occupation;
+  return occupation ? occupation : null;
+}
+
+/** 某件装备（含变体）的**性别限制**；不是装备 / 没配返回 null（#838，口径同上） */
+export function equipmentSexOf(id: string): string | null {
+  const baseId = baseKeyOf(id);
+  if (baseId === null) return null;
+  const sex = equipmentBases?.get(baseId)?.sex;
+  return sex ? sex : null;
 }
 
 /** 某级称号的当前属性（1 起；未激活传 0 / 负数 → null） */

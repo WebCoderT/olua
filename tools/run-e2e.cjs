@@ -76,6 +76,8 @@ const WEIGHT = {
   "test:e2e:skill-upgrade": 4,
   // 泡点升级要等经验节拍（1 秒一拍）+ 建号后把点数一一点进一项 + 两次重启（存量补发幂等）
   "test:e2e:attr-points": 5,
+  // 纯 HTTP：五格播种 + 十来次穿戴/卸下 + 十次配置 PATCH（每次都要重装结算层）
+  "test:e2e:equip-rules": 2,
 };
 
 function weightOf(script) {
