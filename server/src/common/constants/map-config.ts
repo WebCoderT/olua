@@ -83,6 +83,10 @@ export const MAP_LABEL_MAX_LENGTH = 24;
 export const SPAWN_AREA_LIMITS = {
   name: { min: 1, max: 24 },
   count: { min: 1, max: 200 },
+  /** 密度系数取值域（#852）：0 = 清场，1 = 基准，5 = 五倍。再大基本是填错了 */
+  density: { min: 0, max: 5 },
+  /** 高峰时段写法（`"19:00-23:00"`，支持跨零点；空串 = 无峰谷） */
+  peakHours: /^(\d{1,2}):(\d{2})-(\d{1,2}):(\d{2})$/,
   /** 矩形最短边（像素）；管理端画布也按它做「太小的框不提交」 */
   minSize: 16,
 } as const;

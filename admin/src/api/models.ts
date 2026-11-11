@@ -2493,9 +2493,21 @@ export type SaveSpawnArea = {
    */
   monsterKey: string;
   /**
-   * 这一区维持多少只（1~200，播种按它展开）
+   * 这一区最多维持多少只（1~200，落库为 max；密度目标以它为基准）
    */
   count: number;
+  /**
+   * 高峰系数（0~5，留空 = 1.0；在高峰时段内乘到上限上）
+   */
+  densityPeak?: number;
+  /**
+   * 低谷系数（0~5，留空 = 1.0；不在高峰时段内乘到上限上）
+   */
+  densityOff?: number;
+  /**
+   * 高峰时段（如 "19:00-23:00"，支持跨零点 "22:00-02:00"；留空 = 无峰谷）
+   */
+  peakHours?: string;
   /**
    * 区域中心 x（世界坐标；原点 = 地图左上角）
    */
@@ -8993,13 +9005,29 @@ export type MapSpawnArea = {
    */
   monsterLabel: string;
   /**
-   * 区域允许的最少怪物数
+   * 区域允许的最少怪物数（密度目标的下限；表单固定写 0）
    */
   min: number;
   /**
-   * 区域允许的最多怪物数（播种按它展开）
+   * 区域允许的最多怪物数（密度目标的基准，见 densityPeak / densityOff）
    */
   max: number;
+  /**
+   * 高峰系数（null = 1.0；在 peakHours 内乘到上限上）
+   */
+  densityPeak: number | null;
+  /**
+   * 低谷系数（null = 1.0；不在 peakHours 内时乘到上限上）
+   */
+  densityOff: number | null;
+  /**
+   * 高峰时段（null / 空 = 无峰谷，如 "19:00-23:00"）
+   */
+  peakHours: string | null;
+  /**
+   * 此刻的目标怪物数（服务端按 max × 时段系数 × 人数系数算，1 人时等于 max × 时段系数）
+   */
+  targetNow: number;
   /**
    * 区域中心 x（世界坐标；原点 = 地图左上角）
    */

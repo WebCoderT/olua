@@ -173,8 +173,8 @@ async function main() {
     checkEqual(area.name, "e2e 新建区", "区域名原样返回");
     checkEqual(area.monsterKey, "1", "怪物 key 原样返回");
     checkEqual(area.monsterLabel !== "", true, "怪物名由服务端查表拼出（不要求客户端认识 key）");
-    checkEqual(area.min, 5, "min 落库 = 提交的数量");
-    checkEqual(area.max, 5, "max 落库 = 提交的数量（播种按它展开）");
+    checkEqual(area.min, 0, "min 恒为 0（#852：密度目标的下限，count 只落 max）");
+    checkEqual(area.max, 5, "max 落库 = 提交的数量（密度目标的基准）");
     checkEqual(area.cx, 4000, "世界中心 x 原样存下");
     checkEqual(area.cy, -4000, "世界中心 y 原样存下（y 轴向上，故为负）");
     checkEqual(area.w, 256, "区域宽原样存下");
@@ -264,7 +264,7 @@ async function main() {
     checkEqual(updated.body?.data?.name, "e2e 改名区", "名字已改");
     checkEqual(updated.body?.data?.monsterKey, "2", "怪物已换");
     checkEqual(updated.body?.data?.max, 7, "数量已改");
-    checkEqual(updated.body?.data?.min, 7, "min 跟着 max 一起改（接口只有一个 count）");
+    checkEqual(updated.body?.data?.min, 0, "min 不跟着 max 变（#852 起恒为 0）");
     checkEqual(updated.body?.data?.cx, 2000, "位置已挪");
     checkEqual(updated.body?.data?.w, 384, "宽已改");
     checkEqual(updated.body?.data?.inBounds, true, "改完仍在图内");
@@ -396,8 +396,8 @@ async function main() {
     const schemas = doc.components?.schemas ?? {};
     checkEqual(
       Object.keys(schemas.SaveSpawnAreaDto?.properties ?? {}).sort().join(","),
-      "count,cx,cy,h,monsterKey,name,w",
-      "写模型七个字段：**没有 id / mapId**（路径里已经有地图了）",
+      "count,cx,cy,densityOff,densityPeak,h,monsterKey,name,peakHours,w",
+      "写模型十个字段：**没有 id / mapId**（路径里已经有地图了），三个密度字段可空",
     );
 
     //#endregion

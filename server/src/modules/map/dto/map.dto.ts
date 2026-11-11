@@ -1,6 +1,6 @@
 import { ApiProperty } from "@nestjs/swagger";
 import { Type } from "class-transformer";
-import { IsIn, IsInt, IsNumber, IsString, Length, Max, Min } from "class-validator";
+import { IsIn, IsInt, IsNumber, IsOptional, IsString, Length, Max, Min } from "class-validator";
 import {
   COLLISION_BOX_LIMITS,
   MAP_ENTER_LIMITS,
@@ -175,11 +175,25 @@ export class MapSpawnAreaDto {
   @ApiProperty({ description: "怪物名（查不到配置时回落成 key）" })
   monsterLabel: string;
 
-  @ApiProperty({ description: "区域允许的最少怪物数" })
+  @ApiProperty({ description: "区域允许的最少怪物数（密度目标的下限；表单固定写 0）" })
   min: number;
 
-  @ApiProperty({ description: "区域允许的最多怪物数（播种按它展开）" })
+  @ApiProperty({ description: "区域允许的最多怪物数（密度目标的基准，见 densityPeak / densityOff）" })
   max: number;
+
+  @ApiProperty({ description: "高峰系数（null = 1.0；在 peakHours 内乘到上限上）", type: Number, nullable: true })
+  densityPeak: number | null;
+
+  @ApiProperty({ description: "低谷系数（null = 1.0；不在 peakHours 内时乘到上限上）", type: Number, nullable: true })
+  densityOff: number | null;
+
+  @ApiProperty({ description: "高峰时段（null / 空 = 无峰谷，如 \"19:00-23:00\"）", type: String, nullable: true })
+  peakHours: string | null;
+
+  @ApiProperty({
+    description: "此刻的目标怪物数（服务端按 max × 时段系数 × 人数系数算，1 人时等于 max × 时段系数）",
+  })
+  targetNow: number;
 
   @ApiProperty({ description: "区域中心 x（世界坐标；原点 = 地图左上角）" })
   cx: number;
@@ -614,11 +628,14 @@ export class SaveMapConfigDto {
  * 管理端画布本来就是 Tiled 口径（底图坐标），它负责换算：
  * `cx = x + w/2`、`cy = -(y + h/2)`（#566 后的口径，没有半图偏移）。
  *
- * ## `count` 为什么只有一个数
+ * ## `count` 为什么只有「上限」一个数
  *
- * 表里是 `min` / `max` 两列，但播种一直只按 `max` 展开、`min` 从没被读过（留给将来的
- * 「维持最少 N 只」）。表单上摆两个数字只会让人问「min 填了为什么没反应」，
- * 所以接口只收 `count`，落库时 `min = max = count` —— 想用 min 时再加字段，不提前占位。
+ * 表里是 `min` / `max` 两列。**`count` 落的是 `max`，`min` 固定写 0**（#852）：密度目标
+ * = `max × 时段系数 × 人数系数`，下限留 0 才让低谷 / 稀有度真正降得下来。表单上再摆一个
+ * 「最少」只会让人问「填了为什么没反应」—— 真要垫底，运营直接改库里的 `min`。
+ *
+ * 三个密度字段都可空（空 = 1.0 / 无峰谷）：不配时目标恒等于 `max`，行为与加字段前一模一样，
+ * 运营可以逐图灰度。
  */
 export class SaveSpawnAreaDto {
   @ApiProperty({
@@ -638,7 +655,7 @@ export class SaveSpawnAreaDto {
   monsterKey: string;
 
   @ApiProperty({
-    description: "这一区维持多少只（1~200，播种按它展开）",
+    description: "这一区最多维持多少只（1~200，落库为 max；密度目标以它为基准）",
     minimum: SPAWN_AREA_LIMITS.count.min,
     maximum: SPAWN_AREA_LIMITS.count.max,
   })
@@ -647,6 +664,42 @@ export class SaveSpawnAreaDto {
   @Min(SPAWN_AREA_LIMITS.count.min, { message: `数量不能小于 ${SPAWN_AREA_LIMITS.count.min}` })
   @Max(SPAWN_AREA_LIMITS.count.max, { message: `数量不能大于 ${SPAWN_AREA_LIMITS.count.max}` })
   count: number;
+
+  @ApiProperty({
+    description: `高峰系数（0~5，留空 = 1.0；在高峰时段内乘到上限上）`,
+    required: false,
+    minimum: SPAWN_AREA_LIMITS.density.min,
+    maximum: SPAWN_AREA_LIMITS.density.max,
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber({}, { message: "高峰系数必须是数字" })
+  @Min(SPAWN_AREA_LIMITS.density.min, { message: `高峰系数不能小于 ${SPAWN_AREA_LIMITS.density.min}` })
+  @Max(SPAWN_AREA_LIMITS.density.max, { message: `高峰系数不能大于 ${SPAWN_AREA_LIMITS.density.max}` })
+  densityPeak?: number;
+
+  @ApiProperty({
+    description: `低谷系数（0~5，留空 = 1.0；不在高峰时段内乘到上限上）`,
+    required: false,
+    minimum: SPAWN_AREA_LIMITS.density.min,
+    maximum: SPAWN_AREA_LIMITS.density.max,
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber({}, { message: "低谷系数必须是数字" })
+  @Min(SPAWN_AREA_LIMITS.density.min, { message: `低谷系数不能小于 ${SPAWN_AREA_LIMITS.density.min}` })
+  @Max(SPAWN_AREA_LIMITS.density.max, { message: `低谷系数不能大于 ${SPAWN_AREA_LIMITS.density.max}` })
+  densityOff?: number;
+
+  @ApiProperty({
+    description: `高峰时段（如 "19:00-23:00"，支持跨零点 "22:00-02:00"；留空 = 无峰谷）`,
+    required: false,
+    example: "19:00-23:00",
+  })
+  @IsOptional()
+  @IsString({ message: "高峰时段必须是字符串" })
+  @Length(0, 32, { message: "高峰时段写法太长（应为 19:00-23:00 这种）" })
+  peakHours?: string;
 
   @ApiProperty({ description: "区域中心 x（世界坐标；原点 = 地图左上角）" })
   @Type(() => Number)

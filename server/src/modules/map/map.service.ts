@@ -17,6 +17,7 @@ import {
   spawnAreaInBounds,
   spawnAreaOverflow,
 } from "../../common/utils/spawn-area-bounds.util";
+import { spawnTargetOf } from "../../common/utils/spawn-density.util";
 import { MapCollisionRepository } from "../../database/repositories/map-collision.repository";
 import { MapMonitorRepository } from "../../database/repositories/map-monitor.repository";
 import { MapNpcRepository } from "../../database/repositories/map-npc.repository";
@@ -528,8 +529,10 @@ export class MapService {
       map_id: mapId,
       name,
       monster_key: dto.monsterKey,
-      min: dto.count,
+      // #852：min 固定 0（目标是 max × 密度系数 × 人数系数，下限留 0 才降得下来）
+      min: 0,
       max: dto.count,
+      ...this.densityOf(dto),
       cx: box.cx,
       cy: box.cy,
       w: box.w,
@@ -560,8 +563,9 @@ export class MapService {
       ...before,
       name,
       monster_key: dto.monsterKey,
-      min: dto.count,
+      min: 0,
       max: dto.count,
+      ...this.densityOf(dto),
       cx: box.cx,
       cy: box.cy,
       w: box.w,
@@ -654,6 +658,32 @@ export class MapService {
     return box;
   }
 
+  /**
+   * 密度字段的落库形态（#852）
+   *
+   * 三个都可不填：空 = 1.0 / 无峰谷，等于「这一区不配密度」（目标恒等于 max，与加字段前一样）。
+   * `peakHours` 的格式在这里拦：写错了会让这一区静默退化成「无峰谷」—— 运营以为配了峰谷、
+   * 实际没生效，比直接报错难查得多。
+   */
+  private densityOf(dto: SaveSpawnAreaDto): {
+    density_peak: number | null;
+    density_off: number | null;
+    peak_hours: string | null;
+  } {
+    const peakHours = dto.peakHours?.trim() ?? "";
+    if (peakHours !== "" && !SPAWN_AREA_LIMITS.peakHours.test(peakHours)) {
+      throw new BizException(
+        BizCode.PARAM_INVALID,
+        `高峰时段写法不对（${peakHours}），应为 19:00-23:00 这种（支持跨零点 22:00-02:00），留空表示没有峰谷`,
+      );
+    }
+    return {
+      density_peak: dto.densityPeak ?? null,
+      density_off: dto.densityOff ?? null,
+      peak_hours: peakHours === "" ? null : peakHours,
+    };
+  }
+
   /** 取一个刷怪区，且必须属于路径里那张图（防止拿 A 图的 areaId 去改 B 图） */
   private requireArea(mapId: string, areaId: number): MapSpawnAreaRow {
     const area = this.spawnAreas.findById(areaId);
@@ -672,6 +702,11 @@ export class MapService {
       monsterLabel: this.monsterLabelOf(area.monster_key),
       min: area.min,
       max: area.max,
+      densityPeak: area.density_peak,
+      densityOff: area.density_off,
+      peakHours: area.peak_hours,
+      // 此刻目标几只：与 tick 同一份公式、同一个人数（查看这张管理页的人不在图里，按 1 人算）
+      targetNow: spawnTargetOf(area, 1, Date.now()),
       cx: area.cx,
       cy: area.cy,
       w: area.w,

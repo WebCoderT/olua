@@ -4,12 +4,13 @@ import { WorldMonsterRow } from "../rows";
 
 /** 覆盖式写入（同 instance_id 更新，否则插入）——upsert 与 upsertBatch 共用一条 SQL */
 const UPSERT_SQL = `INSERT INTO world_monsters
-  (instance_id, map_id, zone_id, monster_key, x, y, hp, max_hp, alive, killed_at, respawn_at, updated_at)
- VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  (instance_id, map_id, zone_id, monster_key, area_id, x, y, hp, max_hp, alive, killed_at, respawn_at, updated_at)
+ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
  ON CONFLICT(instance_id) DO UPDATE SET
   map_id = excluded.map_id,
   zone_id = excluded.zone_id,
   monster_key = excluded.monster_key,
+  area_id = excluded.area_id,
   x = excluded.x,
   y = excluded.y,
   hp = excluded.hp,
@@ -26,6 +27,7 @@ function rowParams(row: WorldMonsterRow): (string | number | null)[] {
     row.map_id,
     row.zone_id,
     row.monster_key,
+    row.area_id,
     row.x,
     row.y,
     row.hp,
@@ -80,11 +82,24 @@ export class WorldMonsterRepository {
   rekey(oldInstanceId: string, row: WorldMonsterRow): void {
     this.db.run(
       `UPDATE world_monsters SET
-        instance_id = ?, map_id = ?, zone_id = ?, monster_key = ?, x = ?, y = ?,
+        instance_id = ?, map_id = ?, zone_id = ?, monster_key = ?, area_id = ?, x = ?, y = ?,
         hp = ?, max_hp = ?, alive = ?, killed_at = ?, respawn_at = ?, updated_at = ?
        WHERE instance_id = ?`,
       [...rowParams(row), oldInstanceId],
     );
+  }
+
+  /**
+   * 按 instanceId 整批删除（#852 密度裁剪：`alive > target` 时删掉多出来的几只）
+   *
+   * 一个事务删完：裁剪发生在 tick 里，删一半就报错会让「内存里删了、库里还在」——
+   * 下次加载又把它们全捞回来，看着像杀不干净。
+   */
+  removeMany(instanceIds: string[]): void {
+    if (instanceIds.length === 0) return;
+    this.db.transaction(() => {
+      for (const instanceId of instanceIds) this.db.run("DELETE FROM world_monsters WHERE instance_id = ?", [instanceId]);
+    });
   }
 
   /** 全表实例数（启动日志 / 运维观察用） */

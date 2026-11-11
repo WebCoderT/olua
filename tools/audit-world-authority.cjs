@@ -169,6 +169,16 @@ const SETTLEMENT = path.join(SERVER, "modules", "realtime", "combat-settlement.s
 requirePatterns(WORLD, [
   { pattern: /spawnAreas\.listByMap\(/, hint: "播种必须读 map_spawn_areas（不是客户端配置）" },
   { pattern: /processRespawns\(/, hint: "重生必须由服务端 tick 驱动" },
+  // #852：密度对齐挂在 tick 上，目标数只许来自 spawnTargetOf（管理端页面显示的那个数也是它算的）
+  { pattern: /reconcileDensity\(/, hint: "密度对齐必须由 tick 驱动（改了 max / 系数下一秒就生效）" },
+  { pattern: /spawnTargetOf\(/, hint: "目标只数只许用 spawnTargetOf 算（别在世界服务里另抄一份公式）" },
+  // #849：落盘按 worldPersistMs 节流，否则那个配置就是个死字段
+  {
+    pattern: /now - this\.lastPersistAt >= this\.persistMs\(\)/,
+    hint: "落盘必须按 worldPersistMs 节流（#849：每次 tick 无条件 flush 等于这个配置没接线）",
+  },
+  // #850：落点钳进图内（越界区域不再把怪刷到图外）
+  { pattern: /clampPointToMap\(/, hint: "落点必须钳进图内（#850）" },
 ]);
 
 requirePatterns(SETTLEMENT, [

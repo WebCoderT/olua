@@ -221,6 +221,7 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
         map_id      TEXT NOT NULL,
         zone_id     INTEGER NOT NULL DEFAULT 1,
         monster_key TEXT NOT NULL,
+        area_id     INTEGER,
         x           REAL NOT NULL,
         y           REAL NOT NULL,
         hp          REAL NOT NULL,
@@ -282,6 +283,9 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
         cy          REAL    NOT NULL,
         w           REAL    NOT NULL,
         h           REAL    NOT NULL,
+        density_peak REAL,
+        density_off  REAL,
+        peak_hours   TEXT,
         updated_at  INTEGER NOT NULL DEFAULT 0
       );
       CREATE UNIQUE INDEX IF NOT EXISTS idx_map_spawn_areas_natural ON map_spawn_areas(map_id, name);
@@ -1396,6 +1400,15 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
     // 日常日切（#815）：存量库补列后老行都是 0（真实天号在 20000 以上），一次性垫成今天 ——
     // 昨天接的日常今天还能交一次，而不是凭空从面板上消失。幂等：天号 0 只可能是补列那一批
     this.ensureColumn("quest_progress", "reset_day", "INTEGER NOT NULL DEFAULT 0");
+    // 投放密度曲线与世界侧的区归属（#852）：三列系数空 = 1.0（不改行为），
+    // area_id 让 tick 能按区数「这一区现在几只」；存量实例没有值，按出生点反查回填
+    this.ensureColumn("map_spawn_areas", "density_peak", "REAL");
+    this.ensureColumn("map_spawn_areas", "density_off", "REAL");
+    this.ensureColumn("map_spawn_areas", "peak_hours", "TEXT");
+    this.ensureColumn("world_monsters", "area_id", "INTEGER");
+    // 老行是「表单只有一个数量框 → min = max」，密度上线后这条下限会把系数顶死
+    // （`density_off` 再小也降不下来）。一次性抹平，幂等：改成 0 之后不再满足 `min = max`
+    this.db.prepare("UPDATE map_spawn_areas SET min = 0 WHERE min = max AND min > 0").run();
 
     // 货币统一命名（#843、#844）：奖励列与邮件附件列统一挂 bindGold 语汇（存量库一次性改名，幂等）
     this.renameColumnIfExists("quests", "reward_gold", "reward_bind_gold");
