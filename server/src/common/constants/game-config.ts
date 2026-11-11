@@ -64,6 +64,9 @@ export const GROWTH_SCALAR_SPECS: Record<string, GrowthScalarSpec> = {
   // 上限 5 是防手滑 —— 写个 100 就让「堆一项」直接顶满面板
   "attrPointRatio": { min: 0, max: 5, integer: false },
   "attrResetCost": { min: 0, max: 1000000, integer: true },
+  // 等级差（#834）：每越 1 级压掉多少伤害。1 = 越 1 级就打不动（上下限都是合法语义词，
+  // 但 1 是极端配置 —— 出厂 0.05，越 20 级归零）
+  "levelGapSuppress": { min: 0, max: 1, integer: false },
 };
 
 /** 标量参数的中文说明（管理端列表直接展示；键必须与 GROWTH_SCALARS 一致） */
@@ -79,6 +82,8 @@ export const GROWTH_SCALAR_DESCRIPTIONS: Record<string, string> = {
   "attrPointRatio":
     "属性点：每点加成系数（出厂 0.005 = 每点 0.5%）。力量→物攻、体质→生命+物防、精神→法攻+道攻+法力按**等级曲线基础值**的百分比放大；敏捷→暴击率按**绝对百分点**加（0.005 = +0.5%）",
   "attrResetCost": "属性点：洗点花费的绑定元宝（0 = 免费洗点。四维归零、已分配点数全部退还）",
+  "levelGapSuppress":
+    "等级差：目标每比角色高 1 级，伤害乘数 −该值（0.05 = 每级 −5%，越 20 级伤害归零；0 = 完全不压制，1 = 越 1 级就打不动）。只压玩家打怪，同级与打低级怪恒为 1",
 };
 
 /**

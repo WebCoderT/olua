@@ -456,17 +456,16 @@ function connect(url) {
     // 「走出来」的基准也取**这一段开始时的实际位置**（上一段把它推离了出生点，拿出生点当基线
     // 会让阈值落在一个刚好够不着的距离上）
     const entriesFrom = (from) => sessionA.aiEntries(bruiser.instanceId, from);
-    // A 先走到牵引半径内的一处**停一下**（500px < 600），等怪确实迈出一步，再跑出去。
-    // 原来是一口气从 150px 跑到 850px：整段窗口只有约 1.1s，满负载并行跑时 AI tick 会被挤后，
-    // 怪可能在这一段里一个 tick 都没拿到 → 一条追击帧都没有，「跟过来」就成了对 CPU 的赌博
-    // （2026-11-12 `make e2e-all` 实测漂过一次，单跑 38 条全绿）。停等的窗口按 tick 挤后
-    // 的余量给到 3.6s，同时也短于「怪从出生点走到 500px 处」的 3.7s —— 不至于先挨打。
-    // 停等期间必须持续上报位置：目标位置上报超时同样会走 `endChase`，把记恨一起清掉。
-    const holdX = BRUISER.x + 500;
-    await walk(sessionA, [walkStartX, BRUISER.y], [holdX, BRUISER.y], aHp);
+    // A **先在检测范围里（150px）站住**，等怪确实迈出一步，再跑出去。
+    // 原来是一记仇就开跑：整段窗口约 1.1s，满负载并行跑时 AI tick 会被挤后，A 可能在第一个 tick
+    // 之前就跑出检测范围 200 —— 怪整段**没看见他**，追击帧一条都没有，「跟过来」于是永远为空
+    // （2026-11-12 连实测两次，单跑 / 满负载各一次）。站着等的窗口给到 3s（tick 挤后的余量），
+    // 期间必须持续上报位置：目标位置上报超时同样会走 `endChase`，把记恨一起清掉。
+    // 站着挨打的量是有界的：怪自己也要靠 tick 才动、才出手，tick 被挤时两边一起慢，先走到 60px
+    // 攻击距离至少要 (150−60)/120 ≈ 0.75s —— 而这里看到第一帧位移（+20px = 0.17s）就退出。
     let chased = null;
-    for (let index = 0; index < 30 && !chased; index += 1) {
-      sessionA.sendPos("1", holdX, BRUISER.y, aHp);
+    for (let index = 0; index < 25 && !chased; index += 1) {
+      sessionA.sendPos("1", walkStartX, BRUISER.y, aHp);
       await sleep(120);
       chased = entriesFrom(chaseFrom).find((entry) => entry.x > chaseBaseX + 20) ?? null;
     }
@@ -475,8 +474,8 @@ function connect(url) {
       "A 走开的过程中怪确实跟了过来（不是原地没动，否则脱战断言就没有意义）",
       chased && `x=${chased.x}（本段起点 ${chaseBaseX.toFixed(1)}）`,
     );
-    // 再跑出牵引半径：500 → 1050（> 600），后面的「脱战回家」从这一腿开始算
-    await walk(sessionA, [holdX, BRUISER.y], [walkStartX + 700, BRUISER.y], aHp);
+    // 再跑出牵引半径：150 → 850（> 600），后面的「脱战回家」从这一腿开始算
+    await walk(sessionA, [walkStartX, BRUISER.y], [walkStartX + 700, BRUISER.y], aHp);
     const homeEntry = await waitFor(
       "脱战后走回出生点",
       async () =>
@@ -631,11 +630,14 @@ function connect(url) {
     backB.sendPos("1", bFarX, BOSS.y, aHp);
     await sleep(1_500);
     const forgedEntries = backB.aiEntries(boss.instanceId, forgedFrom);
-    const movedTowardForge = forgedEntries.some((entry) => entry.x > BOSS.x + 60);
+    // 阈值 150 而不是 60：上一段进出图之后 BOSS 可能还在「回家」的路上，起点未必正好在出生点，
+    // 几十 px 的漂移不该算「朝伪造点走」。而真去追伪造点（300px/s、1.5s 窗口）会走出去几百 px ——
+    // 150 仍然能把两种情形分干净，且不受那点漂移影响（2026-11-12 真被 61.7px 的漂移咬过一次）
+    const movedTowardForge = forgedEntries.some((entry) => entry.x > BOSS.x + 150);
     check(
       !movedTowardForge,
       "伪造帧之后 BOSS 没有朝那个点走过去（AI 读的是仲裁后的坐标，#855）",
-      `这段窗口里 ${forgedEntries.length} 帧，最远 x=${forgedEntries.reduce((max, entry) => Math.max(max, entry.x), BOSS.x).toFixed(1)}`,
+      `窗口里 ${forgedEntries.length} 帧：${forgedEntries.map((entry) => entry.x.toFixed(1)).join(" → ") || "（无帧）"}`,
     );
     const forgedHits = backB.hitsFrom(forgedFrom).filter((hit) => hit.instanceId === boss.instanceId);
     check(forgedHits.length === 0, "也没有对这个「瞬移过来的」玩家出手", `命中 ${forgedHits.length} 条`);

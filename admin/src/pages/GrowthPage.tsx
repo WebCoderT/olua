@@ -19,6 +19,8 @@ const SCALAR_LABELS: Record<string, string> = {
   // 属性点（#833）：加成的唯一系数与洗点价格都在这里调，客户端只显示四维与余点
   attrPointRatio: "属性点·每点系数",
   attrResetCost: "属性点·洗点花费",
+  // 等级差（#834）：每越 1 级压掉的伤害比例
+  levelGapSuppress: "等级差·每级压制",
 };
 
 /** 曲线键 → 中文名（与服务端 ROLE_LEVEL_CURVE_LABELS 同序同义；未登记的原样显示） */

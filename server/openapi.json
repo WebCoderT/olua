@@ -10751,7 +10751,7 @@
     },
     "/admin/growth-scalars/{key}": {
       "patch": {
-        "description": "只改 `value`；每个键的取值域服务端单独校验：roleMaxLevel ∈ [1, 10000000]（整数），expGain.expPerLevel ∈ [1, 100000]（整数），expGain.maxLevelGap ∈ [0, 100]（整数），mpRecoverPerSecond ∈ [0, 1000]，soakExpPerTick ∈ [0, 1000000]（整数），soakTickSeconds ∈ [1, 3600]（整数），critRate ∈ [0, 1]，critDamage ∈ [0, 10]，attrPointRatio ∈ [0, 5]，attrResetCost ∈ [0, 1000000]（整数）。\n\n- `roleMaxLevel`：改完会把四条曲线的末段 `toLevel` 一起拉到新值（两处数字永远一致）。\n- **改参数会影响军衔等效强度**（#250 的映射基准）。\n- 参数键不存在 → 404（`50014`）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
+        "description": "只改 `value`；每个键的取值域服务端单独校验：roleMaxLevel ∈ [1, 10000000]（整数），expGain.expPerLevel ∈ [1, 100000]（整数），expGain.maxLevelGap ∈ [0, 100]（整数），mpRecoverPerSecond ∈ [0, 1000]，soakExpPerTick ∈ [0, 1000000]（整数），soakTickSeconds ∈ [1, 3600]（整数），critRate ∈ [0, 1]，critDamage ∈ [0, 10]，attrPointRatio ∈ [0, 5]，attrResetCost ∈ [0, 1000000]（整数），levelGapSuppress ∈ [0, 1]。\n\n- `roleMaxLevel`：改完会把四条曲线的末段 `toLevel` 一起拉到新值（两处数字永远一致）。\n- **改参数会影响军衔等效强度**（#250 的映射基准）。\n- 参数键不存在 → 404（`50014`）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
         "operationId": "adminGrowthScalar.update",
         "parameters": [
           {

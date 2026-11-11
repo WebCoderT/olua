@@ -1460,17 +1460,37 @@ function critProfileOf(summary: object, skill: object): CritProfile {
 }
 
 /**
- * 等级压制系数（#826 第三批，docs/22 §2.2 已定「严格压制」）
+ * 等级差每级的伤害压制系数（`growth_scalars.levelGapSuppress`，出厂 0.05）
  *
- * `sup = max(0, 1 − 0.05 × max(0, targetLevel − attackerLevel))`
+ * 从代码字面量搬进配置表是 #834 的收口项：系数属于「运营随时会改的数」，
+ * 写死就意味着每调一次要发一版服务端。
+ *
+ * 三条读法：缺行 / 非数 → 出厂 0.05（老库没有这一行时行为与改动前一致）；
+ * 负数 → 出厂值（负的压制等于「越级打怪更疼」，那不是配置错，是开了一个刷怪口子）；
+ * 上限夹到 1（1 = 越 1 级就打不动，是合法语义，> 1 只会让整数等级差全部归零）。
+ */
+export const DEFAULT_LEVEL_GAP_SUPPRESS = 0.05;
+
+function levelGapSuppressPerLevel(): number {
+  const value = growthScalarOf("levelGapSuppress");
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0) return DEFAULT_LEVEL_GAP_SUPPRESS;
+  return Math.min(1, value);
+}
+
+/**
+ * 等级压制系数（#826 第三批，docs/22 §2.2 已定「严格压制」；#834 系数改配置）
+ *
+ * `sup = max(0, 1 − 系数 × max(0, targetLevel − attackerLevel))`
  *
  * - **只算目标比攻击者高多少**，不取绝对值：打低级怪既不吃惩罚也不加成；
- * - 每级 -5%，越 20 级就是 0（打不动），不再有下限保护；
+ * - 出厂每级 -5%，越 20 级就是 0（打不动），不再有下限保护；
  * - 与经验侧的 `maxLevelGap` 是两条独立的线，都生效。
  */
 function suppressionOf(attackerLevel: number, targetLevel: number): number {
   const gap = Math.max(0, Math.floor(targetLevel) - Math.floor(attackerLevel));
-  return Math.max(0, 1 - 0.05 * gap);
+  // 同级 / 打低级怪直接短路：连配置都不读，热路径上省一次查表（系数对 gap=0 恒为 1）
+  if (gap <= 0) return 1;
+  return Math.max(0, 1 - levelGapSuppressPerLevel() * gap);
 }
 
 /**
