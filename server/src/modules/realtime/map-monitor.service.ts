@@ -13,7 +13,8 @@ import {
 import { itemLabelOf } from "../../common/runtime-config-cache";
 import { MapMonitorRepository } from "../../database/repositories/map-monitor.repository";
 import { MonsterRepository } from "../../database/repositories/monster.repository";
-import { WorldMonster, WorldService } from "../world/world.service";
+import { WorldService } from "../world/world.service";
+import type { WorldMonster } from "../world/world-monster";
 import { MonsterAiLogEvent, MonsterAiService } from "./monster-ai.service";
 import { PlayerPresenceService } from "./player-presence.service";
 
@@ -162,18 +163,24 @@ export class MapMonitorService implements OnApplicationBootstrap, OnApplicationS
   /** 采一遍「有人看的图」，写出快照 + 差分出的刷新事件 */
   private sample(): void {
     const now = Date.now();
-    for (const { zoneId, mapId, monsters } of this.world.viewedMaps()) {
-      const key = `${zoneId}:${mapId}`;
+    for (const room of this.world.viewedRooms()) {
       try {
-        this.sampleMap(key, zoneId, mapId, monsters, now);
+        this.sampleMap(room.roomId, room.zoneId, room.mapId, room.slot, room.monsters, now);
       } catch (error) {
         // 单张图采样失败不该让整轮停摆（下个周期再来）；监控本身不是游戏主链路
-        this.logger.warn(`地图 ${mapId}（区 ${zoneId}）采样失败：${error instanceof Error ? error.message : String(error)}`);
+        this.logger.warn(`房间 ${room.roomId} 采样失败：${error instanceof Error ? error.message : String(error)}`);
       }
     }
   }
 
-  private sampleMap(key: string, zoneId: number, mapId: string, monsters: Map<string, WorldMonster>, now: number): void {
+  private sampleMap(
+    key: string,
+    zoneId: number,
+    mapId: string,
+    slot: string,
+    monsters: Map<string, WorldMonster>,
+    now: number,
+  ): void {
     const before = this.aliveBefore.get(key) ?? new Map<string, boolean>();
     const positions = this.lastPosition.get(key) ?? new Map<string, { x: number; y: number }>();
     const rows: MapMonitorMonster[] = [];
@@ -192,10 +199,11 @@ export class MapMonitorService implements OnApplicationBootstrap, OnApplicationS
 
     const snapshot: MapMonitorSnapshot = {
       monsters: rows,
-      players: this.presence.playersOn(zoneId, mapId),
+      players: this.presence.playersOn(key),
       sampledAt: now,
     };
-    this.monitor.saveState({ zone_id: zoneId, map_id: mapId, payload: JSON.stringify(snapshot), updated_at: now });
+    // 主键三列（#809）：同一张图的不同线各存一份，管理端挑线看
+    this.monitor.saveState({ zone_id: zoneId, map_id: mapId, slot, payload: JSON.stringify(snapshot), updated_at: now });
 
     for (const { monster, x, y } of respawned) {
       this.appendEvent(zoneId, mapId, {

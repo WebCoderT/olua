@@ -4,11 +4,12 @@ import { WorldMonsterRow } from "../rows";
 
 /** 覆盖式写入（同 instance_id 更新，否则插入）——upsert 与 upsertBatch 共用一条 SQL */
 const UPSERT_SQL = `INSERT INTO world_monsters
-  (instance_id, map_id, zone_id, monster_key, area_id, x, y, hp, max_hp, alive, killed_at, respawn_at, updated_at)
- VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  (instance_id, map_id, zone_id, slot, monster_key, area_id, x, y, hp, max_hp, alive, killed_at, respawn_at, updated_at)
+ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
  ON CONFLICT(instance_id) DO UPDATE SET
   map_id = excluded.map_id,
   zone_id = excluded.zone_id,
+  slot = excluded.slot,
   monster_key = excluded.monster_key,
   area_id = excluded.area_id,
   x = excluded.x,
@@ -26,6 +27,7 @@ function rowParams(row: WorldMonsterRow): (string | number | null)[] {
     row.instance_id,
     row.map_id,
     row.zone_id,
+    row.slot,
     row.monster_key,
     row.area_id,
     row.x,
@@ -40,11 +42,12 @@ function rowParams(row: WorldMonsterRow): (string | number | null)[] {
 }
 
 /**
- * 世界怪物实例的数据访问（#35 世界权威；#295 阶段二起带区维度）
+ * 世界怪物实例的数据访问（#35 世界权威；#295 阶段二起带区维度；#809 起带线维度）
  *
  * 表只有服务端一个写者（客户端通过实时通道间接改），所以没有乐观锁列；
- * 写入全部走 `upsert`（同主键覆盖），读按「区（+ 地图）」取整批 —— 世界服务的两个消费面
- * （tick 重生落盘 / 进图下发快照）用 listByZoneMap，合并区重排用 listByZone。
+ * 写入全部走 `upsert`（同主键覆盖），读按「房间（区 + 图 + 线）」取整批 ——
+ * 世界服务的两个消费面（tick 重生落盘 / 进图下发快照）用 listByRoom，
+ * 合并区重排用 listByZone。
  */
 @Injectable()
 export class WorldMonsterRepository {
@@ -62,11 +65,16 @@ export class WorldMonsterRepository {
     });
   }
 
-  /** 取一个区一张地图的全部实例（世界加载 / 合并区重排都按这个口径读） */
-  listByZoneMap(zoneId: number, mapId: string): WorldMonsterRow[] {
+  /**
+   * 取**一间房**的全部实例（世界加载 / 单图重载都按这个口径读）
+   *
+   * 从 `listByZoneMap` 改名（#809）：分线之后「一张图」不等于「一份世界」，
+   * 少了 slot 这一段，公共线和 2 线会读到同一批实例。
+   */
+  listByRoom(zoneId: number, mapId: string, slot: string): WorldMonsterRow[] {
     return this.db.all<WorldMonsterRow>(
-      "SELECT * FROM world_monsters WHERE zone_id = ? AND map_id = ? ORDER BY instance_id ASC",
-      [zoneId, mapId],
+      "SELECT * FROM world_monsters WHERE zone_id = ? AND map_id = ? AND slot = ? ORDER BY instance_id ASC",
+      [zoneId, mapId, slot],
     );
   }
 
@@ -78,11 +86,11 @@ export class WorldMonsterRepository {
     );
   }
 
-  /** 改写一只实例的 instanceId（合并区重排发牌用；zone_id 一并在同一句里落） */
+  /** 改写一只实例的 instanceId（合并区重排发牌用；zone_id / slot 一并在同一句里落） */
   rekey(oldInstanceId: string, row: WorldMonsterRow): void {
     this.db.run(
       `UPDATE world_monsters SET
-        instance_id = ?, map_id = ?, zone_id = ?, monster_key = ?, area_id = ?, x = ?, y = ?,
+        instance_id = ?, map_id = ?, zone_id = ?, slot = ?, monster_key = ?, area_id = ?, x = ?, y = ?,
         hp = ?, max_hp = ?, alive = ?, killed_at = ?, respawn_at = ?, updated_at = ?
        WHERE instance_id = ?`,
       [...rowParams(row), oldInstanceId],
@@ -102,6 +110,21 @@ export class WorldMonsterRepository {
     });
   }
 
+  /**
+   * 删掉**一间房**的全部实例（#809 单图热重载：整份重播之前先清干净）
+   *
+   * 按房间删而不是按 instanceId 列表删：重播的新实例要沿用同一批 id 前缀，
+   * 「先删库再播种」比「算出哪些该删」少一次口径不一致的机会。
+   * @returns 删掉的行数
+   */
+  removeByRoom(zoneId: number, mapId: string, slot: string): number {
+    return this.db.execute("DELETE FROM world_monsters WHERE zone_id = ? AND map_id = ? AND slot = ?", [
+      zoneId,
+      mapId,
+      slot,
+    ]).changes;
+  }
+
   /** 全表实例数（启动日志 / 运维观察用） */
   countAll(): number {
     return this.db.count("SELECT COUNT(1) AS total FROM world_monsters");
@@ -110,13 +133,14 @@ export class WorldMonsterRepository {
   /**
    * 每图每区的实例数与存活数（管理端地图页只读展示，%571）
    *
-   * 只读聚合：世界服务自己的播种 / 重生逻辑不读它，避免「为了看统计而多一条写路径」。
-   * `alive` 在库里是 0/1，SUM 出来就是存活只数。
+   * 只读聚合：世界服务自己的播种 / 重生逻辑不读它，避免「为了看统计而多写一条路径」。
+   * `alive` 在库里是 0/1，SUM 出来就是存活只数。按 (图, 区, 线) 分组（#809）——
+   * 分线之后「这张图几只怪」必须按线分开看，否则 1 线一只都没刷也会显示成满编。
    */
-  countByMap(): Array<{ map_id: string; zone_id: number; total: number; alive: number }> {
-    return this.db.all<{ map_id: string; zone_id: number; total: number; alive: number }>(
-      `SELECT map_id, zone_id, COUNT(1) AS total, SUM(alive) AS alive
-       FROM world_monsters GROUP BY map_id, zone_id ORDER BY map_id ASC, zone_id ASC`,
+  countByMap(): Array<{ map_id: string; zone_id: number; slot: string; total: number; alive: number }> {
+    return this.db.all<{ map_id: string; zone_id: number; slot: string; total: number; alive: number }>(
+      `SELECT map_id, zone_id, slot, COUNT(1) AS total, SUM(alive) AS alive
+       FROM world_monsters GROUP BY map_id, zone_id, slot ORDER BY map_id ASC, zone_id ASC, slot ASC`,
     );
   }
 }

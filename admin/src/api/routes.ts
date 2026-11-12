@@ -763,7 +763,7 @@ export const routes = {
      */
     resetStock: (id: string) => `/admin/mall/goods/${encodeURIComponent(id)}/stock-reset`,
   },
-  /** adminMap 模块（15 个接口） */
+  /** adminMap 模块（18 个接口） */
   adminMap: {
     /**
      * 地图列表（GET /admin/maps）
@@ -826,6 +826,12 @@ export const routes = {
      */
     updateNpc: (id: string, npcRowId: string) => `/admin/maps/${encodeURIComponent(id)}/npcs/${encodeURIComponent(npcRowId)}`,
     /**
+     * 让这张图的房间按现在的刷怪区重新播种（POST /admin/maps/{id}/reload-world）
+     *
+     * 改完刷怪区之后**立刻生效**的那一步（#809，收 #669）。不调它也不会错 —— 下次有人进图会按新区域播种；
+     */
+    reloadWorld: (id: string) => `/admin/maps/${encodeURIComponent(id)}/reload-world`,
+    /**
      * 清掉复活点（DELETE /admin/maps/{id}/revive-point）
      *
      * 把这张图的复活点置空（两列置 NULL，不是删地图行）。**幂等**：本来就没有也返回 `cleared: true` ——
@@ -837,6 +843,18 @@ export const routes = {
      * 每张图最多一个复活点（沿用 #672 之前的粒度：TMX 里也是每图一个 `class=revive` 的点）。
      */
     setRevivePoint: (id: string) => `/admin/maps/${encodeURIComponent(id)}/revive-point`,
+    /**
+     * 地图玩法规则（GET /admin/maps/{id}/rules）
+     *
+     * 这张图的规则（`map_rules` 一行）。**一行不存在 = 全默认**，此时 `inherited=true` ——
+     */
+    rules: (id: string) => `/admin/maps/${encodeURIComponent(id)}/rules`,
+    /**
+     * 保存地图玩法规则（整份覆盖）（PATCH /admin/maps/{id}/rules）
+     *
+     * 15 个字段**整份提交**，不是部分更新：其中 7 个是开关，「没传」与「传了 false」在 JSON 里
+     */
+    saveRules: (id: string) => `/admin/maps/${encodeURIComponent(id)}/rules`,
     /**
      * 新建刷怪区（在图上拖一个框）（POST /admin/maps/{id}/spawn-areas）
      *

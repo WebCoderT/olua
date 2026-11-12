@@ -18,6 +18,7 @@ import {
   spawnAreaOverflow,
 } from "../../common/utils/spawn-area-bounds.util";
 import { spawnTargetOf } from "../../common/utils/spawn-density.util";
+import { MapRuleRepository, mapRulesOf } from "../../database/repositories/map-rule.repository";
 import { MapCollisionRepository } from "../../database/repositories/map-collision.repository";
 import { MapMonitorRepository } from "../../database/repositories/map-monitor.repository";
 import { MapNpcRepository } from "../../database/repositories/map-npc.repository";
@@ -26,6 +27,13 @@ import { MapSpawnAreaRepository } from "../../database/repositories/map-spawn-ar
 import { MapRepository } from "../../database/repositories/map.repository";
 import { MonsterRepository } from "../../database/repositories/monster.repository";
 import { WorldMonsterRepository } from "../../database/repositories/world-monster.repository";
+import { ZoneRepository } from "../../database/repositories/zone.repository";
+import {
+  defaultForceAt,
+  ReloadMode,
+  WorldReloadRequestRepository,
+} from "../../database/repositories/world-reload-request.repository";
+import { PUBLIC_SLOT, roomKey } from "../../common/utils/room-key.util";
 import { MapCollisionRow, MapNpcRow, MapRow, MapSpawnAreaRow, NpcRow } from "../../database/rows";
 import { EMPTY_MAP_CONTENT, EMPTY_MAP_PIXEL_SIZE, MapContent, MapPixelSize } from "./map-content";
 import {
@@ -53,9 +61,14 @@ import {
   MapSpawnAreaPointDto,
   MapSummaryDto,
   MapWorldMonsterDto,
+  MapReloadBatchDto,
+  MapReloadResultDto,
+  MapRulesDto,
+  ReloadWorldDto,
   SaveMapCollisionDto,
   SaveMapConfigDto,
   SaveMapNpcDto,
+  SaveMapRulesDto,
   SaveRevivePointDto,
   SaveSpawnAreaDto,
 } from "./dto/map.dto";
@@ -152,6 +165,9 @@ export class MapService {
     private readonly monsters: MonsterRepository,
     private readonly npcs: NpcRepository,
     private readonly monitorRows: MapMonitorRepository,
+    private readonly mapRules: MapRuleRepository,
+    private readonly reloadRequests: WorldReloadRequestRepository,
+    private readonly zones: ZoneRepository,
   ) {}
 
 
@@ -298,13 +314,16 @@ export class MapService {
    * 快照坏掉（半截 JSON）时返回空列表 + `sampledAt = null`，不抛 500 —— 一张图的镜像
    * 坏了不该让整个监控接口挂掉，页面会显示「没有可用快照」。
    */
-  monitor(id: string, query: { zone?: number; since?: number; limit?: number }): MapMonitorDto {
+  monitor(id: string, query: { zone?: number; since?: number; limit?: number; slot?: string }): MapMonitorDto {
     const row = this.requireRow(id);
     const size = this.sizeOf(row);
     const states = this.monitorRows.listStates(id);
     // 不指定区就用「最新写过快照的那个区」—— 玩家在哪个区，就看到哪个区
     const zoneId = query.zone ?? states[0]?.zone_id ?? 1;
-    const state = states.find((item) => item.zone_id === zoneId) ?? null;
+    // 线（#809）：不传 = 公共线。指定了线就**只认这一条线的帧**，不拿别的线凑 ——
+    // 「切到 1 线却看到 0 线的怪」比看到空图更糟（运营会以为分线没生效）
+    const slot = query.slot ?? PUBLIC_SLOT;
+    const state = this.monitorRows.findState(zoneId, id, slot);
     const snapshot = parseMonitorSnapshot(state?.payload);
     const now = Date.now();
     const since = Math.max(0, query.since ?? 0);
@@ -399,6 +418,16 @@ export class MapService {
     dto.height = size.height;
     dto.zoneId = zoneId;
     dto.zones = states.map((item) => item.zone_id).sort((left, right) => left - right);
+    // 有哪些线可切：至少包含当下这条线（这张图从没被采样过时 `states` 是空的，
+    // 但页面上的选择器不能因此消失 —— 它得能显示「当前在 0 线」）
+    dto.slot = slot;
+    const slotOptions = new Set<string>(states.map((item) => item.slot));
+    slotOptions.add(slot);
+    dto.slots = [...slotOptions].sort((left, right) => {
+      if (left === PUBLIC_SLOT) return -1;
+      if (right === PUBLIC_SLOT) return 1;
+      return left.localeCompare(right, "en");
+    });
     dto.sampledAt = snapshot?.sampledAt ?? null;
     dto.updatedAt = state?.updated_at ?? null;
     dto.staleMs = state ? Math.max(0, now - state.updated_at) : null;
@@ -435,6 +464,125 @@ export class MapService {
     dto.cursor = lastId > 0 ? lastId : since;
     return dto;
   }
+
+  //#region 单图热重载（#809 / 收 #669）
+
+  /**
+   * 让这张图的房间**按现在的刷怪区重新播种**（改完区域立刻生效的正常路径）
+   *
+   * ## 为什么写一张表而不是直接调实时进程
+   *
+   * 世界只在实时进程（3101）内存里，本进程（3100）够不着；而「实时进程没起来 / 正在重启」
+   * 又是常态。写一行 `pending` 让它在下一轮自己执行，天然是「谁在跑谁干活」，也不必处理
+   * HTTP 回调失败重试（重试由 `RoomReloadService` 的尝试计数负责）。
+   *
+   * ## 为什么一次发给每个区
+   *
+   * 刷怪区（`map_spawn_areas`）是**全服共用的配置**，但每个存活区各有一份这张图的世界。
+   * 只重载区 1 的话，区 2 的玩家继续看到改之前的怪 —— 那正是 #669 里「改完只对新区生效」
+   * 的那类不一致。所以按 `zones.listLive()` 逐个房间（区 × 图 × 线）各排一条。
+   *
+   * ## `plan` 说的是「会不会排队」，不是「现在几个人」
+   *
+   * 有没有人在房里只有实时进程知道。这里能给的是：`reload`（连 AI 一起重载）与
+   * `forceAfterMs = 0`（立刻强制）都**不等**，标 `immediate`；其余情况可能先排队
+   * （没人则下个 tick 就执行），标 `queued`。
+   */
+  reloadWorld(id: string, dto: ReloadWorldDto, actor: AuthenticatedUser): MapReloadBatchDto {
+    const row = this.requireRow(id);
+    const slot = dto.slot ?? PUBLIC_SLOT;
+    const mode: ReloadMode = dto.mode;
+    const now = Date.now();
+    const forceAt = defaultForceAt(now, dto.forceAfterMs);
+    const plan: "immediate" | "queued" = mode === "reload" || dto.forceAfterMs === 0 ? "immediate" : "queued";
+
+    const batch = new MapReloadBatchDto();
+    batch.requestedAt = now;
+    batch.items = this.zones.listLive().map((zone) => {
+      const { id: requestId, merged } = this.reloadRequests.enqueue({
+        zoneId: zone.id,
+        mapId: id,
+        slot,
+        mode,
+        requestedBy: actor.username,
+        requestedAt: now,
+        forceAt,
+      });
+      const item = new MapReloadResultDto();
+      item.requestId = requestId;
+      item.merged = merged;
+      item.roomId = roomKey(zone.id, id, slot);
+      item.slot = slot;
+      item.mode = mode;
+      item.forceAt = forceAt;
+      item.plan = plan;
+      return item;
+    });
+    this.logger.log(
+      `地图 ${id}（${row.label}）请求重载：mode=${mode} / slot=${slot} / plan=${plan} / ` +
+        `房间 ${batch.items.map((item) => `${item.roomId}${item.merged ? "(合并)" : ""}`).join("、") || "（没有存活区）"}`,
+    );
+    return batch;
+  }
+
+  //#endregion
+
+  //#region 地图玩法规则（#809）
+
+  /**
+   * 一张图的玩法规则
+   *
+   * `inherited = true` 是**重要信息**：库里没有这一行，返回的是出厂默认值。管理端要把它
+   * 显示成「未覆盖」，否则运营会以为「这张图单独配了 30 人上限」—— 哪天默认值改了，
+   * 他会发现这张图「自己变了」。
+   */
+  rulesOf(id: string): MapRulesDto {
+    this.requireRow(id);
+    return this.rulesDtoOf(id);
+  }
+
+  /**
+   * 保存一张图的规则（**整份覆盖**）
+   *
+   * 不写「部分更新」：15 个字段里 7 个开关，「没传」与「传了 false」在 JSON 里长得一样，
+   * 静默把一个开关关掉是最难查的一类问题。管理端先读（拿到含默认的全量）再整份提交。
+   *
+   * 生效范围：倍率在**服务端结算时**乘（不进客户端快照）；人数上限 / 分线数由实时进程的
+   * `RoomManager` 每次现读 —— 所以保存后不需要再触发一次重载（改的是「这间房能装几个人」，
+   * 不是「房里有几只怪」）。
+   */
+  saveRules(id: string, dto: SaveMapRulesDto, actor: AuthenticatedUser): MapRulesDto {
+    const row = this.requireRow(id);
+    const before = mapRulesOf(this.mapRules.find(id));
+    const now = Date.now();
+    this.mapRules.save({
+      map_id: id,
+      exp_rate: dto.expRate,
+      drop_rate: dto.dropRate,
+      money_rate: dto.moneyRate,
+      allow_pk: dto.allowPk ? 1 : 0,
+      allow_auto_battle: dto.allowAutoBattle ? 1 : 0,
+      allow_recall: dto.allowRecall ? 1 : 0,
+      allow_drop: dto.allowDrop ? 1 : 0,
+      max_players_per_room: dto.maxPlayersPerRoom,
+      max_channels: dto.maxChannels,
+      transfer_cost_money: dto.transferCostMoney,
+      transfer_cooldown_ms: dto.transferCooldownMs,
+      deny_transfer_in_combat: dto.denyTransferInCombat ? 1 : 0,
+      respawn_ms_override: dto.respawnMsOverride ?? null,
+      simulate_when_empty: dto.simulateWhenEmpty ? 1 : 0,
+      updated_by: actor.username,
+      updated_at: now,
+    });
+    this.logger.log(
+      `地图 ${id}（${row.label}）规则已更新：经验×${before.expRate}→${dto.expRate} / 掉落×${before.dropRate}→${dto.dropRate} / ` +
+        `金钱×${before.moneyRate}→${dto.moneyRate} / 人数 ${before.maxPlayersPerRoom}→${dto.maxPlayersPerRoom} / ` +
+        `分线 ${before.maxChannels}→${dto.maxChannels}`,
+    );
+    return this.rulesDtoOf(id);
+  }
+
+  //#endregion
 
   /** 详情：基础 + 图层 + 刷怪区 + NPC/复活点 + 碰撞盒 + 场上怪物 + 来源说明 */
   detail(id: string): MapDetailDto {
@@ -1010,6 +1158,32 @@ export class MapService {
   /** 资源路径（约定：`resources/map/<id>/<id>.tmx`；客户端按同一规则拼，服务端只回显） */
   private srcOf(id: string): string {
     return `map/${id}/${id}`;
+  }
+
+  /** 一行规则 → DTO（少了 `inherited` 与两个落款字段，那三个不属于 map_rules 的业务形状） */
+  private rulesDtoOf(id: string): MapRulesDto {
+    const stored = this.mapRules.find(id);
+    const rules = mapRulesOf(stored);
+    const dto = new MapRulesDto();
+    dto.mapId = id;
+    dto.inherited = stored === null;
+    dto.expRate = rules.expRate;
+    dto.dropRate = rules.dropRate;
+    dto.moneyRate = rules.moneyRate;
+    dto.allowPk = rules.allowPk;
+    dto.allowAutoBattle = rules.allowAutoBattle;
+    dto.allowRecall = rules.allowRecall;
+    dto.allowDrop = rules.allowDrop;
+    dto.maxPlayersPerRoom = rules.maxPlayersPerRoom;
+    dto.maxChannels = rules.maxChannels;
+    dto.transferCostMoney = rules.transferCostMoney;
+    dto.transferCooldownMs = rules.transferCooldownMs;
+    dto.denyTransferInCombat = rules.denyTransferInCombat;
+    dto.respawnMsOverride = rules.respawnMsOverride;
+    dto.simulateWhenEmpty = rules.simulateWhenEmpty;
+    dto.updatedBy = stored?.updated_by ?? "";
+    dto.updatedAt = stored?.updated_at ?? 0;
+    return dto;
   }
 
   /** 尺寸（`maps` 表的几何列）；一行没补过几何时按 0 展示，并留一条 warn 便于批量排查 */

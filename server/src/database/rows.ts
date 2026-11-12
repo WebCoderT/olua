@@ -304,11 +304,13 @@ export interface MailQueueWithAccountRow extends MailQueueRow {
 
 /** 世界怪物实例行（服务端持有的怪物状态，一行 = 场上一只怪） */
 export interface WorldMonsterRow {
-  /** 实例 id（服务端发牌，如 "m1_z1_3"：地图 1、一区的第 3 只；全服唯一且跨重启稳定） */
+  /** 实例 id（服务端发牌，如 "m1_z1_c0_3"：地图 1、一区公共线的第 3 只；全服唯一且跨重启稳定） */
   instance_id: string;
   map_id: string;
   /** 归属区（#295 阶段二；同一张图各区各有一份独立世界） */
   zone_id: number;
+  /** 归属线（#809：'0' 公共线 / '1'.. 分线 / 'i<seq>' 副本） */
+  slot: string;
   /** 怪物 key（configs/monster 的关联键，战斗数值查 monsters 表） */
   monster_key: string;
   /**
@@ -362,9 +364,51 @@ export interface RolePositionRow {
 export interface MapMonitorStateRow {
   zone_id: number;
   map_id: string;
+  /** 线（#809：'0' 公共线，分线 / 副本各占一行） */
+  slot: string;
   /** JSON：{ monsters, players, sampledAt } */
   payload: string;
   updated_at: number;
+}
+
+/** 地图级玩法规则（`map_rules` 表；#809 / docs/20 §2.2，一行不存在 = 全默认） */
+export interface MapRuleRow {
+  map_id: string;
+  exp_rate: number;
+  drop_rate: number;
+  money_rate: number;
+  allow_pk: number;
+  allow_auto_battle: number;
+  allow_recall: number;
+  allow_drop: number;
+  max_players_per_room: number;
+  max_channels: number;
+  transfer_cost_money: number;
+  transfer_cooldown_ms: number;
+  deny_transfer_in_combat: number;
+  respawn_ms_override: number | null;
+  simulate_when_empty: number;
+  updated_by: string;
+  updated_at: number;
+}
+
+/** 单图热重载请求（`world_reload_requests` 表；#809，跨进程的一张待办表） */
+export interface WorldReloadRequestRow {
+  id: number;
+  zone_id: number;
+  map_id: string;
+  slot: string;
+  /** 'respawn' = 只重播刷怪区 / 'reload' = 连 AI 运行时一起重载 */
+  mode: string;
+  requested_by: string;
+  requested_at: number;
+  /** 等空窗的截止时刻（到点强制执行） */
+  force_at: number;
+  /** 'pending' / 'done' / 'failed' */
+  status: string;
+  done_at: number | null;
+  /** 执行结果摘要（done 时是重播只数，failed 时是最后一次错误） */
+  detail: string | null;
 }
 
 /** 实时地图监控的一条文字事件（`map_monitor_events` 表；#665；`payload` 见 `MapMonitorEvent`） */

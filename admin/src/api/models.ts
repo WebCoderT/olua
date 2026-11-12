@@ -2621,6 +2621,80 @@ export type AdminSendMail = {
   items?: MailAttachment[];
 };
 
+export type ReloadWorld = {
+  /**
+   * 重载模式：`respawn` = 只重播刷怪区（可等空窗）/ `reload` = 连 AI 运行时一起重载（立刻）
+   */
+  mode: "respawn" | "reload";
+  /**
+   * 线（#809 本刀只支持 `0` 公共线；分线 / 副本是第④刀）
+   */
+  slot?: string;
+  /**
+   * 等空窗的上限（毫秒）。不传 = 出厂 5 分钟；`0` = 立刻强制（房里有人也马上重刷）
+   */
+  forceAfterMs?: number;
+};
+
+export type SaveMapRules = {
+  /**
+   * 经验倍率（0 ~ 100）
+   */
+  expRate: number;
+  /**
+   * 掉落倍率（0 ~ 100）
+   */
+  dropRate: number;
+  /**
+   * 金钱倍率（0 ~ 100）
+   */
+  moneyRate: number;
+  /**
+   * 允许 PK
+   */
+  allowPk: boolean;
+  /**
+   * 允许自动挂机
+   */
+  allowAutoBattle: boolean;
+  /**
+   * 允许被拉人 / 回城
+   */
+  allowRecall: boolean;
+  /**
+   * 这张图掉不掉东西
+   */
+  allowDrop: boolean;
+  /**
+   * 单房间人数上限（0 = 不限，上限 1000）
+   */
+  maxPlayersPerRoom: number;
+  /**
+   * 分线数量上限（1 ~ 20；1 = 不分线）
+   */
+  maxChannels: number;
+  /**
+   * 传送花费（铜钱，0 ~ 1000000）
+   */
+  transferCostMoney: number;
+  /**
+   * 传送冷却（毫秒，0 ~ 1 小时）
+   */
+  transferCooldownMs: number;
+  /**
+   * 战斗中禁止传送
+   */
+  denyTransferInCombat: boolean;
+  /**
+   * 中间级重生时长（毫秒；传 null = 继承全局 worldRespawnMs）
+   */
+  respawnMsOverride?: unknown | null;
+  /**
+   * 无人时继续跑世界（false = 冻结）
+   */
+  simulateWhenEmpty: boolean;
+};
+
 export type SaveMapConfig = {
   /**
    * 地图名称（显示在传送弹窗 / 小地图 / 公告里）
@@ -10029,6 +10103,14 @@ export type MapMonitor = {
    */
   zones: number[];
   /**
+   * 这一帧是哪条线（#809：'0' 公共线 / '1'.. 分线 / 'i<seq>' 副本）
+   */
+  slot: string;
+  /**
+   * 这张图有哪些线留下过快照（页面据此切换线；只有 '0' 时前端不必显示选择器）
+   */
+  slots: string[];
+  /**
    * 快照采样时刻（毫秒）；null = 这张图从没被采样过
    */
   sampledAt: number | null;
@@ -10064,6 +10146,10 @@ export type MapMonitorQuery = {
    */
   zone?: number;
   /**
+   * 线（#809：`0` 公共线 / `1`.. 分线 / `i<seq>` 副本；不传 = 公共线）
+   */
+  slot?: string;
+  /**
    * 事件游标：只取 id 大于它的事件（0 / 不传 = 最新若干条）
    */
   since?: number;
@@ -10071,6 +10157,123 @@ export type MapMonitorQuery = {
    * 本次最多取多少条事件（默认 60，上限 200）
    */
   limit?: number;
+};
+
+export type MapReloadResult = {
+  /**
+   * 请求行 id（重复请求合并时是**同一条**的 id）
+   */
+  requestId: number;
+  /**
+   * 与已有的 pending 请求合并了（运营连点两下只重播一次）
+   */
+  merged: boolean;
+  /**
+   * 房号 `<zone>:<map>:<slot>`
+   */
+  roomId: string;
+  /**
+   * 线
+   */
+  slot: string;
+  /**
+   * 重载模式
+   */
+  mode: "respawn" | "reload";
+  /**
+   * 排队截止时刻（毫秒时间戳）；到点强制执行
+   */
+  forceAt: number;
+  /**
+   * 预计行为：`immediate` = 实时进程下一轮就执行（房里没人 / mode=reload / forceAfterMs=0）；`queued` = 房里有人时先排队，等无人或到 `forceAt` 强制。**到底有没有人只有实时进程知道**（管理端进程读不到世界内存），所以这里给的是「会不会排队」而不是「现在几个人」
+   */
+  plan: "immediate" | "queued";
+};
+
+export type MapReloadBatch = {
+  /**
+   * 提交时刻（毫秒时间戳，全组共用）
+   */
+  requestedAt: number;
+  /**
+   * 每个存活区一条（房里没人时下个 tick 就执行；有人在则按 plan 排队）
+   */
+  items: MapReloadResult[];
+};
+
+export type MapRules = {
+  /**
+   * 地图 id
+   */
+  mapId: string;
+  /**
+   * 库里有没有这一行（false = 下面全是出厂默认值）
+   */
+  inherited: boolean;
+  /**
+   * 经验倍率（服务端结算时乘，不下发客户端）
+   */
+  expRate: number;
+  /**
+   * 掉落倍率
+   */
+  dropRate: number;
+  /**
+   * 金钱倍率
+   */
+  moneyRate: number;
+  /**
+   * 允许同图玩家互相攻击（PK）
+   */
+  allowPk: boolean;
+  /**
+   * 允许自动挂机
+   */
+  allowAutoBattle: boolean;
+  /**
+   * 允许被拉人 / 回城
+   */
+  allowRecall: boolean;
+  /**
+   * 这张图掉不掉东西（false = 活动图）
+   */
+  allowDrop: boolean;
+  /**
+   * 单房间人数上限（0 = 不限；出厂 30）
+   */
+  maxPlayersPerRoom: number;
+  /**
+   * 分线数量上限（1 = 不分线；出厂 1）
+   */
+  maxChannels: number;
+  /**
+   * 传送花费（铜钱，0 = 免费）
+   */
+  transferCostMoney: number;
+  /**
+   * 传送冷却（毫秒）
+   */
+  transferCooldownMs: number;
+  /**
+   * 战斗中禁止传送
+   */
+  denyTransferInCombat: boolean;
+  /**
+   * 中间级重生时长（毫秒；null = 继承全局）
+   */
+  respawnMsOverride: unknown | null;
+  /**
+   * 无人时继续跑世界（false = 冻结，现状）
+   */
+  simulateWhenEmpty: boolean;
+  /**
+   * 最后修改人（空串 = 没改过 / 出厂）
+   */
+  updatedBy: string;
+  /**
+   * 最后修改时刻（毫秒；0 = 没改过）
+   */
+  updatedAt: number;
 };
 
 export type UiEffect = {
@@ -10325,6 +10528,10 @@ export type AdminMapMonitorQuery = {
    * 区服 id（不传 = 用该图最新的那份快照所在区）
    */
   zone?: number;
+  /**
+   * 线（#809：`0` 公共线 / `1`.. 分线 / `i<seq>` 副本；不传 = 公共线）
+   */
+  slot?: string;
   /**
    * 事件游标：只取 id 大于它的事件（0 / 不传 = 最新若干条）
    */

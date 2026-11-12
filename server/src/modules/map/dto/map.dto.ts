@@ -730,3 +730,255 @@ export class MapSpawnAreaDeletedDto {
   @ApiProperty({ description: "被删掉的行 id" })
   id: number;
 }
+
+//#region 单图热重载（#809 / 收 #669）
+
+/**
+ * 触发一次单图重载（`POST /admin/maps/:id/reload-world`）
+ *
+ * 三个选项对应管理端保存刷怪区后的 action bar：
+ * - `mode=reload`：**立刻**执行，连 AI 运行时一起重载（在场玩家会看到怪整体重刷一次）；
+ * - `mode=respawn` + `forceAfterMs` 不传：**等无人时**自动重载，最多等 5 分钟（出厂）；
+ * - 不调这个接口 = 不重载（下次有人进图才按新区域播种）。
+ *
+ * `forceAfterMs` 是「等空窗的上限」而不是「延迟多久执行」：房里没人就**立刻**执行，
+ * 有人才排队，到点强制。传 `0` 等于「立刻强制」。
+ */
+export class ReloadWorldDto {
+  @ApiProperty({
+    description: "重载模式：`respawn` = 只重播刷怪区（可等空窗）/ `reload` = 连 AI 运行时一起重载（立刻）",
+    enum: ["respawn", "reload"],
+    example: "respawn",
+  })
+  @IsIn(["respawn", "reload"], { message: "mode 只能是 respawn 或 reload" })
+  mode: "respawn" | "reload";
+
+  @ApiProperty({
+    description: "线（#809 本刀只支持 `0` 公共线；分线 / 副本是第④刀）",
+    required: false,
+    default: "0",
+  })
+  @IsOptional()
+  @IsString({ message: "线必须是字符串" })
+  @Length(1, 16, { message: "线最多 16 个字符" })
+  slot?: string;
+
+  @ApiProperty({
+    description: "等空窗的上限（毫秒）。不传 = 出厂 5 分钟；`0` = 立刻强制（房里有人也马上重刷）",
+    required: false,
+    minimum: 0,
+    maximum: 24 * 60 * 60 * 1000,
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt({ message: "forceAfterMs 必须是整数" })
+  @Min(0, { message: "forceAfterMs 不能为负" })
+  @Max(24 * 60 * 60 * 1000, { message: "forceAfterMs 上限 24 小时" })
+  forceAfterMs?: number;
+}
+
+/** 一次重载请求的回执（管理端据此显示「已排队 / 已执行」与「有多少人在里面」） */
+export class MapReloadResultDto {
+  @ApiProperty({ description: "请求行 id（重复请求合并时是**同一条**的 id）" })
+  requestId: number;
+
+  @ApiProperty({ description: "与已有的 pending 请求合并了（运营连点两下只重播一次）" })
+  merged: boolean;
+
+  @ApiProperty({ description: "房号 `<zone>:<map>:<slot>`" })
+  roomId: string;
+
+  @ApiProperty({ description: "线", example: "0" })
+  slot: string;
+
+  @ApiProperty({ description: "重载模式", enum: ["respawn", "reload"] })
+  mode: string;
+
+  @ApiProperty({ description: "排队截止时刻（毫秒时间戳）；到点强制执行" })
+  forceAt: number;
+
+  @ApiProperty({
+    description:
+      "预计行为：`immediate` = 实时进程下一轮就执行（房里没人 / mode=reload / forceAfterMs=0）；" +
+      "`queued` = 房里有人时先排队，等无人或到 `forceAt` 强制。" +
+      "**到底有没有人只有实时进程知道**（管理端进程读不到世界内存），所以这里给的是「会不会排队」而不是「现在几个人」",
+    enum: ["immediate", "queued"],
+  })
+  plan: string;
+}
+
+//#endregion
+
+/**
+ * 一次「重载这张图」的回执（#809）
+ *
+ * 为什么是**一组**而不是一条：一次重载请求要发给**每一个存活的区**（每个区各有一份这张图的
+ * 世界，只重载区 1 会让其它区继续拿着改之前的刷怪区 —— 那正是 #669 要收掉的那类不一致）。
+ * 管理端弹一句「已在 2 个区分线 0 排队」就够了，不该逼页面自己拼。
+ */
+export class MapReloadBatchDto {
+  @ApiProperty({ description: "提交时刻（毫秒时间戳，全组共用）" })
+  requestedAt: number;
+
+  @ApiProperty({
+    description: "每个存活区一条（房里没人时下个 tick 就执行；有人在则按 plan 排队）",
+    type: [MapReloadResultDto],
+  })
+  items: MapReloadResultDto[];
+}
+
+//#region 地图玩法规则（#809 / docs/20 §2.2）
+
+/**
+ * 一张图的规则（`map_rules`）
+ *
+ * `inherited=true` 表示**库里没有这一行**、返回的是出厂默认值（管理端要把控件显示成
+ * 「未覆盖」的灰态 —— 否则运营会以为「这张图配了 30 人上限」，其实是全局默认）。
+ */
+export class MapRulesDto {
+  @ApiProperty({ description: "地图 id" })
+  mapId: string;
+
+  @ApiProperty({ description: "库里有没有这一行（false = 下面全是出厂默认值）" })
+  inherited: boolean;
+
+  @ApiProperty({ description: "经验倍率（服务端结算时乘，不下发客户端）" })
+  expRate: number;
+
+  @ApiProperty({ description: "掉落倍率" })
+  dropRate: number;
+
+  @ApiProperty({ description: "金钱倍率" })
+  moneyRate: number;
+
+  @ApiProperty({ description: "允许同图玩家互相攻击（PK）" })
+  allowPk: boolean;
+
+  @ApiProperty({ description: "允许自动挂机" })
+  allowAutoBattle: boolean;
+
+  @ApiProperty({ description: "允许被拉人 / 回城" })
+  allowRecall: boolean;
+
+  @ApiProperty({ description: "这张图掉不掉东西（false = 活动图）" })
+  allowDrop: boolean;
+
+  @ApiProperty({ description: "单房间人数上限（0 = 不限；出厂 30）" })
+  maxPlayersPerRoom: number;
+
+  @ApiProperty({ description: "分线数量上限（1 = 不分线；出厂 1）" })
+  maxChannels: number;
+
+  @ApiProperty({ description: "传送花费（铜钱，0 = 免费）" })
+  transferCostMoney: number;
+
+  @ApiProperty({ description: "传送冷却（毫秒）" })
+  transferCooldownMs: number;
+
+  @ApiProperty({ description: "战斗中禁止传送" })
+  denyTransferInCombat: boolean;
+
+  @ApiProperty({ description: "中间级重生时长（毫秒；null = 继承全局）", nullable: true })
+  respawnMsOverride: number | null;
+
+  @ApiProperty({ description: "无人时继续跑世界（false = 冻结，现状）" })
+  simulateWhenEmpty: boolean;
+
+  @ApiProperty({ description: "最后修改人（空串 = 没改过 / 出厂）" })
+  updatedBy: string;
+
+  @ApiProperty({ description: "最后修改时刻（毫秒；0 = 没改过）" })
+  updatedAt: number;
+}
+
+/**
+ * 保存一张图的规则（**整份覆盖**，与 `SaveMapConfigDto` 同一取向）
+ *
+ * 管理端先 `GET /admin/maps/:id/rules` 拿到当前值（含默认），改完整份提交 ——
+ * 不做部分更新：15 个字段里有 4 个是开关，部分更新的「没传」与「传了 false」在
+ * JSON 里长得一样，静默把开关关掉是最难查的一类。
+ */
+export class SaveMapRulesDto {
+  @ApiProperty({ description: "经验倍率（0 ~ 100）", minimum: 0, maximum: 100 })
+  @Type(() => Number)
+  @IsNumber({}, { message: "经验倍率必须是数字" })
+  @Min(0, { message: "经验倍率不能为负" })
+  @Max(100, { message: "经验倍率上限 100（再高就不是倍率了，是数值配错）" })
+  expRate: number;
+
+  @ApiProperty({ description: "掉落倍率（0 ~ 100）", minimum: 0, maximum: 100 })
+  @Type(() => Number)
+  @IsNumber({}, { message: "掉落倍率必须是数字" })
+  @Min(0, { message: "掉落倍率不能为负" })
+  @Max(100, { message: "掉落倍率上限 100" })
+  dropRate: number;
+
+  @ApiProperty({ description: "金钱倍率（0 ~ 100）", minimum: 0, maximum: 100 })
+  @Type(() => Number)
+  @IsNumber({}, { message: "金钱倍率必须是数字" })
+  @Min(0, { message: "金钱倍率不能为负" })
+  @Max(100, { message: "金钱倍率上限 100" })
+  moneyRate: number;
+
+  @ApiProperty({ description: "允许 PK" })
+  allowPk: boolean;
+
+  @ApiProperty({ description: "允许自动挂机" })
+  allowAutoBattle: boolean;
+
+  @ApiProperty({ description: "允许被拉人 / 回城" })
+  allowRecall: boolean;
+
+  @ApiProperty({ description: "这张图掉不掉东西" })
+  allowDrop: boolean;
+
+  @ApiProperty({ description: "单房间人数上限（0 = 不限，上限 1000）", minimum: 0, maximum: 1000 })
+  @Type(() => Number)
+  @IsInt({ message: "人数上限必须是整数" })
+  @Min(0, { message: "人数上限不能为负" })
+  @Max(1000, { message: "人数上限 1000 已经远超单进程能承载的量" })
+  maxPlayersPerRoom: number;
+
+  @ApiProperty({ description: "分线数量上限（1 ~ 20；1 = 不分线）", minimum: 1, maximum: 20 })
+  @Type(() => Number)
+  @IsInt({ message: "分线数量必须是整数" })
+  @Min(1, { message: "分线数量至少 1（= 只有公共线）" })
+  @Max(20, { message: "分线数量上限 20" })
+  maxChannels: number;
+
+  @ApiProperty({ description: "传送花费（铜钱，0 ~ 1000000）", minimum: 0, maximum: 1000000 })
+  @Type(() => Number)
+  @IsInt({ message: "传送花费必须是整数" })
+  @Min(0, { message: "传送花费不能为负" })
+  @Max(1000000, { message: "传送花费上限 1000000" })
+  transferCostMoney: number;
+
+  @ApiProperty({ description: "传送冷却（毫秒，0 ~ 1 小时）", minimum: 0, maximum: 3600000 })
+  @Type(() => Number)
+  @IsInt({ message: "传送冷却必须是整数" })
+  @Min(0, { message: "传送冷却不能为负" })
+  @Max(3600000, { message: "传送冷却上限 1 小时" })
+  transferCooldownMs: number;
+
+  @ApiProperty({ description: "战斗中禁止传送" })
+  denyTransferInCombat: boolean;
+
+  @ApiProperty({
+    description: "中间级重生时长（毫秒；传 null = 继承全局 worldRespawnMs）",
+    required: false,
+    nullable: true,
+    minimum: 0,
+    maximum: 86400000,
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt({ message: "重生时长必须是整数" })
+  @Min(0, { message: "重生时长不能为负" })
+  @Max(86400000, { message: "重生时长上限 24 小时" })
+  respawnMsOverride?: number | null;
+
+  @ApiProperty({ description: "无人时继续跑世界（false = 冻结）" })
+  simulateWhenEmpty: boolean;
+}
+
+//#endregion

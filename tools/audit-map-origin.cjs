@@ -386,10 +386,16 @@ function checkBoundsWired() {
     );
   }
 
-  const world = read(path.join(REPO, "server/src/modules/world/world.service.ts"), "server/src/modules/world/world.service.ts");
-  if (world && !/spawnAreaInBounds\(/.test(world)) {
+  // #809：播种从 world.service 搬进了 RoomManager（一间房一个对象），告警仍在**播种处**，
+  // 所以盯的文件跟着搬 —— 但口径没变：刷怪区越界必须在服务端播种时被算出来并告警一次，
+  // 库表可能还是旧口径 seed 的，怪会刷在图外而没人知道。
+  const roomManager = read(
+    path.join(REPO, "server/src/modules/world/room/room.manager.ts"),
+    "server/src/modules/world/room/room.manager.ts",
+  );
+  if (roomManager && !/spawnAreaInBounds\(/.test(roomManager)) {
     problem(
-      "server/src/modules/world/world.service.ts",
+      "server/src/modules/world/room/room.manager.ts",
       0,
       "播种时要对越界区域告警（spawnAreaInBounds）：库表可能还是旧口径 seed 的，怪会刷在图外而没人知道",
     );

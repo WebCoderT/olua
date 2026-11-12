@@ -303,14 +303,14 @@ function connect(url) {
     const aMonsters = (worldA && worldA.monsters) || [];
     // 只数「有几只」不看具体几只：刷怪区是运营在后台调的数据（`map_spawn_areas`），
     // 这里要验的是**每个区各播一份、instanceId 带自己的区段**，不是某张图几只怪
-    check(aMonsters.length > 0 && aMonsters.every((m) => /^m1_z1_\d+$/.test(m.instanceId)), "一区玩家进图播出一区的世界（instanceId 带区段 z1）", JSON.stringify(aMonsters.map((m) => m.instanceId)));
+    check(aMonsters.length > 0 && aMonsters.every((m) => /^m1_z1_c0_\d+$/.test(m.instanceId)), "一区玩家进图播出一区的世界（instanceId 带区段 z1 与公共线 c0）", JSON.stringify(aMonsters.map((m) => m.instanceId)));
     const aMob1 = aMonsters.find((m) => m.monsterKey === "1");
     check(!!aMob1 && aMob1.hp > 0 && aMob1.alive, "一区实例满血起算（血量取自库里的怪物行）", aMob1 && `hp=${aMob1.hp}`);
     const mobMaxHp = aMob1 ? aMob1.hp : 0;
 
     const worldC = await sessionC.joinWorld("1");
     const cMonsters = (worldC && worldC.monsters) || [];
-    check(cMonsters.length === aMonsters.length && cMonsters.every((m) => /^m1_z2_\d+$/.test(m.instanceId)), "二区玩家进同一张图是另一份世界（区段 z2，份数与一区相同）", JSON.stringify(cMonsters.map((m) => m.instanceId)));
+    check(cMonsters.length === aMonsters.length && cMonsters.every((m) => /^m1_z2_c0_\d+$/.test(m.instanceId)), "二区玩家进同一张图是另一份世界（区段 z2，份数与一区相同）", JSON.stringify(cMonsters.map((m) => m.instanceId)));
 
     const aIds = new Set(aMonsters.map((m) => m.instanceId));
     check(cMonsters.every((m) => !aIds.has(m.instanceId)), "两区的实例 id 完全不相交（各自发牌）");
@@ -355,7 +355,7 @@ function connect(url) {
     // 二区玩家的旧连接重新 join：epoch 已作废旧内存，按账号新区（一区）重载
     const worldC3 = await sessionC.joinWorld("1");
     const c3 = (worldC3 && worldC3.monsters) || [];
-    check(c3.length === mergedTotal && c3.every((m) => /^m1_z1_\d+$/.test(m.instanceId)), "合并后的玩家重新进图落在一区世界（两区那份全在）", JSON.stringify(c3.map((m) => m.instanceId)));
+    check(c3.length === mergedTotal && c3.every((m) => /^m1_z1_c0_\d+$/.test(m.instanceId)), "合并后的玩家重新进图落在一区世界（两区那份全在）", JSON.stringify(c3.map((m) => m.instanceId)));
     const carriedDamage = c3.find((m) => m.instanceId === targetA.instanceId);
     check(!!carriedDamage && carriedDamage.hp === (settleA.ok ? settleA.hp : -1), "合并前打掉的血量如实保留（不是重播一份满血世界）", carriedDamage && `hp=${carriedDamage.hp}`);
 

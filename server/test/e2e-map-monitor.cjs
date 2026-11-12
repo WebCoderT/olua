@@ -797,15 +797,19 @@ async function main() {
       .map((item) => item.name)
       .sort()
       .join(",");
-    checkEqual(queryNames, "limit,since,zone", "三个查询参数都在文档里（zone / since / limit；id 是路径段）");
+    checkEqual(
+      queryNames,
+      "limit,since,slot,zone",
+      "四个查询参数都在文档里（zone / slot / since / limit；id 是路径段）—— slot 是 #809 加的分线维度",
+    );
 
     const schemas = doc.components?.schemas ?? {};
     const monitorSchema = schemas.MapMonitorDto?.properties ?? {};
     check(
-      ["mapId", "mapLabel", "width", "height", "zoneId", "zones", "sampledAt", "updatedAt", "staleMs", "monsters", "players", "events", "cursor"].every(
+      ["mapId", "mapLabel", "width", "height", "zoneId", "zones", "slot", "slots", "sampledAt", "updatedAt", "staleMs", "monsters", "players", "events", "cursor"].every(
         (key) => Boolean(monitorSchema[key]),
       ),
-      "MapMonitorDto 的 13 个字段齐全（页面按它画，缺一个就是 undefined）",
+      "MapMonitorDto 的 15 个字段齐全（页面按它画，缺一个就是 undefined）",
     );
     checkEqual(
       monitorSchema.monsters?.items?.$ref,

@@ -13,7 +13,9 @@ import type { MonsterAiRuntimeParams } from "../../common/constants/runtime-para
 import { roleAttributeSourceOf, summarizeRoleAttributes } from "../combat/role-attributes";
 import { resolveIncomingDamage } from "../combat/status-combat";
 import { RolesService } from "../roles/roles.service";
-import { WorldService, worldKey, type WorldMonster } from "../world/world.service";
+import { WorldService } from "../world/world.service";
+import type { WorldMonster } from "../world/world-monster";
+import { PUBLIC_SLOT, roomKey, splitRoomKey } from "../../common/utils/room-key.util";
 import { MapService } from "../map/map.service";
 import { PlayerPresenceService } from "./player-presence.service";
 import type { RealtimeDropEntry, RealtimeMonsterAiEntry, RealtimeMonsterCast, RealtimeMonsterHit, RealtimeMonsterKill, RealtimeStatusEntry } from "./realtime.protocol";
@@ -523,8 +525,7 @@ export class MonsterAiService implements OnApplicationBootstrap, OnApplicationSh
    */
   onBroadcast:
     | ((
-        zoneId: number,
-        mapId: string,
+        roomId: string,
         data: {
           mapId: string;
           monsters: RealtimeMonsterAiEntry[];
@@ -689,7 +690,16 @@ export class MonsterAiService implements OnApplicationBootstrap, OnApplicationSh
    */
   onMonsterKilled(
     instanceId: string,
-    kill?: { zoneId: number; mapId: string; accountId: string; x: number; y: number; drops: RealtimeDropEntry[] },
+    kill?: {
+      zoneId: number;
+      mapId: string;
+      /** 线（#809；不传按公共线 —— 结算侧拿得到 monster.slot，老调用点也能照旧） */
+      slot?: string;
+      accountId: string;
+      x: number;
+      y: number;
+      drops: RealtimeDropEntry[];
+    },
   ): void {
     const now = Date.now();
     for (const map of this.runtimes.values()) {
@@ -699,7 +709,7 @@ export class MonsterAiService implements OnApplicationBootstrap, OnApplicationSh
       map.delete(instanceId);
     }
     if (!kill) return;
-    const key = worldKey(kill.zoneId, kill.mapId);
+    const key = roomKey(kill.zoneId, kill.mapId, kill.slot ?? PUBLIC_SLOT);
     const list = this.pendingKills.get(key) ?? [];
     list.push({ instanceId, accountId: kill.accountId, x: kill.x, y: kill.y, drops: kill.drops });
     this.pendingKills.set(key, list);
@@ -897,11 +907,11 @@ export class MonsterAiService implements OnApplicationBootstrap, OnApplicationSh
   private tick(): void {
     const now = Date.now();
     this.refreshSkillCache(now);
-    const viewed = this.world.viewedMaps();
+    const viewed = this.world.viewedRooms();
     const viewedKeys = new Set<string>();
 
-    for (const { zoneId, mapId, monsters } of viewed) {
-      const key = worldKey(zoneId, mapId);
+    for (const room of viewed) {
+      const key = room.roomId;
       viewedKeys.add(key);
       // 有人看：解除冻结（#857）。冻结期间什么都没推进，回来直接接着跑
       this.frozenAt.delete(key);
@@ -910,11 +920,11 @@ export class MonsterAiService implements OnApplicationBootstrap, OnApplicationSh
         runtimes = new Map<string, MonsterRuntime>();
         this.runtimes.set(key, runtimes);
       }
-      // 这张图上「位置新鲜且活着」的玩家（AI 的目标候选）—— **只读在场表**（#855）：
+      // 这间房里「位置新鲜且活着」的玩家（AI 的目标候选）—— **只读在场表**（#855）：
       // 用的是仲裁之后被接受的坐标，伪造的 `pos` 帧在这里已经被挡掉了
-      const players = this.presence.aiTargetsOn(zoneId, mapId);
-      const geometry = this.geometryOf(mapId);
-      for (const monster of monsters.values()) {
+      const players = this.presence.aiTargetsOn(room.roomId);
+      const geometry = this.geometryOf(room.mapId);
+      for (const monster of room.monsters.values()) {
         if (!monster.alive) {
           // 死了的怪没有运行时可言（重生回出生点后按新的一轮重新开始）
           runtimes.delete(monster.instanceId);
@@ -1677,9 +1687,9 @@ export class MonsterAiService implements OnApplicationBootstrap, OnApplicationSh
   private broadcast(): void {
     if (this.onBroadcast === null && this.pendingHits.size === 0 && this.pendingCasts.size === 0 && this.pendingKills.size === 0) return;
     for (const [key, runtimes] of this.runtimes) {
-      const at = key.indexOf(":");
-      const zoneId = Number(key.slice(0, at));
-      const mapId = key.slice(at + 1);
+      // key 是房号（`<zone>:<map>:<slot>`）：帧里仍然只带 `mapId`（客户端只认图），
+      // 分线之后要区分「哪条线的怪」得加字段 —— 那是第④刀与协议一起改的事
+      const mapId = splitRoomKey(key).mapId;
       const hits = this.pendingHits.get(key) ?? [];
       this.pendingHits.delete(key);
       const casts = this.pendingCasts.get(key) ?? [];
@@ -1707,7 +1717,7 @@ export class MonsterAiService implements OnApplicationBootstrap, OnApplicationSh
         runtime.sentHp = runtime.hp;
       }
       if (monsters.length === 0 && hits.length === 0 && casts.length === 0 && kills.length === 0) continue;
-      this.onBroadcast?.(zoneId, mapId, { mapId, monsters, hits, casts, kills });
+      this.onBroadcast?.(key, { mapId, monsters, hits, casts, kills });
     }
   }
 
@@ -1820,7 +1830,7 @@ export class MonsterAiService implements OnApplicationBootstrap, OnApplicationSh
 
   /** 取（或按出生点初始化）一只怪的 AI 运行时 */
   private runtimeOf(monster: WorldMonster): MonsterRuntime {
-    const key = worldKey(monster.zoneId, monster.mapId);
+    const key = roomKey(monster.zoneId, monster.mapId, monster.slot);
     let map = this.runtimes.get(key);
     if (!map) {
       map = new Map<string, MonsterRuntime>();

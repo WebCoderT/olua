@@ -11,6 +11,7 @@ import type { ApiEnvelope, AuthenticatedUser } from "../../common/interfaces/api
 import { AccountRepository } from "../../database/repositories/account.repository";
 import type { RoleRow } from "../../database/rows";
 import { WorldService } from "../world/world.service";
+import { roomKey } from "../../common/utils/room-key.util";
 import { MapService, START_MAP_ID, type MapEnterReject } from "../map/map.service";
 import { roleAttributeSourceOf, summarizeRoleAttributes } from "../combat/role-attributes";
 import { RuntimeConfigService } from "../game-config/runtime-config.service";
@@ -50,6 +51,7 @@ import {
   type RealtimeSettleMessage,
   type RealtimeStatusMessage,
   type RealtimeWorldMessage,
+  type RealtimeWorldReloadMessage,
 } from "./realtime.protocol";
 
 /** 一条已经过鉴权的连接（两个字段由本服务自己维护） */
@@ -221,12 +223,25 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
       // 一份值，客户端战斗力显示在两个数之间来回翻。表都很小，全量重装很轻；静默（不刷装载日志）
       this.configRefreshTimer = setInterval(() => this.runtimeConfig.refreshAll({ silent: true }), configRefreshMs).unref();
     }
-    // 世界状态变化（重生等）由世界层通知，这里补上广播出口（世界层不知道连接的存在）
-    this.world.onWorldChanged = (zoneId, mapId) => this.broadcastWorld(zoneId, mapId);
+    // 世界状态变化（重生等）由世界层通知，这里补上广播出口（世界层不知道连接的存在）。
+    // #809 起回调按**房间**（`zone:map:slot`）传参：分线之后「一张图」不等于「一份世界」
+    this.world.onWorldChanged = (roomId) => this.broadcastWorld(roomId);
+    // 单图热重载完成（#809）：只给**那间房**的人发一帧 `world.reload`，客户端重建怪物并飘字。
+    // 不重发整份 world 帧：刷新怪物由客户端收到这一帧后自己再 worldJoin 一次（复用既有链路）
+    this.world.onRoomReloaded = (result) => {
+      const frame: RealtimeWorldReloadMessage = {
+        type: "world.reload",
+        data: { roomId: result.roomId, mapId: result.mapId, slot: result.slot, forced: result.forced },
+      };
+      for (const accountId of this.world.viewersOf(result.roomId)) {
+        const socket = this.connections.get(accountId);
+        if (socket) this.send(socket, frame);
+      }
+    };
     // 怪物 AI 广播（#323）：AI 服务攒好一帧，这里按观看者集合发出去
-    this.monsterAi.onBroadcast = (zoneId, mapId, data) => {
+    this.monsterAi.onBroadcast = (roomId, data) => {
       const frame: RealtimeMonsterAiMessage = { type: "monster-ai", data };
-      for (const accountId of this.world.viewersOf(zoneId, mapId)) {
+      for (const accountId of this.world.viewersOf(roomId)) {
         const socket = this.connections.get(accountId);
         if (socket) this.send(socket, frame);
       }
@@ -240,8 +255,8 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
     // 玩家互见广播（#324）：在场表攒好一帧，这里按观看者集合发出去；
     // 屏蔽（#398）在这里逐观看者剔一次 —— 一个帧发给多人时，收件人的过滤条件各不相同，
     // 「谁能看谁」只能由持有连接与身份的通道来判（在场表只认识「谁在哪张图」）
-    this.presence.onBroadcast = (zoneId, mapId, data) => {
-      for (const accountId of this.world.viewersOf(zoneId, mapId)) {
+    this.presence.onBroadcast = (roomId, data) => {
+      for (const accountId of this.world.viewersOf(roomId)) {
         const socket = this.connections.get(accountId);
         if (!socket) continue;
         this.send(socket, { type: "players", data: this.visiblePlayers(accountId, data) } satisfies RealtimePlayersMessage);
@@ -706,8 +721,11 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
         return;
       }
       const zoneId = this.accounts.findById(socket.identity.id)?.zone_id ?? 1;
+      // 房号（#809）：本刀只产出公共线（`slot="0"`）；分线 / 副本的选线留给第④刀，
+      // 键先一次到位 —— 那时这里只多一个「选哪个 slot」的决策，下面整条链路不用动
+      const roomId = roomKey(zoneId, join.mapId);
       // 快照里的坐标按 AI 实时位置覆盖（#670）：出生点不是「他现在在哪」，见 withLiveMonsterPositions
-      const snapshot = this.withLiveMonsterPositions(this.world.join(zoneId, socket.identity.id, join.mapId));
+      const snapshot = this.withLiveMonsterPositions(this.world.join(roomId, socket.identity.id));
       // 位置以「被接受的 join」为准写回存档（#606）：客户端报 OnMap 是客户端的事，
       // 服务端只记自己放行过的图 —— 下次登录拿它当「他本来就在这」的判据
       this.roles.setMapAt(socket.identity.id, join.mapId);
@@ -718,7 +736,7 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
       const frame: RealtimeWorldMessage = { type: "world", data: snapshot };
       this.send(socket, frame);
       // 玩家互见（#324）：随 world 应答发一份同图全量快照（增量帮不上「刚进图的人」）
-      this.presence.join(socket.identity.id, zoneId, join.mapId);
+      this.presence.join(socket.identity.id, roomId);
       // 队伍（#399）：快照只在变化时发，重连 / 换图的人错过了那些变化 —— 进图补一份。
       // 角色 id 取**账号行**的在线角色（不是在场表）：进图这一刻 pos 帧可能还没到，
       // 而在场表里没条目就查不到「这个角色挂在谁的连接上」，队伍状态会假死到下一次变化
@@ -795,16 +813,16 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
   //#endregion
 
   /**
-   * 把一张图的权威状态广播给正在看它的人（重生等世界变化时由世界层触发）
+   * 把**一间房**的权威状态广播给正在看它的人（重生等世界变化时由世界层触发）
    *
-   * 拿不到快照（图已被卸载）就不发 —— 那只可能发生在观看者集合与世界状态不同步的瞬间，
+   * 拿不到快照（房间已被卸载）就不发 —— 那只可能发生在观看者集合与世界状态不同步的瞬间，
    * 而观看者下一个 worldJoin 会拿到全量。
    */
-  private broadcastWorld(zoneId: number, mapId: string): void {
-    const snapshot = this.world.snapshot(zoneId, mapId);
+  private broadcastWorld(roomId: string): void {
+    const snapshot = this.world.snapshot(roomId);
     if (!snapshot) return;
     const frame: RealtimeWorldMessage = { type: "world", data: this.withLiveMonsterPositions(snapshot) };
-    for (const accountId of this.world.viewersOf(zoneId, mapId)) {
+    for (const accountId of this.world.viewersOf(roomId)) {
       const socket = this.connections.get(accountId);
       if (socket) this.send(socket, frame);
     }

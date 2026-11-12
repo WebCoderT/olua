@@ -198,6 +198,12 @@ import {
   SaveMapNpcDto,
   SaveRevivePointDto,
   SaveSpawnAreaDto,
+  // 单图热重载与地图规则（#809）：响应侧模型必须登记，否则 @ApiDataResponse 的 $ref 悬空
+  MapReloadBatchDto,
+  MapReloadResultDto,
+  MapRulesDto,
+  ReloadWorldDto,
+  SaveMapRulesDto,
 } from "../modules/map/dto/map.dto";
 import {
   MapMonitorDto,
@@ -619,6 +625,13 @@ export const SWAGGER_MODELS = [
   MapMonitorEventDto,
   MapMonitorDropDto,
   MapMonitorQueryDto,
+  // 单图热重载（#809，收 #669）：一次请求发给每个存活区，回执按区一行
+  ReloadWorldDto,
+  MapReloadResultDto,
+  MapReloadBatchDto,
+  // 地图玩法规则（#809）：一行不存在 = 全默认，inherited=false 表示「这张图单独配过」
+  MapRulesDto,
+  SaveMapRulesDto,
   // 特效（#594 升级特效 / #634 掉落光效）
   UiEffectDto,
   UiEffectConfigDto,
