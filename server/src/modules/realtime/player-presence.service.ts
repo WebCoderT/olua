@@ -6,6 +6,7 @@ import { roleAttributeSourceOf, summarizeRoleAttributes } from "../combat/role-a
 import { START_MAP_ID } from "../map/map.service";
 import { RolesService } from "../roles/roles.service";
 import { MovementGuardService, MovementRejectReason } from "./movement-guard.service";
+import { PUBLIC_SLOT, roomKey, splitRoomKey } from "../../common/utils/room-key.util";
 import type { RealtimePlayerAction, RealtimePlayerAppearance, RealtimePlayerEntry } from "./realtime.protocol";
 
 /**
@@ -18,6 +19,8 @@ import type { RealtimePlayerAction, RealtimePlayerAppearance, RealtimePlayerEntr
 interface PresenceEntry {
   zoneId: number;
   mapId: string;
+  /** 线（#809：'0' 公共线；第④刀起会有 '1'.. 与 'i<seq>'）—— 与区 + 图一起决定房间 */
+  slot: string;
   x: number;
   y: number;
   hp: number;
@@ -82,8 +85,14 @@ interface PresenceEntry {
   persistedAt: number;
 }
 
-function worldKey(zoneId: number, mapId: string): string {
-  return `${zoneId}:${mapId}`;
+/**
+ * 一个账号此刻的在场信息（`entries` 的值）
+ *
+ * `zoneId` / `mapId` / `slot` 三者一起决定**他在哪间房**（#809）。老代码只有前两个，
+ * 于是「同图不同线」在分线之后会互相看见 —— 键一次带到 slot，第④刀做分线时这里不用再动。
+ */
+function entryRoomKey(entry: { zoneId: number; mapId: string; slot: string }): string {
+  return roomKey(entry.zoneId, entry.mapId, entry.slot);
 }
 
 /**
@@ -141,7 +150,7 @@ export class PlayerPresenceService implements OnApplicationBootstrap, OnApplicat
    * 广播出口（发给谁、怎么发是通道的事）。RealtimeService 启动时接线；
    * 未接线时照常维护在场表，只是没人收到帧。
    */
-  onBroadcast: ((zoneId: number, mapId: string, data: { mapId: string; full: boolean; players: RealtimePlayerEntry[]; left: string[]; actions: RealtimePlayerAction[] }) => void) | null = null;
+  onBroadcast: ((roomId: string, data: { mapId: string; full: boolean; players: RealtimePlayerEntry[]; left: string[]; actions: RealtimePlayerAction[] }) => void) | null = null;
 
   /**
    * 定向发送出口（快照兜底只发给刚进图的连接自己）。
@@ -192,8 +201,8 @@ export class PlayerPresenceService implements OnApplicationBootstrap, OnApplicat
    * （visiblePlayers 统一过滤）—— 这里只负责按分域攒起来，随下一个互见广播节拍发出。
    * 幂等重发在结算入口就早退了，不会走到这里，天然不会重复广播。
    */
-  recordAction(zoneId: number, mapId: string, action: RealtimePlayerAction): void {
-    const key = worldKey(zoneId, mapId);
+  recordAction(roomId: string, action: RealtimePlayerAction): void {
+    const key = roomId;
     const list = this.pendingActions.get(key);
     if (list) list.push(action);
     else this.pendingActions.set(key, [action]);
@@ -245,6 +254,8 @@ export class PlayerPresenceService implements OnApplicationBootstrap, OnApplicat
       this.entries.set(accountId, {
         zoneId,
         mapId,
+        // 首帧上报先于 worldJoin 时只可能是公共线（分线进图必须先过 worldJoin 才能改图，见 #861）
+        slot: PUBLIC_SLOT,
         x,
         y,
         hp,
@@ -418,16 +429,20 @@ export class PlayerPresenceService implements OnApplicationBootstrap, OnApplicat
    * 旧图的增量帧不再包含它，但「不再出现」不等于「已离开」（可能只是站桩不动），
    * 必须显式广播离开，客户端才会拆掉旧节点。
    */
-  join(accountId: string, zoneId: number, mapId: string): void {
+  join(accountId: string, roomId: string): void {
+    const room = splitRoomKey(roomId);
+    const zoneId = room.zoneId;
+    const mapId = room.mapId;
     const existed = this.entries.get(accountId);
     if (existed) {
-      const movedMap = existed.zoneId !== zoneId || existed.mapId !== mapId;
-      if (movedMap) this.queueLeave(existed.zoneId, existed.mapId, accountId);
+      const movedMap = existed.zoneId !== zoneId || existed.mapId !== mapId || existed.slot !== room.slot;
+      if (movedMap) this.queueLeave(entryRoomKey(existed), accountId);
       // 换图或原地重进都刷新新鲜度：刚登记就因上报迟到被当离场清掉，快照与增量就对不上了
       existed.updatedAt = Date.now();
       if (movedMap) {
         existed.zoneId = zoneId;
         existed.mapId = mapId;
+        existed.slot = room.slot;
         // 换图顺带重置位移基线（#861 / #811）：基线还是上一张图的坐标，跨图距离必然超限，
         // 不重置的话新图的第一帧上报会被当成瞬移（看起来是「进图后愣半秒」，`enforce` 档下
         // 还会白挨一帧 `posCorrect`）。换图这件事本身是服务端放行的，坐标该整体接受
@@ -464,7 +479,7 @@ export class PlayerPresenceService implements OnApplicationBootstrap, OnApplicat
     this.controlCache.delete(accountId);
     if (!entry) return;
     this.entries.delete(accountId);
-    this.broadcastLeave(entry.zoneId, entry.mapId, accountId);
+    this.broadcastLeave(entryRoomKey(entry), entry.mapId, accountId);
     // 位置快照跟着下线一起删（#862/#863）：留着只会让「他其实已经走了」的一行
     // 在新鲜窗口内继续放行 NPC 交互
     if (entry.roleId) {
@@ -514,10 +529,28 @@ export class PlayerPresenceService implements OnApplicationBootstrap, OnApplicat
    * 坐标是客户端自报 + 最小仲裁（#596）的结果，**不是权威**：谎报仍可绕过距离闸，
    * 那是 #811（位置源收口）要解决的事，这里的职责只是「明显不合理的拒绝掉」。
    */
-  positionOf(accountId: string): { zoneId: number; mapId: string; x: number; y: number; hp: number; at: number } | null {
+  positionOf(accountId: string): {
+    roomId: string;
+    zoneId: number;
+    mapId: string;
+    slot: string;
+    x: number;
+    y: number;
+    hp: number;
+    at: number;
+  } | null {
     const entry = this.entries.get(accountId);
     if (!entry) return null;
-    return { zoneId: entry.zoneId, mapId: entry.mapId, x: entry.x, y: entry.y, hp: entry.hp, at: entry.updatedAt };
+    return {
+      roomId: entryRoomKey(entry),
+      zoneId: entry.zoneId,
+      mapId: entry.mapId,
+      slot: entry.slot,
+      x: entry.x,
+      y: entry.y,
+      hp: entry.hp,
+      at: entry.updatedAt,
+    };
   }
 
   /**
@@ -531,12 +564,12 @@ export class PlayerPresenceService implements OnApplicationBootstrap, OnApplicat
    *
    * 只读：不改在场表、不触发广播。
    */
-  aiTargetsOn(zoneId: number, mapId: string): Array<{ accountId: string; x: number; y: number; hp: number; at: number }> {
+  aiTargetsOn(roomId: string): Array<{ accountId: string; x: number; y: number; hp: number; at: number }> {
     const now = Date.now();
     const staleMs = this.posStaleMs();
     const rows: Array<{ accountId: string; x: number; y: number; hp: number; at: number }> = [];
     for (const [accountId, entry] of this.entries) {
-      if (entry.zoneId !== zoneId || entry.mapId !== mapId) continue;
+      if (entryRoomKey(entry) !== roomId) continue;
       if (entry.hp <= 0) continue;
       if (now - entry.updatedAt > staleMs) continue;
       rows.push({ accountId, x: entry.x, y: entry.y, hp: entry.hp, at: entry.updatedAt });
@@ -599,7 +632,7 @@ export class PlayerPresenceService implements OnApplicationBootstrap, OnApplicat
    *
    * 只读：不改变在场表、不触发广播。
    */
-  playersOn(zoneId: number, mapId: string): Array<{
+  playersOn(roomId: string): Array<{
     accountId: string;
     name: string;
     x: number;
@@ -610,7 +643,7 @@ export class PlayerPresenceService implements OnApplicationBootstrap, OnApplicat
   }> {
     const rows: Array<{ accountId: string; name: string; x: number; y: number; hp: number; maxHp: number; moving: boolean }> = [];
     for (const [accountId, entry] of this.entries) {
-      if (entry.zoneId !== zoneId || entry.mapId !== mapId) continue;
+      if (entryRoomKey(entry) !== roomId) continue;
       rows.push({
         accountId,
         name: this.usernameOf(accountId),
@@ -642,7 +675,7 @@ export class PlayerPresenceService implements OnApplicationBootstrap, OnApplicat
       // 超时视作离场：进 left、条目删除（重新上报后会作为新变化再次出现）
       if (now - entry.updatedAt > staleMs) {
         this.entries.delete(accountId);
-        this.queueLeave(entry.zoneId, entry.mapId, accountId);
+        this.queueLeave(entryRoomKey(entry), accountId);
         continue;
       }
       const moved = entry.x !== entry.sentX || entry.y !== entry.sentY;
@@ -663,7 +696,7 @@ export class PlayerPresenceService implements OnApplicationBootstrap, OnApplicat
       const partyChanged = partyId !== entry.sentParty;
       entry.partyId = partyId;
       if (!moved && !turned && !hurt && !redressed && !maxHpChanged && !guildChanged && !partyChanged) continue;
-      const key = worldKey(entry.zoneId, entry.mapId);
+      const key = entryRoomKey(entry);
       const list = changed.get(key) ?? [];
       list.push(this.toEntry(accountId, entry));
       changed.set(key, list);
@@ -686,12 +719,11 @@ export class PlayerPresenceService implements OnApplicationBootstrap, OnApplicat
     // 三路负载（玩家增量 / 动作事件 / 离开）按图合并成一帧发出
     const keys = new Set<string>([...changed.keys(), ...actionsBy.keys(), ...this.pendingLeaves.keys()]);
     for (const key of keys) {
-      const at = key.indexOf(":");
-      const zoneId = Number(key.slice(0, at));
-      const mapId = key.slice(at + 1);
+      // key 现在是房号（三段）：帧里只带图 id（客户端只认图），从房号解析出来
+      const mapId = splitRoomKey(key).mapId;
       const left = this.pendingLeaves.get(key) ?? [];
       this.pendingLeaves.delete(key);
-      this.onBroadcast?.(zoneId, mapId, {
+      this.onBroadcast?.(key, {
         mapId,
         full: false,
         players: changed.get(key) ?? [],
@@ -742,13 +774,13 @@ export class PlayerPresenceService implements OnApplicationBootstrap, OnApplicat
   }
 
   /** 立即广播一次离开（断线 / 被踢走这条；超时离场走广播节拍，见 broadcast） */
-  private broadcastLeave(zoneId: number, mapId: string, accountId: string): void {
-    this.onBroadcast?.(zoneId, mapId, { mapId, full: false, players: [], left: [accountId], actions: [] });
+  private broadcastLeave(roomId: string, mapId: string, accountId: string): void {
+    this.onBroadcast?.(roomId, { mapId, full: false, players: [], left: [accountId], actions: [] });
   }
 
   /** 超时离场先进队列（与增量同节拍发出，避免超时清算一轮就广播 N 帧） */
-  private queueLeave(zoneId: number, mapId: string, accountId: string): void {
-    const key = worldKey(zoneId, mapId);
+  private queueLeave(roomId: string, accountId: string): void {
+    const key = roomId;
     const list = this.pendingLeaves.get(key) ?? [];
     list.push(accountId);
     this.pendingLeaves.set(key, list);

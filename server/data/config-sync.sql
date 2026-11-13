@@ -2,11 +2,11 @@
 --
 -- 只含配置表：账号 / 角色存档 / 审计日志 / 世界怪物实例不在这个文件里。
 -- 导入：make config-import（整表替换；账号与角色存档不受影响）
--- 表 38 张 / 行 13758 条
+-- 表 39 张 / 行 13764 条
 -- config-version: 0
 -- olua config snapshot v1
--- tables: achievements,audio_settings,combat_weights,drop_tables,drugs,equip_aligns,equip_in_aligns,equipment_appearance,equipment_meta,equipment_slots,equipment_variants,equipments,fashions,growth_scalars,guide_settings,items,level_scrolls,mall_categories,mall_goods,map_collisions,map_npcs,map_spawn_areas,maps,money_items,monster_drops,monster_presentation,monster_skills,monsters,npcs,quests,ranks,role_level_curves,runtime_params,skills,souls,statuses,titles,ui_effects
--- counts: achievements=24,audio_settings=12,combat_weights=7,drop_tables=5,drugs=11,equip_aligns=32,equip_in_aligns=31,equipment_appearance=1,equipment_meta=1,equipment_slots=13,equipment_variants=10275,equipments=685,fashions=20,growth_scalars=11,guide_settings=1,items=5,level_scrolls=7,mall_categories=1,mall_goods=1,map_collisions=1615,map_npcs=11,map_spawn_areas=62,maps=11,money_items=8,monster_drops=220,monster_presentation=220,monster_skills=3,monsters=220,npcs=21,quests=5,ranks=100,role_level_curves=24,runtime_params=1,skills=15,souls=37,statuses=7,titles=34,ui_effects=7
+-- tables: achievements,audio_settings,combat_weights,drop_tables,drugs,equip_aligns,equip_in_aligns,equipment_appearance,equipment_meta,equipment_slots,equipment_variants,equipments,fashions,growth_scalars,guide_settings,items,level_scrolls,mall_categories,mall_goods,map_collisions,map_npcs,map_rules,map_spawn_areas,maps,money_items,monster_drops,monster_presentation,monster_skills,monsters,npcs,quests,ranks,role_level_curves,runtime_params,skills,souls,statuses,titles,ui_effects
+-- counts: achievements=24,audio_settings=12,combat_weights=7,drop_tables=5,drugs=11,equip_aligns=32,equip_in_aligns=31,equipment_appearance=1,equipment_meta=1,equipment_slots=13,equipment_variants=10275,equipments=685,fashions=20,growth_scalars=11,guide_settings=1,items=5,level_scrolls=7,mall_categories=1,mall_goods=1,map_collisions=1615,map_npcs=11,map_rules=0,map_spawn_areas=62,maps=11,money_items=8,monster_drops=220,monster_presentation=220,monster_skills=3,monsters=220,npcs=21,quests=5,ranks=100,role_level_curves=24,runtime_params=1,skills=15,souls=37,statuses=7,titles=34,ui_effects=7
 
 PRAGMA foreign_keys = OFF;
 BEGIN;
@@ -12841,6 +12841,9 @@ INSERT INTO "map_npcs" ("id", "map_id", "npc_id", "cx", "cy", "updated_at") VALU
 INSERT INTO "map_npcs" ("id", "map_id", "npc_id", "cx", "cy", "updated_at") VALUES (9, '8', '0002', 4096, -7808, 0);
 INSERT INTO "map_npcs" ("id", "map_id", "npc_id", "cx", "cy", "updated_at") VALUES (10, '9', '0002', 4096, -7808, 0);
 INSERT INTO "map_npcs" ("id", "map_id", "npc_id", "cx", "cy", "updated_at") VALUES (11, '10', '0002', 4096, -7808, 0);
+
+-- ===== map_rules（0 行）=====
+DELETE FROM "map_rules";
 
 -- ===== map_spawn_areas（62 行）=====
 DELETE FROM "map_spawn_areas";

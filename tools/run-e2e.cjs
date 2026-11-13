@@ -82,6 +82,10 @@ const WEIGHT = {
   "test:e2e:map-movement": 2,
   // 一条实时连接 + 六次寻路（每次留 150ms 防刷间隔与一次回执）+ 一次格参数 PATCH
   "test:e2e:map-path": 2,
+  // 起一次实时连接 + 一整轮「改建区域 → 重载 → 排队 → 强制」，每段等一两个轮询周期
+  "test:e2e:map-reload": 2,
+  // 一次完整启动 + 一次「停机改库 → 重启迁移」+ 一轮监控采样
+  "test:e2e:map-room-key": 3,
 };
 
 function weightOf(script) {

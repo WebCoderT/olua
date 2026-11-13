@@ -92,6 +92,9 @@ const ALLOWED_EDGES = [
   { from: "modules/realtime", to: "modules/combat/role-attributes.ts", why: "结算取属性汇总" },
   { from: "modules/realtime", to: "modules/combat/status-combat.ts", why: "受击算格挡与减伤（#822，纯函数）" },
   { from: "modules/realtime", to: "modules/world/world.service.ts", why: "世界权威公开服务" },
+  // 怪物实例的类型契约（#809）：AI 与监控采集器都要按实例读 `slot / areaId / hp / respawnAt`。
+  // 只有类型与两个纯函数（行 ↔ 对象、快照投影）—— 活的生命周期仍在 world 域，realtime 只消费
+  { from: "modules/realtime", to: "modules/world/world-monster.ts", why: "怪物实例类型与快照投影（#809）" },
   { from: "modules/realtime", to: "modules/roles/roles.service.ts", why: "结算读写存档走存档服务" },
   { from: "modules/realtime", to: "modules/roles/role-data.util.ts", why: "roleUpdate 组帧解码存档（#541）" },
   // 掉落溯源（#789）：账本里的 `BagOrigin` 就是背包格子 `BagCell.from` 的形状，只能有一份 ——
@@ -186,7 +189,14 @@ const REPO_EDGES = {
     "modules/map",
   ],
   // 区服（#295）：注册选区校验活区（auth）、世界代际巡检（world）、开区/合并（zone）
-  "database/repositories/zone.repository.ts": ["modules/zone", "modules/auth", "modules/world"],
+  "database/repositories/zone.repository.ts": [
+    "modules/zone",
+    "modules/auth",
+    "modules/world",
+    // 单图重载（#809）：一次重载要发给**每个存活区**（刷怪区是全服共用配置，
+    // 每个区各有一份这张图的世界），所以地图域要读 zones.listLive() —— 只读，不写区服
+    "modules/map",
+  ],
   // 实时地图监控（#665）：**两个域各占一半** —— 实时进程的采集器写（快照 + 击杀/刷新事件），
   // 地图域只读（管理端 `/admin/maps/:id/monitor`）。它不是配置，是运行时的投影。
   "database/repositories/map-monitor.repository.ts": ["modules/realtime", "modules/map"],
@@ -196,6 +206,12 @@ const REPO_EDGES = {
     // 地图管理（#571）：只读地图页要按图统计刷怪区行数（countByMap），不写任何东西
     "modules/map",
   ],
+  // 地图玩法规则（#809）：**两个域各占一半** —— 地图域读写（管理端 `/admin/maps/:id/rules`），
+  // 世界域只读（`RoomManager.capacityOf` 每次现读单房间人数上限；改完即生效，不必重载）
+  "database/repositories/map-rule.repository.ts": ["modules/map", "modules/world"],
+  // 单图热重载请求（#809）：写在地图域（管理端点「重载」写一行 pending），
+  // 读 + 改成 done 在世界域（实时进程的 RoomReloadService 每秒轮询）—— 跨进程的一问一答
+  "database/repositories/world-reload-request.repository.ts": ["modules/map", "modules/world"],
   // NPC 点位（#672）：点位归后台，只有地图域读写（管理端画布 + 配置快照）
   "database/repositories/map-npc.repository.ts": ["modules/map", "modules/quest"],
   // 碰撞盒（#676）：与点位同理 —— 只有地图域读写（画布增删改 + 配置快照下发）；

@@ -236,7 +236,7 @@ function connect(url) {
     // 出厂快照本身就给图 1 配了刷怪区，这里只是再补 3 个槽 —— 所以断「至少 3 只 + 实例 id 形态」，
     // 不断具体只数（运营随时会调密度）
     check(
-      alives.length >= 3 && alives.every((item) => /^m3_z1_\d+$/.test(item.instanceId)),
+      alives.length >= 3 && alives.every((item) => /^m3_z1_c0_\d+$/.test(item.instanceId)),
       `图 ${TEST_MAP} 播出了靶子（实例 id 由服务端发牌，带区段）`,
       JSON.stringify(alives.map((m) => m.instanceId).slice(0, 6)),
     );

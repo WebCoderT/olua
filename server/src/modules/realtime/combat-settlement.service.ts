@@ -18,6 +18,7 @@ import type { BagOrigin } from "../roles/role-inventory";
 import { GameEventsService } from "../../common/events/game-events.service";
 import { PartyService } from "../party/party.service";
 import { WorldService } from "../world/world.service";
+import { roomKey } from "../../common/utils/room-key.util";
 import { MapMonitorService } from "./map-monitor.service";
 import { MonsterAiService } from "./monster-ai.service";
 import { PlayerPresenceService } from "./player-presence.service";
@@ -410,7 +411,7 @@ export class CombatSettlementService {
     // 候选：同区同图、存活、半径内，按距离升序取最近的一批。
     // 位置优先用 AI 运行时坐标（怪会游走，出生点可能早就不在原地了），与单体路径同一取向。
     const candidates = this.world
-      .monstersOf(spot.zoneId, spot.mapId)
+      .monstersOf(spot.roomId)
       .map((monster) => {
         const live = this.monsterAi.livePositionOf(monster.instanceId) ?? { x: monster.x, y: monster.y };
         return { monster, x: live.x, y: live.y, distance: Math.hypot(live.x - spot.x, live.y - spot.y) };
@@ -551,7 +552,7 @@ export class CombatSettlementService {
     }
 
     // 观看者只看到「他放了一个技能」：一次出手记一次，目标取最近的那只（打空时为空串）
-    this.presence.recordAction(spot.zoneId, spot.mapId, { accountId, skillId: cast.skillId, targetId: hits[0]?.targetId ?? "" });
+    this.presence.recordAction(spot.roomId, { accountId, skillId: cast.skillId, targetId: hits[0]?.targetId ?? "" });
 
     const primary = hits[0];
     this.logger.debug(
@@ -593,7 +594,7 @@ export class CombatSettlementService {
     accountId: string,
     cast: ParsedCast,
     skill: Record<string, unknown>,
-  ): { zoneId: number; mapId: string; x: number; y: number; radius: number } | null {
+  ): { roomId: string; zoneId: number; mapId: string; x: number; y: number; radius: number } | null {
     const position = this.presence.positionOf(accountId);
     if (!position) return null;
 
@@ -625,7 +626,9 @@ export class CombatSettlementService {
       }
     }
 
-    return { zoneId: position.zoneId, mapId: position.mapId, x, y, radius };
+    // roomId 一并带上（#809）：群体技能的候选池从「一张图」收窄到「一间房」，
+    // 否则 1 线的 AOE 会打到公共线的怪（分线之后这是最容易被漏掉的一处）
+    return { roomId: position.roomId, zoneId: position.zoneId, mapId: position.mapId, x, y, radius };
   }
 
   private settleNew(accountId: string, cast: ParsedCast): RealtimeSettleData {
@@ -902,7 +905,11 @@ export class CombatSettlementService {
     // 玩家动作事件（#693）：观看者据此播「他出手了」的攻击/技能动画 —— settle 只回出手者
     // 本人，不记这条，别人的屏幕上他永远站着发呆。普攻与技能同一形状（普攻也是技能）。
     // 只在新结算路径记 —— 幂等重发在上面早退，不会重复广播。
-    this.presence.recordAction(target.zoneId, target.mapId, { accountId, skillId: cast.skillId, targetId: cast.targetId });
+    this.presence.recordAction(roomKey(target.zoneId, target.mapId, target.slot), {
+      accountId,
+      skillId: cast.skillId,
+      targetId: cast.targetId,
+    });
 
     this.logger.debug(
       `结算：账号 ${accountId} 技能 ${cast.skillId}(Lv${skillLevel}) → 目标 ${cast.targetId}(${cast.monsterKey}) 伤害 ${damage}` +

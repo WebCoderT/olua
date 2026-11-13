@@ -14,14 +14,18 @@ import {
   MapListDto,
   MapNpcDeletedDto,
   MapNpcDto,
+  MapReloadBatchDto,
   MapRevivePointClearedDto,
   MapRevivePointDto,
+  MapRulesDto,
   MapSpawnAreaDeletedDto,
   MapSpawnAreaDto,
   MapSummaryDto,
+  ReloadWorldDto,
   SaveMapCollisionDto,
   SaveMapConfigDto,
   SaveMapNpcDto,
+  SaveMapRulesDto,
   SaveRevivePointDto,
   SaveSpawnAreaDto,
 } from "./dto/map.dto";
@@ -108,6 +112,85 @@ export class AdminMapController {
   @ApiDataResponse(MapMonitorDto, { description: "这一帧的怪物 / 玩家 / 事件 + 游标与新鲜度" })
   monitor(@Param("id") id: string, @Query() query: MapMonitorQueryDto): MapMonitorDto {
     return this.mapService.monitor(id, query);
+  }
+
+  @Post(":id/reload-world")
+  @AuditTarget("map")
+  @ApiAdminDoc({
+    operationId: "adminMap.reloadWorld",
+    summary: "让这张图的房间按现在的刷怪区重新播种",
+    description:
+      "改完刷怪区之后**立刻生效**的那一步（#809，收 #669）。不调它也不会错 —— 下次有人进图会按新区域播种；\n" +
+      "但在图里的玩家会继续看到改之前的怪，直到换图 / 重进。\n\n" +
+      "三种选择：\n" +
+      "- `mode=reload`：**立刻**执行，连 AI 运行时一起重载。图里的人会看到怪整体重刷一次（掉落 / 血量不保留）；\n" +
+      "- `mode=respawn`（不传 `forceAfterMs`）：**等房里没人**再重载，最多等 5 分钟；\n" +
+      "- 不调 = 不重载。\n\n" +
+      "`forceAfterMs` 是「等空窗的上限」而不是「延迟多久」：房里没人就立刻执行，有人才排队，到点强制\n" +
+      "（`0` = 立刻强制）。每次真正执行完，房里的人都会收到一帧 `world.reload`（`data.forced` 标明是不是\n" +
+      "到点强制），客户端据此提示「本图怪物已重新刷新」。\n\n" +
+      "**一次发给每一个存活区**：刷怪区是全服共用的配置，但每个区各有一份这张图的世界 —— 只重载区 1\n" +
+      "会让其它区继续拿着旧区域。回执里 `items` 每个区一条。\n\n" +
+      "`merged=true` 表示与已有的 pending 请求合并了（运营连点两下只重播一次；合并取最新的 mode，\n" +
+      "`forceAt` 取更早的那个，所以「先排队再点立即」会立刻执行）。\n\n" +
+      "**不受影响的范围**（这是 #669 的核心验收）：其它图、其它区的世界状态、玩家背包与任务进度都不动；\n" +
+      "重载只重建**这一个房间**的怪物实例。",
+    permissions: [Permission.GAME_CONFIG_WRITE],
+  })
+  @ApiParam({ name: "id", description: "地图 id" })
+  @ApiDataResponse(MapReloadBatchDto, { description: "每个存活区一条回执（requestId / roomId / plan / forceAt）" })
+  reloadWorld(
+    @Param("id") id: string,
+    @Body() dto: ReloadWorldDto,
+    @CurrentUser() actor: AuthenticatedUser,
+  ): MapReloadBatchDto {
+    return this.mapService.reloadWorld(id, dto, actor);
+  }
+
+  @Get(":id/rules")
+  @ApiAdminDoc({
+    operationId: "adminMap.rules",
+    summary: "地图玩法规则",
+    description:
+      "这张图的规则（`map_rules` 一行）。**一行不存在 = 全默认**，此时 `inherited=true` ——\n" +
+      "页面要把控件显示成「未覆盖」的灰态，否则运营会以为「这张图单独配了 30 人上限」，\n" +
+      "等哪天默认值改了，他会发现这张图「自己变了」。\n\n" +
+      "字段分三组：\n" +
+      "- **结算倍率**（经验 / 掉落 / 金钱）：只在服务端结算时乘，**不进客户端快照** ——\n" +
+      "  否则「客户端算的经验」与「服务端给的经验」迟早不一致；\n" +
+      "- **房间形状**（单房间人数上限 / 分线数量）：实时进程每次现读，保存即生效；\n" +
+      "- **准入与传送**（PK / 自动挂机 / 拉人 / 掉落 / 传送花费与冷却 / 战斗中禁止传送）。\n\n" +
+      "`respawnMsOverride` 是这张图的中间级重生时长（毫秒），`null` = 继承全局。",
+    permissions: [Permission.GAME_CONFIG_READ],
+  })
+  @ApiParam({ name: "id", description: "地图 id" })
+  @ApiDataResponse(MapRulesDto, { description: "规则全量（含 inherited 与落款）" })
+  rules(@Param("id") id: string): MapRulesDto {
+    return this.mapService.rulesOf(id);
+  }
+
+  @Patch(":id/rules")
+  @AuditTarget("map")
+  @ApiAdminDoc({
+    operationId: "adminMap.saveRules",
+    summary: "保存地图玩法规则（整份覆盖）",
+    description:
+      "15 个字段**整份提交**，不是部分更新：其中 7 个是开关，「没传」与「传了 false」在 JSON 里\n" +
+      "长得一样，静默把开关关掉是最难查的一类问题。页面先 `GET .../rules` 拿全量（含默认）再改再交。\n\n" +
+      "保存后**不需要**再触发一次重载：改的是「这间房能装几个人、怪掉几倍」，不是「房里有几只怪」。\n" +
+      "刷怪区改完要生效请调 `POST .../reload-world`。\n\n" +
+      "倍率上限 100（再高就不是倍率，是数值配错）；`maxPlayersPerRoom = 0` 表示不限人数；\n" +
+      "`maxChannels = 1` 表示不分线。地图不存在 → 404 `50032`。",
+    permissions: [Permission.GAME_CONFIG_WRITE],
+  })
+  @ApiParam({ name: "id", description: "地图 id" })
+  @ApiDataResponse(MapRulesDto, { description: "保存后的全量（inherited 变 false）" })
+  saveRules(
+    @Param("id") id: string,
+    @Body() dto: SaveMapRulesDto,
+    @CurrentUser() actor: AuthenticatedUser,
+  ): MapRulesDto {
+    return this.mapService.saveRules(id, dto, actor);
   }
 
   @Patch(":id")

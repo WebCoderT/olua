@@ -15076,6 +15076,16 @@
             }
           },
           {
+            "name": "slot",
+            "required": false,
+            "in": "query",
+            "description": "线（#809：`0` 公共线 / `1`.. 分线 / `i<seq>` 副本；不传 = 公共线）",
+            "schema": {
+              "default": "0",
+              "type": "string"
+            }
+          },
+          {
             "name": "since",
             "required": false,
             "in": "query",
@@ -15133,6 +15143,195 @@
         },
         "x-olua-permissions": [
           "gameConfig:read"
+        ]
+      }
+    },
+    "/admin/maps/{id}/reload-world": {
+      "post": {
+        "description": "改完刷怪区之后**立刻生效**的那一步（#809，收 #669）。不调它也不会错 —— 下次有人进图会按新区域播种；\n但在图里的玩家会继续看到改之前的怪，直到换图 / 重进。\n\n三种选择：\n- `mode=reload`：**立刻**执行，连 AI 运行时一起重载。图里的人会看到怪整体重刷一次（掉落 / 血量不保留）；\n- `mode=respawn`（不传 `forceAfterMs`）：**等房里没人**再重载，最多等 5 分钟；\n- 不调 = 不重载。\n\n`forceAfterMs` 是「等空窗的上限」而不是「延迟多久」：房里没人就立刻执行，有人才排队，到点强制\n（`0` = 立刻强制）。每次真正执行完，房里的人都会收到一帧 `world.reload`（`data.forced` 标明是不是\n到点强制），客户端据此提示「本图怪物已重新刷新」。\n\n**一次发给每一个存活区**：刷怪区是全服共用的配置，但每个区各有一份这张图的世界 —— 只重载区 1\n会让其它区继续拿着旧区域。回执里 `items` 每个区一条。\n\n`merged=true` 表示与已有的 pending 请求合并了（运营连点两下只重播一次；合并取最新的 mode，\n`forceAt` 取更早的那个，所以「先排队再点立即」会立刻执行）。\n\n**不受影响的范围**（这是 #669 的核心验收）：其它图、其它区的世界状态、玩家背包与任务进度都不动；\n重载只重建**这一个房间**的怪物实例。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
+        "operationId": "adminMap.reloadWorld",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "地图 id",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReloadWorldDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "每个存活区一条回执（requestId / roomId / plan / forceAt）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/MapReloadBatchDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "让这张图的房间按现在的刷怪区重新播种",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/MapReloadBatchDto"
+        },
+        "x-olua-permissions": [
+          "gameConfig:write"
+        ]
+      }
+    },
+    "/admin/maps/{id}/rules": {
+      "get": {
+        "description": "这张图的规则（`map_rules` 一行）。**一行不存在 = 全默认**，此时 `inherited=true` ——\n页面要把控件显示成「未覆盖」的灰态，否则运营会以为「这张图单独配了 30 人上限」，\n等哪天默认值改了，他会发现这张图「自己变了」。\n\n字段分三组：\n- **结算倍率**（经验 / 掉落 / 金钱）：只在服务端结算时乘，**不进客户端快照** ——\n  否则「客户端算的经验」与「服务端给的经验」迟早不一致；\n- **房间形状**（单房间人数上限 / 分线数量）：实时进程每次现读，保存即生效；\n- **准入与传送**（PK / 自动挂机 / 拉人 / 掉落 / 传送花费与冷却 / 战斗中禁止传送）。\n\n`respawnMsOverride` 是这张图的中间级重生时长（毫秒），`null` = 继承全局。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
+        "operationId": "adminMap.rules",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "地图 id",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "规则全量（含 inherited 与落款）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/MapRulesDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "地图玩法规则",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/MapRulesDto"
+        },
+        "x-olua-permissions": [
+          "gameConfig:read"
+        ]
+      },
+      "patch": {
+        "description": "15 个字段**整份提交**，不是部分更新：其中 7 个是开关，「没传」与「传了 false」在 JSON 里\n长得一样，静默把开关关掉是最难查的一类问题。页面先 `GET .../rules` 拿全量（含默认）再改再交。\n\n保存后**不需要**再触发一次重载：改的是「这间房能装几个人、怪掉几倍」，不是「房里有几只怪」。\n刷怪区改完要生效请调 `POST .../reload-world`。\n\n倍率上限 100（再高就不是倍率，是数值配错）；`maxPlayersPerRoom = 0` 表示不限人数；\n`maxChannels = 1` 表示不分线。地图不存在 → 404 `50032`。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
+        "operationId": "adminMap.saveRules",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "地图 id",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SaveMapRulesDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "保存后的全量（inherited 变 false）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/MapRulesDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "保存地图玩法规则（整份覆盖）",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/MapRulesDto"
+        },
+        "x-olua-permissions": [
+          "gameConfig:write"
         ]
       }
     },
@@ -20275,6 +20474,127 @@
         "required": [
           "channel",
           "title"
+        ]
+      },
+      "ReloadWorldDto": {
+        "type": "object",
+        "properties": {
+          "mode": {
+            "type": "string",
+            "description": "重载模式：`respawn` = 只重播刷怪区（可等空窗）/ `reload` = 连 AI 运行时一起重载（立刻）",
+            "enum": [
+              "respawn",
+              "reload"
+            ],
+            "example": "respawn"
+          },
+          "slot": {
+            "type": "string",
+            "description": "线（#809 本刀只支持 `0` 公共线；分线 / 副本是第④刀）",
+            "default": "0"
+          },
+          "forceAfterMs": {
+            "type": "number",
+            "description": "等空窗的上限（毫秒）。不传 = 出厂 5 分钟；`0` = 立刻强制（房里有人也马上重刷）",
+            "minimum": 0,
+            "maximum": 86400000
+          }
+        },
+        "required": [
+          "mode"
+        ]
+      },
+      "SaveMapRulesDto": {
+        "type": "object",
+        "properties": {
+          "expRate": {
+            "type": "number",
+            "description": "经验倍率（0 ~ 100）",
+            "minimum": 0,
+            "maximum": 100
+          },
+          "dropRate": {
+            "type": "number",
+            "description": "掉落倍率（0 ~ 100）",
+            "minimum": 0,
+            "maximum": 100
+          },
+          "moneyRate": {
+            "type": "number",
+            "description": "金钱倍率（0 ~ 100）",
+            "minimum": 0,
+            "maximum": 100
+          },
+          "allowPk": {
+            "type": "boolean",
+            "description": "允许 PK"
+          },
+          "allowAutoBattle": {
+            "type": "boolean",
+            "description": "允许自动挂机"
+          },
+          "allowRecall": {
+            "type": "boolean",
+            "description": "允许被拉人 / 回城"
+          },
+          "allowDrop": {
+            "type": "boolean",
+            "description": "这张图掉不掉东西"
+          },
+          "maxPlayersPerRoom": {
+            "type": "number",
+            "description": "单房间人数上限（0 = 不限，上限 1000）",
+            "minimum": 0,
+            "maximum": 1000
+          },
+          "maxChannels": {
+            "type": "number",
+            "description": "分线数量上限（1 ~ 20；1 = 不分线）",
+            "minimum": 1,
+            "maximum": 20
+          },
+          "transferCostMoney": {
+            "type": "number",
+            "description": "传送花费（铜钱，0 ~ 1000000）",
+            "minimum": 0,
+            "maximum": 1000000
+          },
+          "transferCooldownMs": {
+            "type": "number",
+            "description": "传送冷却（毫秒，0 ~ 1 小时）",
+            "minimum": 0,
+            "maximum": 3600000
+          },
+          "denyTransferInCombat": {
+            "type": "boolean",
+            "description": "战斗中禁止传送"
+          },
+          "respawnMsOverride": {
+            "type": "object",
+            "description": "中间级重生时长（毫秒；传 null = 继承全局 worldRespawnMs）",
+            "nullable": true,
+            "minimum": 0,
+            "maximum": 86400000
+          },
+          "simulateWhenEmpty": {
+            "type": "boolean",
+            "description": "无人时继续跑世界（false = 冻结）"
+          }
+        },
+        "required": [
+          "expRate",
+          "dropRate",
+          "moneyRate",
+          "allowPk",
+          "allowAutoBattle",
+          "allowRecall",
+          "allowDrop",
+          "maxPlayersPerRoom",
+          "maxChannels",
+          "transferCostMoney",
+          "transferCooldownMs",
+          "denyTransferInCombat",
+          "simulateWhenEmpty"
         ]
       },
       "SaveMapConfigDto": {
@@ -31949,6 +32269,17 @@
               "type": "number"
             }
           },
+          "slot": {
+            "type": "string",
+            "description": "这一帧是哪条线（#809：'0' 公共线 / '1'.. 分线 / 'i<seq>' 副本）"
+          },
+          "slots": {
+            "description": "这张图有哪些线留下过快照（页面据此切换线；只有 '0' 时前端不必显示选择器）",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
           "sampledAt": {
             "type": "number",
             "description": "快照采样时刻（毫秒）；null = 这张图从没被采样过",
@@ -31997,6 +32328,8 @@
           "height",
           "zoneId",
           "zones",
+          "slot",
+          "slots",
           "sampledAt",
           "updatedAt",
           "staleMs",
@@ -32013,6 +32346,11 @@
             "type": "number",
             "description": "区服 id（不传 = 用该图最新的那份快照所在区）"
           },
+          "slot": {
+            "type": "string",
+            "description": "线（#809：`0` 公共线 / `1`.. 分线 / `i<seq>` 副本；不传 = 公共线）",
+            "default": "0"
+          },
           "since": {
             "type": "number",
             "description": "事件游标：只取 id 大于它的事件（0 / 不传 = 最新若干条）"
@@ -32022,6 +32360,175 @@
             "description": "本次最多取多少条事件（默认 60，上限 200）"
           }
         }
+      },
+      "MapReloadResultDto": {
+        "type": "object",
+        "properties": {
+          "requestId": {
+            "type": "number",
+            "description": "请求行 id（重复请求合并时是**同一条**的 id）"
+          },
+          "merged": {
+            "type": "boolean",
+            "description": "与已有的 pending 请求合并了（运营连点两下只重播一次）"
+          },
+          "roomId": {
+            "type": "string",
+            "description": "房号 `<zone>:<map>:<slot>`"
+          },
+          "slot": {
+            "type": "string",
+            "description": "线",
+            "example": "0"
+          },
+          "mode": {
+            "type": "string",
+            "description": "重载模式",
+            "enum": [
+              "respawn",
+              "reload"
+            ]
+          },
+          "forceAt": {
+            "type": "number",
+            "description": "排队截止时刻（毫秒时间戳）；到点强制执行"
+          },
+          "plan": {
+            "type": "string",
+            "description": "预计行为：`immediate` = 实时进程下一轮就执行（房里没人 / mode=reload / forceAfterMs=0）；`queued` = 房里有人时先排队，等无人或到 `forceAt` 强制。**到底有没有人只有实时进程知道**（管理端进程读不到世界内存），所以这里给的是「会不会排队」而不是「现在几个人」",
+            "enum": [
+              "immediate",
+              "queued"
+            ]
+          }
+        },
+        "required": [
+          "requestId",
+          "merged",
+          "roomId",
+          "slot",
+          "mode",
+          "forceAt",
+          "plan"
+        ]
+      },
+      "MapReloadBatchDto": {
+        "type": "object",
+        "properties": {
+          "requestedAt": {
+            "type": "number",
+            "description": "提交时刻（毫秒时间戳，全组共用）"
+          },
+          "items": {
+            "description": "每个存活区一条（房里没人时下个 tick 就执行；有人在则按 plan 排队）",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MapReloadResultDto"
+            }
+          }
+        },
+        "required": [
+          "requestedAt",
+          "items"
+        ]
+      },
+      "MapRulesDto": {
+        "type": "object",
+        "properties": {
+          "mapId": {
+            "type": "string",
+            "description": "地图 id"
+          },
+          "inherited": {
+            "type": "boolean",
+            "description": "库里有没有这一行（false = 下面全是出厂默认值）"
+          },
+          "expRate": {
+            "type": "number",
+            "description": "经验倍率（服务端结算时乘，不下发客户端）"
+          },
+          "dropRate": {
+            "type": "number",
+            "description": "掉落倍率"
+          },
+          "moneyRate": {
+            "type": "number",
+            "description": "金钱倍率"
+          },
+          "allowPk": {
+            "type": "boolean",
+            "description": "允许同图玩家互相攻击（PK）"
+          },
+          "allowAutoBattle": {
+            "type": "boolean",
+            "description": "允许自动挂机"
+          },
+          "allowRecall": {
+            "type": "boolean",
+            "description": "允许被拉人 / 回城"
+          },
+          "allowDrop": {
+            "type": "boolean",
+            "description": "这张图掉不掉东西（false = 活动图）"
+          },
+          "maxPlayersPerRoom": {
+            "type": "number",
+            "description": "单房间人数上限（0 = 不限；出厂 30）"
+          },
+          "maxChannels": {
+            "type": "number",
+            "description": "分线数量上限（1 = 不分线；出厂 1）"
+          },
+          "transferCostMoney": {
+            "type": "number",
+            "description": "传送花费（铜钱，0 = 免费）"
+          },
+          "transferCooldownMs": {
+            "type": "number",
+            "description": "传送冷却（毫秒）"
+          },
+          "denyTransferInCombat": {
+            "type": "boolean",
+            "description": "战斗中禁止传送"
+          },
+          "respawnMsOverride": {
+            "type": "object",
+            "description": "中间级重生时长（毫秒；null = 继承全局）",
+            "nullable": true
+          },
+          "simulateWhenEmpty": {
+            "type": "boolean",
+            "description": "无人时继续跑世界（false = 冻结，现状）"
+          },
+          "updatedBy": {
+            "type": "string",
+            "description": "最后修改人（空串 = 没改过 / 出厂）"
+          },
+          "updatedAt": {
+            "type": "number",
+            "description": "最后修改时刻（毫秒；0 = 没改过）"
+          }
+        },
+        "required": [
+          "mapId",
+          "inherited",
+          "expRate",
+          "dropRate",
+          "moneyRate",
+          "allowPk",
+          "allowAutoBattle",
+          "allowRecall",
+          "allowDrop",
+          "maxPlayersPerRoom",
+          "maxChannels",
+          "transferCostMoney",
+          "transferCooldownMs",
+          "denyTransferInCombat",
+          "respawnMsOverride",
+          "simulateWhenEmpty",
+          "updatedBy",
+          "updatedAt"
+        ]
       },
       "UiEffectDto": {
         "type": "object",

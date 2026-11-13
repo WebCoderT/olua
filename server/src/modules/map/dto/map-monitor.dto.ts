@@ -1,6 +1,6 @@
 import { ApiProperty } from "@nestjs/swagger";
 import { Type } from "class-transformer";
-import { IsInt, IsOptional, Max, Min } from "class-validator";
+import { IsInt, IsOptional, IsString, Matches, Max, Min } from "class-validator";
 
 /**
  * 实时地图监控的 DTO（#665）
@@ -205,6 +205,12 @@ export class MapMonitorDto {
   @ApiProperty({ description: "这张图有哪些区留下过快照（页面据此切换区）", type: [Number] })
   zones: number[];
 
+  @ApiProperty({ description: "这一帧是哪条线（#809：'0' 公共线 / '1'.. 分线 / 'i<seq>' 副本）" })
+  slot: string;
+
+  @ApiProperty({ description: "这张图有哪些线留下过快照（页面据此切换线；只有 '0' 时前端不必显示选择器）", type: [String] })
+  slots: string[];
+
   @ApiProperty({ description: "快照采样时刻（毫秒）；null = 这张图从没被采样过", type: Number, nullable: true })
   sampledAt: number | null;
 
@@ -235,6 +241,16 @@ export class MapMonitorQueryDto {
   @IsInt({ message: "区服 id 必须是整数" })
   @Min(1, { message: "区服 id 必须 ≥ 1" })
   zone?: number;
+
+  @ApiProperty({
+    description: "线（#809：`0` 公共线 / `1`.. 分线 / `i<seq>` 副本；不传 = 公共线）",
+    required: false,
+    default: "0",
+  })
+  @IsOptional()
+  @IsString({ message: "线必须是字符串" })
+  @Matches(/^([0-9]{1,4}|i[0-9]{1,9})$/, { message: "线只能是数字（分线）或 i+数字（副本）" })
+  slot?: string;
 
   @ApiProperty({ description: "事件游标：只取 id 大于它的事件（0 / 不传 = 最新若干条）", required: false })
   @IsOptional()

@@ -34,6 +34,10 @@ import { MapSpawnAreaRepository } from "./repositories/map-spawn-area.repository
 import { MapNpcRepository } from "./repositories/map-npc.repository";
 import { MapCollisionRepository } from "./repositories/map-collision.repository";
 import { MapRepository } from "./repositories/map.repository";
+// 地图玩法规则（#809）：`map_rules` 一行 = 一张图的规则覆盖（一行不存在 = 全默认）
+import { MapRuleRepository } from "./repositories/map-rule.repository";
+// 单图热重载请求（#809）：管理端写 pending、实时进程轮询执行 —— 跨进程的一张待办表
+import { WorldReloadRequestRepository } from "./repositories/world-reload-request.repository";
 import { ZoneRepository } from "./repositories/zone.repository";
 // 配置版本链（#881 / #882）：`config_version` / `config_revisions` + 38 张配置表的整表 dump / 替换
 import { ConfigRevisionRepository } from "./repositories/config-revision.repository";
@@ -87,6 +91,8 @@ import { RolePositionRepository } from "./repositories/role-position.repository"
     MapNpcRepository,
     MapCollisionRepository,
     MapRepository,
+    MapRuleRepository,
+    WorldReloadRequestRepository,
     ZoneRepository,
     TitleRepository,
     RankRepository,
@@ -146,6 +152,8 @@ import { RolePositionRepository } from "./repositories/role-position.repository"
     MapNpcRepository,
     MapCollisionRepository,
     MapRepository,
+    MapRuleRepository,
+    WorldReloadRequestRepository,
     ZoneRepository,
     TitleRepository,
     RankRepository,

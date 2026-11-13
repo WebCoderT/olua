@@ -14,12 +14,17 @@ import {
   COMBAT_STATUS_SEEDS,
 } from "../common/constants/combat-status-seed";
 import { resetDayOf } from "../common/utils/daily-clock";
+import { PUBLIC_SLOT, instanceIdOf } from "../common/utils/room-key.util";
 import { bootstrapConfigSnapshot } from "./config-snapshot";
 
 /** 可绑定的参数值（node:sqlite 支持的类型） */
 export type SqlParam = string | number | bigint | null | Uint8Array;
 
-/** world_monsters.instanceId 的两种格式（#295 阶段二起只有新格式；旧格式只在存量库里出现） */
+/**
+ * world_monsters.instanceId 的三种格式（#809 起只有 `m<map>_z<zone>_c<slot>_<n>`；
+ * 前两种只在存量库里出现，由 `migrateWorldMonsterInstanceIds` 归一到最新一种）
+ */
+const WORLD_INSTANCE_ROOM_FORMAT = /^m(.+)_z(\d+)_[ci]\d+_\d+$/;
 const WORLD_INSTANCE_NEW_FORMAT = /^m(.+)_z(\d+)_(\d+)$/;
 const WORLD_INSTANCE_OLD_FORMAT = /^m(.+)_(\d+)$/;
 
@@ -78,17 +83,25 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
 
   /** 建表（IF NOT EXISTS，可重复执行；新增字段时在此加 ALTER 并做存在性判断） */
   private migrate() {
-    // 旧库升级前置（#350）：exec 块里有引用 zone_id 的索引（idx_world_monsters_zone 等），
-    // 而 zone_id 的补列（ALTER）原本排在 exec 之后——旧 schema 的库（无该列）会在建索引时
-    // 直接炸 no such column，起不了服。这里赶在建索引前对「已存在的旧表」补列；
-    // 新库没有这两张表，跳过，exec 后段的 ensureColumn 幂等兜底。
-    for (const [table, definition] of [
-      ["accounts", "INTEGER NOT NULL DEFAULT 1"],
-      ["world_monsters", "INTEGER NOT NULL DEFAULT 1"],
-    ] as const) {
-      const exists =
-        this.count("SELECT COUNT(1) AS total FROM sqlite_master WHERE type = 'table' AND name = ?", [table]) > 0;
-      if (exists) this.ensureColumn(table, "zone_id", definition);
+    // 旧库升级前置（#350 / #809）：exec 块里有引用 zone_id（idx_world_monsters_zone）与
+    // slot（idx_world_monsters_room）的索引，而这两列的 ALTER 原本排在 exec 之后——
+    // 旧 schema 的库（无该列）会在建索引时直接炸 no such column，起不了服。
+    // 这里赶在建索引前对「已存在的旧表」补列；新库没有这两张表，跳过，exec 后段的
+    // ensureColumn 幂等兜底。
+    if (this.count("SELECT COUNT(1) AS total FROM sqlite_master WHERE type = 'table' AND name = ?", ["accounts"]) > 0) {
+      this.ensureColumn("accounts", "zone_id", "INTEGER NOT NULL DEFAULT 1");
+    }
+    if (this.hasTable("world_monsters")) {
+      this.ensureColumn("world_monsters", "zone_id", "INTEGER NOT NULL DEFAULT 1");
+      // slot 也要在 exec 之前补：下面立刻给 (zone_id, map_id, slot) 建索引
+      this.ensureColumn("world_monsters", "slot", "TEXT NOT NULL DEFAULT '0'");
+    }
+    // 监控投影表的主键 #809 起是三列（含 slot，按线各存一份）。SQLite 改不了主键，而这张表是
+    // **运行时投影**（每秒被覆盖写一次）：丢一帧没有任何损失，所以直接 DROP 让下面的
+    // CREATE 建新形状 —— 不写「建新表 + 搬数据 + 改名」那套（为一个可以随便丢的表做搬迁不划算）。
+    if (this.hasTable("map_monitor_state") && !this.hasColumn("map_monitor_state", "slot")) {
+      this.db.exec("DROP TABLE map_monitor_state");
+      this.logger.log("map_monitor_state 主键扩成三列（含 slot）：旧投影已丢弃（运行时投影，一秒后重建）");
     }
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS accounts (
@@ -218,13 +231,16 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
       CREATE INDEX IF NOT EXISTS idx_mail_queue_created ON mail_queue(created_at DESC);
 
       -- 世界权威（#35）：服务端持有的怪物实例状态。
-      -- 一行 = 一只场上怪：身份 / 所属区 + 地图 / 出生点 / 血量 / 存活与重生时刻。
-      -- instanceId 带区段（#295 阶段二：m<mapId>_z<zone>_<n>），同一张图各区各发各的牌。
-      -- 服务端是唯一写者（客户端只通过实时通道间接改它），所以不需要乐观锁列。
+      -- 一行 = 一只场上怪：身份 / 所属区 + 地图 + 线 / 出生点 / 血量 / 存活与重生时刻。
+      -- instanceId 带区段与线（#295 阶段二 / #809：m<mapId>_z<zone>_c<slot>_<n>），
+      -- 同一张图各区各线各发各的牌。服务端是唯一写者（客户端只通过实时通道间接改它），
+      -- 所以不需要乐观锁列。
       CREATE TABLE IF NOT EXISTS world_monsters (
         instance_id TEXT PRIMARY KEY,
         map_id      TEXT NOT NULL,
         zone_id     INTEGER NOT NULL DEFAULT 1,
+        -- 线（#809）：'0' = 公共线，'1'.. = 分线，'i<seq>' = 副本。本刀只产出 '0'
+        slot        TEXT NOT NULL DEFAULT '0',
         monster_key TEXT NOT NULL,
         area_id     INTEGER,
         x           REAL NOT NULL,
@@ -238,6 +254,34 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
       );
       CREATE INDEX IF NOT EXISTS idx_world_monsters_map ON world_monsters(map_id);
       CREATE INDEX IF NOT EXISTS idx_world_monsters_zone ON world_monsters(zone_id, map_id);
+      -- 重载与按房间读（#809）：删一间房的实例是 WHERE zone_id=? AND map_id=? AND slot=?
+      CREATE INDEX IF NOT EXISTS idx_world_monsters_room ON world_monsters(zone_id, map_id, slot);
+
+      -- 单图热重载请求（#809，收 #669）
+      --
+      -- 为什么不用 zones.epoch 做单图重载：epoch 是**全局**代际，动它等于把所有图的
+      -- 内存世界全作废（合并区才付得起这个代价）。改一块刷怪区只该影响那一个房间，
+      -- 所以走一张请求表 —— 跨进程（管理端在 3100 写、实时进程在 3101 读）。
+      --
+      -- mode：'respawn' = 只重播刷怪区（保留实例血量？**不保留**，整份重播）；
+      --       'reload'  = 连 AI 运行时一起重载（与 respawn 的差别在 AI 侧的重建）。
+      -- status：'pending' → 'done' / 'failed'。同一 (zone,map,slot) 的多次请求在写库时合并。
+      CREATE TABLE IF NOT EXISTS world_reload_requests (
+        id           INTEGER PRIMARY KEY AUTOINCREMENT,
+        zone_id      INTEGER NOT NULL,
+        map_id       TEXT    NOT NULL,
+        slot         TEXT    NOT NULL DEFAULT '0',
+        mode         TEXT    NOT NULL,
+        requested_by TEXT    NOT NULL,
+        requested_at INTEGER NOT NULL,
+        -- 等空窗的截止时刻：到点强制执行（在场玩家会看到怪整体重刷一次，并收到提示）
+        force_at     INTEGER NOT NULL,
+        status       TEXT    NOT NULL DEFAULT 'pending',
+        done_at      INTEGER,
+        -- 执行结果摘要（'done' 时是重播只数，'failed' 时是最后一次错误）
+        detail       TEXT
+      );
+      CREATE INDEX IF NOT EXISTS idx_world_reload_pending ON world_reload_requests(status, requested_at);
 
       -- 实时地图监控（#665）：世界进程每秒把「这张图现在长什么样」投影成一行，管理端只读它。
       --
@@ -245,14 +289,17 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
       -- （世界里唯一稳定的真相），而监控要看的是**此刻**的位置 —— 怪物 AI 的模拟坐标只活在
       -- 实时进程内存里，且不落盘（见 monster-ai.service 的 MonsterRuntime）。管理端接口在
       -- 存档进程（3100），两个进程之间只有 SQLite 这一条路，所以这里做一份高频镜像：
-      -- 它是**运行时投影，不是配置**，config-sync 的 33 张表里没有它，重启清空也无所谓。
+      -- 它是**运行时投影，不是配置**，config-sync 的配置表里没有它，重启清空也无所谓。
+      --
+      -- 主键 #809 起是三列（含 slot）：分线之后「这张图此刻什么样」要按线各存一份。
       CREATE TABLE IF NOT EXISTS map_monitor_state (
         zone_id    INTEGER NOT NULL,
         map_id     TEXT    NOT NULL,
+        slot       TEXT    NOT NULL DEFAULT '0',
         -- JSON：{ monsters: [...], players: [...], sampledAt }
         payload    TEXT    NOT NULL,
         updated_at INTEGER NOT NULL,
-        PRIMARY KEY (zone_id, map_id)
+        PRIMARY KEY (zone_id, map_id, slot)
       );
 
       -- 实时地图监控的文字流（#665）：一次击杀 / 一只怪重生 = 一行。
@@ -386,6 +433,41 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
         revive_cy   REAL,
         updated_by  TEXT    NOT NULL DEFAULT '',
         updated_at  INTEGER NOT NULL DEFAULT 0
+      );
+
+      -- 地图级玩法规则（#809 / docs/20 §2.2）：一行 = 一张图的规则覆盖。
+      --
+      -- **一行不存在 = 全默认**（新建图不用先填 15 个字段）—— 这是这张表最重要的口径：
+      -- 读的一方一律「取行，取不到就用这里的默认值」，不靠 seed 补行。
+      --
+      -- 为什么不给 maps 加 15 个列：列一多就没人敢动，而且绝大多数图只用默认值；
+      -- 规则是「玩法」不是「几何」，与 maps 那张纯配置表的修改频率差一个量级。
+      --
+      -- 倍率（exp/drop/money）**只在服务端结算时乘，不下发客户端** —— 否则「客户端算出来的
+      -- 经验」和「服务端给的经验」迟早不一致。本刀（#809）只消费者 capacity 三项：
+      -- max_players_per_room / max_channels / simulate_when_empty；其余列先到位，
+      -- 消费方见 docs/20 §5.5（结算倍率）与 §2.6（分线），属于第④刀。
+      CREATE TABLE IF NOT EXISTS map_rules (
+        map_id                 TEXT    PRIMARY KEY,
+        exp_rate               REAL    NOT NULL DEFAULT 1.0,
+        drop_rate              REAL    NOT NULL DEFAULT 1.0,
+        money_rate             REAL    NOT NULL DEFAULT 1.0,
+        allow_pk               INTEGER NOT NULL DEFAULT 0,
+        allow_auto_battle      INTEGER NOT NULL DEFAULT 1,
+        allow_recall           INTEGER NOT NULL DEFAULT 1,
+        allow_drop             INTEGER NOT NULL DEFAULT 1,
+        -- 容量（#809）：0 = 不限；出厂 30。分线数量 >1 才真的会开新线（第④刀）
+        max_players_per_room   INTEGER NOT NULL DEFAULT 30,
+        max_channels           INTEGER NOT NULL DEFAULT 1,
+        transfer_cost_money    INTEGER NOT NULL DEFAULT 0,
+        transfer_cooldown_ms   INTEGER NOT NULL DEFAULT 0,
+        deny_transfer_in_combat INTEGER NOT NULL DEFAULT 0,
+        -- 中间级重生时长（NULL = 继承全局 worldRespawnMs；见 docs/27 §2.2.2 的三级继承）
+        respawn_ms_override    INTEGER,
+        -- 无人时冻结（0 = 冻结，现状）还是低频 tick（1 = 继续跑世界事件）
+        simulate_when_empty    INTEGER NOT NULL DEFAULT 0,
+        updated_by             TEXT    NOT NULL DEFAULT '',
+        updated_at             INTEGER NOT NULL DEFAULT 0
       );
 
       -- 特效配置（#594 升级特效 / #634 掉落光效）：一行 = 一个特效 key 的「摆位 / 缩放 / 旋转 / 时长 / 开关」
@@ -1390,6 +1472,9 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
     this.ensureColumn("equipments", "in_rotate", "REAL NOT NULL DEFAULT 0");
     this.ensureColumn("equipments", "out_scale", "REAL NOT NULL DEFAULT 1");
     this.ensureColumn("equipments", "out_positions", "TEXT NOT NULL DEFAULT '[]'");
+    // 线（#809）：存量行全落公共线 `'0'`（分线 / 副本是本刀之后的事）。补列必须在这条
+    // 迁移之前 —— 它要把 slot 一起写进新的 instanceId（`m3_z1_c0_12`）
+    this.ensureColumn("world_monsters", "slot", "TEXT NOT NULL DEFAULT '0'");
     this.migrateWorldMonsterInstanceIds();
     // 药品 / 物品图标（#603 第十域）：客户端不再存图标（它拼不出 `item/drug-hp-1` 这类路径，
     // 与地图 / 特效那种「能按 id 推导」的不同）—— 老库补列后由 seedDrugs / seedItems
@@ -1889,31 +1974,56 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
   }
 
   /**
-   * world_monsters.instanceId 引入区段（#295 阶段二的一次性改写，幂等）
+   * world_monsters.instanceId 的格式归一（#295 阶段二引入区段、#809 引入线，幂等）
    *
-   * 旧格式 `m<mapId>_<n>` → 新格式 `m<mapId>_z<zone>_<n>`。识别口径**先新后旧**：
-   * 新格式（`m1_z1_3`）也能被「旧格式」的正则匹配上（mapId 段读成 `1_z1`），
-   * 所以先按新格式排除，剩下的才当旧格式改写 —— 重启多少次都只改一次。
+   * 三种格式都在野外出现过，一律归到 `m<mapId>_z<zone>_c<slot>_<n>`：
+   * - `m<mapId>_<n>`（#295 之前）
+   * - `m<mapId>_z<zone>_<n>`（#295 阶段二 ~ #809 之前，**现网就是这个**）
+   * - `m<mapId>_z<zone>_c<slot>_<n>` / `_i<seq>_<n>`（#809 起）
+   *
+   * 识别口径**先细后粗**：带 slot 段的先排除，剩下的按「有区段」→「无区段」两档改写。
+   * 反过来（先粗后细）会把 `m1_z1_c0_3` 的 mapId 段读成 `1_z1_c0`，改出一条错 id。
+   *
+   * 为什么要改写存量行而不是「新老并存」：观战中的客户端手里握着 instanceId，两种格式
+   * 并存时 `parseInstanceSeq()` 虽然都认，但**同一只怪在两批日志里长得不一样**会让人
+   * 以为出了两只怪。改写是幂等的，代价是一次 epoch +1（世界内存按库重载一次）。
    */
   private migrateWorldMonsterInstanceIds(): void {
-    const rows = this.all<{ instance_id: string; zone_id: number }>("SELECT instance_id, zone_id FROM world_monsters");
+    const rows = this.all<{ instance_id: string; zone_id: number; slot: string | null }>(
+      "SELECT instance_id, zone_id, slot FROM world_monsters",
+    );
     let migrated = 0;
     for (const row of rows) {
-      if (WORLD_INSTANCE_NEW_FORMAT.test(row.instance_id)) continue;
-      const match = WORLD_INSTANCE_OLD_FORMAT.exec(row.instance_id);
-      if (!match) {
-        this.logger.warn(`world_monsters 存在无法识别的 instanceId（${row.instance_id}），跳过区段改写`);
-        continue;
+      if (WORLD_INSTANCE_ROOM_FORMAT.test(row.instance_id)) continue;
+      // 空串当公共线：`slot TEXT NOT NULL DEFAULT '0'` 正常写不出空串，但手工改库 / 老备份
+      // 里出现过就麻烦了 —— 空串会成为一个「谁也不认识、谁也不进去」的独立房间
+      const slot = row.slot ? row.slot : PUBLIC_SLOT;
+      let next: string | null = null;
+      const withZone = WORLD_INSTANCE_NEW_FORMAT.exec(row.instance_id);
+      if (withZone) {
+        next = instanceIdOf(withZone[1], row.zone_id, slot, Number(withZone[2]));
+      } else {
+        const legacy = WORLD_INSTANCE_OLD_FORMAT.exec(row.instance_id);
+        if (!legacy) {
+          this.logger.warn(`world_monsters 存在无法识别的 instanceId（${row.instance_id}），跳过线段改写`);
+          continue;
+        }
+        next = instanceIdOf(legacy[1], row.zone_id, slot, Number(legacy[2]));
       }
-      const next = `m${match[1]}_z${row.zone_id}_${match[2]}`;
       if (this.count("SELECT COUNT(1) AS total FROM world_monsters WHERE instance_id = ?", [next]) > 0) {
         this.logger.warn(`world_monsters 改写目标 id 已存在（${row.instance_id} → ${next}），跳过（理论不可达，报出来便于排查）`);
         continue;
       }
-      this.run("UPDATE world_monsters SET instance_id = ? WHERE instance_id = ?", [next, row.instance_id]);
+      this.run("UPDATE world_monsters SET instance_id = ?, slot = ? WHERE instance_id = ?", [next, slot, row.instance_id]);
       migrated += 1;
     }
-    if (migrated > 0) this.logger.log(`world_monsters 存量 instanceId 已补区段（改写 ${migrated} 行）`);
+    if (migrated > 0) {
+      // 改写之后，**已经跑着的实时进程**手里还是旧 id：epoch +1 让它在下一个 tick 把手上的
+      // 世界整份作废并按库重载（#851 的收口路径）。不 bump 的话，那些进程要到「分域空闲卸载」
+      // 或重启才换过来 —— 而它们手里旧 id 的怪在库里已经不存在，出手就是 20008。
+      this.run("UPDATE world_meta SET epoch = epoch + 1");
+      this.logger.log(`world_monsters 存量 instanceId 已补线段（改写 ${migrated} 行，世界代际 +1 以作废在跑的旧内存）`);
+    }
   }
 
   /**
@@ -1962,6 +2072,17 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
     if (columns.some((item) => item.name === column)) return;
     this.db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
     this.logger.log(`表 ${table} 补列：${column}`);
+  }
+
+  /** 这张表在不在（迁移要「表存在才处理」时用；比 `SELECT` 一条空表便宜也更直白） */
+  private hasTable(table: string): boolean {
+    return this.count("SELECT COUNT(1) AS total FROM sqlite_master WHERE type = 'table' AND name = ?", [table]) > 0;
+  }
+
+  /** 这张表有没有这一列（与 `ensureColumn` 同一口径的只读版） */
+  private hasColumn(table: string, column: string): boolean {
+    const columns = this.db.prepare(`PRAGMA table_info(${table})`).all() as unknown as { name: string }[];
+    return columns.some((item) => item.name === column);
   }
 
   /**

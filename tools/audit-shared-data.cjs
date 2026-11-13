@@ -37,6 +37,14 @@ const path = require("node:path");
 const { CONFIG_TABLES, FORMAT_TAG, TABLES_LINE_PREFIX } = require("../server/scripts/lib/config-tables.cjs");
 const { readRows, readSnapshotText } = require("./lib/snapshot-sql.cjs");
 
+/**
+ * 允许在配置快照里一行都没有的表（空 = 一张图都没单独配过规则，语义就是「全默认」）
+ *
+ * 正常情况下空表几乎一定是导出前就空着（或表名写错），所以默认判红；这份名单只放
+ * **设计上就该为空**的表，加一条就要在注释里写清「空了也不会让使用方看到一页空白」。
+ */
+const EMPTY_ALLOWED = new Set(["map_rules"]);
+
 const ROOT = path.resolve(__dirname, "..");
 const SERVER_SRC = path.join(ROOT, "server", "src");
 const ASSETS = path.join(ROOT, "client", "assets");
@@ -119,7 +127,10 @@ function checkSnapshot() {
   for (const table of CONFIG_TABLES) {
     const rows = readRows(text, table).length;
     total += rows;
-    if (rows === 0) empty.push(table);
+    // `map_rules`（#809）**允许整张空**，而且是常态：这张表的语义是「一行不存在 = 全默认」，
+    // 绝大多数图不单独配规则。空快照导过去不会让界面空白，只会让那张图的规则回到出厂值 ——
+    // 「每张图都插一行」反而会把「调过」与「没调过」在库里弄得一样。
+    if (rows === 0 && !EMPTY_ALLOWED.has(table)) empty.push(table);
     const declaredCount = declaredCounts.get(table);
     if (declaredCount !== undefined && declaredCount !== rows) {
       fail(`快照头部写的 ${table}=${declaredCount} 与实际行数 ${rows} 不符 —— 文件被手工改过？重新导出`);

@@ -18,23 +18,38 @@ import { MapMonitorEventRow, MapMonitorStateRow } from "../rows";
 export class MapMonitorRepository {
   constructor(private readonly db: DatabaseService) {}
 
-  /** 覆盖一个区一张图的快照（主键 = zone_id + map_id） */
+  /** 覆盖一间房（区 + 图 + 线）的快照（主键 = zone_id + map_id + slot，#809 起三列） */
   saveState(row: MapMonitorStateRow): void {
     this.db.run(
-      `INSERT INTO map_monitor_state (zone_id, map_id, payload, updated_at)
-       VALUES (?, ?, ?, ?)
-       ON CONFLICT(zone_id, map_id) DO UPDATE SET
+      `INSERT INTO map_monitor_state (zone_id, map_id, slot, payload, updated_at)
+       VALUES (?, ?, ?, ?, ?)
+       ON CONFLICT(zone_id, map_id, slot) DO UPDATE SET
          payload = excluded.payload,
          updated_at = excluded.updated_at`,
-      [row.zone_id, row.map_id, row.payload, row.updated_at],
+      [row.zone_id, row.map_id, row.slot, row.payload, row.updated_at],
     );
   }
 
-  /** 一张图**所有区**的快照（管理端没指定区时按最新一帧选区） */
+  /**
+   * 一张图**所有区所有线**的快照（管理端没指定区 / 线时按最新一帧选区）
+   *
+   * 排序把 `slot` 放进去了（#809）：同一张图同时有多条线的帧时，管理端默认看到的那一帧
+   * 应该是**公共线**（`'0'` 排最前），而不是「谁最后写谁赢」。
+   */
   listStates(mapId: string): MapMonitorStateRow[] {
     return this.db.all<MapMonitorStateRow>(
-      "SELECT * FROM map_monitor_state WHERE map_id = ? ORDER BY updated_at DESC, zone_id ASC",
+      "SELECT * FROM map_monitor_state WHERE map_id = ? ORDER BY updated_at DESC, zone_id ASC, slot ASC",
       [mapId],
+    );
+  }
+
+  /** 一间房的快照（指定了线时用它；没有就返回 null —— 这条线还没人进过） */
+  findState(zoneId: number, mapId: string, slot: string): MapMonitorStateRow | null {
+    return (
+      this.db.get<MapMonitorStateRow>(
+        "SELECT * FROM map_monitor_state WHERE zone_id = ? AND map_id = ? AND slot = ?",
+        [zoneId, mapId, slot],
+      ) ?? null
     );
   }
 

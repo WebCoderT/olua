@@ -3,6 +3,7 @@ import { BizCode } from "../../common/constants/biz-code";
 import { BizException } from "../../common/errors/biz.exception";
 import { AccountRepository } from "../../database/repositories/account.repository";
 import { WorldMonsterRepository } from "../../database/repositories/world-monster.repository";
+import { instanceIdOf } from "../../common/utils/room-key.util";
 import { ZoneRepository } from "../../database/repositories/zone.repository";
 import { ZoneRow } from "../../database/rows";
 import { AdminZoneDto, ZoneDto } from "./dto/zone.dto";
@@ -84,7 +85,7 @@ export class ZoneService {
         if (!seqByMap.has(row.map_id)) {
           // 首遇这张图：从 to 区同图实例里找最大序号（instanceId 尾段，parseSeq 口径与 WorldService 一致）
           let maxSeq = 0;
-          for (const existing of this.worldMonsters.listByZoneMap(toZoneId, row.map_id)) {
+          for (const existing of this.worldMonsters.listByRoom(toZoneId, row.map_id, row.slot)) {
             maxSeq = Math.max(maxSeq, parseSeq(existing.instance_id));
           }
           seqByMap.set(row.map_id, maxSeq);
@@ -93,7 +94,7 @@ export class ZoneService {
         seqByMap.set(row.map_id, nextSeq);
         this.worldMonsters.rekey(row.instance_id, {
           ...row,
-          instance_id: `m${row.map_id}_z${toZoneId}_${nextSeq}`,
+          instance_id: instanceIdOf(row.map_id, toZoneId, row.slot, nextSeq),
           zone_id: toZoneId,
           updated_at: now,
         });

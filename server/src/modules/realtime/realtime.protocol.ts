@@ -432,8 +432,32 @@ export interface RealtimeWorldMessage {
   type: "world";
   data: {
     mapId: string;
+    /** 房号（#809）：`<zone>:<map>:<slot>` —— 客户端据此判断这份快照是不是自己在的那间房 */
+    roomId?: string;
+    /** 线（`"0"` 公共线；分线 / 副本是第④刀） */
+    slot?: string;
+    /** 这一间房的容量（0 = 不限；客户端传送弹窗显示 `23/30` 用） */
+    capacity?: number;
     /** 全量列表（规模 = 单图怪物数，最多几百只，全量比增量简单且不易漂移） */
     monsters: RealtimeWorldMonster[];
+  };
+}
+
+/**
+ * 服务端 → 客户端：这一间房的怪物整体重刷了（#809 单图热重载）
+ *
+ * 触发场景：运营改完刷怪区选了「立即重载 / 等无人时重载（超时强制）」。客户端的处理是
+ * **重新 worldJoin 一次**（复用既有链路重建怪物），并在 `forced` 时飘一句「本图怪物已重刷」——
+ * 不在这里带全量怪物列表：重载后的实例 id 全变了，增量对齐反而是最容易出错的做法。
+ */
+export interface RealtimeWorldReloadMessage {
+  type: "world.reload";
+  data: {
+    roomId: string;
+    mapId: string;
+    slot: string;
+    /** 强制执行（房间里本来还有人，他们看到怪整体重刷一次） */
+    forced: boolean;
   };
 }
 
@@ -1106,7 +1130,8 @@ export type RealtimeServerMessage =
   | RealtimeRoleUpdateMessage
   | RealtimeStatusMessage
   | RealtimePosCorrectMessage
-  | RealtimePathMessage;
+  | RealtimePathMessage
+  | RealtimeWorldReloadMessage;
 
 /**
  * 关闭码

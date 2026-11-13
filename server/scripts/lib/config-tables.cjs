@@ -61,6 +61,9 @@ const CONFIG_TABLES = Object.freeze([
   "mall_goods",
   "map_collisions",
   "map_npcs",
+  // 地图玩法规则（#809）：一行 = 一张图的规则覆盖（一行不存在 = 全默认）。
+  // **配置表**：运营改的倍率 / 人数上限 / 准入开关要跟着 git 走，各机器一致。
+  "map_rules",
   "map_spawn_areas",
   "maps",
   "money_items",
@@ -131,6 +134,9 @@ const RUNTIME_TABLES = Object.freeze([
   "roles",
   "world_meta",
   "world_monsters",
+  // 单图热重载请求（#809）：管理端写 pending、实时进程轮询执行的**跨进程待办** ——
+  // 纯运行时（「谁的机器上正在重载哪张图」不该跟着 git 走），重启即作废也无妨。
+  "world_reload_requests",
   "zones",
 ]);
 

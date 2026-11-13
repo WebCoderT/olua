@@ -3,6 +3,7 @@ import { ConfigService } from "@nestjs/config";
 import { GuildRepository } from "../../database/repositories/guild.repository";
 import { RoleRepository } from "../../database/repositories/role.repository";
 import { WorldService } from "../world/world.service";
+import { roomKey } from "../../common/utils/room-key.util";
 import { BlockService } from "./block.service";
 import { PlayerPresenceService } from "./player-presence.service";
 import type { RealtimeChatEntry, RealtimeChatMessage } from "./realtime.protocol";
@@ -135,7 +136,7 @@ export class ChatService implements OnApplicationShutdown {
 
   /** 同图频道：同图观看者（发送者也在观看者集合里，天然带回显） */
   private sayMap(accountId: string, identity: SpeakerIdentity, text: string): void {
-    this.deliver(this.reachable([...this.world.viewersOf(identity.zoneId, identity.mapId)], accountId, identity), accountId, identity, {
+    this.deliver(this.reachable([...this.world.viewersOf(roomKey(identity.zoneId, identity.mapId))], accountId, identity), accountId, identity, {
       channel: "map",
       text,
       from: { guildName: identity.guildName },

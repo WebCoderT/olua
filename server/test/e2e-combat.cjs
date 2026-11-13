@@ -377,7 +377,7 @@ function connect(url) {
     const mobA = world && world.monsters[0];
     const mobB = world && world.monsters.find((mob) => mob.instanceId !== (mobA && mobA.instanceId));
     const mobARow = mobA && monsterRowOf(mobA.monsterKey);
-    check(!!mobA && /^m1_z1_\d+$/.test(mobA.instanceId), "准备：实例 id 由服务端发牌（m1_z1_N 形态，带区段）", mobA && mobA.instanceId);
+    check(!!mobA && /^m1_z1_c0_\d+$/.test(mobA.instanceId), "准备：实例 id 由服务端发牌（m1_z1_c0_N 形态，带区段与公共线）", mobA && mobA.instanceId);
     check(!!mobA && mobA.hp === mobARow.maxHp && mobA.maxHp === mobARow.maxHp && mobA.alive === true, "准备：实例以服务端表的满血起算", `hp=${mobA && mobA.hp} 表=${mobARow && mobARow.maxHp}`);
 
     //#endregion
