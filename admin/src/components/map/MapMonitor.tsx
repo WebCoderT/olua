@@ -148,6 +148,7 @@ export function MapMonitorDialog({
   const [data, setData] = useState<MapMonitor | null>(null);
   const [events, setEvents] = useState<MapMonitorEvent[]>([]);
   const [zone, setZone] = useState<number | undefined>(undefined);
+  const [slot, setSlot] = useState<string>("0");
   const [paused, setPaused] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -158,6 +159,7 @@ export function MapMonitorDialog({
   // 轮询依赖的三个值走 ref：把它们放进 effect 依赖会让每次响应都重建定时器
   const cursorRef = useRef(0);
   const zoneRef = useRef<number | undefined>(undefined);
+  const slotRef = useRef<string>("0");
   const pausedRef = useRef(false);
   pausedRef.current = paused;
 
@@ -165,7 +167,9 @@ export function MapMonitorDialog({
   useEffect(() => {
     cursorRef.current = 0;
     zoneRef.current = undefined;
+    slotRef.current = "0";
     setZone(undefined);
+    setSlot("0");
     setEvents([]);
     setData(null);
     setError(null);
@@ -181,11 +185,20 @@ export function MapMonitorDialog({
     setFocus(null);
   };
 
+  /** 选线：与选区同款 —— 清游标重拉；没被采样过的线服务端返回空帧，不拿别的线的帧顶替 */
+  const changeSlot = (next: string) => {
+    slotRef.current = next;
+    setSlot(next);
+    cursorRef.current = 0;
+    setEvents([]);
+    setFocus(null);
+  };
+
   const poll = useCallback(async () => {
     if (!open || !mapId || pausedRef.current) return;
     try {
       // 不按类型拉：混着拉下来才能让「关掉某一类」的 chips 立刻生效（筛选只改显示，不改游标）
-      const next = await mapsApi.monitor(mapId, { zone: zoneRef.current, since: cursorRef.current, limit: 60 });
+      const next = await mapsApi.monitor(mapId, { zone: zoneRef.current, slot: slotRef.current, since: cursorRef.current, limit: 60 });
       setData(next);
       setError(null);
       // 第一次拿到区号就锁住它：之后即使别的区也有快照，也不跟着「最新一帧」乱跳
@@ -212,7 +225,7 @@ export function MapMonitorDialog({
     void poll().finally(() => setLoading(false));
     const timer = setInterval(() => void poll(), POLL_MS);
     return () => clearInterval(timer);
-  }, [open, mapId, zone, poll]);
+  }, [open, mapId, zone, slot, poll]);
 
   const monsters = data?.monsters ?? [];
   const players = data?.players ?? [];
@@ -295,6 +308,18 @@ export function MapMonitorDialog({
                   {data?.zones.map((item) => (
                     <option key={item} value={item}>
                       {item} 区
+                    </option>
+                  ))}
+                </Select>
+              </label>
+            ) : null}
+            {(data?.slots.length ?? 0) > 1 ? (
+              <label className="flex items-center gap-1.5 text-[11px] text-slate-400">
+                线
+                <Select className="w-24" value={slot} onChange={(event) => changeSlot(event.target.value)}>
+                  {data?.slots.map((item) => (
+                    <option key={item} value={item}>
+                      {item === "0" ? "公共线" : item.startsWith("i") ? `副本 ${item}` : `${item} 线`}
                     </option>
                   ))}
                 </Select>
