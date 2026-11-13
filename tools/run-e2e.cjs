@@ -58,6 +58,8 @@ const WEIGHT = {
   "test:e2e:combat": 5,
   "test:e2e:party": 4,
   "test:e2e:realtime": 4,
+  // 两次完整启动（开/关各一次）+ 等怪的第一次游走（出厂间隔 4~9s，最多等 25s）
+  "test:e2e:realtime-stats": 3,
   "test:e2e:achievement": 2,
   "test:e2e:world": 2,
   "test:e2e:dual": 2,

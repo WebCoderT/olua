@@ -34,6 +34,8 @@ const FILE = {
   login: path.join(ASSETS, "ui/Login.ts"),
   selector: path.join(ASSETS, "ui/RoleSelector.ts"),
   network: path.join(ASSETS, "configs/network.ts"),
+  realtimeClient: path.join(ASSETS, "ui/utils/net/RealtimeClient.ts"),
+  combatChannel: path.join(ASSETS, "ui/utils/net/CombatChannel.ts"),
 };
 const read = (file) => fs.readFileSync(file, "utf8");
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -495,7 +497,41 @@ async function expectFailure(action) {
   );
   //#endregion
 
-  finish("PASS：客户端网络层（包裹解包 / 令牌 / 静默 / 防抖同步 / 接线）行为与接线全部通过。");
+  //#region C. 网络诊断层（#767：默认关，关 = 零行为）
+
+  console.log("— C. 网络诊断层：默认关、关 = 零行为、接线齐全 —");
+
+  // 默认关闭的守门断言：误开进正式包会在玩家屏幕上挂一块诊断文本 —— 这里三条锁死
+  const diagnosticsSource = read(FILE.network);
+  check(/diagnostics: \{[\s\S]*?enabled: false/.test(diagnosticsSource), "configs/network 的诊断开关默认 false（防误开进正式包）");
+  check(net.NetDiagnostics.enabled === false, "NetDiagnostics.enabled 读到的就是 false（真实配置跑出来的）");
+  check(net.NetDiagnostics.summary() === "", "诊断关着时 summary() 是空串（不产生任何文本）");
+  // 关着时所有 note* 都是空操作：喂了数据再查，内部状态不得变化（RTT 窗口 / 帧龄都不该有值）
+  net.NetDiagnostics.noteRtt(123);
+  net.NetDiagnostics.noteFrame("players");
+  net.NetDiagnostics.noteFrame("monster-ai");
+  net.NetDiagnostics.noteInterpolation(88);
+  check(net.NetDiagnostics.summary() === "", "诊断关着时 note* 全是空操作（喂完数据 summary 仍是空串）");
+
+  const diagnosticsGameSource = read(FILE.game);
+  check(
+    /NetDiagnostics\.mount\(LayerManager\.UILayer\)/.test(diagnosticsGameSource) &&
+      /NetDiagnostics\.tick\(deltaTime\)/.test(diagnosticsGameSource) &&
+      /NetDiagnostics\.unmount\(\)/.test(diagnosticsGameSource),
+    "Game 三处接线齐全（mount 建文本 / tick 驱动 / unmount 摘引用）",
+  );
+  const diagnosticsRealtimeSource = read(FILE.realtimeClient);
+  check(
+    /this\.pingSentAt = NetDiagnostics\.enabled \? Date\.now\(\) : null;/.test(diagnosticsRealtimeSource) && /frame\.type === "pong"/.test(diagnosticsRealtimeSource),
+    "RTT 只在诊断开着时采样（ping 记发出时刻，pong 分支算往返）",
+  );
+  check(
+    /NetDiagnostics\.noteFrame\("players"\)/.test(read(FILE.combatChannel)) && /NetDiagnostics\.noteFrame\("monster-ai"\)/.test(read(FILE.combatChannel)),
+    "CombatChannel 两个分发口都报帧龄（players / monster-ai）",
+  );
+  //#endregion
+
+  finish("PASS：客户端网络层（包裹解包 / 令牌 / 静默 / 防抖同步 / 接线 / 诊断层默认关）行为与接线全部通过。");
 })().catch((error) => {
   fail(`测试异常终止：${error && error.stack ? error.stack : error}`);
 });

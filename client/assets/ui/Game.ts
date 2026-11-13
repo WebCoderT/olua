@@ -40,6 +40,7 @@ import MonsterAI from "./core/MonsterAI";
 import AutoBattle from "./core/AutoBattle";
 import AutoBattleTips from "./core/AutoBattleTips";
 import RouteIndicator from "./core/RouteIndicator";
+import NetDiagnostics from "./utils/net/NetDiagnostics";
 import PreloadManager from "./core/PreloadManager";
 import RoleUIManager from "./core/RoleUIManager";
 import SkillManager from "./core/SkillManager";
@@ -261,6 +262,8 @@ export class Game extends Component {
       .catch(() => undefined);
     // 初始化图层（含掉落物层/怪物层）
     LayerManager.initLayer(this.node, this.camera);
+    // 网络诊断层（#767）：默认关 —— 关着时 mount 是空操作（不建节点）；开着才挂左上角的诊断文本
+    NetDiagnostics.mount(LayerManager.UILayer);
     // 预加载：地图信息 → 地图内 NPC/怪物帧动画 → 当前角色穿戴的帧动画（见 core/PreloadManager）
     // 走 Loading 过渡场景进来时资源已就绪，这里直接命中缓存立即返回；
     // 直接从 Game 场景启动（编辑器里单独跑 Game）时在此补齐，避免进图后逐个节点异步加载帧动画造成卡顿
@@ -446,6 +449,8 @@ export class Game extends Component {
     this.moveSoundMoving = false;
     this.moveLoopRunning = false;
     RouteIndicator.reset();
+    // 诊断文本的引用摘掉（节点本身随 UI 层随场景销毁；重进 Game 会重新 mount）
+    NetDiagnostics.unmount();
     HoverTipManager.hide();
     StatusManager.reset();
     RoleUIManager.clearViews();
@@ -493,6 +498,8 @@ export class Game extends Component {
     MonsterAI.tick(MonsterManager.getMonsterMap());
     // 玩家互见（#324）每帧驱动：向广播位置插值 + 按位移差量定朝向/动作
     OtherPlayerManager.tick(deltaTime);
+    // 网络诊断层（#767）：每帧驱动（内部 0.5s 节流重写文本；关着时第一行就返回，零开销）
+    NetDiagnostics.tick(deltaTime);
     // 自身位置上报（服务端 AI 的目标检测输入 + 互见数据源；通道没连上时是空操作）
     this.reportPosition(deltaTime);
     // 小地图每帧驱动（内部按刷新间隔节流：地图名称/世界坐标文本与角色黑点/怪物红点重绘）

@@ -30,6 +30,8 @@ const FILES = [
   "configs/network.ts",
   "configs/texts.ts",
   "types/common.ts",
+  // ScreenLayout（designResolution）：NetDiagnostics 的 HUD 定位用
+  "ui/utils/layout/ScreenLayout.ts",
   "ui/utils/net/ApiRoutes.ts",
   "ui/utils/net/ApiModels.ts",
   "ui/utils/net/ApiCodes.ts",
@@ -38,6 +40,7 @@ const FILES = [
   "ui/utils/net/HttpClient.ts",
   "ui/utils/net/Api.ts",
   "ui/utils/net/RoleSync.ts",
+  "ui/utils/net/NetDiagnostics.ts",
   "ui/utils/net/RealtimeClient.ts",
   "ui/utils/net/CombatChannel.ts",
 ];
@@ -51,7 +54,9 @@ const STUB_IMPORTS = {
 
 const CC_SHIM = `/**
  * cc 运行时垫片（由 client/tools/lib/net-sandbox.cjs 生成，请勿手改）
- * 网络层只用到 sys.localStorage（Session 存令牌），其余能力一概不实现。
+ * 网络层只用到 sys.localStorage（Session 存令牌）；#767 起 NetDiagnostics 进了沙箱，
+ * 它的 import（Color/Label/Node/UITransform/Vec2/Size）给空壳类占位 —— 诊断默认关，
+ * 那些类在测试里永远不会被实例化（mount 是空操作），有构造器就不炸编译。
  */
 const store = new Map();
 const sys = {
@@ -72,7 +77,23 @@ const sys = {
   /** 测试用：直接拿到底层 Map（清场用） */
   __store: store,
 };
-module.exports = { sys };
+class Size {
+  constructor(width, height) {
+    this.width = width;
+    this.height = height;
+  }
+}
+class Vec2 {
+  constructor(x, y) {
+    this.x = x;
+    this.y = y;
+  }
+}
+class Color {}
+class Label {}
+class Node {}
+class UITransform {}
+module.exports = { sys, Size, Vec2, Color, Label, Node, UITransform };
 `;
 
 /** 替身模块源码 */
@@ -182,6 +203,8 @@ function prepareNet(sandboxName) {
     RealtimeClient: pick(load("ui/utils/net/RealtimeClient.js")),
     /** 战斗结算通道（#34：cast 出手 / settle 回帧，settle 帧由 RealtimeClient 转发进来） */
     CombatChannel: pick(load("ui/utils/net/CombatChannel.js")),
+    /** 网络诊断层（#767：默认关；测试断言默认值与关态零行为） */
+    NetDiagnostics: pick(load("ui/utils/net/NetDiagnostics.js")),
     /** 实时通道的状态枚举与地址拼装（地址由 configs/network.baseUrl 推导，测试逐种形态断言） */
     RealtimeStatus: load("ui/utils/net/RealtimeClient.js").RealtimeStatus,
     /** 开发模式的接口地址派生（#775：主机取自页面，测试逐种主机断言） */

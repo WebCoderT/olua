@@ -99,6 +99,44 @@ const TICKET_SWEEP_MIN_MS = 60_000;
 const SHUTDOWN_GRACE_MS = 1000;
 
 /**
+ * 广播统计的口径（#767：同步延迟测量基线，先有数字再决定砍哪一段）
+ *
+ * 只量**三条广播出口**（世界 / 怪物 AI / 玩家互见），私聊 / 队伍 / 状态推送这类
+ * 定向小帧不进统计 —— 它们不在「20 人同图时服务端每轮花多久」这个问题上。
+ * 每轮记：收件人数 / 帧条数 / JSON 字节数 / stringify 耗时 / 实际间隔，
+ * 按 `REALTIME_STATS_INTERVAL_MS` 汇总各打一行日志。
+ */
+type StatsKind = "world" | "monster-ai" | "players";
+
+/** 一轮广播的原始计数（`statsRun` 的起止之间） */
+interface StatsRound {
+  /** 轮起点（`performance.now()`；实际间隔按它与上一轮起点比） */
+  startedAt: number;
+  /** 本轮产生的逻辑帧数（world / players / monster-ai 目前都是一次调用一帧） */
+  frames: number;
+  /** 实际送达的连接数（连接不在了 / readyState 不对的不算） */
+  recipients: number;
+  /** `send()` 里 JSON.stringify 的累计耗时（毫秒） */
+  stringifyMs: number;
+  /** 实际写出的 JSON 字节数（UTF-8 计） */
+  bytes: number;
+  /** 距上一轮起点的间隔（本轮是这一类广播的第一轮时为 null，不进平均值） */
+  intervalMs: number | null;
+}
+
+/** 一个汇总窗口内某类广播的累计（flushStats 打完日志即清） */
+interface StatsAccum {
+  rounds: number;
+  frames: number;
+  recipients: number;
+  bytes: number;
+  stringifyMs: number;
+  /** 用于算平均轮间隔（首轮没有间隔，不计入） */
+  intervals: number;
+  intervalCount: number;
+}
+
+/**
  * 实时通道（服务端侧）
  *
  * 只做三件事：发票据、按票据建连、把连接养活着。业务消息见 #34。
@@ -138,6 +176,18 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
   /** 握手路径（`/<API_PREFIX>/realtime`），bootstrap 时按前缀算出来 */
   private path = `/${REALTIME_PATH}`;
   private closing = false;
+
+  /** 广播统计开关（bootstrap 按 `realtimeStatsIntervalMs` 决定；false = 所有统计钩子空操作，零开销） */
+  private statsOn = false;
+  /** 统计汇总间隔（毫秒），bootstrap 时定死；改它要重启进程（统计不该有运行时开关的复杂度） */
+  private statsIntervalMs = 10_000;
+  private statsTimer: NodeJS.Timeout | null = null;
+  /** 进行中的一轮（send() 按 `statsCurrentKind` 把 stringify 耗时与字节记进来） */
+  private statsCurrentKind: StatsKind | null = null;
+  private readonly statsRounds = new Map<StatsKind, StatsRound>();
+  /** 各类广播上一轮的起点（算实际间隔用） */
+  private readonly statsLastRoundAt = new Map<StatsKind, number>();
+  private readonly statsAccum = new Map<StatsKind, StatsAccum>();
 
   constructor(
     private readonly config: ConfigService,
@@ -223,6 +273,13 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
       // 一份值，客户端战斗力显示在两个数之间来回翻。表都很小，全量重装很轻；静默（不刷装载日志）
       this.configRefreshTimer = setInterval(() => this.runtimeConfig.refreshAll({ silent: true }), configRefreshMs).unref();
     }
+    // 广播统计（#767）：默认 10000ms 汇总一行；0 = 整套统计关闭（钩子全空操作）
+    const statsMs = this.statsMs();
+    if (statsMs > 0) {
+      this.statsOn = true;
+      this.statsIntervalMs = statsMs;
+      this.statsTimer = setInterval(() => this.flushStats(), statsMs).unref();
+    }
     // 世界状态变化（重生等）由世界层通知，这里补上广播出口（世界层不知道连接的存在）。
     // #809 起回调按**房间**（`zone:map:slot`）传参：分线之后「一张图」不等于「一份世界」
     this.world.onWorldChanged = (roomId) => this.broadcastWorld(roomId);
@@ -240,11 +297,14 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
     };
     // 怪物 AI 广播（#323）：AI 服务攒好一帧，这里按观看者集合发出去
     this.monsterAi.onBroadcast = (roomId, data) => {
-      const frame: RealtimeMonsterAiMessage = { type: "monster-ai", data };
-      for (const accountId of this.world.viewersOf(roomId)) {
-        const socket = this.connections.get(accountId);
-        if (socket) this.send(socket, frame);
-      }
+      // 每次回调 = 一帧（一間房的增量）。统计（#767）只包住发送，不碰攒帧逻辑
+      this.statsRun("monster-ai", 1, () => {
+        const frame: RealtimeMonsterAiMessage = { type: "monster-ai", data };
+        for (const accountId of this.world.viewersOf(roomId)) {
+          const socket = this.connections.get(accountId);
+          if (socket) this.send(socket, frame);
+        }
+      });
     };
     // 状态推送（#826 第三批）：怪物把眩晕 / 灼烧挂到某个玩家身上时，整份快照推给他本人。
     // 不推的话他要等到下一次出手被 `stunned` 拒了才知道自己被控 —— 血条莫名其妙掉一截同理。
@@ -256,11 +316,13 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
     // 屏蔽（#398）在这里逐观看者剔一次 —— 一个帧发给多人时，收件人的过滤条件各不相同，
     // 「谁能看谁」只能由持有连接与身份的通道来判（在场表只认识「谁在哪张图」）
     this.presence.onBroadcast = (roomId, data) => {
-      for (const accountId of this.world.viewersOf(roomId)) {
-        const socket = this.connections.get(accountId);
-        if (!socket) continue;
-        this.send(socket, { type: "players", data: this.visiblePlayers(accountId, data) } satisfies RealtimePlayersMessage);
-      }
+      this.statsRun("players", 1, () => {
+        for (const accountId of this.world.viewersOf(roomId)) {
+          const socket = this.connections.get(accountId);
+          if (!socket) continue;
+          this.send(socket, { type: "players", data: this.visiblePlayers(accountId, data) } satisfies RealtimePlayersMessage);
+        }
+      });
     };
     // 快照兜底的定向发送（full 帧只给刚进图的连接自己）：同样过一次屏蔽过滤
     this.presence.onSendTo = (accountId, data) => {
@@ -328,6 +390,78 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
     return Math.max(0, Number(this.config.get<number>("realtimeConfigRefreshMs") ?? 10_000));
   }
 
+  /** 广播统计汇总间隔（毫秒；0 = 关闭统计。改它要重启进程，统计没有运行时开关） */
+  private statsMs(): number {
+    return Math.max(0, Number(this.config.get<number>("realtimeStatsIntervalMs") ?? 10_000));
+  }
+
+  //#endregion
+
+  //#region 广播统计（#767：同步延迟测量基线）
+
+  /**
+   * 量一轮广播：起点 / 间隔记好 → 跑发送 → 收进累计
+   *
+   * 统计关闭时**只跑 fn**（连对象都不建），开销为零；开着时也只是同步的几条赋值，
+   * 广播路径里没有任何 await / setTimeout（issue 的硬边界：统计不能改变时序）。
+   */
+  private statsRun(kind: StatsKind, frames: number, fn: () => void): void {
+    if (!this.statsOn) {
+      fn();
+      return;
+    }
+    const startedAt = performance.now();
+    const last = this.statsLastRoundAt.get(kind);
+    const round: StatsRound = {
+      startedAt,
+      frames,
+      recipients: 0,
+      stringifyMs: 0,
+      bytes: 0,
+      intervalMs: last === undefined ? null : startedAt - last,
+    };
+    this.statsLastRoundAt.set(kind, startedAt);
+    this.statsRounds.set(kind, round);
+    const previousKind = this.statsCurrentKind;
+    this.statsCurrentKind = kind;
+    try {
+      fn();
+    } finally {
+      this.statsCurrentKind = previousKind;
+      this.statsRounds.delete(kind);
+      this.statsAccumulate(kind, round);
+    }
+  }
+
+  private statsAccumulate(kind: StatsKind, round: StatsRound): void {
+    const acc = this.statsAccum.get(kind) ?? { rounds: 0, frames: 0, recipients: 0, bytes: 0, stringifyMs: 0, intervals: 0, intervalCount: 0 };
+    acc.rounds += 1;
+    acc.frames += round.frames;
+    acc.recipients += round.recipients;
+    acc.bytes += round.bytes;
+    acc.stringifyMs += round.stringifyMs;
+    if (round.intervalMs !== null) {
+      acc.intervals += round.intervalMs;
+      acc.intervalCount += 1;
+    }
+    this.statsAccum.set(kind, acc);
+  }
+
+  /** 汇总窗口到点：每类有活动的广播打一行（没活动的类不打 —— 日志要留给有用的信息） */
+  private flushStats(): void {
+    for (const [kind, acc] of this.statsAccum) {
+      const avgInterval = acc.intervalCount > 0 ? Math.round(acc.intervals / acc.intervalCount) : 0;
+      this.logger.log(
+        `广播统计[${kind}] ${Math.round(this.statsIntervalMs / 1000)}s 内：${acc.rounds} 轮 / 帧 ${acc.frames} / ` +
+          `收件 ${acc.recipients} 人次 / ${(acc.bytes / 1024).toFixed(1)}KB / stringify ${acc.stringifyMs.toFixed(1)}ms / ` +
+          `平均轮间隔 ${avgInterval}ms`,
+      );
+    }
+    this.statsAccum.clear();
+  }
+
+  //#endregion
+
   /**
    * 关掉通道（**在 `onModuleDestroy` 而不是 `onApplicationShutdown` 里**）
    *
@@ -343,12 +477,13 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
    */
   async onModuleDestroy(): Promise<void> {
     this.closing = true;
-    for (const timer of [this.heartbeatTimer, this.ticketSweepTimer, this.kickPollTimer, this.roleSyncTimer, this.configRefreshTimer]) if (timer) clearInterval(timer);
+    for (const timer of [this.heartbeatTimer, this.ticketSweepTimer, this.kickPollTimer, this.roleSyncTimer, this.configRefreshTimer, this.statsTimer]) if (timer) clearInterval(timer);
     this.heartbeatTimer = null;
     this.ticketSweepTimer = null;
     this.kickPollTimer = null;
     this.configRefreshTimer = null;
     this.roleSyncTimer = null;
+    this.statsTimer = null;
     this.tickets.clear();
 
     const sockets = [...this.connections.values()];
@@ -822,10 +957,13 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
     const snapshot = this.world.snapshot(roomId);
     if (!snapshot) return;
     const frame: RealtimeWorldMessage = { type: "world", data: this.withLiveMonsterPositions(snapshot) };
-    for (const accountId of this.world.viewersOf(roomId)) {
-      const socket = this.connections.get(accountId);
-      if (socket) this.send(socket, frame);
-    }
+    // 一次回调 = 一帧全量（world 帧是事件驱动的，重生 / 代际变化才发，不在固定节拍上）
+    this.statsRun("world", 1, () => {
+      for (const accountId of this.world.viewersOf(roomId)) {
+        const socket = this.connections.get(accountId);
+        if (socket) this.send(socket, frame);
+      }
+    });
   }
 
   /**
@@ -1032,6 +1170,20 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
 
   private send(socket: TrackedSocket, message: RealtimeServerMessage): void {
     if (socket.readyState !== WebSocket.OPEN) return;
+    // 统计开着且有广播轮正在进行（#767）：量 stringify 耗时与字节数。定向帧（私聊 /
+    // 队伍 / 状态推送）不在轮里，走原路径 —— 统计代码不改变任何时序，只是多算一次
+    if (this.statsOn && this.statsCurrentKind !== null) {
+      const round = this.statsRounds.get(this.statsCurrentKind);
+      if (round) {
+        const t0 = performance.now();
+        const json = JSON.stringify(message);
+        round.stringifyMs += performance.now() - t0;
+        round.bytes += Buffer.byteLength(json);
+        round.recipients += 1;
+        socket.send(json);
+        return;
+      }
+    }
     socket.send(JSON.stringify(message));
   }
 

@@ -274,6 +274,7 @@ export interface AppConfiguration {
    * 默认 10 秒：配置改动最迟一个间隔后在实时侧生效（表都很小，全量重装很轻）。
    */
   realtimeConfigRefreshMs: number;
+  realtimeStatsIntervalMs: number;
   //#endregion
 
   //#region 聊天（#395）
@@ -601,6 +602,7 @@ export default function configuration(): AppConfiguration {
     realtimeOnlineStaleMs: Number(process.env.REALTIME_ONLINE_STALE_MS ?? 90 * 1000),
     realtimeRoleSyncMs: Number(process.env.REALTIME_ROLE_SYNC_MS ?? 1 * 1000),
     realtimeConfigRefreshMs: Number(process.env.REALTIME_CONFIG_REFRESH_MS ?? 10 * 1000),
+    realtimeStatsIntervalMs: Number(process.env.REALTIME_STATS_INTERVAL_MS ?? 10 * 1000),
     chatMaxLength: Number(process.env.CHAT_MAX_LENGTH ?? 120),
     chatRateLimit: Number(process.env.CHAT_RATE_LIMIT ?? 5),
     chatRateWindowMs: Number(process.env.CHAT_RATE_WINDOW_MS ?? 10 * 1000),

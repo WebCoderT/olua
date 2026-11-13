@@ -1,3 +1,4 @@
+import NetDiagnostics from "./NetDiagnostics";
 import RealtimeClient from "./RealtimeClient";
 import { RealtimeStatus } from "./RealtimeClient";
 
@@ -729,6 +730,8 @@ export default class CombatChannel {
   static dispatchMonsterAi(data: unknown): void {
     const frame = data as MonsterAiFrame | null;
     if (!frame || typeof frame !== "object" || !Array.isArray(frame.monsters) || !Array.isArray(frame.hits)) return;
+    // 帧龄采样（#767）：诊断关着时是空操作
+    NetDiagnostics.noteFrame("monster-ai");
     if (!this.onMonsterAi) {
       console.warn("[monster-ai] 收到 AI 广播但没有处理者（onMonsterAi 未接线），帧被丢弃");
       return;
@@ -740,6 +743,8 @@ export default class CombatChannel {
   static dispatchPlayers(data: unknown): void {
     const frame = data as PlayersFrame | null;
     if (!frame || typeof frame !== "object" || !Array.isArray(frame.players) || !Array.isArray(frame.left)) return;
+    // 帧龄采样（#767）：诊断关着时是空操作
+    NetDiagnostics.noteFrame("players");
     if (!this.onPlayers) {
       // 没接线不告警：旧客户端构建（没接 OtherPlayerManager）收到 players 帧是正常现象
       return;
