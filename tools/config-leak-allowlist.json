@@ -100,6 +100,21 @@
       "file": "ui/core/SoundManager.ts",
       "rule": "nodeName",
       "reason": "new Node(\"sound_manager\") 是音效常驻节点（#683）的引擎侧身份：创建与使用都在 SoundManager 内，靠 director.addPersistRootNode 存活、从不按名查找，也没有任何可调含义（玩家看不到它）。"
+    },
+    {
+      "file": "ui/utils/net/NetDiagnostics.ts",
+      "rule": "cn",
+      "reason": "诊断文本（#767）是开发排查工具、默认关且不进正式 HUD：summary() 的中文只出现在开着开关的开发者屏幕上，不面向玩家，没有「运营改文案」的场景 —— 搬进 configs/texts 反而让它看起来像正式文案。"
+    },
+    {
+      "file": "ui/utils/net/NetDiagnostics.ts",
+      "rule": "nodeName",
+      "reason": "new Node(\"net_diagnostics\") 是诊断文本节点（#767）的引擎侧身份：创建与摘引用都在本文件内，从不按名查找，也没有任何可调含义。"
+    },
+    {
+      "file": "ui/utils/net/NetDiagnostics.ts",
+      "rule": "color",
+      "reason": "诊断文本的颜色（#767）是排查工具的固定配色：只在开关打开时可见、不进正式 HUD，不存在「调它」的场景。"
     }
   ]
 }
