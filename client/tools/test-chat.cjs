@@ -174,7 +174,7 @@ try {
   const serverRealtime = readRepo(SERVER_REALTIME);
 
   check(/presentAccountIds\(\)/.test(serverChat), "世界频道广播全服在场者（presence 的在场表就是名单，#876）");
-  check(/viewersOf\(identity\.zoneId, identity\.mapId\)/.test(serverChat), "同图频道复用互见的观看者集合（不为聊天另建按图索引）");
+  check(/viewersOf\(roomKey\(identity\.zoneId, identity\.mapId\)\)/.test(serverChat), "同图频道复用互见的观看者集合（不为聊天另建按图索引；#809 起房号是 roomKey 三键）");
   check(/guildOfRole\(identity\.roleId\)/.test(serverChat) && !/identity\.guildId/.test(serverChat.split("sayGuild")[1] || ""), "帮会准入每次查库（不用在场的懒刷新缓存）");
   check(/isConnected\(target\.account_id\)/.test(serverChat), "私聊收件人不在线整条拒绝（不制造发出去但没人收到的消息）");
   check(/对方不在线/.test(serverChat), "离线拒绝有明确文案（玩家得知道为什么没发出去）");

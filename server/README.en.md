@@ -113,6 +113,7 @@ Literal values of these keys must not appear in code — `node ../tools/audit-ap
 | `REALTIME_EMBEDDED` | `true` | whether the realtime channel is embedded in the main process; `false` = standalone form (the main process mounts neither the WS channel nor the ticket endpoint; `main.realtime.ts` boots a dedicated realtime process, #37) |
 | `REALTIME_PORT` | `3101` | the realtime process listen port (only used in standalone form; nginx reverse-proxies `/api/realtime*` to it) |
 | `REALTIME_KICK_POLL_MS` | `3000` | kick-offline sweep interval (polls the online-role flag in the database and closes connections once cleared; `0` = off) |
+| `REALTIME_STATS_INTERVAL_MS` | `10000` | broadcast-stats aggregation interval (#767: recipients / frames / bytes / stringify time / actual interval per exit — world, monster AI, players — one log line each; `0` = stats off) |
 | `CHAT_MAX_LENGTH` | `120` | maximum length of a single chat message in characters (measured after server-side sanitisation; client checks are just a round-trip saver) |
 | `CHAT_RATE_LIMIT` | `5` | maximum messages per sliding rate-limit window (rejected with an error frame, never silently dropped) |
 | `CHAT_RATE_WINDOW_MS` | `10000` | rate-limit window width in milliseconds (floor 1000 so a misconfigured zero cannot switch the limiter off) |

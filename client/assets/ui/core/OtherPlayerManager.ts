@@ -12,6 +12,7 @@ import MonsterManager from "./MonsterManager";
 import GameUiHelper from "../helpers/GameUiHelper";
 import UiHelper from "../helpers/UiHelper";
 import { getDirectionByVector } from "../utils/battle/BattleMath";
+import NetDiagnostics from "../utils/net/NetDiagnostics";
 import SocialStore from "./SocialStore";
 import PartyStore from "./PartyStore";
 import type { PlayerActionEntry, PlayerAppearance, PlayerEntry, PlayersFrame } from "../utils/net/CombatChannel";
@@ -221,14 +222,24 @@ export default class OtherPlayerManager {
 
   /** 每帧驱动：向广播位置插值 + 按位移差量定朝向 / 动作（Game.update 里与 MonsterAI.tick 并排调用） */
   static tick(deltaTime: number): void {
-    if (this.others.size === 0) return;
+    if (this.others.size === 0) {
+      // 诊断采样（#767）：没人可追时剩余距离归零，别让上一个人的旧值一直挂着
+      NetDiagnostics.noteInterpolation(0);
+      return;
+    }
     // 插值系数按帧长折算：约 0.15s 追上目标位置 —— 比广播节拍（200ms）略慢半拍，视觉上是「匀速滑动」
     const factor = Math.min(1, (deltaTime / 0.15) * 0.5);
+    // 插值剩余距离（#767）：全场追得最远的那个人还有多少像素没到 —— 只在诊断开着时累计
+    let maxRemain = 0;
     for (const view of this.others.values()) {
       if (!isValid(view.node)) continue;
       const current = view.node.position;
       const dx = view.targetX - current.x;
       const dy = view.targetY - current.y;
+      if (NetDiagnostics.enabled) {
+        const remain = Math.hypot(dx, dy);
+        if (remain > maxRemain) maxRemain = remain;
+      }
       view.node.setPosition(current.x + dx * factor, current.y + dy * factor, current.z);
       let changed = false;
       // 朝向跟着剩余位移走：差量太小（已基本追上 / 原地微抖）时保持上一次朝向，
@@ -249,6 +260,7 @@ export default class OtherPlayerManager {
       // 只在真的变了才切：play 里的 crossFade 会把动画从头重启，每帧调等于永远停在第一帧
       if (changed) view.appearance.play(view.action, view.direction);
     }
+    NetDiagnostics.noteInterpolation(maxRemain);
   }
 
   /** 清空所有远端玩家（切换地图时调用，与怪物 / 掉落物同一口径） */

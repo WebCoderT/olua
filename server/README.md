@@ -133,6 +133,7 @@ npm run dev              # 开发（ts-node 热启动）；npm run build && npm 
 | `REALTIME_EMBEDDED` | `true` | 实时通道是否内嵌主进程；`false` = 独立进程形态（主进程不挂 WS 与取票接口，由 `main.realtime.ts` 单独起实时进程，#37） |
 | `REALTIME_PORT` | `3101` | 实时进程的监听端口（只有独立进程形态会用到；nginx 把 `/api/realtime*` 反代到它） |
 | `REALTIME_KICK_POLL_MS` | `3000` | 踢下线巡检间隔（轮询库里的在线角色标记，发现被清就断开连接；`0` = 关闭） |
+| `REALTIME_STATS_INTERVAL_MS` | `10000` | 广播统计的汇总间隔（#767：世界 / 怪物 AI / 玩家互见三条出口的收件人数 / 帧数 / 字节数 / stringify 耗时 / 实际间隔，各打一行日志；`0` = 关闭统计） |
 | `CHAT_MAX_LENGTH` | `120` | 单条聊天消息的最大长度（字符；服务端净化后量长度，客户端校验只是省往返） |
 | `CHAT_RATE_LIMIT` | `5` | 限频窗口内的最大发言条数（滑窗；超限回 error 帧而不是静默丢弃） |
 | `CHAT_RATE_WINDOW_MS` | `10000` | 限频窗口宽度（毫秒；下限 1000，防把窗口配成零等于关掉限频） |

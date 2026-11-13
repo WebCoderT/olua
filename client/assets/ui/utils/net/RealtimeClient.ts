@@ -4,6 +4,7 @@ import { RealtimeApi } from "./Api";
 import ApiError from "./ApiError";
 import { REALTIME_CLOSE } from "./ApiCodes";
 import CombatChannel from "./CombatChannel";
+import NetDiagnostics from "./NetDiagnostics";
 import Session from "./Session";
 
 /**
@@ -122,6 +123,8 @@ export default class RealtimeClient {
   private static handshakeTimer: ReturnType<typeof setTimeout> | null = null;
   private static pingTimer: ReturnType<typeof setInterval> | null = null;
   private static pongTimer: ReturnType<typeof setTimeout> | null = null;
+  /** 最近一次 ping 的发出时刻（#767 RTT 采样用；null = 不采样） */
+  private static pingSentAt: number | null = null;
   private static retryTimer: ReturnType<typeof setTimeout> | null = null;
 
   /** 状态变化出口（接线方在这里提示玩家；不接也能跑，只是没人看见） */
@@ -351,6 +354,15 @@ export default class RealtimeClient {
       return;
     }
     // pong 是心跳应答 —— 算「这条连接活着」，撤掉超时判据（error 同理，但它在上面单列了一支）
+    if (frame.type === "pong") {
+      // RTT 采样（#767）：ping 发出 → pong 回来的本地往返。诊断关着时 noteRtt 是空操作
+      if (this.pingSentAt !== null) {
+        NetDiagnostics.noteRtt(Date.now() - this.pingSentAt);
+        this.pingSentAt = null;
+      }
+      this.clearPongTimer();
+      return;
+    }
     this.clearPongTimer();
   }
 
@@ -389,6 +401,8 @@ export default class RealtimeClient {
     const socket = this.socket;
     if (!socket || socket.readyState !== SOCKET_OPEN) return;
     if (this.pongTimer) return;
+    // 发出时刻先记（#767：pong 回来算 RTT 用；诊断关着时记 null，pong 分支就不采样）
+    this.pingSentAt = NetDiagnostics.enabled ? Date.now() : null;
     socket.send(JSON.stringify({ type: "ping" }));
     this.pongTimer = setTimeout(() => {
       this.pongTimer = null;
