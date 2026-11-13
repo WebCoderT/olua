@@ -357,10 +357,11 @@ function connect(url) {
     checkEqual(homeAt2, homeAt1, "最后一个人离开后起点图不再被采样（AI 与采集一起停）");
     check(!!awayAt2 && !!awayAt1 && awayAt2 > awayAt1, "同期新图仍在采样（不是采集器停了）", `${awayAt1} → ${awayAt2}`);
 
-    const idleLine = `分域 1:${HOME_MAP}（地图 ${HOME_MAP} / 区 1）无人观看已空闲`;
+    // #809 起房间键是三键，日志文案跟着 RoomManager 走（房间 roomId（地图 / 区 / 线））
+    const idleLine = `房间 1:${HOME_MAP}:0（地图 ${HOME_MAP} / 区 1 / 线 0）无人观看已空闲`;
     const reclaimed = await waitFor("起点图的空闲卸载日志", async () => (server.logs().includes(idleLine) ? true : null));
     check(!!reclaimed, "空闲满阈值后起点图从内存卸载（服务端日志可见）", idleLine);
-    check(!server.logs().includes(`分域 1:${AWAY_MAP}（地图 ${AWAY_MAP} / 区 1）无人观看已空闲`), "还有人在看的新图没有被卸载");
+    check(!server.logs().includes(`房间 1:${AWAY_MAP}:0（地图 ${AWAY_MAP} / 区 1 / 线 0）无人观看已空闲`), "还有人在看的新图没有被卸载");
 
     //#endregion
 

@@ -301,18 +301,21 @@ export class WorldService implements OnApplicationBootstrap, OnApplicationShutdo
     if (current === this.epoch) return;
     const previous = this.epoch;
     this.epoch = current;
+    // 观看者名单要先抄走：房被 evict 后重建出来的新对象 viewers 是空的，而他们的
+    // WebSocket 连接还活着 —— 不搬回去，重载完的广播就「无人在场」，#851 的
+    // 「代际变化主动下发 world 帧」收口等于没做（旧实现 viewers Map 不清、白拿这个语义）
     const evicted = this.roomManager
       .list()
-      .map((room) => ({ roomId: room.roomId, zoneId: room.zoneId, mapId: room.mapId, slot: room.slot, viewers: room.viewers.size }));
+      .map((room) => ({ roomId: room.roomId, zoneId: room.zoneId, mapId: room.mapId, slot: room.slot, viewers: [...room.viewers] }));
     this.roomManager.evictAll();
     let reloaded = 0;
     for (const room of evicted) {
-      // 观看者集合随房间一起被清了：他们的连接还活着，下一次 join 会重新登记。
-      // 这里只处理「有人看 = 该立刻按库重载」的那部分
-      if (room.viewers === 0) continue;
+      // 连接还在但没人看（空房）的就不重载：惰性，下次 join 再按库加载
+      if (room.viewers.length === 0) continue;
       // 库里没有这一房的实例 = 它已经被合并/搬走：不重载、更不重新播种（见上面的注释）
       if (this.worldMonsters.listByRoom(room.zoneId, room.mapId, room.slot).length === 0) continue;
       const loaded = this.roomManager.ensure(room.roomId);
+      for (const accountId of room.viewers) this.roomManager.addViewer(loaded, accountId);
       loaded.trimGraceUntil = Date.now() + MERGE_TRIM_GRACE_MS;
       reloaded += 1;
       this.onWorldChanged?.(room.roomId);
