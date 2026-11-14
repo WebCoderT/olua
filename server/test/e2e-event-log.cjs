@@ -522,7 +522,17 @@ function connect(url) {
       spotDb.close();
       check(!!spot, "准备：map_npcs 里有传送官点位", JSON.stringify(spot));
       session.socket.send(JSON.stringify({ type: "pos", data: { mapId: MAP_ID, x: spot.cx, y: spot.cy, hp: 100 } }));
-      await sleep(400);
+      // 落库节流是每角色 1 秒（rolePositionPersistMs 默认 1000、下限 200）—— 固定 sleep
+      // 会撞上节流窗口（CI 实测 400ms 不够），改成轮询 role_positions 等坐标真到位
+      await waitFor("位置落库到 NPC 旁", async () => {
+        const pollDb = new DatabaseSync(dbPath);
+        try {
+          const row = pollDb.prepare("SELECT x, y FROM role_positions WHERE role_id = ?").get(roleId);
+          return row && row.x === spot.cx && row.y === spot.cy ? row : null;
+        } finally {
+          pollDb.close();
+        }
+      });
     }
 
     const accepted = await api(baseUrl, "POST", "quests/accept", { token, body: { questId: "8001" } });
