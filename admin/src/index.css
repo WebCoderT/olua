@@ -37,6 +37,9 @@
   --color-gold: #c9a24d;
   --color-gold-hi: #f0dcac;
   --color-gold-dim: #6b562f;
+  /* 金的半透明两档：只给背景微光与选中底色用（不参与文字） */
+  --color-gold-veil: rgba(201, 162, 77, 0.07);
+  --color-gold-veil-strong: rgba(201, 162, 77, 0.26);
 
   /* ── 火：危险与错误 ── */
   --color-ember: #b9441f;
@@ -47,6 +50,23 @@
 
   /* ── 注意：介于金与火之间（维护中、非阻断的数据异常） ── */
   --color-warn: #be8a2b;
+
+  /*
+   * ── 圆角：传奇只有「刀切感」一档 ──
+   * 设计稿所有容器都是 2px。这里覆盖 Tailwind 的圆角刻度，
+   * 于是 `rounded-md/lg/xl/2xl` 全部落到 2~4px —— 存量页面零改动完成换形。
+   * `rounded-full`（9999px）不受影响，仍留给状态点与进度条。
+   */
+  --radius-sm: 2px;
+  --radius-md: 2px;
+  --radius-lg: 2px;
+  --radius-xl: 3px;
+  --radius-2xl: 4px;
+  --radius-3xl: 4px;
+
+  /* ── 字体三族：标题衬线（史书感）/ 正文无衬线 / 数字等宽（对齐账目） ── */
+  --font-display: "Songti SC", "Source Han Serif SC", "Noto Serif SC", "STSong", serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 
   /*
    * ══ 过渡层：覆盖 Tailwind 内置色族 ══
@@ -107,24 +127,105 @@ body,
 
 body {
   margin: 0;
-  background-color: var(--color-surface-1);
+  /* 石面 + 右上角一缕极弱火光：后台要安静，叙事感只留在金线与衬线标题 */
+  background:
+    radial-gradient(1100px 520px at 82% -12%, var(--color-gold-veil), transparent 62%),
+    linear-gradient(180deg, var(--color-surface-2) 0%, var(--color-surface-1) 34%);
   color: var(--color-ink-2);
   font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", "Segoe UI", sans-serif;
+  font-size: 14px;
+  line-height: 1.6;
   -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background: var(--color-gold-veil-strong);
+  color: var(--color-ink-1);
+}
+
+/*
+ * ════════════════════════════════════════════════════════════════════
+ *  两个复合质感类（组件用，页面不用）
+ *
+ *  - `.legend-card`：金线外框 + 内衬细线 + 上缘微光。设计稿的「卡片」就是这个，
+ *    任何一层都要靠它表达，页面里不要自己拼边框背景。
+ *  - `.legend-rule`：金暗色发丝分隔线（标题下、区块间）。
+ * ════════════════════════════════════════════════════════════════════
+ */
+@layer components {
+  .legend-card {
+    position: relative;
+    border: 1px solid color-mix(in srgb, var(--color-gold) 16%, transparent);
+    border-radius: var(--radius-2xl);
+    background: linear-gradient(
+      170deg,
+      var(--color-surface-3) 0%,
+      color-mix(in srgb, var(--color-surface-3) 72%, var(--color-surface-2)) 46%,
+      var(--color-surface-2) 100%
+    );
+    box-shadow:
+      0 18px 40px -28px rgba(0, 0, 0, 0.9),
+      inset 0 1px 0 color-mix(in srgb, var(--color-gold-hi) 6%, transparent);
+  }
+  /* 内衬线：距边 4px 的第二道极弱金线，放大看才有的「器物感」 */
+  .legend-card::before {
+    content: "";
+    position: absolute;
+    inset: 4px;
+    border: 1px solid color-mix(in srgb, var(--color-gold) 6%, transparent);
+    border-radius: inherit;
+    pointer-events: none;
+  }
+  .legend-card > * {
+    position: relative;
+  }
+
+  .legend-rule {
+    height: 1px;
+    border: 0;
+    background: linear-gradient(90deg, var(--color-line-gold), transparent 72%);
+  }
+
+  /* 等宽数字：账目、编号、时间一律用它，纵向才对得齐 */
+  .legend-num {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* 后台骨架的两块底：侧栏（上缘一缕金雾）与顶栏（半透明 + 模糊） */
+  .legend-side {
+    background:
+      linear-gradient(180deg, color-mix(in srgb, var(--color-gold) 5%, transparent) 0%, transparent 22%),
+      linear-gradient(180deg, var(--color-surface-2), color-mix(in srgb, var(--color-surface-1) 72%, var(--color-surface-0)) 70%);
+    border-right: 1px solid color-mix(in srgb, var(--color-gold) 8%, transparent);
+  }
+
+  .legend-topbar {
+    background: linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--color-surface-3) 72%, transparent),
+      color-mix(in srgb, var(--color-surface-1) 42%, transparent)
+    );
+    border-bottom: 1px solid color-mix(in srgb, var(--color-gold) 8%, transparent);
+    backdrop-filter: blur(6px);
+  }
 }
 
 /* 细滚动条（默认滚动条在深色底上很突兀） */
 * {
   scrollbar-width: thin;
-  scrollbar-color: var(--color-line-strong) transparent;
+  scrollbar-color: color-mix(in srgb, var(--color-gold) 22%, transparent) transparent;
 }
 *::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
 *::-webkit-scrollbar-thumb {
-  background-color: var(--color-line-strong);
+  background-color: color-mix(in srgb, var(--color-gold) 22%, transparent);
   border-radius: 9999px;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background-color: color-mix(in srgb, var(--color-gold) 36%, transparent);
 }
 *::-webkit-scrollbar-track {
   background-color: transparent;

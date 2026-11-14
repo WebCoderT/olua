@@ -1,16 +1,33 @@
 import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, SelectHTMLAttributes } from "react";
 
-/** 通用小组件集（表格 / 卡片 / 按钮 / 表单控件的统一样式，页面里不再各写一套 class） */
+/**
+ * 通用小组件集（表格 / 卡片 / 按钮 / 表单控件的统一样式，页面里不再各写一套 class）
+ *
+ * ## 视觉口径（legend 设计系统，#946）
+ * 单一来源 `design/legend-console/system.html`，色值只活在 `index.css` 的 `@theme`。
+ * 这里只做「把 token 组装成控件」这一件事 —— 控件的形状、字阶、描边都在这一层定死，
+ * 页面因此**没有能力**把按钮写成别的样子（这是设计系统能落地的关键，不是风格偏好）。
+ *
+ * 三条不可违反的语义：
+ * - 金 = 唯一高光色，只给主操作与选中态；**金底必须配深字**（白字对比度不足）。
+ * - 火 = 危险 / 失败；玉 = 在线 / 正常；注意 = 非阻断异常。
+ * - 数字一律 `legend-num`（等宽 + tabular），账目列才对得齐。
+ */
 
 type ButtonVariant = "primary" | "outline" | "ghost" | "danger";
 
 const BUTTON_VARIANTS: Record<ButtonVariant, string> = {
   /* 金是唯一高光色：主按钮金底必须配深色字（白字对比度不足 2:1），与设计稿一致 */
-  primary: "bg-gold text-surface-0 hover:bg-gold-hi",
-  outline: "border border-line-strong text-ink-2 hover:border-gold-dim hover:bg-surface-3/60",
-  ghost: "text-ink-3 hover:bg-surface-3/60",
-  danger: "bg-ember text-ink-1 hover:bg-ember-hi",
+  primary:
+    "border border-gold/70 bg-gradient-to-b from-gold-hi to-gold text-surface-0 hover:to-gold-hi active:translate-y-px",
+  outline:
+    "border border-line-strong bg-surface-3/40 text-ink-2 hover:border-gold-dim hover:bg-surface-3 hover:text-ink-1 active:translate-y-px",
+  ghost: "border border-transparent text-ink-3 hover:bg-surface-3 hover:text-ink-1",
+  danger: "border border-ember/60 bg-ember text-ink-1 hover:bg-ember-hi active:translate-y-px",
 };
+
+const BUTTON_BASE =
+  "inline-flex items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors duration-150 outline-none focus-visible:ring-2 focus-visible:ring-gold/40 disabled:cursor-not-allowed disabled:opacity-40";
 
 export function Spinner({ className = "h-4 w-4" }: { className?: string }) {
   return (
@@ -33,7 +50,7 @@ export function Button({
     <button
       {...rest}
       disabled={disabled || loading}
-      className={`inline-flex items-center justify-center gap-2 rounded-lg px-3 py-1.5 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-50 ${BUTTON_VARIANTS[variant]} ${className}`}
+      className={`${BUTTON_BASE} ${BUTTON_VARIANTS[variant]} ${className}`}
     >
       {loading ? <Spinner /> : null}
       {children}
@@ -66,24 +83,24 @@ export function Field({
 }) {
   if (inline) {
     return (
-      <label className={`flex items-center gap-1.5 whitespace-nowrap ${width ?? "w-40"}`}>
-        <span className="shrink-0 text-xs text-ink-4">{label}</span>
+      <label className={`flex items-center gap-2 whitespace-nowrap ${width ?? "w-40"}`}>
+        <span className="shrink-0 text-[11px] tracking-wide text-ink-4">{label}</span>
         <span className="min-w-0 flex-1">{children}</span>
-        {hint ? <span className="shrink-0 text-xs text-ink-5">{hint}</span> : null}
+        {hint ? <span className="shrink-0 text-[11px] text-ink-5">{hint}</span> : null}
       </label>
     );
   }
   return (
     <label className={`flex flex-col gap-1 ${width ?? ""}`}>
-      <span className="text-xs font-medium text-ink-4">{label}</span>
+      <span className="text-[11px] font-medium tracking-wide text-ink-4">{label}</span>
       {children}
-      {hint ? <span className="text-xs text-ink-5">{hint}</span> : null}
+      {hint ? <span className="text-[11px] text-ink-5">{hint}</span> : null}
     </label>
   );
 }
 
 const CONTROL_CLASS =
-  "w-full rounded-lg border border-line-strong bg-surface-2/70 px-2.5 py-1.5 text-sm text-ink-1 outline-none transition placeholder:text-ink-5 focus:border-gold focus:ring-2 focus:ring-gold/30 disabled:opacity-60";
+  "w-full rounded-md border border-line-strong bg-surface-1/70 px-2.5 py-1.5 text-sm text-ink-1 outline-none transition-colors placeholder:text-ink-6 hover:border-gold-dim focus:border-gold focus:ring-1 focus:ring-gold/30 disabled:cursor-not-allowed disabled:opacity-50";
 
 export function Input({ className = "", ...rest }: InputHTMLAttributes<HTMLInputElement>) {
   return <input {...rest} className={`${CONTROL_CLASS} ${className}`} />;
@@ -105,6 +122,9 @@ export function Select({ className = "", children, ...rest }: SelectHTMLAttribut
  *
  * `dense` 只压内边距，标题 / 说明 / 内容一概不少。要恢复原来的呼吸感传 `dense={false}`
  * （目前只有登录壳与少数展板类页面用得上）。
+ *
+ * 视觉实体是 `.legend-card`（index.css）：金线外框 + 内衬细线 + 上缘微光，
+ * 页面里**不许**再自己拼 `border + bg` 造卡片。
  */
 export function Card({
   title,
@@ -123,21 +143,21 @@ export function Card({
   dense?: boolean;
 }) {
   return (
-    <section className={`rounded-2xl border border-line bg-surface-2/60 shadow-lg shadow-black/20 ${className}`}>
+    <section className={`legend-card ${className}`}>
       {title || actions ? (
         <header
-          className={`flex flex-wrap items-center justify-between gap-2 border-b border-line ${
-            dense ? "px-3.5 py-2" : "px-5 py-4"
+          className={`flex flex-wrap items-center justify-between gap-2 border-b border-gold/10 ${
+            dense ? "px-4 py-2.5" : "px-5 py-4"
           }`}
         >
           <div className="min-w-0">
-            {title ? <h2 className="text-sm font-semibold text-ink-1">{title}</h2> : null}
-            {description ? <p className="mt-0.5 text-xs text-ink-5">{description}</p> : null}
+            {title ? <h2 className="text-[13px] font-semibold tracking-[.08em] text-ink-1">{title}</h2> : null}
+            {description ? <p className="mt-0.5 text-[11.5px] leading-relaxed text-ink-4">{description}</p> : null}
           </div>
           {actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}
         </header>
       ) : null}
-      <div className={dense ? "px-3.5 py-3" : "p-5"}>{children}</div>
+      <div className={dense ? "px-4 py-3" : "p-5"}>{children}</div>
     </section>
   );
 }
@@ -145,24 +165,30 @@ export function Card({
 type BadgeTone = "green" | "red" | "slate" | "indigo" | "amber";
 
 const BADGE_TONES: Record<BadgeTone, string> = {
-  green: "bg-jade/15 text-jade ring-jade/30",
-  red: "bg-ember/15 text-ember-hi ring-ember/30",
-  slate: "bg-ink-5/15 text-ink-3 ring-ink-5/40",
-  indigo: "bg-gold/15 text-gold ring-gold/30",
-  amber: "bg-warn/15 text-warn ring-warn/30",
+  green: "bg-jade/12 text-jade ring-jade/30",
+  red: "bg-ember/12 text-ember-hi ring-ember/30",
+  slate: "bg-ink-5/12 text-ink-3 ring-ink-5/30",
+  indigo: "bg-gold/12 text-gold ring-gold/30",
+  amber: "bg-warn/12 text-warn ring-warn/30",
 };
 
 export function Badge({ tone = "slate", children }: { tone?: BadgeTone; children: ReactNode }) {
-  return <span className={`inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${BADGE_TONES[tone]}`}>{children}</span>;
+  return (
+    <span
+      className={`inline-flex items-center rounded-sm px-1.5 py-px text-[11px] font-medium ring-1 ring-inset ${BADGE_TONES[tone]}`}
+    >
+      {children}
+    </span>
+  );
 }
 
 type NoticeTone = "amber" | "red" | "slate" | "emerald";
 
 const NOTICE_TONES: Record<NoticeTone, string> = {
-  amber: "border-warn/40 bg-warn/10 text-warn",
-  red: "border-ember/40 bg-ember/10 text-ember-hi",
-  slate: "border-line-strong bg-surface-3/50 text-ink-3",
-  emerald: "border-jade/30 bg-jade/10 text-jade",
+  amber: "border-warn/30 border-l-warn bg-warn/8 text-warn",
+  red: "border-ember/30 border-l-ember bg-ember/8 text-ember-hi",
+  slate: "border-line-strong border-l-line-gold bg-surface-3/50 text-ink-3",
+  emerald: "border-jade/25 border-l-jade bg-jade/8 text-jade",
 };
 
 /**
@@ -173,6 +199,8 @@ const NOTICE_TONES: Record<NoticeTone, string> = {
  *
  * 用途边界：**解释 / 警告**用它，**操作结果**用 toast（`toastSuccess` / `toastError`）——
  * 提示条是页面的一部分（刷新后还在），toast 是一次性反馈。
+ *
+ * 形状：左缘一道实色竖条（2px）标严重度，其余三边用弱化描边 —— 一屏里多条提示不会抢表格。
  */
 export function Notice({
   tone = "amber",
@@ -184,7 +212,7 @@ export function Notice({
   children: ReactNode;
 }) {
   return (
-    <div className={`rounded-xl border px-3 py-2 text-xs leading-relaxed ${NOTICE_TONES[tone]}`}>
+    <div className={`rounded-sm border border-l-2 px-3 py-2 text-xs leading-relaxed ${NOTICE_TONES[tone]}`}>
       {title ? <p className="font-medium">{title}</p> : null}
       <div className={title ? "mt-1 opacity-90" : ""}>{children}</div>
     </div>
@@ -193,25 +221,47 @@ export function Notice({
 
 export function EmptyState({ title, description }: { title: string; description?: string }) {
   return (
-    <div className="flex flex-col items-center justify-center gap-1 py-12 text-center">
+    <div className="flex flex-col items-center justify-center gap-2 py-12 text-center">
+      <span aria-hidden="true" className="text-[10px] tracking-[.4em] text-gold-dim">
+        ◆
+      </span>
       <p className="text-sm text-ink-3">{title}</p>
-      {description ? <p className="text-xs text-ink-5">{description}</p> : null}
+      {description ? <p className="text-[11.5px] text-ink-5">{description}</p> : null}
     </div>
   );
 }
 
-export function StatCard({ label, value, hint }: { label: string; value: number | string; hint?: string }) {
+/**
+ * 指标卡（概览页 KPI）
+ *
+ * 数字用等宽 + tabular：同排几个数字的位数不同，比例字体会让小数点前后错位。
+ * `plain` 用于「不需要强调」的次级指标（管理员数这类），金色留给要看的四个主指标。
+ */
+export function StatCard({
+  label,
+  value,
+  hint,
+  plain = false,
+}: {
+  label: string;
+  value: number | string;
+  hint?: string;
+  plain?: boolean;
+}) {
   return (
-    <div className="rounded-2xl border border-line bg-surface-2/60 px-4 py-3">
-      <p className="text-xs text-ink-5">{label}</p>
-      <p className="mt-1 text-xl font-semibold text-ink-1">{value}</p>
-      {hint ? <p className="mt-1 text-xs text-ink-5">{hint}</p> : null}
+    <div className="legend-card px-4 py-3">
+      <p className="font-mono text-[9.5px] uppercase tracking-[.18em] text-ink-4">{label}</p>
+      <p className={`legend-num mt-2 text-[26px] font-medium leading-none ${plain ? "text-ink-1" : "text-gold-hi"}`}>
+        {typeof value === "number" ? value.toLocaleString("zh-CN") : value}
+      </p>
+      {hint ? <p className="mt-2 text-[11px] text-ink-4">{hint}</p> : null}
     </div>
   );
 }
 
 /** 表格统一样式（页面里直接拼这些 class，避免每个表各写一套） */
 export const tableClass = "w-full min-w-[720px] border-collapse text-sm";
-export const theadClass = "text-left text-xs uppercase tracking-wide text-ink-5";
-export const thClass = "whitespace-nowrap border-b border-line px-3 py-2 font-medium";
+export const theadClass = "text-left";
+export const thClass =
+  "whitespace-nowrap border-b border-line px-3 py-2 font-mono text-[10px] font-medium uppercase tracking-[.14em] text-ink-5";
 export const tdClass = "whitespace-nowrap border-b border-line/60 px-3 py-2 text-ink-3";

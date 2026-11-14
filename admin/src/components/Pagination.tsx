@@ -26,8 +26,8 @@ export function Pagination({
   const to = Math.min(total, page * size);
 
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 px-1 py-3 text-xs text-slate-400">
-      <span>
+    <div className="flex flex-wrap items-center justify-between gap-3 px-1 py-3 text-xs text-ink-4">
+      <span className="legend-num tracking-wide">
         共 {total} 条{total > 0 ? `，当前 ${from}–${to}` : ""}
       </span>
       <div className="flex flex-wrap items-center gap-4">
@@ -54,7 +54,7 @@ export function Pagination({
           <Button variant="outline" className="px-2.5 py-1 text-xs" disabled={page <= 1} onClick={() => onChange(page - 1)}>
             上一页
           </Button>
-          <span className="tabular-nums">
+          <span className="legend-num text-ink-3">
             {page} / {pageCount}
           </span>
           <Button variant="outline" className="px-2.5 py-1 text-xs" disabled={page >= pageCount} onClick={() => onChange(page + 1)}>

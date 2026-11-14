@@ -177,6 +177,23 @@ const activeBranchKeys = (nodes: NavNode[], pathname: string, prefix = ""): stri
     return [key, ...activeBranchKeys(node.children, pathname, `${key}${KEY_SEP}`)];
   });
 
+/** 当前页在导航树里的路径（顶栏面包屑用）：`["战斗与装备","装备","装备配置"]` */
+const findTrail = (nodes: NavNode[], pathname: string, trail: string[] = []): string[] | null => {
+  for (const node of nodes) {
+    if (isBranch(node)) {
+      const found = findTrail(node.children, pathname, [...trail, node.label]);
+      if (found) return found;
+    } else if (isActiveRoute(node, pathname)) {
+      return [...trail, node.label];
+    }
+  }
+  return null;
+};
+
+/** 分组计数：组标题右侧那句「07」是叶子总数，让人知道收起来的是什么规模 */
+const leafCount = (node: NavNode): number =>
+  isBranch(node) ? node.children.reduce((sum, child) => sum + leafCount(child), 0) : 1;
+
 /**
  * 后台骨架：左侧导航 + 顶部身份栏 + 内容区
  *
@@ -302,9 +319,12 @@ export function Layout() {
   const visibleTop = NAV_TOP.filter(canSee);
   const visibleGroups = prune(NAV_GROUPS) as NavBranch[];
 
+  /** 叶子链接：选中时左缘一道金条（设计稿 `.nav-leaf.active`），比整块填充安静 */
   const navLinkClass = (isActive: boolean) =>
-    `rounded-lg px-3 py-1.5 text-sm transition ${
-      isActive ? "bg-indigo-500/15 font-medium text-indigo-300" : "text-slate-400 hover:bg-slate-800/60 hover:text-slate-200"
+    `-ml-px block border-l-2 py-1.5 pl-3 pr-2 text-[12.5px] transition-colors ${
+      isActive
+        ? "border-gold bg-gradient-to-r from-gold/12 to-transparent font-medium text-gold-hi"
+        : "border-transparent text-ink-2 hover:border-line-gold hover:bg-gold-veil hover:text-ink-1"
     }`;
 
   /** 展开箭头（组与小节共用，尺寸随层级） */
@@ -337,22 +357,29 @@ export function Layout() {
     const activeInBranch = !open && hasActiveLeaf(node, location.pathname);
     const topLevel = depth === 0;
     return (
-      <div key={key}>
+      <div key={key} className={topLevel ? "mt-3" : ""}>
         <button
           type="button"
           onClick={() => toggleGroup(key)}
           aria-expanded={open}
-          className={`flex w-full items-center justify-between rounded-lg transition ${
+          className={`flex w-full items-center gap-2 rounded-sm transition-colors ${
             topLevel
-              ? `px-3 py-2 text-xs font-semibold tracking-wide ${activeInBranch ? "text-indigo-300" : "text-slate-500 hover:bg-slate-800/60 hover:text-slate-200"}`
-              : `ml-3 px-2 py-1.5 text-[11px] font-medium tracking-wide ${activeInBranch ? "text-indigo-300/90" : "text-slate-600 hover:text-slate-400"}`
+              ? `px-2.5 py-1.5 font-mono text-[9.5px] uppercase tracking-[.20em] ${
+                  activeInBranch ? "text-gold" : "text-ink-4 hover:text-ink-2"
+                }`
+              : `ml-1 px-2 py-1 text-[11px] tracking-[.04em] ${activeInBranch ? "text-gold/90" : "text-ink-5 hover:text-ink-3"}`
           }`}
         >
-          {node.label}
           {chevron(open, !topLevel)}
+          <span className="truncate">{node.label}</span>
+          {topLevel ? <span className="ml-auto font-mono text-[9px] text-gold-dim">{leafCount(node)}</span> : null}
         </button>
         {open && (
-          <div className={`mt-0.5 flex flex-col gap-0.5 ${topLevel ? "ml-3 border-l border-slate-800 pl-2" : "ml-3 border-l border-slate-800/60 pl-2"}`}>
+          <div
+            className={`mt-0.5 flex flex-col ${
+              topLevel ? "ml-3 border-l border-gold/10 pl-1.5" : "ml-3 border-l border-gold/10 pl-1.5"
+            }`}
+          >
             {node.children.map((child) => renderNode(child, `${key}${KEY_SEP}${child.label}`, depth + 1))}
           </div>
         )}
@@ -360,44 +387,105 @@ export function Layout() {
     );
   };
 
+  // 顶栏面包屑：管理端 / 组 / 小节 / 页面
+  const trail = findTrail([...visibleTop, ...visibleGroups], location.pathname);
+  const roleLabel = admin?.role ? adminRoleLabel(admin.role) : "—";
+  const initial = (admin?.username ?? "?").slice(0, 1).toUpperCase();
+
   return (
     <div className="flex h-screen overflow-hidden">
-      <aside className="flex w-56 shrink-0 flex-col overflow-hidden border-r border-slate-800 bg-slate-900/50 px-4 py-6">
-        <p className="shrink-0 px-2 text-sm font-semibold tracking-wide text-slate-100">{APP_TITLE}</p>
-        <nav ref={navRef} className="mt-6 flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto pr-1 [scrollbar-gutter:stable]">
+      <aside className="legend-side flex w-60 shrink-0 flex-col overflow-hidden">
+        {/* 品牌：盾形纹章 + 衬线字标（与登录页同一枚纹章） */}
+        <div className="flex shrink-0 items-center gap-2.5 border-b border-gold/10 px-[18px] py-5">
+          <svg viewBox="0 0 26 31" className="h-[27px] w-[23px] shrink-0" aria-hidden="true">
+            <path d="M13 1 25 5v10.5c0 6.6-5 11.6-12 14.5C6 27.1 1 22.1 1 15.5V5L13 1Z" fill="none" stroke="var(--color-gold-dim)" />
+            <path d="M13 5.5 21 8.3v7.2c0 4.6-3.4 8.2-8 10.3-4.6-2.1-8-5.7-8-10.3V8.3L13 5.5Z" fill="none" stroke="var(--color-gold)" opacity=".55" />
+            <path d="M13 9.5v9M9.5 13.5h7" stroke="var(--color-gold-hi)" strokeWidth="1.2" strokeLinecap="round" />
+          </svg>
+          <div className="min-w-0">
+            <b className="block truncate font-display text-[15px] font-bold leading-none tracking-[.22em] text-gold-hi">
+              {APP_TITLE}
+            </b>
+            <span className="mt-1.5 block font-mono text-[8.5px] tracking-[.28em] text-ink-4">ADMIN CONSOLE</span>
+          </div>
+        </div>
+
+        {/* 会话状态条：绿点只表示「令牌有效」，不表示业务在线数 */}
+        <div className="mx-3 mt-3 flex shrink-0 items-center gap-2 rounded-sm border border-gold/12 bg-surface-0/30 px-2.5 py-2 font-mono text-[10.5px] tracking-[.04em] text-ink-3">
+          <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-jade" />
+          <span className="truncate">会话有效 · 权限 {(admin?.permissions ?? []).length} 项</span>
+        </div>
+
+        <nav ref={navRef} className="mt-1 flex min-h-0 flex-1 flex-col overflow-y-auto px-2.5 py-2 [scrollbar-gutter:stable]">
           {visibleTop.map((item) => (
-            <NavLink key={item.to} to={item.to} end={item.end} className={({ isActive }) => navLinkClass(isActive)}>
+            <NavLink
+              key={item.to}
+              to={item.to}
+              end={item.end}
+              className={({ isActive }) =>
+                `-ml-px flex items-center gap-2.5 border-l-2 py-2 pl-3 pr-2 text-[13px] transition-colors ${
+                  isActive
+                    ? "border-gold bg-gradient-to-r from-gold/15 to-transparent font-medium text-gold-hi"
+                    : "border-transparent text-ink-2 hover:border-line-gold hover:bg-gold-veil hover:text-ink-1"
+                }`
+              }
+            >
+              <svg viewBox="0 0 16 16" className="h-3.5 w-3.5 shrink-0 text-gold" fill="none" stroke="currentColor" strokeWidth="1.3" aria-hidden="true">
+                <rect x="1.5" y="1.5" width="5" height="5" />
+                <rect x="9.5" y="1.5" width="5" height="5" />
+                <rect x="1.5" y="9.5" width="5" height="5" />
+                <rect x="9.5" y="9.5" width="5" height="5" />
+              </svg>
               {item.label}
             </NavLink>
           ))}
           {visibleGroups.map((group) => renderNode(group, group.label, 0))}
         </nav>
+
+        {/* 身份栏：纹章方块 (首字) + 账号 + 角色 */}
+        <div className="flex shrink-0 items-center gap-2.5 border-t border-gold/10 px-3.5 py-3">
+          <span className="grid h-8 w-8 shrink-0 place-items-center rounded-sm border border-gold-dim bg-gradient-to-b from-gold/15 to-gold/5 font-display text-[13px] text-gold-hi">
+            {initial}
+          </span>
+          <div className="min-w-0">
+            <b className="block truncate text-[12.5px] font-semibold text-ink-1">{admin?.username ?? "未知"}</b>
+            <span className="block truncate font-mono text-[9.5px] tracking-[.08em] text-ink-4">{roleLabel}</span>
+          </div>
+        </div>
       </aside>
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-        <header className="flex shrink-0 items-center justify-between gap-4 border-b border-slate-800 bg-slate-900/30 px-6 py-4">
-          <div className="min-w-0">
-            <p className="flex items-center gap-2 truncate text-sm text-slate-300">
-              当前管理员：<span className="font-medium text-slate-100">{admin?.username ?? "未知"}</span>
-              {admin?.role ? <Badge tone={admin.role === "super_admin" ? "amber" : admin.role === "viewer" ? "slate" : "indigo"}>{adminRoleLabel(admin.role)}</Badge> : null}
-            </p>
-            <p className="mt-0.5 text-xs text-slate-500">
-              权限点 {(admin?.permissions ?? []).length} 项 · 界面按权限显隐，服务端独立校验
-            </p>
+        <header className="legend-topbar flex h-[60px] shrink-0 items-center gap-4 px-6">
+          {/* 面包屑：直接输 URL 进来也知道自己在哪一层 */}
+          <div className="flex min-w-0 items-center gap-2 text-xs">
+            <span className="font-mono text-[10px] tracking-[.16em] text-gold-dim">OLUA</span>
+            {(trail ?? ["未知页面"]).map((label, index, all) => (
+              <span key={`${label}-${index}`} className="flex min-w-0 items-center gap-2">
+                <span className="text-gold-dim">/</span>
+                <span className={index === all.length - 1 ? "truncate text-ink-2" : "truncate text-ink-4"}>{label}</span>
+              </span>
+            ))}
           </div>
-          <div className="flex items-center gap-2">
+          <div className="ml-auto flex shrink-0 items-center gap-2">
+            {admin?.role ? (
+              <span className="hidden sm:inline-flex">
+                <Badge tone={admin.role === "super_admin" ? "amber" : admin.role === "viewer" ? "slate" : "indigo"}>
+                  {roleLabel}
+                </Badge>
+              </span>
+            ) : null}
             <NavLink to="/me">
-              {({ isActive }) => (
-                <Button variant={isActive ? "primary" : "outline"}>我的账号</Button>
-              )}
+              {({ isActive }) => <Button variant={isActive ? "primary" : "outline"}>我的账号</Button>}
             </NavLink>
             <Button variant="outline" onClick={logout}>
               退出登录
             </Button>
           </div>
         </header>
-        <main ref={mainRef} className="min-h-0 min-w-0 flex-1 overflow-y-auto p-6 [scrollbar-gutter:stable]">
-          <Outlet />
+        <main ref={mainRef} className="min-h-0 min-w-0 flex-1 overflow-y-auto px-6 py-5 [scrollbar-gutter:stable]">
+          <div className="mx-auto w-full max-w-[1440px]">
+            <Outlet />
+          </div>
         </main>
       </div>
     </div>
