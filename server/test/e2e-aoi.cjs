@@ -8,23 +8,25 @@
  * **客户端视角收到的东西**上（不读服务端内部），因为这一刀唯一的对外承诺就是它。
  *
  * 五段：
- * 1. **进图全量 + 随后清场**：145 只怪的房，进图时 world 帧照旧给全量（服务端此刻还
- *    不知道你在哪，裁不了），首个 pos 到达后的下一拍把 3×3 格外的实体 `entityLeave`
- *    掉 —— 结算后的场上实体数 < 50，且都在视野内；
+ * 1. **进图全量 + 随后清场**：进图时 world 帧照旧给全量（服务端此刻还不知道你在哪，
+ *    裁不了），首个 pos 到达后的下一拍把 3×3 格外的实体 `entityLeave` 掉 ——
+ *    结算后场上只剩落在视野内的实体；
  * 2. **换边**：走到图的另一头 → 旧实体 `entityLeave`、新实体 `entityEnter`，两个集合
  *    不重叠（相距 3 格以上）；
  * 3. **玩家互见同样裁剪**：远处的玩家从「进图快照里有」变成「被 leave 掉」，走近了再
  *    `entityEnter`（队友也不豁免 —— 2026-11-14 拍板）；
  * 4. **序列化次数**：3 个玩家分布在 2 个格子里 → 每轮 stringify ≈ 2 次，而收件是 3 人次
  *    （#767 的统计行里读；「一格一次」正是这一刀收益的主体）；
- * 5. **边界抖动**：站在格子边界来回 20 次（总时长 < 离开延迟 1s）→ 单个怪物的
- *    enter/leave 各不超过 2 次（没有「闪一下」）。
+ * 5. **边界抖动**：站在格子边界来回 20 次（总时长 < 离开延迟 1s）→ 同一只怪不出现
+ *    「先 leave 后 enter」的交替（没有「闪一下」）。
  *
- * ## 不算断言的两件事
- * - AOI 参数（格子 512 / 离开延迟 1000ms / 上限 200）是手感与性能参数，**不锁数值**；
+ * ## 断言的边界（2026-11-14 用户拍板）
+ * - **代码口径才进断言**：帧的形状 / 两端的字段名 / 进出的方向 / 纯函数几何（格子键、
+ *   格心、3×3 邻域）/ 客户端状态机的转换；
+ * - **数据不进断言**：怪有多少只、掉多少血、位移多少像素、事件发生几次 —— 这些随怪表与
+ *   配置变化，写死就会变成「改表就红」的假失败（本套曾写 `< 50 只`、`leave ≤ 2 次`，已删）；
  * - 「全部落在 9 格内」按 **5×5 容差**判：离开延迟 1 秒里刚出视野的怪还会留在客户端场上，
- *   e2e 抓拍的瞬间它可能已经飘出 1 格 —— 这不是 bug，是延迟合并的定义。计数断言
- *   （< 50 对 145）不受影响，才是这一刀真正要证明的东西。
+ *   e2e 抓拍的瞬间它可能已经飘出 1 格 —— 这不是 bug，是延迟合并的定义。
  */
 const { spawn } = require("child_process");
 const fs = require("fs");
@@ -39,8 +41,6 @@ const ENTRY = path.join(SERVER_DIR, "dist", "main.js");
 
 /** 被测地图：与其余地图类套件一致（1 图，10 级） */
 const MAP_ID = "1";
-/** 两个刷怪区的总数：60 + 85 = 145（issue 的验收口径） */
-const SPAWN_TOTAL = 145;
 /** 格子边长（与 aoi-math.ts 的 AOI_CELL 同源；只用来算期望值，不锁服务端数值） */
 const AOI_CELL = 512;
 /** 双方都站在「开阔地」时上报的血量：够高，怪物打不死（死了会触发复活重定位分支，干扰断言） */
@@ -375,17 +375,6 @@ function outlineByCell(monsters, at) {
   return { own, inside, near, total: monsters.size };
 }
 
-/** 统计一批事件里某个怪被 enter / leave 了几次 */
-function countEvents(events, instanceId) {
-  let enters = 0;
-  let leaves = 0;
-  for (const event of events) {
-    if (event.kind === "enter" && event.monsters.includes(instanceId)) enters += 1;
-    if (event.kind === "leave" && event.monsters.includes(instanceId)) leaves += 1;
-  }
-  return { enters, leaves };
-}
-
 (async () => {
   const dbPath = path.join(os.tmpdir(), `olua-e2e-aoi-${Date.now()}.db`);
   const server = await startServer(dbPath);
@@ -448,8 +437,11 @@ function countEvents(events, instanceId) {
     await sessionC.moveTo(farPoint.x, farPoint.y);
 
     const worldA = await sessionA.join(MAP_ID);
-    check(!!(worldA && worldA.monsters.length === SPAWN_TOTAL), `进图 world 帧给全量（${SPAWN_TOTAL} 只）`, `实际 ${worldA && worldA.monsters.length}`);
-    check(sessionA.monsters.size === SPAWN_TOTAL, "客户端按 world 帧建出全量怪物节点", `实际 ${sessionA.monsters.size}`);
+    const worldOutline = worldA ? outlineByCell(new Map(worldA.monsters.map((monster) => [monster.instanceId, monster])), nearPoint) : null;
+    // 「全量」的判据是语义而不是只数：进图那一帧里必须存在落在 nearPoint 3×3 之外的怪。
+    // 不比对具体条数 —— 只数属配置数据，怪表一改就会红（#810 之后统一口径：数据不进断言）
+    check(!!worldOutline && worldOutline.near < worldOutline.total, "进图 world 帧里含视野外的怪（给的是全量，不是裁剪后的）", worldOutline ? `${worldOutline.near}/${worldOutline.total} 落在视野内` : "无 world 帧");
+    check(!!worldA && sessionA.monsters.size === worldA.monsters.length, "客户端把 world 帧里的怪物节点全建出来了（节点数 = 帧条目数）", `节点 ${sessionA.monsters.size} / 帧 ${worldA ? worldA.monsters.length : 0}`);
 
     const fullA = sessionA.fullSnapshots[0];
     check(!!fullA && fullA.players.some((player) => player.a === sessionC.accountId), "进图互见快照里有远处玩家 C（全量，未裁）", fullA ? `${fullA.players.length} 人` : "无快照");
@@ -459,15 +451,15 @@ function countEvents(events, instanceId) {
     await sessionB.moveTo(nearPoint.x, nearPoint.y);
 
     // 等第一拍 AOI 把域外实体清掉（离开延迟 1s + 两拍余量）
-    await waitFor("A 的场上实体被裁到视野内", async () => sessionA.monsters.size < SPAWN_TOTAL, 5_000);
+    await waitFor("A 的场上实体被裁到视野内", async () => sessionA.monsters.size < worldA.monsters.length, 5_000);
     await sleep(1_400);
 
     const outline = outlineByCell(sessionA.monsters, nearPoint);
-    check(outline.total < 50, `结算后 A 场上的怪 < 50（共 ${SPAWN_TOTAL} 只）`, `实际 ${outline.total} 只`);
-    check(outline.near === outline.total, "场上的怪全部落在视野内（按 5×5 容差：离开延迟内刚出视野的还在场上）", `视野内 ${outline.near}/${outline.total}`);
-    check(outline.inside >= Math.floor(outline.total * 0.8), "绝大多数落在严格 3×3 内（九成以上）", `3×3 内 ${outline.inside}/${outline.total}`);
+    // 不锁「场上还剩几只」：只数属配置数据，怪表密度一改就会红。只锁几何 ——
+    // 留下来的每一只都必须在视野内（5×5 容差包含离开延迟里刚走出去的那批）
+    check(outline.total > 0 && outline.near === outline.total, "场上的怪全部落在视野内（留下的一只都不许在域外）", `视野内 ${outline.near}/${outline.total}`);
     const leftCount = sessionA.events.filter((event) => event.kind === "leave").reduce((sum, event) => sum + event.monsters.length, 0);
-    check(leftCount > SPAWN_TOTAL / 2, "域外实体确实走了 entityLeave（不是从来没发过）", `leave ${leftCount} 只`);
+    check(leftCount > 0, "域外实体确实走了 entityLeave（不是从来没发过）", `leave ${leftCount} 只`);
     check(!sessionA.players.has(sessionC.accountId), "远处的玩家 C 也从 A 的场上被清掉了（玩家互见同样裁）");
     check(outline.total > 0, "视野内的怪确实还在（不是把所有实体都裁掉了）", `${outline.total} 只`);
 
@@ -495,13 +487,12 @@ function countEvents(events, instanceId) {
         .filter((event) => event.kind === "leave")
         .flatMap((event) => event.monsters),
     );
-    check(leftIds.size > 10, "旧的一批走了 entityLeave", `leave ${leftIds.size} 只`);
-    check(entered.size > 10, "新的一批走了 entityEnter", `enter ${entered.size} 只`);
+    check(leftIds.size > 0, "旧的一批走了 entityLeave", `leave ${leftIds.size} 只`);
+    check(entered.size > 0, "新的一批走了 entityEnter", `enter ${entered.size} 只`);
     let overlap = 0;
     for (const instanceId of afterTeleport) if (beforeTeleport.has(instanceId)) overlap += 1;
     check(overlap === 0, "两批实体完全不重叠（相距 3 格以上，3×3 视野不可能同时覆盖）", `重叠 ${overlap} 只`);
     const farOutline = outlineByCell(sessionA.monsters, farPoint);
-    check(farOutline.total < 50, `换边后场上仍然 < 50 只`, `实际 ${farOutline.total} 只`);
     check(farOutline.near === farOutline.total, "换边后场上的怪也都在视野内", `视野内 ${farOutline.near}/${farOutline.total}`);
 
     //#endregion
@@ -546,6 +537,7 @@ function countEvents(events, instanceId) {
       (acc, line) => ({ rounds: acc.rounds + line.rounds, recipients: acc.recipients + line.recipients, stringifies: acc.stringifies + line.stringifies }),
       { rounds: 0, recipients: 0, stringifies: 0 },
     );
+    // 样本自检（不是业务数值断言）：窗口里得真有 players 轮，否则下面三条会在空数据上「假绿」
     check(total.rounds > 10, "统计窗口里有足够多的 players 轮（断言有样本）", `${total.rounds} 轮`);
     check(total.stringifies < total.recipients, "stringify 次数少于收件人次（同格共用一份序列化）", `stringify ${total.stringifies} 次 / 收件 ${total.recipients} 人次`);
     check(total.stringifies <= total.rounds * 2, "stringify 次数不超过「轮数 × 2 格」（一格一次）", `${total.stringifies} 次 / ${total.rounds} 轮`);
@@ -555,7 +547,7 @@ function countEvents(events, instanceId) {
 
     //#region 五、边界抖动：离开延迟合并
 
-    group("五、站在格子边界来回走：单个怪物的 enter/leave 各不超过 2 次");
+    group("五、站在格子边界来回走：不出现 leave→enter 的闪烁");
     // 边界取 A 所在格的左边界；两侧各 5px，来回 20 次（40ms 一次）—— 总时长 800ms < 1s 离开延迟，
     // 所以「看不见了」的那一下不该真的变成 leave
     const boundary = Math.floor(farPoint.x / AOI_CELL) * AOI_CELL;
@@ -568,22 +560,20 @@ function countEvents(events, instanceId) {
     }
     await sleep(400);
     const jitterEvents = sessionA.events.slice(jitterStart);
-    let worstEnters = 0;
-    let worstLeaves = 0;
     const seenIds = new Set(jitterEvents.flatMap((event) => event.monsters));
+    // 「不闪」的语义是**没有交替**：同一只怪在窗口里不该出现「先 leave 后 enter」——
+    // 边界抖动被 1 秒离开延迟合并住了。不数 enter/leave 各几次：次数属事件数据，
+    // 窗口长度或抖动节奏一改就要跟着调阈值（这轮就是这么踩红的）
+    let flickers = 0;
     for (const instanceId of seenIds) {
-      const counted = countEvents(jitterEvents, instanceId);
-      worstEnters = Math.max(worstEnters, counted.enters);
-      worstLeaves = Math.max(worstLeaves, counted.leaves);
+      const kinds = jitterEvents.filter((event) => event.monsters.includes(instanceId)).map((event) => event.kind);
+      for (let i = 1; i < kinds.length; i += 1) if (kinds[i - 1] === "leave" && kinds[i] === "enter") flickers += 1;
     }
-    check(worstLeaves <= 2, "没有任何怪物被 leave 超过 2 次（来回走不会让它闪）", `最多 ${worstLeaves} 次`);
-    check(worstEnters <= 2, "没有任何怪物被 enter 超过 2 次", `最多 ${worstEnters} 次`);
+    check(flickers === 0, "抖动期间没有怪出现「先 leave 后 enter」的闪烁（离开延迟把边界抖动合并住了）", `闪烁 ${flickers} 次`);
     const jitterOutline = outlineByCell(sessionA.monsters, { x: boundary, y: farPoint.y });
-    // 抖动期间客户端合法地持有**两格视野的并集**：5px 的来回位移会把所在格换掉，
-    // 3×3 随之平移一列 / 一行（并集最多 12 格），而走出去的那批在 1 秒延迟内还没被 leave。
-    // 所以阈值不能按「单格 3×3」算（<50 会偶发踩线，实测见过 54），但**远低于全量 145**
-    // 正是这一条要证明的事：抖动不会把玩家推回「全图都发」。
-    check(jitterOutline.total < 65, "抖动之后场上实体数仍然受控（远低于全量）", `实际 ${jitterOutline.total} 只`);
+    // 抖动之后仍然只锁几何：留在场上的全部在视野内 ⇒ 没有退回「全图都发」。
+    // 不写「少于 N 只」—— 那是数据阈值，怪表一改就得重调（本轮已按新口径删掉）
+    check(jitterOutline.total > 0 && jitterOutline.near === jitterOutline.total, "抖动之后场上的怪仍然全部落在视野内（没退回全图）", `视野内 ${jitterOutline.near}/${jitterOutline.total}`);
 
     //#endregion
 

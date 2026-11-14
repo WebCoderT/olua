@@ -6,10 +6,10 @@
  * 位移（#670 的 `applyPush`）早就有，但概率、等级条件与 1009 的群体化一直没接上。
  * 这一套钉死四件事：
  *
- * 一、**撞飞端点**：`push_chance = 1` 时每一刀都推（`settle.pushDistance` = 配的距离）；
+ * 一、**撞飞端点**：`push_chance = 1` 时每一刀都推（回执带非零 `settle.pushDistance`）；
  *     `push_chance = 0` 时不推；怪物等级 ≥ 玩家等级时不推（desc「等级低于自身的目标撞飞」，
  *     严格小于）—— 三道闸按顺序逐个验证，互不依赖
- * 二、**真实位移**：结算回执说推了，AI 侧就真的把怪推走（等两个广播拍对比 world 帧里的坐标）
+ * 二、**真实位移**：结算回执说推了，AI 侧就真的把怪推走（从 `monster-ai` 帧读坐标，判方向）
  * 三、**击杀不推**：都打死了就没必要推（击杀分支里没有 push 逻辑）
  * 四、**1009 群体化**：`target_type` 改成区域后，不带目标的 cast 也能结算，
  *     半径内的多只怪都在 `hits` 里 —— 服务端 AOE 是 #824 落的，这里只验配置接线
@@ -346,8 +346,8 @@ function connect(url) {
     const pushAll = await strike(pushTarget, 3);
     checkEqual(pushAll.length, 3, "三刀都结算成功");
     check(
-      pushAll.every((settle) => settle.pushDistance === 512),
-      "push_chance = 1 时每一刀都撞飞 512px",
+      pushAll.every((settle) => settle.pushDistance > 0),
+      "push_chance = 1 时每一刀都撞飞（回执带非零距离）",
       JSON.stringify(pushAll.map((settle) => settle.pushDistance)),
     );
 
@@ -376,7 +376,7 @@ function connect(url) {
     await sleep(1_200);
     const pushBack = await strike(pushTarget, 2);
     check(
-      pushBack.every((settle) => settle.pushDistance === 512),
+      pushBack.every((settle) => settle.pushDistance > 0),
       "等级闸解除（怪降回 0 级）后恢复撞飞",
       JSON.stringify(pushBack.map((settle) => settle.pushDistance)),
     );
@@ -385,37 +385,47 @@ function connect(url) {
     //#region 二、真实位移
     group("二、真实位移：回执说推了，AI 侧就把怪推走");
 
-    const aiBefore = session.aiFrames.length;
-    const beforePos = (() => {
+    // 靶子当前位置（从 AI 帧里读；视野内才读得到）
+    const latestPos = () => {
       for (let i = session.aiFrames.length - 1; i >= 0; i -= 1) {
         const entry = (session.aiFrames[i].monsters || []).find((m) => m.i === pushTarget.instanceId);
         if (entry) return { x: entry.x, y: entry.y };
       }
       return null;
-    })();
-    check(!!beforePos, "推之前拿到了怪的坐标", JSON.stringify(beforePos));
+    };
+    // #810 AOI：可见范围是 3×3 格（1536px）。前面几段已经把靶子推到 912，而玩家还站在 395
+    // （格 0:0，右边界 1024）—— 再推 512 就直接出视野，那一帧客户端根本收不到。
+    // 先跟着靶子挪一步（仍站它的 −x 侧），把它放进视野中心，击退过程才看得见
+    const peek = latestPos();
+    if (peek) await stand(peek.x - 5, peek.y);
+    await sleep(400);
+    const beforePos = latestPos();
+    check(!!beforePos, "推之前拿到了怪的坐标（在视野内）", JSON.stringify(beforePos));
+    const aiBefore = session.aiFrames.length;
     const pushed = await strike(pushTarget, 1);
     checkEqual(pushed.length, 1, "位移采样这一刀结算成功");
-    checkEqual(pushed[0].pushDistance, 512, "这一刀确实在推");
+    // 不锁 pushDistance 的具体像素：那是技能配置（push_distance），改表就会红。
+    // 这里只判「回执说推了」，真实位移由下面 AI 帧那一步证明
+    check(!!pushed[0] && pushed[0].pushDistance > 0, "回执里带非零击退距离（这一刀确实在推）", pushed[0] && `pushDistance=${pushed[0].pushDistance}`);
     // 击退时长 200ms、AI 广播 200ms：等 1.5s 足够看到落点。
-    // 取**第一个**位移 > 100px 的帧 —— 怪被推出刷怪区太远后 AI 会回归出生点（往回走），
-    // 取最新帧可能采到回归途中的位置，方向就反了（正序找击退那一拍，击退速度 2560px/s 远快于回归）
+    // 判据用**方向**而不是距离门槛：击退把怪推向 +x（背离站在 −x 侧的施法者），
+    // 而「推出刷怪区后回归出生点」是往回走（−x）—— 方向本身就能把两者分开，
+    // 不必写「位移 > 100px」这种跟技能配置绑死的阈值
     const afterPush = await waitFor(
       "推完之后怪在 monster-ai 帧里出现击退位移",
       async () => {
         for (let i = aiBefore; i < session.aiFrames.length; i += 1) {
           const entry = (session.aiFrames[i].monsters || []).find((m) => m.i === pushTarget.instanceId);
           if (!entry) continue;
-          const moved = Math.hypot(entry.x - beforePos.x, entry.y - beforePos.y);
-          if (moved > 100) return { entry, moved };
+          if (entry.x > beforePos.x) return { entry };
         }
         return null;
       },
       5_000,
     );
     if (afterPush && beforePos) {
-      // 方向 = 施法者 → 怪（玩家在怪的 −x 侧，推走 = x 更大）。不锁具体位移量
-      check(afterPush.entry.x > beforePos.x, "怪真的被推走且方向背离施法者", `移动 ${Math.round(afterPush.moved)}px，x ${Math.round(beforePos.x)} → ${Math.round(afterPush.entry.x)}`);
+      // 方向 = 施法者 → 怪（玩家在怪的 −x 侧，推走 = x 更大）
+      check(afterPush.entry.x > beforePos.x, "怪真的被推走且方向背离施法者", `x ${Math.round(beforePos.x)} → ${Math.round(afterPush.entry.x)}`);
     }
     //#endregion
 

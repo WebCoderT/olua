@@ -82,7 +82,7 @@ env -u NODE_OPTIONS npm run verify
 - **队伍与帮会不豁免**：队友走出视野一样消失（队伍面板不受影响）；
 - 参数是**常量不是 env**：格子 512 / 离开延迟 1000ms / 单帧上限 200（改格子等于重建所有索引，必须发版）；
 - 索引与「谁看得到谁」都住在实时进程（`aoi.service.ts`），**世界层不参与裁剪**：`WorldService` 仍是全量权威，所以排查时「World 有 145、某玩家只收到 25」是正常现象；
-- 专项 e2e：`npm run test:e2e:map-aoi`（145 只怪的房：结算后场上 < 50、换边 leave + enter 不重叠、3 人 2 格 → stringify < 收件人次、边界抖动 enter/leave 各 ≤ 2 次）。
+- 专项 e2e：`npm run test:e2e:map-aoi`（进图给全量 → 清场后只剩视野内的实体、换边 `leave` + `enter` 不重叠、玩家互见同样裁、3 人 2 格 → stringify < 收件人次、边界抖动不出现 `leave→enter` 交替）。断言只锁**代码口径**（帧形状 / 几何 / 状态机），只数、掉血、位移这类数据不进断言；
 
 ## 接口与文档
 
