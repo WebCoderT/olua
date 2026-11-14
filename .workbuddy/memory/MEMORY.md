@@ -78,8 +78,9 @@ compose 五服务：admin:80 唯一入口 / game:8080 / server:3100 / realtime:3
 - 区服 epic #954 剩余：**#958 P2 社交边界 → #959 P3 排行榜 → #960 P4 管理端单区上下文 →
   #961 P5 区服运营/合区向导 → #962 P6 客户端 → #963 P7 公告按区**（P8 按区分片并入 #770）。
   P2/P3 可并行，P4 建议在 P2 之后。
-- 当前 open：**#966 存量数据断言清理**（第一批 战斗域 combat/element-damage 已落地 PR #972；
-  下一批 crit/cast-guard/area-skill/skill-upgrade/level-gap/use-cooldown）· #9 包体积 · #12~#19 素材 · #295 阶段三 ·
+- 当前 open：**#966 存量数据断言清理**（**战斗域已收口**：第一批 combat/element-damage PR #972、
+  第二批 crit/cast-guard/area-skill/skill-upgrade/level-gap/use-cooldown PR #974；下一批 数值成长 →
+  物品交易 → 世界刷怪 → 社交任务 → 客户端 tools）· #9 包体积 · #12~#19 素材 · #295 阶段三 ·
   #403 帮会战 · #742 TLS · #808 地图重构（剩 **#812 分线副本**；
   结算读 `map_rules`、掉落进 Room 暂未落地，重开条件见 docs/20）· #801~#805 掉落重构 ·
   #769/#770 同步系列 · #772 分片 · #438 群发。保持现状：技能 1011 / 快捷键 6 格 / 装备 7 部位。
