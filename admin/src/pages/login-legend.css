@@ -948,3 +948,5 @@
 .legend-login.static .ember {
   display: none;
 }
+
+/* 维护口径：改这里的任何视觉值，先对 design/legend-login/index.html；两边必须同步改。 */
