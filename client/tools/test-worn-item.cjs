@@ -172,7 +172,7 @@ function main() {
   check((appearSrc.match(/getEquipment\(wornIdOf\(source\.equipments\./g) || []).length === 2, "外观两处（衣服 / 武器）都经 wornIdOf");
 
   const otherSrc = readSrc("ui/core/OtherPlayerManager.ts");
-  check(/cloth: worn\(appearance\.cloth\)/.test(otherSrc), "远端玩家：互见帧的 id 包成 { id }（协议里只有 id，没有元数据）");
+  check(/cloth: worn\(appearance\.c\)/.test(otherSrc), "远端玩家：互见帧的 id 包成 { id }（c = cloth，#768 缩写；协议里只有 id，没有元数据）");
   check(/const worn = \(id: string\) => \(id \? \{ id \} : null\);/.test(otherSrc), "远端玩家：空串 → null（协议用空串表示没穿）");
 
   //#endregion

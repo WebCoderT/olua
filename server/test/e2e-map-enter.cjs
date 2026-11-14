@@ -410,11 +410,11 @@ function connect(url) {
         return watcher.players
           .slice(beforePos)
           .flatMap((frame) => frame.players || [])
-          .filter((entry) => entry.username === "门槛测试")
+          .filter((entry) => entry.n === "门槛测试")
           .pop() || null;
       }, 5_000);
       check(!!seen && seen.x === 520 && seen.y === 380, "真上报（mapId = 当前图）被接受：同图玩家看得见", JSON.stringify(seen && { x: seen.x, y: seen.y, hp: seen.hp }));
-      const targetAccountId = seen ? seen.accountId : "";
+      const targetAccountId = seen ? seen.a : "";
       check(!!targetAccountId, "拿得到目标的账号 id（后面按它判离开）");
 
       // 伪造：换成别的图（1 图）连发几十帧 —— 以前这会把人搬到 1 图，现在整帧丢弃
@@ -425,7 +425,7 @@ function connect(url) {
       const forged = watcher.players
         .slice(beforeForge)
         .flatMap((frame) => frame.players || [])
-        .filter((entry) => entry.accountId === targetAccountId);
+        .filter((entry) => entry.a === targetAccountId);
       check(forged.length === 0, "伪造帧没有改变任何东西（坐标 / 血量一个字段都没动）", JSON.stringify(forged.slice(-1)[0]));
       const stillThere = watcher.players
         .slice(beforeForge)
@@ -451,7 +451,7 @@ function connect(url) {
         return watcher.players
           .slice(afterLeft)
           .flatMap((frame) => frame.players || [])
-          .find((entry) => entry.accountId === targetAccountId && entry.x === 300) || null;
+          .find((entry) => entry.a === targetAccountId && entry.x === 300) || null;
       }, 5_000);
       check(!!back, "首帧也校验位置：伪造帧没能建出条目，真上报把人接回在场表", JSON.stringify(back && { x: back.x, y: back.y }));
 

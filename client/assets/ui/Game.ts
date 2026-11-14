@@ -227,9 +227,9 @@ export class Game extends Component {
     // 施法/死亡不播，其余情况一次性抖一下不打断任何事）。#670 删掉本地怪物 AI 后，
     // 这是玩家挨打的**唯一**一条路 —— 本地既不结算也不再自己判断命中
     MonsterManager.onPlayerServerHit = (hit) => {
-      StorageManager.applyMonsterHit(hit);
+      StorageManager.applyMonsterHit({ hp: hit.hp, maxHp: hit.m });
       if (!this.roleDisplay) return;
-      GameUiHelper.showDamageText(this.roleDisplay, hit.damage);
+      GameUiHelper.showDamageText(this.roleDisplay, hit.d);
       GameUiHelper.showHitScreenFlash();
       this.roleDisplay.playInjured();
     };

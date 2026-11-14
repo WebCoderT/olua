@@ -161,26 +161,40 @@ export interface WorldSnapshot {
   monsters: WorldMonsterSnapshot[];
 }
 
-/** 怪物 AI 广播帧里的一只怪（#323：只发有变化的；位置 = 服务端模拟出的当前坐标） */
+/**
+ * 怪物 AI 广播帧里的一只怪（#323：只发有变化的；位置 = 服务端模拟出的当前坐标）
+ *
+ * #768 帧瘦身：字段名取缩写（`i`=instanceId、`mv`=moving、`m`=maxHp）——
+ * 这帧是全服最高频的广播。完整映射表见 docs/11；服务端 realtime.protocol.ts
+ * 的 `RealtimeMonsterAiEntry` 与这里逐字段对应（有源码级断言钉住）。
+ */
 export interface MonsterAiEntry {
-  instanceId: string;
+  /** 实例 id（缩写 `i`，#768） */
+  i: string;
   x: number;
   y: number;
-  /** 是否在移动（客户端据此播走路 / 待机；方向由位移差量自算） */
-  moving: boolean;
-  /** 当前血量与上限（#670：别人打的伤害也要看见；旧服务端不带时按缺省处理） */
-  hp?: number;
-  maxHp?: number;
+  /** 是否在移动（缩写 `mv`，#768；客户端据此播走路 / 待机；方向由位移差量自算） */
+  mv: boolean;
+  /** 当前血量与上限（#670：别人打的伤害也要看见；缩写 `m`=maxHp，#768；#768 起必带，不再按缺省兜底） */
+  hp: number;
+  m: number;
 }
 
-/** 怪物 AI 广播帧里的一次普攻命中（玩家受击的权威结果，服务端已落账） */
+/** 怪物 AI 广播帧里的一次普攻命中（玩家受击的权威结果，服务端已落账；字段缩写同上，#768） */
 export interface MonsterHitEntry {
-  instanceId: string;
-  /** 受击账号（广播给全图观看者；#324 玩家互见之前客户端只演自己的） */
-  accountId: string;
-  damage: number;
+  /** 怪实例 id（缩写 `i`） */
+  i: string;
+  /** 受击账号（缩写 `a`；广播给全图观看者；#324 玩家互见之前客户端只演自己的） */
+  a: string;
+  /** 伤害（缩写 `d`） */
+  d: number;
   hp: number;
-  maxHp: number;
+  /** 血量上限（缩写 `m`） */
+  m: number;
+  /**
+   * 这一下被格挡了（缩写 `bl`，#822：`d` 已是格挡后的值，这个标记只给表现用）
+   */
+  bl?: boolean;
 }
 
 /** 服务端怪物 AI 广播帧（协议见 realtime.protocol 的 RealtimeMonsterAiMessage.data） */
@@ -194,60 +208,73 @@ export interface MonsterAiFrame {
   kills?: MonsterKillEntry[];
 }
 
-/** 怪物释放技能的演出指令（#372：协议见 realtime.protocol 的 RealtimeMonsterCast） */
+/** 怪物释放技能的演出指令（#372：协议见 realtime.protocol 的 RealtimeMonsterCast；字段缩写 `i`/`s`/`st`，#768） */
 export interface MonsterCastEntry {
-  instanceId: string;
-  skillId: string;
-  /** 有值 = 这次释放给怪物自己挂了这个状态（客户端据此在怪物身上播状态特效） */
-  statusId?: string;
+  /** 怪实例 id（缩写 `i`） */
+  i: string;
+  /** 技能 id（缩写 `s`） */
+  s: string;
+  /** 有值 = 这次释放给怪物自己挂了这个状态（缩写 `st`；客户端据此在怪物身上播状态特效） */
+  st?: string;
 }
 
 /**
- * 怪物 AI 广播帧里的一次玩家击杀（#689：协议见 realtime.protocol 的 RealtimeMonsterKill）
+ * 怪物 AI 广播帧里的一次玩家击杀（#689：协议见 realtime.protocol 的 RealtimeMonsterKill；字段缩写同上，#768）
  *
  * 别人的击杀没有 settle 帧（reward 只发击杀者），死亡清场与掉落铺场全靠这条事件；
- * 击杀者自己按 accountId 跳过 —— 那份已由 settle 演过。
+ * 击杀者自己按 `a` 跳过 —— 那份已由 settle 演过。
  */
 export interface MonsterKillEntry {
-  instanceId: string;
-  accountId: string;
+  /** 怪实例 id（缩写 `i`） */
+  i: string;
+  /** 击杀者账号（缩写 `a`） */
+  a: string;
   /** 死亡点（世界坐标；掉落物铺在这里） */
   x: number;
   y: number;
-  drops: Array<{ goodId: string; count: number }>;
+  /** 掉落结果（缩写 `dp`；同一物品已合并数量） */
+  dp: Array<{ goodId: string; count: number }>;
 }
 
-/** 一名远端玩家的外观（#383：协议见 realtime.protocol 的 RealtimePlayerAppearance） */
+/** 一名远端玩家的外观（#383：协议见 realtime.protocol 的 RealtimePlayerAppearance；字段缩写 `sx`/`c`/`w`/`f`，#768） */
 export interface PlayerAppearance {
-  /** 性别（"1" 男 / "2" 女，与 SEX 枚举同形）：没穿衣服时用它选默认身体 */
-  sex: string;
-  /** 衣服装备 id（"" = 没穿） */
-  cloth: string;
-  /** 武器装备 id（"" = 没拿） */
-  weapon: string;
-  /** 时装 id（"" = 没穿时装） */
-  fashion: string;
+  /** 性别（缩写 `sx`；"1" 男 / "2" 女，与 SEX 枚举同形）：没穿衣服时用它选默认身体 */
+  sx: string;
+  /** 衣服装备 id（缩写 `c`；"" = 没穿） */
+  c: string;
+  /** 武器装备 id（缩写 `w`；"" = 没拿） */
+  w: string;
+  /** 时装 id（缩写 `f`；"" = 没穿时装） */
+  f: string;
 }
 
-/** 玩家互见广播帧里的一名玩家（#324：协议见 realtime.protocol 的 RealtimePlayerEntry） */
+/**
+ * 玩家互见广播帧里的一名玩家（#324：协议见 realtime.protocol 的 RealtimePlayerEntry）
+ *
+ * #768 帧瘦身：字段名取缩写（`a`=accountId、`n`=username、`r`=roleId、`g`=guildId、
+ * `gn`=guildName、`p`=partyId、`m`=maxHp、`mv`=moving、`ap`=appearance）。
+ */
 export interface PlayerEntry {
-  accountId: string;
-  /** 显示名（角色名优先，缺省回落账号名） */
-  username: string;
-  /** 角色 id（#389：与自己的社交快照比对算出关系；旧服务端不带时按空串） */
-  roleId?: string;
-  /** 所属帮会 id / 名字（#389；空串 = 无帮会。同帮的人名字是蓝的） */
-  guildId?: string;
-  guildName?: string;
-  /** 所在队伍 id（#399；空串 = 没队伍。同队的人名字是金色的，还会挂队标） */
-  partyId?: string;
+  /** 账号 id（缩写 `a`，#768） */
+  a: string;
+  /** 显示名（缩写 `n`；角色名优先，缺省回落账号名） */
+  n: string;
+  /** 角色 id（缩写 `r`，#389：与自己的社交快照比对算出关系；空串 = 对方未选角） */
+  r: string;
+  /** 所属帮会 id / 名字（缩写 `g` / `gn`，#389；空串 = 无帮会。同帮的人名字是蓝的） */
+  g: string;
+  gn: string;
+  /** 所在队伍 id（缩写 `p`，#399；空串 = 没队伍。同队的人名字是金色的，还会挂队标） */
+  p: string;
   x: number;
   y: number;
   hp: number;
-  maxHp: number;
-  moving: boolean;
-  /** 外观（#383；旧服务端可能没有这个字段，客户端按默认外观兜底） */
-  appearance?: PlayerAppearance;
+  /** 血量上限（缩写 `m`） */
+  m: number;
+  /** 是否在移动（缩写 `mv`） */
+  mv: boolean;
+  /** 外观（缩写 `ap`，#383；#768 起必带，不再按默认外观兜底） */
+  ap: PlayerAppearance;
 }
 
 /**
@@ -295,11 +322,12 @@ export interface PlayersFrame {
  * 出手者自己也会收到，客户端按 accountId 跳过（本地已经演过，再来一次会重复）。
  */
 export interface PlayerActionEntry {
-  accountId: string;
-  /** 技能 id（普攻也是技能，如 "1000"；客户端按配置播动作动画与特效） */
-  skillId: string;
-  /** 目标怪物实例 id（客户端据此定朝向与特效落点；取不到目标时特效退回释放者身上） */
-  targetId?: string;
+  /** 出手账号（缩写 `a`，#768；出手者自己也会收到，客户端按它跳过） */
+  a: string;
+  /** 技能 id（缩写 `s`；普攻也是技能，如 "1000"；客户端按配置播动作动画与特效） */
+  s: string;
+  /** 目标怪物实例 id（缩写 `t`；客户端据此定朝向与特效落点；取不到目标时特效退回释放者身上） */
+  t?: string;
 }
 
 /** 拾取入包后实际写入的背包格子（#325：叠加进已有堆 = 那一格更新后的形状；装备 = 新占的格子） */
@@ -569,8 +597,11 @@ export default class CombatChannel {
    */
   static onPath: ((frame: PathFrame) => void) | null = null;
 
-  /** 位置上报的最小间隔（毫秒）：AI 的目标检测不需要逐帧精度，4Hz 足够 */
-  private static POSITION_INTERVAL = 250;
+  /**
+   * 位置上报的最小间隔（毫秒）：#768 提到 10Hz —— AI 目标检测与互见的采样节拍，
+   * 与服务端广播节拍（10Hz）对齐；再快没有观感收益，只是纯流量
+   */
+  private static POSITION_INTERVAL = 100;
   private static lastPositionSentAt = 0;
 
   /**
@@ -636,7 +667,8 @@ export default class CombatChannel {
     const now = Date.now();
     if (now - this.lastPositionSentAt < this.POSITION_INTERVAL) return;
     this.lastPositionSentAt = now;
-    RealtimeClient.send({ type: "pos", data: { mapId, x, y, hp, moving } });
+    // #768 帧瘦身：坐标整数像素（world 系本来就是整数刻度，小数是 Cocos 浮点累加的尾巴）
+    RealtimeClient.send({ type: "pos", data: { mapId, x: Math.round(x), y: Math.round(y), hp, moving } });
   }
 
   /** 换图重置位置上报节流（新图的第一帧位置要立刻送上去） */

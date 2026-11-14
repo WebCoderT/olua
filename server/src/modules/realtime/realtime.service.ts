@@ -38,7 +38,6 @@ import {
   type RealtimeChatMessage,
   type RealtimeIdentity,
   type RealtimeMapEnterResultMessage,
-  type RealtimeMonsterAiMessage,
   type RealtimePickedMessage,
   type RealtimeRoleUpdateMessage,
   type RealtimePlayerAction,
@@ -116,7 +115,9 @@ interface StatsRound {
   frames: number;
   /** 实际送达的连接数（连接不在了 / readyState 不对的不算） */
   recipients: number;
-  /** `send()` 里 JSON.stringify 的累计耗时（毫秒） */
+  /** 本轮 JSON.stringify 的次数（#768 序列化缓存后应远小于收件人次） */
+  stringifies: number;
+  /** JSON.stringify 的累计耗时（毫秒） */
   stringifyMs: number;
   /** 实际写出的 JSON 字节数（UTF-8 计） */
   bytes: number;
@@ -129,6 +130,7 @@ interface StatsAccum {
   rounds: number;
   frames: number;
   recipients: number;
+  stringifies: number;
   bytes: number;
   stringifyMs: number;
   /** 用于算平均轮间隔（首轮没有间隔，不计入） */
@@ -290,20 +292,15 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
         type: "world.reload",
         data: { roomId: result.roomId, mapId: result.mapId, slot: result.slot, forced: result.forced },
       };
-      for (const accountId of this.world.viewersOf(result.roomId)) {
-        const socket = this.connections.get(accountId);
-        if (socket) this.send(socket, frame);
-      }
+      // #768：同一帧只 stringify 一次（不在统计轮里，sendToViewers 的记账分支自动跳过）
+      this.sendToViewers(this.world.viewersOf(result.roomId), frame);
     };
-    // 怪物 AI 广播（#323）：AI 服务攒好一帧，这里按观看者集合发出去
+    // 怪物 AI 广播（#323）：AI 服务攒好一帧，这里按观看者集合发出去。
+    // #768 序列化缓存：帧对观看者相同，只 stringify 一次（sendToViewers）
     this.monsterAi.onBroadcast = (roomId, data) => {
       // 每次回调 = 一帧（一間房的增量）。统计（#767）只包住发送，不碰攒帧逻辑
       this.statsRun("monster-ai", 1, () => {
-        const frame: RealtimeMonsterAiMessage = { type: "monster-ai", data };
-        for (const accountId of this.world.viewersOf(roomId)) {
-          const socket = this.connections.get(accountId);
-          if (socket) this.send(socket, frame);
-        }
+        this.sendToViewers(this.world.viewersOf(roomId), { type: "monster-ai", data });
       });
     };
     // 状态推送（#826 第三批）：怪物把眩晕 / 灼烧挂到某个玩家身上时，整份快照推给他本人。
@@ -314,13 +311,35 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
     };
     // 玩家互见广播（#324）：在场表攒好一帧，这里按观看者集合发出去；
     // 屏蔽（#398）在这里逐观看者剔一次 —— 一个帧发给多人时，收件人的过滤条件各不相同，
-    // 「谁能看谁」只能由持有连接与身份的通道来判（在场表只认识「谁在哪张图」）
+    // 「谁能看谁」只能由持有连接与身份的通道来判（在场表只认识「谁在哪张图」）。
+    // #768 序列化缓存：没拉黑任何人的观看者（绝大多数）全图共用一份序列化结果，
+    // 只有真的滤掉了条目的观看者才各出一份
     this.presence.onBroadcast = (roomId, data) => {
       this.statsRun("players", 1, () => {
+        const round = this.currentRound();
+        let sharedJson: string | null = null;
+        let sharedBytes = 0;
         for (const accountId of this.world.viewersOf(roomId)) {
           const socket = this.connections.get(accountId);
-          if (!socket) continue;
-          this.send(socket, { type: "players", data: this.visiblePlayers(accountId, data) } satisfies RealtimePlayersMessage);
+          if (!socket || socket.readyState !== WebSocket.OPEN) continue;
+          const filtered = this.visiblePlayers(accountId, data);
+          if (filtered === data) {
+            // 快路径：这个观看者没有任何条目被滤（visiblePlayers 原样返回入参）
+            if (sharedJson === null) {
+              const t0 = round ? performance.now() : 0;
+              const frame: RealtimePlayersMessage = { type: "players", data };
+              sharedJson = JSON.stringify(frame);
+              sharedBytes = Buffer.byteLength(sharedJson);
+              if (round) {
+                round.stringifyMs += performance.now() - t0;
+                round.stringifies += 1;
+              }
+            }
+            this.sendPrebuilt(socket, sharedJson, sharedBytes);
+          } else {
+            // 慢路径：有屏蔽，过滤结果因人而异，只能各序列化一份
+            this.send(socket, { type: "players", data: filtered } satisfies RealtimePlayersMessage);
+          }
         }
       });
     };
@@ -335,10 +354,8 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
     // from.accountId 在 ChatService 侧已组好，帧到这里就是成品
     this.chat.onDeliver = (accountIds, entry) => {
       const frame: RealtimeChatBroadcast = { type: "chat", data: entry };
-      for (const id of new Set(accountIds)) {
-        const socket = this.connections.get(id);
-        if (socket) this.send(socket, frame);
-      }
+      // #768：同一帧只 stringify 一次（低频路径，纯一致性收益）
+      this.sendToViewers(new Set(accountIds), frame);
     };
     // 聊天拒绝：走通用 error 帧（低频操作，明确告知比悄悄丢弃好）
     this.chat.onReject = (accountId, message) => {
@@ -416,6 +433,7 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
       startedAt,
       frames,
       recipients: 0,
+      stringifies: 0,
       stringifyMs: 0,
       bytes: 0,
       intervalMs: last === undefined ? null : startedAt - last,
@@ -434,10 +452,11 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
   }
 
   private statsAccumulate(kind: StatsKind, round: StatsRound): void {
-    const acc = this.statsAccum.get(kind) ?? { rounds: 0, frames: 0, recipients: 0, bytes: 0, stringifyMs: 0, intervals: 0, intervalCount: 0 };
+    const acc = this.statsAccum.get(kind) ?? { rounds: 0, frames: 0, recipients: 0, stringifies: 0, bytes: 0, stringifyMs: 0, intervals: 0, intervalCount: 0 };
     acc.rounds += 1;
     acc.frames += round.frames;
     acc.recipients += round.recipients;
+    acc.stringifies += round.stringifies;
     acc.bytes += round.bytes;
     acc.stringifyMs += round.stringifyMs;
     if (round.intervalMs !== null) {
@@ -453,8 +472,8 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
       const avgInterval = acc.intervalCount > 0 ? Math.round(acc.intervals / acc.intervalCount) : 0;
       this.logger.log(
         `广播统计[${kind}] ${Math.round(this.statsIntervalMs / 1000)}s 内：${acc.rounds} 轮 / 帧 ${acc.frames} / ` +
-          `收件 ${acc.recipients} 人次 / ${(acc.bytes / 1024).toFixed(1)}KB / stringify ${acc.stringifyMs.toFixed(1)}ms / ` +
-          `平均轮间隔 ${avgInterval}ms`,
+          `收件 ${acc.recipients} 人次 / stringify ${acc.stringifies} 次 ${acc.stringifyMs.toFixed(1)}ms / ` +
+          `${(acc.bytes / 1024).toFixed(1)}KB / 平均轮间隔 ${avgInterval}ms`,
       );
     }
     this.statsAccum.clear();
@@ -958,11 +977,9 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
     if (!snapshot) return;
     const frame: RealtimeWorldMessage = { type: "world", data: this.withLiveMonsterPositions(snapshot) };
     // 一次回调 = 一帧全量（world 帧是事件驱动的，重生 / 代际变化才发，不在固定节拍上）
+    // #768 序列化缓存：同一帧只 stringify 一次（sendToViewers）
     this.statsRun("world", 1, () => {
-      for (const accountId of this.world.viewersOf(roomId)) {
-        const socket = this.connections.get(accountId);
-        if (socket) this.send(socket, frame);
-      }
+      this.sendToViewers(this.world.viewersOf(roomId), frame);
     });
   }
 
@@ -1005,10 +1022,10 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
   ): { mapId: string; full: boolean; players: RealtimePlayerEntry[]; left: string[]; actions: RealtimePlayerAction[] } {
     const viewerRoleId = this.presence.identityOf(viewerAccountId)?.roleId ?? "";
     if (!viewerRoleId) return data;
-    const players = data.players.filter((entry) => !this.blocks.hiddenFor(viewerRoleId, entry.roleId ?? ""));
+    const players = data.players.filter((entry) => !this.blocks.hiddenFor(viewerRoleId, entry.r ?? ""));
     // 动作事件与 players 同口径（#693）：拉黑的人出手的动画也不该出现在我的屏幕上
     const actions = data.actions.filter((action) => {
-      const actorRoleId = this.presence.identityOf(action.accountId)?.roleId ?? "";
+      const actorRoleId = this.presence.identityOf(action.a)?.roleId ?? "";
       return !this.blocks.hiddenFor(viewerRoleId, actorRoleId);
     });
     // 没有要滤掉的条目时原样返回：这条路径每 200ms 跑一遍，能少建一个对象就少建一个
@@ -1168,21 +1185,69 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
 
   //#region 工具
 
+  /** 进行中的一轮（广播出口的 fn 里拿它记账；不在轮里返回 null） */
+  private currentRound(): StatsRound | null {
+    if (!this.statsOn || this.statsCurrentKind === null) return null;
+    return this.statsRounds.get(this.statsCurrentKind) ?? null;
+  }
+
+  /**
+   * 预序列化发送（#768 序列化缓存）：帧已经 stringify 过，这里只做写出与统计记账
+   *
+   * 字节照旧按「每收件人写出长度」累计（这是真正的下行流量），但不再各自付一次 stringify ——
+   * 20 人同图时 JSON.parse/​stringify 从每拍 20 次降到 1 次，这是这刀收益的主体。
+   */
+  private sendPrebuilt(socket: TrackedSocket, json: string, byteLen: number): void {
+    if (socket.readyState !== WebSocket.OPEN) return;
+    const round = this.currentRound();
+    if (round) {
+      round.bytes += byteLen;
+      round.recipients += 1;
+    }
+    socket.send(json);
+  }
+
+  /**
+   * 同一帧发给一批观看者（#768 序列化缓存）：**只 stringify 一次**，逐 socket 写出
+   *
+   * 三条广播出口（world / monster-ai）的帧对观看者完全相同，逐个 `send()` 的话
+   * 每收件人都要各 stringify 一次 —— 量的是同一份数据。这里挪到循环外做一次。
+   * 定向帧（私聊 / 队伍 / 状态推送 / 应答）不走这里，仍走 `send()`。
+   */
+  private sendToViewers(accountIds: Iterable<string>, frame: RealtimeServerMessage): void {
+    const round = this.currentRound();
+    let json: string | null = null;
+    let byteLen = 0;
+    for (const accountId of accountIds) {
+      const socket = this.connections.get(accountId);
+      if (!socket || socket.readyState !== WebSocket.OPEN) continue;
+      if (json === null) {
+        const t0 = round ? performance.now() : 0;
+        json = JSON.stringify(frame);
+        byteLen = Buffer.byteLength(json);
+        if (round) {
+          round.stringifyMs += performance.now() - t0;
+          round.stringifies += 1;
+        }
+      }
+      this.sendPrebuilt(socket, json, byteLen);
+    }
+  }
+
   private send(socket: TrackedSocket, message: RealtimeServerMessage): void {
     if (socket.readyState !== WebSocket.OPEN) return;
     // 统计开着且有广播轮正在进行（#767）：量 stringify 耗时与字节数。定向帧（私聊 /
     // 队伍 / 状态推送）不在轮里，走原路径 —— 统计代码不改变任何时序，只是多算一次
-    if (this.statsOn && this.statsCurrentKind !== null) {
-      const round = this.statsRounds.get(this.statsCurrentKind);
-      if (round) {
-        const t0 = performance.now();
-        const json = JSON.stringify(message);
-        round.stringifyMs += performance.now() - t0;
-        round.bytes += Buffer.byteLength(json);
-        round.recipients += 1;
-        socket.send(json);
-        return;
-      }
+    const round = this.currentRound();
+    if (round) {
+      const t0 = performance.now();
+      const json = JSON.stringify(message);
+      round.stringifyMs += performance.now() - t0;
+      round.stringifies += 1;
+      round.bytes += Buffer.byteLength(json);
+      round.recipients += 1;
+      socket.send(json);
+      return;
     }
     socket.send(JSON.stringify(message));
   }

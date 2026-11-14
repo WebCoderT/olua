@@ -171,7 +171,7 @@ function connect(url) {
     /** 服务端此刻认的 x（从最近一帧 players 里找自己那一条） */
     observed() {
       for (let index = session.playersFrames.length - 1; index >= 0; index -= 1) {
-        const entry = session.playersFrames[index].players.find((player) => player.accountId === session.userId);
+        const entry = session.playersFrames[index].players.find((player) => player.a === session.userId);
         if (entry) return entry;
       }
       return null;

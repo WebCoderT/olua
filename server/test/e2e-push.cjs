@@ -388,7 +388,7 @@ function connect(url) {
     const aiBefore = session.aiFrames.length;
     const beforePos = (() => {
       for (let i = session.aiFrames.length - 1; i >= 0; i -= 1) {
-        const entry = (session.aiFrames[i].monsters || []).find((m) => m.instanceId === pushTarget.instanceId);
+        const entry = (session.aiFrames[i].monsters || []).find((m) => m.i === pushTarget.instanceId);
         if (entry) return { x: entry.x, y: entry.y };
       }
       return null;
@@ -404,7 +404,7 @@ function connect(url) {
       "推完之后怪在 monster-ai 帧里出现击退位移",
       async () => {
         for (let i = aiBefore; i < session.aiFrames.length; i += 1) {
-          const entry = (session.aiFrames[i].monsters || []).find((m) => m.instanceId === pushTarget.instanceId);
+          const entry = (session.aiFrames[i].monsters || []).find((m) => m.i === pushTarget.instanceId);
           if (!entry) continue;
           const moved = Math.hypot(entry.x - beforePos.x, entry.y - beforePos.y);
           if (moved > 100) return { entry, moved };

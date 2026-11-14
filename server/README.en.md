@@ -307,7 +307,7 @@ One codebase, two entries, assembled on demand (`AppModule.register({ realtime }
 
 ## Monster AI and skill casting (#323 / #372)
 
-Monster **behaviour is authoritative on the server** (`MonsterAiService`, tick 100ms / broadcast throttled to 200ms):
+Monster **behaviour is authoritative on the server** (`MonsterAiService`, tick 100ms / broadcast throttled to 100ms, 10 Hz since #768):
 target picking, chasing, idle wandering, auto-attacks and **skill casts** are all decided server-side — the client only plays them back.
 
 - **Skills come from tables**: `monster_skills` says *which* skills a monster casts and in what order (status skills first as buffs, then damage skills; inside a group by ascending `priority`, ties broken by skill id), `skills` supplies action / effect / multipliers / distance / cast lock, `statuses` supplies duration and stat modifiers. All three are **read from the DB with a 1 second TTL cache** — admin edits take effect within 1 second (the two processes can only exchange changes through the shared SQLite file, there is no notification channel);

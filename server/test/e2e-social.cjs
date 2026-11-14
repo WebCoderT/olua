@@ -391,7 +391,7 @@ function connect(url) {
       "B 收到的 players 帧里出现 A",
       async () => {
         for (const frame of sessionB.players) {
-          const entry = frame.players.find((item) => item.accountId !== undefined && item.username === "甲玩家");
+          const entry = frame.players.find((item) => item.a !== undefined && item.n === "甲玩家");
           if (entry) return entry;
         }
         return null;
@@ -399,9 +399,9 @@ function connect(url) {
       8_000,
     );
     check(!!frameWithA, "B 在互见帧里看到了 A（同图互见本身仍然工作）");
-    checkEqual(frameWithA && frameWithA.roleId, A.roleId, "条目带 roleId（社交关系按角色记，客户端据此比对好友/敌人）");
-    checkEqual(frameWithA && frameWithA.guildId, guild.data && guild.data.id, "条目带 guildId（同帮判定要「我的」与「他的」相等）");
-    checkEqual(frameWithA && frameWithA.guildName, "社交帮", "条目带 guildName（悬浮提示 / 附近列表直接用）");
+    checkEqual(frameWithA && frameWithA.r, A.roleId, "条目带 roleId（r 缩写，#768；社交关系按角色记，客户端据此比对好友/敌人）");
+    checkEqual(frameWithA && frameWithA.g, guild.data && guild.data.id, "条目带 guildId（g 缩写，#768；同帮判定要「我的」与「他的」相等）");
+    checkEqual(frameWithA && frameWithA.gn, "社交帮", "条目带 guildName（gn 缩写，#768；悬浮提示 / 附近列表直接用）");
 
     sessionA.socket.close();
     sessionB.socket.close();

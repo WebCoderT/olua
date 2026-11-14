@@ -249,7 +249,7 @@ Implemented features only; each side's README covers its own capabilities in mor
 | Dash skill | Teleports to the mouse position and plays a landing effect |
 | Status buffs | Statuses applied by skills, looping effects on the body, icon timers |
 | Monster skills | Cast by the server-side AI, the client only plays the effects |
-| Players seeing each other | Players on the same map see each other's appearance and HP, broadcast incrementally every 200ms |
+| Players seeing each other | Players on the same map see each other's appearance and HP, broadcast incrementally at 10 Hz (100ms, #768) |
 | Path line | While auto-pathing, the ground and the mini-map both draw a dotted white route |
 
 ### Monsters, death and revival

@@ -200,7 +200,7 @@ export default class MonsterManager {
    */
   static applyServerAi(data: MonsterAiFrame) {
     for (const entry of data.monsters) {
-      const node = this.instanceIndex.get(entry.instanceId);
+      const node = this.instanceIndex.get(entry.i);
       if (!node) continue; // 还没生成的怪（重生广播的 world 帧会先落场），下一帧再对齐
       // 血量（#670）：别人打的伤害也走这一条 —— 血条不能只在自己出手时才动
       const monster = this.monsterMap.get(node);
@@ -212,22 +212,22 @@ export default class MonsterManager {
           continue;
         }
         monster.hp = entry.hp;
-        if (entry.maxHp !== undefined) monster.maxHp = entry.maxHp;
+        if (entry.m !== undefined) monster.maxHp = entry.m;
         this.updateHead(node, monster);
       }
-      MonsterAI.applyServerState(node, entry.x, entry.y, entry.moving);
+      MonsterAI.applyServerState(node, entry.x, entry.y, entry.mv);
     }
     // 技能释放（#372）：动作 + 特效 + 自身状态特效，全部由服务端驱动
     const castIds = new Set<string>();
     for (const cast of data.casts ?? []) {
-      if (this.playServerCast(cast)) castIds.add(cast.instanceId);
+      if (this.playServerCast(cast)) castIds.add(cast.i);
     }
     const myId = RealtimeClient.onlineUserId;
     for (const hit of data.hits) {
       // 普攻在服务端没有单独的「出手」事件：命中即代表这只怪刚挥了一下，补播攻击动作
       // （技能的那一下就由 casts 播过了，同一帧不重复播）
-      if (!castIds.has(hit.instanceId)) this.playServerAttack(hit.instanceId);
-      if (hit.accountId !== myId) continue;
+      if (!castIds.has(hit.i)) this.playServerAttack(hit.i);
+      if (hit.a !== myId) continue;
       if (!this.onPlayerServerHit) {
         console.warn("[monster-ai] 玩家被普攻命中但没有处理者（onPlayerServerHit 未接线），事件被丢弃");
         continue;
@@ -237,7 +237,7 @@ export default class MonsterManager {
     // 玩家击杀（#689）：别人的击杀在此清场与铺掉落 —— 死的是哪只、死在哪、掉了什么都在事件里；
     // 自己的击杀跳过（settle 帧已经演过，这里再来一次会重复铺掉落）
     for (const kill of data.kills ?? []) {
-      if (kill.accountId === myId) continue;
+      if (kill.a === myId) continue;
       this.applyRemoteKill(kill);
     }
     this.cleanupStatusEffects();
@@ -253,10 +253,10 @@ export default class MonsterManager {
    *   不可拾取 —— 点击与自动拾取都会跳过（见 DropManager.spawnRemoteDrops）。
    */
   private static applyRemoteKill(kill: MonsterKillEntry): void {
-    const node = this.instanceIndex.get(kill.instanceId);
+    const node = this.instanceIndex.get(kill.i);
     const monster = node ? this.monsterMap.get(node) : null;
     if (node && monster && monster.hp > 0) this.applyDamage(node, monster, 0, 0, true);
-    if (kill.drops.length) DropManager.spawnRemoteDrops(kill.drops, new Vec3(kill.x, kill.y));
+    if (kill.dp.length) DropManager.spawnRemoteDrops(kill.dp, new Vec3(kill.x, kill.y));
   }
 
   /**
@@ -267,19 +267,19 @@ export default class MonsterManager {
    * 演不出来可以接受，崩溃不行。
    */
   private static playServerCast(cast: MonsterCastEntry): boolean {
-    const node = this.instanceIndex.get(cast.instanceId);
+    const node = this.instanceIndex.get(cast.i);
     if (!node || !isValid(node)) return false; // 半销毁 / 已死亡的怪：静默跳过
     const monster = this.monsterMap.get(node);
     if (!monster) return false;
-    const config = findSkillConfig(cast.skillId);
+    const config = findSkillConfig(cast.s);
     if (!config) {
-      console.warn(`[monster-skill] 怪物 ${cast.instanceId} 释放的技能 ${cast.skillId} 不在配置里，无法演出`);
+      console.warn(`[monster-skill] 怪物 ${cast.i} 释放的技能 ${cast.s} 不在配置里，无法演出`);
       return false;
     }
     MonsterAI.playServerAction(node, config.action);
     // effectIsOnSelf / 无目标时退回释放者，与角色侧同一口径
     EffectManager.play(config, node, null, monster);
-    if (cast.statusId) this.applyStatusEffect(cast.instanceId, node, cast.statusId);
+    if (cast.st) this.applyStatusEffect(cast.i, node, cast.st);
     return true;
   }
 

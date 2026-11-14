@@ -194,7 +194,7 @@ function connect(url) {
     /** 等「这个账号的动作事件」（#693：结算后随下一个互见广播节拍发出） */
     async waitForAction(accountId, timeoutMs = 5_000) {
       return waitFor(`accountId=${accountId} 的动作事件`, async () => {
-        const hits = session.actions.filter((entry) => entry.accountId === accountId);
+        const hits = session.actions.filter((entry) => entry.a === accountId);
         return hits.length > 0 ? hits[hits.length - 1] : null;
       }, timeoutMs);
     },
@@ -202,7 +202,7 @@ function connect(url) {
     async waitForKill(instanceId, timeoutMs = 5_000) {
       return waitFor(`instanceId=${instanceId} 的击杀事件`, async () => {
         for (let i = session.aiFrames.length - 1; i >= 0; i -= 1) {
-          const kill = (session.aiFrames[i].kills ?? []).find((entry) => entry.instanceId === instanceId);
+          const kill = (session.aiFrames[i].kills ?? []).find((entry) => entry.i === instanceId);
           if (kill) return kill;
         }
         return null;
@@ -347,8 +347,8 @@ function connect(url) {
     // settle 只发出手者，B 对「A 出了一次手」原本一无所知（别人的屏幕据此播他的攻击/技能动画）
     const actionEventB = await sessionB.waitForAction(meA.data && meA.data.id);
     check(!!actionEventB, "动作事件随 players 帧广播给同图观看者（B）", JSON.stringify(actionEventB));
-    checkEqual(actionEventB && actionEventB.skillId, "1000", "动作事件带技能 id（客户端按配置播动作动画与特效）");
-    checkEqual(actionEventB && actionEventB.targetId, wA1.instanceId, "动作事件带目标实例 id（朝向与特效落点用）");
+    checkEqual(actionEventB && actionEventB.s, "1000", "动作事件带技能 id（客户端按配置播动作动画与特效）");
+    checkEqual(actionEventB && actionEventB.t, wA1.instanceId, "动作事件带目标实例 id（朝向与特效落点用）");
     const actionEventA = await sessionA.waitForAction(meA.data && meA.data.id);
     check(!!actionEventA, "出手者自己也收到同一帧（客户端按 accountId 自行跳过，服务端不做收件人剔除）");
 
@@ -378,8 +378,8 @@ function connect(url) {
     // 别人的屏幕据此做死亡清场与掉落铺场（settle 帧只发击杀者，B 对这次击杀原本一无所知）
     const killEventB = await sessionB.waitForKill(wA2.instanceId);
     check(!!killEventB, "击杀事件随 monster-ai 帧广播给同图观看者（B）", JSON.stringify(killEventB));
-    checkEqual(killEventB && killEventB.accountId, meA.data && meA.data.id, "击杀事件带击杀者账号（客户端据此跳过自己的击杀）");
-    check(Array.isArray(killEventB && killEventB.drops), "击杀事件带掉落列表（可为空数组——这次什么都没掉也照发）", JSON.stringify(killEventB && killEventB.drops));
+    checkEqual(killEventB && killEventB.a, meA.data && meA.data.id, "击杀事件带击杀者账号（客户端据此跳过自己的击杀）");
+    check(Array.isArray(killEventB && killEventB.dp), "击杀事件带掉落列表（可为空数组——这次什么都没掉也照发）", JSON.stringify(killEventB && killEventB.dp));
     check(typeof (killEventB && killEventB.x) === "number" && typeof (killEventB && killEventB.y) === "number", "击杀事件带死亡点坐标（掉落物铺在这里）");
     const killEventA = await sessionA.waitForKill(wA2.instanceId);
     check(!!killEventA, "击杀者自己也收到同一帧（客户端按 accountId 自行跳过，服务端不做收件人剔除）");

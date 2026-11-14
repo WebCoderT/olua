@@ -283,8 +283,8 @@ function main() {
   // 怪物侧（#372）：服务端广播 → 演出。这三处不接上，怪物放技能在画面上什么都没有
   const monsterManager = read("assets/ui/core/MonsterManager.ts");
   check(/data\.casts/.test(monsterManager), "MonsterManager 消费 casts 帧（技能动作 / 特效的入口）");
-  check(/findSkillConfig\(cast\.skillId\)/.test(monsterManager), "技能配置按 id 查（怪物技能不在 skills Map 里）");
-  check(/applyStatusEffect\(cast\.instanceId/.test(monsterManager), "状态型技能挂到怪物身上播特效");
+  check(/findSkillConfig\(cast\.s\)/.test(monsterManager), "技能配置按 id 查（s = skillId，#768 缩写；怪物技能不在 skills Map 里）");
+  check(/applyStatusEffect\(cast\.i/.test(monsterManager), "状态型技能挂到怪物身上播特效（i = instanceId，#768 缩写）");
   const combatChannel = read("assets/ui/utils/net/CombatChannel.ts");
   check(/casts\?: MonsterCastEntry\[\]/.test(combatChannel), "CombatChannel 的 AI 帧带 casts（旧服务端不带时按空数组）");
   const serverAi = read("../server/src/modules/realtime/monster-ai.service.ts");

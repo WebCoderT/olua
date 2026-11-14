@@ -87,7 +87,7 @@ function main() {
   // 受击三件套都挂在同一条回调上（#670：本地怪物 AI 删除后这是玩家挨打的唯一一条路）
   check(/showHitScreenFlash\(\)/.test(gameSrc), "受击回调触发屏幕红闪");
   check(/playInjured\(\)/.test(gameSrc), "受击回调触发受击动作");
-  check(/applyMonsterHit\(hit\)/.test(gameSrc), "受击回调把服务端血量入账（客户端不自算）");
+  check(/applyMonsterHit\(\{ hp: hit\.hp, maxHp: hit\.m \}\)/.test(gameSrc), "受击回调把服务端血量入账（客户端不自算；#768 帧缩写 m = maxHp）");
 
   finish("PASS：受击反馈三件套配置齐全、受击动画链路真实可用、优先级守卫与组合根接线在位。");
 }

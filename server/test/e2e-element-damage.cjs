@@ -338,13 +338,13 @@ async function standAndWait(session, predicate, timeoutMs = 20_000) {
     check(Array.isArray(defenseA.magicDefense) && defenseA.magicDefense[1] < 100, "而魔防仍是等级那一档（两列真的分开了）", JSON.stringify(defenseA.magicDefense));
 
     const hitPhysical = await standAndWait(playerA.session, async () => {
-      return playerA.session.hitsFrom(0).find((hit) => hit.instanceId && hit.damage > 0) ?? null;
+      return playerA.session.hitsFrom(0).find((hit) => hit.i && hit.d > 0) ?? null;
     });
-    check(!!hitPhysical, "被物理技能命中（伤害 > 0）", hitPhysical && `damage=${hitPhysical.damage}`);
+    check(!!hitPhysical, "被物理技能命中（伤害 > 0）", hitPhysical && `damage=${hitPhysical.d}`);
     check(
-      !!hitPhysical && hitPhysical.damage > 3000 && hitPhysical.damage <= 5000,
+      !!hitPhysical && hitPhysical.d > 3000 && hitPhysical.d <= 5000,
       "伤害 = 「9000 − 物防 5000」那一档（不是 9000 − 魔防 6）",
-      hitPhysical && `damage=${hitPhysical.damage}`,
+      hitPhysical && `damage=${hitPhysical.d}`,
     );
     //#endregion
 
@@ -357,17 +357,17 @@ async function standAndWait(session, predicate, timeoutMs = 20_000) {
     const playerB = await spawnPlayer(baseUrl, adminToken, "elem_b");
     const castFrom = playerB.session.aiFrames.length;
     const hitMagic = await standAndWait(playerB.session, async () => {
-      return playerB.session.hitsFrom(0).find((hit) => hit.damage > 0) ?? null;
+      return playerB.session.hitsFrom(0).find((hit) => hit.d > 0) ?? null;
     });
-    check(!!hitMagic, "被法术技能命中（伤害 > 0）", hitMagic && `damage=${hitMagic.damage}`);
+    check(!!hitMagic, "被法术技能命中（伤害 > 0）", hitMagic && `damage=${hitMagic.d}`);
     check(
-      !!hitMagic && hitMagic.damage > 8000,
+      !!hitMagic && hitMagic.d > 8000,
       "伤害 = 「9000 − 魔防 6」那一档（物防 5000 一点没参与）",
-      hitMagic && `damage=${hitMagic.damage}`,
+      hitMagic && `damage=${hitMagic.d}`,
     );
     const magicCast = await waitFor(
       "法术技能 9001 的 casts 帧",
-      async () => playerB.session.castsFrom(castFrom).find((cast) => cast.skillId === SKILL) ?? null,
+      async () => playerB.session.castsFrom(castFrom).find((cast) => cast.s === SKILL) ?? null,
       8_000,
     );
     check(!!magicCast, "这一下确实是「法术技能」打出来的（casts 帧里有 9001）", magicCast && magicCast.skillId);
@@ -387,10 +387,10 @@ async function standAndWait(session, predicate, timeoutMs = 20_000) {
       playerC.session.sendPos("1", STAND.x, STAND.y, 100);
       await sleep(120);
     }
-    const silentCasts = playerC.session.castsFrom(observeFrom).filter((cast) => cast.skillId === SKILL);
+    const silentCasts = playerC.session.castsFrom(observeFrom).filter((cast) => cast.s === SKILL);
     check(silentCasts.length === 0, "法攻配 0 时该技能一次都没放（回落到普攻）", `放了 ${silentCasts.length} 次`);
     const weakHits = playerC.session.hitsFrom(observeFrom);
-    const maxDamage = weakHits.reduce((max, hit) => Math.max(max, hit.damage), 0);
+    const maxDamage = weakHits.reduce((max, hit) => Math.max(max, hit.d), 0);
     check(maxDamage <= 5, "这几秒里的命中都是普攻那一档（物攻 1 − 防御）", `最大伤害 ${maxDamage}`);
     check(
       server.logs().includes("配成 0") && server.logs().includes(SKILL),

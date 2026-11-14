@@ -265,7 +265,7 @@ function connect(url) {
     /** 某只怪在**这一帧之后**的最新一条 AI 位置（按帧序号取，避免读到旧帧） */
     latestAi(instanceId, fromIndex = 0) {
       for (let i = session.aiFrames.length - 1; i >= fromIndex; i -= 1) {
-        const entry = session.aiFrames[i].monsters.find((m) => m.instanceId === instanceId);
+        const entry = session.aiFrames[i].monsters.find((m) => m.i === instanceId);
         if (entry) return entry;
       }
       return null;
@@ -275,7 +275,7 @@ function connect(url) {
       const out = [];
       for (let i = fromIndex; i < session.aiFrames.length; i += 1) {
         for (const entry of session.aiFrames[i].monsters) {
-          if (entry.instanceId === instanceId) out.push(entry);
+          if (entry.i === instanceId) out.push(entry);
         }
       }
       return out;
@@ -364,7 +364,7 @@ function connect(url) {
       8_000,
     );
     check(!!visibleToB, "同图观看者 B 在 monster-ai 帧里收到这只怪的血量（别人打的伤害也看得见）", visibleToB && `hp=${visibleToB.hp}`);
-    check(!!visibleToB && visibleToB.maxHp === bruiser.maxHp, "血量条目带上上限（客户端画血条要用）", visibleToB && `maxHp=${visibleToB.maxHp}`);
+    check(!!visibleToB && visibleToB.m === bruiser.maxHp, "血量条目带上上限（客户端画血条要用）", visibleToB && `m=${visibleToB.m}`);
     //#endregion
 
     //#region 二、击退由服务端模拟（#670）
@@ -500,7 +500,7 @@ function connect(url) {
       sessionA.sendPos("1", BRUISER.x + 150, BRUISER.y, aHp);
       await sleep(120);
     }
-    const noChaseHits = sessionA.hitsFrom(calmFrom).filter((hit) => hit.instanceId === bruiser.instanceId);
+    const noChaseHits = sessionA.hitsFrom(calmFrom).filter((hit) => hit.i === bruiser.instanceId);
     check(
       noChaseHits.length === 0,
       "脱战后 A 站回来（150px，在检测范围 200 内）怪**不再**主动追他（记恨已清，#858）",
@@ -513,10 +513,10 @@ function connect(url) {
     check(!!reProvoke && reProvoke.ok, "A 再打它一下（重新记恨）", JSON.stringify(reProvoke && reProvoke.ok));
     const reProvokedHit = await waitFor(
       "被动怪重新追上来并打人",
-      async () => sessionA.hitsFrom(reProvokeFrom).find((hit) => hit.instanceId === bruiser.instanceId) ?? null,
+      async () => sessionA.hitsFrom(reProvokeFrom).find((hit) => hit.i === bruiser.instanceId) ?? null,
       12_000,
     );
-    check(!!reProvokedHit, "重新记恨之后它又追上来打人了（#858 清的是「脱战后的旧账」，不是把人永久拉黑）", reProvokedHit && `damage=${reProvokedHit.damage}`);
+    check(!!reProvokedHit, "重新记恨之后它又追上来打人了（#858 清的是「脱战后的旧账」，不是把人永久拉黑）", reProvokedHit && `damage=${reProvokedHit.d}`);
     //#endregion
 
     //#region 五、移动不穿墙（#854 E4）
@@ -639,17 +639,17 @@ function connect(url) {
       "伪造帧之后 BOSS 没有朝那个点走过去（AI 读的是仲裁后的坐标，#855）",
       `窗口里 ${forgedEntries.length} 帧：${forgedEntries.map((entry) => entry.x.toFixed(1)).join(" → ") || "（无帧）"}`,
     );
-    const forgedHits = backB.hitsFrom(forgedFrom).filter((hit) => hit.instanceId === boss.instanceId);
+    const forgedHits = backB.hitsFrom(forgedFrom).filter((hit) => hit.i === boss.instanceId);
     check(forgedHits.length === 0, "也没有对这个「瞬移过来的」玩家出手", `命中 ${forgedHits.length} 条`);
     // 回归：正常走过去还是会被发现（闸不能把所有人都挡住）
     const legitFrom = backB.aiFrames.length;
     await walk(backB, [bFarX, BOSS.y], [BOSS.x + 40, BOSS.y], aHp);
     const legitHit = await waitFor(
       "正常走近之后 BOSS 出手",
-      async () => backB.hitsFrom(legitFrom).find((hit) => hit.instanceId === boss.instanceId) ?? null,
+      async () => backB.hitsFrom(legitFrom).find((hit) => hit.i === boss.instanceId) ?? null,
       12_000,
     );
-    check(!!legitHit, "正常一步步走近的玩家仍然会被索敌并挨打（仲裁没有误杀正常移动）", legitHit && `damage=${legitHit.damage}`);
+    check(!!legitHit, "正常一步步走近的玩家仍然会被索敌并挨打（仲裁没有误杀正常移动）", legitHit && `damage=${legitHit.d}`);
     // B 的任务到此为止：它站在 BOSS 身边会一直挨打，留着会让下一段「尸体期不许有命中」混进它的命中
     backB.socket.close();
     //#endregion
@@ -666,7 +666,7 @@ function connect(url) {
     const aAccountId = meA.data && meA.data.id;
     check(typeof aAccountId === "string" && aAccountId.length > 0, "准备：拿到 A 的账号 id（下面按受击账号过滤命中帧）");
     const hitsOnA = (fromIndex) =>
-      backSession.hitsFrom(fromIndex).filter((hit) => hit.instanceId === boss.instanceId && hit.accountId === aAccountId);
+      backSession.hitsFrom(fromIndex).filter((hit) => hit.i === boss.instanceId && hit.a === aAccountId);
     let keepReporting = true;
     const reporter = (async () => {
       while (keepReporting) {
@@ -679,7 +679,7 @@ function connect(url) {
       async () => hitsOnA(0).find((hit) => hit.hp === 0) ?? null,
       25_000,
     );
-    check(!!deathHit, "玩家被 BOSS 打到 hp = 0（服务端结算出来的死亡）", deathHit && `damage=${deathHit.damage}`);
+    check(!!deathHit, "玩家被 BOSS 打到 hp = 0（服务端结算出来的死亡）", deathHit && `damage=${deathHit.d}`);
     // 从这里开始算「尸体期」：A 继续上报 hp = 100（假装还活着），但服务端已经知道他死了。
     // 观察窗口要跨过至少一个完整的普攻间隔（出厂 2000ms）—— 少了就只是「还没来得及出手」
     const corpseFrom = backSession.aiFrames.length;
@@ -688,9 +688,9 @@ function connect(url) {
     check(
       lateHits.length === 0,
       "目标倒下之后不再有命中（结算返回 null → 服务端把目标作废，不依赖客户端上报的血量）",
-      `尸体期命中 ${lateHits.length} 条${lateHits.length > 0 ? `（${lateHits.map((hit) => `${hit.instanceId}→${hit.hp}`).join(", ")}）` : ""}`,
+      `尸体期命中 ${lateHits.length} 条${lateHits.length > 0 ? `（${lateHits.map((hit) => `${hit.i}→${hit.hp}`).join(", ")}）` : ""}`,
     );
-    const lateDamageCasts = backSession.castsFrom(corpseFrom).filter((cast) => cast.instanceId === boss.instanceId && cast.skillId === "9001");
+    const lateDamageCasts = backSession.castsFrom(corpseFrom).filter((cast) => cast.i === boss.instanceId && cast.s === "9001");
     check(lateDamageCasts.length === 0, "也不再释放伤害型技能 9001（原来的实现是「结算不出来照样播 casts」）", `尸体期释放 ${lateDamageCasts.length} 次`);
     keepReporting = false;
     await reporter;
