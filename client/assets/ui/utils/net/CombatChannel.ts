@@ -342,6 +342,38 @@ export interface PickPlacedCell {
   from?: { role?: string; monster?: string; at?: number };
 }
 
+/**
+ * 进入视野的实体（#810：AOI 按格子裁剪之后，广播只带「你看得见的」；这一帧补上
+ * 「刚走进你视野的」）
+ *
+ * 与 world 帧的分工：world 帧是**基线**（进图那一刻的一整份，客户端按它做差量合并），
+ * 这一帧是**基线之后的新增**（怪游走进来、别人跑过来 / 传送过来）。动作都是 upsert，
+ * 所以重复收到同一个 id 是空操作 —— 进图时服务端先发全量 world、随后可能把其中一部分
+ * 再 enter 一遍（那时它还不知道你在哪一格，裁不了），不需要客户端做特殊处理。
+ */
+export interface EntityEnterFrame {
+  mapId: string;
+  /** 新进入视野的怪（形状与 world 帧的条目相同：带 monsterKey / maxHp，可直接建节点） */
+  monsters: WorldMonsterSnapshot[];
+  /** 新进入视野的玩家（形状与 players 帧的条目相同，含外观） */
+  players: PlayerEntry[];
+}
+
+/**
+ * 离开视野的实体（#810）：只给 id，客户端按 id 拆节点
+ *
+ * 与 players 帧的 `left` 的区别：`left` 是「这个人不在图里了」（下线 / 换图 / 超时），
+ * 这一帧是「他还在，只是你看不见了」。拆节点的动作相同，所以两边都收敛到同一个落点。
+ * 服务端对离开**延迟 1 秒**合并（站在格子边界来回走不会闪），客户端不需要自己去抖。
+ */
+export interface EntityLeaveFrame {
+  mapId: string;
+  /** 离开视野的怪实例 id */
+  monsters: string[];
+  /** 离开视野的玩家账号 id */
+  players: string[];
+}
+
 /** 服务端拾取成功（协议见 realtime.protocol 的 RealtimePickedOk） */
 export interface PickOk {
   castId: number;
@@ -553,6 +585,17 @@ export default class CombatChannel {
 
   /** 玩家互见广播出口（#324；组合根接线到 OtherPlayerManager.applyPlayersFrame，不接时帧被丢弃） */
   static onPlayers: ((data: PlayersFrame) => void) | null = null;
+
+  /**
+   * 进入视野出口（#810；组合根接线到 MonsterManager.applyEntityEnter / OtherPlayerManager…）
+   *
+   * 怪与玩家同一条出口：客户端要做的都是「按 id upsert 一个节点」，拆两条只会让组合根
+   * 再多写一行、让两侧的校验重复一遍。不接时静默丢弃（旧构建没有 AOI 概念，帧到达是正常的）。
+   */
+  static onEntityEnter: ((data: EntityEnterFrame) => void) | null = null;
+
+  /** 离开视野出口（#810；同上：按 id 拆节点，不接时静默丢弃） */
+  static onEntityLeave: ((data: EntityLeaveFrame) => void) | null = null;
 
   /** 拾取结果出口（#325；组合根接线到 DropManager.applyPickedFrame，不接时结果被丢弃并告警） */
   static onPicked: ((data: PickResult) => void) | null = null;
@@ -782,6 +825,29 @@ export default class CombatChannel {
       return;
     }
     this.onPlayers(frame);
+  }
+
+  /**
+   * RealtimeClient 收到 entityEnter 帧后走这里（#810：刚进入视野的怪与玩家）
+   *
+   * 形状校验只做「两个数组都在」：这一帧不是战斗结算，畸形帧最坏是少建两个节点，
+   * 下一拍服务端不会重发 —— 但真正的防线在服务端（帧由它组），客户端不做逐字段深校验。
+   */
+  static dispatchEntityEnter(data: unknown): void {
+    const frame = data as EntityEnterFrame | null;
+    if (!frame || typeof frame !== "object" || !Array.isArray(frame.monsters) || !Array.isArray(frame.players)) return;
+    // 不做帧龄采样（#767 的两条是持续广播，帧龄＝同步延迟；这一帧是事件性的，没有帧龄可言）
+    // 没接线不告警：旧客户端构建（没有 AOI）收到这一帧是正常现象
+    if (!this.onEntityEnter) return;
+    this.onEntityEnter(frame);
+  }
+
+  /** RealtimeClient 收到 entityLeave 帧后走这里（#810：离开视野 —— 只带 id，客户端拆节点） */
+  static dispatchEntityLeave(data: unknown): void {
+    const frame = data as EntityLeaveFrame | null;
+    if (!frame || typeof frame !== "object" || !Array.isArray(frame.monsters) || !Array.isArray(frame.players)) return;
+    if (!this.onEntityLeave) return;
+    this.onEntityLeave(frame);
   }
 
   /** RealtimeClient 收到 picked 帧后走这里（#325：成功与拒绝都在内） */

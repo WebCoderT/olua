@@ -21,7 +21,7 @@ import GuideStore from "./GuideStore";
 import { GUIDE_EVENT } from "../../types/guide";
 import { addMonsterCollider } from "../utils/physics/MonsterCollider";
 import { getWorldColliderRect } from "../utils/physics/MoveBlocking";
-import CombatChannel, { CombatKillReward, CombatSettleHit, MonsterAiFrame, MonsterCastEntry, MonsterHitEntry, MonsterKillEntry, WorldSnapshot } from "../utils/net/CombatChannel";
+import CombatChannel, { CombatKillReward, CombatSettleHit, EntityEnterFrame, EntityLeaveFrame, MonsterAiFrame, MonsterCastEntry, MonsterHitEntry, MonsterKillEntry, WorldSnapshot } from "../utils/net/CombatChannel";
 import RealtimeClient from "../utils/net/RealtimeClient";
 
 /**
@@ -454,12 +454,52 @@ export default class MonsterManager {
       if (!entry.alive) continue; // 死亡中的怪不生成；重生广播一到会作为「新增」落场
       this.spawn(entry.monsterKey, new Vec3(entry.x, entry.y), entry.instanceId, entry.hp);
     }
-    // 场上有、快照里没有：换图残留之类的兜底，按死亡表现清掉（不演经验与掉落 —— 不是本地击杀）
-    this.instanceIndex.forEach((node, instanceId) => {
-      if (seen.has(instanceId)) return;
-      const monster = this.monsterMap.get(node);
-      if (monster && monster.hp > 0) this.applyDamage(node, monster, 0, 0, true);
-    });
+    // 场上有、快照里没有：**不再演死亡**（#810）—— 快照按视野裁剪之后，最常见的缺席原因是
+    // 「这只怪在你视野外」（进图那一份是全量，之后的重生广播只含看得见的），播死亡动画会让
+    // 玩家看见远处的怪凭空倒地。真正的死亡在快照里是 `alive === false` 的条目（上面那条分支），
+    // 所以这里只摘节点（与 entityLeave 同一条路），换图残留也一并清掉。
+    // Array.from 而不是直接展开迭代器：babel loose 下展开 Map 只剩迭代器本身（#471）
+    for (const instanceId of Array.from(this.instanceIndex.keys())) {
+      if (seen.has(instanceId)) continue;
+      this.despawn(instanceId);
+    }
+  }
+
+  /**
+   * 进入视野（#810：AOI 裁剪之后，离你太远的怪不下发；走进来的那一批从这一帧到）
+   *
+   * **纯 upsert**：已经场上的跳过（进图时服务端先给一份全量 world，随后还会把其中一部分
+   * 再 enter 一遍 —— 那时它还不知道你在哪一格，裁不了），缺的按快照建节点。
+   * 死亡中的怪不建（`alive === false`）：那是「还没重生的空位」，建出来就是一只打不死的怪。
+   */
+  static applyEntityEnter(frame: EntityEnterFrame) {
+    for (const entry of frame.monsters) {
+      if (!entry.alive) continue;
+      if (this.instanceIndex.has(entry.instanceId)) continue;
+      this.spawn(entry.monsterKey, new Vec3(entry.x, entry.y), entry.instanceId, entry.hp);
+    }
+  }
+
+  /**
+   * 离开视野（#810：怪游走远了 / 你走开了 —— 它还在，只是你看不见了）
+   *
+   * **不演死亡**：它没死，播死亡动画会让玩家以为打死了一只（还白等一个不给奖励的动画）。
+   * 迟到的事件（结算 / AI 帧）按 id 找不到节点会静默跳过，这是各落点早有的口径。
+   */
+  static applyEntityLeave(frame: EntityLeaveFrame) {
+    for (const instanceId of frame.monsters) this.despawn(instanceId);
+  }
+
+  /** 按实例 id 摘掉一只怪（离开视野；死亡有奖励/无奖励两条路各自走 applyDamage） */
+  private static despawn(instanceId: string) {
+    const node = this.instanceIndex.get(instanceId);
+    if (!node) return;
+    this.instanceIndex.delete(instanceId);
+    this.monsterMap.delete(node);
+    // 状态特效是怪物节点的子节点，下面 destroy 时一并销毁；这里只清账
+    this.statusEffects.delete(instanceId);
+    CursorManager.unregisterHover(node);
+    if (isValid(node)) node.destroy();
   }
 
   /**

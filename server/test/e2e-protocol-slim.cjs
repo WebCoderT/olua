@@ -13,6 +13,9 @@
  *    要求完全一致（含可选性）。比 JSON 相等弱、比 grep 单串强 —— 加字段/删字段/改可选都会红；
  * 2. **world 帧保持原名**：`RealtimeWorldMonster` / `WorldMonsterSnapshot` 仍是 `instanceId`
  *    （进图一次性，瘦身收益低，拍板不改）；
+ * 2b. **AOI 进出帧同形对齐**（#810）：`RealtimeEntityEnterData` ↔ `EntityEnterFrame`、
+ *    `RealtimeEntityLeaveData` ↔ `EntityLeaveFrame`。enter 的怪条目直接复用
+ *    `RealtimeWorldMonster`（客户端建节点走同一段代码），所以这里比的是载荷外壳；
  * 3. **提频默认值钉在源码上**：服务端两个广播节拍兜底 100（configuration.ts + 两个服务）、
  *    env 示例登记 100；客户端上报节拍 `POSITION_INTERVAL = 100` 且 `sendPosition` 取整。
  *
@@ -99,6 +102,9 @@ const clientSrc = stripComments(fs.readFileSync(CLIENT_CHANNEL, "utf8"));
     ["RealtimePlayerEntry", "PlayerEntry"],
     ["RealtimePlayerAppearance", "PlayerAppearance"],
     ["RealtimePlayerAction", "PlayerActionEntry"],
+    // #810：AOI 进出视野的那一对（载荷在服务端单独命名成 Data 接口，才能按名字抽字段）
+    ["RealtimeEntityEnterData", "EntityEnterFrame"],
+    ["RealtimeEntityLeaveData", "EntityLeaveFrame"],
   ];
   for (const [serverName, clientName] of PAIRS) {
     const serverFields = fieldsOfInterface(serverSrc, serverName);

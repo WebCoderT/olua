@@ -163,8 +163,35 @@ export default class OtherPlayerManager {
   }
 
   /**
-   * 附近的人（社交面板「附近」页的取源）
+   * 进入视野（#810：AOI 裁剪之后，远处的人不下发；跑过来的 / 传送过来的从这一帧到）
    *
+   * 与 players 帧的增量走**同一个 upsert**：形状相同（都是 `PlayerEntry`），新建与更新
+   * 是同一段代码，不存在「首次进来要特殊处理」的分支。自己按账号 id 跳过 —— 服务端组
+   * 这一帧时已经排掉了自己，这里是第二道（同 players 帧，宁可多判一次）。
+   */
+  static applyEntityEnter(players: PlayerEntry[], selfAccountId: string): void {
+    if (players.length === 0) return;
+    // 地图上要按关系上色，就不能等玩家手动打开社交面板：第一次见到别人时顺手拉一次快照
+    this.watchSocial();
+    for (const entry of players) {
+      if (entry.a === selfAccountId) continue;
+      this.upsert(entry);
+    }
+  }
+
+  /**
+   * 离开视野（#810：他还在图里，只是你看不见了）
+   *
+   * 与 players 帧的 `left` 拆的是同一种节点（`remove`）—— 区别只在**语义**：`left` 是
+   * 「这个人不在图里了」（下线 / 换图 / 位置超时），这一帧是「他还在，只是走出你的视野」。
+   * 客户端不需要区分，所以这里是同一个落点。
+   */
+  static applyEntityLeave(accountIds: string[]): void {
+    for (const accountId of accountIds) this.remove(accountId);
+  }
+
+  /**
+   * 附近的人（社交面板「附近」页的取源）
    * 就是当前场上的远端玩家 —— 互见帧里有的，才是「此刻同图看得见」的；
    * 关系一并算好（面板直接按它显示标签与颜色，不在面板里再判一遍）。
    */

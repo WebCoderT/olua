@@ -295,6 +295,16 @@ export default class RealtimeClient {
       CombatChannel.dispatchPlayers(frame.data);
       return;
     }
+    if (frame.type === "entityEnter") {
+      // AOI 进出视野（#810）：刚走进视野的怪与玩家，形状的解释在 CombatChannel
+      CombatChannel.dispatchEntityEnter(frame.data);
+      return;
+    }
+    if (frame.type === "entityLeave") {
+      // AOI 离开视野（#810）：只带 id，客户端拆节点
+      CombatChannel.dispatchEntityLeave(frame.data);
+      return;
+    }
     if (frame.type === "statuses") {
       // 本人状态快照（#826 第三批）：被怪物挂上眩晕 / 灼烧时服务端主动推，
       // 不经过 settle —— 不接这条的话要等下一次出手被拒才知道自己被控了
