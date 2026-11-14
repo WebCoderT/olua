@@ -5,6 +5,8 @@
 
 ## 纪律（不可绕过）
 - issue → 分支 → PR（「关联 #n」，**不写 Closes**）→ CI 绿 → squash → 手动 `gh issue close`；长正文一律 `--body-file`。
+- **多会话并行 = worktree**（#948）：仓库有第二个人可能动笔时，改动一律在自己的 worktree（`~/worktrees/olua-<issue>`）；
+  动笔前 `git status` 确认改动归属；只 `git add <明确路径>`；记忆/日志也只写自己 worktree。细则 → `.workbuddy/skills/olua-branch-worktree/`。
 - 仓库 PUBLIC：密钥 / IP / 邀请码 / JWT 不进记忆、不进版本库。**`website/` 永不改动**。
 - **现状 ≠ 正确**：issue 正文先按行号实测 `server/src` + `admin/src` 再动手。
 - **待决定项实时问**（AskUserQuestion 一轮 1~4 个）；文档禁写「不做」（写「暂时放置 + 重开条件」）；
