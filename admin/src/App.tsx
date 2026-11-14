@@ -45,6 +45,7 @@ import { AuditPage } from "./pages/AuditPage";
 import { EventLogsPage } from "./pages/EventLogsPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { LoginPage } from "./pages/LoginPage";
+import { LegendPreviewPage } from "./pages/LegendPreviewPage";
 import { MailsPage } from "./pages/MailsPage";
 import { MailSendPage } from "./pages/MailSendPage";
 import { MyAccountPage } from "./pages/MyAccountPage";
@@ -98,6 +99,8 @@ export function App() {
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
+        {/* #946：组件试衣间，免登录（验收期间临时路由，是否转正待定） */}
+        <Route path="/legend-preview" element={<LegendPreviewPage />} />
         <Route
           element={
             <RequireAuth>
