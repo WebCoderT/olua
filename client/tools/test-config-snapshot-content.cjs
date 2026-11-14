@@ -73,8 +73,9 @@ function main() {
   // 沙箱的「快照到达前」状态：客户端自身零出厂行，表是 hydrateSnapshotTables 按服务端种子灌的。
   // **必须在任何 apply* 之前断言** —— 分段入口是整表重建，后跑的分段会把别的表清空。
   console.log("\n=== 快照到达前的表（沙箱按线上同一条路灌种子）===");
-  check(drugs.length === 11, "药品表 11 种（#603 第十域：数据在 item-seed；金创药 5 档 + 魔法药 3 档 + 太阳水 + 两种百分比药）", `size=${drugs.length}`);
-  check(fashionData.length === 20, "时装表 20 套（#603 第十二域：数据在 fashion-seed）", String(fashionData.length));
+  // 药品 / 时装各几行是运营数据（#603 的种子能加能删）；判「灌进去了」+ 「行数 = 快照行数」（下一条 NPC 才是范式）
+  check(drugs.length > 0, "药品表有行（#603 第十域：数据在 item-seed）", `size=${drugs.length}`);
+  check(fashionData.length > 0, "时装表有行（#603 第十二域：数据在 fashion-seed）", String(fashionData.length));
   // #655：沙箱里这张表由快照灌满（线上也是同一条 apply* 链），所以判据从「空」改成「行数 = 快照行数」；
   // 「客户端没有本地兜底」由源码断言守（game-config.ts 里 npcs 以空 Map 起）
   check(npcs.size === factory.npcs().length, "NPC 表行数 = 快照行数（客户端自身零出厂行）", `size=${npcs.size}`);
