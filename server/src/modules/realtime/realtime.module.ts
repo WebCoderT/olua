@@ -7,6 +7,7 @@ import { WorldModule } from "../world/world.module";
 import { MapModule } from "../map/map.module";
 import { EventLogModule } from "../event-log/event-log.module";
 import { BlockService } from "./block.service";
+import { AoiService } from "./aoi.service";
 import { CastGuardService } from "./cast-guard.service";
 import { ChatService } from "./chat.service";
 import { CombatSettlementService } from "./combat-settlement.service";
@@ -56,6 +57,9 @@ import { StatusTickService } from "./status-tick.service";
     CastGuardService,
     MonsterAiService,
     PlayerPresenceService,
+    // 视野裁剪（#810）：格子索引 + 每拍的进出差量。状态是**进程内内存态**（索引随房间
+    // 生命周期），所以与广播出口同住本模块 —— 拆进程形态里只有实时进程需要它
+    AoiService,
     // 移动三道校验（#811）：几何/网格（两个消费者共用一份副本）、闸门、服务端 A*。
     // 三者都住本模块 —— 拆进程形态里只有实时进程会判位移与寻路
     MapGeometryService,

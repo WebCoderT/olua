@@ -715,6 +715,62 @@ export interface RealtimePlayerAction {
 
 //#endregion
 
+//#region AOI 进出视野（#810：广播按格子裁剪，进出走增量帧）
+
+/**
+ * 服务端 → 客户端：这些实体**刚进入你的视野**（#810）
+ *
+ * 怪物与玩家走同一对帧（`entityEnter` / `entityLeave`）：客户端要做的动作是同一件事
+ * ——「场上多了一个节点 / 少了一个节点」，分成两对帧只会让客户端在两处维护同一套增删逻辑。
+ * 载荷按类型分两个数组，是因为两者的数据形状本来就不同（怪要 `monsterKey` 建模型、
+ * 玩家要外观拼小人），硬合成一个带判别字段的联合体会让客户端每次消费都要先分支。
+ *
+ * **收到就建（或按 id 更新）** —— 进图时服务端先给一份全量 `world` 帧（那时还不知道你在哪，
+ * 没法裁），随后这一帧可能把其中一部分再 enter 一遍：客户端按 id upsert，重复 enter 是空操作。
+ */
+export interface RealtimeEntityEnterMessage {
+  type: "entityEnter";
+  data: RealtimeEntityEnterData;
+}
+
+/**
+ * `entityEnter` 的载荷（单独命名：客户端 `EntityEnterFrame` 与它逐字段一一对应，
+ * 由 `e2e-protocol-slim` 做源码级比对 —— 嵌在 Message 里就没法按接口名抽字段了）
+ */
+export interface RealtimeEntityEnterData {
+  mapId: string;
+  /** 新进入视野的怪（形状与 world 帧的条目相同：带 maxHp 等不变量，客户端可直接建节点） */
+  monsters: RealtimeWorldMonster[];
+  /** 新进入视野的玩家（形状与 players 帧的条目相同） */
+  players: RealtimePlayerEntry[];
+}
+
+/**
+ * 服务端 → 客户端：这些实体**离开了你的视野**（#810）
+ *
+ * 只给 id：客户端按 id 拆节点，不需要任何其他字段。离开**延迟 1 秒**（`AOI_LEAVE_DELAY_MS`）
+ * —— 站在格子边界来回走时，1 秒内又进来就不发这一帧，否则玩家会看到怪闪一下。
+ *
+ * 与 players 帧的 `left` 的区别：`left` 是「这个人**不在图里**了」（下线 / 换图 / 超时），
+ * 这一帧是「他还在，只是你看不见了」。两者都要拆节点，但只有 `left` 会通知到全图
+ * （离开视野是逐观看者的，别人的视野里他还在）。
+ */
+export interface RealtimeEntityLeaveMessage {
+  type: "entityLeave";
+  data: RealtimeEntityLeaveData;
+}
+
+/** `entityLeave` 的载荷（同 `RealtimeEntityEnterData`：与客户端 `EntityLeaveFrame` 逐字段对应） */
+export interface RealtimeEntityLeaveData {
+  mapId: string;
+  /** 离开视野的怪实例 id */
+  monsters: string[];
+  /** 离开视野的玩家账号 id */
+  players: string[];
+}
+
+//#endregion
+
 //#region 掉落拾取（#325：地面掉落物归属击杀者，拾取入包的权威在服务端）
 
 /**
@@ -1154,7 +1210,9 @@ export type RealtimeServerMessage =
   | RealtimeStatusMessage
   | RealtimePosCorrectMessage
   | RealtimePathMessage
-  | RealtimeWorldReloadMessage;
+  | RealtimeWorldReloadMessage
+  | RealtimeEntityEnterMessage
+  | RealtimeEntityLeaveMessage;
 
 /**
  * 关闭码
