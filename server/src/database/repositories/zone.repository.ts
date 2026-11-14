@@ -51,7 +51,7 @@ export class ZoneRepository {
 
   /** 某个区名下的账号数（合并前给管理端确认用） */
   countAccounts(zoneId: number): number {
-    return this.db.count("SELECT COUNT(1) AS total FROM accounts WHERE zone_id = ?", [zoneId]);
+    return this.db.count("SELECT COUNT(1) AS total FROM accounts WHERE active_zone_id = ?", [zoneId]);
   }
 
   /**

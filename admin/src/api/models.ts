@@ -14,2840 +14,19 @@
  * 字段与服务端 `@ApiProperty` 一一对应；这里的每一条都对应 OpenAPI 文档里的一个 schema。
  */
 
-export type Register = {
+export type Health = {
   /**
-   * 游戏账号：3~20 位字母 / 数字 / 下划线
+   * 服务状态
    */
-  username: string;
+  status: string;
   /**
-   * 密码：6~32 位
+   * 运行环境
    */
-  password: string;
+  env: string;
   /**
-   * 归属区 id（可省略，默认 1 = 一区；活区清单见 GET /zones）
+   * 服务端时间戳（毫秒）
    */
-  zoneId?: number;
-};
-
-export type Login = {
-  /**
-   * 游戏账号
-   */
-  username: string;
-  /**
-   * 密码
-   */
-  password: string;
-};
-
-export type CreateRole = {
-  /**
-   * 角色名（同一账号内唯一；去空白后 1~12 字）
-   */
-  name: string;
-  /**
-   * 职业（客户端 OECCUPATION 枚举值）
-   */
-  occupation: string;
-  /**
-   * 性别（客户端 SEX 枚举值）
-   */
-  sex: string;
-};
-
-export type SaveRole = {
-  /**
-   * 角色完整数据（全量覆盖）
-   */
-  data: Record<string, unknown>;
-  /**
-   * 客户端读到的修订号（必填；与服务端不一致时返回 20006，需先拉最新数据）
-   */
-  revision: number;
-};
-
-export type GrowthUpgrade = {
-  /**
-   * 成长线：title 称号 / soul 战魂 / rank 军衔
-   */
-  kind: "title" | "soul" | "rank";
-  /**
-   * 目标阶位（必须是升级链上当前阶位的下一阶，防跳级）
-   */
-  targetLevel: number;
-  /**
-   * 修订号（乐观锁，必填）：客户端读到的值，与服务端不一致时 20006，需先拉最新存档（B62 / #820）
-   */
-  revision: number;
-};
-
-export type MallPurchase = {
-  /**
-   * 商品 id（必须是商城目录里的装备变体）
-   */
-  goodId: string;
-  /**
-   * 修订号（乐观锁，必填）：客户端读到的值，与服务端不一致时 20006，需先拉最新存档（B62 / #820）
-   */
-  revision: number;
-};
-
-export type SellEntry = {
-  /**
-   * 物品 id（必须在共享快照的出售价表里，否则 20018）
-   */
-  goodId: string;
-  /**
-   * 要卖的件数（≥1；超过背包持有量整单拒绝 20019）
-   */
-  count: number;
-};
-
-export type SellGoods = {
-  /**
-   * 要卖的东西（一次最多 200 条，够一键回收把整包装备报上来）。同 id 的多条会先合并再扣，重复报同一格不构成两次出售。
-   */
-  entries: SellEntry[];
-  /**
-   * 修订号（乐观锁，必填）：客户端读到的值，与服务端不一致时 20006，需先拉最新存档（B62 / #820）
-   */
-  revision: number;
-};
-
-export type DrugUse = {
-  /**
-   * 背包行
-   */
-  row: number;
-  /**
-   * 背包列
-   */
-  col: number;
-  /**
-   * 修订号（乐观锁，必填）：客户端读到的值，与服务端不一致时 20006，需先拉最新存档（B62 / #820）
-   */
-  revision: number;
-};
-
-export type MoneyUse = {
-  /**
-   * 背包行
-   */
-  row: number;
-  /**
-   * 背包列
-   */
-  col: number;
-  /**
-   * 修订号（乐观锁，必填）：客户端读到的值，与服务端不一致时 20006，需先拉最新存档（B62 / #820）
-   */
-  revision: number;
-};
-
-export type LevelScrollUse = {
-  /**
-   * 背包行
-   */
-  row: number;
-  /**
-   * 背包列
-   */
-  col: number;
-  /**
-   * 修订号（乐观锁，必填）：客户端读到的值，与服务端不一致时 20006，需先拉最新存档（B62 / #820）
-   */
-  revision: number;
-};
-
-export type SkillUpgrade = {
-  /**
-   * 要升的技能 id（必须是已学会的技能，见 `data.skills`）
-   */
-  skillId: string;
-  /**
-   * 修订号（乐观锁，必填）：客户端读到的值，与服务端不一致时 20006，需先拉最新存档（B62 / #820）
-   */
-  revision: number;
-};
-
-export type AttrAllocate = {
-  /**
-   * 本次加给力量的点数（缺省 = 0）
-   */
-  str?: number;
-  /**
-   * 本次加给敏捷的点数（缺省 = 0）
-   */
-  agi?: number;
-  /**
-   * 本次加给体质的点数（缺省 = 0）
-   */
-  vit?: number;
-  /**
-   * 本次加给精神的点数（缺省 = 0）
-   */
-  spi?: number;
-  /**
-   * 修订号（乐观锁，必填）：客户端读到的值，与服务端不一致时 20006，需先拉最新存档（B62 / #820）
-   */
-  revision: number;
-};
-
-export type AttrReset = {
-  /**
-   * 修订号（乐观锁，必填）：与服务端不一致时 20006，需先拉最新存档（B62 / #820）
-   */
-  revision: number;
-};
-
-export type FashionBuy = {
-  /**
-   * 要买的时装 id（fashions 表主键，如 cloth_2）
-   */
-  fashionId: string;
-  /**
-   * 修订号（乐观锁，必填）：客户端读到的值，与服务端不一致时 20006，需先拉最新存档（B62 / #820）
-   */
-  revision: number;
-};
-
-export type FashionWear = {
-  /**
-   * 要穿的时装 id；null = 脱下当前时装
-   */
-  fashionId: string | null;
-  /**
-   * 修订号（乐观锁，必填）：客户端读到的值，与服务端不一致时 20006，需先拉最新存档（B62 / #820）
-   */
-  revision: number;
-};
-
-export type BagOpCell = {
-  /**
-   * 行
-   */
-  row: number;
-  /**
-   * 列
-   */
-  col: number;
-  /**
-   * 物品 id
-   */
-  id: string;
-  /**
-   * 件数（结构粗上限；真实单格上限按物品所属表 max_stack 在服务端判，#841/#842）
-   */
-  count: number;
-};
-
-export type BagOp = {
-  /**
-   * 动作
-   */
-  action: "equip" | "unequip" | "discard" | "move" | "tidy";
-  /**
-   * 背包行（equip / discard）
-   */
-  row?: number;
-  /**
-   * 背包列（equip / discard）
-   */
-  col?: number;
-  /**
-   * 装备槽位（unequip），如 cloth / weapon
-   */
-  slot?: string;
-  /**
-   * 操作后的背包内容（move / tidy；稀疏格子，只报有东西的格子）
-   */
-  cells?: BagOpCell[];
-  /**
-   * 修订号（乐观锁，必填）：客户端读到的值，与服务端不一致时 20006，需先拉最新存档（B62 / #820）
-   */
-  revision: number;
-};
-
-export type AdminRegister = {
-  /**
-   * 管理员账号：3~20 位字母 / 数字 / 下划线
-   */
-  username: string;
-  /**
-   * 密码：6~32 位
-   */
-  password: string;
-  /**
-   * 注册码（服务端配置了 ADMIN_REGISTER_CODE 时必填；未配置且未开 ADMIN_REGISTER_OPEN 时，管理端注册整体关闭）
-   */
-  registerCode?: string;
-};
-
-export type AdminLogin = {
-  /**
-   * 管理员账号
-   */
-  username: string;
-  /**
-   * 密码
-   */
-  password: string;
-};
-
-export type ChangeAdminPassword = {
-  /**
-   * 当前密码
-   */
-  oldPassword: string;
-  /**
-   * 新密码（6~32 位）
-   */
-  newPassword: string;
-};
-
-export type UpdateAccountEmail = {
-  /**
-   * 玩家邮箱；传非空串补录 / 改，传空串清空。同一邮箱只绑一个账号（大小写不敏感）。
-   */
-  email: string;
-};
-
-export type UpdateAccountStatus = {
-  /**
-   * 目标状态：disabled 封禁 / active 解封（封禁四件套一并清空）
-   */
-  status?: "active" | "disabled";
-  /**
-   * 封禁原因：写进操作日志，也会出现在玩家登录被拒的提示里
-   */
-  reason?: string;
-  /**
-   * 封禁时长（小时）；不填或 null = 永久。仅在 status=disabled 时有意义
-   */
-  durationHours?: unknown | null;
-};
-
-export type BatchUpdateAccountStatus = {
-  /**
-   * 目标状态：disabled 封禁 / active 解封（封禁四件套一并清空）
-   */
-  status?: "active" | "disabled";
-  /**
-   * 封禁原因：写进操作日志，也会出现在玩家登录被拒的提示里
-   */
-  reason?: string;
-  /**
-   * 封禁时长（小时）；不填或 null = 永久。仅在 status=disabled 时有意义
-   */
-  durationHours?: unknown | null;
-  /**
-   * 要变更的账号 id 列表（最多 100 条）
-   */
-  ids: string[];
-};
-
-export type ResetAccountPassword = {
-  /**
-   * 新密码（6~32 位）
-   */
-  password: string;
-};
-
-export type BatchDeleteRoles = {
-  /**
-   * 要删除的角色 id 列表（最多 100 条）
-   */
-  ids: string[];
-};
-
-export type RoleBagCell = {
-  /**
-   * 格子行号（0 ~ 63）
-   */
-  row: number;
-  /**
-   * 格子列号（0 ~ 63）
-   */
-  col: number;
-  /**
-   * 物品 id（客户端 configs/items 的 key）
-   */
-  id: string;
-  /**
-   * 数量
-   */
-  count: number;
-};
-
-export type RolePatchPayload = {
-  /**
-   * 角色名
-   */
-  name?: string;
-  /**
-   * 职业（1 战士 / 2 魔法师 / 3 道士 / 4 全职业）
-   */
-  occupation?: "1" | "2" | "3" | "4";
-  /**
-   * 性别（1 男 / 2 女 / 3 全性别）
-   */
-  sex?: "1" | "2" | "3";
-  /**
-   * 等级
-   */
-  level?: number;
-  /**
-   * 绑定元宝（唯一货币，旧币种字段已随 #843/#844 收敛删除）
-   */
-  bindGold?: number;
-  /**
-   * 经验
-   */
-  exp?: number;
-  /**
-   * 战魂等级
-   */
-  soulOfWar?: number;
-  /**
-   * 称号等级
-   */
-  title?: number;
-  /**
-   * 军衔阶数
-   */
-  rank?: number;
-  /**
-   * 当前血量（0 = 死亡状态，玩家可走复活接口）
-   */
-  hp?: number;
-  /**
-   * 当前魔法值
-   */
-  mp?: number;
-  /**
-   * 时装（外观）id，如 cloth_2；null = 脱掉时装
-   */
-  fashionCloth?: string | null;
-  /**
-   * 时装拥有清单（整份覆盖，如 ["cloth_2", "cloth_5"]）
-   */
-  fashionsOwned?: string[];
-  /**
-   * 头像编号
-   */
-  avatar?: number;
-  /**
-   * 所在地图 id（客户端 configs/map 的 key）
-   */
-  onMap?: string;
-  /**
-   * 装备穿戴表（槽位名 → 装备 id；null 或空串表示该槽位空着）
-   */
-  equipments?: Record<string, string | null>;
-  /**
-   * 技能等级表（技能 id → 等级）
-   */
-  skills?: Record<string, number>;
-  /**
-   * 背包格子（稀疏：行/列/物品 id/数量）；空数组 = 清空背包
-   */
-  bag?: RoleBagCell[];
-};
-
-export type AdminUpdatePayload = {
-  /**
-   * 目标角色
-   */
-  role?: "super_admin" | "admin" | "viewer";
-  /**
-   * 目标状态
-   */
-  status?: "active" | "disabled";
-};
-
-export type ResetAdminPassword = {
-  /**
-   * 新密码（6~32 位）
-   */
-  password: string;
-};
-
-export type CreateZone = {
-  /**
-   * 区服名（1~20 字，唯一）
-   */
-  name: string;
-};
-
-export type MergeZone = {
-  /**
-   * 被并入的区（from，合并后打上已合并标记）
-   */
-  fromZoneId: number;
-  /**
-   * 并入的目标区（to，必须还是活区）
-   */
-  toZoneId: number;
-};
-
-export type CreateAnnouncement = {
-  /**
-   * 标题
-   */
-  title: string;
-  /**
-   * 正文（纯文本）
-   */
-  content: string;
-  /**
-   * 级别，默认 normal
-   */
-  level?: "normal" | "important";
-  /**
-   * 是否启用，默认 true
-   */
-  enabled?: boolean;
-  /**
-   * 生效开始时间（毫秒时间戳）；不传 = 立即生效
-   */
-  startsAt?: number;
-  /**
-   * 生效结束时间（毫秒时间戳，不含）；不传 = 不设截止
-   */
-  endsAt?: number;
-};
-
-export type UpdateAnnouncement = {
-  /**
-   * 标题（不传则不改）
-   */
-  title?: string;
-  /**
-   * 正文（不传则不改）
-   */
-  content?: string;
-  /**
-   * 级别（不传则不改）
-   */
-  level?: "normal" | "important";
-  /**
-   * 启用 / 停用（不传则不改）
-   */
-  enabled?: boolean;
-  /**
-   * 生效开始时间（毫秒）；传 `null` = 改为立即生效，不传则不改
-   */
-  startsAt?: number | null;
-  /**
-   * 生效结束时间（毫秒，不含）；传 `null` = 改为不设截止，不传则不改
-   */
-  endsAt?: number | null;
-};
-
-export type UpdateAchievementCondition = {
-  /**
-   * 条件类型
-   */
-  type?: "kill" | "quest" | "level" | "combat" | "collect";
-  /**
-   * 目标（kill = 怪物 key 或 "*"；collect = 物品 id；其余留空）
-   */
-  target?: string;
-  /**
-   * 门槛值（1~999999）
-   */
-  count?: number;
-};
-
-export type AchievementRewardItem = {
-  /**
-   * 物品 id
-   */
-  goodId: string;
-  /**
-   * 数量
-   */
-  count: number;
-};
-
-export type UpdateAchievementRewards = {
-  /**
-   * 绑定元宝（≥0）
-   */
-  bindGold?: number;
-  /**
-   * 经验（≥0）
-   */
-  exp?: number;
-  /**
-   * 物品清单（≤20 条）
-   */
-  items?: AchievementRewardItem[];
-};
-
-export type UpdateAchievement = {
-  /**
-   * 分类
-   */
-  category?: "battle" | "growth" | "explore";
-  /**
-   * 名称（1~50 字）
-   */
-  label?: string;
-  /**
-   * 描述（≤200 字）
-   */
-  description?: string;
-  /**
-   * 条件（逐字段合并）
-   */
-  condition?: UpdateAchievementCondition;
-  /**
-   * 奖励（逐字段合并）
-   */
-  rewards?: UpdateAchievementRewards;
-  /**
-   * 分类内展示顺序（0~9999）
-   */
-  sortOrder?: number;
-  /**
-   * 未达成时是否默认折叠
-   */
-  hidden?: boolean;
-};
-
-export type CreateAchievement = {
-  /**
-   * 分类
-   */
-  category?: "battle" | "growth" | "explore";
-  /**
-   * 名称（1~50 字）
-   */
-  label?: string;
-  /**
-   * 描述（≤200 字）
-   */
-  description?: string;
-  /**
-   * 条件（逐字段合并）
-   */
-  condition?: UpdateAchievementCondition;
-  /**
-   * 奖励（逐字段合并）
-   */
-  rewards?: UpdateAchievementRewards;
-  /**
-   * 分类内展示顺序（0~9999）
-   */
-  sortOrder?: number;
-  /**
-   * 未达成时是否默认折叠
-   */
-  hidden?: boolean;
-  /**
-   * 成就 id（唯一；语义串，如 ach_kill_10）
-   */
-  id: string;
-};
-
-export type UpgradeOrder = {
-  /**
-   * 重排后的称号等级全序列（须与当前 upgrade 渠道的等级集合完全一致）
-   */
-  levels: number[];
-};
-
-export type ConfigAttributeRange = {
-  /**
-   * 下限
-   */
-  min: number;
-  /**
-   * 上限
-   */
-  max: number;
-};
-
-export type ConfigAttributes = {
-  /**
-   * 生命上限加成
-   */
-  maxHp: number;
-  /**
-   * 每 5 秒回血
-   */
-  hpRecover: number;
-  /**
-   * 物理攻击 [下限, 上限]
-   */
-  physicalAttack: ConfigAttributeRange;
-  /**
-   * 魔法攻击 [下限, 上限]
-   */
-  magicAttack: ConfigAttributeRange;
-  /**
-   * 道术攻击 [下限, 上限]
-   */
-  taoistAttack: ConfigAttributeRange;
-  /**
-   * 物理防御 [下限, 上限]
-   */
-  physicalDefense: ConfigAttributeRange;
-  /**
-   * 魔法防御 [下限, 上限]
-   */
-  magicDefense: ConfigAttributeRange;
-  /**
-   * 道术防御 [下限, 上限]
-   */
-  taoistDefense: ConfigAttributeRange;
-};
-
-export type UpdateTitle = {
-  /**
-   * 名称（不传则不改）
-   */
-  label?: string;
-  /**
-   * 描述（不传则不改）
-   */
-  description?: string;
-  /**
-   * 动画资源目录（不传则不改）
-   */
-  animation?: string;
-  /**
-   * 动画帧率（不传则不改）
-   */
-  animationFrameRate?: number;
-  /**
-   * 升到该级消耗的绑定元宝（不传则不改）
-   */
-  bindGold?: number;
-  /**
-   * 获得渠道（不传则不改）
-   */
-  acquireChannel?: "upgrade" | "grant" | "unavailable";
-  /**
-   * 八项属性（**整份提交、整份替换**，不传则不改；区间型要求 0 ≤ min ≤ max）
-   */
-  attributes?: ConfigAttributes;
-};
-
-export type UpdateSoul = {
-  /**
-   * 名称（不传则不改）
-   */
-  label?: string;
-  /**
-   * 描述（不传则不改）
-   */
-  description?: string;
-  /**
-   * 动画资源目录（不传则不改）
-   */
-  animation?: string;
-  /**
-   * 动画帧率（不传则不改）
-   */
-  animationFrameRate?: number;
-  /**
-   * 升到该阶消耗的绑定元宝（不传则不改）
-   */
-  bindGold?: number;
-  /**
-   * 八项属性（**整份提交、整份替换**，不传则不改；区间型要求 0 ≤ min ≤ max）
-   */
-  attributes?: ConfigAttributes;
-};
-
-export type UpdateRank = {
-  /**
-   * 衔名（不传则不改）
-   */
-  label?: string;
-  /**
-   * 大段名（不传则不改）
-   */
-  tier?: string;
-  /**
-   * 描述（不传则不改）
-   */
-  description?: string;
-  /**
-   * 晋到该阶消耗的绑定元宝（不传则不改；编辑弹窗会原样带回当前值）
-   */
-  bindGold?: number;
-  /**
-   * 八项属性（**整份提交、整份替换**，不传则不改；区间型要求 0 ≤ min ≤ max）
-   */
-  attributes?: ConfigAttributes;
-};
-
-export type DamageCoefficient = {
-  /**
-   * 收益基数属性（maxHp / hpRecover / physicalAttack / magicAttack / taoistAttack / physicalDefense / magicDefense / taoistDefense）
-   */
-  baseType: string;
-  /**
-   * 倍率（0 = 该级不造成伤害；上限 100 防止手滑多打两个零）
-   */
-  baseTypeRate: number;
-};
-
-export type UpdateSkill = {
-  /**
-   * 技能名（≤50 字）
-   */
-  label?: string;
-  /**
-   * 图标资源路径（≤200 字；空串 = 不显示图标）
-   */
-  icon?: string;
-  /**
-   * 分类：0 主动 / 1 被动 / 2 状态 / 3 回复
-   */
-  category?: "0" | "1" | "2" | "3";
-  /**
-   * 目标类型：0 区域 / 1 单体 / 2 群体 / 3 自身
-   */
-  targetType?: "0" | "1" | "2" | "3";
-  /**
-   * 施法动作（≤50 字；空串 = 不播动作）
-   */
-  action?: string;
-  /**
-   * 技能特效图集路径（≤200 字；空串 = 无特效）
-   */
-  effect?: string;
-  /**
-   * 特效是否播在自己身上
-   */
-  effectOnSelf?: boolean;
-  /**
-   * 冷却（秒，0 = 不限制）
-   */
-  cooldown?: number;
-  /**
-   * 释放消耗魔法值（0 = 不消耗）
-   */
-  mpCost?: number;
-  /**
-   * 施法距离（0 = 不限距离）
-   */
-  distance?: number;
-  /**
-   * 学习 / 开启等级
-   */
-  levelReq?: number;
-  /**
-   * 描述文案（≤500 字）
-   */
-  description?: string;
-  /**
-   * 伤害系数（下标 = 技能等级 - 1，最多 20 级）
-   */
-  damageCoefficients?: DamageCoefficient[];
-  /**
-   * 释放后挂载的状态 id（空串 = 不挂；状态型技能必填）
-   */
-  statusId?: string;
-  /**
-   * 动作锁时长（毫秒；0 = 跟动画时长走）
-   */
-  castLockMs?: number;
-  /**
-   * 是否要求有合法目标
-   */
-  requireTarget?: boolean;
-  /**
-   * 是否可被自动战斗 / 挂机释放
-   */
-  canAuto?: boolean;
-  /**
-   * 职业归属：1 战士 / 2 魔法师 / 3 道士 / 4 全职业（#603 第十一域；客户端技能栏按它重建映射）
-   */
-  occupation?: "1" | "2" | "3" | "4";
-  /**
-   * 命中后的击退距离（像素；0 = 不击退；只对单体技能生效）
-   */
-  pushDistance?: number;
-  /**
-   * 撞飞概率（0~1；0 = 从不撞飞，1 = 必撞。撞飞还要求施法者等级 > 怪物等级）
-   */
-  pushChance?: number;
-  /**
-   * 技能自带暴击率（0~1；与角色暴击率相加。`desc` 写「附带 15% 暴击率」就配 0.15）
-   */
-  critRate?: number;
-  /**
-   * 技能自带暴击倍率（> 1 才生效；0 = 用角色那一份。它替换的是倍率，不是概率）
-   */
-  critDamage?: number;
-  /**
-   * 无视防御比例（0~1；1 = 完全无视目标防御，0 = 正常吃防御）
-   */
-  defIgnore?: number;
-  /**
-   * 两段连击的第二段系数（0~1；0 = 没有第二段。第二段伤害 = 第一段 × 系数）
-   */
-  secondHitRatio?: number;
-  /**
-   * 拉人距离（像素；0 = 不拉。方向 = 目标朝施法者）
-   */
-  pullDistance?: number;
-};
-
-export type CreateSkill = {
-  /**
-   * 技能名（≤50 字）
-   */
-  label?: string;
-  /**
-   * 图标资源路径（≤200 字；空串 = 不显示图标）
-   */
-  icon?: string;
-  /**
-   * 分类：0 主动 / 1 被动 / 2 状态 / 3 回复
-   */
-  category?: "0" | "1" | "2" | "3";
-  /**
-   * 目标类型：0 区域 / 1 单体 / 2 群体 / 3 自身
-   */
-  targetType?: "0" | "1" | "2" | "3";
-  /**
-   * 施法动作（≤50 字；空串 = 不播动作）
-   */
-  action?: string;
-  /**
-   * 技能特效图集路径（≤200 字；空串 = 无特效）
-   */
-  effect?: string;
-  /**
-   * 特效是否播在自己身上
-   */
-  effectOnSelf?: boolean;
-  /**
-   * 冷却（秒，0 = 不限制）
-   */
-  cooldown?: number;
-  /**
-   * 释放消耗魔法值（0 = 不消耗）
-   */
-  mpCost?: number;
-  /**
-   * 施法距离（0 = 不限距离）
-   */
-  distance?: number;
-  /**
-   * 学习 / 开启等级
-   */
-  levelReq?: number;
-  /**
-   * 描述文案（≤500 字）
-   */
-  description?: string;
-  /**
-   * 伤害系数（下标 = 技能等级 - 1，最多 20 级）
-   */
-  damageCoefficients?: DamageCoefficient[];
-  /**
-   * 释放后挂载的状态 id（空串 = 不挂；状态型技能必填）
-   */
-  statusId?: string;
-  /**
-   * 动作锁时长（毫秒；0 = 跟动画时长走）
-   */
-  castLockMs?: number;
-  /**
-   * 是否要求有合法目标
-   */
-  requireTarget?: boolean;
-  /**
-   * 是否可被自动战斗 / 挂机释放
-   */
-  canAuto?: boolean;
-  /**
-   * 职业归属：1 战士 / 2 魔法师 / 3 道士 / 4 全职业（#603 第十一域；客户端技能栏按它重建映射）
-   */
-  occupation?: "1" | "2" | "3" | "4";
-  /**
-   * 命中后的击退距离（像素；0 = 不击退；只对单体技能生效）
-   */
-  pushDistance?: number;
-  /**
-   * 撞飞概率（0~1；0 = 从不撞飞，1 = 必撞。撞飞还要求施法者等级 > 怪物等级）
-   */
-  pushChance?: number;
-  /**
-   * 技能自带暴击率（0~1；与角色暴击率相加。`desc` 写「附带 15% 暴击率」就配 0.15）
-   */
-  critRate?: number;
-  /**
-   * 技能自带暴击倍率（> 1 才生效；0 = 用角色那一份。它替换的是倍率，不是概率）
-   */
-  critDamage?: number;
-  /**
-   * 无视防御比例（0~1；1 = 完全无视目标防御，0 = 正常吃防御）
-   */
-  defIgnore?: number;
-  /**
-   * 两段连击的第二段系数（0~1；0 = 没有第二段。第二段伤害 = 第一段 × 系数）
-   */
-  secondHitRatio?: number;
-  /**
-   * 拉人距离（像素；0 = 不拉。方向 = 目标朝施法者）
-   */
-  pullDistance?: number;
-  /**
-   * 技能 id（怪物技能段：9000~9999 的四位数字，如 "9001"）
-   */
-  id: string;
-  /**
-   * 归属：只能 monster（缺省 monster）
-   */
-  owner?: "role" | "monster";
-};
-
-export type StatusCombat = {
-  /**
-   * 格挡触发概率 0~1（缺省 = 不参与格挡判定）
-   */
-  blockChance?: number;
-  /**
-   * 格挡触发时本次伤害的乘数（0~1，0.5 = 减半）
-   */
-  blockFactor?: number;
-  /**
-   * 防御乘法系数（≥1，1.5 = 防御 ×1.5；多个状态连乘）
-   */
-  defenseMultiplier?: number;
-  /**
-   * 攻击乘法系数（≥1，1.5 = 攻击 ×1.5；多个状态连乘）
-   */
-  attackMultiplier?: number;
-};
-
-export type StatusTick = {
-  /**
-   * 每拍掉多少血（负数扣血，正数当治疗）
-   */
-  hp?: number;
-  /**
-   * 每拍回多少蓝（负数扣蓝）
-   */
-  mp?: number;
-  /**
-   * 每拍按最大血量的比例变化（-0.02 = 每拍掉 2%）
-   */
-  hpPercent?: number;
-  /**
-   * 每拍按最大蓝量的比例变化
-   */
-  mpPercent?: number;
-};
-
-export type StatusControl = {
-  /**
-   * 眩晕 / 麻痹：禁止移动与出手（两者在服务端是同一条判据，只是来源与图标不同）
-   */
-  stun?: boolean;
-  /**
-   * 定身：只禁止移动，仍可出手
-   */
-  root?: boolean;
-  /**
-   * 沉默：只禁止出手，仍可移动
-   */
-  silence?: boolean;
-};
-
-export type UpdateStatus = {
-  /**
-   * 状态名（≤50 字）
-   */
-  label?: string;
-  /**
-   * 图标资源路径（≤200 字；空串 = 不显示图标）
-   */
-  icon?: string;
-  /**
-   * 持续时间（秒，>0）
-   */
-  duration?: number;
-  /**
-   * 来源：skill / equipment / privilege / other
-   */
-  source?: "skill" | "equipment" | "privilege" | "other";
-  /**
-   * 描述文案（≤500 字）
-   */
-  description?: string;
-  /**
-   * 身上特效图集路径（≤200 字；空串 = 只在图标栏显示）
-   */
-  effect?: string;
-  /**
-   * 身上特效是否只播一遍停在尾帧
-   */
-  effectHoldLast?: boolean;
-  /**
-   * 战斗数值修正（整份替换：不传则不改）
-   */
-  combat?: StatusCombat;
-  /**
-   * 分类：buff / damage / control / speed
-   */
-  kind?: "buff" | "damage" | "control" | "speed";
-  /**
-   * 最大层数（1~99，1 = 不叠）
-   */
-  maxStacks?: number;
-  /**
-   * 周期触发间隔（毫秒；0 = 无周期，最小 100）
-   */
-  tickMs?: number;
-  /**
-   * 每拍做什么（整份替换：不传则不改）
-   */
-  tickEffect?: StatusTick;
-  /**
-   * 控制标记（整份替换：不传则不改）
-   */
-  controlFlags?: StatusControl;
-};
-
-export type CreateEquipment = {
-  /**
-   * 装备 id（可省 —— 缺省按 `部位_序号` 生成，如 cloth_33）。手填要求：小写字母开头，只含小写字母 / 数字 / 下划线，≤40 字符；撞已有 id → 409（`50039`）
-   */
-  id?: string;
-  /**
-   * 部位（EQUIPMENT_TYPE 的枚举值，取值：other1 / cloth / other2 / weapon / necklace / ring / accessories / shinguard / helmet / scapular / belt / wristband / shoes）—— 决定角色弹窗里的槽位
-   */
-  slot: string;
-  /**
-   * 名称（如「青铜重甲」；1~50 字，前后缀由客户端拼在名字前后）
-   */
-  label: string;
-  /**
-   * 模板基础件 id（可省）：复制它的图标 / 内观图集 / 外观图集 / 标签 / 几何（缩放 / 旋转 / 锚点 / 8 向位置）/职业性别 / 描述 / 八项属性 —— 新装备立刻可见可用。不给就是一张白纸（资源与几何全空，客户端看不到外观）
-   */
-  templateId?: string;
-  /**
-   * 穿戴需求等级（不传 = 跟模板；再不行 1）
-   */
-  level?: number;
-  /**
-   * 售卖价（不传 = 跟模板；再不行 0。0 = 不可售卖。**商城售价不在这里**）
-   */
-  sellPrice?: number;
-  /**
-   * 掉落时强制绑定（#789；不传 = 跟模板，再不行 false）
-   */
-  bindOnDrop?: boolean;
-  /**
-   * 职业限制（不传 = 跟模板；再不行 4 = 不限）
-   */
-  occupation?: string;
-  /**
-   * 性别限制（不传 = 跟模板；再不行 3 = 不限）
-   */
-  sex?: string;
-  /**
-   * 描述（≤500 字）
-   */
-  description?: string;
-  /**
-   * 标签（整份替换；每一项 ≤20 字，最多 8 个）
-   */
-  tags?: string[];
-  /**
-   * 图标（resources 相对路径；不传 = 跟模板）
-   */
-  icon?: string;
-  /**
-   * 内观图集（resources 相对路径；不传 = 跟模板）
-   */
-  inAtlas?: string;
-  /**
-   * 外观图集（resources 相对路径；不传 = 跟模板）
-   */
-  outAtlas?: string;
-};
-
-export type EquipmentPoint = {
-  /**
-   * x（像素，单轴 ±4000）
-   */
-  x: number;
-  /**
-   * y（像素，向上为正；单轴 ±4000）
-   */
-  y: number;
-};
-
-export type UpdateEquipment = {
-  /**
-   * 名称（不传则不改；≤50 字）
-   */
-  label?: string;
-  /**
-   * 描述（不传则不改；≤500 字，空串 = 清空）
-   */
-  description?: string;
-  /**
-   * 职业限制（取值：1 / 2 / 3 / 4）
-   */
-  occupation?: string;
-  /**
-   * 性别限制（取值：1 / 2 / 3）
-   */
-  sex?: string;
-  /**
-   * 图标（resources 相对路径；空串 = 不显示图标）
-   */
-  icon?: string;
-  /**
-   * 内观图集（resources 相对路径；空串 = 内观不显示这件）
-   */
-  inAtlas?: string;
-  /**
-   * 外观图集（resources 相对路径；空串 = 外观不显示这件）
-   */
-  outAtlas?: string;
-  /**
-   * 标签（整份替换；每一项 ≤20 字，最多 8 个）
-   */
-  tags?: string[];
-  /**
-   * 外观缩放（1 = 原尺寸）
-   */
-  outScale?: number;
-  /**
-   * 内观横向缩放（1 = 原尺寸）
-   */
-  inScaleX?: number;
-  /**
-   * 内观纵向缩放（1 = 原尺寸）
-   */
-  inScaleY?: number;
-  /**
-   * 内观旋转角度（度；0 = 不转）
-   */
-  inRotate?: number;
-  /**
-   * 内观锚点 x（像素）
-   */
-  inPosX?: number;
-  /**
-   * 内观锚点 y（像素，向上为正）
-   */
-  inPosY?: number;
-  /**
-   * 外观 8 向位置（**整份提交、整份替换**，必须正好 8 个，顺序 up → left_up；单轴 ±4000）。只改出厂值，实际效果以「装备对齐」工作台（equip_aligns）为准
-   */
-  outPositions?: EquipmentPoint[];
-  /**
-   * 穿戴需求等级（不传则不改）
-   */
-  level?: number;
-  /**
-   * 售卖价（不传则不改；0 = 不可售卖。**商城售价不在这里** —— 唯一写入口归商城定价管理）
-   */
-  sellPrice?: number;
-  /**
-   * 八项基础属性（**整份提交、整份替换**，不传则不改；区间型要求 0 ≤ min ≤ max）。变体属性 = 基础属性 × 前后缀倍率，在客户端展开
-   */
-  attributes?: ConfigAttributes;
-  /**
-   * 掉落时强制绑定（#789；不传则不改）
-   */
-  bindOnDrop?: boolean;
-};
-
-export type UpdateEquipmentVariant = {
-  /**
-   * 名称（基础名，不含前后缀文案；前后缀由客户端按下标拼）
-   */
-  label?: string;
-  /**
-   * 穿戴需求等级（≥ 1）
-   */
-  level?: number;
-  /**
-   * 回收价（≥ 0；货币 = 绑定元宝）
-   */
-  sellPrice?: number;
-  /**
-   * 八项属性（整份提交；不传则保留原值）
-   */
-  attributes?: ConfigAttributes;
-};
-
-export type UpdateEquipmentSlot = {
-  /**
-   * 槽位中文名（不传则不改；≤20 字）
-   */
-  label?: string;
-  /**
-   * 槽位底图（resources 相对路径；空串 = 不显示底图）
-   */
-  imageSrc?: string;
-  /**
-   * 位置分组：left / right / bottom / custom
-   */
-  position?: string;
-  /**
-   * 排序序号（从 0 起；也决定背包「一键整理」的部位序）
-   */
-  order?: number;
-};
-
-export type UpdateEquipmentMeta = {
-  /**
-   * 前缀倍率（整份替换；1~10 项，每项 > 0）
-   */
-  prefixRates?: number[];
-  /**
-   * 后缀倍率（整份替换；1~10 项，每项 > 0）
-   */
-  suffixRates?: number[];
-  /**
-   * 前缀文案（整份替换；必须与前缀倍率等长）
-   */
-  prefixLabels?: string[];
-  /**
-   * 后缀文案（整份替换；必须与后缀倍率等长）
-   */
-  suffixLabels?: string[];
-  /**
-   * 前缀文字颜色（#720，整份替换；每项 #RRGGBB；必须与文案等长或空数组 = 全部用客户端内置色）
-   */
-  prefixColors?: string[];
-  /**
-   * 后缀文字颜色（#720，整份替换；口径同前缀颜色）
-   */
-  suffixColors?: string[];
-};
-
-export type EquipAlignPoint = {
-  /**
-   * 横向（游戏单位，向右为正）
-   */
-  x: number;
-  /**
-   * 纵向（游戏单位，**向上为正**；与页面画布的 y 向下相反）
-   */
-  y: number;
-};
-
-export type SaveEquipAlign = {
-  /**
-   * 外观缩放
-   */
-  outScale: number;
-  /**
-   * 8 个方向的外观位移（**必须正好 8 个**，顺序见客户端 directions）
-   */
-  outPositions: EquipAlignPoint[];
-  /**
-   * true = `outPositions` 是绝对位置；false / 缺省 = 运行时按身体帧自动算（只对武器有意义）
-   */
-  outManual?: boolean;
-};
-
-export type EquipInAlignPoint = {
-  /**
-   * 横向（弹窗坐标，向右为正）
-   */
-  x: number;
-  /**
-   * 纵向（弹窗坐标，**向上为正**；与页面画布的 y 向下相反）
-   */
-  y: number;
-};
-
-export type SaveEquipInAlign = {
-  /**
-   * 内观横向缩放
-   */
-  inScaleX: number;
-  /**
-   * 内观纵向缩放
-   */
-  inScaleY: number;
-  /**
-   * 内观位置（弹窗坐标系，y 向上）
-   */
-  inPosition: EquipInAlignPoint;
-  /**
-   * true = 用绝对位置；false / 缺省 = 客户端自动算（只对武器有意义）
-   */
-  inManual?: boolean;
-};
-
-export type UpdateDrug = {
-  /**
-   * 名称（不传则不改）
-   */
-  label?: string;
-  /**
-   * 描述（不传则不改）
-   */
-  description?: string;
-  /**
-   * 图标（resources 相对路径，如 item/drug-hp-1；空串 = 不显示图标）。**这是少数允许下发的资源路径** —— 药品图标与 id 之间没有可推导的约定，只能存表
-   */
-  icon?: string;
-  /**
-   * 使用等级需求（不传则不改；1 ~ 角色等级上限）。只作用于展示与背包排序，不拦用药
-   */
-  level?: number;
-  /**
-   * 售卖价（不传则不改；0 = 不可售卖。**商城售价不在这里** —— 唯一写入口归商城定价管理）
-   */
-  sellPrice?: number;
-  /**
-   * 最大叠加数量（不传则不改）
-   */
-  maxStack?: number;
-  /**
-   * 使用冷却秒数（不传则不改；0 = 无冷却）
-   */
-  cooldown?: number;
-  /**
-   * 固定回复生命（不传则不改）
-   */
-  effectHp?: number;
-  /**
-   * 固定回复魔法（不传则不改）
-   */
-  effectMp?: number;
-  /**
-   * 按 maxHp 的百分比回复，整数（不传则不改；50 = 50%）
-   */
-  effectHpPercent?: number;
-  /**
-   * 按 maxMp 的百分比回复，整数（不传则不改；50 = 50%）
-   */
-  effectMpPercent?: number;
-  /**
-   * 掉落时强制绑定（#789；不传则不改）
-   */
-  bindOnDrop?: boolean;
-};
-
-export type UpdateItem = {
-  /**
-   * 名称（不传则不改）
-   */
-  label?: string;
-  /**
-   * 描述（不传则不改）
-   */
-  description?: string;
-  /**
-   * 图标（resources 相对路径，如 item/2010210；空串 = 不显示图标）。**这是少数允许下发的资源路径** —— 药品 / 材料的图标与 id 之间没有可推导的约定（地图 / 特效能按 id 拼路径，这两个拼不出来），只能存表
-   */
-  icon?: string;
-  /**
-   * 售卖价（不传则不改；0 = 不可售卖。**商城售价不在这里** —— 唯一写入口归商城定价管理）
-   */
-  sellPrice?: number;
-  /**
-   * 最大叠加数量（不传则不改）
-   */
-  maxStack?: number;
-  /**
-   * 掉落时强制绑定（#789；不传则不改）
-   */
-  bindOnDrop?: boolean;
-};
-
-export type CreateMoneyItem = {
-  /**
-   * 物品 id（缺省 = money_<货币>_<面值>，如 money_bind_gold_100）；小写字母开头、字母数字下划线
-   */
-  id?: string;
-  /**
-   * 货币类型：bindGold（绑定元宝，唯一货币）
-   */
-  currency: string;
-  /**
-   * 单件入账金额（1 ~ 1000000）
-   */
-  amount: number;
-  /**
-   * 名称（缺省 = 「货币中文名（面值）」）
-   */
-  label?: string;
-  /**
-   * 描述（缺省 = 「使用后获得 N 点…」）
-   */
-  description?: string;
-  /**
-   * 图标资源路径（缺省 = item/currency/<货币>-<面值>）
-   */
-  icon?: string;
-  /**
-   * 最大叠加数量（缺省 999）
-   */
-  maxStack?: number;
-  /**
-   * 售卖价（0 = 不可出售；缺省 0）
-   */
-  sellPrice?: number;
-  /**
-   * 掉落时强制绑定（#789；缺省 false）
-   */
-  bindOnDrop?: boolean;
-};
-
-export type UpdateMoneyItem = {
-  /**
-   * 名称（不传则不改）
-   */
-  label?: string;
-  /**
-   * 描述（不传则不改）
-   */
-  description?: string;
-  /**
-   * 图标资源路径（不传则不改）
-   */
-  icon?: string;
-  /**
-   * 货币类型（不传则不改）
-   */
-  currency?: string;
-  /**
-   * 单件入账金额（不传则不改）
-   */
-  amount?: number;
-  /**
-   * 最大叠加数量（不传则不改）
-   */
-  maxStack?: number;
-  /**
-   * 售卖价（不传则不改）
-   */
-  sellPrice?: number;
-  /**
-   * 掉落时强制绑定（#789；不传则不改）
-   */
-  bindOnDrop?: boolean;
-};
-
-export type CreateLevelScroll = {
-  /**
-   * 物品 id（缺省按等级区间派生）；小写字母开头、字母数字下划线
-   */
-  id?: string;
-  /**
-   * 可用等级下限（含）
-   */
-  minLevel: number;
-  /**
-   * 可用等级上限（含），必须不小于下限
-   */
-  maxLevel: number;
-  /**
-   * 名称（缺省按等级区间派生）
-   */
-  label?: string;
-  /**
-   * 描述（缺省按等级区间生成）
-   */
-  description?: string;
-  /**
-   * 图标资源路径（缺省按卷号派生：item/scroll/level-scroll-1 … -7）
-   */
-  icon?: string;
-  /**
-   * 最大叠加数量（缺省 999）
-   */
-  maxStack?: number;
-  /**
-   * 售卖价（0 = 不可出售；缺省 0）
-   */
-  sellPrice?: number;
-  /**
-   * 掉落时强制绑定（#789；缺省 false）
-   */
-  bindOnDrop?: boolean;
-};
-
-export type UpdateLevelScroll = {
-  /**
-   * 名称（不传则不改）
-   */
-  label?: string;
-  /**
-   * 描述（不传则不改）
-   */
-  description?: string;
-  /**
-   * 图标资源路径（不传则不改）
-   */
-  icon?: string;
-  /**
-   * 可用等级下限（不传则不改）
-   */
-  minLevel?: number;
-  /**
-   * 可用等级上限（不传则不改）
-   */
-  maxLevel?: number;
-  /**
-   * 最大叠加数量（不传则不改）
-   */
-  maxStack?: number;
-  /**
-   * 售卖价（不传则不改）
-   */
-  sellPrice?: number;
-  /**
-   * 掉落时强制绑定（#789；不传则不改）
-   */
-  bindOnDrop?: boolean;
-};
-
-export type AttributeRange = {
-  /**
-   * 下限（含）
-   */
-  min: number;
-  /**
-   * 上限（含）
-   */
-  max: number;
-};
-
-export type MonsterAttributes = {
-  /**
-   * 物理攻击区间
-   */
-  physicalAttack: AttributeRange;
-  /**
-   * 魔法攻击区间
-   */
-  magicAttack: AttributeRange;
-  /**
-   * 道术攻击区间
-   */
-  taoistAttack: AttributeRange;
-  /**
-   * 物理防御区间
-   */
-  physicalDefense: AttributeRange;
-  /**
-   * 魔法防御区间
-   */
-  magicDefense: AttributeRange;
-  /**
-   * 道术防御区间
-   */
-  taoistDefense: AttributeRange;
-};
-
-export type UpdateMonsterPresentation = {
-  /**
-   * 是否主动攻击玩家（不传则不改）
-   */
-  aggressive?: boolean;
-  /**
-   * 检测范围（像素半径；主动怪在这个距离内发现玩家）。不传则不改
-   */
-  detectRange?: number;
-  /**
-   * 移动速度（刚体线速度单位；出厂 2，与角色步行同口径）。不传则不改
-   */
-  moveSpeed?: number;
-  /**
-   * 动作速度覆盖（动作键 → 每秒循环数）。**传 `{}` = 清空回客户端默认，不传 = 不改**；动作键只认 stand / walk / run / injured / die（其余动作没有帧）
-   */
-  speedRate?: Record<string, number>;
-};
-
-export type UpdateMonster = {
-  /**
-   * 名称（不传则不改）
-   */
-  label?: string;
-  /**
-   * 定位（normal / elite / boss，不传则不改）。不重算已展开数值，但会改变 BOSS 判定（击杀 BOSS 邮件）
-   */
-  tier?: string;
-  /**
-   * 等级（显示用元数据，不传则不改）
-   */
-  level?: number;
-  /**
-   * 最大生命（不传则不改）
-   */
-  maxHp?: number;
-  /**
-   * 六项攻防区间（**整份提交、整份替换**，不传则不改；要求 0 ≤ min ≤ max）
-   */
-  attributes?: MonsterAttributes;
-  /**
-   * 行为参数（主动攻击 / 检测范围 / 移动速度 / 动作速度；不传则整段不改）
-   */
-  presentation?: UpdateMonsterPresentation;
-};
-
-export type MonsterSkillItem = {
-  /**
-   * 技能 id（必须在 skills 表里存在且 owner=monster；不存在 → 400 40000）
-   */
-  skillId: string;
-  /**
-   * 优先级（越小越先，缺省 0；同优先级按技能 id 排序）
-   */
-  priority?: number;
-  /**
-   * 冷却覆写（秒；不传 = 用技能自身的 cooldown）
-   */
-  cooldown?: number;
-};
-
-export type ReplaceMonsterSkills = {
-  /**
-   * 完整清单（整份替换；空数组 = 清空，AI 回退到普攻）
-   */
-  skills: MonsterSkillItem[];
-};
-
-export type UpdateNpc = {
-  /**
-   * 名称（不传则不改）
-   */
-  label?: string;
-  /**
-   * 对话文案（不传则不改；空串 = 清空）
-   */
-  dialog?: string;
-  /**
-   * 素材目录（resources 相对路径；不传则不改；空串 = 该 NPC 不显示）
-   */
-  src?: string;
-  /**
-   * 横向缩放（0.1~10，不传则不改；1 = 原尺寸）
-   */
-  scaleX?: number;
-  /**
-   * 纵向缩放（0.1~10，不传则不改；1 = 原尺寸）
-   */
-  scaleY?: number;
-  /**
-   * 横向偏移（像素，±4000，不传则不改；0 = 不偏移）
-   */
-  posX?: number;
-  /**
-   * 纵向偏移（像素，±4000，不传则不改；0 = 不偏移）
-   */
-  posY?: number;
-};
-
-export type UpdateQuestObjective = {
-  /**
-   * 目标类型
-   */
-  type?: "kill" | "talk" | "collect";
-  /**
-   * 目标键（非空）
-   */
-  target?: string;
-  /**
-   * 目标数量（1~9999）
-   */
-  count?: number;
-};
-
-export type QuestRewardItem = {
-  /**
-   * 物品 id
-   */
-  goodId: string;
-  /**
-   * 数量
-   */
-  count: number;
-};
-
-export type UpdateQuestRewards = {
-  /**
-   * 绑定元宝（≥0）
-   */
-  bindGold?: number;
-  /**
-   * 经验（≥0）
-   */
-  exp?: number;
-  /**
-   * 物品清单（≤20 条；goodId 非空、count 1~9999）
-   */
-  items?: QuestRewardItem[];
-};
-
-export type UpdateQuest = {
-  /**
-   * 类型
-   */
-  kind?: "main" | "daily" | "weekly";
-  /**
-   * 名称（1~50 字）
-   */
-  label?: string;
-  /**
-   * 描述（≤500 字）
-   */
-  description?: string;
-  /**
-   * 主线链前置任务 id（空串 = 无前置）
-   */
-  prevQuestId?: string;
-  /**
-   * 接取最低等级（1~999）
-   */
-  minLevel?: number;
-  /**
-   * 发布 NPC id
-   */
-  npcId?: string;
-  /**
-   * 目标（传了就整份替换）
-   */
-  objective?: UpdateQuestObjective;
-  /**
-   * 奖励（传了就整份替换）
-   */
-  rewards?: UpdateQuestRewards;
-};
-
-export type CreateQuest = {
-  /**
-   * 类型
-   */
-  kind?: "main" | "daily" | "weekly";
-  /**
-   * 名称（1~50 字）
-   */
-  label?: string;
-  /**
-   * 描述（≤500 字）
-   */
-  description?: string;
-  /**
-   * 主线链前置任务 id（空串 = 无前置）
-   */
-  prevQuestId?: string;
-  /**
-   * 接取最低等级（1~999）
-   */
-  minLevel?: number;
-  /**
-   * 发布 NPC id
-   */
-  npcId?: string;
-  /**
-   * 目标（传了就整份替换）
-   */
-  objective?: UpdateQuestObjective;
-  /**
-   * 奖励（传了就整份替换）
-   */
-  rewards?: UpdateQuestRewards;
-  /**
-   * 任务 id（唯一；建议主线 8000 段 / 日常 8100 段）
-   */
-  id: string;
-};
-
-export type CreateMallCategory = {
-  /**
-   * 分类显示名（1~20 字）
-   */
-  label: string;
-  /**
-   * 排序值（缺省排到最后）
-   */
-  sortOrder?: number;
-};
-
-export type UpdateMallCategory = {
-  /**
-   * 分类显示名（1~20 字）
-   */
-  label?: string;
-  /**
-   * 排序值（小者在先）
-   */
-  sortOrder?: number;
-};
-
-export type CreateMallGood = {
-  /**
-   * 商品 id（装备变体 id，如 cloth_1_p3s2）
-   */
-  id: string;
-  /**
-   * 所属分类 id
-   */
-  categoryId: string;
-  /**
-   * 售价（绑定元宝/件，下限 1；缺省按 1 上架）
-   */
-  price?: number;
-  /**
-   * 购买等级（缺省 0 = 不限等级）
-   */
-  requiredLevel?: number;
-  /**
-   * 每日限购件数（0 / 留空 = 不限购；按角色按 05:00 切日计）
-   */
-  dailyLimit?: number;
-  /**
-   * 全服库存件数（-1 / 留空 = 不限量；0 = 售罄停售）
-   */
-  stock?: number;
-};
-
-export type UpdateMallGood = {
-  /**
-   * 所属分类 id（改分类 = 在商城陈列里挪个位置）
-   */
-  categoryId?: string;
-  /**
-   * 售价（绑定元宝/件，下限 1）
-   */
-  price?: number;
-  /**
-   * 购买等级
-   */
-  requiredLevel?: number;
-  /**
-   * 每日限购件数（0 = 不限购）
-   */
-  dailyLimit?: number;
-  /**
-   * 全服库存件数（-1 = 不限量，0 = 售罄停售）
-   */
-  stock?: number;
-};
-
-export type UpdateFashion = {
-  /**
-   * 名称（不传则不改）
-   */
-  label?: string;
-  /**
-   * 描述文案（不传则不改）
-   */
-  description?: string;
-  /**
-   * 售卖价（绑定元宝/件，不传则不改）
-   */
-  sellPrice?: number;
-  /**
-   * 获得渠道（不传则不改）
-   */
-  acquireChannel?: "upgrade" | "grant" | "unavailable";
-  /**
-   * 图标（resources 相对路径，不传则不改；空串 = 不显示图标）
-   */
-  icon?: string;
-  /**
-   * 内观资源（resources 相对路径，不传则不改；空串 = 内观不显示这套）
-   */
-  inRes?: string;
-  /**
-   * 外观资源（resources 相对路径，不传则不改；空串 = 场景里不显示这套）
-   */
-  outRes?: string;
-  /**
-   * 八项属性（**整份提交、整份替换**，不传则不改；区间型要求 0 ≤ min ≤ max）
-   */
-  attributes?: ConfigAttributes;
-};
-
-export type DropEntry = {
-  /**
-   * 物品 id（物品总表 configs/items 的键，含装备前后缀变体）
-   */
-  goodId: string;
-  /**
-   * 抽取权重（同一表内相对值，缺省 1）
-   */
-  weight?: number;
-  /**
-   * 掉落概率 0~1（抽中后再判定，缺省 1 必掉）
-   */
-  chance?: number;
-  /**
-   * 数量区间 [最小, 最大]（缺省 [1,1]）
-   */
-  count?: number[];
-};
-
-export type CreateDropTable = {
-  /**
-   * 抽取次数：数字（固定件数）或 [最小, 最大]（件数区间）
-   */
-  picks?: unknown;
-  /**
-   * 条目池（goodId 必须在物品总表里；weight/chance/count 缺省 1/1/[1,1]）
-   */
-  entries: DropEntry[];
-  /**
-   * 表 id（小写字母开头的字母/数字/下划线，≤50 字符）
-   */
-  id: string;
-};
-
-export type UpdateDropTable = {
-  /**
-   * 抽取次数：数字（固定件数）或 [最小, 最大]（件数区间）；不传则不改
-   */
-  picks?: unknown;
-  /**
-   * 条目池（**整份替换**；不传则不改）
-   */
-  entries?: DropEntry[];
-};
-
-export type UpdateMonsterDrop = {
-  /**
-   * 引用的具名表 id（null = 不引用具名表）
-   */
-  tableId?: string | null;
-  /**
-   * 抽取次数：数字（固定件数）或 [最小, 最大]（件数区间）
-   */
-  picks?: unknown;
-  /**
-   * 内联条目池（**整份替换**）
-   */
-  entries?: DropEntry[];
-  /**
-   * 掉落整体强制绑定（#789；不传则不改）。与「引用表 / 内联条目 / 清空」三态互不影响
-   */
-  bindDrops?: boolean;
-};
-
-export type UpdateLevelCurve = {
-  /**
-   * 结束等级（含）；不能小于本段起始等级
-   */
-  toLevel?: number;
-  /**
-   * 起始等级处的值（≥ 0）
-   */
-  startValue?: number;
-  /**
-   * 每级增量（≥ 0；经验段建议 ≥ 1）
-   */
-  perLevel?: number;
-  /**
-   * 每级增量的增量（≥ 0；只有 exp 有意义，其余曲线请留 0）
-   */
-  accel?: number;
-};
-
-export type UpdateGrowthScalar = {
-  /**
-   * 参数值；整数键（roleMaxLevel / expGain.*）必须是整数，比率键在 [0, 1] 等取值域内
-   */
-  value: number;
-};
-
-export type UpdateDropRuntimeParams = {
-  /**
-   * 自动拾取半径（像素）
-   */
-  autoPickupRadius?: number;
-  /**
-   * 服务端拾取距离闸（像素；0 = 关闭校验）
-   */
-  pickAcceptRadius?: number;
-  /**
-   * 背包已满的提示 / 重试间隔（毫秒）
-   */
-  fullTipInterval?: number;
-  /**
-   * 多件掉落物的最小中心间距（像素）
-   */
-  scatterMinDistance?: number;
-  /**
-   * 服务端拾取应答等待上限（毫秒）
-   */
-  pickReplyTimeout?: number;
-  /**
-   * 随机绑定概率（百分比 0~100；0 = 从不随机绑定）
-   */
-  bindChance?: number;
-};
-
-export type UpdateAutoBattleParams = {
-  /**
-   * 自动选目标的最大距离（像素，0 = 不限）
-   */
-  maxTargetDistance?: number;
-  /**
-   * 自动移动是否使用跑步速度
-   */
-  moveByRun?: boolean;
-  /**
-   * A* 网格单元边长（像素）
-   */
-  cellSize?: number;
-  /**
-   * 通行余量（像素）
-   */
-  clearance?: number;
-  /**
-   * 重新寻路间隔（毫秒）
-   */
-  repathInterval?: number;
-  /**
-   * 到达路点的判定半径（像素）
-   */
-  waypointTolerance?: number;
-  /**
-   * 卡住检测间隔（毫秒）
-   */
-  stuckInterval?: number;
-  /**
-   * 卡住判定位移阈值（像素）
-   */
-  stuckDistance?: number;
-  /**
-   * 连续卡住多少次后放弃当前目标
-   */
-  stuckRetryLimit?: number;
-  /**
-   * 被放弃目标的拉黑时长（毫秒）
-   */
-  targetBanDuration?: number;
-  /**
-   * 没目标时的重找间隔（毫秒）
-   */
-  targetSearchInterval?: number;
-  /**
-   * 点击寻路的到达判定半径（像素）
-   */
-  arriveTolerance?: number;
-  /**
-   * 传送落点吸附半径（格）
-   */
-  teleportSnapRadius?: number;
-  /**
-   * 突进类技能的落点吸附半径（像素）
-   */
-  dashSnapRadius?: number;
-};
-
-export type UpdateGuildRuleParams = {
-  /**
-   * 帮会名最短字数
-   */
-  nameMin?: number;
-  /**
-   * 帮会名最长字数（必须 ≥ 最短字数）
-   */
-  nameMax?: number;
-  /**
-   * 帮会公告最长字数（0 = 不限）
-   */
-  noticeMax?: number;
-  /**
-   * 入帮申请留言最长字数（0 = 不限）
-   */
-  applicationMessageMax?: number;
-  /**
-   * 建帮所需最低角色等级（0 = 不限等级）
-   */
-  createLevelMin?: number;
-  /**
-   * 建帮消耗绑定元宝（0 = 免费）
-   */
-  createCostBindGold?: number;
-};
-
-export type UpdateRuntimeParams = {
-  /**
-   * 掉落物手感参数（只提交改动过的字段）
-   */
-  drop?: UpdateDropRuntimeParams;
-  /**
-   * 自动战斗 / 寻路参数（只提交改动过的字段）
-   */
-  autoBattle?: UpdateAutoBattleParams;
-  /**
-   * 帮会规则门槛（只提交改动过的字段）
-   */
-  guild?: UpdateGuildRuleParams;
-  /**
-   * 修改备注（写进审计日志的上下文，便于追溯「为什么改」）
-   */
-  note?: string;
-};
-
-export type UpdateMonsterAiParams = {
-  /**
-   * 普攻间隔（毫秒）
-   */
-  attackInterval?: number;
-  /**
-   * 普攻距离（像素）
-   */
-  attackRange?: number;
-  /**
-   * 施法硬直兜底（毫秒）
-   */
-  attackActionTime?: number;
-  /**
-   * 击退时长（毫秒）
-   */
-  pushDuration?: number;
-  /**
-   * 待机游走间隔区间（毫秒，[最小, 最大]）
-   */
-  idleMoveInterval?: number[];
-  /**
-   * 待机游走每次走多久（毫秒，[最小, 最大]）
-   */
-  idleMoveDuration?: number[];
-  /**
-   * 游走速度倍率
-   */
-  idleMoveSpeedScale?: number;
-  /**
-   * 游走活动半径（像素）
-   */
-  wanderRadius?: number;
-  /**
-   * 牵引半径（像素，必须大于普攻距离）
-   */
-  leashRange?: number;
-  /**
-   * 回家速度倍率
-   */
-  returnSpeedRate?: number;
-  /**
-   * 回家超时（毫秒）
-   */
-  returnTimeoutMs?: number;
-};
-
-export type UpdateMovementGuardParams = {
-  /**
-   * 档位：off / log / enforce
-   */
-  mode?: "off" | "log" | "enforce";
-  /**
-   * 速度上限（像素/秒）
-   */
-  maxSpeed?: number;
-  /**
-   * 容差倍率
-   */
-  tolerance?: number;
-  /**
-   * 抖动余量（像素）
-   */
-  jitterPx?: number;
-  /**
-   * 是否做穿墙校验
-   */
-  wallCheck?: boolean;
-  /**
-   * 同一连接两次 posCorrect 的最小间隔（毫秒）
-   */
-  correctIntervalMs?: number;
-};
-
-export type UpdateCombatWeights = {
-  /**
-   * 生命上限权重
-   */
-  maxHp?: number;
-  /**
-   * 物理攻击权重
-   */
-  physicalAttack?: number;
-  /**
-   * 魔法攻击权重
-   */
-  magicAttack?: number;
-  /**
-   * 道术攻击权重
-   */
-  taoistAttack?: number;
-  /**
-   * 物理防御权重
-   */
-  physicalDefense?: number;
-  /**
-   * 魔法防御权重
-   */
-  magicDefense?: number;
-  /**
-   * 道术防御权重
-   */
-  taoistDefense?: number;
-  /**
-   * 修改备注（写进审计日志的上下文，便于追溯「为什么改」）
-   */
-  note?: string;
-};
-
-export type GuideStep = {
-  /**
-   * 步骤标识（日志与单测用；同一份配置里唯一，不落存档）
-   */
-  id: string;
-  /**
-   * 气泡标题
-   */
-  title: string;
-  /**
-   * 气泡正文（一句话说清「做什么」）
-   */
-  desc: string;
-  /**
-   * 高亮语义位：joystick / nav:bag / nav:skill / nav:chat / shortcut（客户端按它现取节点，取不到就只显示气泡）
-   */
-  spot: "joystick" | "nav:bag" | "nav:skill" | "nav:chat" | "shortcut";
-  /**
-   * 推进事件：move / kill / pickup / openBag / openSkill / openChat（当前步收到它才前进，别的事件不越级）
-   */
-  trigger: "move" | "kill" | "pickup" | "openBag" | "openSkill" | "openChat";
-};
-
-export type UpdateGuideSteps = {
-  /**
-   * 步骤表（整份替换，顺序即体验顺序）
-   */
-  steps: GuideStep[];
-  /**
-   * 修改备注（写进审计日志的上下文，便于追溯「为什么改」）
-   */
-  note?: string;
-};
-
-export type AppearanceEffect = {
-  /**
-   * 水平偏移（像素，右为正；边框相对图标中心、背景相对弹窗面板中心）
-   */
-  x: number;
-  /**
-   * 垂直偏移（像素，上为正）
-   */
-  y: number;
-  /**
-   * 尺寸倍率（1 = 客户端默认适配结果）
-   */
-  scale: number;
-};
-
-export type AppearanceAssignment = {
-  /**
-   * 装备前缀序号（0 起；运行时档数由 equipment_meta 文案长度决定，硬上限 9）
-   */
-  prefix: number;
-  /**
-   * 装备后缀序号（0 起；硬上限 9）
-   */
-  suffix: number;
-  /**
-   * 边框 / 背景 key（客户端资源清单里的编号）
-   */
-  key: string;
-  /**
-   * 显示效果（#700；不传 = {0,0,1} 即默认适配结果）
-   */
-  effect?: AppearanceEffect;
-};
-
-export type CustomAppearance = {
-  /**
-   * 物品 id（如 weapon_20_p4s2，只影响这一个变体）或基础件 key（如 weapon_20，影响其全部变体）
-   */
-  equipment: string;
-  /**
-   * 边框 / 背景 key
-   */
-  key: string;
-  /**
-   * 显示效果（#700；不传 = {0,0,1} 即默认适配结果）
-   */
-  effect?: AppearanceEffect;
-};
-
-export type AppearanceItem = {
-  /**
-   * 边框 / 背景 key（客户端资源清单里的编号）
-   */
-  key: string;
-  /**
-   * 显示效果（#700；不传 = {0,0,1} 即默认适配结果）
-   */
-  effect?: AppearanceEffect;
-  /**
-   * 别名（#718，可选；给人看的名字，客户端不消费，快照里没有；空串视同没填）
-   */
-  name?: string;
-  /**
-   * 分组（#718，可选；管理端按组过滤用，客户端不消费，快照里没有；空串视同没填）
-   */
-  group?: string;
-};
-
-export type UpdateEquipmentBorder = {
-  /**
-   * 前后缀组合 → 边框（整边替换，恰好覆盖当前档数的每种组合且不重复）
-   */
-  assignments: AppearanceAssignment[];
-  /**
-   * 特殊装备 → 边框（整边替换；装备标识不可重复）
-   */
-  customs: CustomAppearance[];
-  /**
-   * 边框清单（整份替换；被引用的 key 必须在清单里）
-   */
-  items?: AppearanceItem[];
-  /**
-   * 修改备注（写进审计日志的上下文，便于追溯「为什么改」）
-   */
-  note?: string;
-};
-
-export type UpdateEquipmentBackground = {
-  /**
-   * 前后缀组合 → 详情背景（整边替换，恰好覆盖当前档数的每种组合且不重复）
-   */
-  assignments: AppearanceAssignment[];
-  /**
-   * 特殊装备 → 详情背景（整边替换；装备标识不可重复）
-   */
-  customs: CustomAppearance[];
-  /**
-   * 背景清单（整份替换；被引用的 key 必须在清单里）
-   */
-  items?: AppearanceItem[];
-  /**
-   * 修改备注（写进审计日志的上下文，便于追溯「为什么改」）
-   */
-  note?: string;
-};
-
-export type SendMail = {
-  /**
-   * 收件邮箱（可选）。不传时，若关联的玩家账号填了邮箱，则自动用该账号的邮箱投递；两者皆无则报错（50005）。管理端选了关联账号后会自动把账号邮箱带进这个字段，所以运营大多不用手填。
-   */
-  to?: string;
-  /**
-   * 模板 key（custom = 自定义，此时必须传 subject 与 body）
-   */
-  templateKey: "welcome" | "banNotice" | "maintenance" | "custom";
-  /**
-   * 关联的玩家账号 id（可选，仅用于追溯）
-   */
-  accountId?: string;
-  /**
-   * 模板变量（键是模板声明的变量名，如 username / reason）；缺必填变量会直接拒发
-   */
-  variables?: Record<string, string>;
-  /**
-   * 自定义标题（**仅 custom 模板必填**）
-   */
-  subject?: string;
-  /**
-   * 自定义正文（**仅 custom 模板必填**，纯文本）
-   */
-  body?: string;
-};
-
-export type CreateGuild = {
-  /**
-   * 帮会名（长度按「运行时参数 · 帮会规则」的当前配置，出厂 2~12 字；全局唯一）
-   */
-  name: string;
-  /**
-   * 公告（可选；长度按运行时参数，出厂 200 字）
-   */
-  notice?: string;
-};
-
-export type ApplyGuild = {
-  /**
-   * 留言（可选；长度按运行时参数，出厂 50 字）；重复申请会**覆盖**上一条留言
-   */
-  message?: string;
-};
-
-export type ReviewGuildApplication = {
-  /**
-   * true 通过 / false 拒绝（拒绝直接删掉申请，不留记录）
-   */
-  approve: boolean;
-};
-
-export type AppointGuildRank = {
-  /**
-   * 目标角色 id（必须是本帮成员，且不是帮主）
-   */
-  roleId: string;
-  /**
-   * 目标职位：vice 任命为副帮主 / member 卸任回普通成员
-   */
-  rank: "vice" | "member";
-};
-
-export type TransferGuild = {
-  /**
-   * 新帮主的角色 id（必须是本帮成员，且不是自己）
-   */
-  roleId: string;
-};
-
-export type UpdateGuildNotice = {
-  /**
-   * 公告（长度按运行时参数，出厂 200 字；空字符串表示清空）
-   */
-  notice: string;
-};
-
-export type AdminUpdateGuild = {
-  /**
-   * 帮会名（长度按运行时参数，出厂 2~12 字；全局唯一）
-   */
-  name?: string;
-  /**
-   * 公告（长度按运行时参数，出厂 200 字）
-   */
-  notice?: string;
-};
-
-export type SocialTarget = {
-  /**
-   * 对方角色 id（「附近」与帮会成员列表用这个：精确且不受重名影响）
-   */
-  roleId?: string;
-  /**
-   * 对方角色名（手动输入时用；角色名只在同一账号内唯一，重名会返回 50116）
-   */
-  name?: string;
-};
-
-export type CreateReport = {
-  /**
-   * 被举报的角色 id（「附近」列表里点选）
-   */
-  roleId: string;
-  /**
-   * 举报类别：abuse / cheat / name / other（固定枚举，不开放自由分类）
-   */
-  category: string;
-  /**
-   * 补充说明（可空；只在 category 说不清时写清楚发生了什么）
-   */
-  reason?: string;
-};
-
-export type QuestId = {
-  /**
-   * 任务 id
-   */
-  questId: string;
-};
-
-export type NpcTalk = {
-  /**
-   * NPC id
-   */
-  npcId: string;
-  /**
-   * 预留字段（v1 无对话分支）
-   */
-  option?: string;
-};
-
-export type AchievementId = {
-  /**
-   * 成就 id（如 "ach_kill_10"）
-   */
-  achievementId: string;
-};
-
-export type MailAttachment = {
-  /**
-   * 物品 id（客户端拿共享快照换名字与图标）
-   */
-  goodId: string;
-  /**
-   * 数量
-   */
-  count: number;
-};
-
-export type AdminSendMail = {
-  /**
-   * 频道：只允许 system（系统）/ reward（奖励）
-   */
-  channel: "system" | "reward";
-  /**
-   * 标题
-   */
-  title: string;
-  /**
-   * 正文（纯文本，换行用 \n；可空）
-   */
-  body?: string;
-  /**
-   * 附件绑定元宝（不传 = 没有）
-   */
-  bindGold?: number;
-  /**
-   * 附件经验（不传 = 没有）
-   */
-  exp?: number;
-  /**
-   * 附件物品（不传 = 没有）
-   */
-  items?: MailAttachment[];
-};
-
-export type ReloadWorld = {
-  /**
-   * 重载模式：`respawn` = 只重播刷怪区（可等空窗）/ `reload` = 连 AI 运行时一起重载（立刻）
-   */
-  mode: "respawn" | "reload";
-  /**
-   * 线（#809 本刀只支持 `0` 公共线；分线 / 副本是第④刀）
-   */
-  slot?: string;
-  /**
-   * 等空窗的上限（毫秒）。不传 = 出厂 5 分钟；`0` = 立刻强制（房里有人也马上重刷）
-   */
-  forceAfterMs?: number;
-};
-
-export type SaveMapRules = {
-  /**
-   * 经验倍率（0 ~ 100）
-   */
-  expRate: number;
-  /**
-   * 掉落倍率（0 ~ 100）
-   */
-  dropRate: number;
-  /**
-   * 金钱倍率（0 ~ 100）
-   */
-  moneyRate: number;
-  /**
-   * 允许 PK
-   */
-  allowPk: boolean;
-  /**
-   * 允许自动挂机
-   */
-  allowAutoBattle: boolean;
-  /**
-   * 允许被拉人 / 回城
-   */
-  allowRecall: boolean;
-  /**
-   * 这张图掉不掉东西
-   */
-  allowDrop: boolean;
-  /**
-   * 单房间人数上限（0 = 不限，上限 1000）
-   */
-  maxPlayersPerRoom: number;
-  /**
-   * 分线数量上限（1 ~ 20；1 = 不分线）
-   */
-  maxChannels: number;
-  /**
-   * 传送花费（铜钱，0 ~ 1000000）
-   */
-  transferCostMoney: number;
-  /**
-   * 传送冷却（毫秒，0 ~ 1 小时）
-   */
-  transferCooldownMs: number;
-  /**
-   * 战斗中禁止传送
-   */
-  denyTransferInCombat: boolean;
-  /**
-   * 中间级重生时长（毫秒；传 null = 继承全局 worldRespawnMs）
-   */
-  respawnMsOverride?: unknown | null;
-  /**
-   * 无人时继续跑世界（false = 冻结）
-   */
-  simulateWhenEmpty: boolean;
-};
-
-export type SaveMapConfig = {
-  /**
-   * 地图名称（显示在传送弹窗 / 小地图 / 公告里）
-   */
-  label: string;
-  /**
-   * 地图类型（0 安全地图 / 1 等级地图 / 2 战斗力地图 / 3 战魂地图）
-   */
-  type: "0" | "1" | "2" | "3";
-  /**
-   * 进入所需等级（0 = 不限）
-   */
-  level: number;
-  /**
-   * 进入所需战斗力（0 = 不限）
-   */
-  combat: number;
-  /**
-   * 进入所需战魂阶（0 = 不限）
-   */
-  soulOfWar: number;
-};
-
-export type SaveSpawnArea = {
-  /**
-   * 区域名（同一张图内唯一，运营自己起，如「1号刷怪区」）
-   */
-  name: string;
-  /**
-   * 怪物 key（monsters 表的 id，必须存在）
-   */
-  monsterKey: string;
-  /**
-   * 这一区最多维持多少只（1~200，落库为 max；密度目标以它为基准）
-   */
-  count: number;
-  /**
-   * 高峰系数（0~5，留空 = 1.0；在高峰时段内乘到上限上）
-   */
-  densityPeak?: number;
-  /**
-   * 低谷系数（0~5，留空 = 1.0；不在高峰时段内乘到上限上）
-   */
-  densityOff?: number;
-  /**
-   * 高峰时段（如 "19:00-23:00"，支持跨零点 "22:00-02:00"；留空 = 无峰谷）
-   */
-  peakHours?: string;
-  /**
-   * 区域中心 x（世界坐标；原点 = 地图左上角）
-   */
-  cx: number;
-  /**
-   * 区域中心 y（世界坐标；y 轴向上，故为负）
-   */
-  cy: number;
-  /**
-   * 区域宽（像素，至少 16）
-   */
-  w: number;
-  /**
-   * 区域高（像素，至少 16）
-   */
-  h: number;
-};
-
-export type SaveMapNpc = {
-  /**
-   * NPC id（必须在 npcs 表里存在）
-   */
-  npcId: string;
-  /**
-   * 世界坐标 x（原点 = 地图左上角）
-   */
-  cx: number;
-  /**
-   * 世界坐标 y（y 轴向上，故为负）
-   */
-  cy: number;
-};
-
-export type SaveMapCollision = {
-  /**
-   * 矩形中心 x（世界坐标；原点 = 地图左上角）
-   */
-  cx: number;
-  /**
-   * 矩形中心 y（世界坐标；y 轴向上，故为负）
-   */
-  cy: number;
-  /**
-   * 矩形宽（像素，至少 1）
-   */
-  w: number;
-  /**
-   * 矩形高（像素，至少 1）
-   */
-  h: number;
-};
-
-export type SaveRevivePoint = {
-  /**
-   * 世界坐标 x（原点 = 地图左上角）
-   */
-  cx: number;
-  /**
-   * 世界坐标 y（y 轴向上，故为负）
-   */
-  cy: number;
-};
-
-export type SaveUiEffect = {
-};
-
-export type SaveAudioSetting = {
-};
-
-export type PageMeta = {
-  /**
-   * 总条数
-   */
-  total: number;
-  /**
-   * 当前页码（从 1 开始）
-   */
-  page: number;
-  /**
-   * 每页条数
-   */
-  size: number;
-};
-
-export type PageQuery = {
-  /**
-   * 页码，从 1 开始
-   */
-  page?: number;
-  /**
-   * 每页条数（1~100）
-   */
-  size?: number;
-  /**
-   * 关键字（不同接口含义见其说明）
-   */
-  keyword?: string;
-  /**
-   * 排序字段（取值见各接口说明，未登记的值会退回默认排序）
-   */
-  sort?: string;
-  /**
-   * 排序方向：asc 升序 / desc 降序
-   */
-  order?: "asc" | "desc";
+  time: number;
 };
 
 export type Account = {
@@ -2883,10 +62,6 @@ export type Account = {
    * 当前选中的角色 id（未选角色时为 null）
    */
   onlineRoleId: string | null;
-  /**
-   * 归属区 id（注册时选定；只随合并区变化）
-   */
-  zoneId: number;
   /**
    * 角色数量（列表接口返回）
    */
@@ -2924,6 +99,32 @@ export type AuthResult = {
   account: Account;
 };
 
+export type Register = {
+  /**
+   * 游戏账号：3~20 位字母 / 数字 / 下划线
+   */
+  username: string;
+  /**
+   * 密码：6~32 位
+   */
+  password: string;
+  /**
+   * 归属区 id（可省略，默认 1 = 一区；活区清单见 GET /zones）
+   */
+  zoneId?: number;
+};
+
+export type Login = {
+  /**
+   * 游戏账号
+   */
+  username: string;
+  /**
+   * 密码
+   */
+  password: string;
+};
+
 export type RoleSummary = {
   /**
    * 角色 id
@@ -2933,6 +134,10 @@ export type RoleSummary = {
    * 所属账号 id
    */
   accountId: string;
+  /**
+   * 所属区 id（展示用；服务端按它判归属，客户端不要回传）
+   */
+  zoneId: number;
   /**
    * 角色名
    */
@@ -2977,6 +182,10 @@ export type RoleDetail = {
    */
   accountId: string;
   /**
+   * 所属区 id（展示用；服务端按它判归属，客户端不要回传）
+   */
+  zoneId: number;
+  /**
    * 角色名
    */
   name: string;
@@ -3014,6 +223,32 @@ export type RoleDetail = {
   data: Record<string, unknown>;
 };
 
+export type CreateRole = {
+  /**
+   * 角色名（同一账号内唯一；去空白后 1~12 字）
+   */
+  name: string;
+  /**
+   * 职业（客户端 OECCUPATION 枚举值）
+   */
+  occupation: string;
+  /**
+   * 性别（客户端 SEX 枚举值）
+   */
+  sex: string;
+};
+
+export type SaveRole = {
+  /**
+   * 角色完整数据（全量覆盖）
+   */
+  data: Record<string, unknown>;
+  /**
+   * 客户端读到的修订号（必填；与服务端不一致时返回 20006，需先拉最新数据）
+   */
+  revision: number;
+};
+
 export type GrowthUpgradeResult = {
   /**
    * 角色 id
@@ -3023,6 +258,10 @@ export type GrowthUpgradeResult = {
    * 所属账号 id
    */
   accountId: string;
+  /**
+   * 所属区 id（展示用；服务端按它判归属，客户端不要回传）
+   */
+  zoneId: number;
   /**
    * 角色名
    */
@@ -3073,6 +312,21 @@ export type GrowthUpgradeResult = {
   gainedLabel: string;
 };
 
+export type GrowthUpgrade = {
+  /**
+   * 成长线：title 称号 / soul 战魂 / rank 军衔
+   */
+  kind: "title" | "soul" | "rank";
+  /**
+   * 目标阶位（必须是升级链上当前阶位的下一阶，防跳级）
+   */
+  targetLevel: number;
+  /**
+   * 修订号（乐观锁，必填）：客户端读到的值，与服务端不一致时 20006，需先拉最新存档（B62 / #820）
+   */
+  revision: number;
+};
+
 export type MallPurchaseResult = {
   /**
    * 角色 id
@@ -3082,6 +336,10 @@ export type MallPurchaseResult = {
    * 所属账号 id
    */
   accountId: string;
+  /**
+   * 所属区 id（展示用；服务端按它判归属，客户端不要回传）
+   */
+  zoneId: number;
   /**
    * 角色名
    */
@@ -3144,6 +402,55 @@ export type MallPurchaseResult = {
   stock: number;
 };
 
+export type MallPurchase = {
+  /**
+   * 商品 id（必须是商城目录里的装备变体）
+   */
+  goodId: string;
+  /**
+   * 修订号（乐观锁，必填）：客户端读到的值，与服务端不一致时 20006，需先拉最新存档（B62 / #820）
+   */
+  revision: number;
+};
+
+export type MallLimit = {
+  /**
+   * 商品 id
+   */
+  goodId: string;
+  /**
+   * 今天已买几件（05:00 切日）
+   */
+  dailyBought: number;
+  /**
+   * 每日限购（0 = 不限购）
+   */
+  dailyLimit: number;
+  /**
+   * 全服已售件数（不限量商品恒 0）
+   */
+  sold: number;
+  /**
+   * 全服库存（-1 = 不限量，0 = 售罄）
+   */
+  stock: number;
+  /**
+   * 现在能不能买（等级 / 余额另有判据，这里只看限购与库存）
+   */
+  purchasable: boolean;
+};
+
+export type MallLimits = {
+  /**
+   * 当前天号（05:00 切日；客户端不需要解释它，只用于排查）
+   */
+  day: number;
+  /**
+   * 逐件商品的限购与库存
+   */
+  list: MallLimit[];
+};
+
 export type SellLine = {
   /**
    * 物品 id
@@ -3172,6 +479,10 @@ export type SellGoodsResult = {
    * 所属账号 id
    */
   accountId: string;
+  /**
+   * 所属区 id（展示用；服务端按它判归属，客户端不要回传）
+   */
+  zoneId: number;
   /**
    * 角色名
    */
@@ -3222,6 +533,28 @@ export type SellGoodsResult = {
   total: number;
 };
 
+export type SellEntry = {
+  /**
+   * 物品 id（必须在共享快照的出售价表里，否则 20018）
+   */
+  goodId: string;
+  /**
+   * 要卖的件数（≥1；超过背包持有量整单拒绝 20019）
+   */
+  count: number;
+};
+
+export type SellGoods = {
+  /**
+   * 要卖的东西（一次最多 200 条，够一键回收把整包装备报上来）。同 id 的多条会先合并再扣，重复报同一格不构成两次出售。
+   */
+  entries: SellEntry[];
+  /**
+   * 修订号（乐观锁，必填）：客户端读到的值，与服务端不一致时 20006，需先拉最新存档（B62 / #820）
+   */
+  revision: number;
+};
+
 export type DrugUseResult = {
   /**
    * 角色 id
@@ -3231,6 +564,10 @@ export type DrugUseResult = {
    * 所属账号 id
    */
   accountId: string;
+  /**
+   * 所属区 id（展示用；服务端按它判归属，客户端不要回传）
+   */
+  zoneId: number;
   /**
    * 角色名
    */
@@ -3281,6 +618,21 @@ export type DrugUseResult = {
   recoveredMp: number;
 };
 
+export type DrugUse = {
+  /**
+   * 背包行
+   */
+  row: number;
+  /**
+   * 背包列
+   */
+  col: number;
+  /**
+   * 修订号（乐观锁，必填）：客户端读到的值，与服务端不一致时 20006，需先拉最新存档（B62 / #820）
+   */
+  revision: number;
+};
+
 export type MoneyUseResult = {
   /**
    * 角色 id
@@ -3290,6 +642,10 @@ export type MoneyUseResult = {
    * 所属账号 id
    */
   accountId: string;
+  /**
+   * 所属区 id（展示用；服务端按它判归属，客户端不要回传）
+   */
+  zoneId: number;
   /**
    * 角色名
    */
@@ -3344,323 +700,19 @@ export type MoneyUseResult = {
   balance: number;
 };
 
-export type ReviveResult = {
+export type MoneyUse = {
   /**
-   * 复活后的生命值（= maxHp）
+   * 背包行
    */
-  hp: number;
+  row: number;
   /**
-   * 复活后的魔法值（= maxMp）
+   * 背包列
    */
-  mp: number;
+  col: number;
   /**
-   * 服务端重算的生命上限
-   */
-  maxHp: number;
-  /**
-   * 服务端重算的魔法上限
-   */
-  maxMp: number;
-};
-
-export type FashionBuyResult = {
-  /**
-   * 本次购买的时装 id
-   */
-  fashionId: string;
-  /**
-   * 本次扣除的绑定元宝（= fashions.sell_price）
-   */
-  price: number;
-  /**
-   * 购买后的绑定元宝余额
-   */
-  bindGold: number;
-  /**
-   * 购买后的拥有清单（含新买的这件；已拥有的 id 不会重复）
-   */
-  owned: string[];
-  /**
-   * 最新修订号
+   * 修订号（乐观锁，必填）：客户端读到的值，与服务端不一致时 20006，需先拉最新存档（B62 / #820）
    */
   revision: number;
-};
-
-export type FashionWearResult = {
-  /**
-   * 穿着态（当前穿的时装 id，null = 未穿）
-   */
-  fashionCloth: string | null;
-  /**
-   * 当前拥有清单
-   */
-  owned: string[];
-  /**
-   * 最新修订号
-   */
-  revision: number;
-};
-
-export type BagOpResult = {
-  /**
-   * 角色 id
-   */
-  id: string;
-  /**
-   * 所属账号 id
-   */
-  accountId: string;
-  /**
-   * 角色名
-   */
-  name: string;
-  /**
-   * 职业：1 战士 / 2 魔法师 / 3 道士 / 4 全职业
-   */
-  occupation: string;
-  /**
-   * 性别：1 男 / 2 女 / 3 全性别
-   */
-  sex: string;
-  /**
-   * 等级
-   */
-  level: number;
-  /**
-   * 是否当前选中（在线）角色
-   */
-  online: boolean;
-  /**
-   * 修订号（每次落库 +1；客户端保存进度时带上它做乐观锁）
-   */
-  revision: number;
-  /**
-   * 创建时间（毫秒）
-   */
-  createdAt: number;
-  /**
-   * 最近更新时间（毫秒）
-   */
-  updatedAt: number;
-  /**
-   * 角色完整数据（客户端 entities/Role 的 JSON 快照，服务端按不透明文档存取；管理端只编辑其中的常用字段）
-   */
-  data: Record<string, unknown>;
-  /**
-   * 本次执行的动作
-   */
-  action: "equip" | "unequip" | "discard" | "move" | "tidy";
-  /**
-   * 本次涉及的装备槽位（非装备操作为 null）
-   */
-  slot: string | null;
-};
-
-export type RealtimeTicket = {
-  /**
-   * 一次性票据（拼到 ws 地址的 ticket 查询参数上）
-   */
-  ticket: string;
-  /**
-   * 有效期（毫秒）；过期后必须重新取票
-   */
-  expiresIn: number;
-};
-
-export type MoneyItem = {
-  /**
-   * 物品 id（如 money_bind_gold_10；背包按它引用）
-   */
-  id: string;
-  /**
-   * 名称（如「绑定元宝（10）」）
-   */
-  label: string;
-  /**
-   * 描述
-   */
-  description: string;
-  /**
-   * 图标资源路径（resources 相对路径，如 item/currency/bind-gold-10）
-   */
-  icon: string;
-  /**
-   * 入账到哪个账本字段：bindGold = 绑定元宝
-   */
-  currency: string;
-  /**
-   * 单件入账金额（使用一个就加这么多）
-   */
-  amount: number;
-  /**
-   * 最大叠加数量
-   */
-  maxStack: number;
-  /**
-   * 售卖价（0 = 不可出售）
-   */
-  sellPrice: number;
-  /**
-   * 掉落时强制绑定（#789）：true = 掉出来就绑定角色、不可交易
-   */
-  bindOnDrop: boolean;
-  /**
-   * 最近更新时间（毫秒）
-   */
-  updatedAt: number;
-};
-
-export type MoneyItemPage = {
-  /**
-   * 总条数
-   */
-  total: number;
-  /**
-   * 当前页码（从 1 开始）
-   */
-  page: number;
-  /**
-   * 每页条数
-   */
-  size: number;
-  /**
-   * 当前页的货币物品
-   */
-  list: MoneyItem[];
-};
-
-export type MoneyItemQuery = {
-  /**
-   * 页码，从 1 开始
-   */
-  page?: number;
-  /**
-   * 每页条数（1~100）
-   */
-  size?: number;
-  /**
-   * 关键字：模糊匹配 id / 名称 / 描述
-   */
-  keyword?: string;
-  /**
-   * 排序字段（取值见各接口说明，未登记的值会退回默认排序）
-   */
-  sort?: string;
-  /**
-   * 排序方向：asc 升序 / desc 降序
-   */
-  order?: "asc" | "desc";
-  /**
-   * 只看某种货币（bindGold）
-   */
-  currency?: string;
-};
-
-export type RemoveMoneyItemResult = {
-  /**
-   * 被删除的物品 id
-   */
-  id: string;
-  /**
-   * 实际删除的行数（正常为 1；0 说明刚被别人删掉了）
-   */
-  removed: number;
-};
-
-export type LevelScroll = {
-  /**
-   * 物品 id（如 level_scroll_1；背包按它引用）
-   */
-  id: string;
-  /**
-   * 名称（如「升级卷轴 Lv1」）
-   */
-  label: string;
-  /**
-   * 描述
-   */
-  description: string;
-  /**
-   * 图标资源路径（resources 相对路径，如 item/scroll/level-scroll）
-   */
-  icon: string;
-  /**
-   * 可用等级下限（含）：角色等级低于它就用不了
-   */
-  minLevel: number;
-  /**
-   * 可用等级上限（含）：用完之后角色就会超出这段，需要换下一卷
-   */
-  maxLevel: number;
-  /**
-   * 最大叠加数量
-   */
-  maxStack: number;
-  /**
-   * 售卖价（0 = 不可出售）
-   */
-  sellPrice: number;
-  /**
-   * 掉落时强制绑定（#789）：true = 掉出来就绑定角色、不可交易
-   */
-  bindOnDrop: boolean;
-  /**
-   * 最近更新时间（毫秒）
-   */
-  updatedAt: number;
-};
-
-export type LevelScrollPage = {
-  /**
-   * 总条数
-   */
-  total: number;
-  /**
-   * 当前页码（从 1 开始）
-   */
-  page: number;
-  /**
-   * 每页条数
-   */
-  size: number;
-  /**
-   * 当前页的升级卷轴
-   */
-  list: LevelScroll[];
-};
-
-export type LevelScrollQuery = {
-  /**
-   * 页码，从 1 开始
-   */
-  page?: number;
-  /**
-   * 每页条数（1~100）
-   */
-  size?: number;
-  /**
-   * 关键字：模糊匹配 id / 名称 / 描述
-   */
-  keyword?: string;
-  /**
-   * 排序字段（取值见各接口说明，未登记的值会退回默认排序）
-   */
-  sort?: string;
-  /**
-   * 排序方向：asc 升序 / desc 降序
-   */
-  order?: "asc" | "desc";
-};
-
-export type RemoveLevelScrollResult = {
-  /**
-   * 被删除的卷轴 id
-   */
-  id: string;
-  /**
-   * 实际删除的行数（正常为 1；0 说明刚被别人删掉了）
-   */
-  removed: number;
 };
 
 export type LevelScrollUseResult = {
@@ -3672,6 +724,10 @@ export type LevelScrollUseResult = {
    * 所属账号 id
    */
   accountId: string;
+  /**
+   * 所属区 id（展示用；服务端按它判归属，客户端不要回传）
+   */
+  zoneId: number;
   /**
    * 角色名
    */
@@ -3730,6 +786,21 @@ export type LevelScrollUseResult = {
   expNeed: number;
 };
 
+export type LevelScrollUse = {
+  /**
+   * 背包行
+   */
+  row: number;
+  /**
+   * 背包列
+   */
+  col: number;
+  /**
+   * 修订号（乐观锁，必填）：客户端读到的值，与服务端不一致时 20006，需先拉最新存档（B62 / #820）
+   */
+  revision: number;
+};
+
 export type SkillUpgradeResult = {
   /**
    * 角色 id
@@ -3739,6 +810,10 @@ export type SkillUpgradeResult = {
    * 所属账号 id
    */
   accountId: string;
+  /**
+   * 所属区 id（展示用；服务端按它判归属，客户端不要回传）
+   */
+  zoneId: number;
   /**
    * 角色名
    */
@@ -3805,6 +880,17 @@ export type SkillUpgradeResult = {
   maxLevel: number;
 };
 
+export type SkillUpgrade = {
+  /**
+   * 要升的技能 id（必须是已学会的技能，见 `data.skills`）
+   */
+  skillId: string;
+  /**
+   * 修订号（乐观锁，必填）：客户端读到的值，与服务端不一致时 20006，需先拉最新存档（B62 / #820）
+   */
+  revision: number;
+};
+
 export type AttrAllocation = {
   /**
    * 力量已分配点数（物攻）
@@ -3833,6 +919,10 @@ export type AttrChangeResult = {
    * 所属账号 id
    */
   accountId: string;
+  /**
+   * 所属区 id（展示用；服务端按它判归属，客户端不要回传）
+   */
+  zoneId: number;
   /**
    * 角色名
    */
@@ -3891,42 +981,218 @@ export type AttrChangeResult = {
   cost: number;
 };
 
-export type Zone = {
+export type AttrAllocate = {
   /**
-   * 区服 id
+   * 本次加给力量的点数（缺省 = 0）
    */
-  id: number;
+  str?: number;
   /**
-   * 区服名
+   * 本次加给敏捷的点数（缺省 = 0）
    */
-  name: string;
+  agi?: number;
+  /**
+   * 本次加给体质的点数（缺省 = 0）
+   */
+  vit?: number;
+  /**
+   * 本次加给精神的点数（缺省 = 0）
+   */
+  spi?: number;
+  /**
+   * 修订号（乐观锁，必填）：客户端读到的值，与服务端不一致时 20006，需先拉最新存档（B62 / #820）
+   */
+  revision: number;
 };
 
-export type AdminZone = {
+export type AttrReset = {
   /**
-   * 区服 id
+   * 修订号（乐观锁，必填）：与服务端不一致时 20006，需先拉最新存档（B62 / #820）
    */
-  id: number;
+  revision: number;
+};
+
+export type ReviveResult = {
   /**
-   * 区服名
+   * 复活后的生命值（= maxHp）
+   */
+  hp: number;
+  /**
+   * 复活后的魔法值（= maxMp）
+   */
+  mp: number;
+  /**
+   * 服务端重算的生命上限
+   */
+  maxHp: number;
+  /**
+   * 服务端重算的魔法上限
+   */
+  maxMp: number;
+};
+
+export type FashionBuyResult = {
+  /**
+   * 本次购买的时装 id
+   */
+  fashionId: string;
+  /**
+   * 本次扣除的绑定元宝（= fashions.sell_price）
+   */
+  price: number;
+  /**
+   * 购买后的绑定元宝余额
+   */
+  bindGold: number;
+  /**
+   * 购买后的拥有清单（含新买的这件；已拥有的 id 不会重复）
+   */
+  owned: string[];
+  /**
+   * 最新修订号
+   */
+  revision: number;
+};
+
+export type FashionBuy = {
+  /**
+   * 要买的时装 id（fashions 表主键，如 cloth_2）
+   */
+  fashionId: string;
+  /**
+   * 修订号（乐观锁，必填）：客户端读到的值，与服务端不一致时 20006，需先拉最新存档（B62 / #820）
+   */
+  revision: number;
+};
+
+export type FashionWearResult = {
+  /**
+   * 穿着态（当前穿的时装 id，null = 未穿）
+   */
+  fashionCloth: string | null;
+  /**
+   * 当前拥有清单
+   */
+  owned: string[];
+  /**
+   * 最新修订号
+   */
+  revision: number;
+};
+
+export type FashionWear = {
+  /**
+   * 要穿的时装 id；null = 脱下当前时装
+   */
+  fashionId: string | null;
+  /**
+   * 修订号（乐观锁，必填）：客户端读到的值，与服务端不一致时 20006，需先拉最新存档（B62 / #820）
+   */
+  revision: number;
+};
+
+export type BagOpResult = {
+  /**
+   * 角色 id
+   */
+  id: string;
+  /**
+   * 所属账号 id
+   */
+  accountId: string;
+  /**
+   * 所属区 id（展示用；服务端按它判归属，客户端不要回传）
+   */
+  zoneId: number;
+  /**
+   * 角色名
    */
   name: string;
   /**
-   * 已并入的区服 id（未合并为 null）
+   * 职业：1 战士 / 2 魔法师 / 3 道士 / 4 全职业
    */
-  mergedInto: number | null;
+  occupation: string;
   /**
-   * 当前归属本区的账号数
+   * 性别：1 男 / 2 女 / 3 全性别
    */
-  accountCount: number;
+  sex: string;
   /**
-   * 开区时间（毫秒）
+   * 等级
+   */
+  level: number;
+  /**
+   * 是否当前选中（在线）角色
+   */
+  online: boolean;
+  /**
+   * 修订号（每次落库 +1；客户端保存进度时带上它做乐观锁）
+   */
+  revision: number;
+  /**
+   * 创建时间（毫秒）
    */
   createdAt: number;
   /**
    * 最近更新时间（毫秒）
    */
   updatedAt: number;
+  /**
+   * 角色完整数据（客户端 entities/Role 的 JSON 快照，服务端按不透明文档存取；管理端只编辑其中的常用字段）
+   */
+  data: Record<string, unknown>;
+  /**
+   * 本次执行的动作
+   */
+  action: "equip" | "unequip" | "discard" | "move" | "tidy";
+  /**
+   * 本次涉及的装备槽位（非装备操作为 null）
+   */
+  slot: string | null;
+};
+
+export type BagOpCell = {
+  /**
+   * 行
+   */
+  row: number;
+  /**
+   * 列
+   */
+  col: number;
+  /**
+   * 物品 id
+   */
+  id: string;
+  /**
+   * 件数（结构粗上限；真实单格上限按物品所属表 max_stack 在服务端判，#841/#842）
+   */
+  count: number;
+};
+
+export type BagOp = {
+  /**
+   * 动作
+   */
+  action: "equip" | "unequip" | "discard" | "move" | "tidy";
+  /**
+   * 背包行（equip / discard）
+   */
+  row?: number;
+  /**
+   * 背包列（equip / discard）
+   */
+  col?: number;
+  /**
+   * 装备槽位（unequip），如 cloth / weapon
+   */
+  slot?: string;
+  /**
+   * 操作后的背包内容（move / tidy；稀疏格子，只报有东西的格子）
+   */
+  cells?: BagOpCell[];
+  /**
+   * 修订号（乐观锁，必填）：客户端读到的值，与服务端不一致时 20006，需先拉最新存档（B62 / #820）
+   */
+  revision: number;
 };
 
 export type AdminInfo = {
@@ -3979,15 +1245,41 @@ export type AdminAuthResult = {
   admin: AdminInfo;
 };
 
-export type AccountDetail = {
+export type AdminRegister = {
   /**
-   * 账号信息
+   * 管理员账号：3~20 位字母 / 数字 / 下划线
    */
-  account: Account;
+  username: string;
   /**
-   * 该账号的角色列表
+   * 密码：6~32 位
    */
-  roles: RoleSummary[];
+  password: string;
+  /**
+   * 注册码（服务端配置了 ADMIN_REGISTER_CODE 时必填；未配置且未开 ADMIN_REGISTER_OPEN 时，管理端注册整体关闭）
+   */
+  registerCode?: string;
+};
+
+export type AdminLogin = {
+  /**
+   * 管理员账号
+   */
+  username: string;
+  /**
+   * 密码
+   */
+  password: string;
+};
+
+export type ChangeAdminPassword = {
+  /**
+   * 当前密码
+   */
+  oldPassword: string;
+  /**
+   * 新密码（6~32 位）
+   */
+  newPassword: string;
 };
 
 export type AdminStats = {
@@ -4112,20 +1404,6 @@ export type StatsRecentItem = {
   success: boolean;
 };
 
-export type StatsTrendQuery = {
-  /**
-   * 统计天数（含今天），最多 90 天
-   */
-  days?: number;
-};
-
-export type StatsRecentQuery = {
-  /**
-   * 取多少条
-   */
-  limit?: number;
-};
-
 export type AccountPage = {
   /**
    * 总条数
@@ -4145,23 +1423,116 @@ export type AccountPage = {
   list: Account[];
 };
 
-export type AdminPage = {
+export type AccountDetail = {
   /**
-   * 总条数
+   * 账号信息
    */
-  total: number;
+  account: Account;
   /**
-   * 当前页码（从 1 开始）
+   * 该账号的角色列表
    */
-  page: number;
+  roles: RoleSummary[];
+};
+
+export type UpdateAccountEmail = {
   /**
-   * 每页条数
+   * 玩家邮箱；传非空串补录 / 改，传空串清空。同一邮箱只绑一个账号（大小写不敏感）。
    */
-  size: number;
+  email: string;
+};
+
+export type UpdateAccountStatus = {
   /**
-   * 当前页的管理员列表
+   * 目标状态：disabled 封禁 / active 解封（封禁四件套一并清空）
    */
-  list: AdminInfo[];
+  status?: "active" | "disabled";
+  /**
+   * 封禁原因：写进操作日志，也会出现在玩家登录被拒的提示里
+   */
+  reason?: string;
+  /**
+   * 封禁时长（小时）；不填或 null = 永久。仅在 status=disabled 时有意义
+   */
+  durationHours?: unknown | null;
+};
+
+export type BatchStatusResult = {
+  /**
+   * 请求操作的条数（含重复提交的 id）
+   */
+  requested: number;
+  /**
+   * 实际改到的条数（已不存在的 id 不计入）
+   */
+  updated: number;
+  /**
+   * 实际改到的账号 id
+   */
+  ids: string[];
+  /**
+   * 因本次封禁被清掉在线角色的账号 id（解封时为空）
+   */
+  clearedOnlineAccountIds: string[];
+};
+
+export type BatchUpdateAccountStatus = {
+  /**
+   * 目标状态：disabled 封禁 / active 解封（封禁四件套一并清空）
+   */
+  status?: "active" | "disabled";
+  /**
+   * 封禁原因：写进操作日志，也会出现在玩家登录被拒的提示里
+   */
+  reason?: string;
+  /**
+   * 封禁时长（小时）；不填或 null = 永久。仅在 status=disabled 时有意义
+   */
+  durationHours?: unknown | null;
+  /**
+   * 要变更的账号 id 列表（最多 100 条）
+   */
+  ids: string[];
+};
+
+export type ResetPasswordResult = {
+  /**
+   * 被重置的对象 id
+   */
+  id: string;
+  /**
+   * 被重置的对象名（账号名 / 管理员名，界面直接展示）
+   */
+  name: string;
+  /**
+   * 提示：口令变更后，该对象此前签发的令牌**已全部作废**，需要用它重新登录
+   */
+  revokedTokens?: boolean;
+};
+
+export type ResetAccountPassword = {
+  /**
+   * 新密码（6~32 位）
+   */
+  password: string;
+};
+
+export type BatchDeleteResult = {
+  /**
+   * 请求删除的条数
+   */
+  requested: number;
+  /**
+   * 实际删除的条数（已不存在的 id 不计入）
+   */
+  deleted: number;
+  /**
+   * 实际被删掉的角色 id
+   */
+  ids: string[];
+  /**
+   * 被顺带清掉在线角色标记的账号 id（删的是在线角色时）
+   */
+  clearedOnlineAccountIds: string[];
 };
 
 export type AdminRole = {
@@ -4173,6 +1544,10 @@ export type AdminRole = {
    * 所属账号 id
    */
   accountId: string;
+  /**
+   * 所属区 id（展示用；服务端按它判归属，客户端不要回传）
+   */
+  zoneId: number;
   /**
    * 角色名
    */
@@ -4236,6 +1611,13 @@ export type AdminRolePage = {
    * 当前页的角色列表
    */
   list: AdminRole[];
+};
+
+export type BatchDeleteRoles = {
+  /**
+   * 要删除的角色 id 列表（最多 100 条）
+   */
+  ids: string[];
 };
 
 export type RoleDerivedAttributes = {
@@ -4325,6 +1707,10 @@ export type AdminRoleDetail = {
    */
   accountId: string;
   /**
+   * 所属区 id（展示用；服务端按它判归属，客户端不要回传）
+   */
+  zoneId: number;
+  /**
    * 角色名
    */
   name: string;
@@ -4374,57 +1760,180 @@ export type AdminRoleDetail = {
   derived: RoleDerived;
 };
 
-export type BatchDeleteResult = {
+export type RoleBagCell = {
   /**
-   * 请求删除的条数
+   * 格子行号（0 ~ 63）
    */
-  requested: number;
+  row: number;
   /**
-   * 实际删除的条数（已不存在的 id 不计入）
+   * 格子列号（0 ~ 63）
    */
-  deleted: number;
+  col: number;
   /**
-   * 实际被删掉的角色 id
-   */
-  ids: string[];
-  /**
-   * 被顺带清掉在线角色标记的账号 id（删的是在线角色时）
-   */
-  clearedOnlineAccountIds: string[];
-};
-
-export type BatchStatusResult = {
-  /**
-   * 请求操作的条数（含重复提交的 id）
-   */
-  requested: number;
-  /**
-   * 实际改到的条数（已不存在的 id 不计入）
-   */
-  updated: number;
-  /**
-   * 实际改到的账号 id
-   */
-  ids: string[];
-  /**
-   * 因本次封禁被清掉在线角色的账号 id（解封时为空）
-   */
-  clearedOnlineAccountIds: string[];
-};
-
-export type ResetPasswordResult = {
-  /**
-   * 被重置的对象 id
+   * 物品 id（客户端 configs/items 的 key）
    */
   id: string;
   /**
-   * 被重置的对象名（账号名 / 管理员名，界面直接展示）
+   * 数量
+   */
+  count: number;
+};
+
+export type RolePatchPayload = {
+  /**
+   * 角色名
+   */
+  name?: string;
+  /**
+   * 职业（1 战士 / 2 魔法师 / 3 道士 / 4 全职业）
+   */
+  occupation?: "1" | "2" | "3" | "4";
+  /**
+   * 性别（1 男 / 2 女 / 3 全性别）
+   */
+  sex?: "1" | "2" | "3";
+  /**
+   * 等级
+   */
+  level?: number;
+  /**
+   * 绑定元宝（唯一货币，旧币种字段已随 #843/#844 收敛删除）
+   */
+  bindGold?: number;
+  /**
+   * 经验
+   */
+  exp?: number;
+  /**
+   * 战魂等级
+   */
+  soulOfWar?: number;
+  /**
+   * 称号等级
+   */
+  title?: number;
+  /**
+   * 军衔阶数
+   */
+  rank?: number;
+  /**
+   * 当前血量（0 = 死亡状态，玩家可走复活接口）
+   */
+  hp?: number;
+  /**
+   * 当前魔法值
+   */
+  mp?: number;
+  /**
+   * 时装（外观）id，如 cloth_2；null = 脱掉时装
+   */
+  fashionCloth?: string | null;
+  /**
+   * 时装拥有清单（整份覆盖，如 ["cloth_2", "cloth_5"]）
+   */
+  fashionsOwned?: string[];
+  /**
+   * 头像编号
+   */
+  avatar?: number;
+  /**
+   * 所在地图 id（客户端 configs/map 的 key）
+   */
+  onMap?: string;
+  /**
+   * 装备穿戴表（槽位名 → 装备 id；null 或空串表示该槽位空着）
+   */
+  equipments?: Record<string, string | null>;
+  /**
+   * 技能等级表（技能 id → 等级）
+   */
+  skills?: Record<string, number>;
+  /**
+   * 背包格子（稀疏：行/列/物品 id/数量）；空数组 = 清空背包
+   */
+  bag?: RoleBagCell[];
+};
+
+export type AdminPage = {
+  /**
+   * 总条数
+   */
+  total: number;
+  /**
+   * 当前页码（从 1 开始）
+   */
+  page: number;
+  /**
+   * 每页条数
+   */
+  size: number;
+  /**
+   * 当前页的管理员列表
+   */
+  list: AdminInfo[];
+};
+
+export type AdminUpdatePayload = {
+  /**
+   * 目标角色
+   */
+  role?: "super_admin" | "admin" | "viewer";
+  /**
+   * 目标状态
+   */
+  status?: "active" | "disabled";
+};
+
+export type ResetAdminPassword = {
+  /**
+   * 新密码（6~32 位）
+   */
+  password: string;
+};
+
+export type AdminZone = {
+  /**
+   * 区服 id
+   */
+  id: number;
+  /**
+   * 区服名
    */
   name: string;
   /**
-   * 提示：口令变更后，该对象此前签发的令牌**已全部作废**，需要用它重新登录
+   * 已并入的区服 id（未合并为 null）
    */
-  revokedTokens?: boolean;
+  mergedInto: number | null;
+  /**
+   * 当前归属本区的账号数
+   */
+  accountCount: number;
+  /**
+   * 开区时间（毫秒）
+   */
+  createdAt: number;
+  /**
+   * 最近更新时间（毫秒）
+   */
+  updatedAt: number;
+};
+
+export type CreateZone = {
+  /**
+   * 区服名（1~20 字，唯一）
+   */
+  name: string;
+};
+
+export type MergeZone = {
+  /**
+   * 被并入的区（from，合并后打上已合并标记）
+   */
+  fromZoneId: number;
+  /**
+   * 并入的目标区（to，必须还是活区）
+   */
+  toZoneId: number;
 };
 
 export type AuditLog = {
@@ -4547,65 +2056,6 @@ export type AuditExport = {
   truncated: boolean;
 };
 
-export type AuditQuery = {
-  /**
-   * 页码，从 1 开始
-   */
-  page?: number;
-  /**
-   * 每页条数（1~100）
-   */
-  size?: number;
-  /**
-   * 关键字：模糊匹配操作人账号名 / 动作（如 password）/ 目标 id / 请求路径
-   */
-  keyword?: string;
-  /**
-   * 排序字段（取值见各接口说明，未登记的值会退回默认排序）
-   */
-  sort?: string;
-  /**
-   * 排序方向：asc 升序 / desc 降序
-   */
-  order?: "asc" | "desc";
-  /**
-   * 只看某个操作人的日志（管理员 id）
-   */
-  actorId?: string;
-  /**
-   * 只看某个动作（operationId，取值见 /admin/audit-logs/actions）
-   */
-  action?: string;
-  /**
-   * 目标类型筛选
-   */
-  targetType?: "account" | "role" | "admin" | "announcement" | "mail" | "title" | "soul" | "rank" | "equipment" | "drug" | "item" | "monster" | "npc" | "mall" | "fashion" | "dropTable" | "monsterDrop" | "levelCurve" | "equipmentVariant" | "growthScalar" | "skill" | "status" | "zone" | "guild" | "quest" | "achievement" | "equipAlign" | "equipInAlign" | "map" | "uiEffect" | "audioSetting" | "runtimeParams" | "combatWeights" | "guideSteps" | "equipmentAppearance" | "moneyItem" | "levelScroll" | "config";
-  /**
-   * 只看针对某个目标的日志（目标 id）
-   */
-  targetId?: string;
-  /**
-   * 只看某个来源 IP（**精确匹配**；反向代理下需要 TRUST_PROXY=true 才准）
-   */
-  ip?: string;
-  /**
-   * 只看某个操作人角色
-   */
-  actorRole?: "super_admin" | "admin" | "viewer";
-  /**
-   * 结果筛选：true 只看成功 / false 只看失败
-   */
-  success?: "true" | "false";
-  /**
-   * 起始时间（毫秒时间戳，含）
-   */
-  from?: number;
-  /**
-   * 结束时间（毫秒时间戳，含）
-   */
-  to?: number;
-};
-
 export type EventLog = {
   /**
    * 流水 id
@@ -4684,57 +2134,6 @@ export type EventLogPage = {
   list: EventLog[];
 };
 
-export type EventLogQuery = {
-  /**
-   * 页码，从 1 开始
-   */
-  page?: number;
-  /**
-   * 每页条数（1~100）
-   */
-  size?: number;
-  /**
-   * 关键字：模糊匹配角色名 / 目标 / 载荷
-   */
-  keyword?: string;
-  /**
-   * 排序字段（取值见各接口说明，未登记的值会退回默认排序）
-   */
-  sort?: string;
-  /**
-   * 排序方向：asc 升序 / desc 降序
-   */
-  order?: "asc" | "desc";
-  /**
-   * 事件类型（取值见 /admin/event-logs/types）
-   */
-  type?: string;
-  /**
-   * 只看某个角色（角色 id）
-   */
-  roleId?: string;
-  /**
-   * 只看某个账号（账号 id）
-   */
-  accountId?: string;
-  /**
-   * 只看某张地图（地图 id）
-   */
-  mapId?: string;
-  /**
-   * 结果筛选：true 只看成功 / false 只看失败
-   */
-  success?: "true" | "false";
-  /**
-   * 起始时间（毫秒时间戳，含）
-   */
-  from?: number;
-  /**
-   * 结束时间（毫秒时间戳，含）
-   */
-  to?: number;
-};
-
 export type EventType = {
   /**
    * 类型值（落库值）
@@ -4755,122 +2154,6 @@ export type EventTypeList = {
    * 全部事件类型（含当前 0 条的）
    */
   types: EventType[];
-};
-
-export type AccountQuery = {
-  /**
-   * 页码，从 1 开始
-   */
-  page?: number;
-  /**
-   * 每页条数（1~100）
-   */
-  size?: number;
-  /**
-   * 关键字（不同接口含义见其说明）
-   */
-  keyword?: string;
-  /**
-   * 排序字段（取值见各接口说明，未登记的值会退回默认排序）
-   */
-  sort?: string;
-  /**
-   * 排序方向：asc 升序 / desc 降序
-   */
-  order?: "asc" | "desc";
-  /**
-   * 状态筛选
-   */
-  status?: "active" | "disabled";
-};
-
-export type RoleQuery = {
-  /**
-   * 页码，从 1 开始
-   */
-  page?: number;
-  /**
-   * 每页条数（1~100）
-   */
-  size?: number;
-  /**
-   * 关键字（不同接口含义见其说明）
-   */
-  keyword?: string;
-  /**
-   * 排序字段（取值见各接口说明，未登记的值会退回默认排序）
-   */
-  sort?: string;
-  /**
-   * 排序方向：asc 升序 / desc 降序
-   */
-  order?: "asc" | "desc";
-  /**
-   * 限定账号 id（查某账号下的全部角色）
-   */
-  accountId?: string;
-  /**
-   * 在线状态筛选：true 只看在线（账号当前选中的）角色
-   */
-  online?: "true" | "false";
-  /**
-   * 职业筛选
-   */
-  occupation?: "1" | "2" | "3" | "4";
-  /**
-   * 性别筛选
-   */
-  sex?: "1" | "2" | "3";
-  /**
-   * 最低等级（含）
-   */
-  minLevel?: number;
-  /**
-   * 最高等级（含）
-   */
-  maxLevel?: number;
-};
-
-export type AdminQuery = {
-  /**
-   * 页码，从 1 开始
-   */
-  page?: number;
-  /**
-   * 每页条数（1~100）
-   */
-  size?: number;
-  /**
-   * 关键字（不同接口含义见其说明）
-   */
-  keyword?: string;
-  /**
-   * 排序字段（取值见各接口说明，未登记的值会退回默认排序）
-   */
-  sort?: string;
-  /**
-   * 排序方向：asc 升序 / desc 降序
-   */
-  order?: "asc" | "desc";
-  /**
-   * 角色筛选
-   */
-  role?: "super_admin" | "admin" | "viewer";
-};
-
-export type Health = {
-  /**
-   * 服务状态
-   */
-  status: string;
-  /**
-   * 运行环境
-   */
-  env: string;
-  /**
-   * 服务端时间戳（毫秒）
-   */
-  time: number;
 };
 
 export type SystemRuntime = {
@@ -5160,113 +2443,145 @@ export type AnnouncementPage = {
   list: Announcement[];
 };
 
-export type AnnouncementQuery = {
+export type CreateAnnouncement = {
   /**
-   * 页码，从 1 开始
+   * 标题
    */
-  page?: number;
+  title: string;
   /**
-   * 每页条数（1~100）
+   * 正文（纯文本）
    */
-  size?: number;
+  content: string;
   /**
-   * 关键字：模糊匹配标题与正文
-   */
-  keyword?: string;
-  /**
-   * 排序字段（取值见各接口说明，未登记的值会退回默认排序）
-   */
-  sort?: string;
-  /**
-   * 排序方向：asc 升序 / desc 降序
-   */
-  order?: "asc" | "desc";
-  /**
-   * 级别筛选
+   * 级别，默认 normal
    */
   level?: "normal" | "important";
   /**
-   * 启用状态筛选：true 只看启用 / false 只看停用
+   * 是否启用，默认 true
    */
-  enabled?: "true" | "false";
+  enabled?: boolean;
   /**
-   * 生效状态筛选：true 只看生效中 / false 只看不在生效窗口内（含未开始与已过期）
+   * 生效开始时间（毫秒时间戳）；不传 = 立即生效
    */
-  active?: "true" | "false";
+  startsAt?: number;
+  /**
+   * 生效结束时间（毫秒时间戳，不含）；不传 = 不设截止
+   */
+  endsAt?: number;
 };
 
-export type MailJob = {
+export type UpdateAnnouncement = {
   /**
-   * 任务 id
+   * 标题（不传则不改）
+   */
+  title?: string;
+  /**
+   * 正文（不传则不改）
+   */
+  content?: string;
+  /**
+   * 级别（不传则不改）
+   */
+  level?: "normal" | "important";
+  /**
+   * 启用 / 停用（不传则不改）
+   */
+  enabled?: boolean;
+  /**
+   * 生效开始时间（毫秒）；传 `null` = 改为立即生效，不传则不改
+   */
+  startsAt?: number | null;
+  /**
+   * 生效结束时间（毫秒，不含）；传 `null` = 改为不设截止，不传则不改
+   */
+  endsAt?: number | null;
+};
+
+export type AchievementCondition = {
+  /**
+   * 类型：kill 累计击杀 / quest 累计交付任务（累计型，进度落库）；level 等级 / combat 战力 / collect 持有物品（状态型，查询现算）
+   */
+  type: "kill" | "quest" | "level" | "combat" | "collect";
+  /**
+   * 目标：kill = 怪物 key（"*" 任意）/ collect = 物品 id / 其余空串
+   */
+  target: string;
+  /**
+   * 门槛值（累计型 = 需要多少次，状态型 = 需要到多少）
+   */
+  count: number;
+};
+
+export type AchievementRewardItem = {
+  /**
+   * 物品 id
+   */
+  goodId: string;
+  /**
+   * 数量
+   */
+  count: number;
+};
+
+export type AchievementRewards = {
+  /**
+   * 绑定元宝
+   */
+  bindGold: number;
+  /**
+   * 经验
+   */
+  exp: number;
+  /**
+   * 物品清单
+   */
+  items: AchievementRewardItem[];
+};
+
+export type Achievement = {
+  /**
+   * 成就 id（语义串，如 ach_kill_10）
    */
   id: string;
   /**
-   * 收件邮箱
+   * 分类：battle 战斗 / growth 成长 / explore 探索
    */
-  to: string;
+  category: "battle" | "growth" | "explore";
   /**
-   * 关联的玩家账号 id；null = 未关联账号
+   * 名称
    */
-  accountId: string | null;
+  label: string;
   /**
-   * 关联的玩家账号名；账号已被删则为 null
+   * 描述
    */
-  accountName: string | null;
+  description: string;
   /**
-   * 模板 key
+   * 条件
    */
-  templateKey: string;
+  condition: AchievementCondition;
   /**
-   * 模板中文名（模板已被删则退回 key）
+   * 奖励
    */
-  templateName: string;
+  rewards: AchievementRewards;
   /**
-   * 渲染后的标题
+   * 分类内展示顺序（小的在前）
    */
-  subject: string;
+  sortOrder: number;
   /**
-   * 渲染后的正文（重投时发的仍是这份内容，模板改动不影响已入队的任务）
+   * 未达成时是否默认折叠（不剧透条件）
    */
-  body: string;
-  /**
-   * 状态
-   */
-  status: "pending" | "sending" | "retrying" | "sent" | "failed";
-  /**
-   * 状态中文名
-   */
-  statusLabel: string;
-  /**
-   * 已尝试次数（成功的那次也计入）
-   */
-  attempts: number;
-  /**
-   * 下一次重试的时刻（毫秒）；待发送与终态为 null
-   */
-  nextRetryAt: number | null;
-  /**
-   * 最近一次失败的原因；成功为 null（界面可直接展示）
-   */
-  lastError: string | null;
-  /**
-   * 发起人管理员账号名（管理员被删后仍可追溯）
-   */
-  createdBy: string | null;
-  /**
-   * 入队时间（毫秒）
-   */
-  createdAt: number;
+  hidden: boolean;
   /**
    * 最近更新时间（毫秒）
    */
   updatedAt: number;
   /**
-   * 投递成功的时刻（毫秒）；未成功为 null
+   * 已有多少角色拥有这条成就的记录（仅行内统计用，列表不填）
    */
-  sentAt: number | null;
+  recordCount?: number;
 };
 
-export type MailJobPage = {
+export type AchievementPage = {
   /**
    * 总条数
    */
@@ -5280,78 +2595,151 @@ export type MailJobPage = {
    */
   size: number;
   /**
-   * 当前页的投递任务
+   * 当前页的成就配置
    */
-  list: MailJob[];
+  list: Achievement[];
 };
 
-export type MailQuery = {
+export type UpdateAchievementCondition = {
   /**
-   * 页码，从 1 开始
+   * 条件类型
    */
-  page?: number;
+  type?: "kill" | "quest" | "level" | "combat" | "collect";
   /**
-   * 每页条数（1~100）
+   * 目标（kill = 怪物 key 或 "*"；collect = 物品 id；其余留空）
    */
-  size?: number;
+  target?: string;
   /**
-   * 关键字：模糊匹配收件邮箱 / 标题 / 收件账号名
+   * 门槛值（1~999999）
    */
-  keyword?: string;
-  /**
-   * 排序字段（取值见各接口说明，未登记的值会退回默认排序）
-   */
-  sort?: string;
-  /**
-   * 排序方向：asc 升序 / desc 降序
-   */
-  order?: "asc" | "desc";
-  /**
-   * 状态筛选
-   */
-  status?: "pending" | "sending" | "retrying" | "sent" | "failed";
+  count?: number;
 };
 
-export type MailTemplate = {
+export type UpdateAchievementRewards = {
   /**
-   * 模板 key
+   * 绑定元宝（≥0）
    */
-  key: string;
+  bindGold?: number;
   /**
-   * 模板中文名
+   * 经验（≥0）
    */
-  name: string;
+  exp?: number;
   /**
-   * 用途说明（界面提示运营这封信该填什么）
+   * 物品清单（≤20 条）
    */
-  hint: string;
-  /**
-   * 必填变量名；缺一个就拒发
-   */
-  variables: string[];
-  /**
-   * 标题模板（含 {{变量}} 占位符；custom 为空串）
-   */
-  subject: string;
-  /**
-   * 正文模板（含 {{变量}} 占位符；custom 为空串）
-   */
-  body: string;
+  items?: AchievementRewardItem[];
 };
 
-export type SendMailResult = {
+export type UpdateAchievement = {
   /**
-   * 投递任务 id
+   * 分类
+   */
+  category?: "battle" | "growth" | "explore";
+  /**
+   * 名称（1~50 字）
+   */
+  label?: string;
+  /**
+   * 描述（≤200 字）
+   */
+  description?: string;
+  /**
+   * 条件（逐字段合并）
+   */
+  condition?: UpdateAchievementCondition;
+  /**
+   * 奖励（逐字段合并）
+   */
+  rewards?: UpdateAchievementRewards;
+  /**
+   * 分类内展示顺序（0~9999）
+   */
+  sortOrder?: number;
+  /**
+   * 未达成时是否默认折叠
+   */
+  hidden?: boolean;
+};
+
+export type CreateAchievement = {
+  /**
+   * 分类
+   */
+  category?: "battle" | "growth" | "explore";
+  /**
+   * 名称（1~50 字）
+   */
+  label?: string;
+  /**
+   * 描述（≤200 字）
+   */
+  description?: string;
+  /**
+   * 条件（逐字段合并）
+   */
+  condition?: UpdateAchievementCondition;
+  /**
+   * 奖励（逐字段合并）
+   */
+  rewards?: UpdateAchievementRewards;
+  /**
+   * 分类内展示顺序（0~9999）
+   */
+  sortOrder?: number;
+  /**
+   * 未达成时是否默认折叠
+   */
+  hidden?: boolean;
+  /**
+   * 成就 id（唯一；语义串，如 ach_kill_10）
    */
   id: string;
+};
+
+export type ConfigAttributeRange = {
   /**
-   * 入队后的状态（恒为 pending：是否真发出去要在投递记录里看）
+   * 下限
    */
-  status: string;
+  min: number;
   /**
-   * 渲染后的标题（可以先看一眼，发错了还来得及在记录里查到）
+   * 上限
    */
-  subject: string;
+  max: number;
+};
+
+export type ConfigAttributes = {
+  /**
+   * 生命上限加成
+   */
+  maxHp: number;
+  /**
+   * 每 5 秒回血
+   */
+  hpRecover: number;
+  /**
+   * 物理攻击 [下限, 上限]
+   */
+  physicalAttack: ConfigAttributeRange;
+  /**
+   * 魔法攻击 [下限, 上限]
+   */
+  magicAttack: ConfigAttributeRange;
+  /**
+   * 道术攻击 [下限, 上限]
+   */
+  taoistAttack: ConfigAttributeRange;
+  /**
+   * 物理防御 [下限, 上限]
+   */
+  physicalDefense: ConfigAttributeRange;
+  /**
+   * 魔法防御 [下限, 上限]
+   */
+  magicDefense: ConfigAttributeRange;
+  /**
+   * 道术防御 [下限, 上限]
+   */
+  taoistDefense: ConfigAttributeRange;
 };
 
 export type Title = {
@@ -5416,31 +2804,42 @@ export type TitlePage = {
   list: Title[];
 };
 
-export type TitleQuery = {
+export type UpgradeOrder = {
   /**
-   * 页码，从 1 开始
+   * 重排后的称号等级全序列（须与当前 upgrade 渠道的等级集合完全一致）
    */
-  page?: number;
+  levels: number[];
+};
+
+export type UpdateTitle = {
   /**
-   * 每页条数（1~100）
+   * 名称（不传则不改）
    */
-  size?: number;
+  label?: string;
   /**
-   * 关键字：模糊匹配名称与描述
+   * 描述（不传则不改）
    */
-  keyword?: string;
+  description?: string;
   /**
-   * 排序字段（取值见各接口说明，未登记的值会退回默认排序）
+   * 动画资源目录（不传则不改）
    */
-  sort?: string;
+  animation?: string;
   /**
-   * 排序方向：asc 升序 / desc 降序
+   * 动画帧率（不传则不改）
    */
-  order?: "asc" | "desc";
+  animationFrameRate?: number;
   /**
-   * 获得渠道筛选
+   * 升到该级消耗的绑定元宝（不传则不改）
+   */
+  bindGold?: number;
+  /**
+   * 获得渠道（不传则不改）
    */
   acquireChannel?: "upgrade" | "grant" | "unavailable";
+  /**
+   * 八项属性（**整份提交、整份替换**，不传则不改；区间型要求 0 ≤ min ≤ max）
+   */
+  attributes?: ConfigAttributes;
 };
 
 export type Soul = {
@@ -5501,436 +2900,31 @@ export type SoulPage = {
   list: Soul[];
 };
 
-export type SoulQuery = {
+export type UpdateSoul = {
   /**
-   * 页码，从 1 开始
+   * 名称（不传则不改）
    */
-  page?: number;
+  label?: string;
   /**
-   * 每页条数（1~100）
+   * 描述（不传则不改）
    */
-  size?: number;
+  description?: string;
   /**
-   * 关键字：模糊匹配名称与描述
+   * 动画资源目录（不传则不改）
    */
-  keyword?: string;
+  animation?: string;
   /**
-   * 排序字段（取值见各接口说明，未登记的值会退回默认排序）
+   * 动画帧率（不传则不改）
    */
-  sort?: string;
+  animationFrameRate?: number;
   /**
-   * 排序方向：asc 升序 / desc 降序
+   * 升到该阶消耗的绑定元宝（不传则不改）
    */
-  order?: "asc" | "desc";
-};
-
-export type LevelCurve = {
+  bindGold?: number;
   /**
-   * 曲线 key：exp（升级经验）/ hp（生命上限）/ attack_max（物攻上限）/ defense_max（物防上限）
+   * 八项属性（**整份提交、整份替换**，不传则不改；区间型要求 0 ≤ min ≤ max）
    */
-  curve: string;
-  /**
-   * 段序号（同一曲线内 1 起；段的起点由上一段终点决定，不可改）
-   */
-  seq: number;
-  /**
-   * 起始等级（含）
-   */
-  fromLevel: number;
-  /**
-   * 结束等级（含）；最后一段是等级上限，超出按该段公式继续外推
-   */
-  toLevel: number;
-  /**
-   * fromLevel 处的值
-   */
-  startValue: number;
-  /**
-   * 每级增量
-   */
-  perLevel: number;
-  /**
-   * 每级增量的增量（二阶；只有 exp 用，其余为 0）
-   */
-  accel: number;
-  /**
-   * 最近更新时间（毫秒）
-   */
-  updatedAt: number;
-};
-
-export type LevelCurveList = {
-  /**
-   * 全部曲线段（按曲线 → 段序）
-   */
-  list: LevelCurve[];
-};
-
-export type LevelAttributes = {
-  /**
-   * 等级
-   */
-  level: number;
-  /**
-   * 升到下一级所需经验
-   */
-  exp: number;
-  /**
-   * 生命上限（裸属性）
-   */
-  maxHp: number;
-  /**
-   * 魔法上限（= 生命上限 × 0.5）
-   */
-  maxMp: number;
-  /**
-   * 每秒回血（= 生命上限 ÷ 100，四舍五入）
-   */
-  hpRecover: number;
-  /**
-   * 物攻区间（三系攻同值）
-   */
-  physicalAttack: ConfigAttributeRange;
-  /**
-   * 魔攻区间
-   */
-  magicAttack: ConfigAttributeRange;
-  /**
-   * 道攻区间
-   */
-  taoistAttack: ConfigAttributeRange;
-  /**
-   * 物防区间（三系防同值）
-   */
-  physicalDefense: ConfigAttributeRange;
-  /**
-   * 魔防区间
-   */
-  magicDefense: ConfigAttributeRange;
-  /**
-   * 道防区间
-   */
-  taoistDefense: ConfigAttributeRange;
-};
-
-export type GrowthScalar = {
-  /**
-   * 参数键（如 roleMaxLevel / attributeRange.minRate）
-   */
-  key: string;
-  /**
-   * 参数值
-   */
-  value: number;
-  /**
-   * 参数说明（改之前先读一遍 —— 每个键的语义都在这里）
-   */
-  description: string;
-  /**
-   * 最近更新时间（毫秒）
-   */
-  updatedAt: number;
-};
-
-export type GrowthScalarPage = {
-  /**
-   * 总条数
-   */
-  total: number;
-  /**
-   * 当前页码（从 1 开始）
-   */
-  page: number;
-  /**
-   * 每页条数
-   */
-  size: number;
-  /**
-   * 当前页的标量参数
-   */
-  list: GrowthScalar[];
-};
-
-export type GrowthScalarQuery = {
-  /**
-   * 页码，从 1 开始
-   */
-  page?: number;
-  /**
-   * 每页条数（1~100）
-   */
-  size?: number;
-  /**
-   * 关键字：模糊匹配参数键与说明
-   */
-  keyword?: string;
-  /**
-   * 排序字段（取值见各接口说明，未登记的值会退回默认排序）
-   */
-  sort?: string;
-  /**
-   * 排序方向：asc 升序 / desc 降序
-   */
-  order?: "asc" | "desc";
-};
-
-export type DropRuntimeParams = {
-  /**
-   * 自动拾取半径（像素）：脚底距离小于它即拾取
-   */
-  autoPickupRadius: number;
-  /**
-   * 服务端拾取距离闸（像素，#817）：玩家离掉落物落地位置超过它就拒收拾取请求。与 autoPickupRadius 是两把尺子（那是客户端手感，这是服务端权威）；0 = 关闭校验，别当出货值
-   */
-  pickAcceptRadius: number;
-  /**
-   * 背包已满的提示 / 重试间隔（毫秒）
-   */
-  fullTipInterval: number;
-  /**
-   * 多件掉落物的最小中心间距（像素）
-   */
-  scatterMinDistance: number;
-  /**
-   * 服务端拾取应答等待上限（毫秒），超时允许重试
-   */
-  pickReplyTimeout: number;
-  /**
-   * 随机绑定概率（百分比 0~100）：物品与怪物都没有「强制绑定」时，按它掷一次决定这一件是否绑定角色。0 = 从不随机绑定
-   */
-  bindChance: number;
-};
-
-export type AutoBattleParams = {
-  /**
-   * 自动选目标的最大距离（像素，0 = 不限，全图取最近）
-   */
-  maxTargetDistance: number;
-  /**
-   * 自动移动是否使用跑步速度
-   */
-  moveByRun: boolean;
-  /**
-   * A* 网格单元边长（像素）：越小越贴合障碍、搜索越慢
-   */
-  cellSize: number;
-  /**
-   * 通行余量（像素）：障碍矩形向外扩张这么多再烙进网格
-   */
-  clearance: number;
-  /**
-   * 重新寻路间隔（毫秒）
-   */
-  repathInterval: number;
-  /**
-   * 到达路点的判定半径（像素）
-   */
-  waypointTolerance: number;
-  /**
-   * 卡住检测间隔（毫秒）
-   */
-  stuckInterval: number;
-  /**
-   * 卡住判定：该间隔内位移小于此值视为卡住（像素）
-   */
-  stuckDistance: number;
-  /**
-   * 连续卡住多少次后放弃当前目标
-   */
-  stuckRetryLimit: number;
-  /**
-   * 被放弃目标的拉黑时长（毫秒）
-   */
-  targetBanDuration: number;
-  /**
-   * 场上没目标时，隔多久再找一次（毫秒）
-   */
-  targetSearchInterval: number;
-  /**
-   * 点击寻路的到达判定半径（像素）
-   */
-  arriveTolerance: number;
-  /**
-   * 传送落点吸附半径（格）
-   */
-  teleportSnapRadius: number;
-  /**
-   * 突进类技能的落点吸附半径（像素）
-   */
-  dashSnapRadius: number;
-};
-
-export type GuildRuleParams = {
-  /**
-   * 帮会名最短字数
-   */
-  nameMin: number;
-  /**
-   * 帮会名最长字数（必须 ≥ 最短字数）
-   */
-  nameMax: number;
-  /**
-   * 帮会公告最长字数（0 = 不限）
-   */
-  noticeMax: number;
-  /**
-   * 入帮申请留言最长字数（0 = 不限）
-   */
-  applicationMessageMax: number;
-  /**
-   * 建帮所需最低角色等级（0 = 不限等级）
-   */
-  createLevelMin: number;
-  /**
-   * 建帮消耗绑定元宝（0 = 免费）
-   */
-  createCostBindGold: number;
-};
-
-export type RuntimeParams = {
-  /**
-   * 掉落物手感参数（服务端只下发，不消费）
-   */
-  drop: DropRuntimeParams;
-  /**
-   * 自动战斗 / 寻路参数（服务端只下发，不消费）
-   */
-  autoBattle: AutoBattleParams;
-  /**
-   * 帮会规则门槛（服务端校验读它）
-   */
-  guild: GuildRuleParams;
-  /**
-   * 最后修改时间（毫秒）
-   */
-  updatedAt: number;
-};
-
-export type MonsterAiParams = {
-  /**
-   * 普攻间隔（毫秒）
-   */
-  attackInterval: number;
-  /**
-   * 普攻距离（像素）
-   */
-  attackRange: number;
-  /**
-   * 施法硬直兜底（毫秒）：技能没配 cast_lock_ms 时用它
-   */
-  attackActionTime: number;
-  /**
-   * 击退时长（毫秒）：技能只配距离时用它换算击退速度
-   */
-  pushDuration: number;
-  /**
-   * 待机游走间隔区间（毫秒，[最小, 最大]）
-   */
-  idleMoveInterval: number[];
-  /**
-   * 待机游走每次走多久（毫秒，[最小, 最大]）
-   */
-  idleMoveDuration: number[];
-  /**
-   * 游走速度倍率（乘在怪物 moveSpeed 上）
-   */
-  idleMoveSpeedScale: number;
-  /**
-   * 游走活动半径（像素，围绕出生点）
-   */
-  wanderRadius: number;
-  /**
-   * 牵引半径（像素）：目标跑出这个距离就脱战回家。必须大于普攻距离，否则怪永远追不上就脱战
-   */
-  leashRange: number;
-  /**
-   * 回家速度倍率（乘在 moveSpeed 上；比追击快，免得被拖着遛）
-   */
-  returnSpeedRate: number;
-  /**
-   * 回家超时（毫秒）：到点还没走回去就吸附到出生点
-   */
-  returnTimeoutMs: number;
-};
-
-export type MovementGuardParams = {
-  /**
-   * 档位：off 完全不校验 / log 只记账放行（出厂）/ enforce 拒绝并拉回
-   */
-  mode: "off" | "log" | "enforce";
-  /**
-   * 速度上限（像素/秒）：单帧位移超过 上限×容差×Δt + 抖动 即判超速
-   */
-  maxSpeed: number;
-  /**
-   * 容差倍率（留给刚体加减速与插值）
-   */
-  tolerance: number;
-  /**
-   * 抖动余量（像素）：抵掉坐标取整与上报相位差
-   */
-  jitterPx: number;
-  /**
-   * 是否做穿墙校验（与档位分开，碰撞数据出问题时可单独止血）
-   */
-  wallCheck: boolean;
-  /**
-   * 同一连接两次 posCorrect 的最小间隔（毫秒）
-   */
-  correctIntervalMs: number;
-};
-
-export type CombatWeights = {
-  /**
-   * 生命上限：每 1 点生命折算多少战力
-   */
-  maxHp: number;
-  /**
-   * 物理攻击：每 1 点（区间按上下限之和）折算多少战力
-   */
-  physicalAttack: number;
-  /**
-   * 魔法攻击：每 1 点（区间按上下限之和）折算多少战力
-   */
-  magicAttack: number;
-  /**
-   * 道术攻击：每 1 点（区间按上下限之和）折算多少战力
-   */
-  taoistAttack: number;
-  /**
-   * 物理防御：每 1 点（区间按上下限之和）折算多少战力
-   */
-  physicalDefense: number;
-  /**
-   * 魔法防御：每 1 点（区间按上下限之和）折算多少战力
-   */
-  magicDefense: number;
-  /**
-   * 道术防御：每 1 点（区间按上下限之和）折算多少战力
-   */
-  taoistDefense: number;
-};
-
-export type CombatWeightsResponse = {
-  /**
-   * 当前生效权重（属性名 → 倍率）
-   */
-  weights: CombatWeights;
-  /**
-   * 最后修改时间（毫秒，0 = 从未改过，仍是出厂值）
-   */
-  updatedAt: number;
-};
-
-export type GuideSteps = {
-  /**
-   * 步骤表（数组顺序 = 体验顺序）
-   */
-  steps: GuideStep[];
-  /**
-   * 最后修改时间（毫秒，0 = 从未改过、仍是出厂值）
-   */
-  updatedAt: number;
+  attributes?: ConfigAttributes;
 };
 
 export type Rank = {
@@ -5983,122 +2977,591 @@ export type RankPage = {
   list: Rank[];
 };
 
-export type RankQuery = {
+export type UpdateRank = {
   /**
-   * 页码，从 1 开始
+   * 衔名（不传则不改）
    */
-  page?: number;
+  label?: string;
   /**
-   * 每页条数（1~100）
-   */
-  size?: number;
-  /**
-   * 关键字：模糊匹配衔名 / 大段名 / 描述
-   */
-  keyword?: string;
-  /**
-   * 排序字段（取值见各接口说明，未登记的值会退回默认排序）
-   */
-  sort?: string;
-  /**
-   * 排序方向：asc 升序 / desc 降序
-   */
-  order?: "asc" | "desc";
-  /**
-   * 按大段名筛（取值：兵卒 / 校尉 / 都尉 / 中郎将 / 将军 / 重号将军 / 公卿 / 王爵 / 神将 / 神话；枚举清单派生自客户端配置，不落 schema 以免中文联合类型进两端生成物）
+   * 大段名（不传则不改）
    */
   tier?: string;
+  /**
+   * 描述（不传则不改）
+   */
+  description?: string;
+  /**
+   * 晋到该阶消耗的绑定元宝（不传则不改；编辑弹窗会原样带回当前值）
+   */
+  bindGold?: number;
+  /**
+   * 八项属性（**整份提交、整份替换**，不传则不改；区间型要求 0 ≤ min ≤ max）
+   */
+  attributes?: ConfigAttributes;
 };
 
-export type Equipment = {
+export type DamageCoefficient = {
   /**
-   * 装备基础件 id（如 cloth_1；变体 id 带 _pXsY 不进管理端）
+   * 收益基数属性（maxHp / hpRecover / physicalAttack / magicAttack / taoistAttack / physicalDefense / magicDefense / taoistDefense）
+   */
+  baseType: string;
+  /**
+   * 倍率（0 = 该级不造成伤害；上限 100 防止手滑多打两个零）
+   */
+  baseTypeRate: number;
+};
+
+export type Skill = {
+  /**
+   * 技能 id（角色技能被技能栏 / 快捷键 / 角色存档引用）
    */
   id: string;
   /**
-   * 部位（EQUIPMENT_TYPE 的枚举值，如 cloth）
+   * 归属：role / monster
    */
-  slot: string;
+  owner: "role" | "monster";
   /**
-   * 穿戴需求等级（装备定强的锚点）
-   */
-  level: number;
-  /**
-   * 售卖价（0 = 不可售卖；商城售价归商城定价管理，不在这里）
-   */
-  sellPrice: number;
-  /**
-   * 名称（如「青铜重甲」；前后缀由客户端拼在名字前后）
+   * 技能名
    */
   label: string;
   /**
-   * 描述（装备详情弹窗正文）
-   */
-  description: string;
-  /**
-   * 职业限制（取值域见 OCCUPATION_HINT：1 战士 / 2 魔法师 / 3 道士 / 4 全职业）
-   */
-  occupation: string;
-  /**
-   * 性别限制（取值域见 SEX_HINT：1 男 / 2 女 / 3 全性别）
-   */
-  sex: string;
-  /**
-   * 图标（resources 相对路径，如 equipment/clothes/icon/005；管理端列表缩略图与客户端图标共用）
+   * 技能图标资源路径（resources 相对路径，不含扩展名）
    */
   icon: string;
   /**
-   * 内观图集（角色弹窗里穿在身上的那套；resources 相对路径）
+   * 分类：0 主动 / 1 被动 / 2 状态 / 3 回复（与客户端 SkillType 同值）
    */
-  inAtlas: string;
+  category: "0" | "1" | "2" | "3";
   /**
-   * 外观图集（场景里跟着角色走的那个；resources 相对路径）
+   * 目标类型：0 区域 / 1 单体 / 2 群体 / 3 自身（与客户端 SkillTargetType 同值）
    */
-  outAtlas: string;
+  targetType: "0" | "1" | "2" | "3";
   /**
-   * 标签（如「第一大陆」；详情弹窗展示，无逻辑含义）
+   * 施法动作（客户端动画动作键，如 attack_near；空串 = 不播动作）
    */
-  tags: string[];
+  action: string;
   /**
-   * 外观缩放（1 = 原尺寸）
+   * 技能特效图集路径（空串 = 无特效）
    */
-  outScale: number;
+  effect: string;
   /**
-   * 内观横向缩放（1 = 原尺寸）
+   * 特效是否播在自己身上
    */
-  inScaleX: number;
+  effectOnSelf: boolean;
   /**
-   * 内观纵向缩放（1 = 原尺寸）
+   * 冷却（秒）
    */
-  inScaleY: number;
+  cooldown: number;
   /**
-   * 内观旋转角度（度，0 = 不转）
+   * 释放一次消耗的魔法值
    */
-  inRotate: number;
+  mpCost: number;
   /**
-   * 内观锚点 x（弹窗坐标系，原点 = 弹窗中心、y 向上）
+   * 施法距离（0 = 不限距离）
    */
-  inPosX: number;
+  distance: number;
   /**
-   * 内观锚点 y（弹窗坐标系，y 向上）
+   * 学习 / 开启等级
    */
-  inPosY: number;
+  levelReq: number;
   /**
-   * 外观 8 向绝对位置（相对角色脚底锚点，y 向上；顺序 up / right_up / right / right_down / down / left_down / left / left_up）。**这是出厂值**：管理端「装备对齐」工作台调过的结果在 equip_aligns 表、每次进图另发
+   * 描述文案
    */
-  outPositions: EquipmentPoint[];
+  description: string;
   /**
-   * 八项基础属性（普通的·人级那一件自己的值；#655 起变体各自成行，不再由它乘倍率现算）
+   * 伤害系数（下标 = 技能等级 - 1；状态型技能可为空数组）
    */
-  attributes: ConfigAttributes;
+  damageCoefficients: DamageCoefficient[];
   /**
-   * 掉落时强制绑定（#789）：true = 这件装备一掉出来就绑定角色、不可交易。三种绑定判定之一（另两个：怪物侧「掉落强制绑定」、掉落参数里的随机概率），任一为真即绑定
+   * 释放成功后给自身挂的状态 id（空串 = 不挂）
    */
-  bindOnDrop: boolean;
+  statusId: string;
+  /**
+   * 释放动作锁时长（毫秒；0 = 跟动画时长走）
+   */
+  castLockMs: number;
+  /**
+   * 是否要求有合法目标（自身 / 状态型技能可关）
+   */
+  requireTarget: boolean;
+  /**
+   * 是否可被自动战斗 / 挂机释放
+   */
+  canAuto: boolean;
+  /**
+   * 职业归属：1 战士 / 2 魔法师 / 3 道士 / 4 全职业（#603 第十一域）。客户端技能栏按它重建「职业 → 技能」映射，所以这一列是「技能归谁」的唯一来源
+   */
+  occupation: string;
+  /**
+   * 命中后的击退距离（像素；0 = 不击退。只对单体技能生效）
+   */
+  pushDistance: number;
+  /**
+   * 撞飞概率（0~1；0 = 从不撞飞，1 = 必撞。#826：撞飞还要求施法者等级 > 怪物等级）
+   */
+  pushChance: number;
+  /**
+   * 技能自带暴击率（0~1；与角色暴击率**相加**，不是替换）。#826：`desc` 里「附带 15% 暴击率」就配 0.15
+   */
+  critRate: number;
+  /**
+   * 技能自带暴击倍率（> 1 才生效；0 = 用角色那一份。它替换的是倍率而不是概率）
+   */
+  critDamage: number;
+  /**
+   * 无视防御比例（0~1；1 = 完全无视目标防御，0 = 正常吃防御。只影响这一发）
+   */
+  defIgnore: number;
+  /**
+   * 两段连击的第二段系数（0~1；0 = 没有第二段。第二段伤害 = 第一段 × 这个系数，不再单独掷攻击区间）
+   */
+  secondHitRatio: number;
+  /**
+   * 拉人距离（像素；0 = 不拉。方向 = 目标朝施法者，与 pushDistance 相反）
+   */
+  pullDistance: number;
   /**
    * 最近更新时间（毫秒）
    */
   updatedAt: number;
+};
+
+export type SkillPage = {
+  /**
+   * 总条数
+   */
+  total: number;
+  /**
+   * 当前页码（从 1 开始）
+   */
+  page: number;
+  /**
+   * 每页条数
+   */
+  size: number;
+  /**
+   * 当前页的技能配置
+   */
+  list: Skill[];
+};
+
+export type UpdateSkill = {
+  /**
+   * 技能名（≤50 字）
+   */
+  label?: string;
+  /**
+   * 图标资源路径（≤200 字；空串 = 不显示图标）
+   */
+  icon?: string;
+  /**
+   * 分类：0 主动 / 1 被动 / 2 状态 / 3 回复
+   */
+  category?: "0" | "1" | "2" | "3";
+  /**
+   * 目标类型：0 区域 / 1 单体 / 2 群体 / 3 自身
+   */
+  targetType?: "0" | "1" | "2" | "3";
+  /**
+   * 施法动作（≤50 字；空串 = 不播动作）
+   */
+  action?: string;
+  /**
+   * 技能特效图集路径（≤200 字；空串 = 无特效）
+   */
+  effect?: string;
+  /**
+   * 特效是否播在自己身上
+   */
+  effectOnSelf?: boolean;
+  /**
+   * 冷却（秒，0 = 不限制）
+   */
+  cooldown?: number;
+  /**
+   * 释放消耗魔法值（0 = 不消耗）
+   */
+  mpCost?: number;
+  /**
+   * 施法距离（0 = 不限距离）
+   */
+  distance?: number;
+  /**
+   * 学习 / 开启等级
+   */
+  levelReq?: number;
+  /**
+   * 描述文案（≤500 字）
+   */
+  description?: string;
+  /**
+   * 伤害系数（下标 = 技能等级 - 1，最多 20 级）
+   */
+  damageCoefficients?: DamageCoefficient[];
+  /**
+   * 释放后挂载的状态 id（空串 = 不挂；状态型技能必填）
+   */
+  statusId?: string;
+  /**
+   * 动作锁时长（毫秒；0 = 跟动画时长走）
+   */
+  castLockMs?: number;
+  /**
+   * 是否要求有合法目标
+   */
+  requireTarget?: boolean;
+  /**
+   * 是否可被自动战斗 / 挂机释放
+   */
+  canAuto?: boolean;
+  /**
+   * 职业归属：1 战士 / 2 魔法师 / 3 道士 / 4 全职业（#603 第十一域；客户端技能栏按它重建映射）
+   */
+  occupation?: "1" | "2" | "3" | "4";
+  /**
+   * 命中后的击退距离（像素；0 = 不击退；只对单体技能生效）
+   */
+  pushDistance?: number;
+  /**
+   * 撞飞概率（0~1；0 = 从不撞飞，1 = 必撞。撞飞还要求施法者等级 > 怪物等级）
+   */
+  pushChance?: number;
+  /**
+   * 技能自带暴击率（0~1；与角色暴击率相加。`desc` 写「附带 15% 暴击率」就配 0.15）
+   */
+  critRate?: number;
+  /**
+   * 技能自带暴击倍率（> 1 才生效；0 = 用角色那一份。它替换的是倍率，不是概率）
+   */
+  critDamage?: number;
+  /**
+   * 无视防御比例（0~1；1 = 完全无视目标防御，0 = 正常吃防御）
+   */
+  defIgnore?: number;
+  /**
+   * 两段连击的第二段系数（0~1；0 = 没有第二段。第二段伤害 = 第一段 × 系数）
+   */
+  secondHitRatio?: number;
+  /**
+   * 拉人距离（像素；0 = 不拉。方向 = 目标朝施法者）
+   */
+  pullDistance?: number;
+};
+
+export type CreateSkill = {
+  /**
+   * 技能名（≤50 字）
+   */
+  label?: string;
+  /**
+   * 图标资源路径（≤200 字；空串 = 不显示图标）
+   */
+  icon?: string;
+  /**
+   * 分类：0 主动 / 1 被动 / 2 状态 / 3 回复
+   */
+  category?: "0" | "1" | "2" | "3";
+  /**
+   * 目标类型：0 区域 / 1 单体 / 2 群体 / 3 自身
+   */
+  targetType?: "0" | "1" | "2" | "3";
+  /**
+   * 施法动作（≤50 字；空串 = 不播动作）
+   */
+  action?: string;
+  /**
+   * 技能特效图集路径（≤200 字；空串 = 无特效）
+   */
+  effect?: string;
+  /**
+   * 特效是否播在自己身上
+   */
+  effectOnSelf?: boolean;
+  /**
+   * 冷却（秒，0 = 不限制）
+   */
+  cooldown?: number;
+  /**
+   * 释放消耗魔法值（0 = 不消耗）
+   */
+  mpCost?: number;
+  /**
+   * 施法距离（0 = 不限距离）
+   */
+  distance?: number;
+  /**
+   * 学习 / 开启等级
+   */
+  levelReq?: number;
+  /**
+   * 描述文案（≤500 字）
+   */
+  description?: string;
+  /**
+   * 伤害系数（下标 = 技能等级 - 1，最多 20 级）
+   */
+  damageCoefficients?: DamageCoefficient[];
+  /**
+   * 释放后挂载的状态 id（空串 = 不挂；状态型技能必填）
+   */
+  statusId?: string;
+  /**
+   * 动作锁时长（毫秒；0 = 跟动画时长走）
+   */
+  castLockMs?: number;
+  /**
+   * 是否要求有合法目标
+   */
+  requireTarget?: boolean;
+  /**
+   * 是否可被自动战斗 / 挂机释放
+   */
+  canAuto?: boolean;
+  /**
+   * 职业归属：1 战士 / 2 魔法师 / 3 道士 / 4 全职业（#603 第十一域；客户端技能栏按它重建映射）
+   */
+  occupation?: "1" | "2" | "3" | "4";
+  /**
+   * 命中后的击退距离（像素；0 = 不击退；只对单体技能生效）
+   */
+  pushDistance?: number;
+  /**
+   * 撞飞概率（0~1；0 = 从不撞飞，1 = 必撞。撞飞还要求施法者等级 > 怪物等级）
+   */
+  pushChance?: number;
+  /**
+   * 技能自带暴击率（0~1；与角色暴击率相加。`desc` 写「附带 15% 暴击率」就配 0.15）
+   */
+  critRate?: number;
+  /**
+   * 技能自带暴击倍率（> 1 才生效；0 = 用角色那一份。它替换的是倍率，不是概率）
+   */
+  critDamage?: number;
+  /**
+   * 无视防御比例（0~1；1 = 完全无视目标防御，0 = 正常吃防御）
+   */
+  defIgnore?: number;
+  /**
+   * 两段连击的第二段系数（0~1；0 = 没有第二段。第二段伤害 = 第一段 × 系数）
+   */
+  secondHitRatio?: number;
+  /**
+   * 拉人距离（像素；0 = 不拉。方向 = 目标朝施法者）
+   */
+  pullDistance?: number;
+  /**
+   * 技能 id（怪物技能段：9000~9999 的四位数字，如 "9001"）
+   */
+  id: string;
+  /**
+   * 归属：只能 monster（缺省 monster）
+   */
+  owner?: "role" | "monster";
+};
+
+export type StatusCombat = {
+  /**
+   * 格挡触发概率 0~1（缺省 = 不参与格挡判定）
+   */
+  blockChance?: number;
+  /**
+   * 格挡触发时本次伤害的乘数（0~1，0.5 = 减半）
+   */
+  blockFactor?: number;
+  /**
+   * 防御乘法系数（≥1，1.5 = 防御 ×1.5；多个状态连乘）
+   */
+  defenseMultiplier?: number;
+  /**
+   * 攻击乘法系数（≥1，1.5 = 攻击 ×1.5；多个状态连乘）
+   */
+  attackMultiplier?: number;
+};
+
+export type StatusTick = {
+  /**
+   * 每拍掉多少血（负数扣血，正数当治疗）
+   */
+  hp?: number;
+  /**
+   * 每拍回多少蓝（负数扣蓝）
+   */
+  mp?: number;
+  /**
+   * 每拍按最大血量的比例变化（-0.02 = 每拍掉 2%）
+   */
+  hpPercent?: number;
+  /**
+   * 每拍按最大蓝量的比例变化
+   */
+  mpPercent?: number;
+};
+
+export type StatusControl = {
+  /**
+   * 眩晕 / 麻痹：禁止移动与出手（两者在服务端是同一条判据，只是来源与图标不同）
+   */
+  stun?: boolean;
+  /**
+   * 定身：只禁止移动，仍可出手
+   */
+  root?: boolean;
+  /**
+   * 沉默：只禁止出手，仍可移动
+   */
+  silence?: boolean;
+};
+
+export type Status = {
+  /**
+   * 状态 id（技能 statusId 与将来的装备 / 特权引用它）
+   */
+  id: string;
+  /**
+   * 归属：role / monster
+   */
+  owner: "role" | "monster";
+  /**
+   * 状态名
+   */
+  label: string;
+  /**
+   * 状态图标资源路径（resources 相对路径，不含扩展名）
+   */
+  icon: string;
+  /**
+   * 持续时间（秒；重复获得时从获得时刻重新计时，不叠层）
+   */
+  duration: number;
+  /**
+   * 来源：skill / equipment / privilege / other
+   */
+  source: "skill" | "equipment" | "privilege" | "other";
+  /**
+   * 描述文案
+   */
+  description: string;
+  /**
+   * 身上特效图集路径（空串 = 只在图标栏显示）
+   */
+  effect: string;
+  /**
+   * 身上特效是否只播一遍并停在尾帧（脉冲类特效配 true）
+   */
+  effectHoldLast: boolean;
+  /**
+   * 战斗数值修正（缺省 = 纯表现状态）
+   */
+  combat: StatusCombat;
+  /**
+   * 分类：buff / damage / control / speed（只用于分组，判据看 controlFlags 与 tickMs）
+   */
+  kind: string;
+  /**
+   * 最大层数（1 = 不叠；同 id 再加一层 → +1 并刷新到期）
+   */
+  maxStacks: number;
+  /**
+   * 周期触发间隔（毫秒；0 = 无周期）
+   */
+  tickMs: number;
+  /**
+   * 每拍做什么
+   */
+  tickEffect: StatusTick;
+  /**
+   * 控制标记
+   */
+  controlFlags: StatusControl;
+  /**
+   * 最近更新时间（毫秒）
+   */
+  updatedAt: number;
+};
+
+export type StatusPage = {
+  /**
+   * 总条数
+   */
+  total: number;
+  /**
+   * 当前页码（从 1 开始）
+   */
+  page: number;
+  /**
+   * 每页条数
+   */
+  size: number;
+  /**
+   * 当前页的状态配置
+   */
+  list: Status[];
+};
+
+export type UpdateStatus = {
+  /**
+   * 状态名（≤50 字）
+   */
+  label?: string;
+  /**
+   * 图标资源路径（≤200 字；空串 = 不显示图标）
+   */
+  icon?: string;
+  /**
+   * 持续时间（秒，>0）
+   */
+  duration?: number;
+  /**
+   * 来源：skill / equipment / privilege / other
+   */
+  source?: "skill" | "equipment" | "privilege" | "other";
+  /**
+   * 描述文案（≤500 字）
+   */
+  description?: string;
+  /**
+   * 身上特效图集路径（≤200 字；空串 = 只在图标栏显示）
+   */
+  effect?: string;
+  /**
+   * 身上特效是否只播一遍停在尾帧
+   */
+  effectHoldLast?: boolean;
+  /**
+   * 战斗数值修正（整份替换：不传则不改）
+   */
+  combat?: StatusCombat;
+  /**
+   * 分类：buff / damage / control / speed
+   */
+  kind?: "buff" | "damage" | "control" | "speed";
+  /**
+   * 最大层数（1~99，1 = 不叠）
+   */
+  maxStacks?: number;
+  /**
+   * 周期触发间隔（毫秒；0 = 无周期，最小 100）
+   */
+  tickMs?: number;
+  /**
+   * 每拍做什么（整份替换：不传则不改）
+   */
+  tickEffect?: StatusTick;
+  /**
+   * 控制标记（整份替换：不传则不改）
+   */
+  controlFlags?: StatusControl;
+};
+
+export type EquipmentPoint = {
+  /**
+   * x（像素，单轴 ±4000）
+   */
+  x: number;
+  /**
+   * y（像素，向上为正；单轴 ±4000）
+   */
+  y: number;
 };
 
 export type EquipmentListItem = {
@@ -6215,41 +3678,6 @@ export type EquipmentPage = {
   list: EquipmentListItem[];
 };
 
-export type EquipmentQuery = {
-  /**
-   * 页码，从 1 开始
-   */
-  page?: number;
-  /**
-   * 每页条数（1~100）
-   */
-  size?: number;
-  /**
-   * 关键字：模糊匹配 id 与名称
-   */
-  keyword?: string;
-  /**
-   * 排序字段（取值见各接口说明，未登记的值会退回默认排序）
-   */
-  sort?: string;
-  /**
-   * 排序方向：asc 升序 / desc 降序
-   */
-  order?: "asc" | "desc";
-  /**
-   * 按部位筛（取值：other1 / cloth / other2 / weapon / necklace / ring / accessories / shinguard / helmet / scapular / belt / wristband / shoes；枚举清单派生自客户端配置，不落 schema 以免英文/中文键进两端生成物）
-   */
-  slot?: string;
-  /**
-   * 等级段下限（含）
-   */
-  minLevel?: number;
-  /**
-   * 等级段上限（含）
-   */
-  maxLevel?: number;
-};
-
 export type EquipmentSlotCount = {
   /**
    * 部位 key（EQUIPMENT_TYPE 的枚举值）
@@ -6276,6 +3704,97 @@ export type EquipmentSlotSummary = {
   slots: EquipmentSlotCount[];
 };
 
+export type Equipment = {
+  /**
+   * 装备基础件 id（如 cloth_1；变体 id 带 _pXsY 不进管理端）
+   */
+  id: string;
+  /**
+   * 部位（EQUIPMENT_TYPE 的枚举值，如 cloth）
+   */
+  slot: string;
+  /**
+   * 穿戴需求等级（装备定强的锚点）
+   */
+  level: number;
+  /**
+   * 售卖价（0 = 不可售卖；商城售价归商城定价管理，不在这里）
+   */
+  sellPrice: number;
+  /**
+   * 名称（如「青铜重甲」；前后缀由客户端拼在名字前后）
+   */
+  label: string;
+  /**
+   * 描述（装备详情弹窗正文）
+   */
+  description: string;
+  /**
+   * 职业限制（取值域见 OCCUPATION_HINT：1 战士 / 2 魔法师 / 3 道士 / 4 全职业）
+   */
+  occupation: string;
+  /**
+   * 性别限制（取值域见 SEX_HINT：1 男 / 2 女 / 3 全性别）
+   */
+  sex: string;
+  /**
+   * 图标（resources 相对路径，如 equipment/clothes/icon/005；管理端列表缩略图与客户端图标共用）
+   */
+  icon: string;
+  /**
+   * 内观图集（角色弹窗里穿在身上的那套；resources 相对路径）
+   */
+  inAtlas: string;
+  /**
+   * 外观图集（场景里跟着角色走的那个；resources 相对路径）
+   */
+  outAtlas: string;
+  /**
+   * 标签（如「第一大陆」；详情弹窗展示，无逻辑含义）
+   */
+  tags: string[];
+  /**
+   * 外观缩放（1 = 原尺寸）
+   */
+  outScale: number;
+  /**
+   * 内观横向缩放（1 = 原尺寸）
+   */
+  inScaleX: number;
+  /**
+   * 内观纵向缩放（1 = 原尺寸）
+   */
+  inScaleY: number;
+  /**
+   * 内观旋转角度（度，0 = 不转）
+   */
+  inRotate: number;
+  /**
+   * 内观锚点 x（弹窗坐标系，原点 = 弹窗中心、y 向上）
+   */
+  inPosX: number;
+  /**
+   * 内观锚点 y（弹窗坐标系，y 向上）
+   */
+  inPosY: number;
+  /**
+   * 外观 8 向绝对位置（相对角色脚底锚点，y 向上；顺序 up / right_up / right / right_down / down / left_down / left / left_up）。**这是出厂值**：管理端「装备对齐」工作台调过的结果在 equip_aligns 表、每次进图另发
+   */
+  outPositions: EquipmentPoint[];
+  /**
+   * 八项基础属性（普通的·人级那一件自己的值；#655 起变体各自成行，不再由它乘倍率现算）
+   */
+  attributes: ConfigAttributes;
+  /**
+   * 掉落时强制绑定（#789）：true = 这件装备一掉出来就绑定角色、不可交易。三种绑定判定之一（另两个：怪物侧「掉落强制绑定」、掉落参数里的随机概率），任一为真即绑定
+   */
+  bindOnDrop: boolean;
+  /**
+   * 最近更新时间（毫秒）
+   */
+  updatedAt: number;
+};
+
 export type CreateEquipmentResult = {
   /**
    * 新建出来的装备基础件
@@ -6285,6 +3804,144 @@ export type CreateEquipmentResult = {
    * 连带展开的变体行数（= 前缀档数 × 后缀档数，出厂 15）
    */
   variants: number;
+};
+
+export type CreateEquipment = {
+  /**
+   * 装备 id（可省 —— 缺省按 `部位_序号` 生成，如 cloth_33）。手填要求：小写字母开头，只含小写字母 / 数字 / 下划线，≤40 字符；撞已有 id → 409（`50039`）
+   */
+  id?: string;
+  /**
+   * 部位（EQUIPMENT_TYPE 的枚举值，取值：other1 / cloth / other2 / weapon / necklace / ring / accessories / shinguard / helmet / scapular / belt / wristband / shoes）—— 决定角色弹窗里的槽位
+   */
+  slot: string;
+  /**
+   * 名称（如「青铜重甲」；1~50 字，前后缀由客户端拼在名字前后）
+   */
+  label: string;
+  /**
+   * 模板基础件 id（可省）：复制它的图标 / 内观图集 / 外观图集 / 标签 / 几何（缩放 / 旋转 / 锚点 / 8 向位置）/职业性别 / 描述 / 八项属性 —— 新装备立刻可见可用。不给就是一张白纸（资源与几何全空，客户端看不到外观）
+   */
+  templateId?: string;
+  /**
+   * 穿戴需求等级（不传 = 跟模板；再不行 1）
+   */
+  level?: number;
+  /**
+   * 售卖价（不传 = 跟模板；再不行 0。0 = 不可售卖。**商城售价不在这里**）
+   */
+  sellPrice?: number;
+  /**
+   * 掉落时强制绑定（#789；不传 = 跟模板，再不行 false）
+   */
+  bindOnDrop?: boolean;
+  /**
+   * 职业限制（不传 = 跟模板；再不行 4 = 不限）
+   */
+  occupation?: string;
+  /**
+   * 性别限制（不传 = 跟模板；再不行 3 = 不限）
+   */
+  sex?: string;
+  /**
+   * 描述（≤500 字）
+   */
+  description?: string;
+  /**
+   * 标签（整份替换；每一项 ≤20 字，最多 8 个）
+   */
+  tags?: string[];
+  /**
+   * 图标（resources 相对路径；不传 = 跟模板）
+   */
+  icon?: string;
+  /**
+   * 内观图集（resources 相对路径；不传 = 跟模板）
+   */
+  inAtlas?: string;
+  /**
+   * 外观图集（resources 相对路径；不传 = 跟模板）
+   */
+  outAtlas?: string;
+};
+
+export type UpdateEquipment = {
+  /**
+   * 名称（不传则不改；≤50 字）
+   */
+  label?: string;
+  /**
+   * 描述（不传则不改；≤500 字，空串 = 清空）
+   */
+  description?: string;
+  /**
+   * 职业限制（取值：1 / 2 / 3 / 4）
+   */
+  occupation?: string;
+  /**
+   * 性别限制（取值：1 / 2 / 3）
+   */
+  sex?: string;
+  /**
+   * 图标（resources 相对路径；空串 = 不显示图标）
+   */
+  icon?: string;
+  /**
+   * 内观图集（resources 相对路径；空串 = 内观不显示这件）
+   */
+  inAtlas?: string;
+  /**
+   * 外观图集（resources 相对路径；空串 = 外观不显示这件）
+   */
+  outAtlas?: string;
+  /**
+   * 标签（整份替换；每一项 ≤20 字，最多 8 个）
+   */
+  tags?: string[];
+  /**
+   * 外观缩放（1 = 原尺寸）
+   */
+  outScale?: number;
+  /**
+   * 内观横向缩放（1 = 原尺寸）
+   */
+  inScaleX?: number;
+  /**
+   * 内观纵向缩放（1 = 原尺寸）
+   */
+  inScaleY?: number;
+  /**
+   * 内观旋转角度（度；0 = 不转）
+   */
+  inRotate?: number;
+  /**
+   * 内观锚点 x（像素）
+   */
+  inPosX?: number;
+  /**
+   * 内观锚点 y（像素，向上为正）
+   */
+  inPosY?: number;
+  /**
+   * 外观 8 向位置（**整份提交、整份替换**，必须正好 8 个，顺序 up → left_up；单轴 ±4000）。只改出厂值，实际效果以「装备对齐」工作台（equip_aligns）为准
+   */
+  outPositions?: EquipmentPoint[];
+  /**
+   * 穿戴需求等级（不传则不改）
+   */
+  level?: number;
+  /**
+   * 售卖价（不传则不改；0 = 不可售卖。**商城售价不在这里** —— 唯一写入口归商城定价管理）
+   */
+  sellPrice?: number;
+  /**
+   * 八项基础属性（**整份提交、整份替换**，不传则不改；区间型要求 0 ≤ min ≤ max）。变体属性 = 基础属性 × 前后缀倍率，在客户端展开
+   */
+  attributes?: ConfigAttributes;
+  /**
+   * 掉落时强制绑定（#789；不传则不改）
+   */
+  bindOnDrop?: boolean;
 };
 
 export type RemoveEquipmentResult = {
@@ -6424,31 +4081,23 @@ export type EquipmentVariantPage = {
   list: EquipmentVariant[];
 };
 
-export type EquipmentVariantQuery = {
+export type UpdateEquipmentVariant = {
   /**
-   * 页码，从 1 开始
+   * 名称（基础名，不含前后缀文案；前后缀由客户端按下标拼）
    */
-  page?: number;
+  label?: string;
   /**
-   * 每页条数（1~100）
+   * 穿戴需求等级（≥ 1）
    */
-  size?: number;
+  level?: number;
   /**
-   * 关键字：模糊匹配变体 id 与名称
+   * 回收价（≥ 0；货币 = 绑定元宝）
    */
-  keyword?: string;
+  sellPrice?: number;
   /**
-   * 排序字段（取值见各接口说明，未登记的值会退回默认排序）
+   * 八项属性（整份提交；不传则保留原值）
    */
-  sort?: string;
-  /**
-   * 排序方向：asc 升序 / desc 降序
-   */
-  order?: "asc" | "desc";
-  /**
-   * 只列某个基础件的变体（如 cloth_1；弹窗就靠它）
-   */
-  baseId?: string;
+  attributes?: ConfigAttributes;
 };
 
 export type EquipmentVariantRebuildResult = {
@@ -6466,88 +4115,228 @@ export type EquipmentVariantRebuildResult = {
   variants: number;
 };
 
-export type EquipmentBorder = {
+export type EquipmentSlot = {
   /**
-   * 边框清单本体（#714；棋盘与自定义表只引用这里的 key）
+   * 槽位 key（EQUIPMENT_TYPE 的枚举值，如 cloth）
    */
-  items: AppearanceItem[];
+  key: string;
   /**
-   * 前后缀组合 → 边框（恰好覆盖当前档数的每种组合、各一条）
+   * 槽位中文名（如「衣服」）
    */
-  assignments: AppearanceAssignment[];
+  label: string;
   /**
-   * 特殊装备 → 边框（优先于前后缀表；装备标识不可重复）
+   * 槽位底图（resources 相对路径，如 ui/slot/cloth）
    */
-  customs: CustomAppearance[];
+  imageSrc: string;
   /**
-   * 最后修改时间（毫秒，0 = 从未改过、仍是出厂值）
+   * 在角色弹窗里的位置分组（left / right / bottom / custom）
    */
-  updatedAt: number;
-};
-
-export type EquipmentBackground = {
+  position: string;
   /**
-   * 背景清单本体（#714；棋盘与自定义表只引用这里的 key）
+   * 排序序号（从 0 起；槽位排列与背包整理序的唯一来源）
    */
-  items: AppearanceItem[];
+  order: number;
   /**
-   * 前后缀组合 → 详情背景（恰好覆盖当前档数的每种组合、各一条）
-   */
-  assignments: AppearanceAssignment[];
-  /**
-   * 特殊装备 → 详情背景（优先于前后缀表；装备标识不可重复）
-   */
-  customs: CustomAppearance[];
-  /**
-   * 最后修改时间（毫秒，0 = 从未改过、仍是出厂值）
+   * 最近更新时间（毫秒）
    */
   updatedAt: number;
 };
 
-export type AppearanceResourceScan = {
+export type UpdateEquipmentSlot = {
   /**
-   * 实际扫描的资源目录（排查「为什么扫不到」用）
+   * 槽位中文名（不传则不改；≤20 字）
    */
-  dir: string;
+  label?: string;
   /**
-   * 文件夹里的全部 key（按编号升序）
+   * 槽位底图（resources 相对路径；空串 = 不显示底图）
    */
-  keys: string[];
+  imageSrc?: string;
   /**
-   * 文件夹有、清单没有的 key（同步会新增）
+   * 位置分组：left / right / bottom / custom
    */
-  added: string[];
+  position?: string;
   /**
-   * 清单有、文件夹没有的 key（同步会移除）
+   * 排序序号（从 0 起；也决定背包「一键整理」的部位序）
    */
-  removed: string[];
-  /**
-   * removed 里仍被棋盘 / 特殊装备绑定引用的 key（#716 允许移除；引用处会显示异常，客户端安静跳过）
-   */
-  removedReferenced: string[];
+  order?: number;
 };
 
-export type AppearanceResourceSync = {
+export type EquipmentMeta = {
   /**
-   * 本次新增的 key
+   * 前缀属性倍率（下标 = EQUIPMENT_PREFIX 序号）
    */
-  added: string[];
+  prefixRates: number[];
   /**
-   * 本次移除的 key
+   * 后缀属性倍率（下标 = EQUIPMENT_SUFFIX 序号）
    */
-  removed: string[];
+  suffixRates: number[];
   /**
-   * 移除的 key 里仍被引用的（引用处待运营修复）
+   * 前缀文案（与倍率同长）
    */
-  removedReferenced: string[];
+  prefixLabels: string[];
   /**
-   * 保留的条目数（存活条目连同已配置的 effect 一起保留）
+   * 后缀文案（与倍率同长）
    */
-  kept: number;
+  suffixLabels: string[];
   /**
-   * 同步后的最后修改时间（毫秒）
+   * 前缀文字颜色（#720，`#RRGGBB`，与文案同长；空数组 = 客户端按内置色渲染）
+   */
+  prefixColors: string[];
+  /**
+   * 后缀文字颜色（#720，`#RRGGBB`，与文案同长；空数组 = 客户端按内置色渲染）
+   */
+  suffixColors: string[];
+  /**
+   * 最近更新时间（毫秒）
    */
   updatedAt: number;
+};
+
+export type UpdateEquipmentMeta = {
+  /**
+   * 前缀倍率（整份替换；1~10 项，每项 > 0）
+   */
+  prefixRates?: number[];
+  /**
+   * 后缀倍率（整份替换；1~10 项，每项 > 0）
+   */
+  suffixRates?: number[];
+  /**
+   * 前缀文案（整份替换；必须与前缀倍率等长）
+   */
+  prefixLabels?: string[];
+  /**
+   * 后缀文案（整份替换；必须与后缀倍率等长）
+   */
+  suffixLabels?: string[];
+  /**
+   * 前缀文字颜色（#720，整份替换；每项 #RRGGBB；必须与文案等长或空数组 = 全部用客户端内置色）
+   */
+  prefixColors?: string[];
+  /**
+   * 后缀文字颜色（#720，整份替换；口径同前缀颜色）
+   */
+  suffixColors?: string[];
+};
+
+export type EquipAlignPoint = {
+  /**
+   * 横向（游戏单位，向右为正）
+   */
+  x: number;
+  /**
+   * 纵向（游戏单位，**向上为正**；与页面画布的 y 向下相反）
+   */
+  y: number;
+};
+
+export type EquipAlign = {
+  /**
+   * 目标 id：`cloth:<基础件>` / `weapon:<基础件>` / `role:<1|2>`（裸模按性别）
+   */
+  id: string;
+  /**
+   * 外观缩放
+   */
+  outScale: number;
+  /**
+   * 8 个方向的外观位移（顺序见客户端 configs/animation 的 directions）
+   */
+  outPositions: EquipAlignPoint[];
+  /**
+   * true = `outPositions` 是**绝对位置**（工作台手调的结果）；false = 运行时按身体帧自动算，`outPositions` 只当微调。武器的渐进语义，见 configs/equipAlign
+   */
+  outManual: boolean;
+  /**
+   * 最近更新时间（毫秒）
+   */
+  updatedAt: number;
+};
+
+export type EquipAlignList = {
+  /**
+   * 全部已保存的对齐几何（**没有行 = 用客户端配置里的值**）
+   */
+  list: EquipAlign[];
+};
+
+export type SaveEquipAlign = {
+  /**
+   * 外观缩放
+   */
+  outScale: number;
+  /**
+   * 8 个方向的外观位移（**必须正好 8 个**，顺序见客户端 directions）
+   */
+  outPositions: EquipAlignPoint[];
+  /**
+   * true = `outPositions` 是绝对位置；false / 缺省 = 运行时按身体帧自动算（只对武器有意义）
+   */
+  outManual?: boolean;
+};
+
+export type EquipInAlignPoint = {
+  /**
+   * 横向（弹窗坐标，向右为正）
+   */
+  x: number;
+  /**
+   * 纵向（弹窗坐标，**向上为正**；与页面画布的 y 向下相反）
+   */
+  y: number;
+};
+
+export type EquipInAlign = {
+  /**
+   * 目标 id：`cloth:<基础件>` / `weapon:<基础件>`
+   */
+  id: string;
+  /**
+   * 内观横向缩放（客户端 `inScaleX`）
+   */
+  inScaleX: number;
+  /**
+   * 内观纵向缩放（客户端 `inScaleY`）
+   */
+  inScaleY: number;
+  /**
+   * 内观位置（弹窗坐标系，y 向上）
+   */
+  inPosition: EquipInAlignPoint;
+  /**
+   * true = 用手调的绝对位置（工作台调过）；false = 客户端按当前衣服的内容 bbox 自动算，`inPosition` 不参与（只对武器有意义，衣服恒为 true）
+   */
+  inManual: boolean;
+  /**
+   * 最近更新时间（毫秒）
+   */
+  updatedAt: number;
+};
+
+export type EquipInAlignList = {
+  /**
+   * 全部已保存的内观几何（**没有行 = 用客户端配置里的值**）
+   */
+  list: EquipInAlign[];
+};
+
+export type SaveEquipInAlign = {
+  /**
+   * 内观横向缩放
+   */
+  inScaleX: number;
+  /**
+   * 内观纵向缩放
+   */
+  inScaleY: number;
+  /**
+   * 内观位置（弹窗坐标系，y 向上）
+   */
+  inPosition: EquipInAlignPoint;
+  /**
+   * true = 用绝对位置；false / 缺省 = 客户端自动算（只对武器有意义）
+   */
+  inManual?: boolean;
 };
 
 export type Drug = {
@@ -6628,27 +4417,55 @@ export type DrugPage = {
   list: Drug[];
 };
 
-export type DrugQuery = {
+export type UpdateDrug = {
   /**
-   * 页码，从 1 开始
+   * 名称（不传则不改）
    */
-  page?: number;
+  label?: string;
   /**
-   * 每页条数（1~100）
+   * 描述（不传则不改）
    */
-  size?: number;
+  description?: string;
   /**
-   * 关键字：模糊匹配 id / 名称 / 描述
+   * 图标（resources 相对路径，如 item/drug-hp-1；空串 = 不显示图标）。**这是少数允许下发的资源路径** —— 药品图标与 id 之间没有可推导的约定，只能存表
    */
-  keyword?: string;
+  icon?: string;
   /**
-   * 排序字段（取值见各接口说明，未登记的值会退回默认排序）
+   * 使用等级需求（不传则不改；1 ~ 角色等级上限）。只作用于展示与背包排序，不拦用药
    */
-  sort?: string;
+  level?: number;
   /**
-   * 排序方向：asc 升序 / desc 降序
+   * 售卖价（不传则不改；0 = 不可售卖。**商城售价不在这里** —— 唯一写入口归商城定价管理）
    */
-  order?: "asc" | "desc";
+  sellPrice?: number;
+  /**
+   * 最大叠加数量（不传则不改）
+   */
+  maxStack?: number;
+  /**
+   * 使用冷却秒数（不传则不改；0 = 无冷却）
+   */
+  cooldown?: number;
+  /**
+   * 固定回复生命（不传则不改）
+   */
+  effectHp?: number;
+  /**
+   * 固定回复魔法（不传则不改）
+   */
+  effectMp?: number;
+  /**
+   * 按 maxHp 的百分比回复，整数（不传则不改；50 = 50%）
+   */
+  effectHpPercent?: number;
+  /**
+   * 按 maxMp 的百分比回复，整数（不传则不改；50 = 50%）
+   */
+  effectMpPercent?: number;
+  /**
+   * 掉落时强制绑定（#789；不传则不改）
+   */
+  bindOnDrop?: boolean;
 };
 
 export type Item = {
@@ -6713,62 +4530,363 @@ export type ItemPage = {
   list: Item[];
 };
 
-export type ItemQuery = {
+export type UpdateItem = {
   /**
-   * 页码，从 1 开始
+   * 名称（不传则不改）
    */
-  page?: number;
+  label?: string;
   /**
-   * 每页条数（1~100）
+   * 描述（不传则不改）
    */
-  size?: number;
+  description?: string;
   /**
-   * 关键字：模糊匹配 id / 名称 / 描述
+   * 图标（resources 相对路径，如 item/2010210；空串 = 不显示图标）。**这是少数允许下发的资源路径** —— 药品 / 材料的图标与 id 之间没有可推导的约定（地图 / 特效能按 id 拼路径，这两个拼不出来），只能存表
    */
-  keyword?: string;
+  icon?: string;
   /**
-   * 排序字段（取值见各接口说明，未登记的值会退回默认排序）
+   * 售卖价（不传则不改；0 = 不可售卖。**商城售价不在这里** —— 唯一写入口归商城定价管理）
    */
-  sort?: string;
+  sellPrice?: number;
   /**
-   * 排序方向：asc 升序 / desc 降序
+   * 最大叠加数量（不传则不改）
    */
-  order?: "asc" | "desc";
+  maxStack?: number;
   /**
-   * 按物品大类筛（取值：equipment / drug / material / other；枚举清单派生自客户端配置，不落 schema 以免枚举字面量进两端生成物）
+   * 掉落时强制绑定（#789；不传则不改）
    */
-  type?: string;
+  bindOnDrop?: boolean;
 };
 
-export type Monster = {
+export type MoneyItem = {
   /**
-   * 怪物 key（configs/monster 的关联键，如 "1"）
+   * 物品 id（如 money_bind_gold_10；背包按它引用）
    */
   id: string;
   /**
-   * 名称（头顶名牌，后台可改）
+   * 名称（如「绑定元宝（10）」）
    */
   label: string;
   /**
-   * 定位（normal / elite / boss）。改它**不会**重算已展开的血量 / 攻防，但会改变 BOSS 判定（击杀 BOSS 才发的邮件）
+   * 描述
    */
-  tier: string;
+  description: string;
   /**
-   * 等级（显示用元数据；战斗数值以 maxHp / 六项区间为准）
+   * 图标资源路径（resources 相对路径，如 item/currency/bind-gold-10）
    */
-  level: number;
+  icon: string;
   /**
-   * 最大生命
+   * 入账到哪个账本字段：bindGold = 绑定元宝
    */
-  maxHp: number;
+  currency: string;
   /**
-   * 六项攻防区间（0 ≤ min ≤ max）
+   * 单件入账金额（使用一个就加这么多）
    */
-  attributes: MonsterAttributes;
+  amount: number;
+  /**
+   * 最大叠加数量
+   */
+  maxStack: number;
+  /**
+   * 售卖价（0 = 不可出售）
+   */
+  sellPrice: number;
+  /**
+   * 掉落时强制绑定（#789）：true = 掉出来就绑定角色、不可交易
+   */
+  bindOnDrop: boolean;
   /**
    * 最近更新时间（毫秒）
    */
   updatedAt: number;
+};
+
+export type MoneyItemPage = {
+  /**
+   * 总条数
+   */
+  total: number;
+  /**
+   * 当前页码（从 1 开始）
+   */
+  page: number;
+  /**
+   * 每页条数
+   */
+  size: number;
+  /**
+   * 当前页的货币物品
+   */
+  list: MoneyItem[];
+};
+
+export type CreateMoneyItem = {
+  /**
+   * 物品 id（缺省 = money_<货币>_<面值>，如 money_bind_gold_100）；小写字母开头、字母数字下划线
+   */
+  id?: string;
+  /**
+   * 货币类型：bindGold（绑定元宝，唯一货币）
+   */
+  currency: string;
+  /**
+   * 单件入账金额（1 ~ 1000000）
+   */
+  amount: number;
+  /**
+   * 名称（缺省 = 「货币中文名（面值）」）
+   */
+  label?: string;
+  /**
+   * 描述（缺省 = 「使用后获得 N 点…」）
+   */
+  description?: string;
+  /**
+   * 图标资源路径（缺省 = item/currency/<货币>-<面值>）
+   */
+  icon?: string;
+  /**
+   * 最大叠加数量（缺省 999）
+   */
+  maxStack?: number;
+  /**
+   * 售卖价（0 = 不可出售；缺省 0）
+   */
+  sellPrice?: number;
+  /**
+   * 掉落时强制绑定（#789；缺省 false）
+   */
+  bindOnDrop?: boolean;
+};
+
+export type UpdateMoneyItem = {
+  /**
+   * 名称（不传则不改）
+   */
+  label?: string;
+  /**
+   * 描述（不传则不改）
+   */
+  description?: string;
+  /**
+   * 图标资源路径（不传则不改）
+   */
+  icon?: string;
+  /**
+   * 货币类型（不传则不改）
+   */
+  currency?: string;
+  /**
+   * 单件入账金额（不传则不改）
+   */
+  amount?: number;
+  /**
+   * 最大叠加数量（不传则不改）
+   */
+  maxStack?: number;
+  /**
+   * 售卖价（不传则不改）
+   */
+  sellPrice?: number;
+  /**
+   * 掉落时强制绑定（#789；不传则不改）
+   */
+  bindOnDrop?: boolean;
+};
+
+export type RemoveMoneyItemResult = {
+  /**
+   * 被删除的物品 id
+   */
+  id: string;
+  /**
+   * 实际删除的行数（正常为 1；0 说明刚被别人删掉了）
+   */
+  removed: number;
+};
+
+export type LevelScroll = {
+  /**
+   * 物品 id（如 level_scroll_1；背包按它引用）
+   */
+  id: string;
+  /**
+   * 名称（如「升级卷轴 Lv1」）
+   */
+  label: string;
+  /**
+   * 描述
+   */
+  description: string;
+  /**
+   * 图标资源路径（resources 相对路径，如 item/scroll/level-scroll）
+   */
+  icon: string;
+  /**
+   * 可用等级下限（含）：角色等级低于它就用不了
+   */
+  minLevel: number;
+  /**
+   * 可用等级上限（含）：用完之后角色就会超出这段，需要换下一卷
+   */
+  maxLevel: number;
+  /**
+   * 最大叠加数量
+   */
+  maxStack: number;
+  /**
+   * 售卖价（0 = 不可出售）
+   */
+  sellPrice: number;
+  /**
+   * 掉落时强制绑定（#789）：true = 掉出来就绑定角色、不可交易
+   */
+  bindOnDrop: boolean;
+  /**
+   * 最近更新时间（毫秒）
+   */
+  updatedAt: number;
+};
+
+export type LevelScrollPage = {
+  /**
+   * 总条数
+   */
+  total: number;
+  /**
+   * 当前页码（从 1 开始）
+   */
+  page: number;
+  /**
+   * 每页条数
+   */
+  size: number;
+  /**
+   * 当前页的升级卷轴
+   */
+  list: LevelScroll[];
+};
+
+export type CreateLevelScroll = {
+  /**
+   * 物品 id（缺省按等级区间派生）；小写字母开头、字母数字下划线
+   */
+  id?: string;
+  /**
+   * 可用等级下限（含）
+   */
+  minLevel: number;
+  /**
+   * 可用等级上限（含），必须不小于下限
+   */
+  maxLevel: number;
+  /**
+   * 名称（缺省按等级区间派生）
+   */
+  label?: string;
+  /**
+   * 描述（缺省按等级区间生成）
+   */
+  description?: string;
+  /**
+   * 图标资源路径（缺省按卷号派生：item/scroll/level-scroll-1 … -7）
+   */
+  icon?: string;
+  /**
+   * 最大叠加数量（缺省 999）
+   */
+  maxStack?: number;
+  /**
+   * 售卖价（0 = 不可出售；缺省 0）
+   */
+  sellPrice?: number;
+  /**
+   * 掉落时强制绑定（#789；缺省 false）
+   */
+  bindOnDrop?: boolean;
+};
+
+export type UpdateLevelScroll = {
+  /**
+   * 名称（不传则不改）
+   */
+  label?: string;
+  /**
+   * 描述（不传则不改）
+   */
+  description?: string;
+  /**
+   * 图标资源路径（不传则不改）
+   */
+  icon?: string;
+  /**
+   * 可用等级下限（不传则不改）
+   */
+  minLevel?: number;
+  /**
+   * 可用等级上限（不传则不改）
+   */
+  maxLevel?: number;
+  /**
+   * 最大叠加数量（不传则不改）
+   */
+  maxStack?: number;
+  /**
+   * 售卖价（不传则不改）
+   */
+  sellPrice?: number;
+  /**
+   * 掉落时强制绑定（#789；不传则不改）
+   */
+  bindOnDrop?: boolean;
+};
+
+export type RemoveLevelScrollResult = {
+  /**
+   * 被删除的卷轴 id
+   */
+  id: string;
+  /**
+   * 实际删除的行数（正常为 1；0 说明刚被别人删掉了）
+   */
+  removed: number;
+};
+
+export type AttributeRange = {
+  /**
+   * 下限（含）
+   */
+  min: number;
+  /**
+   * 上限（含）
+   */
+  max: number;
+};
+
+export type MonsterAttributes = {
+  /**
+   * 物理攻击区间
+   */
+  physicalAttack: AttributeRange;
+  /**
+   * 魔法攻击区间
+   */
+  magicAttack: AttributeRange;
+  /**
+   * 道术攻击区间
+   */
+  taoistAttack: AttributeRange;
+  /**
+   * 物理防御区间
+   */
+  physicalDefense: AttributeRange;
+  /**
+   * 魔法防御区间
+   */
+  magicDefense: AttributeRange;
+  /**
+   * 道术防御区间
+   */
+  taoistDefense: AttributeRange;
 };
 
 export type MonsterDropSummary = {
@@ -6913,31 +5031,110 @@ export type MonsterPage = {
   list: AdminMonster[];
 };
 
-export type MonsterQuery = {
+export type UpdateMonsterPresentation = {
   /**
-   * 页码，从 1 开始
+   * 是否主动攻击玩家（不传则不改）
    */
-  page?: number;
+  aggressive?: boolean;
   /**
-   * 每页条数（1~100）
+   * 检测范围（像素半径；主动怪在这个距离内发现玩家）。不传则不改
    */
-  size?: number;
+  detectRange?: number;
   /**
-   * 关键字：模糊匹配 id 与名称
+   * 移动速度（刚体线速度单位；出厂 2，与角色步行同口径）。不传则不改
    */
-  keyword?: string;
+  moveSpeed?: number;
   /**
-   * 排序字段（取值见各接口说明，未登记的值会退回默认排序）
+   * 动作速度覆盖（动作键 → 每秒循环数）。**传 `{}` = 清空回客户端默认，不传 = 不改**；动作键只认 stand / walk / run / injured / die（其余动作没有帧）
    */
-  sort?: string;
+  speedRate?: Record<string, number>;
+};
+
+export type UpdateMonster = {
   /**
-   * 排序方向：asc 升序 / desc 降序
+   * 名称（不传则不改）
    */
-  order?: "asc" | "desc";
+  label?: string;
   /**
-   * 按定位筛（取值：normal / elite / boss；不落 schema 以免枚举键进两端生成物）
+   * 定位（normal / elite / boss，不传则不改）。不重算已展开数值，但会改变 BOSS 判定（击杀 BOSS 邮件）
    */
   tier?: string;
+  /**
+   * 等级（显示用元数据，不传则不改）
+   */
+  level?: number;
+  /**
+   * 最大生命（不传则不改）
+   */
+  maxHp?: number;
+  /**
+   * 六项攻防区间（**整份提交、整份替换**，不传则不改；要求 0 ≤ min ≤ max）
+   */
+  attributes?: MonsterAttributes;
+  /**
+   * 行为参数（主动攻击 / 检测范围 / 移动速度 / 动作速度；不传则整段不改）
+   */
+  presentation?: UpdateMonsterPresentation;
+};
+
+export type MonsterSkill = {
+  /**
+   * 怪物 key（与 monsters 表主键一致）
+   */
+  monsterKey: string;
+  /**
+   * 技能 id（skills 表里 owner=monster 的行）
+   */
+  skillId: string;
+  /**
+   * 技能名（冗余展示用，来源 skills.label）
+   */
+  skillLabel: string;
+  /**
+   * 优先级（越小越先；状态型整体先于伤害型尝试）
+   */
+  priority: number;
+  /**
+   * 冷却覆写（秒；null = 用技能自身的 cooldown）
+   */
+  cooldown: unknown | null;
+  /**
+   * 最后修改时间（毫秒时间戳）
+   */
+  updatedAt: number;
+};
+
+export type MonsterSkillList = {
+  /**
+   * 挂载清单（按优先级升序）
+   */
+  list: MonsterSkill[];
+  /**
+   * 条数
+   */
+  total: number;
+};
+
+export type MonsterSkillItem = {
+  /**
+   * 技能 id（必须在 skills 表里存在且 owner=monster；不存在 → 400 40000）
+   */
+  skillId: string;
+  /**
+   * 优先级（越小越先，缺省 0；同优先级按技能 id 排序）
+   */
+  priority?: number;
+  /**
+   * 冷却覆写（秒；不传 = 用技能自身的 cooldown）
+   */
+  cooldown?: number;
+};
+
+export type ReplaceMonsterSkills = {
+  /**
+   * 完整清单（整份替换；空数组 = 清空，AI 回退到普攻）
+   */
+  skills: MonsterSkillItem[];
 };
 
 export type Npc = {
@@ -6998,339 +5195,35 @@ export type NpcPage = {
   list: Npc[];
 };
 
-export type NpcQuery = {
+export type UpdateNpc = {
   /**
-   * 页码，从 1 开始
+   * 名称（不传则不改）
    */
-  page?: number;
+  label?: string;
   /**
-   * 每页条数（1~100）
+   * 对话文案（不传则不改；空串 = 清空）
    */
-  size?: number;
+  dialog?: string;
   /**
-   * 关键字：模糊匹配 id 与名称
+   * 素材目录（resources 相对路径；不传则不改；空串 = 该 NPC 不显示）
    */
-  keyword?: string;
+  src?: string;
   /**
-   * 排序字段（取值见各接口说明，未登记的值会退回默认排序）
+   * 横向缩放（0.1~10，不传则不改；1 = 原尺寸）
    */
-  sort?: string;
+  scaleX?: number;
   /**
-   * 排序方向：asc 升序 / desc 降序
+   * 纵向缩放（0.1~10，不传则不改；1 = 原尺寸）
    */
-  order?: "asc" | "desc";
-};
-
-export type Skill = {
+  scaleY?: number;
   /**
-   * 技能 id（角色技能被技能栏 / 快捷键 / 角色存档引用）
+   * 横向偏移（像素，±4000，不传则不改；0 = 不偏移）
    */
-  id: string;
+  posX?: number;
   /**
-   * 归属：role / monster
+   * 纵向偏移（像素，±4000，不传则不改；0 = 不偏移）
    */
-  owner: "role" | "monster";
-  /**
-   * 技能名
-   */
-  label: string;
-  /**
-   * 技能图标资源路径（resources 相对路径，不含扩展名）
-   */
-  icon: string;
-  /**
-   * 分类：0 主动 / 1 被动 / 2 状态 / 3 回复（与客户端 SkillType 同值）
-   */
-  category: "0" | "1" | "2" | "3";
-  /**
-   * 目标类型：0 区域 / 1 单体 / 2 群体 / 3 自身（与客户端 SkillTargetType 同值）
-   */
-  targetType: "0" | "1" | "2" | "3";
-  /**
-   * 施法动作（客户端动画动作键，如 attack_near；空串 = 不播动作）
-   */
-  action: string;
-  /**
-   * 技能特效图集路径（空串 = 无特效）
-   */
-  effect: string;
-  /**
-   * 特效是否播在自己身上
-   */
-  effectOnSelf: boolean;
-  /**
-   * 冷却（秒）
-   */
-  cooldown: number;
-  /**
-   * 释放一次消耗的魔法值
-   */
-  mpCost: number;
-  /**
-   * 施法距离（0 = 不限距离）
-   */
-  distance: number;
-  /**
-   * 学习 / 开启等级
-   */
-  levelReq: number;
-  /**
-   * 描述文案
-   */
-  description: string;
-  /**
-   * 伤害系数（下标 = 技能等级 - 1；状态型技能可为空数组）
-   */
-  damageCoefficients: DamageCoefficient[];
-  /**
-   * 释放成功后给自身挂的状态 id（空串 = 不挂）
-   */
-  statusId: string;
-  /**
-   * 释放动作锁时长（毫秒；0 = 跟动画时长走）
-   */
-  castLockMs: number;
-  /**
-   * 是否要求有合法目标（自身 / 状态型技能可关）
-   */
-  requireTarget: boolean;
-  /**
-   * 是否可被自动战斗 / 挂机释放
-   */
-  canAuto: boolean;
-  /**
-   * 职业归属：1 战士 / 2 魔法师 / 3 道士 / 4 全职业（#603 第十一域）。客户端技能栏按它重建「职业 → 技能」映射，所以这一列是「技能归谁」的唯一来源
-   */
-  occupation: string;
-  /**
-   * 命中后的击退距离（像素；0 = 不击退。只对单体技能生效）
-   */
-  pushDistance: number;
-  /**
-   * 撞飞概率（0~1；0 = 从不撞飞，1 = 必撞。#826：撞飞还要求施法者等级 > 怪物等级）
-   */
-  pushChance: number;
-  /**
-   * 技能自带暴击率（0~1；与角色暴击率**相加**，不是替换）。#826：`desc` 里「附带 15% 暴击率」就配 0.15
-   */
-  critRate: number;
-  /**
-   * 技能自带暴击倍率（> 1 才生效；0 = 用角色那一份。它替换的是倍率而不是概率）
-   */
-  critDamage: number;
-  /**
-   * 无视防御比例（0~1；1 = 完全无视目标防御，0 = 正常吃防御。只影响这一发）
-   */
-  defIgnore: number;
-  /**
-   * 两段连击的第二段系数（0~1；0 = 没有第二段。第二段伤害 = 第一段 × 这个系数，不再单独掷攻击区间）
-   */
-  secondHitRatio: number;
-  /**
-   * 拉人距离（像素；0 = 不拉。方向 = 目标朝施法者，与 pushDistance 相反）
-   */
-  pullDistance: number;
-  /**
-   * 最近更新时间（毫秒）
-   */
-  updatedAt: number;
-};
-
-export type SkillPage = {
-  /**
-   * 总条数
-   */
-  total: number;
-  /**
-   * 当前页码（从 1 开始）
-   */
-  page: number;
-  /**
-   * 每页条数
-   */
-  size: number;
-  /**
-   * 当前页的技能配置
-   */
-  list: Skill[];
-};
-
-export type SkillQuery = {
-  /**
-   * 页码，从 1 开始
-   */
-  page?: number;
-  /**
-   * 每页条数（1~100）
-   */
-  size?: number;
-  /**
-   * 关键字：模糊匹配 id 与技能名
-   */
-  keyword?: string;
-  /**
-   * 排序字段（取值见各接口说明，未登记的值会退回默认排序）
-   */
-  sort?: string;
-  /**
-   * 排序方向：asc 升序 / desc 降序
-   */
-  order?: "asc" | "desc";
-  /**
-   * 归属筛选：role / monster（不传 = 两边都要）
-   */
-  owner?: "role" | "monster";
-};
-
-export type MonsterSkill = {
-  /**
-   * 怪物 key（与 monsters 表主键一致）
-   */
-  monsterKey: string;
-  /**
-   * 技能 id（skills 表里 owner=monster 的行）
-   */
-  skillId: string;
-  /**
-   * 技能名（冗余展示用，来源 skills.label）
-   */
-  skillLabel: string;
-  /**
-   * 优先级（越小越先；状态型整体先于伤害型尝试）
-   */
-  priority: number;
-  /**
-   * 冷却覆写（秒；null = 用技能自身的 cooldown）
-   */
-  cooldown: unknown | null;
-  /**
-   * 最后修改时间（毫秒时间戳）
-   */
-  updatedAt: number;
-};
-
-export type MonsterSkillList = {
-  /**
-   * 挂载清单（按优先级升序）
-   */
-  list: MonsterSkill[];
-  /**
-   * 条数
-   */
-  total: number;
-};
-
-export type Status = {
-  /**
-   * 状态 id（技能 statusId 与将来的装备 / 特权引用它）
-   */
-  id: string;
-  /**
-   * 归属：role / monster
-   */
-  owner: "role" | "monster";
-  /**
-   * 状态名
-   */
-  label: string;
-  /**
-   * 状态图标资源路径（resources 相对路径，不含扩展名）
-   */
-  icon: string;
-  /**
-   * 持续时间（秒；重复获得时从获得时刻重新计时，不叠层）
-   */
-  duration: number;
-  /**
-   * 来源：skill / equipment / privilege / other
-   */
-  source: "skill" | "equipment" | "privilege" | "other";
-  /**
-   * 描述文案
-   */
-  description: string;
-  /**
-   * 身上特效图集路径（空串 = 只在图标栏显示）
-   */
-  effect: string;
-  /**
-   * 身上特效是否只播一遍并停在尾帧（脉冲类特效配 true）
-   */
-  effectHoldLast: boolean;
-  /**
-   * 战斗数值修正（缺省 = 纯表现状态）
-   */
-  combat: StatusCombat;
-  /**
-   * 分类：buff / damage / control / speed（只用于分组，判据看 controlFlags 与 tickMs）
-   */
-  kind: string;
-  /**
-   * 最大层数（1 = 不叠；同 id 再加一层 → +1 并刷新到期）
-   */
-  maxStacks: number;
-  /**
-   * 周期触发间隔（毫秒；0 = 无周期）
-   */
-  tickMs: number;
-  /**
-   * 每拍做什么
-   */
-  tickEffect: StatusTick;
-  /**
-   * 控制标记
-   */
-  controlFlags: StatusControl;
-  /**
-   * 最近更新时间（毫秒）
-   */
-  updatedAt: number;
-};
-
-export type StatusPage = {
-  /**
-   * 总条数
-   */
-  total: number;
-  /**
-   * 当前页码（从 1 开始）
-   */
-  page: number;
-  /**
-   * 每页条数
-   */
-  size: number;
-  /**
-   * 当前页的状态配置
-   */
-  list: Status[];
-};
-
-export type StatusQuery = {
-  /**
-   * 页码，从 1 开始
-   */
-  page?: number;
-  /**
-   * 每页条数（1~100）
-   */
-  size?: number;
-  /**
-   * 关键字：模糊匹配 id 与状态名
-   */
-  keyword?: string;
-  /**
-   * 排序字段（取值见各接口说明，未登记的值会退回默认排序）
-   */
-  sort?: string;
-  /**
-   * 排序方向：asc 升序 / desc 降序
-   */
-  order?: "asc" | "desc";
-  /**
-   * 归属筛选：role / monster（不传 = 两边都要）
-   */
-  owner?: "role" | "monster";
+  posY?: number;
 };
 
 export type QuestObjective = {
@@ -7344,6 +5237,17 @@ export type QuestObjective = {
   target: string;
   /**
    * 目标数量
+   */
+  count: number;
+};
+
+export type QuestRewardItem = {
+  /**
+   * 物品 id
+   */
+  goodId: string;
+  /**
+   * 数量
    */
   count: number;
 };
@@ -7425,102 +5329,108 @@ export type QuestPage = {
   list: Quest[];
 };
 
-export type QuestQuery = {
+export type UpdateQuestObjective = {
   /**
-   * 页码，从 1 开始
+   * 目标类型
    */
-  page?: number;
+  type?: "kill" | "talk" | "collect";
   /**
-   * 每页条数（1~100）
+   * 目标键（非空）
    */
-  size?: number;
+  target?: string;
   /**
-   * 关键字：模糊匹配 id 与名称
+   * 目标数量（1~9999）
    */
-  keyword?: string;
-  /**
-   * 排序字段（取值见各接口说明，未登记的值会退回默认排序）
-   */
-  sort?: string;
-  /**
-   * 排序方向：asc 升序 / desc 降序
-   */
-  order?: "asc" | "desc";
-  /**
-   * 类型筛选：main | daily | weekly
-   */
-  kind?: string;
+  count?: number;
 };
 
-export type QuestState = {
+export type UpdateQuestRewards = {
   /**
-   * 任务 id
+   * 绑定元宝（≥0）
    */
-  questId: string;
+  bindGold?: number;
   /**
-   * 状态：available 可接（无进度行）/ accepted 进行中 / ready 可交付 / claimed 已领奖
+   * 经验（≥0）
    */
-  status: "available" | "accepted" | "ready" | "claimed";
+  exp?: number;
   /**
-   * 当前进度（kill/talk 为累计次数；collect 为背包持有量与目标取小）
+   * 物品清单（≤20 条；goodId 非空、count 1~9999）
    */
-  progress: number;
-  /**
-   * 目标数量（来自任务配置，客户端免查快照比对）
-   */
-  target: number;
+  items?: QuestRewardItem[];
 };
 
-export type MyQuests = {
+export type UpdateQuest = {
   /**
-   * 全部进度行（可接的任务不在内 —— 可接态由客户端按快照配置与 claimed 行计算）
+   * 类型
    */
-  quests: QuestState[];
+  kind?: "main" | "daily" | "weekly";
+  /**
+   * 名称（1~50 字）
+   */
+  label?: string;
+  /**
+   * 描述（≤500 字）
+   */
+  description?: string;
+  /**
+   * 主线链前置任务 id（空串 = 无前置）
+   */
+  prevQuestId?: string;
+  /**
+   * 接取最低等级（1~999）
+   */
+  minLevel?: number;
+  /**
+   * 发布 NPC id
+   */
+  npcId?: string;
+  /**
+   * 目标（传了就整份替换）
+   */
+  objective?: UpdateQuestObjective;
+  /**
+   * 奖励（传了就整份替换）
+   */
+  rewards?: UpdateQuestRewards;
 };
 
-export type QuestRewardResult = {
+export type CreateQuest = {
   /**
-   * 绑定元宝
+   * 类型
    */
-  bindGold: number;
+  kind?: "main" | "daily" | "weekly";
   /**
-   * 经验
+   * 名称（1~50 字）
    */
-  exp: number;
+  label?: string;
   /**
-   * 物品清单
+   * 描述（≤500 字）
    */
-  items: unknown[];
+  description?: string;
   /**
-   * 发奖后等级
+   * 主线链前置任务 id（空串 = 无前置）
    */
-  level: number;
+  prevQuestId?: string;
   /**
-   * 是否升级
+   * 接取最低等级（1~999）
    */
-  leveledUp: boolean;
-};
-
-export type QuestSubmitResult = {
+  minLevel?: number;
   /**
-   * 交付后的任务快照
+   * 发布 NPC id
    */
-  quests: QuestState[];
+  npcId?: string;
   /**
-   * 本次奖励结算
+   * 目标（传了就整份替换）
    */
-  reward: QuestRewardResult;
-};
-
-export type NpcTalkResult = {
+  objective?: UpdateQuestObjective;
   /**
-   * 对话文案（管理端 npcs 表的 dialog 列，空串 = 未配置）
+   * 奖励（传了就整份替换）
    */
-  dialog: string;
+  rewards?: UpdateQuestRewards;
   /**
-   * 该 NPC 名下全部任务在当前角色上的状态（含可接但未接的）
+   * 任务 id（唯一；建议主线 8000 段 / 日常 8100 段）
    */
-  quests: QuestState[];
+  id: string;
 };
 
 export type MallCategory = {
@@ -7546,6 +5456,28 @@ export type MallCategory = {
   updatedAt: number;
 };
 
+export type CreateMallCategory = {
+  /**
+   * 分类显示名（1~20 字）
+   */
+  label: string;
+  /**
+   * 排序值（缺省排到最后）
+   */
+  sortOrder?: number;
+};
+
+export type UpdateMallCategory = {
+  /**
+   * 分类显示名（1~20 字）
+   */
+  label?: string;
+  /**
+   * 排序值（小者在先）
+   */
+  sortOrder?: number;
+};
+
 export type MallCategoryRemove = {
   /**
    * 被删除的分类 id
@@ -7555,99 +5487,6 @@ export type MallCategoryRemove = {
    * 恒为 true（删除成功）
    */
   removed: boolean;
-};
-
-export type MallCatalogItem = {
-  /**
-   * 物品 id（装备变体 id / 药品 id）
-   */
-  id: string;
-  /**
-   * 品类：equipment（装备）/ drug（药品）
-   */
-  kind: string;
-  /**
-   * 显示名
-   */
-  label: string;
-  /**
-   * 图标（resources 相对路径）
-   */
-  icon: string;
-  /**
-   * 部位（药品为空串）
-   */
-  slot: string;
-  /**
-   * 等级（装备等级需求 / 药品等级）
-   */
-  level: number;
-  /**
-   * 前缀序号（品质；药品恒 0）
-   */
-  prefix: number;
-  /**
-   * 后缀序号（阶级；药品恒 0）
-   */
-  suffix: number;
-  /**
-   * 是否已在商城上架（一件物品全商城只能挂一行）
-   */
-  listed: boolean;
-};
-
-export type MallCatalogPage = {
-  /**
-   * 总条数
-   */
-  total: number;
-  /**
-   * 当前页码（从 1 开始）
-   */
-  page: number;
-  /**
-   * 每页条数
-   */
-  size: number;
-  /**
-   * 当前页的候选物品
-   */
-  list: MallCatalogItem[];
-  /**
-   * 当前分类下出现过的等级（升序去重；与关键字无关）
-   */
-  levels: number[];
-};
-
-export type MallCatalogQuery = {
-  /**
-   * 页码，从 1 开始
-   */
-  page?: number;
-  /**
-   * 每页条数（1~100）
-   */
-  size?: number;
-  /**
-   * 关键字：模糊匹配 id 与名称
-   */
-  keyword?: string;
-  /**
-   * 排序字段（取值见各接口说明，未登记的值会退回默认排序）
-   */
-  sort?: string;
-  /**
-   * 排序方向：asc 升序 / desc 降序
-   */
-  order?: "asc" | "desc";
-  /**
-   * 物品分类：部位 key（other1 / cloth / other2 / weapon / necklace / ring / accessories / shinguard / helmet / scapular / belt / wristband / shoes）或 drug（药品）；留空 = 全部
-   */
-  category?: string;
-  /**
-   * 精确等级（留空 = 全部等级）
-   */
-  level?: number;
 };
 
 export type MallGoodItem = {
@@ -7736,59 +5575,71 @@ export type MallGoodPage = {
   levels: number[];
 };
 
-export type MallGoodQuery = {
+export type MallCatalogItem = {
   /**
-   * 页码，从 1 开始
-   */
-  page?: number;
-  /**
-   * 每页条数（1~100）
-   */
-  size?: number;
-  /**
-   * 关键字：模糊匹配商品 id 与显示名
-   */
-  keyword?: string;
-  /**
-   * 排序字段（取值见各接口说明，未登记的值会退回默认排序）
-   */
-  sort?: string;
-  /**
-   * 排序方向：asc 升序 / desc 降序
-   */
-  order?: "asc" | "desc";
-  /**
-   * 按分类筛（分类 id）
-   */
-  categoryId?: string;
-  /**
-   * 按部位筛（取值：other1 / cloth / other2 / weapon / necklace / ring / accessories / shinguard / helmet / scapular / belt / wristband / shoes）
-   */
-  slot?: string;
-  /**
-   * 按品类筛：equipment（装备）/ drug（药品）
-   */
-  kind?: string;
-  /**
-   * 按物品等级精确筛（装备等级需求 / 药品等级；留空 = 全部）
-   */
-  level?: number;
-};
-
-export type MallGoodRemove = {
-  /**
-   * 被下架的商品 id
+   * 物品 id（装备变体 id / 药品 id）
    */
   id: string;
   /**
-   * 恒为 true（下架成功）
+   * 品类：equipment（装备）/ drug（药品）
    */
-  removed: boolean;
+  kind: string;
+  /**
+   * 显示名
+   */
+  label: string;
+  /**
+   * 图标（resources 相对路径）
+   */
+  icon: string;
+  /**
+   * 部位（药品为空串）
+   */
+  slot: string;
+  /**
+   * 等级（装备等级需求 / 药品等级）
+   */
+  level: number;
+  /**
+   * 前缀序号（品质；药品恒 0）
+   */
+  prefix: number;
+  /**
+   * 后缀序号（阶级；药品恒 0）
+   */
+  suffix: number;
+  /**
+   * 是否已在商城上架（一件物品全商城只能挂一行）
+   */
+  listed: boolean;
 };
 
-export type MallGoodEntry = {
+export type MallCatalogPage = {
   /**
-   * 商品 id（装备变体 id）
+   * 总条数
+   */
+  total: number;
+  /**
+   * 当前页码（从 1 开始）
+   */
+  page: number;
+  /**
+   * 每页条数
+   */
+  size: number;
+  /**
+   * 当前页的候选物品
+   */
+  list: MallCatalogItem[];
+  /**
+   * 当前分类下出现过的等级（升序去重；与关键字无关）
+   */
+  levels: number[];
+};
+
+export type CreateMallGood = {
+  /**
+   * 商品 id（装备变体 id，如 cloth_1_p3s2）
    */
   id: string;
   /**
@@ -7796,59 +5647,44 @@ export type MallGoodEntry = {
    */
   categoryId: string;
   /**
-   * 售价（绑定元宝/件）
+   * 售价（绑定元宝/件，下限 1；缺省按 1 上架）
    */
-  price: number;
+  price?: number;
   /**
-   * 购买等级（0 = 不限）
+   * 购买等级（缺省 0 = 不限等级）
    */
-  requiredLevel: number;
+  requiredLevel?: number;
   /**
-   * 每日限购件数（0 = 不限购）。**只有配置，没有「今天买了几个」** —— 运行时计数走 `GET /roles/:roleId/mall-limits`，那是随角色变的，不能进快照
+   * 每日限购件数（0 / 留空 = 不限购；按角色按 05:00 切日计）
    */
-  dailyLimit: number;
+  dailyLimit?: number;
   /**
-   * 全服库存件数（-1 = 不限量，0 = 售罄）。已售件数同样走 mall-limits
+   * 全服库存件数（-1 / 留空 = 不限量；0 = 售罄停售）
    */
-  stock: number;
+  stock?: number;
 };
 
-export type MallLimit = {
+export type UpdateMallGood = {
   /**
-   * 商品 id
+   * 所属分类 id（改分类 = 在商城陈列里挪个位置）
    */
-  goodId: string;
+  categoryId?: string;
   /**
-   * 今天已买几件（05:00 切日）
+   * 售价（绑定元宝/件，下限 1）
    */
-  dailyBought: number;
+  price?: number;
   /**
-   * 每日限购（0 = 不限购）
+   * 购买等级
    */
-  dailyLimit: number;
+  requiredLevel?: number;
   /**
-   * 全服已售件数（不限量商品恒 0）
+   * 每日限购件数（0 = 不限购）
    */
-  sold: number;
+  dailyLimit?: number;
   /**
-   * 全服库存（-1 = 不限量，0 = 售罄）
+   * 全服库存件数（-1 = 不限量，0 = 售罄停售）
    */
-  stock: number;
-  /**
-   * 现在能不能买（等级 / 余额另有判据，这里只看限购与库存）
-   */
-  purchasable: boolean;
-};
-
-export type MallLimits = {
-  /**
-   * 当前天号（05:00 切日；客户端不需要解释它，只用于排查）
-   */
-  day: number;
-  /**
-   * 逐件商品的限购与库存
-   */
-  list: MallLimit[];
+  stock?: number;
 };
 
 export type MallStockReset = {
@@ -7864,6 +5700,17 @@ export type MallStockReset = {
    * 恒为 true（重置成功）
    */
   reset: boolean;
+};
+
+export type MallGoodRemove = {
+  /**
+   * 被下架的商品 id
+   */
+  id: string;
+  /**
+   * 恒为 true（下架成功）
+   */
+  removed: boolean;
 };
 
 export type Fashion = {
@@ -7928,31 +5775,58 @@ export type FashionPage = {
   list: Fashion[];
 };
 
-export type FashionQuery = {
+export type UpdateFashion = {
   /**
-   * 页码，从 1 开始
+   * 名称（不传则不改）
    */
-  page?: number;
+  label?: string;
   /**
-   * 每页条数（1~100）
+   * 描述文案（不传则不改）
    */
-  size?: number;
+  description?: string;
   /**
-   * 关键字：模糊匹配 id 与名称
+   * 售卖价（绑定元宝/件，不传则不改）
    */
-  keyword?: string;
+  sellPrice?: number;
   /**
-   * 排序字段（取值见各接口说明，未登记的值会退回默认排序）
-   */
-  sort?: string;
-  /**
-   * 排序方向：asc 升序 / desc 降序
-   */
-  order?: "asc" | "desc";
-  /**
-   * 按获得渠道筛（不落 schema 以免枚举键进两端生成物）
+   * 获得渠道（不传则不改）
    */
   acquireChannel?: "upgrade" | "grant" | "unavailable";
+  /**
+   * 图标（resources 相对路径，不传则不改；空串 = 不显示图标）
+   */
+  icon?: string;
+  /**
+   * 内观资源（resources 相对路径，不传则不改；空串 = 内观不显示这套）
+   */
+  inRes?: string;
+  /**
+   * 外观资源（resources 相对路径，不传则不改；空串 = 场景里不显示这套）
+   */
+  outRes?: string;
+  /**
+   * 八项属性（**整份提交、整份替换**，不传则不改；区间型要求 0 ≤ min ≤ max）
+   */
+  attributes?: ConfigAttributes;
+};
+
+export type DropEntry = {
+  /**
+   * 物品 id（物品总表 configs/items 的键，含装备前后缀变体）
+   */
+  goodId: string;
+  /**
+   * 抽取权重（同一表内相对值，缺省 1）
+   */
+  weight?: number;
+  /**
+   * 掉落概率 0~1（抽中后再判定，缺省 1 必掉）
+   */
+  chance?: number;
+  /**
+   * 数量区间 [最小, 最大]（缺省 [1,1]）
+   */
+  count?: number[];
 };
 
 export type DropTable = {
@@ -7983,6 +5857,32 @@ export type DropTableList = {
    * 总张数
    */
   total: number;
+};
+
+export type CreateDropTable = {
+  /**
+   * 抽取次数：数字（固定件数）或 [最小, 最大]（件数区间）
+   */
+  picks?: unknown;
+  /**
+   * 条目池（goodId 必须在物品总表里；weight/chance/count 缺省 1/1/[1,1]）
+   */
+  entries: DropEntry[];
+  /**
+   * 表 id（小写字母开头的字母/数字/下划线，≤50 字符）
+   */
+  id: string;
+};
+
+export type UpdateDropTable = {
+  /**
+   * 抽取次数：数字（固定件数）或 [最小, 最大]（件数区间）；不传则不改
+   */
+  picks?: unknown;
+  /**
+   * 条目池（**整份替换**；不传则不改）
+   */
+  entries?: DropEntry[];
 };
 
 export type MonsterDrop = {
@@ -8035,104 +5935,234 @@ export type MonsterDropPage = {
   list: MonsterDrop[];
 };
 
-export type MonsterDropQuery = {
+export type UpdateMonsterDrop = {
   /**
-   * 页码，从 1 开始
+   * 引用的具名表 id（null = 不引用具名表）
    */
-  page?: number;
+  tableId?: string | null;
   /**
-   * 每页条数（1~100）
+   * 抽取次数：数字（固定件数）或 [最小, 最大]（件数区间）
    */
-  size?: number;
+  picks?: unknown;
   /**
-   * 关键字：模糊匹配怪物 key
+   * 内联条目池（**整份替换**）
    */
-  keyword?: string;
+  entries?: DropEntry[];
   /**
-   * 排序字段（取值见各接口说明，未登记的值会退回默认排序）
+   * 掉落整体强制绑定（#789；不传则不改）。与「引用表 / 内联条目 / 清空」三态互不影响
    */
-  sort?: string;
-  /**
-   * 排序方向：asc 升序 / desc 降序
-   */
-  order?: "asc" | "desc";
-  /**
-   * 按来源筛（不落 schema 以免枚举键进两端生成物）
-   */
-  source?: "table" | "entries" | "none";
+  bindDrops?: boolean;
 };
 
-export type AchievementCondition = {
+export type LevelCurve = {
   /**
-   * 类型：kill 累计击杀 / quest 累计交付任务（累计型，进度落库）；level 等级 / combat 战力 / collect 持有物品（状态型，查询现算）
+   * 曲线 key：exp（升级经验）/ hp（生命上限）/ attack_max（物攻上限）/ defense_max（物防上限）
    */
-  type: "kill" | "quest" | "level" | "combat" | "collect";
+  curve: string;
   /**
-   * 目标：kill = 怪物 key（"*" 任意）/ collect = 物品 id / 其余空串
+   * 段序号（同一曲线内 1 起；段的起点由上一段终点决定，不可改）
    */
-  target: string;
+  seq: number;
   /**
-   * 门槛值（累计型 = 需要多少次，状态型 = 需要到多少）
+   * 起始等级（含）
    */
-  count: number;
-};
-
-export type AchievementRewards = {
+  fromLevel: number;
   /**
-   * 绑定元宝
+   * 结束等级（含）；最后一段是等级上限，超出按该段公式继续外推
    */
-  bindGold: number;
+  toLevel: number;
   /**
-   * 经验
+   * fromLevel 处的值
    */
-  exp: number;
+  startValue: number;
   /**
-   * 物品清单
+   * 每级增量
    */
-  items: AchievementRewardItem[];
-};
-
-export type Achievement = {
+  perLevel: number;
   /**
-   * 成就 id（语义串，如 ach_kill_10）
+   * 每级增量的增量（二阶；只有 exp 用，其余为 0）
    */
-  id: string;
-  /**
-   * 分类：battle 战斗 / growth 成长 / explore 探索
-   */
-  category: "battle" | "growth" | "explore";
-  /**
-   * 名称
-   */
-  label: string;
-  /**
-   * 描述
-   */
-  description: string;
-  /**
-   * 条件
-   */
-  condition: AchievementCondition;
-  /**
-   * 奖励
-   */
-  rewards: AchievementRewards;
-  /**
-   * 分类内展示顺序（小的在前）
-   */
-  sortOrder: number;
-  /**
-   * 未达成时是否默认折叠（不剧透条件）
-   */
-  hidden: boolean;
+  accel: number;
   /**
    * 最近更新时间（毫秒）
    */
   updatedAt: number;
+};
+
+export type LevelCurveList = {
   /**
-   * 已有多少角色拥有这条成就的记录（仅行内统计用，列表不填）
+   * 全部曲线段（按曲线 → 段序）
    */
-  recordCount?: number;
+  list: LevelCurve[];
+};
+
+export type LevelAttributes = {
+  /**
+   * 等级
+   */
+  level: number;
+  /**
+   * 升到下一级所需经验
+   */
+  exp: number;
+  /**
+   * 生命上限（裸属性）
+   */
+  maxHp: number;
+  /**
+   * 魔法上限（= 生命上限 × 0.5）
+   */
+  maxMp: number;
+  /**
+   * 每秒回血（= 生命上限 ÷ 100，四舍五入）
+   */
+  hpRecover: number;
+  /**
+   * 物攻区间（三系攻同值）
+   */
+  physicalAttack: ConfigAttributeRange;
+  /**
+   * 魔攻区间
+   */
+  magicAttack: ConfigAttributeRange;
+  /**
+   * 道攻区间
+   */
+  taoistAttack: ConfigAttributeRange;
+  /**
+   * 物防区间（三系防同值）
+   */
+  physicalDefense: ConfigAttributeRange;
+  /**
+   * 魔防区间
+   */
+  magicDefense: ConfigAttributeRange;
+  /**
+   * 道防区间
+   */
+  taoistDefense: ConfigAttributeRange;
+};
+
+export type UpdateLevelCurve = {
+  /**
+   * 结束等级（含）；不能小于本段起始等级
+   */
+  toLevel?: number;
+  /**
+   * 起始等级处的值（≥ 0）
+   */
+  startValue?: number;
+  /**
+   * 每级增量（≥ 0；经验段建议 ≥ 1）
+   */
+  perLevel?: number;
+  /**
+   * 每级增量的增量（≥ 0；只有 exp 有意义，其余曲线请留 0）
+   */
+  accel?: number;
+};
+
+export type GrowthScalar = {
+  /**
+   * 参数键（如 roleMaxLevel / attributeRange.minRate）
+   */
+  key: string;
+  /**
+   * 参数值
+   */
+  value: number;
+  /**
+   * 参数说明（改之前先读一遍 —— 每个键的语义都在这里）
+   */
+  description: string;
+  /**
+   * 最近更新时间（毫秒）
+   */
+  updatedAt: number;
+};
+
+export type GrowthScalarPage = {
+  /**
+   * 总条数
+   */
+  total: number;
+  /**
+   * 当前页码（从 1 开始）
+   */
+  page: number;
+  /**
+   * 每页条数
+   */
+  size: number;
+  /**
+   * 当前页的标量参数
+   */
+  list: GrowthScalar[];
+};
+
+export type UpdateGrowthScalar = {
+  /**
+   * 参数值；整数键（roleMaxLevel / expGain.*）必须是整数，比率键在 [0, 1] 等取值域内
+   */
+  value: number;
+};
+
+export type Monster = {
+  /**
+   * 怪物 key（configs/monster 的关联键，如 "1"）
+   */
+  id: string;
+  /**
+   * 名称（头顶名牌，后台可改）
+   */
+  label: string;
+  /**
+   * 定位（normal / elite / boss）。改它**不会**重算已展开的血量 / 攻防，但会改变 BOSS 判定（击杀 BOSS 才发的邮件）
+   */
+  tier: string;
+  /**
+   * 等级（显示用元数据；战斗数值以 maxHp / 六项区间为准）
+   */
+  level: number;
+  /**
+   * 最大生命
+   */
+  maxHp: number;
+  /**
+   * 六项攻防区间（0 ≤ min ≤ max）
+   */
+  attributes: MonsterAttributes;
+  /**
+   * 最近更新时间（毫秒）
+   */
+  updatedAt: number;
+};
+
+export type MallGoodEntry = {
+  /**
+   * 商品 id（装备变体 id）
+   */
+  id: string;
+  /**
+   * 所属分类 id
+   */
+  categoryId: string;
+  /**
+   * 售价（绑定元宝/件）
+   */
+  price: number;
+  /**
+   * 购买等级（0 = 不限）
+   */
+  requiredLevel: number;
+  /**
+   * 每日限购件数（0 = 不限购）。**只有配置，没有「今天买了几个」** —— 运行时计数走 `GET /roles/:roleId/mall-limits`，那是随角色变的，不能进快照
+   */
+  dailyLimit: number;
+  /**
+   * 全服库存件数（-1 = 不限量，0 = 售罄）。已售件数同样走 mall-limits
+   */
+  stock: number;
 };
 
 export type MapNpcPoint = {
@@ -8288,62 +6318,159 @@ export type UiEffectConfig = {
   enabled: boolean;
 };
 
-export type EquipmentSlot = {
+export type DropRuntimeParams = {
   /**
-   * 槽位 key（EQUIPMENT_TYPE 的枚举值，如 cloth）
+   * 自动拾取半径（像素）：脚底距离小于它即拾取
    */
-  key: string;
+  autoPickupRadius: number;
   /**
-   * 槽位中文名（如「衣服」）
+   * 服务端拾取距离闸（像素，#817）：玩家离掉落物落地位置超过它就拒收拾取请求。与 autoPickupRadius 是两把尺子（那是客户端手感，这是服务端权威）；0 = 关闭校验，别当出货值
    */
-  label: string;
+  pickAcceptRadius: number;
   /**
-   * 槽位底图（resources 相对路径，如 ui/slot/cloth）
+   * 背包已满的提示 / 重试间隔（毫秒）
    */
-  imageSrc: string;
+  fullTipInterval: number;
   /**
-   * 在角色弹窗里的位置分组（left / right / bottom / custom）
+   * 多件掉落物的最小中心间距（像素）
    */
-  position: string;
+  scatterMinDistance: number;
   /**
-   * 排序序号（从 0 起；槽位排列与背包整理序的唯一来源）
+   * 服务端拾取应答等待上限（毫秒），超时允许重试
    */
-  order: number;
+  pickReplyTimeout: number;
   /**
-   * 最近更新时间（毫秒）
+   * 随机绑定概率（百分比 0~100）：物品与怪物都没有「强制绑定」时，按它掷一次决定这一件是否绑定角色。0 = 从不随机绑定
+   */
+  bindChance: number;
+};
+
+export type AutoBattleParams = {
+  /**
+   * 自动选目标的最大距离（像素，0 = 不限，全图取最近）
+   */
+  maxTargetDistance: number;
+  /**
+   * 自动移动是否使用跑步速度
+   */
+  moveByRun: boolean;
+  /**
+   * A* 网格单元边长（像素）：越小越贴合障碍、搜索越慢
+   */
+  cellSize: number;
+  /**
+   * 通行余量（像素）：障碍矩形向外扩张这么多再烙进网格
+   */
+  clearance: number;
+  /**
+   * 重新寻路间隔（毫秒）
+   */
+  repathInterval: number;
+  /**
+   * 到达路点的判定半径（像素）
+   */
+  waypointTolerance: number;
+  /**
+   * 卡住检测间隔（毫秒）
+   */
+  stuckInterval: number;
+  /**
+   * 卡住判定：该间隔内位移小于此值视为卡住（像素）
+   */
+  stuckDistance: number;
+  /**
+   * 连续卡住多少次后放弃当前目标
+   */
+  stuckRetryLimit: number;
+  /**
+   * 被放弃目标的拉黑时长（毫秒）
+   */
+  targetBanDuration: number;
+  /**
+   * 场上没目标时，隔多久再找一次（毫秒）
+   */
+  targetSearchInterval: number;
+  /**
+   * 点击寻路的到达判定半径（像素）
+   */
+  arriveTolerance: number;
+  /**
+   * 传送落点吸附半径（格）
+   */
+  teleportSnapRadius: number;
+  /**
+   * 突进类技能的落点吸附半径（像素）
+   */
+  dashSnapRadius: number;
+};
+
+export type GuildRuleParams = {
+  /**
+   * 帮会名最短字数
+   */
+  nameMin: number;
+  /**
+   * 帮会名最长字数（必须 ≥ 最短字数）
+   */
+  nameMax: number;
+  /**
+   * 帮会公告最长字数（0 = 不限）
+   */
+  noticeMax: number;
+  /**
+   * 入帮申请留言最长字数（0 = 不限）
+   */
+  applicationMessageMax: number;
+  /**
+   * 建帮所需最低角色等级（0 = 不限等级）
+   */
+  createLevelMin: number;
+  /**
+   * 建帮消耗绑定元宝（0 = 免费）
+   */
+  createCostBindGold: number;
+};
+
+export type RuntimeParams = {
+  /**
+   * 掉落物手感参数（服务端只下发，不消费）
+   */
+  drop: DropRuntimeParams;
+  /**
+   * 自动战斗 / 寻路参数（服务端只下发，不消费）
+   */
+  autoBattle: AutoBattleParams;
+  /**
+   * 帮会规则门槛（服务端校验读它）
+   */
+  guild: GuildRuleParams;
+  /**
+   * 最后修改时间（毫秒）
    */
   updatedAt: number;
 };
 
-export type EquipmentMeta = {
+export type GuideStep = {
   /**
-   * 前缀属性倍率（下标 = EQUIPMENT_PREFIX 序号）
+   * 步骤标识（日志与单测用；同一份配置里唯一，不落存档）
    */
-  prefixRates: number[];
+  id: string;
   /**
-   * 后缀属性倍率（下标 = EQUIPMENT_SUFFIX 序号）
+   * 气泡标题
    */
-  suffixRates: number[];
+  title: string;
   /**
-   * 前缀文案（与倍率同长）
+   * 气泡正文（一句话说清「做什么」）
    */
-  prefixLabels: string[];
+  desc: string;
   /**
-   * 后缀文案（与倍率同长）
+   * 高亮语义位：joystick / nav:bag / nav:skill / nav:chat / shortcut（客户端按它现取节点，取不到就只显示气泡）
    */
-  suffixLabels: string[];
+  spot: "joystick" | "nav:bag" | "nav:skill" | "nav:chat" | "shortcut";
   /**
-   * 前缀文字颜色（#720，`#RRGGBB`，与文案同长；空数组 = 客户端按内置色渲染）
+   * 推进事件：move / kill / pickup / openBag / openSkill / openChat（当前步收到它才前进，别的事件不越级）
    */
-  prefixColors: string[];
-  /**
-   * 后缀文字颜色（#720，`#RRGGBB`，与文案同长；空数组 = 客户端按内置色渲染）
-   */
-  suffixColors: string[];
-  /**
-   * 最近更新时间（毫秒）
-   */
-  updatedAt: number;
+  trigger: "move" | "kill" | "pickup" | "openBag" | "openSkill" | "openChat";
 };
 
 export type AudioConfig = {
@@ -8367,6 +6494,55 @@ export type AudioConfig = {
    * 开关（false = 客户端整个不播，连文件都不读）
    */
   enabled: boolean;
+};
+
+export type AppearanceEffect = {
+  /**
+   * 水平偏移（像素，右为正；边框相对图标中心、背景相对弹窗面板中心）
+   */
+  x: number;
+  /**
+   * 垂直偏移（像素，上为正）
+   */
+  y: number;
+  /**
+   * 尺寸倍率（1 = 客户端默认适配结果）
+   */
+  scale: number;
+};
+
+export type AppearanceAssignment = {
+  /**
+   * 装备前缀序号（0 起；运行时档数由 equipment_meta 文案长度决定，硬上限 9）
+   */
+  prefix: number;
+  /**
+   * 装备后缀序号（0 起；硬上限 9）
+   */
+  suffix: number;
+  /**
+   * 边框 / 背景 key（客户端资源清单里的编号）
+   */
+  key: string;
+  /**
+   * 显示效果（#700；不传 = {0,0,1} 即默认适配结果）
+   */
+  effect?: AppearanceEffect;
+};
+
+export type CustomAppearance = {
+  /**
+   * 物品 id（如 weapon_20_p4s2，只影响这一个变体）或基础件 key（如 weapon_20，影响其全部变体）
+   */
+  equipment: string;
+  /**
+   * 边框 / 背景 key
+   */
+  key: string;
+  /**
+   * 显示效果（#700；不传 = {0,0,1} 即默认适配结果）
+   */
+  effect?: AppearanceEffect;
 };
 
 export type EquipmentAppearance = {
@@ -8527,6 +6703,854 @@ export type GameConfigSnapshot = {
   equipmentAppearance: EquipmentAppearance;
 };
 
+export type ConfigVersion = {
+  /**
+   * 配置版本号：每次管理端写配置成功 +1（0 = 出厂状态，一次都没改过）
+   */
+  version: number;
+};
+
+export type AudioConfigList = {
+  /**
+   * 行数（= 音效 key 数）
+   */
+  total: number;
+  /**
+   * 全部音效配置，按 AUDIO_KEYS 登记顺序
+   */
+  list: AudioConfig[];
+};
+
+export type UpdateDropRuntimeParams = {
+  /**
+   * 自动拾取半径（像素）
+   */
+  autoPickupRadius?: number;
+  /**
+   * 服务端拾取距离闸（像素；0 = 关闭校验）
+   */
+  pickAcceptRadius?: number;
+  /**
+   * 背包已满的提示 / 重试间隔（毫秒）
+   */
+  fullTipInterval?: number;
+  /**
+   * 多件掉落物的最小中心间距（像素）
+   */
+  scatterMinDistance?: number;
+  /**
+   * 服务端拾取应答等待上限（毫秒）
+   */
+  pickReplyTimeout?: number;
+  /**
+   * 随机绑定概率（百分比 0~100；0 = 从不随机绑定）
+   */
+  bindChance?: number;
+};
+
+export type UpdateAutoBattleParams = {
+  /**
+   * 自动选目标的最大距离（像素，0 = 不限）
+   */
+  maxTargetDistance?: number;
+  /**
+   * 自动移动是否使用跑步速度
+   */
+  moveByRun?: boolean;
+  /**
+   * A* 网格单元边长（像素）
+   */
+  cellSize?: number;
+  /**
+   * 通行余量（像素）
+   */
+  clearance?: number;
+  /**
+   * 重新寻路间隔（毫秒）
+   */
+  repathInterval?: number;
+  /**
+   * 到达路点的判定半径（像素）
+   */
+  waypointTolerance?: number;
+  /**
+   * 卡住检测间隔（毫秒）
+   */
+  stuckInterval?: number;
+  /**
+   * 卡住判定位移阈值（像素）
+   */
+  stuckDistance?: number;
+  /**
+   * 连续卡住多少次后放弃当前目标
+   */
+  stuckRetryLimit?: number;
+  /**
+   * 被放弃目标的拉黑时长（毫秒）
+   */
+  targetBanDuration?: number;
+  /**
+   * 没目标时的重找间隔（毫秒）
+   */
+  targetSearchInterval?: number;
+  /**
+   * 点击寻路的到达判定半径（像素）
+   */
+  arriveTolerance?: number;
+  /**
+   * 传送落点吸附半径（格）
+   */
+  teleportSnapRadius?: number;
+  /**
+   * 突进类技能的落点吸附半径（像素）
+   */
+  dashSnapRadius?: number;
+};
+
+export type UpdateGuildRuleParams = {
+  /**
+   * 帮会名最短字数
+   */
+  nameMin?: number;
+  /**
+   * 帮会名最长字数（必须 ≥ 最短字数）
+   */
+  nameMax?: number;
+  /**
+   * 帮会公告最长字数（0 = 不限）
+   */
+  noticeMax?: number;
+  /**
+   * 入帮申请留言最长字数（0 = 不限）
+   */
+  applicationMessageMax?: number;
+  /**
+   * 建帮所需最低角色等级（0 = 不限等级）
+   */
+  createLevelMin?: number;
+  /**
+   * 建帮消耗绑定元宝（0 = 免费）
+   */
+  createCostBindGold?: number;
+};
+
+export type UpdateRuntimeParams = {
+  /**
+   * 掉落物手感参数（只提交改动过的字段）
+   */
+  drop?: UpdateDropRuntimeParams;
+  /**
+   * 自动战斗 / 寻路参数（只提交改动过的字段）
+   */
+  autoBattle?: UpdateAutoBattleParams;
+  /**
+   * 帮会规则门槛（只提交改动过的字段）
+   */
+  guild?: UpdateGuildRuleParams;
+  /**
+   * 修改备注（写进审计日志的上下文，便于追溯「为什么改」）
+   */
+  note?: string;
+};
+
+export type MonsterAiParams = {
+  /**
+   * 普攻间隔（毫秒）
+   */
+  attackInterval: number;
+  /**
+   * 普攻距离（像素）
+   */
+  attackRange: number;
+  /**
+   * 施法硬直兜底（毫秒）：技能没配 cast_lock_ms 时用它
+   */
+  attackActionTime: number;
+  /**
+   * 击退时长（毫秒）：技能只配距离时用它换算击退速度
+   */
+  pushDuration: number;
+  /**
+   * 待机游走间隔区间（毫秒，[最小, 最大]）
+   */
+  idleMoveInterval: number[];
+  /**
+   * 待机游走每次走多久（毫秒，[最小, 最大]）
+   */
+  idleMoveDuration: number[];
+  /**
+   * 游走速度倍率（乘在怪物 moveSpeed 上）
+   */
+  idleMoveSpeedScale: number;
+  /**
+   * 游走活动半径（像素，围绕出生点）
+   */
+  wanderRadius: number;
+  /**
+   * 牵引半径（像素）：目标跑出这个距离就脱战回家。必须大于普攻距离，否则怪永远追不上就脱战
+   */
+  leashRange: number;
+  /**
+   * 回家速度倍率（乘在 moveSpeed 上；比追击快，免得被拖着遛）
+   */
+  returnSpeedRate: number;
+  /**
+   * 回家超时（毫秒）：到点还没走回去就吸附到出生点
+   */
+  returnTimeoutMs: number;
+};
+
+export type UpdateMonsterAiParams = {
+  /**
+   * 普攻间隔（毫秒）
+   */
+  attackInterval?: number;
+  /**
+   * 普攻距离（像素）
+   */
+  attackRange?: number;
+  /**
+   * 施法硬直兜底（毫秒）
+   */
+  attackActionTime?: number;
+  /**
+   * 击退时长（毫秒）
+   */
+  pushDuration?: number;
+  /**
+   * 待机游走间隔区间（毫秒，[最小, 最大]）
+   */
+  idleMoveInterval?: number[];
+  /**
+   * 待机游走每次走多久（毫秒，[最小, 最大]）
+   */
+  idleMoveDuration?: number[];
+  /**
+   * 游走速度倍率
+   */
+  idleMoveSpeedScale?: number;
+  /**
+   * 游走活动半径（像素）
+   */
+  wanderRadius?: number;
+  /**
+   * 牵引半径（像素，必须大于普攻距离）
+   */
+  leashRange?: number;
+  /**
+   * 回家速度倍率
+   */
+  returnSpeedRate?: number;
+  /**
+   * 回家超时（毫秒）
+   */
+  returnTimeoutMs?: number;
+};
+
+export type MovementGuardParams = {
+  /**
+   * 档位：off 完全不校验 / log 只记账放行（出厂）/ enforce 拒绝并拉回
+   */
+  mode: "off" | "log" | "enforce";
+  /**
+   * 速度上限（像素/秒）：单帧位移超过 上限×容差×Δt + 抖动 即判超速
+   */
+  maxSpeed: number;
+  /**
+   * 容差倍率（留给刚体加减速与插值）
+   */
+  tolerance: number;
+  /**
+   * 抖动余量（像素）：抵掉坐标取整与上报相位差
+   */
+  jitterPx: number;
+  /**
+   * 是否做穿墙校验（与档位分开，碰撞数据出问题时可单独止血）
+   */
+  wallCheck: boolean;
+  /**
+   * 同一连接两次 posCorrect 的最小间隔（毫秒）
+   */
+  correctIntervalMs: number;
+};
+
+export type UpdateMovementGuardParams = {
+  /**
+   * 档位：off / log / enforce
+   */
+  mode?: "off" | "log" | "enforce";
+  /**
+   * 速度上限（像素/秒）
+   */
+  maxSpeed?: number;
+  /**
+   * 容差倍率
+   */
+  tolerance?: number;
+  /**
+   * 抖动余量（像素）
+   */
+  jitterPx?: number;
+  /**
+   * 是否做穿墙校验
+   */
+  wallCheck?: boolean;
+  /**
+   * 同一连接两次 posCorrect 的最小间隔（毫秒）
+   */
+  correctIntervalMs?: number;
+};
+
+export type CombatWeights = {
+  /**
+   * 生命上限：每 1 点生命折算多少战力
+   */
+  maxHp: number;
+  /**
+   * 物理攻击：每 1 点（区间按上下限之和）折算多少战力
+   */
+  physicalAttack: number;
+  /**
+   * 魔法攻击：每 1 点（区间按上下限之和）折算多少战力
+   */
+  magicAttack: number;
+  /**
+   * 道术攻击：每 1 点（区间按上下限之和）折算多少战力
+   */
+  taoistAttack: number;
+  /**
+   * 物理防御：每 1 点（区间按上下限之和）折算多少战力
+   */
+  physicalDefense: number;
+  /**
+   * 魔法防御：每 1 点（区间按上下限之和）折算多少战力
+   */
+  magicDefense: number;
+  /**
+   * 道术防御：每 1 点（区间按上下限之和）折算多少战力
+   */
+  taoistDefense: number;
+};
+
+export type CombatWeightsResponse = {
+  /**
+   * 当前生效权重（属性名 → 倍率）
+   */
+  weights: CombatWeights;
+  /**
+   * 最后修改时间（毫秒，0 = 从未改过，仍是出厂值）
+   */
+  updatedAt: number;
+};
+
+export type UpdateCombatWeights = {
+  /**
+   * 生命上限权重
+   */
+  maxHp?: number;
+  /**
+   * 物理攻击权重
+   */
+  physicalAttack?: number;
+  /**
+   * 魔法攻击权重
+   */
+  magicAttack?: number;
+  /**
+   * 道术攻击权重
+   */
+  taoistAttack?: number;
+  /**
+   * 物理防御权重
+   */
+  physicalDefense?: number;
+  /**
+   * 魔法防御权重
+   */
+  magicDefense?: number;
+  /**
+   * 道术防御权重
+   */
+  taoistDefense?: number;
+  /**
+   * 修改备注（写进审计日志的上下文，便于追溯「为什么改」）
+   */
+  note?: string;
+};
+
+export type GuideSteps = {
+  /**
+   * 步骤表（数组顺序 = 体验顺序）
+   */
+  steps: GuideStep[];
+  /**
+   * 最后修改时间（毫秒，0 = 从未改过、仍是出厂值）
+   */
+  updatedAt: number;
+};
+
+export type UpdateGuideSteps = {
+  /**
+   * 步骤表（整份替换，顺序即体验顺序）
+   */
+  steps: GuideStep[];
+  /**
+   * 修改备注（写进审计日志的上下文，便于追溯「为什么改」）
+   */
+  note?: string;
+};
+
+export type AppearanceItem = {
+  /**
+   * 边框 / 背景 key（客户端资源清单里的编号）
+   */
+  key: string;
+  /**
+   * 显示效果（#700；不传 = {0,0,1} 即默认适配结果）
+   */
+  effect?: AppearanceEffect;
+  /**
+   * 别名（#718，可选；给人看的名字，客户端不消费，快照里没有；空串视同没填）
+   */
+  name?: string;
+  /**
+   * 分组（#718，可选；管理端按组过滤用，客户端不消费，快照里没有；空串视同没填）
+   */
+  group?: string;
+};
+
+export type EquipmentBorder = {
+  /**
+   * 边框清单本体（#714；棋盘与自定义表只引用这里的 key）
+   */
+  items: AppearanceItem[];
+  /**
+   * 前后缀组合 → 边框（恰好覆盖当前档数的每种组合、各一条）
+   */
+  assignments: AppearanceAssignment[];
+  /**
+   * 特殊装备 → 边框（优先于前后缀表；装备标识不可重复）
+   */
+  customs: CustomAppearance[];
+  /**
+   * 最后修改时间（毫秒，0 = 从未改过、仍是出厂值）
+   */
+  updatedAt: number;
+};
+
+export type UpdateEquipmentBorder = {
+  /**
+   * 前后缀组合 → 边框（整边替换，恰好覆盖当前档数的每种组合且不重复）
+   */
+  assignments: AppearanceAssignment[];
+  /**
+   * 特殊装备 → 边框（整边替换；装备标识不可重复）
+   */
+  customs: CustomAppearance[];
+  /**
+   * 边框清单（整份替换；被引用的 key 必须在清单里）
+   */
+  items?: AppearanceItem[];
+  /**
+   * 修改备注（写进审计日志的上下文，便于追溯「为什么改」）
+   */
+  note?: string;
+};
+
+export type AppearanceResourceScan = {
+  /**
+   * 实际扫描的资源目录（排查「为什么扫不到」用）
+   */
+  dir: string;
+  /**
+   * 文件夹里的全部 key（按编号升序）
+   */
+  keys: string[];
+  /**
+   * 文件夹有、清单没有的 key（同步会新增）
+   */
+  added: string[];
+  /**
+   * 清单有、文件夹没有的 key（同步会移除）
+   */
+  removed: string[];
+  /**
+   * removed 里仍被棋盘 / 特殊装备绑定引用的 key（#716 允许移除；引用处会显示异常，客户端安静跳过）
+   */
+  removedReferenced: string[];
+};
+
+export type AppearanceResourceSync = {
+  /**
+   * 本次新增的 key
+   */
+  added: string[];
+  /**
+   * 本次移除的 key
+   */
+  removed: string[];
+  /**
+   * 移除的 key 里仍被引用的（引用处待运营修复）
+   */
+  removedReferenced: string[];
+  /**
+   * 保留的条目数（存活条目连同已配置的 effect 一起保留）
+   */
+  kept: number;
+  /**
+   * 同步后的最后修改时间（毫秒）
+   */
+  updatedAt: number;
+};
+
+export type EquipmentBackground = {
+  /**
+   * 背景清单本体（#714；棋盘与自定义表只引用这里的 key）
+   */
+  items: AppearanceItem[];
+  /**
+   * 前后缀组合 → 详情背景（恰好覆盖当前档数的每种组合、各一条）
+   */
+  assignments: AppearanceAssignment[];
+  /**
+   * 特殊装备 → 详情背景（优先于前后缀表；装备标识不可重复）
+   */
+  customs: CustomAppearance[];
+  /**
+   * 最后修改时间（毫秒，0 = 从未改过、仍是出厂值）
+   */
+  updatedAt: number;
+};
+
+export type UpdateEquipmentBackground = {
+  /**
+   * 前后缀组合 → 详情背景（整边替换，恰好覆盖当前档数的每种组合且不重复）
+   */
+  assignments: AppearanceAssignment[];
+  /**
+   * 特殊装备 → 详情背景（整边替换；装备标识不可重复）
+   */
+  customs: CustomAppearance[];
+  /**
+   * 背景清单（整份替换；被引用的 key 必须在清单里）
+   */
+  items?: AppearanceItem[];
+  /**
+   * 修改备注（写进审计日志的上下文，便于追溯「为什么改」）
+   */
+  note?: string;
+};
+
+export type ConfigRevision = {
+  /**
+   * 版本号（这一层是「第几版」，与 config_version 同一个计数）
+   */
+  version: number;
+  /**
+   * 这一层是什么改动（写接口的 operationId，如 adminSkill.update）
+   */
+  label: string;
+  /**
+   * payload 字节数（全量配置 JSON；超过 5MB 说明配置该拆了）
+   */
+  byteSize: number;
+  /**
+   * payload 里有几张配置表
+   */
+  tableCount: number;
+  /**
+   * payload 里一共多少行
+   */
+  rowCount: number;
+  /**
+   * 操作人（管理端账号名；同一人 10 秒内的连点会合并成一层）
+   */
+  createdBy: string;
+  /**
+   * 落层时间（毫秒）
+   */
+  createdAt: number;
+};
+
+export type ConfigRevisionList = {
+  /**
+   * 保留的层数（默认 20，`CONFIG_REVISION_RETAIN`）
+   */
+  total: number;
+  /**
+   * 按版本号倒序（最新在前）
+   */
+  list: ConfigRevision[];
+};
+
+export type ConfigRevisionTableDiff = {
+  /**
+   * 表名（与 config-sync.sql 的节名一致）
+   */
+  table: string;
+  /**
+   * 这张表在旧版有几行
+   */
+  from: number;
+  /**
+   * 这张表在新版有几行
+   */
+  to: number;
+  /**
+   * 新增行数（改一行也会体现成「一删一加」，所以它是行级不是字段级）
+   */
+  added: number;
+  /**
+   * 删除行数
+   */
+  removed: number;
+};
+
+export type ConfigRevisionDiff = {
+  /**
+   * 旧版本号
+   */
+  from: number;
+  /**
+   * 新版本号
+   */
+  to: number;
+  /**
+   * 有变化的表数（行数一样但值改了也会出现在这个列表里）
+   */
+  changed: number;
+  /**
+   * 逐表差异，只含有变化的表
+   */
+  tables: ConfigRevisionTableDiff[];
+};
+
+export type ConfigRestoreResult = {
+  /**
+   * 回滚后的新版本号（回滚本身也是一层新版本，历史不删）
+   */
+  version: number;
+  /**
+   * 内容取自哪一层
+   */
+  restoredFrom: number;
+  /**
+   * 恢复了多少张表
+   */
+  tables: number;
+  /**
+   * 恢复了多少行
+   */
+  rows: number;
+  /**
+   * 被跳过的表（payload 里有、当前库里没有的表结构 —— 不做结构迁移，跳过并告警）
+   */
+  skipped: string[];
+};
+
+export type MailTemplate = {
+  /**
+   * 模板 key
+   */
+  key: string;
+  /**
+   * 模板中文名
+   */
+  name: string;
+  /**
+   * 用途说明（界面提示运营这封信该填什么）
+   */
+  hint: string;
+  /**
+   * 必填变量名；缺一个就拒发
+   */
+  variables: string[];
+  /**
+   * 标题模板（含 {{变量}} 占位符；custom 为空串）
+   */
+  subject: string;
+  /**
+   * 正文模板（含 {{变量}} 占位符；custom 为空串）
+   */
+  body: string;
+};
+
+export type MailJob = {
+  /**
+   * 任务 id
+   */
+  id: string;
+  /**
+   * 收件邮箱
+   */
+  to: string;
+  /**
+   * 关联的玩家账号 id；null = 未关联账号
+   */
+  accountId: string | null;
+  /**
+   * 关联的玩家账号名；账号已被删则为 null
+   */
+  accountName: string | null;
+  /**
+   * 模板 key
+   */
+  templateKey: string;
+  /**
+   * 模板中文名（模板已被删则退回 key）
+   */
+  templateName: string;
+  /**
+   * 渲染后的标题
+   */
+  subject: string;
+  /**
+   * 渲染后的正文（重投时发的仍是这份内容，模板改动不影响已入队的任务）
+   */
+  body: string;
+  /**
+   * 状态
+   */
+  status: "pending" | "sending" | "retrying" | "sent" | "failed";
+  /**
+   * 状态中文名
+   */
+  statusLabel: string;
+  /**
+   * 已尝试次数（成功的那次也计入）
+   */
+  attempts: number;
+  /**
+   * 下一次重试的时刻（毫秒）；待发送与终态为 null
+   */
+  nextRetryAt: number | null;
+  /**
+   * 最近一次失败的原因；成功为 null（界面可直接展示）
+   */
+  lastError: string | null;
+  /**
+   * 发起人管理员账号名（管理员被删后仍可追溯）
+   */
+  createdBy: string | null;
+  /**
+   * 入队时间（毫秒）
+   */
+  createdAt: number;
+  /**
+   * 最近更新时间（毫秒）
+   */
+  updatedAt: number;
+  /**
+   * 投递成功的时刻（毫秒）；未成功为 null
+   */
+  sentAt: number | null;
+};
+
+export type MailJobPage = {
+  /**
+   * 总条数
+   */
+  total: number;
+  /**
+   * 当前页码（从 1 开始）
+   */
+  page: number;
+  /**
+   * 每页条数
+   */
+  size: number;
+  /**
+   * 当前页的投递任务
+   */
+  list: MailJob[];
+};
+
+export type SendMailResult = {
+  /**
+   * 投递任务 id
+   */
+  id: string;
+  /**
+   * 入队后的状态（恒为 pending：是否真发出去要在投递记录里看）
+   */
+  status: string;
+  /**
+   * 渲染后的标题（可以先看一眼，发错了还来得及在记录里查到）
+   */
+  subject: string;
+};
+
+export type SendMail = {
+  /**
+   * 收件邮箱（可选）。不传时，若关联的玩家账号填了邮箱，则自动用该账号的邮箱投递；两者皆无则报错（50005）。管理端选了关联账号后会自动把账号邮箱带进这个字段，所以运营大多不用手填。
+   */
+  to?: string;
+  /**
+   * 模板 key（custom = 自定义，此时必须传 subject 与 body）
+   */
+  templateKey: "welcome" | "banNotice" | "maintenance" | "custom";
+  /**
+   * 关联的玩家账号 id（可选，仅用于追溯）
+   */
+  accountId?: string;
+  /**
+   * 模板变量（键是模板声明的变量名，如 username / reason）；缺必填变量会直接拒发
+   */
+  variables?: Record<string, string>;
+  /**
+   * 自定义标题（**仅 custom 模板必填**）
+   */
+  subject?: string;
+  /**
+   * 自定义正文（**仅 custom 模板必填**，纯文本）
+   */
+  body?: string;
+};
+
+export type Zone = {
+  /**
+   * 区服 id
+   */
+  id: number;
+  /**
+   * 区服名
+   */
+  name: string;
+};
+
+export type MyZone = {
+  /**
+   * 区服 id
+   */
+  id: number;
+  /**
+   * 区服名
+   */
+  name: string;
+  /**
+   * 我在这个区有几个角色
+   */
+  roleCount: number;
+  /**
+   * 是不是当前浏览区（选角页拉的就是它）
+   */
+  current: boolean;
+};
+
+export type SelectZoneResult = {
+  /**
+   * 切换后的当前浏览区
+   */
+  zoneId: number;
+};
+
+export type SelectZone = {
+  /**
+   * 要切到的区服 id（活区清单见 GET /zones/mine）
+   */
+  zoneId: number;
+};
+
 export type GuildSummary = {
   /**
    * 帮会 id
@@ -8683,6 +7707,56 @@ export type MyGuild = {
   applicants: GuildApplication[];
 };
 
+export type CreateGuild = {
+  /**
+   * 帮会名（长度按「运行时参数 · 帮会规则」的当前配置，出厂 2~12 字；全局唯一）
+   */
+  name: string;
+  /**
+   * 公告（可选；长度按运行时参数，出厂 200 字）
+   */
+  notice?: string;
+};
+
+export type ApplyGuild = {
+  /**
+   * 留言（可选；长度按运行时参数，出厂 50 字）；重复申请会**覆盖**上一条留言
+   */
+  message?: string;
+};
+
+export type ReviewGuildApplication = {
+  /**
+   * true 通过 / false 拒绝（拒绝直接删掉申请，不留记录）
+   */
+  approve: boolean;
+};
+
+export type AppointGuildRank = {
+  /**
+   * 目标角色 id（必须是本帮成员，且不是帮主）
+   */
+  roleId: string;
+  /**
+   * 目标职位：vice 任命为副帮主 / member 卸任回普通成员
+   */
+  rank: "vice" | "member";
+};
+
+export type TransferGuild = {
+  /**
+   * 新帮主的角色 id（必须是本帮成员，且不是自己）
+   */
+  roleId: string;
+};
+
+export type UpdateGuildNotice = {
+  /**
+   * 公告（长度按运行时参数，出厂 200 字；空字符串表示清空）
+   */
+  notice: string;
+};
+
 export type AdminGuild = {
   /**
    * 帮会 id
@@ -8765,6 +7839,17 @@ export type AdminGuildDetail = {
   members: GuildMember[];
 };
 
+export type AdminUpdateGuild = {
+  /**
+   * 帮会名（长度按运行时参数，出厂 2~12 字；全局唯一）
+   */
+  name?: string;
+  /**
+   * 公告（长度按运行时参数，出厂 200 字）
+   */
+  notice?: string;
+};
+
 export type SocialEntry = {
   /**
    * 对方角色 id
@@ -8825,6 +7910,32 @@ export type MySocial = {
    * 我拉黑的人（单向；**不含「谁拉黑了我」** —— 被拉黑对本人完全不可见，否则等于告诉骚扰者「他怕了」，反而成了继续骚扰的信号）
    */
   blocks: SocialEntry[];
+};
+
+export type SocialTarget = {
+  /**
+   * 对方角色 id（「附近」与帮会成员列表用这个：精确且不受重名影响）
+   */
+  roleId?: string;
+  /**
+   * 对方角色名（手动输入时用；角色名只在同一账号内唯一，重名会返回 50116）
+   */
+  name?: string;
+};
+
+export type CreateReport = {
+  /**
+   * 被举报的角色 id（「附近」列表里点选）
+   */
+  roleId: string;
+  /**
+   * 举报类别：abuse / cheat / name / other（固定枚举，不开放自由分类）
+   */
+  category: string;
+  /**
+   * 补充说明（可空；只在 category 说不清时写清楚发生了什么）
+   */
+  reason?: string;
 };
 
 export type Report = {
@@ -8889,35 +8000,93 @@ export type ReportPage = {
   list: Report[];
 };
 
-export type ReportQuery = {
+export type QuestState = {
   /**
-   * 页码，从 1 开始
+   * 任务 id
    */
-  page?: number;
+  questId: string;
   /**
-   * 每页条数（1~100）
+   * 状态：available 可接（无进度行）/ accepted 进行中 / ready 可交付 / claimed 已领奖
    */
-  size?: number;
+  status: "available" | "accepted" | "ready" | "claimed";
   /**
-   * 关键字：模糊匹配双方角色名或角色 id
+   * 当前进度（kill/talk 为累计次数；collect 为背包持有量与目标取小）
    */
-  keyword?: string;
+  progress: number;
   /**
-   * 排序字段（取值见各接口说明，未登记的值会退回默认排序）
+   * 目标数量（来自任务配置，客户端免查快照比对）
    */
-  sort?: string;
+  target: number;
+};
+
+export type MyQuests = {
   /**
-   * 排序方向：asc 升序 / desc 降序
+   * 全部进度行（可接的任务不在内 —— 可接态由客户端按快照配置与 claimed 行计算）
    */
-  order?: "asc" | "desc";
+  quests: QuestState[];
+};
+
+export type QuestId = {
   /**
-   * 类别：abuse / cheat / name / other
+   * 任务 id
    */
-  category?: string;
+  questId: string;
+};
+
+export type QuestRewardResult = {
   /**
-   * 状态：pending / handled / dismissed
+   * 绑定元宝
    */
-  status?: string;
+  bindGold: number;
+  /**
+   * 经验
+   */
+  exp: number;
+  /**
+   * 物品清单
+   */
+  items: unknown[];
+  /**
+   * 发奖后等级
+   */
+  level: number;
+  /**
+   * 是否升级
+   */
+  leveledUp: boolean;
+};
+
+export type QuestSubmitResult = {
+  /**
+   * 交付后的任务快照
+   */
+  quests: QuestState[];
+  /**
+   * 本次奖励结算
+   */
+  reward: QuestRewardResult;
+};
+
+export type NpcTalkResult = {
+  /**
+   * 对话文案（管理端 npcs 表的 dialog 列，空串 = 未配置）
+   */
+  dialog: string;
+  /**
+   * 该 NPC 名下全部任务在当前角色上的状态（含可接但未接的）
+   */
+  quests: QuestState[];
+};
+
+export type NpcTalk = {
+  /**
+   * NPC id
+   */
+  npcId: string;
+  /**
+   * 预留字段（v1 无对话分支）
+   */
+  option?: string;
 };
 
 export type LeaderboardEntry = {
@@ -8955,6 +8124,21 @@ export type LeaderboardEntry = {
   zoneId: number;
 };
 
+export type LeaderboardSelf = {
+  /**
+   * 我的名次；**0 = 没有名次**（没有在线角色，或角色不在这份快照里）
+   */
+  rank: number;
+  /**
+   * 我在榜上的那一条（`rank = 0` 时为 null）
+   */
+  entry: LeaderboardEntry | null;
+  /**
+   * 这份快照算出来的时刻（毫秒）
+   */
+  computedAt: number;
+};
+
 export type LeaderboardPage = {
   /**
    * 总条数
@@ -8976,32 +8160,6 @@ export type LeaderboardPage = {
    * 这份快照算出来的时刻（毫秒）。榜单是**物化**的（默认每分钟重算一次），客户端据此告诉玩家「每分钟更新」，而不是让人以为刚升级就该立刻跳名次。
    */
   computedAt: number;
-};
-
-export type LeaderboardSelf = {
-  /**
-   * 我的名次；**0 = 没有名次**（没有在线角色，或角色不在这份快照里）
-   */
-  rank: number;
-  /**
-   * 我在榜上的那一条（`rank = 0` 时为 null）
-   */
-  entry: LeaderboardEntry | null;
-  /**
-   * 这份快照算出来的时刻（毫秒）
-   */
-  computedAt: number;
-};
-
-export type LeaderboardQuery = {
-  /**
-   * 页码，从 1 开始
-   */
-  page?: number;
-  /**
-   * 每页条数（默认 20）。上限由服务端配置 `LEADERBOARD_TOP_N` 决定（默认 100）——传得比它大不会报错，会被夹到上限。
-   */
-  size?: number;
 };
 
 export type AchievementView = {
@@ -9116,50 +8274,22 @@ export type AchievementClaimResult = {
   mailId: string | null;
 };
 
-export type AchievementPage = {
+export type AchievementId = {
   /**
-   * 总条数
+   * 成就 id（如 "ach_kill_10"）
    */
-  total: number;
-  /**
-   * 当前页码（从 1 开始）
-   */
-  page: number;
-  /**
-   * 每页条数
-   */
-  size: number;
-  /**
-   * 当前页的成就配置
-   */
-  list: Achievement[];
+  achievementId: string;
 };
 
-export type AchievementQuery = {
+export type MailAttachment = {
   /**
-   * 页码，从 1 开始
+   * 物品 id（客户端拿共享快照换名字与图标）
    */
-  page?: number;
+  goodId: string;
   /**
-   * 每页条数（1~100）
+   * 数量
    */
-  size?: number;
-  /**
-   * 关键字：模糊匹配 id 与名称
-   */
-  keyword?: string;
-  /**
-   * 排序字段（取值见各接口说明，未登记的值会退回默认排序）
-   */
-  sort?: string;
-  /**
-   * 排序方向：asc 升序 / desc 降序
-   */
-  order?: "asc" | "desc";
-  /**
-   * 分类筛选：battle | growth | explore
-   */
-  category?: string;
+  count: number;
 };
 
 export type MailView = {
@@ -9356,68 +8486,129 @@ export type MailClaimAllResult = {
   failures: MailClaimFailure[];
 };
 
-export type EquipAlign = {
+export type AdminSendMail = {
   /**
-   * 目标 id：`cloth:<基础件>` / `weapon:<基础件>` / `role:<1|2>`（裸模按性别）
+   * 频道：只允许 system（系统）/ reward（奖励）
+   */
+  channel: "system" | "reward";
+  /**
+   * 标题
+   */
+  title: string;
+  /**
+   * 正文（纯文本，换行用 \n；可空）
+   */
+  body?: string;
+  /**
+   * 附件绑定元宝（不传 = 没有）
+   */
+  bindGold?: number;
+  /**
+   * 附件经验（不传 = 没有）
+   */
+  exp?: number;
+  /**
+   * 附件物品（不传 = 没有）
+   */
+  items?: MailAttachment[];
+};
+
+export type MapSummary = {
+  /**
+   * 地图 id（= resources/map 下的目录名，也是角色 onMap 存的值）
    */
   id: string;
   /**
-   * 外观缩放
+   * 地图名
    */
-  outScale: number;
+  label: string;
   /**
-   * 8 个方向的外观位移（顺序见客户端 configs/animation 的 directions）
+   * 类型码（0 安全 / 1 等级 / 2 战斗力 / 3 战魂）
    */
-  outPositions: EquipAlignPoint[];
+  type: string;
   /**
-   * true = `outPositions` 是**绝对位置**（工作台手调的结果）；false = 运行时按身体帧自动算，`outPositions` 只当微调。武器的渐进语义，见 configs/equipAlign
+   * 类型名（安全地图 / 等级地图 / 战斗力地图 / 战魂地图）
    */
-  outManual: boolean;
+  typeLabel: string;
   /**
-   * 最近更新时间（毫秒）
+   * 进入所需等级（0 = 不限）
    */
-  updatedAt: number;
+  level: number;
+  /**
+   * 进入所需战斗力（0 = 不限）
+   */
+  combat: number;
+  /**
+   * 进入所需战魂阶（0 = 不限）
+   */
+  soulOfWar: number;
+  /**
+   * 客户端资源路径（如 map/0/0）
+   */
+  src: string;
+  /**
+   * 横向格数
+   */
+  cols: number;
+  /**
+   * 纵向格数
+   */
+  rows: number;
+  /**
+   * 单格宽（像素）
+   */
+  tileWidth: number;
+  /**
+   * 单格高（像素）
+   */
+  tileHeight: number;
+  /**
+   * 地图像素宽
+   */
+  width: number;
+  /**
+   * 地图像素高
+   */
+  height: number;
+  /**
+   * 图层数
+   */
+  layerCount: number;
+  /**
+   * 服务端 NPC 点位数（map_npcs；#672 起点位归后台）
+   */
+  npcPointCount: number;
+  /**
+   * 服务端是否设了复活点（maps.revive_cx/cy 非空）
+   */
+  hasRevivePoint: boolean;
+  /**
+   * 服务端碰撞盒行数（map_collisions；#676 起碰撞归后台）
+   */
+  collisionCount: number;
+  /**
+   * 服务端刷怪区行数（map_spawn_areas）
+   */
+  spawnAreaCount: number;
+  /**
+   * 服务端场上怪物实例数（world_monsters，全部区合计）
+   */
+  worldMonsterCount: number;
 };
 
-export type EquipAlignList = {
+export type MapList = {
   /**
-   * 全部已保存的对齐几何（**没有行 = 用客户端配置里的值**）
+   * 地图总数
    */
-  list: EquipAlign[];
-};
-
-export type EquipInAlign = {
+  total: number;
   /**
-   * 目标 id：`cloth:<基础件>` / `weapon:<基础件>`
+   * 地图列表（按 id 数字升序）
    */
-  id: string;
+  list: MapSummary[];
   /**
-   * 内观横向缩放（客户端 `inScaleX`）
+   * 全部地图类型（管理端编辑下拉用；含当前没有地图使用的类型，顺序即传送弹窗分组顺序）
    */
-  inScaleX: number;
-  /**
-   * 内观纵向缩放（客户端 `inScaleY`）
-   */
-  inScaleY: number;
-  /**
-   * 内观位置（弹窗坐标系，y 向上）
-   */
-  inPosition: EquipInAlignPoint;
-  /**
-   * true = 用手调的绝对位置（工作台调过）；false = 客户端按当前衣服的内容 bbox 自动算，`inPosition` 不参与（只对武器有意义，衣服恒为 true）
-   */
-  inManual: boolean;
-  /**
-   * 最近更新时间（毫秒）
-   */
-  updatedAt: number;
-};
-
-export type EquipInAlignList = {
-  /**
-   * 全部已保存的内观几何（**没有行 = 用客户端配置里的值**）
-   */
-  list: EquipInAlign[];
+  types: MapTypeGroup[];
 };
 
 export type MapLayer = {
@@ -9521,142 +8712,6 @@ export type MapSpawnArea = {
   overflow: MapSpawnAreaOverflow;
 };
 
-export type MapWorldMonster = {
-  /**
-   * 区服 id
-   */
-  zoneId: number;
-  /**
-   * 该区这张图的实例总数
-   */
-  total: number;
-  /**
-   * 其中存活只数
-   */
-  alive: number;
-};
-
-export type MapSource = {
-  /**
-   * 对应的字段块（layers / groups / spawnAreas / worldMonsters / config / size）
-   */
-  section: string;
-  /**
-   * 给人看的名字
-   */
-  label: string;
-  /**
-   * 来源类别：config 客户端资源 / db 服务端库表
-   */
-  origin: string;
-  /**
-   * 具体文件路径（config）或表名（db）
-   */
-  ref: string;
-  /**
-   * 一句话说明这块能不能改、改了怎么生效
-   */
-  note: string;
-};
-
-export type MapSummary = {
-  /**
-   * 地图 id（= resources/map 下的目录名，也是角色 onMap 存的值）
-   */
-  id: string;
-  /**
-   * 地图名
-   */
-  label: string;
-  /**
-   * 类型码（0 安全 / 1 等级 / 2 战斗力 / 3 战魂）
-   */
-  type: string;
-  /**
-   * 类型名（安全地图 / 等级地图 / 战斗力地图 / 战魂地图）
-   */
-  typeLabel: string;
-  /**
-   * 进入所需等级（0 = 不限）
-   */
-  level: number;
-  /**
-   * 进入所需战斗力（0 = 不限）
-   */
-  combat: number;
-  /**
-   * 进入所需战魂阶（0 = 不限）
-   */
-  soulOfWar: number;
-  /**
-   * 客户端资源路径（如 map/0/0）
-   */
-  src: string;
-  /**
-   * 横向格数
-   */
-  cols: number;
-  /**
-   * 纵向格数
-   */
-  rows: number;
-  /**
-   * 单格宽（像素）
-   */
-  tileWidth: number;
-  /**
-   * 单格高（像素）
-   */
-  tileHeight: number;
-  /**
-   * 地图像素宽
-   */
-  width: number;
-  /**
-   * 地图像素高
-   */
-  height: number;
-  /**
-   * 图层数
-   */
-  layerCount: number;
-  /**
-   * 服务端 NPC 点位数（map_npcs；#672 起点位归后台）
-   */
-  npcPointCount: number;
-  /**
-   * 服务端是否设了复活点（maps.revive_cx/cy 非空）
-   */
-  hasRevivePoint: boolean;
-  /**
-   * 服务端碰撞盒行数（map_collisions；#676 起碰撞归后台）
-   */
-  collisionCount: number;
-  /**
-   * 服务端刷怪区行数（map_spawn_areas）
-   */
-  spawnAreaCount: number;
-  /**
-   * 服务端场上怪物实例数（world_monsters，全部区合计）
-   */
-  worldMonsterCount: number;
-};
-
-export type MapList = {
-  /**
-   * 地图总数
-   */
-  total: number;
-  /**
-   * 地图列表（按 id 数字升序）
-   */
-  list: MapSummary[];
-  /**
-   * 全部地图类型（管理端编辑下拉用；含当前没有地图使用的类型，顺序即传送弹窗分组顺序）
-   */
-  types: MapTypeGroup[];
-};
-
 export type MapNpc = {
   /**
    * 点位行 id（改 / 删用它定位；换 NPC 时 id 不变）
@@ -9724,6 +8779,44 @@ export type MapCollision = {
    * 整块落在图外（画面上完全看不到；允许存在，四面围墙就是超出的）
    */
   fullyOutside: boolean;
+};
+
+export type MapWorldMonster = {
+  /**
+   * 区服 id
+   */
+  zoneId: number;
+  /**
+   * 该区这张图的实例总数
+   */
+  total: number;
+  /**
+   * 其中存活只数
+   */
+  alive: number;
+};
+
+export type MapSource = {
+  /**
+   * 对应的字段块（layers / groups / spawnAreas / worldMonsters / config / size）
+   */
+  section: string;
+  /**
+   * 给人看的名字
+   */
+  label: string;
+  /**
+   * 来源类别：config 客户端资源 / db 服务端库表
+   */
+  origin: string;
+  /**
+   * 具体文件路径（config）或表名（db）
+   */
+  ref: string;
+  /**
+   * 一句话说明这块能不能改、改了怎么生效
+   */
+  note: string;
 };
 
 export type MapDetail = {
@@ -9835,46 +8928,6 @@ export type MapDetail = {
    * 每一块数据的来源（页面按它渲染徽标）
    */
   sources: MapSource[];
-};
-
-export type MapSpawnAreaDeleted = {
-  /**
-   * 恒为 true（失败会抛 404，不会有 false）
-   */
-  deleted: boolean;
-  /**
-   * 被删掉的行 id
-   */
-  id: number;
-};
-
-export type MapNpcDeleted = {
-  /**
-   * 恒为 true（失败会抛 404，不会有 false）
-   */
-  deleted: boolean;
-  /**
-   * 被删掉的点位行 id
-   */
-  id: number;
-};
-
-export type MapRevivePointCleared = {
-  /**
-   * 恒为 true（本来就没有复活点时也返回 true —— 清空是幂等的）
-   */
-  cleared: boolean;
-};
-
-export type MapCollisionDeleted = {
-  /**
-   * 恒为 true（失败会抛 404，不会有 false）
-   */
-  deleted: boolean;
-  /**
-   * 被删掉的碰撞盒行 id
-   */
-  id: number;
 };
 
 export type MapMonitorMonster = {
@@ -10140,25 +9193,6 @@ export type MapMonitor = {
   cursor: number;
 };
 
-export type MapMonitorQuery = {
-  /**
-   * 区服 id（不传 = 用该图最新的那份快照所在区）
-   */
-  zone?: number;
-  /**
-   * 线（#809：`0` 公共线 / `1`.. 分线 / `i<seq>` 副本；不传 = 公共线）
-   */
-  slot?: string;
-  /**
-   * 事件游标：只取 id 大于它的事件（0 / 不传 = 最新若干条）
-   */
-  since?: number;
-  /**
-   * 本次最多取多少条事件（默认 60，上限 200）
-   */
-  limit?: number;
-};
-
 export type MapReloadResult = {
   /**
    * 请求行 id（重复请求合并时是**同一条**的 id）
@@ -10199,6 +9233,21 @@ export type MapReloadBatch = {
    * 每个存活区一条（房里没人时下个 tick 就执行；有人在则按 plan 排队）
    */
   items: MapReloadResult[];
+};
+
+export type ReloadWorld = {
+  /**
+   * 重载模式：`respawn` = 只重播刷怪区（可等空窗）/ `reload` = 连 AI 运行时一起重载（立刻）
+   */
+  mode: "respawn" | "reload";
+  /**
+   * 线（#809 本刀只支持 `0` 公共线；分线 / 副本是第④刀）
+   */
+  slot?: string;
+  /**
+   * 等空窗的上限（毫秒）。不传 = 出厂 5 分钟；`0` = 立刻强制（房里有人也马上重刷）
+   */
+  forceAfterMs?: number;
 };
 
 export type MapRules = {
@@ -10276,6 +9325,216 @@ export type MapRules = {
   updatedAt: number;
 };
 
+export type SaveMapRules = {
+  /**
+   * 经验倍率（0 ~ 100）
+   */
+  expRate: number;
+  /**
+   * 掉落倍率（0 ~ 100）
+   */
+  dropRate: number;
+  /**
+   * 金钱倍率（0 ~ 100）
+   */
+  moneyRate: number;
+  /**
+   * 允许 PK
+   */
+  allowPk: boolean;
+  /**
+   * 允许自动挂机
+   */
+  allowAutoBattle: boolean;
+  /**
+   * 允许被拉人 / 回城
+   */
+  allowRecall: boolean;
+  /**
+   * 这张图掉不掉东西
+   */
+  allowDrop: boolean;
+  /**
+   * 单房间人数上限（0 = 不限，上限 1000）
+   */
+  maxPlayersPerRoom: number;
+  /**
+   * 分线数量上限（1 ~ 20；1 = 不分线）
+   */
+  maxChannels: number;
+  /**
+   * 传送花费（铜钱，0 ~ 1000000）
+   */
+  transferCostMoney: number;
+  /**
+   * 传送冷却（毫秒，0 ~ 1 小时）
+   */
+  transferCooldownMs: number;
+  /**
+   * 战斗中禁止传送
+   */
+  denyTransferInCombat: boolean;
+  /**
+   * 中间级重生时长（毫秒；传 null = 继承全局 worldRespawnMs）
+   */
+  respawnMsOverride?: unknown | null;
+  /**
+   * 无人时继续跑世界（false = 冻结）
+   */
+  simulateWhenEmpty: boolean;
+};
+
+export type SaveMapConfig = {
+  /**
+   * 地图名称（显示在传送弹窗 / 小地图 / 公告里）
+   */
+  label: string;
+  /**
+   * 地图类型（0 安全地图 / 1 等级地图 / 2 战斗力地图 / 3 战魂地图）
+   */
+  type: "0" | "1" | "2" | "3";
+  /**
+   * 进入所需等级（0 = 不限）
+   */
+  level: number;
+  /**
+   * 进入所需战斗力（0 = 不限）
+   */
+  combat: number;
+  /**
+   * 进入所需战魂阶（0 = 不限）
+   */
+  soulOfWar: number;
+};
+
+export type SaveSpawnArea = {
+  /**
+   * 区域名（同一张图内唯一，运营自己起，如「1号刷怪区」）
+   */
+  name: string;
+  /**
+   * 怪物 key（monsters 表的 id，必须存在）
+   */
+  monsterKey: string;
+  /**
+   * 这一区最多维持多少只（1~200，落库为 max；密度目标以它为基准）
+   */
+  count: number;
+  /**
+   * 高峰系数（0~5，留空 = 1.0；在高峰时段内乘到上限上）
+   */
+  densityPeak?: number;
+  /**
+   * 低谷系数（0~5，留空 = 1.0；不在高峰时段内乘到上限上）
+   */
+  densityOff?: number;
+  /**
+   * 高峰时段（如 "19:00-23:00"，支持跨零点 "22:00-02:00"；留空 = 无峰谷）
+   */
+  peakHours?: string;
+  /**
+   * 区域中心 x（世界坐标；原点 = 地图左上角）
+   */
+  cx: number;
+  /**
+   * 区域中心 y（世界坐标；y 轴向上，故为负）
+   */
+  cy: number;
+  /**
+   * 区域宽（像素，至少 16）
+   */
+  w: number;
+  /**
+   * 区域高（像素，至少 16）
+   */
+  h: number;
+};
+
+export type MapSpawnAreaDeleted = {
+  /**
+   * 恒为 true（失败会抛 404，不会有 false）
+   */
+  deleted: boolean;
+  /**
+   * 被删掉的行 id
+   */
+  id: number;
+};
+
+export type SaveMapNpc = {
+  /**
+   * NPC id（必须在 npcs 表里存在）
+   */
+  npcId: string;
+  /**
+   * 世界坐标 x（原点 = 地图左上角）
+   */
+  cx: number;
+  /**
+   * 世界坐标 y（y 轴向上，故为负）
+   */
+  cy: number;
+};
+
+export type MapNpcDeleted = {
+  /**
+   * 恒为 true（失败会抛 404，不会有 false）
+   */
+  deleted: boolean;
+  /**
+   * 被删掉的点位行 id
+   */
+  id: number;
+};
+
+export type SaveMapCollision = {
+  /**
+   * 矩形中心 x（世界坐标；原点 = 地图左上角）
+   */
+  cx: number;
+  /**
+   * 矩形中心 y（世界坐标；y 轴向上，故为负）
+   */
+  cy: number;
+  /**
+   * 矩形宽（像素，至少 1）
+   */
+  w: number;
+  /**
+   * 矩形高（像素，至少 1）
+   */
+  h: number;
+};
+
+export type MapCollisionDeleted = {
+  /**
+   * 恒为 true（失败会抛 404，不会有 false）
+   */
+  deleted: boolean;
+  /**
+   * 被删掉的碰撞盒行 id
+   */
+  id: number;
+};
+
+export type SaveRevivePoint = {
+  /**
+   * 世界坐标 x（原点 = 地图左上角）
+   */
+  cx: number;
+  /**
+   * 世界坐标 y（y 轴向上，故为负）
+   */
+  cy: number;
+};
+
+export type MapRevivePointCleared = {
+  /**
+   * 恒为 true（本来就没有复活点时也返回 true —— 清空是幂等的）
+   */
+  cleared: boolean;
+};
+
 export type UiEffect = {
   /**
    * 特效 key（升级特效 = upgrade、掉落光效 = light-1~light-6；取值域见 UI_EFFECT_KEYS）
@@ -10328,6 +9587,9 @@ export type UiEffectList = {
    * 全部特效行，按 seed 顺序（= UI_EFFECT_KEYS 登记顺序：升级特效在最前，掉落光效按档排）
    */
   list: UiEffect[];
+};
+
+export type SaveUiEffect = {
 };
 
 export type AudioSetting = {
@@ -10384,129 +9646,948 @@ export type AudioSettingList = {
   list: AudioSetting[];
 };
 
-export type AudioConfigList = {
+export type SaveAudioSetting = {
+};
+
+export type RealtimeTicket = {
   /**
-   * 行数（= 音效 key 数）
+   * 一次性票据（拼到 ws 地址的 ticket 查询参数上）
+   */
+  ticket: string;
+  /**
+   * 有效期（毫秒）；过期后必须重新取票
+   */
+  expiresIn: number;
+};
+
+export type PageMeta = {
+  /**
+   * 总条数
    */
   total: number;
   /**
-   * 全部音效配置，按 AUDIO_KEYS 登记顺序
+   * 当前页码（从 1 开始）
    */
-  list: AudioConfig[];
+  page: number;
+  /**
+   * 每页条数
+   */
+  size: number;
 };
 
-export type ConfigVersion = {
+export type PageQuery = {
   /**
-   * 配置版本号：每次管理端写配置成功 +1（0 = 出厂状态，一次都没改过）
+   * 页码，从 1 开始
    */
-  version: number;
+  page?: number;
+  /**
+   * 每页条数（1~100）
+   */
+  size?: number;
+  /**
+   * 关键字（不同接口含义见其说明）
+   */
+  keyword?: string;
+  /**
+   * 排序字段（取值见各接口说明，未登记的值会退回默认排序）
+   */
+  sort?: string;
+  /**
+   * 排序方向：asc 升序 / desc 降序
+   */
+  order?: "asc" | "desc";
 };
 
-export type ConfigRevision = {
+export type MoneyItemQuery = {
   /**
-   * 版本号（这一层是「第几版」，与 config_version 同一个计数）
+   * 页码，从 1 开始
    */
-  version: number;
+  page?: number;
   /**
-   * 这一层是什么改动（写接口的 operationId，如 adminSkill.update）
+   * 每页条数（1~100）
    */
-  label: string;
+  size?: number;
   /**
-   * payload 字节数（全量配置 JSON；超过 5MB 说明配置该拆了）
+   * 关键字：模糊匹配 id / 名称 / 描述
    */
-  byteSize: number;
+  keyword?: string;
   /**
-   * payload 里有几张配置表
+   * 排序字段（取值见各接口说明，未登记的值会退回默认排序）
    */
-  tableCount: number;
+  sort?: string;
   /**
-   * payload 里一共多少行
+   * 排序方向：asc 升序 / desc 降序
    */
-  rowCount: number;
+  order?: "asc" | "desc";
   /**
-   * 操作人（管理端账号名；同一人 10 秒内的连点会合并成一层）
+   * 只看某种货币（bindGold）
    */
-  createdBy: string;
-  /**
-   * 落层时间（毫秒）
-   */
-  createdAt: number;
+  currency?: string;
 };
 
-export type ConfigRevisionList = {
+export type LevelScrollQuery = {
   /**
-   * 保留的层数（默认 20，`CONFIG_REVISION_RETAIN`）
+   * 页码，从 1 开始
    */
-  total: number;
+  page?: number;
   /**
-   * 按版本号倒序（最新在前）
+   * 每页条数（1~100）
    */
-  list: ConfigRevision[];
+  size?: number;
+  /**
+   * 关键字：模糊匹配 id / 名称 / 描述
+   */
+  keyword?: string;
+  /**
+   * 排序字段（取值见各接口说明，未登记的值会退回默认排序）
+   */
+  sort?: string;
+  /**
+   * 排序方向：asc 升序 / desc 降序
+   */
+  order?: "asc" | "desc";
 };
 
-export type ConfigRevisionTableDiff = {
+export type StatsTrendQuery = {
   /**
-   * 表名（与 config-sync.sql 的节名一致）
+   * 统计天数（含今天），最多 90 天
    */
-  table: string;
-  /**
-   * 这张表在旧版有几行
-   */
-  from: number;
-  /**
-   * 这张表在新版有几行
-   */
-  to: number;
-  /**
-   * 新增行数（改一行也会体现成「一删一加」，所以它是行级不是字段级）
-   */
-  added: number;
-  /**
-   * 删除行数
-   */
-  removed: number;
+  days?: number;
 };
 
-export type ConfigRevisionDiff = {
+export type StatsRecentQuery = {
   /**
-   * 旧版本号
+   * 取多少条
    */
-  from: number;
-  /**
-   * 新版本号
-   */
-  to: number;
-  /**
-   * 有变化的表数（行数一样但值改了也会出现在这个列表里）
-   */
-  changed: number;
-  /**
-   * 逐表差异，只含有变化的表
-   */
-  tables: ConfigRevisionTableDiff[];
+  limit?: number;
 };
 
-export type ConfigRestoreResult = {
+export type AuditQuery = {
   /**
-   * 回滚后的新版本号（回滚本身也是一层新版本，历史不删）
+   * 页码，从 1 开始
    */
-  version: number;
+  page?: number;
   /**
-   * 内容取自哪一层
+   * 每页条数（1~100）
    */
-  restoredFrom: number;
+  size?: number;
   /**
-   * 恢复了多少张表
+   * 关键字：模糊匹配操作人账号名 / 动作（如 password）/ 目标 id / 请求路径
    */
-  tables: number;
+  keyword?: string;
   /**
-   * 恢复了多少行
+   * 排序字段（取值见各接口说明，未登记的值会退回默认排序）
    */
-  rows: number;
+  sort?: string;
   /**
-   * 被跳过的表（payload 里有、当前库里没有的表结构 —— 不做结构迁移，跳过并告警）
+   * 排序方向：asc 升序 / desc 降序
    */
-  skipped: string[];
+  order?: "asc" | "desc";
+  /**
+   * 只看某个操作人的日志（管理员 id）
+   */
+  actorId?: string;
+  /**
+   * 只看某个动作（operationId，取值见 /admin/audit-logs/actions）
+   */
+  action?: string;
+  /**
+   * 目标类型筛选
+   */
+  targetType?: "account" | "role" | "admin" | "announcement" | "mail" | "title" | "soul" | "rank" | "equipment" | "drug" | "item" | "monster" | "npc" | "mall" | "fashion" | "dropTable" | "monsterDrop" | "levelCurve" | "equipmentVariant" | "growthScalar" | "skill" | "status" | "zone" | "guild" | "quest" | "achievement" | "equipAlign" | "equipInAlign" | "map" | "uiEffect" | "audioSetting" | "runtimeParams" | "combatWeights" | "guideSteps" | "equipmentAppearance" | "moneyItem" | "levelScroll" | "config";
+  /**
+   * 只看针对某个目标的日志（目标 id）
+   */
+  targetId?: string;
+  /**
+   * 只看某个来源 IP（**精确匹配**；反向代理下需要 TRUST_PROXY=true 才准）
+   */
+  ip?: string;
+  /**
+   * 只看某个操作人角色
+   */
+  actorRole?: "super_admin" | "admin" | "viewer";
+  /**
+   * 结果筛选：true 只看成功 / false 只看失败
+   */
+  success?: "true" | "false";
+  /**
+   * 起始时间（毫秒时间戳，含）
+   */
+  from?: number;
+  /**
+   * 结束时间（毫秒时间戳，含）
+   */
+  to?: number;
+};
+
+export type EventLogQuery = {
+  /**
+   * 页码，从 1 开始
+   */
+  page?: number;
+  /**
+   * 每页条数（1~100）
+   */
+  size?: number;
+  /**
+   * 关键字：模糊匹配角色名 / 目标 / 载荷
+   */
+  keyword?: string;
+  /**
+   * 排序字段（取值见各接口说明，未登记的值会退回默认排序）
+   */
+  sort?: string;
+  /**
+   * 排序方向：asc 升序 / desc 降序
+   */
+  order?: "asc" | "desc";
+  /**
+   * 事件类型（取值见 /admin/event-logs/types）
+   */
+  type?: string;
+  /**
+   * 只看某个角色（角色 id）
+   */
+  roleId?: string;
+  /**
+   * 只看某个账号（账号 id）
+   */
+  accountId?: string;
+  /**
+   * 只看某张地图（地图 id）
+   */
+  mapId?: string;
+  /**
+   * 结果筛选：true 只看成功 / false 只看失败
+   */
+  success?: "true" | "false";
+  /**
+   * 起始时间（毫秒时间戳，含）
+   */
+  from?: number;
+  /**
+   * 结束时间（毫秒时间戳，含）
+   */
+  to?: number;
+};
+
+export type AccountQuery = {
+  /**
+   * 页码，从 1 开始
+   */
+  page?: number;
+  /**
+   * 每页条数（1~100）
+   */
+  size?: number;
+  /**
+   * 关键字（不同接口含义见其说明）
+   */
+  keyword?: string;
+  /**
+   * 排序字段（取值见各接口说明，未登记的值会退回默认排序）
+   */
+  sort?: string;
+  /**
+   * 排序方向：asc 升序 / desc 降序
+   */
+  order?: "asc" | "desc";
+  /**
+   * 状态筛选
+   */
+  status?: "active" | "disabled";
+};
+
+export type RoleQuery = {
+  /**
+   * 页码，从 1 开始
+   */
+  page?: number;
+  /**
+   * 每页条数（1~100）
+   */
+  size?: number;
+  /**
+   * 关键字（不同接口含义见其说明）
+   */
+  keyword?: string;
+  /**
+   * 排序字段（取值见各接口说明，未登记的值会退回默认排序）
+   */
+  sort?: string;
+  /**
+   * 排序方向：asc 升序 / desc 降序
+   */
+  order?: "asc" | "desc";
+  /**
+   * 限定账号 id（查某账号下的全部角色）
+   */
+  accountId?: string;
+  /**
+   * 在线状态筛选：true 只看在线（账号当前选中的）角色
+   */
+  online?: "true" | "false";
+  /**
+   * 职业筛选
+   */
+  occupation?: "1" | "2" | "3" | "4";
+  /**
+   * 性别筛选
+   */
+  sex?: "1" | "2" | "3";
+  /**
+   * 最低等级（含）
+   */
+  minLevel?: number;
+  /**
+   * 最高等级（含）
+   */
+  maxLevel?: number;
+};
+
+export type AdminQuery = {
+  /**
+   * 页码，从 1 开始
+   */
+  page?: number;
+  /**
+   * 每页条数（1~100）
+   */
+  size?: number;
+  /**
+   * 关键字（不同接口含义见其说明）
+   */
+  keyword?: string;
+  /**
+   * 排序字段（取值见各接口说明，未登记的值会退回默认排序）
+   */
+  sort?: string;
+  /**
+   * 排序方向：asc 升序 / desc 降序
+   */
+  order?: "asc" | "desc";
+  /**
+   * 角色筛选
+   */
+  role?: "super_admin" | "admin" | "viewer";
+};
+
+export type AnnouncementQuery = {
+  /**
+   * 页码，从 1 开始
+   */
+  page?: number;
+  /**
+   * 每页条数（1~100）
+   */
+  size?: number;
+  /**
+   * 关键字：模糊匹配标题与正文
+   */
+  keyword?: string;
+  /**
+   * 排序字段（取值见各接口说明，未登记的值会退回默认排序）
+   */
+  sort?: string;
+  /**
+   * 排序方向：asc 升序 / desc 降序
+   */
+  order?: "asc" | "desc";
+  /**
+   * 级别筛选
+   */
+  level?: "normal" | "important";
+  /**
+   * 启用状态筛选：true 只看启用 / false 只看停用
+   */
+  enabled?: "true" | "false";
+  /**
+   * 生效状态筛选：true 只看生效中 / false 只看不在生效窗口内（含未开始与已过期）
+   */
+  active?: "true" | "false";
+};
+
+export type MailQuery = {
+  /**
+   * 页码，从 1 开始
+   */
+  page?: number;
+  /**
+   * 每页条数（1~100）
+   */
+  size?: number;
+  /**
+   * 关键字：模糊匹配收件邮箱 / 标题 / 收件账号名
+   */
+  keyword?: string;
+  /**
+   * 排序字段（取值见各接口说明，未登记的值会退回默认排序）
+   */
+  sort?: string;
+  /**
+   * 排序方向：asc 升序 / desc 降序
+   */
+  order?: "asc" | "desc";
+  /**
+   * 状态筛选
+   */
+  status?: "pending" | "sending" | "retrying" | "sent" | "failed";
+};
+
+export type TitleQuery = {
+  /**
+   * 页码，从 1 开始
+   */
+  page?: number;
+  /**
+   * 每页条数（1~100）
+   */
+  size?: number;
+  /**
+   * 关键字：模糊匹配名称与描述
+   */
+  keyword?: string;
+  /**
+   * 排序字段（取值见各接口说明，未登记的值会退回默认排序）
+   */
+  sort?: string;
+  /**
+   * 排序方向：asc 升序 / desc 降序
+   */
+  order?: "asc" | "desc";
+  /**
+   * 获得渠道筛选
+   */
+  acquireChannel?: "upgrade" | "grant" | "unavailable";
+};
+
+export type SoulQuery = {
+  /**
+   * 页码，从 1 开始
+   */
+  page?: number;
+  /**
+   * 每页条数（1~100）
+   */
+  size?: number;
+  /**
+   * 关键字：模糊匹配名称与描述
+   */
+  keyword?: string;
+  /**
+   * 排序字段（取值见各接口说明，未登记的值会退回默认排序）
+   */
+  sort?: string;
+  /**
+   * 排序方向：asc 升序 / desc 降序
+   */
+  order?: "asc" | "desc";
+};
+
+export type GrowthScalarQuery = {
+  /**
+   * 页码，从 1 开始
+   */
+  page?: number;
+  /**
+   * 每页条数（1~100）
+   */
+  size?: number;
+  /**
+   * 关键字：模糊匹配参数键与说明
+   */
+  keyword?: string;
+  /**
+   * 排序字段（取值见各接口说明，未登记的值会退回默认排序）
+   */
+  sort?: string;
+  /**
+   * 排序方向：asc 升序 / desc 降序
+   */
+  order?: "asc" | "desc";
+};
+
+export type RankQuery = {
+  /**
+   * 页码，从 1 开始
+   */
+  page?: number;
+  /**
+   * 每页条数（1~100）
+   */
+  size?: number;
+  /**
+   * 关键字：模糊匹配衔名 / 大段名 / 描述
+   */
+  keyword?: string;
+  /**
+   * 排序字段（取值见各接口说明，未登记的值会退回默认排序）
+   */
+  sort?: string;
+  /**
+   * 排序方向：asc 升序 / desc 降序
+   */
+  order?: "asc" | "desc";
+  /**
+   * 按大段名筛（取值：兵卒 / 校尉 / 都尉 / 中郎将 / 将军 / 重号将军 / 公卿 / 王爵 / 神将 / 神话；枚举清单派生自客户端配置，不落 schema 以免中文联合类型进两端生成物）
+   */
+  tier?: string;
+};
+
+export type EquipmentQuery = {
+  /**
+   * 页码，从 1 开始
+   */
+  page?: number;
+  /**
+   * 每页条数（1~100）
+   */
+  size?: number;
+  /**
+   * 关键字：模糊匹配 id 与名称
+   */
+  keyword?: string;
+  /**
+   * 排序字段（取值见各接口说明，未登记的值会退回默认排序）
+   */
+  sort?: string;
+  /**
+   * 排序方向：asc 升序 / desc 降序
+   */
+  order?: "asc" | "desc";
+  /**
+   * 按部位筛（取值：other1 / cloth / other2 / weapon / necklace / ring / accessories / shinguard / helmet / scapular / belt / wristband / shoes；枚举清单派生自客户端配置，不落 schema 以免英文/中文键进两端生成物）
+   */
+  slot?: string;
+  /**
+   * 等级段下限（含）
+   */
+  minLevel?: number;
+  /**
+   * 等级段上限（含）
+   */
+  maxLevel?: number;
+};
+
+export type EquipmentVariantQuery = {
+  /**
+   * 页码，从 1 开始
+   */
+  page?: number;
+  /**
+   * 每页条数（1~100）
+   */
+  size?: number;
+  /**
+   * 关键字：模糊匹配变体 id 与名称
+   */
+  keyword?: string;
+  /**
+   * 排序字段（取值见各接口说明，未登记的值会退回默认排序）
+   */
+  sort?: string;
+  /**
+   * 排序方向：asc 升序 / desc 降序
+   */
+  order?: "asc" | "desc";
+  /**
+   * 只列某个基础件的变体（如 cloth_1；弹窗就靠它）
+   */
+  baseId?: string;
+};
+
+export type DrugQuery = {
+  /**
+   * 页码，从 1 开始
+   */
+  page?: number;
+  /**
+   * 每页条数（1~100）
+   */
+  size?: number;
+  /**
+   * 关键字：模糊匹配 id / 名称 / 描述
+   */
+  keyword?: string;
+  /**
+   * 排序字段（取值见各接口说明，未登记的值会退回默认排序）
+   */
+  sort?: string;
+  /**
+   * 排序方向：asc 升序 / desc 降序
+   */
+  order?: "asc" | "desc";
+};
+
+export type ItemQuery = {
+  /**
+   * 页码，从 1 开始
+   */
+  page?: number;
+  /**
+   * 每页条数（1~100）
+   */
+  size?: number;
+  /**
+   * 关键字：模糊匹配 id / 名称 / 描述
+   */
+  keyword?: string;
+  /**
+   * 排序字段（取值见各接口说明，未登记的值会退回默认排序）
+   */
+  sort?: string;
+  /**
+   * 排序方向：asc 升序 / desc 降序
+   */
+  order?: "asc" | "desc";
+  /**
+   * 按物品大类筛（取值：equipment / drug / material / other；枚举清单派生自客户端配置，不落 schema 以免枚举字面量进两端生成物）
+   */
+  type?: string;
+};
+
+export type MonsterQuery = {
+  /**
+   * 页码，从 1 开始
+   */
+  page?: number;
+  /**
+   * 每页条数（1~100）
+   */
+  size?: number;
+  /**
+   * 关键字：模糊匹配 id 与名称
+   */
+  keyword?: string;
+  /**
+   * 排序字段（取值见各接口说明，未登记的值会退回默认排序）
+   */
+  sort?: string;
+  /**
+   * 排序方向：asc 升序 / desc 降序
+   */
+  order?: "asc" | "desc";
+  /**
+   * 按定位筛（取值：normal / elite / boss；不落 schema 以免枚举键进两端生成物）
+   */
+  tier?: string;
+};
+
+export type NpcQuery = {
+  /**
+   * 页码，从 1 开始
+   */
+  page?: number;
+  /**
+   * 每页条数（1~100）
+   */
+  size?: number;
+  /**
+   * 关键字：模糊匹配 id 与名称
+   */
+  keyword?: string;
+  /**
+   * 排序字段（取值见各接口说明，未登记的值会退回默认排序）
+   */
+  sort?: string;
+  /**
+   * 排序方向：asc 升序 / desc 降序
+   */
+  order?: "asc" | "desc";
+};
+
+export type SkillQuery = {
+  /**
+   * 页码，从 1 开始
+   */
+  page?: number;
+  /**
+   * 每页条数（1~100）
+   */
+  size?: number;
+  /**
+   * 关键字：模糊匹配 id 与技能名
+   */
+  keyword?: string;
+  /**
+   * 排序字段（取值见各接口说明，未登记的值会退回默认排序）
+   */
+  sort?: string;
+  /**
+   * 排序方向：asc 升序 / desc 降序
+   */
+  order?: "asc" | "desc";
+  /**
+   * 归属筛选：role / monster（不传 = 两边都要）
+   */
+  owner?: "role" | "monster";
+};
+
+export type StatusQuery = {
+  /**
+   * 页码，从 1 开始
+   */
+  page?: number;
+  /**
+   * 每页条数（1~100）
+   */
+  size?: number;
+  /**
+   * 关键字：模糊匹配 id 与状态名
+   */
+  keyword?: string;
+  /**
+   * 排序字段（取值见各接口说明，未登记的值会退回默认排序）
+   */
+  sort?: string;
+  /**
+   * 排序方向：asc 升序 / desc 降序
+   */
+  order?: "asc" | "desc";
+  /**
+   * 归属筛选：role / monster（不传 = 两边都要）
+   */
+  owner?: "role" | "monster";
+};
+
+export type QuestQuery = {
+  /**
+   * 页码，从 1 开始
+   */
+  page?: number;
+  /**
+   * 每页条数（1~100）
+   */
+  size?: number;
+  /**
+   * 关键字：模糊匹配 id 与名称
+   */
+  keyword?: string;
+  /**
+   * 排序字段（取值见各接口说明，未登记的值会退回默认排序）
+   */
+  sort?: string;
+  /**
+   * 排序方向：asc 升序 / desc 降序
+   */
+  order?: "asc" | "desc";
+  /**
+   * 类型筛选：main | daily | weekly
+   */
+  kind?: string;
+};
+
+export type MallCatalogQuery = {
+  /**
+   * 页码，从 1 开始
+   */
+  page?: number;
+  /**
+   * 每页条数（1~100）
+   */
+  size?: number;
+  /**
+   * 关键字：模糊匹配 id 与名称
+   */
+  keyword?: string;
+  /**
+   * 排序字段（取值见各接口说明，未登记的值会退回默认排序）
+   */
+  sort?: string;
+  /**
+   * 排序方向：asc 升序 / desc 降序
+   */
+  order?: "asc" | "desc";
+  /**
+   * 物品分类：部位 key（other1 / cloth / other2 / weapon / necklace / ring / accessories / shinguard / helmet / scapular / belt / wristband / shoes）或 drug（药品）；留空 = 全部
+   */
+  category?: string;
+  /**
+   * 精确等级（留空 = 全部等级）
+   */
+  level?: number;
+};
+
+export type MallGoodQuery = {
+  /**
+   * 页码，从 1 开始
+   */
+  page?: number;
+  /**
+   * 每页条数（1~100）
+   */
+  size?: number;
+  /**
+   * 关键字：模糊匹配商品 id 与显示名
+   */
+  keyword?: string;
+  /**
+   * 排序字段（取值见各接口说明，未登记的值会退回默认排序）
+   */
+  sort?: string;
+  /**
+   * 排序方向：asc 升序 / desc 降序
+   */
+  order?: "asc" | "desc";
+  /**
+   * 按分类筛（分类 id）
+   */
+  categoryId?: string;
+  /**
+   * 按部位筛（取值：other1 / cloth / other2 / weapon / necklace / ring / accessories / shinguard / helmet / scapular / belt / wristband / shoes）
+   */
+  slot?: string;
+  /**
+   * 按品类筛：equipment（装备）/ drug（药品）
+   */
+  kind?: string;
+  /**
+   * 按物品等级精确筛（装备等级需求 / 药品等级；留空 = 全部）
+   */
+  level?: number;
+};
+
+export type FashionQuery = {
+  /**
+   * 页码，从 1 开始
+   */
+  page?: number;
+  /**
+   * 每页条数（1~100）
+   */
+  size?: number;
+  /**
+   * 关键字：模糊匹配 id 与名称
+   */
+  keyword?: string;
+  /**
+   * 排序字段（取值见各接口说明，未登记的值会退回默认排序）
+   */
+  sort?: string;
+  /**
+   * 排序方向：asc 升序 / desc 降序
+   */
+  order?: "asc" | "desc";
+  /**
+   * 按获得渠道筛（不落 schema 以免枚举键进两端生成物）
+   */
+  acquireChannel?: "upgrade" | "grant" | "unavailable";
+};
+
+export type MonsterDropQuery = {
+  /**
+   * 页码，从 1 开始
+   */
+  page?: number;
+  /**
+   * 每页条数（1~100）
+   */
+  size?: number;
+  /**
+   * 关键字：模糊匹配怪物 key
+   */
+  keyword?: string;
+  /**
+   * 排序字段（取值见各接口说明，未登记的值会退回默认排序）
+   */
+  sort?: string;
+  /**
+   * 排序方向：asc 升序 / desc 降序
+   */
+  order?: "asc" | "desc";
+  /**
+   * 按来源筛（不落 schema 以免枚举键进两端生成物）
+   */
+  source?: "table" | "entries" | "none";
+};
+
+export type ReportQuery = {
+  /**
+   * 页码，从 1 开始
+   */
+  page?: number;
+  /**
+   * 每页条数（1~100）
+   */
+  size?: number;
+  /**
+   * 关键字：模糊匹配双方角色名或角色 id
+   */
+  keyword?: string;
+  /**
+   * 排序字段（取值见各接口说明，未登记的值会退回默认排序）
+   */
+  sort?: string;
+  /**
+   * 排序方向：asc 升序 / desc 降序
+   */
+  order?: "asc" | "desc";
+  /**
+   * 类别：abuse / cheat / name / other
+   */
+  category?: string;
+  /**
+   * 状态：pending / handled / dismissed
+   */
+  status?: string;
+};
+
+export type LeaderboardQuery = {
+  /**
+   * 页码，从 1 开始
+   */
+  page?: number;
+  /**
+   * 每页条数（默认 20）。上限由服务端配置 `LEADERBOARD_TOP_N` 决定（默认 100）——传得比它大不会报错，会被夹到上限。
+   */
+  size?: number;
+};
+
+export type AchievementQuery = {
+  /**
+   * 页码，从 1 开始
+   */
+  page?: number;
+  /**
+   * 每页条数（1~100）
+   */
+  size?: number;
+  /**
+   * 关键字：模糊匹配 id 与名称
+   */
+  keyword?: string;
+  /**
+   * 排序字段（取值见各接口说明，未登记的值会退回默认排序）
+   */
+  sort?: string;
+  /**
+   * 排序方向：asc 升序 / desc 降序
+   */
+  order?: "asc" | "desc";
+  /**
+   * 分类筛选：battle | growth | explore
+   */
+  category?: string;
+};
+
+export type MapMonitorQuery = {
+  /**
+   * 区服 id（不传 = 用该图最新的那份快照所在区）
+   */
+  zone?: number;
+  /**
+   * 线（#809：`0` 公共线 / `1`.. 分线 / `i<seq>` 副本；不传 = 公共线）
+   */
+  slot?: string;
+  /**
+   * 事件游标：只取 id 大于它的事件（0 / 不传 = 最新若干条）
+   */
+  since?: number;
+  /**
+   * 本次最多取多少条事件（默认 60，上限 200）
+   */
+  limit?: number;
 };
 
 export type ConfigRevisionQuery = {

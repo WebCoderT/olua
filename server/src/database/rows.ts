@@ -42,7 +42,7 @@ export interface AccountRow {
    * 归属区（#295 阶段二）：注册时选定，之后只随「合并区」变化（合并是管理员操作，
    * 玩家自己换不了区）。各区只有一行的世界里，账号的世界就是它归属区的世界。
    */
-  zone_id: number;
+  active_zone_id: number;
   created_at: number;
   updated_at: number;
   last_login_at: number | null;
@@ -68,6 +68,8 @@ export interface WorldMetaRow {
 export interface RoleRow {
   id: string;
   account_id: string;
+  /** 角色所属区（#957）：**区归属的唯一权威**；账号行上的 active_zone_id 只是「当前浏览区」 */
+  zone_id: number;
   name: string;
   occupation: string;
   sex: string;

@@ -5,7 +5,6 @@ import { BizCode } from "../../common/constants/biz-code";
 import { ATTACK_ATTRIBUTES, DEFENSE_BY_ATTACK, MONSTER_STAT_COLUMN, type AttackAttribute } from "../../common/constants/game-enums";
 import { PARTY_EXP_SHARE_DISTANCE_DEFAULT } from "../../common/constants/social";
 import { BizException } from "../../common/errors/biz.exception";
-import { AccountRepository } from "../../database/repositories/account.repository";
 import { DropTableRepository } from "../../database/repositories/drop-table.repository";
 import { GrowthRepository } from "../../database/repositories/growth.repository";
 import { MonsterDropRepository } from "../../database/repositories/monster-drop.repository";
@@ -93,7 +92,6 @@ export class CombatSettlementService {
     private readonly world: WorldService,
     private readonly monsterAi: MonsterAiService,
     private readonly monsterConfigs: MonsterRepository,
-    private readonly accounts: AccountRepository,
     private readonly monsterDrops: MonsterDropRepository,
     private readonly dropTables: DropTableRepository,
     private readonly growth: GrowthRepository,
@@ -665,7 +663,8 @@ export class CombatSettlementService {
     if (target.monsterKey !== cast.monsterKey) {
       return fail("unknown_target", `目标 ${cast.targetId} 是怪物 ${target.monsterKey}，与本次的 ${cast.monsterKey} 不符`);
     }
-    const attackerZone = this.accounts.findById(accountId)?.zone_id ?? 1;
+    // #957：攻击者的区按在线角色算，不再读账号行
+    const attackerZone = this.roles.zoneOf(accountId);
     if (target.zoneId !== attackerZone) {
       return fail("unknown_target", `目标 ${cast.targetId} 不在你所在的世界里`);
     }

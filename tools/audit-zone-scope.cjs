@@ -18,8 +18,9 @@
  *      玩家侧 DTO 不许出现带校验装饰器的 zoneId 字段（只许服务端推导）。
  *   2. zone-scoped 仓储的查询函数签名必须带区（findById / list / count / findByAccount /
  *      findIdsByName / listForLeaderboard 这一批），否则调用方能在编译期就合法地「不带区查」。
- *   3. 已经带 zone_id 列的表（world_monsters / map_monitor_*），SQL 必须真的过滤 zone；
- *      service 层不许解构 dto.zoneId / query.zoneId 当权威。
+ *   3. 已经带 zone_id 列的表（roles / world_monsters / map_monitor_*），**读**它们的 SQL 必须
+ *      真的过滤 zone（写语句与「按主键取一行拼名字」的装饰 join 不算，理由见 tablesIn /
+ *      rolesAreDecorative 的注释）；service 层不许解构 dto.zoneId / query.zoneId 当权威。
  *
  * 判据都是静态的，不需要跑服务。输出风格与 audit-world-authority.cjs 一致：
  * 逐条指名道姓（文件:行 + 方法 + 该怎么做），exit 1。
@@ -60,7 +61,7 @@ const PLAYER_SIDE_EXCLUDE = [path.join("modules", "admin"), path.join("modules",
  * 注意 roles 暂时不在里面（P1 #957 才加列）。加完列**必须**把 roles 加到这里：
  * 脚本下面有「schema 已带 zone_id 但清单没登记」的检查，漏改会红。
  */
-const TABLES_WITH_ZONE = ["world_monsters", "map_monitor_state", "map_monitor_events"];
+const TABLES_WITH_ZONE = ["roles", "world_monsters", "map_monitor_state", "map_monitor_events"];
 
 /**
  * 刻意**不**纳入的表（它们也有 zone_id 列，但按设计允许全局查）：
@@ -72,7 +73,7 @@ const TABLES_WITH_ZONE = ["world_monsters", "map_monitor_state", "map_monitor_ev
  */
 
 /** 将来加列的表：schema 里出现 zone_id 时用来提示「该把谁补进 TABLES_WITH_ZONE」 */
-const TABLES_BECOMING_ZONE_SCOPED = ["roles", "guilds", "role_mails", "announcements"];
+const TABLES_BECOMING_ZONE_SCOPED = ["guilds", "role_mails", "announcements"];
 
 /**
  * zone-scoped 仓储：行属于某个区，按 id/名字取到别区对象就是跨区攻击。
@@ -97,6 +98,7 @@ const ZONE_SCOPED_REPOS = [
  */
 const WATCHED_METHODS = [
   "findById",
+  "findByIdAnyZone",
   "findByIds",
   "findByKey",
   "findByAccount",
@@ -308,13 +310,48 @@ function methodsOf(rawSource) {
   });
 }
 
-/** 方法体里出现的表（FROM / UPDATE / INTO / JOIN 之后那个词） */
+/**
+ * 方法体里出现的表（FROM / INTO / JOIN 之后那个词）
+ *
+ * **不算 `UPDATE <表>`**：这条规则盯的是「**读**出来的行把别区也算进来」，写语句（按主键
+ * `UPDATE roles SET … WHERE id = ?`）写错行由「仓储签名带区 + 上游已解区」保证 —— 上游拿不到
+ * 别区的 id（拿 id 的那一步是 `findById(zoneId, id)`，跨区直接 404）。把写入也算进来只会
+ * 逼出一串「按主键写」的豁免条目，条目一多就没人看，规则等于废掉。
+ * `INTO` 保留：`INSERT INTO roles (…)` 少了 `zone_id` 列是真错，得拦。
+ */
 function tablesIn(body) {
   const found = new Set();
-  const re = /\b(?:FROM|UPDATE|INTO|JOIN)\s+([a-z_][a-z0-9_]*)/gi;
+  const re = /\b(?:FROM|INTO|JOIN)\s+([a-z_][a-z0-9_]*)/gi;
   let m;
   while ((m = re.exec(body))) found.add(m[1].toLowerCase());
   return found;
+}
+
+/**
+ * `roles` 是不是只被当作「按主键取一行的装饰」（标量子查询 / join 到外层已有的外键）
+ *
+ * 形态只有两种，都要求 `ON <别名>.id = …` / `WHERE <别名>.id = …`：
+ *
+ *   COALESCE((SELECT r.name FROM roles r WHERE r.id = g.leader_id), '') AS leader_name
+ *   SELECT m.*, r.name AS role_name FROM guild_members m JOIN roles r ON r.id = m.role_id
+ *
+ * 这类引用捞不出别区的行 —— 行被外层的 id 钉死，最多取到那一行（取不到就是 NULL）。
+ * 它们出现在帮会成员、组队成员、举报列表、审计流水、账号角色数这些「展示用 join」上，
+ * 若也算违规，光靠豁免条目就得好几十条，而真正的漏点会被淹没在噪音里。
+ *
+ * **判据必须「全部引用都是装饰」才算数**：只要方法体里还有一处 `FROM roles` 是裸查
+ * （`SELECT * FROM roles WHERE id = ?`、`SELECT id FROM roles WHERE name = ?`），照旧违规。
+ */
+const ROLE_REF = /\b(?:FROM|JOIN)\s+roles\b/gi;
+const ROLE_PINNED = [
+  /\(\s*SELECT\b[^()]*\bFROM\s+roles\s+(?:AS\s+)?([a-z_]\w*)[^()]*\bWHERE\s+\1\.id\s*=/gi,
+  /\bJOIN\s+roles\s+(?:AS\s+)?([a-z_]\w*)\s+ON\s+\1\.id\s*=/gi,
+];
+function rolesAreDecorative(body) {
+  const refs = (body.match(ROLE_REF) || []).length;
+  if (refs === 0) return false;
+  const pinned = ROLE_PINNED.reduce((total, re) => total + (body.match(re) || []).length, 0);
+  return pinned === refs;
 }
 
 const HAS_ZONE_PARAM = /\bzone(?:Id)?\s*[?:]/;
@@ -347,7 +384,11 @@ for (const file of walk(REPOS)) {
   if (!source) continue;
   for (const method of methodsOf(source)) {
     const tables = tablesIn(method.body);
-    const offending = TABLES_WITH_ZONE.filter((table) => tables.has(table));
+    let offending = TABLES_WITH_ZONE.filter((table) => tables.has(table));
+    // `roles` 只当展览架（按主键取一行拼名字）时不算跨区读 —— 见 rolesAreDecorative
+    if (offending.includes("roles") && rolesAreDecorative(method.body)) {
+      offending = offending.filter((table) => table !== "roles");
+    }
     if (offending.length === 0) continue;
     // 区感知的三种写法：WHERE 里过滤 / INSERT 自己写了 zone_id 列 / upsert 主键含 zone_id
     const zoneAware =

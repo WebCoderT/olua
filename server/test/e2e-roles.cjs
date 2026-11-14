@@ -16,7 +16,7 @@
  *   管理端改等级后立即重算；列表**不带**（只有详情带）；等级 0（脏数据）时如实给 null
  *   （#786 起等级走参数化曲线，末段外推 —— 没有「等级不在表里」这种情形了）
  * · 文档：新接口落在「管理端」分组且带权限点标注
- * · 角色数上限（#878）：一账号 6 个、第 7 个 400 / 20018、`UNIQUE(account_id, name)` 真的在库里
+ * · 角色数上限（#878 / #957）：**每区** 6 个、第 7 个 400 / 20018、`UNIQUE(account_id, zone_id, name)` 真的在库里（旧两列索引已删）
  * · 身份字段独占（#879）：存档改不了 name / occupation / sex（非法职业也不拦存档）
  * · 登出（#880）：吊销该账号全部令牌（另一台设备的也一起失效），重新登录照常
  *
@@ -1018,10 +1018,17 @@ async function raiseLevel(roleId, level, token) {
 
   // 表上的唯一索引：接口层验不出来（应用层查重会先拦），只能直接看 schema
   const db = app.get(DatabaseService);
+  // #957 起唯一键是**三列**：每区各自唯一（同账号跨区同名允许，同区重名仍拦）
   const uniqueIndex = db.all(
-    "SELECT name FROM sqlite_master WHERE type = 'index' AND name = 'idx_roles_account_name'",
+    "SELECT name FROM sqlite_master WHERE type = 'index' AND name = 'idx_roles_account_zone_name'",
   );
-  check(uniqueIndex.length === 1, "UNIQUE(account_id, name) 索引已建立（并发同名由数据库兜底）", JSON.stringify(uniqueIndex));
+  check(
+    uniqueIndex.length === 1,
+    "UNIQUE(account_id, zone_id, name) 索引已建立（并发同名由数据库兜底）",
+    JSON.stringify(uniqueIndex),
+  );
+  const legacyIndex = db.all("SELECT name FROM sqlite_master WHERE type = 'index' AND name = 'idx_roles_account_name'");
+  check(legacyIndex.length === 0, "旧的两列唯一索引已删掉（留着会拦住同账号跨区同名）", JSON.stringify(legacyIndex));
   let duplicateRejected = false;
   let duplicateMessage = "";
   try {

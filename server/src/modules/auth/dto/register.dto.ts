@@ -15,8 +15,10 @@ export class RegisterDto {
   password: string;
 
   /**
-   * 归属区（#295 阶段二）：注册时选定，之后只随合并区变化。
-   * 可省略 —— 老客户端不知道区服，省略时落一区（默认区），行为与区服上线前完全一致。
+   * @deprecated #957 起**注册不再定区**：账号只是身份，角色才属于区。
+   *
+   * 字段留一版只为兼容旧客户端（它会把 zoneId 一起发上来），服务端**忽略**它。
+   * 下一版删；删之前别在服务端读它 —— 读了就等于「区可以由客户端指定」，那正是要堵的路。
    */
   @ApiProperty({ description: "归属区 id（可省略，默认 1 = 一区；活区清单见 GET /zones）", required: false, example: 1 })
   @IsOptional()
