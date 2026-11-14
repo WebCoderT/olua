@@ -206,9 +206,14 @@ async function startServer(env) {
 }
 
 /** 发一次请求，返回 { status, body }（body 是唯一包裹体） */
+/** 管理端请求所在的区（#960）：一个 e2e 进程只在一个区里干活，管理端请求统一带它 */
+const ADMIN_ZONE = 1;
+
 async function api(baseUrl, method, route, options = {}) {
   const headers = { "Content-Type": "application/json" };
   if (options.token) headers.Authorization = `Bearer ${options.token}`;
+  // 管理端单区上下文（#960）：控制台前端在请求拦截器里统一带 X-Zone-Id，测试里对等模拟
+  if (options.zoneId !== undefined) headers["X-Zone-Id"] = String(options.zoneId);
   const response = await fetch(`${baseUrl}${route}`, {
     method,
     headers,
@@ -233,13 +238,13 @@ const revOf = (baseUrl, roleId, token) =>
 
 /** 注册并登录一个管理员，返回 token（第一个注册者自动是超级管理员） */
 async function registerAdmin(baseUrl, username, password) {
-  const login = await api(baseUrl, "POST", "/api/admin/auth/login", { body: { username, password } });
+  const login = await api(baseUrl, "POST", "/api/admin/auth/login", { body: { zoneId: ADMIN_ZONE, username, password } });
   if (login.body?.data?.token) return login.body.data.token;
   const registered = await api(baseUrl, "POST", "/api/admin/auth/register", {
     body: { username, password, registerCode: ADMIN_CODE },
   });
   check(Boolean(registered.body?.data), `注册管理员 ${username}`);
-  const retry = await api(baseUrl, "POST", "/api/admin/auth/login", { body: { username, password } });
+  const retry = await api(baseUrl, "POST", "/api/admin/auth/login", { body: { zoneId: ADMIN_ZONE, username, password } });
   check(Boolean(retry.body?.data?.token), `登录管理员 ${username}`);
   return retry.body?.data?.token;
 }
@@ -363,12 +368,12 @@ async function main() {
     const viewerId = adminList.body?.data?.list?.find((item) => item.username === "gamecfgviewer")?.id;
     const roleSet = await api(base, "PATCH", `/api/admin/admins/${viewerId}`, { token, body: { role: "viewer" } });
     checkEqual(roleSet.status, 200, "观察员角色就位");
-    const viewerLogin = await api(base, "POST", "/api/admin/auth/login", { body: { username: "gamecfgviewer", password: "Viewer#12" } });
+    const viewerLogin = await api(base, "POST", "/api/admin/auth/login", { body: { zoneId: ADMIN_ZONE, username: "gamecfgviewer", password: "Viewer#12" } });
     const viewerToken = viewerLogin.body?.data?.token;
 
-    const viewerRead = await api(base, "GET", "/api/admin/titles", { token: viewerToken });
+    const viewerRead = await api(base, "GET", "/api/admin/titles", { token: viewerToken, zoneId: ADMIN_ZONE });
     checkEqual(viewerRead.body?.code, 0, "观察员能看称号配置");
-    const viewerWrite = await api(base, "PATCH", "/api/admin/titles/1", { token: viewerToken, body: { bindGold: 1 } });
+    const viewerWrite = await api(base, "PATCH", "/api/admin/titles/1", { token: viewerToken, zoneId: ADMIN_ZONE, body: { bindGold: 1 } });
     checkEqual(viewerWrite.status, 403, "观察员改配置 → 403");
     checkEqual(viewerWrite.body?.code, 30006, "观察员改配置 → 30006（权限点不足）");
 
@@ -438,9 +443,9 @@ async function main() {
     checkEqual(JSON.stringify(afterRejoin.body?.data?.map((item) => item.level)), JSON.stringify([1, 3, 2]), "重新加入后列表顺序（追加到尾，不恢复旧位置）");
 
     // 观察员：能看列表，不能重排
-    const viewerUpgradeRead = await api(base, "GET", "/api/admin/titles/upgrade-list", { token: viewerToken });
+    const viewerUpgradeRead = await api(base, "GET", "/api/admin/titles/upgrade-list", { token: viewerToken, zoneId: ADMIN_ZONE });
     checkEqual(viewerUpgradeRead.body?.code, 0, "观察员能看成长列表");
-    const viewerReorder = await api(base, "PATCH", "/api/admin/titles/upgrade-order", { token: viewerToken, body: { levels: [1, 3, 2] } });
+    const viewerReorder = await api(base, "PATCH", "/api/admin/titles/upgrade-order", { token: viewerToken, zoneId: ADMIN_ZONE, body: { levels: [1, 3, 2] } });
     checkEqual(viewerReorder.status, 403, "观察员重排 → 403");
     checkEqual(viewerReorder.body?.code, 30006, "观察员重排 → 30006（权限点不足）");
 
@@ -491,9 +496,9 @@ async function main() {
     checkEqual(soulPriceSeen?.bindGold, 888, "成长列表里的消耗与主列表一致（行内改价走同一份 bindGold）");
 
     // 观察员：能看列表，不能重排
-    const viewerSoulRead = await api(base, "GET", "/api/admin/souls/upgrade-list", { token: viewerToken });
+    const viewerSoulRead = await api(base, "GET", "/api/admin/souls/upgrade-list", { token: viewerToken, zoneId: ADMIN_ZONE });
     checkEqual(viewerSoulRead.body?.code, 0, "观察员能看战魂成长列表");
-    const viewerSoulReorder = await api(base, "PATCH", "/api/admin/souls/upgrade-order", { token: viewerToken, body: { levels: soulLevels } });
+    const viewerSoulReorder = await api(base, "PATCH", "/api/admin/souls/upgrade-order", { token: viewerToken, zoneId: ADMIN_ZONE, body: { levels: soulLevels } });
     checkEqual(viewerSoulReorder.status, 403, "观察员重排战魂 → 403");
     checkEqual(viewerSoulReorder.body?.code, 30006, "观察员重排战魂 → 30006（权限点不足）");
 
@@ -525,7 +530,7 @@ async function main() {
     const curveList = await api(base, "GET", "/api/admin/level-curves", { token });
     checkEqual(curveList.status, 200, "等级曲线可读");
     checkEqual(curveList.body?.data?.list?.length, levelCurveRows.length, "曲线段数 = 配置行数（4 条 × 6 段）");
-    const viewerCurveWrite = await api(base, "PATCH", "/api/admin/level-curves/hp/1", { token: viewerToken, body: { startValue: 1 } });
+    const viewerCurveWrite = await api(base, "PATCH", "/api/admin/level-curves/hp/1", { token: viewerToken, zoneId: ADMIN_ZONE, body: { startValue: 1 } });
     checkEqual(viewerCurveWrite.status, 403, "观察员改曲线 → 403");
     checkEqual(viewerCurveWrite.body?.code, 30006, "观察员改曲线 → 30006（权限点不足）");
 
@@ -573,7 +578,7 @@ async function main() {
     checkEqual(scalarGhost.body?.code, 50014, "标量参数未找到用专属业务码 50014");
     const scalarKeyword = await api(base, "GET", "/api/admin/growth-scalars?keyword=recover", { token });
     checkEqual(scalarKeyword.body?.data?.total, 1, "关键字能命中对应参数");
-    const viewerScalarWrite = await api(base, "PATCH", "/api/admin/growth-scalars/roleMaxLevel", { token: viewerToken, body: { value: 50 } });
+    const viewerScalarWrite = await api(base, "PATCH", "/api/admin/growth-scalars/roleMaxLevel", { token: viewerToken, zoneId: ADMIN_ZONE, body: { value: 50 } });
     checkEqual(viewerScalarWrite.status, 403, "观察员改标量参数 → 403");
     checkEqual(viewerScalarWrite.body?.code, 30006, "观察员改标量参数 → 30006（权限点不足）");
 
@@ -613,7 +618,7 @@ async function main() {
     const runtimeUnknownKey = await api(base, "PATCH", "/api/admin/runtime-params", { token, body: { drop: { bogusParam: 5 } } });
     checkEqual(runtimeUnknownKey.status, 200, "未知字段被白名单剥掉（不报错）");
     checkEqual(runtimeUnknownKey.body?.data?.drop?.autoPickupRadius, 72, "剥掉之后其余值不变");
-    const viewerRuntimeWrite = await api(base, "PATCH", "/api/admin/runtime-params", { token: viewerToken, body: { drop: { autoPickupRadius: 50 } } });
+    const viewerRuntimeWrite = await api(base, "PATCH", "/api/admin/runtime-params", { token: viewerToken, zoneId: ADMIN_ZONE, body: { drop: { autoPickupRadius: 50 } } });
     checkEqual(viewerRuntimeWrite.status, 403, "观察员改运行时参数 → 403");
     checkEqual(viewerRuntimeWrite.body?.code, 30006, "观察员改运行时参数 → 30006（权限点不足）");
     const postRuntime = await api(base, "POST", "/api/admin/runtime-params", { token, body: {} });
@@ -656,7 +661,7 @@ async function main() {
     const weightUnknown = await api(base, "PATCH", "/api/admin/combat-weights", { token, body: { hpRecover: 3 } });
     checkEqual(weightUnknown.status, 200, "未知属性被白名单剥掉（不报错）");
     checkEqual(weightUnknown.body?.data?.weights?.maxHp, weights.maxHp, "剥掉之后其余值不变");
-    const viewerWeightWrite = await api(base, "PATCH", "/api/admin/combat-weights", { token: viewerToken, body: { maxHp: 20 } });
+    const viewerWeightWrite = await api(base, "PATCH", "/api/admin/combat-weights", { token: viewerToken, zoneId: ADMIN_ZONE, body: { maxHp: 20 } });
     checkEqual(viewerWeightWrite.status, 403, "观察员改战斗力权重 → 403");
     checkEqual(viewerWeightWrite.body?.code, 30006, "观察员改战斗力权重 → 30006（权限点不足）");
     const postWeights = await api(base, "POST", "/api/admin/combat-weights", { token, body: {} });
@@ -717,7 +722,7 @@ async function main() {
     checkEqual(guideEmpty.status, 400, "清空步骤 → 400（想关引导是让玩家走完，不是删配置）");
     const guideAfterReject = await api(base, "GET", "/api/admin/guide-steps", { token });
     checkEqual(guideAfterReject.body?.data?.steps?.length, 2, "被拒的提交没有落库（整份不动）");
-    const viewerGuideWrite = await api(base, "PATCH", "/api/admin/guide-steps", { token: viewerToken, body: { steps: twoSteps } });
+    const viewerGuideWrite = await api(base, "PATCH", "/api/admin/guide-steps", { token: viewerToken, zoneId: ADMIN_ZONE, body: { steps: twoSteps } });
     checkEqual(viewerGuideWrite.status, 403, "观察员改引导步骤 → 403");
     checkEqual(viewerGuideWrite.body?.code, 30006, "观察员改引导步骤 → 30006（权限点不足）");
     const postGuide = await api(base, "POST", "/api/admin/guide-steps", { token, body: { steps: twoSteps } });
@@ -763,9 +768,9 @@ async function main() {
     checkEqual(deleteRank.status, 404, "DELETE 军衔 → 404（路由不存在）");
     const rankUpgradeList = await api(base, "GET", "/api/admin/ranks/upgrade-list", { token });
     checkEqual(rankUpgradeList.status, 404, "军衔没有成长列表接口（顺序天然按阶，不需要重排）");
-    const viewerRankRead = await api(base, "GET", "/api/admin/ranks", { token: viewerToken });
+    const viewerRankRead = await api(base, "GET", "/api/admin/ranks", { token: viewerToken, zoneId: ADMIN_ZONE });
     checkEqual(viewerRankRead.body?.code, 0, "观察员能看军衔配置");
-    const viewerRankWrite = await api(base, "PATCH", "/api/admin/ranks/1", { token: viewerToken, body: { bindGold: 1 } });
+    const viewerRankWrite = await api(base, "PATCH", "/api/admin/ranks/1", { token: viewerToken, zoneId: ADMIN_ZONE, body: { bindGold: 1 } });
     checkEqual(viewerRankWrite.status, 403, "观察员改军衔 → 403");
     checkEqual(viewerRankWrite.body?.code, 30006, "观察员改军衔 → 30006（权限点不足）");
 
@@ -887,14 +892,14 @@ async function main() {
     checkEqual(postEquipment.status, 400, "POST 装备缺部位 / 名称 → 400（#773 起路由存在，校验拦下）");
     const deleteEquipment = await api(base, "DELETE", "/api/admin/equipments/cloth_999", { token });
     checkEqual(deleteEquipment.status, 404, "DELETE 不存在的装备 → 404");
-    const viewerEquipmentRead = await api(base, "GET", "/api/admin/equipments", { token: viewerToken });
+    const viewerEquipmentRead = await api(base, "GET", "/api/admin/equipments", { token: viewerToken, zoneId: ADMIN_ZONE });
     checkEqual(viewerEquipmentRead.body?.code, 0, "观察员能看装备配置");
-    const viewerEquipmentWrite = await api(base, "PATCH", "/api/admin/equipments/cloth_14", { token: viewerToken, body: { sellPrice: 1 } });
+    const viewerEquipmentWrite = await api(base, "PATCH", "/api/admin/equipments/cloth_14", { token: viewerToken, zoneId: ADMIN_ZONE, body: { sellPrice: 1 } });
     checkEqual(viewerEquipmentWrite.status, 403, "观察员改装备 → 403");
     checkEqual(viewerEquipmentWrite.body?.code, 30006, "观察员改装备 → 30006（权限点不足）");
-    const viewerEquipmentCreate = await api(base, "POST", "/api/admin/equipments", { token: viewerToken, body: { slot: "cloth", label: "观察员想建" } });
+    const viewerEquipmentCreate = await api(base, "POST", "/api/admin/equipments", { token: viewerToken, zoneId: ADMIN_ZONE, body: { slot: "cloth", label: "观察员想建" } });
     checkEqual(viewerEquipmentCreate.status, 403, "观察员新建装备 → 403");
-    const viewerEquipmentDelete = await api(base, "DELETE", "/api/admin/equipments/cloth_14", { token: viewerToken });
+    const viewerEquipmentDelete = await api(base, "DELETE", "/api/admin/equipments/cloth_14", { token: viewerToken, zoneId: ADMIN_ZONE });
     checkEqual(viewerEquipmentDelete.status, 403, "观察员删除装备 → 403");
 
     //#endregion
@@ -1002,9 +1007,9 @@ async function main() {
     checkEqual(slots.body?.data?.[0]?.order, 0, "排序从 0 起");
     checkEqual(slots.body?.data?.[0]?.label, slotRows[0].label, "槽位名称与种子一致");
 
-    const slotAuthoring = await api(base, "GET", "/api/admin/equipment-slots", { token: viewerToken });
+    const slotAuthoring = await api(base, "GET", "/api/admin/equipment-slots", { token: viewerToken, zoneId: ADMIN_ZONE });
     checkEqual(slotAuthoring.body?.code, 0, "观察员能看槽位表");
-    const slotWriteByViewer = await api(base, "PATCH", "/api/admin/equipment-slots/cloth", { token: viewerToken, body: { label: "衣服改" } });
+    const slotWriteByViewer = await api(base, "PATCH", "/api/admin/equipment-slots/cloth", { token: viewerToken, zoneId: ADMIN_ZONE, body: { label: "衣服改" } });
     checkEqual(slotWriteByViewer.status, 403, "观察员改槽位 → 403");
     const slotPost = await api(base, "POST", "/api/admin/equipment-slots", { token, body: { key: "ghost" } });
     checkEqual(slotPost.status, 404, "POST 槽位 → 404（槽位不能新增）");
@@ -1031,9 +1036,9 @@ async function main() {
     checkEqual(metaRow.prefixLabels?.[0], equipMeta.prefixLabels[0], "前缀文案与种子一致");
     checkEqual(metaRow.suffixLabels?.[0], equipMeta.suffixLabels[0], "后缀文案与种子一致");
     check(metaRow.recycleCurve === undefined, "回收价曲线已从契约里退场（#655 改成逐条 sell_price）");
-    const metaByViewer = await api(base, "GET", "/api/admin/equipment-meta", { token: viewerToken });
+    const metaByViewer = await api(base, "GET", "/api/admin/equipment-meta", { token: viewerToken, zoneId: ADMIN_ZONE });
     checkEqual(metaByViewer.body?.code, 0, "观察员能看装备规则");
-    const metaWriteByViewer = await api(base, "PATCH", "/api/admin/equipment-meta", { token: viewerToken, body: { prefixRates: [1] } });
+    const metaWriteByViewer = await api(base, "PATCH", "/api/admin/equipment-meta", { token: viewerToken, zoneId: ADMIN_ZONE, body: { prefixRates: [1] } });
     checkEqual(metaWriteByViewer.status, 403, "观察员改装备规则 → 403");
 
     const metaAsymmetric = await api(base, "PATCH", "/api/admin/equipment-meta", { token, body: { prefixRates: [1, 1.5], prefixLabels: ["一档"] } });
@@ -1144,9 +1149,9 @@ async function main() {
     checkEqual(postDrug.status, 404, "POST 药品 → 404（路由不存在）");
     const deleteDrug = await api(base, "DELETE", "/api/admin/drugs/drug_hp_1", { token });
     checkEqual(deleteDrug.status, 404, "DELETE 药品 → 404（路由不存在）");
-    const viewerDrugRead = await api(base, "GET", "/api/admin/drugs", { token: viewerToken });
+    const viewerDrugRead = await api(base, "GET", "/api/admin/drugs", { token: viewerToken, zoneId: ADMIN_ZONE });
     checkEqual(viewerDrugRead.body?.code, 0, "观察员能看药品配置");
-    const viewerDrugWrite = await api(base, "PATCH", "/api/admin/drugs/drug_hp_1", { token: viewerToken, body: { effectHp: 1 } });
+    const viewerDrugWrite = await api(base, "PATCH", "/api/admin/drugs/drug_hp_1", { token: viewerToken, zoneId: ADMIN_ZONE, body: { effectHp: 1 } });
     checkEqual(viewerDrugWrite.status, 403, "观察员改药品 → 403");
     checkEqual(viewerDrugWrite.body?.code, 30006, "观察员改药品 → 30006（权限点不足）");
 
@@ -1196,9 +1201,9 @@ async function main() {
     checkEqual(postItem.status, 404, "POST 物品 → 404（路由不存在）");
     const deleteItem = await api(base, "DELETE", "/api/admin/items/material_hide", { token });
     checkEqual(deleteItem.status, 404, "DELETE 物品 → 404（路由不存在）");
-    const viewerItemRead = await api(base, "GET", "/api/admin/items", { token: viewerToken });
+    const viewerItemRead = await api(base, "GET", "/api/admin/items", { token: viewerToken, zoneId: ADMIN_ZONE });
     checkEqual(viewerItemRead.body?.code, 0, "观察员能看物品配置");
-    const viewerItemWrite = await api(base, "PATCH", "/api/admin/items/material_hide", { token: viewerToken, body: { sellPrice: 1 } });
+    const viewerItemWrite = await api(base, "PATCH", "/api/admin/items/material_hide", { token: viewerToken, zoneId: ADMIN_ZONE, body: { sellPrice: 1 } });
     checkEqual(viewerItemWrite.status, 403, "观察员改物品 → 403");
     checkEqual(viewerItemWrite.body?.code, 30006, "观察员改物品 → 30006（权限点不足）");
 
@@ -1370,9 +1375,9 @@ async function main() {
     checkEqual(postMonster.status, 404, "POST 怪物 → 404（路由不存在）");
     const deleteMonster = await api(base, "DELETE", "/api/admin/monsters/1", { token });
     checkEqual(deleteMonster.status, 404, "DELETE 怪物 → 404（路由不存在）");
-    const viewerMonsterRead = await api(base, "GET", "/api/admin/monsters", { token: viewerToken });
+    const viewerMonsterRead = await api(base, "GET", "/api/admin/monsters", { token: viewerToken, zoneId: ADMIN_ZONE });
     checkEqual(viewerMonsterRead.body?.code, 0, "观察员能看怪物配置");
-    const viewerMonsterWrite = await api(base, "PATCH", "/api/admin/monsters/1", { token: viewerToken, body: { maxHp: 1 } });
+    const viewerMonsterWrite = await api(base, "PATCH", "/api/admin/monsters/1", { token: viewerToken, zoneId: ADMIN_ZONE, body: { maxHp: 1 } });
     checkEqual(viewerMonsterWrite.status, 403, "观察员改怪物 → 403");
     checkEqual(viewerMonsterWrite.body?.code, 30006, "观察员改怪物 → 30006（权限点不足）");
 
@@ -1442,9 +1447,9 @@ async function main() {
     checkEqual(postNpc.status, 404, "POST NPC → 404（路由不存在）");
     const deleteNpc = await api(base, "DELETE", "/api/admin/npcs/0002", { token });
     checkEqual(deleteNpc.status, 404, "DELETE NPC → 404（路由不存在）");
-    const viewerNpcRead = await api(base, "GET", "/api/admin/npcs", { token: viewerToken });
+    const viewerNpcRead = await api(base, "GET", "/api/admin/npcs", { token: viewerToken, zoneId: ADMIN_ZONE });
     checkEqual(viewerNpcRead.body?.code, 0, "观察员能看 NPC 配置");
-    const viewerNpcWrite = await api(base, "PATCH", "/api/admin/npcs/0002", { token: viewerToken, body: { label: "x" } });
+    const viewerNpcWrite = await api(base, "PATCH", "/api/admin/npcs/0002", { token: viewerToken, zoneId: ADMIN_ZONE, body: { label: "x" } });
     checkEqual(viewerNpcWrite.status, 403, "观察员改 NPC → 403");
     checkEqual(viewerNpcWrite.body?.code, 30006, "观察员改 NPC → 30006（权限点不足）");
 
@@ -1632,12 +1637,12 @@ async function main() {
     checkEqual(mallCatDelete3.body?.code, 50025, "分类不存在用 50025");
 
     // 观察员：能读，不能写（分类与商品两条链都要挡）
-    const viewerMallRead = await api(base, "GET", "/api/admin/mall/categories", { token: viewerToken });
+    const viewerMallRead = await api(base, "GET", "/api/admin/mall/categories", { token: viewerToken, zoneId: ADMIN_ZONE });
     checkEqual(viewerMallRead.body?.code, 0, "观察员能看分类");
-    const viewerMallCatWrite = await api(base, "POST", "/api/admin/mall/categories", { token: viewerToken, body: { label: "x" } });
+    const viewerMallCatWrite = await api(base, "POST", "/api/admin/mall/categories", { token: viewerToken, zoneId: ADMIN_ZONE, body: { label: "x" } });
     checkEqual(viewerMallCatWrite.status, 403, "观察员建分类 → 403");
     checkEqual(viewerMallCatWrite.body?.code, 30006, "观察员建分类 → 30006（权限点不足）");
-    const viewerMallGoodWrite = await api(base, "POST", "/api/admin/mall/goods", { token: viewerToken, body: { id: "cloth_1", categoryId: "default" } });
+    const viewerMallGoodWrite = await api(base, "POST", "/api/admin/mall/goods", { token: viewerToken, zoneId: ADMIN_ZONE, body: { id: "cloth_1", categoryId: "default" } });
     checkEqual(viewerMallGoodWrite.status, 403, "观察员上架 → 403");
 
     //#endregion
@@ -1737,9 +1742,9 @@ async function main() {
     checkEqual(postFashion.status, 404, "POST 时装 → 404（路由不存在）");
     const deleteFashion = await api(base, "DELETE", "/api/admin/fashions/cloth_2", { token });
     checkEqual(deleteFashion.status, 404, "DELETE 时装 → 404（路由不存在）");
-    const viewerFashionRead = await api(base, "GET", "/api/admin/fashions", { token: viewerToken });
+    const viewerFashionRead = await api(base, "GET", "/api/admin/fashions", { token: viewerToken, zoneId: ADMIN_ZONE });
     checkEqual(viewerFashionRead.body?.code, 0, "观察员能看时装配置");
-    const viewerFashionWrite = await api(base, "PATCH", "/api/admin/fashions/cloth_2", { token: viewerToken, body: { sellPrice: 1 } });
+    const viewerFashionWrite = await api(base, "PATCH", "/api/admin/fashions/cloth_2", { token: viewerToken, zoneId: ADMIN_ZONE, body: { sellPrice: 1 } });
     checkEqual(viewerFashionWrite.status, 403, "观察员改时装 → 403");
     checkEqual(viewerFashionWrite.body?.code, 30006, "观察员改时装 → 30006（权限点不足）");
 
@@ -1873,12 +1878,12 @@ async function main() {
     checkEqual(postMonsterDrop.status, 404, "POST 每怪掉落 → 404（路由不存在，行与怪物一一对应）");
     const deleteMonsterDrop = await api(base, "DELETE", "/api/admin/monster-drops/1", { token });
     checkEqual(deleteMonsterDrop.status, 404, "DELETE 每怪掉落 → 404（路由不存在）");
-    const viewerDropRead = await api(base, "GET", "/api/admin/drop-tables", { token: viewerToken });
+    const viewerDropRead = await api(base, "GET", "/api/admin/drop-tables", { token: viewerToken, zoneId: ADMIN_ZONE });
     checkEqual(viewerDropRead.body?.code, 0, "观察员能看具名掉落表");
-    const viewerDropWrite = await api(base, "POST", "/api/admin/drop-tables", { token: viewerToken, body: { id: "nope", entries: [{ goodId: "material_iron" }] } });
+    const viewerDropWrite = await api(base, "POST", "/api/admin/drop-tables", { token: viewerToken, zoneId: ADMIN_ZONE, body: { id: "nope", entries: [{ goodId: "material_iron" }] } });
     checkEqual(viewerDropWrite.status, 403, "观察员建具名表 → 403");
     checkEqual(viewerDropWrite.body?.code, 30006, "观察员建具名表 → 30006（权限点不足）");
-    const viewerMonsterDropWrite = await api(base, "PATCH", "/api/admin/monster-drops/1", { token: viewerToken, body: { tableId: null, entries: null } });
+    const viewerMonsterDropWrite = await api(base, "PATCH", "/api/admin/monster-drops/1", { token: viewerToken, zoneId: ADMIN_ZONE, body: { tableId: null, entries: null } });
     checkEqual(viewerMonsterDropWrite.status, 403, "观察员改每怪掉落 → 403");
 
     // #584：怪物列表直接带掉落摘要（管理端视角），弹窗回填走单条详情
@@ -1896,7 +1901,7 @@ async function main() {
     const dropDetailGhost = await api(base, "GET", "/api/admin/monster-drops/999", { token });
     checkEqual(dropDetailGhost.status, 404, "查不存在的怪掉落 → 404");
     checkEqual(dropDetailGhost.body?.code, 50024, "怪物掉落未找到用 50024");
-    const viewerDropDetail = await api(base, "GET", "/api/admin/monster-drops/1", { token: viewerToken });
+    const viewerDropDetail = await api(base, "GET", "/api/admin/monster-drops/1", { token: viewerToken, zoneId: ADMIN_ZONE });
     checkEqual(viewerDropDetail.body?.code, 0, "观察员能看单条掉落详情（只读）");
 
     //#endregion
@@ -2106,15 +2111,15 @@ async function main() {
 
     // #605：战力权重进了配置表 —— 服务端算战力必须读配置（覆盖层），不能还用编译期常量。
     // 探针是「角色详情里的派生战力」（服务端现算）：翻倍生命权重 → 必须变大；还原 → 必须回原值。
-    const combatBefore = (await api(base, "GET", `/api/admin/roles/${growthRoleId}`, { token })).body?.data?.derived?.attributes?.combat;
+    const combatBefore = (await api(base, "GET", `/api/admin/roles/${growthRoleId}`, { token, zoneId: ADMIN_ZONE })).body?.data?.derived?.attributes?.combat;
     check(Number.isFinite(combatBefore) && combatBefore > 0, "角色详情能算出战力（结算探针）", String(combatBefore));
     const heavierWeights = await api(base, "PATCH", "/api/admin/combat-weights", { token, body: { maxHp: weights.maxHp * 2 } });
     checkEqual(heavierWeights.status, 200, "把生命权重翻倍");
-    const combatAfter = (await api(base, "GET", `/api/admin/roles/${growthRoleId}`, { token })).body?.data?.derived?.attributes?.combat;
+    const combatAfter = (await api(base, "GET", `/api/admin/roles/${growthRoleId}`, { token, zoneId: ADMIN_ZONE })).body?.data?.derived?.attributes?.combat;
     check(combatAfter > combatBefore, "生命权重翻倍后服务端算的战力立刻变大（结算读库、不是常量）", `${combatBefore} → ${combatAfter}`);
     const weightBackToSeed = await api(base, "PATCH", "/api/admin/combat-weights", { token, body: { maxHp: weights.maxHp } });
     checkEqual(weightBackToSeed.status, 200, "还原生命权重");
-    const combatRestored = (await api(base, "GET", `/api/admin/roles/${growthRoleId}`, { token })).body?.data?.derived?.attributes?.combat;
+    const combatRestored = (await api(base, "GET", `/api/admin/roles/${growthRoleId}`, { token, zoneId: ADMIN_ZONE })).body?.data?.derived?.attributes?.combat;
     checkEqual(combatRestored, combatBefore, "还原后战力回到原值（覆盖层不是一次性的）");
 
     // seed 后全部称号渠道 unavailable → 升级链为空 → 即使 0 阶也没有下一阶
@@ -2150,6 +2155,7 @@ async function main() {
     // 同时为乐观锁用例制造一个旧 revision（PATCH 同样推进修订号）
     const rich = await api(base, "PATCH", `/api/admin/roles/${growthRoleId}`, {
       token,
+      zoneId: ADMIN_ZONE,
       body: { bindGold: 999999999 },
     });
     checkEqual(rich.status, 200, "管理端给成长线角色充值绑定元宝（账本只有服务端写点）");
@@ -2260,7 +2266,7 @@ async function main() {
     for (let row = 0; row < 4; row++) {
       for (let col = 0; col < 6; col++) fullBagCells.push({ row, col, id: "cloth_1_p0s0", count: 1 });
     }
-    const stuffedMall = await api(base, "PATCH", `/api/admin/roles/${mallRoleId}`, { token, body: { bag: fullBagCells } });
+    const stuffedMall = await api(base, "PATCH", `/api/admin/roles/${mallRoleId}`, { token, zoneId: ADMIN_ZONE, body: { bag: fullBagCells } });
     checkEqual(stuffedMall.status, 200, "管理端把背包塞满（4×6 全满）");
 
     // #758：先上架（默认分类、售价 777）—— 不在上架清单里的商品购买直接 404
@@ -2281,6 +2287,7 @@ async function main() {
     // 背包满 → 20012（先于绑定元宝不足：入包前先扣费的设计下顺序是 价→钱→包，但这里钱也不足……先充值再测满包）
     const richMall = await api(base, "PATCH", `/api/admin/roles/${mallRoleId}`, {
       token,
+      zoneId: ADMIN_ZONE,
       body: { bindGold: 999999999 },
     });
     checkEqual(richMall.status, 200, "管理端充值到 999999999（背包仍是满的）");
@@ -2294,6 +2301,7 @@ async function main() {
     // 腾出背包 + 归零：账本只有服务端写点（#548），所以走管理端 PATCH 的稀疏背包（空数组 = 清空）
     const emptied = await api(base, "PATCH", `/api/admin/roles/${mallRoleId}`, {
       token,
+      zoneId: ADMIN_ZONE,
       body: { bindGold: 0, bag: [] },
     });
     checkEqual(emptied.status, 200, "管理端清空背包 + 归零绑定元宝（故意不足）");
@@ -2310,6 +2318,7 @@ async function main() {
 
     const recharge = await api(base, "PATCH", `/api/admin/roles/${mallRoleId}`, {
       token,
+      zoneId: ADMIN_ZONE,
       body: { bindGold: 1000 },
     });
     checkEqual(recharge.status, 200, "管理端充 1000 绑定元宝");
@@ -2362,6 +2371,7 @@ async function main() {
     checkEqual(drugListed.body?.data?.slot, "", "药品没有部位（管理端该显示「药品」而不是空部位）");
     const drugReady = await api(base, "PATCH", `/api/admin/roles/${mallRoleId}`, {
       token,
+      zoneId: ADMIN_ZONE,
       body: { bindGold: 100, bag: [] },
     });
     const drugBuy1 = await api(base, "POST", `/api/roles/${mallRoleId}/mall-purchase`, {
@@ -2405,10 +2415,11 @@ async function main() {
     const drugRoleId = drugCreate.body?.data?.id;
     const drugSeed = await api(base, "PATCH", `/api/admin/roles/${drugRoleId}`, {
       token,
+      zoneId: ADMIN_ZONE,
       body: { bag: [{ row: 0, col: 0, id: "drug_hp_1", count: 2 }] },
     });
     checkEqual(drugSeed.status, 200, "管理端摆两瓶金创药（(0,0) x2）");
-    const drugLow = await api(base, "PATCH", `/api/admin/roles/${drugRoleId}`, { token, body: { hp: 10 } });
+    const drugLow = await api(base, "PATCH", `/api/admin/roles/${drugRoleId}`, { token, zoneId: ADMIN_ZONE, body: { hp: 10 } });
     checkEqual(drugLow.status, 200, "血量压到 10（管理端旁路，供「10 + 60」断言用）");
     const drugFresh = await api(base, "GET", `/api/roles/${drugRoleId}`, { token: drugPlayer });
     checkEqual(drugFresh.status, 200, "取到最新存档（后续用药的 revision 基线）");
@@ -2454,6 +2465,7 @@ async function main() {
     // 所以「摆一格药」要走管理端结构化编辑，PUT 只负责改血量
     const refillPlaced = await api(base, "PATCH", `/api/admin/roles/${drugRoleId}`, {
       token,
+      zoneId: ADMIN_ZONE,
       body: { bag: [{ row: 0, col: 0, id: "drug_hp_1", count: 1 }] },
     });
     checkEqual(refillPlaced.status, 200, "补一格药（管理端摆格，血量保持已满）");
@@ -2477,10 +2489,11 @@ async function main() {
     check(Number(drugMaxHp) > 0, "前置：拿得到服务端重算的 maxHp", JSON.stringify(drugMaxHp));
     const sunPlaced = await api(base, "PATCH", `/api/admin/roles/${drugRoleId}`, {
       token,
+      zoneId: ADMIN_ZONE,
       body: { bag: [{ row: 0, col: 1, id: "drug_sun", count: 1 }] },
     });
     checkEqual(sunPlaced.status, 200, "摆好太阳水（管理端摆格，血满蓝低）");
-    const sunSave = await api(base, "PATCH", `/api/admin/roles/${drugRoleId}`, { token, body: { hp: drugMaxHp, mp: 10 } });
+    const sunSave = await api(base, "PATCH", `/api/admin/roles/${drugRoleId}`, { token, zoneId: ADMIN_ZONE, body: { hp: drugMaxHp, mp: 10 } });
     checkEqual(sunSave.status, 200, "血量顶满、魔法压到 10（管理端旁路）");
     const sunFresh = await api(base, "GET", `/api/roles/${drugRoleId}`, { token: drugPlayer });
     const sunUsed = await api(base, "POST", `/api/roles/${drugRoleId}/drug-use`, {
@@ -2500,11 +2513,13 @@ async function main() {
     const drugMaxMp = drugFresh.body?.data?.data?.maxMp;
     const fullPlaced = await api(base, "PATCH", `/api/admin/roles/${drugRoleId}`, {
       token,
+      zoneId: ADMIN_ZONE,
       body: { bag: [{ row: 0, col: 0, id: "drug_hp_1", count: 2 }] },
     });
     checkEqual(fullPlaced.status, 200, "摆好满血满蓝 + 一格药（管理端摆格）");
     const fullSave = await api(base, "PATCH", `/api/admin/roles/${drugRoleId}`, {
       token,
+      zoneId: ADMIN_ZONE,
       body: { hp: drugMaxHp, mp: drugMaxMp },
     });
     const fullFresh = await api(base, "GET", `/api/roles/${drugRoleId}`, { token: drugPlayer });
@@ -2522,6 +2537,7 @@ async function main() {
     // 目标不合法：非药品格子 / 空格子 / 坐标越界
     const equipPlaced = await api(base, "PATCH", `/api/admin/roles/${drugRoleId}`, {
       token,
+      zoneId: ADMIN_ZONE,
       body: { bag: [{ row: 1, col: 0, id: "cloth_1_p0s0", count: 1 }] },
     });
     checkEqual(equipPlaced.status, 200, "摆好一格装备（管理端摆格）");
@@ -2704,9 +2720,9 @@ async function main() {
     checkEqual(deleteStatus.status, 404, "DELETE 状态 → 404（路由不存在）");
 
     // —— 权限：观察员可读不可写 ——
-    const viewerSkillRead = await api(base, "GET", "/api/admin/skills", { token: viewerToken });
+    const viewerSkillRead = await api(base, "GET", "/api/admin/skills", { token: viewerToken, zoneId: ADMIN_ZONE });
     checkEqual(viewerSkillRead.body?.code, 0, "观察员能看技能配置");
-    const viewerSkillWrite = await api(base, "PATCH", "/api/admin/skills/1000", { token: viewerToken, body: { label: "x" } });
+    const viewerSkillWrite = await api(base, "PATCH", "/api/admin/skills/1000", { token: viewerToken, zoneId: ADMIN_ZONE, body: { label: "x" } });
     checkEqual(viewerSkillWrite.status, 403, "观察员改技能 → 403");
     checkEqual(viewerSkillWrite.body?.code, 30006, "观察员改技能 → 30006（权限点不足）");
 

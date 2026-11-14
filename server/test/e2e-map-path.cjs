@@ -119,9 +119,14 @@ async function startServer(dbPath) {
   throw new Error("等待服务启动超时");
 }
 
+/** 管理端请求所在的区（#960）：一个 e2e 进程只在一个区里干活，管理端请求统一带它 */
+const ADMIN_ZONE = 1;
+
 async function api(baseUrl, method, route, options = {}) {
   const headers = { "Content-Type": "application/json" };
   if (options.token) headers.Authorization = `Bearer ${options.token}`;
+  // 管理端单区上下文（#960）：控制台前端在请求拦截器里统一带 X-Zone-Id，测试里对等模拟
+  if (options.zoneId !== undefined) headers["X-Zone-Id"] = String(options.zoneId);
   const response = await fetch(`${baseUrl}/api/${route}`, {
     method,
     headers,
@@ -254,7 +259,7 @@ function polylineLength(points) {
       body: { username: "gm_path", password: "pass1234", registerCode: ADMIN_CODE },
     });
     const adminToken = adminReg.body?.data?.token;
-    const runtimeParams = await api(baseUrl, "GET", "admin/runtime-params", { token: adminToken });
+    const runtimeParams = await api(baseUrl, "GET", "admin/runtime-params", { token: adminToken, zoneId: ADMIN_ZONE });
     const cellSize = runtimeParams.body?.data?.autoBattle?.cellSize;
     const clearance = runtimeParams.body?.data?.autoBattle?.clearance;
     check(cellSize > 0 && clearance >= 0, "准备：拿到客户端同一组网格参数（auto_battle.cellSize / clearance）", `cellSize=${cellSize} clearance=${clearance}`);
@@ -347,7 +352,7 @@ function polylineLength(points) {
     group("七、格参数改了立刻生效（读 auto_battle，没有第二份常量）");
     {
       const before = await session.requestPath("1", { x: 1200, y: -1200 });
-      const patched = await api(baseUrl, "PATCH", "admin/runtime-params", { token: adminToken, body: { autoBattle: { cellSize: 80 } } });
+      const patched = await api(baseUrl, "PATCH", "admin/runtime-params", { token: adminToken, zoneId: ADMIN_ZONE, body: { autoBattle: { cellSize: 80 } } });
       check(patched.body?.data?.autoBattle?.cellSize === 80, "cellSize 改成 80");
       const after = await session.requestPath("1", { x: 1200, y: -1200 });
       check(!!after && after.unreachable === false, "换格尺寸后照样能算出路");
@@ -355,7 +360,7 @@ function polylineLength(points) {
       const onEighty = centers.every((point) => Math.abs((point.x - 40) % 80) < 0.01 || Math.abs(point.x % 80) < 0.01);
       check(centers.length === 0 || onEighty, "中间路点变成 80 格心（没有缓存旧网格）", `points=${centers.length}`);
       check(!!before, "（对照）改之前也算出过路");
-      await api(baseUrl, "PATCH", "admin/runtime-params", { token: adminToken, body: { autoBattle: { cellSize: 40 } } });
+      await api(baseUrl, "PATCH", "admin/runtime-params", { token: adminToken, zoneId: ADMIN_ZONE, body: { autoBattle: { cellSize: 40 } } });
     }
     //#endregion
   } finally {

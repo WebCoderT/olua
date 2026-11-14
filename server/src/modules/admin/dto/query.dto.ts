@@ -136,11 +136,12 @@ export class StatsRecentQueryDto {
  * `online` 传字符串是为了绕开隐式转换的坑（见 RoleQueryDto.online 注释）；
  * 等级区间写反了（min > max）直接报参数错误，否则会得到一个「莫名其妙空」的列表。
  */
-export function roleFilterOf(query: RoleQueryDto): RoleFilter {
+export function roleFilterOf(query: RoleQueryDto, zoneId: number): RoleFilter {
   if (query.minLevel !== undefined && query.maxLevel !== undefined && query.minLevel > query.maxLevel) {
     throw new BizException(BizCode.PARAM_INVALID, "最低等级不能大于最高等级");
   }
   return {
+    zoneId,
     keyword: query.keyword?.trim() || undefined,
     accountId: query.accountId?.trim() || undefined,
     online: query.online === undefined ? undefined : query.online === "true",

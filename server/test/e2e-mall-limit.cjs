@@ -110,9 +110,14 @@ async function startServer(dbPath) {
   throw new Error("等待服务启动超时");
 }
 
+/** 管理端请求所在的区（#960）：一个 e2e 进程只在一个区里干活，管理端请求统一带它 */
+const ADMIN_ZONE = 1;
+
 async function api(baseUrl, method, route, options = {}) {
   const headers = { "Content-Type": "application/json" };
   if (options.token) headers.Authorization = `Bearer ${options.token}`;
+  // 管理端单区上下文（#960）：控制台前端在请求拦截器里统一带 X-Zone-Id，测试里对等模拟
+  if (options.zoneId !== undefined) headers["X-Zone-Id"] = String(options.zoneId);
   const response = await fetch(`${baseUrl}/api/${route}`, {
     method,
     headers,
@@ -135,7 +140,7 @@ async function revOf(baseUrl, roleId, token) {
 
 async function registerAdmin(baseUrl, username, password) {
   await api(baseUrl, "POST", "admin/auth/register", { body: { username, password, registerCode: ADMIN_CODE } });
-  const login = await api(baseUrl, "POST", "admin/auth/login", { body: { username, password } });
+  const login = await api(baseUrl, "POST", "admin/auth/login", { body: { zoneId: ADMIN_ZONE, username, password } });
   return login.data && login.data.token;
 }
 
@@ -188,7 +193,7 @@ function countOf(bag, goodId) {
 
     /** 钱包（绑定元宝是唯一货币：#304 商城只扣 bindGold） */
     const setBindGold = async (id, bindGold) => {
-      const result = await api(baseUrl, "PATCH", `admin/roles/${id}`, { token: adminToken, body: { bindGold } });
+      const result = await api(baseUrl, "PATCH", `admin/roles/${id}`, { token: adminToken, zoneId: ADMIN_ZONE, body: { bindGold } });
       check(result.code === 0, `准备：角色 ${id} 绑定元宝置为 ${bindGold}`, result.message);
     };
     /**
@@ -198,7 +203,7 @@ function countOf(bag, goodId) {
      */
     const seedBag = async (id, label) => {
       const result = await api(baseUrl, "PATCH", `admin/roles/${id}`, {
-        token: adminToken,
+        token: adminToken, zoneId: ADMIN_ZONE,
         body: { bag: [{ row: 3, col: 5, id: "cloth_1_p0s0", count: 1 }] },
       });
       check(result.code === 0, `准备：${label} 背包铺出 4×6 网格`, result.message);
@@ -211,7 +216,7 @@ function countOf(bag, goodId) {
     await seedBag(roleId, "囤货的");
     await seedBag(roleId2, "后来的");
 
-    const category = await api(baseUrl, "POST", "admin/mall/categories", { token: adminToken, body: { label: "限购测试" } });
+    const category = await api(baseUrl, "POST", "admin/mall/categories", { token: adminToken, zoneId: ADMIN_ZONE, body: { label: "限购测试" } });
     const categoryId = category.data && category.data.id;
     check(category.code === 0 && !!categoryId, "准备：商城分类已建", category.message);
 
@@ -219,14 +224,14 @@ function countOf(bag, goodId) {
     const GOOD = "cloth_1_p0s1";
     const listGood = async (body) => {
       const result = await api(baseUrl, "POST", "admin/mall/goods", {
-        token: adminToken,
+        token: adminToken, zoneId: ADMIN_ZONE,
         body: { id: GOOD, categoryId, price: PRICE, ...body },
       });
       check(result.code === 0, `准备：上架 ${JSON.stringify(body)}`, result.message);
       return result.data;
     };
     const patchGood = async (body) => {
-      const result = await api(baseUrl, "PATCH", `admin/mall/goods/${GOOD}`, { token: adminToken, body });
+      const result = await api(baseUrl, "PATCH", `admin/mall/goods/${GOOD}`, { token: adminToken, zoneId: ADMIN_ZONE, body });
       check(result.code === 0, `准备：改商品 ${JSON.stringify(body)}`, result.message);
       return result.data;
     };
@@ -335,7 +340,7 @@ function countOf(bag, goodId) {
     const zero = await buy(roleId2, token2);
     checkEqual(zero.code, 50030, "库存改成 0 = 立刻停售（50030，不用等下架）");
 
-    const reset = await api(baseUrl, "POST", `admin/mall/goods/${GOOD}/stock-reset`, { token: adminToken });
+    const reset = await api(baseUrl, "POST", `admin/mall/goods/${GOOD}/stock-reset`, { token: adminToken, zoneId: ADMIN_ZONE });
     checkEqual(reset.code, 0, "管理端重置库存成功");
     checkEqual(reset.data && reset.data.sold, 0, "重置后已售归零");
     await patchGood({ stock: 1 });
@@ -344,12 +349,12 @@ function countOf(bag, goodId) {
     checkEqual(afterReset.data && afterReset.data.sold, 1, "新一轮从 1 开始计数");
 
     // 下架应该把已售一起清掉：否则重新上架会沿用旧 sold，配个小 stock 就「刚上架就售罄」
-    const del = await api(baseUrl, "DELETE", `admin/mall/goods/${GOOD}`, { token: adminToken });
+    const del = await api(baseUrl, "DELETE", `admin/mall/goods/${GOOD}`, { token: adminToken, zoneId: ADMIN_ZONE });
     checkEqual(del.code, 0, "下架成功");
     await listGood({ dailyLimit: 0, stock: 5 });
     // 断言不能只看上架接口的回执（新建行的 sold 恒 0，那样改不改 resetStock 都绿）：
     // 真读一次管理端列表与玩家侧只读视图，两处都得是 0
-    const relistPage = await api(baseUrl, "GET", "admin/mall/goods", { token: adminToken });
+    const relistPage = await api(baseUrl, "GET", "admin/mall/goods", { token: adminToken, zoneId: ADMIN_ZONE });
     const relistRow = ((relistPage.data && relistPage.data.list) || []).find((entry) => entry.id === GOOD) || {};
     checkEqual(relistRow.sold, 0, "**下架再上架 sold 归零**（重新上架 = 新的一轮，管理端列表真读库）");
     const relistView = await limitsOf(roleId2, token2);
@@ -398,7 +403,7 @@ function countOf(bag, goodId) {
     for (let row = 0; row < 4; row += 1) {
       for (let col = 0; col < 6; col += 1) FULL_BAG.push({ row, col, id: "cloth_1_p0s0", count: 1 });
     }
-    const stuffed = await api(baseUrl, "PATCH", `admin/roles/${roleId}`, { token: adminToken, body: { bag: FULL_BAG } });
+    const stuffed = await api(baseUrl, "PATCH", `admin/roles/${roleId}`, { token: adminToken, zoneId: ADMIN_ZONE, body: { bag: FULL_BAG } });
     checkEqual(stuffed.code, 0, "管理端把背包塞满（4×6 全满）");
 
     const failBuy = await buy(roleId, token);
@@ -409,7 +414,7 @@ function countOf(bag, goodId) {
     checkEqual(await bindGoldOf(roleId, token), txBaselineBindGold, "失败的那次也没扣钱");
 
     // 清空背包（空数组 = 清空，网格保留 4×6）后再买：名额确实还在，不是「占了就没了」
-    const emptied = await api(baseUrl, "PATCH", `admin/roles/${roleId}`, { token: adminToken, body: { bag: [] } });
+    const emptied = await api(baseUrl, "PATCH", `admin/roles/${roleId}`, { token: adminToken, zoneId: ADMIN_ZONE, body: { bag: [] } });
     checkEqual(emptied.code, 0, "清空背包（网格尺寸保留）");
     const retry = await buy(roleId, token);
     checkEqual(retry.code, 0, "腾出空间后再买成功");

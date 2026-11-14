@@ -127,9 +127,14 @@ async function startProcess(entry, label, env, portEnv = "PORT") {
 }
 
 /** 发一次请求，返回唯一包裹体（code / message / data） */
+/** 管理端请求所在的区（#960）：一个 e2e 进程只在一个区里干活，管理端请求统一带它 */
+const ADMIN_ZONE = 1;
+
 async function api(baseUrl, method, route, options = {}) {
   const headers = { "Content-Type": "application/json" };
   if (options.token) headers.Authorization = `Bearer ${options.token}`;
+  // 管理端单区上下文（#960）：控制台前端在请求拦截器里统一带 X-Zone-Id，测试里对等模拟
+  if (options.zoneId !== undefined) headers["X-Zone-Id"] = String(options.zoneId);
   const response = await fetch(`${baseUrl}/api/${route}`, {
     method,
     headers,
@@ -306,7 +311,7 @@ function seedSpawnAreas(dbPath) {
 
     // 超管令牌在「准备：账号与角色」段落已注册（补技能时就用它）
 
-    const kick = await api(baseUrl, "POST", `admin/accounts/${accountId}/offline`, { token: adminToken });
+    const kick = await api(baseUrl, "POST", `admin/accounts/${accountId}/offline`, { token: adminToken, zoneId: ADMIN_ZONE });
     checkEqual(kick.body.code, 0, "存档进程踢下线成功（清 online_role_id）", kick.body.message);
 
     const closed = await waitFor("连接被巡检断开", async () => (session.closed ? session : null), 5_000);
@@ -318,7 +323,7 @@ function seedSpawnAreas(dbPath) {
 
     group("四、存档进程重置密码，旧令牌在实时进程被拒");
 
-    const reset = await api(baseUrl, "PATCH", `admin/accounts/${accountId}/password`, { token: adminToken, body: { password: "new-pass-99" } });
+    const reset = await api(baseUrl, "PATCH", `admin/accounts/${accountId}/password`, { token: adminToken, zoneId: ADMIN_ZONE, body: { password: "new-pass-99" } });
     checkEqual(reset.body.code, 0, "存档进程重置密码成功（token_version +1）", reset.body.message);
 
     const stale = await api(rtUrl, "POST", "realtime/ticket", { token });

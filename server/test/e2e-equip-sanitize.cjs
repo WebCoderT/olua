@@ -69,10 +69,15 @@ function finish(message) {
 
 let baseUrl = "";
 
+/** 管理端请求所在的区（#960）：一个 e2e 进程只在一个区里干活，管理端请求统一带它 */
+const ADMIN_ZONE = 1;
+
 async function api(method, route, options = {}) {
   const headers = {};
   if (options.body !== undefined) headers["Content-Type"] = "application/json";
   if (options.token) headers.Authorization = `Bearer ${options.token}`;
+  // 管理端单区上下文（#960）：控制台前端在请求拦截器里统一带 X-Zone-Id，测试里对等模拟
+  if (options.zoneId !== undefined) headers["X-Zone-Id"] = String(options.zoneId);
   const response = await fetch(`${baseUrl}/${route}`, {
     method,
     headers,
@@ -113,7 +118,7 @@ async function api(method, route, options = {}) {
   };
 
   const derivedOf = async (roleId, token) => {
-    const detail = await api("GET", `admin/roles/${roleId}`, { token });
+    const detail = await api("GET", `admin/roles/${roleId}`, { token, zoneId: ADMIN_ZONE });
     if (detail.code !== 0) throw new Error(`读角色详情失败：${detail.message}`);
     return detail.data.derived;
   };
@@ -220,7 +225,7 @@ async function api(method, route, options = {}) {
     group("管理端 PATCH：简表契约不变，部位与存在性收口（#836）");
     // #836 起管理端 PATCH 也走「槽位 ↔ id」裁决：之前「同一件塞两个槽位」「不存在的 id」
     // 都静默落库（等下次清洗），现在创建侧直接拒绝 —— 脏档只能由直写库 / 史前老档造出。
-    const patched = await api("PATCH", `admin/roles/${roleId}`, { token: adminToken, body: { equipments: { [slot]: eqId } } });
+    const patched = await api("PATCH", `admin/roles/${roleId}`, { token: adminToken, zoneId: ADMIN_ZONE, body: { equipments: { [slot]: eqId } } });
     check(patched.code === 0, "管理端 PATCH 合法简表成功（契约没变）", patched.message);
     check(
       patched.data && patched.data.derived && patched.data.derived.attributes.combat === singleCombat,
@@ -229,13 +234,13 @@ async function api(method, route, options = {}) {
     );
 
     const misfitPatched = await api("PATCH", `admin/roles/${roleId}`, {
-      token: adminToken,
+      token: adminToken, zoneId: ADMIN_ZONE,
       body: { equipments: { [otherSlots[0]]: eqId } },
     });
     check(misfitPatched.code === 20003, "PATCH 部位不符 → 20003（不再静默落库等清洗）", misfitPatched.message);
 
     const unknownPatched = await api("PATCH", `admin/roles/${roleId}`, {
-      token: adminToken,
+      token: adminToken, zoneId: ADMIN_ZONE,
       body: { equipments: { [otherSlots[0]]: "no_such_equipment" } },
     });
     check(unknownPatched.code === 20003, "PATCH 不存在的装备 id → 20003", unknownPatched.message);

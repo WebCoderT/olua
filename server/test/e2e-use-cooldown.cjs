@@ -103,9 +103,14 @@ async function startServer(dbPath) {
   throw new Error("等待服务启动超时");
 }
 
+/** 管理端请求所在的区（#960）：一个 e2e 进程只在一个区里干活，管理端请求统一带它 */
+const ADMIN_ZONE = 1;
+
 async function api(baseUrl, method, route, options = {}) {
   const headers = { "Content-Type": "application/json" };
   if (options.token) headers.Authorization = `Bearer ${options.token}`;
+  // 管理端单区上下文（#960）：控制台前端在请求拦截器里统一带 X-Zone-Id，测试里对等模拟
+  if (options.zoneId !== undefined) headers["X-Zone-Id"] = String(options.zoneId);
   const response = await fetch(`${baseUrl}/api/${route}`, {
     method,
     headers,
@@ -133,7 +138,7 @@ function cellAt(bag, row, col) {
 
 async function registerAdmin(baseUrl, username, password) {
   await api(baseUrl, "POST", "admin/auth/register", { body: { username, password, registerCode: ADMIN_CODE } });
-  const login = await api(baseUrl, "POST", "admin/auth/login", { body: { username, password } });
+  const login = await api(baseUrl, "POST", "admin/auth/login", { body: { zoneId: ADMIN_ZONE, username, password } });
   return login.data && login.data.token;
 }
 
@@ -171,7 +176,7 @@ const BIND_ROW_50 = MONEY.find((row) => row.currency === "bindGold" && Number(ro
 
     /** 摆背包（管理端整份覆盖：客户端改不了 bag） */
     const seedBag = async (cells) => {
-      const result = await api(baseUrl, "PATCH", `admin/roles/${roleId}`, { token: adminToken, body: { bag: cells } });
+      const result = await api(baseUrl, "PATCH", `admin/roles/${roleId}`, { token: adminToken, zoneId: ADMIN_ZONE, body: { bag: cells } });
       check(result.code === 0, `准备：管理端注入 ${cells.length} 格物品`, result.message);
       return result;
     };
@@ -180,7 +185,7 @@ const BIND_ROW_50 = MONEY.find((row) => row.currency === "bindGold" && Number(ro
       const body = {};
       if (hp !== undefined) body.hp = hp;
       if (mp !== undefined) body.mp = mp;
-      const result = await api(baseUrl, "PATCH", `admin/roles/${roleId}`, { token: adminToken, body });
+      const result = await api(baseUrl, "PATCH", `admin/roles/${roleId}`, { token: adminToken, zoneId: ADMIN_ZONE, body });
       check(result.code === 0, `准备：血蓝压到 hp=${hp} mp=${mp}`, result.message);
       return result;
     };

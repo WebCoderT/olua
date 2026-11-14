@@ -174,9 +174,14 @@ async function startServer(dbPath) {
   throw new Error("等待服务启动超时");
 }
 
+/** 管理端请求所在的区（#960）：一个 e2e 进程只在一个区里干活，管理端请求统一带它 */
+const ADMIN_ZONE = 1;
+
 async function api(baseUrl, method, route, options = {}) {
   const headers = { "Content-Type": "application/json" };
   if (options.token) headers.Authorization = `Bearer ${options.token}`;
+  // 管理端单区上下文（#960）：控制台前端在请求拦截器里统一带 X-Zone-Id，测试里对等模拟
+  if (options.zoneId !== undefined) headers["X-Zone-Id"] = String(options.zoneId);
   const response = await fetch(`${baseUrl}/api/${route}`, {
     method,
     headers,
@@ -199,10 +204,10 @@ async function preparePlayer(baseUrl, username, roleName) {
 }
 
 async function registerAdmin(baseUrl, username, password) {
-  const login = await api(baseUrl, "POST", "admin/auth/login", { body: { username, password } });
+  const login = await api(baseUrl, "POST", "admin/auth/login", { body: { zoneId: ADMIN_ZONE, username, password } });
   if (login.body?.data?.token) return login.body.data.token;
   await api(baseUrl, "POST", "admin/auth/register", { body: { username, password, registerCode: ADMIN_CODE } });
-  const retry = await api(baseUrl, "POST", "admin/auth/login", { body: { username, password } });
+  const retry = await api(baseUrl, "POST", "admin/auth/login", { body: { zoneId: ADMIN_ZONE, username, password } });
   return retry.body?.data?.token;
 }
 
@@ -300,7 +305,7 @@ const idsOf = (monsters) => (monsters || []).map((monster) => monster.instanceId
     check(factoryAreas.length > 0, "新手村出厂就有刷怪区（配置快照灌的）", String(factoryAreas.length));
     for (const area of factoryAreas) {
       const removed = await api(base, "DELETE", `admin/maps/${HOME_MAP}/spawn-areas/${area.id}`, {
-        token: adminToken,
+        token: adminToken, zoneId: ADMIN_ZONE,
       });
       if (removed.status !== 200) {
         check(false, `清空出厂刷怪区（id=${area.id}）`, JSON.stringify(removed.body));
@@ -310,7 +315,7 @@ const idsOf = (monsters) => (monsters || []).map((monster) => monster.instanceId
     checkEqual((await areasOf(base, adminToken, HOME_MAP)).length, 0, "新手村的刷怪区已清空");
 
     const created = await api(base, "POST", `admin/maps/${HOME_MAP}/spawn-areas`, {
-      token: adminToken,
+      token: adminToken, zoneId: ADMIN_ZONE,
       body: { name: "重载探针区", monsterKey: MONSTER_A, count: 3, cx: 400, cy: -400, w: 200, h: 200 },
     });
     const areaId = created.body?.data?.id;
@@ -343,7 +348,7 @@ const idsOf = (monsters) => (monsters || []).map((monster) => monster.instanceId
 
     group("一、改完刷怪区不重载：图里还是旧世界");
     const patched = await api(base, "PATCH", `admin/maps/${HOME_MAP}/spawn-areas/${areaId}`, {
-      token: adminToken,
+      token: adminToken, zoneId: ADMIN_ZONE,
       body: { name: "重载探针区", monsterKey: MONSTER_B, count: 3, cx: 400, cy: -400, w: 200, h: 200 },
     });
     checkEqual(patched.status, 200, `把这一区的怪换成 B 怪（key=${MONSTER_B}）`);
@@ -364,7 +369,7 @@ const idsOf = (monsters) => (monsters || []).map((monster) => monster.instanceId
     group("二、reload：一个轮询周期内整批换成新配置，并推新快照");
     const reloadMarks = sessionA.reloads.length;
     const requested = await api(base, "POST", `admin/maps/${HOME_MAP}/reload-world`, {
-      token: adminToken,
+      token: adminToken, zoneId: ADMIN_ZONE,
       body: { mode: "reload", slot: "0" },
     });
     const items = requested.body?.data?.items ?? [];
@@ -459,13 +464,13 @@ const idsOf = (monsters) => (monsters || []).map((monster) => monster.instanceId
 
     group("五、排队：mode=respawn 且房里有人时不动手");
     const backToA = await api(base, "PATCH", `admin/maps/${HOME_MAP}/spawn-areas/${areaId}`, {
-      token: adminToken,
+      token: adminToken, zoneId: ADMIN_ZONE,
       body: { name: "重载探针区", monsterKey: MONSTER_A, count: 3, cx: 400, cy: -400, w: 200, h: 200 },
     });
     checkEqual(backToA.status, 200, "把这一区换回 A 怪");
 
     const queued = await api(base, "POST", `admin/maps/${HOME_MAP}/reload-world`, {
-      token: adminToken,
+      token: adminToken, zoneId: ADMIN_ZONE,
       body: { mode: "respawn", slot: "0" },
     });
     const queuedItem = (queued.body?.data?.items ?? [])[0];
@@ -495,7 +500,7 @@ const idsOf = (monsters) => (monsters || []).map((monster) => monster.instanceId
     group("六、强制：forceAfterMs=0 合并到同一条请求并立刻执行");
     const forcedMarks = sessionA.reloads.length;
     const forced = await api(base, "POST", `admin/maps/${HOME_MAP}/reload-world`, {
-      token: adminToken,
+      token: adminToken, zoneId: ADMIN_ZONE,
       body: { mode: "respawn", slot: "0", forceAfterMs: 0 },
     });
     const forcedItem = (forced.body?.data?.items ?? [])[0];
@@ -537,14 +542,14 @@ const idsOf = (monsters) => (monsters || []).map((monster) => monster.instanceId
     //#region 七、地图规则
 
     group("七、地图规则：一行不存在 = 全默认，保存后 inherited 变 false");
-    const freshRules = await api(base, "GET", `admin/maps/${HOME_MAP}/rules`, { token: adminToken });
+    const freshRules = await api(base, "GET", `admin/maps/${HOME_MAP}/rules`, { token: adminToken, zoneId: ADMIN_ZONE });
     checkEqual(freshRules.status, 200, "读规则成功");
     checkEqual(freshRules.body?.data?.inherited, true, "新人村没配过规则：inherited=true（全是出厂默认）");
     checkEqual(freshRules.body?.data?.maxPlayersPerRoom, 30, "出厂单房间人数上限 30");
     checkEqual(freshRules.body?.data?.maxChannels, 1, "出厂不分线（maxChannels=1）");
 
     const saveRules = await api(base, "PATCH", `admin/maps/${HOME_MAP}/rules`, {
-      token: adminToken,
+      token: adminToken, zoneId: ADMIN_ZONE,
       body: {
         expRate: 1.5,
         dropRate: 2,
@@ -568,12 +573,12 @@ const idsOf = (monsters) => (monsters || []).map((monster) => monster.instanceId
     checkEqual(saveRules.body?.data?.respawnMsOverride, 45000, "重生时长覆盖写进去了（null 与 0 是两件事）");
     checkEqual(saveRules.body?.data?.allowDrop, false, "开关关掉了（false 与「没传」必须能分开）");
 
-    const reread = await api(base, "GET", `admin/maps/${HOME_MAP}/rules`, { token: adminToken });
+    const reread = await api(base, "GET", `admin/maps/${HOME_MAP}/rules`, { token: adminToken, zoneId: ADMIN_ZONE });
     checkEqual(reread.body?.data?.expRate, 1.5, "重新读回来是 1.5（落库了，不是只改了回执）");
     checkEqual(reread.body?.data?.updatedBy, "reloadroot", "落款记着谁改的");
 
     const tooBig = await api(base, "PATCH", `admin/maps/${HOME_MAP}/rules`, {
-      token: adminToken,
+      token: adminToken, zoneId: ADMIN_ZONE,
       body: {
         expRate: 1,
         dropRate: 1,
@@ -593,7 +598,7 @@ const idsOf = (monsters) => (monsters || []).map((monster) => monster.instanceId
     });
     checkEqual(tooBig.status, 400, "人数上限 5000 被拒（40000 校验失败，不是静默存进去）");
 
-    const audits = await api(base, "GET", "admin/audit-logs?targetType=map&size=20", { token: adminToken });
+    const audits = await api(base, "GET", "admin/audit-logs?targetType=map&size=20", { token: adminToken, zoneId: ADMIN_ZONE });
     check(
       (audits.body?.data?.list ?? []).some((row) => row.action === "adminMap.saveRules"),
       "保存规则进了审计日志（action=adminMap.saveRules）",

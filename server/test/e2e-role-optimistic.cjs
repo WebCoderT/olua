@@ -106,9 +106,14 @@ async function startServer(dbPath) {
   throw new Error("等待服务超时");
 }
 
+/** 管理端请求所在的区（#960）：一个 e2e 进程只在一个区里干活，管理端请求统一带它 */
+const ADMIN_ZONE = 1;
+
 async function api(baseUrl, method, route, options = {}) {
   const headers = { "Content-Type": "application/json" };
   if (options.token) headers.Authorization = `Bearer ${options.token}`;
+  // 管理端单区上下文（#960）：控制台前端在请求拦截器里统一带 X-Zone-Id，测试里对等模拟
+  if (options.zoneId !== undefined) headers["X-Zone-Id"] = String(options.zoneId);
   const response = await fetch(`${baseUrl}/api/${route}`, {
     method,
     headers,
@@ -162,7 +167,7 @@ function roleRow(dbPath, roleId) {
       body: { username: "optimistic_admin", password: "pass1234", registerCode: ADMIN_CODE },
     });
     const adminLogin = await api(baseUrl, "POST", "admin/auth/login", {
-      body: { username: "optimistic_admin", password: "pass1234" },
+      body: { zoneId: ADMIN_ZONE, username: "optimistic_admin", password: "pass1234" },
     });
     const adminToken = adminLogin.data && adminLogin.data.token;
     check(!!adminToken, "准备：管理员已登录");
@@ -209,7 +214,7 @@ function roleRow(dbPath, roleId) {
     group("二、过期基线：同样是四条路径，全部 20006 且不写库");
     const staleRevision = baseline.revision;
     // 先让服务端自己往前走一步（管理端改数值），让上面那份基线变成「过期」
-    const patched = await api(baseUrl, "PATCH", `admin/roles/${roleId}`, { token: adminToken, body: { bindGold: 777 } });
+    const patched = await api(baseUrl, "PATCH", `admin/roles/${roleId}`, { token: adminToken, zoneId: ADMIN_ZONE, body: { bindGold: 777 } });
     checkEqual(patched.code, 0, "准备：管理端把绑定元宝改成 777（服务端 revision 前进一格）");
     const afterPatch = roleRow(dbPath, roleId);
     checkEqual(afterPatch.revision, staleRevision + 1, "管理端改数值推进了 revision");

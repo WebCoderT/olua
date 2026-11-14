@@ -169,9 +169,14 @@ async function startServer(dbPath) {
 }
 
 /** 发一次请求，返回 { status, body }（body 是唯一包裹体，数据在 body.data） */
+/** 管理端请求所在的区（#960）：一个 e2e 进程只在一个区里干活，管理端请求统一带它 */
+const ADMIN_ZONE = 1;
+
 async function api(baseUrl, method, route, options = {}) {
   const headers = { "Content-Type": "application/json" };
   if (options.token) headers.Authorization = `Bearer ${options.token}`;
+  // 管理端单区上下文（#960）：控制台前端在请求拦截器里统一带 X-Zone-Id，测试里对等模拟
+  if (options.zoneId !== undefined) headers["X-Zone-Id"] = String(options.zoneId);
   const response = await fetch(`${baseUrl}/api/${route}`, {
     method,
     headers,
@@ -196,10 +201,10 @@ async function preparePlayer(baseUrl, username, roleName) {
 
 /** 注册并登录一个管理员（第一个注册者自动是超级管理员） */
 async function registerAdmin(baseUrl, username, password) {
-  const login = await api(baseUrl, "POST", "admin/auth/login", { body: { username, password } });
+  const login = await api(baseUrl, "POST", "admin/auth/login", { body: { zoneId: ADMIN_ZONE, username, password } });
   if (login.body?.data?.token) return login.body.data.token;
   await api(baseUrl, "POST", "admin/auth/register", { body: { username, password, registerCode: ADMIN_CODE } });
-  const retry = await api(baseUrl, "POST", "admin/auth/login", { body: { username, password } });
+  const retry = await api(baseUrl, "POST", "admin/auth/login", { body: { zoneId: ADMIN_ZONE, username, password } });
   return retry.body?.data?.token;
 }
 
@@ -398,7 +403,7 @@ function withDb(dbPath, fn) {
       "公共线的监控快照（采集器每 200ms 一帧）",
       async () => {
         const response = await api(server.baseUrl, "GET", `admin/maps/${HOME_MAP}/monitor?slot=0`, {
-          token: adminToken,
+          token: adminToken, zoneId: ADMIN_ZONE,
         });
         const data = response.body?.data;
         return data && data.sampledAt ? data : null;
@@ -420,7 +425,7 @@ function withDb(dbPath, fn) {
 
     // 不存在的线：**不许**退回公共线的帧（「切到 1 线看到 0 线的怪」比空图更糟）
     const otherLine = await api(server.baseUrl, "GET", `admin/maps/${HOME_MAP}/monitor?slot=7`, {
-      token: adminToken,
+      token: adminToken, zoneId: ADMIN_ZONE,
     });
     const otherData = otherLine.body?.data;
     check(
@@ -431,7 +436,7 @@ function withDb(dbPath, fn) {
     checkEqual(otherData && otherData.slot, "7", "空帧也照实说「你问的是 7 线」");
 
     const badSlot = await api(server.baseUrl, "GET", `admin/maps/${HOME_MAP}/monitor?slot=abc`, {
-      token: adminToken,
+      token: adminToken, zoneId: ADMIN_ZONE,
     });
     checkEqual(badSlot.status, 400, "非法线名（abc）被拒（40000 校验失败，不是静默当 0 线）");
 

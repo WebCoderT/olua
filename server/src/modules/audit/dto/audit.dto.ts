@@ -1,5 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
 import { IsIn, IsInt, IsOptional, IsString, MaxLength, Min } from "class-validator";
+import { Type } from "class-transformer";
 import { PageMetaDto, PageQueryDto } from "../../../common/dto/api-envelope.dto";
 import { ADMIN_ROLES } from "../../../common/constants/permission";
 import { AUDIT_TARGET_TYPES } from "../../../common/decorators/audit-target.decorator";
@@ -61,6 +62,13 @@ export class AuditLogDto {
   @ApiProperty({ description: "请求路径", type: "string", nullable: true })
   path: string | null;
 
+  @ApiProperty({
+    description: "这次操作发生时管理端选的区（#960）。全区性接口（配置 / 管理员 / 区目录）与未选区的请求为 null",
+    type: "number",
+    nullable: true,
+  })
+  zoneId: number | null;
+
   @ApiProperty({ description: "HTTP 状态码", type: "number", nullable: true })
   statusCode: number | null;
 
@@ -90,6 +98,7 @@ export class AuditLogDto {
     dto.ip = row.ip;
     dto.method = row.method;
     dto.path = row.path;
+    dto.zoneId = row.zone_id;
     dto.statusCode = row.status_code;
     dto.success = row.success === 1;
     dto.errorCode = row.error_code;
@@ -111,6 +120,16 @@ export class AuditQueryDto extends PageQueryDto {
   @IsOptional()
   @IsString({ message: "关键字必须是字符串" })
   declare keyword?: string;
+
+  @ApiPropertyOptional({
+    description: "只看在某个区里发生的操作（不传 = 全部区；跨区追责时按区筛）",
+    minimum: 1,
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt({ message: "区服 id 必须是整数" })
+  @Min(1, { message: "区服 id 必须 ≥ 1" })
+  zoneId?: number;
 
   @ApiPropertyOptional({ description: "只看某个操作人的日志（管理员 id）" })
   @IsOptional()

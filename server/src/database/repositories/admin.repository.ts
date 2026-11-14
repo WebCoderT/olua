@@ -69,8 +69,8 @@ export class AdminRepository {
 
   insert(row: AdminRow): void {
     this.db.run(
-      `INSERT INTO admins (id, username, password, status, role, token_version, created_at, updated_at, last_login_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO admins (id, username, password, status, role, token_version, created_at, updated_at, last_login_at, last_zone_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         row.id,
         row.username,
@@ -81,6 +81,7 @@ export class AdminRepository {
         row.created_at,
         row.updated_at,
         row.last_login_at,
+        row.last_zone_id,
       ],
     );
   }
@@ -93,6 +94,8 @@ export class AdminRepository {
       password?: string;
       token_version?: number;
       last_login_at?: number;
+      /** 上次作业区（#960）：登录时写入，只当登录页下拉的默认值 */
+      last_zone_id?: number;
       updated_at?: number;
     },
   ): boolean {
@@ -117,6 +120,10 @@ export class AdminRepository {
     if (patch.last_login_at !== undefined) {
       fields.push("last_login_at = ?");
       params.push(patch.last_login_at);
+    }
+    if (patch.last_zone_id !== undefined) {
+      fields.push("last_zone_id = ?");
+      params.push(patch.last_zone_id);
     }
     if (fields.length === 0) return this.findById(id) !== undefined;
     fields.push("updated_at = ?");

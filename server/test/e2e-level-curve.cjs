@@ -107,9 +107,14 @@ async function startServer(dbPath) {
   throw new Error("等待服务启动超时");
 }
 
+/** 管理端请求所在的区（#960）：一个 e2e 进程只在一个区里干活，管理端请求统一带它 */
+const ADMIN_ZONE = 1;
+
 async function api(baseUrl, method, route, options = {}) {
   const headers = { "Content-Type": "application/json" };
   if (options.token) headers.Authorization = `Bearer ${options.token}`;
+  // 管理端单区上下文（#960）：控制台前端在请求拦截器里统一带 X-Zone-Id，测试里对等模拟
+  if (options.zoneId !== undefined) headers["X-Zone-Id"] = String(options.zoneId);
   const response = await fetch(`${baseUrl}/api/${route}`, {
     method,
     headers,
@@ -126,7 +131,7 @@ async function api(baseUrl, method, route, options = {}) {
 
 async function registerAdmin(baseUrl, username, password) {
   await api(baseUrl, "POST", "admin/auth/register", { body: { username, password, registerCode: ADMIN_CODE } });
-  const login = await api(baseUrl, "POST", "admin/auth/login", { body: { username, password } });
+  const login = await api(baseUrl, "POST", "admin/auth/login", { body: { zoneId: ADMIN_ZONE, username, password } });
   return login.data && login.data.token;
 }
 
@@ -149,10 +154,10 @@ function seedSegment(curve, seq) {
     const adminToken = await registerAdmin(baseUrl, "level_admin", "Admin#123456");
     check(!!adminToken, "准备：管理员已登录");
 
-    const preview = async (level) => api(baseUrl, "GET", `admin/level-curves/preview?level=${level}`, { token: adminToken });
+    const preview = async (level) => api(baseUrl, "GET", `admin/level-curves/preview?level=${level}`, { token: adminToken, zoneId: ADMIN_ZONE });
     const patchSegment = async (curve, seq, body) =>
-      api(baseUrl, "PATCH", `admin/level-curves/${curve}/${seq}`, { token: adminToken, body });
-    const listCurves = async () => api(baseUrl, "GET", "admin/level-curves", { token: adminToken });
+      api(baseUrl, "PATCH", `admin/level-curves/${curve}/${seq}`, { token: adminToken, zoneId: ADMIN_ZONE, body });
+    const listCurves = async () => api(baseUrl, "GET", "admin/level-curves", { token: adminToken, zoneId: ADMIN_ZONE });
 
     //#region 〇、出厂 24 段 + 计算器与独立实现对齐
 
@@ -311,7 +316,7 @@ function seedSegment(curve, seq) {
 
     group("四、等级上限与末段永远一致");
     const bumpMax = await api(baseUrl, "PATCH", "admin/growth-scalars/roleMaxLevel", {
-      token: adminToken,
+      token: adminToken, zoneId: ADMIN_ZONE,
       body: { value: 2000000 },
     });
     checkEqual(bumpMax.code, 0, "上限改成 200 万");
@@ -325,7 +330,7 @@ function seedSegment(curve, seq) {
       "四条曲线的末段结束等级都跟着变成 200 万",
       lastOfAll.join(","),
     );
-    await api(baseUrl, "PATCH", "admin/growth-scalars/roleMaxLevel", { token: adminToken, body: { value: 1000000 } });
+    await api(baseUrl, "PATCH", "admin/growth-scalars/roleMaxLevel", { token: adminToken, zoneId: ADMIN_ZONE, body: { value: 1000000 } });
     checkEqual((await preview(1)).code, 0, "上限调回 100 万后计算器仍正常");
 
     //#endregion
@@ -333,7 +338,7 @@ function seedSegment(curve, seq) {
     //#region 五、旧表与旧接口确实没了
 
     group("五、逐级表与旧接口已下线");
-    const gone = await api(baseUrl, "GET", "admin/role-levels?page=1&size=10", { token: adminToken });
+    const gone = await api(baseUrl, "GET", "admin/role-levels?page=1&size=10", { token: adminToken, zoneId: ADMIN_ZONE });
     check(gone === null || gone.code !== 0, "旧接口 admin/role-levels 已不存在", JSON.stringify(gone && gone.code));
     const health = await fetch(`${baseUrl}/api/health`);
     check(health.ok, "服务仍然健康（删表没有把它打挂）");

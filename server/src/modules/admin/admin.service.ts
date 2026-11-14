@@ -79,29 +79,41 @@ export class AdminService {
 
   //#region 账号
 
-  /** 账号分页检索（keyword 匹配账号名；排序字段白名单见 AccountRepository.ACCOUNT_SORT） */
-  listAccounts(query: AccountQueryDto, user?: AuthenticatedUser): PageResult<AccountDto> {
+  /**
+   * 账号分页检索（keyword 匹配账号名；排序字段白名单见 AccountRepository.ACCOUNT_SORT）
+   *
+   * **只出「在当前区有角色」的账号**（#960）：管理端一次只在一个区里干活，
+   * 全服账号混在一页里，第 3 页到底是谁的第 3 页说不清。
+   */
+  listAccounts(query: AccountQueryDto, zoneId: number, user?: AuthenticatedUser): PageResult<AccountDto> {
     const { page, size } = normalizePage(query);
     const keyword = query.keyword?.trim() || undefined;
     const options: AccountListOptions = { page, size, keyword, status: query.status, sort: query.sort, order: query.order };
     // 邮箱是个人信息：只有持 account:email 权限的角色才在列表里看到（只读观察员看不到）
     const includeEmail = roleHasPermission(user?.role, Permission.ACCOUNT_EMAIL);
     return {
-      list: this.accounts.list(options).map((row) => AccountDto.from(row, includeEmail)),
-      total: this.accounts.count({ keyword, status: query.status }),
+      list: this.accounts.list(zoneId, options).map((row) => AccountDto.from(row, includeEmail)),
+      total: this.accounts.count(zoneId, { keyword, status: query.status }),
       page,
       size,
     };
   }
 
-  /** 账号详情（账号 + 名下角色概要） */
-  accountDetail(id: string, user?: AuthenticatedUser): AdminAccountDetailDto {
+  /**
+   * 账号详情（账号 + 名下**本区**角色概要 + 另在几个区有角色）
+   *
+   * 「另在 N 个区有角色」是给客服看的提示（#960）：账号级操作（封禁 / 改密 / 删号）
+   * 会影响所有区，提交前要知道影响面 —— 但详情里只列当前区的角色，不然一个人在 A 区
+   * 的页面上删掉 B 区的角色，只是因为他刚好翻到了那一行。
+   */
+  accountDetail(id: string, zoneId: number, user?: AuthenticatedUser): AdminAccountDetailDto {
     const account = this.mustAccount(id);
     // 邮箱是个人信息：只有持 account:email 权限的角色才在详情里看到
     const includeEmail = roleHasPermission(user?.role, Permission.ACCOUNT_EMAIL);
     return {
       account: AccountDto.from(account, includeEmail),
-      roles: this.roles.findByAccountAnyZone(id).map((row) => RoleSummaryDto.from(row, account.online_role_id)),
+      roles: this.roles.findByAccountAndZone(zoneId, id).map((row) => RoleSummaryDto.from(row, account.online_role_id)),
+      otherZoneCount: this.roles.countOtherZonesOfAccount(zoneId, id),
     };
   }
 
@@ -270,10 +282,10 @@ export class AdminService {
 
   //#region 角色
 
-  /** 角色分页检索（keyword 匹配角色名或角色 id；其余条件见 RoleQueryDto） */
-  listRoles(query: RoleQueryDto): PageResult<AdminRoleDto> {
+  /** 角色分页检索（keyword 匹配角色名或角色 id；条件见 RoleQueryDto，区恒为当前区） */
+  listRoles(query: RoleQueryDto, zoneId: number): PageResult<AdminRoleDto> {
     const { page, size } = normalizePage(query);
-    const filter = roleFilterOf(query);
+    const filter = roleFilterOf(query, zoneId);
     return {
       list: this.roles.list({ ...filter, page, size, sort: query.sort, order: query.order }).map((row) => this.toAdminRoleDto(row)),
       total: this.roles.count(filter),
@@ -291,8 +303,8 @@ export class AdminService {
    * 顺带在这里做「客户端上报值 vs 服务端重算值」的观测：不一致记一条 warn。
    * 详情接口是**抽查**（要有人点开才发生），真正的全量观测在玩家上报存档那条线上（issue #94）。
    */
-  roleDetail(id: string): AdminRoleDetailDto {
-    return this.toAdminRoleDetailDto(this.withAccount(this.mustRole(id)));
+  roleDetail(id: string, zoneId: number): AdminRoleDetailDto {
+    return this.toAdminRoleDetailDto(this.withAccount(this.mustRole(zoneId, id)));
   }
 
   /**
@@ -303,8 +315,8 @@ export class AdminService {
    * 保存后角色修订号 +1 —— 在线玩家那边的下一次进度推送会撞上乐观锁（20006），
    * 从而先同步到这里，不会被玩家手上的旧存档覆盖回去。
    */
-  patchRole(id: string, dto: AdminPatchRoleDto): AdminRoleDetailDto {
-    const row = this.mustRole(id);
+  patchRole(id: string, zoneId: number, dto: AdminPatchRoleDto): AdminRoleDetailDto {
+    const row = this.mustRole(zoneId, id);
     // roles.data 是 JSON 字符串，编辑前先解出来（坏了直接报错，绝不拿空对象覆盖）
     const { data } = parseRoleData(parseStoredRoleData(row.data));
     const next: Record<string, unknown> = { ...data };
@@ -316,8 +328,8 @@ export class AdminService {
     if (dto.name !== undefined) {
       const name = normalizeName(dto.name);
       // 同一区不许重名（#957）：区是独立服，同名跨区合法，同区重名才会让选角页分不清。
-      // 区取角色自己那一行（管理端这会儿还没有 X-Zone-Id，见 #960）
-      if (this.roles.findByAccountZoneAndName(row.zone_id, row.account_id, name, id)) {
+      // 区就是当前作业区（row 本身就是按它取出来的，见 mustRole）
+      if (this.roles.findByAccountZoneAndName(zoneId, row.account_id, name, id)) {
         throw BizException.conflict(BizCode.ROLE_NAME_EXISTS, "该区下已存在同名角色");
       }
       patch.name = name;
@@ -421,12 +433,12 @@ export class AdminService {
     }
     patch.data = JSON.stringify(next);
     this.roles.updateById(id, patch);
-    return this.roleDetail(id);
+    return this.roleDetail(id, zoneId);
   }
 
   /** 删除角色（若正好是账号的在线角色，一并清掉在线标记） */
-  removeRole(id: string): null {
-    const row = this.mustRole(id);
+  removeRole(id: string, zoneId: number): null {
+    const row = this.mustRole(zoneId, id);
     this.roles.deleteById(id);
     this.accounts.clearOnlineRole(row.account_id, id);
     return null;
@@ -437,10 +449,13 @@ export class AdminService {
    *
    * 幂等：已不存在的 id 静默跳过（管理端列表可能已过期，为一条陈旧 id 整体失败更难用）。
    * 删到某个账号的在线角色时顺带清掉在线标记 —— 与单条删除同一套收尾（见 removeRole）。
+   *
+   * **只删当前区的**（#960）：跨区 id 与「不存在」同一种处理（跳过）。顺着「列表里那批 id」
+   * 删是对的，但 id 是客户端传的 —— 它可以是任何区的任何角色。
    */
-  batchRemoveRoles(dto: BatchDeleteRolesDto, actor?: AdminActor): BatchDeleteResultDto {
+  batchRemoveRoles(dto: BatchDeleteRolesDto, zoneId: number, actor?: AdminActor): BatchDeleteResultDto {
     const ids = [...new Set(dto.ids.map((item) => item.trim()).filter(Boolean))];
-    const found = this.roles.findManyByIds(ids);
+    const found = this.roles.findManyByIds(ids).filter((row) => row.zone_id === zoneId);
     const clearedOnlineAccountIds = this.clearOnlineMarkers(found);
     const deleted = this.roles.deleteByIds(found.map((row) => row.id));
     // 按目标补明细（#885）：同一个理由，主行只记到「批量删了一次」
@@ -462,10 +477,15 @@ export class AdminService {
     };
   }
 
-  /** 清空某账号的全部角色（重置玩家存档时用；账号本身保留） */
-  purgeAccountRoles(accountId: string): BatchDeleteResultDto {
+  /**
+   * 清空某账号在**当前区**的全部角色（重置玩家存档时用；账号本身保留）
+   *
+   * 只清本区：跨区清角等于「在 A 区的页面上把 B 区的号也删了」，而页面根本没列出那些角色。
+   * 真要清全服的角色，得逐个区切过去做（这是刻意的：一次误点不该毁掉所有区）。
+   */
+  purgeAccountRoles(accountId: string, zoneId: number): BatchDeleteResultDto {
     this.mustAccount(accountId);
-    const rows = this.roles.findByAccountAnyZone(accountId);
+    const rows = this.roles.findByAccountAndZone(zoneId, accountId);
     const clearedOnlineAccountIds = this.clearOnlineMarkers(rows);
     const deleted = this.roles.deleteByIds(rows.map((row) => row.id));
     return {
@@ -494,10 +514,10 @@ export class AdminService {
   }
 
   /** 把角色设为所属账号的在线角色（等价于玩家在选角界面选它进游戏） */
-  selectRole(id: string): AdminRoleDetailDto {
-    const row = this.mustRole(id);
+  selectRole(id: string, zoneId: number): AdminRoleDetailDto {
+    const row = this.mustRole(zoneId, id);
     this.accounts.updateById(row.account_id, { online_role_id: row.id });
-    return this.roleDetail(id);
+    return this.roleDetail(id, zoneId);
   }
 
   //#endregion
@@ -571,17 +591,17 @@ export class AdminService {
 
   //#endregion
 
-  /** 概览统计 */
-  stats(): AdminStatsDto {
+  /** 概览统计（当前区；`adminCount` 是全局的 —— 管理员不属于任何区） */
+  stats(zoneId: number): AdminStatsDto {
     const startOfToday = new Date();
     startOfToday.setHours(0, 0, 0, 0);
     const dto = new AdminStatsDto();
-    dto.accountCount = this.accounts.countAll();
-    dto.roleCount = this.roles.countAll();
-    dto.onlineAccountCount = this.accounts.countOnline();
-    dto.todayNewAccountCount = this.accounts.countCreatedAfter(startOfToday.getTime());
-    dto.todayNewRoleCount = this.roles.countCreatedAfter(startOfToday.getTime());
-    dto.bannedAccountCount = this.accounts.countBanned(Date.now());
+    dto.accountCount = this.accounts.countAll(zoneId);
+    dto.roleCount = this.roles.countAll(zoneId);
+    dto.onlineAccountCount = this.accounts.countOnline(zoneId);
+    dto.todayNewAccountCount = this.accounts.countCreatedAfter(zoneId, startOfToday.getTime());
+    dto.todayNewRoleCount = this.roles.countCreatedAfter(zoneId, startOfToday.getTime());
+    dto.bannedAccountCount = this.accounts.countBanned(zoneId, Date.now());
     dto.adminCount = this.admins.countAll();
     return dto;
   }
@@ -593,14 +613,14 @@ export class AdminService {
    * 前端拿到稀疏数组还得自己补，补错了折线就会骗人（缺的那天被前后两点连成直线，
    * 看着就像那天有人在注册）。
    */
-  statsTrend(days: number): StatsTrendDto {
+  statsTrend(days: number, zoneId: number): StatsTrendDto {
     const start = new Date();
     start.setHours(0, 0, 0, 0);
     start.setDate(start.getDate() - (days - 1));
     const since = start.getTime();
 
-    const accountsByDay = new Map(this.accounts.countByDaySince(since).map((row) => [row.day, row.total]));
-    const rolesByDay = new Map(this.roles.countByDaySince(since).map((row) => [row.day, row.total]));
+    const accountsByDay = new Map(this.accounts.countByDaySince(zoneId, since).map((row) => [row.day, row.total]));
+    const rolesByDay = new Map(this.roles.countByDaySince(zoneId, since).map((row) => [row.day, row.total]));
 
     const dto = new StatsTrendDto();
     dto.days = days;
@@ -626,14 +646,14 @@ export class AdminService {
    * 只给分组键与数量：职业、性别、地图的名字都由管理端按客户端字典翻译
    * （服务端不复制游戏配置）。等级档的区间起点是通用格式，不涉及游戏配置。
    */
-  statsBreakdown(): StatsBreakdownDto {
+  statsBreakdown(zoneId: number): StatsBreakdownDto {
     const dto = new StatsBreakdownDto();
     // 等级档：key 存区间起点（bucket 0 -> "1"，代表 1~10 级）
-    dto.levels = this.roles.countByLevelBucket().map((row) => breakdownItem(String(row.bucket * 10 + 1), row.total));
-    dto.occupations = this.roles.countByOccupation().map((row) => breakdownItem(row.key, row.total));
-    dto.sexes = this.roles.countBySex().map((row) => breakdownItem(row.key, row.total));
+    dto.levels = this.roles.countByLevelBucket(zoneId).map((row) => breakdownItem(String(row.bucket * 10 + 1), row.total));
+    dto.occupations = this.roles.countByOccupation(zoneId).map((row) => breakdownItem(row.key, row.total));
+    dto.sexes = this.roles.countBySex(zoneId).map((row) => breakdownItem(row.key, row.total));
     // 快照里没有 onMap 的老数据归到空键
-    dto.maps = this.roles.countByMap().map((row) => breakdownItem(row.key ?? "", row.total));
+    dto.maps = this.roles.countByMap(zoneId).map((row) => breakdownItem(row.key ?? "", row.total));
     return dto;
   }
 
@@ -665,9 +685,14 @@ export class AdminService {
     return account;
   }
 
-  private mustRole(id: string): RoleRow {
-    // 管理端还没有区上下文（#960 补 X-Zone-Id），这里只能跨区取；改成 findById 要等 #960
-    const row = this.roles.findByIdAnyZone(id);
+  /**
+   * 取**当前区**的角色（#960）
+   *
+   * 跨区取 = 404，不是 403：这里不是权限问题（客服本来就能切到那个区），
+   * 是「A 区页面 + B 区 id」这种拼接请求必须失败，而不是悄悄改到另一个区去。
+   */
+  private mustRole(zoneId: number, id: string): RoleRow {
+    const row = this.roles.findById(zoneId, id);
     if (!row) throw BizException.notFound(BizCode.ROLE_NOT_FOUND, "角色不存在");
     return row;
   }

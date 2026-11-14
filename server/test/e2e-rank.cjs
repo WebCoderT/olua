@@ -115,9 +115,14 @@ async function startServer(dbPath, extraEnv = {}) {
 }
 
 /** 发一次请求，返回唯一包裹体（code / message / data） */
+/** 管理端请求所在的区（#960）：一个 e2e 进程只在一个区里干活，管理端请求统一带它 */
+const ADMIN_ZONE = 1;
+
 async function api(baseUrl, method, route, options = {}) {
   const headers = { "Content-Type": "application/json" };
   if (options.token) headers.Authorization = `Bearer ${options.token}`;
+  // 管理端单区上下文（#960）：控制台前端在请求拦截器里统一带 X-Zone-Id，测试里对等模拟
+  if (options.zoneId !== undefined) headers["X-Zone-Id"] = String(options.zoneId);
   const response = await fetch(`${baseUrl}/api/${route}`, {
     method,
     headers,
@@ -160,7 +165,7 @@ async function preparePlayer(baseUrl, username, roleName, level = 1, extra = {})
       raiserToken = await registerAdmin(baseUrl, "rank_raiser", "Admin#1234");
       raiserTokens.set(baseUrl, raiserToken);
     }
-    const raised = await api(baseUrl, "PATCH", `admin/roles/${roleId}`, { token: raiserToken, body: { level, ...extra } });
+    const raised = await api(baseUrl, "PATCH", `admin/roles/${roleId}`, { token: raiserToken, zoneId: ADMIN_ZONE, body: { level, ...extra } });
     const code = raised && raised.body && raised.body.code;
     if (code !== 0) throw new Error(`提等级失败 ${roleId} → ${level}：${raised && raised.body && raised.body.message}`);
   }
@@ -170,7 +175,7 @@ async function preparePlayer(baseUrl, username, roleName, level = 1, extra = {})
 /** 注册并登录一个管理员（改等级要 `ROLE_WRITE`：等级是服务端写点，#550 起存档改不动它） */
 async function registerAdmin(baseUrl, username, password) {
   await api(baseUrl, "POST", "admin/auth/register", { body: { username, password, registerCode: ADMIN_CODE } });
-  const login = await api(baseUrl, "POST", "admin/auth/login", { body: { username, password } });
+  const login = await api(baseUrl, "POST", "admin/auth/login", { body: { zoneId: ADMIN_ZONE, username, password } });
   return login.body && login.body.data && login.body.data.token;
 }
 
@@ -344,7 +349,7 @@ function namesOf(page) {
 
     const beforeSnapshot = await data(baseUrl, "GET", "leaderboards/level?size=10", { token: A.token });
     // 等级是服务端写点（#550 起存档里的上报值会被回填）：造「等级变了但快照还没重算」走运营侧 PATCH
-    const raised = await data(baseUrl, "PATCH", `admin/roles/${A.roleId}`, { token: adminToken, body: { level: 20 } });
+    const raised = await data(baseUrl, "PATCH", `admin/roles/${A.roleId}`, { token: adminToken, zoneId: ADMIN_ZONE, body: { level: 20 } });
     checkEqual(raised && raised.level, 20, "甲的角色等级已改成 20（管理端 PATCH）");
 
     const afterSnapshot = await data(baseUrl, "GET", "leaderboards/level?size=10", { token: A.token });
@@ -388,7 +393,7 @@ function namesOf(page) {
     checkEqual(namesOf(freshBefore), "后进,先锋", "第一次查询就把榜算出来了（惰性首算，不需要预热）");
 
     const freshAdmin = await registerAdmin(refresher.baseUrl, "rank_fresh_admin", "Rank#12345");
-    await data(refresher.baseUrl, "PATCH", `admin/roles/${freshA.roleId}`, { token: freshAdmin, body: { level: 12 } });
+    await data(refresher.baseUrl, "PATCH", `admin/roles/${freshA.roleId}`, { token: freshAdmin, zoneId: ADMIN_ZONE, body: { level: 12 } });
     const freshRight = await data(refresher.baseUrl, "GET", "leaderboards/level", { token: freshA.token });
     checkEqual(namesOf(freshRight), "后进,先锋", "改完立刻查还是旧顺序（快照期内不跳名）");
 

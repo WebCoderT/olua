@@ -7,7 +7,7 @@ import { BanStatus } from "../components/BanStatus";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { ResetPasswordDialog } from "../components/ResetPasswordDialog";
 import { EmailDialog } from "../components/EmailDialog";
-import { Badge, Button, Card, EmptyState, Spinner, tableClass, tdClass, thClass, theadClass } from "../components/ui";
+import { Badge, Button, Card, EmptyState, Notice, Spinner, tableClass, tdClass, thClass, theadClass } from "../components/ui";
 import { hasPermission } from "../store/session";
 import { toastSuccess } from "../store/toast";
 import { PageHeader } from "../components/PageHeader";
@@ -186,6 +186,8 @@ export function AccountDetailPage() {
   }
 
   const { account, roles } = detail;
+  /** 另在几个区还有角色（#960）：本页只列当前区的，别区的要点顶栏切过去看 */
+  const otherZoneCount = detail.otherZoneCount ?? 0;
 
   return (
     <div className="flex flex-col gap-4">
@@ -245,8 +247,15 @@ export function AccountDetailPage() {
         ) : null}
       </div>
 
+      {otherZoneCount > 0 ? (
+        <Notice tone="muted" title={`该账号另在 ${otherZoneCount} 个区还有角色`}>
+          这里只列 <b className="text-ink-1">当前区</b> 的角色。要看别的区，用顶栏的区服切换器切过去再回到这个账号 ——
+          管理端一次只在一个区里干活，「第 3 页」才不会两个区混在一起。
+        </Notice>
+      ) : null}
+
       <Card
-        title={`角色（${roles.length}）`}
+        title={`角色（本区 ${roles.length}）`}
         description="基础信息与装备 / 技能 / 背包都能直接改；账号本身不会被删除，清空后玩家可以重新创建角色。"
         actions={
           <Button variant="danger" className="px-2.5 py-1 text-xs" disabled={!canDeleteRole || roles.length === 0} onClick={() => setPurgeConfirm(true)}>

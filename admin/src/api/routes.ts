@@ -27,7 +27,7 @@ export const routes = {
     /**
      * 删除账号（DELETE /admin/accounts/{id}）
      *
-     * 名下角色一并删除（外键级联），不可恢复。
+     * 名下角色一并删除（外键级联，**所有区**都删），不可恢复。账号级操作，与当前区无关。
      */
     remove: (id: string) => `/admin/accounts/${encodeURIComponent(id)}`,
     /**
@@ -75,7 +75,7 @@ export const routes = {
     /**
      * 概览统计（GET /admin/stats）
      *
-     * 账号 / 角色总量、今日新增、当前封禁中账号数、在线账号数、管理员数。
+     * 账号 / 角色总量、今日新增、当前封禁中账号数、在线账号数、管理员数。**角色类数字都是当前区的**。
      */
     stats: "/admin/stats",
   },
@@ -196,7 +196,7 @@ export const routes = {
      */
     export: "/admin/audit-logs/export",
   },
-  /** adminAuth 模块（4 个接口） */
+  /** adminAuth 模块（5 个接口） */
   adminAuth: {
     /**
      * 管理员登录（POST /admin/auth/login）
@@ -222,6 +222,12 @@ export const routes = {
      * 注册许可由两件配置决定：配了 `ADMIN_REGISTER_CODE` 就必须带对注册码；没配则要求 `ADMIN_REGISTER_OPEN=true`（**默认关闭** —— 忘记配注册码不该等于人人可开后台）。**第一个**注册的管理员自动成为超级管理员，之后注册的一律是普通管理员。
      */
     register: "/admin/auth/register",
+    /**
+     * 管理端登录页的可选区（GET /admin/auth/zones）
+     *
+     * 登录页先拉这个再让管理员选区（#960）。**公开接口**：登录前没有令牌。
+     */
+    zones: "/admin/auth/zones",
   },
   /** adminCombatWeights 模块（2 个接口） */
   adminCombatWeights: {
@@ -588,25 +594,25 @@ export const routes = {
     /**
      * 帮会列表（GET /admin/guilds）
      *
-     * 全部帮会（含人数与帮主名），按人数降序。
+     * 当前区的全部帮会（含人数与帮主名），按人数降序。
      */
     list: "/admin/guilds",
     /**
      * 强制解散帮会（DELETE /admin/guilds/{id}）
      *
-     * 成员与待审批申请一并清除，**不可恢复**。用于违规帮会名 / 组织性刷资源等运营处置。
+     * 成员与待审批申请一并清除，**不可恢复**。用于违规帮会名 / 组织性刷资源等运营处置。别区的帮会 id 返回 404。
      */
     remove: (id: string) => `/admin/guilds/${encodeURIComponent(id)}`,
     /**
      * 帮会详情（GET /admin/guilds/{id}）
      *
-     * 帮会信息 + 完整成员名单（帮主 → 副帮主 → 成员）。
+     * 帮会信息 + 完整成员名单（帮主 → 副帮主 → 成员）。别区的帮会 id 返回 404。
      */
     detail: (id: string) => `/admin/guilds/${encodeURIComponent(id)}`,
     /**
      * 修改帮会（名字 / 公告）（PATCH /admin/guilds/{id}）
      *
-     * 两个字段都可选，只传要改的。改名字仍要求全局唯一（50102）。
+     * 两个字段都可选，只传要改的。改名字仍要求**全局唯一**（50102）—— 同名帮会分处两区会让搜索、举报、客服沟通全部指不准。别区的帮会 id 返回 404。
      */
     update: (id: string) => `/admin/guilds/${encodeURIComponent(id)}`,
   },
@@ -999,7 +1005,7 @@ export const routes = {
     /**
      * 举报列表（GET /admin/reports）
      *
-     * 按举报时间倒序（新举报在前，同毫秒以 id 兜底，翻页稳定）。
+     * **只列本区角色之间的举报**（举报人属本区；举报人角色已删时看被举报方的区）。
      */
     list: "/admin/reports",
   },
@@ -1008,19 +1014,19 @@ export const routes = {
     /**
      * 角色列表（GET /admin/roles）
      *
-     * keyword 匹配角色名或角色 id；accountId 限定账号；online / occupation / sex / minLevel / maxLevel 做筛选。
+     * keyword 匹配角色名或角色 id；accountId 限定账号；online / occupation / sex / minLevel / maxLevel 做筛选。**只列当前区的角色**。
      */
     list: "/admin/roles",
     /**
      * 删除角色（DELETE /admin/roles/{id}）
      *
-     * 不可恢复；是账号在线角色时一并清掉在线标记。
+     * 不可恢复；是账号在线角色时一并清掉在线标记。别区的角色 id 返回 404。
      */
     remove: (id: string) => `/admin/roles/${encodeURIComponent(id)}`,
     /**
      * 角色详情（GET /admin/roles/{id}）
      *
-     * 含完整 data（背包 / 装备等原样返回），并带一组 **derived**：服务端按存档输入**现算**的战斗属性。
+     * 含完整 data（背包 / 装备等原样返回），并带一组 **derived**：服务端按存档输入**现算**的战斗属性。别区的角色 id 返回 404。
      */
     detail: (id: string) => `/admin/roles/${encodeURIComponent(id)}`,
     /**
@@ -1032,7 +1038,7 @@ export const routes = {
     /**
      * 设为在线角色（POST /admin/roles/{id}/select）
      *
-     * 把角色设为所属账号的在线角色（等价于玩家在选角界面选它进游戏）。
+     * 把角色设为所属账号的在线角色（等价于玩家在选角界面选它进游戏）。别区的角色 id 返回 404。
      */
     select: (id: string) => `/admin/roles/${encodeURIComponent(id)}/select`,
     /**
@@ -1140,7 +1146,7 @@ export const routes = {
     /**
      * 分布统计（GET /admin/stats/breakdown）
      *
-     * 等级（10 级一档）/ 职业 / 性别 / 所在地图四组分布。
+     * 等级（10 级一档）/ 职业 / 性别 / 所在地图四组分布，**都只数当前区的角色**。
      */
     breakdown: "/admin/stats/breakdown",
     /**

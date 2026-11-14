@@ -109,9 +109,14 @@ async function startServer(env) {
 }
 
 /** 发一次请求，返回 { status, body }（body 是唯一包裹体） */
+/** 管理端请求所在的区（#960）：一个 e2e 进程只在一个区里干活，管理端请求统一带它 */
+const ADMIN_ZONE = 1;
+
 async function api(baseUrl, method, route, options = {}) {
   const headers = { "Content-Type": "application/json" };
   if (options.token) headers.Authorization = `Bearer ${options.token}`;
+  // 管理端单区上下文（#960）：控制台前端在请求拦截器里统一带 X-Zone-Id，测试里对等模拟
+  if (options.zoneId !== undefined) headers["X-Zone-Id"] = String(options.zoneId);
   const response = await fetch(`${baseUrl}${route}`, {
     method,
     headers,
@@ -128,10 +133,10 @@ async function api(baseUrl, method, route, options = {}) {
 
 /** 注册并登录一个管理员，返回 token（第一个注册者自动是超级管理员） */
 async function registerAdmin(baseUrl, username, password) {
-  const login = await api(baseUrl, "POST", "/api/admin/auth/login", { body: { username, password } });
+  const login = await api(baseUrl, "POST", "/api/admin/auth/login", { body: { zoneId: ADMIN_ZONE, username, password } });
   if (login.body?.data?.token) return login.body.data.token;
   await api(baseUrl, "POST", "/api/admin/auth/register", { body: { username, password, registerCode: ADMIN_CODE } });
-  const retry = await api(baseUrl, "POST", "/api/admin/auth/login", { body: { username, password } });
+  const retry = await api(baseUrl, "POST", "/api/admin/auth/login", { body: { zoneId: ADMIN_ZONE, username, password } });
   return retry.body?.data?.token;
 }
 
@@ -367,18 +372,18 @@ async function main() {
     const demote = await api(base, "PATCH", `/api/admin/admins/${viewerId}`, { token, body: { role: "viewer" } });
     checkEqual(demote.status, 200, "把第二个管理员降为只读观察员");
 
-    checkEqual((await api(base, "GET", "/api/admin/maps/0", { token: viewerToken })).status, 200, "观察员可读详情");
+    checkEqual((await api(base, "GET", "/api/admin/maps/0", { token: viewerToken, zoneId: ADMIN_ZONE })).status, 200, "观察员可读详情");
     checkEqual(
-      (await api(base, "POST", "/api/admin/maps/0/npcs", { token: viewerToken, body: pointOf({ npcId: "1001" }) })).status,
+      (await api(base, "POST", "/api/admin/maps/0/npcs", { token: viewerToken, zoneId: ADMIN_ZONE, body: pointOf({ npcId: "1001" }) })).status,
       403,
       "观察员放 NPC → 403（他没有 gameConfig:write）",
     );
     checkEqual(
-      (await api(base, "PUT", "/api/admin/maps/0/revive-point", { token: viewerToken, body: { cx: 100, cy: -100 } })).status,
+      (await api(base, "PUT", "/api/admin/maps/0/revive-point", { token: viewerToken, zoneId: ADMIN_ZONE, body: { cx: 100, cy: -100 } })).status,
       403,
       "观察员设复活点 → 403",
     );
-    checkEqual((await api(base, "DELETE", "/api/admin/maps/0/revive-point", { token: viewerToken })).status, 403, "观察员清复活点 → 403");
+    checkEqual((await api(base, "DELETE", "/api/admin/maps/0/revive-point", { token: viewerToken, zoneId: ADMIN_ZONE })).status, 403, "观察员清复活点 → 403");
     checkEqual((await api(base, "POST", "/api/admin/maps/0/npcs", { body: pointOf() })).status, 401, "无令牌 → 401");
 
     //#endregion

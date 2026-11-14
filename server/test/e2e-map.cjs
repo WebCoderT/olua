@@ -113,9 +113,14 @@ async function startServer(env) {
 }
 
 /** 发一次请求，返回 { status, body }（body 是唯一包裹体） */
+/** 管理端请求所在的区（#960）：一个 e2e 进程只在一个区里干活，管理端请求统一带它 */
+const ADMIN_ZONE = 1;
+
 async function api(baseUrl, method, route, options = {}) {
   const headers = { "Content-Type": "application/json" };
   if (options.token) headers.Authorization = `Bearer ${options.token}`;
+  // 管理端单区上下文（#960）：控制台前端在请求拦截器里统一带 X-Zone-Id，测试里对等模拟
+  if (options.zoneId !== undefined) headers["X-Zone-Id"] = String(options.zoneId);
   const response = await fetch(`${baseUrl}${route}`, {
     method,
     headers,
@@ -132,10 +137,10 @@ async function api(baseUrl, method, route, options = {}) {
 
 /** 注册并登录一个管理员，返回 token（第一个注册者自动是超级管理员） */
 async function registerAdmin(baseUrl, username, password) {
-  const login = await api(baseUrl, "POST", "/api/admin/auth/login", { body: { username, password } });
+  const login = await api(baseUrl, "POST", "/api/admin/auth/login", { body: { zoneId: ADMIN_ZONE, username, password } });
   if (login.body?.data?.token) return login.body.data.token;
   await api(baseUrl, "POST", "/api/admin/auth/register", { body: { username, password, registerCode: ADMIN_CODE } });
-  const retry = await api(baseUrl, "POST", "/api/admin/auth/login", { body: { username, password } });
+  const retry = await api(baseUrl, "POST", "/api/admin/auth/login", { body: { zoneId: ADMIN_ZONE, username, password } });
   return retry.body?.data?.token;
 }
 
@@ -494,12 +499,12 @@ async function main() {
     const demote = await api(base, "PATCH", `/api/admin/admins/${viewerId}`, { token: rootToken, body: { role: "viewer" } });
     checkEqual(demote.status, 200, "把第二个管理员降为只读观察员");
 
-    const viewerList = await api(base, "GET", "/api/admin/maps", { token: viewerToken });
+    const viewerList = await api(base, "GET", "/api/admin/maps", { token: viewerToken, zoneId: ADMIN_ZONE });
     checkEqual(viewerList.status, 200, "观察员可读列表（gameConfig:read 就够）");
-    const viewerDetail = await api(base, "GET", "/api/admin/maps/3", { token: viewerToken });
+    const viewerDetail = await api(base, "GET", "/api/admin/maps/3", { token: viewerToken, zoneId: ADMIN_ZONE });
     checkEqual(viewerDetail.status, 200, "观察员可读详情");
     const viewerWrite = await api(base, "PATCH", "/api/admin/maps/0", {
-      token: viewerToken,
+      token: viewerToken, zoneId: ADMIN_ZONE,
       body: { label: "观察员改的", type: "0", level: 1, combat: 0, soulOfWar: 0 },
     });
     checkEqual(viewerWrite.status, 403, "观察员改玩法配置 → 403（写入口存在，但他没有 gameConfig:write）");

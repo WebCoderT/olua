@@ -60,10 +60,15 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 let baseUrl = "";
 
+/** 管理端请求所在的区（#960）：一个 e2e 进程只在一个区里干活，管理端请求统一带它 */
+const ADMIN_ZONE = 1;
+
 async function api(method, path, options = {}) {
   const headers = {};
   if (options.body !== undefined) headers["Content-Type"] = "application/json";
   if (options.token) headers.Authorization = `Bearer ${options.token}`;
+  // 管理端单区上下文（#960）：控制台前端在请求拦截器里统一带 X-Zone-Id，测试里对等模拟
+  if (options.zoneId !== undefined) headers["X-Zone-Id"] = String(options.zoneId);
   const response = await fetch(`${baseUrl}/${path}`, {
     method,
     headers,
@@ -87,7 +92,7 @@ async function api(method, path, options = {}) {
   check(admin.code === 0 && !!adminToken, "准备：注册管理员拿到令牌", admin.message);
 
   const setScalar = async (key, value) => {
-    const res = await api("PATCH", `admin/growth-scalars/${key}`, { token: adminToken, body: { value } });
+    const res = await api("PATCH", `admin/growth-scalars/${key}`, { token: adminToken, zoneId: ADMIN_ZONE, body: { value } });
     if (res.code !== 0) throw new Error(`设标量 ${key}=${value} 失败：${res.message}`);
   };
   /** 角色详情（RoleDto：level / revision 在顶层，exp 在 data 文档里） */
@@ -135,7 +140,7 @@ async function api(method, path, options = {}) {
   // 这一段的守点因此从「到顶」改成「循环升级」：一次入账必须能连跳好几级，
   // 而不是把超出的经验丢掉或只升一级。
   check(maxed.level > soaked.level + 1, "一次大额入账跨多级（循环升级，不是只升一级）", `level ${soaked.level} → ${maxed.level}`);
-  const nextNeed = await api("GET", `admin/level-curves/preview?level=${maxed.level + 1}`, { token: adminToken });
+  const nextNeed = await api("GET", `admin/level-curves/preview?level=${maxed.level + 1}`, { token: adminToken, zoneId: ADMIN_ZONE });
   check(
     nextNeed.code === 0 && maxed.data.exp < nextNeed.data.exp,
     "余数 = 不足下一级的那部分（升级判定与等级属性计算器同一套经验曲线）",
@@ -143,10 +148,10 @@ async function api(method, path, options = {}) {
   );
 
   // 到顶短路：直接把角色顶到上限再观察 —— 真升 100 万级要循环 100 万次，不是测试该干的事
-  const capLevel = (await api("GET", "admin/growth-scalars", { token: adminToken })).data.list.find(
+  const capLevel = (await api("GET", "admin/growth-scalars", { token: adminToken, zoneId: ADMIN_ZONE })).data.list.find(
     (row) => row.key === "roleMaxLevel",
   ).value;
-  const cappedAt = await api("PATCH", `admin/roles/${roleId}`, { token: adminToken, body: { level: capLevel } });
+  const cappedAt = await api("PATCH", `admin/roles/${roleId}`, { token: adminToken, zoneId: ADMIN_ZONE, body: { level: capLevel } });
   check(cappedAt.code === 0, `三：把角色顶到等级上限（${capLevel}）`, cappedAt.message);
   const revisionAtCap = (await roleOf(token, roleId)).revision;
   await sleep(2300);
@@ -165,7 +170,7 @@ async function api(method, path, options = {}) {
   const roleIdC = (await api("POST", "roles", { token: playerC.data.token, body: { name: "在线侠", occupation: "1", sex: "1" } })).data.id;
   const playerB = await api("POST", "auth/register", { body: { username: "soak_offline", password: "pass1234" } });
   const roleIdB = (await api("POST", "roles", { token: playerB.data.token, body: { name: "下线侠", occupation: "1", sex: "1" } })).data.id;
-  await api("POST", `admin/accounts/${playerB.data.account.id}/offline`, { token: adminToken });
+  await api("POST", `admin/accounts/${playerB.data.account.id}/offline`, { token: adminToken, zoneId: ADMIN_ZONE });
   const offlineBase = await roleOf(playerB.data.token, roleIdB);
   const onlineBase = await roleOf(playerC.data.token, roleIdC);
   await sleep(2300);
@@ -179,11 +184,11 @@ async function api(method, path, options = {}) {
   //#region 五、参数校验：出界值拒收
 
   console.log("— 五、参数校验 —");
-  const badRate = await api("PATCH", "admin/growth-scalars/soakExpPerTick", { token: adminToken, body: { value: -1 } });
+  const badRate = await api("PATCH", "admin/growth-scalars/soakExpPerTick", { token: adminToken, zoneId: ADMIN_ZONE, body: { value: -1 } });
   check(badRate.code !== 0 && badRate.status === 400, "负速率拒收（取值域 [0, 1000000]）", `${badRate.code}/${badRate.status}`);
-  const badSeconds = await api("PATCH", "admin/growth-scalars/soakTickSeconds", { token: adminToken, body: { value: 0 } });
+  const badSeconds = await api("PATCH", "admin/growth-scalars/soakTickSeconds", { token: adminToken, zoneId: ADMIN_ZONE, body: { value: 0 } });
   check(badSeconds.code !== 0 && badSeconds.status === 400, "零间隔拒收（取值域 [1, 3600]）", `${badSeconds.code}/${badSeconds.status}`);
-  const badFraction = await api("PATCH", "admin/growth-scalars/soakExpPerTick", { token: adminToken, body: { value: 1.5 } });
+  const badFraction = await api("PATCH", "admin/growth-scalars/soakExpPerTick", { token: adminToken, zoneId: ADMIN_ZONE, body: { value: 1.5 } });
   check(badFraction.code !== 0 && badFraction.status === 400, "小数速率拒收（必须整数）", `${badFraction.code}/${badFraction.status}`);
 
   // 还原出厂关闭，不留残余影响别的环境

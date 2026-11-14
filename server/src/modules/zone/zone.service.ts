@@ -6,9 +6,10 @@ import { RoleRepository } from "../../database/repositories/role.repository";
 import { ROLE_NAME_MAX_LENGTH } from "../roles/role-data.util";
 import { WorldMonsterRepository } from "../../database/repositories/world-monster.repository";
 import { instanceIdOf } from "../../common/utils/room-key.util";
+import { resolveZoneId } from "../../common/guards/zone-context.guard";
 import { ZoneRepository } from "../../database/repositories/zone.repository";
 import { ZoneRow } from "../../database/rows";
-import { AdminZoneDto, ZoneDto } from "./dto/zone.dto";
+import { AdminZoneDto, ZoneDto, ZoneOptionDto } from "./dto/zone.dto";
 
 /** 从 instanceId 解析发牌序号（与 WorldService 内部同一口径：取最后一个 `_` 之后的数字） */
 function parseSeq(instanceId: string): number {
@@ -57,29 +58,22 @@ export class ZoneService {
     return this.zones.listAll().map((row) => AdminZoneDto.from(row, this.zones.countAccounts(row.id)));
   }
 
+  /** 可选区（#960：登录页下拉；未合并 + 按 sort，含 closed，字段见 ZoneOptionDto） */
+  options(): ZoneOptionDto[] {
+    return this.zones.listSelectable().map((row) => ZoneOptionDto.from(row));
+  }
+
   /**
-   * 把管理端请求头 `X-Zone-Id` 解成区 id（#959 起用；#960 的守卫会统一调这里）
+   * 校验并返回区 id（登录时用；四条拒绝理由与守卫**同一句话**）
    *
-   * 管理端「一次只在一个区里干活」：头必填，且必须是**活区**（已合并的区没有可看的
-   * 实时数据，只剩历史流水）。缺失 / 不是正整数 / 区不存在 / 区已合并 → 400
-   * `ZONE_REQUIRED` —— 四种情况对客户端是同一句话「先选一个区服」，
-   * 区分它们只会逼客户端写四条其实一样的提示。
+   * 复用守卫里那个 `resolveZoneId`，而不是另写一份判断 —— 两处各写一份的话，
+   * 迟早出现「登录能选的区，进去第一个请求就 400」。
    *
-   * 这里**只做「区存在吗」的校验**，不判资源归属（那是各 service 的事，见 docs/39 §3.8）。
+   * 放在 service 而不是让登录直接注入 `ZoneRepository`：仓储是 zone 模块的私产，
+   * 跨模块直接装配会被 `audit-server-boundaries` 拦（也确实该拦）。
    */
-  resolveZoneHeader(raw: string | undefined): number {
-    const zoneId = Number(raw);
-    if (!raw || !Number.isInteger(zoneId) || zoneId <= 0) {
-      throw new BizException(BizCode.ZONE_REQUIRED, "管理端请求必须带 X-Zone-Id（先选一个区服）", HttpStatus.BAD_REQUEST);
-    }
-    if (!this.zones.findLiveById(zoneId)) {
-      throw new BizException(
-        BizCode.ZONE_REQUIRED,
-        `X-Zone-Id 指向的区服不存在或已合并（${zoneId}）—— 先选一个区服`,
-        HttpStatus.BAD_REQUEST,
-      );
-    }
-    return zoneId;
+  assertSelectable(raw: string | number | undefined): number {
+    return resolveZoneId(this.zones, raw);
   }
 
   /** 开新区（名字查重后落库；区 id 自增，注册端立即可选） */

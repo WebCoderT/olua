@@ -102,9 +102,14 @@ async function startServer(dbPath) {
   throw new Error("等待服务启动超时");
 }
 
+/** 管理端请求所在的区（#960）：一个 e2e 进程只在一个区里干活，管理端请求统一带它 */
+const ADMIN_ZONE = 1;
+
 async function api(baseUrl, method, route, options = {}) {
   const headers = { "Content-Type": "application/json" };
   if (options.token) headers.Authorization = `Bearer ${options.token}`;
+  // 管理端单区上下文（#960）：控制台前端在请求拦截器里统一带 X-Zone-Id，测试里对等模拟
+  if (options.zoneId !== undefined) headers["X-Zone-Id"] = String(options.zoneId);
   const response = await fetch(`${baseUrl}/api/${route}`, {
     method,
     headers,
@@ -171,7 +176,7 @@ function writeData(dbPath, roleId, data) {
     check(!!token && !!roleId, "准备：账号与角色已创建", created.message);
 
     await api(baseUrl, "POST", "admin/auth/register", { body: { username: "corrupt_admin", password: "pass1234", registerCode: ADMIN_CODE } });
-    const adminLogin = await api(baseUrl, "POST", "admin/auth/login", { body: { username: "corrupt_admin", password: "pass1234" } });
+    const adminLogin = await api(baseUrl, "POST", "admin/auth/login", { body: { zoneId: ADMIN_ZONE, username: "corrupt_admin", password: "pass1234" } });
     const adminToken = adminLogin.data && adminLogin.data.token;
     check(!!adminToken, "准备：管理员已登录（看 corrupted 标记要用它）");
 
@@ -191,7 +196,7 @@ function writeData(dbPath, roleId, data) {
     checkEqual(afterReject.corrupted, 1, "库里标了 corrupted=1（可被运维检索）");
     checkEqual(afterReject.data, brokenRaw, "坏 JSON 原样保留（不删行、不洗成空档）");
 
-    const adminView = await api(baseUrl, "GET", `admin/roles/${roleId}`, { token: adminToken });
+    const adminView = await api(baseUrl, "GET", `admin/roles/${roleId}`, { token: adminToken, zoneId: ADMIN_ZONE });
     checkEqual(adminView.data && adminView.data.corrupted, true, "管理端详情能看到 corrupted（运维不用查库）");
 
     const again = await api(baseUrl, "POST", `roles/${roleId}/select`, { token });

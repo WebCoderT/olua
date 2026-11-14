@@ -128,9 +128,14 @@ async function startServer(dbPath) {
 }
 
 /** 发一次请求，返回统一包裹体（code / message / data） */
+/** 管理端请求所在的区（#960）：一个 e2e 进程只在一个区里干活，管理端请求统一带它 */
+const ADMIN_ZONE = 1;
+
 async function api(baseUrl, method, route, options = {}) {
   const headers = { "Content-Type": "application/json" };
   if (options.token) headers.Authorization = `Bearer ${options.token}`;
+  // 管理端单区上下文（#960）：控制台前端在请求拦截器里统一带 X-Zone-Id，测试里对等模拟
+  if (options.zoneId !== undefined) headers["X-Zone-Id"] = String(options.zoneId);
   const response = await fetch(`${baseUrl}/api/${route}`, {
     method,
     headers,
@@ -418,7 +423,7 @@ function playerEntries(session, roleId) {
     });
     check(badCategory.code !== 0, "非法类别被 DTO 挡下（固定枚举，不开放自由分类）", `code=${badCategory.code}`);
 
-    const adminList = await api(baseUrl, "GET", "admin/reports?page=1&size=10", { token: adminToken });
+    const adminList = await api(baseUrl, "GET", "admin/reports?page=1&size=10", { token: adminToken, zoneId: ADMIN_ZONE });
     checkEqual(adminList.code, 0, "管理端能查举报列表");
     checkEqual(adminList.data.total, 1, "列表里只有那一条（重复举报没有落第二条）");
     const first = adminList.data.list[0];
@@ -427,7 +432,7 @@ function playerEntries(session, roleId) {
     checkEqual(first && first.categoryLabel, "骚扰辱骂", "类别中文名由服务端给（界面不自己映射）");
     checkEqual(first && first.status, "pending", "状态是待处理（v1 只写 pending）");
 
-    const filtered = await api(baseUrl, "GET", `admin/reports?keyword=${encodeURIComponent("丙玩家")}`, { token: adminToken });
+    const filtered = await api(baseUrl, "GET", `admin/reports?keyword=${encodeURIComponent("丙玩家")}`, { token: adminToken, zoneId: ADMIN_ZONE });
     checkEqual(filtered.data.total, 1, "按举报人角色名也能搜到（名字与 id 都进关键字）");
 
     const playerOnAdmin = await api(baseUrl, "GET", "admin/reports", { token: C.token });

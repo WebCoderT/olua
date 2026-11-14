@@ -1,4 +1,4 @@
-import { readToken } from "../store/session";
+import { readToken, readZoneId } from "../store/session";
 import { API_TIMEOUT, buildUrl } from "./config";
 import { ApiError } from "./types";
 import type { ApiEnvelope } from "./types";
@@ -50,12 +50,20 @@ export function setReloginHandler(handler: () => void): void {
   reloginHandler = handler;
 }
 
-/** 默认请求拦截器：补公共头 + 注入令牌 */
+/**
+ * 默认请求拦截器：补公共头 + 注入令牌 + 注入当前区
+ *
+ * **区只在这里加一次**（#960）：页面各写一份迟早有页面忘带，而忘了带的后果是 400，
+ * 或者更糟 —— 落到服务端的「没选区的请求」分支上去。唯一例外是登录（`auth: false`），
+ * 它的区在请求体里，登录页自己带。
+ */
 useRequestInterceptor((config) => {
   config.headers["Content-Type"] = config.headers["Content-Type"] ?? "application/json";
   if (config.auth) {
     const token = readToken();
     if (token) config.headers.Authorization = `Bearer ${token}`;
+    const zoneId = readZoneId();
+    if (zoneId !== null) config.headers["X-Zone-Id"] = String(zoneId);
   }
   return config;
 });

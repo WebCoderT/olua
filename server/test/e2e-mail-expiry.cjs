@@ -71,6 +71,8 @@ async function api(method, path, options = {}) {
   const headers = {};
   if (options.body !== undefined) headers["Content-Type"] = "application/json";
   if (options.token) headers.Authorization = `Bearer ${options.token}`;
+  // 管理端单区上下文（#960）：控制台前端在请求拦截器里统一带 X-Zone-Id，测试里对等模拟
+  if (options.zoneId !== undefined) headers["X-Zone-Id"] = String(options.zoneId);
   const response = await fetch(`${baseUrl}/${path}`, {
     method,
     headers,

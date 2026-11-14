@@ -1228,6 +1228,10 @@ export type AdminInfo = {
    * 最近登录时间（毫秒，从未登录为 null）
    */
   lastLoginAt: number | null;
+  /**
+   * 上次作业的区（#960：登录页下拉的默认值；换浏览器也一致。不参与鉴权）
+   */
+  lastZoneId: number | null;
 };
 
 export type AdminAuthResult = {
@@ -1269,6 +1273,29 @@ export type AdminLogin = {
    * 密码
    */
   password: string;
+  /**
+   * 登录后所在的区服 id（可选清单见 GET /admin/auth/zones）。**必填，但校验不在这里**：缺失 / 非整数 / 区不存在 / 区已合并统一由 `resolveZoneId` 回 400 `ZONE_REQUIRED(50029)`，四种理由对客户端是同一句话（选一个区服）。
+   */
+  zoneId?: number;
+};
+
+export type ZoneOption = {
+  /**
+   * 区服 id
+   */
+  id: number;
+  /**
+   * 区服名
+   */
+  name: string;
+  /**
+   * 运营状态：`open`（正常） / `closed`（停止注册，仍可进去查历史）
+   */
+  status: "open" | "closed";
+  /**
+   * 下拉排序（升序，同值按 id）
+   */
+  sort: number;
 };
 
 export type ChangeAdminPassword = {
@@ -1429,9 +1456,13 @@ export type AccountDetail = {
    */
   account: Account;
   /**
-   * 该账号的角色列表
+   * 该账号在本区的角色列表
    */
   roles: RoleSummary[];
+  /**
+   * 另在几个区还有角色（#960）。账号级操作（封禁 / 改密 / 删号）会影响这些区的角色，管理端提交前要用它提示影响面；详情里只列当前区的角色
+   */
+  otherZoneCount: number;
 };
 
 export type UpdateAccountEmail = {
@@ -1905,6 +1936,14 @@ export type AdminZone = {
    */
   mergedInto: number | null;
   /**
+   * 运营状态：open / closed
+   */
+  status: "open" | "closed";
+  /**
+   * 下拉排序（升序，同值按 id）
+   */
+  sort: number;
+  /**
    * 当前归属本区的账号数
    */
   accountCount: number;
@@ -2043,6 +2082,10 @@ export type AuditLog = {
    * 请求路径
    */
   path: string | null;
+  /**
+   * 这次操作发生时管理端选的区（#960）。全区性接口（配置 / 管理员 / 区目录）与未选区的请求为 null
+   */
+  zoneId: number | null;
   /**
    * HTTP 状态码
    */
@@ -9799,6 +9842,10 @@ export type AuditQuery = {
    * 排序方向：asc 升序 / desc 降序
    */
   order?: "asc" | "desc";
+  /**
+   * 只看在某个区里发生的操作（不传 = 全部区；跨区追责时按区筛）
+   */
+  zoneId?: number;
   /**
    * 只看某个操作人的日志（管理员 id）
    */

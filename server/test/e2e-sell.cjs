@@ -138,9 +138,14 @@ async function startServer(dbPath) {
 }
 
 /** 发一次请求，返回唯一包裹体（code / message / data） */
+/** 管理端请求所在的区（#960）：一个 e2e 进程只在一个区里干活，管理端请求统一带它 */
+const ADMIN_ZONE = 1;
+
 async function api(baseUrl, method, route, options = {}) {
   const headers = { "Content-Type": "application/json" };
   if (options.token) headers.Authorization = `Bearer ${options.token}`;
+  // 管理端单区上下文（#960）：控制台前端在请求拦截器里统一带 X-Zone-Id，测试里对等模拟
+  if (options.zoneId !== undefined) headers["X-Zone-Id"] = String(options.zoneId);
   const response = await fetch(`${baseUrl}/api/${route}`, {
     method,
     headers,
@@ -182,7 +187,7 @@ const BAG_SEED_CELLS = [
 /** 注册并登录一个管理员（PATCH 角色要 `ROLE_WRITE`） */
 async function registerAdmin(baseUrl, username, password) {
   await api(baseUrl, "POST", "admin/auth/register", { body: { username, password, registerCode: ADMIN_CODE } });
-  const login = await api(baseUrl, "POST", "admin/auth/login", { body: { username, password } });
+  const login = await api(baseUrl, "POST", "admin/auth/login", { body: { zoneId: ADMIN_ZONE, username, password } });
   return login.data && login.data.token;
 }
 
@@ -215,7 +220,7 @@ function countInBag(bag, goodId) {
     check(created.code === 0 && created.data.online === true, "准备：角色已创建并自动在线", created.message);
     const adminToken = await registerAdmin(baseUrl, "sell_admin", "Admin#123456");
     check(!!adminToken, "准备：管理员已登录（造背包状态只有这条路）");
-    const seeded = await api(baseUrl, "PATCH", `admin/roles/${roleId}`, { token: adminToken, body: { bag: BAG_SEED_CELLS } });
+    const seeded = await api(baseUrl, "PATCH", `admin/roles/${roleId}`, { token: adminToken, zoneId: ADMIN_ZONE, body: { bag: BAG_SEED_CELLS } });
     check(seeded.code === 0, "准备：管理端把四样物品注入背包", seeded.message);
     const snapshot = await api(baseUrl, "GET", `roles/${roleId}`, { token });
     check(countInBag(snapshot.data.data.bag, "cloth_1") === 1, "准备：背包里有一件 cloth_1");
@@ -292,7 +297,7 @@ function countInBag(bag, goodId) {
     const walletNow = await api(baseUrl, "GET", `roles/${roleId}`, { token });
     const bindGoldNow = Number((walletNow.data.data || {}).bindGold || 0);
     if (bindGoldNow < refillPrice) {
-      const topped = await api(baseUrl, "PATCH", `admin/roles/${roleId}`, { token: adminToken, body: { bindGold: refillPrice } });
+      const topped = await api(baseUrl, "PATCH", `admin/roles/${roleId}`, { token: adminToken, zoneId: ADMIN_ZONE, body: { bindGold: refillPrice } });
       check(topped.code === 0, `准备：绑定元宝补到 ${refillPrice}（= 快照里的商城价）`, topped.message);
     }
     const refill = await api(baseUrl, "POST", `roles/${roleId}/mall-purchase`, { token, body: { goodId: "cloth_1", revision: await revOf(baseUrl, roleId, token) } });
@@ -338,7 +343,7 @@ function countInBag(bag, goodId) {
     // 绑定与非绑定走的是同一条入账路径（`takeGoodsFromBag` 不读 bound），所以用普通装备
     // 也验得到；绑定件本身能不能卖由 e2e-combat 的绑定段单独覆盖。
     const seeded845 = await api(baseUrl, "PATCH", `admin/roles/${roleId}`, {
-      token: adminToken,
+      token: adminToken, zoneId: ADMIN_ZONE,
       body: { bag: [{ row: 0, col: 0, id: "cloth_1", count: 1 }] },
     });
     check(seeded845.code === 0, "准备：补一件 cloth_1", seeded845.message);

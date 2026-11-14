@@ -53,6 +53,15 @@ export interface ZoneRow {
   id: number;
   /** 区名（如「一区」；唯一，给玩家注册时选） */
   name: string;
+  /**
+   * 运营状态（#960）：`open` | `closed`
+   *
+   * **已合并不塞进这里**：那是 `merged_into` 的事。一个区可以先 `closed`（停止注册、
+   * 不推荐新人）再合并，两者是不同维度 —— 混在一个字段里会写出「关了就一定没数据」的错判。
+   */
+  status: string;
+  /** 登录页 / 注册下拉的排序（升序；同值按 id。运营用它把新区顶上去） */
+  sort: number;
   /** 已并入哪个区（合并区的标记；NULL = 还是一个活区） */
   merged_into: number | null;
   created_at: number;
@@ -117,6 +126,13 @@ export interface AdminRow {
   created_at: number;
   updated_at: number;
   last_login_at: number | null;
+  /**
+   * 上次作业的区（#960）
+   *
+   * 管理端不绑区，但「上次在哪个区干活」要记住：换一台浏览器登录也该回到那个区。
+   * 登录时写入（登录必带区），**不参与鉴权** —— 它只是下拉框的默认值。
+   */
+  last_zone_id: number | null;
 }
 
 /** 账号行 + 统计出来的角色数（列表接口用） */
@@ -174,6 +190,13 @@ export interface AuditLogRow {
   ip: string | null;
   method: string | null;
   path: string | null;
+  /**
+   * 这次操作发生在哪个区（#960）。
+   *
+   * **不是归属，是现场**：跨区追责要能答「这个客服在几区干过什么」。
+   * 全区性的接口（配置、管理员、区目录）与登录失败这类没有区的请求为空。
+   */
+  zone_id: number | null;
   /** HTTP 状态码 */
   status_code: number | null;
   /** 1 成功 / 0 失败 */
@@ -2004,6 +2027,13 @@ export interface RoleStatusRow {
 
 /** 角色筛选条件（管理端列表 / 批量操作共用） */
 export interface RoleFilter {
+  /**
+   * 当前作业区（#960，**必填**）
+   *
+   * 管理端一次只在一个区里干活：列表 / 计数 / 批量删都必须带它。
+   * 设成必填而不是可选，是为了让「漏传区」在编译期就暴露 —— 可选参数会静默变成「全区」。
+   */
+  zoneId: number;
   keyword?: string;
   accountId?: string;
   /** true 只看在线角色；false 只看离线角色；不传不筛 */

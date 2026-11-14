@@ -172,9 +172,14 @@ async function startServer(dbPath) {
   throw new Error("等待服务启动超时");
 }
 
+/** 管理端请求所在的区（#960）：一个 e2e 进程只在一个区里干活，管理端请求统一带它 */
+const ADMIN_ZONE = 1;
+
 async function api(baseUrl, method, route, options = {}) {
   const headers = { "Content-Type": "application/json" };
   if (options.token) headers.Authorization = `Bearer ${options.token}`;
+  // 管理端单区上下文（#960）：控制台前端在请求拦截器里统一带 X-Zone-Id，测试里对等模拟
+  if (options.zoneId !== undefined) headers["X-Zone-Id"] = String(options.zoneId);
   const response = await fetch(`${baseUrl}/api/${route}`, {
     method,
     headers,
@@ -268,7 +273,7 @@ function connect(url) {
 
     // 技能配置走管理端：结算读的 skillOf 只在「启动 + 管理端写操作后」重装
     const patchSkill = async (body) => {
-      const result = await api(baseUrl, "PATCH", `admin/skills/${SKILL}`, { token: adminToken, body });
+      const result = await api(baseUrl, "PATCH", `admin/skills/${SKILL}`, { token: adminToken, zoneId: ADMIN_ZONE, body });
       checkEqual(result && result.code, 0, `准备：改 ${SKILL} ${JSON.stringify(body)}`);
       return result && result.data;
     };
@@ -386,7 +391,7 @@ function connect(url) {
     group("三、角色属性相加：growth_scalars.critRate + skills.crit_rate");
 
     const patchScalar = async (key, value) => {
-      const result = await api(baseUrl, "PATCH", `admin/growth-scalars/${key}`, { token: adminToken, body: { value } });
+      const result = await api(baseUrl, "PATCH", `admin/growth-scalars/${key}`, { token: adminToken, zoneId: ADMIN_ZONE, body: { value } });
       checkEqual(result && result.code, 0, `准备：把成长参数 ${key} 设为 ${value}`, result && result.message);
     };
 

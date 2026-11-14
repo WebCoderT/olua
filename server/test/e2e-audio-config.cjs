@@ -62,10 +62,15 @@ function finish(message) {
 let baseUrl = "";
 
 /** 发一次请求，返回归一后的结果 */
+/** 管理端请求所在的区（#960）：一个 e2e 进程只在一个区里干活，管理端请求统一带它 */
+const ADMIN_ZONE = 1;
+
 async function api(method, path, options = {}) {
   const headers = {};
   if (options.body !== undefined) headers["Content-Type"] = "application/json";
   if (options.token) headers.Authorization = `Bearer ${options.token}`;
+  // 管理端单区上下文（#960）：控制台前端在请求拦截器里统一带 X-Zone-Id，测试里对等模拟
+  if (options.zoneId !== undefined) headers["X-Zone-Id"] = String(options.zoneId);
   const response = await fetch(`${baseUrl}/${path}`, {
     method,
     headers,
@@ -115,7 +120,7 @@ function saveAudio(key, token, body) {
       body: { username: "gm_audio_view", password: "pass1234", registerCode: "test-admin-code" },
     });
     const viewerToken = viewer.data.token;
-    await api("PATCH", `admin/admins/${viewer.data.admin.id}`, { token: adminToken, body: { role: "viewer" } });
+    await api("PATCH", `admin/admins/${viewer.data.admin.id}`, { token: adminToken, zoneId: ADMIN_ZONE, body: { role: "viewer" } });
 
     const player = await api("POST", "auth/register", { body: { username: "audio_player", password: "pass1234" } });
     const playerToken = player.data.token;
@@ -129,7 +134,7 @@ function saveAudio(key, token, body) {
 
     console.log("— 一、鉴权：观察员可读不可写、玩家令牌 401 —");
 
-    const viewerList = await api("GET", "admin/audio-settings", { token: viewerToken });
+    const viewerList = await api("GET", "admin/audio-settings", { token: viewerToken, zoneId: ADMIN_ZONE });
     check(viewerList.code === 0 && viewerList.data.total === 12, "观察员能读音效列表（gameConfig:read）", `${viewerList.status}`);
     const viewerSave = await saveAudio("login_bgm", viewerToken, { volume: 30 });
     check(
@@ -146,7 +151,7 @@ function saveAudio(key, token, body) {
 
     console.log("— 二、seed：12 项按登记顺序（分类成组）补出、没有新建 / 删除接口 —");
 
-    const list = await api("GET", "admin/audio-settings", { token: adminToken });
+    const list = await api("GET", "admin/audio-settings", { token: adminToken, zoneId: ADMIN_ZONE });
     check(list.code === 0, "超管能读音效列表", list.message);
     const rows = list.data?.list ?? [];
     check(rows.length === 12 && list.data.total === 12, "出厂 12 个音效项", `${rows.length}`);
@@ -219,9 +224,9 @@ function saveAudio(key, token, body) {
     check(rows.some((row) => row.loop), "至少有一项是循环（登录背景音）", rows.filter((row) => row.loop).map((row) => row.key).join(","));
     check(rows.every((row) => row.enabled), "出厂全部启用（没有任何一项默认哑掉）");
 
-    const createTry = await api("POST", "admin/audio-settings", { token: adminToken, body: {} });
+    const createTry = await api("POST", "admin/audio-settings", { token: adminToken, zoneId: ADMIN_ZONE, body: {} });
     check(createTry.status === 404, "没有新建接口（POST 404：key 由客户端播放代码决定）", `${createTry.status}`);
-    const deleteTry = await api("DELETE", "admin/audio-settings/login_bgm", { token: adminToken });
+    const deleteTry = await api("DELETE", "admin/audio-settings/login_bgm", { token: adminToken, zoneId: ADMIN_ZONE });
     check(deleteTry.status === 404, "没有删除接口（DELETE 404）", `${deleteTry.status}`);
 
     //#endregion
@@ -293,7 +298,7 @@ function saveAudio(key, token, body) {
     check(saved.data.updatedAt > 0, "追账：updatedAt > 0（改过了）", String(saved.data?.updatedAt));
     check(saved.data.updatedBy === "gm_audio", "追账：updatedBy = 操作人账号名", saved.data?.updatedBy);
 
-    const reloaded = await api("GET", "admin/audio-settings", { token: adminToken });
+    const reloaded = await api("GET", "admin/audio-settings", { token: adminToken, zoneId: ADMIN_ZONE });
     const bgmAfter = (reloaded.data?.list ?? []).find((row) => row.key === "login_bgm");
     check(bgmAfter?.volume === 35 && bgmAfter?.enabled === false, "再读一次仍是保存后的值（落了库，不是内存）", JSON.stringify(bgmAfter));
 
@@ -342,7 +347,7 @@ function saveAudio(key, token, body) {
 
     console.log("— 七、审计：动作与目标类型 —");
 
-    const audit = await api("GET", "admin/audit-logs?size=50&targetType=audioSetting", { token: adminToken });
+    const audit = await api("GET", "admin/audit-logs?size=50&targetType=audioSetting", { token: adminToken, zoneId: ADMIN_ZONE });
     check(audit.code === 0, "能查审计日志", audit.message);
     const audioLogs = audit.data?.list ?? [];
     check(audioLogs.length > 0, "写音效会进审计（targetType = audioSetting）", `${audioLogs.length}`);

@@ -59,10 +59,15 @@ function finish(message) {
 let baseUrl = "";
 
 /** 发一次请求，返回归一后的结果 */
+/** 管理端请求所在的区（#960）：一个 e2e 进程只在一个区里干活，管理端请求统一带它 */
+const ADMIN_ZONE = 1;
+
 async function api(method, path, options = {}) {
   const headers = {};
   if (options.body !== undefined) headers["Content-Type"] = "application/json";
   if (options.token) headers.Authorization = `Bearer ${options.token}`;
+  // 管理端单区上下文（#960）：控制台前端在请求拦截器里统一带 X-Zone-Id，测试里对等模拟
+  if (options.zoneId !== undefined) headers["X-Zone-Id"] = String(options.zoneId);
   const response = await fetch(`${baseUrl}/${path}`, {
     method,
     headers,
@@ -108,8 +113,8 @@ function saveEffect(key, token, body) {
 
     const viewer = await api("POST", "admin/auth/register", { body: { username: "gm_effect_view", password: "pass1234", registerCode: "test-admin-code" } });
     const viewerToken = viewer.data.token;
-    await api("PATCH", `admin/admins/${viewer.data.admin.id}`, { token: adminToken, body: { role: "viewer" } });
-    const viewerMe = await api("GET", "admin/auth/me", { token: viewerToken });
+    await api("PATCH", `admin/admins/${viewer.data.admin.id}`, { token: adminToken, zoneId: ADMIN_ZONE, body: { role: "viewer" } });
+    const viewerMe = await api("GET", "admin/auth/me", { token: viewerToken, zoneId: ADMIN_ZONE });
     check(viewerMe.data.role === "viewer", "准备：只读观察员已就位", viewerMe.data && viewerMe.data.role);
 
     const player = await api("POST", "auth/register", { body: { username: "effect_player", password: "pass1234" } });
@@ -124,7 +129,7 @@ function saveEffect(key, token, body) {
 
     console.log("— 一、鉴权：观察员可读不可写、玩家令牌 401 —");
 
-    const viewerList = await api("GET", "admin/ui-effects", { token: viewerToken });
+    const viewerList = await api("GET", "admin/ui-effects", { token: viewerToken, zoneId: ADMIN_ZONE });
     check(viewerList.code === 0 && viewerList.data.total >= 1, "观察员能看特效列表（gameConfig:read 观察员有）", `${viewerList.status}`);
     const viewerSave = await saveEffect("upgrade", viewerToken, { offsetY: 200 });
     check(viewerSave.status === 403 && viewerSave.code === 30006, "观察员保存被拒（403 / 30006：没有 gameConfig:write）", `${viewerSave.status}/${viewerSave.code}`);
@@ -137,7 +142,7 @@ function saveEffect(key, token, body) {
 
     console.log("— 二、seed：七行（升级 + 六档光柱）按登记顺序补出、没有新建 / 删除接口 —");
 
-    const list = await api("GET", "admin/ui-effects", { token: adminToken });
+    const list = await api("GET", "admin/ui-effects", { token: adminToken, zoneId: ADMIN_ZONE });
     const upgradeRow = (list.data.list || []).find((row) => row.key === "upgrade");
     check(list.code === 0 && !!upgradeRow, "seed 补出了 upgrade 行", JSON.stringify(list.data));
     // 摆位（偏移 / 缩放 / 时长）是运营在后台能调的数据，**不在这条断言里锁值** ——
@@ -150,9 +155,9 @@ function saveEffect(key, token, body) {
     const MOTION_KEYS = ["offsetX", "offsetY", "scaleX", "scaleY", "rotate", "durationMs", "updatedAt"];
     check(shapeOk(upgradeRow, MOTION_KEYS), "upgrade 行字段格式正常（数值列是数字 / enabled 是布尔 / updatedAt 是时间戳）", JSON.stringify(upgradeRow));
 
-    const created = await api("POST", "admin/ui-effects", { token: adminToken, body: { key: "ghost" } });
+    const created = await api("POST", "admin/ui-effects", { token: adminToken, zoneId: ADMIN_ZONE, body: { key: "ghost" } });
     check(created.status === 404, "没有新建接口（POST → 404：key 的存在性由客户端消费代码决定）", `${created.status}`);
-    const removed = await api("DELETE", "admin/ui-effects/upgrade", { token: adminToken });
+    const removed = await api("DELETE", "admin/ui-effects/upgrade", { token: adminToken, zoneId: ADMIN_ZONE });
     check(removed.status === 404, "没有删除接口（DELETE → 404：运营不能把特效删没）", `${removed.status}`);
 
     // #634：掉落光效六档也由 seed 补出（一档一行，六张图集是六份美术、各自可调）
@@ -211,7 +216,7 @@ function saveEffect(key, token, body) {
     );
     check(saved.data.enabled === false && saved.data.updatedBy === "gm_effect" && saved.data.updatedAt > 0, "开关落位 + 追账字段（updatedBy / updatedAt）", JSON.stringify(saved.data));
 
-    const relisted = await api("GET", "admin/ui-effects", { token: adminToken });
+    const relisted = await api("GET", "admin/ui-effects", { token: adminToken, zoneId: ADMIN_ZONE });
     const relistedRow = (relisted.data.list || []).find((row) => row.key === "upgrade");
     check(relistedRow && relistedRow.offsetX === 12 && relistedRow.enabled === false, "重读列表是新值（不是只改了返回值）", JSON.stringify(relistedRow));
 
@@ -260,7 +265,7 @@ function saveEffect(key, token, body) {
 
     console.log("— 六、审计：谁在什么时候改了哪个特效 —");
 
-    const audit = await api("GET", "admin/audit-logs?action=adminUiEffect.save&page=1&size=10", { token: adminToken });
+    const audit = await api("GET", "admin/audit-logs?action=adminUiEffect.save&page=1&size=10", { token: adminToken, zoneId: ADMIN_ZONE });
     // 前面入参边界节里的 unknown key 保存尝试（404）也会落审计行，且排序可能排在成功行前面 —— 只认成功那条
     const entries = audit.data.list || [];
     const entry = entries.find((e) => e.statusCode === 200 && e.targetId === "upgrade");

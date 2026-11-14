@@ -118,9 +118,14 @@ async function stopServer(child) {
   }
 }
 
+/** 管理端请求所在的区（#960）：一个 e2e 进程只在一个区里干活，管理端请求统一带它 */
+const ADMIN_ZONE = 1;
+
 async function api(baseUrl, method, route, options = {}) {
   const headers = { "Content-Type": "application/json" };
   if (options.token) headers.Authorization = `Bearer ${options.token}`;
+  // 管理端单区上下文（#960）：控制台前端在请求拦截器里统一带 X-Zone-Id，测试里对等模拟
+  if (options.zoneId !== undefined) headers["X-Zone-Id"] = String(options.zoneId);
   const response = await fetch(`${baseUrl}${route}`, {
     method,
     headers,
@@ -469,7 +474,7 @@ async function registerAdmin(baseUrl) {
 
 async function loginAdmin(baseUrl) {
   const login = await api(baseUrl, "POST", "/api/admin/auth/login", {
-    body: { username: "backup_super", password: "backup-mpvk-1" },
+    body: { zoneId: ADMIN_ZONE, username: "backup_super", password: "backup-mpvk-1" },
   });
   return login.body.data?.token ?? "";
 }

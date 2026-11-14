@@ -78,10 +78,15 @@ let baseUrl = "";
  * 发一次请求，返回归一后的结果
  * @returns {Promise<{ status: number, code: number, message: string, data: any }>}
  */
+/** 管理端请求所在的区（#960）：一个 e2e 进程只在一个区里干活，管理端请求统一带它 */
+const ADMIN_ZONE = 1;
+
 async function api(method, path, options = {}) {
   const headers = {};
   if (options.body !== undefined) headers["Content-Type"] = "application/json";
   if (options.token) headers.Authorization = `Bearer ${options.token}`;
+  // 管理端单区上下文（#960）：控制台前端在请求拦截器里统一带 X-Zone-Id，测试里对等模拟
+  if (options.zoneId !== undefined) headers["X-Zone-Id"] = String(options.zoneId);
   const response = await fetch(`${baseUrl}/${path}`, {
     method,
     headers,
@@ -130,7 +135,7 @@ function roleData(id, name, occupation, level) {
  * 顺带也把这条运营路径本身钉在测试里 —— 后台补级只走它。
  */
 async function raiseLevel(roleId, level, token) {
-  const res = await api("PATCH", `admin/roles/${roleId}`, { token, body: { level } });
+  const res = await api("PATCH", `admin/roles/${roleId}`, { token, zoneId: ADMIN_ZONE, body: { level } });
   if (res.code !== 0) throw new Error(`提等级失败 ${roleId} → ${level}：${res.message}`);
   return res;
 }
@@ -155,8 +160,8 @@ async function raiseLevel(roleId, level, token) {
 
   const viewer = await api("POST", "admin/auth/register", { body: { username: "gm_view", password: "pass1234", registerCode: "test-admin-code" } });
   const viewerToken = viewer.data.token;
-  await api("PATCH", `admin/admins/${viewer.data.admin.id}`, { token: adminToken, body: { role: "viewer" } });
-  const viewerMe = await api("GET", "admin/auth/me", { token: viewerToken });
+  await api("PATCH", `admin/admins/${viewer.data.admin.id}`, { token: adminToken, zoneId: ADMIN_ZONE, body: { role: "viewer" } });
+  const viewerMe = await api("GET", "admin/auth/me", { token: viewerToken, zoneId: ADMIN_ZONE });
   check(viewerMe.data.role === "viewer", "准备：只读观察员已就位", viewerMe.data && viewerMe.data.role);
 
   const playerA = await api("POST", "auth/register", { body: { username: "role_player_a", password: "pass1234" } });
@@ -262,36 +267,36 @@ async function raiseLevel(roleId, level, token) {
     `${raisedB1.data && raisedB1.data.level}`,
   );
 
-  const all = await api("GET", "admin/roles", { token: adminToken });
+  const all = await api("GET", "admin/roles", { token: adminToken, zoneId: ADMIN_ZONE });
   check(all.code === 0 && all.data.total === 4, "角色列表返回全量（4 个）", JSON.stringify(all.data && all.data.total));
 
-  const onlineOnly = await api("GET", "admin/roles?online=true", { token: adminToken });
+  const onlineOnly = await api("GET", "admin/roles?online=true", { token: adminToken, zoneId: ADMIN_ZONE });
   check(onlineOnly.data.total === 2, "online=true 只返回各账号当前选中的角色（2 个）", JSON.stringify(onlineOnly.data.total));
   check(
     onlineOnly.data.list.every((item) => item.online === true),
     "筛选结果的 online 字段全为 true",
   );
 
-  const offlineOnly = await api("GET", "admin/roles?online=false", { token: adminToken });
+  const offlineOnly = await api("GET", "admin/roles?online=false", { token: adminToken, zoneId: ADMIN_ZONE });
   check(offlineOnly.data.total === 2, "online=false 只返回离线角色（2 个）", JSON.stringify(offlineOnly.data.total));
   check(
     offlineOnly.data.list.every((item) => item.online === false),
     "筛选结果的 online 字段全为 false",
   );
 
-  const byOccupation = await api("GET", "admin/roles?occupation=2", { token: adminToken });
+  const byOccupation = await api("GET", "admin/roles?occupation=2", { token: adminToken, zoneId: ADMIN_ZONE });
   check(byOccupation.data.total === 2, "按职业筛选（职业 2 有 2 个）", JSON.stringify(byOccupation.data.total));
 
-  const byLevel = await api("GET", "admin/roles?minLevel=10&maxLevel=20", { token: adminToken });
+  const byLevel = await api("GET", "admin/roles?minLevel=10&maxLevel=20", { token: adminToken, zoneId: ADMIN_ZONE });
   check(byLevel.data.total === 2, "按等级区间筛选（10~20 有 2 个）", JSON.stringify(byLevel.data.total));
 
-  const badRange = await api("GET", "admin/roles?minLevel=20&maxLevel=10", { token: adminToken });
+  const badRange = await api("GET", "admin/roles?minLevel=20&maxLevel=10", { token: adminToken, zoneId: ADMIN_ZONE });
   check(badRange.code === 40000, "等级区间写反直接报参数错误（否则会得到一个莫名空的列表）", `${badRange.code}`);
 
-  const byAccount = await api("GET", `admin/roles?accountId=${accountA}`, { token: adminToken });
+  const byAccount = await api("GET", `admin/roles?accountId=${accountA}`, { token: adminToken, zoneId: ADMIN_ZONE });
   check(byAccount.data.total === 3, "按账号筛选（甲有 3 个角色）", JSON.stringify(byAccount.data.total));
 
-  const byKeyword = await api("GET", "admin/roles?keyword=" + encodeURIComponent("乙一"), { token: adminToken });
+  const byKeyword = await api("GET", "admin/roles?keyword=" + encodeURIComponent("乙一"), { token: adminToken, zoneId: ADMIN_ZONE });
   check(byKeyword.data.total === 1 && byKeyword.data.list[0].id === roleB1Id, "关键字匹配角色 id（服务端生成的 id）", JSON.stringify(byKeyword.data.total));
 
   const withAccountName = all.data.list.every((item) => typeof item.accountName === "string");
@@ -305,7 +310,7 @@ async function raiseLevel(roleId, level, token) {
 
   // 时装：`fashionCloth` 在 #377 从数字改成**时装 id**（fashions 表主键），管理端也只能填字符串
   const patched = await api("PATCH", `admin/roles/${roleA2Id}`, {
-    token: adminToken,
+    token: adminToken, zoneId: ADMIN_ZONE,
     body: { name: "甲二改", level: 11, fashionCloth: "cloth_2", avatar: 7, onMap: "12", bindGold: 8888 },
   });
   check(patched.code === 0, "改基础信息成功", patched.message);
@@ -314,18 +319,18 @@ async function raiseLevel(roleId, level, token) {
   check(patched.data.data.bindGold === 8888, "数值字段写进角色数据");
   check(patched.data.revision === 2, "管理端改一次，修订号 +1", JSON.stringify(patched.data.revision));
 
-  const numericFashion = await api("PATCH", `admin/roles/${roleA2Id}`, { token: adminToken, body: { fashionCloth: 3 } });
+  const numericFashion = await api("PATCH", `admin/roles/${roleA2Id}`, { token: adminToken, zoneId: ADMIN_ZONE, body: { fashionCloth: 3 } });
   check(numericFashion.code === 40000 && numericFashion.status === 400, "时装填旧形状的数字被拒（只收时装 id）", `${numericFashion.code}/${numericFashion.status}`);
-  const unknownFashion = await api("PATCH", `admin/roles/${roleA2Id}`, { token: adminToken, body: { fashionCloth: "no_such_fashion" } });
+  const unknownFashion = await api("PATCH", `admin/roles/${roleA2Id}`, { token: adminToken, zoneId: ADMIN_ZONE, body: { fashionCloth: "no_such_fashion" } });
   check(unknownFashion.code === 0 && unknownFashion.data.revision === 3, "任意字符串都收（清单外 id 由客户端按 null 兜底）", JSON.stringify(unknownFashion.data?.revision));
-  const clearedFashion = await api("PATCH", `admin/roles/${roleA2Id}`, { token: adminToken, body: { fashionCloth: null } });
+  const clearedFashion = await api("PATCH", `admin/roles/${roleA2Id}`, { token: adminToken, zoneId: ADMIN_ZONE, body: { fashionCloth: null } });
   check(clearedFashion.code === 0 && clearedFashion.data.data.fashionCloth === null, "传 null = 脱下（清空穿戴）");
 
-  const duplicateName = await api("PATCH", `admin/roles/${roleA2Id}`, { token: adminToken, body: { name: "甲三" } });
+  const duplicateName = await api("PATCH", `admin/roles/${roleA2Id}`, { token: adminToken, zoneId: ADMIN_ZONE, body: { name: "甲三" } });
   check(duplicateName.code === 20005 && duplicateName.status === 409, "同账号下改名撞车被拒（20005）", `${duplicateName.code}/${duplicateName.status}`);
 
   const runtime = await api("PATCH", `admin/roles/${roleA2Id}`, {
-    token: adminToken,
+    token: adminToken, zoneId: ADMIN_ZONE,
     body: {
       // #836 起管理端 PATCH 也校验装备存在性与部位（之前 1001/3001 这种编的 id 都收）——
       // 结构性断言（包对象 / 空串规整 null / 背包扩容）改用真实装备 id 保持
@@ -349,38 +354,38 @@ async function raiseLevel(roleId, level, token) {
   check(runtime.data.data.bag[0][1].id === "2001" && runtime.data.data.bag[0][1].count === 5, "背包物品落在正确的格子上");
   check(runtime.data.data.bag[1][0] === null, "未提交的格子是空的");
 
-  const clearBag = await api("PATCH", `admin/roles/${roleA2Id}`, { token: adminToken, body: { bag: [] } });
+  const clearBag = await api("PATCH", `admin/roles/${roleA2Id}`, { token: adminToken, zoneId: ADMIN_ZONE, body: { bag: [] } });
   check(
     clearBag.data.data.bag.every((row) => row.every((cell) => cell === null)) && clearBag.data.data.bag.length === 4,
     "背包传空数组 = 清空（网格尺寸保留）",
   );
 
   const dupCell = await api("PATCH", `admin/roles/${roleA2Id}`, {
-    token: adminToken,
+    token: adminToken, zoneId: ADMIN_ZONE,
     body: { bag: [{ row: 0, col: 0, id: "1", count: 1 }, { row: 0, col: 0, id: "2", count: 1 }] },
   });
   check(dupCell.code === 20003 && dupCell.status === 400, "背包格子坐标重复被拒（20003）", `${dupCell.code}/${dupCell.status}`);
 
-  const badAxis = await api("PATCH", `admin/roles/${roleA2Id}`, { token: adminToken, body: { bag: [{ row: 999, col: 0, id: "1", count: 1 }] } });
+  const badAxis = await api("PATCH", `admin/roles/${roleA2Id}`, { token: adminToken, zoneId: ADMIN_ZONE, body: { bag: [{ row: 999, col: 0, id: "1", count: 1 }] } });
   check(badAxis.code === 40000, "背包行号越界被拦下（DTO 40000）", `${badAxis.code}`);
 
-  const badCount = await api("PATCH", `admin/roles/${roleA2Id}`, { token: adminToken, body: { bag: [{ row: 0, col: 0, id: "1", count: 0 }] } });
+  const badCount = await api("PATCH", `admin/roles/${roleA2Id}`, { token: adminToken, zoneId: ADMIN_ZONE, body: { bag: [{ row: 0, col: 0, id: "1", count: 0 }] } });
   check(badCount.code === 40000, "背包数量为 0 被拦下（DTO 40000）", `${badCount.code}`);
 
-  const lostProps = await api("PATCH", `admin/roles/${roleA2Id}`, { token: adminToken, body: { bag: [{ row: 0, col: 0, id: "9001", count: 2 }] } });
+  const lostProps = await api("PATCH", `admin/roles/${roleA2Id}`, { token: adminToken, zoneId: ADMIN_ZONE, body: { bag: [{ row: 0, col: 0, id: "9001", count: 2 }] } });
   check(
     lostProps.data.data.bag[0][0] && lostProps.data.data.bag[0][0].id === "9001",
     "背包格子的属性没有被管道的白名单剥掉（嵌套裸对象会静默变成空数组）",
     JSON.stringify(lostProps.data.data.bag[0][0]),
   );
 
-  const badSkills = await api("PATCH", `admin/roles/${roleA2Id}`, { token: adminToken, body: { skills: { "1001": -1 } } });
+  const badSkills = await api("PATCH", `admin/roles/${roleA2Id}`, { token: adminToken, zoneId: ADMIN_ZONE, body: { skills: { "1001": -1 } } });
   check(badSkills.code === 20003, "技能等级为负被拒", `${badSkills.code}`);
 
-  const badEquipments = await api("PATCH", `admin/roles/${roleA2Id}`, { token: adminToken, body: { equipments: ["not-an-object"] } });
+  const badEquipments = await api("PATCH", `admin/roles/${roleA2Id}`, { token: adminToken, zoneId: ADMIN_ZONE, body: { equipments: ["not-an-object"] } });
   check(badEquipments.code === 40000, "装备表传数组被 DTO 拦下（40000）", `${badEquipments.code}`);
 
-  const badOnMap = await api("PATCH", `admin/roles/${roleA2Id}`, { token: adminToken, body: { onMap: "" } });
+  const badOnMap = await api("PATCH", `admin/roles/${roleA2Id}`, { token: adminToken, zoneId: ADMIN_ZONE, body: { onMap: "" } });
   check(badOnMap.code === 40000, "所在地图传空串被拦下（40000）", `${badOnMap.code}`);
 
   // 「只有账号当前在线的角色才允许推存档」——不在线的角色推回来一律 20007（踢下线语义）。
@@ -406,7 +411,7 @@ async function raiseLevel(roleId, level, token) {
 
   const beforePatch = await api("GET", `roles/${roleA1Id}`, { token: tokenA });
   const baseline = beforePatch.data.revision;
-  await api("PATCH", `admin/roles/${roleA1Id}`, { token: adminToken, body: { bindGold: 777 } });
+  await api("PATCH", `admin/roles/${roleA1Id}`, { token: adminToken, zoneId: ADMIN_ZONE, body: { bindGold: 777 } });
   const staleAfterAdmin = await api("PUT", `roles/${roleA1Id}`, {
     token: tokenA,
     body: { data: { ...roleData(roleA1Id, "甲一", "1", 1), bindGold: 123 }, revision: baseline },
@@ -428,33 +433,33 @@ async function raiseLevel(roleId, level, token) {
 
   console.log("— 五、批量删除 —");
 
-  const batch = await api("POST", "admin/roles/batch-delete", { token: adminToken, body: { ids: [roleA2Id, roleA3Id] } });
+  const batch = await api("POST", "admin/roles/batch-delete", { token: adminToken, zoneId: ADMIN_ZONE, body: { ids: [roleA2Id, roleA3Id] } });
   check(batch.code === 0 && batch.data.deleted === 2, "批量删除两条", JSON.stringify(batch.data && batch.data.deleted));
   check(batch.data.requested === 2 && batch.data.ids.length === 2, "返回请求条数与实际删掉的 id");
   check(batch.data.clearedOnlineAccountIds.length === 0, "删的不是在线角色 → 没有账号被清标记", JSON.stringify(batch.data.clearedOnlineAccountIds));
 
-  const again = await api("POST", "admin/roles/batch-delete", { token: adminToken, body: { ids: [roleA2Id] } });
+  const again = await api("POST", "admin/roles/batch-delete", { token: adminToken, zoneId: ADMIN_ZONE, body: { ids: [roleA2Id] } });
   check(again.code === 0 && again.data.deleted === 0, "重复删除同一个 id 幂等（不报错、删除数为 0）", JSON.stringify(again.data && again.data.deleted));
 
-  const emptyIds = await api("POST", "admin/roles/batch-delete", { token: adminToken, body: { ids: [] } });
+  const emptyIds = await api("POST", "admin/roles/batch-delete", { token: adminToken, zoneId: ADMIN_ZONE, body: { ids: [] } });
   check(emptyIds.code === 40000, "空 id 列表被 DTO 拦下（40000）", `${emptyIds.code}`);
 
   const tooMany = await api("POST", "admin/roles/batch-delete", {
-    token: adminToken,
+    token: adminToken, zoneId: ADMIN_ZONE,
     body: { ids: Array.from({ length: 101 }, (_, index) => `role_x${index}`) },
   });
   check(tooMany.code === 40000, "超过 100 条被拦下（40000）", `${tooMany.code}`);
 
-  const purge = await api("DELETE", `admin/accounts/${accountA}/roles`, { token: adminToken });
+  const purge = await api("DELETE", `admin/accounts/${accountA}/roles`, { token: adminToken, zoneId: ADMIN_ZONE });
   check(purge.code === 0 && purge.data.deleted === 1, "清空账号 A 的全部角色（剩 1 个在线角色）", JSON.stringify(purge.data && purge.data.deleted));
   check(purge.data.clearedOnlineAccountIds.indexOf(accountA) !== -1, "在线角色被删时顺带清掉账号的在线标记", JSON.stringify(purge.data.clearedOnlineAccountIds));
 
-  const detailA = await api("GET", `admin/accounts/${accountA}`, { token: adminToken });
+  const detailA = await api("GET", `admin/accounts/${accountA}`, { token: adminToken, zoneId: ADMIN_ZONE });
   check(detailA.data.roles.length === 0, "账号下已无角色");
   check(detailA.data.account.onlineRoleId === null, "账号的在线角色已被清空");
   check(detailA.data.account.username === "role_player_a", "账号本身保留（与「删除账号」区分）");
 
-  const purgeMissing = await api("DELETE", "admin/accounts/not-exist-id/roles", { token: adminToken });
+  const purgeMissing = await api("DELETE", "admin/accounts/not-exist-id/roles", { token: adminToken, zoneId: ADMIN_ZONE });
   check(purgeMissing.code === 10002, "给不存在的账号清角色 → 10002", `${purgeMissing.code}`);
 
   //#endregion
@@ -463,22 +468,22 @@ async function raiseLevel(roleId, level, token) {
 
   console.log("— 六、权限：只读观察员不能写 —");
 
-  const viewerList = await api("GET", "admin/roles", { token: viewerToken });
+  const viewerList = await api("GET", "admin/roles", { token: viewerToken, zoneId: ADMIN_ZONE });
   check(viewerList.code === 0, "只读观察员能看角色列表");
 
-  const viewerBatch = await api("POST", "admin/roles/batch-delete", { token: viewerToken, body: { ids: [roleB1Id] } });
+  const viewerBatch = await api("POST", "admin/roles/batch-delete", { token: viewerToken, zoneId: ADMIN_ZONE, body: { ids: [roleB1Id] } });
   check(viewerBatch.code === 30006 && viewerBatch.status === 403, "只读观察员批量删除 → 403 / 30006", `${viewerBatch.code}/${viewerBatch.status}`);
 
-  const viewerPatch = await api("PATCH", `admin/roles/${roleB1Id}`, { token: viewerToken, body: { level: 99 } });
+  const viewerPatch = await api("PATCH", `admin/roles/${roleB1Id}`, { token: viewerToken, zoneId: ADMIN_ZONE, body: { level: 99 } });
   check(viewerPatch.code === 30006, "只读观察员改角色 → 30006", `${viewerPatch.code}`);
 
-  const viewerPurge = await api("DELETE", `admin/accounts/${accountB}/roles`, { token: viewerToken });
+  const viewerPurge = await api("DELETE", `admin/accounts/${accountB}/roles`, { token: viewerToken, zoneId: ADMIN_ZONE });
   check(viewerPurge.code === 30006, "只读观察员清空账号角色 → 30006", `${viewerPurge.code}`);
 
   const playerTokenOnAdmin = await api("POST", "admin/roles/batch-delete", { token: tokenB, body: { ids: [roleB1Id] } });
   check(playerTokenOnAdmin.status === 401, "玩家令牌调管理端接口 → 401（受众隔离）", `${playerTokenOnAdmin.status}`);
 
-  const stillThere = await api("GET", "admin/roles?keyword=" + encodeURIComponent("乙一"), { token: adminToken });
+  const stillThere = await api("GET", "admin/roles?keyword=" + encodeURIComponent("乙一"), { token: adminToken, zoneId: ADMIN_ZONE });
   check(stillThere.data.total === 1, "越权请求全部被拦，角色还在（按名字检索）");
 
   //#endregion
@@ -552,7 +557,7 @@ async function raiseLevel(roleId, level, token) {
   const roleD1Id = seeded.data.id;
   check(seeded.code === 0, "准备：建一个角色（建号恒 1 级）", seeded.message);
 
-  const derived1 = await api("GET", `admin/roles/${roleD1Id}`, { token: adminToken });
+  const derived1 = await api("GET", `admin/roles/${roleD1Id}`, { token: adminToken, zoneId: ADMIN_ZONE });
   const d1 = derived1.data.derived;
   check(!!d1 && !!d1.attributes, "详情带一组服务端重算的战斗属性");
   check(
@@ -576,7 +581,7 @@ async function raiseLevel(roleId, level, token) {
   const consistent = await api("POST", "roles", { token: tokenC, body: { name: "算二", occupation: "1", sex: "1" } });
   const roleD2Id = consistent.data.id;
   check(consistent.code === 0, "准备：再建一个角色（初始文档即服务端重算值）", consistent.message);
-  const derived2 = await api("GET", `admin/roles/${roleD2Id}`, { token: adminToken });
+  const derived2 = await api("GET", `admin/roles/${roleD2Id}`, { token: adminToken, zoneId: ADMIN_ZONE });
   check(derived2.data.derived.mismatch === false, "服务端构造的初始文档 → reported 与权威值一致", JSON.stringify(derived2.data.derived.reported));
   check(derived2.data.derived.reported.combat === steadyCombat, "服务端算的那份原样带出来（同等级下两号同值，口径一致）", String(derived2.data.derived.reported.combat));
 
@@ -585,7 +590,7 @@ async function raiseLevel(roleId, level, token) {
   const bogus = await api("POST", "roles", { token: tokenC, body: { name: "算三", occupation: "1", sex: "1" } });
   const roleD3Id = bogus.data.id;
   check(bogus.code === 0, "准备：再建一个角色（无属性入参可填）", bogus.message);
-  const derived3 = await api("GET", `admin/roles/${roleD3Id}`, { token: adminToken });
+  const derived3 = await api("GET", `admin/roles/${roleD3Id}`, { token: adminToken, zoneId: ADMIN_ZONE });
   check(derived3.data.derived.mismatch === false, "服务端构造的初始角色：reported = 权威值（mismatch=false）", JSON.stringify(derived3.data.derived.reported));
   check(
     derived3.data.derived.reported.combat === derived3.data.derived.attributes.combat,
@@ -594,7 +599,7 @@ async function raiseLevel(roleId, level, token) {
   );
 
   // 管理端改等级 → derived 立刻跟着变（不等客户端同步），且客户端那份旧上报值当场变成「不一致」
-  const bumped = await api("PATCH", `admin/roles/${roleD3Id}`, { token: adminToken, body: { level: 30 } });
+  const bumped = await api("PATCH", `admin/roles/${roleD3Id}`, { token: adminToken, zoneId: ADMIN_ZONE, body: { level: 30 } });
   check(
     bumped.data.derived.attributes.combat !== steadyCombat,
     "管理端改等级后，服务端重算的战斗力立刻变（不等客户端同步）",
@@ -605,7 +610,7 @@ async function raiseLevel(roleId, level, token) {
     "管理端改等级后存档属性当场重算（#836：落库值就是服务端算的，不再留一份旧的等玩家同步）",
     JSON.stringify(bumped.data.derived.reported),
   );
-  const reread = await api("GET", `admin/roles/${roleD3Id}`, { token: adminToken });
+  const reread = await api("GET", `admin/roles/${roleD3Id}`, { token: adminToken, zoneId: ADMIN_ZONE });
   check(
     reread.data.derived.attributes.combat === bumped.data.derived.attributes.combat,
     "改完返回的 derived 与重新读一遍一致",
@@ -615,7 +620,7 @@ async function raiseLevel(roleId, level, token) {
   // 查不到的装备 id：#836 起管理端 PATCH 直接拒绝（不再静默落库）——
   // 「未知装备作为证据交出来」的覆盖挪到 e2e-equip-sanitize（直写库造历史脏档）
   const unknownEquip = await api("PATCH", `admin/roles/${roleD1Id}`, {
-    token: adminToken,
+    token: adminToken, zoneId: ADMIN_ZONE,
     body: { equipments: { weapon: "no_such_equipment", helmet: null } },
   });
   check(
@@ -625,7 +630,7 @@ async function raiseLevel(roleId, level, token) {
   );
 
   // #786：等级改成参数化曲线后**没有硬边界**了 —— 远超旧上限 60 的等级照样算得出来（末段外推）
-  const farLevel = await api("PATCH", `admin/roles/${roleD1Id}`, { token: adminToken, body: { level: 999 } });
+  const farLevel = await api("PATCH", `admin/roles/${roleD1Id}`, { token: adminToken, zoneId: ADMIN_ZONE, body: { level: 999 } });
   check(
     Boolean(farLevel.data.derived.attributes) && farLevel.data.derived.attributes.maxHp > 0,
     "远超旧上限（999 级）→ 曲线外推照样算得出属性（不再有「等级不在表里」）",
@@ -648,7 +653,7 @@ async function raiseLevel(roleId, level, token) {
   );
 
   // 列表不带派生字段：列表页不展示战斗力，给它算就是白算，还会让响应无谓变胖
-  const listForDerived = await api("GET", "admin/roles?accountId=" + playerC.data.account.id, { token: adminToken });
+  const listForDerived = await api("GET", "admin/roles?accountId=" + playerC.data.account.id, { token: adminToken, zoneId: ADMIN_ZONE });
   check(listForDerived.data.list.length === 3, "列表按账号筛出本组的三个角色", String(listForDerived.data.list.length));
   check(
     listForDerived.data.list.every((role) => role.derived === undefined),
@@ -664,7 +669,7 @@ async function raiseLevel(roleId, level, token) {
 
   // 这条守的是「两端一致」：管理端改的是库，客户端靠快照覆写跟着变；服务端此前读的是
   // 编译期生成物 —— 于是面板变了、伤害没变，且没有任何报错。现在覆盖层接管，必须立刻生效。
-  const equipList = await api("GET", "admin/equipments?size=1", { token: adminToken });
+  const equipList = await api("GET", "admin/equipments?size=1", { token: adminToken, zoneId: ADMIN_ZONE });
   const sampleEquip = equipList.data.list[0];
   check(!!sampleEquip && sampleEquip.attributes.maxHp > 0, "准备：取一件 maxHp > 0 的基础件", JSON.stringify(sampleEquip && sampleEquip.attributes));
 
@@ -673,24 +678,24 @@ async function raiseLevel(roleId, level, token) {
   // #825 起部位不符的条目**不计属性**（同件穿多槽 / 一槽一件错位装备都能刷战力），
   // 所以「穿一件衣服」必须写 cloth，不能借 WEAPON 的壳。
   const wearIt = await api("PATCH", `admin/roles/${roleD1Id}`, {
-    token: adminToken,
+    token: adminToken, zoneId: ADMIN_ZONE,
     body: { level: 10, equipments: { [sampleEquip.slot.toUpperCase()]: sampleEquip.id } },
   });
   const baseMaxHp = wearIt.data.derived.attributes.maxHp;
   check(typeof baseMaxHp === "number", "穿上后取到含装备加成的 maxHp", String(baseMaxHp));
 
   // #655：变体是**独立配置行** —— 管理端改哪一行，服务端下一次重算就用那一行
-  const variantList = await api("GET", `admin/equipment-variants?baseId=${sampleEquip.id}&size=20`, { token: adminToken });
+  const variantList = await api("GET", `admin/equipment-variants?baseId=${sampleEquip.id}&size=20`, { token: adminToken, zoneId: ADMIN_ZONE });
   const variantRow = (variantList.data.list || []).find((item) => item.id === sampleEquip.id);
   check(!!variantRow, "准备：变体表里能查到这件装备的 p0s0 行", JSON.stringify((variantList.data.list || []).length));
 
   const boost = await api("PATCH", `admin/equipment-variants/${sampleEquip.id}`, {
-    token: adminToken,
+    token: adminToken, zoneId: ADMIN_ZONE,
     body: { attributes: { ...variantRow.attributes, maxHp: variantRow.attributes.maxHp * 2 } },
   });
   check(boost.code === 0, "管理端把该变体的 maxHp 改成 2 倍", boost.message);
 
-  const afterBoost = await api("GET", `admin/roles/${roleD1Id}`, { token: adminToken });
+  const afterBoost = await api("GET", `admin/roles/${roleD1Id}`, { token: adminToken, zoneId: ADMIN_ZONE });
   const boostedMaxHp = afterBoost.data.derived.attributes.maxHp;
   check(
     boostedMaxHp === baseMaxHp + variantRow.attributes.maxHp,
@@ -700,11 +705,11 @@ async function raiseLevel(roleId, level, token) {
 
   // 独立性守点（#655 的语义变化）：改基础件**不再**带动它的 15 个变体
   const baseTriple = await api("PATCH", `admin/equipments/${sampleEquip.id}`, {
-    token: adminToken,
+    token: adminToken, zoneId: ADMIN_ZONE,
     body: { attributes: { ...sampleEquip.attributes, maxHp: sampleEquip.attributes.maxHp * 3 } },
   });
   check(baseTriple.code === 0, "管理端把基础件 maxHp 改成 3 倍", baseTriple.message);
-  const afterBase = await api("GET", `admin/roles/${roleD1Id}`, { token: adminToken });
+  const afterBase = await api("GET", `admin/roles/${roleD1Id}`, { token: adminToken, zoneId: ADMIN_ZONE });
   check(
     afterBase.data.derived.attributes.maxHp === boostedMaxHp,
     "改基础件不再带动变体（每件变体都是独立配置行）",
@@ -716,7 +721,7 @@ async function raiseLevel(roleId, level, token) {
   const topVariant = (variantList.data.list || []).find((item) => item.id === variantId);
   check(!!topVariant, "准备：同一件的 p4s2 变体也在表里", JSON.stringify((variantList.data.list || []).map((item) => item.id)));
   const wearVariant = await api("PATCH", `admin/roles/${roleD1Id}`, {
-    token: adminToken,
+    token: adminToken, zoneId: ADMIN_ZONE,
     body: { equipments: { [sampleEquip.slot.toUpperCase()]: variantId } },
   });
   check(wearVariant.code === 0, "准备：把同一件的变体穿上（p4s2）", wearVariant.message);
@@ -729,12 +734,12 @@ async function raiseLevel(roleId, level, token) {
   );
 
   // 还原：先把变体和基础件都改回原值，再确认角色属性回到起点
-  const restoreVariant = await api("PATCH", `admin/equipment-variants/${sampleEquip.id}`, { token: adminToken, body: { attributes: variantRow.attributes } });
+  const restoreVariant = await api("PATCH", `admin/equipment-variants/${sampleEquip.id}`, { token: adminToken, zoneId: ADMIN_ZONE, body: { attributes: variantRow.attributes } });
   check(restoreVariant.code === 0, "还原该变体的属性", restoreVariant.message);
-  const restoredEquip = await api("PATCH", `admin/equipments/${sampleEquip.id}`, { token: adminToken, body: { attributes: sampleEquip.attributes } });
+  const restoredEquip = await api("PATCH", `admin/equipments/${sampleEquip.id}`, { token: adminToken, zoneId: ADMIN_ZONE, body: { attributes: sampleEquip.attributes } });
   check(restoredEquip.code === 0, "还原该基础件的属性", restoredEquip.message);
   const backToNormal = await api("PATCH", `admin/roles/${roleD1Id}`, {
-    token: adminToken,
+    token: adminToken, zoneId: ADMIN_ZONE,
     body: { equipments: { [sampleEquip.slot.toUpperCase()]: sampleEquip.id } },
   });
   check(
@@ -756,7 +761,7 @@ async function raiseLevel(roleId, level, token) {
   // 服务端此前读的是编译期生成物 —— 界面上写 77，到账 2。玩家只能描述成「价签不对」。
   const bagWith = (id, count) => ({ bag: [{ row: 0, col: 0, id, count }] });
 
-  const putHide = await api("PATCH", `admin/roles/${roleD1Id}`, { token: adminToken, body: bagWith("material_hide", 5) });
+  const putHide = await api("PATCH", `admin/roles/${roleD1Id}`, { token: adminToken, zoneId: ADMIN_ZONE, body: bagWith("material_hide", 5) });
   check(putHide.code === 0, "准备：背包里放 5 块兽皮", putHide.message);
 
   const hideFactory = snap.index("items")["material_hide"].sellPrice;
@@ -766,7 +771,7 @@ async function raiseLevel(roleId, level, token) {
   });
   check(soldAtFactory.data.sold[0].unitPrice === hideFactory, "未改价时按出厂价签成交（库里 seed 值与生成物一致）", soldAtFactory.data.sold[0].unitPrice);
 
-  const priceUp = await api("PATCH", "admin/items/material_hide", { token: adminToken, body: { sellPrice: 77 } });
+  const priceUp = await api("PATCH", "admin/items/material_hide", { token: adminToken, zoneId: ADMIN_ZONE, body: { sellPrice: 77 } });
   check(priceUp.code === 0, "管理端把兽皮卖价改成 77", priceUp.message);
   const soldAtNew = await api("POST", `roles/${roleD1Id}/sell`, {
     token: tokenC,
@@ -774,7 +779,7 @@ async function raiseLevel(roleId, level, token) {
   });
   check(soldAtNew.data.sold[0].unitPrice === 77, "再卖一块立刻按新价（不重启、不清库）", soldAtNew.data.sold[0].unitPrice);
 
-  await api("PATCH", "admin/items/material_hide", { token: adminToken, body: { sellPrice: hideFactory } });
+  await api("PATCH", "admin/items/material_hide", { token: adminToken, zoneId: ADMIN_ZONE, body: { sellPrice: hideFactory } });
   const soldBackToFactory = await api("POST", `roles/${roleD1Id}/sell`, {
     token: tokenC,
     body: { entries: [{ goodId: "material_hide", count: 1 }], revision: await revOf(roleD1Id, tokenC) },
@@ -782,7 +787,7 @@ async function raiseLevel(roleId, level, token) {
   check(soldBackToFactory.data.sold[0].unitPrice === hideFactory, "还原后回到出厂价（覆盖层跟着回退，不是一次性的）", soldBackToFactory.data.sold[0].unitPrice);
 
   // 装备：#655 起回收价就是**变体行的 sell_price**（以前是「等级基础价 × 前后缀倍率」现算）
-  const putEquip = await api("PATCH", `admin/roles/${roleD1Id}`, { token: adminToken, body: bagWith(sampleEquip.id, 1) });
+  const putEquip = await api("PATCH", `admin/roles/${roleD1Id}`, { token: adminToken, zoneId: ADMIN_ZONE, body: bagWith(sampleEquip.id, 1) });
   check(putEquip.code === 0, "准备：背包里放一件该装备（基础件）", putEquip.message);
   const soldEquip = await api("POST", `roles/${roleD1Id}/sell`, {
     token: tokenC,
@@ -796,9 +801,9 @@ async function raiseLevel(roleId, level, token) {
 
   // 改基础件等级**不再**改价签（变体行有独立 level / sell_price）——
   // 想调价就改那一行的 sellPrice，这是 #655 的语义变化
-  const levelUp = await api("PATCH", `admin/equipments/${sampleEquip.id}`, { token: adminToken, body: { level: 50 } });
+  const levelUp = await api("PATCH", `admin/equipments/${sampleEquip.id}`, { token: adminToken, zoneId: ADMIN_ZONE, body: { level: 50 } });
   check(levelUp.code === 0, "管理端把该装备的等级改成 50", levelUp.message);
-  await api("PATCH", `admin/roles/${roleD1Id}`, { token: adminToken, body: bagWith(sampleEquip.id, 1) });
+  await api("PATCH", `admin/roles/${roleD1Id}`, { token: adminToken, zoneId: ADMIN_ZONE, body: bagWith(sampleEquip.id, 1) });
   const soldEquip50 = await api("POST", `roles/${roleD1Id}/sell`, {
     token: tokenC,
     body: { entries: [{ goodId: sampleEquip.id, count: 1 }], revision: await revOf(roleD1Id, tokenC) },
@@ -809,14 +814,14 @@ async function raiseLevel(roleId, level, token) {
     `${soldEquip50.data.sold[0].unitPrice} vs ${variantRow.sellPrice}`,
   );
 
-  const levelRestore = await api("PATCH", `admin/equipments/${sampleEquip.id}`, { token: adminToken, body: { level: sampleEquip.level } });
+  const levelRestore = await api("PATCH", `admin/equipments/${sampleEquip.id}`, { token: adminToken, zoneId: ADMIN_ZONE, body: { level: sampleEquip.level } });
   check(levelRestore.code === 0, "还原该装备的等级（后续断言仍按出厂值）", levelRestore.message);
 
   // 改变体自己的 sellPrice → 成交价立刻跟着走（这才是现在调价的入口）
   const variantPrice = variantRow.sellPrice + 7;
-  const priceUpVariant = await api("PATCH", `admin/equipment-variants/${sampleEquip.id}`, { token: adminToken, body: { sellPrice: variantPrice } });
+  const priceUpVariant = await api("PATCH", `admin/equipment-variants/${sampleEquip.id}`, { token: adminToken, zoneId: ADMIN_ZONE, body: { sellPrice: variantPrice } });
   check(priceUpVariant.code === 0, "管理端把该变体的回收价 +7", priceUpVariant.message);
-  await api("PATCH", `admin/roles/${roleD1Id}`, { token: adminToken, body: bagWith(sampleEquip.id, 1) });
+  await api("PATCH", `admin/roles/${roleD1Id}`, { token: adminToken, zoneId: ADMIN_ZONE, body: bagWith(sampleEquip.id, 1) });
   const soldEquipNewPrice = await api("POST", `roles/${roleD1Id}/sell`, {
     token: tokenC,
     body: { entries: [{ goodId: sampleEquip.id, count: 1 }], revision: await revOf(roleD1Id, tokenC) },
@@ -826,7 +831,7 @@ async function raiseLevel(roleId, level, token) {
     "改变体回收价 → 成交价立刻跟着走（不重启、不用重新生成共享数据）",
     `${soldEquipNewPrice.data.sold[0].unitPrice} vs ${variantPrice}`,
   );
-  await api("PATCH", `admin/equipment-variants/${sampleEquip.id}`, { token: adminToken, body: { sellPrice: variantRow.sellPrice } });
+  await api("PATCH", `admin/equipment-variants/${sampleEquip.id}`, { token: adminToken, zoneId: ADMIN_ZONE, body: { sellPrice: variantRow.sellPrice } });
 
   //#endregion
 
@@ -845,7 +850,7 @@ async function raiseLevel(roleId, level, token) {
   check(seededE.code === 0, "准备：建一个角色（建号恒 1 级，自动成为在线角色）", seededE.message);
 
   // 拿服务端刚算出来的那份当「正确的上报值」——不在测试里重实现一遍算法
-  const reference = await api("GET", `admin/roles/${roleE1Id}`, { token: adminToken });
+  const reference = await api("GET", `admin/roles/${roleE1Id}`, { token: adminToken, zoneId: ADMIN_ZONE });
   const rightCombat = reference.data.derived.attributes.combat;
   const rightMaxHp = reference.data.derived.attributes.maxHp;
   check(typeof rightCombat === "number", "取到服务端重算的基准值", String(rightCombat));
@@ -864,7 +869,7 @@ async function raiseLevel(roleId, level, token) {
     JSON.stringify(warnLines.slice(beforeBad)),
   );
   // #541 权威覆盖：上报的那份只用来记日志，落库的一定是服务端重算的
-  const afterBadSave = await api("GET", `admin/roles/${roleE1Id}`, { token: adminToken });
+  const afterBadSave = await api("GET", `admin/roles/${roleE1Id}`, { token: adminToken, zoneId: ADMIN_ZONE });
   check(
     afterBadSave.data.derived.reported.combat === afterBadSave.data.derived.attributes.combat,
     "离谱上报不落库：存档里已被服务端重算值覆盖（reported = 权威值）",
@@ -896,7 +901,7 @@ async function raiseLevel(roleId, level, token) {
   const roleF1Id = seededF.data.id;
   check(seededF.code === 0, "准备：第五个玩家建号（入参只有三样，初始账本为 0）", seededF.message);
   // #597：初始文档由服务端构造，等级天然恒为 1（「建号上报满级」这条路连入参都没有了）
-  const createdF = await api("GET", `admin/roles/${roleF1Id}`, { token: adminToken });
+  const createdF = await api("GET", `admin/roles/${roleF1Id}`, { token: adminToken, zoneId: ADMIN_ZONE });
   check(
     createdF.data.level === 1 && createdF.data.data.level === 1,
     "服务端构造的初始角色恒为 1 级（索引列与存档两份一致）",
@@ -941,7 +946,7 @@ async function raiseLevel(roleId, level, token) {
   check(tamperedDoc.exp === 0, "经验没被改写（经验只由服务端结算）", `exp=${tamperedDoc.exp}`);
   check(tamperedDoc.level === 1, "等级没被改写（改包填 99，索引列也跟着回填成 1）", `level=${tamperedDoc.level}`);
   // 上限由服务端重算得出，血蓝夹在 [0, maxHp]（客户端 applyServerRoleUpdate 同一条不变式）
-  const fDerived = await api("GET", `admin/roles/${roleF1Id}`, { token: adminToken });
+  const fDerived = await api("GET", `admin/roles/${roleF1Id}`, { token: adminToken, zoneId: ADMIN_ZONE });
   const fMaxHp = fDerived.data.derived.attributes.maxHp;
   check(
     tamperedDoc.hp === fMaxHp,

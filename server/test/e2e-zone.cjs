@@ -154,9 +154,14 @@ async function startServer(dbPath) {
 }
 
 /** 发一次请求，返回唯一包裹体（code / message / data） */
+/** 管理端请求所在的区（#960）：一个 e2e 进程只在一个区里干活，管理端请求统一带它 */
+const ADMIN_ZONE = 1;
+
 async function api(baseUrl, method, route, options = {}) {
   const headers = { "Content-Type": "application/json" };
   if (options.token) headers.Authorization = `Bearer ${options.token}`;
+  // 管理端单区上下文（#960）：控制台前端在请求拦截器里统一带 X-Zone-Id，测试里对等模拟
+  if (options.zoneId !== undefined) headers["X-Zone-Id"] = String(options.zoneId);
   const response = await fetch(`${baseUrl}/api/${route}`, {
     method,
     headers,
@@ -242,7 +247,7 @@ function connect(url) {
     const adminToken = adminReg.data && adminReg.data.token;
     checkEqual(adminReg.data && adminReg.data.admin.role, "super_admin", "准备：超级管理员已注册");
 
-    const zone2 = await api(baseUrl, "POST", "admin/zones", { token: adminToken, body: { name: "二区" } });
+    const zone2 = await api(baseUrl, "POST", "admin/zones", { token: adminToken, zoneId: ADMIN_ZONE, body: { name: "二区" } });
     check(!!(zone2.data && zone2.data.id >= 2), "开新区「二区」成功", JSON.stringify(zone2.data));
     const zone2Id = zone2.data && zone2.data.id;
 
@@ -265,29 +270,29 @@ function connect(url) {
     //#region 二、合并区边界
 
     group("二、合并区边界：同区 / 不存在 / 目标已合并 / 源已合并");
-    const mergeSelf = await api(baseUrl, "POST", "admin/zones/merge", { token: adminToken, body: { fromZoneId: zone2Id, toZoneId: zone2Id } });
+    const mergeSelf = await api(baseUrl, "POST", "admin/zones/merge", { token: adminToken, zoneId: ADMIN_ZONE, body: { fromZoneId: zone2Id, toZoneId: zone2Id } });
     checkEqual(mergeSelf.code, 50028, "from = to 被拒（ZONE_MERGE_SAME 50028）", mergeSelf.message);
 
-    const mergeNoFrom = await api(baseUrl, "POST", "admin/zones/merge", { token: adminToken, body: { fromZoneId: 99, toZoneId: 1 } });
+    const mergeNoFrom = await api(baseUrl, "POST", "admin/zones/merge", { token: adminToken, zoneId: ADMIN_ZONE, body: { fromZoneId: 99, toZoneId: 1 } });
     checkEqual(mergeNoFrom.code, 50025, "from 不存在被拒（ZONE_NOT_FOUND 50025）", mergeNoFrom.message);
 
     // 先开三区并并进二区，制造一个「已合并」的区给后面的边界用
-    const zone3 = await api(baseUrl, "POST", "admin/zones", { token: adminToken, body: { name: "三区" } });
+    const zone3 = await api(baseUrl, "POST", "admin/zones", { token: adminToken, zoneId: ADMIN_ZONE, body: { name: "三区" } });
     const zone3Id = zone3.data && zone3.data.id;
-    const merge3to2 = await api(baseUrl, "POST", "admin/zones/merge", { token: adminToken, body: { fromZoneId: zone3Id, toZoneId: zone2Id } });
+    const merge3to2 = await api(baseUrl, "POST", "admin/zones/merge", { token: adminToken, zoneId: ADMIN_ZONE, body: { fromZoneId: zone3Id, toZoneId: zone2Id } });
     checkEqual(merge3to2.data && merge3to2.data.mergedInto, zone2Id, "三区并入二区成功（返回 mergedInto 标记）");
 
     const zonesAfter3to2 = await api(baseUrl, "GET", "zones");
     check(Array.isArray(zonesAfter3to2.data) && zonesAfter3to2.data.length === 2, "合并后三区从活区列表消失", JSON.stringify(zonesAfter3to2.data && zonesAfter3to2.data.map((z) => z.name)));
 
-    const adminZones = await api(baseUrl, "GET", "admin/zones", { token: adminToken });
+    const adminZones = await api(baseUrl, "GET", "admin/zones", { token: adminToken, zoneId: ADMIN_ZONE });
     const mergedRow = Array.isArray(adminZones.data) && adminZones.data.find((z) => z.id === zone3Id);
     check(!!mergedRow && mergedRow.mergedInto === zone2Id, "管理端列表仍看得到已合并的区（mergedInto 指向去向）", JSON.stringify(mergedRow));
 
-    const mergeMergedFrom = await api(baseUrl, "POST", "admin/zones/merge", { token: adminToken, body: { fromZoneId: zone3Id, toZoneId: 1 } });
+    const mergeMergedFrom = await api(baseUrl, "POST", "admin/zones/merge", { token: adminToken, zoneId: ADMIN_ZONE, body: { fromZoneId: zone3Id, toZoneId: 1 } });
     checkEqual(mergeMergedFrom.code, 50026, "已合并的区不能再当源区（ZONE_MERGED 50026）", mergeMergedFrom.message);
 
-    const mergeMergedTo = await api(baseUrl, "POST", "admin/zones/merge", { token: adminToken, body: { fromZoneId: 1, toZoneId: zone3Id } });
+    const mergeMergedTo = await api(baseUrl, "POST", "admin/zones/merge", { token: adminToken, zoneId: ADMIN_ZONE, body: { fromZoneId: 1, toZoneId: zone3Id } });
     checkEqual(mergeMergedTo.code, 50026, "已合并的区也不能当目标区（ZONE_MERGED 50026）", mergeMergedTo.message);
 
     // 边界段的合并已经把代际推过一轮：等一拍（> 2 个 tick）让世界服务巡检到并作废旧内存，
@@ -350,7 +355,7 @@ function connect(url) {
 
     group("四、合并区生效：搬账号 / 世界改牌 / 状态保留 / 代际失效");
     await sleep(1200); // 等一区那笔伤害落盘（persist 500ms），合并后才能断言「状态如实保留」
-    const merged = await api(baseUrl, "POST", "admin/zones/merge", { token: adminToken, body: { fromZoneId: zone2Id, toZoneId: 1 } });
+    const merged = await api(baseUrl, "POST", "admin/zones/merge", { token: adminToken, zoneId: ADMIN_ZONE, body: { fromZoneId: zone2Id, toZoneId: 1 } });
     checkEqual(merged.data && merged.data.mergedInto, 1, "二区并入一区成功");
 
     const mineCAfter = await api(baseUrl, "GET", "zones/mine", { token: tokenC });
@@ -391,7 +396,7 @@ function connect(url) {
     const selectMerged = await api(baseUrl, "POST", "zones/select", { token: tokenC, body: { zoneId: zone2Id } });
     checkEqual(selectMerged.code, 50026, "选已合并的区被拒（ZONE_MERGED 50026）", selectMerged.message);
 
-    const adminZonesEnd = await api(baseUrl, "GET", "admin/zones", { token: adminToken });
+    const adminZonesEnd = await api(baseUrl, "GET", "admin/zones", { token: adminToken, zoneId: ADMIN_ZONE });
     const zone2Row = Array.isArray(adminZonesEnd.data) && adminZonesEnd.data.find((z) => z.id === zone2Id);
     const zone1Row = Array.isArray(adminZonesEnd.data) && adminZonesEnd.data.find((z) => z.id === 1);
     check(!!zone2Row && zone2Row.mergedInto === 1 && zone2Row.accountCount === 0, "管理端视角：二区已标记合并、账号数清零", JSON.stringify(zone2Row));

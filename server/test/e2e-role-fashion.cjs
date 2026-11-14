@@ -62,10 +62,15 @@ function finish(message) {
 
 let baseUrl = "";
 
+/** 管理端请求所在的区（#960）：一个 e2e 进程只在一个区里干活，管理端请求统一带它 */
+const ADMIN_ZONE = 1;
+
 async function api(method, path, options = {}) {
   const headers = {};
   if (options.body !== undefined) headers["Content-Type"] = "application/json";
   if (options.token) headers.Authorization = `Bearer ${options.token}`;
+  // 管理端单区上下文（#960）：控制台前端在请求拦截器里统一带 X-Zone-Id，测试里对等模拟
+  if (options.zoneId !== undefined) headers["X-Zone-Id"] = String(options.zoneId);
   const response = await fetch(`${baseUrl}/${path}`, {
     method,
     headers,
@@ -150,7 +155,7 @@ function roleData(id, name, overrides = {}) {
   console.log("— 二、穿 / 脱接口（POST /roles/:id/fashion-wear）—");
 
   // 老档迁移：管理端直接写穿着态（历史合法来源）→ 清单没建过 → 第一次穿 / 脱把穿着认领进去
-  await api("PATCH", `admin/roles/${roleId}`, { token: adminToken, body: { fashionCloth: "cloth_2" } });
+  await api("PATCH", `admin/roles/${roleId}`, { token: adminToken, zoneId: ADMIN_ZONE, body: { fashionCloth: "cloth_2" } });
   const wearNothing = await api("POST", `roles/${roleId}/fashion-wear`, { token, body: { fashionId: null, revision: await revOf(roleId, token) } });
   check(wearNothing.code === 0, "老档迁移：无清单时第一次穿 / 脱成功（当前穿着被认领）", wearNothing.message);
   check(
@@ -172,7 +177,7 @@ function roleData(id, name, overrides = {}) {
   check(wearUnowned.code === 20017 && wearUnowned.status === 409, "未拥有的时装拒收（20017 / 409）", `${wearUnowned.code}/${wearUnowned.status}`);
 
   // 管理端发放（grant 语义）后可穿
-  const grant = await api("PATCH", `admin/roles/${roleId}`, { token: adminToken, body: { fashionsOwned: ["cloth_2", "cloth_3"] } });
+  const grant = await api("PATCH", `admin/roles/${roleId}`, { token: adminToken, zoneId: ADMIN_ZONE, body: { fashionsOwned: ["cloth_2", "cloth_3"] } });
   check(grant.code === 0, "管理端 PATCH fashionsOwned 发放成功", grant.message);
   const detailAfterGrant = await api("GET", `roles/${roleId}`, { token });
   check(
@@ -209,13 +214,13 @@ function roleData(id, name, overrides = {}) {
   check(buyLocked.code === 20016 && buyLocked.status === 409, "未开放渠道拒收（20016 / 409）", `${buyLocked.code}/${buyLocked.status}`);
 
   // 管理端开放渠道与定价（运营动作），绑定元宝不足拒收
-  const openSale = await api("PATCH", "admin/fashions/cloth_5", { token: adminToken, body: { sellPrice: 50, acquireChannel: "upgrade" } });
+  const openSale = await api("PATCH", "admin/fashions/cloth_5", { token: adminToken, zoneId: ADMIN_ZONE, body: { sellPrice: 50, acquireChannel: "upgrade" } });
   check(openSale.code === 0, "管理端开放 cloth_5 购买（价 50）", openSale.message);
   const buyPoor = await api("POST", `roles/${roleId}/fashion-buy`, { token, body: { fashionId: "cloth_5", revision: await revOf(roleId, token) } });
   check(buyPoor.code === 20011 && buyPoor.status === 409, "绑定元宝不足拒收（20011 / 409）", `${buyPoor.code}/${buyPoor.status}`);
 
   // 管理端发绑定元宝 → 购买成功：扣费、清单、revision 三处落账
-  await api("PATCH", `admin/roles/${roleId}`, { token: adminToken, body: { bindGold: 120 } });
+  await api("PATCH", `admin/roles/${roleId}`, { token: adminToken, zoneId: ADMIN_ZONE, body: { bindGold: 120 } });
   const revisionBeforeBuy = (await api("GET", `roles/${roleId}`, { token })).data.revision;
   const bought = await api("POST", `roles/${roleId}/fashion-buy`, { token, body: { fashionId: "cloth_5", revision: await revOf(roleId, token) } });
   check(bought.code === 0, "购买成功", bought.message);

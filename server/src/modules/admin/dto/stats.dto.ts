@@ -7,8 +7,16 @@ export class AdminAccountDetailDto {
   @ApiProperty({ description: "账号信息", type: AccountDto })
   account: AccountDto;
 
-  @ApiProperty({ description: "该账号的角色列表", type: RoleSummaryDto, isArray: true })
+  @ApiProperty({ description: "该账号在本区的角色列表", type: RoleSummaryDto, isArray: true })
   roles: RoleSummaryDto[];
+
+  @ApiProperty({
+    description:
+      "另在几个区还有角色（#960）。账号级操作（封禁 / 改密 / 删号）会影响这些区的角色，" +
+      "管理端提交前要用它提示影响面；详情里只列当前区的角色",
+    example: 1,
+  })
+  otherZoneCount: number;
 }
 
 /** 概览统计 */

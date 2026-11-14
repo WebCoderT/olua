@@ -113,6 +113,9 @@ async function startServer(dbPath, extraEnv = {}) {
 }
 
 /** 发一次请求，返回 { status, body }（唯一包裹体：code / message / data） */
+/** 管理端请求所在的区（#960）：一个 e2e 进程只在一个区里干活，管理端请求统一带它 */
+const ADMIN_ZONE = 1;
+
 async function api(baseUrl, method, route, options = {}) {
   const headers = { "Content-Type": "application/json" };
   if (options.token) headers.Authorization = `Bearer ${options.token}`;
@@ -155,7 +158,7 @@ async function preparePlayer(baseUrl, adminToken, username, roleName, level, zon
   const role = created.body && created.body.data;
   if (!role) throw new Error(`建角失败 ${username}：${created.body && created.body.message}`);
   if (level !== 1) {
-    const raised = await api(baseUrl, "PATCH", `admin/roles/${role.id}`, { token: adminToken, body: { level } });
+    const raised = await api(baseUrl, "PATCH", `admin/roles/${role.id}`, { token: adminToken, zoneId: zoneId ?? ADMIN_ZONE, body: { level } });
     if (!raised.body || raised.body.code !== 0) {
       throw new Error(`提级失败 ${roleName} → ${level}：${raised.body && raised.body.message}`);
     }
@@ -188,14 +191,14 @@ const zonesOf = (page) => (page ? page.list.map((entry) => entry.zoneId).join(",
       body: { username: "zone_board_admin", password: "Admin#1234", registerCode: ADMIN_CODE },
     });
     const adminLogin = await api(baseUrl, "POST", "admin/auth/login", {
-      body: { username: "zone_board_admin", password: "Admin#1234" },
+      body: { zoneId: ADMIN_ZONE, username: "zone_board_admin", password: "Admin#1234" },
     });
     const adminToken = adminRegistered.body?.data?.token ?? adminLogin.body?.data?.token;
     check(!!adminToken, "管理员已登录（提级 / 后台看榜都要用）");
 
-    const zone2 = await api(baseUrl, "POST", "admin/zones", { token: adminToken, body: { name: "二区" } });
+    const zone2 = await api(baseUrl, "POST", "admin/zones", { token: adminToken, zoneId: ADMIN_ZONE, body: { name: "二区" } });
     const zone2Id = zone2.body?.data?.id;
-    const zone3 = await api(baseUrl, "POST", "admin/zones", { token: adminToken, body: { name: "三区" } });
+    const zone3 = await api(baseUrl, "POST", "admin/zones", { token: adminToken, zoneId: ADMIN_ZONE, body: { name: "三区" } });
     const zone3Id = zone3.body?.data?.id;
     check(!!zone2Id && !!zone3Id, "开二区、三区（三区不建角色，用来验空榜）", `${zone2Id} / ${zone3Id}`);
 
@@ -310,6 +313,7 @@ const zonesOf = (page) => (page ? page.list.map((entry) => entry.zoneId).join(",
     const adminEmpty = await api(baseUrl, "GET", "admin/leaderboards/level", { token: adminToken, zoneId: zone3Id });
     checkEqual(adminEmpty.body?.data?.total, 0, "后台看空区也是空榜");
 
+    // 刻意不带 X-Zone-Id（不传 zoneId 选项 → 请求上就没有这个头）
     const adminNoHeader = await api(baseUrl, "GET", "admin/leaderboards/level", { token: adminToken });
     checkEqual(adminNoHeader.status, 400, "不带 X-Zone-Id 是 400（管理端一次只在一个区里干活）");
     checkEqual(adminNoHeader.body && adminNoHeader.body.code, 50029, "不带 X-Zone-Id 的码是 ZONE_REQUIRED(50029)");

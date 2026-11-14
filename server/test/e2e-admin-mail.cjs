@@ -59,10 +59,15 @@ function finish(message) {
 let baseUrl = "";
 
 /** 发一次请求，返回归一后的结果 */
+/** 管理端请求所在的区（#960）：一个 e2e 进程只在一个区里干活，管理端请求统一带它 */
+const ADMIN_ZONE = 1;
+
 async function api(method, path, options = {}) {
   const headers = {};
   if (options.body !== undefined) headers["Content-Type"] = "application/json";
   if (options.token) headers.Authorization = `Bearer ${options.token}`;
+  // 管理端单区上下文（#960）：控制台前端在请求拦截器里统一带 X-Zone-Id，测试里对等模拟
+  if (options.zoneId !== undefined) headers["X-Zone-Id"] = String(options.zoneId);
   const response = await fetch(`${baseUrl}/${path}`, {
     method,
     headers,
@@ -105,8 +110,8 @@ function sendMail(roleId, token, body) {
 
     const viewer = await api("POST", "admin/auth/register", { body: { username: "gm_mail_view", password: "pass1234", registerCode: "test-admin-code" } });
     const viewerToken = viewer.data.token;
-    await api("PATCH", `admin/admins/${viewer.data.admin.id}`, { token: adminToken, body: { role: "viewer" } });
-    const viewerMe = await api("GET", "admin/auth/me", { token: viewerToken });
+    await api("PATCH", `admin/admins/${viewer.data.admin.id}`, { token: adminToken, zoneId: ADMIN_ZONE, body: { role: "viewer" } });
+    const viewerMe = await api("GET", "admin/auth/me", { token: viewerToken, zoneId: ADMIN_ZONE });
     check(viewerMe.data.role === "viewer", "准备：只读观察员已就位", viewerMe.data && viewerMe.data.role);
 
     const playerA = await api("POST", "auth/register", { body: { username: "mailsend_a", password: "pass1234" } });
@@ -160,7 +165,7 @@ function sendMail(roleId, token, body) {
     const missingRole = await sendMail("role_nope", adminToken, {});
     check(missingRole.status === 404 && missingRole.code === 20002, "收件角色不存在 → 404（20002）", `${missingRole.status}/${missingRole.code}`);
 
-    const noTitle = await api("POST", "admin/game-mail/roles/${roleAId}", { token: adminToken, body: { channel: "system" } });
+    const noTitle = await api("POST", "admin/game-mail/roles/${roleAId}", { token: adminToken, zoneId: ADMIN_ZONE, body: { channel: "system" } });
     check(noTitle.status === 400, "缺标题 → 400（标题必填）", `${noTitle.status}`);
     const longTitle = await sendMail(roleAId, adminToken, { title: "长".repeat(61) });
     check(longTitle.status === 400, "标题超 60 字 → 400", `${longTitle.status}`);
@@ -232,7 +237,7 @@ function sendMail(roleId, token, body) {
 
     const offline = await sendMail(roleB2Id, adminToken, { title: "离线也能收" });
     check(offline.code === 0, "发给离线角色成功（邮件本来就是异步的）", offline.message);
-    const switchOnline = await api("POST", `admin/roles/${roleB2Id}/select`, { token: adminToken });
+    const switchOnline = await api("POST", `admin/roles/${roleB2Id}/select`, { token: adminToken, zoneId: ADMIN_ZONE });
     check(switchOnline.code === 0, "管理端把玩家乙的在线角色切到一号", switchOnline.message);
     const offlineBox = await api("GET", "mails/me", { token: tokenB });
     check(
@@ -246,7 +251,7 @@ function sendMail(roleId, token, body) {
 
     console.log("— 六、审计：谁给哪个角色发了什么 —");
 
-    const audit = await api("GET", "admin/audit-logs?action=adminGameMail.send&size=50", { token: adminToken });
+    const audit = await api("GET", "admin/audit-logs?action=adminGameMail.send&size=50", { token: adminToken, zoneId: ADMIN_ZONE });
     const entry = (audit.data.list || []).find((row) => row.targetId === roleAId);
     check(!!entry, "审计日志里有 adminGameMail.send 的记录", audit.message);
     check(

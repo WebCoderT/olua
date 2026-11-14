@@ -225,9 +225,14 @@ async function startServer(dbPath) {
   throw new Error("等待服务启动超时");
 }
 
+/** 管理端请求所在的区（#960）：一个 e2e 进程只在一个区里干活，管理端请求统一带它 */
+const ADMIN_ZONE = 1;
+
 async function api(baseUrl, method, route, options = {}) {
   const headers = { "Content-Type": "application/json" };
   if (options.token) headers.Authorization = `Bearer ${options.token}`;
+  // 管理端单区上下文（#960）：控制台前端在请求拦截器里统一带 X-Zone-Id，测试里对等模拟
+  if (options.zoneId !== undefined) headers["X-Zone-Id"] = String(options.zoneId);
   const response = await fetch(`${baseUrl}/api/${route}`, {
     method,
     headers,
@@ -423,7 +428,7 @@ function connect(url) {
     group("五、伤害系数真的取下一档：把两档改成 1× / 20×，升级前后各砍一刀");
     // 管理端写操作会触发技能缓存刷新（直改库读不到 —— 与 map_spawn_areas 的播种口径不同）
     const patched = await api(baseUrl, "PATCH", `admin/skills/${SKILL_BASE}`, {
-      token: adminToken,
+      token: adminToken, zoneId: ADMIN_ZONE,
       body: {
         damageCoefficients: [
           { baseType: "physicalAttack", baseTypeRate: COEF_LOW },

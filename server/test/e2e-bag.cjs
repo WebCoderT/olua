@@ -117,9 +117,14 @@ async function startServer(dbPath) {
 }
 
 /** 发一次请求，返回唯一包裹体（code / message / data） */
+/** 管理端请求所在的区（#960）：一个 e2e 进程只在一个区里干活，管理端请求统一带它 */
+const ADMIN_ZONE = 1;
+
 async function api(baseUrl, method, route, options = {}) {
   const headers = { "Content-Type": "application/json" };
   if (options.token) headers.Authorization = `Bearer ${options.token}`;
+  // 管理端单区上下文（#960）：控制台前端在请求拦截器里统一带 X-Zone-Id，测试里对等模拟
+  if (options.zoneId !== undefined) headers["X-Zone-Id"] = String(options.zoneId);
   const response = await fetch(`${baseUrl}/api/${route}`, {
     method,
     headers,
@@ -198,7 +203,7 @@ function layoutCells(items, cols = 10) {
 /** 注册并登录一个管理员（提等级要 `ROLE_WRITE`） */
 async function registerAdmin(baseUrl, username, password) {
   await api(baseUrl, "POST", "admin/auth/register", { body: { username, password, registerCode: ADMIN_CODE } });
-  const login = await api(baseUrl, "POST", "admin/auth/login", { body: { username, password } });
+  const login = await api(baseUrl, "POST", "admin/auth/login", { body: { zoneId: ADMIN_ZONE, username, password } });
   return login.data && login.data.token;
 }
 
@@ -230,7 +235,7 @@ const CLOTH_10_MAX_HP = equipBases["cloth_10"].maxHp;
     check(created.code === 0 && created.data.online === true, "准备：角色已创建并自动在线", created.message);
     const adminToken = await registerAdmin(baseUrl, "bag_admin", "Admin#123456");
     check(!!adminToken, "准备：管理员已登录（造状态 / 提等级只有这条路）");
-    const seeded = await api(baseUrl, "PATCH", `admin/roles/${roleId}`, { token: adminToken, body: { bag: BAG_SEED_CELLS } });
+    const seeded = await api(baseUrl, "PATCH", `admin/roles/${roleId}`, { token: adminToken, zoneId: ADMIN_ZONE, body: { bag: BAG_SEED_CELLS } });
     check(seeded.code === 0, "准备：管理端把四样物品注入背包", seeded.message);
     const snapshot = await api(baseUrl, "GET", `roles/${roleId}`, { token });
     checkEqual(countInBag(snapshot.data.data.bag, "cloth_1"), 1, "准备：背包里有一件 cloth_1（1 级衣服）");
@@ -277,7 +282,7 @@ const CLOTH_10_MAX_HP = equipBases["cloth_10"].maxHp;
     //#region 三、换装：旧装备回到刚腾出的格子
 
     group("三、换装（格数守恒）");
-    const raised = await api(baseUrl, "PATCH", `admin/roles/${roleId}`, { token: adminToken, body: { level: 10 } });
+    const raised = await api(baseUrl, "PATCH", `admin/roles/${roleId}`, { token: adminToken, zoneId: ADMIN_ZONE, body: { level: 10 } });
     checkEqual(raised.code, 0, "管理端把等级提到 10（提级是管理端特权）");
     const swapped = await api(baseUrl, "POST", `roles/${roleId}/bag-op`, { token, body: { action: "equip", row: 0, col: 4, revision: await revOf(baseUrl, roleId, token) } });
     check(swapped.code === 0, "穿上 10 级衣服（把身上的换下来）", swapped.message);
@@ -476,7 +481,7 @@ const CLOTH_10_MAX_HP = equipBases["cloth_10"].maxHp;
     const selected2 = await api(baseUrl, "POST", `roles/${stackedRoleId}/select`, { token });
     checkEqual(selected2.code, 0, "准备：角色二已选为在线角色");
     const cheatSeed = await api(baseUrl, "PATCH", `admin/roles/${stackedRoleId}`, {
-      token: adminToken,
+      token: adminToken, zoneId: ADMIN_ZONE,
       body: { bag: [{ row: 0, col: 0, id: "cloth_1", count: 3 }] },
     });
     checkEqual(cheatSeed.code, 20003, "管理端塞 count=3 的装备 → 20003（创建侧不允许造出重叠）");
@@ -490,7 +495,7 @@ const CLOTH_10_MAX_HP = equipBases["cloth_10"].maxHp;
     group("十一、单格上限（#841 / #842）");
     // 货币道具的表值是 999：两格 500+499 能注入（若 maxStack 还按 99 分堆，500 一格早就被拒）
     const moneySeed = await api(baseUrl, "PATCH", `admin/roles/${stackedRoleId}`, {
-      token: adminToken,
+      token: adminToken, zoneId: ADMIN_ZONE,
       body: { bag: [{ row: 0, col: 0, id: "money_bind_gold_10", count: 500 }, { row: 0, col: 1, id: "money_bind_gold_10", count: 499 }] },
     });
     checkEqual(moneySeed.code, 0, "货币道具 500+499 注入成功（#841：money_items 的 999 生效）", moneySeed.message);
@@ -511,7 +516,7 @@ const CLOTH_10_MAX_HP = equipBases["cloth_10"].maxHp;
 
     // 药品的表值是 99：两格 99+99 守恒没问题，但报成一格 198 超上限 → 20022
     const drugSeed = await api(baseUrl, "PATCH", `admin/roles/${stackedRoleId}`, {
-      token: adminToken,
+      token: adminToken, zoneId: ADMIN_ZONE,
       body: { bag: [{ row: 0, col: 0, id: "drug_hp_1", count: 99 }, { row: 0, col: 1, id: "drug_hp_1", count: 99 }] },
     });
     checkEqual(drugSeed.code, 0, "药品 99+99 注入成功", drugSeed.message);
@@ -529,7 +534,7 @@ const CLOTH_10_MAX_HP = equipBases["cloth_10"].maxHp;
 
     // 管理端同样拦：塞 100 瓶一格 → 20003（#836 与玩家同一把尺）
     const adminOver = await api(baseUrl, "PATCH", `admin/roles/${stackedRoleId}`, {
-      token: adminToken,
+      token: adminToken, zoneId: ADMIN_ZONE,
       body: { bag: [{ row: 0, col: 0, id: "drug_hp_1", count: 100 }] },
     });
     checkEqual(adminOver.code, 20003, "管理端塞 100 瓶一格 → 20003（运营也造不出超上限的格子）");
@@ -541,19 +546,19 @@ const CLOTH_10_MAX_HP = equipBases["cloth_10"].maxHp;
     group("十二、管理端 PATCH（#836）");
     // ① 部位不符：weapon_1 存在，但它是武器不能塞进 cloth 槽
     const wrongSlot = await api(baseUrl, "PATCH", `admin/roles/${stackedRoleId}`, {
-      token: adminToken,
+      token: adminToken, zoneId: ADMIN_ZONE,
       body: { equipments: { cloth: "weapon_1" } },
     });
     checkEqual(wrongSlot.code, 20003, "PATCH 装备部位不符 → 20003（不再静默落库等清洗）");
     // ② 物品不存在 / 不是装备
     const unknownEquip = await api(baseUrl, "PATCH", `admin/roles/${stackedRoleId}`, {
-      token: adminToken,
+      token: adminToken, zoneId: ADMIN_ZONE,
       body: { equipments: { cloth: "cloth_99" } },
     });
     checkEqual(unknownEquip.code, 20003, "PATCH 不存在的装备 id → 20003");
     // ③ 合法 PATCH：属性当场重算（运营改装备后面板现算与落库值不再分裂）
     const legitPatch = await api(baseUrl, "PATCH", `admin/roles/${stackedRoleId}`, {
-      token: adminToken,
+      token: adminToken, zoneId: ADMIN_ZONE,
       body: { equipments: { cloth: "cloth_1" } },
     });
     checkEqual(legitPatch.code, 0, "PATCH 合法装备成功", legitPatch.message);

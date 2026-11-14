@@ -20,7 +20,19 @@ export class ZoneRepository {
 
   /** 还活着的区服（未合并；玩家注册下拉框只列这些） */
   listLive(): ZoneRow[] {
-    return this.db.all<ZoneRow>("SELECT * FROM zones WHERE merged_into IS NULL ORDER BY id ASC");
+    return this.db.all<ZoneRow>("SELECT * FROM zones WHERE merged_into IS NULL ORDER BY sort ASC, id ASC");
+  }
+
+  /**
+   * 登录页 / 注册下拉的可选区（#960）
+   *
+   * 与 `listLive` 同一条 SQL，但**语义不同**：这里要的是「能选的有哪些」——
+   * 含 `closed` 区（管理端要能进去查历史），只是排序听运营的（`sort` 升序，同值按 id）。
+   * 之所以让 `listLive` 也按 `sort`：玩家注册时看到的顺序应该和后台排的一致，
+   * 否则「运营把新区顶上去」只对管理员生效。
+   */
+  listSelectable(): ZoneRow[] {
+    return this.listLive();
   }
 
   findById(id: number): ZoneRow | undefined {

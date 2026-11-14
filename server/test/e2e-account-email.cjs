@@ -107,9 +107,14 @@ async function startServer(env) {
 }
 
 /** 发一次请求，返回 { status, body }（body 是唯一包裹体） */
+/** 管理端请求所在的区（#960）：一个 e2e 进程只在一个区里干活，管理端请求统一带它 */
+const ADMIN_ZONE = 1;
+
 async function api(baseUrl, method, route, options = {}) {
   const headers = { "Content-Type": "application/json" };
   if (options.token) headers.Authorization = `Bearer ${options.token}`;
+  // 管理端单区上下文（#960）：控制台前端在请求拦截器里统一带 X-Zone-Id，测试里对等模拟
+  if (options.zoneId !== undefined) headers["X-Zone-Id"] = String(options.zoneId);
   const response = await fetch(`${baseUrl}${route}`, {
     method,
     headers,
@@ -142,19 +147,25 @@ async function registerAdmin(baseUrl, username, password) {
   await api(baseUrl, "POST", "/api/admin/auth/register", {
     body: { username, password, registerCode: ADMIN_CODE },
   });
-  const login = await api(baseUrl, "POST", "/api/admin/auth/login", { body: { username, password } });
+  const login = await api(baseUrl, "POST", "/api/admin/auth/login", { body: { zoneId: ADMIN_ZONE, username, password } });
   return login.body?.data?.token;
 }
 
-/** 注册一个玩家账号，返回 { token, username } */
+/** 注册一个玩家账号，返回 { token, username }
+ *
+ * 顺手建一个角色：#960 起管理端账号列表按「**在本区有角色**」筛，只注册不建号的账号
+ * 在管理端查不到（客服也没有可操作的东西），下面还要用列表接口拿它的 id。
+ */
 async function registerPlayer(baseUrl, username, password) {
   const res = await api(baseUrl, "POST", "/api/auth/register", { body: { username, password } });
-  return { token: res.body?.data?.token, username };
+  const token = res.body?.data?.token;
+  await api(baseUrl, "POST", "/api/roles", { token, body: { name: "甲", occupation: "1", sex: "1" } });
+  return { token, username };
 }
 
 /** 按账号名查账号 id（管理端列表接口，仅 super/admin 可用） */
 async function findAccountId(baseUrl, token, username) {
-  const res = await api(baseUrl, "GET", `/api/admin/accounts?keyword=${encodeURIComponent(username)}`, { token });
+  const res = await api(baseUrl, "GET", `/api/admin/accounts?keyword=${encodeURIComponent(username)}`, { token, zoneId: ADMIN_ZONE });
   return res.body?.data?.list?.find((item) => item.username === username)?.id ?? null;
 }
 
@@ -184,17 +195,17 @@ async function main() {
     const viewerToken = await registerAdmin(base, "email_viewer", "EmailViewer#1");
     const viewerId = await findAdminId(base, superToken, "email_viewer");
     check(Boolean(viewerId), "查到观察员管理员 id（用管理员列表接口，不是玩家账号列表）");
-    const demote = await api(base, "PATCH", `/api/admin/admins/${viewerId}`, { token: superToken, body: { role: "viewer" } });
+    const demote = await api(base, "PATCH", `/api/admin/admins/${viewerId}`, { token: superToken, zoneId: ADMIN_ZONE, body: { role: "viewer" } });
     checkEqual(demote.status, 200, "把观察员降级为 viewer 成功");
 
     group("一、可见性：只读观察员看不到邮箱，也改不了");
     {
-      const detail = await api(base, "GET", `/api/admin/accounts/${idA}`, { token: viewerToken });
+      const detail = await api(base, "GET", `/api/admin/accounts/${idA}`, { token: viewerToken, zoneId: ADMIN_ZONE });
       checkEqual(detail.status, 200, "观察员能看账号详情（account:read）");
       check(detail.body?.data?.account?.email === undefined, "观察员拿到的账号里**没有** email 字段（个人信息被隐藏）");
 
       const patch = await api(base, "PATCH", `/api/admin/accounts/${idA}/email`, {
-        token: viewerToken,
+        token: viewerToken, zoneId: ADMIN_ZONE,
         body: { email: "viewer-sees@x.com" },
       });
       checkEqual(patch.status, 403, "观察员补录邮箱被拒（403）");
@@ -204,20 +215,20 @@ async function main() {
     group("二、补录 / 查看 / 清空（持 account:email 的超级管理员）");
     {
       const patch = await api(base, "PATCH", `/api/admin/accounts/${idA}/email`, {
-        token: superToken,
+        token: superToken, zoneId: ADMIN_ZONE,
         body: { email: "a@example.com" },
       });
       checkEqual(patch.status, 200, "补录邮箱返回 200");
       checkEqual(patch.body?.data?.email, "a@example.com", "回包带上了新邮箱");
 
-      const detail = await api(base, "GET", `/api/admin/accounts/${idA}`, { token: superToken });
+      const detail = await api(base, "GET", `/api/admin/accounts/${idA}`, { token: superToken, zoneId: ADMIN_ZONE });
       checkEqual(detail.body?.data?.account?.email, "a@example.com", "详情里能看到刚补录的邮箱（account:email 持有者可见）");
     }
 
     group("三、格式校验与去重");
     {
       const bad = await api(base, "PATCH", `/api/admin/accounts/${idA}/email`, {
-        token: superToken,
+        token: superToken, zoneId: ADMIN_ZONE,
         body: { email: "not-an-email" },
       });
       checkEqual(bad.status, 400, "非法邮箱格式返回 400");
@@ -226,14 +237,14 @@ async function main() {
 
       // 先把 playerB 绑上一个邮箱
       const setB = await api(base, "PATCH", `/api/admin/accounts/${idB}/email`, {
-        token: superToken,
+        token: superToken, zoneId: ADMIN_ZONE,
         body: { email: "dup@example.com" },
       });
       checkEqual(setB.status, 200, "给 playerB 绑邮箱成功");
 
       // playerA 想用同一个邮箱 → 冲突
       const dup = await api(base, "PATCH", `/api/admin/accounts/${idA}/email`, {
-        token: superToken,
+        token: superToken, zoneId: ADMIN_ZONE,
         body: { email: "DUP@example.com" }, // 大小写不敏感，应判冲突
       });
       checkEqual(dup.status, 409, "同一邮箱（大小写不敏感）被别的账号占用 → 409");
@@ -244,11 +255,11 @@ async function main() {
     group("四、清空（传空串）");
     {
       const clear = await api(base, "PATCH", `/api/admin/accounts/${idA}/email`, {
-        token: superToken,
+        token: superToken, zoneId: ADMIN_ZONE,
         body: { email: "" },
       });
       checkEqual(clear.status, 200, "清空邮箱返回 200");
-      const detail = await api(base, "GET", `/api/admin/accounts/${idA}`, { token: superToken });
+      const detail = await api(base, "GET", `/api/admin/accounts/${idA}`, { token: superToken, zoneId: ADMIN_ZONE });
       check(detail.body?.data?.account?.email === null || detail.body?.data?.account?.email === undefined, "清空后邮箱为 null / 不返回");
     }
 
@@ -256,20 +267,20 @@ async function main() {
     {
       // 重新给 playerA 绑一个邮箱
       await api(base, "PATCH", `/api/admin/accounts/${idA}/email`, {
-        token: superToken,
+        token: superToken, zoneId: ADMIN_ZONE,
         body: { email: "fallback@example.com" },
       });
 
       // 不填 to，只关联账号 → 应自动用账号的邮箱
       const send = await api(base, "POST", "/api/admin/mails", {
-        token: superToken,
+        token: superToken, zoneId: ADMIN_ZONE,
         body: { templateKey: "custom", subject: "通知", body: "内容", accountId: idA },
       });
       checkEqual(send.status, 201, "关联账号 + 不填 to 也能入队");
       // 收件邮箱不在「发送回包」里（那是 SendMailResultDto，只有 id/status/subject），
       // 真正落库的 to_email 要去投递记录里看
       const job = await waitFor("投递任务出现", async () => {
-        const list = await api(base, "GET", "/api/admin/mails", { token: superToken });
+        const list = await api(base, "GET", "/api/admin/mails", { token: superToken, zoneId: ADMIN_ZONE });
         return list.body?.data?.list?.find((item) => item.id === send.body?.data?.id) ?? null;
       });
       checkEqual(job?.to, "fallback@example.com", "收件邮箱自动取关联账号的邮箱");
@@ -278,7 +289,7 @@ async function main() {
       const playerC = await registerPlayer(base, "email_player_c", "pass1234");
       const idC = await findAccountId(base, superToken, "email_player_c");
       const missing = await api(base, "POST", "/api/admin/mails", {
-        token: superToken,
+        token: superToken, zoneId: ADMIN_ZONE,
         body: { templateKey: "custom", subject: "通知", body: "内容", accountId: idC },
       });
       checkEqual(missing.status, 400, "账号没邮箱且不填 to → 被拒");

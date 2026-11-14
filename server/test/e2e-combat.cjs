@@ -215,9 +215,14 @@ async function startServer(dbPath) {
 }
 
 /** 发一次请求，返回唯一包裹体（code / message / data） */
+/** 管理端请求所在的区（#960）：一个 e2e 进程只在一个区里干活，管理端请求统一带它 */
+const ADMIN_ZONE = 1;
+
 async function api(baseUrl, method, route, options = {}) {
   const headers = { "Content-Type": "application/json" };
   if (options.token) headers.Authorization = `Bearer ${options.token}`;
+  // 管理端单区上下文（#960）：控制台前端在请求拦截器里统一带 X-Zone-Id，测试里对等模拟
+  if (options.zoneId !== undefined) headers["X-Zone-Id"] = String(options.zoneId);
   const response = await fetch(`${baseUrl}/api/${route}`, {
     method,
     headers,
@@ -255,7 +260,7 @@ const waitFor = async (label, predicate, timeoutMs = 5_000) => {
 /** 注册并登录一个管理员，返回 token（临时库是空的，第一个注册者自动是超级管理员） */
 async function registerAdmin(baseUrl, username, password) {
   await api(baseUrl, "POST", "admin/auth/register", { body: { username, password, registerCode: ADMIN_CODE } });
-  const login = await api(baseUrl, "POST", "admin/auth/login", { body: { username, password } });
+  const login = await api(baseUrl, "POST", "admin/auth/login", { body: { zoneId: ADMIN_ZONE, username, password } });
   return login.data && login.data.token;
 }
 
@@ -350,7 +355,7 @@ function connect(url) {
     check(!!adminToken, "准备：管理员已登录（改配置表与造角色状态都要用它）");
 
     // 清空技能，让「未学习」这条用例恢复前提（#597 起初始号自带 1xxx 全 1 级）
-    const cleared = await api(baseUrl, "PATCH", `admin/roles/${roleId}`, { token: adminToken, body: { skills: {} } });
+    const cleared = await api(baseUrl, "PATCH", `admin/roles/${roleId}`, { token: adminToken, zoneId: ADMIN_ZONE, body: { skills: {} } });
     check(cleared.code === 0, "准备：管理端清空技能（未学习用例的前提）", cleared.message);
 
     const ticket = await api(baseUrl, "POST", "realtime/ticket", { token });
@@ -428,7 +433,7 @@ function connect(url) {
 
     group("二、正常结算：伤害由服务端算出，血量算术自洽");
     // 技能已收权（#556）：玩家侧存档改不动 `skills`，学技能只能走管理端结构化编辑
-    const saved = await api(baseUrl, "PATCH", `admin/roles/${roleId}`, { token: adminToken, body: { skills: { 1000: 1 } } });
+    const saved = await api(baseUrl, "PATCH", `admin/roles/${roleId}`, { token: adminToken, zoneId: ADMIN_ZONE, body: { skills: { 1000: 1 } } });
     check(saved.code === 0, "准备：角色已学会技能 1000（管理端结构化编辑）", saved.message);
 
     const target = mobA ? mobA.instanceId : "m1_1";
@@ -546,7 +551,7 @@ function connect(url) {
     // #606 起进图门槛在服务端判（1 级角色既进不了 1 图 10 级、也进不了 2 图 40 级），
     // 而这一区域要验的是「换图清账」——所以先用管理端把这名角色提到 10 级并承认它的位置
     // （`onMap` 一并写 `mapAt`），换图目标选新手村 0 图（1 级可进），往返两程都在门槛之内
-    const promoted = await api(baseUrl, "PATCH", `admin/roles/${roleId}`, { token: adminToken, body: { level: 10, onMap: "1" } });
+    const promoted = await api(baseUrl, "PATCH", `admin/roles/${roleId}`, { token: adminToken, zoneId: ADMIN_ZONE, body: { level: 10, onMap: "1" } });
     check(promoted.code === 0, "换图前把角色提到 10 级并摆回 1 图（门槛之上才有得验换图）", promoted.message);
     const map2 = await session.joinWorld("0");
     // 不数只数（播种密度是配置数据）：换图要拿到的是一份形状完整、mapId 跟着换的快照
@@ -690,14 +695,14 @@ function connect(url) {
 
     // —— B. 升级：等级曲线 exp 段管理端改值即时生效（#786 曲线参数化）——
 
-    const curvesBefore = await api(baseUrl, "GET", "admin/level-curves", { token: adminToken });
+    const curvesBefore = await api(baseUrl, "GET", "admin/level-curves", { token: adminToken, zoneId: ADMIN_ZONE });
     const expSegOne = curvesBefore.data && curvesBefore.data.list.find((row) => row.curve === "exp" && row.seq === 1);
     check(!!expSegOne, "B：读到经验曲线第 1 段（1 级起）", JSON.stringify(expSegOne));
-    const expOfOne = await api(baseUrl, "GET", "admin/level-curves/preview?level=1", { token: adminToken });
+    const expOfOne = await api(baseUrl, "GET", "admin/level-curves/preview?level=1", { token: adminToken, zoneId: ADMIN_ZONE });
     check(expOfOne.code === 0 && expOfOne.data.exp === expSegOne.startValue, "B：1 级经验 = 第 1 段起始值（计算器与段参数同源）", JSON.stringify({ preview: expOfOne.data && expOfOne.data.exp, seed: expSegOne.startValue }));
     // 把 1 级升级所需的经验改成 1：任何经验都够升 —— 这样「升级」只依赖我们的构造，
     // 不依赖击杀经验的具体数额（那是配置数据）
-    const expPatched = await api(baseUrl, "PATCH", "admin/level-curves/exp/1", { token: adminToken, body: { startValue: 1 } });
+    const expPatched = await api(baseUrl, "PATCH", "admin/level-curves/exp/1", { token: adminToken, zoneId: ADMIN_ZONE, body: { startValue: 1 } });
     check(expPatched.code === 0, "B：把 1 级升级所需经验改成 1（任何经验都够升）");
 
     const killerB = await newPlayer("combat_rwb");
@@ -723,15 +728,15 @@ function connect(url) {
       JSON.stringify({ level: roleB.data && roleB.data.level, exp: roleB.data && roleB.data.data && roleB.data.data.exp }),
     );
     // 还原：把 1 级经验改回 seed 值（本库独立，但保持「测试后还原 seed」的纪律）
-    await api(baseUrl, "PATCH", "admin/level-curves/exp/1", { token: adminToken, body: { startValue: expSegOne.startValue } });
+    await api(baseUrl, "PATCH", "admin/level-curves/exp/1", { token: adminToken, zoneId: ADMIN_ZONE, body: { startValue: expSegOne.startValue } });
 
     // —— C. 确定性掉落：monster_drops 管理端改值即时生效 ——
 
-    const dropsBefore = await api(baseUrl, "GET", "admin/monster-drops?page=1&size=20", { token: adminToken });
+    const dropsBefore = await api(baseUrl, "GET", "admin/monster-drops?page=1&size=20", { token: adminToken, zoneId: ADMIN_ZONE });
     const dropRowOne = dropsBefore.data && dropsBefore.data.list.find((row) => row.monsterKey === "1");
     check(!!dropRowOne, "C：读到怪物 1 的掉落 seed 行", JSON.stringify(dropRowOne && dropRowOne.source));
     await api(baseUrl, "PATCH", "admin/monster-drops/1", {
-      token: adminToken,
+      token: adminToken, zoneId: ADMIN_ZONE,
       body: { tableId: null, picks: 2, entries: [{ goodId: "drug_hp_1", weight: 100, chance: 1, count: [2, 2] }] },
     });
 
@@ -776,7 +781,7 @@ function connect(url) {
     );
     // 还原怪物 1 的掉落配置（seed 是内联条目池）
     await api(baseUrl, "PATCH", "admin/monster-drops/1", {
-      token: adminToken,
+      token: adminToken, zoneId: ADMIN_ZONE,
       body: { tableId: null, picks: dropRowOne.picks, entries: dropRowOne.entries },
     });
 
@@ -787,7 +792,7 @@ function connect(url) {
     const revisionDBefore = roleDBefore.data && roleDBefore.data.revision;
     // 等级是服务端写点（#550 起存档改不动它），这里走运营侧的 PATCH 改到 10 级 ——
     // 顺带验一件事：level 是索引列，PATCH 之后详情里的等级必须是 10，修订号只推进一次
-    const savedD = await api(baseUrl, "PATCH", `admin/roles/${killerD.roleId}`, { token: adminToken, body: { level: 10 } });
+    const savedD = await api(baseUrl, "PATCH", `admin/roles/${killerD.roleId}`, { token: adminToken, zoneId: ADMIN_ZONE, body: { level: 10 } });
     check(savedD.code === 0, "D：角色已改到 10 级（管理端 PATCH）", savedD.message);
     const afterPatchD = await api(baseUrl, "GET", `roles/${killerD.roleId}`, { token: killerD.token });
     const revisionD = afterPatchD.data && afterPatchD.data.revision;
@@ -995,7 +1000,7 @@ function connect(url) {
     // #836 起管理端 PATCH 也校验部位与存在性 —— 之前随手写的 3001/4001（库里没有）
     // 现在会 20003，改用真实装备 id（cloth_1 +60 maxHp，正好给下面的血条分母断言垫差值）
     const redressed = await api(baseUrl, "PATCH", `admin/roles/${companion.roleId}`, {
-      token: adminToken,
+      token: adminToken, zoneId: ADMIN_ZONE,
       body: { equipments: { cloth: "cloth_1", weapon: "weapon_1" } },
     });
     check(redressed.code === 0, "H：换装已写进存档（服务端权威数据变了，实时进程没被告知）", redressed.message);
@@ -1018,7 +1023,7 @@ function connect(url) {
     // 等级走管理端 PATCH（#550 起存档改不动等级），装备保持不动，只有 maxHp 会变
     // 等级走管理端 PATCH（#550 起存档改不动等级），装备保持不动，只有 maxHp 会变
     const maxHpBefore = dressedEntry ? dressedEntry.m : 0;
-    const leveled = await api(baseUrl, "PATCH", `admin/roles/${companion.roleId}`, { token: adminToken, body: { level: 10 } });
+    const leveled = await api(baseUrl, "PATCH", `admin/roles/${companion.roleId}`, { token: adminToken, zoneId: ADMIN_ZONE, body: { level: 10 } });
     check(leveled.code === 0, "H：等级已改（管理端 PATCH 到 10 级，体力上限随之变化）", leveled.message);
     // 判「分母跟着变大」这个方向，不写死具体数值（那是等级曲线 + 装备加成算出来的）
     const maxHpFrame = await waitFor("fighter 收到 companion 的血条分母变化", async () => {
@@ -1057,7 +1062,7 @@ function connect(url) {
 
     // 掉落确定性：怪物 1 改成「必掉 drug_hp_1 x2」（picks 1 × chance 1 × count [2,2]）
     await api(baseUrl, "PATCH", "admin/monster-drops/1", {
-      token: adminToken,
+      token: adminToken, zoneId: ADMIN_ZONE,
       body: { tableId: null, picks: 1, entries: [{ goodId: "drug_hp_1", weight: 100, chance: 1, count: [2, 2] }] },
     });
 
@@ -1181,7 +1186,7 @@ function connect(url) {
     // 所以「塞满背包」这种造状态必须走管理端结构化编辑（稀疏格式，一行一格）
     const fullCells = [];
     for (let row = 0; row < 4; row++) for (let col = 0; col < 10; col++) fullCells.push({ row, col, id: "material_iron", count: 99 });
-    const savedFull = await api(baseUrl, "PATCH", `admin/roles/${picker.roleId}`, { token: adminToken, body: { bag: fullCells } });
+    const savedFull = await api(baseUrl, "PATCH", `admin/roles/${picker.roleId}`, { token: adminToken, zoneId: ADMIN_ZONE, body: { bag: fullCells } });
     check(savedFull.code === 0, "E：背包已存成全满（4×10 格 material_iron x99，管理端结构化编辑）", savedFull.message);
 
     const mobFull = await aliveMonster(picker, "1");
@@ -1213,7 +1218,7 @@ function connect(url) {
     // F 靠的是客户端主动发 `targetsReset` —— 那是**客户端消息**，改包不发就还能隔图吸掉落。
     // 判据必须由服务端在放行 worldJoin 时自己给出：换图那一刻账本就没了。
     // 图 2 有进图门槛，先把等级提上去（picker 此时已经站在图 1，换图要走门槛判定）
-    await api(baseUrl, "PATCH", `admin/roles/${picker.roleId}`, { token: adminToken, body: { level: 60 } });
+    await api(baseUrl, "PATCH", `admin/roles/${picker.roleId}`, { token: adminToken, zoneId: ADMIN_ZONE, body: { level: 60 } });
     const mobG = await aliveMonster(picker, "1");
     const killedG = mobG ? await killMonster(picker, mobG.monsterKey, mobG.instanceId) : null;
     check(!!killedG, "G：在图 1 打出一份掉落（先不拾）", JSON.stringify(killedG && killedG.castId));
@@ -1278,9 +1283,9 @@ function connect(url) {
 
     // 0 = 关闭校验（排查问题用的开关）：改完立刻生效（结算现读库，不等客户端重进）
     // 基线从接口读（与后面还原 `bindChance` 同一手法：不引配置快照那份第二来源）
-    const paramsBeforeRadius = await api(baseUrl, "GET", "admin/runtime-params", { token: adminToken });
+    const paramsBeforeRadius = await api(baseUrl, "GET", "admin/runtime-params", { token: adminToken, zoneId: ADMIN_ZONE });
     const acceptBefore = paramsBeforeRadius.data.drop.pickAcceptRadius;
-    await api(baseUrl, "PATCH", "admin/runtime-params", { token: adminToken, body: { drop: { pickAcceptRadius: 0 } } });
+    await api(baseUrl, "PATCH", "admin/runtime-params", { token: adminToken, zoneId: ADMIN_ZONE, body: { drop: { pickAcceptRadius: 0 } } });
     const mobH2 = await aliveMonster(farPicker, "1");
     const killedH2 = mobH2 ? await killMonster(farPicker, mobH2.monsterKey, mobH2.instanceId) : null;
     const pickedOff = killedH2
@@ -1292,7 +1297,7 @@ function connect(url) {
       JSON.stringify(pickedOff),
     );
     const restoredP = await api(baseUrl, "PATCH", "admin/runtime-params", {
-      token: adminToken,
+      token: adminToken, zoneId: ADMIN_ZONE,
       body: { drop: { pickAcceptRadius: acceptBefore } },
     });
     // 还原是准备卫生：判「写回了」而不是「等于某个数」
@@ -1300,7 +1305,7 @@ function connect(url) {
 
     // 还原怪物 1 的掉落配置（seed 是内联条目池）
     await api(baseUrl, "PATCH", "admin/monster-drops/1", {
-      token: adminToken,
+      token: adminToken, zoneId: ADMIN_ZONE,
       body: { tableId: null, picks: dropRowOne.picks, entries: dropRowOne.entries },
     });
 
@@ -1312,7 +1317,7 @@ function connect(url) {
 
     /** 动手前每只怪的掉落配置（还原用；键 = monsterKey） */
     const dropRowsBefore = new Map();
-    const dropListBefore = await api(baseUrl, "GET", "admin/monster-drops?page=1&size=100", { token: adminToken });
+    const dropListBefore = await api(baseUrl, "GET", "admin/monster-drops?page=1&size=100", { token: adminToken, zoneId: ADMIN_ZONE });
     ((dropListBefore.data && dropListBefore.data.list) || []).forEach((row) => dropRowsBefore.set(row.monsterKey, row));
 
     /**
@@ -1328,7 +1333,7 @@ function connect(url) {
      */
     const patchDropOf = (monsterKey, goodId, extra = {}, count = [2, 2]) =>
       api(baseUrl, "PATCH", `admin/monster-drops/${monsterKey}`, {
-        token: adminToken,
+        token: adminToken, zoneId: ADMIN_ZONE,
         body: { tableId: null, picks: 1, entries: [{ goodId, weight: 100, chance: 1, count }], bindDrops: false, ...extra },
       });
 
@@ -1367,7 +1372,7 @@ function connect(url) {
     );
 
     // 物品侧：把这件药品自己标成「掉落强制绑定」
-    const drugBindOn = await api(baseUrl, "PATCH", "admin/drugs/drug_hp_1", { token: adminToken, body: { bindOnDrop: true } });
+    const drugBindOn = await api(baseUrl, "PATCH", "admin/drugs/drug_hp_1", { token: adminToken, zoneId: ADMIN_ZONE, body: { bindOnDrop: true } });
     check(
       drugBindOn.code === 0 && drugBindOn.data.bindOnDrop === true,
       "A：药品标成「掉落强制绑定」（管理端 PATCH 生效）",
@@ -1379,7 +1384,7 @@ function connect(url) {
       "A：物品侧强制绑定生效（这只是药品自己的标记，怪物没开）",
       JSON.stringify(itemBound && itemBound.drops),
     );
-    await api(baseUrl, "PATCH", "admin/drugs/drug_hp_1", { token: adminToken, body: { bindOnDrop: false } });
+    await api(baseUrl, "PATCH", "admin/drugs/drug_hp_1", { token: adminToken, zoneId: ADMIN_ZONE, body: { bindOnDrop: false } });
 
     // 怪物侧：这只怪掉什么都绑
     const monsterBound = await killWith(binder, "drug_hp_1", { bindDrops: true });
@@ -1390,16 +1395,16 @@ function connect(url) {
     );
 
     // 随机概率：两个强制都不为真时按参数掷一次；100% 必绑、0% 必不绑
-    const paramsBefore = await api(baseUrl, "GET", "admin/runtime-params", { token: adminToken });
+    const paramsBefore = await api(baseUrl, "GET", "admin/runtime-params", { token: adminToken, zoneId: ADMIN_ZONE });
     const chanceBefore = paramsBefore.data && paramsBefore.data.drop && paramsBefore.data.drop.bindChance;
-    await api(baseUrl, "PATCH", "admin/runtime-params", { token: adminToken, body: { drop: { bindChance: 100 } } });
+    await api(baseUrl, "PATCH", "admin/runtime-params", { token: adminToken, zoneId: ADMIN_ZONE, body: { drop: { bindChance: 100 } } });
     const randomBound = await killWith(binder, "drug_hp_1");
     check(
       !!randomBound && randomBound.drops[0].bound === true,
       "A：随机绑定概率 100% → 必绑（第三道规则）",
       JSON.stringify(randomBound && randomBound.drops),
     );
-    await api(baseUrl, "PATCH", "admin/runtime-params", { token: adminToken, body: { drop: { bindChance: 0 } } });
+    await api(baseUrl, "PATCH", "admin/runtime-params", { token: adminToken, zoneId: ADMIN_ZONE, body: { drop: { bindChance: 0 } } });
     const randomOff = await killWith(binder, "drug_hp_1");
     check(
       !!randomOff && randomOff.drops[0].bound === false,
@@ -1533,7 +1538,7 @@ function connect(url) {
 
     // 用药：`emptyPos` 上那堆是绑定的 —— 用掉一瓶后 bound 必须还在，
     // 否则 5 瓶绑定药用到剩 1 瓶就变成可交易的了
-    await api(baseUrl, "PATCH", `admin/roles/${binder.roleId}`, { token: adminToken, body: { hp: 1 } });
+    await api(baseUrl, "PATCH", `admin/roles/${binder.roleId}`, { token: adminToken, zoneId: ADMIN_ZONE, body: { hp: 1 } });
     const usedBound = await api(baseUrl, "POST", `roles/${binder.roleId}/drug-use`, {
       token: binder.token,
       body: { row: emptyPos.row, col: emptyPos.col, revision: await revOf(baseUrl, binder.roleId, binder.token) },
@@ -1586,7 +1591,7 @@ function connect(url) {
         : cell,
     );
     const adminBagPatched = await api(baseUrl, "PATCH", `admin/roles/${binder.roleId}`, {
-      token: adminToken,
+      token: adminToken, zoneId: ADMIN_ZONE,
       body: { bag: adminBagCells },
     });
     check(adminBagPatched.code === 0, "D2：管理端 PATCH bag 挪动绑定材料成功", adminBagPatched.message);
@@ -1702,9 +1707,9 @@ function connect(url) {
               picks: before.source === "entries" && before.picks !== null ? before.picks : undefined,
               bindDrops: before.bindDrops === true,
             };
-      await api(baseUrl, "PATCH", `admin/monster-drops/${key}`, { token: adminToken, body: restore });
+      await api(baseUrl, "PATCH", `admin/monster-drops/${key}`, { token: adminToken, zoneId: ADMIN_ZONE, body: restore });
     }
-    await api(baseUrl, "PATCH", "admin/runtime-params", { token: adminToken, body: { drop: { bindChance: chanceBefore } } });
+    await api(baseUrl, "PATCH", "admin/runtime-params", { token: adminToken, zoneId: ADMIN_ZONE, body: { drop: { bindChance: chanceBefore } } });
 
     //#endregion
 
@@ -1717,14 +1722,14 @@ function connect(url) {
     check(!!castMob, "十：地图 2 有活着的怪（技能释放的宿主）", JSON.stringify(castMob));
 
     // 原挂载与原攻击区间：region 末尾要还原（不污染 seed 前提与后续断言）
-    const mountBefore = await api(baseUrl, "GET", `admin/monsters/${castMob.monsterKey}/skills`, { token: adminToken });
-    const monsterQuery = await api(baseUrl, "GET", `admin/monsters?keyword=${encodeURIComponent(castMob.monsterKey)}`, { token: adminToken });
+    const mountBefore = await api(baseUrl, "GET", `admin/monsters/${castMob.monsterKey}/skills`, { token: adminToken, zoneId: ADMIN_ZONE });
+    const monsterQuery = await api(baseUrl, "GET", `admin/monsters?keyword=${encodeURIComponent(castMob.monsterKey)}`, { token: adminToken, zoneId: ADMIN_ZONE });
     const monsterRow = monsterQuery.data && monsterQuery.data.list.find((row) => row.id === castMob.monsterKey);
     check(!!monsterRow, "十：读到这只怪的基础数据（要固定攻击区间）", JSON.stringify(monsterQuery.data && monsterQuery.data.list.slice(0, 1)));
 
     // 攻击区间固定成 50~50：普攻伤害 ≤ 50，狂怒 ×1.5 之后必然 > 50 —— 倍率有没有生效一眼可辨
     const fixedAttack = await api(baseUrl, "PATCH", `admin/monsters/${castMob.monsterKey}`, {
-      token: adminToken,
+      token: adminToken, zoneId: ADMIN_ZONE,
       body: { attributes: { ...monsterRow.attributes, physicalAttack: { min: 50, max: 50 } } },
     });
     check(fixedAttack.code === 0, "十：物攻区间固定成 50~50（让倍率可辨）", fixedAttack.message);
@@ -1732,7 +1737,7 @@ function connect(url) {
     // —— A. 只挂状态型（狂怒）：服务端释放 → casts 带 statusId → 攻击倍率生效 ——
 
     const mountStateful = await api(baseUrl, "PUT", `admin/monsters/${castMob.monsterKey}/skills`, {
-      token: adminToken,
+      token: adminToken, zoneId: ADMIN_ZONE,
       body: { skills: [{ skillId: "9002", priority: 1 }] },
     });
     check(
@@ -1780,7 +1785,7 @@ function connect(url) {
 
     castPosTimer && clearInterval(castPosTimer);
     const mountDamaging = await api(baseUrl, "PUT", `admin/monsters/${castMob.monsterKey}/skills`, {
-      token: adminToken,
+      token: adminToken, zoneId: ADMIN_ZONE,
       body: { skills: [{ skillId: "9001", priority: 1 }] },
     });
     check(mountDamaging.code === 0 && mountDamaging.data.total === 1, "十：挂载换成 1 条（只放跃鼠猛击）", JSON.stringify(mountDamaging.data));
@@ -1789,10 +1794,10 @@ function connect(url) {
     // 一发伤害型技能 ≈ 50×1.8×1.5 − 物防 ≈ 130，而 1 级角色只有 100 血 —— 打中就躺；
     // 躺下之后 `applyMonsterHit` 直接返回 null（不再报命中），这一段的 hits 断言就永远等不到。
     // 所以先把 1 级血量抬高（本库独立，段尾还原）。
-    const hpCurvesBefore = await api(baseUrl, "GET", "admin/level-curves", { token: adminToken });
+    const hpCurvesBefore = await api(baseUrl, "GET", "admin/level-curves", { token: adminToken, zoneId: ADMIN_ZONE });
     const hpSegOne = hpCurvesBefore.data && hpCurvesBefore.data.list.find((row) => row.curve === "hp" && row.seq === 1);
     const levelOneHp = hpSegOne && hpSegOne.startValue;
-    const hpBoosted = await api(baseUrl, "PATCH", "admin/level-curves/hp/1", { token: adminToken, body: { startValue: 5000 } });
+    const hpBoosted = await api(baseUrl, "PATCH", "admin/level-curves/hp/1", { token: adminToken, zoneId: ADMIN_ZONE, body: { startValue: 5000 } });
     check(hpBoosted.code === 0, "十：把 1 级血量临时抬高（让沙包活到技能命中）", hpBoosted.message);
 
     const casterB = await newPlayer("combat_rsk");
@@ -1868,7 +1873,7 @@ function connect(url) {
     const restoreMount =
       mountBefore.data && mountBefore.data.list.length > 0
         ? await api(baseUrl, "PUT", `admin/monsters/${castMob.monsterKey}/skills`, {
-            token: adminToken,
+            token: adminToken, zoneId: ADMIN_ZONE,
             body: {
               skills: mountBefore.data.list.map((item) => ({
                 skillId: item.skillId,
@@ -1877,14 +1882,14 @@ function connect(url) {
               })),
             },
           })
-        : await api(baseUrl, "PUT", `admin/monsters/${castMob.monsterKey}/skills`, { token: adminToken, body: { skills: [] } });
+        : await api(baseUrl, "PUT", `admin/monsters/${castMob.monsterKey}/skills`, { token: adminToken, zoneId: ADMIN_ZONE, body: { skills: [] } });
     check(restoreMount.code === 0, "十：还原这只怪的技能挂载", restoreMount.message);
     const restoreAttack = await api(baseUrl, "PATCH", `admin/monsters/${castMob.monsterKey}`, {
-      token: adminToken,
+      token: adminToken, zoneId: ADMIN_ZONE,
       body: { attributes: monsterRow.attributes },
     });
     check(restoreAttack.code === 0, "十：还原攻击区间（seed 前提复原）", restoreAttack.message);
-    const hpRestored = await api(baseUrl, "PATCH", "admin/level-curves/hp/1", { token: adminToken, body: { startValue: levelOneHp } });
+    const hpRestored = await api(baseUrl, "PATCH", "admin/level-curves/hp/1", { token: adminToken, zoneId: ADMIN_ZONE, body: { startValue: levelOneHp } });
     check(hpRestored.code === 0, "十：还原 1 级血量", hpRestored.message);
 
     //#endregion

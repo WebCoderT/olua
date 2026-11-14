@@ -19,6 +19,34 @@ export class ZoneDto {
   }
 }
 
+/** 区服视图（管理端登录页下拉：#960 —— 只发「选哪个」要用的四个字段） */
+export class ZoneOptionDto {
+  @ApiProperty({ description: "区服 id", example: 1 })
+  id: number;
+
+  @ApiProperty({ description: "区服名", example: "一区" })
+  name: string;
+
+  @ApiProperty({
+    description: "运营状态：`open`（正常） / `closed`（停止注册，仍可进去查历史）",
+    example: "open",
+    enum: ["open", "closed"],
+  })
+  status: string;
+
+  @ApiProperty({ description: "下拉排序（升序，同值按 id）", example: 0 })
+  sort: number;
+
+  static from(row: ZoneRow): ZoneOptionDto {
+    const dto = new ZoneOptionDto();
+    dto.id = row.id;
+    dto.name = row.name;
+    dto.status = row.status;
+    dto.sort = row.sort;
+    return dto;
+  }
+}
+
 /** 区服视图（管理端：带合并标记与账号数） */
 export class AdminZoneDto {
   @ApiProperty({ description: "区服 id", example: 1 })
@@ -29,6 +57,12 @@ export class AdminZoneDto {
 
   @ApiProperty({ description: "已并入的区服 id（未合并为 null）", type: "number", nullable: true, example: null })
   mergedInto: number | null;
+
+  @ApiProperty({ description: "运营状态：open / closed", example: "open", enum: ["open", "closed"] })
+  status: string;
+
+  @ApiProperty({ description: "下拉排序（升序，同值按 id）", example: 0 })
+  sort: number;
 
   @ApiProperty({ description: "当前归属本区的账号数", example: 42 })
   accountCount: number;
@@ -44,6 +78,8 @@ export class AdminZoneDto {
     dto.id = row.id;
     dto.name = row.name;
     dto.mergedInto = row.merged_into;
+    dto.status = row.status;
+    dto.sort = row.sort;
     dto.accountCount = accountCount;
     dto.createdAt = row.created_at;
     dto.updatedAt = row.updated_at;

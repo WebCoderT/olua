@@ -528,6 +528,22 @@
   font-size: 14px;
   transition: border-color 0.25s var(--ease), box-shadow 0.25s var(--ease), background 0.25s var(--ease);
 }
+/* 区服下拉（#960）：原生 select 在暗背景里要压掉系统外观；option 由系统渲染，必须显式给底色 */
+.legend-login .ctrl.select {
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+  padding-right: 34px;
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5 6 6.5 11 1.5' fill='none' stroke='%23c9a24d' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 13px center;
+  background-color: transparent;
+}
+.legend-login .ctrl.select option {
+  /* 系统下拉面板不在我们的背景里，必须自己给底色，否则白底白字 */
+  background: var(--stone-1);
+  color: var(--ink);
+}
 .legend-login .ctrl::placeholder {
   color: #6e604a;
 }

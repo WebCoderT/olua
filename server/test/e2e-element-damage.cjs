@@ -199,9 +199,14 @@ async function startServer(dbPath) {
   throw new Error("等待服务启动超时");
 }
 
+/** 管理端请求所在的区（#960）：一个 e2e 进程只在一个区里干活，管理端请求统一带它 */
+const ADMIN_ZONE = 1;
+
 async function api(baseUrl, method, route, options = {}) {
   const headers = { "Content-Type": "application/json" };
   if (options.token) headers.Authorization = `Bearer ${options.token}`;
+  // 管理端单区上下文（#960）：控制台前端在请求拦截器里统一带 X-Zone-Id，测试里对等模拟
+  if (options.zoneId !== undefined) headers["X-Zone-Id"] = String(options.zoneId);
   const response = await fetch(`${baseUrl}/api/${route}`, {
     method,
     headers,
@@ -268,10 +273,10 @@ async function spawnPlayer(baseUrl, adminToken, name) {
 
   // #859：新号没有位置记录时只准进新手村，而这一套全程在图 1 上打 ——
   // 用运营摆位（`onMap` 一并写 `mapAt`）把人放过去，比直接改库更贴近真实链路
-  const placed = await api(baseUrl, "PATCH", `admin/roles/${roleId}`, { token: adminToken, body: { onMap: "1" } });
+  const placed = await api(baseUrl, "PATCH", `admin/roles/${roleId}`, { token: adminToken, zoneId: ADMIN_ZONE, body: { onMap: "1" } });
   if (placed.code !== 0) throw new Error(`摆位失败：${placed.message}`);
 
-  const worn = await api(baseUrl, "PATCH", `admin/roles/${roleId}`, { token: adminToken, body: { equipments: { [GEAR.slot]: GEAR.id } } });
+  const worn = await api(baseUrl, "PATCH", `admin/roles/${roleId}`, { token: adminToken, zoneId: ADMIN_ZONE, body: { equipments: { [GEAR.slot]: GEAR.id } } });
   if (worn.code !== 0) throw new Error(`穿装备失败：${worn.message}`);
 
   const ticket = await api(baseUrl, "POST", "realtime/ticket", { token });
@@ -312,7 +317,7 @@ async function standAndWait(session, predicate, timeoutMs = 20_000) {
     // 改的是**变体行**不是基础件：`equipmentAttributesOf` 读 `equipment_variants`（每件基础件 15 行，
     // #655 起变体各自成行、改基础件不带动变体）。穿在身上的 id 解析到的就是变体那一行。
     const patchedGear = await api(baseUrl, "PATCH", `admin/equipment-variants/${GEAR.id}`, {
-      token: adminToken,
+      token: adminToken, zoneId: ADMIN_ZONE,
       body: {
         attributes: {
           maxHp: 0,

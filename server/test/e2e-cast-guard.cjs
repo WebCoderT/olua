@@ -139,9 +139,14 @@ async function startServer(dbPath) {
   throw new Error("等待服务启动超时");
 }
 
+/** 管理端请求所在的区（#960）：一个 e2e 进程只在一个区里干活，管理端请求统一带它 */
+const ADMIN_ZONE = 1;
+
 async function api(baseUrl, method, route, options = {}) {
   const headers = { "Content-Type": "application/json" };
   if (options.token) headers.Authorization = `Bearer ${options.token}`;
+  // 管理端单区上下文（#960）：控制台前端在请求拦截器里统一带 X-Zone-Id，测试里对等模拟
+  if (options.zoneId !== undefined) headers["X-Zone-Id"] = String(options.zoneId);
   const response = await fetch(`${baseUrl}/api/${route}`, {
     method,
     headers,
@@ -363,7 +368,7 @@ function connect(url) {
     group("五、耗蓝闸：蓝不够 → 被拒，且不扣血 / 不留冷却");
 
     // 把基础剑术的蓝耗临时调到 999（新角色 mp 远不够），比「烧光法力」更确定
-    const patched = await api(baseUrl, "PATCH", "admin/skills/1000", { token: adminToken, body: { mpCost: 999 } });
+    const patched = await api(baseUrl, "PATCH", "admin/skills/1000", { token: adminToken, zoneId: ADMIN_ZONE, body: { mpCost: 999 } });
     checkEqual(patched.code, 0, "准备：把基础剑术蓝耗临时改成 999", patched.message);
     await sleep(300); // 上一段最后一发刚放出去：等冷却过掉，这一发才会被「蓝不足」拦住而不是「冷却」
     const mpTarget = await weakTarget();
@@ -372,7 +377,7 @@ function connect(url) {
     const mpFrame = await a.settleOf(mpId);
     checkEqual(mpFrame && mpFrame.rejected, "mp", "蓝不足被拒（rejected = mp）");
     checkEqual(await hpOf(mpTarget.instanceId), beforeMp, "蓝不足的出手没有扣血");
-    const restoreMp = await api(baseUrl, "PATCH", "admin/skills/1000", { token: adminToken, body: { mpCost: 0 } });
+    const restoreMp = await api(baseUrl, "PATCH", "admin/skills/1000", { token: adminToken, zoneId: ADMIN_ZONE, body: { mpCost: 0 } });
     checkEqual(restoreMp.code, 0, "还原：基础剑术蓝耗回到 0");
 
     //#region 六、rate：令牌桶

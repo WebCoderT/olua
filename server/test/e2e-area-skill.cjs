@@ -240,9 +240,14 @@ async function startServer(dbPath) {
   throw new Error("等待服务启动超时");
 }
 
+/** 管理端请求所在的区（#960）：一个 e2e 进程只在一个区里干活，管理端请求统一带它 */
+const ADMIN_ZONE = 1;
+
 async function api(baseUrl, method, route, options = {}) {
   const headers = { "Content-Type": "application/json" };
   if (options.token) headers.Authorization = `Bearer ${options.token}`;
+  // 管理端单区上下文（#960）：控制台前端在请求拦截器里统一带 X-Zone-Id，测试里对等模拟
+  if (options.zoneId !== undefined) headers["X-Zone-Id"] = String(options.zoneId);
   const response = await fetch(`${baseUrl}/api/${route}`, {
     method,
     headers,
@@ -339,7 +344,7 @@ async function standAt(session, mapId, point) {
 
     // 把 1009 改造成群体技能（走管理端接口：结算读的技能表是「启动时 + 管理端写操作后」重装的）
     const patchedAoe = await api(baseUrl, "PATCH", `admin/skills/${AOE_SKILL}`, {
-      token: adminToken,
+      token: adminToken, zoneId: ADMIN_ZONE,
       body: {
         targetType: "2",
         distance: REACH,
@@ -348,7 +353,7 @@ async function standAt(session, mapId, point) {
       },
     });
     check(patchedAoe.code === 0, `准备：把 ${AOE_SKILL} 改成群体技能（target_type=2、半径 ${REACH}）`, patchedAoe.message);
-    const patchedDash = await api(baseUrl, "PATCH", `admin/skills/${DASH_SKILL}`, { token: adminToken, body: { mpCost: 0 } });
+    const patchedDash = await api(baseUrl, "PATCH", `admin/skills/${DASH_SKILL}`, { token: adminToken, zoneId: ADMIN_ZONE, body: { mpCost: 0 } });
     check(patchedDash.code === 0, `准备：把 ${DASH_SKILL} 的蓝耗置 0（这一套不测耗蓝闸）`, patchedDash.message);
 
     const registered = await api(baseUrl, "POST", "auth/register", { body: { username: "area_player", password: "pass1234" } });

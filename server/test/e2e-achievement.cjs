@@ -137,9 +137,14 @@ async function startServer(dbPath) {
 }
 
 /** 发一次请求，返回唯一包裹体（code / message / data） */
+/** 管理端请求所在的区（#960）：一个 e2e 进程只在一个区里干活，管理端请求统一带它 */
+const ADMIN_ZONE = 1;
+
 async function api(baseUrl, method, route, options = {}) {
   const headers = { "Content-Type": "application/json" };
   if (options.token) headers.Authorization = `Bearer ${options.token}`;
+  // 管理端单区上下文（#960）：控制台前端在请求拦截器里统一带 X-Zone-Id，测试里对等模拟
+  if (options.zoneId !== undefined) headers["X-Zone-Id"] = String(options.zoneId);
   const response = await fetch(`${baseUrl}/api/${route}`, {
     method,
     headers,
@@ -256,7 +261,7 @@ function setRoleLevel(dbPath, roleId, level) {
     check(!!(world && world.monsters.some((m) => m.alive)), "准备：进图拿到活着的怪物 1");
 
     await api(baseUrl, "POST", "admin/auth/register", { body: { username: "ach_admin", password: "pass1234", registerCode: ADMIN_CODE } });
-    const adminLogin = await api(baseUrl, "POST", "admin/auth/login", { body: { username: "ach_admin", password: "pass1234" } });
+    const adminLogin = await api(baseUrl, "POST", "admin/auth/login", { body: { zoneId: ADMIN_ZONE, username: "ach_admin", password: "pass1234" } });
     const adminToken = adminLogin.data && adminLogin.data.token;
     check(!!adminToken, "准备：管理员已登录（配置守卫用它）");
 
@@ -386,7 +391,7 @@ function setRoleLevel(dbPath, roleId, level) {
     // 所以「塞满背包」要走管理端结构化编辑（稀疏格式，一行一格）
     const stuffedCells = [];
     for (let row = 0; row < 4; row++) for (let col = 0; col < 10; col++) stuffedCells.push({ row, col, id: "material_hide", count: 99 });
-    const stuffed = await api(baseUrl, "PATCH", `admin/roles/${roleId}`, { token: adminToken, body: { bag: stuffedCells } });
+    const stuffed = await api(baseUrl, "PATCH", `admin/roles/${roleId}`, { token: adminToken, zoneId: ADMIN_ZONE, body: { bag: stuffedCells } });
     checkEqual(stuffed && stuffed.code, 0, "准备：背包塞满（40 格兽皮，管理端摆格）");
     const bagFull = await api(baseUrl, "POST", "achievements/claim", { token, body: { achievementId: "ach_level_10" } });
     checkEqual(bagFull && bagFull.code, 0, "背包满时成就也能领（不再堵在 20012）");
@@ -404,7 +409,7 @@ function setRoleLevel(dbPath, roleId, level) {
     );
     // 清出一格（只剩 (0,0) 一件）：同样靠管理端摆格，客户端存档改不动背包内容
     await api(baseUrl, "PATCH", `admin/roles/${roleId}`, {
-      token: adminToken,
+      token: adminToken, zoneId: ADMIN_ZONE,
       body: { bag: [{ row: 0, col: 0, id: "material_hide", count: 99 }] },
     });
     const claimedAfter = await api(baseUrl, "POST", `mails/${rewardMail && rewardMail.id}/claim`, { token });
@@ -416,26 +421,26 @@ function setRoleLevel(dbPath, roleId, level) {
     //#region 七、管理端配置
 
     group("七、管理端配置：列表 / 编辑 / 新建 / 目标键校验 / 删除守卫");
-    const list = await api(baseUrl, "GET", "admin/achievements?page=1&size=50", { token: adminToken });
+    const list = await api(baseUrl, "GET", "admin/achievements?page=1&size=50", { token: adminToken, zoneId: ADMIN_ZONE });
     check(list && list.data && list.data.list.length > 0, "管理端列表读得到成就（条数是出厂数据，不判）", String(list && list.data && list.data.list.length));
     const updated = await api(baseUrl, "PATCH", "admin/achievements/ach_collect_hide", {
-      token: adminToken,
+      token: adminToken, zoneId: ADMIN_ZONE,
       body: { label: "皮料大亨" },
     });
     checkEqual(updated && updated.data && updated.data.label, "皮料大亨", "编辑名称（部分更新）生效");
     const badTarget = await api(baseUrl, "POST", "admin/achievements", {
-      token: adminToken,
+      token: adminToken, zoneId: ADMIN_ZONE,
       body: { id: "ach_bad", category: "battle", label: "坏目标", condition: { type: "kill", target: "999999", count: 1 } },
     });
     checkEqual(badTarget && badTarget.code, 40000, "击杀目标不是已配置怪物 → 40000");
     const fresh = await api(baseUrl, "POST", "admin/achievements", {
-      token: adminToken,
+      token: adminToken, zoneId: ADMIN_ZONE,
       body: { id: "ach_fresh", category: "explore", label: "新成就", condition: { type: "level", target: "", count: 5 } },
     });
     checkEqual(fresh && fresh.data && fresh.data.id, "ach_fresh", "新建成就成功");
-    const removeFresh = await api(baseUrl, "DELETE", "admin/achievements/ach_fresh", { token: adminToken });
+    const removeFresh = await api(baseUrl, "DELETE", "admin/achievements/ach_fresh", { token: adminToken, zoneId: ADMIN_ZONE });
     checkEqual(removeFresh && removeFresh.code, 0, "没有玩家记录时可以删");
-    const removeUsed = await api(baseUrl, "DELETE", "admin/achievements/ach_kill_10", { token: adminToken });
+    const removeUsed = await api(baseUrl, "DELETE", "admin/achievements/ach_kill_10", { token: adminToken, zoneId: ADMIN_ZONE });
     checkEqual(removeUsed && removeUsed.code, 40000, "有玩家成就记录时拒删（40000）");
 
     //#endregion

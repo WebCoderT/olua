@@ -5,6 +5,8 @@ import { RoleReportRow, RoleReportWithNameRow } from "../rows";
 
 /** 举报列表的查询条件（全部可选，条件之间是「与」） */
 export interface ReportListOptions {
+  /** 当前区（#960）：只看**本区角色之间**的举报 */
+  zoneId: number;
   /** abuse / cheat / name / other */
   category?: string;
   status?: string;
@@ -58,6 +60,11 @@ export class ReportRepository {
   list(options: ReportListOptions): PageResult<RoleReportWithNameRow> {
     const where: string[] = [];
     const params: SqlParam[] = [];
+    // 区（#960）：举报人属于哪个区，这条举报就归哪个区。
+    // 举报人角色已删时（`reporter.id IS NULL`）退一步看被举报方的区 —— 举报是证据，
+    // 不能因为一方删号就从所有区的列表里消失。
+    where.push("(reporter.zone_id = ? OR (reporter.id IS NULL AND target.zone_id = ?))");
+    params.push(options.zoneId, options.zoneId);
     if (options.category) {
       where.push("rep.category = ?");
       params.push(options.category);

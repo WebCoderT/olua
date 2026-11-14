@@ -200,10 +200,17 @@ export class AccountRepository {
     this.db.run("UPDATE accounts SET active_zone_id = ?, updated_at = ? WHERE active_zone_id = ?", [toZoneId, now, fromZoneId]);
   }
 
-  /** 分页检索（keyword 匹配用户名；排序见 ACCOUNT_SORT 白名单） */
-  list(options: AccountListOptions): AccountWithCountRow[] {
-    const where: string[] = [];
-    const params: SqlParam[] = [];
+  /**
+   * 分页检索（keyword 匹配用户名；排序见 ACCOUNT_SORT 白名单）
+   *
+   * **按区收口（#960）**：管理端一次只在一个区里干活，列表只出「在这个区有角色」的账号
+   * （`EXISTS` 而不是 join —— 一个账号在本区可能有好几个角色，join 会让它出现多行，
+   * 而且分页 total 也跟着虚高）。`role_count` 同样只数本区的角色：显示「3 个角色」
+   * 而详情里只列出 1 个，是最容易让人以为删错了的那种不一致。
+   */
+  list(zoneId: number, options: AccountListOptions): AccountWithCountRow[] {
+    const where: string[] = ["EXISTS (SELECT 1 FROM roles r0 WHERE r0.account_id = a.id AND r0.zone_id = ?)"];
+    const params: SqlParam[] = [zoneId];
     if (options.keyword) {
       where.push("a.username LIKE ?");
       params.push(`%${options.keyword}%`);
@@ -212,55 +219,74 @@ export class AccountRepository {
       where.push("a.status = ?");
       params.push(options.status);
     }
-    const clause = where.length ? `WHERE ${where.join(" AND ")}` : "";
+    const clause = `WHERE ${where.join(" AND ")}`;
     return this.db.all<AccountWithCountRow>(
-      `SELECT a.*, (SELECT COUNT(1) FROM roles r WHERE r.account_id = a.id) AS role_count
+      `SELECT a.*, (SELECT COUNT(1) FROM roles r WHERE r.account_id = a.id AND r.zone_id = ?) AS role_count
        FROM accounts a ${clause}
        ORDER BY ${resolveSort(ACCOUNT_SORT, options.sort, options.order)}
        LIMIT ? OFFSET ?`,
-      [...params, options.size, (options.page - 1) * options.size],
+      [zoneId, ...params, options.size, (options.page - 1) * options.size],
     );
   }
 
-  /** 分页检索的总数 */
-  count(options: { keyword?: string; status?: string }): number {
-    const where: string[] = [];
-    const params: SqlParam[] = [];
+  /** 分页检索的总数（与 list 同一套条件，别各写一份） */
+  count(zoneId: number, options: { keyword?: string; status?: string }): number {
+    const where: string[] = ["EXISTS (SELECT 1 FROM roles r0 WHERE r0.account_id = a.id AND r0.zone_id = ?)"];
+    const params: SqlParam[] = [zoneId];
     if (options.keyword) {
-      where.push("username LIKE ?");
+      where.push("a.username LIKE ?");
       params.push(`%${options.keyword}%`);
     }
     if (options.status) {
-      where.push("status = ?");
+      where.push("a.status = ?");
       params.push(options.status);
     }
-    const clause = where.length ? `WHERE ${where.join(" AND ")}` : "";
-    return this.db.count(`SELECT COUNT(1) AS total FROM accounts ${clause}`, params);
+    return this.db.count(`SELECT COUNT(1) AS total FROM accounts a WHERE ${where.join(" AND ")}`, params);
   }
 
-  /** 统计总数（概览用） */
-  countAll(): number {
-    return this.db.count("SELECT COUNT(1) AS total FROM accounts");
-  }
-
-  /** 统计某时间点之后注册的数量（概览用） */
-  countCreatedAfter(timestamp: number): number {
-    return this.db.count("SELECT COUNT(1) AS total FROM accounts WHERE created_at >= ?", [timestamp]);
-  }
-
-  /** 按天统计新增账号（时区处理同 RoleRepository.countByDaySince） */
-  countByDaySince(since: number): { day: string; total: number }[] {
-    return this.db.all<{ day: string; total: number }>(
-      `SELECT date(created_at / 1000, 'unixepoch', 'localtime') AS day, COUNT(1) AS total
-       FROM accounts WHERE created_at >= ?
-       GROUP BY day ORDER BY day ASC`,
-      [since],
+  /**
+   * 本区账号数（概览用，#960）
+   *
+   * 「本区账号」= 在这个区**有角色**的账号。账号本身不属于区（#957），所以只能用
+   * `EXISTS` 反查；`active_zone_id` 不能用 —— 那只是「上次在哪个区看角色」。
+   */
+  countAll(zoneId: number): number {
+    return this.db.count(
+      "SELECT COUNT(1) AS total FROM accounts a WHERE EXISTS (SELECT 1 FROM roles r WHERE r.account_id = a.id AND r.zone_id = ?)",
+      [zoneId],
     );
   }
 
-  /** 当前有在线角色的账号数（概览用） */
-  countOnline(): number {
-    return this.db.count("SELECT COUNT(1) AS total FROM accounts WHERE online_role_id IS NOT NULL");
+  /** 本区某时间点之后新建账号数（注册后立刻建角才算本区，所以仍走 EXISTS） */
+  countCreatedAfter(zoneId: number, timestamp: number): number {
+    return this.db.count(
+      `SELECT COUNT(1) AS total FROM accounts a
+       WHERE a.created_at >= ?
+         AND EXISTS (SELECT 1 FROM roles r WHERE r.account_id = a.id AND r.zone_id = ?)`,
+      [timestamp, zoneId],
+    );
+  }
+
+  /** 按天统计本区新增账号（时区处理同 RoleRepository.countByDaySince） */
+  countByDaySince(zoneId: number, since: number): { day: string; total: number }[] {
+    return this.db.all<{ day: string; total: number }>(
+      `SELECT date(a.created_at / 1000, 'unixepoch', 'localtime') AS day, COUNT(1) AS total
+       FROM accounts a
+       WHERE a.created_at >= ?
+         AND EXISTS (SELECT 1 FROM roles r WHERE r.account_id = a.id AND r.zone_id = ?)
+       GROUP BY day ORDER BY day ASC`,
+      [since, zoneId],
+    );
+  }
+
+  /** 当前在线、且在线角色在**本区**的账号数（概览用） */
+  countOnline(zoneId: number): number {
+    return this.db.count(
+      `SELECT COUNT(1) AS total FROM accounts a
+       WHERE a.online_role_id IS NOT NULL
+         AND EXISTS (SELECT 1 FROM roles r WHERE r.id = a.online_role_id AND r.zone_id = ?)`,
+      [zoneId],
+    );
   }
 
   /**
@@ -296,11 +322,13 @@ export class AccountRepository {
       .map((row) => row.id);
   }
 
-  /** 当前封禁中的账号数（概览用；永久封禁与未到期的临时封禁都算，已到期的不算） */
-  countBanned(now: number = Date.now()): number {
+  /** 本区当前封禁中的账号数（概览用；永久封禁与未到期的临时封禁都算，已到期的不算） */
+  countBanned(zoneId: number, now: number = Date.now()): number {
     return this.db.count(
-      "SELECT COUNT(1) AS total FROM accounts WHERE status = ? AND (ban_until IS NULL OR ban_until > ?)",
-      [ENTITY_STATUS.DISABLED, now],
+      `SELECT COUNT(1) AS total FROM accounts a
+       WHERE a.status = ? AND (a.ban_until IS NULL OR a.ban_until > ?)
+         AND EXISTS (SELECT 1 FROM roles r WHERE r.account_id = a.id AND r.zone_id = ?)`,
+      [ENTITY_STATUS.DISABLED, now, zoneId],
     );
   }
 }
