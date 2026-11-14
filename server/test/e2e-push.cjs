@@ -212,6 +212,8 @@ function connect(url) {
     settles: [],
     worlds: [],
     aiFrames: [],
+    /** 被 entityLeave 掉的怪 id（#810 AOI：怪被推出 3×3 视野时客户端收到的是这个） */
+    leaves: [],
     seq: 0,
     fire(body) {
       session.seq += 1;
@@ -246,6 +248,8 @@ function connect(url) {
       if (frame.type === "world") session.worlds.push(frame.data);
       // 怪的位置广播走 monster-ai 帧（entry 只有 instanceId，没有 monsterKey）
       if (frame.type === "monster-ai") session.aiFrames.push(frame.data);
+      // #810 AOI：怪被推出 3×3 视野之后，客户端不再收到它的位置帧，而是收到 entityLeave
+      if (frame.type === "entityLeave") session.leaves.push(...((frame.data && frame.data.monsters) || []));
     } catch {
       /* 非 JSON 帧不记 */
     }
@@ -393,39 +397,53 @@ function connect(url) {
       }
       return null;
     };
-    // #810 AOI：可见范围是 3×3 格（1536px）。前面几段已经把靶子推到 912，而玩家还站在 395
-    // （格 0:0，右边界 1024）—— 再推 512 就直接出视野，那一帧客户端根本收不到。
-    // 先跟着靶子挪一步（仍站它的 −x 侧），把它放进视野中心，击退过程才看得见
-    const peek = latestPos();
-    if (peek) await stand(peek.x - 5, peek.y);
-    await sleep(400);
+    // #810 AOI：可见范围是 3×3 格（1536px）。前面几段已经把靶子推到很远，而玩家还站在
+    // 原地 —— 再推 512 就直接出视野。先跟着靶子挪过去（仍站它的 −x 侧）。
+    // **校准两轮**：第一轮读到的可能是旧帧的位置，挪过去等一拍让新帧到达，再按新帧挪一次
+    // （CI 上慢一拍就挪错地方，一轮校准不够 —— 实测踩过）
+    for (let round = 0; round < 2; round += 1) {
+      const at = latestPos();
+      if (!at) break;
+      await stand(at.x - 5, at.y);
+      await sleep(500);
+    }
     const beforePos = latestPos();
     check(!!beforePos, "推之前拿到了怪的坐标（在视野内）", JSON.stringify(beforePos));
+    if (!beforePos) throw new Error("靶子不在视野内，这一段没法观测位移");
     const aiBefore = session.aiFrames.length;
+    const leavesBefore = session.leaves.length;
     const pushed = await strike(pushTarget, 1);
     checkEqual(pushed.length, 1, "位移采样这一刀结算成功");
     // 不锁 pushDistance 的具体像素：那是技能配置（push_distance），改表就会红。
     // 这里只判「回执说推了」，真实位移由下面 AI 帧那一步证明
     check(!!pushed[0] && pushed[0].pushDistance > 0, "回执里带非零击退距离（这一刀确实在推）", pushed[0] && `pushDistance=${pushed[0].pushDistance}`);
     // 击退时长 200ms、AI 广播 200ms：等 1.5s 足够看到落点。
-    // 判据用**方向**而不是距离门槛：击退把怪推向 +x（背离站在 −x 侧的施法者），
-    // 而「推出刷怪区后回归出生点」是往回走（−x）—— 方向本身就能把两者分开，
-    // 不必写「位移 > 100px」这种跟技能配置绑死的阈值
+    // 两个判据都算「推走了」：
+    // ① AI 帧里出现了更靠 +x 的位置 —— 击退推向 +x（背离站在 −x 侧的施法者），
+    //    而「推出刷怪区后回归出生点」是往回走（−x），方向本身就能把两者分开；
+    //    （不写「位移 > 100px」这种跟技能配置绑死的阈值）
+    // ② 或者它直接出了 3×3 视野、客户端收到 entityLeave —— 512px 的击退够把视野
+    //    边缘的怪一步推出去，那是**推得够远**的另一种表现，不是「没推」
     const afterPush = await waitFor(
-      "推完之后怪在 monster-ai 帧里出现击退位移",
+      "推完之后怪被推走（AI 帧位置更大，或被推出视野 leave 掉）",
       async () => {
         for (let i = aiBefore; i < session.aiFrames.length; i += 1) {
           const entry = (session.aiFrames[i].monsters || []).find((m) => m.i === pushTarget.instanceId);
           if (!entry) continue;
-          if (entry.x > beforePos.x) return { entry };
+          if (entry.x > beforePos.x) return { kind: "moved", entry };
         }
+        if (session.leaves.slice(leavesBefore).includes(pushTarget.instanceId)) return { kind: "left" };
         return null;
       },
       5_000,
     );
-    if (afterPush && beforePos) {
+    if (afterPush) {
       // 方向 = 施法者 → 怪（玩家在怪的 −x 侧，推走 = x 更大）
-      check(afterPush.entry.x > beforePos.x, "怪真的被推走且方向背离施法者", `x ${Math.round(beforePos.x)} → ${Math.round(afterPush.entry.x)}`);
+      check(
+        afterPush.kind === "left" || afterPush.entry.x > beforePos.x,
+        "怪真的被推走且方向背离施法者",
+        afterPush.kind === "left" ? "被推出 3×3 视野（entityLeave）" : `x ${Math.round(beforePos.x)} → ${Math.round(afterPush.entry.x)}`,
+      );
     }
     //#endregion
 
