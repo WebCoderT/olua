@@ -335,7 +335,7 @@ function connect(url) {
     })();
     const blockedHit = await waitFor(
       "怪物命中帧（带 blocked）",
-      async () => a.hitsFrom(fromIndex).find((hit) => hit.blocked === true) ?? null,
+      async () => a.hitsFrom(fromIndex).find((hit) => hit.bl === true) ?? null,
       25_000,
     );
     keepReporting = false;

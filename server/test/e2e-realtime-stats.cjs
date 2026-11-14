@@ -159,15 +159,15 @@ async function api(baseUrl, method, route, options = {}) {
   return { status: response.status, body };
 }
 
-/** 统计行解析：`广播统计[kind] Xs 内：N 轮 / 帧 N / 收件 N 人次 / N.NKB / stringify N.Nms / 平均轮间隔 Nms` */
+/** 统计行解析：`广播统计[kind] Xs 内：N 轮 / 帧 N / 收件 N 人次 / stringify N 次 N.Nms / N.NKB / 平均轮间隔 Nms` */
 function parseStatsLines(logs, kind) {
   return logs
     .split("\n")
     .filter((line) => line.includes(`${STATS_PREFIX}${kind}]`))
     .map((line) => {
-      const rounds = /(\d+) 轮 \/ 帧 (\d+) \/ 收件 (\d+) 人次 \/ ([\d.]+)KB \/ stringify ([\d.]+)ms \/ 平均轮间隔 (\d+)ms/.exec(line);
+      const rounds = /(\d+) 轮 \/ 帧 (\d+) \/ 收件 (\d+) 人次 \/ stringify (\d+) 次 ([\d.]+)ms \/ ([\d.]+)KB \/ 平均轮间隔 (\d+)ms/.exec(line);
       return rounds
-        ? { rounds: Number(rounds[1]), frames: Number(rounds[2]), recipients: Number(rounds[3]), kb: Number(rounds[4]), stringifyMs: Number(rounds[5]), avgIntervalMs: Number(rounds[6]) }
+        ? { rounds: Number(rounds[1]), frames: Number(rounds[2]), recipients: Number(rounds[3]), stringifies: Number(rounds[4]), stringifyMs: Number(rounds[5]), kb: Number(rounds[6]), avgIntervalMs: Number(rounds[7]) }
         : null;
     })
     .filter(Boolean);
@@ -218,7 +218,7 @@ async function stopServer(server, dbPath) {
   try {
     const socket = await activePlayer(on.baseUrl, "a");
 
-    // players 轮：位置一直在变，广播节拍 200ms < 汇总窗口，窗口内必有累计
+    // players 轮：位置一直在变，广播节拍 100ms（#768 起 10Hz）< 汇总窗口，窗口内必有累计
     const playersLines = await waitFor("players 统计行", async () => {
       const lines = parseStatsLines(on.logs(), "players");
       return lines.length > 0 ? lines : null;
@@ -228,6 +228,8 @@ async function stopServer(server, dbPath) {
     check(latest.rounds > 0, "轮数 > 0（广播出口真的在跑）", `rounds=${latest.rounds}`);
     check(latest.frames > 0, "帧条数 > 0", `frames=${latest.frames}`);
     check(latest.recipients > 0, "收件人次 > 0（这条连接真实收到了帧）", `recipients=${latest.recipients}`);
+    check(latest.stringifies > 0, "stringify 次数字段存在（#768：序列化缓存后应远小于收件人次）", `stringifies=${latest.stringifies}`);
+    check(latest.stringifies <= latest.recipients, "stringify 次数 ≤ 收件人次（同一帧只序列化一次复用）", `stringifies=${latest.stringifies} recipients=${latest.recipients}`);
     check(latest.kb >= 0, "JSON 字节数字段存在（KB）", `kb=${latest.kb}`);
     check(latest.stringifyMs >= 0, "stringify 耗时字段存在", `stringifyMs=${latest.stringifyMs}`);
     check(latest.avgIntervalMs >= 0, "平均轮间隔字段存在", `avgIntervalMs=${latest.avgIntervalMs}`);

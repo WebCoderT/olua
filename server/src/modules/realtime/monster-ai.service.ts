@@ -711,7 +711,7 @@ export class MonsterAiService implements OnApplicationBootstrap, OnApplicationSh
     if (!kill) return;
     const key = roomKey(kill.zoneId, kill.mapId, kill.slot ?? PUBLIC_SLOT);
     const list = this.pendingKills.get(key) ?? [];
-    list.push({ instanceId, accountId: kill.accountId, x: kill.x, y: kill.y, drops: kill.drops });
+    list.push({ i: instanceId, a: kill.accountId, x: kill.x, y: kill.y, dp: kill.drops });
     this.pendingKills.set(key, list);
   }
 
@@ -1134,9 +1134,9 @@ export class MonsterAiService implements OnApplicationBootstrap, OnApplicationSh
               x: runtime.x,
               y: runtime.y,
               accountId: chasing,
-              damage: hit.damage,
+              damage: hit.d,
               hp: hit.hp,
-              maxHp: hit.maxHp,
+              maxHp: hit.m,
             });
           } else {
             this.forgetTarget(runtime, chasing, now, this.presence.positionOf(chasing));
@@ -1481,11 +1481,11 @@ export class MonsterAiService implements OnApplicationBootstrap, OnApplicationSh
     // 普攻与施法共用同一个出手窗口：技能放完不会立刻接一记普攻
     runtime.nextAttackAt = Math.max(runtime.nextAttackAt, now + this.ai.attackInterval);
 
-    const cast: RealtimeMonsterCast = { instanceId: monster.instanceId, skillId: plan.skillId };
+    const cast: RealtimeMonsterCast = { i: monster.instanceId, s: plan.skillId };
     if (plan.category === "2") {
       // 自己上 buff：走统一的挂状态入口（叠层 / 刷新到期 / tickedAt 三件事只写一份）
       this.applyStatusToMonster(monster.instanceId, plan.statusId);
-      cast.statusId = plan.statusId;
+      cast.st = plan.statusId;
     } else if (hit && victim && plan.statusId) {
       // 伤害型技能顺带挂状态（#826 第三批）：眩晕 / 麻痹 / 灼烧是「怪打人」这一侧的效果，
       // 落在**被打的玩家**身上（角色状态有落库 + 每秒结算，怪物侧只有进程内记账）。
@@ -1493,7 +1493,7 @@ export class MonsterAiService implements OnApplicationBootstrap, OnApplicationSh
       // 管理端的状态页看得见，不该让 AI 每 tick 刷一条日志。
       const pushed = this.roles.applyStatusToOnlineRole(victim, plan.statusId, plan.skillId);
       if (pushed) {
-        cast.statusId = plan.statusId;
+        cast.st = plan.statusId;
         // 整份快照推给本人：不推的话他要等到下一次出手被 `stunned` 拒了才知道自己被控
         this.onStatuses?.(victim, pushed);
       }
@@ -1515,9 +1515,9 @@ export class MonsterAiService implements OnApplicationBootstrap, OnApplicationSh
       accountId: runtime.target ?? "",
       skillId: plan.skillId,
       skillLabel: plan.label,
-      damage: hit?.damage ?? 0,
+      damage: hit?.d ?? 0,
       hp: hit?.hp ?? 0,
-      maxHp: hit?.maxHp ?? 0,
+      maxHp: hit?.m ?? 0,
     });
     this.logger.debug(
       `怪物 ${monster.instanceId}(${monster.monsterKey}) 释放技能 ${plan.skillId}（${plan.category === "2" ? `状态 ${plan.statusId}` : `伤害倍率 ${plan.rate}`}）`,
@@ -1566,12 +1566,12 @@ export class MonsterAiService implements OnApplicationBootstrap, OnApplicationSh
     // 打到 0 血之后还要等客户端下一帧上报，中间几拍会继续对着尸体出手（#670 复发）
     this.presence.markHp(accountId, applied.hp);
     return {
-      instanceId: monster.instanceId,
-      accountId,
-      damage,
+      i: monster.instanceId,
+      a: accountId,
+      d: damage,
       hp: applied.hp,
-      maxHp: applied.maxHp,
-      ...(resolved.blocked ? { blocked: true } : {}),
+      m: applied.maxHp,
+      ...(resolved.blocked ? { bl: true } : {}),
     };
   }
 
@@ -1704,12 +1704,13 @@ export class MonsterAiService implements OnApplicationBootstrap, OnApplicationSh
         const hurt = runtime.hp !== runtime.sentHp;
         if (!moved && !turn && !hurt) continue;
         monsters.push({
-          instanceId,
-          x: Math.round(runtime.x * 100) / 100,
-          y: Math.round(runtime.y * 100) / 100,
-          moving: runtime.movingNow,
+          i: instanceId,
+          // #768 坐标整数化：广播出整数像素（模拟内部仍是浮点，只省线上字节）
+          x: Math.round(runtime.x),
+          y: Math.round(runtime.y),
+          mv: runtime.movingNow,
           hp: runtime.hp,
-          maxHp: runtime.maxHp,
+          m: runtime.maxHp,
         });
         runtime.sentX = runtime.x;
         runtime.sentY = runtime.y;
@@ -1888,7 +1889,8 @@ export class MonsterAiService implements OnApplicationBootstrap, OnApplicationSh
   }
 
   private broadcastMs(): number {
-    return Math.max(50, Number(this.config.get<number>("monsterAiBroadcastMs") ?? 200));
+    // #768 提频：默认 10Hz（与客户端上报节拍对齐），配置可覆写，下限 50ms 不变
+    return Math.max(50, Number(this.config.get<number>("monsterAiBroadcastMs") ?? 100));
   }
 
   private posStaleMs(): number {

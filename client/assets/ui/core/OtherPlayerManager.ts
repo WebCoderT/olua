@@ -21,7 +21,7 @@ import type { PlayerActionEntry, PlayerAppearance, PlayerEntry, PlayersFrame } f
  * 互见帧没带外观时的兜底（#383）：旧服务端不发 appearance 字段，
  * 按「男性、没穿没拿」拼一个 —— 至少是一具完整身体，不是空白
  */
-const DEFAULT_APPEARANCE: PlayerAppearance = { sex: SEX.BOY, cloth: "", weapon: "", fashion: "" };
+const DEFAULT_APPEARANCE: PlayerAppearance = { sx: SEX.BOY, c: "", w: "", f: "" };
 
 /**
  * 互见帧的外观 -> RoleAppearance 的装配数据
@@ -34,16 +34,16 @@ const DEFAULT_APPEARANCE: PlayerAppearance = { sex: SEX.BOY, cloth: "", weapon: 
 function toOutSource(appearance: PlayerAppearance): RoleOutSource {
   const worn = (id: string) => (id ? { id } : null);
   return {
-    sex: appearance.sex as SEX,
-    equipments: { cloth: worn(appearance.cloth), weapon: worn(appearance.weapon) },
-    fashionCloth: appearance.fashion || null,
+    sex: appearance.sx as SEX,
+    equipments: { cloth: worn(appearance.c), weapon: worn(appearance.w) },
+    fashionCloth: appearance.f || null,
     speedRate: defaultRoleSpeedRate,
   };
 }
 
-/** 外观比较键（换装判据：四个字段拼一串，字符串比较比逐字段比省事） */
+/** 外观比较键（换装判据：四个字段拼一串，字符串比较比逐字段比省事；字段缩写见 #768） */
 function appearanceKey(appearance: PlayerAppearance): string {
-  return `${appearance.sex}|${appearance.cloth}|${appearance.weapon}|${appearance.fashion}`;
+  return `${appearance.sx}|${appearance.c}|${appearance.w}|${appearance.f}`;
 }
 
 /**
@@ -143,7 +143,7 @@ export default class OtherPlayerManager {
     this.watchSocial();
     if (frame.full) {
       // 快照兜底：以帧为准重建集合（换图后的第一帧 / 重连后的补偿都走这里）
-      const keep = new Set(frame.players.map((entry) => entry.accountId));
+      const keep = new Set(frame.players.map((entry) => entry.a));
       // Array.from 而不是 `[...keys()]`：babel loose 下展开迭代器会变成 `[].concat(迭代器)`，
       // concat 不展开非数组 → 拿到的是迭代器本身，`remove()` 于是一个都没删掉（#471）
       for (const accountId of Array.from(this.others.keys())) {
@@ -152,12 +152,12 @@ export default class OtherPlayerManager {
     }
     for (const accountId of frame.left) this.remove(accountId);
     for (const entry of frame.players) {
-      if (entry.accountId === selfAccountId) continue;
+      if (entry.a === selfAccountId) continue;
       this.upsert(entry);
     }
-    // 动作事件（#693）：别人的攻击 / 技能动画 —— 自己的按 accountId 跳过（本地已演过）
+    // 动作事件（#693）：别人的攻击 / 技能动画 —— 自己的按账号 id 跳过（本地已演过）
     for (const action of frame.actions ?? []) {
-      if (action.accountId === selfAccountId) continue;
+      if (action.a === selfAccountId) continue;
       this.playAction(action);
     }
   }
@@ -272,36 +272,36 @@ export default class OtherPlayerManager {
   //#region 内部：增删与节点构建
 
   private static upsert(entry: PlayerEntry): void {
-    let view = this.others.get(entry.accountId);
+    let view = this.others.get(entry.a);
     if (!view) {
       view = this.create(entry);
-      this.others.set(entry.accountId, view);
+      this.others.set(entry.a, view);
     }
     view.targetX = entry.x;
     view.targetY = entry.y;
-    view.moving = entry.moving;
+    view.moving = entry.mv;
     // 身份 / 帮会 / 队伍（#389/#399）：关系判定的输入变了就重算一次 —— 入帮 / 退帮 / 组队 /
     // 退队都会在这里体现（身份与帮会是服务端 5s 懒刷新，队伍是变化即推）
-    const guildId = entry.guildId ?? "";
-    const partyId = entry.partyId ?? "";
+    const guildId = entry.g ?? "";
+    const partyId = entry.p ?? "";
     if (
-      view.roleId !== (entry.roleId ?? "") ||
+      view.roleId !== (entry.r ?? "") ||
       view.guildId !== guildId ||
       view.partyId !== partyId ||
-      view.name !== entry.username
+      view.name !== entry.n
     ) {
-      view.roleId = entry.roleId ?? "";
+      view.roleId = entry.r ?? "";
       view.guildId = guildId;
-      view.guildName = entry.guildName ?? "";
+      view.guildName = entry.gn ?? "";
       view.partyId = partyId;
-      if (view.name !== entry.username) {
-        view.name = entry.username;
+      if (view.name !== entry.n) {
+        view.name = entry.n;
         const label = view.nameLabel.getComponent(Label);
-        if (label) label.string = entry.username;
+        if (label) label.string = entry.n;
       }
       this.refreshRelation(view);
     }
-    const appearance = entry.appearance ?? DEFAULT_APPEARANCE;
+    const appearance = entry.ap ?? DEFAULT_APPEARANCE;
     const key = appearanceKey(appearance);
     if (key !== view.appearanceKey) {
       // 换装（#383）：按新外观重新装配，动作 / 朝向沿用当前值 —— 不打断正在走的人
@@ -309,9 +309,9 @@ export default class OtherPlayerManager {
       view.source = toOutSource(appearance);
       view.appearance.updateOutShow(view.source, view.action, view.direction);
     }
-    if (view.hp !== entry.hp || view.maxHp !== entry.maxHp) {
+    if (view.hp !== entry.hp || view.maxHp !== entry.m) {
       view.hp = entry.hp;
-      view.maxHp = entry.maxHp;
+      view.maxHp = entry.m;
       this.refreshHead(view);
     }
   }
@@ -333,11 +333,11 @@ export default class OtherPlayerManager {
    *   报错不行。人不在场上（动作到之前他换图 / 掉线了）同样跳过。
    */
   private static playAction(action: PlayerActionEntry): void {
-    const view = this.others.get(action.accountId);
+    const view = this.others.get(action.a);
     if (!view || !isValid(view.node)) return;
-    const config = findSkillConfig(action.skillId);
+    const config = findSkillConfig(action.s);
     if (!config) return;
-    const target = action.targetId ? MonsterManager.nodeOf(action.targetId) : null;
+    const target = action.t ? MonsterManager.nodeOf(action.t) : null;
     let direction = view.direction;
     if (target && isValid(target)) {
       const from = view.node.getWorldPosition();
@@ -350,12 +350,12 @@ export default class OtherPlayerManager {
 
   private static create(entry: PlayerEntry): OtherPlayerView {
     /** 宿主节点（几何与主角一致：锚点 (0.5, 0)、roleBody 同尺寸，原点在脚底 —— 互见的坐标才有可比性） */
-    const node = new Node(`other_player_${entry.accountId}`);
+    const node = new Node(`other_player_${entry.a}`);
     const transform = node.addComponent(UITransform);
     transform.setContentSize(roleBody.size);
     transform.setAnchorPoint(0.5, 0);
     node.setPosition(entry.x, entry.y);
-    const appearance = entry.appearance ?? DEFAULT_APPEARANCE;
+    const appearance = entry.ap ?? DEFAULT_APPEARANCE;
     // 外观装配与主角同一份代码（#383）：衣服 / 武器两个子节点由它在构造函数里挂到宿主上。
     // 攻击完成的回调给空实现 —— 远端玩家的攻击锁在逻辑层不存在（#693 起动作动画照播，
     // 但那只是演出，FINISHED 续播走 / 站由外观自己完成，宿主不需要解锁回调）。
@@ -364,29 +364,29 @@ export default class OtherPlayerManager {
     roleAppearance.updateOutShow(source, ACTION.STAND, DIRECTION.DOWN);
     /** 角色名称（颜色由关系决定，先按「同地图」建，随后 refreshRelation 上色） */
     const layout = roleShowLayout.name;
-    const nameLabel = UiHelper.createLabel("role_name", entry.username, layout.color, layout.fontSize, layout.position, layout.size);
+    const nameLabel = UiHelper.createLabel("role_name", entry.n, layout.color, layout.fontSize, layout.position, layout.size);
     node.addChild(nameLabel);
     /** 头顶信息栏（血条 + 血量文字；军衔红字按 0 建立占位，远端玩家的军衔不随互见帧下发，恒为空行） */
     node.addChild(GameUiHelper.createHead("other_head", 1, 1, 0));
     LayerManager.addToGameLayer(node);
     const view: OtherPlayerView = {
       node,
-      accountId: entry.accountId,
+      accountId: entry.a,
       appearance: roleAppearance,
       source,
       appearanceKey: appearanceKey(appearance),
       nameLabel,
-      name: entry.username,
-      roleId: entry.roleId ?? "",
-      guildId: entry.guildId ?? "",
-      guildName: entry.guildName ?? "",
-      partyId: entry.partyId ?? "",
+      name: entry.n,
+      roleId: entry.r ?? "",
+      guildId: entry.g ?? "",
+      guildName: entry.gn ?? "",
+      partyId: entry.p ?? "",
       relation: RELATION.MAP,
       targetX: entry.x,
       targetY: entry.y,
       hp: 1,
       maxHp: 1,
-      moving: entry.moving,
+      moving: entry.mv,
       direction: DIRECTION.DOWN,
       action: ACTION.STAND,
     };

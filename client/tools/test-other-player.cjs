@@ -53,16 +53,16 @@ try {
   const clientFields = fieldNames(clientChannel, "PlayerAppearance");
   check(Array.isArray(serverFields), "服务端有 RealtimePlayerAppearance 接口");
   check(Array.isArray(clientFields), "客户端有 PlayerAppearance 接口");
-  const expectedFields = "sex,cloth,weapon,fashion";
-  check(serverFields && serverFields.join(",") === expectedFields, `服务端字段是 sex/cloth/weapon/fashion（实得 ${serverFields && serverFields.join("/")}）`);
-  check(clientFields && clientFields.join(",") === expectedFields, `客户端字段同形（实得 ${clientFields && clientFields.join("/")}）`);
+  const expectedFields = "sx,c,w,f";
+  check(serverFields && serverFields.join(",") === expectedFields, `服务端外观字段是 sx/c/w/f（#768 缩写；实得 ${serverFields && serverFields.join("/")}` + "）");
+  check(clientFields && clientFields.join(",") === expectedFields, `客户端字段同形（实得 ${clientFields && clientFields.join("/")}` + "）");
   check(
     !!serverFields && !!clientFields && serverFields.join(",") === clientFields.join(","),
     "两端字段集合完全一致（手抄的两份接口靠这条锁住，漂移了会各自编译通过）",
   );
-  check(/appearance: RealtimePlayerAppearance;/.test(serverProtocol), "服务端互见条目带 appearance（必填）");
-  check(/appearance\?: PlayerAppearance;/.test(clientChannel), "客户端互见条目 appearance 可选（旧服务端不发时能兜底）");
-  check(/sex: string;/.test(serverProtocol), "sex 用字符串（与客户端 SEX 枚举 \"1\"/\"2\" 同形，不是数字）");
+  check(/ap: RealtimePlayerAppearance;/.test(serverProtocol), "服务端互见条目带外观（ap = appearance，#768 缩写；必填）");
+  check(/ap: PlayerAppearance;/.test(clientChannel), "客户端互见条目外观必填（ap，#768 起协议同批发，不再可选兜底）");
+  check(/sx: string;/.test(serverProtocol), "性别字段缩写 sx（#768），值仍是字符串（与客户端 SEX 枚举 \"1\"/\"2\" 同形，不是数字）");
 
   //#endregion
 
@@ -89,15 +89,15 @@ try {
   // 语义没变（协议仍用空串表示没穿），所以断言按新形状写
   check(
     /const worn = \(id: string\) => \(id \? \{ id \} : null\);/.test(toSourceBody) &&
-      /cloth: worn\(appearance\.cloth\)/.test(toSourceBody) &&
-      /weapon: worn\(appearance\.weapon\)/.test(toSourceBody),
-    "衣服 / 武器：空串 → null、有值 → { id }（远端玩家没有元数据，只包 id）",
+      /cloth: worn\(appearance\.c\)/.test(toSourceBody) &&
+      /weapon: worn\(appearance\.w\)/.test(toSourceBody),
+    "衣服 / 武器：空串 → null、有值 → { id }（c / w 是 #768 缩写；远端玩家没有元数据，只包 id）",
   );
-  check(/fashionCloth: appearance\.fashion \|\| null/.test(toSourceBody), "时装：空串 → null（协议用空串表示没穿）");
-  check(/sex: appearance\.sex as SEX/.test(toSourceBody), "性别按 SEX 枚举透传（未知值由 getRoleDefaultCloth 回落男性）");
+  check(/fashionCloth: appearance\.f \|\| null/.test(toSourceBody), "时装：空串 → null（f = fashion，#768 缩写；协议用空串表示没穿）");
+  check(/sex: appearance\.sx as SEX/.test(toSourceBody), "性别按 SEX 枚举透传（sx = sex，#768 缩写；未知值由 getRoleDefaultCloth 回落男性)");
   check(/speedRate: defaultRoleSpeedRate/.test(toSourceBody), "速度倍率取默认值（远端属性不随互见帧下发）");
-  check(/DEFAULT_APPEARANCE[^=]*=\s*\{[^}]*sex: SEX\.BOY[^}]*cloth: ""[^}]*weapon: ""[^}]*fashion: ""/.test(clientManager), "有兜底外观（男性 / 没穿没拿），旧服务端不发时也能画出完整身体");
-  check((clientManager.match(/entry\.appearance \?\? DEFAULT_APPEARANCE/g) || []).length === 2, "创建与更新两处都走兜底（缺字段不会画出半个人）");
+  check(/DEFAULT_APPEARANCE[^=]*=\s*\{[^}]*sx: SEX\.BOY[^}]*c: ""[^}]*w: ""[^}]*f: ""/.test(clientManager), "有兜底外观（sx/c/w/f，#768 缩写；男性 / 没穿没拿），缺外观时也能画出完整身体");
+  check((clientManager.match(/entry\.ap \?\? DEFAULT_APPEARANCE/g) || []).length === 2, "创建与更新两处都走兜底（缺字段不会画出半个人）");
 
   //#endregion
 
@@ -130,7 +130,7 @@ try {
     /if \(!moved && !turned && !hurt && !redressed && !maxHpChanged && !guildChanged && !partyChanged\) continue;/.test(serverPresence),
     "外观变化进增量判据（否则站着不动换装别人看不到）",
   );
-  check(/const redressed = this\.appearanceKey\(entry\.appearance\) !== entry\.sentAppearance;/.test(serverPresence), "换装判据用外观键比较");
+  check(/const redressed = this\.appearanceKey\(entry\.appearance\) !== entry\.sentAppearance;/.test(serverPresence), "换装判据用外观键比较（在场表内部字段仍叫 appearance，广播出口才缩写成 ap）");
   check(/typeof sex === "number" \? String\(sex\)/.test(serverPresence), "性别兼容历史数字形状（旧存档里见过 1/2）");
   check(/typeof data\.fashionCloth === "string" \? data\.fashionCloth : ""/.test(serverPresence), "时装只认字符串（历史的数字一律当没穿）");
   check(
@@ -138,7 +138,7 @@ try {
     "懒刷新顺带对齐血条分母（换装 / 升级都会改 maxHp，只在首见算一次会冻住）",
   );
   check(/const maxHpChanged = entry\.maxHp !== entry\.sentMaxHp;/.test(serverPresence), "分母变化也进增量判据（血量没动时别人也看得到）");
-  check(/appearance: \{ \.\.\.entry\.appearance \}/.test(serverPresence), "广播时复制一份外观（在场表里的会被下次懒刷新整份替换）");
+  check(/ap: \{ \.\.\.entry\.appearance \}/.test(serverPresence), "广播时复制一份外观（ap 缩写出帧，#768；在场表里的会被下次懒刷新整份替换）");
   check(/playerAppearanceRefreshMs: Number\(process\.env\.PLAYER_APPEARANCE_REFRESH_MS \?\? 5000\)/.test(serverConfig), "配置默认 5 秒");
   check(/^PLAYER_APPEARANCE_REFRESH_MS=5000$/m.test(serverEnv), ".env.example 已登记");
 

@@ -609,17 +609,17 @@ function snap(snapshot) {
 
     const bSeenWithParty = await waitFor("B 的 frame 里 A 带上了 partyId", async () => {
       for (let i = sB.players.length - 1; i >= 0; i -= 1) {
-        const entry = sB.players[i].players.find((player) => player.roleId === A.roleId);
-        if (entry && entry.partyId === teamId) return entry;
+        const entry = sB.players[i].players.find((player) => player.r === A.roleId);
+        if (entry && entry.p === teamId) return entry;
       }
       return null;
     });
-    check(!!bSeenWithParty, "别人眼里的我带上了队伍 id（此刻同队）", bSeenWithParty && bSeenWithParty.partyId);
+    check(!!bSeenWithParty, "别人眼里的我带上了队伍 id（此刻同队）", bSeenWithParty && bSeenWithParty.p);
 
     const aSeenWithParty = await waitFor("A 的 frame 里 B 带上了 partyId", async () => {
       for (let i = sA.players.length - 1; i >= 0; i -= 1) {
-        const entry = sA.players[i].players.find((player) => player.roleId === B.roleId);
-        if (entry && entry.partyId === teamId) return entry;
+        const entry = sA.players[i].players.find((player) => player.r === B.roleId);
+        if (entry && entry.p === teamId) return entry;
       }
       return null;
     });
@@ -629,8 +629,8 @@ function snap(snapshot) {
     sB.partyAction("leave");
     const partyCleared = await waitFor("退队后互见帧的 partyId 变回空串", async () => {
       for (let i = sA.players.length - 1; i >= 0; i -= 1) {
-        const entry = sA.players[i].players.find((player) => player.roleId === B.roleId);
-        if (entry && entry.partyId === "") return entry;
+        const entry = sA.players[i].players.find((player) => player.r === B.roleId);
+        if (entry && entry.p === "") return entry;
       }
       return null;
     });

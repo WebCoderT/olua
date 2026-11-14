@@ -491,16 +491,23 @@ export interface RealtimePositionMessage {
   };
 }
 
-/** 怪物 AI 广播帧里的一只怪（只发有变化的：位置变了、移动标记变了或血量变了） */
+/**
+ * 怪物 AI 广播帧里的一只怪（只发有变化的：位置变了、移动标记变了或血量变了）
+ *
+ * #768 帧瘦身：字段名取单字/双字缩写（`i`=instanceId、`mv`=moving、`m`=maxHp），
+ * 这帧是全服最高频的广播，每个字段名每拍都在重复付字节。完整映射表见 docs/11；
+ * 客户端 `CombatChannel.ts` 的 `MonsterAiFrame` 与这里逐字段对应（有源码级断言钉住）。
+ */
 export interface RealtimeMonsterAiEntry {
-  instanceId: string;
+  /** 实例 id（缩写 `i`，#768） */
+  i: string;
   /** 服务端模拟出的当前坐标（世界坐标；与 world 帧的出生点同一坐标系） */
   x: number;
   y: number;
-  /** 是否在移动（客户端据此播走路 / 待机；方向由客户端按位移差量自算） */
-  moving: boolean;
+  /** 是否在移动（缩写 `mv`，#768；客户端据此播走路 / 待机；方向由客户端按位移差量自算） */
+  mv: boolean;
   /**
-   * 当前血量与上限（#670）
+   * 当前血量与上限（#670；缩写 `m`=maxHp，#768）
    *
    * 血量权威是世界层的（玩家打怪走 settle 帧，只发给出手的那个人），同图**其他人**原本
    * 收不到这只怪掉的血 —— 别人打怪时他看到的血条不动。这里把「这只怪现在多少血」跟着
@@ -508,42 +515,48 @@ export interface RealtimeMonsterAiEntry {
    * （见 MonsterAiService.broadcast），所以站着被打的怪也会立刻出现。
    */
   hp: number;
-  maxHp: number;
+  m: number;
 }
 
-/** 怪物 AI 广播帧里的一次普攻命中（玩家受击的权威结果） */
+/** 怪物 AI 广播帧里的一次普攻命中（玩家受击的权威结果；字段缩写同上，#768） */
 export interface RealtimeMonsterHit {
-  instanceId: string;
-  /** 受击账号（广播给全图观看者；#324 玩家互见之前客户端只演自己的） */
-  accountId: string;
-  damage: number;
+  /** 怪实例 id（缩写 `i`） */
+  i: string;
+  /** 受击账号（缩写 `a`；广播给全图观看者；#324 玩家互见之前客户端只演自己的） */
+  a: string;
+  /** 伤害（缩写 `d`） */
+  d: number;
   /** 受击后玩家剩余血量（服务端已落账，客户端照搬） */
   hp: number;
-  maxHp: number;
+  /** 血量上限（缩写 `m`） */
+  m: number;
   /**
-   * 这一下被格挡了（#822：护体神盾 `blockChance` / `blockFactor` 在服务端掷骰）
+   * 这一下被格挡了（缩写 `bl`，#822：护体神盾 `blockChance` / `blockFactor` 在服务端掷骰）
    *
-   * `damage` 已经是格挡后的值，这个标记只给表现用（飘字 / 音效走既有那些口子，
+   * `d` 已经是格挡后的值，这个标记只给表现用（飘字 / 音效走既有那些口子，
    * 本轮不做专门的格挡演出 —— 见 docs/37 B5 的验收）。
    */
-  blocked?: boolean;
+  bl?: boolean;
 }
 
 /**
- * 怪物释放技能（#372）：纯演出指令
+ * 怪物释放技能（#372）：纯演出指令（字段缩写同上，#768）
  *
  * 与 `hits` 分开的原因：状态型技能**不产生伤害**（只给自己挂 buff），
  * 而伤害型技能的「动作 + 特效」要靠技能配置里的 action / effect 播 ——
  * 两者都只需要「谁放了什么」，伤害数值仍走 hits（客户端不重算）。
  *
- * `statusId` 有值 = 这次释放要挂载的状态 id，客户端据此在怪身上播状态特效。两种来源都会带它：
+ * `st` 有值 = 这次释放要挂载的状态 id，客户端据此在怪身上播状态特效。两种来源都会带它：
  * ① 状态型技能（如狂怒 9002）；② `skills.status_id` 非空的伤害型技能（如跃鼠猛击 9001 → 2004 眩晕，
  * 命中且目标活着才真的挂上，见 `castSkill` / `applyStatusTicks`）。服务端已经按状态修正过后续伤害，客户端只演。
  */
 export interface RealtimeMonsterCast {
-  instanceId: string;
-  skillId: string;
-  statusId?: string;
+  /** 怪实例 id（缩写 `i`） */
+  i: string;
+  /** 技能 id（缩写 `s`） */
+  s: string;
+  /** 挂载的状态 id（缩写 `st`；有值才带） */
+  st?: string;
 }
 
 /** 服务端 → 客户端：怪物 AI 广播（位置/血量增量 + 普攻/技能命中事件 + 技能释放 + 玩家击杀，按地图分发给观看者） */
@@ -569,14 +582,15 @@ export interface RealtimeMonsterAiMessage {
  * 死在哪、掉了什么（铺到地面，纯演出不可拾取 —— 账本定位 pick 帧只认击杀者的 castId）。
  */
 export interface RealtimeMonsterKill {
-  instanceId: string;
-  /** 击杀者账号（客户端据此跳过自己的击杀，避免与 settle 路径重复演出） */
-  accountId: string;
+  /** 怪实例 id（缩写 `i`，#768） */
+  i: string;
+  /** 击杀者账号（缩写 `a`；客户端据此跳过自己的击杀，避免与 settle 路径重复演出） */
+  a: string;
   /** 死亡点（世界坐标；AI 运行时被清前取的模拟坐标，取不到退回出生点） */
   x: number;
   y: number;
-  /** 掉落结果（同一物品已合并数量；可为空数组 —— 这次什么都没掉，但死亡清场仍要走） */
-  drops: RealtimeDropEntry[];
+  /** 掉落结果（缩写 `dp`；同一物品已合并数量；可为空数组 —— 这次什么都没掉，但死亡清场仍要走） */
+  dp: RealtimeDropEntry[];
 }
 
 //#endregion
@@ -589,49 +603,55 @@ export interface RealtimeMonsterKill {
  * 只发「别人眼里的你」需要的东西：位置（客户端自报的最近一次上报）、血量（血条演出）、
  * 移动标记（走路 / 待机演出）。账号名在连接建连时就有（RealtimeIdentity.username），
  * 顺手带上省得客户端再查一次。
+ *
+ * #768 帧瘦身：字段名取缩写（`a`=accountId、`n`=username、`r`=roleId、`g`=guildId、
+ * `gn`=guildName、`p`=partyId、`m`=maxHp、`mv`=moving、`ap`=appearance）——
+ * players 帧每人每拍都发一份完整条目，名字省的字节按人数乘节拍。完整映射表见 docs/11；
+ * 客户端 `CombatChannel.ts` 的 `PlayersFrame` 与这里逐字段对应（有源码级断言钉住）。
  */
 export interface RealtimePlayerEntry {
-  accountId: string;
-  /** 显示名（角色名优先，缺省回落账号名；服务端首见时查一次缓存住） */
-  username: string;
+  /** 账号 id（缩写 `a`，#768） */
+  a: string;
+  /** 显示名（缩写 `n`；角色名优先，缺省回落账号名；服务端首见时查一次缓存住） */
+  n: string;
   /**
-   * 角色 id（#389）
+   * 角色 id（缩写 `r`，#389）
    *
    * 客户端拿它跟自己的社交快照（好友 / 敌人里的 roleId）比对，算出「这个人是好友还是敌人」。
    * 只发账号 id 是不够的：社交关系是按**角色**记的，一个账号可能有多个角色。
    * 没角色（未选角 / 存档被删）时为空串 —— 那时连名字都只有账号名，不存在关系。
    */
-  roleId: string;
+  r: string;
   /**
-   * 所属帮会 id（#389；空串 = 无帮会）
+   * 所属帮会 id（缩写 `g`，#389；空串 = 无帮会）
    *
    * 同帮的人名字是蓝的 —— 判定要「我的 guildId」与「他的 guildId」相等，
    * 所以两边都得带。帮会名一并下发，社交面板与悬浮提示直接用，不必再查一次。
    */
-  guildId: string;
-  /** 所属帮会名（#389；空串 = 无帮会） */
-  guildName: string;
+  g: string;
+  /** 所属帮会名（缩写 `gn`，#389；空串 = 无帮会） */
+  gn: string;
   /**
-   * 所属队伍 id（#399；空串 = 没队伍）
+   * 所属队伍 id（缩写 `p`，#399；空串 = 没队伍）
    *
    * 客户端拿它跟自己的 `partyId` 比对，算出「这个人是队友」——队友的名字是金色的，
    * 与敌人 / 同帮 / 好友同一套关系判定（优先级里队伍高于帮会、低于敌人）。
    * 队伍 id 是**随机串**，不泄露任何「这队有几个人 / 队长是谁」的信息。
    */
-  partyId: string;
+  p: string;
   x: number;
   y: number;
   hp: number;
-  /** 资源上限（血条分母；服务端在首次见到该玩家时查一次在线角色缓存住） */
-  maxHp: number;
-  /** 是否在移动（客户端自报；方向由位移差量自算） */
-  moving: boolean;
-  /** 外观（#383：对方穿什么、拿什么、有没有时装） */
-  appearance: RealtimePlayerAppearance;
+  /** 资源上限（缩写 `m`；血条分母；服务端在首次见到该玩家时查一次在线角色缓存住） */
+  m: number;
+  /** 是否在移动（缩写 `mv`；客户端自报；方向由位移差量自算） */
+  mv: boolean;
+  /** 外观（缩写 `ap`，#383：对方穿什么、拿什么、有没有时装） */
+  ap: RealtimePlayerAppearance;
 }
 
 /**
- * 一名远端玩家的外观（#383）
+ * 一名远端玩家的外观（#383；字段缩写 `sx`=sex、`c`=cloth、`w`=weapon、`f`=fashion，#768）
  *
  * 只带「拼出这个人长什么样」的最小集合 —— 与客户端 `entities/Role` 的对应字段同名，
  * 客户端拿去填一个轻量对象就能直接复用 `RoleAppearance` 的装配逻辑（帧目录取源、
@@ -642,16 +662,16 @@ export interface RealtimePlayerEntry {
  */
 export interface RealtimePlayerAppearance {
   /**
-   * 性别（`"1"` 男 / `"2"` 女，与客户端 SEX 枚举同形）：没穿衣服时用它选默认身体。
+   * 性别（缩写 `sx`；`"1"` 男 / `"2"` 女，与客户端 SEX 枚举同形）：没穿衣服时用它选默认身体。
    * 历史存档里也可能是数字 1/2，服务端读的时候统一转成字符串
    */
-  sex: string;
-  /** 衣服装备 id（`""` = 没穿，客户端按性别回落默认身体） */
-  cloth: string;
-  /** 武器装备 id（`""` = 没拿，客户端隐藏武器节点） */
-  weapon: string;
-  /** 时装 id（`""` = 没穿时装；与 fashions 表主键同形，如 cloth_2） */
-  fashion: string;
+  sx: string;
+  /** 衣服装备 id（缩写 `c`；`""` = 没穿，客户端按性别回落默认身体） */
+  c: string;
+  /** 武器装备 id（缩写 `w`；`""` = 没拿，客户端隐藏武器节点） */
+  w: string;
+  /** 时装 id（缩写 `f`；`""` = 没穿时装；与 fashions 表主键同形，如 cloth_2） */
+  f: string;
 }
 
 /**
@@ -685,9 +705,12 @@ export interface RealtimePlayersMessage {
  * 跳过（自己的动作在 settle 路径上已经演过，这里再来一次会重复）。
  */
 export interface RealtimePlayerAction {
-  accountId: string;
-  skillId: string;
-  targetId?: string;
+  /** 出手账号（缩写 `a`，#768） */
+  a: string;
+  /** 技能 id（缩写 `s`） */
+  s: string;
+  /** 打向的怪实例 id（缩写 `t`；取不到目标时特效退回释放者身上，缺省才不带） */
+  t?: string;
 }
 
 //#endregion

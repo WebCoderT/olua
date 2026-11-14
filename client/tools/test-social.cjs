@@ -135,17 +135,17 @@ try {
 
   //#region C. 协议两端同形
 
-  console.log("\n— C. 协议两端同形（互见帧带 roleId / guildId / guildName） —");
+  console.log("\n— C. 协议两端同形（互见帧带 r / g / gn，#768 缩写） —");
 
   const serverEntry = fieldNames(readRepo(SERVER_PROTOCOL), "RealtimePlayerEntry") ?? [];
   const clientEntry = fieldNames(read(CLIENT_CHANNEL), "PlayerEntry") ?? [];
-  check(serverEntry.indexOf("roleId") >= 0, "服务端互见条目带 roleId（社交关系按角色记，不是按账号）");
-  check(serverEntry.indexOf("guildId") >= 0 && serverEntry.indexOf("guildName") >= 0, "服务端互见条目带 guildId / guildName");
-  check(clientEntry.indexOf("roleId") >= 0 && clientEntry.indexOf("guildId") >= 0 && clientEntry.indexOf("guildName") >= 0, "客户端同形");
+  check(serverEntry.indexOf("r") >= 0, "服务端互见条目带角色 id（r = roleId，#768 缩写；社交关系按角色记，不是按账号）");
+  check(serverEntry.indexOf("g") >= 0 && serverEntry.indexOf("gn") >= 0, "服务端互见条目带帮会 id / 名（g / gn = guildId / guildName，#768 缩写）");
+  check(clientEntry.indexOf("r") >= 0 && clientEntry.indexOf("g") >= 0 && clientEntry.indexOf("gn") >= 0, "客户端同形");
   const clientSource = read(CLIENT_CHANNEL);
-  check(/roleId\?: string;/.test(clientSource) && /guildId\?: string;/.test(clientSource), "客户端三项都是可选（旧服务端不发时按无帮会处理）");
-  check(serverEntry.indexOf("partyId") >= 0, "服务端互见条目带 partyId（#399：队标与队友金的原料）");
-  check(clientEntry.indexOf("partyId") >= 0, "客户端互见条目同形（可选，旧服务端不发时按没队伍）");
+  check(/r: string;/.test(clientSource) && /g: string;/.test(clientSource), "客户端三项都是必带（#768 起协议同批发，不再可选兜底）");
+  check(serverEntry.indexOf("p") >= 0, "服务端互见条目带队伍 id（p = partyId，#768 缩写；#399：队标与队友金的原料）");
+  check(clientEntry.indexOf("p") >= 0, "客户端互见条目同形");
 
   //#endregion
 

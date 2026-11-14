@@ -765,9 +765,9 @@ function connect(url) {
     }, 8_000);
     check(!!aiHitFrame, "A：收到 monster-ai 命中帧（服务端按普攻间隔出招）", JSON.stringify(aiHitFrame));
     const hit = aiHitFrame && aiHitFrame.hits[0];
-    check(!!hit && hit.damage > 0, "A：普攻伤害 > 0（怪物物攻区间 − 玩家物防区间）", JSON.stringify(hit));
-    check(!!hit && hit.hp < 100 && hit.maxHp > 0, "A：受击后血量下降且带资源上限", JSON.stringify(hit));
-    check(!!hit && typeof hit.accountId === "string" && hit.accountId.length > 0, "A：命中事件带受击账号（广播给全图观看者）");
+    check(!!hit && hit.d > 0, "A：普攻伤害 > 0（怪物物攻区间 − 玩家物防区间）", JSON.stringify(hit));
+    check(!!hit && hit.hp < 100 && hit.m > 0, "A：受击后血量下降且带资源上限", JSON.stringify(hit));
+    check(!!hit && typeof hit.a === "string" && hit.a.length > 0, "A：命中事件带受击账号（广播给全图观看者）");
 
     const roleAfter = await api(baseUrl, "GET", `roles/${fighter.roleId}`, { token: fighter.token });
     check(!!hit && roleAfter.code === 0 && roleAfter.data.data.hp === hit.hp, "A：受击已落进存档（data.hp = hit.hp）", JSON.stringify({ db: roleAfter.data && roleAfter.data.data && roleAfter.data.data.hp, hit: hit && hit.hp }));
@@ -787,7 +787,7 @@ function connect(url) {
     posTimer = setInterval(() => reportPos(far.x, far.y, 100), 500);
     const countBeforeChase = hitCount();
     const chaseEntry = await waitFor("追击中的位置增量", async () => {
-      return fighter.session.ais.flatMap((frame) => frame.monsters || []).find((entry) => entry.instanceId === aiMob.instanceId && entry.moving === true) || null;
+      return fighter.session.ais.flatMap((frame) => frame.monsters || []).find((entry) => entry.i === aiMob.instanceId && entry.mv === true) || null;
     }, 3_000);
     check(!!chaseEntry, "C：收到移动中的位置增量（moving = true）", JSON.stringify(chaseEntry));
     check(!!chaseEntry && chaseEntry.x < aiMob.x + 150, "C：怪物朝玩家方向移动（x 向目标趋近）", JSON.stringify({ entryX: chaseEntry && chaseEntry.x, spawnX: aiMob.x }));
@@ -832,18 +832,18 @@ function connect(url) {
       return companion.session.players.find((frame) => frame.full === true) || null;
     }, 5_000);
     check(!!fullFrame, "A：进图即收到互见快照（full = true，随 world 应答发出）", JSON.stringify(fullFrame));
-    const fighterAccountId = fullFrame && fullFrame.players.length > 0 ? fullFrame.players[0].accountId : null;
+    const fighterAccountId = fullFrame && fullFrame.players.length > 0 ? fullFrame.players[0].a : null;
     check(!!fighterAccountId, "A：快照里带着已在场的 fighter（只列同图观看者）", JSON.stringify(fullFrame));
     check(
-      !!fullFrame && fullFrame.players[0].hp === 100 && fullFrame.players[0].maxHp > 0,
-      "A：快照条目带血量与资源上限（maxHp 服务端重算，血条分母不用客户端猜）",
+      !!fullFrame && fullFrame.players[0].hp === 100 && fullFrame.players[0].m > 0,
+      "A：快照条目带血量与资源上限（m=maxHp 服务端重算，血条分母不用客户端猜）",
       JSON.stringify(fullFrame && fullFrame.players[0]),
     );
-    check(!!fullFrame && fullFrame.players[0].username === "combat_raf", "A：快照条目带显示名（角色名，服务端首见时查好缓存）", JSON.stringify(fullFrame && fullFrame.players[0]));
-    // #383：外观随互见帧下发 —— 「没穿」用空串（客户端据此回落性别默认身体）
-    const snapshotAppearance = fullFrame && fullFrame.players[0] && fullFrame.players[0].appearance;
+    check(!!fullFrame && fullFrame.players[0].n === "combat_raf", "A：快照条目带显示名（n=username，角色名，服务端首见时查好缓存）", JSON.stringify(fullFrame && fullFrame.players[0]));
+    // #383：外观随互见帧下发 —— 「没穿」用空串（客户端据此回落性别默认身体）；字段缩写见 #768
+    const snapshotAppearance = fullFrame && fullFrame.players[0] && fullFrame.players[0].ap;
     check(
-      !!snapshotAppearance && snapshotAppearance.sex === "1" && snapshotAppearance.cloth === "" && snapshotAppearance.weapon === "" && snapshotAppearance.fashion === "",
+      !!snapshotAppearance && snapshotAppearance.sx === "1" && snapshotAppearance.c === "" && snapshotAppearance.w === "" && snapshotAppearance.f === "",
       "A：快照条目带外观（性别 + 空装备槽原样下发，别人能看到他长什么样）",
       JSON.stringify(snapshotAppearance),
     );
@@ -855,11 +855,11 @@ function connect(url) {
       300,
     );
     const appearFrame = await waitFor("fighter 收到 companion 出现", async () => {
-      return fighter.session.players.find((frame) => frame.players.some((entry) => entry.accountId !== fighterAccountId)) || null;
+      return fighter.session.players.find((frame) => frame.players.some((entry) => entry.a !== fighterAccountId)) || null;
     }, 5_000);
     check(!!appearFrame, "B：fighter 收到 companion 的出现帧（首次上报即作为变化广播）", JSON.stringify(appearFrame));
-    const companionEntry = appearFrame && appearFrame.players.find((entry) => entry.accountId !== fighterAccountId);
-    const companionAccountId = companionEntry ? companionEntry.accountId : null;
+    const companionEntry = appearFrame && appearFrame.players.find((entry) => entry.a !== fighterAccountId);
+    const companionAccountId = companionEntry ? companionEntry.a : null;
 
     // —— C. 超时离场与重现：消失与重现都是显式事件 ——
     clearInterval(fighterPosTimer);
@@ -872,7 +872,7 @@ function connect(url) {
       300,
     );
     const reappear = await waitFor("companion 再次收到 fighter", async () => {
-      return companion.session.players.find((frame) => frame.players.some((entry) => entry.accountId === fighterAccountId)) || null;
+      return companion.session.players.find((frame) => frame.players.some((entry) => entry.a === fighterAccountId)) || null;
     }, 5_000);
     check(!!reappear, "C：fighter 恢复上报后再次出现（重新上报即作为变化广播）", JSON.stringify(reappear));
 
@@ -880,16 +880,16 @@ function connect(url) {
     companionPos.x = 260;
     companionPos.moving = true;
     const moveFrame = await waitFor("fighter 收到 companion 的移动增量", async () => {
-      return fighter.session.players.find((frame) => frame.players.some((entry) => entry.accountId === companionAccountId && entry.moving === true)) || null;
+      return fighter.session.players.find((frame) => frame.players.some((entry) => entry.a === companionAccountId && entry.mv === true)) || null;
     }, 5_000);
     check(!!moveFrame, "D：移动中的上报带 moving 标记（走路的演出依据，客户端自报）", JSON.stringify(moveFrame));
-    const moveEntry = moveFrame && moveFrame.players.find((entry) => entry.accountId === companionAccountId);
+    const moveEntry = moveFrame && moveFrame.players.find((entry) => entry.a === companionAccountId);
     check(!!moveEntry && moveEntry.x === 260, "D：增量坐标是服务端转发的最新上报值", JSON.stringify(moveEntry));
 
     // —— E. 血量变化：互见帧里的血量跟着上报走 ——
     companionPos.hp = 80;
     const hurtFrame = await waitFor("fighter 收到 companion 的血量变化", async () => {
-      return fighter.session.players.find((frame) => frame.players.some((entry) => entry.accountId === companionAccountId && entry.hp === 80)) || null;
+      return fighter.session.players.find((frame) => frame.players.some((entry) => entry.a === companionAccountId && entry.hp === 80)) || null;
     }, 5_000);
     check(!!hurtFrame, "E：血量变化进入增量广播（互见的血条跟着走）", JSON.stringify(hurtFrame));
 
@@ -906,32 +906,32 @@ function connect(url) {
     const dressedFrame = await waitFor("fighter 收到 companion 的换装帧", async () => {
       return (
         fighter.session.players.find((frame) =>
-          frame.players.some((entry) => entry.accountId === companionAccountId && entry.appearance && entry.appearance.cloth === "cloth_1"),
+          frame.players.some((entry) => entry.a === companionAccountId && entry.ap && entry.ap.c === "cloth_1"),
         ) || null
       );
     }, 8_000);
-    const dressedEntry = dressedFrame && dressedFrame.players.find((entry) => entry.accountId === companionAccountId);
+    const dressedEntry = dressedFrame && dressedFrame.players.find((entry) => entry.a === companionAccountId);
     check(
-      !!dressedEntry && dressedEntry.appearance.cloth === "cloth_1" && dressedEntry.appearance.weapon === "weapon_1",
+      !!dressedEntry && dressedEntry.ap.c === "cloth_1" && dressedEntry.ap.w === "weapon_1",
       "H：换装后收到外观变化帧（坐标 / 血量都没变也广播，不用等他动一下）",
-      JSON.stringify(dressedEntry && dressedEntry.appearance),
+      JSON.stringify(dressedEntry && dressedEntry.ap),
     );
 
     // 血条分母跟着存档走：升到 10 级（裸模 100 → 262，再加 cloth_1 的 60 = 322），别人看到的
     // 分母要跟上 —— maxHp 只在首见时算过一次，不并进懒刷新就会被冻在那一刻（换装加体力也撞这条）。
     // 等级走管理端 PATCH（#550 起存档改不动等级），装备保持不动，只有 maxHp 会变
     // 等级走管理端 PATCH（#550 起存档改不动等级），装备保持不动，只有 maxHp 会变
-    const maxHpBefore = dressedEntry ? dressedEntry.maxHp : 0;
+    const maxHpBefore = dressedEntry ? dressedEntry.m : 0;
     const leveled = await api(baseUrl, "PATCH", `admin/roles/${companion.roleId}`, { token: adminToken, body: { level: 10 } });
     check(leveled.code === 0, "H：等级已改（管理端 PATCH 到 10 级，体力上限随之变化）", leveled.message);
     const maxHpFrame = await waitFor("fighter 收到 companion 的血条分母变化", async () => {
       // 直接等新值出现：等「≠ 旧值」会被更早的入图快照帧（裸模 100）抢先满足
-      return fighter.session.players.find((frame) => frame.players.some((entry) => entry.accountId === companionAccountId && entry.maxHp === 322)) || null;
+      return fighter.session.players.find((frame) => frame.players.some((entry) => entry.a === companionAccountId && entry.m === 322)) || null;
     }, 8_000);
-    const maxHpEntry = maxHpFrame && maxHpFrame.players.find((entry) => entry.accountId === companionAccountId);
+    const maxHpEntry = maxHpFrame && maxHpFrame.players.find((entry) => entry.a === companionAccountId);
     check(
-      !!maxHpEntry && maxHpEntry.maxHp === 322,
-      `H：血条分母跟着存档走（${maxHpBefore} → ${maxHpEntry && maxHpEntry.maxHp}，不会被冻在首见那一刻）`,
+      !!maxHpEntry && maxHpEntry.m === 322,
+      `H：血条分母跟着存档走（${maxHpBefore} → ${maxHpEntry && maxHpEntry.m}，不会被冻在首见那一刻）`,
       JSON.stringify(maxHpEntry),
     );
 
@@ -1642,19 +1642,19 @@ function connect(url) {
 
     const castFrame = await waitFor(
       "casts 帧",
-      async () => casterA.session.ais.find((frame) => (frame.casts || []).some((entry) => entry.instanceId === castMob.instanceId)) || null,
+      async () => casterA.session.ais.find((frame) => (frame.casts || []).some((entry) => entry.i === castMob.instanceId)) || null,
       10_000,
     );
     check(!!castFrame, "十：收到 casts 帧（放不放、放哪个由服务端决定）", JSON.stringify(castFrame));
-    const stateCast = castFrame && (castFrame.casts || []).find((entry) => entry.instanceId === castMob.instanceId);
-    check(!!(stateCast && stateCast.skillId === "9002"), "十：先放状态型技能（狂怒 9002）", JSON.stringify(stateCast));
-    check(!!(stateCast && stateCast.statusId === "9001"), "十：casts 带挂载的状态 id（客户端据此播状态特效）", JSON.stringify(stateCast));
+    const stateCast = castFrame && (castFrame.casts || []).find((entry) => entry.i === castMob.instanceId);
+    check(!!(stateCast && stateCast.s === "9002"), "十：先放状态型技能（狂怒 9002）", JSON.stringify(stateCast));
+    check(!!(stateCast && stateCast.st === "9001"), "十：casts 带挂载的状态 id（客户端据此播状态特效）", JSON.stringify(stateCast));
     check(!!stateCast && stateCast.damage === undefined, "十：casts 不带伤害（数值权威在 hits 帧）", JSON.stringify(stateCast));
 
     const buffedHit = await waitFor(
       "狂怒生效后的普攻",
       async () =>
-        casterA.session.ais.flatMap((frame) => frame.hits || []).find((hit) => hit.instanceId === castMob.instanceId && hit.damage > 50) ||
+        casterA.session.ais.flatMap((frame) => frame.hits || []).find((hit) => hit.i === castMob.instanceId && hit.d > 50) ||
         null,
       10_000,
     );
@@ -1701,17 +1701,17 @@ function connect(url) {
       "伤害型 casts 帧",
       async () =>
         casterB.session.ais.find(
-          (frame) => (frame.casts || []).some((entry) => entry.instanceId === castMob.instanceId && entry.skillId === "9001"),
+          (frame) => (frame.casts || []).some((entry) => entry.i === castMob.instanceId && entry.s === "9001"),
         ) || null,
       12_000,
     );
     check(!!damagingFrame, "十：改成伤害型后服务端改放 9001（挂载改动 1 秒内生效）", JSON.stringify(damagingFrame));
-    const damagingCast = damagingFrame && (damagingFrame.casts || []).find((entry) => entry.skillId === "9001");
+    const damagingCast = damagingFrame && (damagingFrame.casts || []).find((entry) => entry.s === "9001");
     // 口径变更（#826 第三批）：9001「跃鼠猛击」出厂带 `status_id = 2004`（伤害 + 命中挂眩晕），
     // 所以伤害型技能的 casts 也会带 statusId —— 原来的「只有状态型技能才带」已经不成立。
     // 这里断的是「带 status_id 的伤害技能把 id 带出来」，不带的那一类仍由上面的 9002 分支覆盖。
     check(
-      !!damagingCast && damagingCast.statusId === "2004",
+      !!damagingCast && damagingCast.st === "2004",
       "十：伤害型技能带 status_id 时 casts 也带（9001 → 2004 眩晕）",
       JSON.stringify(damagingCast),
     );
@@ -1728,20 +1728,20 @@ function connect(url) {
       async () =>
         casterB.session.ais.find(
           (frame) =>
-            (frame.casts || []).some((entry) => entry.instanceId === castMob.instanceId && entry.skillId === "9001") &&
-            (frame.hits || []).some((hit) => hit.instanceId === castMob.instanceId),
+            (frame.casts || []).some((entry) => entry.i === castMob.instanceId && entry.s === "9001") &&
+            (frame.hits || []).some((hit) => hit.i === castMob.instanceId),
         ) || null,
       15_000,
     );
     castPosTimerB && clearInterval(castPosTimerB);
-    const damagingHit = damagingPair && (damagingPair.hits || []).find((hit) => hit.instanceId === castMob.instanceId);
+    const damagingHit = damagingPair && (damagingPair.hits || []).find((hit) => hit.i === castMob.instanceId);
     check(
       !!damagingHit,
       "十：伤害型技能同帧走 hits 下发（动作归 casts，数值归 hits）",
       JSON.stringify(damagingPair && damagingPair.hits),
     );
     check(
-      !!damagingHit && damagingHit.damage >= 60,
+      !!damagingHit && damagingHit.d >= 60,
       "十：技能伤害带倍率（物攻 50 × 1.8 扣物防后仍 > 60）",
       JSON.stringify(damagingHit),
     );

@@ -193,7 +193,7 @@ function connect(url) {
 function playerEntries(session, roleId) {
   const hits = [];
   for (const frame of session.players) {
-    for (const entry of frame.players) if (entry.roleId === roleId) hits.push(entry);
+    for (const entry of frame.players) if (entry.r === roleId) hits.push(entry);
   }
   return hits;
 }
@@ -245,7 +245,7 @@ function playerEntries(session, roleId) {
     const baseline = await waitFor("C 的 full 快照里有 A（拉黑前的 baseline）", async () => {
       const full = sessionC.players.find((frame) => frame.full);
       if (!full) return null;
-      return full.players.some((entry) => entry.roleId === A.roleId) ? full : null;
+      return full.players.some((entry) => entry.r === A.roleId) ? full : null;
     });
     check(!!baseline, "同图互见的 baseline 已建立（C 看得见 A）");
 
@@ -334,7 +334,7 @@ function playerEntries(session, roleId) {
     sessionA.players = [];
     sessionA.send("worldJoin", { mapId: "1" });
     const fullForA = await waitFor("A 重进图拿到 full 快照", async () => sessionA.players.find((frame) => frame.full) || null);
-    const fullIds = fullForA ? fullForA.players.map((entry) => entry.accountId) : [];
+    const fullIds = fullForA ? fullForA.players.map((entry) => entry.a) : [];
     check(!!fullForA, "A 重进图后收到 full 快照（进图本身是幂等的）");
     check(fullIds.length > 0, "full 快照里有其他人（C 还在，说明不是「什么都滤掉了」）", `ids=${fullIds.join(",")}`);
     check(fullIds.indexOf(B.roleId) < 0, "**full 快照同样过滤**：A 看不到 B（否则重进图就把他带回来了）");

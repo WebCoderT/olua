@@ -347,7 +347,7 @@ function connect(url) {
       const out = [];
       for (let i = fromIndex; i < session.aiFrames.length; i += 1) {
         for (const entry of session.aiFrames[i].monsters || []) {
-          if (entry.instanceId === instanceId) out.push(entry);
+          if (entry.i === instanceId) out.push(entry);
         }
       }
       return out;
@@ -583,7 +583,7 @@ function connect(url) {
         drop: start && last ? start.hp - last.hp : 0,
         lastHp: last ? last.hp : null,
         lastAlive: !!last,
-        maxHp: start ? start.maxHp : TARGET_HP,
+        maxHp: start ? start.m : TARGET_HP,
       };
     };
 
@@ -636,7 +636,7 @@ function connect(url) {
           // 命中帧是全图广播：按 accountId 过滤，否则别的目标挨打也会算成自己被控
           const hit = session
             .hitsFrom(0)
-            .filter((entry) => entry.instanceId === boss.instanceId && entry.accountId === accountId)
+            .filter((entry) => entry.i === boss.instanceId && entry.a === accountId)
             .pop();
           return hit ?? null;
         },
@@ -678,7 +678,7 @@ function connect(url) {
         // 眩晕自己是 20 秒，但期间会不断被刷新；直接看窗口里有没有新的命中
           const hits = session
             .hitsFrom(walkFrom)
-            .filter((entry) => entry.instanceId === boss.instanceId && entry.accountId === accountId);
+            .filter((entry) => entry.i === boss.instanceId && entry.a === accountId);
           return hits.length > 0 ? hits[hits.length - 1] : null;
         },
         12_000,
@@ -711,7 +711,7 @@ function connect(url) {
     check(!!burnStored, "怪打人这一侧也会挂状态（与玩家打怪同一个口径）", burnStored && `stacks=${burnStored.stacks}`);
 
     const beforeTick = readRole(dbPath, roleId);
-    check(!!beforeTick, "读到玩家存档（周期结算的权威值）", beforeTick && `hp=${beforeTick.hp}/${beforeTick.maxHp} revision=${beforeTick.revision}`);
+    check(!!beforeTick, "读到玩家存档（周期结算的权威值）", beforeTick && `hp=${beforeTick.hp}/${beforeTick.m} revision=${beforeTick.revision}`);
     // 窗口取 6.4 秒，不是 3 秒 —— 两条都在削这个数：
     // ① 结算是每秒一拍、定时器相位随机，3 秒窗口在慢时钟机器上可能只覆盖到一拍（CI 实测掉 1）；
     // ② 自然回血（`hpRecoverOfHp` = 1%/秒）会在每次受击结算时把血补回来，血量其实是**锯齿**
@@ -759,7 +759,7 @@ function connect(url) {
         async () => {
           const hits = session
             .hitsFrom(quietFrom)
-            .filter((entry) => entry.instanceId === boss.instanceId && entry.accountId === accountId);
+            .filter((entry) => entry.i === boss.instanceId && entry.a === accountId);
           return hits.length > 0 ? hits[hits.length - 1] : null;
         },
         20_000,
@@ -802,9 +802,9 @@ function connect(url) {
     await sleep(3_500);
     const quietHits = session
       .hitsFrom(stillWindow)
-      .filter((entry) => entry.instanceId === boss.instanceId && entry.accountId === accountId);
+      .filter((entry) => entry.i === boss.instanceId && entry.a === accountId);
     checkEqual(quietHits.length, 0, "眩晕期间 BOSS 一次都没打中玩家（禁一切：既不出手也不放技能）");
-    const quietCasts = session.castsFrom(stillWindow).filter((cast) => cast.instanceId === boss.instanceId);
+    const quietCasts = session.castsFrom(stillWindow).filter((cast) => cast.i === boss.instanceId);
     checkEqual(quietCasts.length, 0, "眩晕期间也不再释放任何技能", JSON.stringify(quietCasts.slice(0, 3)));
 
     // 位置冻结：这一段窗口里 BOSS 的坐标必须一动不动。
