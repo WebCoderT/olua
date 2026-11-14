@@ -26,7 +26,7 @@ import type RoleDisplay from "../role/RoleDisplay";
  * - 功能入口按钮：单列竖排的布局容器（Layout 纵向），位于地图内容区左侧
  * - 地图区域：真实小地图——当前地图的 preview.jpg，裁剪在内容区大小（layout.contentSize）的视口内，
  *   按「内容区 ↔ 世界视野」等比缩放后随角色平移（缩放见 configs/smallMap.getSmallMapScale）
- * - 地图正下方：服务器线路与排行榜（横向布局容器，排行榜在左；#400 起「排行榜」可点开全服榜）
+ * - 地图正下方：服务器线路与排行榜（横向布局容器，排行榜在左；#400 起「排行榜」可点开，榜单是**本区**的）
  * - 最下方：世界坐标条
  * 位置、尺寸与图片来源全部来自 configs/hudLayout.smallMap（入口图标按名字走 uiMinimap 取图）
  * 地图区域上实时绘制坐标点：角色黑点固定在内容区中心（底图随之平移，故黑点下方永远是角色真实所在位置），
@@ -235,7 +235,7 @@ export default class SmallMap extends Node {
     const tagRow = layout.tagRow;
     const tags = GameUiHelper.createRow("small_map_tags", tagRow.gap, tagRow.position, new Size(tagRow.size.width * 2 + tagRow.gap, tagRow.size.height));
     const rankingEntry = GameUiHelper.createImage("small_map_ranking_list", uiImages.smallMapRankingList, new Vec2(), tagRow.size);
-    // 排行榜标签（#400）：原来是纯装饰图，现在点开全服榜（等级 / 战力 / 击杀）
+    // 排行榜标签（#400）：原来是纯装饰图，现在点开本区榜（等级 / 战力 / 击杀；#959 起分区分榜）
     bindPointerAction(rankingEntry, () => this.leaderboardDialog.open(), this);
     tags.addChild(rankingEntry);
     tags.addChild(GameUiHelper.createImage("small_map_server_line", uiImages.smallMapServerLine, new Vec2(), tagRow.size));

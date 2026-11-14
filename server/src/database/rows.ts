@@ -131,11 +131,11 @@ export interface RoleWithAccountRow extends RoleRow {
 }
 
 /**
- * 排行榜候选行（#400）
+ * 排行榜候选行（#400；#959 起按区取）
  *
  * 只取三个榜要用的东西：等级 / 击杀数是索引列，战力得靠 `data` 里的装备与养成项
- * 现算（`summarizeRoleAttributes`）。`zone_id` 来自账号行 —— 榜是「全服单榜」，
- * 区服只作为展示字段带出去（将来分区时不用再改查询）。
+ * 现算（`summarizeRoleAttributes`）。`zone_id` 是 `roles.zone_id`（#957 之后的唯一权威，
+ * 不再 join 账号行）：榜是**分区榜**，查询本身就按它过滤，带出来只为让条目自己说清所属区。
  *
  * **刻意不带 `account_id`**：榜单是对外数据，账号 id 属于没必要暴露的关联键。
  */

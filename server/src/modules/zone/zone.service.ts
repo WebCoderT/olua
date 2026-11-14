@@ -57,6 +57,31 @@ export class ZoneService {
     return this.zones.listAll().map((row) => AdminZoneDto.from(row, this.zones.countAccounts(row.id)));
   }
 
+  /**
+   * 把管理端请求头 `X-Zone-Id` 解成区 id（#959 起用；#960 的守卫会统一调这里）
+   *
+   * 管理端「一次只在一个区里干活」：头必填，且必须是**活区**（已合并的区没有可看的
+   * 实时数据，只剩历史流水）。缺失 / 不是正整数 / 区不存在 / 区已合并 → 400
+   * `ZONE_REQUIRED` —— 四种情况对客户端是同一句话「先选一个区服」，
+   * 区分它们只会逼客户端写四条其实一样的提示。
+   *
+   * 这里**只做「区存在吗」的校验**，不判资源归属（那是各 service 的事，见 docs/39 §3.8）。
+   */
+  resolveZoneHeader(raw: string | undefined): number {
+    const zoneId = Number(raw);
+    if (!raw || !Number.isInteger(zoneId) || zoneId <= 0) {
+      throw new BizException(BizCode.ZONE_REQUIRED, "管理端请求必须带 X-Zone-Id（先选一个区服）", HttpStatus.BAD_REQUEST);
+    }
+    if (!this.zones.findLiveById(zoneId)) {
+      throw new BizException(
+        BizCode.ZONE_REQUIRED,
+        `X-Zone-Id 指向的区服不存在或已合并（${zoneId}）—— 先选一个区服`,
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+    return zoneId;
+  }
+
   /** 开新区（名字查重后落库；区 id 自增，注册端立即可选） */
   create(name: string): AdminZoneDto {
     const trimmed = name.trim();

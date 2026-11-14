@@ -13,10 +13,13 @@ import { LeaderboardPageDto, LeaderboardQueryDto, LeaderboardSelfDto } from "./d
 const BOARD_LIST = LEADERBOARD_BOARDS.map((board) => `\`${board}\`（${LEADERBOARD_BOARD_LABELS[board]}）`).join(" / ");
 
 /**
- * 排行榜（#400）
+ * 排行榜（#400；#959 起分区）
  *
  * 三个榜共用同一套分页与名次规则，路由上只差一个 `:board`：
  * `GET /leaderboards/level|combat|kills`。
+ *
+ * 榜是**分区榜**：只出当前角色所在区，**不接受 `?zoneId=`**（区由服务端从账号推导，
+ * 传了也不读）。要跨区看榜是运营的事，走 `GET /admin/leaderboards/:board`。
  *
  * 榜是**物化**的（默认每分钟重算一次），响应里的 `computedAt` 就是这份快照的时刻 ——
  * 客户端据此说「每分钟更新」，而不是让人以为刚升一级就该立刻跳名次。
@@ -34,8 +37,8 @@ export class LeaderboardController {
       "取的是**当前在线角色**：玩家在游戏里看榜，关心的是「我这个角色第几」。\n" +
       "没有在线角色（还没进游戏 / 被踢下线）时返回 `rank = 0` 与 `entry = null` —— " +
       "**不是 404**：界面上「你还没有名次」是正常状态，客户端不必为它写错误分支。\n\n" +
-      "名次在**全量排序**里算，所以即使玩家排在上榜条数（`LEADERBOARD_TOP_N`）之外，" +
-      "这里也能拿到真实名次。",
+      "名次在**在线角色所在区**的榜里算（榜是分区榜，见 `leaderboard.page`）。" +
+      "即使玩家排在上榜条数（`LEADERBOARD_TOP_N`）之外，这里也能拿到真实名次。",
   })
   @ApiParam({ name: "board", description: `榜单：${BOARD_LIST}`, enum: [...LEADERBOARD_BOARDS] })
   @ApiDataResponse(LeaderboardSelfDto, { description: "我的名次（未上榜时 rank=0、entry=null）" })
@@ -46,14 +49,17 @@ export class LeaderboardController {
   @Get(":board")
   @ApiPlayerDoc({
     operationId: "leaderboard.page",
-    summary: "榜单分页",
+    summary: "榜单分页（本区）",
     description:
       `\`board\` 取 ${BOARD_LIST}。\n\n` +
+      "**榜是分区榜**（#959）：只出当前角色所在区，名次也在区内算 —— 不进图时取账号的" +
+      "「当前浏览区」。**不接受 `?zoneId=`**：传了也不读，跨区看榜是运营动作（管理端接口）。\n\n" +
       "**排序是固定的**（等级 / 战力 / 击杀各自降序），所以没有 `sort` / `keyword` 参数 —— " +
       "名次一旦能改排序就没有意义了。\n\n" +
       "**并列规则**：同分同名次（竞赛排名，1、2、2、4），同分之间按角色 id 升序，" +
       "两次重算之间次序不抖。\n\n" +
-      "**离线也上榜**：榜读的是角色存档，不要求在线。\n\n" +
+      "**离线也上榜**：榜读的是角色存档，不要求在线。区里一个人都没有时返回空榜" +
+      "（`list = []`、`total = 0`），不是错误。\n\n" +
       "`size` 超过上榜条数（`LEADERBOARD_TOP_N`，默认 100）时会被**夹到上限**而不是报错 —— " +
       "榜本来只有这么长。\n\n" +
       "响应里的 `computedAt` 是这份快照算出来的时刻：榜单默认每分钟重算一次，" +
@@ -62,7 +68,11 @@ export class LeaderboardController {
   @ApiParam({ name: "board", description: `榜单：${BOARD_LIST}`, enum: [...LEADERBOARD_BOARDS] })
   @ApiQueryModel(LeaderboardQueryDto)
   @ApiDataResponse(LeaderboardPageDto, { description: "分页结果（list/total/page/size + computedAt）" })
-  page(@Param("board") board: string, @Query() query: LeaderboardQueryDto): LeaderboardPageDto {
-    return this.leaderboardService.page(this.leaderboardService.assertBoard(board), query);
+  page(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("board") board: string,
+    @Query() query: LeaderboardQueryDto,
+  ): LeaderboardPageDto {
+    return this.leaderboardService.page(this.leaderboardService.assertBoard(board), user.id, query);
   }
 }

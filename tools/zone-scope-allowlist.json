@@ -44,13 +44,6 @@
       "reason": "管理端角色列表：P4 单区上下文后条件恒带 r.zone_id = :current"
     },
     {
-      "rule": "repo-signature",
-      "file": "server/src/database/repositories/role.repository.ts",
-      "key": "listForLeaderboard",
-      "issue": 959,
-      "reason": "P3 分区榜：一次扫描按 roles.zone_id 分桶（这条查询本来就 join 了 accounts.zone_id，改列来源即可）"
-    },
-    {
       "rule": "repo-sql",
       "file": "server/src/database/repositories/account.repository.ts",
       "key": "list",
@@ -217,13 +210,6 @@
       "key": "list",
       "issue": 960,
       "reason": "管理端角色列表：P4 的 buildWhere 里补 r.zone_id = ?（与 count 同源，别各写一份）"
-    },
-    {
-      "rule": "repo-sql",
-      "file": "server/src/database/repositories/role.repository.ts",
-      "key": "listForLeaderboard",
-      "issue": 959,
-      "reason": "P3 分区榜：全表扫是刻意的（每 LEADERBOARD_REFRESH_MS 一次），P3 改成一次扫描按 zone_id 分桶"
     },
     {
       "rule": "repo-sql",

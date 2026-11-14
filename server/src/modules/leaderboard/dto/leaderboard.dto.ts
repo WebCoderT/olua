@@ -32,7 +32,7 @@ export class LeaderboardEntryDto {
   @ApiProperty({ description: "击杀数（服务端结算路径累加）" })
   kills: number;
 
-  @ApiProperty({ description: "归属区服 id（榜是全服单榜，这一项只用于展示「来自 X 区」）" })
+  @ApiProperty({ description: "归属区服 id。榜是**分区榜**（#959）：同一份榜里的条目必然同区，这一项留给客户端显示「来自 X 区」" })
   zoneId: number;
 }
 

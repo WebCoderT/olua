@@ -187,7 +187,7 @@ export const ApiRoutes = {
   /** leaderboard 模块（2 个接口） */
   leaderboard: {
     /**
-     * 榜单分页（GET /leaderboards/{board}）
+     * 榜单分页（本区）（GET /leaderboards/{board}）
      *
      * `board` 取 `level`（等级） / `combat`（战力） / `kills`（击杀）。
      */

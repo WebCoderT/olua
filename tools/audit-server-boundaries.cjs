@@ -88,6 +88,9 @@ const ALLOWED_EDGES = [
   { from: "modules/roles", to: "modules/game-config/dto/mall.dto.ts", why: "商城限购 / 库存视图形状复用（#846）" },
   // 区服（#295）：管理端开区/合并区直接复用 ZoneService 的一份实现（admin 控制器只做鉴权与审计）
   { from: "modules/admin", to: "modules/zone/", why: "区服管理复用 ZoneService 的开区/合并实现" },
+  // 后台看榜（#959）：与玩家侧读**同一份**物化快照（LeaderboardService.adminPage）。
+  // 让管理端自己排一份榜 = 客服看到的和玩家看到的不是同一个数，出了问题没法对账
+  { from: "modules/admin", to: "modules/leaderboard/", why: "后台榜单与玩家侧共用一份物化快照（#959）" },
   // 合并区改名（#957）：撞名时的截断长度必须与建角校验读同一个 ROLE_NAME_MAX_LENGTH，
   // 在 zone 里抄一个数字，等哪天名字上限调了就会出现「合区后角色名超长」——
   // 只有这一个常量，没有业务逻辑
@@ -111,6 +114,10 @@ const ALLOWED_EDGES = [
   // 社交（#388/#389）：所有帮会 / 好友动作都落在「账号的在线角色」上，
   // 而哪个角色在线只有存档域知道（accounts.online_role_id）—— 不让社交域自己摸账号表
   { from: "modules/social", to: "modules/roles/roles.service.ts", why: "社交动作取账号的在线角色" },
+  // 榜单分区（#959）：榜要看「这个账号现在是哪个区」（进图后是在线角色的区，没选角色时是
+  // 账号的当前浏览区）。这条判断只能有一份 —— 在 leaderboard 里照抄一遍读法，
+  // 等哪天区归属规则再变（合区 / 换区清在线角色），榜就会和社交 / 实时各说各话
+  { from: "modules/leaderboard", to: "modules/roles/roles.service.ts", why: "榜单按账号推导当前区（#959）" },
   // 任务（#396）：接取 / 交付落在账号的在线角色上；交付发奖走存档域的单次落库方法
   { from: "modules/quest", to: "modules/roles/roles.service.ts", why: "任务动作取在线角色与交付发奖" },
   { from: "modules/quest", to: "modules/game-config/dto/", why: "任务配置 DTO（管理端编辑入参的形状）" },

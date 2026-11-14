@@ -3456,6 +3456,105 @@
         ]
       }
     },
+    "/admin/leaderboards/{board}": {
+      "get": {
+        "description": "`board` 取 `level`（等级） / `combat`（战力） / `kills`（击杀）。\n\n**区取自请求头 `X-Zone-Id`**（必填；缺失 / 不是正整数 / 区不存在 / 区已合并 → 400 `ZONE_REQUIRED`）。不接受 `?zoneId=` —— 管理端的区是「当前上下文」，不是单次查询参数。\n\n榜是分区榜（#959）：名次在区内算，上榜条数（`LEADERBOARD_TOP_N`）也按区各截一次。\n\n并列规则与玩家侧一致：同分同名次（1、2、2、4），同分按角色 id 升序。区里暂时没有角色时返回空榜（`list = []`、`total = 0`），不是错误。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`role:read`（查看角色；角色：超级管理员 / 管理员 / 只读观察员）",
+        "operationId": "adminLeaderboard.page",
+        "parameters": [
+          {
+            "name": "board",
+            "required": true,
+            "in": "path",
+            "description": "榜单：`level`（等级） / `combat`（战力） / `kills`（击杀）",
+            "schema": {
+              "enum": [
+                "level",
+                "combat",
+                "kills"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "description": "页码，从 1 开始",
+            "schema": {
+              "minimum": 1,
+              "default": 1,
+              "example": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "size",
+            "required": false,
+            "in": "query",
+            "description": "每页条数（默认 20）。上限由服务端配置 `LEADERBOARD_TOP_N` 决定（默认 100）——传得比它大不会报错，会被夹到上限。",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
+              "example": 20,
+              "type": "number"
+            }
+          },
+          {
+            "name": "X-Zone-Id",
+            "in": "header",
+            "description": "当前作业区服（未合并的区 id）",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "该区的分页结果（list/total/page/size + computedAt）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/LeaderboardPageDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "某个区的榜单分页",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/LeaderboardPageDto"
+        },
+        "x-olua-permissions": [
+          "role:read"
+        ],
+        "x-olua-query-schema": {
+          "$ref": "#/components/schemas/LeaderboardQueryDto"
+        }
+      }
+    },
     "/admin/audit-logs": {
       "get": {
         "description": "按时间倒序返回管理端的写操作记录（含登录成功 / 失败、改密码）。`keyword`（模糊匹配操作人账号名 / 动作 / 目标 id / 请求路径）、`actorId` / `action` / `targetType` / `targetId` / `success` / `from` / `to` 均可选，条件之间是「与」的关系。\n\n**排序**：`sort` 取 `createdAt` / `actorName` / `action` / `targetType` / `success` / `statusCode` / `ip`，`order` 取 asc / desc（默认 createdAt 倒序）。同一毫秒的多条日志另有 id 兜底次序，保证翻页稳定。\n\n`detail` 是当时的请求体，已对 `password` / `secret` / `token` / `registerCode` 一类字段打码（值替换为 `***`）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`audit:read`（查看操作日志；角色：超级管理员 / 管理员）",
@@ -14419,7 +14518,7 @@
     },
     "/leaderboards/{board}/me": {
       "get": {
-        "description": "`board` 取 `level`（等级） / `combat`（战力） / `kills`（击杀）（下同）。\n\n取的是**当前在线角色**：玩家在游戏里看榜，关心的是「我这个角色第几」。\n没有在线角色（还没进游戏 / 被踢下线）时返回 `rank = 0` 与 `entry = null` —— **不是 404**：界面上「你还没有名次」是正常状态，客户端不必为它写错误分支。\n\n名次在**全量排序**里算，所以即使玩家排在上榜条数（`LEADERBOARD_TOP_N`）之外，这里也能拿到真实名次。\n\n---\n\n**鉴权**：客户端令牌（`player`），只能操作令牌所属账号自己的数据。",
+        "description": "`board` 取 `level`（等级） / `combat`（战力） / `kills`（击杀）（下同）。\n\n取的是**当前在线角色**：玩家在游戏里看榜，关心的是「我这个角色第几」。\n没有在线角色（还没进游戏 / 被踢下线）时返回 `rank = 0` 与 `entry = null` —— **不是 404**：界面上「你还没有名次」是正常状态，客户端不必为它写错误分支。\n\n名次在**在线角色所在区**的榜里算（榜是分区榜，见 `leaderboard.page`）。即使玩家排在上榜条数（`LEADERBOARD_TOP_N`）之外，这里也能拿到真实名次。\n\n---\n\n**鉴权**：客户端令牌（`player`），只能操作令牌所属账号自己的数据。",
         "operationId": "leaderboard.me",
         "parameters": [
           {
@@ -14478,7 +14577,7 @@
     },
     "/leaderboards/{board}": {
       "get": {
-        "description": "`board` 取 `level`（等级） / `combat`（战力） / `kills`（击杀）。\n\n**排序是固定的**（等级 / 战力 / 击杀各自降序），所以没有 `sort` / `keyword` 参数 —— 名次一旦能改排序就没有意义了。\n\n**并列规则**：同分同名次（竞赛排名，1、2、2、4），同分之间按角色 id 升序，两次重算之间次序不抖。\n\n**离线也上榜**：榜读的是角色存档，不要求在线。\n\n`size` 超过上榜条数（`LEADERBOARD_TOP_N`，默认 100）时会被**夹到上限**而不是报错 —— 榜本来只有这么长。\n\n响应里的 `computedAt` 是这份快照算出来的时刻：榜单默认每分钟重算一次，刚升级的玩家最多等一分钟才看到自己往上挪。\n\n---\n\n**鉴权**：客户端令牌（`player`），只能操作令牌所属账号自己的数据。",
+        "description": "`board` 取 `level`（等级） / `combat`（战力） / `kills`（击杀）。\n\n**榜是分区榜**（#959）：只出当前角色所在区，名次也在区内算 —— 不进图时取账号的「当前浏览区」。**不接受 `?zoneId=`**：传了也不读，跨区看榜是运营动作（管理端接口）。\n\n**排序是固定的**（等级 / 战力 / 击杀各自降序），所以没有 `sort` / `keyword` 参数 —— 名次一旦能改排序就没有意义了。\n\n**并列规则**：同分同名次（竞赛排名，1、2、2、4），同分之间按角色 id 升序，两次重算之间次序不抖。\n\n**离线也上榜**：榜读的是角色存档，不要求在线。区里一个人都没有时返回空榜（`list = []`、`total = 0`），不是错误。\n\n`size` 超过上榜条数（`LEADERBOARD_TOP_N`，默认 100）时会被**夹到上限**而不是报错 —— 榜本来只有这么长。\n\n响应里的 `computedAt` 是这份快照算出来的时刻：榜单默认每分钟重算一次，刚升级的玩家最多等一分钟才看到自己往上挪。\n\n---\n\n**鉴权**：客户端令牌（`player`），只能操作令牌所属账号自己的数据。",
         "operationId": "leaderboard.page",
         "parameters": [
           {
@@ -14549,7 +14648,7 @@
             "player": []
           }
         ],
-        "summary": "榜单分页",
+        "summary": "榜单分页（本区）",
         "tags": [
           "客户端"
         ],
@@ -19493,6 +19592,93 @@
         "required": [
           "fromZoneId",
           "toZoneId"
+        ]
+      },
+      "LeaderboardEntryDto": {
+        "type": "object",
+        "properties": {
+          "rank": {
+            "type": "number",
+            "description": "名次（并列同分同名次：1、2、2、4）",
+            "example": 1
+          },
+          "roleId": {
+            "type": "string",
+            "description": "角色 id（点进去看详情 / 加好友用）"
+          },
+          "name": {
+            "type": "string",
+            "description": "角色名"
+          },
+          "occupation": {
+            "type": "string",
+            "description": "职业码"
+          },
+          "level": {
+            "type": "number",
+            "description": "等级"
+          },
+          "combat": {
+            "type": "number",
+            "description": "战斗力（与客户端 combatCalc 同源）"
+          },
+          "kills": {
+            "type": "number",
+            "description": "击杀数（服务端结算路径累加）"
+          },
+          "zoneId": {
+            "type": "number",
+            "description": "归属区服 id。榜是**分区榜**（#959）：同一份榜里的条目必然同区，这一项留给客户端显示「来自 X 区」"
+          }
+        },
+        "required": [
+          "rank",
+          "roleId",
+          "name",
+          "occupation",
+          "level",
+          "combat",
+          "kills",
+          "zoneId"
+        ]
+      },
+      "LeaderboardPageDto": {
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "number",
+            "description": "总条数",
+            "example": 42
+          },
+          "page": {
+            "type": "number",
+            "description": "当前页码（从 1 开始）",
+            "example": 1
+          },
+          "size": {
+            "type": "number",
+            "description": "每页条数",
+            "example": 20
+          },
+          "list": {
+            "description": "本页条目（按名次升序）",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LeaderboardEntryDto"
+            }
+          },
+          "computedAt": {
+            "type": "number",
+            "description": "这份快照算出来的时刻（毫秒）。榜单是**物化**的（默认每分钟重算一次），客户端据此告诉玩家「每分钟更新」，而不是让人以为刚升级就该立刻跳名次。",
+            "example": 1760000000000
+          }
+        },
+        "required": [
+          "total",
+          "page",
+          "size",
+          "list",
+          "computedAt"
         ]
       },
       "AuditLogDto": {
@@ -29230,54 +29416,6 @@
           "npcId"
         ]
       },
-      "LeaderboardEntryDto": {
-        "type": "object",
-        "properties": {
-          "rank": {
-            "type": "number",
-            "description": "名次（并列同分同名次：1、2、2、4）",
-            "example": 1
-          },
-          "roleId": {
-            "type": "string",
-            "description": "角色 id（点进去看详情 / 加好友用）"
-          },
-          "name": {
-            "type": "string",
-            "description": "角色名"
-          },
-          "occupation": {
-            "type": "string",
-            "description": "职业码"
-          },
-          "level": {
-            "type": "number",
-            "description": "等级"
-          },
-          "combat": {
-            "type": "number",
-            "description": "战斗力（与客户端 combatCalc 同源）"
-          },
-          "kills": {
-            "type": "number",
-            "description": "击杀数（服务端结算路径累加）"
-          },
-          "zoneId": {
-            "type": "number",
-            "description": "归属区服 id（榜是全服单榜，这一项只用于展示「来自 X 区」）"
-          }
-        },
-        "required": [
-          "rank",
-          "roleId",
-          "name",
-          "occupation",
-          "level",
-          "combat",
-          "kills",
-          "zoneId"
-        ]
-      },
       "LeaderboardSelfDto": {
         "type": "object",
         "properties": {
@@ -29305,45 +29443,6 @@
         "required": [
           "rank",
           "entry",
-          "computedAt"
-        ]
-      },
-      "LeaderboardPageDto": {
-        "type": "object",
-        "properties": {
-          "total": {
-            "type": "number",
-            "description": "总条数",
-            "example": 42
-          },
-          "page": {
-            "type": "number",
-            "description": "当前页码（从 1 开始）",
-            "example": 1
-          },
-          "size": {
-            "type": "number",
-            "description": "每页条数",
-            "example": 20
-          },
-          "list": {
-            "description": "本页条目（按名次升序）",
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/LeaderboardEntryDto"
-            }
-          },
-          "computedAt": {
-            "type": "number",
-            "description": "这份快照算出来的时刻（毫秒）。榜单是**物化**的（默认每分钟重算一次），客户端据此告诉玩家「每分钟更新」，而不是让人以为刚升级就该立刻跳名次。",
-            "example": 1760000000000
-          }
-        },
-        "required": [
-          "total",
-          "page",
-          "size",
-          "list",
           "computedAt"
         ]
       },

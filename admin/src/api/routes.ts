@@ -625,6 +625,15 @@ export const routes = {
      */
     update: (id: string) => `/admin/items/${encodeURIComponent(id)}`,
   },
+  /** adminLeaderboard 模块（1 个接口） */
+  adminLeaderboard: {
+    /**
+     * 某个区的榜单分页（GET /admin/leaderboards/{board}）
+     *
+     * `board` 取 `level`（等级） / `combat`（战力） / `kills`（击杀）。
+     */
+    page: (board: string) => `/admin/leaderboards/${encodeURIComponent(board)}`,
+  },
   /** adminLevelCurve 模块（3 个接口） */
   adminLevelCurve: {
     /**
