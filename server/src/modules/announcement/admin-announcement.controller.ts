@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } from "@nestjs/common";
 import { ApiParam } from "@nestjs/swagger";
 import { ApiDataResponse, ApiVoidResponse } from "../../common/decorators/api-data-response.decorator";
 import { ApiAdminDoc } from "../../common/decorators/api-doc.decorator";
@@ -6,7 +6,9 @@ import { ApiQueryModel } from "../../common/decorators/api-query-model.decorator
 import { ApiAudience } from "../../common/decorators/audience.decorator";
 import { AuditTarget } from "../../common/decorators/audit-target.decorator";
 import { CurrentUser } from "../../common/decorators/current-user.decorator";
+import { ZoneContext } from "../../common/decorators/zone-context.decorator";
 import { Permission } from "../../common/constants/permission";
+import { ZoneContextGuard } from "../../common/guards/zone-context.guard";
 import { AuthenticatedUser, PageResult } from "../../common/interfaces/api-envelope.interface";
 import { ANNOUNCEMENT_SORT, sortFieldNames } from "../../database/sort-specs";
 import { AnnouncementService } from "./announcement.service";
@@ -24,8 +26,14 @@ import {
  * 写操作都带 `@AuditTarget("announcement")` —— 「谁在什么时候向全服发了什么」是必须可追溯的
  * 运营动作（动作取自 operationId，无需另设清单）。
  * 编辑用 PATCH（**部分更新**）：列表上的启停按钮只回传 `enabled`，不会覆盖运营正在编辑的正文。
+ *
+ * **区上下文（#963）**：整个控制器挂 `ZoneContextGuard`，请求必须带 `X-Zone-Id` ——
+ * 新建公告默认投给这个区（`scope=all` 才打到全服，那另需 `announcement:publish-all`）。
+ * 列表 / 删除不分区的数据范围：管理员看得到所有区的公告（含全服），否则「发到别区的公告」
+ * 在界面上就消失了，运营没法发现发错地方。
  */
 @ApiAudience("admin")
+@UseGuards(ZoneContextGuard)
 @Controller("admin/announcements")
 export class AdminAnnouncementController {
   constructor(private readonly announcementService: AnnouncementService) {}
@@ -56,12 +64,18 @@ export class AdminAnnouncementController {
     summary: "发布公告",
     description:
       "不传 `startsAt` = 立即生效，不传 `endsAt` = 不设截止（**不要**为了「长期有效」编一个很远的结束时间）。\n\n" +
+      "`scope` 决定投放范围：默认 `zone` = 只投给请求头 `X-Zone-Id` 指定的区；" +
+      "`all` = 全服（所有区都能看到），需要 `announcement:publish-all`，否则 403 / 30006。\n\n" +
       "发布人取当前登录的管理员账号名，不接受入参指定；`endsAt` 必须晚于 `startsAt`（否则 50002）。",
     permissions: [Permission.ANNOUNCEMENT_WRITE],
   })
   @ApiDataResponse(AnnouncementDto, { status: 201, description: "创建成功" })
-  create(@CurrentUser() user: AuthenticatedUser, @Body() dto: CreateAnnouncementDto): AnnouncementDto {
-    return this.announcementService.create(user, dto);
+  create(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: CreateAnnouncementDto,
+    @ZoneContext() zoneId: number,
+  ): AnnouncementDto {
+    return this.announcementService.create(user, dto, zoneId);
   }
 
   @Patch(":id")
@@ -72,13 +86,20 @@ export class AdminAnnouncementController {
     description:
       "**部分更新**：只改请求体里出现的字段 —— 列表上的「启用 / 停用」只传 `enabled` 即可，不会覆盖其它字段。\n\n" +
       "`startsAt` / `endsAt` 传 `null` 表示改为「立即生效」/「不设截止」，不传则保持原值。" +
-      "时间窗按**合并后的结果**校验（只传 `endsAt` 时也会与库里已有的 `startsAt` 比对）。",
+      "时间窗按**合并后的结果**校验（只传 `endsAt` 时也会与库里已有的 `startsAt` 比对）。\n\n" +
+      "`scope` 只在要改投放范围时传（`zone` = 改成当前区 / `all` = 改成全服，后者需 " +
+      "`announcement:publish-all`）；不传则投放范围不动。",
     permissions: [Permission.ANNOUNCEMENT_WRITE],
   })
   @ApiParam({ name: "id", description: "公告 id" })
   @ApiDataResponse(AnnouncementDto, { description: "更新后的公告" })
-  update(@Param("id") id: string, @Body() dto: UpdateAnnouncementDto): AnnouncementDto {
-    return this.announcementService.update(id, dto);
+  update(
+    @Param("id") id: string,
+    @Body() dto: UpdateAnnouncementDto,
+    @CurrentUser() user: AuthenticatedUser,
+    @ZoneContext() zoneId: number,
+  ): AnnouncementDto {
+    return this.announcementService.update(id, dto, user, zoneId);
   }
 
   @Delete(":id")

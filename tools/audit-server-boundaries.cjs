@@ -61,6 +61,10 @@ const ALLOWED_EDGES = [
   // 同一对纯函数（summarize + apply），两处各抄一份必然漂移
   { from: "modules/admin", to: "modules/combat/role-attributes.ts", why: "属性汇总与写回纯函数（#836）" },
   // 审计是横切能力：登录（auth）与管理端（admin）都要写操作日志（经 AuditModule 导出的服务）
+  // 公告读「玩家在哪个区」只能问 roles（#963）：`onlineZoneOf` 是「在线角色所在区」的唯一口径，
+  // 公告域自己读 accounts / roles 两张表就等于把「区怎么算」抄了第二份（改口径必然漏一处）。
+  // 只用一个只读方法，不构成「公告域依赖角色域业务」。
+  { from: "modules/announcement", to: "modules/roles/roles.service.ts", why: "公告按区可见性取「当前角色区」（#963）" },
   { from: "modules/auth", to: "modules/audit/audit.service.ts", why: "登录写审计" },
   { from: "modules/admin", to: "modules/audit/audit.service.ts", why: "管理端写审计" },
   // 玩家行为流水（#886）与审计同理是横切能力：登录（auth）、领取（game-mail）、

@@ -4623,12 +4623,12 @@
     },
     "/announcements/active": {
       "get": {
-        "description": "只返回**同时满足**三个条件的公告：手动启用了、已到生效开始时间、还没到结束时间（`startsAt` / `endsAt` 为 null 分别表示立即生效 / 不设截止）。\n\n排序：**重要在前**，同级按发布时间倒序。无生效公告时返回空数组（不是 null）。\n\n无需令牌 —— 停机维护这类公告在登录页就要能显示。\n\n---\n\n**鉴权**：无需令牌，公开接口。",
+        "description": "只返回**同时满足**三个条件的公告：手动启用了、已到生效开始时间、还没到结束时间（`startsAt` / `endsAt` 为 null 分别表示立即生效 / 不设截止）。\n\n**只含全服公告**（投放范围为「全服」的那些）：这条路没有令牌、也就没有区，登录页与还没选区的玩家看到的就是它。进游戏之后用 `GET /announcements/mine`：那条会多带上「本区」公告。\n\n排序：**重要在前**，同级按发布时间倒序。无生效公告时返回空数组（不是 null）。\n\n无需令牌 —— 停机维护这类公告在登录页就要能显示。\n\n---\n\n**鉴权**：无需令牌，公开接口。",
         "operationId": "announcement.active",
         "parameters": [],
         "responses": {
           "200": {
-            "description": "生效中的公告（可能为空数组）",
+            "description": "生效中的全服公告（可能为空数组）",
             "content": {
               "application/json": {
                 "schema": {
@@ -4652,11 +4652,61 @@
             }
           }
         },
-        "summary": "当前生效中的公告",
+        "summary": "当前生效中的公告（全服）",
         "tags": [
           "公共接口"
         ],
         "x-olua-audience": "public",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/ActiveAnnouncementDto"
+          }
+        }
+      }
+    },
+    "/announcements/mine": {
+      "get": {
+        "description": "与 `GET /announcements/active` 同一套「生效中」判据，只是**多算一层区**：返回「全服公告 + 投给我所在区的公告」。\n\n区由服务端从**在线角色**推导（还没建角 / 还在选角页就只给全服公告 —— 那时他还不属于任何区），**不接受 `zoneId` 入参** —— 传了也不读。\n\n登录页那种「还没有令牌」的场景请用公共接口，它只给全服公告。\n\n---\n\n**鉴权**：客户端令牌（`player`），只能操作令牌所属账号自己的数据。",
+        "operationId": "announcement.mine",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "生效中的全服 + 本区公告（可能为空数组）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/ActiveAnnouncementDto"
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "player": []
+          }
+        ],
+        "summary": "当前生效中的公告（全服 + 本区）",
+        "tags": [
+          "客户端"
+        ],
+        "x-olua-audience": "player",
         "x-olua-data-nullable": false,
         "x-olua-data-schema": {
           "type": "array",
@@ -4814,7 +4864,7 @@
         }
       },
       "post": {
-        "description": "不传 `startsAt` = 立即生效，不传 `endsAt` = 不设截止（**不要**为了「长期有效」编一个很远的结束时间）。\n\n发布人取当前登录的管理员账号名，不接受入参指定；`endsAt` 必须晚于 `startsAt`（否则 50002）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`announcement:write`（发布 / 编辑公告；角色：超级管理员 / 管理员）",
+        "description": "不传 `startsAt` = 立即生效，不传 `endsAt` = 不设截止（**不要**为了「长期有效」编一个很远的结束时间）。\n\n`scope` 决定投放范围：默认 `zone` = 只投给请求头 `X-Zone-Id` 指定的区；`all` = 全服（所有区都能看到），需要 `announcement:publish-all`，否则 403 / 30006。\n\n发布人取当前登录的管理员账号名，不接受入参指定；`endsAt` 必须晚于 `startsAt`（否则 50002）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`announcement:write`（发布 / 编辑公告；角色：超级管理员 / 管理员）",
         "operationId": "adminAnnouncement.create",
         "parameters": [],
         "requestBody": {
@@ -4871,7 +4921,7 @@
     },
     "/admin/announcements/{id}": {
       "patch": {
-        "description": "**部分更新**：只改请求体里出现的字段 —— 列表上的「启用 / 停用」只传 `enabled` 即可，不会覆盖其它字段。\n\n`startsAt` / `endsAt` 传 `null` 表示改为「立即生效」/「不设截止」，不传则保持原值。时间窗按**合并后的结果**校验（只传 `endsAt` 时也会与库里已有的 `startsAt` 比对）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`announcement:write`（发布 / 编辑公告；角色：超级管理员 / 管理员）",
+        "description": "**部分更新**：只改请求体里出现的字段 —— 列表上的「启用 / 停用」只传 `enabled` 即可，不会覆盖其它字段。\n\n`startsAt` / `endsAt` 传 `null` 表示改为「立即生效」/「不设截止」，不传则保持原值。时间窗按**合并后的结果**校验（只传 `endsAt` 时也会与库里已有的 `startsAt` 比对）。\n\n`scope` 只在要改投放范围时传（`zone` = 改成当前区 / `all` = 改成全服，后者需 `announcement:publish-all`）；不传则投放范围不动。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`announcement:write`（发布 / 编辑公告；角色：超级管理员 / 管理员）",
         "operationId": "adminAnnouncement.update",
         "parameters": [
           {
@@ -17006,11 +17056,6 @@
             "type": "string",
             "description": "密码：6~32 位",
             "example": "123456"
-          },
-          "zoneId": {
-            "type": "number",
-            "description": "归属区 id（可省略，默认 1 = 一区；活区清单见 GET /zones）",
-            "example": 1
           }
         },
         "required": [
@@ -21105,6 +21150,11 @@
             "description": "生效结束时间（毫秒，不含）；null = 不设截止",
             "nullable": true
           },
+          "zoneId": {
+            "type": "number",
+            "description": "投放范围所属的区；null = 全服（所有区可见）",
+            "nullable": true
+          },
           "createdBy": {
             "type": "string",
             "description": "发布人管理员账号名（管理员被删后仍可追溯）",
@@ -21131,6 +21181,7 @@
           "enabled",
           "startsAt",
           "endsAt",
+          "zoneId",
           "createdBy",
           "createdAt",
           "updatedAt",
@@ -21198,6 +21249,15 @@
             "description": "是否启用，默认 true",
             "default": true
           },
+          "scope": {
+            "type": "string",
+            "description": "投放范围，默认 zone（只投当前区）。all = 全服，需要 announcement:publish-all",
+            "enum": [
+              "zone",
+              "all"
+            ],
+            "default": "zone"
+          },
           "startsAt": {
             "type": "number",
             "description": "生效开始时间（毫秒时间戳）；不传 = 立即生效",
@@ -21239,6 +21299,14 @@
           "enabled": {
             "type": "boolean",
             "description": "启用 / 停用（不传则不改）"
+          },
+          "scope": {
+            "type": "string",
+            "description": "改投放范围（不传则不改）：zone = 当前区，all = 全服（需要 announcement:publish-all）",
+            "enum": [
+              "zone",
+              "all"
+            ]
           },
           "startsAt": {
             "type": "number",

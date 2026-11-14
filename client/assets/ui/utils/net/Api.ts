@@ -45,14 +45,20 @@ export const AchievementApi = {
   mine: (options?: Options) => HttpClient.get<MyAchievements>(ApiRoutes.achievement.mine, options),
 };
 
-/** announcement 模块的接口（1 个，生成） */
+/** announcement 模块的接口（2 个，生成） */
 export const AnnouncementApi = {
   /**
-   * 当前生效中的公告（GET /announcements/active）
+   * 当前生效中的公告（全服）（GET /announcements/active）
    *
    * 只返回**同时满足**三个条件的公告：手动启用了、已到生效开始时间、还没到结束时间（`startsAt` / `endsAt` 为 null 分别表示立即生效 / 不设截止）。
    */
   active: (options?: Options) => HttpClient.get<ActiveAnnouncement[]>(ApiRoutes.announcement.active, { auth: false, ...options }),
+  /**
+   * 当前生效中的公告（全服 + 本区）（GET /announcements/mine）
+   *
+   * 与 `GET /announcements/active` 同一套「生效中」判据，只是**多算一层区**：返回「全服公告 + 投给我所在区的公告」。
+   */
+  mine: (options?: Options) => HttpClient.get<ActiveAnnouncement[]>(ApiRoutes.announcement.mine, options),
 };
 
 /** auth 模块的接口（4 个，生成） */

@@ -278,6 +278,13 @@ export interface AnnouncementRow {
   starts_at: number | null;
   /** 生效结束时间（毫秒，不含）；null = 不设截止 */
   ends_at: number | null;
+  /**
+   * 投放范围（#963）：`NULL` = 全服（所有区都能看到），否则只对该区可见
+   *
+   * 为什么是「可空」而不是 `0` 当全服：0 会与「不存在的区」撞值，而 NULL 天然是
+   * 「没有区这一维」—— 界面显示「全服」时不需要再去翻译一个魔法数字。
+   */
+  zone_id: number | null;
   /** 发布人管理员账号名（冗余存一份，管理员被删后仍可追溯） */
   created_by: string | null;
   created_at: number;

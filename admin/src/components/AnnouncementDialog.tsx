@@ -1,5 +1,12 @@
 import { useEffect, useState } from "react";
-import { ANNOUNCEMENT_LEVEL, ANNOUNCEMENT_LEVEL_LABELS, localInputToMs, msToLocalInput } from "../api";
+import {
+  ANNOUNCEMENT_LEVEL,
+  ANNOUNCEMENT_LEVEL_LABELS,
+  ANNOUNCEMENT_SCOPE,
+  ANNOUNCEMENT_SCOPE_LABELS,
+  localInputToMs,
+  msToLocalInput,
+} from "../api";
 import type { Announcement } from "../api";
 import { Modal } from "./Modal";
 import { Button, Field, Input, Notice, Select } from "./ui";
@@ -22,6 +29,8 @@ export interface AnnouncementFormValue {
   enabled: boolean;
   startsAt: number | null;
   endsAt: number | null;
+  /** 投放范围（#963）：`zone` = 只投当前区，`all` = 全服 */
+  scope: string;
 }
 
 /**
@@ -35,12 +44,18 @@ export interface AnnouncementFormValue {
 export function AnnouncementDialog({
   open,
   initial,
+  currentZoneName,
+  canPublishAll,
   onCancel,
   onSubmit,
 }: {
   open: boolean;
   /** 传入 = 编辑该条；null = 新建 */
   initial: Announcement | null;
+  /** 当前区名（顶栏选的那个区）——「当前区」这个选项要说清是哪个区 */
+  currentZoneName: string;
+  /** 有没有 `announcement:publish-all`：没有就把「全服」置灰（权威判定在服务端） */
+  canPublishAll: boolean;
   onCancel: () => void;
   /** 提交；返回是否成功（失败时请求层已统一弹过提示） */
   onSubmit: (value: AnnouncementFormValue) => Promise<boolean>;
@@ -51,6 +66,7 @@ export function AnnouncementDialog({
   const [enabled, setEnabled] = useState(true);
   const [startsAt, setStartsAt] = useState("");
   const [endsAt, setEndsAt] = useState("");
+  const [scope, setScope] = useState<string>(ANNOUNCEMENT_SCOPE.ZONE);
   const [submitting, setSubmitting] = useState(false);
 
   // 每次打开都按当前记录重置表单（关掉再打开另一条时不该残留上一条的内容）
@@ -62,6 +78,8 @@ export function AnnouncementDialog({
     setEnabled(initial?.enabled ?? true);
     setStartsAt(msToLocalInput(initial?.startsAt ?? null));
     setEndsAt(msToLocalInput(initial?.endsAt ?? null));
+    // 存量公告的 zoneId 为 null = 全服（老数据都是全服公告）
+    setScope(initial ? (initial.zoneId === null ? ANNOUNCEMENT_SCOPE.ALL : ANNOUNCEMENT_SCOPE.ZONE) : ANNOUNCEMENT_SCOPE.ZONE);
     setSubmitting(false);
   }, [open, initial]);
 
@@ -81,6 +99,7 @@ export function AnnouncementDialog({
       enabled,
       startsAt: startMs,
       endsAt: endMs,
+      scope,
     });
     setSubmitting(false);
     if (!ok) return;
@@ -136,6 +155,31 @@ export function AnnouncementDialog({
             <Input type="datetime-local" value={endsAt} onChange={(event) => setEndsAt(event.target.value)} />
           </Field>
         </div>
+
+        <Field
+          label="投放范围"
+          hint={canPublishAll ? undefined : "「全服」需要超级管理员权限；你现在发的是本区公告"}
+        >
+          <Select value={scope} onChange={(event) => setScope(event.target.value)}>
+            <option value={ANNOUNCEMENT_SCOPE.ZONE}>
+              {ANNOUNCEMENT_SCOPE_LABELS[ANNOUNCEMENT_SCOPE.ZONE]}（{currentZoneName}）
+            </option>
+            <option value={ANNOUNCEMENT_SCOPE.ALL} disabled={!canPublishAll}>
+              {ANNOUNCEMENT_SCOPE_LABELS[ANNOUNCEMENT_SCOPE.ALL]}（所有区都能看到）
+            </option>
+          </Select>
+        </Field>
+
+        {scope === ANNOUNCEMENT_SCOPE.ALL ? (
+          <Notice tone="warn">
+            这条会打到所有区：游戏内每个区的玩家都会看到，登录页也会显示（登录页只显示全服公告）。
+          </Notice>
+        ) : (
+          <Notice tone="muted">
+            只投给 {currentZoneName}：登录页与其它区的玩家都看不到它 —— 停机维护这类要所有人都知道的
+            消息，请选「全服」。
+          </Notice>
+        )}
 
         <label className="flex items-center gap-2 text-sm text-ink-3">
           <input type="checkbox" className="h-4 w-4 accent-gold" checked={enabled} onChange={(event) => setEnabled(event.target.checked)} />

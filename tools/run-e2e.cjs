@@ -92,6 +92,8 @@ const WEIGHT = {
   "test:e2e:zone-maintenance": 2,
   // 一次完整启动 + 等世界落盘 + 一次合并 + 一轮代际巡检（等两拍确认死区不复播）
   "test:e2e:zone-merge": 2,
+  // 一次完整启动 + 两个区 / 三枚令牌的准备 + 六段可见性断言（无等待窗，纯 HTTP）
+  "test:e2e:zone-announcement": 1,
 };
 
 function weightOf(script) {

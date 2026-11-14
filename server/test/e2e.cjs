@@ -522,10 +522,14 @@ async function runSuite(baseUrl) {
   const admin2Id = adminRegister2.body.data.admin.id;
   checkEqual(adminRegister2.body.data.admin.role, "admin", "第二个注册的管理员是普通管理员");
   checkEqual(adminRegister2.body.data.admin.roleLabel, "管理员", "普通管理员角色中文名");
+  // #963 起普通管理员还少一条「公告投放全服」（影响面权限）：只比超管少这两条
   checkEqual(
-    superPerms.filter((item) => !adminRegister2.body.data.admin.permissions.includes(item)).join(","),
-    "admin:manage",
-    "普通管理员只比超管少「管理管理员」",
+    superPerms
+      .filter((item) => !adminRegister2.body.data.admin.permissions.includes(item))
+      .sort()
+      .join(","),
+    "admin:manage,announcement:publish-all",
+    "普通管理员只比超管少「管理管理员」与「公告投放全服」",
   );
 
   const listAdmins = await call("GET", "/api/admin/admins?page=1&size=10", { token: adminToken, zoneId: ADMIN_ZONE });
@@ -619,9 +623,12 @@ async function runSuite(baseUrl) {
   check(Array.isArray(activeEmpty.body.data), "无公告时返回空数组（不是 null）");
   checkEqual(activeEmpty.body.data.length, 0, "初始没有生效中的公告");
 
+  // 这一段后面读的是**公共**接口（没有令牌、也就没有区），它只返回全服公告（#963），
+  // 所以这里都发 `scope: "all"`。区维度的行为（默认投本区 / 别区看不到 / 非超管发全服被拒）
+  // 在 `e2e-zone-announcement.cjs` 里单独验 —— 那个套件才是这组规则的家。
   const publishImportant = await call("POST", "/api/admin/announcements", {
     token: adminToken, zoneId: ADMIN_ZONE,
-    body: { title: "开服公告", content: "欢迎来到 olua", level: "important" },
+    body: { title: "开服公告", content: "欢迎来到 olua", level: "important", scope: "all" },
   });
   checkEqual(publishImportant.status, 201, "发布重要公告（201）");
   checkEqual(publishImportant.body.data.active, true, "立即生效 → active = true");
@@ -630,27 +637,27 @@ async function runSuite(baseUrl) {
 
   const publishNormal = await call("POST", "/api/admin/announcements", {
     token: adminToken, zoneId: ADMIN_ZONE,
-    body: { title: "普通公告", content: "普通公告的正文", level: "normal" },
+    body: { title: "普通公告", content: "普通公告的正文", level: "normal", scope: "all" },
   });
   const normalId = publishNormal.body.data.id;
   checkEqual(publishNormal.body.data.level, "normal", "level 按入参落库");
 
   const publishFuture = await call("POST", "/api/admin/announcements", {
     token: adminToken, zoneId: ADMIN_ZONE,
-    body: { title: "未开始的公告", content: "x", startsAt: now + 3_600_000 },
+    body: { title: "未开始的公告", content: "x", startsAt: now + 3_600_000, scope: "all" },
   });
   const futureId = publishFuture.body.data.id;
   checkEqual(publishFuture.body.data.active, false, "还没到开始时间 → active = false");
 
   const publishExpired = await call("POST", "/api/admin/announcements", {
     token: adminToken, zoneId: ADMIN_ZONE,
-    body: { title: "已过期的公告", content: "x", startsAt: now - 7_200_000, endsAt: now - 3_600_000 },
+    body: { title: "已过期的公告", content: "x", startsAt: now - 7_200_000, endsAt: now - 3_600_000, scope: "all" },
   });
   checkEqual(publishExpired.body.data.active, false, "已经过了结束时间 → active = false");
 
   const publishDisabled = await call("POST", "/api/admin/announcements", {
     token: adminToken, zoneId: ADMIN_ZONE,
-    body: { title: "被停用的公告", content: "x", enabled: false },
+    body: { title: "被停用的公告", content: "x", enabled: false, scope: "all" },
   });
   const disabledId = publishDisabled.body.data.id;
   checkEqual(publishDisabled.body.data.active, false, "手动停用 → active = false");

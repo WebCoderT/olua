@@ -15,9 +15,12 @@ import { clearChildren } from "../../utils/node/NodeTree";
 /**
  * 游戏内公告板（左列表 + 右详情）
  *
- * 数据来源是公共接口 `GET /announcements/active`（**无需令牌**，所以登录页那个提醒弹窗用的是同一个接口）
- * —— 服务端只给「当前生效中」的一批，客户端不自己判断生效与否（那套判据在服务端 SQL 里，见服务端
- * announcement.repository 的 ACTIVE_SQL）。
+ * 数据来源是带令牌的 `GET /announcements/mine`（#963）：服务端按**在线角色所在区**返回
+ * 「全服 + 本区」两批，客户端不自己判断生效与否、也不自己挑区（那套判据与区推导都在服务端，
+ * 见 announcement.repository 的 ACTIVE_SQL 与 RolesService.onlineZoneOf）。
+ *
+ * 登录页那个提醒弹窗用的是**另一条**接口 `GET /announcements/active`：那时还没有令牌，
+ * 服务端只能给全服公告 —— 本板的「本区」公告在登录页是看不到的，这是有意的。
  *
  * 未读标记的口径：拉回来的那批公告各自与**本地已读记录**（AnnouncementReadStore）比对，
  * 只影响展示（亮色标题 + 圆点）。打开公告板即把这一批全部记为已读，但**标记发生在渲染之后**，
@@ -105,7 +108,7 @@ export default class AnnouncementBoardDialog {
   /** 拉取生效中公告并渲染（失败在右栏给说明，红点保持原状） */
   private async load() {
     try {
-      const list = await AnnouncementApi.active({ silent: true });
+      const list = await AnnouncementApi.mine({ silent: true });
       // 拉取期间可能已经关掉弹窗或切了场景：此时不再碰节点
       if (!this.isOpen() || !this.listContent) return;
       this.render(buildAnnouncementViews(list, AnnouncementReadStore.getReadIds()));

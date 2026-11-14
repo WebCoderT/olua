@@ -59,11 +59,6 @@
       "file": "modules/game-mail/admin-game-mail.controller.ts",
       "issue": "#960",
       "reason": "同上：游戏内邮件按账号 / 角色投递，跨区"
-    },
-    {
-      "file": "modules/announcement/admin-announcement.controller.ts",
-      "issue": "#963",
-      "reason": "公告按区投放在 P7（#963）做：届时表单加「投放范围：当前区 / 全服」，这里改成挂守卫 + 按区过滤，并删掉本条"
     }
   ],
   "dirs": [
@@ -74,6 +69,16 @@
     }
   ],
   "routes": [
+    {
+      "route": "GET /admin/announcements",
+      "issue": "#963",
+      "reason": "公告列表**刻意跨区**：一条发到 2 区的公告必须还能出现在 1 区的列表里，否则「发错地方」在界面上直接消失。区只决定新建默认投哪（create 用 @ZoneContext）"
+    },
+    {
+      "route": "DELETE /admin/announcements/:id",
+      "issue": "#963",
+      "reason": "删除按 id 删的是那一条公告本身，与当前停在哪个区无关；跨区误删由审计兜（AuditTarget=announcement）"
+    },
     {
       "route": "PATCH /admin/accounts/:id/email",
       "issue": "#960",

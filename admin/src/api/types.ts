@@ -131,6 +131,13 @@ export const PERMISSION = {
   /** 发布 / 编辑 / 删除公告（会直接推送给全服玩家，属于对外发声） */
   ANNOUNCEMENT_WRITE: "announcement:write",
   /**
+   * 公告投放「全服」（#963）
+   *
+   * 只有超管有：带 `ANNOUNCEMENT_WRITE` 的人能在**当前区**发声，一条公告打到所有区
+   * 是影响面上的越级。界面上据此把「全服」选项置灰，权威判定仍在服务端（403 / 30006）。
+   */
+  ANNOUNCEMENT_PUBLISH_ALL: "announcement:publish-all",
+  /**
    * 查看邮件投递记录
    *
    * 与 `ANNOUNCEMENT_READ` **不同，只读观察员不给**：投递记录里有玩家的**邮箱地址**
@@ -238,6 +245,7 @@ export const PERMISSION_LABELS: Record<string, string> = {
   [PERMISSION.ROLE_DELETE]: "删除角色",
   [PERMISSION.ANNOUNCEMENT_READ]: "查看公告",
   [PERMISSION.ANNOUNCEMENT_WRITE]: "发布 / 编辑公告",
+  [PERMISSION.ANNOUNCEMENT_PUBLISH_ALL]: "公告投放全服",
   [PERMISSION.MAIL_READ]: "查看邮件投递记录",
   [PERMISSION.MAIL_WRITE]: "发送邮件",
   [PERMISSION.GAME_MAIL_SEND]: "补发游戏消息",
@@ -312,6 +320,22 @@ export const ANNOUNCEMENT_LEVEL = {
 export const ANNOUNCEMENT_LEVEL_LABELS: Record<string, string> = {
   [ANNOUNCEMENT_LEVEL.NORMAL]: "普通",
   [ANNOUNCEMENT_LEVEL.IMPORTANT]: "重要",
+};
+
+/**
+ * 公告投放范围（服务端 `common/constants/announcement.ts` 的镜像，#963）
+ *
+ * `zone` = 只投当前区（默认），`all` = 全服（需要 `announcement:publish-all`）。
+ * 服务端存的是 `announcements.zone_id`（NULL = 全服），界面按这个枚举翻译。
+ */
+export const ANNOUNCEMENT_SCOPE = {
+  ZONE: "zone",
+  ALL: "all",
+} as const;
+
+export const ANNOUNCEMENT_SCOPE_LABELS: Record<string, string> = {
+  [ANNOUNCEMENT_SCOPE.ZONE]: "当前区",
+  [ANNOUNCEMENT_SCOPE.ALL]: "全服",
 };
 
 /** 管理员角色 */

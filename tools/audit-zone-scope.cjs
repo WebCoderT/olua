@@ -84,7 +84,20 @@ const TABLES_WITH_ZONE = ["roles", "guilds", "world_monsters", "map_monitor_stat
  */
 
 /** 将来加列的表：schema 里出现 zone_id 时用来提示「该把谁补进 TABLES_WITH_ZONE」 */
-const TABLES_BECOMING_ZONE_SCOPED = ["role_mails", "announcements"];
+const TABLES_BECOMING_ZONE_SCOPED = ["role_mails"];
+
+/**
+ * 区**可空**的表：`zone_id` 为 NULL = 全服（#963 的公告就是这一档）
+ *
+ * 这类表刻意不进 `TABLES_WITH_ZONE`：跨区可见是设计要求 —— 一条全服公告每个区都读得到，
+ * 管理端列表也必须看得见别区的公告（否则「发到 2 区去了」在 1 区的界面上直接消失），
+ * 给这些查询挂豁免会变成一堆永远删不掉的条目。
+ *
+ * 真正要守的是**写入口必须表态**：INSERT / UPDATE 得自己写 `zone_id` 列。漏写的后果不是
+ * 「查不到」而是**静默变成全服**（NULL）—— 一条本想只投本区的通知会影响所有区。
+ * 所以这里只查写、不查读（读的可见性由 e2e 盯着：别区看不到、登录页只有全服）。
+ */
+const TABLES_WITH_NULLABLE_ZONE = ["announcements"];
 
 /**
  * zone-scoped 仓储：行属于某个区，按 id/名字取到别区对象就是跨区攻击。
@@ -414,6 +427,33 @@ for (const file of walk(REPOS)) {
       method.name,
       `读写 ${offending.join(" / ")} 却没有 zone_id 过滤 —— 这条查询会把别的区的行也算进来`,
     );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 四·补、区可空的表：写入口必须自己写 zone_id（漏写 = 静默变全服）
+// ---------------------------------------------------------------------------
+for (const file of walk(REPOS)) {
+  const source = read(file);
+  if (!source) continue;
+  for (const method of methodsOf(source)) {
+    for (const table of TABLES_WITH_NULLABLE_ZONE) {
+      // 只看**这条 SQL 自己**写的列：方法体里出现 `zone_id` 不算（后面的注释 / 别的语句也会提到它，
+      // 一开始就写成「body 里有 zone_id 就放行」，结果漏写的 insert 因为下一段的注释而被放过）
+      const insertCols = new RegExp(`INSERT\\s+INTO\\s+${table}\\s*\\(([^)]*)\\)`, "i").exec(method.body);
+      const updateSet = new RegExp(`UPDATE\\s+${table}\\s+SET\\s+([\\s\\S]*?)\\bWHERE\\b`, "i").exec(method.body);
+      const writes = Boolean(insertCols || updateSet);
+      if (!writes) continue;
+      const written = `${insertCols ? insertCols[1] : ""} ${updateSet ? updateSet[1] : ""}`;
+      if (/\bzone_id\b/.test(written)) continue;
+      report(
+        "repo-sql",
+        file,
+        method.line,
+        method.name,
+        `写 ${table} 却没有写 zone_id 列 —— 这条会静默把行落成「全服」（NULL），影响面从本区变成所有区`,
+      );
+    }
   }
 }
 

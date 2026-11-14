@@ -127,7 +127,8 @@ export default class SmallMap extends Node {
    */
   private async refreshAnnouncementUnread() {
     try {
-      const list = await AnnouncementApi.active({ silent: true });
+      // 与公告板同一条（#963）：带上令牌才拿得到「本区」那批，否则红点会漏掉本区公告
+      const list = await AnnouncementApi.mine({ silent: true });
       if (!isValid(this)) return;
       this.setAnnouncementUnread(countUnread(buildAnnouncementViews(list, AnnouncementReadStore.getReadIds())));
     } catch {

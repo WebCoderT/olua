@@ -197,13 +197,14 @@ if (sandbox) {
     check(/onOpenAnnouncement: \(\) => this\.openAnnouncementDialog\(\)/.test(smallMapSource), "公告入口挂在邮件面板上（消息中心 > 公告）");
     check(/this\.announcementDialog\.open\(\)/.test(smallMapSource), "公告入口真的打开公告板");
     check(/this\.entryDot = this\.createEntryDot\(button\)/.test(smallMapSource), "消息入口上挂了未读红点节点");
-    check(/AnnouncementApi\.active\(\{ silent: true \}\)/.test(smallMapSource), "进游戏探未读走静默请求（拉不到不弹提示）");
+    // #963：进游戏后走**带令牌**的 mine —— 本区公告也要进红点；登录页那条 active 只给全服
+    check(/AnnouncementApi\.mine\(\{ silent: true \}\)/.test(smallMapSource), "进游戏探未读走带令牌的 mine（含本区公告）且静默（拉不到不弹提示）");
     check(/countUnread\(buildAnnouncementViews\(list, AnnouncementReadStore\.getReadIds\(\)\)\)/.test(smallMapSource), "未读红点用与公告板同一套口径（已读记录 + 渲染数据）");
     check(/this\.entryDot\.active = this\.mailUnread \+ this\.announcementUnread > 0/.test(smallMapSource), "红点按「邮件待处理 + 未读公告」合计显隐");
 
     // 公告板：拉取 → 渲染 → 整批标已读 → 回调未读数
     check(/import \{ AnnouncementApi \} from "\.\.\/\.\.\/utils\/net\/Api";/.test(boardSource), "公告板走统一请求层（生成物里的 AnnouncementApi）");
-    check(/AnnouncementApi\.active\(\{ silent: true \}\)/.test(boardSource), "公告拉取失败走静默（不弹全局提示）");
+    check(/AnnouncementApi\.mine\(\{ silent: true \}\)/.test(boardSource), "公告板走 mine（全服 + 本区），拉取失败静默（不弹全局提示）");
     check(/buildAnnouncementViews\(list, AnnouncementReadStore\.getReadIds\(\)\)/.test(boardSource), "渲染数据由 configs/announcement 组装");
     check(/this\.markAllRead\(views\)/.test(boardSource), "打开公告板即把这一批标为已读");
     check(
@@ -218,7 +219,10 @@ if (sandbox) {
 
     // 提醒弹窗：没有重要公告就不建节点
     check(/if \(views\.length === 0\) return;/.test(noticeSource), "没有重要公告时静默返回（不建节点、不遮屏）");
-    check(/AnnouncementApi\.active\(\{ silent: true \}\)/.test(noticeSource), "登录页拉公告失败也静默");
+    check(
+      /AnnouncementApi\.active\(\{ silent: true \}\)/.test(noticeSource),
+      "登录页仍用公共 active（没有令牌、只给全服公告），拉取失败静默（#963）",
+    );
     check(/buildAnnouncementViews\(list, \[\]\)/.test(noticeSource), "提醒弹窗不参与已读判定（传空记录）");
     check(/blockClickThrough\(dialog\)/.test(noticeSource) && /propagationStopped = true/.test(noticeSource), "提醒弹窗独占触摸：不穿透到下面的账号密码框");
 
