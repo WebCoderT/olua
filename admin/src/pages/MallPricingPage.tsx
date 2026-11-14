@@ -490,7 +490,7 @@ export function MallPricingPage() {
           <div className="ml-auto flex gap-2">
             <Button variant="outline" onClick={() => setCategoryDialogOpen(true)}>
               管理分类
-              <Badge tone="slate">{categories.length}</Badge>
+              <Badge tone="muted">{categories.length}</Badge>
             </Button>
             <Button disabled={!canWrite || categories.length === 0} title={categories.length === 0 ? "先建一个分类" : undefined} onClick={openCreate}>
               上架商品
@@ -522,48 +522,48 @@ export function MallPricingPage() {
                 </thead>
                 <tbody>
                   {goods?.list.map((item) => (
-                    <tr key={item.id} className="transition hover:bg-slate-800/30">
+                    <tr key={item.id} className="transition hover:bg-surface-4/30">
                       <td className={tdClass}>
                         <GameIcon path={item.icon} alt={item.label} />
                       </td>
-                      <td className={`${tdClass} font-mono text-xs text-slate-300`}>{item.id}</td>
-                      <td className={`${tdClass} max-w-[220px] truncate font-medium text-slate-100`} title={item.label}>
+                      <td className={`${tdClass} font-mono text-xs text-ink-3`}>{item.id}</td>
+                      <td className={`${tdClass} max-w-[220px] truncate font-medium text-ink-1`} title={item.label}>
                         {item.label}
                       </td>
                       <td className={tdClass}>
-                        <Badge tone="indigo">{categoryLabelOf(item.categoryId)}</Badge>
+                        <Badge tone="gold">{categoryLabelOf(item.categoryId)}</Badge>
                       </td>
                       <td className={tdClass}>
                         {item.kind === DRUG_CATEGORY ? (
-                          <Badge tone="amber">药品</Badge>
+                          <Badge tone="warn">药品</Badge>
                         ) : (
-                          <Badge tone="slate">{item.slot ? slotLabel(item.slot) : "—"}</Badge>
+                          <Badge tone="muted">{item.slot ? slotLabel(item.slot) : "—"}</Badge>
                         )}
                       </td>
                       <td className={tdClass}>
                         {item.kind === DRUG_CATEGORY ? (
-                          <span className="text-xs text-slate-500">—</span>
+                          <span className="text-xs text-ink-5">—</span>
                         ) : (
                           <div className="flex flex-wrap gap-1">
-                            <Badge tone="indigo">{prefixLabelOf(item.prefix)}</Badge>
-                            <Badge tone="slate">{suffixLabelOf(item.suffix)}</Badge>
+                            <Badge tone="gold">{prefixLabelOf(item.prefix)}</Badge>
+                            <Badge tone="muted">{suffixLabelOf(item.suffix)}</Badge>
                           </div>
                         )}
                       </td>
-                      <td className={`${tdClass} text-slate-400`}>{item.level}</td>
-                      <td className={`${tdClass} font-medium text-emerald-300`}>{item.price}</td>
+                      <td className={`${tdClass} text-ink-4`}>{item.level}</td>
+                      <td className={`${tdClass} font-medium text-jade-hi`}>{item.price}</td>
                       <td className={tdClass}>{item.requiredLevel > 0 ? `Lv.${item.requiredLevel}` : "—"}</td>
                       <td className={tdClass}>
                         <div className="flex flex-col gap-1 text-xs">
-                          <span className={item.dailyLimit > 0 ? "text-amber-300" : "text-slate-500"}>
+                          <span className={item.dailyLimit > 0 ? "text-warn-hi" : "text-ink-5"}>
                             {item.dailyLimit > 0 ? `限购 ${item.dailyLimit}/日` : "不限购"}
                           </span>
-                          <span className={item.stock >= 0 ? (item.sold >= item.stock ? "text-rose-300" : "text-emerald-300") : "text-slate-500"}>
+                          <span className={item.stock >= 0 ? (item.sold >= item.stock ? "text-ember-hi" : "text-jade-hi") : "text-ink-5"}>
                             {item.stock >= 0 ? `${item.sold}/${item.stock} 已售` : "不限量"}
                           </span>
                         </div>
                       </td>
-                      <td className={`${tdClass} text-xs text-slate-400`}>{formatTime(item.updatedAt)}</td>
+                      <td className={`${tdClass} text-xs text-ink-4`}>{formatTime(item.updatedAt)}</td>
                       <td className={`${tdClass} text-right`}>
                         <div className="flex justify-end gap-2">
                           <Button variant="outline" className="px-2.5 py-1 text-xs" disabled={!canWrite} onClick={() => openEdit(item)}>
@@ -655,7 +655,7 @@ export function MallPricingPage() {
                   const dirty = categoryDirtyOf(category);
                   const draftValid = draft.label.trim().length > 0 && draft.label.trim().length <= 20;
                   return (
-                    <tr key={category.id} className="transition hover:bg-slate-800/30">
+                    <tr key={category.id} className="transition hover:bg-surface-4/30">
                       <td className={tdClass}>
                         <Input
                           className="w-44"
@@ -679,9 +679,9 @@ export function MallPricingPage() {
                         />
                       </td>
                       <td className={tdClass}>
-                        {category.goodCount > 0 ? <Badge tone="indigo">{category.goodCount}</Badge> : <span className="text-xs text-slate-500">0</span>}
+                        {category.goodCount > 0 ? <Badge tone="gold">{category.goodCount}</Badge> : <span className="text-xs text-ink-5">0</span>}
                       </td>
-                      <td className={`${tdClass} text-xs text-slate-400`}>{formatTime(category.updatedAt)}</td>
+                      <td className={`${tdClass} text-xs text-ink-4`}>{formatTime(category.updatedAt)}</td>
                       <td className={`${tdClass} text-right`}>
                         <div className="flex justify-end gap-2">
                           <Button
@@ -778,11 +778,11 @@ export function MallPricingPage() {
               label="候选物品（点选一件）"
               hint="同一件装备有 15 个变体（名称相同），认准「部位 + 前后缀」；带「已上架」的不能再挂第二行。"
             >
-              <div className="max-h-56 overflow-y-auto rounded-lg border border-slate-800">
+              <div className="max-h-56 overflow-y-auto rounded-lg border border-line">
                 {catalogLoading ? (
-                  <p className="px-3 py-3 text-xs text-slate-500">查询中…</p>
+                  <p className="px-3 py-3 text-xs text-ink-5">查询中…</p>
                 ) : !catalog || catalog.list.length === 0 ? (
-                  <p className="px-3 py-3 text-xs text-slate-500">这个分类与等级下没有物品，换个条件试试</p>
+                  <p className="px-3 py-3 text-xs text-ink-5">这个分类与等级下没有物品，换个条件试试</p>
                 ) : (
                   catalog.list.map((item) => (
                     <button
@@ -790,24 +790,24 @@ export function MallPricingPage() {
                       type="button"
                       disabled={item.listed}
                       title={item.listed ? `${item.id} 已在商城上架（想换分类直接编辑那件商品）` : item.id}
-                      className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs transition ${item.listed ? "cursor-not-allowed opacity-40" : "hover:bg-slate-800/60"} ${pickedVariant?.id === item.id ? "bg-slate-800/80" : ""}`}
+                      className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs transition ${item.listed ? "cursor-not-allowed opacity-40" : "hover:bg-surface-4/60"} ${pickedVariant?.id === item.id ? "bg-surface-4/80" : ""}`}
                       onClick={() => setPickedVariant(item)}
                     >
                       <GameIcon path={item.icon} alt={item.label} size={24} zoomable={false} />
-                      <span className="shrink-0 font-mono text-slate-400">{item.id}</span>
-                      <span className="truncate text-slate-100" title={item.label}>{item.label}</span>
+                      <span className="shrink-0 font-mono text-ink-4">{item.id}</span>
+                      <span className="truncate text-ink-1" title={item.label}>{item.label}</span>
                       <span className="ml-auto flex shrink-0 items-center gap-1">
                         {item.kind === DRUG_CATEGORY ? (
-                          <Badge tone="amber">药品</Badge>
+                          <Badge tone="warn">药品</Badge>
                         ) : (
                           <>
-                            <Badge tone="slate">{item.slot ? slotLabel(item.slot) : "部位未知"}</Badge>
-                            <Badge tone="indigo">{prefixLabelOf(item.prefix)}</Badge>
-                            <Badge tone="slate">{suffixLabelOf(item.suffix)}</Badge>
+                            <Badge tone="muted">{item.slot ? slotLabel(item.slot) : "部位未知"}</Badge>
+                            <Badge tone="gold">{prefixLabelOf(item.prefix)}</Badge>
+                            <Badge tone="muted">{suffixLabelOf(item.suffix)}</Badge>
                           </>
                         )}
-                        <span className="text-slate-500">Lv.{item.level}</span>
-                        {item.listed ? <Badge tone="amber">已上架</Badge> : null}
+                        <span className="text-ink-5">Lv.{item.level}</span>
+                        {item.listed ? <Badge tone="warn">已上架</Badge> : null}
                       </span>
                     </button>
                   ))
@@ -820,7 +820,7 @@ export function MallPricingPage() {
               total={catalog?.total ?? 0}
               onChange={setCatalogPage}
             />
-            <div className="flex flex-wrap gap-3 rounded-lg border border-slate-800 bg-slate-900/40 px-3 py-3">
+            <div className="flex flex-wrap gap-3 rounded-lg border border-line bg-surface-2/40 px-3 py-3">
               <Field width="w-44" label="挂到商城分类">
                 <Select value={createCategoryId} onChange={(event) => setCreateCategoryId(event.target.value)}>
                   {categories.map((category) => (
@@ -844,7 +844,7 @@ export function MallPricingPage() {
               </Field>
             </div>
             {!createValid ? (
-              <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-200">
+              <p className="rounded-lg border border-ember/40 bg-ember/10 px-3 py-2 text-xs text-ember-hi">
                 先选一件物品与商城分类；售价 / 购买等级 / 每日限购 / 库存需为合法整数（限购 0 与库存 -1 表示不限）。
               </p>
             ) : null}
@@ -888,7 +888,7 @@ export function MallPricingPage() {
             </Field>
           </div>
           {!editValid ? (
-            <p className="mt-3 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-200">
+            <p className="mt-3 rounded-lg border border-ember/40 bg-ember/10 px-3 py-2 text-xs text-ember-hi">
               售价 / 购买等级 / 每日限购 / 库存需为合法整数（限购 0 与库存 -1 表示不限），且必须选一个商城分类。
             </p>
           ) : null}

@@ -809,7 +809,7 @@ export function EquipAlignPage() {
         </Field>
         <Field width="w-40" label="比对基准（裸模）">
           <select
-            className="rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100"
+            className="rounded-lg border border-line-strong bg-surface-2/70 px-3 py-2 text-sm text-ink-1"
             value={prefs.baseRoleId}
             onChange={(event) => setPrefs((prev) => ({ ...prev, baseRoleId: event.target.value }))}
           >
@@ -835,9 +835,9 @@ export function EquipAlignPage() {
           </div>
         </Field>
         <div className="ml-auto flex flex-wrap items-center gap-2">
-          <span className="text-xs text-slate-500">
+          <span className="text-xs text-ink-5">
             已保存 {Object.keys(saved).length} 件 · 调过 {dirtyCount} / {ALL_ITEMS.length}
-            {unsavedIds.length ? <span className="ml-1 text-amber-400">· {unsavedIds.length} 件未保存</span> : null}
+            {unsavedIds.length ? <span className="ml-1 text-warn">· {unsavedIds.length} 件未保存</span> : null}
           </span>
           <Button variant="primary" onClick={saveAll} loading={Boolean(pending)} disabled={!unsavedIds.length || loadingSaved}>
             {`保存全部${unsavedIds.length ? `（${unsavedIds.length}）` : ""}`}
@@ -848,7 +848,7 @@ export function EquipAlignPage() {
           <Button variant="ghost" onClick={exportJson}>
             导出 JSON
           </Button>
-          <label className="cursor-pointer rounded-lg border border-slate-700 px-3.5 py-2 text-sm text-slate-200 hover:border-slate-500">
+          <label className="cursor-pointer rounded-lg border border-line-strong px-3.5 py-2 text-sm text-ink-2 hover:border-line-strong">
             导入
             <input
               type="file"
@@ -866,7 +866,7 @@ export function EquipAlignPage() {
       </Card>
 
       {savedError ? (
-        <div className="flex items-start gap-3 rounded-xl border border-rose-900/60 bg-rose-950/30 px-4 py-3 text-xs text-rose-300">
+        <div className="flex items-start gap-3 rounded-xl border border-ember/40 bg-ember/10 px-4 py-3 text-xs text-ember-hi">
           <span className="flex-1">{savedError}</span>
           <button className="shrink-0 underline" onClick={clearError}>
             知道了
@@ -875,13 +875,13 @@ export function EquipAlignPage() {
       ) : null}
 
       {loadingSaved ? (
-        <div className="flex items-center gap-2 rounded-xl border border-slate-800 bg-slate-900/40 px-4 py-2 text-xs text-slate-400">
+        <div className="flex items-center gap-2 rounded-xl border border-line bg-surface-2/40 px-4 py-2 text-xs text-ink-4">
           <Spinner className="h-3 w-3" /> 正在读取服务端已保存的对齐…
         </div>
       ) : null}
 
       {failures.length ? (
-        <div className="rounded-xl border border-rose-900/60 bg-rose-950/30 px-4 py-3 text-xs text-rose-300">
+        <div className="rounded-xl border border-ember/40 bg-ember/10 px-4 py-3 text-xs text-ember-hi">
           {failures.slice(0, 3).map((message) => (
             <div key={message}>{message}</div>
           ))}
@@ -889,7 +889,7 @@ export function EquipAlignPage() {
       ) : null}
 
       {roleFeetWorst && Math.abs(roleFeetWorst.delta) > 2 ? (
-        <div className="flex items-start gap-3 rounded-xl border border-amber-900/60 bg-amber-950/30 px-4 py-3 text-xs text-amber-300">
+        <div className="flex items-start gap-3 rounded-xl border border-warn/20 bg-warn/10 px-4 py-3 text-xs text-warn-hi">
           <span className="flex-1">
             基准裸模「{roleItem.label}」在 {DIRECTION_LABELS[DIRECTIONS[roleFeetWorst.index]]} 方向脚底离地面{" "}
             {roleFeetWorst.delta > 0 ? "+" : ""}
@@ -926,7 +926,7 @@ export function EquipAlignPage() {
                     if (first) setActiveId(first.id);
                   }}
                   className={`flex-1 rounded-lg px-2 py-1.5 text-xs font-medium transition ${
-                    kind === value ? "bg-indigo-600 text-white" : "bg-slate-800/60 text-slate-300 hover:bg-slate-800"
+                    kind === value ? "bg-gold text-surface-0" : "bg-surface-4/60 text-ink-3 hover:bg-surface-4"
                   }`}
                 >
                   {KIND_LABELS[value]}
@@ -946,16 +946,16 @@ export function EquipAlignPage() {
                     key={item.id}
                     onClick={() => setActiveId(item.id)}
                     className={`flex w-full items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-left text-xs transition ${
-                      active ? "bg-indigo-600/20 text-indigo-200" : "text-slate-300 hover:bg-slate-800/60"
+                      active ? "bg-gold/20 text-gold-hi" : "text-ink-3 hover:bg-surface-4/60"
                     }`}
                   >
                     <span className="min-w-0 flex-1 truncate">
                       {item.label}
-                      <span className="ml-1 text-slate-500">{item.key}</span>
+                      <span className="ml-1 text-ink-5">{item.key}</span>
                     </span>
-                    {missing.has(item.atlas) ? <span className="text-amber-400">缺素材</span> : null}
-                    {dirtyLocal ? <span className="text-amber-400" title="有未保存的改动">●</span> : null}
-                    {isDirty(geo, item.base) ? <span className="text-emerald-400">{adjusted}/8</span> : null}
+                    {missing.has(item.atlas) ? <span className="text-warn">缺素材</span> : null}
+                    {dirtyLocal ? <span className="text-warn" title="有未保存的改动">●</span> : null}
+                    {isDirty(geo, item.base) ? <span className="text-jade">{adjusted}/8</span> : null}
                   </button>
                 );
               })}
@@ -966,13 +966,13 @@ export function EquipAlignPage() {
         {/* 中间：8 宫格 */}
         <div className="min-w-0 flex-1">
           <Card>
-            <div className="mb-2 flex flex-wrap items-center gap-2 text-xs text-slate-400">
-              <span className="font-medium text-slate-200">
+            <div className="mb-2 flex flex-wrap items-center gap-2 text-xs text-ink-4">
+              <span className="font-medium text-ink-2">
                 {KIND_LABELS[activeItem.kind]} · {activeItem.label}
               </span>
-              <span className="text-slate-500">{activeItem.atlas}</span>
+              <span className="text-ink-5">{activeItem.atlas}</span>
               {!roleAtlas || !itemAtlas ? (
-                <span className="flex items-center gap-1 text-amber-400">
+                <span className="flex items-center gap-1 text-warn">
                   <Spinner className="h-3 w-3" /> 素材加载中
                 </span>
               ) : null}
@@ -981,7 +981,7 @@ export function EquipAlignPage() {
             <div ref={wrapRef} className="w-full">
               <canvas
                 ref={canvasRef}
-                className="block w-full cursor-grab touch-none rounded-xl bg-[#12141a] active:cursor-grabbing"
+                className="block w-full cursor-grab touch-none rounded-xl bg-surface-0 active:cursor-grabbing"
                 onPointerDown={onPointerDown}
                 onPointerMove={onPointerMove}
                 onPointerUp={endDrag}
@@ -990,7 +990,7 @@ export function EquipAlignPage() {
                 onWheel={onWheel}
               />
             </div>
-            <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-slate-500">
+            <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-ink-5">
               {(["canvas", "content", "solid", "feet", "frame", "hands", "origin", "itemTop"] as (keyof Guides)[]).map((key) => (
                 <label key={key} className="flex items-center gap-1.5">
                   <input
@@ -1017,7 +1017,7 @@ export function EquipAlignPage() {
         {/* 右栏：数值 */}
         <aside className="w-full shrink-0 xl:w-64">
           <Card>
-            <div className="mb-3 text-sm font-semibold text-slate-100">当前方向：{DIRECTION_LABELS[DIRECTIONS[direction]]}（{DIRECTIONS[direction]}）</div>
+            <div className="mb-3 text-sm font-semibold text-ink-1">当前方向：{DIRECTION_LABELS[DIRECTIONS[direction]]}（{DIRECTIONS[direction]}）</div>
             <div className="grid grid-cols-2 gap-2">
               <Field label="X">
                 <Input
@@ -1051,7 +1051,7 @@ export function EquipAlignPage() {
             </div>
 
             {activeItem.kind === "weapon" ? (
-              <label className="mt-3 flex items-start gap-2 rounded-lg bg-slate-800/40 p-2 text-xs text-slate-300">
+              <label className="mt-3 flex items-start gap-2 rounded-lg bg-surface-4/40 p-2 text-xs text-ink-3">
                 <input
                   type="checkbox"
                   className="mt-0.5"
@@ -1060,7 +1060,7 @@ export function EquipAlignPage() {
                 />
                 <span>
                   使用手调的绝对位置（#541 起客户端已停用帧算法，恒按绝对位置摆）
-                  <span className="block text-slate-500">此开关当前不影响游戏内表现，仅保留数据语义：客户端外观一律把坐标当绝对位置；保存时保持勾选即可。</span>
+                  <span className="block text-ink-5">此开关当前不影响游戏内表现，仅保留数据语义：客户端外观一律把坐标当绝对位置；保存时保持勾选即可。</span>
                 </span>
               </label>
             ) : null}
@@ -1085,11 +1085,11 @@ export function EquipAlignPage() {
               </Button>
             </div>
 
-            <div className="mt-2 text-[11px] leading-relaxed text-slate-500">
+            <div className="mt-2 text-[11px] leading-relaxed text-ink-5">
               {unsaved ? "有未保存的改动 —— 按「保存本件」才写进服务端。" : "已与服务端一致；改动会实时存浏览器，刷新不丢。"}
             </div>
 
-            <div className="mt-4 space-y-1 border-t border-slate-800 pt-3 text-[11px] leading-relaxed text-slate-500">
+            <div className="mt-4 space-y-1 border-t border-line pt-3 text-[11px] leading-relaxed text-ink-5">
               <div>8 方向全部列出（点格子或按 1-8 切换方向）：</div>
               <div className="grid grid-cols-2 gap-x-2">
                 {DIRECTIONS.map((name, index) => {
@@ -1099,7 +1099,7 @@ export function EquipAlignPage() {
                       key={name}
                       onClick={() => setDirection(index)}
                       className={`flex justify-between rounded px-1 py-0.5 text-left ${
-                        index === direction ? "bg-indigo-600/20 text-indigo-200" : "hover:bg-slate-800/60"
+                        index === direction ? "bg-gold/20 text-gold-hi" : "hover:bg-surface-4/60"
                       }`}
                     >
                       <span>{DIRECTION_LABELS[name]}</span>
@@ -1112,7 +1112,7 @@ export function EquipAlignPage() {
               </div>
             </div>
 
-            {notice ? <div className="mt-3 rounded-lg bg-emerald-500/10 px-2 py-1.5 text-[11px] text-emerald-300">{notice}</div> : null}
+            {notice ? <div className="mt-3 rounded-lg bg-jade/10 px-2 py-1.5 text-[11px] text-jade-hi">{notice}</div> : null}
           </Card>
         </aside>
       </div>

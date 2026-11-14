@@ -19,7 +19,7 @@ export function DescriptionField({
   return (
     <Field label="描述文案" hint={hint}>
       <textarea
-        className="min-h-[80px] w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none transition focus:border-emerald-500"
+        className="min-h-[80px] w-full rounded-lg border border-line-strong bg-surface-0 px-3 py-2 text-sm text-ink-1 outline-none transition focus:border-jade"
         maxLength={500}
         value={value}
         onChange={(event) => onChange(event.target.value)}
@@ -29,14 +29,14 @@ export function DescriptionField({
 }
 
 /** 校验问题清单（即时提示；权威在服务端）。红色 = 编辑弹窗内嵌，琥珀 = 创建弹窗底部 */
-export function ProblemList({ problems, tone = "red" }: { problems: string[]; tone?: "red" | "amber" }) {
+export function ProblemList({ problems, tone = "ember" }: { problems: string[]; tone?: "ember" | "warn" }) {
   if (problems.length === 0) return null;
   return (
     <ul
       className={
-        tone === "red"
-          ? "flex flex-col gap-1 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-200"
-          : "mt-4 space-y-1 rounded-lg border border-amber-900/50 bg-amber-950/20 p-3 text-xs text-amber-300"
+        tone === "ember"
+          ? "flex flex-col gap-1 rounded-lg border border-ember/40 bg-ember/10 px-3 py-2 text-xs text-ember-hi"
+          : "mt-4 space-y-1 rounded-lg border border-warn/20 bg-warn/10 p-3 text-xs text-warn-hi"
       }
     >
       {problems.map((message) => (

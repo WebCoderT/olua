@@ -65,15 +65,15 @@ export function EquipSlots({
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-xs text-slate-400">
-          已穿 <span className="text-slate-100">{worn}</span> / {slots.length} 个部位；点格子挑装备，× 卸下
+        <p className="text-xs text-ink-4">
+          已穿 <span className="text-ink-1">{worn}</span> / {slots.length} 个部位；点格子挑装备，× 卸下
         </p>
-        <label className="flex items-center gap-1.5 text-[11px] text-slate-500">
+        <label className="flex items-center gap-1.5 text-[11px] text-ink-5">
           <input
             type="checkbox"
             checked={anySlot}
             onChange={(event) => setAnySlot(event.target.checked)}
-            className="h-3.5 w-3.5 accent-indigo-500"
+            className="h-3.5 w-3.5 accent-gold"
           />
           选择器显示全部部位
         </label>
@@ -81,7 +81,7 @@ export function EquipSlots({
 
       <div className="flex flex-col gap-2">
         {wornSlots.length === 0 ? (
-          <p className="text-xs text-slate-500">还没穿任何装备 —— 从下面点一个部位开始挑。</p>
+          <p className="text-xs text-ink-5">还没穿任何装备 —— 从下面点一个部位开始挑。</p>
         ) : (
           // auto-fit：卡片的宽度取决于它被放进哪一栏（右宽栏 460~700），按**可用宽度**决定列数
           // 比按视口断点稳 —— 1280 下四张卡挤成 105px 会把装备名截成「普通的·人…」
@@ -120,9 +120,9 @@ export function EquipSlots({
                   title={`${known ? slotLabel(slot) : slot}：空（点击挑装备）`}
                   aria-label={`${known ? slotLabel(slot) : slot}空槽位`}
                   onClick={() => setPicking(slot)}
-                  className="flex items-center gap-1 rounded-lg border border-dashed border-slate-800 px-1.5 py-0.5 text-[11px] text-slate-500 transition hover:border-indigo-500/60 hover:text-slate-200 disabled:cursor-not-allowed"
+                  className="flex items-center gap-1 rounded-lg border border-dashed border-line px-1.5 py-0.5 text-[11px] text-ink-5 transition hover:border-gold/60 hover:text-ink-2 disabled:cursor-not-allowed"
                 >
-                  <span aria-hidden="true" className="h-3 w-3 rounded-sm border border-slate-800 bg-slate-950/40" />
+                  <span aria-hidden="true" className="h-3 w-3 rounded-sm border border-line bg-surface-0/40" />
                   {known ? slotLabel(slot) : `${slot}（未知）`}
                 </button>
               );

@@ -133,7 +133,7 @@ export function ConfigRevisionsPage() {
 
   if (loading && version === null) {
     return (
-      <div className="flex items-center gap-2 text-sm text-slate-400">
+      <div className="flex items-center gap-2 text-sm text-ink-4">
         <Spinner /> 正在读取配置版本…
       </div>
     );
@@ -145,7 +145,7 @@ export function ConfigRevisionsPage() {
         title="配置版本"
         description={
           <>
-            当前第 <span className="text-slate-300">{version ?? "—"}</span> 版 ·
+            当前第 <span className="text-ink-3">{version ?? "—"}</span> 版 ·
             每次「改配置」的写接口成功后 +1，并留一层全量快照（滚动保留 20 层）
           </>
         }
@@ -156,7 +156,7 @@ export function ConfigRevisionsPage() {
         }
       />
 
-      <Notice tone="slate">
+      <Notice tone="muted">
         「改动」列是那次写操作的接口名（如 <code>adminSkill.update</code>），与操作日志里的
         「动作」同一个字符串 —— 想知道谁在什么时候改的，去操作日志按它筛。
         同一人 10 秒内的连点会合并成一层（避免拖一次数值刷出十层历史）。
@@ -219,15 +219,15 @@ export function ConfigRevisionsPage() {
                   return (
                     <tr key={item.version}>
                       <td className={tdClass}>
-                        <span className="font-medium text-slate-100">v{item.version}</span>
+                        <span className="font-medium text-ink-1">v{item.version}</span>
                         {isCurrent ? (
                           <span className="ml-1">
-                            <Badge tone="green">当前</Badge>
+                            <Badge tone="jade">当前</Badge>
                           </span>
                         ) : null}
                       </td>
                       <td className={tdClass}>
-                        <code className="rounded bg-slate-800/70 px-1.5 py-0.5 text-xs text-slate-300">
+                        <code className="rounded bg-surface-4/70 px-1.5 py-0.5 text-xs text-ink-3">
                           {item.label || "—"}
                         </code>
                       </td>
@@ -302,12 +302,12 @@ export function ConfigRevisionsPage() {
                   {diff.tables.map((row) => (
                     <tr key={row.table}>
                       <td className={tdClass}>
-                        <code className="text-xs text-slate-300">{row.table}</code>
+                        <code className="text-xs text-ink-3">{row.table}</code>
                       </td>
                       <td className={tdClass}>{row.from}</td>
                       <td className={tdClass}>{row.to}</td>
-                      <td className={tdClass}>{row.added > 0 ? <Badge tone="green">+{row.added}</Badge> : "—"}</td>
-                      <td className={tdClass}>{row.removed > 0 ? <Badge tone="red">−{row.removed}</Badge> : "—"}</td>
+                      <td className={tdClass}>{row.added > 0 ? <Badge tone="jade">+{row.added}</Badge> : "—"}</td>
+                      <td className={tdClass}>{row.removed > 0 ? <Badge tone="ember">−{row.removed}</Badge> : "—"}</td>
                     </tr>
                   ))}
                 </tbody>

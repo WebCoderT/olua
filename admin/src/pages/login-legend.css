@@ -23,8 +23,21 @@
   --ink-2: var(--color-ink-2);
   --ink-3: var(--color-ink-3);
 
-  --line: rgba(201, 162, 77, 0.2);
-  --line-soft: rgba(201, 162, 77, 0.1);
+  --line: color-mix(in srgb, var(--gold) 20%, transparent);
+  --line-soft: color-mix(in srgb, var(--gold) 10%, transparent);
+
+  /*
+   * 场景色：远山 / 城堡剪影 / 窗火。
+   * 这五个值不属于 UI 色板（它们是插画层次的「空气透视」），所以留在页面作用域里，
+   * 但同样只在本文件出现一次 —— SVG 里引 var()，不再写裸色值。
+   */
+  --ll-ridge-hi: #3b2b1c;
+  --ll-ridge-lo: #241a11;
+  --ll-keep-hi: #14100a;
+  --ll-keep-lo: #0a0806;
+  --ll-keep-edge: #0b0907;
+  --ll-flag: #7a2b16;
+  --ll-window: #d9663a;
 
   --font-display: "Songti SC", "Source Han Serif SC", "Noto Serif SC", "STSong", serif;
   --font-ui: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui, sans-serif;

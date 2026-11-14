@@ -64,18 +64,18 @@ export function BagGrid({
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-xs text-slate-400">
-          已用 <span className="text-slate-100">{cells.length}</span> / {rows * cols} 格（{rows} 行 × {cols} 列）
+        <p className="text-xs text-ink-4">
+          已用 <span className="text-ink-1">{cells.length}</span> / {rows * cols} 格（{rows} 行 × {cols} 列）
         </p>
         {outOfRange.length > 0 ? (
-          <p className="text-[11px] text-amber-300">
+          <p className="text-[11px] text-warn-hi">
             有 {outOfRange.length} 件物品落在当前网格之外（配置改小了？）—— 保存时不会被丢掉，但界面上看不见位置
           </p>
         ) : null}
       </div>
 
       {rows === 0 || cols === 0 ? (
-        <p className="text-xs text-slate-500">该角色数据里没有背包（`bag` 为空或不合法），无法按格编辑。</p>
+        <p className="text-xs text-ink-5">该角色数据里没有背包（`bag` 为空或不合法），无法按格编辑。</p>
       ) : (
         <div className="overflow-x-auto">
           <div
@@ -141,19 +141,19 @@ function BagCellButton({
       onClick={onClick}
       className={`relative flex aspect-square items-center justify-center rounded-md border transition disabled:cursor-not-allowed ${
         cell
-          ? "border-slate-700 bg-slate-900/70 hover:border-indigo-500/70"
-          : "border-dashed border-slate-800 bg-slate-950/40 hover:border-slate-600 hover:bg-slate-900/60"
+          ? "border-line-strong bg-surface-2/70 hover:border-gold/70"
+          : "border-dashed border-line bg-surface-0/40 hover:border-line-strong hover:bg-surface-2/60"
       }`}
     >
       {cell ? (
         <>
           <EntityImage image={entityImage("item", cell.id)} alt={entityLabel("item", cell.id)} size={24} />
           {cell.count > 1 ? (
-            <span className="absolute bottom-0 right-0.5 text-[10px] font-medium text-amber-200">{cell.count}</span>
+            <span className="absolute bottom-0 right-0.5 text-[10px] font-medium text-warn-hi">{cell.count}</span>
           ) : null}
         </>
       ) : (
-        <span className="text-xs text-slate-700">+</span>
+        <span className="text-xs text-ink-6">+</span>
       )}
     </button>
   );
@@ -207,14 +207,14 @@ function CellEditor({
           <div className="mr-auto flex min-w-[160px] flex-1 items-center gap-2">
             {id ? <EntityImage image={entityImage("item", id)} alt={entityLabel("item", id)} size={32} /> : null}
             <div className="min-w-0 flex-1">
-              <p className="truncate text-xs text-slate-200">{id ? entityLabel("item", id) : "还没选物品"}</p>
-              <p className="truncate text-[10px] text-slate-500">{id ? `堆叠上限 ${max}` : "在上面的列表里点一项"}</p>
+              <p className="truncate text-xs text-ink-2">{id ? entityLabel("item", id) : "还没选物品"}</p>
+              <p className="truncate text-[10px] text-ink-5">{id ? `堆叠上限 ${max}` : "在上面的列表里点一项"}</p>
             </div>
           </div>
           {!countOk && id ? (
-            <span className="text-[11px] text-amber-300">数量要在 1 ~ {max} 之间（超过堆叠上限请分格放）</span>
+            <span className="text-[11px] text-warn-hi">数量要在 1 ~ {max} 之间（超过堆叠上限请分格放）</span>
           ) : null}
-          <label className="flex items-center gap-2 text-xs text-slate-400">
+          <label className="flex items-center gap-2 text-xs text-ink-4">
             数量
             <div className="w-24">
               <Input

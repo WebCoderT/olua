@@ -193,9 +193,9 @@ export function MonsterDropDialog({
                 <PicksEditor draft={picks} onChange={setPicks} />
               </div>
               {selectedTable ? (
-                <div className="flex flex-col gap-2 rounded-lg border border-slate-800 bg-slate-950/40 px-3 py-2">
-                  <p className="text-xs text-slate-400">
-                    这张表自己的件数是 <span className="font-mono text-slate-200">{picksText(selectedTable.picks)}</span>；
+                <div className="flex flex-col gap-2 rounded-lg border border-line bg-surface-0/40 px-3 py-2">
+                  <p className="text-xs text-ink-4">
+                    这张表自己的件数是 <span className="font-mono text-ink-2">{picksText(selectedTable.picks)}</span>；
                     上面留空就用它，填了就只对这只怪生效。
                   </p>
                   {/* 「这张表里到底是什么」——共用表一改影响所有引用它的怪，别只看条数就点保存 */}
@@ -213,23 +213,23 @@ export function MonsterDropDialog({
           ) : null}
 
           {mode === "none" ? (
-            <p className="rounded-lg border border-slate-700 bg-slate-950/40 px-3 py-2 text-xs text-slate-400">
+            <p className="rounded-lg border border-line-strong bg-surface-0/40 px-3 py-2 text-xs text-ink-4">
               清空后这只怪没有独立掉落配置，将走兜底表（default）。
             </p>
           ) : null}
 
           {!canWrite ? (
-            <p className="rounded-lg border border-amber-900/50 bg-amber-950/20 px-3 py-2 text-xs text-amber-300">
+            <p className="rounded-lg border border-warn/20 bg-warn/10 px-3 py-2 text-xs text-warn-hi">
               当前角色没有「修改养成配置」权限，只能看不能存。
             </p>
           ) : null}
           {mode === "table" && tableId === "" ? (
-            <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-200">引用具名表要先选一张表。</p>
+            <p className="rounded-lg border border-ember/40 bg-ember/10 px-3 py-2 text-xs text-ember-hi">引用具名表要先选一张表。</p>
           ) : null}
           {picksValue === undefined && (mode === "inline" || (mode === "table" && picks.min.trim() !== "")) ? (
-            <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-200">抽取件数需为 ≥1 的整数（或 1 ≤ 下限 ≤ 上限）。</p>
+            <p className="rounded-lg border border-ember/40 bg-ember/10 px-3 py-2 text-xs text-ember-hi">抽取件数需为 ≥1 的整数（或 1 ≤ 下限 ≤ 上限）。</p>
           ) : null}
-          {errors.length > 0 ? <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-200">{errors.join("；")}。</p> : null}
+          {errors.length > 0 ? <p className="rounded-lg border border-ember/40 bg-ember/10 px-3 py-2 text-xs text-ember-hi">{errors.join("；")}。</p> : null}
         </>
       )}
     </Modal>

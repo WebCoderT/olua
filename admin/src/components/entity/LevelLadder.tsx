@@ -48,23 +48,23 @@ export function LevelLadder({
           event.preventDefault();
           setOpen(true);
         }}
-        className={`flex items-center gap-3 rounded-xl border border-slate-700 bg-slate-900/70 ${compact ? "p-2" : "p-2.5"} transition ${
-          disabled ? "" : "cursor-pointer hover:border-indigo-500/70 hover:bg-slate-800/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60"
+        className={`flex items-center gap-3 rounded-xl border border-line-strong bg-surface-2/70 ${compact ? "p-2" : "p-2.5"} transition ${
+          disabled ? "" : "cursor-pointer hover:border-gold/70 hover:bg-surface-4/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/60"
         }`}
       >
         <EntityImage image={active ? levelImage(kind, value) : {}} alt={active ? levelLabel(kind, value) : undefined} size={36} />
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <p className="text-[10px] leading-tight text-slate-500">{label}</p>
-            <Badge tone={active ? "indigo" : "slate"}>
+            <p className="text-[10px] leading-tight text-ink-5">{label}</p>
+            <Badge tone={active ? "gold" : "muted"}>
               <span className="whitespace-nowrap">{active ? `${value} 档` : "未激活"}</span>
             </Badge>
           </div>
-          <p className={`truncate text-xs font-medium ${active ? "text-slate-100" : "text-slate-600"}`}>
+          <p className={`truncate text-xs font-medium ${active ? "text-ink-1" : "text-ink-6"}`}>
             {active ? levelLabel(kind, value) || `第 ${value} 档` : "点此选择档位"}
           </p>
           {compact ? null : (
-            <p className="truncate text-[10px] text-slate-500">{active ? levelDescription(kind, value) : "0 = 未激活"}</p>
+            <p className="truncate text-[10px] text-ink-5">{active ? levelDescription(kind, value) : "0 = 未激活"}</p>
           )}
         </div>
         {active && !disabled ? (
@@ -76,7 +76,7 @@ export function LevelLadder({
               event.stopPropagation();
               onChange(0);
             }}
-            className="rounded px-1 text-xs leading-none text-slate-500 transition hover:bg-slate-800 hover:text-rose-300"
+            className="rounded px-1 text-xs leading-none text-ink-5 transition hover:bg-surface-4 hover:text-ember-hi"
           >
             ×
           </button>

@@ -147,19 +147,19 @@ export function RanksPage() {
             </thead>
             <tbody>
               {data?.list.map((item) => (
-                <tr key={item.level} className="transition hover:bg-slate-800/30">
+                <tr key={item.level} className="transition hover:bg-surface-4/30">
                   <td className={tdClass}>{item.level}</td>
                   <td className={tdClass}>
-                    <Badge tone="slate">{item.tier}</Badge>
+                    <Badge tone="muted">{item.tier}</Badge>
                   </td>
                   <td className={tdClass}>
-                    <span className="block font-medium text-slate-100">{item.label}</span>
-                    <span className="mt-0.5 block max-w-[240px] truncate text-xs text-slate-500" title={item.description}>
+                    <span className="block font-medium text-ink-1">{item.label}</span>
+                    <span className="mt-0.5 block max-w-[240px] truncate text-xs text-ink-5" title={item.description}>
                       {item.description}
                     </span>
                   </td>
-                  <td className={`${tdClass} text-xs text-slate-400`}>{attributeSummary(item)}</td>
-                  <td className={`${tdClass} text-xs text-slate-400`}>{formatTime(item.updatedAt)}</td>
+                  <td className={`${tdClass} text-xs text-ink-4`}>{attributeSummary(item)}</td>
+                  <td className={`${tdClass} text-xs text-ink-4`}>{formatTime(item.updatedAt)}</td>
                   <td className={`${tdClass} text-right`}>
                     <Button
                       variant="outline"

@@ -85,7 +85,7 @@ export function CombatWeightsPage() {
           <>
             战力 = Σ 属性 × 权重：区间属性（三系攻击 / 三系防御）按<b>上下限之和</b>乘倍率，生命按单值乘，
             每秒回血不计入。战力是地图准入门槛的刻度，改这里等于重新标定全服准入。
-            {row ? <span className="ml-1 text-slate-500">上次修改：{formatTime(row.updatedAt)}</span> : null}
+            {row ? <span className="ml-1 text-ink-5">上次修改：{formatTime(row.updatedAt)}</span> : null}
           </>
         }
       />
@@ -125,7 +125,7 @@ export function CombatWeightsPage() {
               ))}
             </div>
             {allZero ? (
-              <p className="text-xs text-amber-400">
+              <p className="text-xs text-warn">
                 七项不能同时为 0：那会让所有角色的战力都变成 0，地图准入门槛全部失效。
               </p>
             ) : null}

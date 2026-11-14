@@ -123,7 +123,7 @@ export function BanDialog({
           </Field>
         ) : null}
 
-        <Notice tone="amber">
+        <Notice tone="warn">
           封禁<strong>立即生效</strong>：在线的玩家下一次请求就会被拒（客户端会收到「账号已被封禁并带上原因」），
           在线标记也会一并清除。永久封禁没有自动恢复，只能手动解封。
         </Notice>

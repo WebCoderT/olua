@@ -160,7 +160,7 @@ export function SpawnAreaFormDialog({
         footer={
           <>
             {area ? (
-              <Button variant="ghost" className="mr-auto text-rose-300" disabled={saving} onClick={() => setAskingDelete(true)}>
+              <Button variant="ghost" className="mr-auto text-ember-hi" disabled={saving} onClick={() => setAskingDelete(true)}>
                 删除这个区
               </Button>
             ) : null}
@@ -174,7 +174,7 @@ export function SpawnAreaFormDialog({
         }
       >
         <div className="space-y-3">
-          <div className="grid grid-cols-2 gap-2 rounded-xl border border-slate-800 bg-slate-900/40 px-3 py-2 text-[11px] text-slate-400 sm:grid-cols-4">
+          <div className="grid grid-cols-2 gap-2 rounded-xl border border-line bg-surface-2/40 px-3 py-2 text-[11px] text-ink-4 sm:grid-cols-4">
             <Info label="左上角（Tiled）" value={`${round(box.x)}, ${round(box.y)}`} />
             <Info label="尺寸（像素）" value={`${round(box.width)} × ${round(box.height)}`} />
             <Info label="世界中心" value={`${round(world.cx)}, ${round(world.cy)}`} />
@@ -191,7 +191,7 @@ export function SpawnAreaFormDialog({
           <Field label="区域名（同一张图内唯一）">
             <Input value={name} maxLength={24} placeholder="如：1号刷怪区" onChange={(event) => setName(event.target.value)} />
           </Field>
-          {nameTaken ? <p className="-mt-1.5 text-[11px] text-rose-300">这张图里已经有同名区域了，换一个名字</p> : null}
+          {nameTaken ? <p className="-mt-1.5 text-[11px] text-ember-hi">这张图里已经有同名区域了，换一个名字</p> : null}
 
           <Field label="怪物">
             <EntityPickButton
@@ -220,10 +220,10 @@ export function SpawnAreaFormDialog({
               <Input value={hours} maxLength={32} placeholder="19:00-23:00" onChange={(event) => setHours(event.target.value)} />
             </Field>
           </div>
-          {!densityOk ? <p className="-mt-1.5 text-[11px] text-rose-300">系数要填 0~5 之间的数字，或者留空</p> : null}
-          {!hoursOk ? <p className="-mt-1.5 text-[11px] text-rose-300">时段要写成 19:00-23:00（可跨零点 22:00-02:00），或者留空</p> : null}
+          {!densityOk ? <p className="-mt-1.5 text-[11px] text-ember-hi">系数要填 0~5 之间的数字，或者留空</p> : null}
+          {!hoursOk ? <p className="-mt-1.5 text-[11px] text-ember-hi">时段要写成 19:00-23:00（可跨零点 22:00-02:00），或者留空</p> : null}
 
-          <Notice tone="amber" title="何时生效">
+          <Notice tone="warn" title="何时生效">
             世界<b>每秒</b>按「目标只数 vs 场上只数」对齐：少的补（每次最多 2 只）、多的删（先删死亡等重生的，再删最久没被攻击的，
             5 秒内被打过的保留）。改完<b>1 秒内</b>生效，不用等分域卸载。目标 = 数量上限 × 时段系数 × 人数系数（图上每多一人 +10%，最多 +50%）。
           </Notice>
@@ -246,8 +246,8 @@ export function SpawnAreaFormDialog({
 function Info({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <p className="text-slate-500">{label}</p>
-      <p className="mt-0.5 font-mono text-slate-300">{value}</p>
+      <p className="text-ink-5">{label}</p>
+      <p className="mt-0.5 font-mono text-ink-3">{value}</p>
     </div>
   );
 }

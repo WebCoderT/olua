@@ -91,11 +91,11 @@ export function EntityPickerList({
         ) : null}
       </div>
 
-      {hint ? <p className="text-xs text-slate-500">{hint}</p> : null}
+      {hint ? <p className="text-xs text-ink-5">{hint}</p> : null}
 
       <div className="min-h-0 flex-1 overflow-y-auto">
         {shown.length === 0 ? (
-          <p className="py-8 text-center text-xs text-slate-500">{emptyHint}</p>
+          <p className="py-8 text-center text-xs text-ink-5">{emptyHint}</p>
         ) : (
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
             {shown.map((option) => {
@@ -109,21 +109,21 @@ export function EntityPickerList({
                   onClick={() => onPick(option.id)}
                   className={`flex items-center gap-2 rounded-lg border p-2 text-left transition ${
                     active
-                      ? "border-indigo-500 bg-indigo-500/10"
-                      : "border-slate-800 bg-slate-900/60 hover:border-slate-600 hover:bg-slate-800/60"
+                      ? "border-gold bg-gold/10"
+                      : "border-line bg-surface-2/60 hover:border-line-strong hover:bg-surface-4/60"
                   }`}
                 >
                   <EntityImage image={option.image} alt={option.label} size={imageSize} />
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-xs text-slate-100">{option.label}</span>
-                    <span className="block truncate text-[10px] text-slate-500">{option.note}</span>
+                    <span className="block truncate text-xs text-ink-1">{option.label}</span>
+                    <span className="block truncate text-[10px] text-ink-5">{option.note}</span>
                   </span>
                   {/* 多选才画勾：单选点一下就走，多选框型对齐与否一眼看不出 */}
                   {multiple ? (
                     <span
                       aria-hidden="true"
                       className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border text-[10px] ${
-                        active ? "border-indigo-400 bg-indigo-500 text-white" : "border-slate-600 text-transparent"
+                        active ? "border-gold-hi bg-gold text-surface-0" : "border-line-strong text-transparent"
                       }`}
                     >
                       ✓
@@ -137,7 +137,7 @@ export function EntityPickerList({
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-[11px] text-slate-600">
+        <p className="text-[11px] text-ink-6">
           共 {filtered.length} 项
           {filtered.length > shown.length ? `，已画 ${shown.length} 项` : ""}
         </p>
@@ -161,7 +161,7 @@ function GroupChip({ active, onClick, children }: { active: boolean; onClick: ()
       type="button"
       onClick={onClick}
       className={`rounded-md px-2 py-1 text-[11px] transition ${
-        active ? "bg-indigo-500 text-white" : "bg-slate-800/70 text-slate-300 hover:bg-slate-700"
+        active ? "bg-gold text-surface-0" : "bg-surface-4/70 text-ink-3 hover:bg-surface-4"
       }`}
     >
       {children}

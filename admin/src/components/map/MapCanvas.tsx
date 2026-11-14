@@ -88,17 +88,17 @@ export interface DrawPoint {
 }
 
 const COLOR = {
-  spawn: "#818cf8", // indigo-400
+  spawn: "var(--color-gold)", // 金：刷怪区
   /** 越界区域：换成警示色，否则「被裁掉的那块」看起来跟「本来就没有」一模一样 */
-  spawnOutside: "#f43f5e", // rose-500
+  spawnOutside: "var(--color-ember)", // 火：越界
   /** 正在编辑的那一块 */
-  spawnActive: "#a78bfa", // violet-400
-  npc: "#38bdf8", // sky-400
-  npcActive: "#7dd3fc", // sky-300
-  revive: "#34d399", // emerald-400
-  reviveActive: "#6ee7b7", // emerald-300
-  outside: "#f43f5e", // rose-500（越界点位）
-  collision: "#fb7185", // rose-400
+  spawnActive: "var(--color-gold-hi)", // 金高光：正在编辑
+  npc: "var(--color-jade)", // 玉：NPC
+  npcActive: "var(--color-jade-hi)", // 玉高光：选中 NPC
+  revive: "var(--color-warn)", // 注意色：复活点
+  reviveActive: "var(--color-warn-hi)", // 注意高光：选中复活点
+  outside: "var(--color-ember)", // 火：越界点位
+  collision: "var(--color-ember-hi)", // 火高光：碰撞盒
 };
 
 /** 点对象的命中半径（按图宽的比例算：8192 的图上约 46，缩到 700px 宽约 4px） */
@@ -298,14 +298,14 @@ export function MapCanvas({
 
   return (
     <div
-      className="relative mx-auto w-full overflow-hidden rounded-xl border border-slate-800 bg-slate-950"
+      className="relative mx-auto w-full overflow-hidden rounded-xl border border-line bg-surface-0"
       // 限高而不是限宽：11 张图都是正方形，宽度顶到 62vh 时高度也就 62vh ——
       // 一屏能同时看到「配置改了什么」和「地图变成什么样」，不被一张大图挤走。
       // 放大镜里传 100%（那里只有一个目的：把标签看大）
       style={{ aspectRatio: `${ratio}`, maxWidth }}
     >
       {imageFailed ? (
-        <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 text-[11px] text-slate-600">
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 text-[11px] text-ink-6">
           <span>预览图加载失败（map/{detail.id}/preview.jpg）</span>
           <span>叠加层照常显示，可以对着坐标核位置</span>
         </div>
@@ -410,8 +410,8 @@ export function MapCanvas({
                   y={box.y + box.height / 2 + labelSize / 3}
                   textAnchor="middle"
                   fontSize={labelSize}
-                  fill="#e2e8f0"
-                  stroke="#0f172a"
+                  fill="var(--color-ink-1)"
+                  stroke="var(--color-surface-0)"
                   strokeWidth={labelSize / 22}
                   paintOrder="stroke"
                   pointerEvents="none"
@@ -500,8 +500,8 @@ export function MapCanvas({
               y={draftBox.y + draftBox.height / 2 + labelSize / 3}
               textAnchor="middle"
               fontSize={labelSize}
-              fill="#f5f3ff"
-              stroke="#0f172a"
+              fill="var(--color-ink-1)"
+              stroke="var(--color-surface-0)"
               strokeWidth={labelSize / 22}
               paintOrder="stroke"
             >
@@ -513,14 +513,14 @@ export function MapCanvas({
 
       {MODE_HINT[mode] ? (
         <div
-          className="pointer-events-none absolute left-1 top-1 rounded bg-slate-950/80 px-2 py-1 text-[11px]"
+          className="pointer-events-none absolute left-1 top-1 rounded bg-surface-0/80 px-2 py-1 text-[11px]"
           style={{ color: MODE_HINT[mode]!.color }}
         >
           {MODE_HINT[mode]!.text}
         </div>
       ) : null}
 
-      <div className="pointer-events-none absolute bottom-1 right-1 rounded bg-slate-950/70 px-1.5 py-0.5 text-[10px] text-slate-500">
+      <div className="pointer-events-none absolute bottom-1 right-1 rounded bg-surface-0/70 px-1.5 py-0.5 text-[10px] text-ink-5">
         {detail.width} × {detail.height} px · {detail.cols}×{detail.rows} 格
       </div>
     </div>
@@ -530,10 +530,10 @@ export function MapCanvas({
 /** 每种编辑模式左上角那一行提示（`view` 不提示：查看模式不该有常驻横幅） */
 const MODE_HINT: Record<CanvasMode, { text: string; color: string } | null> = {
   view: null,
-  spawn: { text: "在图上拖出矩形 = 新建刷怪区 · Esc 取消", color: "#ddd6fe" },
-  npc: { text: "点空白 = 放一个 NPC（再选是谁）· 拖已有点 = 挪位置 · Esc 取消", color: "#bae6fd" },
-  revive: { text: "点哪里 = 复活点就设在哪里 · 拖动已有点 = 挪位置 · Esc 取消", color: "#a7f3d0" },
-  collision: { text: "在图上拖出矩形 = 新建碰撞盒 · 查看模式下点已有框可改 · Esc 取消", color: "#fecdd3" },
+  spawn: { text: "在图上拖出矩形 = 新建刷怪区 · Esc 取消", color: "var(--color-gold-hi)" },
+  npc: { text: "点空白 = 放一个 NPC（再选是谁）· 拖已有点 = 挪位置 · Esc 取消", color: "var(--color-jade-hi)" },
+  revive: { text: "点哪里 = 复活点就设在哪里 · 拖动已有点 = 挪位置 · Esc 取消", color: "var(--color-warn-hi)" },
+  collision: { text: "在图上拖出矩形 = 新建碰撞盒 · 查看模式下点已有框可改 · Esc 取消", color: "var(--color-ember-hi)" },
 };
 
 /**
@@ -599,7 +599,7 @@ function PointDot({
         y={cy + labelSize / 3}
         fontSize={labelSize}
         fill={stroke}
-        stroke="#0f172a"
+        stroke="var(--color-surface-0)"
         strokeWidth={labelSize / 24}
         paintOrder="stroke"
         pointerEvents="none"

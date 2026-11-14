@@ -33,7 +33,7 @@ export function SkillList({
 
   return (
     <div className="flex flex-col gap-2">
-      {rows.length === 0 ? <p className="text-xs text-slate-500">该角色还没有技能。</p> : null}
+      {rows.length === 0 ? <p className="text-xs text-ink-5">该角色还没有技能。</p> : null}
 
       {/* 双列 + 紧凑行：12 个技能原来是 12 行 × 64px（要滚），现在是 6 行 × 40px。
           列数按**可用宽度** auto-fit（弹窗 4xl 下两列，窄一点自动变一列） */}

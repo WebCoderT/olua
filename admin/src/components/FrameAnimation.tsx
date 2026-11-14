@@ -268,7 +268,7 @@ export function FrameAnimation({
     return (
       <span
         aria-hidden="true"
-        className="inline-flex items-center justify-center rounded border border-slate-800 bg-slate-900/60 text-[10px] text-slate-600"
+        className="inline-flex items-center justify-center rounded border border-line bg-surface-2/60 text-[10px] text-ink-6"
         style={{ width: size, height: size }}
       >
         无图
@@ -281,7 +281,7 @@ export function FrameAnimation({
       ref={canvasRef}
       role="img"
       aria-label={alt ?? ""}
-      className="rounded border border-slate-800 bg-slate-900/60"
+      className="rounded border border-line bg-surface-2/60"
       style={{ imageRendering: "pixelated" }}
     />
   );
@@ -347,7 +347,7 @@ function AnimationLightbox({
         ref={canvasRef}
         role="img"
         aria-label={alt ?? ""}
-        className="max-h-[60vmin] max-w-[60vmin] rounded border border-slate-700 bg-slate-900/60"
+        className="max-h-[60vmin] max-w-[60vmin] rounded border border-line-strong bg-surface-2/60"
         style={{ imageRendering: "pixelated" }}
       />
     </Lightbox>

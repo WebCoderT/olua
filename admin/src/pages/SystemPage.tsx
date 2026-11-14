@@ -10,9 +10,9 @@ import { PageHeader } from "../components/PageHeader";
 /** 「标签 + 值」的一格（运行时信息用它排成网格，值可能很长所以允许折行） */
 function InfoItem({ label, value }: { label: string; value: ReactNode }) {
   return (
-    <div className="rounded-xl border border-slate-800 bg-slate-900/40 px-4 py-3">
-      <p className="text-xs text-slate-500">{label}</p>
-      <p className="mt-1 break-all text-sm text-slate-100">{value}</p>
+    <div className="rounded-xl border border-line bg-surface-2/40 px-4 py-3">
+      <p className="text-xs text-ink-5">{label}</p>
+      <p className="mt-1 break-all text-sm text-ink-1">{value}</p>
     </div>
   );
 }
@@ -57,7 +57,7 @@ export function SystemPage() {
 
   if (loading && !info) {
     return (
-      <div className="flex items-center gap-2 text-sm text-slate-400">
+      <div className="flex items-center gap-2 text-sm text-ink-4">
         <Spinner /> 正在读取系统信息…
       </div>
     );
@@ -85,11 +85,11 @@ export function SystemPage() {
       />
 
       {warnings.length > 0 ? (
-        <div className="rounded-2xl border border-amber-500/40 bg-amber-500/10 px-5 py-4">
-          <p className="text-sm font-medium text-amber-200">
+        <div className="rounded-2xl border border-warn/40 bg-warn/10 px-5 py-4">
+          <p className="text-sm font-medium text-warn-hi">
             有 {warnings.length} 项配置需要运维注意
           </p>
-          <p className="mt-1 break-all text-xs text-amber-200/80">
+          <p className="mt-1 break-all text-xs text-warn-hi/80">
             {warnings.map((item) => item.key).join("、")} —— 详见下方「配置快照」
           </p>
         </div>
@@ -137,14 +137,14 @@ export function SystemPage() {
             <tbody>
               {database.tables.map((item) => (
                 <tr key={item.table}>
-                  <td className={`${tdClass} font-mono text-slate-200`}>{item.table}</td>
+                  <td className={`${tdClass} font-mono text-ink-2`}>{item.table}</td>
                   <td className={tdClass}>{item.rows}</td>
                 </tr>
               ))}
               {database.tables.length > 0 ? (
                 <tr>
-                  <td className={`${tdClass} font-medium text-slate-400`}>合计（{database.tables.length} 张表）</td>
-                  <td className={`${tdClass} font-medium text-slate-200`}>{tableRows}</td>
+                  <td className={`${tdClass} font-medium text-ink-4`}>合计（{database.tables.length} 张表）</td>
+                  <td className={`${tdClass} font-medium text-ink-2`}>{tableRows}</td>
                 </tr>
               ) : (
                 <tr>
@@ -164,19 +164,19 @@ export function SystemPage() {
       >
         <div className="mb-4 flex flex-wrap items-center gap-2">
           {backup.enabled ? (
-            <Badge tone="green">已启用</Badge>
+            <Badge tone="jade">已启用</Badge>
           ) : (
-            <Badge tone="slate">未启用</Badge>
+            <Badge tone="muted">未启用</Badge>
           )}
           {backup.enabled ? (
-            <span className="text-xs text-slate-500">
+            <span className="text-xs text-ink-5">
               {backup.intervalText}
               {" · 保留 "}
               {backup.keepCount > 0 ? `${backup.keepCount} 份` : "不限份数"}
               {backup.retentionDays > 0 ? ` / ${backup.retentionDays} 天` : ""}
             </span>
           ) : (
-            <span className="text-xs text-slate-500">{backup.reason}</span>
+            <span className="text-xs text-ink-5">{backup.reason}</span>
           )}
         </div>
 
@@ -192,9 +192,9 @@ export function SystemPage() {
               backup.lastOk === null ? (
                 "还没跑过"
               ) : backup.lastOk ? (
-                <Badge tone="green">成功</Badge>
+                <Badge tone="jade">成功</Badge>
               ) : (
-                <Badge tone="red">失败</Badge>
+                <Badge tone="ember">失败</Badge>
               )
             }
           />
@@ -204,7 +204,7 @@ export function SystemPage() {
         </div>
 
         {backup.lastOk === false ? (
-          <div className="mt-4 rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-xs text-red-200">
+          <div className="mt-4 rounded-xl border border-ember/50 bg-ember/10 px-4 py-3 text-xs text-ember-hi">
             上次备份失败：{backup.lastError}
           </div>
         ) : null}
@@ -226,13 +226,13 @@ export function SystemPage() {
             <tbody>
               {config.map((item) => (
                 <tr key={item.key}>
-                  <td className={`${tdClass} font-mono text-slate-200`}>{item.key}</td>
+                  <td className={`${tdClass} font-mono text-ink-2`}>{item.key}</td>
                   <td className={tdClass}>{item.value}</td>
                   <td className={tdClass}>
                     <div className="flex gap-1.5">
-                      {item.warning ? <Badge tone="amber">需注意</Badge> : null}
-                      {item.sensitive ? <Badge tone="slate">脱敏</Badge> : null}
-                      {!item.warning && !item.sensitive ? <span className="text-slate-600">—</span> : null}
+                      {item.warning ? <Badge tone="warn">需注意</Badge> : null}
+                      {item.sensitive ? <Badge tone="muted">脱敏</Badge> : null}
+                      {!item.warning && !item.sensitive ? <span className="text-ink-6">—</span> : null}
                     </div>
                   </td>
                 </tr>

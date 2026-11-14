@@ -14,9 +14,9 @@ import { PageHeader } from "../components/PageHeader";
 const PAGE_SIZE = 10;
 
 /** 级别配色：重要标红，普通保持中性 */
-const LEVEL_TONE: Record<string, "red" | "slate"> = {
-  important: "red",
-  normal: "slate",
+const LEVEL_TONE: Record<string, "ember" | "muted"> = {
+  important: "ember",
+  normal: "muted",
 };
 
 /**
@@ -26,11 +26,11 @@ const LEVEL_TONE: Record<string, "red" | "slate"> = {
  * 这里只负责把「为什么不在生效中」翻译出来给运营看 —— 停用 / 未开始 / 已过期三选一。
  * 即使本地时钟与服务端有偏差，也只是这三行文案会先变一下，不影响任何判定。
  */
-function stateOf(item: Announcement): { label: string; tone: "green" | "red" | "amber" | "slate" } {
-  if (!item.enabled) return { label: "已停用", tone: "red" };
-  if (item.active) return { label: "生效中", tone: "green" };
-  if (item.startsAt !== null && item.startsAt > Date.now()) return { label: "未开始", tone: "amber" };
-  return { label: "已过期", tone: "slate" };
+function stateOf(item: Announcement): { label: string; tone: "jade" | "ember" | "warn" | "muted" } {
+  if (!item.enabled) return { label: "已停用", tone: "ember" };
+  if (item.active) return { label: "生效中", tone: "jade" };
+  if (item.startsAt !== null && item.startsAt > Date.now()) return { label: "未开始", tone: "warn" };
+  return { label: "已过期", tone: "muted" };
 }
 
 /** 时间窗的人读形式（null 分别表示「立即生效」「不设截止」） */
@@ -188,7 +188,7 @@ export function AnnouncementsPage() {
     <div className="flex flex-col gap-4">
       <PageHeader
         title="公告"
-        description={<>面向全服的运营消息。玩家侧由 <code className="text-slate-400">GET /announcements/active</code> 拉取「当前生效中」的那一批（无需登录，登录页也能显示）；
+        description={<>面向全服的运营消息。玩家侧由 <code className="text-ink-4">GET /announcements/active</code> 拉取「当前生效中」的那一批（无需登录，登录页也能显示）；
             生效 = 已启用 且 在时间窗内，两个条件由服务端判定。</>}
         actions={<>
           <Button disabled={!canWrite} onClick={openCreate}>
@@ -263,23 +263,23 @@ export function AnnouncementsPage() {
               {data?.list.map((item) => {
                 const state = stateOf(item);
                 return (
-                  <tr key={item.id} className="transition hover:bg-slate-800/30">
+                  <tr key={item.id} className="transition hover:bg-surface-4/30">
                     <td className={tdClass}>
-                      <span className="block max-w-[260px] truncate font-medium text-slate-100" title={item.title}>
+                      <span className="block max-w-[260px] truncate font-medium text-ink-1" title={item.title}>
                         {item.title}
                       </span>
-                      <span className="mt-0.5 block max-w-[260px] truncate text-xs text-slate-500" title={item.content}>
+                      <span className="mt-0.5 block max-w-[260px] truncate text-xs text-ink-5" title={item.content}>
                         {item.content}
                       </span>
                     </td>
                     <td className={tdClass}>
-                      <Badge tone={LEVEL_TONE[item.level] ?? "slate"}>{ANNOUNCEMENT_LEVEL_LABELS[item.level] ?? item.level}</Badge>
+                      <Badge tone={LEVEL_TONE[item.level] ?? "muted"}>{ANNOUNCEMENT_LEVEL_LABELS[item.level] ?? item.level}</Badge>
                     </td>
                     <td className={tdClass}>
                       <Badge tone={state.tone}>{state.label}</Badge>
                     </td>
-                    <td className={`${tdClass} text-xs text-slate-400`}>{windowText(item)}</td>
-                    <td className={tdClass}>{item.enabled ? <Badge tone="green">已启用</Badge> : <Badge tone="slate">已停用</Badge>}</td>
+                    <td className={`${tdClass} text-xs text-ink-4`}>{windowText(item)}</td>
+                    <td className={tdClass}>{item.enabled ? <Badge tone="jade">已启用</Badge> : <Badge tone="muted">已停用</Badge>}</td>
                     <td className={tdClass}>{item.createdBy ?? "—"}</td>
                     <td className={tdClass}>{formatTime(item.updatedAt)}</td>
                     <td className={`${tdClass} text-right`}>

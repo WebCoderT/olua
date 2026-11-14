@@ -469,7 +469,7 @@ export function Layout() {
           <div className="ml-auto flex shrink-0 items-center gap-2">
             {admin?.role ? (
               <span className="hidden sm:inline-flex">
-                <Badge tone={admin.role === "super_admin" ? "amber" : admin.role === "viewer" ? "slate" : "indigo"}>
+                <Badge tone={admin.role === "super_admin" ? "warn" : admin.role === "viewer" ? "muted" : "gold"}>
                   {roleLabel}
                 </Badge>
               </span>

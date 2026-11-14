@@ -171,7 +171,7 @@ export function GameConfigDialog({
 
         <AttributesGrid attributes={attributes} onChange={setAttributes} header="属性加成（整份替换）" crossed={crossedKeys} />
 
-        {!numbersValid ? <Notice tone="red">帧率需为 ≥1 的整数。</Notice> : null}
+        {!numbersValid ? <Notice tone="ember">帧率需为 ≥1 的整数。</Notice> : null}
       </div>
     </Modal>
   );

@@ -134,7 +134,7 @@ export function NpcPointFormDialog({
         footer={
           <>
             {point ? (
-              <Button variant="ghost" className="mr-auto text-rose-300" disabled={saving} onClick={() => setAskingDelete(true)}>
+              <Button variant="ghost" className="mr-auto text-ember-hi" disabled={saving} onClick={() => setAskingDelete(true)}>
                 从这张图移除
               </Button>
             ) : null}
@@ -148,7 +148,7 @@ export function NpcPointFormDialog({
         }
       >
         <div className="space-y-3">
-          <div className="grid grid-cols-2 gap-2 rounded-xl border border-slate-800 bg-slate-900/40 px-3 py-2 text-[11px] text-slate-400">
+          <div className="grid grid-cols-2 gap-2 rounded-xl border border-line bg-surface-2/40 px-3 py-2 text-[11px] text-ink-4">
             <Info label="地图坐标（Tiled）" value={`${round(xValue || 0)}, ${round(yValue || 0)}`} />
             <Info label="世界坐标（入库）" value={world ? `${world.cx}, ${world.cy}` : "—"} />
           </div>
@@ -164,7 +164,7 @@ export function NpcPointFormDialog({
               onChange={setNpcId}
             />
           </Field>
-          {taken ? <p className="-mt-1.5 text-[11px] text-rose-300">这张图里已经有这个 NPC 了：一张图只放一个（同一 NPC 不需要两个摊位）</p> : null}
+          {taken ? <p className="-mt-1.5 text-[11px] text-ember-hi">这张图里已经有这个 NPC 了：一张图只放一个（同一 NPC 不需要两个摊位）</p> : null}
 
           <div className="grid grid-cols-2 gap-2">
             <Field label="地图 x（左上角原点、向右为正）">
@@ -175,7 +175,7 @@ export function NpcPointFormDialog({
             </Field>
           </div>
 
-          <Notice tone="amber" title="何时生效">
+          <Notice tone="warn" title="何时生效">
             客户端下次进图时按快照把 NPC 摆到新位置（正在图里的人要换图 / 重进）。
             越界的点会被服务端直接拒 —— 点位必须落在 <code>[0, {detail.width}] × [0, {detail.height}]</code>（地图像素）以内。
           </Notice>
@@ -198,8 +198,8 @@ export function NpcPointFormDialog({
 function Info({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <p className="text-slate-500">{label}</p>
-      <p className="mt-0.5 font-mono text-slate-300">{value}</p>
+      <p className="text-ink-5">{label}</p>
+      <p className="mt-0.5 font-mono text-ink-3">{value}</p>
     </div>
   );
 }

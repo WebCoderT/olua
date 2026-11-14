@@ -104,8 +104,8 @@ function AttributesCell({ attributes }: { attributes: ConfigAttributes }) {
     <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 text-[11px] leading-tight">
       {cells.map((cell) => (
         <span key={cell.label} className="flex items-baseline gap-1">
-          <span className="shrink-0 text-slate-500">{cell.label}</span>
-          <span className={cell.zero ? "text-slate-600" : "text-slate-200"}>{cell.text}</span>
+          <span className="shrink-0 text-ink-5">{cell.label}</span>
+          <span className={cell.zero ? "text-ink-6" : "text-ink-2"}>{cell.text}</span>
         </span>
       ))}
     </div>
@@ -116,8 +116,8 @@ function AttributesCell({ attributes }: { attributes: ConfigAttributes }) {
 function ReadonlyRow({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="flex gap-2 text-xs leading-relaxed">
-      <span className="w-16 shrink-0 text-slate-500">{label}</span>
-      <span className="min-w-0 flex-1 break-all text-slate-300">{children}</span>
+      <span className="w-16 shrink-0 text-ink-5">{label}</span>
+      <span className="min-w-0 flex-1 break-all text-ink-3">{children}</span>
     </div>
   );
 }
@@ -213,7 +213,7 @@ export function EquipmentVariantsDialog({
         title={
           <>
             变体 · {equipment.label}
-            <span className="ml-2 font-mono text-xs text-slate-500">{equipment.id}</span>
+            <span className="ml-2 font-mono text-xs text-ink-5">{equipment.id}</span>
           </>
         }
         hint={
@@ -253,16 +253,16 @@ export function EquipmentVariantsDialog({
               {rows.map((item) => {
                 const itemQuality = qualityOf(quality, item);
                 return (
-                  <tr key={item.id} className="transition hover:bg-slate-800/30">
-                    <td className={`${tdClass} font-mono text-xs text-slate-300`}>{item.id}</td>
-                    <td className={`${tdClass} font-medium text-slate-100`}>
+                  <tr key={item.id} className="transition hover:bg-surface-4/30">
+                    <td className={`${tdClass} font-mono text-xs text-ink-3`}>{item.id}</td>
+                    <td className={`${tdClass} font-medium text-ink-1`}>
                       <VariantName item={item} quality={itemQuality} />
                     </td>
                     <td className={tdClass}>
                       <div className="flex flex-wrap items-center gap-1">
-                        <Badge tone="indigo">{itemQuality.prefixLabel}</Badge>
-                        <Badge tone="slate">{itemQuality.suffixLabel}</Badge>
-                        <span className="text-[11px] text-slate-500">×{itemQuality.rate}</span>
+                        <Badge tone="gold">{itemQuality.prefixLabel}</Badge>
+                        <Badge tone="muted">{itemQuality.suffixLabel}</Badge>
+                        <span className="text-[11px] text-ink-5">×{itemQuality.rate}</span>
                       </div>
                     </td>
                     <td className={tdClass}>{item.level}</td>
@@ -272,11 +272,11 @@ export function EquipmentVariantsDialog({
                     </td>
                     <td className={tdClass}>
                       <div className="flex flex-wrap gap-1">
-                        <Badge tone={item.occupation === OCCUPATION_ANY ? "slate" : "amber"}>{occupationLabel(item.occupation)}</Badge>
-                        <Badge tone={item.sex === SEX_ANY ? "slate" : "amber"}>{sexLabel(item.sex)}</Badge>
+                        <Badge tone={item.occupation === OCCUPATION_ANY ? "muted" : "warn"}>{occupationLabel(item.occupation)}</Badge>
+                        <Badge tone={item.sex === SEX_ANY ? "muted" : "warn"}>{sexLabel(item.sex)}</Badge>
                       </div>
                     </td>
-                    <td className={`${tdClass} text-xs text-slate-400`}>{formatTime(item.updatedAt)}</td>
+                    <td className={`${tdClass} text-xs text-ink-4`}>{formatTime(item.updatedAt)}</td>
                     <td className={`${tdClass} text-right`}>
                       <Button
                         variant="outline"
@@ -393,7 +393,7 @@ function VariantEditDialog({
       size="lg"
       title={
         <>
-          编辑变体 · <span className="font-mono text-sm text-slate-400">{row.id}</span>
+          编辑变体 · <span className="font-mono text-sm text-ink-4">{row.id}</span>
         </>
       }
       hint={
@@ -416,7 +416,7 @@ function VariantEditDialog({
       }
     >
       <section className="flex flex-col gap-3">
-        <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-400">变体数值（可改）</h3>
+        <h3 className="text-xs font-semibold uppercase tracking-wide text-ink-4">变体数值（可改）</h3>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <Field label="名称" hint="基础名，不含前后缀文案">
             <Input value={label} onChange={(event) => setLabel(event.target.value)} />
@@ -431,10 +431,10 @@ function VariantEditDialog({
         <AttributesGrid attributes={attributes} onChange={setAttributes} header="八项属性（整份替换）" crossed={crossed} />
       </section>
 
-      <section className="mt-4 flex flex-col gap-2 rounded-xl border border-slate-800 bg-slate-900/40 px-3 py-2.5">
+      <section className="mt-4 flex flex-col gap-2 rounded-xl border border-line bg-surface-2/40 px-3 py-2.5">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-400">跟着基础件（只读）</h3>
-          <span className="text-[11px] text-slate-500">同款变体共用这些值，要改去「装备配置」页</span>
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-ink-4">跟着基础件（只读）</h3>
+          <span className="text-[11px] text-ink-5">同款变体共用这些值，要改去「装备配置」页</span>
         </div>
         <div className="grid grid-cols-1 gap-x-6 gap-y-1 sm:grid-cols-2">
           <ReadonlyRow label="部位">{slotLabel(row.slot)}</ReadonlyRow>
@@ -448,7 +448,7 @@ function VariantEditDialog({
             {quality.prefixLabel} · {quality.suffixLabel}（合计 ×{quality.rate}）
           </ReadonlyRow>
           <ReadonlyRow label="标签">
-            {row.tags?.length ? row.tags.join("、") : <span className="text-slate-600">—</span>}
+            {row.tags?.length ? row.tags.join("、") : <span className="text-ink-6">—</span>}
           </ReadonlyRow>
           <ReadonlyRow label="缩放 / 旋转">
             外观 ×{row.outScale} · 内观 ×{row.inScaleX} / ×{row.inScaleY} · 旋转 {row.inRotate}°
@@ -459,32 +459,32 @@ function VariantEditDialog({
           <ReadonlyRow label="图标">
             <span className="flex items-center gap-2">
               <GameIcon path={row.icon ?? ""} alt={row.label} size={28} />
-              <span className="font-mono text-[11px] text-slate-400">{row.icon || "—"}</span>
+              <span className="font-mono text-[11px] text-ink-4">{row.icon || "—"}</span>
             </span>
           </ReadonlyRow>
           <ReadonlyRow label="内观图集">
-            <span className="font-mono text-[11px] text-slate-400">{row.inAtlas || "—"}</span>
+            <span className="font-mono text-[11px] text-ink-4">{row.inAtlas || "—"}</span>
           </ReadonlyRow>
           <ReadonlyRow label="外观图集">
-            <span className="font-mono text-[11px] text-slate-400">{row.outAtlas || "—"}</span>
+            <span className="font-mono text-[11px] text-ink-4">{row.outAtlas || "—"}</span>
           </ReadonlyRow>
         </div>
         <ReadonlyRow label="8 向位置">
-          <span className="flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-slate-400">
+          <span className="flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-ink-4">
             {POSITION_DIRECTIONS.map((direction, index) => (
               <span key={direction}>
-                <span className="text-slate-500">{direction}</span> ({positions[index]?.x ?? 0}, {positions[index]?.y ?? 0})
+                <span className="text-ink-5">{direction}</span> ({positions[index]?.x ?? 0}, {positions[index]?.y ?? 0})
               </span>
             ))}
           </span>
         </ReadonlyRow>
         <ReadonlyRow label="描述">
-          {row.description?.trim() ? row.description : <span className="text-slate-600">—</span>}
+          {row.description?.trim() ? row.description : <span className="text-ink-6">—</span>}
         </ReadonlyRow>
       </section>
 
       {error ? (
-        <p className="mt-3 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-200">{error}</p>
+        <p className="mt-3 rounded-lg border border-ember/40 bg-ember/10 px-3 py-2 text-xs text-ember-hi">{error}</p>
       ) : null}
     </Modal>
   );

@@ -229,7 +229,7 @@ export function RolesPage() {
         title={`角色列表（${data?.total ?? 0}）`}
         actions={
           <>
-            {selectedIds.length > 0 ? <span className="text-xs text-slate-400">已选 {selectedIds.length} 个</span> : null}
+            {selectedIds.length > 0 ? <span className="text-xs text-ink-4">已选 {selectedIds.length} 个</span> : null}
             <Button variant="danger" className="px-2.5 py-1 text-xs" disabled={!canDelete || selectedIds.length === 0} onClick={() => setBatchConfirm(true)}>
               批量删除
             </Button>
@@ -244,7 +244,7 @@ export function RolesPage() {
                   <input
                     type="checkbox"
                     aria-label="全选本页"
-                    className="h-4 w-4 accent-indigo-500"
+                    className="h-4 w-4 accent-gold"
                     checked={allChecked}
                     disabled={!canDelete || currentList.length === 0}
                     onChange={toggleAll}
@@ -263,26 +263,26 @@ export function RolesPage() {
             </thead>
             <tbody>
               {currentList.map((role) => (
-                <tr key={role.id} className="transition hover:bg-slate-800/30">
+                <tr key={role.id} className="transition hover:bg-surface-4/30">
                   <td className={tdClass}>
                     <input
                       type="checkbox"
                       aria-label={`选择 ${role.name}`}
-                      className="h-4 w-4 accent-indigo-500"
+                      className="h-4 w-4 accent-gold"
                       checked={selectedIds.indexOf(role.id) !== -1}
                       disabled={!canDelete}
                       onChange={() => toggleOne(role.id)}
                     />
                   </td>
                   <td className={tdClass}>
-                    <Link to={`/roles/${role.id}`} className="font-medium text-indigo-300 hover:text-indigo-200">
+                    <Link to={`/roles/${role.id}`} className="font-medium text-gold hover:text-gold-hi">
                       {role.name}
                     </Link>
-                    <div className="mt-0.5 text-xs text-slate-500">id: {role.id}</div>
+                    <div className="mt-0.5 text-xs text-ink-5">id: {role.id}</div>
                   </td>
                   <td className={tdClass}>
                     {role.accountName ? (
-                      <Link to={`/accounts/${role.accountId}`} className="text-slate-300 hover:text-indigo-300">
+                      <Link to={`/accounts/${role.accountId}`} className="text-ink-3 hover:text-gold">
                         {role.accountName}
                       </Link>
                     ) : (
@@ -292,9 +292,9 @@ export function RolesPage() {
                   <td className={tdClass}>{OCCUPATION_LABELS[role.occupation] ?? role.occupation}</td>
                   <td className={tdClass}>{SEX_LABELS[role.sex] ?? role.sex}</td>
                   <td className={tdClass}>{role.level}</td>
-                  <td className={tdClass}>{role.online ? <Badge tone="indigo">在线</Badge> : <Badge>离线</Badge>}</td>
+                  <td className={tdClass}>{role.online ? <Badge tone="gold">在线</Badge> : <Badge>离线</Badge>}</td>
                   <td className={tdClass}>
-                    <span className="text-xs text-slate-500">#{role.revision}</span>
+                    <span className="text-xs text-ink-5">#{role.revision}</span>
                   </td>
                   <td className={tdClass}>{formatTime(role.updatedAt)}</td>
                   <td className={`${tdClass} text-right`}>

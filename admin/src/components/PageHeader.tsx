@@ -6,7 +6,7 @@ import { Link } from "react-router-dom";
  *
  * 为什么要它：三十个页面原来各写一遍
  * `<div><h1 className="text-lg …"/><p className="mt-1 text-xs …"/></div>`，
- * 抄着抄着就漂了 —— `text-xl` 一档、`text-slate-100` 一档、说明 `mt-1` 与 `mt-0.5` 混着用，
+ * 抄着抄着就漂了 —— `text-xl` 一档、`text-ink-1` 一档、说明 `mt-1` 与 `mt-0.5` 混着用，
  * 换页面时「字在跳」。统一在这里产出的好处是：改字号只改一处，而且**新页面没有别的写法可选**。
  *
  * 三条约定（见技能 `.workbuddy/skills/olua-admin-ui`）：

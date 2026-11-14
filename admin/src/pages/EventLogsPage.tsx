@@ -117,7 +117,7 @@ export function EventLogsPage() {
         description={
           <>
             玩家侧的行为记录（登录 / 进图 / 击杀 / 拾取 / 获得 / 消耗 / 邮件 / 任务）。
-            <strong className="text-slate-400">与「操作日志」不同</strong>：那一页记管理员的写操作，这一页记玩家角色做了什么。
+            <strong className="text-ink-4">与「操作日志」不同</strong>：那一页记管理员的写操作，这一页记玩家角色做了什么。
             超过保留天数或条数上限时自动清理最旧的。
           </>
         }
@@ -193,7 +193,7 @@ export function EventLogsPage() {
             重置
           </Button>
         </div>
-        {rangeError ? <p className="mt-3 rounded-lg border border-rose-500/40 bg-rose-950/50 px-3 py-2 text-xs text-rose-200">{rangeError}</p> : null}
+        {rangeError ? <p className="mt-3 rounded-lg border border-ember/40 bg-ember/15 px-3 py-2 text-xs text-ember-hi">{rangeError}</p> : null}
       </Card>
 
       <Card
@@ -236,7 +236,7 @@ export function EventLogsPage() {
         />
       </Card>
 
-      <p className="text-xs text-slate-500">
+      <p className="text-xs text-ink-5">
         时间范围按本地时区解释；角色 / 账号 / 地图都是精确匹配（想按名字找用关键字）。地图名来自地图名录，名录里没有的显示原 id。
         登录失败的记录没有账号 id（那是「尝试登录的用户名」写在详情里）—— 详情里能看到。
       </p>
@@ -248,23 +248,23 @@ export function EventLogsPage() {
 function EventRow({ item, open, onToggle }: { item: EventLog; open: boolean; onToggle: () => void }) {
   return (
     <>
-      <tr className="transition hover:bg-slate-800/30">
+      <tr className="transition hover:bg-surface-4/30">
         <td className={tdClass}>{formatTimeFull(item.createdAt)}</td>
         <td className={tdClass}>
           <span className="flex items-center gap-2">
-            <span className="text-slate-200">{item.typeLabel}</span>
-            {item.success ? null : <Badge tone="red">失败</Badge>}
+            <span className="text-ink-2">{item.typeLabel}</span>
+            {item.success ? null : <Badge tone="ember">失败</Badge>}
           </span>
-          <span className="font-mono text-xs text-slate-500">{item.type}</span>
+          <span className="font-mono text-xs text-ink-5">{item.type}</span>
         </td>
         <td className={tdClass}>
           {item.roleName || item.roleId ? (
             <span className="flex flex-col">
-              <span className="text-slate-100">{item.roleName ?? "（角色已删）"}</span>
-              <span className="font-mono text-xs text-slate-500">{item.roleId ?? "—"}</span>
+              <span className="text-ink-1">{item.roleName ?? "（角色已删）"}</span>
+              <span className="font-mono text-xs text-ink-5">{item.roleId ?? "—"}</span>
             </span>
           ) : (
-            <span className="text-slate-500">—</span>
+            <span className="text-ink-5">—</span>
           )}
         </td>
         <td className={tdClass}>{item.mapId ? mapText(item.mapId) : "—"}</td>
@@ -279,19 +279,19 @@ function EventRow({ item, open, onToggle }: { item: EventLog; open: boolean; onT
         </td>
       </tr>
       {open ? (
-        <tr className="bg-slate-900/40">
+        <tr className="bg-surface-2/40">
           <td className={tdClass} colSpan={7}>
             <div className="flex flex-col gap-2 py-1">
-              <p className="text-xs text-slate-400">
-                账号：<span className="font-mono text-slate-300">{item.accountId ?? "—"}</span>
+              <p className="text-xs text-ink-4">
+                账号：<span className="font-mono text-ink-3">{item.accountId ?? "—"}</span>
                 <span className="ml-3">区服：</span>
-                <span className="font-mono text-slate-300">{item.zoneId ?? "—"}</span>
+                <span className="font-mono text-ink-3">{item.zoneId ?? "—"}</span>
                 <span className="ml-3">地图：</span>
-                <span className="font-mono text-slate-300">{item.mapId ?? "—"}</span>
+                <span className="font-mono text-ink-3">{item.mapId ?? "—"}</span>
                 <span className="ml-3">流水 id：</span>
-                <span className="font-mono text-slate-300">{item.id}</span>
+                <span className="font-mono text-ink-3">{item.id}</span>
               </p>
-              <pre className="max-h-64 overflow-auto rounded-lg border border-slate-800 bg-slate-950/60 p-3 font-mono text-xs text-slate-300">
+              <pre className="max-h-64 overflow-auto rounded-lg border border-line bg-surface-0/60 p-3 font-mono text-xs text-ink-3">
                 {item.detail ? JSON.stringify(item.detail, null, 2) : "（无附加上下文）"}
               </pre>
             </div>
@@ -309,15 +309,15 @@ function EventRow({ item, open, onToggle }: { item: EventLog; open: boolean; onT
  * 查不到就原样显示 id —— 宁可显示 `mon_101` 也不显示「未知」，否则日志里丢了 id 就再也追不回来。
  */
 function TargetCell({ item }: { item: EventLog }) {
-  if (!item.target) return <span className="text-slate-500">—</span>;
+  if (!item.target) return <span className="text-ink-5">—</span>;
   const name = targetNameOf(item);
   return (
     <span className="flex flex-col">
-      <span className="text-slate-200">
+      <span className="text-ink-2">
         {name}
-        {item.amount !== null ? <span className="ml-2 tabular-nums text-amber-300">×{item.amount}</span> : null}
+        {item.amount !== null ? <span className="ml-2 tabular-nums text-warn-hi">×{item.amount}</span> : null}
       </span>
-      {name !== item.target ? <span className="font-mono text-xs text-slate-500">{item.target}</span> : null}
+      {name !== item.target ? <span className="font-mono text-xs text-ink-5">{item.target}</span> : null}
     </span>
   );
 }

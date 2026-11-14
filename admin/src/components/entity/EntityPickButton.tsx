@@ -66,14 +66,14 @@ export function EntityPickButton({
         onClick={() => setOpen(true)}
         className={`flex min-w-0 items-center gap-2 rounded-lg border p-1.5 text-left transition disabled:opacity-50 ${
           unknown
-            ? "border-amber-700/60 bg-amber-500/5 hover:border-amber-600"
-            : "border-slate-800 bg-slate-900/60 hover:border-slate-600 hover:bg-slate-800/60"
+            ? "border-warn/30 bg-warn/5 hover:border-warn/50"
+            : "border-line bg-surface-2/60 hover:border-line-strong hover:bg-surface-4/60"
         } w-full`}
       >
         <EntityImage image={image} alt={label} size={28} />
         <span className="min-w-0 flex-1">
-          <span className={`block truncate text-xs ${value ? "text-slate-100" : "text-slate-500"}`}>{value ? label : placeholder}</span>
-          <span className={`block truncate text-[10px] ${unknown ? "text-amber-300/90" : "text-slate-500"}`}>
+          <span className={`block truncate text-xs ${value ? "text-ink-1" : "text-ink-5"}`}>{value ? label : placeholder}</span>
+          <span className={`block truncate text-[10px] ${unknown ? "text-warn-hi/90" : "text-ink-5"}`}>
             {unknown ? `清单里没有这个 id：${value}` : note || (value ? value : "点一下可视化挑")}
           </span>
         </span>

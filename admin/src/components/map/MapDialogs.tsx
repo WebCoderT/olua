@@ -22,7 +22,7 @@ import { overflowText, overflowTitle } from "./bounds";
 
 /** 行高亮：从图上点过来时，表里那一行要能被一眼找到（否则弹窗打开了还得自己找） */
 function rowClass(active: boolean): string {
-  return active ? `${tdClass} bg-indigo-500/10` : tdClass;
+  return active ? `${tdClass} bg-gold/10` : tdClass;
 }
 
 export function LayersDialog({ open, detail, onClose }: { open: boolean; detail: MapDetail | null; onClose: () => void }) {
@@ -96,8 +96,8 @@ export function NpcPointsDialog({
       {!detail ? null : (
         <div className="space-y-3">
           <section>
-            <h4 className="mb-1 text-xs text-slate-300">
-              NPC 点位 <span className="text-slate-600">（{detail.npcPoints.length}）</span>
+            <h4 className="mb-1 text-xs text-ink-3">
+              NPC 点位 <span className="text-ink-6">（{detail.npcPoints.length}）</span>
             </h4>
             {detail.npcPoints.length === 0 ? (
               <EmptyState title="这张图没有 NPC" description="安全地图一般只有复活点；要加就点页面上「放置 NPC」，在图上点一下" />
@@ -118,7 +118,7 @@ export function NpcPointsDialog({
                       <tr key={point.id}>
                         <td className={rowClass(point.id === focusId)}>{point.id}</td>
                         <td className={rowClass(point.id === focusId)}>
-                          {point.npcLabel} <span className="text-slate-600">({point.npcId})</span>
+                          {point.npcLabel} <span className="text-ink-6">({point.npcId})</span>
                         </td>
                         <td className={rowClass(point.id === focusId)}>
                           ({point.cx}, {point.cy})
@@ -140,7 +140,7 @@ export function NpcPointsDialog({
           </section>
 
           <section>
-            <h4 className="mb-1 text-xs text-slate-300">复活点</h4>
+            <h4 className="mb-1 text-xs text-ink-3">复活点</h4>
             {!detail.revivePoint ? (
               <EmptyState title="这张图没有复活点" description="没有复活点的图，玩家死在这里会退回上一次的复活点 —— 点页面上「设复活点」，在图上点一下即可" />
             ) : (
@@ -178,7 +178,7 @@ export function NpcPointsDialog({
 
 /** 「在图内」单元格：判据来自服务端 `inBounds`（点位没有 overflow 量，只有一个是非） */
 function InBoundsCell({ inBounds }: { inBounds: boolean }) {
-  return inBounds ? <Badge tone="green">在图内</Badge> : <Badge tone="red">越界</Badge>;
+  return inBounds ? <Badge tone="jade">在图内</Badge> : <Badge tone="ember">越界</Badge>;
 }
 
 /**
@@ -234,7 +234,7 @@ export function SpawnAreasDialog({
                     <td className={rowClass(area.id === focusId)}>{area.id}</td>
                     <td className={rowClass(area.id === focusId)}>{area.name}</td>
                     <td className={rowClass(area.id === focusId)}>
-                      {area.monsterLabel} <span className="text-slate-600">({area.monsterKey})</span>
+                      {area.monsterLabel} <span className="text-ink-6">({area.monsterKey})</span>
                     </td>
                     <td className={rowClass(area.id === focusId)}>
                       {area.min}~{area.max}
@@ -247,11 +247,11 @@ export function SpawnAreasDialog({
                     </td>
                     <td className={rowClass(area.id === focusId)}>
                       {area.inBounds ? (
-                        <Badge tone="green">在图内</Badge>
+                        <Badge tone="jade">在图内</Badge>
                       ) : (
                         <span className="flex flex-wrap items-center gap-1.5 text-[11px]" title={overflowTitle(area)}>
-                          <Badge tone="red">越界</Badge>
-                          <span className="font-mono text-rose-300">{overflowText(area)}</span>
+                          <Badge tone="ember">越界</Badge>
+                          <span className="font-mono text-ember-hi">{overflowText(area)}</span>
                         </span>
                       )}
                     </td>
@@ -359,7 +359,7 @@ export function CollisionsDialog({
                   {box.w} × {box.h}
                 </td>
                 <td className={rowClass(box.id === focusId)}>
-                  {box.fullyOutside ? <Badge tone="red">整块在图外（看不见）</Badge> : <span className="text-slate-500">图内 / 跨边界</span>}
+                  {box.fullyOutside ? <Badge tone="ember">整块在图外（看不见）</Badge> : <span className="text-ink-5">图内 / 跨边界</span>}
                 </td>
                 <td className={rowClass(box.id === focusId)}>
                   <Button variant="ghost" onClick={() => onEdit(box)}>
@@ -400,12 +400,12 @@ export function SourcesDialog({ open, detail, onClose }: { open: boolean; detail
                 <td className={tdClass}>{source.label}</td>
                 <td className={tdClass}>
                   {/* 只有两类（#655 起「生成快照」这一类随数据落库消失）；未知值按库表兜底显示原文 */}
-                  <Badge tone={source.origin === "config" ? "amber" : "green"}>
+                  <Badge tone={source.origin === "config" ? "warn" : "jade"}>
                     {source.origin === "config" ? "客户端资源" : "服务端库表"}
                   </Badge>
                 </td>
                 <td className={`${tdClass} font-mono text-[11px]`}>{source.ref}</td>
-                <td className={`${tdClass} whitespace-normal text-slate-400`}>{source.note}</td>
+                <td className={`${tdClass} whitespace-normal text-ink-4`}>{source.note}</td>
               </tr>
             ))}
           </tbody>

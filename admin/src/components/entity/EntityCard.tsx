@@ -63,26 +63,26 @@ export function EntityCard({
       onClick={disabled ? undefined : onClick}
       onKeyDown={onKeyDown}
       className={`relative flex items-center rounded-xl border ${compact ? "gap-1.5 p-1" : "gap-2.5 p-2"} text-left transition ${
-        empty ? "border-dashed border-slate-700 bg-slate-900/30" : "border-slate-700 bg-slate-900/70"
-      } ${disabled || !onClick ? "" : "cursor-pointer hover:border-indigo-500/70 hover:bg-slate-800/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60"}`}
+        empty ? "border-dashed border-line-strong bg-surface-2/30" : "border-line-strong bg-surface-2/70"
+      } ${disabled || !onClick ? "" : "cursor-pointer hover:border-gold/70 hover:bg-surface-4/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/60"}`}
     >
       {/* 空槽不画图标：`NoImage` 那种「无图」占位看着像「缺资源」，而这里本来就是空的 */}
       {empty ? (
         <span
           aria-hidden="true"
-          className="rounded border border-dashed border-slate-800 bg-slate-950/40"
+          className="rounded border border-dashed border-line bg-surface-0/40"
           style={{ width: size, height: size }}
         />
       ) : (
         <EntityImage image={image} alt={label} size={size} />
       )}
       <div className="min-w-0 flex-1">
-        {badge && !compact ? <p className="text-[10px] leading-tight text-slate-500">{badge}</p> : null}
-        <p className={`truncate text-xs font-medium ${empty ? "text-slate-600" : "text-slate-100"}`}>
-          {badge && compact ? <span className="mr-1 text-[10px] font-normal text-slate-500">{badge}</span> : null}
+        {badge && !compact ? <p className="text-[10px] leading-tight text-ink-5">{badge}</p> : null}
+        <p className={`truncate text-xs font-medium ${empty ? "text-ink-6" : "text-ink-1"}`}>
+          {badge && compact ? <span className="mr-1 text-[10px] font-normal text-ink-5">{badge}</span> : null}
           {empty ? placeholder : label}
         </p>
-        {!empty && note ? <p className="truncate text-[10px] leading-tight text-slate-500">{note}</p> : null}
+        {!empty && note ? <p className="truncate text-[10px] leading-tight text-ink-5">{note}</p> : null}
       </div>
       {!empty && onClear ? (
         <button
@@ -94,7 +94,7 @@ export function EntityCard({
             event.stopPropagation();
             onClear();
           }}
-          className="absolute right-1 top-1 rounded px-1 text-xs leading-none text-slate-500 transition hover:bg-slate-800 hover:text-rose-300 disabled:cursor-not-allowed disabled:opacity-40"
+          className="absolute right-1 top-1 rounded px-1 text-xs leading-none text-ink-5 transition hover:bg-surface-4 hover:text-ember-hi disabled:cursor-not-allowed disabled:opacity-40"
         >
           ×
         </button>

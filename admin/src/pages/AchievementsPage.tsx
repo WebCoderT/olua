@@ -427,7 +427,7 @@ export function AchievementsPage() {
           </Field>
           <div className="md:col-span-2">
             <div className="mb-2 flex items-center justify-between">
-              <span className="text-xs font-medium text-slate-400">奖励物品（留空表示不给物品）</span>
+              <span className="text-xs font-medium text-ink-4">奖励物品（留空表示不给物品）</span>
               <Button
                 variant="outline"
                 className="px-2.5 py-1 text-xs"
@@ -438,9 +438,9 @@ export function AchievementsPage() {
               </Button>
             </div>
             {form.items.length === 0 ? (
-              <p className="text-xs text-slate-500">没有物品奖励：只发绑定元宝与经验。</p>
+              <p className="text-xs text-ink-5">没有物品奖励：只发绑定元宝与经验。</p>
             ) : (
-              <div className="flex flex-col gap-2 rounded-xl border border-slate-800 bg-slate-950/40 p-3">
+              <div className="flex flex-col gap-2 rounded-xl border border-line bg-surface-0/40 p-3">
                 {form.items.map((entry, index) => (
                   <div key={index} className="flex items-center gap-2">
                     <div className="min-w-0 flex-1">
@@ -458,7 +458,7 @@ export function AchievementsPage() {
                         }
                       />
                     </div>
-                    <span className="text-xs text-slate-600">×</span>
+                    <span className="text-xs text-ink-6">×</span>
                     <div className="w-24 shrink-0">
                       <Input
                         type="number"
@@ -475,7 +475,7 @@ export function AchievementsPage() {
                     </div>
                     <Button
                       variant="ghost"
-                      className="px-2 py-1 text-xs text-rose-300"
+                      className="px-2 py-1 text-xs text-ember-hi"
                       onClick={() => setForm({ ...form, items: form.items.filter((_, i) => i !== index) })}
                     >
                       删除
@@ -508,31 +508,31 @@ export function AchievementsPage() {
             </thead>
             <tbody>
               {data?.list.map((item) => (
-                <tr key={item.id} className="transition hover:bg-slate-800/30">
-                  <td className={`${tdClass} font-mono text-xs text-slate-400`}>{item.id}</td>
+                <tr key={item.id} className="transition hover:bg-surface-4/30">
+                  <td className={`${tdClass} font-mono text-xs text-ink-4`}>{item.id}</td>
                   <td className={tdClass}>
-                    <Badge tone="slate">{CATEGORY_LABELS[item.category] ?? item.category}</Badge>
+                    <Badge tone="muted">{CATEGORY_LABELS[item.category] ?? item.category}</Badge>
                   </td>
                   <td className={tdClass}>
-                    <span className="block font-medium text-slate-100">
+                    <span className="block font-medium text-ink-1">
                       {item.label}
-                      {item.hidden ? <span className="ml-1 text-xs text-amber-400/80">（隐藏）</span> : null}
+                      {item.hidden ? <span className="ml-1 text-xs text-warn/80">（隐藏）</span> : null}
                     </span>
-                    <span className="mt-0.5 block max-w-[260px] truncate text-xs text-slate-500" title={item.description}>
+                    <span className="mt-0.5 block max-w-[260px] truncate text-xs text-ink-5" title={item.description}>
                       {item.description}
                     </span>
                   </td>
                   <td className={tdClass}>
-                    <span className="block text-xs text-slate-300">{conditionSummary(item)}</span>
-                    <span className="mt-0.5 block text-[11px] text-slate-500">
+                    <span className="block text-xs text-ink-3">{conditionSummary(item)}</span>
+                    <span className="mt-0.5 block text-[11px] text-ink-5">
                       {CUMULATIVE.has(item.condition.type) ? "事件记账" : "查询现算"}
                     </span>
                   </td>
-                  <td className={`${tdClass} text-xs text-slate-400`}>
+                  <td className={`${tdClass} text-xs text-ink-4`}>
                     {item.rewards.bindGold} 绑定元宝 / {item.rewards.exp} 经验
                     {item.rewards.items.length > 0 ? ` / ${item.rewards.items.length} 件物品` : ""}
                   </td>
-                  <td className={`${tdClass} text-xs text-slate-400`}>{formatTime(item.updatedAt)}</td>
+                  <td className={`${tdClass} text-xs text-ink-4`}>{formatTime(item.updatedAt)}</td>
                   <td className={`${tdClass} text-right`}>
                     <div className="flex justify-end gap-2">
                       <Button

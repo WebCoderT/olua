@@ -53,12 +53,12 @@ export function AttributesGrid<A extends { maxHp?: number; hpRecover?: number } 
 
   return (
     <div>
-      <span className="mb-2 block text-xs font-medium text-slate-400">{header}</span>
-      <div className="grid grid-cols-1 gap-3 rounded-xl border border-slate-800 bg-slate-950/40 p-4 sm:grid-cols-2">
+      <span className="mb-2 block text-xs font-medium text-ink-4">{header}</span>
+      <div className="grid grid-cols-1 gap-3 rounded-xl border border-line bg-surface-0/40 p-4 sm:grid-cols-2">
         {"maxHp" in attributes
           ? SCALAR_ROWS.map(({ key, label }) => (
               <div key={key} className="flex items-center justify-between gap-2">
-                <span className="shrink-0 whitespace-nowrap text-xs text-slate-400">{label}</span>
+                <span className="shrink-0 whitespace-nowrap text-xs text-ink-4">{label}</span>
                 {/* 宽度给外层：`Input` 自带 `w-full`，写在自己的 className 上会与基础类打架 */}
                 <div className="w-28">
                   <Input
@@ -73,7 +73,7 @@ export function AttributesGrid<A extends { maxHp?: number; hpRecover?: number } 
           : null}
         {RANGE_FIELDS.map(({ key, label: fieldLabel }) => (
           <div key={key} className="flex items-center justify-between gap-2">
-            <span className="shrink-0 whitespace-nowrap text-xs text-slate-400">{fieldLabel}</span>
+            <span className="shrink-0 whitespace-nowrap text-xs text-ink-4">{fieldLabel}</span>
             <div className="flex items-center gap-1">
               <div className="w-20">
                 <Input
@@ -84,7 +84,7 @@ export function AttributesGrid<A extends { maxHp?: number; hpRecover?: number } 
                   onChange={(event) => setRange(key, "min", event.target.value)}
                 />
               </div>
-              <span className="text-xs text-slate-600">~</span>
+              <span className="text-xs text-ink-6">~</span>
               <div className="w-20">
                 <Input
                   type="number"
@@ -100,7 +100,7 @@ export function AttributesGrid<A extends { maxHp?: number; hpRecover?: number } 
       </div>
 
       {crossed.length > 0 ? (
-        <Notice tone="red">以下属性的下限不能大于上限：{crossed.join("、")}。</Notice>
+        <Notice tone="ember">以下属性的下限不能大于上限：{crossed.join("、")}。</Notice>
       ) : null}
     </div>
   );

@@ -142,22 +142,22 @@ export function NpcsPage() {
             </thead>
             <tbody>
               {data?.list.map((item) => (
-                <tr key={item.id} className="transition hover:bg-slate-800/30">
+                <tr key={item.id} className="transition hover:bg-surface-4/30">
                   <td className={tdClass}>
                     <FrameAnimation atlas={item.src} alt={item.label} />
                   </td>
-                  <td className={`${tdClass} font-mono text-xs text-slate-300`}>{item.id}</td>
-                  <td className={`${tdClass} font-medium text-slate-100`}>{item.label}</td>
-                  <td className={`${tdClass} font-mono text-xs text-slate-400`}>{item.src || <span className="text-slate-600">（未配置，不显示）</span>}</td>
-                  <td className={`${tdClass} whitespace-nowrap font-mono text-xs text-slate-400`}>
+                  <td className={`${tdClass} font-mono text-xs text-ink-3`}>{item.id}</td>
+                  <td className={`${tdClass} font-medium text-ink-1`}>{item.label}</td>
+                  <td className={`${tdClass} font-mono text-xs text-ink-4`}>{item.src || <span className="text-ink-6">（未配置，不显示）</span>}</td>
+                  <td className={`${tdClass} whitespace-nowrap font-mono text-xs text-ink-4`}>
                     ×{item.scaleX} / ×{item.scaleY}
                     <br />
                     ({item.posX}, {item.posY})
                   </td>
-                  <td className={`${tdClass} max-w-[360px] truncate text-xs text-slate-400`} title={item.dialog}>
-                    {item.dialog || <span className="text-slate-600">（未配置）</span>}
+                  <td className={`${tdClass} max-w-[360px] truncate text-xs text-ink-4`} title={item.dialog}>
+                    {item.dialog || <span className="text-ink-6">（未配置）</span>}
                   </td>
-                  <td className={`${tdClass} text-xs text-slate-400`}>{formatTime(item.updatedAt)}</td>
+                  <td className={`${tdClass} text-xs text-ink-4`}>{formatTime(item.updatedAt)}</td>
                   <td className={`${tdClass} text-right`}>
                     <Button variant="outline" className="px-2.5 py-1 text-xs" disabled={!canWrite} onClick={() => openEdit(item)}>
                       编辑
@@ -245,7 +245,7 @@ export function NpcsPage() {
           </div>
           <Field label="对话文案" hint="客户端暂无对话数据形态，先在这里维护（≤2000 字）">
             <textarea
-              className="min-h-[96px] w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none transition focus:border-emerald-500"
+              className="min-h-[96px] w-full rounded-lg border border-line-strong bg-surface-0 px-3 py-2 text-sm text-ink-1 outline-none transition focus:border-jade"
               maxLength={2000}
               value={form.dialog}
               onChange={(event) => setForm({ ...form, dialog: event.target.value })}

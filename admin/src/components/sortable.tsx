@@ -75,12 +75,12 @@ export function SortableTh({
     <th className={`${thClass} ${className}`} aria-sort={active ? (order === "asc" ? "ascending" : "descending") : "none"}>
       <button
         type="button"
-        className="inline-flex items-center gap-1 transition hover:text-slate-200"
+        className="inline-flex items-center gap-1 transition hover:text-ink-2"
         title={`按「${label}」排序（${nextOrder === "asc" ? "升序" : "降序"}）`}
         onClick={() => onToggle(field, defaultOrder)}
       >
         {label}
-        <span className={active ? "text-indigo-300" : "text-slate-600"} aria-hidden="true">
+        <span className={active ? "text-gold" : "text-ink-6"} aria-hidden="true">
           {active ? (order === "asc" ? "▲" : "▼") : "⇅"}
         </span>
       </button>

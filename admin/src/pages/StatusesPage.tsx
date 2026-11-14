@@ -190,7 +190,7 @@ function StatusEditDialog({
       title={
         <>
           编辑状态 · {initial.id}
-          <span className="ml-2 text-xs font-normal text-slate-500">
+          <span className="ml-2 text-xs font-normal text-ink-5">
             {SKILL_OWNER_LABELS[initial.owner] ?? initial.owner}归属
           </span>
         </>
@@ -241,13 +241,13 @@ function StatusEditDialog({
           onChange={(path) => set("effect", path)}
         />
       </div>
-      <label className="flex items-center gap-2 text-xs text-slate-300">
+      <label className="flex items-center gap-2 text-xs text-ink-3">
         <input type="checkbox" checked={form.effectHoldLast} onChange={(event) => set("effectHoldLast", event.target.checked)} />
         身上特效只播一遍并停在尾帧（脉冲类特效勾上）
       </label>
       <div>
-        <span className="mb-2 block text-xs font-medium text-slate-400">战斗数值修正（整份替换；留空 = 该维度不参与，全空 = 纯表现状态）</span>
-        <div className="grid grid-cols-1 gap-3 rounded-xl border border-slate-800 bg-slate-950/40 p-4 sm:grid-cols-3">
+        <span className="mb-2 block text-xs font-medium text-ink-4">战斗数值修正（整份替换；留空 = 该维度不参与，全空 = 纯表现状态）</span>
+        <div className="grid grid-cols-1 gap-3 rounded-xl border border-line bg-surface-0/40 p-4 sm:grid-cols-3">
           <Field label="格挡概率" hint="0~1，如 0.2">
             <Input
               type="number"
@@ -284,8 +284,8 @@ function StatusEditDialog({
         </div>
       </div>
       <div>
-        <span className="mb-2 block text-xs font-medium text-slate-400">层数与周期（#826 第三批）</span>
-        <div className="grid grid-cols-1 gap-3 rounded-xl border border-slate-800 bg-slate-950/40 p-4 sm:grid-cols-3">
+        <span className="mb-2 block text-xs font-medium text-ink-4">层数与周期（#826 第三批）</span>
+        <div className="grid grid-cols-1 gap-3 rounded-xl border border-line bg-surface-0/40 p-4 sm:grid-cols-3">
           <Field label="分类" hint="只用于分组；真正生效的是下面的「周期间隔」与「控制标记」">
             <Select value={form.kind} onChange={(event) => set("kind", event.target.value)}>
               {Object.entries(STATUS_KIND_LABELS).map(([value, text]) => (
@@ -340,17 +340,17 @@ function StatusEditDialog({
         </div>
       </div>
       <div>
-        <span className="mb-2 block text-xs font-medium text-slate-400">控制标记（勾上即生效；眩晕与麻痹在服务端是同一条判据）</span>
-        <div className="grid grid-cols-1 gap-3 rounded-xl border border-slate-800 bg-slate-950/40 p-4 sm:grid-cols-3">
-          <label className="flex items-center gap-2 text-xs text-slate-300">
+        <span className="mb-2 block text-xs font-medium text-ink-4">控制标记（勾上即生效；眩晕与麻痹在服务端是同一条判据）</span>
+        <div className="grid grid-cols-1 gap-3 rounded-xl border border-line bg-surface-0/40 p-4 sm:grid-cols-3">
+          <label className="flex items-center gap-2 text-xs text-ink-3">
             <input type="checkbox" checked={form.stun} onChange={(event) => set("stun", event.target.checked)} />
             眩晕 / 麻痹（禁止移动与出手）
           </label>
-          <label className="flex items-center gap-2 text-xs text-slate-300">
+          <label className="flex items-center gap-2 text-xs text-ink-3">
             <input type="checkbox" checked={form.root} onChange={(event) => set("root", event.target.checked)} />
             定身（只禁止移动）
           </label>
-          <label className="flex items-center gap-2 text-xs text-slate-300">
+          <label className="flex items-center gap-2 text-xs text-ink-3">
             <input type="checkbox" checked={form.silence} onChange={(event) => set("silence", event.target.checked)} />
             沉默（只禁止出手）
           </label>
@@ -514,30 +514,30 @@ export function StatusesPage() {
               {data?.list.map((item) => {
                 const summary = combatSummary(item.combat);
                 return (
-                  <tr key={item.id} className="transition hover:bg-slate-800/30">
+                  <tr key={item.id} className="transition hover:bg-surface-4/30">
                     <td className={tdClass}>
                       <GameIcon path={item.icon} alt={item.label} />
                     </td>
-                    <td className={`${tdClass} font-mono text-xs text-slate-300`}>{item.id}</td>
-                    <td className={`${tdClass} font-medium text-slate-100`}>{item.label}</td>
+                    <td className={`${tdClass} font-mono text-xs text-ink-3`}>{item.id}</td>
+                    <td className={`${tdClass} font-medium text-ink-1`}>{item.label}</td>
                     <td className={tdClass}>
-                      <Badge tone={item.owner === "monster" ? "amber" : "indigo"}>{SKILL_OWNER_LABELS[item.owner] ?? item.owner}</Badge>
+                      <Badge tone={item.owner === "monster" ? "warn" : "gold"}>{SKILL_OWNER_LABELS[item.owner] ?? item.owner}</Badge>
                     </td>
                     <td className={tdClass}>{STATUS_SOURCE_LABELS[item.source] ?? item.source}</td>
-                    <td className={`${tdClass} text-xs text-slate-400`}>{item.duration}s</td>
-                    <td className={`${tdClass} text-xs text-slate-400`}>{summary || <span className="text-slate-600">（纯表现）</span>}</td>
-                    <td className={`${tdClass} text-xs text-slate-400`}>{behaviourSummary(item)}</td>
-                    <td className={`${tdClass} max-w-[220px] truncate text-xs text-slate-400`} title={item.effect}>
+                    <td className={`${tdClass} text-xs text-ink-4`}>{item.duration}s</td>
+                    <td className={`${tdClass} text-xs text-ink-4`}>{summary || <span className="text-ink-6">（纯表现）</span>}</td>
+                    <td className={`${tdClass} text-xs text-ink-4`}>{behaviourSummary(item)}</td>
+                    <td className={`${tdClass} max-w-[220px] truncate text-xs text-ink-4`} title={item.effect}>
                       {item.effect ? (
                         <>
                           {item.effect}
-                          {item.effectHoldLast ? <span className="ml-1 text-slate-500">（停尾帧）</span> : null}
+                          {item.effectHoldLast ? <span className="ml-1 text-ink-5">（停尾帧）</span> : null}
                         </>
                       ) : (
-                        <span className="text-slate-600">（仅图标）</span>
+                        <span className="text-ink-6">（仅图标）</span>
                       )}
                     </td>
-                    <td className={`${tdClass} text-xs text-slate-400`}>{formatTime(item.updatedAt)}</td>
+                    <td className={`${tdClass} text-xs text-ink-4`}>{formatTime(item.updatedAt)}</td>
                     <td className={`${tdClass} text-right`}>
                       <Button
                         variant="outline"

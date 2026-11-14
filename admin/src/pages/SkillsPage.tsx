@@ -237,7 +237,7 @@ function SkillEditDialog({
       title={
         <>
           编辑技能 · {initial.id}
-          <span className="ml-2 text-xs font-normal text-slate-500">
+          <span className="ml-2 text-xs font-normal text-ink-5">
             {SKILL_OWNER_LABELS[initial.owner] ?? initial.owner}归属
           </span>
         </>
@@ -326,8 +326,8 @@ function SkillEditDialog({
         </Field>
       </div>
       <div>
-        <span className="mb-2 block text-xs font-medium text-slate-400">释放限制（动作锁同时锁移动与再次出手）</span>
-        <div className="grid grid-cols-1 gap-3 rounded-xl border border-slate-800 bg-slate-950/40 p-4 sm:grid-cols-3">
+        <span className="mb-2 block text-xs font-medium text-ink-4">释放限制（动作锁同时锁移动与再次出手）</span>
+        <div className="grid grid-cols-1 gap-3 rounded-xl border border-line bg-surface-0/40 p-4 sm:grid-cols-3">
           <Field label="冷却（秒）" hint="0 = 不限制">
             <Input type="number" min={0} step={0.1} value={form.cooldown} onChange={(event) => set("cooldown", event.target.value)} />
           </Field>
@@ -410,15 +410,15 @@ function SkillEditDialog({
             />
           </Field>
           <div className="flex flex-col justify-center gap-2">
-            <label className="flex items-center gap-2 text-xs text-slate-300">
+            <label className="flex items-center gap-2 text-xs text-ink-3">
               <input type="checkbox" checked={form.requireTarget} onChange={(event) => set("requireTarget", event.target.checked)} />
               要求有合法目标
             </label>
-            <label className="flex items-center gap-2 text-xs text-slate-300">
+            <label className="flex items-center gap-2 text-xs text-ink-3">
               <input type="checkbox" checked={form.effectOnSelf} onChange={(event) => set("effectOnSelf", event.target.checked)} />
               特效播在自己身上
             </label>
-            <label className="flex items-center gap-2 text-xs text-slate-300">
+            <label className="flex items-center gap-2 text-xs text-ink-3">
               <input type="checkbox" checked={form.canAuto} onChange={(event) => set("canAuto", event.target.checked)} />
               可被自动战斗释放
             </label>
@@ -427,7 +427,7 @@ function SkillEditDialog({
       </div>
       <div>
         <div className="mb-2 flex items-center justify-between">
-          <span className="text-xs font-medium text-slate-400">伤害系数（下标 = 技能等级 - 1，整份替换）</span>
+          <span className="text-xs font-medium text-ink-4">伤害系数（下标 = 技能等级 - 1，整份替换）</span>
           <Button
             variant="outline"
             className="px-2.5 py-1 text-xs"
@@ -437,13 +437,13 @@ function SkillEditDialog({
             加一级
           </Button>
         </div>
-        <div className="flex flex-col gap-2 rounded-xl border border-slate-800 bg-slate-950/40 p-4">
+        <div className="flex flex-col gap-2 rounded-xl border border-line bg-surface-0/40 p-4">
           {form.coefficients.length === 0 ? (
-            <p className="text-xs text-slate-500">没有配置倍率：状态型技能可以为空，主动 / 回复类技能至少一条。</p>
+            <p className="text-xs text-ink-5">没有配置倍率：状态型技能可以为空，主动 / 回复类技能至少一条。</p>
           ) : null}
           {form.coefficients.map((entry, index) => (
             <div key={index} className="flex items-center gap-2">
-              <span className="w-12 shrink-0 text-xs text-slate-500">Lv.{index + 1}</span>
+              <span className="w-12 shrink-0 text-xs text-ink-5">Lv.{index + 1}</span>
               <div className="w-32">
                 <Select
                   value={entry.baseType}
@@ -456,7 +456,7 @@ function SkillEditDialog({
                   ))}
                 </Select>
               </div>
-              <span className="text-xs text-slate-600">×</span>
+              <span className="text-xs text-ink-6">×</span>
               <div className="w-24">
                 <Input
                   type="number"
@@ -469,7 +469,7 @@ function SkillEditDialog({
               </div>
               <Button
                 variant="ghost"
-                className="px-2 py-1 text-xs text-rose-300"
+                className="px-2 py-1 text-xs text-ember-hi"
                 onClick={() => set("coefficients", form.coefficients.filter((_, i) => i !== index))}
               >
                 删除
@@ -662,7 +662,7 @@ function SkillCreateDialog({
           <Input value={form.rate} onChange={(event) => set("rate", event.target.value)} disabled={stateful} />
         </Field>
       </div>
-      <ProblemList problems={problems} tone="amber" />
+      <ProblemList problems={problems} tone="warn" />
     </Modal>
   );
 }
@@ -864,33 +864,33 @@ export function SkillsPage() {
               {data?.list.map((item) => {
                 const first = item.damageCoefficients[0];
                 return (
-                  <tr key={item.id} className="transition hover:bg-slate-800/30">
+                  <tr key={item.id} className="transition hover:bg-surface-4/30">
                     <td className={tdClass}>
                       <GameIcon path={item.icon} alt={item.label} />
                     </td>
-                    <td className={`${tdClass} font-mono text-xs text-slate-300`}>{item.id}</td>
-                    <td className={`${tdClass} font-medium text-slate-100`}>{item.label}</td>
+                    <td className={`${tdClass} font-mono text-xs text-ink-3`}>{item.id}</td>
+                    <td className={`${tdClass} font-medium text-ink-1`}>{item.label}</td>
                     <td className={tdClass}>
-                      <Badge tone={item.owner === "monster" ? "amber" : "indigo"}>{SKILL_OWNER_LABELS[item.owner] ?? item.owner}</Badge>
+                      <Badge tone={item.owner === "monster" ? "warn" : "gold"}>{SKILL_OWNER_LABELS[item.owner] ?? item.owner}</Badge>
                     </td>
                     <td className={tdClass}>{SKILL_CATEGORY_LABELS[item.category] ?? item.category}</td>
                     <td className={tdClass}>{OCCUPATION_LABELS[item.occupation] ?? item.occupation}</td>
                     <td className={tdClass}>{SKILL_TARGET_TYPE_LABELS[item.targetType] ?? item.targetType}</td>
-                    <td className={`${tdClass} text-xs text-slate-400`}>
+                    <td className={`${tdClass} text-xs text-ink-4`}>
                       冷却 {item.cooldown}s · 蓝 {item.mpCost}
                       {item.distance > 0 ? ` · 距离 ${item.distance}` : ""}
                       {item.pushDistance > 0 ? ` · 击退 ${item.pushDistance}` : ""}
                       {item.pullDistance > 0 ? ` · 拉人 ${item.pullDistance}` : ""}
                       {item.secondHitRatio > 0 ? ` · 两段 ×${item.secondHitRatio}` : ""}
                     </td>
-                    <td className={`${tdClass} text-xs text-slate-400`}>
+                    <td className={`${tdClass} text-xs text-ink-4`}>
                       {first ? `${damageBaseLabel(first.baseType)}×${first.baseTypeRate}（共 ${item.damageCoefficients.length} 级）` : "—"}
                     </td>
-                    <td className={`${tdClass} text-xs text-slate-400`}>{item.castLockMs > 0 ? `${item.castLockMs}ms` : "跟动画"}</td>
-                    <td className={`${tdClass} text-xs text-slate-400`}>
-                      {item.statusId ? item.statusId : <span className="text-slate-600">（不挂）</span>}
+                    <td className={`${tdClass} text-xs text-ink-4`}>{item.castLockMs > 0 ? `${item.castLockMs}ms` : "跟动画"}</td>
+                    <td className={`${tdClass} text-xs text-ink-4`}>
+                      {item.statusId ? item.statusId : <span className="text-ink-6">（不挂）</span>}
                     </td>
-                    <td className={`${tdClass} text-xs text-slate-400`}>{formatTime(item.updatedAt)}</td>
+                    <td className={`${tdClass} text-xs text-ink-4`}>{formatTime(item.updatedAt)}</td>
                     <td className={`${tdClass} text-right`}>
                       <div className="flex justify-end gap-2">
                         <Button
@@ -908,7 +908,7 @@ export function SkillsPage() {
                         {item.owner === "monster" ? (
                           <Button
                             variant="ghost"
-                            className="px-2.5 py-1 text-xs text-rose-300"
+                            className="px-2.5 py-1 text-xs text-ember-hi"
                             disabled={!canWrite || removingId === item.id}
                             loading={removingId === item.id}
                             onClick={() => void removeSkill(item)}

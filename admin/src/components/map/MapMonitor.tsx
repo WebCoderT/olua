@@ -56,9 +56,9 @@ const MAX_EVENTS = 300;
 const STALE_WARN_MS = 5000;
 
 const COLOR = {
-  alive: "#fb7185", // rose-400：场上的怪
-  dead: "#64748b", // slate-500：倒了还没刷
-  player: "#38bdf8", // sky-400：玩家
+  alive: "var(--color-ember-hi)", // 火高光：场上的怪
+  dead: "var(--color-ink-5)", // 墨 5：倒了还没刷
+  player: "var(--color-gold)", // 金：玩家
 };
 
 /**
@@ -68,12 +68,12 @@ const COLOR = {
  * **字面量** class —— Tailwind 扫的是源码文本，拼出来的类名不会被生成。
  */
 const KIND_META: Record<string, { label: string; dot: string; text: string }> = {
-  kill: { label: "击杀", dot: "bg-rose-400", text: "text-rose-300" },
-  damage: { label: "伤害", dot: "bg-amber-400", text: "text-amber-300" },
-  cast: { label: "怪物技能", dot: "bg-violet-400", text: "text-violet-300" },
-  hit: { label: "怪物普攻", dot: "bg-pink-400", text: "text-pink-300" },
-  chase: { label: "追击", dot: "bg-sky-400", text: "text-sky-300" },
-  respawn: { label: "刷新", dot: "bg-emerald-400", text: "text-emerald-300" },
+  kill: { label: "击杀", dot: "bg-ember-hi", text: "text-ember-hi" },
+  damage: { label: "伤害", dot: "bg-warn-hi", text: "text-warn-hi" },
+  cast: { label: "怪物技能", dot: "bg-warn-hi", text: "text-warn-hi" },
+  hit: { label: "怪物普攻", dot: "bg-warn-hi", text: "text-warn-hi" },
+  chase: { label: "追击", dot: "bg-gold", text: "text-gold" },
+  respawn: { label: "刷新", dot: "bg-jade-hi", text: "text-jade-hi" },
 };
 
 /** chips 的排列顺序 = 「一件事从开打走向结局」的顺序，不是字母序也不是服务端写入顺序 */
@@ -265,7 +265,7 @@ export function MapMonitorDialog({
       title={
         <>
           实时监控 · {mapLabel || `#${mapId}`}
-          {data ? <Badge tone={isStale ? "amber" : "green"}>{isStale ? "采集已停" : "实时"}</Badge> : null}
+          {data ? <Badge tone={isStale ? "warn" : "jade"}>{isStale ? "采集已停" : "实时"}</Badge> : null}
         </>
       }
       hint="每秒采样一次：怪物位置 / 血量 / 重生倒计时 + 玩家位置 + 事件流（击杀、每一下伤害、怪物技能与普攻、追击起止，时间到毫秒）。数据来自实时进程，没人在图里时采集会停（看右下角「最后采样」）。"
@@ -273,15 +273,15 @@ export function MapMonitorDialog({
       onClose={onClose}
       footer={
         <>
-          <span className="mr-auto flex flex-wrap items-center gap-3 text-[11px] text-slate-500">
+          <span className="mr-auto flex flex-wrap items-center gap-3 text-[11px] text-ink-5">
             <span>存活 {alive}</span>
             <span>倒下 {monsters.length - alive}</span>
             <span>玩家 {players.length}</span>
             <span>
               事件 {visible.length}
-              {visible.length === events.length ? ` / ${events.length}` : <span className="text-slate-600"> / 共 {events.length}</span>}
+              {visible.length === events.length ? ` / ${events.length}` : <span className="text-ink-6"> / 共 {events.length}</span>}
             </span>
-            {stale !== null ? <span className={isStale ? "text-amber-300" : undefined}>最后采样 {agoText(stale)}</span> : null}
+            {stale !== null ? <span className={isStale ? "text-warn-hi" : undefined}>最后采样 {agoText(stale)}</span> : null}
           </span>
           <Button variant="outline" onClick={() => setPaused((value) => !value)}>
             {paused ? "继续" : "暂停"}
@@ -296,13 +296,13 @@ export function MapMonitorDialog({
       <div className="grid grid-cols-1 gap-3 xl:grid-cols-[minmax(0,1fr)_400px]">
         <div className="flex flex-col gap-2">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-400">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-ink-4">
               <Legend color={COLOR.alive} label="存活的怪" />
               <Legend color={COLOR.dead} label="倒下（等重生）" hollow />
               <Legend color={COLOR.player} label="玩家" square />
             </div>
             {(data?.zones.length ?? 0) > 1 ? (
-              <label className="flex items-center gap-1.5 text-[11px] text-slate-400">
+              <label className="flex items-center gap-1.5 text-[11px] text-ink-4">
                 区
                 <Select className="w-24" value={String(zone ?? "")} onChange={(event) => changeZone(Number(event.target.value))}>
                   {data?.zones.map((item) => (
@@ -314,7 +314,7 @@ export function MapMonitorDialog({
               </label>
             ) : null}
             {(data?.slots.length ?? 0) > 1 ? (
-              <label className="flex items-center gap-1.5 text-[11px] text-slate-400">
+              <label className="flex items-center gap-1.5 text-[11px] text-ink-4">
                 线
                 <Select className="w-24" value={slot} onChange={(event) => changeSlot(event.target.value)}>
                   {data?.slots.map((item) => (
@@ -328,15 +328,15 @@ export function MapMonitorDialog({
           </div>
 
           {loading && !data ? (
-            <div className="flex items-center justify-center gap-2 rounded-xl border border-slate-800 bg-slate-950/40 py-16 text-xs text-slate-500">
+            <div className="flex items-center justify-center gap-2 rounded-xl border border-line bg-surface-0/40 py-16 text-xs text-ink-5">
               <Spinner /> 读取世界快照…
             </div>
           ) : error ? (
-            <Notice tone="red" title="拉不到监控数据">
+            <Notice tone="ember" title="拉不到监控数据">
               {error}
             </Notice>
           ) : !data || data.sampledAt === null ? (
-            <div className="rounded-xl border border-slate-800 bg-slate-950/40">
+            <div className="rounded-xl border border-line bg-surface-0/40">
               <EmptyState
                 title="这张图还没有世界快照"
                 description="没人在里面时实时进程不播种也不采样；等有人进图（或确认实时进程在跑）再刷新。"
@@ -354,9 +354,9 @@ export function MapMonitorDialog({
             />
           )}
 
-          <p className="text-[11px] text-slate-500">
+          <p className="text-[11px] text-ink-5">
             坐标是世界坐标（原点 = 左上角、y 轴向上，与刷怪区同一口径）。鼠标停在点上能看到实例 id 与血量；
-            <span className="text-slate-400">点一只怪可以只看它的日志</span>（再点一次取消）。
+            <span className="text-ink-4">点一只怪可以只看它的日志</span>（再点一次取消）。
           </p>
         </div>
 
@@ -420,11 +420,11 @@ function LiveMap({
 
   return (
     <div
-      className="relative mx-auto w-full overflow-hidden rounded-xl border border-slate-800 bg-slate-950"
+      className="relative mx-auto w-full overflow-hidden rounded-xl border border-line bg-surface-0"
       style={{ aspectRatio: `${ratio}`, maxWidth: "min(100%, 58vh)" }}
     >
       {imageFailed ? (
-        <div className="absolute inset-0 flex items-center justify-center text-[11px] text-slate-600">
+        <div className="absolute inset-0 flex items-center justify-center text-[11px] text-ink-6">
           预览图加载失败（map/{mapId}/preview.jpg）—— 点位照常显示
         </div>
       ) : (
@@ -457,13 +457,13 @@ function LiveMap({
                 rx={radius * 0.3}
                 fill={COLOR.player}
                 fillOpacity={0.85}
-                stroke="#0f172a"
+                stroke="var(--color-surface-0)"
                 strokeWidth={radius * 0.18}
                 vectorEffect="non-scaling-stroke"
               >
                 <title>{`${player.name}\n(${Math.round(player.x)}, ${Math.round(player.y)}) · 血量 ${Math.round(player.hp)}/${Math.round(player.maxHp)}`}</title>
               </rect>
-              <text x={x} y={y - radius * 1.8} fill="#e0f2fe" fontSize={labelSize} textAnchor="middle" stroke="#0f172a" strokeWidth={labelSize * 0.12} paintOrder="stroke">
+              <text x={x} y={y - radius * 1.8} fill="var(--color-ink-1)" fontSize={labelSize} textAnchor="middle" stroke="var(--color-surface-0)" strokeWidth={labelSize * 0.12} paintOrder="stroke">
                 {player.name}
               </text>
             </g>
@@ -490,7 +490,7 @@ function LiveMap({
                   cy={y}
                   r={radius * 1.9}
                   fill="none"
-                  stroke="#f8fafc"
+                  stroke="var(--color-ink-1)"
                   strokeWidth={Math.max(2, radius * 0.12)}
                   strokeDasharray={`${radius * 0.45} ${radius * 0.3}`}
                 />
@@ -515,7 +515,7 @@ function LiveMap({
                 </title>
               </circle>
               {monster.alive ? null : (
-                <text x={x} y={y + labelSize * 0.35} fill="#94a3b8" fontSize={labelSize} textAnchor="middle" stroke="#020617" strokeWidth={labelSize * 0.12} paintOrder="stroke">
+                <text x={x} y={y + labelSize * 0.35} fill="var(--color-ink-4)" fontSize={labelSize} textAnchor="middle" stroke="var(--color-surface-0)" strokeWidth={labelSize * 0.12} paintOrder="stroke">
                   {remainText(monster.respawnInMs ?? 0)}
                 </text>
               )}
@@ -572,11 +572,11 @@ function EventFeed({
   };
 
   return (
-    <div className="flex h-[58vh] min-h-[240px] flex-col overflow-hidden rounded-xl border border-slate-800 bg-slate-950/40">
-      <div className="border-b border-slate-800 px-2.5 py-1.5">
+    <div className="flex h-[58vh] min-h-[240px] flex-col overflow-hidden rounded-xl border border-line bg-surface-0/40">
+      <div className="border-b border-line px-2.5 py-1.5">
         <div className="flex items-center justify-between gap-2">
-          <span className="text-xs font-medium text-slate-300">文字流</span>
-          <span className="text-[11px] text-slate-500">
+          <span className="text-xs font-medium text-ink-3">文字流</span>
+          <span className="text-[11px] text-ink-5">
             {paused ? "已暂停（不拉新数据）" : `显示 ${events.length} / 共 ${total} 条`}
           </span>
         </div>
@@ -592,10 +592,10 @@ function EventFeed({
           ))}
         </div>
         {focus ? (
-          <div className="mt-1 flex items-center gap-1.5 rounded-md border border-sky-500/40 bg-sky-500/10 px-1.5 py-0.5 text-[11px] text-sky-200">
+          <div className="mt-1 flex items-center gap-1.5 rounded-md border border-gold/40 bg-gold/10 px-1.5 py-0.5 text-[11px] text-gold-hi">
             只看 <span className="font-medium">{focus.label}</span>
-            <span className="font-mono text-[10px] text-sky-400/70">{focus.instanceId}</span>
-            <button type="button" onClick={onClearFocus} className="ml-auto text-sky-300 hover:text-white" title="取消聚焦">
+            <span className="font-mono text-[10px] text-gold/70">{focus.instanceId}</span>
+            <button type="button" onClick={onClearFocus} className="ml-auto text-gold hover:text-ink-1" title="取消聚焦">
               取消
             </button>
           </div>
@@ -603,7 +603,7 @@ function EventFeed({
       </div>
       <div ref={boxRef} onScroll={onScroll} className="min-h-0 flex-1 overflow-y-auto">
         {events.length === 0 ? (
-          <p className="px-3 py-8 text-center text-[11px] text-slate-500">
+          <p className="px-3 py-8 text-center text-[11px] text-ink-5">
             {total > 0 ? (
               <>当前筛选下没有事件（共 {total} 条被筛掉）—— 把上面的类型 chips 打开，或取消聚焦。</>
             ) : (
@@ -629,19 +629,19 @@ function EventFeed({
 
 /** 类型筛选 chip：关掉的一律半透明（不用 line-through，中文压一条横线后基本读不清） */
 function KindChip({ kind, count, active, onClick }: { kind: string; count: number; active: boolean; onClick: () => void }) {
-  const meta = KIND_META[kind] ?? { label: kind, dot: "bg-slate-500", text: "text-slate-400" };
+  const meta = KIND_META[kind] ?? { label: kind, dot: "bg-ink-5", text: "text-ink-4" };
   return (
     <button
       type="button"
       onClick={onClick}
       title={active ? `隐藏${meta.label}事件` : `显示${meta.label}事件`}
       className={`flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px] transition ${
-        active ? "border-slate-600 bg-slate-800/80 text-slate-200" : "border-slate-800 text-slate-600 opacity-60 hover:opacity-100"
+        active ? "border-line-strong bg-surface-4/80 text-ink-2" : "border-line text-ink-6 opacity-60 hover:opacity-100"
       }`}
     >
-      <span className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full ${active ? meta.dot : "bg-slate-700"}`} />
+      <span className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full ${active ? meta.dot : "bg-surface-4"}`} />
       {meta.label}
-      <span className="font-mono text-slate-500">{count}</span>
+      <span className="font-mono text-ink-5">{count}</span>
     </button>
   );
 }
@@ -657,17 +657,17 @@ function KindChip({ kind, count, active, onClick }: { kind: string; count: numbe
  * 时间列下面那行是**与上一条的间隔** —— 一秒内连发四条时，「+0ms / +3ms」比四个相同的时间戳有用得多。
  */
 function EventRow({ event, deltaMs }: { event: MapMonitorEvent; deltaMs: number | null }) {
-  const meta = KIND_META[event.kind] ?? { label: event.kind, dot: "bg-slate-500", text: "text-slate-300" };
+  const meta = KIND_META[event.kind] ?? { label: event.kind, dot: "bg-ink-5", text: "text-ink-3" };
   const respawnIn = event.respawnAt > 0 ? event.respawnAt - Date.now() : 0;
   const coords = `(${Math.round(event.x)}, ${Math.round(event.y)})`;
 
   return (
-    <div className="flex gap-2 border-b border-slate-800/60 px-2.5 py-1.5 last:border-b-0">
+    <div className="flex gap-2 border-b border-line/60 px-2.5 py-1.5 last:border-b-0">
       <div className="w-[68px] shrink-0">
-        <div className="font-mono text-[10px] leading-4 text-slate-400" title={new Date(event.at).toLocaleString()}>
+        <div className="font-mono text-[10px] leading-4 text-ink-4" title={new Date(event.at).toLocaleString()}>
           {clockOf(event.at)}
         </div>
-        <div className="font-mono text-[9px] leading-3 text-slate-600">{deltaMs === null ? "" : deltaText(deltaMs)}</div>
+        <div className="font-mono text-[9px] leading-3 text-ink-6">{deltaMs === null ? "" : deltaText(deltaMs)}</div>
       </div>
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-baseline gap-1 text-[11px]">
@@ -685,20 +685,20 @@ function EventHead({ event, coords }: { event: MapMonitorEvent; coords: string }
   if (event.kind === "kill") {
     return (
       <>
-        <span className="text-slate-200">{event.label}</span>
-        <span className="text-slate-500">被</span>
-        <span className="text-indigo-300">{event.killer || "（未知）"}</span>
-        <span className="text-slate-500">打死</span>
-        <span className="font-mono text-[10px] text-slate-500">{coords}</span>
+        <span className="text-ink-2">{event.label}</span>
+        <span className="text-ink-5">被</span>
+        <span className="text-gold">{event.killer || "（未知）"}</span>
+        <span className="text-ink-5">打死</span>
+        <span className="font-mono text-[10px] text-ink-5">{coords}</span>
       </>
     );
   }
   if (event.kind === "respawn") {
     return (
       <>
-        <span className="text-slate-200">{event.label}</span>
-        <span className="text-emerald-300">刷新了</span>
-        <span className="font-mono text-[10px] text-slate-500">{coords}</span>
+        <span className="text-ink-2">{event.label}</span>
+        <span className="text-jade-hi">刷新了</span>
+        <span className="font-mono text-[10px] text-ink-5">{coords}</span>
       </>
     );
   }
@@ -706,13 +706,13 @@ function EventHead({ event, coords }: { event: MapMonitorEvent; coords: string }
     // 「被 … 用 … 打了」：三个主体（怪 / 人 / 技能）缺一个就看不清这一下是怎么来的
     return (
       <>
-        <span className="text-slate-200">{event.label}</span>
-        <span className="text-slate-500">被</span>
-        <span className="text-indigo-300">{event.attacker || "（未知）"}</span>
-        <span className="text-slate-500">用</span>
-        <span className="text-slate-300">{event.skillLabel || event.skillId || "（未知技能）"}</span>
-        <span className="text-slate-500">打了</span>
-        <span className="font-mono text-amber-300">-{Math.round(event.amount)}</span>
+        <span className="text-ink-2">{event.label}</span>
+        <span className="text-ink-5">被</span>
+        <span className="text-gold">{event.attacker || "（未知）"}</span>
+        <span className="text-ink-5">用</span>
+        <span className="text-ink-3">{event.skillLabel || event.skillId || "（未知技能）"}</span>
+        <span className="text-ink-5">打了</span>
+        <span className="font-mono text-warn-hi">-{Math.round(event.amount)}</span>
       </>
     );
   }
@@ -720,38 +720,38 @@ function EventHead({ event, coords }: { event: MapMonitorEvent; coords: string }
     const ended = event.phase === "end";
     return (
       <>
-        <span className="text-slate-200">{event.label}</span>
-        <span className={ended ? "text-amber-300" : "text-emerald-300"}>{ended ? "结束追击" : "开始追击"}</span>
-        <span className="text-sky-300">{event.target || "（未知）"}</span>
-        <span className="text-slate-500">·</span>
-        <span className="text-slate-400">{event.reason || "（无成因）"}</span>
-        {event.distance > 0 ? <span className="font-mono text-[10px] text-slate-500">{Math.round(event.distance)}px</span> : null}
+        <span className="text-ink-2">{event.label}</span>
+        <span className={ended ? "text-warn-hi" : "text-jade-hi"}>{ended ? "结束追击" : "开始追击"}</span>
+        <span className="text-gold">{event.target || "（未知）"}</span>
+        <span className="text-ink-5">·</span>
+        <span className="text-ink-4">{event.reason || "（无成因）"}</span>
+        {event.distance > 0 ? <span className="font-mono text-[10px] text-ink-5">{Math.round(event.distance)}px</span> : null}
       </>
     );
   }
   if (event.kind === "cast") {
     return (
       <>
-        <span className="text-slate-200">{event.label}</span>
-        <span className="text-slate-500">对</span>
-        <span className="text-sky-300">{event.target || "（未知）"}</span>
-        <span className="text-slate-500">放</span>
-        <span className="text-violet-300">{event.skillLabel || event.skillId || "（未知技能）"}</span>
-        <span className="font-mono text-violet-200">-{Math.round(event.amount)}</span>
+        <span className="text-ink-2">{event.label}</span>
+        <span className="text-ink-5">对</span>
+        <span className="text-gold">{event.target || "（未知）"}</span>
+        <span className="text-ink-5">放</span>
+        <span className="text-warn-hi">{event.skillLabel || event.skillId || "（未知技能）"}</span>
+        <span className="font-mono text-warn-hi">-{Math.round(event.amount)}</span>
       </>
     );
   }
   if (event.kind === "hit") {
     return (
       <>
-        <span className="text-slate-200">{event.label}</span>
-        <span className="text-slate-500">普攻</span>
-        <span className="text-sky-300">{event.target || "（未知）"}</span>
-        <span className="font-mono text-pink-300">-{Math.round(event.amount)}</span>
+        <span className="text-ink-2">{event.label}</span>
+        <span className="text-ink-5">普攻</span>
+        <span className="text-gold">{event.target || "（未知）"}</span>
+        <span className="font-mono text-warn-hi">-{Math.round(event.amount)}</span>
       </>
     );
   }
-  return <span className="text-slate-500">（未知事件类型 {event.kind}）</span>;
+  return <span className="text-ink-5">（未知事件类型 {event.kind}）</span>;
 }
 
 /** 详情行：数字与落点（击杀还带掉落） */
@@ -759,23 +759,23 @@ function EventDetail({ event, coords, respawnIn }: { event: MapMonitorEvent; coo
   if (event.kind === "kill") {
     return (
       <>
-        <div className="mt-0.5 text-[10px] text-slate-500">
+        <div className="mt-0.5 text-[10px] text-ink-5">
           怪物位置 {coords} · 下次刷新 {clockShort(event.respawnAt)}（剩 {remainText(respawnIn)}）
         </div>
         {event.drops.length === 0 ? (
-          <div className="mt-0.5 text-[10px] text-slate-600">没有掉落</div>
+          <div className="mt-0.5 text-[10px] text-ink-6">没有掉落</div>
         ) : (
           <div className="mt-1 flex flex-wrap gap-1">
             {event.drops.map((drop, index) => (
               <span
                 key={`${drop.goodId}-${index}`}
-                className="flex items-center gap-1 rounded-md border border-slate-800 bg-slate-900/60 py-0.5 pl-0.5 pr-1.5"
+                className="flex items-center gap-1 rounded-md border border-line bg-surface-2/60 py-0.5 pl-0.5 pr-1.5"
                 title={`${drop.label || drop.goodId}（${drop.goodId}）×${drop.count}\n落点 (${Math.round(drop.x)}, ${Math.round(drop.y)})—— 客户端在这一点的周围铺开`}
               >
                 <EntityImage image={entityImage("item", drop.goodId)} alt={drop.label} size={16} />
-                <span className="text-[10px] text-slate-300">{drop.label || drop.goodId}</span>
-                <span className="font-mono text-[10px] text-slate-500">×{drop.count}</span>
-                <span className="font-mono text-[10px] text-slate-600">
+                <span className="text-[10px] text-ink-3">{drop.label || drop.goodId}</span>
+                <span className="font-mono text-[10px] text-ink-5">×{drop.count}</span>
+                <span className="font-mono text-[10px] text-ink-6">
                   @{Math.round(drop.x)},{Math.round(drop.y)}
                 </span>
               </span>
@@ -788,7 +788,7 @@ function EventDetail({ event, coords, respawnIn }: { event: MapMonitorEvent; coo
 
   if (event.kind === "respawn") {
     return (
-      <div className="mt-0.5 text-[10px] text-slate-500">
+      <div className="mt-0.5 text-[10px] text-ink-5">
         出生点 {coords} · 满血 {Math.round(event.maxHp)}
       </div>
     );
@@ -797,17 +797,17 @@ function EventDetail({ event, coords, respawnIn }: { event: MapMonitorEvent; coo
   if (event.kind === "damage") {
     // 三个数字（前 / 后 / 上限）+ 条 + 百分比：服务端保证 `hpBefore - hpAfter === amount`
     return (
-      <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] text-slate-500">
-        <span className="font-mono text-slate-400">{hpText(event.hpBefore, event.hpAfter, event.maxHp)}</span>
-        <span className="font-mono text-slate-500">{percentOf(event.hpAfter, event.maxHp)}</span>
-        <HpBar hp={event.hpAfter} maxHp={event.maxHp} tone="bg-amber-400" />
+      <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] text-ink-5">
+        <span className="font-mono text-ink-4">{hpText(event.hpBefore, event.hpAfter, event.maxHp)}</span>
+        <span className="font-mono text-ink-5">{percentOf(event.hpAfter, event.maxHp)}</span>
+        <HpBar hp={event.hpAfter} maxHp={event.maxHp} tone="bg-warn-hi" />
         {event.pushDistance > 0 ? (
           <span>推开 {Math.round(event.pushDistance)}px</span>
         ) : (
-          <span className="text-slate-600">没推开</span>
+          <span className="text-ink-6">没推开</span>
         )}
-        {event.killed ? <span className="text-rose-300">这一下打死了</span> : null}
-        <span className="font-mono text-slate-600">{coords}</span>
+        {event.killed ? <span className="text-ember-hi">这一下打死了</span> : null}
+        <span className="font-mono text-ink-6">{coords}</span>
       </div>
     );
   }
@@ -815,23 +815,23 @@ function EventDetail({ event, coords, respawnIn }: { event: MapMonitorEvent; coo
   if (event.kind === "cast" || event.kind === "hit") {
     // 这里掉血的是**玩家**（怪出手），所以条走玫红 —— 与上面「怪掉血」的琥珀色区分开
     return (
-      <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] text-slate-500">
-        <span className="text-slate-600">玩家血量</span>
-        <span className="font-mono text-slate-400">{hpText(event.hpBefore, event.hpAfter, event.maxHp)}</span>
-        <span className="font-mono text-slate-500">{percentOf(event.hpAfter, event.maxHp)}</span>
-        <HpBar hp={event.hpAfter} maxHp={event.maxHp} tone="bg-rose-400" />
-        {event.killed ? <span className="text-rose-300">这一下把玩家打倒了</span> : null}
-        <span className="font-mono text-slate-600">{coords}</span>
+      <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] text-ink-5">
+        <span className="text-ink-6">玩家血量</span>
+        <span className="font-mono text-ink-4">{hpText(event.hpBefore, event.hpAfter, event.maxHp)}</span>
+        <span className="font-mono text-ink-5">{percentOf(event.hpAfter, event.maxHp)}</span>
+        <HpBar hp={event.hpAfter} maxHp={event.maxHp} tone="bg-ember-hi" />
+        {event.killed ? <span className="text-ember-hi">这一下把玩家打倒了</span> : null}
+        <span className="font-mono text-ink-6">{coords}</span>
       </div>
     );
   }
 
   if (event.kind === "chase") {
     return (
-      <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] text-slate-500">
-        <span className="font-mono text-slate-600">{coords}</span>
-        {event.targetAccountId ? <span className="font-mono text-slate-600">{event.targetAccountId}</span> : null}
-        {event.distance > 0 ? null : <span className="text-slate-600">目标位置已不可知</span>}
+      <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] text-ink-5">
+        <span className="font-mono text-ink-6">{coords}</span>
+        {event.targetAccountId ? <span className="font-mono text-ink-6">{event.targetAccountId}</span> : null}
+        {event.distance > 0 ? null : <span className="text-ink-6">目标位置已不可知</span>}
       </div>
     );
   }
@@ -843,7 +843,7 @@ function EventDetail({ event, coords, respawnIn }: { event: MapMonitorEvent; coo
 function HpBar({ hp, maxHp, tone }: { hp: number; maxHp: number; tone: string }) {
   const ratio = maxHp > 0 ? Math.max(0, Math.min(1, hp / maxHp)) : 0;
   return (
-    <span className="inline-block h-1.5 w-14 overflow-hidden rounded-full bg-slate-800 align-middle">
+    <span className="inline-block h-1.5 w-14 overflow-hidden rounded-full bg-surface-4 align-middle">
       <span className={`block h-full ${tone}`} style={{ width: `${ratio * 100}%` }} />
     </span>
   );

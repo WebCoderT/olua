@@ -180,14 +180,14 @@ export function AppearanceEffectWorkbench(props: {
 
   return (
     <div className="flex flex-col gap-3">
-      {props.hint ? <p className="text-xs text-slate-500">{props.hint}</p> : null}
-      <div className="flex justify-center rounded border border-slate-700/60 bg-slate-900/40 p-2">
+      {props.hint ? <p className="text-xs text-ink-5">{props.hint}</p> : null}
+      <div className="flex justify-center rounded border border-line-strong/60 bg-surface-2/40 p-2">
         {failed ? (
-          <p className="py-16 text-sm text-slate-500">首帧加载失败（key 指向的图集不存在？先确认 key 再调效果）。</p>
+          <p className="py-16 text-sm text-ink-5">首帧加载失败（key 指向的图集不存在？先确认 key 再调效果）。</p>
         ) : (
           <canvas
             ref={canvasRef}
-            className="cursor-move touch-none rounded bg-slate-950/80"
+            className="cursor-move touch-none rounded bg-surface-0/80"
             style={{ imageRendering: "pixelated", maxWidth: "100%" }}
             onPointerDown={onPointerDown}
             onPointerMove={onPointerMove}
@@ -219,7 +219,7 @@ export function AppearanceEffectWorkbench(props: {
               max={3}
               step={0.05}
               value={Math.min(props.value.scale, 3)}
-              className="h-1 w-full accent-blue-500"
+              className="h-1 w-full accent-gold"
               onChange={(event) => props.onChange({ ...props.value, scale: round2(Number(event.target.value)) })}
             />
             <Input

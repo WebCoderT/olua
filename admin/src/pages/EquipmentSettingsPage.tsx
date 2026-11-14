@@ -242,15 +242,15 @@ export function EquipmentSettingsPage() {
               </thead>
               <tbody>
                 {slots.map((slot) => (
-                  <tr key={slot.key} className="transition hover:bg-slate-800/30">
+                  <tr key={slot.key} className="transition hover:bg-surface-4/30">
                     <td className={tdClass}>{slot.order}</td>
-                    <td className={`${tdClass} font-mono text-xs text-slate-300`}>{slot.key}</td>
-                    <td className={`${tdClass} font-medium text-slate-100`}>{slot.label}</td>
-                    <td className={`${tdClass} font-mono text-xs text-slate-400`}>{slot.imageSrc}</td>
+                    <td className={`${tdClass} font-mono text-xs text-ink-3`}>{slot.key}</td>
+                    <td className={`${tdClass} font-medium text-ink-1`}>{slot.label}</td>
+                    <td className={`${tdClass} font-mono text-xs text-ink-4`}>{slot.imageSrc}</td>
                     <td className={tdClass}>
-                      <Badge tone="slate">{POSITION_OPTIONS.find((option) => option.value === slot.position)?.label ?? slot.position}</Badge>
+                      <Badge tone="muted">{POSITION_OPTIONS.find((option) => option.value === slot.position)?.label ?? slot.position}</Badge>
                     </td>
-                    <td className={`${tdClass} text-xs text-slate-400`}>{formatTime(slot.updatedAt)}</td>
+                    <td className={`${tdClass} text-xs text-ink-4`}>{formatTime(slot.updatedAt)}</td>
                     <td className={`${tdClass} text-right`}>
                       <Button variant="outline" className="px-2.5 py-1 text-xs" disabled={!canWrite} onClick={() => setEditing(slot)}>
                         编辑
@@ -277,14 +277,14 @@ export function EquipmentSettingsPage() {
               const rates = kind === "prefix" ? draft.prefixRates : draft.suffixRates;
               return (
                 <div key={kind} className="flex flex-col gap-2">
-                  <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-400">{kind === "prefix" ? "前缀（品质）" : "后缀（阶级）"}</h3>
+                  <h3 className="text-xs font-semibold uppercase tracking-wide text-ink-4">{kind === "prefix" ? "前缀（品质）" : "后缀（阶级）"}</h3>
                   <div className="grid grid-cols-[auto_1fr_7rem] items-center gap-2">
-                    <span className="text-[11px] text-slate-500">序</span>
-                    <span className="text-[11px] text-slate-500">文案</span>
-                    <span className="text-[11px] text-slate-500">倍率</span>
+                    <span className="text-[11px] text-ink-5">序</span>
+                    <span className="text-[11px] text-ink-5">文案</span>
+                    <span className="text-[11px] text-ink-5">倍率</span>
                     {labels.map((label, index) => (
                       <div key={index} className="col-span-3 grid grid-cols-[auto_1fr_7rem] items-center gap-2">
-                        <span className="w-4 text-center text-xs text-slate-500">{index}</span>
+                        <span className="w-4 text-center text-xs text-ink-5">{index}</span>
                         <Input
                           value={label}
                           disabled={!canWrite}
@@ -306,7 +306,7 @@ export function EquipmentSettingsPage() {
           </div>
         ) : null}
         {draft && !ratesValid ? (
-          <p className="mt-3 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-200">
+          <p className="mt-3 rounded-lg border border-ember/40 bg-ember/10 px-3 py-2 text-xs text-ember-hi">
             倍率必须都是正数、文案不能为空（下标就是前后缀枚举序号，不能少档）。
           </p>
         ) : null}
@@ -317,7 +317,7 @@ export function EquipmentSettingsPage() {
         description="逐条配置（#655）：每件变体的回收价在装备列表的「N 个变体」弹窗里改 sellPrice 那一列，服务端结算与客户端背包读的是同一列 —— 这里不再有「按等级取曲线价」。改价去那一页，改完记得 make config-export。"
       >
         <div className="mt-4 flex items-center justify-between gap-3">
-          <p className="text-xs text-slate-500">
+          <p className="text-xs text-ink-5">
             {meta ? `上次保存：${formatTime(meta.updatedAt)}` : ""}
           </p>
           <Button disabled={!canWrite || !canSave} loading={saving} onClick={() => void saveMeta()}>

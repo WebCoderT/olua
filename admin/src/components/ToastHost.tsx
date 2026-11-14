@@ -20,7 +20,7 @@ export function ToastHost() {
       {items.map((item) => (
         <div
           key={item.id}
-          className={`pointer-events-auto rounded-sm border border-l-2 px-4 py-3 text-sm shadow-lg shadow-black/40 backdrop-blur ${
+          className={`pointer-events-auto rounded-sm border border-l-2 px-4 py-3 text-sm shadow-lg shadow-surface-0/60 backdrop-blur ${
             item.type === "error"
               ? "border-ember/35 border-l-ember bg-surface-2/95 text-ember-hi"
               : item.type === "success"

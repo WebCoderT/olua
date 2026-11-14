@@ -168,14 +168,14 @@ function EffectPreview({
   if (state.phase === "loading") {
     // 不套 Card：外层（左栏）已经是一张卡片，这里只要占住画布的坑
     return (
-      <div className="flex items-center justify-center rounded-lg border border-slate-800 bg-slate-950 py-24 text-sm text-slate-400">
+      <div className="flex items-center justify-center rounded-lg border border-line bg-surface-0 py-24 text-sm text-ink-4">
         预览素材加载中…
       </div>
     );
   }
   if (state.phase === "error") {
     return (
-      <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-4 text-xs leading-relaxed text-amber-400">
+      <div className="rounded-lg border border-warn/40 bg-warn/10 p-4 text-xs leading-relaxed text-warn">
         {state.message}
       </div>
     );
@@ -186,9 +186,9 @@ function EffectPreview({
         ref={canvasRef}
         width={size.width}
         height={size.height}
-        className="max-w-full rounded-lg border border-slate-800 bg-slate-950"
+        className="max-w-full rounded-lg border border-line bg-surface-0"
       />
-      <p className="text-xs text-slate-600">
+      <p className="text-xs text-ink-6">
         {kind === "dropItem"
           ? `参考：掉落物图标 ${40}×40（虚线框）· 虚线 = 地面 · 光柱画在图标下层 · 按表单当前值实时叠放（未保存也生效）`
           : `参考：裸模正面站立第一帧（${roleAtlasPath()}）· 虚线 = 脚下原点 · 特效按表单当前值实时叠放（未保存也生效）`}
@@ -322,14 +322,14 @@ export function UiEffectsPage() {
       />
 
       {loading ? (
-        <Card className="p-5 text-sm text-slate-400">加载中…</Card>
+        <Card className="p-5 text-sm text-ink-4">加载中…</Card>
       ) : rows.length === 0 ? (
-        <Card className="p-5 text-sm text-slate-400">还没有特效（服务端 seed 没有灌出任何一行 —— 检查 UI_EFFECT_DEFAULTS）。</Card>
+        <Card className="p-5 text-sm text-ink-4">还没有特效（服务端 seed 没有灌出任何一行 —— 检查 UI_EFFECT_DEFAULTS）。</Card>
       ) : (
         <>
           {/* 页签栏：一族一个（升级特效 / 掉落光效）；掉落光效的六个档位在页内容里用下拉框选，
               不再一档一个页签 —— 七个页签会把「升级特效」挤到最右边 */}
-          <div className="flex flex-wrap items-center gap-1 border-b border-slate-800" role="tablist">
+          <div className="flex flex-wrap items-center gap-1 border-b border-line" role="tablist">
             {tabs.map((tab) => {
               const active = tab === activeTab;
               const dirtyCount = dirtyCountOf(tab);
@@ -341,14 +341,14 @@ export function UiEffectsPage() {
                   onClick={() => setActiveTab(tab)}
                   className={`-mb-px rounded-t-lg border border-b-0 px-4 py-2 text-sm transition-colors ${
                     active
-                      ? "border-slate-800 bg-slate-900 font-medium text-slate-100"
-                      : "border-transparent text-slate-400 hover:text-slate-200"
+                      ? "border-line bg-surface-2 font-medium text-ink-1"
+                      : "border-transparent text-ink-4 hover:text-ink-2"
                   }`}
                 >
                   {TAB_LABELS[tab]}
                   {dirtyCount > 0 ? (
                     <span
-                      className="ml-1.5 inline-block size-1.5 rounded-full bg-amber-400 align-middle"
+                      className="ml-1.5 inline-block size-1.5 rounded-full bg-warn-hi align-middle"
                       aria-label={`${dirtyCount} 处未保存`}
                       title={`${dirtyCount} 处未保存`}
                     />
@@ -400,7 +400,7 @@ export function UiEffectsPage() {
                 ) : null}
 
                 {!activeForm.enabled ? (
-                  <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-400">
+                  <p className="rounded-lg border border-warn/40 bg-warn/10 px-3 py-2 text-xs text-warn">
                     {activeKind === "dropItem"
                       ? "光效已停用（enabled = false）—— 游戏里这件掉落物不再显示光柱（照常拾取），预览仍按参数显示供调整。"
                       : "特效已停用（enabled = false）—— 游戏里升级不再播特效，预览仍按参数显示供调整。"}
@@ -432,27 +432,27 @@ export function UiEffectsPage() {
                 </div>
 
                 {/* 底部：启用开关 + 追账 + 保存（右栏不拉伸到左栏高度，这里紧跟参数，不靠 mt-auto 撑） */}
-                <div className="flex flex-col gap-3 border-t border-slate-800 pt-4">
-                  <label className="flex items-center gap-2 text-sm text-slate-300">
+                <div className="flex flex-col gap-3 border-t border-line pt-4">
+                  <label className="flex items-center gap-2 text-sm text-ink-3">
                     <input
                       type="checkbox"
                       checked={activeForm.enabled}
                       onChange={(e) => patch(activeRow.key, { enabled: e.target.checked })}
                       disabled={!canWrite}
-                      className="size-4 accent-indigo-500"
+                      className="size-4 accent-gold"
                     />
                     {activeKind === "dropItem" ? "启用光柱" : "启用特效"}
                   </label>
 
                   <div className="flex flex-wrap items-center gap-3">
-                    <span className="text-xs text-slate-600">
+                    <span className="text-xs text-ink-6">
                       {activeRow.updatedAt > 0
                         ? `最后修改：${activeRow.updatedBy || "—"} · ${new Date(activeRow.updatedAt).toLocaleString()}`
                         : "仍是出厂值，从未改过"}
                     </span>
 
                     <div className="ml-auto flex items-center gap-3">
-                      {isDirty(activeForm, activeRow) ? <span className="text-xs font-medium text-amber-400">未保存</span> : null}
+                      {isDirty(activeForm, activeRow) ? <span className="text-xs font-medium text-warn">未保存</span> : null}
                       <Button
                         variant="primary"
                         onClick={() => void submit(activeRow.key)}
@@ -478,7 +478,7 @@ export function UiEffectsPage() {
                     </div>
                   </div>
 
-                  {!canWrite ? <p className="text-xs text-amber-400">当前管理员角色没有 gameConfig:write 权限点，只能看不能改。</p> : null}
+                  {!canWrite ? <p className="text-xs text-warn">当前管理员角色没有 gameConfig:write 权限点，只能看不能改。</p> : null}
                 </div>
               </Card>
             </div>
