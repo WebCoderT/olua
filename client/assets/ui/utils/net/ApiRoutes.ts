@@ -31,14 +31,20 @@ export const ApiRoutes = {
      */
     mine: "/achievements/me",
   },
-  /** announcement 模块（1 个接口） */
+  /** announcement 模块（2 个接口） */
   announcement: {
     /**
-     * 当前生效中的公告（GET /announcements/active）
+     * 当前生效中的公告（全服）（GET /announcements/active）
      *
      * 只返回**同时满足**三个条件的公告：手动启用了、已到生效开始时间、还没到结束时间（`startsAt` / `endsAt` 为 null 分别表示立即生效 / 不设截止）。
      */
     active: "/announcements/active",
+    /**
+     * 当前生效中的公告（全服 + 本区）（GET /announcements/mine）
+     *
+     * 与 `GET /announcements/active` 同一套「生效中」判据，只是**多算一层区**：返回「全服公告 + 投给我所在区的公告」。
+     */
+    mine: "/announcements/mine",
   },
   /** auth 模块（4 个接口） */
   auth: {

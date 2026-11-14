@@ -3,7 +3,9 @@ import { IsBoolean, IsIn, IsInt, IsOptional, IsString, MaxLength, Min, MinLength
 import {
   ANNOUNCEMENT_CONTENT_MAX,
   ANNOUNCEMENT_LEVELS,
+  ANNOUNCEMENT_SCOPES,
   ANNOUNCEMENT_TITLE_MAX,
+  AnnouncementScope,
 } from "../../../common/constants/announcement";
 import { PageMetaDto, PageQueryDto } from "../../../common/dto/api-envelope.dto";
 import { AnnouncementRow } from "../../../database/rows";
@@ -69,6 +71,13 @@ export class AnnouncementDto {
   @ApiProperty({ description: "生效结束时间（毫秒，不含）；null = 不设截止", type: "number", nullable: true })
   endsAt: number | null;
 
+  @ApiProperty({
+    description: "投放范围所属的区；null = 全服（所有区可见）",
+    type: "number",
+    nullable: true,
+  })
+  zoneId: number | null;
+
   @ApiProperty({ description: "发布人管理员账号名（管理员被删后仍可追溯）", type: "string", nullable: true })
   createdBy: string | null;
 
@@ -96,6 +105,7 @@ export class AnnouncementDto {
     dto.enabled = row.enabled === 1;
     dto.startsAt = row.starts_at;
     dto.endsAt = row.ends_at;
+    dto.zoneId = row.zone_id;
     dto.createdBy = row.created_by;
     dto.createdAt = row.created_at;
     dto.updatedAt = row.updated_at;
@@ -187,6 +197,16 @@ export class CreateAnnouncementDto {
   enabled?: boolean;
 
   @ApiPropertyOptional({
+    description: "投放范围，默认 zone（只投当前区）。all = 全服，需要 announcement:publish-all",
+    enum: ANNOUNCEMENT_SCOPES,
+    default: AnnouncementScope.ZONE,
+  })
+  @IsOptional()
+  @IsString({ message: "投放范围必须是字符串" })
+  @IsIn([...ANNOUNCEMENT_SCOPES], { message: "投放范围取值不合法" })
+  scope?: string;
+
+  @ApiPropertyOptional({
     description: "生效开始时间（毫秒时间戳）；不传 = 立即生效",
     minimum: 0,
     example: 1760000000000,
@@ -234,6 +254,15 @@ export class UpdateAnnouncementDto {
   @IsOptional()
   @IsBoolean({ message: "启用状态必须是布尔值" })
   enabled?: boolean;
+
+  @ApiPropertyOptional({
+    description: "改投放范围（不传则不改）：zone = 当前区，all = 全服（需要 announcement:publish-all）",
+    enum: ANNOUNCEMENT_SCOPES,
+  })
+  @IsOptional()
+  @IsString({ message: "投放范围必须是字符串" })
+  @IsIn([...ANNOUNCEMENT_SCOPES], { message: "投放范围取值不合法" })
+  scope?: string;
 
   @ApiPropertyOptional({
     description: "生效开始时间（毫秒）；传 `null` = 改为立即生效，不传则不改",

@@ -108,10 +108,6 @@ export type Register = {
    * 密码：6~32 位
    */
   password: string;
-  /**
-   * 归属区 id（可省略，默认 1 = 一区；活区清单见 GET /zones）
-   */
-  zoneId?: number;
 };
 
 export type Login = {
@@ -2731,6 +2727,10 @@ export type Announcement = {
    */
   endsAt: number | null;
   /**
+   * 投放范围所属的区；null = 全服（所有区可见）
+   */
+  zoneId: number | null;
+  /**
    * 发布人管理员账号名（管理员被删后仍可追溯）
    */
   createdBy: string | null;
@@ -2785,6 +2785,10 @@ export type CreateAnnouncement = {
    */
   enabled?: boolean;
   /**
+   * 投放范围，默认 zone（只投当前区）。all = 全服，需要 announcement:publish-all
+   */
+  scope?: "zone" | "all";
+  /**
    * 生效开始时间（毫秒时间戳）；不传 = 立即生效
    */
   startsAt?: number;
@@ -2811,6 +2815,10 @@ export type UpdateAnnouncement = {
    * 启用 / 停用（不传则不改）
    */
   enabled?: boolean;
+  /**
+   * 改投放范围（不传则不改）：zone = 当前区，all = 全服（需要 announcement:publish-all）
+   */
+  scope?: "zone" | "all";
   /**
    * 生效开始时间（毫秒）；传 `null` = 改为立即生效，不传则不改
    */

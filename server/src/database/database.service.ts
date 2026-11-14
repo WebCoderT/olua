@@ -242,6 +242,8 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
         enabled    INTEGER NOT NULL DEFAULT 1,
         starts_at  INTEGER,
         ends_at    INTEGER,
+        -- 投放范围（#963）：NULL = 全服（所有区可见），否则只对该区可见
+        zone_id    INTEGER,
         created_by TEXT,
         created_at INTEGER NOT NULL,
         updated_at INTEGER NOT NULL
@@ -1641,6 +1643,10 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
     // 老行是「表单只有一个数量框 → min = max」，密度上线后这条下限会把系数顶死
     // （`density_off` 再小也降不下来）。一次性抹平，幂等：改成 0 之后不再满足 `min = max`
     this.db.prepare("UPDATE map_spawn_areas SET min = 0 WHERE min = max AND min > 0").run();
+
+    // 公告按区投放（#963）：存量库补列，**不加 DEFAULT** —— 存量公告保持「全服可见」，
+    // 补成 1 会让历史上所有公告突然只在 1 区出现（2 区的人一条都看不到 = 静默丢功能）
+    this.ensureColumn("announcements", "zone_id", "INTEGER");
 
     // 货币统一命名（#843、#844）：奖励列与邮件附件列统一挂 bindGold 语汇（存量库一次性改名，幂等）
     this.renameColumnIfExists("quests", "reward_gold", "reward_bind_gold");

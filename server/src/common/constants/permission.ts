@@ -57,6 +57,14 @@ export const Permission = {
   ANNOUNCEMENT_READ: "announcement:read",
   /** 发布 / 编辑 / 删除公告（会直接推送给全服玩家，属于对外发声，单列一个权限点） */
   ANNOUNCEMENT_WRITE: "announcement:write",
+  /**
+   * 公告投放「全服」（#963）
+   *
+   * `announcement:write` 只能在**当前区**发声（管理员本来就能切任意区，一个区一个区地发
+   * 是正常操作）；「一条公告打到所有区」是**影响面**上的越级，单列一个点并只给超管。
+   * 与 `zone:read` 那种「看」不同，这条是「一次影响所有人」，所以不随 `admin` 角色下放。
+   */
+  ANNOUNCEMENT_PUBLISH_ALL: "announcement:publish-all",
 
   /**
    * 查看邮件投递记录
@@ -204,8 +212,15 @@ export const ADMIN_ROLES: AdminRoleValue[] = Object.values(AdminRole);
 export const ROLE_PERMISSIONS: Record<AdminRoleValue, PermissionValue[]> = {
   /** 超级管理员：全部权限 */
   [AdminRole.SUPER]: ALL_PERMISSIONS,
-  /** 管理员：除「管理管理员」外全部 —— 管理员之间不能互相提权 */
-  [AdminRole.ADMIN]: ALL_PERMISSIONS.filter((item) => item !== Permission.ADMIN_MANAGE),
+  /**
+   * 管理员：除两项外全部
+   *
+   * - `admin:manage`：「管理管理员」—— 管理员之间不能互相提权；
+   * - `announcement:publish-all`：公告打到所有区（#963）—— 影响面权限，管理员逐区发即可。
+   */
+  [AdminRole.ADMIN]: ALL_PERMISSIONS.filter(
+    (item) => item !== Permission.ADMIN_MANAGE && item !== Permission.ANNOUNCEMENT_PUBLISH_ALL,
+  ),
   /** 只读观察员：读权限，任何写操作都不行 */
   [AdminRole.VIEWER]: [
     Permission.STATS_READ,
@@ -239,6 +254,7 @@ export const PERMISSION_LABELS: Record<PermissionValue, string> = {
   [Permission.ROLE_DELETE]: "删除角色",
   [Permission.ANNOUNCEMENT_READ]: "查看公告",
   [Permission.ANNOUNCEMENT_WRITE]: "发布 / 编辑公告",
+  [Permission.ANNOUNCEMENT_PUBLISH_ALL]: "公告投放全服",
   [Permission.MAIL_READ]: "查看邮件投递记录",
   [Permission.MAIL_WRITE]: "发送邮件",
   [Permission.GAME_MAIL_SEND]: "补发游戏消息",

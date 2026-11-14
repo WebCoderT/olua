@@ -8,7 +8,8 @@
  * 这比「传了别区就报错」更严：报错还能说明代码里读了这个参数，而这里要的是
  * 「代码里根本没有这个读点」。
  *
- * 覆盖：角色列表 / 在线角色 / 角色详情 / 存进度 / 我的区服 / 帮会列表（#958）/ 排行榜（#959），
+ * 覆盖：角色列表 / 在线角色 / 角色详情 / 存进度 / 我的区服 / 帮会列表（#958）/ 排行榜（#959）/
+ * 公告板（#963），
  * 外加一条反证 —— 拿别区角色 id 去打，即使 `?zoneId=` 指的正是那个区，也还是 20002（不认参数）。
  *
  * 与 e2e-zone 同款：临时文件库 + 独立端口。
@@ -213,6 +214,12 @@ async function api(baseUrl, method, route, options = {}) {
       "GET /roles/:id?zoneId=<二区> 与不带一致",
       await api(baseUrl, "GET", `roles/${zone1RoleId}`, { token: tokenA }),
       await api(baseUrl, "GET", `roles/${zone1RoleId}?zoneId=${zone2Id}`, { token: tokenA }),
+    );
+    // #963：公告板也走这一条 —— 区来自在线角色，参数传了不读（否则等于能读别区的内部通知）
+    checkSame(
+      "GET /announcements/mine?zoneId=<二区> 与不带一致",
+      await api(baseUrl, "GET", "announcements/mine", { token: tokenA }),
+      await api(baseUrl, "GET", `announcements/mine?zoneId=${zone2Id}`, { token: tokenA }),
     );
 
     //#endregion

@@ -1,5 +1,13 @@
 import { useCallback, useEffect, useState } from "react";
-import { announcementsApi, ANNOUNCEMENT_LEVEL_LABELS, formatTime, PERMISSION } from "../api";
+import {
+  announcementsApi,
+  ANNOUNCEMENT_LEVEL_LABELS,
+  ANNOUNCEMENT_SCOPE,
+  ANNOUNCEMENT_SCOPE_LABELS,
+  formatTime,
+  PERMISSION,
+  zonesApi,
+} from "../api";
 import type { Announcement, AnnouncementQuery, CreateAnnouncement, PageResult, UpdateAnnouncement } from "../api";
 import { AnnouncementDialog } from "../components/AnnouncementDialog";
 import type { AnnouncementFormValue } from "../components/AnnouncementDialog";
@@ -7,7 +15,7 @@ import { ConfirmDialog } from "../components/ConfirmDialog";
 import { Pagination } from "../components/Pagination";
 import { SortableTh, useSort } from "../components/sortable";
 import { Badge, Button, Card, EmptyState, Input, Select, Spinner, tableClass, tdClass, thClass, theadClass , Field } from "../components/ui";
-import { hasPermission } from "../store/session";
+import { hasPermission, readZoneId } from "../store/session";
 import { toastSuccess } from "../store/toast";
 import { PageHeader } from "../components/PageHeader";
 
@@ -49,6 +57,11 @@ function windowText(item: Announcement): string {
  */
 export function AnnouncementsPage() {
   const canWrite = hasPermission(PERMISSION.ANNOUNCEMENT_WRITE);
+  // 「全服」是影响面权限（#963）：界面上只是把选项置灰，权威判定在服务端
+  const canPublishAll = hasPermission(PERMISSION.ANNOUNCEMENT_PUBLISH_ALL);
+  /** 区 id → 区名（投放范围那一列要显示「一区」而不是「1」） */
+  const [zoneNames, setZoneNames] = useState<Record<number, string>>({});
+  const currentZoneId = readZoneId();
   const [draft, setDraft] = useState({ keyword: "", level: "", enabled: "", active: "" });
   const [query, setQuery] = useState({ keyword: "", level: "", enabled: "", active: "" });
   const [page, setPage] = useState(1);
@@ -90,6 +103,30 @@ export function AnnouncementsPage() {
     void load();
   }, [load]);
 
+  // 区名只用来显示（公告列表不按区筛：管理员要能发现「发到别区去了」）
+  useEffect(() => {
+    let alive = true;
+    void zonesApi
+      .list()
+      .then((list) => {
+        if (!alive) return;
+        const map: Record<number, string> = {};
+        for (const zone of list) map[zone.id] = zone.name;
+        setZoneNames(map);
+      })
+      .catch(() => {
+        /* 拿不到区名就退化成显示 id，不影响发公告 */
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const scopeText = (item: Announcement): string =>
+    item.zoneId === null ? ANNOUNCEMENT_SCOPE_LABELS[ANNOUNCEMENT_SCOPE.ALL] : (zoneNames[item.zoneId] ?? `区 #${item.zoneId}`);
+
+  const currentZoneName = (currentZoneId !== null ? zoneNames[currentZoneId] : undefined) ?? "当前区";
+
   const submitSearch = () => {
     setPage(1);
     setQuery({ ...draft, keyword: draft.keyword.trim() });
@@ -116,6 +153,10 @@ export function AnnouncementsPage() {
   const submitDialog = async (value: AnnouncementFormValue): Promise<boolean> => {
     try {
       if (editing) {
+        // `scope` 只在**改过**时才发：发一条 2 区的公告、而顶栏停在 1 区时，
+        // 无脑带上 `scope=zone` 会把它搬到 1 区（服务端按当前区解释这个值）
+        const wasAll = editing.zoneId === null;
+        const scopeChanged = (value.scope === ANNOUNCEMENT_SCOPE.ALL) !== wasAll;
         const body: UpdateAnnouncement = {
           title: value.title,
           content: value.content,
@@ -123,6 +164,7 @@ export function AnnouncementsPage() {
           enabled: value.enabled,
           startsAt: value.startsAt,
           endsAt: value.endsAt,
+          ...(scopeChanged ? { scope: value.scope as UpdateAnnouncement["scope"] } : {}),
         };
         await announcementsApi.update(editing.id, body);
         toastSuccess("公告已更新");
@@ -134,9 +176,10 @@ export function AnnouncementsPage() {
           enabled: value.enabled,
           startsAt: value.startsAt ?? undefined,
           endsAt: value.endsAt ?? undefined,
+          scope: value.scope as CreateAnnouncement["scope"],
         };
         await announcementsApi.create(body);
-        toastSuccess("公告已发布");
+        toastSuccess(value.scope === ANNOUNCEMENT_SCOPE.ALL ? "公告已发布（全服）" : `公告已发布（仅 ${currentZoneName}）`);
       }
       setDialogOpen(false);
       setEditing(null);
@@ -188,7 +231,9 @@ export function AnnouncementsPage() {
     <div className="flex flex-col gap-4">
       <PageHeader
         title="公告"
-        description={<>面向全服的运营消息。玩家侧由 <code className="text-ink-4">GET /announcements/active</code> 拉取「当前生效中」的那一批（无需登录，登录页也能显示）；
+        description={<>运营消息，按「投放范围」决定谁能看到：全服 = 所有区 + 登录页；某个区 = 只有那个区的玩家在游戏内看得到。
+            玩家侧两条读路径：<code className="text-ink-4">GET /announcements/active</code>（无需登录，登录页用，只给全服）、
+            <code className="text-ink-4">GET /announcements/mine</code>（带令牌，游戏内用，全服 + 本区）。
             生效 = 已启用 且 在时间窗内，两个条件由服务端判定。</>}
         actions={<>
           <Button disabled={!canWrite} onClick={openCreate}>
@@ -251,6 +296,7 @@ export function AnnouncementsPage() {
               <tr>
                 <SortableTh label="标题" field="title" sort={sort} order={order} onToggle={toggle} />
                 <SortableTh label="级别" field="level" sort={sort} order={order} onToggle={toggle} />
+                <th className={thClass}>投放范围</th>
                 <th className={thClass}>状态</th>
                 <th className={thClass}>生效时间窗</th>
                 <SortableTh label="启用" field="enabled" sort={sort} order={order} onToggle={toggle} />
@@ -274,6 +320,9 @@ export function AnnouncementsPage() {
                     </td>
                     <td className={tdClass}>
                       <Badge tone={LEVEL_TONE[item.level] ?? "muted"}>{ANNOUNCEMENT_LEVEL_LABELS[item.level] ?? item.level}</Badge>
+                    </td>
+                    <td className={tdClass}>
+                      <Badge tone={item.zoneId === null ? "gold" : "muted"}>{scopeText(item)}</Badge>
                     </td>
                     <td className={tdClass}>
                       <Badge tone={state.tone}>{state.label}</Badge>
@@ -332,6 +381,8 @@ export function AnnouncementsPage() {
       <AnnouncementDialog
         open={dialogOpen}
         initial={editing}
+        currentZoneName={currentZoneName}
+        canPublishAll={canPublishAll}
         onCancel={() => {
           setDialogOpen(false);
           setEditing(null);

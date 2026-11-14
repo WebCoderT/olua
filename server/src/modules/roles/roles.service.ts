@@ -227,8 +227,21 @@ export class RolesService {
   zoneOf(accountId: string): number {
     const account = this.accounts.findById(accountId);
     if (!account) return 1;
-    const row = account.online_role_id ? this.roles.findByIdAnyZone(account.online_role_id) : undefined;
-    return row?.zone_id ?? account.active_zone_id;
+    return this.onlineZoneOf(accountId) ?? account.active_zone_id;
+  }
+
+  /**
+   * **在线角色**所在的区；还没选角色（或角色已删）返回 `null`
+   *
+   * 与 `zoneOf` 的差别只在「没有在线角色时」：`zoneOf` 退回账号的浏览区（结算 / 进图这类
+   * 动作总要落到一个区上，不能没有答案），而这里返回 null 表示「这个人现在还不属于任何区」。
+   * 按区决定**可见内容**的地方要用这一个：一个还没建角的新号只是「在浏览 1 区」，
+   * 把 1 区的公告推给他等于替他把区选了（#963 的公告板就是这种情况）。
+   */
+  onlineZoneOf(accountId: string): number | null {
+    const account = this.accounts.findById(accountId);
+    if (!account || !account.online_role_id) return null;
+    return this.roles.findByIdAnyZone(account.online_role_id)?.zone_id ?? null;
   }
 
   /** 当前选中（在线）角色；未选或角色已被删返回 null */

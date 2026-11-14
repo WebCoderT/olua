@@ -41,8 +41,8 @@ export class AnnouncementRepository {
   insert(row: AnnouncementRow): void {
     this.db.run(
       `INSERT INTO announcements
-        (id, title, content, level, enabled, starts_at, ends_at, created_by, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        (id, title, content, level, enabled, starts_at, ends_at, zone_id, created_by, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         row.id,
         row.title,
@@ -51,6 +51,7 @@ export class AnnouncementRepository {
         row.enabled,
         row.starts_at,
         row.ends_at,
+        row.zone_id,
         row.created_by,
         row.created_at,
         row.updated_at,
@@ -62,13 +63,24 @@ export class AnnouncementRepository {
    * 按 id 覆盖可编辑字段
    *
    * `created_by` 刻意**不在更新列里**：发布人是历史事实，编辑公告的人不该把自己写成发布人。
+   * `zone_id` 在列里：改投放范围是正当运营动作（一条只在 1 区发的公告，发现该让全服看到）。
    */
   update(row: AnnouncementRow): { changes: number } {
     return this.db.execute(
       `UPDATE announcements
-       SET title = ?, content = ?, level = ?, enabled = ?, starts_at = ?, ends_at = ?, updated_at = ?
+       SET title = ?, content = ?, level = ?, enabled = ?, starts_at = ?, ends_at = ?, zone_id = ?, updated_at = ?
        WHERE id = ?`,
-      [row.title, row.content, row.level, row.enabled, row.starts_at, row.ends_at, row.updated_at, row.id],
+      [
+        row.title,
+        row.content,
+        row.level,
+        row.enabled,
+        row.starts_at,
+        row.ends_at,
+        row.zone_id,
+        row.updated_at,
+        row.id,
+      ],
     );
   }
 
@@ -107,12 +119,22 @@ export class AnnouncementRepository {
    *
    * 排序：**重要在前**，同级按发布时间倒序 —— 玩家第一眼该看到的是重要公告，
    * 而不是最近发的一条闲聊。
+   *
+   * `zoneId` 决定「能看到哪些投放范围」（#963）：
+   * - `null` → **只给全服公告**（`zone_id IS NULL`）。调用方是没有区上下文的场景
+   *   （登录页 / 还没建角的账号），它连「我在哪个区」都答不出来；
+   * - 数字 → 全服 + 本区。
+   *
+   * 「别区公告不出现」不是额外过滤出来的，而是**只按这两个条件取**：一条只投给 2 区的
+   * 公告，在 1 区的请求里天然不满足任何一支。
    */
-  listActive(now: number): AnnouncementRow[] {
+  listActive(now: number, zoneId: number | null = null): AnnouncementRow[] {
+    const zoneSql = zoneId === null ? "zone_id IS NULL" : "(zone_id IS NULL OR zone_id = ?)";
+    const params: SqlParam[] = zoneId === null ? [now, now] : [now, now, zoneId];
     return this.db.all<AnnouncementRow>(
-      `SELECT * FROM announcements WHERE ${ACTIVE_SQL}
+      `SELECT * FROM announcements WHERE ${ACTIVE_SQL} AND ${zoneSql}
        ORDER BY CASE level WHEN '${AnnouncementLevel.IMPORTANT}' THEN 0 ELSE 1 END ASC, created_at DESC`,
-      [now, now],
+      params,
     );
   }
 
