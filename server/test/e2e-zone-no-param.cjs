@@ -8,8 +8,8 @@
  * 这比「传了别区就报错」更严：报错还能说明代码里读了这个参数，而这里要的是
  * 「代码里根本没有这个读点」。
  *
- * 覆盖：角色列表 / 在线角色 / 角色详情 / 存进度 / 我的区服 / 帮会列表（#958），外加一条反证
- * ——拿别区角色 id 去打，即使 `?zoneId=` 指的正是那个区，也还是 20002（不认参数）。
+ * 覆盖：角色列表 / 在线角色 / 角色详情 / 存进度 / 我的区服 / 帮会列表（#958）/ 排行榜（#959），
+ * 外加一条反证 —— 拿别区角色 id 去打，即使 `?zoneId=` 指的正是那个区，也还是 20002（不认参数）。
  *
  * 与 e2e-zone 同款：临时文件库 + 独立端口。
  */
@@ -189,6 +189,20 @@ async function api(baseUrl, method, route, options = {}) {
       Array.isArray(guildListA.data) && guildListA.data.length === 1 && guildListA.data[0].name === "一区帮",
       "带 ?zoneId=<二区> 拿到的仍是**一区**的帮会列表（参数不读，只在服务端推导的区里查）",
       JSON.stringify(guildListA.data && guildListA.data.map((guild) => guild.name)),
+    );
+    checkSame(
+      "GET /leaderboards/level?zoneId=<二区> 与不带一致",
+      await api(baseUrl, "GET", "leaderboards/level", { token: tokenA }),
+      await api(baseUrl, "GET", `leaderboards/level?zoneId=${zone2Id}`, { token: tokenA }),
+    );
+    const boardA = await api(baseUrl, "GET", `leaderboards/level?zoneId=${zone2Id}`, { token: tokenA });
+    const boardRoleIds = new Set(
+      (boardA.data && boardA.data.list ? boardA.data.list : []).map((entry) => entry.roleId),
+    );
+    check(
+      boardA.data && boardA.data.total === 2 && boardRoleIds.has(zone1RoleId) && !boardRoleIds.has(zone2RoleId),
+      "带 ?zoneId=<二区> 拿到的仍是**一区**的榜（只有一区那 2 个角色，二区的同名角色不在里面）",
+      JSON.stringify([...boardRoleIds]),
     );
     checkSame(
       "GET /roles/:id?zoneId=<二区> 与不带一致",

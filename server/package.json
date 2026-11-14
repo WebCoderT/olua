@@ -39,6 +39,7 @@
     "test:e2e:zone-party": "node --disable-warning=ExperimentalWarning test/e2e-zone-party.cjs",
     "test:e2e:zone-guild": "node --disable-warning=ExperimentalWarning test/e2e-zone-guild.cjs",
     "test:e2e:zone-no-param": "node --disable-warning=ExperimentalWarning test/e2e-zone-no-param.cjs",
+    "test:e2e:zone-leaderboard": "node --disable-warning=ExperimentalWarning test/e2e-zone-leaderboard.cjs",
     "test:e2e:zone-migrate": "node --disable-warning=ExperimentalWarning test/e2e-zone-migrate.cjs",
     "test:e2e:role-migration": "node --disable-warning=ExperimentalWarning test/e2e-role-migration.cjs",
     "test:e2e:role-corrupted": "node --disable-warning=ExperimentalWarning test/e2e-role-corrupted.cjs",

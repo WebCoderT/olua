@@ -161,15 +161,20 @@ export class RoleRepository {
   }
 
   /**
-   * 排行榜候选（#400：全表 + 账号的区服）
+   * 排行榜候选（#400；#959 收成按区）
    *
-   * 全表读是有意的：物化每 `LEADERBOARD_REFRESH_MS` 才跑一次，而「按分页现排序」
+   * 一次读一整区是有意的：物化每 `LEADERBOARD_REFRESH_MS` 才跑一次，而「按分页现排序」
    * 要把整表读 N 遍。倒过来做的代价是「角色数上万时一次重算占几十毫秒」—— 见服务注释。
+   *
+   * **区必须进 SQL**（#959）：榜是分区榜，全服混排下线了。查询走 `idx_roles_zone`
+   * （区 + 主键的顺序读），跨区的行在存储层就被挡掉 —— 名次也不会被别区的人挤掉。
    */
-  listForLeaderboard(): RoleLeaderboardRow[] {
+  listForLeaderboard(zoneId: number): RoleLeaderboardRow[] {
     return this.db.all<RoleLeaderboardRow>(
       `SELECT r.id, r.name, r.occupation, r.level, r.kills, r.data, r.zone_id AS zone_id
-       FROM roles r`,
+       FROM roles r
+       WHERE r.zone_id = ?`,
+      [zoneId],
     );
   }
 

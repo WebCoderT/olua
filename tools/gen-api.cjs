@@ -85,7 +85,7 @@ const MODULES = {
   guild: { target: "client", export: "GuildApi" },
   social: { target: "client", export: "SocialApi" },
   quest: { target: "client", export: "QuestApi" },
-  // 排行榜（#400）：与军衔（adminRank）不同 —— 那个是 rank 字段的配置表，这个是全服榜单
+  // 排行榜（#400）：与军衔（adminRank）不同 —— 那个是 rank 字段的配置表，这个是本区榜单（#959 分区）
   leaderboard: { target: "client", export: "LeaderboardApi" },
   // 成就（#401）：玩家侧「查 / 领」；管理端配置页是 adminAchievement
   achievement: { target: "client", export: "AchievementApi" },
@@ -149,6 +149,9 @@ const MODULES = {
   adminSkill: { target: "admin", export: "skillsApi" },
   adminStatus: { target: "admin", export: "statusesApi" },
   adminZone: { target: "admin", export: "zonesApi" },
+  // 后台榜单（#959）：与玩家侧 leaderboard 读同一份物化快照，但区来自 X-Zone-Id，
+  // 所以是**另一个模块段**而不是同一个 —— operationId 的前缀就是「谁来调」的标记
+  adminLeaderboard: { target: "admin", export: "leaderboardsApi" },
   adminGuild: { target: "admin", export: "guildsApi" },
   adminQuest: { target: "admin", export: "questsApi" },
   adminReport: { target: "admin", export: "reportsApi" },

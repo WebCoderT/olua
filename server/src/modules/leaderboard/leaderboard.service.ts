@@ -15,6 +15,7 @@ import { AccountRepository } from "../../database/repositories/account.repositor
 import { RoleRepository } from "../../database/repositories/role.repository";
 import { RoleLeaderboardRow } from "../../database/rows";
 import { summarizeRoleAttributes } from "../combat/role-attributes";
+import { RolesService } from "../roles/roles.service";
 import { LeaderboardEntryDto, LeaderboardPageDto, LeaderboardQueryDto, LeaderboardSelfDto } from "./dto/leaderboard.dto";
 
 /** 一个角色的三个榜共用的「算好的原料」（一次扫描只算一遍战力，三个榜共享） */
@@ -50,6 +51,9 @@ interface BoardSnapshot {
   computedAt: number;
 }
 
+/** 一个区的三个榜（一次重算整体替换，读者不会看到「等级榜新、战力榜旧」） */
+type ZoneBoards = Record<LeaderboardBoard, BoardSnapshot>;
+
 /**
  * 排行榜（#400）
  *
@@ -64,17 +68,36 @@ interface BoardSnapshot {
  * 离线也上榜：读的是 `roles` 存档表，不要求在线（离线玩家也是榜的一部分）。
  *
  * ===========================================================================
+ * 分区（#959 / docs/39 §3.6）
+ * ===========================================================================
+ * 榜是**分区榜**：每个区各一份快照，名次在区内算，`topN` 也按区各截一次。
+ * 全服混排下线了 —— 条目上的 `zoneId` 保留只为展示（客户端不再按它混排）。
+ *
+ * 玩家接口**不收 `?zoneId=`**：看哪个区由服务端从账号推导（`RolesService.zoneOf`：
+ * 进图后是在线角色的区，还没选角色时是账号的当前浏览区）。管理端另开
+ * `GET /admin/leaderboards/:board`，区取自请求头 `X-Zone-Id`。
+ *
+ * 缓存是**按需分桶**的：`Map<zoneId, ZoneBoards>`，某个区第一次被请求时才算它那一份，
+ * 之后只刷新已经算过的区。没人看的区不占 CPU 也不占内存 —— 「全服一次扫完、
+ * 把所有区的榜都物化出来」只有在「每个区人数都很多且都有人看榜」时才划算，
+ * 而新开的区恰恰相反（头几天榜上只有三个人）。
+ *
+ * 设计稿 §3.6 写的是「一次扫描按 zoneId 分桶」，落地改成**每区一条 SQL**
+ * （`WHERE zone_id = ?`，走 `idx_roles_zone`）：分桶要先知道「有哪些区」，
+ * 而区清单是运营数据（随时开区 / 合区），为它多一条依赖不值得 ——
+ * 「谁被请求才算谁」这件事本身就决定了该算哪些区。
+ *
+ * ===========================================================================
  * 为什么是「进程内物化」而不是每次现算，也不是落一张快照表
  * ===========================================================================
- * - **不每次现算**：一次现算 = 全表读 + 逐行解析存档 + 三个排序。榜会被频繁打开
+ * - **不每次现算**：一次现算 = 整区读 + 逐行解析存档 + 三个排序。榜会被频繁打开
  *   （点一下就刷），而榜单的价值恰恰是「所有人看到同一份」——现算等于每人一份，
  *   还顺带把「谁先打开谁看到旧名次」变成随机现象。
  * - **不落快照表**：榜是 `roles` 的**纯派生数据**。落库就多出第二个真相：
  *   角色升了级而快照表没跟上，两者谁对？派生数据不落库，就没有这个问题。
  *   进程重启的代价是「第一分钟算不出来」——而首次请求是惰性算的，实际是零等待。
- * - **重算不撕裂**：整份快照（三个榜）一次性算完，最后**一次赋值**换掉引用。
- *   读侧永远拿到「某个完整时刻的三个榜」，不会读到「等级榜是新的、战力榜是旧的」，
- *   也不会读到算了一半的数组。
+ * - **重算不撕裂**：整份快照（一个区的三个榜）一次性算完，最后**一次赋值**换掉引用。
+ *   读侧永远拿到「某个完整时刻的三个榜」，不会读到算了一半的数组。
  *
  * ===========================================================================
  * 定时器为什么在「第一次有人看榜」时才起
@@ -89,15 +112,16 @@ interface BoardSnapshot {
 @Injectable()
 export class LeaderboardService implements OnApplicationShutdown {
   private readonly logger = new Logger(LeaderboardService.name);
-  /** 物化快照（null = 还没算过；首次请求时算） */
-  private cache: Record<LeaderboardBoard, BoardSnapshot> | null = null;
+  /** 分区物化快照（区 → 三个榜）；某个区不在表里 = 还没人看过它 */
+  private readonly cache = new Map<number, ZoneBoards>();
   /** 重算定时器（只有被请求过才会存在） */
   private timer: NodeJS.Timeout | null = null;
 
   constructor(
     private readonly config: ConfigService,
-    private readonly roles: RoleRepository,
+    private readonly roleRepo: RoleRepository,
     private readonly accounts: AccountRepository,
+    private readonly roles: RolesService,
   ) {}
 
   /** 进程退出前收掉定时器（e2e 起停多台服务，留着会拖住事件循环） */
@@ -109,23 +133,23 @@ export class LeaderboardService implements OnApplicationShutdown {
   }
 
   /**
-   * 分页读一个榜
+   * 分页读一个榜（玩家侧：区由服务端推导）
    *
    * `size` 超过 `LEADERBOARD_TOP_N` 时**夹到上限**而不是报错：客户端把 size 写大了
    * 是他自己的事，榜本来就只有这么长，给满是更友好的回应。
    */
-  page(board: LeaderboardBoard, query: LeaderboardQueryDto): LeaderboardPageDto {
-    const snapshot = this.snapshotOf(board);
-    const size = Math.min(Math.max(1, Math.floor(query.size ?? 20)), this.topN());
-    const page = Math.max(1, Math.floor(query.page ?? 1));
-    const start = (page - 1) * size;
-    return {
-      list: snapshot.entries.slice(start, start + size),
-      total: snapshot.entries.length,
-      page,
-      size,
-      computedAt: snapshot.computedAt,
-    };
+  page(board: LeaderboardBoard, accountId: string, query: LeaderboardQueryDto): LeaderboardPageDto {
+    return this.pageOfZone(board, this.roles.zoneOf(accountId), query);
+  }
+
+  /**
+   * 分页读一个榜（管理端：区来自 `X-Zone-Id`，由调用方校验后传进来）
+   *
+   * 与玩家侧共用同一份快照 —— 客服在后台看到的榜必须和玩家看到的一模一样，
+   * 「后台另算一遍」是两套口径的开始。
+   */
+  adminPage(board: LeaderboardBoard, zoneId: number, query: LeaderboardQueryDto): LeaderboardPageDto {
+    return this.pageOfZone(board, zoneId, query);
   }
 
   /**
@@ -134,11 +158,14 @@ export class LeaderboardService implements OnApplicationShutdown {
    * 取**当前在线角色**：玩家在游戏里看榜，关心的是「我这个角色第几」。
    * 没有在线角色（没进游戏 / 被踢）→ `rank = 0`，不是 404：
    * 界面上「你还没有名次」是正常状态，客户端不必为它写一条错误分支。
+   *
+   * 名次在**在线角色所在区**的快照里算（`zoneOf` 就是「在线角色的区，没有则当前浏览区」），
+   * 所以跨区看着别区的榜也不会拿到错的名次。
    */
   me(board: LeaderboardBoard, accountId: string): LeaderboardSelfDto {
-    const snapshot = this.snapshotOf(board);
-    const account = this.accounts.findById(accountId);
-    const roleId = account?.online_role_id ?? "";
+    const zoneId = this.roles.zoneOf(accountId);
+    const snapshot = this.snapshotOf(zoneId, board);
+    const roleId = this.accounts.findById(accountId)?.online_role_id ?? "";
     const entry = roleId ? (snapshot.byRole.get(roleId) ?? null) : null;
     return {
       rank: entry ? entry.rank : LEADERBOARD_NO_RANK,
@@ -158,13 +185,30 @@ export class LeaderboardService implements OnApplicationShutdown {
 
   //#region 物化
 
-  /** 取一份快照（没有就现场算；算完顺手起定时器） */
-  private snapshotOf(board: LeaderboardBoard): BoardSnapshot {
-    if (!this.cache) {
-      this.cache = this.recompute();
+  /** 取一份快照（这个区没有就现场算；算完顺手起定时器） */
+  private snapshotOf(zoneId: number, board: LeaderboardBoard): BoardSnapshot {
+    let boards = this.cache.get(zoneId);
+    if (!boards) {
+      boards = this.recompute(zoneId);
+      this.cache.set(zoneId, boards);
       this.startTimer();
     }
-    return this.cache[board];
+    return boards[board];
+  }
+
+  /** 分页切片（玩家侧与管理端共用，唯一区别只是区从哪来） */
+  private pageOfZone(board: LeaderboardBoard, zoneId: number, query: LeaderboardQueryDto): LeaderboardPageDto {
+    const snapshot = this.snapshotOf(zoneId, board);
+    const size = Math.min(Math.max(1, Math.floor(query.size ?? 20)), this.topN());
+    const page = Math.max(1, Math.floor(query.page ?? 1));
+    const start = (page - 1) * size;
+    return {
+      list: snapshot.entries.slice(start, start + size),
+      total: snapshot.entries.length,
+      page,
+      size,
+      computedAt: snapshot.computedAt,
+    };
   }
 
   /**
@@ -181,32 +225,38 @@ export class LeaderboardService implements OnApplicationShutdown {
     this.timer.unref?.();
   }
 
-  /** 定时重算：失败只记日志，旧快照继续服务（榜单挂了不该把接口拖垮） */
+  /**
+   * 定时重算：**只刷已经算过的区**（没人看的区没有快照，也就没必要算）
+   *
+   * 单个区失败只记日志，那个区继续用旧快照 —— 一个区的坏数据不该把别的区的榜也拖住。
+   */
   private refresh(): void {
-    try {
-      this.cache = this.recompute();
-    } catch (error) {
-      this.logger.warn(`榜单重算失败，继续用上一份快照：${(error as Error).message}`);
+    for (const zoneId of [...this.cache.keys()]) {
+      try {
+        this.cache.set(zoneId, this.recompute(zoneId));
+      } catch (error) {
+        this.logger.warn(`区 ${zoneId} 的榜单重算失败，继续用上一份快照：${(error as Error).message}`);
+      }
     }
   }
 
   /**
-   * 重算三个榜（一次扫描，三个排序）
+   * 重算一个区的三个榜（一次扫描，三个排序）
    *
-   * 顺序是「先读 → 再算 → 最后一次性换引用」：中途抛异常时 `this.cache` 仍是旧的那份，
+   * 顺序是「先读 → 再算 → 最后一次性换引用」：中途抛异常时调用方手里那份仍是旧的，
    * 读者不会看到空榜。
    */
-  private recompute(): Record<LeaderboardBoard, BoardSnapshot> {
+  private recompute(zoneId: number): ZoneBoards {
     const startedAt = Date.now();
-    const rows = this.roles.listForLeaderboard();
+    const rows = this.roleRepo.listForLeaderboard(zoneId);
     const scored: ScoredRole[] = rows.map((row) => this.scoreOf(row));
     const computedAt = startedAt;
-    const next = {} as Record<LeaderboardBoard, BoardSnapshot>;
+    const next = {} as ZoneBoards;
     for (const board of LEADERBOARD_BOARDS) {
       next[board] = this.buildBoard(board, scored, computedAt);
     }
     const top = Math.max(...LEADERBOARD_BOARDS.map((board) => next[board].entries.length));
-    this.logger.debug(`榜单重算完成：${scored.length} 个角色，耗时 ${Date.now() - startedAt}ms，最长榜 ${top} 条`);
+    this.logger.debug(`区 ${zoneId} 榜单重算完成：${scored.length} 个角色，耗时 ${Date.now() - startedAt}ms，最长榜 ${top} 条`);
     return next;
   }
 
@@ -215,6 +265,9 @@ export class LeaderboardService implements OnApplicationShutdown {
    *
    * 名次按**下标 + 1** 起算，遇到「分数与上一条不同」才换名次 —— 这就是 1、2、2、4
    * （竞赛排名）：并列的人占掉同名次，后面那位跳过被占的名次。
+   *
+   * 区里一个人都没有时得到空榜（`entries = []`、`total = 0`）—— 这是正常状态，
+   * 不是错误：新开的区在第一批玩家升级之前就该显示「还没有人上榜」。
    */
   private buildBoard(board: LeaderboardBoard, scored: ScoredRole[], computedAt: number): BoardSnapshot {
     const sorted = [...scored].sort((left, right) => this.compare(board, left, right));
@@ -266,7 +319,7 @@ export class LeaderboardService implements OnApplicationShutdown {
    * 战力靠 `summarizeRoleAttributes` 现算（#541 起属性算法只有服务端这一份实现）。
    * **算不出来就给 0**，不让它把整次重算带崩：
    * 等级超出成长曲线（旧存档 / 后台手工改过）、存档 JSON 坏掉，都属于「这一个角色数据有问题」，
-   * 不该让全服榜一起没了。
+   * 不该让全区榜一起没了。
    */
   private scoreOf(row: RoleLeaderboardRow): ScoredRole {
     return {

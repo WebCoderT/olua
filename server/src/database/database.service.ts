@@ -170,6 +170,9 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
         updated_at INTEGER NOT NULL
       );
       CREATE INDEX IF NOT EXISTS idx_roles_account ON roles(account_id);
+      -- 按区索引（#959）：分区榜每次重算读**整区**角色，区名查重 / 按名找人也都按它收口。
+      -- 没有这条索引时「一区一查」会退化成全表扫 + 过滤，区一多就是「扫 N 遍全表」。
+      CREATE INDEX IF NOT EXISTS idx_roles_zone ON roles(zone_id);
 
       CREATE TABLE IF NOT EXISTS admins (
         id            TEXT PRIMARY KEY,
