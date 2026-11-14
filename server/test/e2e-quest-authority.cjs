@@ -173,9 +173,14 @@ async function startServer(dbPath) {
 }
 
 /** 发一次请求，返回唯一包裹体（code / message / data） */
+/** 管理端请求所在的区（#960）：一个 e2e 进程只在一个区里干活，管理端请求统一带它 */
+const ADMIN_ZONE = 1;
+
 async function api(baseUrl, method, route, options = {}) {
   const headers = { "Content-Type": "application/json" };
   if (options.token) headers.Authorization = `Bearer ${options.token}`;
+  // 管理端单区上下文（#960）：控制台前端在请求拦截器里统一带 X-Zone-Id，测试里对等模拟
+  if (options.zoneId !== undefined) headers["X-Zone-Id"] = String(options.zoneId);
   const response = await fetch(`${baseUrl}/api/${route}`, {
     method,
     headers,
@@ -218,13 +223,13 @@ function weekStartDay(now = Date.now()) {
     await api(baseUrl, "POST", "admin/auth/register", {
       body: { username: "quest_auth_admin", password: "pass1234", registerCode: ADMIN_CODE },
     });
-    const adminLogin = await api(baseUrl, "POST", "admin/auth/login", { body: { username: "quest_auth_admin", password: "pass1234" } });
+    const adminLogin = await api(baseUrl, "POST", "admin/auth/login", { body: { zoneId: ADMIN_ZONE, username: "quest_auth_admin", password: "pass1234" } });
     const adminToken = adminLogin && adminLogin.data && adminLogin.data.token;
     check(!!adminToken, "准备：管理员已登录（要建周常 / 摆点位）");
 
     // 周常任务 8201：与任务 NPC 对话 1 次（跑通「接 → 推进度 → 交付 → 切周」整条链）
     const weekly = await api(baseUrl, "POST", "admin/quests", {
-      token: adminToken,
+      token: adminToken, zoneId: ADMIN_ZONE,
       body: {
         id: "8201",
         kind: "weekly",
@@ -240,7 +245,7 @@ function weekStartDay(now = Date.now()) {
     // 8202：发布 NPC 是 9002（现网 `map_npcs` 里没有它），用来测「缺点位放行」那一档；
     // 不挂 prev 链，接取能不能过只取决于 NPC 距离这一道闸
     const noPointQuest = await api(baseUrl, "POST", "admin/quests", {
-      token: adminToken,
+      token: adminToken, zoneId: ADMIN_ZONE,
       body: {
         id: "8202",
         kind: "main",
@@ -324,7 +329,7 @@ function weekStartDay(now = Date.now()) {
 
     // 补一个点位到别的图（map 2）——「只摆在别的图」要变成拒绝，而不是继续放行
     const placed = await api(baseUrl, "POST", `admin/maps/2/npcs`, {
-      token: adminToken,
+      token: adminToken, zoneId: ADMIN_ZONE,
       body: { npcId: NPC_NO_POINT, cx: 4096, cy: -5312 },
     });
     check(placed && placed.code === 0, "准备：给 9002 在 map 2 摆一个点位", placed && JSON.stringify(placed.message));

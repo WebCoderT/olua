@@ -8,7 +8,9 @@ import { BizException } from "../../common/errors/biz.exception";
 import { LoginThrottleService } from "../../common/security/login-throttle.service";
 import { hashPassword, verifyPassword } from "../../common/utils/password.util";
 import { AdminRepository } from "../../database/repositories/admin.repository";
+import { ZoneService } from "../zone/zone.service";
 import { AdminRow } from "../../database/rows";
+import { ZoneOptionDto } from "../zone/dto/zone.dto";
 import { AuditService } from "../audit/audit.service";
 import { describeError } from "../../common/interceptors/audit.interceptor";
 import { TokenService } from "../token/token.service";
@@ -32,6 +34,7 @@ export class AdminAuthService implements OnModuleInit {
     private readonly config: ConfigService,
     private readonly throttle: LoginThrottleService,
     private readonly audit: AuditService,
+    private readonly zones: ZoneService,
   ) {}
 
   /**
@@ -85,6 +88,8 @@ export class AdminAuthService implements OnModuleInit {
         created_at: now,
         updated_at: now,
         last_login_at: now,
+        // 注册时还没有选区（#960 起登录必带区）：留 NULL，登录页回退到第一个可选区
+        last_zone_id: null,
       };
       this.admins.insert(admin);
       if (isFirstAdmin) this.logger.log(`首个管理员 ${username} 已自动设为超级管理员`);
@@ -143,14 +148,20 @@ export class AdminAuthService implements OnModuleInit {
       throw new BizException(BizCode.ADMIN_DISABLED, "管理员账号已停用", HttpStatus.FORBIDDEN);
     }
     this.throttle.recordSuccess(username, ip);
+    // 区校验放在**口令与状态都通过之后**：否则一个不知道密码的人也能拿 400 / 200 的差别
+    // 把区 id 探一遍（哪些区存在、哪些已合并）。这里错就是错在「选错了区」，与登录凭证无关。
+    const zoneId = this.zones.assertSelectable(dto.zoneId);
     admin.last_login_at = Date.now();
-    this.admins.updateById(admin.id, { last_login_at: admin.last_login_at });
+    admin.last_zone_id = zoneId;
+    this.admins.updateById(admin.id, { last_login_at: admin.last_login_at, last_zone_id: zoneId });
     this.audit.recordLoginAttempt({
       action: "adminAuth.login",
       route: "admin/auth/login",
       username: admin.username,
       ip,
       ok: true,
+      // 登录成功才记区：失败那条日志里的 zoneId 还没校验过，记下来只会误导
+      zoneId,
       actor: { id: admin.id, username: admin.username, role: admin.role },
     });
     return this.issue(admin);
@@ -185,6 +196,19 @@ export class AdminAuthService implements OnModuleInit {
     const admin = this.admins.findById(adminId);
     if (!admin) throw BizException.notFound(BizCode.ADMIN_NOT_FOUND, "管理员账号不存在");
     return AdminDto.from(admin);
+  }
+
+  /**
+   * 登录页可选区（#960，`GET /admin/auth/zones`，@Public）
+   *
+   * 为什么公开：登录页还没有令牌，但它必须先告诉人「有哪些区」才能选区登录。
+   * 泄露面很小 —— 区名与运营状态本身就是玩家注册时能看到的东西（玩家侧
+   * `GET /zones` 也公开）；这里多的只有 `status`（关区标记）与排序。
+   *
+   * **不含已合并的区**：选它一定被 `ZoneContextGuard` 拒（数据已搬走）。
+   */
+  zoneOptions(): ZoneOptionDto[] {
+    return this.zones.options();
   }
 
   private issue(admin: AdminRow): AdminTokenDto {

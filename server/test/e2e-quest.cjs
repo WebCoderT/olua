@@ -144,9 +144,14 @@ async function startServer(dbPath) {
 }
 
 /** 发一次请求，返回唯一包裹体（code / message / data） */
+/** 管理端请求所在的区（#960）：一个 e2e 进程只在一个区里干活，管理端请求统一带它 */
+const ADMIN_ZONE = 1;
+
 async function api(baseUrl, method, route, options = {}) {
   const headers = { "Content-Type": "application/json" };
   if (options.token) headers.Authorization = `Bearer ${options.token}`;
+  // 管理端单区上下文（#960）：控制台前端在请求拦截器里统一带 X-Zone-Id，测试里对等模拟
+  if (options.zoneId !== undefined) headers["X-Zone-Id"] = String(options.zoneId);
   const response = await fetch(`${baseUrl}/api/${route}`, {
     method,
     headers,
@@ -291,11 +296,11 @@ function setResetDay(dbPath, roleId, questId, day) {
     check(!!(world && world.monsters.some((m) => m.alive)), "准备：进图拿到活着的怪物 1", JSON.stringify(world && world.monsters.length));
 
     await api(baseUrl, "POST", "admin/auth/register", { body: { username: "quest_admin", password: "pass1234", registerCode: ADMIN_CODE } });
-    const adminLogin = await api(baseUrl, "POST", "admin/auth/login", { body: { username: "quest_admin", password: "pass1234" } });
+    const adminLogin = await api(baseUrl, "POST", "admin/auth/login", { body: { zoneId: ADMIN_ZONE, username: "quest_admin", password: "pass1234" } });
     const adminToken = adminLogin.data && adminLogin.data.token;
     check(!!adminToken, "准备：管理员已登录（配置守卫要用它改表）");
 
-    const questList = await api(baseUrl, "GET", "admin/quests?page=1&size=50", { token: adminToken });
+    const questList = await api(baseUrl, "GET", "admin/quests?page=1&size=50", { token: adminToken, zoneId: ADMIN_ZONE });
     check(questList.code === 0 && questList.data.list.length === 5, "准备：任务配置 seed 了 5 条（8001~8004 主线 + 8101 日常）", JSON.stringify(questList.data && questList.data.total));
 
     /**
@@ -372,7 +377,7 @@ function setResetDay(dbPath, roleId, questId, day) {
     check(gated.code === 20015, "主线链前置未完成 → 20015（8002 还没领）", JSON.stringify(gated));
 
     // 未接取时 npc-talk 里是 available（放在接取 8001 之前——可接态来自「无进度行」）
-    await api(baseUrl, "PATCH", "admin/npcs/0002", { token: adminToken, body: { dialog: "欢迎来到大陆，年轻人。" } });
+    await api(baseUrl, "PATCH", "admin/npcs/0002", { token: adminToken, zoneId: ADMIN_ZONE, body: { dialog: "欢迎来到大陆，年轻人。" } });
     const talkBefore = await questApi("POST", "quests/npc-talk", { npcId: "0002" });
     const beforeRow = talkBefore.code === 0 ? (talkBefore.data.quests || []).find((row) => row.questId === "8001") : null;
     check(!!beforeRow && beforeRow.status === "available", "未接取时 npc-talk 里 8001 是 available", JSON.stringify(beforeRow));
@@ -384,10 +389,10 @@ function setResetDay(dbPath, roleId, questId, day) {
     const reAccept = await questApi("POST", "quests/accept", { questId: "8001" });
     check(reAccept.code === 20015, "重复接取 → 20015", JSON.stringify(reAccept));
 
-    await api(baseUrl, "PATCH", "admin/quests/8101", { token: adminToken, body: { minLevel: 99 } });
+    await api(baseUrl, "PATCH", "admin/quests/8101", { token: adminToken, zoneId: ADMIN_ZONE, body: { minLevel: 99 } });
     const lowLevel = await questApi("POST", "quests/accept", { questId: "8101" });
     check(lowLevel.code === 20016, "等级不够 → 20016（服务端复核，不信客户端灰按钮）", JSON.stringify(lowLevel));
-    await api(baseUrl, "PATCH", "admin/quests/8101", { token: adminToken, body: { minLevel: 1 } });
+    await api(baseUrl, "PATCH", "admin/quests/8101", { token: adminToken, zoneId: ADMIN_ZONE, body: { minLevel: 1 } });
     const acceptedDaily = await questApi("POST", "quests/accept", { questId: "8101" });
     check(acceptedDaily.code === 0, "等级够（改回 1 级）→ 日常可接（无前置门控）", JSON.stringify(acceptedDaily.message));
 
@@ -464,7 +469,7 @@ function setResetDay(dbPath, roleId, questId, day) {
 
     group("五、collect（交付时查背包）");
     // 背包恰好 2 张皮（8002 的奖励）：把 8003 的目标数量改成 2，走「够 → 扣走 + 发奖」的完整链
-    await api(baseUrl, "PATCH", "admin/quests/8003", { token: adminToken, body: { objective: { type: "collect", target: "material_hide", count: 2 } } });
+    await api(baseUrl, "PATCH", "admin/quests/8003", { token: adminToken, zoneId: ADMIN_ZONE, body: { objective: { type: "collect", target: "material_hide", count: 2 } } });
     const acceptedCollect = await questApi("POST", "quests/accept", { questId: "8003" });
     check(acceptedCollect.code === 0, "接取 8003（prev 8002 已 claimed）", JSON.stringify(acceptedCollect.message));
     const collectProgress = await myQuest("8003");
@@ -491,7 +496,7 @@ function setResetDay(dbPath, roleId, questId, day) {
 
     group("六、daily 领奖后不删行，今天不能再接");
     const roleBindGold = async () => (((await api(baseUrl, "GET", `roles/${roleId}`, { token })).data || {}).data || {}).bindGold;
-    await api(baseUrl, "PATCH", "admin/quests/8101", { token: adminToken, body: { objective: { type: "kill", target: "1", count: 1 } } });
+    await api(baseUrl, "PATCH", "admin/quests/8101", { token: adminToken, zoneId: ADMIN_ZONE, body: { objective: { type: "kill", target: "1", count: 1 } } });
     const bindGoldBeforeDaily = await roleBindGold();
     const dailyKill = await killOne();
     check(!!(dailyKill && dailyKill.killed), "日常目标（改后杀 1 只怪物 1）达成");
@@ -545,30 +550,30 @@ function setResetDay(dbPath, roleId, questId, day) {
 
     group("七、管理端配置纪律");
     const createdQuest = await api(baseUrl, "POST", "admin/quests", {
-      token: adminToken,
+      token: adminToken, zoneId: ADMIN_ZONE,
       body: { id: "8201", kind: "daily", label: "临时任务", objective: { type: "kill", target: "1", count: 1 }, rewards: { bindGold: 1, exp: 1, items: [] } },
     });
     check(createdQuest.code === 0 && createdQuest.data.id === "8201", "动态新增任务成功", JSON.stringify(createdQuest.message));
     const dupQuest = await api(baseUrl, "POST", "admin/quests", {
-      token: adminToken,
+      token: adminToken, zoneId: ADMIN_ZONE,
       body: { id: "8201", kind: "daily", label: "重复", objective: { type: "kill", target: "1", count: 1 } },
     });
     check(dupQuest.code === 40000, "重复 id → 40000", JSON.stringify(dupQuest));
     const badTarget = await api(baseUrl, "POST", "admin/quests", {
-      token: adminToken,
+      token: adminToken, zoneId: ADMIN_ZONE,
       body: { id: "8202", kind: "daily", label: "坏目标", objective: { type: "kill", target: "no_such_monster", count: 1 } },
     });
     check(badTarget.code === 40000, "目标键指向不存在的怪物 → 40000", JSON.stringify(badTarget));
-    const cycle = await api(baseUrl, "PATCH", "admin/quests/8001", { token: adminToken, body: { prevQuestId: "8004" } });
+    const cycle = await api(baseUrl, "PATCH", "admin/quests/8001", { token: adminToken, zoneId: ADMIN_ZONE, body: { prevQuestId: "8004" } });
     check(cycle.code === 40000, "前置链成环（8001→8004→8003→8002→8001）→ 40000", JSON.stringify(cycle));
 
-    const delWithFollower = await api(baseUrl, "DELETE", "admin/quests/8002", { token: adminToken });
+    const delWithFollower = await api(baseUrl, "DELETE", "admin/quests/8002", { token: adminToken, zoneId: ADMIN_ZONE });
     check(delWithFollower.code === 40000, "被后继任务当前置 → 拒删", JSON.stringify(delWithFollower));
-    const delWithProgress = await api(baseUrl, "DELETE", "admin/quests/8001", { token: adminToken });
+    const delWithProgress = await api(baseUrl, "DELETE", "admin/quests/8001", { token: adminToken, zoneId: ADMIN_ZONE });
     check(delWithProgress.code === 40000, "有玩家进度（claimed 行）→ 拒删", JSON.stringify(delWithProgress));
-    const delTemp = await api(baseUrl, "DELETE", "admin/quests/8201", { token: adminToken });
+    const delTemp = await api(baseUrl, "DELETE", "admin/quests/8201", { token: adminToken, zoneId: ADMIN_ZONE });
     check(delTemp.code === 0, "无引用的临时任务可删", JSON.stringify(delTemp));
-    const delMissing = await api(baseUrl, "DELETE", "admin/quests/9999", { token: adminToken });
+    const delMissing = await api(baseUrl, "DELETE", "admin/quests/9999", { token: adminToken, zoneId: ADMIN_ZONE });
     check(delMissing.code === 50031, "删除不存在的任务 → 404（50031）", JSON.stringify(delMissing));
 
     //#endregion

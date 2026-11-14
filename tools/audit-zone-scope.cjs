@@ -52,8 +52,19 @@ const REPOS = path.join(SERVER, "database", "repositories");
 const SCHEMA = path.join(SERVER, "database", "database.service.ts");
 const ALLOWLIST_FILE = path.join(__dirname, "zone-scope-allowlist.json");
 
-/** 玩家侧 = 除管理端与区服模块；这两个模块的区是「必填上下文」，本来就该有 */
-const PLAYER_SIDE_EXCLUDE = [path.join("modules", "admin"), path.join("modules", "zone")];
+/**
+ * 玩家侧 = 除管理端 / 区服 / 审计之外的模块
+ *
+ * 这三个模块的区都不是「玩家的归属」，而是别的意思：
+ *   - `admin` / `zone`：区是**必填上下文**（`X-Zone-Id`），本来就该有；
+ *   - `audit`：管理端的旁路。写入口的 `zoneId` 是**服务端从守卫取到的当前区**
+ *     （不是玩家请求参数），查询的 `?zoneId=` 是管理员的**筛选条件**（不传 = 全部区）。
+ */
+const PLAYER_SIDE_EXCLUDE = [
+  path.join("modules", "admin"),
+  path.join("modules", "zone"),
+  path.join("modules", "audit"),
+];
 
 /**
  * 已经带 zone_id 列的表 —— 这些表的 SQL 必须自己过滤 zone。
@@ -468,7 +479,7 @@ for (const entry of allowlist.entries ?? []) {
       file: path.relative(ROOT, ALLOWLIST_FILE),
       line: 0,
       key: `${entry.file}#${entry.key}`,
-      hint: `这条豁免已经不再命中任何违规（${entry.rule}）—— 代码改好了就删掉它，别让白名单只增不减`,
+      hint: `这条豁免已经不再命中任何违规（${entry.rule} / ${entry.file} / ${entry.key}）—— 代码改好了就删掉它，别让白名单只增不减`,
     });
     continue;
   }

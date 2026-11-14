@@ -71,10 +71,15 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 let baseUrl = "";
 
+/** 管理端请求所在的区（#960）：一个 e2e 进程只在一个区里干活，管理端请求统一带它 */
+const ADMIN_ZONE = 1;
+
 async function api(method, path, options = {}) {
   const headers = {};
   if (options.body !== undefined) headers["Content-Type"] = "application/json";
   if (options.token) headers.Authorization = `Bearer ${options.token}`;
+  // 管理端单区上下文（#960）：控制台前端在请求拦截器里统一带 X-Zone-Id，测试里对等模拟
+  if (options.zoneId !== undefined) headers["X-Zone-Id"] = String(options.zoneId);
   const response = await fetch(`${baseUrl}/${path}`, {
     method,
     headers,
@@ -138,7 +143,7 @@ async function main() {
     const viewer = await api("POST", "admin/auth/register", {
       body: { username: "gm_config_view", password: "pass1234", registerCode: "test-admin-code" },
     });
-    await api("PATCH", `admin/admins/${viewer.data.admin.id}`, { token: adminToken, body: { role: "viewer" } });
+    await api("PATCH", `admin/admins/${viewer.data.admin.id}`, { token: adminToken, zoneId: ADMIN_ZONE, body: { role: "viewer" } });
     const viewerToken = viewer.data.token;
 
     const player = await api("POST", "auth/register", { body: { username: "cfg_player", password: "pass1234" } });
@@ -151,7 +156,7 @@ async function main() {
     checkEqual(v0.code, 0, "玩家侧 GET /game-config/version 可用");
     checkEqual(v0.data?.version, 0, "空库首启：版本从 0 开始（出厂快照文件写的是第 0 版）");
 
-    const adminV0 = await api("GET", "admin/config/version", { token: adminToken });
+    const adminV0 = await api("GET", "admin/config/version", { token: adminToken, zoneId: ADMIN_ZONE });
     checkEqual(adminV0.code, 0, "管理端版本接口可用", adminV0.message);
     checkEqual(adminV0.data?.version, 0, "管理端看到同一个数字");
 
@@ -182,7 +187,7 @@ async function main() {
     //#endregion
 
     //#region 三 · 写配置 +1（判据是权限点）
-    const patch1 = await api("PATCH", "admin/skills/1001", { token: adminToken, body: { castLockMs: 1111 } });
+    const patch1 = await api("PATCH", "admin/skills/1001", { token: adminToken, zoneId: ADMIN_ZONE, body: { castLockMs: 1111 } });
     checkEqual(patch1.code, 0, "改技能 castLockMs 成功", patch1.message);
 
     const v1 = await api("GET", "game-config/version", { token: playerToken });
@@ -194,14 +199,14 @@ async function main() {
     checkEqual(afterPatch.etag, 'W/"cfg-1"', "ETag 跟着版本走");
 
     // 非配置写接口不该 +1：公告走 announcement:write，不进配置版本
-    const announcement = await api("POST", "admin/announcements", { token: adminToken, body: { title: "版本链测试", content: "不该影响配置版本" } });
+    const announcement = await api("POST", "admin/announcements", { token: adminToken, zoneId: ADMIN_ZONE, body: { title: "版本链测试", content: "不该影响配置版本" } });
     checkEqual(announcement.code, 0, "准备：发一条公告", announcement.message);
-    const afterAnnouncement = await api("GET", "admin/config/version", { token: adminToken });
+    const afterAnnouncement = await api("GET", "admin/config/version", { token: adminToken, zoneId: ADMIN_ZONE });
     checkEqual(afterAnnouncement.data?.version, 1, "公告这类非配置写不动版本号（判据是 gameConfig:write 权限点）");
     //#endregion
 
     //#region 四 · 回滚历史与节流（#882）
-    const list1 = await api("GET", "admin/config/revisions", { token: adminToken });
+    const list1 = await api("GET", "admin/config/revisions", { token: adminToken, zoneId: ADMIN_ZONE });
     checkEqual(list1.data?.total, 1, "第一次改配置落了一层历史");
     const layer1 = list1.data?.list?.[0] ?? { version: -1, rowCount: -1 };
     checkEqual(layer1.version, 1, "层的版本号 = 改动后的版本号");
@@ -212,9 +217,9 @@ async function main() {
     check(layer1.byteSize > 0, "payload 字节数有记录");
 
     // 窗口内连点：合并成一层（版本照旧 +1）
-    await api("PATCH", "admin/skills/1001", { token: adminToken, body: { castLockMs: 2222 } });
-    await api("PATCH", "admin/skills/1001", { token: adminToken, body: { castLockMs: 3333 } });
-    const listBurst = await api("GET", "admin/config/revisions", { token: adminToken });
+    await api("PATCH", "admin/skills/1001", { token: adminToken, zoneId: ADMIN_ZONE, body: { castLockMs: 2222 } });
+    await api("PATCH", "admin/skills/1001", { token: adminToken, zoneId: ADMIN_ZONE, body: { castLockMs: 3333 } });
+    const listBurst = await api("GET", "admin/config/revisions", { token: adminToken, zoneId: ADMIN_ZONE });
     checkEqual(listBurst.data?.total, 1, "同一人在节流窗内连点 3 次 → 只有一层");
     checkEqual(listBurst.data?.list?.[0]?.version, 3, "那一层记的是最新版本号（内容也是最新的）");
     const v3 = await api("GET", "game-config/version", { token: playerToken });
@@ -222,20 +227,20 @@ async function main() {
 
     // 跨窗口：新的一层
     await sleep(900);
-    await api("PATCH", "admin/skills/1001", { token: adminToken, body: { castLockMs: 4444 } });
-    const list2 = await api("GET", "admin/config/revisions", { token: adminToken });
+    await api("PATCH", "admin/skills/1001", { token: adminToken, zoneId: ADMIN_ZONE, body: { castLockMs: 4444 } });
+    const list2 = await api("GET", "admin/config/revisions", { token: adminToken, zoneId: ADMIN_ZONE });
     checkEqual(list2.data?.total, 2, "过了节流窗再改 → 新的一层");
     checkEqual(list2.data?.list?.[0]?.version, 4, "最新一层是第 4 版");
     checkEqual(list2.data?.list?.[1]?.version, 3, "上一层的版本号没被改写");
 
-    const diff = await api("GET", "admin/config/revisions/3/diff/4", { token: adminToken });
+    const diff = await api("GET", "admin/config/revisions/3/diff/4", { token: adminToken, zoneId: ADMIN_ZONE });
     checkEqual(diff.code, 0, "diff 接口可用", diff.message);
     check((diff.data?.tables ?? []).some((row) => row.table === "skills"), "diff 指出 skills 表有变化", JSON.stringify(diff.data?.tables ?? null));
     checkEqual(diff.data?.changed, (diff.data?.tables ?? []).length, "changed 与逐表条目数一致");
     //#endregion
 
     //#region 五 · 回滚（#882）
-    const restore = await api("POST", "admin/config/revisions/3/restore", { token: adminToken });
+    const restore = await api("POST", "admin/config/revisions/3/restore", { token: adminToken, zoneId: ADMIN_ZONE });
     checkEqual(restore.code, 0, "回滚到第 3 版成功", restore.message);
     checkEqual(restore.data?.restoredFrom, 3, "结果里写了取自哪一版");
     check((restore.data?.version ?? 0) > 4, "回滚本身也是一层新版本（版本继续往前）", String(restore.data?.version ?? null));
@@ -245,7 +250,7 @@ async function main() {
     checkEqual(skillValue(restored, "1001", "castLockMs"), 3333, "库里的值回到第 3 版（3333）");
     checkEqual(restored.etag, `W/"cfg-${restore.data?.version}"`, "快照 ETag 跟上回滚后的版本");
 
-    const history = await api("GET", "admin/config/revisions", { token: adminToken });
+    const history = await api("GET", "admin/config/revisions", { token: adminToken, zoneId: ADMIN_ZONE });
     checkEqual(history.data?.list?.[0]?.label, "restore:v3", "回滚落的那一层 label 是 restore:vN");
     checkEqual(history.data?.total, 3, "历史不删：v3 / v4 / 回滚层都在");
     check(
@@ -254,12 +259,12 @@ async function main() {
       JSON.stringify((history.data?.list ?? []).map((row) => row.version)),
     );
 
-    const missing = await api("POST", "admin/config/revisions/99999/restore", { token: adminToken });
+    const missing = await api("POST", "admin/config/revisions/99999/restore", { token: adminToken, zoneId: ADMIN_ZONE });
     checkEqual(missing.code, 50146, "回滚一个不存在的版本 → 404 / 50146", missing.message);
 
-    const forbiddenList = await api("GET", "admin/config/revisions", { token: viewerToken });
+    const forbiddenList = await api("GET", "admin/config/revisions", { token: viewerToken, zoneId: ADMIN_ZONE });
     checkEqual(forbiddenList.code, 30006, "只读观察员看不了配置版本历史", forbiddenList.message);
-    const forbiddenRestore = await api("POST", "admin/config/revisions/3/restore", { token: viewerToken });
+    const forbiddenRestore = await api("POST", "admin/config/revisions/3/restore", { token: viewerToken, zoneId: ADMIN_ZONE });
     checkEqual(forbiddenRestore.code, 30006, "只读观察员不能回滚", forbiddenRestore.message);
     //#endregion
 

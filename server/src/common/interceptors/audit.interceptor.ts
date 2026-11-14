@@ -9,7 +9,7 @@ import { BizException } from "../errors/biz.exception";
 import { AuthenticatedUser } from "../interfaces/api-envelope.interface";
 import { AuditService } from "../../modules/audit/audit.service";
 
-type AuditRequest = Request & { user?: AuthenticatedUser };
+type AuditRequest = Request & { user?: AuthenticatedUser; zoneId?: number };
 
 /** 只审这些方法（读接口不记，否则一页列表就把日志刷满） */
 const WRITE_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
@@ -65,6 +65,8 @@ export class AuditInterceptor implements NestInterceptor {
       ip: request.ip ?? null,
       method: request.method.toUpperCase(),
       path: request.originalUrl,
+      // 区由 ZoneContextGuard 放进 request（#960）；全局模块没有守卫，这里就是 null
+      zoneId: request.zoneId ?? null,
     };
 
     return next.handle().pipe(

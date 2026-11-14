@@ -1,4 +1,16 @@
-import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Patch, Post, Query } from "@nestjs/common";
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  Patch,
+  Post,
+  Query,
+  UseGuards,
+} from "@nestjs/common";
 import { ApiParam } from "@nestjs/swagger";
 import { ApiDataResponse, ApiVoidResponse } from "../../common/decorators/api-data-response.decorator";
 import { ApiAdminDoc } from "../../common/decorators/api-doc.decorator";
@@ -6,6 +18,8 @@ import { AuditTarget } from "../../common/decorators/audit-target.decorator";
 import { ApiQueryModel } from "../../common/decorators/api-query-model.decorator";
 import { ApiAudience } from "../../common/decorators/audience.decorator";
 import { CurrentUser } from "../../common/decorators/current-user.decorator";
+import { ZoneContext } from "../../common/decorators/zone-context.decorator";
+import { ZoneContextGuard } from "../../common/guards/zone-context.guard";
 import { Permission } from "../../common/constants/permission";
 import { PageResult } from "../../common/interfaces/api-envelope.interface";
 import { AuthenticatedUser } from "../../common/interfaces/api-envelope.interface";
@@ -31,8 +45,19 @@ import { AccountPageDto } from "./dto/page-result.dto";
  *
  * 每个接口都标了所需权限点（`@ApiAdminDoc({ permissions })`），
  * 实际校验在 common/guards/permission.guard：只读观察员调写接口会拿到 403 / 30006。
+ *
+ * **单区上下文（#960 / docs/39 §3.8）**：整个控制器挂 `ZoneContextGuard`，请求必须带
+ * `X-Zone-Id`。但「带区」不等于「按区过滤」—— 两种接口要分开看：
+ *   - **按区过滤**：概览统计 / 趋势 / 分布 / 账号列表 / 账号详情 / 清空角色。
+ *     账号本身是全服共享的（一个账号可以在多个区各有角色），所以列表与详情
+ *     **按「在本区有角色」** 来筛，角色列表只列本区那几个。
+ *   - **账号级写操作**（封禁 / 解封 / 改邮箱 / 重置密码 / 踢下线 / 删除账号）：
+ *     作用对象是整个账号，**刻意不按区过滤** —— 封禁是账号级的，封了就是全区都上不去；
+ *     要求「在 A 区封禁只能封 A 区的那份」既做不到（登录时还没有区）也没有意义。
+ *     审计流水（`stats/recent`）同理，记账时用的是「当时在哪个区里点的」。
  */
 @ApiAudience("admin")
+@UseGuards(ZoneContextGuard)
 @Controller("admin")
 export class AdminAccountsController {
   constructor(private readonly adminService: AdminService) {}
@@ -41,12 +66,12 @@ export class AdminAccountsController {
   @ApiAdminDoc({
     operationId: "adminAccount.stats",
     summary: "概览统计",
-    description: "账号 / 角色总量、今日新增、当前封禁中账号数、在线账号数、管理员数。",
+    description: "账号 / 角色总量、今日新增、当前封禁中账号数、在线账号数、管理员数。**角色类数字都是当前区的**。",
     permissions: [Permission.STATS_READ],
   })
   @ApiDataResponse(AdminStatsDto, { description: "统计数据" })
-  stats(): AdminStatsDto {
-    return this.adminService.stats();
+  stats(@ZoneContext() zoneId: number): AdminStatsDto {
+    return this.adminService.stats(zoneId);
   }
 
   @Get("stats/trend")
@@ -55,13 +80,14 @@ export class AdminAccountsController {
     summary: "增长趋势（按天）",
     description:
       "返回最近 N 天的逐日新增账号与新增角色。**没有数据的日期也会返回（值为 0）** —— " +
-      "前端可以直接画折线，不用自己补。日期按服务器本地时区。",
+      "前端可以直接画折线，不用自己补。日期按服务器本地时区。\n\n" +
+      "新增角色只数当前区的；新增账号数的是「在本区首次建角的账号」（同一账号在两个区建角只算一次）。",
     permissions: [Permission.STATS_READ],
   })
   @ApiQueryModel(StatsTrendQueryDto)
   @ApiDataResponse(StatsTrendDto, { description: "趋势数据（points 已补齐日期）" })
-  trend(@Query() query: StatsTrendQueryDto): StatsTrendDto {
-    return this.adminService.statsTrend(query.days ?? 7);
+  trend(@Query() query: StatsTrendQueryDto, @ZoneContext() zoneId: number): StatsTrendDto {
+    return this.adminService.statsTrend(query.days ?? 7, zoneId);
   }
 
   @Get("stats/breakdown")
@@ -69,21 +95,24 @@ export class AdminAccountsController {
     operationId: "adminStats.breakdown",
     summary: "分布统计",
     description:
-      "等级（10 级一档）/ 职业 / 性别 / 所在地图四组分布。\n\n" +
+      "等级（10 级一档）/ 职业 / 性别 / 所在地图四组分布，**都只数当前区的角色**。\n\n" +
       "只返回分组键与数量，**不返回展示名**：职业、性别、地图的字典权威在客户端 `configs`，" +
       "服务端复制一份就会两边漂移，所以翻译交给管理端。",
     permissions: [Permission.STATS_READ],
   })
   @ApiDataResponse(StatsBreakdownDto, { description: "四组分布" })
-  breakdown(): StatsBreakdownDto {
-    return this.adminService.statsBreakdown();
+  breakdown(@ZoneContext() zoneId: number): StatsBreakdownDto {
+    return this.adminService.statsBreakdown(zoneId);
   }
 
   @Get("stats/recent")
   @ApiAdminDoc({
     operationId: "adminStats.recent",
     summary: "最近动态",
-    description: "最近若干条写操作（复用操作日志表），概览页用来看「刚才发生了什么」。不含请求体。",
+    description:
+      "最近若干条写操作（复用操作日志表），概览页用来看「刚才发生了什么」。不含请求体。\n\n" +
+      "**这个列表不分区**：审计流水记的是「谁在什么时候动了什么」，在 A 区点进去看最近动作，" +
+      "也要能看到同事在 B 区刚做的事（否则一个误操作在另一个区就查不到了）。",
     permissions: [Permission.STATS_READ],
   })
   @ApiQueryModel(StatsRecentQueryDto)
@@ -98,22 +127,41 @@ export class AdminAccountsController {
     summary: "账号列表",
     description:
       "keyword 模糊匹配账号名；status 可按状态筛选。\n\n" +
+      "**只列在本区有角色的账号**（连同该账号在别区有没有角色、有几个，`otherZoneCount` 告诉你）。" +
+      "一个从没在 A 区建过角的账号不会出现在 A 区的列表里 —— 单区上下文的意义就在这里：" +
+      "「第 3 页」指的是本区第 3 页。\n\n" +
       `**排序**：\`sort\` 取 ${sortFieldNames(ACCOUNT_SORT)}，\`order\` 取 asc / desc（默认 createdAt 倒序）。` +
       "白名单外的取值**不会报错**，会静默退回默认排序（排序列要拼进 SQL，服务端只认登记过的字段）。",
     permissions: [Permission.ACCOUNT_READ],
   })
   @ApiQueryModel(AccountQueryDto)
   @ApiDataResponse(AccountPageDto, { description: "分页结果（list/total/page/size）" })
-  list(@Query() query: AccountQueryDto, @CurrentUser() user: AuthenticatedUser): PageResult<AccountDto> {
-    return this.adminService.listAccounts(query, user);
+  list(
+    @Query() query: AccountQueryDto,
+    @ZoneContext() zoneId: number,
+    @CurrentUser() user: AuthenticatedUser,
+  ): PageResult<AccountDto> {
+    return this.adminService.listAccounts(query, zoneId, user);
   }
 
   @Get("accounts/:id")
-  @ApiAdminDoc({ operationId: "adminAccount.detail", summary: "账号详情", description: "返回账号信息 + 名下角色概要列表。", permissions: [Permission.ACCOUNT_READ] })
+  @ApiAdminDoc({
+    operationId: "adminAccount.detail",
+    summary: "账号详情",
+    description:
+      "返回账号信息 + 名下角色概要列表。\n\n" +
+      "角色列表**只有本区的**；`otherZoneCount` 是「另外还在几个区有角色」。" +
+      "账号信息本身（封禁状态、邮箱、注册时间）是全服的，与当前区无关。",
+    permissions: [Permission.ACCOUNT_READ],
+  })
   @ApiParam({ name: "id", description: "账号 id" })
   @ApiDataResponse(AdminAccountDetailDto, { description: "账号详情" })
-  detail(@Param("id") id: string, @CurrentUser() user: AuthenticatedUser): AdminAccountDetailDto {
-    return this.adminService.accountDetail(id, user);
+  detail(
+    @Param("id") id: string,
+    @ZoneContext() zoneId: number,
+    @CurrentUser() user: AuthenticatedUser,
+  ): AdminAccountDetailDto {
+    return this.adminService.accountDetail(id, zoneId, user);
   }
 
   @Patch("accounts/:id/email")
@@ -140,6 +188,7 @@ export class AdminAccountsController {
     summary: "封禁 / 解封账号",
     description:
       "改完立刻生效：守卫每次请求都回查账号状态，在线的玩家下一次请求就被拒。\n\n" +
+      "**账号级操作，与当前区无关**：封了就全区都登不上（登录时还没有区，做不到「只封一个区」）。\n\n" +
       "**封禁**可带 `reason`（原因，玩家登录时会看到）与 `durationHours`（时长，小时）—— " +
       "不填时长即永久封禁。临时封禁**到期自动解封**：判定按时间算，不依赖谁来点解封，\n" +
       "定时器只负责把库里的状态扫回去。\n\n" +
@@ -215,7 +264,7 @@ export class AdminAccountsController {
   @ApiAdminDoc({
     operationId: "adminAccount.remove",
     summary: "删除账号",
-    description: "名下角色一并删除（外键级联），不可恢复。",
+    description: "名下角色一并删除（外键级联，**所有区**都删），不可恢复。账号级操作，与当前区无关。",
     permissions: [Permission.ACCOUNT_DELETE],
   })
   @ApiParam({ name: "id", description: "账号 id" })
@@ -231,12 +280,14 @@ export class AdminAccountsController {
     summary: "清空账号下的全部角色",
     description:
       "账号保留、名下角色全删（重置玩家存档用），不可恢复；作为在线角色的会顺带清掉在线标记。" +
-      "与「删除账号」的区别：账号本身还在，玩家可以重新创建角色。",
+      "与「删除账号」的区别：账号本身还在，玩家可以重新创建角色。\n\n" +
+      "**只清当前区的角色**。这是刻意的：一次误点不该把玩家在所有区的存档一起毁掉 ——" +
+      "要清全服就逐个区切过去再点一次（每次都会落一条审计）。",
     permissions: [Permission.ROLE_DELETE],
   })
   @ApiParam({ name: "id", description: "账号 id" })
   @ApiDataResponse(BatchDeleteResultDto, { description: "删除结果（requested / deleted / ids / clearedOnlineAccountIds）" })
-  purgeRoles(@Param("id") id: string): BatchDeleteResultDto {
-    return this.adminService.purgeAccountRoles(id);
+  purgeRoles(@Param("id") id: string, @ZoneContext() zoneId: number): BatchDeleteResultDto {
+    return this.adminService.purgeAccountRoles(id, zoneId);
   }
 }

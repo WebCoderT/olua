@@ -1575,6 +1575,51 @@
         }
       }
     },
+    "/admin/auth/zones": {
+      "get": {
+        "description": "登录页先拉这个再让管理员选区（#960）。**公开接口**：登录前没有令牌。\n\n只回 `id` / `name` / `status` / `sort`，**不含已合并的区**（选它一定被拒：数据已搬走）。\n`closed` 区仍然列出 —— 管理端要能进去查历史，关区只是停止注册与不再推荐新人。\n\n排序听运营的（`sort` 升序，同值按 id），与玩家注册下拉是同一份顺序。\n\n---\n\n**鉴权**：无需令牌，公开接口。",
+        "operationId": "adminAuth.zones",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "可选区（未合并）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/ZoneOptionDto"
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "管理端登录页的可选区",
+        "tags": [
+          "公共接口"
+        ],
+        "x-olua-audience": "public",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/ZoneOptionDto"
+          }
+        }
+      }
+    },
     "/admin/auth/me": {
       "get": {
         "description": "返回当前管理员的角色与**权限点清单** —— 管理端据此显示 / 隐藏菜单与按钮（服务端仍会独立校验，前端隐藏只是体验）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）；本接口只操作当前登录管理员自身，不需要额外权限点。",
@@ -1677,7 +1722,7 @@
     },
     "/admin/stats": {
       "get": {
-        "description": "账号 / 角色总量、今日新增、当前封禁中账号数、在线账号数、管理员数。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`stats:read`（查看概览；角色：超级管理员 / 管理员 / 只读观察员）",
+        "description": "账号 / 角色总量、今日新增、当前封禁中账号数、在线账号数、管理员数。**角色类数字都是当前区的**。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`stats:read`（查看概览；角色：超级管理员 / 管理员 / 只读观察员）",
         "operationId": "adminAccount.stats",
         "parameters": [],
         "responses": {
@@ -1724,7 +1769,7 @@
     },
     "/admin/stats/trend": {
       "get": {
-        "description": "返回最近 N 天的逐日新增账号与新增角色。**没有数据的日期也会返回（值为 0）** —— 前端可以直接画折线，不用自己补。日期按服务器本地时区。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`stats:read`（查看概览；角色：超级管理员 / 管理员 / 只读观察员）",
+        "description": "返回最近 N 天的逐日新增账号与新增角色。**没有数据的日期也会返回（值为 0）** —— 前端可以直接画折线，不用自己补。日期按服务器本地时区。\n\n新增角色只数当前区的；新增账号数的是「在本区首次建角的账号」（同一账号在两个区建角只算一次）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`stats:read`（查看概览；角色：超级管理员 / 管理员 / 只读观察员）",
         "operationId": "adminStats.trend",
         "parameters": [
           {
@@ -1788,7 +1833,7 @@
     },
     "/admin/stats/breakdown": {
       "get": {
-        "description": "等级（10 级一档）/ 职业 / 性别 / 所在地图四组分布。\n\n只返回分组键与数量，**不返回展示名**：职业、性别、地图的字典权威在客户端 `configs`，服务端复制一份就会两边漂移，所以翻译交给管理端。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`stats:read`（查看概览；角色：超级管理员 / 管理员 / 只读观察员）",
+        "description": "等级（10 级一档）/ 职业 / 性别 / 所在地图四组分布，**都只数当前区的角色**。\n\n只返回分组键与数量，**不返回展示名**：职业、性别、地图的字典权威在客户端 `configs`，服务端复制一份就会两边漂移，所以翻译交给管理端。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`stats:read`（查看概览；角色：超级管理员 / 管理员 / 只读观察员）",
         "operationId": "adminStats.breakdown",
         "parameters": [],
         "responses": {
@@ -1835,7 +1880,7 @@
     },
     "/admin/stats/recent": {
       "get": {
-        "description": "最近若干条写操作（复用操作日志表），概览页用来看「刚才发生了什么」。不含请求体。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`stats:read`（查看概览；角色：超级管理员 / 管理员 / 只读观察员）",
+        "description": "最近若干条写操作（复用操作日志表），概览页用来看「刚才发生了什么」。不含请求体。\n\n**这个列表不分区**：审计流水记的是「谁在什么时候动了什么」，在 A 区点进去看最近动作，也要能看到同事在 B 区刚做的事（否则一个误操作在另一个区就查不到了）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`stats:read`（查看概览；角色：超级管理员 / 管理员 / 只读观察员）",
         "operationId": "adminStats.recent",
         "parameters": [
           {
@@ -1905,7 +1950,7 @@
     },
     "/admin/accounts": {
       "get": {
-        "description": "keyword 模糊匹配账号名；status 可按状态筛选。\n\n**排序**：`sort` 取 `username` / `status` / `roleCount` / `createdAt` / `lastLoginAt`，`order` 取 asc / desc（默认 createdAt 倒序）。白名单外的取值**不会报错**，会静默退回默认排序（排序列要拼进 SQL，服务端只认登记过的字段）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`account:read`（查看账号；角色：超级管理员 / 管理员 / 只读观察员）",
+        "description": "keyword 模糊匹配账号名；status 可按状态筛选。\n\n**只列在本区有角色的账号**（连同该账号在别区有没有角色、有几个，`otherZoneCount` 告诉你）。一个从没在 A 区建过角的账号不会出现在 A 区的列表里 —— 单区上下文的意义就在这里：「第 3 页」指的是本区第 3 页。\n\n**排序**：`sort` 取 `username` / `status` / `roleCount` / `createdAt` / `lastLoginAt`，`order` 取 asc / desc（默认 createdAt 倒序）。白名单外的取值**不会报错**，会静默退回默认排序（排序列要拼进 SQL，服务端只认登记过的字段）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`account:read`（查看账号；角色：超级管理员 / 管理员 / 只读观察员）",
         "operationId": "adminAccount.list",
         "parameters": [
           {
@@ -2027,7 +2072,7 @@
     },
     "/admin/accounts/{id}": {
       "get": {
-        "description": "返回账号信息 + 名下角色概要列表。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`account:read`（查看账号；角色：超级管理员 / 管理员 / 只读观察员）",
+        "description": "返回账号信息 + 名下角色概要列表。\n\n角色列表**只有本区的**；`otherZoneCount` 是「另外还在几个区有角色」。账号信息本身（封禁状态、邮箱、注册时间）是全服的，与当前区无关。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`account:read`（查看账号；角色：超级管理员 / 管理员 / 只读观察员）",
         "operationId": "adminAccount.detail",
         "parameters": [
           {
@@ -2082,7 +2127,7 @@
         ]
       },
       "delete": {
-        "description": "名下角色一并删除（外键级联），不可恢复。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`account:delete`（删除账号；角色：超级管理员 / 管理员）",
+        "description": "名下角色一并删除（外键级联，**所有区**都删），不可恢复。账号级操作，与当前区无关。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`account:delete`（删除账号；角色：超级管理员 / 管理员）",
         "operationId": "adminAccount.remove",
         "parameters": [
           {
@@ -2205,7 +2250,7 @@
     },
     "/admin/accounts/{id}/status": {
       "patch": {
-        "description": "改完立刻生效：守卫每次请求都回查账号状态，在线的玩家下一次请求就被拒。\n\n**封禁**可带 `reason`（原因，玩家登录时会看到）与 `durationHours`（时长，小时）—— 不填时长即永久封禁。临时封禁**到期自动解封**：判定按时间算，不依赖谁来点解封，\n定时器只负责把库里的状态扫回去。\n\n**解封**（status=active）会把原因、到期时间、执行人、执行时间一并清空。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`account:status`（封禁 / 解封账号；角色：超级管理员 / 管理员）",
+        "description": "改完立刻生效：守卫每次请求都回查账号状态，在线的玩家下一次请求就被拒。\n\n**账号级操作，与当前区无关**：封了就全区都登不上（登录时还没有区，做不到「只封一个区」）。\n\n**封禁**可带 `reason`（原因，玩家登录时会看到）与 `durationHours`（时长，小时）—— 不填时长即永久封禁。临时封禁**到期自动解封**：判定按时间算，不依赖谁来点解封，\n定时器只负责把库里的状态扫回去。\n\n**解封**（status=active）会把原因、到期时间、执行人、执行时间一并清空。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`account:status`（封禁 / 解封账号；角色：超级管理员 / 管理员）",
         "operationId": "adminAccount.updateStatus",
         "parameters": [
           {
@@ -2453,7 +2498,7 @@
     },
     "/admin/accounts/{id}/roles": {
       "delete": {
-        "description": "账号保留、名下角色全删（重置玩家存档用），不可恢复；作为在线角色的会顺带清掉在线标记。与「删除账号」的区别：账号本身还在，玩家可以重新创建角色。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`role:delete`（删除角色；角色：超级管理员 / 管理员）",
+        "description": "账号保留、名下角色全删（重置玩家存档用），不可恢复；作为在线角色的会顺带清掉在线标记。与「删除账号」的区别：账号本身还在，玩家可以重新创建角色。\n\n**只清当前区的角色**。这是刻意的：一次误点不该把玩家在所有区的存档一起毁掉 ——要清全服就逐个区切过去再点一次（每次都会落一条审计）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`role:delete`（删除角色；角色：超级管理员 / 管理员）",
         "operationId": "adminAccount.purgeRoles",
         "parameters": [
           {
@@ -2510,7 +2555,7 @@
     },
     "/admin/roles": {
       "get": {
-        "description": "keyword 匹配角色名或角色 id；accountId 限定账号；online / occupation / sex / minLevel / maxLevel 做筛选。\n\n**排序**：`sort` 取 `name` / `accountName` / `level` / `revision` / `createdAt` / `updatedAt`，`order` 取 asc / desc（默认 updatedAt 倒序）；白名单外的取值静默退回默认排序（排序列要拼进 SQL，服务端只认登记过的字段）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`role:read`（查看角色；角色：超级管理员 / 管理员 / 只读观察员）",
+        "description": "keyword 匹配角色名或角色 id；accountId 限定账号；online / occupation / sex / minLevel / maxLevel 做筛选。**只列当前区的角色**。\n\n**排序**：`sort` 取 `name` / `accountName` / `level` / `revision` / `createdAt` / `updatedAt`，`order` 取 asc / desc（默认 updatedAt 倒序）；白名单外的取值静默退回默认排序（排序列要拼进 SQL，服务端只认登记过的字段）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`role:read`（查看角色；角色：超级管理员 / 管理员 / 只读观察员）",
         "operationId": "adminRole.list",
         "parameters": [
           {
@@ -2692,7 +2737,7 @@
     },
     "/admin/roles/batch-delete": {
       "post": {
-        "description": "按 id 列表删除（最多 100 条）。已不存在的 id 静默跳过（幂等）；作为某个账号在线角色的会被顺带清掉在线标记。返回实际删除的条数与涉及的账号 id。\n\nPOST 而不是 DELETE 是因为要带请求体；用 200 而不是 201 —— 它不创建资源。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`role:delete`（删除角色；角色：超级管理员 / 管理员）",
+        "description": "按 id 列表删除（最多 100 条）。已不存在的 id 静默跳过（幂等）；作为某个账号在线角色的会被顺带清掉在线标记。返回实际删除的条数与涉及的账号 id。\n\n**别区的 id 静默跳过**，不算失败 —— 批量框里的 id 是一次请求带过来的，其中混进别区的 id 只可能是列表与操作之间切了区，报错反而让「删掉能删的」这件事做不到。\n\nPOST 而不是 DELETE 是因为要带请求体；用 200 而不是 201 —— 它不创建资源。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`role:delete`（删除角色；角色：超级管理员 / 管理员）",
         "operationId": "adminRole.batchRemove",
         "parameters": [],
         "requestBody": {
@@ -2749,7 +2794,7 @@
     },
     "/admin/roles/{id}": {
       "get": {
-        "description": "含完整 data（背包 / 装备等原样返回），并带一组 **derived**：服务端按存档输入**现算**的战斗属性。\n\nderived 不在库里、每次读的时候算，与 `data` 里客户端上报的那份并列给出 —— 服务端算的不一定「对」（玩家在升级与重算之间存档时，客户端那份才是旧的），所以只把两份摆出来，不做自动判定。\n\n`derived.mismatch` 表示两份对不上，**不等于作弊**：配置漂移、存档留着旧装备 id 同样会命中。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`role:read`（查看角色；角色：超级管理员 / 管理员 / 只读观察员）",
+        "description": "含完整 data（背包 / 装备等原样返回），并带一组 **derived**：服务端按存档输入**现算**的战斗属性。别区的角色 id 返回 404。\n\nderived 不在库里、每次读的时候算，与 `data` 里客户端上报的那份并列给出 —— 服务端算的不一定「对」（玩家在升级与重算之间存档时，客户端那份才是旧的），所以只把两份摆出来，不做自动判定。\n\n`derived.mismatch` 表示两份对不上，**不等于作弊**：配置漂移、存档留着旧装备 id 同样会命中。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`role:read`（查看角色；角色：超级管理员 / 管理员 / 只读观察员）",
         "operationId": "adminRole.detail",
         "parameters": [
           {
@@ -2804,7 +2849,7 @@
         ]
       },
       "patch": {
-        "description": "只提交要改的字段，其余原样保留。开放三类：**基础信息**（角色名 / 职业 / 性别 / 等级 / 时装 / 头像 / 所在地图）、**常用数值**（绑定元宝 / 经验 / 战魂 / 称号 / 军衔）、**运行时数据**（装备穿戴表 / 技能等级表 / 背包格子，结构化编辑，传 `bag: []` 即清空背包）。\n\n角色名仍需满足「同一账号下不重名」。保存后修订号 +1，在线玩家的下一次进度推送会先同步到这里。\n\n返回的 `derived` 是**改完之后**服务端现算的战斗属性：改等级 / 战魂 / 称号 / 军衔 / 装备后，战斗力**立刻**反映新值，不用等客户端同步。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`role:write`（修改角色；角色：超级管理员 / 管理员）",
+        "description": "只提交要改的字段，其余原样保留。开放三类：**基础信息**（角色名 / 职业 / 性别 / 等级 / 时装 / 头像 / 所在地图）、**常用数值**（绑定元宝 / 经验 / 战魂 / 称号 / 军衔）、**运行时数据**（装备穿戴表 / 技能等级表 / 背包格子，结构化编辑，传 `bag: []` 即清空背包）。\n\n角色名仍需满足「同一账号下不重名」，查重范围**限本区**（同名在两区的两个角色互不影响）。\n别区的角色 id 返回 404。保存后修订号 +1，在线玩家的下一次进度推送会先同步到这里。\n\n返回的 `derived` 是**改完之后**服务端现算的战斗属性：改等级 / 战魂 / 称号 / 军衔 / 装备后，战斗力**立刻**反映新值，不用等客户端同步。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`role:write`（修改角色；角色：超级管理员 / 管理员）",
         "operationId": "adminRole.patch",
         "parameters": [
           {
@@ -2869,7 +2914,7 @@
         ]
       },
       "delete": {
-        "description": "不可恢复；是账号在线角色时一并清掉在线标记。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`role:delete`（删除角色；角色：超级管理员 / 管理员）",
+        "description": "不可恢复；是账号在线角色时一并清掉在线标记。别区的角色 id 返回 404。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`role:delete`（删除角色；角色：超级管理员 / 管理员）",
         "operationId": "adminRole.remove",
         "parameters": [
           {
@@ -2925,7 +2970,7 @@
     },
     "/admin/roles/{id}/select": {
       "post": {
-        "description": "把角色设为所属账号的在线角色（等价于玩家在选角界面选它进游戏）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`role:select`（切换在线角色；角色：超级管理员 / 管理员）",
+        "description": "把角色设为所属账号的在线角色（等价于玩家在选角界面选它进游戏）。别区的角色 id 返回 404。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`role:select`（切换在线角色；角色：超级管理员 / 管理员）",
         "operationId": "adminRole.select",
         "parameters": [
           {
@@ -3619,6 +3664,16 @@
             }
           },
           {
+            "name": "zoneId",
+            "required": false,
+            "in": "query",
+            "description": "只看在某个区里发生的操作（不传 = 全部区；跨区追责时按区筛）",
+            "schema": {
+              "minimum": 1,
+              "type": "number"
+            }
+          },
+          {
             "name": "actorId",
             "required": false,
             "in": "query",
@@ -3906,6 +3961,16 @@
                 "asc",
                 "desc"
               ]
+            }
+          },
+          {
+            "name": "zoneId",
+            "required": false,
+            "in": "query",
+            "description": "只看在某个区里发生的操作（不传 = 全部区；跨区追责时按区筛）",
+            "schema": {
+              "minimum": 1,
+              "type": "number"
             }
           },
           {
@@ -13373,7 +13438,7 @@
     },
     "/admin/guilds": {
       "get": {
-        "description": "全部帮会（含人数与帮主名），按人数降序。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`guild:read`（查看帮会；角色：超级管理员 / 管理员 / 只读观察员）",
+        "description": "当前区的全部帮会（含人数与帮主名），按人数降序。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`guild:read`（查看帮会；角色：超级管理员 / 管理员 / 只读观察员）",
         "operationId": "adminGuild.list",
         "parameters": [],
         "responses": {
@@ -13426,7 +13491,7 @@
     },
     "/admin/guilds/{id}": {
       "get": {
-        "description": "帮会信息 + 完整成员名单（帮主 → 副帮主 → 成员）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`guild:read`（查看帮会；角色：超级管理员 / 管理员 / 只读观察员）",
+        "description": "帮会信息 + 完整成员名单（帮主 → 副帮主 → 成员）。别区的帮会 id 返回 404。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`guild:read`（查看帮会；角色：超级管理员 / 管理员 / 只读观察员）",
         "operationId": "adminGuild.detail",
         "parameters": [
           {
@@ -13481,7 +13546,7 @@
         ]
       },
       "patch": {
-        "description": "两个字段都可选，只传要改的。改名字仍要求全局唯一（50102）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`guild:write`（改帮会公告 / 解散帮会；角色：超级管理员 / 管理员）",
+        "description": "两个字段都可选，只传要改的。改名字仍要求**全局唯一**（50102）—— 同名帮会分处两区会让搜索、举报、客服沟通全部指不准。别区的帮会 id 返回 404。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`guild:write`（改帮会公告 / 解散帮会；角色：超级管理员 / 管理员）",
         "operationId": "adminGuild.update",
         "parameters": [
           {
@@ -13546,7 +13611,7 @@
         ]
       },
       "delete": {
-        "description": "成员与待审批申请一并清除，**不可恢复**。用于违规帮会名 / 组织性刷资源等运营处置。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`guild:write`（改帮会公告 / 解散帮会；角色：超级管理员 / 管理员）",
+        "description": "成员与待审批申请一并清除，**不可恢复**。用于违规帮会名 / 组织性刷资源等运营处置。别区的帮会 id 返回 404。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`guild:write`（改帮会公告 / 解散帮会；角色：超级管理员 / 管理员）",
         "operationId": "adminGuild.remove",
         "parameters": [
           {
@@ -14131,7 +14196,7 @@
     },
     "/admin/reports": {
       "get": {
-        "description": "按举报时间倒序（新举报在前，同毫秒以 id 兜底，翻页稳定）。\n\n`category` 取 abuse / cheat / name / other，`status` 取 pending / handled / dismissed（v1 只会是 pending），`keyword` 模糊匹配双方角色名或角色 id。条件之间是「与」的关系。\n\n`roleName` / `targetName` 是**查询时**关联出来的当前角色名：角色已删则为 null，界面退回显示 id。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`report:read`（查看玩家举报；角色：超级管理员 / 管理员）",
+        "description": "**只列本区角色之间的举报**（举报人属本区；举报人角色已删时看被举报方的区）。\n按举报时间倒序（新举报在前，同毫秒以 id 兜底，翻页稳定）。\n\n`category` 取 abuse / cheat / name / other，`status` 取 pending / handled / dismissed（v1 只会是 pending），`keyword` 模糊匹配双方角色名或角色 id。条件之间是「与」的关系。\n\n`roleName` / `targetName` 是**查询时**关联出来的当前角色名：角色已删则为 null，界面退回显示 id。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`report:read`（查看玩家举报；角色：超级管理员 / 管理员）",
         "operationId": "adminReport.list",
         "parameters": [
           {
@@ -18400,6 +18465,11 @@
             "type": "number",
             "description": "最近登录时间（毫秒，从未登录为 null）",
             "nullable": true
+          },
+          "lastZoneId": {
+            "type": "number",
+            "description": "上次作业的区（#960：登录页下拉的默认值；换浏览器也一致。不参与鉴权）",
+            "nullable": true
           }
         },
         "required": [
@@ -18410,7 +18480,8 @@
           "roleLabel",
           "permissions",
           "createdAt",
-          "lastLoginAt"
+          "lastLoginAt",
+          "lastZoneId"
         ]
       },
       "AdminTokenDto": {
@@ -18476,11 +18547,51 @@
             "type": "string",
             "description": "密码",
             "example": "admin123"
+          },
+          "zoneId": {
+            "type": "number",
+            "description": "登录后所在的区服 id（可选清单见 GET /admin/auth/zones）。**必填，但校验不在这里**：缺失 / 非整数 / 区不存在 / 区已合并统一由 `resolveZoneId` 回 400 `ZONE_REQUIRED(50029)`，四种理由对客户端是同一句话（选一个区服）。",
+            "example": 1
           }
         },
         "required": [
           "username",
           "password"
+        ]
+      },
+      "ZoneOptionDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "number",
+            "description": "区服 id",
+            "example": 1
+          },
+          "name": {
+            "type": "string",
+            "description": "区服名",
+            "example": "一区"
+          },
+          "status": {
+            "type": "string",
+            "description": "运营状态：`open`（正常） / `closed`（停止注册，仍可进去查历史）",
+            "example": "open",
+            "enum": [
+              "open",
+              "closed"
+            ]
+          },
+          "sort": {
+            "type": "number",
+            "description": "下拉排序（升序，同值按 id）",
+            "example": 0
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "status",
+          "sort"
         ]
       },
       "ChangeAdminPasswordDto": {
@@ -18740,16 +18851,22 @@
             ]
           },
           "roles": {
-            "description": "该账号的角色列表",
+            "description": "该账号在本区的角色列表",
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/RoleSummaryDto"
             }
+          },
+          "otherZoneCount": {
+            "type": "number",
+            "description": "另在几个区还有角色（#960）。账号级操作（封禁 / 改密 / 删号）会影响这些区的角色，管理端提交前要用它提示影响面；详情里只列当前区的角色",
+            "example": 1
           }
         },
         "required": [
           "account",
-          "roles"
+          "roles",
+          "otherZoneCount"
         ]
       },
       "UpdateAccountEmailDto": {
@@ -19537,6 +19654,20 @@
             "nullable": true,
             "example": null
           },
+          "status": {
+            "type": "string",
+            "description": "运营状态：open / closed",
+            "example": "open",
+            "enum": [
+              "open",
+              "closed"
+            ]
+          },
+          "sort": {
+            "type": "number",
+            "description": "下拉排序（升序，同值按 id）",
+            "example": 0
+          },
           "accountCount": {
             "type": "number",
             "description": "当前归属本区的账号数",
@@ -19557,6 +19688,8 @@
           "id",
           "name",
           "mergedInto",
+          "status",
+          "sort",
           "accountCount",
           "createdAt",
           "updatedAt"
@@ -19744,6 +19877,11 @@
             "description": "请求路径",
             "nullable": true
           },
+          "zoneId": {
+            "type": "number",
+            "description": "这次操作发生时管理端选的区（#960）。全区性接口（配置 / 管理员 / 区目录）与未选区的请求为 null",
+            "nullable": true
+          },
           "statusCode": {
             "type": "number",
             "description": "HTTP 状态码",
@@ -19781,6 +19919,7 @@
           "ip",
           "method",
           "path",
+          "zoneId",
           "statusCode",
           "success",
           "errorCode",
@@ -31912,6 +32051,11 @@
               "desc"
             ],
             "default": "desc"
+          },
+          "zoneId": {
+            "type": "number",
+            "description": "只看在某个区里发生的操作（不传 = 全部区；跨区追责时按区筛）",
+            "minimum": 1
           },
           "actorId": {
             "type": "string",

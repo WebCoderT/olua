@@ -1,0 +1,113 @@
+{
+  "_comment": [
+    "管理端单区上下文白名单（#960 / docs/39 §3.8）。由 tools/audit-admin-zone.cjs 读取。",
+    "三种条目：files（单个控制器）、dirs（整个目录）、routes（受控控制器里刻意不按区过滤的路由）。",
+    "每条必须有 issue 与 reason；**条目不再命中也会红** —— 改好了就删。"
+  ],
+  "files": [
+    {
+      "file": "modules/admin/admin-zone.controller.ts",
+      "issue": "#960",
+      "reason": "区目录本身（列表 / 开区 / 合并 / 改状态）—— 它卖的就是「全区清单」，不需要也不可能有当前区"
+    },
+    {
+      "file": "modules/admin/admin-admins.controller.ts",
+      "issue": "#960",
+      "reason": "管理员账号级：管理员不属于任何区（口径 Z6：不绑区、不做可见集）"
+    },
+    {
+      "file": "modules/admin/admin-auth.controller.ts",
+      "issue": "#960",
+      "reason": "登录 / 登出 / 我的信息。只有 login 需要区（它显式收 zoneId 写在 body 里，见 admin-auth.service），此时还没有守卫可言"
+    },
+    {
+      "file": "modules/system/admin-system.controller.ts",
+      "issue": "#960",
+      "reason": "全局系统设置（进程 / 运行参数 / 定时器状态），与区无关"
+    },
+    {
+      "file": "modules/ui-effect/ui-effect.controller.ts",
+      "issue": "#960",
+      "reason": "全局外观配置（UI 特效），全区共用一份"
+    },
+    {
+      "file": "modules/audio-setting/audio-setting.controller.ts",
+      "issue": "#960",
+      "reason": "全局音频配置，全区共用一份"
+    },
+    {
+      "file": "modules/audit/audit.controller.ts",
+      "issue": "#960",
+      "reason": "操作日志**刻意跨区**：追责要看「这个人在哪些区干过什么」。审计行自带 zone_id，支持可选 ?zoneId= 筛选，不传 = 全部"
+    },
+    {
+      "file": "modules/event-log/event-log.controller.ts",
+      "issue": "#960",
+      "reason": "玩家行为流水是排查用的全服视图；且 zone_id 可能为空（登录失败这类事件本来无区可归），按区硬筛会让它们从所有区的列表里消失。按区筛选留待需要时以可选 ?zoneId= 补"
+    },
+    {
+      "file": "modules/map/map.controller.ts",
+      "issue": "#960",
+      "reason": "地图配置（刷怪区 / NPC / 碰撞 / 规则）全区共享；监控用可选 ?zone= 指定区（不传 = 该图最新快照所在区）；reload-world 刻意发给每个存活区（#809 的验收项）"
+    },
+    {
+      "file": "modules/mail/admin-mail.controller.ts",
+      "issue": "#960",
+      "reason": "邮件按**账号**投递（发到账号下的所有角色），单区上下文对它没有意义；按区群发见 #438"
+    },
+    {
+      "file": "modules/game-mail/admin-game-mail.controller.ts",
+      "issue": "#960",
+      "reason": "同上：游戏内邮件按账号 / 角色投递，跨区"
+    },
+    {
+      "file": "modules/announcement/admin-announcement.controller.ts",
+      "issue": "#963",
+      "reason": "公告按区投放在 P7（#963）做：届时表单加「投放范围：当前区 / 全服」，这里改成挂守卫 + 按区过滤，并删掉本条"
+    }
+  ],
+  "dirs": [
+    {
+      "dir": "modules/game-config",
+      "issue": "#960",
+      "reason": "全部游戏配置（物品 / 装备 / 技能 / 怪物 / 任务 / 商城 / 掉落…）全区共享一份。按区覆盖是另一件事，见 docs/39 §7 暂时放置"
+    }
+  ],
+  "routes": [
+    {
+      "route": "PATCH /admin/accounts/:id/email",
+      "issue": "#960",
+      "reason": "补录 / 修改玩家邮箱是**账号级**操作（邮箱挂在账号上，不分区）"
+    },
+    {
+      "route": "PATCH /admin/accounts/:id/status",
+      "issue": "#960",
+      "reason": "封禁 / 解封是**账号级**：登录时还没有区，做不到「只封一个区」"
+    },
+    {
+      "route": "POST /admin/accounts/batch-status",
+      "issue": "#960",
+      "reason": "同上，批量版"
+    },
+    {
+      "route": "PATCH /admin/accounts/:id/password",
+      "issue": "#960",
+      "reason": "重置密码是账号级，且会作废该账号全部令牌（不分区的另一个理由：令牌不绑区）"
+    },
+    {
+      "route": "POST /admin/accounts/:id/offline",
+      "issue": "#960",
+      "reason": "踢下线清的是账号当前的在线角色标记（`accounts.online_role_id`），一列一账号，没有区维度"
+    },
+    {
+      "route": "DELETE /admin/accounts/:id",
+      "issue": "#960",
+      "reason": "删号删的是账号 + 名下**所有区**的角色（外键级联）；要「只清一个区」用 purgeRoles"
+    },
+    {
+      "route": "GET /admin/stats/recent",
+      "issue": "#960",
+      "reason": "最近动态读的是审计流水，**刻意跨区**（理由同 admin/audit-logs）：在 A 区也要能看到同事刚在 B 区做了什么"
+    }
+  ]
+}

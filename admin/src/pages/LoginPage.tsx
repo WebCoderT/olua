@@ -2,16 +2,18 @@ import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { ApiError, authApi } from "../api";
+import type { ZoneOption } from "../api";
 import { APP_TITLE } from "../api/config";
-import { saveSession } from "../store/session";
+import { readZoneId, saveSession, saveZoneId } from "../store/session";
 import "./login-legend.css";
 
 /**
  * 管理端登录页 —— 视觉与 `design/legend-login/index.html` 一一对应
  *
- * 与设计稿的三处内容差异（均因真实系统无对应数据/功能，用户 2026-11-14 拍板「视觉全留、假内容换真」）：
- * 1. 顶栏去掉「区服 + 在线人数」（登录接口只要账号密码，区服接口需 token 拿不到），保留状态点与标题；
- * 2. 去掉「登录区服」下拉（同上，无数据来源）；
+ * 与设计稿的内容差异（用户 2026-11-14 拍板「视觉全留、假内容换真」）：
+ * 1. 顶栏去掉「区服 + 在线人数」，保留状态点与标题 —— 登录前拿不到在线人数；
+ * 2. 「登录区服」下拉**保留并落地**（#960）：数据来自 `GET /admin/auth/zones`（公开接口），
+ *    未选区不能登录 —— 管理端一次只在一个区里干活，这个区是每个请求的上下文；
  * 3. 「忘记密码」改为提示联系超管、「申请权限」指向 /register（系统里没有这两个页面）。
  *
  * 视觉部分是**刻意绕过 PageHeader / Card 那套后台版式**的：登录页是独立视觉语言（衬线大标题、
@@ -38,6 +40,10 @@ export function LoginPage() {
   const navigate = useNavigate();
   const [username, setUsername] = useState(() => localStorage.getItem(REMEMBER_KEY) ?? "");
   const [password, setPassword] = useState("");
+  /** 可选的区（`GET /admin/auth/zones`，只回 id/name/status/sort，不含已合并的区） */
+  const [zones, setZones] = useState<ZoneOption[]>([]);
+  const [zoneId, setZoneId] = useState<number | null>(null);
+  const [errZone, setErrZone] = useState("");
   const [remember, setRemember] = useState(() => Boolean(localStorage.getItem(REMEMBER_KEY)));
   const [showPwd, setShowPwd] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -53,6 +59,33 @@ export function LoginPage() {
 
   useEffect(() => {
     accountRef.current?.focus();
+  }, []);
+
+  /**
+   * 拉可选区清单
+   *
+   * 登录页是**唯一**需要它的地方之一（另一个是顶栏切换器），所以不放进全局缓存：
+   * 拉不到就退回「只有 1 区」的形态并提示 —— 区清单拉不到时不该把人挡在门外，
+   * 但也不能让人以为「没得选」就那么进去了（服务端照样会因为 zoneId 不合法而拒）。
+   */
+  useEffect(() => {
+    let alive = true;
+    void (async () => {
+      try {
+        const list = await authApi.zones({ silent: true });
+        if (!alive) return;
+        setZones(list);
+        // 默认值优先级：上次在这个浏览器选的区 → 列表里第一个
+        const remembered = readZoneId();
+        const pick = list.find((zone) => zone.id === remembered) ?? list[0];
+        setZoneId(pick ? pick.id : null);
+      } catch {
+        if (alive) setZones([]);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
   }, []);
 
   useEffect(
@@ -77,6 +110,10 @@ export function LoginPage() {
     event.preventDefault();
     if (loading) return;
 
+    if (zoneId === null) {
+      setErrZone("请选择登录区服");
+      return;
+    }
     if (!username.trim()) {
       setErrAccount("请输入管理账号");
       triggerShake("account");
@@ -101,7 +138,9 @@ export function LoginPage() {
     setLoading(true);
     try {
       // 静默：登录页自己就地展示错误，不需要全局提示再弹一次
-      const result = await authApi.login({ username, password }, { silent: true });
+      const result = await authApi.login({ username, password, zoneId }, { silent: true });
+      // 先落区再落会话：http 拦截器靠读它给后续请求加 X-Zone-Id
+      saveZoneId(zoneId);
       saveSession(result.token, result.admin);
       if (remember) localStorage.setItem(REMEMBER_KEY, username);
       else localStorage.removeItem(REMEMBER_KEY);
@@ -322,6 +361,31 @@ export function LoginPage() {
               <div className="gate-head">
                 <h2>账号登录</h2>
                 <p>仅限已授权的管理者 · 非法登录将记录 IP</p>
+              </div>
+
+              <div className={`field${errZone ? " invalid" : ""}`}>
+                <label htmlFor="zone">登录区服</label>
+                <select
+                  className="ctrl select"
+                  id="zone"
+                  value={zoneId ?? ""}
+                  aria-describedby="errZone"
+                  onChange={(e) => {
+                    setZoneId(e.target.value ? Number(e.target.value) : null);
+                    if (errZone) setErrZone("");
+                  }}
+                >
+                  <option value="">{zones.length === 0 ? "正在读取区服清单…" : "请选择区服"}</option>
+                  {zones.map((zone) => (
+                    <option key={zone.id} value={zone.id}>
+                      {zone.name}
+                      {zone.status === "closed" ? "（已关闭，仅供查历史）" : ""}
+                    </option>
+                  ))}
+                </select>
+                <p className="err" id="errZone">
+                  {errZone}
+                </p>
               </div>
 
               <div className={`field${errAccount ? " invalid" : ""}${shake === "account" ? " shake" : ""}`}>

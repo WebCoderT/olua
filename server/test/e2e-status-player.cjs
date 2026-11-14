@@ -146,9 +146,14 @@ async function startServer(dbPath) {
   throw new Error("等待服务启动超时");
 }
 
+/** 管理端请求所在的区（#960）：一个 e2e 进程只在一个区里干活，管理端请求统一带它 */
+const ADMIN_ZONE = 1;
+
 async function api(baseUrl, method, route, options = {}) {
   const headers = { "Content-Type": "application/json" };
   if (options.token) headers.Authorization = `Bearer ${options.token}`;
+  // 管理端单区上下文（#960）：控制台前端在请求拦截器里统一带 X-Zone-Id，测试里对等模拟
+  if (options.zoneId !== undefined) headers["X-Zone-Id"] = String(options.zoneId);
   const response = await fetch(`${baseUrl}/api/${route}`, {
     method,
     headers,
@@ -266,7 +271,7 @@ function connect(url) {
     // duration 同时拉到 60 秒（#905）：出厂 10 秒在 CI 慢时钟下会在「等格挡帧」的中途过期，
     // blocked 帧从此不再出现，这一段只能等到超时。断言读回执里的 duration，不锁 10。
     const patched = await api(baseUrl, "PATCH", "admin/statuses/2001", {
-      token: adminToken,
+      token: adminToken, zoneId: ADMIN_ZONE,
       body: { combat: { blockChance: 1, blockFactor: 0.5 }, duration: 60 },
     });
     checkEqual(patched && patched.data && patched.data.combat && patched.data.combat.blockChance, 1, "管理端把 2001 改成 100% 格挡（写操作触发 refreshAll，即时生效）");

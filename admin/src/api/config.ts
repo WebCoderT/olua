@@ -51,6 +51,8 @@ export const APP_TITLE = readEnv("VITE_APP_TITLE", "olua 管理端");
 export const STORAGE_KEYS = {
   token: "olua.admin.token",
   profile: "olua.admin.profile",
+  /** 当前所在的区（#960）：管理端一次只在一个区里干活，每个请求用 `X-Zone-Id` 说明它 */
+  zone: "olua.admin.zone",
 } as const;
 
 /** 把路径与查询参数拼成完整地址（路径不含 API_BASE_URL 前缀，见各 api 模块） */

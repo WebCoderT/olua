@@ -15,9 +15,10 @@ import { ReportDto, ReportQueryDto } from "./dto/report.dto";
 export class ReportService {
   constructor(private readonly reports: ReportRepository) {}
 
-  list(query: ReportQueryDto): PageResult<ReportDto> {
+  list(query: ReportQueryDto, zoneId: number): PageResult<ReportDto> {
     const { page, size } = normalizePage(query);
     const result = this.reports.list({
+      zoneId,
       category: query.category,
       status: query.status,
       keyword: query.keyword,

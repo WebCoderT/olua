@@ -42,6 +42,9 @@ const PARTY_LIMIT = 3;
 /** 管理端注册码：造高等级号要提级（#554 后建号恒 1 级），提级得用管理端令牌 */
 const ADMIN_REGISTER_CODE = "e2e-party-admin-code";
 
+/** 管理端请求的当前区（#960：管理端不绑区，但一次只在一个区里干活，头必填） */
+const ADMIN_ZONE = 1;
+
 //#region 断言小工具（与 e2e-chat / e2e-blocks 同款口径）
 
 const failures = [];
@@ -191,6 +194,8 @@ async function startServer(dbPath, extraEnv = {}) {
 async function api(baseUrl, method, route, options = {}) {
   const headers = { "Content-Type": "application/json" };
   if (options.token) headers.Authorization = `Bearer ${options.token}`;
+  // 管理端单区上下文（#960）：控制台前端在请求拦截器里统一带 X-Zone-Id，测试里对等模拟
+  if (options.zoneId !== undefined) headers["X-Zone-Id"] = String(options.zoneId);
   const response = await fetch(`${baseUrl}/api/${route}`, {
     method,
     headers,
@@ -236,7 +241,7 @@ async function adminTokenOf(baseUrl) {
 /** 管理端把角色提到指定等级（#554 之后唯一的正规提级路径） */
 async function raiseLevel(baseUrl, roleId, level) {
   const token = await adminTokenOf(baseUrl);
-  const res = await api(baseUrl, "PATCH", `admin/roles/${roleId}`, { token, body: { level } });
+  const res = await api(baseUrl, "PATCH", `admin/roles/${roleId}`, { token, zoneId: ADMIN_ZONE, body: { level } });
   if (!res || res.code !== 0) throw new Error(`提等级失败 ${roleId} → ${level}：${res && res.message}`);
   return res;
 }

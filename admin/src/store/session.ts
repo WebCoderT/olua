@@ -75,8 +75,46 @@ export function readAdmin(): AdminInfo | null {
 export function clearSession(): void {
   safeRemove(STORAGE_KEYS.token);
   safeRemove(STORAGE_KEYS.profile);
+  // 区跟着会话一起清：换个人登录时不该继承上一个人停在哪个区
+  safeRemove(STORAGE_KEYS.zone);
   emitSession(null);
 }
+
+//#region 当前区（#960）
+
+/**
+ * 管理端「当前所在的区」
+ *
+ * **它不是权限**：管理员能看所有区（口径见 docs/39 §3.8），这一格只决定「这次请求在哪个区里干活」。
+ * 存 localStorage 是为了换浏览器也回到同一个区；服务端另有 `admins.last_zone_id` 记上次选区，
+ * 登录页拿它做默认值（本机这份只是「这次会话选了哪个」）。
+ */
+export function readZoneId(): number | null {
+  const raw = safeGet(STORAGE_KEYS.zone);
+  const zoneId = Number(raw);
+  return raw && Number.isInteger(zoneId) && zoneId > 0 ? zoneId : null;
+}
+
+type ZoneListener = (zoneId: number | null) => void;
+const zoneListeners = new Set<ZoneListener>();
+
+export function subscribeZone(listener: ZoneListener): () => void {
+  zoneListeners.add(listener);
+  return () => {
+    zoneListeners.delete(listener);
+  };
+}
+
+function emitZone(zoneId: number | null): void {
+  for (const listener of zoneListeners) listener(zoneId);
+}
+
+export function saveZoneId(zoneId: number): void {
+  safeSet(STORAGE_KEYS.zone, String(zoneId));
+  emitZone(zoneId);
+}
+
+//#endregion
 
 export function isLoggedIn(): boolean {
   return Boolean(readToken());

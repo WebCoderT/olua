@@ -127,9 +127,14 @@ async function startServer(env) {
 }
 
 /** 发一次请求，返回 { status, body }（body 是唯一包裹体） */
+/** 管理端请求所在的区（#960）：一个 e2e 进程只在一个区里干活，管理端请求统一带它 */
+const ADMIN_ZONE = 1;
+
 async function api(baseUrl, method, route, options = {}) {
   const headers = { "Content-Type": "application/json" };
   if (options.token) headers.Authorization = `Bearer ${options.token}`;
+  // 管理端单区上下文（#960）：控制台前端在请求拦截器里统一带 X-Zone-Id，测试里对等模拟
+  if (options.zoneId !== undefined) headers["X-Zone-Id"] = String(options.zoneId);
   const response = await fetch(`${baseUrl}${route}`, {
     method,
     headers,
@@ -288,8 +293,8 @@ async function runMainSuite(baseUrl) {
     body: { username: "guard_viewer", password: "viewer-pass-1", registerCode: ADMIN_CODE },
   });
   const viewerId = viewerReg.body.data.admin.id;
-  await call("PATCH", `/api/admin/admins/${viewerId}`, { token: superToken, body: { role: "viewer" } });
-  const viewerLogin = await call("POST", "/api/admin/auth/login", { body: { username: "guard_viewer", password: "viewer-pass-1" } });
+  await call("PATCH", `/api/admin/admins/${viewerId}`, { token: superToken, zoneId: ADMIN_ZONE, body: { role: "viewer" } });
+  const viewerLogin = await call("POST", "/api/admin/auth/login", { body: { zoneId: ADMIN_ZONE, username: "guard_viewer", password: "viewer-pass-1" } });
   const viewerToken = viewerLogin.body.data.token;
   checkEqual(viewerLogin.body.data.admin.role, "viewer", "观察员登录后角色为 viewer");
 
@@ -300,7 +305,7 @@ async function runMainSuite(baseUrl) {
 
   // —— 超管重置玩家密码 ——
   const resetPlayer = await call("PATCH", `/api/admin/accounts/${playerAccountId}/password`, {
-    token: superToken,
+    token: superToken, zoneId: ADMIN_ZONE,
     body: { password: "player-new-pass" },
   });
   checkEqual(resetPlayer.body.code, 0, "超管可以重置玩家密码");
@@ -324,7 +329,7 @@ async function runMainSuite(baseUrl) {
 
   // —— 权限：观察员不能重置玩家密码 ——
   const viewerReset = await call("PATCH", `/api/admin/accounts/${playerAccountId}/password`, {
-    token: viewerToken,
+    token: viewerToken, zoneId: ADMIN_ZONE,
     body: { password: "hacked-pass" },
   });
   checkEqual(viewerReset.status, 403, "只读观察员重置玩家密码被拒（403）");
@@ -334,46 +339,46 @@ async function runMainSuite(baseUrl) {
 
   // —— 管理员自助改密 ——
   const wrongOld = await call("PATCH", "/api/admin/auth/password", {
-    token: adminToken,
+    token: adminToken, zoneId: ADMIN_ZONE,
     body: { oldPassword: "not-my-password", newPassword: "admin-pass-2" },
   });
   checkEqual(wrongOld.body.code, 30010, "自助改密带错原密码 → 30010");
 
   const samePass = await call("PATCH", "/api/admin/auth/password", {
-    token: adminToken,
+    token: adminToken, zoneId: ADMIN_ZONE,
     body: { oldPassword: "admin-pass-1", newPassword: "admin-pass-1" },
   });
   checkEqual(samePass.body.code, 30011, "新密码与当前密码相同 → 30011");
 
   const changed = await call("PATCH", "/api/admin/auth/password", {
-    token: adminToken,
+    token: adminToken, zoneId: ADMIN_ZONE,
     body: { oldPassword: "admin-pass-1", newPassword: "admin-pass-2" },
   });
   checkEqual(changed.body.code, 0, "自助改密成功");
   check(Boolean(changed.body.data?.token), "自助改密返回新令牌（自己不会被踢出去）");
   const newAdminToken = changed.body.data.token;
 
-  const oldAdminToken = await call("GET", "/api/admin/auth/me", { token: adminToken });
+  const oldAdminToken = await call("GET", "/api/admin/auth/me", { token: adminToken, zoneId: ADMIN_ZONE });
   checkEqual(oldAdminToken.body.code, 40103, "改密后旧管理员令牌失效（40103）");
-  const newAdminTokenOk = await call("GET", "/api/admin/auth/me", { token: newAdminToken });
+  const newAdminTokenOk = await call("GET", "/api/admin/auth/me", { token: newAdminToken, zoneId: ADMIN_ZONE });
   checkEqual(newAdminTokenOk.body.code, 0, "新令牌可用");
-  const adminRelogin = await call("POST", "/api/admin/auth/login", { body: { username: "guard_admin", password: "admin-pass-2" } });
+  const adminRelogin = await call("POST", "/api/admin/auth/login", { body: { zoneId: ADMIN_ZONE, username: "guard_admin", password: "admin-pass-2" } });
   checkEqual(adminRelogin.body.code, 0, "管理员可以用新密码重新登录");
 
   // —— 超管重置他人密码 ——
   const resetAdmin = await call("PATCH", `/api/admin/admins/${adminId}/password`, {
-    token: superToken,
+    token: superToken, zoneId: ADMIN_ZONE,
     body: { password: "admin-forced-3" },
   });
   checkEqual(resetAdmin.body.code, 0, "超管可以重置其他管理员的密码");
-  const afterResetAdmin = await call("GET", "/api/admin/auth/me", { token: newAdminToken });
+  const afterResetAdmin = await call("GET", "/api/admin/auth/me", { token: newAdminToken, zoneId: ADMIN_ZONE });
   checkEqual(afterResetAdmin.body.code, 40103, "被重置的管理员旧令牌立即失效");
 
   // 普通管理员不能重置别人（admin:manage 只有超管有）
   // 注意：上一步超管刚把 guard_admin 的密码改掉，所以这里要用**新密码**重新登录
   //（旧令牌已随版本号作废 —— 这正是「重置密码 = 把对方踢下线」的体现）
   const adminAfterReset = await call("POST", "/api/admin/auth/login", {
-    body: { username: "guard_admin", password: "admin-forced-3" },
+    body: { zoneId: ADMIN_ZONE, username: "guard_admin", password: "admin-forced-3" },
   });
   checkEqual(adminAfterReset.body.code, 0, "被重置的管理员可用新密码登录");
   const adminResetsPeer = await call("PATCH", `/api/admin/admins/${viewerId}/password`, {
@@ -387,7 +392,7 @@ async function runMainSuite(baseUrl) {
   //#region 三、操作审计
   group("三、操作审计：落库 / 打码 / 筛选 / 权限");
 
-  const logs = await call("GET", "/api/admin/audit-logs?size=100", { token: superToken });
+  const logs = await call("GET", "/api/admin/audit-logs?size=100", { token: superToken, zoneId: ADMIN_ZONE });
   checkEqual(logs.body.code, 0, "超管可以查操作日志");
   check(logs.body.data.total > 0, "日志里有记录");
 
@@ -419,58 +424,58 @@ async function runMainSuite(baseUrl) {
   const adminLoginLog = list.find((item) => item.action === "adminAuth.login" && item.success === true);
   check(Boolean(adminLoginLog), "管理端登录留痕");
 
-  const failedOnly = await call("GET", "/api/admin/audit-logs?success=false&size=100", { token: superToken });
+  const failedOnly = await call("GET", "/api/admin/audit-logs?success=false&size=100", { token: superToken, zoneId: ADMIN_ZONE });
   check(
     failedOnly.body.data.list.length > 0 && failedOnly.body.data.list.every((item) => item.success === false),
     "success=false 只返回失败记录",
   );
 
-  const byAction = await call("GET", "/api/admin/audit-logs?action=adminAdmin.update&size=100", { token: superToken });
+  const byAction = await call("GET", "/api/admin/audit-logs?action=adminAdmin.update&size=100", { token: superToken, zoneId: ADMIN_ZONE });
   check(
     byAction.body.data.list.length > 0 && byAction.body.data.list.every((item) => item.action === "adminAdmin.update"),
     "按动作筛选只返回该动作",
   );
 
-  const byTarget = await call("GET", `/api/admin/audit-logs?targetType=account&targetId=${playerAccountId}&size=100`, { token: superToken });
+  const byTarget = await call("GET", `/api/admin/audit-logs?targetType=account&targetId=${playerAccountId}&size=100`, { token: superToken, zoneId: ADMIN_ZONE });
   check(
     byTarget.body.data.list.length > 0 && byTarget.body.data.list.every((item) => item.targetId === playerAccountId),
     "按目标筛选只返回该目标的记录",
   );
 
   // 关键字：命中四项之一即可（操作人账号名 / 动作 / 目标 id / 请求路径）
-  const byKeyword = await call("GET", "/api/admin/audit-logs?keyword=guard_super&size=100", { token: superToken });
+  const byKeyword = await call("GET", "/api/admin/audit-logs?keyword=guard_super&size=100", { token: superToken, zoneId: ADMIN_ZONE });
   check(
     byKeyword.body.data.list.length > 0 && byKeyword.body.data.list.every((item) => item.actorName === "guard_super"),
     "keyword 能按操作人账号名模糊匹配",
   );
 
-  const byKeywordAction = await call("GET", "/api/admin/audit-logs?keyword=resetPassword&size=100", { token: superToken });
+  const byKeywordAction = await call("GET", "/api/admin/audit-logs?keyword=resetPassword&size=100", { token: superToken, zoneId: ADMIN_ZONE });
   check(
     byKeywordAction.body.data.list.length > 0 && byKeywordAction.body.data.list.every((item) => item.action.includes("resetPassword")),
     "keyword 能匹配到动作名",
   );
 
-  const byKeywordId = await call("GET", `/api/admin/audit-logs?keyword=${playerAccountId}&size=100`, { token: superToken });
+  const byKeywordId = await call("GET", `/api/admin/audit-logs?keyword=${playerAccountId}&size=100`, { token: superToken, zoneId: ADMIN_ZONE });
   check(
     byKeywordId.body.data.list.length > 0 && byKeywordId.body.data.list.every((item) => item.targetId === playerAccountId),
     "keyword 能匹配到目标 id",
   );
 
   // 通配符要转义：`%` 必须当字面量，否则这条会退化成「匹配所有含 guard 的记录」
-  const keywordLiteral = await call("GET", "/api/admin/audit-logs?keyword=guard%25&size=100", { token: superToken });
+  const keywordLiteral = await call("GET", "/api/admin/audit-logs?keyword=guard%25&size=100", { token: superToken, zoneId: ADMIN_ZONE });
   checkEqual(keywordLiteral.body.data.list.length, 0, "keyword 里的 % 按字面量处理（不退化成通配符）");
 
-  const keywordAnd = await call("GET", "/api/admin/audit-logs?keyword=guard_super&success=false&size=100", { token: superToken });
+  const keywordAnd = await call("GET", "/api/admin/audit-logs?keyword=guard_super&success=false&size=100", { token: superToken, zoneId: ADMIN_ZONE });
   check(
     keywordAnd.body.data.list.every((item) => item.success === false && item.actorName === "guard_super"),
     "keyword 与其他条件之间是「与」的关系",
   );
 
-  const actions = await call("GET", "/api/admin/audit-logs/actions", { token: superToken });
+  const actions = await call("GET", "/api/admin/audit-logs/actions", { token: superToken, zoneId: ADMIN_ZONE });
   check(actions.body.data.actions.includes("adminAccount.resetPassword"), "动作清单含重置玩家密码");
   check(actions.body.data.actions.includes("adminAuth.login"), "动作清单含登录动作");
 
-  const viewerReadsAudit = await call("GET", "/api/admin/audit-logs", { token: viewerToken });
+  const viewerReadsAudit = await call("GET", "/api/admin/audit-logs", { token: viewerToken, zoneId: ADMIN_ZONE });
   checkEqual(viewerReadsAudit.body.code, 30006, "只读观察员不能查看操作日志（30006）");
 
   const playerReadsAudit = await call("GET", "/api/admin/audit-logs", { token: freshPlayerToken });
@@ -508,14 +513,14 @@ async function runMainSuite(baseUrl) {
   const saveOk = await pushFreshSave(call, freshPlayerToken, kickRoleId);
   checkEqual(saveOk.body.code, 0, "在线时推存档正常");
 
-  const kicked = await call("POST", `/api/admin/accounts/${playerAccountId}/offline`, { token: superToken });
+  const kicked = await call("POST", `/api/admin/accounts/${playerAccountId}/offline`, { token: superToken, zoneId: ADMIN_ZONE });
   checkEqual(kicked.body.code, 0, "超管踢下线成功");
   checkEqual(kicked.body.data.onlineRoleId, null, "踢下线后账号没有在线角色");
 
   const saveAfterKick = await pushFreshSave(call, freshPlayerToken, kickRoleId);
   checkEqual(saveAfterKick.body.code, 20007, "被踢后推存档被拒（20007 ROLE_KICKED）");
 
-  const kickAgain = await call("POST", `/api/admin/accounts/${playerAccountId}/offline`, { token: superToken });
+  const kickAgain = await call("POST", `/api/admin/accounts/${playerAccountId}/offline`, { token: superToken, zoneId: ADMIN_ZONE });
   checkEqual(kickAgain.body.code, 0, "重复踢下线幂等（不报错）");
 
   const onlineNow = await call("GET", "/api/roles/online", { token: freshPlayerToken });
@@ -539,7 +544,7 @@ async function runMainSuite(baseUrl) {
   check(Boolean(banRoleId), "准备：玩家创建一个在线角色（封禁用例的前置）");
 
   const banTemp = await call("PATCH", banTarget, {
-    token: superToken,
+    token: superToken, zoneId: ADMIN_ZONE,
     body: { status: "disabled", reason: "使用外挂", durationHours: 24 },
   });
   checkEqual(banTemp.body.code, 0, "临时封禁成功");
@@ -558,7 +563,7 @@ async function runMainSuite(baseUrl) {
   const bannedMe = await call("GET", "/api/auth/me", { token: freshPlayerToken });
   checkEqual(bannedMe.status, 401, "已登录的令牌下一次请求即被拒（封禁即时生效）");
 
-  const unbanned = await call("PATCH", banTarget, { token: superToken, body: { status: "active" } });
+  const unbanned = await call("PATCH", banTarget, { token: superToken, zoneId: ADMIN_ZONE, body: { status: "active" } });
   checkEqual(unbanned.body.data.status, "active", "解封后状态回到 active");
   checkEqual(unbanned.body.data.banReason, null, "解封清空封禁原因");
   checkEqual(unbanned.body.data.banUntil, null, "解封清空到期时间");
@@ -570,18 +575,18 @@ async function runMainSuite(baseUrl) {
   const backToken = backLogin.body.data.token;
 
   // 不传时长 = 永久封禁（ban_until 写 null，「disabled + null」才是永久，不能只看 null）
-  const banForever = await call("PATCH", banTarget, { token: superToken, body: { status: "disabled", reason: "恶意刷屏" } });
+  const banForever = await call("PATCH", banTarget, { token: superToken, zoneId: ADMIN_ZONE, body: { status: "disabled", reason: "恶意刷屏" } });
   checkEqual(banForever.body.data.banUntil, null, "不传时长 = 永久封禁（banUntil 为 null）");
   const foreverLogin = await call("POST", "/api/auth/login", { body: { username: "guard_player", password: "player-new-pass" } });
   check(foreverLogin.body.message.includes("永久封禁"), "永久封禁的提示里写明「永久」");
 
-  const badDuration = await call("PATCH", banTarget, { token: superToken, body: { status: "disabled", durationHours: 0 } });
+  const badDuration = await call("PATCH", banTarget, { token: superToken, zoneId: ADMIN_ZONE, body: { status: "disabled", durationHours: 0 } });
   checkEqual(badDuration.status, 400, "封禁时长小于 1 小时被拒（400）");
-  const badReason = await call("PATCH", banTarget, { token: superToken, body: { status: "disabled", reason: "x".repeat(101) } });
+  const badReason = await call("PATCH", banTarget, { token: superToken, zoneId: ADMIN_ZONE, body: { status: "disabled", reason: "x".repeat(101) } });
   checkEqual(badReason.status, 400, "封禁原因超过 100 字被拒（400）");
 
   // 收尾：解封（本段是 runMainSuite 最后一段，留个正常状态给后面的改动）
-  await call("PATCH", banTarget, { token: superToken, body: { status: "active" } });
+  await call("PATCH", banTarget, { token: superToken, zoneId: ADMIN_ZONE, body: { status: "active" } });
   checkEqual((await call("GET", "/api/auth/me", { token: backToken })).body.code, 0, "解封后重新登录的令牌可用（收尾）");
 
   //#endregion
@@ -589,7 +594,7 @@ async function runMainSuite(baseUrl) {
   //#region 七、运营看板
   group("七、运营看板：趋势补日期 / 分布不翻译 / 最近动态不外泄请求体");
 
-  const trend = await call("GET", "/api/admin/stats/trend?days=7", { token: superToken });
+  const trend = await call("GET", "/api/admin/stats/trend?days=7", { token: superToken, zoneId: ADMIN_ZONE });
   checkEqual(trend.body.code, 0, "趋势接口可读");
   checkEqual(trend.body.data.days, 7, "回显统计天数");
   checkEqual(trend.body.data.points.length, 7, "返回 7 个点（没有数据的那天也要有）");
@@ -606,10 +611,10 @@ async function runMainSuite(baseUrl) {
   );
   check(trend.body.data.points[6].newAccounts >= 1, "今天至少有 1 个新增账号（前面注册过的）");
 
-  const tooManyDays = await call("GET", "/api/admin/stats/trend?days=999", { token: superToken });
+  const tooManyDays = await call("GET", "/api/admin/stats/trend?days=999", { token: superToken, zoneId: ADMIN_ZONE });
   checkEqual(tooManyDays.status, 400, "统计天数超过上限被拒（400）");
 
-  const breakdown = await call("GET", "/api/admin/stats/breakdown", { token: superToken });
+  const breakdown = await call("GET", "/api/admin/stats/breakdown", { token: superToken, zoneId: ADMIN_ZONE });
   checkEqual(breakdown.body.code, 0, "分布接口可读");
   check(breakdown.body.data.levels.length > 0, "等级分布有数据（前面创建过角色）");
   check(
@@ -623,7 +628,7 @@ async function runMainSuite(baseUrl) {
   check(breakdown.body.data.occupations.length > 0, "职业分布有数据");
   check(Array.isArray(breakdown.body.data.maps), "地图分布是数组（从角色快照的 onMap 聚合）");
 
-  const recent = await call("GET", "/api/admin/stats/recent?limit=5", { token: superToken });
+  const recent = await call("GET", "/api/admin/stats/recent?limit=5", { token: superToken, zoneId: ADMIN_ZONE });
   checkEqual(recent.body.code, 0, "最近动态可读");
   check(recent.body.data.length > 0 && recent.body.data.length <= 5, "最多返回 limit 条");
   check(
@@ -636,7 +641,7 @@ async function runMainSuite(baseUrl) {
   );
   checkEqual(recent.body.data[0].action, "adminAccount.updateStatus", "最近一条正是上一步的解封操作");
 
-  const viewerTrend = await call("GET", "/api/admin/stats/trend", { token: viewerToken });
+  const viewerTrend = await call("GET", "/api/admin/stats/trend", { token: viewerToken, zoneId: ADMIN_ZONE });
   checkEqual(viewerTrend.body.code, 0, "只读观察员有 stats:read，可以看趋势");
   const playerTrend = await call("GET", "/api/admin/stats/trend", { token: backToken });
   checkEqual(playerTrend.status, 401, "玩家令牌拿不到看板接口（401）");
@@ -647,14 +652,33 @@ async function runMainSuite(baseUrl) {
   group("八、列表体验：排序白名单 / 每页条数 / 批量封禁解封");
 
   // 准备：两个用户名有前后之分的账号（用来验证排序真的换了顺序）
+  //
+  // **两个都要在 1 区有角色**：管理端账号列表按「在本区有角色」筛（#960），
+  // 光注册不建角的账号在任何区的列表里都看不到 —— 那样排序断言会输在一个空列表上。
   const sortA = await call("POST", "/api/auth/register", { body: { username: "guard_aaa", password: "aaa-qzmw-1" } });
   const sortB = await call("POST", "/api/auth/register", { body: { username: "guard_zzz", password: "zzz-qzmw-1" } });
   const sortAId = sortA.body.data.account.id;
   const sortBId = sortB.body.data.account.id;
   check(Boolean(sortAId) && Boolean(sortBId), "准备：注册两个用户名有前后之分的账号");
+  for (const [account, roleName] of [
+    [sortA, "排序甲"],
+    [sortB, "排序乙"],
+  ]) {
+    const made = await call("POST", "/api/roles", {
+      token: account.body.data.token,
+      body: { name: roleName, occupation: "1", sex: "1" },
+    });
+    checkEqual(made.body.code, 0, `准备：给 ${account.body.data.account.username} 在 1 区建一个角色`);
+    // 建角即「选中这个角色」→ 账号带上了在线角色。下面第九段要验「批量封禁不该踢到人」，
+    // 所以这里把它们请下线，恢复成「没有在线角色」的状态。
+    await call("POST", `/api/admin/accounts/${account.body.data.account.id}/offline`, {
+      token: superToken,
+      zoneId: ADMIN_ZONE,
+    });
+  }
 
   // —— 排序（服务端执行） ——
-  const byNameAsc = await call("GET", "/api/admin/accounts?sort=username&order=asc&size=100", { token: superToken });
+  const byNameAsc = await call("GET", "/api/admin/accounts?sort=username&order=asc&size=100", { token: superToken, zoneId: ADMIN_ZONE });
   const ascNames = byNameAsc.body.data.list.map((item) => item.username);
   check(
     ascNames.indexOf("guard_aaa") !== -1 && ascNames.indexOf("guard_aaa") < ascNames.indexOf("guard_zzz"),
@@ -663,31 +687,31 @@ async function runMainSuite(baseUrl) {
   checkEqual(byNameAsc.body.data.size, 100, "每页条数 100 生效（size 回显）");
   checkEqual(byNameAsc.body.data.list.length, byNameAsc.body.data.total, "每页 100 能装下全部数据（条数 = total）");
 
-  const byNameDesc = await call("GET", "/api/admin/accounts?sort=username&order=desc&size=100", { token: superToken });
+  const byNameDesc = await call("GET", "/api/admin/accounts?sort=username&order=desc&size=100", { token: superToken, zoneId: ADMIN_ZONE });
   const descNames = byNameDesc.body.data.list.map((item) => item.username);
   check(descNames.indexOf("guard_zzz") < descNames.indexOf("guard_aaa"), "order=desc 把顺序反过来");
 
   // 白名单：sort 是拼进 SQL 的，传白名单外的值必须静默退回默认排序（不报错、更不能拼进语句）
   const injected = await call("GET", `/api/admin/accounts?sort=${encodeURIComponent("username; DROP TABLE accounts")}&order=asc`, {
-    token: superToken,
+    token: superToken, zoneId: ADMIN_ZONE,
   });
   checkEqual(injected.body.code, 0, "白名单外的排序字段不报错（静默退回默认排序）");
   check(injected.body.data.list.length > 0, "退回默认排序后仍然返回数据");
-  const tableAlive = await call("GET", "/api/admin/accounts?size=1", { token: superToken });
+  const tableAlive = await call("GET", "/api/admin/accounts?size=1", { token: superToken, zoneId: ADMIN_ZONE });
   check(tableAlive.body.data.total >= 3, "accounts 表完好（注入串没有被拼进 SQL）");
 
-  const badOrder = await call("GET", "/api/admin/accounts?sort=username&order=sideways", { token: superToken });
+  const badOrder = await call("GET", "/api/admin/accounts?sort=username&order=sideways", { token: superToken, zoneId: ADMIN_ZONE });
   checkEqual(badOrder.status, 400, "排序方向只认 asc / desc（其他值 400）");
-  const tooLongSort = await call("GET", `/api/admin/accounts?sort=${"x".repeat(33)}`, { token: superToken });
+  const tooLongSort = await call("GET", `/api/admin/accounts?sort=${"x".repeat(33)}`, { token: superToken, zoneId: ADMIN_ZONE });
   checkEqual(tooLongSort.status, 400, "排序字段过长被拒（400）");
 
-  const rolesSorted = await call("GET", "/api/admin/roles?sort=level&order=desc&size=100", { token: superToken });
+  const rolesSorted = await call("GET", "/api/admin/roles?sort=level&order=desc&size=100", { token: superToken, zoneId: ADMIN_ZONE });
   const levels = rolesSorted.body.data.list.map((item) => item.level);
   check(levels.length >= 2, "角色列表数据够验证排序");
   check(levels.every((value, index) => index === 0 || levels[index - 1] >= value), "sort=level&order=desc 生效（等级从高到低）");
 
-  const adminsDefault = await call("GET", "/api/admin/admins?size=100", { token: superToken });
-  const adminsDesc = await call("GET", "/api/admin/admins?sort=username&order=desc&size=100", { token: superToken });
+  const adminsDefault = await call("GET", "/api/admin/admins?size=100", { token: superToken, zoneId: ADMIN_ZONE });
+  const adminsDesc = await call("GET", "/api/admin/admins?sort=username&order=desc&size=100", { token: superToken, zoneId: ADMIN_ZONE });
   checkEqual(
     adminsDesc.body.data.list.map((item) => item.username).join(","),
     adminsDefault.body.data.list
@@ -698,14 +722,14 @@ async function runMainSuite(baseUrl) {
     "管理员列表按用户名倒序（默认仍按创建时间升序）",
   );
 
-  const auditSorted = await call("GET", "/api/admin/audit-logs?sort=action&order=asc&size=50", { token: superToken });
+  const auditSorted = await call("GET", "/api/admin/audit-logs?sort=action&order=asc&size=50", { token: superToken, zoneId: ADMIN_ZONE });
   const sortedActions = auditSorted.body.data.list.map((item) => item.action);
   check(sortedActions.length > 1, "操作日志数据够验证排序");
   check(sortedActions.every((value, index) => index === 0 || sortedActions[index - 1] <= value), "sort=action&order=asc 生效");
 
   // —— 批量封禁 / 解封 ——
   const batchBan = await call("POST", "/api/admin/accounts/batch-status", {
-    token: superToken,
+    token: superToken, zoneId: ADMIN_ZONE,
     body: { ids: [sortAId, sortBId], status: "disabled", reason: "批量测试", durationHours: 6 },
   });
   checkEqual(batchBan.body.code, 0, "批量封禁成功");
@@ -718,7 +742,7 @@ async function runMainSuite(baseUrl) {
   check(batchBanned.body.message.includes("批量测试"), "批量封禁的原因同样进登录提示");
 
   const ghost = await call("POST", "/api/admin/accounts/batch-status", {
-    token: superToken,
+    token: superToken, zoneId: ADMIN_ZONE,
     body: { ids: [sortAId, "no-such-account-id"], status: "active" },
   });
   checkEqual(ghost.body.data.requested, 2, "requested 含已不存在的 id");
@@ -730,7 +754,7 @@ async function runMainSuite(baseUrl) {
   );
 
   const viewerBatch = await call("POST", "/api/admin/accounts/batch-status", {
-    token: viewerToken,
+    token: viewerToken, zoneId: ADMIN_ZONE,
     body: { ids: [sortAId], status: "disabled", reason: "越权尝试" },
   });
   checkEqual(viewerBatch.status, 403, "只读观察员批量封禁被拒（403）");
@@ -742,15 +766,15 @@ async function runMainSuite(baseUrl) {
   );
 
   const tooMany = await call("POST", "/api/admin/accounts/batch-status", {
-    token: superToken,
+    token: superToken, zoneId: ADMIN_ZONE,
     body: { ids: Array.from({ length: 101 }, (_, index) => `id-${index}`), status: "disabled" },
   });
   checkEqual(tooMany.status, 400, "一次操作超过 100 个账号被拒（400）");
-  const emptyIds = await call("POST", "/api/admin/accounts/batch-status", { token: superToken, body: { ids: [], status: "disabled" } });
+  const emptyIds = await call("POST", "/api/admin/accounts/batch-status", { token: superToken, zoneId: ADMIN_ZONE, body: { ids: [], status: "disabled" } });
   checkEqual(emptyIds.status, 400, "空 id 列表被拒（400）");
 
   // 收尾：把 sortB 解封（上面批量封禁过它，ghost 那步只解了 sortA），留个干净状态
-  const cleanup = await call("POST", "/api/admin/accounts/batch-status", { token: superToken, body: { ids: [sortBId], status: "active" } });
+  const cleanup = await call("POST", "/api/admin/accounts/batch-status", { token: superToken, zoneId: ADMIN_ZONE, body: { ids: [sortBId], status: "active" } });
   checkEqual(cleanup.body.data.updated, 1, "收尾：解封剩余的被封账号");
   checkEqual(
     (await call("POST", "/api/auth/login", { body: { username: "guard_zzz", password: "zzz-qzmw-1" } })).body.code,
@@ -764,29 +788,29 @@ async function runMainSuite(baseUrl) {
   group("九、审计增强：IP 与角色筛选 / CSV 导出 / 防公式注入");
 
   // —— 筛选维度：来源 IP 与操作人角色 ——
-  const sample = await call("GET", "/api/admin/audit-logs?keyword=guard_super&size=5", { token: superToken });
+  const sample = await call("GET", "/api/admin/audit-logs?keyword=guard_super&size=5", { token: superToken, zoneId: ADMIN_ZONE });
   const sampleIp = sample.body.data.list.find((item) => item.ip)?.ip;
   check(Boolean(sampleIp), "准备：日志里记到了来源 IP");
 
-  const byIp = await call("GET", `/api/admin/audit-logs?ip=${encodeURIComponent(sampleIp)}&size=50`, { token: superToken });
+  const byIp = await call("GET", `/api/admin/audit-logs?ip=${encodeURIComponent(sampleIp)}&size=50`, { token: superToken, zoneId: ADMIN_ZONE });
   checkEqual(byIp.body.code, 0, "按来源 IP 筛选可读");
   check(
     byIp.body.data.list.length > 0 && byIp.body.data.list.every((item) => item.ip === sampleIp),
     "筛出来的每一条都是该 IP",
   );
 
-  const noSuchIp = await call("GET", "/api/admin/audit-logs?ip=203.0.113.9", { token: superToken });
+  const noSuchIp = await call("GET", "/api/admin/audit-logs?ip=203.0.113.9", { token: superToken, zoneId: ADMIN_ZONE });
   checkEqual(noSuchIp.body.data.total, 0, "不存在的 IP 筛出 0 条");
 
-  const byRole = await call("GET", "/api/admin/audit-logs?actorRole=super_admin&size=50", { token: superToken });
+  const byRole = await call("GET", "/api/admin/audit-logs?actorRole=super_admin&size=50", { token: superToken, zoneId: ADMIN_ZONE });
   check(
     byRole.body.data.list.length > 0 && byRole.body.data.list.every((item) => item.actorRole === "super_admin"),
     "按操作人角色筛选生效",
   );
 
-  const badRole = await call("GET", "/api/admin/audit-logs?actorRole=root", { token: superToken });
+  const badRole = await call("GET", "/api/admin/audit-logs?actorRole=root", { token: superToken, zoneId: ADMIN_ZONE });
   checkEqual(badRole.status, 400, "操作人角色取值不在枚举内被拒（400）");
-  const longIp = await call("GET", `/api/admin/audit-logs?ip=${"9".repeat(46)}`, { token: superToken });
+  const longIp = await call("GET", `/api/admin/audit-logs?ip=${"9".repeat(46)}`, { token: superToken, zoneId: ADMIN_ZONE });
   checkEqual(longIp.status, 400, "来源 IP 过长被拒（400）");
 
   // —— CSV 导出 ——
@@ -797,10 +821,10 @@ async function runMainSuite(baseUrl) {
     body: { name: "=1+1", occupation: "1", sex: "1" },
   });
   checkEqual(csvRole.body.code, 0, "准备：创建一个名字像公式的角色");
-  const csvSelect = await call("POST", `/api/admin/roles/${csvRole.body.data.id}/select`, { token: superToken });
+  const csvSelect = await call("POST", `/api/admin/roles/${csvRole.body.data.id}/select`, { token: superToken, zoneId: ADMIN_ZONE });
   checkEqual(csvSelect.body.code, 0, "准备：用管理端操作它一次（留下带目标名的日志）");
 
-  const exported = await call("GET", "/api/admin/audit-logs/export", { token: superToken });
+  const exported = await call("GET", "/api/admin/audit-logs/export", { token: superToken, zoneId: ADMIN_ZONE });
   checkEqual(exported.body.code, 0, "导出接口可读");
   check(/^olua-audit-\d{8}-\d{6}\.csv$/.test(exported.body.data.filename), "文件名带本地时间戳");
   check(exported.body.data.content.startsWith("\uFEFF"), "CSV 带 UTF-8 BOM（Excel 打开不乱码）");
@@ -813,20 +837,20 @@ async function runMainSuite(baseUrl) {
   check(exported.body.data.total >= exported.body.data.rows, "total 不小于实际导出的条数");
   checkEqual(exported.body.data.truncated, false, "数据量没到上限，不截断");
 
-  const filtered = await call("GET", "/api/admin/audit-logs/export?action=adminRole.select", { token: superToken });
+  const filtered = await call("GET", "/api/admin/audit-logs/export?action=adminRole.select", { token: superToken, zoneId: ADMIN_ZONE });
   checkEqual(filtered.body.data.total, filtered.body.data.rows, "导出与列表共用同一套筛选条件（按动作导出）");
   check(filtered.body.data.rows >= 1, "按动作导出有数据");
   check(filtered.body.data.content.includes("'=1+1"), "以 = 开头的角色名被钉成文本（防 CSV 注入，端到端）");
 
-  const emptyExport = await call("GET", "/api/admin/audit-logs/export?ip=203.0.113.9", { token: superToken });
+  const emptyExport = await call("GET", "/api/admin/audit-logs/export?ip=203.0.113.9", { token: superToken, zoneId: ADMIN_ZONE });
   checkEqual(emptyExport.body.data.rows, 0, "筛不到数据时导出只有表头");
   checkEqual(emptyExport.body.data.total, 0, "空结果的 total 为 0");
 
   // 导出走 audit:read：普通管理员有、只读观察员**有意没有**（审计日志会暴露「谁做了什么」）
-  const adminLogin = await call("POST", "/api/admin/auth/login", { body: { username: "guard_admin", password: "admin-forced-3" } });
+  const adminLogin = await call("POST", "/api/admin/auth/login", { body: { zoneId: ADMIN_ZONE, username: "guard_admin", password: "admin-forced-3" } });
   const adminExport = await call("GET", "/api/admin/audit-logs/export", { token: adminLogin.body.data.token });
   checkEqual(adminExport.body.code, 0, "普通管理员（有 audit:read）可以导出");
-  const viewerExport = await call("GET", "/api/admin/audit-logs/export", { token: viewerToken });
+  const viewerExport = await call("GET", "/api/admin/audit-logs/export", { token: viewerToken, zoneId: ADMIN_ZONE });
   checkEqual(viewerExport.status, 403, "只读观察员没有 audit:read，导出被拒（403）");
   checkEqual(viewerExport.body.code, 30006, "导出越权的业务码是 30006");
   const playerExport = await call("GET", "/api/admin/audit-logs/export", { token: backToken });
@@ -1096,7 +1120,7 @@ async function runRetentionSuite() {
   const pruneOn = await startServer({ DB_PATH: dbPath, AUDIT_LOG_MAX_ROWS: "0", AUDIT_RETENTION_DAYS: "30" });
   try {
     const login = await api(pruneOn.baseUrl, "POST", "/api/admin/auth/login", {
-      body: { username: "retention_super", password: "retention-pass-1" },
+      body: { zoneId: ADMIN_ZONE, username: "retention_super", password: "retention-pass-1" },
     });
     const token = login.body.data.token;
     checkEqual(login.body.code, 0, "重启后超管仍在（同一个库）");
@@ -1116,7 +1140,7 @@ async function runRetentionSuite() {
   const pruneOff = await startServer({ DB_PATH: dbPath, AUDIT_LOG_MAX_ROWS: "0", AUDIT_RETENTION_DAYS: "0" });
   try {
     const login = await api(pruneOff.baseUrl, "POST", "/api/admin/auth/login", {
-      body: { username: "retention_super", password: "retention-pass-1" },
+      body: { zoneId: ADMIN_ZONE, username: "retention_super", password: "retention-pass-1" },
     });
     const token = login.body.data.token;
     const kept = await api(pruneOff.baseUrl, "GET", `/api/admin/audit-logs?action=${OLD_ACTION}`, { token });
@@ -1148,7 +1172,7 @@ async function runIpSuite(baseUrl) {
   checkEqual(second.status, 429, "换一个用户名也会被 IP 维度拦下（429）");
   checkEqual(second.body.code, 10005, "IP 维度锁定同样是 10005");
 
-  const adminIp = await api(baseUrl, "POST", "/api/admin/auth/login", { body: { username: "ip_victim_admin", password: "x-pass-1" } });
+  const adminIp = await api(baseUrl, "POST", "/api/admin/auth/login", { body: { zoneId: ADMIN_ZONE, username: "ip_victim_admin", password: "x-pass-1" } });
   checkEqual(adminIp.status, 429, "管理端登录共用同一套 IP 限流");
 }
 

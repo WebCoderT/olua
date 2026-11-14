@@ -1,8 +1,19 @@
 import { useEffect, useRef, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { adminRoleLabel, authApi, ensureGameData, ensureMapCatalog, PERMISSION } from "../api";
+import type { ZoneOption } from "../api";
 import { APP_TITLE } from "../api/config";
-import { clearSession, hasPermission, readAdmin, readToken, saveSession, subscribeSession } from "../store/session";
+import {
+  clearSession,
+  hasPermission,
+  readAdmin,
+  readToken,
+  readZoneId,
+  saveSession,
+  saveZoneId,
+  subscribeSession,
+  subscribeZone,
+} from "../store/session";
 import { Badge, Button } from "./ui";
 
 /**
@@ -259,6 +270,40 @@ export function Layout() {
   // 会话变化（「我的账号」里改完密码换了新令牌 / 被重置后清会话）→ 顶部身份栏跟着刷新
   useEffect(() => subscribeSession(setAdmin), []);
 
+  //#region 当前区（#960）
+
+  /** 当前所在的区：只决定「这次请求在哪个区里干活」，不是权限（谁都能切任意区） */
+  const [zoneId, setZoneId] = useState<number | null>(() => readZoneId());
+  const [zones, setZones] = useState<ZoneOption[]>([]);
+
+  useEffect(() => subscribeZone(setZoneId), []);
+
+  /**
+   * 顶栏常驻区切换器：清单只在进布局时拉一次
+   *
+   * 拉不到就只显示当前区 id —— 切不了区不该挡住后台任何一页（区清单本身是全局模块，
+   * 不受当前区影响）。
+   */
+  useEffect(() => {
+    let alive = true;
+    void (async () => {
+      try {
+        const list = await authApi.zones({ silent: true });
+        if (!alive) return;
+        setZones(list);
+        // 本机没记过（换了浏览器 / 清了缓存）→ 用第一个可选区兜底，避免每个请求都 400
+        if (readZoneId() === null && list.length > 0) saveZoneId(list[0].id);
+      } catch {
+        /* 静默：用当前记住的区继续 */
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  //#endregion
+
   // 地图名录（#573）：地图名只在服务端，角色详情 / 实体选择器要同步读它 ——
   // 登录后进到布局就拉一次，失败静默（只是名字回落成 id，不挡任何页面）
   useEffect(() => {
@@ -308,6 +353,18 @@ export function Layout() {
   const logout = () => {
     clearSession();
     navigate("/login", { replace: true });
+  };
+
+  /**
+   * 切区
+   *
+   * **只换 `X-Zone-Id` 并重拉当前页数据，不跳登录**（设计稿口径）。重拉靠下面 `Outlet` 的 key：
+   * 换 key = 当前页组件整体重挂载，各页自己的 `useEffect` 拉数都会再跑一遍 ——
+   * 比让每个页面订阅「区变了」更省事，也不会漏掉某个页面忘了订阅。
+   */
+  const switchZone = (next: number) => {
+    if (next === zoneId) return;
+    saveZoneId(next);
   };
 
   // 权限过滤递归到叶：子树全被过滤掉的分组整枝隐藏
@@ -467,6 +524,23 @@ export function Layout() {
             ))}
           </div>
           <div className="ml-auto flex shrink-0 items-center gap-2">
+            {/* 区切换器：常驻顶栏（不是权限，是「我现在在哪个区里干活」） */}
+            <label className="flex items-center gap-1.5 rounded-sm border border-gold/20 bg-gold-veil px-2 py-1">
+              <span className="font-mono text-[9.5px] uppercase tracking-[.16em] text-gold-dim">区服</span>
+              <select
+                className="bg-transparent pr-1 text-[12px] text-ink-1 outline-none"
+                value={zoneId ?? ""}
+                aria-label="切换区服"
+                onChange={(e) => switchZone(Number(e.target.value))}
+              >
+                {zones.length === 0 ? <option value={zoneId ?? ""}>{zoneId ?? "—"}</option> : null}
+                {zones.map((zone) => (
+                  <option key={zone.id} value={zone.id} className="bg-surface-1 text-ink-1">
+                    {zone.name}
+                  </option>
+                ))}
+              </select>
+            </label>
             {admin?.role ? (
               <span className="hidden sm:inline-flex">
                 <Badge tone={admin.role === "super_admin" ? "warn" : admin.role === "viewer" ? "muted" : "gold"}>
@@ -483,7 +557,8 @@ export function Layout() {
           </div>
         </header>
         <main ref={mainRef} className="min-h-0 min-w-0 flex-1 overflow-y-auto px-6 py-5 [scrollbar-gutter:stable]">
-          <div className="mx-auto w-full max-w-[1440px]">
+          {/* key = 当前区：切区后整页重挂载，各页自己的拉数逻辑随之重跑（#960） */}
+          <div className="mx-auto w-full max-w-[1440px]" key={zoneId ?? "no-zone"}>
             <Outlet />
           </div>
         </main>

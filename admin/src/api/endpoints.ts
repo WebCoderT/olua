@@ -11,7 +11,7 @@
 import { http } from "./http";
 import type { HttpOptions } from "./http";
 import { routes } from "./routes";
-import type { Account, AccountDetail, AccountPage, AccountQuery, Achievement, AchievementPage, AchievementQuery, AdminAuthResult, AdminGuild, AdminGuildDetail, AdminInfo, AdminLevelCurvePreviewQuery, AdminLogin, AdminMapMonitorQuery, AdminMonster, AdminPage, AdminQuery, AdminRegister, AdminRoleDetail, AdminRolePage, AdminSendMail, AdminStats, AdminUpdateGuild, AdminUpdatePayload, AdminZone, Announcement, AnnouncementPage, AnnouncementQuery, AppearanceResourceScan, AppearanceResourceSync, AudioSetting, AudioSettingList, AuditActionList, AuditExport, AuditLogPage, AuditQuery, BatchDeleteResult, BatchDeleteRoles, BatchStatusResult, BatchUpdateAccountStatus, ChangeAdminPassword, CombatWeightsResponse, ConfigRestoreResult, ConfigRevisionDiff, ConfigRevisionList, ConfigRevisionQuery, ConfigVersion, CreateAchievement, CreateAnnouncement, CreateDropTable, CreateEquipment, CreateEquipmentResult, CreateLevelScroll, CreateMallCategory, CreateMallGood, CreateMoneyItem, CreateQuest, CreateSkill, CreateZone, DropTable, DropTableList, Drug, DrugPage, DrugQuery, EquipAlign, EquipAlignList, EquipInAlign, EquipInAlignList, Equipment, EquipmentBackground, EquipmentBorder, EquipmentMeta, EquipmentPage, EquipmentQuery, EquipmentSlot, EquipmentSlotSummary, EquipmentVariant, EquipmentVariantPage, EquipmentVariantQuery, EquipmentVariantRebuildResult, EventLogPage, EventLogQuery, EventTypeList, Fashion, FashionPage, FashionQuery, GameConfigSnapshot, GrowthScalar, GrowthScalarPage, GrowthScalarQuery, GuideSteps, Item, ItemPage, ItemQuery, LeaderboardPage, LeaderboardQuery, LevelAttributes, LevelCurve, LevelCurveList, LevelScroll, LevelScrollPage, LevelScrollQuery, MailJob, MailJobPage, MailQuery, MailTemplate, MailView, MallCatalogPage, MallCatalogQuery, MallCategory, MallCategoryRemove, MallGoodItem, MallGoodPage, MallGoodQuery, MallGoodRemove, MallStockReset, MapCollision, MapCollisionDeleted, MapDetail, MapList, MapMonitor, MapNpc, MapNpcDeleted, MapReloadBatch, MapRevivePoint, MapRevivePointCleared, MapRules, MapSpawnArea, MapSpawnAreaDeleted, MapSummary, MergeZone, MoneyItem, MoneyItemPage, MoneyItemQuery, MonsterAiParams, MonsterDrop, MonsterDropPage, MonsterDropQuery, MonsterPage, MonsterQuery, MonsterSkillList, MovementGuardParams, Npc, NpcPage, NpcQuery, Quest, QuestPage, QuestQuery, Rank, RankPage, RankQuery, ReloadWorld, RemoveEquipmentResult, RemoveLevelScrollResult, RemoveMoneyItemResult, ReplaceMonsterSkills, ReportPage, ReportQuery, ResetAccountPassword, ResetAdminPassword, ResetPasswordResult, RolePatchPayload, RoleQuery, RuntimeParams, SaveAudioSetting, SaveEquipAlign, SaveEquipInAlign, SaveMapCollision, SaveMapConfig, SaveMapNpc, SaveMapRules, SaveRevivePoint, SaveSpawnArea, SaveUiEffect, SendMail, SendMailResult, Skill, SkillPage, SkillQuery, Soul, SoulPage, SoulQuery, StatsBreakdown, StatsRecentItem, StatsRecentQuery, StatsTrend, StatsTrendQuery, Status, StatusPage, StatusQuery, SystemInfo, Title, TitlePage, TitleQuery, UiEffect, UiEffectList, UpdateAccountEmail, UpdateAccountStatus, UpdateAchievement, UpdateAnnouncement, UpdateCombatWeights, UpdateDropTable, UpdateDrug, UpdateEquipment, UpdateEquipmentBackground, UpdateEquipmentBorder, UpdateEquipmentMeta, UpdateEquipmentSlot, UpdateEquipmentVariant, UpdateFashion, UpdateGrowthScalar, UpdateGuideSteps, UpdateItem, UpdateLevelCurve, UpdateLevelScroll, UpdateMallCategory, UpdateMallGood, UpdateMoneyItem, UpdateMonster, UpdateMonsterAiParams, UpdateMonsterDrop, UpdateMovementGuardParams, UpdateNpc, UpdateQuest, UpdateRank, UpdateRuntimeParams, UpdateSkill, UpdateSoul, UpdateStatus, UpdateTitle, UpgradeOrder } from "./models";
+import type { Account, AccountDetail, AccountPage, AccountQuery, Achievement, AchievementPage, AchievementQuery, AdminAuthResult, AdminGuild, AdminGuildDetail, AdminInfo, AdminLevelCurvePreviewQuery, AdminLogin, AdminMapMonitorQuery, AdminMonster, AdminPage, AdminQuery, AdminRegister, AdminRoleDetail, AdminRolePage, AdminSendMail, AdminStats, AdminUpdateGuild, AdminUpdatePayload, AdminZone, Announcement, AnnouncementPage, AnnouncementQuery, AppearanceResourceScan, AppearanceResourceSync, AudioSetting, AudioSettingList, AuditActionList, AuditExport, AuditLogPage, AuditQuery, BatchDeleteResult, BatchDeleteRoles, BatchStatusResult, BatchUpdateAccountStatus, ChangeAdminPassword, CombatWeightsResponse, ConfigRestoreResult, ConfigRevisionDiff, ConfigRevisionList, ConfigRevisionQuery, ConfigVersion, CreateAchievement, CreateAnnouncement, CreateDropTable, CreateEquipment, CreateEquipmentResult, CreateLevelScroll, CreateMallCategory, CreateMallGood, CreateMoneyItem, CreateQuest, CreateSkill, CreateZone, DropTable, DropTableList, Drug, DrugPage, DrugQuery, EquipAlign, EquipAlignList, EquipInAlign, EquipInAlignList, Equipment, EquipmentBackground, EquipmentBorder, EquipmentMeta, EquipmentPage, EquipmentQuery, EquipmentSlot, EquipmentSlotSummary, EquipmentVariant, EquipmentVariantPage, EquipmentVariantQuery, EquipmentVariantRebuildResult, EventLogPage, EventLogQuery, EventTypeList, Fashion, FashionPage, FashionQuery, GameConfigSnapshot, GrowthScalar, GrowthScalarPage, GrowthScalarQuery, GuideSteps, Item, ItemPage, ItemQuery, LeaderboardPage, LeaderboardQuery, LevelAttributes, LevelCurve, LevelCurveList, LevelScroll, LevelScrollPage, LevelScrollQuery, MailJob, MailJobPage, MailQuery, MailTemplate, MailView, MallCatalogPage, MallCatalogQuery, MallCategory, MallCategoryRemove, MallGoodItem, MallGoodPage, MallGoodQuery, MallGoodRemove, MallStockReset, MapCollision, MapCollisionDeleted, MapDetail, MapList, MapMonitor, MapNpc, MapNpcDeleted, MapReloadBatch, MapRevivePoint, MapRevivePointCleared, MapRules, MapSpawnArea, MapSpawnAreaDeleted, MapSummary, MergeZone, MoneyItem, MoneyItemPage, MoneyItemQuery, MonsterAiParams, MonsterDrop, MonsterDropPage, MonsterDropQuery, MonsterPage, MonsterQuery, MonsterSkillList, MovementGuardParams, Npc, NpcPage, NpcQuery, Quest, QuestPage, QuestQuery, Rank, RankPage, RankQuery, ReloadWorld, RemoveEquipmentResult, RemoveLevelScrollResult, RemoveMoneyItemResult, ReplaceMonsterSkills, ReportPage, ReportQuery, ResetAccountPassword, ResetAdminPassword, ResetPasswordResult, RolePatchPayload, RoleQuery, RuntimeParams, SaveAudioSetting, SaveEquipAlign, SaveEquipInAlign, SaveMapCollision, SaveMapConfig, SaveMapNpc, SaveMapRules, SaveRevivePoint, SaveSpawnArea, SaveUiEffect, SendMail, SendMailResult, Skill, SkillPage, SkillQuery, Soul, SoulPage, SoulQuery, StatsBreakdown, StatsRecentItem, StatsRecentQuery, StatsTrend, StatsTrendQuery, Status, StatusPage, StatusQuery, SystemInfo, Title, TitlePage, TitleQuery, UiEffect, UiEffectList, UpdateAccountEmail, UpdateAccountStatus, UpdateAchievement, UpdateAnnouncement, UpdateCombatWeights, UpdateDropTable, UpdateDrug, UpdateEquipment, UpdateEquipmentBackground, UpdateEquipmentBorder, UpdateEquipmentMeta, UpdateEquipmentSlot, UpdateEquipmentVariant, UpdateFashion, UpdateGrowthScalar, UpdateGuideSteps, UpdateItem, UpdateLevelCurve, UpdateLevelScroll, UpdateMallCategory, UpdateMallGood, UpdateMoneyItem, UpdateMonster, UpdateMonsterAiParams, UpdateMonsterDrop, UpdateMovementGuardParams, UpdateNpc, UpdateQuest, UpdateRank, UpdateRuntimeParams, UpdateSkill, UpdateSoul, UpdateStatus, UpdateTitle, UpgradeOrder, ZoneOption } from "./models";
 
 /**
  * 接口方法（管理端唯一调服务端的地方，自动生成，禁止手改）
@@ -26,7 +26,7 @@ import type { Account, AccountDetail, AccountPage, AccountQuery, Achievement, Ac
 type Options = HttpOptions;
 
 // 模型类型再导出一次：调用方 `import type { RoleSummary } from "./Api"` 这类既有写法仍然可用
-export type { Account, AccountDetail, AccountPage, AccountQuery, Achievement, AchievementClaimResult, AchievementCondition, AchievementId, AchievementPage, AchievementQuery, AchievementRewardItem, AchievementRewards, AchievementSummary, AchievementView, ActiveAnnouncement, AdminAuthResult, AdminGuild, AdminGuildDetail, AdminInfo, AdminLevelCurvePreviewQuery, AdminLogin, AdminMapMonitorQuery, AdminMonster, AdminPage, AdminQuery, AdminRegister, AdminRole, AdminRoleDetail, AdminRolePage, AdminSendMail, AdminStats, AdminUpdateGuild, AdminUpdatePayload, AdminZone, Announcement, AnnouncementPage, AnnouncementQuery, AppearanceAssignment, AppearanceEffect, AppearanceItem, AppearanceResourceScan, AppearanceResourceSync, ApplyGuild, AppointGuildRank, AttrAllocate, AttrAllocation, AttrChangeResult, AttrReset, AttributeRange, AudioConfig, AudioConfigList, AudioSetting, AudioSettingList, AuditActionList, AuditExport, AuditLog, AuditLogPage, AuditQuery, AuthResult, AutoBattleParams, BagOp, BagOpCell, BagOpResult, BatchDeleteResult, BatchDeleteRoles, BatchStatusResult, BatchUpdateAccountStatus, ChangeAdminPassword, CombatWeights, CombatWeightsResponse, ConfigAttributeRange, ConfigAttributes, ConfigRestoreResult, ConfigRevision, ConfigRevisionDiff, ConfigRevisionList, ConfigRevisionQuery, ConfigRevisionTableDiff, ConfigVersion, ContentSize, CreateAchievement, CreateAnnouncement, CreateDropTable, CreateEquipment, CreateEquipmentResult, CreateGuild, CreateLevelScroll, CreateMallCategory, CreateMallGood, CreateMoneyItem, CreateQuest, CreateReport, CreateRole, CreateSkill, CreateZone, CustomAppearance, DamageCoefficient, DropEntry, DropRuntimeParams, DropTable, DropTableList, Drug, DrugPage, DrugQuery, DrugUse, DrugUseResult, EquipAlign, EquipAlignList, EquipAlignPoint, EquipInAlign, EquipInAlignList, EquipInAlignPoint, Equipment, EquipmentAppearance, EquipmentBackground, EquipmentBorder, EquipmentListItem, EquipmentMeta, EquipmentPage, EquipmentPoint, EquipmentQuery, EquipmentSlot, EquipmentSlotCount, EquipmentSlotSummary, EquipmentVariant, EquipmentVariantPage, EquipmentVariantQuery, EquipmentVariantRebuildResult, EventLog, EventLogPage, EventLogQuery, EventType, EventTypeList, Fashion, FashionBuy, FashionBuyResult, FashionPage, FashionQuery, FashionWear, FashionWearResult, GameConfigSnapshot, GameMailClaimAllQuery, GrowthScalar, GrowthScalarPage, GrowthScalarQuery, GrowthUpgrade, GrowthUpgradeResult, GuideStep, GuideSteps, GuildApplication, GuildMember, GuildRuleParams, GuildSummary, Health, Item, ItemPage, ItemQuery, LeaderboardEntry, LeaderboardPage, LeaderboardQuery, LeaderboardSelf, LevelAttributes, LevelCurve, LevelCurveList, LevelScroll, LevelScrollPage, LevelScrollQuery, LevelScrollUse, LevelScrollUseResult, Login, MailAttachment, MailBox, MailChannelSummary, MailClaimAllResult, MailClaimFailure, MailClaimResult, MailJob, MailJobPage, MailQuery, MailTemplate, MailView, MallCatalogItem, MallCatalogPage, MallCatalogQuery, MallCategory, MallCategoryRemove, MallGoodEntry, MallGoodItem, MallGoodPage, MallGoodQuery, MallGoodRemove, MallLimit, MallLimits, MallPurchase, MallPurchaseResult, MallStockReset, MapCollision, MapCollisionBox, MapCollisionDeleted, MapConfig, MapDetail, MapLayer, MapList, MapMonitor, MapMonitorDrop, MapMonitorEvent, MapMonitorMonster, MapMonitorPlayer, MapMonitorQuery, MapNpc, MapNpcDeleted, MapNpcPoint, MapPosition, MapReloadBatch, MapReloadResult, MapRevivePoint, MapRevivePointCleared, MapRules, MapSource, MapSpawnArea, MapSpawnAreaDeleted, MapSpawnAreaOverflow, MapSpawnAreaPoint, MapSummary, MapTypeGroup, MapWorldMonster, MergeZone, MoneyItem, MoneyItemPage, MoneyItemQuery, MoneyUse, MoneyUseResult, Monster, MonsterAiParams, MonsterAttributes, MonsterDrop, MonsterDropPage, MonsterDropQuery, MonsterDropSummary, MonsterPage, MonsterPresentation, MonsterQuery, MonsterSkill, MonsterSkillItem, MonsterSkillList, MovementGuardParams, MyAchievements, MyGuild, MyQuests, MySocial, MyZone, Npc, NpcPage, NpcQuery, NpcTalk, NpcTalkResult, OutOffset, PageMeta, PageQuery, Quest, QuestId, QuestObjective, QuestPage, QuestQuery, QuestRewardItem, QuestRewardResult, QuestRewards, QuestState, QuestSubmitResult, Rank, RankPage, RankQuery, RealtimeTicket, Register, ReloadWorld, RemoveEquipmentResult, RemoveLevelScrollResult, RemoveMoneyItemResult, ReplaceMonsterSkills, Report, ReportPage, ReportQuery, ResetAccountPassword, ResetAdminPassword, ResetPasswordResult, ReviewGuildApplication, ReviveResult, RoleBagCell, RoleDerived, RoleDerivedAttributes, RoleDetail, RolePatchPayload, RoleQuery, RoleReportedAttributes, RoleSummary, RuntimeParams, SaveAudioSetting, SaveEquipAlign, SaveEquipInAlign, SaveMapCollision, SaveMapConfig, SaveMapNpc, SaveMapRules, SaveRevivePoint, SaveRole, SaveSpawnArea, SaveUiEffect, SelectZone, SelectZoneResult, SellEntry, SellGoods, SellGoodsResult, SellLine, SendMail, SendMailResult, Skill, SkillPage, SkillQuery, SkillUpgrade, SkillUpgradeResult, SocialEntry, SocialTarget, Soul, SoulPage, SoulQuery, StatsBreakdown, StatsBreakdownItem, StatsRecentItem, StatsRecentQuery, StatsTrend, StatsTrendPoint, StatsTrendQuery, Status, StatusCombat, StatusControl, StatusPage, StatusQuery, StatusTick, SystemBackup, SystemConfigItem, SystemDatabase, SystemInfo, SystemRuntime, SystemTableCount, Title, TitlePage, TitleQuery, TransferGuild, UiEffect, UiEffectConfig, UiEffectList, UpdateAccountEmail, UpdateAccountStatus, UpdateAchievement, UpdateAchievementCondition, UpdateAchievementRewards, UpdateAnnouncement, UpdateAutoBattleParams, UpdateCombatWeights, UpdateDropRuntimeParams, UpdateDropTable, UpdateDrug, UpdateEquipment, UpdateEquipmentBackground, UpdateEquipmentBorder, UpdateEquipmentMeta, UpdateEquipmentSlot, UpdateEquipmentVariant, UpdateFashion, UpdateGrowthScalar, UpdateGuideSteps, UpdateGuildNotice, UpdateGuildRuleParams, UpdateItem, UpdateLevelCurve, UpdateLevelScroll, UpdateMallCategory, UpdateMallGood, UpdateMoneyItem, UpdateMonster, UpdateMonsterAiParams, UpdateMonsterDrop, UpdateMonsterPresentation, UpdateMovementGuardParams, UpdateNpc, UpdateQuest, UpdateQuestObjective, UpdateQuestRewards, UpdateRank, UpdateRuntimeParams, UpdateSkill, UpdateSoul, UpdateStatus, UpdateTitle, UpgradeOrder, Zone } from "./models";
+export type { Account, AccountDetail, AccountPage, AccountQuery, Achievement, AchievementClaimResult, AchievementCondition, AchievementId, AchievementPage, AchievementQuery, AchievementRewardItem, AchievementRewards, AchievementSummary, AchievementView, ActiveAnnouncement, AdminAuthResult, AdminGuild, AdminGuildDetail, AdminInfo, AdminLevelCurvePreviewQuery, AdminLogin, AdminMapMonitorQuery, AdminMonster, AdminPage, AdminQuery, AdminRegister, AdminRole, AdminRoleDetail, AdminRolePage, AdminSendMail, AdminStats, AdminUpdateGuild, AdminUpdatePayload, AdminZone, Announcement, AnnouncementPage, AnnouncementQuery, AppearanceAssignment, AppearanceEffect, AppearanceItem, AppearanceResourceScan, AppearanceResourceSync, ApplyGuild, AppointGuildRank, AttrAllocate, AttrAllocation, AttrChangeResult, AttrReset, AttributeRange, AudioConfig, AudioConfigList, AudioSetting, AudioSettingList, AuditActionList, AuditExport, AuditLog, AuditLogPage, AuditQuery, AuthResult, AutoBattleParams, BagOp, BagOpCell, BagOpResult, BatchDeleteResult, BatchDeleteRoles, BatchStatusResult, BatchUpdateAccountStatus, ChangeAdminPassword, CombatWeights, CombatWeightsResponse, ConfigAttributeRange, ConfigAttributes, ConfigRestoreResult, ConfigRevision, ConfigRevisionDiff, ConfigRevisionList, ConfigRevisionQuery, ConfigRevisionTableDiff, ConfigVersion, ContentSize, CreateAchievement, CreateAnnouncement, CreateDropTable, CreateEquipment, CreateEquipmentResult, CreateGuild, CreateLevelScroll, CreateMallCategory, CreateMallGood, CreateMoneyItem, CreateQuest, CreateReport, CreateRole, CreateSkill, CreateZone, CustomAppearance, DamageCoefficient, DropEntry, DropRuntimeParams, DropTable, DropTableList, Drug, DrugPage, DrugQuery, DrugUse, DrugUseResult, EquipAlign, EquipAlignList, EquipAlignPoint, EquipInAlign, EquipInAlignList, EquipInAlignPoint, Equipment, EquipmentAppearance, EquipmentBackground, EquipmentBorder, EquipmentListItem, EquipmentMeta, EquipmentPage, EquipmentPoint, EquipmentQuery, EquipmentSlot, EquipmentSlotCount, EquipmentSlotSummary, EquipmentVariant, EquipmentVariantPage, EquipmentVariantQuery, EquipmentVariantRebuildResult, EventLog, EventLogPage, EventLogQuery, EventType, EventTypeList, Fashion, FashionBuy, FashionBuyResult, FashionPage, FashionQuery, FashionWear, FashionWearResult, GameConfigSnapshot, GameMailClaimAllQuery, GrowthScalar, GrowthScalarPage, GrowthScalarQuery, GrowthUpgrade, GrowthUpgradeResult, GuideStep, GuideSteps, GuildApplication, GuildMember, GuildRuleParams, GuildSummary, Health, Item, ItemPage, ItemQuery, LeaderboardEntry, LeaderboardPage, LeaderboardQuery, LeaderboardSelf, LevelAttributes, LevelCurve, LevelCurveList, LevelScroll, LevelScrollPage, LevelScrollQuery, LevelScrollUse, LevelScrollUseResult, Login, MailAttachment, MailBox, MailChannelSummary, MailClaimAllResult, MailClaimFailure, MailClaimResult, MailJob, MailJobPage, MailQuery, MailTemplate, MailView, MallCatalogItem, MallCatalogPage, MallCatalogQuery, MallCategory, MallCategoryRemove, MallGoodEntry, MallGoodItem, MallGoodPage, MallGoodQuery, MallGoodRemove, MallLimit, MallLimits, MallPurchase, MallPurchaseResult, MallStockReset, MapCollision, MapCollisionBox, MapCollisionDeleted, MapConfig, MapDetail, MapLayer, MapList, MapMonitor, MapMonitorDrop, MapMonitorEvent, MapMonitorMonster, MapMonitorPlayer, MapMonitorQuery, MapNpc, MapNpcDeleted, MapNpcPoint, MapPosition, MapReloadBatch, MapReloadResult, MapRevivePoint, MapRevivePointCleared, MapRules, MapSource, MapSpawnArea, MapSpawnAreaDeleted, MapSpawnAreaOverflow, MapSpawnAreaPoint, MapSummary, MapTypeGroup, MapWorldMonster, MergeZone, MoneyItem, MoneyItemPage, MoneyItemQuery, MoneyUse, MoneyUseResult, Monster, MonsterAiParams, MonsterAttributes, MonsterDrop, MonsterDropPage, MonsterDropQuery, MonsterDropSummary, MonsterPage, MonsterPresentation, MonsterQuery, MonsterSkill, MonsterSkillItem, MonsterSkillList, MovementGuardParams, MyAchievements, MyGuild, MyQuests, MySocial, MyZone, Npc, NpcPage, NpcQuery, NpcTalk, NpcTalkResult, OutOffset, PageMeta, PageQuery, Quest, QuestId, QuestObjective, QuestPage, QuestQuery, QuestRewardItem, QuestRewardResult, QuestRewards, QuestState, QuestSubmitResult, Rank, RankPage, RankQuery, RealtimeTicket, Register, ReloadWorld, RemoveEquipmentResult, RemoveLevelScrollResult, RemoveMoneyItemResult, ReplaceMonsterSkills, Report, ReportPage, ReportQuery, ResetAccountPassword, ResetAdminPassword, ResetPasswordResult, ReviewGuildApplication, ReviveResult, RoleBagCell, RoleDerived, RoleDerivedAttributes, RoleDetail, RolePatchPayload, RoleQuery, RoleReportedAttributes, RoleSummary, RuntimeParams, SaveAudioSetting, SaveEquipAlign, SaveEquipInAlign, SaveMapCollision, SaveMapConfig, SaveMapNpc, SaveMapRules, SaveRevivePoint, SaveRole, SaveSpawnArea, SaveUiEffect, SelectZone, SelectZoneResult, SellEntry, SellGoods, SellGoodsResult, SellLine, SendMail, SendMailResult, Skill, SkillPage, SkillQuery, SkillUpgrade, SkillUpgradeResult, SocialEntry, SocialTarget, Soul, SoulPage, SoulQuery, StatsBreakdown, StatsBreakdownItem, StatsRecentItem, StatsRecentQuery, StatsTrend, StatsTrendPoint, StatsTrendQuery, Status, StatusCombat, StatusControl, StatusPage, StatusQuery, StatusTick, SystemBackup, SystemConfigItem, SystemDatabase, SystemInfo, SystemRuntime, SystemTableCount, Title, TitlePage, TitleQuery, TransferGuild, UiEffect, UiEffectConfig, UiEffectList, UpdateAccountEmail, UpdateAccountStatus, UpdateAchievement, UpdateAchievementCondition, UpdateAchievementRewards, UpdateAnnouncement, UpdateAutoBattleParams, UpdateCombatWeights, UpdateDropRuntimeParams, UpdateDropTable, UpdateDrug, UpdateEquipment, UpdateEquipmentBackground, UpdateEquipmentBorder, UpdateEquipmentMeta, UpdateEquipmentSlot, UpdateEquipmentVariant, UpdateFashion, UpdateGrowthScalar, UpdateGuideSteps, UpdateGuildNotice, UpdateGuildRuleParams, UpdateItem, UpdateLevelCurve, UpdateLevelScroll, UpdateMallCategory, UpdateMallGood, UpdateMoneyItem, UpdateMonster, UpdateMonsterAiParams, UpdateMonsterDrop, UpdateMonsterPresentation, UpdateMovementGuardParams, UpdateNpc, UpdateQuest, UpdateQuestObjective, UpdateQuestRewards, UpdateRank, UpdateRuntimeParams, UpdateSkill, UpdateSoul, UpdateStatus, UpdateTitle, UpgradeOrder, Zone, ZoneOption } from "./models";
 
 /** adminAccount 模块的接口（10 个，生成） */
 export const accountsApi = {
@@ -41,7 +41,7 @@ export const accountsApi = {
   /**
    * 删除账号（DELETE /admin/accounts/{id}）
    *
-   * 名下角色一并删除（外键级联），不可恢复。
+   * 名下角色一并删除（外键级联，**所有区**都删），不可恢复。账号级操作，与当前区无关。
    *
    * 权限点：account:delete
    */
@@ -105,7 +105,7 @@ export const accountsApi = {
   /**
    * 概览统计（GET /admin/stats）
    *
-   * 账号 / 角色总量、今日新增、当前封禁中账号数、在线账号数、管理员数。
+   * 账号 / 角色总量、今日新增、当前封禁中账号数、在线账号数、管理员数。**角色类数字都是当前区的**。
    *
    * 权限点：stats:read
    */
@@ -268,7 +268,7 @@ export const auditApi = {
   export: (query: AuditQuery = {}, options?: Options) => http.get<AuditExport>(routes.adminAudit.export, { query, ...options }),
 };
 
-/** adminAuth 模块的接口（4 个，生成） */
+/** adminAuth 模块的接口（5 个，生成） */
 export const authApi = {
   /**
    * 管理员登录（POST /admin/auth/login）
@@ -294,6 +294,12 @@ export const authApi = {
    * 注册许可由两件配置决定：配了 `ADMIN_REGISTER_CODE` 就必须带对注册码；没配则要求 `ADMIN_REGISTER_OPEN=true`（**默认关闭** —— 忘记配注册码不该等于人人可开后台）。**第一个**注册的管理员自动成为超级管理员，之后注册的一律是普通管理员。
    */
   register: (body: AdminRegister, options?: Options) => http.post<AdminAuthResult>(routes.adminAuth.register, body, { auth: false, ...options }),
+  /**
+   * 管理端登录页的可选区（GET /admin/auth/zones）
+   *
+   * 登录页先拉这个再让管理员选区（#960）。**公开接口**：登录前没有令牌。
+   */
+  zones: (options?: Options) => http.get<ZoneOption[]>(routes.adminAuth.zones, { auth: false, ...options }),
 };
 
 /** adminCombatWeights 模块的接口（2 个，生成） */
@@ -781,7 +787,7 @@ export const guildsApi = {
   /**
    * 帮会列表（GET /admin/guilds）
    *
-   * 全部帮会（含人数与帮主名），按人数降序。
+   * 当前区的全部帮会（含人数与帮主名），按人数降序。
    *
    * 权限点：guild:read
    */
@@ -789,7 +795,7 @@ export const guildsApi = {
   /**
    * 强制解散帮会（DELETE /admin/guilds/{id}）
    *
-   * 成员与待审批申请一并清除，**不可恢复**。用于违规帮会名 / 组织性刷资源等运营处置。
+   * 成员与待审批申请一并清除，**不可恢复**。用于违规帮会名 / 组织性刷资源等运营处置。别区的帮会 id 返回 404。
    *
    * 权限点：guild:write
    */
@@ -797,7 +803,7 @@ export const guildsApi = {
   /**
    * 帮会详情（GET /admin/guilds/{id}）
    *
-   * 帮会信息 + 完整成员名单（帮主 → 副帮主 → 成员）。
+   * 帮会信息 + 完整成员名单（帮主 → 副帮主 → 成员）。别区的帮会 id 返回 404。
    *
    * 权限点：guild:read
    */
@@ -805,7 +811,7 @@ export const guildsApi = {
   /**
    * 修改帮会（名字 / 公告）（PATCH /admin/guilds/{id}）
    *
-   * 两个字段都可选，只传要改的。改名字仍要求全局唯一（50102）。
+   * 两个字段都可选，只传要改的。改名字仍要求**全局唯一**（50102）—— 同名帮会分处两区会让搜索、举报、客服沟通全部指不准。别区的帮会 id 返回 404。
    *
    * 权限点：guild:write
    */
@@ -1329,7 +1335,7 @@ export const reportsApi = {
   /**
    * 举报列表（GET /admin/reports）
    *
-   * 按举报时间倒序（新举报在前，同毫秒以 id 兜底，翻页稳定）。
+   * **只列本区角色之间的举报**（举报人属本区；举报人角色已删时看被举报方的区）。
    *
    * 权限点：report:read
    */
@@ -1341,7 +1347,7 @@ export const rolesApi = {
   /**
    * 角色列表（GET /admin/roles）
    *
-   * keyword 匹配角色名或角色 id；accountId 限定账号；online / occupation / sex / minLevel / maxLevel 做筛选。
+   * keyword 匹配角色名或角色 id；accountId 限定账号；online / occupation / sex / minLevel / maxLevel 做筛选。**只列当前区的角色**。
    *
    * 权限点：role:read
    */
@@ -1349,7 +1355,7 @@ export const rolesApi = {
   /**
    * 删除角色（DELETE /admin/roles/{id}）
    *
-   * 不可恢复；是账号在线角色时一并清掉在线标记。
+   * 不可恢复；是账号在线角色时一并清掉在线标记。别区的角色 id 返回 404。
    *
    * 权限点：role:delete
    */
@@ -1357,7 +1363,7 @@ export const rolesApi = {
   /**
    * 角色详情（GET /admin/roles/{id}）
    *
-   * 含完整 data（背包 / 装备等原样返回），并带一组 **derived**：服务端按存档输入**现算**的战斗属性。
+   * 含完整 data（背包 / 装备等原样返回），并带一组 **derived**：服务端按存档输入**现算**的战斗属性。别区的角色 id 返回 404。
    *
    * 权限点：role:read
    */
@@ -1373,7 +1379,7 @@ export const rolesApi = {
   /**
    * 设为在线角色（POST /admin/roles/{id}/select）
    *
-   * 把角色设为所属账号的在线角色（等价于玩家在选角界面选它进游戏）。
+   * 把角色设为所属账号的在线角色（等价于玩家在选角界面选它进游戏）。别区的角色 id 返回 404。
    *
    * 权限点：role:select
    */
@@ -1517,7 +1523,7 @@ export const statsApi = {
   /**
    * 分布统计（GET /admin/stats/breakdown）
    *
-   * 等级（10 级一档）/ 职业 / 性别 / 所在地图四组分布。
+   * 等级（10 级一档）/ 职业 / 性别 / 所在地图四组分布，**都只数当前区的角色**。
    *
    * 权限点：stats:read
    */

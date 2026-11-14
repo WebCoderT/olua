@@ -45,13 +45,6 @@
     },
     {
       "rule": "repo-sql",
-      "file": "server/src/database/repositories/account.repository.ts",
-      "key": "list",
-      "issue": 960,
-      "reason": "账号列表里的「角色数」子查询 `(SELECT COUNT(1) FROM roles r WHERE r.account_id = a.id)` 是全区的；P4 改成 EXISTS(… AND r.zone_id = :current)，顺带让列表只出本区有角色的账号"
-    },
-    {
-      "rule": "repo-sql",
       "file": "server/src/database/repositories/guild.repository.ts",
       "key": "findByIdAnyZone",
       "issue": 960,
@@ -116,55 +109,6 @@
     {
       "rule": "repo-sql",
       "file": "server/src/database/repositories/role.repository.ts",
-      "key": "countAll",
-      "issue": 960,
-      "reason": "概览看板的「角色总数」：现在是全服合计，P4 按 X-Zone-Id 统计"
-    },
-    {
-      "rule": "repo-sql",
-      "file": "server/src/database/repositories/role.repository.ts",
-      "key": "countByDaySince",
-      "issue": 960,
-      "reason": "概览新增趋势图：P4 按区分组（GROUP BY 里加 zone_id，或者直接 WHERE zone_id = ?）"
-    },
-    {
-      "rule": "repo-sql",
-      "file": "server/src/database/repositories/role.repository.ts",
-      "key": "countByLevelBucket",
-      "issue": 960,
-      "reason": "概览等级分布：P4 按区（同一个概览接口一起改）"
-    },
-    {
-      "rule": "repo-sql",
-      "file": "server/src/database/repositories/role.repository.ts",
-      "key": "countByMap",
-      "issue": 960,
-      "reason": "概览地图分布：P4 按区（json_extract 那套不变，只多一个 zone 条件）"
-    },
-    {
-      "rule": "repo-sql",
-      "file": "server/src/database/repositories/role.repository.ts",
-      "key": "countByOccupation",
-      "issue": 960,
-      "reason": "概览职业分布：P4 按区"
-    },
-    {
-      "rule": "repo-sql",
-      "file": "server/src/database/repositories/role.repository.ts",
-      "key": "countBySex",
-      "issue": 960,
-      "reason": "概览性别分布：P4 按区"
-    },
-    {
-      "rule": "repo-sql",
-      "file": "server/src/database/repositories/role.repository.ts",
-      "key": "countCreatedAfter",
-      "issue": 960,
-      "reason": "概览「今日新增角色」：P4 按区"
-    },
-    {
-      "rule": "repo-sql",
-      "file": "server/src/database/repositories/role.repository.ts",
       "key": "deleteByAccount",
       "issue": 960,
       "reason": "删账号时按设计**全区**删角（账号不属于任何区）—— 这条不该加区条件，P4 只在提交前提示「影响 N 个区」"
@@ -206,13 +150,6 @@
     },
     {
       "rule": "repo-sql",
-      "file": "server/src/database/repositories/role.repository.ts",
-      "key": "list",
-      "issue": 960,
-      "reason": "管理端角色列表：P4 的 buildWhere 里补 r.zone_id = ?（与 count 同源，别各写一份）"
-    },
-    {
-      "rule": "repo-sql",
       "file": "server/src/database/repositories/world-monster.repository.ts",
       "key": "countAll",
       "issue": 960,
@@ -231,6 +168,20 @@
       "key": "removeMany",
       "issue": 961,
       "reason": "按 instanceId 删，而 instance id 本身是 m<map>_z<zone>_c<slot>_<n>（room-key.util 的唯一口径），不会跨区"
+    },
+    {
+      "rule": "repo-sql",
+      "file": "server/src/database/repositories/role.repository.ts",
+      "key": "countOtherZonesOfAccount",
+      "issue": "#960",
+      "reason": "这条查询问的就是「除当前区以外还有几个区」，所以它必须 zone_id <> ?；写成 = 就没意义了"
+    },
+    {
+      "rule": "repo-sql",
+      "file": "server/src/database/repositories/role.repository.ts",
+      "key": "list",
+      "issue": "#960",
+      "reason": "区过滤在 buildWhere 里（第一个条件恒为 r.zone_id = ?，且 RoleFilter.zoneId 是必填），静态规则只看方法体看不到 —— 不要把它内联成字面量来骗过审计"
     }
   ]
 }

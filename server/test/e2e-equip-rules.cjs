@@ -135,9 +135,14 @@ async function startServer(dbPath) {
   throw new Error("等待服务启动超时");
 }
 
+/** 管理端请求所在的区（#960）：一个 e2e 进程只在一个区里干活，管理端请求统一带它 */
+const ADMIN_ZONE = 1;
+
 async function api(baseUrl, method, route, options = {}) {
   const headers = { "Content-Type": "application/json" };
   if (options.token) headers.Authorization = `Bearer ${options.token}`;
+  // 管理端单区上下文（#960）：控制台前端在请求拦截器里统一带 X-Zone-Id，测试里对等模拟
+  if (options.zoneId !== undefined) headers["X-Zone-Id"] = String(options.zoneId);
   const response = await fetch(`${baseUrl}/api/${route}`, {
     method,
     headers,
@@ -196,7 +201,7 @@ const BAG_SEED_CELLS = [
     const roleId = created.data && created.data.id;
     check(!!(token && roleId), "准备：账号与角色已建好（战士 / 男）", created.message);
 
-    const seeded = await api(baseUrl, "PATCH", `admin/roles/${roleId}`, { token: adminToken, body: { bag: BAG_SEED_CELLS } });
+    const seeded = await api(baseUrl, "PATCH", `admin/roles/${roleId}`, { token: adminToken, zoneId: ADMIN_ZONE, body: { bag: BAG_SEED_CELLS } });
     check(seeded.code === 0, "准备：管理端把五格东西注入背包", seeded.message);
 
     /** 当前修订号（每次写接口都要带基线，#820） */
@@ -216,7 +221,7 @@ const BAG_SEED_CELLS = [
         body: { action: "unequip", slot, revision: await revOf() },
       });
     /** 改装备的两列（写操作会顺手重装结算层，改完下一次穿戴即生效） */
-    const patchEquipment = (id, body) => api(baseUrl, "PATCH", `admin/equipments/${id}`, { token: adminToken, body });
+    const patchEquipment = (id, body) => api(baseUrl, "PATCH", `admin/equipments/${id}`, { token: adminToken, zoneId: ADMIN_ZONE, body });
 
     /**
      * 背包里某个 id 现在在哪一格（找不到返回 null）
@@ -247,7 +252,7 @@ const BAG_SEED_CELLS = [
     //#region 一、出厂口径：一件都不拦
 
     group("一、出厂口径（occupation=4 / sex=3 → 现状一件都不拦）");
-    const weapons = await api(baseUrl, "GET", "admin/equipments?slot=weapon&page=1&size=100", { token: adminToken });
+    const weapons = await api(baseUrl, "GET", "admin/equipments?slot=weapon&page=1&size=100", { token: adminToken, zoneId: ADMIN_ZONE });
     const weaponRows = (weapons.data && weapons.data.list) || [];
     check(weaponRows.length > 0, "管理端能读到武器列表", `rows=${weaponRows.length}`);
     check(
@@ -278,7 +283,7 @@ const BAG_SEED_CELLS = [
     checkEqual(await revOf(), revBefore, "被拒之后修订号没变（拒绝不落库）");
 
     // 提级到 10：等级这一项满足，就轮到性别说话
-    const raised = await api(baseUrl, "PATCH", `admin/roles/${roleId}`, { token: adminToken, body: { level: 10 } });
+    const raised = await api(baseUrl, "PATCH", `admin/roles/${roleId}`, { token: adminToken, zoneId: ADMIN_ZONE, body: { level: 10 } });
     checkEqual(raised.code, 0, "管理端把角色提到 10 级");
     const wrongSex = await equipItem("cloth_10");
     checkEqual(wrongSex.code, 20021, "10 级战士穿「法师 · 女」→ 20021");
@@ -388,12 +393,12 @@ const BAG_SEED_CELLS = [
     //#region 九、角色侧读库
 
     group("九、角色侧读库（判据不吃存档里的旧值）");
-    const toGirl = await api(baseUrl, "PATCH", `admin/roles/${roleId}`, { token: adminToken, body: { sex: "2" } });
+    const toGirl = await api(baseUrl, "PATCH", `admin/roles/${roleId}`, { token: adminToken, zoneId: ADMIN_ZONE, body: { sex: "2" } });
     checkEqual(toGirl.code, 0, "管理端把角色改成女性");
     const boyOnly = await equipItem("helmet_1");
     checkEqual(boyOnly.code, 20021, "女性穿「男」专属头盔 → 20021");
     check(((boyOnly && boyOnly.message) || "").includes("男角色才能穿戴"), "理由是性别（读的是角色表的 sex，不是存档）", boyOnly.message);
-    await api(baseUrl, "PATCH", `admin/roles/${roleId}`, { token: adminToken, body: { sex: "1" } });
+    await api(baseUrl, "PATCH", `admin/roles/${roleId}`, { token: adminToken, zoneId: ADMIN_ZONE, body: { sex: "1" } });
     const backToBoy = await equipItem("helmet_1");
     checkEqual(backToBoy.code, 0, "改回男性后立刻穿得上");
 

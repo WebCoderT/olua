@@ -157,9 +157,14 @@ async function startServer(dbPath) {
   throw new Error("等待服务启动超时");
 }
 
+/** 管理端请求所在的区（#960）：一个 e2e 进程只在一个区里干活，管理端请求统一带它 */
+const ADMIN_ZONE = 1;
+
 async function api(baseUrl, method, route, options = {}) {
   const headers = { "Content-Type": "application/json" };
   if (options.token) headers.Authorization = `Bearer ${options.token}`;
+  // 管理端单区上下文（#960）：控制台前端在请求拦截器里统一带 X-Zone-Id，测试里对等模拟
+  if (options.zoneId !== undefined) headers["X-Zone-Id"] = String(options.zoneId);
   if (options.userAgent) headers["User-Agent"] = options.userAgent;
   const response = await fetch(`${baseUrl}/api/${route}`, {
     method,
@@ -357,10 +362,10 @@ function connect(url) {
     group("三、进图 / 击杀 / 拾取：走真实实时通道");
 
     // 怪物 1 压成一刀死（maxHp 是独立列，改完即时生效），掉落固定成 drug_hp_1 ×2
-    const squishy = await api(baseUrl, "PATCH", "admin/monsters/1", { token: adminToken, body: { maxHp: 5 } });
+    const squishy = await api(baseUrl, "PATCH", "admin/monsters/1", { token: adminToken, zoneId: ADMIN_ZONE, body: { maxHp: 5 } });
     check(squishy.code === 0, "准备：怪物 1 改成一刀死", squishy.message);
     const dropSet = await api(baseUrl, "PATCH", "admin/monster-drops/1", {
-      token: adminToken,
+      token: adminToken, zoneId: ADMIN_ZONE,
       body: { tableId: null, picks: 1, entries: [{ goodId: DROP_GOOD, weight: 100, chance: 1, count: [2, 2] }] },
     });
     check(dropSet.code === 0, "准备：怪物 1 必掉 drug_hp_1 ×2", dropSet.message);
@@ -481,7 +486,7 @@ function connect(url) {
     group("五、邮件：领取记 mail，附件记 gain（source = mail）");
 
     const mailSent = await api(baseUrl, "POST", `admin/game-mail/roles/${roleId}`, {
-      token: adminToken,
+      token: adminToken, zoneId: ADMIN_ZONE,
       body: { channel: "reward", title: "e2e 补偿", bindGold: 100, items: [{ goodId: DROP_GOOD, count: 1 }] },
     });
     check(mailSent.code === 0, "管理端补发一封带附件的邮件", mailSent.message);
@@ -557,7 +562,7 @@ function connect(url) {
 
     group("七、类型字典：十类都登记，暂时放置的两类 total = 0");
 
-    const types = await api(baseUrl, "GET", "admin/event-logs/types", { token: adminToken });
+    const types = await api(baseUrl, "GET", "admin/event-logs/types", { token: adminToken, zoneId: ADMIN_ZONE });
     check(types.code === 0, "类型清单可查", types.message);
     const typeList = (types.data && types.data.types) || [];
     checkEqual(typeList.length, 10, "字典里十类都在（含暂时放置的两类）");
@@ -575,22 +580,22 @@ function connect(url) {
 
     group("八、查询接口：类型 / 角色 / 地图三种筛选");
 
-    const byRole = await api(baseUrl, "GET", `admin/event-logs?roleId=${roleId}&size=100`, { token: adminToken });
+    const byRole = await api(baseUrl, "GET", `admin/event-logs?roleId=${roleId}&size=100`, { token: adminToken, zoneId: ADMIN_ZONE });
     check(byRole.code === 0, "按角色筛可查", byRole.message);
     const roleRows = (byRole.data && byRole.data.list) || [];
     check(roleRows.length > 0 && roleRows.every((row) => row.roleId === roleId), "按角色筛只回该角色的流水", `rows=${roleRows.length}`);
     checkEqual(byRole.data && byRole.data.total, roleRows.length, "total 与当前页一致（同一套筛选条件）");
 
-    const byType = await api(baseUrl, "GET", "admin/event-logs?type=kill&size=100", { token: adminToken });
+    const byType = await api(baseUrl, "GET", "admin/event-logs?type=kill&size=100", { token: adminToken, zoneId: ADMIN_ZONE });
     const killRows = (byType.data && byType.data.list) || [];
     check(killRows.length > 0 && killRows.every((row) => row.type === "kill"), "按类型筛只回该类型", `rows=${killRows.length}`);
     checkEqual(killRows[0] && killRows[0].typeLabel, "击杀", "列表带 typeLabel");
 
-    const byMap = await api(baseUrl, "GET", `admin/event-logs?mapId=${MAP_ID}&type=pick&size=100`, { token: adminToken });
+    const byMap = await api(baseUrl, "GET", `admin/event-logs?mapId=${MAP_ID}&type=pick&size=100`, { token: adminToken, zoneId: ADMIN_ZONE });
     const mapRows = (byMap.data && byMap.data.list) || [];
     check(mapRows.length > 0 && mapRows.every((row) => row.mapId === MAP_ID), "按地图 + 类型交叉筛可用", `rows=${mapRows.length}`);
 
-    const badType = await api(baseUrl, "GET", "admin/event-logs?type=not_a_type", { token: adminToken });
+    const badType = await api(baseUrl, "GET", "admin/event-logs?type=not_a_type", { token: adminToken, zoneId: ADMIN_ZONE });
     check(badType.code !== 0, "非法类型被拒（不是静默回空列表）", badType.message);
 
     const playerRead = await api(baseUrl, "GET", "admin/event-logs", { token });
@@ -611,7 +616,7 @@ function connect(url) {
     check(victims.every(Boolean), "准备：3 个账号已注册", JSON.stringify(victims));
 
     const banned = await api(baseUrl, "POST", "admin/accounts/batch-status", {
-      token: adminToken,
+      token: adminToken, zoneId: ADMIN_ZONE,
       body: { ids: victims, status: "disabled", reason: "e2e 批量封禁" },
     });
     check(banned.code === 0 && banned.data.updated === 3, "批量封禁 3 个账号成功", JSON.stringify(banned.data));
@@ -644,7 +649,7 @@ function connect(url) {
     }
     check(roleIds.every(Boolean), "准备：2 个角色已创建", JSON.stringify(roleIds));
 
-    const removed = await api(baseUrl, "POST", "admin/roles/batch-delete", { token: adminToken, body: { ids: roleIds } });
+    const removed = await api(baseUrl, "POST", "admin/roles/batch-delete", { token: adminToken, zoneId: ADMIN_ZONE, body: { ids: roleIds } });
     check(removed.code === 0 && removed.data.deleted === 2, "批量删除 2 个角色成功", JSON.stringify(removed.data));
     const roleAudit = query(dbPath, "SELECT * FROM audit_logs WHERE action = 'adminRole.batchRemove' ORDER BY created_at DESC");
     const roleItems = roleAudit.filter((row) => (detailOf(row) || {}).item === true);

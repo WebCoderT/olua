@@ -66,10 +66,15 @@ function sleep(ms) {
 
 let baseUrl = "";
 
+/** 管理端请求所在的区（#960）：一个 e2e 进程只在一个区里干活，管理端请求统一带它 */
+const ADMIN_ZONE = 1;
+
 async function api(method, path, options = {}) {
   const headers = {};
   if (options.body !== undefined) headers["Content-Type"] = "application/json";
   if (options.token) headers.Authorization = `Bearer ${options.token}`;
+  // 管理端单区上下文（#960）：控制台前端在请求拦截器里统一带 X-Zone-Id，测试里对等模拟
+  if (options.zoneId !== undefined) headers["X-Zone-Id"] = String(options.zoneId);
   const response = await fetch(`${baseUrl}/${path}`, {
     method,
     headers,
@@ -125,7 +130,7 @@ function roleData(id, name, occupation, level, overrides = {}) {
   check(created.code === 0, "准备：建号成功", created.message);
   // 提到 5 级，让成长曲线给出非 1 级的 maxHp（断言「上限是服务端重算值」才有区分度）。
   // 先随便存一档再取上限：存档路径做权威重算，取值要在重算之后
-  await api("PATCH", `admin/roles/${roleId}`, { token: adminToken, body: { level: 5 } });
+  await api("PATCH", `admin/roles/${roleId}`, { token: adminToken, zoneId: ADMIN_ZONE, body: { level: 5 } });
   await saveRole(api, token, roleId, roleData(roleId, "血蓝", "1", 5));
   const detail = await api("GET", `roles/${roleId}`, { token });
   const maxHp = detail.data.data.maxHp;
@@ -177,25 +182,25 @@ function roleData(id, name, occupation, level, overrides = {}) {
   const lowMp = Math.max(1, Math.floor(maxMp / 4));
   /** 把蓝清到 lowMp 并等一段时间，再走一次存档触发结算 —— 返回结算后的蓝量 */
   const settleAfter = async (waitMs) => {
-    await api("PATCH", `admin/roles/${roleId}`, { token: adminToken, body: { mp: lowMp } });
+    await api("PATCH", `admin/roles/${roleId}`, { token: adminToken, zoneId: ADMIN_ZONE, body: { mp: lowMp } });
     await sleep(waitMs);
     await saveRole(api, token, roleId, roleData(roleId, "血蓝", "1", 5));
     const detailAfter = await api("GET", `roles/${roleId}`, { token });
     return detailAfter.data.data.mp;
   };
 
-  const offPatched = await api("PATCH", scalarPath, { token: adminToken, body: { value: 0 } });
+  const offPatched = await api("PATCH", scalarPath, { token: adminToken, zoneId: ADMIN_ZONE, body: { value: 0 } });
   check(offPatched.code === 0, "回复速度可改（0 = 关闭自然回蓝）", offPatched.message);
   const mpWhenOff = await settleAfter(1200);
   // 累加器在结算后必然 < 1（服务端只留小数部分），所以速度为 0 时一点都不该涨
   check(mpWhenOff === lowMp, "速度为 0 时不回蓝（配置真的进了结算）", `${mpWhenOff} vs ${lowMp}`);
 
-  await api("PATCH", scalarPath, { token: adminToken, body: { value: 20 } });
+  await api("PATCH", scalarPath, { token: adminToken, zoneId: ADMIN_ZONE, body: { value: 20 } });
   const mpWhenFast = await settleAfter(1200);
   check(mpWhenFast >= Math.min(maxMp, lowMp + 20), "速度为 20 时 1.2 秒至少回 20 点（越改越快的方向也对）", `${mpWhenFast}`);
 
   // 还原出厂值：同一进程里后面还有复活/管理端旁路的断言，别把速度留在 20
-  const restored = await api("PATCH", scalarPath, { token: adminToken, body: { value: 2 } });
+  const restored = await api("PATCH", scalarPath, { token: adminToken, zoneId: ADMIN_ZONE, body: { value: 2 } });
   check(restored.code === 0, "还原出厂回复速度", restored.message);
 
   //#endregion
@@ -208,7 +213,7 @@ function roleData(id, name, occupation, level, overrides = {}) {
   check(reviveAlive.code === 20015 && reviveAlive.status === 409, "未死亡时复活被拒（20015 / 409）", `${reviveAlive.code}/${reviveAlive.status}`);
 
   // 管理端旁路把人打死（PATCH hp=0；同时会重置结算游标）——这也是运营救卡死号的路径
-  const killed = await api("PATCH", `admin/roles/${roleId}`, { token: adminToken, body: { hp: 0, mp: 0 } });
+  const killed = await api("PATCH", `admin/roles/${roleId}`, { token: adminToken, zoneId: ADMIN_ZONE, body: { hp: 0, mp: 0 } });
   check(killed.code === 0 && killed.data.data.hp === 0, "管理端 PATCH hp=0 生效（运营旁路）", JSON.stringify(killed.data && killed.data.data && killed.data.data.hp));
 
   // 死亡后改包上报满血：save 结算基线取库里的 0，死亡不回复 —— 上报无效
@@ -236,7 +241,7 @@ function roleData(id, name, occupation, level, overrides = {}) {
   // 用管理端把血量打下来（同时重置游标）→ 立即 PUT 一次（推进游标）→ 查库确认血量没变；
   // 回复量 = hpRecover × 秒。断言「结算不会凭空给血」与「游标在走」，
   // 真实回复由客户端长连接场景验证，e2e 不 sleep。
-  await api("PATCH", `admin/roles/${roleId}`, { token: adminToken, body: { hp: 1 } });
+  await api("PATCH", `admin/roles/${roleId}`, { token: adminToken, zoneId: ADMIN_ZONE, body: { hp: 1 } });
   const hurtSave = await saveRole(api, token, roleId, roleData(roleId, "血蓝", "1", 5, { hp: 1 }));
   check(hurtSave.code === 0, "准备：残血状态保存成功");
   const hurt = await api("GET", `roles/${roleId}`, { token });

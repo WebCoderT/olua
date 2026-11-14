@@ -1,8 +1,10 @@
-import { Controller, Get, Query } from "@nestjs/common";
+import { Controller, Get, Query, UseGuards } from "@nestjs/common";
 import { ApiAudience } from "../../common/decorators/audience.decorator";
 import { ApiAdminDoc } from "../../common/decorators/api-doc.decorator";
 import { ApiDataResponse } from "../../common/decorators/api-data-response.decorator";
 import { ApiQueryModel } from "../../common/decorators/api-query-model.decorator";
+import { ZoneContext } from "../../common/decorators/zone-context.decorator";
+import { ZoneContextGuard } from "../../common/guards/zone-context.guard";
 import { Permission } from "../../common/constants/permission";
 import { REPORT_CATEGORIES } from "../../common/constants/social";
 import { PageResult } from "../../common/interfaces/api-envelope.interface";
@@ -19,6 +21,7 @@ import { ReportService } from "./report.service";
  * 因此这里也没有 `@AuditTarget`：只读接口不产生审计记录（审计记的是写操作）。
  */
 @ApiAudience("admin")
+@UseGuards(ZoneContextGuard)
 @Controller("admin/reports")
 export class AdminReportController {
   constructor(private readonly reportService: ReportService) {}
@@ -28,6 +31,7 @@ export class AdminReportController {
     operationId: "adminReport.list",
     summary: "举报列表",
     description:
+      "**只列本区角色之间的举报**（举报人属本区；举报人角色已删时看被举报方的区）。\n" +
       "按举报时间倒序（新举报在前，同毫秒以 id 兜底，翻页稳定）。\n\n" +
       "`category` 取 " +
       REPORT_CATEGORIES.join(" / ") +
@@ -38,7 +42,7 @@ export class AdminReportController {
   })
   @ApiQueryModel(ReportQueryDto)
   @ApiDataResponse(ReportPageDto, { description: "分页结果（list/total/page/size）" })
-  list(@Query() query: ReportQueryDto): PageResult<ReportDto> {
-    return this.reportService.list(query);
+  list(@Query() query: ReportQueryDto, @ZoneContext() zoneId: number): PageResult<ReportDto> {
+    return this.reportService.list(query, zoneId);
   }
 }

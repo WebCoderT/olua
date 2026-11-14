@@ -125,9 +125,14 @@ async function startServer(extraEnv = {}) {
 }
 
 /** 发一次请求，返回 { status, body }（body 是唯一包裹体） */
+/** 管理端请求所在的区（#960）：一个 e2e 进程只在一个区里干活，管理端请求统一带它 */
+const ADMIN_ZONE = 1;
+
 async function api(baseUrl, method, route, options = {}) {
   const headers = { "Content-Type": "application/json" };
   if (options.token) headers.Authorization = `Bearer ${options.token}`;
+  // 管理端单区上下文（#960）：控制台前端在请求拦截器里统一带 X-Zone-Id，测试里对等模拟
+  if (options.zoneId !== undefined) headers["X-Zone-Id"] = String(options.zoneId);
   const response = await fetch(`${baseUrl}${route}`, {
     method,
     headers,
@@ -262,10 +267,10 @@ async function main() {
         body: { username: "realtime_admin", password: "Admin#1234", registerCode: ADMIN_CODE },
       });
       const adminLogin = await api(baseUrl, "POST", "/api/admin/auth/login", {
-        body: { username: "realtime_admin", password: "Admin#1234" },
+        body: { zoneId: ADMIN_ZONE, username: "realtime_admin", password: "Admin#1234" },
       });
       const adminToken = adminLogin.body?.data?.token;
-      const crossed = await api(baseUrl, "POST", "/api/realtime/ticket", { token: adminToken });
+      const crossed = await api(baseUrl, "POST", "/api/realtime/ticket", { token: adminToken, zoneId: ADMIN_ZONE });
       checkEqual(crossed.status, 401, "管理端令牌取票被拒（受众不符 → 401）");
       checkEqual(crossed.body?.code, 40101, "受众不符走的是同一个码 40101");
 
@@ -338,7 +343,7 @@ async function main() {
         body: { username: "role_update_admin", password: "Admin#1234", registerCode: ADMIN_CODE },
       });
       const roleAdminLogin = await api(baseUrl, "POST", "/api/admin/auth/login", {
-        body: { username: "role_update_admin", password: "Admin#1234" },
+        body: { zoneId: ADMIN_ZONE, username: "role_update_admin", password: "Admin#1234" },
       });
       const roleAdminToken = roleAdminLogin.body?.data?.token;
 
@@ -412,7 +417,7 @@ async function main() {
       // 这三个字段自 #548 起归服务端（改包会被回填），所以「改了但看不到」只能靠帧补。
       // 时装发放（#596）搭同一趟车：管理端 PATCH 是 grant 语义的唯一写路，帧要带回
       const patched = await api(baseUrl, "PATCH", `/api/admin/roles/${roleAId}`, {
-        token: roleAdminToken,
+        token: roleAdminToken, zoneId: ADMIN_ZONE,
         body: { title: 5, soulOfWar: 6, rank: 7, fashionCloth: "cloth_3", fashionsOwned: ["cloth_2", "cloth_3"] },
       });
       checkEqual(patched.status, 200, "准备：管理端改三个阶位 + 发放两套时装");
@@ -572,7 +577,7 @@ async function main() {
           body: { username: "hb_admin", password: "Admin#1234", registerCode: ADMIN_CODE },
         });
         const adminLogin = await api(hbUrl, "POST", "/api/admin/auth/login", {
-          body: { username: "hb_admin", password: "Admin#1234" },
+          body: { zoneId: ADMIN_ZONE, username: "hb_admin", password: "Admin#1234" },
         });
         const adminToken = adminLogin.body?.data?.token ?? adminRegister.body?.data?.token;
         const tokenD = await registerPlayer(hbUrl, "heartbeat_d");
@@ -580,7 +585,7 @@ async function main() {
         const accountIdD = meD.body?.data?.id;
         await api(hbUrl, "POST", "/api/roles", { token: tokenD, body: { name: "heartbeat_r2", occupation: "1", sex: "1" } });
         check(Boolean(accountIdD && rowOf("heartbeat_d")?.online_role_id), "准备：账号 D 已建号并自动在线");
-        const kick = await api(hbUrl, "POST", `/api/admin/accounts/${accountIdD}/offline`, { token: adminToken });
+        const kick = await api(hbUrl, "POST", `/api/admin/accounts/${accountIdD}/offline`, { token: adminToken, zoneId: ADMIN_ZONE });
         checkEqual(kick.status, 201, "管理端踢下线成功");
         const rowD = rowOf("heartbeat_d");
         check(rowD?.online_role_id == null && rowD?.online_heartbeat_at == null, "踢下线把标记与心跳一起清（与清算同一条写点）");
@@ -616,7 +621,7 @@ async function main() {
         });
         const adminToken = adminReg.body?.data?.token;
         const patched = await api(pUrl, "PATCH", "/api/admin/runtime-params/movement", {
-          token: adminToken,
+          token: adminToken, zoneId: ADMIN_ZONE,
           body: { mode: "enforce", maxSpeed: 500, tolerance: 1, jitterPx: 0 },
         });
         checkEqual(patched.body?.data?.mode, "enforce", "准备：档位切到 enforce（PATCH 回执带新值）");

@@ -104,9 +104,14 @@ async function startServer(dbPath) {
   throw new Error("等待服务启动超时");
 }
 
+/** 管理端请求所在的区（#960）：一个 e2e 进程只在一个区里干活，管理端请求统一带它 */
+const ADMIN_ZONE = 1;
+
 async function api(baseUrl, method, route, options = {}) {
   const headers = { "Content-Type": "application/json" };
   if (options.token) headers.Authorization = `Bearer ${options.token}`;
+  // 管理端单区上下文（#960）：控制台前端在请求拦截器里统一带 X-Zone-Id，测试里对等模拟
+  if (options.zoneId !== undefined) headers["X-Zone-Id"] = String(options.zoneId);
   const response = await fetch(`${baseUrl}/api/${route}`, {
     method,
     headers,
@@ -141,7 +146,7 @@ async function api(baseUrl, method, route, options = {}) {
       body: { username: "no_param_super", password: "super-pass-1", registerCode: "zone-no-param-admin-code" },
     });
     const adminToken = adminReg.data && adminReg.data.token;
-    const zone2 = await api(baseUrl, "POST", "admin/zones", { token: adminToken, body: { name: "二区" } });
+    const zone2 = await api(baseUrl, "POST", "admin/zones", { token: adminToken, zoneId: ADMIN_ZONE, body: { name: "二区" } });
     const zone2Id = zone2.data && zone2.data.id;
 
     const regB = await api(baseUrl, "POST", "auth/register", { body: { username: "no_param_b", password: "pass1234" } });

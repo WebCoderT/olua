@@ -21,6 +21,8 @@ export interface AuditEntryInput {
   ip?: string | null;
   method?: string | null;
   path?: string | null;
+  /** 这次操作发生在哪个区（#960）；全区性接口与未选区的请求为空 */
+  zoneId?: number | null;
   statusCode?: number | null;
   success?: boolean;
   errorCode?: number | null;
@@ -72,6 +74,7 @@ export class AuditService implements OnModuleInit {
         ip: input.ip ?? null,
         method: input.method ?? null,
         path: input.path ?? null,
+        zone_id: input.zoneId ?? null,
         status_code: input.statusCode ?? null,
         success: input.success === false ? 0 : 1,
         error_code: input.errorCode ?? null,
@@ -100,6 +103,8 @@ export class AuditService implements OnModuleInit {
     username: string;
     ip?: string | null;
     ok: boolean;
+    /** 登录时选的是哪个区（登录接口的 zoneId 校验通过之后才有值） */
+    zoneId?: number | null;
     actor?: { id: string; username: string; role?: string } | null;
     errorCode?: number | null;
     errorMessage?: string | null;
@@ -112,6 +117,7 @@ export class AuditService implements OnModuleInit {
       ip: input.ip ?? null,
       method: "POST",
       path: input.route,
+      zoneId: input.zoneId ?? null,
       statusCode: input.statusCode ?? (input.ok ? 200 : 401),
       success: input.ok,
       errorCode: input.errorCode ?? null,
@@ -175,6 +181,7 @@ export class AuditService implements OnModuleInit {
     return {
       keyword: query.keyword?.trim() || undefined,
       actorId: query.actorId?.trim() || undefined,
+      zoneId: query.zoneId,
       action: query.action?.trim() || undefined,
       targetType: query.targetType,
       targetId: query.targetId?.trim() || undefined,

@@ -198,6 +198,9 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
         ip            TEXT,
         method        TEXT,
         path          TEXT,
+        -- 这次操作发生在哪个区（#960）：跨区追责要能答「这个客服在几区干过什么」。
+        -- 全区性接口（配置 / 管理员 / 区目录）与登录失败这类没有区的请求为空。
+        zone_id       INTEGER,
         status_code   INTEGER,
         success       INTEGER NOT NULL DEFAULT 1,
         error_code    INTEGER,
@@ -546,6 +549,10 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
       CREATE TABLE IF NOT EXISTS zones (
         id          INTEGER PRIMARY KEY AUTOINCREMENT,
         name        TEXT    NOT NULL UNIQUE,
+        -- 运营状态（#960）：open / closed。已合并看 merged_into，两者不是一回事
+        status      TEXT    NOT NULL DEFAULT 'open',
+        -- 下拉排序（#960）：升序，同值按 id
+        sort        INTEGER NOT NULL DEFAULT 0,
         merged_into INTEGER,
         created_at  INTEGER NOT NULL,
         updated_at  INTEGER NOT NULL
@@ -1447,6 +1454,14 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
     // 令牌版本号（改密即失效旧令牌）：存量库补列后默认 0，而存量令牌里没有 ver 字段也按 0 处理，两者一致
     this.ensureColumn("accounts", "token_version", "INTEGER NOT NULL DEFAULT 0");
     this.ensureColumn("admins", "token_version", "INTEGER NOT NULL DEFAULT 0");
+    // 上次作业区（#960）：管理端不绑区，但下拉框要记住上次的选择。存量管理员留 NULL，
+    // 登录页会回退到第一个可选区（不写死 1：一区可能已经被合并了）
+    this.ensureColumn("admins", "last_zone_id", "INTEGER");
+    this.ensureColumn("audit_logs", "zone_id", "INTEGER");
+    // 区服运营字段（#960）：P5 的开区 / 关区 / 排序先只需要这两个 ——
+    // 存量区一律 open（历史上没有「关区」这个概念）
+    this.ensureColumn("zones", "status", "TEXT NOT NULL DEFAULT 'open'");
+    this.ensureColumn("zones", "sort", "INTEGER NOT NULL DEFAULT 0");
     // 封禁闭环：原因 / 到期时间（null = 永久）/ 执行人 / 执行时间
     this.ensureColumn("accounts", "ban_reason", "TEXT");
     this.ensureColumn("accounts", "ban_until", "INTEGER");

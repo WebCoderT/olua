@@ -117,9 +117,14 @@ async function startServer(dbPath, extraEnv = {}) {
 }
 
 /** 发一次请求，返回唯一包裹体（code / message / data） */
+/** 管理端请求所在的区（#960）：一个 e2e 进程只在一个区里干活，管理端请求统一带它 */
+const ADMIN_ZONE = 1;
+
 async function api(baseUrl, method, route, options = {}) {
   const headers = { "Content-Type": "application/json" };
   if (options.token) headers.Authorization = `Bearer ${options.token}`;
+  // 管理端单区上下文（#960）：控制台前端在请求拦截器里统一带 X-Zone-Id，测试里对等模拟
+  if (options.zoneId !== undefined) headers["X-Zone-Id"] = String(options.zoneId);
   const response = await fetch(`${baseUrl}/api/${route}`, {
     method,
     headers,
@@ -168,7 +173,7 @@ async function preparePlayer(baseUrl, username, roleName) {
     // 逻辑本身（建帮 / 申请 / 审批 / 踢人 / 转让 / 解散），不该被门槛挡住 —— 先归零。
     // 门槛自己由「七、建帮门槛」专门验（那里会重新打开、逐条踩边界），八、九组继续用归零的状态。
     const relaxGate = await api(baseUrl, "PATCH", "admin/runtime-params", {
-      token: adminToken,
+      token: adminToken, zoneId: ADMIN_ZONE,
       body: { guild: { createLevelMin: 0, createCostBindGold: 0 } },
     });
     check(
@@ -205,7 +210,7 @@ async function preparePlayer(baseUrl, username, roleName) {
     check(!!row && row.name === "测试帮" && row.leaderName === "帮主甲" && row.memberCount === 1, "列表带帮主名与人数（一行看全）", JSON.stringify(row));
     checkEqual(list.data && list.data.length, 1, "列表只有刚建的那一个帮会");
 
-    const adminList0 = await api(baseUrl, "GET", "admin/guilds", { token: adminToken });
+    const adminList0 = await api(baseUrl, "GET", "admin/guilds", { token: adminToken, zoneId: ADMIN_ZONE });
     check(Array.isArray(adminList0.data) && adminList0.data.length === 1, "管理端也能看到这个帮会");
 
     //#endregion
@@ -214,11 +219,11 @@ async function preparePlayer(baseUrl, username, roleName) {
 
     group("一·五、帮会规则读运行时参数（管理端「运行时参数」页可改）");
 
-    const rulesBefore = await api(baseUrl, "GET", "admin/runtime-params", { token: adminToken });
+    const rulesBefore = await api(baseUrl, "GET", "admin/runtime-params", { token: adminToken, zoneId: ADMIN_ZONE });
     checkEqual(rulesBefore.data && rulesBefore.data.guild.nameMax, 12, "帮会名上限出厂 12 字（seed 自 shared/runtime-seed）");
 
     const tighten = await api(baseUrl, "PATCH", "admin/runtime-params", {
-      token: adminToken,
+      token: adminToken, zoneId: ADMIN_ZONE,
       body: { guild: { nameMax: 4, noticeMax: 6, applicationMessageMax: 5 } },
     });
     checkEqual(tighten.code, 0, "把名字上限收到 4 字 / 公告 6 字 / 留言 5 字");
@@ -236,11 +241,11 @@ async function preparePlayer(baseUrl, username, roleName) {
     checkEqual(messageTooLong.code, 40000, "申请留言超上限被拒", messageTooLong.message);
 
     // 两条被拒的建帮都没有落库：帮会表里还是只有 A 建的那一个
-    const guildsAfterReject = await api(baseUrl, "GET", "admin/guilds", { token: adminToken });
+    const guildsAfterReject = await api(baseUrl, "GET", "admin/guilds", { token: adminToken, zoneId: ADMIN_ZONE });
     checkEqual(guildsAfterReject.data && guildsAfterReject.data.length, 1, "被拒的建帮没有落库（先校验后写）");
 
     const restoreRules = await api(baseUrl, "PATCH", "admin/runtime-params", {
-      token: adminToken,
+      token: adminToken, zoneId: ADMIN_ZONE,
       body: { guild: { nameMax: 12, noticeMax: 200, applicationMessageMax: 50 } },
     });
     checkEqual(restoreRules.code, 0, "复原出厂规则");
@@ -380,7 +385,7 @@ async function preparePlayer(baseUrl, username, roleName) {
     const mineB4 = await api(baseUrl, "GET", "guilds/me", { token: B.token });
     checkEqual(mineB4.data && mineB4.data.applicants.length, 1, "帮主看到 A 的重新申请");
 
-    const adminDetail = await api(baseUrl, "GET", `admin/guilds/${guildId}`, { token: adminToken });
+    const adminDetail = await api(baseUrl, "GET", `admin/guilds/${guildId}`, { token: adminToken, zoneId: ADMIN_ZONE });
     check(
       adminDetail.data && adminDetail.data.members.length === 1 && adminDetail.data.members[0].rankLabel === "帮主",
       "管理端详情带成员名单与职位中文名",
@@ -388,14 +393,14 @@ async function preparePlayer(baseUrl, username, roleName) {
     );
 
     const adminRename = await api(baseUrl, "PATCH", `admin/guilds/${guildId}`, {
-      token: adminToken,
+      token: adminToken, zoneId: ADMIN_ZONE,
       body: { name: "改名帮", notice: "运营改名" },
     });
     check(adminRename.data && adminRename.data.name === "改名帮" && adminRename.data.notice === "运营改名", "管理端可改名与改公告");
     const mineB5 = await api(baseUrl, "GET", "guilds/me", { token: B.token });
     checkEqual(mineB5.data && mineB5.data.name, "改名帮", "改名对玩家侧立即生效（同一个帮会 id，不是新建）");
 
-    const adminRemove = await api(baseUrl, "DELETE", `admin/guilds/${guildId}`, { token: adminToken });
+    const adminRemove = await api(baseUrl, "DELETE", `admin/guilds/${guildId}`, { token: adminToken, zoneId: ADMIN_ZONE });
     checkEqual(adminRemove.code, 0, "管理端强制解散成功");
 
     const mineB6 = await api(baseUrl, "GET", "guilds/me", { token: B.token });
@@ -413,10 +418,10 @@ async function preparePlayer(baseUrl, username, roleName) {
     checkEqual(memberRows.n, 0, "成员行被外键级联删掉（没有孤儿成员）");
     checkEqual(applicationRows.n, 0, "待审批申请同样被级联删掉");
 
-    const removeAgain = await api(baseUrl, "DELETE", `admin/guilds/${guildId}`, { token: adminToken });
+    const removeAgain = await api(baseUrl, "DELETE", `admin/guilds/${guildId}`, { token: adminToken, zoneId: ADMIN_ZONE });
     checkEqual(removeAgain.code, 50101, "删过的 id 再删 = 50101（GUILD_NOT_FOUND）", removeAgain.message);
 
-    const patchMissing = await api(baseUrl, "PATCH", "admin/guilds/g_not_exists", { token: adminToken, body: { notice: "x" } });
+    const patchMissing = await api(baseUrl, "PATCH", "admin/guilds/g_not_exists", { token: adminToken, zoneId: ADMIN_ZONE, body: { notice: "x" } });
     checkEqual(patchMissing.code, 50101, "改不存在的帮会 = 50101", patchMissing.message);
 
     //#endregion
@@ -427,7 +432,7 @@ async function preparePlayer(baseUrl, username, roleName) {
 
     /** 帮会表当前行数（判「被拒的建帮一行都没留」） */
     const guildCount = async () => {
-      const res = await api(baseUrl, "GET", "admin/guilds", { token: adminToken });
+      const res = await api(baseUrl, "GET", "admin/guilds", { token: adminToken, zoneId: ADMIN_ZONE });
       return Array.isArray(res.data) ? res.data.length : -1;
     };
     /** 角色存档里的绑定元宝（读权威那一份，不看接口回显） */
@@ -437,7 +442,7 @@ async function preparePlayer(baseUrl, username, roleName) {
     };
 
     const gateOn = await api(baseUrl, "PATCH", "admin/runtime-params", {
-      token: adminToken,
+      token: adminToken, zoneId: ADMIN_ZONE,
       body: { guild: { createLevelMin: 10, createCostBindGold: 100000 } },
     });
     check(
@@ -457,7 +462,7 @@ async function preparePlayer(baseUrl, username, roleName) {
     checkEqual(await guildCount(), countBeforeGate, "等级被拒的建帮没有落库");
 
     // 等级够了、钱包空的：钱不够是**20011**（与「等级不够」分开，客户端据此提示去攒钱）
-    const raiseLevel = await api(baseUrl, "PATCH", `admin/roles/${A.roleId}`, { token: adminToken, body: { level: 10 } });
+    const raiseLevel = await api(baseUrl, "PATCH", `admin/roles/${A.roleId}`, { token: adminToken, zoneId: ADMIN_ZONE, body: { level: 10 } });
     checkEqual(raiseLevel.code, 0, "管理端把 A 提到 10 级");
     checkEqual(await bindGoldOf(A), 0, "A 的绑定元宝是 0（余额不足的前提）");
     const poorCreate = await api(baseUrl, "POST", "guilds", { token: A.token, body: { name: "没钱包" } });
@@ -466,7 +471,7 @@ async function preparePlayer(baseUrl, username, roleName) {
     checkEqual(await bindGoldOf(A), 0, "被拒之后钱包一个子儿都没动（没有半扣）");
 
     // 钱够：扣款与建帮同一事务 —— 建成的同时余额清零，revision 只推进一次
-    const grantGold = await api(baseUrl, "PATCH", `admin/roles/${A.roleId}`, { token: adminToken, body: { bindGold: 100000 } });
+    const grantGold = await api(baseUrl, "PATCH", `admin/roles/${A.roleId}`, { token: adminToken, zoneId: ADMIN_ZONE, body: { bindGold: 100000 } });
     checkEqual(grantGold.code, 0, "管理端给 A 充值 100000 绑定元宝");
     const afterGrant = await api(baseUrl, "GET", `roles/${A.roleId}`, { token: A.token });
     const revisionBeforeCreate = afterGrant.data && afterGrant.data.revision;
@@ -486,7 +491,7 @@ async function preparePlayer(baseUrl, username, roleName) {
 
     // 花费归零后同一个人（已 10 级、余额 0）再建一个 —— 证明门槛真的每次现读配置
     const freeAgain = await api(baseUrl, "PATCH", "admin/runtime-params", {
-      token: adminToken,
+      token: adminToken, zoneId: ADMIN_ZONE,
       body: { guild: { createCostBindGold: 0 } },
     });
     checkEqual(freeAgain.data && freeAgain.data.guild.createCostBindGold, 0, "把建帮花费改成 0（免费）");
@@ -500,7 +505,7 @@ async function preparePlayer(baseUrl, username, roleName) {
 
     // 收尾：把门槛恢复成「免费」，后面两组（任命 / 申请限额）不关心门槛
     const gateOff = await api(baseUrl, "PATCH", "admin/runtime-params", {
-      token: adminToken,
+      token: adminToken, zoneId: ADMIN_ZONE,
       body: { guild: { createLevelMin: 0, createCostBindGold: 0 } },
     });
     checkEqual(gateOff.code, 0, "门槛复原成 0 / 0（后面两组用免费状态）");
@@ -592,7 +597,7 @@ async function preparePlayer(baseUrl, username, roleName) {
       });
       const limitAdminToken = limitAdminReg.data && limitAdminReg.data.token;
       const limitGateOff = await api(lb, "PATCH", "admin/runtime-params", {
-        token: limitAdminToken,
+        token: limitAdminToken, zoneId: ADMIN_ZONE,
         body: { guild: { createLevelMin: 0, createCostBindGold: 0 } },
       });
       check(limitGateOff.code === 0, "（独立进程）建帮门槛先归零（1 级新号才建得了帮）", JSON.stringify(limitGateOff.message));

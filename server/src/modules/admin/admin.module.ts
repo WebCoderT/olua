@@ -20,7 +20,7 @@ import { BanSchedulerService } from "./ban-scheduler.service";
  * 并用 `@ApiAdminDoc({ permissions })` 声明所需权限点（见 common/guards/permission.guard）。
  * 依赖 AuditModule：登录事件要显式留痕（写接口的留痕由拦截器负责）。
  * 依赖 ZoneModule：区服管理接口复用 ZoneService 的合并逻辑（一份实现，别处不复制）；
- * `X-Zone-Id` 的解析也在这里（`ZoneService.resolveZoneHeader`，见 #959 / #960）。
+ * 登录选区的校验也走它（`ZoneService.assertSelectable`，与 `ZoneContextGuard` 共用同一套拒绝理由）。
  * 依赖 LeaderboardModule：后台榜单与玩家侧读同一份物化快照。
  */
 @Module({

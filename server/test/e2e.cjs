@@ -74,9 +74,14 @@ async function waitForServer(baseUrl, child) {
 }
 
 /** 发一次请求，返回 { status, body }（body 是解析后的统一响应包裹） */
+/** 管理端请求所在的区（#960）：一个 e2e 进程只在一个区里干活，管理端请求统一带它 */
+const ADMIN_ZONE = 1;
+
 async function api(baseUrl, method, route, options = {}) {
   const headers = { "Content-Type": "application/json" };
   if (options.token) headers.Authorization = `Bearer ${options.token}`;
+  // 管理端单区上下文（#960）：控制台前端在请求拦截器里统一带 X-Zone-Id，测试里对等模拟
+  if (options.zoneId !== undefined) headers["X-Zone-Id"] = String(options.zoneId);
   const response = await fetch(`${baseUrl}${route}`, {
     method,
     headers,
@@ -359,6 +364,12 @@ async function runSuite(baseUrl) {
   const adminOnPlayer = await call("GET", "/api/roles");
   checkEqual(adminOnPlayer.status, 401, "无令牌调玩家接口被拒（401）");
 
+  // #960：管理端账号列表按「**在本区有角色**」筛（同一个人可能在别区有号、本区没有，
+  // 那种账号在这张表里没有可操作的东西）。所以下面要验「两个账号」就先得让第二个账号
+  // 真在本区建个号 —— 只注册不建号的账号现在是看不见的。
+  const otherRole = await call("POST", "/api/roles", { token: otherToken, body: { name: "他角", occupation: "1", sex: "1" } });
+  checkEqual(otherRole.status, 201, "第二个账号在本区建号（供管理端账号列表筛选用）");
+
   //#endregion
 
   //#region 六、管理端
@@ -372,11 +383,11 @@ async function runSuite(baseUrl) {
   checkEqual(adminRegister.status, 201, "管理员注册成功（201）");
   const adminToken = adminRegister.body.data.token;
 
-  const adminLogin = await call("POST", "/api/admin/auth/login", { body: { username: "gm001", password: "admin123" } });
+  const adminLogin = await call("POST", "/api/admin/auth/login", { body: { zoneId: ADMIN_ZONE, username: "gm001", password: "admin123" } });
   checkEqual(adminLogin.status, 200, "管理员登录返回 200");
   const adminLoginToken = adminLogin.body.data.token;
 
-  const adminMe = await call("GET", "/api/admin/auth/me", { token: adminLoginToken });
+  const adminMe = await call("GET", "/api/admin/auth/me", { token: adminLoginToken, zoneId: ADMIN_ZONE });
   checkEqual(adminMe.body.data.username, "gm001", "管理员 me 返回当前管理员");
 
   const adminNoToken = await call("GET", "/api/admin/accounts");
@@ -385,69 +396,69 @@ async function runSuite(baseUrl) {
   const adminByPlayerToken = await call("GET", "/api/admin/accounts", { token });
   checkEqual(adminByPlayerToken.status, 401, "玩家令牌调管理端被拒（401）");
 
-  const stats = await call("GET", "/api/admin/stats", { token: adminToken });
+  const stats = await call("GET", "/api/admin/stats", { token: adminToken, zoneId: ADMIN_ZONE });
   checkEqual(stats.status, 200, "概览统计可访问");
   checkEqual(stats.body.data.accountCount, 2, "账号总数 = 2");
-  checkEqual(stats.body.data.roleCount, 4, "角色总数 = 4（四个都在上限 6 之内）");
+  checkEqual(stats.body.data.roleCount, 5, "角色总数 = 5（player001 四个 + player002 一个）");
   checkEqual(stats.body.data.adminCount, 1, "管理员数 = 1");
 
-  const accounts = await call("GET", "/api/admin/accounts?page=1&size=10", { token: adminToken });
+  const accounts = await call("GET", "/api/admin/accounts?page=1&size=10", { token: adminToken, zoneId: ADMIN_ZONE });
   checkEqual(accounts.body.data.total, 2, "账号分页 total = 2");
   checkEqual(accounts.body.data.list.length, 2, "账号分页 list 长度");
   checkEqual(accounts.body.data.page, 1, "分页回显 page");
   check(typeof accounts.body.data.list[0].roleCount === "number", "账号列表带角色数");
 
-  const keywordAccounts = await call("GET", "/api/admin/accounts?keyword=player002", { token: adminToken });
+  const keywordAccounts = await call("GET", "/api/admin/accounts?keyword=player002", { token: adminToken, zoneId: ADMIN_ZONE });
   checkEqual(keywordAccounts.body.data.total, 1, "账号关键字检索生效");
 
-  const pagedAccounts = await call("GET", "/api/admin/accounts?page=2&size=1", { token: adminToken });
+  const pagedAccounts = await call("GET", "/api/admin/accounts?page=2&size=1", { token: adminToken, zoneId: ADMIN_ZONE });
   checkEqual(pagedAccounts.body.data.list.length, 1, "第二页 size=1 返回 1 条");
 
   const accountId = register.body.data.account.id;
-  const accountDetail = await call("GET", `/api/admin/accounts/${accountId}`, { token: adminToken });
+  const accountDetail = await call("GET", `/api/admin/accounts/${accountId}`, { token: adminToken, zoneId: ADMIN_ZONE });
   checkEqual(accountDetail.body.data.account.username, "player001", "账号详情返回账号信息");
   checkEqual(accountDetail.body.data.roles.length, 4, "账号详情带名下角色");
 
-  const adminRoles = await call("GET", `/api/admin/roles?accountId=${accountId}`, { token: adminToken });
+  const adminRoles = await call("GET", `/api/admin/roles?accountId=${accountId}`, { token: adminToken, zoneId: ADMIN_ZONE });
   checkEqual(adminRoles.body.data.total, 4, "按账号查角色 total = 4");
   checkEqual(adminRoles.body.data.list[0].accountName, "player001", "角色列表带账号名");
   checkEqual(adminRoles.body.data.list.filter((item) => item.online).length, 1, "角色列表带在线标记");
 
-  const roleKeyword = await call("GET", `/api/admin/roles?keyword=${role1Id}`, { token: adminToken });
+  const roleKeyword = await call("GET", `/api/admin/roles?keyword=${role1Id}`, { token: adminToken, zoneId: ADMIN_ZONE });
   checkEqual(roleKeyword.body.data.total, 1, "角色 id 关键字检索生效");
 
-  const roleDetail = await call("GET", `/api/admin/roles/${role1Id}`, { token: adminToken });
+  const roleDetail = await call("GET", `/api/admin/roles/${role1Id}`, { token: adminToken, zoneId: ADMIN_ZONE });
   checkEqual(roleDetail.body.data.name, "小明", "管理端角色详情");
   checkEqual(roleDetail.body.data.data.bag.length, 0, "管理端角色详情含完整 data（初始背包为空）");
   checkEqual(roleDetail.body.data.accountName, "player001", "管理端角色详情带账号名");
 
-  const patched = await call("PATCH", `/api/admin/roles/${role1Id}`, { token: adminToken, body: { level: 42, bindGold: 777, exp: 555, title: 3 } });
+  const patched = await call("PATCH", `/api/admin/roles/${role1Id}`, { token: adminToken, zoneId: ADMIN_ZONE, body: { level: 42, bindGold: 777, exp: 555, title: 3 } });
   checkEqual(patched.status, 200, "管理端改角色返回 200");
   checkEqual(patched.body.data.level, 42, "等级已改");
   checkEqual(patched.body.data.data.bindGold, 777, "绑定元宝已改（写进 data）");
   checkEqual(patched.body.data.data.title, 3, "称号已改");
   checkEqual(patched.body.data.data.bag.length, 0, "未编辑的背包字段原样保留");
 
-  const patchedName = await call("PATCH", `/api/admin/roles/${role1Id}`, { token: adminToken, body: { name: "改名后" } });
+  const patchedName = await call("PATCH", `/api/admin/roles/${role1Id}`, { token: adminToken, zoneId: ADMIN_ZONE, body: { name: "改名后" } });
   checkEqual(patchedName.body.data.name, "改名后", "角色名已改");
 
-  const badPatch = await call("PATCH", `/api/admin/roles/${role1Id}`, { token: adminToken, body: { level: 0 } });
+  const badPatch = await call("PATCH", `/api/admin/roles/${role1Id}`, { token: adminToken, zoneId: ADMIN_ZONE, body: { level: 0 } });
   checkEqual(badPatch.status, 400, "等级 0 被拒（400）");
 
   const playerSeesPatch = await call("GET", `/api/roles/${role1Id}`, { token });
   checkEqual(playerSeesPatch.body.data.level, 42, "客户端能读到管理端的改动");
   checkEqual(playerSeesPatch.body.data.name, "改名后", "客户端能读到管理端改的名字");
 
-  const adminSelect = await call("POST", `/api/admin/roles/${role1Id}/select`, { token: adminToken });
+  const adminSelect = await call("POST", `/api/admin/roles/${role1Id}/select`, { token: adminToken, zoneId: ADMIN_ZONE });
   checkEqual(adminSelect.status, 200, "管理端设为在线角色返回 200");
   checkEqual(adminSelect.body.data.online, true, "管理端设为在线后返回体标记在线");
   const onlineAfterAdminSelect = await call("GET", "/api/roles/online", { token });
   checkEqual(onlineAfterAdminSelect.body.data.id, role1Id, "管理端设置的在线角色对客户端生效");
 
-  const restoreOnline = await call("POST", `/api/admin/roles/${role2Id}/select`, { token: adminToken });
+  const restoreOnline = await call("POST", `/api/admin/roles/${role2Id}/select`, { token: adminToken, zoneId: ADMIN_ZONE });
   checkEqual(restoreOnline.body.data.online, true, "管理端可再次切换在线角色");
 
-  const disable = await call("PATCH", `/api/admin/accounts/${accountId}/status`, { token: adminToken, body: { status: "disabled" } });
+  const disable = await call("PATCH", `/api/admin/accounts/${accountId}/status`, { token: adminToken, zoneId: ADMIN_ZONE, body: { status: "disabled" } });
   checkEqual(disable.body.data.status, "disabled", "账号已封禁");
 
   const blockedAfterBan = await call("GET", "/api/auth/me", { token });
@@ -457,12 +468,12 @@ async function runSuite(baseUrl) {
   const blockedLogin = await call("POST", "/api/auth/login", { body: { username: "player001", password: "123456" } });
   checkEqual(blockedLogin.status, 403, "封禁账号无法登录（403）");
 
-  const enable = await call("PATCH", `/api/admin/accounts/${accountId}/status`, { token: adminToken, body: { status: "active" } });
+  const enable = await call("PATCH", `/api/admin/accounts/${accountId}/status`, { token: adminToken, zoneId: ADMIN_ZONE, body: { status: "active" } });
   checkEqual(enable.body.data.status, "active", "账号已解封");
   const afterEnable = await call("GET", "/api/auth/me", { token });
   checkEqual(afterEnable.status, 200, "解封后令牌恢复可用");
 
-  const deleteOnlineRole = await call("DELETE", `/api/admin/roles/${role2Id}`, { token: adminToken });
+  const deleteOnlineRole = await call("DELETE", `/api/admin/roles/${role2Id}`, { token: adminToken, zoneId: ADMIN_ZONE });
   checkEqual(deleteOnlineRole.status, 200, "管理端删除在线角色成功");
   checkEqual(deleteOnlineRole.body.data, null, "删除接口 data 为 null");
   const onlineAfterDelete = await call("GET", "/api/roles/online", { token });
@@ -474,22 +485,22 @@ async function runSuite(baseUrl) {
   checkEqual(listAfterDelete.body.data.length, 2, "删除后角色只剩 2 个（四个里删了在线角色与第三个）");
 
   const otherAccountId = otherLogin.body.data.account.id;
-  const deleteAccount = await call("DELETE", `/api/admin/accounts/${accountId}`, { token: adminToken });
+  const deleteAccount = await call("DELETE", `/api/admin/accounts/${accountId}`, { token: adminToken, zoneId: ADMIN_ZONE });
   checkEqual(deleteAccount.status, 200, "管理端删除账号成功");
 
-  const accountsAfterDelete = await call("GET", "/api/admin/accounts", { token: adminToken });
+  const accountsAfterDelete = await call("GET", "/api/admin/accounts", { token: adminToken, zoneId: ADMIN_ZONE });
   checkEqual(accountsAfterDelete.body.data.total, 1, "删账号后总数 = 1");
 
-  const cascadedRoles = await call("GET", `/api/admin/roles?accountId=${accountId}`, { token: adminToken });
+  const cascadedRoles = await call("GET", `/api/admin/roles?accountId=${accountId}`, { token: adminToken, zoneId: ADMIN_ZONE });
   checkEqual(cascadedRoles.body.data.total, 0, "账号下的角色被级联删除");
 
-  const accountGone = await call("GET", `/api/admin/accounts/${accountId}`, { token: adminToken });
+  const accountGone = await call("GET", `/api/admin/accounts/${accountId}`, { token: adminToken, zoneId: ADMIN_ZONE });
   checkEqual(accountGone.status, 404, "被删账号详情返回 404");
 
-  const remainingRoles = await call("GET", "/api/admin/roles", { token: adminToken });
-  checkEqual(remainingRoles.body.data.total, 0, "角色总数为 0（另一个账号没建角色）");
+  const remainingRoles = await call("GET", "/api/admin/roles", { token: adminToken, zoneId: ADMIN_ZONE });
+  checkEqual(remainingRoles.body.data.total, 1, "角色总数为 1（另一个账号的角色还在）");
 
-  const otherStillThere = await call("GET", `/api/admin/accounts/${otherAccountId}`, { token: adminToken });
+  const otherStillThere = await call("GET", `/api/admin/accounts/${otherAccountId}`, { token: adminToken, zoneId: ADMIN_ZONE });
   checkEqual(otherStillThere.status, 200, "另一个账号不受影响");
 
   //#endregion
@@ -517,19 +528,19 @@ async function runSuite(baseUrl) {
     "普通管理员只比超管少「管理管理员」",
   );
 
-  const listAdmins = await call("GET", "/api/admin/admins?page=1&size=10", { token: adminToken });
+  const listAdmins = await call("GET", "/api/admin/admins?page=1&size=10", { token: adminToken, zoneId: ADMIN_ZONE });
   checkEqual(listAdmins.status, 200, "超管可查管理员列表");
   checkEqual(listAdmins.body.data.total, 2, "管理员总数 = 2");
   checkEqual(listAdmins.body.data.page, 1, "管理员列表回显分页");
-  const superOnly = await call("GET", "/api/admin/admins?role=super_admin", { token: adminToken });
+  const superOnly = await call("GET", "/api/admin/admins?role=super_admin", { token: adminToken, zoneId: ADMIN_ZONE });
   checkEqual(superOnly.body.data.total, 1, "管理员列表可按角色筛选");
 
-  const manageByAdmin2 = await call("PATCH", `/api/admin/admins/${admin1Id}`, { token: admin2Token, body: { role: "viewer" } });
+  const manageByAdmin2 = await call("PATCH", `/api/admin/admins/${admin1Id}`, { token: admin2Token, zoneId: ADMIN_ZONE, body: { role: "viewer" } });
   checkEqual(manageByAdmin2.status, 403, "普通管理员改管理员被拒（403）");
   checkEqual(manageByAdmin2.body.code, 30006, "无权限业务码为 ADMIN_PERMISSION_DENIED");
   check(String(manageByAdmin2.body.message).includes("权限"), "无权限提示说明原因");
 
-  const toViewer = await call("PATCH", `/api/admin/admins/${admin2Id}`, { token: adminToken, body: { role: "viewer" } });
+  const toViewer = await call("PATCH", `/api/admin/admins/${admin2Id}`, { token: adminToken, zoneId: ADMIN_ZONE, body: { role: "viewer" } });
   checkEqual(toViewer.status, 200, "超管可改管理员角色");
   checkEqual(toViewer.body.data.role, "viewer", "已改为只读观察员");
   checkEqual(
@@ -539,51 +550,51 @@ async function runSuite(baseUrl) {
   );
 
   // 降权当即生效：还是同一枚旧令牌
-  checkEqual((await call("GET", "/api/admin/stats", { token: admin2Token })).status, 200, "只读观察员可看概览");
-  checkEqual((await call("GET", "/api/admin/accounts", { token: admin2Token })).status, 200, "只读观察员可看账号列表");
+  checkEqual((await call("GET", "/api/admin/stats", { token: admin2Token, zoneId: ADMIN_ZONE })).status, 200, "只读观察员可看概览");
+  checkEqual((await call("GET", "/api/admin/accounts", { token: admin2Token, zoneId: ADMIN_ZONE })).status, 200, "只读观察员可看账号列表");
   const viewerBan = await call("PATCH", `/api/admin/accounts/${otherAccountId}/status`, {
-    token: admin2Token,
+    token: admin2Token, zoneId: ADMIN_ZONE,
     body: { status: "disabled" },
   });
   checkEqual(viewerBan.status, 403, "只读观察员封号被拒（403）");
   checkEqual(viewerBan.body.code, 30006, "越权封号业务码为 30006");
-  checkEqual((await call("PATCH", "/api/admin/roles/1", { token: admin2Token, body: { level: 5 } })).status, 403, "只读观察员改角色被拒");
-  checkEqual((await call("POST", "/api/admin/roles/1/select", { token: admin2Token })).status, 403, "只读观察员切在线角色被拒");
-  checkEqual((await call("DELETE", "/api/admin/roles/1", { token: admin2Token })).status, 403, "只读观察员删角色被拒");
-  checkEqual((await call("GET", "/api/admin/admins", { token: admin2Token })).status, 403, "只读观察员查管理员列表被拒");
-  const viewerMe = await call("GET", "/api/admin/auth/me", { token: admin2Token });
+  checkEqual((await call("PATCH", "/api/admin/roles/1", { token: admin2Token, zoneId: ADMIN_ZONE, body: { level: 5 } })).status, 403, "只读观察员改角色被拒");
+  checkEqual((await call("POST", "/api/admin/roles/1/select", { token: admin2Token, zoneId: ADMIN_ZONE })).status, 403, "只读观察员切在线角色被拒");
+  checkEqual((await call("DELETE", "/api/admin/roles/1", { token: admin2Token, zoneId: ADMIN_ZONE })).status, 403, "只读观察员删角色被拒");
+  checkEqual((await call("GET", "/api/admin/admins", { token: admin2Token, zoneId: ADMIN_ZONE })).status, 403, "只读观察员查管理员列表被拒");
+  const viewerMe = await call("GET", "/api/admin/auth/me", { token: admin2Token, zoneId: ADMIN_ZONE });
   checkEqual(viewerMe.status, 200, "只读观察员可看自己的信息（无需权限点）");
   checkEqual(viewerMe.body.data.role, "viewer", "me 返回最新角色");
   checkEqual(viewerMe.body.data.permissions.length, 7, "me 返回的权限点与角色一致");
-  checkEqual((await call("PATCH", `/api/admin/accounts/${otherAccountId}/status`, { token: admin2Token, body: { status: "disabled" } })).body.code, 30006, "越权码重复确认");
+  checkEqual((await call("PATCH", `/api/admin/accounts/${otherAccountId}/status`, { token: admin2Token, zoneId: ADMIN_ZONE, body: { status: "disabled" } })).body.code, 30006, "越权码重复确认");
 
   // 最后一个启用中的超管受保护
-  const selfDemote = await call("PATCH", `/api/admin/admins/${admin1Id}`, { token: adminToken, body: { role: "admin" } });
+  const selfDemote = await call("PATCH", `/api/admin/admins/${admin1Id}`, { token: adminToken, zoneId: ADMIN_ZONE, body: { role: "admin" } });
   checkEqual(selfDemote.status, 403, "最后一个超管自降被拒（403）");
   checkEqual(selfDemote.body.code, 30007, "保护业务码为 ADMIN_PROTECTED");
   checkEqual(
-    (await call("PATCH", `/api/admin/admins/${admin1Id}`, { token: adminToken, body: { status: "disabled" } })).status,
+    (await call("PATCH", `/api/admin/admins/${admin1Id}`, { token: adminToken, zoneId: ADMIN_ZONE, body: { status: "disabled" } })).status,
     403,
     "最后一个超管停用自己被拒",
   );
-  checkEqual((await call("DELETE", `/api/admin/admins/${admin1Id}`, { token: adminToken })).status, 403, "最后一个超管删除自己被拒");
+  checkEqual((await call("DELETE", `/api/admin/admins/${admin1Id}`, { token: adminToken, zoneId: ADMIN_ZONE })).status, 403, "最后一个超管删除自己被拒");
 
   // 有第二个超管之后：自降可以，但轮到下一个「最后一个」时又被保护
-  const promote = await call("PATCH", `/api/admin/admins/${admin2Id}`, { token: adminToken, body: { role: "super_admin" } });
+  const promote = await call("PATCH", `/api/admin/admins/${admin2Id}`, { token: adminToken, zoneId: ADMIN_ZONE, body: { role: "super_admin" } });
   checkEqual(promote.body.data.role, "super_admin", "可提升为超级管理员");
-  checkEqual((await call("PATCH", `/api/admin/admins/${admin2Id}`, { token: admin2Token, body: { role: "admin" } })).status, 200, "有第二个超管后自降被允许");
+  checkEqual((await call("PATCH", `/api/admin/admins/${admin2Id}`, { token: admin2Token, zoneId: ADMIN_ZONE, body: { role: "admin" } })).status, 200, "有第二个超管后自降被允许");
   checkEqual(
-    (await call("PATCH", `/api/admin/admins/${admin1Id}`, { token: adminToken, body: { role: "viewer" } })).status,
+    (await call("PATCH", `/api/admin/admins/${admin1Id}`, { token: adminToken, zoneId: ADMIN_ZONE, body: { role: "viewer" } })).status,
     403,
     "此时 admin1 是最后一个超管，自降再次被拒",
   );
 
   // 收尾：删掉 gm002（admin1 全程仍是超管）
-  checkEqual((await call("DELETE", `/api/admin/admins/${admin2Id}`, { token: adminToken })).status, 200, "超管可删除其他管理员");
-  check(Array.isArray((await call("GET", "/api/admin/admins", { token: adminToken })).body.data.list), "管理员列表仍可读（删除后）");
-  checkEqual((await call("GET", "/api/admin/admins", { token: adminToken })).body.data.total, 1, "删除后管理员只剩 1 个");
+  checkEqual((await call("DELETE", `/api/admin/admins/${admin2Id}`, { token: adminToken, zoneId: ADMIN_ZONE })).status, 200, "超管可删除其他管理员");
+  check(Array.isArray((await call("GET", "/api/admin/admins", { token: adminToken, zoneId: ADMIN_ZONE })).body.data.list), "管理员列表仍可读（删除后）");
+  checkEqual((await call("GET", "/api/admin/admins", { token: adminToken, zoneId: ADMIN_ZONE })).body.data.total, 1, "删除后管理员只剩 1 个");
   checkEqual(
-    (await call("PATCH", `/api/admin/admins/${admin2Id}`, { token: adminToken, body: { role: "viewer" } })).status,
+    (await call("PATCH", `/api/admin/admins/${admin2Id}`, { token: adminToken, zoneId: ADMIN_ZONE, body: { role: "viewer" } })).status,
     404,
     "再改被删掉的管理员返回 404",
   );
@@ -609,7 +620,7 @@ async function runSuite(baseUrl) {
   checkEqual(activeEmpty.body.data.length, 0, "初始没有生效中的公告");
 
   const publishImportant = await call("POST", "/api/admin/announcements", {
-    token: adminToken,
+    token: adminToken, zoneId: ADMIN_ZONE,
     body: { title: "开服公告", content: "欢迎来到 olua", level: "important" },
   });
   checkEqual(publishImportant.status, 201, "发布重要公告（201）");
@@ -618,27 +629,27 @@ async function runSuite(baseUrl) {
   const importantId = publishImportant.body.data.id;
 
   const publishNormal = await call("POST", "/api/admin/announcements", {
-    token: adminToken,
+    token: adminToken, zoneId: ADMIN_ZONE,
     body: { title: "普通公告", content: "普通公告的正文", level: "normal" },
   });
   const normalId = publishNormal.body.data.id;
   checkEqual(publishNormal.body.data.level, "normal", "level 按入参落库");
 
   const publishFuture = await call("POST", "/api/admin/announcements", {
-    token: adminToken,
+    token: adminToken, zoneId: ADMIN_ZONE,
     body: { title: "未开始的公告", content: "x", startsAt: now + 3_600_000 },
   });
   const futureId = publishFuture.body.data.id;
   checkEqual(publishFuture.body.data.active, false, "还没到开始时间 → active = false");
 
   const publishExpired = await call("POST", "/api/admin/announcements", {
-    token: adminToken,
+    token: adminToken, zoneId: ADMIN_ZONE,
     body: { title: "已过期的公告", content: "x", startsAt: now - 7_200_000, endsAt: now - 3_600_000 },
   });
   checkEqual(publishExpired.body.data.active, false, "已经过了结束时间 → active = false");
 
   const publishDisabled = await call("POST", "/api/admin/announcements", {
-    token: adminToken,
+    token: adminToken, zoneId: ADMIN_ZONE,
     body: { title: "被停用的公告", content: "x", enabled: false },
   });
   const disabledId = publishDisabled.body.data.id;
@@ -657,39 +668,39 @@ async function runSuite(baseUrl) {
     "公共接口只给展示需要的字段（不含 enabled / createdBy / 时间戳）",
   );
 
-  const adminList = await call("GET", "/api/admin/announcements?size=50", { token: adminToken });
+  const adminList = await call("GET", "/api/admin/announcements?size=50", { token: adminToken, zoneId: ADMIN_ZONE });
   checkEqual(adminList.status, 200, "管理端可读公告列表");
   checkEqual(adminList.body.data.total, 5, "列表 total = 5");
   checkEqual(typeof adminList.body.data.list[0].enabled, "boolean", "管理端列表带内部字段 enabled");
-  const byActive = await call("GET", "/api/admin/announcements?active=true&size=50", { token: adminToken });
+  const byActive = await call("GET", "/api/admin/announcements?active=true&size=50", { token: adminToken, zoneId: ADMIN_ZONE });
   checkEqual(byActive.body.data.total, 2, "active=true 与玩家看到的完全一致");
   check(byActive.body.data.list.every((item) => item.active === true), "筛选结果里每条的 active 标记都为 true");
-  const byInactive = await call("GET", "/api/admin/announcements?active=false&size=50", { token: adminToken });
+  const byInactive = await call("GET", "/api/admin/announcements?active=false&size=50", { token: adminToken, zoneId: ADMIN_ZONE });
   checkEqual(byInactive.body.data.total, 3, "active=false 是补集（未开始 / 已过期 / 已停用）");
   check(byInactive.body.data.list.every((item) => item.active === false), "反筛时 active 标记都为 false");
-  checkEqual((await call("GET", "/api/admin/announcements?keyword=过期", { token: adminToken })).body.data.total, 1, "keyword 命中标题");
-  checkEqual((await call("GET", "/api/admin/announcements?level=important", { token: adminToken })).body.data.total, 1, "可按级别筛选");
-  checkEqual((await call("GET", "/api/admin/announcements?enabled=false", { token: adminToken })).body.data.total, 1, "可按启用状态筛选");
-  checkEqual((await call("GET", "/api/admin/announcements?sort=title&order=asc", { token: adminToken })).status, 200, "白名单内的排序可用");
+  checkEqual((await call("GET", "/api/admin/announcements?keyword=过期", { token: adminToken, zoneId: ADMIN_ZONE })).body.data.total, 1, "keyword 命中标题");
+  checkEqual((await call("GET", "/api/admin/announcements?level=important", { token: adminToken, zoneId: ADMIN_ZONE })).body.data.total, 1, "可按级别筛选");
+  checkEqual((await call("GET", "/api/admin/announcements?enabled=false", { token: adminToken, zoneId: ADMIN_ZONE })).body.data.total, 1, "可按启用状态筛选");
+  checkEqual((await call("GET", "/api/admin/announcements?sort=title&order=asc", { token: adminToken, zoneId: ADMIN_ZONE })).status, 200, "白名单内的排序可用");
   checkEqual(
-    (await call("GET", "/api/admin/announcements?sort=id%20DESC;DROP%20TABLE", { token: adminToken })).status,
+    (await call("GET", "/api/admin/announcements?sort=id%20DESC;DROP%20TABLE", { token: adminToken, zoneId: ADMIN_ZONE })).status,
     200,
     "白名单外的排序值静默退回默认（不报错，也不会被拼进 SQL）",
   );
 
-  const toggled = await call("PATCH", `/api/admin/announcements/${normalId}`, { token: adminToken, body: { enabled: false } });
+  const toggled = await call("PATCH", `/api/admin/announcements/${normalId}`, { token: adminToken, zoneId: ADMIN_ZONE, body: { enabled: false } });
   checkEqual(toggled.status, 200, "部分更新成功");
   checkEqual(toggled.body.data.enabled, false, "enabled 已改为 false");
   checkEqual(toggled.body.data.content, "普通公告的正文", "只传 enabled 不会清掉正文（部分更新语义）");
   checkEqual((await call("GET", "/api/announcements/active")).body.data.length, 1, "停用后生效中的只剩 1 条");
 
-  const badRange = await call("PATCH", `/api/admin/announcements/${futureId}`, { token: adminToken, body: { endsAt: now + 1000 } });
+  const badRange = await call("PATCH", `/api/admin/announcements/${futureId}`, { token: adminToken, zoneId: ADMIN_ZONE, body: { endsAt: now + 1000 } });
   checkEqual(badRange.status, 400, "结束时间早于开始时间被拒（跨字段校验）");
   checkEqual(badRange.body.code, 50002, "时间窗业务码 50002");
   checkEqual(
     (
       await call("POST", "/api/admin/announcements", {
-        token: adminToken,
+        token: adminToken, zoneId: ADMIN_ZONE,
         body: { title: "t", content: "c", startsAt: now + 10_000, endsAt: now + 5_000 },
       })
     ).body.code,
@@ -697,12 +708,12 @@ async function runSuite(baseUrl) {
     "创建时同样校验时间窗",
   );
   checkEqual(
-    (await call("PATCH", `/api/admin/announcements/${futureId}`, { token: adminToken, body: { startsAt: null } })).body.data.active,
+    (await call("PATCH", `/api/admin/announcements/${futureId}`, { token: adminToken, zoneId: ADMIN_ZONE, body: { startsAt: null } })).body.data.active,
     true,
     "startsAt 传 null = 改为立即生效",
   );
-  checkEqual((await call("POST", "/api/admin/announcements", { token: adminToken, body: { title: "", content: "c" } })).status, 400, "空标题被拒");
-  checkEqual((await call("POST", "/api/admin/announcements", { token: adminToken, body: { title: "t", content: "" } })).status, 400, "空正文被拒");
+  checkEqual((await call("POST", "/api/admin/announcements", { token: adminToken, zoneId: ADMIN_ZONE, body: { title: "", content: "c" } })).status, 400, "空标题被拒");
+  checkEqual((await call("POST", "/api/admin/announcements", { token: adminToken, zoneId: ADMIN_ZONE, body: { title: "t", content: "" } })).status, 400, "空正文被拒");
 
   // —— 权限：观察员可读不可写 ——
   const annViewer = await call("POST", "/api/admin/auth/register", {
@@ -711,25 +722,25 @@ async function runSuite(baseUrl) {
   const annViewerId = annViewer.body.data.admin.id;
   const annViewerToken = annViewer.body.data.token;
   checkEqual(
-    (await call("PATCH", `/api/admin/admins/${annViewerId}`, { token: adminToken, body: { role: "viewer" } })).status,
+    (await call("PATCH", `/api/admin/admins/${annViewerId}`, { token: adminToken, zoneId: ADMIN_ZONE, body: { role: "viewer" } })).status,
     200,
     "把 gm003 降为只读观察员",
   );
   checkEqual(
-    (await call("GET", "/api/admin/announcements", { token: annViewerToken })).status,
+    (await call("GET", "/api/admin/announcements", { token: annViewerToken, zoneId: ADMIN_ZONE })).status,
     200,
     "只读观察员可看公告列表（announcement:read）",
   );
-  const viewerPublish = await call("POST", "/api/admin/announcements", { token: annViewerToken, body: { title: "x", content: "y" } });
+  const viewerPublish = await call("POST", "/api/admin/announcements", { token: annViewerToken, zoneId: ADMIN_ZONE, body: { title: "x", content: "y" } });
   checkEqual(viewerPublish.status, 403, "只读观察员发公告被拒（403）");
   checkEqual(viewerPublish.body.code, 30006, "越权业务码 30006");
   checkEqual(
-    (await call("PATCH", `/api/admin/announcements/${importantId}`, { token: annViewerToken, body: { enabled: false } })).status,
+    (await call("PATCH", `/api/admin/announcements/${importantId}`, { token: annViewerToken, zoneId: ADMIN_ZONE, body: { enabled: false } })).status,
     403,
     "只读观察员编辑公告被拒",
   );
   checkEqual(
-    (await call("DELETE", `/api/admin/announcements/${importantId}`, { token: annViewerToken })).status,
+    (await call("DELETE", `/api/admin/announcements/${importantId}`, { token: annViewerToken, zoneId: ADMIN_ZONE })).status,
     403,
     "只读观察员删公告被拒",
   );
@@ -737,15 +748,15 @@ async function runSuite(baseUrl) {
   checkEqual((await call("GET", "/api/admin/announcements")).status, 401, "未登录读管理端公告列表被拒（401）");
 
   // —— 删除（放在审计断言之前：审计是写操作的**结果**，得先发生） ——
-  checkEqual((await call("DELETE", `/api/admin/announcements/${disabledId}`, { token: adminToken })).status, 200, "删除公告成功");
+  checkEqual((await call("DELETE", `/api/admin/announcements/${disabledId}`, { token: adminToken, zoneId: ADMIN_ZONE })).status, 200, "删除公告成功");
   checkEqual(
-    (await call("DELETE", `/api/admin/announcements/${disabledId}`, { token: adminToken })).body.code,
+    (await call("DELETE", `/api/admin/announcements/${disabledId}`, { token: adminToken, zoneId: ADMIN_ZONE })).body.code,
     50001,
     "重复删除返回 50001（公告不存在）",
   );
 
   // —— 审计留痕：动作取自 operationId，目标名按 targetType 关联回来 ——
-  const annAudit = await call("GET", "/api/admin/audit-logs?targetType=announcement&size=50", { token: adminToken });
+  const annAudit = await call("GET", "/api/admin/audit-logs?targetType=announcement&size=50", { token: adminToken, zoneId: ADMIN_ZONE });
   checkEqual(annAudit.status, 200, "可按 announcement 筛审计日志");
   check(annAudit.body.data.total >= 5, "公告写操作已自动留痕");
   checkEqual(annAudit.body.data.list[0].targetType, "announcement", "审计目标类型为 announcement");
@@ -757,7 +768,7 @@ async function runSuite(baseUrl) {
     null,
     "目标已删的审计记录 targetName 退回 null（targetId 仍在）",
   );
-  checkEqual((await call("DELETE", `/api/admin/admins/${annViewerId}`, { token: adminToken })).status, 200, "清理：删除 gm003");
+  checkEqual((await call("DELETE", `/api/admin/admins/${annViewerId}`, { token: adminToken, zoneId: ADMIN_ZONE })).status, 200, "清理：删除 gm003");
 
   //#endregion
 }

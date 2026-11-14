@@ -128,9 +128,14 @@ async function startServer(dbPath) {
   throw new Error("等待服务启动超时");
 }
 
+/** 管理端请求所在的区（#960）：一个 e2e 进程只在一个区里干活，管理端请求统一带它 */
+const ADMIN_ZONE = 1;
+
 async function api(baseUrl, method, route, options = {}) {
   const headers = { "Content-Type": "application/json" };
   if (options.token) headers.Authorization = `Bearer ${options.token}`;
+  // 管理端单区上下文（#960）：控制台前端在请求拦截器里统一带 X-Zone-Id，测试里对等模拟
+  if (options.zoneId !== undefined) headers["X-Zone-Id"] = String(options.zoneId);
   const response = await fetch(`${baseUrl}/api/${route}`, {
     method,
     headers,
@@ -218,7 +223,7 @@ function connect(url) {
     group("准备：管理员、玩家、角色与实时连接");
 
     await api(baseUrl, "POST", "admin/auth/register", { body: { username: "map_admin", password: "pass1234", registerCode: ADMIN_CODE } });
-    const adminLogin = await api(baseUrl, "POST", "admin/auth/login", { body: { username: "map_admin", password: "pass1234" } });
+    const adminLogin = await api(baseUrl, "POST", "admin/auth/login", { body: { zoneId: ADMIN_ZONE, username: "map_admin", password: "pass1234" } });
     const adminToken = adminLogin.data && adminLogin.data.token;
     check(!!adminToken, "准备：管理员已登录", adminLogin.message);
 
@@ -321,7 +326,7 @@ function connect(url) {
     group("四、运营把人摆进高级图 / 事后调高门槛：已经在那里的低等级角色永远放行");
     {
       // 运营摆位：PATCH onMap 同时承认这个位置（mapAt），否则「门槛认为他还在旧图」
-      const placed = await api(baseUrl, "PATCH", `admin/roles/${roleId}`, { token: adminToken, body: { onMap: "2" } });
+      const placed = await api(baseUrl, "PATCH", `admin/roles/${roleId}`, { token: adminToken, zoneId: ADMIN_ZONE, body: { onMap: "2" } });
       check(placed.code === 0, "运营把 1 级角色摆到王城（PATCH onMap=2）", placed.message);
       const placedData = await roleData();
       checkEqual(placedData.mapAt, "2", "摆位同时写了服务端位置：mapAt = 2");
@@ -330,10 +335,10 @@ function connect(url) {
       check(!!joined && joined.mapId === "2", "1 级角色进王城成功（位置与目标一致 → 不拦）");
 
       // 运营再把门槛调高：站在里面的人重连进来仍然不拦（#573 的教训）
-      const mapTwo = await api(baseUrl, "GET", "admin/maps/2", { token: adminToken });
+      const mapTwo = await api(baseUrl, "GET", "admin/maps/2", { token: adminToken, zoneId: ADMIN_ZONE });
       const config = mapTwo.data;
       const raised = await api(baseUrl, "PATCH", "admin/maps/2", {
-        token: adminToken,
+        token: adminToken, zoneId: ADMIN_ZONE,
         body: { label: config.label, type: config.type, level: 99, combat: config.combat, soulOfWar: config.soulOfWar },
       });
       check(raised.code === 0, "运营把王城进入等级调到 99", raised.message);

@@ -150,9 +150,14 @@ async function stopServer(server) {
   }
 }
 
+/** 管理端请求所在的区（#960）：一个 e2e 进程只在一个区里干活，管理端请求统一带它 */
+const ADMIN_ZONE = 1;
+
 async function api(baseUrl, method, route, options = {}) {
   const headers = { "Content-Type": "application/json" };
   if (options.token) headers.Authorization = `Bearer ${options.token}`;
+  // 管理端单区上下文（#960）：控制台前端在请求拦截器里统一带 X-Zone-Id，测试里对等模拟
+  if (options.zoneId !== undefined) headers["X-Zone-Id"] = String(options.zoneId);
   const response = await fetch(`${baseUrl}/api/${route}`, {
     method,
     headers,
@@ -191,19 +196,19 @@ async function api(baseUrl, method, route, options = {}) {
 
     const readRole = async () => (await api(baseUrl, "GET", `roles/${roleId}`, { token })).data;
     const patchRole = async (body, label) => {
-      const result = await api(baseUrl, "PATCH", `admin/roles/${roleId}`, { token: adminToken, body });
+      const result = await api(baseUrl, "PATCH", `admin/roles/${roleId}`, { token: adminToken, zoneId: ADMIN_ZONE, body });
       check(result.code === 0, `准备：${label}`, result.message);
       return result;
     };
     const patchScalar = async (key, value) => {
-      const result = await api(baseUrl, "PATCH", `admin/growth-scalars/${key}`, { token: adminToken, body: { value } });
+      const result = await api(baseUrl, "PATCH", `admin/growth-scalars/${key}`, { token: adminToken, zoneId: ADMIN_ZONE, body: { value } });
       check(result.code === 0, `准备：把 ${key} 改成 ${value}`, result.message);
       return result;
     };
     /** 发一封带经验的邮件并领取（发奖路径的入口：admin 补发 → 玩家 claim） */
     const grantExpByMail = async (exp) => {
       const sent = await api(baseUrl, "POST", `admin/game-mail/roles/${roleId}`, {
-        token: adminToken,
+        token: adminToken, zoneId: ADMIN_ZONE,
         body: { channel: "reward", title: "升级测试", body: "经验附件", exp },
       });
       checkEqual(sent.code, 0, `发一封带 ${exp} 经验的补发邮件`, sent.message);

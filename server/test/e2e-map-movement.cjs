@@ -124,9 +124,14 @@ async function startServer(dbPath) {
   throw new Error("等待服务启动超时");
 }
 
+/** 管理端请求所在的区（#960）：一个 e2e 进程只在一个区里干活，管理端请求统一带它 */
+const ADMIN_ZONE = 1;
+
 async function api(baseUrl, method, route, options = {}) {
   const headers = { "Content-Type": "application/json" };
   if (options.token) headers.Authorization = `Bearer ${options.token}`;
+  // 管理端单区上下文（#960）：控制台前端在请求拦截器里统一带 X-Zone-Id，测试里对等模拟
+  if (options.zoneId !== undefined) headers["X-Zone-Id"] = String(options.zoneId);
   const response = await fetch(`${baseUrl}/api/${route}`, {
     method,
     headers,
@@ -233,12 +238,12 @@ function pickBox(dbPath) {
     });
     const adminToken = adminReg.body?.data?.token;
     check(!!adminToken, "准备：管理员账号注册成功");
-    const patchMovement = (body) => api(baseUrl, "PATCH", "admin/runtime-params/movement", { token: adminToken, body });
+    const patchMovement = (body) => api(baseUrl, "PATCH", "admin/runtime-params/movement", { token: adminToken, zoneId: ADMIN_ZONE, body });
     //#endregion
 
     //#region 一、配置口
     group("一、配置口：出厂 log、能热切、容差 < 1 被拒");
-    const initial = await api(baseUrl, "GET", "admin/runtime-params/movement", { token: adminToken });
+    const initial = await api(baseUrl, "GET", "admin/runtime-params/movement", { token: adminToken, zoneId: ADMIN_ZONE });
     check(initial.body?.code === 0, "GET /admin/runtime-params/movement 通");
     checkEqual(initial.body?.data?.mode, "log", "出厂档位是 log（跑一周看误伤率再切 enforce）");
     check(Number(initial.body?.data?.maxSpeed) > 0, "出厂就带速度上限（具体 px/s 是运营数据，不判）", String(initial.body?.data?.maxSpeed));
@@ -382,19 +387,19 @@ function pickBox(dbPath) {
 
     //#region 八、别组参数不受影响
     group("八、改位移校验不会顺手清掉别的分组（整行 UPDATE 的纪律）");
-    const dropBefore = await api(baseUrl, "GET", "admin/runtime-params", { token: adminToken });
+    const dropBefore = await api(baseUrl, "GET", "admin/runtime-params", { token: adminToken, zoneId: ADMIN_ZONE });
     await patchMovement({ maxSpeed: 500 });
-    const dropAfter = await api(baseUrl, "GET", "admin/runtime-params", { token: adminToken });
+    const dropAfter = await api(baseUrl, "GET", "admin/runtime-params", { token: adminToken, zoneId: ADMIN_ZONE });
     checkEqual(
       JSON.stringify(dropAfter.body?.data?.drop),
       JSON.stringify(dropBefore.body?.data?.drop),
       "改 movement 之后 drop 分组原样（没被写成 {}）",
     );
-    const aiBefore = await api(baseUrl, "GET", "admin/runtime-params/monster-ai", { token: adminToken });
-    await api(baseUrl, "PATCH", "admin/runtime-params", { token: adminToken, body: { guild: { nameMin: 2 } } });
-    const aiAfter = await api(baseUrl, "GET", "admin/runtime-params/monster-ai", { token: adminToken });
+    const aiBefore = await api(baseUrl, "GET", "admin/runtime-params/monster-ai", { token: adminToken, zoneId: ADMIN_ZONE });
+    await api(baseUrl, "PATCH", "admin/runtime-params", { token: adminToken, zoneId: ADMIN_ZONE, body: { guild: { nameMin: 2 } } });
+    const aiAfter = await api(baseUrl, "GET", "admin/runtime-params/monster-ai", { token: adminToken, zoneId: ADMIN_ZONE });
     checkEqual(JSON.stringify(aiAfter.body?.data), JSON.stringify(aiBefore.body?.data), "改三组参数之后 monster_ai 原样（movement 同理）");
-    const moveAfter = await api(baseUrl, "GET", "admin/runtime-params/movement", { token: adminToken });
+    const moveAfter = await api(baseUrl, "GET", "admin/runtime-params/movement", { token: adminToken, zoneId: ADMIN_ZONE });
     checkEqual(moveAfter.body?.data?.maxSpeed, 500, "movement 也原样留在库里");
     //#endregion
   } finally {

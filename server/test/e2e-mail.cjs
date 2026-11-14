@@ -112,9 +112,14 @@ async function startServer(env) {
 }
 
 /** 发一次请求，返回 { status, body }（body 是唯一包裹体） */
+/** 管理端请求所在的区（#960）：一个 e2e 进程只在一个区里干活，管理端请求统一带它 */
+const ADMIN_ZONE = 1;
+
 async function api(baseUrl, method, route, options = {}) {
   const headers = { "Content-Type": "application/json" };
   if (options.token) headers.Authorization = `Bearer ${options.token}`;
+  // 管理端单区上下文（#960）：控制台前端在请求拦截器里统一带 X-Zone-Id，测试里对等模拟
+  if (options.zoneId !== undefined) headers["X-Zone-Id"] = String(options.zoneId);
   const response = await fetch(`${baseUrl}${route}`, {
     method,
     headers,
@@ -148,7 +153,7 @@ async function registerAdmin(baseUrl, username, password) {
     body: { username, password, registerCode: ADMIN_CODE },
   });
   check(Boolean(registered.body?.data), `注册管理员 ${username}`);
-  const login = await api(baseUrl, "POST", "/api/admin/auth/login", { body: { username, password } });
+  const login = await api(baseUrl, "POST", "/api/admin/auth/login", { body: { zoneId: ADMIN_ZONE, username, password } });
   check(Boolean(login.body?.data?.token), `登录管理员 ${username}`);
   return login.body?.data?.token;
 }
@@ -310,11 +315,11 @@ async function runEnabledSuite() {
     const admins = await api(base, "GET", "/api/admin/admins", { token });
     const viewerRow = admins.body?.data?.list?.find((item) => item.username === "mailviewer");
     await api(base, "PATCH", `/api/admin/admins/${viewerRow.id}`, { token, body: { role: "viewer" } });
-    const viewerMails = await api(base, "GET", "/api/admin/mails", { token: viewerToken });
+    const viewerMails = await api(base, "GET", "/api/admin/mails", { token: viewerToken, zoneId: ADMIN_ZONE });
     checkEqual(viewerMails.status, 403, "只读观察员看不了邮件投递记录（含玩家邮箱，属个人信息）");
     checkEqual(viewerMails.body?.code, 30006, "拒绝码是「权限不足」30006");
     const viewerSend = await api(base, "POST", "/api/admin/mails", {
-      token: viewerToken,
+      token: viewerToken, zoneId: ADMIN_ZONE,
       body: { to: "x@example.com", templateKey: "custom", subject: "a", body: "b" },
     });
     checkEqual(viewerSend.status, 403, "只读观察员更不能发信");

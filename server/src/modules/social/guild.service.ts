@@ -422,20 +422,26 @@ export class GuildService {
 
   //#region 管理端
 
-  /** 管理端列表：暂时跨区（#960 接 `X-Zone-Id` 之后改成只看当前区） */
-  adminList(): AdminGuildDto[] {
-    return this.guilds.listAll().map((row) => AdminGuildDto.fromAdmin(row));
+  /**
+   * 管理端列表：**只看当前区**（#960）
+   *
+   * 帮会本来就带区（`guilds.zone_id`，见 #958），所以管理端的「第 3 页」必须指本区第 3 页。
+   * 名字仍然全局唯一 —— 别区有个同名帮会时，改名会撞 50102，那是刻意的（见建表注释）。
+   */
+  adminList(zoneId: number): AdminGuildDto[] {
+    return this.guilds.listByZone(zoneId).map((row) => AdminGuildDto.fromAdmin(row));
   }
 
-  adminDetail(id: string): AdminGuildDetailDto {
-    const row = this.guilds.findListRowAnyZone(id);
+  /** 详情：别区的帮会 id 一律 404（不是 403 —— 403 会泄露「这个 id 存在」） */
+  adminDetail(zoneId: number, id: string): AdminGuildDetailDto {
+    const row = this.guilds.findListRow(zoneId, id);
     if (!row) throw BizException.notFound(BizCode.GUILD_NOT_FOUND, "帮会不存在");
     return AdminGuildDetailDto.fromDetail(row, this.guilds.members(id));
   }
 
   /** 改帮会（名字 / 公告）：名字仍要全局唯一（排除自己） */
-  adminUpdate(id: string, dto: AdminUpdateGuildDto): AdminGuildDetailDto {
-    const guild = this.guilds.findByIdAnyZone(id);
+  adminUpdate(zoneId: number, id: string, dto: AdminUpdateGuildDto): AdminGuildDetailDto {
+    const guild = this.guilds.findById(zoneId, id);
     if (!guild) throw BizException.notFound(BizCode.GUILD_NOT_FOUND, "帮会不存在");
     const now = Date.now();
     if (dto.name !== undefined) {
@@ -452,12 +458,12 @@ export class GuildService {
       this.assertNotice(notice);
       this.guilds.updateNotice(id, notice, now);
     }
-    return this.adminDetail(id);
+    return this.adminDetail(zoneId, id);
   }
 
   /** 强制解散（运营手段：违规帮会名 / 组织性刷资源等） */
-  adminRemove(id: string): void {
-    const guild = this.guilds.findByIdAnyZone(id);
+  adminRemove(zoneId: number, id: string): void {
+    const guild = this.guilds.findById(zoneId, id);
     if (!guild) throw BizException.notFound(BizCode.GUILD_NOT_FOUND, "帮会不存在");
     this.guilds.remove(id);
     this.logger.log(`帮会被管理员强制解散：${guild.name}（${guild.id}）`);

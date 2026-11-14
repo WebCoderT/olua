@@ -1,4 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
+import { Type } from "class-transformer";
 import { IsOptional, IsString, Length, Matches } from "class-validator";
 
 /** 管理端注册入参（是否需要注册码由服务端 ADMIN_REGISTER_CODE 决定） */
@@ -30,4 +31,21 @@ export class AdminLoginDto {
   @IsString({ message: "密码必须是字符串" })
   @Length(1, 64, { message: "请输入密码" })
   password: string;
+
+  /**
+   * 登录后进入哪个区（#960）
+   *
+   * **必填**：管理端一次只在一个区里干活，登录时就定下来（之后顶栏可切）。
+   * 可选区清单走 `GET /admin/auth/zones`（公开，登录页先拉它）。
+   */
+  @ApiPropertyOptional({
+    description:
+      "登录后所在的区服 id（可选清单见 GET /admin/auth/zones）。**必填，但校验不在这里**：" +
+      "缺失 / 非整数 / 区不存在 / 区已合并统一由 `resolveZoneId` 回 400 `ZONE_REQUIRED(50029)`，" +
+      "四种理由对客户端是同一句话（选一个区服）。",
+    example: 1,
+  })
+  @IsOptional()
+  @Type(() => Number)
+  zoneId?: number;
 }

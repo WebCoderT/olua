@@ -38,6 +38,13 @@ export class AdminDto {
   @ApiProperty({ description: "最近登录时间（毫秒，从未登录为 null）", type: "number", nullable: true })
   lastLoginAt: number | null;
 
+  @ApiProperty({
+    description: "上次作业的区（#960：登录页下拉的默认值；换浏览器也一致。不参与鉴权）",
+    type: "number",
+    nullable: true,
+  })
+  lastZoneId: number | null;
+
   static from(row: AdminRow): AdminDto {
     const dto = new AdminDto();
     const permissions = permissionsOfRole(row.role);
@@ -50,6 +57,7 @@ export class AdminDto {
     dto.permissions = permissions;
     dto.createdAt = row.created_at;
     dto.lastLoginAt = row.last_login_at;
+    dto.lastZoneId = row.last_zone_id;
     return dto;
   }
 }

@@ -118,9 +118,14 @@ async function startServer(dbPath) {
 }
 
 /** 发一次请求，返回唯一包裹体（code / message / data） */
+/** 管理端请求所在的区（#960）：一个 e2e 进程只在一个区里干活，管理端请求统一带它 */
+const ADMIN_ZONE = 1;
+
 async function api(baseUrl, method, route, options = {}) {
   const headers = { "Content-Type": "application/json" };
   if (options.token) headers.Authorization = `Bearer ${options.token}`;
+  // 管理端单区上下文（#960）：控制台前端在请求拦截器里统一带 X-Zone-Id，测试里对等模拟
+  if (options.zoneId !== undefined) headers["X-Zone-Id"] = String(options.zoneId);
   const response = await fetch(`${baseUrl}/api/${route}`, {
     method,
     headers,
@@ -162,7 +167,7 @@ function cellAt(bag, row, col) {
 /** 注册并登录一个管理员（配置读写要 `gameConfig:*`） */
 async function registerAdmin(baseUrl, username, password) {
   await api(baseUrl, "POST", "admin/auth/register", { body: { username, password, registerCode: ADMIN_CODE } });
-  const login = await api(baseUrl, "POST", "admin/auth/login", { body: { username, password } });
+  const login = await api(baseUrl, "POST", "admin/auth/login", { body: { zoneId: ADMIN_ZONE, username, password } });
   return login.data && login.data.token;
 }
 
@@ -218,14 +223,14 @@ const expectedRangeOf = (index) => ({
      * 所以要同时验两个格子（比如「A 被拒之后 A 还在、B 也能用」）必须一次塞齐。
      */
     const seedBag = async (cells) => {
-      const result = await api(baseUrl, "PATCH", `admin/roles/${roleId}`, { token: adminToken, body: { bag: cells } });
+      const result = await api(baseUrl, "PATCH", `admin/roles/${roleId}`, { token: adminToken, zoneId: ADMIN_ZONE, body: { bag: cells } });
       check(result.code === 0, `准备：管理端注入 ${cells.length} 格物品`, result.message);
       return result;
     };
 
     /** 把角色摆到某级（卷轴的判定全看等级，e2e 里只能从管理端摆位） */
     const patchRole = async (body) => {
-      const result = await api(baseUrl, "PATCH", `admin/roles/${roleId}`, { token: adminToken, body });
+      const result = await api(baseUrl, "PATCH", `admin/roles/${roleId}`, { token: adminToken, zoneId: ADMIN_ZONE, body });
       check(result.code === 0, `准备：管理端改角色 ${JSON.stringify(body)}`, result.message);
       return result;
     };
@@ -252,19 +257,19 @@ const expectedRangeOf = (index) => ({
     check(rangeOk, `区间切法 = LvN 的 (N-1)×1000 ~ N×1000-1（按卷号派生，不是逐行手填；共 ${standardIds.length} 卷）`);
     checkEqual(Number(LV2.minLevel), 1000, "Lv2 的起点正好是 Lv1 用完之后的那一级（1000）");
 
-    const listed = await api(baseUrl, "GET", "admin/level-scrolls?page=1&size=100", { token: adminToken });
+    const listed = await api(baseUrl, "GET", "admin/level-scrolls?page=1&size=100", { token: adminToken, zoneId: ADMIN_ZONE });
     checkEqual(listed.code, 0, "管理端能读升级卷轴列表", listed.message);
     checkEqual(listed.data.total, SEED_SCROLLS.length, "列表总数与快照行数一致");
     checkEqual(listed.data.list[0].id, "level_scroll_1", "列表按等级下限升序（第一卷在最前）");
     checkEqual(listed.data.list[0].label, SEED_SCROLL_BY_ID.level_scroll_1.label, "名称取自库（不是代码里另写一份）");
     checkEqual(listed.data.list[0].icon, SEED_SCROLL_BY_ID.level_scroll_1.icon, "图标路径取自库");
     const keywordHit = await api(baseUrl, "GET", "admin/level-scrolls?page=1&size=100&keyword=level_scroll_1", {
-      token: adminToken,
+      token: adminToken, zoneId: ADMIN_ZONE,
     });
     checkEqual(keywordHit.data.total, 1, "关键字精确匹配 id（level_scroll_1 只命中一卷，不是前缀模糊到 1/2…）");
     // 管理端「按最高档续开一卷」靠这条取全表最高档（不从当前页凑 —— 卷轴能开到上万卷）
     const top = await api(baseUrl, "GET", "admin/level-scrolls?page=1&size=1&sort=minLevel&order=desc", {
-      token: adminToken,
+      token: adminToken, zoneId: ADMIN_ZONE,
     });
     checkEqual(top.code, 0, "支持 size=1 + 指定排序（排序键在白名单里）", top.message);
     checkEqual(top.data.list.length, 1, "只回一行");
@@ -373,7 +378,7 @@ const expectedRangeOf = (index) => ({
 
     group("五、新建（只填等级区间）");
     const createdNext = await api(baseUrl, "POST", "admin/level-scrolls", {
-      token: adminToken,
+      token: adminToken, zoneId: ADMIN_ZONE,
       body: { minLevel: 7000, maxLevel: 7999 },
     });
     checkEqual(createdNext.code, 0, "只填区间就能建", createdNext.message);
@@ -385,30 +390,30 @@ const expectedRangeOf = (index) => ({
     checkEqual(createdNext.data.sellPrice, 0, "售价缺省 0（不可出售）");
 
     const duplicate = await api(baseUrl, "POST", "admin/level-scrolls", {
-      token: adminToken,
+      token: adminToken, zoneId: ADMIN_ZONE,
       body: { minLevel: 7000, maxLevel: 7999 },
     });
     checkEqual(duplicate.code, 50044, "同区间再建一次 → 50044（派生的 id 撞了）");
     const reversed = await api(baseUrl, "POST", "admin/level-scrolls", {
-      token: adminToken,
+      token: adminToken, zoneId: ADMIN_ZONE,
       body: { minLevel: 3000, maxLevel: 2000 },
     });
     checkEqual(reversed.code, 40000, "下限 > 上限 → 40000（参数校验）");
     const badId = await api(baseUrl, "POST", "admin/level-scrolls", {
-      token: adminToken,
+      token: adminToken, zoneId: ADMIN_ZONE,
       body: { id: "Scroll-BAD", minLevel: 8000, maxLevel: 8999 },
     });
     checkEqual(badId.code, 40000, "id 大写 / 连字符 → 40000（只许小写字母数字下划线）");
 
     const custom = await api(baseUrl, "POST", "admin/level-scrolls", {
-      token: adminToken,
+      token: adminToken, zoneId: ADMIN_ZONE,
       body: { minLevel: 500, maxLevel: 800, label: "残缺卷轴" },
     });
     checkEqual(custom.code, 0, "区间不按 1000 切也能建（运营可以开怪卷）", custom.message);
     checkEqual(custom.data.id, "level_scroll_500_800", "非标准区间 → id 用「下限_上限」");
     checkEqual(custom.data.label, "残缺卷轴", "指定了名称就用指定的");
 
-    const listAfterCreate = await api(baseUrl, "GET", "admin/level-scrolls?page=1&size=100", { token: adminToken });
+    const listAfterCreate = await api(baseUrl, "GET", "admin/level-scrolls?page=1&size=100", { token: adminToken, zoneId: ADMIN_ZONE });
     checkEqual(listAfterCreate.data.total, SEED_SCROLLS.length + 2, "列表多了两条（Lv8 + 怪卷）");
     const minLevels = listAfterCreate.data.list.map((item) => Number(item.minLevel));
     check(
@@ -417,7 +422,7 @@ const expectedRangeOf = (index) => ({
       minLevels.join(","),
     );
     const topAfterCreate = await api(baseUrl, "GET", "admin/level-scrolls?page=1&size=1&sort=minLevel&order=desc", {
-      token: adminToken,
+      token: adminToken, zoneId: ADMIN_ZONE,
     });
     checkEqual(topAfterCreate.data.list[0].id, "level_scroll_8", "新建的 Lv8 成了全表最高档（「续开」下一次从 8000 起）");
 
@@ -431,7 +436,7 @@ const expectedRangeOf = (index) => ({
     const beforePatch8 = await api(baseUrl, "POST", `roles/${roleId}/level-scroll-use`, { token, body: { row: 0, col: 3, revision: await revOf(baseUrl, roleId, token) } });
     checkEqual(beforePatch8.code, 20025, `当前 ${levelNow} 级用 Lv8（7000~7999）→ 20025`);
     const patched8 = await api(baseUrl, "PATCH", "admin/level-scrolls/level_scroll_8", {
-      token: adminToken,
+      token: adminToken, zoneId: ADMIN_ZONE,
       body: { minLevel: 1000, maxLevel: 1999 },
     });
     checkEqual(patched8.code, 0, "把 Lv8 的区间改到 1000~1999", patched8.message);
@@ -442,19 +447,19 @@ const expectedRangeOf = (index) => ({
 
     await seedBag([{ row: 0, col: 4, id: "level_scroll_8", count: 2 }]);
     const patched8Back = await api(baseUrl, "PATCH", "admin/level-scrolls/level_scroll_8", {
-      token: adminToken,
+      token: adminToken, zoneId: ADMIN_ZONE,
       body: { minLevel: 7000, maxLevel: 7999 },
     });
     checkEqual(patched8Back.code, 0, "把区间改回去（7000~7999）", patched8Back.message);
     const useAfterPatchBack = await api(baseUrl, "POST", `roles/${roleId}/level-scroll-use`, { token, body: { row: 0, col: 4, revision: await revOf(baseUrl, roleId, token) } });
     checkEqual(useAfterPatchBack.code, 20025, "改回去之后立刻又用不了 → 20025");
     const patchReversed = await api(baseUrl, "PATCH", "admin/level-scrolls/level_scroll_8", {
-      token: adminToken,
+      token: adminToken, zoneId: ADMIN_ZONE,
       body: { minLevel: 9000 },
     });
     checkEqual(patchReversed.code, 40000, "只改下限把区间改反 → 40000（按合成后的结果校验）");
     const patchMissing = await api(baseUrl, "PATCH", "admin/level-scrolls/level_scroll_not_exists", {
-      token: adminToken,
+      token: adminToken, zoneId: ADMIN_ZONE,
       body: { minLevel: 1 },
     });
     checkEqual(patchMissing.code, 50043, "改不存在的行 → 50043");
@@ -466,7 +471,7 @@ const expectedRangeOf = (index) => ({
     group("七、到了等级上限就不给升（20026）");
     const capScrollId = "level_scroll_1_" + CAP_LEVEL;
     const capScroll = await api(baseUrl, "POST", "admin/level-scrolls", {
-      token: adminToken,
+      token: adminToken, zoneId: ADMIN_ZONE,
       body: { minLevel: 1, maxLevel: CAP_LEVEL, label: "通天卷轴" },
     });
     checkEqual(capScroll.code, 0, "建一卷覆盖到等级上限的（minLevel 1 ~ roleMaxLevel）", capScroll.message);
@@ -487,10 +492,10 @@ const expectedRangeOf = (index) => ({
     //#region 八、删除
 
     group("八、删除（只删配置，不碰存档）");
-    const removed = await api(baseUrl, "DELETE", "admin/level-scrolls/level_scroll_8", { token: adminToken });
+    const removed = await api(baseUrl, "DELETE", "admin/level-scrolls/level_scroll_8", { token: adminToken, zoneId: ADMIN_ZONE });
     checkEqual(removed.code, 0, "删掉 Lv8", removed.message);
     checkEqual(Number(removed.data.removed), 1, "实际删了 1 行");
-    const removeAgain = await api(baseUrl, "DELETE", "admin/level-scrolls/level_scroll_8", { token: adminToken });
+    const removeAgain = await api(baseUrl, "DELETE", "admin/level-scrolls/level_scroll_8", { token: adminToken, zoneId: ADMIN_ZONE });
     checkEqual(removeAgain.code, 50043, "再删一次 → 50043（已经没了）");
     const useRemoved = await api(baseUrl, "POST", `roles/${roleId}/level-scroll-use`, { token, body: { row: 0, col: 4, revision: await revOf(baseUrl, roleId, token) } });
     checkEqual(useRemoved.code, 20024, "配置删了之后再用那个格子 → 20024（不白升级）");

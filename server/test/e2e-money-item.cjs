@@ -115,9 +115,14 @@ async function startServer(dbPath) {
 }
 
 /** 发一次请求，返回唯一包裹体（code / message / data） */
+/** 管理端请求所在的区（#960）：一个 e2e 进程只在一个区里干活，管理端请求统一带它 */
+const ADMIN_ZONE = 1;
+
 async function api(baseUrl, method, route, options = {}) {
   const headers = { "Content-Type": "application/json" };
   if (options.token) headers.Authorization = `Bearer ${options.token}`;
+  // 管理端单区上下文（#960）：控制台前端在请求拦截器里统一带 X-Zone-Id，测试里对等模拟
+  if (options.zoneId !== undefined) headers["X-Zone-Id"] = String(options.zoneId);
   const response = await fetch(`${baseUrl}/api/${route}`, {
     method,
     headers,
@@ -159,7 +164,7 @@ function cellAt(bag, row, col) {
 /** 注册并登录一个管理员（配置读写要 `gameConfig:*`） */
 async function registerAdmin(baseUrl, username, password) {
   await api(baseUrl, "POST", "admin/auth/register", { body: { username, password, registerCode: ADMIN_CODE } });
-  const login = await api(baseUrl, "POST", "admin/auth/login", { body: { username, password } });
+  const login = await api(baseUrl, "POST", "admin/auth/login", { body: { zoneId: ADMIN_ZONE, username, password } });
   return login.data && login.data.token;
 }
 
@@ -202,7 +207,7 @@ const BIND_ROW_50 = seedOf("bindGold", 50);
 
     /** 造背包：管理端整份覆盖（客户端改不了 bag，造状态只能走这条路） */
     const seedBag = async (cells) => {
-      const result = await api(baseUrl, "PATCH", `admin/roles/${roleId}`, { token: adminToken, body: { bag: cells } });
+      const result = await api(baseUrl, "PATCH", `admin/roles/${roleId}`, { token: adminToken, zoneId: ADMIN_ZONE, body: { bag: cells } });
       check(result.code === 0, `准备：管理端注入 ${cells.length} 格物品`, result.message);
       return result;
     };
@@ -214,7 +219,7 @@ const BIND_ROW_50 = seedOf("bindGold", 50);
     group("一、出厂清单与筛选");
     // 出厂有几档面值是运营数据（能加能删），只判「有货」；要守的是「三处口径一致」
     check(SEED_MONEY.length > 0, "快照里有出厂面值（具体几档是运营数据）", String(SEED_MONEY.length));
-    const listed = await api(baseUrl, "GET", "admin/money-items?page=1&size=100", { token: adminToken });
+    const listed = await api(baseUrl, "GET", "admin/money-items?page=1&size=100", { token: adminToken, zoneId: ADMIN_ZONE });
     checkEqual(listed.code, 0, "管理端能读货币物品列表", listed.message);
     checkEqual(listed.data.total, SEED_MONEY.length, "列表总数与快照行数一致");
     const firstListed = listed.data.list[0];
@@ -223,16 +228,16 @@ const BIND_ROW_50 = seedOf("bindGold", 50);
       SEED_MONEY_BY_ID[firstListed.id].label,
       "列表里第一条的名称取自库（不是代码里另写一份）",
     );
-    const bindOnly = await api(baseUrl, "GET", "admin/money-items?page=1&size=100&currency=bindGold", { token: adminToken });
+    const bindOnly = await api(baseUrl, "GET", "admin/money-items?page=1&size=100&currency=bindGold", { token: adminToken, zoneId: ADMIN_ZONE });
     checkEqual(bindOnly.data.total, SEED_MONEY.filter((row) => row.currency === "bindGold").length, "按 currency=bindGold 筛出的条数 = 快照里该币种的行数");
     check(
       bindOnly.data.list.every((item) => item.currency === "bindGold"),
       "筛选结果里没有别的币种",
       bindOnly.data.list.map((item) => item.currency).join(","),
     );
-    const badCurrencyFilter = await api(baseUrl, "GET", "admin/money-items?page=1&size=100&currency=legacy", { token: adminToken });
+    const badCurrencyFilter = await api(baseUrl, "GET", "admin/money-items?page=1&size=100&currency=legacy", { token: adminToken, zoneId: ADMIN_ZONE });
     checkEqual(badCurrencyFilter.code, 40000, "未知币种筛 → 40000（取值域只有 bindGold）");
-    const keywordHit = await api(baseUrl, "GET", "admin/money-items?page=1&size=100&keyword=money_bind_gold", { token: adminToken });
+    const keywordHit = await api(baseUrl, "GET", "admin/money-items?page=1&size=100&keyword=money_bind_gold", { token: adminToken, zoneId: ADMIN_ZONE });
     checkEqual(
       keywordHit.data.total,
       SEED_MONEY.filter((row) => String(row.id).startsWith("money_bind_gold")).length,
@@ -319,30 +324,30 @@ const BIND_ROW_50 = seedOf("bindGold", 50);
     //#region 四、新建：只填货币 + 面值
 
     group("四、新建货币物品（派生 id / 名称 / 图标）");
-    const createdItem = await api(baseUrl, "POST", "admin/money-items", { token: adminToken, body: { currency: "bindGold", amount: 8888 } });
+    const createdItem = await api(baseUrl, "POST", "admin/money-items", { token: adminToken, zoneId: ADMIN_ZONE, body: { currency: "bindGold", amount: 8888 } });
     checkEqual(createdItem.code, 0, "只填货币 + 面值就能建", createdItem.message);
     checkEqual(createdItem.data.id, "money_bind_gold_8888", "id 按「货币 + 面值」派生");
     checkEqual(createdItem.data.label, "绑定元宝（8888）", "名称缺省 = 货币中文名（面值）");
     checkEqual(createdItem.data.icon, "item/currency/bind-gold-8888", "图标路径按资源命名纪律派生");
     checkEqual(createdItem.data.maxStack, 999, "叠加上限缺省 999");
     checkEqual(createdItem.data.sellPrice, 0, "售价缺省 0（不可出售）");
-    const afterCreate = await api(baseUrl, "GET", "admin/money-items?page=1&size=100", { token: adminToken });
+    const afterCreate = await api(baseUrl, "GET", "admin/money-items?page=1&size=100", { token: adminToken, zoneId: ADMIN_ZONE });
     checkEqual(afterCreate.data.total, SEED_MONEY.length + 1, "列表多了一条");
-    const duplicate = await api(baseUrl, "POST", "admin/money-items", { token: adminToken, body: { currency: "bindGold", amount: 8888 } });
+    const duplicate = await api(baseUrl, "POST", "admin/money-items", { token: adminToken, zoneId: ADMIN_ZONE, body: { currency: "bindGold", amount: 8888 } });
     checkEqual(duplicate.code, 50042, "同货币同面值再建一次 → 50042（id 撞了）");
-    const badCurrency = await api(baseUrl, "POST", "admin/money-items", { token: adminToken, body: { currency: "diamond", amount: 10 } });
+    const badCurrency = await api(baseUrl, "POST", "admin/money-items", { token: adminToken, zoneId: ADMIN_ZONE, body: { currency: "diamond", amount: 10 } });
     checkEqual(badCurrency.code, 40000, "币种不在取值域之内 → 40000（参数校验）");
-    const legacyCurrency = await api(baseUrl, "POST", "admin/money-items", { token: adminToken, body: { id: "money_legacy_coin", currency: "legacy", amount: 10 } });
+    const legacyCurrency = await api(baseUrl, "POST", "admin/money-items", { token: adminToken, zoneId: ADMIN_ZONE, body: { id: "money_legacy_coin", currency: "legacy", amount: 10 } });
     checkEqual(legacyCurrency.code, 40000, "未知币种进不来 → 40000（取值域只有 bindGold）");
-    const badAmount = await api(baseUrl, "POST", "admin/money-items", { token: adminToken, body: { currency: "bindGold", amount: 0 } });
+    const badAmount = await api(baseUrl, "POST", "admin/money-items", { token: adminToken, zoneId: ADMIN_ZONE, body: { currency: "bindGold", amount: 0 } });
     checkEqual(badAmount.code, 40000, "面值 0 → 40000（参数校验）");
     const customId = await api(baseUrl, "POST", "admin/money-items", {
-      token: adminToken,
+      token: adminToken, zoneId: ADMIN_ZONE,
       body: { id: "money_test_custom", currency: "bindGold", amount: 7, label: "七枚小绑定元宝" },
     });
     checkEqual(customId.code, 0, "也可以自己指定 id 与名称", customId.message);
     checkEqual(customId.data.label, "七枚小绑定元宝", "指定了名称就用指定的");
-    const badId = await api(baseUrl, "POST", "admin/money-items", { token: adminToken, body: { id: "Money-BAD", currency: "bindGold", amount: 9 } });
+    const badId = await api(baseUrl, "POST", "admin/money-items", { token: adminToken, zoneId: ADMIN_ZONE, body: { id: "Money-BAD", currency: "bindGold", amount: 9 } });
     checkEqual(badId.code, 40000, "id 大写 / 连字符 → 40000（只许小写字母数字下划线）");
 
     //#endregion
@@ -357,7 +362,7 @@ const BIND_ROW_50 = seedOf("bindGold", 50);
     checkEqual(Number(useNew.data.data.bindGold), bindGoldBefore + 8888, "入账 8888（按库里的面值）");
 
     const patched = await api(baseUrl, "PATCH", "admin/money-items/money_bind_gold_8888", {
-      token: adminToken,
+      token: adminToken, zoneId: ADMIN_ZONE,
       body: { amount: 1234, label: "绑定元宝（改名版）" },
     });
     checkEqual(patched.code, 0, "改面值 + 改名", patched.message);
@@ -370,7 +375,7 @@ const BIND_ROW_50 = seedOf("bindGold", 50);
       bindGoldBefore + 8888 + 1234,
       "这次加的是新面值 1234（存量格子跟着配置走，客户端改包也没用）",
     );
-    const patchMissing = await api(baseUrl, "PATCH", "admin/money-items/money_not_exists", { token: adminToken, body: { amount: 1 } });
+    const patchMissing = await api(baseUrl, "PATCH", "admin/money-items/money_not_exists", { token: adminToken, zoneId: ADMIN_ZONE, body: { amount: 1 } });
     checkEqual(patchMissing.code, 50041, "改不存在的行 → 50041");
 
     //#endregion
@@ -378,12 +383,12 @@ const BIND_ROW_50 = seedOf("bindGold", 50);
     //#region 六、删除
 
     group("六、删除（只删配置，不碰存档）");
-    const removed = await api(baseUrl, "DELETE", "admin/money-items/money_bind_gold_8888", { token: adminToken });
+    const removed = await api(baseUrl, "DELETE", "admin/money-items/money_bind_gold_8888", { token: adminToken, zoneId: ADMIN_ZONE });
     checkEqual(removed.code, 0, "删掉刚才那条", removed.message);
     checkEqual(Number(removed.data.removed), 1, "实际删了 1 行");
-    const removeAgain = await api(baseUrl, "DELETE", "admin/money-items/money_bind_gold_8888", { token: adminToken });
+    const removeAgain = await api(baseUrl, "DELETE", "admin/money-items/money_bind_gold_8888", { token: adminToken, zoneId: ADMIN_ZONE });
     checkEqual(removeAgain.code, 50041, "再删一次 → 50041（已经没了）");
-    const listAfterRemove = await api(baseUrl, "GET", "admin/money-items?page=1&size=100", { token: adminToken });
+    const listAfterRemove = await api(baseUrl, "GET", "admin/money-items?page=1&size=100", { token: adminToken, zoneId: ADMIN_ZONE });
     checkEqual(listAfterRemove.data.total, SEED_MONEY.length + 1, "列表少了一条（还剩自定义那条）");
     // 背包里那格已经被用光；再放一个旧 id 进去，验证「认不出的道具」不崩也不给钱
     await seedBag([{ row: 0, col: 0, id: "money_bind_gold_8888", count: 1 }]);

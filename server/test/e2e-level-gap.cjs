@@ -183,9 +183,14 @@ async function startServer(dbPath) {
   throw new Error("等待服务启动超时");
 }
 
+/** 管理端请求所在的区（#960）：一个 e2e 进程只在一个区里干活，管理端请求统一带它 */
+const ADMIN_ZONE = 1;
+
 async function api(baseUrl, method, route, options = {}) {
   const headers = { "Content-Type": "application/json" };
   if (options.token) headers.Authorization = `Bearer ${options.token}`;
+  // 管理端单区上下文（#960）：控制台前端在请求拦截器里统一带 X-Zone-Id，测试里对等模拟
+  if (options.zoneId !== undefined) headers["X-Zone-Id"] = String(options.zoneId);
   const response = await fetch(`${baseUrl}/api/${route}`, {
     method,
     headers,
@@ -277,12 +282,12 @@ function connect(url) {
 
     /** 改角色等级（`admin/roles/:id` 会当场重算面板；`online()` 每发都现读库，改完即生效） */
     const setLevel = async (level) => {
-      const patched = await api(baseUrl, "PATCH", `admin/roles/${roleId}`, { token: adminToken, body: { level } });
+      const patched = await api(baseUrl, "PATCH", `admin/roles/${roleId}`, { token: adminToken, zoneId: ADMIN_ZONE, body: { level } });
       check(patched.code === 0, `准备：角色等级改成 ${level}`, patched.message);
     };
     /** 改压制系数（内存缓存随写刷新） */
     const setSuppress = (value) =>
-      api(baseUrl, "PATCH", `admin/growth-scalars/${SUP_KEY}`, { token: adminToken, body: { value } });
+      api(baseUrl, "PATCH", `admin/growth-scalars/${SUP_KEY}`, { token: adminToken, zoneId: ADMIN_ZONE, body: { value } });
 
     const ticket = await api(baseUrl, "POST", "realtime/ticket", { token });
     const session = connect(`${baseUrl.replace("http", "ws")}/api/realtime?ticket=${encodeURIComponent(ticket.data.ticket)}`);
@@ -315,7 +320,7 @@ function connect(url) {
     //#region 一、出厂口径
 
     group("一、出厂口径：growth_scalars.levelGapSuppress = 0.05，管理端读得到也改得动");
-    const scalars = await api(baseUrl, "GET", "admin/growth-scalars?page=1&size=100", { token: adminToken });
+    const scalars = await api(baseUrl, "GET", "admin/growth-scalars?page=1&size=100", { token: adminToken, zoneId: ADMIN_ZONE });
     const listed = ((scalars.data && scalars.data.list) || []).find((row) => row.key === SUP_KEY);
     check(!!listed, "管理端「成长参数」里能读到这一行（存量库由启动时 INSERT OR IGNORE 补）", SUP_KEY);
     // 出厂值本身是配置数据：只判「这一行存在且是个正系数」，不锁 0.05
@@ -410,7 +415,7 @@ function connect(url) {
     checkEqual(tooBig.status, 400, "40000 走 HTTP 400");
     const tooSmall = await setSuppress(-0.1);
     checkEqual(tooSmall.code, 40000, "系数 -0.1 → 40000（负的压制等于越级打怪更疼，是刷怪口子）", tooSmall.message);
-    const afterInvalid = await api(baseUrl, "GET", "admin/growth-scalars?page=1&size=100", { token: adminToken });
+    const afterInvalid = await api(baseUrl, "GET", "admin/growth-scalars?page=1&size=100", { token: adminToken, zoneId: ADMIN_ZONE });
     const kept = ((afterInvalid.data && afterInvalid.data.list) || []).find((row) => row.key === SUP_KEY);
     checkEqual(kept && Number(kept.value), 0, "两次非法写入都没落库（还是上一步的 0）");
 
@@ -420,7 +425,7 @@ function connect(url) {
 
     group("九、区域路径同一个系数：单体与区域共用 suppressionOf");
     const toArea = await api(baseUrl, "PATCH", `admin/skills/${SKILL_AREA}`, {
-      token: adminToken,
+      token: adminToken, zoneId: ADMIN_ZONE,
       body: { targetType: "0" },
     });
     checkEqual(toArea.code, 0, `准备：把 ${SKILL_AREA} 改成区域技能（target_type = 0）`, toArea.message);
@@ -441,7 +446,7 @@ function connect(url) {
     //#endregion
 
     // 收尾：靶子恢复成单体（这一套自己改的配置自己还原，别影响复跑）
-    await api(baseUrl, "PATCH", `admin/skills/${SKILL_AREA}`, { token: adminToken, body: { targetType: "1" } });
+    await api(baseUrl, "PATCH", `admin/skills/${SKILL_AREA}`, { token: adminToken, zoneId: ADMIN_ZONE, body: { targetType: "1" } });
     await setSuppress(0.05);
   } finally {
     server.child.kill();

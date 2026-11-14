@@ -12,6 +12,8 @@ export interface AuditListOptions {
   keyword?: string;
   /** 操作人 id */
   actorId?: string;
+  /** 只看某个区里发生的操作（#960）。不传 = 全部区 */
+  zoneId?: number;
   /** 动作（operationId） */
   action?: string;
   targetType?: string;
@@ -48,8 +50,8 @@ export class AuditRepository {
     this.db.run(
       `INSERT INTO audit_logs
         (id, actor_id, actor_name, actor_role, action, target_type, target_id, detail,
-         ip, method, path, status_code, success, error_code, error_message, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         ip, method, path, zone_id, status_code, success, error_code, error_message, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         row.id,
         row.actor_id,
@@ -62,6 +64,7 @@ export class AuditRepository {
         row.ip,
         row.method,
         row.path,
+        row.zone_id,
         row.status_code,
         row.success,
         row.error_code,
@@ -143,6 +146,10 @@ export class AuditRepository {
     if (options.actorId) {
       where.push("a.actor_id = ?");
       params.push(options.actorId);
+    }
+    if (options.zoneId !== undefined) {
+      where.push("a.zone_id = ?");
+      params.push(options.zoneId);
     }
     if (options.action) {
       where.push("a.action = ?");

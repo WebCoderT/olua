@@ -274,9 +274,14 @@ async function startServer(dbPath) {
   throw new Error("等待服务启动超时");
 }
 
+/** 管理端请求所在的区（#960）：一个 e2e 进程只在一个区里干活，管理端请求统一带它 */
+const ADMIN_ZONE = 1;
+
 async function api(baseUrl, method, route, options = {}) {
   const headers = { "Content-Type": "application/json" };
   if (options.token) headers.Authorization = `Bearer ${options.token}`;
+  // 管理端单区上下文（#960）：控制台前端在请求拦截器里统一带 X-Zone-Id，测试里对等模拟
+  if (options.zoneId !== undefined) headers["X-Zone-Id"] = String(options.zoneId);
   const response = await fetch(`${baseUrl}/api/${route}`, {
     method,
     headers,
@@ -458,14 +463,14 @@ function connect(url) {
 
     /** 改技能（管理端写操作触发缓存刷新，下一刀生效） */
     const patchSkill = async (skillId, body) => {
-      const result = await api(baseUrl, "PATCH", `admin/skills/${skillId}`, { token: adminToken, body });
+      const result = await api(baseUrl, "PATCH", `admin/skills/${skillId}`, { token: adminToken, zoneId: ADMIN_ZONE, body });
       checkEqual(result && result.code, 0, `准备：改技能 ${skillId} ${JSON.stringify(body)}`);
       return result && result.data;
     };
 
     /** 改状态（同上） */
     const patchStatus = async (statusId, body) => {
-      const result = await api(baseUrl, "PATCH", `admin/statuses/${statusId}`, { token: adminToken, body });
+      const result = await api(baseUrl, "PATCH", `admin/statuses/${statusId}`, { token: adminToken, zoneId: ADMIN_ZONE, body });
       checkEqual(result && result.code, 0, `准备：改状态 ${statusId} ${JSON.stringify(body)}`);
       return result && result.data;
     };

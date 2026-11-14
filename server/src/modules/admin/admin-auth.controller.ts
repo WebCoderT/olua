@@ -10,6 +10,7 @@ import { AdminAuthService } from "./admin-auth.service";
 import { AdminLoginDto, AdminRegisterDto } from "./dto/admin-auth.dto";
 import { AdminDto, AdminTokenDto } from "./dto/admin.dto";
 import { ChangeAdminPasswordDto } from "./dto/password.dto";
+import { ZoneOptionDto } from "../zone/dto/zone.dto";
 
 /**
  * 管理端 · 认证接口
@@ -55,6 +56,22 @@ export class AdminAuthController {
   @ApiDataResponse(AdminTokenDto, { description: "登录成功" })
   login(@Body() dto: AdminLoginDto, @Ip() ip: string): AdminTokenDto {
     return this.adminAuthService.login(dto, ip);
+  }
+
+  @Public()
+  @Get("zones")
+  @ApiPublicDoc({
+    operationId: "adminAuth.zones",
+    summary: "管理端登录页的可选区",
+    description:
+      "登录页先拉这个再让管理员选区（#960）。**公开接口**：登录前没有令牌。\n\n" +
+      "只回 `id` / `name` / `status` / `sort`，**不含已合并的区**（选它一定被拒：数据已搬走）。\n" +
+      "`closed` 区仍然列出 —— 管理端要能进去查历史，关区只是停止注册与不再推荐新人。\n\n" +
+      "排序听运营的（`sort` 升序，同值按 id），与玩家注册下拉是同一份顺序。",
+  })
+  @ApiDataResponse(ZoneOptionDto, { description: "可选区（未合并）", isArray: true })
+  zones(): ZoneOptionDto[] {
+    return this.adminAuthService.zoneOptions();
   }
 
   @Get("me")
