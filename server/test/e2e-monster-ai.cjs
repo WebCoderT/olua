@@ -476,12 +476,19 @@ function connect(url) {
     );
     // 再跑出牵引半径：150 → 850（> 600），后面的「脱战回家」从这一腿开始算
     await walk(sessionA, [walkStartX, BRUISER.y], [walkStartX + 700, BRUISER.y], aHp);
+    // 观测面换成 `worldJoin` 的权威快照（#966 顺带修的 flake）：
+    // `monster-ai` 帧有两道窄门 —— 只发「这一拍动过 / 转过 / 掉过血」的怪，且按 3×3 格裁剪。
+    // A 跑到 850px 外之后，出生点那一格就出了他的视野（512px 格，跨两格就没了），回程的最后
+    // 几帧根本收不到；A 的落点差一格，这条就在红/绿之间摇（全量跑连续两轮红、单跑必绿）。
+    // 进图快照是**全量**（`realtime.service.ts` 里 AOI 只裁广播，不裁 worldJoin 的应答），
+    // 也不看「有没有变化」—— 判的是「怪现在回到出生点了」，不是「我收到过那一帧」。
     const homeEntry = await waitFor(
       "脱战后走回出生点",
-      async () =>
-        entriesFrom(chaseFrom).find(
-          (entry) => Math.abs(entry.x - BRUISER.x) <= 20 && Math.abs(entry.y - BRUISER.y) <= 20,
-        ) ?? null,
+      async () => {
+        const snap = await sessionA.joinWorld("1");
+        const now = snap && (snap.monsters || []).find((monster) => monster.instanceId === bruiser.instanceId);
+        return now && Math.abs(now.x - BRUISER.x) <= 20 && Math.abs(now.y - BRUISER.y) <= 20 ? now : null;
+      },
       10_000,
     );
     check(

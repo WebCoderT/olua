@@ -212,7 +212,8 @@ const BIND_ROW_50 = seedOf("bindGold", 50);
     //#region 一、出厂清单：8 条 × 三处口径一致
 
     group("一、出厂清单与筛选");
-    checkEqual(SEED_MONEY.length, 8, "快照里出厂 8 条（唯一货币 bindGold × 8 档面值）");
+    // 出厂有几档面值是运营数据（能加能删），只判「有货」；要守的是「三处口径一致」
+    check(SEED_MONEY.length > 0, "快照里有出厂面值（具体几档是运营数据）", String(SEED_MONEY.length));
     const listed = await api(baseUrl, "GET", "admin/money-items?page=1&size=100", { token: adminToken });
     checkEqual(listed.code, 0, "管理端能读货币物品列表", listed.message);
     checkEqual(listed.data.total, SEED_MONEY.length, "列表总数与快照行数一致");
@@ -223,7 +224,7 @@ const BIND_ROW_50 = seedOf("bindGold", 50);
       "列表里第一条的名称取自库（不是代码里另写一份）",
     );
     const bindOnly = await api(baseUrl, "GET", "admin/money-items?page=1&size=100&currency=bindGold", { token: adminToken });
-    checkEqual(bindOnly.data.total, 8, "按 currency=bindGold 筛出 8 条");
+    checkEqual(bindOnly.data.total, SEED_MONEY.filter((row) => row.currency === "bindGold").length, "按 currency=bindGold 筛出的条数 = 快照里该币种的行数");
     check(
       bindOnly.data.list.every((item) => item.currency === "bindGold"),
       "筛选结果里没有别的币种",
@@ -232,7 +233,11 @@ const BIND_ROW_50 = seedOf("bindGold", 50);
     const badCurrencyFilter = await api(baseUrl, "GET", "admin/money-items?page=1&size=100&currency=legacy", { token: adminToken });
     checkEqual(badCurrencyFilter.code, 40000, "未知币种筛 → 40000（取值域只有 bindGold）");
     const keywordHit = await api(baseUrl, "GET", "admin/money-items?page=1&size=100&keyword=money_bind_gold", { token: adminToken });
-    checkEqual(keywordHit.data.total, 8, "关键字模糊匹配 id 前缀（money_bind_gold → 8 条）");
+    checkEqual(
+      keywordHit.data.total,
+      SEED_MONEY.filter((row) => String(row.id).startsWith("money_bind_gold")).length,
+      "关键字模糊匹配 id 前缀（命中全部该前缀的面值）",
+    );
     const snapshot = await api(baseUrl, "GET", "game-config", { token });
     checkEqual(snapshot.code, 0, "客户端能拉配置快照", snapshot.message);
     checkEqual((snapshot.data.moneyItems || []).length, SEED_MONEY.length, "快照里下发同样 8 条（客户端按它建物品索引）");

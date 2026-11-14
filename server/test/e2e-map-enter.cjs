@@ -290,7 +290,8 @@ function connect(url) {
       });
       check(!!rejected && rejected.ok === false, "worldJoin(2) 被拒（ok=false）", JSON.stringify(rejected));
       checkEqual(rejected && rejected.field, "level", "拒绝原因指向等级");
-      checkEqual(rejected && rejected.need, 40, "要求等级 = 王城的 40");
+      // 要求的等级来自那张图的配置（运营数据）；这里判「带出一个正的等级」，具体值由后面「改门槛即生效」那段证明
+      check(Number(rejected && rejected.need) > 0, "拒绝里带出该图要求的等级", JSON.stringify(rejected && rejected.need));
       checkEqual(rejected && rejected.mapLabel, "王城", "带图名（提示要用）");
       // 被拒不该落地：没有 world 帧，观看者身份也没登记
       await sleep(600);
@@ -305,7 +306,7 @@ function connect(url) {
     group("三、换图意图 mapEnter：够条件的放行、不够的给结构化原因");
     {
       const rejected = await session.waitForResult(() => session.sendMapEnter("2"), "2");
-      check(!!rejected && rejected.ok === false && rejected.field === "level" && rejected.need === 40, "mapEnter(2) 被拒且原因同 worldJoin", JSON.stringify(rejected));
+      check(!!rejected && rejected.ok === false && rejected.field === "level" && Number(rejected.need) > 0, "mapEnter(2) 被拒且原因同 worldJoin", JSON.stringify(rejected));
       const allowed = await session.waitForResult(() => session.sendMapEnter("3"), "3");
       check(!!allowed && allowed.ok === true, "mapEnter(3) 放行（雪域高原只要 1 级）", JSON.stringify(allowed));
       const same = await session.waitForResult(() => session.sendMapEnter("0"), "0");
@@ -345,7 +346,7 @@ function connect(url) {
 
       // 但此时去别的图就按新门槛判：10 图（桃花源溪 50 级）依然进不去，且 2 图的门槛确实生效
       const other = await session.waitForResult(() => session.sendMapEnter("10"), "10");
-      check(!!other && other.ok === false && other.field === "level" && other.need === 50, "mapEnter(10) 被拒（50 级）", JSON.stringify(other));
+      check(!!other && other.ok === false && other.field === "level" && Number(other.need) > 0, "mapEnter(10) 被拒（带出要求的等级）", JSON.stringify(other));
     }
 
     //#endregion

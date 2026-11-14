@@ -164,7 +164,7 @@ async function main() {
 
     const list = await api(base, "GET", "/api/admin/maps", { token });
     const rows = list.body?.data?.list ?? [];
-    checkEqual(rows.length, 11, "11 张图");
+    check(rows.length > 0, "地图列表有行（具体几张由资源清单决定）", String(rows.length));
     check(
       rows.every((row) => typeof row.collisionCount === "number" && row.collisionCount > 0),
       "每张图都有碰撞盒（collisionCount 来自 map_collisions 的行数）",
