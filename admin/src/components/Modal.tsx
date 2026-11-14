@@ -68,17 +68,17 @@ export function Modal({
       role="dialog"
       aria-modal="true"
       aria-label={typeof title === "string" ? title : undefined}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-surface-0/80 p-4 backdrop-blur-[2px]"
       onClick={onClose}
     >
       <div
-        className={`flex max-h-[85vh] w-full ${MODAL_SIZES[size]} flex-col rounded-2xl border border-slate-800 bg-slate-900 p-5 shadow-2xl`}
+        className={`legend-card flex max-h-[85vh] w-full ${MODAL_SIZES[size]} flex-col p-5 shadow-2xl`}
         onClick={(event) => event.stopPropagation()}
       >
-        <div className="mb-3 flex items-start justify-between gap-3 border-b border-slate-800 pb-3">
+        <div className="mb-3 flex items-start justify-between gap-3 border-b border-gold/10 pb-3">
           <div className="min-w-0">
-            <h3 className="text-base font-semibold text-slate-100">{title}</h3>
-            {hint ? <p className="mt-1 text-xs text-slate-500">{hint}</p> : null}
+            <h3 className="font-display text-base font-bold tracking-[.08em] text-ink-1">{title}</h3>
+            {hint ? <p className="mt-1 text-xs text-ink-4">{hint}</p> : null}
           </div>
           {/* `shrink-0`：标题过长时不能把「关闭」压成竖排两个字 */}
           <Button variant="ghost" className="shrink-0 whitespace-nowrap px-2 py-1 text-xs" onClick={onClose}>
@@ -86,7 +86,7 @@ export function Modal({
           </Button>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto pr-1">{children}</div>
-        {footer ? <div className="mt-3 flex flex-wrap items-center justify-end gap-2 border-t border-slate-800 pt-3">{footer}</div> : null}
+        {footer ? <div className="mt-3 flex flex-wrap items-center justify-end gap-2 border-t border-gold/10 pt-3">{footer}</div> : null}
       </div>
     </div>
   );

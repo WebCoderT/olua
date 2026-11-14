@@ -20,12 +20,12 @@ export function ToastHost() {
       {items.map((item) => (
         <div
           key={item.id}
-          className={`pointer-events-auto rounded-xl border px-4 py-3 text-sm shadow-lg shadow-black/30 backdrop-blur ${
+          className={`pointer-events-auto rounded-sm border border-l-2 px-4 py-3 text-sm shadow-lg shadow-black/40 backdrop-blur ${
             item.type === "error"
-              ? "border-rose-500/40 bg-rose-950/80 text-rose-100"
+              ? "border-ember/35 border-l-ember bg-surface-2/95 text-ember-hi"
               : item.type === "success"
-                ? "border-emerald-500/40 bg-emerald-950/80 text-emerald-100"
-                : "border-slate-700 bg-slate-900/90 text-slate-100"
+                ? "border-jade/30 border-l-jade bg-surface-2/95 text-jade"
+                : "border-line-strong border-l-line-gold bg-surface-2/95 text-ink-2"
           }`}
         >
           {item.message}

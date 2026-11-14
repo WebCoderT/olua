@@ -65,7 +65,7 @@ export function FilterBar({
           {!onSearch && !onReset && loading ? <Spinner /> : null}
         </div>
       </div>
-      {hint ? <p className="mt-2 text-xs text-slate-500">{hint}</p> : null}
+      {hint ? <p className="mt-2 text-[11.5px] text-ink-5">{hint}</p> : null}
     </Card>
   );
 }
