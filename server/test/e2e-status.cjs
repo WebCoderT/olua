@@ -337,7 +337,8 @@ function connect(url) {
     /** 某只怪在 fromIndex 之后的最新一条 AI 位置 */
     latestAi(instanceId, fromIndex = 0) {
       for (let i = session.aiFrames.length - 1; i >= fromIndex; i -= 1) {
-        const entry = (session.aiFrames[i].monsters || []).find((mob) => mob.instanceId === instanceId);
+        // #768 缩字段：monster-ai 条目的实例 id 是 `i`（world 快照那边才叫 instanceId）
+        const entry = (session.aiFrames[i].monsters || []).find((mob) => mob.i === instanceId);
         if (entry) return entry;
       }
       return null;
@@ -643,7 +644,7 @@ function connect(url) {
         20_000,
       ),
     );
-    check(!!stunHit, "BOSS 真的对玩家放了技能并命中", stunHit && `damage=${stunHit.damage}`);
+    check(!!stunHit, "BOSS 真的对玩家放了技能并命中", stunHit && `damage=${stunHit.d}`);
 
     const stunnedFrame = await waitFor(
       "本人收到 statuses 帧",
@@ -687,7 +688,7 @@ function connect(url) {
     check(
       !!stillHit,
       "眩晕期间上报的坐标不被采纳（人没走开，怪还够得着 —— 若锁失效早就超出牵引半径脱战了）",
-      stillHit && `damage=${stillHit.damage}`,
+      stillHit && `damage=${stillHit.d}`,
     );
 
     // 清场：状态行直删（`snapshotOf` 现读库，删完立刻生效）。
@@ -765,7 +766,7 @@ function connect(url) {
         20_000,
       ),
     );
-    check(!!stillHitting, "纯伤害的 9001 仍然命中玩家", stillHitting && `damage=${stillHitting.damage}`);
+    check(!!stillHitting, "纯伤害的 9001 仍然命中玩家", stillHitting && `damage=${stillHitting.d}`);
     check(!hasStatus(dbPath, roleId, STATUS_STUN), "反证：清空 statusId 之后命中不再挂眩晕");
 
     // 后退到攻击距离外（但仍在检测范围 1200 内）：BOSS 会一路追过来准备打你。

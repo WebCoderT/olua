@@ -340,8 +340,9 @@ function connect(url) {
     );
     keepReporting = false;
     await reporter;
-    check(!!blockedHit, "100% 格挡时命中被格挡（hits 帧带 blocked: true）", blockedHit && `damage=${blockedHit.damage}`);
-    check(!!blockedHit && blockedHit.damage >= 0, "格挡后的伤害是非负整数（乘 blockFactor 后四舍五入）", blockedHit && `damage=${blockedHit.damage}`);
+    check(!!blockedHit, "100% 格挡时命中被格挡（hits 帧带 blocked: true）", blockedHit && `damage=${blockedHit.d}`);
+    // #768 缩字段：命中帧的伤害字段是 `d`
+    check(!!blockedHit && blockedHit.d >= 0, "格挡后的伤害是非负整数（乘 blockFactor 后四舍五入）", blockedHit && `damage=${blockedHit.d}`);
     //#endregion
 
     //#region 五、到期即消失（惰性清理）
