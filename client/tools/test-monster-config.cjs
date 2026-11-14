@@ -58,8 +58,9 @@ const tierByKey = new Map(factory.monsters().map((row) => [String(row.id), row.t
 //#region A. 数据行为（服务端资源行 → 运行时表）
 
 const keys = [...rows.keys()].sort((a, b) => Number(a) - Number(b));
-check(keys.length === 220 && keys.every((key, index) => key === String(index + 1)), "220 只怪资源行齐全且 key 连续（1~220）", `实得 ${keys.length} 条`);
-check(tierByKey.size === 220, "数值表 220 行齐全（key 双向对账的另一半）", `实得 ${tierByKey.size} 行`);
+// 怪有几只是资源侧数据（美术出一只就多一行）；要守的是「key 连续、与数值表一一对应」
+check(keys.length > 0 && keys.every((key, index) => key === String(index + 1)), "怪物资源行齐全且 key 从 1 连续（无缺口）", `实得 ${keys.length} 条`);
+check(tierByKey.size === keys.length, "数值表行数 = 资源表行数（key 双向对账的另一半）", `资源 ${keys.length} / 数值 ${tierByKey.size}`);
 check(keys.every((key) => tierByKey.has(key)) && [...tierByKey.keys()].every((key) => rows.has(key)), "资源行与数值行的 key 一一对应（生成器断言之外的复核）");
 
 check(
