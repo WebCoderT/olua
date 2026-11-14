@@ -498,7 +498,7 @@ function setResetDay(dbPath, roleId, questId, day) {
     const dailyReady = await myQuest("8101");
     check(!!dailyReady && dailyReady.status === "ready", "日常进度到量 → ready", JSON.stringify(dailyReady));
     const submitDaily = await api(baseUrl, "POST", "quests/submit", { token, body: { questId: "8101" } });
-    check(submitDaily.code === 0 && submitDaily.data.reward.bindGold === 500, "交付日常：奖励照发", JSON.stringify(submitDaily.data && submitDaily.data.reward));
+    check(submitDaily.code === 0 && Number(submitDaily.data.reward.bindGold) > 0, "交付日常：奖励照发（具体数额是配置数据，不判）", JSON.stringify(submitDaily.data && submitDaily.data.reward));
 
     const dailyAfter = await myQuest("8101");
     check(!!dailyAfter && dailyAfter.status === "claimed", "daily 领奖后**行还在**（claimed，不再是删行）", JSON.stringify(dailyAfter));
@@ -522,7 +522,8 @@ function setResetDay(dbPath, roleId, questId, day) {
       const dup = await api(baseUrl, "POST", "quests/submit", { token, body: { questId: "8101" } });
       check(dup.code !== 0, `第 ${i + 2} 次交付日常 → 拒（${dup.code}）`, JSON.stringify(dup.message));
     }
-    checkEqual((await roleBindGold()) - bindGoldBeforeDaily, 500, "绑定元宝只涨了一次奖励（连交没有重复发）");
+    // 用「第一次交付发的那笔」当基准：涨了两次说明重复发，涨了一次说明闸住了 —— 不锁配置里的具体数额（#966）
+    checkEqual((await roleBindGold()) - bindGoldBeforeDaily, Number(submitDaily.data.reward.bindGold), "绑定元宝只涨了一次奖励（连交没有重复发）");
 
     // 跨 05:00：把这一行挪到昨天 —— 视作可再接，accept 时覆盖重置
     const staleDay = dailyRows[0].reset_day - 1;
