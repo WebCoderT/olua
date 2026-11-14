@@ -35,6 +35,11 @@
 compose 五服务：admin:80 唯一入口 / game:8080 / server:3100 / realtime:3101 / website 不映射端口。
 出厂快照进镜像，卷 `olua_olua-data`；客户端地址由 `DEV_MODE` 唯一开关决定。
 
+## admin 视觉 = legend 设计系统（#946 全部落地，PR #947/#950/#951）
+- token 唯一来源 `admin/src/index.css` 的 `@theme`（surface/line/ink/gold/ember/jade/warn 语义名）；设计稿单一来源 `design/legend-console/`。**Tailwind 内置色族与裸色值全禁**；四族职责不交叉；金底必配深字；SVG 用 `var(--color-*)`。
+- 守点 `tools/audit-admin-ui.cjs` **七条**（结构 4：遮罩/页头/卡片/字段标签；词汇 3：旧色族/裸色值/必有 PageHeader）；改守点后必须反证（违规探针全拦）。Badge/Notice tone 键 = `jade/ember/gold/warn/muted`。
+- **新页面一律 `cd admin && npm run new:page -- <Name>` 起步**（合规骨架 + `__UI_CAPTURE__` 状态清单）；显示效果靠人眼看截图，不写断言。细则 → `.workbuddy/skills/olua-admin-ui/`（legend 版）。
+
 ## 进度
 - 细节 → `topics/进度年表.md`。最近：**#768 10Hz 提频+帧瘦身+序列化缓存（PR #945 `9202366c`，已关）** ·
   #767 同步延迟测量基线（PR #944 `ba846c6b`）· #809 Room 抽象 + 热重载（PR #942/#943，关 #809+#669）·
