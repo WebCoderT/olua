@@ -9,7 +9,9 @@
  *
  * 这套测试钉五条线：
  *
- * 〇、**曲线复现旧表**：1 / 60 级的裸属性与旧 60 行逐位相同（改了公式立刻红）
+ * 〇、**计算器与独立实现对得上**：每段起止等级上，服务端求值 == `snap.curveValue`（另写一份公式）。
+ *    这里**不锁绝对值**（`1 级 100 血` / `60 级 98720` 那类数字是运营数据，改了就该放行 —— #966）；
+ *    锁定的是「段选择 + 段内公式 + 派生比例」这三层代码。
  * 一、**计算器**：任意等级现算，0 / 负数 / 非数字拒收；100 万级不是 Infinity
  * 二、**改段即时生效**：改一段的每级增量，下一次 preview 就是新值（不用重启）
  * 三、**段的结构约束**：结束等级不能小于起点、不能把下一段挤空、曲线键不能拼错
@@ -152,37 +154,71 @@ function seedSegment(curve, seq) {
       api(baseUrl, "PATCH", `admin/level-curves/${curve}/${seq}`, { token: adminToken, body });
     const listCurves = async () => api(baseUrl, "GET", "admin/level-curves", { token: adminToken });
 
-    //#region 〇、出厂 24 段 + 复现旧 60 行
+    //#region 〇、出厂 24 段 + 计算器与独立实现对齐
 
-    group("〇、出厂：4 条曲线 × 6 段，逐位复现旧 60 行");
+    group("〇、出厂：4 条曲线 × 6 段，计算器与「另一份实现」逐段对齐");
     const listed = await listCurves();
     checkEqual(listed.code, 0, "曲线列表可读");
     const curves = (listed.data && listed.data.list) || [];
-    checkEqual(curves.length, SEED_CURVES.length, "段数 = 出厂行数");
+    checkEqual(curves.length, SEED_CURVES.length, "段数 = 快照行数");
     const curveKeys = Array.from(new Set(curves.map((row) => row.curve))).sort();
     checkEqual(curveKeys.join(","), "attack_max,defense_max,exp,hp", "只有 4 条独立曲线");
 
+    /**
+     * preview 回执里「某条曲线」对应的字段
+     *
+     * 服务端把 4 条曲线展开成 16 列，这里只取回源的那一列做对照 —— 派生列走下面
+     * 的比例关系判定，不再单独要一条曲线。
+     */
+    const CURVE_FIELD = {
+      exp: (data) => data.exp,
+      hp: (data) => data.maxHp,
+      attack_max: (data) => data.physicalAttack.max,
+      defense_max: (data) => data.physicalDefense.max,
+    };
+
     const lv1 = await preview(1);
     checkEqual(lv1.code, 0, "1 级算得出来");
-    checkEqual(lv1.data.maxHp, 100, "1 级生命 = 100（旧表第 1 行）");
-    checkEqual(lv1.data.maxMp, 50, "1 级魔法 = 生命/2");
-    checkEqual(lv1.data.hpRecover, 1, "1 级回血 = 生命/100");
-    checkEqual(lv1.data.exp, 100, "1 级升级经验 = 100");
-    checkEqual(lv1.data.physicalAttack.min, 14, "1 级物攻下限 = 上限×0.7");
-    checkEqual(lv1.data.physicalAttack.max, 20, "1 级物攻上限 = 20");
-    checkEqual(
+    // 期望值一律从快照段参数现算（`snap.curveValue` 是独立实现），不写死数字：数值归运营，#966
+    checkEqual(lv1.data.maxHp, snap.curveValue("hp", 1), "1 级生命 = 快照 hp 段算出来的值");
+    checkEqual(lv1.data.exp, snap.curveValue("exp", 1), "1 级升级经验 = 快照 exp 段算出来的值");
+    checkEqual(lv1.data.physicalAttack.max, snap.curveValue("attack_max", 1), "1 级物攻上限 = 快照 attack_max 段");
+    checkEqual(lv1.data.physicalDefense.max, snap.curveValue("defense_max", 1), "1 级物防上限 = 快照 defense_max 段");
+
+    // 派生列不配曲线，是比例（`ROLE_LEVEL_RATIOS`）—— 判关系，不判绝对值
+    checkEqual(lv1.data.maxMp, Math.round(lv1.data.maxHp / 2), "魔法上限 = 生命 × 0.5（派生列，不是另一条曲线）");
+    checkEqual(lv1.data.hpRecover, Math.round(lv1.data.maxHp / 100), "回血 = 生命 × 0.01");
+    checkEqual(lv1.data.physicalAttack.min, Math.round(lv1.data.physicalAttack.max * 0.7), "物攻下限 = 上限 × 0.7");
+    checkEqual(lv1.data.physicalDefense.min, Math.round(lv1.data.physicalDefense.max * 0.7), "物防下限 = 上限 × 0.7");
+    check(
       lv1.data.magicAttack.max === lv1.data.physicalAttack.max && lv1.data.taoistAttack.max === lv1.data.physicalAttack.max,
       true,
       "三系攻同值（出厂就是这样）",
     );
 
     const lv60 = await preview(60);
-    checkEqual(lv60.data.maxHp, 98720, "60 级生命 = 98720（旧表末行，曲线零误差）");
-    checkEqual(lv60.data.maxMp, 49360, "60 级魔法 = 49360");
-    checkEqual(lv60.data.hpRecover, 987, "60 级回血 = 987");
-    checkEqual(lv60.data.exp, 106750, "60 级升级经验 = 106750");
-    checkEqual(lv60.data.physicalAttack.max, 12540, "60 级物攻上限 = 12540");
-    checkEqual(lv60.data.physicalDefense.max, 3762, "60 级物防上限 = 3762");
+    checkEqual(lv60.code, 0, "60 级算得出来");
+    checkEqual(lv60.data.maxHp, snap.curveValue("hp", 60), "60 级生命与快照同段公式一致");
+    checkEqual(lv60.data.exp, snap.curveValue("exp", 60), "60 级升级经验同法");
+    checkEqual(lv60.data.physicalAttack.max, snap.curveValue("attack_max", 60), "60 级物攻上限同法");
+    checkEqual(lv60.data.physicalDefense.max, snap.curveValue("defense_max", 60), "60 级物防上限同法");
+
+    // 24 段 × 起止等级：一条断言盖住「选哪一段」与「段内怎么算」两层
+    const misaligned = [];
+    for (const row of SEED_CURVES) {
+      const field = CURVE_FIELD[row.curve];
+      for (const level of [Number(row.fromLevel), Number(row.toLevel)]) {
+        const got = ((await preview(level)).data) || {};
+        const actual = field ? field(got) : undefined;
+        const want = snap.curveValue(row.curve, level);
+        if (actual !== want) misaligned.push(`${row.curve}@${level}: ${actual} != ${want}`);
+      }
+    }
+    check(
+      misaligned.length === 0,
+      "24 段的起止等级上，服务端求值都等于快照段公式（不取错段、边界不跳变）",
+      misaligned.slice(0, 5).join("; "),
+    );
 
     //#endregion
 

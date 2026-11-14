@@ -238,14 +238,18 @@ const expectedRangeOf = (index) => ({
     //#region 一、出厂清单
 
     group("一、出厂清单与列表口径");
-    checkEqual(SEED_SCROLLS.length, 7, "快照里出厂 7 卷");
-    let rangeOk = true;
-    for (let index = 1; index <= 7; index += 1) {
-      const row = SEED_SCROLL_BY_ID[`level_scroll_${index}`];
+    // 出厂几卷是数据（运营能续开也能删），这里只判「有货」；切法/派生才是代码
+    check(SEED_SCROLLS.length > 0, "快照里有出厂卷轴", String(SEED_SCROLLS.length));
+    // 只对「标准卷」（id = level_scroll_N）验切法；运营自开的怪卷（如 level_scroll_500_800）不在此列
+    const standardIds = SEED_SCROLLS.map((row) => String(row.id)).filter((id) => /^level_scroll_\d+$/.test(id));
+    let rangeOk = standardIds.length > 0;
+    for (const id of standardIds) {
+      const index = Number(id.replace("level_scroll_", ""));
+      const row = SEED_SCROLL_BY_ID[id];
       const expected = expectedRangeOf(index);
       if (!row || Number(row.minLevel) !== expected.min || Number(row.maxLevel) !== expected.max) rangeOk = false;
     }
-    check(rangeOk, "区间切法 = LvN 的 (N-1)×1000 ~ N×1000-1（Lv1 = 1~999、Lv7 = 6000~6999）");
+    check(rangeOk, `区间切法 = LvN 的 (N-1)×1000 ~ N×1000-1（按卷号派生，不是逐行手填；共 ${standardIds.length} 卷）`);
     checkEqual(Number(LV2.minLevel), 1000, "Lv2 的起点正好是 Lv1 用完之后的那一级（1000）");
 
     const listed = await api(baseUrl, "GET", "admin/level-scrolls?page=1&size=100", { token: adminToken });
@@ -264,8 +268,9 @@ const expectedRangeOf = (index) => ({
     });
     checkEqual(top.code, 0, "支持 size=1 + 指定排序（排序键在白名单里）", top.message);
     checkEqual(top.data.list.length, 1, "只回一行");
-    checkEqual(top.data.list[0].id, "level_scroll_7", "取到的是最高档 Lv7");
-    checkEqual(top.data.list[0].maxLevel, 6999, "最高档上限 = 6999（下一卷从 7000 起）");
+    const topSeed = SEED_SCROLLS.slice().sort((a, b) => Number(b.minLevel) - Number(a.minLevel))[0];
+    checkEqual(top.data.list[0].id, topSeed.id, "取到的是最高档（minLevel 最大的那一卷）");
+    checkEqual(Number(top.data.list[0].maxLevel), Number(topSeed.maxLevel), "上限取自库（不是按 id 现算一遍）");
 
     const snapshot = await api(baseUrl, "GET", "game-config", { token });
     checkEqual(snapshot.code, 0, "客户端能拉配置快照", snapshot.message);
