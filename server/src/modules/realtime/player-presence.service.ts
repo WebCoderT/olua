@@ -174,6 +174,19 @@ export class PlayerPresenceService implements OnApplicationBootstrap, OnApplicat
    */
   onCorrect: ((accountId: string, data: { x: number; y: number; reason: MovementRejectReason; mapId: string }) => void) | null = null;
 
+  /**
+   * 每个广播拍都会跑一次（#810：AOI 的驱动源）
+   *
+   * 为什么挂在互见的节拍上，而不是自己再起一个定时器：实体进出视野只由**两种变化**引起
+   * —— 玩家自己移动（这一拍就在这里）与怪物移动（AI 广播那一拍）。同频（都是 10Hz）
+   * 且对齐，裁出来的结果才与发出去的帧一致；两个独立定时器会各错半拍，「这一帧里
+   * 有一只已经该离开视野的怪」这类缝隙永远修不干净。
+   *
+   * 刻意**不受「有没有任何变化」限制**：没人动的时候也得跑（怪物可能在走进来），
+   * 所以它在下面 `broadcast()` 的提前返回之前调用。
+   */
+  onTick: (() => void) | null = null;
+
   constructor(
     private readonly config: ConfigService,
     private readonly roles: RolesService,
@@ -667,6 +680,8 @@ export class PlayerPresenceService implements OnApplicationBootstrap, OnApplicat
     // （理论上不会），存档进程的 NPC 交互仍然得能看到位置
     const now = Date.now();
     this.flushPositions(now);
+    // AOI（#810）先于「有没有人订阅广播」的判断：它算的是「谁该看见谁」，与有没有增量无关
+    this.onTick?.();
     if (this.onBroadcast === null && this.onSendTo === null) return;
     const staleMs = this.posStaleMs();
     // 按图分组的玩家增量（观看者以图为单位，分组后每个图最多发一帧）
@@ -804,6 +819,36 @@ export class PlayerPresenceService implements OnApplicationBootstrap, OnApplicat
       // 复制一份再发：在场表里的那份会被下一次懒刷新整份替换，别让广播出去的对象跟着变
       ap: { ...entry.appearance },
     };
+  }
+
+  /**
+   * 一个在线玩家此刻的互见条目（#810：`entityEnter` 用它把「刚进视野的人」整份给客户端）
+   *
+   * 与广播那条路的形状完全一致（同一个 `toEntry`）：客户端收到 enter 之后走的建人逻辑，
+   * 与收到 players 增量时走的是同一段，不需要为「首次」再写一套。
+   *
+   * 不在场（已断线 / 位置超时被清）返回 null —— AOI 那一拍算出来的集合可能比在场表晚
+   * 几十毫秒，宁可少发一条，也不发一个已经不在的人。
+   */
+  entryOf(accountId: string): RealtimePlayerEntry | null {
+    const entry = this.entries.get(accountId);
+    return entry ? this.toEntry(accountId, entry) : null;
+  }
+
+  /**
+   * 一间房里所有玩家的坐标（#810：AOI 每拍同步索引用）
+   *
+   * 比 `playersOn` 轻一档：不查名字、不排序 —— 索引只认「谁在哪」，名字与外观是发帧时
+   * 才需要的东西（那一步用 `entryOf`）。每 100ms × 房间数跑一次的东西，不该顺手做
+   * `localeCompare` 排序。
+   */
+  positionsOn(roomId: string): Array<{ accountId: string; x: number; y: number }> {
+    const rows: Array<{ accountId: string; x: number; y: number }> = [];
+    for (const [accountId, entry] of this.entries) {
+      if (entryRoomKey(entry) !== roomId) continue;
+      rows.push({ accountId, x: entry.x, y: entry.y });
+    }
+    return rows;
   }
 
   /**

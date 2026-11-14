@@ -227,6 +227,17 @@ export class WorldService implements OnApplicationBootstrap, OnApplicationShutdo
     return null;
   }
 
+  /**
+   * 在一间房里查一只实例（#810：AOI 发 `entityEnter` 时按实例 id 取权威血量 / 上限）
+   *
+   * 与 `find` 分开：`find` 不知道房号，只能逐房扫；AOI 每拍要给几十只怪组条目，
+   * 每只都扫一遍所有房间就变成 O(房数 × 怪数)。反正房号在调用方手里（它正按房广播）。
+   * 房间不在内存（已卸载）返回 null —— 那时这份索引也该作废了。
+   */
+  monsterOf(roomId: string, instanceId: string): WorldMonster | null {
+    return this.roomManager.get(roomId)?.monsters.get(instanceId) ?? null;
+  }
+
   //#endregion
 
   //#region 单图热重载（#809，收 #669）

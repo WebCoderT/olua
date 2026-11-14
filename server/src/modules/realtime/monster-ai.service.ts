@@ -118,6 +118,14 @@ const SKILL_CACHE_TTL_MS = 1000;
 const MAX_MONSTER_CATCH_UP_TICKS = 5;
 
 /**
+ * 没有任何运行时的房间返回它（共享的空 Map，别改）
+ *
+ * `liveRuntimesOf` 每 100ms 会被 AOI 调一次（包括「图里没人看、运行时已回收」的情形），
+ * 每次都 `new Map()` 只是给 GC 添活；空表是只读的，一份就够。
+ */
+const EMPTY_RUNTIMES: ReadonlyMap<string, { x: number; y: number; hp: number; maxHp: number }> = new Map();
+
+/**
  * 一个可释放技能的运行时快照（技能行 + 挂载条目 + 状态行合并后的结果）
  *
  * 提前合并的理由：AI 每 tick 每只怪都要判断「能不能放、放哪个」，不该在那里做 JSON 解析。
@@ -485,8 +493,7 @@ export class MonsterAiService implements OnApplicationBootstrap, OnApplicationSh
   private readonly logger = new Logger(MonsterAiService.name);
 
   /** `zone:mapId` → 该图各怪的 AI 运行时（与世界服务的分域键同构；没人看的图**冻结**不删，#857） */
-  private readonly runtimes = new Map<string, Map<string, MonsterRuntime>>();
-  /** `zone:mapId` → 冻结起始时刻（毫秒；#857 回收阈值用） */
+  private readonly runtimes = new Map<string, Map<string, MonsterRuntime>>();  /** `zone:mapId` → 冻结起始时刻（毫秒；#857 回收阈值用） */
   private readonly frozenAt = new Map<string, number>();
   /** mapId → 可行走几何（#854；碰撞盒是低频数据，5 秒 TTL） */
   private readonly geometryCache = new Map<string, { at: number; geo: WalkGeometry | null }>();
@@ -730,6 +737,21 @@ export class MonsterAiService implements OnApplicationBootstrap, OnApplicationSh
     const runtime = this.findRuntime(instanceId);
     if (!runtime) return null;
     return { x: runtime.x, y: runtime.y, moving: runtime.movingNow };
+  }
+
+  /**
+   * 一间房里所有怪此刻的坐标与血量（#810：AOI 索引每拍刷新视线用）
+   *
+   * 返回内部 Map 本身（只读口径）：AOI 每 100ms 要把整间房的怪同步进格子索引，如果这里
+   * 复制一份出来，就是「145 只 × 10Hz」的对象分配，纯属喂 GC。调用方承诺只读有两个理由：
+   * ① 它只是拿去算格子与距离；② 真正改这些字段的是 AI tick 自己（同一个事件循环，
+   * 不存在并发读写）。`ReadonlyMap` 在类型上把这条承诺写死。
+   *
+   * 死掉的怪不在里面（`killMonster` 会把运行时删掉）—— 需要「死亡中的怪」的一方
+   * （AOI 发快照）应该回世界层取，那里有存活标记与重生倒计时。
+   */
+  liveRuntimesOf(roomId: string): ReadonlyMap<string, { x: number; y: number; hp: number; maxHp: number }> {
+    return this.runtimes.get(roomId) ?? EMPTY_RUNTIMES;
   }
 
   //#endregion

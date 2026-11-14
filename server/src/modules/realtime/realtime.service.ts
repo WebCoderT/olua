@@ -11,6 +11,7 @@ import type { ApiEnvelope, AuthenticatedUser } from "../../common/interfaces/api
 import { AccountRepository } from "../../database/repositories/account.repository";
 import type { RoleRow } from "../../database/rows";
 import { WorldService } from "../world/world.service";
+import { worldMonsterSnapshotOf } from "../world/world-monster";
 import { roomKey } from "../../common/utils/room-key.util";
 import { MapService, START_MAP_ID, type MapEnterReject } from "../map/map.service";
 import { roleAttributeSourceOf, summarizeRoleAttributes } from "../combat/role-attributes";
@@ -27,6 +28,8 @@ import { ChatService } from "./chat.service";
 import { CombatSettlementService } from "./combat-settlement.service";
 import { MonsterAiService } from "./monster-ai.service";
 import { PlayerPresenceService } from "./player-presence.service";
+import { AoiService } from "./aoi.service";
+import { MONSTER_ENTITY, PLAYER_ENTITY, monsterEntityOf, playerEntityOf } from "./aoi-math";
 import { PathService } from "./path.service";
 import { QuestService } from "../quest/quest.service";
 import {
@@ -36,11 +39,13 @@ import {
   type ChatChannel,
   type RealtimeChatBroadcast,
   type RealtimeChatMessage,
+  type RealtimeEntityEnterMessage,
+  type RealtimeEntityLeaveMessage,
   type RealtimeIdentity,
   type RealtimeMapEnterResultMessage,
+  type RealtimeMonsterAiMessage,
   type RealtimePickedMessage,
   type RealtimeRoleUpdateMessage,
-  type RealtimePlayerAction,
   type RealtimePlayerEntry,
   type RealtimePlayersMessage,
   type RealtimePosCorrectMessage,
@@ -50,6 +55,7 @@ import {
   type RealtimeSettleMessage,
   type RealtimeStatusMessage,
   type RealtimeWorldMessage,
+  type RealtimeWorldMonster,
   type RealtimeWorldReloadMessage,
 } from "./realtime.protocol";
 
@@ -139,6 +145,14 @@ interface StatsAccum {
 }
 
 /**
+ * players 帧的 data（三条出口共用的形状：互见广播 / 进图快照 / AOI 裁剪）
+ *
+ * 提成别名是因为 #810 之后要在「裁一刀」的两个阶段之间传它，而它原本是内联在
+ * `visiblePlayers` 参数里的匿名类型 —— 匿名类型写在两处就会各改各的，最后漂成两个形状。
+ */
+type PlayersFrameData = RealtimePlayersMessage["data"];
+
+/**
  * 实时通道（服务端侧）
  *
  * 只做三件事：发票据、按票据建连、把连接养活着。业务消息见 #34。
@@ -197,6 +211,7 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
     private readonly combat: CombatSettlementService,
     private readonly monsterAi: MonsterAiService,
     private readonly presence: PlayerPresenceService,
+    private readonly aoi: AoiService,
     private readonly chat: ChatService,
     private readonly blocks: BlockService,
     private readonly party: PartyService,
@@ -296,12 +311,11 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
       this.sendToViewers(this.world.viewersOf(result.roomId), frame);
     };
     // 怪物 AI 广播（#323）：AI 服务攒好一帧，这里按观看者集合发出去。
-    // #768 序列化缓存：帧对观看者相同，只 stringify 一次（sendToViewers）
+    // #810：出口按格子裁剪 —— 每个观看者只收「自己 3×3 格内」的怪与发生在它们身上的事件；
+    // 同一格的观看者拿到的内容完全相同，所以按格分组、每组只序列化一次
     this.monsterAi.onBroadcast = (roomId, data) => {
       // 每次回调 = 一帧（一間房的增量）。统计（#767）只包住发送，不碰攒帧逻辑
-      this.statsRun("monster-ai", 1, () => {
-        this.sendToViewers(this.world.viewersOf(roomId), { type: "monster-ai", data });
-      });
+      this.statsRun("monster-ai", 1, () => this.broadcastMonsterAi(roomId, data));
     };
     // 状态推送（#826 第三批）：怪物把眩晕 / 灼烧挂到某个玩家身上时，整份快照推给他本人。
     // 不推的话他要等到下一次出手被 `stunned` 拒了才知道自己被控 —— 血条莫名其妙掉一截同理。
@@ -309,46 +323,25 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
       const socket = this.connections.get(accountId);
       if (socket) this.send(socket, { type: "statuses", data: { statuses } } satisfies RealtimeStatusMessage);
     };
-    // 玩家互见广播（#324）：在场表攒好一帧，这里按观看者集合发出去；
-    // 屏蔽（#398）在这里逐观看者剔一次 —— 一个帧发给多人时，收件人的过滤条件各不相同，
-    // 「谁能看谁」只能由持有连接与身份的通道来判（在场表只认识「谁在哪张图」）。
-    // #768 序列化缓存：没拉黑任何人的观看者（绝大多数）全图共用一份序列化结果，
-    // 只有真的滤掉了条目的观看者才各出一份
+    // 玩家互见广播（#324）：在场表攒好一帧，这里按观看者集合发出去。
+    // 两道过滤叠加：**AOI**（#810：只看 3×3 格内的人）与**屏蔽**（#398：拉黑的人不出现在屏幕上）。
+    // 前者按格（同格的人结果相同、可共用序列化），后者因人而异（只有真的滤掉了的才各出一份）
     this.presence.onBroadcast = (roomId, data) => {
-      this.statsRun("players", 1, () => {
-        const round = this.currentRound();
-        let sharedJson: string | null = null;
-        let sharedBytes = 0;
-        for (const accountId of this.world.viewersOf(roomId)) {
-          const socket = this.connections.get(accountId);
-          if (!socket || socket.readyState !== WebSocket.OPEN) continue;
-          const filtered = this.visiblePlayers(accountId, data);
-          if (filtered === data) {
-            // 快路径：这个观看者没有任何条目被滤（visiblePlayers 原样返回入参）
-            if (sharedJson === null) {
-              const t0 = round ? performance.now() : 0;
-              const frame: RealtimePlayersMessage = { type: "players", data };
-              sharedJson = JSON.stringify(frame);
-              sharedBytes = Buffer.byteLength(sharedJson);
-              if (round) {
-                round.stringifyMs += performance.now() - t0;
-                round.stringifies += 1;
-              }
-            }
-            this.sendPrebuilt(socket, sharedJson, sharedBytes);
-          } else {
-            // 慢路径：有屏蔽，过滤结果因人而异，只能各序列化一份
-            this.send(socket, { type: "players", data: filtered } satisfies RealtimePlayersMessage);
-          }
-        }
-      });
+      this.statsRun("players", 1, () => this.broadcastPlayers(roomId, data));
     };
-    // 快照兜底的定向发送（full 帧只给刚进图的连接自己）：同样过一次屏蔽过滤
+    // AOI 的驱动源（#810）：互见节拍（10Hz）每拍都会跑，哪怕没有任何变化 ——
+    // 怪物可能正在走进某人的视野，那件事不会在玩家的增量里体现
+    this.presence.onTick = () => this.aoiTick();
+    // 快照兜底的定向发送（full 帧只给刚进图的连接自己）：同样过一次屏蔽过滤。
+    // #810：这份快照**不按 AOI 裁** —— 刚进图的人服务端还不知道他在哪，先给全量；
+    // 第一拍 AOI 会把 3×3 格外的实体 leave 掉（基线在 worldJoin 里 seed 成同一批 id）
     this.presence.onSendTo = (accountId, data) => {
       const socket = this.connections.get(accountId);
-      if (socket) {
-        this.send(socket, { type: "players", data: this.visiblePlayers(accountId, data) } satisfies RealtimePlayersMessage);
-      }
+      if (!socket) return;
+      const filtered = this.visiblePlayers(accountId, data);
+      // 全被拉黑 = 什么都不剩：不发空帧（客户端本来就没有这些人）
+      if (!filtered) return;
+      this.send(socket, { type: "players", data: filtered } satisfies RealtimePlayersMessage);
     };
     // 聊天投递（#395）：ChatService 选好收件人列表，这里对着连接表发；
     // from.accountId 在 ChatService 侧已组好，帧到这里就是成品
@@ -623,6 +616,9 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
         // 只把「观看者」退掉（空闲回收的依据）。被顶掉的旧连接**不能**清 —— map 里已经是新连接的天下
         this.combat.dropAccount(identity.id);
         this.presence.dropAccount(identity.id);
+        // AOI 的观看者状态（#810）：断线即丢。留着它没有意义 —— seen 基线对应的是
+        // 一个已经不存在的客户端，下次进图会重新 seed
+        this.aoi.dropViewer(identity.id);
         this.world.leave(identity.id);
         this.chat.dropAccount(identity.id);
         // 离线不保留 buff（#822 / docs/22 §5）：状态会改结算（防御倍率 / 格挡），
@@ -891,6 +887,13 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
       this.send(socket, frame);
       // 玩家互见（#324）：随 world 应答发一份同图全量快照（增量帮不上「刚进图的人」）
       this.presence.join(socket.identity.id, roomId);
+      // AOI 基线（#810）：进图这一刻还不知道他在哪（pos 帧随后才到），所以上面给的是
+      // **全量**；这里把基线对齐成「客户端手上现有的东西」，第一拍 AOI 就只做一件事 ——
+      // 把 3×3 格外的实体 leave 掉（不 seed 的话那些域外实体会永久留在他的画面上）
+      this.aoi.seed(roomId, socket.identity.id, [
+        ...snapshot.monsters.map((monster) => monsterEntityOf(monster.instanceId)),
+        ...this.presence.positionsOn(roomId).map((player) => playerEntityOf(player.accountId)),
+      ]);
       // 队伍（#399）：快照只在变化时发，重连 / 换图的人错过了那些变化 —— 进图补一份。
       // 角色 id 取**账号行**的在线角色（不是在场表）：进图这一刻 pos 帧可能还没到，
       // 而在场表里没条目就查不到「这个角色挂在谁的连接上」，队伍状态会假死到下一次变化
@@ -971,15 +974,43 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
    *
    * 拿不到快照（房间已被卸载）就不发 —— 那只可能发生在观看者集合与世界状态不同步的瞬间，
    * 而观看者下一个 worldJoin 会拿到全量。
+   *
+   * #810：这条出口也按格裁剪。world 帧是「客户端按它重建怪物集合」的权威帧 —— 不裁的话
+   * 每次有人重生（每 30 秒一波）全图 145 只都会回到每个人的画面上，下一拍 AOI 再把域外的
+   * 清掉，表现为「远处的怪每半分钟闪一下」。裁剪之后同格的人共用一份序列化结果。
    */
   private broadcastWorld(roomId: string): void {
     const snapshot = this.world.snapshot(roomId);
     if (!snapshot) return;
-    const frame: RealtimeWorldMessage = { type: "world", data: this.withLiveMonsterPositions(snapshot) };
+    const full = this.withLiveMonsterPositions(snapshot);
+    // 索引先对齐：裁剪的依据是「他在哪、怪在哪」，用的是刚同步完的坐标
+    this.syncAoiRoom(roomId);
     // 一次回调 = 一帧全量（world 帧是事件驱动的，重生 / 代际变化才发，不在固定节拍上）
-    // #768 序列化缓存：同一帧只 stringify 一次（sendToViewers）
     this.statsRun("world", 1, () => {
-      this.sendToViewers(this.world.viewersOf(roomId), frame);
+      const groups = new Map<string | null, string[]>();
+      for (const accountId of this.world.viewersOf(roomId)) {
+        const socket = this.connections.get(accountId);
+        if (!socket || socket.readyState !== WebSocket.OPEN) continue;
+        // null = 位置未知（刚进图 / 换图途中）：不裁，整份发给他
+        const cell = this.aoi.viewerCellOf(accountId);
+        const list = groups.get(cell) ?? [];
+        list.push(accountId);
+        groups.set(cell, list);
+      }
+      for (const [cell, accountIds] of groups) {
+        const visible = cell === null ? null : this.aoi.visibleInCell(roomId, cell);
+        const monsters = visible === null ? full.monsters : full.monsters.filter((monster) => visible.has(monsterEntityOf(monster.instanceId)));
+        // 客户端收到 world 帧会按它重建怪物集合 —— 基线必须对齐到「这一帧里实际有的」
+        for (const accountId of accountIds) {
+          this.aoi.seedMonsters(
+            roomId,
+            accountId,
+            monsters.map((monster) => monsterEntityOf(monster.instanceId)),
+          );
+        }
+        const frame: RealtimeWorldMessage = { type: "world", data: monsters === full.monsters ? full : { ...full, monsters } };
+        this.sendToViewers(accountIds, frame);
+      }
     });
   }
 
@@ -1015,11 +1046,11 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
    *
    * `full` 快照同样要滤：刚进图的人拿着全量，里面不该有他拉黑的人
    * （否则「拉黑后消失」在重进图的那一刻又冒出来）。
+   *
+   * 返回 `null` = 滤完什么都不剩（#810：这一格本来就没看到这些人）—— 调用方据此跳过
+   * 整帧，而不是发一条空帧让客户端白解析一次。
    */
-  private visiblePlayers(
-    viewerAccountId: string,
-    data: { mapId: string; full: boolean; players: RealtimePlayerEntry[]; left: string[]; actions: RealtimePlayerAction[] },
-  ): { mapId: string; full: boolean; players: RealtimePlayerEntry[]; left: string[]; actions: RealtimePlayerAction[] } {
+  private visiblePlayers(viewerAccountId: string, data: PlayersFrameData): PlayersFrameData | null {
     const viewerRoleId = this.presence.identityOf(viewerAccountId)?.roleId ?? "";
     if (!viewerRoleId) return data;
     const players = data.players.filter((entry) => !this.blocks.hiddenFor(viewerRoleId, entry.r ?? ""));
@@ -1028,7 +1059,214 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
       const actorRoleId = this.presence.identityOf(action.a)?.roleId ?? "";
       return !this.blocks.hiddenFor(viewerRoleId, actorRoleId);
     });
-    // 没有要滤掉的条目时原样返回：这条路径每 200ms 跑一遍，能少建一个对象就少建一个
+    if (players.length === 0 && actions.length === 0 && data.left.length === 0) return null;
+    // 没有要滤掉的条目时原样返回：这条路径每 100ms 跑一遍，能少建一个对象就少建一个
+    return players.length === data.players.length && actions.length === data.actions.length ? data : { ...data, players, actions };
+  }
+
+  //#endregion
+
+  //#region AOI（#810：广播按格子裁剪，进出走 entityEnter / entityLeave）
+
+  /**
+   * AOI 一拍（挂在互见节拍上，10Hz）
+   *
+   * 顺序是固定的三件事：**先同步索引**（怪按 AI 实时坐标、玩家按在场表）、**再逐个观看者
+   * 算进出**、**最后清理已经不在内存的房**。第一件事必须在第二件之前 —— 索引空着的时候
+   * 算出来的「可见集合」是空集，会把客户端手里刚拿到的一整图怪全部 leave 掉。
+   */
+  private aoiTick(): void {
+    if (this.closing) return;
+    const now = Date.now();
+    const active = new Set<string>();
+    for (const room of this.world.viewedRooms()) {
+      active.add(room.roomId);
+      this.syncAoiRoom(room.roomId);
+      for (const accountId of room.viewers) this.syncViewerAoi(room.roomId, room.mapId, accountId, now);
+    }
+    // 房间卸载（没人看满 worldMapIdleMs）不会通知本服务：每拍按「有人看的房」对一遍，
+    // 不在里面的索引与观看者状态一并丢掉
+    this.aoi.pruneRooms(active);
+  }
+
+  /**
+   * 把一间房的权威状态同步进格子索引
+   *
+   * 怪的位置**优先取 AI 运行时**（世界层记的是出生点，怪被拉着走了半张图，出生点就不代表
+   * 「它现在在哪」）；死掉的怪没有运行时，退回世界层的坐标 —— 它虽然不会在客户端建节点，
+   * 但「在哪死」仍然影响「谁看得见这次死亡」，位置不能凭空丢。
+   */
+  private syncAoiRoom(roomId: string): void {
+    const live = this.monsterAi.liveRuntimesOf(roomId);
+    const monsterIds = new Set<string>();
+    for (const monster of this.world.monstersOf(roomId)) {
+      const entityId = monsterEntityOf(monster.instanceId);
+      monsterIds.add(entityId);
+      const runtime = live.get(monster.instanceId);
+      this.aoi.index(roomId, entityId, runtime?.x ?? monster.x, runtime?.y ?? monster.y);
+    }
+    // 重载换过一批实例（id 全变）/ 合并区搬走：旧 id 必须从索引里掉出来，
+    // 否则它会作为「可见实体」一直算进别人视野，成为一个发不出去的幽灵
+    this.aoi.retain(roomId, MONSTER_ENTITY, monsterIds);
+
+    const playerIds = new Set<string>();
+    for (const player of this.presence.positionsOn(roomId)) {
+      const entityId = playerEntityOf(player.accountId);
+      playerIds.add(entityId);
+      this.aoi.index(roomId, entityId, player.x, player.y);
+    }
+    this.aoi.retain(roomId, PLAYER_ENTITY, playerIds);
+  }
+
+  /**
+   * 算一个观看者这一拍的进出，并把增量帧发给他
+   *
+   * 参数只带 `roomId` / `mapId` 两个字符串，不带整个世界域的 `Room` 对象：跨域的边
+   * （`audit-server-boundaries`）只放行了 world 的**公开服务**与怪物实例契约，房间内部结构
+   * 属于世界域私事 —— 这里需要的只是「哪间房」与「帧里的 mapId」。
+   */
+  private syncViewerAoi(roomId: string, mapId: string, accountId: string, now: number): void {
+    const at = this.presence.positionOf(accountId);
+    // 位置未知（刚进图 pos 还没到 / 换图途中）→ 这一拍不裁：裁剪的依据就是「他在哪」，
+    // 没有就等下一拍。此时他手里是进图时那份全量，不会有错，只是暂时没被裁
+    if (!at || at.roomId !== roomId) return;
+    const { enters, leaves } = this.aoi.diff(roomId, accountId, at.x, at.y, now);
+    const socket = this.connections.get(accountId);
+    if (!socket || socket.readyState !== WebSocket.OPEN) return;
+    if (enters.length > 0) this.sendEntityEnter(socket, roomId, mapId, accountId, enters);
+    if (leaves.length > 0) this.sendEntityLeave(socket, mapId, leaves);
+  }
+
+  /** 组一帧 `entityEnter`（怪：世界层快照 + AI 实时坐标；玩家：在场表条目） */
+  private sendEntityEnter(socket: TrackedSocket, roomId: string, mapId: string, accountId: string, entityIds: string[]): void {
+    const monsters: RealtimeWorldMonster[] = [];
+    const players: RealtimePlayerEntry[] = [];
+    for (const entityId of entityIds) {
+      if (entityId.startsWith(MONSTER_ENTITY)) {
+        const snapshot = this.monsterSnapshotOf(roomId, entityId.slice(MONSTER_ENTITY.length));
+        if (snapshot) monsters.push(snapshot);
+        continue;
+      }
+      // 自己的条目不发（客户端本来就有自己），AOI 那边也不会把它算进 enters
+      const entry = this.presence.entryOf(entityId.slice(PLAYER_ENTITY.length));
+      if (entry) players.push(entry);
+    }
+    if (monsters.length === 0 && players.length === 0) return;
+    const frame: RealtimeEntityEnterMessage = { type: "entityEnter", data: { mapId, monsters, players } };
+    this.send(socket, frame);
+  }
+
+  /** 组一帧 `entityLeave`（只有 id：客户端按 id 拆节点，别的都不需要） */
+  private sendEntityLeave(socket: TrackedSocket, mapId: string, entityIds: string[]): void {
+    const monsters: string[] = [];
+    const players: string[] = [];
+    for (const entityId of entityIds) {
+      if (entityId.startsWith(MONSTER_ENTITY)) monsters.push(entityId.slice(MONSTER_ENTITY.length));
+      else players.push(entityId.slice(PLAYER_ENTITY.length));
+    }
+    const frame: RealtimeEntityLeaveMessage = { type: "entityLeave", data: { mapId, monsters, players } };
+    this.send(socket, frame);
+  }
+
+  /** 一只怪的快照（世界层权威血量 / 存活 + AI 实时坐标） */
+  private monsterSnapshotOf(roomId: string, instanceId: string): RealtimeWorldMonster | null {
+    const monster = this.world.monsterOf(roomId, instanceId);
+    if (!monster) return null;
+    const snapshot = worldMonsterSnapshotOf(monster);
+    const live = this.monsterAi.liveRuntimesOf(roomId).get(instanceId);
+    if (!live) return snapshot;
+    snapshot.x = live.x;
+    snapshot.y = live.y;
+    return snapshot;
+  }
+
+  /**
+   * 怪物 AI 出口（#810）：按格裁剪，**同一格只序列化一次**
+   *
+   * 一帧里可能同时有位置变化、命中、施法、击杀四路负载，全部按「那只怪在不在你的视野里」
+   * 过滤。命中事件同样按怪的可见性判：怪打得到你时它必然在你的视野内（普攻距离远小于
+   * 一格），所以不需要为「自己挨打」单开例外。
+   */
+  private broadcastMonsterAi(roomId: string, data: RealtimeMonsterAiMessage["data"]): void {
+    const groups = new Map<string | null, string[]>();
+    for (const accountId of this.world.viewersOf(roomId)) {
+      const socket = this.connections.get(accountId);
+      if (!socket || socket.readyState !== WebSocket.OPEN) continue;
+      // null = 位置未知：不裁（刚进图那几十毫秒）
+      const cell = this.aoi.viewerCellOf(accountId);
+      const list = groups.get(cell) ?? [];
+      list.push(accountId);
+      groups.set(cell, list);
+    }
+    for (const [cell, accountIds] of groups) {
+      const frame: RealtimeMonsterAiMessage | null =
+        cell === null ? { type: "monster-ai", data } : this.monsterAiFrameIn(roomId, cell, data);
+      // 这一格什么都看不到 → 不发空帧（人多了之后这是常态：大多数格没有变化）
+      if (!frame) continue;
+      this.sendToViewers(accountIds, frame);
+    }
+  }
+
+  /** 裁剪一帧 monster-ai：只留这个格子里看得见的怪与发生在它们身上的事 */
+  private monsterAiFrameIn(roomId: string, cell: string, data: RealtimeMonsterAiMessage["data"]): RealtimeMonsterAiMessage | null {
+    const visible = this.aoi.visibleInCell(roomId, cell);
+    const monsters = data.monsters.filter((entry) => visible.has(monsterEntityOf(entry.i)));
+    const hits = data.hits.filter((hit) => visible.has(monsterEntityOf(hit.i)));
+    const casts = data.casts.filter((cast) => visible.has(monsterEntityOf(cast.i)));
+    const kills = data.kills.filter((kill) => visible.has(monsterEntityOf(kill.i)));
+    if (monsters.length === 0 && hits.length === 0 && casts.length === 0 && kills.length === 0) return null;
+    return { type: "monster-ai", data: { mapId: data.mapId, monsters, hits, casts, kills } };
+  }
+
+  /**
+   * 玩家互见出口（#810）：AOI 裁剪 + 屏蔽过滤，**同一格只序列化一次**
+   *
+   * 两道过滤的差别决定了怎么复用序列化：AOI 的裁剪结果只取决于「你在哪一格」（同格相同），
+   * 屏蔽的结果因人而异。所以先按格算一份「裁剪后」的基线，没拉黑任何人的观看者共用它
+   * （以及它的 JSON），拉黑了人的那几个再各自过滤一份（少数派，与 #768 的处理一致）。
+   */
+  private broadcastPlayers(roomId: string, data: PlayersFrameData): void {
+    const groups = new Map<string | null, { accounts: string[]; base: PlayersFrameData | null }>();
+    const custom: Array<{ accountId: string; data: PlayersFrameData }> = [];
+    for (const accountId of this.world.viewersOf(roomId)) {
+      const socket = this.connections.get(accountId);
+      if (!socket || socket.readyState !== WebSocket.OPEN) continue;
+      const cell = this.aoi.viewerCellOf(accountId);
+      let group = groups.get(cell);
+      if (!group) {
+        group = { accounts: [], base: this.cropPlayersData(roomId, cell, data) };
+        groups.set(cell, group);
+      }
+      // 这一格看不到这批变化（同格没有这些人）→ 这一帧对他没有意义
+      if (!group.base) continue;
+      const filtered = this.visiblePlayers(accountId, group.base);
+      if (!filtered) continue;
+      if (filtered === group.base) group.accounts.push(accountId);
+      else custom.push({ accountId, data: filtered });
+    }
+    for (const group of groups.values()) {
+      if (group.base && group.accounts.length > 0) {
+        this.sendToViewers(group.accounts, { type: "players", data: group.base } satisfies RealtimePlayersMessage);
+      }
+    }
+    for (const one of custom) {
+      const socket = this.connections.get(one.accountId);
+      if (socket) this.send(socket, { type: "players", data: one.data } satisfies RealtimePlayersMessage);
+    }
+  }
+
+  /**
+   * 按 AOI 裁剪一帧互见数据（不含屏蔽过滤）
+   *
+   * `left` 不过滤：它是「这个人不在图里了」，必须让所有收件人拆节点 —— 与屏蔽那边
+   * 的同一条理由（漏发留幽灵，多发是空操作）。
+   */
+  private cropPlayersData(roomId: string, cell: string | null, data: PlayersFrameData): PlayersFrameData | null {
+    if (cell === null) return data;
+    const visible = this.aoi.visibleInCell(roomId, cell);
+    const players = data.players.filter((entry) => visible.has(playerEntityOf(entry.a)));
+    const actions = data.actions.filter((action) => visible.has(playerEntityOf(action.a)));
+    if (players.length === 0 && actions.length === 0 && data.left.length === 0) return null;
     return players.length === data.players.length && actions.length === data.actions.length ? data : { ...data, players, actions };
   }
 
@@ -1113,6 +1351,7 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
       // 与 close 事件的清理同口径：退观看者、清幂等账、清位置上报（世界状态是共享的，不清）
       this.combat.dropAccount(accountId);
       this.presence.dropAccount(accountId);
+      this.aoi.dropViewer(accountId);
       this.world.leave(accountId);
       this.chat.dropAccount(accountId);
       this.roles.clearStatusesOf(accountId);
