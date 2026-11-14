@@ -152,7 +152,7 @@ function TiersCard({ onChanged }: { onChanged: () => void }) {
     return (
       <section className="flex flex-col gap-2">
         <div className="flex items-center justify-between">
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-ink-4">
             {kindLabel}档位（{tiers?.length ?? 0} 档，序号即档位 id）
           </h3>
           <Button variant="ghost" disabled={!canWrite || !tiers || tiers.length >= TIER_LIMITS.max} onClick={() => appendTier(kind)}>
@@ -163,17 +163,17 @@ function TiersCard({ onChanged }: { onChanged: () => void }) {
           <table className="w-full min-w-[560px] border-separate border-spacing-1">
             <thead>
               <tr>
-                <th className="w-12 text-xs font-normal text-slate-500">序号</th>
-                <th className="text-xs font-normal text-slate-400">文案</th>
-                <th className="w-28 text-xs font-normal text-slate-400">属性倍率</th>
-                <th className="w-48 text-xs font-normal text-slate-400">文字颜色</th>
-                <th className="w-16 text-right text-xs font-normal text-slate-400">操作</th>
+                <th className="w-12 text-xs font-normal text-ink-5">序号</th>
+                <th className="text-xs font-normal text-ink-4">文案</th>
+                <th className="w-28 text-xs font-normal text-ink-4">属性倍率</th>
+                <th className="w-48 text-xs font-normal text-ink-4">文字颜色</th>
+                <th className="w-16 text-right text-xs font-normal text-ink-4">操作</th>
               </tr>
             </thead>
             <tbody>
               {(tiers ?? []).map((tier, index) => (
                 <tr key={index}>
-                  <td className="text-center text-xs text-slate-500">{index}</td>
+                  <td className="text-center text-xs text-ink-5">{index}</td>
                   <td>
                     <Input value={tier.label} disabled={!canWrite} onChange={(event) => patchTier(kind, index, { label: event.target.value })} />
                   </td>
@@ -194,7 +194,7 @@ function TiersCard({ onChanged }: { onChanged: () => void }) {
                         aria-label={`${kindLabel}第 ${index + 1} 档颜色`}
                         value={HEX_COLOR_PATTERN.test(tier.color.trim()) ? tier.color.trim() : "#000000"}
                         disabled={!canWrite}
-                        className="h-9 w-9 cursor-pointer rounded border border-slate-700 bg-slate-900 p-0.5 disabled:cursor-not-allowed"
+                        className="h-9 w-9 cursor-pointer rounded border border-line-strong bg-surface-2 p-0.5 disabled:cursor-not-allowed"
                         onChange={(event) => patchTier(kind, index, { color: event.target.value })}
                       />
                       <Input
@@ -242,7 +242,7 @@ function TiersCard({ onChanged }: { onChanged: () => void }) {
         <div className="flex flex-col gap-5">
           {renderTiers("prefix", prefixTiers)}
           {renderTiers("suffix", suffixTiers)}
-          {problem ? <p className="text-xs text-red-300">{problem}</p> : null}
+          {problem ? <p className="text-xs text-ember-hi">{problem}</p> : null}
         </div>
       )}
     </Card>
@@ -405,14 +405,14 @@ function AssociationBoard({ config, metaVersion }: { config: BoardConfig; metaVe
         </div>
       ) : (
         <div className="flex flex-col gap-4">
-          {invalid ? <p className="text-xs text-amber-400">{invalid}</p> : null}
+          {invalid ? <p className="text-xs text-warn">{invalid}</p> : null}
           <div className="overflow-x-auto">
             <table className="w-full min-w-[640px] border-separate border-spacing-1">
               <thead>
                 <tr>
-                  <th className="w-16 text-xs font-normal text-slate-500">后缀 \ 前缀</th>
+                  <th className="w-16 text-xs font-normal text-ink-5">后缀 \ 前缀</th>
                   {prefixLabels.map((prefix) => (
-                    <th key={prefix} className="text-xs font-normal text-slate-400">
+                    <th key={prefix} className="text-xs font-normal text-ink-4">
                       {prefix}
                     </th>
                   ))}
@@ -421,7 +421,7 @@ function AssociationBoard({ config, metaVersion }: { config: BoardConfig; metaVe
               <tbody>
                 {suffixLabels.map((suffix, s) => (
                   <tr key={suffix}>
-                    <td className="text-xs text-slate-400">{suffix}</td>
+                    <td className="text-xs text-ink-4">{suffix}</td>
                     {prefixLabels.map((_, p) => {
                       const combo = s * prefixCount + p;
                       return (
@@ -496,10 +496,10 @@ function AppearanceCell({
         onClick={() => setOpen(true)}
         className={`flex w-full flex-col items-center gap-1 rounded border p-1.5 transition disabled:cursor-not-allowed disabled:opacity-60 ${
           unknown
-            ? "border-amber-700/60 bg-amber-500/5 hover:border-amber-600"
+            ? "border-warn/30 bg-warn/5 hover:border-warn/50"
             : value
-              ? "border-slate-800/80 hover:border-indigo-500/70 hover:bg-slate-800/40"
-              : "border-dashed border-slate-700 bg-slate-900/30 hover:border-slate-600"
+              ? "border-line/80 hover:border-gold/70 hover:bg-surface-4/40"
+              : "border-dashed border-line-strong bg-surface-2/30 hover:border-line-strong"
         }`}
       >
         {value ? (
@@ -507,15 +507,15 @@ function AppearanceCell({
         ) : (
           <span
             aria-hidden="true"
-            className="rounded border border-dashed border-slate-800 bg-slate-950/40"
+            className="rounded border border-dashed border-line bg-surface-0/40"
             style={{ width: 56, height: 56 }}
           />
         )}
-        <span className={`w-full truncate text-center text-[11px] ${value ? "text-slate-100" : "text-slate-500"}`}>
+        <span className={`w-full truncate text-center text-[11px] ${value ? "text-ink-1" : "text-ink-5"}`}>
           {option?.label ?? (value || `点这里挑${noun}`)}
         </span>
         <span
-          className={`w-full truncate text-center font-mono text-[10px] ${unknown ? "text-amber-300/90" : "text-slate-500"}`}
+          className={`w-full truncate text-center font-mono text-[10px] ${unknown ? "text-warn-hi/90" : "text-ink-5"}`}
         >
           {unknown ? "清单里没有" : value || "未选"}
         </span>

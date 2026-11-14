@@ -128,7 +128,7 @@ export function RuntimeParamsPage() {
             掉落手感与自动战斗参数以前写死在客户端（<span className="font-mono text-xs">configs/drop</span> 与{" "}
             <span className="font-mono text-xs">configs/autoBattle</span>），帮会规则写死在服务端常量里。现在都能在这里改：
             改完不需要重新打客户端包，玩家下次进游戏拉配置时生效（帮会规则是立即生效）。
-            {params ? <span className="ml-1 text-slate-500">上次修改：{formatTime(params.updatedAt)}</span> : null}
+            {params ? <span className="ml-1 text-ink-5">上次修改：{formatTime(params.updatedAt)}</span> : null}
           </>
         }
       />
@@ -233,7 +233,7 @@ export function RuntimeParamsPage() {
                 />
               </Field>
             ))}
-            {guildInvalid ? <p className="text-xs text-amber-400">最短字数不能大于最长字数，先改回来再保存。</p> : null}
+            {guildInvalid ? <p className="text-xs text-warn">最短字数不能大于最长字数，先改回来再保存。</p> : null}
           </div>
         ) : null}
       </Card>
@@ -269,7 +269,7 @@ export function RuntimeParamsPage() {
                 />
               </Field>
             ))}
-            {aiInvalid ? <p className="text-xs text-amber-400 sm:col-span-2 lg:col-span-4">{aiInvalid}</p> : null}
+            {aiInvalid ? <p className="text-xs text-warn sm:col-span-2 lg:col-span-4">{aiInvalid}</p> : null}
           </div>
         ) : null}
       </Card>

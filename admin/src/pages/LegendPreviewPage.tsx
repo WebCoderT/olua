@@ -29,7 +29,7 @@ export function LegendPreviewPage() {
       <PageHeader
         title="legend 组件试衣间"
         description="设计系统验收页 · 数据硬编码 · 免登录。控件形状与色阶都在这里定稿，页面只做布局。"
-        actions={<Badge tone="indigo">#946</Badge>}
+        actions={<Badge tone="gold">#946</Badge>}
       />
 
       <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 xl:grid-cols-4">
@@ -95,7 +95,7 @@ export function LegendPreviewPage() {
         <div className="col-span-12 lg:col-span-6">
           <Card title="所在地图" description="横向条：注意色 = 非阻断异常 / 次要维度">
             <BarList
-              tone="amber"
+              tone="warn"
               items={[
                 { label: "地图 1", value: 3200 },
                 { label: "地图 3", value: 2100 },
@@ -140,15 +140,15 @@ export function LegendPreviewPage() {
           <div className="flex flex-col gap-2.5">
             <div className="flex flex-wrap gap-2">
               <Badge>默认</Badge>
-              <Badge tone="indigo">金 · 选中</Badge>
-              <Badge tone="green">在线</Badge>
-              <Badge tone="amber">注意</Badge>
-              <Badge tone="red">封禁</Badge>
+              <Badge tone="gold">金 · 选中</Badge>
+              <Badge tone="jade">在线</Badge>
+              <Badge tone="warn">注意</Badge>
+              <Badge tone="ember">封禁</Badge>
             </div>
-            <Notice tone="slate">说明：数值不锁出厂值，改库后 1s TTL 现取。</Notice>
-            <Notice tone="amber">注意：本次重构不含行为变更，只换视觉。</Notice>
-            <Notice tone="emerald">正常：服务在线，实时通道已连接。</Notice>
-            <Notice tone="red">错误：封禁失败，该账号已解封。</Notice>
+            <Notice tone="muted">说明：数值不锁出厂值，改库后 1s TTL 现取。</Notice>
+            <Notice tone="warn">注意：本次重构不含行为变更，只换视觉。</Notice>
+            <Notice tone="jade">正常：服务在线，实时通道已连接。</Notice>
+            <Notice tone="ember">错误：封禁失败，该账号已解封。</Notice>
           </div>
         </Card>
       </div>
@@ -182,7 +182,7 @@ export function LegendPreviewPage() {
                   <td className={tdClass}>{r.cls}</td>
                   <td className={`${tdClass} legend-num`}>{r.gold.toLocaleString("zh-CN")}</td>
                   <td className={tdClass}>
-                    <Badge tone={r.ban === "封禁中" ? "red" : "green"}>{r.ban}</Badge>
+                    <Badge tone={r.ban === "封禁中" ? "ember" : "jade"}>{r.ban}</Badge>
                   </td>
                   <td className={`${tdClass} legend-num text-[11.5px] text-ink-4`}>{r.at}</td>
                   <td className={tdClass}>

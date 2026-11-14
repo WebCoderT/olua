@@ -202,7 +202,7 @@ export function AccountsPage() {
             <Spinner />
           ) : canStatus ? (
             <>
-              {selectedIds.length > 0 ? <span className="text-xs text-slate-400">已选 {selectedIds.length} 个</span> : null}
+              {selectedIds.length > 0 ? <span className="text-xs text-ink-4">已选 {selectedIds.length} 个</span> : null}
               <Button
                 variant="outline"
                 className="px-2.5 py-1 text-xs"
@@ -233,7 +233,7 @@ export function AccountsPage() {
                     <input
                       type="checkbox"
                       aria-label="全选本页"
-                      className="h-4 w-4 accent-indigo-500"
+                      className="h-4 w-4 accent-gold"
                       checked={allChecked}
                       disabled={currentList.length === 0}
                       onChange={toggleAll}
@@ -250,23 +250,23 @@ export function AccountsPage() {
             </thead>
             <tbody>
               {currentList.map((account) => (
-                <tr key={account.id} className="transition hover:bg-slate-800/30">
+                <tr key={account.id} className="transition hover:bg-surface-4/30">
                   {canStatus ? (
                     <td className={tdClass}>
                       <input
                         type="checkbox"
                         aria-label={`选择 ${account.username}`}
-                        className="h-4 w-4 accent-indigo-500"
+                        className="h-4 w-4 accent-gold"
                         checked={selectedIds.indexOf(account.id) !== -1}
                         onChange={() => toggleOne(account.id)}
                       />
                     </td>
                   ) : null}
                   <td className={tdClass}>
-                    <Link to={`/accounts/${account.id}`} className="font-medium text-indigo-300 hover:text-indigo-200">
+                    <Link to={`/accounts/${account.id}`} className="font-medium text-gold hover:text-gold-hi">
                       {account.username}
                     </Link>
-                    {account.onlineRoleId ? <span className="ml-2 text-xs text-slate-500">有在线角色</span> : null}
+                    {account.onlineRoleId ? <span className="ml-2 text-xs text-ink-5">有在线角色</span> : null}
                   </td>
                   <td className={tdClass}>
                     <BanStatus account={account} />

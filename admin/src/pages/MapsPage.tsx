@@ -307,7 +307,7 @@ export function MapsPage() {
         description="玩法配置、刷怪区、NPC、复活点与碰撞盒都在这里改，保存即生效；地图文件只剩瓦片（底图与预览图是资源）。"
         actions={
           <>
-            <Badge tone="indigo">可编辑玩法配置</Badge>
+            <Badge tone="gold">可编辑玩法配置</Badge>
             <Button variant="ghost" onClick={() => void loadList()}>
               刷新
             </Button>
@@ -316,7 +316,7 @@ export function MapsPage() {
       />
 
       {loading ? (
-        <div className="flex items-center gap-2 py-10 text-xs text-slate-500">
+        <div className="flex items-center gap-2 py-10 text-xs text-ink-5">
           <Spinner /> 加载地图清单…
         </div>
       ) : (
@@ -331,14 +331,14 @@ export function MapsPage() {
                       type="button"
                       onClick={() => setSelected(item.id)}
                       className={`w-full rounded-lg border px-2.5 py-2 text-left transition ${
-                        active ? "border-indigo-500/50 bg-indigo-500/10" : "border-slate-800 bg-slate-900/40 hover:border-slate-700"
+                        active ? "border-gold/50 bg-gold/10" : "border-line bg-surface-2/40 hover:border-line-strong"
                       }`}
                     >
                       <div className="flex items-baseline justify-between gap-2">
-                        <span className="truncate text-sm text-slate-100">{item.label || `（未命名 #${item.id}）`}</span>
-                        <span className="shrink-0 text-xs text-slate-500">#{item.id}</span>
+                        <span className="truncate text-sm text-ink-1">{item.label || `（未命名 #${item.id}）`}</span>
+                        <span className="shrink-0 text-xs text-ink-5">#{item.id}</span>
                       </div>
-                      <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-slate-500">
+                      <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-ink-5">
                         <span>{item.typeLabel}</span>
                         <span>·</span>
                         <span>
@@ -351,7 +351,7 @@ export function MapsPage() {
                         <span>·</span>
                         <span>碰撞 {item.collisionCount}</span>
                         {/* 复活点只有「有 / 没有」两种状态：没有时不必占位，写出来反而像少了一个 */}
-                        {item.hasRevivePoint ? <span className="text-emerald-400/70">· 复活点</span> : null}
+                        {item.hasRevivePoint ? <span className="text-jade/70">· 复活点</span> : null}
                       </div>
                     </button>
                   </li>
@@ -363,7 +363,7 @@ export function MapsPage() {
           <div className="space-y-3">
             {detailLoading && !detail ? (
               <Card>
-                <div className="flex items-center gap-2 py-10 text-xs text-slate-500">
+                <div className="flex items-center gap-2 py-10 text-xs text-ink-5">
                   <Spinner /> 加载地图详情…
                 </div>
               </Card>
@@ -378,7 +378,7 @@ export function MapsPage() {
                   description="保存即生效：服务端进图校验读这张表，客户端下次进游戏拉取新配置"
                   actions={
                     <div className="flex items-center gap-2">
-                      {dirty && <Badge tone="amber">未保存</Badge>}
+                      {dirty && <Badge tone="warn">未保存</Badge>}
                       <Button variant="ghost" onClick={() => setForm(formOf(detail))} disabled={!dirty || saving}>
                         还原
                       </Button>
@@ -411,8 +411,8 @@ export function MapsPage() {
                       <Input type="number" min={0} value={form.soulOfWar} onChange={(event) => setForm({ ...form, soulOfWar: event.target.value })} />
                     </FormField>
                   </div>
-                  <p className="mt-2 text-[11px] text-slate-500">
-                    数值 <code className="text-slate-400">0</code> 表示<b>不限制</b>（安全地图就是 0 / 0 / 0）。已经在图里的玩家不受影响，新门槛从下一次进游戏开始生效。
+                  <p className="mt-2 text-[11px] text-ink-5">
+                    数值 <code className="text-ink-4">0</code> 表示<b>不限制</b>（安全地图就是 0 / 0 / 0）。已经在图里的玩家不受影响，新门槛从下一次进游戏开始生效。
                   </p>
                 </Card>
 
@@ -434,7 +434,7 @@ export function MapsPage() {
                   actions={
                     <>
                       {/* 只在有越界时出现：0 越界是常态，天天挂一个绿徽标等于没有徽标 */}
-                      {outOfBounds > 0 && <Badge tone="red">越界 {outOfBounds}</Badge>}
+                      {outOfBounds > 0 && <Badge tone="ember">越界 {outOfBounds}</Badge>}
                       <Button variant="ghost" onClick={() => setZoomed(true)}>
                         放大
                       </Button>
@@ -445,8 +445,8 @@ export function MapsPage() {
                   }
                 >
                   <LayerLegend visible={layers} onChange={setLayers} />
-                  <p className="mt-1.5 flex items-center gap-1.5 text-[11px] text-slate-500">
-                    <span className="inline-block h-2.5 w-2.5 shrink-0 rounded-sm border-2 border-dashed" style={{ borderColor: "#f43f5e" }} />
+                  <p className="mt-1.5 flex items-center gap-1.5 text-[11px] text-ink-5">
+                    <span className="inline-block h-2.5 w-2.5 shrink-0 rounded-sm border-2 border-dashed" style={{ borderColor: "var(--color-ember)" }} />
                     红色虚线 = 越出地图边界的区域 / 点位（超出部分被画布裁掉，图上只剩缺角）；碰撞盒不参与越界计数（围墙本来就画在图外）
                   </p>
                   <div className="mt-2">
@@ -662,20 +662,20 @@ export function MapsPage() {
  */
 function ModeSwitch({ mode, onChange }: { mode: CanvasMode; onChange: (next: CanvasMode) => void }) {
   const items: Array<{ key: CanvasMode; label: string; active: string }> = [
-    { key: "spawn", label: "绘制刷怪区", active: "bg-violet-500/20 text-violet-200" },
-    { key: "collision", label: "绘制碰撞盒", active: "bg-rose-500/20 text-rose-200" },
-    { key: "npc", label: "放置 NPC", active: "bg-sky-500/20 text-sky-200" },
-    { key: "revive", label: "设复活点", active: "bg-emerald-500/20 text-emerald-200" },
+    { key: "spawn", label: "绘制刷怪区", active: "bg-warn/20 text-warn-hi" },
+    { key: "collision", label: "绘制碰撞盒", active: "bg-ember/20 text-ember-hi" },
+    { key: "npc", label: "放置 NPC", active: "bg-gold/20 text-gold-hi" },
+    { key: "revive", label: "设复活点", active: "bg-jade/20 text-jade-hi" },
   ];
   return (
-    <div className="flex overflow-hidden rounded-lg border border-slate-800">
+    <div className="flex overflow-hidden rounded-lg border border-line">
       {items.map((item) => (
         <button
           key={item.key}
           type="button"
           onClick={() => onChange(item.key)}
           className={`px-2.5 py-1.5 text-xs font-medium transition ${
-            mode === item.key ? item.active : "text-slate-300 hover:bg-slate-800/60"
+            mode === item.key ? item.active : "text-ink-3 hover:bg-surface-4/60"
           }`}
           // 再点一次退出：提示写在 title 里，不给按钮换字（换字会让四个按钮宽度跳变）
           title={mode === item.key ? "再点一次退出该模式" : undefined}
@@ -687,7 +687,7 @@ function ModeSwitch({ mode, onChange }: { mode: CanvasMode; onChange: (next: Can
         <button
           type="button"
           onClick={() => onChange("view")}
-          className="border-l border-slate-800 px-2.5 py-1.5 text-xs text-slate-400 transition hover:bg-slate-800/60"
+          className="border-l border-line px-2.5 py-1.5 text-xs text-ink-4 transition hover:bg-surface-4/60"
         >
           退出
         </button>
@@ -699,20 +699,20 @@ function ModeSwitch({ mode, onChange }: { mode: CanvasMode; onChange: (next: Can
 /** 叠加层图例 + 开关（色块与 MapCanvas 的描边同一套颜色，靠 label 对上而不是靠记忆） */
 function LayerLegend({ visible, onChange }: { visible: MapLayerVisibility; onChange: (next: MapLayerVisibility) => void }) {
   const items: Array<{ key: keyof MapLayerVisibility; label: string; color: string; dash?: boolean }> = [
-    { key: "spawn", label: "刷怪区（服务端）", color: "#818cf8" },
-    { key: "npc", label: "NPC", color: "#38bdf8" },
-    { key: "revive", label: "复活点", color: "#34d399" },
-    { key: "collision", label: "碰撞盒", color: "#fb7185" },
+    { key: "spawn", label: "刷怪区（服务端）", color: "var(--color-gold)" },
+    { key: "npc", label: "NPC", color: "var(--color-jade)" },
+    { key: "revive", label: "复活点", color: "var(--color-warn)" },
+    { key: "collision", label: "碰撞盒", color: "var(--color-ember-hi)" },
   ];
   return (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
       {items.map((item) => (
-        <label key={item.key} className="flex cursor-pointer items-center gap-1.5 text-[11px] text-slate-400">
+        <label key={item.key} className="flex cursor-pointer items-center gap-1.5 text-[11px] text-ink-4">
           <input
             type="checkbox"
             checked={visible[item.key]}
             onChange={(event) => onChange({ ...visible, [item.key]: event.target.checked })}
-            className="h-3 w-3 accent-indigo-500"
+            className="h-3 w-3 accent-gold"
           />
           <span className="inline-block h-2.5 w-2.5 shrink-0 rounded-sm" style={{ background: item.dash ? "transparent" : item.color, border: `2px ${item.dash ? "dashed" : "solid"} ${item.color}` }} />
           {item.label}

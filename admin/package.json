@@ -9,7 +9,8 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "new:page": "node ../tools/new-admin-page.cjs"
   },
   "dependencies": {
     "react": "^19.3.0",

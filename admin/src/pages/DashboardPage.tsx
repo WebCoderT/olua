@@ -161,7 +161,7 @@ export function DashboardPage() {
         <div className="col-span-12 lg:col-span-6">
           <Card title="所在地图" description="地图名以客户端 configs/map 为准，这里只显示编号">
             <BarList
-              tone="amber"
+              tone="warn"
               items={(breakdown?.maps ?? []).map((item) => ({ label: mapLabel(item.key), value: item.count }))}
             />
           </Card>
@@ -170,7 +170,7 @@ export function DashboardPage() {
         <div className="col-span-12 lg:col-span-4">
           <Card title="性别分布">
             <BarList
-              tone="emerald"
+              tone="jade"
               items={(breakdown?.sexes ?? []).map((item) => ({ label: SEX_LABELS[item.key] ?? `性别 ${item.key}`, value: item.count }))}
             />
           </Card>
@@ -206,7 +206,7 @@ export function DashboardPage() {
                         {auditTargetLabel(item.targetType)} <span className="legend-num">{item.targetId?.slice(0, 8) ?? ""}</span>
                       </span>
                     ) : null}
-                    {item.success ? null : <Badge tone="red">失败</Badge>}
+                    {item.success ? null : <Badge tone="ember">失败</Badge>}
                   </li>
                 ))}
               </ul>

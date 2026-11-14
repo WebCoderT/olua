@@ -140,7 +140,7 @@ export function MailSendPage() {
             rows={4}
             placeholder="写点说明，玩家在消息中心能看到。"
             disabled={!canSend}
-            className="w-full rounded-lg border border-slate-700 bg-slate-900/60 px-3 py-2 text-sm text-slate-100 outline-none placeholder:text-slate-600 focus:border-indigo-500 disabled:opacity-50"
+            className="w-full rounded-lg border border-line-strong bg-surface-2/60 px-3 py-2 text-sm text-ink-1 outline-none placeholder:text-ink-6 focus:border-gold disabled:opacity-50"
           />
         </Field>
 
@@ -155,13 +155,13 @@ export function MailSendPage() {
 
         <div className="flex flex-col gap-2">
           <div className="flex items-center justify-between">
-            <p className="text-xs font-medium text-slate-400">附件物品（可选，最多 20 条）</p>
+            <p className="text-xs font-medium text-ink-4">附件物品（可选，最多 20 条）</p>
             <Button variant="outline" onClick={() => setItems((prev) => [...prev, { goodId: "", count: "1" }])} disabled={!canSend || items.length >= 20}>
               加一件
             </Button>
           </div>
           {items.length === 0 ? (
-            <p className="text-xs text-slate-600">没有物品附件 —— 只发绑定元宝 / 经验 / 纯文本也可以。</p>
+            <p className="text-xs text-ink-6">没有物品附件 —— 只发绑定元宝 / 经验 / 纯文本也可以。</p>
           ) : (
             items.map((line, index) => (
               <div key={index} className="flex items-center gap-2">
@@ -197,15 +197,15 @@ export function MailSendPage() {
           <Button variant="primary" onClick={submit} disabled={!canSubmit}>
             {sending ? "发送中…" : "发送"}
           </Button>
-          {!canSend ? <p className="text-xs text-amber-400">当前管理员角色没有 gameMail:send 权限点，只能看不能发。</p> : null}
+          {!canSend ? <p className="text-xs text-warn">当前管理员角色没有 gameMail:send 权限点，只能看不能发。</p> : null}
         </div>
       </Card>
 
       {sent ? (
         <Card className="flex flex-col gap-1 p-5">
-          <p className="text-sm font-medium text-emerald-400">已落进收件箱</p>
-          <p className="text-xs text-slate-400">
-            邮件 id <span className="font-mono text-slate-200">{sent.id}</span> · 频道 {sent.channel} · 标题「{sent.title}」
+          <p className="text-sm font-medium text-jade">已落进收件箱</p>
+          <p className="text-xs text-ink-4">
+            邮件 id <span className="font-mono text-ink-2">{sent.id}</span> · 频道 {sent.channel} · 标题「{sent.title}」
             {sent.bindGold > 0 || sent.exp > 0 || sent.attachments.length > 0 ? " · 附件待玩家领取" : " · 纯文本通知"}
           </p>
         </Card>

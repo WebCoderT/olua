@@ -36,7 +36,7 @@ export function EntityImage({
     <span
       aria-hidden="true"
       style={{ width: size, height: size }}
-      className="shrink-0 rounded-lg border border-dashed border-slate-800 bg-slate-950/40"
+      className="shrink-0 rounded-lg border border-dashed border-line bg-surface-0/40"
     />
   );
 }

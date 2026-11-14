@@ -296,28 +296,28 @@ export function LevelScrollsPage() {
             </thead>
             <tbody>
               {data?.list.map((item) => (
-                <tr key={item.id} className="transition hover:bg-slate-800/30">
+                <tr key={item.id} className="transition hover:bg-surface-4/30">
                   <td className={tdClass}>
                     <GameIcon path={item.icon} alt={item.label} />
                   </td>
-                  <td className={`${tdClass} font-mono text-xs text-slate-300`}>{item.id}</td>
+                  <td className={`${tdClass} font-mono text-xs text-ink-3`}>{item.id}</td>
                   <td className={tdClass}>
-                    <span className="block font-medium text-slate-100">{item.label}</span>
-                    <span className="mt-0.5 block max-w-[320px] truncate text-xs text-slate-500" title={item.description}>
+                    <span className="block font-medium text-ink-1">{item.label}</span>
+                    <span className="mt-0.5 block max-w-[320px] truncate text-xs text-ink-5" title={item.description}>
                       {item.description || "—"}
                     </span>
                   </td>
                   <td className={tdClass}>
-                    <Badge tone="amber">
+                    <Badge tone="warn">
                       {levelText(item.minLevel)} ~ {levelText(item.maxLevel)}
                     </Badge>
                   </td>
                   <td className={tdClass}>{item.maxStack}</td>
                   <td className={tdClass}>{item.sellPrice > 0 ? levelText(item.sellPrice) : "不可出售"}</td>
                   <td className={tdClass}>
-                    <Badge tone={item.bindOnDrop ? "amber" : "slate"}>{item.bindOnDrop ? "强制绑定" : "—"}</Badge>
+                    <Badge tone={item.bindOnDrop ? "warn" : "muted"}>{item.bindOnDrop ? "强制绑定" : "—"}</Badge>
                   </td>
-                  <td className={`${tdClass} text-xs text-slate-400`}>{formatTime(item.updatedAt)}</td>
+                  <td className={`${tdClass} text-xs text-ink-4`}>{formatTime(item.updatedAt)}</td>
                   <td className={`${tdClass} text-right`}>
                     <div className="flex justify-end gap-2">
                       <Button variant="outline" className="px-2.5 py-1 text-xs" disabled={!canWrite} onClick={() => openEdit(item)}>
@@ -391,9 +391,9 @@ export function LevelScrollsPage() {
             </Field>
           </div>
           {rangeInvalid ? (
-            <p className="text-xs text-rose-400">下限不能大于上限（现在是 {form.minLevel} ~ {form.maxLevel}）。</p>
+            <p className="text-xs text-ember-hi">下限不能大于上限（现在是 {form.minLevel} ~ {form.maxLevel}）。</p>
           ) : (
-            <p className="text-xs text-slate-500">
+            <p className="text-xs text-ink-5">
               这一卷在 {levelText(form.minLevel)} ~ {levelText(form.maxLevel)} 级可用；用完之后角色等级正好是{" "}
               {levelText(form.maxLevel + 1)} 级 —— 再要升就得换下一卷。
             </p>

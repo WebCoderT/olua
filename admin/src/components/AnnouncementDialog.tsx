@@ -111,7 +111,7 @@ export function AnnouncementDialog({
 
         <Field label="正文" hint={`最多 ${CONTENT_MAX} 字，纯文本`}>
           <textarea
-            className="min-h-[140px] w-full resize-y rounded-lg border border-slate-700 bg-slate-950/60 px-2.5 py-1.5 text-sm text-slate-100 outline-none transition placeholder:text-slate-600 focus:border-indigo-500/70"
+            className="min-h-[140px] w-full resize-y rounded-lg border border-line-strong bg-surface-0/60 px-2.5 py-1.5 text-sm text-ink-1 outline-none transition placeholder:text-ink-6 focus:border-gold/70"
             value={content}
             maxLength={CONTENT_MAX}
             placeholder="正文内容，换行会原样保留"
@@ -137,12 +137,12 @@ export function AnnouncementDialog({
           </Field>
         </div>
 
-        <label className="flex items-center gap-2 text-sm text-slate-300">
-          <input type="checkbox" className="h-4 w-4 accent-indigo-500" checked={enabled} onChange={(event) => setEnabled(event.target.checked)} />
+        <label className="flex items-center gap-2 text-sm text-ink-3">
+          <input type="checkbox" className="h-4 w-4 accent-gold" checked={enabled} onChange={(event) => setEnabled(event.target.checked)} />
           启用（停用后玩家立刻看不到，但记录与时间窗都还在）
         </label>
 
-        {rangeInvalid ? <Notice tone="red">生效结束时间必须晚于开始时间。</Notice> : null}
+        {rangeInvalid ? <Notice tone="ember">生效结束时间必须晚于开始时间。</Notice> : null}
       </div>
     </Modal>
   );

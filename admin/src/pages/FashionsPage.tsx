@@ -25,10 +25,10 @@ const FASHION_CHANNEL_LABELS: Record<string, string> = {
   [ACQUIRE_CHANNEL.UNAVAILABLE]: "无法获取",
 };
 const CHANNEL_OPTIONS = Object.entries(FASHION_CHANNEL_LABELS);
-const CHANNEL_TONE: Record<string, "green" | "indigo" | "slate"> = {
-  [ACQUIRE_CHANNEL.UPGRADE]: "green",
-  [ACQUIRE_CHANNEL.GRANT]: "indigo",
-  [ACQUIRE_CHANNEL.UNAVAILABLE]: "slate",
+const CHANNEL_TONE: Record<string, "jade" | "gold" | "muted"> = {
+  [ACQUIRE_CHANNEL.UPGRADE]: "jade",
+  [ACQUIRE_CHANNEL.GRANT]: "gold",
+  [ACQUIRE_CHANNEL.UNAVAILABLE]: "muted",
 };
 
 /** 属性摘要（列表列太窄，只报几个关键数；完整数值在编辑弹窗里） */
@@ -134,14 +134,14 @@ function FashionEditDialog({
       </div>
       <Field label="描述文案">
         <textarea
-          className="min-h-[64px] w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none transition focus:border-sky-500"
+          className="min-h-[64px] w-full rounded-lg border border-line-strong bg-surface-0 px-3 py-2 text-sm text-ink-1 outline-none transition focus:border-gold"
           maxLength={500}
           value={description}
           onChange={(event) => setDescription(event.target.value)}
         />
       </Field>
-      <div className="flex flex-col gap-3 rounded-xl border border-slate-800 bg-slate-950/40 p-4">
-        <span className="text-xs font-medium text-slate-400">资源（换成套素材不用改代码）</span>
+      <div className="flex flex-col gap-3 rounded-xl border border-line bg-surface-0/40 p-4">
+        <span className="text-xs font-medium text-ink-4">资源（换成套素材不用改代码）</span>
         <IconField
           label="图标"
           hint="列表 / 背包里显示的那张小图"
@@ -180,7 +180,7 @@ function FashionEditDialog({
       </Field>
       <AttributesGrid attributes={attributes} onChange={setAttributes} header="八项属性（整份替换）" crossed={crossedKeys} />
       {!labelValid || !descriptionValid || !priceValid ? (
-        <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-200">
+        <p className="rounded-lg border border-ember/40 bg-ember/10 px-3 py-2 text-xs text-ember-hi">
           名称需为 1~50 字、描述 ≤500 字、售卖价需为 0~1 亿的整数。
         </p>
       ) : null}
@@ -321,20 +321,20 @@ export function FashionsPage() {
             </thead>
             <tbody>
               {data?.list.map((item) => (
-                <tr key={item.id} className="transition hover:bg-slate-800/30">
+                <tr key={item.id} className="transition hover:bg-surface-4/30">
                   <td className={tdClass}>
                     <GameIcon path={item.icon} alt={item.label} />
                   </td>
-                  <td className={`${tdClass} font-mono text-xs text-slate-300`}>{item.id}</td>
-                  <td className={`${tdClass} font-medium text-slate-100`}>{item.label}</td>
+                  <td className={`${tdClass} font-mono text-xs text-ink-3`}>{item.id}</td>
+                  <td className={`${tdClass} font-medium text-ink-1`}>{item.label}</td>
                   <td className={tdClass}>
-                    <Badge tone={CHANNEL_TONE[item.acquireChannel] ?? "slate"}>
+                    <Badge tone={CHANNEL_TONE[item.acquireChannel] ?? "muted"}>
                       {FASHION_CHANNEL_LABELS[item.acquireChannel] ?? item.acquireChannel}
                     </Badge>
                   </td>
                   <td className={tdClass}>{item.sellPrice}</td>
-                  <td className={`${tdClass} text-xs text-slate-400`}>{attributeSummary(item)}</td>
-                  <td className={`${tdClass} text-xs text-slate-400`}>{formatTime(item.updatedAt)}</td>
+                  <td className={`${tdClass} text-xs text-ink-4`}>{attributeSummary(item)}</td>
+                  <td className={`${tdClass} text-xs text-ink-4`}>{formatTime(item.updatedAt)}</td>
                   <td className={`${tdClass} text-right`}>
                     <Button
                       variant="outline"

@@ -4,7 +4,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { ApiError, authApi } from "../api";
 import { APP_TITLE } from "../api/config";
 import { saveSession } from "../store/session";
-import { Button, Field, Input } from "../components/ui";
+import { Button, Field, Input, Notice } from "../components/ui";
 
 /** 管理端注册页（能不能注册、要不要注册码，全由服务端配置决定） */
 export function RegisterPage() {
@@ -38,16 +38,18 @@ export function RegisterPage() {
 
   return (
     <div className="flex min-h-screen items-center justify-center px-4">
-      <form onSubmit={submit} className="w-full max-w-sm rounded-2xl border border-slate-800 bg-slate-900/50 p-8 shadow-2xl">
-        <h1 className="text-lg font-semibold text-slate-50">{APP_TITLE}</h1>
-        <p className="mt-1 text-xs text-slate-500">注册一个管理员账号</p>
-        <p className="mt-2 rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-2 text-xs leading-relaxed text-slate-400">
-          服务端的第一个管理员会自动成为「超级管理员」（拥有全部权限）；之后注册的都是「管理员」，要提权得由超级管理员在「管理员」页调整。
-        </p>
-        <p className="mt-2 rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-2 text-xs leading-relaxed text-slate-400">
-          <span className="font-medium text-slate-300">注册默认是关的</span>：服务端配了 <code>ADMIN_REGISTER_CODE</code> 时按注册码放行；没配的话需要显式打开{" "}
-          <code>ADMIN_REGISTER_OPEN</code>，否则这个接口会直接拒绝（那是运维在 <code>.env</code> 里的开关）。
-        </p>
+      <form onSubmit={submit} className="legend-card w-full max-w-sm p-8">
+        <h1 className="font-display text-xl font-semibold tracking-wide text-ink-1">{APP_TITLE}</h1>
+        <p className="mt-1 text-xs text-ink-5">注册一个管理员账号</p>
+        <div className="mt-3 flex flex-col gap-2">
+          <Notice tone="muted">
+            服务端的第一个管理员会自动成为「超级管理员」（拥有全部权限）；之后注册的都是「管理员」，要提权得由超级管理员在「管理员」页调整。
+          </Notice>
+          <Notice tone="warn">
+            <span className="font-medium">注册默认是关的</span>：服务端配了 <code>ADMIN_REGISTER_CODE</code> 时按注册码放行；没配的话需要显式打开{" "}
+            <code>ADMIN_REGISTER_OPEN</code>，否则这个接口会直接拒绝（那是运维在 <code>.env</code> 里的开关）。
+          </Notice>
+        </div>
 
         <div className="mt-6 flex flex-col gap-4">
           <Field label="管理员账号" hint="3~20 位字母、数字或下划线">
@@ -64,15 +66,15 @@ export function RegisterPage() {
           </Field>
         </div>
 
-        {error ? <p className="mt-4 rounded-lg border border-rose-500/40 bg-rose-950/50 px-3 py-2 text-xs text-rose-200">{error}</p> : null}
+        {error ? <p className="mt-4 rounded-lg border border-ember/40 bg-ember/15 px-3 py-2 text-xs text-ember-hi">{error}</p> : null}
 
         <Button type="submit" className="mt-6 w-full" loading={loading}>
           注册并登录
         </Button>
 
-        <p className="mt-4 text-center text-xs text-slate-500">
+        <p className="mt-4 text-center text-xs text-ink-5">
           已有账号？
-          <Link to="/login" className="ml-1 text-indigo-400 hover:text-indigo-300">
+          <Link to="/login" className="ml-1 text-gold-hi hover:text-gold">
             返回登录
           </Link>
         </p>

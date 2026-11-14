@@ -175,7 +175,7 @@ export function AccountDetailPage() {
 
   if (loading && !detail) {
     return (
-      <div className="flex items-center gap-2 text-sm text-slate-400">
+      <div className="flex items-center gap-2 text-sm text-ink-4">
         <Spinner /> 加载中…
       </div>
     );
@@ -230,17 +230,17 @@ export function AccountDetailPage() {
           <BanStatus account={account} showReason />
         </Card>
         <Card title="注册时间">
-          <p className="text-sm text-slate-200">{formatTime(account.createdAt)}</p>
+          <p className="text-sm text-ink-2">{formatTime(account.createdAt)}</p>
         </Card>
         <Card title="最近登录">
-          <p className="text-sm text-slate-200">{formatTime(account.lastLoginAt)}</p>
+          <p className="text-sm text-ink-2">{formatTime(account.lastLoginAt)}</p>
         </Card>
         <Card title="在线角色">
-          <p className="text-sm text-slate-200">{roles.find((role) => role.online)?.name ?? "未选角色"}</p>
+          <p className="text-sm text-ink-2">{roles.find((role) => role.online)?.name ?? "未选角色"}</p>
         </Card>
         {canEmail ? (
           <Card title="玩家邮箱">
-            <p className="text-sm text-slate-200">{account.email ?? "未填写"}</p>
+            <p className="text-sm text-ink-2">{account.email ?? "未填写"}</p>
           </Card>
         ) : null}
       </div>
@@ -269,16 +269,16 @@ export function AccountDetailPage() {
             </thead>
             <tbody>
               {roles.map((role) => (
-                <tr key={role.id} className="transition hover:bg-slate-800/30">
+                <tr key={role.id} className="transition hover:bg-surface-4/30">
                   <td className={tdClass}>
-                    <Link to={`/roles/${role.id}`} className="font-medium text-indigo-300 hover:text-indigo-200">
+                    <Link to={`/roles/${role.id}`} className="font-medium text-gold hover:text-gold-hi">
                       {role.name}
                     </Link>
                   </td>
                   <td className={tdClass}>{OCCUPATION_LABELS[role.occupation] ?? role.occupation}</td>
                   <td className={tdClass}>{SEX_LABELS[role.sex] ?? role.sex}</td>
                   <td className={tdClass}>{role.level}</td>
-                  <td className={tdClass}>{role.online ? <Badge tone="indigo">在线</Badge> : <Badge>离线</Badge>}</td>
+                  <td className={tdClass}>{role.online ? <Badge tone="gold">在线</Badge> : <Badge>离线</Badge>}</td>
                   <td className={tdClass}>{formatTime(role.updatedAt)}</td>
                   <td className={`${tdClass} text-right`}>
                     <div className="flex justify-end gap-2">

@@ -273,8 +273,8 @@ function buildPatch(role: AdminRole, form: RoleForm): RolePatchPayload {
 function ReadOnlyValue({ label, value }: { label: string; value: string }) {
   return (
     <div className="min-w-0">
-      <p className="text-[10px] text-slate-500">{label}</p>
-      <p className="truncate text-xs font-medium tabular-nums text-slate-100" title={value}>
+      <p className="text-[10px] text-ink-5">{label}</p>
+      <p className="truncate text-xs font-medium tabular-nums text-ink-1" title={value}>
         {value}
       </p>
     </div>
@@ -379,7 +379,7 @@ export function RoleDetailPage() {
 
   if (loading && !role) {
     return (
-      <div className="flex items-center gap-2 text-sm text-slate-400">
+      <div className="flex items-center gap-2 text-sm text-ink-4">
         <Spinner /> 加载中…
       </div>
     );
@@ -410,15 +410,15 @@ export function RoleDetailPage() {
         title={
           <>
             {role.name}
-            {role.online ? <Badge tone="indigo">在线</Badge> : null}
-            <span className="text-xs font-normal text-slate-500">修订 #{role.revision}</span>
+            {role.online ? <Badge tone="gold">在线</Badge> : null}
+            <span className="text-xs font-normal text-ink-5">修订 #{role.revision}</span>
           </>
         }
         description={
           <>
             角色 id：{role.id} · 账号：
             {role.accountName ? (
-              <Link to={`/accounts/${role.accountId}`} className="text-indigo-300 hover:text-indigo-200">
+              <Link to={`/accounts/${role.accountId}`} className="text-gold hover:text-gold-hi">
                 {role.accountName}
               </Link>
             ) : (
@@ -490,10 +490,10 @@ export function RoleDetailPage() {
               <div className="flex gap-2.5">
                 <div className="flex w-16 shrink-0 flex-col items-center gap-1">
                   <GameIcon path={avatar} alt={`${occupationLabel}${sexLabel}头像`} size={56} />
-                  <span className="text-[10px] text-slate-500">编号 {form.avatar || 0}</span>
+                  <span className="text-[10px] text-ink-5">编号 {form.avatar || 0}</span>
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium text-slate-100" title={form.name}>
+                  <p className="truncate text-sm font-medium text-ink-1" title={form.name}>
                     {form.name}
                   </p>
                   <div className="mt-1 grid grid-cols-3 gap-x-3 gap-y-1">
@@ -502,22 +502,22 @@ export function RoleDetailPage() {
                     <ReadOnlyValue label="性别" value={sexLabel} />
                   </div>
                   <div className="mt-1.5 flex min-w-0 items-center gap-1.5">
-                    <span className="shrink-0 text-[10px] text-slate-500">所在地图</span>
+                    <span className="shrink-0 text-[10px] text-ink-5">所在地图</span>
                     {form.onMap.trim() ? (
                       <>
                         <EntityImage image={entityImage("map", form.onMap.trim())} size={22} alt={mapText(form.onMap.trim())} />
-                        <span className="truncate text-xs text-slate-200">{mapText(form.onMap.trim())}</span>
+                        <span className="truncate text-xs text-ink-2">{mapText(form.onMap.trim())}</span>
                       </>
                     ) : (
-                      <span className="text-xs text-slate-600">未在地图上</span>
+                      <span className="text-xs text-ink-6">未在地图上</span>
                     )}
                   </div>
                 </div>
               </div>
 
               {/* 货币与经验（只读） */}
-              <div className="border-t border-slate-800 pt-3">
-                <p className="mb-1.5 text-[10px] uppercase tracking-wide text-slate-500">货币与经验</p>
+              <div className="border-t border-line pt-3">
+                <p className="mb-1.5 text-[10px] uppercase tracking-wide text-ink-5">货币与经验</p>
                 <div className="grid grid-cols-4 gap-2">
                   {NUMBER_FIELDS.map(({ key, label }) => (
                     <ReadOnlyValue key={key} label={label} value={(form[key] as string) || "0"} />
@@ -526,7 +526,7 @@ export function RoleDetailPage() {
               </div>
 
               {/* 战斗属性（服务端重算，只读） */}
-              <div className="border-t border-slate-800 pt-3">
+              <div className="border-t border-line pt-3">
                 <RoleAttributesCard derived={role.derived} bare />
               </div>
             </div>
@@ -544,8 +544,8 @@ export function RoleDetailPage() {
               <EquipSlots value={form.equipments} disabled={!canWrite} onChange={(next) => update("equipments", next)} />
 
               {/* 时装 + 成长阶位：都是「一项外观 / 一个档位」，并成一行，不再各占一张卡 */}
-              <div className="border-t border-slate-800 pt-3">
-                <p className="mb-2 text-[10px] uppercase tracking-wide text-slate-500">时装与成长阶位</p>
+              <div className="border-t border-line pt-3">
+                <p className="mb-2 text-[10px] uppercase tracking-wide text-ink-5">时装与成长阶位</p>
                 {/* auto-fit 而不是 xl 断点：这一行的宽度跟的是**卡片**（右栏 460~700 都可能），
                     不是视口 —— 按视口排版会让 1280 下四格挤成 105px，「未激活」被竖排成四个字 */}
                 <div
@@ -582,8 +582,8 @@ export function RoleDetailPage() {
       </div>
 
       {/* 保存条：一直可见（页面不滚，它也不会跑） */}
-      <div className="sticky bottom-0 z-30 flex flex-wrap items-center justify-end gap-2 rounded-xl border border-slate-800 bg-slate-900/95 px-3 py-2 shadow-lg shadow-black/30 backdrop-blur">
-        <span className="mr-auto text-xs text-slate-500">
+      <div className="sticky bottom-0 z-30 flex flex-wrap items-center justify-end gap-2 rounded-xl border border-line bg-surface-2/95 px-3 py-2 shadow-lg shadow-surface-0/50 backdrop-blur">
+        <span className="mr-auto text-xs text-ink-5">
           {canWrite ? "只提交改动过的字段；装备 / 技能 / 背包是整体替换。" : readonlyHint}
         </span>
         <Button variant="outline" onClick={() => setForm(toForm(role))} disabled={!canWrite || saving}>
@@ -667,7 +667,7 @@ export function RoleDetailPage() {
         size="lg"
         onClose={() => setRawOpen(false)}
       >
-        <pre className="overflow-auto rounded-xl border border-slate-800 bg-slate-950/60 p-4 text-xs leading-relaxed text-slate-400">
+        <pre className="overflow-auto rounded-xl border border-line bg-surface-0/60 p-4 text-xs leading-relaxed text-ink-4">
           {JSON.stringify(role.data, null, 2)}
         </pre>
       </Modal>

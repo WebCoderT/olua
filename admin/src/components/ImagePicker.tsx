@@ -270,7 +270,7 @@ function ImagePickerList({
 
       <div className="min-h-0 flex-1 overflow-y-auto">
         {shown.length === 0 ? (
-          <p className="py-8 text-center text-xs text-slate-500">
+          <p className="py-8 text-center text-xs text-ink-5">
             {candidates.length === 0
               ? mode === "atlas"
                 ? "这个目录下没有动画资源"
@@ -289,8 +289,8 @@ function ImagePickerList({
                   onClick={() => onPick(value)}
                   className={`flex flex-col items-center gap-1 rounded-lg border p-1.5 transition ${
                     active
-                      ? "border-indigo-500 bg-indigo-500/10"
-                      : "border-slate-800 bg-slate-900/60 hover:border-slate-600 hover:bg-slate-800/60"
+                      ? "border-gold bg-gold/10"
+                      : "border-line bg-surface-2/60 hover:border-line-strong hover:bg-surface-4/60"
                   }`}
                 >
                   {/*
@@ -305,8 +305,8 @@ function ImagePickerList({
                   ) : (
                     <GameIcon path={value} alt={name} size={44} zoomable={false} />
                   )}
-                  <span className="w-full truncate text-center text-[10px] text-slate-400">{name}</span>
-                  {!thumb ? <span className="text-[9px] text-amber-300/70">{files} 个文件</span> : null}
+                  <span className="w-full truncate text-center text-[10px] text-ink-4">{name}</span>
+                  {!thumb ? <span className="text-[9px] text-warn-hi/70">{files} 个文件</span> : null}
                 </button>
               );
             })}
@@ -314,7 +314,7 @@ function ImagePickerList({
         )}
       </div>
 
-      <p className="text-[11px] text-slate-600">
+      <p className="text-[11px] text-ink-6">
         共 {filtered.length} 项
         {filtered.length > max ? `，只画了前 ${shown.length} 项 —— 用搜索或分组缩小范围` : ""}
       </p>
@@ -328,7 +328,7 @@ function GroupChip({ active, onClick, children }: { active: boolean; onClick: ()
       type="button"
       onClick={onClick}
       className={`rounded-md px-2 py-1 text-[11px] transition ${
-        active ? "bg-indigo-500 text-white" : "bg-slate-800/70 text-slate-300 hover:bg-slate-700"
+        active ? "bg-gold text-surface-0" : "bg-surface-4/70 text-ink-3 hover:bg-surface-4"
       }`}
     >
       {children}
@@ -341,7 +341,7 @@ function FolderGlyph({ size = 44 }: { size?: number }) {
   return (
     <span
       aria-hidden="true"
-      className="inline-flex items-center justify-center rounded border border-slate-800 bg-slate-900/60 text-amber-300/75"
+      className="inline-flex items-center justify-center rounded border border-line bg-surface-2/60 text-warn-hi/75"
       style={{ width: size, height: size }}
     >
       <svg
@@ -467,7 +467,7 @@ export function ImagePicker({
       onClose={onClose}
       footer={
         <>
-          <span className="mr-auto text-[11px] text-slate-500">
+          <span className="mr-auto text-[11px] text-ink-5">
             {catalog
               ? catalog.source === "list"
                 ? "开发模式：直接扫本地素材目录"
@@ -484,9 +484,9 @@ export function ImagePicker({
       }
     >
       {error ? (
-        <div className="rounded-lg border border-amber-700/50 bg-amber-500/10 p-3 text-xs text-amber-200">
+        <div className="rounded-lg border border-warn/30 bg-warn/10 p-3 text-xs text-warn-hi">
           <p className="font-medium">拿不到图片清单：{error}</p>
-          <p className="mt-1 text-amber-200/80">
+          <p className="mt-1 text-warn-hi/80">
             开发环境确认 <code className="font-mono">client/assets/resources</code> 已就位（README 的「资源同步」）；
             生产环境确认素材包里带了 <code className="font-mono">image-manifest.json</code>（make image-manifest）。
           </p>

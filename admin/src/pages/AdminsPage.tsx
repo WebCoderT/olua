@@ -12,10 +12,10 @@ import { PageHeader } from "../components/PageHeader";
 
 const PAGE_SIZE = 10;
 
-const ROLE_TONE: Record<string, "amber" | "indigo" | "slate"> = {
-  [ADMIN_ROLE.SUPER]: "amber",
-  [ADMIN_ROLE.ADMIN]: "indigo",
-  [ADMIN_ROLE.VIEWER]: "slate",
+const ROLE_TONE: Record<string, "warn" | "gold" | "muted"> = {
+  [ADMIN_ROLE.SUPER]: "warn",
+  [ADMIN_ROLE.ADMIN]: "gold",
+  [ADMIN_ROLE.VIEWER]: "muted",
 };
 
 /**
@@ -200,10 +200,10 @@ export function AdminsPage() {
                 const isSelf = self?.id === admin.id;
                 const busy = busyId === admin.id;
                 return (
-                  <tr key={admin.id} className="transition hover:bg-slate-800/30">
+                  <tr key={admin.id} className="transition hover:bg-surface-4/30">
                     <td className={tdClass}>
-                      <span className="font-medium text-slate-100">{admin.username}</span>
-                      {isSelf ? <span className="ml-2 text-xs text-indigo-300">当前登录</span> : null}
+                      <span className="font-medium text-ink-1">{admin.username}</span>
+                      {isSelf ? <span className="ml-2 text-xs text-gold">当前登录</span> : null}
                     </td>
                     <td className={tdClass}>
                       {canManage && !busy ? (
@@ -221,11 +221,11 @@ export function AdminsPage() {
                           </Select>
                         </div>
                       ) : (
-                        <Badge tone={ROLE_TONE[admin.role] ?? "slate"}>{adminRoleLabel(admin.role)}</Badge>
+                        <Badge tone={ROLE_TONE[admin.role] ?? "muted"}>{adminRoleLabel(admin.role)}</Badge>
                       )}
                     </td>
                     <td className={tdClass}>{admin.permissions?.length ?? 0}</td>
-                    <td className={tdClass}>{admin.status === "active" ? <Badge tone="green">正常</Badge> : <Badge tone="red">已停用</Badge>}</td>
+                    <td className={tdClass}>{admin.status === "active" ? <Badge tone="jade">正常</Badge> : <Badge tone="ember">已停用</Badge>}</td>
                     <td className={tdClass}>{formatTime(admin.createdAt)}</td>
                     <td className={tdClass}>{formatTime(admin.lastLoginAt)}</td>
                     <td className={`${tdClass} text-right`}>

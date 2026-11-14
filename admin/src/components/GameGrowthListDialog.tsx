@@ -211,12 +211,12 @@ export function GameGrowthListDialog({
                     if (canWrite && conf.sortable) event.preventDefault();
                   }}
                   onDrop={() => void handleDrop(index)}
-                  className={`transition hover:bg-slate-800/30 ${canWrite && conf.sortable ? "cursor-grab active:cursor-grabbing" : ""}`}
+                  className={`transition hover:bg-surface-4/30 ${canWrite && conf.sortable ? "cursor-grab active:cursor-grabbing" : ""}`}
                 >
-                  <td className={`${tdClass} tabular-nums text-slate-400`}>{index + 1}</td>
+                  <td className={`${tdClass} tabular-nums text-ink-4`}>{index + 1}</td>
                   <td className={tdClass}>{item.level}</td>
                   <td className={tdClass}>
-                    <span className="font-medium text-slate-100">{item.label}</span>
+                    <span className="font-medium text-ink-1">{item.label}</span>
                   </td>
                   <td className={tdClass}>
                     <div className="flex items-center gap-2">
@@ -240,7 +240,7 @@ export function GameGrowthListDialog({
                       </Button>
                     </div>
                   </td>
-                  <td className={`${tdClass} text-right text-xs text-slate-600`}>
+                  <td className={`${tdClass} text-right text-xs text-ink-6`}>
                     {canWrite && conf.sortable ? "拖动整行调整顺序" : ""}
                   </td>
                 </tr>

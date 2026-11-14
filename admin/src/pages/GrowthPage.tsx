@@ -111,8 +111,8 @@ function LevelCurveCard({ canWrite }: { canWrite: boolean }) {
           return (
             <div key={curve}>
               <div className="mb-1.5 flex items-baseline gap-2">
-                <span className="text-sm font-medium text-slate-200">{CURVE_LABELS[curve] ?? curve}</span>
-                <span className="font-mono text-xs text-slate-500">{curve}</span>
+                <span className="text-sm font-medium text-ink-2">{CURVE_LABELS[curve] ?? curve}</span>
+                <span className="font-mono text-xs text-ink-5">{curve}</span>
               </div>
               <div className="overflow-x-auto">
                 <table className={tableClass}>
@@ -129,15 +129,15 @@ function LevelCurveCard({ canWrite }: { canWrite: boolean }) {
                   </thead>
                   <tbody>
                     {segments.map((row) => (
-                      <tr key={`${row.curve}-${row.seq}`} className="transition hover:bg-slate-800/30">
+                      <tr key={`${row.curve}-${row.seq}`} className="transition hover:bg-surface-4/30">
                         <td className={tdClass}>{row.seq}</td>
                         <td className={`${tdClass} font-mono`}>
                           {row.fromLevel.toLocaleString()} ~ {row.toLevel.toLocaleString()}
                         </td>
                         <td className={tdClass}>{row.startValue.toLocaleString()}</td>
                         <td className={tdClass}>{row.perLevel.toLocaleString()}</td>
-                        <td className={`${tdClass} text-slate-400`}>{row.accel}</td>
-                        <td className={`${tdClass} text-xs text-slate-400`}>{formatTime(row.updatedAt)}</td>
+                        <td className={`${tdClass} text-ink-4`}>{row.accel}</td>
+                        <td className={`${tdClass} text-xs text-ink-4`}>{formatTime(row.updatedAt)}</td>
                         <td className={`${tdClass} text-right`}>
                           <Button
                             variant="outline"
@@ -251,7 +251,7 @@ function CurveDialog({ row, onClose, onSaved }: { row: LevelCurve; onClose: () =
           <Input value={accel} inputMode="numeric" onChange={(event) => setAccel(event.target.value)} />
         </Field>
       </div>
-      <p className="mt-3 text-xs text-slate-400">
+      <p className="mt-3 text-xs text-ink-4">
         段内公式：值 = 起始值 + 每级增量 × k + 加速度 × k × (k-1) ÷ 2（k = 等级 − {row.fromLevel}）。
         生命 / 物攻 / 物防这三条曲线的加速度请留 0。
       </p>
@@ -329,13 +329,13 @@ function LevelCalculatorCard() {
         </Button>
       </div>
 
-      {error ? <div className="mt-3 rounded-md bg-red-950/40 px-3 py-2 text-sm text-red-300">{error}</div> : null}
+      {error ? <div className="mt-3 rounded-md bg-ember/10 px-3 py-2 text-sm text-ember-hi">{error}</div> : null}
 
       {result ? (
-        <div className="mt-4 rounded-lg border border-slate-800 bg-slate-900/40 p-4">
+        <div className="mt-4 rounded-lg border border-line bg-surface-2/40 p-4">
           <div className="mb-3 flex items-baseline gap-2">
-            <span className="text-lg font-semibold text-slate-100">Lv.{result.level.toLocaleString()}</span>
-            <span className="text-xs text-slate-400">升到下一级需要 {result.exp.toLocaleString()} 经验</span>
+            <span className="text-lg font-semibold text-ink-1">Lv.{result.level.toLocaleString()}</span>
+            <span className="text-xs text-ink-4">升到下一级需要 {result.exp.toLocaleString()} 经验</span>
           </div>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <Stat label="生命上限" value={result.maxHp.toLocaleString()} />
@@ -350,7 +350,7 @@ function LevelCalculatorCard() {
               />
             ))}
           </div>
-          <p className="mt-3 text-xs text-slate-500">
+          <p className="mt-3 text-xs text-ink-5">
             三系攻 / 三系防出厂同值（下限 = 上限 × 0.7），魔上限 = 生命 ÷ 2，回血 = 生命 ÷ 100（四舍五入）。
           </p>
         </div>
@@ -361,9 +361,9 @@ function LevelCalculatorCard() {
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-md bg-slate-800/40 px-3 py-2">
-      <div className="text-xs text-slate-400">{label}</div>
-      <div className="mt-0.5 font-mono text-sm text-slate-100">{value}</div>
+    <div className="rounded-md bg-surface-4/40 px-3 py-2">
+      <div className="text-xs text-ink-4">{label}</div>
+      <div className="mt-0.5 font-mono text-sm text-ink-1">{value}</div>
     </div>
   );
 }
@@ -447,12 +447,12 @@ function ScalarCard({ canWrite }: { canWrite: boolean }) {
           </thead>
           <tbody>
             {data?.list.map((row) => (
-              <tr key={row.key} className="transition hover:bg-slate-800/30">
-                <td className={`${tdClass} font-medium text-slate-100`}>{SCALAR_LABELS[row.key] ?? row.key}</td>
-                <td className={`${tdClass} font-mono text-xs text-slate-400`}>{row.key}</td>
+              <tr key={row.key} className="transition hover:bg-surface-4/30">
+                <td className={`${tdClass} font-medium text-ink-1`}>{SCALAR_LABELS[row.key] ?? row.key}</td>
+                <td className={`${tdClass} font-mono text-xs text-ink-4`}>{row.key}</td>
                 <td className={tdClass}>{row.value.toLocaleString()}</td>
-                <td className={`${tdClass} text-xs text-slate-400`}>{row.description}</td>
-                <td className={`${tdClass} text-xs text-slate-400`}>{formatTime(row.updatedAt)}</td>
+                <td className={`${tdClass} text-xs text-ink-4`}>{row.description}</td>
+                <td className={`${tdClass} text-xs text-ink-4`}>{formatTime(row.updatedAt)}</td>
                 <td className={`${tdClass} text-right`}>
                   <Button variant="outline" className="px-2.5 py-1 text-xs" disabled={!canWrite} onClick={() => setEditing(row)}>
                     编辑

@@ -18,19 +18,19 @@ export function BanStatus({ account, showReason = false }: { account: Account; s
   }`;
 
   if (!state.banned) {
-    return state.expired ? <Badge tone="amber">{state.text}</Badge> : <Badge tone="green">正常</Badge>;
+    return state.expired ? <Badge tone="warn">{state.text}</Badge> : <Badge tone="jade">正常</Badge>;
   }
   if (!showReason) {
     return (
       <span title={detail}>
-        <Badge tone="red">{state.text}</Badge>
+        <Badge tone="ember">{state.text}</Badge>
       </span>
     );
   }
   return (
     <div className="flex flex-col items-start gap-1">
-      <Badge tone="red">{state.text}</Badge>
-      <span className="text-xs text-slate-500">{detail}</span>
+      <Badge tone="ember">{state.text}</Badge>
+      <span className="text-xs text-ink-5">{detail}</span>
     </div>
   );
 }

@@ -91,9 +91,9 @@ function DropTableDialog({
         <PicksEditor draft={picks} onChange={setPicks} />
       </div>
       <EntriesEditor drafts={drafts} onChange={setDrafts} />
-      {!idValid ? <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-200">表 id 只能是小写字母开头的字母 / 数字 / 下划线（≤50 字符）。</p> : null}
-      {picksValue === undefined ? <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-200">抽取件数需为 ≥1 的整数（或 1 ≤ 下限 ≤ 上限）。</p> : null}
-      {errors.length > 0 ? <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-200">{errors.join("；")}。</p> : null}
+      {!idValid ? <p className="rounded-lg border border-ember/40 bg-ember/10 px-3 py-2 text-xs text-ember-hi">表 id 只能是小写字母开头的字母 / 数字 / 下划线（≤50 字符）。</p> : null}
+      {picksValue === undefined ? <p className="rounded-lg border border-ember/40 bg-ember/10 px-3 py-2 text-xs text-ember-hi">抽取件数需为 ≥1 的整数（或 1 ≤ 下限 ≤ 上限）。</p> : null}
+      {errors.length > 0 ? <p className="rounded-lg border border-ember/40 bg-ember/10 px-3 py-2 text-xs text-ember-hi">{errors.join("；")}。</p> : null}
     </Modal>
   );
 }
@@ -204,11 +204,11 @@ export function DropConfigPage() {
             </thead>
             <tbody>
               {tables?.map((table) => (
-                <tr key={table.id} className="transition hover:bg-slate-800/30">
-                  <td className={`${tdClass} font-mono text-xs text-slate-300`}>{table.id}</td>
+                <tr key={table.id} className="transition hover:bg-surface-4/30">
+                  <td className={`${tdClass} font-mono text-xs text-ink-3`}>{table.id}</td>
                   <td className={`${tdClass} font-mono text-xs`}>{picksText(table.picks)}</td>
                   <td className={tdClass}>{table.entries.length}</td>
-                  <td className={`${tdClass} text-xs text-slate-400`}>{formatTime(table.updatedAt)}</td>
+                  <td className={`${tdClass} text-xs text-ink-4`}>{formatTime(table.updatedAt)}</td>
                   <td className={`${tdClass} text-right`}>
                     <div className="flex justify-end gap-1.5">
                       <Button
@@ -223,7 +223,7 @@ export function DropConfigPage() {
                       >
                         编辑
                       </Button>
-                      <Button variant="outline" className="px-2.5 py-1 text-xs text-red-300" disabled={!canWrite} onClick={() => void removeTable(table)}>
+                      <Button variant="outline" className="px-2.5 py-1 text-xs text-ember-hi" disabled={!canWrite} onClick={() => void removeTable(table)}>
                         删除
                       </Button>
                     </div>

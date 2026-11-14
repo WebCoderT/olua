@@ -45,7 +45,7 @@ export function ConfirmDialog({
         </>
       }
     >
-      {description ? <p className="text-sm leading-relaxed text-slate-400">{description}</p> : null}
+      {description ? <p className="text-sm leading-relaxed text-ink-4">{description}</p> : null}
     </Modal>
   );
 }

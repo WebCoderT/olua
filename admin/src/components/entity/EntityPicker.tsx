@@ -77,7 +77,7 @@ export function EntityPicker({
       footer={
         multiple ? (
           <>
-            <span className="mr-auto text-[11px] text-slate-500">已选 {picked.length} 项</span>
+            <span className="mr-auto text-[11px] text-ink-5">已选 {picked.length} 项</span>
             <Button variant="outline" disabled={picked.length === 0} onClick={() => setPicked([])}>
               清空
             </Button>

@@ -543,19 +543,19 @@ export function EquipInAlignPage() {
           </div>
         </Field>
         <Field width="w-40" label="衣服基准">
-          <div className="rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-300">
+          <div className="rounded-lg border border-line-strong bg-surface-2/70 px-3 py-2 text-sm text-ink-3">
             弹窗圆盘（背景图）
           </div>
         </Field>
         <Field width="w-40" label="武器基准">
-          <div className="rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-300">
+          <div className="rounded-lg border border-line-strong bg-surface-2/70 px-3 py-2 text-sm text-ink-3">
             第一件衣服 · {BASE_CLOTH ? BASE_CLOTH.label : "（缺素材）"}
           </div>
         </Field>
         <div className="ml-auto flex flex-wrap items-center gap-2">
-          <span className="text-xs text-slate-500">
+          <span className="text-xs text-ink-5">
             已保存 {Object.keys(saved).length} 件 · 调过 {dirtyCount} / {ALL_ITEMS.length}
-            {unsavedIds.length ? <span className="ml-1 text-amber-400">· {unsavedIds.length} 件未保存</span> : null}
+            {unsavedIds.length ? <span className="ml-1 text-warn">· {unsavedIds.length} 件未保存</span> : null}
           </span>
           <Button variant="primary" onClick={saveAll} loading={Boolean(pending)} disabled={!unsavedIds.length || loadingSaved}>
             {`保存全部${unsavedIds.length ? `（${unsavedIds.length}）` : ""}`}
@@ -568,7 +568,7 @@ export function EquipInAlignPage() {
       </Card>
 
       {savedError ? (
-        <div className="flex items-start gap-3 rounded-xl border border-rose-900/60 bg-rose-950/30 px-4 py-3 text-xs text-rose-300">
+        <div className="flex items-start gap-3 rounded-xl border border-ember/40 bg-ember/10 px-4 py-3 text-xs text-ember-hi">
           <span className="flex-1">{savedError}</span>
           <button className="shrink-0 underline" onClick={clearError}>
             知道了
@@ -577,13 +577,13 @@ export function EquipInAlignPage() {
       ) : null}
 
       {loadingSaved ? (
-        <div className="flex items-center gap-2 rounded-xl border border-slate-800 bg-slate-900/40 px-4 py-2 text-xs text-slate-400">
+        <div className="flex items-center gap-2 rounded-xl border border-line bg-surface-2/40 px-4 py-2 text-xs text-ink-4">
           <Spinner className="h-3 w-3" /> 正在读取服务端已保存的内观几何…
         </div>
       ) : null}
 
       {failures.length ? (
-        <div className="rounded-xl border border-rose-900/60 bg-rose-950/30 px-4 py-3 text-xs text-rose-300">
+        <div className="rounded-xl border border-ember/40 bg-ember/10 px-4 py-3 text-xs text-ember-hi">
           {failures.slice(0, 3).map((message) => (
             <div key={message}>{message}</div>
           ))}
@@ -604,7 +604,7 @@ export function EquipInAlignPage() {
                     if (first) setActiveId(first.id);
                   }}
                   className={`flex-1 rounded-lg px-2 py-1.5 text-xs font-medium transition ${
-                    kind === value ? "bg-indigo-600 text-white" : "bg-slate-800/60 text-slate-300 hover:bg-slate-800"
+                    kind === value ? "bg-gold text-surface-0" : "bg-surface-4/60 text-ink-3 hover:bg-surface-4"
                   }`}
                 >
                   {KIND_LABELS[value]}
@@ -623,16 +623,16 @@ export function EquipInAlignPage() {
                     key={item.id}
                     onClick={() => setActiveId(item.id)}
                     className={`flex w-full items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-left text-xs transition ${
-                      active ? "bg-indigo-600/20 text-indigo-200" : "text-slate-300 hover:bg-slate-800/60"
+                      active ? "bg-gold/20 text-gold-hi" : "text-ink-3 hover:bg-surface-4/60"
                     }`}
                   >
                     <span className="min-w-0 flex-1 truncate">
                       {item.label}
-                      <span className="ml-1 text-slate-500">{item.key}</span>
+                      <span className="ml-1 text-ink-5">{item.key}</span>
                     </span>
-                    {missing.has(item.inPath) ? <span className="text-amber-400">缺素材</span> : null}
-                    {dirtyLocal ? <span className="text-amber-400" title="有未保存的改动">●</span> : null}
-                    {isDirty(geo, item.base) ? <span className="text-emerald-400">调过</span> : null}
+                    {missing.has(item.inPath) ? <span className="text-warn">缺素材</span> : null}
+                    {dirtyLocal ? <span className="text-warn" title="有未保存的改动">●</span> : null}
+                    {isDirty(geo, item.base) ? <span className="text-jade">调过</span> : null}
                   </button>
                 );
               })}
@@ -643,13 +643,13 @@ export function EquipInAlignPage() {
         {/* 中间：弹窗视图 */}
         <div className="min-w-0 flex-1">
           <Card>
-            <div className="mb-2 flex flex-wrap items-center gap-2 text-xs text-slate-400">
-              <span className="font-medium text-slate-200">
+            <div className="mb-2 flex flex-wrap items-center gap-2 text-xs text-ink-4">
+              <span className="font-medium text-ink-2">
                 {KIND_LABELS[activeItem.kind]} · {activeItem.label}
               </span>
-              <span className="text-slate-500">{activeItem.inPath}</span>
+              <span className="text-ink-5">{activeItem.inPath}</span>
               {!itemAtlas ? (
-                <span className="flex items-center gap-1 text-amber-400">
+                <span className="flex items-center gap-1 text-warn">
                   <Spinner className="h-3 w-3" /> 素材加载中
                 </span>
               ) : null}
@@ -658,7 +658,7 @@ export function EquipInAlignPage() {
             <div ref={wrapRef} className="w-full">
               <canvas
                 ref={canvasRef}
-                className="block w-full cursor-grab touch-none rounded-xl bg-[#12141a] active:cursor-grabbing"
+                className="block w-full cursor-grab touch-none rounded-xl bg-surface-0 active:cursor-grabbing"
                 onPointerDown={onPointerDown}
                 onPointerMove={onPointerMove}
                 onPointerUp={endDrag}
@@ -666,7 +666,7 @@ export function EquipInAlignPage() {
                 onWheel={onWheel}
               />
             </div>
-            <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-slate-500">
+            <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-ink-5">
               {(["background", "plate", "canvas", "content", "solid", "hands", "origin"] as (keyof InGuides)[]).map((key) => (
                 <label key={key} className="flex items-center gap-1.5">
                   <input
@@ -692,7 +692,7 @@ export function EquipInAlignPage() {
         {/* 右栏：数值 */}
         <aside className="w-full shrink-0 xl:w-64">
           <Card>
-            <div className="mb-3 text-sm font-semibold text-slate-100">
+            <div className="mb-3 text-sm font-semibold text-ink-1">
               {KIND_LABELS[activeItem.kind]} · {activeItem.label}
             </div>
             <div className="grid grid-cols-2 gap-2">
@@ -742,9 +742,9 @@ export function EquipInAlignPage() {
               </Field>
             </div>
 
-            <div className="mt-2 text-[11px] leading-relaxed text-slate-500">
+            <div className="mt-2 text-[11px] leading-relaxed text-ink-5">
               脚底相对圆盘中心：
-              <span className={feetDelta != null && Math.abs(feetDelta) > 2 ? "text-amber-400" : "text-slate-300"}>
+              <span className={feetDelta != null && Math.abs(feetDelta) > 2 ? "text-warn" : "text-ink-3"}>
                 {feetDelta == null ? "量不到轮廓" : `${feetDelta > 0 ? "+" : ""}${feetDelta.toFixed(1)}`}
               </span>
               {feetDelta != null ? <span className="ml-1">（正 = 悬空、负 = 陷进盘里）</span> : null}
@@ -752,7 +752,7 @@ export function EquipInAlignPage() {
             </div>
 
             {activeItem.kind === "weapon" ? (
-              <label className="mt-3 flex items-start gap-2 rounded-lg bg-slate-800/40 p-2 text-xs text-slate-300">
+              <label className="mt-3 flex items-start gap-2 rounded-lg bg-surface-4/40 p-2 text-xs text-ink-3">
                 <input
                   type="checkbox"
                   className="mt-0.5"
@@ -761,10 +761,10 @@ export function EquipInAlignPage() {
                 />
                 <span>
                   使用手调的绝对位置
-                  <span className="block text-slate-500">
+                  <span className="block text-ink-5">
                     拖动 / 改数值会自动勾上。没勾时客户端按当前衣服的内容 bbox 自动算 —— 这里的位置不生效（保存也会按手调存）。
                   </span>
-                  <span className="block text-slate-500">
+                  <span className="block text-ink-5">
                     想彻底回到自动算：用「还原本件」删掉这行，别只把勾去掉。
                   </span>
                 </span>
@@ -789,11 +789,11 @@ export function EquipInAlignPage() {
               </Button>
             </div>
 
-            <div className="mt-2 text-[11px] leading-relaxed text-slate-500">
+            <div className="mt-2 text-[11px] leading-relaxed text-ink-5">
               {unsaved ? "有未保存的改动 —— 按「保存本件」才写进服务端。" : "已与服务端一致；改动会实时存浏览器，刷新不丢。"}
             </div>
 
-            {notice ? <div className="mt-3 rounded-lg bg-emerald-500/10 px-2 py-1.5 text-[11px] text-emerald-300">{notice}</div> : null}
+            {notice ? <div className="mt-3 rounded-lg bg-jade/10 px-2 py-1.5 text-[11px] text-jade-hi">{notice}</div> : null}
           </Card>
         </aside>
       </div>

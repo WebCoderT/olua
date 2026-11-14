@@ -31,37 +31,37 @@ function clockMinute(at: number): string {
 }
 
 /** `plan` 的人话：管理端进程读不到实时进程的世界内存，这里给的是「会不会排队」 */
-function planOf(item: MapReloadResult): { label: string; tone: "green" | "amber" } {
-  if (item.plan === "immediate") return { label: "下一轮就执行（房里没人 / 立刻模式）", tone: "green" };
-  return { label: "有人在线，先排队等空窗", tone: "amber" };
+function planOf(item: MapReloadResult): { label: string; tone: "jade" | "warn" } {
+  if (item.plan === "immediate") return { label: "下一轮就执行（房里没人 / 立刻模式）", tone: "jade" };
+  return { label: "有人在线，先排队等空窗", tone: "warn" };
 }
 
 /** 提交重载后的按区回执（每个存活区一条 —— 刷怪区是全服共用配置，但世界按区分份） */
 function ReloadReceipt({ batch }: { batch: MapReloadBatch }) {
   return (
     <div className="mt-3 space-y-2">
-      <div className="flex items-center gap-2 text-xs font-medium text-slate-300">
+      <div className="flex items-center gap-2 text-xs font-medium text-ink-3">
         提交结果
-        <Badge tone={batch.items.some((item) => item.merged) ? "amber" : "green"}>
+        <Badge tone={batch.items.some((item) => item.merged) ? "warn" : "jade"}>
           {batch.items.length} 个存活区
         </Badge>
       </div>
       {batch.items.map((item) => {
         const plan = planOf(item);
         return (
-          <div key={item.roomId} className="rounded-xl border border-slate-800 bg-slate-900/40 px-3 py-2">
+          <div key={item.roomId} className="rounded-xl border border-line bg-surface-2/40 px-3 py-2">
             <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
-              <span className="font-mono text-slate-300">{item.roomId}</span>
-              {item.merged ? <Badge tone="amber">已并入 pending</Badge> : null}
-              <Badge tone={item.mode === "reload" ? "red" : "slate"}>
+              <span className="font-mono text-ink-3">{item.roomId}</span>
+              {item.merged ? <Badge tone="warn">已并入 pending</Badge> : null}
+              <Badge tone={item.mode === "reload" ? "ember" : "muted"}>
                 {item.mode === "reload" ? "整体重载" : "只重播"}
               </Badge>
               <Badge tone={plan.tone}>{plan.label}</Badge>
             </div>
-            <p className="mt-1 text-[11px] text-slate-500">
+            <p className="mt-1 text-[11px] text-ink-5">
               {item.plan === "queued" ? (
                 <>
-                  排队截止 <span className="font-mono text-slate-400">{clockMinute(item.forceAt)}</span>
+                  排队截止 <span className="font-mono text-ink-4">{clockMinute(item.forceAt)}</span>
                   （到点房里还有人也会强制重刷；房里先空出来就立刻执行）
                 </>
               ) : (
@@ -142,7 +142,7 @@ export function ReloadWorldDialog({
       }
     >
       <div className="space-y-3">
-        {!canWrite ? <Notice tone="amber">你只有配置读权限 —— 可以看回执，不能提交重载。</Notice> : null}
+        {!canWrite ? <Notice tone="warn">你只有配置读权限 —— 可以看回执，不能提交重载。</Notice> : null}
         <FormField label="重载模式" hint="reload 连 AI 运行时一起重载，怪整体重刷一次（掉落 / 血量不保留）；respawn 只按新刷怪区对齐数量。">
           <Select value={mode} onChange={(event) => setMode(event.target.value === "reload" ? "reload" : "respawn")}>
             <option value="respawn">respawn · 按新刷怪区重播（可等空窗）</option>
@@ -164,7 +164,7 @@ export function ReloadWorldDialog({
             />
           </FormField>
         ) : null}
-        <p className="text-[11px] text-slate-500">
+        <p className="text-[11px] text-ink-5">
           一次发给<b>每一个存活区</b>（每个区各有一份这张图的世界）。重复提交会与已排队的请求合并，不会刷两次。
           其它图、其它区的世界完全不受影响。
         </p>
@@ -233,17 +233,17 @@ function RuleToggle({
   onChange: (next: boolean) => void;
 }) {
   return (
-    <label className={`flex cursor-pointer items-start gap-2 rounded-lg border border-slate-800 bg-slate-900/40 px-2.5 py-2 text-xs ${disabled ? "cursor-not-allowed opacity-60" : ""}`}>
+    <label className={`flex cursor-pointer items-start gap-2 rounded-lg border border-line bg-surface-2/40 px-2.5 py-2 text-xs ${disabled ? "cursor-not-allowed opacity-60" : ""}`}>
       <input
         type="checkbox"
         checked={checked}
         disabled={disabled}
         onChange={(event) => onChange(event.target.checked)}
-        className="mt-0.5 accent-sky-500"
+        className="mt-0.5 accent-gold"
       />
       <span>
-        <span className="text-slate-200">{title}</span>
-        <span className="block text-[10px] leading-4 text-slate-500">{hint}</span>
+        <span className="text-ink-2">{title}</span>
+        <span className="block text-[10px] leading-4 text-ink-5">{hint}</span>
       </span>
     </label>
   );
@@ -348,11 +348,11 @@ export function MapRulesDialog({
       }
     >
       {loading ? (
-        <div className="flex items-center justify-center gap-2 py-12 text-xs text-slate-500">
+        <div className="flex items-center justify-center gap-2 py-12 text-xs text-ink-5">
           <Spinner /> 读取当前规则…
         </div>
       ) : error ? (
-        <Notice tone="red" title="拉不到规则">
+        <Notice tone="ember" title="拉不到规则">
           {error}
         </Notice>
       ) : !rules || !form ? (
@@ -360,19 +360,19 @@ export function MapRulesDialog({
       ) : (
         <div className="space-y-4">
           {rules.inherited ? (
-            <Notice tone="amber">
+            <Notice tone="warn">
               这张图<b>没有单独的规则行</b>（inherited）—— 下面显示的全是出厂默认值。保存后才会落一行；
               在那之前改全局默认值，这张图会跟着变。
             </Notice>
           ) : (
-            <div className="text-[11px] text-slate-500">
-              这张图有<b className="text-slate-300">单独的规则行</b>
+            <div className="text-[11px] text-ink-5">
+              这张图有<b className="text-ink-3">单独的规则行</b>
               {rules.updatedBy ? <>（最后由 {rules.updatedBy} 修改）</> : null}。
             </div>
           )}
 
           <section>
-            <h4 className="mb-1.5 text-xs font-medium text-slate-300">结算倍率（服务端结算时乘）</h4>
+            <h4 className="mb-1.5 text-xs font-medium text-ink-3">结算倍率（服务端结算时乘）</h4>
             <div className="grid grid-cols-3 gap-2">
               <FormField label="经验">
                 <Input type="number" min={0} max={100} step={0.1} value={form.expRate} onChange={(event) => patch("expRate", event.target.value)} />
@@ -387,7 +387,7 @@ export function MapRulesDialog({
           </section>
 
           <section>
-            <h4 className="mb-1.5 text-xs font-medium text-slate-300">规则开关</h4>
+            <h4 className="mb-1.5 text-xs font-medium text-ink-3">规则开关</h4>
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
               <RuleToggle checked={form.allowPk} hint="允许同图玩家互相攻击" title="允许 PK" disabled={!canWrite} onChange={(next) => patch("allowPk", next)} />
               <RuleToggle checked={form.allowAutoBattle} hint="关闭后这张图的自动挂机不生效" title="允许自动挂机" disabled={!canWrite} onChange={(next) => patch("allowAutoBattle", next)} />
@@ -399,7 +399,7 @@ export function MapRulesDialog({
           </section>
 
           <section>
-            <h4 className="mb-1.5 text-xs font-medium text-slate-300">容量与传送</h4>
+            <h4 className="mb-1.5 text-xs font-medium text-ink-3">容量与传送</h4>
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
               <FormField label="单房人数上限">
                 <Input type="number" min={0} max={1000} value={form.maxPlayersPerRoom} onChange={(event) => patch("maxPlayersPerRoom", event.target.value)} />
@@ -429,7 +429,7 @@ export function MapRulesDialog({
             </FormField>
           </section>
 
-          <p className="text-[11px] text-slate-500">
+          <p className="text-[11px] text-ink-5">
             保存是<b>整份覆盖</b>：没提到的字段按页面上显示的值落库。容量与传送开关在下次进图 / 传送校验时生效；
             倍率在下一笔结算就生效。
           </p>

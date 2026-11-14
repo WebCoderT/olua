@@ -29,10 +29,10 @@ const CATEGORY_LABELS: Array<[string, string]> = [
 ];
 
 /** 状态中文名与配色（v1 只会出现 pending，另两种是后续刀的落脚点） */
-const STATUS_META: Record<string, { label: string; tone: "slate" | "green" | "red" }> = {
-  pending: { label: "待处理", tone: "slate" },
-  handled: { label: "已处理", tone: "green" },
-  dismissed: { label: "已驳回", tone: "red" },
+const STATUS_META: Record<string, { label: string; tone: "muted" | "jade" | "ember" }> = {
+  pending: { label: "待处理", tone: "muted" },
+  handled: { label: "已处理", tone: "jade" },
+  dismissed: { label: "已驳回", tone: "ember" },
 };
 
 /**
@@ -152,23 +152,23 @@ export function ReportsPage() {
             </thead>
             <tbody>
               {data?.list.map((item) => {
-                const meta = STATUS_META[item.status] ?? { label: item.status, tone: "slate" as const };
+                const meta = STATUS_META[item.status] ?? { label: item.status, tone: "muted" as const };
                 const open = Boolean(expanded[item.id]);
                 return (
                   <Fragment key={item.id}>
-                    <tr className="transition hover:bg-slate-800/30">
+                    <tr className="transition hover:bg-surface-4/30">
                       <td className={tdClass}>{formatTime(item.createdAt)}</td>
                       <td className={tdClass}>
-                        <span className="text-slate-200">{item.roleName ?? "（已删除）"}</span>
-                        <span className="ml-2 font-mono text-xs text-slate-500">{item.roleId}</span>
+                        <span className="text-ink-2">{item.roleName ?? "（已删除）"}</span>
+                        <span className="ml-2 font-mono text-xs text-ink-5">{item.roleId}</span>
                       </td>
                       <td className={tdClass}>
-                        <span className="text-slate-200">{item.targetName ?? "（已删除）"}</span>
-                        <span className="ml-2 font-mono text-xs text-slate-500">{item.targetRoleId}</span>
+                        <span className="text-ink-2">{item.targetName ?? "（已删除）"}</span>
+                        <span className="ml-2 font-mono text-xs text-ink-5">{item.targetRoleId}</span>
                       </td>
                       <td className={tdClass}>{item.categoryLabel}</td>
                       <td className={`${tdClass} max-w-[280px] truncate`} title={item.reason || undefined}>
-                        {item.reason || <span className="text-slate-500">—</span>}
+                        {item.reason || <span className="text-ink-5">—</span>}
                       </td>
                       <td className={tdClass}>
                         <Badge tone={meta.tone}>{meta.label}</Badge>
@@ -180,11 +180,11 @@ export function ReportsPage() {
                       </td>
                     </tr>
                     {open ? (
-                      <tr className="bg-slate-900/40">
+                      <tr className="bg-surface-2/40">
                         <td className={tdClass} colSpan={7}>
-                          <div className="flex flex-col gap-1 py-1 text-xs text-slate-300">
+                          <div className="flex flex-col gap-1 py-1 text-xs text-ink-3">
                             <p>
-                              举报 id：<span className="font-mono text-slate-400">{item.id}</span>
+                              举报 id：<span className="font-mono text-ink-4">{item.id}</span>
                             </p>
                             <p>
                               类别：{item.categoryLabel}（<span className="font-mono">{item.category}</span>）
@@ -217,7 +217,7 @@ export function ReportsPage() {
         />
       </Card>
 
-      <p className="text-xs text-slate-500">
+      <p className="text-xs text-ink-5">
         举报只落库、不自动处罚：是否需要处置由人判断。被举报人不会收到任何通知 —— 通知等于把举报人卖了。
       </p>
     </div>

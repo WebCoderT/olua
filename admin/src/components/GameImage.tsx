@@ -27,7 +27,7 @@ function NoImage({ size }: { size: number }) {
   return (
     <span
       aria-hidden="true"
-      className="inline-flex items-center justify-center rounded border border-slate-800 bg-slate-900/60 text-[10px] text-slate-600"
+      className="inline-flex items-center justify-center rounded border border-line bg-surface-2/60 text-[10px] text-ink-6"
       style={{ width: size, height: size }}
     >
       无图
@@ -35,7 +35,7 @@ function NoImage({ size }: { size: number }) {
   );
 }
 
-const imgClass = "rounded border border-slate-800 bg-slate-900/60 object-contain";
+const imgClass = "rounded border border-line bg-surface-2/60 object-contain";
 
 /**
  * 点击缩略图放大查看的灯箱
@@ -57,15 +57,15 @@ export function Lightbox({ alt, onClose, children }: { alt?: string; onClose: ()
       role="dialog"
       aria-modal="true"
       aria-label={alt ? `${alt}（放大查看）` : "放大查看"}
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-8"
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-surface-0/80 p-8"
       onClick={onClose}
     >
       <div
-        className="flex max-h-full max-w-full flex-col items-center rounded-lg border border-slate-700 bg-slate-900 p-4 shadow-2xl"
+        className="flex max-h-full max-w-full flex-col items-center rounded-lg border border-line-strong bg-surface-2 p-4 shadow-2xl"
         onClick={(event) => event.stopPropagation()}
       >
         {children}
-        {alt ? <p className="mt-3 max-w-[60vmin] break-all text-center text-sm text-slate-300">{alt}</p> : null}
+        {alt ? <p className="mt-3 max-w-[60vmin] break-all text-center text-sm text-ink-3">{alt}</p> : null}
       </div>
     </div>,
     document.body,
@@ -87,7 +87,7 @@ export function Zoomable({
       type="button"
       title="点击放大"
       aria-label={alt ? `放大查看 ${alt}` : "放大查看"}
-      className="cursor-zoom-in transition hover:ring-2 hover:ring-indigo-400/60"
+      className="cursor-zoom-in transition hover:ring-2 hover:ring-gold-hi/60"
       onClick={(event) => {
         event.stopPropagation();
         onZoom();
@@ -311,7 +311,7 @@ export function GameFrame({
       ref={canvasRef}
       role="img"
       aria-label={alt ?? ""}
-      className="rounded border border-slate-800 bg-slate-900/60"
+      className="rounded border border-line bg-surface-2/60"
       style={{ imageRendering: "pixelated" }}
     />
   );
@@ -346,7 +346,7 @@ function FrameLightbox({ atlas, alt, onClose }: { atlas: string; alt?: string; o
         ref={bigRef}
         role="img"
         aria-label={alt ?? ""}
-        className="max-h-[60vmin] max-w-[60vmin] rounded border border-slate-700 bg-slate-900/60"
+        className="max-h-[60vmin] max-w-[60vmin] rounded border border-line-strong bg-surface-2/60"
         style={{ imageRendering: "pixelated" }}
       />
     </Lightbox>

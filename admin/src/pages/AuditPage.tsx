@@ -153,7 +153,7 @@ export function AuditPage() {
     <div className="flex flex-col gap-4">
       <PageHeader
         title="操作日志"
-        description={<>管理端的<strong className="text-slate-400">写</strong>操作自动留痕（读接口不记，否则一页列表就能把日志刷满）。口令一类字段落库前已打码；日志超过上限时自动清理最旧的。</>}
+        description={<>管理端的<strong className="text-ink-4">写</strong>操作自动留痕（读接口不记，否则一页列表就能把日志刷满）。口令一类字段落库前已打码；日志超过上限时自动清理最旧的。</>}
       />
 
       <Card>
@@ -238,7 +238,7 @@ export function AuditPage() {
             重置
           </Button>
         </div>
-        {rangeError ? <p className="mt-3 rounded-lg border border-rose-500/40 bg-rose-950/50 px-3 py-2 text-xs text-rose-200">{rangeError}</p> : null}
+        {rangeError ? <p className="mt-3 rounded-lg border border-ember/40 bg-ember/15 px-3 py-2 text-xs text-ember-hi">{rangeError}</p> : null}
       </Card>
 
       <Card
@@ -288,7 +288,7 @@ export function AuditPage() {
         />
       </Card>
 
-      <p className="text-xs text-slate-500">
+      <p className="text-xs text-ink-5">
         时间范围按本地时区解释；「目标 id」与「来源 IP」都是精确匹配（想按名字找用关键字）。点表头可换排序，排序由服务端执行。日志只记管理端的写操作，玩家自己的存档推送不在这里。
       </p>
     </div>
@@ -299,41 +299,41 @@ export function AuditPage() {
 function LogRow({ item, open, onToggle }: { item: AuditLog; open: boolean; onToggle: () => void }) {
   return (
     <>
-      <tr className="transition hover:bg-slate-800/30">
+      <tr className="transition hover:bg-surface-4/30">
         <td className={tdClass}>{formatTimeFull(item.createdAt)}</td>
         <td className={tdClass}>
           {item.actorName ? (
             <span className="flex items-center gap-2">
-              <span className="text-slate-100">{item.actorName}</span>
-              {item.actorRole ? <span className="text-xs text-slate-500">{adminRoleLabel(item.actorRole)}</span> : null}
+              <span className="text-ink-1">{item.actorName}</span>
+              {item.actorRole ? <span className="text-xs text-ink-5">{adminRoleLabel(item.actorRole)}</span> : null}
             </span>
           ) : (
-            <span className="text-slate-500">—（未登录）</span>
+            <span className="text-ink-5">—（未登录）</span>
           )}
         </td>
         <td className={tdClass}>
-          <span className="text-slate-200">{auditActionLabel(item.action)}</span>
-          <span className="ml-2 font-mono text-xs text-slate-500">{item.action}</span>
+          <span className="text-ink-2">{auditActionLabel(item.action)}</span>
+          <span className="ml-2 font-mono text-xs text-ink-5">{item.action}</span>
         </td>
         <td className={tdClass}>
           {item.targetType ? (
             <span className="flex flex-col">
-              <span className="text-slate-200">{item.targetName ?? "（已删除）"}</span>
-              <span className="text-xs text-slate-500">
+              <span className="text-ink-2">{item.targetName ?? "（已删除）"}</span>
+              <span className="text-xs text-ink-5">
                 {auditTargetLabel(item.targetType)} · {item.targetId ?? "—"}
               </span>
             </span>
           ) : (
-            <span className="text-slate-500">—</span>
+            <span className="text-ink-5">—</span>
           )}
         </td>
         <td className={tdClass}>
           {item.success ? (
-            <Badge tone="green">成功</Badge>
+            <Badge tone="jade">成功</Badge>
           ) : (
             <span className="flex flex-col gap-1">
-              <Badge tone="red">失败</Badge>
-              <span className="text-xs text-slate-500">
+              <Badge tone="ember">失败</Badge>
+              <span className="text-xs text-ink-5">
                 {item.errorCode ?? item.statusCode ?? "—"}
                 {item.errorMessage ? ` ${item.errorMessage}` : ""}
               </span>
@@ -348,14 +348,14 @@ function LogRow({ item, open, onToggle }: { item: AuditLog; open: boolean; onTog
         </td>
       </tr>
       {open ? (
-        <tr className="bg-slate-900/40">
+        <tr className="bg-surface-2/40">
           <td className={tdClass} colSpan={7}>
             <div className="flex flex-col gap-2 py-1">
-              <p className="text-xs text-slate-400">
-                请求：<span className="font-mono text-slate-300">{item.method ?? "—"}</span> <span className="font-mono text-slate-300">{item.path ?? "—"}</span>
-                {item.statusCode !== null ? <span className="ml-2 text-slate-500">HTTP {item.statusCode}</span> : null}
+              <p className="text-xs text-ink-4">
+                请求：<span className="font-mono text-ink-3">{item.method ?? "—"}</span> <span className="font-mono text-ink-3">{item.path ?? "—"}</span>
+                {item.statusCode !== null ? <span className="ml-2 text-ink-5">HTTP {item.statusCode}</span> : null}
               </p>
-              <pre className="max-h-64 overflow-auto rounded-lg border border-slate-800 bg-slate-950/60 p-3 font-mono text-xs text-slate-300">
+              <pre className="max-h-64 overflow-auto rounded-lg border border-line bg-surface-0/60 p-3 font-mono text-xs text-ink-3">
                 {item.detail ? JSON.stringify(item.detail, null, 2) : "（无请求体）"}
               </pre>
             </div>

@@ -292,8 +292,8 @@ function QuestDialog({
         </Field>
       </div>
       <div>
-        <span className="mb-2 block text-xs font-medium text-slate-400">目标（单目标，v1 边界）</span>
-        <div className="grid grid-cols-1 gap-3 rounded-xl border border-slate-800 bg-slate-950/40 p-4 sm:grid-cols-3">
+        <span className="mb-2 block text-xs font-medium text-ink-4">目标（单目标，v1 边界）</span>
+        <div className="grid grid-cols-1 gap-3 rounded-xl border border-line bg-surface-0/40 p-4 sm:grid-cols-3">
           <Field label="目标类型" hint="决定推进方式">
             <Select value={form.objectiveType} onChange={(event) => switchObjectiveType(event.target.value)}>
               {Object.entries(OBJECTIVE_TYPE_LABELS).map(([value, text]) => (
@@ -323,14 +323,14 @@ function QuestDialog({
             />
           </Field>
         </div>
-        <p className="mt-1.5 text-xs text-slate-600">
+        <p className="mt-1.5 text-xs text-ink-6">
           kill 的进度在服务端击杀结算时推进（实时进程直写库）；talk 在玩家与 NPC 对话时推进；
           collect 在交付时按背包实有数量判定，不需要额外钩子。
         </p>
       </div>
       <div>
-        <span className="mb-2 block text-xs font-medium text-slate-400">奖励（交付时直接入包，整份放不下会被拒绝）</span>
-        <div className="grid grid-cols-1 gap-3 rounded-xl border border-slate-800 bg-slate-950/40 p-4 sm:grid-cols-2">
+        <span className="mb-2 block text-xs font-medium text-ink-4">奖励（交付时直接入包，整份放不下会被拒绝）</span>
+        <div className="grid grid-cols-1 gap-3 rounded-xl border border-line bg-surface-0/40 p-4 sm:grid-cols-2">
           <Field label="绑定元宝">
             <Input type="number" min={0} value={form.bindGold} onChange={(event) => set("bindGold", event.target.value)} />
           </Field>
@@ -340,7 +340,7 @@ function QuestDialog({
         </div>
 
         <div className="mt-2 flex items-center justify-between">
-          <span className="text-xs text-slate-500">奖励物品（最多 {REWARD_ITEMS_MAX} 条）</span>
+          <span className="text-xs text-ink-5">奖励物品（最多 {REWARD_ITEMS_MAX} 条）</span>
           <Button
             variant="outline"
             className="px-2.5 py-1 text-xs"
@@ -350,8 +350,8 @@ function QuestDialog({
             加一条
           </Button>
         </div>
-        <div className="mt-2 flex flex-col gap-2 rounded-xl border border-slate-800 bg-slate-950/40 p-4">
-          {form.items.length === 0 ? <p className="text-xs text-slate-500">没有物品奖励：只发绑定元宝与经验。</p> : null}
+        <div className="mt-2 flex flex-col gap-2 rounded-xl border border-line bg-surface-0/40 p-4">
+          {form.items.length === 0 ? <p className="text-xs text-ink-5">没有物品奖励：只发绑定元宝与经验。</p> : null}
           {form.items.map((entry, index) => (
             <div key={index} className="flex items-center gap-2">
               <div className="min-w-0 flex-1">
@@ -364,7 +364,7 @@ function QuestDialog({
                   onChange={(goodId) => setItem(index, { goodId })}
                 />
               </div>
-              <span className="text-xs text-slate-600">×</span>
+              <span className="text-xs text-ink-6">×</span>
               <div className="w-24">
                 <Input
                   type="number"
@@ -377,7 +377,7 @@ function QuestDialog({
               </div>
               <Button
                 variant="ghost"
-                className="px-2 py-1 text-xs text-rose-300"
+                className="px-2 py-1 text-xs text-ember-hi"
                 onClick={() => set("items", form.items.filter((_, i) => i !== index))}
               >
                 删除
@@ -592,31 +592,31 @@ export function QuestsPage() {
             </thead>
             <tbody>
               {data?.list.map((item) => (
-                <tr key={item.id} className="transition hover:bg-slate-800/30">
-                  <td className={`${tdClass} font-mono text-xs text-slate-300`}>{item.id}</td>
-                  <td className={`${tdClass} font-medium text-slate-100`}>{item.label}</td>
+                <tr key={item.id} className="transition hover:bg-surface-4/30">
+                  <td className={`${tdClass} font-mono text-xs text-ink-3`}>{item.id}</td>
+                  <td className={`${tdClass} font-medium text-ink-1`}>{item.label}</td>
                   <td className={tdClass}>
-                    <Badge tone={item.kind === "main" ? "indigo" : "amber"}>{QUEST_KIND_LABELS[item.kind] ?? item.kind}</Badge>
+                    <Badge tone={item.kind === "main" ? "gold" : "warn"}>{QUEST_KIND_LABELS[item.kind] ?? item.kind}</Badge>
                   </td>
-                  <td className={`${tdClass} text-xs text-slate-400`}>
-                    {item.prevQuestId ? <span className="font-mono">{item.prevQuestId}</span> : <span className="text-slate-600">—</span>}
+                  <td className={`${tdClass} text-xs text-ink-4`}>
+                    {item.prevQuestId ? <span className="font-mono">{item.prevQuestId}</span> : <span className="text-ink-6">—</span>}
                   </td>
-                  <td className={`${tdClass} text-xs text-slate-400`}>Lv.{item.minLevel}</td>
-                  <td className={`${tdClass} text-xs text-slate-400`}>
-                    {item.npcId ? keyLabel("npc", item.npcId) : <span className="text-slate-600">—</span>}
+                  <td className={`${tdClass} text-xs text-ink-4`}>Lv.{item.minLevel}</td>
+                  <td className={`${tdClass} text-xs text-ink-4`}>
+                    {item.npcId ? keyLabel("npc", item.npcId) : <span className="text-ink-6">—</span>}
                   </td>
-                  <td className={`${tdClass} text-xs text-slate-400`}>
+                  <td className={`${tdClass} text-xs text-ink-4`}>
                     {OBJECTIVE_TYPE_LABELS[item.objective.type] ?? item.objective.type} ·{" "}
                     {keyLabel(OBJECTIVE_TARGET_SOURCE[item.objective.type] ?? "item", item.objective.target)} ×
                     {item.objective.count}
                   </td>
-                  <td className={`${tdClass} text-xs text-slate-400`}>
+                  <td className={`${tdClass} text-xs text-ink-4`}>
                     绑定元宝 {item.rewards.bindGold} · 经验 {item.rewards.exp}
                     {item.rewards.items.length > 0
                       ? ` · ${item.rewards.items.map((entry) => `${entityLabel("item", entry.goodId) || entry.goodId}×${entry.count}`).join("、")}`
                       : ""}
                   </td>
-                  <td className={`${tdClass} text-xs text-slate-400`}>{formatTime(item.updatedAt)}</td>
+                  <td className={`${tdClass} text-xs text-ink-4`}>{formatTime(item.updatedAt)}</td>
                   <td className={`${tdClass} text-right`}>
                     <div className="flex justify-end gap-2">
                       <Button
@@ -633,7 +633,7 @@ export function QuestsPage() {
                       </Button>
                       <Button
                         variant="ghost"
-                        className="px-2.5 py-1 text-xs text-rose-300"
+                        className="px-2.5 py-1 text-xs text-ember-hi"
                         disabled={!canWrite || removingId === item.id}
                         loading={removingId === item.id}
                         onClick={() => void removeQuest(item)}

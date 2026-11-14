@@ -112,7 +112,7 @@ export function GuideStepsPage() {
             这张表以前写在客户端源码里（改一句文案要重打客户端包）。现在运营可改：几步、顺序、文案、高亮哪里、
             什么动作算过。玩家下次进游戏拉配置时整表替换；<b>引导进度不受影响</b>
             （存档里存的是「走到第几步」，所以在中间插一步会把后面所有人的进度往后推一格）。
-            {saved ? <span className="ml-1 text-slate-500">上次修改：{formatTime(saved.updatedAt)}</span> : null}
+            {saved ? <span className="ml-1 text-ink-5">上次修改：{formatTime(saved.updatedAt)}</span> : null}
           </>
         }
       />
@@ -141,12 +141,12 @@ export function GuideStepsPage() {
       >
         {draft ? (
           <div className="flex flex-col gap-3">
-            {invalid ? <p className="text-xs text-amber-400">{invalid}</p> : null}
-            {draft.length === 0 ? <p className="text-sm text-slate-400">还没有步骤。点右上角「添加一步」开始。</p> : null}
+            {invalid ? <p className="text-xs text-warn">{invalid}</p> : null}
+            {draft.length === 0 ? <p className="text-sm text-ink-4">还没有步骤。点右上角「添加一步」开始。</p> : null}
             {draft.map((row, index) => (
-              <div key={`${row.id}-${index}`} className="rounded border border-slate-700/60 p-3">
+              <div key={`${row.id}-${index}`} className="rounded border border-line-strong/60 p-3">
                 <div className="mb-2 flex items-center justify-between">
-                  <span className="text-sm font-medium text-slate-300">第 {index + 1} 步</span>
+                  <span className="text-sm font-medium text-ink-3">第 {index + 1} 步</span>
                   {canWrite ? (
                     <div className="flex items-center gap-2">
                       <Button variant="ghost" disabled={index === 0} onClick={() => move(index, -1)}>

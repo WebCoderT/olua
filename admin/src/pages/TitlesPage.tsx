@@ -12,10 +12,10 @@ import { toastSuccess } from "../store/toast";
 import { PageHeader } from "../components/PageHeader";
 
 /** 渠道徽章配色：可升级的绿、赠送的蓝、暂不放出的灰 */
-const CHANNEL_TONE: Record<string, "green" | "indigo" | "slate"> = {
-  upgrade: "green",
-  grant: "indigo",
-  unavailable: "slate",
+const CHANNEL_TONE: Record<string, "jade" | "gold" | "muted"> = {
+  upgrade: "jade",
+  grant: "gold",
+  unavailable: "muted",
 };
 
 /** 属性摘要（列表列太窄，只报几个关键数；完整数值在编辑弹窗里） */
@@ -170,24 +170,24 @@ export function TitlesPage() {
             </thead>
             <tbody>
               {data?.list.map((item) => (
-                <tr key={item.level} className="transition hover:bg-slate-800/30">
+                <tr key={item.level} className="transition hover:bg-surface-4/30">
                   <td className={tdClass}>
                     <FrameAnimation atlas={titleAnimation(item.level)} alt={item.label} />
                   </td>
                   <td className={tdClass}>{item.level}</td>
                   <td className={tdClass}>
-                    <span className="block font-medium text-slate-100">{item.label}</span>
-                    <span className="mt-0.5 block max-w-[240px] truncate text-xs text-slate-500" title={item.description}>
+                    <span className="block font-medium text-ink-1">{item.label}</span>
+                    <span className="mt-0.5 block max-w-[240px] truncate text-xs text-ink-5" title={item.description}>
                       {item.description}
                     </span>
                   </td>
                   <td className={tdClass}>
-                    <Badge tone={CHANNEL_TONE[item.acquireChannel] ?? "slate"}>
+                    <Badge tone={CHANNEL_TONE[item.acquireChannel] ?? "muted"}>
                       {ACQUIRE_CHANNEL_LABELS[item.acquireChannel] ?? item.acquireChannel}
                     </Badge>
                   </td>
-                  <td className={`${tdClass} text-xs text-slate-400`}>{attributeSummary(item)}</td>
-                  <td className={`${tdClass} text-xs text-slate-400`}>{formatTime(item.updatedAt)}</td>
+                  <td className={`${tdClass} text-xs text-ink-4`}>{attributeSummary(item)}</td>
+                  <td className={`${tdClass} text-xs text-ink-4`}>{formatTime(item.updatedAt)}</td>
                   <td className={`${tdClass} text-right`}>
                     <Button
                       variant="outline"

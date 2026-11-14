@@ -86,7 +86,7 @@ function AttributeTable({
   return (
     <table className={`w-full border-collapse ${dense ? "text-xs" : "min-w-[26rem] text-sm"}`}>
       <thead>
-        <tr className="border-b border-slate-800 text-left text-xs text-slate-500">
+        <tr className="border-b border-line text-left text-xs text-ink-5">
           <th className={`${cell} font-medium`}>属性</th>
           <th className={`${cell} font-medium`}>服务端重算</th>
           <th className={`${dense ? "py-1" : "py-2"} font-medium`}>存档旧值</th>
@@ -98,14 +98,14 @@ function AttributeTable({
           const serverValue = attributes ? attributes[row.key] : undefined;
           const differs = reported !== null && typeof serverValue === "number" && serverValue !== reported;
           return (
-            <tr key={row.key} className={`border-b border-slate-800/60 last:border-0 ${differs ? "bg-amber-500/10" : ""}`}>
-              <td className={`${cell} text-slate-400`}>
+            <tr key={row.key} className={`border-b border-line/60 last:border-0 ${differs ? "bg-warn/10" : ""}`}>
+              <td className={`${cell} text-ink-4`}>
                 {row.label}
-                {row.hint ? <span className="ml-1 text-xs text-slate-600">（{row.hint}）</span> : null}
+                {row.hint ? <span className="ml-1 text-xs text-ink-6">（{row.hint}）</span> : null}
               </td>
-              <td className={`${cell} font-medium text-slate-100`}>{attributes ? serverTextOf(attributes, row) : "—"}</td>
-              <td className={`${dense ? "py-1" : "py-2"} ${differs ? "font-medium text-amber-300" : "text-slate-400"}`}>
-                {reported === null ? <span className="text-slate-600">—</span> : reported}
+              <td className={`${cell} font-medium text-ink-1`}>{attributes ? serverTextOf(attributes, row) : "—"}</td>
+              <td className={`${dense ? "py-1" : "py-2"} ${differs ? "font-medium text-warn-hi" : "text-ink-4"}`}>
+                {reported === null ? <span className="text-ink-6">—</span> : reported}
               </td>
             </tr>
           );
@@ -171,7 +171,7 @@ export function RoleAttributesCard({
   if (bare) {
     return (
       <div className="flex flex-col gap-2">
-        <p className="text-[10px] uppercase tracking-wide text-slate-500">战斗属性（服务端重算 · 只读）</p>
+        <p className="text-[10px] uppercase tracking-wide text-ink-5">战斗属性（服务端重算 · 只读）</p>
         {notices}
         <dl className="grid grid-cols-1 gap-x-4 sm:grid-cols-2">
           {ATTRIBUTE_ROWS.map((row) => {
@@ -181,20 +181,20 @@ export function RoleAttributesCard({
             return (
               <div
                 key={row.key}
-                className={`flex items-baseline justify-between gap-2 rounded px-1 py-0.5 ${differs ? "bg-amber-500/10" : ""}`}
+                className={`flex items-baseline justify-between gap-2 rounded px-1 py-0.5 ${differs ? "bg-warn/10" : ""}`}
               >
-                <dt className="truncate text-[11px] text-slate-400">
+                <dt className="truncate text-[11px] text-ink-4">
                   {row.label}
-                  {row.hint ? <span className="text-[10px] text-slate-600">（{row.hint}）</span> : null}
+                  {row.hint ? <span className="text-[10px] text-ink-6">（{row.hint}）</span> : null}
                 </dt>
                 <dd className="flex shrink-0 items-baseline gap-1.5">
-                  <span className={`text-xs font-medium tabular-nums ${differs ? "text-amber-200" : "text-slate-100"}`}>
+                  <span className={`text-xs font-medium tabular-nums ${differs ? "text-warn-hi" : "text-ink-1"}`}>
                     {attributes ? serverTextOf(attributes, row) : "—"}
                   </span>
                   {/* 只在「和重算值不同」时才把旧值摆出来：一样的时候它没有信息量，
                       而窄栏里每行多一个数字就挤一分 */}
                   {differs && reported !== null ? (
-                    <span className="text-[10px] tabular-nums text-amber-300">存档 {reported}</span>
+                    <span className="text-[10px] tabular-nums text-warn-hi">存档 {reported}</span>
                   ) : null}
                 </dd>
               </div>
@@ -230,7 +230,7 @@ export function RoleAttributesCard({
       </div>
 
       {dense ? null : (
-        <p className="mt-3 text-xs leading-relaxed text-slate-600">
+        <p className="mt-3 text-xs leading-relaxed text-ink-6">
           「存档旧值」一列只有战斗力与最大生命值：存档里其实也有六项攻防，但服务端从来没拿它们对照过，摆出来会让人误以为那几项也校验过。客户端从 #541 起不再计算属性 —— 每次写档都由服务端按存档输入（等级 / 装备 / 战魂 / 称号 / 军衔）重算覆盖，所以这一列只是「上一次写下的快照」；它与重算值不同，说明存档旧了，保存一次即可纠正。
         </p>
       )}

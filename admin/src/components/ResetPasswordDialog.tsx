@@ -90,7 +90,7 @@ export function ResetPasswordDialog({
       hint={
         done ? (
           <>
-            {kindText}「{targetName}」的新口令如下，请<strong className="text-slate-200">现在</strong>告知本人。
+            {kindText}「{targetName}」的新口令如下，请<strong className="text-ink-2">现在</strong>告知本人。
           </>
         ) : (
           <>将为{kindText}「{targetName}」设置一个新口令。</>
@@ -119,10 +119,10 @@ export function ResetPasswordDialog({
     >
       {done ? (
         <div className="flex flex-col gap-3">
-          <p className="select-all rounded-lg border border-slate-700 bg-slate-950/70 px-4 py-3 text-center font-mono text-xl tracking-wider text-amber-300">
+          <p className="select-all rounded-lg border border-line-strong bg-surface-0/70 px-4 py-3 text-center font-mono text-xl tracking-wider text-warn-hi">
             {password}
           </p>
-          <Notice tone="amber">
+          <Notice tone="warn">
             服务端只保存口令的哈希，关掉这个框之后就再也查不到了（忘了只能再重置一次）。对方此前的令牌已全部失效，需要用它重新登录。
           </Notice>
         </div>
@@ -134,7 +134,7 @@ export function ResetPasswordDialog({
               换一个
             </Button>
           </div>
-          <Notice tone="amber">
+          <Notice tone="warn">
             重置后，该{kindText}此前签发的令牌会<strong>全部作废</strong>（在线的话下一次操作就被送回登录页）。请确认能联系上本人再操作。
           </Notice>
         </div>

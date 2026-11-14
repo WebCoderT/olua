@@ -69,8 +69,8 @@ export function EmailDialog({
     >
       <div className="flex flex-col gap-3">
         {currentEmail ? (
-          <Notice tone="slate">
-            当前邮箱：<span className="text-slate-200">{currentEmail}</span>
+          <Notice tone="muted">
+            当前邮箱：<span className="text-ink-2">{currentEmail}</span>
           </Notice>
         ) : null}
 
@@ -87,7 +87,7 @@ export function EmailDialog({
           />
         </Field>
 
-        <Notice tone="amber">同一邮箱只能绑定一个账号（大小写不敏感）。格式或冲突错误由服务端即时返回。</Notice>
+        <Notice tone="warn">同一邮箱只能绑定一个账号（大小写不敏感）。格式或冲突错误由服务端即时返回。</Notice>
       </div>
     </Modal>
   );

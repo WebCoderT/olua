@@ -1,6 +1,6 @@
 ---
 name: olua-admin-ui
-description: olua 管理端（admin/，React 19 + Tailwind 4 + Vite）的**视觉与版式规范**，以及「把存量页面改到规范上」的迁移做法。核心心智模型：同一类东西必须长得一样（页头 / 卡片 / 弹窗 / 字段标签只许各有一个来源），一屏能看完的不要让人滚，要改的才给控件（只读用纯文本而不是灰掉的输入框）。涵盖：token 表（色板只用 slate/indigo/emerald/amber/rose，圆角三档，字阶三档，全局紧凑档：Card 默认 dense px-3.5 py-2 / py-3、Button px-3 py-1.5、控件 px-2.5 py-1.5、表格 px-3 py-2）、两档版式（列表档 gap-4 / 详情档 gap-3 + dense + 一屏不滚）、PageHeader（标题 + 说明 + 右侧操作 + 返回链接，替代三十处手抄 h1）、FilterBar 筛选条（**条件块内部上下结构：标签在上、控件在下；若干块横向排成一行**，右侧 ml-auto 放查询/重置，宽度一律给 Field width —— 因为 Input 自带 w-full）、Card 与 dense（只压内边距、不动层次）、Modal 四档宽度（sm/md/lg/xl，不许页面自己传 max-w-*）、Notice 提示条（amber/red/slate/emerald 四色，替代各页自造的 amber 卡片）、Field 字段与标签（默认上下结构，替代裸 span 标签）、表格 tableClass 系列、Badge tone、EmptyState/Spinner、components/entity 那套可视化实体组件（EntityPicker/EquipSlots/LevelLadder/BagGrid/SkillList，装备与物品一律「用图挑」而不是输 id）、素材预览组件（GameFrame 首帧 / FrameAnimation plist 全帧循环：文档序播放、空帧阈值与客户端同值、共享 rAF、路径缓存，一律走 /game-resources 同源）、只看不改成三件事（去掉 input/select、用纯文本、服务端仍权威）、守点 tools/audit-admin-ui.cjs（页面里禁止手写 fixed 遮罩 / 裸 h1 / 自造卡片 / 裸 span 标签）、迁移手册（页头→PageHeader、弹窗→Modal、筛选区→FilterBar+Field、提示条→Notice、逐页核对）与验收命令（make admin-typecheck / admin-build / make audit + 真机 Chrome 逐路由截图量 scrollHeight）。触发场景：用户说"管理端风格统一""把页面风格改一下""照角色详情那套做""前端太乱""字体大小不一致""弹窗宽窄不一""两个页面长得不一样""抽个公共组件""页头统一""做成组件化""把这次改动做成技能""UI 规范""样式规范""设计系统""视觉规范""列表页和详情页版式""一屏看完""紧凑一点""筛选条件放一行""标签放输入框上面""只读展示""不要输入框"。注意：本技能只管**视觉与版式**，接口 / 权限 / 数据口径归 olua-admin。
+description: olua 管理端（admin/，React 19 + Tailwind 4 + Vite）的**视觉与版式规范**，以及「把存量页面改到规范上」的迁移做法。核心心智模型：同一类东西必须长得一样（页头 / 卡片 / 弹窗 / 字段标签只许各有一个来源），一屏能看完的不要让人滚，要改的才给控件（只读用纯文本而不是灰掉的输入框）。视觉语言 = **legend 设计系统「石·金·火」**（单一来源 design/legend-console/ 六页稿 + admin/src/index.css 的 @theme token）：色板只用语义 token（surface / line / ink / gold / ember / jade / warn），四族职责不许交叉（石管层次、金管交互、火管危险、玉只管「在线/正常」），圆角整体锐角 2~4px、金色只做唯一高光、金底必须配深字，Tailwind 内置色族（slate/indigo/rose/emerald/amber/red/sky/violet/black/white…）**全部禁用**。涵盖：token 表、两档版式（列表档 gap-4 / 详情档 gap-3 + dense + 一屏不滚）、PageHeader、FilterBar（标签在上控件在下）、Card 与 dense、Modal 四档宽度、Notice 四色、Field、表格 tableClass 系列、Badge/EmptyState/Spinner、components/entity 可视化实体组件、素材预览（GameFrame 首帧 / FrameAnimation 全帧循环）、只看不改成三件事、守点 tools/audit-admin-ui.cjs **七条规则**（结构 4 条：遮罩/页头/卡片/字段标签；词汇 3 条：旧色族/裸色值/页面必有 PageHeader）、`npm run new:page` 脚手架（新页面从合规骨架开始）与 `__UI_CAPTURE__` 状态清单约定（截图供人眼审，显示效果不写断言）、迁移手册与验收命令。触发场景：用户说"管理端风格统一""把页面风格改一下""照角色详情那套做""前端太乱""字体大小不一致""弹窗宽窄不一""两个页面长得不一样""抽个公共组件""页头统一""做成组件化""把这次改动做成技能""UI 规范""样式规范""设计系统""视觉规范""legend""石金火""列表页和详情页版式""一屏看完""紧凑一点""筛选条件放一行""标签放输入框上面""只读展示""不要输入框"。注意：本技能只管**视觉与版式**，接口 / 权限 / 数据口径归 olua-admin。
 agent_created: true
 ---
 
@@ -25,32 +25,46 @@ cd .. && make audit    # 跨端审计，含 tools/audit-admin-ui.cjs
 3. **要改的才给控件。** 只读字段用纯文本，不要用 `disabled` 的输入框 ——
    灰输入框看起来像「你没权限」，会让人去找解锁开关；纯文本才是「这里本来就不改」。
 
-## 一、token：只用下面这些，页面里不许新造
+## 一、token：legend「石·金·火」，只用语义 token，页面里不许新造
 
-色板、圆角、字阶全部落在 `components/ui.tsx` 与 `index.css` 里，页面只消费。
+唯一色值来源 = `admin/src/index.css` 的 `@theme`（设计稿单一来源 = `design/legend-console/system.html`）。
+**Tailwind 内置色族（slate / indigo / rose / emerald / amber / red / sky / violet / black / white …）全部禁用**，
+守点脚本 `no-legacy-palette` 直接拦截；裸色值（`#xxxxxx` / `rgb()` / `bg-[#…]`）也一样（`no-raw-color`）。
+
+| token（语义） | 职责 | 常用类 |
+|---|---|---|
+| `surface-0..4` | 石：背景层次（0 最深虚空 → 4 最亮） | `bg-surface-2` 卡片底、`bg-surface-0/75` 遮罩 |
+| `line` / `line-strong` / `line-gold` | 线：描边三档 | `border-line` 卡片/分隔、`border-line-strong` 控件边框 |
+| `ink-1..6` | 墨：文字五档（1 最亮，6 极弱） | `text-ink-1` 标题、`text-ink-5` 说明 |
+| `gold` / `gold-hi` / `gold-dim` | 金：**唯一高光色** —— 交互、选中、主操作 | `bg-gold text-surface-0` 主按钮、`text-gold-hi` 强调 |
+| `ember` / `ember-hi` | 火：危险与错误 | `text-ember-hi`、`bg-ember/10` 微光 |
+| `jade` / `jade-hi` | 玉：**只**表「在线 / 服务正常」 | `text-jade` |
+| `warn` / `warn-hi` | 注意：介于金与火（维护中、非阻断异常） | `text-warn`、`bg-warn/10` |
+
+四条纪律（违反由守点脚本拦）：
+
+1. **四族职责不许交叉**：石管层次、金管交互、火管危险、玉只管在线。要表「注意」用 warn，不许拿金凑。
+2. **金底必须配深字**（`text-surface-0`）—— 金是唯一高光色，金底白字对比不足 2:1（#947 实测）。
+3. **色值只活在 index.css 与页面作用域样式文件**：SVG / 内联样式用 `var(--color-*)`；
+   canvas / 画布专用色（地图事件、装备品质的数据值）属于**数据**，不属 UI，可以留字面量但要有注释。
+4. **圆角整体锐角 2~4px**：`--radius-*` 已整体压缩，`rounded-md/lg/xl/2xl` 直接用即是锐角；
+   `rounded-full` 只留给状态点与进度条。
+
+版式 token（其余沿用原规范）：
 
 | 用途 | 类名 | 备注 |
 |---|---|---|
-| 页面底 | `#020617` | `index.css` 的 `body`，页面不写背景 |
-| 卡片外壳 | `rounded-2xl border border-slate-800 bg-slate-900/40 shadow-lg shadow-black/20` | `Card` 内置 |
-| 卡片头 / 身 | `px-3.5 py-2` / `px-3.5 py-3` | `Card` **默认 `dense`**（全局紧凑）；`dense={false}` 回到 `px-5 py-4` / `p-5` |
-| 分隔线 | `border-slate-800` | 表格行内 `border-slate-800/60` |
-| 页头标题 | `text-lg font-semibold text-slate-50` | 只由 `PageHeader` 产出 |
-| 页头说明 | `mt-0.5 text-xs text-slate-500` | ≤ 2 行；再长就写进卡片 `description` |
-| 卡片标题 / 说明 | `text-sm font-semibold text-slate-100` / `mt-1 text-xs text-slate-500` | `Card` 内置 |
-| 字段标签 | `text-xs font-medium text-slate-400` | `Field` 内置 |
-| 正文 / 次要 | `text-sm text-slate-300` / `text-xs text-slate-500` | |
-| 链接 | `text-indigo-300 hover:text-indigo-200` | 表格里的行内跳转 |
-| 主色 | `indigo-500` | 主按钮、聚焦环、选中态 |
-| 语义色 | `emerald` 成功 / `amber` 注意 / `rose` 危险 | 只经 `Badge`、`Notice` |
-| 圆角 | 卡片 `2xl`、控件 `lg`、徽标 `md`、提示条 `xl` | 不许出现 `rounded-3xl` / `rounded-none` |
-| 字阶 | `text-lg` / `text-sm` / `text-xs` | 密集详情可加 `text-[10px]`，**不许多出第四档** |
-| 间距 | 页面块间 `gap-4`（详情档 `gap-3`）；表单栅格 `gap-3` / `gap-4` | |
-| 控件内边距 | `Button` `px-3 py-1.5`；`Input` / `Select` `px-2.5 py-1.5` | 全局紧凑的唯一来源 |
+| 卡片外壳 | `<Card>`（内部 `legend-card` 金线框） | 页面**不写**外壳类；例外：登录/注册壳用 `.legend-card` |
+| 卡片头 / 身 | `px-3.5 py-2` / `px-3.5 py-3` | `Card` 默认 `dense`；`dense={false}` 回到宽松档 |
+| 页头标题 | `text-lg font-semibold text-ink-1` | 只由 `PageHeader` 产出 |
+| 页头说明 | `mt-0.5 text-xs text-ink-5` | ≤ 2 行 |
+| 正文 / 次要 | `text-sm text-ink-2` / `text-xs text-ink-5` | |
+| 链接 | `text-gold hover:text-gold-hi` | |
+| 字阶 | `text-lg` / `text-sm` / `text-xs` | 密集处可 `text-[10px]` / `text-[11px]`，不许多出第四档 |
+| 间距 | 页面块间 `gap-4`（详情档 `gap-3`） | |
+| 控件内边距 | `Button` `px-3 py-1.5`；`Input` / `Select` `px-2.5 py-1.5` | |
 | 表格单元格 | `px-3 py-2` | `thClass` / `tdClass` 内置 |
-
-**不许**：写 `bg-white` / `text-black` / `slate-100` 当标题色（那是 `slate-50`）、
-`text-base` 当卡片标题、`py-6` 这种非档位内边距。深色主题只有一个，不做明暗切换。
+| 数字 | `.legend-num`（等宽 + tabular-nums） | 账目、编号、时间，纵向对齐 |
 
 ## 二、版式两档：先选档，再排内容
 
@@ -105,8 +119,8 @@ cd .. && make audit    # 跨端审计，含 tools/audit-admin-ui.cjs
 | 表格 | `tableClass` / `theadClass` / `thClass` / `tdClass` | 拼接，不新写 |
 | 排序列头 | `SortableTh` | `field` / `sort` / `order` / `onToggle` |
 | 分页 | `Pagination` | 服务端分页，`10/20/50/100` |
-| 状态徽标 | `Badge` | `tone`: `green`/`red`/`slate`/`indigo`/`amber` |
-| 提示 / 警告条 | `Notice` | `tone`: `amber`/`red`/`slate`/`emerald` |
+| 状态徽标 | `Badge` | `tone`: `jade`(正常)/`ember`(危险)/`muted`(中性)/`gold`(主色)/`warn`(注意) |
+| 提示 / 警告条 | `Notice` | `tone`: `warn`/`ember`/`muted`/`jade` |
 | 空态 | `EmptyState` | `title` / `description`，别用「加载中」的样式冒充 |
 | 加载 | `Spinner` | 行内 `h-4 w-4`；整块加载居中 `py-16` |
 | 任意内容弹窗 | `Modal` | `size`: `sm`/`md`/`lg`/`xl`，`footer`，Esc 与遮罩关闭 |
@@ -177,10 +191,10 @@ cd .. && make audit    # 跨端审计，含 tools/audit-admin-ui.cjs
 
 ## 六、表格与列表
 
-- 列头 `theadClass`（`text-xs uppercase tracking-wide text-slate-500`），行 `hover:bg-slate-800/30`。
+- 列头 `theadClass`（`text-xs uppercase tracking-wide text-ink-5`），行 `hover:bg-surface-4/30`。
 - 操作列固定在最右、`text-right`，按钮 `px-2.5 py-1 text-xs`。
 - 第一列放**能认出来的东西**（图 / 名字 + id 小字），不要第一列就是 id。
-- 一列里塞两种信息用「主 + 次」两行（`font-medium text-slate-100` + `mt-0.5 text-xs text-slate-500`），
+- 一列里塞两种信息用「主 + 次」两行（`font-medium text-ink-1` + `mt-0.5 text-xs text-ink-5`），
   不要用 `·` 连成一句长串。
 
 ## 七、只读 vs 可编辑
@@ -249,22 +263,53 @@ cd .. && make audit    # 跨端审计，含 tools/audit-admin-ui.cjs
 反向的一条：**引用已不在清单里时照实显示 key 并标黄**（清单页「从文件夹同步」会连被引用的
 素材一起删）—— 客户端对坏 key 是安静跳过，界面装作没事就等于把「哪个品质没边框」藏起来了。
 
-## 九、禁用清单（= `tools/audit-admin-ui.cjs` 的规则）
+## 九、禁用清单（= `tools/audit-admin-ui.cjs` 的七条规则）
 
-页面（`admin/src/pages/**`）里不许出现：
+页面（`admin/src/pages/**`）里不许出现（结构 4 条 + 词汇 3 条）：
 
-1. `fixed inset-0 z-` —— 弹窗一律走 `Modal`；
-2. `<h1 className=` —— 页头一律走 `PageHeader`；
-3. `rounded-2xl border border-slate-800 bg-slate-900/40` —— 卡片一律走 `Card`；
-4. `<span className="mb-1.5 block text-xs font-medium text-slate-400">` —— 字段标签一律走 `Field`；
-5. `text-xl` / `text-2xl` 当页面标题、`bg-white`、`text-black`。
+1. `fixed inset-0` —— 弹窗一律走 `Modal`（`no-handwritten-overlay`）；
+2. `<h1` —— 页头一律走 `PageHeader`（`no-handwritten-header`）；
+3. `rounded-2xl border border-line bg-surface-2` 这类手拼卡片壳 —— 一律走 `Card`（`no-handwritten-card`）；
+4. `mb-1.5 block text-xs font-medium` —— 字段标签一律走 `Field`（`no-handwritten-field-label`）；
+5. Tailwind 内置色族（slate / indigo / red / sky / violet / black / white … 全部）（`no-legacy-palette`）；
+6. 裸色值：`bg-[#…]` / `className` 或 `style` 里的 `#hex` / `rgb()` / `hsl()`（`no-raw-color`）；
+7. 整个文件不含 `PageHeader`（`require-page-header`；白名单：登录 / 注册两个认证壳）。
 
-`components/**` 里**至少不许 1**（手写遮罩）—— 脚本就是这么跑的：页面查 1~4，组件查 1，
-白名单只有 `Modal.tsx`（遮罩的唯一实现）与 `GameImage.tsx`（`z-[100]` 全屏看图，不是表单弹窗）。
+`components/**` 只查 1、5、6（组件是视觉的实现处，拿「不许写卡片」卡 `ui.tsx` 只会制造假 FAIL ——
+**假 FAIL 会让人学会无视审计**）。组件白名单：`Modal.tsx`（遮罩的唯一实现）、`GameImage.tsx`
+（`z-[100]` 全屏看图）。
 
-为什么组件也要查：五个共用弹窗（封禁 / 重置口令 / 补录邮箱 / 公告 / 养成配置 / 成长列表）曾经**全部**
-绕开 `Modal` —— 页面里守住了、组件里漏了，用户看到的是「有的弹窗能按 Esc，有的不能、宽度也不一样」。
-共用弹窗是最容易漏的一类，因为写它的人不在 `pages/` 里看。
+为什么组件也查色：六个共用弹窗曾**全部**绕开 `Modal` —— 页面守住了、组件漏了。
+共用层是最容易漏的一类，因为写它的人不在 `pages/` 里看效果。
+
+**反证方法**（改守点脚本后必做）：造一个 `__AuditProbe.tsx` 塞满七类违规，跑 audit 必须全数拦下
+且 exit=1，删掉后必须回绿。
+
+## 九点五、新页面：从合规骨架开始（`npm run new:page`）
+
+```bash
+cd admin && npm run new:page -- ItemQuest 物品任务
+# 生成 src/pages/ItemQuestPage.tsx，自带 PageHeader / FilterBar / 表格 / 分页 / 三态
+```
+
+骨架已含守点脚本的全部合规项，**生成后还差三步**（脚本会提示）：api/ 补接口与行类型、
+App.tsx 挂路由、Layout.tsx 挂导航（带 permission）。
+不要手写新页面再「顺手对规范」—— 骨架就是规范的可执行形式。
+
+### `__UI_CAPTURE__` 状态清单（显示效果不写断言）
+
+每个页面文件的 JSDoc 里维护一份截图清单：
+
+```
+ * __UI_CAPTURE__（截图清单 —— 截图工具按 id 逐状态出图，供人眼审）
+ *   loading   初始加载：Spinner 可见
+ *   empty     空数据：EmptyState 完整
+ *   filled    有数据：表格行、徽章、分页齐全
+ *   filtered  过滤后的结果
+```
+
+纪律：**显示效果靠人眼看，不写断言**（用户 2026-11 明确）。截图工具按清单逐状态出图即可，
+不许对帧率 / 尺寸 / 颜色 / 对齐写像素断言。
 
 ## 十、迁移手册（存量页面怎么改到规范上）
 
@@ -272,12 +317,12 @@ cd .. && make audit    # 跨端审计，含 tools/audit-admin-ui.cjs
 
 1. **页头**：`<div><h1 …/><p …/></div>` → `<PageHeader title description actions back />`。
    顺手统一容器 `gap-4`（详情页 `gap-3`）。注意四个例外：`LoginPage` / `RegisterPage` 是登录壳、
-   `GuildsPage` 原来是 `text-xl`、`SystemPage` 是 `text-slate-100` —— 一律回到 `text-lg`/`text-slate-50`。
+   `GuildsPage` 原来是 `text-xl`、`SystemPage` 是 `text-ink-1` —— 一律回到 `text-lg`/`text-ink-1`。
 2. **弹窗**：手写 `fixed inset-0` 外壳 → `Modal`。把 `<div className="max-h-[90vh] …overflow-y-auto">`
    里的内容整段搬进 `<Modal>` 的 children，标题与说明搬进 `title` / `hint`，底部按钮搬进 `footer`。
    **顺手补上 Esc 与遮罩关闭** —— 手写弹窗经常只有「取消」一条路。
-3. **提示条**：自造的 `border-amber-500/40 bg-amber-500/10` 块 → `Notice tone="amber"`。
-4. **字段标签**：裸 `<span className="mb-1.5 block text-xs font-medium text-slate-400">` → `<Field label>`。
+3. **提示条**：自造的 `border-amber-500/40 bg-amber-500/10` 块 → `Notice tone="warn"`。
+4. **字段标签**：裸 `<span className="mb-1.5 block text-xs font-medium">` → `<Field label>`。
 5. **筛选区**：整块换成 `<FilterBar onSearch onReset extra>`，条件用 `<Field label width>`（上下结构）；
    容器对齐 `items-end`（块底对齐），「查询」在主按钮位，「重置」用 `outline`。
 6. **表格**：确认用了 `tableClass` 系列、操作列在最右、第一列是「认得出的东西」。
@@ -320,11 +365,11 @@ const ctx = await b.newContext({ viewport: { width: 1440, height: 900 } });
 - **`sticky bottom-0` 的保存条会压住最后一行内容**（页面上永远差一点看不到）。要么预留 `pb`，
   要么不用 sticky。
 - **`disabled` 输入框 ≠ 只读**：前者暗示「有开关能解锁」，后者才是「这里不改」。
-- **弹窗里再放 `Card`**：双层圆角+边框，看着像套娃。弹窗内部用分隔线（`border-t border-slate-800`）分组。
+- **弹窗里再放 `Card`**：双层圆角+边框，看着像套娃。弹窗内部用分隔线（`border-t border-line`）分组。
 - **「宽度给外层」这条对组件库同样成立**：`AttributesEditor` 里写 `<Input className="w-20">` 时，
   八项属性的标签被压成「物\n攻」竖排、输入框宽度也不受控 —— 改成 `<div className="w-20"><Input/></div>`
   才稳定。扫法：`<Input|Select className="…w-*…">` 一律是可疑点。
 - **迁移脚本会把 markdown 的 `**粗体**` 原样搬进 JSX 文本**：用户看到的是字面星号。
-  改成 `<strong className="text-slate-400">`，或者删掉强调。
+  改成 `<strong className="text-ink-4">`，或者删掉强调。
 - **页头说明一旦超过两行，右侧动作会换到第二行**：`PageHeader` 里给动作区补了 `ml-auto`（换行后仍贴右），
   但根治办法是把说明压到一行 —— 说明是「为什么 / 边界」，不是规格书。

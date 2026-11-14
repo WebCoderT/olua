@@ -224,11 +224,11 @@ export function DonutChart({
 /** 水平条形列表（分布用）：名称 + 条 + 数量与占比 */
 export function BarList({
   items,
-  tone = "indigo",
+  tone = "gold",
   emptyText = "暂无数据",
 }: {
   items: { label: string; value: number }[];
-  tone?: "indigo" | "emerald" | "amber";
+  tone?: "gold" | "jade" | "warn";
   emptyText?: string;
 }) {
   if (items.length === 0) return <p className="py-6 text-center text-[11.5px] text-ink-5">{emptyText}</p>;
@@ -236,9 +236,9 @@ export function BarList({
   const max = Math.max(1, ...items.map((item) => item.value));
   const total = items.reduce((sum, item) => sum + item.value, 0);
   const barColor = {
-    indigo: "bg-gradient-to-r from-gold/70 to-gold",
-    emerald: "bg-gradient-to-r from-jade/60 to-jade",
-    amber: "bg-gradient-to-r from-warn/60 to-warn",
+    gold: "bg-gradient-to-r from-gold/70 to-gold",
+    jade: "bg-gradient-to-r from-jade/60 to-jade",
+    warn: "bg-gradient-to-r from-warn/60 to-warn",
   }[tone];
 
   return (

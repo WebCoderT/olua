@@ -82,7 +82,7 @@ const BORDER_CONFIG: KindConfig = {
       背包格子与身上装备槽的物品图标上那圈品质光效框。这里是**边框清单本体**：新增 / 删除边框、调显示效果都在表格里；
       哪个前后缀品质用哪个在「前后缀管理」页的棋盘里引用，特殊装备的单独绑定在本页下方。
       素材增删了别手填 —— 点「从文件夹同步」按磁盘素材整批更新。
-      {updatedAt ? <span className="ml-1 text-slate-500">上次修改：{formatTime(updatedAt)}</span> : null}
+      {updatedAt ? <span className="ml-1 text-ink-5">上次修改：{formatTime(updatedAt)}</span> : null}
     </>
   ),
   kind: "border",
@@ -107,7 +107,7 @@ const BACKGROUND_CONFIG: KindConfig = {
       物品详情弹窗的品质背景动画。这里是**背景清单本体**：新增 / 删除背景、调显示效果都在表格里；
       哪个前后缀品质用哪个在「前后缀管理」页的棋盘里引用，特殊装备的单独绑定在本页下方。
       素材增删了别手填 —— 点「从文件夹同步」按磁盘素材整批更新。
-      {updatedAt ? <span className="ml-1 text-slate-500">上次修改：{formatTime(updatedAt)}</span> : null}
+      {updatedAt ? <span className="ml-1 text-ink-5">上次修改：{formatTime(updatedAt)}</span> : null}
     </>
   ),
   kind: "background",
@@ -341,11 +341,11 @@ function EquipmentAppearanceKindPage({ config }: { config: KindConfig }) {
             ) : null
           }
         >
-          {invalid ? <p className="text-xs text-amber-400">{invalid}</p> : null}
+          {invalid ? <p className="text-xs text-warn">{invalid}</p> : null}
           {items.length === 0 ? (
-            <p className="text-sm text-slate-400">清单空着 —— 点「添加一项」或「从文件夹同步」把素材加进来。</p>
+            <p className="text-sm text-ink-4">清单空着 —— 点「添加一项」或「从文件夹同步」把素材加进来。</p>
           ) : filteredItems.length === 0 ? (
-            <p className="text-sm text-slate-400">没有匹配「{query.trim() || groupFilter || "（过滤条件）"}」的条目。</p>
+            <p className="text-sm text-ink-4">没有匹配「{query.trim() || groupFilter || "（过滤条件）"}」的条目。</p>
           ) : (
             <>
               <div className="overflow-x-auto">
@@ -404,7 +404,7 @@ function EquipmentAppearanceKindPage({ config }: { config: KindConfig }) {
                               效果 {row.effect ? describeEffect(row.effect as AppearanceEffectValue) : "默认"}
                             </Button>
                           </td>
-                          <td className={tdClass}>{refs > 0 ? <Badge tone="indigo">引用 {refs}</Badge> : <Badge tone="slate">未引用</Badge>}</td>
+                          <td className={tdClass}>{refs > 0 ? <Badge tone="gold">引用 {refs}</Badge> : <Badge tone="muted">未引用</Badge>}</td>
                           <td className={tdClass}>
                             {canWrite ? (
                               <Button
@@ -424,7 +424,7 @@ function EquipmentAppearanceKindPage({ config }: { config: KindConfig }) {
                 </table>
               </div>
               {pageCount > 1 ? (
-                <div className="flex items-center justify-end gap-2 pt-1 text-xs text-slate-400">
+                <div className="flex items-center justify-end gap-2 pt-1 text-xs text-ink-4">
                   <span>
                     共 {filteredItems.length} 条 · 第 {safePage + 1} / {pageCount} 页
                   </span>
@@ -454,7 +454,7 @@ function EquipmentAppearanceKindPage({ config }: { config: KindConfig }) {
           }
         >
           {customs.length === 0 ? (
-            <p className="text-sm text-slate-400">还没有特殊装备绑定（所有装备走「前后缀管理」页的棋盘）。</p>
+            <p className="text-sm text-ink-4">还没有特殊装备绑定（所有装备走「前后缀管理」页的棋盘）。</p>
           ) : (
             <div className="overflow-x-auto">
               <table className={tableClass}>
@@ -549,32 +549,32 @@ function EquipmentAppearanceKindPage({ config }: { config: KindConfig }) {
         }
       >
         {scanLoading || !scan ? (
-          <div className="flex items-center gap-2 py-6 text-sm text-slate-400">
+          <div className="flex items-center gap-2 py-6 text-sm text-ink-4">
             <Spinner /> 正在扫描资源文件夹…
           </div>
         ) : (
-          <div className="flex flex-col gap-3 text-sm text-slate-300">
+          <div className="flex flex-col gap-3 text-sm text-ink-3">
             <p>
-              以 <span className="break-all font-mono text-xs text-slate-400">{scan.dir}</span> 为准：文件夹里有
-              <span className="mx-1 text-slate-100">{scan.keys.length}</span>个{config.noun}素材。
+              以 <span className="break-all font-mono text-xs text-ink-4">{scan.dir}</span> 为准：文件夹里有
+              <span className="mx-1 text-ink-1">{scan.keys.length}</span>个{config.noun}素材。
             </p>
             {scan.added.length === 0 && scan.removed.length === 0 ? (
-              <p className="text-slate-400">清单与文件夹一致，无需同步。</p>
+              <p className="text-ink-4">清单与文件夹一致，无需同步。</p>
             ) : null}
             {scan.added.length > 0 ? (
               <section>
-                <p className="text-emerald-400">将新增 {scan.added.length} 条（effect 缺省，之后可在清单里调）</p>
-                <ChipList keys={scan.added} tone="text-emerald-300/80" />
+                <p className="text-jade">将新增 {scan.added.length} 条（effect 缺省，之后可在清单里调）</p>
+                <ChipList keys={scan.added} tone="text-jade-hi/80" />
               </section>
             ) : null}
             {scan.removed.length > 0 ? (
               <section>
-                <p className="text-rose-400">将移除 {scan.removed.length} 条（文件夹里已没有对应素材）</p>
-                <ChipList keys={scan.removed} tone="text-rose-300/80" />
+                <p className="text-ember-hi">将移除 {scan.removed.length} 条（文件夹里已没有对应素材）</p>
+                <ChipList keys={scan.removed} tone="text-ember-hi/80" />
               </section>
             ) : null}
             {scan.removedReferenced.length > 0 ? (
-              <p className="rounded border border-amber-700/60 bg-amber-900/20 p-2 text-xs leading-relaxed text-amber-300">
+              <p className="rounded border border-warn/30 bg-warn/10 p-2 text-xs leading-relaxed text-warn-hi">
                 其中 {scan.removedReferenced.length} 条（{scan.removedReferenced.join("、")}）仍被前后缀棋盘 / 特殊装备绑定引用 ——
                 同步照样移除，引用处会显示异常（客户端安静跳过），之后请在「前后缀管理」页或下方绑定区改引用别的{config.noun}。
               </p>

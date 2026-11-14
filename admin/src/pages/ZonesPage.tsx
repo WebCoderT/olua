@@ -114,7 +114,7 @@ export function ZonesPage() {
             开新区
           </Button>
         </div>
-        {!canWrite ? <p className="mt-3 text-xs text-amber-300">当前角色没有「开区 / 合并区」权限，只能查看清单。</p> : null}
+        {!canWrite ? <p className="mt-3 text-xs text-warn-hi">当前角色没有「开区 / 合并区」权限，只能查看清单。</p> : null}
       </Card>
 
       <Card title="合并区" description="把源区并入目标区：源区账号全部搬走、世界实例重排续序、源区标记为已合并（不可逆）。">
@@ -143,7 +143,7 @@ export function ZonesPage() {
             合并区
           </Button>
           {fromZone && toZone && fromZone.id === toZone.id ? (
-            <span className="pb-2 text-xs text-red-300">源区与目标区不能是同一个。</span>
+            <span className="pb-2 text-xs text-ember-hi">源区与目标区不能是同一个。</span>
           ) : null}
         </div>
       </Card>
@@ -163,19 +163,19 @@ export function ZonesPage() {
             </thead>
             <tbody>
               {(zones ?? []).map((zone) => (
-                <tr key={zone.id} className="transition hover:bg-slate-800/30">
-                  <td className={`${tdClass} font-mono text-xs text-slate-300`}>{zone.id}</td>
-                  <td className={`${tdClass} font-medium text-slate-100`}>{zone.name}</td>
+                <tr key={zone.id} className="transition hover:bg-surface-4/30">
+                  <td className={`${tdClass} font-mono text-xs text-ink-3`}>{zone.id}</td>
+                  <td className={`${tdClass} font-medium text-ink-1`}>{zone.name}</td>
                   <td className={tdClass}>
                     {zone.mergedInto === null ? (
-                      <Badge tone="green">活区</Badge>
+                      <Badge tone="jade">活区</Badge>
                     ) : (
-                      <Badge tone="slate">已并入 {zones?.find((z) => z.id === zone.mergedInto)?.name ?? `区 ${zone.mergedInto}`}</Badge>
+                      <Badge tone="muted">已并入 {zones?.find((z) => z.id === zone.mergedInto)?.name ?? `区 ${zone.mergedInto}`}</Badge>
                     )}
                   </td>
                   <td className={tdClass}>{zone.accountCount}</td>
-                  <td className={`${tdClass} text-xs text-slate-400`}>{formatTime(zone.createdAt)}</td>
-                  <td className={`${tdClass} text-xs text-slate-400`}>{formatTime(zone.updatedAt)}</td>
+                  <td className={`${tdClass} text-xs text-ink-4`}>{formatTime(zone.createdAt)}</td>
+                  <td className={`${tdClass} text-xs text-ink-4`}>{formatTime(zone.updatedAt)}</td>
                 </tr>
               ))}
             </tbody>

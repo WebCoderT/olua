@@ -23,12 +23,12 @@ import { PageHeader } from "../components/PageHeader";
 const PAGE_SIZE = 10;
 
 /** 状态配色（中文名用服务端给的 `statusLabel`，不在这里另抄一份） */
-const STATUS_TONE: Record<string, "green" | "red" | "amber" | "indigo" | "slate"> = {
-  pending: "slate",
-  sending: "indigo",
-  retrying: "amber",
-  sent: "green",
-  failed: "red",
+const STATUS_TONE: Record<string, "jade" | "ember" | "warn" | "gold" | "muted"> = {
+  pending: "muted",
+  sending: "gold",
+  retrying: "warn",
+  sent: "jade",
+  failed: "ember",
 };
 
 /** 自定义模板：标题与正文由运营当场填（其余模板用变量渲染） */
@@ -206,7 +206,7 @@ export function MailsPage() {
     <div className="flex flex-col gap-4">
       <PageHeader
         title="邮件"
-        description={<>给指定玩家发邮件。<strong className="text-slate-400">点「发送」只是入队</strong>，后台调度器负责真正投递 ——
+        description={<>给指定玩家发邮件。<strong className="text-ink-4">点「发送」只是入队</strong>，后台调度器负责真正投递 ——
             失败会自动重试（指数退避），用尽次数才标为失败并保留原因。未配置 SMTP 时通道整体禁用，接口会直接说明原因。</>}
       />
 
@@ -241,15 +241,15 @@ export function MailsPage() {
               </Field>
           </div>
 
-          {template ? <p className="text-xs text-slate-500">{template.hint}</p> : null}
+          {template ? <p className="text-xs text-ink-5">{template.hint}</p> : null}
 
           {canReadAccount ? (
             <div>
               <Field label="关联玩家账号（可选，只为追溯）">
                 {account ? (
-                  <div className="flex items-center gap-2 text-sm text-slate-300">
-                    <Badge tone="indigo">{account.username}</Badge>
-                    <span className="text-xs text-slate-500">（不是投递凭据，不填也照样发）</span>
+                  <div className="flex items-center gap-2 text-sm text-ink-3">
+                    <Badge tone="gold">{account.username}</Badge>
+                    <span className="text-xs text-ink-5">（不是投递凭据，不填也照样发）</span>
                     <Button variant="outline" className="px-2.5 py-1 text-xs" onClick={() => setAccount(null)}>
                       取消关联
                     </Button>
@@ -327,7 +327,7 @@ export function MailsPage() {
               <div>
                 <Field label="正文（纯文本）">
                   <textarea
-                    className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 outline-none transition focus:border-indigo-500"
+                    className="w-full rounded-lg border border-line-strong bg-surface-2 px-3 py-2 text-sm text-ink-1 outline-none transition focus:border-gold"
                     rows={4}
                     value={body}
                     disabled={!canWrite}
@@ -394,26 +394,26 @@ export function MailsPage() {
             </thead>
             <tbody>
               {data?.list.map((item) => (
-                <tr key={item.id} className="transition hover:bg-slate-800/30">
+                <tr key={item.id} className="transition hover:bg-surface-4/30">
                   <td className={tdClass}>
-                    <span className="block max-w-[200px] truncate text-slate-100" title={item.to}>
+                    <span className="block max-w-[200px] truncate text-ink-1" title={item.to}>
                       {item.to}
                     </span>
                   </td>
-                  <td className={tdClass}>{item.accountName ?? <span className="text-slate-600">未关联</span>}</td>
+                  <td className={tdClass}>{item.accountName ?? <span className="text-ink-6">未关联</span>}</td>
                   <td className={tdClass}>
-                    <span className="block max-w-[240px] truncate text-slate-300" title={item.subject}>
+                    <span className="block max-w-[240px] truncate text-ink-3" title={item.subject}>
                       {item.subject}
                     </span>
-                    <span className="mt-0.5 block max-w-[240px] truncate text-xs text-slate-500" title={item.body}>
+                    <span className="mt-0.5 block max-w-[240px] truncate text-xs text-ink-5" title={item.body}>
                       {item.body}
                     </span>
                   </td>
                   <td className={tdClass}>
-                    <Badge tone={STATUS_TONE[item.status] ?? "slate"}>{item.statusLabel}</Badge>
+                    <Badge tone={STATUS_TONE[item.status] ?? "muted"}>{item.statusLabel}</Badge>
                   </td>
                   <td className={tdClass}>{item.attempts}</td>
-                  <td className={`${tdClass} max-w-[220px] text-xs text-red-300`}>
+                  <td className={`${tdClass} max-w-[220px] text-xs text-ember-hi`}>
                     <span className="block truncate" title={item.lastError ?? ""}>
                       {item.lastError ?? "—"}
                     </span>

@@ -162,17 +162,17 @@ export function Card({
   );
 }
 
-type BadgeTone = "green" | "red" | "slate" | "indigo" | "amber";
+type BadgeTone = "jade" | "ember" | "muted" | "gold" | "warn";
 
 const BADGE_TONES: Record<BadgeTone, string> = {
-  green: "bg-jade/12 text-jade ring-jade/30",
-  red: "bg-ember/12 text-ember-hi ring-ember/30",
-  slate: "bg-ink-5/12 text-ink-3 ring-ink-5/30",
-  indigo: "bg-gold/12 text-gold ring-gold/30",
-  amber: "bg-warn/12 text-warn ring-warn/30",
+  jade: "bg-jade/12 text-jade ring-jade/30",
+  ember: "bg-ember/12 text-ember-hi ring-ember/30",
+  muted: "bg-ink-5/12 text-ink-3 ring-ink-5/30",
+  gold: "bg-gold/12 text-gold ring-gold/30",
+  warn: "bg-warn/12 text-warn ring-warn/30",
 };
 
-export function Badge({ tone = "slate", children }: { tone?: BadgeTone; children: ReactNode }) {
+export function Badge({ tone = "muted", children }: { tone?: BadgeTone; children: ReactNode }) {
   return (
     <span
       className={`inline-flex items-center rounded-sm px-1.5 py-px text-[11px] font-medium ring-1 ring-inset ${BADGE_TONES[tone]}`}
@@ -182,20 +182,20 @@ export function Badge({ tone = "slate", children }: { tone?: BadgeTone; children
   );
 }
 
-type NoticeTone = "amber" | "red" | "slate" | "emerald";
+type NoticeTone = "warn" | "ember" | "muted" | "jade";
 
 const NOTICE_TONES: Record<NoticeTone, string> = {
-  amber: "border-warn/30 border-l-warn bg-warn/8 text-warn",
-  red: "border-ember/30 border-l-ember bg-ember/8 text-ember-hi",
-  slate: "border-line-strong border-l-line-gold bg-surface-3/50 text-ink-3",
-  emerald: "border-jade/25 border-l-jade bg-jade/8 text-jade",
+  warn: "border-warn/30 border-l-warn bg-warn/8 text-warn",
+  ember: "border-ember/30 border-l-ember bg-ember/8 text-ember-hi",
+  muted: "border-line-strong border-l-line-gold bg-surface-3/50 text-ink-3",
+  jade: "border-jade/25 border-l-jade bg-jade/8 text-jade",
 };
 
 /**
  * 提示条（一行到一段的解释性文字）
  *
- * 为什么抽出来：各页原来自己拼 `rounded-2xl border border-amber-500/40 bg-warn/10 px-5 py-4`
- * 或者 `rounded-lg border border-red-500/30 …`，同为「提醒」却有三种字号与两种圆角。
+ * 为什么抽出来：各页原来自己拼 `rounded-2xl border border-warn/40 bg-warn/10 px-5 py-4`
+ * 或者 `rounded-lg border border-ember/40 …`，同为「提醒」却有三种字号与两种圆角。
  *
  * 用途边界：**解释 / 警告**用它，**操作结果**用 toast（`toastSuccess` / `toastError`）——
  * 提示条是页面的一部分（刷新后还在），toast 是一次性反馈。
@@ -203,7 +203,7 @@ const NOTICE_TONES: Record<NoticeTone, string> = {
  * 形状：左缘一道实色竖条（2px）标严重度，其余三边用弱化描边 —— 一屏里多条提示不会抢表格。
  */
 export function Notice({
-  tone = "amber",
+  tone = "warn",
   title,
   children,
 }: {

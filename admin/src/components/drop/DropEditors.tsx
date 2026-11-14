@@ -24,10 +24,10 @@ const ENTRY_GRID = "grid grid-cols-[1.75rem_minmax(0,1fr)_4.5rem_5.5rem_7.5rem_1
 
 /** 来源中文名（语义标注：引用具名表 / 内联条目 / 未配置走兜底） */
 export const DROP_SOURCE_LABELS: Record<string, string> = { table: "具名表", entries: "内联", none: "兜底" };
-export const DROP_SOURCE_TONE: Record<string, "indigo" | "green" | "slate"> = {
-  table: "indigo",
-  entries: "green",
-  none: "slate",
+export const DROP_SOURCE_TONE: Record<string, "gold" | "jade" | "muted"> = {
+  table: "gold",
+  entries: "jade",
+  none: "muted",
 };
 
 /** picks 的编辑形态：两个输入，max 留空 = 固定件数（min），都填 = [min, max] */
@@ -152,9 +152,9 @@ export function EntriesEditor({ drafts, onChange }: { drafts: EntryDraft[]; onCh
   return (
     <div>
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-        <span className="text-xs font-medium text-slate-400">
+        <span className="text-xs font-medium text-ink-4">
           条目池
-          <span className="ml-1.5 font-normal text-slate-500">
+          <span className="ml-1.5 font-normal text-ink-5">
             共 {drafts.length} 条{totalWeight > 0 ? ` · 权重合计 ${totalWeight}` : ""}
           </span>
         </span>
@@ -168,8 +168,8 @@ export function EntriesEditor({ drafts, onChange }: { drafts: EntryDraft[]; onCh
         </div>
       </div>
 
-      <div className="overflow-hidden rounded-xl border border-slate-800 bg-slate-950/40">
-        <div className={`${ENTRY_GRID} border-b border-slate-800 bg-slate-900/40 px-2 py-1.5 text-[11px] text-slate-500`}>
+      <div className="overflow-hidden rounded-xl border border-line bg-surface-0/40">
+        <div className={`${ENTRY_GRID} border-b border-line bg-surface-2/40 px-2 py-1.5 text-[11px] text-ink-5`}>
           <span className="text-center">序</span>
           <span>物品</span>
           <span className="text-center" title="抽到哪一条的相对占比（同一池内归一化；0 = 永不抽到）">
@@ -185,17 +185,17 @@ export function EntriesEditor({ drafts, onChange }: { drafts: EntryDraft[]; onCh
         </div>
 
         {drafts.length === 0 ? (
-          <p className="px-3 py-6 text-center text-xs text-slate-500">
+          <p className="px-3 py-6 text-center text-xs text-ink-5">
             还没有条目 —— 用「批量添加」一次挑多件，或「加一条」逐条配。
           </p>
         ) : (
-          <div className="divide-y divide-slate-800/60">
+          <div className="divide-y divide-line/60">
             {drafts.map((draft, index) => {
               const weight = Math.max(0, Number(draft.weight) || 0);
               const share = totalWeight > 0 ? (weight / totalWeight) * 100 : 0;
               return (
-                <div key={index} className={`${ENTRY_GRID} px-2 py-1.5 transition hover:bg-slate-900/50`}>
-                  <span className="text-center font-mono text-[11px] text-slate-500">{index + 1}</span>
+                <div key={index} className={`${ENTRY_GRID} px-2 py-1.5 transition hover:bg-surface-2/50`}>
+                  <span className="text-center font-mono text-[11px] text-ink-5">{index + 1}</span>
                   <EntityPickButton
                     value={draft.goodId}
                     options={itemOptions}
@@ -228,7 +228,7 @@ export function EntriesEditor({ drafts, onChange }: { drafts: EntryDraft[]; onCh
                       value={draft.chancePct}
                       onChange={(event) => update(index, { chancePct: event.target.value })}
                     />
-                    <span className="shrink-0 text-[10px] text-slate-500">%</span>
+                    <span className="shrink-0 text-[10px] text-ink-5">%</span>
                   </div>
                   <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-1">
                     <Input
@@ -239,7 +239,7 @@ export function EntriesEditor({ drafts, onChange }: { drafts: EntryDraft[]; onCh
                       value={draft.countMin}
                       onChange={(event) => update(index, { countMin: event.target.value })}
                     />
-                    <span className="text-[10px] text-slate-600">~</span>
+                    <span className="text-[10px] text-ink-6">~</span>
                     <Input
                       type="number"
                       min={0}
@@ -256,7 +256,7 @@ export function EntriesEditor({ drafts, onChange }: { drafts: EntryDraft[]; onCh
                   */}
                   <button
                     type="button"
-                    className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-500 transition hover:bg-rose-500/10 hover:text-rose-300 disabled:cursor-not-allowed disabled:opacity-40"
+                    className="flex h-7 w-7 items-center justify-center rounded-lg text-ink-5 transition hover:bg-ember/10 hover:text-ember-hi disabled:cursor-not-allowed disabled:opacity-40"
                     title="删除这一条"
                     aria-label={`删除条目 ${index + 1}`}
                     disabled={drafts.length <= 1}
@@ -271,7 +271,7 @@ export function EntriesEditor({ drafts, onChange }: { drafts: EntryDraft[]; onCh
         )}
       </div>
 
-      <p className="mt-1.5 text-[11px] text-slate-500">
+      <p className="mt-1.5 text-[11px] text-ink-5">
         抽取顺序：按权重决定抽到哪一条 → 过概率 → 取件数；权重为 0 的条目永远不会被抽到。
       </p>
 
@@ -314,7 +314,7 @@ export function PicksEditor({ draft, onChange }: { draft: PicksDraft; onChange: 
  */
 export function EntriesPreview({ entries, max = 12 }: { entries: DropEntry[]; max?: number }) {
   if (entries.length === 0) {
-    return <p className="text-xs text-amber-300/90">这张表没有条目 —— 抽出来会是空的（服务端不放行空表，存不进去）。</p>;
+    return <p className="text-xs text-warn-hi/90">这张表没有条目 —— 抽出来会是空的（服务端不放行空表，存不进去）。</p>;
   }
   const shown = entries.slice(0, max);
   return (
@@ -326,16 +326,16 @@ export function EntriesPreview({ entries, max = 12 }: { entries: DropEntry[]; ma
           <span
             key={`${entry.goodId}-${index}`}
             title={`${label}（${entry.goodId}）· 权重 ${entry.weight} · 概率 ${pctOfChance(entry.chance ?? 1)}%`}
-            className="flex items-center gap-1 rounded-lg border border-slate-800 bg-slate-900/60 py-0.5 pl-0.5 pr-1.5"
+            className="flex items-center gap-1 rounded-lg border border-line bg-surface-2/60 py-0.5 pl-0.5 pr-1.5"
           >
             <EntityImage image={entityImage("item", entry.goodId)} alt={label} size={20} />
-            <span className="max-w-[120px] truncate text-[11px] text-slate-300">{label}</span>
-            <span className="font-mono text-[10px] text-slate-500">×{low === high ? low : `${low}~${high}`}</span>
+            <span className="max-w-[120px] truncate text-[11px] text-ink-3">{label}</span>
+            <span className="font-mono text-[10px] text-ink-5">×{low === high ? low : `${low}~${high}`}</span>
           </span>
         );
       })}
       {entries.length > shown.length ? (
-        <span className="text-[11px] text-slate-500">还有 {entries.length - shown.length} 条…</span>
+        <span className="text-[11px] text-ink-5">还有 {entries.length - shown.length} 条…</span>
       ) : null}
     </div>
   );

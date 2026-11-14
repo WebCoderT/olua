@@ -125,7 +125,7 @@ export function CollisionFormDialog({
         footer={
           <>
             {box ? (
-              <Button variant="ghost" className="mr-auto text-rose-300" disabled={saving} onClick={() => setAskingDelete(true)}>
+              <Button variant="ghost" className="mr-auto text-ember-hi" disabled={saving} onClick={() => setAskingDelete(true)}>
                 删除这个碰撞盒
               </Button>
             ) : null}
@@ -154,26 +154,26 @@ export function CollisionFormDialog({
             </Field>
           </div>
 
-          <div className="grid grid-cols-2 gap-2 rounded-xl border border-slate-800 bg-slate-900/40 px-3 py-2 text-[11px] text-slate-400">
+          <div className="grid grid-cols-2 gap-2 rounded-xl border border-line bg-surface-2/40 px-3 py-2 text-[11px] text-ink-4">
             <div>
-              <p className="text-slate-500">左上角（Tiled 口径，对着编辑器核）</p>
-              <p className="mt-0.5 font-mono text-slate-300">{tiled ? `${round2(tiled.x)}, ${round2(tiled.y)}` : "—"}</p>
+              <p className="text-ink-5">左上角（Tiled 口径，对着编辑器核）</p>
+              <p className="mt-0.5 font-mono text-ink-3">{tiled ? `${round2(tiled.x)}, ${round2(tiled.y)}` : "—"}</p>
             </div>
             <div>
-              <p className="text-slate-500">地图范围（世界坐标）</p>
-              <p className="mt-0.5 font-mono text-slate-300">
+              <p className="text-ink-5">地图范围（世界坐标）</p>
+              <p className="mt-0.5 font-mono text-ink-3">
                 x ∈ [0, {detail.width}]、y ∈ [-{detail.height}, 0]
               </p>
             </div>
           </div>
 
           {fullyOutside ? (
-            <Notice tone="amber" title="这个盒子整块在地图外">
+            <Notice tone="warn" title="这个盒子整块在地图外">
               它不会挡任何东西，画面上也看不到（四面围墙是「跨边界」而不是「整块在外」，那种是对的）。
               如果不是故意的，检查一下 y 的正负 —— 世界坐标 y 向上，所以图内的 y 一定是负数或 0。
             </Notice>
           ) : (
-            <p className="text-[11px] text-slate-500">
+            <p className="text-[11px] text-ink-5">
               允许超出地图边界：四面围墙本来就画在图外（把玩家关在图里的手段）。图里的人要换图 / 重进才生效。
             </p>
           )}

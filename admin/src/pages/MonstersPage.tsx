@@ -50,10 +50,10 @@ const SPEED_RATE_MAX = 10;
 /** 弹窗里的一节（基础 / 行为 / 资源）：分隔线 + 标题 + 一句限定说明 */
 function Section({ title, note, children }: { title: string; note?: string; children: ReactNode }) {
   return (
-    <section className="mt-4 border-t border-slate-800 pt-4 first:mt-0 first:border-0 first:pt-0">
+    <section className="mt-4 border-t border-line pt-4 first:mt-0 first:border-0 first:pt-0">
       <div className="mb-2 flex flex-wrap items-baseline gap-2">
-        <span className="text-xs font-semibold tracking-wide text-slate-200">{title}</span>
-        {note ? <span className="text-xs text-slate-500">{note}</span> : null}
+        <span className="text-xs font-semibold tracking-wide text-ink-2">{title}</span>
+        {note ? <span className="text-xs text-ink-5">{note}</span> : null}
       </div>
       {children}
     </section>
@@ -176,9 +176,9 @@ function MonsterEditDialog({
       title={<>编辑怪物 · {initial.id}</>}
       hint={
         <>
-          三档生效时间：<span className="text-slate-300">基础数值即时</span>（世界播种与伤害结算直读库，
-          已活着的实例血量上限沿用出生值、重生后生效）· <span className="text-slate-300">行为参数 ≤1 秒</span>
-          （实时进程的 AI 缓存）· <span className="text-slate-300">画面表现要重进地图</span>（客户端重拉快照）。
+          三档生效时间：<span className="text-ink-3">基础数值即时</span>（世界播种与伤害结算直读库，
+          已活着的实例血量上限沿用出生值、重生后生效）· <span className="text-ink-3">行为参数 ≤1 秒</span>
+          （实时进程的 AI 缓存）· <span className="text-ink-3">画面表现要重进地图</span>（客户端重拉快照）。
         </>
       }
       size="lg"
@@ -223,18 +223,18 @@ function MonsterEditDialog({
             crossed={crossedKeys}
           />
         </div>
-        <p className="mt-2 text-xs text-slate-500">
+        <p className="mt-2 text-xs text-ink-5">
           改定位不重算已展开的血量 / 攻防，但会改变 BOSS 判定（击杀 BOSS 才发的邮件）；掉落看「掉落」弹窗，不随定位变。
         </p>
       </Section>
 
       <Section title="行为参数" note="服务端 AI ≤1 秒生效；画面表现要客户端重进地图">
         {behaviorEditable ? (
-          <div className="rounded-xl border border-slate-800 bg-slate-950/40 p-3">
-            <label className="flex items-center gap-2 text-xs text-slate-200">
+          <div className="rounded-xl border border-line bg-surface-0/40 p-3">
+            <label className="flex items-center gap-2 text-xs text-ink-2">
               <input
                 type="checkbox"
-                className="h-4 w-4 accent-indigo-500"
+                className="h-4 w-4 accent-gold"
                 checked={aggressive}
                 onChange={(event) => setAggressive(event.target.checked)}
               />
@@ -260,7 +260,7 @@ function MonsterEditDialog({
               </Field>
             </div>
             <div className="mt-3">
-              <span className="mb-1 block text-xs font-medium text-slate-400">
+              <span className="mb-1 block text-xs font-medium text-ink-4">
                 动作速度覆盖（每秒循环数，留空 = 用客户端默认）
               </span>
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
@@ -279,15 +279,15 @@ function MonsterEditDialog({
                   </Field>
                 ))}
               </div>
-              <p className="mt-1 text-xs text-slate-500">
+              <p className="mt-1 text-xs text-ink-5">
                 只有这五个动作有帧；攻击 / 技能动作在素材里没有帧，播放时回退待机，所以不给入口。
               </p>
             </div>
           </div>
         ) : (
-          <Notice tone="amber" title="这只怪还没有资源表现行">
+          <Notice tone="warn" title="这只怪还没有资源表现行">
             行为参数存在 `monster_presentation` 表里，行由几何生成器按图集建。先跑
-            <code className="mx-1 text-slate-200">node client/tools/gen-monster-config.cjs</code>
+            <code className="mx-1 text-ink-2">node client/tools/gen-monster-config.cjs</code>
             把几何量出来，再回来改行为。
           </Notice>
         )}
@@ -295,52 +295,52 @@ function MonsterEditDialog({
 
       <Section title="资源与几何（只读）" note="素材实测值，改了图要重跑几何生成器">
         {presentation ? (
-          <dl className="grid grid-cols-2 gap-x-4 gap-y-1.5 rounded-xl border border-slate-800 bg-slate-950/40 p-3 text-xs sm:grid-cols-3">
+          <dl className="grid grid-cols-2 gap-x-4 gap-y-1.5 rounded-xl border border-line bg-surface-0/40 p-3 text-xs sm:grid-cols-3">
             <div>
-              <dt className="text-slate-500">图标</dt>
-              <dd className="break-all font-mono text-slate-300">{presentation.icon}</dd>
+              <dt className="text-ink-5">图标</dt>
+              <dd className="break-all font-mono text-ink-3">{presentation.icon}</dd>
             </div>
             <div>
-              <dt className="text-slate-500">外观图集</dt>
-              <dd className="break-all font-mono text-slate-300">{presentation.out}</dd>
+              <dt className="text-ink-5">外观图集</dt>
+              <dd className="break-all font-mono text-ink-3">{presentation.out}</dd>
             </div>
             <div>
-              <dt className="text-slate-500">摆放偏移</dt>
-              <dd className="font-mono text-slate-300">
+              <dt className="text-ink-5">摆放偏移</dt>
+              <dd className="font-mono text-ink-3">
                 {presentation.outOffset.x}, {presentation.outOffset.y}
               </dd>
             </div>
             <div>
-              <dt className="text-slate-500">身体尺寸</dt>
-              <dd className="font-mono text-slate-300">
+              <dt className="text-ink-5">身体尺寸</dt>
+              <dd className="font-mono text-ink-3">
                 {presentation.contentSize.width} × {presentation.contentSize.height}
               </dd>
             </div>
           </dl>
         ) : (
-          <p className="rounded-lg border border-slate-800 bg-slate-950/40 px-3 py-2 text-xs text-slate-500">
+          <p className="rounded-lg border border-line bg-surface-0/40 px-3 py-2 text-xs text-ink-5">
             没有资源表现行（地图上这只怪会画不出来，直到跑几何生成器）。
           </p>
         )}
       </Section>
 
       {!levelValid || !maxHpValid ? (
-        <p className="mt-3 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-200">
+        <p className="mt-3 rounded-lg border border-ember/40 bg-ember/10 px-3 py-2 text-xs text-ember-hi">
           等级与生命上限需为 ≥1 的整数。
         </p>
       ) : null}
       {behaviorEditable && !detectValid ? (
-        <p className="mt-3 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-200">
+        <p className="mt-3 rounded-lg border border-ember/40 bg-ember/10 px-3 py-2 text-xs text-ember-hi">
           检测范围需为 ≥0 的整数（像素半径）。
         </p>
       ) : null}
       {behaviorEditable && !moveValid ? (
-        <p className="mt-3 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-200">
+        <p className="mt-3 rounded-lg border border-ember/40 bg-ember/10 px-3 py-2 text-xs text-ember-hi">
           移动速度需为 ≥0 的数字。
         </p>
       ) : null}
       {behaviorEditable && rateProblems.length > 0 ? (
-        <p className="mt-3 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-200">
+        <p className="mt-3 rounded-lg border border-ember/40 bg-ember/10 px-3 py-2 text-xs text-ember-hi">
           动作速度需在 {SPEED_RATE_MIN}~{SPEED_RATE_MAX} 之间：{rateProblems.join(" / ")}。
         </p>
       ) : null}
@@ -469,16 +469,16 @@ function MonsterSkillsDialog({
         <>
           <div className="mt-5 flex flex-col gap-2">
             {rows.length === 0 ? (
-              <p className="rounded-lg border border-slate-800 bg-slate-950/40 px-3 py-2 text-xs text-slate-500">
+              <p className="rounded-lg border border-line bg-surface-0/40 px-3 py-2 text-xs text-ink-5">
                 这只怪不放技能，只普攻。
               </p>
             ) : null}
             {rows.map((row, index) => (
-              <div key={row.skillId} className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-800 bg-slate-950/40 p-3">
-                <span className="min-w-[140px] flex-1 text-xs text-slate-200">
-                  <span className="font-mono text-slate-500">{row.skillId}</span> · {labelOf(row.skillId)}
+              <div key={row.skillId} className="flex flex-wrap items-center gap-2 rounded-xl border border-line bg-surface-0/40 p-3">
+                <span className="min-w-[140px] flex-1 text-xs text-ink-2">
+                  <span className="font-mono text-ink-5">{row.skillId}</span> · {labelOf(row.skillId)}
                 </span>
-                <label className="flex items-center gap-1 text-xs text-slate-400">
+                <label className="flex items-center gap-1 text-xs text-ink-4">
                   优先级
                   <div className="w-16">
                     <Input
@@ -488,7 +488,7 @@ function MonsterSkillsDialog({
                     />
                   </div>
                 </label>
-                <label className="flex items-center gap-1 text-xs text-slate-400">
+                <label className="flex items-center gap-1 text-xs text-ink-4">
                   冷却
                   <div className="w-20">
                     <Input
@@ -501,7 +501,7 @@ function MonsterSkillsDialog({
                 </label>
                 <Button
                   variant="ghost"
-                  className="px-2 py-1 text-xs text-rose-300"
+                  className="px-2 py-1 text-xs text-ember-hi"
                   onClick={() => setRows(rows.filter((_, i) => i !== index))}
                 >
                   移除
@@ -532,7 +532,7 @@ function MonsterSkillsDialog({
           </div>
 
           {problems.length > 0 ? (
-            <ul className="mt-4 space-y-1 rounded-lg border border-amber-900/50 bg-amber-950/20 p-3 text-xs text-amber-300">
+            <ul className="mt-4 space-y-1 rounded-lg border border-warn/20 bg-warn/10 p-3 text-xs text-warn-hi">
               {problems.map((message) => (
                 <li key={message}>· {message}</li>
               ))}
@@ -641,8 +641,8 @@ export function MonstersPage() {
       <PageHeader
         title="怪物配置"
         description={<>key 清单固定（被地图刷怪点 / 掉落表 / 技能引用），只可编辑、不可新增 / 删除。
-            数值与定位改完即时生效；<span className="text-slate-300">是否主动攻击 / 检测范围 / 移动速度 / 动作速度</span>
-            也在编辑弹窗里（服务端 AI ≤1 秒生效，画面表现要重进地图）。资源几何是素材实测值，只读。<span className="text-slate-300">死后掉什么就在这一页改</span>（
+            数值与定位改完即时生效；<span className="text-ink-3">是否主动攻击 / 检测范围 / 移动速度 / 动作速度</span>
+            也在编辑弹窗里（服务端 AI ≤1 秒生效，画面表现要重进地图）。资源几何是素材实测值，只读。<span className="text-ink-3">死后掉什么就在这一页改</span>（
             引用具名表 / 内联条目池 / 清空走兜底，三选一，服务端抽表并入包）。</>}
       />
 
@@ -698,7 +698,7 @@ export function MonstersPage() {
             </thead>
             <tbody>
               {data?.list.map((item) => (
-                <tr key={item.id} className="transition hover:bg-slate-800/30">
+                <tr key={item.id} className="transition hover:bg-surface-4/30">
                   <td className={tdClass}>
                     {monsterOut(item.id) ? (
                       // 站立动画筛 d0（客户端里「朝下站立」那条循环）；没配外观的怪退回静态头像
@@ -707,35 +707,35 @@ export function MonstersPage() {
                       <GameIcon path={monsterIcon(item.id)} alt={item.label} />
                     )}
                   </td>
-                  <td className={`${tdClass} font-mono text-xs text-slate-300`}>{item.id}</td>
-                  <td className={`${tdClass} font-medium text-slate-100`}>{item.label}</td>
+                  <td className={`${tdClass} font-mono text-xs text-ink-3`}>{item.id}</td>
+                  <td className={`${tdClass} font-medium text-ink-1`}>{item.label}</td>
                   <td className={tdClass}>
                     <div className="flex items-center gap-1.5 whitespace-nowrap">
-                      <Badge tone={item.tier === "boss" ? "red" : item.tier === "elite" ? "amber" : "slate"}>
+                      <Badge tone={item.tier === "boss" ? "ember" : item.tier === "elite" ? "warn" : "muted"}>
                         {TIER_LABELS[item.tier] ?? item.tier}
                       </Badge>
                       {item.presentation ? (
-                        <Badge tone={item.presentation.aggressive ? "red" : "slate"}>
+                        <Badge tone={item.presentation.aggressive ? "ember" : "muted"}>
                           {item.presentation.aggressive ? "主动" : "被动"}
                         </Badge>
                       ) : (
-                        <span className="text-xs text-slate-500">无表现行</span>
+                        <span className="text-xs text-ink-5">无表现行</span>
                       )}
                     </div>
                   </td>
                   <td className={tdClass}>{item.level}</td>
                   <td className={tdClass}>{item.maxHp}</td>
-                  <td className={`${tdClass} text-xs text-slate-400`}>{attributeSummary(item)}</td>
+                  <td className={`${tdClass} text-xs text-ink-4`}>{attributeSummary(item)}</td>
                   <td className={tdClass}>
                     <div className="flex items-center gap-1.5 whitespace-nowrap">
-                      <Badge tone={DROP_SOURCE_TONE[item.drop?.source ?? "none"] ?? "slate"}>
+                      <Badge tone={DROP_SOURCE_TONE[item.drop?.source ?? "none"] ?? "muted"}>
                         {DROP_SOURCE_LABELS[item.drop?.source ?? "none"] ?? "兜底"}
                       </Badge>
-                      <span className="text-xs text-slate-400">{dropSummaryText(item.drop, tablesById)}</span>
-                      {item.drop?.bindDrops ? <Badge tone="amber">掉落绑定</Badge> : null}
+                      <span className="text-xs text-ink-4">{dropSummaryText(item.drop, tablesById)}</span>
+                      {item.drop?.bindDrops ? <Badge tone="warn">掉落绑定</Badge> : null}
                     </div>
                   </td>
-                  <td className={`${tdClass} text-xs text-slate-400`}>{formatTime(item.updatedAt)}</td>
+                  <td className={`${tdClass} text-xs text-ink-4`}>{formatTime(item.updatedAt)}</td>
                   <td className={`${tdClass} text-right`}>
                     <div className="flex justify-end gap-2">
                       <Button

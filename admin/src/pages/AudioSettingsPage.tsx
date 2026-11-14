@@ -51,10 +51,10 @@ const ALL_TAB = "__all__";
  * 类名必须写成完整字面量：Tailwind 只识别源码里出现过的类，拼出来的串会被摇掉。
  */
 const CATEGORY_ACCENTS: Record<string, { dot: string; bar: string; tab: string }> = {
-  login: { dot: "bg-indigo-400", bar: "border-l-indigo-500/60", tab: "bg-indigo-500/15 text-indigo-200 ring-indigo-500/40" },
-  combat: { dot: "bg-rose-400", bar: "border-l-rose-500/60", tab: "bg-rose-500/15 text-rose-200 ring-rose-500/40" },
-  item: { dot: "bg-amber-400", bar: "border-l-amber-500/60", tab: "bg-amber-500/15 text-amber-200 ring-amber-500/40" },
-  growth: { dot: "bg-emerald-400", bar: "border-l-emerald-500/60", tab: "bg-emerald-500/15 text-emerald-200 ring-emerald-500/40" },
+  login: { dot: "bg-gold-hi", bar: "border-l-indigo-500/60", tab: "bg-gold/15 text-gold-hi ring-gold/40" },
+  combat: { dot: "bg-ember-hi", bar: "border-l-rose-500/60", tab: "bg-ember/15 text-ember-hi ring-ember/40" },
+  item: { dot: "bg-warn-hi", bar: "border-l-amber-500/60", tab: "bg-warn/15 text-warn-hi ring-warn/40" },
+  growth: { dot: "bg-jade-hi", bar: "border-l-emerald-500/60", tab: "bg-jade/15 text-jade-hi ring-jade/40" },
 };
 
 const accentOf = (category: string) => CATEGORY_ACCENTS[category] ?? CATEGORY_ACCENTS.login;
@@ -225,9 +225,9 @@ export function AudioSettingsPage() {
 
   /** 未配置 = 路径为空（这一项不会响）；已停用 = enabled = false */
   const statusOf = (form: AudioForm) => {
-    if (!form.enabled) return { tone: "slate" as const, text: "已停用" };
-    if (!form.filePath.trim()) return { tone: "amber" as const, text: "未配置文件" };
-    return { tone: "green" as const, text: "已启用" };
+    if (!form.enabled) return { tone: "muted" as const, text: "已停用" };
+    if (!form.filePath.trim()) return { tone: "warn" as const, text: "未配置文件" };
+    return { tone: "jade" as const, text: "已启用" };
   };
 
   const volumeValueOf = (text: string) => {
@@ -294,7 +294,7 @@ export function AudioSettingsPage() {
         description="11 个音效项，按分类分组。配的是「用哪个文件 / 多大声 / 循环不循环 / 开不开」—— 文件在客户端资源包 audio/ 里，服务端只存相对路径，所以换曲子不用重打客户端包。"
         actions={
           <>
-            {dirtyCount > 0 ? <Badge tone="amber">{dirtyCount} 项未保存</Badge> : null}
+            {dirtyCount > 0 ? <Badge tone="warn">{dirtyCount} 项未保存</Badge> : null}
             <Button variant="outline" onClick={() => void load()} loading={loading}>
               刷新
             </Button>
@@ -318,7 +318,7 @@ export function AudioSettingsPage() {
           >
             <Input value={resRoot} onChange={(event) => changeResRoot(event.target.value)} placeholder={DEFAULT_RES_ROOT} />
           </Field>
-          <p className="pb-1 text-xs text-slate-500">
+          <p className="pb-1 text-xs text-ink-5">
             可选的音频文件：
             {usableFiles.length > 0 ? `${usableFiles.length} 个（来自 audio/ 目录清单）` : "清单读不到 —— 直接手填路径，用试听确认"}
             {skippedFiles > 0 ? ` · 另有 ${skippedFiles} 个文件名不是英文（未列入，改名后重新进页面即可）` : ""}
@@ -327,18 +327,18 @@ export function AudioSettingsPage() {
       </Card>
 
       {/* 分类 tab：`role=tablist` 让读屏与键盘可用；计数直接标在 tab 上，不用逐个点开看 */}
-      <div role="tablist" aria-label="音效分类" className="flex flex-wrap items-center gap-1.5 rounded-xl border border-slate-800 bg-slate-900/40 p-1.5">
+      <div role="tablist" aria-label="音效分类" className="flex flex-wrap items-center gap-1.5 rounded-xl border border-line bg-surface-2/40 p-1.5">
         <button
           type="button"
           role="tab"
           aria-selected={activeTab === ALL_TAB}
           onClick={() => setActiveTab(ALL_TAB)}
           className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium ring-1 ring-inset transition ${
-            activeTab === ALL_TAB ? "bg-slate-100/10 text-slate-100 ring-slate-500/50" : "text-slate-400 ring-transparent hover:text-slate-200"
+            activeTab === ALL_TAB ? "bg-ink-1/10 text-ink-1 ring-ink-5/50" : "text-ink-4 ring-transparent hover:text-ink-2"
           }`}
         >
           全部
-          <span className="rounded bg-slate-800 px-1.5 py-0.5 text-[11px] text-slate-300">{rows.length}</span>
+          <span className="rounded bg-surface-4 px-1.5 py-0.5 text-[11px] text-ink-3">{rows.length}</span>
         </button>
         {tabs.map((tab) => {
           const accent = accentOf(tab.key);
@@ -351,19 +351,19 @@ export function AudioSettingsPage() {
               aria-selected={active}
               onClick={() => setActiveTab(tab.key)}
               className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium ring-1 ring-inset transition ${
-                active ? accent.tab : "text-slate-400 ring-transparent hover:text-slate-200"
+                active ? accent.tab : "text-ink-4 ring-transparent hover:text-ink-2"
               }`}
             >
               <span aria-hidden="true" className={`size-1.5 rounded-full ${accent.dot}`} />
               {tab.label}
-              <span className="rounded bg-slate-800 px-1.5 py-0.5 text-[11px] text-slate-300">{tab.count}</span>
+              <span className="rounded bg-surface-4 px-1.5 py-0.5 text-[11px] text-ink-3">{tab.count}</span>
             </button>
           );
         })}
       </div>
 
       {loading ? (
-        <Card className="p-5 text-sm text-slate-400">加载中…</Card>
+        <Card className="p-5 text-sm text-ink-4">加载中…</Card>
       ) : rows.length === 0 ? (
         <Card className="p-5">
           <EmptyState title="还没有音效项" description="服务端 seed 没有灌出任何一行 —— 检查 AUDIO_DEFAULTS。" />
@@ -385,22 +385,22 @@ export function AudioSettingsPage() {
             return (
               <section
                 key={row.key}
-                className={`rounded-2xl border border-slate-800 border-l-2 bg-slate-900/40 shadow-lg shadow-black/20 ${accent.bar} ${
-                  dirty ? "ring-1 ring-amber-500/20" : ""
+                className={`rounded-2xl border border-line border-l-2 bg-surface-2/40 shadow-lg shadow-surface-0/40 ${accent.bar} ${
+                  dirty ? "ring-1 ring-warn/20" : ""
                 }`}
               >
                 <div className="flex flex-col gap-3 px-3.5 py-3 lg:flex-row lg:items-start">
                   {/* 左栏：是什么 */}
                   <div className="flex w-full shrink-0 flex-col gap-1 lg:w-64">
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-sm font-medium text-slate-100">{row.label}</span>
+                      <span className="text-sm font-medium text-ink-1">{row.label}</span>
                       <Badge tone={status.tone}>{status.text}</Badge>
-                      {dirty ? <span className="text-[11px] font-medium text-amber-400">未保存</span> : null}
+                      {dirty ? <span className="text-[11px] font-medium text-warn">未保存</span> : null}
                     </div>
-                    <code className="truncate text-[11px] text-slate-500" title={row.key}>
+                    <code className="truncate text-[11px] text-ink-5" title={row.key}>
                       {row.key}
                     </code>
-                    <p className="text-[11px] leading-relaxed text-slate-500">
+                    <p className="text-[11px] leading-relaxed text-ink-5">
                       {form.loop ? "循环播放" : "播放一次"}
                       {form.volume.trim() === "0" ? " · 音量为 0（等于静音）" : ""}
                       {" · "}
@@ -452,13 +452,13 @@ export function AudioSettingsPage() {
                       </Button>
                     </div>
 
-                    {problem ? <p className="text-xs text-rose-400">{problem}</p> : null}
-                    {error ? <p className="text-xs text-amber-400">{error}</p> : null}
+                    {problem ? <p className="text-xs text-ember-hi">{problem}</p> : null}
+                    {error ? <p className="text-xs text-warn">{error}</p> : null}
                     {!form.enabled ? (
-                      <p className="text-xs text-amber-400">已停用 —— 客户端连文件都不读，与「音量调 0」不是一回事。</p>
+                      <p className="text-xs text-warn">已停用 —— 客户端连文件都不读，与「音量调 0」不是一回事。</p>
                     ) : null}
                     {form.enabled && !form.filePath.trim() ? (
-                      <p className="text-xs text-slate-500">还没有选文件 —— 这一项不会响（保存也合法，等文件进资源包再补）。</p>
+                      <p className="text-xs text-ink-5">还没有选文件 —— 这一项不会响（保存也合法，等文件进资源包再补）。</p>
                     ) : null}
 
                     <div className="flex flex-wrap items-end gap-x-4 gap-y-2">
@@ -472,7 +472,7 @@ export function AudioSettingsPage() {
                             value={volumeValueOf(form.volume)}
                             onChange={(event) => patch(row.key, { volume: event.target.value })}
                             disabled={!canWrite}
-                            className="h-1.5 flex-1 accent-indigo-500"
+                            className="h-1.5 flex-1 accent-gold"
                             aria-label={`${row.label} 音量`}
                           />
                           <Input
@@ -486,28 +486,28 @@ export function AudioSettingsPage() {
                           />
                         </div>
                       </Field>
-                      <label className="flex items-center gap-2 pb-1.5 text-xs text-slate-300">
+                      <label className="flex items-center gap-2 pb-1.5 text-xs text-ink-3">
                         <input
                           type="checkbox"
                           checked={form.loop}
                           onChange={(event) => patch(row.key, { loop: event.target.checked })}
                           disabled={!canWrite}
-                          className="size-3.5 accent-indigo-500"
+                          className="size-3.5 accent-gold"
                         />
                         循环播放
                       </label>
-                      <label className="flex items-center gap-2 pb-1.5 text-xs text-slate-300">
+                      <label className="flex items-center gap-2 pb-1.5 text-xs text-ink-3">
                         <input
                           type="checkbox"
                           checked={form.enabled}
                           onChange={(event) => patch(row.key, { enabled: event.target.checked })}
                           disabled={!canWrite}
-                          className="size-3.5 accent-indigo-500"
+                          className="size-3.5 accent-gold"
                         />
                         启用
                       </label>
                       <div className="ml-auto flex items-center gap-2 pb-0.5">
-                        {!canWrite ? <span className="text-xs text-amber-400">没有 gameConfig:write 权限，只能看</span> : null}
+                        {!canWrite ? <span className="text-xs text-warn">没有 gameConfig:write 权限，只能看</span> : null}
                         <Button
                           variant="primary"
                           onClick={() => void submit(row)}
@@ -526,8 +526,8 @@ export function AudioSettingsPage() {
         </div>
       )}
 
-      <Notice tone="slate" title="路径规则与「为什么只能试听」">
-        只能填 <code className="text-slate-200">audio/</code> 下的文件，带扩展名（{AUDIO_EXTS.join(" / ")}），文件名只允许英文、数字、下划线、短横线。
+      <Notice tone="muted" title="路径规则与「为什么只能试听」">
+        只能填 <code className="text-ink-2">audio/</code> 下的文件，带扩展名（{AUDIO_EXTS.join(" / ")}），文件名只允许英文、数字、下划线、短横线。
         服务端**不检查文件是否存在** —— 资源包不在服务器上，查了只会掩盖「本机有、线上没有」；
         所以每次改完路径请点一次<strong>试听</strong>，那就是这条链路唯一的验证手段。
       </Notice>

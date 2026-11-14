@@ -85,38 +85,38 @@ export function MyAccountPage() {
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <Card title="当前身份">
-          <div className="flex flex-col gap-3 text-sm text-slate-200">
+          <div className="flex flex-col gap-3 text-sm text-ink-2">
             <p className="flex items-center gap-2">
-              <span className="font-medium text-slate-100">{info?.username ?? "—"}</span>
-              {info?.role ? <Badge tone={info.role === "super_admin" ? "amber" : info.role === "viewer" ? "slate" : "indigo"}>{adminRoleLabel(info.role)}</Badge> : null}
+              <span className="font-medium text-ink-1">{info?.username ?? "—"}</span>
+              {info?.role ? <Badge tone={info.role === "super_admin" ? "warn" : info.role === "viewer" ? "muted" : "gold"}>{adminRoleLabel(info.role)}</Badge> : null}
             </p>
-            <p className="text-xs text-slate-400">账号 id：{info?.id ?? "—"}</p>
+            <p className="text-xs text-ink-4">账号 id：{info?.id ?? "—"}</p>
           </div>
         </Card>
         <Card title="登录情况">
-          <div className="flex flex-col gap-3 text-sm text-slate-200">
+          <div className="flex flex-col gap-3 text-sm text-ink-2">
             <p>最近登录：{formatTime(info?.lastLoginAt)}</p>
-            <p className="text-xs text-slate-400">账号创建：{formatTime(info?.createdAt)}</p>
+            <p className="text-xs text-ink-4">账号创建：{formatTime(info?.createdAt)}</p>
           </div>
         </Card>
         <Card title="状态">
-          <p className="text-sm text-slate-200">{info?.status === "active" ? <Badge tone="green">正常</Badge> : <Badge tone="red">已停用</Badge>}</p>
+          <p className="text-sm text-ink-2">{info?.status === "active" ? <Badge tone="jade">正常</Badge> : <Badge tone="ember">已停用</Badge>}</p>
         </Card>
       </div>
 
       <Card title="我的权限点" description="界面按权限显隐，服务端独立校验——这里的清单就是服务端下发的权威值。">
         {loading && !info ? (
-          <div className="flex items-center gap-2 text-sm text-slate-400">
+          <div className="flex items-center gap-2 text-sm text-ink-4">
             <Spinner /> 加载中…
           </div>
         ) : (
           <div className="flex flex-wrap gap-2">
             {(info?.permissions ?? []).map((item) => (
-              <Badge key={item} tone="indigo">
+              <Badge key={item} tone="gold">
                 {permissionLabel(item)}
               </Badge>
             ))}
-            {(info?.permissions ?? []).length === 0 ? <p className="text-sm text-slate-400">没有任何权限点</p> : null}
+            {(info?.permissions ?? []).length === 0 ? <p className="text-sm text-ink-4">没有任何权限点</p> : null}
           </div>
         )}
       </Card>
@@ -133,7 +133,7 @@ export function MyAccountPage() {
             <Input type="password" value={form.confirm} autoComplete="new-password" onChange={(event) => setForm({ ...form, confirm: event.target.value })} />
           </Field>
 
-          {error ? <p className="rounded-lg border border-rose-500/40 bg-rose-950/50 px-3 py-2 text-xs text-rose-200">{error}</p> : null}
+          {error ? <p className="rounded-lg border border-ember/40 bg-ember/15 px-3 py-2 text-xs text-ember-hi">{error}</p> : null}
 
           <Button type="submit" loading={submitting} className="self-start">
             修改密码
@@ -141,7 +141,7 @@ export function MyAccountPage() {
         </form>
       </Card>
 
-      <p className="text-xs text-slate-500">忘了密码？只能请超级管理员在「管理员」页里重置（重置后你手里的令牌会立即失效，需要用新口令重新登录）。</p>
+      <p className="text-xs text-ink-5">忘了密码？只能请超级管理员在「管理员」页里重置（重置后你手里的令牌会立即失效，需要用新口令重新登录）。</p>
     </div>
   );
 }

@@ -59,12 +59,12 @@ function SlotTabs({
             onClick={() => onChange(tab.slot)}
             className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-medium transition ${
               selected
-                ? "border-indigo-500/60 bg-indigo-500/15 text-indigo-200"
-                : "border-slate-700 text-slate-300 hover:border-slate-500 hover:bg-slate-800/60"
+                ? "border-gold/60 bg-gold/15 text-gold-hi"
+                : "border-line-strong text-ink-3 hover:border-line-strong hover:bg-surface-4/60"
             }`}
           >
             {tab.label}
-            <span className={selected ? "text-indigo-300/80" : "text-slate-500"}>{tab.count}</span>
+            <span className={selected ? "text-gold/80" : "text-ink-5"}>{tab.count}</span>
           </button>
         );
       })}
@@ -265,12 +265,12 @@ function EquipmentCreateDialog({
           </Field>
         </div>
         {!levelValid || !priceValid ? (
-          <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-200">
+          <p className="rounded-lg border border-ember/40 bg-ember/10 px-3 py-2 text-xs text-ember-hi">
             等级需为 ≥1 的整数，售卖价需为 ≥0 的整数。
           </p>
         ) : null}
-        <p className="text-xs text-slate-500">
-          新建会<b className="text-slate-400">连带展开这件装备的全部前后缀变体</b>（档数取「装备设置」里的前缀 /
+        <p className="text-xs text-ink-5">
+          新建会<b className="text-ink-4">连带展开这件装备的全部前后缀变体</b>（档数取「装备设置」里的前缀 /
           后缀档数，出厂 15 个）—— 变体才是客户端真正认得的东西，少了它们商城与掉落都挂不上。
         </p>
       </div>
@@ -462,7 +462,7 @@ function EquipmentEditDialog({
       }
     >
       <section className="flex flex-col gap-3">
-        <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-400">文案与限制</h3>
+        <h3 className="text-xs font-semibold uppercase tracking-wide text-ink-4">文案与限制</h3>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Field label="名称" hint="≤50 字；前后缀由客户端拼在名字前后">
             <Input value={draft.label} onChange={(event) => patch({ label: event.target.value })} />
@@ -503,7 +503,7 @@ function EquipmentEditDialog({
         </div>
         <Field label="描述" hint="≤500 字；空 = 清空（详情弹窗正文）">
           <textarea
-            className="w-full rounded-lg border border-slate-700 bg-slate-900/60 px-3 py-2 text-sm text-slate-100 outline-none focus:border-sky-500"
+            className="w-full rounded-lg border border-line-strong bg-surface-2/60 px-3 py-2 text-sm text-ink-1 outline-none focus:border-gold"
             rows={3}
             value={draft.description}
             onChange={(event) => patch({ description: event.target.value })}
@@ -512,7 +512,7 @@ function EquipmentEditDialog({
       </section>
 
       <section className="flex flex-col gap-3">
-        <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-400">资源与几何</h3>
+        <h3 className="text-xs font-semibold uppercase tracking-wide text-ink-4">资源与几何</h3>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <IconField
             label="图标"
@@ -561,13 +561,13 @@ function EquipmentEditDialog({
           </Field>
         </div>
         <div>
-          <p className="mb-2 text-xs text-slate-400">
+          <p className="mb-2 text-xs text-ink-4">
             外观 8 向位置（相对角色脚底锚点，y 向上）—— 出厂值；工作台保存过的装备以工作台为准
           </p>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
             {POSITION_DIRECTIONS.map((direction, index) => (
-              <div key={direction} className="rounded-lg border border-slate-700/60 bg-slate-900/40 p-2">
-                <p className="mb-1 text-[11px] text-slate-400">{direction}</p>
+              <div key={direction} className="rounded-lg border border-line-strong/60 bg-surface-2/40 p-2">
+                <p className="mb-1 text-[11px] text-ink-4">{direction}</p>
                 <div className="flex gap-1">
                   <Input
                     type="number"
@@ -599,7 +599,7 @@ function EquipmentEditDialog({
       </section>
 
       <section className="flex flex-col gap-3">
-        <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-400">基础属性（整份替换）</h3>
+        <h3 className="text-xs font-semibold uppercase tracking-wide text-ink-4">基础属性（整份替换）</h3>
         <AttributesGrid
           attributes={draft.attributes}
           onChange={(attributes) => patch({ attributes })}
@@ -608,7 +608,7 @@ function EquipmentEditDialog({
         />
       </section>
       {!levelValid || !priceValid || !positionsOk || !numbers.every(isNumber) ? (
-        <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-200">
+        <p className="rounded-lg border border-ember/40 bg-ember/10 px-3 py-2 text-xs text-ember-hi">
           等级需为 ≥1 的整数、售卖价需为 ≥0 的整数；缩放 / 旋转 / 锚点与 8 向位置都要能解析成数字（8 个方向缺一不可）。
         </p>
       ) : null}
@@ -881,7 +881,7 @@ export function EquipmentsPage() {
             </thead>
             <tbody>
               {data?.list.map((item) => (
-                <tr key={item.id} className="transition hover:bg-slate-800/30">
+                <tr key={item.id} className="transition hover:bg-surface-4/30">
                   <td className={tdClass}>
                     {item.outAtlas ? (
                       // 外观站立动画筛 d0（8 方向挤一张表）；没配外观的装备退回静态图标
@@ -890,11 +890,11 @@ export function EquipmentsPage() {
                       <GameIcon path={item.icon ?? ""} alt={item.label} />
                     )}
                   </td>
-                  <td className={`${tdClass} font-mono text-xs text-slate-300`}>{item.id}</td>
+                  <td className={`${tdClass} font-mono text-xs text-ink-3`}>{item.id}</td>
                   <td className={tdClass}>
-                    <Badge tone="slate">{slotLabel(item.slot)}</Badge>
+                    <Badge tone="muted">{slotLabel(item.slot)}</Badge>
                   </td>
-                  <td className={`${tdClass} font-medium text-slate-100`}>{item.label}</td>
+                  <td className={`${tdClass} font-medium text-ink-1`}>{item.label}</td>
                   <td className={tdClass}>{item.level}</td>
                   <td className={tdClass}>{item.sellPrice}</td>
                   <td className={tdClass}>
@@ -902,17 +902,17 @@ export function EquipmentsPage() {
                     <button
                       type="button"
                       title="看这件装备的全部变体"
-                      className="rounded-md border border-slate-700 px-2 py-0.5 text-xs text-slate-300 transition hover:border-indigo-500/60 hover:bg-indigo-500/10 hover:text-indigo-200"
+                      className="rounded-md border border-line-strong px-2 py-0.5 text-xs text-ink-3 transition hover:border-gold/60 hover:bg-gold/10 hover:text-gold-hi"
                       onClick={() => setVariantsOf(item)}
                     >
                       {item.variantCount ?? 0} 个
                     </button>
                   </td>
-                  <td className={`${tdClass} text-xs text-slate-400`}>{attributeSummary(item)}</td>
+                  <td className={`${tdClass} text-xs text-ink-4`}>{attributeSummary(item)}</td>
                   <td className={tdClass}>
-                    <Badge tone={item.bindOnDrop ? "amber" : "slate"}>{item.bindOnDrop ? "强制绑定" : "—"}</Badge>
+                    <Badge tone={item.bindOnDrop ? "warn" : "muted"}>{item.bindOnDrop ? "强制绑定" : "—"}</Badge>
                   </td>
-                  <td className={`${tdClass} text-xs text-slate-400`}>{formatTime(item.updatedAt)}</td>
+                  <td className={`${tdClass} text-xs text-ink-4`}>{formatTime(item.updatedAt)}</td>
                   <td className={`${tdClass} text-right`}>
                     <Button
                       variant="outline"
@@ -927,7 +927,7 @@ export function EquipmentsPage() {
                     </Button>
                     <Button
                       variant="ghost"
-                      className="ml-1 px-2.5 py-1 text-xs text-rose-300 hover:bg-rose-500/10"
+                      className="ml-1 px-2.5 py-1 text-xs text-ember-hi hover:bg-ember/10"
                       disabled={!canWrite}
                       onClick={() => setDeleting(item)}
                     >

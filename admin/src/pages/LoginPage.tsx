@@ -127,19 +127,19 @@ export function LoginPage() {
         <svg className="ridge" viewBox="0 0 1600 560" preserveAspectRatio="xMidYMax slice">
           <defs>
             <linearGradient id="ll-hill" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#3B2B1C" />
-              <stop offset="100%" stopColor="#241A11" />
+              <stop offset="0%" stopColor="var(--ll-ridge-hi)" />
+              <stop offset="100%" stopColor="var(--ll-ridge-lo)" />
             </linearGradient>
             <linearGradient id="ll-keep" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#14100A" />
-              <stop offset="100%" stopColor="#0A0806" />
+              <stop offset="0%" stopColor="var(--ll-keep-hi)" />
+              <stop offset="100%" stopColor="var(--ll-keep-lo)" />
             </linearGradient>
             <pattern id="ll-merlon" width="26" height="14" patternUnits="userSpaceOnUse">
               <rect width="17" height="14" fill="url(#ll-keep)" />
             </pattern>
             <radialGradient id="ll-glow">
-              <stop offset="0%" stopColor="#E4743A" stopOpacity=".85" />
-              <stop offset="100%" stopColor="#E4743A" stopOpacity="0" />
+              <stop offset="0%" stopColor="var(--fire-hi)" stopOpacity=".85" />
+              <stop offset="100%" stopColor="var(--fire-hi)" stopOpacity="0" />
             </radialGradient>
           </defs>
 
@@ -169,13 +169,13 @@ export function LoginPage() {
           </g>
 
           {/* 塔尖旗帜 */}
-          <g stroke="#0B0907" strokeWidth="1.6">
+          <g stroke="var(--ll-keep-edge)" strokeWidth="1.6">
             <path d="M800 248 L800 214" />
           </g>
-          <path d="M801 216 L826 222 L801 230 Z" fill="#7A2B16" opacity=".85" />
+          <path d="M801 216 L826 222 L801 230 Z" fill="var(--ll-flag)" opacity=".85" />
 
           {/* 窗火：一片暖光点，让「城」在夜里活着 */}
-          <g fill="#D9663A">
+          <g fill="var(--ll-window)">
             <rect x="794" y="326" width="4" height="7" opacity=".95" />
             <rect x="804" y="326" width="4" height="7" opacity=".8" />
             <rect x="784" y="404" width="4" height="6" opacity=".7" />
@@ -195,19 +195,19 @@ export function LoginPage() {
 
           {/* 近景乱石与倒插的断矛 */}
           <path
-            fill="#080605"
+            fill="var(--ll-keep-lo)"
             opacity=".95"
             d="M0 486 L78 468 L146 486 L232 462 L318 488 L410 470 L500 492 L1600 492 L1600 560 L0 560 Z"
           />
-          <g stroke="#0A0806" strokeWidth="3" strokeLinecap="round" opacity=".9">
+          <g stroke="var(--ll-keep-lo)" strokeWidth="3" strokeLinecap="round" opacity=".9">
             <path d="M214 500 L246 424" />
             <path d="M244 500 L270 440" />
             <path d="M1188 504 L1224 432" />
             <path d="M1218 502 L1248 448" />
             <path d="M960 508 L986 462" />
           </g>
-          <path d="M246 424 L258 418 L250 434 Z" fill="#0A0806" />
-          <path d="M1224 432 L1238 428 L1228 442 Z" fill="#0A0806" />
+          <path d="M246 424 L258 418 L250 434 Z" fill="var(--ll-keep-lo)" />
+          <path d="M1224 432 L1238 428 L1228 442 Z" fill="var(--ll-keep-lo)" />
         </svg>
 
         <div className="fog" />
@@ -243,7 +243,7 @@ export function LoginPage() {
             <svg className="crest" viewBox="0 0 34 40" fill="none" aria-hidden="true">
               <path
                 d="M17 1.5 L32.2 6.6 V20.4 C32.2 29.6 25.6 35.6 17 38.6 C8.4 35.6 1.8 29.6 1.8 20.4 V6.6 Z"
-                stroke="#C9A24D"
+                stroke="var(--gold)"
                 strokeWidth="1.2"
                 fill="rgba(201,162,77,.06)"
               />
@@ -252,9 +252,9 @@ export function LoginPage() {
                 stroke="rgba(201,162,77,.35)"
                 strokeWidth=".8"
               />
-              <path d="M17 10.5 V26.5" stroke="#F0DCAC" strokeWidth="1.4" />
-              <path d="M12.6 15.4 H21.4" stroke="#C9A24D" strokeWidth="1.1" />
-              <path d="M17 26.5 L15 29.6 H19 Z" fill="#C9A24D" />
+              <path d="M17 10.5 V26.5" stroke="var(--gold-hi)" strokeWidth="1.4" />
+              <path d="M12.6 15.4 H21.4" stroke="var(--gold)" strokeWidth="1.1" />
+              <path d="M17 26.5 L15 29.6 H19 Z" fill="var(--gold)" />
             </svg>
             <div className="brand-txt">
               <b>OLUA</b>

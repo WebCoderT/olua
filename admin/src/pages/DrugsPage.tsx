@@ -174,28 +174,28 @@ export function DrugsPage() {
             </thead>
             <tbody>
               {data?.list.map((item) => (
-                <tr key={item.id} className="transition hover:bg-slate-800/30">
+                <tr key={item.id} className="transition hover:bg-surface-4/30">
                   <td className={tdClass}>
                     <GameIcon path={item.icon || drugIcon(item.id)} alt={item.label} />
                   </td>
-                  <td className={`${tdClass} font-mono text-xs text-slate-300`}>{item.id}</td>
+                  <td className={`${tdClass} font-mono text-xs text-ink-3`}>{item.id}</td>
                   <td className={tdClass}>
-                    <span className="block font-medium text-slate-100">{item.label}</span>
-                    <span className="mt-0.5 block max-w-[240px] truncate text-xs text-slate-500" title={item.description}>
+                    <span className="block font-medium text-ink-1">{item.label}</span>
+                    <span className="mt-0.5 block max-w-[240px] truncate text-xs text-ink-5" title={item.description}>
                       {item.description}
                     </span>
                   </td>
                   <td className={tdClass}>{item.level}</td>
-                  <td className={`${tdClass} text-xs text-slate-300`}>{effectSummary(item)}</td>
+                  <td className={`${tdClass} text-xs text-ink-3`}>{effectSummary(item)}</td>
                   <td className={tdClass}>{item.cooldown}s</td>
                   <td className={tdClass}>{item.sellPrice}</td>
                   <td className={tdClass}>
-                    <Badge tone="slate">{item.maxStack}</Badge>
+                    <Badge tone="muted">{item.maxStack}</Badge>
                   </td>
                   <td className={tdClass}>
-                    <Badge tone={item.bindOnDrop ? "amber" : "slate"}>{item.bindOnDrop ? "强制绑定" : "—"}</Badge>
+                    <Badge tone={item.bindOnDrop ? "warn" : "muted"}>{item.bindOnDrop ? "强制绑定" : "—"}</Badge>
                   </td>
-                  <td className={`${tdClass} text-xs text-slate-400`}>{formatTime(item.updatedAt)}</td>
+                  <td className={`${tdClass} text-xs text-ink-4`}>{formatTime(item.updatedAt)}</td>
                   <td className={`${tdClass} text-right`}>
                     <Button variant="outline" className="px-2.5 py-1 text-xs" disabled={!canWrite} onClick={() => openEdit(item)}>
                       编辑

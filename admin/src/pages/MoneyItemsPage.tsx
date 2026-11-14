@@ -283,29 +283,29 @@ export function MoneyItemsPage() {
             </thead>
             <tbody>
               {data?.list.map((item) => (
-                <tr key={item.id} className="transition hover:bg-slate-800/30">
+                <tr key={item.id} className="transition hover:bg-surface-4/30">
                   <td className={tdClass}>
                     <GameIcon path={item.icon} alt={item.label} />
                   </td>
-                  <td className={`${tdClass} font-mono text-xs text-slate-300`}>{item.id}</td>
+                  <td className={`${tdClass} font-mono text-xs text-ink-3`}>{item.id}</td>
                   <td className={tdClass}>
-                    <span className="block font-medium text-slate-100">{item.label}</span>
-                    <span className="mt-0.5 block max-w-[280px] truncate text-xs text-slate-500" title={item.description}>
+                    <span className="block font-medium text-ink-1">{item.label}</span>
+                    <span className="mt-0.5 block max-w-[280px] truncate text-xs text-ink-5" title={item.description}>
                       {item.description || "—"}
                     </span>
                   </td>
                   <td className={tdClass}>
-                    <Badge tone="slate">
+                    <Badge tone="muted">
                       {MONEY_KIND_LABELS[item.currency] ?? item.currency}
                     </Badge>
                   </td>
-                  <td className={`${tdClass} font-mono text-sm text-amber-200`}>+{amountText(item.amount)}</td>
+                  <td className={`${tdClass} font-mono text-sm text-warn-hi`}>+{amountText(item.amount)}</td>
                   <td className={tdClass}>{item.maxStack}</td>
                   <td className={tdClass}>{item.sellPrice > 0 ? amountText(item.sellPrice) : "不可出售"}</td>
                   <td className={tdClass}>
-                    <Badge tone={item.bindOnDrop ? "amber" : "slate"}>{item.bindOnDrop ? "强制绑定" : "—"}</Badge>
+                    <Badge tone={item.bindOnDrop ? "warn" : "muted"}>{item.bindOnDrop ? "强制绑定" : "—"}</Badge>
                   </td>
-                  <td className={`${tdClass} text-xs text-slate-400`}>{formatTime(item.updatedAt)}</td>
+                  <td className={`${tdClass} text-xs text-ink-4`}>{formatTime(item.updatedAt)}</td>
                   <td className={`${tdClass} text-right`}>
                     <div className="flex justify-end gap-2">
                       <Button variant="outline" className="px-2.5 py-1 text-xs" disabled={!canWrite} onClick={() => openEdit(item)}>
