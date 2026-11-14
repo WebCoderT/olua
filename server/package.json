@@ -41,6 +41,8 @@
     "test:e2e:zone-no-param": "node --disable-warning=ExperimentalWarning test/e2e-zone-no-param.cjs",
     "test:e2e:zone-leaderboard": "node --disable-warning=ExperimentalWarning test/e2e-zone-leaderboard.cjs",
     "test:e2e:zone-migrate": "node --disable-warning=ExperimentalWarning test/e2e-zone-migrate.cjs",
+    "test:e2e:zone-maintenance": "node --disable-warning=ExperimentalWarning test/e2e-zone-maintenance.cjs",
+    "test:e2e:zone-merge": "node --disable-warning=ExperimentalWarning test/e2e-zone-merge.cjs",
     "test:e2e:role-migration": "node --disable-warning=ExperimentalWarning test/e2e-role-migration.cjs",
     "test:e2e:role-corrupted": "node --disable-warning=ExperimentalWarning test/e2e-role-corrupted.cjs",
     "test:e2e:role-optimistic": "node --disable-warning=ExperimentalWarning test/e2e-role-optimistic.cjs",

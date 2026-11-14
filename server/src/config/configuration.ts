@@ -243,6 +243,21 @@ export interface AppConfiguration {
    */
   realtimeKickPollMs: number;
   /**
+   * 区状态巡检间隔（毫秒，#961）
+   *
+   * 实时进程按它轮询 `zones`：某个区转 `maintenance` → 广播 `zoneMaintenance` 倒计时，
+   * 到点断开该区连接；某个区被合并 → 发 `zoneMerged` 立即断开。跨进程（管理端在 3100
+   * 改状态、连接在 3101）没有推送通道，轮询是唯一办法；区数个位数，读全表可忽略。
+   */
+  zoneStatusPollMs: number;
+  /**
+   * 维护倒计时多久后强制断线（毫秒，#961；`0` = 立刻断）
+   *
+   * 出厂 60 秒：正在打怪的人需要时间收手（打完这一只、把东西捡了）。断得太干脆，
+   * 玩家会认为「掉线了」而不是「服在维护」。
+   */
+  zoneMaintenanceKickMs: number;
+  /**
    * 在线心跳的宽限期（毫秒，#547；`0` = 关闭清算）
    *
    * 「角色在线」以 `accounts.online_role_id` 为准，但玩家崩溃 / 断网后没人清这个标记
@@ -599,6 +614,21 @@ export default function configuration(): AppConfiguration {
     realtimeEmbedded: process.env.REALTIME_EMBEDDED !== "false",
     realtimePort: Number(process.env.REALTIME_PORT ?? 3101),
     realtimeKickPollMs: Number(process.env.REALTIME_KICK_POLL_MS ?? 3 * 1000),
+    /**
+     * 区状态巡检间隔（毫秒，#961）
+     *
+     * 实时进程按它轮询 `zones`：发现某个区转 `maintenance` 就广播倒计时，
+     * 发现某个区被合并就发 `zoneMerged` 并断线。区数个位数，读全表的代价可以忽略；
+     * e2e 把它调到 200ms，让「切维护 → 收到帧」不用等 5 秒。
+     */
+    zoneStatusPollMs: Number(process.env.ZONE_STATUS_POLL_MS ?? 5 * 1000),
+    /**
+     * 维护倒计时多久后强制断线（毫秒，#961）
+     *
+     * 出厂 60 秒：正在打怪的人需要时间收手（打完这一只、把东西捡了）。断得太干脆，
+     * 玩家会以为「掉线了」而不是「服在维护」。设 0 = 立刻断（e2e 用）。
+     */
+    zoneMaintenanceKickMs: Number(process.env.ZONE_MAINTENANCE_KICK_MS ?? 60 * 1000),
     realtimeOnlineStaleMs: Number(process.env.REALTIME_ONLINE_STALE_MS ?? 90 * 1000),
     realtimeRoleSyncMs: Number(process.env.REALTIME_ROLE_SYNC_MS ?? 1 * 1000),
     realtimeConfigRefreshMs: Number(process.env.REALTIME_CONFIG_REFRESH_MS ?? 10 * 1000),

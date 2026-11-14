@@ -25,7 +25,8 @@
  * 2. **服务端按新口径发牌**：进图拿到的 `instanceId` 是 `m<map>_z<zone>_c<slot>_<seq>`
  *    （不是改造前的 `m<map>_z<zone>_<seq>`），且 `world_monsters.slot = '0'`；
  * 3. **存量库批量改库**：把一行的 id 改回老格式、重启服务 → 自动补线段，
- *    同时 `world_meta.epoch + 1` 让在跑的实时进程把手上的旧 id 整份作废（#851 路径）。
+ *    同时 `zone_world_meta.epoch + 1` 让在跑的实时进程把手上的旧 id 整份作废（#851 路径；
+ *    代际从 #961 起按区记，这条迁移改全表所以每个区都推一格）。
  *    不 bump 的话那些进程手里的旧 id 在库里已经不存在，出手就是 20008；
  * 4. **监控按线取快照**：`GET /admin/maps/:id/monitor?slot=0` 的 `slot` / `slots`
  *    是这一条线的帧（不同线的帧不许互相顶替 —— 「切到 1 线看到 0 线的怪」比空图更糟）；
@@ -336,7 +337,7 @@ function withDb(dbPath, fn) {
       "实例落库（落盘按 WORLD_PERSIST_MS 节流，不是播种当场就写）",
       async () => {
         const rows = withDb(dbPath, (db) =>
-          db.prepare("SELECT instance_id, slot FROM world_monsters WHERE map_id = ?").all(HOME_MAP),
+          db.prepare("SELECT instance_id, zone_id, slot FROM world_monsters WHERE map_id = ?").all(HOME_MAP),
         );
         return rows.length > 0 ? rows : null;
       },
@@ -362,7 +363,15 @@ function withDb(dbPath, fn) {
         victim.instance_id,
       );
     });
-    const epochBefore = withDb(dbPath, (db) => Number(db.prepare("SELECT epoch FROM world_meta WHERE id = 1").get().epoch));
+    // 代际是**按区**的（#961：`zone_world_meta`）：这条迁移改的是全表 instanceId，
+    // 所以每个区都得推一格。抽查被改那一行所在的区（读不到行按 0 算，与仓储同一口径）。
+    const epochOf = (zoneId) =>
+      withDb(dbPath, (db) => {
+        const row = db.prepare("SELECT epoch FROM zone_world_meta WHERE zone_id = ?").get(zoneId);
+        return row ? Number(row.epoch) : 0;
+      });
+    const victimZone = victim.zone_id;
+    const epochBefore = epochOf(victimZone);
     await server.stop();
 
     server = await startServer(dbPath);
@@ -382,8 +391,12 @@ function withDb(dbPath, fn) {
       migrated.filter((row) => row.instance_id === "m0_z1_c0_99").every((row) => row.slot === "0"),
       "改写时顺手把 slot 补成 '0'（空串不是合法槽位）",
     );
-    const epochAfter = withDb(dbPath, (db) => Number(db.prepare("SELECT epoch FROM world_meta WHERE id = 1").get().epoch));
-    check(epochAfter > epochBefore, "世界代际 +1（在跑的进程据此整份作废并重载）", `${epochBefore} → ${epochAfter}`);
+    const epochAfter = epochOf(victimZone);
+    check(
+      epochAfter > epochBefore,
+      "所在区的世界代际 +1（在跑的进程据此整份作废并重载）",
+      `zone ${victimZone}: ${epochBefore} → ${epochAfter}`,
+    );
 
     // 重启用的是**新端口**，旧连接已断：重连一次再问快照（客户端重连也是这个动作）
     const session2 = await connectPlayer(server.baseUrl, player);

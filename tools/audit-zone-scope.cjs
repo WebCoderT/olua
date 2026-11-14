@@ -511,7 +511,10 @@ if (problems.length === 0) {
 
 console.error(`✗ 区边界：${problems.length} 处问题（区只能由服务端推导，详情见 docs/39 §2.4）\n`);
 for (const item of problems) {
-  console.error(`  [${item.rule}] ${item.file}${item.line ? `:${item.line}` : ""}`);
+  // 把 key（方法名 / 白名单条目）也打出来：只说「某文件有问题」等于让人自己 grep，
+  // 「同一处豁免盖住了 N 处」这类问题不点名是哪条豁免根本没法修
+  const where = `${item.file}${item.line ? `:${item.line}` : ""}`;
+  console.error(`  [${item.rule}] ${where}${item.key && item.key !== "?" ? ` · ${item.key}` : ""}`);
   console.error(`    ${item.hint}`);
 }
 process.exit(1);

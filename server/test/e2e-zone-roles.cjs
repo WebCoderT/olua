@@ -255,7 +255,8 @@ function createRole(baseUrl, token, name) {
     check(!!(bZone2.data && bZone2.data.id), "账号 B 在二区建同名「撞名」（跨区允许）");
 
     const merged = await api(baseUrl, "POST", "admin/zones/merge", { token: adminToken, zoneId: ADMIN_ZONE, body: { fromZoneId: zone2Id, toZoneId: currentZoneId } });
-    checkEqual(merged.data && merged.data.mergedInto, currentZoneId, "二区并入一区成功");
+    // #961 起合并回的是报告对象（不再是单个区 id）：`toZoneId` 是去向，另带搬走的人数与改名清单
+    checkEqual(merged.data && merged.data.toZoneId, currentZoneId, "二区并入一区成功");
 
     const mineAfter = await api(baseUrl, "GET", "zones/mine", { token: tokenB });
     const mineAfterList = Array.isArray(mineAfter.data) ? mineAfter.data : [];

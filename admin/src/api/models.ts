@@ -123,6 +123,10 @@ export type Login = {
    * 密码
    */
   password: string;
+  /**
+   * 登录到哪个区（可省略 = 当前浏览区；活区清单见 GET /zones）
+   */
+  zoneId?: number;
 };
 
 export type RoleSummary = {
@@ -1289,9 +1293,9 @@ export type ZoneOption = {
    */
   name: string;
   /**
-   * 运营状态：`open`（正常） / `closed`（停止注册，仍可进去查历史）
+   * 运营状态：`open`（正常） / `maintenance`（维护中） / `closed`（停止注册，仍可进去查历史）
    */
-  status: "open" | "closed";
+  status: "open" | "maintenance" | "closed";
   /**
    * 下拉排序（升序，同值按 id）
    */
@@ -1936,19 +1940,51 @@ export type AdminZone = {
    */
   mergedInto: number | null;
   /**
-   * 运营状态：open / closed
+   * 运营状态：open / maintenance / closed
    */
-  status: "open" | "closed";
+  status: "open" | "maintenance" | "closed";
   /**
    * 下拉排序（升序，同值按 id）
    */
   sort: number;
   /**
-   * 当前归属本区的账号数
+   * 开服时间（毫秒）
+   */
+  openedAt: number;
+  /**
+   * 是否推荐区（选服弹窗里标「推荐」）
+   */
+  recommended: boolean;
+  /**
+   * 运营备注（仅后台可见）
+   */
+  note: string | null;
+  /**
+   * 本区账号数（在本区有角色的去重账号）
    */
   accountCount: number;
   /**
-   * 开区时间（毫秒）
+   * 本区角色数
+   */
+  roleCount: number;
+  /**
+   * 本区在线账号数
+   */
+  onlineCount: number;
+  /**
+   * 本区世界实例数（所有图的怪物行）
+   */
+  monsterCount: number;
+  /**
+   * 本区帮会数
+   */
+  guildCount: number;
+  /**
+   * 本区待执行的单图重载请求数
+   */
+  pendingReloads: number;
+  /**
+   * 建行时间（毫秒；一区是 0）
    */
   createdAt: number;
   /**
@@ -1962,6 +1998,193 @@ export type CreateZone = {
    * 区服名（1~20 字，唯一）
    */
   name: string;
+  /**
+   * 开服时间（毫秒；不传 = 现在）
+   */
+  openedAt?: number;
+  /**
+   * 下拉排序（升序；越小越前）
+   */
+  sort?: number;
+  /**
+   * 是否推荐区
+   */
+  recommended?: boolean;
+  /**
+   * 运营备注（仅后台可见，≤200 字）
+   */
+  note?: string;
+};
+
+export type UpdateZone = {
+  /**
+   * 下拉排序（升序；越小越前）
+   */
+  sort?: number;
+  /**
+   * 是否推荐区
+   */
+  recommended?: boolean;
+  /**
+   * 运营备注（仅后台可见，≤200 字；空串 = 清空）
+   */
+  note?: string;
+  /**
+   * 开服时间（毫秒）
+   */
+  openedAt?: number;
+};
+
+export type SetZoneStatus = {
+  /**
+   * 目标状态
+   */
+  status: "open" | "maintenance" | "closed";
+  /**
+   * 变更原因（写进操作日志，≤200 字）
+   */
+  reason?: string;
+};
+
+export type MergePrecheck = {
+  /**
+   * 源区 id
+   */
+  fromZoneId: number;
+  /**
+   * 目标区 id
+   */
+  toZoneId: number;
+  /**
+   * 源区名
+   */
+  fromName: string;
+  /**
+   * 目标区名
+   */
+  toName: string;
+  /**
+   * 源区状态
+   */
+  fromStatus: string;
+  /**
+   * 目标区状态
+   */
+  toStatus: string;
+  /**
+   * 源区当前在线账号数（合并会断开他们）
+   */
+  onlineCount: number;
+  /**
+   * 源区待执行重载请求数（合并会作废）
+   */
+  pendingReloads: number;
+  /**
+   * 源区账号数（会搬走）
+   */
+  accountCount: number;
+  /**
+   * 源区角色数（会搬走）
+   */
+  roleCount: number;
+  /**
+   * 源区帮会数（会搬走）
+   */
+  guildCount: number;
+  /**
+   * 源区世界实例数（会重排发牌）
+   */
+  monsterCount: number;
+  /**
+   * 撞名的帮会清单（**恒为空**：帮会名全服唯一，#958）
+   */
+  guildConflicts: string[];
+  /**
+   * 不能合并的原因（空数组 = 可以合）
+   */
+  blockers: string[];
+  /**
+   * 预检是否通过
+   */
+  ok: boolean;
+};
+
+export type RenamedRole = {
+  /**
+   * 角色 id
+   */
+  id: string;
+  /**
+   * 改名前的名字
+   */
+  name: string;
+  /**
+   * 改名后的名字
+   */
+  renamed: string;
+};
+
+export type MergeReport = {
+  /**
+   * 源区 id
+   */
+  fromZoneId: number;
+  /**
+   * 目标区 id
+   */
+  toZoneId: number;
+  /**
+   * 源区名
+   */
+  fromName: string;
+  /**
+   * 目标区名
+   */
+  toName: string;
+  /**
+   * 搬走的账号数
+   */
+  accountCount: number;
+  /**
+   * 搬走的角色数
+   */
+  roleCount: number;
+  /**
+   * 重排发牌的世界实例数
+   */
+  monsterCount: number;
+  /**
+   * 搬走的帮会数
+   */
+  guildCount: number;
+  /**
+   * 被系统改名的角色（同账号在两个区同名）
+   */
+  renamedRoles: RenamedRole[];
+  /**
+   * 作废的待执行重载请求数
+   */
+  failedReloads: number;
+  /**
+   * 清掉的监控快照行数
+   */
+  removedMonitorStates: number;
+  /**
+   * 清掉的监控事件行数
+   */
+  removedMonitorEvents: number;
+  /**
+   * 清掉的角色位置行数
+   */
+  removedPositions: number;
+  /**
+   * 合并时在源区在线的账号数（会被断开）
+   */
+  onlineDisconnected: number;
+  /**
+   * 合并完成时刻（毫秒）
+   */
+  mergedAt: number;
 };
 
 export type MergeZone = {
@@ -7617,6 +7840,10 @@ export type Zone = {
    * 区服名
    */
   name: string;
+  /**
+   * 运营状态：open / maintenance / closed
+   */
+  status: "open" | "maintenance" | "closed";
 };
 
 export type MyZone = {
@@ -7628,6 +7855,10 @@ export type MyZone = {
    * 区服名
    */
   name: string;
+  /**
+   * 运营状态：open / maintenance / closed
+   */
+  status: "open" | "maintenance" | "closed";
   /**
    * 我在这个区有几个角色
    */
@@ -10684,6 +10915,11 @@ export type AdminMapMonitorQuery = {
    * 本次最多取多少条事件（默认 60，上限 200）
    */
   limit?: number;
+};
+
+export type AdminZoneMergePrecheckQuery = {
+  fromZoneId: number;
+  toZoneId: number;
 };
 
 export type GameMailClaimAllQuery = {

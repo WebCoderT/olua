@@ -7,8 +7,10 @@ import type { Duplex } from "node:stream";
 import { WebSocket, WebSocketServer, type RawData } from "ws";
 import { BizCode } from "../../common/constants/biz-code";
 import { EVENT_TYPE } from "../../common/constants/event-type";
+import { ZONE_STATUS } from "../../common/constants/zone-status";
 import type { ApiEnvelope, AuthenticatedUser } from "../../common/interfaces/api-envelope.interface";
 import { AccountRepository } from "../../database/repositories/account.repository";
+import { ZoneRepository } from "../../database/repositories/zone.repository";
 import type { RoleRow } from "../../database/rows";
 import { WorldService } from "../world/world.service";
 import { worldMonsterSnapshotOf } from "../world/world-monster";
@@ -57,6 +59,8 @@ import {
   type RealtimeWorldMessage,
   type RealtimeWorldMonster,
   type RealtimeWorldReloadMessage,
+  type RealtimeZoneMaintenanceMessage,
+  type RealtimeZoneMergedMessage,
 } from "./realtime.protocol";
 
 /** 一条已经过鉴权的连接（两个字段由本服务自己维护） */
@@ -76,8 +80,19 @@ interface TrackedSocket extends WebSocket {
    * `undefined` = 还没推过（建连后的首次推送会补上）。
    */
   roleSyncSignature?: string;
-  /** 上一次寻路请求的时刻（#811 防刷节流；挂在连接上，断开即随对象一起回收） */
+  /**
+   * 上一次寻路请求的时刻（#811 防刷节流；挂在连接上，断开即随对象一起回收）
+   */
   lastPathFindAt?: number;
+  /**
+   * 他被放行进的**哪个区的世界**（#961 维护倒计时 / 合并踢线用）
+   *
+   * 不用在场表（`presence`）判：那张表是**报过位置**才有条目的，刚登录进图站着不动的人
+   * 不在里面 —— 维护时他既收不到倒计时、也不会被断，等于一个漏网的在线玩家。这条字段在
+   * `worldJoin` 放行时写一次，随连接一起回收，比每次巡检回查库便宜，也比在场表准。
+   * `undefined` = 还没进过图（留在选角页 / 只在登录页），不在维护踢线的范围内。
+   */
+  worldZoneId?: number;
 }
 
 /** 一张还没被用掉的票据 */
@@ -185,6 +200,15 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
   private ticketSweepTimer: NodeJS.Timeout | null = null;
   /** 踢下线巡检定时器（见 sweepKicked；0 = 关闭巡检） */
   private kickPollTimer: NodeJS.Timeout | null = null;
+  /** 区状态巡检定时器（#961：维护倒计时 / 合并踢线；0 = 关闭巡检） */
+  private zoneStatusTimer: NodeJS.Timeout | null = null;
+  /**
+   * 已经广播过维护倒计时的区（区 id → 广播时刻）
+   *
+   * 只放内存：进程重启后重新广播一次倒计时没有坏处（维护本来就是持续状态），
+   * 而落库要多一张表 + 清理逻辑，不值。
+   */
+  private readonly maintenanceAnnounced = new Map<number, number>();
   /** 角色快照轮询定时器（见 syncRoles；0 = 关闭推送） */
   private roleSyncTimer: NodeJS.Timeout | null = null;
   /** 运营配置定期重装定时器（见 configRefreshMs；0 = 关闭重装） */
@@ -219,6 +243,7 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
     private readonly world: WorldService,
     private readonly maps: MapService,
     private readonly accounts: AccountRepository,
+    private readonly zones: ZoneRepository,
     private readonly roles: RolesService,
     private readonly runtimeConfig: RuntimeConfigService,
     private readonly eventLogs: EventLogService,
@@ -276,6 +301,12 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
       // 这里轮询库把「已被踢 / 已登出」的连接断掉；内嵌形态下它同样生效
       // （把「踢下线只清标记、连接要等下一次操作才被拒」的欠账一并补上）
       this.kickPollTimer = setInterval(() => this.sweepKicked(), kickPollMs).unref();
+    }
+    const zonePollMs = this.zoneStatusPollMs();
+    if (zonePollMs > 0) {
+      // 区状态巡检（#961）：维护倒计时 + 合并踢线。管理端在存档进程改 `zones.status`，
+      // 连接在实时进程 —— SQLite 不做通知，轮询是唯一办法（与踢下线同一套理由）
+      this.zoneStatusTimer = setInterval(() => this.sweepZoneStatus(), zonePollMs).unref();
     }
     const roleSyncMs = this.roleSyncPollMs();
     if (roleSyncMs > 0) {
@@ -390,6 +421,16 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
     return Math.max(0, Number(this.config.get<number>("realtimeKickPollMs") ?? 3000));
   }
 
+  /** 区状态巡检间隔（毫秒；0 = 关闭 —— 关掉之后维护 / 合并都不会主动踢线） */
+  private zoneStatusPollMs(): number {
+    return Math.max(0, Number(this.config.get<number>("zoneStatusPollMs") ?? 5000));
+  }
+
+  /** 维护倒计时时长（毫秒；0 = 立刻断） */
+  private zoneMaintenanceKickMs(): number {
+    return Math.max(0, Number(this.config.get<number>("zoneMaintenanceKickMs") ?? 60_000));
+  }
+
   /** 角色快照轮询间隔（毫秒；0 = 关闭 roleUpdate 推送） */
   private roleSyncPollMs(): number {
     return Math.max(0, Number(this.config.get<number>("realtimeRoleSyncMs") ?? 1000));
@@ -489,10 +530,11 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
    */
   async onModuleDestroy(): Promise<void> {
     this.closing = true;
-    for (const timer of [this.heartbeatTimer, this.ticketSweepTimer, this.kickPollTimer, this.roleSyncTimer, this.configRefreshTimer, this.statsTimer]) if (timer) clearInterval(timer);
+    for (const timer of [this.heartbeatTimer, this.ticketSweepTimer, this.kickPollTimer, this.zoneStatusTimer, this.roleSyncTimer, this.configRefreshTimer, this.statsTimer]) if (timer) clearInterval(timer);
     this.heartbeatTimer = null;
     this.ticketSweepTimer = null;
     this.kickPollTimer = null;
+    this.zoneStatusTimer = null;
     this.configRefreshTimer = null;
     this.roleSyncTimer = null;
     this.statsTimer = null;
@@ -875,9 +917,23 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
       }
       // #957：区按在线角色算（accounts 那一列只是「当前浏览区」）
       const zoneId = this.roles.zoneOf(socket.identity.id);
+      // 区状态闸门（#961）：维护中 / 已关闭 / 已合并的区不许进图。
+      // 这一条是**权威**（改包绕过 mapEnter 直发 worldJoin 走的就是这里）；
+      // `mapEnterResultOf` 里还有同一判据的「提前问一遍」版本，给客户端即时反馈。
+      const zoneState = this.zones.stateOf(zoneId);
+      if (!zoneState || zoneState.merged_into !== null || zoneState.status !== ZONE_STATUS.OPEN) {
+        const zoneReject: RealtimeMapEnterResultMessage = {
+          type: "mapEnterResult",
+          data: { mapId: join.mapId, ok: false, field: "zone", need: 0, mapLabel: zoneState?.name ?? `区 ${zoneId}` },
+        };
+        this.send(socket, zoneReject);
+        return;
+      }
       // 房号（#809）：本刀只产出公共线（`slot="0"`）；分线 / 副本的选线留给第④刀，
       // 键先一次到位 —— 那时这里只多一个「选哪个 slot」的决策，下面整条链路不用动
       const roomId = roomKey(zoneId, join.mapId);
+      // 记住「他在哪个区玩」（#961 维护 / 合并踢线的名单来源；见 TrackedSocket.worldZoneId）
+      socket.worldZoneId = zoneId;
       // 快照里的坐标按 AI 实时位置覆盖（#670）：出生点不是「他现在在哪」，见 withLiveMonsterPositions
       const snapshot = this.withLiveMonsterPositions(this.world.join(roomId, socket.identity.id));
       // 位置以「被接受的 join」为准写回存档（#606）：客户端报 OnMap 是客户端的事，
@@ -966,6 +1022,15 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
 
   /** 组一帧 `mapEnterResult`（放行与被拒同形，客户端只看 `ok`） */
   private mapEnterResultOf(accountId: string, mapId: string): RealtimeMapEnterResultMessage {
+    // 区状态先判（#961）：维护中连「能不能去」都不该回 ok —— 否则客户端会先切场景、
+    // 再在 worldJoin 那一步被拒，玩家看到的是黑屏 + 退回，而不是一句「本服维护中」
+    const zoneState = this.zones.stateOf(this.roles.zoneOf(accountId));
+    if (!zoneState || zoneState.merged_into !== null || zoneState.status !== ZONE_STATUS.OPEN) {
+      return {
+        type: "mapEnterResult",
+        data: { mapId, ok: false, field: "zone", need: 0, mapLabel: zoneState?.name ?? "本区" },
+      };
+    }
     const reject = this.mapEnterRejectOf(accountId, mapId);
     if (!reject) return { type: "mapEnterResult", data: { mapId, ok: true } };
     return { type: "mapEnterResult", data: { mapId, ok: false, ...reject } };
@@ -1350,16 +1415,123 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
       // 账号都没了（被删）同样视作「该走了」；还在但在线角色已被清 → 被踢 / 已登出
       if (account && account.online_role_id !== null) continue;
       this.logger.log(`账号 ${accountId} 的在线角色已被清除，断开其实时连接`);
-      socket.close(REALTIME_CLOSE.REPLACED, "登录状态已变更（被踢下线或已登出），请重新选角");
-      this.connections.delete(accountId);
-      // 与 close 事件的清理同口径：退观看者、清幂等账、清位置上报（世界状态是共享的，不清）
-      this.combat.dropAccount(accountId);
-      this.presence.dropAccount(accountId);
-      this.aoi.dropViewer(accountId);
-      this.world.leave(accountId);
-      this.chat.dropAccount(accountId);
-      this.roles.clearStatusesOf(accountId);
+      this.closeAccount(accountId, socket, REALTIME_CLOSE.REPLACED, "登录状态已变更（被踢下线或已登出），请重新选角");
     }
+  }
+
+  /**
+   * 区状态巡检（#961：维护倒计时 / 合并踢线）
+   *
+   * 两件事，都是「管理端在存档进程写库、连接在实时进程」这一形态逼出来的：
+   *
+   * 1. **维护**：某个区转 `maintenance` 后，先给区里的人广播一次 `zoneMaintenance`
+   *    （带倒计时），到点再断。倒计时只广播一次 —— 每拍重发等于把客户端计时器
+   *    每秒归零一次。
+   * 2. **合并**：某个区 `merged_into` 非空 → 发 `zoneMerged` 并**立即**断。合并之后
+   *    这个区号已经不存在了，让他继续待在旧世界里看到的全是半小时前的状态。
+   *
+   * 只看**连接上记的那个区**（`socket.worldZoneId`，`worldJoin` 放行时写的）：还没进过图的
+   * 连接不踢 —— 他本来就还没进游戏，回登录页重新选服即可。不用在场表（`presence`）：
+   * 那张表要报过位置才有条目，刚进图站着不动的人会被漏掉（既收不到倒计时也不会被断）。
+   */
+  private sweepZoneStatus(): void {
+    if (this.closing) return;
+    const now = Date.now();
+    const states = this.zones.listStates();
+    const byId = new Map(states.map((state) => [state.id, state]));
+
+    for (const state of states) {
+      // —— 已合并：发帧 + 立即断 ——
+      if (state.merged_into !== null) {
+        const accounts = this.accountsInWorldOf(state.id);
+        if (accounts.length === 0) continue;
+        const target = byId.get(state.merged_into);
+        for (const accountId of accounts) {
+          const socket = this.connections.get(accountId);
+          if (!socket) continue;
+          const frame: RealtimeZoneMergedMessage = {
+            type: "zoneMerged",
+            data: {
+              zoneId: state.id,
+              zoneName: state.name,
+              mergedInto: state.merged_into,
+              mergedIntoName: target?.name ?? `区 ${state.merged_into}`,
+            },
+          };
+          this.send(socket, frame);
+          this.logger.log(`账号 ${accountId} 所在区「${state.name}」已合并，断开其实时连接`);
+          this.closeAccount(accountId, socket, REALTIME_CLOSE.ZONE_MERGED, `本区已并入「${frame.data.mergedIntoName}」，请重新选择区服`);
+        }
+        this.maintenanceAnnounced.delete(state.id);
+        continue;
+      }
+
+      // —— 维护：先倒计时，到点断 ——
+      if (state.status !== ZONE_STATUS.MAINTENANCE) {
+        // 恢复了就忘了这次维护，下次再转维护要重新广播
+        this.maintenanceAnnounced.delete(state.id);
+        continue;
+      }
+      const accounts = this.accountsInWorldOf(state.id);
+      if (accounts.length === 0) continue;
+      const kickMs = this.zoneMaintenanceKickMs();
+      const announcedAt = this.maintenanceAnnounced.get(state.id);
+      if (announcedAt === undefined) {
+        this.maintenanceAnnounced.set(state.id, now);
+        for (const accountId of accounts) {
+          const socket = this.connections.get(accountId);
+          if (!socket) continue;
+          const frame: RealtimeZoneMaintenanceMessage = {
+            type: "zoneMaintenance",
+            data: { zoneId: state.id, zoneName: state.name, inMs: kickMs },
+          };
+          this.send(socket, frame);
+        }
+        this.logger.warn(`区服「${state.name}」进入维护：已向 ${accounts.length} 名在线玩家广播 ${Math.round(kickMs / 1000)} 秒倒计时`);
+        continue;
+      }
+      if (now - announcedAt < kickMs) continue;
+      for (const accountId of accounts) {
+        const socket = this.connections.get(accountId);
+        if (!socket) continue;
+        this.closeAccount(accountId, socket, REALTIME_CLOSE.MAINTENANCE, `本区（${state.name}）正在维护，请稍后再进`);
+      }
+      this.maintenanceAnnounced.delete(state.id);
+      this.logger.log(`区服「${state.name}」维护倒计时结束，已断开该区全部在线连接`);
+    }
+  }
+
+  /**
+   * 这个区里此刻有哪些账号的实时连接（#961 维护 / 合并踢线用）
+   *
+   * 判据是**连接上记的那个区**，不是在场表：见 `TrackedSocket.worldZoneId` 的注释。
+   * 线性扫一遍连接表（在线量级是几百，巡检每秒一次，够用）。
+   */
+  private accountsInWorldOf(zoneId: number): string[] {
+    const ids: string[] = [];
+    for (const [accountId, socket] of this.connections) {
+      if (socket.worldZoneId === zoneId) ids.push(accountId);
+    }
+    return ids;
+  }
+
+  /**
+   * 断开一条连接并清干净它在各服务里的痕迹
+   *
+   * 抽出来是因为三条路径要一模一样地收尾（踢下线巡检 / 维护到期 / 区被合并）：
+   * 少清一处就是「人走了但还挂在这间房里」—— 那间房的 AI 照跑、监控照采样、
+   * 世界频道还往一个不在的人身上投递（#821 踩过）。
+   */
+  private closeAccount(accountId: string, socket: TrackedSocket, code: number, reason: string): void {
+    socket.close(code, reason);
+    this.connections.delete(accountId);
+    // 与 close 事件的清理同口径：退观看者、清幂等账、清位置上报（世界状态是共享的，不清）
+    this.combat.dropAccount(accountId);
+    this.presence.dropAccount(accountId);
+    this.aoi.dropViewer(accountId);
+    this.world.leave(accountId);
+    this.chat.dropAccount(accountId);
+    this.roles.clearStatusesOf(accountId);
   }
 
   /** 建连时查一次在线角色，给巡检当基线（查不到 = 账号不存在，交给心跳自然收尾） */

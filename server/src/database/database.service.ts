@@ -549,10 +549,16 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
       CREATE TABLE IF NOT EXISTS zones (
         id          INTEGER PRIMARY KEY AUTOINCREMENT,
         name        TEXT    NOT NULL UNIQUE,
-        -- 运营状态（#960）：open / closed。已合并看 merged_into，两者不是一回事
+        -- 运营状态（#960 / #961）：open / maintenance / closed。已合并看 merged_into，两者不是一回事
         status      TEXT    NOT NULL DEFAULT 'open',
         -- 下拉排序（#960）：升序，同值按 id
         sort        INTEGER NOT NULL DEFAULT 0,
+        -- 开服时间（#961）：与 created_at 分开（一区的 created_at 是 0）
+        opened_at   INTEGER NOT NULL DEFAULT 0,
+        -- 推荐区（#961）：选服弹窗里标「推荐」
+        recommended INTEGER NOT NULL DEFAULT 0,
+        -- 运营备注（#961）：内部可见，客户端拿不到
+        note        TEXT,
         merged_into INTEGER,
         created_at  INTEGER NOT NULL,
         updated_at  INTEGER NOT NULL
@@ -560,10 +566,9 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
       -- 一区恒在（id=1，账号默认区）：seed 在 migrate 里做，CREATE 单独兜底
       INSERT OR IGNORE INTO zones (id, name, merged_into, created_at, updated_at) VALUES (1, '一区', NULL, 0, 0);
 
-      -- 世界代际（#295 阶段二）：单行表（id 恒为 1），epoch 每次合并区 +1。
-      -- 世界服务的内存态跨「合并区」会变陈旧（instanceId 被改写、账号换了区），
-      -- 而 API 进程与实时进程各持一份内存 —— 跨进程通知靠轮询这张表：
-      -- tick 发现 epoch 变了就把整份内存世界作废（不落盘），下次 join 从库重载。
+      -- 历史单行表（#295 阶段二建的）：epoch 已被 #961 的按区代际 zone_world_meta 取代，
+      -- 世界服务不再读这一列。留着表是为了 coord_origin（坐标系平移的一次性标记）和
+      -- 老库的兼容 —— 存量库的区代际由下面那条 INSERT ... SELECT 从这里的值起步。
       CREATE TABLE IF NOT EXISTS world_meta (
         id    INTEGER PRIMARY KEY CHECK (id = 1),
         epoch INTEGER NOT NULL DEFAULT 0,
@@ -1462,6 +1467,23 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
     // 存量区一律 open（历史上没有「关区」这个概念）
     this.ensureColumn("zones", "status", "TEXT NOT NULL DEFAULT 'open'");
     this.ensureColumn("zones", "sort", "INTEGER NOT NULL DEFAULT 0");
+    // 开服时间 / 推荐 / 备注（#961）：`opened_at` 与 `created_at` 分开 —— 一区的 created_at
+    // 是 0（seed 行），拿它算「开了多少天」会得到 1970 年；补列后存量区回落 created_at
+    this.ensureColumn("zones", "opened_at", "INTEGER NOT NULL DEFAULT 0");
+    this.ensureColumn("zones", "recommended", "INTEGER NOT NULL DEFAULT 0");
+    this.ensureColumn("zones", "note", "TEXT");
+    this.run("UPDATE zones SET opened_at = created_at WHERE opened_at = 0 AND created_at > 0");
+    // 区级世界代际（#961）：存量库第一次跑时按当前全局 epoch 补齐每一行 ——
+    // 补 0 会让所有区的内存世界在同一拍全部作废（玩家看到本图怪整体重刷一次），
+    // 而它们其实什么都没变
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS zone_world_meta (
+        zone_id INTEGER PRIMARY KEY,
+        epoch   INTEGER NOT NULL DEFAULT 0
+      );
+      INSERT OR IGNORE INTO zone_world_meta (zone_id, epoch)
+        SELECT z.id, (SELECT epoch FROM world_meta WHERE id = 1) FROM zones z;
+    `);
     // 封禁闭环：原因 / 到期时间（null = 永久）/ 执行人 / 执行时间
     this.ensureColumn("accounts", "ban_reason", "TEXT");
     this.ensureColumn("accounts", "ban_until", "INTEGER");
@@ -2113,7 +2135,7 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
    *
    * 为什么要改写存量行而不是「新老并存」：观战中的客户端手里握着 instanceId，两种格式
    * 并存时 `parseInstanceSeq()` 虽然都认，但**同一只怪在两批日志里长得不一样**会让人
-   * 以为出了两只怪。改写是幂等的，代价是一次 epoch +1（世界内存按库重载一次）。
+   * 以为出了两只怪。改写是幂等的，代价是一次「全区代际 +1」（世界内存按库重载一次）。
    */
   private migrateWorldMonsterInstanceIds(): void {
     const rows = this.all<{ instance_id: string; zone_id: number; slot: string | null }>(
@@ -2145,11 +2167,16 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
       migrated += 1;
     }
     if (migrated > 0) {
-      // 改写之后，**已经跑着的实时进程**手里还是旧 id：epoch +1 让它在下一个 tick 把手上的
+      // 改写之后，**已经跑着的实时进程**手里还是旧 id：代际 +1 让它在下一个 tick 把手上的
       // 世界整份作废并按库重载（#851 的收口路径）。不 bump 的话，那些进程要到「分域空闲卸载」
       // 或重启才换过来 —— 而它们手里旧 id 的怪在库里已经不存在，出手就是 20008。
-      this.run("UPDATE world_meta SET epoch = epoch + 1");
-      this.logger.log(`world_monsters 存量 instanceId 已补线段（改写 ${migrated} 行，世界代际 +1 以作废在跑的旧内存）`);
+      //
+      // #961 起代际是**按区**的（`zone_world_meta`）：合并只作废参与的区，而这条迁移改的是
+      // 全表 instanceId，所以每个区都得推一格 —— 先给已有行 +1，再给还没有行的区补 1
+      // （缺行读作 0，补 1 即视为变化，与 bumpEpochs 同一口径）。
+      this.run("UPDATE zone_world_meta SET epoch = epoch + 1");
+      this.run("INSERT OR IGNORE INTO zone_world_meta (zone_id, epoch) SELECT id, 1 FROM zones");
+      this.logger.log(`world_monsters 存量 instanceId 已补线段（改写 ${migrated} 行，全区代际 +1 以作废在跑的旧内存）`);
     }
   }
 

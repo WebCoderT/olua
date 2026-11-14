@@ -210,10 +210,16 @@ const REPO_EDGES = {
     // 单图重载（#809）：一次重载要发给**每个存活区**（刷怪区是全服共用配置，
     // 每个区各有一份这张图的世界），所以地图域要读 zones.listLive() —— 只读，不写区服
     "modules/map",
+    // 区状态巡检（#961）：实时进程轮询 `zones.status / merged_into`，转维护就广播倒计时、
+    // 被合并就发 zoneMerged 并断线。只读状态列（写仍在管理端）；不能经 ZoneService ——
+    // 那个服务为了合区还装配了帮会 / 监控 / 位置 / 重载四个仓储，实时进程不需要这些
+    "modules/realtime",
   ],
   // 实时地图监控（#665）：**两个域各占一半** —— 实时进程的采集器写（快照 + 击杀/刷新事件），
   // 地图域只读（管理端 `/admin/maps/:id/monitor`）。它不是配置，是运行时的投影。
-  "database/repositories/map-monitor.repository.ts": ["modules/realtime", "modules/map"],
+  // 合并区（#961）：zone 域在合并事务里删源区的投影行（removeZone）—— 投影跟着区走，
+  // 留着就是「一个不存在的区还在监控列表里」
+  "database/repositories/map-monitor.repository.ts": ["modules/realtime", "modules/map", "modules/zone"],
   // 刷怪区（#295）：播种来源表，与世界实例同属 world 模块
   "database/repositories/map-spawn-area.repository.ts": [
     "modules/world",
@@ -224,8 +230,10 @@ const REPO_EDGES = {
   // 世界域只读（`RoomManager.capacityOf` 每次现读单房间人数上限；改完即生效，不必重载）
   "database/repositories/map-rule.repository.ts": ["modules/map", "modules/world"],
   // 单图热重载请求（#809）：写在地图域（管理端点「重载」写一行 pending），
-  // 读 + 改成 done 在世界域（实时进程的 RoomReloadService 每秒轮询）—— 跨进程的一问一答
-  "database/repositories/world-reload-request.repository.ts": ["modules/map", "modules/world"],
+  // 读 + 改成 done 在世界域（实时进程的 RoomReloadService 每秒轮询）—— 跨进程的一问一答。
+  // 合并区（#961）：zone 域把源区 pending 置 failed（`failPendingOfZone`）—— 必须在合并
+  // 事务里做，否则实时进程下一拍就在**死区**上重载并重新播种，合并等于白做
+  "database/repositories/world-reload-request.repository.ts": ["modules/map", "modules/world", "modules/zone"],
   // NPC 点位（#672）：点位归后台，只有地图域读写（管理端画布 + 配置快照）
   "database/repositories/map-npc.repository.ts": ["modules/map", "modules/quest"],
   // 碰撞盒（#676）：与点位同理 —— 只有地图域读写（画布增删改 + 配置快照下发）；
@@ -311,8 +319,10 @@ const REPO_EDGES = {
   "database/repositories/status.repository.ts": ["modules/game-config", "modules/realtime"],
   // 怪物技能挂载（#372）：game-config 管挂载清单（整份替换），realtime 的 AI 读它决定放哪些技能
   "database/repositories/monster-skill.repository.ts": ["modules/game-config", "modules/realtime"],
-  // 帮会（#388）：社交域独占三张表的读写（管理端控制器也在 social 域内，不额外开边）
-  "database/repositories/guild.repository.ts": ["modules/social", "modules/realtime"],
+  // 帮会（#388）：社交域独占三张表的读写（管理端控制器也在 social 域内，不额外开边）。
+  // 合并区（#961）：zone 域在合并事务里把 `guilds.zone_id` 改挂目标区（moveZoneOfGuilds）——
+  // 帮会跟着帮主角色走，必须与搬角色同生共死
+  "database/repositories/guild.repository.ts": ["modules/social", "modules/realtime", "modules/zone"],
   // 屏蔽（#398）：社交域读写；实时进程的 BlockService 整表缓存它做过滤（聊天投递 / 互见帧）
   "database/repositories/social.repository.ts": ["modules/social", "modules/realtime"],
   // 举报（#398）：只在大陆侧社交模块内读写（管理端只读列表也在 social 域内）
@@ -324,7 +334,9 @@ const REPO_EDGES = {
   // 角色位置快照（#862/#863）：实时进程是**唯一写者**（在场表按 1 秒节流落一份），
   // 任务域只读它判「有没有站在 NPC 旁边」。开这条边的正当性就在这里 ——
   // 存档进程要是也能写它，客户端改个包就能让自己瞬移到 NPC 面前。
-  "database/repositories/role-position.repository.ts": ["modules/realtime", "modules/quest"],
+  // 合并区（#961）：zone 域**只在合并事务里删**源区角色的行（`removeByZoneRoles`），
+  // 而且必须在搬角色**之前**删 —— 这张表没有 zone_id，搬完就再也认不出源区残留了。
+  "database/repositories/role-position.repository.ts": ["modules/realtime", "modules/quest", "modules/zone"],
   // 成就（#401）：配置表读写归 game-config（管理端页 + seed），记录表归 achievement 域；
   // game-config 只做删除守卫的只读 count（有玩家记录拒删）
   "database/repositories/achievement.repository.ts": ["modules/game-config", "modules/achievement"],

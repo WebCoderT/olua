@@ -88,6 +88,10 @@ const WEIGHT = {
   "test:e2e:map-reload": 2,
   // 一次完整启动 + 一次「停机改库 → 重启迁移」+ 一轮监控采样
   "test:e2e:map-room-key": 3,
+  // 两轮维护倒计时各要真的等到点断开（各 2s）+ 一次「恢复后不踢」的观测窗
+  "test:e2e:zone-maintenance": 2,
+  // 一次完整启动 + 等世界落盘 + 一次合并 + 一轮代际巡检（等两拍确认死区不复播）
+  "test:e2e:zone-merge": 2,
 };
 
 function weightOf(script) {

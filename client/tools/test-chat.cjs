@@ -173,8 +173,16 @@ try {
   const serverChat = readRepo(SERVER_CHAT);
   const serverRealtime = readRepo(SERVER_REALTIME);
 
-  check(/presentAccountIds\(\)/.test(serverChat), "世界频道广播全服在场者（presence 的在场表就是名单，#876）");
-  check(/viewersOf\(roomKey\(identity\.zoneId, identity\.mapId\)\)/.test(serverChat), "同图频道复用互见的观看者集合（不为聊天另建按图索引；#809 起房号是 roomKey 三键）");
+  // #958 起 world 再收一层区：广播给**本区**在场者（`presentAccountIdsOf(zoneId)`），
+  // 同图则改用 presence 算好的 `identity.roomId`（房号三键）。断言钉的就是这两句。
+  check(
+    /presentAccountIdsOf\(identity\.zoneId\)/.test(serverChat),
+    "世界频道广播本区在场者（#876 的在场表 + #958 的同区收口）",
+  );
+  check(
+    /viewersOf\(identity\.roomId\)/.test(serverChat),
+    "同图频道复用互见的观看者集合（房号是 roomKey 三键，identity.roomId 已算好）",
+  );
   check(/guildOfRole\(identity\.roleId\)/.test(serverChat) && !/identity\.guildId/.test(serverChat.split("sayGuild")[1] || ""), "帮会准入每次查库（不用在场的懒刷新缓存）");
   check(/isConnected\(target\.account_id\)/.test(serverChat), "私聊收件人不在线整条拒绝（不制造发出去但没人收到的消息）");
   check(/对方不在线/.test(serverChat), "离线拒绝有明确文案（玩家得知道为什么没发出去）");

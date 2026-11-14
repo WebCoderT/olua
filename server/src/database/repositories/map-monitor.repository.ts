@@ -116,4 +116,19 @@ export class MapMonitorRepository {
   trimOlderThan(cutoff: number): number {
     return this.db.execute("DELETE FROM map_monitor_events WHERE at < ?", [cutoff]).changes;
   }
+
+  /**
+   * 清掉一个区的全部监控投影（#961 合并区）
+   *
+   * 监控页是按区拉的：源区合并之后，库里留着它那一行「快照」和几千条事件，
+   * 管理端列表里就还挂着一个已经不存在、也再也刷新不动的区。这两张都是
+   * **运行时投影**（不是配置，重启清空也无所谓），所以合并时直接删比标脏更省事。
+   *
+   * @returns 删掉的快照行数 + 事件行数
+   */
+  removeZone(zoneId: number): { states: number; events: number } {
+    const states = this.db.execute("DELETE FROM map_monitor_state WHERE zone_id = ?", [zoneId]).changes;
+    const events = this.db.execute("DELETE FROM map_monitor_events WHERE zone_id = ?", [zoneId]).changes;
+    return { states, events };
+  }
 }

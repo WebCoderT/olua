@@ -95,7 +95,7 @@ export const START_MAP_ID = "0";
  */
 export interface MapEnterReject {
   /** 缺哪一项（决定客户端取哪条文案） */
-  field: "level" | "combat" | "soul" | "unknown" | "start";
+  field: "level" | "combat" | "soul" | "unknown" | "start" | "zone";
   /** 这张图要求的值（`unknown` / `start` 恒 0） */
   need: number;
   /** 图名（客户端提示里要用；`unknown` 时是客户端报上来的那个 id） */

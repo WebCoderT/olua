@@ -280,7 +280,13 @@ function connect(url) {
     const zone3 = await api(baseUrl, "POST", "admin/zones", { token: adminToken, zoneId: ADMIN_ZONE, body: { name: "三区" } });
     const zone3Id = zone3.data && zone3.data.id;
     const merge3to2 = await api(baseUrl, "POST", "admin/zones/merge", { token: adminToken, zoneId: ADMIN_ZONE, body: { fromZoneId: zone3Id, toZoneId: zone2Id } });
-    checkEqual(merge3to2.data && merge3to2.data.mergedInto, zone2Id, "三区并入二区成功（返回 mergedInto 标记）");
+    // #961 起 merge 返回的是**合并报告**（搬了多少、改了什么名、作废了几条重载），
+    // 「这个区打上了合并标记」改由管理端列表验（下面那条）
+    check(
+      merge3to2.data && merge3to2.data.fromZoneId === zone3Id && merge3to2.data.toZoneId === zone2Id && merge3to2.data.mergedAt > 0,
+      "三区并入二区成功（返回合并报告：from / to / mergedAt）",
+      JSON.stringify(merge3to2.data),
+    );
 
     const zonesAfter3to2 = await api(baseUrl, "GET", "zones");
     check(Array.isArray(zonesAfter3to2.data) && zonesAfter3to2.data.length === 2, "合并后三区从活区列表消失", JSON.stringify(zonesAfter3to2.data && zonesAfter3to2.data.map((z) => z.name)));
@@ -356,7 +362,13 @@ function connect(url) {
     group("四、合并区生效：搬账号 / 世界改牌 / 状态保留 / 代际失效");
     await sleep(1200); // 等一区那笔伤害落盘（persist 500ms），合并后才能断言「状态如实保留」
     const merged = await api(baseUrl, "POST", "admin/zones/merge", { token: adminToken, zoneId: ADMIN_ZONE, body: { fromZoneId: zone2Id, toZoneId: 1 } });
-    checkEqual(merged.data && merged.data.mergedInto, 1, "二区并入一区成功");
+    checkEqual(merged.data && merged.data.toZoneId, 1, "二区并入一区成功（报告里的去向 = 一区）");
+    // #961：报告要能说清「搬了多少」—— 这几列是运营事后对账的唯一凭据
+    check(
+      merged.data && merged.data.accountCount >= 1 && merged.data.roleCount >= 1,
+      "合并报告带搬走的账号数 / 角色数",
+      JSON.stringify({ accounts: merged.data && merged.data.accountCount, roles: merged.data && merged.data.roleCount }),
+    );
 
     const mineCAfter = await api(baseUrl, "GET", "zones/mine", { token: tokenC });
     const mineCAfterFirst = (Array.isArray(mineCAfter.data) ? mineCAfter.data : [])[0];
@@ -400,7 +412,15 @@ function connect(url) {
     const zone2Row = Array.isArray(adminZonesEnd.data) && adminZonesEnd.data.find((z) => z.id === zone2Id);
     const zone1Row = Array.isArray(adminZonesEnd.data) && adminZonesEnd.data.find((z) => z.id === 1);
     check(!!zone2Row && zone2Row.mergedInto === 1 && zone2Row.accountCount === 0, "管理端视角：二区已标记合并、账号数清零", JSON.stringify(zone2Row));
-    check(!!zone1Row && zone1Row.accountCount === 4, "管理端视角：一区账号数 = 4（A/B/bad/C 的当前浏览区都在一区）", zone1Row && `count=${zone1Row.accountCount}`);
+    // #961：账号数口径改成「在本区有角色的去重账号」—— 与账号列表的 total 必须同源，
+    // 否则运营看到两个数会以为是两个东西
+    const accountsInZone1 = await api(baseUrl, "GET", "admin/accounts?size=100", { token: adminToken, zoneId: ADMIN_ZONE });
+    check(
+      !!zone1Row && zone1Row.accountCount === (accountsInZone1.data && accountsInZone1.data.total),
+      "管理端视角：一区账号数与账号列表 total 同源（都按「本区有角色」算）",
+      zone1Row && `count=${zone1Row.accountCount}，列表 total=${accountsInZone1.data && accountsInZone1.data.total}`,
+    );
+    check(!!zone1Row && zone1Row.onlineCount >= 0 && zone1Row.roleCount > 0, "管理端视角：聚合列有值（在线数 / 角色数）", JSON.stringify(zone1Row));
 
     //#endregion
   } finally {

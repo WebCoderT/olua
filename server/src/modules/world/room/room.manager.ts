@@ -261,6 +261,23 @@ export class RoomManager {
   }
 
   /**
+   * 只作废一个区的房间（#961 区级代际）
+   *
+   * 与 `evictAll` 同一套语义（观看者集合由调用方搬回重建出来的房），只是范围收窄到
+   * 一个区：合并区只该让参与合并的那些区重建，别的区照常跑 —— 否则「合一个区，
+   * 全服每张图的怪都重刷一次」，玩家看到的是莫名其妙的集体重生。
+   */
+  evictZone(zoneId: number): Room[] {
+    const evicted: Room[] = [];
+    for (const [roomId, room] of this.rooms) {
+      if (room.zoneId !== zoneId) continue;
+      this.rooms.delete(roomId);
+      evicted.push(room);
+    }
+    return evicted;
+  }
+
+  /**
    * 空闲回收（`idleMs <= 0` 表示不回收，与改造前 `worldMapIdleMs` 的语义一致）
    * @returns 被卸载的房间
    */

@@ -59,6 +59,11 @@ export class GuildRepository {
     );
   }
 
+  /** 本区帮会数（#961 区服列表的聚合列） */
+  countByZone(zoneId: number): number {
+    return this.db.count("SELECT COUNT(1) AS total FROM guilds WHERE zone_id = ?", [zoneId]);
+  }
+
   /** 本区的某个帮会（跨区 = 不存在，返回 undefined） */
   findById(zoneId: number, id: string): GuildRow | undefined {
     return this.db.get<GuildRow>("SELECT * FROM guilds WHERE id = ? AND zone_id = ?", [id, zoneId]);

@@ -1228,25 +1228,43 @@ export const routes = {
      */
     save: (id: string) => `/admin/ui-effects/${encodeURIComponent(id)}`,
   },
-  /** adminZone 模块（3 个接口） */
+  /** adminZone 模块（6 个接口） */
   adminZone: {
     /**
-     * 区服列表（GET /admin/zones）
+     * 区服列表（含聚合列）（GET /admin/zones）
      *
-     * 全部区服（含已合并的，附 `mergedInto` 去向与当前账号数），按开区顺序排列。
+     * 全部区服（含已合并的），附账号数 / 角色数 / 在线数 / 世界实例数 / 帮会数 / 待执行重载数。
      */
     list: "/admin/zones",
     /**
      * 开新区（POST /admin/zones）
      *
-     * 区名唯一（1~20 字）。新开的区立即可供注册选择，世界在第一个玩家进图时播种。
+     * 区名唯一（1~20 字）。可同时定开服时间 / 排序 / 推荐 / 备注。新开的区立即可供注册选择，世界在第一个玩家进图时播种。
      */
     create: "/admin/zones",
     /**
+     * 改区服运营字段（PATCH /admin/zones/{id}）
+     *
+     * 排序 / 推荐 / 备注 / 开服时间。**改名不提供**：改名会让已发出去的公告与客服话术全部对不上。
+     */
+    update: (id: string) => `/admin/zones/${encodeURIComponent(id)}`,
+    /**
+     * 改区服状态（维护 / 关闭 / 恢复）（POST /admin/zones/{id}/status）
+     *
+     * 状态机：`open` ⇄ `maintenance` → `closed`。
+     */
+    setStatus: (id: string) => `/admin/zones/${encodeURIComponent(id)}/status`,
+    /**
      * 合并区（from 并入 to）（POST /admin/zones/merge）
      *
-     * 把 from 区整体并入 to 区，一个事务内完成：from 区账号全部改挂 to 区、from 区的世界怪物实例改挂 to 区并重排发牌（instanceId 换成 to 区区段）、from 区打上已合并标记。
+     * 把 from 区整体并入 to 区，一个事务内完成：角色与帮会改挂 to 区（同账号同名角色自动改名，清单进报告）、账号改挂 to 区、世界怪物实例重排发牌（instanceId 换成 to 区区段）、源区待执行重载请求作废、源区监控投影与角色位置清理、源区标记已合并。
      */
     merge: "/admin/zones/merge",
+    /**
+     * 合区预检（GET /admin/zones/merge/precheck）
+     *
+     * 事务外能查的全查一遍：两区都必须 `open` 且不同，源区在线人数（会被断开）、待执行重载数（会作废）、帮会数（会搬走）。`ok = false` 时 `blockers` 里是全部原因 —— 前端据此禁用「确认合并」。
+     */
+    mergePrecheck: "/admin/zones/merge/precheck",
   },
 } as const;
