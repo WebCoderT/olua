@@ -24,8 +24,8 @@
   乐观锁「拉最新 + 丢弃本轮」不重推。
 - **区 = 服务端算出的上下文，不是请求参数**（#954 / docs/39 §2.4）：玩家侧接口**零 `zoneId`**（浏览期
   `accounts.active_zone_id`，进图后在线角色 `roles.zone_id`）；zone-scoped 仓储**没有无区重载**（删单参
-  `findById(id)` 逼 tsc 交区）；按 id 取别区对象一律 **404**；管理端 `X-Zone-Id` 必须 ∈ `admin_zones`，
-  「全部区」只读。守点待落地：`tools/audit-zone-scope.cjs` 四条。
+  `findById(id)` 逼 tsc 交区）；按 id 取别区对象一律 **404**；管理端**不绑区**（所有管理员可见全区），
+  但 `X-Zone-Id` 必填、无「全部区」视图，登录页与顶栏都能切。守点待落地：`tools/audit-zone-scope.cjs` 四条。
 - 方向恒 `apply-snapshot → game-config → types`；一份数据一个来源；客户端零兜底；进 `SERVER_INVENTORY_FIELDS`
   的字段不得写也不得补默认值；纯服务端参数别进 `RuntimeParamsDto`。
 - 已展开域见 `topics/架构不变量.md`（战斗 #822~#826 · AI #853~#858 · 背包 #835~#842 · 邮件 #866~#870 · 商城
