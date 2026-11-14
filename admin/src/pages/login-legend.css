@@ -1,0 +1,950 @@
+/*
+ * 管理端登录页 —— 与 design/legend-login/index.html 视觉一一对应
+ *
+ * 与设计稿的两点差别（都是必要的工程处理）：
+ * 1. 全部选择器收敛到 `.legend-login` 作用域 —— 设计稿是独立页面，这里是 SPA 中的一条路由，
+ *    裸 `*` / `body` 规则会污染整个管理端。
+ * 2. 色值不再硬编码，改为引用 index.css 的 @theme token（同一套「石·金·火」，
+ *    改 token 即全站同步，登录页不会成为第二个色值来源）。
+ */
+
+.legend-login {
+  /* 局部别名 → token（设计稿的规则体因此可以原样保留） */
+  --void: var(--color-surface-0);
+  --stone-1: var(--color-surface-2);
+  --stone-2: var(--color-surface-3);
+  --stone-3: var(--color-surface-4);
+  --gold: var(--color-gold);
+  --gold-hi: var(--color-gold-hi);
+  --gold-dim: var(--color-gold-dim);
+  --fire: var(--color-ember);
+  --fire-hi: var(--color-ember-hi);
+  --ink: var(--color-ink-1);
+  --ink-2: var(--color-ink-2);
+  --ink-3: var(--color-ink-3);
+
+  --line: rgba(201, 162, 77, 0.2);
+  --line-soft: rgba(201, 162, 77, 0.1);
+
+  --font-display: "Songti SC", "Source Han Serif SC", "Noto Serif SC", "STSong", serif;
+  --font-ui: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+  --gut: clamp(24px, 5vw, 88px);
+  --r: 2px; /* 传奇不用大圆角，只留一刀切的锐利 */
+  --ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+  --ease-out: cubic-bezier(0, 0, 0.2, 1);
+
+  position: relative;
+  min-height: 100vh;
+  background: var(--void);
+  color: var(--ink);
+  font: 400 15px/1.6 var(--font-ui);
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+.legend-login *,
+.legend-login *::before,
+.legend-login *::after {
+  box-sizing: border-box;
+}
+.legend-login img,
+.legend-login svg {
+  display: block;
+}
+.legend-login a {
+  color: inherit;
+  text-decoration: none;
+}
+.legend-login button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+.legend-login ::selection {
+  background: rgba(201, 162, 77, 0.28);
+  color: #fff;
+}
+.legend-login :focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 3px;
+}
+
+/* ══════════════════════════════════════════════════════════
+   背景层 —— 天幕 / 远山 / 城堡 / 雾 / 火星 / 火把光 / 暗角 / 石纹
+   全部纯 CSS+SVG，无外部资源
+   ══════════════════════════════════════════════════════════ */
+.legend-login .stage {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 0;
+}
+.legend-login .sky {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(120% 78% at 58% 8%, rgba(120, 38, 16, 0.42) 0%, rgba(84, 28, 12, 0.16) 34%, transparent 62%),
+    radial-gradient(90% 60% at 50% 100%, rgba(150, 72, 26, 0.24) 0%, transparent 60%),
+    linear-gradient(180deg, #0b0806 0%, #14100b 42%, #1a1410 66%, #0a0705 100%);
+}
+/* 天际那道被火映红的光带 */
+.legend-login .burn {
+  position: absolute;
+  left: -10%;
+  right: -10%;
+  top: 26%;
+  height: 38vh;
+  background: radial-gradient(50% 46% at 52% 100%, rgba(214, 96, 38, 0.3) 0%, rgba(180, 64, 24, 0.12) 42%, transparent 74%);
+  filter: blur(6px);
+  animation: legend-burn 14s var(--ease) infinite alternate;
+}
+@keyframes legend-burn {
+  from {
+    opacity: 0.55;
+    transform: translateY(6px) scaleY(0.94);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(-8px) scaleY(1.06);
+  }
+}
+.legend-login .ridge {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100%;
+  height: 58vh;
+  min-height: 380px;
+}
+/* 地面雾：把城堡的底部吃掉，避免「贴纸感」 */
+.legend-login .fog {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 24vh;
+  background: linear-gradient(180deg, transparent 0%, rgba(14, 11, 8, 0.34) 46%, rgba(9, 7, 5, 0.88) 100%);
+}
+/* 火把溢光：贴地一层暖光，从下往上照亮构图 */
+.legend-login .torch {
+  position: absolute;
+  left: 50%;
+  bottom: -6vh;
+  width: 120vw;
+  height: 58vh;
+  transform: translateX(-50%);
+  background: radial-gradient(46% 62% at 50% 100%, rgba(226, 132, 52, 0.34) 0%, rgba(186, 86, 30, 0.13) 40%, transparent 72%);
+  filter: blur(14px);
+  animation: legend-torch 7.5s ease-in-out infinite;
+}
+@keyframes legend-torch {
+  0%,
+  100% {
+    opacity: 0.86;
+    transform: translateX(-50%) scale(1);
+  }
+  42% {
+    opacity: 1;
+    transform: translateX(-50%) scale(1.04);
+  }
+  68% {
+    opacity: 0.9;
+    transform: translateX(-50%) scale(0.99);
+  }
+}
+.legend-login .vignette {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(132% 96% at 50% 46%, transparent 42%, rgba(0, 0, 0, 0.62) 86%),
+    linear-gradient(90deg, rgba(6, 5, 3, 0.86) 0%, rgba(6, 5, 3, 0.3) 34%, transparent 58%);
+}
+/* 石纹：极淡的噪点，让大面积暗色不「塑料」 */
+.legend-login .grain {
+  position: absolute;
+  inset: 0;
+  opacity: 0.16;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.82' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='220' height='220' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+/* 火星：React 注入，向上飘散 */
+.legend-login .embers {
+  position: absolute;
+  inset: 0;
+}
+.legend-login .ember {
+  position: absolute;
+  bottom: -4vh;
+  width: 2px;
+  height: 2px;
+  border-radius: 50%;
+  background: var(--fire-hi);
+  box-shadow: 0 0 6px 1px rgba(228, 116, 58, 0.65);
+  opacity: 0;
+  animation: legend-rise linear infinite;
+}
+@keyframes legend-rise {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 0, 0) scale(0.6);
+  }
+  12% {
+    opacity: 0.9;
+  }
+  70% {
+    opacity: 0.55;
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(var(--drift, 20px), -74vh, 0) scale(1.05);
+  }
+}
+
+/* ══════════════════════════════════════════════════════════
+   骨架
+   ══════════════════════════════════════════════════════════ */
+.legend-login .shell {
+  position: relative;
+  z-index: 2;
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+}
+
+/* ——— 顶栏 ——— */
+.legend-login .topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 32px;
+  padding: 26px var(--gut);
+  border-bottom: 1px solid var(--line-soft);
+  backdrop-filter: blur(2px);
+}
+.legend-login .brand {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.legend-login .crest {
+  width: 34px;
+  height: 40px;
+  flex: 0 0 auto;
+}
+.legend-login .brand-txt b {
+  display: block;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 20px;
+  letter-spacing: 0.3em;
+  line-height: 1;
+  color: var(--gold-hi);
+}
+.legend-login .brand-txt span {
+  display: block;
+  margin-top: 6px;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.34em;
+  color: var(--ink-3);
+}
+.legend-login .meta {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  font-size: 12px;
+  color: var(--ink-3);
+  letter-spacing: 0.04em;
+}
+.legend-login .alive {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--ink-2);
+}
+.legend-login .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-jade);
+  box-shadow: 0 0 0 0 rgba(111, 191, 115, 0.6);
+  animation: legend-pulse 2.6s var(--ease-out) infinite;
+}
+@keyframes legend-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(111, 191, 115, 0.55);
+  }
+  70% {
+    box-shadow: 0 0 0 7px rgba(111, 191, 115, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(111, 191, 115, 0);
+  }
+}
+.legend-login .meta .sep {
+  width: 1px;
+  height: 14px;
+  background: var(--line);
+}
+
+/* ——— 主体两栏 ——— */
+.legend-login .body {
+  display: grid;
+  grid-template-columns: minmax(0, 1.08fr) minmax(360px, 0.72fr);
+  align-items: center;
+  gap: clamp(32px, 5vw, 96px);
+  padding: clamp(28px, 4vw, 64px) var(--gut);
+}
+
+/* ——— 左侧：宣言 ——— */
+.legend-login .hero {
+  max-width: 640px;
+}
+.legend-login .eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.36em;
+  color: var(--gold);
+  text-transform: uppercase;
+}
+.legend-login .eyebrow::before {
+  content: "";
+  width: 34px;
+  height: 1px;
+  background: var(--gold-dim);
+}
+.legend-login .hero h1 {
+  margin: 22px 0 0;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: clamp(46px, 6.2vw, 86px);
+  line-height: 1.02;
+  letter-spacing: 0.04em;
+  color: var(--ink);
+  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.6), 0 0 42px rgba(201, 162, 77, 0.14);
+}
+.legend-login .hero h1 em {
+  font-style: normal;
+  color: var(--gold-hi);
+  background: linear-gradient(180deg, #f6e7c4 6%, #c9a24d 58%, #8a6c34 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.legend-login .hero .lede {
+  margin-top: 26px;
+  max-width: 46ch;
+  font-size: 15px;
+  line-height: 1.85;
+  color: var(--ink-2);
+}
+.legend-login .hero .lede b {
+  color: var(--ink);
+  font-weight: 600;
+}
+/* 三条值守条款：编号 + 词条，横向不堆卡片 */
+.legend-login .creed {
+  margin: 44px 0 0;
+  padding: 0;
+  max-width: 560px;
+  border-top: 1px solid var(--line-soft);
+}
+.legend-login .creed li {
+  display: grid;
+  grid-template-columns: 44px 1fr;
+  gap: 16px;
+  align-items: baseline;
+  padding: 16px 0;
+  border-bottom: 1px solid var(--line-soft);
+  list-style: none;
+  animation: legend-slide-in 0.8s var(--ease) both;
+  animation-delay: calc(0.35s + var(--i, 0) * 0.1s);
+}
+.legend-login .creed .no {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  color: var(--gold-dim);
+}
+.legend-login .creed h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--ink);
+}
+.legend-login .creed p {
+  margin: 4px 0 0;
+  font-size: 12.5px;
+  line-height: 1.7;
+  color: var(--ink-3);
+}
+
+/* ——— 右侧：登录闸门 ——— */
+.legend-login .gate {
+  justify-self: end;
+  width: 100%;
+  max-width: 432px;
+  position: relative;
+  padding: 1px; /* 外框金线 */
+  background: linear-gradient(180deg, var(--gold-dim), rgba(107, 86, 47, 0.3) 26%, rgba(107, 86, 47, 0.3) 74%, var(--gold-dim));
+  box-shadow: 0 40px 90px -40px rgba(0, 0, 0, 0.95), 0 0 0 1px rgba(0, 0, 0, 0.5);
+  animation: legend-gate-in 1s var(--ease) both 0.1s;
+}
+@keyframes legend-gate-in {
+  from {
+    opacity: 0;
+    transform: translateY(26px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+/* 面板本体：内衬第二道 1px 线 + 石面渐变 */
+.legend-login .panel {
+  position: relative;
+  padding: clamp(24px, 2.4vw, 34px) clamp(22px, 2.2vw, 30px) 26px;
+  background:
+    radial-gradient(120% 60% at 50% 0%, rgba(201, 162, 77, 0.07) 0%, transparent 62%),
+    linear-gradient(168deg, #241d16 0%, #1a1510 46%, #14100c 100%);
+}
+.legend-login .panel::before {
+  content: "";
+  position: absolute;
+  inset: 6px;
+  border: 1px solid var(--line);
+  pointer-events: none;
+}
+/* 四角金饰：一对 L 形折线 */
+.legend-login .corner {
+  position: absolute;
+  width: 15px;
+  height: 15px;
+  pointer-events: none;
+}
+.legend-login .corner::before,
+.legend-login .corner::after {
+  content: "";
+  position: absolute;
+  background: var(--gold);
+}
+.legend-login .corner::before {
+  width: 15px;
+  height: 1px;
+}
+.legend-login .corner::after {
+  width: 1px;
+  height: 15px;
+}
+.legend-login .corner.tl {
+  left: -1px;
+  top: -1px;
+}
+.legend-login .corner.tr {
+  right: -1px;
+  top: -1px;
+  transform: scaleX(-1);
+}
+.legend-login .corner.bl {
+  left: -1px;
+  bottom: -1px;
+  transform: scaleY(-1);
+}
+.legend-login .corner.br {
+  right: -1px;
+  bottom: -1px;
+  transform: scale(-1);
+}
+
+.legend-login .gate-head {
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--line-soft);
+}
+.legend-login .gate-head h2 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  color: var(--ink);
+}
+.legend-login .gate-head p {
+  margin: 8px 0 0;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  color: var(--ink-3);
+}
+
+/* 字段 */
+.legend-login .field {
+  margin-top: 20px;
+  position: relative;
+}
+.legend-login .field > label {
+  display: block;
+  margin-bottom: 9px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.legend-login .ctrl {
+  width: 100%;
+  height: 46px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 13px;
+  border: 1px solid rgba(201, 162, 77, 0.22);
+  border-radius: var(--r);
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.46), rgba(0, 0, 0, 0.3));
+  color: var(--ink);
+  font-size: 14px;
+  transition: border-color 0.25s var(--ease), box-shadow 0.25s var(--ease), background 0.25s var(--ease);
+}
+.legend-login .ctrl::placeholder {
+  color: #6e604a;
+}
+.legend-login .ctrl:hover {
+  border-color: rgba(201, 162, 77, 0.36);
+}
+.legend-login .ctrl:focus,
+.legend-login .ctrl:focus-within {
+  outline: none;
+  border-color: var(--gold);
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.56), rgba(0, 0, 0, 0.34));
+  box-shadow: 0 0 0 3px rgba(201, 162, 77, 0.1), inset 0 1px 0 rgba(240, 220, 172, 0.1);
+}
+/* 已填：边框稍亮，字色提到最亮，和空态区分 */
+.legend-login .ctrl:not(:placeholder-shown) {
+  border-color: rgba(201, 162, 77, 0.3);
+  color: var(--ink);
+}
+.legend-login .ctrl:disabled,
+.legend-login .ctrl[aria-disabled="true"] {
+  opacity: 0.42;
+  cursor: not-allowed;
+}
+.legend-login .ctrl:disabled:hover {
+  border-color: rgba(201, 162, 77, 0.22);
+}
+
+/* 错误态：火色边 + 左火条 + 字段下方文案；只在提交校验后出现 */
+.legend-login .field.invalid .ctrl,
+.legend-login .field.invalid .ctrl:focus {
+  border-color: rgba(185, 68, 31, 0.85);
+  background: linear-gradient(180deg, rgba(40, 10, 4, 0.55), rgba(0, 0, 0, 0.34));
+  box-shadow: 0 0 0 3px rgba(185, 68, 31, 0.12), inset 0 0 18px rgba(185, 68, 31, 0.08);
+}
+.legend-login .field.invalid > label {
+  color: #d98a64;
+}
+.legend-login .err {
+  display: none;
+  align-items: center;
+  gap: 7px;
+  margin: 8px 0 0;
+  font-size: 11.5px;
+  letter-spacing: 0.02em;
+  color: #de8a61;
+}
+.legend-login .err::before {
+  content: "";
+  width: 5px;
+  height: 5px;
+  background: var(--fire);
+  transform: rotate(45deg);
+  flex: 0 0 auto;
+}
+.legend-login .field.invalid .err {
+  display: flex;
+}
+.legend-login .field.shake {
+  animation: legend-shake 0.34s var(--ease);
+}
+@keyframes legend-shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  18% {
+    transform: translateX(-5px);
+  }
+  38% {
+    transform: translateX(4px);
+  }
+  58% {
+    transform: translateX(-3px);
+  }
+  78% {
+    transform: translateX(2px);
+  }
+}
+
+/* 密码框 */
+.legend-login .pwd {
+  position: relative;
+}
+.legend-login .pwd .ctrl {
+  padding-right: 46px;
+  letter-spacing: 0.18em;
+}
+.legend-login .pwd .ctrl[type="password"]::placeholder {
+  letter-spacing: 0.02em;
+}
+.legend-login .eye {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  color: var(--ink-3);
+  transition: color 0.2s;
+}
+.legend-login .eye:hover {
+  color: var(--gold);
+}
+.legend-login .eye:active {
+  transform: translateY(-50%) scale(0.9);
+}
+.legend-login .eye[aria-pressed="true"] {
+  color: var(--gold);
+}
+.legend-login .eye[aria-pressed="true"] svg {
+  opacity: 0.55;
+}
+
+/* 记住 / 忘记 */
+.legend-login .row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 18px;
+}
+.legend-login .check {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12.5px;
+  color: var(--ink-2);
+  cursor: pointer;
+  user-select: none;
+}
+.legend-login .check:hover {
+  color: var(--ink);
+}
+.legend-login .check input {
+  appearance: none;
+  width: 15px;
+  height: 15px;
+  border: 1px solid rgba(201, 162, 77, 0.45);
+  border-radius: 1px;
+  background: rgba(0, 0, 0, 0.4);
+  position: relative;
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s, box-shadow 0.2s, transform 0.12s;
+}
+.legend-login .check:hover input {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 3px rgba(201, 162, 77, 0.08);
+}
+.legend-login .check input:active {
+  transform: scale(0.9);
+}
+.legend-login .check input:checked {
+  background: var(--gold);
+  border-color: var(--gold);
+  box-shadow: 0 0 10px rgba(201, 162, 77, 0.35);
+}
+.legend-login .check input:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
+.legend-login .check input:checked::after {
+  content: "";
+  position: absolute;
+  left: 4px;
+  top: 1px;
+  width: 5px;
+  height: 9px;
+  border-right: 2px solid #14100b;
+  border-bottom: 2px solid #14100b;
+  transform: rotate(40deg);
+}
+.legend-login .link {
+  font-size: 12.5px;
+  color: var(--ink-3);
+  border-bottom: 1px solid transparent;
+  transition: color 0.2s, border-color 0.2s, text-shadow 0.2s;
+  padding-bottom: 1px;
+}
+.legend-login .link:hover {
+  color: var(--gold);
+  border-color: var(--gold-dim);
+  text-shadow: 0 0 12px rgba(201, 162, 77, 0.35);
+}
+.legend-login .link:active {
+  color: var(--gold-hi);
+}
+
+/* 主按钮：金锭，唯一的实心高光 */
+.legend-login .enter {
+  position: relative;
+  overflow: hidden;
+  width: 100%;
+  height: 50px;
+  margin-top: 24px;
+  border-radius: var(--r);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  color: #1a1206;
+  background: linear-gradient(180deg, #f2dfac 0%, #d9b96e 34%, #be9644 68%, #9c7734 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.62),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.3),
+    0 14px 26px -14px rgba(201, 162, 77, 0.55);
+  transition: transform 0.16s var(--ease), box-shadow 0.25s var(--ease), filter 0.2s;
+}
+.legend-login .enter:hover {
+  filter: brightness(1.06);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7), 0 18px 30px -14px rgba(201, 162, 77, 0.7);
+}
+.legend-login .enter:active {
+  transform: translateY(1px) scale(0.997);
+  filter: brightness(0.96);
+}
+.legend-login .enter:focus-visible {
+  outline: 2px solid var(--gold-hi);
+  outline-offset: 3px;
+}
+.legend-login .enter[disabled] {
+  cursor: progress;
+  filter: saturate(0.5) brightness(0.86);
+}
+/* 掠过剑光 */
+.legend-login .enter::after {
+  content: "";
+  position: absolute;
+  top: -40%;
+  bottom: -40%;
+  width: 38%;
+  left: -46%;
+  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.62), transparent);
+  transform: skewX(-18deg);
+  animation: legend-sheen 4.6s var(--ease) infinite;
+}
+@keyframes legend-sheen {
+  0%,
+  62% {
+    left: -46%;
+  }
+  86%,
+  100% {
+    left: 112%;
+  }
+}
+.legend-login .enter[disabled]::after {
+  animation: none;
+  opacity: 0;
+}
+
+.legend-login .foot-note {
+  margin: 18px 0 0;
+  text-align: center;
+  font-size: 11.5px;
+  color: var(--ink-3);
+  letter-spacing: 0.02em;
+}
+.legend-login .foot-note a {
+  color: var(--ink-2);
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 1px;
+}
+.legend-login .foot-note a:hover {
+  color: var(--gold);
+  border-color: var(--gold-dim);
+}
+
+/* ——— 页脚 ——— */
+.legend-login .footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  flex-wrap: wrap;
+  padding: 18px var(--gut) 22px;
+  border-top: 1px solid var(--line-soft);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  color: var(--ink-3);
+}
+.legend-login .footer .mono {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.14em;
+}
+
+/* ——— Toast ——— */
+.legend-login .toast {
+  position: fixed;
+  left: 50%;
+  bottom: 38px;
+  z-index: 60;
+  transform: translate(-50%, 20px);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 20px;
+  border: 1px solid var(--gold-dim);
+  border-radius: var(--r);
+  background: linear-gradient(180deg, #221b14, #16110c);
+  box-shadow: 0 24px 48px -20px rgba(0, 0, 0, 0.9);
+  font-size: 13px;
+  color: var(--ink);
+  letter-spacing: 0.04em;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.26s var(--ease), transform 0.26s var(--ease), visibility 0.26s;
+}
+.legend-login .toast.show {
+  opacity: 1;
+  visibility: visible;
+  transform: translate(-50%, 0);
+}
+.legend-login .toast::before {
+  content: "";
+  width: 5px;
+  height: 5px;
+  background: var(--fire-hi);
+  transform: rotate(45deg);
+  box-shadow: 0 0 8px rgba(228, 116, 58, 0.9);
+}
+
+/* ——— 入场 ——— */
+@keyframes legend-slide-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.legend-login .hero > * {
+  animation: legend-slide-in 0.9s var(--ease) both;
+}
+.legend-login .eyebrow {
+  animation-delay: 0.06s;
+}
+.legend-login .hero h1 {
+  animation-delay: 0.14s;
+}
+.legend-login .hero .lede {
+  animation-delay: 0.22s;
+}
+
+/* ══════════════════════════════════════════════════════════
+   响应式
+   ══════════════════════════════════════════════════════════ */
+@media (max-width: 1080px) {
+  .legend-login .hero h1 {
+    font-size: clamp(40px, 6vw, 60px);
+  }
+  .legend-login .creed {
+    max-width: none;
+  }
+}
+@media (max-width: 900px) {
+  .legend-login .body {
+    grid-template-columns: 1fr;
+    gap: 36px;
+    padding-top: 8px;
+    align-items: start;
+  }
+  .legend-login .gate {
+    justify-self: stretch;
+    max-width: none;
+  }
+  .legend-login .creed {
+    display: none;
+  }
+  .legend-login .hero .lede {
+    max-width: none;
+    font-size: 14px;
+  }
+  .legend-login .vignette {
+    background: radial-gradient(140% 80% at 50% 30%, transparent 30%, rgba(0, 0, 0, 0.72) 92%);
+  }
+  .legend-login .meta .sep,
+  .legend-login .meta .only-lg {
+    display: none;
+  }
+}
+@media (max-width: 520px) {
+  .legend-login .topbar {
+    padding: 18px 20px;
+  }
+  .legend-login .brand-txt b {
+    font-size: 17px;
+    letter-spacing: 0.22em;
+  }
+  .legend-login .hero h1 {
+    font-size: 38px;
+  }
+  .legend-login .footer {
+    justify-content: center;
+    text-align: center;
+  }
+  .legend-login .meta {
+    min-width: 0;
+  }
+  .legend-login .alive {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .legend-login *,
+  .legend-login *::before,
+  .legend-login *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* 静态模式（?static=1）：跳过入场动画，供截图/自动化用 */
+.legend-login.static *,
+.legend-login.static *::before,
+.legend-login.static *::after {
+  animation: none !important;
+  transition: none !important;
+}
+.legend-login.static .ember {
+  display: none;
+}
