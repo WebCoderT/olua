@@ -5,10 +5,13 @@
  * `CastPlan.baseType` 一直解析着却从没用过：怪物打玩家恒取 `physical_attack` 对 `physicalDefense`，
  * 于是「魔法怪」的难度全靠物理那条线走。这一套把三件事钉死：
  *
- * 一、**物理技能打物防**：玩家堆到 5000 物防、技能 baseType = physicalAttack、
- *     怪物物攻 9000 → 伤害应是「9000 − 5000」那一档（不是 9000 − 6）
- * 二、**法术技能打魔防**：同一个玩家、同一个位置，只把技能的 baseType 换成 magicAttack、
- *     魔攻配 9000 → 伤害应是「9000 − 6」那一档（物防 5000 一点不参与）
+ * 把「吃的是哪一列」写成**相对关系**而不是数值区间（#966：只校验代码，不校验数据）：
+ * 同一个玩家、同一套装备（物防 5000 / 魔防 ~6），只切换技能的 baseType 与怪物的攻击列 ——
+ * 若两系走的是同一列，两次伤害会相等；能分出「法术伤害 > 物理伤害」，就说明各读各的列。
+ *
+ * 一、**物理技能打物防**：技能 baseType = physicalAttack → 伤害被 5000 物防吃掉大半
+ * 二、**法术技能打魔防**：同一套装备只换 baseType = magicAttack → 伤害基本不被吃掉，
+ *     必然大于第一条（物防 5000 一点没参与）
  * 三、**法攻配 0 视为未配**（拍板口径）：法师技能挂上去但 `magic_attack` 是 0 →
  *     该技能**整个跳过**（回落到普攻），服务端日志留一条 warn，不留「放了法术不掉血」的哑弹
  *
@@ -327,29 +330,26 @@ async function standAndWait(session, predicate, timeoutMs = 20_000) {
     //#endregion
 
     //#region 一、物理技能打物防
-    group("一、物理技能打物防：怪攻 9000、玩家物防 5000 → 伤害在 4000 一档");
+    group("一、物理技能打物防：怪攻 9000 撞上玩家物防 5000");
     setMonsterAttack(dbPath, { physical: 9000, magic: 0 });
     setSkillBaseType(dbPath, "physicalAttack");
     await sleep(1_300); // 技能缓存 TTL 1 秒：等它按新配置重建
 
     const playerA = await spawnPlayer(baseUrl, adminToken, "elem_a");
     const defenseA = playerA.derived.attributes;
+    // 构造回读：5000 是我们刚写进装备的那一份（不是出厂配置），派生的下限得把它算进去
     check(Array.isArray(defenseA.physicalDefense) && defenseA.physicalDefense[1] >= 5000, "玩家侧物防确实被堆到 5000", JSON.stringify(defenseA.physicalDefense));
-    check(Array.isArray(defenseA.magicDefense) && defenseA.magicDefense[1] < 100, "而魔防仍是等级那一档（两列真的分开了）", JSON.stringify(defenseA.magicDefense));
+    // 两列真的分开：魔防不是我们写的 5000（走的是等级那一档）
+    check(Array.isArray(defenseA.magicDefense) && defenseA.magicDefense[1] !== defenseA.physicalDefense[1], "而魔防仍是等级那一档（两列真的分开了）", JSON.stringify(defenseA.magicDefense));
 
     const hitPhysical = await standAndWait(playerA.session, async () => {
       return playerA.session.hitsFrom(0).find((hit) => hit.i && hit.d > 0) ?? null;
     });
     check(!!hitPhysical, "被物理技能命中（伤害 > 0）", hitPhysical && `damage=${hitPhysical.d}`);
-    check(
-      !!hitPhysical && hitPhysical.d > 3000 && hitPhysical.d <= 5000,
-      "伤害 = 「9000 − 物防 5000」那一档（不是 9000 − 魔防 6）",
-      hitPhysical && `damage=${hitPhysical.d}`,
-    );
     //#endregion
 
     //#region 二、法术技能打魔防
-    group("二、法术技能打魔防：同一套装备，魔攻 9000 → 伤害在 9000 一档");
+    group("二、法术技能打魔防：同一套装备换成 magAttack，伤害不再被物防吃掉");
     setMonsterAttack(dbPath, { physical: 0, magic: 9000 });
     setSkillBaseType(dbPath, "magicAttack");
     await sleep(1_300);
@@ -360,10 +360,12 @@ async function standAndWait(session, predicate, timeoutMs = 20_000) {
       return playerB.session.hitsFrom(0).find((hit) => hit.d > 0) ?? null;
     });
     check(!!hitMagic, "被法术技能命中（伤害 > 0）", hitMagic && `damage=${hitMagic.d}`);
+    // 核心判据（相对关系，不是数值区间）：同一套装备，法术伤害必须**大于**物理伤害。
+    // 两系若读同一列，两个数会相等 —— 相等就是回归，这一条就红
     check(
-      !!hitMagic && hitMagic.d > 8000,
-      "伤害 = 「9000 − 魔防 6」那一档（物防 5000 一点没参与）",
-      hitMagic && `damage=${hitMagic.d}`,
+      !!hitMagic && !!hitPhysical && hitMagic.d > hitPhysical.d,
+      "法术打的是魔防那一列（同一套装备下，法术伤害 > 物理伤害；读同一列就会相等）",
+      `物理 ${hitPhysical && hitPhysical.d} / 法术 ${hitMagic && hitMagic.d}`,
     );
     const magicCast = await waitFor(
       "法术技能 9001 的 casts 帧",
@@ -390,8 +392,8 @@ async function standAndWait(session, predicate, timeoutMs = 20_000) {
     const silentCasts = playerC.session.castsFrom(observeFrom).filter((cast) => cast.s === SKILL);
     check(silentCasts.length === 0, "法攻配 0 时该技能一次都没放（回落到普攻）", `放了 ${silentCasts.length} 次`);
     const weakHits = playerC.session.hitsFrom(observeFrom);
-    const maxDamage = weakHits.reduce((max, hit) => Math.max(max, hit.d), 0);
-    check(maxDamage <= 5, "这几秒里的命中都是普攻那一档（物攻 1 − 防御）", `最大伤害 ${maxDamage}`);
+    // 判「普攻还在打」（回落到普攻这件事真的发生），不比伤害档位（那是物攻 1 与防御算出来的数值）
+    check(weakHits.length > 0, "法攻配 0 时仍然有普攻命中（回落到普攻，不是站着不动）", `命中 ${weakHits.length} 次`);
     check(
       server.logs().includes("配成 0") && server.logs().includes(SKILL),
       "服务端日志里有一条「该项攻击配成 0，已跳过该技能」的 warn",

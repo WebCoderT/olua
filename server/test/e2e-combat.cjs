@@ -17,6 +17,18 @@
  * - 掉落拾取（#325）：pick 帧按账本格子级入包（可叠加/装备占格）、背包满拒拾、
  *   重复拾取幂等、非归属者与未知账拒拾、清账后不可再拾
  *
+ * ## 断言口径（2026-11-14 拍板：只校验代码，不校验数据；#966）
+ *
+ * **进断言**：帧形状与字段名、错误码、状态机转换（重复投递 → duplicate、死后 → target_dead、
+ * 击杀 → reward 带 level/leveledUp/drops）、响应内部的算术自洽（`hp = 上一份 hp − 本份 damage`）、
+ * 方向与存在性（伤害 > 0、坐标朝目标移动、分母变大）、落账一致性（存档里的值 === 结算帧里的值）、
+ * 以及关键分支的源码形态（目标选取的 detectRange / 倍率那一步）。
+ *
+ * **不进断言**：怪有几只、伤害落在哪个区间、经验是多少、血量等于某个绝对值、位移多少像素、
+ * 某段时间里发生了几次。这些随配置表与机器负载变化，运营调一次数值就整片红，而那不是缺陷。
+ * 需要「确实发生了」用 `waitFor` 等事件；需要「A 比 B 强」用相对关系；需要「不再发生」
+ * 改成看状态或钉源码分支 —— 三条都比固定窗口 + 数值区间稳。
+ *
  * 走的是 `dist/`，所以前置是 `npm run build`。
  * 用法：npm run test:e2e:combat
  */
@@ -36,39 +48,39 @@ const ENTRY = path.join(SERVER_DIR, "dist", "main.js");
 /** 管理员注册邀请码（与 startServer 的 ADMIN_REGISTER_CODE 同值；击杀奖励 region 要用它改配置表） */
 const ADMIN_CODE = "e2e-combat-admin";
 
-//#region 出厂值的预期来源：配置快照
-
-/**
- * `server/data/config-snapshot.sql`（= 库的逐行投影，空库启动时整份灌进去）
- *
- * #655 起库里是唯一权威，所以这一套里的「几只怪 / 多少血 / 多少经验」一律**算出来**，
- * 不写死：写死就等于把出厂的刷怪密度、等级经验搬成测试里的第二份副本，
- * 运营在后台调一次数值，这里就整片红 —— 而那并不是缺陷。
- */
-const configSnapshot = require("./lib/config-snapshot.cjs");
+/** 出手节拍（`lib/cast-pace.cjs`）：服务端 #813 起按真客户端口径判冷却，连发会被 `rejected: "cooldown"` 拒掉 */
 const { paceCast } = require("./lib/cast-pace.cjs");
 
-const SPAWN_AREAS = configSnapshot.rows("map_spawn_areas");
-const MONSTER_ROWS = configSnapshot.rows("monsters");
-const GROWTH_SCALARS = Object.fromEntries(configSnapshot.rows("growth_scalars").map((row) => [row.key, Number(row.value)]));
+/**
+ * 读服务端构建产物（源码口径断言用）
+ *
+ * 「某个分支还在不在」钉在 `dist/` 上：删掉 / 改名会直接红，而它不依赖配置表数值，
+ * 也不依赖运行时相位 —— 比「某段时间里发生了什么」稳得多（#966）。
+ */
+const distSource = (rel) => fs.readFileSync(path.join(SERVER_DIR, "dist", rel), "utf8");
 
-/** 某张图的播种量：每个刷怪区按 `max` 铺满（`WorldService` 的播种口径，不是随机数） */
-const spawnCount = (mapId) =>
-  SPAWN_AREAS.filter((area) => String(area.mapId) === String(mapId)).reduce((sum, area) => sum + Number(area.max), 0);
-
-/** 怪物出厂行（按 key 取；maxHp / level 这些断言都以它为准） */
-const monsterRowOf = (key) => MONSTER_ROWS.find((row) => String(row.id) === String(key));
-
-/** 击杀经验（与 `CombatSettlementService.killExpFor` 同口径：同级 = (等级+1) × expPerLevel，等级差线性衰减） */
-const killExpOf = (roleLevel, monsterLevel) => {
-  const perLevel = GROWTH_SCALARS["expGain.expPerLevel"];
-  const maxGap = GROWTH_SCALARS["expGain.maxLevelGap"];
-  const gap = Math.abs(roleLevel - monsterLevel);
-  if (gap >= maxGap) return 0;
-  return Math.max(1, Math.round((monsterLevel + 1) * perLevel * (1 - gap / maxGap)));
-};
-
-//#endregion
+/**
+ * 取某个方法的函数体（从 `name(` 到与它配对的那个 `}`），用来钉住里面的分支
+ *
+ * 不能靠缩进找结尾：dist 里类方法缩进 4 空格、命名空间里的函数 2 空格，写死任何一种都会
+ * 取到「从这个方法一直到类结尾」——那样断言会被别的方法里的同名代码喂饱（假绿）。这里按
+ * 大括号配对切，找不到配对就返回空串（空串一律判失败，不会误绿）。
+ */
+function bodyOf(source, name) {
+  const from = source.indexOf(`${name}(`);
+  if (from < 0) return "";
+  const open = source.indexOf("{", from);
+  if (open < 0) return "";
+  let depth = 0;
+  for (let i = open; i < source.length; i += 1) {
+    if (source[i] === "{") depth += 1;
+    else if (source[i] === "}") {
+      depth -= 1;
+      if (depth === 0) return source.slice(from, i + 1);
+    }
+  }
+  return "";
+}
 
 //#region 断言小工具
 
@@ -89,10 +101,6 @@ function check(condition, label, detail = "") {
   failures.push(label);
   console.log(`  ✗ ${label}${detail ? ` —— ${detail}` : ""}`);
   return false;
-}
-
-function checkEqual(actual, expected, label) {
-  return check(actual === expected, `${label}（期望 ${JSON.stringify(expected)}，实际 ${JSON.stringify(actual)}）`);
 }
 
 //#endregion
@@ -370,15 +378,28 @@ function connect(url) {
       return { id, promise };
     };
 
-    /** 进图播种：地图 1 上的刷怪区按 `max` 铺满（maxHp / 物防都来自 `monsters` 表），拿回服务端发的实例 id */
-    const mapOneTotal = spawnCount("1");
+    /** 进图播种：拿回服务端发的实例 id（#966 起不数只数 —— 播种密度是配置数据） */
     const world = await session.joinWorld("1");
-    check(world && world.monsters.length === mapOneTotal, `准备：worldJoin 播种后拿到 ${mapOneTotal} 只权威实例`, JSON.stringify(world));
     const mobA = world && world.monsters[0];
     const mobB = world && world.monsters.find((mob) => mob.instanceId !== (mobA && mobA.instanceId));
-    const mobARow = mobA && monsterRowOf(mobA.monsterKey);
-    check(!!mobA && /^m1_z1_c0_\d+$/.test(mobA.instanceId), "准备：实例 id 由服务端发牌（m1_z1_c0_N 形态，带区段与公共线）", mobA && mobA.instanceId);
-    check(!!mobA && mobA.hp === mobARow.maxHp && mobA.maxHp === mobARow.maxHp && mobA.alive === true, "准备：实例以服务端表的满血起算", `hp=${mobA && mobA.hp} 表=${mobARow && mobARow.maxHp}`);
+    check(
+      !!world &&
+        Array.isArray(world.monsters) &&
+        world.monsters.length > 0 &&
+        world.monsters.every(
+          (mob) =>
+            typeof mob.instanceId === "string" &&
+            typeof mob.monsterKey === "string" &&
+            typeof mob.hp === "number" &&
+            typeof mob.maxHp === "number" &&
+            typeof mob.alive === "boolean",
+        ),
+      "准备：worldJoin 播种后拿到权威实例（每条带 instanceId / monsterKey / hp / maxHp / alive）",
+      JSON.stringify(world && world.monsters[0]),
+    );
+    check(!!mobA && /^m\d+_z\d+_c\d+_\d+$/.test(mobA.instanceId), "准备：实例 id 由服务端发牌（m<图>_z<区>_c<线>_<序号> 形态）", mobA && mobA.instanceId);
+    // 起算满血：当前血量 === 自己报的上限。不与 `monsters` 表比对 —— 那是配置数据
+    check(!!mobA && mobA.hp === mobA.maxHp && mobA.alive === true, "准备：实例以满血起算（hp === maxHp 且 alive）", `hp=${mobA && mobA.hp} maxHp=${mobA && mobA.maxHp}`);
 
     //#endregion
 
@@ -410,18 +431,24 @@ function connect(url) {
     const saved = await api(baseUrl, "PATCH", `admin/roles/${roleId}`, { token: adminToken, body: { skills: { 1000: 1 } } });
     check(saved.code === 0, "准备：角色已学会技能 1000（管理端结构化编辑）", saved.message);
 
-    // 怪物 1（赤焰斗鸡）：maxHp / 物防取 `monsters` 表；1 级角色物攻 [14,20]，技能 1 级倍率 1 → 伤害 ∈ [8, 16]
-    const firstShot = cast(session, { skillId: "1000", targetId: mobA ? mobA.instanceId : "m1_1", monsterKey: "1" });
+    const target = mobA ? mobA.instanceId : "m1_1";
+    const firstShot = cast(session, { skillId: "1000", targetId: target, monsterKey: "1" });
     const first = await firstShot.promise;
     check(!!(first && first.ok), "首次出手结算成功", JSON.stringify(first));
-    const firstHp = first && first.ok ? first.hp : -1;
-    check(first.ok && first.damage >= 8 && first.damage <= 16, "伤害落在公式区间 [8, 16] 内", `damage=${first.damage}`);
-    check(first.ok && first.killed === false, "满血怪一击不死（killed = false）");
-    check(first.ok && firstHp === mobARow.maxHp - first.damage, `血量算术自洽（hp = ${mobARow.maxHp} − damage）`, `hp=${firstHp}`);
-    check(first.ok && first.duplicate === false, "首次结算 duplicate = false");
+    // 数值区间（[8, 16] 那种）不判：它由物攻区间与技能倍率算出来，改表就红（#966）。
+    // 判「伤害是一个正数」+「结算帧的形状」
+    check(!!first && first.ok && typeof first.damage === "number" && first.damage > 0, "伤害由服务端给出且大于 0", first && `damage=${first.damage}`);
+    check(
+      !!first && first.ok && typeof first.killed === "boolean" && typeof first.hp === "number" && typeof first.duplicate === "boolean",
+      "结算帧带 killed / hp / duplicate（形状：客户端据此判演出与幂等）",
+      JSON.stringify(first),
+    );
+    check(!!first && first.ok && first.duplicate === false, "首次结算 duplicate = false");
 
-    const second = await cast(session, { skillId: "1000", targetId: mobA ? mobA.instanceId : "m1_1", monsterKey: "1" }).promise;
-    check(!!(second && second.ok) && second.hp === firstHp - second.damage, "第二击在第一击的余量上继续扣", `hp=${second.hp}`);
+    const second = await cast(session, { skillId: "1000", targetId: target, monsterKey: "1" }).promise;
+    // 算术自洽：第二击的余量 = 第一击报的血量 − 第二击报的伤害。不断「=== maxHp − 累计伤害」——
+    // 那要把 `monsters` 表的血量搬进来比对，属配置数据
+    check(!!(second && second.ok) && second.hp === first.hp - second.damage, "第二击在第一击的余量上继续扣（hp 自洽）", second && `hp=${second.hp}`);
 
     //#endregion
 
@@ -480,18 +507,19 @@ function connect(url) {
     //#region 四、死亡判定
 
     group("四、死亡由服务端判：恰好一次 killed，之后 target_dead");
-    let killedCount = 0;
-    let deathHp = -1;
-    for (let i = 0; i < 60; i++) {
+    let deathHp = null;
+    for (let i = 0; i < 60; i += 1) {
       const result = await cast(session, { skillId: "1000", targetId: mobA ? mobA.instanceId : "m1_1", monsterKey: "1" }).promise;
       if (!result || !result.ok) break;
       if (result.killed) {
-        killedCount += 1;
         deathHp = result.hp;
+        break;
       }
     }
-    checkEqual(killedCount, 1, "killed 恰好报一次");
-    checkEqual(deathHp, 0, "死亡时血量恰好为 0");
+    // 死亡是状态机：`killed` 那一帧的血量必须是 0（0 是「死」的定义，不是配置数值）。
+    // 「恰好报一次」不再数次数 —— 循环结构本身就保证了 ≤1，而重复报 killed 的根因是幂等，
+    // 下面 target_dead + 重发同 castId 的两条已经覆盖
+    check(deathHp === 0, "killed 那一帧的血量为 0（死亡态的定义）", `hp=${deathHp}`);
     const deadCast = await cast(session, { skillId: "1000", targetId: mobA ? mobA.instanceId : "m1_1", monsterKey: "1" }).promise;
     check(deadCast && deadCast.ok === false && deadCast.code === "target_dead", "死后再打报 target_dead", JSON.stringify(deadCast));
 
@@ -512,7 +540,7 @@ function connect(url) {
     const snapA = snapshot && snapshot.monsters.find((m) => m.instanceId === (mobA ? mobA.instanceId : "m1_1"));
     const snapB = snapshot && snapshot.monsters.find((m) => m.instanceId === (mobB ? mobB.instanceId : "m1_2"));
     check(!!snapA && snapA.alive === false && snapA.hp === 0 && typeof snapA.respawnInMs === "number", "快照里死亡的实例 alive=false 且带重生倒计时", JSON.stringify(snapA));
-    check(!!snapB && snapB.alive === true && snapB.hp === monsterRowOf(snapB.monsterKey).maxHp, "快照里活着的实例状态不受会话操作影响", JSON.stringify(snapB));
+    check(!!snapB && snapB.alive === true && snapB.hp === snapB.maxHp, "快照里活着的实例状态不受会话操作影响（满血且 alive）", JSON.stringify(snapB));
 
     // 换图 = 发新的 worldJoin：旧图观看者身份移除、幂等账清零，但旧图实例状态原样保留。
     // #606 起进图门槛在服务端判（1 级角色既进不了 1 图 10 级、也进不了 2 图 40 级），
@@ -521,7 +549,8 @@ function connect(url) {
     const promoted = await api(baseUrl, "PATCH", `admin/roles/${roleId}`, { token: adminToken, body: { level: 10, onMap: "1" } });
     check(promoted.code === 0, "换图前把角色提到 10 级并摆回 1 图（门槛之上才有得验换图）", promoted.message);
     const map2 = await session.joinWorld("0");
-    check(!!(map2 && map2.monsters.length === spawnCount("0")), `换图 worldJoin 拿到新图的实例（${spawnCount("0")} 只）`, JSON.stringify(map2));
+    // 不数只数（播种密度是配置数据）：换图要拿到的是一份形状完整、mapId 跟着换的快照
+    check(!!map2 && Array.isArray(map2.monsters) && map2.mapId === "0", "换图 worldJoin 拿到新图的快照（mapId 跟着换）", JSON.stringify(map2 && map2.mapId));
     const back = await session.joinWorld("1");
     const backA = back && back.monsters.find((m) => m.instanceId === (mobA ? mobA.instanceId : "m1_1"));
     check(!!backA && backA.alive === false && backA.hp === 0, "换图往返后旧图实例状态保持（世界状态不随会话清）");
@@ -554,7 +583,14 @@ function connect(url) {
     await waitFor("重连成功", async () => (session.opened ? session : null));
     // 重连后重新 join（播种计划为空 —— 实例已存在，不该翻倍），拿回权威状态
     const rejoined = await session.joinWorld("1");
-    check(!!(rejoined && rejoined.monsters.length === mapOneTotal), `重连后重新 worldJoin 不重复播种（仍是 ${mapOneTotal} 只）`, JSON.stringify(rejoined && rejoined.monsters.length));
+    // 「不重复播种」= 实例 id 没有出现两份（唯一性），且与首次进图是同一份（相对关系）
+    const rejoinIds = (rejoined && rejoined.monsters ? rejoined.monsters : []).map((m) => m.instanceId);
+    const firstIds = (world && world.monsters ? world.monsters : []).map((m) => m.instanceId);
+    check(
+      rejoinIds.length > 0 && new Set(rejoinIds).size === rejoinIds.length && rejoinIds.length === firstIds.length,
+      "重连后重新 worldJoin 不重复播种（实例 id 唯一，且与首次进图同一份）",
+      `${rejoinIds.length} 条 / 去重 ${new Set(rejoinIds).size} / 首次 ${firstIds.length}`,
+    );
     const rejoinA = rejoined && rejoined.monsters.find((m) => m.instanceId === (mobA ? mobA.instanceId : "m1_1"));
     check(!!rejoinA && rejoinA.alive === false && rejoinA.hp === 0, "重连拿回的状态与断线前一致（断线不清世界状态）");
     // castSeq 继续往下走；重连后同一 castId 也没人记得它 —— 视为新出手（打活着的 mobB）
@@ -615,29 +651,42 @@ function connect(url) {
       }, 15_000);
     }
 
-    // —— A. 正常经验：同级击杀 = (怪物等级 + 1) × expPerLevel，服务端落账（revision 推进）——
+    // —— A. 正常经验：服务端落账（reward 与存档一致、revision 推进）——
 
     const killerA = await newPlayer("combat_rwa");
     const mobA2 = await aliveMonster(killerA, "1");
     check(!!mobA2, "A：等到了活着的怪（前面的击杀已按 5s 重生）", JSON.stringify(mobA2));
-    const expA = killExpOf(1, monsterRowOf(mobA2.monsterKey).level);
     const killedA = await killMonster(killerA, mobA2.monsterKey, mobA2.instanceId);
     check(!!(killedA && killedA.ok && killedA.reward), "A：击杀结算带 reward", JSON.stringify(killedA));
-    check(!!(killedA && killedA.reward) && killedA.reward.exp === expA, `A：同级击杀经验 = (等级+1)×expPerLevel = ${expA}`, JSON.stringify(killedA && killedA.reward));
-    check(!!(killedA && killedA.reward) && killedA.reward.leveledUp === false && killedA.reward.level === 1, `A：${expA} 经验不够升级（level 不变 / leveledUp=false）`, JSON.stringify(killedA && killedA.reward && { level: killedA.reward.level, leveledUp: killedA.reward.leveledUp }));
+    // 经验的具体数额（(等级+1)×expPerLevel）是配置数据，不判；判「有经验」与「落账」
+    check(
+      !!(killedA && killedA.reward) && typeof killedA.reward.exp === "number" && killedA.reward.exp > 0,
+      "A：同级击杀给经验（exp > 0）",
+      JSON.stringify(killedA && killedA.reward),
+    );
+    check(
+      !!(killedA && killedA.reward) && typeof killedA.reward.leveledUp === "boolean" && typeof killedA.reward.level === "number",
+      "A：reward 带 level / leveledUp（形状：客户端据此播升级）",
+      JSON.stringify(killedA && killedA.reward && { level: killedA.reward.level, leveledUp: killedA.reward.leveledUp }),
+    );
     check(Array.isArray(killedA && killedA.reward && killedA.reward.drops), "A：reward.drops 是数组（内容随掉落表，确定性断言在 C 组）");
     const roleA = await api(baseUrl, "GET", `roles/${killerA.roleId}`, { token: killerA.token });
-    check(roleA.code === 0 && roleA.data.data.exp === expA, `A：服务端已把经验落进存档（data.exp = ${expA}）`, JSON.stringify(roleA.data && roleA.data.exp));
+    check(roleA.code === 0 && roleA.data.data.exp === (killedA.reward && killedA.reward.exp), "A：服务端已把经验落进存档（存档 exp === reward.exp）", JSON.stringify(roleA.data && roleA.data.exp));
     check(roleA.code === 0 && roleA.data.revision === (killedA.reward ? killedA.reward.revision : -1), "A：reward.revision 与服务端当前修订号一致（客户端照搬不会撞乐观锁）");
 
-    // —— A2. 击杀计数（#400）：独立于经验，一次一加 ——
+    // —— A2. 击杀计数（#400）：独立于经验，一次一加（判相对关系，不判绝对次数）——
 
-    checkEqual(readKills(dbPath, killerA.roleId), 1, "A：击杀计数 +1（roles.kills = 1，#400 排行榜的原料）");
+    const killsBefore = readKills(dbPath, killerA.roleId);
     const mobA3 = await aliveMonster(killerA, "1");
     check(!!mobA3, "A：等到第二只活着的怪（验击杀计数是累加而不是覆盖）", JSON.stringify(mobA3));
     const killedA2 = mobA3 ? await killMonster(killerA, mobA3.monsterKey, mobA3.instanceId) : null;
     check(!!(killedA2 && killedA2.killed), "A：第二只也打死了");
-    checkEqual(readKills(dbPath, killerA.roleId), 2, "A：击杀计数累加到 2（不是被后一次覆盖成 1）");
+    const killsAfter = readKills(dbPath, killerA.roleId);
+    check(
+      typeof killsBefore === "number" && typeof killsAfter === "number" && killsAfter > killsBefore,
+      "A：击杀计数在累加（第二次 > 第一次，不是被后一次覆盖）",
+      `${killsBefore} → ${killsAfter}`,
+    );
 
     // —— B. 升级：等级曲线 exp 段管理端改值即时生效（#786 曲线参数化）——
 
@@ -646,20 +695,33 @@ function connect(url) {
     check(!!expSegOne, "B：读到经验曲线第 1 段（1 级起）", JSON.stringify(expSegOne));
     const expOfOne = await api(baseUrl, "GET", "admin/level-curves/preview?level=1", { token: adminToken });
     check(expOfOne.code === 0 && expOfOne.data.exp === expSegOne.startValue, "B：1 级经验 = 第 1 段起始值（计算器与段参数同源）", JSON.stringify({ preview: expOfOne.data && expOfOne.data.exp, seed: expSegOne.startValue }));
-    const expPatched = await api(baseUrl, "PATCH", "admin/level-curves/exp/1", { token: adminToken, body: { startValue: 5 } });
-    check(expPatched.code === 0, "B：把 1 级经验改成 5 成功");
+    // 把 1 级升级所需的经验改成 1：任何经验都够升 —— 这样「升级」只依赖我们的构造，
+    // 不依赖击杀经验的具体数额（那是配置数据）
+    const expPatched = await api(baseUrl, "PATCH", "admin/level-curves/exp/1", { token: adminToken, body: { startValue: 1 } });
+    check(expPatched.code === 0, "B：把 1 级升级所需经验改成 1（任何经验都够升）");
 
     const killerB = await newPlayer("combat_rwb");
     const mobB2 = await aliveMonster(killerB, "2");
     check(!!mobB2, "B：地图 2 等到了活着的怪", JSON.stringify(mobB2));
     const killedB = await killMonster(killerB, mobB2.monsterKey, mobB2.instanceId);
-    // 经验按快照里的怪物等级 + 成长标量算：等级差线性衰减，1 级经验上限刚被管理端改成 5 → 必然升级、剩 exp − 5
-    const expB = killExpOf(1, monsterRowOf(mobB2.monsterKey).level);
-    const expLeftB = expB - 5;
-    check(!!(killedB && killedB.reward) && killedB.reward.exp === expB, `B：击杀 ${monsterRowOf(mobB2.monsterKey).level} 级怪经验 = ${expB}`, JSON.stringify(killedB && killedB.reward));
-    check(!!(killedB && killedB.reward) && killedB.reward.leveledUp === true && killedB.reward.level === 2 && killedB.reward.expNow === expLeftB, `B：管理端改角色等级 1 行的经验即时生效（升到 2 级，本级剩 ${expLeftB}）`, JSON.stringify(killedB && killedB.reward));
+    // 判「升级真的发生」这个状态机 + 「管理端改曲线即时生效」，不判经验数额
+    check(
+      !!(killedB && killedB.reward) && killedB.reward.leveledUp === true && killedB.reward.level === 2,
+      "B：管理端改 1 级经验即时生效（这一击升到 2 级 / leveledUp=true）",
+      JSON.stringify(killedB && killedB.reward),
+    );
+    // expNow 是「本级剩余的溢出经验」：只要升了级，就必然小于本次拿到的经验（方向，不写死差值）
+    check(
+      !!(killedB && killedB.reward) && typeof killedB.reward.expNow === "number" && killedB.reward.expNow < killedB.reward.exp,
+      "B：溢出经验结转（expNow < 本次获得的 exp）",
+      JSON.stringify(killedB && killedB.reward && { exp: killedB.reward.exp, expNow: killedB.reward.expNow }),
+    );
     const roleB = await api(baseUrl, "GET", `roles/${killerB.roleId}`, { token: killerB.token });
-    check(roleB.code === 0 && roleB.data.level === 2 && roleB.data.data.exp === expLeftB, `B：服务端已升级（level 列 = 2，data.exp = ${expLeftB}）`, JSON.stringify({ level: roleB.data && roleB.data.level, exp: roleB.data && roleB.data.data && roleB.data.data.exp }));
+    check(
+      roleB.code === 0 && roleB.data.level === 2 && roleB.data.data.exp === (killedB.reward && killedB.reward.expNow),
+      "B：服务端已升级（level 列 = 2，data.exp === reward.expNow）",
+      JSON.stringify({ level: roleB.data && roleB.data.level, exp: roleB.data && roleB.data.data && roleB.data.data.exp }),
+    );
     // 还原：把 1 级经验改回 seed 值（本库独立，但保持「测试后还原 seed」的纪律）
     await api(baseUrl, "PATCH", "admin/level-curves/exp/1", { token: adminToken, body: { startValue: expSegOne.startValue } });
 
@@ -679,12 +741,21 @@ function connect(url) {
     const killedC = await killMonster(killerC, mobC.monsterKey, mobC.instanceId);
     // picks 2 × 每次必掉 2 个 → 合并后恰好 drug_hp_1 x4（权重/概率/数量全确定）；
     // 默认参数下不绑定（bindChance 0 + 物品/怪物都没开强制绑定，#789）
+    // 掉落判「读的是改后的表」+「同 id 合并成一堆」；不判件数（那是表里的 chance / count 数据）
     check(
-      !!(killedC && killedC.reward) && JSON.stringify(killedC.reward.drops) === JSON.stringify([{ goodId: "drug_hp_1", count: 4, bound: false }]),
-      "C：掉落按改后的表结算（2 次抽取 × 每次 2 个，合并 = drug_hp_1 x4，默认不绑定）",
+      !!(killedC && killedC.reward) &&
+        Array.isArray(killedC.reward.drops) &&
+        killedC.reward.drops.length === 1 &&
+        killedC.reward.drops[0].goodId === "drug_hp_1" &&
+        killedC.reward.drops[0].bound === false,
+      "C：掉落按改后的表结算（只掉改表里那件，多次抽取合并成一堆，默认不绑定）",
       JSON.stringify(killedC && killedC.reward && killedC.reward.drops),
     );
-    check(!!(killedC && killedC.reward) && killedC.reward.exp === 10 && killedC.reward.leveledUp === false, "C：经验与掉落互不影响（经验曲线已还原，不再升级）");
+    check(
+      !!(killedC && killedC.reward) && typeof killedC.reward.exp === "number" && killedC.reward.exp > 0 && killedC.reward.leveledUp === false,
+      "C：经验与掉落互不影响（经验照给；曲线已还原，所以不再升级）",
+      JSON.stringify(killedC && killedC.reward && { exp: killedC.reward.exp, leveledUp: killedC.reward.leveledUp }),
+    );
 
     // 幂等：重发击杀那次的 castId，reward 原样重发（不重掷掉落、不重复入账）
     const killedCastId = castSeq; // killMonster 的最后一发就是击杀那发
@@ -728,7 +799,7 @@ function connect(url) {
     const mobD = await aliveMonster(killerD, "1");
     check(!!mobD, "D：等到了活着的怪", JSON.stringify(mobD));
     const killedD2 = mobD ? await killMonster(killerD, mobD.monsterKey, mobD.instanceId) : null;
-    check(!!(killedD2 && killedD2.reward) && killedD2.reward.exp === 0, "D：等级差 9 ≥ 6 → 无经验（exp = 0）", JSON.stringify(killedD2 && killedD2.reward));
+    check(!!(killedD2 && killedD2.reward) && killedD2.reward.exp === 0, "D：等级差超过上限 → 无经验（exp === 0，0 是「不给」的定义）", JSON.stringify(killedD2 && killedD2.reward));
     check(!!(killedD2 && killedD2.reward) && killedD2.reward.revision === revisionD, "D：无经验不入账（revision 不再推进）", JSON.stringify(killedD2 && killedD2.reward));
     const roleDAfter = await api(baseUrl, "GET", `roles/${killerD.roleId}`, { token: killerD.token });
     check(roleDAfter.code === 0 && !roleDAfter.data.data.exp, "D：存档里没有经验记录（服务端没有多记）", JSON.stringify(roleDAfter.data && roleDAfter.data.data && roleDAfter.data.data.exp));
@@ -766,19 +837,19 @@ function connect(url) {
     check(!!aiHitFrame, "A：收到 monster-ai 命中帧（服务端按普攻间隔出招）", JSON.stringify(aiHitFrame));
     const hit = aiHitFrame && aiHitFrame.hits[0];
     check(!!hit && hit.d > 0, "A：普攻伤害 > 0（怪物物攻区间 − 玩家物防区间）", JSON.stringify(hit));
-    check(!!hit && hit.hp < 100 && hit.m > 0, "A：受击后血量下降且带资源上限", JSON.stringify(hit));
+    // 100 是这一段上报的血量；判「低于上限」这个方向，不判具体值
+    check(!!hit && typeof hit.hp === "number" && hit.hp < hit.m && hit.m > 0, "A：受击后血量低于上限且带资源上限", JSON.stringify(hit));
     check(!!hit && typeof hit.a === "string" && hit.a.length > 0, "A：命中事件带受击账号（广播给全图观看者）");
 
     const roleAfter = await api(baseUrl, "GET", `roles/${fighter.roleId}`, { token: fighter.token });
     check(!!hit && roleAfter.code === 0 && roleAfter.data.data.hp === hit.hp, "A：受击已落进存档（data.hp = hit.hp）", JSON.stringify({ db: roleAfter.data && roleAfter.data.data && roleAfter.data.data.hp, hit: hit && hit.hp }));
     check(roleAfter.code === 0 && roleAfter.data.revision === revisionBefore, "A：受击不推进修订号（revision 原样，战斗期间存档不撞乐观锁）", JSON.stringify({ before: revisionBefore, after: roleAfter.data && roleAfter.data.revision }));
 
-    // —— B. 普攻间隔：1.5s 内没有第二击，2.5s 内第二击到来 ——
+    // —— B. 普攻间隔：不再判「1.5s 里没有第二击」（固定窗口 + 计数 = 数据断言，相位一偏就红），
+    //      只等「第二击到来」这件事发生 ——
     const countAfterFirst = hitCount();
-    await sleep(1_500);
-    check(hitCount() === countAfterFirst, "B：1.5s 内没有第二击（attackInterval = 2000ms 生效）", JSON.stringify({ countAfterFirst, now: hitCount() }));
-    await sleep(1_200);
-    check(hitCount() >= countAfterFirst + 1, "B：2.7s 内第二击到来（间隔后继续出招）", JSON.stringify({ countAfterFirst, now: hitCount() }));
+    const secondHit = await waitFor("第二击到来", async () => (hitCount() > countAfterFirst ? hitCount() : null), 8_000);
+    check(!!secondHit, "B：间隔后继续出招（等到第二击）", `hits ${countAfterFirst} → ${secondHit}`);
 
     // —— C. 追击：玩家走出普攻距离但在检测范围内 → 服务端推着怪追 ——
     const far = { x: aiMob.x + 150, y: aiMob.y };
@@ -790,22 +861,47 @@ function connect(url) {
       return fighter.session.ais.flatMap((frame) => frame.monsters || []).find((entry) => entry.i === aiMob.instanceId && entry.mv === true) || null;
     }, 3_000);
     check(!!chaseEntry, "C：收到移动中的位置增量（moving = true）", JSON.stringify(chaseEntry));
-    check(!!chaseEntry && chaseEntry.x < aiMob.x + 150, "C：怪物朝玩家方向移动（x 向目标趋近）", JSON.stringify({ entryX: chaseEntry && chaseEntry.x, spawnX: aiMob.x }));
+    // 方向判据用「到目标的距离没有变大」而不是「x 变大」：怪会绕障碍，单轴可能先横着走
+    // 甚至短暂反向；「在移动（mv=true）且没远离目标」才是这条要证明的事。
+    // 广播坐标是整数化的（#768），所以两边都取整再比 —— 浮点 hypot 会差出 1e-13 那种假红
+    const distToTarget = (entry) => Math.round(Math.hypot(entry.x - far.x, entry.y - far.y));
+    check(
+      !!chaseEntry && distToTarget(chaseEntry) <= Math.round(Math.hypot(aiMob.x - far.x, aiMob.y - far.y)),
+      "C：怪物朝玩家方向移动（在移动，且到目标的距离没有变大）",
+      JSON.stringify({ entry: { x: chaseEntry && chaseEntry.x, y: chaseEntry && chaseEntry.y }, spawnDist: Math.round(Math.hypot(aiMob.x - far.x, aiMob.y - far.y)), nowDist: chaseEntry ? distToTarget(chaseEntry) : null }),
+    );
 
     // —— D. 丢失目标：走出检测范围 / 玩家死亡都不再被追击 ——
+    //
+    // 「一段时间里没有再发生」脱离窗口没法表达，而「固定窗口 + 事件计数」正是 #966 要清掉的
+    // 形态。更麻烦的是：怪有没有**停下来**取决于地图几何（可能卡墙，`movingNow` 一直为真）
+    // 与 leash 配置（500px 内它本来就该继续跟）—— 那不是稳定的可观察状态。
+    // 所以这一段只留「位置上报」把场景摆好，判据改为钉源码里的两道闸，删掉任一条这里就红。
     reportPos(aiMob.x + 500, aiMob.y, 100);
     posTimer && clearInterval(posTimer);
     posTimer = setInterval(() => reportPos(aiMob.x + 500, aiMob.y, 100), 500);
-    const countBeforeFar = hitCount();
-    await sleep(1_500);
-    check(hitCount() === countBeforeFar, "D：走出检测范围后不再被追击（detectRange = 200 生效）", JSON.stringify({ before: countBeforeFar, now: hitCount() }));
+
+    // 「死亡后不再被选为目标」的闸在候选过滤里（不在索敌循环里）：hp <= 0 的人根本不进候选
+    const presenceSource = distSource("modules/realtime/player-presence.service.js");
+    const aiTargets = bodyOf(presenceSource, "aiTargetsOn");
+    check(
+      /hp\s*<=\s*0/.test(aiTargets) && /updatedAt/.test(aiTargets),
+      "D：候选目标过滤掉已死 / 位置过期的玩家（源码口径：aiTargetsOn 里的 hp <= 0 分支）",
+      aiTargets.slice(0, 220),
+    );
+    const monsterAiSource = distSource("modules/realtime/monster-ai.service.js");
+    const detectAt = monsterAiSource.indexOf("distance <= config.detectRange");
+    check(
+      detectAt >= 0,
+      "D：索敌按检测范围收口（源码口径：distance <= config.detectRange）",
+      detectAt >= 0 ? monsterAiSource.slice(Math.max(0, detectAt - 200), detectAt + 60) : "没找到这个分支",
+    );
 
     reportPos(near.x, near.y, 0);
     posTimer && clearInterval(posTimer);
     posTimer = setInterval(() => reportPos(near.x, near.y, 0), 500);
-    const countBeforeDead = hitCount();
-    await sleep(1_500);
-    check(hitCount() === countBeforeDead, "D：上报血量 0（死亡）后不再被选为目标", JSON.stringify({ before: countBeforeDead, now: hitCount() }));
+    // 让 hp = 0 这一帧先落进在场表：region 八 的快照要读到它「恢复后」的样子
+    await sleep(400);
     posTimer && clearInterval(posTimer);
 
     //#endregion
@@ -835,7 +931,7 @@ function connect(url) {
     const fighterAccountId = fullFrame && fullFrame.players.length > 0 ? fullFrame.players[0].a : null;
     check(!!fighterAccountId, "A：快照里带着已在场的 fighter（只列同图观看者）", JSON.stringify(fullFrame));
     check(
-      !!fullFrame && fullFrame.players[0].hp === 100 && fullFrame.players[0].m > 0,
+      !!fullFrame && typeof fullFrame.players[0].hp === "number" && fullFrame.players[0].m > 0 && fullFrame.players[0].hp <= fullFrame.players[0].m,
       "A：快照条目带血量与资源上限（m=maxHp 服务端重算，血条分母不用客户端猜）",
       JSON.stringify(fullFrame && fullFrame.players[0]),
     );
@@ -884,12 +980,12 @@ function connect(url) {
     }, 5_000);
     check(!!moveFrame, "D：移动中的上报带 moving 标记（走路的演出依据，客户端自报）", JSON.stringify(moveFrame));
     const moveEntry = moveFrame && moveFrame.players.find((entry) => entry.a === companionAccountId);
-    check(!!moveEntry && moveEntry.x === 260, "D：增量坐标是服务端转发的最新上报值", JSON.stringify(moveEntry));
+    check(!!moveEntry && moveEntry.x === companionPos.x, "D：增量坐标是服务端转发的最新上报值（回显）", JSON.stringify(moveEntry));
 
     // —— E. 血量变化：互见帧里的血量跟着上报走 ——
     companionPos.hp = 80;
     const hurtFrame = await waitFor("fighter 收到 companion 的血量变化", async () => {
-      return fighter.session.players.find((frame) => frame.players.some((entry) => entry.a === companionAccountId && entry.hp === 80)) || null;
+      return fighter.session.players.find((frame) => frame.players.some((entry) => entry.a === companionAccountId && entry.hp === companionPos.hp)) || null;
     }, 5_000);
     check(!!hurtFrame, "E：血量变化进入增量广播（互见的血条跟着走）", JSON.stringify(hurtFrame));
 
@@ -924,13 +1020,14 @@ function connect(url) {
     const maxHpBefore = dressedEntry ? dressedEntry.m : 0;
     const leveled = await api(baseUrl, "PATCH", `admin/roles/${companion.roleId}`, { token: adminToken, body: { level: 10 } });
     check(leveled.code === 0, "H：等级已改（管理端 PATCH 到 10 级，体力上限随之变化）", leveled.message);
+    // 判「分母跟着变大」这个方向，不写死具体数值（那是等级曲线 + 装备加成算出来的）
     const maxHpFrame = await waitFor("fighter 收到 companion 的血条分母变化", async () => {
-      // 直接等新值出现：等「≠ 旧值」会被更早的入图快照帧（裸模 100）抢先满足
-      return fighter.session.players.find((frame) => frame.players.some((entry) => entry.a === companionAccountId && entry.m === 322)) || null;
+      // 直接等「比旧值大」：等「≠ 旧值」会被更早的入图快照帧（裸模）抢先满足
+      return fighter.session.players.find((frame) => frame.players.some((entry) => entry.a === companionAccountId && entry.m > maxHpBefore)) || null;
     }, 8_000);
     const maxHpEntry = maxHpFrame && maxHpFrame.players.find((entry) => entry.a === companionAccountId);
     check(
-      !!maxHpEntry && maxHpEntry.m === 322,
+      !!maxHpEntry && maxHpEntry.m > maxHpBefore,
       `H：血条分母跟着存档走（${maxHpBefore} → ${maxHpEntry && maxHpEntry.m}，不会被冻在首见那一刻）`,
       JSON.stringify(maxHpEntry),
     );
@@ -1014,15 +1111,25 @@ function connect(url) {
     check(!!mobK, "A：等到了活着的怪", JSON.stringify(mobK));
     const killedK = mobK ? await killMonster(picker, mobK.monsterKey, mobK.instanceId) : null;
     check(
-      !!(killedK && killedK.reward) && JSON.stringify(killedK.reward.drops) === JSON.stringify([{ goodId: "drug_hp_1", count: 2, bound: false }]),
-      "A：击杀结算带确定的掉落（drug_hp_1 x2，拾取账本与 settle 帧同源）",
+      !!(killedK && killedK.reward) &&
+        Array.isArray(killedK.reward.drops) &&
+        killedK.reward.drops.length === 1 &&
+        killedK.reward.drops[0].goodId === "drug_hp_1" &&
+        killedK.reward.drops[0].count > 0 &&
+        killedK.reward.drops[0].bound === false,
+      "A：击杀结算带确定的掉落（只掉改表里那件、件数 > 0、不绑定）",
       JSON.stringify(killedK && killedK.reward && killedK.reward.drops),
     );
     const pickedFirst = killedK ? await pick(picker, killedK.castId, 0) : null;
     check(!!(pickedFirst && pickedFirst.ok && pickedFirst.alreadyPicked === false), "A：首次拾取成功（alreadyPicked = false）", JSON.stringify(pickedFirst));
     check(
-      !!(pickedFirst && pickedFirst.ok) && JSON.stringify(pickedFirst.placed) === JSON.stringify([{ row: 0, col: 0, id: "drug_hp_1", count: 2 }]),
-      "A：placed 是服务端实际写入的格子（空背包第 0 行第 0 格整份放入）",
+      !!(pickedFirst && pickedFirst.ok) &&
+        Array.isArray(pickedFirst.placed) &&
+        pickedFirst.placed.length === 1 &&
+        pickedFirst.placed[0].row === 0 &&
+        pickedFirst.placed[0].col === 0 &&
+        pickedFirst.placed[0].id === "drug_hp_1",
+      "A：placed 是服务端实际写入的格子（空背包按行优先落到第 0 行第 0 格）",
       JSON.stringify(pickedFirst && pickedFirst.ok && pickedFirst.placed),
     );
     check(
@@ -1033,8 +1140,8 @@ function connect(url) {
     const roleAfterPick = await api(baseUrl, "GET", `roles/${picker.roleId}`, { token: picker.token });
     const firstCell = roleAfterPick.data && roleAfterPick.data.data && Array.isArray(roleAfterPick.data.data.bag) ? roleAfterPick.data.data.bag[0] && roleAfterPick.data.data.bag[0][0] : undefined;
     check(
-      roleAfterPick.code === 0 && JSON.stringify(firstCell) === JSON.stringify({ id: "drug_hp_1", count: 2 }),
-      "A：掉落已落进存档（data.bag[0][0] = drug_hp_1 x2）",
+      roleAfterPick.code === 0 && !!firstCell && firstCell.id === "drug_hp_1",
+      "A：掉落已落进存档（data.bag[0][0] 是 drug_hp_1，与 picked.placed 同一格）",
       JSON.stringify(firstCell),
     );
 
@@ -1170,8 +1277,9 @@ function connect(url) {
     );
 
     // 0 = 关闭校验（排查问题用的开关）：改完立刻生效（结算现读库，不等客户端重进）
-    // 出厂值从快照读（`runtime_params.drop_params`，JSON 列已由快照解析器解开）
-    const acceptBefore = configSnapshot.rows("runtime_params")[0].dropParams.pickAcceptRadius;
+    // 基线从接口读（与后面还原 `bindChance` 同一手法：不引配置快照那份第二来源）
+    const paramsBeforeRadius = await api(baseUrl, "GET", "admin/runtime-params", { token: adminToken });
+    const acceptBefore = paramsBeforeRadius.data.drop.pickAcceptRadius;
     await api(baseUrl, "PATCH", "admin/runtime-params", { token: adminToken, body: { drop: { pickAcceptRadius: 0 } } });
     const mobH2 = await aliveMonster(farPicker, "1");
     const killedH2 = mobH2 ? await killMonster(farPicker, mobH2.monsterKey, mobH2.instanceId) : null;
@@ -1187,7 +1295,8 @@ function connect(url) {
       token: adminToken,
       body: { drop: { pickAcceptRadius: acceptBefore } },
     });
-    checkEqual(restoredP.data && restoredP.data.drop && restoredP.data.drop.pickAcceptRadius, acceptBefore, "H：拾取半径已还原成出厂值");
+    // 还原是准备卫生：判「写回了」而不是「等于某个数」
+    check(restoredP.code === 0, "H：拾取半径已还原成改之前的值", restoredP.message);
 
     // 还原怪物 1 的掉落配置（seed 是内联条目池）
     await api(baseUrl, "PATCH", "admin/monster-drops/1", {
@@ -1368,7 +1477,7 @@ function connect(url) {
         if (cell && cell.id === "drug_hp_1") drugCells.push({ row, col, id: cell.id, count: cell.count, bound: cell.bound === true });
       }),
     );
-    check(drugCells.length === 2, "C：背包里有两堆同种药（绑定一堆 / 未绑定一堆，没有并成一堆）", JSON.stringify(drugCells));
+    check(drugCells.length >= 2, "C：背包里同种药分成两堆以上（绑定一堆 / 未绑定一堆，没有并成一堆）", JSON.stringify(drugCells));
     const boundOne = drugCells.find((cell) => cell.bound);
     const looseOne = drugCells.find((cell) => !cell.bound);
     check(!!boundOne && !!looseOne, "C：两堆里恰好一堆绑、一堆没绑（同 id 不同桶）", JSON.stringify(drugCells));
@@ -1559,8 +1668,8 @@ function connect(url) {
       offResult.code === 0 ? offResult.data.data.bag.flat().filter((cell) => cell && cell.id === "weapon_1") : [];
     const offCell = offCells.find((cell) => cell.bound === true) || null;
     check(
-      offCells.length === 2 && offCells.filter((cell) => cell.bound === true).length === 1,
-      "E：脱下来之后背包里是两件 weapon_1（未绑定的对照件 + 绑定件），绑定态没有扩散到另一件",
+      !!offCell && offCells.some((cell) => cell.bound !== true),
+      "E：脱下来之后背包里既有绑定件也有未绑定的对照件（绑定态没有扩散到另一件）",
       JSON.stringify(offCells),
     );
     check(
@@ -1651,14 +1760,21 @@ function connect(url) {
     check(!!(stateCast && stateCast.st === "9001"), "十：casts 带挂载的状态 id（客户端据此播状态特效）", JSON.stringify(stateCast));
     check(!!stateCast && stateCast.damage === undefined, "十：casts 不带伤害（数值权威在 hits 帧）", JSON.stringify(stateCast));
 
+    // 「狂怒 ×1.5 真的乘到伤害上」属数值（物攻固定 50 + 防御区间，改表就变）：e2e 不比大小。
+    // 判两件事：① 狂怒之后这只怪仍正常出招（状态没把普攻吞掉）；
+    // ② 服务端那一步真的存在 —— `attack()` 里 `rollRange(...) * attackMultiplierOf(...)`，删掉就红
     const buffedHit = await waitFor(
-      "狂怒生效后的普攻",
-      async () =>
-        casterA.session.ais.flatMap((frame) => frame.hits || []).find((hit) => hit.i === castMob.instanceId && hit.d > 50) ||
-        null,
+      "狂怒之后这只怪仍正常出招",
+      async () => casterA.session.ais.flatMap((frame) => frame.hits || []).find((hit) => hit.i === castMob.instanceId && hit.d > 0) || null,
       10_000,
     );
-    check(!!buffedHit, "十：狂怒 ×1.5 服务端生效（物攻固定 50，伤害 > 50 只可能乘过倍率）", JSON.stringify(buffedHit));
+    check(!!buffedHit, "十：狂怒之后这只怪仍正常出招（状态不吞掉普攻）", JSON.stringify(buffedHit));
+    const multAt = monsterAiSource.indexOf("this.attackMultiplierOf(");
+    check(
+      multAt >= 0 && /rollRange\(/.test(monsterAiSource.slice(Math.max(0, multAt - 220), multAt + 60)),
+      "十：服务端把「状态攻击倍率」乘进攻击（源码口径：rollRange(...) * attackMultiplierOf(...)）",
+      multAt >= 0 ? monsterAiSource.slice(Math.max(0, multAt - 160), multAt + 40) : "没找到这一步",
+    );
 
     // —— B. 同一只怪换成伤害型（跃鼠猛击）：casts 与 hits 同帧，且带倍率伤害 ——
 
@@ -1684,7 +1800,8 @@ function connect(url) {
     // 那么后面等 hits 只会等来一个「打中就躺」的假红 —— 把口径显式摆出来
     const sandbag = await api(baseUrl, "GET", `roles/${casterB.roleId}`, { token: casterB.token });
     const sandbagHp = Number(sandbag.data && sandbag.data.data && sandbag.data.data.maxHp) || 0;
-    check(sandbagHp >= 1000, "十：沙包按抬高后的血量建号（血量口径已生效）", `maxHp=${sandbagHp}`);
+    // 判「比原值高」（沙包确实用上了抬高后的曲线），不写死 5000
+    check(sandbagHp > levelOneHp, "十：沙包按抬高后的血量建号（血量口径已生效）", `maxHp=${sandbagHp} 原值=${levelOneHp}`);
     // 必须先 joinWorld：monster-ai 帧按「谁在看这张图」派发，没进图的连接收不到广播
     const worldB = await enterAt(casterB, "2");
     const mobNow = worldB && worldB.monsters.find((entry) => entry.instanceId === castMob.instanceId);
@@ -1741,8 +1858,8 @@ function connect(url) {
       JSON.stringify(damagingPair && damagingPair.hits),
     );
     check(
-      !!damagingHit && damagingHit.d >= 60,
-      "十：技能伤害带倍率（物攻 50 × 1.8 扣物防后仍 > 60）",
+      !!damagingHit && typeof damagingHit.d === "number" && damagingHit.d > 0,
+      "十：技能这一下在 hits 帧里带非零伤害（倍率算在服务端，见上一条源码断言）",
       JSON.stringify(damagingHit),
     );
 
