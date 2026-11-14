@@ -230,9 +230,15 @@ async function api(baseUrl, method, route, options = {}) {
 
     //#region 一、建号口径
 
-    group("一、建号口径：属性点 1 点、四维全 0");
+    group("一、建号口径：四维全 0、余点 = 等级");
     const fresh = await readRole();
-    checkEqual(fresh.data.attrPoints, 1, "新角色带 1 点属性点（每级 1 点，1 级 = 1 点）");
+    // 判的是不变式「余点 + 已分配 = 等级」（每级 1 点是代码规则），不写死 1 点 —— 数值归运营，#966
+    const allocatedOf = (attrs) => ATTR_KEYS.reduce((sum, key) => sum + Number(attrs[key] || 0), 0);
+    checkEqual(
+      Number(fresh.data.attrPoints) + allocatedOf(fresh.data.attrs || {}),
+      Number(fresh.level),
+      `新角色余点 + 已分配 = 等级（${fresh.data.attrPoints} + 0 = ${fresh.level}）`,
+    );
     check(!!fresh.data.attrs && typeof fresh.data.attrs === "object", "存档里有 attrs 对象（面板不用兜底）", JSON.stringify(fresh.data.attrs));
     check(
       ATTR_KEYS.every((key) => Number(fresh.data.attrs[key]) === 0),
@@ -276,7 +282,7 @@ async function api(baseUrl, method, route, options = {}) {
     checkEqual(first.code, 0, "加点放行", first.message);
     checkEqual(first.data.attrs.str, 1, "回执里的四维已经是 1（客户端整份照搬就够）");
     check(ATTR_KEYS.every((key) => key === "str" || first.data.attrs[key] === 0), "其它三项仍是 0（只加被点名的那一项）", JSON.stringify(first.data.attrs));
-    checkEqual(first.data.attrPoints, 0, "余点 1 − 1 = 0");
+    checkEqual(first.data.attrPoints, Number(fresh.data.attrPoints) - 1, "余点 = 加之前 − 1");
     checkEqual(first.data.spent, 1, "本次消耗 1 点");
     checkEqual(first.data.refund, 0, "加点不退还");
     checkEqual(first.data.cost, 0, "加点不花绑定元宝");
@@ -284,7 +290,7 @@ async function api(baseUrl, method, route, options = {}) {
 
     const afterFirst = readAttrsInDb(dbPath, roleId);
     checkEqual(afterFirst.attrs.str, 1, "库里落的是 1 点力量（不是只改了回执）");
-    checkEqual(afterFirst.attrPoints, 0, "库里的余点已扣干净");
+    checkEqual(afterFirst.attrPoints, Number(fresh.data.attrPoints) - 1, "库里的余点已扣干净（与回执同一个数）");
     checkEqual(afterFirst.revision, fresh.revision + 1, "库里的 revision 也是 +1");
 
     //#endregion
@@ -293,8 +299,12 @@ async function api(baseUrl, method, route, options = {}) {
 
     group("四、点数不足：20037，且一点都没动");
     const poor = await allocate({ vit: 2 });
-    checkEqual(poor.code, 20037, "余点 0 时加 2 点 → 20037", poor.message);
-    check(!!poor.details && poor.details.need === 2 && poor.details.owned === 0, "details 带 need / owned（客户端据此提示差额）", JSON.stringify(poor.details));
+    checkEqual(poor.code, 20037, "余点不够时加 2 点 → 20037", poor.message);
+    check(
+      !!poor.details && poor.details.need === 2 && Number(poor.details.owned) === Number(afterFirst.attrPoints),
+      "details 带 need（这次要加几点）/ owned（手上还有几点），客户端据此提示差额",
+      JSON.stringify(poor.details),
+    );
     checkEqual(poor.data, null, "失败响应 data 恒为 null");
     const afterPoor = readAttrsInDb(dbPath, roleId);
     checkEqual(afterPoor.attrs.vit, 0, "失败不加点（体质还是 0）");
@@ -313,8 +323,8 @@ async function api(baseUrl, method, route, options = {}) {
     };
     const saved = await saveRole((method, route, options) => api(baseUrl, method, route, options), token, roleId, tampered);
     checkEqual(saved && saved.code, 0, "带改过的四维存档（结构合法，服务端放行）", saved && saved.message);
-    checkEqual(Number(saved.data.data.attrPoints), 0, "余点被回填成库里的 0（改包白拿不到点）");
-    checkEqual(Number(saved.data.data.attrs.str), 1, "力量被回填成库里的 1（改包白拿不到面板）");
+    checkEqual(Number(saved.data.data.attrPoints), Number(afterFirst.attrPoints), "余点被回填成库里的值（改包白拿不到点）");
+    checkEqual(Number(saved.data.data.attrs.str), Number(first.data.attrs.str), "力量被回填成库里的值（改包白拿不到面板）");
     checkEqual(Number(saved.data.data.attrs.agi), 0, "敏捷被回填成库里的 0");
     checkEqual(Number(saved.data.data.attrs.spi), 0, "精神被回填成库里的 0");
 

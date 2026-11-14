@@ -664,6 +664,9 @@ function connect(url) {
     group("十、反证：流水表写不进去时，主流程照常");
 
     const db = new DatabaseSync(dbPath);
+    // 服务端此刻在写（流水是本套件的主要流量）：不等锁就会偶发 `database is locked`
+    // —— 与 e2e-level-gap / e2e-attr-points 等 9 套同款处理
+    db.exec("PRAGMA busy_timeout = 5000");
     db.exec("ALTER TABLE event_logs RENAME TO event_logs_broken");
     db.close();
     const loginWithBrokenLog = await api(baseUrl, "POST", "auth/login", {
@@ -673,6 +676,7 @@ function connect(url) {
     check(!!(loginWithBrokenLog.data && loginWithBrokenLog.data.token), "照样发得出令牌", JSON.stringify(loginWithBrokenLog.data && !!loginWithBrokenLog.data.token));
 
     const dbBack = new DatabaseSync(dbPath);
+    dbBack.exec("PRAGMA busy_timeout = 5000");
     dbBack.exec("ALTER TABLE event_logs_broken RENAME TO event_logs");
     dbBack.close();
     const countAfterRestore = eventsOf(dbPath, "login").length;
