@@ -165,7 +165,8 @@ export class ChatService implements OnApplicationShutdown {
       this.reject(accountId, "缺少私聊对象");
       return;
     }
-    const target = this.roles.findById(toRoleId);
+    // 只在同一区里找（#957）：跨区私聊与「查无此人」同一种回复，不泄露别区有没有这个 id
+    const target = this.roles.findById(identity.zoneId, toRoleId);
     if (!target) {
       this.reject(accountId, "查无此人");
       return;

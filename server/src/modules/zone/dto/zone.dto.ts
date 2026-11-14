@@ -73,3 +73,27 @@ export class MergeZoneDto {
   @Min(1, { message: "toZoneId 必须是正整数" })
   toZoneId: number;
 }
+
+/** 我的区服（选服弹窗：#957）：区 + 我在这区的角色数 + 是不是当前浏览区 */
+export class MyZoneDto extends ZoneDto {
+  @ApiProperty({ description: "我在这个区有几个角色", example: 2 })
+  roleCount: number;
+
+  @ApiProperty({ description: "是不是当前浏览区（选角页拉的就是它）", example: true })
+  current: boolean;
+}
+
+/** 选服入参（#957）：只允许切到「我有角色 / 还能建角」的活区 */
+export class SelectZoneDto {
+  @ApiProperty({ description: "要切到的区服 id（活区清单见 GET /zones/mine）", example: 2 })
+  @Type(() => Number)
+  @IsInt({ message: "zoneId 必须是整数" })
+  @Min(1, { message: "zoneId 必须是正整数" })
+  zoneId: number;
+}
+
+/** 选服结果 */
+export class SelectZoneResultDto {
+  @ApiProperty({ description: "切换后的当前浏览区", example: 2 })
+  zoneId: number;
+}

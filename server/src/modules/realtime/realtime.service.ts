@@ -811,7 +811,8 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
       // 位置上报（#323 AI 目标检测输入 + #324 玩家互见数据源）：格式不对就丢掉这条（高频帧，不值得回 error 刷屏）
       const position = parsePosition(parsed.data);
       if (!position) return;
-      const zoneId = this.accounts.findById(socket.identity.id)?.zone_id ?? 1;
+      // #957：区按在线角色算（accounts 那一列只是「当前浏览区」）
+      const zoneId = this.roles.zoneOf(socket.identity.id);
       // 只喂在场表（#855）：它仲裁之后的那份坐标就是 AI 索敌与互见广播的唯一来源，
       // 以前这里还同时喂怪物 AI 一份原始坐标 —— 一份伪造的 pos 骗两边，仲裁形同虚设
       this.presence.updatePosition(
@@ -870,7 +871,8 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
         this.send(socket, this.mapEnterResultOf(socket.identity.id, join.mapId));
         return;
       }
-      const zoneId = this.accounts.findById(socket.identity.id)?.zone_id ?? 1;
+      // #957：区按在线角色算（accounts 那一列只是「当前浏览区」）
+      const zoneId = this.roles.zoneOf(socket.identity.id);
       // 房号（#809）：本刀只产出公共线（`slot="0"`）；分线 / 副本的选线留给第④刀，
       // 键先一次到位 —— 那时这里只多一个「选哪个 slot」的决策，下面整条链路不用动
       const roomId = roomKey(zoneId, join.mapId);

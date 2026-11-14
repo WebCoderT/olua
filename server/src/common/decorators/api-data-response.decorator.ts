@@ -1,5 +1,5 @@
 import { applyDecorators, HttpStatus, Type } from "@nestjs/common";
-import { ApiExtension, ApiResponse, getSchemaPath } from "@nestjs/swagger";
+import { ApiExtraModels, ApiExtension, ApiResponse, getSchemaPath } from "@nestjs/swagger";
 import { ApiEnvelopeDto } from "../dto/api-envelope.dto";
 
 interface ApiDataResponseOptions {
@@ -34,6 +34,10 @@ export function ApiDataResponse(model?: Type<unknown>, options: ApiDataResponseO
   const wrappedData = model ? (isArray ? { type: "array", items: { $ref: getSchemaPath(model) } } : dataSchema) : dataSchema;
 
   const decorators = [
+    // 只被 getSchemaPath 引用、没出现在任何方法签名里的 DTO（如 GET /zones/mine 的 MyZoneDto），
+    // Swagger 不会自己去注册它 —— 结果就是 `$ref` 悬空、生成出来的客户端对着不存在的类型报错。
+    // 所以这里显式登记一次：谁被这个装饰器点名，谁就必须进 components.schemas。
+    ...(model ? [ApiExtraModels(model)] : []),
     // 没有业务数据的接口（删除之类的 void 响应）不写这个扩展，生成器据此产出 `null`
     ...(model ? [ApiExtension("x-olua-data-schema", wrappedData)] : []),
     ApiExtension("x-olua-data-nullable", nullable || !model),

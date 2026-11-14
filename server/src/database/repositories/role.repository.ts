@@ -12,12 +12,91 @@ export type { RoleFilter };
 export class RoleRepository {
   constructor(private readonly db: DatabaseService) {}
 
-  findById(id: string): RoleRow | undefined {
+  /**
+   * 按 id 取角色 —— **必须交区**（#957）
+   *
+   * 区落在签名上，漏过滤就编译不过，不靠 review 记得写 where。跨区取到别人的角色
+   * 在 404 语义上等于「不存在」（见 docs/39 §2.4 规则 3）。
+   */
+  findById(zoneId: number, id: string): RoleRow | undefined {
+    return this.db.get<RoleRow>("SELECT * FROM roles WHERE id = ? AND zone_id = ?", [id, zoneId]);
+  }
+
+  /**
+   * 按 id 取角色，**不限区** —— 只给「还没有区上下文」的地方用（管理端 #960、迁移/合并工具）。
+   *
+   * 名字故意写全：`grep findByIdAnyZone` 就能数出还有谁在跨区取角色，别把它当 findById 用。
+   */
+  findByIdAnyZone(id: string): RoleRow | undefined {
     return this.db.get<RoleRow>("SELECT * FROM roles WHERE id = ?", [id]);
   }
 
-  findByAccount(accountId: string): RoleRow[] {
+  /**
+   * 合并区：把 `from` 区的全部角色改挂 `to` 区（#957）
+   *
+   * 先处理**同账号同名**：唯一约束是 `(account_id, zone_id, name)`，两个区各有一个「张三」
+   * 搬过去就撞了。口径（用户 2026-08-14 拍板「系统自动改名」）：改名的是**后进来的那个**
+   * —— 也就是 from 区的角色，加后缀（调用方给，通常是源区名），超出长度就截断原名。
+   *
+   * 返回改名清单，交给合并报告与系统邮件（玩家得知道自己为什么改名了）。
+   */
+  moveZoneOfRoles(
+    fromZoneId: number,
+    toZoneId: number,
+    suffix: string,
+    nameMax: number,
+    now: number,
+  ): Array<{ id: string; name: string; renamed: string }> {
+    const conflicts = this.db.all<{ id: string; name: string }>(
+      `SELECT f.id AS id, f.name AS name
+         FROM roles f
+         JOIN roles t ON t.account_id = f.account_id AND t.name = f.name AND t.zone_id = ?
+        WHERE f.zone_id = ?
+        ORDER BY f.created_at ASC`,
+      [toZoneId, fromZoneId],
+    );
+    const renamed: Array<{ id: string; name: string; renamed: string }> = [];
+    for (const row of conflicts) {
+      const base = row.name.slice(0, Math.max(1, nameMax - suffix.length));
+      let next = `${base}${suffix}`;
+      // 极少见：截断后仍撞（同名同后缀的历史数据）→ 追加角色 id 末 4 位兜底，保证一定落地
+      const clash = this.db.get<{ id: string }>(
+        "SELECT id FROM roles WHERE zone_id = ? AND name = ? AND id <> ?",
+        [toZoneId, next, row.id],
+      );
+      if (clash) next = `${base.slice(0, Math.max(1, nameMax - suffix.length - 4))}${suffix}${row.id.slice(-4)}`;
+      this.db.run("UPDATE roles SET name = ?, updated_at = ? WHERE id = ?", [next, now, row.id]);
+      renamed.push({ id: row.id, name: row.name, renamed: next });
+    }
+    this.db.run("UPDATE roles SET zone_id = ?, updated_at = ? WHERE zone_id = ?", [toZoneId, now, fromZoneId]);
+    return renamed;
+  }
+
+  /**
+   * 某账号在**全部区**的角色，**不限区**（#957）
+   *
+   * 只给「账号级视图」用：管理端账号详情的「另在 N 个区有角色」（#960）与删号前的清理。
+   * 玩家侧一律走 `findByAccountAndZone` —— 名字里的 `AnyZone` 就是给 `grep` 数调用点用的，
+   * 别拿它当「列表」用（那等于把别区的角色端到玩家面前）。
+   */
+  findByAccountAnyZone(accountId: string): RoleRow[] {
     return this.db.all<RoleRow>("SELECT * FROM roles WHERE account_id = ? ORDER BY created_at ASC", [accountId]);
+  }
+
+  /** 某账号在**某个区**的角色（选角页只拉这一份） */
+  findByAccountAndZone(zoneId: number, accountId: string): RoleRow[] {
+    return this.db.all<RoleRow>(
+      "SELECT * FROM roles WHERE account_id = ? AND zone_id = ? ORDER BY created_at ASC",
+      [accountId, zoneId],
+    );
+  }
+
+  /** 某账号在某区已有几个角色（每区 6 个的上限按这个数比） */
+  countByAccountAndZone(zoneId: number, accountId: string): number {
+    return this.db.count("SELECT COUNT(1) AS total FROM roles WHERE account_id = ? AND zone_id = ?", [
+      accountId,
+      zoneId,
+    ]);
   }
 
   /** 按 id 批量取（批量删除要先知道它们属于哪些账号，好清理在线标记） */
@@ -27,10 +106,23 @@ export class RoleRepository {
     return this.db.all<RoleRow>(`SELECT * FROM roles WHERE id IN (${placeholders})`, ids);
   }
 
-  /** 同一账号下是否已有同名角色（excludeId 用于「改自己的名字不算重复」） */
-  findByAccountAndName(accountId: string, name: string, excludeId?: string): RoleRow | undefined {
-    if (excludeId) return this.db.get<RoleRow>("SELECT * FROM roles WHERE account_id = ? AND name = ? AND id <> ?", [accountId, name, excludeId]);
-    return this.db.get<RoleRow>("SELECT * FROM roles WHERE account_id = ? AND name = ?", [accountId, name]);
+  /**
+   * 同一账号在**同一区**是否已有同名角色（excludeId 用于「改自己的名字不算重复」）
+   *
+   * 唯一约束是 `(account_id, zone_id, name)`：同名跨区**允许**（区是独立服），同区重名才拦。
+   */
+  findByAccountZoneAndName(zoneId: number, accountId: string, name: string, excludeId?: string): RoleRow | undefined {
+    if (excludeId) {
+      return this.db.get<RoleRow>(
+        "SELECT * FROM roles WHERE account_id = ? AND zone_id = ? AND name = ? AND id <> ?",
+        [accountId, zoneId, name, excludeId],
+      );
+    }
+    return this.db.get<RoleRow>("SELECT * FROM roles WHERE account_id = ? AND zone_id = ? AND name = ?", [
+      accountId,
+      zoneId,
+      name,
+    ]);
   }
 
   /**
@@ -48,9 +140,9 @@ export class RoleRepository {
 
   insert(row: RoleRow): void {
     this.db.run(
-      `INSERT INTO roles (id, account_id, name, occupation, sex, level, kills, data, revision, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [row.id, row.account_id, row.name, row.occupation, row.sex, row.level, row.kills, row.data, row.revision, row.created_at, row.updated_at],
+      `INSERT INTO roles (id, account_id, zone_id, name, occupation, sex, level, kills, data, revision, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [row.id, row.account_id, row.zone_id, row.name, row.occupation, row.sex, row.level, row.kills, row.data, row.revision, row.created_at, row.updated_at],
     );
   }
 
@@ -73,8 +165,8 @@ export class RoleRepository {
    */
   listForLeaderboard(): RoleLeaderboardRow[] {
     return this.db.all<RoleLeaderboardRow>(
-      `SELECT r.id, r.name, r.occupation, r.level, r.kills, r.data, COALESCE(a.zone_id, 1) AS zone_id
-       FROM roles r LEFT JOIN accounts a ON a.id = r.account_id`,
+      `SELECT r.id, r.name, r.occupation, r.level, r.kills, r.data, r.zone_id AS zone_id
+       FROM roles r`,
     );
   }
 
@@ -147,7 +239,7 @@ export class RoleRepository {
       fields.push("data = ?");
       params.push(patch.data);
     }
-    if (fields.length === 0) return this.findById(id) !== undefined;
+    if (fields.length === 0) return this.findByIdAnyZone(id) !== undefined;
     fields.push("revision = revision + 1");
     fields.push("updated_at = ?");
     params.push(patch.updated_at ?? Date.now());
@@ -291,4 +383,5 @@ export class RoleRepository {
     }
     return { clause: where.length ? `WHERE ${where.join(" AND ")}` : "", params };
   }
+
 }

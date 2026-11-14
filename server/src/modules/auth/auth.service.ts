@@ -40,10 +40,11 @@ export class AuthService {
     const username = dto.username.trim();
     if (this.accounts.findByUsername(username)) throw BizException.conflict(BizCode.ACCOUNT_EXISTS, "该账号已被注册");
 
-    // 归属区（#295 阶段二）：必须是活区（不存在 / 已合并都进不去）；省略落一区（默认区）
-    const zoneId = dto.zoneId ?? 1;
-    const zone = this.zones.findLiveById(zoneId);
-    if (!zone) throw BizException.notFound(BizCode.ZONE_NOT_FOUND, "所选区服不存在或已合并");
+    // 区（#957）：**注册不再定区**。账号只是身份，归属由角色决定（`roles.zone_id`）；
+    // 这一列只是「当前浏览区」，注册时先落在第一个活区，玩家选服时由 POST /zones/select 改。
+    // 老客户端仍可能带 zoneId —— 直接忽略（忽略而不是报错，否则旧包白屏）。
+    const firstZone = this.zones.listLive()[0];
+    if (!firstZone) throw BizException.notFound(BizCode.ZONE_NOT_FOUND, "当前没有可用区服");
 
     const now = Date.now();
     const account: AccountRow = {
@@ -59,7 +60,7 @@ export class AuthService {
       ban_until: null,
       banned_by: null,
       banned_at: null,
-      zone_id: zone.id,
+      active_zone_id: firstZone.id,
       created_at: now,
       updated_at: now,
       last_login_at: now,

@@ -466,13 +466,25 @@ export const ApiRoutes = {
      */
     report: "/social/reports",
   },
-  /** zone 模块（1 个接口） */
+  /** zone 模块（3 个接口） */
   zone: {
     /**
      * 区服列表（活区）（GET /zones）
      *
-     * 返回全部未合并的区服，按开区顺序排列。注册入参 `zoneId` 从这里选。
+     * 返回全部未合并的区服，按开区顺序排列。注册**不再选**区（#957），选服用 POST /zones/select。
      */
     list: "/zones",
+    /**
+     * 我的区服（含各区角色数与当前区）（GET /zones/mine）
+     *
+     * 登录后拉一次渲染选服弹窗。只有一个区有角色时客户端不弹窗，直接进选角页。
+     */
+    mine: "/zones/mine",
+    /**
+     * 切换当前浏览区（POST /zones/select）
+     *
+     * 把所选区写进账号的「当前浏览区」；之后 GET /roles 与建角都落在这个区。区归属不变。
+     */
+    select: "/zones/select",
   },
 } as const;

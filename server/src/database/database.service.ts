@@ -89,7 +89,24 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
     // 这里赶在建索引前对「已存在的旧表」补列；新库没有这两张表，跳过，exec 后段的
     // ensureColumn 幂等兜底。
     if (this.count("SELECT COUNT(1) AS total FROM sqlite_master WHERE type = 'table' AND name = ?", ["accounts"]) > 0) {
-      this.ensureColumn("accounts", "zone_id", "INTEGER NOT NULL DEFAULT 1");
+      // #957：账号不再属于区 —— 这一列降级成「当前浏览区」，名字也跟着改，免得有人拿它当归属读。
+      // 旧库就地改名（SQLite 3.25+ 的 RENAME COLUMN，值不丢），新库由下面的 ALTER 补。
+      if (this.hasColumn("accounts", "zone_id") && !this.hasColumn("accounts", "active_zone_id")) {
+        this.db.exec("ALTER TABLE accounts RENAME COLUMN zone_id TO active_zone_id");
+        this.logger.log("accounts.zone_id → active_zone_id（降级为「当前浏览区」，角色归属见 roles.zone_id， #957）");
+      }
+      this.ensureColumn("accounts", "active_zone_id", "INTEGER NOT NULL DEFAULT 1");
+    }
+    // 角色带区（#957）：加列 + 按「账号当时的区」回填。只在**第一次**加列时回填 ——
+    // 之后再跑会拿账号的当前浏览区覆盖角色的真实归属（合并区之后就错得更远）。
+    if (this.hasTable("roles") && !this.hasColumn("roles", "zone_id")) {
+      this.ensureColumn("roles", "zone_id", "INTEGER NOT NULL DEFAULT 1");
+      // 注意列名是**改名之后**的 active_zone_id：上面那一步已经把 accounts.zone_id 就地改掉了，
+      // 这里再写旧名会「no such column」直接启动失败（升级路径，新库走不到这一段）
+      this.db.exec(
+        "UPDATE roles SET zone_id = COALESCE((SELECT a.active_zone_id FROM accounts a WHERE a.id = roles.account_id), 1)",
+      );
+      this.logger.log("roles.zone_id 已加列，并按账号原区回填（#957）");
     }
     if (this.hasTable("world_monsters")) {
       this.ensureColumn("world_monsters", "zone_id", "INTEGER NOT NULL DEFAULT 1");
@@ -125,6 +142,9 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
       CREATE TABLE IF NOT EXISTS roles (
         id         TEXT PRIMARY KEY,
         account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+        -- 区（#957）：**角色属于区**，账号不再属于区（accounts.zone_id 降级为「当前浏览区」，
+        -- 改名 active_zone_id）。一个账号可以在各区各建角色，所以区必须落在这一行上。
+        zone_id    INTEGER NOT NULL DEFAULT 1,
         name       TEXT NOT NULL,
         occupation TEXT NOT NULL DEFAULT '',
         sex        TEXT NOT NULL DEFAULT '',
@@ -1418,8 +1438,9 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
     this.db.exec(
       "CREATE UNIQUE INDEX IF NOT EXISTS idx_accounts_email ON accounts(LOWER(email)) WHERE email IS NOT NULL;",
     );
-    // 区服（#295 阶段二）：存量账号全部归入一区（zone_id=1 与 zones seed 对齐，注册入参可指定）
-    this.ensureColumn("accounts", "zone_id", "INTEGER NOT NULL DEFAULT 1");
+    // 当前浏览区（#295 阶段二 → #957 降级）：存量账号全部归入一区。
+    // **它不是归属**：角色属于哪个区只认 `roles.zone_id`；这一列只决定「选角页拉哪个区的角色」。
+    this.ensureColumn("accounts", "active_zone_id", "INTEGER NOT NULL DEFAULT 1");
     this.ensureColumn("world_monsters", "zone_id", "INTEGER NOT NULL DEFAULT 1");
     // 在线心跳（#547）：与 online_role_id 同生同灭。补列后存量在线标记的心跳是 NULL，
     // 而「NULL 心跳」在清算判据里等于已过期 —— 直接上线会把所有在线玩家 mass kick。
@@ -1609,7 +1630,11 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
   }
 
   /**
-   * 角色名唯一索引：`UNIQUE(account_id, name)`（#878 / I3）
+   * 角色名唯一索引：`UNIQUE(account_id, zone_id, name)`（#878 / I3，区维度见 #957）
+   *
+   * 每区各自唯一：同一个账号在 1 区叫「张三」、2 区也叫「张三」是允许的（区是独立服，
+   * 玩家进新区当然想用老名字）。反过来，**同区同账号**重名必须拦住——客户端选角页
+   * 只显示名字，同区重名会让人分不清哪个是自己的。
    *
    * 以前重名只靠 `RolesService.create` 里的一次「查了再插」—— 两条并发请求可以双双查到
    * 「没有」，然后各插一行。表上没有约束，应用层的检查就只是**概率**上的检查。
@@ -1621,10 +1646,12 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
    */
   private ensureRoleNameUnique(): void {
     const duplicates = this.db
-      .prepare("SELECT account_id, name, COUNT(1) AS total FROM roles GROUP BY account_id, name HAVING COUNT(1) > 1")
-      .all() as { account_id: string; name: string; total: number }[];
+      .prepare(
+        "SELECT account_id, zone_id, name, COUNT(1) AS total FROM roles GROUP BY account_id, zone_id, name HAVING COUNT(1) > 1",
+      )
+      .all() as { account_id: string; zone_id: number; name: string; total: number }[];
     if (duplicates.length > 0) {
-      const detail = duplicates.map((row) => `${row.account_id} / ${row.name} ×${row.total}`).join("；");
+      const detail = duplicates.map((row) => `${row.account_id} / z${row.zone_id} / ${row.name} ×${row.total}`).join("；");
       this.logger.error(
         `角色名唯一索引未建立：库里有 ${duplicates.length} 组同账号同名角色（${detail}）。` +
           "这是并发建号留下的重复行 —— 在管理端把这些角色改名后重启即可自动建索引；" +
@@ -1632,7 +1659,11 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
       );
       return;
     }
-    this.db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_roles_account_name ON roles(account_id, name)");
+    // 旧的两列索引要显式删掉：同名索引不冲突，但它在的每一天都在阻止「同账号跨区同名」
+    this.db.exec("DROP INDEX IF EXISTS idx_roles_account_name");
+    this.db.exec(
+      "CREATE UNIQUE INDEX IF NOT EXISTS idx_roles_account_zone_name ON roles(account_id, zone_id, name)",
+    );
   }
 
   /**

@@ -12,6 +12,10 @@ export class RoleSummaryDto {
   @ApiProperty({ description: "所属账号 id" })
   accountId: string;
 
+  /** 角色所属区（#957：区归属的唯一权威，客户端只用它显示「区服：X」，不能拿来当请求参数） */
+  @ApiProperty({ description: "所属区 id（展示用；服务端按它判归属，客户端不要回传）", example: 1 })
+  zoneId: number;
+
   @ApiProperty({ description: "角色名" })
   name: string;
 
@@ -48,6 +52,7 @@ export class RoleSummaryDto {
     const dto = new RoleSummaryDto();
     dto.id = row.id;
     dto.accountId = row.account_id;
+    dto.zoneId = row.zone_id;
     dto.name = row.name;
     dto.occupation = row.occupation;
     dto.sex = row.sex;

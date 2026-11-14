@@ -88,6 +88,10 @@ const ALLOWED_EDGES = [
   { from: "modules/roles", to: "modules/game-config/dto/mall.dto.ts", why: "商城限购 / 库存视图形状复用（#846）" },
   // 区服（#295）：管理端开区/合并区直接复用 ZoneService 的一份实现（admin 控制器只做鉴权与审计）
   { from: "modules/admin", to: "modules/zone/", why: "区服管理复用 ZoneService 的开区/合并实现" },
+  // 合并区改名（#957）：撞名时的截断长度必须与建角校验读同一个 ROLE_NAME_MAX_LENGTH，
+  // 在 zone 里抄一个数字，等哪天名字上限调了就会出现「合区后角色名超长」——
+  // 只有这一个常量，没有业务逻辑
+  { from: "modules/zone", to: "modules/roles/role-data.util.ts", why: "合区改名截断长度取存档域的同一份上限（#957）" },
   // realtime（gateway+结算）依赖 world 与存档的公开服务，依赖 combat 纯函数
   { from: "modules/realtime", to: "modules/combat/role-attributes.ts", why: "结算取属性汇总" },
   { from: "modules/realtime", to: "modules/combat/status-combat.ts", why: "受击算格挡与减伤（#822，纯函数）" },
@@ -168,6 +172,9 @@ const REPO_EDGES = {
     "modules/realtime",
     // 排行榜（#400）：物化时一次读全表（等级 / 击杀是索引列，战力从存档现算）
     "modules/leaderboard",
+    // 合并区（#957）：区归属的唯一权威是 roles.zone_id，搬角色必须在 ZoneService 的合并事务里
+    // （搬账号 → 搬世界发牌 → 改角色区，三步同生共死；拆到 roles 域就没法回滚了）
+    "modules/zone",
   ],
   "database/repositories/audit.repository.ts": ["modules/audit", "modules/admin"],
   "database/repositories/announcement.repository.ts": ["modules/announcement"],

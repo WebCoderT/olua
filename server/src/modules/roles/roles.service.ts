@@ -211,7 +211,24 @@ export class RolesService {
   /** 当前账号的角色列表（按创建时间升序，与客户端站位顺序一致） */
   list(accountId: string): RoleSummaryDto[] {
     const account = this.mustAccount(accountId);
-    return this.roles.findByAccount(accountId).map((row) => RoleSummaryDto.from(row, account.online_role_id));
+    // #957：选角页只拉「当前浏览区」的角色。角色属于区，账号只是身份。
+    return this.roles
+      .findByAccountAndZone(account.active_zone_id, accountId)
+      .map((row) => RoleSummaryDto.from(row, account.online_role_id));
+  }
+
+  /**
+   * 账号当前所在区（#957）
+   *
+   * 进图后**角色就是权威**（`roles.zone_id`）；还没选角色时退回账号的「当前浏览区」。
+   * 实时与战斗结算都走这一个入口 —— 以前它们各自去读 `accounts.zone_id`，
+   * 那是「账号属于区」时代的读法，多区建角之后会读到错的区。
+   */
+  zoneOf(accountId: string): number {
+    const account = this.accounts.findById(accountId);
+    if (!account) return 1;
+    const row = account.online_role_id ? this.roles.findByIdAnyZone(account.online_role_id) : undefined;
+    return row?.zone_id ?? account.active_zone_id;
   }
 
   /** 当前选中（在线）角色；未选或角色已被删返回 null */
@@ -219,7 +236,7 @@ export class RolesService {
     const account = this.mustAccount(accountId);
     const roleId = account.online_role_id;
     if (!roleId) return null;
-    const row = this.roles.findById(roleId);
+    const row = this.roles.findById(account.active_zone_id, roleId);
     return row ? RoleDto.from(row, roleId) : null;
   }
 
@@ -239,9 +256,14 @@ export class RolesService {
     return this.roles.findIdsByName(name.trim());
   }
 
-  /** 这个角色 id 是否存在（社交按 id 加好友前的存在性校验：#389） */
+  /**
+   * 这个角色 id 是否存在（社交按 id 加好友前的存在性校验：#389）
+   *
+   * 入参是**别人**的角色 id，调用方这会儿还拿不到对方的区 —— 跨区拦截在 #958 做
+   * （解析层带区 + mustSameZone）。在那之前这里只能跨区取，别把它当成「同区校验」。
+   */
   existsById(roleId: string): boolean {
-    return Boolean(this.roles.findById(roleId));
+    return Boolean(this.roles.findByIdAnyZone(roleId));
   }
 
   /**
@@ -252,7 +274,8 @@ export class RolesService {
    * 都是「不够级」，调用方不需要区分（要区分存在的先调 `existsById`）。
    */
   levelOf(roleId: string): number {
-    const row = this.roles.findById(roleId);
+    // 同 existsById：目标角色的区要由调用方给（#958）
+    const row = this.roles.findByIdAnyZone(roleId);
     return row ? Math.max(0, Math.floor(Number(row.level) || 0)) : 0;
   }
 
@@ -272,14 +295,19 @@ export class RolesService {
     const occupation = normalizeEnum(dto.occupation, ROLE_OCCUPATIONS, "职业");
     const sex = normalizeEnum(dto.sex, ROLE_SEXES, "性别");
 
-    if (this.roles.findByAccountAndName(accountId, name)) throw BizException.conflict(BizCode.ROLE_NAME_EXISTS, "该账号下已存在同名角色");
+    // 区（#957）：建角落在「当前浏览区」，玩家先用 POST /zones/select 选好区再建
+    const zoneId = account.active_zone_id;
+    if (this.roles.findByAccountZoneAndName(zoneId, accountId, name)) {
+      throw BizException.conflict(BizCode.ROLE_NAME_EXISTS, "该区下已存在同名角色");
+    }
 
     // 角色数上限（#878 / I3）：先数再插。并发下两道请求可能同时通过这一关 ——
-    // 兜底是表上的 `UNIQUE(account_id, name)`（重名）与「先到先得」的语义：
+    // 兜底是表上的 `UNIQUE(account_id, zone_id, name)`（重名）与「先到先得」的语义：
     // 真撞上也只是多一个角色，不会变成无限建号（这一道闸挡的是脚本刷行）
+    // 上限按**区**算（#957）：每区 6 个，玩家进新区应当拿到完整角色位
     const limit = this.roleLimitPerAccount();
-    if (this.roles.findByAccount(accountId).length >= limit) {
-      throw new BizException(BizCode.ROLE_LIMIT_EXCEEDED, `每个账号最多 ${limit} 个角色，请先删除一个再建`, HttpStatus.BAD_REQUEST);
+    if (this.roles.countByAccountAndZone(zoneId, accountId) >= limit) {
+      throw new BizException(BizCode.ROLE_LIMIT_EXCEEDED, `每个区最多 ${limit} 个角色，请先删除一个再建`, HttpStatus.BAD_REQUEST);
     }
 
     const id = this.generateRoleId();
@@ -298,6 +326,7 @@ export class RolesService {
     const row: RoleRow = {
       id,
       account_id: accountId,
+      zone_id: zoneId,
       name,
       occupation,
       sex,
@@ -325,7 +354,8 @@ export class RolesService {
    */
   private generateRoleId(): string {
     let id = Date.now().toString();
-    while (this.roles.findById(id)) id = `${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+    // 主键唯一性不分区：这里要的是「全库没有这个 id」，所以故意用 AnyZone
+    while (this.roles.findByIdAnyZone(id)) id = `${Date.now()}-${Math.floor(Math.random() * 1000)}`;
     return id;
   }
 
@@ -765,7 +795,7 @@ export class RolesService {
     const account = this.mustAccount(accountId);
     const roleId = account.online_role_id;
     if (!roleId) throw BizException.conflict(BizCode.ROLE_NOT_FOUND, "当前没有在线角色，无法拾取");
-    const existing = this.roles.findById(roleId);
+    const existing = this.roles.findById(account.active_zone_id, roleId);
     if (!existing || existing.account_id !== accountId) {
       throw BizException.conflict(BizCode.ROLE_NOT_FOUND, "当前没有在线角色，无法拾取");
     }
@@ -882,7 +912,10 @@ export class RolesService {
   /** 当前在线角色的修订号（不在线返回 null）—— 拾取幂等重放应答要用 */
   onlineRevision(accountId: string): number | null {
     const account = this.accounts.findById(accountId);
-    const row = account?.online_role_id ? this.roles.findById(account.online_role_id) : undefined;
+    const row =
+      account?.online_role_id && account
+        ? this.roles.findById(account.active_zone_id, account.online_role_id)
+        : undefined;
     return row ? row.revision : null;
   }
 
@@ -1594,7 +1627,10 @@ export class RolesService {
    */
   applyMonsterHit(accountId: string, damage: number): { hp: number; maxHp: number } | null {
     const account = this.accounts.findById(accountId);
-    const existing = account && account.online_role_id ? this.roles.findById(account.online_role_id) : undefined;
+    const existing =
+      account && account.online_role_id
+        ? this.roles.findById(account.active_zone_id, account.online_role_id)
+        : undefined;
     if (!account || !existing || account.online_role_id !== existing.id) return null;
 
     const data = decodeStoredRoleData(existing.data);
@@ -1693,7 +1729,8 @@ export class RolesService {
       // 会在他不在的时候被烧死 —— 那不是玩法，是数据事故
       const account = online.get(due.roleId);
       if (!account) continue;
-      const row = this.roles.findById(due.roleId);
+      // 这条路径拿到的是一批「到期状态」，角色已在在线表里核对过账号；区从角色行上取
+      const row = this.roles.findByIdAnyZone(due.roleId);
       if (!row) continue;
       const effect = due.effect;
       const data = decodeStoredRoleData(row.data);
@@ -1771,7 +1808,10 @@ export class RolesService {
    */
   spendCastMp(accountId: string, cost: number): { mp: number; maxMp: number } | null {
     const account = this.accounts.findById(accountId);
-    const existing = account && account.online_role_id ? this.roles.findById(account.online_role_id) : undefined;
+    const existing =
+      account && account.online_role_id
+        ? this.roles.findById(account.active_zone_id, account.online_role_id)
+        : undefined;
     if (!account || !existing) return null;
 
     const data = decodeStoredRoleData(existing.data);
@@ -2004,7 +2044,7 @@ export class RolesService {
    */
   applyKillExp(accountId: string, roleId: string, exp: number): KillExpResult | null {
     const account = this.accounts.findById(accountId);
-    const existing = account ? this.roles.findById(roleId) : undefined;
+    const existing = account ? this.roles.findById(account.active_zone_id, roleId) : undefined;
     // 与升级 / 购买同一纪律：被踢下线的角色不能再推进度（结算进行到一半被踢是正常情况）
     if (!account || !existing || existing.account_id !== accountId || account.online_role_id !== roleId) return null;
 
@@ -2050,7 +2090,7 @@ export class RolesService {
     const account = this.accounts.findById(accountId);
     const roleId = account?.online_role_id;
     if (!account || !roleId) return null;
-    const role = this.roles.findById(roleId);
+    const role = this.roles.findById(account.active_zone_id, roleId);
     if (!role || role.account_id !== accountId) return null;
     if (role.level >= this.roleMaxLevel()) return null;
     return this.applyKillExp(accountId, roleId, exp);
@@ -2065,7 +2105,7 @@ export class RolesService {
   countGoodInBag(accountId: string, goodId: string): number {
     const account = this.accounts.findById(accountId);
     const roleId = account?.online_role_id;
-    const existing = roleId ? this.roles.findById(roleId) : undefined;
+    const existing = roleId && account ? this.roles.findById(account.active_zone_id, roleId) : undefined;
     if (!account || !roleId || !existing || existing.account_id !== accountId) return 0;
     const data = decodeStoredRoleData(existing.data);
     return this.countGoods(data, goodId);
@@ -2118,7 +2158,8 @@ export class RolesService {
     rewards: { bindGold: number; exp: number; items: Array<{ goodId: string; count: number }> },
     source = "mail-auto",
   ): KillExpResult {
-    const existing = this.roles.findById(roleId);
+    // 入参只有 roleId（邮件 / 任务奖励），区在 P2/P7 由调用方带上（#958）
+    const existing = this.roles.findByIdAnyZone(roleId);
     if (!existing) throw BizException.notFound(BizCode.ROLE_NOT_FOUND, "角色不存在");
     return this.applyRewards(existing, null, rewards, source);
   }
@@ -2272,7 +2313,7 @@ export class RolesService {
     if (account.online_role_id !== roleId) {
       throw BizException.conflict(BizCode.ROLE_KICKED, "该角色已被管理员下线");
     }
-    const existing = this.roles.findById(roleId);
+    const existing = this.roles.findById(account.active_zone_id, roleId);
     if (!existing || existing.account_id !== accountId) {
       throw BizException.conflict(BizCode.ROLE_NOT_FOUND, "当前没有在线角色");
     }
@@ -2456,7 +2497,7 @@ export class RolesService {
     const account = this.accounts.findById(accountId);
     const roleId = account?.online_role_id;
     if (!roleId) return null;
-    const row = this.roles.findById(roleId);
+    const row = account ? this.roles.findById(account.active_zone_id, roleId) : undefined;
     return row && row.account_id === accountId ? row : null;
   }
 
@@ -2573,7 +2614,8 @@ export class RolesService {
    * @throws BizException 不存在 → 404；存在但不属于该账号 → 403（越权）
    */
   private mustOwnRole(accountId: string, roleId: string): RoleRow {
-    const row = this.roles.findById(roleId);
+    const account = this.mustAccount(accountId);
+    const row = this.roles.findById(account.active_zone_id, roleId);
     if (!row) throw BizException.notFound(BizCode.ROLE_NOT_FOUND, "角色不存在");
     if (row.account_id !== accountId) {
       throw new BizException(BizCode.FORBIDDEN, "无权操作该角色", HttpStatus.FORBIDDEN);

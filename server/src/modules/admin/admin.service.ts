@@ -101,7 +101,7 @@ export class AdminService {
     const includeEmail = roleHasPermission(user?.role, Permission.ACCOUNT_EMAIL);
     return {
       account: AccountDto.from(account, includeEmail),
-      roles: this.roles.findByAccount(id).map((row) => RoleSummaryDto.from(row, account.online_role_id)),
+      roles: this.roles.findByAccountAnyZone(id).map((row) => RoleSummaryDto.from(row, account.online_role_id)),
     };
   }
 
@@ -315,10 +315,10 @@ export class AdminService {
 
     if (dto.name !== undefined) {
       const name = normalizeName(dto.name);
-      // 同账号不许重名：玩家侧的创建与保存都拦了，管理端不能开这个口子
-      // （否则客户端选角列表里会出现两个同名角色，玩家自己也没法区分）
-      if (this.roles.findByAccountAndName(row.account_id, name, id)) {
-        throw BizException.conflict(BizCode.ROLE_NAME_EXISTS, "该账号下已存在同名角色");
+      // 同一区不许重名（#957）：区是独立服，同名跨区合法，同区重名才会让选角页分不清。
+      // 区取角色自己那一行（管理端这会儿还没有 X-Zone-Id，见 #960）
+      if (this.roles.findByAccountZoneAndName(row.zone_id, row.account_id, name, id)) {
+        throw BizException.conflict(BizCode.ROLE_NAME_EXISTS, "该区下已存在同名角色");
       }
       patch.name = name;
       next.name = name;
@@ -465,7 +465,7 @@ export class AdminService {
   /** 清空某账号的全部角色（重置玩家存档时用；账号本身保留） */
   purgeAccountRoles(accountId: string): BatchDeleteResultDto {
     this.mustAccount(accountId);
-    const rows = this.roles.findByAccount(accountId);
+    const rows = this.roles.findByAccountAnyZone(accountId);
     const clearedOnlineAccountIds = this.clearOnlineMarkers(rows);
     const deleted = this.roles.deleteByIds(rows.map((row) => row.id));
     return {
@@ -666,7 +666,8 @@ export class AdminService {
   }
 
   private mustRole(id: string): RoleRow {
-    const row = this.roles.findById(id);
+    // 管理端还没有区上下文（#960 补 X-Zone-Id），这里只能跨区取；改成 findById 要等 #960
+    const row = this.roles.findByIdAnyZone(id);
     if (!row) throw BizException.notFound(BizCode.ROLE_NOT_FOUND, "角色不存在");
     return row;
   }

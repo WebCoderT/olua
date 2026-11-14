@@ -3,13 +3,15 @@
  * 区服专项 e2e（server/test/e2e-zone.cjs，issue #295 阶段二）
  *
  * 盯的不变量（改区服模型后必须全绿）：
- * 一、注册选区：公共 GET /zones 只列活区；注册带 zoneId 落对应区（省略落一区），
- *     不存在 / 已合并的区拒注册；账号归属区在 me 里如实返回
+ * 一、注册与选服（#957 起账号不属于区）：公共 GET /zones 只列活区；注册不再收区
+ *     （带 zoneId 一律忽略且不报错，旧包兼容）；选服走 POST /zones/select，
+ *     不存在 / 已合并的区被拒；GET /zones/mine 给出各区的角色数与当前浏览区
  * 二、合并区边界：from=to / from 不存在 / 目标已合并 / from 已合并，各自拒绝码正确；
  *     合并后的区从活区列表消失（管理端列表仍可见，带 mergedInto 标记）
  * 三、世界按区隔离：两个区进同一张图各播一份怪（instanceId 带各自区段、互不相同），
  *     各区扣血只影响自己的实例；拿别的区的实例 id 出手被拒（unknown_target）
- * 四、合并区生效：事务内搬账号（me.zoneId 变了）、世界实例改牌（z2 行清零、
+ * 四、合并区生效：事务内搬角色（roles.zone_id 改挂目标区）+ 搬账号的当前浏览区、
+ *     世界实例改牌（z2 行清零、
  *     全部变成 z1 段且总量不丢）、被打过的怪血量如实保留、epoch 升级后旧连接
  *     重新 join 落在新世界的权威状态上
  *
@@ -222,14 +224,19 @@ function connect(url) {
     check(Array.isArray(zones0.data) && zones0.data.length === 1 && zones0.data[0].id === 1 && zones0.data[0].name === "一区", "公共 GET /zones 初始只列一区（seed）", JSON.stringify(zones0.data));
 
     const regA = await api(baseUrl, "POST", "auth/register", { body: { username: "zone_player_a", password: "pass1234" } });
-    checkEqual(regA.data && regA.data.account.zoneId, 1, "注册不带 zoneId 落默认一区（老客户端兼容）");
+    check(
+      !!(regA.data && regA.data.account) && !("zoneId" in regA.data.account),
+      "注册不带 zoneId，响应里也没有 account.zoneId（账号不属于区，#957）",
+      JSON.stringify(regA.data && regA.data.account),
+    );
     const tokenA = regA.data && regA.data.token;
 
+    // 旧包兼容（docs/39 §八 风险表）：注册时塞 zoneId **忽略且不报错** —— 报错会让旧客户端白屏
     const regB = await api(baseUrl, "POST", "auth/register", { body: { username: "zone_player_b", password: "pass1234", zoneId: 1 } });
-    checkEqual(regB.data && regB.data.account.zoneId, 1, "注册显式带 zoneId=1 同样落一区");
+    check(!!(regB.data && regB.data.token), "注册带 zoneId=1 仍然成功（字段被剥掉）", regB.message);
 
     const regBad = await api(baseUrl, "POST", "auth/register", { body: { username: "zone_player_bad", password: "pass1234", zoneId: 999 } });
-    checkEqual(regBad.code, 50025, "注册选不存在的区被拒（ZONE_NOT_FOUND 50025）", regBad.message);
+    check(!!(regBad.data && regBad.data.token), "注册带不存在的 zoneId 也只是被忽略（不再 50025）", regBad.message);
 
     const adminReg = await api(baseUrl, "POST", "admin/auth/register", { body: { username: "zone_super", password: "super-pass-1", registerCode: "zone-admin-code" } });
     const adminToken = adminReg.data && adminReg.data.token;
@@ -239,9 +246,16 @@ function connect(url) {
     check(!!(zone2.data && zone2.data.id >= 2), "开新区「二区」成功", JSON.stringify(zone2.data));
     const zone2Id = zone2.data && zone2.data.id;
 
-    const regC = await api(baseUrl, "POST", "auth/register", { body: { username: "zone_player_c", password: "pass1234", zoneId: zone2Id } });
-    checkEqual(regC.data && regC.data.account.zoneId, zone2Id, "注册带新区的 zoneId 落二区");
+    const regC = await api(baseUrl, "POST", "auth/register", { body: { username: "zone_player_c", password: "pass1234" } });
     const tokenC = regC.data && regC.data.token;
+    const selectC = await api(baseUrl, "POST", "zones/select", { token: tokenC, body: { zoneId: zone2Id } });
+    checkEqual(selectC.data && selectC.data.zoneId, zone2Id, "C 选服切到二区（POST /zones/select）");
+    const mineC = await api(baseUrl, "GET", "zones/mine", { token: tokenC });
+    const mineCRow = (mineC.data || []).find((zone) => zone.id === zone2Id);
+    check(!!mineCRow && mineCRow.current === true, "GET /zones/mine 的 current 是二区", JSON.stringify(mineC.data));
+
+    const selectMissing = await api(baseUrl, "POST", "zones/select", { token: tokenC, body: { zoneId: 999 } });
+    checkEqual(selectMissing.code, 50025, "选不存在的区被拒（ZONE_NOT_FOUND 50025）", selectMissing.message);
 
     const zones1 = await api(baseUrl, "GET", "zones");
     check(Array.isArray(zones1.data) && zones1.data.length === 2 && zones1.data[0].id === 1 && zones1.data[1].id === zone2Id, "开区后活区列表变成两个（按开区顺序）", JSON.stringify(zones1.data && zones1.data.map((z) => z.id)));
@@ -339,8 +353,21 @@ function connect(url) {
     const merged = await api(baseUrl, "POST", "admin/zones/merge", { token: adminToken, body: { fromZoneId: zone2Id, toZoneId: 1 } });
     checkEqual(merged.data && merged.data.mergedInto, 1, "二区并入一区成功");
 
-    const meC = await api(baseUrl, "GET", "auth/me", { token: tokenC });
-    checkEqual(meC.data && meC.data.zoneId, 1, "二区玩家的账号已搬进一区（me.zoneId）");
+    const mineCAfter = await api(baseUrl, "GET", "zones/mine", { token: tokenC });
+    const mineCAfterFirst = (Array.isArray(mineCAfter.data) ? mineCAfter.data : [])[0];
+    check(
+      !!mineCAfterFirst && mineCAfterFirst.id === 1 && mineCAfterFirst.current === true,
+      "合并后账号的「当前浏览区」已搬到一区（/zones/mine）",
+      JSON.stringify(mineCAfter.data),
+    );
+    const rolesCAfter = await api(baseUrl, "GET", "roles", { token: tokenC });
+    const rolesCAfterList = Array.isArray(rolesCAfter.data) ? rolesCAfter.data : [];
+    checkEqual(rolesCAfterList.length, 1, "二区玩家的角色跟着搬过来（GET /roles 仍是他那 1 个）");
+    check(
+      rolesCAfterList.every((row) => row.zoneId === 1),
+      "角色行的 zoneId 已是 1（区归属的唯一权威搬对了）",
+      JSON.stringify(rolesCAfterList.map((row) => row.zoneId)),
+    );
 
     await sleep(1000); // 等 tick 巡检到 epoch 变化、作废旧内存（300ms 一轮，两轮足够）
     const { DatabaseSync } = require("node:sqlite");
@@ -361,14 +388,14 @@ function connect(url) {
 
     const zonesEnd = await api(baseUrl, "GET", "zones");
     check(Array.isArray(zonesEnd.data) && zonesEnd.data.length === 1 && zonesEnd.data[0].id === 1, "合并后活区列表只剩一区");
-    const regMerged = await api(baseUrl, "POST", "auth/register", { body: { username: "zone_player_late", password: "pass1234", zoneId: zone2Id } });
-    checkEqual(regMerged.code, 50025, "注册选已合并的区被拒（同 ZONE_NOT_FOUND）", regMerged.message);
+    const selectMerged = await api(baseUrl, "POST", "zones/select", { token: tokenC, body: { zoneId: zone2Id } });
+    checkEqual(selectMerged.code, 50026, "选已合并的区被拒（ZONE_MERGED 50026）", selectMerged.message);
 
     const adminZonesEnd = await api(baseUrl, "GET", "admin/zones", { token: adminToken });
     const zone2Row = Array.isArray(adminZonesEnd.data) && adminZonesEnd.data.find((z) => z.id === zone2Id);
     const zone1Row = Array.isArray(adminZonesEnd.data) && adminZonesEnd.data.find((z) => z.id === 1);
     check(!!zone2Row && zone2Row.mergedInto === 1 && zone2Row.accountCount === 0, "管理端视角：二区已标记合并、账号数清零", JSON.stringify(zone2Row));
-    check(!!zone1Row && zone1Row.accountCount === 3, "管理端视角：一区账号数 = 3（A/B/C 全在）", zone1Row && `count=${zone1Row.accountCount}`);
+    check(!!zone1Row && zone1Row.accountCount === 4, "管理端视角：一区账号数 = 4（A/B/bad/C 的当前浏览区都在一区）", zone1Row && `count=${zone1Row.accountCount}`);
 
     //#endregion
   } finally {

@@ -49,7 +49,7 @@ export class AccountRepository {
 
   insert(row: AccountRow): void {
     this.db.run(
-      `INSERT INTO accounts (id, username, password, status, online_role_id, online_heartbeat_at, token_version, zone_id, created_at, updated_at, last_login_at)
+      `INSERT INTO accounts (id, username, password, status, online_role_id, online_heartbeat_at, token_version, active_zone_id, created_at, updated_at, last_login_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         row.id,
@@ -59,7 +59,7 @@ export class AccountRepository {
         row.online_role_id,
         row.online_heartbeat_at,
         row.token_version,
-        row.zone_id ?? 1,
+        row.active_zone_id ?? 1,
         row.created_at,
         row.updated_at,
         row.last_login_at,
@@ -87,6 +87,8 @@ export class AccountRepository {
     if (patch.banned_at !== undefined) assign("banned_at", patch.banned_at);
     if (patch.email !== undefined) assign("email", patch.email);
     if (patch.last_login_at !== undefined) assign("last_login_at", patch.last_login_at);
+    // 新列忘了加分支 = 静默不生效（#957 就踩过：/zones/select 返回成功但 active_zone_id 没写进去）
+    if (patch.active_zone_id !== undefined) assign("active_zone_id", patch.active_zone_id);
     if (fields.length === 0) return this.findById(id) !== undefined;
     assign("updated_at", patch.updated_at ?? Date.now());
     params.push(id);
@@ -195,7 +197,7 @@ export class AccountRepository {
    * 只在合并区的事务里调用 —— 单独调用没有业务意义（玩家自己换不了区）。
    */
   moveAllAccounts(fromZoneId: number, toZoneId: number, now: number): void {
-    this.db.run("UPDATE accounts SET zone_id = ?, updated_at = ? WHERE zone_id = ?", [toZoneId, now, fromZoneId]);
+    this.db.run("UPDATE accounts SET active_zone_id = ?, updated_at = ? WHERE active_zone_id = ?", [toZoneId, now, fromZoneId]);
   }
 
   /** 分页检索（keyword 匹配用户名；排序见 ACCOUNT_SORT 白名单） */

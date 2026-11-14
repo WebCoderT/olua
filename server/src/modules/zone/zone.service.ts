@@ -2,6 +2,8 @@ import { HttpStatus, Injectable, Logger } from "@nestjs/common";
 import { BizCode } from "../../common/constants/biz-code";
 import { BizException } from "../../common/errors/biz.exception";
 import { AccountRepository } from "../../database/repositories/account.repository";
+import { RoleRepository } from "../../database/repositories/role.repository";
+import { ROLE_NAME_MAX_LENGTH } from "../roles/role-data.util";
 import { WorldMonsterRepository } from "../../database/repositories/world-monster.repository";
 import { instanceIdOf } from "../../common/utils/room-key.util";
 import { ZoneRepository } from "../../database/repositories/zone.repository";
@@ -42,6 +44,7 @@ export class ZoneService {
     private readonly zones: ZoneRepository,
     private readonly worldMonsters: WorldMonsterRepository,
     private readonly accounts: AccountRepository,
+    private readonly roles: RoleRepository,
   ) {}
 
   /** 活区列表（玩家注册下拉框：只列未合并的） */
@@ -74,8 +77,15 @@ export class ZoneService {
     const now = Date.now();
 
     const movedAccounts = this.zones.countAccounts(fromZoneId);
+    let renamedRoles: Array<{ id: string; name: string; renamed: string }> = [];
     const movedMonsters = this.zones.transaction(() => {
-      // ① 搬账号（世界是按账号行解析区的，搬完它们下一次 worldJoin 就落在 to 区）
+      // ⓪ 先搬**角色**（#957：区归属的唯一权威是 roles.zone_id）。
+      // 同账号在两个区同名时会撞 UNIQUE(account_id, zone_id, name)，那是改名那一步解决的
+      // （口径：系统自动改名，后缀 = 源区名；清单进合并报告）。必须在搬账号之前，
+      // 因为改名的判据是「to 区已有同名」，而搬账号不影响角色行。
+      renamedRoles = this.roles.moveZoneOfRoles(fromZoneId, toZoneId, `·${from.name}`, ROLE_NAME_MAX_LENGTH, now);
+
+      // ① 搬账号（只剩「当前浏览区」语义：这些人下次登录默认落在 to 区）
       this.accounts.moveAllAccounts(fromZoneId, toZoneId, now);
 
       // ② 重排 from 区的世界发牌：instanceId 换成 to 区的区段，序号接着 to 区同图的已有实例续
@@ -106,9 +116,51 @@ export class ZoneService {
       return monsters.length;
     });
 
-    this.logger.log(`合并区：${from.name}（id=${fromZoneId}）→ ${to.name}（id=${toZoneId}），搬账号 ${movedAccounts} 个、世界实例 ${movedMonsters} 只，代际已 +1`);
+    this.logger.log(
+      `合并区：${from.name}（id=${fromZoneId}）→ ${to.name}（id=${toZoneId}），搬账号 ${movedAccounts} 个、` +
+        `改名角色 ${renamedRoles.length} 个、世界实例 ${movedMonsters} 只，代际已 +1`,
+    );
     const merged = this.zones.findById(fromZoneId) as ZoneRow;
     return AdminZoneDto.from(merged, 0);
+  }
+
+  /**
+   * 我的区服（#957）：`GET /zones/mine`
+   *
+   * 账号级聚合，是玩家侧**唯一**一次返回多个区的接口 —— 它只带「我在这个区有几个角色」，
+   * 不含任何别的区的游戏数据，用来渲染选服弹窗。
+   */
+  mine(accountId: string): Array<ZoneDto & { roleCount: number; current: boolean }> {
+    const account = this.accounts.findById(accountId);
+    if (!account) throw BizException.notFound(BizCode.ACCOUNT_NOT_FOUND, "账号不存在");
+    const live = this.zones.listLive().map(ZoneDto.from);
+    return live.map((zone) => ({
+      ...zone,
+      roleCount: this.roles.countByAccountAndZone(zone.id, accountId),
+      current: zone.id === account.active_zone_id,
+    }));
+  }
+
+  /**
+   * 选服（#957）：`POST /zones/select`
+   *
+   * 只改**当前浏览区**（`accounts.active_zone_id`），不改任何角色归属 —— 区是角色的属性，
+   * 玩家换区玩就是换一组角色，不是「搬家」。校验一条：区还在开放（合并掉的区选不了）。
+   *
+   * **换区会清掉「当前在线角色」**：在线角色在 A 区、人却在 B 区浏览，会让
+   * `GET /roles/online` 与实时进图各说各话（`GET /roles` 出 B 区、进图按在线角色落 A 区）。
+   * 换区的语义本来就是「换一组角色」，所以清空是最诚实的做法 —— 客户端在新区重新选角。
+   * 选的是同一个区则什么都不动（避免重复点一下就把人踢出角色）。
+   */
+  select(accountId: string, zoneId: number): { zoneId: number } {
+    const account = this.accounts.findById(accountId);
+    if (!account) throw BizException.notFound(BizCode.ACCOUNT_NOT_FOUND, "账号不存在");
+    const zone = this.assertLive(zoneId, "所选区服");
+    // TODO(#961)：zones.status 落地后这里加「维护中不许选」的判定（现在只有「活区」一个维度）
+    const patch: Parameters<AccountRepository["updateById"]>[1] = { active_zone_id: zone.id, updated_at: Date.now() };
+    if (account.active_zone_id !== zone.id) patch.online_role_id = null;
+    this.accounts.updateById(accountId, patch);
+    return { zoneId: zone.id };
   }
 
   /** 断言「id 存在且还是活区」，否则按场景报错（不存在 vs 已合并给不同文案） */
