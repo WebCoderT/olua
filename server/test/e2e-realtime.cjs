@@ -642,7 +642,7 @@ async function main() {
           for (let i = watcher.messages.length - 1; i >= 0; i -= 1) {
             const frame = watcher.messages[i];
             if (frame.type !== "players") continue;
-            const entry = (frame.data?.players ?? []).find((p) => p.username === "presence_r1");
+            const entry = (frame.data?.players ?? []).find((p) => p.n === "presence_r1");
             if (entry) return { x: entry.x, y: entry.y, hp: entry.hp };
           }
           return null;

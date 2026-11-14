@@ -786,22 +786,23 @@ export class PlayerPresenceService implements OnApplicationBootstrap, OnApplicat
     this.pendingLeaves.set(key, list);
   }
 
-  /** 广播条目形状 */
+  /** 广播条目形状（字段缩写见 RealtimePlayerEntry，#768 帧瘦身） */
   private toEntry(accountId: string, entry: PresenceEntry): RealtimePlayerEntry {
     return {
-      accountId,
-      username: this.usernameOf(accountId),
-      roleId: entry.roleId,
-      guildId: entry.guildId,
-      guildName: entry.guildName,
-      partyId: entry.partyId,
-      x: Math.round(entry.x * 100) / 100,
-      y: Math.round(entry.y * 100) / 100,
+      a: accountId,
+      n: this.usernameOf(accountId),
+      r: entry.roleId,
+      g: entry.guildId,
+      gn: entry.guildName,
+      p: entry.partyId,
+      // #768 坐标整数化：广播出整数像素（客户端上报已是整数，这里再取整兜住服务端仲裁的浮点）
+      x: Math.round(entry.x),
+      y: Math.round(entry.y),
       hp: entry.hp,
-      maxHp: entry.maxHp,
-      moving: entry.moving,
+      m: entry.maxHp,
+      mv: entry.moving,
       // 复制一份再发：在场表里的那份会被下一次懒刷新整份替换，别让广播出去的对象跟着变
-      appearance: { ...entry.appearance },
+      ap: { ...entry.appearance },
     };
   }
 
@@ -841,17 +842,17 @@ export class PlayerPresenceService implements OnApplicationBootstrap, OnApplicat
     // 性别：客户端 SEX 是字符串枚举（"1" 男 / "2" 女），但历史存档里也见过数字 —— 两种都收
     const sex = data.sex;
     return {
-      sex: typeof sex === "string" ? sex : typeof sex === "number" ? String(sex) : "1",
-      cloth: wornId("cloth"),
-      weapon: wornId("weapon"),
+      sx: typeof sex === "string" ? sex : typeof sex === "number" ? String(sex) : "1",
+      c: wornId("cloth"),
+      w: wornId("weapon"),
       // 时装历史形状是 number（从没人写过），只认字符串；数字一律当没穿
-      fashion: typeof data.fashionCloth === "string" ? data.fashionCloth : "",
+      f: typeof data.fashionCloth === "string" ? data.fashionCloth : "",
     };
   }
 
   /** 外观比较键（增量广播判据：四个字段拼一串，字符串比较比逐字段比省事） */
   private appearanceKey(appearance: RealtimePlayerAppearance): string {
-    return `${appearance.sex}|${appearance.cloth}|${appearance.weapon}|${appearance.fashion}`;
+    return `${appearance.sx}|${appearance.c}|${appearance.w}|${appearance.f}`;
   }
 
   private usernameOf(accountId: string): string {
@@ -869,7 +870,8 @@ export class PlayerPresenceService implements OnApplicationBootstrap, OnApplicat
   //#region 配置
 
   private broadcastMs(): number {
-    return Math.max(50, Number(this.config.get<number>("playerSyncBroadcastMs") ?? 200));
+    // #768 提频：默认 10Hz（与客户端上报节拍对齐），配置可覆写，下限 50ms 不变
+    return Math.max(50, Number(this.config.get<number>("playerSyncBroadcastMs") ?? 100));
   }
 
   private posStaleMs(): number {

@@ -394,7 +394,7 @@ git pull && make config-import       # 整表替换配置；账号与角色存�
 
 ## 怪物 AI 与技能释放（#323 / #372）
 
-怪物的**行为权威在服务端**（`MonsterAiService`，tick 100ms / 广播按 200ms 节流）：
+怪物的**行为权威在服务端**（`MonsterAiService`，tick 100ms / 广播按 100ms 节流，#768 起 10Hz）：
 目标选择、追击、待机游走、普攻、以及**放技能**都由服务端决定，客户端只做演出。
 
 - **技能从表里来**：`monster_skills` 决定「这只怪放哪些、什么顺序」（先状态型 buff、再伤害型，

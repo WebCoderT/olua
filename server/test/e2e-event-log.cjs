@@ -511,6 +511,30 @@ function connect(url) {
 
     group("六、任务：交付记 quest，奖励记 gain（source = quest）");
 
+    // 拾取那帧 pos 把人「搬」到了怪倒下的位置；任务交互的距离闸（#862/#863）读的是
+    // role_positions —— 那张表由广播节拍 flushPositions 节流落库。#768 提频前，接取
+    // 抢在 200ms 落库窗口之前才绿，本质是竞态；提频后窗口减半，必输。这里改成确定性
+    // 行为：再报一帧 NPC 旁的位置（服务端内存位置随之更新），等一拍落库再接取。
+    // 不能直接改库（placeRolesNear）：服务端内存里的旧位置会在下一轮 flush 覆盖回去。
+    {
+      const spotDb = new DatabaseSync(dbPath);
+      const spot = spotDb.prepare("SELECT cx, cy FROM map_npcs WHERE map_id = ? AND npc_id = ?").get(MAP_ID, "0002");
+      spotDb.close();
+      check(!!spot, "准备：map_npcs 里有传送官点位", JSON.stringify(spot));
+      session.socket.send(JSON.stringify({ type: "pos", data: { mapId: MAP_ID, x: spot.cx, y: spot.cy, hp: 100 } }));
+      // 落库节流是每角色 1 秒（rolePositionPersistMs 默认 1000、下限 200）—— 固定 sleep
+      // 会撞上节流窗口（CI 实测 400ms 不够），改成轮询 role_positions 等坐标真到位
+      await waitFor("位置落库到 NPC 旁", async () => {
+        const pollDb = new DatabaseSync(dbPath);
+        try {
+          const row = pollDb.prepare("SELECT x, y FROM role_positions WHERE role_id = ?").get(roleId);
+          return row && row.x === spot.cx && row.y === spot.cy ? row : null;
+        } finally {
+          pollDb.close();
+        }
+      });
+    }
+
     const accepted = await api(baseUrl, "POST", "quests/accept", { token, body: { questId: "8001" } });
     check(accepted.code === 0, "接取主线 8001（talk 型，不用打怪）", accepted.message);
     const talked = await api(baseUrl, "POST", "quests/npc-talk", { token, body: { npcId: "0002" } });

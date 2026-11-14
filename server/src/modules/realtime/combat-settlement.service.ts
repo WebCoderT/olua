@@ -552,7 +552,7 @@ export class CombatSettlementService {
     }
 
     // 观看者只看到「他放了一个技能」：一次出手记一次，目标取最近的那只（打空时为空串）
-    this.presence.recordAction(spot.roomId, { accountId, skillId: cast.skillId, targetId: hits[0]?.targetId ?? "" });
+    this.presence.recordAction(spot.roomId, { a: accountId, s: cast.skillId, t: hits[0]?.targetId ?? "" });
 
     const primary = hits[0];
     this.logger.debug(
@@ -906,9 +906,9 @@ export class CombatSettlementService {
     // 本人，不记这条，别人的屏幕上他永远站着发呆。普攻与技能同一形状（普攻也是技能）。
     // 只在新结算路径记 —— 幂等重发在上面早退，不会重复广播。
     this.presence.recordAction(roomKey(target.zoneId, target.mapId, target.slot), {
-      accountId,
-      skillId: cast.skillId,
-      targetId: cast.targetId,
+      a: accountId,
+      s: cast.skillId,
+      t: cast.targetId,
     });
 
     this.logger.debug(
