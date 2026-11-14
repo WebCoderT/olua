@@ -581,7 +581,10 @@ function connect(url) {
       const entries = session.aiEntries(burn.instanceId, from);
       const last = entries.length ? entries[entries.length - 1] : null;
       return {
-        drop: start && last ? start.hp - last.hp : 0,
+        // 基线：优先进视野之后收到过的那一帧；**一帧都没有时退回播种满血**
+        // （#810 AOI 之后客户端只看得到视野内的怪，站到靶子旁边之前它在帧里根本不存在，
+        //  而这一段之前没有任何东西打过它 —— 满血就是窗口起点的血量）
+        drop: (start ? start.hp : TARGET_HP) - (last ? last.hp : TARGET_HP),
         lastHp: last ? last.hp : null,
         lastAlive: !!last,
         maxHp: start ? start.m : TARGET_HP,
@@ -774,6 +777,10 @@ function connect(url) {
     // （贴脸站定出手的怪本来就不动）。
     const chaseFrom = session.aiFrames.length;
     await walk({ x: playerPos.x + 500, y: playerPos.y });
+    // 走完之后再等 600ms：BOSS 是在「玩家离开攻击距离」之后才开始追的，走完当场收割
+    // 只能看到它刚起步的那几十像素（判定门槛是 >30px，窗口太窄会随机踩线）。
+    // #810 AOI 之后客户端只看得到视野内的怪，这条「看得到它在动」的窗口必须留够
+    await sleep(600);
     const chaseEntries = session.aiEntries(boss.instanceId, chaseFrom);
     const chaseShift = chaseEntries.reduce(
       (acc, entry) => ({ minX: Math.min(acc.minX, entry.x), maxX: Math.max(acc.maxX, entry.x) }),

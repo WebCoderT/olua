@@ -11,7 +11,6 @@ import type { ApiEnvelope, AuthenticatedUser } from "../../common/interfaces/api
 import { AccountRepository } from "../../database/repositories/account.repository";
 import type { RoleRow } from "../../database/rows";
 import { WorldService } from "../world/world.service";
-import type { Room } from "../world/room/room";
 import { worldMonsterSnapshotOf } from "../world/world-monster";
 import { roomKey } from "../../common/utils/room-key.util";
 import { MapService, START_MAP_ID, type MapEnterReject } from "../map/map.service";
@@ -1083,7 +1082,7 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
     for (const room of this.world.viewedRooms()) {
       active.add(room.roomId);
       this.syncAoiRoom(room.roomId);
-      for (const accountId of room.viewers) this.syncViewerAoi(room, accountId, now);
+      for (const accountId of room.viewers) this.syncViewerAoi(room.roomId, room.mapId, accountId, now);
     }
     // 房间卸载（没人看满 worldMapIdleMs）不会通知本服务：每拍按「有人看的房」对一遍，
     // 不在里面的索引与观看者状态一并丢掉
@@ -1119,26 +1118,32 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
     this.aoi.retain(roomId, PLAYER_ENTITY, playerIds);
   }
 
-  /** 算一个观看者这一拍的进出，并把增量帧发给他 */
-  private syncViewerAoi(room: Room, accountId: string, now: number): void {
+  /**
+   * 算一个观看者这一拍的进出，并把增量帧发给他
+   *
+   * 参数只带 `roomId` / `mapId` 两个字符串，不带整个世界域的 `Room` 对象：跨域的边
+   * （`audit-server-boundaries`）只放行了 world 的**公开服务**与怪物实例契约，房间内部结构
+   * 属于世界域私事 —— 这里需要的只是「哪间房」与「帧里的 mapId」。
+   */
+  private syncViewerAoi(roomId: string, mapId: string, accountId: string, now: number): void {
     const at = this.presence.positionOf(accountId);
     // 位置未知（刚进图 pos 还没到 / 换图途中）→ 这一拍不裁：裁剪的依据就是「他在哪」，
     // 没有就等下一拍。此时他手里是进图时那份全量，不会有错，只是暂时没被裁
-    if (!at || at.roomId !== room.roomId) return;
-    const { enters, leaves } = this.aoi.diff(room.roomId, accountId, at.x, at.y, now);
+    if (!at || at.roomId !== roomId) return;
+    const { enters, leaves } = this.aoi.diff(roomId, accountId, at.x, at.y, now);
     const socket = this.connections.get(accountId);
     if (!socket || socket.readyState !== WebSocket.OPEN) return;
-    if (enters.length > 0) this.sendEntityEnter(socket, room, accountId, enters);
-    if (leaves.length > 0) this.sendEntityLeave(socket, room, leaves);
+    if (enters.length > 0) this.sendEntityEnter(socket, roomId, mapId, accountId, enters);
+    if (leaves.length > 0) this.sendEntityLeave(socket, mapId, leaves);
   }
 
   /** 组一帧 `entityEnter`（怪：世界层快照 + AI 实时坐标；玩家：在场表条目） */
-  private sendEntityEnter(socket: TrackedSocket, room: Room, accountId: string, entityIds: string[]): void {
+  private sendEntityEnter(socket: TrackedSocket, roomId: string, mapId: string, accountId: string, entityIds: string[]): void {
     const monsters: RealtimeWorldMonster[] = [];
     const players: RealtimePlayerEntry[] = [];
     for (const entityId of entityIds) {
       if (entityId.startsWith(MONSTER_ENTITY)) {
-        const snapshot = this.monsterSnapshotOf(room.roomId, entityId.slice(MONSTER_ENTITY.length));
+        const snapshot = this.monsterSnapshotOf(roomId, entityId.slice(MONSTER_ENTITY.length));
         if (snapshot) monsters.push(snapshot);
         continue;
       }
@@ -1147,19 +1152,19 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
       if (entry) players.push(entry);
     }
     if (monsters.length === 0 && players.length === 0) return;
-    const frame: RealtimeEntityEnterMessage = { type: "entityEnter", data: { mapId: room.mapId, monsters, players } };
+    const frame: RealtimeEntityEnterMessage = { type: "entityEnter", data: { mapId, monsters, players } };
     this.send(socket, frame);
   }
 
   /** 组一帧 `entityLeave`（只有 id：客户端按 id 拆节点，别的都不需要） */
-  private sendEntityLeave(socket: TrackedSocket, room: Room, entityIds: string[]): void {
+  private sendEntityLeave(socket: TrackedSocket, mapId: string, entityIds: string[]): void {
     const monsters: string[] = [];
     const players: string[] = [];
     for (const entityId of entityIds) {
       if (entityId.startsWith(MONSTER_ENTITY)) monsters.push(entityId.slice(MONSTER_ENTITY.length));
       else players.push(entityId.slice(PLAYER_ENTITY.length));
     }
-    const frame: RealtimeEntityLeaveMessage = { type: "entityLeave", data: { mapId: room.mapId, monsters, players } };
+    const frame: RealtimeEntityLeaveMessage = { type: "entityLeave", data: { mapId, monsters, players } };
     this.send(socket, frame);
   }
 

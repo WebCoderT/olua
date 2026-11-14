@@ -579,7 +579,11 @@ function countEvents(events, instanceId) {
     check(worstLeaves <= 2, "没有任何怪物被 leave 超过 2 次（来回走不会让它闪）", `最多 ${worstLeaves} 次`);
     check(worstEnters <= 2, "没有任何怪物被 enter 超过 2 次", `最多 ${worstEnters} 次`);
     const jitterOutline = outlineByCell(sessionA.monsters, { x: boundary, y: farPoint.y });
-    check(jitterOutline.total < 50, "抖动之后场上实体数仍然受控", `实际 ${jitterOutline.total} 只`);
+    // 抖动期间客户端合法地持有**两格视野的并集**：5px 的来回位移会把所在格换掉，
+    // 3×3 随之平移一列 / 一行（并集最多 12 格），而走出去的那批在 1 秒延迟内还没被 leave。
+    // 所以阈值不能按「单格 3×3」算（<50 会偶发踩线，实测见过 54），但**远低于全量 145**
+    // 正是这一条要证明的事：抖动不会把玩家推回「全图都发」。
+    check(jitterOutline.total < 65, "抖动之后场上实体数仍然受控（远低于全量）", `实际 ${jitterOutline.total} 只`);
 
     //#endregion
 
