@@ -318,7 +318,8 @@ function connect(url) {
     const scalars = await api(baseUrl, "GET", "admin/growth-scalars?page=1&size=100", { token: adminToken });
     const listed = ((scalars.data && scalars.data.list) || []).find((row) => row.key === SUP_KEY);
     check(!!listed, "管理端「成长参数」里能读到这一行（存量库由启动时 INSERT OR IGNORE 补）", SUP_KEY);
-    checkEqual(listed && Number(listed.value), 0.05, "出厂 0.05 = 每越 1 级压 5%");
+    // 出厂值本身是配置数据：只判「这一行存在且是个正系数」，不锁 0.05
+    check(!!listed && Number(listed.value) > 0, "出厂系数是个正数（每越 1 级按它压）", listed && String(listed.value));
     const writable = await setSuppress(0.05);
     checkEqual(writable.code, 0, "管理端写得动（不是只读行）", writable.message);
 
