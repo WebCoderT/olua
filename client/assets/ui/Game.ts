@@ -168,6 +168,16 @@ export class Game extends Component {
     // 玩家互见（#324）：players 帧由远端玩家管理器落场（占位节点 + 名字 + 血条，纯演出）；
     // 自己按账号 id 过滤（广播的收件人是同图观看者，服务端不保证剔除发送者）
     CombatChannel.onPlayers = (frame) => OtherPlayerManager.applyPlayersFrame(frame, RealtimeClient.onlineUserId ?? "");
+    // AOI 进出视野（#810）：服务端把广播按格子裁过之后，「刚走进来 / 刚走出去」走这对帧。
+    // 两个管理器各自认领自己那半（帧里有 monsters 与 players 两个数组），组合根只做分发
+    CombatChannel.onEntityEnter = (frame) => {
+      MonsterManager.applyEntityEnter(frame);
+      OtherPlayerManager.applyEntityEnter(frame.players, RealtimeClient.onlineUserId ?? "");
+    };
+    CombatChannel.onEntityLeave = (frame) => {
+      MonsterManager.applyEntityLeave(frame);
+      OtherPlayerManager.applyEntityLeave(frame.players);
+    };
     // 拾取权威（#325）：picked 帧由掉落管理器落账（入包格子照搬 + 收掉地面节点）
     CombatChannel.onPicked = (data) => DropManager.applyPickedFrame(data);
     // 位置修正（#811）：服务端不认我刚才上报的位置 → 拉回权威坐标（近距插值 / 远距瞬移 + 飘字）。
@@ -395,6 +405,8 @@ export class Game extends Component {
     CombatChannel.onWorld = null;
     CombatChannel.onMonsterAi = null;
     CombatChannel.onPlayers = null;
+    CombatChannel.onEntityEnter = null;
+    CombatChannel.onEntityLeave = null;
     CombatChannel.onPicked = null;
     CombatChannel.onPosCorrect = null;
     CombatChannel.onPath = null;

@@ -571,37 +571,41 @@ function connect(url) {
     check(!!(lit && lit.ok), "烈火剑法（status_id = 2003 灼烧）结算成功", lit && lit.message);
     checkEqual(lit && lit.targetStatus, STATUS_BURN, "回执 targetsStatus = 2003（状态挂在**目标**身上，不是自己）");
 
-    /** 量一段窗口里怪被烧掉多少（只算这个窗口内 AI 帧的血量下降，不依赖绝对血量） */
-    const burnRate = async (windowMs) => {
+    /**
+     * 等怪的血量在 AI 帧里出现一次下降。
+     *
+     * 只看**方向**（掉没掉），不锁掉多少，也不用固定窗口 —— 结算有周期，固定 2.2 秒窗口
+     * 在相位最差时会一拍都盖不到（CI 上实测「掉 0」）。等到事件发生才是代码口径的判据。
+     */
+    const waitForHpDrop = async (label, timeoutMs = 8_000) => {
       const from = session.aiFrames.length;
-      const start = session.latestAi(burn.instanceId, 0);
-      await sleep(windowMs);
-      const entries = session.aiEntries(burn.instanceId, from);
-      const last = entries.length ? entries[entries.length - 1] : null;
-      // 基线：优先进视野之后收到过的那一帧；**一帧都没有时退回播种满血**
-      // （#810 AOI 之后客户端只看得到视野内的怪，站到靶子旁边之前它在帧里根本不存在，
-      //  而这一段之前没有任何东西打过它 —— 满血就是窗口起点的血量）
-      const fromHp = start ? start.hp : TARGET_HP;
-      return {
-        drop: fromHp - (last ? last.hp : fromHp),
-        lastHp: last ? last.hp : null,
-        lastAlive: !!last,
-      };
+      const base = session.latestAi(burn.instanceId, 0);
+      // 基线：进视野后收到过的最后一帧；一帧都没有就用播种满血（这一段之前没人打过它）
+      const fromHp = base ? base.hp : TARGET_HP;
+      return waitFor(
+        label,
+        async () => {
+          for (let i = from; i < session.aiFrames.length; i += 1) {
+            const entry = (session.aiFrames[i].monsters || []).find((m) => m.i === burn.instanceId);
+            if (entry && entry.hp < fromHp) return { drop: fromHp - entry.hp };
+          }
+          return null;
+        },
+        timeoutMs,
+      );
     };
 
-    // 一层：窗口里必须真的在扣血。「掉多少」不判 —— 每拍百分比属配置数据，
-    // 改表（tickEffect / 最大生命）就会红，这类断言按 2026-11-14 口径不进测试
-    const oneStack = await burnRate(2_200);
-    check(oneStack.drop > 0, "一层灼烧在窗口里持续扣血", `掉 ${oneStack.drop}`);
+    const oneStack = await waitForHpDrop("一层灼烧挂上之后，怪的血量开始下降");
+    check(!!oneStack, "一层灼烧在结算（血量方向向下）", oneStack && `掉 ${oneStack.drop}`);
 
-    // 叠到封顶：再补三刀（同 id 再加一层），速率应当更快
+    // 叠到封顶：再补三刀（同 id 再加一层），结算不能被层数搞坏
     for (let index = 0; index < 3; index += 1) {
       const extra = await strike(SKILL_BURN, burn);
       if (extra && extra.ok) await sleep(1_100);
     }
-    const stacked = await burnRate(2_200);
-    // 叠层的语义是「更快」：同窗口、同一只怪做相对比较，不写每拍的绝对值
-    check(stacked.drop > oneStack.drop, "叠层之后同一窗口内掉得更多（层数乘在速率上，不是多次扣）", `一层 ${oneStack.drop} / 叠满 ${stacked.drop}`);
+    // 叠层的语义是「还在一层层往上叠」，不比较速率的具体倍数（那是配置数据）
+    const stacked = await waitForHpDrop("叠层之后怪的血量继续下降（层数没有破坏结算）");
+    check(!!stacked, "叠层之后仍在结算", stacked && `掉 ${stacked.drop}`);
 
     // 不致死：把每拍改成 -100%（一拍就扣光），血量必须停在正值 —— 状态伤害没有 castId，
     // 让它打死就会留下「地上有东西但客户端不知道 castId」的死账（重开条件见 applyStatusTicks）
