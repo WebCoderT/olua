@@ -5,10 +5,11 @@ import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, SelectHTMLAt
 type ButtonVariant = "primary" | "outline" | "ghost" | "danger";
 
 const BUTTON_VARIANTS: Record<ButtonVariant, string> = {
-  primary: "bg-indigo-500 text-white hover:bg-indigo-400",
-  outline: "border border-slate-700 text-slate-200 hover:border-slate-500 hover:bg-slate-800/60",
-  ghost: "text-slate-300 hover:bg-slate-800/60",
-  danger: "bg-rose-600 text-white hover:bg-rose-500",
+  /* 金是唯一高光色：主按钮金底必须配深色字（白字对比度不足 2:1），与设计稿一致 */
+  primary: "bg-gold text-surface-0 hover:bg-gold-hi",
+  outline: "border border-line-strong text-ink-2 hover:border-gold-dim hover:bg-surface-3/60",
+  ghost: "text-ink-3 hover:bg-surface-3/60",
+  danger: "bg-ember text-ink-1 hover:bg-ember-hi",
 };
 
 export function Spinner({ className = "h-4 w-4" }: { className?: string }) {
@@ -66,23 +67,23 @@ export function Field({
   if (inline) {
     return (
       <label className={`flex items-center gap-1.5 whitespace-nowrap ${width ?? "w-40"}`}>
-        <span className="shrink-0 text-xs text-slate-400">{label}</span>
+        <span className="shrink-0 text-xs text-ink-4">{label}</span>
         <span className="min-w-0 flex-1">{children}</span>
-        {hint ? <span className="shrink-0 text-xs text-slate-500">{hint}</span> : null}
+        {hint ? <span className="shrink-0 text-xs text-ink-5">{hint}</span> : null}
       </label>
     );
   }
   return (
     <label className={`flex flex-col gap-1 ${width ?? ""}`}>
-      <span className="text-xs font-medium text-slate-400">{label}</span>
+      <span className="text-xs font-medium text-ink-4">{label}</span>
       {children}
-      {hint ? <span className="text-xs text-slate-500">{hint}</span> : null}
+      {hint ? <span className="text-xs text-ink-5">{hint}</span> : null}
     </label>
   );
 }
 
 const CONTROL_CLASS =
-  "w-full rounded-lg border border-slate-700 bg-slate-900/70 px-2.5 py-1.5 text-sm text-slate-100 outline-none transition placeholder:text-slate-500 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 disabled:opacity-60";
+  "w-full rounded-lg border border-line-strong bg-surface-2/70 px-2.5 py-1.5 text-sm text-ink-1 outline-none transition placeholder:text-ink-5 focus:border-gold focus:ring-2 focus:ring-gold/30 disabled:opacity-60";
 
 export function Input({ className = "", ...rest }: InputHTMLAttributes<HTMLInputElement>) {
   return <input {...rest} className={`${CONTROL_CLASS} ${className}`} />;
@@ -122,16 +123,16 @@ export function Card({
   dense?: boolean;
 }) {
   return (
-    <section className={`rounded-2xl border border-slate-800 bg-slate-900/40 shadow-lg shadow-black/20 ${className}`}>
+    <section className={`rounded-2xl border border-line bg-surface-2/60 shadow-lg shadow-black/20 ${className}`}>
       {title || actions ? (
         <header
-          className={`flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 ${
+          className={`flex flex-wrap items-center justify-between gap-2 border-b border-line ${
             dense ? "px-3.5 py-2" : "px-5 py-4"
           }`}
         >
           <div className="min-w-0">
-            {title ? <h2 className="text-sm font-semibold text-slate-100">{title}</h2> : null}
-            {description ? <p className="mt-0.5 text-xs text-slate-500">{description}</p> : null}
+            {title ? <h2 className="text-sm font-semibold text-ink-1">{title}</h2> : null}
+            {description ? <p className="mt-0.5 text-xs text-ink-5">{description}</p> : null}
           </div>
           {actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}
         </header>
@@ -144,11 +145,11 @@ export function Card({
 type BadgeTone = "green" | "red" | "slate" | "indigo" | "amber";
 
 const BADGE_TONES: Record<BadgeTone, string> = {
-  green: "bg-emerald-500/15 text-emerald-300 ring-emerald-500/30",
-  red: "bg-rose-500/15 text-rose-300 ring-rose-500/30",
-  slate: "bg-slate-500/15 text-slate-300 ring-slate-500/30",
-  indigo: "bg-indigo-500/15 text-indigo-300 ring-indigo-500/30",
-  amber: "bg-amber-500/15 text-amber-300 ring-amber-500/30",
+  green: "bg-jade/15 text-jade ring-jade/30",
+  red: "bg-ember/15 text-ember-hi ring-ember/30",
+  slate: "bg-ink-5/15 text-ink-3 ring-ink-5/40",
+  indigo: "bg-gold/15 text-gold ring-gold/30",
+  amber: "bg-warn/15 text-warn ring-warn/30",
 };
 
 export function Badge({ tone = "slate", children }: { tone?: BadgeTone; children: ReactNode }) {
@@ -158,16 +159,16 @@ export function Badge({ tone = "slate", children }: { tone?: BadgeTone; children
 type NoticeTone = "amber" | "red" | "slate" | "emerald";
 
 const NOTICE_TONES: Record<NoticeTone, string> = {
-  amber: "border-amber-500/30 bg-amber-500/10 text-amber-200",
-  red: "border-rose-500/30 bg-rose-500/10 text-rose-200",
-  slate: "border-slate-700 bg-slate-800/40 text-slate-300",
-  emerald: "border-emerald-500/30 bg-emerald-500/10 text-emerald-200",
+  amber: "border-warn/40 bg-warn/10 text-warn",
+  red: "border-ember/40 bg-ember/10 text-ember-hi",
+  slate: "border-line-strong bg-surface-3/50 text-ink-3",
+  emerald: "border-jade/30 bg-jade/10 text-jade",
 };
 
 /**
  * 提示条（一行到一段的解释性文字）
  *
- * 为什么抽出来：各页原来自己拼 `rounded-2xl border border-amber-500/40 bg-amber-500/10 px-5 py-4`
+ * 为什么抽出来：各页原来自己拼 `rounded-2xl border border-amber-500/40 bg-warn/10 px-5 py-4`
  * 或者 `rounded-lg border border-red-500/30 …`，同为「提醒」却有三种字号与两种圆角。
  *
  * 用途边界：**解释 / 警告**用它，**操作结果**用 toast（`toastSuccess` / `toastError`）——
@@ -193,24 +194,24 @@ export function Notice({
 export function EmptyState({ title, description }: { title: string; description?: string }) {
   return (
     <div className="flex flex-col items-center justify-center gap-1 py-12 text-center">
-      <p className="text-sm text-slate-300">{title}</p>
-      {description ? <p className="text-xs text-slate-500">{description}</p> : null}
+      <p className="text-sm text-ink-3">{title}</p>
+      {description ? <p className="text-xs text-ink-5">{description}</p> : null}
     </div>
   );
 }
 
 export function StatCard({ label, value, hint }: { label: string; value: number | string; hint?: string }) {
   return (
-    <div className="rounded-2xl border border-slate-800 bg-slate-900/40 px-4 py-3">
-      <p className="text-xs text-slate-500">{label}</p>
-      <p className="mt-1 text-xl font-semibold text-slate-50">{value}</p>
-      {hint ? <p className="mt-1 text-xs text-slate-500">{hint}</p> : null}
+    <div className="rounded-2xl border border-line bg-surface-2/60 px-4 py-3">
+      <p className="text-xs text-ink-5">{label}</p>
+      <p className="mt-1 text-xl font-semibold text-ink-1">{value}</p>
+      {hint ? <p className="mt-1 text-xs text-ink-5">{hint}</p> : null}
     </div>
   );
 }
 
 /** 表格统一样式（页面里直接拼这些 class，避免每个表各写一套） */
 export const tableClass = "w-full min-w-[720px] border-collapse text-sm";
-export const theadClass = "text-left text-xs uppercase tracking-wide text-slate-500";
-export const thClass = "whitespace-nowrap border-b border-slate-800 px-3 py-2 font-medium";
-export const tdClass = "whitespace-nowrap border-b border-slate-800/60 px-3 py-2 text-slate-300";
+export const theadClass = "text-left text-xs uppercase tracking-wide text-ink-5";
+export const thClass = "whitespace-nowrap border-b border-line px-3 py-2 font-medium";
+export const tdClass = "whitespace-nowrap border-b border-line/60 px-3 py-2 text-ink-3";

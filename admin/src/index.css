@@ -1,5 +1,103 @@
 @import "tailwindcss";
 
+/*
+ * ════════════════════════════════════════════════════════════════════
+ *  legend token（#946）—— 设计稿单一来源：design/legend-console/system.html
+ *
+ *  规则（违反由 tools/audit-admin-ui.cjs 拦截）：
+ *  1. 新代码只许用下面的**语义 token**（surface / line / ink / gold / ember / jade / warn）。
+ *  2. **不许**再新写 slate- / indigo- / amber- / rose- / emerald- —— 那一节是「过渡层」，
+ *     只为了让存量 939 处类名零改动换皮而存在，逐页迁完即删。
+ *  3. 不许写裸色值（#xxxxxx / rgb()）或任意值类（bg-[...]）。色值只活在本文件。
+ *  4. 四族职责不许交叉：石管层次、金管交互、火管危险、玉只管「在线/正常」。
+ * ════════════════════════════════════════════════════════════════════
+ */
+@theme {
+  /* ── 石：背景与层次（surface-0 最深 → surface-4 最亮） ── */
+  --color-surface-0: #090705; /* 虚空：遮罩、间隙 */
+  --color-surface-1: #0e0b08; /* 页面底，长时间阅读 */
+  --color-surface-2: #12100c; /* 侧栏、页脚、卡片底 */
+  --color-surface-3: #1b1712; /* 卡片上缘、悬停底 */
+  --color-surface-4: #241e17; /* 卡片下缘、次级按钮 */
+
+  /* ── 线：描边三档 ── */
+  --color-line: #2b2419; /* 分隔线、卡片边框 */
+  --color-line-strong: #453a2b; /* 控件边框、悬停边框 */
+  --color-line-gold: #6b562f; /* 金暗线：选中、内衬 */
+
+  /* ── 墨：文字五档（ink-1 最亮） ── */
+  --color-ink-1: #eee5d2; /* 标题、主文字（不是纯白） */
+  --color-ink-2: #d8cdbb; /* 正文 */
+  --color-ink-3: #beb2a0; /* 次要正文 */
+  --color-ink-4: #9e8f79; /* 标签 */
+  --color-ink-5: #7e7059; /* 说明、占位 */
+  --color-ink-6: #5f5443; /* 极弱、禁用 */
+
+  /* ── 金：交互与选中（唯一高光色） ── */
+  --color-gold: #c9a24d;
+  --color-gold-hi: #f0dcac;
+  --color-gold-dim: #6b562f;
+
+  /* ── 火：危险与错误 ── */
+  --color-ember: #b9441f;
+  --color-ember-hi: #e4743a;
+
+  /* ── 玉：只表「服务正常 / 在线」 ── */
+  --color-jade: #6fa96b;
+
+  /* ── 注意：介于金与火之间（维护中、非阻断的数据异常） ── */
+  --color-warn: #be8a2b;
+
+  /*
+   * ══ 过渡层：覆盖 Tailwind 内置色族 ══
+   * 目的：让存量 939 处 slate-/indigo-/… 类名零改动换皮。
+   * 语义仍然成立（slate=中性、indigo=主色、amber=注意、rose=危险、emerald=成功），
+   * 所以这不是「撒谎」，只是把同一语义角色换到 legend 的色相上。
+   * 迁移完成后整段删除。
+   */
+  --color-slate-950: #090705;
+  --color-slate-900: #12100c;
+  --color-slate-800: #241e17;
+  --color-slate-700: #3a2f22;
+  --color-slate-600: #5f5443;
+  --color-slate-500: #7e7059;
+  --color-slate-400: #9e8f79;
+  --color-slate-300: #beb2a0;
+  --color-slate-200: #d8cdbb;
+  --color-slate-100: #ebe1ce;
+  --color-slate-50: #f6efe0;
+
+  --color-indigo-600: #ae8a3c;
+  --color-indigo-500: #c9a24d;
+  --color-indigo-400: #d6b368;
+  --color-indigo-300: #dcc489;
+  --color-indigo-200: #efdcb4;
+  --color-indigo-100: #f7edd6;
+
+  --color-rose-950: #2a1108;
+  --color-rose-900: #4a1b0e;
+  --color-rose-600: #9f3617;
+  --color-rose-500: #b9441f;
+  --color-rose-400: #cd5c36;
+  --color-rose-300: #e4743a;
+  --color-rose-200: #eea183;
+  --color-rose-100: #f5c9b8;
+
+  --color-emerald-500: #6fa96b;
+  --color-emerald-400: #83b97f;
+  --color-emerald-300: #9ccb98;
+  --color-emerald-200: #c2debf;
+  --color-emerald-100: #ddeddb;
+
+  --color-amber-950: #241a0b;
+  --color-amber-900: #3a2910;
+  --color-amber-700: #6b4c18;
+  --color-amber-500: #be8a2b;
+  --color-amber-400: #d2a344;
+  --color-amber-300: #e2bc72;
+  --color-amber-200: #efd8ad;
+}
+
 /* 基础版式：整屏高度 + 深色底（Tailwind 只管工具类，这里放全局兜底） */
 html,
 body,
@@ -9,8 +107,8 @@ body,
 
 body {
   margin: 0;
-  background-color: #020617; /* slate-950 */
-  color: #e2e8f0; /* slate-200 */
+  background-color: var(--color-surface-1);
+  color: var(--color-ink-2);
   font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", "Segoe UI", sans-serif;
   -webkit-font-smoothing: antialiased;
 }
@@ -18,14 +116,14 @@ body {
 /* 细滚动条（默认滚动条在深色底上很突兀） */
 * {
   scrollbar-width: thin;
-  scrollbar-color: #334155 transparent;
+  scrollbar-color: var(--color-line-strong) transparent;
 }
 *::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
 *::-webkit-scrollbar-thumb {
-  background-color: #334155;
+  background-color: var(--color-line-strong);
   border-radius: 9999px;
 }
 *::-webkit-scrollbar-track {
