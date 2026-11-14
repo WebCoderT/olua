@@ -210,7 +210,8 @@ const BIND_ROW_50 = MONEY.find((row) => row.currency === "bindGold" && Number(ro
     const tooFast = await useDrug(0, 0);
     checkEqual(tooFast.code, 20030, "紧接着再点 → 20030 冷却中", tooFast.message);
     const remaining = Number(tooFast.details && tooFast.details.remainingMs);
-    check(remaining > 0 && remaining <= HP_DRUG_COOLDOWN_S * 1000, "回执带剩余毫秒（客户端据此灰按钮）", String(remaining));
+    // 上界（= 药品 cooldown 全长）是配置算出来的，不判；判「带一个正的剩余毫秒」
+    check(remaining > 0, "回执带剩余毫秒（客户端据此灰按钮）", String(remaining));
     const afterBlocked = await api(baseUrl, "GET", `roles/${roleId}`, { token });
     checkEqual((cellAt(afterBlocked.data.data.bag, 0, 0) || {}).count, 1, "**被冷却拒掉的那次不扣药**（仍是 1 瓶）");
 

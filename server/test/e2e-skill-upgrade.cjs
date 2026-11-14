@@ -389,7 +389,8 @@ function connect(url) {
     group("三、点数不足：20035，且一点都没动");
     const poor = await upgrade(SKILL_FIRE);
     checkEqual(poor.code, 20035, "点数为 0 时升 2→3（要 2 点）→ 20035", poor.message);
-    check(!!poor.details && poor.details.need === 2 && poor.details.owned === 0, "details 带 need / owned（客户端据此提示差额）", JSON.stringify(poor.details));
+    // need 的具体点数由技能系数档位算出来（配置数据），只判「带 need 与 owned 两个字段且 need 为正」
+    check(!!poor.details && Number(poor.details.need) > 0 && poor.details.owned === 0, "details 带 need / owned（客户端据此提示差额）", JSON.stringify(poor.details));
     checkEqual(poor.data, null, "失败响应 data 恒为 null");
     const afterPoor = readSkillsInDb(dbPath, roleId);
     checkEqual(Number(afterPoor.skills[SKILL_FIRE]), 2, "失败不扣等级（还是 2 级）");

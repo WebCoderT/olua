@@ -420,7 +420,8 @@ async function standAt(session, mapId, point) {
     const aoeCastId = session.fire({ skillId: AOE_SKILL, targetId: "", monsterKey: "", x: center.x, y: center.y });
     const aoe = await session.settleOf(aoeCastId);
     check(!!(aoe && aoe.ok), `${AOE_SKILL} 施放成功`, aoe && JSON.stringify(aoe).slice(0, 160));
-    check(Array.isArray(aoe && aoe.hits) && aoe.hits.length === 3, "hits 里正好三只（半径内的全部命中）", aoe && JSON.stringify((aoe.hits || []).map((hit) => hit.targetId)));
+    // 命中集合下面按「与世界里的实例逐一对齐」判（集合相等已包含「数量相等」），
+    // 这里不再单独写「=== 3」—— 那是把播种密度搬成断言（#966）
     const hitIds = (aoe && aoe.hits ? aoe.hits : []).map((hit) => hit.targetId).sort();
     const worldIds = hitTargets.map((mob) => mob.instanceId).sort();
     check(
@@ -493,15 +494,15 @@ async function standAt(session, mapId, point) {
     placeRolesAt(dbPath, "3");
     const killWorld = await session.joinWorld(KILL_MAP);
     const killTargets = ((killWorld && killWorld.monsters) || []).filter((mob) => mob.alive);
-    checkEqual(killTargets.length, 3, "图 2 播出了三只 1 血靶子");
+    check(killTargets.length > 0, "图 2 播出了 1 血靶子（播种密度不判）", String(killTargets.length));
     const killCenter = KILL_CLUSTER.points[0];
     await standAt(session, KILL_MAP, killCenter);
     await paceAoe();
     const killCastId = session.fire({ skillId: AOE_SKILL, targetId: "", monsterKey: "", x: killCenter.x, y: killCenter.y });
     const kill = await session.settleOf(killCastId);
-    check(Array.isArray(kill && kill.hits) && kill.hits.length === 3, "一次施放命中三只", kill && JSON.stringify((kill.hits || []).map((hit) => hit.targetId)));
+    check(Array.isArray(kill && kill.hits) && kill.hits.length === killTargets.length, "一次施放命中场上全部靶子", kill && JSON.stringify((kill.hits || []).map((hit) => hit.targetId)));
     check(
-      (kill && kill.hits ? kill.hits : []).length === 3 && kill.hits.every((hit) => hit.killed === true),
+      (kill && kill.hits ? kill.hits : []).length === killTargets.length && kill.hits.every((hit) => hit.killed === true),
       "三只全被打死（1 血怪吃什么伤害都死）",
       kill && JSON.stringify((kill.hits || []).map((hit) => `${hit.damage}/${hit.hp}`)),
     );
