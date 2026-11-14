@@ -157,10 +157,15 @@ function insertEventsAt(dbPath, zoneId, mapId, count, at) {
   const { DatabaseSync } = require("node:sqlite");
   const db = new DatabaseSync(dbPath);
   const insert = db.prepare("INSERT INTO map_monitor_events (zone_id, map_id, at, kind, payload) VALUES (?, ?, ?, ?, ?)");
+  let inserted = 0;
   for (let index = 0; index < count; index += 1) {
-    insert.run(zoneId, mapId, at + index, "kill", JSON.stringify({ kind: "kill", at: at + index, label: "历史的" }));
+    const result = insert.run(zoneId, mapId, at + index, "kill", JSON.stringify({ kind: "kill", at: at + index, label: "历史的" }));
+    inserted += Number(result.changes ?? 0);
   }
   db.close();
+  // 返回**实际写入行数**而不是事后 COUNT：8 天前那批正好是时间闸的猎物，
+  // 扫描间隔 200ms，事后数会和扫描器抢（CI 上偶发读到 0，本地几乎不出现）
+  return inserted;
 }
 
 /** 某张表上有没有这条索引（时间闸靠它不全表扫，属于「建了没有」的事实检查） */
@@ -723,11 +728,11 @@ async function main() {
     const dayMs = 24 * 60 * 60 * 1000;
     // 99 号图 = 一张「从此没人进」的死图：8 天前攒下的 3 条，之后再没有任何人往里写 ——
     // 这正是条数闸管不住的场景（它只在写入时跑）
-    insertEventsAt(dbPath, 1, "99", 3, Date.now() - (RETENTION_DAYS + 1) * dayMs);
+    const oldRows = insertEventsAt(dbPath, 1, "99", 3, Date.now() - (RETENTION_DAYS + 1) * dayMs);
     // 98 号图 = 还在保留期内（3 天前）的对照：时间闸不该碰它
-    insertEventsAt(dbPath, 1, "98", 2, Date.now() - 3 * dayMs);
-    check(countEvents(dbPath, "99") === 3, "准备：死图上塞了 3 条 8 天前的记录", `实际 ${countEvents(dbPath, "99")}`);
-    check(countEvents(dbPath, "98") === 2, "准备：对照图上塞了 2 条 3 天前的记录", `实际 ${countEvents(dbPath, "98")}`);
+    const keepRows = insertEventsAt(dbPath, 1, "98", 2, Date.now() - 3 * dayMs);
+    check(oldRows === 3, "准备：死图上写入了 3 条 8 天前的记录", `实际写入 ${oldRows}`);
+    check(keepRows === 2, "准备：对照图上写入了 2 条 3 天前的记录", `实际写入 ${keepRows}`);
 
     await waitFor("时间闸扫到并删掉过期行", async () => (countEvents(dbPath, "99") === 0 ? true : null), 5_000);
     check(
