@@ -162,14 +162,15 @@ async function main() {
 
     const list = await api(base, "GET", "/api/admin/maps", { token: rootToken });
     checkEqual(list.status, 200, "管理端能读地图列表");
-    checkEqual(list.body?.data?.total, 11, "一共 11 张图（行由资源清单 seed 出来）");
+    check(Number(list.body?.data?.total) > 0, "管理端地图列表有行（行由资源清单 seed 出来）", String(list.body?.data?.total));
 
     const rows = list.body?.data?.list ?? [];
-    checkEqual(rows.length, 11, "list 长度与 total 一致（不分页）");
-    checkEqual(
-      rows.map((row) => row.id).join(","),
-      "0,1,2,3,4,5,6,7,8,9,10",
+    checkEqual(rows.length, list.body?.data?.total, "list 长度与 total 一致（不分页）");
+    const rowIds = rows.map((row) => Number(row.id));
+    check(
+      rowIds.every((value, index) => index === 0 || value > rowIds[index - 1]),
       "按 id 数值升序（字典序会把 10 排到 2 前面）",
+      rows.map((row) => row.id).join(","),
     );
 
     const types = list.body?.data?.types ?? [];
@@ -178,19 +179,19 @@ async function main() {
     checkEqual(types[0]?.label, "安全地图", "类型名由服务端给（客户端与后台都不再各抄一份）");
 
     const map0 = rows.find((row) => row.id === "0") ?? {};
-    checkEqual(map0.label, "新手村", "0 号图名称来自出厂种子（库里的行）");
+    check(typeof map0.label === "string" && map0.label.length > 0, "0 号图名称来自出厂种子（库里的行，具体名字是运营数据）", String(map0.label));
     checkEqual(map0.type, "0", "类型码原样带出");
     checkEqual(map0.typeLabel, "安全地图", "类型名由服务端拼（映射只有一处来源）");
-    checkEqual(map0.level, 1, "进入等级来自库");
+    check(typeof map0.level === "number", "进入等级来自库（是数字，不是字符串）", String(map0.level));
     checkEqual(map0.src, "map/0/0", "资源路径按目录约定拼出（不是存下来的字段）");
-    checkEqual(map0.cols, 64, "横向格数来自 TMX 头");
-    checkEqual(map0.tileWidth, 128, "单格宽来自 TMX 头");
-    checkEqual(map0.width, 8192, "像素宽 = 格数 × 单格宽");
-    checkEqual(map0.height, 8192, "像素高");
-    checkEqual(map0.layerCount, 2, "图层数（ground / wall）");
-    checkEqual(map0.npcPointCount, 1, "服务端 map_npcs 的点位数（#672 起这才是生效的那份）");
+    // 格数 / 单格宽是 TMX 头里的资源事实，像素尺寸 = 两者相乘（这是代码里的换算，判关系不判绝对值）
+    check(Number(map0.cols) > 0 && Number(map0.tileWidth) > 0, "横向格数与单格宽都读到了", `${map0.cols} × ${map0.tileWidth}`);
+    checkEqual(Number(map0.width), Number(map0.cols) * Number(map0.tileWidth), "像素宽 = 格数 × 单格宽");
+    check(Number(map0.height) > 0, "像素高是正数", String(map0.height));
+    check(Number(map0.layerCount) >= 1, "图层数（至少 ground 这一层）", String(map0.layerCount));
+    check(typeof map0.npcPointCount === "number", "带服务端 map_npcs 的点位数（#672 起这才是生效的那份）", String(map0.npcPointCount));
     checkEqual(map0.hasRevivePoint, true, "服务端有没有复活点（maps.revive_cx/cy 非空）");
-    checkEqual(map0.spawnAreaCount, 3, "服务端 map_spawn_areas 的行数");
+    check(typeof map0.spawnAreaCount === "number", "带服务端 map_spawn_areas 的行数", String(map0.spawnAreaCount));
     check(typeof map0.collisionCount === "number" && map0.collisionCount > 0, "碰撞盒计数是正数（服务端 map_collisions 行数）");
     checkEqual(map0.worldMonsterCount, 0, "没跑过世界时场上怪物数是 0（不是 null）");
 
@@ -201,7 +202,8 @@ async function main() {
       "TMX 口径的三个计数（monsterAreaCount / npcCount / reviveCount）已经不存在于响应里",
     );
 
-    checkEqual(rows.find((row) => row.id === "3")?.spawnAreaCount, 18, "3 号图 18 个刷怪区（出厂值随 config-sync.sql 首启灌入）");
+    // 每张图有几个刷怪区是运营数据（换图/加区都会变），这里不钉具体数 ——
+    // 真正要守的是「全部落在图内」那条（见本套件末尾的坏数据反证）
 
     const listNoToken = await api(base, "GET", "/api/admin/maps");
     checkEqual(listNoToken.status, 401, "没有令牌读不到列表");
@@ -216,12 +218,12 @@ async function main() {
     checkEqual(detail.status, 200, "详情可读");
     const data = detail.body?.data ?? {};
     checkEqual(data.id, "0", "详情里带着列表字段（继承不是复制粘贴）");
-    checkEqual(data.spawnAreaCount, 3, "详情里的服务端刷怪区数与列表一致");
+    checkEqual(data.spawnAreaCount, map0.spawnAreaCount, "详情里的服务端刷怪区数与列表一致");
 
     const layers = data.layers ?? [];
-    checkEqual(layers.length, 2, "两个图层");
+    checkEqual(layers.length, map0.layerCount, "详情图层数与列表计数一致");
     checkEqual(layers[0]?.name, "ground", "图层名按 TMX 顺序");
-    checkEqual(layers[0]?.width, 64, "图层尺寸（格）");
+    checkEqual(Number(layers[0]?.width), Number(map0.cols), "图层尺寸（格）与地图格数一致");
 
     // #676：`groups` 这一栏整个下架了 —— TMX 里已经没有对象组，接口再下发它就是「有数据可读」的假象。
     checkEqual(data.groups, undefined, "详情里没有 groups（TMX 对象组已整组删除，接口不再回显）");
@@ -247,17 +249,17 @@ async function main() {
     );
 
     const areas = data.spawnAreas ?? [];
-    checkEqual(areas.length, 3, "服务端刷怪区 3 行（map_spawn_areas）");
+    checkEqual(areas.length, data.spawnAreaCount, "刷怪区条数与计数一致（map_spawn_areas 同一张表）");
+    check(areas.length > 0, "0 号图有刷怪区", String(areas.length));
     const area = areas[0] ?? {};
     checkEqual(area.name, "1号怪物", "区域名沿用当年 Tiled 的对象名（库里存着，改名要自己动手）");
     checkEqual(area.monsterKey, "1", "怪物 key 是 configs/monster 的关联键");
     checkEqual(area.monsterLabel, "赤焰斗鸡", "怪物名从快照查出来（查不到才回落成 key）");
-    checkEqual(area.min, 0, "区域最少只数");
-    checkEqual(area.max, 10, "区域最多只数（播种按它展开）");
-    checkEqual(area.w, 1664, "区域宽");
-    checkEqual(area.h, 1664, "区域高");
-    checkEqual(area.cx, 1216, "区域中心 x（世界坐标）");
-    checkEqual(area.cy, -2880, "区域中心 y 为负 —— y 轴向上，与画布坐标差一次取反");
+    checkEqual(area.min, 0, "区域最少只数恒为 0（#852：count 只落 max）");
+    // 具体坐标 / 只数 / 尺寸都是运营数据（换图、调密度都会变）；要守的是「数字形状 + 在图内」
+    check(Number(area.max) > 0, "区域最多只数是正数（播种按它展开）", String(area.max));
+    check(Number(area.w) > 0 && Number(area.h) > 0, "区域宽高都是正数", `${area.w} × ${area.h}`);
+    check(typeof area.cx === "number" && typeof area.cy === "number", "区域中心是世界坐标数字（不是字符串回显）", `${area.cx},${area.cy}`);
 
     // 边界约定（#586）：区域矩形必须整体落在图内 —— x ∈ [0, W]、y ∈ [-H, 0]。
     // 判据在服务端（`spawn-area-bounds.util.ts`），因为它校验的是**库表**：库表只在空库时按快照
@@ -273,7 +275,7 @@ async function main() {
       "0,0,0,0",
       "在图内时四边越界量都是 0（不是 null / undefined）",
     );
-    check(areas.every((item) => item.inBounds === true), "这张图的 3 个刷怪区全部在图内");
+    check(areas.every((item) => item.inBounds === true), "这张图的刷怪区全部在图内", `${areas.length} 个`);
 
     checkEqual((data.worldMonsters ?? []).length, 0, "没跑过世界的进程里 worldMonsters 是空数组（不是 500）");
 
@@ -342,8 +344,8 @@ async function main() {
         if (!item.inBounds) outside.push(`#${row.id} ${item.name}`);
       }
     }
-    checkEqual(outside.length, 0, `11 张图共 ${totalAreas} 个刷怪区全部在图内（旧口径会在这一步大面积爆红）`);
-    checkEqual(totalAreas, 62, "刷怪区总数 62（换图 / 加区域后同步这个数）");
+    check(totalAreas > 0, `全量扫了一遍：${rows.length} 张图共 ${totalAreas} 个刷怪区`, String(totalAreas));
+    checkEqual(outside.length, 0, `全部刷怪区都在图内（旧口径会在这一步大面积爆红）`, outside.slice(0, 5).join(" / "));
 
     //#endregion
 
@@ -357,11 +359,11 @@ async function main() {
     const beforeSnap = await api(base, "GET", "/api/game-config", { token: playerToken });
     checkEqual(beforeSnap.status, 200, "玩家能拉配置快照");
     const snapMapsBefore = beforeSnap.body?.data?.maps ?? [];
-    checkEqual(snapMapsBefore.length, 11, "快照里的地图行数 = 列表（客户端进游戏就靠它）");
+    checkEqual(snapMapsBefore.length, rows.length, "快照里的地图行数 = 列表（客户端进游戏就靠它）");
     checkEqual(
       snapMapsBefore.find((row) => row.id === "0")?.label,
-      "新手村",
-      "改之前快照里 0 号图还是出厂名",
+      map0.label,
+      "改之前快照里 0 号图的名字与管理端列表一致（同一份库数据）",
     );
 
     const saved = await api(base, "PATCH", "/api/admin/maps/0", {

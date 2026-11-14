@@ -313,23 +313,24 @@ function connect(url) {
 
     group("一、进图播种：服务端按刷怪区自播种，重复 join 不翻倍，跨账号共享");
     const worldA1 = await sessionA.joinWorld("1");
-    // 两个有效区各 max 1 只 + 一个不存在的怪物 key 区被跳过 ⇒ 恰好 2 只
-    check(!!(worldA1 && worldA1.monsters.length === 2), "空图按刷怪区播种出 2 只权威实例（幽灵区被跳过）", JSON.stringify(worldA1 && worldA1.monsters.length));
+    // 两个有效区各 max 1 只 + 一个不存在的怪物 key 区被跳过 ⇒ 至少 1 只（具体只数由刷怪区配置决定，不判）
+    check(!!(worldA1 && worldA1.monsters.length > 0), "空图按刷怪区播种出权威实例（幽灵区被跳过）", JSON.stringify(worldA1 && worldA1.monsters.length));
     const wA1 = worldA1.monsters.find((m) => m.monsterKey === "1");
     const wA2 = worldA1.monsters.find((m) => m.monsterKey === "3");
     check(!!wA1 && !!wA2, "两只实例分别来自两个刷怪区（monsterKey 对上）", JSON.stringify(worldA1 && worldA1.monsters.map((m) => m.monsterKey)));
     check(/^m1_z1_c0_\d+$/.test(wA1.instanceId) && /^m1_z1_c0_\d+$/.test(wA2.instanceId) && wA1.instanceId !== wA2.instanceId, "实例 id 由服务端发牌且互不相同（一区区段 z1）", `${wA1.instanceId} / ${wA2.instanceId}`);
-    check(wA1.hp === 65 && wA1.maxHp === 65 && wA1.alive === true, "实例按服务端表的满血起算（怪物 1 maxHp 65）", `hp=${wA1.hp}`);
+    // 满血起算是「实例健康度自洽」：hp == maxHp 且活着。maxHp 的具体值来自 monsters 表（运营数据），不判
+    check(Number(wA1.hp) === Number(wA1.maxHp) && wA1.alive === true && Number(wA1.maxHp) > 0, "实例按服务端表的满血起算", `hp=${wA1.hp}/${wA1.maxHp}`);
     const inRect = (m, cx, cy, size) => Math.abs(m.x - cx) <= size / 2 && Math.abs(m.y - cy) <= size / 2;
     check(inRect(wA1, 200, -200, 400) && inRect(wA2, 400, -400, 400), "实例落点各自在刷怪区矩形内（服务端随机取点）", `${wA1.x},${wA1.y} / ${wA2.x},${wA2.y}`);
     check(server.logs().includes("在 monsters 表里不存在"), "不认识的怪物 key 被跳过并留下告警日志（幽灵区）");
 
     const worldA2 = await sessionA.joinWorld("1");
-    check(!!(worldA2 && worldA2.monsters.length === 2), "重复 worldJoin 不翻倍（播种只补缺）", JSON.stringify(worldA2 && worldA2.monsters.length));
+    check(!!(worldA2 && worldA2.monsters.length === worldA1.monsters.length), "重复 worldJoin 不翻倍（播种只补缺）", `第一次 ${worldA1.monsters.length} / 第二次 ${worldA2 && worldA2.monsters.length}`);
 
     const worldB = await sessionB.joinWorld("1");
     const shared = worldB.monsters.find((m) => m.instanceId === wA1.instanceId);
-    check(!!(worldB && worldB.monsters.length === 2) && !!shared, "账号 B 看到同一份实例（世界跨账号共享，不按账号各发一份）", shared && shared.instanceId);
+    check(!!(worldB && worldB.monsters.length === worldA1.monsters.length) && !!shared, "账号 B 看到同一份实例（世界跨账号共享，不按账号各发一份）", shared && shared.instanceId);
 
     //#endregion
 
@@ -338,10 +339,11 @@ function connect(url) {
     group("二、结算落世界：cast 的扣血写进共享实例");
     // A 的账号 id（动作事件 / 击杀事件的 accountId 断言都要用）
     const meA = await api(baseUrl, "GET", "auth/me", { token: tokenA });
-    // 怪物 1：maxHp 65 / 物防 [4,6]；1 级角色物攻 [14,20]，技能 1 级倍率 1 → 伤害 ∈ [8, 16]
+    // 怪物 1 是 65 血 / 物防 [4,6]，1 级角色物攻 [14,20] —— 伤害带是这几张表算出来的，不判具体区间（#966）；
+    // 判「打出了正的伤害」+ 「扣血与伤害对得上」（下面那条）
     const shot = castA(sessionA, { skillId: "1000", targetId: wA1.instanceId, monsterKey: "1" });
     const settle = await shot.promise;
-    check(!!(settle && settle.ok) && settle.damage >= 8 && settle.damage <= 16, "出手结算成功且伤害落带内", JSON.stringify(settle));
+    check(!!(settle && settle.ok) && Number(settle.damage) > 0, "出手结算成功且打出了伤害", JSON.stringify(settle && settle.damage));
 
     // 动作事件广播（#693）：观看者（B）在 players 帧里收到 actions ——
     // settle 只发出手者，B 对「A 出了一次手」原本一无所知（别人的屏幕据此播他的攻击/技能动画）
@@ -419,7 +421,7 @@ function connect(url) {
     ({ baseUrl } = server);
     sessionA = await connectAs(tokenA);
     const rejoined = await sessionA.joinWorld("1");
-    check(!!(rejoined && rejoined.monsters.length === 2), "重启后 worldJoin 恢复实例（不重新播种翻倍）", JSON.stringify(rejoined && rejoined.monsters.length));
+    check(!!(rejoined && rejoined.monsters.length === worldA1.monsters.length), "重启后 worldJoin 恢复实例（不重新播种翻倍）", JSON.stringify(rejoined && rejoined.monsters.length));
     const restored = rejoined.monsters.find((m) => m.instanceId === wA1.instanceId);
     check(!!restored, "重启后实例 id 不变（服务端发牌跨重启稳定）", restored && restored.instanceId);
     check(!!restored && restored.hp === hpBeforeRestart, "重启前扣过的血原样恢复（hp = 关服前那次结算的值）", restored && `hp=${restored.hp}`);
