@@ -86,6 +86,11 @@ export class WorldMonsterRepository {
     );
   }
 
+  /** 一个区有多少只实例（#961 区服列表的聚合列） */
+  countByZone(zoneId: number): number {
+    return this.db.count("SELECT COUNT(1) AS total FROM world_monsters WHERE zone_id = ?", [zoneId]);
+  }
+
   /** 改写一只实例的 instanceId（合并区重排发牌用；zone_id / slot 一并在同一句里落） */
   rekey(oldInstanceId: string, row: WorldMonsterRow): void {
     this.db.run(

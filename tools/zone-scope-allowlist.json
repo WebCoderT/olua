@@ -3,10 +3,17 @@
   "entries": [
     {
       "rule": "dto-input",
-      "file": "server/src/modules/auth/dto/register.dto.ts",
+      "file": "server/src/modules/auth/dto/login.dto.ts",
       "key": "zoneId",
-      "issue": 957,
-      "reason": "注册仍收 zoneId（兼容旧客户端）。P1 起账号不再属于区，这一字段改成 deprecated → 忽略 → 删除"
+      "issue": 961,
+      "reason": "登录时选区（#961）：这不是「数据范围」而是「进哪个服」的选择 —— 服务端校验 open / 未合并后写 accounts.active_zone_id，之后所有读接口仍只认服务端那一列。没有它，当前区转维护后多区账号会被锁死在登录页（那时候还没有令牌，调不了 POST /zones/select）。注册那份同名旧字段已在 #961 删掉（多余字段由 whitelist 静默剥掉）"
+    },
+    {
+      "rule": "service-zone-input",
+      "file": "server/src/modules/auth/auth.service.ts",
+      "key": "dto.zoneId",
+      "issue": 961,
+      "reason": "与上面 login.dto 那条是同一件事的两面（DTO 收、service 用）。用途只有一个：把「登录到哪个区」写进 accounts.active_zone_id —— 服务端先过 playableZone（open / 未合并），写完之后所有读接口仍然只认这一列。这是「选服」，不是「按客户端给的区过滤数据」"
     },
     {
       "rule": "repo-signature",

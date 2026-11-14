@@ -459,6 +459,15 @@ export default class RealtimeClient {
       return;
     }
 
+    // 区维护 / 区被合并（#961）：重连也会被同样的理由拒掉，只会变成空转的重连风暴。
+    // 停在这里，由上层（维护提示 / 回登录页）接管 —— 完整交互在 #962 做。
+    if (code === REALTIME_CLOSE.MAINTENANCE || code === REALTIME_CLOSE.ZONE_MERGED) {
+      this.stopped = true;
+      console.warn(`[realtime] 本区暂不可进（${reason || `close=${code}`}），不再重连`);
+      this.emit(RealtimeStatus.Disconnected, { lost: wasConnected, willRetry: false, reason: reason || `close=${code}` });
+      return;
+    }
+
     console.warn(`[realtime] 连接断开（${reason || `close=${code}`}），退避后重连`);
     this.emit(RealtimeStatus.Disconnected, { lost: wasConnected, willRetry: true, reason: reason || `close=${code}` });
     this.scheduleRetry();

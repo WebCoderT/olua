@@ -8,7 +8,7 @@
     {
       "file": "modules/admin/admin-zone.controller.ts",
       "issue": "#960",
-      "reason": "区目录本身（列表 / 开区 / 合并 / 改状态）—— 它卖的就是「全区清单」，不需要也不可能有当前区"
+      "reason": "区目录本身（列表 / 开区 / 改设置 / 改状态 / 合区）—— 它卖的就是「全区清单」，**刻意不挂守卫**：要求它先说明「你在哪个区里」是循环依赖；合区更是同时动两个区。见 docs/39 §3.9"
     },
     {
       "file": "modules/admin/admin-admins.controller.ts",

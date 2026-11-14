@@ -7,7 +7,8 @@ import { AuthenticatedUser } from "../../common/interfaces/api-envelope.interfac
 import { AuthService } from "./auth.service";
 import { AccountDto } from "./dto/account.dto";
 import { AuthTokenDto } from "./dto/auth-token.dto";
-import { LoginDto, RegisterDto } from "./dto/register.dto";
+import { RegisterDto } from "./dto/register.dto";
+import { LoginDto } from "./dto/login.dto";
 
 /**
  * 客户端 · 认证接口

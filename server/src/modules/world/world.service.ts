@@ -55,10 +55,11 @@ export interface RoomReloadResult {
  * ===========================================================================
  * tick 的四件事（频率见配置 WORLD_TICK_MS / WORLD_PERSIST_MS）
  * ===========================================================================
- * 1. 代际巡检：`world_meta.epoch` 变了 = 别的进程（或本进程的管理操作）改写了库里的
- *    世界（合并区搬账号、重排 instanceId）—— 把整份内存世界作废（**不落盘**：库里
- *    已是改写后的权威，落盘会把旧 id 写回去）。#851 起**有人看的房间当场按库重载并广播**，
- *    没人看的保持惰性（下次 join 再加载）；
+ * 1. 代际巡检：**某个区**的 `zone_world_meta.epoch` 变了 = 别的进程（或本进程的管理操作）
+ *    改写了库里那个区的世界（合并区搬账号、重排 instanceId）—— 把**那个区**的内存世界
+ *    作废（**不落盘**：库里已是改写后的权威，落盘会把旧 id 写回去）。#851 起**有人看的
+ *    房间当场按库重载并广播**，没人看的保持惰性（下次 join 再加载）。代际从 #961 起按区记
+ *    （原来的 `world_meta.epoch` 是全局单值，合并一次所有图都白重建）；
  * 2. 重生：死亡满 `worldRespawnMs` 的实例复活（满血、回出生点），并通知观看者；
  * 3. 密度对齐（#852）：按「目标数 vs 当前实例数」的差量补 / 裁，每次最多补 2 只 ——
  *    运营改 `max` 或密度系数**下一秒就见效**（实现见 `RoomManager.alignDensity`）；
@@ -78,8 +79,13 @@ export interface RoomReloadResult {
 export class WorldService implements OnApplicationBootstrap, OnApplicationShutdown {
   private readonly logger = new Logger(WorldService.name);
 
-  /** 上次巡检到的世界代际（变了 = 库被别的进程改写过，见 tick 的代际巡检；bootstrap 时读真实值） */
-  private epoch = 0;
+  /**
+   * 上次巡检到的**区级**世界代际（#961：区 id → epoch）
+   *
+   * 以前是一个全局数字：合并一次全服所有图的内存世界都作废，玩家看到本图怪整体重刷一次。
+   * 现在合并只 bump 参与的两个区，这里也只作废那两个区的房间。
+   */
+  private epochs = new Map<number, number>();
 
   private tickTimer: NodeJS.Timeout | null = null;
   /** 上次落盘的时刻（#849：`worldPersistMs` 是节流间隔，不是「每次 tick 都 flush」） */
@@ -105,7 +111,7 @@ export class WorldService implements OnApplicationBootstrap, OnApplicationShutdo
   ) {}
 
   onApplicationBootstrap(): void {
-    this.epoch = this.zones.getEpoch();
+    this.epochs = this.epochsOf();
     const total = this.worldMonsters.countAll();
     this.tickTimer = setInterval(() => this.tick(), this.tickMs()).unref();
     this.logger.log(
@@ -290,11 +296,11 @@ export class WorldService implements OnApplicationBootstrap, OnApplicationShutdo
   }
 
   /**
-   * 代际巡检（#295 阶段二：跨进程的世界配置失效信号）
+   * 代际巡检（#295 阶段二 → #961 下沉到区）
    *
-   * 合并区在 API 进程里改写库（搬账号 + 重排 instanceId + epoch+1），而世界内存
-   * 两个进程各有一份 —— 本进程发现 epoch 变了就把整份内存作废。**不落盘**：
-   * 库里已经是改写后的权威状态，把旧 id 的脏行写回去等于把合并前的问题复活。
+   * 合并区在 API 进程里改写库（搬角色/帮会 + 重排 instanceId + bump 两个区的 epoch），
+   * 而世界内存两个进程各有一份 —— 本进程发现某个区的 epoch 变了就把**那个区**的房间作废。
+   * **不落盘**：库里已经是改写后的权威状态，把旧 id 的脏行写回去等于把合并前的问题复活。
    *
    * #851：作废之后**不能只留个空壳**。只清内存不通知，客户端手里那些旧 `instanceId`
    * 会一直指着已经不存在的怪（出手就是 20008「目标不存在」），而下一个 world 帧可能
@@ -308,17 +314,29 @@ export class WorldService implements OnApplicationBootstrap, OnApplicationShutdo
    * 合并等于白做。播种只属于「第一个观看者进图」，不属于「代际变化」。
    */
   private checkEpoch(): void {
-    const current = this.zones.getEpoch();
-    if (current === this.epoch) return;
-    const previous = this.epoch;
-    this.epoch = current;
-    // 观看者名单要先抄走：房被 evict 后重建出来的新对象 viewers 是空的，而他们的
-    // WebSocket 连接还活着 —— 不搬回去，重载完的广播就「无人在场」，#851 的
-    // 「代际变化主动下发 world 帧」收口等于没做（旧实现 viewers Map 不清、白拿这个语义）
-    const evicted = this.roomManager
-      .list()
-      .map((room) => ({ roomId: room.roomId, zoneId: room.zoneId, mapId: room.mapId, slot: room.slot, viewers: [...room.viewers] }));
-    this.roomManager.evictAll();
+    const current = this.epochsOf();
+    const changed = new Set<number>();
+    for (const [zoneId, epoch] of current) {
+      if ((this.epochs.get(zoneId) ?? 0) !== epoch) changed.add(zoneId);
+    }
+    // 表里没有的区（新开的区还没落行）读作 0；内存里记过它但这次查不到也算变化
+    for (const zoneId of this.epochs.keys()) {
+      if (!current.has(zoneId) && (this.epochs.get(zoneId) ?? 0) !== 0) changed.add(zoneId);
+    }
+    if (changed.size === 0) {
+      this.epochs = current;
+      return;
+    }
+    this.epochs = current;
+    const evicted = [...changed].flatMap((zoneId) =>
+      this.roomManager.evictZone(zoneId).map((room) => ({
+        roomId: room.roomId,
+        zoneId: room.zoneId,
+        mapId: room.mapId,
+        slot: room.slot,
+        viewers: [...room.viewers],
+      })),
+    );
     let reloaded = 0;
     for (const room of evicted) {
       // 连接还在但没人看（空房）的就不重载：惰性，下次 join 再按库加载
@@ -333,10 +351,17 @@ export class WorldService implements OnApplicationBootstrap, OnApplicationShutdo
     }
     if (evicted.length > 0) {
       this.logger.warn(
-        `世界代际 ${previous} → ${current}，已作废内存中 ${evicted.length} 个房间（未落盘，状态以库为准）；` +
+        `世界代际变化（区 ${[...changed].join(",")}）：已作废内存中 ${evicted.length} 个房间（未落盘，状态以库为准）；` +
           `其中 ${reloaded} 个有人看，已按库重载并通知观看者`,
       );
     }
+  }
+
+  /** 读一次区级代际（区数个位数，全表读比维护缓存简单） */
+  private epochsOf(): Map<number, number> {
+    const map = new Map<number, number>();
+    for (const row of this.zones.listEpochs()) map.set(row.zone_id, row.epoch);
+    return map;
   }
 
   //#endregion

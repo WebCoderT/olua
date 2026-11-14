@@ -54,7 +54,7 @@ export interface ZoneRow {
   /** 区名（如「一区」；唯一，给玩家注册时选） */
   name: string;
   /**
-   * 运营状态（#960）：`open` | `closed`
+   * 运营状态（#960 / #961）：`open` | `maintenance` | `closed`
    *
    * **已合并不塞进这里**：那是 `merged_into` 的事。一个区可以先 `closed`（停止注册、
    * 不推荐新人）再合并，两者是不同维度 —— 混在一个字段里会写出「关了就一定没数据」的错判。
@@ -62,15 +62,31 @@ export interface ZoneRow {
   status: string;
   /** 登录页 / 注册下拉的排序（升序；同值按 id。运营用它把新区顶上去） */
   sort: number;
+  /** 开服时间（毫秒，#961）：区别于 `created_at`（建行时刻，一区是 0）—— 用来算开服天数 / 活动周期 */
+  opened_at: number;
+  /** 推荐区（1 = 选服弹窗里标「推荐」；`0` 与 `1` 两个值，客户端只做标记不做排序） */
+  recommended: number;
+  /** 运营备注（内部可见；客户端拿不到） */
+  note: string | null;
   /** 已并入哪个区（合并区的标记；NULL = 还是一个活区） */
   merged_into: number | null;
   created_at: number;
   updated_at: number;
 }
 
-/** 世界代际一行（`world_meta` 表，单行；epoch 每次合并区 +1） */
-export interface WorldMetaRow {
-  id: number;
+/**
+ * 区级世界代际（`zone_world_meta` 表，#961）
+ *
+ * 合并区只该作废**参与的这两个区**的内存世界。原来的 `world_meta.epoch` 是全局单值，
+ * 合并一次全服所有图都白重建一遍（玩家看到本图怪整体重刷）。这里按区各存一行。
+ *
+ * 没有行 = 该区还没有代际记录（新开的区），读作 0。
+ *
+ * 注：`world_meta` 表本身还在，但只剩 `coord_origin`（坐标系平移的一次性标记）；
+ * 它的 `epoch` 列已无人读（代际按区了），所以这里不再有对应的行接口。
+ */
+export interface ZoneWorldMetaRow {
+  zone_id: number;
   epoch: number;
 }
 

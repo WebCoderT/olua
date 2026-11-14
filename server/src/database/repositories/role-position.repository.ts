@@ -43,4 +43,19 @@ export class RolePositionRepository {
   removeAllOfRole(roleId: string): void {
     this.remove(roleId);
   }
+
+  /**
+   * 删掉某个区所有角色的位置行（#961 合并区）
+   *
+   * **必须在搬角色之前调**：这张表没有 `zone_id`，只能反查 `roles.zone_id` ——
+   * 角色一旦搬去目标区，就再也认不出哪些行是源区留下的了（会变成一堆指向
+   * 「现在属于别的区」的角色的过期坐标，让合并后的距离校验按旧图判断）。
+   */
+  removeByZoneRoles(zoneId: number): number {
+    const rows = this.db.all<{ role_id: string }>("SELECT id AS role_id FROM roles WHERE zone_id = ?", [zoneId]);
+    if (rows.length === 0) return 0;
+    const placeholders = rows.map(() => "?").join(",");
+    this.db.run(`DELETE FROM role_positions WHERE role_id IN (${placeholders})`, rows.map((row) => row.role_id));
+    return rows.length;
+  }
 }

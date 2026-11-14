@@ -11,8 +11,9 @@
  * 四、**越界钳制**（#850）：整块在图外的刷怪区不再把怪刷到图外（落点钳在图内）；
  * 五、**落盘节流**（#849）：`worldPersistMs` 是节流间隔 —— 受击后短时间内库里还是旧值，
  *     关服时 `flushAll` 一定把最后一次变化写进去（丢的只是「进程被硬杀」的那点窗口）；
- * 六、**代际作废**（#851）：`world_meta.epoch` 变了 → 有人看的分域按库重载并广播，
+ * 六、**代际作废**（#851）：`zone_world_meta.epoch` 变了 → 有人看的分域按库重载并广播，
  *     客户端**不用再发 worldJoin** 就能拿到新实例表（旧 instanceId 不会一直悬着）。
+ *     代际从 #961 起按区记（原来是 `world_meta` 的单行全局值），本套全在 1 区，推 1 区的。
  *
  * 与其他 e2e 的差别：用**文件库**（节流与重启恢复只有文件库能验），并且第一次启动把
  * `WORLD_PERSIST_MS` 调到很大 —— 「没到点就不写库」这条只有把节流窗口拉长才测得准
@@ -383,7 +384,16 @@ function windowAround(offsetMinutes, spanMinutes) {
     check(idsBefore.every((instanceId) => instanceId.startsWith(`m${MAP_ID}_z1_`)), "实例 id 的区段没有漂移（z1）", idsBefore[0]);
 
     const baseline = session.worlds.length;
-    withDb(dbPath, (db) => db.prepare("UPDATE world_meta SET epoch = epoch + 1 WHERE id = 1").run());
+    // 代际**按区**（#961）：本套全程在 1 区（实例 id 的 `_z1_` 段），所以只推 1 区这一格。
+    // 用 UPSERT 是因为这一行正常已由建库时补齐；缺行时补 1 也算变化，与仓储同一口径。
+    withDb(dbPath, (db) =>
+      db
+        .prepare(
+          "INSERT INTO zone_world_meta (zone_id, epoch) VALUES (1, 1)" +
+            " ON CONFLICT(zone_id) DO UPDATE SET epoch = epoch + 1",
+        )
+        .run(),
+    );
     const pushed = await session.waitNewWorld(baseline, 8_000);
     check(!!pushed, "代际变了之后收到主动下发的 world 帧（没有发 worldJoin）");
     const idsAfter = pushed ? pushed.monsters.map((monster) => monster.instanceId).sort() : [];

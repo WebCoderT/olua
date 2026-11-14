@@ -52,7 +52,7 @@ const NAV_GROUPS: NavBranch[] = [
         children: [
           { to: "/accounts", label: "账号管理", permission: PERMISSION.ACCOUNT_READ },
           { to: "/roles", label: "角色管理", permission: PERMISSION.ROLE_READ },
-          { to: "/zones", label: "区服管理", permission: PERMISSION.ZONE_READ },
+          { to: "/zones", label: "区服运营", permission: PERMISSION.ZONE_READ },
         ],
       },
       {

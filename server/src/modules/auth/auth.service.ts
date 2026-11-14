@@ -2,6 +2,7 @@ import { HttpStatus, Injectable } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { randomUUID } from "node:crypto";
 import { BizCode } from "../../common/constants/biz-code";
+import { ZONE_STATUS } from "../../common/constants/zone-status";
 import { ENTITY_STATUS } from "../../common/constants/status";
 import { BizException } from "../../common/errors/biz.exception";
 import { hashPassword, verifyPassword } from "../../common/utils/password.util";
@@ -9,14 +10,15 @@ import { describeBan, isBanned } from "../../common/utils/ban.util";
 import { LoginThrottleService } from "../../common/security/login-throttle.service";
 import { AccountRepository } from "../../database/repositories/account.repository";
 import { ZoneRepository } from "../../database/repositories/zone.repository";
-import { AccountRow } from "../../database/rows";
+import { AccountRow, ZoneRow } from "../../database/rows";
 import { AuditService } from "../audit/audit.service";
 import { EventLogService } from "../event-log/event-log.service";
 import { EVENT_TYPE } from "../../common/constants/event-type";
 import { TokenService } from "../token/token.service";
 import { AccountDto } from "./dto/account.dto";
 import { AuthTokenDto } from "./dto/auth-token.dto";
-import { LoginDto, RegisterDto } from "./dto/register.dto";
+import { RegisterDto } from "./dto/register.dto";
+import { LoginDto } from "./dto/login.dto";
 
 /** 玩家账号认证（注册 / 登录 / 取当前账号） */
 @Injectable()
@@ -41,10 +43,14 @@ export class AuthService {
     if (this.accounts.findByUsername(username)) throw BizException.conflict(BizCode.ACCOUNT_EXISTS, "该账号已被注册");
 
     // 区（#957）：**注册不再定区**。账号只是身份，归属由角色决定（`roles.zone_id`）；
-    // 这一列只是「当前浏览区」，注册时先落在第一个活区，玩家选服时由 POST /zones/select 改。
+    // 这一列只是「当前浏览区」，注册时先落在第一个**开放**的活区，玩家选服时由
+    // POST /zones/select 改。#961 起维护中 / 已关闭的区不接新账号 —— 否则新玩家一
+    // 注册就落在一个进不去的区，第一步就是死路。
     // 老客户端仍可能带 zoneId —— 直接忽略（忽略而不是报错，否则旧包白屏）。
-    const firstZone = this.zones.listLive()[0];
-    if (!firstZone) throw BizException.notFound(BizCode.ZONE_NOT_FOUND, "当前没有可用区服");
+    const firstZone = this.zones.listLive().find((zone) => zone.status === ZONE_STATUS.OPEN);
+    if (!firstZone) {
+      throw new BizException(BizCode.ZONE_UNAVAILABLE, "当前没有开放中的区服，请稍后再试", HttpStatus.CONFLICT);
+    }
 
     const now = Date.now();
     const account: AccountRow = {
@@ -123,6 +129,19 @@ export class AuthService {
       account.banned_at = null;
     }
     this.throttle.recordSuccess(username, ip);
+
+    // 区状态闸门（#961）：维护中 / 已关闭的区不许进。
+    // 顺序放在口令 + 封禁**之后**：区名是公开信息，但「这个账号的当前浏览区在维护」
+    // 不该在口令没对的时候泄露给扫描器。
+    const targetZone = this.playableZone(dto.zoneId ?? account.active_zone_id, dto.zoneId === undefined ? "当前区服" : "所选区服");
+    if (targetZone.id !== account.active_zone_id) {
+      // 登录时直接指定了另一个区（见 LoginDto.zoneId）：顺便把「当前浏览区」切过去，
+      // 否则登录进去了、下一个请求还是按旧区算
+      account.active_zone_id = targetZone.id;
+      account.online_role_id = null;
+      this.accounts.updateById(account.id, { active_zone_id: targetZone.id, online_role_id: null, updated_at: Date.now() });
+    }
+
     account.last_login_at = Date.now();
     this.accounts.updateById(account.id, { last_login_at: account.last_login_at });
     this.audit.recordLoginAttempt({ action: "auth.login", route: "auth/login", username: account.username, ip, ok: true });
@@ -153,6 +172,29 @@ export class AuthService {
       success: input.ok,
       detail: input.reason ? { username: input.username, reason: input.reason } : { username: input.username },
     });
+  }
+
+  /**
+   * 玩家侧区闸门（#961）：这个区现在能不能进
+   *
+   * 三种拒绝分开说：不存在 / 已合并 / 维护中或已关闭。与守卫那套「四种理由同一句话」
+   * 不同 —— 这里玩家已经登录，说清楚原因他才知道「等一等」还是「换个区」。
+   *
+   * 放在 auth 里而不是调 `ZoneService.assertOpen`：那个方法在 zone 模块，
+   * auth → zone 的 service 依赖会让两个模块互相拽着（zone 也要认账号）。
+   * 判据只有「`status === open` 且未合并」一条，一处读库就够。
+   */
+  private playableZone(zoneId: number, label: string): ZoneRow {
+    const row = this.zones.findById(zoneId);
+    if (!row) throw BizException.notFound(BizCode.ZONE_NOT_FOUND, `${label}不存在`);
+    if (row.merged_into !== null) {
+      throw new BizException(BizCode.ZONE_MERGED, `${label}（${row.name}）已并入其他区`, HttpStatus.CONFLICT);
+    }
+    if (row.status !== ZONE_STATUS.OPEN) {
+      const why = row.status === ZONE_STATUS.MAINTENANCE ? "正在维护" : "已关闭";
+      throw new BizException(BizCode.ZONE_UNAVAILABLE, `${label}（${row.name}）${why}，请稍后再进`, HttpStatus.CONFLICT);
+    }
+    return row;
   }
 
   /** 当前登录账号（守卫已确认存在且状态正常） */

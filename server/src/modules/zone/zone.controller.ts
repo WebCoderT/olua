@@ -42,7 +42,7 @@ export class ZoneController {
   })
   @ApiDataResponse(MyZoneDto, { description: "区列表（含角色数与当前标记）", isArray: true })
   mine(@CurrentUser() user: AuthenticatedUser): MyZoneDto[] {
-    return this.zoneService.mine(user.id) as MyZoneDto[];
+    return this.zoneService.mine(user.id);
   }
 
   /**

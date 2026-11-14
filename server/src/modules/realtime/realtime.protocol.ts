@@ -399,7 +399,7 @@ export interface RealtimeMapEnterResultMessage {
     mapId: string;
     ok: boolean;
     /** 缺哪一项（`ok = true` 时没有）；`unknown` = 图不存在，`start` = 还没有位置记录、只准进新手村（#859） */
-    field?: "level" | "combat" | "soul" | "unknown" | "start";
+    field?: "level" | "combat" | "soul" | "unknown" | "start" | "zone";
     /** 这张图要求的值（`ok = true` 时没有） */
     need?: number;
     /** 图名（提示里要用；`ok = true` 时没有） */
@@ -458,6 +458,46 @@ export interface RealtimeWorldReloadMessage {
     slot: string;
     /** 强制执行（房间里本来还有人，他们看到怪整体重刷一次） */
     forced: boolean;
+  };
+}
+
+/**
+ * 服务端 → 客户端：这个区要进维护了（#961）
+ *
+ * 服务端在「区转 maintenance」的那一刻推一次，`inMs` 是**距离强制断开**还有多久
+ * （出厂 60 秒，见 `ZONE_MAINTENANCE_KICK_MS`）。客户端拿它显示倒计时（「本服将在
+ * 58 秒后进入维护」），到点服务端会主动断线（关闭码 `MAINTENANCE`）。
+ *
+ * 为什么不直接断：正在打怪的人需要时间收手（打完这一只、把东西捡了）。断得太干脆，
+ * 玩家会认为「掉线了」而不是「服在维护」。
+ *
+ * **恢复不推帧**：维护结束后玩家本来就要重新登录（连接早就断了），
+ * 没有「还连着的人」需要通知。
+ */
+export interface RealtimeZoneMaintenanceMessage {
+  type: "zoneMaintenance";
+  data: {
+    zoneId: number;
+    zoneName: string;
+    /** 距离强制断开的毫秒数（0 = 立即） */
+    inMs: number;
+  };
+}
+
+/**
+ * 服务端 → 客户端：这个区已经被合并进别的区了（#961）
+ *
+ * 与 `zoneMaintenance` 分开：合并是**永久**的（这个区号从此不存在），客户端该做的是
+ * 「回登录页 + 提示本区已并入 X 区」，而不是等倒计时。服务端发完这一帧立即断线。
+ */
+export interface RealtimeZoneMergedMessage {
+  type: "zoneMerged";
+  data: {
+    zoneId: number;
+    zoneName: string;
+    /** 并入了哪个区 */
+    mergedInto: number;
+    mergedIntoName: string;
   };
 }
 
@@ -1212,7 +1252,9 @@ export type RealtimeServerMessage =
   | RealtimePathMessage
   | RealtimeWorldReloadMessage
   | RealtimeEntityEnterMessage
-  | RealtimeEntityLeaveMessage;
+  | RealtimeEntityLeaveMessage
+  | RealtimeZoneMaintenanceMessage
+  | RealtimeZoneMergedMessage;
 
 /**
  * 关闭码
@@ -1226,4 +1268,13 @@ export const REALTIME_CLOSE = {
   GOING_AWAY: 1001,
   /** 同一账号的新连接上线，本条被替换 */
   REPLACED: 4000,
+  /**
+   * 所在区进入维护（#961）：服务端发完 `zoneMaintenance` 倒计时后主动断开
+   *
+   * 与 `REPLACED`（4000）分开：那个的语义是「回选角、别自动重连」，而这个的语义是
+   * 「**别再连了**，等你登录的时候再看这个区开没开」—— 客户端据此整页回登录并提示维护。
+   */
+  MAINTENANCE: 4001,
+  /** 所在区已被合并（#961）：连接断开，回登录页并提示「本区已并入 X 区」 */
+  ZONE_MERGED: 4002,
 } as const;

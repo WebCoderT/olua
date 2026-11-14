@@ -3338,7 +3338,7 @@
     },
     "/admin/zones": {
       "get": {
-        "description": "全部区服（含已合并的，附 `mergedInto` 去向与当前账号数），按开区顺序排列。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`zone:read`（查看区服；角色：超级管理员 / 管理员 / 只读观察员）",
+        "description": "全部区服（含已合并的），附账号数 / 角色数 / 在线数 / 世界实例数 / 帮会数 / 待执行重载数。\n\n**账号数**是「在本区有角色的去重账号」（#957 起账号本身不属于区），不是 `active_zone_id` 的分布。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`zone:read`（查看区服；角色：超级管理员 / 管理员 / 只读观察员）",
         "operationId": "adminZone.list",
         "parameters": [],
         "responses": {
@@ -3372,7 +3372,7 @@
             "admin": []
           }
         ],
-        "summary": "区服列表",
+        "summary": "区服列表（含聚合列）",
         "tags": [
           "管理端"
         ],
@@ -3389,7 +3389,7 @@
         ]
       },
       "post": {
-        "description": "区名唯一（1~20 字）。新开的区立即可供注册选择，世界在第一个玩家进图时播种。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`zone:write`（开区 / 合并区；角色：超级管理员 / 管理员）",
+        "description": "区名唯一（1~20 字）。可同时定开服时间 / 排序 / 推荐 / 备注。新开的区立即可供注册选择，世界在第一个玩家进图时播种。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`zone:write`（开区 / 合并区；角色：超级管理员 / 管理员）",
         "operationId": "adminZone.create",
         "parameters": [],
         "requestBody": {
@@ -3444,24 +3444,33 @@
         ]
       }
     },
-    "/admin/zones/merge": {
-      "post": {
-        "description": "把 from 区整体并入 to 区，一个事务内完成：from 区账号全部改挂 to 区、from 区的世界怪物实例改挂 to 区并重排发牌（instanceId 换成 to 区区段）、from 区打上已合并标记。\n\n**生效方式**：两个进程的世界内存靠代际信号作废 —— 玩家下一次进图就落在 to 区的世界，在线玩家不需要强制下线；合并瞬间各图未落盘的几秒内伤害变化会丢弃（可接受，见 #295）。\n\n边界：from 与 to 必须都是活区（未合并）、不能是同一个区。用户名全局唯一，所以合并永不撞名（#295 的刻意取舍）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`zone:write`（开区 / 合并区；角色：超级管理员 / 管理员）",
-        "operationId": "adminZone.merge",
-        "parameters": [],
+    "/admin/zones/{id}": {
+      "patch": {
+        "description": "排序 / 推荐 / 备注 / 开服时间。**改名不提供**：改名会让已发出去的公告与客服话术全部对不上。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`zone:write`（开区 / 合并区；角色：超级管理员 / 管理员）",
+        "operationId": "adminZone.update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/MergeZoneDto"
+                "$ref": "#/components/schemas/UpdateZoneDto"
               }
             }
           }
         },
         "responses": {
           "200": {
-            "description": "合并后的 from 区（含 mergedInto 标记）",
+            "description": "改完的区",
             "content": {
               "application/json": {
                 "schema": {
@@ -3487,7 +3496,7 @@
             "admin": []
           }
         ],
-        "summary": "合并区（from 并入 to）",
+        "summary": "改区服运营字段",
         "tags": [
           "管理端"
         ],
@@ -3495,6 +3504,193 @@
         "x-olua-data-nullable": false,
         "x-olua-data-schema": {
           "$ref": "#/components/schemas/AdminZoneDto"
+        },
+        "x-olua-permissions": [
+          "zone:write"
+        ]
+      }
+    },
+    "/admin/zones/{id}/status": {
+      "post": {
+        "description": "状态机：`open` ⇄ `maintenance` → `closed`。\n\n- 转 `maintenance`：该区立刻停止注册与选服，在线玩家收到 `zoneMaintenance` 倒计时后断开；世界**不冻结**（照常 tick 与落盘），恢复后玩家原样回来；\n- 转 `closed`：**不可逆**（数据还在，客服可查历史，但玩家侧永久进不去）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`zone:write`（开区 / 合并区；角色：超级管理员 / 管理员）",
+        "operationId": "adminZone.setStatus",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetZoneStatusDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "改完的区",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/AdminZoneDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "改区服状态（维护 / 关闭 / 恢复）",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/AdminZoneDto"
+        },
+        "x-olua-permissions": [
+          "zone:write"
+        ]
+      }
+    },
+    "/admin/zones/merge/precheck": {
+      "get": {
+        "description": "事务外能查的全查一遍：两区都必须 `open` 且不同，源区在线人数（会被断开）、待执行重载数（会作废）、帮会数（会搬走）。`ok = false` 时 `blockers` 里是全部原因 —— 前端据此禁用「确认合并」。\n\n`guildConflicts` **恒为空**：帮会名是全服唯一的（#958），合并撞不上名。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`zone:read`（查看区服；角色：超级管理员 / 管理员 / 只读观察员）",
+        "operationId": "adminZone.mergePrecheck",
+        "parameters": [
+          {
+            "name": "fromZoneId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "toZoneId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "预检结果",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/MergePrecheckDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "合区预检",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/MergePrecheckDto"
+        },
+        "x-olua-permissions": [
+          "zone:read"
+        ]
+      }
+    },
+    "/admin/zones/merge": {
+      "post": {
+        "description": "把 from 区整体并入 to 区，一个事务内完成：角色与帮会改挂 to 区（同账号同名角色自动改名，清单进报告）、账号改挂 to 区、世界怪物实例重排发牌（instanceId 换成 to 区区段）、源区待执行重载请求作废、源区监控投影与角色位置清理、源区标记已合并。\n\n**生效方式**：只 bump 参与合并这两个区的世界代际（#961），其他区的内存世界不受影响 ——在线玩家的连接会收到 `zoneMerged` 并被断开，回登录页重新选服。\n\n边界：预检不通过直接 409 `ZONE_MERGE_BLOCKED`（不进事务）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`zone:write`（开区 / 合并区；角色：超级管理员 / 管理员）",
+        "operationId": "adminZone.merge",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MergeZoneDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "合并报告",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/MergeReportDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "合并区（from 并入 to）",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/MergeReportDto"
         },
         "x-olua-permissions": [
           "zone:write"
@@ -16834,6 +17030,11 @@
             "type": "string",
             "description": "密码",
             "example": "123456"
+          },
+          "zoneId": {
+            "type": "number",
+            "description": "登录到哪个区（可省略 = 当前浏览区；活区清单见 GET /zones）",
+            "example": 1
           }
         },
         "required": [
@@ -18574,10 +18775,11 @@
           },
           "status": {
             "type": "string",
-            "description": "运营状态：`open`（正常） / `closed`（停止注册，仍可进去查历史）",
+            "description": "运营状态：`open`（正常） / `maintenance`（维护中） / `closed`（停止注册，仍可进去查历史）",
             "example": "open",
             "enum": [
               "open",
+              "maintenance",
               "closed"
             ]
           },
@@ -19656,10 +19858,11 @@
           },
           "status": {
             "type": "string",
-            "description": "运营状态：open / closed",
+            "description": "运营状态：open / maintenance / closed",
             "example": "open",
             "enum": [
               "open",
+              "maintenance",
               "closed"
             ]
           },
@@ -19668,14 +19871,55 @@
             "description": "下拉排序（升序，同值按 id）",
             "example": 0
           },
+          "openedAt": {
+            "type": "number",
+            "description": "开服时间（毫秒）",
+            "example": 1760000000000
+          },
+          "recommended": {
+            "type": "boolean",
+            "description": "是否推荐区（选服弹窗里标「推荐」）",
+            "example": false
+          },
+          "note": {
+            "type": "string",
+            "description": "运营备注（仅后台可见）",
+            "nullable": true,
+            "example": null
+          },
           "accountCount": {
             "type": "number",
-            "description": "当前归属本区的账号数",
+            "description": "本区账号数（在本区有角色的去重账号）",
             "example": 42
+          },
+          "roleCount": {
+            "type": "number",
+            "description": "本区角色数",
+            "example": 57
+          },
+          "onlineCount": {
+            "type": "number",
+            "description": "本区在线账号数",
+            "example": 3
+          },
+          "monsterCount": {
+            "type": "number",
+            "description": "本区世界实例数（所有图的怪物行）",
+            "example": 240
+          },
+          "guildCount": {
+            "type": "number",
+            "description": "本区帮会数",
+            "example": 4
+          },
+          "pendingReloads": {
+            "type": "number",
+            "description": "本区待执行的单图重载请求数",
+            "example": 0
           },
           "createdAt": {
             "type": "number",
-            "description": "开区时间（毫秒）",
+            "description": "建行时间（毫秒；一区是 0）",
             "example": 1760000000000
           },
           "updatedAt": {
@@ -19690,7 +19934,15 @@
           "mergedInto",
           "status",
           "sort",
+          "openedAt",
+          "recommended",
+          "note",
           "accountCount",
+          "roleCount",
+          "onlineCount",
+          "monsterCount",
+          "guildCount",
+          "pendingReloads",
           "createdAt",
           "updatedAt"
         ]
@@ -19702,10 +19954,305 @@
             "type": "string",
             "description": "区服名（1~20 字，唯一）",
             "example": "二区"
+          },
+          "openedAt": {
+            "type": "number",
+            "description": "开服时间（毫秒；不传 = 现在）",
+            "example": 1760000000000
+          },
+          "sort": {
+            "type": "number",
+            "description": "下拉排序（升序；越小越前）",
+            "example": 0
+          },
+          "recommended": {
+            "type": "boolean",
+            "description": "是否推荐区",
+            "example": false
+          },
+          "note": {
+            "type": "string",
+            "description": "运营备注（仅后台可见，≤200 字）",
+            "example": "首发区"
           }
         },
         "required": [
           "name"
+        ]
+      },
+      "UpdateZoneDto": {
+        "type": "object",
+        "properties": {
+          "sort": {
+            "type": "number",
+            "description": "下拉排序（升序；越小越前）",
+            "example": 0
+          },
+          "recommended": {
+            "type": "boolean",
+            "description": "是否推荐区",
+            "example": true
+          },
+          "note": {
+            "type": "string",
+            "description": "运营备注（仅后台可见，≤200 字；空串 = 清空）",
+            "example": "首发区"
+          },
+          "openedAt": {
+            "type": "number",
+            "description": "开服时间（毫秒）",
+            "example": 1760000000000
+          }
+        }
+      },
+      "SetZoneStatusDto": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "description": "目标状态",
+            "example": "maintenance",
+            "enum": [
+              "open",
+              "maintenance",
+              "closed"
+            ]
+          },
+          "reason": {
+            "type": "string",
+            "description": "变更原因（写进操作日志，≤200 字）",
+            "example": "版本更新"
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "MergePrecheckDto": {
+        "type": "object",
+        "properties": {
+          "fromZoneId": {
+            "type": "number",
+            "description": "源区 id",
+            "example": 2
+          },
+          "toZoneId": {
+            "type": "number",
+            "description": "目标区 id",
+            "example": 1
+          },
+          "fromName": {
+            "type": "string",
+            "description": "源区名",
+            "example": "二区"
+          },
+          "toName": {
+            "type": "string",
+            "description": "目标区名",
+            "example": "一区"
+          },
+          "fromStatus": {
+            "type": "string",
+            "description": "源区状态",
+            "example": "open"
+          },
+          "toStatus": {
+            "type": "string",
+            "description": "目标区状态",
+            "example": "open"
+          },
+          "onlineCount": {
+            "type": "number",
+            "description": "源区当前在线账号数（合并会断开他们）",
+            "example": 2
+          },
+          "pendingReloads": {
+            "type": "number",
+            "description": "源区待执行重载请求数（合并会作废）",
+            "example": 1
+          },
+          "accountCount": {
+            "type": "number",
+            "description": "源区账号数（会搬走）",
+            "example": 12
+          },
+          "roleCount": {
+            "type": "number",
+            "description": "源区角色数（会搬走）",
+            "example": 18
+          },
+          "guildCount": {
+            "type": "number",
+            "description": "源区帮会数（会搬走）",
+            "example": 2
+          },
+          "monsterCount": {
+            "type": "number",
+            "description": "源区世界实例数（会重排发牌）",
+            "example": 96
+          },
+          "guildConflicts": {
+            "type": "array",
+            "description": "撞名的帮会清单（**恒为空**：帮会名全服唯一，#958）",
+            "items": {
+              "type": "string"
+            },
+            "example": []
+          },
+          "blockers": {
+            "type": "array",
+            "description": "不能合并的原因（空数组 = 可以合）",
+            "items": {
+              "type": "string"
+            },
+            "example": []
+          },
+          "ok": {
+            "type": "boolean",
+            "description": "预检是否通过",
+            "example": true
+          }
+        },
+        "required": [
+          "fromZoneId",
+          "toZoneId",
+          "fromName",
+          "toName",
+          "fromStatus",
+          "toStatus",
+          "onlineCount",
+          "pendingReloads",
+          "accountCount",
+          "roleCount",
+          "guildCount",
+          "monsterCount",
+          "guildConflicts",
+          "blockers",
+          "ok"
+        ]
+      },
+      "RenamedRoleDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "角色 id",
+            "example": "1794643918370"
+          },
+          "name": {
+            "type": "string",
+            "description": "改名前的名字",
+            "example": "双面人"
+          },
+          "renamed": {
+            "type": "string",
+            "description": "改名后的名字",
+            "example": "双面人·二区"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "renamed"
+        ]
+      },
+      "MergeReportDto": {
+        "type": "object",
+        "properties": {
+          "fromZoneId": {
+            "type": "number",
+            "description": "源区 id",
+            "example": 2
+          },
+          "toZoneId": {
+            "type": "number",
+            "description": "目标区 id",
+            "example": 1
+          },
+          "fromName": {
+            "type": "string",
+            "description": "源区名",
+            "example": "二区"
+          },
+          "toName": {
+            "type": "string",
+            "description": "目标区名",
+            "example": "一区"
+          },
+          "accountCount": {
+            "type": "number",
+            "description": "搬走的账号数",
+            "example": 12
+          },
+          "roleCount": {
+            "type": "number",
+            "description": "搬走的角色数",
+            "example": 18
+          },
+          "monsterCount": {
+            "type": "number",
+            "description": "重排发牌的世界实例数",
+            "example": 96
+          },
+          "guildCount": {
+            "type": "number",
+            "description": "搬走的帮会数",
+            "example": 2
+          },
+          "renamedRoles": {
+            "description": "被系统改名的角色（同账号在两个区同名）",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RenamedRoleDto"
+            }
+          },
+          "failedReloads": {
+            "type": "number",
+            "description": "作废的待执行重载请求数",
+            "example": 1
+          },
+          "removedMonitorStates": {
+            "type": "number",
+            "description": "清掉的监控快照行数",
+            "example": 3
+          },
+          "removedMonitorEvents": {
+            "type": "number",
+            "description": "清掉的监控事件行数",
+            "example": 40
+          },
+          "removedPositions": {
+            "type": "number",
+            "description": "清掉的角色位置行数",
+            "example": 5
+          },
+          "onlineDisconnected": {
+            "type": "number",
+            "description": "合并时在源区在线的账号数（会被断开）",
+            "example": 2
+          },
+          "mergedAt": {
+            "type": "number",
+            "description": "合并完成时刻（毫秒）",
+            "example": 1760000000000
+          }
+        },
+        "required": [
+          "fromZoneId",
+          "toZoneId",
+          "fromName",
+          "toName",
+          "accountCount",
+          "roleCount",
+          "monsterCount",
+          "guildCount",
+          "renamedRoles",
+          "failedReloads",
+          "removedMonitorStates",
+          "removedMonitorEvents",
+          "removedPositions",
+          "onlineDisconnected",
+          "mergedAt"
         ]
       },
       "MergeZoneDto": {
@@ -28586,11 +29133,22 @@
             "type": "string",
             "description": "区服名",
             "example": "一区"
+          },
+          "status": {
+            "type": "string",
+            "description": "运营状态：open / maintenance / closed",
+            "example": "open",
+            "enum": [
+              "open",
+              "maintenance",
+              "closed"
+            ]
           }
         },
         "required": [
           "id",
-          "name"
+          "name",
+          "status"
         ]
       },
       "MyZoneDto": {
@@ -28606,6 +29164,16 @@
             "description": "区服名",
             "example": "一区"
           },
+          "status": {
+            "type": "string",
+            "description": "运营状态：open / maintenance / closed",
+            "example": "open",
+            "enum": [
+              "open",
+              "maintenance",
+              "closed"
+            ]
+          },
           "roleCount": {
             "type": "number",
             "description": "我在这个区有几个角色",
@@ -28620,6 +29188,7 @@
         "required": [
           "id",
           "name",
+          "status",
           "roleCount",
           "current"
         ]

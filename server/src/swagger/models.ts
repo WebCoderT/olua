@@ -143,7 +143,8 @@ import {
   UpdateCombatWeightsDto,
 } from "../modules/game-config/dto/combat-weights.dto";
 import { GuideStepDto, GuideStepsDto, UpdateGuideStepsDto } from "../modules/game-config/dto/guide.dto";
-import { LoginDto, RegisterDto } from "../modules/auth/dto/register.dto";
+import { RegisterDto } from "../modules/auth/dto/register.dto";
+import { LoginDto } from "../modules/auth/dto/login.dto";
 import { RealtimeTicketDto } from "../modules/realtime/dto/realtime.dto";
 import { ZoneDto, AdminZoneDto, CreateZoneDto, MergeZoneDto } from "../modules/zone/dto/zone.dto";
 import {

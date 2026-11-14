@@ -75,6 +75,32 @@ export class WorldReloadRequestRepository {
     );
   }
 
+  /** 某个区还有多少条待执行（#961 区服聚合 + 合并预检） */
+  countPendingOfZone(zoneId: number): number {
+    return this.db.count(
+      "SELECT COUNT(1) AS total FROM world_reload_requests WHERE status = 'pending' AND zone_id = ?",
+      [zoneId],
+    );
+  }
+
+  /**
+   * 把某个区所有待执行请求作废（#961 合并区）
+   *
+   * 合并之后那个区已经不存在了，请求指向的 `(zone, map, slot)` 也搬去了目标区 ——
+   * 留着 pending 会让实时进程在**已经合并掉的区**上跑一次重载，
+   * 而 `reloadRoom` 走的是 `ensure`（空房按刷怪区播种），等于给死区重新播种一份世界。
+   * 这正是 issue 里「合并会复活死区」那个缺陷的源头。
+   */
+  failPendingOfZone(zoneId: number, detail: string, at: number): number {
+    const pending = this.countPendingOfZone(zoneId);
+    if (pending === 0) return 0;
+    this.db.run(
+      "UPDATE world_reload_requests SET status = 'failed', done_at = ?, detail = ? WHERE status = 'pending' AND zone_id = ?",
+      [at, detail, zoneId],
+    );
+    return pending;
+  }
+
   /** 标记执行完成（带重播只数摘要） */
   markDone(id: number, detail: string, at: number): void {
     this.db.run("UPDATE world_reload_requests SET status = 'done', done_at = ?, detail = ? WHERE id = ?", [at, detail, id]);
