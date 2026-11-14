@@ -12701,7 +12701,7 @@
     },
     "/guilds": {
       "get": {
-        "description": "全部帮会，按人数降序（同人数按创建时间升序）。列表带人数与帮主名，不含成员名单。\n\n---\n\n**鉴权**：客户端令牌（`player`），只能操作令牌所属账号自己的数据。",
+        "description": "**本区**的帮会，按人数降序（同人数按创建时间升序）。列表带人数与帮主名，不含成员名单。\n\n区由服务端推导（在线角色所在区，未进游戏时用当前浏览区），**不接受 `?zoneId=`** —— 带了也无效。\n\n---\n\n**鉴权**：客户端令牌（`player`），只能操作令牌所属账号自己的数据。",
         "operationId": "guild.list",
         "parameters": [],
         "responses": {
@@ -12735,7 +12735,7 @@
             "player": []
           }
         ],
-        "summary": "帮会列表",
+        "summary": "帮会列表（当前区）",
         "tags": [
           "客户端"
         ],
@@ -28333,6 +28333,11 @@
             "description": "帮会 id",
             "example": "g_1760000000000_ab12"
           },
+          "zoneId": {
+            "type": "number",
+            "description": "所属区 id（展示用；服务端按它判归属，客户端不要回传）",
+            "example": 1
+          },
           "name": {
             "type": "string",
             "description": "帮会名",
@@ -28366,6 +28371,7 @@
         },
         "required": [
           "id",
+          "zoneId",
           "name",
           "notice",
           "level",
@@ -28468,6 +28474,11 @@
             "description": "帮会 id",
             "example": "g_1760000000000_ab12"
           },
+          "zoneId": {
+            "type": "number",
+            "description": "所属区 id（展示用；服务端按它判归属，客户端不要回传）",
+            "example": 1
+          },
           "name": {
             "type": "string",
             "description": "帮会名",
@@ -28555,6 +28566,7 @@
         },
         "required": [
           "id",
+          "zoneId",
           "name",
           "notice",
           "level",
@@ -28671,6 +28683,11 @@
             "description": "帮会 id",
             "example": "g_1760000000000_ab12"
           },
+          "zoneId": {
+            "type": "number",
+            "description": "所属区 id（展示用；服务端按它判归属，客户端不要回传）",
+            "example": 1
+          },
           "name": {
             "type": "string",
             "description": "帮会名",
@@ -28714,6 +28731,7 @@
         },
         "required": [
           "id",
+          "zoneId",
           "name",
           "notice",
           "level",
@@ -28731,6 +28749,11 @@
             "type": "string",
             "description": "帮会 id",
             "example": "g_1760000000000_ab12"
+          },
+          "zoneId": {
+            "type": "number",
+            "description": "所属区 id（展示用；服务端按它判归属，客户端不要回传）",
+            "example": 1
           },
           "name": {
             "type": "string",
@@ -28782,6 +28805,7 @@
         },
         "required": [
           "id",
+          "zoneId",
           "name",
           "notice",
           "level",

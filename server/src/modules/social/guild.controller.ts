@@ -33,12 +33,14 @@ export class GuildController {
   @Get()
   @ApiPlayerDoc({
     operationId: "guild.list",
-    summary: "帮会列表",
-    description: "全部帮会，按人数降序（同人数按创建时间升序）。列表带人数与帮主名，不含成员名单。",
+    summary: "帮会列表（当前区）",
+    description:
+      "**本区**的帮会，按人数降序（同人数按创建时间升序）。列表带人数与帮主名，不含成员名单。\n\n" +
+      "区由服务端推导（在线角色所在区，未进游戏时用当前浏览区），**不接受 `?zoneId=`** —— 带了也无效。",
   })
   @ApiDataResponse(GuildSummaryDto, { isArray: true, description: "帮会列表" })
-  list(): GuildSummaryDto[] {
-    return this.guildService.list();
+  list(@CurrentUser() user: AuthenticatedUser): GuildSummaryDto[] {
+    return this.guildService.list(user.id);
   }
 
   @Get("me")

@@ -147,7 +147,7 @@ export interface RoleLeaderboardRow {
   kills: number;
   /** 角色存档（算战力用；解析失败的角色跳过，不让它把整次重算带崩） */
   data: string;
-  /** 归属区（账号行上的 zone_id；join 不到时为 1，与账号默认值同口径） */
+  /** 归属区（`roles.zone_id`；角色带区后这一列就是唯一权威，不再 join 账号） */
   zone_id: number;
 }
 
@@ -1592,7 +1592,14 @@ export interface MonsterSkillRow {
 /** 帮会一行（`guilds` 表） */
 export interface GuildRow {
   id: string;
-  /** 帮会名（唯一，2~12 字） */
+  /**
+   * 所属区（#958）：建帮时取帮主角色的区，**不接受前端传**。
+   *
+   * 帮会不跨区 —— 成员只能来自本区，列表 / 申请 / 审批全部按它收口。
+   * 名字仍然全局唯一（跨区同名会让搜索、举报、客服沟通无法区分）。
+   */
+  zone_id: number;
+  /** 帮会名（全局唯一，2~12 字） */
   name: string;
   /** 公告（0~200 字） */
   notice: string;

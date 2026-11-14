@@ -1,5 +1,6 @@
 import { Injectable, Logger, OnApplicationShutdown, OnModuleInit } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
+import { randomUUID } from "node:crypto";
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { DatabaseSync } from "node:sqlite";
@@ -107,6 +108,18 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
         "UPDATE roles SET zone_id = COALESCE((SELECT a.active_zone_id FROM accounts a WHERE a.id = roles.account_id), 1)",
       );
       this.logger.log("roles.zone_id 已加列，并按账号原区回填（#957）");
+    }
+    // 帮会绑区（#958）：加列 + 按**帮主角色的区**回填，然后把跨区成员踢出去并发一封系统邮件。
+    // 只在第一次加列时做这三件事：之后再跑会拿「现在的区」重新裁一遍成员，
+    // 而合区之后本来合法的成员正是「从 from 区搬过来」的那批人。
+    if (this.hasTable("guilds") && !this.hasColumn("guilds", "zone_id")) {
+      this.ensureColumn("guilds", "zone_id", "INTEGER NOT NULL DEFAULT 1");
+      // 帮主的区就是帮会的区：帮主是唯一必须有区的人（帮会没有区之前，成员可以来自任何区）
+      this.db.exec(
+        "UPDATE guilds SET zone_id = COALESCE((SELECT r.zone_id FROM roles r WHERE r.id = guilds.leader_id), 1)",
+      );
+      this.evictCrossZoneGuildMembers();
+      this.logger.log("guilds.zone_id 已加列，按帮主角色区回填并移出跨区成员（#958）");
     }
     if (this.hasTable("world_monsters")) {
       this.ensureColumn("world_monsters", "zone_id", "INTEGER NOT NULL DEFAULT 1");
@@ -1136,6 +1149,9 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
       -- level / funds 只占位（帮会等级与资金不在这一刀），写业务前先想清楚它们由谁改。
       CREATE TABLE IF NOT EXISTS guilds (
         id         TEXT PRIMARY KEY,
+        -- 所属区（#958）：建帮时取帮主角色的区，成员 / 列表 / 申请全按它收口。
+        -- 名字仍然**全局唯一**（跨区同名会让搜索、举报、客服沟通无法区分）
+        zone_id    INTEGER NOT NULL DEFAULT 1,
         name       TEXT NOT NULL UNIQUE,
         notice     TEXT NOT NULL DEFAULT '',
         leader_id  TEXT NOT NULL,
@@ -1627,6 +1643,68 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
     this.seedCombatStatusesOnce();
     this.seedSkillPointsOnce();
     this.seedAttrPointsOnce();
+  }
+
+  /**
+   * 帮会绑区的一次性清理（#958）：把「角色区 ≠ 帮会区」的成员与申请移出去
+   *
+   * 什么时候会存在这些人：帮会绑区之前，成员可以来自任何区（那时帮会没有区），
+   * 于是 2 区的角色可能在 1 区的帮会里。绑区之后这些人就成了漏洞 ——
+   * 帮会频道跨区喊话、经验分成跨区、列表里出现别区的名字。
+   *
+   * 处理方式：**移出**而不是给帮会补区，也不是让成员带着帮会跨区搬 ——
+   * 帮会归属已按帮主定了，成员只是「站错了地方」。移出必须让玩家知道原因，
+   * 所以每人发一封系统邮件（`role_mails` 直插：这一步在启动迁移里，拿不到业务层的服务）。
+   *
+   * 幂等：清理完之后再跑一次查不到任何行。只在第一次加列时调用（见 onModuleInit）。
+   */
+  private evictCrossZoneGuildMembers(): void {
+    const evicted = this.db
+      .prepare(
+        `SELECT m.role_id AS role_id, r.name AS role_name, g.name AS guild_name,
+                g.zone_id AS guild_zone, r.zone_id AS role_zone
+           FROM guild_members m
+           JOIN roles r ON r.id = m.role_id
+           JOIN guilds g ON g.id = m.guild_id
+          WHERE r.zone_id <> g.zone_id`,
+      )
+      .all() as Array<{
+      role_id: string;
+      role_name: string;
+      guild_name: string;
+      guild_zone: number;
+      role_zone: number;
+    }>;
+    if (evicted.length === 0) return;
+    const withMail = this.hasTable("role_mails");
+    const now = Date.now();
+    for (const row of evicted) {
+      this.db.prepare("DELETE FROM guild_members WHERE role_id = ?").run(row.role_id);
+      if (!withMail) continue;
+      this.db
+        .prepare(
+          `INSERT INTO role_mails
+             (id, role_id, channel, kind, title, body, bind_gold, exp, attachments, read_at, claimed_at, expires_at, created_at)
+           VALUES (?, ?, 'system', 'guild_zone_reset', ?, ?, 0, 0, '[]', NULL, NULL, NULL, ?)`,
+        )
+        .run(
+          randomUUID(),
+          row.role_id,
+          "帮会调整通知",
+          `你所在的帮会「${row.guild_name}」属于 ${row.guild_zone} 区，而你所在的 ${row.role_zone} 区与它不同区，` +
+            `因此已自动退出该帮会。可以在本区重新创建或申请帮会。`,
+          now,
+        );
+    }
+    // 跨区申请一并作废（申请本身不跨区，留着只会在审批时炸）
+    this.db
+      .prepare(
+        `DELETE FROM guild_applications
+          WHERE role_id IN (SELECT r.id FROM roles r JOIN guilds g ON g.id = guild_applications.guild_id
+                             WHERE r.zone_id <> g.zone_id)`,
+      )
+      .run();
+    this.logger.warn(`移出 ${evicted.length} 名跨区帮会成员（已发系统邮件），并清掉跨区入帮申请（#958）`);
   }
 
   /**

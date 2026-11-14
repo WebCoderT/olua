@@ -998,9 +998,11 @@ export class CombatSettlementService {
    * - 不加成：加成会引出「多开小号刷经验」，而这一刀没有反多开的机制；
    * - 队友那份走**他自己的等级差**：高等级带小号打高级怪时，小号对那只怪的基数是 0，
    *   乘任何比例还是 0 —— 拉小号这件事被公式本身挡住，不需要另加规则；
-   * - 离线 / 不同图 / 等级差过大的队友**不发帧**（没有经验可演），也不写库；
-   * - **距离闸（#877）**：同图但距击杀点超过 `PARTY_EXP_SHARE_DISTANCE`（默认 800px）的
-   *   队友同样不分 —— 站城里挂机的小号不该白拿一半经验。同图与距离读的是同一份
+   * - 离线 / **不同房** / 等级差过大的队友**不发帧**（没有经验可演），也不写库；
+   *   「同房」= `zone:map:slot` 三键全等（#958）：只比 mapId 时两个区同在 3 图的队友会互相
+   *   分经验，两套经济就此串味；
+   * - **距离闸（#877）**：同房但距击杀点超过 `PARTY_EXP_SHARE_DISTANCE`（默认 800px）的
+   *   队友同样不分 —— 站城里挂机的小号不该白拿一半经验。同房与距离读的是同一份
    *   在场位置（`presence.positionOf`），判定收在 `withinShareDistance` 一处。
    */
   private sharePartyExp(
@@ -1012,14 +1014,15 @@ export class CombatSettlementService {
   ): void {
     const share = this.party.expMateShare();
     if (share <= 0) return;
-    const mapId = this.presence.identityOf(killerAccountId)?.mapId ?? "";
-    const mates = this.party.sameMapMates(killerRoleId, mapId);
+    // 房号（zone:map:slot）从击杀者的在场条目来：他自己就在那个房间里击杀的（#958）
+    const roomId = this.presence.identityOf(killerAccountId)?.roomId ?? "";
+    const mates = this.party.sameRoomMates(killerRoleId, roomId);
     if (mates.length === 0) return;
     for (const mate of mates) {
       const role = this.roles.online(mate.accountId);
       // 在线角色不是他（切角色 / 连接还没换过来）就跳过：入账必须落在**当前在线角色**上
       if (!role || role.id !== mate.roleId) continue;
-      if (!this.withinShareDistance(mate.accountId, killSpot)) continue;
+      if (!this.withinShareDistance(mate.accountId, roomId, killSpot)) continue;
       const gain = Math.floor(this.killExpFor(role.level, monsterLevel) * share);
       if (gain <= 0) continue;
       const applied = this.roles.applyKillExp(mate.accountId, mate.roleId, gain);
@@ -1038,16 +1041,23 @@ export class CombatSettlementService {
   }
 
   /**
-   * 分成距离闸（#877）：同图 + 距击杀点 `PARTY_EXP_SHARE_DISTANCE` 内
+   * 分成距离闸（#877）：**同房** + 距击杀点 `PARTY_EXP_SHARE_DISTANCE` 内
    *
-   * 同图与距离读**同一份**在场位置（`presence.positionOf`，4Hz 自报 + 最小仲裁）——
-   * 判定收在这一处，别处（sameMapMates 的 locationOf）只做粗筛；位置还没上报过
+   * 同房与距离读**同一份**在场位置（`presence.positionOf`，4Hz 自报 + 最小仲裁）——
+   * 判定收在这一处，别处（sameRoomMates 的 locationOf）只做粗筛；位置还没上报过
    * （pos 帧一帧都没来）按「不在场」处理：没有参照坐标的距离是无意义的。
+   *
+   * 比的是**房号**而不是 `mapId`（#958）：两个区的同名图坐标完全可能重合，
+   * 光比 mapId 会让别区的队友隔着「同一张图」拿到经验。
    */
-  private withinShareDistance(mateAccountId: string, killSpot: { mapId: string; x: number; y: number }): boolean {
+  private withinShareDistance(
+    mateAccountId: string,
+    roomId: string,
+    killSpot: { mapId: string; x: number; y: number },
+  ): boolean {
     const position = this.presence.positionOf(mateAccountId);
     if (!position) return false;
-    if (position.mapId !== killSpot.mapId) return false;
+    if (position.roomId !== roomId) return false;
     const limit = Math.max(0, Number(this.config.get<number>("partyExpShareDistance") ?? PARTY_EXP_SHARE_DISTANCE_DEFAULT));
     return Math.hypot(position.x - killSpot.x, position.y - killSpot.y) <= limit;
   }

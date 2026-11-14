@@ -10,15 +10,20 @@ import {
 } from "../rows";
 
 /**
- * 帮会数据访问（#388）
+ * 帮会数据访问（#388；#958 起按区）
  *
  * 三张表各管一件事：
- * - `guilds`：帮会本身（名字 / 公告 / 帮主 / 占位的等级与资金）
+ * - `guilds`：帮会本身（名字 / 公告 / 帮主 / 属区 / 占位的等级与资金）
  * - `guild_members`：谁在哪个帮会、什么职位 —— `role_id` 唯一索引保证「一个人只能在一个帮会」
  * - `guild_applications`：入帮申请（同一人对同一帮会只有一行，重复申请覆盖留言）
  *
  * 成员 / 申请列表都要展示**角色名与等级**，所以查询里 join `roles` —— 那是索引列上的冗余，
  * 不落第二份快照（角色改名 / 升级后列表立刻是新的，不需要同步）。
+ *
+ * ## 区在签名上（#958）
+ * 玩家侧的列表 / 详情一律 `listByZone(zoneId)` / `findById(zoneId, id)`；`findByIdAnyZone`
+ * 只给管理端与合并区用（#960 收口）。名字**仍然全局唯一**：跨区同名会让搜索、举报、
+ * 客服沟通无法区分，而帮会名是玩家自己输入的、全局唯一是可解释的规则。
  */
 @Injectable()
 export class GuildRepository {
@@ -26,8 +31,25 @@ export class GuildRepository {
 
   //#region 帮会
 
-  /** 帮会列表：按人数降序（人多的在前），同人数按创建时间升序（老帮会在前） */
-  list(): GuildListRow[] {
+  /** 本区帮会列表：按人数降序（人多的在前），同人数按创建时间升序（老帮会在前） */
+  listByZone(zoneId: number): GuildListRow[] {
+    return this.db.all<GuildListRow>(
+      `SELECT g.*,
+              (SELECT COUNT(1) FROM guild_members m WHERE m.guild_id = g.id) AS member_count,
+              COALESCE((SELECT r.name FROM roles r WHERE r.id = g.leader_id), '') AS leader_name
+         FROM guilds g
+        WHERE g.zone_id = ?
+        ORDER BY member_count DESC, g.created_at ASC`,
+      [zoneId],
+    );
+  }
+
+  /**
+   * **全部区**的帮会列表 —— 只给还没接区上下文的管理端用（#960 会换成按 `X-Zone-Id` 取）
+   *
+   * 名字里的 `All` 就是给 `grep` 数调用点用的：玩家侧拿它当列表 = 把别区帮会端到玩家面前。
+   */
+  listAll(): GuildListRow[] {
     return this.db.all<GuildListRow>(
       `SELECT g.*,
               (SELECT COUNT(1) FROM guild_members m WHERE m.guild_id = g.id) AS member_count,
@@ -37,16 +59,35 @@ export class GuildRepository {
     );
   }
 
-  findById(id: string): GuildRow | undefined {
+  /** 本区的某个帮会（跨区 = 不存在，返回 undefined） */
+  findById(zoneId: number, id: string): GuildRow | undefined {
+    return this.db.get<GuildRow>("SELECT * FROM guilds WHERE id = ? AND zone_id = ?", [id, zoneId]);
+  }
+
+  /** 不限区取帮会（管理端 / 合并区 / 成员行的外键反查；玩家侧请用 `findById`） */
+  findByIdAnyZone(id: string): GuildRow | undefined {
     return this.db.get<GuildRow>("SELECT * FROM guilds WHERE id = ?", [id]);
   }
 
+  /** 按名字找（**全局唯一**，不分区 —— 重名判定就是要看全库） */
   findByName(name: string): GuildRow | undefined {
     return this.db.get<GuildRow>("SELECT * FROM guilds WHERE name = ?", [name]);
   }
 
-  /** 列表行形态的单条（管理端详情 / 创建后回显都用它，形状与列表一致） */
-  findListRow(id: string): GuildListRow | undefined {
+  /** 列表行形态的单条（玩家侧按区；形状与列表一致） */
+  findListRow(zoneId: number, id: string): GuildListRow | undefined {
+    return this.db.get<GuildListRow>(
+      `SELECT g.*,
+              (SELECT COUNT(1) FROM guild_members m WHERE m.guild_id = g.id) AS member_count,
+              COALESCE((SELECT r.name FROM roles r WHERE r.id = g.leader_id), '') AS leader_name
+         FROM guilds g
+        WHERE g.id = ? AND g.zone_id = ?`,
+      [id, zoneId],
+    );
+  }
+
+  /** 列表行形态的单条，不限区（管理端详情用，#960 收口） */
+  findListRowAnyZone(id: string): GuildListRow | undefined {
     return this.db.get<GuildListRow>(
       `SELECT g.*,
               (SELECT COUNT(1) FROM guild_members m WHERE m.guild_id = g.id) AS member_count,
@@ -59,10 +100,16 @@ export class GuildRepository {
 
   insert(row: GuildRow): void {
     this.db.run(
-      `INSERT INTO guilds (id, name, notice, leader_id, level, funds, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [row.id, row.name, row.notice, row.leader_id, row.level, row.funds, row.created_at, row.updated_at],
+      `INSERT INTO guilds (id, zone_id, name, notice, leader_id, level, funds, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [row.id, row.zone_id, row.name, row.notice, row.leader_id, row.level, row.funds, row.created_at, row.updated_at],
     );
+  }
+
+  /** 合并区：把整个帮会改挂目标区（#961 的合并向导用；撞名由调用方先改好） */
+  moveZoneOfGuilds(fromZoneId: number, toZoneId: number, now: number): number {
+    return this.db.execute("UPDATE guilds SET zone_id = ?, updated_at = ? WHERE zone_id = ?", [toZoneId, now, fromZoneId])
+      .changes;
   }
 
   updateNotice(id: string, notice: string, now: number): void {
@@ -80,10 +127,6 @@ export class GuildRepository {
   /** 解散（成员与申请靠外键 ON DELETE CASCADE 一起清掉，不需要手工删两张表） */
   remove(id: string): void {
     this.db.run("DELETE FROM guilds WHERE id = ?", [id]);
-  }
-
-  count(): number {
-    return this.db.count("SELECT COUNT(1) AS total FROM guilds");
   }
 
   /**

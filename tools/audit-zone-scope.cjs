@@ -58,10 +58,10 @@ const PLAYER_SIDE_EXCLUDE = [path.join("modules", "admin"), path.join("modules",
 /**
  * 已经带 zone_id 列的表 —— 这些表的 SQL 必须自己过滤 zone。
  *
- * 注意 roles 暂时不在里面（P1 #957 才加列）。加完列**必须**把 roles 加到这里：
- * 脚本下面有「schema 已带 zone_id 但清单没登记」的检查，漏改会红。
+ * 加完列**必须**把表加到这里：脚本下面有「schema 已带 zone_id 但清单没登记」的检查，漏改会红。
+ * 现役：roles（#957）、guilds（#958）、world_monsters / map_monitor_*（#809 之前就有）。
  */
-const TABLES_WITH_ZONE = ["roles", "world_monsters", "map_monitor_state", "map_monitor_events"];
+const TABLES_WITH_ZONE = ["roles", "guilds", "world_monsters", "map_monitor_state", "map_monitor_events"];
 
 /**
  * 刻意**不**纳入的表（它们也有 zone_id 列，但按设计允许全局查）：
@@ -73,7 +73,7 @@ const TABLES_WITH_ZONE = ["roles", "world_monsters", "map_monitor_state", "map_m
  */
 
 /** 将来加列的表：schema 里出现 zone_id 时用来提示「该把谁补进 TABLES_WITH_ZONE」 */
-const TABLES_BECOMING_ZONE_SCOPED = ["guilds", "role_mails", "announcements"];
+const TABLES_BECOMING_ZONE_SCOPED = ["role_mails", "announcements"];
 
 /**
  * zone-scoped 仓储：行属于某个区，按 id/名字取到别区对象就是跨区攻击。

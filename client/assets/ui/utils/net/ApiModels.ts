@@ -7557,6 +7557,10 @@ export type GuildSummary = {
    */
   id: string;
   /**
+   * 所属区 id（展示用；服务端按它判归属，客户端不要回传）
+   */
+  zoneId: number;
+  /**
    * 帮会名
    */
   name: string;
@@ -7641,6 +7645,10 @@ export type MyGuild = {
    * 帮会 id
    */
   id: string;
+  /**
+   * 所属区 id（展示用；服务端按它判归属，客户端不要回传）
+   */
+  zoneId: number;
   /**
    * 帮会名
    */
@@ -7763,6 +7771,10 @@ export type AdminGuild = {
    */
   id: string;
   /**
+   * 所属区 id（展示用；服务端按它判归属，客户端不要回传）
+   */
+  zoneId: number;
+  /**
    * 帮会名
    */
   name: string;
@@ -7801,6 +7813,10 @@ export type AdminGuildDetail = {
    * 帮会 id
    */
   id: string;
+  /**
+   * 所属区 id（展示用；服务端按它判归属，客户端不要回传）
+   */
+  zoneId: number;
   /**
    * 帮会名
    */

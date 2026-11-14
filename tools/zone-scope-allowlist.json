@@ -10,17 +10,31 @@
     },
     {
       "rule": "repo-signature",
-      "file": "server/src/database/repositories/role.repository.ts",
-      "key": "findIdsByName",
-      "issue": 958,
-      "reason": "P2 加区：跨区重名会让『按名字加好友』直接解析到别区角色（现状只靠 50116 兜）"
+      "file": "server/src/database/repositories/guild.repository.ts",
+      "key": "findByIdAnyZone",
+      "issue": 960,
+      "reason": "刻意保留的无区重载（管理端详情 / 合并区搬帮会 / 成员行反查）。P4 接区上下文后管理端改走 findById"
+    },
+    {
+      "rule": "repo-signature",
+      "file": "server/src/database/repositories/map-monitor.repository.ts",
+      "key": "listStates",
+      "issue": 960,
+      "reason": "现在是『一张图所有区所有线』（管理端还没有区上下文）；P4 之后按 X-Zone-Id 过滤"
     },
     {
       "rule": "repo-signature",
       "file": "server/src/database/repositories/role.repository.ts",
-      "key": "listForLeaderboard",
-      "issue": 959,
-      "reason": "P3 分区榜：一次扫描按 roles.zone_id 分桶（这条查询本来就 join 了 accounts.zone_id，改列来源即可）"
+      "key": "count",
+      "issue": 960,
+      "reason": "与 list 共用 buildWhere，P4 一起加 zone 条件（两处必须同源，别各写一份）"
+    },
+    {
+      "rule": "repo-signature",
+      "file": "server/src/database/repositories/role.repository.ts",
+      "key": "findByIdAnyZone",
+      "issue": 960,
+      "reason": "显式逃生口（名字写全，`grep findByIdAnyZone` 就能数出谁在跨区取角色）：只许这一个，不许再新增同类。现存调用点是管理端 mustRole 与状态 tick，P4 补区上下文后逐个改回 findById"
     },
     {
       "rule": "repo-signature",
@@ -32,37 +46,58 @@
     {
       "rule": "repo-signature",
       "file": "server/src/database/repositories/role.repository.ts",
-      "key": "count",
-      "issue": 960,
-      "reason": "与 list 共用 buildWhere，P4 一起加 zone 条件（两处必须同源，别各写一份）"
+      "key": "listForLeaderboard",
+      "issue": 959,
+      "reason": "P3 分区榜：一次扫描按 roles.zone_id 分桶（这条查询本来就 join 了 accounts.zone_id，改列来源即可）"
     },
     {
-      "rule": "repo-signature",
-      "file": "server/src/database/repositories/guild.repository.ts",
+      "rule": "repo-sql",
+      "file": "server/src/database/repositories/account.repository.ts",
       "key": "list",
-      "issue": 958,
-      "reason": "P2 帮会绑区：GET /guilds 从『无身份参数』改成按当前角色区列出"
-    },
-    {
-      "rule": "repo-signature",
-      "file": "server/src/database/repositories/guild.repository.ts",
-      "key": "findById",
-      "issue": 958,
-      "reason": "P2 改成 findById(zoneId, id)：按 guildId 申请 / 查看时先确认帮会属于我的区"
-    },
-    {
-      "rule": "repo-signature",
-      "file": "server/src/database/repositories/guild.repository.ts",
-      "key": "count",
-      "issue": 958,
-      "reason": "P2 帮会数按区统计（管理端区服列表的『帮会数』也读它）"
-    },
-    {
-      "rule": "repo-signature",
-      "file": "server/src/database/repositories/map-monitor.repository.ts",
-      "key": "listStates",
       "issue": 960,
-      "reason": "现在是『一张图所有区所有线』（管理端还没有区上下文）；P4 之后按 X-Zone-Id 过滤"
+      "reason": "账号列表里的「角色数」子查询 `(SELECT COUNT(1) FROM roles r WHERE r.account_id = a.id)` 是全区的；P4 改成 EXISTS(… AND r.zone_id = :current)，顺带让列表只出本区有角色的账号"
+    },
+    {
+      "rule": "repo-sql",
+      "file": "server/src/database/repositories/guild.repository.ts",
+      "key": "findByIdAnyZone",
+      "issue": 960,
+      "reason": "同上：这一条就是「不限区取帮会」，SQL 里没有 zone 是它的语义"
+    },
+    {
+      "rule": "repo-sql",
+      "file": "server/src/database/repositories/guild.repository.ts",
+      "key": "findByName",
+      "issue": 958,
+      "reason": "帮会名**全局唯一**（跨区同名会让搜索 / 举报 / 客服沟通无法区分），重名判定必须看全库"
+    },
+    {
+      "rule": "repo-sql",
+      "file": "server/src/database/repositories/guild.repository.ts",
+      "key": "findListRowAnyZone",
+      "issue": 960,
+      "reason": "管理端详情用的不限区形态，P4 换 findListRow(zoneId, id)"
+    },
+    {
+      "rule": "repo-sql",
+      "file": "server/src/database/repositories/guild.repository.ts",
+      "key": "guildOfRole",
+      "issue": 958,
+      "reason": "按**自己的** roleId 取所在帮会（成员行 → 帮会），入参本来就是我自己的角色，行只会落在我的区"
+    },
+    {
+      "rule": "repo-sql",
+      "file": "server/src/database/repositories/guild.repository.ts",
+      "key": "listAll",
+      "issue": 960,
+      "reason": "管理端帮会列表：还没接 X-Zone-Id（P4 #960）。玩家侧一律走 listByZone"
+    },
+    {
+      "rule": "repo-sql",
+      "file": "server/src/database/repositories/guild.repository.ts",
+      "key": "remove",
+      "issue": 960,
+      "reason": "按主键删一行：调用方先用 findByIdAnyZone 解出来（跨区 = 404）。P4 改成 remove(zoneId, id)"
     },
     {
       "rule": "repo-sql",
@@ -77,98 +112,6 @@
       "key": "trimOlderThan",
       "issue": 961,
       "reason": "按设计就是全局清理（只按时间删，不按区读）：死图的监控行到点该走，走 idx_map_monitor_events_at"
-    },
-    {
-      "rule": "repo-sql",
-      "file": "server/src/database/repositories/world-monster.repository.ts",
-      "key": "removeMany",
-      "issue": 961,
-      "reason": "按 instanceId 删，而 instance id 本身是 m<map>_z<zone>_c<slot>_<n>（room-key.util 的唯一口径），不会跨区"
-    },
-    {
-      "rule": "repo-sql",
-      "file": "server/src/database/repositories/world-monster.repository.ts",
-      "key": "countAll",
-      "issue": 960,
-      "reason": "启动日志 / 运维观察用的全服实例数，不分桶（要按区看走 countByMap）"
-    },
-    {
-      "rule": "repo-sql",
-      "file": "server/src/database/repositories/world-monster.repository.ts",
-      "key": "countByMap",
-      "issue": 960,
-      "reason": "管理端地图页的只读聚合，GROUP BY 已经带 zone_id；P4 加区上下文后改成只出当前区即可"
-    },
-
-    {
-      "rule": "repo-signature",
-      "file": "server/src/database/repositories/role.repository.ts",
-      "key": "findByIdAnyZone",
-      "issue": 960,
-      "reason": "显式逃生口（名字写全，`grep findByIdAnyZone` 就能数出谁在跨区取角色）：只许这一个，不许再新增同类。现存调用点是管理端 mustRole 与状态 tick，P4 补区上下文后逐个改回 findById"
-    },
-    {
-      "rule": "repo-sql",
-      "file": "server/src/database/repositories/role.repository.ts",
-      "key": "findByIdAnyZone",
-      "issue": 960,
-      "reason": "同上：`SELECT * FROM roles WHERE id = ?` 就是「不限区取一行」本身，P4 之后只剩迁移工具用"
-    },
-    {
-      "rule": "repo-sql",
-      "file": "server/src/database/repositories/role.repository.ts",
-      "key": "findByAccountAnyZone",
-      "issue": 960,
-      "reason": "账号级视图（管理端账号详情 / 删号前清理）：账号本来跨区，按设计要看全部区 —— 玩家侧已被 findByAccountAndZone 顶掉。P4 在页面上折叠成「另在 N 个区有角色」，查询保持全区"
-    },
-    {
-      "rule": "repo-sql",
-      "file": "server/src/database/repositories/role.repository.ts",
-      "key": "findManyByIds",
-      "issue": 960,
-      "reason": "管理端批量删：id 来自当前列表（P4 列表自身按区过滤后，这批 id 天然同区）。留着单参是因为它按主键 IN 取，不按业务键"
-    },
-    {
-      "rule": "repo-sql",
-      "file": "server/src/database/repositories/role.repository.ts",
-      "key": "findIdsByName",
-      "issue": 958,
-      "reason": "P2 社交解析层带区：现在按名字全库找，跨区重名只能靠 50116 兜（同 repo-signature 那条，两条一起清）"
-    },
-    {
-      "rule": "repo-sql",
-      "file": "server/src/database/repositories/role.repository.ts",
-      "key": "listForLeaderboard",
-      "issue": 959,
-      "reason": "P3 分区榜：全表扫是刻意的（每 LEADERBOARD_REFRESH_MS 一次），P3 改成一次扫描按 zone_id 分桶"
-    },
-    {
-      "rule": "repo-sql",
-      "file": "server/src/database/repositories/role.repository.ts",
-      "key": "deleteById",
-      "issue": 960,
-      "reason": "管理端删单个角色：P4 的写操作要么带区校验、要么目标资源区 ≠ 当前区就 404"
-    },
-    {
-      "rule": "repo-sql",
-      "file": "server/src/database/repositories/role.repository.ts",
-      "key": "deleteByIds",
-      "issue": 960,
-      "reason": "管理端批量删（与 deleteById 同一刀）"
-    },
-    {
-      "rule": "repo-sql",
-      "file": "server/src/database/repositories/role.repository.ts",
-      "key": "deleteByAccount",
-      "issue": 960,
-      "reason": "删账号时按设计**全区**删角（账号不属于任何区）—— 这条不该加区条件，P4 只在提交前提示「影响 N 个区」"
-    },
-    {
-      "rule": "repo-sql",
-      "file": "server/src/database/repositories/role.repository.ts",
-      "key": "list",
-      "issue": 960,
-      "reason": "管理端角色列表：P4 的 buildWhere 里补 r.zone_id = ?（与 count 同源，别各写一份）"
     },
     {
       "rule": "repo-sql",
@@ -187,13 +130,6 @@
     {
       "rule": "repo-sql",
       "file": "server/src/database/repositories/role.repository.ts",
-      "key": "countCreatedAfter",
-      "issue": 960,
-      "reason": "概览「今日新增角色」：P4 按区"
-    },
-    {
-      "rule": "repo-sql",
-      "file": "server/src/database/repositories/role.repository.ts",
       "key": "countByDaySince",
       "issue": 960,
       "reason": "概览新增趋势图：P4 按区分组（GROUP BY 里加 zone_id，或者直接 WHERE zone_id = ?）"
@@ -204,6 +140,13 @@
       "key": "countByLevelBucket",
       "issue": 960,
       "reason": "概览等级分布：P4 按区（同一个概览接口一起改）"
+    },
+    {
+      "rule": "repo-sql",
+      "file": "server/src/database/repositories/role.repository.ts",
+      "key": "countByMap",
+      "issue": 960,
+      "reason": "概览地图分布：P4 按区（json_extract 那套不变，只多一个 zone 条件）"
     },
     {
       "rule": "repo-sql",
@@ -222,16 +165,86 @@
     {
       "rule": "repo-sql",
       "file": "server/src/database/repositories/role.repository.ts",
-      "key": "countByMap",
+      "key": "countCreatedAfter",
       "issue": 960,
-      "reason": "概览地图分布：P4 按区（json_extract 那套不变，只多一个 zone 条件）"
+      "reason": "概览「今日新增角色」：P4 按区"
     },
     {
       "rule": "repo-sql",
-      "file": "server/src/database/repositories/account.repository.ts",
+      "file": "server/src/database/repositories/role.repository.ts",
+      "key": "deleteByAccount",
+      "issue": 960,
+      "reason": "删账号时按设计**全区**删角（账号不属于任何区）—— 这条不该加区条件，P4 只在提交前提示「影响 N 个区」"
+    },
+    {
+      "rule": "repo-sql",
+      "file": "server/src/database/repositories/role.repository.ts",
+      "key": "deleteById",
+      "issue": 960,
+      "reason": "管理端删单个角色：P4 的写操作要么带区校验、要么目标资源区 ≠ 当前区就 404"
+    },
+    {
+      "rule": "repo-sql",
+      "file": "server/src/database/repositories/role.repository.ts",
+      "key": "deleteByIds",
+      "issue": 960,
+      "reason": "管理端批量删（与 deleteById 同一刀）"
+    },
+    {
+      "rule": "repo-sql",
+      "file": "server/src/database/repositories/role.repository.ts",
+      "key": "findByAccountAnyZone",
+      "issue": 960,
+      "reason": "账号级视图（管理端账号详情 / 删号前清理）：账号本来跨区，按设计要看全部区 —— 玩家侧已被 findByAccountAndZone 顶掉。P4 在页面上折叠成「另在 N 个区有角色」，查询保持全区"
+    },
+    {
+      "rule": "repo-sql",
+      "file": "server/src/database/repositories/role.repository.ts",
+      "key": "findByIdAnyZone",
+      "issue": 960,
+      "reason": "同上：`SELECT * FROM roles WHERE id = ?` 就是「不限区取一行」本身，P4 之后只剩迁移工具用"
+    },
+    {
+      "rule": "repo-sql",
+      "file": "server/src/database/repositories/role.repository.ts",
+      "key": "findManyByIds",
+      "issue": 960,
+      "reason": "管理端批量删：id 来自当前列表（P4 列表自身按区过滤后，这批 id 天然同区）。留着单参是因为它按主键 IN 取，不按业务键"
+    },
+    {
+      "rule": "repo-sql",
+      "file": "server/src/database/repositories/role.repository.ts",
       "key": "list",
       "issue": 960,
-      "reason": "账号列表里的「角色数」子查询 `(SELECT COUNT(1) FROM roles r WHERE r.account_id = a.id)` 是全区的；P4 改成 EXISTS(… AND r.zone_id = :current)，顺带让列表只出本区有角色的账号"
+      "reason": "管理端角色列表：P4 的 buildWhere 里补 r.zone_id = ?（与 count 同源，别各写一份）"
+    },
+    {
+      "rule": "repo-sql",
+      "file": "server/src/database/repositories/role.repository.ts",
+      "key": "listForLeaderboard",
+      "issue": 959,
+      "reason": "P3 分区榜：全表扫是刻意的（每 LEADERBOARD_REFRESH_MS 一次），P3 改成一次扫描按 zone_id 分桶"
+    },
+    {
+      "rule": "repo-sql",
+      "file": "server/src/database/repositories/world-monster.repository.ts",
+      "key": "countAll",
+      "issue": 960,
+      "reason": "启动日志 / 运维观察用的全服实例数，不分桶（要按区看走 countByMap）"
+    },
+    {
+      "rule": "repo-sql",
+      "file": "server/src/database/repositories/world-monster.repository.ts",
+      "key": "countByMap",
+      "issue": 960,
+      "reason": "管理端地图页的只读聚合，GROUP BY 已经带 zone_id；P4 加区上下文后改成只出当前区即可"
+    },
+    {
+      "rule": "repo-sql",
+      "file": "server/src/database/repositories/world-monster.repository.ts",
+      "key": "removeMany",
+      "issue": 961,
+      "reason": "按 instanceId 删，而 instance id 本身是 m<map>_z<zone>_c<slot>_<n>（room-key.util 的唯一口径），不会跨区"
     }
   ]
 }
