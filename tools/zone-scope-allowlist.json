@@ -1,0 +1,131 @@
+{
+  "note": "区边界审计的存量欠账（#956）。每条 = 一处已知的『区还没收口』，必须写清 issue（谁清）与 reason（为什么留）。代码改好、条目不再命中任何违规时，脚本会要求你删掉它 —— 白名单只增不减就等于没有白名单。",
+  "entries": [
+    {
+      "rule": "dto-input",
+      "file": "server/src/modules/auth/dto/register.dto.ts",
+      "key": "zoneId",
+      "issue": 957,
+      "reason": "注册仍收 zoneId（兼容旧客户端）。P1 起账号不再属于区，这一字段改成 deprecated → 忽略 → 删除"
+    },
+    {
+      "rule": "service-zone-input",
+      "file": "server/src/modules/auth/auth.service.ts",
+      "key": "dto.zoneId",
+      "issue": 957,
+      "reason": "注册时把 zoneId 写进 accounts.zone_id。P1 改成只建账号，区在选服时由服务端写入 active_zone_id"
+    },
+    {
+      "rule": "repo-signature",
+      "file": "server/src/database/repositories/role.repository.ts",
+      "key": "findById",
+      "issue": 957,
+      "reason": "P1 改成 findById(zoneId, id) —— 这是『按 id 取到别区角色』的唯一入口，也是 tsc 强制交区的起点"
+    },
+    {
+      "rule": "repo-signature",
+      "file": "server/src/database/repositories/role.repository.ts",
+      "key": "findByAccount",
+      "issue": 957,
+      "reason": "P1 改成 findByAccount(zoneId, accountId)：GET /roles 只出当前浏览区的角色"
+    },
+    {
+      "rule": "repo-signature",
+      "file": "server/src/database/repositories/role.repository.ts",
+      "key": "findByAccountAndName",
+      "issue": 957,
+      "reason": "P1 改成 (accountId, zoneId, name)：唯一索引换成三列后，重名判定也必须按区"
+    },
+    {
+      "rule": "repo-signature",
+      "file": "server/src/database/repositories/role.repository.ts",
+      "key": "findIdsByName",
+      "issue": 958,
+      "reason": "P2 加区：跨区重名会让『按名字加好友』直接解析到别区角色（现状只靠 50116 兜）"
+    },
+    {
+      "rule": "repo-signature",
+      "file": "server/src/database/repositories/role.repository.ts",
+      "key": "listForLeaderboard",
+      "issue": 959,
+      "reason": "P3 分区榜：一次扫描按 roles.zone_id 分桶（这条查询本来就 join 了 accounts.zone_id，改列来源即可）"
+    },
+    {
+      "rule": "repo-signature",
+      "file": "server/src/database/repositories/role.repository.ts",
+      "key": "list",
+      "issue": 960,
+      "reason": "管理端角色列表：P4 单区上下文后条件恒带 r.zone_id = :current"
+    },
+    {
+      "rule": "repo-signature",
+      "file": "server/src/database/repositories/role.repository.ts",
+      "key": "count",
+      "issue": 960,
+      "reason": "与 list 共用 buildWhere，P4 一起加 zone 条件（两处必须同源，别各写一份）"
+    },
+    {
+      "rule": "repo-signature",
+      "file": "server/src/database/repositories/guild.repository.ts",
+      "key": "list",
+      "issue": 958,
+      "reason": "P2 帮会绑区：GET /guilds 从『无身份参数』改成按当前角色区列出"
+    },
+    {
+      "rule": "repo-signature",
+      "file": "server/src/database/repositories/guild.repository.ts",
+      "key": "findById",
+      "issue": 958,
+      "reason": "P2 改成 findById(zoneId, id)：按 guildId 申请 / 查看时先确认帮会属于我的区"
+    },
+    {
+      "rule": "repo-signature",
+      "file": "server/src/database/repositories/guild.repository.ts",
+      "key": "count",
+      "issue": 958,
+      "reason": "P2 帮会数按区统计（管理端区服列表的『帮会数』也读它）"
+    },
+    {
+      "rule": "repo-signature",
+      "file": "server/src/database/repositories/map-monitor.repository.ts",
+      "key": "listStates",
+      "issue": 960,
+      "reason": "现在是『一张图所有区所有线』（管理端还没有区上下文）；P4 之后按 X-Zone-Id 过滤"
+    },
+    {
+      "rule": "repo-sql",
+      "file": "server/src/database/repositories/map-monitor.repository.ts",
+      "key": "listStates",
+      "issue": 960,
+      "reason": "同上：SQL 只按 map_id 查，P4 补 zone_id"
+    },
+    {
+      "rule": "repo-sql",
+      "file": "server/src/database/repositories/map-monitor.repository.ts",
+      "key": "trimOlderThan",
+      "issue": 961,
+      "reason": "按设计就是全局清理（只按时间删，不按区读）：死图的监控行到点该走，走 idx_map_monitor_events_at"
+    },
+    {
+      "rule": "repo-sql",
+      "file": "server/src/database/repositories/world-monster.repository.ts",
+      "key": "removeMany",
+      "issue": 961,
+      "reason": "按 instanceId 删，而 instance id 本身是 m<map>_z<zone>_c<slot>_<n>（room-key.util 的唯一口径），不会跨区"
+    },
+    {
+      "rule": "repo-sql",
+      "file": "server/src/database/repositories/world-monster.repository.ts",
+      "key": "countAll",
+      "issue": 960,
+      "reason": "启动日志 / 运维观察用的全服实例数，不分桶（要按区看走 countByMap）"
+    },
+    {
+      "rule": "repo-sql",
+      "file": "server/src/database/repositories/world-monster.repository.ts",
+      "key": "countByMap",
+      "issue": 960,
+      "reason": "管理端地图页的只读聚合，GROUP BY 已经带 zone_id；P4 加区上下文后改成只出当前区即可"
+    }
+  ]
+}
