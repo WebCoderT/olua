@@ -21,6 +21,10 @@ export class GuildSummaryDto {
   @ApiProperty({ description: "帮会 id", example: "g_1760000000000_ab12" })
   id: string;
 
+  /** 所属区（#958：展示用 —— 客户端标题写「X 区 · 帮会」；服务端按它判归属，不接受回传） */
+  @ApiProperty({ description: "所属区 id（展示用；服务端按它判归属，客户端不要回传）", example: 1 })
+  zoneId: number;
+
   @ApiProperty({ description: "帮会名", example: "听雨阁" })
   name: string;
 
@@ -42,6 +46,7 @@ export class GuildSummaryDto {
   static from(row: GuildListRow): GuildSummaryDto {
     const dto = new GuildSummaryDto();
     dto.id = row.id;
+    dto.zoneId = row.zone_id;
     dto.name = row.name;
     dto.notice = row.notice;
     dto.level = row.level;
@@ -126,6 +131,9 @@ export class GuildApplicationDto {
 export class MyGuildDto {
   @ApiProperty({ description: "帮会 id", example: "g_1760000000000_ab12" })
   id: string;
+
+  @ApiProperty({ description: "所属区 id（展示用；服务端按它判归属，客户端不要回传）", example: 1 })
+  zoneId: number;
 
   @ApiProperty({ description: "帮会名", example: "听雨阁" })
   name: string;

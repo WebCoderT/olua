@@ -30,6 +30,13 @@ export interface PartyActor {
   name: string;
   /** 当前所在地图（空串 = 还没进图；同图判定用） */
   mapId: string;
+  /**
+   * 角色所在的区（#958）：组队的**第一道门槛** —— 队员只能来自本区。
+   *
+   * 从在场表拿（`identityOf`，也就是在线角色所在区），不是账号的「当前浏览区」：
+   * 玩家可能正站在 1 区的图上，账号的浏览区却已经切到 2 区。
+   */
+  zoneId: number;
 }
 
 /** 一条待处理的邀请（内存态，30 秒过期） */
@@ -40,6 +47,13 @@ interface PartyInvite {
   fromLevel: number;
   memberCount: number;
   expiresAt: number;
+  /**
+   * 发出邀请时发起人所在的区（#958）
+   *
+   * 同意时再比一次：邀请的 30 秒里可能合区、可能角色被搬走。发出去时的区是**发起人
+   * 当时的事实**，不能拿「现在的区」反推（那正好把要拦的情况放过去）。
+   */
+  fromZoneId: number;
 }
 
 /**
@@ -68,6 +82,14 @@ interface PartyInvite {
  * - 踢人 / 转让 / 解散：只有队长（这三件事会伤到别人）；
  * - 退出：谁都能退。队长退出**自动移交**给最早加入的成员（没人就删队）——
  *   「队长不能退」在队长掉线不回来时会把整队锁死。
+ *
+ * ===========================================================================
+ * 区边界（#958）
+ * ===========================================================================
+ * 队伍**不跨区**：邀请时比一次发起人的区与目标角色的区（`PARTY_ZONE_MISMATCH`），
+ * 接受时再比一次（邀请的 30 秒里可能合区）。经验分成按**房号**（`zone:map:slot`）筛队友，
+ * 不是只比 `mapId` —— 两个区同在「3 图」时，光比 mapId 会把两个经济体的经验串起来。
+ * 队伍本身不落 `zone_id` 列：成员都同区是**入口保证**的结果，加一列只是同一事实的第二份。
  *
  * ===========================================================================
  * 与屏蔽的关系（#398）
@@ -107,12 +129,15 @@ export class PartyService implements OnApplicationBootstrap, OnApplicationShutdo
   sendTo: ((accountId: string, frame: RealtimeServerMessage) => void) | null = null;
 
   /**
-   * 在线位置（RealtimeService 接线）：角色 id → 连接所在账号与地图
+   * 在线位置（RealtimeService 接线）：角色 id → 连接所在账号、地图与**房号**
    *
    * 返回 null = 这个角色此刻没有在线连接。队伍快照的「在线 / 同图」与经验分享的
-   * 「同图才分」都靠它，而连接表在通道那边。
+   * 「同房才分」都靠它，而连接表在通道那边。
+   *
+   * 房号是 `zone:map:slot`（#809）—— 经验分成按它比，见过「两个区同在 3 图也分经验」的
+   * 漏洞（#958）之后就不再单比 `mapId` 了。
    */
-  locationOf: ((roleId: string) => { accountId: string; mapId: string } | null) | null = null;
+  locationOf: ((roleId: string) => { accountId: string; mapId: string; roomId: string } | null) | null = null;
 
   /** 屏蔽判定（RealtimeService 接线到 BlockService.hiddenFor：a 是否拉黑了 b） */
   blockedFrom: ((aRoleId: string, bRoleId: string) => boolean) | null = null;
@@ -166,19 +191,22 @@ export class PartyService implements OnApplicationBootstrap, OnApplicationShutdo
   }
 
   /**
-   * 与击杀者同图、在线的其他队友（经验分成用）
+   * 与击杀者在**同一间房**、在线的其他队友（经验分成用）
    *
-   * 只返回**在线且同图**的：离线队友不能入账（`applyKillExp` 要求账号的在线角色是它），
-   * 不同图的队友拿不到（组队不等于「全图共享经验」，那是跨图支援的事，本刀不做）。
+   * 只返回**在线且同房**的：离线队友不能入账（`applyKillExp` 要求账号的在线角色是它），
+   * 不同房（别的图 / 别的区 / 别的线）的队友拿不到 —— 组队不等于「全服共享经验」。
+   *
+   * 房号是 `zone:map:slot` 三键（#958）：以前只比 `mapId`，于是 1 区和 2 区同在「3 图」的
+   * 队友会互相分到经验（两套经济、两个排行榜串味）。
    */
-  sameMapMates(roleId: string, mapId: string): Array<{ roleId: string; accountId: string }> {
+  sameRoomMates(roleId: string, roomId: string): Array<{ roleId: string; accountId: string }> {
     const partyId = this.partyIdOfRole(roleId);
-    if (!partyId || !mapId) return [];
+    if (!partyId || !roomId) return [];
     const mates: Array<{ roleId: string; accountId: string }> = [];
     for (const member of this.parties.membersOf(partyId)) {
       if (member.role_id === roleId) continue;
       const location = this.locationOf?.(member.role_id) ?? null;
-      if (!location || location.mapId !== mapId) continue;
+      if (!location || location.roomId !== roomId) continue;
       mates.push({ roleId: member.role_id, accountId: location.accountId });
     }
     return mates;
@@ -271,8 +299,17 @@ export class PartyService implements OnApplicationBootstrap, OnApplicationShutdo
       this.fail(actor, BizCode.PARTY_LEVEL_TOO_LOW, `需要 ${minLevel} 级才能组队`);
       return;
     }
-    if (!this.roles.existsById(targetRoleId)) {
+    // 同区优先（#958）：组队是**本区**的协作，邀请别区的人一律拒。
+    // 两种情形分开报：「这个 id 根本不存在」与「他在别区」——后者给专用码是设计口径
+    // （docs/39 §3.4）：玩家按附近列表点到别区的人时，一句「不同区服不能组队」比
+    // 「找不到这个角色」可解释得多。它不是权限判断，跨区邀请本来就没有任何入口。
+    const targetZone = this.roles.zoneOfRole(targetRoleId);
+    if (targetZone === null) {
       this.fail(actor, BizCode.SOCIAL_ROLE_NOT_FOUND, "找不到这个角色");
+      return;
+    }
+    if (targetZone !== actor.zoneId) {
+      this.fail(actor, BizCode.PARTY_ZONE_MISMATCH, "不同区服之间不能组队");
       return;
     }
     // 屏蔽优先（#398）：两个方向分开说 —— 我拉黑他是自己的设置（可以解除），
@@ -331,6 +368,7 @@ export class PartyService implements OnApplicationBootstrap, OnApplicationShutdo
       fromLevel: this.levelOfActor(actor),
       memberCount: roster.length,
       expiresAt: Date.now() + this.inviteTtlMs(),
+      fromZoneId: actor.zoneId,
     };
     this.invites.set(targetRoleId, [...existing, invite]);
     const frame: RealtimePartyInviteMessage = {
@@ -372,10 +410,17 @@ export class PartyService implements OnApplicationBootstrap, OnApplicationShutdo
       this.fail(actor, BizCode.PARTY_INVITE_NOT_FOUND, "这个队伍已经解散了");
       return;
     }
-    // 邀请发出之后可能才发生的屏蔽：同样作废（不说破方向，直接当邀请没了）
+    // 邀请发出之后可能发生的屏蔽：同样作废（不说破方向，直接当邀请没了）
     if (this.blockedFrom?.(actor.roleId, invite.fromRoleId) || this.blockedFrom?.(invite.fromRoleId, actor.roleId)) {
       this.dropInvite(actor.roleId, invite);
       this.fail(actor, BizCode.PARTY_INVITE_NOT_FOUND, "这个队伍已经解散了");
+      return;
+    }
+    // 区在邀请的这 30 秒里可能变了（合区把发起人的角色搬走 / 他自己换了区）：
+    // 再比一次，不一致就当邀请作废 —— 与「队伍散了」同一种回复，不给跨区入队留窗口。
+    if (invite.fromZoneId !== actor.zoneId) {
+      this.dropInvite(actor.roleId, invite);
+      this.fail(actor, BizCode.PARTY_ZONE_MISMATCH, "不同区服之间不能组队");
       return;
     }
     if (this.parties.countMembers(party.id) >= this.memberLimit()) {

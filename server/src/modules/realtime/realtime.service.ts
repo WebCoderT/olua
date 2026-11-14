@@ -801,6 +801,8 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
           roleId: identity.roleId,
           name: identity.username,
           mapId: identity.mapId,
+          // #958：组队的第一道门槛 —— 队员只能来自本区（区从在场表来，不是账号浏览区）
+          zoneId: identity.zoneId,
         },
         data.action,
         data.roleId,

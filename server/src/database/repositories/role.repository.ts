@@ -126,14 +126,17 @@ export class RoleRepository {
   }
 
   /**
-   * 按角色名全库找（社交加好友 / 标敌人用，#389）
+   * 按角色名在**本区**找（社交加好友 / 标敌人用，#389；#958 收成按区）
    *
    * 角色名只在**同一账号内**唯一，所以这里天然可能返回多条 —— 调用方必须处理
    * 「同名不止一个」（返回 50116 让玩家从「附近」或帮会成员里加，而不是替他随便挑一个）。
+   *
+   * 区必须进 SQL：跨区重名会把别区的人解析出来（对方从没听说过这个请求），
+   * 而「本区没有」与「他在别区」对玩家是同一个答案 —— 不存在。
    */
-  findIdsByName(name: string): string[] {
+  findIdsByName(zoneId: number, name: string): string[] {
     return this.db
-      .all<{ id: string }>("SELECT id FROM roles WHERE name = ? ORDER BY created_at ASC", [name])
+      .all<{ id: string }>("SELECT id FROM roles WHERE zone_id = ? AND name = ? ORDER BY created_at ASC", [zoneId, name])
       .map((row) => row.id);
   }
 

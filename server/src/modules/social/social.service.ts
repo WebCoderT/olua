@@ -81,7 +81,7 @@ export class SocialService {
    */
   addFriend(accountId: string, dto: SocialTargetDto): MySocialDto {
     const me = this.onlineRole(accountId);
-    const targetId = this.resolveTarget(me.id, dto);
+    const targetId = this.resolveTarget(me, dto);
     // 他把我拉黑了 → 用「找不到这个人」挡回去（#398）
     //
     // 刻意复用 50109 而不是新开一个「你已被拉黑」：一旦告诉对方「你被拉黑了」，
@@ -180,7 +180,7 @@ export class SocialService {
   /** 标敌人（单向：只有我自己看得见，对方既不知道也不受影响） */
   addEnemy(accountId: string, dto: SocialTargetDto): MySocialDto {
     const me = this.onlineRole(accountId);
-    const targetId = this.resolveTarget(me.id, dto);
+    const targetId = this.resolveTarget(me, dto);
     if (this.social.findEnemy(me.id, targetId)) {
       throw BizException.conflict(BizCode.SOCIAL_ENEMY_EXISTS, "你已经把他标成敌人了");
     }
@@ -210,7 +210,7 @@ export class SocialService {
    */
   addBlock(accountId: string, dto: SocialTargetDto): MySocialDto {
     const me = this.onlineRole(accountId);
-    const targetId = this.resolveTarget(me.id, dto);
+    const targetId = this.resolveTarget(me, dto);
     if (this.social.findBlock(me.id, targetId)) {
       throw BizException.conflict(BizCode.SOCIAL_BLOCK_EXISTS, "你已经拉黑他了");
     }
@@ -253,7 +253,8 @@ export class SocialService {
     if (targetId === me.id) {
       throw BizException.conflict(BizCode.SOCIAL_TARGET_SELF, "不能举报自己");
     }
-    if (!this.roles.existsById(targetId)) {
+    // 同区才算存在（#958）：举报别区的角色 id 与举报一个不存在的 id 同一种回复
+    if (!this.roles.roleInZone(me.zoneId, targetId)) {
       throw BizException.notFound(BizCode.SOCIAL_ROLE_NOT_FOUND, "这个角色不存在（可能已被删除）");
     }
     if (this.reports.findOpen(me.id, targetId, REPORT_STATUS.PENDING)) {
@@ -299,21 +300,24 @@ export class SocialService {
   }
 
   /**
-   * 入参 → 目标角色 id
+   * 入参 → 目标角色 id（#958：**只在同区里解析**）
    *
    * `roleId` 优先（「附近」与帮会成员列表里本来就有 id，精确且不受重名影响）；
    * 否则按名字找，找不到 50109、同名多个 50116。最后统一挡掉「对自己」。
+   *
+   * 跨区一律当「不存在」（50109），不用 403：403 等于承认「这个 id 存在，只是你看不到」，
+   * 把 roleId 遍历一遍就能摸出别区有多少角色。按名字找同理 —— 只在 `me.zone_id` 里查。
    */
-  private resolveTarget(myRoleId: string, dto: SocialTargetDto): string {
+  private resolveTarget(me: RoleDto, dto: SocialTargetDto): string {
     const byId = (dto.roleId ?? "").trim();
     let targetId = "";
     if (byId) {
-      if (!this.roles.existsById(byId)) {
+      if (!this.roles.roleInZone(me.zoneId, byId)) {
         throw BizException.notFound(BizCode.SOCIAL_ROLE_NOT_FOUND, "这个角色不存在（可能已被删除）");
       }
       targetId = byId;
     } else {
-      const ids = this.roles.idsByName(dto.name ?? "");
+      const ids = this.roles.idsByName(me.zoneId, dto.name ?? "");
       if (ids.length === 0) throw BizException.notFound(BizCode.SOCIAL_ROLE_NOT_FOUND, "没有找到这个角色名");
       if (ids.length > 1) {
         throw BizException.conflict(
@@ -323,7 +327,7 @@ export class SocialService {
       }
       targetId = ids[0];
     }
-    if (targetId === myRoleId) {
+    if (targetId === me.id) {
       throw BizException.conflict(BizCode.SOCIAL_TARGET_SELF, "不能对自己做这个操作");
     }
     return targetId;

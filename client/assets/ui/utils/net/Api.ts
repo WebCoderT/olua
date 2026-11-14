@@ -126,9 +126,9 @@ export const GameConfigApi = {
 /** guild 模块的接口（11 个，生成） */
 export const GuildApi = {
   /**
-   * 帮会列表（GET /guilds）
+   * 帮会列表（当前区）（GET /guilds）
    *
-   * 全部帮会，按人数降序（同人数按创建时间升序）。列表带人数与帮主名，不含成员名单。
+   * **本区**的帮会，按人数降序（同人数按创建时间升序）。列表带人数与帮主名，不含成员名单。
    */
   list: (options?: Options) => HttpClient.get<GuildSummary[]>(ApiRoutes.guild.list, options),
   /**

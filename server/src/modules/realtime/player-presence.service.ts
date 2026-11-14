@@ -515,6 +515,8 @@ export class PlayerPresenceService implements OnApplicationBootstrap, OnApplicat
   identityOf(accountId: string): {
     zoneId: number;
     mapId: string;
+    /** 房号（`zone:map:slot`）—— 同图频道与经验分成都按它比，别自己拿 zone+map 拼（#958） */
+    roomId: string;
     roleId: string;
     guildId: string;
     guildName: string;
@@ -525,6 +527,7 @@ export class PlayerPresenceService implements OnApplicationBootstrap, OnApplicat
     return {
       zoneId: entry.zoneId,
       mapId: entry.mapId,
+      roomId: entryRoomKey(entry),
       roleId: entry.roleId,
       guildId: entry.guildId,
       guildName: entry.guildName,
@@ -607,31 +610,38 @@ export class PlayerPresenceService implements OnApplicationBootstrap, OnApplicat
   }
 
   /**
-   * 全服此刻所有「进过图」的账号 id（#876 世界频道的收件人口径）
+   * **某个区**此刻所有「进过图」的账号 id（#876 世界频道的收件人口径，#958 收成「本区」）
    *
-   * 在场表本身就是这张名单：worldJoin 进、断线/超时出，不需要另维护一张
-   * 「全服在线」索引 —— 那又是一个要在四条路径上同步的东西。聊天是限频后的
-   * 低频操作，全量拷贝一份 keys 完全不贵。
+   * 世界频道从「全服」收成「本区」：合区之前每个区是独立服，1 区的人不该看见 2 区的
+   * 叫卖与对骂 —— 那是两套经济、两套帮会、两套排行榜。收件人按在场条目的 `zoneId`
+   * 现筛，不另维护「区 → 在线」的索引（又一份要在四条路径上同步的东西）。
    *
    * 只读：不改在场表、不触发广播。
    */
-  presentAccountIds(): string[] {
-    return Array.from(this.entries.keys());
+  presentAccountIdsOf(zoneId: number): string[] {
+    const ids: string[] = [];
+    for (const [accountId, entry] of this.entries) {
+      if (entry.zoneId === zoneId) ids.push(accountId);
+    }
+    return ids;
   }
 
   /**
-   * 按角色找在线连接（#399：队伍快照的「在线 / 同图」与队友经验分成的「同图才分」都要它）
+   * 按角色找在线连接（#399：队伍快照的「在线 / 同图」与队友经验分成的「同房才分」都要它）
    *
    * 线性扫一遍在线表：队伍最多 4 人、每次击杀查一次，这个规模上完全够。
    * 为它维护一张反向索引，就得在「首见 / 换图 / 断线 / 超时」四条路径上同步 ——
    * 多出来的只是漂移的机会。
    *
+   * `roomId` 是 `zone:map:slot` 三键（#809）：**区与线都要比**。只比 `mapId` 时，两个区
+   * 同在「3 图」的队友会互相分到经验（#958 修的就是这一条），分线之后同理。
+   *
    * 返回 null = 这个角色此刻不在线（没进图 / 断线 / 位置超时被清）。
    */
-  locateRole(roleId: string): { accountId: string; mapId: string } | null {
+  locateRole(roleId: string): { accountId: string; mapId: string; roomId: string } | null {
     if (!roleId) return null;
     for (const [accountId, entry] of this.entries) {
-      if (entry.roleId === roleId) return { accountId, mapId: entry.mapId };
+      if (entry.roleId === roleId) return { accountId, mapId: entry.mapId, roomId: entryRoomKey(entry) };
     }
     return null;
   }

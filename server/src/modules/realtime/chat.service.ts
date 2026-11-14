@@ -3,7 +3,6 @@ import { ConfigService } from "@nestjs/config";
 import { GuildRepository } from "../../database/repositories/guild.repository";
 import { RoleRepository } from "../../database/repositories/role.repository";
 import { WorldService } from "../world/world.service";
-import { roomKey } from "../../common/utils/room-key.util";
 import { BlockService } from "./block.service";
 import { PlayerPresenceService } from "./player-presence.service";
 import type { RealtimeChatEntry, RealtimeChatMessage } from "./realtime.protocol";
@@ -12,6 +11,8 @@ import type { RealtimeChatEntry, RealtimeChatMessage } from "./realtime.protocol
 interface SpeakerIdentity {
   zoneId: number;
   mapId: string;
+  /** 房号（`zone:map:slot`，presence 算好的）—— 同图频道按它投递 */
+  roomId: string;
   roleId: string;
   guildId: string;
   guildName: string;
@@ -26,18 +27,19 @@ interface SpeakerIdentity {
  * 只对每一条消息做四件事——身份核实、正文净化、限频、按频道选收件人。客户端的校验
  * （长度、频道名）只是省一次往返，**全部以这里为准**。
  *
- * ## 四个频道的口径（#876：世界与同图拆开，名实相符）
- * - `world`：广播给**全服在场者**（`presence.presentAccountIds`，进过图的在线账号，
- *   不限图）——原来 world 按图广播是名不副实，不同图的人互相看不到；世界消息天然
- *   低频（限频压着），全服广播的代价可以接受；
- * - `map`：广播给**同图观看者**（复用互见的观看者集合 `world.viewersOf`）——
+ * ## 四个频道的口径（#876：世界与同图拆开；#958：全部收成「同区」）
+ * - `world`：广播给**本区在场者**（`presence.presentAccountIdsOf(zoneId)`，进过图、不限图）——
+ *   #876 之前 world 按图广播是名不副实（不同图的人互相看不到）；#958 起再收一层区：
+ *   区是独立服，1 区的人不该看见 2 区的叫卖与对骂；
+ * - `map`：广播给**同房**观看者（`world.viewersOf(identity.roomId)`，房号是 `zone:map:slot`）——
  *   #876 之前的 world 就是它，拆出来后「就近说话」的语义有了自己的频道；
  * - `guild`：转发给帮会全部在线成员。帮会身份**每次查库**（`guildOfRole` / `members`），
  *   不用在场的懒刷新缓存——准入判断错一次（刚退帮的人还能喊一嗓子）比一次 DB 读贵得多，
- *   而聊天本来就是限频之后的低频操作；
+ *   而聊天本来就是限频之后的低频操作；投递前再校验「发送者区 = 帮会区」（#958），
+ *   只有服务器运维手改库才会不一致，宁可拒掉也不跨区喊话；
  * - `private`：定向发给 `toRoleId` 对应的账号，**仅在线可达、不落库**（离线转 mail 是
  *   后续刀）。收件人不在线时整条拒绝（含发送者回显）——「发出去了但对面永远收不到」
- *   比「发不出去」更伤体验。
+ *   比「发不出去」更伤体验。找人只在同区找（#957），跨区与「查无此人」同一种回复。
  *
  * ## 屏蔽过滤（#398）
  * 世界 / 同图 / 帮会在投递前逐收件人判一次「他有没有拉黑发送者」，拉黑了就不发（`reachable`）。
@@ -125,18 +127,18 @@ export class ChatService implements OnApplicationShutdown {
 
   //#region 四个频道
 
-  /** 世界频道：全服在场者（发送者一定在集合里，天然带回显；屏蔽过滤照走） */
+  /** 世界频道：**本区**在场者（发送者一定在集合里，天然带回显；屏蔽过滤照走） */
   private sayWorld(accountId: string, identity: SpeakerIdentity, text: string): void {
-    this.deliver(this.reachable(this.presence.presentAccountIds(), accountId, identity), accountId, identity, {
+    this.deliver(this.reachable(this.presence.presentAccountIdsOf(identity.zoneId), accountId, identity), accountId, identity, {
       channel: "world",
       text,
       from: { guildName: identity.guildName },
     });
   }
 
-  /** 同图频道：同图观看者（发送者也在观看者集合里，天然带回显） */
+  /** 同图频道：同房观看者（发送者也在观看者集合里，天然带回显） */
   private sayMap(accountId: string, identity: SpeakerIdentity, text: string): void {
-    this.deliver(this.reachable([...this.world.viewersOf(roomKey(identity.zoneId, identity.mapId))], accountId, identity), accountId, identity, {
+    this.deliver(this.reachable([...this.world.viewersOf(identity.roomId)], accountId, identity), accountId, identity, {
       channel: "map",
       text,
       from: { guildName: identity.guildName },
@@ -148,6 +150,12 @@ export class ChatService implements OnApplicationShutdown {
     const guild = this.guilds.guildOfRole(identity.roleId);
     if (!guild) {
       this.reject(accountId, "你还没有帮会，帮会频道不可用");
+      return;
+    }
+    // 帮会不跨区（#958）：成员表已经按区收口，这里是「发送者站错了区」的兜底
+    // （合区 / 维护中手改库才会不一致）。拒掉而不是照发：一条跨区消息会带出别区的帮会名。
+    if (guild.zone_id !== identity.zoneId) {
+      this.reject(accountId, "这个帮会不属于当前区服，帮会频道不可用");
       return;
     }
     const roleIds = this.guilds.members(guild.id).map((member) => member.role_id);

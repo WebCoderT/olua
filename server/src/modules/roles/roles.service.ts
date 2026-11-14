@@ -247,20 +247,49 @@ export class RolesService {
   }
 
   /**
-   * 按角色名找人（社交用：#389）
+   * 按角色名找人（社交用：#389；#958 起**只在指定区里**找）
    *
    * 名字只在同一账号内唯一，所以可能返回多个 —— 社交那边据此返回 50116，
    * 让玩家改从「附近」或帮会成员里加，而不是替他随便挑一个。
+   *
+   * 带区是必须的：跨区重名会让「按名字加好友」解析到别区的角色（那边的人从没听说过
+   * 这个请求），也会把别区的角色规模透出去。找不到 = 这个人不存在，与「他在别区」同一种回复。
    */
-  idsByName(name: string): string[] {
-    return this.roles.findIdsByName(name.trim());
+  idsByName(zoneId: number, name: string): string[] {
+    return this.roles.findIdsByName(zoneId, name.trim());
   }
 
   /**
-   * 这个角色 id 是否存在（社交按 id 加好友前的存在性校验：#389）
+   * 某角色**属于哪个区**（#958 社交 / 组队的第一步：先问「他在哪个区」，再决定后续）
    *
-   * 入参是**别人**的角色 id，调用方这会儿还拿不到对方的区 —— 跨区拦截在 #958 做
-   * （解析层带区 + mustSameZone）。在那之前这里只能跨区取，别把它当成「同区校验」。
+   * 返回 null = 这个 id 根本不存在。调用方拿到区之后自己比 —— 比「本区取不到」
+   * 多了一种可区分的说法（组队要给 `PARTY_ZONE_MISMATCH` 而不是「查无此人」）。
+   *
+   * 一次索引列查询，不解析存档；比「本区查不到 → 再全库查一次」省一条 SQL。
+   */
+  zoneOfRole(roleId: string): number | null {
+    const row = this.roles.findByIdAnyZone(roleId);
+    return row ? row.zone_id : null;
+  }
+
+  /**
+   * 按 id 取角色，**只在本区**（跨区 = 不存在，返回 null）
+   *
+   * 社交动作的目标解析（加好友 / 标敌人 / 拉黑 / 举报）走这里：拿别区的 roleId 进来
+   * 得到的是「这个角色不存在」（`SOCIAL_ROLE_NOT_FOUND`），而不是 403 ——
+   * 403 等于告诉对方「这个 id 存在，只是你看不到」，遍历一遍就能摸出别区的规模。
+   */
+  roleInZone(zoneId: number, roleId: string): RoleRow | null {
+    const row = this.roles.findById(zoneId, roleId);
+    return row ?? null;
+  }
+
+  /**
+   * 这个角色 id 是否存在（游戏内邮件投递前的存在性校验：#436）
+   *
+   * **刻意跨区**：邮件是服务端内部投递（成就奖励 / 帮会维护通知 / 运营补发），
+   * 发件方手里只有一个 roleId，没有「区上下文」也不该有 —— 它不是玩家侧读接口。
+   * 玩家侧的「按 id 取角色」一律走 `roleInZone`。
    */
   existsById(roleId: string): boolean {
     return Boolean(this.roles.findByIdAnyZone(roleId));

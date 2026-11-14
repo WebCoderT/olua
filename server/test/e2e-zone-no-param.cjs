@@ -8,7 +8,7 @@
  * 这比「传了别区就报错」更严：报错还能说明代码里读了这个参数，而这里要的是
  * 「代码里根本没有这个读点」。
  *
- * 覆盖：角色列表 / 在线角色 / 角色详情 / 存进度 / 我的区服，外加一条反证
+ * 覆盖：角色列表 / 在线角色 / 角色详情 / 存进度 / 我的区服 / 帮会列表（#958），外加一条反证
  * ——拿别区角色 id 去打，即使 `?zoneId=` 指的正是那个区，也还是 20002（不认参数）。
  *
  * 与 e2e-zone 同款：临时文件库 + 独立端口。
@@ -17,6 +17,7 @@ const { spawn } = require("child_process");
 const net = require("net");
 const os = require("os");
 const path = require("path");
+const { relaxGuildGate } = require("./lib/guild-gate.cjs");
 
 const SERVER_DIR = path.join(__dirname, "..");
 const ENTRY = path.join(SERVER_DIR, "dist", "main.js");
@@ -152,6 +153,12 @@ async function api(baseUrl, method, route, options = {}) {
     const zone2RoleId = roleB.data && roleB.data.id;
     check(!!zone2RoleId && zone2RoleId !== zone1RoleId, "二区账号 B 建了同名角色「影子」（跨区同名允许）", zone2RoleId);
 
+    // 帮会列表也要有内容，否则「带不带参数」两边都是空数组，断言等于没测（#958）
+    relaxGuildGate(dbPath);
+    const guildA = await api(baseUrl, "POST", "guilds", { token: tokenA, body: { name: "一区帮" } });
+    const guildB = await api(baseUrl, "POST", "guilds", { token: tokenB, body: { name: "二区帮" } });
+    check(!!(guildA.data && guildA.data.id) && !!(guildB.data && guildB.data.id), "两个区各建一个帮会");
+
     //#endregion
 
     //#region 一、读接口：带与不带逐字节相同
@@ -171,6 +178,17 @@ async function api(baseUrl, method, route, options = {}) {
       "GET /zones/mine?zoneId=<二区> 与不带一致",
       await api(baseUrl, "GET", "zones/mine", { token: tokenA }),
       await api(baseUrl, "GET", `zones/mine?zoneId=${zone2Id}`, { token: tokenA }),
+    );
+    checkSame(
+      "GET /guilds?zoneId=<二区> 与不带一致",
+      await api(baseUrl, "GET", "guilds", { token: tokenA }),
+      await api(baseUrl, "GET", `guilds?zoneId=${zone2Id}`, { token: tokenA }),
+    );
+    const guildListA = await api(baseUrl, "GET", `guilds?zoneId=${zone2Id}`, { token: tokenA });
+    check(
+      Array.isArray(guildListA.data) && guildListA.data.length === 1 && guildListA.data[0].name === "一区帮",
+      "带 ?zoneId=<二区> 拿到的仍是**一区**的帮会列表（参数不读，只在服务端推导的区里查）",
+      JSON.stringify(guildListA.data && guildListA.data.map((guild) => guild.name)),
     );
     checkSame(
       "GET /roles/:id?zoneId=<二区> 与不带一致",

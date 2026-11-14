@@ -133,9 +133,16 @@ export class GuildService {
 
   //#region 玩家侧
 
-  /** 帮会列表（浏览：人多的在前） */
-  list(): GuildSummaryDto[] {
-    return this.guilds.list().map((row) => GuildSummaryDto.from(row));
+  /**
+   * 帮会列表（浏览：人多的在前）
+   *
+   * 只出**当前区**（#958）：区是独立服，1 区的玩家看不到 2 区的帮会。
+   * 区取账号的当前上下文（`roles.zoneOf`：在线角色优先，回落浏览区）——
+   * 还没进游戏也能先浏览本区帮会。
+   */
+  list(accountId: string): GuildSummaryDto[] {
+    const zoneId = this.roles.zoneOf(accountId);
+    return this.guilds.listByZone(zoneId).map((row) => GuildSummaryDto.from(row));
   }
 
   /** 我的帮会；不在任何帮会时返回 null（客户端据此显示「创建 / 申请」两种入口） */
@@ -143,7 +150,8 @@ export class GuildService {
     const role = this.onlineRole(accountId);
     const membership = this.guilds.membershipOf(role.id);
     if (!membership) return null;
-    const guild = this.guilds.findById(membership.guild_id);
+    // 按角色的区取（#958）：成员行只可能指向本区帮会，跨区说明库被手改过 —— 当作没有帮会
+    const guild = this.guilds.findById(role.zoneId, membership.guild_id);
     if (!guild) return null; // 外键保证不可达；真出现了也别 500，当作没有帮会
     const members = this.guilds.members(guild.id);
     const officer = isOfficer(membership.rank);
@@ -197,6 +205,8 @@ export class GuildService {
     const now = Date.now();
     const row: GuildRow = {
       id: `${GUILD_ID_PREFIX}${now.toString(36)}_${randomUUID().slice(0, 8)}`,
+      // 区取帮主的角色（#958）：不接受前端传区，建帮就是把「我这一区的角色」聚起来
+      zone_id: role.zoneId,
       name,
       notice,
       leader_id: role.id,
@@ -232,7 +242,8 @@ export class GuildService {
     if (this.guilds.membershipOf(role.id)) {
       throw BizException.conflict(BizCode.GUILD_ALREADY_IN, "你已经在一个帮会里了，先退出才能申请别的");
     }
-    const guild = this.guilds.findById(guildId);
+    // 只在**本区**找（#958）：别区的帮会 id 与「不存在」同一种回复，不给跨区申请留入口
+    const guild = this.guilds.findById(role.zoneId, guildId);
     if (!guild) throw BizException.notFound(BizCode.GUILD_NOT_FOUND, "这个帮会不存在（可能刚被解散）");
     if (this.guilds.countMembers(guildId) >= this.memberLimit) {
       throw BizException.conflict(BizCode.GUILD_FULL, "这个帮会人满了");
@@ -275,6 +286,12 @@ export class GuildService {
     // 申请期间对方可能已经进了别的帮会 —— 入帮前再查一次，不能靠「申请时查过」
     if (this.guilds.membershipOf(targetRoleId)) {
       throw BizException.conflict(BizCode.GUILD_ALREADY_IN, "对方已经加入其它帮会了");
+    }
+    // 申请期间对方可能换了区（合区搬角色）：跨区入帮会把「别区的人」写进本帮的成员表，
+    // 之后列表 / 帮会频道 / 经验分成全都要为此写例外。直接作废这条申请（#958）
+    if (this.roles.zoneOfRole(targetRoleId) !== guild.zone_id) {
+      this.guilds.removeApplication(guild.id, targetRoleId);
+      throw BizException.notFound(BizCode.GUILD_TARGET_INVALID, "这个申请的玩家已经不在本区服了，申请已作废");
     }
     if (this.guilds.countMembers(guild.id) >= this.memberLimit) {
       throw BizException.conflict(BizCode.GUILD_FULL, "帮会人满了，先踢人或等上限提高");
@@ -405,19 +422,20 @@ export class GuildService {
 
   //#region 管理端
 
+  /** 管理端列表：暂时跨区（#960 接 `X-Zone-Id` 之后改成只看当前区） */
   adminList(): AdminGuildDto[] {
-    return this.guilds.list().map((row) => AdminGuildDto.fromAdmin(row));
+    return this.guilds.listAll().map((row) => AdminGuildDto.fromAdmin(row));
   }
 
   adminDetail(id: string): AdminGuildDetailDto {
-    const row = this.guilds.findListRow(id);
+    const row = this.guilds.findListRowAnyZone(id);
     if (!row) throw BizException.notFound(BizCode.GUILD_NOT_FOUND, "帮会不存在");
     return AdminGuildDetailDto.fromDetail(row, this.guilds.members(id));
   }
 
   /** 改帮会（名字 / 公告）：名字仍要全局唯一（排除自己） */
   adminUpdate(id: string, dto: AdminUpdateGuildDto): AdminGuildDetailDto {
-    const guild = this.guilds.findById(id);
+    const guild = this.guilds.findByIdAnyZone(id);
     if (!guild) throw BizException.notFound(BizCode.GUILD_NOT_FOUND, "帮会不存在");
     const now = Date.now();
     if (dto.name !== undefined) {
@@ -439,7 +457,7 @@ export class GuildService {
 
   /** 强制解散（运营手段：违规帮会名 / 组织性刷资源等） */
   adminRemove(id: string): void {
-    const guild = this.guilds.findById(id);
+    const guild = this.guilds.findByIdAnyZone(id);
     if (!guild) throw BizException.notFound(BizCode.GUILD_NOT_FOUND, "帮会不存在");
     this.guilds.remove(id);
     this.logger.log(`帮会被管理员强制解散：${guild.name}（${guild.id}）`);
@@ -461,7 +479,7 @@ export class GuildService {
     const role = this.onlineRole(accountId);
     const membership = this.guilds.membershipOf(role.id);
     if (!membership) throw BizException.conflict(BizCode.GUILD_NOT_IN, "你还没有加入任何帮会");
-    const guild = this.guilds.findById(membership.guild_id);
+    const guild = this.guilds.findById(role.zoneId, membership.guild_id);
     if (!guild) throw BizException.notFound(BizCode.GUILD_NOT_FOUND, "这个帮会不存在（可能刚被解散）");
     return { guild, membership };
   }
@@ -485,6 +503,7 @@ export class GuildService {
     const leader = members.find((item) => item.role_id === guild.leader_id);
     const dto = new MyGuildDto();
     dto.id = guild.id;
+    dto.zoneId = guild.zone_id;
     dto.name = guild.name;
     dto.notice = guild.notice;
     dto.level = guild.level;
