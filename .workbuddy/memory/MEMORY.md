@@ -85,6 +85,20 @@ compose 五服务：admin:80 唯一入口 / game:8080 / server:3100 / realtime:3
   #768 10Hz 提频+帧瘦身+序列化缓存（PR #945 `9202366c`，已关） ·
   #767 同步延迟测量基线（PR #944 `ba846c6b`）· #809 Room 抽象 + 热重载（PR #942/#943，关 #809+#669）·
   #811 移动校验（#941）· #932 任务域（#933）· #826 战斗六项（#936）。
+- **#812 地图规则接入结算（PR #1005 `98f7fbb5`，已关；epic #808 第四刀拆成 A/B/C）**：
+  `expRate` 乘击杀者 + **队友分成**（同图同口径，否则「带人刷高倍率图」变成对队友的惩罚）；
+  `dropRate` **乘 `chance` 封顶 1**（不乘 `picks` —— 那会让事件次数与产出一起翻倍）；
+  `allowDrop=false` 一件都不抽（世界侧不生成实体，客户端也就没有 `dropSpawn`）。
+  `maxPlayersPerRoom` 早在 #809 就接了，本轮只补快照三项（`maxPlayersPerRoom` / `maxChannels` /
+  `transferCostMoney`），**倍率一律不进快照**（否则两端算的经验迟早漂）。
+  规则读取走**地图域公开口** `MapService.rulesConfigOf(mapId)`：与给管理端的 `rulesOf` 刻意分开
+  （后者带 `inherited` 与落款、地图不存在抛 404），运行时消费方不该为「读个倍率」多一条失败路径；
+  `MapRules` 类型随地图域导出，消费方不摸仓储 —— **`audit-server-boundaries` 对 type-only import 同样计数**。
+  B/C 已拆 #1000 分线 / #1001 副本与传送代价。`e2e-map-rules` 34 条。
+- **`SaveMapRulesDto` 那个真 bug（2026-11-15）**：6 个布尔字段只挂 `@ApiProperty`、没有校验装饰器，
+  `ValidationPipe({ whitelist: true })` 把它们**全部剥掉** → 保存一次规则就把所有开关写成 `false`
+  （`allowDrop` 变 false，掉落一件都不出）。写 DTO 的 boolean 必须有 `@IsBoolean`；
+  全仓扫过 `src/**/dto/**` 还有 **77 处**缺（多数是只读响应 DTO 无妨），是否加静态守点另议。
 - **同步系列五刀全部落地**：#767 基线 → #768 10Hz+瘦身 → **#769 插值（PR #991 `14d7b285`，已关）**：
   `players` / `monster-ai` 两帧带**帧级 `t`**（同一拍共用一个值、AOI 裁剪后原样带上）；
   客户端 `ui/core/SnapshotInterpolator`（缓冲 4 条、线性插值、外插上限 100ms、同 t 覆盖 /
@@ -128,8 +142,8 @@ compose 五服务：admin:80 唯一入口 / game:8080 / server:3100 / realtime:3
   `event:read`，排序白名单，**不按 `drop_id` 去重**，`summary` 不吃 `result` 且四态恒出现）。
   `e2e-drop` 38→60 · 新增 `e2e-drop-records` 37。**#804 之前客户端捡不起东西照旧**。
 - 当前 open：#9 包体积 · #12~#19 素材 · #295 阶段三 ·
-  #403 帮会战 · #742 TLS · #808 地图重构（剩 **#812 分线副本**；
-  结算读 `map_rules`、掉落进 Room 暂未落地，重开条件见 docs/20）· **#801 掉落 epic 剩 #804/#805**。
+  #403 帮会战 · #742 TLS · #808 地图重构（**#812 规则层已关**，剩 **#1000 分线** / **#1001 副本与传送代价**；
+  掉落进 Room 仍未落地，重开条件见 docs/20）· **#801 掉落 epic 剩 #804/#805**。
   保持现状：技能 1011 / 快捷键 6 格 / 装备 7 部位。
 - **掉落已是世界实体（#802，PR #993 `89065e2a`，已关）**：`DropService` 是唯一权威（`ground`/`byId` + 终态
   `recent` 留 60s 接重发），`world_drops` 是投影（100ms 批量 upsert、重启清空），`drop_records` /
@@ -143,6 +157,6 @@ compose 五服务：admin:80 唯一入口 / game:8080 / server:3100 / realtime:3
   `tools/config-leak-allowlist.json`（config-leak）+ **进了配置快照的键还要加 `e2e-guard` 的
   `EXPECTED_CONFIG_KEYS`**（#770 踩到：前两项都过了，`make e2e-all` 才在 guard 十节报「白名单之外的项」）。
   新增 e2e 脚本别忘了 `tools/run-e2e.cjs` 的 `WEIGHT`（漏了只是分片不均，不报错）。
-- **CI 红的判据**：先在本地完整 verify（**88 套**）复跑——**本地能精确复现 = 代码/测试问题**（改字段名最容易漏
+- **CI 红的判据**：先在本地完整 verify（**89 套**）复跑——**本地能精确复现 = 代码/测试问题**（改字段名最容易漏
   「函数体内读点」，如 `find(m => m.instanceId === …)`）；只有本地绿而 CI 红才考虑分片负载，`gh run rerun --failed`。
   同一套件连续 ≥2 轮同断言红不要再当抖动。改广播帧字段后记得全量本地 verify，「本地绿」结论会过期。
