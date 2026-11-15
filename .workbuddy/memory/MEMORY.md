@@ -92,8 +92,11 @@ admin 退回 `127.0.0.1:8081` —— 宿主机 `:80` 只能有一个主人；开
   #403 帮会战（远期占位）。保持现状：技能 1011 / 快捷键 6 格 / 装备 7 部位。
 - **口径数字**：`docs/14` 无生成脚本、改接口手工加行，现 **266 = 8 + 68 + 190**；client 单测 **70 套**；
   e2e **92 套**（**按 `test:e2e*` 脚本数**，`ls server/test/e2e*.cjs` 是 91 个文件，差的那 1 个是
-  `test:e2e:backup` → `test/backup.cjs`；全仓一律按脚本数，别再写 90/91）；`make audit` **17 项**；
+  `test:e2e:backup` → `test/backup.cjs`；全仓一律按脚本数，别再写 90/91）；`make audit` **18 项**；
+  表 **76 = 39 配置 + 37 运行时**；管理端 **53 页面 / 54 路由**；客户端 **32 个 Manager**；结算缓存 **14**；
   `docs/37` 是最高优先单一来源。
+- **`docs/README` 目录表的行数列有守点**（#1039）：`audit-docs-toc` 按磁盘现算，**改完任何一篇文档先跑
+  `node tools/audit-docs-toc.cjs --write`**，否则 `make audit` 直接红。它同时守「每篇都要登记 + 序号与文件名一致」。
 - **新增 env 键 / 文案 / 节点名 / 颜色的 PR，静态审计预判三处登记**：`.env.example`（`audit-api-hardcode`）+
   `tools/config-leak-allowlist.json`（config-leak）+ 进了配置快照的键还要加 `e2e-guard` 的 `EXPECTED_CONFIG_KEYS`。
   新增 e2e 脚本别忘 `tools/run-e2e.cjs` 的 `WEIGHT`（漏了只是分片不均，不报错）。

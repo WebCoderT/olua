@@ -168,7 +168,7 @@ test/e2e-equip-in-align.cjs      装备内观几何专项（73 条断言，#523�
 
 **4.0 游戏数据的唯一权威 = 数据库**（#603 逐域上移，#655 收口）
 
-`server/data/config-sync.sql` 是**全部配置表的出厂快照**（38 张；等级曲线 24 段、装备变体行、
+`server/data/config-sync.sql` 是**全部配置表的出厂快照**（39 张；等级曲线 24 段、装备变体行、
 怪物 / 掉落 / 地图 / 刷怪区 / 特效 / 运行时参数 / 货币道具 / 升级卷轴都在里面）。空库启动时 `bootstrapConfigSnapshot()`
 整表灌入，之后运营在管理端改库，`make config-export` 把库重导回那份 SQL 提交 —— **多机同步靠 SQL，不靠种子**。
 
@@ -205,7 +205,7 @@ test/e2e-equip-in-align.cjs      装备内观几何专项（73 条断言，#523�
 
 多人协作各自跑本地时，配置靠 `make config-export` / `make config-import` 对齐（不碰运行时数据）：
 
-- **分类唯一处** `scripts/lib/config-tables.cjs`（38 张配置 + 24 张运行时）。库里出现**没归类的表**，
+- **分类唯一处** `scripts/lib/config-tables.cjs`（39 张配置 + 37 张运行时）。库里出现**没归类的表**，
   导出直接报错 —— 新加表忘了分类由这条守点抓（比「漏同步」好查得多）。
 - **整表替换**（每张表 `DELETE` + 逐行 `INSERT`）：upsert 表达不了删除，会让对方库里删掉的行永远留着。
   代价是文件必须全量，所以导入前校验「表清单完全一致 + 每表恰好一条 DELETE + 不含运行时表」，
