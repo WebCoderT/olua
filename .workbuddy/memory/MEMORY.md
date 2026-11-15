@@ -41,6 +41,8 @@
   `assertAllClassified()` 只在 `make config-export` 跑，常年没人导配置就发现不了 —— `zone_world_meta`（#961）
   就这么漏了一整轮，谁去导配置谁当场炸。改守点后按惯例做了反证（摘掉 `mail_broadcasts` → 红且指名道姓）。
 
+- **合并前的类型检查以 `make ci-static` 为准**（2026-11-15 #804 踩到）：同一个提交，worktree 里单跑
+  `make client-check` 报 0 错，`make ci-static`（自己先 `npm ci`）才报两处真错。别只信单跑一次的结果。
 - 工具链：只信 Grep 工具（BSD grep 交替恒空）· 批量替换 `perl -pi -e` · `curl --noproxy '*'` · 判进程 `kill -0`。
 
 ## 架构不变量（细节见 `topics/架构不变量.md`）
@@ -117,7 +119,7 @@ compose 五服务：admin:80 唯一入口 / game:8080 / server:3100 / realtime:3
   三层闸门：路径 `s<k>` 不符 → `421/50150`；票里的区不符 → 同上且**不消耗票**；`worldJoin` 用角色
   **现在的**区复核 → `close(4003)`，客户端**重取票**后立刻重连（连错 ≥3 次才退回退避）。
   `REALTIME_EMBEDDED=true` 时 `shardCount()` 强制 1（配错不该让人起不来）。`e2e-realtime-shard` 27 条。
-  下一步：**#812 分线/副本/map_rules**，或 #804/#805 掉落（#803 已落）。
+  下一步：**#812 分线/副本/map_rules**，或 **#805**（掉落 epic 最后一项；#802/#803/#804 已落）。
 - **epic #954 区服模型补完 —— 全部完成**（P0~P7 八个子 issue 全关，2026-11-15 关 epic）：
   #956 守点 #968 · #957 角色带区 #970 · #958 社交 #976 · #959 排行榜 #978 · #960 管理端单区 #984 ·
   #961 运营合区 #985 · #963 公告按区 #986 · #962 客户端选服 #989（`f6d8f35c`）。
@@ -142,18 +144,25 @@ compose 五服务：admin:80 唯一入口 / game:8080 / server:3100 / realtime:3
   两道保留闸取先到：每图 2000 条（攒 200 裁）+ 7 天（每 6h 扫，`≤0` 关闭）。
   读接口 `GET /admin/drops/records` + `/summary`（`modules/drops`，区走 `X-Zone-Id`，权限复用
   `event:read`，排序白名单，**不按 `drop_id` 去重**，`summary` 不吃 `result` 且四态恒出现）。
-  `e2e-drop` 38→60 · 新增 `e2e-drop-records` 37。**#804 之前客户端捡不起东西照旧**。
+  `e2e-drop` 38→60 · 新增 `e2e-drop-records` 37。客户端侧由 **#804** 接上（`sendPick(dropId)`）。
 - 当前 open：#9 包体积 · #12~#19 素材 · #295 阶段三 ·
   #403 帮会战 · #742 TLS · #808 地图重构（**#812 规则层已关**，剩 **#1000 分线** / **#1001 副本与传送代价**；
-  掉落进 Room 仍未落地，重开条件见 docs/20）· **#801 掉落 epic 剩 #804/#805**。
+  掉落进 Room 仍未落地，重开条件见 docs/20）· **#801 掉落 epic 剩 #805**。
   保持现状：技能 1011 / 快捷键 6 格 / 装备 7 部位。
 - **掉落已是世界实体（#802，PR #993 `89065e2a`，已关）**：`DropService` 是唯一权威（`ground`/`byId` + 终态
   `recent` 留 60s 接重发），`world_drops` 是投影（100ms 批量 upsert、重启清空），`drop_records` /
   `drop_clear_requests` 只建表（分别给 #803 / #805）。`pick` 只带 `dropId`、九步校验、11 种 `code`；
   第 2 步判图读 `roles.zoneOf` + `MapAtOfOnlineRole`（**不是在场表缓存**）。参数键名沿用库里的
   `pickAcceptRadius`（设计稿的 `pickRange` 已统一掉，0 = 闸关闭），新增只有 `ttlMs`/`protectMs`/
-  `maxGroundPerMap`/`announceBoss`。**#804 之前客户端捡不起东西**（仍发 castId+下标），已定先合再改。
-- `docs/14` 无生成脚本，改接口手工加行；现口径 **262 = 8 + 68 + 186**。client 单测可当门禁（**68 套**）。
+  `maxGroundPerMap`/`announceBoss`。客户端由 **#804** 接上（见下条）。
+- **#804 客户端掉落重写（PR #1008 `78cfb1a9`，已关）**：客户端只剩 `dropId` 口径 —— `sendPick(dropId)`、
+  铺地唯一入口（击杀者与旁观者同一广播同一形状）、`DropScatter.ts` 删除（坐标归服务端）、进图吃
+  `world.drops` 全量 + `dropSpawn`/`dropRemove`/`dropNotice`；时间轴只认相对量（`expireInMs` → 本地
+  + 3s 断网兜底，到期等 `dropRemove`）、**末段零提示**（issue 正文的「末 10 秒秒数」被参数表作废）；
+  九码文案 + 800ms 共用节流；`canPickLocally` fail-open（只省请求，引导第 3 步靠它）；归属头像要服务端
+  `ownerClass`/`ownerSex`（+`partyId`），客户端 `Mask.Type.GRAPHICS_ELLIPSE` 裁圆。
+  纯逻辑在 `ui/utils/drop/DropRule.ts`（不 import cc，可沙箱跑），结构断言在 `client/tools/test-drop-rule.cjs`。
+- `docs/14` 无生成脚本，改接口手工加行；现口径 **262 = 8 + 68 + 186**。client 单测可当门禁（**69 套**）。
   `docs/37` 是最高优先单一来源。
 - **新增 env 键 / 文案 / 节点名 / 颜色的 PR，静态审计要预判三处登记**：`.env.example`（audit-api-hardcode）+
   `tools/config-leak-allowlist.json`（config-leak）+ **进了配置快照的键还要加 `e2e-guard` 的
