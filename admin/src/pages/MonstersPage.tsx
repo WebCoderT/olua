@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import type { ReactNode } from "react";
 import { dropApi, formatTime, MONSTER_TIER_LABELS, monsterIcon, monsterOut, monstersApi, PERMISSION, skillsApi } from "../api";
 import type { AdminMonster, DropTable, Monster, MonsterAttributes, PageResult, Skill, UpdateMonster } from "../api";
@@ -557,8 +558,15 @@ function MonsterSkillsDialog({
  */
 export function MonstersPage() {
   const canWrite = hasPermission(PERMISSION.GAME_CONFIG_WRITE);
-  const [draft, setDraft] = useState({ keyword: "", tier: "" });
-  const [query, setQuery] = useState({ keyword: "", tier: "" });
+  /**
+   * 外部深链（#805）：怪物掉落反查页点「去怪物配置」时带 `?open=<monsterKey>`，
+   * 这里直接把那只怪的掉落弹窗打开 —— 运营不用在 200 多只怪里再找一遍。
+   */
+  const [searchParams] = useSearchParams();
+  const openKey = searchParams.get("open");
+  const initialKeyword = searchParams.get("keyword") ?? "";
+  const [draft, setDraft] = useState({ keyword: initialKeyword, tier: "" });
+  const [query, setQuery] = useState({ keyword: initialKeyword, tier: "" });
   const [page, setPage] = useState(1);
   const [size, setSize] = useState(20);
   const [data, setData] = useState<PageResult<AdminMonster> | null>(null);
@@ -603,6 +611,29 @@ export function MonstersPage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  /**
+   * 深链打开掉落弹窗（#805）：反查页点「去怪物配置」带 `?open=<monsterKey>` 过来。
+   *
+   * 用 `list({ keyword })` 而不是新增一个「按 key 取详情」的接口：怪物页本来就有这个查询，
+   * 而且 `keyword` 命中的第一条不一定就是目标（模糊匹配），所以再按 `id` 精确挑一次。
+   */
+  useEffect(() => {
+    if (!openKey) return;
+    let alive = true;
+    void (async () => {
+      try {
+        const result = await monstersApi.list({ page: 1, size: 10, keyword: openKey });
+        const target = result.list.find((row) => row.id === openKey);
+        if (alive && target) setDropTarget(target);
+      } catch {
+        /* 错误已由请求层统一提示 */
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [openKey]);
 
   const submitSearch = () => {
     setPage(1);

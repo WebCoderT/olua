@@ -271,7 +271,7 @@ export const routes = {
      */
     version: "/admin/config/version",
   },
-  /** adminDrop 模块（9 个接口） */
+  /** adminDrop 模块（12 个接口） */
   adminDrop: {
     /**
      * 具名掉落表列表（GET /admin/drop-tables）
@@ -297,6 +297,24 @@ export const routes = {
      * **部分更新**：只改请求体里出现的字段（picks / entries）。
      */
     updateTable: (id: string) => `/admin/drop-tables/${encodeURIComponent(id)}`,
+    /**
+     * 当前地面掉落（GET /admin/drops/ground）
+     *
+     * 一页「现在地上有什么」：哪张图、什么物品、谁打的、落在哪、还剩多久过期、是否在保护期。
+     */
+    groundList: "/admin/drops/ground",
+    /**
+     * 当前地面概况（总件数 / 保护中 / 即将过期 / 单图水位）（GET /admin/drops/ground/summary）
+     *
+     * 监控页顶部的四格：当前区地上总件数、还在归属保护期内的件数、窗口内即将过期的件数，
+     */
+    groundSummary: "/admin/drops/ground/summary",
+    /**
+     * 怪物掉落反查（这件东西都有谁会掉）（GET /admin/drops/monster-index）
+     *
+     * 把每只怪的掉落池**摊平**成「怪物 × 物品」的一行：权重、概率、件数区间、绑定状态，
+     */
+    monsterIndex: "/admin/drops/monster-index",
     /**
      * 掉落流水（GET /admin/drops/records）
      *

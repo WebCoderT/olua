@@ -238,6 +238,16 @@ import {
   DropRecordSummaryDto,
   DropRecordSummaryItemDto,
 } from "../modules/drops/dto/drop-record.dto";
+import {
+  DropGroundDto,
+  DropGroundPageDto,
+  DropGroundQueryDto,
+  DropGroundSummaryDto,
+  DropGroundSummaryItemDto,
+  MonsterDropIndexItemDto,
+  MonsterDropIndexPageDto,
+  MonsterDropIndexQueryDto,
+} from "../modules/drops/dto/drop-ground.dto";
 
 /**
  * Swagger 文档要注册的模型清单
@@ -665,4 +675,13 @@ export const SWAGGER_MODELS = [
   DropRecordQueryDto,
   DropRecordSummaryDto,
   DropRecordSummaryItemDto,
+  // 掉落监控与反查（#805）：地面投影 / 概况 / 怪物×物品反查
+  DropGroundDto,
+  DropGroundPageDto,
+  DropGroundQueryDto,
+  DropGroundSummaryDto,
+  DropGroundSummaryItemDto,
+  MonsterDropIndexItemDto,
+  MonsterDropIndexPageDto,
+  MonsterDropIndexQueryDto,
 ];

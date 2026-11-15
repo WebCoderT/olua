@@ -118,6 +118,11 @@
       "route": "GET /admin/stats/recent",
       "issue": "#960",
       "reason": "最近动态读的是审计流水，**刻意跨区**（理由同 admin/audit-logs）：在 A 区也要能看到同事刚在 B 区做了什么"
+    },
+    {
+      "route": "GET /admin/drops/monster-index",
+      "issue": "#805",
+      "reason": "掉落**配置**反查（「这件东西谁会掉」）：配置全区共用一份，按区筛只会让同一个答案在不同区长得不一样。同控制器的 ground / records 全部用 @ZoneContext 取区，所以不能整文件豁免"
     }
   ]
 }

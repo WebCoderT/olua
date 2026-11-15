@@ -4576,9 +4576,281 @@
         ]
       }
     },
+    "/admin/drops/ground/summary": {
+      "get": {
+        "description": "监控页顶部的四格：当前区地上总件数、还在归属保护期内的件数、窗口内即将过期的件数，\n以及按图分组的明细（每图件数 + 单图上限 `cap`，水位 = total / cap）。\n\n四个数字从**同一次**分组查询求和而来，不会是四个不同时间点的快照。\n\n`serverNow` 一并返回：页面算「还剩几秒」用它，不读本机时钟（客户端时钟漂了也不影响）。\n\n数据来自 `world_drops` 投影 —— 实时进程 100ms 批量刷一次，**最多差一拍**，不承诺毫秒级精确。\n\n**区取自请求头 `X-Zone-Id`**（必填；缺失 / 非法 → 400 `ZONE_REQUIRED`）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`drop:read`（查看掉落记录；角色：超级管理员 / 管理员 / 只读观察员）",
+        "operationId": "adminDrop.groundSummary",
+        "parameters": [
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "description": "页码，从 1 开始",
+            "schema": {
+              "minimum": 1,
+              "default": 1,
+              "example": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "size",
+            "required": false,
+            "in": "query",
+            "description": "每页条数（1~100）",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
+              "example": 20,
+              "type": "number"
+            }
+          },
+          {
+            "name": "keyword",
+            "required": false,
+            "in": "query",
+            "description": "关键字（不同接口含义见其说明）",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sort",
+            "required": false,
+            "in": "query",
+            "description": "排序字段（取值见各接口说明，未登记的值会退回默认排序）",
+            "schema": {
+              "example": "createdAt",
+              "type": "string"
+            }
+          },
+          {
+            "name": "order",
+            "required": false,
+            "in": "query",
+            "description": "排序方向：asc 升序 / desc 降序",
+            "schema": {
+              "default": "desc",
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ]
+            }
+          },
+          {
+            "name": "mapId",
+            "required": false,
+            "in": "query",
+            "description": "只看某张图（地图 id）",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "ownerName",
+            "required": false,
+            "in": "query",
+            "description": "归属者角色名（模糊匹配；`_` / `%` 会被转义）",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Zone-Id",
+            "in": "header",
+            "description": "当前作业区服（未合并的区 id）",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "四格数字 + 按图明细 + 服务端时间",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/DropGroundSummaryDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "当前地面概况（总件数 / 保护中 / 即将过期 / 单图水位）",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/DropGroundSummaryDto"
+        },
+        "x-olua-permissions": [
+          "drop:read"
+        ],
+        "x-olua-query-schema": {
+          "$ref": "#/components/schemas/DropGroundQueryDto"
+        }
+      }
+    },
+    "/admin/drops/ground": {
+      "get": {
+        "description": "一页「现在地上有什么」：哪张图、什么物品、谁打的、落在哪、还剩多久过期、是否在保护期。\n\n`mapId` 精确、`keyword` 模糊匹配**物品 id**（`world_drops` 只存 id 不存名字，显示名由接口\n按当前配置拼好返回）、`ownerName` 模糊匹配归属者角色名。条件之间是「与」。\n\n**排序**：`sort` 取 `createdAt` / `expireAt` / `protectUntil`，默认 `expireAt` 升序 —— 最先消失的排在最上面，运营才来得及去现场看。\n\n`remainMs` / `totalMs` / `protecting` 都是服务端算好的：页面不读时钟、也不把 `ttlMs` 写死。\n\n**区取自请求头 `X-Zone-Id`**（必填；缺失 / 非法 → 400 `ZONE_REQUIRED`）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`drop:read`（查看掉落记录；角色：超级管理员 / 管理员 / 只读观察员）",
+        "operationId": "adminDrop.groundList",
+        "parameters": [
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "description": "页码，从 1 开始",
+            "schema": {
+              "minimum": 1,
+              "default": 1,
+              "example": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "size",
+            "required": false,
+            "in": "query",
+            "description": "每页条数（1~100）",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
+              "example": 20,
+              "type": "number"
+            }
+          },
+          {
+            "name": "keyword",
+            "required": false,
+            "in": "query",
+            "description": "关键字（不同接口含义见其说明）",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sort",
+            "required": false,
+            "in": "query",
+            "description": "排序字段（取值见各接口说明，未登记的值会退回默认排序）",
+            "schema": {
+              "example": "createdAt",
+              "type": "string"
+            }
+          },
+          {
+            "name": "order",
+            "required": false,
+            "in": "query",
+            "description": "排序方向：asc 升序 / desc 降序",
+            "schema": {
+              "default": "desc",
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ]
+            }
+          },
+          {
+            "name": "mapId",
+            "required": false,
+            "in": "query",
+            "description": "只看某张图（地图 id）",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "ownerName",
+            "required": false,
+            "in": "query",
+            "description": "归属者角色名（模糊匹配；`_` / `%` 会被转义）",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Zone-Id",
+            "in": "header",
+            "description": "当前作业区服（未合并的区 id）",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "分页结果（list/total/page/size）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/DropGroundPageDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "当前地面掉落",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/DropGroundPageDto"
+        },
+        "x-olua-permissions": [
+          "drop:read"
+        ],
+        "x-olua-query-schema": {
+          "$ref": "#/components/schemas/DropGroundQueryDto"
+        }
+      }
+    },
     "/admin/drops/records/summary": {
       "get": {
-        "description": "页面顶部的概况卡：按终态（picked / expired / overflow / restart_lost）分组计数。\n\n**四个终态恒出现**（没有数据的给 0）：少一格会让运营以为「这种结果不存在」，而 0 一眼能看出「还没发生过」。\n\n`result` 筛选在这里**不生效**（刻意）：传了就是「只看 picked」，再按 picked 分组只剩一行。\n其余条件（`mapId` / `ownerName` / `goodId` / `from` / `to`）照常生效。\n\n**区取自请求头 `X-Zone-Id`**（必填；缺失 / 非法 → 400 `ZONE_REQUIRED`）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`event:read`（查看玩家行为流水；角色：超级管理员 / 管理员）",
+        "description": "页面顶部的概况卡：按终态（picked / expired / overflow / restart_lost）分组计数。\n\n**四个终态恒出现**（没有数据的给 0）：少一格会让运营以为「这种结果不存在」，而 0 一眼能看出「还没发生过」。\n\n`result` 筛选在这里**不生效**（刻意）：传了就是「只看 picked」，再按 picked 分组只剩一行。\n其余条件（`mapId` / `ownerName` / `goodId` / `from` / `to`）照常生效。\n\n**区取自请求头 `X-Zone-Id`**（必填；缺失 / 非法 → 400 `ZONE_REQUIRED`）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`drop:read`（查看掉落记录；角色：超级管理员 / 管理员 / 只读观察员）",
         "operationId": "adminDrop.recordSummary",
         "parameters": [
           {
@@ -4749,7 +5021,7 @@
           "$ref": "#/components/schemas/DropRecordSummaryDto"
         },
         "x-olua-permissions": [
-          "event:read"
+          "drop:read"
         ],
         "x-olua-query-schema": {
           "$ref": "#/components/schemas/DropRecordQueryDto"
@@ -4758,7 +5030,7 @@
     },
     "/admin/drops/records": {
       "get": {
-        "description": "一页掉落终态记录（一件掉落的一生只有一行）：谁打的、掉在哪张图、在地上待了多久、最后被谁捡走 / 怎么消失的。\n\n`result` 取 `picked` / `expired` / `overflow` / `restart_lost`；`mapId` / `ownerName`（模糊）/ `goodId`（精确）/ `from` / `to`（按掉落落地时刻）均可选，条件之间是「与」。\n\n**排序**：`sort` 取 `createdAt` / `resolvedAt` / `livedMs`，`order` 取 asc / desc（默认 `resolvedAt` 倒序）。\n\n**同 `dropId` 可能有多行**：`dropId` 里的序号每区自增，进程重启后从 1 重新开始 —— 所以两次\n进程生命周期里可能生成同一个 `dropId`，而它们的流水都留着。排序与翻页一律按自增 `id`，\n**不要按 `dropId` 去重**（docs/18 §3.5）。\n\n**保留策略**：每区每图 `DROP_RECORD_KEEP_PER_MAP`（默认 2000）条 + `DROP_RECORD_RETENTION_DAYS`（默认 7 天），两道闸取先到 —— 「三天前的记录查不到」既可能是被条数挤掉、也可能是超了保留天数。\n\n**区取自请求头 `X-Zone-Id`**（必填；缺失 / 非法 → 400 `ZONE_REQUIRED`）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`event:read`（查看玩家行为流水；角色：超级管理员 / 管理员）",
+        "description": "一页掉落终态记录（一件掉落的一生只有一行）：谁打的、掉在哪张图、在地上待了多久、最后被谁捡走 / 怎么消失的。\n\n`result` 取 `picked` / `expired` / `overflow` / `restart_lost`；`mapId` / `ownerName`（模糊）/ `goodId`（精确）/ `from` / `to`（按掉落落地时刻）均可选，条件之间是「与」。\n\n**排序**：`sort` 取 `createdAt` / `resolvedAt` / `livedMs`，`order` 取 asc / desc（默认 `resolvedAt` 倒序）。\n\n**同 `dropId` 可能有多行**：`dropId` 里的序号每区自增，进程重启后从 1 重新开始 —— 所以两次\n进程生命周期里可能生成同一个 `dropId`，而它们的流水都留着。排序与翻页一律按自增 `id`，\n**不要按 `dropId` 去重**（docs/18 §3.5）。\n\n**保留策略**：每区每图 `DROP_RECORD_KEEP_PER_MAP`（默认 2000）条 + `DROP_RECORD_RETENTION_DAYS`（默认 7 天），两道闸取先到 —— 「三天前的记录查不到」既可能是被条数挤掉、也可能是超了保留天数。\n\n**区取自请求头 `X-Zone-Id`**（必填；缺失 / 非法 → 400 `ZONE_REQUIRED`）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`drop:read`（查看掉落记录；角色：超级管理员 / 管理员 / 只读观察员）",
         "operationId": "adminDrop.recordList",
         "parameters": [
           {
@@ -4929,10 +5201,146 @@
           "$ref": "#/components/schemas/DropRecordPageDto"
         },
         "x-olua-permissions": [
-          "event:read"
+          "drop:read"
         ],
         "x-olua-query-schema": {
           "$ref": "#/components/schemas/DropRecordQueryDto"
+        }
+      }
+    },
+    "/admin/drops/monster-index": {
+      "get": {
+        "description": "把每只怪的掉落池**摊平**成「怪物 × 物品」的一行：权重、概率、件数区间、绑定状态，\n点一行可以跳到怪物配置页打开那只怪的掉落弹窗。\n\n两种配置写法都会摊平：内联条目池（`source=entries`）与引用具名表（`source=table`）；\n没配掉落（`source=none`，走兜底表）的怪不产生行 —— 「走兜底」不是一个可比对的条目。\n\n`goodId` 精确（查「这件装备谁掉」）、`monsterKey` 精确、`keyword` 模糊匹配物品 id。\n结果按怪物 key 再按物品 id 稳定排序。\n\n**不分区**：这是配置反查，配置是全区共用的一份。请求头 `X-Zone-Id` 仍要求（管理端没有\n「无区」会话），只是本接口不拿它筛数据。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`drop:read`（查看掉落记录；角色：超级管理员 / 管理员 / 只读观察员）",
+        "operationId": "adminDrop.monsterIndex",
+        "parameters": [
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "description": "页码，从 1 开始",
+            "schema": {
+              "minimum": 1,
+              "default": 1,
+              "example": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "size",
+            "required": false,
+            "in": "query",
+            "description": "每页条数（1~100）",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
+              "example": 20,
+              "type": "number"
+            }
+          },
+          {
+            "name": "keyword",
+            "required": false,
+            "in": "query",
+            "description": "关键字（不同接口含义见其说明）",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sort",
+            "required": false,
+            "in": "query",
+            "description": "排序字段（取值见各接口说明，未登记的值会退回默认排序）",
+            "schema": {
+              "example": "createdAt",
+              "type": "string"
+            }
+          },
+          {
+            "name": "order",
+            "required": false,
+            "in": "query",
+            "description": "排序方向：asc 升序 / desc 降序",
+            "schema": {
+              "default": "desc",
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ]
+            }
+          },
+          {
+            "name": "goodId",
+            "required": false,
+            "in": "query",
+            "description": "只看某个物品（精确匹配：这件东西都有谁会掉）",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "monsterKey",
+            "required": false,
+            "in": "query",
+            "description": "只看某只怪（精确匹配怪物 key）",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Zone-Id",
+            "in": "header",
+            "description": "当前作业区服（未合并的区 id）",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "分页结果（list/total/page/size）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/MonsterDropIndexPageDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "怪物掉落反查（这件东西都有谁会掉）",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/MonsterDropIndexPageDto"
+        },
+        "x-olua-permissions": [
+          "drop:read"
+        ],
+        "x-olua-query-schema": {
+          "$ref": "#/components/schemas/MonsterDropIndexQueryDto"
         }
       }
     },
@@ -21288,6 +21696,239 @@
           "types"
         ]
       },
+      "DropGroundSummaryItemDto": {
+        "type": "object",
+        "properties": {
+          "mapId": {
+            "type": "string",
+            "description": "地图 id",
+            "example": "1"
+          },
+          "total": {
+            "type": "number",
+            "description": "这张图地上的件数"
+          },
+          "protectedTotal": {
+            "type": "number",
+            "description": "这张图还在归属保护期内的件数"
+          },
+          "expiringTotal": {
+            "type": "number",
+            "description": "这张图在窗口内就要过期的件数"
+          },
+          "cap": {
+            "type": "number",
+            "description": "单图上限（运行时参数 `drop.maxGroundPerMap`）；水位 = total / cap",
+            "nullable": true
+          }
+        },
+        "required": [
+          "mapId",
+          "total",
+          "protectedTotal",
+          "expiringTotal",
+          "cap"
+        ]
+      },
+      "DropGroundSummaryDto": {
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "number",
+            "description": "当前区地上总件数"
+          },
+          "protectedTotal": {
+            "type": "number",
+            "description": "还在归属保护期内的总件数"
+          },
+          "expiringTotal": {
+            "type": "number",
+            "description": "在窗口内就要过期的总件数"
+          },
+          "expiringWindowMs": {
+            "type": "number",
+            "description": "「即将过期」的窗口长度（毫秒）",
+            "example": 60000
+          },
+          "capPerMap": {
+            "type": "number",
+            "description": "单图上限（运行时参数 `drop.maxGroundPerMap`）；`null` = 读不到该参数（页面显示「上限未知」，不拿一个写死的数字冒充配置值）",
+            "nullable": true
+          },
+          "byMap": {
+            "description": "按图分组的明细（没有掉落时为空数组）",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DropGroundSummaryItemDto"
+            }
+          },
+          "serverNow": {
+            "type": "number",
+            "description": "服务端此刻的时间戳（页面算剩余秒数用它，不读本机时钟）"
+          }
+        },
+        "required": [
+          "total",
+          "protectedTotal",
+          "expiringTotal",
+          "expiringWindowMs",
+          "capPerMap",
+          "byMap",
+          "serverNow"
+        ]
+      },
+      "DropGroundDto": {
+        "type": "object",
+        "properties": {
+          "dropId": {
+            "type": "string",
+            "description": "掉落 id（`d_<区>_<图>_<序号>`）",
+            "example": "d_1_1_42"
+          },
+          "zoneId": {
+            "type": "number",
+            "description": "区服 id"
+          },
+          "mapId": {
+            "type": "string",
+            "description": "地图 id",
+            "example": "1"
+          },
+          "goodId": {
+            "type": "string",
+            "description": "物品 id",
+            "example": "drug_hp_1"
+          },
+          "goodLabel": {
+            "type": "string",
+            "description": "物品显示名（按**当前**配置现查；配置已删时回落成 id）",
+            "example": "金创药（小）"
+          },
+          "count": {
+            "type": "number",
+            "description": "件数"
+          },
+          "bound": {
+            "type": "boolean",
+            "description": "是否绑定（掉落那一刻的判定结果）"
+          },
+          "x": {
+            "type": "number",
+            "description": "落点 x（服务端散落算出来的，客户端不再自己撒）"
+          },
+          "y": {
+            "type": "number",
+            "description": "落点 y"
+          },
+          "ownerAccountId": {
+            "type": "string",
+            "description": "归属者账号 id"
+          },
+          "ownerRoleId": {
+            "type": "string",
+            "description": "归属者角色 id"
+          },
+          "ownerName": {
+            "type": "string",
+            "description": "归属者角色名（保护期内的「XX的」就是这个）"
+          },
+          "monsterKey": {
+            "type": "string",
+            "description": "来源怪物 key",
+            "example": "slime_1"
+          },
+          "monsterLabel": {
+            "type": "string",
+            "description": "来源怪物显示名（快照；存量行为 null）",
+            "nullable": true
+          },
+          "monsterInstanceId": {
+            "type": "string",
+            "description": "来源怪物实例 id（同 key 的第几只）"
+          },
+          "createdAt": {
+            "type": "number",
+            "description": "落地时刻（毫秒）"
+          },
+          "expireAt": {
+            "type": "number",
+            "description": "过期时刻（毫秒）"
+          },
+          "protectUntil": {
+            "type": "number",
+            "description": "归属保护期结束时刻（毫秒；之前只有归属者与队友能捡）"
+          },
+          "remainMs": {
+            "type": "number",
+            "description": "还剩多少毫秒过期（服务端算：max(0, expireAt - now)）"
+          },
+          "totalMs": {
+            "type": "number",
+            "description": "这件掉落的总存活时长（= expireAt - createdAt，进度条的分母）",
+            "example": 180000
+          },
+          "protecting": {
+            "type": "boolean",
+            "description": "此刻是否还在保护期（= protectUntil > now，服务端判，页面不自己比时钟）"
+          }
+        },
+        "required": [
+          "dropId",
+          "zoneId",
+          "mapId",
+          "goodId",
+          "goodLabel",
+          "count",
+          "bound",
+          "x",
+          "y",
+          "ownerAccountId",
+          "ownerRoleId",
+          "ownerName",
+          "monsterKey",
+          "monsterLabel",
+          "monsterInstanceId",
+          "createdAt",
+          "expireAt",
+          "protectUntil",
+          "remainMs",
+          "totalMs",
+          "protecting"
+        ]
+      },
+      "DropGroundPageDto": {
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "number",
+            "description": "总条数",
+            "example": 42
+          },
+          "page": {
+            "type": "number",
+            "description": "当前页码（从 1 开始）",
+            "example": 1
+          },
+          "size": {
+            "type": "number",
+            "description": "每页条数",
+            "example": 20
+          },
+          "list": {
+            "description": "当前页的地面掉落（默认按过期时刻升序：最先消失的在前）",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DropGroundDto"
+            }
+          }
+        },
+        "required": [
+          "total",
+          "page",
+          "size",
+          "list"
+        ]
+      },
       "DropRecordSummaryItemDto": {
         "type": "object",
         "properties": {
@@ -21508,6 +22149,118 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/DropRecordDto"
+            }
+          }
+        },
+        "required": [
+          "total",
+          "page",
+          "size",
+          "list"
+        ]
+      },
+      "MonsterDropIndexItemDto": {
+        "type": "object",
+        "properties": {
+          "monsterKey": {
+            "type": "string",
+            "description": "怪物 key（= 怪物配置主键）",
+            "example": "slime_1"
+          },
+          "monsterLabel": {
+            "type": "string",
+            "description": "怪物显示名（按当前配置现查；查不到回落成 key）"
+          },
+          "goodId": {
+            "type": "string",
+            "description": "物品 id",
+            "example": "drug_hp_1"
+          },
+          "goodLabel": {
+            "type": "string",
+            "description": "物品显示名（按当前配置现查；查不到回落成 id）"
+          },
+          "source": {
+            "type": "string",
+            "description": "条目来源：`entries`（这只怪内联）/ `table`（引用具名表）",
+            "enum": [
+              "entries",
+              "table"
+            ]
+          },
+          "tableId": {
+            "type": "string",
+            "description": "引用的具名表 id（`source=entries` 时为 null）",
+            "nullable": true
+          },
+          "weight": {
+            "type": "number",
+            "description": "抽取权重（同一池内相对值，缺省 1）"
+          },
+          "chance": {
+            "type": "number",
+            "description": "掉落概率 0~1（抽中后再生效，缺省 1 = 必掉）"
+          },
+          "minCount": {
+            "type": "number",
+            "description": "件数下限（count 区间的第一位）"
+          },
+          "maxCount": {
+            "type": "number",
+            "description": "件数上限（count 区间的第二位）"
+          },
+          "bindDrops": {
+            "type": "boolean",
+            "description": "这只怪的掉落是否整体强制绑定（`monster_drops.bind_drops`）"
+          },
+          "bindOnDrop": {
+            "type": "boolean",
+            "description": "物品自身是否「掉出即绑定」（五张配置表的 `bind_on_drop`）"
+          },
+          "bound": {
+            "type": "boolean",
+            "description": "合成结论：两者取「或」—— 任一为真，掉出来就是绑定的（与掉落结算的判定同一口径）"
+          }
+        },
+        "required": [
+          "monsterKey",
+          "monsterLabel",
+          "goodId",
+          "goodLabel",
+          "source",
+          "tableId",
+          "weight",
+          "chance",
+          "minCount",
+          "maxCount",
+          "bindDrops",
+          "bindOnDrop",
+          "bound"
+        ]
+      },
+      "MonsterDropIndexPageDto": {
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "number",
+            "description": "总条数",
+            "example": 42
+          },
+          "page": {
+            "type": "number",
+            "description": "当前页码（从 1 开始）",
+            "example": 1
+          },
+          "size": {
+            "type": "number",
+            "description": "每页条数",
+            "example": 20
+          },
+          "list": {
+            "description": "当前页的反查行",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MonsterDropIndexItemDto"
             }
           }
         },
@@ -35158,6 +35911,98 @@
             "type": "number",
             "description": "结束时间（毫秒时间戳，含）",
             "minimum": 0
+          }
+        }
+      },
+      "DropGroundQueryDto": {
+        "type": "object",
+        "properties": {
+          "page": {
+            "type": "number",
+            "description": "页码，从 1 开始",
+            "example": 1,
+            "default": 1,
+            "minimum": 1
+          },
+          "size": {
+            "type": "number",
+            "description": "每页条数（1~100）",
+            "example": 20,
+            "default": 20,
+            "minimum": 1,
+            "maximum": 100
+          },
+          "keyword": {
+            "type": "string",
+            "description": "关键字（不同接口含义见其说明）"
+          },
+          "sort": {
+            "type": "string",
+            "description": "排序字段（取值见各接口说明，未登记的值会退回默认排序）",
+            "example": "createdAt"
+          },
+          "order": {
+            "type": "string",
+            "description": "排序方向：asc 升序 / desc 降序",
+            "enum": [
+              "asc",
+              "desc"
+            ],
+            "default": "desc"
+          },
+          "mapId": {
+            "type": "string",
+            "description": "只看某张图（地图 id）"
+          },
+          "ownerName": {
+            "type": "string",
+            "description": "归属者角色名（模糊匹配；`_` / `%` 会被转义）"
+          }
+        }
+      },
+      "MonsterDropIndexQueryDto": {
+        "type": "object",
+        "properties": {
+          "page": {
+            "type": "number",
+            "description": "页码，从 1 开始",
+            "example": 1,
+            "default": 1,
+            "minimum": 1
+          },
+          "size": {
+            "type": "number",
+            "description": "每页条数（1~100）",
+            "example": 20,
+            "default": 20,
+            "minimum": 1,
+            "maximum": 100
+          },
+          "keyword": {
+            "type": "string",
+            "description": "关键字（不同接口含义见其说明）"
+          },
+          "sort": {
+            "type": "string",
+            "description": "排序字段（取值见各接口说明，未登记的值会退回默认排序）",
+            "example": "createdAt"
+          },
+          "order": {
+            "type": "string",
+            "description": "排序方向：asc 升序 / desc 降序",
+            "enum": [
+              "asc",
+              "desc"
+            ],
+            "default": "desc"
+          },
+          "goodId": {
+            "type": "string",
+            "description": "只看某个物品（精确匹配：这件东西都有谁会掉）"
+          },
+          "monsterKey": {
+            "type": "string",
+            "description": "只看某只怪（精确匹配怪物 key）"
           }
         }
       }

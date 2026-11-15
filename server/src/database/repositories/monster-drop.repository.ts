@@ -63,6 +63,16 @@ export class MonsterDropRepository {
     );
   }
 
+  /**
+   * 全部掉落配置行（管理端「怪物掉落反查」用，#805）
+   *
+   * 这张表与怪物一一对应（主键 `monster_key`，清单固定），行数就是怪物数量级 ——
+   * 反查要按「物品」横向扫全部怪，分页取反而会把答案切碎，一次全读最直白。
+   */
+  listAll(): MonsterDropRow[] {
+    return this.db.all<MonsterDropRow>("SELECT * FROM monster_drops ORDER BY monster_key ASC");
+  }
+
   /** 分页检索（默认按 key 数值升序 —— 与怪物配置页同一动线） */
   list(options: MonsterDropListOptions): MonsterDropRow[] {
     const { clause, params } = this.where(options);

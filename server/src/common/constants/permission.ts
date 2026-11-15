@@ -126,6 +126,18 @@ export const Permission = {
   EVENT_READ: "event:read",
 
   /**
+   * 查看掉落记录（地面监控 + 终态流水 + 怪物掉落反查，#805）
+   *
+   * **与 `event:read` 分开、并且给只读观察员**：这两类数据看着都「有人名」，但定位不同 ——
+   * `event_logs` 记的是「某个玩家什么时候在哪做了什么」（含来源 IP），是查人用的；
+   * 掉落这边回答的是「这件东西现在在哪、最后去哪了」，主角是**物品**，人名只是归属者 / 拾取者，
+   * 与 `role:read`（已给观察员）同一量级。观察员的定位是「看业务数据」，掉落属于业务数据。
+   *
+   * 写入侧（按图清空地面）另有一个写权限点，不借用这个读权限。
+   */
+  DROP_READ: "drop:read",
+
+  /**
    * 查看系统信息（版本 / 运行时长 / 数据库体积与行数 / 脱敏配置快照）
    *
    * 同样不给只读观察员：这一页暴露部署形态（数据文件路径、限流与保留策略的具体阈值），
@@ -250,6 +262,7 @@ export const ROLE_PERMISSIONS: Record<AdminRoleValue, PermissionValue[]> = {
     Permission.GAME_CONFIG_READ,
     Permission.ZONE_READ,
     Permission.GUILD_READ,
+    Permission.DROP_READ,
   ],
 };
 
@@ -284,6 +297,7 @@ export const PERMISSION_LABELS: Record<PermissionValue, string> = {
   [Permission.ADMIN_MANAGE]: "管理管理员",
   [Permission.AUDIT_READ]: "查看操作日志",
   [Permission.EVENT_READ]: "查看玩家行为流水",
+  [Permission.DROP_READ]: "查看掉落记录",
   [Permission.SYSTEM_READ]: "查看系统信息",
   [Permission.GAME_CONFIG_READ]: "查看养成配置",
   [Permission.GAME_CONFIG_WRITE]: "修改养成配置",

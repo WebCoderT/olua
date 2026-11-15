@@ -389,3 +389,20 @@ export const DROP_RECORD_SORT: SortSpec<"createdAt" | "resolvedAt" | "livedMs"> 
   default: "resolvedAt",
   defaultOrder: "desc",
 };
+
+/**
+ * 当前地面掉落（`world_drops` 投影，#805）：默认按**过期时刻升序**
+ *
+ * 监控页要回答的是「接下来会消失的是什么」—— 先到期的排在最上面，运营才来得及去现场看。
+ * 想按「刚掉下来的」看就 `sort=createdAt&order=desc`；保护期用 `protectUntil`。
+ */
+export const DROP_GROUND_SORT: SortSpec<"createdAt" | "expireAt" | "protectUntil"> = {
+  columns: {
+    createdAt: "created_at",
+    expireAt: "expire_at",
+    protectUntil: "protect_until",
+  },
+  default: "expireAt",
+  defaultOrder: "asc",
+};
+

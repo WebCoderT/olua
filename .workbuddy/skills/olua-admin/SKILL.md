@@ -78,7 +78,7 @@ await authApi.login({ username, password }, { silent: true }); // 表单自己�
 - `api/types.ts` 的 `PERMISSION`（与服务端 `common/constants/permission.ts` **一一对应**；`gameConfig:read/write` 养成配置、`account:password` 重置玩家口令、`account:email` 补录 / 查看玩家邮箱、`announcement:*` 公告、`mail:*` 邮件、`audit:read` 查操作日志与 `system:read` 看系统信息是逐个后加的）；
 - `store/session.hasPermission`（**脏会话兜底空数组 = 最小权限**）；
 - 导航项带 `permission` 过滤；写操作用 `disabled`；`App.tsx` 用 `RequirePermission` 外壳包住页面；
-- **导航是三级结构**（`Layout.tsx`，#710 从「组 → 项」细分成「组 → 小节 → 页」）：顶层独立项 `NAV_TOP`（概览）+ `NAV_GROUPS` 四个功能域（运营管理 / 战斗与装备 / 养成与玩法 / 系统管理）+ 其下 10 个小节（账号与区服 / 玩家与社区 / 装备 / 对齐工作台 / 战斗配置 / 世界与表现 / 参数与引导 / 角色养成 / 物品与商城 / 玩法）+ 41 个页面叶子；
+- **导航是三级结构**（`Layout.tsx`，#710 从「组 → 项」细分成「组 → 小节 → 页」）：顶层独立项 `NAV_TOP`（概览）+ `NAV_GROUPS` 四个功能域（运营管理 / 战斗与装备 / 养成与玩法 / 系统管理）+ 其下 11 个小节（账号与区服 / 玩家与社区 / 装备 / 对齐工作台 / 战斗配置 / 掉落 / 世界与表现 / 参数与引导 / 角色养成 / 物品与商城 / 玩法）+ 47 个页面叶子；
   子树里**全部无权限时整棵隐藏**（小节与组都是）；组与小节都可折叠，展开 key = 各级 label 用 `/` 连接（改名 = 那棵子树偏好重置，无损），偏好记在 localStorage `olua-admin-nav-expanded`；路由仍是扁平路径（`App.tsx` 不动），层级只是侧栏的视觉与交互；
   加页面 = 往某个小节里塞一个 `NavLeaf`（`to` / `label` / `permission`），**别为了放不下就新开一个组** —— 先看现有小节语义是否覆盖；
 - **不需要权限点的页面**（如「我的账号」）直接挂路由，不进 `NAV_TOP` / `NAV_GROUPS`（它是每个人的私有页，放顶部身份栏更顺手）；
@@ -295,7 +295,7 @@ await authApi.login({ username, password }, { silent: true }); // 表单自己�
 | 区域 | 行为 |
 |---|---|
 | 外层 `<div>` | `h-screen overflow-hidden` —— 文档高度恒等于视口（`documentElement.scrollHeight === clientHeight`） |
-| 左侧 `<aside>` | `overflow-hidden` + 标题 `shrink-0`；里面 `<nav>` 是 `min-h-0 flex-1 overflow-y-auto`，**42 个叶子（概览 + 四个功能域 / 10 个小节）全在这条侧栏里滚** |
+| 左侧 `<aside>` | `overflow-hidden` + 标题 `shrink-0`；里面 `<nav>` 是 `min-h-0 flex-1 overflow-y-auto`，**48 个叶子（概览 + 四个功能域 / 11 个小节）全在这条侧栏里滚** |
 | 顶栏 `<header>` | `shrink-0`，永远可见（不随内容滚走） |
 | 内容 `<main>` | `min-h-0 min-w-0 flex-1 overflow-y-auto`，页面内容再长也只滚这一块 |
 

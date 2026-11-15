@@ -2476,6 +2476,166 @@ export type EventTypeList = {
   types: EventType[];
 };
 
+export type DropGroundSummaryItem = {
+  /**
+   * 地图 id
+   */
+  mapId: string;
+  /**
+   * 这张图地上的件数
+   */
+  total: number;
+  /**
+   * 这张图还在归属保护期内的件数
+   */
+  protectedTotal: number;
+  /**
+   * 这张图在窗口内就要过期的件数
+   */
+  expiringTotal: number;
+  /**
+   * 单图上限（运行时参数 `drop.maxGroundPerMap`）；水位 = total / cap
+   */
+  cap: number | null;
+};
+
+export type DropGroundSummary = {
+  /**
+   * 当前区地上总件数
+   */
+  total: number;
+  /**
+   * 还在归属保护期内的总件数
+   */
+  protectedTotal: number;
+  /**
+   * 在窗口内就要过期的总件数
+   */
+  expiringTotal: number;
+  /**
+   * 「即将过期」的窗口长度（毫秒）
+   */
+  expiringWindowMs: number;
+  /**
+   * 单图上限（运行时参数 `drop.maxGroundPerMap`）；`null` = 读不到该参数（页面显示「上限未知」，不拿一个写死的数字冒充配置值）
+   */
+  capPerMap: number | null;
+  /**
+   * 按图分组的明细（没有掉落时为空数组）
+   */
+  byMap: DropGroundSummaryItem[];
+  /**
+   * 服务端此刻的时间戳（页面算剩余秒数用它，不读本机时钟）
+   */
+  serverNow: number;
+};
+
+export type DropGround = {
+  /**
+   * 掉落 id（`d_<区>_<图>_<序号>`）
+   */
+  dropId: string;
+  /**
+   * 区服 id
+   */
+  zoneId: number;
+  /**
+   * 地图 id
+   */
+  mapId: string;
+  /**
+   * 物品 id
+   */
+  goodId: string;
+  /**
+   * 物品显示名（按**当前**配置现查；配置已删时回落成 id）
+   */
+  goodLabel: string;
+  /**
+   * 件数
+   */
+  count: number;
+  /**
+   * 是否绑定（掉落那一刻的判定结果）
+   */
+  bound: boolean;
+  /**
+   * 落点 x（服务端散落算出来的，客户端不再自己撒）
+   */
+  x: number;
+  /**
+   * 落点 y
+   */
+  y: number;
+  /**
+   * 归属者账号 id
+   */
+  ownerAccountId: string;
+  /**
+   * 归属者角色 id
+   */
+  ownerRoleId: string;
+  /**
+   * 归属者角色名（保护期内的「XX的」就是这个）
+   */
+  ownerName: string;
+  /**
+   * 来源怪物 key
+   */
+  monsterKey: string;
+  /**
+   * 来源怪物显示名（快照；存量行为 null）
+   */
+  monsterLabel: string | null;
+  /**
+   * 来源怪物实例 id（同 key 的第几只）
+   */
+  monsterInstanceId: string;
+  /**
+   * 落地时刻（毫秒）
+   */
+  createdAt: number;
+  /**
+   * 过期时刻（毫秒）
+   */
+  expireAt: number;
+  /**
+   * 归属保护期结束时刻（毫秒；之前只有归属者与队友能捡）
+   */
+  protectUntil: number;
+  /**
+   * 还剩多少毫秒过期（服务端算：max(0, expireAt - now)）
+   */
+  remainMs: number;
+  /**
+   * 这件掉落的总存活时长（= expireAt - createdAt，进度条的分母）
+   */
+  totalMs: number;
+  /**
+   * 此刻是否还在保护期（= protectUntil > now，服务端判，页面不自己比时钟）
+   */
+  protecting: boolean;
+};
+
+export type DropGroundPage = {
+  /**
+   * 总条数
+   */
+  total: number;
+  /**
+   * 当前页码（从 1 开始）
+   */
+  page: number;
+  /**
+   * 每页条数
+   */
+  size: number;
+  /**
+   * 当前页的地面掉落（默认按过期时刻升序：最先消失的在前）
+   */
+  list: DropGround[];
+};
+
 export type DropRecordSummaryItem = {
   /**
    * 终态值
@@ -2618,6 +2778,80 @@ export type DropRecordPage = {
    * 当前页的流水（默认按终态时刻倒序）
    */
   list: DropRecord[];
+};
+
+export type MonsterDropIndexItem = {
+  /**
+   * 怪物 key（= 怪物配置主键）
+   */
+  monsterKey: string;
+  /**
+   * 怪物显示名（按当前配置现查；查不到回落成 key）
+   */
+  monsterLabel: string;
+  /**
+   * 物品 id
+   */
+  goodId: string;
+  /**
+   * 物品显示名（按当前配置现查；查不到回落成 id）
+   */
+  goodLabel: string;
+  /**
+   * 条目来源：`entries`（这只怪内联）/ `table`（引用具名表）
+   */
+  source: "entries" | "table";
+  /**
+   * 引用的具名表 id（`source=entries` 时为 null）
+   */
+  tableId: string | null;
+  /**
+   * 抽取权重（同一池内相对值，缺省 1）
+   */
+  weight: number;
+  /**
+   * 掉落概率 0~1（抽中后再生效，缺省 1 = 必掉）
+   */
+  chance: number;
+  /**
+   * 件数下限（count 区间的第一位）
+   */
+  minCount: number;
+  /**
+   * 件数上限（count 区间的第二位）
+   */
+  maxCount: number;
+  /**
+   * 这只怪的掉落是否整体强制绑定（`monster_drops.bind_drops`）
+   */
+  bindDrops: boolean;
+  /**
+   * 物品自身是否「掉出即绑定」（五张配置表的 `bind_on_drop`）
+   */
+  bindOnDrop: boolean;
+  /**
+   * 合成结论：两者取「或」—— 任一为真，掉出来就是绑定的（与掉落结算的判定同一口径）
+   */
+  bound: boolean;
+};
+
+export type MonsterDropIndexPage = {
+  /**
+   * 总条数
+   */
+  total: number;
+  /**
+   * 当前页码（从 1 开始）
+   */
+  page: number;
+  /**
+   * 每页条数
+   */
+  size: number;
+  /**
+   * 当前页的反查行
+   */
+  list: MonsterDropIndexItem[];
 };
 
 export type SystemRuntime = {
@@ -11297,6 +11531,68 @@ export type DropRecordQuery = {
    * 结束时间（毫秒时间戳，含）
    */
   to?: number;
+};
+
+export type DropGroundQuery = {
+  /**
+   * 页码，从 1 开始
+   */
+  page?: number;
+  /**
+   * 每页条数（1~100）
+   */
+  size?: number;
+  /**
+   * 关键字（不同接口含义见其说明）
+   */
+  keyword?: string;
+  /**
+   * 排序字段（取值见各接口说明，未登记的值会退回默认排序）
+   */
+  sort?: string;
+  /**
+   * 排序方向：asc 升序 / desc 降序
+   */
+  order?: "asc" | "desc";
+  /**
+   * 只看某张图（地图 id）
+   */
+  mapId?: string;
+  /**
+   * 归属者角色名（模糊匹配；`_` / `%` 会被转义）
+   */
+  ownerName?: string;
+};
+
+export type MonsterDropIndexQuery = {
+  /**
+   * 页码，从 1 开始
+   */
+  page?: number;
+  /**
+   * 每页条数（1~100）
+   */
+  size?: number;
+  /**
+   * 关键字（不同接口含义见其说明）
+   */
+  keyword?: string;
+  /**
+   * 排序字段（取值见各接口说明，未登记的值会退回默认排序）
+   */
+  sort?: string;
+  /**
+   * 排序方向：asc 升序 / desc 降序
+   */
+  order?: "asc" | "desc";
+  /**
+   * 只看某个物品（精确匹配：这件东西都有谁会掉）
+   */
+  goodId?: string;
+  /**
+   * 只看某只怪（精确匹配怪物 key）
+   */
+  monsterKey?: string;
 };
 
 export type AdminLevelCurvePreviewQuery = {

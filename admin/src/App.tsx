@@ -40,6 +40,9 @@ import { ReportsPage } from "./pages/ReportsPage";
 import { MallPricingPage } from "./pages/MallPricingPage";
 import { FashionsPage } from "./pages/FashionsPage";
 import { DropConfigPage } from "./pages/DropConfigPage";
+import { DropMonitorPage } from "./pages/DropMonitorPage";
+import { DropRecordsPage } from "./pages/DropRecordsPage";
+import { MonsterDropsPage } from "./pages/MonsterDropsPage";
 import { GrowthPage } from "./pages/GrowthPage";
 import { AuditPage } from "./pages/AuditPage";
 import { EventLogsPage } from "./pages/EventLogsPage";
@@ -362,6 +365,30 @@ export function App() {
             element={
               <RequirePermission permission={PERMISSION.GAME_CONFIG_READ}>
                 <DropConfigPage />
+              </RequirePermission>
+            }
+          />
+          <Route
+            path="monster-drops"
+            element={
+              <RequirePermission permission={PERMISSION.DROP_READ}>
+                <MonsterDropsPage />
+              </RequirePermission>
+            }
+          />
+          <Route
+            path="drop-monitor"
+            element={
+              <RequirePermission permission={PERMISSION.DROP_READ}>
+                <DropMonitorPage />
+              </RequirePermission>
+            }
+          />
+          <Route
+            path="drop-records"
+            element={
+              <RequirePermission permission={PERMISSION.DROP_READ}>
+                <DropRecordsPage />
               </RequirePermission>
             }
           />

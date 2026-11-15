@@ -94,8 +94,18 @@ const NAV_GROUPS: NavBranch[] = [
           { to: "/monsters", label: "怪物配置", permission: PERMISSION.GAME_CONFIG_READ },
           { to: "/skills", label: "技能配置", permission: PERMISSION.GAME_CONFIG_READ },
           { to: "/statuses", label: "状态配置", permission: PERMISSION.GAME_CONFIG_READ },
-          { to: "/drops", label: "掉落配置", permission: PERMISSION.GAME_CONFIG_READ },
           { to: "/combat-weights", label: "战斗力权重", permission: PERMISSION.GAME_CONFIG_READ },
+        ],
+      },
+      {
+        // 掉落单独一节（#805）：配置、反查、现状、结果四件事在同一处 —— 上一版把「掉落配置」
+        // 塞在战斗配置里，找绑定配置时要先想「它在哪个页」，这次按回答的问题分类。
+        label: "掉落",
+        children: [
+          { to: "/drops", label: "掉落表配置", permission: PERMISSION.GAME_CONFIG_READ },
+          { to: "/monster-drops", label: "怪物掉落", permission: PERMISSION.DROP_READ },
+          { to: "/drop-monitor", label: "掉落监控", permission: PERMISSION.DROP_READ },
+          { to: "/drop-records", label: "掉落流水", permission: PERMISSION.DROP_READ },
         ],
       },
       {
