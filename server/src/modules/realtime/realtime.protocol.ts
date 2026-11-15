@@ -604,6 +604,14 @@ export interface RealtimeMonsterAiMessage {
   type: "monster-ai";
   data: {
     mapId: string;
+    /**
+     * 这一拍的服务端时刻（毫秒；#769，与 players 帧同一个口径）
+     *
+     * 怪物帧里只有「有变化的怪」，客户端拿它当插值的时间基准：同一个 t 的条目是同一时刻的
+     * 位置，几帧拼起来才能算出速度。裁剪（按格）后必须原样带上 —— 丢了它客户端只能退回
+     * 「收帧时刻」，抖动就全变成位移了。
+     */
+    t: number;
     monsters: RealtimeMonsterAiEntry[];
     hits: RealtimeMonsterHit[];
     /** #372：这一拍释放的技能（含状态型；没有技能释放时是空数组，不是 undefined） */
@@ -725,6 +733,18 @@ export interface RealtimePlayersMessage {
   type: "players";
   data: {
     mapId: string;
+    /**
+     * 这一拍的服务端时刻（毫秒，`Date.now()`；#769）
+     *
+     * 插值的**时间基准**：客户端把帧里的坐标当作「t 时刻的位置」，攒几帧后按 t 线性回放，
+     * 渲染时刻 = 服务端时钟 - 固定的渲染延迟。没有它，客户端只能用「收到的那一刻」当基准 ——
+     * 那会把网络抖动直接算成位移（抖动大的那一下快进、丢帧的那一下站住），
+     * 这正是 #769 要消掉的「忽快忽慢」。
+     *
+     * **同一拍发出去的所有帧共用一个 t**（增量、全量、裁剪后、按格分组的都是一份 data），
+     * 所以 t 不是「每帧发送时刻」，而是「这一拍模拟结束的时刻」。
+     */
+    t: number;
     /** true = 全量快照（观看者刚进图，或服务端认为它需要重建集合） */
     full: boolean;
     players: RealtimePlayerEntry[];

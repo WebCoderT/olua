@@ -11,8 +11,9 @@ import { designResolution } from "../layout/ScreenLayout";
  * - **RTT**：应用层 `ping` → `pong` 的本地往返（RealtimeClient 接线，见 pingSentAt）；
  * - **players 帧龄**：距最近一次收到互见帧过了多久（长时间不动 = 广播停了）；
  * - **monsterAi 帧龄**：距最近一次收到怪物帧过了多久；
- * - **插值剩余**：OtherPlayerManager 里离广播目标最远的那个人还有多少像素没追上
- *   （正常 < 半个广播周期的位移；一直很大 = 插值系数与节拍不匹配）。
+ * - **插值落后**：#769 之后插值不再是「追上目标点」，而是「按服务端时间回放快照」——
+ *   所以这里量的是渲染位置离**最新已知位置**还有多远（正常 ≈ 一个渲染延迟的位移）。
+ *   一直偏大 = 渲染延迟 / 缓冲深度与广播间隔不匹配；一直是 0 = 快照根本不更新（帧没到）。
  *
  * ## 边界（issue 的硬边界）
  *
@@ -32,7 +33,7 @@ export default class NetDiagnostics {
   /** 最近一帧到达的本地时刻（0 = 还没收到过；帧龄按 Date.now() - 它算） */
   private static playersFrameAt = 0;
   private static monsterAiFrameAt = 0;
-  /** 互见插值的最大剩余距离（px；OtherPlayerManager.tick 每帧报一次全场最大值） */
+  /** 互见插值的最大落后距离（px；OtherPlayerManager.tick 每帧报一次全场最大值） */
   private static interpolationPx = 0;
 
   /** 诊断文本节点（mount 建一次；enabled=false 时恒 null，不占任何内存） */
@@ -55,7 +56,7 @@ export default class NetDiagnostics {
     else this.monsterAiFrameAt = Date.now();
   }
 
-  /** 记一次插值剩余距离（px；OtherPlayerManager.tick 每帧报全场最大值） */
+  /** 记一次插值落后距离（px；OtherPlayerManager.tick 每帧报全场最大值） */
   static noteInterpolation(px: number): void {
     if (!this.enabled) return;
     this.interpolationPx = px;
@@ -69,7 +70,7 @@ export default class NetDiagnostics {
       ? `${Math.round(this.rttSamples.reduce((sum, item) => sum + item, 0) / this.rttSamples.length)}ms`
       : "—";
     const age = (at: number) => (at === 0 ? "—" : `${now - at}ms`);
-    return `RTT ${rtt} | players 帧龄 ${age(this.playersFrameAt)} | monsterAi 帧龄 ${age(this.monsterAiFrameAt)} | 插值剩余 ${Math.round(this.interpolationPx)}px`;
+    return `RTT ${rtt} | players 帧龄 ${age(this.playersFrameAt)} | monsterAi 帧龄 ${age(this.monsterAiFrameAt)} | 插值落后 ${Math.round(this.interpolationPx)}px`;
   }
 
   /**

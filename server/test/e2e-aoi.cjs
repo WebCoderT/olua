@@ -265,6 +265,9 @@ function connect(url, accountId) {
     /** 进图快照（players 帧 full = true 的那份，第 1 段断言「先全量、后清场」用） */
     fullSnapshots: [],
     aiFrames: 0,
+    /** 帧级时间戳序列（#769：只核对「带没带 / 是不是数字 / 单调不减」，不校验具体数值） */
+    playersTs: [],
+    aiTs: [],
     sendPos(x, y) {
       socket.send(JSON.stringify({ type: "pos", data: { mapId: MAP_ID, x, y, hp: HP } }));
     },
@@ -340,6 +343,7 @@ function connect(url, accountId) {
       return;
     }
     if (frame.type === "players") {
+      session.playersTs.push(data.t);
       if (data.full) session.fullSnapshots.push(data);
       for (const player of data.players) session.players.set(player.a, player);
       for (const left of data.left) session.players.delete(left);
@@ -347,6 +351,7 @@ function connect(url, accountId) {
     }
     if (frame.type === "monster-ai") {
       session.aiFrames += 1;
+      session.aiTs.push(data.t);
       for (const entry of data.monsters) {
         const known = session.monsters.get(entry.i);
         if (!known) continue;
@@ -580,6 +585,23 @@ function outlineByCell(monsters, at) {
     //#endregion
 
     check(sessionA.aiFrames > 0 && sessionB.aiFrames > 0, "怪物 AI 帧照常到达（裁剪没有把出口弄哑）", `A ${sessionA.aiFrames} 帧 / B ${sessionB.aiFrames} 帧`);
+
+    //#region #769 帧级时间戳：插值的时间基准（只校验形状与单调，不校验数值）
+
+    group("帧级时间戳（#769：每帧带 t，裁剪后仍在）");
+    {
+      const isMs = (value) => typeof value === "number" && Number.isFinite(value) && value > 0;
+      check(sessionA.playersTs.length > 0 && sessionA.playersTs.every(isMs), "players 帧带毫秒级 t", `${sessionA.playersTs.length} 帧`);
+      check(sessionA.aiTs.length > 0 && sessionA.aiTs.every(isMs), "monster-ai 帧带毫秒级 t", `${sessionA.aiTs.length} 帧`);
+      // 单调不减：同一拍共用一个 t，跨拍只能往前走（时钟倒流会让客户端插值把人物往回拉）
+      const monotonic = (list) => list.every((t, i) => i === 0 || t >= list[i - 1]);
+      check(monotonic(sessionA.playersTs), "players 的 t 单调不减");
+      check(monotonic(sessionA.aiTs), "monster-ai 的 t 单调不减");
+      // 这个用例里的帧全部经过 AOI 裁剪（B / C 在别的格子）—— 收得到就说明裁剪路径把 t 带上了
+      check(sessionB.playersTs.length > 0 && sessionB.aiTs.length > 0, "被裁剪的观看者收到带 t 的帧（裁剪只删条目，不改时间基准）");
+    }
+
+    //#endregion
 
     for (const session of [sessionA, sessionB, sessionC]) session.socket.close();
   } finally {

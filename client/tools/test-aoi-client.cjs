@@ -213,8 +213,8 @@ try {
   const otherLeave = bodyOf(otherSrc, /static applyEntityLeave\(accountIds: string\[\]\): void/);
   check(otherEnter !== null, "OtherPlayerManager.applyEntityEnter 存在");
   check(
-    !!otherEnter && /if \(entry\.a === selfAccountId\) continue;/.test(otherEnter) && /this\.upsert\(entry\)/.test(otherEnter),
-    "玩家 enter 跳过自己并复用 upsert（首次 / 更新同一段代码）",
+    !!otherEnter && /if \(entry\.a === selfAccountId\) continue;/.test(otherEnter) && /this\.upsert\(entry, now\)/.test(otherEnter),
+    "玩家 enter 跳过自己并复用 upsert（首次 / 更新同一段代码；#769 起带「服务端此刻」当快照时间）",
   );
   check(
     !!otherEnter && /if \(players\.length === 0\) return;/.test(otherEnter),

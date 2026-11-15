@@ -200,6 +200,13 @@ export interface MonsterHitEntry {
 /** 服务端怪物 AI 广播帧（协议见 realtime.protocol 的 RealtimeMonsterAiMessage.data） */
 export interface MonsterAiFrame {
   mapId: string;
+  /**
+   * 这一拍的服务端时刻（毫秒；#769 插值的时间基准）
+   *
+   * 帧里的坐标是「t 时刻的位置」，客户端攒几条后按 t 线性回放（`SnapshotInterpolator`）。
+   * 服务端裁剪（按格）后原样带上，所以同一拍的各条帧共用一个值。
+   */
+  t: number;
   monsters: MonsterAiEntry[];
   hits: MonsterHitEntry[];
   /** #372：这一拍怪物释放的技能（含状态型；旧服务端不带该字段时按空数组处理） */
@@ -306,6 +313,8 @@ export interface PathFrame {
 /** 服务端玩家互见广播帧（协议见 realtime.protocol 的 RealtimePlayersMessage.data） */
 export interface PlayersFrame {
   mapId: string;
+  /** 这一拍的服务端时刻（毫秒；#769 插值的时间基准，全量 / 增量帧都带） */
+  t: number;
   /** true = 全量快照（刚进图时拿到，客户端据此重建整个集合） */
   full: boolean;
   players: PlayerEntry[];

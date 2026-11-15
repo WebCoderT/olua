@@ -522,8 +522,12 @@ async function expectFailure(action) {
   );
   const diagnosticsRealtimeSource = read(FILE.realtimeClient);
   check(
-    /this\.pingSentAt = NetDiagnostics\.enabled \? Date\.now\(\) : null;/.test(diagnosticsRealtimeSource) && /frame\.type === "pong"/.test(diagnosticsRealtimeSource),
-    "RTT 只在诊断开着时采样（ping 记发出时刻，pong 分支算往返）",
+    /this\.pingSentAt = Date\.now\(\);/.test(diagnosticsRealtimeSource) && /frame\.type === "pong"/.test(diagnosticsRealtimeSource),
+    "ping 一律记发出时刻（#769 起时钟校准也要它；RTT 入账仍被 noteRtt 的诊断开关挡着，关着就空操作）",
+  );
+  check(
+    /ServerClock\.sync\(data\.serverTime, this\.pingSentAt\)/.test(diagnosticsRealtimeSource),
+    "pong 的服务端时刻用来细校准时钟（#769：扣掉半程时延；welcome 那次只能算粗的）",
   );
   check(
     /NetDiagnostics\.noteFrame\("players"\)/.test(read(FILE.combatChannel)) && /NetDiagnostics\.noteFrame\("monster-ai"\)/.test(read(FILE.combatChannel)),
