@@ -71,7 +71,7 @@ compose 五服务：admin:80 唯一入口 / game:8080 / server:3100 / realtime:3
   `roles.zone_id` 是区归属唯一权威、`accounts.zone_id` 改名 `active_zone_id`（当前浏览区）；
   玩家侧零区参数、跨区 roleId 一律 20002；新增 `GET /zones/mine` + `POST /zones/select`（换区清在线角色）；
   合区搬角色 + 同账号同名**自动改名**。`e2e-zone-roles` 45 / `e2e-zone-no-param` 12 /
-  `e2e-zone-migrate` 12（旧库升级幂等），e2e 清单 **84 套** · #956 P0 守点（PR #968）·
+  `e2e-zone-migrate` 12（旧库升级幂等），e2e 清单 **85 套** · #956 P0 守点（PR #968）·
   **#810 AOI 视野裁剪（PR #953 服务端 + #965 客户端，已关）**：
   512px 格子 3×3 邻域、`entityEnter`/`entityLeave`、同格只序列化一次、离开延迟 1s 合并；
   客户端 upsert 建 / `despawn` 拆、快照缺席不演死亡。`e2e-aoi` 30 条 + 协议 38 条 + 客户端 66 套 ·
@@ -100,12 +100,18 @@ compose 五服务：admin:80 唯一入口 / game:8080 / server:3100 / realtime:3
   P8 按区分片并入 #770 口径；#438 群发按区等主体落地（docs/39 §3.7 有重开条件）。
 - 当前 open：#9 包体积 · #12~#19 素材 · #295 阶段三 ·
   #403 帮会战 · #742 TLS · #808 地图重构（剩 **#812 分线副本**；
-  结算读 `map_rules`、掉落进 Room 暂未落地，重开条件见 docs/20）· #801~#805 掉落重构 ·
+  结算读 `map_rules`、掉落进 Room 暂未落地，重开条件见 docs/20）· **#801 掉落 epic 剩 #803/#804/#805** ·
   #770 同步分片 · #438 群发。保持现状：技能 1011 / 快捷键 6 格 / 装备 7 部位。
+- **掉落已是世界实体（#802，PR #993 `89065e2a`，已关）**：`DropService` 是唯一权威（`ground`/`byId` + 终态
+  `recent` 留 60s 接重发），`world_drops` 是投影（100ms 批量 upsert、重启清空），`drop_records` /
+  `drop_clear_requests` 只建表（分别给 #803 / #805）。`pick` 只带 `dropId`、九步校验、11 种 `code`；
+  第 2 步判图读 `roles.zoneOf` + `MapAtOfOnlineRole`（**不是在场表缓存**）。参数键名沿用库里的
+  `pickAcceptRadius`（设计稿的 `pickRange` 已统一掉，0 = 闸关闭），新增只有 `ttlMs`/`protectMs`/
+  `maxGroundPerMap`/`announceBoss`。**#804 之前客户端捡不起东西**（仍发 castId+下标），已定先合再改。
 - `docs/14` 无生成脚本，改接口手工加行；现口径 **257 = 8 + 68 + 181**。client 单测可当门禁（**68 套**）。
   `docs/37` 是最高优先单一来源。
 - **新增 env 键 / 文案 / 节点名 / 颜色的 PR，静态审计要预判两处登记**：`.env.example`（audit-api-hardcode）+
   `tools/config-leak-allowlist.json`（config-leak）。
-- **CI 红的判据**：先在本地完整 verify（84 套）复跑——**本地能精确复现 = 代码/测试问题**（改字段名最容易漏
+- **CI 红的判据**：先在本地完整 verify（**85 套**）复跑——**本地能精确复现 = 代码/测试问题**（改字段名最容易漏
   「函数体内读点」，如 `find(m => m.instanceId === …)`）；只有本地绿而 CI 红才考虑分片负载，`gh run rerun --failed`。
   同一套件连续 ≥2 轮同断言红不要再当抖动。改广播帧字段后记得全量本地 verify，「本地绿」结论会过期。
