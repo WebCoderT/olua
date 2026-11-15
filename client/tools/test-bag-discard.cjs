@@ -317,7 +317,7 @@ check(/this\.closeDiscardConfirm\(\);\s*\n\s*const confirm = new ConfirmDialog/.
   const end = layoutSource.indexOf("//#endregion", start);
   const block = layoutSource.slice(start, end > start ? end : undefined);
   check(start > 0, "能定位 confirmDialogLayout 配置块");
-  check(/maskColor: new Color\(0, 0, 0, 160\)/.test(block), "遮罩颜色在配置里（黑色半透明，与死亡遮罩同款）");
+  check(/maskColor: T\.surface\.scrim/.test(block), "遮罩颜色在配置里（令牌 surface-scrim，与死亡遮罩同款）");
   ["panel", "title", "message", "confirmButton", "cancelButton"].forEach((key) => check(new RegExp(`${key}:`).test(block), `confirmDialogLayout 配了 ${key}`));
   check(/confirmButton: \{ name: "confirm_ok_button", position: new Vec2\(-90, -58\) \}/.test(block), "「确定」在面板左侧");
   check(/cancelButton: \{ name: "confirm_cancel_button", position: new Vec2\(90, -58\) \}/.test(block), "「取消」在面板右侧（两钮左右对称、错开 180 > 按钮宽 123）");

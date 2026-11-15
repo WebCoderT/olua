@@ -64,6 +64,9 @@ import {
   avatarImage,
   bagGridLayout,
   bottomBarLayout,
+  ButtonTone,
+  buttonStyle,
+  buttonTone,
   chatDialogLayout,
   createRolePreviewImage,
   createRoleShowImage,
@@ -86,6 +89,7 @@ import {
   skillListDialogLayout,
   attrAllocateDialogLayout,
   tipsLayout,
+  T,
   uiImages,
   uiSize,
   uiTheme,
@@ -1235,40 +1239,71 @@ export default class GameUiHelper {
   }
 
   /**
-   * 创建通用弹窗背景面板（九宫拼装容器，#737）
+   * HUD 常驻件底板（半透明暖褐 + 一圈弱金线，无铆钉）
    *
-   * 头部标题带**高度恒定**：不管弹窗多大，头行三块都按原尺寸摆放（红条永远 42px、
-   * 两角回纹永不变形），只有头/底的中块横向拉伸、body 行三块双向拉伸
-   * （切线依据见 configs/layout/dialogs.dialogFrame.background）。
+   * 对齐 `design/olua-ui` 的 `.surface-glass` 用法：HUD 上的信息栏 / 怪物条 / 底部栏都靠它
+   * 从世界里「浮」出来，但不该像弹窗那样抢视线 —— 因此不画铆钉、线只到 line-2。
+   */
+  static createGlassPlate(name: string, size: Size, radius: number, border: Color = T.line[2], fill: Color = T.surface.glass) {
+    const node = UiHelper.createNode(name, new Vec2(), size);
+    const graphics = node.addComponent(Graphics);
+    graphics.fillColor = fill;
+    graphics.roundRect(-size.width / 2, -size.height / 2, size.width, size.height, radius);
+    graphics.fill();
+    graphics.lineWidth = T.border.width;
+    graphics.strokeColor = border;
+    graphics.roundRect(-size.width / 2, -size.height / 2, size.width, size.height, radius);
+    graphics.stroke();
+    return node;
+  }
+
+  /**
+   * 创建通用弹窗背景面板（矢量底板 + 四角铆钉，#1059）
+   *
+   * 对齐 `design/olua-ui` 的 `.panel--rivet`：暖炭褐底 + 顶部明暗过渡 + 1px 古铜金线 + 四角铆钉。
+   * 全部用 Graphics 现画（不再九宫拼图）：弹窗尺寸变化时金线恒为 1px、铆钉恒为同一个圆，
+   * 不会被拉伸成椭圆；配色与几何见 configs/layout/dialogs.dialogFrame.panel。
    * 返回的容器尺寸即弹窗尺寸，后续子件坐标以弹窗中心为原点（与 createDialog 系列一致）。
    */
   static createDialogPanel(name: string, size: Size = dialogFrame.size) {
-    const { cornerWidth, headerHeight, footerHeight, pieces } = dialogFrame.background;
+    const { fill, fillTop, fillTopRatio, border, borderWidth, innerHighlight, radius, rivet } = dialogFrame.panel;
     const panel = UiHelper.createNode(name, new Vec2(), size);
-    const halfW = size.width / 2;
-    const halfH = size.height / 2;
-    // 中列宽 / body 行高（弹窗小于两列角块时兜底为 1，宁可压中块也不让角块重叠）
-    const sideW = Math.max(1, size.width - cornerWidth * 2);
-    const midH = Math.max(1, size.height - headerHeight - footerHeight);
-    // 各行中心 y 与左右列中心 x（body 行的中心与弹窗高度无关：恒 (底行高 - 头行高) / 2）
-    const headerY = halfH - headerHeight / 2;
-    const bodyY = (footerHeight - headerHeight) / 2;
-    const footerY = footerHeight / 2 - halfH;
-    const leftX = cornerWidth / 2 - halfW;
-    const rightX = halfW - cornerWidth / 2;
-    const cells: Array<[string, string, Vec2, Size]> = [
-      [`${name}_header_left`, pieces.headerLeft, new Vec2(leftX, headerY), new Size(cornerWidth, headerHeight)],
-      [`${name}_header_center`, pieces.headerCenter, new Vec2(0, headerY), new Size(sideW, headerHeight)],
-      [`${name}_header_right`, pieces.headerRight, new Vec2(rightX, headerY), new Size(cornerWidth, headerHeight)],
-      [`${name}_body_left`, pieces.bodyLeft, new Vec2(leftX, bodyY), new Size(cornerWidth, midH)],
-      [`${name}_body_center`, pieces.bodyCenter, new Vec2(0, bodyY), new Size(sideW, midH)],
-      [`${name}_body_right`, pieces.bodyRight, new Vec2(rightX, bodyY), new Size(cornerWidth, midH)],
-      [`${name}_footer_left`, pieces.footerLeft, new Vec2(leftX, footerY), new Size(cornerWidth, footerHeight)],
-      [`${name}_footer_center`, pieces.footerCenter, new Vec2(0, footerY), new Size(sideW, footerHeight)],
-      [`${name}_footer_right`, pieces.footerRight, new Vec2(rightX, footerY), new Size(cornerWidth, footerHeight)],
+    const graphics = panel.addComponent(Graphics);
+    const left = -size.width / 2;
+    const bottom = -size.height / 2;
+    // 1) 底板：主体色整块 + 顶部一条半透明亮带（Graphics 没有渐变，用两层矩形叠出上亮下暗）
+    graphics.fillColor = fill;
+    graphics.roundRect(left, bottom, size.width, size.height, radius);
+    graphics.fill();
+    const bandHeight = size.height * fillTopRatio;
+    graphics.fillColor = fillTop;
+    graphics.roundRect(left, bottom + size.height - bandHeight, size.width, bandHeight, radius);
+    graphics.fill();
+    // 2) 外框 1px 金线（恒定粗细，不随面板尺寸拉伸）
+    graphics.lineWidth = borderWidth;
+    graphics.strokeColor = border;
+    graphics.roundRect(left, bottom, size.width, size.height, radius);
+    graphics.stroke();
+    // 3) 内侧一圈极弱高光：贴顶边往下 2px，撑出「金属压边」的厚度感
+    graphics.lineWidth = borderWidth;
+    graphics.strokeColor = innerHighlight;
+    graphics.roundRect(left + 2, bottom + 2, size.width - 4, size.height - 4, Math.max(0, radius - 1));
+    graphics.stroke();
+    // 4) 四角铆钉（ui.css .panel--rivet）：左上实心 + 右上 / 左下 / 右下各一颗，各带一个小拖尾点
+    const r = rivet.size / 2;
+    const inset = rivet.inset;
+    const rivetPoints: Array<[number, number, number, number]> = [
+      [left + inset, bottom + size.height - inset, 1, 0],
+      [left + size.width - inset, bottom + size.height - inset, -1, 0],
+      [left + inset, bottom + inset, 1, 0],
+      [left + size.width - inset, bottom + inset, -1, 0],
     ];
-    for (const [cellName, image, position, cellSize] of cells) {
-      panel.addChild(UiHelper.createSprite(cellName, image, position, cellSize));
+    for (const [x, y, dir] of rivetPoints) {
+      graphics.fillColor = rivet.color;
+      graphics.circle(x, y, r);
+      graphics.fill();
+      graphics.circle(x + dir * rivet.trailOffset, y, rivet.trailSize / 2);
+      graphics.fill();
     }
     return panel;
   }
@@ -1318,53 +1353,113 @@ export default class GameUiHelper {
   static createDialog(name: string, title: string, position: Vec2 = new Vec2(), size: Size = dialogFrame.size) {
     // 弹窗
     const dialog = this.createDialogBg(name, position, size);
-    // 关闭弹窗按钮
+    // 关闭弹窗按钮（矢量 ×：与设计稿 .panel-close 同口径，不再用图片）
     const inset = dialogFrame.closeButton.inset;
-    const closeButton = UiHelper.createButton(`${name}_close_button`, dialogFrame.closeImage, new Vec2(size.width / 2 - inset, size.height / 2 - inset), dialogFrame.closeButton.size);
+    const closeButton = this.createVectorButton(
+      `${name}_close_button`,
+      dialogFrame.closeButton.text,
+      new Vec2(size.width / 2 - inset, size.height / 2 - inset),
+      dialogFrame.closeButton.size,
+      dialogFrame.closeButton.fontSize,
+      dialogFrame.closeButton.color,
+    );
     dialog.addChild(closeButton);
-    // 弹窗标题
+    // 弹窗标题（居中 + 下方短金线）
     const titleHeight = dialogFrame.title.height;
+    const titleY = size.height / 2 - dialogFrame.title.insetTop;
     const dialogTitle = UiHelper.createLabel(
       `${name}_title`,
       title,
       dialogFrame.title.color,
       dialogFrame.title.fontSize,
-      new Vec2(0, size.height / 2 - dialogFrame.title.insetTop),
+      new Vec2(0, titleY),
       new Size(size.width - dialogFrame.title.widthPadding, titleHeight),
     );
     dialog.addChild(dialogTitle);
+    const rule = dialogFrame.title.rule;
+    const ruleNode = UiHelper.createNode(`${name}_title_rule`, new Vec2(0, titleY - titleHeight / 2 - rule.gap), new Size(rule.width, rule.height));
+    const ruleGraphics = ruleNode.addComponent(Graphics);
+    ruleGraphics.fillColor = rule.color;
+    ruleGraphics.rect(-rule.width / 2, -rule.height / 2, rule.width, rule.height);
+    ruleGraphics.fill();
+    dialog.addChild(ruleNode);
     // 添加关闭功能
     closeButton.on(Node.EventType.TOUCH_END, () => dialog.destroy(), this);
     return dialog;
   }
 
   /**
-   * 创建游戏大按钮
+   * 矢量小按钮（只画字，不带底图）：关闭键 / 行内文字键这类「不需要重量感」的点击区
+   *
+   * 与 createButton 同一套接线（Button 缩放反馈 + 点击音 + 鼠标通道命中拦截），
+   * 只是外观由字色决定，避免为 30×30 的小键再切一张图。
+   */
+  static createVectorButton(name: string, text: string, position: Vec2, size: Size, fontSize: number, color: Color) {
+    const node = UiHelper.createNode(name, position, size);
+    node.addComponent(Button).transition = Button.Transition.SCALE;
+    SoundManager.bindClick(node);
+    blockClickThrough(node);
+    node.addChild(UiHelper.createLabel(`${name}_label`, text, color, fontSize, new Vec2(), size));
+    return node;
+  }
+
+  /**
+   * 创建游戏大按钮（主行动档：朱红渐变 + 亮朱描边，ui.css .btn--primary）
    */
   static createBigButton(name: string, text: string, position: Vec2 = new Vec2()) {
-    const bigButton = UiHelper.createButton(name, uiImages.bigButtonBackground, position, uiSize.bigButtonSize);
-    bigButton.name = name;
-    const label = UiHelper.createLabel(`${name}_label`, text, Color.WHITE, uiSize.bigButtonFontSize, new Vec2(), uiSize.bigButtonSize);
-    bigButton.addChild(label);
-    return bigButton;
+    return this.createPlateButton(name, text, uiImages.bigButtonBackground, position, uiSize.bigButtonSize, uiSize.bigButtonFontSize, buttonTone.primary);
   }
 
-  /** 创建游戏中按钮 */
+  /** 创建游戏中按钮（常规档：暗褐金属 + 金线，ui.css .btn） */
   static createMiddleButton(name: string, text: string, position: Vec2 = new Vec2()) {
-    const middleButton = UiHelper.createButton(name, uiImages.middleButtonBackground, position, uiSize.middleButtonSize);
-    middleButton.name = name;
-    const label = UiHelper.createLabel(`${name}_label`, text, Color.WHITE, uiSize.middleButtonFontSize, new Vec2(), uiSize.middleButtonSize);
-    middleButton.addChild(label);
-    return middleButton;
+    return this.createPlateButton(name, text, uiImages.middleButtonBackground, position, uiSize.middleButtonSize, uiSize.middleButtonFontSize, buttonTone.normal);
   }
 
-  /** 创建游戏小按钮 */
+  /** 创建游戏小按钮（行内档：24 高，ui.css .btn--xs） */
   static createSmallButtion(name: string, text: string, position: Vec2 = new Vec2()) {
-    const button = UiHelper.createButton(name, uiImages.smallButtonBackground, position, uiSize.smallButtonSize);
-    button.name = name;
-    const label = UiHelper.createLabel(`${name}_label`, text, Color.WHITE, uiSize.smallButtonFontSize, new Vec2(), uiSize.smallButtonSize);
-    button.addChild(label);
-    return button;
+    return this.createPlateButton(name, text, uiImages.smallButtonBackground, position, uiSize.smallButtonSize, uiSize.smallButtonFontSize, buttonTone.normal);
+  }
+
+  /**
+   * 矢量底板按钮（对外入口：#1059 起界面上新增的按钮走这里，色调由调用方指定）
+   *
+   * 与 createBigButton / createMiddleButton / createSmallButtion 同一套绘制，只是尺寸与色调自由给。
+   */
+  static createToneButton(name: string, text: string, position: Vec2, size: Size, fontSize: number, tone: ButtonTone) {
+    return this.createPlateButton(name, text, "", position, size, fontSize, tone);
+  }
+
+  /**
+   * 矢量底板按钮（三档按钮共用）
+   *
+   * 底板由 Graphics 现画：主色整块 + 上半一条亮带（模拟 180deg 渐变）+ 一圈描边；
+   * 文字居中。色调与几何见 configs/layout/sizes 的 buttonTone / buttonStyle。
+   * @param image 兼容旧调用：底板已改为矢量，图片参数不再参与绘制（保留形参避免改一圈调用点）
+   */
+  private static createPlateButton(name: string, text: string, image: string, position: Vec2, size: Size, fontSize: number, tone: ButtonTone) {
+    const node = UiHelper.createNode(name, position, size);
+    node.addComponent(Button).transition = Button.Transition.SCALE;
+    SoundManager.bindClick(node);
+    blockClickThrough(node);
+    const graphics = node.addComponent(Graphics);
+    const w = size.width;
+    const h = size.height;
+    const radius = buttonStyle.radius;
+    graphics.fillColor = tone.fill;
+    graphics.roundRect(-w / 2, -h / 2, w, h, radius);
+    graphics.fill();
+    if (tone.fillTopRatio > 0) {
+      const bandH = h * tone.fillTopRatio;
+      graphics.fillColor = tone.fillTop;
+      graphics.roundRect(-w / 2, h / 2 - bandH, w, bandH, radius);
+      graphics.fill();
+    }
+    graphics.lineWidth = buttonStyle.borderWidth;
+    graphics.strokeColor = tone.border;
+    graphics.roundRect(-w / 2, -h / 2, w, h, radius);
+    graphics.stroke();
+    node.addChild(UiHelper.createLabel(`${name}_label`, text, tone.text, fontSize, new Vec2(), size));
+    return node;
   }
 
   //#endregion

@@ -1,4 +1,5 @@
-import { Color, Size } from "cc";
+import { Size } from "cc";
+import { T } from "./tokens";
 
 /**
  * UI 通用主题（跨界面复用、但既不属于某个界面布局、也不属于某个功能域的样式）
@@ -8,11 +9,12 @@ import { Color, Size } from "cc";
  * - 与玩法绑定的表现（飘字、指针、小地图描点）→ 各自的域配置（cursor / smallMap / …）
  * - 剩下的「通用零件默认长相」→ 本文件
  *
- * 约定：核心代码只引用这里的值，**不在零件里写颜色/字号/时长**。
+ * 约定：核心代码只引用这里的值，**不在零件里写颜色/字号/时长**；
+ * 颜色本身一律引用设计令牌（configs/layout/tokens），不在这里写色值。
  */
 export const uiTheme = {
   /** 输入框占位符颜色（UiHelper.createInputBox） */
-  inputPlaceholderColor: new Color("#999999"),
+  inputPlaceholderColor: T.text[4],
 
   /**
    * 输入框内层 EditBox 的几何（UiHelper.createInputBox 的调用方按它算宽高）
@@ -42,8 +44,8 @@ export const uiTheme = {
      * 连续命中不会都叠在同一个点上糊成一团；数组只有一项时相当于关闭错峰
      */
     damage: {
-      color: Color.RED,
-      blockedColor: new Color(255, 200, 60, 255),
+      color: T.combat.damage,
+      blockedColor: T.combat.blocked,
       fontSize: 18,
       size: new Size(80, 24),
       spawnOffsetY: 40,
@@ -54,7 +56,7 @@ export const uiTheme = {
     },
     /** 技能释放飘字（释放者头顶） */
     skill: {
-      color: Color.YELLOW,
+      color: T.gold[4],
       fontSize: 14,
       size: new Size(120, 20),
       spawnOffsetY: 40,
@@ -64,7 +66,7 @@ export const uiTheme = {
     },
     /** 经验飘字（被击杀怪物头顶） */
     exp: {
-      color: Color.GREEN,
+      color: T.combat.exp,
       fontSize: 14,
       size: new Size(100, 20),
       spawnOffsetY: 40,
@@ -77,8 +79,8 @@ export const uiTheme = {
      * 颜色按变化方向由代码选：上升 upColor / 下降 downColor（文案 ±delta 也在代码里拼）
      */
     combat: {
-      upColor: new Color(90, 220, 110, 255),
-      downColor: new Color(255, 96, 96, 255),
+      upColor: T.combat.up,
+      downColor: T.combat.down,
       fontSize: 14,
       size: new Size(90, 18),
       spawnOffsetX: 36,

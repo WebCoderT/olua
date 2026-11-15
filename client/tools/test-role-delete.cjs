@@ -130,14 +130,19 @@ const selectorSource = fs.readFileSync(ROLE_SELECTOR_FILE, "utf8");
 const scenesSource = fs.readFileSync(SCENES_FILE, "utf8");
 const storageSource = fs.readFileSync(STORAGE_MANAGER_FILE, "utf8");
 
-check(/manageRoleButton\.on\(Node\.EventType\.TOUCH_END, \(\) => this\.toggleManageRole\(\)\)/.test(selectorSource), "「管理」按钮已绑定 toggleManageRole（原来只建节点没绑事件）");
-check(/button\.on\(Node\.EventType\.TOUCH_END, \(\) => this\.onDeleteRoleClick\(role\.id, button\)/.test(selectorSource), "每个删除按钮都绑定了 onDeleteRoleClick");
-check(/cell\.addChild\(button\)/.test(selectorSource), "删除按钮挂在角色单元格下（预览的兄弟节点 → 点删除不会冒泡成选中角色，又跟着滚动区走）");
+check(/manageButton\.on\(Node\.EventType\.TOUCH_END, \(\) => this\.toggleManageRole\(\),? ?this?\)/.test(selectorSource), "「管理」按钮已绑定 toggleManageRole（原来只建节点没绑事件）");
+check(/button\.on\(Node\.EventType\.TOUCH_END, \(event[\s\S]{0,90}this\.onDeleteRoleClick\(role\.id, button\)/.test(selectorSource), "每个删除按钮都绑定了 onDeleteRoleClick（并先停掉冒泡，免得连带选中角色）");
+check(/card\.addChild\(button\)/.test(selectorSource), "删除按钮挂在角色卡下（预览的兄弟节点 → 点删除不会冒泡成选中角色，又跟着滚动区走）");
 check(/if \(this\.ownerRoleSelectedId === roleId\) this\.clearSelectedRole\(\)/.test(selectorSource), "删掉选中角色时复位选中态与开始游戏按钮");
 check(/onDestroy\(\)[\s\S]{0,200}this\.cancelDeleteConfirm\(\)/.test(selectorSource), "场景销毁时清理待确认定时器");
 check(/setTimeout\(\(\) => this\.cancelDeleteConfirm\(\), roleSelectorLayout\.manageRole\.confirmTimeout\)/.test(selectorSource), "两步确认带超时自动复位");
 
-check(/manageRole:\s*\{[\s\S]*deleteButtonOffset[\s\S]*deleteButtonSize[\s\S]*confirmTimeout[\s\S]*hint:/.test(scenesSource), "manageRole 布局配置齐备（偏移/尺寸/超时/提示条）");
+check(
+  /roster:[\s\S]*deleteButton: \{ size: new Size\(/.test(scenesSource) &&
+    /manageHint: \{[\s\S]{0,200}textKey: "label_role_delete_hint"/.test(scenesSource) &&
+    /manageRole: \{[\s\S]{0,120}confirmTimeout/.test(scenesSource),
+  "删除按钮几何 / 提示条 / 两步确认超时都在布局配置里（#1059 起按钮随卡片、提示条独立成 manageHint）",
+);
 
 check(/static deleteRole\(id: string\): boolean \{/.test(storageSource), "StorageManager 暴露了 deleteRole");
 check(/!roles\.some\(\(role\) => role\.id === selected\)/.test(storageSource), "deleteRole 会校验并清掉指向已不存在角色的选中项");

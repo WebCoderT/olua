@@ -1,5 +1,6 @@
-import { Color, Size, Vec2 } from "cc";
+import { Size, Vec2 } from "cc";
 import { uiImages } from "./images";
+import { T } from "./tokens";
 
 /**
  * 角色信息弹窗内的面板零件布局
@@ -27,10 +28,10 @@ export const equipmentSlotLayout = {
     size: new Size(24, 24),
     fontSize: 13,
     /** 圆底填充与描边（绿 = 变强），文字用白字保对比度 */
-    fill: new Color(30, 120, 60, 235),
-    borderColor: new Color(120, 220, 120),
+    fill: T.jadeDeep,
+    borderColor: T.jade,
     borderWidth: 1.5,
-    color: Color.WHITE,
+    color: T.text[1],
   },
   /** 各分组容器（name = 节点名，horizontal = 横排还是竖排） */
   groups: {
@@ -71,9 +72,9 @@ export const bagGridLayout = {
     fontSize: 14,
     size: new Size(24, 16),
     /** 常规数量颜色 */
-    color: new Color(255, 255, 255, 255),
+    color: T.text[1],
     /** 满叠（数量达到 maxStack）时的颜色 */
-    fullColor: new Color(255, 140, 80, 255),
+    fullColor: T.ember[4],
   },
 
   /**
@@ -99,7 +100,7 @@ export const bagGridLayout = {
     highlightSize: new Size(50, 50),
     highlightLineWidth: 2,
     highlightInset: 3,
-    highlightColor: new Color(255, 214, 102, 255),
+    highlightColor: T.gold[4],
   },
 };
 

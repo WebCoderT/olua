@@ -17,6 +17,7 @@ import { blockClickThrough } from "./utils/input/UiHit";
 import AnnouncementNoticeDialog from "./components/dialogs/AnnouncementNoticeDialog";
 import ZoneSelectDialog from "./components/dialogs/ZoneSelectDialog";
 import { createRoundedPanel } from "./components/dialogs/tab-kit";
+import { buttonTone } from "../configs/layout/sizes";
 import ZoneStore from "./core/ZoneStore";
 const { ccclass } = _decorator;
 
@@ -210,33 +211,32 @@ export class Login extends Component {
     const notice = hero.notice;
     const bar = createRoundedPanel(notice.name, notice.size, palette.noticeFill, palette.line, radius.control);
     const accentEdge = this.addGraphics(bar);
-    this.fillRect(accentEdge, new Size(4, notice.size.height), palette.accent, new Vec2(-notice.size.width / 2 + 2, 0));
+    this.fillRect(accentEdge, new Size(notice.edgeWidth, notice.size.height), palette.accent, new Vec2(-notice.size.width / 2 + notice.edgeWidth / 2, 0));
     const noticeTitle = UiHelper.createLabel(
       `${notice.name}_label`,
-      getText("login_notice_label"),
+      getText(notice.label.textKey),
       palette.gold,
-      notice.labelFontSize,
-      new Vec2(-269, 0),
-      new Size(60, notice.size.height),
+      notice.label.fontSize,
+      new Vec2(notice.label.offsetX, 0),
+      notice.label.size,
     );
     bar.addChild(noticeTitle);
-    const noticeLine = UiHelper.createLabel(`${notice.name}_line`, "", palette.inkSoft, notice.rowFontSize, new Vec2(34, 0), new Size(520, notice.size.height), Label.HorizontalAlign.LEFT);
+    const noticeLine = UiHelper.createLabel(`${notice.name}_line`, "", palette.inkSoft, notice.row.fontSize, new Vec2(notice.row.offsetX, 0), notice.row.size, Label.HorizontalAlign.LEFT);
     bar.addChild(noticeLine);
     this.noticeLabel = noticeLine.getComponent(Label);
     this.noticeBar = bar;
     this.stage!.addChild(bar);
   }
 
-  /** 右侧登录面板：标题 / 输入框 / 选服 / 记住账号 / 主按钮 / 次要入口 / 脚注 */
+  /** 右侧登录面板：眉题 / 标题 / 输入框 / 选服 / 记住账号 / 主按钮 / 次要入口 / 脚注 */
   private buildPanel(): void {
     const { panel, palette, radius } = loginLayout;
-    // 面板壳：暗褐圆角 + 金点对角装饰（设计稿 .panel::before/::after 的简化版）
-    const panelNode = createRoundedPanel(panel.name, panel.size, palette.panelFill, palette.goldDark, radius.shell);
-    const dots = this.addGraphics(panelNode);
-    const dotOffsetX = panel.size.width / 2 - 14;
-    const dotOffsetY = panel.size.height / 2 - 14;
-    [new Vec2(-dotOffsetX, dotOffsetY), new Vec2(dotOffsetX, -dotOffsetY)].forEach((dot) => this.fillCircle(dots, 4.5, palette.gold, dot));
+    // 面板壳：矢量底板（主体色 + 顶部亮带 + 1px 金线 + 内侧高光 + 四角铆钉，见 createDialogPanel）
+    const panelNode = GameUiHelper.createDialogPanel(panel.name, panel.size);
+    panelNode.setPosition(panel.position.x, panel.position.y, 0);
     this.stage!.addChild(panelNode);
+    // 左上角小字（ACCOUNT）
+    panelNode.addChild(this.createAlignedLabel(panel.eyebrow, palette.goldDark, Label.HorizontalAlign.LEFT));
     // 标题 + 金色下划线
     panelNode.addChild(UiHelper.createLabel(`${panel.name}_title`, getText(panel.title.textKey), palette.ink, panel.title.fontSize, panel.title.position, panel.title.size));
     const underline = UiHelper.createNode(panel.titleUnderline.name, panel.titleUnderline.position, panel.titleUnderline.size);
@@ -255,14 +255,15 @@ export class Login extends Component {
     this.drawEye(this.eyeIcon, this.passwordVisible);
     this.bindClick(eye, () => this.togglePasswordVisible());
     password.node.addChild(eye);
-    // 选服按钮（#1009）：区名 / 状态字由 loadZones 回填
+    // 选服按钮（#1009）：地球小图 + 区名 / 状态字由 loadZones 回填
     const serverButton = createRoundedPanel(panel.server.name, panel.server.size, palette.fieldFill, palette.line, radius.control);
-    const serverLabel = UiHelper.createLabel(`${panel.server.name}_label`, getText("login_server_label"), palette.muted, panel.server.fontSize, new Vec2(panel.server.labelX, 0), panel.server.labelSize);
-    serverButton.addChild(serverLabel);
-    const serverName = UiHelper.createLabel(`${panel.server.name}_name`, getText("login_zone_unknown"), palette.ink, panel.server.fontSize, new Vec2(panel.server.nameX, 0), panel.server.nameSize);
+    const globe = UiHelper.createNode(`${panel.server.name}_globe`, new Vec2(panel.server.globeX, 0), new Size(panel.server.globeRadius * 3, panel.server.globeRadius * 3));
+    this.drawGlobe(this.addGraphics(globe), palette.muted, panel.server.globeRadius);
+    serverButton.addChild(globe);
+    const serverName = UiHelper.createLabel(`${panel.server.name}_name`, getText("login_zone_unknown"), palette.ink, panel.server.fontSize, new Vec2(panel.server.nameX, 0), panel.server.nameSize, Label.HorizontalAlign.LEFT);
     serverButton.addChild(serverName);
     this.serverNameLabel = serverName.getComponent(Label);
-    const serverStatus = UiHelper.createLabel(`${panel.server.name}_status`, "", palette.gold, panel.server.statusFontSize, new Vec2(panel.server.statusX, 0), panel.server.statusSize);
+    const serverStatus = UiHelper.createLabel(`${panel.server.name}_status`, "", palette.accentText, panel.server.statusFontSize, new Vec2(panel.server.statusX, 0), panel.server.statusSize);
     serverButton.addChild(serverStatus);
     this.serverStatusLabel = serverStatus.getComponent(Label);
     const caret = UiHelper.createNode(`${panel.server.name}_caret`, new Vec2(panel.server.caretX, 0), new Size(12, 12));
@@ -289,16 +290,17 @@ export class Login extends Component {
     );
     this.bindClick(forgot, () => GameUiHelper.createTip("login_forgot_tip"));
     panelNode.addChild(forgot);
-    // 主按钮：朱红渐变（上半高光阶）+ 描边 + 主文案
-    const button = createRoundedPanel(panel.loginButton.name, panel.loginButton.size, palette.accent, palette.accentBorder, radius.control);
-    const highlight = this.addGraphics(button);
-    highlight.fillColor = palette.highlight;
-    highlight.roundRect(-panel.loginButton.size.width / 2, 0, panel.loginButton.size.width, panel.loginButton.size.height / 2, radius.control);
-    highlight.fill();
-    button.addChild(
-      UiHelper.createLabel(`${panel.loginButton.name}_label`, getText(panel.loginButton.textKey), palette.btnText, panel.loginButton.fontSize, new Vec2(), panel.loginButton.size),
+    // 主按钮：朱红渐变（矢量底板 + 上半亮带 + 描边，primary 色调）
+    const button = GameUiHelper.createToneButton(
+      panel.loginButton.name,
+      getText(panel.loginButton.textKey),
+      panel.loginButton.position,
+      panel.loginButton.size,
+      panel.loginButton.fontSize,
+      buttonTone.primary,
     );
-    this.bindClick(button, () => void this.login());
+    // 点击音与鼠标通道拦截已在按钮工厂里登记（再调 bindClick 会响两声）
+    button.on(Node.EventType.TOUCH_END, () => void this.login(), this);
     this.loginButtonNode = button;
     panelNode.addChild(button);
     // 次要入口行：注册新账号（复用上方输入框）/ 游戏修复（暂时放置 → 飘字）
@@ -317,7 +319,7 @@ export class Login extends Component {
     panelNode.addChild(repair);
     // 脚注：1px 分隔线 + 合规文案
     const footLine = UiHelper.createNode(panel.foot.line.name, panel.foot.line.position, panel.foot.line.size);
-    this.fillRect(this.addGraphics(footLine), panel.foot.line.size, palette.line);
+    this.fillRect(this.addGraphics(footLine), panel.foot.line.size, palette.lineFaint);
     panelNode.addChild(footLine);
     panelNode.addChild(
       UiHelper.createLabel(`${panel.name}_foot`, getText(panel.foot.text.textKey), palette.muted, panel.foot.text.fontSize, panel.foot.text.position, panel.foot.text.size),
@@ -370,7 +372,7 @@ export class Login extends Component {
     graphics.strokeColor = palette.line;
     graphics.roundRect(-config.size.width / 2, -config.size.height / 2, config.size.width, config.size.height, radius.control);
     graphics.stroke();
-    background.addChild(UiHelper.createSprite("input_icon", config.icon, new Vec2(-config.size.width / 2 + 34, 0), new Size(36, 36)));
+    background.addChild(UiHelper.createSprite("input_icon", config.icon, new Vec2(-config.size.width / 2 + 22, 0), new Size(20, 20)));
     const input = UiHelper.createInputBox(
       "input",
       config.placeholder,
@@ -401,13 +403,6 @@ export class Login extends Component {
     graphics.fill();
   }
 
-  /** 实心圆点（面板四角装饰） */
-  private fillCircle(graphics: Graphics, radius: number, color: Color, at: Vec2): void {
-    graphics.fillColor = color;
-    graphics.circle(at.x, at.y, radius);
-    graphics.fill();
-  }
-
   /** 向下小箭头（选服按钮右端） */
   private drawCaretDown(graphics: Graphics, color: Color): void {
     graphics.fillColor = color;
@@ -416,6 +411,19 @@ export class Login extends Component {
     graphics.lineTo(0, 5);
     graphics.close();
     graphics.fill();
+  }
+
+  /** 地球小图（选服条左端）：一圈经线 + 一条赤道 + 一条竖椭圆，16px 见方的图标语汇 */
+  private drawGlobe(graphics: Graphics, color: Color, radius: number): void {
+    graphics.lineWidth = 1;
+    graphics.strokeColor = color;
+    graphics.circle(0, 0, radius);
+    graphics.stroke();
+    graphics.moveTo(-radius, 0);
+    graphics.lineTo(radius, 0);
+    graphics.stroke();
+    graphics.ellipse(0, 0, radius * 0.34, radius);
+    graphics.stroke();
   }
 
   /** 勾选框：选中 = 金底 + 勾，未选中 = 暗底 + 金边 */

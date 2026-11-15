@@ -375,7 +375,8 @@ async function expectFailure(action) {
     "主动退出先吊销令牌（#880）：logoutToLogin 发 auth/logout 后再清会话，且挡住重登兜底（否则登录场景被重载两次）",
   );
   check(
-    /backButton\.on\(Node\.EventType\.TOUCH_END, \(\) => logoutToLogin\(\)\)/.test(read(FILE.selector)),
+    // #1059：返回登录从底部牌匾栏移到左栏 CTA，仍是同一个 logoutToLogin 出口
+    /backButton\.on\(Node\.EventType\.TOUCH_END, \(\) => logoutToLogin\(\),? ?this?\)/.test(read(FILE.selector)),
     "选角「返回登录」走吊销路径（不是只清本地：令牌无状态，删本地副本不影响泄漏出去那份）",
   );
   check(/HttpClient\.setFailureHandler\(/.test(setupSource) && /createErrorTipText\(describeError\(error\)\)/.test(setupSource), "失败出口 = 统一飘字（文案由 ApiError 归一）");

@@ -10,7 +10,8 @@
  * - layout/lights.ts   装备光柱显示（尺寸与帧率；素材与前缀映射见 configs/light）
  * - layout/scenes.ts   场景界面（登录 / 选角 / 加载）
  * - layout/images.ts   图片与字体地址（取图函数 + 具名图片表 uiImages）
- * - layout/sizes.ts    跨界面复用的尺寸与字号（uiSize）
+ * - layout/tokens.ts   设计令牌（design/olua-ui/tokens.css 的 TS 镜像：配色 / 字号 / 圆角 / 间距 / 时长 / 层级 / 舞台）
+ * - layout/sizes.ts    跨界面复用的尺寸与字号（uiSize）+ 按钮三档色调（buttonTone）
  * - layout/theme.ts    通用零件样式（空节点调试边框 / 输入框占位色 / 飘字配色与时长）
  *
  * 约定：组件与零件只引用这里的值，**不在组件里写坐标、尺寸或图片路径**；
@@ -30,5 +31,6 @@ export * from "./layout/backgrounds";
 export * from "./layout/lights";
 export * from "./layout/scenes";
 export * from "./layout/images";
+export * from "./layout/tokens";
 export * from "./layout/sizes";
 export * from "./layout/theme";

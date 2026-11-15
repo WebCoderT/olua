@@ -4,7 +4,7 @@ import RoleUIManager from "../../core/RoleUIManager";
 import StatusIconBar from "./StatusIconBar";
 import { Role } from "../../../entities/Role";
 import { RELATION_SHIP } from "../../../types/role";
-import { uiImages, roleInfoBarLayout } from "../../../configs/hudLayout";
+import { roleInfoBarLayout, T, uiImages } from "../../../configs/hudLayout";
 
 /** 货币种数（收敛后只有绑定元宝一种，#843/#844），用于把货币容器宽度等分给每件 */
 const CURRENCY_COUNT = 1;
@@ -39,8 +39,8 @@ export default class RoleInfoBar extends Node {
     this.isSelf = isSelf;
     this.addComponent(UITransform).setContentSize(layout.size);
     this.applyFixedPosition();
-    // 背景框
-    this.addChild(GameUiHelper.createImage("role_info_background", uiImages.roleInfoBackground, new Vec2(), layout.backgroundSize));
+    // 底板（#1059：矢量半透明面板，不再用底图）
+    this.addChild(GameUiHelper.createGlassPlate("role_info_background", layout.backgroundSize, T.radius.r3, T.line[3]));
     // 名称与等级
     this.nameLabel = GameUiHelper.createText("role_name", role.name, layout.name.fontSize, layout.name.position, layout.name.size, Color.WHITE, Label.HorizontalAlign.LEFT).getComponent(Label);
     this.addChild(this.nameLabel.node);

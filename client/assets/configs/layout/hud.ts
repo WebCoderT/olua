@@ -1,5 +1,6 @@
 import { Color, Size, Vec2 } from "cc";
 import { roleBody } from "../role";
+import { T } from "./tokens";
 
 /**
  * 常驻 HUD 与游戏内固定表现元素的布局
@@ -15,26 +16,26 @@ import { roleBody } from "../role";
 
 /** 角色信息栏布局（坐标以信息栏中心为原点） */
 export const roleInfoBarLayout = {
-  /** 信息栏自身尺寸 */
-  size: new Size(300, 70),
+  /** 信息栏自身尺寸（HUD 规范 344×84：左边缘距屏幕 20、顶边 18） */
+  size: new Size(344, 84),
   /** 自己固定在左上角（屏幕坐标，原点在屏幕中心；固定值直接手调） */
-  position: new Vec2(-791, 489),
+  position: new Vec2(-768, 480),
   /** 其他玩家（屏幕中心） */
   otherPosition: new Vec2(0, 0),
-  /** 背景框尺寸（与原图一致） */
-  backgroundSize: new Size(300, 70),
+  /** 背景框尺寸（与信息栏同尺寸；#1059 起底板改矢量绘制） */
+  backgroundSize: new Size(344, 84),
   /** 名称（左对齐） */
-  name: { position: new Vec2(17, -20), size: new Size(190, 20), fontSize: 14 },
+  name: { position: new Vec2(-14, 12), size: new Size(150, 20), fontSize: T.fontSize.f16 },
   /** 等级 */
-  level: { position: new Vec2(-138, -17.5), size: new Size(24, 24), fontSize: 16 },
+  level: { position: new Vec2(104, 10), size: new Size(48, 18), fontSize: T.fontSize.f11 },
   /** 头像（按职业/性别取图） */
-  portrait: { position: new Vec2(-109.5, 7.5), size: new Size(51, 60) },
+  portrait: { position: new Vec2(-131, 0), size: new Size(54, 58) },
   /** 三种货币（同一个横向布局容器，子件均分容器宽度且内部左对齐） */
-  currencyBar: { position: new Vec2(20, 24), size: new Size(200, 14), spacing: 0 },
+  currencyBar: { position: new Vec2(-16, -16), size: new Size(200, 14), spacing: 0 },
   /** 战斗力（图标尺寸；数值文本紧随图标右边缘，间隔 labelGap） */
-  combat: { position: new Vec2(-38, 1), iconSize: new Size(60, 30), labelGap: 3 },
+  combat: { position: new Vec2(108, 0), iconSize: new Size(60, 30), labelGap: 3 },
   /** 状态图标条（首个图标中心对齐头像中心、向右排开，横向布局；图标来源为 configs/status 各状态的 icon） */
-  statusBar: { position: new Vec2(-109.5, -46), size: new Size(220, 24), spacing: 4, iconSize: new Size(24, 24) },
+  statusBar: { position: new Vec2(-131, -54), size: new Size(220, 24), spacing: 4, iconSize: new Size(24, 24) },
 };
 
 //#endregion
@@ -44,9 +45,9 @@ export const roleInfoBarLayout = {
 /** 底部栏布局（自身坐标以屏幕中心为原点，子件坐标以底部栏中心为原点） */
 export const bottomBarLayout = {
   /** 底部栏主体 */
-  size: new Size(970, 134),
+  size: new Size(1092, 162),
   /** 贴屏幕底部居中（屏幕坐标，原点在屏幕中心；固定值直接手调 —— 旧实现按「中心距下边缘 51」算出，换算结果就是 -489） */
-  position: new Vec2(0, -477),
+  position: new Vec2(0, -451),
   /**
    * 功能按键区（横向布局容器，按钮排列交给 Layout）
    *
@@ -54,7 +55,7 @@ export const bottomBarLayout = {
    * 最右侧多出的宽度对应背景图上那个**宽格子 —— 什么都不放**（留白）。
    * 入口清单见 configs/bottomNav.bottomNavItems；想再塞入口先看这 130 宽度装不装得下
    */
-  navBar: { spacing: 6, position: new Vec2(102, -18), size: new Size(282, 44) },
+  navBar: { spacing: 6, position: new Vec2(160, -8), size: new Size(366, 56) },
   /**
    * 单个功能按键：图标尺寸 + 快捷键字母
    *
@@ -62,11 +63,11 @@ export const bottomBarLayout = {
    * 原来放在右下方 (15,-15) 正好压住最后一个字（真机上是「好友F」「组队G」这种，见 #466）。
    */
   navButton: {
-    size: new Size(42, 44),
-    key: { position: new Vec2(14, 16), size: new Size(20, 20), fontSize: 10 },
+    size: new Size(56, 56),
+    key: { position: new Vec2(20, 22), size: new Size(20, 20), fontSize: T.fontSize.f10 },
   },
   /** 经验条 */
-  expBar: { position: new Vec2(0, -55.5), size: new Size(614, 8) },
+  expBar: { position: new Vec2(0, -64), size: new Size(640, 7) },
   /**
    * 血量球（role_hp_orb 节点：球底图/填充与血量文字都挂这个节点下）
    *
@@ -75,7 +76,7 @@ export const bottomBarLayout = {
    * 血量文字相对球心偏移
    */
   hpOrb: {
-    position: new Vec2(-370, 5),
+    position: new Vec2(-470, -4),
     size: new Size(90, 90),
     text: { position: new Vec2(0, -51.5), size: new Size(120, 10), fontSize: 14 },
   },
@@ -84,22 +85,22 @@ export const bottomBarLayout = {
    * 坐标口径与 hpOrb 相同：position 是节点在底部栏里的位置，文字相对球心偏移
    */
   mpOrb: {
-    position: new Vec2(370, 5),
+    position: new Vec2(470, -4),
     size: new Size(90, 90),
     text: { position: new Vec2(0, -51.5), size: new Size(120, 10), fontSize: 14 },
   },
   /** 快捷键栏（横向布局容器，5 格 = 5×44 + 4×4 = 224；居中在血球与功能按键区之间的空档） */
-  shortcutBar: { spacing: 4, position: new Vec2(-194, -18), size: new Size(226, 44) },
+  shortcutBar: { spacing: 4, position: new Vec2(-189, -8), size: new Size(308, 52) },
   /** 单个快捷键槽：图标尺寸 + 右下角按键名 + 居中冷却倒计时 */
   shortcutSlot: {
-    size: new Size(42, 44),
-    key: { position: new Vec2(20, -15), size: new Size(20, 10), fontSize: 10 },
+    size: new Size(48, 52),
+    key: { position: new Vec2(23, -19), size: new Size(20, 10), fontSize: T.fontSize.f10 },
     cooldown: { position: new Vec2(0, 0), size: new Size(40, 20), fontSize: 16 },
   },
   /** 自动挂机开关（底部栏中段空档，图标下方带文字） */
   autoFight: {
-    size: new Size(44, 44),
-    position: new Vec2(-295, 62),
+    size: new Size(48, 56),
+    position: new Vec2(-377, 4),
     label: { text: "挂机", position: new Vec2(0, -14), size: new Size(44, 12), fontSize: 10 },
   },
 };
@@ -138,8 +139,8 @@ export const joystickLayout = {
  */
 export const smallMapLayout = {
   /** 组件主体（尺寸需容纳整块内容，位置在屏幕右上角——屏幕坐标固定值，原点在屏幕中心，直接手调） */
-  size: new Size(280, 250),
-  position: new Vec2(818, 403),
+  size: new Size(304, 276),
+  position: new Vec2(788, 388),
   /**
    * 功能入口图标：单列竖排，图标资源即 names 里的名字（ui/minimap 目录）
    *
@@ -161,15 +162,15 @@ export const smallMapLayout = {
   entryIconSize: 28,
   entryIconGap: 6,
   /** 按钮列的位置 */
-  entryColumnPosition: new Vec2(-130, -10),
+  entryColumnPosition: new Vec2(-152, -8),
   /** 地图内容区底图（暂为空图占位，其中心即子件坐标原点） */
-  mapFrameSize: new Size(232, 211),
+  mapFrameSize: new Size(260, 205),
   /** 地图内容区的可绘制区域（黑点/红点画在这里） */
-  contentSize: new Size(200, 180),
+  contentSize: new Size(250, 185),
   /** 地图名称条（贴在内容区正上方） */
-  nameBar: { position: new Vec2(0, 106), size: new Size(272, 43), fontSize: 14, color: new Color(255, 223, 170) },
+  nameBar: { position: new Vec2(0, 112), size: new Size(272, 40), fontSize: T.fontSize.f14, color: T.gold[4] },
   /** 线路 / 排行榜标签行（横向布局容器，排行榜在左、线路在右） */
-  tagRow: { position: new Vec2(0, -112), size: new Size(85, 24), gap: 0 },
+  tagRow: { position: new Vec2(0, -118), size: new Size(85, 24), gap: 0 },
   /**
    * 「N 线」动态线号层（#1016）：盖在「服务器线路」标签底图烙死的「1 线」字上
    *
@@ -178,11 +179,11 @@ export const smallMapLayout = {
    * 只在分线（channel > 0）且 `maxChannels > 1` 时显示。
    */
   channelTag: {
-    patch: { name: "small_map_channel_patch", rect: { x: -30.5, y: -5, width: 50, height: 13 }, color: new Color(72, 13, 6, 255) },
-    text: { name: "small_map_channel_text", fontSize: 13, position: new Vec2(-5.5, 0), size: new Size(50, 14), color: new Color(214, 190, 150, 255) },
+    patch: { name: "small_map_channel_patch", rect: { x: -30.5, y: -5, width: 50, height: 13 }, color: T.ember[1] },
+    text: { name: "small_map_channel_text", fontSize: 13, position: new Vec2(-5.5, 0), size: new Size(50, 14), color: T.gold[4] },
   },
   /** 世界坐标条 */
-  positionBar: { position: new Vec2(0, -88), size: new Size(115, 21), fontSize: 12 },
+  positionBar: { position: new Vec2(0, -94), size: new Size(115, 21), fontSize: T.fontSize.f12 },
 };
 
 //#endregion
@@ -191,17 +192,17 @@ export const smallMapLayout = {
 
 /** 怪物信息面板布局（坐标以面板中心为原点） */
 export const monsterInfoPanelLayout = {
-  size: new Size(238, 71),
-  position: new Vec2(0, 480),
+  size: new Size(276, 80),
+  position: new Vec2(0, 484),
   /** 左侧头像（取怪物图标） */
-  avatar: { position: new Vec2(-75, 0), size: new Size(60, 66) },
+  avatar: { position: new Vec2(-104, 0), size: new Size(56, 64) },
   /** 名称（左对齐） */
-  name: { position: new Vec2(26, 17.5), size: new Size(135, 16), fontSize: 14 },
+  name: { position: new Vec2(14, 22), size: new Size(150, 18), fontSize: T.fontSize.f14 },
   /** 血量条与血量文字 */
-  hpBar: { position: new Vec2(29.5, 1.7), size: new Size(140, 12) },
-  hpText: { position: new Vec2(-1, -18), size: new Size(80, 12), fontSize: 12 },
+  hpBar: { position: new Vec2(10, 2), size: new Size(190, 11) },
+  hpText: { position: new Vec2(0, -22), size: new Size(80, 12), fontSize: T.fontSize.f10 },
   /** 技能行（未配置技能则不渲染） */
-  skillRow: { position: new Vec2(65, -18), slotSize: 20, spacing: 4 },
+  skillRow: { position: new Vec2(62, -22), slotSize: 18, spacing: 4 },
 };
 
 //#endregion
@@ -244,7 +245,7 @@ export const dropItemLayout = {
     avatarSize: new Size(32, 32),
     /** 头像与前缀之间的间距（名称行内部的段间距仍取 name.spacing） */
     avatarGap: 2,
-    prefixColor: new Color(200, 200, 200, 255),
+    prefixColor: T.text[2],
   },
 };
 
@@ -263,7 +264,7 @@ export const tipsLayout = {
    * （登录页输入框之间那条深红装饰板就是典型）：纯红 12 号字直接贴上去几乎读不出来。
    * 统一加深色描边 + 提字号，任何底色上都读得清（#457）
    */
-  outline: { width: 2, color: new Color(0, 0, 0, 255) },
+  outline: { width: 2, color: T.surface[0] },
   /** 上浮目标位置（纵坐标）与上浮时长（秒） */
   risePositionY: 40,
   messageMoveDuration: 0.5,
@@ -292,7 +293,7 @@ export const roleShowLayout = {
    * createRoleName），不进头顶信息栏。纵坐标取 roleBody 高度的一半 = 身体几何中心，
    * 由推导保证「正中间」；roleBody 改尺寸时自动跟随
    */
-  name: { position: new Vec2(0, roleBody.size.height / 2), size: new Size(100, 12), fontSize: 10, color: new Color(255, 255, 255) },
+  name: { position: new Vec2(0, roleBody.size.height / 2), size: new Size(100, 12), fontSize: T.fontSize.f10, color: T.text[1] },
   /** 战魂外显（勾选「外显」时挂载，随主角移动；动画帧自带大量透明边距，实际视觉尺寸更小） */
   soul: { position: new Vec2(26, 62), size: new Size(72, 72), scale: { x: 0.1, y: 0.1 } },
 /**
@@ -310,7 +311,7 @@ export const roleShowLayout = {
    * 军衔没有素材，头顶这份就是它的全部外观：未授衔（rank = 0）时整行清空、不留视觉。
    * 颜色刻意用红：军衔是「杀出来的功名」，与白色的角色名称、白色的血量文字区分开。
    */
-  rank: { fontSize: 10, size: new Size(100, 12), color: new Color(255, 60, 60) },
+  rank: { fontSize: T.fontSize.f10, size: new Size(100, 12), color: T.ember[3] },
 };
 
 //#endregion
@@ -326,21 +327,21 @@ export const roleShowLayout = {
  */
 export const questTrackerLayout = {
   /** 首行位置（屏幕坐标原点在中心） */
-  position: new Vec2(-640, 190),
+  position: new Vec2(-775, 210),
   /** 命中区宽度（文字左对齐铺满） */
-  width: 300,
+  width: 330,
   /** 每行高度（行间不再另加间距） */
   rowHeight: 22,
   /** 最多显示几条（超出部分不显示：「还有 N 条」提示） */
   maxRows: 3,
   fontSize: 12,
   /** 任务名颜色 / 进度颜色（可交付时整行转绿） */
-  nameColor: new Color(255, 226, 150, 255),
-  progressColor: new Color(170, 182, 198, 255),
-  readyColor: new Color(120, 220, 140, 255),
+  nameColor: T.gold[4],
+  progressColor: T.text[3],
+  readyColor: T.jade,
   /** 超出提示（{count} = 还有几条没显示） */
   moreText: "还有 {count} 条任务，打开任务面板查看",
-  moreColor: new Color(150, 160, 175, 255),
+  moreColor: T.text[3],
   /** 空态不显示任何东西（追踪栏占位也不留） */
   texts: {
     /** 进度格式：{done}/{total} */
@@ -367,8 +368,8 @@ export const questNpcMarkLayout = {
   offset: new Vec2(0, 96),
   size: new Size(40, 26),
   fontSize: 20,
-  availableColor: new Color(255, 214, 102, 255),
-  readyColor: new Color(120, 220, 140, 255),
+  availableColor: T.gold[4],
+  readyColor: T.jade,
   /** 标记字符（! 可接 / ? 可交付；两个都没有就整块隐藏） */
   texts: { available: "!", ready: "?" },
 };
