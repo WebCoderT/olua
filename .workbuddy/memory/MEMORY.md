@@ -99,7 +99,7 @@ admin 退回 `127.0.0.1:8081` —— 宿主机 `:80` 只能有一个主人；开
   两个接口后；`/admin` path 前缀是 **195**，差 3 个是免令牌的 `/admin/auth/*`）；
   client 单测 **70 套**；
   e2e **92 套**（**按 `test:e2e*` 脚本数**，`ls server/test/e2e*.cjs` 是 91 个文件，差的那 1 个是
-  `test:e2e:backup` → `test/backup.cjs`；全仓一律按脚本数，别再写 90/91）；`make audit` **18 项**；
+  `test:e2e:backup` → `test/backup.cjs`；全仓一律按脚本数，别再写 90/91）；`make audit` **19 项**；
   表 **76 = 39 配置 + 37 运行时**；管理端 **53 页面 / 54 路由**；客户端 **32 个 Manager**；结算缓存 **14**；
   `docs/37` 是最高优先单一来源。
 - **`docs/README` 的目录表有守点**（#1039 / #1042 / #1045）：`audit-docs-toc` 守**四类**——每篇都要登记
@@ -108,6 +108,11 @@ admin 退回 `127.0.0.1:8081` —— 宿主机 `:80` 只能有一个主人；开
 - **「行数」列已删除（#1045）**，别再往目录表加回去：行数是唯一「改任何一篇正文一个字都可能变」的
   派生数字，冲突面 100%，并行会话「算完 → 合并」之间必漂（#1042 加守点首跑就红）。原则：**派生数字
   要么精确维护、要么不写**，写「大致准」的行数等于假精确。
+- **数量声明有守点**（#1050，`audit-count-claims`）：全仓文案里的 `N 项审计` / `N 个守点`、`N 套 e2e`、
+  `N 套 client/tools/test-*.cjs` 必须等于磁盘实际数量（`ls tools/audit-*.cjs` / `test:e2e*` 脚本数 /
+  `ls client/tools/test-*.cjs`）。**加/删审计或 e2e 后跑 `node tools/audit-count-claims.cjs --write`**。
+  `.workbuddy/memory/**` 永久排除（历史日志写的是当时的数，改了反而失真）。
+  ↳ 2026-11-15 实测同一数字在四处分别是 **12 / 15 / 16 / 18** —— 不是改漏了，是没有单一来源。
 - **新增 env 键 / 文案 / 节点名 / 颜色的 PR，静态审计预判三处登记**：`.env.example`（`audit-api-hardcode`）+
   `tools/config-leak-allowlist.json`（config-leak）+ 进了配置快照的键还要加 `e2e-guard` 的 `EXPECTED_CONFIG_KEYS`。
   新增 e2e 脚本别忘 `tools/run-e2e.cjs` 的 `WEIGHT`（漏了只是分片不均，不报错）。

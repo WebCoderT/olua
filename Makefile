@@ -5,7 +5,7 @@
 #    client/  Cocos Creator 3.8.7 + TypeScript 客户端（没有 npm 脚本，用编辑器打开）
 #    server/  NestJS 12 + node:sqlite 服务端（同时是接口契约的唯一源头）
 #    admin/   React 19 + Vite + Tailwind v4 管理端
-#    tools/   跨端脚本（接口生成 + 数据快照生成 + 12 项审计 + e2e 辅助）
+#    tools/   跨端脚本（接口生成 + 数据快照生成 + 19 项审计 + e2e 辅助）
 #
 #  常用：
 #    make install          首次拉仓库：装 server / admin 依赖
@@ -59,7 +59,7 @@ CREATOR ?= CocosCreator
         check test verify ci ci-static e2e-all server-e2e-shard server-install-ci \
         audit audit-generated audit-hardcode audit-config audit-click audit-deploy \
         test-changed \
-        audit-shared-data audit-equip-align-catalog audit-docs-toc \
+        audit-shared-data audit-equip-align-catalog audit-docs-toc audit-count-claims \
         docker-build docker-up docker-down docker-logs \
         client-check client-test client-test-one client-gen-monster client-gen-drops \
         client-clean-frames client-clean-frames-apply client-open client-gen-declarations \
@@ -463,6 +463,9 @@ audit-equip-align-catalog: ## 装备对齐清单（管理端工作台的数据�
 
 audit-docs-toc: ## docs/README 目录表的登记 / 序号 / 死链 / 接口数是否与磁盘一致（加接口后先 --write）
 	@$(NODE) tools/audit-docs-toc.cjs
+
+audit-count-claims: ## 全仓「N 项审计 / N 套 e2e / N 套单测」声明是否等于磁盘实际数量（加脚本后先 --write）
+	@$(NODE) tools/audit-count-claims.cjs
 
 
 # ==============================================================================
