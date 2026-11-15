@@ -7,7 +7,7 @@ import { DatabaseService, SqlParam } from "../database.service";
  * ===========================================================================
  * 为什么这两张表要单独一个仓储
  * ===========================================================================
- * 回滚要「把 38 张配置表整体换掉」，而**表名是数据不是常量**（清单在
+ * 回滚要「把全部配置表整体换掉」，而**表名是数据不是常量**（清单在
  * `scripts/lib/config-tables.cjs`）——`DELETE FROM "?"` 在 SQLite 里不成立，只能在运行期
  * 拼字符串。按仓库的边界纪律，**SQL 只许出现在仓储里**，所以这层必须存在：
  * 业务侧（`ConfigVersionService` / `ConfigRevisionService`）只表达「落一层 / 取一层 /
@@ -150,7 +150,7 @@ export class ConfigRevisionRepository {
 
   //#region 配置表（表名动态，SQL 只能在这里拼）
 
-  /** 事务（回滚的 38 张表必须在一个事务里换完） */
+  /** 事务（回滚要换的全部配置表必须在同一个事务里换完） */
   transaction<T>(work: () => T): T {
     return this.db.transaction(work);
   }

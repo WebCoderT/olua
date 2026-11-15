@@ -212,7 +212,7 @@ async function main() {
     checkEqual(layer1.version, 1, "层的版本号 = 改动后的版本号");
     checkEqual(layer1.label, "adminSkill.update", "层上记的是触发改动的接口标识");
     checkEqual(layer1.createdBy, "gm_config", "层上记的是操作人");
-    check(layer1.tableCount >= 30, "payload 是全量配置（38 张表上下）", String(layer1.tableCount));
+    check(layer1.tableCount >= 30, "payload 是全量配置（覆盖全部配置表）", String(layer1.tableCount));
     check(layer1.rowCount > 10000, "payload 行数与库里一致（约 1.3 万行）", String(layer1.rowCount));
     check(layer1.byteSize > 0, "payload 字节数有记录");
 
