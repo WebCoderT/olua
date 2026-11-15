@@ -154,7 +154,9 @@ function saveAudio(key, token, body) {
     const list = await api("GET", "admin/audio-settings", { token: adminToken, zoneId: ADMIN_ZONE });
     check(list.code === 0, "超管能读音效列表", list.message);
     const rows = list.data?.list ?? [];
-    check(rows.length === 12 && list.data.total === 12, "出厂 12 个音效项", `${rows.length}`);
+    // 出厂有几项音效属于「界面合同」（AUDIO_KEYS 登记表），行数跟着登记表走 —— 这里只判「灌进去了」；
+    // 要守的是下面那条「顺序 = 登记顺序」，以及每一项都能被读到（#966）
+    check(rows.length > 0 && list.data.total === rows.length, "音效项都读得到（条数 = 登记表，具体几项不写死）", `${rows.length}`);
 
     // 顺序 = `AUDIO_KEYS` 登记顺序（按分类成组）—— 管理端 tab 的分组与顺序就按它排，
     // 换成字典序会让「界面与交互」不再排在最前面

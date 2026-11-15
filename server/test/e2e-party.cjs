@@ -695,8 +695,9 @@ function snap(snapshot) {
     const kill1 = await kill(sA, mob);
     check(!!kill1 && !!kill1.reward, "击杀后 settle 帧带 reward（经验在服务端结算）");
     const killerExp = kill1 && kill1.reward ? kill1.reward.exp : 0;
-    // 1 级打 1 级怪：(1+1) × expPerLevel(5) × (1 - 0/6) = 10
-    checkEqual(killerExp, 10, "击杀者拿全额（等级差 0 → 10 点）");
+    // 具体几点由怪物经验 × 等级差系数算出来（配置数据），这里只判「确实发了经验、且是正数」；
+    // 「队友拿一半」那条是对这个值的纯算术关系，不需要知道基数是多少（#966）
+    check(killerExp > 0, "击杀者拿到经验（基数由经验表与等级差算出，不锁具体点数）", String(killerExp));
 
     const mateGain = await waitFor("B 收到队友经验帧", async () => sB.expGains.slice(-1)[0] || null);
     checkEqual(mateGain && mateGain.exp, Math.floor(killerExp / 2), "同图队友拿到击杀经验的一半（向下取整）");
@@ -768,12 +769,18 @@ function snap(snapshot) {
     // 只验「读配置」这一小段数学：起第二台服务要 30 秒，而这三种脏值用类本身就能钉死
     group("十、上限脏值回落（直接 new 服务类，不起第二台服务）");
     const { PartyService } = require(path.join(SERVER_DIR, "dist", "modules", "party", "party.service.js"));
+    // 回落值是服务端自己的默认常量（`common/constants/social.ts`），不是运营数据 —— 从 dist 里
+    // 读出来比：以后调默认值不会假红，但「脏值透传 / 不回落」照样会红（#966）
+    const { PARTY_MEMBER_LIMIT_DEFAULT, PARTY_MIN_LEVEL_DEFAULT } = require(
+      path.join(SERVER_DIR, "dist", "common", "constants", "social.js"),
+    );
     const dirtyConfig = (value) => new PartyService({}, {}, { get: () => value });
-    checkEqual(dirtyConfig("abc").memberLimit(), 4, "非数字上限回落默认 4（不让组队变成「一个人就算满」）");
-    checkEqual(dirtyConfig(1).memberLimit(), 4, "小于 2 的上限回落默认");
+    checkEqual(dirtyConfig("abc").memberLimit(), PARTY_MEMBER_LIMIT_DEFAULT, "非数字上限回落默认（不让组队变成「一个人就算满」）");
+    checkEqual(dirtyConfig(1).memberLimit(), PARTY_MEMBER_LIMIT_DEFAULT, "小于 2 的上限回落默认");
+    check(PARTY_MEMBER_LIMIT_DEFAULT >= 2, "默认上限本身是合法值（≥ 2）", String(PARTY_MEMBER_LIMIT_DEFAULT));
     checkEqual(dirtyConfig("6").memberLimit(), 6, "合法值（含数字字符串）照配置走");
-    checkEqual(dirtyConfig(undefined).minLevel(), 10, "门槛未配置回落默认 10（与客户端入口 openLevel 同值）");
-    checkEqual(dirtyConfig(0).minLevel(), 10, "小于 1 的门槛回落默认（读错不该让「所有人都不能组队」）");
+    checkEqual(dirtyConfig(undefined).minLevel(), PARTY_MIN_LEVEL_DEFAULT, "门槛未配置回落默认（与客户端入口 openLevel 同值）");
+    checkEqual(dirtyConfig(0).minLevel(), PARTY_MIN_LEVEL_DEFAULT, "小于 1 的门槛回落默认（读错不该让「所有人都不能组队」）");
     checkEqual(dirtyConfig("12").minLevel(), 12, "合法门槛（含数字字符串）照配置走");
 
     //#endregion

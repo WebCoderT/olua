@@ -220,7 +220,13 @@ async function preparePlayer(baseUrl, username, roleName) {
     group("一·五、帮会规则读运行时参数（管理端「运行时参数」页可改）");
 
     const rulesBefore = await api(baseUrl, "GET", "admin/runtime-params", { token: adminToken, zoneId: ADMIN_ZONE });
-    checkEqual(rulesBefore.data && rulesBefore.data.guild.nameMax, 12, "帮会名上限出厂 12 字（seed 自 shared/runtime-seed）");
+    // 出厂值存在 runtime-seed 里（运营数据），这里只判「读得到、是个正的字符上限」；
+    // 真正的行为由下一段（改成 4 之后长名被拒）验，值本身不用锁（#966）
+    check(
+      Number(rulesBefore.data && rulesBefore.data.guild.nameMax) > 0,
+      "帮会名上限读得到（正数字，具体几字由运行时种子配）",
+      JSON.stringify(rulesBefore.data && rulesBefore.data.guild.nameMax),
+    );
 
     const tighten = await api(baseUrl, "PATCH", "admin/runtime-params", {
       token: adminToken, zoneId: ADMIN_ZONE,

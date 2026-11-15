@@ -434,7 +434,9 @@ async function api(baseUrl, method, route, options = {}) {
       Number((await readRole()).data.attrPoints),
       "回执的余点与存档一致（客户端照搬即可）",
     );
-    checkEqual(resetResult.data.cost, 500, "洗点花了出厂价 500（`growth_scalars.attrResetCost`）");
+    // 洗点要多少钱由 `growth_scalars.attrResetCost` 配（运营数据）；判「报价是个正数、且按这个数扣了」
+    check(Number(resetResult.data.cost) > 0, "洗点报价是正数（数值本身由成长参数配）", JSON.stringify(resetResult.data.cost));
+    const resetCostPaid = Number(resetResult.data.cost);
 
     const afterReset = readAttrsInDb(dbPath, roleId);
     check(
@@ -443,7 +445,7 @@ async function api(baseUrl, method, route, options = {}) {
       JSON.stringify(afterReset.attrs),
     );
     checkEqual(afterReset.attrPoints, pointSum, "点数全退（余点 = 洗点前四维之和）");
-    checkEqual(afterReset.bindGold, beforeReset.bindGold - 500, "绑定元宝扣了 500（扣钱与归零在同一次写档里）");
+    checkEqual(afterReset.bindGold, beforeReset.bindGold - resetCostPaid, "绑定元宝按报价扣（扣钱与归零在同一次写档里）");
     check(
       afterReset.maxHp <= beforeReset.maxHp,
       "面板跟着回到基线（生命上限降回去了，说明重算真的跑了）",
