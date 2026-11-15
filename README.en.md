@@ -8,9 +8,9 @@ The project is **free and open source**: play the live instance or deploy your o
 
 | What you want | Where to go |
 | --- | --- |
-| Play right now | <http://game.yimw.cn> (web build, no download) |
-| See what the project looks like | <http://yimw.cn> (site: gameplay, screenshots, architecture, deployment) |
-| Open the admin console | <http://admin.yimw.cn> (edit configs, post announcements, manage accounts) |
+| Play right now | <https://game.yimw.cn> (web build, no download) |
+| See what the project looks like | <https://yimw.cn> (site: gameplay, screenshots, architecture, deployment) |
+| Open the admin console | <https://admin.yimw.cn> (edit configs, post announcements, manage accounts) |
 
 > Code lives on [GitHub](https://github.com/WebCoderT/olua); [Gitee](https://gitee.com/putiwan/olua) is a read-only mirror.
 > If you find it interesting, a **Star ⭐** is appreciated.

@@ -7,9 +7,9 @@
 
 | 想做什么 | 去哪里 |
 | --- | --- |
-| 立刻玩一把 | <http://game.yimw.cn>（网页版，不用下载） |
-| 看看项目长什么样 | <http://yimw.cn>（官网：玩法、截图、架构、部署） |
-| 进运营后台 | <http://admin.yimw.cn>（改配置、发公告、管账号） |
+| 立刻玩一把 | <https://game.yimw.cn>（网页版，不用下载） |
+| 看看项目长什么样 | <https://yimw.cn>（官网：玩法、截图、架构、部署） |
+| 进运营后台 | <https://admin.yimw.cn>（改配置、发公告、管账号） |
 
 > 代码在 [GitHub](https://github.com/WebCoderT/olua)，[Gitee](https://gitee.com/putiwan/olua) 是只读镜像。
 > 觉得有意思可以点个 **Star ⭐**。

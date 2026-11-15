@@ -7,7 +7,7 @@
 它只负责把结果演出来。
 
 > 这是 **Cocos Creator 工程的根目录** —— 用 Cocos Creator 打开的就是这个目录，不是仓库根。
-> 想直接玩：打开 <http://game.yimw.cn>，不需要装任何东西。
+> 想直接玩：打开 <https://game.yimw.cn>，不需要装任何东西。
 > 项目总览见 [../README.md](../README.md)；客户端的问题见 [FAQ.md](FAQ.md)；
 > 服务端 / 管理端 / 跨端的说明见 [../server/](../server/) · [../admin/](../admin/) · [../FAQ.md](../FAQ.md)。
 

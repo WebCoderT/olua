@@ -24,6 +24,16 @@
 浏览器 ──► :8080 游戏容器（:80 那条游戏入口的直连等价物，调试用）
 ```
 
+开了 HTTPS（`OLUA_TLS=on`，见[第 10 节](#10-https边缘-terminated-tls)）时，最前面多一跳，
+其余部分一行不变：
+
+```
+浏览器 ──► edge 容器 :80 / :443（nginx 终止 TLS，一张四域名证书）
+              ├─ :80  ─► 只应答 ACME 校验（/.well-known/acme-challenge/），其余 301 到 https
+              └─ :443 ─► 整站反代到 admin:80（Host 原样透传 → 上面那张图的分流照旧生效）
+          此时宿主机 :80 归 edge，admin 退回 127.0.0.1:8081（只给本机验收用）
+```
+
 **域名是环境变量，不是配置**：`admin/nginx.conf.template` 是 envsubst 模板，三站域名在
 `deploy.env` 的 `OLUA_SITE_DOMAINS` / `OLUA_ADMIN_DOMAIN` / `OLUA_GAME_DOMAIN` 里给，
 deploy.sh 每次部署生成 compose `.env` 上传 → 换域名只改 deploy.env 重发，不改代码、不重建镜像。
@@ -32,7 +42,7 @@ deploy.sh 每次部署生成 compose `.env` 上传 → 换域名只改 deploy.en
 `/resources/`）：那份素材（`client/assets/resources`，含 `image-manifest.json` /
 `audio-manifest.json`）**不在 Cocos 构建产物里**，要单独 `deploy.sh --resources` 增量同步。
 
-三条设计约束，改动时别破坏：
+五条设计约束，改动时别破坏：
 
 | 约束 | 为什么 |
 | --- | --- |
@@ -40,7 +50,7 @@ deploy.sh 每次部署生成 compose `.env` 上传 → 换域名只改 deploy.en
 | 服务端 `:3100` **不映射到宿主机** | 对外多开一个端口只是把签名接口和 Swagger 一并暴露，没有收益。要本地调试就把 `docker-compose.yml` 里那四行注释打开 |
 | 实时进程 `:3101` **同样不映射**（#175 拆进程） | game 容器把 `/api/realtime*` 按路径反代到 `server-realtime`（含 WS upgrade 头），客户端零改动；两进程共享同一个 SQLite 卷（WAL） |
 | **管理端块必须 `default_server`** | nginx 的 `_` 不是通配符；不标默认站点的话，未匹配域名（如 IP 直访）会落到 :80 的**第一个** server 块（官网站）拿 404 |
-| **不上 HTTPS**（当前决定） | 先跑通。将来要上就在宿主机加一层 nginx/Caddy 做 TLS 终结、反代到 :80，不动 compose |
+| **TLS 只在最外层终结**（#742，`edge` 容器） | 三站分流已经在 admin 的模板里；边缘只做「同一个 Host 原样转进去」，所以它只有一段 `location`。让 admin 自己 `listen 443` 就得把 80 跳转与 443 站点各写一份三站 server 块 —— 同一套路由两份配置 |
 
 数据落在具名卷 `olua-data`，`docker compose down` **不会**删它；只有 `down -v` 才会。
 
@@ -81,6 +91,9 @@ $EDITOR deploy.env      # 填真实值
 
 `JWT_SECRET` 必须是随机长串，别手编：`openssl rand -hex 32`
 
+开 HTTPS 只需要在这份文件里再加两个键：`OLUA_TLS=on` 与 `OLUA_ACME_EMAIL=<你的邮箱>`
+（deploy.sh 会派生 compose 侧需要的全部变量，不用手工改 compose，见第 10 节）。
+
 > **安全红线**：`.gitignore` 已排除 `deploy.env` 与 `*.pem`（`server/.gitignore` 也排除了 `server/.env`）。
 >  仓库是公开的 —— 任何一次把 `deploy.env`、`olua.pem` 或 `server/.env` 提交上去，
 >  都等同于把服务器交出去。提交前 `git status` 看一眼，它们**不该出现**在待提交列表里。
@@ -94,7 +107,8 @@ $EDITOR deploy.env      # 填真实值
 >  所以改为**从管理机（本地仓库）导出归档再上传** —— 确定性高、不受 GitHub 连通性影响，
 >  且 `git archive` 天然只含**已提交文件**，不会把 `node_modules`、素材、`deploy.env` 带上去。
 
-前提（一次性）：服务器装好 Docker CE、`ubuntu` 在 docker 组、控制台防火墙放行 **80**（将来上 HTTPS 再放 443）。
+前提（一次性）：服务器装好 Docker CE、`ubuntu` 在 docker 组、控制台防火墙放行 **80**；
+开 HTTPS 还要放行 **443**（见第 10 节）。
 
 ```bash
 # 0) 读配置
@@ -208,6 +222,16 @@ docker compose down -v                # 收并删卷 —— **会丢库**，别�
 docker system prune -a                # 清无用镜像层（磁盘紧张时用）
 ```
 
+开了 HTTPS 之后还会多两个容器（只在 `--profile tls` 下存在，`.env` 里
+`COMPOSE_PROFILES=tls` 会自动带上）：
+
+```bash
+docker compose ps                     # 多出 edge（:80/:443）与 certbot 两个
+docker compose logs -f edge           # 边缘 nginx：证书缺失、301、WS 握手问题都看这里
+docker compose logs certbot           # 续期记录（每 12 小时一次，静默 = 没到期）
+docker compose exec certbot certbot certificates   # 当前证书、SAN、到期时间
+```
+
 ---
 
 ## 7. 数据备份
@@ -239,6 +263,10 @@ docker run --rm -v olua-data:/data -v /opt/olua/backup:/backup \
 | 上传 40M 归档被中断 | `scp` 可能超过前台命令时限，放到后台跑即可，不是网络故障 |
 | `pkill -f "git clone"` 把自己也杀了 | 模式会匹配到自身命令行，写成 `pkill -f "git clon[e]"` |
 | 管理端注册不了 | 配了 `ADMIN_REGISTER_CODE` 就必须带相同邀请码；**留空不等于开放注册**（需显式 `ADMIN_REGISTER_OPEN=true`） |
+| `edge` 起来了但页面打不开 | `docker compose logs edge`：若打印「还没有证书」，说明首次签发没跑 → `deploy.sh --tls-init` |
+| https 打不开、http 还 301 跳过去 | 证书没就位或 443 没在控制台放行；`docker compose logs edge` 与 `curl -k https://<域名>/` |
+| 浏览器一直跳 https，但证书报错 | 301 被浏览器缓存了（换域名或清缓存才能回退），所以证书要先签好再开 `OLUA_TLS` |
+| 续期失败 | certbot 走 webroot：`edge` 必须在跑（:80 上要有 `/.well-known/acme-challenge/`），且 80 对公网可达 |
 
 ---
 
@@ -290,9 +318,11 @@ bash .workbuddy/skills/olua-deploy/scripts/deploy.sh --game client/build/web-des
 
 ### 9.4 三个容易踩的点
 
-- **接口地址不用为不同环境改**：`client/assets/configs/network.ts` 会按 `location.hostname` 判断，
-  回环地址与私有网段 / 本地域名（含以局域网 IP 打开的 Cocos 预览）走 `http://localhost:3100/api`，
-  公网域名才走同源 `/api`。**一份产物两处通用**。
+- **接口地址由 `DEV_MODE` 一个开关决定**（`client/assets/configs/network.ts`）：`true` = 开发，
+  走 `http://<页面 host>:3100/api`（主机取自**当前页面**，所以手机用局域网 IP 打开也能连）；
+  `false` = 打包，走同源 `/api`。**同源这一条就是 HTTPS 天然兼容的原因**：页面是 https，
+  `/api` 自然是 https，实时通道的地址也按 `http→ws / https→wss` 从 baseUrl 推导 ——
+  换协议客户端一行都不用改（#742 核过一遍）。⚠ 发布前把 `DEV_MODE` 改回 `false`。
 - **缺资源必须报 404**：`deploy/nginx-game.conf` **故意不写** SPA 那种 `try_files $uri /index.html`，
   否则缺图时会回一段 HTML 给资源加载器，错误极难定位。
 - **缓存策略**：构建没开 `md5Cache`，文件名不带内容哈希 → 资源只能短期缓存（`assets/` 设 1 小时）；
@@ -301,3 +331,120 @@ bash .workbuddy/skills/olua-deploy/scripts/deploy.sh --game client/build/web-des
 ### 9.5 防火墙
 
 `:8080` 要在云厂商控制台放行，**这台机器上的 `ufw`/iptables 改不了那层**。
+
+开 HTTPS 之后：**放行 443**（否则只有 301 能过去、页面打不开），`:8080` 可以不再对外 ——
+玩家走 `https://game.yimw.cn`（经 edge 的 443 → admin → game），8080 只是本机调试入口。
+注意 `:8080` 是**明文**，对外开放时等于留了一条绕过 HTTPS 的旁路。
+
+---
+
+## 10. HTTPS（边缘 terminated TLS）
+
+> 目标（#742）：四个 host 全部 HTTPS、http 301 到 https、一张证书覆盖四个域名、自动续期。
+> 上线前的事实：443 完全没监听，管理端密码与 JWT 在公网明文走，分享卡片因 `og:image`
+> 是 http 取不到图。
+
+### 10.1 拓扑与分工
+
+最前面加一跳 `edge`（nginx），它是宿主机 `:80` / `:443` 的**唯一主人**：
+
+| 容器 | 职责 | 什么时候存在 |
+| --- | --- | --- |
+| `edge` | 终止 TLS，持证书；`:80` 只应答 ACME 校验并 301 到 https；`:443` 把同一个 Host 反代到 `admin:80` | `--profile tls` |
+| `certbot` | 每 12 小时 `renew` 一次（webroot），证书落在具名卷 `olua-letsencrypt` | `--profile tls` |
+| `admin` | 三站分流**照旧**（它收到的还是原来的 Host）；TLS 下不再对外发布端口，只绑 `127.0.0.1:8081` | 一直都有 |
+
+为什么不让 `admin` 自己 `listen 443`：三站分流已经在它的模板里，边缘只做「原样转进去」，
+所以边缘只有一段 `location`。反过来做，80 跳转与 443 站点就得各写一份三站 server 块 ——
+同一套路由两份配置，改一处忘一处只在线上看得出来。详见 `deploy/nginx-edge.conf` 头部。
+
+### 10.2 打开它
+
+```bash
+# deploy.env 里加两行（这个文件永不提交）
+OLUA_TLS=on
+OLUA_ACME_EMAIL=you@example.com      # Let's Encrypt 的到期提醒走这里
+```
+
+deploy.sh 会自动派生 compose 侧需要的三样东西，**不需要手工改 compose**：
+
+| 写进服务器 `.env` | 作用 |
+| --- | --- |
+| `COMPOSE_PROFILES=tls` | `docker compose up -d` 自动带上 `edge` / `certbot`（不用每次多打 `--profile`） |
+| `OLUA_ADMIN_BIND=127.0.0.1` | 让 admin 不再占公网 `:80` |
+| `OLUA_ADMIN_PORT=8081` | admin 退到 8081，把 `:80` 让给 edge |
+
+### 10.3 首次签发（只跑一次）
+
+前提两件事，缺一件就会卡在「校验文件 404」或「连接超时」：
+
+1. 四个域名（`yimw.cn` / `www` / `admin` / `game`）都**解析到这台机器**；
+2. 云厂商控制台放行 **80 与 443**（本机 ufw/iptables 改不了那层）。
+
+```bash
+bash .workbuddy/skills/olua-deploy/scripts/deploy.sh --tls-init
+```
+
+它做的事（顺序不能反）：起后端与静态站但**不起 edge** → 用 `certbot` 的 `--standalone`
+占住 `:80` 应答校验（此时 `:80` 是空的）→ 签出 `--cert-name olua` 的四域名证书 →
+再起 `edge` → 跑完整验收。
+
+> 为什么首次不用 webroot：鸡生蛋 —— webroot 要求 `:80` 上有人把校验文件供出来，而 `:80`
+> 归 edge，edge 又要证书才能起 nginx。之后所有**续期**才走 webroot（edge 已在服务）。
+
+### 10.4 续期（无人值守）
+
+| 谁 | 多久 | 做什么 |
+| --- | --- | --- |
+| `certbot` 容器 | 每 12 小时 | `certbot renew`（剩 30 天才真续，其余静默退出） |
+| `edge` 容器 | 每 6 小时 | `nginx -s reload` —— certbot 在**另一个容器**里，这一层没有 Docker socket，只能自己定期重读证书 |
+
+reload 是热操作（不断连接）。就算续期发生在两次 reload 之间，最坏也是「新证书晚 6 小时生效」，
+而证书是 90 天有效期，没有任何风险。
+
+### 10.5 验收
+
+`deploy.sh --verify` 在 TLS 模式下的输出多三行，正是 #742 的验收项：
+
+```
+admin page: 200                       # https://127.0.0.1/（-k，用 IP 打时证书名对不上）
+admin 内网口: 200                      # http://127.0.0.1:8081/（直连后端，验证它自己没坏）
+--- HTTPS 专项
+http→https: 301 → https://admin.yimw.cn/
+证书到期: notAfter=Feb 13 12:00:00 2027 GMT
+证书 SAN: DNS:yimw.cn, DNS:www.yimw.cn, DNS:admin.yimw.cn, DNS:game.yimw.cn
+```
+
+外部视角再核一遍（本机 DNS 与浏览器缓存都可能骗人）：
+
+```bash
+for h in yimw.cn www.yimw.cn admin.yimw.cn game.yimw.cn; do
+  curl -s -o /dev/null -w "$h  https=%{http_code}  " "https://$h/"
+  curl -s -o /dev/null -w "http=%{http_code}\n" "http://$h/"
+done
+```
+
+分享卡片：微信调试工具 / opengraph 校验工具读 `https://yimw.cn/`，`og:image` 应当能取到图。
+
+### 10.6 回滚（回到明文 :80）
+
+```bash
+# deploy.env 里 OLUA_TLS=off，然后正常发一次
+bash .workbuddy/skills/olua-deploy/scripts/deploy.sh
+```
+
+`build_compose_env` 不再写 `COMPOSE_PROFILES` / `OLUA_ADMIN_BIND` / `OLUA_ADMIN_PORT`，
+compose 回到默认值：admin 重新占 `:80`，edge 与 certbot 因为 profile 不激活而**不会被拉起**
+（容器会在下次 `up -d` 时被清掉）。证书留在卷里，再打开 `OLUA_TLS=on` 时可以直接复用。
+
+> ⚠ 浏览器侧不可逆：**301 会被缓存**，回滚后访问过 https 的浏览器仍会往 https 跳。
+> 真要回退，得换域名或让用户清缓存 —— 所以「先签好证书、确认 https 全绿，再开 `OLUA_TLS`」。
+
+### 10.7 暂时放置（不是不做）
+
+| 项 | 为什么现在不做 | 重开条件 |
+| --- | --- | --- |
+| HSTS（`Strict-Transport-Security`） | 一旦下发，浏览器在 max-age 内**强制** https，证书出问题就没有回退余地 | https 稳定跑满一个续期周期（≥90 天）无事故 |
+| 证书到期监控告警 | 现在靠 `deploy.sh --verify` 的「证书到期」一行人工看 | 有第二个人接手运维，或出现一次「忘了看」 |
+| DNS-01 / 泛域名证书 | 需要 DNSPod API 密钥进服务器；四个固定域名用 http-01 就够 | 出现「动态子域名」需求（如每个副本一个域名） |
+| IPv6 / OCSP stapling | 当前没有 AAAA 记录，OCSP 效果也取决于客户端 | 域名加 AAAA 记录 |

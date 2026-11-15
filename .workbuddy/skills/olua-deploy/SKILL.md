@@ -53,7 +53,10 @@ compose 里有**五个服务**，但对外只有一个 80（管理端容器当�
   （服务名、`/api/` 前缀）由 `tools/audit-deploy.cjs` 替你对齐 —— 改任何一边都要两边一起改。
 - **`/game-resources/`**：管理端把 game 容器的 `/resources/` 反代出去，图片选择器 / 装备对齐 / 音效清单
   的生产数据源就在这。服务端「边框 / 背景从文件夹同步」读的是同一份（compose 挂 `./game/resources` 只读）。
-- 当前**不上 HTTPS**；将来要上就在宿主机加 nginx/Caddy 做 TLS 终结反代到 :80，不动 compose。
+- **HTTPS 是可选的一层**（#742，`deploy.env` 里 `OLUA_TLS=on`）：最前面加 `edge` 容器（nginx）
+  独占宿主机 `:80`/`:443`，终止 TLS 后把同一个 Host 转给 `admin:80`（三站分流一行不改），
+  `certbot` 容器每 12 小时续期。打开后 `deploy.sh` 会自动写 `COMPOSE_PROFILES=tls` 并把 admin
+  退回 `127.0.0.1:8081` —— 宿主机 `:80` 只能有一个主人。首次签发要单独跑一次 `--tls-init`。
 
 ## 标准流程
 
@@ -65,6 +68,7 @@ bash ~/.workbuddy/skills/olua-deploy/scripts/deploy.sh --no-build  # 只换代�
 bash ~/.workbuddy/skills/olua-deploy/scripts/deploy.sh --env-only  # 只更新 server/.env（+ compose .env）并重启服务端
 bash ~/.workbuddy/skills/olua-deploy/scripts/deploy.sh --game      # 同步 Cocos Web 产物到 :8080
 bash ~/.workbuddy/skills/olua-deploy/scripts/deploy.sh --resources # 同步素材包到 game/resources/（/game-resources 的数据源）
+bash ~/.workbuddy/skills/olua-deploy/scripts/deploy.sh --tls-init  # 首次签发证书（OLUA_TLS=on 才用，跑一次）
 bash ~/.workbuddy/skills/olua-deploy/scripts/deploy.sh --verify    # 只做验收检查
 ```
 

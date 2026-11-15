@@ -7,7 +7,7 @@ browser are all drawn by the code in here. It makes no decisions of its own — 
 from the server; this side only plays the result out on screen.
 
 > This is **the root directory of the Cocos Creator project** — open this directory in Cocos Creator, not the repository root.
-> Just want to play? Open <http://game.yimw.cn>, nothing to install.
+> Just want to play? Open <https://game.yimw.cn>, nothing to install.
 > Project overview: [../README.en.md](../README.en.md); client questions: [FAQ.en.md](FAQ.en.md);
 > admin questions: [../admin/README.en.md](../admin/README.en.md); cross-side FAQ: [../FAQ.en.md](../FAQ.en.md); server: [../server/README.en.md](../server/README.en.md).
 
