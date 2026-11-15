@@ -62,6 +62,8 @@
 - 图集加载：`loadLoopFrames(dir)` 候选 `[dir, dir/<basename>]`（`effect/upgrade` 命中 `effect/upgrade/upgrade.plist`）；
   「图集优先、散帧兜底」，两样全缺才是整片空白。
 - 发布：`make resources-manifest/pack/upload RES_VERSION=<新版本>` + 提交**仓库根**的 `resources.manifest.json`。
+  `make audit` 里的 `audit-resource-refs` 末尾会按**存在性 + 大小**打印清单体检（**只警告不判红**，#1027）；
+  sha1 口径只认 `resources_sync.py verify`，别造第二个真相。
 
 ## 引擎坑 / 部署（展开 → `cocos-*` 技能 · `olua-deploy`）
 指针事件配 `UITransform`；Game 挂 Canvas → 五世界层建好再 `setWorldPosition(0,0,0)`；显隐与摆位绑「片段就绪」。
