@@ -218,6 +218,10 @@ export class DropService implements OnApplicationBootstrap, OnApplicationShutdow
       this.ground.set(key, field);
     }
     const taken = Array.from(field.values()).map((entity) => ({ x: entity.x, y: entity.y }));
+    // 归属者的职业 / 性别（#804）：客户端要拿它拼 `ui/avatar/{职业}-{性别}.png` 画归属小头像。
+    // 掉落是击杀者打出来的，他此刻必然在线（`online` 取的就是当前选中角色）；取不到就留空，
+    // 客户端退化为「只显示『XX的』前缀」（docs/18 §6.7）。
+    const ownerRole = this.roles.online(input.owner.accountId);
 
     const result: Array<{ dropId: string; goodId: string; count: number; bound: boolean }> = [];
     for (let index = 0; index < drops.length; index += 1) {
@@ -242,7 +246,12 @@ export class DropService implements OnApplicationBootstrap, OnApplicationShutdow
         from: itemTypeOf(drop.goodId) === "equipment"
           ? { role: input.owner.name, monster: input.source.monsterKey, at: now }
           : undefined,
-        owner: { accountId: input.owner.accountId, roleId: input.owner.roleId, name: input.owner.name },
+        owner: {
+          accountId: input.owner.accountId,
+          roleId: input.owner.roleId,
+          name: input.owner.name,
+          ...(ownerRole ? { occupation: ownerRole.occupation, sex: ownerRole.sex } : {}),
+        },
         partyId: input.partyId ?? null,
         source: {
           instanceId: input.source.instanceId,
@@ -707,6 +716,12 @@ export class DropService implements OnApplicationBootstrap, OnApplicationShutdow
       y: Math.round(entity.y),
       ownerName: entity.owner.name,
       ownerAccountId: entity.owner.accountId,
+      // 归属小头像（#804）：两样都齐才下发 —— 缺一样客户端就画不出图，不如让它只留前缀
+      ...(entity.owner.occupation && entity.owner.sex
+        ? { ownerClass: entity.owner.occupation, ownerSex: entity.owner.sex }
+        : {}),
+      // 同队可捡的预判依据（#804）：只在下发有队伍时给，空串（无队伍）不占字段
+      ...(entity.partyId ? { partyId: entity.partyId } : {}),
       protectUntil: entity.protectUntil,
       expireAt: entity.expireAt,
       expireInMs: Math.max(0, entity.expireAt - now),
@@ -881,7 +896,14 @@ export interface DropEntity {
   bound: boolean;
   /** 溯源，只有装备有（能力与 #789 一致） */
   from?: { role?: string; monster?: string; at?: number };
-  owner: { accountId: string; roleId: string; name: string };
+  owner: {
+    accountId: string;
+    roleId: string;
+    name: string;
+    /** 归属者的职业 / 性别（#804：客户端画归属小头像用；取不到就是 undefined） */
+    occupation?: string;
+    sex?: string;
+  };
   /** 掉落那一刻归属者所在的队伍（null = 无队伍）；保护期判定的依据 */
   partyId: string | null;
   source: { instanceId: string; monsterKey: string; label: string; tier: string };

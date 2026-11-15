@@ -223,6 +223,18 @@ export const dropItemLayout = {
   nameColor: Color.WHITE,
   /** 数量段颜色（可叠加物品的「x{数量}」） */
   countColor: Color.WHITE,
+  /**
+   * 归属标记（#804）：名称行最左侧的圆形小头像 + 「XX的」前缀
+   *
+   * `avatarSize` 固定 32×32（比图标小一圈才不像第二个物品）；头像缺职业 / 性别时**不画空框**，
+   * 只留前缀（见 docs/18 §6.7）。前缀色刻意压暗：它是「这是谁的」的注解，不该比物品名更抢眼。
+   */
+  owner: {
+    avatarSize: new Size(32, 32),
+    /** 头像与前缀之间的间距（名称行内部的段间距仍取 name.spacing） */
+    avatarGap: 2,
+    prefixColor: new Color(200, 200, 200, 255),
+  },
 };
 
 //#endregion

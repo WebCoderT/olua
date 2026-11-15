@@ -341,6 +341,21 @@ export default class RealtimeClient {
       CombatChannel.dispatchPicked(frame.data);
       return;
     }
+    if (frame.type === "dropSpawn") {
+      // 掉落出现（#802）：同图广播，含击杀者自己 —— 铺地只走这一条（#804）
+      CombatChannel.dispatchDropSpawn(frame.data);
+      return;
+    }
+    if (frame.type === "dropRemove") {
+      // 掉落消失（#802）：被捡走 / 过期 / 单图超限被挤掉，客户端按 id 收节点
+      CombatChannel.dispatchDropRemove(frame.data);
+      return;
+    }
+    if (frame.type === "dropNotice") {
+      // 稀有掉落全服公告（#802）：用现有系统飘字展示，不进聊天
+      CombatChannel.dispatchDropNotice(frame.data);
+      return;
+    }
     if (frame.type === "chat") {
       // 聊天广播（#395）：世界 / 帮会 / 私聊同形，形状的解释在 CombatChannel
       CombatChannel.dispatchChat(frame.data);

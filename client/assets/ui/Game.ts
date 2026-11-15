@@ -158,7 +158,11 @@ export class Game extends Component {
     // 伤害结算上移服务端（#34）：settle 帧的结果由怪物管理器落到目标身上（扣血/飘字/死亡）
     CombatChannel.onSettle = MonsterManager.applyServerSettle.bind(MonsterManager);
     // 世界权威（#35）：world 帧的快照由怪物管理器与场上节点做差量合并（播种落场/重生补场）
-    CombatChannel.onWorld = MonsterManager.applyWorldState.bind(MonsterManager);
+    // 地面掉落物也在这一帧里（#802）：进图 / 断线重连**先清再按快照重建**，旧图的东西不跟过来
+    CombatChannel.onWorld = (snapshot) => {
+      MonsterManager.applyWorldState(snapshot);
+      DropManager.applySnapshot(snapshot.drops, snapshot.mapId);
+    };
     // 本人状态快照（#826 第三批）：被怪物挂上眩晕 / 灼烧时服务端主动推，不经过 settle。
     // 与 settle 回执里的 statuses 走同一个落点（整表重建图标栏），不做增量
     CombatChannel.onStatuses = (statuses) => StatusManager.applyFromServer(statuses);
@@ -180,6 +184,11 @@ export class Game extends Component {
     };
     // 拾取权威（#325）：picked 帧由掉落管理器落账（入包格子照搬 + 收掉地面节点）
     CombatChannel.onPicked = (data) => DropManager.applyPickedFrame(data);
+    // 掉落铺地 / 收场 / 公告（#802 / #804）：三条帧都归掉落管理器，**铺地只有一条路** ——
+    // 击杀者与旁观者收的是同一条广播，不再有「自己杀的走 settle、别人杀的走 monster-ai」
+    CombatChannel.onDropSpawn = (frame) => DropManager.onDropSpawn(frame);
+    CombatChannel.onDropRemove = (frame) => DropManager.onDropRemove(frame);
+    CombatChannel.onDropNotice = (frame) => DropManager.onDropNotice(frame);
     // 位置修正（#811）：服务端不认我刚才上报的位置 → 拉回权威坐标（近距插值 / 远距瞬移 + 飘字）。
     // 飘字只说一次「网络波动」：不说玩家会以为游戏坏了，多说一句他就会被反复打断
     CombatChannel.onPosCorrect = (frame) => {
@@ -408,6 +417,9 @@ export class Game extends Component {
     CombatChannel.onEntityEnter = null;
     CombatChannel.onEntityLeave = null;
     CombatChannel.onPicked = null;
+    CombatChannel.onDropSpawn = null;
+    CombatChannel.onDropRemove = null;
+    CombatChannel.onDropNotice = null;
     CombatChannel.onPosCorrect = null;
     CombatChannel.onPath = null;
     CombatChannel.onChat = null;
@@ -519,6 +531,8 @@ export class Game extends Component {
     // 掉落物自动拾取（角色走到掉落物上即收入背包，用位移后的最新位置判定）
     const rolePosition = this.roleDisplay?.getWorldPosition();
     if (rolePosition) DropManager.autoPickup(rolePosition);
+    // 掉落的本地到期兜底 + 保护期到点撤归属标记（#804）：只做这两件事，不画任何倒计时
+    DropManager.update();
     // 新手引导（#402）：「先动起来」按**实际走过的距离**判，不看按键 ——
     // 摇杆、方向键、点地面走的都算（这些都是「我在移动」的同一种事实）
     if (rolePosition) {

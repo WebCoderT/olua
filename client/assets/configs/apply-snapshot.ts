@@ -309,8 +309,10 @@ export function applyAppearanceSection(data: unknown): void {
  * 运营改不了；现在服务端存一份（`config-sync.sql` → `runtime_params` 表 → 管理端可改），
  * 进游戏拉一次快照就覆写到本地参数对象上。
  *
- * **覆写是「改字段」不是「换对象」**：消费方（DropManager / AutoBattle / DropScatter /
- * GuildPanel）持有的是同一个对象的引用，换对象等于把改动写在空气里。
+ * **覆写是「改字段」不是「换对象」**：消费方（DropManager / AutoBattle / GuildPanel）
+ * 持有的是同一个对象的引用，换对象等于把改动写在空气里。（#804 起散落搬到服务端，
+ * 客户端的 `DropScatter` 已删除；`dropRuntime.scatterMinDistance` 仍随快照覆写，
+ * 但客户端不读它 —— 留着只为与快照同形。）
  *
  * `guild` 那组客户端**只用于提示**（输入框长度、建帮按钮下的门槛说明），判定在服务端 ——
  * 覆写它只是让提示跟上运营改的值，改不改得动结果由服务端说了算。

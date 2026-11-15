@@ -34,6 +34,30 @@ export interface DropResult {
   goodId: string;
   /** 掉落数量 */
   count: number;
+  /**
+   * 地面实体的 id（#802；服务端结算时回填）
+   *
+   * 客户端**不用它铺地**（铺地只走 `dropSpawn` 广播），它只让击杀者对得上号
+   * （日志 / 排查「这件东西最后去哪了」）。
+   */
+  dropId?: string;
+  /** 是否绑定角色（#789；只影响背包格子展示） */
+  bound?: boolean;
+}
+
+/**
+ * 掉落物归属者（#804：地面上的「XX的」前缀与圆形小头像）
+ *
+ * `occupation` / `sex` 可能缺（服务端查不到角色时不下发）—— 缺了就**只留前缀**，
+ * 不画空框、不留占位（docs/18 §6.7）。
+ */
+export interface DropOwner {
+  /** 归属者显示名（前缀「{name}的」） */
+  name: string;
+  /** 职业（拼 `ui/avatar/{职业}-{性别}.png`） */
+  occupation?: string;
+  /** 性别（同上） */
+  sex?: string;
 }
 
 /**

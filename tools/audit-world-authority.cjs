@@ -23,7 +23,9 @@
  *   2. 掉落入包只许走 `StorageManager.applyPickResult`（照搬服务端落的格子），
  *      `addGood` 不许在 `ui/` 里被调用（它只有一个定义，出现在别的行就是本地发物品）；
  *   3. 唯一入口接线：`GameMap` 发 `sendWorldJoin`、`MonsterManager` 落 `applyWorldState`、
- *      `DropManager.spawnResults` 的 `castId` **必填**（缺省就是「本地口径的掉落」）；
+ *      **铺地只走服务端的 `dropSpawn` / `world.drops`**（#804：`MonsterManager` 不许碰掉落，
+ *      客户端不许出现 `spawnResults` / `spawnRemoteDrops` / `scatterDropPositions`），
+ *      pick 帧只带 `dropId`；
  *   4. 服务端那一侧真的在算：`world.service` 读 `map_spawn_areas` 播种、
  *      `combat-settlement` 抽掉落并调 `roles.pickDrop`；
  *   5. 怪物数值与表现**客户端零副本**（#588，取代 #586 的「出厂兜底」）：configs/monster
@@ -83,6 +85,18 @@ function forbid(dir, patterns, hint) {
   }
 }
 
+/** 断言某个**文件**里不许出现这些模式（forbid 是扫目录，单文件单独一条路） */
+function forbidFile(file, patterns, hint) {
+  const lines = read(file, "扫描目标").split(/\r?\n/);
+  lines.forEach((text, index) => {
+    for (const pattern of patterns) {
+      if (pattern.test(text)) {
+        problem(file, index + 1, `${hint}（命中 ${pattern}）：${text.trim()}`);
+      }
+    }
+  });
+}
+
 /** 断言某个文件里必须出现这些模式 */
 function requirePatterns(file, patterns, hintPrefix) {
   const text = read(file, "必需接线");
@@ -133,6 +147,7 @@ for (const file of walk(CLIENT_UI)) {
 const GAME_MAP = path.join(CLIENT_UI, "components", "map", "GameMap.ts");
 const MONSTER_MANAGER = path.join(CLIENT_UI, "core", "MonsterManager.ts");
 const DROP_MANAGER = path.join(CLIENT_UI, "core", "DropManager.ts");
+const COMBAT_CHANNEL = path.join(CLIENT_UI, "utils", "net", "CombatChannel.ts");
 
 requirePatterns(GAME_MAP, [
   { pattern: /CombatChannel\.sendWorldJoin\(this\.onMapId\);/, hint: "建图必须登记「我在哪张图」（服务端据此播种）" },
@@ -140,23 +155,38 @@ requirePatterns(GAME_MAP, [
 
 requirePatterns(MONSTER_MANAGER, [
   { pattern: /static applyWorldState\(/, hint: "服务端快照的落场点不见了 —— 怪物会永远刷不出来" },
-  { pattern: /DropManager\.spawnResults\(reward\.drops/, hint: "掉落必须来自 settle 帧的 reward（不是本地结算）" },
 ]);
 
+// 怪物管理器**不许再碰掉落**（#804）：铺地只有服务端广播一条路。
+// #804 之前这里挂着两条 —— `spawnResults(reward.drops)`（自己杀的）与
+// `spawnRemoteDrops(kill.dp)`（别人杀的），那正是「同一堆东西铺两遍、位置对不上、
+// 别人的还捡不起来」的来源。掉落现在是世界实体，只由 `dropSpawn` / `world.drops` 铺。
+forbidFile(MONSTER_MANAGER, [/DropManager\./], "MonsterManager 不许碰掉落（只清怪；铺地归 DropManager.onDropSpawn）");
+
 requirePatterns(DROP_MANAGER, [
-  // `indexBase`（#824）是一次施放打中多只时的**掉落下标起点**，只在服务端账本按施放合并
-  // （多只怪的掉落记在同一份账里，第二只起的下标要接着第一只数）时才有值。
-  // 它必须留默认值 0：单目标路径不传，等于「这份掉落就是账本的头几件」。
-  // castId 仍然必填 —— 下面还有一条专门盯着 `castId?:` 不许出现。
-  { pattern: /static spawnResults\(results: DropResult\[\], position: Vec3, castId: number, indexBase = 0\)/, hint: "spawnResults 的 castId 必须必填 —— 可选参数就是「本地口径的掉落」" },
+  // 铺地两条路进同一个实现：增量 `dropSpawn` 与全量 `world.drops`（进图 / 重连）
+  { pattern: /static onDropSpawn\(frame: DropSpawnFrame\)/, hint: "铺地必须由服务端的 dropSpawn 帧驱动" },
+  { pattern: /static applySnapshot\(drops: DropSnapshot\[\] \| undefined, mapId: string\)/, hint: "进图 / 重连必须按 world.drops 重建" },
+  { pattern: /private static spawnOne\(snapshot: DropSnapshot\)/, hint: "两条路必须进同一个铺地实现（否则又会出现两套表现）" },
   { pattern: /StorageManager\.applyPickResult\(/, hint: "入包要照搬服务端落的格子（applyPickResult）" },
 ]);
 
-// spawnResults 的参数表里不许出现 `castId?:`
+// 客户端不许再出现「自己铺 / 自己散落掉落」的旧入口（#804 已把它们删干净）
+forbid(
+  CLIENT_UI,
+  [/spawnResults\s*\(/, /spawnRemoteDrops\s*\(/, /scatterDropPositions\s*\(/],
+  "客户端不许自己铺 / 自己散落掉落（#804：坐标与生命周期都在服务端，客户端只摆节点）",
+);
+
+// 拾取帧只带 dropId（#802）：带 castId + 下标就是退回「击杀者的账本」那套，
+// 别人的掉落根本没有那个账本（这正是旧实现捡不起别人东西的原因）
 {
-  const text = read(DROP_MANAGER, "掉落管理器");
-  if (/spawnResults\([^)]*castId\?:/.test(text)) {
-    problem(DROP_MANAGER, 0, "spawnResults 的 castId 又变成可选了（可选 = 允许没有服务端账本的掉落物）");
+  const text = read(COMBAT_CHANNEL, "实时通道");
+  if (!/static sendPick\(dropId: string\): boolean/.test(text)) {
+    problem(COMBAT_CHANNEL, 0, "sendPick 必须按 dropId 发请求（不是 castId + 下标）");
+  }
+  if (/type: "pick", data: \{[^}]*castId/.test(text)) {
+    problem(COMBAT_CHANNEL, 0, "pick 帧又带上 castId 了（拾取定位只有 dropId 一处）");
   }
 }
 
@@ -309,7 +339,7 @@ if (problems.length === 0) {
   const scanned = walk(CLIENT_UI).length;
   console.log(
     `✓ 世界权威：客户端 ${scanned} 个文件无本地刷怪 / 无本地掉落结算；` +
-      "唯一入口（sendWorldJoin / applyWorldState / spawnResults(castId) / pickDrop）齐全；" +
+      "唯一入口（sendWorldJoin / applyWorldState / dropSpawn + world.drops / pickDrop(dropId)）齐全；" +
       "怪物数值与表现客户端零副本（game-config 怪物区无数值字段、运行时表由快照两段填充）",
   );
   process.exit(0);

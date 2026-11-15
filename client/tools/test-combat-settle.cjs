@@ -121,8 +121,14 @@ check(
 );
 check(/CombatChannel\.dispatchSettle\(frame\.data\)/.test(realtimeSource), "RealtimeClient 把 settle 帧转发给 CombatChannel");
 check(
-  /CombatChannel\.onWorld = MonsterManager\.applyWorldState\.bind\(MonsterManager\);/.test(gameSource) && /CombatChannel\.onWorld = null;/.test(gameSource),
-  "Game.ts 接线 onWorld（start 接上、onDestroy 摘掉）——必须 bind：回调经 CombatChannel 方法调用触发，裸赋值会让 this 丢成 CombatChannel（#222）",
+  // #804 起 onWorld 多了一段「地面掉落物按快照重建」，于是从裸 bind 改成箭头函数；
+  // 断言随之允许两种写法，但**必须**满足其中一种：要么 bind 上 MonsterManager，
+  // 要么在箭头里显式写 `MonsterManager.applyWorldState(` —— 回调由 CombatChannel 触发，
+  // 裸方法引用会让 this 丢成 CombatChannel（#222，这才是这条断言真正守的东西）
+  (/CombatChannel\.onWorld = MonsterManager\.applyWorldState\.bind\(MonsterManager\);/.test(gameSource) ||
+    /CombatChannel\.onWorld = \(snapshot\) => \{[^}]*MonsterManager\.applyWorldState\(snapshot\)/.test(gameSource)) &&
+    /CombatChannel\.onWorld = null;/.test(gameSource),
+  "Game.ts 接线 onWorld（start 接上、onDestroy 摘掉）——receiver 必须显式（bind 或箭头里点名 MonsterManager），裸赋值会让 this 丢成 CombatChannel（#222）",
 );
 check(/castSeq \+= 1/.test(channelSource), "CombatChannel.castSeq 单调递增（castId 只会更大）");
 check(/id: SkillId;/.test(skillTypeSource), "SkillConfig 声明 id 字段（技能实现 sendCast(config.id) 的来源）");

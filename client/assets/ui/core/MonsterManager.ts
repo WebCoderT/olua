@@ -10,7 +10,6 @@ import { skillDamageBand } from "../utils/battle/BattleMath";
 import { cursorConfig } from "../../configs/cursor";
 import LayerManager from "./LayerManager";
 import CursorManager from "./CursorManager";
-import DropManager from "./DropManager";
 import MonsterAI from "./MonsterAI";
 import EffectManager from "./EffectManager";
 import AnimationHelper from "../helpers/AnimationHelper";
@@ -247,17 +246,16 @@ export default class MonsterManager {
   /**
    * 别人击杀了一只怪的演出（#689）
    *
-   * 两段都各自独立成立，顺序不分先后（节点可能因为换图 / 迟到事件而不在场）：
-   * - 怪还在场上 → 走既有的「无奖励死亡清场」（applyDamage killed 路径：播死亡动画、
-   *   注销数据与悬停，动画播完移除节点）—— 与世界快照的兜底清场同一口径，没有经验与掉落入账；
-   * - 掉落铺场：纯演出，没有 pick 定位（服务端账本在击杀者名下，#325 归属设计不变），
-   *   不可拾取 —— 点击与自动拾取都会跳过（见 DropManager.spawnRemoteDrops）。
+   * 只做清场：怪还在场上 → 走既有的「无奖励死亡清场」（applyDamage killed 路径：播死亡动画、
+   * 注销数据与悬停，动画播完移除节点），与世界快照的兜底清场同一口径，没有经验与掉落入账。
+   *
+   * **掉落不在这里铺**（#804）：别人杀的怪掉什么，由服务端的 `dropSpawn` 广播给同图所有人
+   * （含击杀者自己）—— 一条路径、一份形状，不存在「击杀者演一套、旁观者演另一套」。
    */
   private static applyRemoteKill(kill: MonsterKillEntry): void {
     const node = this.instanceIndex.get(kill.i);
     const monster = node ? this.monsterMap.get(node) : null;
     if (node && monster && monster.hp > 0) this.applyDamage(node, monster, 0, 0, true);
-    if (kill.dp.length) DropManager.spawnRemoteDrops(kill.dp, new Vec3(kill.x, kill.y));
   }
 
   /**
@@ -373,8 +371,6 @@ export default class MonsterManager {
     secondDamage?: number;
     /** 这一发吃了等级压制（#826 第三批；只换飘字文案，伤害已由服务端压过） */
     suppressed?: boolean;
-    /** 掉落下标起点（#824：一次施放打中多只时，第二只起的掉落要接着第一只数） */
-    dropIndexBase?: number;
   }) {
     // 状态快照（#822）：任何一次结算都可能带回「我现在有哪些状态」—— 先刷新图标与身上特效，
     // 再做伤害表现。状态型技能到这里就结束：它没有目标、不产生伤害，
@@ -382,11 +378,9 @@ export default class MonsterManager {
     if (data.statuses) StatusManager.applyFromServer(data.statuses);
     if (data.statusOnly) return;
     // 区域 / 群体（#824）：一条 settle 帧带多只的结果，逐只走同一条落账路径。
-    // `dropIndexBase` 是**跨目标累计**的掉落下标：服务端把一次施放的所有掉落记在同一份
-    // 账本里（拾取帧只有 castId + index），所以第二只怪的掉落要从第一只的末尾接着数 ——
-    // 每只都从 0 数会让「拾第二只的掉落」指到第一只身上（#325 的账本语义）。
+    // #804 起掉落不再由这里铺 —— 铺地只走服务端的 `dropSpawn` 广播（同图所有人同一条路径），
+    // 所以这一层不再需要「跨目标累计掉落下标」了。
     if (data.hits && data.hits.length > 0) {
-      let dropIndexBase = 0;
       for (const hit of data.hits) {
         this.applyServerSettle({
           castId: data.castId,
@@ -398,9 +392,7 @@ export default class MonsterManager {
           reward: hit.reward,
           // 压制逐只标（#826 第三批）：一片怪里等级可能不同，飘字也就各不一样
           suppressed: hit.suppressed,
-          dropIndexBase,
         });
-        dropIndexBase += hit.reward?.drops.length ?? 0;
       }
       return;
     }
@@ -426,7 +418,7 @@ export default class MonsterManager {
         );
       }
     }
-    this.applyDamage(node, monster, data.damage, data.hp, data.killed, data.reward, data.castId, data.dropIndexBase ?? 0, data.secondDamage ?? 0, data.suppressed === true);
+    this.applyDamage(node, monster, data.damage, data.hp, data.killed, data.reward, data.secondDamage ?? 0, data.suppressed === true);
   }
 
   /**
@@ -512,8 +504,6 @@ export default class MonsterManager {
    * @param hp 落完后的血量（服务端给的值）
    * @param killed 是否死亡（以服务端判定为准）
    * @param reward 击杀奖励（#316：服务端结算的入账结果；缺省 = 兜底清场，无奖励）
-   * @param castId 结算的出手序号（#325：随掉落物记账，拾取帧靠它定位服务端账本）
-   * @param dropIndexBase 掉落在服务端账本里的起始下标（#824：AOE 一次打中多只时逐只偏移）
    */
   private static applyDamage(
     target: Node,
@@ -522,8 +512,6 @@ export default class MonsterManager {
     hp: number,
     killed?: boolean,
     reward?: CombatKillReward,
-    castId?: number,
-    dropIndexBase = 0,
     /** 两段连击的第二段（#826 第三批）：单独飘一次，血条只落终值 */
     secondDamage = 0,
     /** 等级压制（#826 第三批）：换飘字文案，数值已经压过了 */
@@ -548,8 +536,8 @@ export default class MonsterManager {
         StorageManager.applyKillReward(reward);
         GameUiHelper.showExpGain(target, reward.exp);
       }
-      // 掉落铺场时带上 castId（#325）：拾取要拿「castId + 下标」向服务端发 pick 帧
-      DropManager.spawnResults(reward.drops, target.getWorldPosition(), castId, dropIndexBase);
+      // #804：掉落**不在这里铺**了。铺地只走服务端的 `dropSpawn` 广播（同图所有人同一条路），
+      // `reward.drops` 现在只用来对账（它带 dropId，但不参与落节点 —— docs/18 §4.3）。
     }
     // 注销数据与悬停注册（信息面板/选中光圈/阻挡/点击判定随之失效），
     // 然后播放死亡动画，动画播完才移除节点；缺死亡帧资源的怪直接移除（不播动画也不永久残留）

@@ -35,14 +35,27 @@ const read = (rel) => fs.readFileSync(path.join(PROJECT_ROOT, rel), "utf8");
 
 /**
  * 从（已剥注释的）源码里取某个方法的完整方法体
- * 左括号取「签名所在行的最后一个 `{`」——本仓库 K&R 风格（签名与左括号同行），
- * 这样带返回类型注解的方法（`: { row: Node; … } {`）不会被类型里的花括号截断
+ *
+ * 左括号取「参数表右括号所在那一行末尾的 `{`」：本仓库 K&R 风格（签名与左括号同行），
+ * 这样带返回类型注解的方法（`: { row: Node; … } {`）不会被类型里的花括号截断。
+ * #804 起参数表允许跨行（createDropNameRow 多了 owner 参数），所以要一行行找
+ * 「含 `)` 且以 `{` 结尾」的那一行 —— 单行签名走到第一轮就命中，行为与原来一致。
  */
 function methodBody(code, signature) {
   const start = code.indexOf(signature);
   if (start < 0) return "";
-  const lineEnd = code.indexOf("\n", start);
-  const open = code.lastIndexOf("{", lineEnd < 0 ? code.length : lineEnd);
+  let cursor = start;
+  let open = -1;
+  while (cursor < code.length) {
+    const lineEnd = code.indexOf("\n", cursor);
+    const end = lineEnd < 0 ? code.length : lineEnd;
+    const line = code.slice(cursor, end).trimEnd();
+    if (line.includes(")") && line.endsWith("{")) {
+      open = cursor + line.length - 1;
+      break;
+    }
+    cursor = end + 1;
+  }
   if (open < start) return "";
   let depth = 0;
   for (let i = open; i < code.length; i++) {
@@ -146,6 +159,10 @@ check(/^export const dropItemLayout = \{/m.test(hudSource), "dropItemLayout 定�
 check(/export \* from "\.\/layout\/hud";/.test(barrelSource), "hudLayout barrel 导出（组件仍从 configs/hudLayout 取）");
 
 check((helperCode.match(/getEquipmentNameParts\(/g) || []).length >= 2, "getEquipmentNameParts 被详情弹窗与地面掉落名共用（同一函数，两处必然一致）");
-check(/GameUiHelper\.createDropItem\(good, count\)/.test(dropManagerSource), "DropManager 仍按「物品 + 数量」调用（口径未变）");
+// #804：掉落物的名称行多了归属标记，调用点随之带上 owner；「物品 + 数量」这两个入参口径没变
+check(
+  /GameUiHelper\.createDropItem\(good, snapshot\.count, dropItemLayout\.iconSize, owner\)/.test(dropManagerSource),
+  "DropManager 仍按「物品 + 数量」铺名（owner 是本刀新增的归属标记，不改前三参语义）",
+);
 
 finish("PASS：掉落名三段拼装、前后缀配色同源、几何入配置与界面接线全部通过。");
