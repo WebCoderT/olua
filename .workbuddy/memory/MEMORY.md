@@ -81,11 +81,11 @@ compose 五服务：admin:80 唯一入口 / game:8080 / server:3100 / realtime:3
   显示效果靠人眼看截图，不写断言。细则 → `.workbuddy/skills/olua-admin-ui/`。
 
 ## 进度与口径（细节 → `topics/进度年表.md`）
-- **当前 open**（2026-11-15 核）：**#1025 资源清单过期**（verify 红，暂缓发布）· #1001 副本与传送代价
-  （#808 epic 只剩这一块）· #772 epic 延迟与分片 · #742 TLS · #403 帮会战（远期占位）。
-  保持现状：技能 1011 / 快捷键 6 格 / 装备 7 部位。
+- **当前 open**（2026-11-15 核）：**#1025 资源清单过期**（verify 红，暂缓发布）· **#1001 副本 instance**
+  （#808 epic 只剩这一刀；第一刀「传送代价 + 空房 tick + 管理端」已落，见年表）· #772 epic 延迟与分片 ·
+  #742 TLS · #403 帮会战（远期占位）。保持现状：技能 1011 / 快捷键 6 格 / 装备 7 部位。
 - **口径数字**：`docs/14` 无生成脚本、改接口手工加行，现 **266 = 8 + 68 + 190**；client 单测 **70 套**；
-  e2e **91 套**；`make audit` **17 项**；`docs/37` 是最高优先单一来源。
+  e2e **92 套**；`make audit` **17 项**；`docs/37` 是最高优先单一来源。
 - **新增 env 键 / 文案 / 节点名 / 颜色的 PR，静态审计预判三处登记**：`.env.example`（`audit-api-hardcode`）+
   `tools/config-leak-allowlist.json`（config-leak）+ 进了配置快照的键还要加 `e2e-guard` 的 `EXPECTED_CONFIG_KEYS`。
   新增 e2e 脚本别忘 `tools/run-e2e.cjs` 的 `WEIGHT`（漏了只是分片不均，不报错）。
