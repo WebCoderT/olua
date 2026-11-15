@@ -101,8 +101,9 @@
    同一套正则必须**同时**跑 `server/data/config-sync.sql` 与本地库，否则两边漂移。
 4. **客户端**：`configs/layout/images.ts` 的取图函数与具名表、`configs/{border,background,light,role,animation}`、
    `types/*` 注释。
-5. **门禁**：`node tools/audit-resource-refs.cjs`（静态字面量 + 展开型引用 + 磁盘结构自检 + 快照 key 点名）
-   与 `make test-changed`。
+5. **门禁**：`node tools/audit-resource-refs.cjs`（静态字面量 + 展开型引用 + 磁盘结构自检 + 快照 key 点名；
+   末尾还会按**存在性 + 大小**体检清单，清单落后磁盘时打一行提示 —— **只警告不判红**，因为那是「还没发版」
+   而不是断链。逐文件 sha1 的口径仍是 `resources_sync.py verify`）与 `make test-changed`。
 6. **清单**：`resources_sync.py manifest --version <新版本>`。
 
 零引用素材**不删只归档**：移到 `_loose_frames_archive/orphans-<年月>/`（该目录 gitignored，
