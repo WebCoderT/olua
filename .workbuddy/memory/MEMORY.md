@@ -46,7 +46,7 @@
   数字漂，「< 200ms」是体验目标不是回归判据；写进断言就是「机器一忙就红」。
 - **数量声明有守点**（#1050）：`tools/audit-count-claims.cjs` 现算「N 项审计 / N 套 e2e / N 套客户端单测」，
   与 `tools/audit-*.cjs`、`server/package.json`、`client/tools/test-*.cjs` 比对；**加脚本后跑 `--write`**
-  （它会连 Makefile / CI 注释 / 官网 / skills 一起改，共 31 处），别再手工列清单。`.workbuddy/memory/**` 永久排除。
+  （它会连 Makefile / CI 注释 / 官网 / skills 一起改，现 63 处），别再手工列清单。`.workbuddy/memory/**` 永久排除。
 - 工具链：只信 Grep 工具（BSD grep 交替恒空）· 批量替换 `perl -pi -e` · `curl --noproxy '*'` · 判进程 `kill -0`。
 
 ## 架构不变量（细节见 `topics/架构不变量.md`）
@@ -107,6 +107,7 @@ admin 退回 `127.0.0.1:8081` —— 宿主机 `:80` 只能有一个主人；开
 - **当前 open**（2026-11-15 核）：**#1025 资源清单过期**（清单与分卷已按 v2026-11-15-1 **重生成并本地打包**，
   放在 `resources_dist/2026-11-15-1/`，**用户决定先不上传**；仓库根 `resources.manifest.json` 仍是旧版）·
   **#742 TLS**（部署侧已落 #1033：边缘 edge + certbot、官网链接换 https；**只差 443 放行 + `--tls-init` + 外网核**）·
+  **#1059** 客户端 UI 令牌与屏稿重构（另一条线在 `~/worktrees/olua-1059`，**别碰**）·
   #403 帮会战（远期占位）。保持现状：技能 1011 / 快捷键 6 格 / 装备 7 部位。
   地图重构的**子项已全关**（#809/#810/#811/#812 + #1000/#1001 两刀 + #1016），但 epic **#808 本身还 open**
   （要不要关是用户的收尾决定，别自己关）。
@@ -128,15 +129,25 @@ admin 退回 `127.0.0.1:8081` —— 宿主机 `:80` 只能有一个主人；开
   `N 套 client/tools/test-*.cjs` 必须等于磁盘实际数量（`ls tools/audit-*.cjs` / `test:e2e*` 脚本数 /
   `ls client/tools/test-*.cjs`）。**加/删审计或 e2e 后跑 `node tools/audit-count-claims.cjs --write`**。
   `.workbuddy/memory/**` 永久排除（历史日志写的是当时的数，改了反而失真）。
+  同脚本另有 **判据 F**（`docs/13` §九 e2e 分组表：标题套数 / 组小计 / 求和式 / 套件名集合，**只报红不给
+  `--write`**）· **G**（`N 张表` 系列 → `config-tables.cjs`，**不读 DB**）· **H**（Manager / 页面 / 路由）。
   ↳ 2026-11-15 实测同一数字在四处分别是 **12 / 15 / 16 / 18** —— 不是改漏了，是没有单一来源。
+- **派生数字的三档处理**（2026-11-15 成型，判据一句话：**要么精确维护、要么不写**）：
+  ① 变动频率低 × 冲突面小（接口数 / 表数 / 页面数 / Manager）→ **写 + 加守点**（判据 G/H，现 63 处）；
+  ② 变动频率高（README 行数列）或**守点覆盖不到的地方**（源码注释 / API 描述里的「38 张表」）→ **不写**，
+  换成不会漂的表述（「全部配置表」）；③ 历史快照（`docs/34` §零「改动前现状」）→ **冻结、不改也不守**。
+  写一个准确一次、之后没人跟的数字比不写更糟（#1045 删行数列 / #1068 去掉 29 处表数）。
 - **新增 env 键 / 文案 / 节点名 / 颜色的 PR，静态审计预判三处登记**：`.env.example`（`audit-api-hardcode`）+
   `tools/config-leak-allowlist.json`（config-leak）+ 进了配置快照的键还要加 `e2e-guard` 的 `EXPECTED_CONFIG_KEYS`。
   新增 e2e 脚本别忘 `tools/run-e2e.cjs` 的 `WEIGHT`（漏了只是分片不均，不报错）。
 - **加一刀就同时要动的四处「派生数字」**（2026-11-15 实测，全部有守点、漏一处合不了）：
   ① 新接口 / 新表 → `node tools/audit-docs-toc.cjs --write`（`docs/14` 标题与 `docs/README` 目录表）；
-  ② 新 e2e 套件 → `node tools/audit-count-claims.cjs --write`（全仓 31 处「N 套 e2e」含 `website/` 三页）
-  **外加** `docs/13` §九 的分组表里挂名字、组小计 +1、总小计求和（**这段没有守点，只能手改**）；
-  ③ 新服务端表 → `docs/15` 的口径行（77 = 39 + 38）与 `docs/README`「数字从哪来」那三行；
+  ② 新 e2e 套件 → `node tools/audit-count-claims.cjs --write`（全仓 63 处声明含 `website/` 三页）
+  **外加** `docs/13` §九 的分组表里挂名字、组小计 +1、总小计求和 —— 这段**已有守点**（同脚本判据 F，
+  标题套数 / 组小计 / 求和式 / 套件名集合双向比对），但**只报红不给 `--write`**：漏的套件挂哪组要人判断（#1063）；
+  ③ 新服务端表 → `node tools/audit-count-claims.cjs --write`（判据 G 守 `N 张表` 系列：`docs/15` 标题、
+  `docs/02` 的口径行、`docs/README` 目录表与「数字从哪来」、各处篇末链接、官网 `<b>N 张表</b>`；
+  值从 `config-tables.cjs` 现算，**不读 DB** —— 老库常比清单少一张）；
   ④ 新 env 键 → `docs/16` §7.2（`.env.example` 的键数也变了：现 103）。
 - **CI 红的判据**（万一又被触发）：本地完整门禁能精确复现 = 代码/测试问题；只有本地绿而 CI 红才考虑分片负载；
   同一套件连续 ≥2 轮同断言红不要再当抖动（`realtime-shard` 的 EADDRINUSE 是残留进程，单跑必绿）。
