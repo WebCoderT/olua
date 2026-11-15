@@ -211,7 +211,7 @@ export const PERMISSION = {
   /**
    * 配置回滚（#882）
    *
-   * 回滚是「一次改 38 张表」，敏感度高于任何单表写权限 —— 想让某人只能微调数值、
+   * 回滚是「一次改全部配置表」，敏感度高于任何单表写权限 —— 想让某人只能微调数值、
    * 不能整体回退时，这一条就是闸。
    */
   CONFIG_RESTORE: "config:restore",
@@ -595,7 +595,7 @@ export const AUDIT_TARGET_LABELS: Record<string, string> = {
   runtimeParams: "运行时参数",
   combatWeights: "战斗力权重",
   guideSteps: "新手引导步骤",
-  /** 配置版本（#882）：回滚的目标类型 —— 一次改 38 张表，不是任何单张表的日志 */
+  /** 配置版本（#882）：回滚的目标类型 —— 一次改全部配置表，不是任何单张表的日志 */
   config: "配置版本",
 };
 

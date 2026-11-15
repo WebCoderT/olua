@@ -23,7 +23,7 @@ import { toastSuccess } from "../store/toast";
  * 配置版本（#882 / J2）
  *
  * 运营改一次配置（任意带 `gameConfig:write` 的写接口成功）→ 服务端 +1 版本，并把**当时
- * 全量 38 张配置表**存成一层历史。这一页就是那串历史的读口：看改了什么、差在哪、退回去。
+ * 全部配置表**存成一层历史。这一页就是那串历史的读口：看改了什么、差在哪、退回去。
  *
  * ## 为什么是「全量层」而不是「改了什么」
  * 配置表之间有外键（装备 → 部位、掉落 → 怪物），只存 diff 的话回滚要做到「按逆序撤销
@@ -321,7 +321,7 @@ export function ConfigRevisionsPage() {
         open={restoreTarget !== null}
         title={`回滚到第 ${restoreTarget?.version ?? "—"} 版？`}
         description={
-          `会把全服配置（38 张表）整体覆盖成第 ${restoreTarget?.version} 版的内容 —— ` +
+          `会把全服配置（全部配置表）整体覆盖成第 ${restoreTarget?.version} 版的内容 —— ` +
           `这一版之后的改动（包括别人的）都会被盖掉。` +
           `回滚本身也会生成新的一层（第 ${(version ?? 0) + 1} 版），历史不删，所以退错了还能再退回来。`
         }

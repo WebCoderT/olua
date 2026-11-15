@@ -58,7 +58,7 @@ export const AUDIT_TARGET_TYPES = [
   "equipmentAppearance",
   "moneyItem",
   "levelScroll",
-  // 配置版本链（#882）：回滚是一次改 38 张表，审计里必须能单独筛出来
+  // 配置版本链（#882）：回滚是一次改全部配置表，审计里必须能单独筛出来
   "config",
 ] as const;
 

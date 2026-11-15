@@ -249,7 +249,7 @@ export const routes = {
     /**
      * 配置版本历史（最近 N 层）（GET /admin/config/revisions）
      *
-     * 按版本号倒序。每层是一份**全量配置**（38 张表），所以列表只回元信息 + 行数，不回 payload。
+     * 按版本号倒序。每层是**全部配置表**的整份快照，所以列表只回元信息 + 行数，不回 payload。
      */
     revisions: "/admin/config/revisions",
     /**
@@ -261,7 +261,7 @@ export const routes = {
     /**
      * 回滚到某一版（单事务全量恢复）（POST /admin/config/revisions/{version}/restore）
      *
-     * 把这一层的**全量配置**写回库里：38 张配置表逐表 `DELETE` + 逐行 `INSERT`，**一个事务** ——
+     * 把这一层的**全量配置**写回库里：全部配置表逐表 `DELETE` + 逐行 `INSERT`，**一个事务** ——
      */
     restore: (version: string) => `/admin/config/revisions/${encodeURIComponent(version)}/restore`,
     /**

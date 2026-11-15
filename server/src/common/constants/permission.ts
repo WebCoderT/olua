@@ -218,7 +218,7 @@ export const Permission = {
   /**
    * 配置回滚（#882）
    *
-   * 回滚是「一次改 38 张表」的动作，敏感度高于任何单表写权限（`gameConfig:write` 改一行，
+   * 回滚是「一次改全部配置表」的动作，敏感度高于任何单表写权限（`gameConfig:write` 改一行，
    * 它改一整套），所以单列一个点 —— 想让某人只能微调数值、不能整体回退时，这一条就是闸。
    */
   CONFIG_RESTORE: "config:restore",

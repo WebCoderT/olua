@@ -45,7 +45,7 @@ import { DropClearRequestRepository } from "./repositories/drop-clear-request.re
 import { MapInstanceRepository } from "./repositories/map-instance.repository";
 import { WorldReloadRequestRepository } from "./repositories/world-reload-request.repository";
 import { ZoneRepository } from "./repositories/zone.repository";
-// 配置版本链（#881 / #882）：`config_version` / `config_revisions` + 38 张配置表的整表 dump / 替换
+// 配置版本链（#881 / #882）：`config_version` / `config_revisions` + 全部配置表的整表 dump / 替换
 import { ConfigRevisionRepository } from "./repositories/config-revision.repository";
 // 玩家行为流水（#886）：`event_logs` 一张表，只给 event-log 模块用
 import { EventLogRepository } from "./repositories/event-log.repository";

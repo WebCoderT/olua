@@ -555,7 +555,7 @@ export interface AppConfiguration {
   /**
    * 回滚历史保留层数（默认 20，`CONFIG_REVISION_RETAIN`）
    *
-   * payload 是**全量配置 JSON**（38 张表），每层约几 MB —— 20 层 ≤ 100MB 是可接受的代价，
+   * payload 是**全部配置表**的全量 JSON，每层约几 MB —— 20 层 ≤ 100MB 是可接受的代价，
    * 换来的是「一键回到 10 分钟前」不需要按 diff 顺序重放。
    */
   configRevisionRetain: number;

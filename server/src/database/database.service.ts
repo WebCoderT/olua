@@ -1817,7 +1817,7 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
     //
     // - `config_version`：单行自增计数器。每次配置写成功后 +1（`ConfigVersionService`），
     //   快照的 ETag 与客户端的「配置是不是变了」都以它为唯一判据 —— 不按时间、不按内容哈希。
-    // - `config_revisions`：每层一份**全量配置 JSON**（38 张配置表整块），保留最近 20 层。
+    // - `config_revisions`：每层一份**全部配置表**的 JSON 整块，保留最近 20 层。
     //   存全量而不是 diff：回滚要「一键」，diff 回滚需要按顺序重放，任一环失败就是半套配置。
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS config_version (

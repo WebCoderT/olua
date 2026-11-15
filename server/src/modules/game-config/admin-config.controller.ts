@@ -30,13 +30,13 @@ import {
  * 就是 50 条日志，等于重做一遍）。现在多了两个：
  *
  * - **看清**：`revisions` 列表（谁 / 什么时候 / 改了什么接口 / 多大）+ 两层之间的逐表 diff；
- * - **回去**：`restore` 一键把 38 张配置表整体写回某一层，**单事务**。
+ * - **回去**：`restore` 一键把全部配置表整体写回某一层，**单事务**。
  *
  * 回滚本身也是一层新版本（版本号继续往前、旧的层不删），所以「回滚错了」还能再滚回来。
  *
  * ## 为什么单列 `config:restore`
  *
- * 回滚是「一次改 38 张表」，敏感度高于任何单表写权限（`gameConfig:write` 改一行）。
+ * 回滚是「一次改全部配置表」，敏感度高于任何单表写权限（`gameConfig:write` 改一行）。
  * 想让某人只能微调数值、不能整体回退时，这一条就是闸。
  *
  * ## 缓存
@@ -71,7 +71,7 @@ export class AdminConfigController {
     operationId: "adminConfig.revisions",
     summary: "配置版本历史（最近 N 层）",
     description:
-      "按版本号倒序。每层是一份**全量配置**（38 张表），所以列表只回元信息 + 行数，不回 payload。\n\n" +
+      "按版本号倒序。每层是**全部配置表**的整份快照，所以列表只回元信息 + 行数，不回 payload。\n\n" +
       "`label` 是触发这次改动的接口标识（如 `adminSkill.update`）；`createdBy` 是操作人。\n" +
       "同一人 `CONFIG_REVISION_THROTTLE_MS`（默认 10 秒）内的连点会合并成一层。\n\n" +
       "默认保留 20 层（`CONFIG_REVISION_RETAIN`），超出删最老的。",
@@ -90,7 +90,7 @@ export class AdminConfigController {
     description:
       "只回**有变化的表**：每张表的行数变化、新增行数、删除行数。\n\n" +
       "**行级不是字段级**：payload 是不透明 JSON，没有可靠的主键可用 —— 改一行会体现成「一删一加」。\n" +
-      "这样至少绝不谎报「这张表没变」（字段级 diff 需要给 38 张表各写一套主键定义，收益不抵成本）。",
+      "这样至少绝不谎报「这张表没变」（字段级 diff 需要给每张配置表各写一套主键定义，收益不抵成本）。",
     permissions: [Permission.CONFIG_READ],
   })
   @ApiParam({ name: "from", description: "旧版本号" })
@@ -106,13 +106,13 @@ export class AdminConfigController {
     operationId: "adminConfig.restore",
     summary: "回滚到某一版（单事务全量恢复）",
     description:
-      "把这一层的**全量配置**写回库里：38 张配置表逐表 `DELETE` + 逐行 `INSERT`，**一个事务** ——\n" +
+      "把这一层的**全量配置**写回库里：全部配置表逐表 `DELETE` + 逐行 `INSERT`，**一个事务** ——\n" +
       "要么全回去，要么一行不动。外键检查推到提交时（`defer_foreign_keys`），所以中途状态合法。\n\n" +
       "- 只写配置表（`config-tables.cjs` 的白名单）；payload 里有、库里没有的表**跳过并告警**，不做结构迁移；\n" +
       "- 只写 payload 与当前表结构**交集**的列 —— 加过列的老版本也能回；\n" +
       "- 回滚本身是**一层新版本**（版本 +1、历史不删），所以回滚错了还能再滚回来；\n" +
       "- **不踢人**：服务端读库，下一跳就是旧值；客户端在下一个安全点换表。\n\n" +
-      "权限点单列（`config:restore`）：这是「一次改 38 张表」，不是普通数值微调。",
+      "权限点单列（`config:restore`）：这是「一次改全部配置表」，不是普通数值微调。",
     permissions: [Permission.CONFIG_RESTORE],
   })
   @ApiParam({ name: "version", description: "要回到的版本号" })
