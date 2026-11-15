@@ -226,6 +226,7 @@ export class RoomManager {
       seq: 0,
       trimGraceUntil: 0,
       capacity: this.capacityOf(mapId),
+      lastEmptyTickAt: 0,
     };
 
     const areas = this.spawnAreas.listByMap(mapId);
@@ -539,6 +540,17 @@ export class RoomManager {
   /** 一间房的容量（`map_rules.max_players_per_room`；一行不存在 = 出厂 30） */
   private capacityOf(mapId: string): number {
     return Math.max(0, Math.trunc(this.rulesOf(mapId).maxPlayersPerRoom));
+  }
+
+  /**
+   * 这张图的空房要不要继续跑世界（`map_rules.simulate_when_empty`；#1001）
+   *
+   * **现读库、不在 Room 上缓存**（与 `pickSlot` 的容量同一取向）：空房 tick 本来就
+   * 每 `EMPTY_ROOM_TICK_MS` 才问一次，一秒一次读库换「运营改完下一拍生效」是划算的；
+   * 缓存到 `ensure` 的写法会让「改了配置、房间还挂着」的图必须等回收重建才认。
+   */
+  simulateWhenEmptyOf(mapId: string): boolean {
+    return this.rulesOf(mapId).simulateWhenEmpty;
   }
 
   //#endregion

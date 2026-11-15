@@ -224,7 +224,8 @@ function numOr(value: string, fallback: number): number {
  * 为什么必须标：`map_rules` 15 列一次建齐（避免二次 ALTER），但接进链路的是一刀一刀
  * 补的。剩下的列如果照旧可编辑，运营改完会以为「这张图的行为变了」—— 而实际要等对应
  * 的那一刀。#747（死配置）就是这么来的。
- * 现已接入：`expRate` / `dropRate` / `allowDrop`（#812）、`maxPlayersPerRoom` / `maxChannels`（#1000）。
+ * 现已接入：`expRate` / `dropRate` / `allowDrop`（#812）、`maxPlayersPerRoom` / `maxChannels`（#1000）、
+ * `transferCostMoney` / `transferCooldownMs` / `denyTransferInCombat` / `simulateWhenEmpty`（#1001）。
  *
  * 值照旧随整份覆盖提交（表单里保留的是读回来的原值），所以置灰不会把别人配的东西清掉。
  */
@@ -233,11 +234,7 @@ const UNWIRED_HINTS: Partial<Record<keyof RulesForm, string>> = {
   allowPk: "未接入：真 PK 玩法在 #403",
   allowAutoBattle: "未接入：等副本落地后接（关掉挂机要连客户端一起改）",
   allowRecall: "未接入：拉人与回城还没有统一入口",
-  transferCostMoney: "未接入：扣款在 #1001",
-  transferCooldownMs: "未接入：冷却计时在 #1001",
-  denyTransferInCombat: "未接入：战斗中拦截在 #1001",
-  respawnMsOverride: "未接入：重生时长的三级继承在 #1001 / docs/27",
-  simulateWhenEmpty: "未接入：空房低频 tick 在 #1001",
+  respawnMsOverride: "未接入：重生时长的三级继承在 #1001 之后的下一刀 / docs/27",
 };
 
 /** 一个开关（checkbox + 说明 —— 说明比标题更重要，开关本身谁都会点） */
@@ -429,8 +426,20 @@ export function MapRulesDialog({
               <RuleToggle checked={form.allowAutoBattle} hint={UNWIRED_HINTS.allowAutoBattle ?? ""} title="允许自动挂机" unwired onChange={(next) => patch("allowAutoBattle", next)} />
               <RuleToggle checked={form.allowRecall} hint={UNWIRED_HINTS.allowRecall ?? ""} title="允许召回" unwired onChange={(next) => patch("allowRecall", next)} />
               <RuleToggle checked={form.allowDrop} hint="false = 活动图：怪倒了不掉东西（这一条**已接入**结算）" title="这张图掉落物品" disabled={!canWrite} onChange={(next) => patch("allowDrop", next)} />
-              <RuleToggle checked={form.denyTransferInCombat} hint={UNWIRED_HINTS.denyTransferInCombat ?? ""} title="战斗中禁传送" unwired onChange={(next) => patch("denyTransferInCombat", next)} />
-              <RuleToggle checked={form.simulateWhenEmpty} hint={UNWIRED_HINTS.simulateWhenEmpty ?? ""} title="无人时继续跑世界" unwired onChange={(next) => patch("simulateWhenEmpty", next)} />
+              <RuleToggle
+                checked={form.denyTransferInCombat}
+                hint="开：最近 10 秒出过手的人不许换图（换线不受影响）；关：随时能走"
+                title="战斗中禁传送"
+                disabled={!canWrite}
+                onChange={(next) => patch("denyTransferInCombat", next)}
+              />
+              <RuleToggle
+                checked={form.simulateWhenEmpty}
+                hint="开：没人看的图每 5 秒仍推进一次重生；关（默认）：冻结，等人回来一次性补算"
+                title="无人时继续跑世界"
+                disabled={!canWrite}
+                onChange={(next) => patch("simulateWhenEmpty", next)}
+              />
             </div>
           </section>
 
@@ -457,11 +466,27 @@ export function MapRulesDialog({
                   onChange={(event) => patch("maxChannels", event.target.value)}
                 />
               </FormField>
-              <FormField label="传送花费（铜钱）" hint={UNWIRED_HINTS.transferCostMoney}>
-                <Input type="number" min={0} disabled value={form.transferCostMoney} onChange={() => undefined} />
+              <FormField
+                label="传送花费（绑定元宝）"
+                hint="去**这张图**的票价，0 = 免费；余额不够时客户端提示「还差多少」"
+              >
+                <Input
+                  type="number"
+                  min={0}
+                  disabled={!canWrite}
+                  value={form.transferCostMoney}
+                  onChange={(event) => patch("transferCostMoney", event.target.value)}
+                />
               </FormField>
-              <FormField label="传送冷却（毫秒）" hint={UNWIRED_HINTS.transferCooldownMs}>
-                <Input type="number" min={0} step={1000} disabled value={form.transferCooldownMs} onChange={() => undefined} />
+              <FormField label="传送冷却（毫秒）" hint="按角色记，0 = 无冷却；从「真的走成」那一刻起算">
+                <Input
+                  type="number"
+                  min={0}
+                  step={1000}
+                  disabled={!canWrite}
+                  value={form.transferCooldownMs}
+                  onChange={(event) => patch("transferCooldownMs", event.target.value)}
+                />
               </FormField>
             </div>
             <FormField
@@ -483,8 +508,9 @@ export function MapRulesDialog({
           <p className="text-[11px] text-ink-5">
             保存是<b>整份覆盖</b>：没提到的字段按页面上显示的值落库。置灰并标「未接入」的字段
             这一版还没接进链路（改数值也不会有行为变化），等对应的刀落地后自动变可编辑。
-            已接入的五项里，经验 / 掉落倍率与「是否掉落」在<b>下一笔结算</b>生效，
-            单房人数上限与分线数量上限在<b>下一次选线</b>生效（已经在跑的房不用重载）。
+            已接入的九项里，经验 / 掉落倍率与「是否掉落」在<b>下一笔结算</b>生效，
+            单房人数上限与分线数量上限在<b>下一次选线</b>生效，传送花费 / 冷却 / 战斗中禁传送在
+            <b>下一次换图</b>生效（这几项都是现读库，不用重载房间）。
           </p>
         </div>
       )}

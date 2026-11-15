@@ -103,6 +103,8 @@ const CAST_TOKENS_MAX_PER_SEC = 20;
 export class CastGuardService {
   /** `账号:技能id` → 上次被接受的出手时刻（毫秒） */
   private readonly lastCastAt = new Map<string, number>();
+  /** 账号 → 上次**任意**技能被接受的出手时刻（毫秒；#1001 的「战斗中」判据读它） */
+  private readonly lastAcceptedAt = new Map<string, number>();
   /** 账号 → 令牌桶（容量 3；补充速率随所施技能的攻速走） */
   private readonly buckets = new Map<string, { tokens: number; at: number }>();
 
@@ -211,12 +213,26 @@ export class CastGuardService {
     }
     bucket.tokens -= 1;
     if (cooldownMs > 0) this.lastCastAt.set(`${input.accountId}:${input.skillId}`, now);
+    // 不计冷却的技能（冷却配 0）也要记：它是「刚打完一发」的既成事实，与冷却无关。
+    // 这张表只服务于「他现在算不算在战斗里」（#1001 的 deny_transfer_in_combat）
+    this.lastAcceptedAt.set(input.accountId, now);
     return { ok: true };
+  }
+
+  /**
+   * 这个账号上一次**被接受**的出手是什么时候（毫秒；没打过返回 null）
+   *
+   * 「被接受」是关键：蓝不够 / 冷却中 / 目标已死那些被拒的帧不更新它 ——
+   * 改包狂发 `cast` 不能把「战斗中」这个状态续上。
+   */
+  lastAcceptedOf(accountId: string): number | null {
+    return this.lastAcceptedAt.get(accountId) ?? null;
   }
 
   /** 连接断开：清掉本账号的冷却与令牌桶（内存不陪断线玩家涨；换图**不**清，见文件头） */
   dropAccount(accountId: string): void {
     this.buckets.delete(accountId);
+    this.lastAcceptedAt.delete(accountId);
     const prefix = `${accountId}:`;
     for (const key of [...this.lastCastAt.keys()]) {
       if (key.startsWith(prefix)) this.lastCastAt.delete(key);

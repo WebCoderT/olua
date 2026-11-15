@@ -507,11 +507,25 @@ export interface RealtimeMapEnterResultMessage {
     mapId: string;
     ok: boolean;
     /**
-     * 缺哪一项（`ok = true` 时没有）；`unknown` = 图不存在，`start` = 还没有位置记录、只准进新手村（#859），
-     * `full` = 这张图所有线都满了（#1000，`need` 是容量）
+     * 缺哪一项（`ok = true` 时没有）
+     *
+     * - `unknown` 图不存在 · `start` 还没有位置记录、只准进新手村（#859）· `zone` 区维护/合并中
+     * - `level` / `combat` / `soul` 三项门槛（#606）
+     * - `full` 这张图所有线都满了（#1000，`need` 是容量）
+     * - `in_combat` / `cooldown` / `money` 传送代价（#1001，见 `need`）
+     *
+     * **`combat` 与 `in_combat` 是两件事**：前者是「战斗力门槛不够」，后者是「你正在打架，
+     * 这张图不许战斗中传送」。合成一个会让客户端把「战力不足」的提示打在「打完再走」上。
      */
-    field?: "level" | "combat" | "soul" | "unknown" | "start" | "zone" | "full";
-    /** 这张图要求的值（`ok = true` 时没有；`field = "full"` 时是单线容量） */
+    field?: "level" | "combat" | "soul" | "unknown" | "start" | "zone" | "full" | "in_combat" | "cooldown" | "money";
+    /**
+     * 这张图要求的值（`ok = true` 时没有）
+     *
+     * - `full`：单线容量
+     * - `money`：**还差多少**绑定元宝（不是票价 —— 客户端要显示「还差 120」而不是「需要 200」）
+     * - `cooldown`：**剩余毫秒**（客户端自己除 1000 取整，服务端不做单位换算）
+     * - `in_combat`：不带（没有「差多少」这回事）
+     */
     need?: number;
     /** 图名（提示里要用；`ok = true` 时没有） */
     mapLabel?: string;
