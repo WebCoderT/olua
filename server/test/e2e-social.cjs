@@ -243,7 +243,13 @@ function connect(url) {
       mineA1.data.friends.length === 1 && mineA1.data.friends[0].roleId === B.roleId && mineA1.data.outgoing.length === 0,
       "A 这边同样变成好友，且「我发出的」已清空（镜像两行同时 accepted）",
     );
-    checkEqual(mineA1.data.friends[0].level, 1, "好友行带等级（列表直接显示，不逐行再查）");
+    // 好友行里的等级应当就是那个角色的当前等级（新号默认几级是成长域的数据，不在这里锁）
+    const bRoleForLevel = await api(baseUrl, "GET", `roles/${B.roleId}`, { token: B.token });
+    checkEqual(
+      mineA1.data.friends[0].level,
+      Number(bRoleForLevel.data && bRoleForLevel.data.level),
+      "好友行带等级（与角色当前等级一致，列表直接显示，不逐行再查）",
+    );
 
     const applyCA = await api(baseUrl, "POST", "social/friends", { token: C.token, body: { roleId: A.roleId } });
     checkEqual(applyCA.code, 0, "C 申请加 A");

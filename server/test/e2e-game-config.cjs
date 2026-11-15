@@ -1057,7 +1057,8 @@ async function main() {
     checkEqual(metaPatched.body?.data?.prefixRates?.[4], 1.5, "新版倍率已落库（改它就是全局调强度）");
 
     // 品质文字颜色（#720）：与文案同下标等长；空数组 = 清空回落客户端内置色；坏 hex / 长度不齐 → 400
-    checkEqual(Array.isArray(metaRow.prefixColors) && metaRow.prefixColors.length, 5, "出厂快照带 5 档前缀颜色（种子内置色）");
+    // 颜色与文案同下标等长 —— 这才是要守的约束；「几档」由种子的品质档位决定，不在这里写死（#966）
+    checkEqual(metaRow.prefixColors?.length, metaRow.prefixLabels?.length, "快照里颜色与品质文案等长（同下标一一对应）");
     const metaColors = await api(base, "PATCH", "/api/admin/equipment-meta", {
       token,
       body: { prefixColors: ["#112233", "#445566", "#778899", "#AABBCC", "#DDEEFF"] },
@@ -1079,12 +1080,12 @@ async function main() {
         suffixRates: equipMeta.suffixRates,
         prefixLabels: equipMeta.prefixLabels,
         suffixLabels: equipMeta.suffixLabels,
-        prefixColors: ["#DDDDDD", "#6EE86E", "#4DA6FF", "#C77DFF", "#FFA640"],
-        suffixColors: ["#B0B0B0", "#4DE3FF", "#FFD700"],
+        prefixColors: equipMeta.prefixColors,
+        suffixColors: equipMeta.suffixColors,
       },
     });
     checkEqual(metaRestored.body?.data?.prefixRates?.[4], equipMeta.prefixRates[4], "倍率已还原（不污染后续结算断言）");
-    checkEqual(metaRestored.body?.data?.prefixColors?.length, 5, "颜色已还原（出厂内置色，不污染快照断言）");
+    checkEqual(metaRestored.body?.data?.prefixColors?.length, equipMeta.prefixColors.length, "颜色已还原（档数回到种子，不污染快照断言）");
 
     //#endregion
 
@@ -1395,18 +1396,22 @@ async function main() {
     const npc2 = npcsRes.body?.data?.list?.find((row) => row.id === "0002");
     check(Boolean(npc2), "列表里有 NPC 0002");
     checkEqual(npc2?.label, npcs["0002"].label, "NPC 0002 名称与配置一致");
-    checkEqual(npc2?.dialog, "", "对话文案 seed 为空串（客户端暂无对话数据形态）");
+    checkEqual(npc2?.dialog, npcs["0002"].dialog, "对话文案 = 种子里那一份（当前为空串，客户端暂无对话数据形态）");
 
     // #603 第七域：外观（素材目录 / 缩放 / 偏移）也在库里 —— 客户端不再存任何 NPC 显示数据
     const npcSeed2 = npcRows.find((row) => row.id === "0002");
     const npcSeedPlain = npcRows.find((row) => row.id === "1001");
     checkEqual(npc2?.src, npcSeed2.src, "素材目录 seed 自 npc-seed（0002）");
-    checkEqual(npc2?.scaleX, 1.5, "0002 横向缩放 seed 自 npc-seed");
-    checkEqual(npc2?.scaleY, 1.5, "0002 纵向缩放 seed 自 npc-seed");
-    checkEqual(npc2?.posX, 11, "0002 横向偏移 seed 自 npc-seed");
-    checkEqual(npc2?.posY, 0, "0002 纵向偏移 seed 自 npc-seed");
+    // 外观四个数与种子逐一对齐（值归美术/策划配，测试只判「落库的是种子那一份」）
+    check(
+      Boolean(npcSeed2) &&
+        ["scaleX", "scaleY", "posX", "posY"].every((key) => npc2?.[key] === npcSeed2[key]),
+      "0002 缩放与偏移 = 种子里那一份（seed 自 npc-seed）",
+      JSON.stringify({ api: npc2 && [npc2.scaleX, npc2.scaleY, npc2.posX, npc2.posY], seed: npcSeed2 && [npcSeed2.scaleX, npcSeed2.scaleY, npcSeed2.posX, npcSeed2.posY] }),
+    );
     const npcPlain = npcsRes.body?.data?.list?.find((row) => row.id === "1001");
     checkEqual(npcPlain?.src, npcSeedPlain.src, "素材目录 seed 自 npc-seed（1001）");
+    // 种子为空时落的是**默认值**（1 / 0），这是代码兜底口径，不是配置数据
     checkEqual(npcPlain?.scaleX, 1, "没配缩放的 NPC 落默认 1（不是 NULL）");
     checkEqual(npcPlain?.posX, 0, "没配偏移的 NPC 落默认 0（不是 NULL）");
     check(
@@ -1663,11 +1668,11 @@ async function main() {
     checkEqual(fashion2?.icon, fashions["cloth_2"].icon, "cloth_2 图标路径与配置一致");
     checkEqual(fashion2?.inRes, fashions["cloth_2"].inRes, "cloth_2 内观路径与配置一致");
     checkEqual(fashion2?.outRes, fashions["cloth_2"].outRes, "cloth_2 外观路径与配置一致");
-    checkEqual(fashion2?.sellPrice, 0, "售卖价 seed 为 0（原配置全零）");
-    checkEqual(fashion2?.acquireChannel, "unavailable", "获得渠道 seed 默认无法获取");
-    checkEqual(fashion2?.attributes?.maxHp, 0, "属性嵌套结构返回且 seed 全 0（maxHp）");
+    checkEqual(fashion2?.sellPrice, fashions["cloth_2"].sellPrice, "售卖价 = 种子里那一份（原配置全零）");
+    checkEqual(fashion2?.acquireChannel, fashions["cloth_2"].acquireChannel, "获得渠道 = 种子里那一份（默认无法获取，靠发放）");
+    checkEqual(fashion2?.attributes?.maxHp, fashions["cloth_2"].maxHp, "属性嵌套结构返回且值与种子一致（maxHp）");
     const fashion12 = fashionsRes.body?.data?.list?.find((row) => row.id === "cloth_12");
-    checkEqual(fashion12?.inRes, "", "cloth_12 无内观（seed 空串）");
+    checkEqual(fashion12?.inRes, fashions["cloth_12"].inRes, "cloth_12 内观 = 种子里那一份（空串 = 无内观）");
 
     const fashionKeyword = await api(base, "GET", "/api/admin/fashions?keyword=" + encodeURIComponent("巫女"), { token });
     checkEqual(fashionKeyword.body?.data?.total, 1, "关键字按名称命中妖绯巫女");
