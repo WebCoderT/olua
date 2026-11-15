@@ -493,7 +493,7 @@ check: client-check admin-typecheck audit ## 快速静态检查：客户端 tsc 
 test-changed: ## 日常门禁（提交前跑这条）：改动哪跑哪（BASE=master 可指定基准）
 	@$(NODE) tools/test-changed.cjs $(if $(BASE),--base=$(BASE),)
 
-test: client-test e2e-all ## 全部测试：客户端 59 套 + 服务端全部 e2e（清单派生自 package.json）
+test: client-test e2e-all ## 全部测试：客户端 70 套 + 服务端全部 e2e（清单派生自 package.json）
 	@echo ""
 	@echo "✓ 测试全部通过"
 
