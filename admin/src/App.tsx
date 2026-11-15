@@ -47,6 +47,7 @@ import { DashboardPage } from "./pages/DashboardPage";
 import { LoginPage } from "./pages/LoginPage";
 import { LegendPreviewPage } from "./pages/LegendPreviewPage";
 import { MailsPage } from "./pages/MailsPage";
+import { MailBroadcastPage } from "./pages/MailBroadcastPage";
 import { MailSendPage } from "./pages/MailSendPage";
 import { MyAccountPage } from "./pages/MyAccountPage";
 import { RegisterPage } from "./pages/RegisterPage";
@@ -426,6 +427,15 @@ export function App() {
             element={
               <RequirePermission permission={PERMISSION.GAME_MAIL_SEND}>
                 <MailSendPage />
+              </RequirePermission>
+            }
+          />
+          {/* 消息群发（#438）：一批影响成千上万个角色，权限点与单发分开 */}
+          <Route
+            path="mail-broadcast"
+            element={
+              <RequirePermission permission={PERMISSION.GAME_MAIL_BROADCAST}>
+                <MailBroadcastPage />
               </RequirePermission>
             }
           />

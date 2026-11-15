@@ -311,6 +311,46 @@ export class RoleRepository {
     return this.db.count("SELECT COUNT(1) AS total FROM roles WHERE zone_id = ?", [zoneId]);
   }
 
+  /**
+   * 群发收件人的 id 列表（#438，**keyset 分页**）
+   *
+   * 为什么不用 `list()` + OFFSET：群发是边发边写 `role_mails`，而 OFFSET 分页在
+   * 「分页期间有人建号 / 删号」时会漏人或重复；`id > 上一批最后一个` 只依赖一个稳定全序，
+   * 前后两批永远不重叠（重复发一封补偿比漏发更难解释）。
+   *
+   * 也不 join accounts：群发不关心账号（`online` 这类筛选用不上），少一次 join 就少一分
+   * 「几万行时慢在无关字段上」的概率。
+   *
+   * **区必填**（docs/39 §2.4）：单区一次；「全服」由上层按区循环，不在 SQL 里放开。
+   */
+  listIdsForBroadcast(
+    zoneId: number,
+    range: { minLevel?: number; maxLevel?: number },
+    afterId: string | null,
+    limit: number,
+  ): string[] {
+    const where: string[] = ["zone_id = ?"];
+    const params: SqlParam[] = [zoneId];
+    if (range.minLevel !== undefined) {
+      where.push("level >= ?");
+      params.push(range.minLevel);
+    }
+    if (range.maxLevel !== undefined) {
+      where.push("level <= ?");
+      params.push(range.maxLevel);
+    }
+    if (afterId) {
+      where.push("id > ?");
+      params.push(afterId);
+    }
+    return this.db
+      .all<{ id: string }>(`SELECT id FROM roles WHERE ${where.join(" AND ")} ORDER BY id ASC LIMIT ?`, [
+        ...params,
+        limit,
+      ])
+      .map((row) => row.id);
+  }
+
   /** 本区某时间点之后创建的角色数（概览「今日新增角色」用） */
   countCreatedAfter(zoneId: number, timestamp: number): number {
     return this.db.count("SELECT COUNT(1) AS total FROM roles WHERE zone_id = ? AND created_at >= ?", [zoneId, timestamp]);

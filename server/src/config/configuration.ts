@@ -179,6 +179,16 @@ export interface AppConfiguration {
    * 投递方不显式给 TTL 时用它（30 天）。**人工补发走 0 = 永久**：运营发的补偿不该过期。
    */
   mailDefaultTtlMs: number;
+  /**
+   * 群发每批写入的封数（#438，默认 500）
+   *
+   * 为什么必须可配：一批 = 一个事务，持着 `role_mails` 的写锁。批太大，实时进程的存档写入
+   * （同一个 SQLite 库，WAL）会被卡住几十毫秒，表现是「偶发卡顿」；批太小，几万行就是几百次
+   * 事务提交，群发本身变慢。500 是「一行 200 字节 × 500 ≈ 100KB」的量级，提交一次几毫秒。
+   *
+   * e2e 会把它调成 2 来验证「跨批」路径真的走过 —— 默认值太大，测不出批边界上的错。
+   */
+  gameMailBroadcastBatchSize: number;
 
   //#region 自动备份
   /**
@@ -605,6 +615,7 @@ export default function configuration(): AppConfiguration {
     mailAutoClaimBatch: Number(process.env.MAIL_AUTO_CLAIM_BATCH ?? 200),
     mailAutoClaimMaxAttempts: Number(process.env.MAIL_AUTO_CLAIM_MAX_ATTEMPTS ?? 5),
     mailDefaultTtlMs: Number(process.env.MAIL_DEFAULT_TTL_MS ?? 30 * 24 * 60 * 60 * 1000),
+    gameMailBroadcastBatchSize: Math.max(1, Number(process.env.GAME_MAIL_BROADCAST_BATCH_SIZE ?? 500)),
     backupIntervalHours: Number(process.env.BACKUP_INTERVAL_HOURS ?? 24),
     backupKeepCount: Number(process.env.BACKUP_KEEP_COUNT ?? 7),
     backupRetentionDays: Number(process.env.BACKUP_RETENTION_DAYS ?? 30),

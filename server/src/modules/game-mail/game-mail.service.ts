@@ -59,6 +59,13 @@ export interface SendMailInput {
    * 到期前 3 天由 `GameMailAutoClaimService` 自动入包（#867），入包成功才允许物理清理。
    */
   ttlMs?: number;
+  /**
+   * 群发批次号（#438）：只有运营群发会填，其余一律不传（= NULL）
+   *
+   * 一行的 `batch_id` 说明它属于哪次群发；单发 / 系统投递没有这个概念，
+   * 所以**不传就是 NULL**，不要用空串冒充（空串会让「有没有批次」变成判空串的布尔）。
+   */
+  batchId?: string;
 }
 
 /**
@@ -262,9 +269,25 @@ export class GameMailService {
    * 而这里的调用方都是「一次具体动作」，本来就不会重复）。
    */
   send(roleId: string, input: SendMailInput): RoleMailRow {
-    const created_at = Date.now();
-    const row: RoleMailRow = {
-      id: `mail_${created_at}_${randomUUID().slice(0, 8)}`,
+    const row = this.compose(roleId, input);
+    this.mails.insert(row);
+    return row;
+  }
+
+  /**
+   * 组装一行收件箱记录（**不落库**）
+   *
+   * 单发（{@link send}）与群发（`GameMailBroadcastService`）共用这一份形状：
+   * 频道收窄、附件序列化、id 规则、保质期换算都只写在这里。分成两份的后果是
+   * 「单发的邮件有 id 前缀、群发的没有」这种没人会主动发现的分叉，
+   * 直到某天有人按前缀 grep 排查。
+   *
+   * `createdAt` 可传：群发一批几百行时共用一个时刻，界面上的「收到时间」才会整齐
+   * （各取各的 `Date.now()` 会让同一批邮件在列表里乱序交错）。
+   */
+  compose(roleId: string, input: SendMailInput, createdAt = Date.now()): RoleMailRow {
+    return {
+      id: `mail_${createdAt}_${randomUUID().slice(0, 8)}`,
       role_id: roleId,
       channel: toMailChannel(input.channel),
       kind: input.kind,
@@ -276,13 +299,12 @@ export class GameMailService {
       read_at: null,
       claimed_at: null,
       // 保质期（#867）：不传 = 默认 30 天；`0` = 显式永久（人工补发走这条）；> 0 = 投递方指定
-      expires_at: this.expiresAtOf(input.ttlMs, created_at),
+      expires_at: this.expiresAtOf(input.ttlMs, createdAt),
       auto_claimed_at: 0,
       auto_attempts: 0,
-      created_at,
+      batch_id: input.batchId ?? null,
+      created_at: createdAt,
     };
-    this.mails.insert(row);
-    return row;
   }
 
   /**

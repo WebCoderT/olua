@@ -550,8 +550,26 @@ export const routes = {
      */
     snapshot: "/admin/game-data",
   },
-  /** adminGameMail 模块（1 个接口） */
+  /** adminGameMail 模块（4 个接口） */
   adminGameMail: {
+    /**
+     * 群发批次列表（GET /admin/game-mail/broadcasts）
+     *
+     * 最近 50 个批次（新发的在前）。**刻意跨区**：在 A 区也要能看到同事刚在 B 区发了什么，否则「发错区」这件事在界面上直接消失。
+     */
+    broadcasts: "/admin/game-mail/broadcasts",
+    /**
+     * 群发游戏消息（POST /admin/game-mail/broadcasts）
+     *
+     * 按「当前区 / 全服 + 等级段」给一批角色各发一封游戏内消息，**同步等写完再返回**。
+     */
+    broadcast: "/admin/game-mail/broadcasts",
+    /**
+     * 群发影响面预估（POST /admin/game-mail/broadcasts/preview）
+     *
+     * 按投放范围与等级段算「预计影响 N 人」，不写任何数据 —— 运营在写正文之前就能先看人数。
+     */
+    previewBroadcast: "/admin/game-mail/broadcasts/preview",
     /**
      * 补发游戏消息（单发）（POST /admin/game-mail/roles/{id}）
      *

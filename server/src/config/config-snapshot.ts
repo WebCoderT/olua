@@ -173,6 +173,11 @@ const CONFIG_SNAPSHOT: ConfigSnapshotSpec[] = [
   { key: "MAIL_RETENTION_DAYS", field: "mailRetentionDays", render: (read) => describeLimit(read<number>("mailRetentionDays"), "天") },
   { key: "MAIL_QUEUE_MAX_ROWS", field: "mailQueueMaxRows", render: (read) => describeLimit(read<number>("mailQueueMaxRows"), "条") },
   {
+    key: "GAME_MAIL_BROADCAST_BATCH_SIZE",
+    field: "gameMailBroadcastBatchSize",
+    render: (read) => describeLimit(read<number>("gameMailBroadcastBatchSize"), "封/批"),
+  },
+  {
     key: "BACKUP_INTERVAL_HOURS",
     field: "backupIntervalHours",
     render: (read) => backupIntervalText(read<number>("backupIntervalHours")),

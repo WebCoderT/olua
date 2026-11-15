@@ -88,6 +88,22 @@ export const Permission = {
    * 观察员不给：向玩家发东西是运营动作（审计里要能查到是谁发的），不是看数据。
    */
   GAME_MAIL_SEND: "gameMail:send",
+  /**
+   * 群发游戏消息（#438）：在当前区按「全区 / 等级段」批量投递
+   *
+   * 与 `gameMail:send`（发一个人）分开的理由是**影响面**：单发写错只错一个人，
+   * 群发写错是整区玩家的收件箱里多一封错信，而邮件不可撤回（#437 明确不做撤回）。
+   * 群发还有第二重成本：一次几万行写入，占着 `role_mails` 的写锁。
+   */
+  GAME_MAIL_BROADCAST: "gameMail:broadcast",
+  /**
+   * 群发游戏消息「全服」（#438）
+   *
+   * 管理端一次只在一个区里干活（docs/39 §3.8），所以「一条群发打到所有区」
+   * 是**跨区的越级动作**，与 `announcement:publish-all`（#963）同一条口径：单列一个点、
+   * 只给超管。管理员想发全区就一个区一个区地发 —— 那是正常操作，也留下了痕迹。
+   */
+  GAME_MAIL_BROADCAST_ALL: "gameMail:broadcast-all",
 
   /** 查看管理员列表 */
   ADMIN_READ: "admin:read",
@@ -213,13 +229,17 @@ export const ROLE_PERMISSIONS: Record<AdminRoleValue, PermissionValue[]> = {
   /** 超级管理员：全部权限 */
   [AdminRole.SUPER]: ALL_PERMISSIONS,
   /**
-   * 管理员：除两项外全部
+   * 管理员：除三项外全部
    *
    * - `admin:manage`：「管理管理员」—— 管理员之间不能互相提权；
-   * - `announcement:publish-all`：公告打到所有区（#963）—— 影响面权限，管理员逐区发即可。
+   * - `announcement:publish-all`：公告打到所有区（#963）—— 影响面权限，管理员逐区发即可；
+   * - `gameMail:broadcast-all`：群发打到所有区（#438）—— 同上，逐区发是正常操作。
    */
   [AdminRole.ADMIN]: ALL_PERMISSIONS.filter(
-    (item) => item !== Permission.ADMIN_MANAGE && item !== Permission.ANNOUNCEMENT_PUBLISH_ALL,
+    (item) =>
+      item !== Permission.ADMIN_MANAGE &&
+      item !== Permission.ANNOUNCEMENT_PUBLISH_ALL &&
+      item !== Permission.GAME_MAIL_BROADCAST_ALL,
   ),
   /** 只读观察员：读权限，任何写操作都不行 */
   [AdminRole.VIEWER]: [
@@ -258,6 +278,8 @@ export const PERMISSION_LABELS: Record<PermissionValue, string> = {
   [Permission.MAIL_READ]: "查看邮件投递记录",
   [Permission.MAIL_WRITE]: "发送邮件",
   [Permission.GAME_MAIL_SEND]: "补发游戏消息",
+  [Permission.GAME_MAIL_BROADCAST]: "群发游戏消息（本区）",
+  [Permission.GAME_MAIL_BROADCAST_ALL]: "群发游戏消息（全服）",
   [Permission.ADMIN_READ]: "查看管理员",
   [Permission.ADMIN_MANAGE]: "管理管理员",
   [Permission.AUDIT_READ]: "查看操作日志",

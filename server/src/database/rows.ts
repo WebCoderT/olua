@@ -1998,7 +1998,44 @@ export interface RoleMailRow {
   auto_claimed_at: number;
   /** 自动入包失败次数（#867）：背包满 / 乐观锁冲突都算；到上限就停手，等人工 */
   auto_attempts: number;
+  /**
+   * 群发批次号（#438；NULL = 单发 / 系统投递）
+   *
+   * 只是**指回 `mail_broadcasts` 的指针**，正文本与附件在批次表里存一份 —— 几万行 ×
+   * 一段正文会让库白白膨胀，而「这次群发说了什么」本来就只有一个答案。
+   */
+  batch_id: string | null;
   created_at: number;
+}
+
+/**
+ * 运营群发批次（#438）
+ *
+ * 一次群发一行。`id` 由调用方（管理端）生成并复用重试 —— 它是幂等的唯一闸门：
+ * 同一批次重复提交时不会再写任何 `role_mails` 行。
+ */
+export interface MailBroadcastRow {
+  id: string;
+  channel: string;
+  /** 来源标签（恒为 `admin-broadcast`，与单发的 `admin` 区分开） */
+  kind: string;
+  title: string;
+  body: string;
+  bind_gold: number;
+  exp: number;
+  /** 物品附件（JSON 列，`[{ goodId, count }]`） */
+  attachments: string;
+  /** 投放范围快照（JSON：`{ scope, zoneId?, minLevel?, maxLevel? }`） */
+  filter: string;
+  /** 发送前按筛选条件算出的目标人数 */
+  target_count: number;
+  /** 实际写入的条数（每批累加；与 target_count 不等说明期间有角色增删） */
+  sent_count: number;
+  operator_id: string;
+  operator_name: string;
+  created_at: number;
+  /** 完成时刻（NULL = 还在写 / 进程挂在中间） */
+  finished_at: number | null;
 }
 
 /**

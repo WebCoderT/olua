@@ -84,7 +84,8 @@ async function api(method, path, options = {}) {
 
 /** 补发一次的快捷封装（body 部分字段缺省也能发） */
 function sendMail(roleId, token, body) {
-  return api("POST", `admin/game-mail/roles/${roleId}`, { token, body: { title: "运营补发", channel: "system", ...body } });
+  // #438 起这个控制器挂 ZoneContextGuard：管理端请求必须带区，否则 400/50029
+  return api("POST", `admin/game-mail/roles/${roleId}`, { token, zoneId: ADMIN_ZONE, body: { title: "运营补发", channel: "system", ...body } });
 }
 
 (async () => {
@@ -165,7 +166,7 @@ function sendMail(roleId, token, body) {
     const missingRole = await sendMail("role_nope", adminToken, {});
     check(missingRole.status === 404 && missingRole.code === 20002, "收件角色不存在 → 404（20002）", `${missingRole.status}/${missingRole.code}`);
 
-    const noTitle = await api("POST", "admin/game-mail/roles/${roleAId}", { token: adminToken, zoneId: ADMIN_ZONE, body: { channel: "system" } });
+    const noTitle = await api("POST", `admin/game-mail/roles/${roleAId}`, { token: adminToken, zoneId: ADMIN_ZONE, body: { channel: "system" } });
     check(noTitle.status === 400, "缺标题 → 400（标题必填）", `${noTitle.status}`);
     const longTitle = await sendMail(roleAId, adminToken, { title: "长".repeat(61) });
     check(longTitle.status === 400, "标题超 60 字 → 400", `${longTitle.status}`);
