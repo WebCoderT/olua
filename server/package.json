@@ -40,6 +40,7 @@
     "test:e2e:zone-roles": "node --disable-warning=ExperimentalWarning test/e2e-zone-roles.cjs",
     "test:e2e:zone-chat": "node --disable-warning=ExperimentalWarning test/e2e-zone-chat.cjs",
     "test:e2e:realtime-shard": "node --disable-warning=ExperimentalWarning test/e2e-realtime-shard.cjs",
+    "test:e2e:latency": "node --disable-warning=ExperimentalWarning test/e2e-latency.cjs",
     "test:e2e:zone-party": "node --disable-warning=ExperimentalWarning test/e2e-zone-party.cjs",
     "test:e2e:zone-guild": "node --disable-warning=ExperimentalWarning test/e2e-zone-guild.cjs",
     "test:e2e:zone-no-param": "node --disable-warning=ExperimentalWarning test/e2e-zone-no-param.cjs",
