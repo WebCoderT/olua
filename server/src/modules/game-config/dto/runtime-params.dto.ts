@@ -730,3 +730,38 @@ export class UpdateMovementGuardParamsDto {
   @Max(10000)
   correctIntervalMs?: number;
 }
+
+/** 出手距离闸参数（#1030；`runtime_params.cast_range` 列，服务端独占、不下发客户端） */
+export class CastRangeParamsDto {
+  @ApiProperty({
+    description: "档位：off 完全不判 / log 只记账放行（出厂）/ enforce 超距即拒该次出手",
+    enum: ["off", "log", "enforce"],
+    example: "log",
+  })
+  @IsIn(["off", "log", "enforce"])
+  mode: "off" | "log" | "enforce";
+
+  @ApiProperty({
+    description: "抖动余量（像素）：抵掉 10Hz 上报的相位差与怪物插值滞后，出厂 24（与 movement.jitterPx 同源）",
+    example: 24,
+  })
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  @Max(500)
+  jitterPx: number;
+}
+
+/** 出手距离闸参数的部分更新（只提交改动过的字段） */
+export class UpdateCastRangeParamsDto {
+  @ApiPropertyOptional({ description: "档位：off / log / enforce", enum: ["off", "log", "enforce"] })
+  @IsOptional()
+  @IsIn(["off", "log", "enforce"])
+  mode?: "off" | "log" | "enforce";
+
+  @ApiPropertyOptional({ description: "抖动余量（像素）" })
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  @Max(500)
+  jitterPx?: number;
+}

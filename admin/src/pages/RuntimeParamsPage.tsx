@@ -1,12 +1,16 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { formatTime, PERMISSION, runtimeParamsApi } from "../api";
 import type {
+  CastRangeParams,
   MonsterAiParams,
+  MovementGuardParams,
   RuntimeParams,
   UpdateAutoBattleParams,
+  UpdateCastRangeParams,
   UpdateDropRuntimeParams,
   UpdateGuildRuleParams,
   UpdateMonsterAiParams,
+  UpdateMovementGuardParams,
 } from "../api";
 import { Button, Card, Field, Input, Select, Spinner } from "../components/ui";
 import { PageHeader } from "../components/PageHeader";
@@ -44,6 +48,12 @@ export function RuntimeParamsPage() {
   // 不单独存「生效值」：这一页只需要草稿，保存后回读的结果直接转成新草稿
   const [aiDraft, setAiDraft] = useState<Record<string, string> | null>(null);
   const [aiSaving, setAiSaving] = useState(false);
+  // 两道服务端校验闸（#811 移动 / #1030 出手距离）：各自一条接口、各自一份草稿，
+  // 与怪物 AI 同一理由 —— 它们都不进客户端快照，改的是服务端判定而不是客户端手感
+  const [movementDraft, setMovementDraft] = useState<Record<string, string> | null>(null);
+  const [movementSaving, setMovementSaving] = useState(false);
+  const [castRangeDraft, setCastRangeDraft] = useState<Record<string, string> | null>(null);
+  const [castRangeSaving, setCastRangeSaving] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -53,6 +63,10 @@ export function RuntimeParamsPage() {
       setDraft(toDraft(row));
       const ai = await runtimeParamsApi.getMonsterAi();
       setAiDraft(toAiDraft(ai));
+      const movement = await runtimeParamsApi.getMovement();
+      setMovementDraft(toMovementDraft(movement));
+      const castRange = await runtimeParamsApi.getCastRange();
+      setCastRangeDraft(toCastRangeDraft(castRange));
     } catch {
       /* 错误已由请求层统一提示 */
     } finally {
@@ -116,6 +130,47 @@ export function RuntimeParamsPage() {
       /* 错误已由请求层统一提示 */
     } finally {
       setAiSaving(false);
+    }
+  };
+
+  const setMovementField = (key: string, value: string) => {
+    setMovementDraft((current) => (current ? { ...current, [key]: value } : current));
+  };
+
+  const saveMovement = async () => {
+    if (!movementDraft) return;
+    const payload = buildMovementPayload(movementDraft);
+    if (!payload) return;
+    setMovementSaving(true);
+    try {
+      const row = await runtimeParamsApi.updateMovement(payload);
+      setMovementDraft(toMovementDraft(row));
+      // 这一组也不走快照：移动闸每次 pos 帧现读库，切完档下一帧就按新值判
+      toastSuccess("移动校验参数已保存（下一次位移判定即生效）");
+    } catch {
+      /* 错误已由请求层统一提示 */
+    } finally {
+      setMovementSaving(false);
+    }
+  };
+
+  const setCastRangeField = (key: string, value: string) => {
+    setCastRangeDraft((current) => (current ? { ...current, [key]: value } : current));
+  };
+
+  const saveCastRange = async () => {
+    if (!castRangeDraft) return;
+    const payload = buildCastRangePayload(castRangeDraft);
+    if (!payload) return;
+    setCastRangeSaving(true);
+    try {
+      const row = await runtimeParamsApi.updateCastRange(payload);
+      setCastRangeDraft(toCastRangeDraft(row));
+      toastSuccess("出手距离闸已保存（下一次出手即生效）");
+    } catch {
+      /* 错误已由请求层统一提示 */
+    } finally {
+      setCastRangeSaving(false);
     }
   };
 
@@ -283,6 +338,108 @@ export function RuntimeParamsPage() {
           </div>
         ) : null}
       </Card>
+
+      <Card
+        title="移动校验（服务端）"
+        actions={
+          loading ? (
+            <Spinner />
+          ) : canWrite ? (
+            <Button disabled={!movementDraft || movementSaving} loading={movementSaving} onClick={() => void saveMovement()}>
+              保存移动校验参数
+            </Button>
+          ) : null
+        }
+        description={
+          canWrite
+            ? "玩家位置是客户端上报的，这三道闸是服务端自己的那把尺子：超速 / 穿墙 / 服务端寻路。出厂档位是 log（照判、照接受、只记流水），先看一周误伤率再切 enforce —— enforce 会丢弃该帧并立刻把玩家拉回权威位置。"
+            : "当前角色没有「修改养成配置」权限，本页只读。"
+        }
+      >
+        {movementDraft ? (
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <Field label="档位" hint="off 不校验（回滚用）/ log 只记账放行（出厂）/ enforce 拒绝并拉回">
+              <Select
+                value={movementDraft.mode}
+                disabled={!canWrite}
+                onChange={(event) => setMovementField("mode", event.target.value)}
+              >
+                <option value="off">off · 不校验</option>
+                <option value="log">log · 只记账</option>
+                <option value="enforce">enforce · 拒绝并拉回</option>
+              </Select>
+            </Field>
+            <Field label="是否校验穿墙" hint="碰撞数据出问题时可单独关掉，不牵连速度校验">
+              <Select
+                value={movementDraft.wallCheck}
+                disabled={!canWrite}
+                onChange={(event) => setMovementField("wallCheck", event.target.value)}
+              >
+                <option value="true">校验</option>
+                <option value="false">不校验</option>
+              </Select>
+            </Field>
+            {MOVEMENT_FIELDS.map((field) => (
+              <Field key={field.key} label={field.label} hint={field.hint}>
+                <Input
+                  type="number"
+                  min={0}
+                  step={field.step ?? 1}
+                  value={movementDraft[field.key] ?? ""}
+                  disabled={!canWrite}
+                  onChange={(event) => setMovementField(field.key, event.target.value)}
+                />
+              </Field>
+            ))}
+          </div>
+        ) : null}
+      </Card>
+
+      <Card
+        title="出手距离闸（服务端）"
+        actions={
+          loading ? (
+            <Spinner />
+          ) : canWrite ? (
+            <Button disabled={!castRangeDraft || castRangeSaving} loading={castRangeSaving} onClick={() => void saveCastRange()}>
+              保存距离闸参数
+            </Button>
+          ) : null
+        }
+        description={
+          canWrite
+            ? "判据与客户端一致：把两边的碰撞盒（角色 40×70，怪物取呈现表的 content 尺寸）换成边缘间距，再比技能的施法距离。出厂档位是 log（照判、照放行、只记流水），先跑一周确认没有误伤再切 enforce —— enforce 下超距的出手会被直接拒（玩家看到的是「点了没反应」）。"
+            : "当前角色没有「修改养成配置」权限，本页只读。"
+        }
+      >
+        {castRangeDraft ? (
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <Field label="档位" hint="off 不判（回滚用）/ log 只记账放行（出厂）/ enforce 超距即拒">
+              <Select
+                value={castRangeDraft.mode}
+                disabled={!canWrite}
+                onChange={(event) => setCastRangeField("mode", event.target.value)}
+              >
+                <option value="off">off · 不判</option>
+                <option value="log">log · 只记账</option>
+                <option value="enforce">enforce · 超距即拒</option>
+              </Select>
+            </Field>
+            {CAST_RANGE_FIELDS.map((field) => (
+              <Field key={field.key} label={field.label} hint={field.hint}>
+                <Input
+                  type="number"
+                  min={0}
+                  step={field.step ?? 1}
+                  value={castRangeDraft[field.key] ?? ""}
+                  disabled={!canWrite}
+                  onChange={(event) => setCastRangeField(field.key, event.target.value)}
+                />
+              </Field>
+            ))}
+          </div>
+        ) : null}
+      </Card>
     </div>
   );
 }
@@ -361,6 +518,19 @@ const AI_FIELDS: Array<FieldSpec & { step?: number }> = [
   { key: "leashRange", label: "牵引半径（像素）", hint: "目标跑出这个距离就脱战回家；必须大于普攻距离", step: 10 },
   { key: "returnSpeedRate", label: "回家速度倍率", hint: "比追击快，免得被玩家拖着遛", step: 0.1 },
   { key: "returnTimeoutMs", label: "回家超时（毫秒）", hint: "到点还没走回出生点就直接吸附回去", step: 1000 },
+];
+
+/** 移动校验的数值字段（档位与穿墙开关是下拉，单独画） */
+const MOVEMENT_FIELDS: Array<FieldSpec & { step?: number }> = [
+  { key: "maxSpeed", label: "速度上限（像素/秒）", hint: "全局尺子：上限×容差×间隔 + 抖动 就是单帧允许的位移", step: 10 },
+  { key: "tolerance", label: "容差倍率", hint: "留给刚体加减速与插值；不能小于 1", step: 0.05 },
+  { key: "jitterPx", label: "抖动余量（像素）", hint: "抵掉坐标取整与上报相位差" },
+  { key: "correctIntervalMs", label: "拉回最小间隔（毫秒）", hint: "同一连接两次 posCorrect 至少隔这么久，防刷帧" },
+];
+
+/** 出手距离闸的数值字段（只有档位 + 一个余量：判据本身全部来自配置表） */
+const CAST_RANGE_FIELDS: Array<FieldSpec & { step?: number }> = [
+  { key: "jitterPx", label: "抖动余量（像素）", hint: "抵掉 10Hz 上报相位差与怪物插值滞后；出厂 24" },
 ];
 
 //#endregion
@@ -590,6 +760,51 @@ function buildAiPayload(values: Record<string, string>): UpdateMonsterAiParams |
     returnSpeedRate: Number(values.returnSpeedRate),
     returnTimeoutMs: Number(values.returnTimeoutMs),
   };
+}
+
+//#endregion
+
+//#region 两道校验闸的草稿 ↔ 生效值
+
+/** 移动校验生效值 → 草稿（模式与开关统一按字符串存，与上面三组共用同一套编辑器） */
+function toMovementDraft(row: MovementGuardParams): Record<string, string> {
+  return {
+    mode: row.mode,
+    wallCheck: row.wallCheck ? "true" : "false",
+    maxSpeed: String(row.maxSpeed),
+    tolerance: String(row.tolerance),
+    jitterPx: String(row.jitterPx),
+    correctIntervalMs: String(row.correctIntervalMs),
+  };
+}
+
+/** 移动校验草稿 → 提交体（有一处不是数字就整组不提交） */
+function buildMovementPayload(values: Record<string, string>): UpdateMovementGuardParams | null {
+  const num = (key: string): number | null => {
+    const raw = values[key];
+    const parsed = Number(raw);
+    return raw !== undefined && raw.trim() !== "" && Number.isFinite(parsed) ? parsed : null;
+  };
+  const maxSpeed = num("maxSpeed");
+  const tolerance = num("tolerance");
+  const jitterPx = num("jitterPx");
+  const correctIntervalMs = num("correctIntervalMs");
+  if (maxSpeed === null || tolerance === null || jitterPx === null || correctIntervalMs === null) return null;
+  const mode = values.mode === "off" || values.mode === "enforce" ? values.mode : "log";
+  return { mode, wallCheck: values.wallCheck === "true", maxSpeed, tolerance, jitterPx, correctIntervalMs };
+}
+
+/** 出手距离闸生效值 → 草稿 */
+function toCastRangeDraft(row: CastRangeParams): Record<string, string> {
+  return { mode: row.mode, jitterPx: String(row.jitterPx) };
+}
+
+/** 出手距离闸草稿 → 提交体 */
+function buildCastRangePayload(values: Record<string, string>): UpdateCastRangeParams | null {
+  const jitterPx = Number(values.jitterPx);
+  if (values.jitterPx === undefined || values.jitterPx.trim() === "" || !Number.isFinite(jitterPx)) return null;
+  const mode = values.mode === "off" || values.mode === "enforce" ? values.mode : "log";
+  return { mode, jitterPx };
 }
 
 //#endregion

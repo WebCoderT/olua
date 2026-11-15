@@ -9,9 +9,8 @@
  * - **cooldown**：同一技能连发 → 第二次被拒并带 `remainMs`（有效冷却 = cooldown ÷ speedRate）
  * - **mp**：蓝不够（这里把技能蓝耗临时调到 999）→ 被拒，且**不扣血、不记冷却**
  * - **rate**：令牌桶耗尽（容量 3）→ 第 4 发被拒；**重新进图不清桶**（A2：换图刷桶堵死）
- *
- * 距离闸（`range`）还没接：位置源仍是客户端自报 + 最小仲裁，#811 收口后补第三道，
- * 现在接上会把站在攻击边缘的正常出手术成超距（理由写在 `CastGuardService` 第三道那段）。
+ * - **range**（#1030）：同图隔 2000px 出手 → `enforce` 档被拒、`log` 档放行、`off` 档不判；
+ *   贴到靶子身上放行；`skills.distance = 0`（不限距离）不走这道闸
  *
  * 一条重要口径：**被拒的出手一份副作用都不该留** —— 不扣血、不扣蓝、不记冷却、不扣令牌。
  * 所以每条拒绝用例都顺带比一次目标血量，并且用「拒完之后立刻能正常打」验证没留冷却。
@@ -38,8 +37,14 @@ const ADMIN_CODE = "cast-guard-admin";
  */
 const TEST_MAP = "3";
 const OTHER_MAP = "1";
-/** 只用来造「死亡态」：客户端存不了 hp=0（服务端按库里落账值覆盖），只能直接改库 */
-const HERO_HP = 100;
+/**
+ * 距离闸用例期间用的落账血量（#1030）
+ *
+ * 那几步会把角色贴到怪身上（验「同技能同目标、只是距离合法时必须放行」），怪会还手。
+ * 血量垫高才不会在中途变成 `dead` —— 那会让后面的用例全部撞在存活闸上，测的就不是距离了。
+ * （死亡态是用 `setRoleHp(dbPath, roleId, 0)` 直接改库造的，不靠这个常量。）
+ */
+const RANGE_TEST_HP = 5000;
 
 //#region 断言小工具
 
@@ -98,6 +103,20 @@ function setRoleHp(dbPath, roleId, hp) {
   const db = new DatabaseSync(dbPath);
   db.prepare("UPDATE roles SET data = json_set(data, '$.hp', ?) WHERE id = ?").run(hp, roleId);
   db.close();
+}
+
+/**
+ * 读 `runtime_params` 某一列的原文（#1030）
+ *
+ * 这一行的写入是**整行 UPDATE**：改一组参数时漏写别的列，那一列就会被静默清成 `{}`。
+ * 原文比对是这条纪律唯一靠谱的断言方式（比字段值更严，也比看接口回读更早发现问题）。
+ */
+function runtimeColumn(dbPath, column) {
+  const { DatabaseSync } = require("node:sqlite");
+  const db = new DatabaseSync(dbPath);
+  const row = db.prepare(`SELECT ${column} AS v FROM runtime_params WHERE id = 1`).get();
+  db.close();
+  return row ? String(row.v) : null;
 }
 
 async function startServer(dbPath) {
@@ -414,8 +433,110 @@ function connect(url) {
 
     //#endregion
 
-    //#region 七、被拒的出手不产生任何世界副作用
-    group("七、拒绝的代价为零：被拒的出手不写日志、不升级、不触发击杀");
+    //#region 七、range：距离闸（#1030）
+    group("七、距离闸：同图隔远出手被拒（客户端改包打不到远处的怪）");
+
+    /** 上报一次位置（服务端据此更新在场坐标；移动校验出厂 log 档，大跳变也照接受） */
+    const sendPos = async (session, mapId, x, y) => {
+      session.socket.send(JSON.stringify({ type: "pos", data: { mapId, x, y, hp: RANGE_TEST_HP } }));
+      await sleep(60);
+    };
+    // 贴脸那一步会被怪打：先把落账血量垫高，免得中途变成 dead（那会把后面的距离用例全带偏）
+    setRoleHp(dbPath, roleId, RANGE_TEST_HP);
+    /** 改距离闸档位（管理端接口；没提交的字段保持原值） */
+    const setCastRange = (body) => api(baseUrl, "PATCH", "admin/runtime-params/cast-range", { token: adminToken, zoneId: ADMIN_ZONE, body });
+
+    const rangeInit = await api(baseUrl, "GET", "admin/runtime-params/cast-range", { token: adminToken, zoneId: ADMIN_ZONE });
+    checkEqual(rangeInit.code, 0, "距离闸参数可读（GET /admin/runtime-params/cast-range）");
+    check(
+      ["off", "log", "enforce"].includes(rangeInit.data && rangeInit.data.mode),
+      "档位是三档之一（off / log / enforce）",
+      JSON.stringify(rangeInit.data),
+    );
+    check(typeof (rangeInit.data && rangeInit.data.jitterPx) === "number", "抖动余量是数值（客户端判距离的盒半径口径）");
+
+    const enforced = await setCastRange({ mode: "enforce" });
+    checkEqual(enforced.data && enforced.data.mode, "enforce", "准备：切到 enforce 档（下一次出手即生效）");
+
+    // 整行 UPDATE 的纪律：改一组参数不能顺手把别的列写空（那是最难查的一类「保存成功但没生效」）
+    const movementBefore = runtimeColumn(dbPath, "movement");
+    const monsterAiBefore = runtimeColumn(dbPath, "monster_ai");
+    await setCastRange({ mode: "enforce" });
+    checkEqual(runtimeColumn(dbPath, "movement"), movementBefore, "改距离闸没有动 movement 列（原文一致）");
+    checkEqual(runtimeColumn(dbPath, "monster_ai"), monsterAiBefore, "改距离闸没有动 monster_ai 列（原文一致）");
+    const castRangeBefore = runtimeColumn(dbPath, "cast_range");
+    const movementPatched = await api(baseUrl, "PATCH", "admin/runtime-params/movement", {
+      token: adminToken,
+      zoneId: ADMIN_ZONE,
+      body: { mode: "log" },
+    });
+    checkEqual(movementPatched.code, 0, "准备：写一次移动校验参数（验证反向不清空 cast_range）");
+    checkEqual(runtimeColumn(dbPath, "cast_range"), castRangeBefore, "改移动校验没有动 cast_range 列（原文一致）");
+
+    // 站到离靶子很远的地方（同图，2000px 外；最宽的怪半宽 590，一定超出任何技能的 edge gap）
+    const farTarget = await freshTarget();
+    const farHpBefore = await hpOf(farTarget.instanceId);
+    await sendPos(a, TEST_MAP, farTarget.x + 2000, farTarget.y);
+    await sleep(400); // 让上一段的冷却过掉，这一发才会被距离闸拦而不是冷却闸
+    const farId = a.fire({ skillId: "1000", targetId: farTarget.instanceId, monsterKey: farTarget.monsterKey });
+    const farFrame = await a.settleOf(farId);
+    checkEqual(farFrame && farFrame.rejected, "range", "隔 2000px 出手被拒（rejected = range）");
+    check(/距离|走近/.test(String(farFrame && farFrame.message)), "拒绝文案说清了距离（客户端据此提示「走近再打」）", farFrame && farFrame.message);
+    checkEqual(await hpOf(farTarget.instanceId), farHpBefore, "被距离闸拒掉的出手一点血都没扣");
+
+    // 贴到靶子身上再打一次：同一个技能、同一个目标，必须放行（证明拦的是距离不是别的）
+    //
+    // **一定要挑低阶怪做这一步**：贴脸站住就等于站进它的攻击范围，图 3 的血牛一击能把
+    // 1 级角色打死 —— 一旦变成 dead，后面每一条出手都会被存活闸拦成 `dead`，
+    // 测的就不再是距离闸了（2026-11-15 全量跑挂在这里，单跑却不挂：纯粹赌怪有没有抬手）。
+    // 顺带再垫一次血：贴脸那几百毫秒里被打一两下也不至于死。
+    const nearTarget = (await weakTarget()) ?? farTarget;
+    setRoleHp(dbPath, roleId, RANGE_TEST_HP);
+    await sendPos(a, TEST_MAP, nearTarget.x, nearTarget.y);
+    await sleep(400);
+    const nearId = a.fire({ skillId: "1000", targetId: nearTarget.instanceId, monsterKey: nearTarget.monsterKey });
+    const nearFrame = await a.settleOf(nearId);
+    check(!!(nearFrame && nearFrame.ok), "贴到靶子身上照常结算（距离闸不误伤）", JSON.stringify(nearFrame && (nearFrame.rejected || nearFrame.damage)));
+
+    // log 档：照判照记但**放行**（观察期不改行为）
+    await setCastRange({ mode: "log" });
+    const logTarget = await freshTarget();
+    await sendPos(a, TEST_MAP, logTarget.x + 2000, logTarget.y);
+    await sleep(400);
+    const logId = a.fire({ skillId: "1000", targetId: logTarget.instanceId, monsterKey: logTarget.monsterKey });
+    const logFrame = await a.settleOf(logId);
+    check(!!(logFrame && logFrame.ok), "log 档：同样隔 2000px 出手**放行**（只记账不拦人）", JSON.stringify(logFrame && logFrame.rejected));
+
+    // off 档：完全不判
+    await setCastRange({ mode: "off" });
+    const offTarget = await freshTarget();
+    await sendPos(a, TEST_MAP, offTarget.x + 2000, offTarget.y);
+    await sleep(400);
+    const offId = a.fire({ skillId: "1000", targetId: offTarget.instanceId, monsterKey: offTarget.monsterKey });
+    const offFrame = await a.settleOf(offId);
+    check(!!(offFrame && offFrame.ok), "off 档：不判距离，远处出手照常结算", JSON.stringify(offFrame && offFrame.rejected));
+
+    // 不限距离的技能分支（skills.distance = 0）：远到 2000px 也不该被距离闸拦
+    await setCastRange({ mode: "enforce" });
+    const noDistance = await api(baseUrl, "PATCH", "admin/skills/1000", { token: adminToken, zoneId: ADMIN_ZONE, body: { distance: 0 } });
+    checkEqual(noDistance.code, 0, "准备：把基础剑术的 distance 临时改成 0（不限距离）");
+    const unlimitedTarget = await freshTarget();
+    await sendPos(a, TEST_MAP, unlimitedTarget.x + 2000, unlimitedTarget.y);
+    await sleep(400);
+    const unlimitedId = a.fire({ skillId: "1000", targetId: unlimitedTarget.instanceId, monsterKey: unlimitedTarget.monsterKey });
+    const unlimitedFrame = await a.settleOf(unlimitedId);
+    check(unlimitedFrame && unlimitedFrame.rejected !== "range", "distance = 0 的技能不走距离闸（不限距离的语义保留）", JSON.stringify(unlimitedFrame && (unlimitedFrame.rejected || unlimitedFrame.ok)));
+
+    // 还原：技能距离与档位都回到出厂口径
+    const restoreDistance = await api(baseUrl, "PATCH", "admin/skills/1000", { token: adminToken, zoneId: ADMIN_ZONE, body: { distance: 10 } });
+    checkEqual(restoreDistance.code, 0, "还原：基础剑术距离回到 10");
+    const restoreMode = await setCastRange({ mode: rangeInit.data && rangeInit.data.mode === "enforce" ? "enforce" : "log" });
+    checkEqual(restoreMode.code, 0, "还原：距离闸档位回到初始值");
+
+    //#endregion
+
+    //#region 八、被拒的出手不产生任何世界副作用
+    group("八、拒绝的代价为零：被拒的出手不写日志、不升级、不触发击杀");
 
     const killsBefore = a.settles.filter((frame) => frame && frame.ok && frame.killed).length;
     const burstTarget = await freshTarget();
