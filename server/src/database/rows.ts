@@ -462,6 +462,8 @@ export interface WorldDropRow {
   /** 掉落那一刻归属者所在的队伍（保护期判定用；null = 无队伍） */
   party_id: string | null;
   monster_key: string;
+  /** 怪物显示名（#803 起冗余存下；存量行为 null） */
+  monster_label: string | null;
   monster_instance_id: string;
   /** 只有装备有溯源（#789）：来源角色名 / 时间戳 */
   origin_role: string | null;
@@ -469,6 +471,42 @@ export interface WorldDropRow {
   created_at: number;
   expire_at: number;
   protect_until: number;
+}
+
+/**
+ * 一件掉落的**终态流水**（`drop_records` 表；#803 起写入）
+ *
+ * 一条掉落的一生只写一行：`result` 是 picked / expired / overflow / restart_lost，
+ * `reason` 只在 `overflow` 上有值（`auto` = 超单图上限被挤掉、`manual_clear` = 管理端清空）。
+ *
+ * 物品名 / 怪物名 / 物品类型都是**冗余存下来的**:配置日后改了或物品被删，
+ * 这条历史记录仍要能被人看懂（「当时掉的是什么、谁掉的」）。
+ */
+export interface DropRecordRow {
+  id: number;
+  drop_id: string;
+  zone_id: number;
+  map_id: string;
+  good_id: string;
+  good_type: string | null;
+  good_label: string | null;
+  count: number;
+  /** 0 / 1 */
+  bound: number;
+  monster_key: string;
+  monster_label: string | null;
+  monster_instance_id: string;
+  owner_account_id: string;
+  owner_role_id: string;
+  owner_name: string;
+  result: string;
+  reason: string | null;
+  picked_account_id: string | null;
+  picked_role_id: string | null;
+  picked_name: string | null;
+  created_at: number;
+  resolved_at: number;
+  lived_ms: number;
 }
 
 /** 单图热重载请求（`world_reload_requests` 表；#809，跨进程的一张待办表） */

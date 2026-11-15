@@ -2476,6 +2476,150 @@ export type EventTypeList = {
   types: EventType[];
 };
 
+export type DropRecordSummaryItem = {
+  /**
+   * 终态值
+   */
+  result: "picked" | "expired" | "overflow" | "restart_lost";
+  /**
+   * 终态的中文名
+   */
+  resultLabel: string;
+  /**
+   * 当前筛选条件下的条数
+   */
+  total: number;
+};
+
+export type DropRecordSummary = {
+  /**
+   * 按终态分组的计数（四个终态恒出现，空数据为 0）
+   */
+  items: DropRecordSummaryItem[];
+  /**
+   * 合计条数（= 各项之和）
+   */
+  total: number;
+};
+
+export type DropRecord = {
+  /**
+   * 自增 id（同一毫秒的多条靠它稳定排序）
+   */
+  id: number;
+  /**
+   * 掉落 id（`d_<区>_<图>_<序号>`）
+   */
+  dropId: string;
+  /**
+   * 区服 id
+   */
+  zoneId: number;
+  /**
+   * 地图 id
+   */
+  mapId: string;
+  /**
+   * 物品 id
+   */
+  goodId: string;
+  /**
+   * 物品类型（equipment / drug / money / scroll…；配置已删时为 null）
+   */
+  goodType: string | null;
+  /**
+   * 物品显示名（掉落那一刻的快照）
+   */
+  goodLabel: string | null;
+  /**
+   * 件数
+   */
+  count: number;
+  /**
+   * 是否绑定（绑定物品不可交易）
+   */
+  bound: boolean;
+  /**
+   * 来源怪物 key
+   */
+  monsterKey: string;
+  /**
+   * 来源怪物显示名（快照）
+   */
+  monsterLabel: string | null;
+  /**
+   * 来源怪物实例 id（同 key 的第几只，排查刷怪用）
+   */
+  monsterInstanceId: string;
+  /**
+   * 归属者账号 id
+   */
+  ownerAccountId: string;
+  /**
+   * 归属者角色 id
+   */
+  ownerRoleId: string;
+  /**
+   * 归属者角色名（快照）
+   */
+  ownerName: string;
+  /**
+   * 终态：picked（被捡走）/ expired（自然过期）/ overflow（被挤掉）/ restart_lost（重启丢失）
+   */
+  result: "picked" | "expired" | "overflow" | "restart_lost";
+  /**
+   * 结果的中文名（未知值回显原值）
+   */
+  resultLabel: string;
+  /**
+   * 结果细分：`overflow` 才有值 —— auto（超单图上限挤掉）/ manual_clear（管理端清空）；其余为 null
+   */
+  reason: string | null;
+  /**
+   * 捡走的人的账号 id（只有 picked 有）
+   */
+  pickedAccountId: string | null;
+  /**
+   * 捡走的人的角色 id（只有 picked 有）
+   */
+  pickedRoleId: string | null;
+  /**
+   * 捡走的人的角色名（只有 picked 有）
+   */
+  pickedName: string | null;
+  /**
+   * 掉落落地时刻（毫秒）
+   */
+  createdAt: number;
+  /**
+   * 离开地面的时刻（毫秒；restart_lost 是进程启动时刻）
+   */
+  resolvedAt: number;
+  /**
+   * 在地上存活了多久（= resolvedAt - createdAt，服务端算好）
+   */
+  livedMs: number;
+};
+
+export type DropRecordPage = {
+  /**
+   * 总条数
+   */
+  total: number;
+  /**
+   * 当前页码（从 1 开始）
+   */
+  page: number;
+  /**
+   * 每页条数
+   */
+  size: number;
+  /**
+   * 当前页的流水（默认按终态时刻倒序）
+   */
+  list: DropRecord[];
+};
+
 export type SystemRuntime = {
   /**
    * 服务端版本（读 server/package.json）
@@ -10937,6 +11081,53 @@ export type ConfigRevisionQuery = {
    * 取最近多少层（默认 20，上限 100）
    */
   limit?: number;
+};
+
+export type DropRecordQuery = {
+  /**
+   * 页码，从 1 开始
+   */
+  page?: number;
+  /**
+   * 每页条数（1~100）
+   */
+  size?: number;
+  /**
+   * 关键字（不同接口含义见其说明）
+   */
+  keyword?: string;
+  /**
+   * 排序字段（取值见各接口说明，未登记的值会退回默认排序）
+   */
+  sort?: string;
+  /**
+   * 排序方向：asc 升序 / desc 降序
+   */
+  order?: "asc" | "desc";
+  /**
+   * 只看某张图（地图 id）
+   */
+  mapId?: string;
+  /**
+   * 只看某种终态
+   */
+  result?: "picked" | "expired" | "overflow" | "restart_lost";
+  /**
+   * 归属者角色名（模糊匹配；`_` / `%` 会被转义）
+   */
+  ownerName?: string;
+  /**
+   * 物品 id（精确匹配：查「这件东西都掉过谁手里」）
+   */
+  goodId?: string;
+  /**
+   * 起始时间（毫秒时间戳，含；按掉落落地时刻）
+   */
+  from?: number;
+  /**
+   * 结束时间（毫秒时间戳，含）
+   */
+  to?: number;
 };
 
 export type AdminLevelCurvePreviewQuery = {

@@ -530,8 +530,39 @@ export interface AppConfiguration {
   configRevisionThrottleMs: number;
   //#endregion
 
-  //#region 排行榜（#400）
+  //#region 掉落流水（#803：`drop_records` 的保留策略）
+  /**
+   * 每区每图保留多少条掉落流水（条数闸，`DROP_RECORD_KEEP_PER_MAP`）
+   *
+   * 与 `mapMonitorEventKeep`（2000）取同一量级：一次击杀就是 1~5 条流水，2000 条 ≈ 几百次
+   * 击杀的可追溯窗口，单行几百字节，几十张图也就几 MB。要查更早的「某件东西去哪了」，
+   * 那是运营留档的事，不是这张表。
+   */
+  dropRecordKeepPerMap: number;
+  /**
+   * 攒够多少条新流水才裁一次旧记录（`DROP_RECORD_TRIM_EVERY`）
+   *
+   * 每写一条就 `DELETE` 一次会让 WAL 白涨 —— 与 `mapMonitorTrimEvery` 同一理由。
+   * e2e 把它压到 1 才验得到「写几条就收敛」。
+   */
+  dropRecordTrimEvery: number;
+  /**
+   * 流水的时间保留期（天，`DROP_RECORD_RETENTION_DAYS`；≤ 0 = 关闭时间闸）
+   *
+   * 条数闸只在**写入时**触发，它管不住「这张图从此没人打」：没有写入就没有裁剪。
+   * 所以再补一道按 `created_at` 扫全表的天数闸，死图的旧流水到点就走。
+   */
+  dropRecordRetentionDays: number;
+  /**
+   * 天数闸多久扫一次（毫秒，`DROP_RECORD_PRUNE_MS`；默认 6 小时）
+   *
+   * 挂实时进程的 flush 定时器检查（那个定时器与有没有掉落无关，恒在跑），所以不需要
+   * 再起一个独立定时器。配成 ≤ 0 / 坏值回落默认：别让它退化成每 100ms 扫一次全表。
+   */
+  dropRecordPruneMs: number;
+  //#endregion
 
+  //#region 排行榜（#400）
   /**
    * 榜单重算周期（毫秒，默认 60000，`LEADERBOARD_REFRESH_MS`）
    *
@@ -670,5 +701,10 @@ export default function configuration(): AppConfiguration {
     configRevisionThrottleMs: Number(process.env.CONFIG_REVISION_THROTTLE_MS ?? 10 * 1000),
     leaderboardRefreshMs: Number(process.env.LEADERBOARD_REFRESH_MS ?? 60000),
     leaderboardTopN: Number(process.env.LEADERBOARD_TOP_N ?? 100),
+    // 掉落流水（#803）：每图条数闸 + 攒批阈值 + 天数闸（三道都只为「这张表别无限长」）
+    dropRecordKeepPerMap: Number(process.env.DROP_RECORD_KEEP_PER_MAP ?? 2000),
+    dropRecordTrimEvery: Number(process.env.DROP_RECORD_TRIM_EVERY ?? 200),
+    dropRecordRetentionDays: Number(process.env.DROP_RECORD_RETENTION_DAYS ?? 7),
+    dropRecordPruneMs: Number(process.env.DROP_RECORD_PRUNE_MS ?? 6 * 60 * 60 * 1000),
   };
 }

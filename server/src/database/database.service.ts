@@ -377,6 +377,9 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
         owner_name          TEXT    NOT NULL,
         party_id            TEXT,
         monster_key         TEXT    NOT NULL,
+        -- 怪物显示名（#803）：起手就冗余存一份，重启清场把这一行转成 restart_lost 流水时
+        -- 才不需要回头去查 monsters 表（那份配置可能已经改名，甚至被删）
+        monster_label       TEXT,
         monster_instance_id TEXT    NOT NULL,
         origin_role         TEXT,
         origin_at           INTEGER,
@@ -406,6 +409,9 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
         owner_role_id       TEXT    NOT NULL,
         owner_name          TEXT    NOT NULL,
         result              TEXT    NOT NULL,
+        -- 结果细分（#803）：overflow 的两个来源要能分开 —— auto（超单图上限被挤掉）与
+        -- manual_clear（管理端清空，#805）。其余结果这一列为 null（结果本身已经说清了）
+        reason              TEXT,
         picked_account_id   TEXT,
         picked_role_id      TEXT,
         picked_name         TEXT,
@@ -1517,6 +1523,11 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
     `);
 
     // 存量库补列（CREATE TABLE IF NOT EXISTS 不会改已有表结构）
+    // 掉落流水的「结果细分」（#803）：`overflow` 要能区分 auto / manual_clear。
+    // 存量行留 null —— 那一列只有 overflow 用得上，其它结果的语义在 result 里已经完整
+    this.ensureColumn("drop_records", "reason", "TEXT");
+    // 投影行冗余怪物名（#803）：存量行留 null（只是显示名，缺了不影响清场与拾取）
+    this.ensureColumn("world_drops", "monster_label", "TEXT");
     // 边框 / 背景的实体注册表（#714）：清单本体住在列表页，棋盘与自定义表只引用 key ——
     // 出厂空表，读取时自动把被引用的 key 补进清单（老数据与 config-sync 出厂数据都不用迁移）
     this.ensureColumn("equipment_appearance", "border_items", "TEXT NOT NULL DEFAULT '[]'");

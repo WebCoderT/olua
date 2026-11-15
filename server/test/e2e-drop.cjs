@@ -13,8 +13,12 @@
  *    **连续击杀时每一件都落库、同一件只有一行**（批量写不丢行、upsert 幂等）
  * 三、**保护期与归属**：保护期内非归属者拿 `protected`（带 `waitMs`）；保护期压 0 之后
  *    新掉落谁都能捡，捡走时原归属者收到 `dropRemove(reason=picked, byName)`
- * 四、**生命周期与重启清场**：TTL 到点自己消失（`dropRemove(reason=expired)` + 投影行删除）；
- *    实时进程重启后地面清空（`world_drops` 无残留，新连接拿到的 `world.drops` 为空）
+ * 四、**生命周期**：TTL 到点自己消失（`dropRemove(reason=expired)` + 投影行删除）；
+ *    超过单图上限时最旧的被挤掉（`reason=overflow`）；重启后地面清空
+ *    （`world_drops` 无残留，新连接拿到的 `world.drops` 为空）
+ * 五、**终态流水（#803）**：picked / expired / overflow / restart_lost 四种终态**各写一行**
+ *    `drop_records`，冗余的物品名与怪物名不为空、`lived_ms = resolved_at - created_at`；
+ *    这一套是这条链路唯一的写侧证据（读侧在 `e2e-drop-records`）
  *
  * ## 为什么单独一套
  *
@@ -236,6 +240,32 @@ function readDropRows(dbPath) {
   }
 }
 
+/**
+ * 读终态流水（`drop_records`，只读连接）
+ *
+ * 流水是**攒批**写的（100ms 一拍），所以断言一律走 `waitFor` 而不是「捡完立刻查」。
+ */
+function readRecordRows(dbPath) {
+  const { DatabaseSync } = require("node:sqlite");
+  const db = new DatabaseSync(dbPath);
+  try {
+    return db
+      .prepare(
+        "SELECT drop_id, zone_id, map_id, good_id, good_type, good_label, count, bound, monster_key, " +
+          "monster_label, monster_instance_id, owner_name, result, reason, picked_account_id, picked_name, " +
+          "created_at, resolved_at, lived_ms FROM drop_records ORDER BY id ASC",
+      )
+      .all();
+  } finally {
+    db.close();
+  }
+}
+
+/** 某件掉落有没有流水行（`result` 给了就一并比对） */
+function recordsOf(dbPath, dropId, result) {
+  return readRecordRows(dbPath).filter((row) => row.drop_id === dropId && (!result || row.result === result));
+}
+
 (async () => {
   const dbPath = path.join(os.tmpdir(), `olua-e2e-drop-${Date.now()}.db`);
   const port = await freePort();
@@ -304,22 +334,29 @@ function readDropRows(dbPath) {
     );
 
     /**
-     * 把某只怪的掉落改成「必掉 1 件 drug_hp_1」（picks 1 × chance 1 → 结果确定）
+     * 把某只怪的掉落改成「必掉这几件」（picks = 件数 × chance 1 → 结果确定）
      *
      * 按实际要打的怪物 key 改，不写死：图上不只有一只怪，挑到哪只取决于重生时序。
+     * 默认只掉 1 件 `drug_hp_1`；挤掉那一段要一次掉好几件（必须是**不同**物品，
+     * 同物品会被 `rollDropTable` 合并成一条，件数就不涨了）。
      */
-    const patchDropOf = (monsterKey, goodId = "drug_hp_1") =>
+    const patchDropOf = (monsterKey, goodIds = ["drug_hp_1"]) =>
       api(baseUrl, "PATCH", `admin/monster-drops/${monsterKey}`, {
         token: adminToken,
         zoneId: ADMIN_ZONE,
-        body: { tableId: null, picks: 1, entries: [{ goodId, weight: 100, chance: 1, count: [1, 1] }], bindDrops: false },
+        body: {
+          tableId: null,
+          picks: goodIds.length,
+          entries: goodIds.map((goodId) => ({ goodId, weight: 100, chance: 1, count: [1, 1] })),
+          bindDrops: false,
+        },
       });
 
     /** cast 序号（服务端幂等账按 castId，自己数就行） */
     let castSeq = 0;
 
     /** 打一只活着的怪，返回击杀那次的结算（打不死 / 被拒返回 null） */
-    const killOne = async (player, mapId = "1") => {
+    const killOne = async (player, mapId = "1", goodIds = ["drug_hp_1"]) => {
       // 怪会被前面的段打空（重生 1500ms 一拍）：这里静默等一只活的，不记失败 ——
       // 等到不了就返回 null，由调用方的断言去说「这一枪没打成」
       let snapshot = null;
@@ -330,7 +367,7 @@ function readDropRows(dbPath) {
       }
       const mob = snapshot && Array.isArray(snapshot.monsters) ? snapshot.monsters.find((monster) => monster.alive) : null;
       if (!mob) return null;
-      await patchDropOf(mob.monsterKey);
+      await patchDropOf(mob.monsterKey, goodIds);
       // 站在怪旁边上报位置：拾取距离闸读的是这份坐标
       const stand = JSON.stringify({ type: "pos", data: { mapId, x: mob.x, y: mob.y, hp: 100 } });
       player.session.socket.send(stand);
@@ -494,6 +531,45 @@ function readDropRows(dbPath) {
     const rowsAfterPick = readDropRows(dbPath).filter((row) => row.drop_id === aliceDrop2);
     check(rowsAfterPick.length === 0, "B：捡走之后投影行被删掉（重连的人不会再看到它）", JSON.stringify(rowsAfterPick));
 
+    // 终态流水（#803）：攒批写（100ms 一拍），所以等而不是立刻查
+    const pickedRecord = await waitFor("捡走之后出现一条 picked 流水", async () => {
+      const hits = recordsOf(dbPath, aliceDrop2, "picked");
+      return hits.length > 0 ? hits[0] : null;
+    }, 5_000);
+    check(!!pickedRecord, "B：捡走写了一条 picked 流水（这件东西最后去哪了有据可查）", JSON.stringify(pickedRecord));
+    check(
+      !!pickedRecord && pickedRecord.picked_name === bob.name && typeof pickedRecord.picked_account_id === "string" && pickedRecord.picked_account_id.length > 0,
+      "B：流水记了捡走的人（picked_name / picked_account_id，角色被删也查得出是谁）",
+      JSON.stringify(pickedRecord && { name: pickedRecord.picked_name, account: pickedRecord.picked_account_id }),
+    );
+    check(
+      !!pickedRecord && !!takenByBob && pickedRecord.good_id === takenByBob.goodId && pickedRecord.count === takenByBob.count,
+      "B：流水里的物品 / 件数 = 拾取应答里的（同一次操作，两处不各自算）",
+      JSON.stringify(pickedRecord && { good: pickedRecord.good_id, count: pickedRecord.count, response: takenByBob && { good: takenByBob.goodId, count: takenByBob.count } }),
+    );
+    check(
+      !!pickedRecord && typeof pickedRecord.good_label === "string" && pickedRecord.good_label.length > 0 &&
+        typeof pickedRecord.good_type === "string" && pickedRecord.good_type.length > 0 &&
+        typeof pickedRecord.monster_label === "string" && pickedRecord.monster_label.length > 0,
+      "B：物品名 / 物品类型 / 怪物名都冗余进流水（配置日后被删，这条记录仍要能看懂）",
+      JSON.stringify(pickedRecord && { label: pickedRecord.good_label, type: pickedRecord.good_type, monster: pickedRecord.monster_label }),
+    );
+    check(
+      !!pickedRecord && pickedRecord.monster_key.length > 0 && pickedRecord.monster_instance_id.length > 0,
+      "B：流水带来源怪物（key + 实例 id，排查「哪只怪掉太多」用）",
+      JSON.stringify(pickedRecord && { key: pickedRecord.monster_key, instance: pickedRecord.monster_instance_id }),
+    );
+    check(
+      !!pickedRecord && pickedRecord.lived_ms === pickedRecord.resolved_at - pickedRecord.created_at,
+      "B：lived_ms 就是 resolved_at - created_at（管理端按存活时长排序，不自己减）",
+      JSON.stringify(pickedRecord && { lived: pickedRecord.lived_ms, created: pickedRecord.created_at, resolved: pickedRecord.resolved_at }),
+    );
+    check(
+      !!pickedRecord && pickedRecord.reason === null,
+      "B：picked 行的 reason 为 null（细分列只有 overflow 用得上）",
+      JSON.stringify(pickedRecord && pickedRecord.reason),
+    );
+
     const restored = await api(baseUrl, "PATCH", "admin/runtime-params", {
       token: adminToken, zoneId: ADMIN_ZONE, body: { drop: { protectMs: protectBefore } },
     });
@@ -529,6 +605,22 @@ function readDropRows(dbPath) {
     const rowsAfterExpire = readDropRows(dbPath).filter((row) => row.drop_id === expireDrop);
     check(rowsAfterExpire.length === 0, "B：过期后投影行被删掉（不会留下捡不起来的幽灵行）", JSON.stringify(rowsAfterExpire));
 
+    const expiredRecord = await waitFor("过期之后出现一条 expired 流水", async () => {
+      const hits = recordsOf(dbPath, expireDrop, "expired");
+      return hits.length > 0 ? hits[0] : null;
+    }, 5_000);
+    check(!!expiredRecord, "B：过期写了一条 expired 流水（没人捡走也要留痕）", JSON.stringify(expiredRecord));
+    check(
+      !!expiredRecord && expiredRecord.picked_name === null && expiredRecord.picked_account_id === null,
+      "B：expired 行没有拾取人（三个 picked_* 列都是 null）",
+      JSON.stringify(expiredRecord && { name: expiredRecord.picked_name, account: expiredRecord.picked_account_id }),
+    );
+    check(
+      !!expiredRecord && expiredRecord.lived_ms === expiredRecord.resolved_at - expiredRecord.created_at,
+      "B：expired 行的存活时长同样自洽",
+      JSON.stringify(expiredRecord && { lived: expiredRecord.lived_ms, created: expiredRecord.created_at, resolved: expiredRecord.resolved_at }),
+    );
+
     // 顺带验一条：拾取被拒之后东西还在（捡不起来 ≠ 消失）
     const killedToKeep = await killOne(alice);
     const keepDrop = dropIdOf(killedToKeep);
@@ -539,6 +631,60 @@ function readDropRows(dbPath) {
       "C：TTL 内（保护期已 0）同一件仍可拾取（上一段的过期没有误伤新掉落）",
       JSON.stringify(stillThere),
     );
+
+    //#endregion
+
+    //#region 四之二、挤掉（overflow：超单图上限时挤掉最旧的）
+
+    group("四之二、挤掉：超单图上限时最旧的被挤掉（dropRemove reason=overflow + 流水 reason=auto）");
+
+    // 上限的下限是 20（#802 定下的夹逼：配 0 或 3 会被夹成 20），所以得造够 21 件才挤得动。
+    // TTL 拉回 180 秒：这一批要在攒够之前一直躺着（过期是另一条路径，别混进来）。
+    const overflowParams = await api(baseUrl, "PATCH", "admin/runtime-params", {
+      token: adminToken, zoneId: ADMIN_ZONE, body: { drop: { ttlMs: 180_000, protectMs: 0, maxGroundPerMap: 20 } },
+    });
+    check(overflowParams.code === 0, "A：单图上限压到 20 件、TTL 拉回 180 秒（改完立即生效，只影响新掉落）", overflowParams.message);
+
+    // 一次击杀掉 6 件**不同**物品：同物品会被 rollDropTable 合并成一条，件数就不涨了
+    const drugList = await api(baseUrl, "GET", "admin/drugs?size=100", { token: adminToken, zoneId: ADMIN_ZONE });
+    const goodIds = ((drugList.data && drugList.data.list) || []).map((item) => item.id).slice(0, 6);
+    check(goodIds.length >= 6, "A：取到 6 种药品 id（一次击杀掉 6 件，几枪就攒够上限）", JSON.stringify(goodIds));
+
+    const overflowPool = [];
+    for (let round = 0; round < 10 && overflowPool.length <= 20; round += 1) {
+      const killed = await killOne(alice, "1", goodIds);
+      if (!killed) break;
+      for (const entry of (killed.reward && killed.reward.drops) || []) {
+        if (typeof entry.dropId === "string" && entry.dropId) overflowPool.push(entry.dropId);
+      }
+    }
+    check(overflowPool.length > 20, "A：地上的件数已经超过单图上限（服务端最多留 20 件，多出来的必须被挤掉）", `共 ${overflowPool.length} 件`);
+
+    const overflowFrame = await waitFor("溢出移除帧", async () => {
+      const hit = alice.session.dropRemoves.find(
+        (frame) => frame.reason === "overflow" && (frame.dropIds || []).some((id) => overflowPool.includes(id)),
+      );
+      return hit || null;
+    }, 15_000);
+    check(!!overflowFrame, "B：到点收到 dropRemove（reason=overflow，客户端据此移除节点）", JSON.stringify(overflowFrame));
+
+    const overflowRecord = await waitFor("挤掉之后出现一条 overflow 流水", async () => {
+      const hit = readRecordRows(dbPath).find((row) => row.result === "overflow" && overflowPool.includes(row.drop_id));
+      return hit || null;
+    }, 10_000);
+    check(!!overflowRecord, "B：挤掉也写一行流水（result=overflow）", JSON.stringify(overflowRecord));
+    check(
+      !!overflowRecord && overflowRecord.reason === "auto",
+      "B：reason=auto（与 #805 的管理端清空 manual_clear 区分开：一个是产出过剩，一个是人为操作）",
+      JSON.stringify(overflowRecord && overflowRecord.reason),
+    );
+    check(
+      !!overflowRecord && overflowRecord.lived_ms === overflowRecord.resolved_at - overflowRecord.created_at,
+      "B：overflow 行的存活时长同样自洽",
+      JSON.stringify(overflowRecord && { lived: overflowRecord.lived_ms, created: overflowRecord.created_at, resolved: overflowRecord.resolved_at }),
+    );
+    const overflowGhost = overflowRecord ? readDropRows(dbPath).filter((row) => row.drop_id === overflowRecord.drop_id) : [];
+    check(overflowGhost.length === 0, "B：被挤掉的那件投影行已删除（不会留下捡不起来的幽灵行）", JSON.stringify(overflowGhost));
 
     //#endregion
 
@@ -569,6 +715,21 @@ function readDropRows(dbPath) {
       /重启清场/.test(restarted.logs()),
       "B：日志里点明清了场（运维能解释「刚才地上的东西怎么没了」）",
       restarted.logs().split("\n").filter((line) => line.includes("重启清场")).slice(-1).join(""),
+    );
+
+    // 清场之前先把每行转成一条 restart_lost 流水（#803）：只删不记的话，
+    // 「上一进程地上那些东西最后怎么了」就永远没人答得上来
+    const restartRecords = readRecordRows(dbPath).filter((row) => row.result === "restart_lost");
+    check(restartRecords.length > 0, "B：重启清场把残留的地面掉落转成了 restart_lost 流水（不是静默删掉）", `共 ${restartRecords.length} 条`);
+    check(
+      restartRecords.some((row) => row.drop_id === survivor),
+      "B：重启前地上那一件（survivor）在流水里是 restart_lost",
+      JSON.stringify(restartRecords.filter((row) => row.drop_id === survivor)),
+    );
+    check(
+      restartRecords.every((row) => row.picked_name === null && row.resolved_at >= row.created_at && row.lived_ms === row.resolved_at - row.created_at),
+      "B：restart_lost 行没有拾取人，存活时长同样自洽",
+      JSON.stringify(restartRecords.slice(0, 3)),
     );
 
     // 新连接拿到的快照也必须是空的（客户端屏幕上不能立着捡不起来的东西）

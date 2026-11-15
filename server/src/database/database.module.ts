@@ -38,6 +38,8 @@ import { MapRepository } from "./repositories/map.repository";
 import { MapRuleRepository } from "./repositories/map-rule.repository";
 // 单图热重载请求（#809）：管理端写 pending、实时进程轮询执行 —— 跨进程的一张待办表
 import { WorldDropRepository } from "./repositories/world-drop.repository";
+// 掉落终态流水（#803）：实时进程 append、管理端按区读 —— append-only 的历史表
+import { DropRecordRepository } from "./repositories/drop-record.repository";
 import { WorldReloadRequestRepository } from "./repositories/world-reload-request.repository";
 import { ZoneRepository } from "./repositories/zone.repository";
 // 配置版本链（#881 / #882）：`config_version` / `config_revisions` + 38 张配置表的整表 dump / 替换
@@ -95,6 +97,7 @@ import { RolePositionRepository } from "./repositories/role-position.repository"
     MapRuleRepository,
     WorldReloadRequestRepository,
     WorldDropRepository,
+    DropRecordRepository,
     ZoneRepository,
     TitleRepository,
     RankRepository,
@@ -157,6 +160,7 @@ import { RolePositionRepository } from "./repositories/role-position.repository"
     MapRuleRepository,
     WorldReloadRequestRepository,
     WorldDropRepository,
+    DropRecordRepository,
     ZoneRepository,
     TitleRepository,
     RankRepository,
