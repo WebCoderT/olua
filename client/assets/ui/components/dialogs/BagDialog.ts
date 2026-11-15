@@ -1,4 +1,4 @@
-import { Graphics, isValid, Label, Node, Size, Vec2 } from "cc";
+import { isValid, Label, Node, Size, Vec2 } from "cc";
 import StorageManager from "../../core/StorageManager";
 import GameUiHelper from "../../helpers/GameUiHelper";
 import UiHelper from "../../helpers/UiHelper";
@@ -154,7 +154,7 @@ export default class BagDialog {
    * 计数行与页脚（稿 05-bag 的 `.count-line` 与 `.panel-foot`）
    *
    * 计数行：左边「已用 / 总数 格」（实时算，见 refreshCount），右边一行操作提示；
-   * 页脚：顶部 1px 分隔线（通栏）+ 两端各一行小字。
+   * 页脚：走通用件 `createDialogFoot`（通栏线 + 两端小字），几何来自 `dialogFootLayout`。
    * 几何全在 configs/layout/dialogs.bagDialogLayout（countLine / foot），这里只摆放与取文案。
    */
   private buildCountAndFoot(dialog: Node) {
@@ -181,34 +181,13 @@ export default class BagDialog {
         Label.HorizontalAlign.RIGHT,
       ),
     );
-    const foot = bagDialogLayout.foot;
-    const ruleWidth = bagDialogLayout.size.width;
-    const rule = UiHelper.createNode("bag_foot_rule", new Vec2(0, foot.lineY), new Size(ruleWidth, 1));
-    const graphics = rule.addComponent(Graphics);
-    graphics.fillColor = foot.lineColor;
-    graphics.rect(-ruleWidth / 2, -0.5, ruleWidth, 1);
-    graphics.fill();
-    dialog.addChild(rule);
     dialog.addChild(
-      UiHelper.createLabel(
-        "bag_foot_left",
+      GameUiHelper.createDialogFoot(
+        "bag_foot",
+        bagDialogLayout.size.width,
+        bagDialogLayout.foot,
         getText("bag_foot_left"),
-        foot.color,
-        foot.fontSize,
-        new Vec2(foot.leftX, foot.textY),
-        new Size(foot.width, foot.height),
-        Label.HorizontalAlign.LEFT,
-      ),
-    );
-    dialog.addChild(
-      UiHelper.createLabel(
-        "bag_foot_right",
         getText("bag_foot_right"),
-        foot.color,
-        foot.fontSize,
-        new Vec2(foot.rightX, foot.textY),
-        new Size(foot.width, foot.height),
-        Label.HorizontalAlign.RIGHT,
       ),
     );
   }
