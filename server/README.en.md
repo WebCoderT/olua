@@ -2,6 +2,10 @@
 
 > [简体中文](README.md) | English
 
+**In plain words: this is the brain of the game.** How many items a kill drops, how much damage that hit did,
+how many bag slots are left, what level you actually are — all decided here, then told to the client to "act it out".
+It also serves every admin-console API: editing configs, posting announcements, banning accounts all go through here.
+
 > The server behind accounts / characters / admin interfaces: SQLite-backed, Swagger-documented.
 > **It is also the single source of truth for the three-end interface contract** — both the client's `ApiRoutes/ApiModels/Api.ts` and the admin's `routes/models/endpoints.ts` are generated from its `openapi.json`.
 >
