@@ -12,7 +12,7 @@ import {
   spawnAreaOverflowText,
 } from "../../../common/utils/spawn-area-bounds.util";
 import { clampPointToMap, clampRectToMap, findAreaAt, spawnTargetOf } from "../../../common/utils/spawn-density.util";
-import { PUBLIC_SLOT, channelOfSlot, instanceIdOf, parseInstanceSeq, roomKey, splitRoomKey } from "../../../common/utils/room-key.util";
+import { PUBLIC_SLOT, channelOfSlot, instanceIdOf, isInstanceSlot, parseInstanceSeq, roomKey, splitRoomKey } from "../../../common/utils/room-key.util";
 import { Room, roomIsFull } from "./room";
 import { WorldMonster, fromWorldMonsterRow, processRespawns } from "../world-monster";
 
@@ -231,7 +231,21 @@ export class RoomManager {
 
     const areas = this.spawnAreas.listByMap(mapId);
     const mapPixel = this.mapPixelOf(mapId);
-    const rows = this.worldMonsters.listByRoom(zoneId, mapId, slot);
+    /**
+     * 副本房（#1001 第二刀）：**不从库恢复**
+     *
+     * 普通房间的生命周期是「内存 → 库 → 播种」，副本反过来：它的世界只属于这一场，
+     * 进程重启 / 房间被销毁之后，库里那批 `i<n>` 的怪是**上一场的残骸**。
+     * 按普通房间那样恢复，等于把「半场打完的副本」复活成一场新的（血都不满、怪死了一半），
+     * 而玩家以为自己进的是刚开的场。所以这里直接清残留行、按刷怪区现播种。
+     *
+     * 真正拦「上一场的人还想进来」是 `MapInstanceService` 的判据（`started_at` 非空
+     * 但房间不在内存 → 拒绝 + 收场），这一行只是兜底保证「即便走进来了，世界也是新的」。
+     */
+    const restore = !isInstanceSlot(slot);
+    if (!restore) this.worldMonsters.removeByRoom(zoneId, mapId, slot);
+    const rows = restore ? this.worldMonsters.listByRoom(zoneId, mapId, slot) : [];
+
     let maxSeq = 0;
     let backfilled = 0;
     for (const row of rows) {
@@ -340,12 +354,17 @@ export class RoomManager {
 
   /**
    * 空闲回收（`idleMs <= 0` 表示不回收，与改造前 `worldMapIdleMs` 的语义一致）
+   *
+   * **副本房不在这里回收**（#1001 第二刀）：它的生死由 `MapInstanceService` 管
+   * （空房宽限到期 / 超时 / 通关），那边收场时会自己 `destroy`。两边都收的后果是
+   * 「房间先被这轮囤掉、收场那一拍找不到房间」，残留行与在里面的观看者就没人清了。
    * @returns 被卸载的房间
    */
   reclaimIdle(now: number, idleMs: number): Room[] {
     if (idleMs <= 0) return [];
     const reclaimed: Room[] = [];
     for (const [roomId, room] of this.rooms) {
+      if (isInstanceSlot(room.slot)) continue;
       if (room.emptySince === null || now - room.emptySince < idleMs) continue;
       this.rooms.delete(roomId);
       reclaimed.push(room);

@@ -17734,6 +17734,204 @@
         ]
       }
     },
+    "/admin/maps/{id}/instances": {
+      "get": {
+        "description": "还开着的副本（按开场先后）+ 最近收场的 10 场。\n\n- `instanceId` 就是客户端 `instanceEnter` 要带的那个（= 房间键 `<区>:<图>:i<序号>`）；\n- `remainMs` 是距离收场的剩余毫秒（已收场为 0），`startedAt` 为空表示**还没人进过**；\n- `players` 是**投影**（实时进程每秒写的监控快照里的人数），界面上当「约 N 人」用，\n  别拿它当容量判据 —— 容量在进副本那一刻由实时进程算；\n- `closeReason`：`emptied`（人走光了）/ `expired`（超时）/ `cleared`（通关）/ \n  `forced`（运营强制）/ `world_lost`（进程重启，这一场的世界没了）。\n\n**区是必填的**（`X-Zone-Id`）：同一个 slot 在不同区是两场不同的副本。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
+        "operationId": "adminMapInstance.list",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "地图 id（副本的底图）",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "还开着的 + 最近收场的副本",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/MapInstanceListDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "这张图在当前区的副本",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/MapInstanceListDto"
+        },
+        "x-olua-permissions": [
+          "gameConfig:read"
+        ]
+      },
+      "post": {
+        "description": "写一行登记（`map_instances`），**世界由第一个进场的人惰性加载**：那一刻按刷怪区现播种，\n之后这场副本的怪与其它场、与公共线完全隔离（各自一个 `slot`）。\n\n出厂值：**30 分钟 / 6 人 / 谁都能进 / 散场回这张图的公共线**。填了就按填的来：\n- `ttlMs`：时限（到点自动收场，收场前 30 秒广播 `instanceClosing`；短副本按一半提前提醒）；\n- `maxPlayers`：人数上限（0 = 不限）；\n- `ownerRoleIds`：白名单（填了就只认名单里的角色）；\n- `originMapId`：散场之后把人送回哪张图。\n\n**副本不需要「提前预热」**：开出来没人进也不用管，到点自己收（`expired`）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
+        "operationId": "adminMapInstance.create",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "地图 id（副本的底图）",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateInstanceDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "这一场（含 instanceId / 到期时刻）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/MapInstanceDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "在这张图上开一场副本",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/MapInstanceDto"
+        },
+        "x-olua-permissions": [
+          "gameConfig:write"
+        ]
+      }
+    },
+    "/admin/maps/{id}/instances/{slot}/close": {
+      "post": {
+        "description": "**只写登记行**：真正的「把人送回原图 + 销毁这场的世界」由实时进程下一拍扫地做\n（它才持有连接），所以玩家最多 1 秒后收到一帧 `world`（已在原图）并被送走。\n\n`reason` 留空 = `forced`（运营把人赶出来）；任务系统标记通关时传 `cleared`。\n\n**幂等**：已经收过的场再点一次不报错，原样返回它当前的收场状态 —— 运营连点两下、\n或者两个人同时点，都不该看到红色报错。真正找错地方（这个 slot 在这张图这个区没有行）\n才回 404（`50046`）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
+        "operationId": "adminMapInstance.close",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "地图 id（副本的底图）",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "slot",
+            "required": true,
+            "in": "path",
+            "description": "副本槽位（`i<序号>`，列表里返回的就是它）",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CloseInstanceDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "收场之后的这一场",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/MapInstanceDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "让一场副本收场（通关 / 强制散场）",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/MapInstanceDto"
+        },
+        "x-olua-permissions": [
+          "gameConfig:write"
+        ]
+      }
+    },
     "/admin/ui-effects": {
       "get": {
         "description": "全部特效的表现参数：摆位 / 缩放 / 旋转 / 时长 / 开关 + 追账字段。\n\n行由启动 seed 按 `UI_EFFECT_DEFAULTS` 补出来，**没有新建 / 删除接口** ——\nkey 的取值域由客户端的消费代码决定（升级特效 `upgrade` + 掉落光效 `light-1`…`light-6`）。\n\n不分页，按 seed 顺序（= `UI_EFFECT_KEYS` 的登记顺序，升级特效在最前）返回。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
@@ -34408,6 +34606,173 @@
         "required": [
           "cleared"
         ]
+      },
+      "MapInstanceDto": {
+        "type": "object",
+        "properties": {
+          "instanceId": {
+            "type": "string",
+            "description": "副本 id（= 房间键 `<区>:<图>:i<序号>`，客户端 instanceEnter 带它）"
+          },
+          "slot": {
+            "type": "string",
+            "description": "槽位（`i<序号>`；日志 / 监控里看到的就是它）"
+          },
+          "zoneId": {
+            "type": "number",
+            "description": "所属区"
+          },
+          "mapId": {
+            "type": "string",
+            "description": "底图 id"
+          },
+          "originMapId": {
+            "type": "string",
+            "description": "散场之后送回哪张图"
+          },
+          "maxPlayers": {
+            "type": "number",
+            "description": "人数上限（0 = 不限）"
+          },
+          "ttlMs": {
+            "type": "number",
+            "description": "时限（毫秒）"
+          },
+          "createdAt": {
+            "type": "number",
+            "description": "开场时刻（毫秒）"
+          },
+          "expiresAt": {
+            "type": "number",
+            "description": "到点收场的时刻（毫秒）"
+          },
+          "remainMs": {
+            "type": "number",
+            "description": "距收场还剩多少毫秒（已收场为 0）"
+          },
+          "startedAt": {
+            "type": "number",
+            "description": "第一次有人进去的时刻（null = 还没人进过）",
+            "nullable": true
+          },
+          "closedAt": {
+            "type": "number",
+            "description": "收场时刻（null = 还开着）",
+            "nullable": true
+          },
+          "closeReason": {
+            "type": "string",
+            "description": "收场原因（emptied / expired / cleared / forced / world_lost；还开着为 null）",
+            "nullable": true
+          },
+          "ownerRoleIds": {
+            "description": "允许进场的角色 id 名单（空 = 谁都能进）",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "players": {
+            "type": "number",
+            "description": "此刻在场人数（来自实时进程的开场登记；没人进过就是 0）"
+          }
+        },
+        "required": [
+          "instanceId",
+          "slot",
+          "zoneId",
+          "mapId",
+          "originMapId",
+          "maxPlayers",
+          "ttlMs",
+          "createdAt",
+          "expiresAt",
+          "remainMs",
+          "startedAt",
+          "closedAt",
+          "closeReason",
+          "ownerRoleIds",
+          "players"
+        ]
+      },
+      "MapInstanceListDto": {
+        "type": "object",
+        "properties": {
+          "mapId": {
+            "type": "string",
+            "description": "地图 id"
+          },
+          "zoneId": {
+            "type": "number",
+            "description": "区 id"
+          },
+          "total": {
+            "type": "number",
+            "description": "还开着的场数"
+          },
+          "open": {
+            "description": "还开着的副本（按开场先后）",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MapInstanceDto"
+            }
+          },
+          "recent": {
+            "description": "最近收场的（最多 10 场；原因比行本身有用）",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MapInstanceDto"
+            }
+          }
+        },
+        "required": [
+          "mapId",
+          "zoneId",
+          "total",
+          "open",
+          "recent"
+        ]
+      },
+      "CreateInstanceDto": {
+        "type": "object",
+        "properties": {
+          "ttlMs": {
+            "type": "number",
+            "description": "时限（毫秒；不填 = 出厂 30 分钟，上限 24 小时）",
+            "minimum": 1000,
+            "maximum": 86400000
+          },
+          "maxPlayers": {
+            "type": "number",
+            "description": "人数上限（不填 = 出厂 6；0 = 不限，上限 100）",
+            "minimum": 0,
+            "maximum": 100
+          },
+          "originMapId": {
+            "type": "string",
+            "description": "散场之后把人送回哪张图（不填 = 这张副本的底图的公共线）"
+          },
+          "ownerRoleIds": {
+            "description": "允许进场的角色 id 名单（不填 = 谁都能进；填了就只认名单）",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "CloseInstanceDto": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "description": "收场原因：cleared = 通关（任务系统标记）/ forced = 强制散场（运营把人赶出来）",
+            "enum": [
+              "cleared",
+              "forced"
+            ]
+          }
+        }
       },
       "UiEffectDto": {
         "type": "object",

@@ -39,6 +39,7 @@ export {
   monstersApi,
   npcsApi,
   mapsApi,
+  mapInstancesApi,
   uiEffectsApi,
   audioSettingsApi,
   skillsApi,

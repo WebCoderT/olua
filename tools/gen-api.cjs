@@ -129,6 +129,9 @@ const MODULES = {
   adminNpc: { target: "admin", export: "npcsApi" },
   // 地图管理（#571）：只读观测台 —— 只有 list / detail，故意没有写接口
   adminMap: { target: "admin", export: "mapsApi" },
+  // 副本（#1001 第二刀）：开 / 列 / 收。单独一个模块而不是并进 adminMap ——
+  // 地图配置是全区共用，副本是分区的（同一个 slot 在不同区是两场），区口径相反
+  adminMapInstance: { target: "admin", export: "mapInstancesApi" },
   // 界面特效（#594）：特效表现参数的管理页
   adminUiEffect: { target: "admin", export: "uiEffectsApi" },
   // 音效（#680）：登录背景音 / 按钮音的「文件 + 音量 + 循环 + 开关」；与 adminUiEffect 同一类（表现参数）

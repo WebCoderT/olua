@@ -1,8 +1,9 @@
-import { ApiProperty } from "@nestjs/swagger";
+import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
 import { Type } from "class-transformer";
-import { IsBoolean, IsIn, IsInt, IsNumber, IsOptional, IsString, Length, Max, Min } from "class-validator";
+import { ArrayMaxSize, IsArray, IsBoolean, IsIn, IsInt, IsNumber, IsOptional, IsString, Length, Max, Min } from "class-validator";
 import {
   COLLISION_BOX_LIMITS,
+  INSTANCE_LIMITS,
   MAP_ENTER_LIMITS,
   MAP_LABEL_MAX_LENGTH,
   MAP_TYPE_LABELS,
@@ -1019,6 +1020,141 @@ export class SaveMapRulesDto {
   @ApiProperty({ description: "无人时继续跑世界（false = 冻结）" })
   @IsBoolean({ message: "simulateWhenEmpty 必须是布尔值" })
   simulateWhenEmpty: boolean;
+}
+
+//#endregion
+
+//#region 副本（#1001 第二刀）
+
+/**
+ * 开一场副本的入参（`POST /admin/maps/:id/instances`）
+ *
+ * 全都可以不填：出厂 30 分钟 / 6 人 / 谁都能进 / 散场回这张图的公共线。
+ * 填了就按填的来，**不做「继承默认再覆盖」**那一套 —— 副本是一次性的，值当场定死更清楚。
+ */
+export class CreateInstanceDto {
+  @ApiPropertyOptional({
+    description: "时限（毫秒；不填 = 出厂 30 分钟，上限 24 小时）",
+    minimum: INSTANCE_LIMITS.ttlMs.min,
+    maximum: INSTANCE_LIMITS.ttlMs.max,
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt({ message: "时限必须是整数（毫秒）" })
+  @Min(INSTANCE_LIMITS.ttlMs.min, { message: "时限至少 1 秒" })
+  @Max(INSTANCE_LIMITS.ttlMs.max, { message: "时限上限 24 小时" })
+  ttlMs?: number;
+
+  @ApiPropertyOptional({
+    description: "人数上限（不填 = 出厂 6；0 = 不限，上限 100）",
+    minimum: INSTANCE_LIMITS.maxPlayers.min,
+    maximum: INSTANCE_LIMITS.maxPlayers.max,
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt({ message: "人数上限必须是整数" })
+  @Min(INSTANCE_LIMITS.maxPlayers.min, { message: "人数上限不能为负" })
+  @Max(INSTANCE_LIMITS.maxPlayers.max, { message: "人数上限最多 100" })
+  maxPlayers?: number;
+
+  @ApiPropertyOptional({
+    description: "散场之后把人送回哪张图（不填 = 这张副本的底图的公共线）",
+  })
+  @IsOptional()
+  @IsString({ message: "散场图必须是地图 id" })
+  @Length(1, 32, { message: "散场图 id 长度不合法" })
+  originMapId?: string;
+
+  @ApiPropertyOptional({
+    description: "允许进场的角色 id 名单（不填 = 谁都能进；填了就只认名单）",
+    type: [String],
+  })
+  @IsOptional()
+  @IsArray({ message: "名单必须是数组" })
+  @ArrayMaxSize(INSTANCE_LIMITS.ownersMax, { message: "名单最多 100 个角色" })
+  @IsString({ each: true, message: "名单里每项都得是角色 id" })
+  ownerRoleIds?: string[];
+}
+
+/** 一场副本（管理端列表 / 开场回执共用；`instanceId` 就是客户端 `instanceEnter` 要带的那个） */
+export class MapInstanceDto {
+  @ApiProperty({ description: "副本 id（= 房间键 `<区>:<图>:i<序号>`，客户端 instanceEnter 带它）" })
+  instanceId: string;
+
+  @ApiProperty({ description: "槽位（`i<序号>`；日志 / 监控里看到的就是它）" })
+  slot: string;
+
+  @ApiProperty({ description: "所属区" })
+  zoneId: number;
+
+  @ApiProperty({ description: "底图 id" })
+  mapId: string;
+
+  @ApiProperty({ description: "散场之后送回哪张图" })
+  originMapId: string;
+
+  @ApiProperty({ description: "人数上限（0 = 不限）" })
+  maxPlayers: number;
+
+  @ApiProperty({ description: "时限（毫秒）" })
+  ttlMs: number;
+
+  @ApiProperty({ description: "开场时刻（毫秒）" })
+  createdAt: number;
+
+  @ApiProperty({ description: "到点收场的时刻（毫秒）" })
+  expiresAt: number;
+
+  @ApiProperty({ description: "距收场还剩多少毫秒（已收场为 0）" })
+  remainMs: number;
+
+  @ApiProperty({ description: "第一次有人进去的时刻（null = 还没人进过）", type: Number, nullable: true })
+  startedAt: number | null;
+
+  @ApiProperty({ description: "收场时刻（null = 还开着）", type: Number, nullable: true })
+  closedAt: number | null;
+
+  @ApiProperty({
+    description: "收场原因（emptied / expired / cleared / forced / world_lost；还开着为 null）",
+    type: String,
+    nullable: true,
+  })
+  closeReason: string | null;
+
+  @ApiProperty({ description: "允许进场的角色 id 名单（空 = 谁都能进）", type: [String] })
+  ownerRoleIds: string[];
+
+  @ApiProperty({ description: "此刻在场人数（来自实时进程的开场登记；没人进过就是 0）" })
+  players: number;
+}
+
+/** 一张图的副本列表（还开着的 + 最近收场的几场） */
+export class MapInstanceListDto {
+  @ApiProperty({ description: "地图 id" })
+  mapId: string;
+
+  @ApiProperty({ description: "区 id" })
+  zoneId: number;
+
+  @ApiProperty({ description: "还开着的场数" })
+  total: number;
+
+  @ApiProperty({ type: [MapInstanceDto], description: "还开着的副本（按开场先后）" })
+  open: MapInstanceDto[];
+
+  @ApiProperty({ type: [MapInstanceDto], description: "最近收场的（最多 10 场；原因比行本身有用）" })
+  recent: MapInstanceDto[];
+}
+
+/** 收场原因（管理端手点只有两种：通关 / 强制） */
+export class CloseInstanceDto {
+  @ApiPropertyOptional({
+    description: "收场原因：cleared = 通关（任务系统标记）/ forced = 强制散场（运营把人赶出来）",
+    enum: ["cleared", "forced"],
+  })
+  @IsOptional()
+  @IsIn(["cleared", "forced"], { message: "收场原因只能是 cleared 或 forced" })
+  reason?: "cleared" | "forced";
 }
 
 //#endregion

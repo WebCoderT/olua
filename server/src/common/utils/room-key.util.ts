@@ -67,6 +67,21 @@ export function isInstanceSlot(slot: string): boolean {
 }
 
 /**
+ * 副本的 slot（`instanceSlotOf(7) === "i7"`）
+ *
+ * 序号就是 `map_instances.id`（自增、AUTOINCREMENT 不复用）：重启后新开的副本
+ * 从 `max(id)` 往后接，不会与内存 / 日志里出现过的 id 撞车。**生成只此一份**，
+ * 副本表、房间键、e2e 三处不许自己拼 `"i" + n`。
+ *
+ * 反方向不用在这里再开一个函数：`slot` 原样就是 `"i7"`，要知道序号直接
+ * `Number(slot.slice(1))`（判它是副本用 `isInstanceSlot`）—— 曾经写过一个
+ * `instanceSeqOf` 解析函数，没人用就删了，别再加回来。
+ */
+export function instanceSlotOf(seq: number): string {
+  return `i${seq}`;
+}
+
+/**
  * 分线号（公共线 0、`"2"` → 2）；**副本返回 -1**
  *
  * 客户端小地图要显示「· 2 线」、容量统计要按线算，两处都读它 —— 副本不该显示成

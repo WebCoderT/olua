@@ -127,6 +127,9 @@ const RUNTIME_TABLES = Object.freeze([
   "drop_records",
   // 清空某图地面的跨进程指令（#802 建表、#805 接）：一行一次请求，只增不删
   "drop_clear_requests",
+  // 副本登记簿（#1001 第二刀）：管理端开、实时进程守，行里记「还允不允许进、几时收场」——
+  // 世界本身在 world_monsters（slot=i<n>），副本不允许从库恢复，所以这张表只是登记，不进同步文件
+  "map_instances",
   "parties",
   "party_members",
   "quest_progress",

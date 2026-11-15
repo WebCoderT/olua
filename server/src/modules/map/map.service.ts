@@ -1,4 +1,4 @@
-import { Injectable, Logger } from "@nestjs/common";
+import { HttpStatus, Injectable, Logger } from "@nestjs/common";
 import { BizCode } from "../../common/constants/biz-code";
 import {
   COLLISION_BOX_LIMITS,
@@ -19,6 +19,12 @@ import {
 } from "../../common/utils/spawn-area-bounds.util";
 import { spawnTargetOf } from "../../common/utils/spawn-density.util";
 import { MapRuleRepository, mapRulesOf, type MapRules } from "../../database/repositories/map-rule.repository";
+import {
+  DEFAULT_INSTANCE_MAX_PLAYERS,
+  DEFAULT_INSTANCE_TTL_MS,
+  INSTANCE_CLOSE_REASON,
+  MapInstanceRepository,
+} from "../../database/repositories/map-instance.repository";
 
 /**
  * 规则的类型随地图域一起导出（#812）
@@ -43,7 +49,7 @@ import {
   WorldReloadRequestRepository,
 } from "../../database/repositories/world-reload-request.repository";
 import { PUBLIC_SLOT, roomKey } from "../../common/utils/room-key.util";
-import { MapCollisionRow, MapNpcRow, MapRow, MapSpawnAreaRow, NpcRow } from "../../database/rows";
+import { MapCollisionRow, MapInstanceRow, MapNpcRow, MapRow, MapSpawnAreaRow, NpcRow } from "../../database/rows";
 import { EMPTY_MAP_CONTENT, EMPTY_MAP_PIXEL_SIZE, MapContent, MapPixelSize } from "./map-content";
 import {
   MapMonitorDto,
@@ -80,6 +86,10 @@ import {
   SaveMapRulesDto,
   SaveRevivePointDto,
   SaveSpawnAreaDto,
+  CloseInstanceDto,
+  CreateInstanceDto,
+  MapInstanceDto,
+  MapInstanceListDto,
 } from "./dto/map.dto";
 
 /**
@@ -177,6 +187,7 @@ export class MapService {
     private readonly mapRules: MapRuleRepository,
     private readonly reloadRequests: WorldReloadRequestRepository,
     private readonly zones: ZoneRepository,
+    private readonly instances: MapInstanceRepository,
   ) {}
 
 
@@ -543,6 +554,117 @@ export class MapService {
         `房间 ${batch.items.map((item) => `${item.roomId}${item.merged ? "(合并)" : ""}`).join("、") || "（没有存活区）"}`,
     );
     return batch;
+  }
+
+  //#endregion
+
+  //#region 副本（#1001 第二刀）
+
+  /**
+   * 开一场副本（`POST /admin/maps/:id/instances`）
+   *
+   * ## 为什么是「写一行」而不是「通知实时进程建房」
+   *
+   * 世界只在实时进程内存里，而开副本这一刻还**不需要**世界 —— 房间由第一个进场的人
+   * 惰性加载（`RoomManager.ensure` 按刷怪区现播种）。所以这里只写登记行：实时进程
+   * 自己会在下一拍扫地时看到它，玩家进场时按行判「能不能进」。实时进程没起来也不影响
+   * 开场（这正是写库而不是 HTTP 回调的好处，与单图重载同一套理由）。
+   *
+   * 出厂值：30 分钟 / 6 人 / 谁都能进；`originMapId` 不填 = 这张图的公共线（散场「出门」）。
+   */
+  createInstance(id: string, zoneId: number, dto: CreateInstanceDto, actor: AuthenticatedUser): MapInstanceDto {
+    const row = this.requireRow(id);
+    const now = Date.now();
+    const created = this.instances.create({
+      zoneId,
+      mapId: row.map_id,
+      originMapId: dto.originMapId ?? row.map_id,
+      ownerRoleIds: dto.ownerRoleIds ?? [],
+      maxPlayers: dto.maxPlayers ?? DEFAULT_INSTANCE_MAX_PLAYERS,
+      ttlMs: dto.ttlMs ?? DEFAULT_INSTANCE_TTL_MS,
+      createdBy: actor.username,
+      now,
+    });
+    this.logger.log(
+      `地图 ${id}（${row.label}）开了第 ${created.id} 场副本：` +
+        `${created.slot} / ${created.max_players} 人 / ${Math.round(created.ttl_ms / 1000)}s / 区 ${zoneId}`,
+    );
+    return this.instanceDtoOf(created, now);
+  }
+
+  /** 这张图在当前区的副本（还开着的 + 最近收场的 10 场） */
+  instancesOf(id: string, zoneId: number): MapInstanceListDto {
+    this.requireRow(id);
+    const now = Date.now();
+    const dto = new MapInstanceListDto();
+    dto.mapId = id;
+    dto.zoneId = zoneId;
+    dto.open = this.instances.listOpenByMap(zoneId, id).map((row) => this.instanceDtoOf(row, now));
+    dto.total = dto.open.length;
+    dto.recent = this.instances.listRecentClosed(zoneId, id, 10).map((row) => this.instanceDtoOf(row, now));
+    return dto;
+  }
+
+  /**
+   * 让一场副本收场（通关 / 强制散场）
+   *
+   * **只标记，不驱赶**：把人送回原图、销毁房间是实时进程那一拍扫地的事（它才持有连接）。
+   * 这里写完行，玩家最多在一个扫地的间隔（1 秒）内收到 `world` 帧被送回原图 ——
+   * 比「管理端直接改内存」这种跨进程幻想靠谱。
+   *
+   * 已经收过的场再点一次：不报错、原样回当前状态（幂等；按钮连点两下不该红）。
+   */
+  closeInstance(id: string, zoneId: number, slot: string, dto: CloseInstanceDto, actor: AuthenticatedUser): MapInstanceDto {
+    const row = this.requireRow(id);
+    const instance = this.instances.findBySlot(zoneId, id, slot);
+    if (!instance) throw new BizException(BizCode.MAP_INSTANCE_NOT_FOUND, `这张图没有这一场副本（${slot}）`, HttpStatus.NOT_FOUND);
+    const now = Date.now();
+    const reason = dto.reason ?? INSTANCE_CLOSE_REASON.FORCED;
+    // 幂等：已经收过的场不回写理由（先到的那个才是真原因），也不打第二条日志 ——
+    // 但回执仍按**库里那份**给，让界面显示真实原因而不是这次点按钮想要的那个
+    const changed = this.instances.close(instance.id, reason, now);
+    if (changed) {
+      this.logger.log(`地图 ${id}（${row.label}）的第 ${instance.id} 场副本被收场（${reason}，操作人 ${actor.username}）`);
+    }
+    return this.instanceDtoOf(this.instances.findById(instance.id) ?? instance, now);
+  }
+
+  /**
+   * 一行 → DTO
+   *
+   * `players` 是**投影**（`map_monitor_state` 里实时进程每秒写的那份），不是权威：
+   * 界面上写「约 N 人」，别拿它当容量判据 —— 容量判据在进副本那一刻由实时进程算。
+   */
+  private instanceDtoOf(row: MapInstanceRow, now: number): MapInstanceDto {
+    const dto = new MapInstanceDto();
+    dto.instanceId = roomKey(row.zone_id, row.map_id, row.slot);
+    dto.slot = row.slot;
+    dto.zoneId = row.zone_id;
+    dto.mapId = row.map_id;
+    dto.originMapId = row.origin_map_id;
+    dto.maxPlayers = row.max_players;
+    dto.ttlMs = row.ttl_ms;
+    dto.createdAt = row.created_at;
+    dto.expiresAt = row.expires_at;
+    dto.remainMs = row.closed_at !== null ? 0 : Math.max(0, row.expires_at - now);
+    dto.startedAt = row.started_at;
+    dto.closedAt = row.closed_at;
+    dto.closeReason = row.close_reason;
+    dto.ownerRoleIds = parseOwnerIds(row.owner_role_ids);
+    dto.players = this.playersInRoomOf(row.zone_id, row.map_id, row.slot);
+    return dto;
+  }
+
+  /** 一间房此刻几个人（读实时进程的投影；没有投影 = 还没人进过这条线） */
+  private playersInRoomOf(zoneId: number, mapId: string, slot: string): number {
+    const state = this.monitorRows.findState(zoneId, mapId, slot);
+    if (!state) return 0;
+    try {
+      const payload = JSON.parse(state.payload) as { players?: unknown };
+      return Array.isArray(payload.players) ? payload.players.length : 0;
+    } catch {
+      return 0;
+    }
   }
 
   //#endregion
@@ -1377,4 +1499,20 @@ export class MapService {
  */
 function round2(value: number): number {
   return Math.round(value * 100) / 100;
+}
+
+/**
+ * `map_instances.owner_role_ids` 那列的解析（脏 JSON 按「谁都能进」处理）
+ *
+ * 与 `MapInstanceService` 的 `parseOwners` 同一取向：名单是**白名单**，坏掉的名单
+ * 不该把所有人挡在外面（副本开出来却谁也进不去，运营只会以为「开副本没生效」）。
+ * 真出了脏数据，看管理端列表里 `ownerRoleIds` 是空数组就知道。
+ */
+function parseOwnerIds(raw: string): string[] {
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === "string") : [];
+  } catch {
+    return [];
+  }
 }
