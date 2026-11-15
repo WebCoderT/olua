@@ -328,8 +328,20 @@ check(/this\.closeDiscardConfirm\(\);\s*\n\s*const confirm = new ConfirmDialog/.
   check(start > 0, "能定位 confirmDialogLayout 配置块");
   check(/maskColor: T\.surface\.scrim/.test(block), "遮罩颜色在配置里（令牌 surface-scrim，与死亡遮罩同款）");
   ["panel", "title", "message", "confirmButton", "cancelButton"].forEach((key) => check(new RegExp(`${key}:`).test(block), `confirmDialogLayout 配了 ${key}`));
-  check(/confirmButton: \{ name: "confirm_ok_button", position: new Vec2\(-90, -58\) \}/.test(block), "「确定」在面板左侧");
-  check(/cancelButton: \{ name: "confirm_cancel_button", position: new Vec2\(90, -58\) \}/.test(block), "「取消」在面板右侧（两钮左右对称、错开 180 > 按钮宽 123）");
+  // 两钮位置断结构：确定在左、取消在右、左右对称、中心距大于按钮宽（不重叠）。
+  // 具体数值按稿调，不写死 —— 只跟 sizes.ts 的中号按钮宽比。
+  const confirmX = Number((block.match(/confirmButton: \{[^}]*position: new Vec2\((-?\d+(?:\.\d+)?),/) || [])[1]);
+  const cancelX = Number((block.match(/cancelButton: \{[^}]*position: new Vec2\((-?\d+(?:\.\d+)?),/) || [])[1]);
+  const sizesSource = fs.readFileSync(path.join(PROJECT_ROOT, "assets/configs/layout/sizes.ts"), "utf8");
+  const middleButtonWidth = Number((sizesSource.match(/middleButtonSize: new Size\((\d+(?:\.\d+)?),/) || [])[1]);
+  check(
+    confirmX < 0 && cancelX > 0 && Math.abs(confirmX + cancelX) < 0.001,
+    `「确定」在左、「取消」在右且左右对称（x = ${confirmX} / ${cancelX}）`,
+  );
+  check(
+    Math.abs(cancelX - confirmX) > middleButtonWidth,
+    `两钮中心错开 ${Math.abs(cancelX - confirmX)} > 中号按钮宽 ${middleButtonWidth}（不会叠在一起）`,
+  );
 }
 
 void items;

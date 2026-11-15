@@ -774,16 +774,42 @@ export const skillShortcutSettingDialogLayout = {
 
 //#region 死亡弹窗（全屏遮罩）
 
-/** 死亡遮罩弹窗布局（自身即全屏节点，坐标为全屏节点中心） */
+/**
+ * 死亡遮罩弹窗布局（自身即全屏节点，坐标为全屏节点中心）
+ *
+ * 稿 20-overlay 的 `.death`：560 宽的主面板（暗朱径向渐变压在纯色上，Graphics 用
+ * 「整块深底 + 上半一条暗朱亮带」近似）+ 标题 36 + 一句说明 + 两枚 196×46 的按钮。
+ */
 export const deathDialogLayout = {
   name: "death_dialog",
   /** 遮罩颜色（黑色半透明，盖住整个屏幕并挡住世界点击） */
   maskColor: T.surface.scrim,
-  /** 标题「您已死亡」 */
-  title: { text: "您已死亡", position: new Vec2(0, 90), size: new Size(400, 60), fontSize: 36, color: Color.WHITE },
-  /** 两个复活按钮（居中偏下对称排布） */
-  reviveInPlaceButton: { name: "revive_in_place_button", text: "原地复活", position: new Vec2(-140, -30) },
-  reviveSafeButton: { name: "revive_safe_button", text: "安全复活", position: new Vec2(140, -30) },
+  /** 主面板（稿 `.death`：560 宽，内容 44/40 内距；这里给固定外框） */
+  panel: {
+    name: "death_panel",
+    position: new Vec2(0, 0),
+    size: new Size(560, 260),
+    fill: T.surface[0],
+    fillTop: T.ember[1],
+    fillTopRatio: 0.5,
+    border: T.line[2],
+    radius: T.radius.r3,
+  },
+  /** 标题「您已死亡」（稿 38px → 收敛到令牌 f40，不为单屏造新档） */
+  title: { text: "您已死亡", position: new Vec2(0, 64), size: new Size(520, 48), fontSize: T.fontSize.f40, color: T.ember[4] },
+  /** 标题下的一句说明（复活代价与去处） */
+  subtitle: {
+    text: "可原地复活（消耗一枚还魂丹），或回到城内安全复活",
+    position: new Vec2(0, 20),
+    size: new Size(500, 20),
+    fontSize: T.fontSize.f12,
+    color: T.text[3],
+  },
+  /** 两个复活按钮（稿 `.acts`：196×46、间距 16、居中 → 中心 ±106） */
+  buttonSize: new Size(196, 46),
+  buttonFontSize: T.fontSize.f16,
+  reviveInPlaceButton: { name: "revive_in_place_button", text: "原地复活", position: new Vec2(-106, -62) },
+  reviveSafeButton: { name: "revive_safe_button", text: "安全复活", position: new Vec2(106, -62) },
 };
 
 //#endregion
@@ -803,13 +829,13 @@ export const confirmDialogLayout = {
   maskColor: T.surface.scrim,
   /** 居中面板：尺寸（背景为通用弹窗背景的九宫拼装，见 createDialogPanel） */
   panel: { name: "confirm_panel", size: new Size(420, 210) },
-  /** 标题（面板上部，配色与通用弹窗标题一致） */
-  title: { name: "confirm_title", position: new Vec2(0, 68), size: new Size(360, 26), fontSize: 16, color: T.ember[4] },
+  /** 标题（面板上部，配色与通用弹窗标题一致；稿 f17 → 收敛到 f18） */
+  title: { name: "confirm_title", position: new Vec2(0, 62), size: new Size(360, 26), fontSize: T.fontSize.f18, color: T.ember[4] },
   /** 正文：宽度固定、高度按内容自适应（可换行，锚点居中故向上下对称撑开） */
-  message: { name: "confirm_message", position: new Vec2(0, 18), width: 340, fontSize: 14, lineHeight: 20, color: Color.WHITE },
-  /** 两个按钮（中号按钮宽 123：x 错开 90 → 间隙 57，整体在面板内居中） */
-  confirmButton: { name: "confirm_ok_button", position: new Vec2(-90, -58) },
-  cancelButton: { name: "confirm_cancel_button", position: new Vec2(90, -58) },
+  message: { name: "confirm_message", position: new Vec2(0, 8), width: 336, fontSize: T.fontSize.f13, lineHeight: 20, color: T.text[2] },
+  /** 两个按钮（中号按钮宽 123：中心 ±64 → 间隙 5，整体在面板内居中） */
+  confirmButton: { name: "confirm_ok_button", position: new Vec2(-64, -56) },
+  cancelButton: { name: "confirm_cancel_button", position: new Vec2(64, -56) },
 };
 
 //#endregion
@@ -1358,14 +1384,14 @@ export const reportDialogLayout = {
   category: {
     y: 44,
     columns: [-135, -45, 45, 135],
-    size: new Size(84, 28),
+    size: new Size(84, 30),
     activeFill: T.gold[4],
     activeText: T.surface[3],
     idleFill: T.surface[2],
     idleText: T.text[1],
     idleBorder: T.surface[3],
-    radius: 6,
-    fontSize: 13,
+    radius: T.radius.r2,
+    fontSize: T.fontSize.f12,
   },
   /** 补充说明输入框（单行，200 字上限在服务端 DTO 里） */
   reason: { name: "report_reason", position: new Vec2(0, -14), size: new Vec2(400, 30) },
