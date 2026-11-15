@@ -15,7 +15,7 @@ agent_created: true
 4. **实时通道** —— 一条 WebSocket 长连接（目前只做「建连 + 心跳」，业务消息见 #34）。
 
 **最重要的一条心智模型（#655 定稿）**：游戏数据（等级 / 装备 / 战魂 / 称号 / 军衔 / 技能 / 物品 / 怪物 / 掉落 / 地图 / 特效…）的
-权威定义**只有一处 —— 数据库**。`server/data/config-sync.sql` 是它的**出厂快照**（32 张配置表，逐表整表替换），
+权威定义**只有一处 —— 数据库**。`server/data/config-sync.sql` 是它的**出厂快照**（39 张配置表，逐表整表替换），
 空库启动时由 `bootstrapConfigSnapshot()` 整份灌进去；运营在管理端改的就是库里的行，`make config-export` 把库重导回那份 SQL。
 代码里**没有第二份数值副本**：`server/src/shared/` 整个目录已删除，客户端 `configs/*` 全是**空的运行时表**
 （进游戏由 `GET /game-config` 快照整表重建），管理端也不 import 任何生成物 —— 它直接调 `/admin/*` 读写库。

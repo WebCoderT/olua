@@ -63,10 +63,10 @@ README（仓库根） → 01 总览（认路）
 | 09 | [成长与养成](./09-成长与养成.md) | 4×6 段等级曲线、三条成长线、三货币、时装、战力权重 | 升级不对 / 属性不涨 / 战力抖动 |
 | 10 | [任务、成就、排行与社交](./10-任务成就排行与社交.md) | 事件总线、任务状态机、累计 vs 状态型成就、三榜、邮件、队伍 | 进度不涨 / 榜不变 / 邮件没收到 |
 | 11 | [客户端](./11-客户端.md) | 四场景、六图层、32 个 Manager、网络三件套、Cocos 已知坑 | 表现层问题 / 换装 / 引导 / 打包 |
-| 12 | [管理端](./12-管理端.md) | 49 条路由、三级导航、`gameData` 查表、操作日志五条设计、玩家行为流水与操作日志的分表口径 | 运营改数 / 权限 / 审计 |
+| 12 | [管理端](./12-管理端.md) | 54 条路由、三级导航、`gameData` 查表、操作日志五条设计、玩家行为流水与操作日志的分表口径 | 运营改数 / 权限 / 审计 |
 | 13 | [部署、运维与质量门禁](./13-部署运维与质量门禁.md) | 五个容器（开 HTTPS 时七个）、`deploy.sh` 七模式、三套备份、CI 两 job、94 套 e2e、19 项审计 | 上线 / 回滚 / 排线上故障 |
 | 14 | [接口清单](./14-接口清单.md) | **自动生成**：268 个 operationId 全表 | 查某个接口叫什么、在哪个 tag |
-| 15 | [数据表清单](./15-数据表清单.md) | 76 张表：39 配置 + 37 运行时，字段级 + 用途 + 谁读写 | 查字段 / 加表 / 对不上列名 |
+| 15 | [数据表清单](./15-数据表清单.md) | 77 张表：39 配置 + 38 运行时，字段级 + 用途 + 谁读写 | 查字段 / 加表 / 对不上列名 |
 | 16 | [配置位置总表](./16-配置位置总表.md) | **39 张表 ↔ 页面双向索引**、藏在弹窗里的入口、四类生效通道、只能改库的配置 | 「这个配置在哪儿改」「改了怎么没生效」 |
 | 17 | [物品掉落流程](./17-物品掉落流程.md) | **掉落物的一生**（v1 现状）：三份真相、怎么配、怎么抽、怎么摆在地上、怎么捡、不捡会怎样、刷新后去哪 | 「掉了没捡会消失吗」「东西在地上的捡不起来」 |
 | 18 | [掉落系统重构设计](./18-掉落系统重构设计.md) | **v2 设计稿（已定稿）**：世界级掉落实体、归属与队友保护期、180s 过期（**末段零提示**）、不动新手引导、dropId 协议、三张新表、管理端三页 + 清空、归属头像、稀有掉落全服公告 | 「掉落要怎么改成多人可捡」「改哪些文件」 |
@@ -191,12 +191,12 @@ README（仓库根） → 01 总览（认路）
 
 | 数字 | 命令 |
 |---|---|
-| 77 张表 / 各表行数 | `sqlite3 server/data/olua.db "SELECT count(*) FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%';"` |
+| 77 张表 / 各表行数 | **口径从清单算**：`node -e "const t=require('./server/scripts/lib/config-tables.cjs');console.log(t.CONFIG_TABLES.length, t.RUNTIME_TABLES.length)"`（39 + 38 = 77）。库里实际建出来的张数另用 `sqlite3 server/data/olua.db "SELECT count(*) FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%';"` —— 老库可能少一张（新表还没建），所以「77」认清单不认库 |
 | 39 配置 / 38 运行时 | `server/scripts/lib/config-tables.cjs` 的 `CONFIG_TABLES` / `RUNTIME_TABLES` |
 | 271 个接口 | `server/openapi.json` 的 `paths` 展开后的 operationId 数；或直接看 [14](./14-接口清单.md) 的标题 |
-| 94 套 e2e | `node -e "console.log(Object.keys(require('./server/package.json').scripts).filter(k=>k.startsWith('test:e2e')).length)"`（**按脚本数**；`ls server/test/e2e*.cjs` 是 92 个文件，差的那 1 个是 `test:e2e:backup` → `test/backup.cjs`） |
+| 94 套 e2e | `node -e "console.log(Object.keys(require('./server/package.json').scripts).filter(k=>k.startsWith('test:e2e')).length)"`（**按脚本数**；`ls server/test/e2e*.cjs` 是 93 个文件，差的那 1 个是 `test:e2e:backup` → `test/backup.cjs`） |
 | 19 项审计 | `ls tools/audit-*.cjs \| wc -l` |
-| 30 个客户端 Manager | `ls client/assets/ui/core/*.ts \| wc -l` |
+| 32 个客户端 Manager | `ls client/assets/ui/core/*.ts \| wc -l` |
 | 53 个管理端页面 / 54 条路由 | `ls admin/src/pages/*.tsx \| wc -l` / `grep -o 'path="[^"]*"' admin/src/App.tsx \| sort -u \| wc -l` |
 | 685 件装备 / 10275 条变体 | `SELECT count(*) FROM equipments;` / `SELECT count(*) FROM equipment_variants;`（应等于 685×15） |
 | 客户端单测 70 套 | `ls client/tools/test-*.cjs \| wc -l` |
@@ -204,6 +204,11 @@ README（仓库根） → 01 总览（认路）
 | 14 张进结算缓存 | `grep -cE "^    apply" server/src/modules/game-config/runtime-config.service.ts` |
 | 198 个 admin 接口 | `node -e "…遍历 openapi.json 的 /admin 前缀…"`（完整命令见 [16](./16-配置位置总表.md) 附录 B） |
 | 28 个客户端 configs / 9 个被覆写 | `ls client/assets/configs/*.ts \| wc -l` / `grep -oE 'from "\./[A-Za-z0-9_-]+"' client/assets/configs/apply-snapshot.ts \| sort -u` |
+
+> 📌 这张表里**带数量声明的行大多已经是守点**（`audit-count-claims` 判据 A~H）：审计项数、e2e 套数、
+> 单测套数、表数（77/39/38）、客户端 Manager、管理端页面 / 路由 —— 数字跟不上磁盘就红，
+> 一条 `node tools/audit-count-claims.cjs --write` 全同步，不用自己数。剩下的装备件数、
+> 快照段数、结算缓存张数属于「改配置才变」的低频数字，仍按上面命令复核。
 | 73 个环境变量 | `grep -cE "^[A-Z_]+=" server/.env.example` |
 | 5 张具名掉落表 / 220 行每怪掉落 | `SELECT count(*) FROM drop_tables;` / `SELECT count(*) FROM monster_drops;` |
 | 掉落账本容量 256 | `grep -n "CAST_DEDUPE_CAPACITY" server/src/modules/realtime/combat-settlement.service.ts` |
