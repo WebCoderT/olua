@@ -75,7 +75,7 @@ compose 五服务：admin:80 唯一入口 / game:8080 / server:3100 / realtime:3
   `roles.zone_id` 是区归属唯一权威、`accounts.zone_id` 改名 `active_zone_id`（当前浏览区）；
   玩家侧零区参数、跨区 roleId 一律 20002；新增 `GET /zones/mine` + `POST /zones/select`（换区清在线角色）；
   合区搬角色 + 同账号同名**自动改名**。`e2e-zone-roles` 45 / `e2e-zone-no-param` 12 /
-  `e2e-zone-migrate` 12（旧库升级幂等），e2e 清单 **86 套** · #956 P0 守点（PR #968）·
+  `e2e-zone-migrate` 12（旧库升级幂等），e2e 清单 **87 套** · #956 P0 守点（PR #968）·
   **#810 AOI 视野裁剪（PR #953 服务端 + #965 客户端，已关）**：
   512px 格子 3×3 邻域、`entityEnter`/`entityLeave`、同格只序列化一次、离开延迟 1s 合并；
   客户端 upsert 建 / `despawn` 拆、快照缺席不演死亡。`e2e-aoi` 30 条 + 协议 38 条 + 客户端 66 套 ·
@@ -85,15 +85,23 @@ compose 五服务：admin:80 唯一入口 / game:8080 / server:3100 / realtime:3
   #768 10Hz 提频+帧瘦身+序列化缓存（PR #945 `9202366c`，已关） ·
   #767 同步延迟测量基线（PR #944 `ba846c6b`）· #809 Room 抽象 + 热重载（PR #942/#943，关 #809+#669）·
   #811 移动校验（#941）· #932 任务域（#933）· #826 战斗六项（#936）。
-- **同步系列三刀全部落地**：#767 基线 → #768 10Hz+瘦身 → **#769 插值（PR #991 `14d7b285`，已关）**：
+- **同步系列五刀全部落地**：#767 基线 → #768 10Hz+瘦身 → **#769 插值（PR #991 `14d7b285`，已关）**：
   `players` / `monster-ai` 两帧带**帧级 `t`**（同一拍共用一个值、AOI 裁剪后原样带上）；
   客户端 `ui/core/SnapshotInterpolator`（缓冲 4 条、线性插值、外插上限 100ms、同 t 覆盖 /
   乱序丢弃）+ `ui/utils/net/ServerClock`（welcome 粗校准 / pong 半程细校准）；
   **玩家与怪物共用同一个插值器**（怪物 `serverX/Y/moving/stepAt` 退役，缓冲挂 WeakMap）。
   手感参数在 `configs/network.realtime.interpolation`（120 / 4 / 100），**不进断言**。
   `e2e-protocol-slim` 38→45 · `e2e-aoi` 30→35 · client 68 套。
-  下一步只剩 **#770 分片**（docs/28 §2.4 已改口径为「按区分片」，动笔前重写正文 +
-  评估 SQLite 多进程写竞争），或 **#812 分线/副本/map_rules**。
+- **#770 按区分片（PR #997 `ae45086e`，已关）**：`shardOf(zoneId, N) = ((zoneId % N) + N) % N`，
+  一个区只在一个实时进程里 → 世界/帮会/公告**不用跨进程广播**；路由 `/api/realtime/s<k>`
+  （`/api/realtime` 恒第 0 片并取票），`N=1` 时行为与改造前一致。
+  票从「随机字节 + 进程内 Map」改成**无状态加密票**（AES-256-GCM，密钥 `sha256(JWT_SECRET)`）：
+  取票与握手会落在不同进程，票必须谁能解；**不改签名票**是因为票只能进 URL（nginx 日志 / 浏览器历史），
+  签名票的 base64url JSON 会把用户名读出来 —— 老断言「票据不可解析」正好守着这条。
+  三层闸门：路径 `s<k>` 不符 → `421/50150`；票里的区不符 → 同上且**不消耗票**；`worldJoin` 用角色
+  **现在的**区复核 → `close(4003)`，客户端**重取票**后立刻重连（连错 ≥3 次才退回退避）。
+  `REALTIME_EMBEDDED=true` 时 `shardCount()` 强制 1（配错不该让人起不来）。`e2e-realtime-shard` 27 条。
+  下一步：**#812 分线/副本/map_rules**，或 #803/#804/#805 掉落。
 - **epic #954 区服模型补完 —— 全部完成**（P0~P7 八个子 issue 全关，2026-11-15 关 epic）：
   #956 守点 #968 · #957 角色带区 #970 · #958 社交 #976 · #959 排行榜 #978 · #960 管理端单区 #984 ·
   #961 运营合区 #985 · #963 公告按区 #986 · #962 客户端选服 #989（`f6d8f35c`）。
@@ -113,8 +121,8 @@ compose 五服务：admin:80 唯一入口 / game:8080 / server:3100 / realtime:3
   中断：`finished_at` 停在 NULL，已写行算数、不补不删。`e2e-game-mail-broadcast` 46 条（批大小调 2 强制跨批）。
 - 当前 open：#9 包体积 · #12~#19 素材 · #295 阶段三 ·
   #403 帮会战 · #742 TLS · #808 地图重构（剩 **#812 分线副本**；
-  结算读 `map_rules`、掉落进 Room 暂未落地，重开条件见 docs/20）· **#801 掉落 epic 剩 #803/#804/#805** ·
-  #770 同步分片。保持现状：技能 1011 / 快捷键 6 格 / 装备 7 部位。
+  结算读 `map_rules`、掉落进 Room 暂未落地，重开条件见 docs/20）· **#801 掉落 epic 剩 #803/#804/#805**。
+  保持现状：技能 1011 / 快捷键 6 格 / 装备 7 部位。
 - **掉落已是世界实体（#802，PR #993 `89065e2a`，已关）**：`DropService` 是唯一权威（`ground`/`byId` + 终态
   `recent` 留 60s 接重发），`world_drops` 是投影（100ms 批量 upsert、重启清空），`drop_records` /
   `drop_clear_requests` 只建表（分别给 #803 / #805）。`pick` 只带 `dropId`、九步校验、11 种 `code`；
@@ -123,8 +131,10 @@ compose 五服务：admin:80 唯一入口 / game:8080 / server:3100 / realtime:3
   `maxGroundPerMap`/`announceBoss`。**#804 之前客户端捡不起东西**（仍发 castId+下标），已定先合再改。
 - `docs/14` 无生成脚本，改接口手工加行；现口径 **260 = 8 + 68 + 184**。client 单测可当门禁（**68 套**）。
   `docs/37` 是最高优先单一来源。
-- **新增 env 键 / 文案 / 节点名 / 颜色的 PR，静态审计要预判两处登记**：`.env.example`（audit-api-hardcode）+
-  `tools/config-leak-allowlist.json`（config-leak）。
-- **CI 红的判据**：先在本地完整 verify（**86 套**）复跑——**本地能精确复现 = 代码/测试问题**（改字段名最容易漏
+- **新增 env 键 / 文案 / 节点名 / 颜色的 PR，静态审计要预判三处登记**：`.env.example`（audit-api-hardcode）+
+  `tools/config-leak-allowlist.json`（config-leak）+ **进了配置快照的键还要加 `e2e-guard` 的
+  `EXPECTED_CONFIG_KEYS`**（#770 踩到：前两项都过了，`make e2e-all` 才在 guard 十节报「白名单之外的项」）。
+  新增 e2e 脚本别忘了 `tools/run-e2e.cjs` 的 `WEIGHT`（漏了只是分片不均，不报错）。
+- **CI 红的判据**：先在本地完整 verify（**87 套**）复跑——**本地能精确复现 = 代码/测试问题**（改字段名最容易漏
   「函数体内读点」，如 `find(m => m.instanceId === …)`）；只有本地绿而 CI 红才考虑分片负载，`gh run rerun --failed`。
   同一套件连续 ≥2 轮同断言红不要再当抖动。改广播帧字段后记得全量本地 verify，「本地绿」结论会过期。
