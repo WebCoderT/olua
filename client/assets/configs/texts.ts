@@ -357,6 +357,9 @@ export const uiTexts = {
   //#region 界面标签：属性与装备
   /** 属性分组标题（特殊属性暂未接入，等有行可填时再加回来，见 GameUiHelper.applyRoleAttributeListStyle 的注释） */
   label_attributes_base: "基础属性",
+  /** 角色信息弹窗页脚（稿 06-role-info 的 .panel-foot）：左操作提示 / 右叠放说明 */
+  role_info_foot_left: "右键脱下装备 · 点击「换」一键换更好",
+  role_info_foot_right: "六个入口与主窗叠放，点谁谁置顶",
   /** 装备详情：等级与部位（{level} · {slot}） */
   label_good_detail_info: "等级 {level} · {slot}",
   /** 装备详情：部位兜底名（配置里查不到槽位时） */
@@ -424,8 +427,11 @@ export const uiTexts = {
   /** 技能熟练等级前缀（lv.N）/ 未学习 */
   label_skill_level: "lv.{level}",
   label_skill_unlearned: "未学习",
-  /** 剩余技能点（#828 技能升级；{points} = 当前点数） */
-  label_skill_points: "技能点：{points}",
+  /** 技能点行的左标签（稿 07-skill 的 `.pt-line`；数值是同行右侧的数字，不带前缀） */
+  label_skill_points: "技能点",
+  /** 技能弹窗页脚（稿 07-skill 的 .panel-foot）：左操作提示 / 右升级说明 */
+  skill_foot_left: "悬停看详情 · 点图标设置快捷键",
+  skill_foot_right: "升级消耗技能点",
   /** 技能升级成功的浮动提示（{skill} 技能名 / {level} 新等级 / {cost} 花费 / {remain} 剩余点数） */
   label_skill_upgrade_tip: "「{skill}」升到 lv.{level}（花 {cost} 点，剩 {remain} 点）",
   /** 四维名称（#833 属性加点；键与服务端 ATTR_KEYS / 存档 data.attrs 逐项一致） */

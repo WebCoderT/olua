@@ -8,7 +8,8 @@ import EquipmentSlotGroup, { EQUIPMENT_SLOT_SIDES } from "../panel/EquipmentSlot
 import RoleAttributeList from "../panel/RoleAttributeList";
 import RoleInShowView from "../panel/RoleInShowView";
 import { refreshInAlign } from "../../utils/net/ConfigLoader";
-import { roleInfoDialogLayout } from "../../../configs/hudLayout";
+import { buttonTone, roleInfoDialogLayout } from "../../../configs/hudLayout";
+import { getText } from "../../../configs/texts";
 import TitleUpgradeDialog from "./TitleUpgradeDialog";
 import WarSoulDialog from "./WarSoulDialog";
 import RankUpgradeDialog from "./RankUpgradeDialog";
@@ -97,10 +98,28 @@ export default class RoleInfoDialog {
       { layout: roleInfoDialogLayout.soulButton, open: () => new WarSoulDialog().open() },
     ];
     entryButtons.forEach(({ layout, open }) => {
-      const button = GameUiHelper.createMiddleButton(layout.name, layout.text, layout.position);
+      // 稿的入口是窄的 ghost 键（84×32），不是中号金属键 —— 一列六枚排下来要够紧凑
+      const button = GameUiHelper.createToneButton(
+        layout.name,
+        layout.text,
+        layout.position,
+        roleInfoDialogLayout.entryButton.size,
+        roleInfoDialogLayout.entryButton.fontSize,
+        buttonTone.ghost,
+      );
       button.on(Node.EventType.TOUCH_END, open, this);
       this.dialog!.addChild(button);
     });
+    // 页脚（稿 .panel-foot）：左右各一行小字，几何由面板尺寸算
+    this.dialog.addChild(
+      GameUiHelper.createDialogFoot(
+        "role_info_foot",
+        roleInfoDialogLayout.size.width,
+        roleInfoDialogLayout.foot,
+        getText("role_info_foot_left"),
+        getText("role_info_foot_right"),
+      ),
+    );
     LayerManager.addDialogToUILayer(this.dialog);
   }
 

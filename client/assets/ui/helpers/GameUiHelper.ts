@@ -1409,6 +1409,65 @@ export default class GameUiHelper {
   }
 
   /**
+   * 弹窗页脚（ui.css `.panel-foot`）：通栏 1px 分隔线 + 两端各一行小字
+   *
+   * 几何来自 configs/layout/dialogs 的 `dialogFootLayout`（按面板尺寸算，不逐屏手抄），
+   * 文案由调用方给（业务文案在 configs/texts）。纯标注层，不拦点击 ——
+   * 弹窗根已经 blockClickThrough，点在页脚上照样算「点中弹窗」。
+   *
+   * @param width 通栏线宽（一般就是弹窗宽）
+   * @param foot 页脚几何（dialogFootLayout 的返回值）
+   */
+  static createDialogFoot(
+    name: string,
+    width: number,
+    foot: {
+      lineY: number;
+      textY: number;
+      leftX: number;
+      rightX: number;
+      width: number;
+      height: number;
+      fontSize: number;
+      color: Color;
+      lineColor: Color;
+    },
+    leftText: string,
+    rightText: string,
+  ) {
+    const container = UiHelper.createNode(name, new Vec2(), new Size(width, foot.height));
+    const rule = UiHelper.createNode(`${name}_rule`, new Vec2(0, foot.lineY), new Size(width, 1));
+    const graphics = rule.addComponent(Graphics);
+    graphics.fillColor = foot.lineColor;
+    graphics.rect(-width / 2, -0.5, width, 1);
+    graphics.fill();
+    container.addChild(rule);
+    container.addChild(
+      UiHelper.createLabel(
+        `${name}_left`,
+        leftText,
+        foot.color,
+        foot.fontSize,
+        new Vec2(foot.leftX, foot.textY),
+        new Size(foot.width, foot.height),
+        Label.HorizontalAlign.LEFT,
+      ),
+    );
+    container.addChild(
+      UiHelper.createLabel(
+        `${name}_right`,
+        rightText,
+        foot.color,
+        foot.fontSize,
+        new Vec2(foot.rightX, foot.textY),
+        new Size(foot.width, foot.height),
+        Label.HorizontalAlign.RIGHT,
+      ),
+    );
+    return container;
+  }
+
+  /**
    * 矢量小按钮（只画字，不带底图）：关闭键 / 行内文字键这类「不需要重量感」的点击区
    *
    * 与 createButton 同一套接线（Button 缩放反馈 + 点击音 + 鼠标通道命中拦截），
@@ -3069,14 +3128,44 @@ export default class GameUiHelper {
   //#region 技能列表
 
   /**
-   * 创建技能点标签（#828）：弹窗顶部一行「技能点：N」
+   * 创建技能点行（#828，稿 07-skill 的 `.pt-line`）：左标签「技能点」+ 右数值 + 行底通栏分隔线
    *
-   * 返回**节点**（与其它零件一致），调用方自己 `getComponent(Label)` 拿来改数字 ——
+   * 返回**容器节点**，数值是它的子节点 `skill_points_value`（调用方按名字取 Label 改数字）——
    * 升级成功后只改这一行 + 重建技能行，不重开弹窗（重开会把滚动位置弹回顶部）。
    */
   static createSkillPointsLabel(): Node {
     const cfg = skillListDialogLayout.points;
-    return UiHelper.createLabel(cfg.name, "", Color.WHITE, cfg.fontSize, cfg.position, cfg.size);
+    const container = UiHelper.createNode(cfg.name, new Vec2(), new Size(cfg.label.width + cfg.value.width, cfg.height));
+    container.addChild(
+      UiHelper.createLabel(
+        `${cfg.name}_caption`,
+        getText("label_skill_points"),
+        cfg.label.color,
+        cfg.label.fontSize,
+        new Vec2(cfg.label.x, cfg.y),
+        new Size(cfg.label.width, cfg.height),
+        Label.HorizontalAlign.LEFT,
+      ),
+    );
+    container.addChild(
+      UiHelper.createLabel(
+        `${cfg.name}_value`,
+        "",
+        cfg.value.color,
+        cfg.value.fontSize,
+        new Vec2(cfg.value.x, cfg.y),
+        new Size(cfg.value.width, cfg.height),
+        Label.HorizontalAlign.RIGHT,
+      ),
+    );
+    const ruleWidth = skillListDialogLayout.list.size.width;
+    const rule = UiHelper.createNode(`${cfg.name}_rule`, new Vec2(0, cfg.rule.y), new Size(ruleWidth, 1));
+    const graphics = rule.addComponent(Graphics);
+    graphics.fillColor = cfg.rule.color;
+    graphics.rect(-ruleWidth / 2, -0.5, ruleWidth, 1);
+    graphics.fill();
+    container.addChild(rule);
+    return container;
   }
 
   /** 创建技能列表滚动区（几何见 configs/hudLayout.skillListDialogLayout.list） */

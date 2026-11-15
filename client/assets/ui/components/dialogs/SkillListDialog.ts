@@ -47,13 +47,24 @@ export default class SkillListDialog {
     // 上面的切换关闭不该算一次（玩家关窗不该被当成学会了）
     GuideStore.notify(GUIDE_EVENT.OPEN_SKILL);
     const dialog = GameUiHelper.createDialog(skillListDialogLayout.name, skillListDialogLayout.title, new Vec2(), skillListDialogLayout.size, skillListDialogLayout.eyebrow);
-    // 技能点（#828）：紧贴标题下沿，先建节点、内容由 rebuild 填
+    // 技能点（#828）：稿 07-skill 的 .pt-line —— 左标签 + 右数值 + 行底分隔线；
+    // 数值是容器里的子节点，改数字只动它（标签是静态文案）
     const pointsNode = GameUiHelper.createSkillPointsLabel();
     dialog.addChild(pointsNode);
-    this.pointsLabel = pointsNode.getComponent(Label);
+    this.pointsLabel = pointsNode.getChildByName(`${skillListDialogLayout.points.name}_value`)?.getComponent(Label) ?? null;
     const skillList = GameUiHelper.createSkillListView();
     this.listContent = skillList.getComponent(ScrollView).content;
     dialog.addChild(skillList);
+    // 页脚（稿 .panel-foot）：左「悬停看详情 · 点图标设置快捷键」/ 右「升级消耗技能点」
+    dialog.addChild(
+      GameUiHelper.createDialogFoot(
+        "skill_foot",
+        skillListDialogLayout.size.width,
+        skillListDialogLayout.foot,
+        getText("skill_foot_left"),
+        getText("skill_foot_right"),
+      ),
+    );
     this.dialog = dialog;
     LayerManager.addDialogToUILayer(dialog);
     this.rebuild();
@@ -71,7 +82,7 @@ export default class SkillListDialog {
     if (!role || !content || !isValid(content)) return;
     if (this.pointsLabel && isValid(this.pointsLabel)) {
       // 点数只显示服务端给的值；老存档没有这个字段时按 0（`ensureRoleDefaults` 已补齐）
-      this.pointsLabel.string = getText("label_skill_points", { points: role.skillPoints });
+      this.pointsLabel.string = `${role.skillPoints}`;
     }
     content.removeAllChildren();
     oeccupationSkills.get(role.occupation).forEach((skillId) => {

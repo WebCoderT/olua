@@ -118,6 +118,32 @@ export const dialogFrame = {
   closeImage: uiImages.closeButton,
 };
 
+/**
+ * 弹窗页脚几何（ui.css `.panel-foot`）：顶部 1px 分隔线 + 两端各一行小字
+ *
+ * 16 个弹窗里 13 个有页脚，几何只随面板尺寸变，所以按尺寸算而不是逐屏手抄：
+ * 线距面板底 24（`--sp-6` + 字高的一半）、字中心距底 8；两端文字块宽 `textWidth`，
+ * 内缘距面板边 `inset`（= `--pad-dialog` 20）→ 左块中心 = -半宽 + inset + 半宽文字块。
+ *
+ * @param size 弹窗尺寸（页脚按**面板高度**贴底，不含外框）
+ * @param textWidth 单侧文字块宽（两端各一块，居中会让长句截断，所以给足）
+ */
+export function dialogFootLayout(size: Size, textWidth = 300, inset = T.spacing.padDialog) {
+  const halfWidth = size.width / 2;
+  const halfHeight = size.height / 2;
+  return {
+    lineY: -halfHeight + 24,
+    textY: -halfHeight + 8,
+    leftX: -halfWidth + inset + textWidth / 2,
+    rightX: halfWidth - inset - textWidth / 2,
+    width: textWidth,
+    height: 14,
+    fontSize: T.fontSize.f11,
+    color: T.text[4],
+    lineColor: T.line[1],
+  };
+}
+
 //#endregion
 
 //#region 战魂弹窗（左中右三栏）
@@ -329,7 +355,12 @@ export const mapPreviewDialogLayout = {
 
 //#region 角色信息弹窗
 
-/** 弹窗尺寸为 dialogFrame.size（600×500） */
+/**
+ * 角色信息弹窗（06-role-info 稿）
+ *
+ * 面板 660×520：五列结构 = 左装备列 / 内观 / 右装备列 / 属性列 / 六入口列
+ * （装备列与属性列的几何在 layout/panels，内观是服务端 `equip_in_aligns` 的对齐数据，不在这里摆）。
+ */
 export const roleInfoDialogLayout = {
   name: "role_info_dialog",
   title: "角色信息",
@@ -337,23 +368,30 @@ export const roleInfoDialogLayout = {
   /** 弹窗尺寸 660×520（06-role-info 稿） */
   size: new Size(660, 520),
   /** 装饰背景（含属性区底图） */
-  background: { image: uiImages.roleInfoDialogBackground, position: new Vec2(-78, -19), size: new Size(431, 452) },
+  background: { image: uiImages.roleInfoDialogBackground, position: new Vec2(-58, -19), size: new Size(431, 452) },
   /**
-   * 「军衔」「称号」「战魂」三个入口按钮（弹窗右侧竖排相邻三格，几何按中号按钮 123×36 推导）：
-   * 称号在右下空区（y -215），战魂紧贴其上一格（-215 + 36 + 10 间距 = -169），
-   * 军衔再往上一格（-169 + 36 + 10 = -123）；三者横坐标同为 x 200 → 按钮占 x 138.5~261.5，
-   * 与右列装备槽（x 55~105）、底部装备槽（x -160~10）都不相交。
-   * 三个系统都走这里，不走 NPC（战魂使者 NPC 仍保留，见 configs/npc）。
+   * 六入口按钮的公共外观（稿 `.entries .btn`：76 宽、f12、ghost 档）
+   * 宽度取 84（= 稿的列宽），六个按钮等距排成一列，靠右缘留 3
    */
-  titleButton: { name: "role_title_button", position: new Vec2(200, -215), text: "称 号" },
-  soulButton: { name: "role_soul_button", position: new Vec2(200, -169), text: "战 魂" },
-  rankButton: { name: "role_rank_button", position: new Vec2(200, -123), text: "军 衔" },
-  /** 时装（衣柜）入口，继续往上排一格（-123 + 36 + 10 = -77），四格同列等距 */
-  fashionButton: { name: "role_fashion_button", position: new Vec2(200, -77), text: "时 装" },
-  /** 社交（帮会 / 好友）入口，再往上排一格（-77 + 36 + 10 = -31），五格同列等距 */
-  socialButton: { name: "role_social_button", position: new Vec2(200, -31), text: "社 交" },
-  /** 属性加点入口（#833），再往上排一格（-31 + 36 + 10 = 15），六格同列等距 */
-  attrButton: { name: "role_attr_button", position: new Vec2(200, 15), text: "属 性" },
+  entryButton: { size: new Size(84, 32), fontSize: T.fontSize.f12 },
+  /**
+   * 六入口（最右一列，从上到下 = 属性 / 社交 / 时装 / 军衔 / 称号 / 战魂，与稿一致）
+   *
+   * 六个按钮 32 高 + 8 间距 → 总高 232，纵向居中（中心 100 / 60 / 20 / -20 / -60 / -100）。
+   * 横坐标 285 → 占 x 243~327（面板半宽 330）；属性列右缘 244，**间距 1**，改列宽时两处一起看。
+   * 三个系统（军衔/称号/战魂）都走这里，不走 NPC（战魂使者 NPC 仍保留，见 configs/npc）。
+   */
+  attrButton: { name: "role_attr_button", position: new Vec2(285, 100), text: "属 性" },
+  socialButton: { name: "role_social_button", position: new Vec2(285, 60), text: "社 交" },
+  fashionButton: { name: "role_fashion_button", position: new Vec2(285, 20), text: "时 装" },
+  rankButton: { name: "role_rank_button", position: new Vec2(285, -20), text: "军 衔" },
+  titleButton: { name: "role_title_button", position: new Vec2(285, -60), text: "称 号" },
+  soulButton: { name: "role_soul_button", position: new Vec2(285, -100), text: "战 魂" },
+  /**
+   * 页脚（稿 `.panel-foot`）：顶部 1px 分隔线 + 两端各一行小字
+   * 几何由面板尺寸算（见 dialogFootLayout），文案进 configs/texts
+   */
+  foot: dialogFootLayout(new Size(660, 520)),
 };
 
 /**
@@ -454,20 +492,10 @@ export const bagDialogLayout = {
     color: T.text[4],
   },
   /**
-   * 页脚（稿 05-bag 的 `.panel-foot`）：顶部 1px 分隔线 + 两端各一行小字。
-   * 行在 -246、字在 -262（面板半高 270，字高 14 → 底缘留 4）
+   * 页脚（稿 05-bag 的 `.panel-foot`）：顶部 1px 分隔线 + 两端各一行小字
+   * 几何由面板尺寸算（见 dialogFootLayout）：540 高 → 线 -246、字 -262
    */
-  foot: {
-    lineY: -246,
-    textY: -262,
-    leftX: -155,
-    rightX: 155,
-    width: 300,
-    height: 14,
-    fontSize: T.fontSize.f11,
-    color: T.text[4],
-    lineColor: T.line[1],
-  },
+  foot: dialogFootLayout(new Size(600, 540), 250),
   /**
    * 底部三个操作按钮（子件坐标以弹窗中心为原点；背包网格底边在 -176，三钮并排落在网格下方）
    * 中号按钮宽 123（见 sizes.uiSize.middleButtonSize），各错开 140 → 两两间距 17，整体左右各留 98
@@ -605,32 +633,43 @@ export const skillListDialogLayout = {
   name: "skill_list_dialog",
   title: "技能",
   eyebrow: "SKILL · K",
-  // 宽 350 = 原来的 280 + 升级按钮那一列（#828）
+  /** 弹窗尺寸 380×440（07-skill 稿） */
   size: new Size(380, 440),
   /**
-   * 剩余技能点（#828）：紧贴标题下沿的一行
+   * 剩余技能点（#828，稿 07-skill 的 `.pt-line`）：一行两端 = 左标签「技能点」+ 右数值，
+   * 行底一条通栏 1px 分隔线，下面紧接技能列表。
    *
-   * 位置 152 = 弹窗半高 200 − 标题占位（insetTop 15 + height 30 + 间隙 3）；
+   * 几何按面板 440 高算：头部下沿 175 − 上内距 2 − 半行高 8 → 行中心 165，
+   * 分隔线 147，列表顶 139（间距 8）。
    * 升级成功后就地改这一行的数字，不重开弹窗（重开会把滚动位置弹回顶部）。
    */
-  points: { name: "skill_points", position: new Vec2(0, 152), size: new Size(330, 18), fontSize: 12 },
+  points: {
+    name: "skill_points",
+    y: 165,
+    height: 20,
+    /** 左标签（左对齐）与右数值（右对齐）：各自 120 宽，内缘距面板边 20 */
+    label: { x: -110, width: 120, fontSize: T.fontSize.f12, color: T.text[3] },
+    value: { x: 110, width: 120, fontSize: T.fontSize.f16, color: T.gold[4] },
+    /** 行底分隔线（通栏 = 内容宽 340） */
+    rule: { y: 147, color: T.line[1] },
+  },
   /** 技能滚动列表（子件坐标以弹窗中心为原点） */
-  list: { name: "skill_list", position: new Vec2(0, -22), size: new Size(330, 320) },
+  list: { name: "skill_list", position: new Vec2(0, -22), size: new Size(340, 322) },
   /**
    * 技能行：图标 + （名称 / 说明）两行文字 + 升级按钮（#828）。
    *
-   * 说明必须**换行**：205 宽 × 10 号字一行只放得下 ~20 字，而 `configs/skill-data.ts` 里的说明
-   * 普遍 40~73 字 —— 单行 CLAMP 会把后半句直接切掉（#481，真机上看就是「说到一半」）。
+   * 说明必须**换行**：说明列 223.5 宽 × 10 号字一行只放得下 ~20 字，而 `configs/skill-data.ts`
+   * 里的说明普遍 40~73 字 —— 单行 CLAMP 会把后半句直接切掉（#481，真机上看就是「说到一半」）。
    * 行高按估算行数自适应（`TextLayout.wrappedHeight`），最多 `maxLines` 行（实测最长 73 字 → 4 行）。
    */
   row: {
-    /** 行宽 = 图标 + 间距 + 说明列 + 间距 + 升级按钮（310 = 40 + 5 + 202 + 6.5 + 56.5） */
-    width: 310,
+    /** 行宽 = 图标 + 间距 + 说明列 + 间距 + 升级按钮（340 = 40 + 10 + 223.5 + 10 + 56.5，与列表同宽） */
+    width: 340,
     iconSize: 40,
-    gap: 5,
+    gap: 10,
     desc: {
       /** 说明列宽（= 行宽 − 图标 − 间距 − 升级按钮 − 按钮左间距） */
-      width: 202,
+      width: 223.5,
       /** 名称行与说明之间的间距 */
       gap: 3,
       nameHeight: 20,
@@ -647,8 +686,10 @@ export const skillListDialogLayout = {
      * 尺寸用公共小按钮（56.5 × 24，九宫格不会被压变形）；标注「升级」，
      * **不显示花费** —— `当前等级` 这条公式只在服务端，写到这里就是第二个真相。
      */
-    upgrade: { width: 56.5, height: 24, gap: 6.5, label: "升级" },
+    upgrade: { width: 56.5, height: 24, gap: 10, label: "升级" },
   },
+  /** 页脚（稿 `.panel-foot`）：左操作提示 / 右升级说明；两块各 160 宽不重叠 */
+  foot: dialogFootLayout(new Size(380, 440), 160),
 };
 
 //#endregion
