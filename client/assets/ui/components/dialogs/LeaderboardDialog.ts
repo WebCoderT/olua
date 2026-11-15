@@ -56,6 +56,10 @@ export default class LeaderboardDialog {
     }
     if (this.dialog && !isValid(this.dialog)) this.reset();
     this.dialog = GameUiHelper.createDialog(layout.name, layout.title, new Vec2(), layout.size, layout.eyebrow);
+    // 页脚（稿 15-rank 的 .panel-foot）
+    this.dialog.addChild(
+      GameUiHelper.createDialogFoot("leaderboard_foot", layout.size.width, layout.foot, layout.footTexts.left, layout.footTexts.right),
+    );
     blockClickThrough(this.dialog);
     LayerManager.addDialogToUILayer(this.dialog);
     this.createTabs();

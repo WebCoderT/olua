@@ -41,6 +41,10 @@ export default class FashionDialog {
     }
     if (this.dialog && !isValid(this.dialog)) this.reset();
     this.dialog = GameUiHelper.createDialog(layout.name, layout.title, new Vec2(), layout.size, layout.eyebrow);
+    // 页脚（稿 18-fashion 的 .panel-foot）
+    this.dialog.addChild(
+      GameUiHelper.createDialogFoot("fashion_foot", layout.size.width, layout.foot, layout.footTexts.left, layout.footTexts.right),
+    );
     // 顶部：当前穿戴
     this.currentLabel = UiHelper.createLabel(
       "fashion_current",

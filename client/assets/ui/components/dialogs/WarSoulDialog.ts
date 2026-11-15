@@ -47,6 +47,10 @@ export default class WarSoulDialog {
     // 默认预览当前战魂阶（链上找不到时停在链首）
     this.selectedLevel = defaultSelectedLevel(role?.soulOfWar ?? 0);
     const dialog = GameUiHelper.createDialog(layout.name, layout.title, new Vec2(), layout.size, layout.eyebrow);
+    // 页脚（稿 17-growth 的 .panel-foot）
+    dialog.addChild(
+      GameUiHelper.createDialogFoot("war_soul_foot", layout.size.width, layout.foot, layout.footTexts.left, layout.footTexts.right),
+    );
     // 左：战魂等级列表（可上下滑动）
     const list = GameUiHelper.createScrollView(layout.list.name, layout.list.position, layout.list.size);
     this.listContent = list.getComponent(ScrollView).content;

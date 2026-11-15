@@ -154,11 +154,18 @@ export function dialogFootLayout(size: Size, textWidth = 300, inset = T.spacing.
  * 三个弹窗的结构与坐标完全同源（左列表 + 中展示 + 右属性列），差异只在文案、
  * 列表名与中间栏的内容（动画 / 徽记）。数值直接改这里。
  */
+/**
+ * 成长线三窗（军衔 / 称号 / 战魂）共用的左栏卡片列表
+ *
+ * 稿 17-growth 是三栏：左 216 列表 / 中 1fr / 右 224，栏间距 col-gap，整体左右各留 18。
+ * 面板 880×540 → 内容宽 844，中栏 380；左栏中心 -244、中栏 4、右栏 310。
+ * 列表顶 225（头部 45 下沿）、高 392 → 中心 29。
+ */
 const growthCardList = (name: string, extra?: { borderWidth: number }) => ({
   name,
-  position: new Vec2(-320, -5),
-  size: new Size(210, 490),
-  cardSize: new Size(192, 44),
+  position: new Vec2(-244, 29),
+  size: new Size(216, 392),
+  cardSize: new Size(200, 44),
   cardFontSize: 13,
   stateFontSize: 11,
   /** 卡片文字颜色：选中 / 未激活 / 已激活 */
@@ -167,17 +174,17 @@ const growthCardList = (name: string, extra?: { borderWidth: number }) => ({
   activeColor: T.jade,
   ...extra,
 });
-const growthAnimation = { position: new Vec2(0, 30), size: new Size(300, 300) };
+const growthAnimation = { position: new Vec2(4, 30), size: new Size(300, 300) };
 const growthAttribute = {
-  position: new Vec2(250, 240),
-  width: 210,
+  position: new Vec2(310, 205),
+  width: 216,
   spacing: 6,
   fontSize: 12,
   titleColor: T.gold[4],
   rowNameColor: T.text[3],
   rowDiffColor: T.jade,
 };
-const growthBindGold = { position: new Vec2(250, -160), size: new Size(200, 16), fontSize: 12 };
+const growthBindGold = { position: new Vec2(310, -150), size: new Size(216, 16), fontSize: 12 };
 
 /** 战魂弹窗布局 */
 export const warSoulDialogLayout = {
@@ -191,7 +198,7 @@ export const warSoulDialogLayout = {
   animation: growthAnimation,
   /** 中：名称 / 描述 / 当前战魂 / 外显勾选框（槽位坐标，子件坐标以槽位中心为原点） */
   info: {
-    position: new Vec2(0, -145),
+    position: new Vec2(4, -145),
     name: { position: new Vec2(0, 42), size: new Size(320, 22), fontSize: 16, color: Color.WHITE },
     description: { position: new Vec2(0, 20), size: new Size(330, 16), fontSize: 11, color: T.text[3] },
     current: { position: new Vec2(0, -22), size: new Size(320, 18), fontSize: 12, color: T.gold[4] },
@@ -203,7 +210,9 @@ export const warSoulDialogLayout = {
   /** 右：绑定元宝余额 */
   bindGold: growthBindGold,
   /** 右：升级按钮（满级 / 当前阶不在成长链上时都置灰，文案分别走 maxedText、lockedText） */
-  upgradeButton: { position: new Vec2(250, -205), text: "升 级", maxedText: "已满级", lockedText: "不可续升" },
+  upgradeButton: { position: new Vec2(310, -205), text: "升 级", maxedText: "已满级", lockedText: "不可续升" },
+  foot: dialogFootLayout(new Size(880, 540), 300),
+  footTexts: { left: "左栏列出全部等级 · 点一档看差异", right: "升级消耗绑定元宝，由服务端结算" },
 };
 
 //#endregion
@@ -225,7 +234,7 @@ export const titleUpgradeDialogLayout = {
   animation: growthAnimation,
   /** 中：名称 / 描述 / 当前称号（槽位坐标，子件坐标以槽位中心为原点；比战魂少一行——没有外显勾选框） */
   info: {
-    position: new Vec2(0, -145),
+    position: new Vec2(4, -145),
     name: { position: new Vec2(0, 42), size: new Size(320, 22), fontSize: 16, color: Color.WHITE },
     description: { position: new Vec2(0, 20), size: new Size(330, 16), fontSize: 11, color: T.text[3] },
     current: { position: new Vec2(0, -8), size: new Size(320, 18), fontSize: 12, color: T.gold[4] },
@@ -235,7 +244,9 @@ export const titleUpgradeDialogLayout = {
   /** 右：绑定元宝余额 */
   bindGold: growthBindGold,
   /** 右：升级按钮（满级 / 当前称号不在成长链上时都置灰，文案分别走 maxedText、lockedText） */
-  upgradeButton: { position: new Vec2(250, -205), text: "升 级", maxedText: "已满级", lockedText: "不可续升" },
+  upgradeButton: { position: new Vec2(310, -205), text: "升 级", maxedText: "已满级", lockedText: "不可续升" },
+  foot: dialogFootLayout(new Size(880, 540), 300),
+  footTexts: { left: "左栏列出全部等级 · 点一档看差异", right: "升级消耗绑定元宝，由服务端结算" },
 };
 
 //#endregion
@@ -256,7 +267,7 @@ export const rankUpgradeDialogLayout = {
   list: growthCardList("rank_list", { borderWidth: 2 }),
   /** 中：军衔徽记（文字牌：段名 + 红色军衔名 + 阶数进度） */
   badge: {
-    position: new Vec2(0, 30),
+    position: new Vec2(4, 30),
     size: new Size(320, 210),
     fill: T.surface[2],
     borderColor: T.gold[4],
@@ -270,7 +281,7 @@ export const rankUpgradeDialogLayout = {
   },
   /** 中：名称 / 描述 / 当前军衔（槽位坐标，子件坐标以槽位中心为原点） */
   info: {
-    position: new Vec2(0, -145),
+    position: new Vec2(4, -145),
     name: { position: new Vec2(0, 42), size: new Size(320, 22), fontSize: 16, color: Color.WHITE },
     description: { position: new Vec2(0, 20), size: new Size(330, 16), fontSize: 11, color: T.text[3] },
     current: { position: new Vec2(0, -8), size: new Size(320, 18), fontSize: 12, color: T.gold[4] },
@@ -280,7 +291,9 @@ export const rankUpgradeDialogLayout = {
   /** 右：绑定元宝余额 */
   bindGold: growthBindGold,
   /** 右：晋升按钮（满衔时文案与置灰） */
-  upgradeButton: { position: new Vec2(250, -205), text: "晋 升", maxedText: "已满衔", lockedText: "不可进阶" },
+  upgradeButton: { position: new Vec2(310, -205), text: "晋 升", maxedText: "已满衔", lockedText: "不可进阶" },
+  foot: dialogFootLayout(new Size(880, 540), 300),
+  footTexts: { left: "左栏列出全部阶位 · 点一档看差异", right: "晋升消耗绑定元宝，由服务端结算" },
 };
 
 //#endregion
@@ -310,10 +323,15 @@ export const mapPreviewDialogLayout = {
   size: new Size(720, 520),
   /** 标题兜底文案（正常显示当前地图名，见 SmallMap 传入） */
   title: "小地图",
-  /** 预览区：地图 preview.jpg 整图铺满；点击按比例换算成世界坐标（左键寻路 / 右键传送） */
-  preview: { name: "map_preview", position: new Vec2(0, -18), size: new Size(560, 392) },
-  /** 预览区下方的操作提示 */
-  hint: { text: "左键点击自动寻路，右键点击直接传送", position: new Vec2(0, -226), size: new Size(420, 20), fontSize: 14, color: T.gold[4] },
+  /**
+   * 预览区：地图 preview.jpg 整图铺满；点击按比例换算成世界坐标（左键寻路 / 右键传送）
+   *
+   * 稿 19-map 的 `.mview`：内容宽 680、高 330，顶边 205（头部下沿）→ 中心 40、底 -125。
+   * 点击换算按**这个尺寸**的比例走，改尺寸不用动代码。
+   */
+  preview: { name: "map_preview", position: new Vec2(0, 40), size: new Size(680, 330) },
+  /** 操作提示（稿的 `.hint` 叠在预览区底部内侧的渐变带上） */
+  hint: { text: "左键点击自动寻路，右键点击直接传送", position: new Vec2(0, -108), size: new Size(660, 20), fontSize: T.fontSize.f11, color: T.gold[4] },
   /**
    * 预览图上的静态文字标记（开窗时按配置快照的点位 / 区域建一次，随预览图一起移动/缩放）
    * 三类标记：NPC 白点 + 点上方紧挨着的名称、刷怪区中心的怪物名称
@@ -349,6 +367,9 @@ export const mapPreviewDialogLayout = {
     /** 终点圆点半径（像素）：比途中的点大一圈 */
     endDotRadius: 7,
   },
+  /** 页脚（稿 19-map 的 .panel-foot） */
+  foot: dialogFootLayout(new Size(720, 520), 300),
+  footTexts: { left: "左键寻路 · 右键直接传送", right: "传送有冷却，战斗中不可用" },
 };
 
 //#endregion
@@ -407,27 +428,27 @@ export const fashionDialogLayout = {
   eyebrow: "FASHION",
   /** 弹窗尺寸 600×500（18-fashion 稿） */
   size: new Size(600, 500),
-  /** 顶部「当前穿戴」提示 */
-  current: { position: new Vec2(0, 205), fontSize: 16 },
-  /** 列表（卡片区，四列） */
-  list: { name: "fashion_list", position: new Vec2(0, -20), size: new Size(556, 396) },
-  /** 单张卡片（相对列表内容左上角逐格排布） */
+  /** 顶部「当前穿戴」提示（稿 `.fcur`：头条一个绿点 + 一句，f12；头部下沿 205 − 半行高 10 = 195） */
+  current: { position: new Vec2(0, 195), fontSize: T.fontSize.f12 },
+  /** 列表（卡片区，四列；稿 `.fgrid` 330 高，中心 8） */
+  list: { name: "fashion_list", position: new Vec2(0, 8), size: new Size(560, 330) },
+  /** 单张卡片（相对列表内容左上角逐格排布；稿 `.fcard` 152 高，四列宽 132.5） */
   card: {
-    size: new Size(130, 104),
+    size: new Size(132, 152),
     /** 卡片间距（横 / 纵） */
-    gap: new Vec2(12, 10),
+    gap: new Vec2(T.spacing.sp3, T.spacing.sp3),
     /** 一行几列 */
     columns: 4,
     /** 外观图标（尺寸与在卡片内的位置） */
     iconSize: new Size(64, 64),
-    iconPosition: new Vec2(0, 16),
+    iconPosition: new Vec2(0, 36),
     /** 名称（字号与在卡片内的位置、尺寸） */
-    labelFontSize: 14,
-    labelPosition: new Vec2(0, -38),
-    labelSize: new Size(122, 20),
+    labelFontSize: T.fontSize.f13,
+    labelPosition: new Vec2(0, -20),
+    labelSize: new Size(120, 20),
     /** 状态角标（已穿戴 / 可穿戴） */
-    stateFontSize: 12,
-    statePosition: new Vec2(0, -56),
+    stateFontSize: T.fontSize.f10,
+    statePosition: new Vec2(0, -50),
     /** 卡片底色（Graphics 自绘，不依赖底图） */
     fill: T.surface[2],
     /** 已穿戴卡片的描边色 */
@@ -455,6 +476,9 @@ export const fashionDialogLayout = {
   },
   /** 顶部提示文案（{label} 替换为时装名） */
   currentText: { worn: "当前穿戴：{label}", none: "当前没有穿时装" },
+  /** 页脚（稿 18-fashion 的 .panel-foot） */
+  foot: dialogFootLayout(new Size(600, 500), 250),
+  footTexts: { left: "点卡片即穿脱 · 未拥有的看得到穿不了", right: "时装只改外观，不影响属性" },
 };
 
 //#endregion
@@ -1745,36 +1769,36 @@ export const leaderboardDialogLayout = {
   title: "排 行 榜",
   eyebrow: "LEADERBOARD",
   size: new Size(600, 540),
-  /** 页签（三枚，与任务 / 队伍弹窗同款式） */
+  /** 页签（三枚 96 宽 + 6 间距，整行居中；头部下沿 225 − 半行高 16 = 209） */
   tabs: {
-    y: 232,
-    size: new Size(120, 32),
-    columns: [-130, 0, 130],
-    radius: 6,
+    y: 209,
+    size: new Size(96, 32),
+    columns: [-102, 0, 102],
+    radius: T.radius.r2,
     activeFill: T.gold[4],
     activeText: T.surface[3],
     idleFill: T.surface[2],
     idleText: T.text[1],
     idleBorder: T.surface[3],
-    fontSize: 13,
+    fontSize: T.fontSize.f14,
   },
-  /** 顶部小结（共几人上榜 + 这份快照的时刻） */
+  /** 顶部小结（共几人上榜 + 这份快照的时刻；稿 `.rsum` 在页签下居中） */
   summary: {
-    position: new Vec2(0, 200),
+    position: new Vec2(0, 175),
     size: new Size(556, 20),
-    fontSize: 12,
-    color: T.text[3],
+    fontSize: T.fontSize.f11,
+    color: T.text[4],
     /** 「刚刚更新」的界线（毫秒）：快照比这个还新就不写时分 */
     freshMs: 60_000,
   },
-  /** 榜单列表（可滚动） */
-  list: { name: "leaderboard_list", position: new Vec2(0, 6), size: new Size(556, 372) },
-  /** 一条名次：名次（左）+ 名字 + 关键数值（右） */
+  /** 榜单列表（稿 `.rlist` 330 高，中心 -10） */
+  list: { name: "leaderboard_list", position: new Vec2(0, -10), size: new Size(556, 330) },
+  /** 一条名次：名次（左）+ 名字 + 关键数值（右）；稿 `.rrow` 46 高 */
   row: {
-    size: new Size(552, 44),
+    size: new Size(552, 46),
     fill: T.surface[1],
     border: T.surface[3],
-    radius: 6,
+    radius: T.radius.r2,
     rankX: -252,
     rankSize: new Size(44, 20),
     rankFontSize: 14,
@@ -1799,16 +1823,19 @@ export const leaderboardDialogLayout = {
     selfFill: T.surface[3],
     selfBorder: T.gold[4],
   },
-  /** 底部固定的「我的名次」条 */
+  /** 底部固定的「我的名次」条（稿 `.rself` 42 高，列表底 -175 − 10 − 21 = -206） */
   selfRow: {
-    position: new Vec2(0, -238),
-    size: new Size(552, 40),
+    position: new Vec2(0, -206),
+    size: new Size(552, 42),
     fill: T.surface[2],
     border: T.gold[2],
-    radius: 6,
-    textFontSize: 12,
+    radius: T.radius.r2,
+    textFontSize: T.fontSize.f11,
     textColor: T.gold[4],
   },
+  /** 页脚（稿 15-rank 的 .panel-foot） */
+  foot: dialogFootLayout(new Size(600, 540), 250),
+  footTexts: { left: "每小时刷新一次 · 只列在线过的角色", right: "点击页签切换维度" },
   /** 文案 */
   texts: {
     tabs: ["等 级", "战 力", "击 杀"],

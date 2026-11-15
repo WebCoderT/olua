@@ -1,4 +1,6 @@
-import { Color, Size, Vec2 } from "cc";
+import { Size, Vec2 } from "cc";
+import { T } from "./layout/tokens";
+import { dialogFootLayout } from "./layout/dialogs";
 
 /**
  * 成就面板的布局 / 样式 / 文案（#401）
@@ -37,78 +39,80 @@ export const achievementTexts = {
   hiddenHint: "达成后揭晓",
 };
 
-/** 成就弹窗布局（尺寸口径与排行榜弹窗同量级） */
+/** 成就弹窗布局（16-achievement 稿，面板 580×440） */
 export const achievementDialogLayout = {
   name: "achievement_dialog",
   title: "成就",
   eyebrow: "ACHIEVEMENT",
   size: new Size(580, 440),
-  /** 顶部页签 */
+  /** 顶部页签（三枚 96 宽 + 6 间距，整行居中；头部下沿 175 − 半行高 16 = 159） */
   tabs: {
-    y: 168,
-    size: new Size(96, 34),
-    radius: 8,
+    y: 159,
+    size: new Size(96, 32),
+    radius: T.radius.r2,
     /** 三个页签的横坐标（与 achievementCategories 一一对应） */
-    columns: [-104, 0, 104],
-    fontSize: 16,
-    idleFill: new Color(38, 42, 54, 255),
-    activeFill: new Color(88, 132, 196, 255),
-    idleBorder: new Color(72, 78, 94, 255),
-    idleText: new Color(178, 184, 196, 255),
-    activeText: new Color(255, 255, 255, 255),
+    columns: [-102, 0, 102],
+    fontSize: T.fontSize.f14,
+    idleFill: T.surface[2],
+    activeFill: T.gold[4],
+    idleBorder: T.surface[3],
+    idleText: T.text[1],
+    activeText: T.surface[3],
   },
-  /** 顶部小结（页签下方一行） */
+  /** 顶部小结（页签下方一行，居中；稿 `.asum`） */
   summary: {
-    position: new Vec2(0, 132),
-    size: new Size(480, 22),
-    fontSize: 15,
-    color: new Color(196, 202, 214, 255),
+    position: new Vec2(0, 133),
+    size: new Size(500, 20),
+    fontSize: T.fontSize.f11,
+    color: T.text[4],
   },
-  /** 成就列表 */
+  /** 成就列表（顶 123，底 -177） */
   list: {
     name: "achievement_list",
-    position: new Vec2(0, -22),
-    size: new Size(500, 276),
+    position: new Vec2(0, -27),
+    size: new Size(536, 300),
   },
   /** 一行成就 */
   row: {
-    size: new Size(480, 60),
-    gap: 6,
-    radius: 8,
-    fill: new Color(30, 34, 44, 255),
-    border: new Color(58, 64, 78, 255),
+    size: new Size(532, 60),
+    gap: T.spacing.sp3,
+    radius: T.radius.r2,
+    fill: T.surface[1],
+    border: T.surface[3],
     /** 已达成（未领）的行：底色偏暖，与未达成一眼分得开 */
-    achievedFill: new Color(58, 48, 30, 255),
-    achievedBorder: new Color(176, 146, 74, 255),
-    nameFontSize: 16,
-    nameColor: new Color(238, 240, 246, 255),
-    descFontSize: 12,
-    descColor: new Color(150, 156, 170, 255),
+    achievedFill: T.surface[3],
+    achievedBorder: T.gold[2],
+    nameFontSize: T.fontSize.f13,
+    nameColor: T.text[1],
+    descFontSize: T.fontSize.f11,
+    descColor: T.text[3],
     /**
      * 名称 / 描述 / 进度 / 按钮各自的横向位置。
      *
      * 名称与描述都是**左对齐**的 label —— 文字从文本框左缘起排，而这里给的是文本框中心 x：
-     * 行宽 480（半宽 240），`nameSize` 宽 280，中心 x 必须 ≥ −224 + 140 = −84 才不越出左缘。
-     * 原来写 −150 → bbox 左缘 −290，越界 50px，真机上只剩名称最后一个字（#483）。
-     * 现在：名称/描述 bbox −224..56，进度 80..160，按钮 160..232（行内留白 16 / 8）。
+     * 行宽 532（半宽 266），`nameSize` 宽 280 → 中心 x 必须 ≥ −250 + 140 = −110 才不越出左缘。
+     * 现在：名称/描述 bbox −250..30，进度 80..160，按钮 160..232（行内留白 34）。
      */
-    namePosition: new Vec2(-84, 12),
+    namePosition: new Vec2(-110, 12),
     nameSize: new Size(280, 20),
-    descPosition: new Vec2(-84, -12),
+    descPosition: new Vec2(-110, -12),
     descSize: new Size(280, 18),
     progressPosition: new Vec2(120, 0),
     progressSize: new Size(80, 20),
-    progressFontSize: 15,
-    progressColor: new Color(196, 202, 214, 255),
+    progressFontSize: T.fontSize.f13,
+    progressColor: T.text[2],
     /** 状态按钮（领取 / 已领取 / 未达成） */
     actionPosition: new Vec2(196, 0),
-    actionSize: new Size(72, 30),
-    actionRadius: 6,
-    claimFill: new Color(92, 148, 96, 255),
-    claimedFill: new Color(52, 56, 66, 255),
-    lockedFill: new Color(40, 44, 54, 255),
-    actionTextColor: new Color(255, 255, 255, 255),
-    lockedTextColor: new Color(130, 136, 148, 255),
-    actionFontSize: 14,
+    actionSize: new Size(72, 24),
+    actionRadius: T.radius.r1,
+    claimFill: T.jadeDeep,
+    claimedFill: T.surface[4],
+    lockedFill: T.surface[2],
+    actionTextColor: T.text.onEmber,
+    lockedTextColor: T.text[4],
+    actionFontSize: T.fontSize.f11,
   },
+  /** 页脚（稿 16-achievement 的 .panel-foot） */
+  foot: dialogFootLayout(new Size(580, 440), 240),
+  footTexts: { left: "达成即自动记录，奖励要点一下才进包", right: "隐藏成就达成后才揭晓条件" },
 };
