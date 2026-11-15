@@ -12,7 +12,8 @@
  * · 画布尺寸 = 1920×1080，且与 client/settings/v2/packages/project.json 的 designResolution 一致
  * · ScreenLayout 里不再出现任何跟窗口 / 分辨率设置有关的代码（view / screen / ResolutionPolicy）
  * · 登录舞台、选角舞台的全部元素（含角色站位 / 删除按钮 / 创建弹窗）**整块落在 1920×1080 画布内**
- * · 登录舞台是 cc.Layout 垂直布局：宽度固定、高度随内容自动变，间距只有 spacingY 一个数（沙箱跑不了引擎组件，纵向位置用同一条公式复算）
+ * · 登录舞台是绝对坐标整版布局（#1036，对齐 design/olua-login）：四大块 + 面板内元素的坐标全在
+ *   loginLayout 里，面板内元素换算回舞台坐标后仍落在面板壳内（沙箱跑不了引擎组件，用纯算术判）
  * · 选角底部栏：宽度 = 画布宽、贴屏幕底边、与原素材同比例（不拉伸变形）
  * · 三个场景启动时不设置分辨率、不注册窗口重排、舞台不 setScale
  *
@@ -66,49 +67,50 @@ function inside(rect, canvas = CANVAS) {
   );
 }
 
-/** 登录舞台元素块（键 = loginLayout.order 里的 key）—— 位置不写在元素上，由 cc.Layout 统一排 */
-function loginBlocks() {
-  const layout = loginLayout;
-  // 区服在登录页就选（#1009）：登录成功后先按这个区 POST /zones/select，选角页再拉角色
-  return {
-    logo: layout.logo,
-    account: layout.account,
-    password: layout.password,
-    zoneLabel: layout.zoneLabel,
-    loginButton: layout.loginButton,
-    registerButton: layout.registerButton,
-  };
-}
-
 /**
- * 复算 cc.Layout（VERTICAL + CONTAINER + TOP_TO_BOTTOM）会排出的容器总高 ——
- * 与引擎同一条公式（cocos/ui/layout.ts _doLayoutVertically）：
- * 容器高 = paddingTop + Σ元素高 + (n-1)×spacingY + paddingBottom。
- * 沙箱跑不了引擎组件，这里用纯算术守「配置算出来的构图落在画布内」。
+ * 登录舞台的全部元素（中心 + 尺寸），清单从配置推导 —— 配置加元素后这里自动跟上。
+ * #1036 起登录舞台是**绝对坐标整版布局**（对齐 design/olua-login），坐标全写在 loginLayout 里；
+ * 面板内元素的配置坐标相对面板中心，这里换算回舞台坐标再判画布包含。
+ * tagline 是 RESIZE_HEIGHT 的多行文本、高度随内容，不进这份清单（跑出画布靠人眼看）。
  */
-function loginContainerHeight() {
-  const blocks = loginBlocks();
-  const heights = loginLayout.order.map((key) => blocks[key].size.height);
-  return (loginLayout.paddingTop ?? 0) + heights.reduce((sum, h) => sum + h, 0) + (heights.length - 1) * loginLayout.spacingY + loginLayout.paddingBottom;
-}
-
-/** 登录舞台的各元素中心 y（按引擎同一条公式从容器顶边往下推：首项顶边 = 容器高/2 - paddingTop） */
-function loginCenters() {
-  const blocks = loginBlocks();
-  let cursor = loginContainerHeight() / 2 - (loginLayout.paddingTop ?? 0);
-  return loginLayout.order.map((key) => {
-    const h = blocks[key].size.height;
-    const center = cursor - h / 2;
-    cursor = center - h / 2 - loginLayout.spacingY;
-    return center;
-  });
-}
-
-/** 登录舞台的全部元素（中心 + 尺寸），清单从配置推导 —— 配置加元素后这里自动跟上 */
 function loginElements() {
-  const blocks = loginBlocks();
-  const centers = loginCenters();
-  return loginLayout.order.map((key, index) => [key, { position: { x: 0, y: centers[index] }, size: blocks[key].size }]);
+  const layout = loginLayout;
+  const topbar = layout.topbar;
+  const hero = layout.hero;
+  const panel = layout.panel;
+  const bottombar = layout.bottombar;
+  const toStage = (position, size) => ({ position: { x: panel.position.x + position.x, y: panel.position.y + position.y }, size });
+  const tabSize = hero.classTabs.size;
+  const classTabs = hero.classTabs.classes.map((cls, index) => [
+    `hero.classTabs.${cls.key}`,
+    {
+      position: {
+        x: hero.classTabs.firstLeftEdgeX + index * (tabSize.width + hero.classTabs.gap) + tabSize.width / 2,
+        y: hero.classTabs.positionY,
+      },
+      size: tabSize,
+    },
+  ]);
+  return [
+    ["topbar.brand", { position: topbar.brand.position, size: topbar.brand.size }],
+    ["topbar.version", { position: topbar.version.position, size: topbar.version.size }],
+    ["topbar.music", { position: topbar.music.position, size: topbar.music.size }],
+    ["hero.eyebrow.line", { position: hero.eyebrow.line.position, size: hero.eyebrow.line.size }],
+    ["hero.eyebrow.label", { position: hero.eyebrow.label.position, size: hero.eyebrow.label.size }],
+    ["hero.logo", { position: hero.logo.position, size: hero.logo.size }],
+    ...classTabs,
+    ["hero.classDesc", { position: hero.classDesc.position, size: hero.classDesc.size }],
+    ["hero.notice", { position: hero.notice.position, size: hero.notice.size }],
+    ["panel", { position: panel.position, size: panel.size }],
+    ["panel.title", toStage(panel.title.position, panel.title.size)],
+    ["panel.account", toStage(panel.account.position, panel.account.size)],
+    ["panel.password", toStage(panel.password.position, panel.password.size)],
+    ["panel.server", toStage(panel.server.position, panel.server.size)],
+    ["panel.loginButton", toStage(panel.loginButton.position, panel.loginButton.size)],
+    ["panel.foot.text", toStage(panel.foot.text.position, panel.foot.text.size)],
+    ["bottombar.copyright", { position: bottombar.copyright.position, size: bottombar.copyright.size }],
+    ...bottombar.links.map((link, index) => [`bottombar.links[${index}]`, { position: link.position, size: link.size }]),
+  ];
 }
 
 /** 选角舞台的全部元素（中心 + 尺寸），清单从配置推导 */
@@ -177,20 +179,30 @@ console.log("\n== C. 选角舞台：全部元素落在 1920×1080 画布内 ==")
   // 选角舞台尺寸（= 画布）属显示效果，靠人眼看
 }
 
-console.log("\n== C2. 登录舞台：cc.Layout 垂直布局（宽固定 / 高随内容 / 间距一个数） ==");
+console.log("\n== C2. 登录舞台：绝对坐标整版布局（#1036，对齐 design/olua-login） ==");
 {
-  const blocks = loginBlocks();
-  const order = loginLayout.order;
-  const centers = loginCenters();
-  const centerOf = (key) => centers[order.indexOf(key)];
-
-  // 配置形态：间距只有 spacingY 一个数，元素不写坐标也不带 gap
-  check(!Object.values(blocks).some((block) => "position" in block), "配置里各元素不写死 position（纵向位置交给 Layout）");
-  check(order.every((key) => !("gap" in blocks[key])), "元素不再各带一个 gap（间距只有 spacingY 一个来源）");
-  check(new Set(order).size === order.length, "order 里没有重复元素");
-  // 舞台宽度数值手调，不断言
-
-  // 纵向顺序/间距/首元素留白/容器总高属于显示效果，靠人眼看
+  const panel = loginLayout.panel;
+  check(
+    loginLayout.stageSize.width === designResolution.width && loginLayout.stageSize.height === designResolution.height,
+    "登录舞台尺寸 = 设计分辨率（单分辨率不缩放）",
+  );
+  // 面板内元素的配置坐标相对面板中心：换算回舞台坐标后必须仍落在面板壳内（跑出壳 = 穿帮）
+  const panelRect = rectOf(panel.position, panel.size);
+  const panelChildren = [
+    ["title", panel.title],
+    ["account", panel.account],
+    ["password", panel.password],
+    ["server", panel.server],
+    ["loginButton", panel.loginButton],
+  ];
+  const insideRect = (rect, outer) =>
+    rect.left >= outer.left - EPS && rect.right <= outer.right + EPS && rect.top <= outer.top + EPS && rect.bottom >= outer.bottom - EPS;
+  const bad = panelChildren
+    .map(([name, item]) => [name, rectOf({ x: panel.position.x + item.position.x, y: panel.position.y + item.position.y }, item.size)])
+    .filter(([, rect]) => !insideRect(rect, panelRect));
+  check(bad.length === 0, `面板 ${panelChildren.length} 个子元素都落在面板壳内`, bad.length ? `越界：${bad.map(([name]) => name).join("、")}` : "");
+  const loginStageSource = fs.readFileSync(LOGIN_FILE, "utf8").replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+  check(!/addComponent\(Layout\)/.test(loginStageSource), "登录舞台不再用 cc.Layout 流式布局（#1036 起为绝对坐标整版布局，坐标全在 loginLayout）");
 }
 
 console.log("\n== D. 选角底部栏：横跨整屏 + 贴底 + 与原素材同比例 ==");
@@ -233,33 +245,28 @@ console.log("\n== E. 源码接线断言（不再有分辨率适配） ==");
   check(!/onWindowResize\(/.test(login) && !/onWindowResize\(/.test(selector), "两个场景都不再注册窗口尺寸变化重排");
 
   check(/new Node\("login_stage"\)/.test(login), "Login：创建舞台容器 login_stage");
-  check(/setContentSize\(layout\.width, 0\)/.test(login), "Login：舞台宽度来自 loginLayout.width（高度初始 0，由 Layout 随内容撑开）");
+  check(/setContentSize\(layout\.stageSize\.width, layout\.stageSize\.height\)/.test(login), "Login：舞台尺寸来自 loginLayout.stageSize（= 设计分辨率，不缩放）");
   check(!/setScale/.test(login), "Login：舞台不 setScale（单分辨率下缩放系数恒为 1，缩放代码已删）");
+  check(!/addComponent\(Layout\)/.test(login) && !/loginLayout\.order/.test(login), "Login：不再有 Layout 流式排布与 order 清单（#1036 起四大块 buildTopbar / buildHero / buildPanel / buildBottombar 按绝对坐标组装）");
   check(
-    /addComponent\(Layout\)/.test(login) && /Layout\.Type\.VERTICAL/.test(login) && /Layout\.ResizeMode\.CONTAINER/.test(login) && /VerticalDirection\.TOP_TO_BOTTOM/.test(login),
-    "Login：舞台用 cc.Layout 垂直布局（VERTICAL + CONTAINER + TOP_TO_BOTTOM，宽固定 / 高随内容 / 从上到下）",
+    /this\.buildTopbar\(\)/.test(login) && /this\.buildHero\(\)/.test(login) && /this\.buildPanel\(\)/.test(login) && /this\.buildBottombar\(\)/.test(login),
+    "Login：四大块接线齐全（顶栏 / 左侧文案区 / 登录面板 / 底部条）",
   );
-  check(
-    /stageLayout\.spacingY = layout\.spacingY/.test(login) && /paddingBottom = layout\.paddingBottom/.test(login),
-    "Login：间距与留白全部读配置（spacingY / paddingBottom；paddingTop 已移除，第一项直接贴容器顶）",
-  );
-  check(/for \(const key of layout\.order\)[\s\S]{0,260}?this\.stage\.addChild\(widget\)/.test(login), "Login：按 loginLayout.order 的顺序挂进舞台（挂载顺序 = 屏幕顺序）");
   check(/createFullScreenImage\("login_background"/.test(login) && !/this\.stage\.addChild\(GameUiHelper\.createFullScreenImage/.test(login), "Login：背景挂在场景根（不在舞台内，铺满整个屏幕）");
-  check(
-    /this\.widgets = \{ logo, account: account\.node, password: password\.node, zoneLabel, loginButton, registerButton \}/.test(login),
-    "Login：元素按 key 登记（与 order 的 key 一一对应，含区服那颗 #1009）",
-  );
-  check(!/getColumnCenters|stackWidgets/.test(login), "Login：不再自己算纵向坐标（交给引擎 Layout）");
-  check(!/layout\.(account|password|loginButton|registerButton|logo|zoneLabel)\.position/.test(login), "Login：不再读写死坐标（位置交给 Layout）");
   // 区服在登录页（#1009）：登录前只拿公共活区列表（GET /zones），不碰要令牌的 /zones/mine
   check(
     /ZoneApi\.list\(\)/.test(login) && !/ZoneApi\.mine\(\)/.test(login),
     "Login：拉公共活区列表（登录前没有令牌，mine 会 401）",
   );
-  check(/this\.zoneLabel/.test(login) && /renderZoneLabel/.test(login), "Login：顶部有区服文案节点，按活区数决定文案");
-  check(!/this\.zoneDialog\.open\([\s\S]{0,80}start\(\)/.test(login), "Login：进页面不自动弹选服窗（点顶部那颗才开）");
+  check(/renderServerButton/.test(login) && /panel\.server/.test(login), "Login：选服按钮在面板里，按区列表刷新区名与状态（#1036 整版布局）");
+  check(!/this\.zoneDialog\.open\([\s\S]{0,80}start\(\)/.test(login), "Login：进页面不自动弹选服窗（点面板里那颗才开）");
   const texts = fs.readFileSync(TEXTS_FILE, "utf8");
-  check(!/login_zone_/.test(texts), "texts：登录页那四条旧区服文案没有回来（区服走 zone_* 一套）");
+  const loginZoneKeys = (texts.match(/^\s*login_zone_\w+/gm) ?? []).map((line) => line.trim().replace(/:.*/, ""));
+  check(
+    loginZoneKeys.length > 0 && loginZoneKeys.every((key) => key === "login_zone_unknown"),
+    "texts：登录页只留「正在获取区服列表」占位这一条 login_zone_* 键（旧区服文案走 zone_* 一套，没有回来）",
+    loginZoneKeys.filter((key) => key !== "login_zone_unknown").length ? `多出：${loginZoneKeys.join("、")}` : "",
+  );
   // 已有登录态直接进选角：误刷新不重输账号密码；未登录才清缓存（保留登录态刷新时的角色缓存）
   check(/if \(Session\.isLoggedIn\) \{\s*\n\s*SceneManager\.loadScene\("RoleSelector"\);\s*\n\s*return;/.test(login), "Login：已有登录态直接跳选角（误刷新不用重输，令牌过期由 401 兜底送回登录）");
   check(/StorageManager\.clear\(\);/.test(login), "Login：未登录才清本地缓存（有登录态的刷新不动角色缓存）");

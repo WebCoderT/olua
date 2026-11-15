@@ -4,12 +4,12 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>工程管理 · olua 开源项目</title>
-  <meta name="description" content="olua 的研发流程与质量门禁：issue → 分支 → PR → CI → squash；PR 只跑一次全套门禁；39 套 e2e、15 项跨端审计、资源清单锁与 AI 协作纪律。" />
+  <meta name="description" content="olua 的研发流程与质量门禁：issue → 分支 → PR → CI → squash；PR 只跑一次全套门禁；92 套 e2e、18 项跨端审计、资源清单锁与 AI 协作纪律。" />
   <link rel="canonical" href="https://yimw.cn/engineering.html" />
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://yimw.cn/engineering.html" />
   <meta property="og:title" content="工程管理 · olua 开源项目" />
-  <meta property="og:description" content="olua 的研发流程与质量门禁：issue → 分支 → PR → CI → squash；PR 只跑一次全套门禁；39 套 e2e、15 项跨端审计、资源清单锁与 AI 协作纪律。" />
+  <meta property="og:description" content="olua 的研发流程与质量门禁：issue → 分支 → PR → CI → squash；PR 只跑一次全套门禁；92 套 e2e、18 项跨端审计、资源清单锁与 AI 协作纪律。" />
   <meta property="og:image" content="https://yimw.cn/assets/img/game.jpg" />
   <meta name="twitter:card" content="summary_large_image" />
   <link rel="icon" href="assets/icons/favicon.ico" sizes="any" />
@@ -50,7 +50,7 @@
     <a href="#loop">研发流程</a>
     <a href="#ci">CI 门禁</a>
     <a href="#layers">测试分层</a>
-    <a href="#audits">15 项审计</a>
+    <a href="#audits">18 项审计</a>
     <a href="#resources">资源分发</a>
     <a href="#ai">AI 协作</a>
   </nav>
@@ -92,7 +92,7 @@
         <div class="flow__num">04</div>
         <div class="flow__body">
           <h4>PR 触发全套 CI</h4>
-          <p>静态半边 + 39 套 e2e 分 4 片并行。<b>只跑一次</b>：PR 的 CI 跑的是 <code>refs/pull/N/merge</code>（master + 本次改动），squash 之后 master 的树与它完全相同，再跑一遍测不到新东西。</p>
+          <p>静态半边 + 92 套 e2e 分 4 片并行。<b>只跑一次</b>：PR 的 CI 跑的是 <code>refs/pull/N/merge</code>（master + 本次改动），squash 之后 master 的树与它完全相同，再跑一遍测不到新东西。</p>
           <p>所以直接 push master 是不受门禁保护的 —— 规则是「别那么干」。</p>
         </div>
       </div>
@@ -122,7 +122,7 @@
     <div class="chain reveal">
       <div class="chain__node chain__node--src">
         <b>static</b>
-        <span>客户端 tsc<br />管理端构建<br />15 项审计<br />服务端编译</span>
+        <span>客户端 tsc<br />管理端构建<br />18 项审计<br />服务端编译</span>
       </div>
       <div class="chain__arrow">＋</div>
       <div class="chain__node">
@@ -243,17 +243,17 @@
     </div>
   </section>
 
-  <!-- ========== 15 项审计 ========== -->
+  <!-- ========== 18 项审计 ========== -->
   <section class="section section--alt" id="audits">
     <div class="section__head reveal">
       <p class="eyebrow eyebrow--center">AUDITS</p>
-      <h2 class="section__title">15 个守点</h2>
+      <h2 class="section__title">18 个守点</h2>
       <p class="section__sub">每一条都对应一次真实踩过的坑</p>
     </div>
 
     <div class="caps caps--3 reveal">
       <article class="cap">
-        <div class="cap__head"><h3>契约与权威</h3><span class="cap__count">7 项</span></div>
+        <div class="cap__head"><h3>契约与权威</h3><span class="cap__count">9 项</span></div>
         <ul>
           <li><b>生成物一致性</b> —— 接口文件必须是生成的，手改或忘生成都红</li>
           <li><b>接口地址硬编码</b> —— 地址与请求各有唯一出口</li>
@@ -262,17 +262,20 @@
           <li><b>世界权威</b> —— 怪物生成与掉落只认服务端</li>
           <li><b>角色存档边界</b> —— 服务端独占字段，客户端推整份存档也改不动</li>
           <li><b>服务端内部边界</b> —— 跨模块 import 只走白名单边</li>
+          <li><b>区边界</b> —— 玩家侧接口零 <code>zoneId</code>、仓储没有无区重载，按 id 取别区对象一律 404</li>
+          <li><b>管理端取区</b> —— 挂了区上下文的接口必须真的取区，不取就得登记并写理由</li>
         </ul>
       </article>
 
       <article class="cap">
-        <div class="cap__head"><h3>口径与一致性</h3><span class="cap__count">5 项</span></div>
+        <div class="cap__head"><h3>口径与一致性</h3><span class="cap__count">6 项</span></div>
         <ul>
           <li><b>地图原点</b> —— 世界坐标与 TMX 坐标只差一次 y 取反，错一处 NPC 全体偏半张图</li>
           <li><b>资源引用</b> —— 代码里写的每个资源路径都要在磁盘上真存在</li>
           <li><b>装备对齐清单</b> —— 管理端派生的 JSON 与客户端配置一致</li>
           <li><b>配置外泄</b> —— 位置、颜色、时长、概率、文案不许写进逻辑</li>
           <li><b>部署接线</b> —— nginx 上游名 = compose 服务名；DB_PATH 必须落在卷里</li>
+          <li><b>文档目录表</b> —— 每篇都要登记、序号对得上文件名、链接不死，接口数与 <code>openapi.json</code> 一致</li>
         </ul>
       </article>
 
