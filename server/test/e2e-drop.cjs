@@ -355,30 +355,71 @@ function recordsOf(dbPath, dropId, result) {
     /** cast 序号（服务端幂等账按 castId，自己数就行） */
     let castSeq = 0;
 
-    /** 打一只活着的怪，返回击杀那次的结算（打不死 / 被拒返回 null） */
-    const killOne = async (player, mapId = "1", goodIds = ["drug_hp_1"]) => {
-      // 怪会被前面的段打空（重生 1500ms 一拍）：这里静默等一只活的，不记失败 ——
-      // 等到不了就返回 null，由调用方的断言去说「这一枪没打成」
-      let snapshot = null;
-      for (let attempt = 0; attempt < 6; attempt += 1) {
-        snapshot = await player.session.joinWorld(mapId);
-        if (snapshot && Array.isArray(snapshot.monsters) && snapshot.monsters.some((monster) => monster.alive)) break;
+    /** 最近一次 `killOne` 没打成的真实原因（只报 null 的话，分不清「没怪」和「这一刀被拒」） */
+    let lastKillError = "";
+
+    /** 等到一只活着的怪（重生 1500ms 一拍，等不到返回 null） */
+    const aliveMobOf = async (player, mapId) => {
+      for (let attempt = 0; attempt < 8; attempt += 1) {
+        const snapshot = await player.session.joinWorld(mapId);
+        const mob = snapshot && Array.isArray(snapshot.monsters) ? snapshot.monsters.find((monster) => monster.alive) : null;
+        if (mob) return mob;
         await sleep(1_500);
       }
-      const mob = snapshot && Array.isArray(snapshot.monsters) ? snapshot.monsters.find((monster) => monster.alive) : null;
-      if (!mob) return null;
-      await patchDropOf(mob.monsterKey, goodIds);
-      // 站在怪旁边上报位置：拾取距离闸读的是这份坐标
-      const stand = JSON.stringify({ type: "pos", data: { mapId, x: mob.x, y: mob.y, hp: 100 } });
-      player.session.socket.send(stand);
-      player.session.socket.send(stand);
-      for (let i = 0; i < 80; i += 1) {
-        await paceCast();
-        const castId = ++castSeq;
-        player.session.socket.send(JSON.stringify({ type: "cast", data: { castId, skillId: "1000", targetId: mob.instanceId, monsterKey: mob.monsterKey } }));
-        const settle = await player.session.waitSettle(castId);
-        if (!settle || !settle.ok) return null;
-        if (settle.killed) return settle;
+      return null;
+    };
+
+    /** 角色被打死了就复活（这一套要的是「还能继续打」；死亡判定本身有专门的套件在验） */
+    const reviveOf = async (player) => {
+      const revived = await api(baseUrl, "POST", `roles/${player.roleId}/revive`, { token: player.token });
+      if (revived.code !== 0) lastKillError = `复活失败：${revived.code} ${revived.message || ""}`.trim();
+      await sleep(300);
+    };
+
+    /**
+     * 打一只活着的怪，返回击杀那次的结算（打不成返回 null，原因留在 `lastKillError`）
+     *
+     * 打不成**不是**立刻放弃整段准备：怪会游走（快照里的坐标一过期，下一刀就被距离拒掉）、
+     * 会被前面那段打空、也会卡在冷却上 —— 这些都不影响**换一只**再来。这一步要的是
+     * 「地上出现一件掉落」，不是「这一只怪必须一刀死」。所以最多换 3 只、总时长封在 40 秒。
+     *
+     * 站在怪堆里连打二十来刀，被怪打死是常态（cast 回 `dead`）—— 那种情况先复活再换下一只，
+     * 否则后面每一段都会跟着报「没打成」，红在准备上却像是掉落语义坏了。
+     */
+    const killOne = async (player, mapId = "1", goodIds = ["drug_hp_1"]) => {
+      const deadline = Date.now() + 40_000;
+      for (let target = 0; target < 3 && Date.now() < deadline; target += 1) {
+        const mob = await aliveMobOf(player, mapId);
+        if (!mob) {
+          lastKillError = `等了 12 秒没等到活怪（mapId=${mapId}）`;
+          return null;
+        }
+        await patchDropOf(mob.monsterKey, goodIds);
+        // 站在怪旁边上报位置：拾取距离闸读的是这份坐标
+        const stand = JSON.stringify({ type: "pos", data: { mapId, x: mob.x, y: mob.y, hp: 100 } });
+        player.session.socket.send(stand);
+        player.session.socket.send(stand);
+        for (let i = 0; i < 80 && Date.now() < deadline; i += 1) {
+          await paceCast();
+          const castId = ++castSeq;
+          player.session.socket.send(JSON.stringify({ type: "cast", data: { castId, skillId: "1000", targetId: mob.instanceId, monsterKey: mob.monsterKey } }));
+          const settle = await player.session.waitSettle(castId);
+          if (!settle) {
+            lastKillError = `castId=${castId} 没收到结算帧`;
+            break;
+          }
+          if (!settle.ok) {
+            lastKillError = `cast 被拒：${settle.code || ""} ${settle.message || ""}`.trim();
+            if (settle.code === "dead") await reviveOf(player);
+            break;
+          }
+          if (settle.killed) {
+            lastKillError = "";
+            return settle;
+          }
+        }
+        // 这一只没打成：等半拍换下一只（重新取快照 = 拿到怪此刻的位置）
+        await sleep(500);
       }
       return null;
     };
@@ -658,7 +699,11 @@ function recordsOf(dbPath, dropId, result) {
         if (typeof entry.dropId === "string" && entry.dropId) overflowPool.push(entry.dropId);
       }
     }
-    check(overflowPool.length > 20, "A：地上的件数已经超过单图上限（服务端最多留 20 件，多出来的必须被挤掉）", `共 ${overflowPool.length} 件`);
+    check(
+      overflowPool.length > 20,
+      "A：地上的件数已经超过单图上限（服务端最多留 20 件，多出来的必须被挤掉）",
+      `共 ${overflowPool.length} 件${lastKillError ? `（最后一次没打成：${lastKillError}）` : ""}`,
+    );
 
     const overflowFrame = await waitFor("溢出移除帧", async () => {
       const hit = alice.session.dropRemoves.find(
@@ -695,7 +740,8 @@ function recordsOf(dbPath, dropId, result) {
     // 先在地上留一件（谁都不捡），再重启
     const killedBeforeRestart = await killOne(alice);
     const survivor = dropIdOf(killedBeforeRestart);
-    await bob.session.waitSpawn(survivor);
+    check(!!survivor, "A：重启前打出一件留在地上的掉落", lastKillError || survivor);
+    if (survivor) await bob.session.waitSpawn(survivor);
     const rowsBeforeRestart = readDropRows(dbPath).filter((row) => row.drop_id === survivor);
     check(rowsBeforeRestart.length === 1, "A：重启前地面上确实有东西（投影表里有一行）", JSON.stringify(rowsBeforeRestart));
 
