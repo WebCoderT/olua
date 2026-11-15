@@ -170,6 +170,17 @@ export const smallMapLayout = {
   nameBar: { position: new Vec2(0, 106), size: new Size(272, 43), fontSize: 14, color: new Color(255, 223, 170) },
   /** 线路 / 排行榜标签行（横向布局容器，排行榜在左、线路在右） */
   tagRow: { position: new Vec2(0, -112), size: new Size(85, 24), gap: 0 },
+  /**
+   * 「N 线」动态线号层（#1016）：盖在「服务器线路」标签底图烙死的「1 线」字上
+   *
+   * 补丁矩形取 banner 内区（素材 85×24：x∈[12,62]、y∈[4,17]，节点坐标以中心为原点），
+   * 颜色取内区纯色的中间值 —— 与上下渐变的偏差肉眼不可见；文字用与烙字同色系的暖金色。
+   * 只在分线（channel > 0）且 `maxChannels > 1` 时显示。
+   */
+  channelTag: {
+    patch: { name: "small_map_channel_patch", rect: { x: -30.5, y: -5, width: 50, height: 13 }, color: new Color(72, 13, 6, 255) },
+    text: { name: "small_map_channel_text", fontSize: 13, position: new Vec2(-5.5, 0), size: new Size(50, 14), color: new Color(214, 190, 150, 255) },
+  },
   /** 世界坐标条 */
   positionBar: { position: new Vec2(0, -88), size: new Size(115, 21), fontSize: 12 },
 };

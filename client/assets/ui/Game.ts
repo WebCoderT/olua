@@ -428,6 +428,9 @@ export class Game extends Component {
     CombatChannel.onPartyInvite = null;
     CombatChannel.onExpGain = null;
     CombatChannel.onServerError = null;
+    // 换线（#1016）：在途的请求撤掉（不回调），上一次的线号清掉 —— 新会话的标题不该带旧线的后缀
+    CombatChannel.cancelChangeChannel();
+    CombatChannel.resetChannel();
     MonsterManager.onPlayerServerHit = null;
     OtherPlayerManager.reset();
     // 社交快照（好友 / 敌人 / 帮会）是「这个角色」的，离开游戏就不该留给下一个角色

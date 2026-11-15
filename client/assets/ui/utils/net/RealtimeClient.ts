@@ -310,6 +310,11 @@ export default class RealtimeClient {
       CombatChannel.dispatchMapEnterResult(frame.data);
       return;
     }
+    if (frame.type === "changeChannelResult") {
+      // 换线判定（#1000 / #1016）：成功也回这一帧，真换房时紧跟着还有一帧 world
+      CombatChannel.dispatchChangeChannelResult(frame.data);
+      return;
+    }
     if (frame.type === "monster-ai") {
       // 怪物 AI 广播（#323）：位置增量 + 普攻命中事件，形状的解释在 CombatChannel
       CombatChannel.dispatchMonsterAi(frame.data);
