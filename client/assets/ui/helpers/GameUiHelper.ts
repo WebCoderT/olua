@@ -39,6 +39,7 @@ import { ACTION, DIRECTION, SpeedRate } from "../../types/animation";
 import { BattleAttributes } from "../../types/common";
 import { Equipment, EQUIPMENT_TYPE, Goods, isEquipment } from "../../types/good";
 import { Monster } from "../../types/monster";
+import type { DropOwner } from "../../types/drop";
 import { NPC } from "../../types/map";
 import { OECCUPATION } from "../../types/role";
 import { SkillId } from "../../types/skill";
@@ -1052,18 +1053,20 @@ export default class GameUiHelper {
    * @param good 物品数据
    * @param count 掉落数量
    * @param size 图标尺寸
-   * @return node 掉落物节点、nameLabel 名称行里第一段文本（供刷新/高亮）
+   * @param owner 归属者（#804：非空时名称行左侧挂「XX的」前缀 + 圆形小头像；自己的掉落传 null）
+   * @return node 掉落物节点、nameLabel 名称行里第一段文本（供刷新/高亮）、
+   *   ownerMark 归属标记节点（保护期结束时由 DropManager 整块移除，没画时为 null）
    */
-  static createDropItem(good: Goods, count: number = 1, size: Size = dropItemLayout.iconSize) {
+  static createDropItem(good: Goods, count: number = 1, size: Size = dropItemLayout.iconSize, owner: DropOwner | null = null) {
     const node = UiHelper.createNode("drop_item", new Vec2(), new Size(size.width, size.height + dropItemLayout.nodeExtraHeight));
     // 光柱先挂：它是掉落物的第一个子节点，排在图标之前 → 画在图标**下层**
     // （图标压住光柱中心、光柱从四周透出，物品本身始终清晰可辨）
     this.applyEquipmentLight(node, good);
     const icon = UiHelper.createSprite(`drop_icon_${good.type}`, good.icon, new Vec2(0, dropItemLayout.iconOffsetY), size);
     node.addChild(icon);
-    const { row, nameLabel } = this.createDropNameRow(good, count, size);
+    const { row, nameLabel, ownerMark } = this.createDropNameRow(good, count, size, owner);
     node.addChild(row);
-    return { node, nameLabel };
+    return { node, nameLabel, ownerMark };
   }
 
   /**
@@ -1072,9 +1075,15 @@ export default class GameUiHelper {
    * 装备的段文案与配色**与详情弹窗同源**（同走 configs/equipments.getEquipmentNameParts）：
    * 前缀/名称用前缀色、后缀用后缀色 —— 地面与详情永远一致，不各写一份色表。
    * 各段宽度随文字自适应（Overflow.NONE），整行按内容宽度（CONTAINER）在图标正下方居中
-   * @return row 名称行节点、nameLabel 行里第一段文本（可能为 null，供调用方刷新/高亮）
+   * @return row 名称行节点、nameLabel 行里第一段文本（可能为 null，供调用方刷新/高亮）、
+   *   ownerMark 归属标记（头像 + 前缀，整块可一次性移除；没画时为 null）
    */
-  private static createDropNameRow(good: Goods, count: number, iconSize: Size): { row: Node; nameLabel: Label | null } {
+  private static createDropNameRow(
+    good: Goods,
+    count: number,
+    iconSize: Size,
+    owner: DropOwner | null = null,
+  ): { row: Node; nameLabel: Label | null; ownerMark: Node | null } {
     const layout = dropItemLayout.name;
     const row = UiHelper.createFlexRow("drop_name", layout.spacing, new Vec2(0, -iconSize.height / 2 - layout.offsetY), new Size(0, layout.lineHeight));
     // 行宽 = 各段宽度之和（CONTAINER），配合锚点 (0.5, 1) 让整行在图标正下方居中；
@@ -1082,6 +1091,9 @@ export default class GameUiHelper {
     row.getComponent(Layout)!.resizeMode = Layout.ResizeMode.CONTAINER;
     row.getComponent(UITransform)!.setAnchorPoint(0.5, 1);
     let nameLabel: Label | null = null;
+    // 归属标记排在最前（#804）：头像 + 「XX的」，保护期一过由 DropManager 整块移除
+    const ownerMark = owner ? this.createDropOwnerMark(owner) : null;
+    if (ownerMark) row.addChild(ownerMark);
     const addSegment = (text: string, color: Color) => {
       const segment = UiHelper.createLabel("drop_name_segment", text, color, layout.fontSize, new Vec2(), new Size(0, layout.lineHeight));
       const label = segment.getComponent(Label)!;
@@ -1099,7 +1111,43 @@ export default class GameUiHelper {
     } else {
       addSegment(count > 1 ? `${good.label} x${count}` : good.label, dropItemLayout.nameColor);
     }
-    return { row, nameLabel };
+    return { row, nameLabel, ownerMark };
+  }
+
+  /**
+   * 掉落物归属标记（#804）：圆形小头像 + 「XX的」前缀
+   *
+   * 头像用**现有素材**（`ui/avatar/{职业}-{性别}.png`，与角色信息面板同源），不新增美术；
+   * 职业或性别缺一个就**不画头像**（拼不出图，画空框比不画更糟）—— 此时只剩前缀，
+   * 这正是 docs/18 §6.7 里「归属者离线 / 头像缺失」的退化形态。
+   *
+   * 圆形靠 Mask（GRAPHICS_ELLIPSE）裁：头像是方图，不裁会在地面上多出一个方块边角，
+   * 和「小头像」的观感差很远。整块（头像 + 前缀）放进一个 flex 行，保护期结束时
+   * 一次性 `destroy()`（不做动画，见 §6.7 的口径）。
+   */
+  private static createDropOwnerMark(owner: DropOwner): Node {
+    const layout = dropItemLayout.owner;
+    const nameLayout = dropItemLayout.name;
+    const mark = UiHelper.createFlexRow("drop_owner", layout.avatarGap, new Vec2(), new Size(0, layout.avatarSize.height));
+    mark.getComponent(Layout)!.resizeMode = Layout.ResizeMode.CONTAINER;
+    if (owner.occupation && owner.sex) {
+      const avatar = UiHelper.createNode("drop_owner_avatar", new Vec2(), layout.avatarSize);
+      avatar.addComponent(Mask).type = Mask.Type.GRAPHICS_ELLIPSE;
+      avatar.addChild(UiHelper.createSprite("drop_owner_avatar_pic", avatarImage(owner.occupation, owner.sex), new Vec2(), layout.avatarSize));
+      mark.addChild(avatar);
+    }
+    const prefix = UiHelper.createLabel(
+      "drop_owner_name",
+      getText("drop_owner_prefix", { name: owner.name }),
+      layout.prefixColor,
+      nameLayout.fontSize,
+      new Vec2(),
+      new Size(0, nameLayout.lineHeight),
+    );
+    // 宽度随文字自适应（与名称段同一口径：CONTAINER 依赖子件宽度求和）
+    prefix.getComponent(Label)!.overflow = Label.Overflow.NONE;
+    mark.addChild(prefix);
+    return mark;
   }
 
   /**

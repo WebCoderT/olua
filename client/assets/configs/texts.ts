@@ -113,6 +113,35 @@ export const uiTexts = {
   /** 单件物品的「名称 x数量」写法 */
   label_good_count: "{name} x{count}",
 
+  //#region 浮动提示：拾取失败（#804 / docs/18 §6.4 的九种 code，每种都有话说）
+  /**
+   * 别人的掉落还在保护期（{owner} 归属者名字 · {n} 剩余秒数）
+   *
+   * 服务端也会回同样的意思，但那条要等一个来回；本地预判能省掉这次请求，
+   * 提示就提前量出来了（判不出来时不拦，见 DropRule.canPickLocally）。
+   */
+  drop_protected_tip: "「{owner}」击杀的物品，{n} 秒后可拾取",
+  /** 已经被别人捡走了（{name} = 拾取者名字） */
+  drop_already_picked_tip: "物品已被「{name}」拾取",
+  /** 过期了（服务端清场掉了，玩家主动点它时给一句解释） */
+  drop_expired_tip: "物品已消失",
+  /** 站得太远（服务端拾取距离闸拒了） */
+  drop_too_far_tip: "距离太远，请靠近后再拾取",
+  /** 不在同一张图上（换图时的迟到请求） */
+  drop_not_on_map_tip: "不在同一地图，无法拾取",
+  /** 这件掉落物服务端已经没有了（不再无限重试，节点直接收掉） */
+  drop_unknown_tip: "物品已不存在",
+  /** 物品被运营下架了（配置里查不到这件东西） */
+  drop_item_gone_tip: "该物品已下架，无法拾取",
+  /** 登录态异常（角色被踢 / 账号已下线）：拾取链路整体不可用，提示重登 */
+  drop_login_abnormal_tip: "登录状态异常，请重新登录",
+  /** 其余没归类的失败（服务端加了新 code 而客户端还没跟上时兜底） */
+  drop_pick_failed_tip: "拾取失败，请稍后再试",
+  /** 归属者前缀（{name} = 归属者名字；只在别人的掉落上出现，保护期内可见） */
+  drop_owner_prefix: "{name}的",
+  /** 稀有掉落全服公告（{killer} 击杀者 · {map} 地图名 · {monster} 怪物名 · {items} 物品列表） */
+  drop_notice_tip: "{killer} 在 {map} 击败 {monster}，掉落 {items}",
+
   //#region 浮动提示：商城
   /** 购买成功（{name} = 物品全名，{price} = 成交价） */
   mall_buy_success_tip: "购买成功：{name}（{price} 绑定元宝）",

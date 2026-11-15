@@ -155,10 +155,84 @@ export interface WorldMonsterSnapshot {
   respawnInMs?: number;
 }
 
+/**
+ * 地面上的一件掉落物（协议见 realtime.protocol 的 `RealtimeDropSnapshot`）
+ *
+ * `world.drops`（进图全量）与 `dropSpawn`（增量广播）**共用这一个形状** —— 客户端两条路
+ * 走同一个落点 `DropManager.onDropSpawn`，不会出现「进图看到的」与「后来掉的」两套表现。
+ *
+ * 时间给三份：`protectUntil` / `expireAt` 是服务端的绝对毫秒（只用于排查对账），
+ * `protectInMs` / `expireInMs` 是相对量 —— **客户端倒计时只准用相对量**，本地钟漂了也不影响。
+ */
+export interface DropSnapshot {
+  dropId: string;
+  goodId: string;
+  count: number;
+  /** 绑定角色（不可交易，只影响背包格子的展示） */
+  bound: boolean;
+  /** 落点（服务端算好的世界坐标，客户端不再自己散落） */
+  x: number;
+  y: number;
+  /** 归属者显示名（名称前缀「XX的」用它） */
+  ownerName: string;
+  /** 归属者账号 id（判断「是不是我的」用，不作权威） */
+  ownerAccountId: string;
+  /** 归属者职业 / 性别（#804：拼 `ui/avatar/{职业}-{性别}.png`；缺一个就不画头像） */
+  ownerClass?: string;
+  ownerSex?: string;
+  /** 掉落那一刻归属者的队伍 id（#804：同队可捡的预判依据；无队伍时不下发） */
+  partyId?: string;
+  /** 保护期结束时刻（服务端绝对毫秒，仅排查用） */
+  protectUntil: number;
+  /** 过期时刻（服务端绝对毫秒，仅排查用） */
+  expireAt: number;
+  /** 距过期还剩多少毫秒（相对量：本地时间轴用它算） */
+  expireInMs: number;
+  /** 距保护期结束还剩多少毫秒（相对量；0 = 已开放） */
+  protectInMs: number;
+}
+
+/** 服务端 → 客户端：一批掉落出现（协议见 realtime.protocol 的 RealtimeDropSpawnMessage） */
+export interface DropSpawnFrame {
+  mapId: string;
+  drops: DropSnapshot[];
+  /** 服务端此刻的毫秒时间戳（可选校准用；客户端判定不用它，见 DropRule 的注释） */
+  serverNow: number;
+}
+
+/** 服务端 → 客户端：一批掉落消失（被捡走 / 过期 / 单图超限被挤掉） */
+export interface DropRemoveFrame {
+  mapId: string;
+  dropIds: string[];
+  /** picked = 被捡走 / expired = 过期 / overflow = 单图超限被挤掉 */
+  reason: "picked" | "expired" | "overflow";
+  /** reason = picked 时给拾取者名字 */
+  byName?: string;
+}
+
+/**
+ * 服务端 → 客户端：稀有掉落全服公告（#802）
+ *
+ * 用**现有系统飘字**展示，不进聊天（聊天没有全服频道，塞进去会让「聊天」变成第二份公告）。
+ */
+export interface DropNoticeFrame {
+  killerName: string;
+  monsterLabel: string;
+  mapId: string;
+  items: Array<{ goodId: string; label: string; count: number }>;
+}
+
 /** 服务端世界快照（协议见 realtime.protocol 的 RealtimeWorldMessage.data） */
 export interface WorldSnapshot {
   mapId: string;
   monsters: WorldMonsterSnapshot[];
+  /**
+   * 地面掉落物的全量（#802）
+   *
+   * 增量广播（`dropSpawn`）帮不上「刚进图 / 刚重连」的人，所以要有一份全量；
+   * 图卸载**不**清掉落（生命周期只由 `expireAt` 决定），逛一圈回来还能看到原地的东西。
+   */
+  drops?: DropSnapshot[];
 }
 
 /**
@@ -385,23 +459,37 @@ export interface EntityLeaveFrame {
 
 /** 服务端拾取成功（协议见 realtime.protocol 的 RealtimePickedOk） */
 export interface PickOk {
-  castId: number;
-  index: number;
+  /** 地面实体的 id（#802 起按它定位；客户端据此收掉节点） */
+  dropId: string;
   ok: true;
   /** 拾取后的角色修订号（入包推进了 revision，客户端照搬做新基线防乐观锁） */
   revision: number;
   placed: PickPlacedCell[];
   /** true = 该掉落此前已拾取过（幂等重放，placed 为空） */
   alreadyPicked: boolean;
+  /** 这次拾取的是什么（飘字用：节点可能已被 dropRemove 收走，不能从地面上取） */
+  goodId: string;
+  count: number;
 }
 
-/** 服务端拾取被拒（地面掉落物保留；bag_full 时客户端提示背包已满） */
+/**
+ * 服务端拾取被拒（地面掉落物保留；docs/18 §6.4 的九种 code 每种都有话说）
+ *
+ * `code` 是**机器可读**的拒绝原因，客户端按它选文案与表现（哪些该收掉节点、哪些只是提示）；
+ * `message` 是服务端给的中文，只进 console，不再上屏（上屏文案在 `configs/texts.ts`）。
+ */
 export interface PickError {
-  castId: number;
-  index: number;
+  /** 地面实体的 id（格式错时为空串） */
+  dropId: string;
   ok: false;
   code: string;
   message: string;
+  /** protected 专用：还要等多少毫秒保护期结束 */
+  waitMs?: number;
+  /** protected 专用：归属者名字（文案「XX 击杀的物品」） */
+  ownerName?: string;
+  /** already_picked 专用：拾取者名字 */
+  byName?: string;
 }
 
 /** 服务端拾取结果（协议见 realtime.protocol 的 RealtimePickedData） */
@@ -609,6 +697,21 @@ export default class CombatChannel {
   /** 拾取结果出口（#325；组合根接线到 DropManager.applyPickedFrame，不接时结果被丢弃并告警） */
   static onPicked: ((data: PickResult) => void) | null = null;
 
+  /**
+   * 掉落出现出口（#802 / #804；组合根接线到 `DropManager.onDropSpawn`）
+   *
+   * 铺地**只走这一条**：击杀者与旁观者收到的是同一条广播、同一份形状，不存在「自己杀的
+   * 走 settle、别人杀的走 monster-ai」两条路径（那正是旧实现铺两遍地雷的来源）。
+   * 不接时静默丢弃（旧构建没有掉落实体概念，帧到达是正常的）。
+   */
+  static onDropSpawn: ((data: DropSpawnFrame) => void) | null = null;
+
+  /** 掉落消失出口（#802 / #804；组合根接线到 `DropManager.onDropRemove`，不接时静默丢弃） */
+  static onDropRemove: ((data: DropRemoveFrame) => void) | null = null;
+
+  /** 稀有掉落公告出口（#802；组合根接线到 `DropManager.onDropNotice`，不接时公告不上屏） */
+  static onDropNotice: ((data: DropNoticeFrame) => void) | null = null;
+
   /** 聊天广播出口（#395；组合根接线到 ChatStore.applyEntry，不接时帧被丢弃——聊天不上屏） */
   static onChat: ((data: ChatEntry) => void) | null = null;
 
@@ -757,12 +860,45 @@ export default class CombatChannel {
   }
 
   /**
-   * 拾取一次击杀的掉落（#325）：castId + drops 下标定位，服务端格子级入包，
+   * 拾取地面上的**一件**掉落物（#802 起按实体 id 定位）
+   *
+   * 以前是 `castId + drops 下标`（击杀那次的账本定位）—— 那套只在「自己杀、自己捡」时成立，
+   * 别人的掉落根本没有那个账本。掉落变成世界实体之后，定位自然是实体自己的 id：谁掉的、
+   * 掉在哪、谁能捡都由服务端判，客户端只需要说「我要这一件」。
+   *
    * 结果以 picked 帧回来（onPicked）。发送失败（连接不在 OPEN 态）返回 false ——
-   * 调用方据此保留地面掉落物，等通道恢复后再试。
+   * 调用方据此保留在途标记，等通道恢复后再试。
    */
-  static sendPick(castId: number, index: number): boolean {
-    return RealtimeClient.send({ type: "pick", data: { castId, index } });
+  static sendPick(dropId: string): boolean {
+    return RealtimeClient.send({ type: "pick", data: { dropId } });
+  }
+
+  /**
+   * 铺地只有这一条入口的两半之一（另一半是 `world.drops` 快照）
+   *
+   * 不接时**静默丢弃**：这是新增帧，旧构建 / 单测环境没有处理者属正常。
+   */
+  static dispatchDropSpawn(data: unknown): void {
+    const frame = data as DropSpawnFrame | null;
+    if (!frame || !Array.isArray(frame.drops)) return;
+    if (!this.onDropSpawn) return;
+    this.onDropSpawn(frame);
+  }
+
+  /** 掉落消失（被捡走 / 过期 / 被挤掉）：同样的口径，不接时静默丢弃 */
+  static dispatchDropRemove(data: unknown): void {
+    const frame = data as DropRemoveFrame | null;
+    if (!frame || !Array.isArray(frame.dropIds)) return;
+    if (!this.onDropRemove) return;
+    this.onDropRemove(frame);
+  }
+
+  /** 稀有掉落公告：不接时静默丢弃（旧构建没有这一帧） */
+  static dispatchDropNotice(data: unknown): void {
+    const frame = data as DropNoticeFrame | null;
+    if (!frame || !Array.isArray(frame.items)) return;
+    if (!this.onDropNotice) return;
+    this.onDropNotice(frame);
   }
 
   /** RealtimeClient 收到 settle 帧后走这里（ok 与拒绝都在内） */
