@@ -269,6 +269,17 @@ export function itemIds(): string[] {
   return [...variants.keys(), ...items.keys(), ...drugs.keys()];
 }
 
+/**
+ * 物品 id → 图标（装备 / 材料 / 药品依次试，与 `itemText` 的回落顺序一致）
+ *
+ * 只吃得下一个 id 的地方（掉落流水、反查这类「只有一个 id 没有类型」的场景）用它；
+ * 已经知道类型的地方直接用对应的 `equipmentIcon` / `itemIcon` / `drugIcon`。
+ */
+export function itemIconOf(id: string): string {
+  if (!id) return "";
+  return equipmentIcon(id) || itemIcon(id) || drugIcon(id);
+}
+
 /** 物品 id → 描述（材料 / 药品有，装备没有） */
 export function itemDescription(id: string): string {
   return items.get(id)?.description ?? "";

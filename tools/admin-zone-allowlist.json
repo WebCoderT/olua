@@ -118,6 +118,11 @@
       "route": "GET /admin/stats/recent",
       "issue": "#960",
       "reason": "最近动态读的是审计流水，**刻意跨区**（理由同 admin/audit-logs）：在 A 区也要能看到同事刚在 B 区做了什么"
+    },
+    {
+      "route": "GET /admin/drops/monster-index",
+      "issue": "#805",
+      "reason": "怪物掉落反查是**配置**查询（`monster_drops` / `drop_tables` 全区共用一份），没有区维度可筛；控制器仍挂 ZoneContextGuard 是为了让管理端只维护一套请求习惯（没有「无区」会话），但不取区做过滤"
     }
   ]
 }

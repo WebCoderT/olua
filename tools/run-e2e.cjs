@@ -100,6 +100,8 @@ const WEIGHT = {
   "test:e2e:map-rules": 1,
   // 一次存档启动 + 两个实时进程共享一个库 + 七段断言（无等待窗：握手与帧都是即时回）
   "test:e2e:realtime-shard": 3,
+  // 一次启动 + 两刀（每刀前按真客户端冷却等 1.1 秒）+ 一次跨进程清空要等实时进程回写
+  "test:e2e:drop-admin": 4,
 };
 
 function weightOf(script) {

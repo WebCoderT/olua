@@ -121,6 +121,22 @@ export class MonsterRepository {
     return this.db.get<MonsterRow>("SELECT * FROM monsters WHERE id = ?", [id]);
   }
 
+  /**
+   * 一批怪物的显示名（`id → label`，管理端反查页给结果补名字用，#805）
+   *
+   * 只取两列：反查页要的是「这只怪叫什么」，把整行（含数值与表现配置）拉回来没有意义。
+   * 空数组直接返回（`IN ()` 在 SQLite 里是语法错误）。
+   */
+  labelsByKeys(ids: string[]): Map<string, string> {
+    if (ids.length === 0) return new Map();
+    const placeholders = ids.map(() => "?").join(", ");
+    const rows = this.db.all<{ id: string; label: string }>(
+      `SELECT id, label FROM monsters WHERE id IN (${placeholders})`,
+      ids,
+    );
+    return new Map(rows.map((row) => [row.id, row.label]));
+  }
+
   /** 分页检索（默认按等级升序 —— 练级动线从低到高） */
   list(options: MonsterListOptions): MonsterRow[] {
     const { clause, params } = this.where(options);

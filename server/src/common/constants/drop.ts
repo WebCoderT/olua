@@ -51,3 +51,22 @@ export const DROP_OVERFLOW_REASON = {
 } as const;
 
 export type DropOverflowReason = (typeof DROP_OVERFLOW_REASON)[keyof typeof DROP_OVERFLOW_REASON];
+
+/**
+ * 单图地面掉落上限的**出厂值**（运行时参数 `drop.maxGroundPerMap` 缺键 / 坏值时用它）
+ *
+ * 放在公共常量里而不是实时域私有：管理端「单图上限占用水位」（#805）要拿同一个数算
+ * `当前件数 / 上限`，两处各写一份 200 迟早漂。夹逼范围（20~1000）留在消费方 ——
+ * 实时侧读参数时夹、管理端只展示，不需要再夹一次。
+ */
+export const DROP_MAX_PER_MAP_DEFAULT = 200;
+
+/**
+ * 单图上限的**合法区间**（运行时参数越界就按这里夹）
+ *
+ * 与出厂值分开的理由：实时进程「读参数时夹」、管理端「展示水位时夹」用的是同一把尺子，
+ * 但两者都不该把区间写死在各自文件里 —— 一个改成 10 一个还写着 20，就会出现
+ * 「页面显示 21/20 超了，服务端却觉得没超」。
+ */
+export const DROP_MAX_PER_MAP_RANGE = { min: 20, max: 1_000 } as const;
+
