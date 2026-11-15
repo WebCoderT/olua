@@ -41,6 +41,8 @@ const FILES = [
   "ui/utils/net/Api.ts",
   "ui/utils/net/RoleSync.ts",
   "ui/utils/net/NetDiagnostics.ts",
+  // #769：RealtimeClient 用它做时钟校准（welcome / pong 两个口子），插值的时间基准
+  "ui/utils/net/ServerClock.ts",
   "ui/utils/net/RealtimeClient.ts",
   "ui/utils/net/CombatChannel.ts",
 ];
@@ -205,6 +207,8 @@ function prepareNet(sandboxName) {
     CombatChannel: pick(load("ui/utils/net/CombatChannel.js")),
     /** 网络诊断层（#767：默认关；测试断言默认值与关态零行为） */
     NetDiagnostics: pick(load("ui/utils/net/NetDiagnostics.js")),
+    /** 服务端时钟（#769：welcome 粗校准 / pong 细校准；测试直接核对偏差） */
+    ServerClock: pick(load("ui/utils/net/ServerClock.js")),
     /** 实时通道的状态枚举与地址拼装（地址由 configs/network.baseUrl 推导，测试逐种形态断言） */
     RealtimeStatus: load("ui/utils/net/RealtimeClient.js").RealtimeStatus,
     /** 开发模式的接口地址派生（#775：主机取自页面，测试逐种主机断言） */

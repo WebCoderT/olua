@@ -1284,7 +1284,8 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
     const casts = data.casts.filter((cast) => visible.has(monsterEntityOf(cast.i)));
     const kills = data.kills.filter((kill) => visible.has(monsterEntityOf(kill.i)));
     if (monsters.length === 0 && hits.length === 0 && casts.length === 0 && kills.length === 0) return null;
-    return { type: "monster-ai", data: { mapId: data.mapId, monsters, hits, casts, kills } };
+    // t 原样带上（#769）：裁剪只删条目，不该改时间基准 —— 同一拍的各格共用同一份 data 的 t
+    return { type: "monster-ai", data: { mapId: data.mapId, t: data.t, monsters, hits, casts, kills } };
   }
 
   /**

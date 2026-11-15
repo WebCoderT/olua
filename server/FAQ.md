@@ -68,7 +68,9 @@ env -u NODE_OPTIONS npm run verify
 
 单轮字节降 ~30%（整数像素 + 字段缩写）；每秒总字节上升是**提频到 10Hz 的预期代价**（轮数翻倍，帧更小更频繁）——换的是体感同步延迟从 415ms 压向 200ms 量级。要回退：`MONSTER_AI_BROADCAST_MS` / `PLAYER_SYNC_BROADCAST_MS` 设回 `200` 即回到旧节拍（协议字段缩写是**同批发**的，回退频率不回退字段名）。
 
-客户端侧的四个数字（RTT / 互见帧龄 / 怪物帧龄 / 插值剩余距离）与最小复现场景见 [客户端 FAQ](../client/FAQ.md#多人同图的延迟怎么量客户端诊断层怎么开)。
+客户端侧的四个数字（RTT / 互见帧龄 / 怪物帧龄 / 插值落后距离）与最小复现场景见 [客户端 FAQ](../client/FAQ.md#多人同图的延迟怎么量客户端诊断层怎么开)。
+
+帧级时间戳（#769）：`players` / `monster-ai` 两帧的 `data.t` 是**这一拍的服务端时刻**（同一拍发出的所有帧共用一个值，裁剪后原样带上）。客户端拿它当插值基准 —— 丢掉它，客户端只能用「收帧时刻」，网络抖动会直接变成位移。
 
 行为有专项 e2e 守着：`npm run test:e2e:realtime-stats`（打开能看到数字、关闭零输出、默认值钉在源码上）；两侧协议字段的一致性由 `npm run test:e2e:protocol-slim` 钉住（服务端 `realtime.protocol.ts` ↔ 客户端 `CombatChannel.ts` 逐字段比对，防单侧漂移）。
 

@@ -164,6 +164,40 @@ const clientSrc = stripComments(fs.readFileSync(CLIENT_CHANNEL, "utf8"));
 
   //#endregion
 
+  //#region 三b、帧级时间戳 t（#769：插值的基准，两侧必填且同形）
+
+  group("三b、帧级时间戳 t（#769）");
+  const realtimeSrc = fs.readFileSync(path.join(SERVER_DIR, "src", "modules", "realtime", "realtime.service.ts"), "utf8");
+  /** 取一个 interface 的完整块（含嵌套 data 对象；用大括号配平，不受缩进影响） */
+  const blockOfInterface = (src, name) => {
+    const start = src.indexOf(`interface ${name} `);
+    if (start < 0) return null;
+    const open = src.indexOf("{", start);
+    let depth = 0;
+    for (let i = open; i < src.length; i += 1) {
+      if (src[i] === "{") depth += 1;
+      if (src[i] === "}") {
+        depth -= 1;
+        if (depth === 0) return src.slice(open, i + 1);
+      }
+    }
+    return null;
+  };
+  /** 帧级时间戳必须**必填**：`t?:` 会让旧客户端静默退回「收帧时刻」，插值收益全丢 */
+  const hasRequiredFrameTime = (src, name) => {
+    const block = blockOfInterface(src, name);
+    return !!block && /(^|\n)\s*t: number;/.test(block) && !/(^|\n)\s*t\?: number;/.test(block);
+  };
+  check(hasRequiredFrameTime(serverSrc, "RealtimePlayersMessage"), "服务端 RealtimePlayersMessage.data 带必填 t: number");
+  check(hasRequiredFrameTime(serverSrc, "RealtimeMonsterAiMessage"), "服务端 RealtimeMonsterAiMessage.data 带必填 t: number");
+  check(hasRequiredFrameTime(clientSrc, "PlayersFrame"), "客户端 PlayersFrame 带必填 t: number（两端口径一致）");
+  check(hasRequiredFrameTime(clientSrc, "MonsterAiFrame"), "客户端 MonsterAiFrame 带必填 t: number（两端口径一致）");
+  check(/t: Date\.now\(\), monsters/.test(aiSrc), "monster-ai 广播出口写 t（这一拍的时刻）");
+  check(/t: tickAt/.test(presenceSrc), "players 增量帧用一拍一个 tickAt（各图各取 Date.now() 会差出几毫秒）");
+  check(/t: data\.t/.test(realtimeSrc), "按格裁剪后原样带上 t（裁剪只删条目，不改时间基准）");
+
+  //#endregion
+
   console.log(`\n${failed === 0 ? "✅" : "❌"} 协议契约：${passed} 条通过 / ${failed} 条失败`);
   if (failed > 0) {
     console.log("\n失败项：");

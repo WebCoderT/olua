@@ -150,13 +150,13 @@ export class PlayerPresenceService implements OnApplicationBootstrap, OnApplicat
    * 广播出口（发给谁、怎么发是通道的事）。RealtimeService 启动时接线；
    * 未接线时照常维护在场表，只是没人收到帧。
    */
-  onBroadcast: ((roomId: string, data: { mapId: string; full: boolean; players: RealtimePlayerEntry[]; left: string[]; actions: RealtimePlayerAction[] }) => void) | null = null;
+  onBroadcast: ((roomId: string, data: { mapId: string; t: number; full: boolean; players: RealtimePlayerEntry[]; left: string[]; actions: RealtimePlayerAction[] }) => void) | null = null;
 
   /**
    * 定向发送出口（快照兜底只发给刚进图的连接自己）。
    * 与 onBroadcast 分开：广播的收件人是「观看者集合」，这里是指定账号。
    */
-  onSendTo: ((accountId: string, data: { mapId: string; full: boolean; players: RealtimePlayerEntry[]; left: string[]; actions: RealtimePlayerAction[] }) => void) | null = null;
+  onSendTo: ((accountId: string, data: { mapId: string; t: number; full: boolean; players: RealtimePlayerEntry[]; left: string[]; actions: RealtimePlayerAction[] }) => void) | null = null;
 
   /**
    * 队伍查询出口（#399，RealtimeService 启动时接线到 `PartyService.partyIdOfRole`）
@@ -473,7 +473,9 @@ export class PlayerPresenceService implements OnApplicationBootstrap, OnApplicat
       if (Date.now() - entry.updatedAt > this.posStaleMs()) continue;
       players.push(this.toEntry(otherId, entry));
     }
-    this.onSendTo?.(accountId, { mapId, full: true, players, left: [], actions: [] });
+    // t = 这一份快照的时刻（#769）：全量帧同样要带 —— 客户端拿它当插值基准的第一个样本，
+    // 没有 t 的话刚进图那几帧只能退回「收帧时刻」，开局就会抖一下
+    this.onSendTo?.(accountId, { mapId, t: Date.now(), full: true, players, left: [], actions: [] });
     // 进图立刻落一次位置快照（#862/#863）：不写的话「刚进图那一秒点 NPC」会被判成
     // 「不知道你在哪」，玩家看到的是「走过去了却接不了任务」。
     const current = this.entries.get(accountId);
@@ -743,6 +745,9 @@ export class PlayerPresenceService implements OnApplicationBootstrap, OnApplicat
     }
     // 三路负载（玩家增量 / 动作事件 / 离开）按图合并成一帧发出
     const keys = new Set<string>([...changed.keys(), ...actionsBy.keys(), ...this.pendingLeaves.keys()]);
+    // 这一拍的时刻（#769）：一次节拍里各图各发一帧，但时间基准只该有一个 ——
+    // 每间房各取一次 Date.now() 会让同一拍的不同图差出几毫秒，跨图比较时就对不上了
+    const tickAt = Date.now();
     for (const key of keys) {
       // key 现在是房号（三段）：帧里只带图 id（客户端只认图），从房号解析出来
       const mapId = splitRoomKey(key).mapId;
@@ -750,6 +755,7 @@ export class PlayerPresenceService implements OnApplicationBootstrap, OnApplicat
       this.pendingLeaves.delete(key);
       this.onBroadcast?.(key, {
         mapId,
+        t: tickAt,
         full: false,
         players: changed.get(key) ?? [],
         left,
@@ -800,7 +806,8 @@ export class PlayerPresenceService implements OnApplicationBootstrap, OnApplicat
 
   /** 立即广播一次离开（断线 / 被踢走这条；超时离场走广播节拍，见 broadcast） */
   private broadcastLeave(roomId: string, mapId: string, accountId: string): void {
-    this.onBroadcast?.(roomId, { mapId, full: false, players: [], left: [accountId], actions: [] });
+    // 离开帧里没有任何坐标，t 只是形状上的必需字段（取广播时刻，别为它另算时间）
+    this.onBroadcast?.(roomId, { mapId, t: Date.now(), full: false, players: [], left: [accountId], actions: [] });
   }
 
   /** 超时离场先进队列（与增量同节拍发出，避免超时清算一轮就广播 N 帧） */

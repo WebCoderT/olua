@@ -5,6 +5,7 @@ import ApiError from "./ApiError";
 import { REALTIME_CLOSE } from "./ApiCodes";
 import CombatChannel from "./CombatChannel";
 import NetDiagnostics from "./NetDiagnostics";
+import ServerClock from "./ServerClock";
 import Session from "./Session";
 
 /**
@@ -256,9 +257,12 @@ export default class RealtimeClient {
       const reconnected = this.everConnected;
       this.everConnected = true;
       this.attempts = 0;
-      const data = (frame.data ?? {}) as { heartbeatMs?: unknown; userId?: unknown };
+      const data = (frame.data ?? {}) as { heartbeatMs?: unknown; userId?: unknown; serverTime?: unknown };
       const heartbeatMs = this.heartbeatMsOf(data.heartbeatMs);
       this.userId = typeof data.userId === "string" ? data.userId : null;
+      // 时钟粗校准（#769）：welcome 自带服务端时刻。没有 RTT 补偿，误差 ≤ 半个 RTT —— 第一个
+      // pong 会用「发出时刻 + 半程」细校准一次，在那之前插值也能跑（只是整体偏几十毫秒）
+      if (typeof data.serverTime === "number") ServerClock.sync(data.serverTime);
       this.clearHandshakeTimer();
       this.clearPongTimer();
       this.armPing(heartbeatMs);
@@ -368,6 +372,10 @@ export default class RealtimeClient {
       // RTT 采样（#767）：ping 发出 → pong 回来的本地往返。诊断关着时 noteRtt 是空操作
       if (this.pingSentAt !== null) {
         NetDiagnostics.noteRtt(Date.now() - this.pingSentAt);
+        // 时钟细校准（#769）：pong 也带服务端时刻，配上「我方发出时刻」能把单程时延扣掉
+        // （welcome 那次没得扣，只能算粗的）。插值的渲染时刻全靠这个偏差
+        const data = (frame.data ?? {}) as { serverTime?: unknown };
+        if (typeof data.serverTime === "number") ServerClock.sync(data.serverTime, this.pingSentAt);
         this.pingSentAt = null;
       }
       this.clearPongTimer();
@@ -411,8 +419,8 @@ export default class RealtimeClient {
     const socket = this.socket;
     if (!socket || socket.readyState !== SOCKET_OPEN) return;
     if (this.pongTimer) return;
-    // 发出时刻先记（#767：pong 回来算 RTT 用；诊断关着时记 null，pong 分支就不采样）
-    this.pingSentAt = NetDiagnostics.enabled ? Date.now() : null;
+    // 发出时刻先记（#767 RTT 采样 + #769 时钟校准都要用它；诊断关着时 noteRtt 自己会空操作）
+    this.pingSentAt = Date.now();
     socket.send(JSON.stringify({ type: "ping" }));
     this.pongTimer = setTimeout(() => {
       this.pongTimer = null;

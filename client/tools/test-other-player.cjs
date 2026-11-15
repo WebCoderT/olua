@@ -110,9 +110,9 @@ try {
   const tickBody = tick ? tick[0] : "";
   check(/if \(changed\) view\.appearance\.play\(/.test(tickBody), "只在变了才切动画（每帧 crossFade 会把动画永远重启在第一帧）");
   check((tickBody.match(/\.appearance\.play\(/g) || []).length === 1, "tick 里只有一处切动画");
-  check(/view\.moving \? ACTION\.WALK : ACTION\.STAND/.test(tickBody), "走 / 站以服务端的移动标记为准（不是看插值走完没）");
-  check(/getDirectionByVector\(new Vec2\(dx, dy\)\)/.test(tickBody), "朝向按剩余位移算八方向（与主角同一套 BattleMath）");
-  check(/Math\.abs\(dx\) \+ Math\.abs\(dy\) > 1/.test(tickBody), "差量太小时不转向（否则站着不动会被几像素误差转得乱转）");
+  check(/const action = sampled\.moving \? ACTION\.WALK : ACTION\.STAND;/.test(tickBody), "走 / 站取采样结果（= 后一条快照的移动标记，不是看插值走完没；#769）");
+  check(/getDirectionByVector\(new Vec2\(dx, dy\)\)/.test(tickBody), "朝向按**这一帧的实际位移**算八方向（与主角同一套 BattleMath；#769 起不再用「到目标的剩余差量」）");
+  check(/Math\.abs\(dx\) \+ Math\.abs\(dy\) > 0\.5/.test(tickBody), "位移为 0 时不转向（否则站着不动会被浮点残差转得乱转）");
   check(!/\.hp\b/.test(tickBody.replace(/\/\*[\s\S]*?\*\//g, "")), "tick 不碰血量（血量只在 upsert 里变）");
 
   //#endregion

@@ -1,22 +1,17 @@
 import { Animation, isValid, Node, RigidBody2D, Vec2 } from "cc";
 import { getAnimationName } from "../../configs/animation";
+import { networkConfig } from "../../configs/network";
 import { ACTION, DIRECTION } from "../../types/animation";
 import { Monster, MonsterAIState } from "../../types/monster";
 import { getDirectionByVector } from "../utils/battle/BattleMath";
+import ServerClock from "../utils/net/ServerClock";
+import SnapshotInterpolator from "./SnapshotInterpolator";
 
 /** 怪物身体内的动画节点名（由 GameUiHelper.createMonsterBody 创建） */
 const MONSTER_ANIMATION_NODE = "monster_animation";
 
 /** 一次性动作：播完即回待机，不做续播（受伤动作就属于这种） */
 const ONCE_ACTIONS: ACTION[] = [ACTION.INJURED];
-
-/**
- * 与服务端位置差距较大时的追赶时长（秒）：差距 / 这个秒数 = 最低追赶速度
- *
- * 正常跟随时用怪物自己的 moveSpeed（与服务端同速，不会忽快忽慢）；只有差距大到
- * 一个广播周期（200ms）追不回来时才加快 —— 典型场景是技能击退的 120px 位移。
- */
-const SERVER_CATCHUP_SECONDS = 0.2;
 
 /**
  * 怪物表现层（静态类）—— **客户端不跑任何怪物行为**
@@ -26,7 +21,8 @@ const SERVER_CATCHUP_SECONDS = 0.2;
  * ===========================================================================
  * #670 起怪物的目标选择、待机游走、追击、普攻、技能释放**全部在服务端**
  * （`server/src/modules/realtime/monster-ai.service.ts`），客户端只做两件事：
- * 1. 把节点朝服务端给的最新坐标**同速趋近**（`stepServer`，滞后约一个广播周期）；
+ * 1. 按服务端时间回放位置快照（`stepServer` + `SnapshotInterpolator`，#769：匀速、抗丢帧，
+ *    不再「朝目标点同速趋近」那种带残差的追赶）；
  * 2. 按事件播动作（`playServerAction`：普攻命中 → 攻击动作、技能释放 → 技能动作）。
  *
  * 之前这里并存一套本地 AI（待机游走 / 追击 / 普攻 / 击退 / 激怒），只在「实时通道没连上」
@@ -38,7 +34,7 @@ const SERVER_CATCHUP_SECONDS = 0.2;
  * - 抛下本地动画随机（待机时随机换动作 / 朝随机方向小走）—— 那会让同一只怪在两个人屏幕上
  *   动得不一样；待机表现改为「服务端说停就站定」，游走本身由服务端模拟并广播；
  * - 击退位移：服务端模拟（结算侧 `MonsterAiService.applyPush`），落点照常走位置广播，
- *   客户端只负责趋近（追赶速度见 stepServer）—— 本地自己推一下，别人的屏幕上怪根本不动；
+ *   客户端只负责回放（快照之间是匀速插值，击退在别人屏幕上也是同一段位移，见 stepServer）；
  * - 玩家侧伤害结算：怪打人的伤害由服务端算（`hits` 帧），客户端不再有 `hitPlayer`。
  *
  * 每个怪物的状态按节点存在本类的状态表里（弱引用，节点销毁自动回收），怪物数据上不挂额外字段
@@ -46,6 +42,15 @@ const SERVER_CATCHUP_SECONDS = 0.2;
 export default class MonsterAI {
   /** 每个怪物一份的表现状态（键为怪物节点） */
   private static states = new WeakMap<Node, MonsterAIState>();
+
+  /**
+   * 每个怪物的位置快照缓冲（#769；键为怪物节点）
+   *
+   * 与玩家侧**同一个插值器**（`SnapshotInterpolator`）：怪物只是「谁在驱动它」不同，
+   * 「怎么把一串坐标变成动画」没有任何理由写第二份 —— 两份逻辑迟早漂移成两套手感。
+   * 状态放在 WeakMap 里而不是 MonsterAIState 上：那个类型在 `types/`，不该反向依赖 ui/core。
+   */
+  private static positions = new WeakMap<Node, SnapshotInterpolator>();
 
   /**
    * 每帧驱动场上怪物的表现（位置趋近 + 走路/待机切换）
@@ -57,50 +62,54 @@ export default class MonsterAI {
 
   /**
    * 记录一次服务端权威位置（#323：由 MonsterManager 收到 monster-ai 帧后调用）
-   * 首次收到直接吸附（服务端可能已经模拟了一段），之后由 stepServer 按帧趋近
+   *
+   * #769 起不再「记一个目标点让 stepServer 追」：这里只把带时间戳的快照压进缓冲，
+   * 回放由 stepServer 按服务端时间做。第一条快照仍然**直接吸附**（服务端可能已经模拟了
+   * 一段，位置离出生点很远），之后的位移全部交给插值。
+   *
+   * @param t 这一帧的服务端时刻（帧级 `t`；缺省取服务端此刻 —— 进视野那条路不带时间戳）
    */
-  static applyServerState(node: Node, x: number, y: number, moving: boolean) {
+  static applyServerState(node: Node, x: number, y: number, moving: boolean, t: number = ServerClock.now()) {
     if (!isValid(node)) return;
-    const state = this.getState(node);
-    if (state.serverX === null) {
+    let positions = this.positions.get(node);
+    if (!positions) {
+      positions = new SnapshotInterpolator(
+        networkConfig.realtime.interpolation.bufferSize,
+        networkConfig.realtime.interpolation.maxExtrapolate,
+      );
+      this.positions.set(node, positions);
       const position = node.getWorldPosition();
       node.setWorldPosition(x, y, position.z);
     }
-    state.serverX = x;
-    state.serverY = y;
-    state.serverMoving = moving;
+    positions.push(t, x, y, moving);
   }
 
   /**
-   * 服务端权威下的一帧演出：向服务端最新位置趋近（同速追赶，滞后约一个广播周期），
-   * 按「服务端移动标记 + 是否还有距离」播走路 / 待机；朝向由位移差量自算。
+   * 服务端权威下的一帧演出：按**服务端时间**回放快照（匀速、抗丢帧），
+   * 按「服务端移动标记 + 位移」播走路 / 待机；朝向由这一帧的实际位移自算。
    * 本地不跑任何行为决策（追击 / 普攻都在服务端），出手动作由事件驱动（MonsterManager）。
    */
   private static stepServer(node: Node, monster: Monster) {
     if (!isValid(node) || monster.hp <= 0) return;
-    const state = this.states.get(node);
-    if (!state || state.serverX === null) return; // 还没收到服务端位置：原地站着等第一帧
+    const positions = this.positions.get(node);
+    if (!positions) return; // 还没收到服务端位置：原地站着等第一帧
     const animate = this.getAnimate(node);
     if (!animate) return;
-    const now = Date.now();
+    const sampled = positions.sample(ServerClock.renderTime(networkConfig.realtime.interpolation.renderDelay));
+    if (!sampled) return;
+    const state = this.getState(node);
     const position = node.getWorldPosition();
-    const offsetX = state.serverX - position.x;
-    const offsetY = state.serverY - position.y;
-    const distance = Math.hypot(offsetX, offsetY);
-    if (distance > 0.05) {
-      // 与服务端同一速度追赶（moveSpeed 像素/秒），步长按真实帧间隔算。
-      // 差距大时（击退 / 网络抖一下迟了半秒）按「一个广播周期内追上」加快 —— 只按 moveSpeed
-      // 走的话，一次 120px 的击退要拖一秒多才补齐，看起来像慢动作回放
-      const dt = Math.min(0.5, Math.max(0, (now - state.serverStepAt) / 1000));
-      const speed = Math.max(monster.moveSpeed, distance / SERVER_CATCHUP_SECONDS);
-      const step = Math.min(distance, speed * dt);
-      node.setWorldPosition(position.x + (offsetX / distance) * step, position.y + (offsetY / distance) * step, position.z);
-      this.playAction(animate, state, ACTION.WALK, getDirectionByVector(new Vec2(offsetX, offsetY)));
-    } else if (!state.serverMoving) {
+    const offsetX = sampled.x - position.x;
+    const offsetY = sampled.y - position.y;
+    if (offsetX !== 0 || offsetY !== 0) node.setWorldPosition(sampled.x, sampled.y, position.z);
+    if (sampled.moving) {
+      // 「在移动」但没有位移（刚起步 / 一帧内没推进）：保持上一次朝向，别拿零向量算方向
+      const direction = Math.abs(offsetX) + Math.abs(offsetY) > 0.5 ? getDirectionByVector(new Vec2(offsetX, offsetY)) : state.direction;
+      this.playAction(animate, state, ACTION.WALK, direction);
+    } else {
       this.stopMoving(node);
       this.playAction(animate, state, ACTION.STAND, state.direction);
     }
-    state.serverStepAt = now;
   }
 
   /**
@@ -207,10 +216,6 @@ export default class MonsterAI {
       action: ACTION.STAND,
       dead: false,
       direction: DIRECTION.DOWN,
-      serverX: null,
-      serverY: 0,
-      serverMoving: false,
-      serverStepAt: Date.now(),
     };
     this.states.set(node, state);
     return state;

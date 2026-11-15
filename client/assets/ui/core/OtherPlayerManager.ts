@@ -1,4 +1,5 @@
 import { isValid, Label, Node, ProgressBar, UITransform, Vec2 } from "cc";
+import { networkConfig } from "../../configs/network";
 import { defaultRoleSpeedRate, roleBody } from "../../configs/role";
 import { roleShowLayout } from "../../configs/layout/hud";
 import { RELATION, RelationKind, getRelationColor, resolveRelation } from "../../configs/social";
@@ -13,8 +14,10 @@ import GameUiHelper from "../helpers/GameUiHelper";
 import UiHelper from "../helpers/UiHelper";
 import { getDirectionByVector } from "../utils/battle/BattleMath";
 import NetDiagnostics from "../utils/net/NetDiagnostics";
+import ServerClock from "../utils/net/ServerClock";
 import SocialStore from "./SocialStore";
 import PartyStore from "./PartyStore";
+import SnapshotInterpolator from "./SnapshotInterpolator";
 import type { PlayerActionEntry, PlayerAppearance, PlayerEntry, PlayersFrame } from "../utils/net/CombatChannel";
 
 /**
@@ -77,14 +80,16 @@ interface OtherPlayerView {
   partyId: string;
   /** 当前算出的关系（附近列表直接用，重算时一并更新） */
   relation: RelationKind;
-  /** 广播给的最新位置（世界坐标；每帧向它插值，平滑过广播节拍的台阶感） */
-  targetX: number;
-  targetY: number;
+  /**
+   * 位置快照缓冲（#769：服务端每帧带时间戳，这里按服务端时间回放插入）
+   *
+   * 不再「每帧朝广播位置走一半」：那条指数逼近永远差最后几像素，且延迟随帧率 / 丢帧
+   * 忽快忽慢。缓冲 + 线性插值给的是匀速滑动（见 SnapshotInterpolator）。
+   */
+  positions: SnapshotInterpolator;
   hp: number;
   maxHp: number;
-  /** 服务端转发的「他客户端自报的移动标记」——决定走 / 站 */
-  moving: boolean;
-  /** 当前朝向（按位移差量算，差量太小时保持不动） */
+  /** 当前朝向（按这一帧的实际位移算，位移为 0 时保持不动） */
   direction: DIRECTION;
   /** 当前动作（走 / 站） */
   action: ACTION;
@@ -105,7 +110,8 @@ export interface NearbyPlayer {
  * 与 MonsterManager 同一套生命周期纪律：
  * - players 帧进来（组合根接线 onPlayers）→ 差量合并到场景：full 快照重建集合、
  *   增量 upsert、left 移除销毁 —— 消失与重现都是服务端的显式事件，本地不做猜测；
- * - 每帧 tick 做位置插值（向广播位置趋近，速度自适应距离）并按剩余位移定朝向；
+ * - 每帧 tick 按**服务端时间**回放快照（#769：缓冲 + 线性插值，匀速、抗丢帧），
+ *   并按实际位移定朝向；
  * - 换图 reset 整份清空（与怪物 / 掉落物同口径，见 GameMap 构造）。
  *
  * ## 外观（#383）
@@ -153,7 +159,7 @@ export default class OtherPlayerManager {
     for (const accountId of frame.left) this.remove(accountId);
     for (const entry of frame.players) {
       if (entry.a === selfAccountId) continue;
-      this.upsert(entry);
+      this.upsert(entry, frame.t);
     }
     // 动作事件（#693）：别人的攻击 / 技能动画 —— 自己的按账号 id 跳过（本地已演过）
     for (const action of frame.actions ?? []) {
@@ -173,9 +179,12 @@ export default class OtherPlayerManager {
     if (players.length === 0) return;
     // 地图上要按关系上色，就不能等玩家手动打开社交面板：第一次见到别人时顺手拉一次快照
     this.watchSocial();
+    // 进视野帧不带时间戳（协议里只给条目）：按「服务端此刻」压入 —— 与随后那些带 t 的
+    // 增量帧同一个时间域，衔接时不会因为基准不同而抖一下
+    const now = ServerClock.now();
     for (const entry of players) {
       if (entry.a === selfAccountId) continue;
-      this.upsert(entry);
+      this.upsert(entry, now);
     }
   }
 
@@ -247,39 +256,45 @@ export default class OtherPlayerManager {
     for (const accountId of blocked) this.remove(accountId);
   }
 
-  /** 每帧驱动：向广播位置插值 + 按位移差量定朝向 / 动作（Game.update 里与 MonsterAI.tick 并排调用） */
+  /** 每帧驱动：按服务端时间回放快照 + 按实际位移定朝向 / 动作（Game.update 里与 MonsterAI.tick 并排调用） */
   static tick(deltaTime: number): void {
     if (this.others.size === 0) {
-      // 诊断采样（#767）：没人可追时剩余距离归零，别让上一个人的旧值一直挂着
+      // 诊断采样（#767）：没人可追时落后量归零，别让上一个人的旧值一直挂着
       NetDiagnostics.noteInterpolation(0);
       return;
     }
-    // 插值系数按帧长折算：约 0.15s 追上目标位置 —— 比广播节拍（200ms）略慢半拍，视觉上是「匀速滑动」
-    const factor = Math.min(1, (deltaTime / 0.15) * 0.5);
-    // 插值剩余距离（#767）：全场追得最远的那个人还有多少像素没到 —— 只在诊断开着时累计
-    let maxRemain = 0;
+    // 渲染时刻统一取一次：同一帧里所有远端玩家必须用同一个基准，各算各的会在
+    // 「这一帧谁该往前走」上互相错开（#769）
+    const renderTime = ServerClock.renderTime(networkConfig.realtime.interpolation.renderDelay);
+    // 插值落后量（#767）：渲染位置离**最新已知位置**还有多远 —— 只在诊断开着时累计。
+    // 语义从「追剩余距离」变成「落后一个渲染延迟的位移」，判据不变：一直是几屏 = 插值参数不对
+    let maxLag = 0;
     for (const view of this.others.values()) {
       if (!isValid(view.node)) continue;
+      const sampled = view.positions.sample(renderTime);
+      if (!sampled) continue; // 还没收到过任何位置：原地站着等第一帧
       const current = view.node.position;
-      const dx = view.targetX - current.x;
-      const dy = view.targetY - current.y;
+      const dx = sampled.x - current.x;
+      const dy = sampled.y - current.y;
       if (NetDiagnostics.enabled) {
-        const remain = Math.hypot(dx, dy);
-        if (remain > maxRemain) maxRemain = remain;
+        const newest = view.positions.newest;
+        const lag = newest ? Math.hypot(newest.x - sampled.x, newest.y - sampled.y) : 0;
+        if (lag > maxLag) maxLag = lag;
       }
-      view.node.setPosition(current.x + dx * factor, current.y + dy * factor, current.z);
+      if (dx !== 0 || dy !== 0) view.node.setPosition(sampled.x, sampled.y, current.z);
       let changed = false;
-      // 朝向跟着剩余位移走：差量太小（已基本追上 / 原地微抖）时保持上一次朝向，
-      // 否则站着不动会被几像素的误差转得乱转
-      if (Math.abs(dx) + Math.abs(dy) > 1) {
+      // 朝向跟着**这一帧真的动了多少**走：站着不动时位移为 0，保持上一次朝向 ——
+      // 旧口径拿「到目标的剩余差量」定朝向，追上之后会剩几像素的残差把人转得乱转
+      if (Math.abs(dx) + Math.abs(dy) > 0.5) {
         const direction = getDirectionByVector(new Vec2(dx, dy));
         if (direction !== view.direction) {
           view.direction = direction;
           changed = true;
         }
       }
-      // 走 / 站以服务端的移动标记为准（那是他自己客户端的真实意图），不看插值有没有走完
-      const action = view.moving ? ACTION.WALK : ACTION.STAND;
+      // 走 / 站取采样结果（= 后一条快照的移动标记，那是他客户端的真实意图），
+      // 不看插值有没有走完（走完与否是渲染时刻的问题，不是意图的问题）
+      const action = sampled.moving ? ACTION.WALK : ACTION.STAND;
       if (action !== view.action) {
         view.action = action;
         changed = true;
@@ -287,7 +302,7 @@ export default class OtherPlayerManager {
       // 只在真的变了才切：play 里的 crossFade 会把动画从头重启，每帧调等于永远停在第一帧
       if (changed) view.appearance.play(view.action, view.direction);
     }
-    NetDiagnostics.noteInterpolation(maxRemain);
+    NetDiagnostics.noteInterpolation(maxLag);
   }
 
   /** 清空所有远端玩家（切换地图时调用，与怪物 / 掉落物同一口径） */
@@ -298,15 +313,15 @@ export default class OtherPlayerManager {
 
   //#region 内部：增删与节点构建
 
-  private static upsert(entry: PlayerEntry): void {
+  private static upsert(entry: PlayerEntry, t: number): void {
     let view = this.others.get(entry.a);
     if (!view) {
-      view = this.create(entry);
+      view = this.create(entry, t);
       this.others.set(entry.a, view);
     }
-    view.targetX = entry.x;
-    view.targetY = entry.y;
-    view.moving = entry.mv;
+    // 位置压进缓冲（#769）：t 是帧的服务端时刻，不是本地收帧时刻 —— 后者会把网络抖动
+    // 直接算成「这两帧隔了很久」，插值速度跟着抖
+    view.positions.push(t, entry.x, entry.y, entry.mv);
     // 身份 / 帮会 / 队伍（#389/#399）：关系判定的输入变了就重算一次 —— 入帮 / 退帮 / 组队 /
     // 退队都会在这里体现（身份与帮会是服务端 5s 懒刷新，队伍是变化即推）
     const guildId = entry.g ?? "";
@@ -375,7 +390,7 @@ export default class OtherPlayerManager {
     if (config.effect) EffectManager.play(config, view.node, target && isValid(target) ? target : null, { speedRate: defaultRoleSpeedRate });
   }
 
-  private static create(entry: PlayerEntry): OtherPlayerView {
+  private static create(entry: PlayerEntry, t: number): OtherPlayerView {
     /** 宿主节点（几何与主角一致：锚点 (0.5, 0)、roleBody 同尺寸，原点在脚底 —— 互见的坐标才有可比性） */
     const node = new Node(`other_player_${entry.a}`);
     const transform = node.addComponent(UITransform);
@@ -396,6 +411,13 @@ export default class OtherPlayerManager {
     /** 头顶信息栏（血条 + 血量文字；军衔红字按 0 建立占位，远端玩家的军衔不随互见帧下发，恒为空行） */
     node.addChild(GameUiHelper.createHead("other_head", 1, 1, 0));
     LayerManager.addToGameLayer(node);
+    // 位置缓冲（#769）：建节点时先压入第一条快照，节点直接站在广播位置上 ——
+    // 缓冲非空，第一帧 tick 就有东西可采样，不会出现「刚看见的人停在原点」
+    const positions = new SnapshotInterpolator(
+      networkConfig.realtime.interpolation.bufferSize,
+      networkConfig.realtime.interpolation.maxExtrapolate,
+    );
+    positions.push(t, entry.x, entry.y, entry.mv);
     const view: OtherPlayerView = {
       node,
       accountId: entry.a,
@@ -409,11 +431,9 @@ export default class OtherPlayerManager {
       guildName: entry.gn ?? "",
       partyId: entry.p ?? "",
       relation: RELATION.MAP,
-      targetX: entry.x,
-      targetY: entry.y,
+      positions,
       hp: 1,
       maxHp: 1,
-      moving: entry.mv,
       direction: DIRECTION.DOWN,
       action: ACTION.STAND,
     };

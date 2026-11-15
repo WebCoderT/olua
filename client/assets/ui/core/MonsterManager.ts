@@ -215,7 +215,8 @@ export default class MonsterManager {
         if (entry.m !== undefined) monster.maxHp = entry.m;
         this.updateHead(node, monster);
       }
-      MonsterAI.applyServerState(node, entry.x, entry.y, entry.mv);
+      // 位置交给插值器（#769）：带上这一帧的服务端时刻，客户端攒几条快照后按时间回放
+      MonsterAI.applyServerState(node, entry.x, entry.y, entry.mv, data.t);
     }
     // 技能释放（#372）：动作 + 特效 + 自身状态特效，全部由服务端驱动
     const castIds = new Set<string>();

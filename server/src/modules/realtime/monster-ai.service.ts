@@ -535,6 +535,8 @@ export class MonsterAiService implements OnApplicationBootstrap, OnApplicationSh
         roomId: string,
         data: {
           mapId: string;
+          /** 这一拍的服务端时刻（#769 插值时间基准；同一拍的条目共用一个值） */
+          t: number;
           monsters: RealtimeMonsterAiEntry[];
           hits: RealtimeMonsterHit[];
           casts: RealtimeMonsterCast[];
@@ -1740,7 +1742,9 @@ export class MonsterAiService implements OnApplicationBootstrap, OnApplicationSh
         runtime.sentHp = runtime.hp;
       }
       if (monsters.length === 0 && hits.length === 0 && casts.length === 0 && kills.length === 0) continue;
-      this.onBroadcast?.(key, { mapId, monsters, hits, casts, kills });
+      // t 取「这一拍广播的时刻」而不是每只怪各自的模拟时刻：同一帧里的坐标本来就是在同一次
+      // tick 里推进出来的，给它们一个共同的时间基准，客户端才好算两帧之间的速度（#769）
+      this.onBroadcast?.(key, { mapId, t: Date.now(), monsters, hits, casts, kills });
     }
   }
 
