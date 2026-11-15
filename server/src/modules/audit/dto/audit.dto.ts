@@ -32,7 +32,7 @@ export class AuditLogDto {
   @ApiProperty({ description: "动作（即接口标识 operationId，如 adminRole.patch）", example: "adminRole.patch" })
   action: string;
 
-  @ApiProperty({ description: "目标类型：account / role / admin / announcement / mail", type: "string", nullable: true })
+  @ApiProperty({ description: "目标类型：account / role / admin / announcement / mail / gameMail", type: "string", nullable: true })
   targetType: string | null;
 
   @ApiProperty({ description: "目标 id", type: "string", nullable: true })

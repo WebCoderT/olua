@@ -3900,6 +3900,7 @@
                 "admin",
                 "announcement",
                 "mail",
+                "gameMail",
                 "title",
                 "soul",
                 "rank",
@@ -4200,6 +4201,7 @@
                 "admin",
                 "announcement",
                 "mail",
+                "gameMail",
                 "title",
                 "soul",
                 "rank",
@@ -15397,6 +15399,171 @@
         ]
       }
     },
+    "/admin/game-mail/broadcasts/preview": {
+      "post": {
+        "description": "按投放范围与等级段算「预计影响 N 人」，不写任何数据 —— 运营在写正文之前就能先看人数。\n\n- `scope=zone` 只算**当前区**（请求头 `X-Zone-Id` 指的那个）；`scope=all` 算所有未合并的区，**同样需要 `gameMail:broadcast-all`**（否则运营先看到「影响 8 万人」再被发送按钮拒绝）。\n- 等级段两端都可省；`minLevel > maxLevel` → 400（填反了必须当场报，否则会「成功发送 0 封」）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameMail:broadcast`（群发游戏消息（本区）；角色：超级管理员 / 管理员）",
+        "operationId": "adminGameMail.previewBroadcast",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BroadcastPreviewDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "命中人数与覆盖的区",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/BroadcastPreviewResultDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "群发影响面预估",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/BroadcastPreviewResultDto"
+        },
+        "x-olua-permissions": [
+          "gameMail:broadcast"
+        ]
+      }
+    },
+    "/admin/game-mail/broadcasts": {
+      "post": {
+        "description": "按「当前区 / 全服 + 等级段」给一批角色各发一封游戏内消息，**同步等写完再返回**。\n\n- `batchId` 由管理端生成并在重试时**原样复用**：同一批次号只发一次，重复提交返回既有结果（`duplicated: true`），不会再写任何一行。\n- 分批写入（`GAME_MAIL_BROADCAST_BATCH_SIZE`，默认 500 封/批），每批一个事务、批间让出事件循环 —— 一次几万行不会长时间占着写锁。\n- 附件同样是**预告**：玩家在消息中心点领取才入包；群发邮件一律**不过期**（补偿不该消失）。\n- 离线角色照发（邮件本来就是异步的）；`targetCount` 与 `sentCount` 不等是正常的（发送期间有人建号 / 删号）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameMail:broadcast`（群发游戏消息（本区）；角色：超级管理员 / 管理员）",
+        "operationId": "adminGameMail.broadcast",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminBroadcastMailDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "批次结果（含 batchId / targetCount / sentCount；duplicated = 这个批次号之前发过）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/BroadcastViewDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "群发游戏消息",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/BroadcastViewDto"
+        },
+        "x-olua-permissions": [
+          "gameMail:broadcast"
+        ]
+      },
+      "get": {
+        "description": "最近 50 个批次（新发的在前）。**刻意跨区**：在 A 区也要能看到同事刚在 B 区发了什么，否则「发错区」这件事在界面上直接消失。\n\n`finishedAt` 为空 = 那一批写到一半中断了（行已经发出去了，不补也不删）；`targetCount` 与 `sentCount` 的差就是中断或期间增删角色的量。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameMail:broadcast`（群发游戏消息（本区）；角色：超级管理员 / 管理员）",
+        "operationId": "adminGameMail.broadcasts",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "最近批次（最多 50 条）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/BroadcastViewDto"
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "群发批次列表",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/BroadcastViewDto"
+          }
+        },
+        "x-olua-permissions": [
+          "gameMail:broadcast"
+        ]
+      }
+    },
     "/admin/maps": {
       "get": {
         "description": "全部地图的概览：名称 / 类型 / 进入条件 / 尺寸 + 各类对象计数。\n\n计数全部是**服务端库表的行数**（#676 起 TMX 里已经没有对象组了）：\n- `spawnAreaCount` / `npcPointCount` / `hasRevivePoint` / `collisionCount`：这张图的配置规模；\n- `worldMonsterCount`：场上实例数（运行时）。\n\n不分页，按 id **数值**升序（`10` 排在 `9` 后面）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
@@ -20435,7 +20602,7 @@
           },
           "targetType": {
             "type": "string",
-            "description": "目标类型：account / role / admin / announcement / mail",
+            "description": "目标类型：account / role / admin / announcement / mail / gameMail",
             "nullable": true
           },
           "targetId": {
@@ -30821,6 +30988,237 @@
           "title"
         ]
       },
+      "BroadcastPreviewResultDto": {
+        "type": "object",
+        "properties": {
+          "targetCount": {
+            "type": "number",
+            "description": "命中的角色数（= 每个人各收到一封）"
+          },
+          "zoneIds": {
+            "description": "本次覆盖的区 id（scope = zone 时只有一个；all 时是全部未合并的区）",
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          }
+        },
+        "required": [
+          "targetCount",
+          "zoneIds"
+        ]
+      },
+      "BroadcastPreviewDto": {
+        "type": "object",
+        "properties": {
+          "scope": {
+            "type": "string",
+            "description": "投递范围：zone = 当前区 / all = 全服（预览全服同样需要超级管理员权限）",
+            "enum": [
+              "zone",
+              "all"
+            ]
+          },
+          "minLevel": {
+            "type": "number",
+            "description": "最低等级（含；不传 = 不限）"
+          },
+          "maxLevel": {
+            "type": "number",
+            "description": "最高等级（含；不传 = 不限）"
+          }
+        },
+        "required": [
+          "scope"
+        ]
+      },
+      "BroadcastFilterDto": {
+        "type": "object",
+        "properties": {
+          "scope": {
+            "type": "string",
+            "description": "投放范围：zone = 当时那个区 / all = 当时所有未合并的区",
+            "enum": [
+              "zone",
+              "all"
+            ]
+          },
+          "zoneId": {
+            "type": "number",
+            "description": "scope = zone 时的区 id；all 时为 null",
+            "nullable": true
+          },
+          "minLevel": {
+            "type": "number",
+            "description": "最低等级（含；不填 = 不限）"
+          },
+          "maxLevel": {
+            "type": "number",
+            "description": "最高等级（含；不填 = 不限）"
+          }
+        },
+        "required": [
+          "scope",
+          "zoneId"
+        ]
+      },
+      "BroadcastViewDto": {
+        "type": "object",
+        "properties": {
+          "batchId": {
+            "type": "string",
+            "description": "批次号"
+          },
+          "channel": {
+            "type": "string",
+            "description": "频道：system / reward"
+          },
+          "title": {
+            "type": "string",
+            "description": "标题"
+          },
+          "body": {
+            "type": "string",
+            "description": "正文"
+          },
+          "bindGold": {
+            "type": "number",
+            "description": "附件绑定元宝（0 = 没有）"
+          },
+          "exp": {
+            "type": "number",
+            "description": "附件经验（0 = 没有）"
+          },
+          "attachments": {
+            "description": "附件物品",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MailAttachmentDto"
+            }
+          },
+          "filter": {
+            "description": "投放条件快照（scope / zoneId / minLevel / maxLevel）",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/BroadcastFilterDto"
+              }
+            ]
+          },
+          "targetCount": {
+            "type": "number",
+            "description": "发送前算出的目标人数"
+          },
+          "sentCount": {
+            "type": "number",
+            "description": "实际写入的封数"
+          },
+          "operatorId": {
+            "type": "string",
+            "description": "操作人 id"
+          },
+          "operatorName": {
+            "type": "string",
+            "description": "操作人用户名"
+          },
+          "createdAt": {
+            "type": "number",
+            "description": "发起时刻（毫秒时间戳）"
+          },
+          "finishedAt": {
+            "type": "number",
+            "description": "完成时刻（null = 还在写 / 中途中断）",
+            "nullable": true
+          },
+          "duplicated": {
+            "type": "boolean",
+            "description": "true = 这个批次号之前已经发过，本次没有再写任何一行"
+          }
+        },
+        "required": [
+          "batchId",
+          "channel",
+          "title",
+          "body",
+          "bindGold",
+          "exp",
+          "attachments",
+          "filter",
+          "targetCount",
+          "sentCount",
+          "operatorId",
+          "operatorName",
+          "createdAt",
+          "finishedAt",
+          "duplicated"
+        ]
+      },
+      "AdminBroadcastMailDto": {
+        "type": "object",
+        "properties": {
+          "channel": {
+            "type": "string",
+            "description": "频道：只允许 system（系统）/ reward（奖励）",
+            "enum": [
+              "system",
+              "reward"
+            ]
+          },
+          "title": {
+            "type": "string",
+            "description": "标题",
+            "minLength": 1,
+            "maxLength": 60
+          },
+          "body": {
+            "type": "string",
+            "description": "正文（纯文本，换行用 \\n；可空）",
+            "maxLength": 1000
+          },
+          "bindGold": {
+            "type": "number",
+            "description": "附件绑定元宝（不传 = 没有）"
+          },
+          "exp": {
+            "type": "number",
+            "description": "附件经验（不传 = 没有）"
+          },
+          "items": {
+            "description": "附件物品（不传 = 没有）",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MailAttachmentDto"
+            }
+          },
+          "batchId": {
+            "type": "string",
+            "description": "批次号：由管理端生成（浏览器 `crypto.randomUUID()`），**重试时原样复用** —— 同一个批次号只发一次",
+            "minLength": 8,
+            "maxLength": 64
+          },
+          "scope": {
+            "type": "string",
+            "description": "投递范围：zone = 当前区 / all = 全服（所有未合并的区，需要超级管理员权限）",
+            "enum": [
+              "zone",
+              "all"
+            ]
+          },
+          "minLevel": {
+            "type": "number",
+            "description": "最低等级（含；不传 = 不限）"
+          },
+          "maxLevel": {
+            "type": "number",
+            "description": "最高等级（含；不传 = 不限）"
+          }
+        },
+        "required": [
+          "channel",
+          "title",
+          "batchId",
+          "scope"
+        ]
+      },
       "MapSummaryDto": {
         "type": "object",
         "properties": {
@@ -32763,6 +33161,7 @@
               "admin",
               "announcement",
               "mail",
+              "gameMail",
               "title",
               "soul",
               "rank",

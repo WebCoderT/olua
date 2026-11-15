@@ -2274,7 +2274,7 @@ export type AuditLog = {
    */
   action: string;
   /**
-   * 目标类型：account / role / admin / announcement / mail
+   * 目标类型：account / role / admin / announcement / mail / gameMail
    */
   targetType: string | null;
   /**
@@ -8851,6 +8851,157 @@ export type AdminSendMail = {
   items?: MailAttachment[];
 };
 
+export type BroadcastPreviewResult = {
+  /**
+   * 命中的角色数（= 每个人各收到一封）
+   */
+  targetCount: number;
+  /**
+   * 本次覆盖的区 id（scope = zone 时只有一个；all 时是全部未合并的区）
+   */
+  zoneIds: number[];
+};
+
+export type BroadcastPreview = {
+  /**
+   * 投递范围：zone = 当前区 / all = 全服（预览全服同样需要超级管理员权限）
+   */
+  scope: "zone" | "all";
+  /**
+   * 最低等级（含；不传 = 不限）
+   */
+  minLevel?: number;
+  /**
+   * 最高等级（含；不传 = 不限）
+   */
+  maxLevel?: number;
+};
+
+export type BroadcastFilter = {
+  /**
+   * 投放范围：zone = 当时那个区 / all = 当时所有未合并的区
+   */
+  scope: "zone" | "all";
+  /**
+   * scope = zone 时的区 id；all 时为 null
+   */
+  zoneId: number | null;
+  /**
+   * 最低等级（含；不填 = 不限）
+   */
+  minLevel?: number;
+  /**
+   * 最高等级（含；不填 = 不限）
+   */
+  maxLevel?: number;
+};
+
+export type BroadcastView = {
+  /**
+   * 批次号
+   */
+  batchId: string;
+  /**
+   * 频道：system / reward
+   */
+  channel: string;
+  /**
+   * 标题
+   */
+  title: string;
+  /**
+   * 正文
+   */
+  body: string;
+  /**
+   * 附件绑定元宝（0 = 没有）
+   */
+  bindGold: number;
+  /**
+   * 附件经验（0 = 没有）
+   */
+  exp: number;
+  /**
+   * 附件物品
+   */
+  attachments: MailAttachment[];
+  /**
+   * 投放条件快照（scope / zoneId / minLevel / maxLevel）
+   */
+  filter: BroadcastFilter;
+  /**
+   * 发送前算出的目标人数
+   */
+  targetCount: number;
+  /**
+   * 实际写入的封数
+   */
+  sentCount: number;
+  /**
+   * 操作人 id
+   */
+  operatorId: string;
+  /**
+   * 操作人用户名
+   */
+  operatorName: string;
+  /**
+   * 发起时刻（毫秒时间戳）
+   */
+  createdAt: number;
+  /**
+   * 完成时刻（null = 还在写 / 中途中断）
+   */
+  finishedAt: number | null;
+  /**
+   * true = 这个批次号之前已经发过，本次没有再写任何一行
+   */
+  duplicated: boolean;
+};
+
+export type AdminBroadcastMail = {
+  /**
+   * 频道：只允许 system（系统）/ reward（奖励）
+   */
+  channel: "system" | "reward";
+  /**
+   * 标题
+   */
+  title: string;
+  /**
+   * 正文（纯文本，换行用 \n；可空）
+   */
+  body?: string;
+  /**
+   * 附件绑定元宝（不传 = 没有）
+   */
+  bindGold?: number;
+  /**
+   * 附件经验（不传 = 没有）
+   */
+  exp?: number;
+  /**
+   * 附件物品（不传 = 没有）
+   */
+  items?: MailAttachment[];
+  /**
+   * 批次号：由管理端生成（浏览器 `crypto.randomUUID()`），**重试时原样复用** —— 同一个批次号只发一次
+   */
+  batchId: string;
+  /**
+   * 投递范围：zone = 当前区 / all = 全服（所有未合并的区，需要超级管理员权限）
+   */
+  scope: "zone" | "all";
+  /**
+   * 最低等级（含；不传 = 不限）
+   */
+  minLevel?: number;
+  /**
+   * 最高等级（含；不传 = 不限）
+   */
+  maxLevel?: number;
+};
+
 export type MapSummary = {
   /**
    * 地图 id（= resources/map 下的目录名，也是角色 onMap 存的值）
@@ -10136,7 +10287,7 @@ export type AuditQuery = {
   /**
    * 目标类型筛选
    */
-  targetType?: "account" | "role" | "admin" | "announcement" | "mail" | "title" | "soul" | "rank" | "equipment" | "drug" | "item" | "monster" | "npc" | "mall" | "fashion" | "dropTable" | "monsterDrop" | "levelCurve" | "equipmentVariant" | "growthScalar" | "skill" | "status" | "zone" | "guild" | "quest" | "achievement" | "equipAlign" | "equipInAlign" | "map" | "uiEffect" | "audioSetting" | "runtimeParams" | "combatWeights" | "guideSteps" | "equipmentAppearance" | "moneyItem" | "levelScroll" | "config";
+  targetType?: "account" | "role" | "admin" | "announcement" | "mail" | "gameMail" | "title" | "soul" | "rank" | "equipment" | "drug" | "item" | "monster" | "npc" | "mall" | "fashion" | "dropTable" | "monsterDrop" | "levelCurve" | "equipmentVariant" | "growthScalar" | "skill" | "status" | "zone" | "guild" | "quest" | "achievement" | "equipAlign" | "equipInAlign" | "map" | "uiEffect" | "audioSetting" | "runtimeParams" | "combatWeights" | "guideSteps" | "equipmentAppearance" | "moneyItem" | "levelScroll" | "config";
   /**
    * 只看针对某个目标的日志（目标 id）
    */

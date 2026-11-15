@@ -34,8 +34,8 @@ export class RoleMailRepository {
   insert(row: RoleMailRow): void {
     this.db.run(
       `INSERT INTO role_mails
-         (id, role_id, channel, kind, title, body, bind_gold, exp, attachments, read_at, claimed_at, expires_at, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         (id, role_id, channel, kind, title, body, bind_gold, exp, attachments, read_at, claimed_at, expires_at, batch_id, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         row.id,
         row.role_id,
@@ -49,9 +49,59 @@ export class RoleMailRepository {
         row.read_at,
         row.claimed_at,
         row.expires_at,
+        row.batch_id,
         row.created_at,
       ],
     );
+  }
+
+  /**
+   * 批量插入（#438：运营群发一次几百行）
+   *
+   * 一条 `INSERT ... VALUES (...), (...), ...` 而不是循环 `insert()`：每行一次
+   * `prepare + run` 在同步驱动下就是几百次跨 JS/C++ 边界，几十万行会慢到离谱；
+   * 多值插入是 SQLite 最擅长的路径。
+   *
+   * **行数由调用方切好**（批大小可配），这里不做二次切分 —— 一个方法两种切法，
+   * 「这批到底写了几行」就说不清了。
+   *
+   * @returns 实际写入的行数
+   */
+  insertMany(rows: RoleMailRow[]): number {
+    if (rows.length === 0) return 0;
+    const columns = 14;
+    const placeholders = rows.map(() => `(${new Array(columns).fill("?").join(", ")})`).join(", ");
+    const params: (string | number | null)[] = [];
+    for (const row of rows) {
+      params.push(
+        row.id,
+        row.role_id,
+        row.channel,
+        row.kind,
+        row.title,
+        row.body,
+        row.bind_gold,
+        row.exp,
+        row.attachments,
+        row.read_at,
+        row.claimed_at,
+        row.expires_at,
+        row.batch_id,
+        row.created_at,
+      );
+    }
+    this.db.run(
+      `INSERT INTO role_mails
+         (id, role_id, channel, kind, title, body, bind_gold, exp, attachments, read_at, claimed_at, expires_at, batch_id, created_at)
+       VALUES ${placeholders}`,
+      params,
+    );
+    return rows.length;
+  }
+
+  /** 某个批次已经落了多少行（#438：排查「实发与目标不等」时用；也用于中断后核对） */
+  countByBatch(batchId: string): number {
+    return this.db.count("SELECT COUNT(*) AS n FROM role_mails WHERE batch_id = ?", [batchId]);
   }
 
   findByKey(id: string): RoleMailRow | undefined {

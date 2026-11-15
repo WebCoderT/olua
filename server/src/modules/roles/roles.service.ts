@@ -325,6 +325,32 @@ export class RolesService {
   }
 
   /**
+   * 群发筛中的角色数（#438：管理端「预计影响 N 人」）
+   *
+   * 走 `RoleRepository.count`，与角色列表页**同一套条件**（`RoleFilter`）——
+   * 管理端看到的 N 与它自己筛一遍人数必须一致，两套 WHERE 就会「预计 3000、实发 2987」。
+   * 区必填（管理端一次只在一个区里干活）；「全服」由群发服务按区逐个累加。
+   */
+  countForBroadcast(zoneId: number, range: { minLevel?: number; maxLevel?: number }): number {
+    return this.roles.count({ zoneId, minLevel: range.minLevel, maxLevel: range.maxLevel });
+  }
+
+  /**
+   * 群发收件人 id（#438，keyset 分页）
+   *
+   * `afterId` 传上一批的最后一个 id；返回空数组表示这一区发完了。
+   * 只读 `roles.id` 一列 —— 群发不需要存档内容（正文在批次表里，附件由玩家领取时才入包）。
+   */
+  listIdsForBroadcast(
+    zoneId: number,
+    range: { minLevel?: number; maxLevel?: number },
+    afterId: string | null,
+    limit: number,
+  ): string[] {
+    return this.roles.listIdsForBroadcast(zoneId, range, afterId, limit);
+  }
+
+  /**
    * 创建角色
    *
    * #597 起建号职责整体在服务端：客户端只传**名称 / 职业 / 性别**三样（它自己才知道的：

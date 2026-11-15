@@ -907,6 +907,8 @@ const EXPECTED_CONFIG_KEYS = [
   "MAIL_POLL_MS",
   "MAIL_RETENTION_DAYS",
   "MAIL_QUEUE_MAX_ROWS",
+  // 群发批大小（#438）：行为验证在 e2e-game-mail-broadcast 里做，这里只守白名单
+  "GAME_MAIL_BROADCAST_BATCH_SIZE",
   // 自动备份（启停与产出的验证在 test/backup.cjs 里单独做，这里只守白名单）
   "BACKUP_INTERVAL_HOURS",
   "BACKUP_KEEP_COUNT",
