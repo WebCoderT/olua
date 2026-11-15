@@ -47,7 +47,7 @@ export default class RoleInfoDialog {
     // 角色信息
     const role = StorageManager.findOnlineRole();
     // 弹窗框（尺寸与装饰背景见 configs/hudLayout.roleInfoDialogLayout）
-    this.dialog = GameUiHelper.createDialog(roleInfoDialogLayout.name, roleInfoDialogLayout.title);
+    this.dialog = GameUiHelper.createDialog(roleInfoDialogLayout.name, roleInfoDialogLayout.title, new Vec2(), roleInfoDialogLayout.size, roleInfoDialogLayout.eyebrow);
     // 装饰背景与战斗力图标
     const bgLayout = roleInfoDialogLayout.background;
     const bg = GameUiHelper.createImage("role_information_background", bgLayout.image, bgLayout.position, bgLayout.size);

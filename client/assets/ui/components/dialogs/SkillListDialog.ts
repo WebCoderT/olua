@@ -46,7 +46,7 @@ export default class SkillListDialog {
     // 引导（#402）：「认识技能」那一步就是「打开过技能列表」—— 事件在**真打开**之后发，
     // 上面的切换关闭不该算一次（玩家关窗不该被当成学会了）
     GuideStore.notify(GUIDE_EVENT.OPEN_SKILL);
-    const dialog = GameUiHelper.createDialog(skillListDialogLayout.name, skillListDialogLayout.title, new Vec2(), skillListDialogLayout.size);
+    const dialog = GameUiHelper.createDialog(skillListDialogLayout.name, skillListDialogLayout.title, new Vec2(), skillListDialogLayout.size, skillListDialogLayout.eyebrow);
     // 技能点（#828）：紧贴标题下沿，先建节点、内容由 rebuild 填
     const pointsNode = GameUiHelper.createSkillPointsLabel();
     dialog.addChild(pointsNode);

@@ -1,4 +1,4 @@
-import { isValid, Label, Node } from "cc";
+import { isValid, Label, Node, Vec2 } from "cc";
 import StorageManager from "../../core/StorageManager";
 import GameUiHelper from "../../helpers/GameUiHelper";
 import LayerManager from "../../core/LayerManager";
@@ -68,7 +68,7 @@ export default class BagDialog {
     this.clearDiscardPending();
     this.closeDiscardConfirm();
     // 弹窗框与背包格子由通用零件拼装
-    const dialog = GameUiHelper.createDialog(bagDialogLayout.name, bagDialogLayout.title);
+    const dialog = GameUiHelper.createDialog(bagDialogLayout.name, bagDialogLayout.title, new Vec2(), bagDialogLayout.size, bagDialogLayout.eyebrow);
     // 底部「一键整理」：合并同类可叠加物并重排（搬运与提示都在数据层，这里只上报点击）
     const tidyButton = GameUiHelper.createMiddleButton(
       bagDialogLayout.tidyButton.name,

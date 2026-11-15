@@ -45,18 +45,46 @@ export const dialogFrame = {
       trailOffset: 14,
     },
   },
+  /**
+   * 头部眉题（ui.css `.panel-eyebrow`）：左上角一行小字（`BAG · B` 这类英文缩写），
+   * 距弹窗左边缘 `padDialog`、距上边缘 `sp6`，字号 f10、金色、字距加大
+   *
+   * 与标题（居中）分工：眉题给键盘快捷键与分区信息，标题才是中文名。
+   * 宽高只决定文本对齐框（LEFT + CENTER），不动不影响排版。
+   */
+  eyebrow: {
+    left: T.spacing.padDialog,
+    top: T.spacing.sp6,
+    width: 240,
+    height: 14,
+    fontSize: T.fontSize.f10,
+    color: T.gold[2],
+  },
   /** 标题：距弹窗上边缘的内缩、文本高度、宽度两侧内缩、字号与颜色（摆放见 GameUiHelper.createDialog） */
   title: {
-    insetTop: 15,
-    height: 30,
+    /** ui.css `.panel-head` 的 padding-top（--sp-7） */
+    insetTop: T.spacing.sp7,
+    height: 24,
     widthPadding: 60,
     fontSize: T.fontSize.f20,
     color: T.text[1],
-    /** 标题下的短金线（ui.css .panel-title::after，44×1） */
-    rule: { width: T.border.titleRuleWidth, height: T.border.titleRuleHeight, color: T.gold[3], gap: 6 },
+    /** 标题下的短金线（ui.css .panel-title::after，44×1，margin-top --sp-3） */
+    rule: { width: T.border.titleRuleWidth, height: T.border.titleRuleHeight, color: T.gold[3], gap: T.spacing.sp3 },
   },
-  /** 关闭按钮：尺寸（公共尺寸，见 sizes.uiSize）+ 距弹窗上/右边缘的内缩 + 矢量化 × 的字号与色 */
-  closeButton: { size: uiSize.closeButtonSize, inset: 15, text: "×", fontSize: T.fontSize.f18, color: T.text[3], hoverColor: T.text[1] },
+  /**
+   * 关闭按钮：尺寸（公共尺寸，见 sizes.uiSize）+ 距弹窗右/上边缘的内缩 + 矢量化 × 的字号与色
+   *
+   * 内缩按 ui.css `.panel-close` 的 `top:10px; right:12px` 反推中心点（按钮 30×30 居中，故各加 15）。
+   */
+  closeButton: {
+    size: uiSize.closeButtonSize,
+    insetX: 27,
+    insetY: 25,
+    text: "×",
+    fontSize: T.fontSize.f18,
+    color: T.text[3],
+    hoverColor: T.text[1],
+  },
   /**
    * 背景图：九宫拼装配置（resources/dialog 下的九块拆图，取图名见 images.dialog*）
    *
@@ -129,7 +157,8 @@ const growthBindGold = { position: new Vec2(250, -160), size: new Size(200, 16),
 export const warSoulDialogLayout = {
   name: "war_soul_dialog",
   title: "战魂",
-  size: new Size(880, 560),
+  eyebrow: "GROWTH · SOUL",
+  size: new Size(880, 540),
   /** 左：等级卡片竖向滚动列表（卡片按等级从上到下，状态用颜色区分） */
   list: growthCardList("soul_list"),
   /** 中：战魂动画（帧率取各等级配置 configs/soul 的 animationFrameRate） */
@@ -162,7 +191,8 @@ export const warSoulDialogLayout = {
 export const titleUpgradeDialogLayout = {
   name: "title_upgrade_dialog",
   title: "称号",
-  size: new Size(880, 560),
+  eyebrow: "GROWTH · TITLE",
+  size: new Size(880, 540),
   /** 左：等级卡片竖向滚动列表（卡片按等级从上到下，状态用颜色区分；34 个称号与战魂 37 个同容器尺寸） */
   list: growthCardList("title_list"),
   /** 中：称号动画（名牌帧原始宽 156~245，弹窗内按 RAW 原尺寸展示） */
@@ -194,7 +224,8 @@ export const titleUpgradeDialogLayout = {
 export const rankUpgradeDialogLayout = {
   name: "rank_upgrade_dialog",
   title: "军衔",
-  size: new Size(880, 560),
+  eyebrow: "GROWTH · RANK",
+  size: new Size(880, 540),
   /** 左：阶数卡片竖向滚动列表（100 阶从上到下，状态用颜色区分） */
   list: growthCardList("rank_list", { borderWidth: 2 }),
   /** 中：军衔徽记（文字牌：段名 + 红色军衔名 + 阶数进度） */
@@ -246,9 +277,11 @@ export const mapTeleportDialogLayout = {
 
 //#region 小地图弹窗（当前地图的整图预览）
 
-/** 弹窗尺寸为 dialogFrame.size（600×500） */
+/** 弹窗尺寸 720×520（ui.css --dlg-w-lg 一级；19-world-map 稿） */
 export const mapPreviewDialogLayout = {
   name: "map_preview_dialog",
+  eyebrow: "WORLD MAP",
+  size: new Size(720, 520),
   /** 标题兜底文案（正常显示当前地图名，见 SmallMap 传入） */
   title: "小地图",
   /** 预览区：地图 preview.jpg 整图铺满；点击按比例换算成世界坐标（左键寻路 / 右键传送） */
@@ -300,6 +333,9 @@ export const mapPreviewDialogLayout = {
 export const roleInfoDialogLayout = {
   name: "role_info_dialog",
   title: "角色信息",
+  eyebrow: "CHARACTER · C",
+  /** 弹窗尺寸 660×520（06-role-info 稿） */
+  size: new Size(660, 520),
   /** 装饰背景（含属性区底图） */
   background: { image: uiImages.roleInfoDialogBackground, position: new Vec2(-78, -19), size: new Size(431, 452) },
   /**
@@ -330,6 +366,9 @@ export const roleInfoDialogLayout = {
 export const fashionDialogLayout = {
   name: "fashion_dialog",
   title: "衣 柜",
+  eyebrow: "FASHION",
+  /** 弹窗尺寸 600×500（18-fashion 稿） */
+  size: new Size(600, 500),
   /** 顶部「当前穿戴」提示 */
   current: { position: new Vec2(0, 205), fontSize: 16 },
   /** 列表（卡片区，四列） */
@@ -391,6 +430,9 @@ export const fashionDialogLayout = {
 export const bagDialogLayout = {
   name: "bag_dialog",
   title: "背包",
+  eyebrow: "BAG · B",
+  /** 弹窗尺寸 600×500（05-bag 稿；也是 dialogFrame 的缺省档） */
+  size: new Size(600, 500),
   /**
    * 底部三个操作按钮（子件坐标以弹窗中心为原点；背包网格底边在 -167，三钮并排落在网格下方）
    * 中号按钮宽 123（见 sizes.uiSize.middleButtonSize），各错开 140 → 两两间距 17，整体左右各留 98
@@ -527,8 +569,9 @@ export const mallDialogLayout = {
 export const skillListDialogLayout = {
   name: "skill_list_dialog",
   title: "技能",
+  eyebrow: "SKILL · K",
   // 宽 350 = 原来的 280 + 升级按钮那一列（#828）
-  size: new Size(350, 400),
+  size: new Size(380, 440),
   /**
    * 剩余技能点（#828）：紧贴标题下沿的一行
    *
@@ -786,6 +829,7 @@ export const hoverTipLayout = {
 export const announcementBoardDialogLayout = {
   name: "announcement_board_dialog",
   title: "公告",
+  eyebrow: "ANNOUNCEMENT",
   size: new Size(720, 500),
   /** 左：公告条目滚动列表（行高固定，正文在右栏） */
   list: {
@@ -1042,6 +1086,7 @@ export const guildDialogLayout = {
 export const socialDialogLayout = {
   name: "social_dialog",
   title: "社 交",
+  eyebrow: "SOCIAL",
   /** 比通用弹窗高 60：多出来的一行放页签（帮会页的坐标因此可以原样复用） */
   size: new Size(600, 560),
   /** 页签栏（选中金色底、未选中暗色底；x 是各页签中心，从「帮会」到「附近」） */
@@ -1373,7 +1418,8 @@ export const chatDialogLayout = {
 export const questDialogLayout = {
   name: "quest_dialog",
   title: "任 务",
-  size: new Size(600, 560),
+  eyebrow: "QUEST",
+  size: new Size(600, 540),
   /** 页签（两枚，与聊天弹窗同款式；角标直接在页签文案后追加「·N」，不另设小字样式） */
   tabs: {
     y: 232,
@@ -1452,7 +1498,8 @@ export const questDialogLayout = {
 export const partyDialogLayout = {
   name: "party_dialog",
   title: "队 伍",
-  size: new Size(600, 560),
+  eyebrow: "PARTY · G",
+  size: new Size(600, 540),
   /** 页签（两枚，与任务弹窗同宽） */
   tabs: {
     y: 232,
@@ -1592,7 +1639,8 @@ export const partyDialogLayout = {
 export const leaderboardDialogLayout = {
   name: "leaderboard_dialog",
   title: "排 行 榜",
-  size: new Size(600, 560),
+  eyebrow: "LEADERBOARD",
+  size: new Size(600, 540),
   /** 页签（三枚，与任务 / 队伍弹窗同款式） */
   tabs: {
     y: 232,

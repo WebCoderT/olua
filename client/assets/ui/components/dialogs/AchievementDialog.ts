@@ -52,7 +52,7 @@ export default class AchievementDialog {
       return;
     }
     if (this.dialog && !isValid(this.dialog)) this.reset();
-    this.dialog = GameUiHelper.createDialog(layout.name, layout.title, new Vec2(), layout.size);
+    this.dialog = GameUiHelper.createDialog(layout.name, layout.title, new Vec2(), layout.size, layout.eyebrow);
     blockClickThrough(this.dialog);
     LayerManager.addDialogToUILayer(this.dialog);
     this.createTabs();

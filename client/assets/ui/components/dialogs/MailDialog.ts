@@ -68,7 +68,7 @@ export default class MailDialog {
       return;
     }
     if (this.dialog && !isValid(this.dialog)) this.reset();
-    const dialog = GameUiHelper.createDialog(layout.name, layout.title, new Vec2(), layout.size);
+    const dialog = GameUiHelper.createDialog(layout.name, layout.title, new Vec2(), layout.size, layout.eyebrow);
     blockClickThrough(dialog);
     LayerManager.addDialogToUILayer(dialog);
     this.dialog = dialog;

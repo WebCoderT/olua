@@ -57,7 +57,7 @@ export default class AnnouncementBoardDialog {
     }
     // 场景切换时弹窗会被连带销毁，这里清理失效引用（否则会一直以为它还开着）
     if (this.dialog && !isValid(this.dialog)) this.reset();
-    const dialog = GameUiHelper.createDialog(layout.name, layout.title, new Vec2(), layout.size);
+    const dialog = GameUiHelper.createDialog(layout.name, layout.title, new Vec2(), layout.size, layout.eyebrow);
     // 左：公告列表（可上下滑动）
     const list = GameUiHelper.createScrollView(layout.list.name, layout.list.position, layout.list.size);
     this.listContent = list.getComponent(ScrollView).content;

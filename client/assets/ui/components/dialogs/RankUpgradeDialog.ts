@@ -44,7 +44,7 @@ export default class RankUpgradeDialog {
     const role = StorageManager.findOnlineRole();
     // 默认预览当前军衔（尚未授衔时预览 1 阶）
     this.selectedLevel = Math.max(1, role?.rank ?? 1);
-    const dialog = GameUiHelper.createDialog(layout.name, layout.title, new Vec2(), layout.size);
+    const dialog = GameUiHelper.createDialog(layout.name, layout.title, new Vec2(), layout.size, layout.eyebrow);
     // 左：军衔阶数列表（可上下滑动，100 阶只建一次）
     const list = GameUiHelper.createScrollView(layout.list.name, layout.list.position, layout.list.size);
     this.listView = list.getComponent(ScrollView);

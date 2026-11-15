@@ -40,7 +40,7 @@ export default class FashionDialog {
       return;
     }
     if (this.dialog && !isValid(this.dialog)) this.reset();
-    this.dialog = GameUiHelper.createDialog(layout.name, layout.title);
+    this.dialog = GameUiHelper.createDialog(layout.name, layout.title, new Vec2(), layout.size, layout.eyebrow);
     // 顶部：当前穿戴
     this.currentLabel = UiHelper.createLabel(
       "fashion_current",

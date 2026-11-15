@@ -71,7 +71,8 @@ export const mailChannels: Array<{ key: MailChannelKey; label: string }> = [
 export const mailDialogLayout = {
   name: "mail_dialog",
   title: "邮件",
-  size: new Size(560, 420),
+  eyebrow: "MAIL",
+  size: new Size(600, 450),
   /** 顶部小结（左） */
   summary: {
     position: new Vec2(-150, 178),

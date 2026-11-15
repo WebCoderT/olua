@@ -54,7 +54,7 @@ export default class MapPreviewDialog {
     const layout = mapPreviewDialogLayout;
     const role = StorageManager.findOnlineRole();
     // 标题用当前地图名（configs/map.ts 登记），没读到数据时退回兜底文案
-    const dialog = GameUiHelper.createDialog(layout.name, role ? mapLabelOf(role.onMap) : layout.title);
+    const dialog = GameUiHelper.createDialog(layout.name, role ? mapLabelOf(role.onMap) : layout.title, new Vec2(), layout.size, layout.eyebrow);
     this.dialog = dialog;
     // 预览区：整张地图的预览图（贴图异步装载；点击换算与点位层都以它为基准）
     const preview = GameUiHelper.createImage(layout.preview.name, "", layout.preview.position, layout.preview.size);

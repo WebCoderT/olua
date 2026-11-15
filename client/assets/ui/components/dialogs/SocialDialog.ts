@@ -67,7 +67,7 @@ export default class SocialDialog {
       return;
     }
     if (this.dialog && !isValid(this.dialog)) this.reset();
-    this.dialog = GameUiHelper.createDialog(layout.name, layout.title, new Vec2(), layout.size);
+    this.dialog = GameUiHelper.createDialog(layout.name, layout.title, new Vec2(), layout.size, layout.eyebrow);
     // 弹窗整体吃掉点击：否则点在行与行之间的空隙会穿透到下层 UI（createDialog 已登记过，这里幂等）
     blockClickThrough(this.dialog);
     LayerManager.addDialogToUILayer(this.dialog);

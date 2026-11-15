@@ -1349,16 +1349,36 @@ export default class GameUiHelper {
 
   /**
    * 创建通用弹窗
+   *
+   * 骨架对齐 `design/olua-ui` 的 `.panel--rivet` + `.panel-head`：
+   * 底板（矢量铆钉）→ 左上眉题（可选）→ 居中标题 + 44×1 短金线 → 右上关闭键。
+   * 头部三段几何全部来自 configs/layout/dialogs.dialogFrame（eyebrow / title / closeButton）。
+   *
+   * @param eyebrow 左上角英文眉题（`BAG · B` 这类，含键盘快捷键）；不传则不画
    */
-  static createDialog(name: string, title: string, position: Vec2 = new Vec2(), size: Size = dialogFrame.size) {
+  static createDialog(name: string, title: string, position: Vec2 = new Vec2(), size: Size = dialogFrame.size, eyebrow = "") {
     // 弹窗
     const dialog = this.createDialogBg(name, position, size);
+    // 眉题：左上角一行小字，左对齐（不画底、不拦点击 —— 纯标注）
+    if (eyebrow) {
+      const cap = dialogFrame.eyebrow;
+      dialog.addChild(
+        UiHelper.createLabel(
+          `${name}_eyebrow`,
+          eyebrow,
+          cap.color,
+          cap.fontSize,
+          new Vec2(-size.width / 2 + cap.left + cap.width / 2, size.height / 2 - cap.top - cap.height / 2),
+          new Size(cap.width, cap.height),
+          Label.HorizontalAlign.LEFT,
+        ),
+      );
+    }
     // 关闭弹窗按钮（矢量 ×：与设计稿 .panel-close 同口径，不再用图片）
-    const inset = dialogFrame.closeButton.inset;
     const closeButton = this.createVectorButton(
       `${name}_close_button`,
       dialogFrame.closeButton.text,
-      new Vec2(size.width / 2 - inset, size.height / 2 - inset),
+      new Vec2(size.width / 2 - dialogFrame.closeButton.insetX, size.height / 2 - dialogFrame.closeButton.insetY),
       dialogFrame.closeButton.size,
       dialogFrame.closeButton.fontSize,
       dialogFrame.closeButton.color,
