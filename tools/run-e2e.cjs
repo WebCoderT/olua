@@ -60,6 +60,8 @@ const WEIGHT = {
   "test:e2e:realtime": 4,
   // 两次完整启动（开/关各一次）+ 等怪的第一次游走（出厂间隔 4~9s，最多等 25s）
   "test:e2e:realtime-stats": 3,
+  // 起一次服务 + 41 个位移采样点（每个隔 250ms，留够两拍半）+ 20 发出手（每发隔 400ms）
+  "test:e2e:latency": 3,
   "test:e2e:achievement": 2,
   "test:e2e:world": 2,
   "test:e2e:dual": 2,
