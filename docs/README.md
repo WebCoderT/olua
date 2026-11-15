@@ -199,7 +199,7 @@ README（仓库根） → 01 总览（认路）
 | 30 个客户端 Manager | `ls client/assets/ui/core/*.ts \| wc -l` |
 | 48 个管理端页面 / 49 条路由 | `ls admin/src/pages/*.tsx \| wc -l` / `grep -o 'path="[^"]*"' admin/src/App.tsx \| sort -u \| wc -l` |
 | 685 件装备 / 10275 条变体 | `SELECT count(*) FROM equipments;` / `SELECT count(*) FROM equipment_variants;`（应等于 685×15） |
-| 客户端单测 65 套 | `ls client/tools/test-*.cjs \| wc -l` |
+| 客户端单测 70 套 | `ls client/tools/test-*.cjs \| wc -l` |
 | 32 段快照 | `grep -cE "^      [a-zA-Z]+:" server/src/modules/game-config/client-config.service.ts` |
 | 13 张进结算缓存 | `grep -cE "^    apply" server/src/modules/game-config/runtime-config.service.ts` |
 | 165 个 admin 接口 | `node -e "…遍历 openapi.json 的 /admin 前缀…"`（完整命令见 [16](./16-配置位置总表.md) 附录 B） |
