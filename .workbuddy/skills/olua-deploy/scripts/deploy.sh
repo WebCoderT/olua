@@ -177,7 +177,7 @@ verify() {
 tls_init() {
   [ "$TLS" = "on" ] || { echo "✗ deploy.env 里 OLUA_TLS 不是 on —— 先改成 on 再来签发"; exit 1; }
   echo "==> 首次签发证书，覆盖：$ALL_DOMAINS"
-  echo "    前提：这些域名都已解析到 $DEPLOY_HOST，控制台放行了 80 与 443"
+  echo "    前提：这些域名都已解析到 ${DEPLOY_HOST}，控制台放行了 80 与 443"
   build_compose_env
   "${SCP[@]}" /tmp/olua-compose.env "$TARGET:$DEPLOY_DIR/.env"
   # 只起后端与静态站：**不起 edge**（:80 要空出来给 certbot 的 standalone）

@@ -248,7 +248,10 @@ services:
     entrypoint: ["/bin/sh", "-c"]
     # `sleep 12h & wait` 而不是直接 `sleep 12h`：docker stop 发的 TERM 要能被 trap 接住，
     # 否则每次重启都要等 10 秒才被 SIGKILL。$$ 是 compose 的转义（真正传进容器的是 `$`）。
-    command: "trap exit TERM; while :; do certbot renew --webroot -w /var/www/certbot --quiet; sleep 12h & wait $${!}; done"
+    # 必须是**单元素列表**：写成裸字符串时 compose 会按 shlex 拆成单词，配上 exec 形式的
+    # entrypoint 就成了 `sh -c trap`（单跑一个 trap 打印完就退出 0 → 无限重启，实测踩过）。
+    command:
+      - "trap exit TERM; while :; do certbot renew --webroot -w /var/www/certbot --quiet; sleep 12h & wait $${!}; done"
 
 volumes:
   # 具名卷：`docker compose down` 不会删它，只有 `down -v` 才会
