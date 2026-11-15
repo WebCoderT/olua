@@ -221,20 +221,18 @@ function numOr(value: string, fallback: number): number {
 /**
  * **还没接进链路**的字段 → 控件置灰 + 标注「未接入」（#812 口径）
  *
- * 为什么必须标：`map_rules` 15 列一次建齐（避免二次 ALTER），但这一轮只有
- * `expRate` / `dropRate` / `allowDrop` 真的进了结算链。剩下的列如果照旧可编辑，
- * 运营改完 `maxChannels = 3` 会以为「这张图能开三条线了」—— 而实际行为要等 #1000。
- * #747（死配置）就是这么来的。
+ * 为什么必须标：`map_rules` 15 列一次建齐（避免二次 ALTER），但接进链路的是一刀一刀
+ * 补的。剩下的列如果照旧可编辑，运营改完会以为「这张图的行为变了」—— 而实际要等对应
+ * 的那一刀。#747（死配置）就是这么来的。
+ * 现已接入：`expRate` / `dropRate` / `allowDrop`（#812）、`maxPlayersPerRoom` / `maxChannels`（#1000）。
  *
  * 值照旧随整份覆盖提交（表单里保留的是读回来的原值），所以置灰不会把别人配的东西清掉。
  */
 const UNWIRED_HINTS: Partial<Record<keyof RulesForm, string>> = {
   moneyRate: "未接入：金币掉落走 drop_tables 的货币物品，与经验不是同一条链",
   allowPk: "未接入：真 PK 玩法在 #403",
-  allowAutoBattle: "未接入：等分线 / 副本落地后接（关掉挂机要连客户端一起改）",
+  allowAutoBattle: "未接入：等副本落地后接（关掉挂机要连客户端一起改）",
   allowRecall: "未接入：拉人与回城还没有统一入口",
-  maxPlayersPerRoom: "未接入：容量闸门在 #1000（分线）—— 现在只影响客户端显示的上限",
-  maxChannels: "未接入：分线在 #1000",
   transferCostMoney: "未接入：扣款在 #1001",
   transferCooldownMs: "未接入：冷却计时在 #1001",
   denyTransferInCombat: "未接入：战斗中拦截在 #1001",
@@ -439,11 +437,25 @@ export function MapRulesDialog({
           <section>
             <h4 className="mb-1.5 text-xs font-medium text-ink-3">容量与传送</h4>
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-              <FormField label="单房人数上限" hint={UNWIRED_HINTS.maxPlayersPerRoom}>
-                <Input type="number" min={0} max={1000} disabled value={form.maxPlayersPerRoom} onChange={() => undefined} />
+              <FormField label="单房人数上限" hint="0 = 不限；这条**已接入**（#1000）：满了自动开下一条线，线也满了才拒人">
+                <Input
+                  type="number"
+                  min={0}
+                  max={1000}
+                  disabled={!canWrite}
+                  value={form.maxPlayersPerRoom}
+                  onChange={(event) => patch("maxPlayersPerRoom", event.target.value)}
+                />
               </FormField>
-              <FormField label="分线数量上限" hint={UNWIRED_HINTS.maxChannels}>
-                <Input type="number" min={1} max={20} disabled value={form.maxChannels} onChange={() => undefined} />
+              <FormField label="分线数量上限" hint="1 = 不分线（出厂）；这条**已接入**（#1000）：>1 时公共线满了自动开新线">
+                <Input
+                  type="number"
+                  min={1}
+                  max={20}
+                  disabled={!canWrite}
+                  value={form.maxChannels}
+                  onChange={(event) => patch("maxChannels", event.target.value)}
+                />
               </FormField>
               <FormField label="传送花费（铜钱）" hint={UNWIRED_HINTS.transferCostMoney}>
                 <Input type="number" min={0} disabled value={form.transferCostMoney} onChange={() => undefined} />
@@ -471,7 +483,8 @@ export function MapRulesDialog({
           <p className="text-[11px] text-ink-5">
             保存是<b>整份覆盖</b>：没提到的字段按页面上显示的值落库。置灰并标「未接入」的字段
             这一版还没接进链路（改数值也不会有行为变化），等对应的刀落地后自动变可编辑。
-            已接入的三项（经验 / 掉落倍率、是否掉落）在<b>下一笔结算</b>就生效。
+            已接入的五项里，经验 / 掉落倍率与「是否掉落」在<b>下一笔结算</b>生效，
+            单房人数上限与分线数量上限在<b>下一次选线</b>生效（已经在跑的房不用重载）。
           </p>
         </div>
       )}

@@ -7,6 +7,7 @@ import { START_MAP_ID } from "../map/map.service";
 import { RolesService } from "../roles/roles.service";
 import { MovementGuardService, MovementRejectReason } from "./movement-guard.service";
 import { PUBLIC_SLOT, roomKey, splitRoomKey } from "../../common/utils/room-key.util";
+import type { RoomRef } from "../../common/utils/room-key.util";
 import type { RealtimePlayerAction, RealtimePlayerAppearance, RealtimePlayerEntry } from "./realtime.protocol";
 
 /**
@@ -131,6 +132,15 @@ export class PlayerPresenceService implements OnApplicationBootstrap, OnApplicat
 
   /** 账号 → 在场信息（连接断开即删） */
   private readonly entries = new Map<string, PresenceEntry>();
+  /**
+   * 账号 → 最后一次 `join` 的房间（#1000）
+   *
+   * 在场条目会**过期删除**（位置超时），而条目里带着 `slot`；条目没了之后第一条 `pos`
+   * 上报会重建条目 —— 没有这份记录就只能拿公共线（`PUBLIC_SLOT`）当默认值，
+   * 于是「站在 2 线发呆超过超时窗」的人会掉进公共线的在场表里（跨线可见 + 容量算错）。
+   * 断线（`dropAccount`）才清。
+   */
+  private readonly lastRooms = new Map<string, RoomRef>();
   /** 账号名缓存（互见帧里顺手带上，省得客户端再查） */
   private readonly usernames = new Map<string, string>();
   /** `zone:mapId` → 攒下的离开账号（断线 / 换图时写入，广播时发出并清空） */
@@ -267,8 +277,9 @@ export class PlayerPresenceService implements OnApplicationBootstrap, OnApplicat
       this.entries.set(accountId, {
         zoneId,
         mapId,
-        // 首帧上报先于 worldJoin 时只可能是公共线（分线进图必须先过 worldJoin 才能改图，见 #861）
-        slot: PUBLIC_SLOT,
+        // 线按「最后一次 join 的房间」还原（#1000）：首帧上报先于 worldJoin 时只可能是公共线
+        // （分线进图必须先过 worldJoin 才能改图，见 #861），但**条目过期重建**时他还在原来那条线
+        slot: this.slotOfLastRoom(accountId, zoneId, mapId),
         x,
         y,
         hp,
@@ -335,6 +346,18 @@ export class PlayerPresenceService implements OnApplicationBootstrap, OnApplicat
       existed.guildName = guild.guildName;
       existed.appearanceAt = existed.updatedAt;
     }
+  }
+
+  /**
+   * 这个账号最后一条线（#1000；区 / 图对不上或从没 join 过 = 公共线）
+   *
+   * 只在「条目不存在、要凭一帧 `pos` 重建」时用：网络抖一下把人从 2 线挪到公共线的
+   * 在场表里，代价是跨线可见 + 那条线的容量白算一个人。
+   */
+  private slotOfLastRoom(accountId: string, zoneId: number, mapId: string): string {
+    const last = this.lastRooms.get(accountId);
+    if (!last || last.zoneId !== zoneId || last.mapId !== mapId) return PUBLIC_SLOT;
+    return last.slot;
   }
 
   /**
@@ -446,6 +469,8 @@ export class PlayerPresenceService implements OnApplicationBootstrap, OnApplicat
     const room = splitRoomKey(roomId);
     const zoneId = room.zoneId;
     const mapId = room.mapId;
+    // 记住「他注册在哪条线」（#1000）：条目过期后重建时靠它还原 slot，不靠默认值
+    this.lastRooms.set(accountId, room);
     const existed = this.entries.get(accountId);
     if (existed) {
       const movedMap = existed.zoneId !== zoneId || existed.mapId !== mapId || existed.slot !== room.slot;
@@ -469,7 +494,9 @@ export class PlayerPresenceService implements OnApplicationBootstrap, OnApplicat
     const players: RealtimePlayerEntry[] = [];
     for (const [otherId, entry] of this.entries) {
       if (otherId === accountId) continue;
-      if (entry.zoneId !== zoneId || entry.mapId !== mapId) continue;
+      // 房号三键都要比（#1000）：只比「区 + 图」时，同图另一条线上的人会出现在这份全量里，
+      // 而后续增量按房号分桶 —— 于是「分线的人看见彼此」只在进图那一帧发生，之后就 ghost 掉
+      if (entry.zoneId !== zoneId || entry.mapId !== mapId || entry.slot !== room.slot) continue;
       if (Date.now() - entry.updatedAt > this.posStaleMs()) continue;
       players.push(this.toEntry(otherId, entry));
     }
@@ -492,6 +519,8 @@ export class PlayerPresenceService implements OnApplicationBootstrap, OnApplicat
     // 控制缓存跟着会话一起清（#826 第三批）：人走了不该还留着「他被定住」的结论，
     // 下次登录如果恰好 200ms 内又开始报位置，那一条会被旧缓存挡掉一帧
     this.controlCache.delete(accountId);
+    // 断线才清「最后一条线」（#1000）：条目过期重建还要用它，连接没了就没意义了
+    this.lastRooms.delete(accountId);
     if (!entry) return;
     this.entries.delete(accountId);
     this.broadcastLeave(entryRoomKey(entry), entry.mapId, accountId);
