@@ -225,6 +225,14 @@ export interface DropNoticeFrame {
 /** 服务端世界快照（协议见 realtime.protocol 的 RealtimeWorldMessage.data） */
 export interface WorldSnapshot {
   mapId: string;
+  /** 房号（#809）：`<zone>:<map>:<slot>`；换线成功后的那帧 `world` 带的就是新房间 */
+  roomId?: string;
+  /** 线的 slot 形态（`"0"` 公共线；分线 / 副本的形态见 `room-key.util`） */
+  slot?: string;
+  /** 第几线（#1000 / #1016）：公共线 `0`、分线 `1..N` —— 小地图「· N 线」标题与选线弹窗读它 */
+  channel?: number;
+  /** 这一间房的容量（0 = 不限；选线弹窗与传送弹窗的「23/30」用） */
+  capacity?: number;
   monsters: WorldMonsterSnapshot[];
   /**
    * 地面掉落物的全量（#802）
@@ -664,6 +672,14 @@ export default class CombatChannel {
   /** 最近一次进图的地图 id（断线重连重发用；#295 起播种在服务端，客户端只报图 id） */
   private static lastJoin: { mapId: string } | null = null;
 
+  /**
+   * 最近一次所在线（#1000 的 `world` 帧带回；0 = 公共线）
+   *
+   * 显示层（小地图「· N 线」标题、选线弹窗的「当前」角标）读它 —— 线是**服务端**定的，
+   * 客户端不自己推算；`worldJoin` / 换线成功的 `world` 帧一到就更新。
+   */
+  private static lastChannel = 0;
+
   /** 结算结果出口（组合根接线到 MonsterManager.applyServerSettle；不接时结果被丢弃并告警） */
   static onSettle: ((data: CombatSettleOk) => void) | null = null;
 
@@ -768,6 +784,18 @@ export default class CombatChannel {
   private static pendingMapEnter: {
     mapId: string;
     settle: (result: MapEnterResult) => void;
+    timer: ReturnType<typeof setTimeout>;
+  } | null = null;
+
+  /**
+   * 正在等应答的那一次换线意图（#1016）
+   *
+   * 与 pendingMapEnter 同一纪律：**只留一条**。选线弹窗连点两行时，第二条请求被拒
+   * （调用方拿 false 自己提示「正在切换中」），不静默顶掉前一条 —— 换线是可逆操作，
+   * 服务端**总是**回帧，没有「丢了也不影响」的理由。
+   */
+  private static pendingChangeChannel: {
+    settle: (result: ChangeChannelResult) => void;
     timer: ReturnType<typeof setTimeout>;
   } | null = null;
 
@@ -939,6 +967,8 @@ export default class CombatChannel {
   static dispatchWorld(data: unknown): void {
     const snapshot = data as WorldSnapshot | null;
     if (!snapshot || typeof snapshot !== "object" || !Array.isArray(snapshot.monsters)) return;
+    // 记下所在线（#1016）：小地图标题与选线弹窗读它。没带 channel 的旧服务端帧不动它
+    if (typeof snapshot.channel === "number" && Number.isFinite(snapshot.channel)) this.lastChannel = snapshot.channel;
     if (!this.onWorld) {
       console.warn("[world] 收到世界快照但没有处理者（onWorld 未接线），快照被丢弃");
       return;
@@ -1181,6 +1211,84 @@ export default class CombatChannel {
     this.pendingMapEnter = null;
     clearTimeout(pending.timer);
   }
+
+  /** 当前所在线（#1016；0 = 公共线。显示层读，别拿它做本地决策 —— 线归服务端定） */
+  static get currentChannel(): number {
+    return this.lastChannel;
+  }
+
+  /** 离开游戏时清掉线状态（回选角 / 登录后上一次的线不该被带进新会话的标题里） */
+  static resetChannel(): void {
+    this.lastChannel = 0;
+  }
+
+  /**
+   * 换线（#1000 / #1016）：只换房间，不换图 —— 不重进场景、不动坐标、不走等级门槛
+   *
+   * @param channel 目标线号（`0` = 公共线；超出 `maxChannels` 的值服务端会拒，客户端先拿配置挡一层）
+   * @param settle  结果回来时调用（**必定调用一次**：超时也算，`timedOut = true`）
+   * @param timeoutMs 多久没应答就按失败收场 —— 服务端卡住不该让弹窗永远转圈
+   * @returns 是否真的发了（通道不在线 / 已有一条在途 = false，调用方据此提示，不假装发了）
+   */
+  static requestChangeChannel(channel: number, settle: (result: ChangeChannelResult) => void, timeoutMs = 3_000): boolean {
+    // 换线是纯实时通道操作：通道不在线就发不出去（服务端连人都找不到），调用方要提示而不是干等
+    if (!this.active) return false;
+    if (this.pendingChangeChannel) return false;
+    const timer = setTimeout(() => {
+      const pending = this.pendingChangeChannel;
+      if (!pending) return;
+      this.pendingChangeChannel = null;
+      console.warn(`[realtime] 换线判定超时（channel=${channel}），按失败收场`);
+      settle({ ok: false, channel: this.lastChannel, mapId: this.lastJoin?.mapId ?? "", timedOut: true });
+    }, timeoutMs);
+    this.pendingChangeChannel = { settle, timer };
+    RealtimeClient.send({ type: "changeChannel", data: { channel } });
+    return true;
+  }
+
+  /** 撤掉还没回来的换线请求（场景销毁时调用；不回调 —— 与 cancelMapEnter 同一纪律） */
+  static cancelChangeChannel(): void {
+    const pending = this.pendingChangeChannel;
+    if (!pending) return;
+    this.pendingChangeChannel = null;
+    clearTimeout(pending.timer);
+  }
+
+  /**
+   * 换线判定结果（#1000：成功也回这一帧；真的换了房间时**紧跟着**还有一帧 `world`）
+   *
+   * `field` 与 `mapEnterResult` 同一套取值风格 —— 服务端不生产面向玩家的句子，
+   * 客户端按 `field` 取自己的文案；没等到帧按失败收场（`timedOut`）。
+   */
+  static dispatchChangeChannelResult(data: unknown): void {
+    const payload = (data ?? {}) as {
+      ok?: unknown;
+      channel?: unknown;
+      mapId?: unknown;
+      field?: unknown;
+      suggestChannel?: unknown;
+      need?: unknown;
+    };
+    const result: ChangeChannelResult = {
+      ok: payload.ok === true,
+      channel: typeof payload.channel === "number" && Number.isFinite(payload.channel) ? payload.channel : this.lastChannel,
+      mapId: typeof payload.mapId === "string" ? payload.mapId : "",
+      field:
+        payload.field === "full" || payload.field === "unknown" || payload.field === "zone" ? payload.field : undefined,
+      suggestChannel: typeof payload.suggestChannel === "number" && Number.isFinite(payload.suggestChannel) ? payload.suggestChannel : undefined,
+      need: typeof payload.need === "number" && Number.isFinite(payload.need) ? payload.need : undefined,
+    };
+    const pending = this.pendingChangeChannel;
+    if (!pending) {
+      console.warn(`[realtime] 收到没有对应请求的换线结果（channel=${result.channel}，ok=${result.ok}）`);
+      return;
+    }
+    this.pendingChangeChannel = null;
+    clearTimeout(pending.timer);
+    // 成功先记账：world 帧随后也会带（同一条），但选线弹窗关窗要立刻用上正确的线号
+    if (result.ok) this.lastChannel = result.channel;
+    pending.settle(result);
+  }
 }
 
 /** 换图判定结果（协议见 realtime.protocol 的 RealtimeMapEnterResultMessage） */
@@ -1193,6 +1301,28 @@ export interface MapEnterResult {
   need?: number;
   /** 图名（提示里要用） */
   mapLabel?: string;
+}
+
+/**
+ * 换线判定结果（协议见 realtime.protocol 的 RealtimeChangeChannelResultMessage；#1000 / #1016）
+ *
+ * `channel` 是**换完之后实际所在**的线 —— 失败时是原来那条，客户端据此把选中态改回去。
+ * `field` 与 `mapEnterResult` 同一套取值风格（服务端不生产中文句子）；
+ * `timedOut` 是客户端自己的标记：没等到应答就超时了，与服务端拒的失败分开提示。
+ */
+export interface ChangeChannelResult {
+  ok: boolean;
+  /** 换完之后所在的线（失败 = 原线） */
+  channel: number;
+  mapId: string;
+  /** 失败原因：`full` = 那条线满了、`unknown` = 这张图没有这条线、`zone` = 本区维护中 / 已合并 */
+  field?: "full" | "unknown" | "zone";
+  /** 一条能进的线（`field = "full"` 且确实还有空线时才有，提示里给玩家指路用） */
+  suggestChannel?: number;
+  /** 单线容量（`field = "full"` 时有） */
+  need?: number;
+  /** 没等到应答（客户端超时收场；与服务端拒绝区分开） */
+  timedOut?: boolean;
 }
 
 /** 服务端拒绝一次结算的形状（协议见 realtime.protocol 的 RealtimeSettleError） */

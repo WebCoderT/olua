@@ -511,6 +511,40 @@ export const uiTexts = {
    * （角色列表本来也是按那个区拉的）。这条提示只是让玩家知道「这次没得选」。
    */
   zone_load_failed_tip: "区服列表拉取失败，按上次的区进入",
+  /**
+   * 地图标题后的线号后缀（#1016；{channel} = 玩家视角的线号 = 服务端 channel + 1）
+   *
+   * 服务端口径里公共线是 `0`、分线 `1..N`（见 room-key.util），玩家眼里的「1 线」就是公共线。
+   * 拼接方（SmallMap）只在 `channel > 0` 时拼这条 —— 公共线保持原来的纯图名，
+   * 分线才追加「· 2 线」这样的后缀。
+   */
+  map_channel_suffix: " · {channel}线",
+  /** 选线弹窗标题（#1016） */
+  channel_select_title: "选择线路",
+  /** 选线弹窗说明（为什么同一张图会有好几条线） */
+  channel_select_hint: "人多拥挤的线路可以去别的线，怪物与掉落各线各一份",
+  /** 选线弹窗：标记当前所在的那条线 */
+  channel_tag_current: "当前",
+  /** 选线弹窗：一行的线名（{channel} = 玩家视角的线号） */
+  channel_row_label: "{channel}线",
+  /** 换线成功（{channel} = 玩家视角的线号） */
+  channel_changed_tip: "已切换到{channel}线",
+  /** 点了自己所在的线（不浪费一次往返，直接提示） */
+  channel_same_tip: "你已在这条线上",
+  /** 有请求在途时又点了别的线（一次只换一条，服务端总是回帧，不会永远等不到） */
+  channel_busy_tip: "正在切换线路，请稍候",
+  /** 通道不在线（断线中）：换线是纯实时通道操作，发不出去 */
+  channel_offline_tip: "网络未连接，暂时无法换线",
+  /** 目标线满员（{channel} = 玩家视角的线号） */
+  channel_full_tip: "{channel}线已满",
+  /** 目标线满员且服务端指了一条还有空位的线（{suggest} = 线号） */
+  channel_full_suggest_tip: "{channel}线已满，{suggest}线还有空位",
+  /** 目标线不存在（本地 maxChannels 与服务端错位时的兜底提示） */
+  channel_unknown_tip: "这条线路不存在",
+  /** 本区维护中 / 已合并，换线被拒（马上还会被踢回登录页，这里先给一句） */
+  channel_zone_tip: "本区状态异常，暂时无法换线",
+  /** 换线请求超时（服务端没回帧；留在原线，可以再试） */
+  channel_timeout_tip: "切换超时，请稍后再试",
   /** 登录成功（{name} = 账号名） */
   login_success_tip: "登录成功，欢迎 {name}",
   /** 注册成功（{name} = 账号名） */

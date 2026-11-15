@@ -1649,3 +1649,54 @@ export const leaderboardDialogLayout = {
 };
 
 //#endregion
+
+//#region 选线弹窗（#1016）
+
+/**
+ * 选线弹窗（小地图的「N 线」标签打开，#1016）
+ *
+ * 列出这张图的**全部线**（0..maxChannels-1，玩家视角 1..N 线；服务端口径公共线 = 0，
+ * 显示时 +1），当前线高亮并标「当前」。点一行发一次 `changeChannel`：成功关窗飘字，
+ * 失败按 `field` 提示并留在弹窗里（换线是可逆操作，服务端总是回帧）。
+ *
+ * 数据是**纯本地**的：线数读配置快照的 `maps`（#812 已下发），当前线读 `world` 帧
+ * 带回的 `channel` —— 不需要为开一个弹窗拉接口。行数就是 maxChannels，通常 ≤ 3，
+ * 滚动区只是防「运营把某张图开到十几条线」的保底。
+ */
+export const channelSelectLayout = {
+  name: "channel_select_dialog",
+  maskColor: new Color(0, 0, 0, 170),
+  panel: { name: "channel_select_panel", size: new Size(420, 400) },
+  /** 标题（配色与选服弹窗同一套） */
+  titleLabel: { name: "channel_select_title", position: new Vec2(0, 170), size: new Size(360, 28), fontSize: 18, color: new Color("#FF8B8B") },
+  /** 说明行：告诉玩家换线意味着什么（各线怪物与掉落独立，人挤就换线） */
+  hint: { position: new Vec2(0, 142), size: new Size(380, 20), fontSize: 12, color: new Color(150, 158, 172, 255) },
+  /** 线列表（纵向滚动；行高与间距见 row） */
+  list: { name: "channel_select_list", position: new Vec2(0, -8), size: new Size(372, 240) },
+  row: {
+    size: new Size(368, 52),
+    /** 行间距（滚动区 content 的 Layout.spacingY） */
+    gap: 10,
+    fill: new Color(22, 26, 34, 190),
+    border: new Color(64, 74, 90, 255),
+    /** 当前所在线的高亮描边（与选服弹窗「上次在」同一套金色） */
+    currentBorder: new Color(255, 200, 80, 255),
+    radius: 6,
+    /** 线名（左列） */
+    nameX: -120,
+    nameSize: new Size(180, 22),
+    nameFontSize: 16,
+    nameColor: new Color(226, 226, 226, 255),
+    /** 「当前」角标（贴右） */
+    tagX: 140,
+    tagSize: new Size(52, 20),
+    tagFontSize: 11,
+    tagFill: new Color(255, 200, 80, 40),
+    tagBorder: new Color(255, 200, 80, 160),
+    tagColor: new Color(255, 209, 102, 255),
+  },
+  /** 取消按钮：打开选线窗不等于必须换 */
+  closeButton: { name: "channel_select_close_button", text: "取消", position: new Vec2(0, -158) },
+};
+
+//#endregion

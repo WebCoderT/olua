@@ -55,6 +55,13 @@ const checks = [
   ["role_delete_confirm_tip", { name: "张三" }, "再点一次确认删除角色「张三」，删除后无法恢复"],
   ["role_delete_done_tip", { name: "李四" }, "角色「李四」已删除"],
   ["label_good_detail_info", { level: 1 }, "等级 1 · {slot}"],
+  // 分线（#1016）：线号后缀与选线弹窗。玩家视角线号 = 服务端 channel + 1（拼接方负责 +1）
+  ["map_channel_suffix", { channel: 2 }, " · 2线"],
+  ["channel_row_label", { channel: 1 }, "1线"],
+  ["channel_tag_current", undefined, "当前"],
+  ["channel_changed_tip", { channel: 3 }, "已切换到3线"],
+  ["channel_full_suggest_tip", { channel: 2, suggest: 1 }, "2线已满，1线还有空位"],
+  ["channel_full_tip", { channel: 2 }, "2线已满"],
 ];
 
 let bad = 0;

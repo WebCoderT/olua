@@ -1,8 +1,9 @@
 import { Graphics, isValid, Label, Node, Size, Sprite, SpriteFrame, UITransform, Vec2, Vec3 } from "cc";
-import { mapLabelOf } from "../../../configs/game-config";
+import { mapLabelOf, maps } from "../../../configs/game-config";
 import { getSmallMapScale, smallMapConfig } from "../../../configs/smallMap";
 import { uiImages, mapPreviewImage, uiMinimap, smallMapLayout } from "../../../configs/hudLayout";
 import { buildAnnouncementViews, countUnread } from "../../../configs/announcement";
+import { getText } from "../../../configs/texts";
 import AutoBattle from "../../core/AutoBattle";
 import AnnouncementReadStore from "../../core/AnnouncementReadStore";
 import MonsterManager from "../../core/MonsterManager";
@@ -12,9 +13,11 @@ import { getMapWorldRect } from "../../utils/map/MapPointMath";
 import { bindPointerAction } from "../../utils/input/Pointer";
 import { loadResourceAsync } from "../../utils/resource/ResourceLoader";
 import { AnnouncementApi, GameMailApi } from "../../utils/net/Api";
+import CombatChannel from "../../utils/net/CombatChannel";
 import AnnouncementBoardDialog from "../dialogs/AnnouncementBoardDialog";
 import LeaderboardDialog from "../dialogs/LeaderboardDialog";
 import AchievementDialog from "../dialogs/AchievementDialog";
+import ChannelSelectDialog from "../dialogs/ChannelSelectDialog";
 import MailDialog from "../dialogs/MailDialog";
 import MapPreviewDialog from "../dialogs/MapPreviewDialog";
 import type RoleDisplay from "../role/RoleDisplay";
@@ -26,7 +29,8 @@ import type RoleDisplay from "../role/RoleDisplay";
  * - 功能入口按钮：单列竖排的布局容器（Layout 纵向），位于地图内容区左侧
  * - 地图区域：真实小地图——当前地图的 preview.jpg，裁剪在内容区大小（layout.contentSize）的视口内，
  *   按「内容区 ↔ 世界视野」等比缩放后随角色平移（缩放见 configs/smallMap.getSmallMapScale）
- * - 地图正下方：服务器线路与排行榜（横向布局容器，排行榜在左；#400 起「排行榜」可点开，榜单是**本区**的）
+ * - 地图正下方：服务器线路与排行榜（横向布局容器，排行榜在左；#400 起「排行榜」可点开，榜单是**本区**的；
+ *   #1016 起「线路」在分线图上也是换线入口——线号动态盖写，点开选线弹窗）
  * - 最下方：世界坐标条
  * 位置、尺寸与图片来源全部来自 configs/hudLayout.smallMap（入口图标按名字走 uiMinimap 取图）
  * 地图区域上实时绘制坐标点：角色黑点固定在内容区中心（底图随之平移，故黑点下方永远是角色真实所在位置），
@@ -81,6 +85,17 @@ export default class SmallMap extends Node {
     onUnreadChange: (unread) => this.setMailUnread(unread),
     onOpenAnnouncement: () => this.openAnnouncementDialog(),
   });
+  /**
+   * 选线弹窗（#1016：小地图下方那颗「N 线」标签打开）
+   *
+   * 只在 `maxChannels > 1` 的图上可点（单线图没有可换的东西，标签保持装饰图原样）。
+   * 线数读配置快照（`maps`），当前线读 `world` 帧带回的 `channel` —— 开弹窗不拉接口。
+   */
+  private channelDialog = new ChannelSelectDialog();
+  /** 服务器线路标签（换线入口；动态线号层盖在它身上） */
+  private serverLineEntry: Node | null = null;
+  /** 「N 线」动态线号层（盖在底图烙死的「1 线」字上；null = 还没建过）。1 线时整层隐藏 */
+  private channelTag: { patch: Graphics; label: Label } | null = null;
   /** 入口红点（未读邮件 + 未领附件 + 未读公告，有任一项才显示） */
   private entryDot: Node | null = null;
   /** 邮件侧待处理数（未读 + 未领，由邮件面板与进游戏时的一次探测维护） */
@@ -239,7 +254,13 @@ export default class SmallMap extends Node {
     // 排行榜标签（#400）：原来是纯装饰图，现在点开本区榜（等级 / 战力 / 击杀；#959 起分区分榜）
     bindPointerAction(rankingEntry, () => this.leaderboardDialog.open(), this);
     tags.addChild(rankingEntry);
-    tags.addChild(GameUiHelper.createImage("small_map_server_line", uiImages.smallMapServerLine, new Vec2(), tagRow.size));
+    // 服务器线路标签（#1016）：底图烙着「1 线」。分线图（maxChannels > 1）上它是换线入口 ——
+    // 线号不是 1 时盖一块底色补丁、写上真实线号（见 updateChannelTag）；点击开选线弹窗。
+    // 单线图上点了没有反应（守卫直接 return），底图原样保留
+    const serverLineEntry = GameUiHelper.createImage("small_map_server_line", uiImages.smallMapServerLine, new Vec2(), tagRow.size);
+    bindPointerAction(serverLineEntry, () => this.openChannelSelect(), this);
+    tags.addChild(serverLineEntry);
+    this.serverLineEntry = serverLineEntry;
     this.addChild(tags);
     // 世界坐标条：线路/排行榜下方
     const positionFrame = GameUiHelper.createImage("small_map_position", uiImages.smallMapPosition, layout.positionBar.position, layout.positionBar.size);
@@ -270,8 +291,77 @@ export default class SmallMap extends Node {
   /** 刷新地图名称与世界坐标文本 */
   private updateLabels(rolePosition: Vec3) {
     const role = StorageManager.findOnlineRole();
-    this.mapNameLabel.string = role ? mapLabelOf(role.onMap) : "";
+    // 标题带线号（#1016）：分线（channel > 0）追加「· N 线」；公共线保持纯图名
+    this.mapNameLabel.string = role ? this.mapTitle(role.onMap, CombatChannel.currentChannel) : "";
     this.positionLabel.string = `${Math.round(rolePosition.x)}, ${Math.round(rolePosition.y)}`;
+    this.updateChannelTag(role);
+  }
+
+  /** 地图标题：`卧龙城`（公共线）/ `卧龙城 · 2线`（分线，玩家视角线号 = 服务端 channel + 1） */
+  private mapTitle(mapId: string, channel: number): string {
+    const label = mapLabelOf(mapId);
+    return channel > 0 ? `${label}${getText("map_channel_suffix", { channel: channel + 1 })}` : label;
+  }
+
+  /**
+   * 刷新换线入口的动态线号层（#1016）
+   *
+   * 底图烙的是「1 线」：公共线（channel 0）时底图原样、整层隐藏；分线时盖一块底色补丁
+   * 遮住烙字，写上真实线号。层只在第一次需要时建一次，之后按图与线切显隐 ——
+   * 单线图（`maxChannels <= 1`，含配置快照还没到）永远隐藏，保持纯装饰图。
+   */
+  private updateChannelTag(role: ReturnType<typeof StorageManager.findOnlineRole>) {
+    const config = role ? maps.get(role.onMap) : undefined;
+    const interactive = !!config && config.maxChannels > 1;
+    if (!interactive) {
+      if (this.channelTag) this.setChannelTagVisible(false);
+      return;
+    }
+    const channel = CombatChannel.currentChannel;
+    if (!this.channelTag) this.channelTag = this.createChannelTag();
+    if (!this.channelTag) return;
+    this.setChannelTagVisible(channel > 0);
+    if (channel > 0) this.channelTag.label.string = getText("channel_row_label", { channel: channel + 1 });
+  }
+
+  /** 线号层显隐（补丁与文字是同父的兄弟节点，要一起切） */
+  private setChannelTagVisible(visible: boolean) {
+    if (!this.channelTag) return;
+    this.channelTag.patch.node.active = visible;
+    this.channelTag.label.node.active = visible;
+  }
+
+  /**
+   * 建动态线号层（一次性）：补丁矩形盖住底图烙死的「1 线」两个字，线号文字盖在补丁上
+   * （几何 / 配色 / 节点名全部来自 configs/layout/hud.smallMapLayout.channelTag）
+   */
+  private createChannelTag(): { patch: Graphics; label: Label } | null {
+    const tag = this.serverLineEntry;
+    // serverLineEntry 在 createBottomInfo 里必然已建；拿不到说明结构被动过，宁可不显示线号
+    if (!tag || !isValid(tag)) return null;
+    const rect = smallMapLayout.channelTag.patch.rect;
+    const patchNode = new Node(smallMapLayout.channelTag.patch.name);
+    const patch = patchNode.addComponent(Graphics);
+    patch.fillColor = smallMapLayout.channelTag.patch.color;
+    patch.rect(rect.x, rect.y, rect.width, rect.height);
+    patch.fill();
+    tag.addChild(patchNode);
+    const text = smallMapLayout.channelTag.text;
+    const labelNode = GameUiHelper.createText(text.name, "", text.fontSize, text.position, text.size, text.color);
+    tag.addChild(labelNode);
+    return { patch, label: labelNode.getComponent(Label)! };
+  }
+
+  /** 打开选线弹窗（#1016；单线图 / 配置没到时守卫直接 return，标签维持装饰图） */
+  private openChannelSelect() {
+    const role = StorageManager.findOnlineRole();
+    const config = role ? maps.get(role.onMap) : undefined;
+    if (!config || config.maxChannels <= 1) return;
+    if (this.channelDialog.isOpen()) {
+      this.channelDialog.close();
+      return;
+    }
+    this.channelDialog.open(config.maxChannels, CombatChannel.currentChannel);
   }
 
   /**
