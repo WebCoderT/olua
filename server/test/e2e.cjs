@@ -522,14 +522,14 @@ async function runSuite(baseUrl) {
   const admin2Id = adminRegister2.body.data.admin.id;
   checkEqual(adminRegister2.body.data.admin.role, "admin", "第二个注册的管理员是普通管理员");
   checkEqual(adminRegister2.body.data.admin.roleLabel, "管理员", "普通管理员角色中文名");
-  // #963 起普通管理员还少一条「公告投放全服」（影响面权限）：只比超管少这两条
+  // #963 / #438 起普通管理员还少两条「影响面权限」（公告投放全服 / 群发全服）：只比超管少这三条
   checkEqual(
     superPerms
       .filter((item) => !adminRegister2.body.data.admin.permissions.includes(item))
       .sort()
       .join(","),
-    "admin:manage,announcement:publish-all",
-    "普通管理员只比超管少「管理管理员」与「公告投放全服」",
+    "admin:manage,announcement:publish-all,gameMail:broadcast-all",
+    "普通管理员只比超管少「管理管理员」「公告投放全服」「群发全服」",
   );
 
   const listAdmins = await call("GET", "/api/admin/admins?page=1&size=10", { token: adminToken, zoneId: ADMIN_ZONE });

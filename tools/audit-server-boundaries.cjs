@@ -145,6 +145,10 @@ const ALLOWED_EDGES = [
   // 邮件（#429）：成就领奖背包满时把整份奖励转成邮件（服务端内部降级，客户端不需多一步）
   { from: "modules/achievement", to: "modules/game-mail/game-mail.service.ts", why: "成就领奖背包满 → 整份奖励转邮件" },
   { from: "modules/game-mail", to: "modules/roles/roles.service.ts", why: "附件领取走与任务 / 成就同一个单次落库发奖入口" },
+  // 群发（#438）：`scope=all` 要遍历「所有未合并的区」才拿到区清单。
+  // 刻意不在群发里自己查 zones 表（那会多一条仓储边），也不做「不带 zone 的 SQL」——
+  // 逐个区发让每条查询都带区，静态守点（audit-zone-scope）不用为群发开豁免
+  { from: "modules/game-mail", to: "modules/zone/zone.service.ts", why: "全服群发遍历区清单（ZoneService.states）" },
   // 社交（#436）：好友申请给对方留一条社交频道的消息 —— 只是通知，状态仍以 social 表为准
   { from: "modules/social", to: "modules/game-mail/game-mail.service.ts", why: "好友申请 → 一条社交消息（消息中心频道化）" },
   { from: "modules/social", to: "modules/roles/dto/", why: "在线角色的形状（RoleDto）：消息正文要用角色名与等级" },
@@ -353,6 +357,8 @@ const REPO_EDGES = {
   "database/repositories/role-achievement.repository.ts": ["modules/achievement", "modules/game-config"],
   // 游戏内邮件（#429）：收件箱只归 game-mail 域读写（成就只通过 GameMailService 发信，不碰表）
   "database/repositories/role-mail.repository.ts": ["modules/game-mail"],
+  // 群发批次（#438）：与收件箱同域 —— 一批一行，只有 game-mail 写（幂等闸门）与读（管理端列表）
+  "database/repositories/mail-broadcast.repository.ts": ["modules/game-mail"],
   // 队伍（#399）：队伍与成员两表唯一写者是 party 域（PartyService）；
   // realtime 只读（伤害结算要问「击杀者的同图队友」，进图补快照要问「他在哪个队」）
   "database/repositories/party.repository.ts": ["modules/party", "modules/realtime"],

@@ -907,6 +907,8 @@ const EXPECTED_CONFIG_KEYS = [
   "MAIL_POLL_MS",
   "MAIL_RETENTION_DAYS",
   "MAIL_QUEUE_MAX_ROWS",
+  // 群发批大小（#438）：行为验证在 e2e-game-mail-broadcast 里做，这里只守白名单
+  "GAME_MAIL_BROADCAST_BATCH_SIZE",
   // 自动备份（启停与产出的验证在 test/backup.cjs 里单独做，这里只守白名单）
   "BACKUP_INTERVAL_HOURS",
   "BACKUP_KEEP_COUNT",
@@ -915,6 +917,9 @@ const EXPECTED_CONFIG_KEYS = [
   // 实时通道（票据一次性 / 心跳 / 优雅关闭的行为验证在 test/e2e-realtime.cjs 里单独做）
   "REALTIME_TICKET_TTL_MS",
   "REALTIME_HEARTBEAT_MS",
+  // 实时按区分片（#770）：行为验证在 e2e-realtime-shard 里做（两个实时进程），这里只守白名单
+  "REALTIME_SHARD_COUNT",
+  "REALTIME_SHARD_INDEX",
 ];
 
 /**
@@ -957,6 +962,25 @@ async function runSystemSuite(server, tokens) {
     "每张表的行数都是非负整数",
   );
   check(info.database.tables.find((item) => item.table === "accounts").rows > 0, "accounts 行数反映真实数据");
+
+  // —— 每张表都必须归类（`scripts/lib/config-tables.cjs` 的两份清单）——
+  // 漏登记是**静默失效**：配置表漏了 → 别人同步过来少一张，界面像「没配数据」；
+  // 运行时表误加 → 账号密码哈希跟着 git 走，发出去就收不回。
+  // 那份文件里的 `assertAllClassified()` 只在 `make config-export` 时才跑，
+  // 这里补一道常驻守点（`zone_world_meta` 就是这么漏掉的：#961 建了表、清单没跟上，
+  // 谁去导配置谁当场炸）。
+  const { CONFIG_TABLES, RUNTIME_TABLES } = require(path.join(SERVER_DIR, "scripts", "lib", "config-tables.cjs"));
+  const classified = new Set([...CONFIG_TABLES, ...RUNTIME_TABLES]);
+  checkEqual(
+    tableNames.filter((name) => !classified.has(name)).join(","),
+    "",
+    "库里的每张表都在 config-tables.cjs 的配置表 / 运行时表清单里",
+  );
+  checkEqual(
+    [...classified].filter((name) => !tableNames.includes(name)).join(","),
+    "",
+    "清单里没有库里不存在的表（改名 / 删表后要同步删清单）",
+  );
 
   // —— 自动备份：这台是内存库，**必须**是关着的（没有文件可备份）——
   // 开关语义与.backup.enabled 真正的启停 / 产出 / 失败可见由 test/backup.cjs 包圆，

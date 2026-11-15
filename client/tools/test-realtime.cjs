@@ -14,6 +14,7 @@
  * · 心跳无应答 / 握手超时都判掉线（socket 层不会自己发现对端没了）
  * · 重连指数退避且封顶；连上即清零
  * · 被别处顶掉（close 4000）**不**抢回来（否则两个客户端互相踢）
+ * · 连错分片（close 4003）立刻重取票重连（#770），连错多次才退回退避
  * · 状态变化按「首次连上 / 掉线 / 重连回来 / 被顶掉」分开报（接线方据此只提示一次，不刷屏）
  *
  * 用法：node client/tools/test-realtime.cjs
@@ -240,6 +241,18 @@ async function connectOk(heartbeatMs = 600000) {
 
   check(buildRealtimeUrl("a b/c").indexOf("?ticket=a%20b%2Fc") > 0, "票据进 query 前做 encodeURIComponent", buildRealtimeUrl("a b/c"));
 
+  networkConfig.baseUrl = "http://localhost:3100/api";
+  check(
+    buildRealtimeUrl("TK", 1) === "ws://localhost:3100/api/realtime/s1?ticket=TK",
+    "票里带分片号 → 路径拼上 /s<k>（nginx 按这段前缀分流，客户端不自己算区落在哪片）",
+    buildRealtimeUrl("TK", 1),
+  );
+  check(
+    buildRealtimeUrl("TK", 0) === "ws://localhost:3100/api/realtime?ticket=TK",
+    "第 0 片不拼前缀（不分片部署与老服务端都只认 …/realtime，少一段就少一个兼容分支）",
+    buildRealtimeUrl("TK", 0),
+  );
+
   globalThis.location = undefined;
   networkConfig.baseUrl = savedBaseUrl;
 
@@ -370,6 +383,40 @@ async function connectOk(heartbeatMs = 600000) {
   await delay(150);
   check(requests.length === requestsAtDrop && sockets.length === 1, "确实没有再取票 / 没有再建连", `取票请求仍为 ${requests.length} 次`);
   restore();
+
+  console.log("\n— J2. 连错分片（close 4003）：立刻重取票重连，连错多次才退回退避 —");
+
+  reset();
+  restore = tuneRealtime({ reconnectBaseDelay: 20, reconnectMaxDelay: 40 });
+  // 票里带分片号 → 客户端跟着票走（哪个进程管这个区由服务端说了算）
+  responder = () => ({ status: 200, text: envelope(0, "请求成功", { ticket: "TK", expiresIn: 30000, shard: 1 }) });
+  const sharded = await connectOk();
+  check(sharded.url.indexOf("/api/realtime/s1?ticket=") > 0, "票里 shard=1 → 建连地址拼上 /s1", sharded.url);
+
+  // 4003 是确定性失败：重取票就能拿到对的片，所以**不等退避**
+  scheduledDelays.length = 0;
+  sharded.serverClose(REALTIME_CLOSE.WRONG_SHARD, "分片不对");
+  await waitFor(() => sockets.length >= 2, 500);
+  check(
+    sockets.length === 2 && retryDelays(20, 40).length === 0,
+    "4003 → 立刻重取票重连，没有安排退避（退避是给网络抖动的，这里的失败重试一次就好）",
+    `建连 ${sockets.length} 次 / 退避 ${retryDelays(20, 40).length} 次`,
+  );
+
+  sockets[sockets.length - 1].serverClose(REALTIME_CLOSE.WRONG_SHARD, "分片不对");
+  await waitFor(() => sockets.length >= 3, 500);
+  check(sockets.length === 3, "再错一次仍然立刻重连（连错 2 次以内不退避）", `建连 ${sockets.length} 次`);
+
+  scheduledDelays.length = 0;
+  sockets[sockets.length - 1].serverClose(REALTIME_CLOSE.WRONG_SHARD, "分片不对");
+  await waitFor(() => retryDelays(20, 40).length >= 1, 500);
+  check(
+    retryDelays(20, 40).length >= 1 && sockets.length === 3,
+    "连错 3 次 → 退回退避（服务端两侧口径不一致时，别把自己变成压服务端的那只手）",
+    `建连 ${sockets.length} 次 / 退避 ${retryDelays(20, 40).join(",")}`,
+  );
+  restore();
+  RealtimeClient.stop();
 
   console.log("\n— K. 不认识的帧 / 坏帧不该搞断连接 —");
 

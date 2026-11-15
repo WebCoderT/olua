@@ -153,6 +153,10 @@ export const PERMISSION = {
    * 的事不能共用一个前缀。只读观察员没有这一项。
    */
   GAME_MAIL_SEND: "gameMail:send",
+  /** 群发游戏消息（#438）：当前区按「全区 / 等级段」批量投递，邮件不可撤回，影响面权限 */
+  GAME_MAIL_BROADCAST: "gameMail:broadcast",
+  /** 群发到**所有区**（#438）：与公告的全服投放同一条口径，只给超管 */
+  GAME_MAIL_BROADCAST_ALL: "gameMail:broadcast-all",
   ADMIN_READ: "admin:read",
   ADMIN_MANAGE: "admin:manage",
   /** 查看操作日志（只读观察员没有这一项） */
@@ -249,6 +253,8 @@ export const PERMISSION_LABELS: Record<string, string> = {
   [PERMISSION.MAIL_READ]: "查看邮件投递记录",
   [PERMISSION.MAIL_WRITE]: "发送邮件",
   [PERMISSION.GAME_MAIL_SEND]: "补发游戏消息",
+  [PERMISSION.GAME_MAIL_BROADCAST]: "群发游戏消息（本区）",
+  [PERMISSION.GAME_MAIL_BROADCAST_ALL]: "群发游戏消息（全服）",
   [PERMISSION.ADMIN_READ]: "查看管理员",
   [PERMISSION.ADMIN_MANAGE]: "管理管理员",
   [PERMISSION.AUDIT_READ]: "查看操作日志",
@@ -548,6 +554,7 @@ export const AUDIT_TARGET_LABELS: Record<string, string> = {
   admin: "管理员",
   announcement: "公告",
   mail: "邮件",
+  gameMail: "游戏内消息（群发）",
   title: "称号配置",
   soul: "战魂配置",
   rank: "军衔配置",

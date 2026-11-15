@@ -99,10 +99,17 @@ function wsOriginOf(baseUrl: string): string {
   return `${scheme}//${scope.location?.host ?? ""}${baseUrl}`;
 }
 
-/** 拼一条完整的实时连接地址（主机与路径都从 configs/network.baseUrl 推出来） */
-export function buildRealtimeUrl(ticket: string): string {
+/**
+ * 拼一条完整的实时连接地址（主机与路径都从 configs/network.baseUrl 推出来）
+ *
+ * `shard`（#770 按区分片）：票里带「这个账号该连哪个实时进程」，非 0 时要把它拼进路径
+ * （服务端的 `shardSegment()` = `s<号>`，nginx 按这段前缀分流到对应进程）。
+ * **0 不拼**：不分片的部署与老服务端都只认 `…/realtime`，少拼一段就少一个兼容分支。
+ */
+export function buildRealtimeUrl(ticket: string, shard = 0): string {
   const base = networkConfig.baseUrl.replace(/\/+$/, "");
-  return `${wsOriginOf(base)}${realtimePath()}?ticket=${encodeURIComponent(ticket)}`;
+  const path = shard > 0 ? `${realtimePath()}/s${shard}` : realtimePath();
+  return `${wsOriginOf(base)}${path}?ticket=${encodeURIComponent(ticket)}`;
 }
 
 /** 服务端会发过来的帧（只声明本类要认的字段，多出来的原样忽略） */
@@ -120,6 +127,14 @@ export default class RealtimeClient {
   private static everConnected = false;
   /** 连续失败次数（退避用；连上即清零） */
   private static attempts = 0;
+  /**
+   * 连续「连错分片」的次数（#770）
+   *
+   * 4003 是**确定性的**失败（票里的区与进程对不上），重取票重连一次就好，所以不退避。
+   * 但万一服务端两侧对不上（比如运维改了分片数却没重启存档进程），不退避就成了热循环 ——
+   * 连续几次之后按普通掉线走退避，至少不会自己把服务端打满。连上即清零。
+   */
+  private static wrongShardRetries = 0;
   private static userId: string | null = null;
   private static handshakeTimer: ReturnType<typeof setTimeout> | null = null;
   private static pingTimer: ReturnType<typeof setInterval> | null = null;
@@ -155,6 +170,7 @@ export default class RealtimeClient {
     }
     this.stopped = false;
     this.attempts = 0;
+    this.wrongShardRetries = 0;
     void this.open();
   }
 
@@ -172,6 +188,7 @@ export default class RealtimeClient {
     this.userId = null;
     this.everConnected = false;
     this.attempts = 0;
+    this.wrongShardRetries = 0;
     if (socket) {
       socket.onopen = null;
       socket.onmessage = null;
@@ -193,10 +210,13 @@ export default class RealtimeClient {
     if (this.stopped) return;
     this.emit(RealtimeStatus.Connecting, {});
     let ticket: string;
+    let shard: number;
     try {
       // 静默：重连是后台自己跑的，失败提示由 onStatusChange 统一发一条，不能让请求层每次都弹
       const result = await RealtimeApi.ticket({ silent: true });
       ticket = result.ticket;
+      // 分片（#770）：票里带着「这个账号该连哪个实时进程」，非 0 时拼进路径
+      shard = result.shard ?? 0;
     } catch (error) {
       console.warn(`[realtime] 取连接票据失败：${error instanceof ApiError ? error.describe() : String(error)}`);
       // 令牌失效：请求层已经把人送回登录场景了，再连也取不到票 —— 停在这里
@@ -208,14 +228,14 @@ export default class RealtimeClient {
       return;
     }
     if (this.stopped) return;
-    this.connect(ticket);
+    this.connect(ticket, shard);
   }
 
   /** 拿票据去建连（地址由 configs/network.baseUrl 推出来，客户端不写第二份地址） */
-  private static connect(ticket: string): void {
+  private static connect(ticket: string, shard = 0): void {
     let socket: WebSocket;
     try {
-      socket = new WebSocket(buildRealtimeUrl(ticket));
+      socket = new WebSocket(buildRealtimeUrl(ticket, shard));
     } catch (error) {
       // 地址拼不出来 / 环境没有 WebSocket：按网络抖动处理，退避之后再试
       console.warn(`[realtime] 建立连接失败：${String(error)}`);
@@ -257,6 +277,7 @@ export default class RealtimeClient {
       const reconnected = this.everConnected;
       this.everConnected = true;
       this.attempts = 0;
+      this.wrongShardRetries = 0;
       const data = (frame.data ?? {}) as { heartbeatMs?: unknown; userId?: unknown; serverTime?: unknown };
       const heartbeatMs = this.heartbeatMsOf(data.heartbeatMs);
       this.userId = typeof data.userId === "string" ? data.userId : null;
@@ -473,6 +494,17 @@ export default class RealtimeClient {
       this.stopped = true;
       console.warn(`[realtime] 本区暂不可进（${reason || `close=${code}`}），不再重连`);
       this.emit(RealtimeStatus.Disconnected, { lost: wasConnected, willRetry: false, reason: reason || `close=${code}` });
+      return;
+    }
+
+    // 连错分片（#770）：重新取票就能拿到正确的 shard，所以**不退避、立刻重开一次**。
+    // 不能按普通掉线走退避 —— 那是给「网络不好」的，这里的失败是确定性的、重试一次就好。
+    // 连着重试几次还错（服务端两侧口径不一致）就退回退避，别把自己变成压服务端的那只手。
+    if (code === REALTIME_CLOSE.WRONG_SHARD && this.wrongShardRetries < 2) {
+      this.wrongShardRetries += 1;
+      console.info(`[realtime] 连接落在错误的分片上（第 ${this.wrongShardRetries} 次），重新取票后立即重连`);
+      this.attempts = 0;
+      void this.open();
       return;
     }
 

@@ -22,6 +22,8 @@ export const AUDIT_TARGET_TYPES = [
   "admin",
   "announcement",
   "mail",
+  // 游戏内消息群发（#438）：一批影响成千上万个角色，与单发（挂在 role 上）分开筛
+  "gameMail",
   "title",
   "soul",
   "rank",

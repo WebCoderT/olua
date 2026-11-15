@@ -36,6 +36,10 @@
 - **配置管理面的断言跟「种子行 / 默认常量」对齐，不手抄值**（2026-11-15 #966 第七批）：`npc.scaleX = 1.5`、
   时装 `sellPrice = 0`、`prefixColors.length = 5` 这类都在抄种子；改成与 `config-snapshot` 的行逐字段比，
   或与 dist 导出的 `PARTY_MEMBER_LIMIT_DEFAULT` 比 —— 运营/策划调值不假红，「没落库 / 脏值透传」照样红。
+- **「每张表都必须归类」有常驻守点**（2026-11-15 #438）：`e2e-guard` 用系统信息页给出的 `sqlite_master`
+  全量清单，对 `config-tables.cjs` 的两份清单做**双向**比对（库里有清单没有 / 清单有库里没有）。
+  `assertAllClassified()` 只在 `make config-export` 跑，常年没人导配置就发现不了 —— `zone_world_meta`（#961）
+  就这么漏了一整轮，谁去导配置谁当场炸。改守点后按惯例做了反证（摘掉 `mail_broadcasts` → 红且指名道姓）。
 
 - 工具链：只信 Grep 工具（BSD grep 交替恒空）· 批量替换 `perl -pi -e` · `curl --noproxy '*'` · 判进程 `kill -0`。
 
@@ -50,7 +54,7 @@
   自动进 `make audit`（现 16 个）；白名单 `tools/zone-scope-allowlist.json` 18 条，**不再命中或同名命中 >1 处都算红**。
 - 方向恒 `apply-snapshot → game-config → types`；一份数据一个来源；客户端零兜底；进 `SERVER_INVENTORY_FIELDS`
   的字段不得写也不得补默认值；纯服务端参数别进 `RuntimeParamsDto`。
-- 已展开域见 `topics/架构不变量.md`（战斗 #822~#826 · AI #853~#858 · 背包 #835~#842 · 邮件 #866~#870 · 商城
+- 已展开域见 `topics/架构不变量.md`（战斗 #822~#826 · AI #853~#858 · 背包 #835~#842 · 邮件 #866~#870 + **#438 群发**（每角色一行 + 批次号幂等 + 全服遍历未合并区）· 商城
   #846 · 进图 #859/#861 · 任务 #862~#865 · 拾取 #817 · 帮会 #871/#872 · 刷怪 #930 · 移动 #811 · **Room #809**：
   roomId 三键 `zone:map:slot` 唯一口径 `room-key.util.ts`，热重载 `world_reload_requests`）。
 
@@ -71,7 +75,7 @@ compose 五服务：admin:80 唯一入口 / game:8080 / server:3100 / realtime:3
   `roles.zone_id` 是区归属唯一权威、`accounts.zone_id` 改名 `active_zone_id`（当前浏览区）；
   玩家侧零区参数、跨区 roleId 一律 20002；新增 `GET /zones/mine` + `POST /zones/select`（换区清在线角色）；
   合区搬角色 + 同账号同名**自动改名**。`e2e-zone-roles` 45 / `e2e-zone-no-param` 12 /
-  `e2e-zone-migrate` 12（旧库升级幂等），e2e 清单 **85 套** · #956 P0 守点（PR #968）·
+  `e2e-zone-migrate` 12（旧库升级幂等），e2e 清单 **87 套** · #956 P0 守点（PR #968）·
   **#810 AOI 视野裁剪（PR #953 服务端 + #965 客户端，已关）**：
   512px 格子 3×3 邻域、`entityEnter`/`entityLeave`、同格只序列化一次、离开延迟 1s 合并；
   客户端 upsert 建 / `despawn` 拆、快照缺席不演死亡。`e2e-aoi` 30 条 + 协议 38 条 + 客户端 66 套 ·
@@ -81,15 +85,23 @@ compose 五服务：admin:80 唯一入口 / game:8080 / server:3100 / realtime:3
   #768 10Hz 提频+帧瘦身+序列化缓存（PR #945 `9202366c`，已关） ·
   #767 同步延迟测量基线（PR #944 `ba846c6b`）· #809 Room 抽象 + 热重载（PR #942/#943，关 #809+#669）·
   #811 移动校验（#941）· #932 任务域（#933）· #826 战斗六项（#936）。
-- **同步系列三刀全部落地**：#767 基线 → #768 10Hz+瘦身 → **#769 插值（PR #991 `14d7b285`，已关）**：
+- **同步系列五刀全部落地**：#767 基线 → #768 10Hz+瘦身 → **#769 插值（PR #991 `14d7b285`，已关）**：
   `players` / `monster-ai` 两帧带**帧级 `t`**（同一拍共用一个值、AOI 裁剪后原样带上）；
   客户端 `ui/core/SnapshotInterpolator`（缓冲 4 条、线性插值、外插上限 100ms、同 t 覆盖 /
   乱序丢弃）+ `ui/utils/net/ServerClock`（welcome 粗校准 / pong 半程细校准）；
   **玩家与怪物共用同一个插值器**（怪物 `serverX/Y/moving/stepAt` 退役，缓冲挂 WeakMap）。
   手感参数在 `configs/network.realtime.interpolation`（120 / 4 / 100），**不进断言**。
   `e2e-protocol-slim` 38→45 · `e2e-aoi` 30→35 · client 68 套。
-  下一步只剩 **#770 分片**（docs/28 §2.4 已改口径为「按区分片」，动笔前重写正文 +
-  评估 SQLite 多进程写竞争），或 **#812 分线/副本/map_rules**。
+- **#770 按区分片（PR #997 `ae45086e`，已关）**：`shardOf(zoneId, N) = ((zoneId % N) + N) % N`，
+  一个区只在一个实时进程里 → 世界/帮会/公告**不用跨进程广播**；路由 `/api/realtime/s<k>`
+  （`/api/realtime` 恒第 0 片并取票），`N=1` 时行为与改造前一致。
+  票从「随机字节 + 进程内 Map」改成**无状态加密票**（AES-256-GCM，密钥 `sha256(JWT_SECRET)`）：
+  取票与握手会落在不同进程，票必须谁能解；**不改签名票**是因为票只能进 URL（nginx 日志 / 浏览器历史），
+  签名票的 base64url JSON 会把用户名读出来 —— 老断言「票据不可解析」正好守着这条。
+  三层闸门：路径 `s<k>` 不符 → `421/50150`；票里的区不符 → 同上且**不消耗票**；`worldJoin` 用角色
+  **现在的**区复核 → `close(4003)`，客户端**重取票**后立刻重连（连错 ≥3 次才退回退避）。
+  `REALTIME_EMBEDDED=true` 时 `shardCount()` 强制 1（配错不该让人起不来）。`e2e-realtime-shard` 27 条。
+  下一步：**#812 分线/副本/map_rules**，或 #803/#804/#805 掉落。
 - **epic #954 区服模型补完 —— 全部完成**（P0~P7 八个子 issue 全关，2026-11-15 关 epic）：
   #956 守点 #968 · #957 角色带区 #970 · #958 社交 #976 · #959 排行榜 #978 · #960 管理端单区 #984 ·
   #961 运营合区 #985 · #963 公告按区 #986 · #962 客户端选服 #989（`f6d8f35c`）。
@@ -98,20 +110,31 @@ compose 五服务：admin:80 唯一入口 / game:8080 / server:3100 / realtime:3
   服务端 `current`（还开放）→ 最新开放区；`RoleSelector.bootstrap` 必须 `ensureZone` → `loadRoles`
   （顺序反了会拉到上一个区的角色）；换区要退出管理模式并清删除按钮（按角色 id 绑定，会给旧区发删除）。
   P8 按区分片并入 #770 口径；#438 群发按区等主体落地（docs/39 §3.7 有重开条件）。
+- **#438 运营群发（PR #994 `c1ed3a9b`，已关）**：每角色一行 `role_mails`（+ `batch_id` 列与部分索引），
+  `mail_broadcasts` 是幂等闸门兼进度账（`INSERT OR IGNORE` + `changes === 0` → `duplicated: true`，
+  **一行不写**；不按标题+正文去重）。权限两个点：`gameMail:broadcast`（管理员，只发当前区）/
+  `gameMail:broadcast-all`（超管），判断在业务里（同接口按入参决定权限，装饰器表达不了）。
+  「全服」= 遍历 `ZoneService.states()` 里 `mergedInto === null` 的区逐个发，**不写不带区的 SQL**
+  （`audit-zone-scope` 零豁免）；keyset 分页（`id > 上批末尾`）而非 OFFSET；一批一事务（插行 +
+  累加 `sent_count`）；批间 `await setImmediate` —— `DatabaseService` 是同步驱动，不让出会堵死整个进程。
+  群发邮件永不过期（`ttlMs: 0`）。`role_mails.batch_id` 刻意不给默认值（NULL = 不属于任何群发）。
+  中断：`finished_at` 停在 NULL，已写行算数、不补不删。`e2e-game-mail-broadcast` 46 条（批大小调 2 强制跨批）。
 - 当前 open：#9 包体积 · #12~#19 素材 · #295 阶段三 ·
   #403 帮会战 · #742 TLS · #808 地图重构（剩 **#812 分线副本**；
-  结算读 `map_rules`、掉落进 Room 暂未落地，重开条件见 docs/20）· **#801 掉落 epic 剩 #803/#804/#805** ·
-  #770 同步分片 · #438 群发。保持现状：技能 1011 / 快捷键 6 格 / 装备 7 部位。
+  结算读 `map_rules`、掉落进 Room 暂未落地，重开条件见 docs/20）· **#801 掉落 epic 剩 #803/#804/#805**。
+  保持现状：技能 1011 / 快捷键 6 格 / 装备 7 部位。
 - **掉落已是世界实体（#802，PR #993 `89065e2a`，已关）**：`DropService` 是唯一权威（`ground`/`byId` + 终态
   `recent` 留 60s 接重发），`world_drops` 是投影（100ms 批量 upsert、重启清空），`drop_records` /
   `drop_clear_requests` 只建表（分别给 #803 / #805）。`pick` 只带 `dropId`、九步校验、11 种 `code`；
   第 2 步判图读 `roles.zoneOf` + `MapAtOfOnlineRole`（**不是在场表缓存**）。参数键名沿用库里的
   `pickAcceptRadius`（设计稿的 `pickRange` 已统一掉，0 = 闸关闭），新增只有 `ttlMs`/`protectMs`/
   `maxGroundPerMap`/`announceBoss`。**#804 之前客户端捡不起东西**（仍发 castId+下标），已定先合再改。
-- `docs/14` 无生成脚本，改接口手工加行；现口径 **257 = 8 + 68 + 181**。client 单测可当门禁（**68 套**）。
+- `docs/14` 无生成脚本，改接口手工加行；现口径 **260 = 8 + 68 + 184**。client 单测可当门禁（**68 套**）。
   `docs/37` 是最高优先单一来源。
-- **新增 env 键 / 文案 / 节点名 / 颜色的 PR，静态审计要预判两处登记**：`.env.example`（audit-api-hardcode）+
-  `tools/config-leak-allowlist.json`（config-leak）。
-- **CI 红的判据**：先在本地完整 verify（**85 套**）复跑——**本地能精确复现 = 代码/测试问题**（改字段名最容易漏
+- **新增 env 键 / 文案 / 节点名 / 颜色的 PR，静态审计要预判三处登记**：`.env.example`（audit-api-hardcode）+
+  `tools/config-leak-allowlist.json`（config-leak）+ **进了配置快照的键还要加 `e2e-guard` 的
+  `EXPECTED_CONFIG_KEYS`**（#770 踩到：前两项都过了，`make e2e-all` 才在 guard 十节报「白名单之外的项」）。
+  新增 e2e 脚本别忘了 `tools/run-e2e.cjs` 的 `WEIGHT`（漏了只是分片不均，不报错）。
+- **CI 红的判据**：先在本地完整 verify（**87 套**）复跑——**本地能精确复现 = 代码/测试问题**（改字段名最容易漏
   「函数体内读点」，如 `find(m => m.instanceId === …)`）；只有本地绿而 CI 红才考虑分片负载，`gh run rerun --failed`。
   同一套件连续 ≥2 轮同断言红不要再当抖动。改广播帧字段后记得全量本地 verify，「本地绿」结论会过期。

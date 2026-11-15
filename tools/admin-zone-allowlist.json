@@ -53,12 +53,7 @@
     {
       "file": "modules/mail/admin-mail.controller.ts",
       "issue": "#960",
-      "reason": "邮件按**账号**投递（发到账号下的所有角色），单区上下文对它没有意义；按区群发见 #438"
-    },
-    {
-      "file": "modules/game-mail/admin-game-mail.controller.ts",
-      "issue": "#960",
-      "reason": "同上：游戏内邮件按账号 / 角色投递，跨区"
+      "reason": "邮件按**账号**投递（发到账号下的所有角色），单区上下文对它没有意义；按区群发见 game-mail 的 /broadcasts"
     }
   ],
   "dirs": [
@@ -69,6 +64,16 @@
     }
   ],
   "routes": [
+    {
+      "route": "POST /admin/game-mail/roles/:id",
+      "issue": "#438",
+      "reason": "单发按**角色 id** 投递，与管理员当前停在哪个区无关 —— 客服补偿的对象可能在别的区，要求先切区只是多一步而且容易切错。群发（/broadcasts）反过来必须带区，所以整个控制器挂上了 ZoneContextGuard（#438 之前是整文件豁免）"
+    },
+    {
+      "route": "GET /admin/game-mail/broadcasts",
+      "issue": "#438",
+      "reason": "群发批次列表**刻意跨区**：在 A 区也要能看到同事刚在 B 区发了什么，否则「发错区」这件事在界面上直接消失。写入侧（POST /broadcasts）由 @ZoneContext 取区，不在此列"
+    },
     {
       "route": "GET /admin/announcements",
       "issue": "#963",

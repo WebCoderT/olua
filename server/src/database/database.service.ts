@@ -1444,6 +1444,35 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
       -- 自动入包的扫描键：只有「有保质期且还没领」的行会被扫到（部分索引，别全表扫）
       CREATE INDEX IF NOT EXISTS idx_role_mails_auto ON role_mails(expires_at) WHERE claimed_at IS NULL;
 
+      -- 运营群发批次（#438）：一次群发一行，不是「一次群发每人一行」。
+      -- 这是幂等的唯一闸门（id 由运营端生成，重复提交同一批次直接返回既有结果），
+      -- 也是「这条群发是谁在什么时候发给多少人」的唯一记录 —— role_mails 那几万行只带
+      -- 一个 batch_id 指回来，正文与附件在这里存一份（不随行数膨胀）。
+      CREATE TABLE IF NOT EXISTS mail_broadcasts (
+        -- 批次号：运营界面上看到的那串；**由调用方给**，服务端不生成（否则重试换号就不幂等了）
+        id            TEXT    PRIMARY KEY,
+        channel       TEXT    NOT NULL,
+        kind          TEXT    NOT NULL DEFAULT 'admin-broadcast',
+        title         TEXT    NOT NULL DEFAULT '',
+        body          TEXT    NOT NULL DEFAULT '',
+        bind_gold     INTEGER NOT NULL DEFAULT 0,
+        exp           INTEGER NOT NULL DEFAULT 0,
+        attachments   TEXT    NOT NULL DEFAULT '[]',
+        -- 投放范围快照（JSON：scope / zoneId / minLevel / maxLevel）
+        -- 存快照而不是存外键：区后来被合并了、等级段口径变了，历史批次仍要能解释「当时发给了谁」
+        filter        TEXT    NOT NULL DEFAULT '{}',
+        -- 目标人数（发送前按筛选条件算一次）与实发条数（每批累加）。
+        -- 两个数不等是正常的：发送过程中有角色创建 / 删除；差异本身就是排查线索
+        target_count  INTEGER NOT NULL DEFAULT 0,
+        sent_count    INTEGER NOT NULL DEFAULT 0,
+        operator_id   TEXT    NOT NULL DEFAULT '',
+        operator_name TEXT    NOT NULL DEFAULT '',
+        created_at    INTEGER NOT NULL DEFAULT 0,
+        -- 完成时刻（NULL = 还在写；进程挂在中间时这一列会停在 NULL，见 GameMailBroadcastService）
+        finished_at   INTEGER
+      );
+      CREATE INDEX IF NOT EXISTS idx_mail_broadcasts_time ON mail_broadcasts(created_at DESC);
+
       -- 客户端运行时参数（#605）：单行表（id 恒为 1），三个分组各一列 JSON。
       -- drop / autoBattle 服务端不消费（只随配置快照下发，客户端用来调手感）；
       -- guild 是**服务端校验门槛**（帮会名 / 公告 / 申请留言长度），客户端读到只为提前提示。
@@ -1602,6 +1631,11 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
     this.db.exec(
       "CREATE INDEX IF NOT EXISTS idx_role_mails_auto ON role_mails(expires_at) WHERE claimed_at IS NULL",
     );
+    // 群发批次号（#438）：**可空** —— 单发 / 系统投递没有批次，NULL 就是「不属于任何群发」。
+    // 不给默认值：默认空串会让「有没有群发」变成一个要判空串的布尔，而 NULL 在 SQL 里本来就
+    // 是「不知道 / 不适用」。存量行一律 NULL（历史上没有群发这回事）
+    this.ensureColumn("role_mails", "batch_id", "TEXT");
+    this.db.exec("CREATE INDEX IF NOT EXISTS idx_role_mails_batch ON role_mails(batch_id) WHERE batch_id IS NOT NULL");
     // 击杀数（#400）：排行榜的原料。放在 roles 行上而不是独立表 —— 写路径唯一（结算时 +1），
     // 客户端的存档覆盖（PUT /roles/:id 换 data）压根碰不到这一列，多一张表只会多一次 join。
     this.ensureColumn("roles", "kills", "INTEGER NOT NULL DEFAULT 0");

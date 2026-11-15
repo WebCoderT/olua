@@ -61,6 +61,7 @@ const NAV_GROUPS: NavBranch[] = [
           { to: "/guilds", label: "帮会管理", permission: PERMISSION.GUILD_READ },
           { to: "/mails", label: "邮件", permission: PERMISSION.MAIL_READ },
           { to: "/mail-send", label: "发消息", permission: PERMISSION.GAME_MAIL_SEND },
+          { to: "/mail-broadcast", label: "消息群发", permission: PERMISSION.GAME_MAIL_BROADCAST },
           { to: "/reports", label: "玩家举报", permission: PERMISSION.REPORT_READ },
           { to: "/announcements", label: "公告", permission: PERMISSION.ANNOUNCEMENT_READ },
         ],

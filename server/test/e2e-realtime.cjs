@@ -281,6 +281,12 @@ async function main() {
         typeof ticket1 === "string" && ticket1.length >= 20 && /^[A-Za-z0-9_-]+$/.test(ticket1),
         "票据是一串足够长、URL 安全的随机字节（不是可解析的令牌）",
       );
+      // #770 起票是「无状态加密票」：URL 会进 nginx 访问日志与浏览器历史，
+      // 所以里面**读不出**账号名（明文或 base64 都不行 —— 那等于把用户名写进日志）
+      check(
+        !ticket1.includes("realtime_a") && !Buffer.from(ticket1, "base64url").toString("utf8").includes("realtime_a"),
+        "票据里读不出账号名（加密的，不是 base64 明文）",
+      );
       checkEqual(first.body?.data?.expiresIn, TICKET_TTL_MS, "回包给出有效期，与配置一致");
       const second = await api(baseUrl, "POST", "/api/realtime/ticket", { token: tokenA });
       check(second.body?.data?.ticket !== ticket1, "两次取票得到不同的票据（不可枚举）");

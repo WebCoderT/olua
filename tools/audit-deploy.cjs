@@ -322,29 +322,42 @@ if (realtimeDbPath && dbPath && mount) {
   fail("compose 的 server-realtime 没有显式 DB_PATH —— 实时进程的写会落进容器可写层，容器重建即丢");
 }
 
-// game nginx 必须把 /api/realtime 反代到 server-realtime（上游名 + 端口 + WS upgrade 头）
-const realtimeUpstream = /set\s+\$olua_realtime\s+http:\/\/([a-z0-9-]+):(\d+);/.exec(gameNginx);
-if (!realtimeUpstream) {
-  fail("deploy/nginx-game.conf 里没找到实时上游锚点 `set $olua_realtime http://server-realtime:<端口>;` —— 玩家能登录但连不上实时通道");
+// game nginx 必须把 /api/realtime* 反代到实时进程（上游名 + 端口 + WS upgrade 头）
+//
+// #770 按区分片之后，这里不再是「一个上游」：`N` 片就有 N 段 location
+// （`/api/realtime` = 第 0 片 + 取票，`/api/realtime/s1` = 第 1 片 …）。
+// 所以逐段校验：**每个上游服务名都必须在 compose 里存在，且端口与它自己的 REALTIME_PORT 一致**。
+const rtBlocks = [...gameNginx.matchAll(/location\s+\/api\/realtime([^\s{]*)\s*\{([\s\S]*?)\n {2}\}/g)];
+if (rtBlocks.length === 0) {
+  fail("deploy/nginx-game.conf 里没有 `location /api/realtime` 块 —— 取票与 WS 都会落到存档进程");
 } else {
-  const [, rtHost, rtPort] = realtimeUpstream;
-  if (rtHost === "server-realtime") ok("game nginx 实时上游服务名", rtHost);
-  else fail(`game nginx 实时通道反代到 \`${rtHost}\`，但 compose 里的实时服务叫 server-realtime`);
+  const baseBlock = rtBlocks.find(([, suffix]) => suffix.trim() === "");
+  if (!baseBlock) fail("deploy/nginx-game.conf 里没有**不带分片段**的 `location /api/realtime` —— 取票请求没有落点");
 
-  if (rtPort === "3101") ok("game nginx 实时上游端口", rtPort);
-  else fail(`game nginx 实时上游端口是 ${rtPort}，应为 3101（与 compose 的 REALTIME_PORT 一致）`);
-
-  const rtLocation = /location\s+\/api\/realtime\s*\{([\s\S]*?)\n {2}\}/.exec(gameNginx);
-  if (!rtLocation) {
-    fail("deploy/nginx-game.conf 里没有 `location /api/realtime` 块 —— 取票与 WS 都会落到存档进程");
-  } else {
-    if (/proxy_set_header\s+Upgrade\s+\$http_upgrade;/.test(rtLocation[1]) && /proxy_set_header\s+Connection\s+"upgrade";/.test(rtLocation[1])) {
-      ok("实时反代带 WS upgrade 头", "Upgrade + Connection");
-    } else {
-      fail("实时反代缺 `Upgrade` / `Connection \"upgrade\"` 头 —— WS 握手会退化成普通 HTTP 请求被拒");
+  for (const [, suffix, body] of rtBlocks) {
+    const where = suffix.trim() === "" ? "/api/realtime（第 0 片 + 取票）" : `/api/realtime${suffix}`;
+    const upstream = /set\s+\$olua_realtime\s+http:\/\/([a-z0-9-]+):(\d+);/.exec(body);
+    if (!upstream) {
+      fail(`${where} 里没有上游锚点 \`set $olua_realtime http://<服务名>:<端口>;\``);
+      continue;
     }
-    if (/proxy_read_timeout\s+\d+s;/.test(rtLocation[1])) ok("实时反代放宽了读超时", "WS 是长连接，默认 60s 会掐断");
-    else fail("实时反代没有调大 proxy_read_timeout —— WS 会被 nginx 默认 60s 掐断（心跳救不回所有代理）");
+    const [, host, port] = upstream;
+    if (!serviceNames.includes(host)) {
+      fail(`${where} 反代到 \`${host}\`，但 compose 里没有这个服务（现有：${serviceNames.join(" / ")}）`);
+    } else {
+      const servicePort = new RegExp(`${host}:[\\s\\S]*?REALTIME_PORT:\\s*"?([0-9]+)"?`).exec(compose);
+      if (!servicePort) fail(`${where} 对应的 compose 服务 ${host} 没有 REALTIME_PORT`);
+      else if (servicePort[1] !== port) fail(`${where} 的上游端口是 ${port}，而 compose 里 ${host} 的 REALTIME_PORT 是 ${servicePort[1]}`);
+      else ok(`game nginx 实时上游（${where}）`, `${host}:${port}`);
+    }
+
+    if (/proxy_set_header\s+Upgrade\s+\$http_upgrade;/.test(body) && /proxy_set_header\s+Connection\s+"upgrade";/.test(body)) {
+      ok(`实时反代带 WS upgrade 头（${where}）`, "Upgrade + Connection");
+    } else {
+      fail(`${where} 缺 \`Upgrade\` / \`Connection "upgrade"\` 头 —— WS 握手会退化成普通 HTTP 请求被拒`);
+    }
+    if (/proxy_read_timeout\s+\d+s;/.test(body)) ok(`实时反代放宽了读超时（${where}）`, "WS 是长连接，默认 60s 会掐断");
+    else fail(`${where} 没有调大 proxy_read_timeout —— WS 会被 nginx 默认 60s 掐断（心跳救不回所有代理）`);
   }
 }
 

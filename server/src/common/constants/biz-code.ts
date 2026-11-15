@@ -718,4 +718,16 @@ export const BizCode = {
    */
   CONFIG_REVISION_PAYLOAD_INVALID: 50147,
   //#endregion
+
+  //#region 实时通道（#770 按区分片）
+
+  /**
+   * 连错分片了：这个区的实时通道在**另一个进程**上
+   *
+   * 客户端不该把它当错误弹给玩家 —— 握手响应里同时给出 `shard`，按它重连一次就好
+   * （换片是部署形态变化，不是玩家做错了什么）。与 404「接口不存在」分开：
+   * 那个会让客户端以为服务端版本不对。
+   */
+  REALTIME_WRONG_SHARD: 50150,
+  //#endregion
 } as const;

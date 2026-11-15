@@ -94,6 +94,10 @@ const WEIGHT = {
   "test:e2e:zone-merge": 2,
   // 一次完整启动 + 两个区 / 三枚令牌的准备 + 六段可见性断言（无等待窗，纯 HTTP）
   "test:e2e:zone-announcement": 1,
+  // 一次完整启动 + 两个区 / 四个角色 / 七段断言（无等待窗：群发是同步接口）
+  "test:e2e:game-mail-broadcast": 1,
+  // 一次存档启动 + 两个实时进程共享一个库 + 七段断言（无等待窗：握手与帧都是即时回）
+  "test:e2e:realtime-shard": 3,
 };
 
 function weightOf(script) {

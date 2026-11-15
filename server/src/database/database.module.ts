@@ -58,6 +58,7 @@ import { PartyRepository } from "./repositories/party.repository";
 import { AchievementRepository } from "./repositories/achievement.repository";
 import { RoleAchievementRepository } from "./repositories/role-achievement.repository";
 import { RoleMailRepository } from "./repositories/role-mail.repository";
+import { MailBroadcastRepository } from "./repositories/mail-broadcast.repository";
 import { EquipAlignRepository } from "./repositories/equip-align.repository";
 import { EquipInAlignRepository } from "./repositories/equip-in-align.repository";
 import { UiEffectRepository } from "./repositories/ui-effect.repository";
@@ -132,6 +133,7 @@ import { RolePositionRepository } from "./repositories/role-position.repository"
     AchievementRepository,
     RoleAchievementRepository,
     RoleMailRepository,
+    MailBroadcastRepository,
     EquipAlignRepository,
     EquipInAlignRepository,
     UiEffectRepository,
@@ -195,6 +197,7 @@ import { RolePositionRepository } from "./repositories/role-position.repository"
     AchievementRepository,
     RoleAchievementRepository,
     RoleMailRepository,
+    MailBroadcastRepository,
     EquipAlignRepository,
     EquipInAlignRepository,
     UiEffectRepository,

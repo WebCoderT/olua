@@ -116,6 +116,9 @@ const RUNTIME_TABLES = Object.freeze([
   // 写进同步文件就等于「别人机器上的销量盖掉我的」，而这个数本来就该各机器不同
   "mall_sales",
   "mall_stock",
+  // 运营群发批次（#438）：一批一行 = 「谁在什么时候发给了谁」的运行时记录，
+  // 跟着 git 走会把 A 机器的发送历史盖到 B 机器上（且 role_mails 那些行并不会一起过去）
+  "mail_broadcasts",
   "map_monitor_events",
   "map_monitor_state",
   // 掉落的地面投影与终态流水（#802）：权威在实时进程内存，表只是跨进程通道与可查历史 ——
@@ -144,6 +147,9 @@ const RUNTIME_TABLES = Object.freeze([
   // 纯运行时（「谁的机器上正在重载哪张图」不该跟着 git 走），重启即作废也无妨。
   "world_reload_requests",
   "zones",
+  // 区级世界代际（#961）：合区 / 换图时 bump，实时进程据此只作废那个区的内存房间 ——
+  // 纯运行时（「哪台机器上某个区跑到第几代」），跟着 git 走没有意义
+  "zone_world_meta",
 ]);
 
 /** 同步文件的格式标记（导入时校验，防止拿错文件把配置清空） */

@@ -1,6 +1,7 @@
 import { join } from "node:path";
 import { ROLE_MAX_PER_ACCOUNT_DEFAULT } from "../common/constants/role";
 import { PARTY_EXP_SHARE_DISTANCE_DEFAULT, PARTY_MIN_LEVEL_DEFAULT } from "../common/constants/social";
+import { shardCountOf } from "../common/utils/shard.util";
 
 /** 内置的开发用 JWT 密钥（生产必须换掉；唯一出现处，比较也只用 `jwtSecretIsDefault`） */
 const DEFAULT_JWT_SECRET = "olua-dev-secret-please-change-me";
@@ -179,6 +180,16 @@ export interface AppConfiguration {
    * 投递方不显式给 TTL 时用它（30 天）。**人工补发走 0 = 永久**：运营发的补偿不该过期。
    */
   mailDefaultTtlMs: number;
+  /**
+   * 群发每批写入的封数（#438，默认 500）
+   *
+   * 为什么必须可配：一批 = 一个事务，持着 `role_mails` 的写锁。批太大，实时进程的存档写入
+   * （同一个 SQLite 库，WAL）会被卡住几十毫秒，表现是「偶发卡顿」；批太小，几万行就是几百次
+   * 事务提交，群发本身变慢。500 是「一行 200 字节 × 500 ≈ 100KB」的量级，提交一次几毫秒。
+   *
+   * e2e 会把它调成 2 来验证「跨批」路径真的走过 —— 默认值太大，测不出批边界上的错。
+   */
+  gameMailBroadcastBatchSize: number;
 
   //#region 自动备份
   /**
@@ -233,6 +244,24 @@ export interface AppConfiguration {
   realtimeEmbedded: boolean;
   /** 实时进程的监听端口（只有独立进程形态会用到；nginx 把 `/api/realtime*` 反代到它） */
   realtimePort: number;
+  /**
+   * 实时进程分片数（#770，按区分片）
+   *
+   * `1`（默认）= 不分片，行为与 #770 之前**完全一致**：`/api/realtime` 原样可用，
+   * 票里也照旧带 `shard: 0`（客户端忽略即可）。真要扩容时按「分片数 × 进程」起容器，
+   * 每个进程用 `REALTIME_SHARD_INDEX` 说自己是谁。
+   *
+   * **改这个值等于换拓扑**：所有区的连接都会在下一次重连时换片（存档不动），
+   * 所以它不该被当成热配置 —— 只有重启才会读到新值。
+   */
+  realtimeShardCount: number;
+  /**
+   * 本进程的分片号（`0 .. count-1`）
+   *
+   * 越界时按 0 处理而不是拒绝启动：分片是**扩容手段**，配置写错退化成单进程
+   * 是最不伤人的失败方式（`shardCountOf` / `ownsZone` 同一条理由）。
+   */
+  realtimeShardIndex: number;
   /**
    * 踢下线巡检间隔（毫秒；`0` = 关闭巡检）
    *
@@ -636,6 +665,7 @@ export default function configuration(): AppConfiguration {
     mailAutoClaimBatch: Number(process.env.MAIL_AUTO_CLAIM_BATCH ?? 200),
     mailAutoClaimMaxAttempts: Number(process.env.MAIL_AUTO_CLAIM_MAX_ATTEMPTS ?? 5),
     mailDefaultTtlMs: Number(process.env.MAIL_DEFAULT_TTL_MS ?? 30 * 24 * 60 * 60 * 1000),
+    gameMailBroadcastBatchSize: Math.max(1, Number(process.env.GAME_MAIL_BROADCAST_BATCH_SIZE ?? 500)),
     backupIntervalHours: Number(process.env.BACKUP_INTERVAL_HOURS ?? 24),
     backupKeepCount: Number(process.env.BACKUP_KEEP_COUNT ?? 7),
     backupRetentionDays: Number(process.env.BACKUP_RETENTION_DAYS ?? 30),
@@ -644,6 +674,8 @@ export default function configuration(): AppConfiguration {
     realtimeHeartbeatMs: Number(process.env.REALTIME_HEARTBEAT_MS ?? 30 * 1000),
     realtimeEmbedded: process.env.REALTIME_EMBEDDED !== "false",
     realtimePort: Number(process.env.REALTIME_PORT ?? 3101),
+    realtimeShardCount: shardCountOf(process.env.REALTIME_SHARD_COUNT ?? 1),
+    realtimeShardIndex: Number(process.env.REALTIME_SHARD_INDEX ?? 0),
     realtimeKickPollMs: Number(process.env.REALTIME_KICK_POLL_MS ?? 3 * 1000),
     /**
      * 区状态巡检间隔（毫秒，#961）

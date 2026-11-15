@@ -1,7 +1,6 @@
 import { Injectable, Logger, OnApplicationBootstrap, OnModuleDestroy } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { HttpAdapterHost } from "@nestjs/core";
-import { randomBytes } from "node:crypto";
 import { STATUS_CODES, type IncomingMessage, type Server as HttpServer } from "node:http";
 import type { Duplex } from "node:stream";
 import { WebSocket, WebSocketServer, type RawData } from "ws";
@@ -15,6 +14,8 @@ import type { RoleRow } from "../../database/rows";
 import { WorldService } from "../world/world.service";
 import { worldMonsterSnapshotOf } from "../world/world-monster";
 import { roomKey } from "../../common/utils/room-key.util";
+import { ownsZone, shardCountOf, shardOf, shardSegment } from "../../common/utils/shard.util";
+import { newTicketNonce, sealTicket, openTicket } from "./realtime-ticket.util";
 import { MapService, START_MAP_ID, type MapEnterReject } from "../map/map.service";
 import { roleAttributeSourceOf, summarizeRoleAttributes } from "../combat/role-attributes";
 import { RuntimeConfigService } from "../game-config/runtime-config.service";
@@ -96,23 +97,25 @@ interface TrackedSocket extends WebSocket {
   worldZoneId?: number;
 }
 
-/** 一张还没被用掉的票据 */
-interface PendingTicket {
-  identity: RealtimeIdentity;
-  /** 过期时刻（毫秒时间戳） */
-  expiresAt: number;
-}
-
-/** 取票据的结果：区分「没这张票 / 已用过」与「过期了」，两者给调用方的码不一样 */
-type TicketResult = { ok: true; identity: RealtimeIdentity } | { ok: false; code: number; message: string };
+/**
+ * 取票据的结果
+ *
+ * 分五种失败，给客户端的码不一样（**但客户端只需要认三种动作**）：
+ * - 无效 / 已用过 → 重新取票；
+ * - 过期 → 重新取票（可能还要先回登录）；
+ * - **连错分片** → 重新取票（票里会带新的 `shard`），不要弹错给玩家。
+ * `shard` 只在「连错分片」时给：它是给日志与人看的，浏览器拿不到失败握手的响应体。
+ */
+type TicketResult =
+  | { ok: true; identity: RealtimeIdentity }
+  | { ok: false; code: number; message: string; shard?: number };
 
 /**
- * 票据清理的兜底周期（毫秒，至少一分钟）
+ * 用过的票据 nonce 保留多久（毫秒，至少一分钟）
  *
- * 刻意**不与票据有效期绑在一起**：清理只是兜底（防「取一堆票就再也不来」把内存撑起来），
- * 而「这张票过期了」这个判断发生在握手那一刻 —— 要是清理跑得跟有效期一样勤，
- * 同一张过期票就有机会先被清掉，于是同一个现象一会儿报「已过期」一会儿报「无效」。
- * 拿不准的事别让调用方去猜：清理慢一点，判断就永远只有一处。
+ * 分片之后票据是**无状态加密票**，「用过即焚」只剩「本进程记住这个 nonce」这一层。
+ * 保留期刻意比票据有效期长（清理慢一点），理由同改造前：清理与判过期跑得一样勤，
+ * 同一张过期票就会一会儿报「已过期」一会儿报「无效」。
  */
 const TICKET_SWEEP_MIN_MS = 60_000;
 
@@ -178,21 +181,34 @@ type PlayersFrameData = RealtimePlayersMessage["data"];
  * （代理日志、浏览器历史、Referer 都会留痕）。所以中间放一层**一次性票据**：
  * - 取票走 `POST /api/realtime/ticket`，那是**普通 HTTP 接口**，全局 AuthGuard 照常生效
  *   —— 令牌校验、回查库、封禁判定、`token_version` 比对一处都没有另写；
- * - 票据是随机字节，与账号的对应关系只存在本进程的内存里，用掉即删、默认 30 秒过期；
+ * - 票据是**加密串**（#770 起：AES-256-GCM，密钥由 `JWT_SECRET` 派生），自带
+ *   「账号 / 区 / 过期时刻」，任何一个实时进程都能独立解开，而 URL 里读不出内容；
+ *   默认 30 秒过期，用过的 nonce 本进程记 30 秒（见 `usedTicketNonces`）；
  * - 握手时只是**取 AuthGuard 已经得出的结论**。令牌不在这条路径上出现第二次，
  *   也就不存在「两套校验各自漂移」这件事（#33 明确要求的）。
  *
- * ## 单实例
- * 票据与连接都在本进程内存里，所以这是**单实例**的能力。#37 拆进程后本模块整体
- * 搬进 `main.realtime.ts` 的实时进程（仍是单实例，只是换了进程）：取票接口与 WS
- * 走同一个 `/api/realtime*` 路径前缀，nginx 按路径反代，票据不必跨进程共享；
- * 跨进程只剩「踢下线感知」一件难事，由巡检（sweepKicked）轮询库标记解决。
+ * ## 分片（#770 按区分片）
+ * 「连接在哪个进程」由**区**决定：`shardOf(zoneId) % N`。取票时算好写进票里，
+ * 客户端连 `…/realtime/s<k>`，nginx 按路径段分流到对应进程。所以：
+ * - 连接与房间仍然是**进程内内存**（不需要共享存储、不需要跨进程广播）；
+ * - 但票据不能再只活在一个进程的内存里 —— 取票与握手会落在不同进程上，
+ *   这是票据从「随机字节 + 内存 Map」改成「无状态加密票」的唯一原因；
+ * - 一个区只在一个进程里，所以「同区所有人都在同一个事件循环」这条**没有变**，
+ *   世界频道 / 帮会频道 / 公告仍然是一进程内遍历连接。
+ *
+ * 跨进程只剩「踢下线感知」「区状态变化」两件难事，都由巡检轮询库标记解决
+ * （`sweepKicked` / `sweepZoneStatus`）。
  */
 @Injectable()
 export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy {
   private readonly logger = new Logger(RealtimeService.name);
-  /** 未使用的票据：票据 → 身份 + 过期时刻（用过即删） */
-  private readonly tickets = new Map<string, PendingTicket>();
+  /**
+   * 用过的票据 nonce → 过期时刻（#770 分片后票据改无状态加密票，「用过即焚」只剩这一层）
+   *
+   * 只需要记**本进程**见过的：票里带区，一张票只可能落在**一个**分片上
+   * （`shardOf(zoneId)`），别的分片收到它本来就会被「连错分片」拒掉。
+   */
+  private readonly usedTicketNonces = new Map<string, number>();
   /** 账号 → 当前那条连接（**一个账号只留一条**，见 adopt 的替换规则） */
   private readonly connections = new Map<string, TrackedSocket>();
   private server: WebSocketServer | null = null;
@@ -272,13 +288,20 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
    * 签发一张连接票据
    *
    * 调用方必须是**已经过 AuthGuard** 的请求 —— 传进来的就是那份结论，这里不再校验任何东西。
+   *
+   * 票据里多带一样东西：**这个账号现在应该在哪个区**（#770 分片要用它算分片号）。
+   * 取 `RolesService.zoneOf`：进图之后角色是权威（`roles.zone_id`），还没选角色时
+   * 退回账号的「当前浏览区」—— 这也是 `worldJoin` 里算区的那同一个入口（不另写一份）。
    */
   issueTicket(user: AuthenticatedUser): RealtimeTicketDto {
     this.dropExpiredTickets();
     const ttl = this.ticketTtlMs();
-    const ticket = randomBytes(24).toString("base64url");
-    this.tickets.set(ticket, { identity: { id: user.id, username: user.username }, expiresAt: Date.now() + ttl });
-    return RealtimeTicketDto.of(ticket, ttl);
+    const zoneId = this.roles.zoneOf(user.id);
+    const ticket = sealTicket(
+      { a: user.id, u: user.username, z: zoneId, n: newTicketNonce(), e: Date.now() + ttl },
+      this.ticketSecret(),
+    );
+    return RealtimeTicketDto.of(ticket, ttl, shardOf(zoneId, this.shardCount()));
   }
 
   //#endregion
@@ -427,9 +450,18 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
       if (socket) this.send(socket, { type: "posCorrect", data } satisfies RealtimePosCorrectMessage);
     };
 
+    const shards = this.shardCount();
     this.logger.log(
-      `实时通道已挂载：${this.path}（存活探测 ${heartbeatMs}ms / 在线心跳宽限 ${this.onlineStaleMs() > 0 ? `${this.onlineStaleMs()}ms` : "关"} / 票据有效期 ${this.ticketTtlMs()}ms / 踢下线巡检 ${kickPollMs > 0 ? `${kickPollMs}ms` : "关"}）`,
+      `实时通道已挂载：${this.path}${shards > 1 ? `（本进程是第 ${this.shardIndex()}/${shards} 片，路径 ${this.path}/${shardSegment(this.shardIndex())}）` : ""}（存活探测 ${heartbeatMs}ms / 在线心跳宽限 ${this.onlineStaleMs() > 0 ? `${this.onlineStaleMs()}ms` : "关"} / 票据有效期 ${this.ticketTtlMs()}ms / 踢下线巡检 ${kickPollMs > 0 ? `${kickPollMs}ms` : "关"}）`,
     );
+    // 分片时把「我管哪几个区」明着打出来：出问题第一件事就是确认某个区到底该在谁身上，
+    // 而这条信息只由「区清单 × 分片数」决定，现算一次比让人去翻配置强
+    if (shards > 1) {
+      const mine = this.zones.listStates().filter((state) => this.owns(state.id));
+      this.logger.log(
+        `本片负责 ${mine.length} 个区：${mine.map((state) => `${state.id}(${state.name})`).join(" / ") || "（暂无）"}`,
+      );
+    }
   }
 
   /** 踢下线巡检间隔（毫秒；0 = 关闭） */
@@ -554,7 +586,7 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
     this.configRefreshTimer = null;
     this.roleSyncTimer = null;
     this.statsTimer = null;
-    this.tickets.clear();
+    this.usedTicketNonces.clear();
 
     const sockets = [...this.connections.values()];
     this.connections.clear();
@@ -602,8 +634,23 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
     const pathname = queryAt === -1 ? target : target.slice(0, queryAt);
     const search = queryAt === -1 ? "" : target.slice(queryAt + 1);
 
-    if (pathname !== this.path) {
+    const requestedShard = this.shardOfPath(pathname);
+    if (requestedShard === undefined) {
       this.refuse(socket, 404, BizCode.NOT_FOUND, "接口不存在");
+      return;
+    }
+    // 路径上点名了别的分片（#770）：这不是「接口不存在」，而是「这条路径归别的进程」。
+    // 客户端拿不到失败握手的响应体（浏览器不给），所以它只会走「重新取票 → 按新票的
+    // shard 重连」这一步；这里的 421 是给日志、e2e 与人看的。
+    // **不给 `data.shard`**：握手时还没解析票，这里根本不知道是哪个区，硬填一个「该去的片」
+    // 只会是猜的（`data.shard` 在票那一支的含义是「这个区该在的片」，一处一个意思就够了）。
+    if (requestedShard !== null && requestedShard !== this.shardIndex()) {
+      this.refuse(
+        socket,
+        421,
+        BizCode.REALTIME_WRONG_SHARD,
+        `本进程是第 ${this.shardIndex()} 片，不接 ${this.path}/${shardSegment(requestedShard)}`,
+      );
       return;
     }
     if (this.closing) {
@@ -615,7 +662,9 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
     const ticket = new URLSearchParams(search).get("ticket");
     const result = ticket ? this.consumeTicket(ticket) : { ok: false as const, code: BizCode.TOKEN_INVALID, message: "缺少连接票据" };
     if (!result.ok) {
-      this.refuse(socket, 401, result.code, result.message);
+      // 连错分片要单独给 421 + shard（理由同上）；其余仍是 401（凭证类问题）
+      if (result.shard !== undefined) this.refuse(socket, 421, result.code, result.message, { shard: result.shard });
+      else this.refuse(socket, 401, result.code, result.message);
       return;
     }
 
@@ -625,19 +674,56 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
   };
 
   /**
-   * 验收一张票据（**用掉即删**）
+   * 握手路径里的分片段（#770）
    *
-   * 删了之后第二次拿同一张票来连只会得到「无效或已被使用」—— 票据是一次性的，
-   * 这也是它能安全地出现在 URL 里的前提之一。
+   * 三种返回：
+   * - `undefined` —— 不是实时通道的路径（404）；
+   * - `null` —— 是实时通道，但**没写分片**（老地址 `…/realtime`）：按「票说了算」处理，
+   *   也就是「这个区的票落在哪个片就归哪个片」。不分片的部署（`N=1`）完全靠这条兼容，
+   *   旧客户端零改动；
+   * - 数字 —— 路径上点名了分片（`…/realtime/s2`）。
+   */
+  private shardOfPath(pathname: string): number | null | undefined {
+    if (pathname === this.path) return null;
+    const prefix = `${this.path}/`;
+    if (!pathname.startsWith(prefix)) return undefined;
+    const segment = pathname.slice(prefix.length);
+    if (!segment.startsWith("s")) return undefined;
+    const index = Number(segment.slice(1));
+    return Number.isInteger(index) && index >= 0 ? index : undefined;
+  }
+
+  /**
+   * 验收一张票据（#770 起是**无状态加密票**：解票 → 判过期 → 判分片 → 判重放）
+   *
+   * 顺序有讲究：
+   * - 解票排第一：解不开的东西连「过期没有」都不该告诉它（伪造票不该从报错里学到东西）；
+   * - 分片判断排在「判重放」之前：连错片不该消耗掉这张票 —— 客户端重连到正确的分片时
+   *   还得用它（30 秒的票不该被一次连错就作废）；
+   * - 重放判断只在本进程内（理由见 `usedTicketNonces`）。
    */
   private consumeTicket(ticket: string): TicketResult {
-    const pending = this.tickets.get(ticket);
-    if (!pending) return { ok: false, code: BizCode.TOKEN_INVALID, message: "连接票据无效或已被使用，请重新获取" };
-    this.tickets.delete(ticket);
-    if (pending.expiresAt <= Date.now()) {
-      return { ok: false, code: BizCode.TOKEN_EXPIRED, message: "连接票据已过期，请重新获取" };
+    const payload = openTicket(ticket, this.ticketSecret());
+    if (!payload) return { ok: false, code: BizCode.TOKEN_INVALID, message: "连接票据无效或已被使用，请重新获取" };
+    if (payload.e <= Date.now()) return { ok: false, code: BizCode.TOKEN_EXPIRED, message: "连接票据已过期，请重新获取" };
+
+    const shard = shardOf(payload.z, this.shardCount());
+    if (shard !== this.shardIndex()) {
+      return {
+        ok: false,
+        code: BizCode.REALTIME_WRONG_SHARD,
+        message: `这个区（${payload.z}）的实时通道在分片 ${shard} 上，请重新取票`,
+        shard,
+      };
     }
-    return { ok: true, identity: pending.identity };
+
+    if (this.usedTicketNonces.has(payload.n)) {
+      return { ok: false, code: BizCode.TOKEN_INVALID, message: "连接票据无效或已被使用，请重新获取" };
+    }
+    // 记到「票据自己的过期时刻」为止：比票据有效期长一点，同一张票在这段时间里都算用过
+    this.usedTicketNonces.set(payload.n, payload.e);
+
+    return { ok: true, identity: { id: payload.a, username: payload.u } };
   }
 
   /**
@@ -933,6 +1019,17 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
       }
       // #957：区按在线角色算（accounts 那一列只是「当前浏览区」）
       const zoneId = this.roles.zoneOf(socket.identity.id);
+      // 分片归属（#770）：这条连接必须落在「这个区的实时进程」上。
+      // 票是 30 秒前的结论，取票之后换过区、或运维改了分片数，都会让它过时 ——
+      // 所以这里用**角色现在的区**再复核一次，不归本进程就断开并让客户端重新取票。
+      if (!this.owns(zoneId)) {
+        this.send(socket, {
+          type: "error",
+          data: { message: `这个区的实时通道在分片 ${shardOf(zoneId, this.shardCount())} 上，正在重新连接` },
+        });
+        this.closeAccount(socket.identity.id, socket, REALTIME_CLOSE.WRONG_SHARD, "连接落在错误的分片上");
+        return;
+      }
       // 区状态闸门（#961）：维护中 / 已关闭 / 已合并的区不许进图。
       // 这一条是**权威**（改包绕过 mapEnter 直发 worldJoin 走的就是这里）；
       // `mapEnterResultOf` 里还有同一判据的「提前问一遍」版本，给客户端即时反馈。
@@ -1463,6 +1560,9 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
     const byId = new Map(states.map((state) => [state.id, state]));
 
     for (const state of states) {
+      // 只处理本进程负责的区（#770）：别的区的连接不在这个进程里，遍历它们纯属白跑，
+      // 而且「维护倒计时按区记在内存里」那份表会白白涨到全区数
+      if (!this.owns(state.id)) continue;
       // —— 已合并：发帧 + 立即断 ——
       if (state.merged_into !== null) {
         const accounts = this.accountsInWorldOf(state.id);
@@ -1696,13 +1796,13 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
    * 响应体与其余接口**完全同形**（`{ code, message, data, timestamp }`），业务码也复用既有的
    * `TOKEN_*` / `NOT_FOUND` / `INTERNAL` —— 调用方不需要为「WS 的拒连」再学一套口径。
    */
-  private refuse(socket: Duplex, status: number, code: number, message: string): void {
+  private refuse(socket: Duplex, status: number, code: number, message: string, data: unknown = null): void {
     const body = JSON.stringify({
       code,
       message,
-      data: null,
+      data,
       timestamp: Date.now(),
-    } satisfies ApiEnvelope<null>);
+    } satisfies ApiEnvelope<unknown>);
     socket.end(
       `HTTP/1.1 ${status} ${STATUS_CODES[status] ?? "Error"}\r\n` +
         "Connection: close\r\n" +
@@ -1713,13 +1813,46 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
     );
   }
 
+  /** 清掉已经过期的 nonce（兜底：防「取一堆票再也不来」把这张表撑起来） */
   private dropExpiredTickets(): void {
     const now = Date.now();
-    for (const [ticket, pending] of this.tickets) if (pending.expiresAt <= now) this.tickets.delete(ticket);
+    for (const [nonce, expiresAt] of this.usedTicketNonces) if (expiresAt <= now) this.usedTicketNonces.delete(nonce);
   }
 
   private ticketTtlMs(): number {
     return this.config.get<number>("realtimeTicketTtlMs") ?? 30_000;
+  }
+
+  /**
+   * 票据密钥的**来源**（实际密钥在 `realtime-ticket.util` 里由它哈希成 32 字节）
+   *
+   * 复用 `JWT_SECRET`：两个实时进程必须用同一把（同一份 `.env` 已经保证了这件事），
+   * 而**不新开一个**密钥的理由是「少一个必须对齐的部署变量」。安全上够用 ——
+   * 票 30 秒过期、只给握手用、泄漏了也只影响一次连接。
+   */
+  private ticketSecret(): string {
+    return this.config.get<string>("jwtSecret") ?? "";
+  }
+
+  /** 分片数（每次现读配置；它是启动期常量，这里只是省一个字段） */
+  private shardCount(): number {
+    const count = shardCountOf(this.config.get<number>("realtimeShardCount") ?? 1);
+    // 内嵌形态（`REALTIME_EMBEDDED=true`，本地开发与全部既有 e2e 的默认）只有一个进程，
+    // 分片无从谈起 —— 强行按 1 处理，否则「配了 2 片」会让一半的区连不上（进程只认自己是 0 片）
+    if (count > 1 && (this.config.get<boolean>("realtimeEmbedded") ?? true)) return 1;
+    return count;
+  }
+
+  /** 本进程的分片号（越界按 0，与 `ownsZone` 同一口径） */
+  shardIndex(): number {
+    const count = this.shardCount();
+    const index = Number(this.config.get<number>("realtimeShardIndex") ?? 0);
+    return Number.isInteger(index) && index >= 0 && index < count ? index : 0;
+  }
+
+  /** 这个区归不归本进程管（#770 准入与进图复核共用这一处） */
+  owns(zoneId: number): boolean {
+    return ownsZone(zoneId, this.shardCount(), this.shardIndex());
   }
 
   private heartbeatMs(): number {
