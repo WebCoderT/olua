@@ -605,12 +605,21 @@ export class CombatSettlementService {
     // 位置在「配置与目标都对上」之后、掷随机数之前：前面任何一步失败都不该记冷却 / 扣令牌，
     // 而伤害一旦掷了骰子就没法回滚。闸的副作用（扣蓝、记冷却、扣令牌）在它内部最后一步统一提交。
     const targetSpot = this.monsterAi.livePositionOf(cast.targetId) ?? { x: target.x, y: target.y };
+    const targetBox = this.monsterAi.monsterBoxOf(cast.monsterKey);
     const verdict = this.guard.guard({
       accountId,
       skill,
       skillId: cast.skillId,
       roleData: role.data ?? {},
-      target: { mapId: target.mapId, x: targetSpot.x, y: targetSpot.y },
+      target: {
+        mapId: target.mapId,
+        x: targetSpot.x,
+        y: targetSpot.y,
+        halfWidth: targetBox?.halfWidth,
+        halfHeight: targetBox?.halfHeight,
+      },
+      // 距离闸（#1030）要施法者坐标与它的时刻：位置未知 / 过期由闸自己放行
+      caster: this.presence.positionOf(accountId) ?? undefined,
     });
     if (!verdict.ok) {
       // `code` 是老字段（一直存在），`rejected` 是 A3 的六道闸分类；闸拒绝时两者同值。

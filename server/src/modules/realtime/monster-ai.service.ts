@@ -91,11 +91,14 @@ const GEOMETRY_CACHE_TTL_MS = 5000;
  */
 const PULL_STOP_GAP = 40;
 
-/** 一只怪的 AI 视觉参数（`monster_presentation` 表的一行，摊平成 AI 用得上的三个字段） */
+/** 一只怪的 AI 视觉参数（`monster_presentation` 表的一行，摊平成 AI 用得上的字段） */
 interface MonsterAiConfig {
   aggressive: boolean;
   detectRange: number;
   moveSpeed: number;
+  /** 碰撞盒半宽 / 半高（#1030 距离闸用；客户端 `addMonsterCollider` 就是拿 content_size 当盒） */
+  halfWidth: number;
+  halfHeight: number;
 }
 
 /**
@@ -739,6 +742,25 @@ export class MonsterAiService implements OnApplicationBootstrap, OnApplicationSh
     const runtime = this.findRuntime(instanceId);
     if (!runtime) return null;
     return { x: runtime.x, y: runtime.y, moving: runtime.movingNow };
+  }
+
+  /**
+   * 这只怪的碰撞盒半宽半高（#1030 距离闸用）
+   *
+   * 来源是 `monster_presentation.content_width/height` —— 客户端 `addMonsterCollider` 正是
+   * 把这组值当 `BoxCollider2D.size`，所以「服务端判距离用的盒」与「客户端判距离用的盒」
+   * 是同一份数据，不另立一套。
+   *
+   * 读不到（呈现表缺行 / 尺寸为 0）返回 `null`：调用方据此**不判距离**（宁可不判，
+   * 不可误判 —— 缺行的怪本来就该在呈现侧报错，不该顺带把玩家的出手拦掉）。
+   *
+   * 顺带刷新配置缓存（TTL 内是空操作）：管理端改完尺寸最多 1 秒生效，与 AI 同一口径。
+   */
+  monsterBoxOf(monsterKey: string): { halfWidth: number; halfHeight: number } | null {
+    this.refreshSkillCache(Date.now());
+    const config = this.presentationByKey.get(monsterKey);
+    if (!config || !(config.halfWidth > 0) || !(config.halfHeight > 0)) return null;
+    return { halfWidth: config.halfWidth, halfHeight: config.halfHeight };
   }
 
   /**
@@ -1767,10 +1789,14 @@ export class MonsterAiService implements OnApplicationBootstrap, OnApplicationSh
 
     const presentation = new Map<string, MonsterAiConfig>();
     for (const row of this.presentationRepo.listAll()) {
+      const width = Number(row.content_width) || 0;
+      const height = Number(row.content_height) || 0;
       presentation.set(row.id, {
         aggressive: Number(row.aggressive) === 1,
         detectRange: Number(row.detect_range) || 0,
         moveSpeed: Number(row.move_speed) || 0,
+        halfWidth: width > 0 ? width / 2 : 0,
+        halfHeight: height > 0 ? height / 2 : 0,
       });
     }
     this.presentationByKey = presentation;

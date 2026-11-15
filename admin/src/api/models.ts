@@ -7816,6 +7816,28 @@ export type UpdateMovementGuardParams = {
   correctIntervalMs?: number;
 };
 
+export type CastRangeParams = {
+  /**
+   * 档位：off 完全不判 / log 只记账放行（出厂）/ enforce 超距即拒该次出手
+   */
+  mode: "off" | "log" | "enforce";
+  /**
+   * 抖动余量（像素）：抵掉 10Hz 上报的相位差与怪物插值滞后，出厂 24（与 movement.jitterPx 同源）
+   */
+  jitterPx: number;
+};
+
+export type UpdateCastRangeParams = {
+  /**
+   * 档位：off / log / enforce
+   */
+  mode?: "off" | "log" | "enforce";
+  /**
+   * 抖动余量（像素）
+   */
+  jitterPx?: number;
+};
+
 export type CombatWeights = {
   /**
    * 生命上限：每 1 点生命折算多少战力

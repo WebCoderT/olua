@@ -225,6 +225,43 @@ export const MOVEMENT_GUARD_KEYS: Array<keyof MovementGuardParams> = [
   "correctIntervalMs",
 ];
 
+/**
+ * 出手距离闸参数（`runtime_params.cast_range` 列，#1030）
+ *
+ * **服务端消费，不进客户端快照**：客户端本地已经按 `canAttackTarget` 判过一遍距离，
+ * 不需要知道服务端闸门开在哪一档 —— 知道档位等于告诉作弊者「现在关着」
+ * （与 `MovementGuardParams` 同一取向）。
+ *
+ * 为什么单独一列而不是并进 `movement`：两者要能**分别**回滚。距离闸误伤时只关它
+ * 一档即可，不必把速度 / 穿墙校验一起关掉。
+ *
+ * 出厂值在 `config-sync.sql`（`log`）；代码里的 `FALLBACK_CAST_RANGE` 只是读不出来时
+ * 兜住进程的最小可用值（`off`）—— 两处刻意不同：一个运营口径，一个进程兜底。
+ */
+export interface CastRangeParams {
+  /**
+   * 档位（与位移校验同名同义）
+   *
+   * - `off`：完全不判，行为与 #1030 之前一样（回滚用）；
+   * - `log`：**出厂**。照判、照放行，只记流水与计数 —— 先跑一周看误伤率；
+   * - `enforce`：超距即拒该次出手（`rejected: "range"`）。
+   *
+   * 认不出的值按 `log` 处理（拼错不该让全服突然打不出技能）。
+   */
+  mode: "off" | "log" | "enforce";
+  /**
+   * 抖动余量（像素，出厂 24）
+   *
+   * 抵掉两端位置的时间差：客户端 10Hz 上报的相位差（移速约 128px/s ⇒ 一拍约 13px）
+   * 与怪物插值滞后（100ms ⇒ 一拍）。取值与 `movement.jitterPx` 同源 —— 都是
+   * 「同一份坐标在不同时刻被读到」的误差，没有理由用两个数。
+   */
+  jitterPx: number;
+}
+
+/** 出手距离闸的键清单（启动自检 + 管理端回读用） */
+export const CAST_RANGE_KEYS: Array<keyof CastRangeParams> = ["mode", "jitterPx"];
+
 /** 三组的键清单（**启动自检用**：库里少了哪个键就点名报错，不静默补默认值） */
 export const RUNTIME_PARAM_KEYS: Record<keyof RuntimeParams, string[]> = {
   drop: [

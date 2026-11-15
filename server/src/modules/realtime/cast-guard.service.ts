@@ -1,4 +1,6 @@
-import { Injectable } from "@nestjs/common";
+import { Injectable, Logger } from "@nestjs/common";
+import { CastRangeParams } from "../../common/constants/runtime-params";
+import { RuntimeParamsRepository } from "../../database/repositories/runtime-params.repository";
 import { RolesService } from "../roles/roles.service";
 
 /**
@@ -16,10 +18,10 @@ import { RolesService } from "../roles/roles.service";
  * 依据是「越便宜、越不可能通过的先判」，且所有**会改状态**的动作（扣蓝、记冷却、扣令牌）
  * 都在最后一步统一提交 —— 前面任何一道失败都不需要回滚。
  *
- * **本轮落地五道，距离闸挂起**（#811 位置源收口后补第三道）：理由见下面第三道那段注释 ——
- * 位置是客户端 4Hz 自报的样本，与客户端自己的预测差一两拍，现在接上会把站在攻击边缘的
- * 正常出手判成超距。跨**图**的远程出手已经被跨图闸拦住（`mapAt` 是权威的），
- * 剩下的「同图隔远打」等 #811。
+ * **六道全部落地**。第三道距离闸当时按 #811 挂起（位置源是客户端自报的样本，与客户端
+ * 自己的预测差一两拍，硬接会把站在攻击边缘的正常出手判成超距）；#811 收口后由 #1030 补上：
+ * 判据与客户端 `canAttackTarget` **同一式** —— 把两边的碰撞盒换成边缘间距再比
+ * `skills.distance`，并给 `cast_range.jitterPx` 的抖动余量。具体见下面第三道。
  *
  * ===========================================================================
  * 两个数值口径（都与客户端同源，不另立一份）
@@ -33,11 +35,12 @@ import { RolesService } from "../roles/roles.service";
  *   桶的职责是挡「比合法攻速更快」的连发，不是限速本身。
  *
  * ===========================================================================
- * 位置与死亡的来源（#811 之前是「够用」，不是「权威」）
+ * 位置与死亡的来源
  * ===========================================================================
- * - 跨图读存档 `data.mapAt`（服务端写，`worldJoin` 放行时才写）—— 这一条是权威的；
- * - 存活读存档 `data.hp`（`applyMonsterHit` 写的，权威）；
- * - 距离要读的坐标不是权威的（客户端自报），所以第三道挂起，见下。
+ * - 跨图读存档 `data.mapAt`（服务端写，`worldJoin` 放行时才写）—— 权威；
+ * - 存活读存档 `data.hp`（`applyMonsterHit` 写的）—— 权威；
+ * - 距离读 `presence.positionOf`（客户端上报 + #811 的服务端校验）与怪物 AI 的仲裁后坐标。
+ *   两者都有「时刻」，过期 / 缺省一律按**位置未知**放行（与拾取距离闸同一条纪律）。
  *
  * ===========================================================================
  * 状态的生命周期
@@ -83,8 +86,19 @@ export interface CastGuardInput {
    * **缺省 = 自身施法**（#822：护体神盾 / 金刚护体这类 `category = "2"` 的 buff）：
    * 没有目标就没有「跨图打」和「隔图打」这回事，跨图与距离两道直接跳过，
    * 存活 / 冷却 / 耗蓝 / 频率四道照走（buff 同样能被改包连放）。
+   *
+   * `halfWidth` / `halfHeight` 是目标碰撞盒的半宽半高（#1030，距离闸用）：
+   * 由调用方从 `monster_presentation.content_width/height` 取（客户端 `addMonsterCollider`
+   * 就是拿这两个值当 `BoxCollider2D.size`）。**缺省 = 尺寸未知，距离闸放行**。
    */
-  target?: { mapId: string; x: number; y: number };
+  target?: { mapId: string; x: number; y: number; halfWidth?: number; halfHeight?: number };
+  /**
+   * 施法者当前坐标与那一帧的时刻（#1030，距离闸用，来自 `presence.positionOf`）
+   *
+   * 缺省 / `at` 过期按**位置未知**放行：刚进图的前几百毫秒、或上报被挡住的老客户端，
+   * 拿不到位置就拒人，等于让正常玩家「点了没反应」。宁可不判，不可误判。
+   */
+  caster?: { x: number; y: number; at: number };
 }
 
 /** 令牌桶容量（A2）：只用来吸收网络抖动，不是「每秒能放几次」 */
@@ -99,14 +113,84 @@ const CAST_BUCKET_CAPACITY = 3;
  */
 const CAST_TOKENS_MAX_PER_SEC = 20;
 
+/**
+ * 角色碰撞盒（#1030，距离闸用）
+ *
+ * 与客户端 `client/assets/configs/role.ts` 的 `roleBody` **必须同值**：
+ * `colliderSize = 40 × 70`、`colliderOffset = (0, 35)` —— 后者意味着节点的原点在脚下，
+ * 碰撞盒整体在节点上方，所以判距离时角色的盒心是 `(x, y + 35)`。
+ *
+ * 客户端换碰撞盒而这里没跟 → 边缘玩家的正常出手会被判成超距（`enforce` 档）；
+ * 反过来这里比客户端宽 → 只是少拦一点，不会误伤。**往宽的一侧偏是安全的**。
+ */
+const ROLE_HALF_WIDTH = 20;
+const ROLE_HALF_HEIGHT = 35;
+const ROLE_BOX_OFFSET_Y = 35;
+
+/**
+ * 施法者位置的有效期（毫秒）
+ *
+ * `pos` 帧是 10Hz（#768 提频），正常情况下最新一条不会超过 100ms。取 2 秒是给
+ * 「卡了一下 / 刚过图 / 网络抖」留余量：超过 2 秒还没新帧，这个人要么已经掉线，
+ * 要么客户端根本不报位置 —— 两种情况都不该由距离闸来判。
+ */
+const CAST_POS_STALE_MS = 2_000;
+
+/**
+ * 读 `runtime_params.cast_range` 这一列
+ *
+ * 缺列 / 坏 JSON / 缺键一律退回 `FALLBACK`（**档位 `off`**）：读不出来时最安全的事情是
+ * 「什么都别拦」—— 反过来（缺配置就当 `enforce`）会让配置事故变成「全服打不出技能」。
+ * 出厂值 `log` 在 `config-sync.sql`，与这里的兜底**刻意不同**：一个是运营口径，一个是进程兜底。
+ */
+const FALLBACK_CAST_RANGE: CastRangeParams = { mode: "off", jitterPx: 24 };
+
+function parseCastRange(raw: string | undefined): CastRangeParams {
+  let parsed: Record<string, unknown> = {};
+  if (raw) {
+    try {
+      const value: unknown = JSON.parse(raw);
+      if (value && typeof value === "object" && !Array.isArray(value)) parsed = value as Record<string, unknown>;
+    } catch {
+      parsed = {};
+    }
+  }
+  const mode = parsed.mode;
+  const jitter = Number(parsed.jitterPx);
+  return {
+    // 认不出的档位按 `log`：拼错不该让全服突然打不出技能（也不该静默变成「不校验」）
+    mode: mode === "off" || mode === "enforce" || mode === "log" ? mode : "log",
+    jitterPx: Number.isFinite(jitter) && jitter >= 0 ? jitter : FALLBACK_CAST_RANGE.jitterPx,
+  };
+}
+
 @Injectable()
 export class CastGuardService {
+  private readonly logger = new Logger(CastGuardService.name);
+
   /** `账号:技能id` → 上次被接受的出手时刻（毫秒） */
   private readonly lastCastAt = new Map<string, number>();
   /** 账号 → 令牌桶（容量 3；补充速率随所施技能的攻速走） */
   private readonly buckets = new Map<string, { tokens: number; at: number }>();
+  /** 距离闸流水（`log` 档观察期靠它出数：每 60 秒汇总一行 warn） */
+  private readonly rangeCounters = { judged: 0, rejected: 0 };
+  /** 上次汇总输出的时刻 */
+  private lastRangeSummaryAt = 0;
 
-  constructor(private readonly roles: RolesService) {}
+  constructor(
+    private readonly roles: RolesService,
+    private readonly runtimeParams: RuntimeParamsRepository,
+  ) {}
+
+  /** 当前生效的距离闸参数（**每次现读库**，与位移校验同一取向：改完下一次出手就生效） */
+  castRangeParams(): CastRangeParams {
+    return parseCastRange(this.runtimeParams.get()?.cast_range);
+  }
+
+  /** 距离闸计数快照（排查脚本 / e2e 的诊断出口；不是业务接口） */
+  castRangeStats(): { judged: number; rejected: number } {
+    return { ...this.rangeCounters };
+  }
 
   /**
    * 判一次出手能不能打出去（不改世界状态，只改判定链自己的三样东西：冷却、令牌、法力）
@@ -147,17 +231,15 @@ export class CastGuardService {
       };
     }
 
-    // —— 三、距离：**这一步暂时空着，#811 落地后接上** ——
-    // 判据本来很简单（`skills.distance > 0` 且超出就拒），问题在**位置源还不是权威**：
-    // 现在的坐标是客户端 4Hz 自报 + 最小仲裁（`presence.positionOf`），与客户端自己的
-    // 预测位置差一拍到两拍；怪物位置又是服务端 AI 模拟的。两边各差一拍，站在攻击边缘的
-    // 正常出手就会被判成超距 —— 而「打不出伤害」比「漏判一次远程出手」难受得多。
-    // 所以距离闸随 #811（位置源收口：单帧即拒 + `posCorrect` 硬拉回 + AI 只读仲裁后坐标）
-    // 一起上；在那之前，跨**图**的远程出手已经被上面第二道拦住（`mapAt` 是权威的），
-    // 剩下的只是「同一张图里隔远打」，等 #811 补齐。重开条件：`#811` 合并。
-    //
-    // 保留这段说明而不是直接删掉的理由：A1 的顺序里它就是第三道，接上时插在这里即可
-    // （在存活、跨图之后，冷却之前），不需要重排。
+    // —— 三、距离（#1030）：与客户端 canAttackTarget 同一式 ——
+    // 判据是**碰撞盒边缘间距**而不是中心距：客户端 `BattleMath.canAttackTarget` 取两个
+    // `BoxCollider2D.worldAABB`，算「水平前沿的间隙」与「垂直间隙」，再比 `skills.distance`。
+    // 服务端只有中心点，所以自己把两边的盒补齐：
+    //   施法者盒心 (x, y+35)、半宽 20、半高 35（roleBody）；目标盒心 (x, y)、半宽高取呈现表。
+    // 为什么不能用一个固定容差代替：怪物半宽 11.5~590px（`monster_presentation` 实测），
+    // 固定 200px 会把大怪的正常近战判成超距，固定 600px 又等于允许站 600px 外打小怪。
+    const rangeReject = this.rangeVerdict(input);
+    if (rangeReject) return rangeReject;
 
     // —— 四、冷却（配置冷却 ÷ 动作速度倍率，与客户端 getEffectiveCooldown 同式）——
     const cooldownMs = this.cooldownMsOf(input.skill, input.roleData);
@@ -224,6 +306,76 @@ export class CastGuardService {
   }
 
   //#region 内部
+
+  /**
+   * 第三道：距离（#1030）
+   *
+   * 返回 `null` = 放行（含「不该判」的所有情况），返回 verdict = 拒绝。
+   *
+   * 什么时候**不判**（每一条都是「宁可漏判，不可误判」）：
+   * - 档位 `off`；
+   * - `skills.distance <= 0`（不限距离，现有 1004 / 1010 / 1011 都是 0）；
+   * - 自身 / 范围技能没有目标（调用方不传 target）；
+   * - 施法者位置缺省或过期（`CAST_POS_STALE_MS`）；
+   * - 目标碰撞盒尺寸未知（呈现表缺行）；
+   * - 目标不在同一张图（那是第二道跨图闸的活，这里不重复判）。
+   *
+   * `log` 档：照判照记，最后返回 `null`（观察期不改行为）。
+   */
+  private rangeVerdict(input: CastGuardInput): CastGuardVerdict | null {
+    // 先做两件不花钱的排除（自身 buff / 区域技能没有目标；不限距离的技能没有可判的东西），
+    // 再读库取档位 —— 这两类出手占多数，没必要为它们每次 SELECT 一行
+    if (!input.target) return null;
+    const allow = Number(input.skill.distance);
+    if (!Number.isFinite(allow) || allow <= 0) return null;
+
+    const cfg = this.castRangeParams();
+    if (cfg.mode === "off") return null;
+
+    const caster = input.caster;
+    if (!caster) return null;
+    const now = Date.now();
+    if (now - caster.at > CAST_POS_STALE_MS) return null;
+    // 跨图是第二道闸的活：这里只判「同一张图上隔多远」。施法者在哪张图由存档 `mapAt` 给
+    // （上面第二道已经用它判过跨图），没有这个键就不判
+    const mapAt = typeof input.roleData.mapAt === "string" ? input.roleData.mapAt : "";
+    if (mapAt && input.target.mapId !== mapAt) return null;
+
+    const halfWidth = Number(input.target.halfWidth);
+    const halfHeight = Number(input.target.halfHeight);
+    if (!Number.isFinite(halfWidth) || !Number.isFinite(halfHeight) || halfWidth <= 0 || halfHeight <= 0) return null;
+
+    // 边缘间距：先算盒心差，再各减两边的半宽/半高，负数按 0（重叠）
+    const gapX = Math.abs(caster.x - input.target.x) - (ROLE_HALF_WIDTH + halfWidth);
+    const gapY = Math.abs(caster.y + ROLE_BOX_OFFSET_Y - input.target.y) - (ROLE_HALF_HEIGHT + halfHeight);
+    const gap = Math.hypot(Math.max(0, gapX), Math.max(0, gapY));
+
+    this.rangeCounters.judged += 1;
+    const limit = Math.max(1, allow) + cfg.jitterPx;
+    if (gap <= limit) return null;
+
+    this.rangeCounters.rejected += 1;
+    this.summarizeRange(cfg);
+    if (cfg.mode === "log") return null; // 观察期只记账，不改行为
+    return {
+      ok: false,
+      rejected: "range",
+      // 文案里把「射程」与「余量」分开写：只给一个合计数时，玩家会把 34px 当成技能射程
+      message: `目标距离 ${Math.round(gap)}px，超出技能 ${input.skillId} 的射程（${Math.round(Math.max(1, allow))}px + ${cfg.jitterPx}px 余量）—— 走近再打`,
+    };
+  }
+
+  /** 60 秒汇总一行（只在**有超距**时说话；`log` 档的观察期就靠这一行） */
+  private summarizeRange(cfg: CastRangeParams): void {
+    const now = Date.now();
+    if (now - this.lastRangeSummaryAt < 60000) return;
+    this.lastRangeSummaryAt = now;
+    const ratio = this.rangeCounters.judged > 0 ? (this.rangeCounters.rejected / this.rangeCounters.judged) * 100 : 0;
+    this.logger.warn(
+      `出手距离闸（${cfg.mode}）近 60 秒：判定 ${this.rangeCounters.judged} 次 / 超距 ${this.rangeCounters.rejected} 次` +
+        `（占比 ${ratio.toFixed(2)}%，余量 ${cfg.jitterPx}px）`,
+    );
+  }
 
   /**
    * 这个技能的实际冷却（毫秒）= `cooldown × 1000 ÷ speedRate[action]`

@@ -2,6 +2,7 @@ import { Injectable, Logger, OnApplicationBootstrap } from "@nestjs/common";
 import { BizCode } from "../../common/constants/biz-code";
 import {
   AutoBattleParams,
+  CastRangeParams,
   DropRuntimeParams,
   GuildRuleParams,
   MonsterAiRuntimeParams,
@@ -15,6 +16,7 @@ import { RuntimeParamsRow } from "../../database/rows";
 import {
   DropRuntimeParamsDto,
   RuntimeParamsDto,
+  UpdateCastRangeParamsDto,
   UpdateMonsterAiParamsDto,
   UpdateMovementGuardParamsDto,
   UpdateRuntimeParamsDto,
@@ -111,6 +113,8 @@ export class RuntimeParamsService implements OnApplicationBootstrap {
       monster_ai: existing?.monster_ai ?? "{}",
       // 位移校验同上（#811）：它有自己的两条接口，改三组参数不该动它
       movement: existing?.movement ?? "{}",
+      // 出手距离闸同理（#1030）：整行 UPDATE，漏写这一列 = 把它静默清成 '{}'
+      cast_range: existing?.cast_range ?? "{}",
       updated_at: Date.now(),
     };
     this.repository.update(row);
@@ -160,6 +164,7 @@ export class RuntimeParamsService implements OnApplicationBootstrap {
       monster_ai: JSON.stringify(next),
       // 位移校验那一列原样写回（同一条整行 UPDATE 的纪律）
       movement: existing?.movement ?? "{}",
+      cast_range: existing?.cast_range ?? "{}",
       updated_at: Date.now(),
     };
     this.repository.update(row);
@@ -198,10 +203,49 @@ export class RuntimeParamsService implements OnApplicationBootstrap {
       guild_rules: existing?.guild_rules ?? "{}",
       monster_ai: existing?.monster_ai ?? "{}",
       movement: JSON.stringify(next),
+      cast_range: existing?.cast_range ?? "{}",
       updated_at: Date.now(),
     };
     this.repository.update(row);
     return this.movement();
+  }
+
+  /**
+   * 出手距离闸参数（`cast_range` 列，#1030）
+   *
+   * 与 `movement()` 同一取向：**原样返回**（缺键不补），兜底由消费方
+   * `CastGuardService` 做 —— 这里补一份等于「代码里的第二份出厂值」。
+   */
+  castRange(): CastRangeParams {
+    return parseGroup(this.repository.get()?.cast_range) as unknown as CastRangeParams;
+  }
+
+  /**
+   * 更新出手距离闸参数（部分更新；与其余五组都分开）
+   *
+   * 合并用 `definedOnly`，落库时**其余六列原样写回**（`update` 是整行 UPDATE）。
+   * 档位拼错由 DTO 的 `@IsIn` 挡住；抖动余量的上下限也由 DTO 管，这里只防手改库。
+   */
+  updateCastRange(dto: UpdateCastRangeParamsDto): CastRangeParams {
+    const existing = this.repository.get();
+    const current = parseGroup(existing?.cast_range);
+    const next = { ...current, ...definedOnly(dto) } as Record<string, unknown>;
+    const jitterPx = Number(next.jitterPx);
+    if (Number.isFinite(jitterPx) && jitterPx < 0) {
+      throw new BizException(BizCode.PARAM_INVALID, `抖动余量 ${jitterPx}px 为负：负余量比配置距离还严，正常出手会被整片误判`);
+    }
+    const row: RuntimeParamsRow = {
+      id: 1,
+      drop_params: existing?.drop_params ?? "{}",
+      auto_battle: existing?.auto_battle ?? "{}",
+      guild_rules: existing?.guild_rules ?? "{}",
+      monster_ai: existing?.monster_ai ?? "{}",
+      movement: existing?.movement ?? "{}",
+      cast_range: JSON.stringify(next),
+      updated_at: Date.now(),
+    };
+    this.repository.update(row);
+    return this.castRange();
   }
 
   /** 三列 JSON → 生效值（坏 JSON 当空对象；缺键就是缺键，不补默认值） */

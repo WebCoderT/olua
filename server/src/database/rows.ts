@@ -1369,6 +1369,12 @@ export interface RuntimeParamsRow {
   monster_ai: string;
   /** 位移校验参数（`MovementGuardParams` 的 JSON；#811，服务端消费、不下发客户端） */
   movement: string;
+  /**
+   * 出手距离闸参数（`CastRangeParams` 的 JSON；#1030，服务端消费、不下发客户端）
+   *
+   * 与 `movement` 分开一列：两者要能分别切档回滚（距离闸误伤时不该牵连移动校验）。
+   */
+  cast_range: string;
   updated_at: number;
 }
 

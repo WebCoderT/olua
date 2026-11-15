@@ -5,7 +5,16 @@ import { ApiDataResponse } from "../../common/decorators/api-data-response.decor
 import { AuditTarget } from "../../common/decorators/audit-target.decorator";
 import { Permission } from "../../common/constants/permission";
 import { RuntimeParamsService } from "./runtime-params.service";
-import { MonsterAiParamsDto, MovementGuardParamsDto, RuntimeParamsDto, UpdateMonsterAiParamsDto, UpdateMovementGuardParamsDto, UpdateRuntimeParamsDto } from "./dto/runtime-params.dto";
+import {
+  CastRangeParamsDto,
+  MonsterAiParamsDto,
+  MovementGuardParamsDto,
+  RuntimeParamsDto,
+  UpdateCastRangeParamsDto,
+  UpdateMonsterAiParamsDto,
+  UpdateMovementGuardParamsDto,
+  UpdateRuntimeParamsDto,
+} from "./dto/runtime-params.dto";
 
 /**
  * 管理端 · 客户端运行时参数（#605）
@@ -123,5 +132,39 @@ export class AdminRuntimeParamsController {
   @ApiDataResponse(MovementGuardParamsDto, { description: "更新后的生效值" })
   updateMovement(@Body() dto: UpdateMovementGuardParamsDto): MovementGuardParamsDto {
     return this.runtimeParamsService.updateMovement(dto) as unknown as MovementGuardParamsDto;
+  }
+
+  @Get("cast-range")
+  @ApiAdminDoc({
+    operationId: "adminRuntimeParams.getCastRange",
+    summary: "出手距离闸参数",
+    description:
+      "出手判定链第三道闸的参数（`runtime_params.cast_range` 列，#1030）。与位移校验一样**单独一条接口**、不下发客户端：\n\n" +
+      "- `mode`：`off` 不判（回滚用）/ `log` 只记账放行（**出厂**）/ `enforce` 超距即拒该次出手（`rejected: \"range\"`）；\n" +
+      "- `jitterPx`：抖动余量（出厂 24），抵掉 10Hz 上报的相位差与怪物插值滞后。\n\n" +
+      "判定式与客户端 `canAttackTarget` **同一式**：把两边的碰撞盒（角色 40×70，怪物取 `monster_presentation.content_width/height`）\n" +
+      "换成边缘间距再比 `skills.distance`。`distance ≤ 0` 的技能（不限距离）、范围技能、自身增益技能不走这道闸。\n\n" +
+      "`log` 档跑满一周、超距占比与误伤抽样都为 0 之后再切 `enforce`。",
+    permissions: [Permission.GAME_CONFIG_READ],
+  })
+  @ApiDataResponse(CastRangeParamsDto, { description: "当前生效值" })
+  getCastRange(): CastRangeParamsDto {
+    return this.runtimeParamsService.castRange() as unknown as CastRangeParamsDto;
+  }
+
+  @Patch("cast-range")
+  @AuditTarget("runtimeParams")
+  @ApiAdminDoc({
+    operationId: "adminRuntimeParams.updateCastRange",
+    summary: "编辑出手距离闸参数",
+    description:
+      "**部分更新**：只提交改动过的字段，没提交的保持原值。\n\n" +
+      "改完**下一次出手**就按新值判（不做缓存），切档位不需要重启、也不需要玩家重进。\n\n" +
+      "风险提示：`enforce` 档下超距的出手会被直接拒（客户端表现是「点了没反应」）—— 切之前先确认 `log` 档的流水里没有误判。",
+    permissions: [Permission.GAME_CONFIG_WRITE],
+  })
+  @ApiDataResponse(CastRangeParamsDto, { description: "更新后的生效值" })
+  updateCastRange(@Body() dto: UpdateCastRangeParamsDto): CastRangeParamsDto {
+    return this.runtimeParamsService.updateCastRange(dto) as unknown as CastRangeParamsDto;
   }
 }

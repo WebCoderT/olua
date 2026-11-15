@@ -1102,7 +1102,7 @@ export const routes = {
      */
     batchRemove: "/admin/roles/batch-delete",
   },
-  /** adminRuntimeParams 模块（6 个接口） */
+  /** adminRuntimeParams 模块（8 个接口） */
   adminRuntimeParams: {
     /**
      * 运行时参数（GET /admin/runtime-params）
@@ -1116,6 +1116,18 @@ export const routes = {
      * **部分更新**：只提交改动过的分组，组内只提交改动过的字段（没提交的保持原值）。
      */
     update: "/admin/runtime-params",
+    /**
+     * 出手距离闸参数（GET /admin/runtime-params/cast-range）
+     *
+     * 出手判定链第三道闸的参数（`runtime_params.cast_range` 列，#1030）。与位移校验一样**单独一条接口**、不下发客户端：
+     */
+    getCastRange: "/admin/runtime-params/cast-range",
+    /**
+     * 编辑出手距离闸参数（PATCH /admin/runtime-params/cast-range）
+     *
+     * **部分更新**：只提交改动过的字段，没提交的保持原值。
+     */
+    updateCastRange: "/admin/runtime-params/cast-range",
     /**
      * 怪物 AI 参数（GET /admin/runtime-params/monster-ai）
      *
