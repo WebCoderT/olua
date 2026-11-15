@@ -16,6 +16,8 @@
  *    实例 id 由服务端发牌，cast 的 targetId 用的就是它；
  *    进图门槛（#606）也在这一段：客户端先发 `mapEnter` 问一句（回 `mapEnterResult`），
  *    落地时 `worldJoin` 再判一次 —— 判据只有服务端一处（`MapService.enterRejectOf`）；
+ *    分线（#1000）同属这一段：`worldJoin` 带 `preferChannel` 选线、`changeChannel` 换线，
+ *    选哪条线由世界层按容量现算（`RoomManager.pickSlot`），**客户端不自己数人**；
  * 4. 其余一律回 `error` 帧，**不断开连接** —— 一条不认识的消息不该让玩家的通道断掉。
  * 掉落拾取（#325）同走这条管子：客户端发 `pick`（拾哪一次击杀的第几件掉落），
  * 服务端按账本原子入包并以 `picked` 帧回结果。
@@ -461,6 +463,13 @@ export interface RealtimeWorldJoinMessage {
   data: {
     /** 地图 id（configs/map 的 key） */
     mapId: string;
+    /**
+     * 想进几线（#1000；不传 / 越界 = 自动选）
+     *
+     * 只是**偏好**：那条线满了会自动换一条（`map_rules.max_channels = 1` 的图永远只有 0 线，
+     * 传什么都会被忽略）。客户端要确认自己在几线，看 `world.channel`，不要假设这里说了算。
+     */
+    preferChannel?: number;
   };
 }
 
@@ -497,12 +506,61 @@ export interface RealtimeMapEnterResultMessage {
   data: {
     mapId: string;
     ok: boolean;
-    /** 缺哪一项（`ok = true` 时没有）；`unknown` = 图不存在，`start` = 还没有位置记录、只准进新手村（#859） */
-    field?: "level" | "combat" | "soul" | "unknown" | "start" | "zone";
-    /** 这张图要求的值（`ok = true` 时没有） */
+    /**
+     * 缺哪一项（`ok = true` 时没有）；`unknown` = 图不存在，`start` = 还没有位置记录、只准进新手村（#859），
+     * `full` = 这张图所有线都满了（#1000，`need` 是容量）
+     */
+    field?: "level" | "combat" | "soul" | "unknown" | "start" | "zone" | "full";
+    /** 这张图要求的值（`ok = true` 时没有；`field = "full"` 时是单线容量） */
     need?: number;
     /** 图名（提示里要用；`ok = true` 时没有） */
     mapLabel?: string;
+    /** 还有别的线能进时给一条建议线（#1000；所有线都满时不带） */
+    suggestChannel?: number;
+  };
+}
+
+/**
+ * 客户端 → 服务端：换线（#1000，**不换图**）
+ *
+ * 与 `worldJoin` 的区别：不重进场景、不动位置、不重算等级门槛 —— 服务端把人从旧房间的
+ * 观看者里摘掉、塞进目标房间，回一份新的 `world` 帧让客户端就地重建怪物与玩家。
+ * 所以客户端**不需要**先卸场景（加载时间是零，切场景反而会闪一下）。
+ *
+ * 目标线满了 / 不存在时回 `changeChannelResult`（`ok = false`），当前所在线不变。
+ */
+export interface RealtimeChangeChannelMessage {
+  type: "changeChannel";
+  data: {
+    /** 目标线号（`0` = 公共线；`map_rules.max_channels` 之外的值一律拒） */
+    channel: number;
+  };
+}
+
+/**
+ * 服务端 → 客户端：换线判定结果（#1000）
+ *
+ * **总是**回这一帧（成功也回）：客户端拿它结束「切换中」的转圈，不用去猜下一帧 `world`
+ * 是不是自己要的那条线。成功且**真的换了房间**时紧跟着还有一帧 `world`（全量重建场上实体）；
+ * 换到「本来就是」的那条线只回这一帧（什么都没变，不值得让客户端重建一遍）。
+ *
+ * `field` 与 `mapEnterResult` 同一套取值风格 —— 服务端不生产面向玩家的句子，客户端按
+ * `field` 取自己的文案：`full` = 那条线满了（`suggestChannel` 是还能进的一条），
+ * `unknown` = 这张图没有这条线（`max_channels` 只有 1 时点「2 线」就是这种）、
+ * `zone` = 本区维护中 / 已合并。
+ */
+export interface RealtimeChangeChannelResultMessage {
+  type: "changeChannelResult";
+  data: {
+    ok: boolean;
+    /** 换完之后所在的线（`ok = false` 时是**原来那条**，客户端据此把选中态改回去） */
+    channel: number;
+    mapId: string;
+    field?: "full" | "unknown" | "zone";
+    /** 一条能进的线（`field = "full"` 且确实还有空线时才有） */
+    suggestChannel?: number;
+    /** 单线容量（`field = "full"` 时有；展示「30/30」用） */
+    need?: number;
   };
 }
 
@@ -533,8 +591,10 @@ export interface RealtimeWorldMessage {
     mapId: string;
     /** 房号（#809）：`<zone>:<map>:<slot>` —— 客户端据此判断这份快照是不是自己在的那间房 */
     roomId?: string;
-    /** 线（`"0"` 公共线；分线 / 副本是第④刀） */
+    /** 线（`"0"` 公共线；分线 / 副本的 slot 形态见 `room-key.util`） */
     slot?: string;
+    /** 第几线（#1000）：公共线 `0`、分线 `1..N`、副本 `-1` —— 小地图标题后的「· 2 线」读它 */
+    channel?: number;
     /** 这一间房的容量（0 = 不限；客户端传送弹窗显示 `23/30` 用） */
     capacity?: number;
     /** 全量列表（规模 = 单图怪物数，最多几百只，全量比增量简单且不易漂移） */
@@ -1375,6 +1435,7 @@ export type RealtimeServerMessage =
   | RealtimeSettleMessage
   | RealtimeWorldMessage
   | RealtimeMapEnterResultMessage
+  | RealtimeChangeChannelResultMessage
   | RealtimeMonsterAiMessage
   | RealtimePlayersMessage
   | RealtimePickedMessage

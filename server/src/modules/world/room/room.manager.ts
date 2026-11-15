@@ -12,8 +12,8 @@ import {
   spawnAreaOverflowText,
 } from "../../../common/utils/spawn-area-bounds.util";
 import { clampPointToMap, clampRectToMap, findAreaAt, spawnTargetOf } from "../../../common/utils/spawn-density.util";
-import { PUBLIC_SLOT, instanceIdOf, parseInstanceSeq, roomKey, splitRoomKey } from "../../../common/utils/room-key.util";
-import { Room } from "./room";
+import { PUBLIC_SLOT, channelOfSlot, instanceIdOf, parseInstanceSeq, roomKey, splitRoomKey } from "../../../common/utils/room-key.util";
+import { Room, roomIsFull } from "./room";
 import { WorldMonster, fromWorldMonsterRow, processRespawns } from "../world-monster";
 
 /**
@@ -103,6 +103,66 @@ export class RoomManager {
   /** 一间房里的一只实例（结算校验用；**不跨房间找** —— instanceId 全局唯一，跨房间找等于掩盖错 id） */
   monsterOf(roomId: string, instanceId: string): WorldMonster | null {
     return this.rooms.get(roomId)?.monsters.get(instanceId) ?? null;
+  }
+
+  /**
+   * 选一条线（#1000）：`prefer` 优先，其次是 `0..maxChannels-1` 里第一条没满的
+   *
+   * 「没满」= 未加载（`ensure()` 时才播种）或观看者数还没到容量；容量 0（不限）时第 0 条
+   * 永远不满 —— 等价于「不分线」，出厂行为与今天完全一致。
+   *
+   * **容量现读 `map_rules`，不信 `room.capacity` 那份缓存**：房间是等空出来才回收重建的，
+   * 而「人满了」正是想调上限的那一刻 —— 缓存永远等不到刷新。顺手把缓存本身也对齐
+   * （世界帧与监控页显示的是它），所以这里对 `room.capacity` 的赋值是刻意的。
+   *
+   * `prefer`（客户端想进的线 / 换线的目标线）**不再是硬要求**：满了就退回自动选，
+   * 所以换线要判「是不是真拿到了想要的那条」得比对返回的 `channel`，不能只看 `full`。
+   *
+   * **全满时仍返回一条线**（`viewers` 最少的）并置 `full: true`：调用方据此决定
+   * 「拒之门外」还是「照进不误」—— 已经站在图里的人（断线重连 / 登录）不该被自己那张图
+   * 的容量锁在门外，塞到最空的那条线即可。
+   */
+  pickSlot(
+    zoneId: number,
+    mapId: string,
+    prefer?: number,
+  ): { slot: string; channel: number; full: boolean; maxChannels: number; capacity: number } {
+    const maxChannels = Math.max(1, Math.trunc(this.rulesOf(mapId).maxChannels));
+    const capacity = this.capacityOf(mapId);
+    /** 这间房满了没有（顺带把缓存容量对齐到当前配置） */
+    const fullOf = (room: Room): boolean => {
+      room.capacity = capacity;
+      return roomIsFull(room);
+    };
+    // 想进的那条线先试一次（越界 / 非整数当没提，不报错：客户端多带一个字段不值得回 error）
+    const wanted = Number.isInteger(prefer) && (prefer as number) >= 0 && (prefer as number) < maxChannels ? prefer : undefined;
+    if (wanted !== undefined) {
+      const room = this.rooms.get(roomKey(zoneId, mapId, String(wanted)));
+      if (!room || !fullOf(room)) return { slot: String(wanted), channel: wanted, full: false, maxChannels, capacity };
+    }
+    let emptiest: Room | null = null;
+    for (let channel = 0; channel < maxChannels; channel += 1) {
+      if (channel === wanted) continue; // 上面刚确认过它满了
+      const slot = String(channel);
+      const room = this.rooms.get(roomKey(zoneId, mapId, slot));
+      if (!room || !fullOf(room)) return { slot, channel, full: false, maxChannels, capacity };
+      if (!emptiest || room.viewers.size < emptiest.viewers.size) emptiest = room;
+    }
+    const slot = emptiest?.slot ?? PUBLIC_SLOT;
+    return { slot, channel: channelOfSlot(slot), full: true, maxChannels, capacity };
+  }
+
+  /**
+   * 一个账号此刻在哪间房（`null` = 没进图）
+   *
+   * 换线要知道「他现在站在哪张图的哪条线」，否则旧的观看者关系没法退干净。
+   * 与 `leave()` 同一个理由用全表扫：有观看者的房间只有在线人数那么多。
+   */
+  roomOf(accountId: string): Room | null {
+    for (const room of this.rooms.values()) {
+      if (room.viewers.has(accountId)) return room;
+    }
+    return null;
   }
 
   //#endregion
@@ -466,10 +526,19 @@ export class RoomManager {
     return clampPointToMap(clipped ? pickPointInArea(clipped.cx, clipped.cy, clipped.w, clipped.h) : raw(), mapPixel);
   }
 
+  /**
+   * 一张图的玩法规则（现读库）
+   *
+   * 容量 / 分线数每间房、每次选线都要看同一个来源；`map_rules` 一行不存在时
+   * `mapRulesOf(null)` 给出厂默认，所以这里不用区分「有没有配过」。
+   */
+  private rulesOf(mapId: string) {
+    return mapRulesOf(this.mapRules.find(mapId));
+  }
+
   /** 一间房的容量（`map_rules.max_players_per_room`；一行不存在 = 出厂 30） */
   private capacityOf(mapId: string): number {
-    const rules = mapRulesOf(this.mapRules.find(mapId));
-    return Math.max(0, Math.trunc(rules.maxPlayersPerRoom));
+    return Math.max(0, Math.trunc(this.rulesOf(mapId).maxPlayersPerRoom));
   }
 
   //#endregion

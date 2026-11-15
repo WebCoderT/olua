@@ -268,10 +268,11 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
     /** 地面掉落物的世界权威（#802）：进图快照、拾取、广播都走它 */
     private readonly drops: DropService,
   ) {
-    // 广播出口：掉落是**图级**的，所以按（区, 图）找观看者，而不是按房号 ——
-    // #812 分线之后如果掉落要按线隔离，这里换成 roomKey 即可（其余不动）
+    // 广播出口：掉落是**图级**的（`world_drops` 还按「区 + 图」存），所以发给这张图
+    // **所有线**的观看者 —— 只发公共线的话，分线的人看不见别人丢下的东西（#1000）。
+    // 等 #805 把掉落搬进 Room，这里换成按房号找人即可（其余不动）
     this.drops.onBroadcast = (zoneId, mapId, frame) => {
-      for (const accountId of this.world.viewersOf(roomKey(zoneId, mapId))) {
+      for (const accountId of this.world.viewersOfMap(zoneId, mapId)) {
         const socket = this.connections.get(accountId);
         if (socket) this.send(socket, frame);
       }
@@ -1042,9 +1043,18 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
         this.send(socket, zoneReject);
         return;
       }
-      // 房号（#809）：本刀只产出公共线（`slot="0"`）；分线 / 副本的选线留给第④刀，
-      // 键先一次到位 —— 那时这里只多一个「选哪个 slot」的决策，下面整条链路不用动
-      const roomId = roomKey(zoneId, join.mapId);
+      // 选线 + 容量闸门（#1000）：判据在世界层（只有它数得清每间房几个人），这里只拿结论。
+      // 「他本来就在这张图」一律放行并塞进最空的那条线 —— 登录 / 断线重连 / 运营把容量
+      // 调小之后，站在图里的人不该被自己那张图的容量锁在门外（同 #573 的教训）。
+      const returning = this.roles.mapAtOfOnlineRole(socket.identity.id) === join.mapId;
+      const pick = this.world.pickRoom(zoneId, join.mapId, join.preferChannel);
+      if (pick.full && !returning) {
+        // 所有线都满：回 mapEnterResult（`field = "full"`）并且**不登记观看者** ——
+        // 与门槛拒绝同一条路，客户端只认这一帧（改包绕过 mapEnter 直发的也挡在这里）
+        this.send(socket, this.mapEnterResultOf(socket.identity.id, join.mapId));
+        return;
+      }
+      const roomId = roomKey(zoneId, join.mapId, pick.slot);
       // 记住「他在哪个区玩」（#961 维护 / 合并踢线的名单来源；见 TrackedSocket.worldZoneId）
       socket.worldZoneId = zoneId;
       // 快照里的坐标按 AI 实时位置覆盖（#670）：出生点不是「他现在在哪」，见 withLiveMonsterPositions
@@ -1088,6 +1098,84 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
         zoneId,
         mapId: join.mapId,
       });
+      return;
+    }
+    if (parsed?.type === "changeChannel") {
+      // 换线（#1000）：**不换图**、不重进场景、不动位置、不走等级门槛 ——
+      // 只是把观看者从旧房间挪到新房间，回一份新的 `world` 帧让客户端就地重建。
+      // 传送代价（钱 / 冷却 / 战斗中禁换）归 #1001；这一刀换线免费且无冷却。
+      const request = parseChangeChannel(parsed.data);
+      if (!request) {
+        this.send(socket, { type: "error", data: { message: "changeChannel 消息缺 channel" } });
+        return;
+      }
+      const accountId = socket.identity.id;
+      const current = this.world.currentRoomOf(accountId);
+      if (!current) {
+        // 没进图就没有「换线」这回事：这是客户端状态错乱或改包，不该静默吞掉
+        this.send(socket, { type: "error", data: { message: "changeChannel 需要先 worldJoin" } });
+        return;
+      }
+      // 失败一律回原来的那条线：客户端据此把选中态改回去（服务端不生产面向玩家的句子）
+      const fail = (field: "full" | "unknown" | "zone", extra?: { suggestChannel?: number; need?: number }): void => {
+        this.send(socket, {
+          type: "changeChannelResult",
+          data: { ok: false, channel: current.channel, mapId: current.mapId, field, ...extra },
+        });
+      };
+      // 区状态闸门（#961）：维护中 / 已合并的区不许再换线（这条连接马上要被踢）
+      const zoneState = this.zones.stateOf(current.zoneId);
+      if (!zoneState || zoneState.merged_into !== null || zoneState.status !== ZONE_STATUS.OPEN) {
+        fail("zone");
+        return;
+      }
+      // 「换到我现在这条线」= 幂等空操作：什么都不重建，但**也要回帧**（客户端靠它停「切换中」）。
+      // 这一条必须排在容量判断之前 —— 他就站在里面，不该被自己那条线的容量拒掉
+      if (request.channel === current.channel) {
+        this.send(socket, {
+          type: "changeChannelResult",
+          data: { ok: true, channel: current.channel, mapId: current.mapId },
+        });
+        return;
+      }
+      const pick = this.world.pickRoom(current.zoneId, current.mapId, request.channel);
+      // 「拿到的是不是想要的那条」只能比对返回的 channel —— `pickRoom` 在满的时候会退而求其次
+      if (pick.channel !== request.channel) {
+        // 线号越界 = 这张图没有这条线（`max_channels = 1` 时点「2 线」就是这种）
+        if (request.channel >= pick.maxChannels) fail("unknown");
+        else fail("full", { suggestChannel: pick.full ? undefined : pick.channel, need: pick.capacity });
+        return;
+      }
+      if (pick.full) {
+        // 目标线就是满的（`pickRoom` 没得退，说明所有线都满了）
+        fail("full", { need: pick.capacity });
+        return;
+      }
+      const roomId = roomKey(current.zoneId, current.mapId, pick.slot);
+      // 世界层负责「退旧房 → 登记新房 → 给全量怪」（`join` 内部先 leave 再 ensure）
+      const snapshot = this.withLiveMonsterPositions(this.world.join(roomId, accountId));
+      this.send(socket, {
+        type: "changeChannelResult",
+        data: { ok: true, channel: pick.channel, mapId: current.mapId },
+      });
+      // 掉落快照照旧按「区 + 图」取（#805 才把掉落搬进 Room）：现在两条线共用一份地面掉落，
+      // 所以这里给的是全量而不是「新房的那一份」—— 客户端按 id upsert，重复给不会出错
+      this.send(socket, {
+        type: "world",
+        data: { ...snapshot, drops: this.drops.snapshotOf(current.zoneId, current.mapId) },
+      });
+      // 互见（#324）：`join` 内部会向旧房排一次 left、给本人发一份新房全量 ——
+      // 不跨线可见这件事由在场表按房号（三段）分组保证，这里不用额外过滤
+      this.presence.join(accountId, roomId);
+      // AOI 基线（#810）：与进图同一套 —— 客户端手上的全量就是新房的那一份，别把
+      // 旧房残留的实体当成「已经发过」，否则它们会永久留在画面上
+      this.aoi.seed(roomId, accountId, [
+        ...snapshot.monsters.map((monster) => monsterEntityOf(monster.instanceId)),
+        ...this.presence.positionsOn(roomId).map((player) => playerEntityOf(player.accountId)),
+      ]);
+      // 旧房的目标与幂等账作废（#34）：同一张图的另一条线上那只怪不在这里，
+      // 留着它等于让「打一半换线」继续对着旧房的实例结算
+      this.combat.resetTargets(accountId);
       return;
     }
     this.send(socket, { type: "error", data: { message: `不认识的消息类型：${String(parsed?.type)}` } });
@@ -1138,6 +1226,22 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
     });
   }
 
+  /**
+   * 容量闸门（#1000）：这张图所有线都满了就该被拒（`null` = 还能进）
+   *
+   * **已经是他的图就放行**：登录 / 断线重连 / 运营把容量调小，都不该把人锁在门外
+   * （与上面「同一个位置就放行」同一条理由）。真进来时塞进最空的那条线，最多超出 1 个人 ——
+   * 比「玩家在自己的图外被弹回」轻得多。
+   */
+  private roomFullRejectOf(accountId: string, mapId: string): { field: "full"; need: number; mapLabel: string } | null {
+    if (!this.maps.exists(mapId)) return null; // 不认识的图不归容量管（`mapEnterRejectOf` 已报 unknown）
+    const pick = this.world.pickRoom(this.roles.zoneOf(accountId), mapId);
+    // `full` 是「**所有**线都满了」，所以这里没有可推荐的线；`need` 给的是单线容量
+    if (!pick.full) return null;
+    if (this.roles.mapAtOfOnlineRole(accountId) === mapId) return null;
+    return { field: "full", need: pick.capacity, mapLabel: this.maps.labelOf(mapId) };
+  }
+
   /** 组一帧 `mapEnterResult`（放行与被拒同形，客户端只看 `ok`） */
   private mapEnterResultOf(accountId: string, mapId: string): RealtimeMapEnterResultMessage {
     // 区状态先判（#961）：维护中连「能不能去」都不该回 ok —— 否则客户端会先切场景、
@@ -1150,8 +1254,11 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
       };
     }
     const reject = this.mapEnterRejectOf(accountId, mapId);
-    if (!reject) return { type: "mapEnterResult", data: { mapId, ok: true } };
-    return { type: "mapEnterResult", data: { mapId, ok: false, ...reject } };
+    if (reject) return { type: "mapEnterResult", data: { mapId, ok: false, ...reject } };
+    // 门槛过了才看容量（#1000）：等级不够的人不该看到「本图已满」——那会把人往错的方向引
+    const full = this.roomFullRejectOf(accountId, mapId);
+    if (full) return { type: "mapEnterResult", data: { mapId, ok: false, ...full } };
+    return { type: "mapEnterResult", data: { mapId, ok: true } };
   }
 
   //#endregion
@@ -1864,24 +1971,47 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
 
 //#region 消息解析（小工具）
 
-/** worldJoin.data 的解析结果（#295 起只带 mapId，播种完全在服务端） */
+/** worldJoin.data 的解析结果（#295 起只带 mapId，播种完全在服务端；#1000 加可选的偏好线） */
 interface ParsedWorldJoin {
   mapId: string;
+  /** 想进几线（不合法就当没提 —— 越界的线号不值得回 error，服务端自己会兜） */
+  preferChannel?: number;
 }
 
 function parseWorldJoin(raw: unknown): ParsedWorldJoin | null {
   if (!raw || typeof raw !== "object") return null;
   const data = raw as Record<string, unknown>;
   if (typeof data.mapId !== "string" || !data.mapId) return null;
-  return { mapId: data.mapId };
+  const preferChannel = toChannel(data.preferChannel);
+  return preferChannel === undefined ? { mapId: data.mapId } : { mapId: data.mapId, preferChannel };
 }
 
 /**
  * mapEnter.data 与 worldJoin 同形（#606：都只有一个目标 mapId）
  *
  * 不另写一份解析：两条消息要判的是同一件事（哪张图），形状漂了也必须一起漂。
+ * `preferChannel` 对 `mapEnter` 无意义（它只回答「能不能去这张图」），多带也不会被读。
  */
 const parseMapEnter = parseWorldJoin;
+
+/** 线号：非负整数才算（浮点 / 负数 / 字符串一律当没提） */
+function toChannel(raw: unknown): number | undefined {
+  if (typeof raw !== "number" || !Number.isInteger(raw) || raw < 0) return undefined;
+  return raw;
+}
+
+/** changeChannel.data 的解析结果（#1000：只带目标线号） */
+interface ParsedChangeChannel {
+  channel: number;
+}
+
+function parseChangeChannel(raw: unknown): ParsedChangeChannel | null {
+  if (!raw || typeof raw !== "object") return null;
+  const data = raw as Record<string, unknown>;
+  const channel = toChannel(data.channel);
+  if (channel === undefined) return null;
+  return { channel };
+}
 
 /** pick.data 的解析结果（#325：格式不对回 error 帧，低频操作值得明确告知） */
 interface ParsedPick {

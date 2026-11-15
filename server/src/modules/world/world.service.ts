@@ -2,6 +2,7 @@ import { Injectable, Logger, OnApplicationBootstrap, OnApplicationShutdown } fro
 import { ConfigService } from "@nestjs/config";
 import { WorldMonsterRepository } from "../../database/repositories/world-monster.repository";
 import { ZoneRepository } from "../../database/repositories/zone.repository";
+import { channelOfSlot } from "../../common/utils/room-key.util";
 import { Room } from "./room/room";
 import { RoomManager } from "./room/room.manager";
 import {
@@ -140,7 +141,7 @@ export class WorldService implements OnApplicationBootstrap, OnApplicationShutdo
   join(
     roomId: string,
     accountId: string,
-  ): { roomId: string; mapId: string; slot: string; capacity: number; monsters: WorldMonsterSnapshot[] } {
+  ): { roomId: string; mapId: string; slot: string; channel: number; capacity: number; monsters: WorldMonsterSnapshot[] } {
     // 幂等：同房重进时这步等于「退掉再登记」，`emptySince` 被 addViewer 抹掉，不会误回收
     this.leave(accountId);
     const room = this.roomManager.ensure(roomId);
@@ -149,6 +150,7 @@ export class WorldService implements OnApplicationBootstrap, OnApplicationShutdo
       roomId: room.roomId,
       mapId: room.mapId,
       slot: room.slot,
+      channel: channelOfSlot(room.slot),
       capacity: room.capacity,
       monsters: [...room.monsters.values()].map(worldMonsterSnapshotOf),
     };
@@ -163,21 +165,73 @@ export class WorldService implements OnApplicationBootstrap, OnApplicationShutdo
   }
 
   /** 一间房的权威快照（`world` 帧的 data）；房间不在内存（未加载 / 已回收）返回 null */
-  snapshot(roomId: string): { roomId: string; mapId: string; slot: string; capacity: number; monsters: WorldMonsterSnapshot[] } | null {
+  snapshot(roomId: string): { roomId: string; mapId: string; slot: string; channel: number; capacity: number; monsters: WorldMonsterSnapshot[] } | null {
     const room = this.roomManager.get(roomId);
     if (!room) return null;
     return {
       roomId: room.roomId,
       mapId: room.mapId,
       slot: room.slot,
+      channel: channelOfSlot(room.slot),
       capacity: room.capacity,
       monsters: [...room.monsters.values()].map(worldMonsterSnapshotOf),
+    };
+  }
+
+  /**
+   * 选线（#1000）：分线闸门的判据只在**这一处**
+   *
+   * 只有世界域知道「每间房现在有几个人在看」，所以选线必须住在这里 —— 通道拿结论
+   * （哪条线 / 满没满），不自己数。
+   *
+   * `prefer` 是「想进的线」（`worldJoin.preferChannel` / `changeChannel.channel`）：
+   * 满了会退回自动选，**想确认拿到的就是这条线，得比对返回的 `channel`**。
+   */
+  pickRoom(
+    zoneId: number,
+    mapId: string,
+    prefer?: number,
+  ): { slot: string; channel: number; full: boolean; maxChannels: number; capacity: number } {
+    return this.roomManager.pickSlot(zoneId, mapId, prefer);
+  }
+
+  /**
+   * 一个账号此刻在哪间房（`null` = 还没进图 / 刚断线）
+   *
+   * 换线必须知道他现在那条线：`join()` 内部会把旧房间的观看者退掉，但**容量判断与
+   * 「换到同一条线」的短路**要先于它，而这两件都得先知道「从哪条线换出去」。
+   */
+  currentRoomOf(accountId: string): { roomId: string; zoneId: number; mapId: string; slot: string; channel: number } | null {
+    const room = this.roomManager.roomOf(accountId);
+    if (!room) return null;
+    return {
+      roomId: room.roomId,
+      zoneId: room.zoneId,
+      mapId: room.mapId,
+      slot: room.slot,
+      channel: channelOfSlot(room.slot),
     };
   }
 
   /** 正在看一间房的账号（广播出口按它找人；只读，别改） */
   viewersOf(roomId: string): Iterable<string> {
     return this.roomManager.get(roomId)?.viewers ?? [];
+  }
+
+  /**
+   * 一张图**所有线**上的观看者（#1000）
+   *
+   * 给「按图广播」的出口用 —— 目前只有地面掉落：`world_drops` 还是按「区 + 图」存的
+   * （搬进 Room 归 #805），所以掉落帧必须发给所有线的观看者，只发公共线等于
+   * 「分线的人看不见别人丢下的东西」。同一个人只会在一条线里（`leave` 会全表退），不重复。
+   */
+  viewersOfMap(zoneId: number, mapId: string): string[] {
+    const ids: string[] = [];
+    for (const room of this.roomManager.viewedRooms()) {
+      if (room.zoneId !== zoneId || room.mapId !== mapId) continue;
+      for (const accountId of room.viewers) ids.push(accountId);
+    }
+    return ids;
   }
 
   /**
