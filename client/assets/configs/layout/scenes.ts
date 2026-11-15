@@ -38,8 +38,11 @@ export const loginLayout = {
   /**
    * 纵向排列顺序（从上到下）：元素按这个顺序挂进舞台，Layout 按挂载顺序排。
    * 每一项必须在下面有对应的元素定义（Login.ts 会校验，缺了当场报错）
+   *
+   * 没有区服选择这一项（#962）：登录前不知道账号有哪几个区，显示「区服：X」是假信息。
+   * 选服在选角页（见 roleSelectorLayout.zoneLabel）。
    */
-  order: ["logo", "account", "password", "zoneSelector", "loginButton", "registerButton"],
+  order: ["logo", "account", "password", "loginButton", "registerButton"],
   background: uiImages.loginBackground,
 
   /** 账号输入框 */
@@ -64,8 +67,6 @@ export const loginLayout = {
     textColor: new Color("#f4fc00"),
     fontSize: 24,
   },
-  /** 区服选择（多开区 #295：文案节点，点按循环切换活区；排在密码框与登录按钮之间） */
-  zoneSelector: { size: new Size(600, 40), color: new Color("#f4fc00"), fontSize: 22 },
   /** 顶部 logo */
   logo: { name: "game_logo", image: uiImages.gameLogo, size: new Size(600, 200) },
 };
@@ -104,6 +105,14 @@ export const roleSelectorLayout = {
    * 创建角色弹窗的关闭在弹窗自己的右上角（见 createDialog.closeButton），不走这颗按钮
    */
   backButton: { name: "back_to_login_button", image: uiImages.roleSelectorBackButton, position: new Vec2(-884, -370), size: new Size(75, 79) },
+  /**
+   * 当前区服（#962）：舞台顶部居中，点它打开选服弹窗。
+   *
+   * 位置在角色滚动区之上（滚动区顶 = 35 + 880/2 = 475，这里 508 留 33 的间隔）。
+   * 只有两个及以上活区时才显示「（点击切换）」并绑点击 —— 单区时点了也是它，
+   * 文案与点击一起退化（见 RoleSelector.renderZoneLabel）。
+   */
+  zoneLabel: { name: "role_selector_zone", position: new Vec2(0, 508), size: new Size(640, 30), fontSize: 20, color: new Color("#FFD166") },
   /**
    * 选中角色信息框（名称 + 等级）：挂在**底部栏**下（role_selector_bottom_bar 的子节点），
    * position 相对底部栏中心 —— 底部栏贴屏幕底边（中心在画布 (0, -540 + 82)），

@@ -7852,6 +7852,10 @@ export type Zone = {
    * 运营状态：open / maintenance / closed
    */
   status: "open" | "maintenance" | "closed";
+  /**
+   * 是否运营推荐区（选服弹窗里标「推荐」）
+   */
+  recommended: boolean;
 };
 
 export type MyZone = {
@@ -7867,6 +7871,10 @@ export type MyZone = {
    * 运营状态：open / maintenance / closed
    */
   status: "open" | "maintenance" | "closed";
+  /**
+   * 是否运营推荐区（选服弹窗里标「推荐」）
+   */
+  recommended: boolean;
   /**
    * 我在这个区有几个角色
    */

@@ -20,11 +20,21 @@ export class ZoneDto {
   @ApiProperty({ description: "运营状态：open / maintenance / closed", example: "open", enum: ["open", "maintenance", "closed"] })
   status: string;
 
+  /**
+   * 是否推荐区（#962）
+   *
+   * 库里 P5 就有这一列，玩家侧一直没发 —— 选服弹窗要标「推荐」，只能补出来。
+   * 与 `status` 同一档：只发展示要用的布尔，不发 `sort` / `opened_at` / `note`。
+   */
+  @ApiProperty({ description: "是否运营推荐区（选服弹窗里标「推荐」）", example: false })
+  recommended: boolean;
+
   static from(row: ZoneRow): ZoneDto {
     const dto = new ZoneDto();
     dto.id = row.id;
     dto.name = row.name;
     dto.status = row.status;
+    dto.recommended = row.recommended === 1;
     return dto;
   }
 }
@@ -376,6 +386,7 @@ export class MyZoneDto extends ZoneDto {
     dto.id = row.id;
     dto.name = row.name;
     dto.status = row.status;
+    dto.recommended = row.recommended === 1;
     dto.roleCount = roleCount;
     dto.current = current;
     return dto;

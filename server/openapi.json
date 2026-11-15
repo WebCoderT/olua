@@ -29211,12 +29211,18 @@
               "maintenance",
               "closed"
             ]
+          },
+          "recommended": {
+            "type": "boolean",
+            "description": "是否运营推荐区（选服弹窗里标「推荐」）",
+            "example": false
           }
         },
         "required": [
           "id",
           "name",
-          "status"
+          "status",
+          "recommended"
         ]
       },
       "MyZoneDto": {
@@ -29242,6 +29248,11 @@
               "closed"
             ]
           },
+          "recommended": {
+            "type": "boolean",
+            "description": "是否运营推荐区（选服弹窗里标「推荐」）",
+            "example": false
+          },
           "roleCount": {
             "type": "number",
             "description": "我在这个区有几个角色",
@@ -29257,6 +29268,7 @@
           "id",
           "name",
           "status",
+          "recommended",
           "roleCount",
           "current"
         ]

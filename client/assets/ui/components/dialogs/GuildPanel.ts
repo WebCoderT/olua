@@ -2,6 +2,7 @@ import { Color, EditBox, Graphics, isValid, Node, ScrollView, Size, Vec2 } from 
 import GameUiHelper from "../../helpers/GameUiHelper";
 import LayerManager from "../../core/LayerManager";
 import SocialStore from "../../core/SocialStore";
+import ZoneStore from "../../core/ZoneStore";
 import UiHelper from "../../helpers/UiHelper";
 import { GuildApi } from "../../utils/net/Api";
 import type { GuildApplication, GuildMember, GuildSummary, MyGuild } from "../../utils/net/Api";
@@ -124,11 +125,13 @@ export default class GuildPanel {
     const createButton = GameUiHelper.createMiddleButton(guest.createButton.name, guest.createButton.text, guest.createButton.position);
     createButton.on(Node.EventType.TOUCH_END, () => void this.createGuild(nameInput), this);
     body.addChild(createButton);
-    // 全部帮会（人数降序由服务端排好）
+    // 全部帮会（人数降序由服务端排好）。标题前挂区名（#962）：帮会是**按区**的，
+    // 不写区名会让人以为「全部帮会」是全服的总数
+    const zone = ZoneStore.currentName();
     body.addChild(
       UiHelper.createLabel(
         "guild_list_title",
-        this.text(texts.listTitle, { count: this.guilds.length }),
+        `${zone ? getText("zone_title_prefix", { zone }) : ""}${this.text(texts.listTitle, { count: this.guilds.length })}`,
         guest.listTitle.color,
         guest.listTitle.fontSize,
         guest.listTitle.position,
