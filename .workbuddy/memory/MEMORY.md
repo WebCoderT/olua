@@ -41,6 +41,12 @@
 - **「每张表都必须归类」有常驻守点**（#438）：`e2e-guard` 拿 `sqlite_master` 全量清单与 `config-tables.cjs`
   **双向**比对（`assertAllClassified()` 只在 `config-export` 跑，常年不导配置就发现不了）。
 - **合并前的类型检查以 `make ci-static` 为准**（#804）：单跑 `make client-check` 0 错、`ci-static` 报两处真错。
+- **延迟类指标只打印分位数、不设阈值**（#1043）：`npm run test:e2e:latency` 量「A 发 pos → B 收到」与
+  「cast → settle」两段，断言只落在结构上（配对 / 条目归属 / `p50≤p95≤max` / 样本数够）。宿主机负载会让
+  数字漂，「< 200ms」是体验目标不是回归判据；写进断言就是「机器一忙就红」。
+- **数量声明有守点**（#1050）：`tools/audit-count-claims.cjs` 现算「N 项审计 / N 套 e2e / N 套客户端单测」，
+  与 `tools/audit-*.cjs`、`server/package.json`、`client/tools/test-*.cjs` 比对；**加脚本后跑 `--write`**
+  （它会连 Makefile / CI 注释 / 官网 / skills 一起改，共 31 处），别再手工列清单。`.workbuddy/memory/**` 永久排除。
 - 工具链：只信 Grep 工具（BSD grep 交替恒空）· 批量替换 `perl -pi -e` · `curl --noproxy '*'` · 判进程 `kill -0`。
 
 ## 架构不变量（细节见 `topics/架构不变量.md`）
@@ -92,13 +98,13 @@ admin 退回 `127.0.0.1:8081` —— 宿主机 `:80` 只能有一个主人；开
 
 ## 进度与口径（细节 → `topics/进度年表.md`）
 - **当前 open**（2026-11-15 核）：**#1025 资源清单过期**（verify 红，暂缓发布）· **#1001 副本 instance**
-  （#808 epic 只剩这一刀；第一刀「传送代价 + 空房 tick + 管理端」已落，见年表）· #772 epic 延迟与分片 ·
+  （#808 epic 只剩这一刀；第一刀「传送代价 + 空房 tick + 管理端」已落，见年表）·
   **#742 TLS**（部署侧已落 #1033：边缘 edge + certbot、官网链接换 https；**只差 443 放行 + `--tls-init` + 外网核**）·
   #403 帮会战（远期占位）。保持现状：技能 1011 / 快捷键 6 格 / 装备 7 部位。
 - **口径数字**：`docs/14` 无生成脚本、改接口手工加行，现 **268 = 8 + 68 + 192**（tag 口径，`cast_range`
   两个接口后；`/admin` path 前缀是 **195**，差 3 个是免令牌的 `/admin/auth/*`）；
   client 单测 **70 套**；
-  e2e **92 套**（**按 `test:e2e*` 脚本数**，`ls server/test/e2e*.cjs` 是 91 个文件，差的那 1 个是
+  e2e **93 套**（**按 `test:e2e*` 脚本数**，`ls server/test/e2e*.cjs` 是 92 个文件，差的那 1 个是
   `test:e2e:backup` → `test/backup.cjs`；全仓一律按脚本数，别再写 90/91）；`make audit` **19 项**；
   表 **76 = 39 配置 + 37 运行时**；管理端 **53 页面 / 54 路由**；客户端 **32 个 Manager**；结算缓存 **14**；
   `docs/37` 是最高优先单一来源。
