@@ -1,6 +1,6 @@
 import { ApiProperty } from "@nestjs/swagger";
 import { Type } from "class-transformer";
-import { IsIn, IsInt, IsNumber, IsOptional, IsString, Length, Max, Min } from "class-validator";
+import { IsBoolean, IsIn, IsInt, IsNumber, IsOptional, IsString, Length, Max, Min } from "class-validator";
 import {
   COLLISION_BOX_LIMITS,
   MAP_ENTER_LIMITS,
@@ -508,6 +508,23 @@ export class MapConfigDto {
     type: [MapCollisionBoxDto],
   })
   collisions: MapCollisionBoxDto[];
+
+  @ApiProperty({
+    description:
+      "单房间人数上限（#812；0 = 不限）。客户端传送弹窗显示 `23/30` 的分母；**人数**那一半要等分线（#1000）",
+  })
+  maxPlayersPerRoom: number;
+
+  @ApiProperty({
+    description:
+      "分线数量（#812；1 = 不分线）。客户端据此决定要不要显示「换线」入口，真正的开线逻辑在 #1000",
+  })
+  maxChannels: number;
+
+  @ApiProperty({
+    description: "传送花费（#812；0 = 免费）。**只进快照供客户端预判**，扣款仍以服务端为准（#1001）",
+  })
+  transferCostMoney: number;
 }
 
 /** 地图类型分组（顺序 = 传送弹窗的分组顺序；文案的唯一来源在服务端） */
@@ -921,15 +938,19 @@ export class SaveMapRulesDto {
   moneyRate: number;
 
   @ApiProperty({ description: "允许 PK" })
+  @IsBoolean({ message: "allowPk 必须是布尔值" })
   allowPk: boolean;
 
   @ApiProperty({ description: "允许自动挂机" })
+  @IsBoolean({ message: "allowAutoBattle 必须是布尔值" })
   allowAutoBattle: boolean;
 
   @ApiProperty({ description: "允许被拉人 / 回城" })
+  @IsBoolean({ message: "allowRecall 必须是布尔值" })
   allowRecall: boolean;
 
   @ApiProperty({ description: "这张图掉不掉东西" })
+  @IsBoolean({ message: "allowDrop 必须是布尔值" })
   allowDrop: boolean;
 
   @ApiProperty({ description: "单房间人数上限（0 = 不限，上限 1000）", minimum: 0, maximum: 1000 })
@@ -961,6 +982,7 @@ export class SaveMapRulesDto {
   transferCooldownMs: number;
 
   @ApiProperty({ description: "战斗中禁止传送" })
+  @IsBoolean({ message: "denyTransferInCombat 必须是布尔值" })
   denyTransferInCombat: boolean;
 
   @ApiProperty({
@@ -978,6 +1000,7 @@ export class SaveMapRulesDto {
   respawnMsOverride?: number | null;
 
   @ApiProperty({ description: "无人时继续跑世界（false = 冻结）" })
+  @IsBoolean({ message: "simulateWhenEmpty 必须是布尔值" })
   simulateWhenEmpty: boolean;
 }
 

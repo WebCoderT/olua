@@ -6602,6 +6602,18 @@ export type MapConfig = {
    * 碰撞盒（#676 起归后台；客户端直接建静态碰撞体 + 当自动战斗的静态障碍）。空数组 = 这张图没有阻挡
    */
   collisions: MapCollisionBox[];
+  /**
+   * 单房间人数上限（#812；0 = 不限）。客户端传送弹窗显示 `23/30` 的分母；**人数**那一半要等分线（#1000）
+   */
+  maxPlayersPerRoom: number;
+  /**
+   * 分线数量（#812；1 = 不分线）。客户端据此决定要不要显示「换线」入口，真正的开线逻辑在 #1000
+   */
+  maxChannels: number;
+  /**
+   * 传送花费（#812；0 = 免费）。**只进快照供客户端预判**，扣款仍以服务端为准（#1001）
+   */
+  transferCostMoney: number;
 };
 
 export type MapTypeGroup = {

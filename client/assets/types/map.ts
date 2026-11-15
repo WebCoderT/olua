@@ -112,4 +112,15 @@ export interface MapConfig {
   spawnAreas: MapSpawnAreaPoint[];
   /** 碰撞盒（静态碰撞体 + 自动战斗的静态障碍都用它；空数组 = 这张图没有阻挡） */
   collisions: MapCollisionBox[];
+  /**
+   * 单房间人数上限（#812；0 = 不限）
+   *
+   * 传送弹窗显示 `23/30` 的分母。**人数那一半还没有**：真实在线人数要等服务端给出
+   * 「每张图当前几人」，那是分线（#1000）的活 —— 在此之前这个值只用来显示上限。
+   */
+  maxPlayersPerRoom: number;
+  /** 分线数量（#812；1 = 不分线）。决定要不要显示「换线」入口（真正的开线逻辑在 #1000） */
+  maxChannels: number;
+  /** 传送花费（#812；0 = 免费）。**只用于提前提示**，扣款以服务端为准（#1001） */
+  transferCostMoney: number;
 }
