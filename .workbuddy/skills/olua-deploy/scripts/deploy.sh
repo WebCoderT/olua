@@ -8,11 +8,13 @@
 #      bash scripts/deploy.sh --env-only      # 只更新 server/.env 并重启服务端
 #      bash scripts/deploy.sh --game [目录]   # 同步游戏 Web 产物到 :8080（默认 client/build/web-desktop-001）
 #      bash scripts/deploy.sh --resources     # 同步管理端素材（image-manifest 等）到 game/resources/
+#      bash scripts/deploy.sh --tls-init      # 首次签发证书（OLUA_TLS=on 才用；跑一次就够）
 #      bash scripts/deploy.sh --verify        # 只做验收检查
 #
 #  前置：
 #    - 根目录存在 deploy.env（gitignored），含 DEPLOY_HOST/USER/KEY/DIR/JWT_SECRET/ADMIN_REGISTER_CODE，
-#      可选 OLUA_SITE_DOMAINS / OLUA_ADMIN_DOMAIN / OLUA_GAME_DOMAIN（三站域名，不填用默认值）
+#      可选 OLUA_SITE_DOMAINS / OLUA_ADMIN_DOMAIN / OLUA_GAME_DOMAIN（三站域名，不填用默认值）、
+#      OLUA_TLS=on + OLUA_ACME_EMAIL（开 HTTPS，#742）
 #    - **改动已提交并合入 master**（git archive 只导出已提交状态，未提交的改动不会上线）
 #    - 本机私钥权限 600（chmod 600），否则 SSH 直接拒绝
 #
@@ -29,6 +31,7 @@ for arg in "$@"; do
     --env-only) MODE="env-only" ;;
     --game)     MODE="game" ;;
     --resources) MODE="resources" ;;
+    --tls-init) MODE="tls-init" ;;
     --verify)   MODE="verify" ;;
     -h|--help)  sed -n '2,22p' "$0"; exit 0 ;;
     -*) echo "未知参数：$arg"; exit 2 ;;
@@ -80,18 +83,62 @@ ADMIN_DOMAIN="${OLUA_ADMIN_DOMAIN:-admin.yimw.cn}"
 GAME_DOMAIN="${OLUA_GAME_DOMAIN:-game.yimw.cn}"
 SITE_PRIMARY="$(printf '%s' "$SITE_DOMAINS" | awk '{print $1}')"
 
+# ---- HTTPS（#742）：开关、账号邮箱，以及「一张证书覆盖哪些域名」----
+TLS="${OLUA_TLS:-off}"
+ACME_EMAIL="${OLUA_ACME_EMAIL:-}"
+if [ "$TLS" = "on" ] && [ -z "$ACME_EMAIL" ]; then
+  echo "✗ OLUA_TLS=on 但 deploy.env 里没有 OLUA_ACME_EMAIL（Let's Encrypt 需要一个账号邮箱）"
+  exit 1
+fi
+
+# 证书的 SAN 列表 = 三个域名变量里出现过的全部（去重、保序）。
+# 与 nginx 模板用的是同一组变量，所以「证书覆盖的域名」永远等于「nginx 认的域名」。
+ALL_DOMAINS="$(printf '%s %s %s\n' "$SITE_DOMAINS" "$ADMIN_DOMAIN" "$GAME_DOMAIN" \
+  | tr ' ' '\n' | awk 'NF && !seen[$0]++' | tr '\n' ' ' | sed 's/ *$//')"
+DOMAIN_FLAGS=""
+for d in $ALL_DOMAINS; do DOMAIN_FLAGS="$DOMAIN_FLAGS -d $d"; done
+
 build_compose_env() {
   {
-    echo "# 由 deploy.sh 生成（compose 插值用），本地真源是 deploy.env 的 OLUA_* 三项"
+    echo "# 由 deploy.sh 生成（compose 插值用），真源是 deploy.env 的 OLUA_* 几项"
     echo "OLUA_SITE_DOMAINS=$SITE_DOMAINS"
     echo "OLUA_ADMIN_DOMAIN=$ADMIN_DOMAIN"
     echo "OLUA_GAME_DOMAIN=$GAME_DOMAIN"
+    if [ "$TLS" = "on" ]; then
+      # 这三行是 TLS 的接线，必须跟域名写在同一个文件里（人手工补必然漏）：
+      #   COMPOSE_PROFILES=tls  → edge / certbot 两个服务才会被 `up -d` 拉起来
+      #   OLUA_ADMIN_BIND/PORT  → 把宿主机 :80 让给 edge（admin 退回回环，本机仍能直连验收）
+      # TLS 关掉时这里不写 → compose 退回默认值，明文 :80 恢复，等于干净的「回滚开关」。
+      echo "COMPOSE_PROFILES=tls"
+      echo "OLUA_ADMIN_BIND=127.0.0.1"
+      echo "OLUA_ADMIN_PORT=8081"
+    fi
   } > /tmp/olua-compose.env
-  echo "  已生成 compose .env（${SITE_PRIMARY} / ${ADMIN_DOMAIN} / ${GAME_DOMAIN}）"
+  local extra=""
+  [ "$TLS" = "on" ] && extra=" + TLS（admin 退回 127.0.0.1:8081，:80/:443 归 edge）"
+  echo "  已生成 compose .env（${SITE_PRIMARY} / ${ADMIN_DOMAIN} / ${GAME_DOMAIN}）${extra}"
 }
 
 verify() {
   echo "==> 验收"
+  # TLS 部署下宿主机 :80 是 edge 的，admin 退到回环 8081（见 build_compose_env）：
+  #   - 对外入口一律从 edge 打（https + 用 IP 打时证书名对不上，所以 -k）；
+  #   - 想验后端本身有没有起来，仍可以直接打 admin 的内网口。
+  if [ "$TLS" = "on" ]; then
+    ADMIN_PROBE="https://127.0.0.1"
+    ADMIN_INNER="http://127.0.0.1:8081"
+    CURL_TLS="-k"
+  else
+    ADMIN_PROBE="http://127.0.0.1"
+    ADMIN_INNER="http://127.0.0.1"
+    CURL_TLS=""
+  fi
+  # 内网口只有 TLS 模式才值得单独看一眼（明文部署下它与「admin page」是同一个地址）
+  if [ "$TLS" = "on" ]; then
+    INNER_LINE="echo -n 'admin 内网口: '; curl --noproxy '*' -s -o /dev/null -w '%{http_code}\\n' --max-time 10 $ADMIN_INNER/"
+  else
+    INNER_LINE=":"
+  fi
   # `docker compose up -d` 返回时容器**还没开始服务**：上一轮就是在这里读到 502 的假故障
   # （nginx 已经在，后面 server 还在 starting）。先等健康检查转绿，再打接口。
   "${SSH[@]}" "$TARGET" "cd '$DEPLOY_DIR'
@@ -101,15 +148,48 @@ verify() {
       sleep 2
     done
     docker compose ps
-    echo -n 'admin page: '; curl --noproxy '*' -s -o /dev/null -w '%{http_code}\n' --max-time 10 http://127.0.0.1/
-    echo -n 'admin api: ';  curl --noproxy '*' -s --max-time 10 http://127.0.0.1/api/health; echo
+    echo -n 'admin page: '; curl --noproxy '*' $CURL_TLS -s -o /dev/null -w '%{http_code}\n' --max-time 10 $ADMIN_PROBE/
+    echo -n 'admin api: ';  curl --noproxy '*' $CURL_TLS -s --max-time 10 $ADMIN_PROBE/api/health; echo
+    $INNER_LINE
     echo -n 'game page: ';  curl --noproxy '*' -s -o /dev/null -w '%{http_code}\n' --max-time 10 http://127.0.0.1:${GAME_PORT}/
     echo -n 'game api: ';   curl --noproxy '*' -s --max-time 10 http://127.0.0.1:${GAME_PORT}/api/health; echo
     echo '--- 三域名分流（Host 头模拟，不依赖本机 DNS）'
-    echo -n \"site($SITE_PRIMARY): \";  curl --noproxy '*' -s -H \"Host: $SITE_PRIMARY\" -o /dev/null -w '%{http_code}\n' --max-time 10 http://127.0.0.1/
-    echo -n \"admin($ADMIN_DOMAIN): \"; curl --noproxy '*' -s -H \"Host: $ADMIN_DOMAIN\" -o /dev/null -w '%{http_code}\n' --max-time 10 http://127.0.0.1/
-    echo -n \"game($GAME_DOMAIN): \";   curl --noproxy '*' -s -H \"Host: $GAME_DOMAIN\" -o /dev/null -w '%{http_code}\n' --max-time 10 http://127.0.0.1/
-    echo -n 'image-manifest: ';         curl --noproxy '*' -s -H \"Host: $ADMIN_DOMAIN\" -o /dev/null -w '%{http_code}\n' --max-time 10 http://127.0.0.1/game-resources/image-manifest.json"
+    echo -n \"site($SITE_PRIMARY): \";  curl --noproxy '*' $CURL_TLS -s -H \"Host: $SITE_PRIMARY\" -o /dev/null -w '%{http_code}\n' --max-time 10 $ADMIN_PROBE/
+    echo -n \"admin($ADMIN_DOMAIN): \"; curl --noproxy '*' $CURL_TLS -s -H \"Host: $ADMIN_DOMAIN\" -o /dev/null -w '%{http_code}\n' --max-time 10 $ADMIN_PROBE/
+    echo -n \"game($GAME_DOMAIN): \";   curl --noproxy '*' $CURL_TLS -s -H \"Host: $GAME_DOMAIN\" -o /dev/null -w '%{http_code}\n' --max-time 10 $ADMIN_PROBE/
+    echo -n 'image-manifest: ';         curl --noproxy '*' $CURL_TLS -s -H \"Host: $ADMIN_DOMAIN\" -o /dev/null -w '%{http_code}\n' --max-time 10 $ADMIN_PROBE/game-resources/image-manifest.json"
+  if [ "$TLS" = "on" ]; then
+    # TLS 专项：这三条正是 #742 的验收项（跳转 / 证书链完整 / 到期时间）
+    "${SSH[@]}" "$TARGET" "cd '$DEPLOY_DIR'
+      echo '--- HTTPS 专项'
+      echo -n 'http→https: '; curl --noproxy '*' -s -o /dev/null -w '%{http_code} → %{redirect_url}\n' --max-time 10 -H 'Host: $ADMIN_DOMAIN' http://127.0.0.1/
+      echo -n '证书到期: '; echo | openssl s_client -connect 127.0.0.1:443 -servername '$ADMIN_DOMAIN' 2>/dev/null | openssl x509 -noout -enddate
+      echo -n '证书 SAN: '; echo | openssl s_client -connect 127.0.0.1:443 -servername '$ADMIN_DOMAIN' 2>/dev/null | openssl x509 -noout -ext subjectAltName | tail -n 1"
+  fi
+}
+
+# 首次签发证书（#742）：**用 standalone，不用 webroot**
+#
+# 理由是鸡生蛋：webroot 校验需要 :80 上有人把 /.well-known/acme-challenge/ 供出来，
+# 而 :80 归 edge，edge 又要证书才能起 nginx（配置里有 listen 443 ssl）。
+# 所以第一次反过来做：先把 edge 停掉（:80 空出来），让 certbot 自己占 :80 应答校验，
+# 签完再起 edge。之后所有续期都走 webroot（edge 已在服务，见 compose 的 certbot 服务）。
+tls_init() {
+  [ "$TLS" = "on" ] || { echo "✗ deploy.env 里 OLUA_TLS 不是 on —— 先改成 on 再来签发"; exit 1; }
+  echo "==> 首次签发证书，覆盖：$ALL_DOMAINS"
+  echo "    前提：这些域名都已解析到 $DEPLOY_HOST，控制台放行了 80 与 443"
+  build_compose_env
+  "${SCP[@]}" /tmp/olua-compose.env "$TARGET:$DEPLOY_DIR/.env"
+  # 只起后端与静态站：**不起 edge**（:80 要空出来给 certbot 的 standalone）
+  "${SSH[@]}" "$TARGET" "cd '$DEPLOY_DIR' && docker compose stop edge 2>/dev/null || true"
+  "${SSH[@]}" "$TARGET" "cd '$DEPLOY_DIR' && docker compose up -d --build server server-realtime admin game website"
+  echo "==> 申请证书（--cert-name olua：目录固定，换域名不用改 nginx）"
+  "${SSH[@]}" "$TARGET" "cd '$DEPLOY_DIR' && docker compose --profile tls run --rm -p 80:80 --entrypoint certbot certbot certonly \
+    --standalone --cert-name olua $DOMAIN_FLAGS \
+    --email '$ACME_EMAIL' --agree-tos --no-eff-email --non-interactive"
+  echo "==> 起 edge 与 certbot（此时证书已就位；certbot 一起起来才有续期循环）"
+  "${SSH[@]}" "$TARGET" "cd '$DEPLOY_DIR' && docker compose up -d"
+  verify
 }
 
 # 同步管理端素材（client/assets/resources）→ 服务器 game/resources/：
@@ -151,6 +231,7 @@ case "$MODE" in
   verify) verify; exit 0 ;;
   game) sync_game; verify; exit 0 ;;
   resources) sync_resources; verify; exit 0 ;;
+  tls-init) tls_init; exit 0 ;;
   env-only)
     echo "==> 只更新 server/.env"
     build_env
@@ -176,6 +257,15 @@ build_env
 echo "==> 5/6 传 compose .env（三站域名，nginx 模板的 envsubst 用）"
 build_compose_env
 "${SCP[@]}" /tmp/olua-compose.env "$TARGET:$DEPLOY_DIR/.env"
+
+if [ "$TLS" = "on" ]; then
+  # 证书还没签的话，edge 会一直等着（不是崩，见 deploy/edge-entrypoint.sh）——
+  # 这里提前说一声，省得看到验收里 https 打不通再去翻容器日志。
+  # 用 `compose run` 探而不是猜卷名：卷的真名带 compose 项目前缀，猜错就是静默不报警。
+  if ! "${SSH[@]}" "$TARGET" "cd '$DEPLOY_DIR' && docker compose --profile tls run --rm --entrypoint sh certbot -c 'test -f /etc/letsencrypt/live/olua/fullchain.pem'" >/dev/null 2>&1; then
+    echo "  ⚠ 服务器上还没有证书：edge 会先等着。首次部署请跑一次 --tls-init"
+  fi
+fi
 
 if [ "$MODE" = "no-build" ]; then
   echo "==> 6/6 跳过重建（--no-build）"

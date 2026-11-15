@@ -14,6 +14,10 @@
 #                                   └→ /api/realtime* 反代 → server-realtime(:3101，WS)
 #        管理端与接口**同源**，所以不需要 CORS；而反代之后服务端必须相信代理给的来源 IP。
 #        这两件事都由本文件的拓扑决定（见下面的 environment），不靠每个 .env 各写一遍。
+#
+#        HTTPS（#742，`--profile tls`）时最前面多一层 edge(nginx :80/:443)：
+#        :80 只做 ACME 校验与 301，:443 持一张四域名证书，把同一个 Host 转给 admin(:80)。
+#        此时 admin 不再对外发布端口（退回 127.0.0.1），见它 ports 上的注释。
 # ==============================================================================
 
 name: olua
@@ -147,8 +151,13 @@ services:
       OLUA_ADMIN_DOMAIN: ${OLUA_ADMIN_DOMAIN:-admin.yimw.cn}
       OLUA_GAME_DOMAIN: ${OLUA_GAME_DOMAIN:-game.yimw.cn}
     ports:
-      # 对外只开 80：官网 / 管理端 / 游戏都从这里按 server_name 分流（**不上 HTTPS**，见 docs/deploy.md）
-      - "${OLUA_ADMIN_PORT:-80}:80"
+      # 对外只开 80：官网 / 管理端 / 游戏都从这里按 server_name 分流。
+      #
+      # 开 TLS（#742，`--profile tls`）时**宿主机 :80 要让给下面的 edge**：一个端口只能
+      # 有一个主人，而对外入口必须只剩 HTTPS 那一层（否则明文 80 还能绕过 301 直连进来）。
+      # 所以绑定地址与端口都做成变量，TLS 部署把它们设成 `127.0.0.1` + `8081`：
+      # 外网打不进来，本机 curl / compose 内网的 edge 仍然够得着。
+      - "${OLUA_ADMIN_BIND:-0.0.0.0}:${OLUA_ADMIN_PORT:-80}:80"
 
   # 游戏客户端（Web 端）：静态托管 Cocos 构建产物，并把 /api 同源反代到服务端。
   # **独立端口**而不是塞进上面的 80：Cocos 产物的资源路径相对根目录，放子路径会大面积 404。
@@ -176,6 +185,76 @@ services:
     volumes:
       - ./website:/usr/share/nginx/html:ro
 
+  # ============================================================================
+  #  TLS 边缘（#742）：宿主机 :80 / :443 的唯一主人，终止 TLS 后整站反代到 admin:80
+  #
+  #  **只有 `--profile tls` 才起**。开关走 deploy.env 的 `OLUA_TLS=on`：deploy.sh 会往
+  #  服务器上的 compose `.env` 写 `COMPOSE_PROFILES=tls`，`docker compose up -d` 就自动带上，
+  #  不必记住每次多打一个 --profile。本地开发不写它 → 这套东西完全不参与。
+  #
+  #  为什么单独一层而不是让 admin 自己 listen 443：三站分流已经在 admin 的模板里，
+  #  这里只做「同一个 Host 原样转进去」；让 admin 上 TLS 就得把 80 跳转与 443 站点
+  #  各写一份三站 server 块（同一套路由两份配置）。详见 deploy/nginx-edge.conf 头部。
+  # ============================================================================
+  edge:
+    profiles: ["tls"]
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    depends_on:
+      - admin
+    environment:
+      # 与 admin 服务同名同源：域名仍只有 deploy.env 一个真源，这里只是喂给 envsubst
+      OLUA_SITE_DOMAINS: ${OLUA_SITE_DOMAINS:-yimw.cn www.yimw.cn}
+      OLUA_ADMIN_DOMAIN: ${OLUA_ADMIN_DOMAIN:-admin.yimw.cn}
+      OLUA_GAME_DOMAIN: ${OLUA_GAME_DOMAIN:-game.yimw.cn}
+    volumes:
+      # envsubst 模板（与 admin 的同一个机制），渲染成 conf.d/default.conf
+      - ./deploy/nginx-edge.conf:/etc/nginx/templates/default.conf.template:ro
+      # 证书与 ACME 校验目录：与下面 certbot 挂**同一对具名卷**。
+      # 用具名卷而不是宿主机目录 —— certbot 以 root 写，宿主机上手工建的目录很容易
+      # 因为属主/权限让它写不进去，而那种失败只在「续期」时才暴露。
+      - olua-letsencrypt:/etc/letsencrypt:ro
+      - olua-webroot:/var/www/certbot:ro
+      # 入口脚本：等证书就位 + 每 6 小时 reload 一次（certbot 在别的容器里续期，
+      # 这一层没有 Docker socket，只能自己定期重读证书）。见 deploy/edge-entrypoint.sh
+      - ./deploy/edge-entrypoint.sh:/edge-entrypoint.sh:ro
+    entrypoint: ["/bin/sh", "/edge-entrypoint.sh"]
+    ports:
+      # 对外的两个正式入口。改端口用 OLUA_TLS_HTTP_PORT / OLUA_TLS_HTTPS_PORT。
+      # 注意：这两个端口一旦被 edge 占了，admin 的 OLUA_ADMIN_PORT 就必须另选
+      #（见上面 admin 的 ports 注释，TLS 部署用 8081）。
+      - "${OLUA_TLS_HTTP_PORT:-80}:80"
+      - "${OLUA_TLS_HTTPS_PORT:-443}:443"
+
+  # ============================================================================
+  #  证书签发与续期（#742）：**首次签发是手工一步**，之后这个容器每 12 小时跑一次 renew
+  #
+  #  首次签发为什么不做成自动：域名得先解析到本机、80 得从公网可达，这两件事的顺序
+  #  只有人知道；自动跑会在「域名还没解析」时反复失败并把 Let's Encrypt 的失败次数
+  #  打上去（有速率限制）。所以第一次用 deploy.sh --tls-init（一条命令，跑的是同一份配置）。
+  #
+  #  `--cert-name olua` 是固定名字：证书链落在 /etc/letsencrypt/live/olua/，
+  #  与 deploy/nginx-edge.conf 里的 ssl_certificate 路径一一对应。换域名时证书内容变、
+  #  目录不变，边缘配置不用跟着改。
+  # ============================================================================
+  certbot:
+    profiles: ["tls"]
+    image: certbot/certbot:latest
+    restart: unless-stopped
+    volumes:
+      # 注意这两个**不是只读**：证书与校验文件都由它写
+      - olua-letsencrypt:/etc/letsencrypt
+      - olua-webroot:/var/www/certbot
+    entrypoint: ["/bin/sh", "-c"]
+    # `sleep 12h & wait` 而不是直接 `sleep 12h`：docker stop 发的 TERM 要能被 trap 接住，
+    # 否则每次重启都要等 10 秒才被 SIGKILL。$$ 是 compose 的转义（真正传进容器的是 `$`）。
+    command: "trap exit TERM; while :; do certbot renew --webroot -w /var/www/certbot --quiet; sleep 12h & wait $${!}; done"
+
 volumes:
   # 具名卷：`docker compose down` 不会删它，只有 `down -v` 才会
   olua-data:
+  # TLS（#742）：证书链（`live/olua/` 下面是指向 archive 的软链，所以**两个目录都要留在
+  # 同一个卷里**，不能只挂 live）与 ACME 的 http-01 校验文件（.well-known/acme-challenge）。
+  # 都用具名卷：certbot 以 root 写，宿主机目录的属主/权限问题只会在续期那天才暴露。
+  olua-letsencrypt:
+  olua-webroot:
