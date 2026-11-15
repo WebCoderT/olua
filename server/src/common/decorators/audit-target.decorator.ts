@@ -36,6 +36,8 @@ export const AUDIT_TARGET_TYPES = [
   "fashion",
   "dropTable",
   "monsterDrop",
+  // 清空某张图的地面掉落（#805）：一次删掉玩家还没捡的东西，必须能单独筛出来
+  "drop",
   "levelCurve",
   "equipmentVariant",
   "growthScalar",

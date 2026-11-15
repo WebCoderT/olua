@@ -1,6 +1,32 @@
 import { Injectable } from "@nestjs/common";
-import { DatabaseService } from "../database.service";
+import { DatabaseService, SqlParam } from "../database.service";
 import { WorldDropRow } from "../rows";
+import { DROP_GROUND_SORT } from "../sort-specs";
+import { resolveSort } from "../sort.util";
+
+/** 当前地面掉落的查询条件（管理端监控页，#805） */
+export interface DropGroundListOptions {
+  /** 区（**必须**：管理端一次只在一个区里干活，见 ZoneContextGuard） */
+  zoneId: number;
+  /** 只看某张图 */
+  mapId?: string;
+  /** 物品 id 模糊（表里没有物品名，名字由调用方按配置拼） */
+  keyword?: string;
+  /** 归属者角色名（模糊；`_` / `%` 会转义） */
+  ownerName?: string;
+  page: number;
+  size: number;
+  sort?: string;
+  order?: string;
+}
+
+/** 地面概况的一组（按图分组的一行） */
+export interface DropGroundSummaryRow {
+  map_id: string;
+  total: number;
+  protected_total: number;
+  expiring_total: number;
+}
 
 /**
  * 地面掉落物的**投影表**读写（`world_drops`；#802）
@@ -54,6 +80,74 @@ export class WorldDropRepository {
   /** 一件掉落（按 dropId；`dropId` 本身就是全局唯一主键） */
   findById(dropId: string): WorldDropRow | undefined {
     return this.db.get<WorldDropRow>("SELECT * FROM world_drops WHERE drop_id = ?", [dropId]);
+  }
+
+  /**
+   * 一页「当前地面」（管理端监控页，#805）
+   *
+   * 读的是**投影**：实时进程 100ms 批量刷一次，所以这里看到的落后最多一拍 ——
+   * 接口文案里不承诺毫秒级精确，也别拿它做「是否已捡走」的判定（那是 `drop_records` 的事）。
+   *
+   * 末尾用 `drop_id` 兜底让分页稳定：按 `expire_at` 排序时同一毫秒的多件会并列，
+   * 没有 tiebreaker 就会翻页重复 / 漏行。
+   */
+  listGround(options: DropGroundListOptions): WorldDropRow[] {
+    const { clause, params } = this.groundWhere(options);
+    return this.db.all<WorldDropRow>(
+      `SELECT * FROM world_drops ${clause}
+       ORDER BY ${resolveSort(DROP_GROUND_SORT, options.sort, options.order)}, drop_id ASC
+       LIMIT ? OFFSET ?`,
+      [...params, options.size, (options.page - 1) * options.size],
+    );
+  }
+
+  /** 同一套条件下的总件数（分页用） */
+  countGround(options: DropGroundListOptions): number {
+    const { clause, params } = this.groundWhere(options);
+    return this.db.count(`SELECT COUNT(1) AS total FROM world_drops ${clause}`, params);
+  }
+
+  /**
+   * 地面概况：按图分组的件数 + 保护中 + 1 分钟内将过期（#805 概况卡）
+   *
+   * 一次 `GROUP BY map_id` 拿全，调用方再横向求和 —— 三次独立 COUNT 会让三格数字
+   * 落在不同的时间点上（投放 / 拾取正在发生），加起来对不上。
+   *
+   * 「将过期」用 `expire_at > now AND <= now + windowMs`：已过期的行理论上不在投影里
+   * （扫描器 1s 一拍），但真有残留时不该把它算进「即将过期」。
+   */
+  summaryGround(options: DropGroundListOptions, now: number, windowMs: number): DropGroundSummaryRow[] {
+    const { clause, params } = this.groundWhere(options);
+    return this.db.all<DropGroundSummaryRow>(
+      `SELECT map_id,
+              COUNT(1) AS total,
+              SUM(CASE WHEN protect_until > ? THEN 1 ELSE 0 END) AS protected_total,
+              SUM(CASE WHEN expire_at > ? AND expire_at <= ? THEN 1 ELSE 0 END) AS expiring_total
+       FROM world_drops ${clause}
+       GROUP BY map_id
+       ORDER BY map_id ASC`,
+      [now, now, now + windowMs, ...params],
+    );
+  }
+
+  /** 条件拼装（listGround / countGround / summaryGround 共用） */
+  private groundWhere(options: DropGroundListOptions): { clause: string; params: SqlParam[] } {
+    const where: string[] = ["zone_id = ?"];
+    const params: SqlParam[] = [options.zoneId];
+    if (options.mapId) {
+      where.push("map_id = ?");
+      params.push(options.mapId);
+    }
+    if (options.keyword) {
+      // 表里没有物品名，只能按 id 模糊；通配符照例转义（玩家名 / id 里都可能有 `_`）
+      where.push("good_id LIKE ? ESCAPE '\\'");
+      params.push(`%${options.keyword.replace(/[\\%_]/g, "\\$&")}%`);
+    }
+    if (options.ownerName) {
+      where.push("owner_name LIKE ? ESCAPE '\\'");
+      params.push(`%${options.ownerName.replace(/[\\%_]/g, "\\$&")}%`);
+    }
+    return { clause: `WHERE ${where.join(" AND ")}`, params };
   }
 
   /**

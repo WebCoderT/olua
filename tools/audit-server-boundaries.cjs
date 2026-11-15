@@ -84,6 +84,9 @@ const ALLOWED_EDGES = [
   { from: "modules/roles", to: "modules/combat/status-combat.ts", why: "状态数值口径（结算/受击共用）" },
   // 帮会规则门槛（#605）：建帮 / 改公告的长度校验读运行时参数（与快照下发同一份配置）
   { from: "modules/social", to: "modules/game-config/runtime-params.service.ts", why: "帮会规则门槛读运行时参数" },
+  // 掉落监控的「单图上限占用水位」（#805）要读 `drop.maxGroundPerMap`：夹逼与坏值回落的口径
+  // 只在 RuntimeParamsService 里有一份，管理端不自己解析那份 JSON
+  { from: "modules/drops", to: "modules/game-config/runtime-params.service.ts", why: "单图上限水位读运行时参数（#805）" },
   { from: "modules/roles", to: "modules/combat/role-attribute-comparison.ts", why: "属性比对纯函数" },
   // 商城购买收权（#304）：扣费与入包在存档域，成交价读 game-config 的定价服务（特殊价/统一价同源）
   { from: "modules/roles", to: "modules/game-config/mall-pricing.service.ts", why: "商城购买读成交价" },
@@ -245,9 +248,12 @@ const REPO_EDGES = {
   // 地面掉落（#802）：**权威在实时进程内存，这张表是投影** —— 实时域 100ms 一拍批量写
   // （生成 / 拾取 / 过期），管理端只读（「这张图地上现在有什么」）。没有第三个模块连它：
   // 掉落从生成那一刻起就不归存档域管（角色身上的是「已入包」，那是 roles 表的事）
-  "database/repositories/world-drop.repository.ts": ["modules/realtime"],
+  // 管理端监控页（#805）：按区读「现在地上有什么」。写入仍只在实时进程。
+  "database/repositories/world-drop.repository.ts": ["modules/realtime", "modules/drops"],
   // 掉落终态流水（#803）：实时进程写（DropService.resolve）、掉落管理端读（列表 / 概况）
   "database/repositories/drop-record.repository.ts": ["modules/realtime", "modules/drops"],
+  // 清空某图地面的跨进程待办（#805）：管理端插一行、实时进程轮询执行并回写
+  "database/repositories/drop-clear-request.repository.ts": ["modules/drops", "modules/realtime"],
   // NPC 点位（#672）：点位归后台，只有地图域读写（管理端画布 + 配置快照）
   "database/repositories/map-npc.repository.ts": ["modules/map", "modules/quest"],
   // 碰撞盒（#676）：与点位同理 —— 只有地图域读写（画布增删改 + 配置快照下发）；
@@ -311,7 +317,7 @@ const REPO_EDGES = {
   // 怪物基础数据（#258）：game-config 读写之外，世界播种（world）与伤害结算（realtime）
   // 也直读本表 —— 管理端改数值即时生效（#655 起库里就是唯一权威，没有生成物可绕）
   // #588：地图详情的刷怪区显示怪物名 —— 名字的权威来源是 monsters 表（只读一行），不再读生成物
-  "database/repositories/monster.repository.ts": ["modules/game-config", "modules/world", "modules/realtime", "modules/map"],
+  "database/repositories/monster.repository.ts": ["modules/game-config", "modules/world", "modules/realtime", "modules/map", "modules/drops"],
   // NPC 基础数据（#258）：同称号 / 战魂 / 军衔 / 装备，只在 game-config 模块内读写；
   // 任务（#396）的 npc-talk 也读（对话文案 + 存在性校验）
   // #672：地图域放点位时要校验 npcId 存在并取名字（只读一行），与 monster.repository 同一理由
@@ -325,8 +331,9 @@ const REPO_EDGES = {
   "database/repositories/fashion.repository.ts": ["modules/game-config", "modules/roles"],
   // 掉落配置（#254）：game-config 读写；击杀掉落收权（#316）后结算（realtime）也直读
   // 两表 —— 管理端改掉落即时生效（具名表允许动态增删，每怪行与怪物一一对应）
-  "database/repositories/drop-table.repository.ts": ["modules/game-config", "modules/realtime"],
-  "database/repositories/monster-drop.repository.ts": ["modules/game-config", "modules/realtime"],
+  // 掉落表（#805）：怪物掉落反查要把「引用具名表」的条目池摊平，只读
+  "database/repositories/drop-table.repository.ts": ["modules/game-config", "modules/realtime", "modules/drops"],
+  "database/repositories/monster-drop.repository.ts": ["modules/game-config", "modules/realtime", "modules/drops"],
   // 技能与状态（#367）：game-config 读写；怪物侧释放（#372）后 realtime 的 MonsterAiService
   // 也读这两张表（技能行 + 状态修正），1 秒 TTL 缓存，改配置最多 1 秒生效
   "database/repositories/skill.repository.ts": ["modules/game-config", "modules/realtime"],

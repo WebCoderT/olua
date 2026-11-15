@@ -474,6 +474,22 @@ export interface WorldDropRow {
 }
 
 /**
+ * 一条「清空某图地面」的跨进程待办（`drop_clear_requests` 表；#805）
+ *
+ * 管理端（3100）只插入，实时进程（3101）轮询执行并回写 `done_at` / `cleared` ——
+ * 两个进程共享这个文件，不共享内存。`done_at` 为 null = 还没执行（重启后也要补做）。
+ */
+export interface DropClearRequestRow {
+  id: number;
+  zone_id: string;
+  map_id: string;
+  requested_at: number;
+  done_at: number | null;
+  /** 实际清掉多少件（3101 回写；0 也是有效结果 —— 那张图本来就是空的） */
+  cleared: number;
+}
+
+/**
  * 一件掉落的**终态流水**（`drop_records` 表；#803 起写入）
  *
  * 一条掉落的一生只写一行：`result` 是 picked / expired / overflow / restart_lost，

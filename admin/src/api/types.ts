@@ -169,6 +169,19 @@ export const PERMISSION = {
    */
   EVENT_READ: "event:read",
   /**
+   * 查看掉落记录（#805：当前地面 / 终态流水 / 怪物掉落反查）
+   *
+   * **观察员给**：这三页的主角是**物品**（它现在在哪、最后去哪了、谁会掉），人名只是归属者 /
+   * 拾取者，与 `ROLE_READ`（已给观察员）同一量级；查人请去「玩家行为流水」。
+   */
+  DROP_READ: "drop:read",
+  /**
+   * 清空某张图的地面掉落（#805）
+   *
+   * **写权限，观察员不给**：这一下会删掉玩家还没捡起来的东西，不可逆。
+   */
+  DROP_CLEAR: "drop:clear",
+  /**
    * 查看系统信息（版本 / 运行时长 / 数据库体积与行数 / 脱敏配置快照）
    *
    * 同样不给只读观察员：这一页暴露部署形态（数据文件路径、限流与保留策略的阈值），
@@ -259,6 +272,8 @@ export const PERMISSION_LABELS: Record<string, string> = {
   [PERMISSION.ADMIN_MANAGE]: "管理管理员",
   [PERMISSION.AUDIT_READ]: "查看操作日志",
   [PERMISSION.EVENT_READ]: "查看玩家行为流水",
+  [PERMISSION.DROP_READ]: "查看掉落记录",
+  [PERMISSION.DROP_CLEAR]: "清空地面掉落",
   [PERMISSION.SYSTEM_READ]: "查看系统信息",
   [PERMISSION.GAME_CONFIG_READ]: "查看养成配置",
   [PERMISSION.GAME_CONFIG_WRITE]: "修改养成配置",

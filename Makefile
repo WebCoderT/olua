@@ -266,6 +266,9 @@ server-e2e-drop: ## 地面掉落（世界实体）专项 e2e（同图可见 / id
 server-e2e-drop-records: ## 掉落流水读接口与保留闸专项 e2e（筛选 / 分页上限 / 排序白名单 / 缺区头 400 / 条数闸与天数闸）
 	@cd server && $(NPM) run test:e2e:drop-records
 
+server-e2e-drop-admin: ## 管理端掉落三件套专项 e2e（地面/流水/反查的筛选与白名单 + 跨进程清空 + 两个权限点）
+	@cd server && $(NPM) run test:e2e:drop-admin
+
 server-e2e-world: ## 服务端世界权威专项 e2e（22 条：播种 / 共享 / tick 重生 / 优雅关闭与重启恢复；临时文件库）
 	@cd server && $(NPM) run test:e2e:world
 

@@ -94,8 +94,18 @@ const NAV_GROUPS: NavBranch[] = [
           { to: "/monsters", label: "怪物配置", permission: PERMISSION.GAME_CONFIG_READ },
           { to: "/skills", label: "技能配置", permission: PERMISSION.GAME_CONFIG_READ },
           { to: "/statuses", label: "状态配置", permission: PERMISSION.GAME_CONFIG_READ },
-          { to: "/drops", label: "掉落配置", permission: PERMISSION.GAME_CONFIG_READ },
           { to: "/combat-weights", label: "战斗力权重", permission: PERMISSION.GAME_CONFIG_READ },
+        ],
+      },
+      {
+        label: "掉落",
+        children: [
+          // 四个叶子是同一件事的四个面（#805）：配置 → 反查 → 现在地上有什么 → 已经结束的那些。
+          // 前两个是配置（gameConfig:read），后两个是运行时观测（drop:read，观察员也看得到）。
+          { to: "/drops", label: "掉落表配置", permission: PERMISSION.GAME_CONFIG_READ },
+          { to: "/monster-drops", label: "怪物掉落", permission: PERMISSION.DROP_READ },
+          { to: "/drop-monitor", label: "掉落监控", permission: PERMISSION.DROP_READ },
+          { to: "/drop-records", label: "掉落流水", permission: PERMISSION.DROP_READ },
         ],
       },
       {

@@ -132,6 +132,7 @@ export {
   fashionText,
   itemDescription,
   itemIcon,
+  itemIconOf,
   itemIds,
   itemType,
   itemText,

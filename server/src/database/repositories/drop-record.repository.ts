@@ -17,6 +17,15 @@ export interface DropRecordListOptions {
   result?: string;
   /** 归属者名字（模糊；用例名里的 `_` 会转义） */
   ownerName?: string;
+  /**
+   * 来源怪物（模糊）
+   *
+   * 同时匹配 `monster_key` 与 `monster_label`（落地那一刻的快照）：运营手里通常只有中文名，
+   * 而反查页点过来的是精确 key —— 一个输入框兼容两种来源，比让人先查 key 再用。
+   */
+  monsterKey?: string;
+  /** 拾取者名字（模糊；只有 picked 的行有值，其余行筛不出来） */
+  pickedName?: string;
   /** 物品 id（精确：运营查「这件东西都掉过谁手里」） */
   goodId?: string;
   /** 起始时间（含，毫秒；按 created_at） */
@@ -172,9 +181,18 @@ export class DropRecordRepository {
       params.push(options.goodId);
     }
     if (options.ownerName) {
-      // LIKE 的通配符要转义：玩家名里的 `_` 是单字符通配，不转义会把「a_b」也筛出来
       where.push("owner_name LIKE ? ESCAPE '\\'");
-      params.push(`%${options.ownerName.replace(/[\\%_]/g, "\\$&")}%`);
+      params.push(likeParam(options.ownerName));
+    }
+    if (options.monsterKey) {
+      // key 与快照名都试：中文名和 `slime_1` 都该能搜到（快照名可能为 null，null LIKE 恒 false）
+      where.push("(monster_key LIKE ? ESCAPE '\\' OR monster_label LIKE ? ESCAPE '\\')");
+      const pattern = likeParam(options.monsterKey);
+      params.push(pattern, pattern);
+    }
+    if (options.pickedName) {
+      where.push("picked_name LIKE ? ESCAPE '\\'");
+      params.push(likeParam(options.pickedName));
     }
     if (options.from !== undefined) {
       where.push("created_at >= ?");
@@ -186,6 +204,16 @@ export class DropRecordRepository {
     }
     return { clause: `WHERE ${where.join(" AND ")}`, params };
   }
+}
+
+/**
+ * 名字类条件的 `%…%` 参数
+ *
+ * LIKE 的通配符要转义：玩家名里的 `_` 是单字符通配，不转义会把「a_b」也筛出来。
+ * 三个模糊条件（归属者 / 怪物 / 拾取者）共用这一处，避免各写一遍写岔。
+ */
+function likeParam(value: string): string {
+  return `%${value.replace(/[\\%_]/g, "\\$&")}%`;
 }
 
 const INSERT_SQL = `INSERT INTO drop_records (

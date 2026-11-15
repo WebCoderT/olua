@@ -1,13 +1,22 @@
 import { Injectable, Logger, OnApplicationBootstrap, OnApplicationShutdown } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { BizCode } from "../../common/constants/biz-code";
-import { DROP_OVERFLOW_REASON, DROP_RESULT, DropOverflowReason, DropResult } from "../../common/constants/drop";
+import {
+  DROP_MAX_PER_MAP_DEFAULT,
+  DROP_MAX_PER_MAP_RANGE,
+  DROP_OVERFLOW_REASON,
+  DROP_RESULT,
+  DropOverflowReason,
+  DropResult,
+} from "../../common/constants/drop";
 import { BizException } from "../../common/errors/biz.exception";
 import { itemLabelOf, itemTypeOf } from "../../common/runtime-config-cache";
 import { legacyWorldKey } from "../../common/utils/room-key.util";
+import { ownsZone, shardCountOf } from "../../common/utils/shard.util";
+import { DropClearRequestRepository } from "../../database/repositories/drop-clear-request.repository";
 import { DropRecordInsert, DropRecordRepository } from "../../database/repositories/drop-record.repository";
 import { WorldDropRepository } from "../../database/repositories/world-drop.repository";
-import type { WorldDropRow } from "../../database/rows";
+import type { DropClearRequestRow, WorldDropRow } from "../../database/rows";
 import { RuntimeParamsRepository } from "../../database/repositories/runtime-params.repository";
 import { RolesService } from "../roles/roles.service";
 import { PartyService } from "../party/party.service";
@@ -120,6 +129,7 @@ export class DropService implements OnApplicationBootstrap, OnApplicationShutdow
   constructor(
     private readonly worldDrops: WorldDropRepository,
     private readonly dropRecords: DropRecordRepository,
+    private readonly clearRequests: DropClearRequestRepository,
     private readonly roles: RolesService,
     private readonly presence: PlayerPresenceService,
     private readonly party: PartyService,
@@ -446,6 +456,8 @@ export class DropService implements OnApplicationBootstrap, OnApplicationShutdow
    */
   private sweep(): void {
     const now = Date.now();
+    // 管理端提交的清空请求也在这个节拍上执行（#805）：两边都按秒级，不需要更快的定时器
+    this.applyClearRequests(now);
     const cap = this.maxGroundPerMap();
     // 回放记忆到期就丢（数量上限 = 这段时间内的拾取/过期次数，通常个位数）
     for (const [dropId, entry] of this.recent) {
@@ -465,6 +477,66 @@ export class DropService implements OnApplicationBootstrap, OnApplicationShutdow
           this.resolve(entity, "overflow", DROP_OVERFLOW_REASON.AUTO);
         });
     }
+  }
+
+  /**
+   * 执行管理端提交的「清空某图地面」请求（#805）
+   *
+   * 请求是**另一个进程**（管理端 3100）插进 `drop_clear_requests` 的 —— 地面掉落活在本进程
+   * 内存里，所以只有这里能真的清掉。三条纪律：
+   *
+   * 1. **只处理自己分片管的区**：分片形态下别的区的请求既不执行也不回写 —— 回写 `done_at`
+   *    会让真正管那个区的进程跳过它，症状是「点了清空没反应」；
+   * 2. **读库抛错就下一拍再试**：回写只发生在真清完之后；
+   * 3. **清 0 件也要回写**：那张图本来就是空的，不回写页面会一直等到「实时进程可能没起来」。
+   */
+  private applyClearRequests(now: number): void {
+    let pending: DropClearRequestRow[];
+    try {
+      pending = this.clearRequests.listPending();
+    } catch (error) {
+      this.logger.warn(`清空请求读取失败（下一拍再试）：${error instanceof Error ? error.message : String(error)}`);
+      return;
+    }
+    if (pending.length === 0) return;
+    for (const request of pending) {
+      const zoneId = Number(request.zone_id);
+      if (!Number.isInteger(zoneId) || !this.managesZone(zoneId)) continue;
+      const cleared = this.clearMap(zoneId, request.map_id);
+      try {
+        this.clearRequests.markDone(request.id, cleared, now);
+      } catch (error) {
+        this.logger.warn(
+          `清空请求 #${request.id} 执行完了但回写失败（下一拍会重清一次，件数会变成 0）：${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        );
+        continue;
+      }
+      this.logger.log(`管理端清空地面：区 ${zoneId} 图 ${request.map_id} 清掉 ${cleared} 件`);
+    }
+  }
+
+  /**
+   * 清掉一张图地面上的全部掉落，返回实际清掉多少件（#805）
+   *
+   * 每件都走 `resolve()`：于是**流水照写**（`overflow` + `manual_clear`）、**广播照发**
+   * （`dropRemove`）、投影表照删 —— 与「被挤掉」走同一条收尾路径，只是原因不同。
+   * 单独写一条「清空专用」的收尾会漏掉其中一两步（漏删投影 = 页面清了又出现）。
+   */
+  clearMap(zoneId: number, mapId: string): number {
+    const field = this.ground.get(legacyWorldKey(zoneId, mapId));
+    if (!field) return 0;
+    const entities = Array.from(field.values()).filter((entity) => entity.status === "ground");
+    for (const entity of entities) this.resolve(entity, "overflow", DROP_OVERFLOW_REASON.MANUAL_CLEAR);
+    return entities.length;
+  }
+
+  /** 这个区归不归本进程管（分片形态下，别的区的清空请求不能由我们回写，见 applyClearRequests） */
+  private managesZone(zoneId: number): boolean {
+    const count = shardCountOf(this.config.get<number>("realtimeShardCount") ?? 1);
+    const index = this.config.get<number>("realtimeShardIndex") ?? 0;
+    return ownsZone(zoneId, count, index);
   }
 
   /**
@@ -832,7 +904,12 @@ export class DropService implements OnApplicationBootstrap, OnApplicationShutdow
   }
 
   private maxGroundPerMap(): number {
-    return this.numberParam("maxGroundPerMap", DROP_MAX_PER_MAP_DEFAULT, 20, 1_000);
+    return this.numberParam(
+      "maxGroundPerMap",
+      DROP_MAX_PER_MAP_DEFAULT,
+      DROP_MAX_PER_MAP_RANGE.min,
+      DROP_MAX_PER_MAP_RANGE.max,
+    );
   }
 
   private scatterMinDistance(): number {
@@ -951,7 +1028,6 @@ const ANNOUNCE_MIN_INTERVAL_MS = 30_000;
 const DROP_TTL_MS_DEFAULT = 180_000;
 const DROP_PROTECT_MS_DEFAULT = 30_000;
 const DROP_PICK_RANGE_DEFAULT = 120;
-const DROP_MAX_PER_MAP_DEFAULT = 200;
 
 /**
  * 掉落流水（`drop_records`）的两道保留闸（#803）

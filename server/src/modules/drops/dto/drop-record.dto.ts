@@ -151,6 +151,18 @@ export class DropRecordQueryDto extends PageQueryDto {
   @MaxLength(64, { message: "归属者名字过长" })
   ownerName?: string;
 
+  @ApiPropertyOptional({ description: "来源怪物（模糊匹配 key 或掉落那一刻的显示名快照）" })
+  @IsOptional()
+  @IsString({ message: "怪物必须是字符串" })
+  @MaxLength(64, { message: "怪物关键字过长" })
+  monsterKey?: string;
+
+  @ApiPropertyOptional({ description: "拾取者角色名（模糊匹配；只有 `picked` 的行有值）" })
+  @IsOptional()
+  @IsString({ message: "拾取者名字必须是字符串" })
+  @MaxLength(64, { message: "拾取者名字过长" })
+  pickedName?: string;
+
   @ApiPropertyOptional({ description: "物品 id（精确匹配：查「这件东西都掉过谁手里」）" })
   @IsOptional()
   @IsString({ message: "物品 id 必须是字符串" })

@@ -232,6 +232,19 @@ import {
   ConfigVersionDto,
 } from "../modules/game-config/dto/config-revision.dto";
 import {
+  DropClearDto,
+  DropClearRequestViewDto,
+  DropClearResultDto,
+  DropGroundDto,
+  DropGroundPageDto,
+  DropGroundQueryDto,
+  DropGroundSummaryDto,
+  DropGroundSummaryItemDto,
+  MonsterDropIndexItemDto,
+  MonsterDropIndexPageDto,
+  MonsterDropIndexQueryDto,
+} from "../modules/drops/dto/drop-ground.dto";
+import {
   DropRecordDto,
   DropRecordPageDto,
   DropRecordQueryDto,
@@ -659,6 +672,18 @@ export const SWAGGER_MODELS = [
   ConfigRevisionDiffDto,
   ConfigRestoreResultDto,
   ConfigRevisionQueryDto,
+  // 掉落监控 / 反查 / 清空（#805）：当前地面（投影）、物品→怪物反查、跨进程清空指令
+  DropGroundDto,
+  DropGroundPageDto,
+  DropGroundQueryDto,
+  DropGroundSummaryDto,
+  DropGroundSummaryItemDto,
+  DropClearDto,
+  DropClearRequestViewDto,
+  DropClearResultDto,
+  MonsterDropIndexItemDto,
+  MonsterDropIndexPageDto,
+  MonsterDropIndexQueryDto,
   // 掉落终态流水（#803）：一件掉落的一生一行，管理端按区读
   DropRecordDto,
   DropRecordPageDto,

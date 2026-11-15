@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
+import { useSearchParams } from "react-router-dom";
 import { dropApi, formatTime, MONSTER_TIER_LABELS, monsterIcon, monsterOut, monstersApi, PERMISSION, skillsApi } from "../api";
 import type { AdminMonster, DropTable, Monster, MonsterAttributes, PageResult, Skill, UpdateMonster } from "../api";
 import { AttributesGrid, crossedRangeKeys } from "../components/AttributesEditor";
@@ -569,6 +570,14 @@ export function MonstersPage() {
   const [skillTarget, setSkillTarget] = useState<AdminMonster | null>(null);
   /** 掉落弹窗的目标怪（= null 表示关闭） */
   const [dropTarget, setDropTarget] = useState<AdminMonster | null>(null);
+  /**
+   * 从「怪物掉落」反查页跳过来时带的 `?drop=<monsterKey>`（#805）
+   *
+   * 那条路上没有列表行对象，只有 key —— 单独存一份，弹窗接受 key 即可（它自己拉配置）。
+   * 同时把列表的筛选收紧到这只怪，落地就能看见它。
+   */
+  const [dropKey, setDropKey] = useState<string | null>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
   /** 具名掉落表（只为把摘要里的 tableId 写成「common · 12 条」） */
   const [tables, setTables] = useState<DropTable[]>([]);
   const tablesById = useMemo(() => new Map(tables.map((table) => [table.id, table])), [tables]);
@@ -599,6 +608,22 @@ export function MonstersPage() {
       alive = false;
     };
   }, []);
+
+  /**
+   * 反查页跳过来的 `?drop=<key>`：把筛选收到这只怪并直接开弹窗
+   *
+   * 参数用完立刻删掉（`replace` 不进历史）：留在地址栏里，刷新一次就又弹一遍，
+   * 而人已经把它关掉了。
+   */
+  useEffect(() => {
+    const key = searchParams.get("drop");
+    if (!key) return;
+    setDraft({ keyword: key, tier: "" });
+    setQuery({ keyword: key, tier: "" });
+    setPage(1);
+    setDropKey(key);
+    setSearchParams({}, { replace: true });
+  }, [searchParams, setSearchParams]);
 
   useEffect(() => {
     void load();
@@ -789,11 +814,15 @@ export function MonstersPage() {
       />
 
       <MonsterDropDialog
-        monsterKey={dropTarget?.id ?? null}
+        monsterKey={dropTarget?.id ?? dropKey}
         monsterLabel={dropTarget?.label}
-        onClose={() => setDropTarget(null)}
+        onClose={() => {
+          setDropTarget(null);
+          setDropKey(null);
+        }}
         onSaved={() => {
           setDropTarget(null);
+          setDropKey(null);
           // 列表里的摘要要跟着变，所以保存后重拉这一页
           void load();
         }}
