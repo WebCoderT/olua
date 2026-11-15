@@ -464,7 +464,7 @@ audit-equip-align-catalog: ## 装备对齐清单（管理端工作台的数据�
 audit-docs-toc: ## docs/README 目录表的登记 / 序号 / 死链 / 接口数是否与磁盘一致（加接口后先 --write）
 	@$(NODE) tools/audit-docs-toc.cjs
 
-audit-count-claims: ## 全仓「N 项审计 / N 套 e2e / N 套单测」声明是否等于磁盘实际数量（加脚本后先 --write）
+audit-count-claims: ## 全仓「N 项审计 / N 套 e2e / N 套单测」声明是否等于磁盘实际数量 + docs/13 §九 分组表结构（加脚本后先 --write）
 	@$(NODE) tools/audit-count-claims.cjs
 
 
