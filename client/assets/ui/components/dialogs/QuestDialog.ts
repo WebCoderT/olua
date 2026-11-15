@@ -61,8 +61,12 @@ export default class QuestDialog {
       return;
     }
     if (this.dialog && !isValid(this.dialog)) this.reset();
-    this.dialog = GameUiHelper.createDialog(layout.name, layout.title, new Vec2(), layout.size);
+    this.dialog = GameUiHelper.createDialog(layout.name, layout.title, new Vec2(), layout.size, layout.eyebrow);
     blockClickThrough(this.dialog);
+    // 页脚（稿 11-quest 的 .panel-foot）：左入口说明 / 右结算说明
+    this.dialog.addChild(
+      GameUiHelper.createDialogFoot("quest_foot", layout.size.width, layout.foot, layout.footTexts.left, layout.footTexts.right),
+    );
     LayerManager.addDialogToUILayer(this.dialog);
     this.createTabs();
     this.body = UiHelper.createGroupNode(`${layout.name}_body`, new Vec2());

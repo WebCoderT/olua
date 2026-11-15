@@ -253,8 +253,15 @@ if (sandbox) {
     const boardBlock = dialogsSource.slice(dialogsSource.indexOf("export const announcementBoardDialogLayout"), dialogsSource.indexOf("//#endregion", dialogsSource.indexOf("export const announcementBoardDialogLayout")));
     check(boardBlock.length > 0, "能定位 announcementBoardDialogLayout 配置块");
     ["name", "title", "size", "list", "detail"].forEach((key) => check(new RegExp(`\\b${key}:`).test(boardBlock), `announcementBoardDialogLayout 配了 ${key}`));
-    check(/itemSize: new Size\(268, 58\)/.test(boardBlock), "条目行高固定（正文在右栏，列表只扫标题）");
-    check(/itemDot: \{ position: new Vec2\(-126, 13\)/.test(boardBlock), "未读圆点几何在配置里");
+    // 条目行高固定：断「容得下标题块 + 来源行」这条结构关系，不写死像素（按稿调间距不该红）
+    const itemSize = boardBlock.match(/itemSize: new Size\((\d+), (\d+)\)/);
+    const titleBlockHeight = Number((boardBlock.match(/itemTitle: \{ position: [^}]*size: new Size\(\d+, (\d+)\)/) || [])[1]);
+    const metaBlockHeight = Number((boardBlock.match(/itemMeta: \{ position: [^}]*size: new Size\(\d+, (\d+)\)/) || [])[1]);
+    check(
+      !!itemSize && Number(itemSize[2]) >= titleBlockHeight + metaBlockHeight,
+      `条目行高容得下标题块 + 来源行（${itemSize?.[2]} ≥ ${titleBlockHeight} + ${metaBlockHeight}）`,
+    );
+    check(/itemDot: \{ position: new Vec2\(-?\d+, -?\d+\), size: new Size\(\d+, \d+\) \}/.test(boardBlock), "未读圆点几何在配置里");
     check(/selectedFill: T\.gold\[1\]/.test(boardBlock), "选中底色在配置里（Graphics 自绘，取令牌 gold-1）");
     check(/unreadTitleColor[\s\S]{0,200}readTitleColor[\s\S]{0,200}itemMetaColor/.test(boardBlock), "未读/已读/元信息三套文字颜色都在配置里");
     check(/body: \{ name: "announcement_body"[\s\S]{0,160}(fontSize|lineHeight|width):/.test(boardBlock), "正文宽度与行高仍走配置（换行文本靠 lineHeight 撑高；具体数值手调，不断言）");

@@ -1,4 +1,6 @@
-import { Color, Size, Vec2 } from "cc";
+import { Size, Vec2 } from "cc";
+import { T } from "./layout/tokens";
+import { dialogFootLayout } from "./layout/dialogs";
 
 /**
  * 游戏内邮件（#429）
@@ -67,37 +69,44 @@ export const mailChannels: Array<{ key: MailChannelKey; label: string }> = [
   { key: "combat", label: "战斗" },
 ];
 
-/** 邮件弹窗布局（尺寸口径与成就 / 排行榜弹窗同量级） */
+/**
+ * 邮件弹窗布局（09-mail 稿，面板 600×450）
+ *
+ * 五段竖排：小结行（左「未读 N · 待领 N」+ 右两颗按钮）→ 频道页签 → 列表 → 页脚。
+ * 几何按面板 450 高算：头部下沿 180 → 小结中心 169 → 页签中心 135 → 列表顶 112（268 高，底 -156）
+ * → 页脚线 201。
+ */
 export const mailDialogLayout = {
   name: "mail_dialog",
   title: "邮件",
-  size: new Size(560, 420),
-  /** 顶部小结（左） */
+  eyebrow: "MAIL",
+  size: new Size(600, 450),
+  /** 顶部小结（左对齐，宽 240：内缘距面板边 20 → 中心 -160） */
   summary: {
-    position: new Vec2(-150, 178),
+    position: new Vec2(-160, 169),
     size: new Size(240, 22),
-    fontSize: 15,
-    color: new Color(196, 202, 214, 255),
+    fontSize: T.fontSize.f12,
+    color: T.text[3],
   },
-  /** 一键领取（中）：只领**当前频道**的（「全部」页签下 = 领全部） */
+  /** 一键领取（中，金键）：只领**当前频道**的（「全部」页签下 = 领全部） */
   claimAll: {
-    position: new Vec2(80, 178),
-    size: new Size(88, 30),
-    radius: 6,
-    fill: new Color(92, 148, 96, 255),
-    disabledFill: new Color(52, 56, 66, 255),
-    textColor: new Color(255, 255, 255, 255),
-    disabledTextColor: new Color(130, 136, 148, 255),
-    fontSize: 14,
+    position: new Vec2(156, 169),
+    size: new Size(88, 28),
+    radius: T.radius.r2,
+    fill: T.gold[2],
+    disabledFill: T.surface[4],
+    textColor: T.text.onGold,
+    disabledTextColor: T.text[4],
+    fontSize: T.fontSize.f12,
   },
-  /** 公告入口（右）：公告板从邮件面板打开，一颗图标一个消息中心 */
+  /** 公告入口（右，次要键）：公告板从邮件面板打开，一颗图标一个消息中心 */
   announcement: {
-    position: new Vec2(196, 178),
-    size: new Size(72, 30),
-    radius: 6,
-    fill: new Color(58, 84, 128, 255),
-    textColor: new Color(255, 255, 255, 255),
-    fontSize: 14,
+    position: new Vec2(244, 169),
+    size: new Size(72, 28),
+    radius: T.radius.r2,
+    fill: T.surface[3],
+    textColor: T.text[2],
+    fontSize: T.fontSize.f12,
   },
   /**
    * 频道页签行（#436）
@@ -107,68 +116,103 @@ export const mailDialogLayout = {
    * 是因为标题长度会随未读数抖动，五个页签一起抖最难看的。
    */
   tabs: {
-    /** 上边界要让给小结行（178±11）与两颗按钮（178±15），下边界不能压到列表（列表顶 123） */
-    y: 140,
-    width: 88,
+    /** 上边界让给小结点（169±11），下边界不能压到列表（列表顶 112） */
+    y: 135,
+    width: 84,
     height: 26,
-    gap: 8,
-    radius: 6,
-    fill: new Color(30, 34, 44, 255),
-    activeFill: new Color(58, 84, 128, 255),
-    textColor: new Color(150, 156, 170, 255),
-    activeTextColor: new Color(255, 255, 255, 255),
-    fontSize: 13,
-    dotFill: new Color(198, 64, 58, 255),
+    gap: T.spacing.sp2,
+    radius: T.radius.r2,
+    fill: T.surface[2],
+    activeFill: T.gold[3],
+    textColor: T.text[3],
+    activeTextColor: T.text.onGold,
+    fontSize: T.fontSize.f12,
+    dotFill: T.ember[2],
     dotRadius: 8,
-    dotFontSize: 10,
-    dotTextColor: new Color(255, 255, 255, 255),
+    dotFontSize: T.fontSize.f10,
+    dotTextColor: T.text.onEmber,
     /** 角标上限：超过就换成「9+」那种写法（两位数会把小圆点撑变形） */
     dotCap: 9,
     /** 角标相对页签右上角的外扩量（不贴边才看得出是「附在页签上」） */
     dotOffset: new Vec2(14, 10),
   },
-  /** 邮件列表 */
+  /** 邮件列表（宽 556 = 内容宽 560 减滚动条 4） */
   list: {
     name: "mail_list",
-    position: new Vec2(0, -32),
-    size: new Size(500, 310),
+    position: new Vec2(0, -22),
+    size: new Size(556, 268),
   },
-  /** 一封邮件 */
+  /** 一封邮件（稿 `.mrow`：未读点 + 标题/附件 + 来源与时间 + 两枚按钮） */
   row: {
-    size: new Size(480, 72),
-    gap: 6,
-    radius: 8,
-    fill: new Color(30, 34, 44, 255),
-    border: new Color(58, 64, 78, 255),
-    /** 未读的行底色偏亮（与「已读」一眼分得开） */
-    unreadFill: new Color(40, 48, 62, 255),
-    unreadBorder: new Color(92, 128, 176, 255),
-    titlePosition: new Vec2(-90, 20),
-    titleSize: new Size(290, 20),
-    titleFontSize: 16,
-    titleColor: new Color(150, 156, 170, 255),
-    unreadTitleColor: new Color(238, 240, 246, 255),
-    descPosition: new Vec2(-90, -6),
-    descSize: new Size(290, 18),
-    descFontSize: 12,
-    descColor: new Color(150, 156, 170, 255),
+    size: new Size(552, 62),
+    gap: T.spacing.sp3,
+    radius: T.radius.r2,
+    fill: T.surface[2],
+    border: T.line[1],
+    /** 未读的行底色偏亮 + 金边（与「已读」一眼分得开） */
+    unreadFill: T.surface[3],
+    unreadBorder: T.line[3],
+    /** 未读标记点（左）：未读 = 金色实心，已读 = 一圈弱线空心 */
+    flagPosition: new Vec2(-260, 0),
+    flagSize: new Size(7, 7),
+    flagColor: T.gold[4],
+    flagOffColor: T.line[1],
+    titlePosition: new Vec2(-82, 14),
+    titleSize: new Size(330, 20),
+    titleFontSize: T.fontSize.f13,
+    titleColor: T.text[2],
+    unreadTitleColor: T.gold[5],
+    descPosition: new Vec2(-82, -8),
+    descSize: new Size(330, 16),
+    descFontSize: T.fontSize.f11,
+    descColor: T.text[3],
+    /** 来源与时间（右对齐两行，贴在按钮组左边） */
+    metaPosition: new Vec2(140, 0),
+    metaSize: new Size(100, 34),
+    metaFontSize: T.fontSize.f10,
+    metaColor: T.text[4],
     /** 领取按钮（上） */
-    actionPosition: new Vec2(186, 14),
-    actionSize: new Size(72, 26),
-    actionRadius: 6,
-    actionFontSize: 13,
-    claimFill: new Color(92, 148, 96, 255),
-    claimedFill: new Color(52, 56, 66, 255),
-    actionTextColor: new Color(255, 255, 255, 255),
-    lockedTextColor: new Color(130, 136, 148, 255),
+    actionPosition: new Vec2(232, 12),
+    actionSize: new Size(64, 22),
+    actionRadius: T.radius.r1,
+    actionFontSize: T.fontSize.f10,
+    claimFill: T.jadeDeep,
+    claimedFill: T.surface[4],
+    actionTextColor: T.text.onEmber,
+    lockedTextColor: T.text[4],
     /** 删除按钮（下）：附件没领时是灰的（点了也只飘一句提示） */
-    removePosition: new Vec2(186, -20),
-    removeSize: new Size(72, 22),
-    removeRadius: 6,
-    removeFill: new Color(64, 52, 52, 255),
-    removeDisabledFill: new Color(44, 44, 48, 255),
-    removeTextColor: new Color(226, 196, 196, 255),
-    removeDisabledTextColor: new Color(120, 120, 124, 255),
-    removeFontSize: 12,
+    removePosition: new Vec2(232, -14),
+    removeSize: new Size(64, 20),
+    removeRadius: T.radius.r1,
+    removeFill: T.surface[3],
+    removeDisabledFill: T.surface[2],
+    removeTextColor: T.text[2],
+    removeDisabledTextColor: T.text[4],
+    removeFontSize: T.fontSize.f10,
   },
+  /** 页脚（稿 `.panel-foot`）：左操作提示 / 右一键领取范围说明 */
+  foot: dialogFootLayout(new Size(600, 450), 250),
+};
+
+/** 邮件页脚与小结里的静态文案（布局之外的散句放这里，组件不写死中文字面量） */
+export const mailFootTexts = {
+  left: "点行即标已读 · 未领附件就删除会二次提醒",
+  right: "一键领取只作用于当前频道",
+};
+
+/**
+ * 邮件来源标签（服务端 `MailView.kind` → 行右侧第一行的中文）
+ *
+ * `kind` 比频道更细（同为 system 频道，成就奖励与运营公告的 kind 不同）。
+ * 映射不到的 kind 原样显示 —— 服务端加了新来源，界面上露出英文也比显示空白强。
+ */
+export const mailKindLabels: Record<string, string> = {
+  system: "系统",
+  achievement: "成就",
+  reward: "奖励",
+  friend: "好友",
+  guild: "行会",
+  boss: "首领",
+  combat: "战斗",
+  gm: "运营",
 };

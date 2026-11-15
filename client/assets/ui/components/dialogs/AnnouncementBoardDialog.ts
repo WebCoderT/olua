@@ -1,8 +1,8 @@
-import { Button, Graphics, Label, Layout, Node, ScrollView, Vec2, isValid } from "cc";
+import { Button, Graphics, Label, Layout, Node, ScrollView, Size, Vec2, isValid } from "cc";
 import { AnnouncementApi } from "../../utils/net/Api";
 import type { AnnouncementView } from "../../../configs/announcement";
 import { buildAnnouncementViews } from "../../../configs/announcement";
-import { announcementBoardDialogLayout as layout, uiImages } from "../../../configs/hudLayout";
+import { announcementBoardDialogLayout as layout, T, uiImages } from "../../../configs/hudLayout";
 import { getText } from "../../../configs/texts";
 import AnnouncementReadStore from "../../core/AnnouncementReadStore";
 import LayerManager from "../../core/LayerManager";
@@ -57,15 +57,35 @@ export default class AnnouncementBoardDialog {
     }
     // 场景切换时弹窗会被连带销毁，这里清理失效引用（否则会一直以为它还开着）
     if (this.dialog && !isValid(this.dialog)) this.reset();
-    const dialog = GameUiHelper.createDialog(layout.name, layout.title, new Vec2(), layout.size);
+    const dialog = GameUiHelper.createDialog(layout.name, layout.title, new Vec2(), layout.size, layout.eyebrow);
     // 左：公告列表（可上下滑动）
     const list = GameUiHelper.createScrollView(layout.list.name, layout.list.position, layout.list.size);
     this.listContent = list.getComponent(ScrollView).content;
     // 条目间距取配置：createScrollView 的默认间距是给卡片列表用的（太挤）
     this.listContent.getComponent(Layout).spacingY = layout.list.itemGap;
     dialog.addChild(list);
-    // 右：标题 / 级别 · 时间窗 / 正文滚动区
+    // 右：外框 + 标题 / 级别 · 时间窗 / 分隔线 / 正文滚动区
     const detail = layout.detail;
+    // 右栏外框（稿 `.br`：圆角 + 深底 + 一圈弱线）—— 先加，压在文字下面
+    const frame = detail.frame;
+    const frameNode = UiHelper.createNode(frame.name, frame.position, frame.size);
+    const frameGraphics = frameNode.addComponent(Graphics);
+    frameGraphics.fillColor = frame.fill;
+    frameGraphics.roundRect(-frame.size.width / 2, -frame.size.height / 2, frame.size.width, frame.size.height, frame.radius);
+    frameGraphics.fill();
+    frameGraphics.lineWidth = T.border.width;
+    frameGraphics.strokeColor = frame.border;
+    frameGraphics.roundRect(-frame.size.width / 2, -frame.size.height / 2, frame.size.width, frame.size.height, frame.radius);
+    frameGraphics.stroke();
+    dialog.addChild(frameNode);
+    // 头部与正文之间的分隔线（稿 `.br-head` 的 border-bottom）
+    const dividerWidth = frame.size.width - T.spacing.padDialog * 2;
+    const divider = UiHelper.createNode(`${detail.title.name}_divider`, new Vec2(frame.position.x, detail.divider.y), new Size(dividerWidth, 1));
+    const dividerGraphics = divider.addComponent(Graphics);
+    dividerGraphics.fillColor = detail.divider.color;
+    dividerGraphics.rect(-dividerWidth / 2, -0.5, dividerWidth, 1);
+    dividerGraphics.fill();
+    dialog.addChild(divider);
     this.detailTitle = UiHelper.createLabel(detail.title.name, "", detail.title.color, detail.title.fontSize, detail.title.position, detail.title.size);
     // 标题单行放不下时缩字号而不是换行：换行会向下顶开下面的元信息与正文区
     this.detailTitle.getComponent(Label).overflow = Label.Overflow.SHRINK;
@@ -154,11 +174,23 @@ export default class AnnouncementBoardDialog {
     const card = UiHelper.createNode(`${item.name}_item_${index}`, new Vec2(), item.itemSize);
     const button = card.addComponent(Button);
     button.transition = Button.Transition.SCALE;
+    // 条目底（稿 `.bi`：深底 + 一圈弱线 + 圆角）
+    const base = UiHelper.createNode(`${item.name}_item_base_${index}`, new Vec2(), item.itemSize);
+    const baseGraphics = base.addComponent(Graphics);
+    const half = { w: item.itemSize.width / 2, h: item.itemSize.height / 2 };
+    baseGraphics.fillColor = item.itemFill;
+    baseGraphics.roundRect(-half.w, -half.h, item.itemSize.width, item.itemSize.height, item.itemRadius);
+    baseGraphics.fill();
+    baseGraphics.lineWidth = T.border.width;
+    baseGraphics.strokeColor = item.itemBorder;
+    baseGraphics.roundRect(-half.w, -half.h, item.itemSize.width, item.itemSize.height, item.itemRadius);
+    baseGraphics.stroke();
+    card.addChild(base);
     // 选中底色（先加，压在文字下面；切换选中只改 active，不重建列表）
     const highlight = UiHelper.createNode(`${item.name}_item_selected_${index}`, new Vec2());
     const graphics = highlight.addComponent(Graphics);
     graphics.fillColor = item.selectedFill;
-    graphics.rect(-item.itemSize.width / 2, -item.itemSize.height / 2, item.itemSize.width, item.itemSize.height);
+    graphics.roundRect(-half.w, -half.h, item.itemSize.width, item.itemSize.height, item.itemRadius);
     graphics.fill();
     highlight.active = false;
     card.addChild(highlight);
@@ -170,7 +202,13 @@ export default class AnnouncementBoardDialog {
     }
     // 标题（未读用亮色，已读压暗）+ 级别 · 时间窗
     const titleColor = view.unread ? item.unreadTitleColor : item.readTitleColor;
-    card.addChild(UiHelper.createLabel(`${item.name}_item_title_${index}`, view.title, titleColor, item.itemTitleFontSize, item.itemTitle.position, item.itemTitle.size, Label.HorizontalAlign.LEFT));
+    const titleNode = UiHelper.createLabel(`${item.name}_item_title_${index}`, view.title, titleColor, item.itemTitleFontSize, item.itemTitle.position, item.itemTitle.size, Label.HorizontalAlign.LEFT);
+    // 稿的条目标题是**两行**（超出截断）：单行 SHRINK 会把长标题缩成小字，反而更难扫
+    const titleLabel = titleNode.getComponent(Label);
+    titleLabel.enableWrapText = true;
+    titleLabel.lineHeight = item.itemTitle.lineHeight;
+    titleLabel.overflow = Label.Overflow.CLAMP;
+    card.addChild(titleNode);
     card.addChild(UiHelper.createLabel(`${item.name}_item_meta_${index}`, this.itemMeta(view), item.itemMetaColor, item.itemMetaFontSize, item.itemMeta.position, item.itemMeta.size, Label.HorizontalAlign.LEFT));
     card.on(Node.EventType.TOUCH_END, () => this.select(view.id), this);
     // 点击音（#685）：公告条目是手写按钮

@@ -47,7 +47,11 @@ export default class TitleUpgradeDialog {
     const role = StorageManager.findOnlineRole();
     // 默认预览当前称号（不在链上时停在链首 —— 列表里本来就没有它）
     this.selectedLevel = defaultSelectedLevel(role?.title ?? 0);
-    const dialog = GameUiHelper.createDialog(layout.name, layout.title, new Vec2(), layout.size);
+    const dialog = GameUiHelper.createDialog(layout.name, layout.title, new Vec2(), layout.size, layout.eyebrow);
+    // 页脚（稿 17-growth 的 .panel-foot）
+    dialog.addChild(
+      GameUiHelper.createDialogFoot("title_upgrade_foot", layout.size.width, layout.foot, layout.footTexts.left, layout.footTexts.right),
+    );
     // 左：称号等级列表（可上下滑动）
     const list = GameUiHelper.createScrollView(layout.list.name, layout.list.position, layout.list.size);
     this.listContent = list.getComponent(ScrollView).content;

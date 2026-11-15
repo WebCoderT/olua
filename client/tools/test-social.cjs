@@ -219,7 +219,15 @@ try {
   const layoutSource = read(CLIENT_DIALOGS_LAYOUT);
   check(/export const socialDialogLayout = \{/.test(layoutSource), "有 socialDialogLayout");
   check(/size: new Size\(600, 560\)/.test(layoutSource), "社交弹窗加高 60（多出来的一行放页签，帮会页坐标不用挪）");
-  check(/columns: \[-208, -104, 0, 104, 208\]/.test(layoutSource), "五个页签的列位 + texts.tabs 与 TABS 一一对应");
+  // 页签列位：断「五枚 + 等距 + 整行居中」这三条结构关系（具体步进按稿定，不写死）
+  const socialBlockStart = layoutSource.indexOf("export const socialDialogLayout");
+  const socialBlock = layoutSource.slice(socialBlockStart, layoutSource.indexOf("export const ", socialBlockStart + 10));
+  const tabColumns = (socialBlock.match(/columns: \[([^\]]+)\]/) || [])[1]?.split(",").map((value) => Number(value.trim())) ?? [];
+  const step = tabColumns[1] - tabColumns[0];
+  check(
+    tabColumns.length === 5 && tabColumns.every((x, index) => index === 0 || Math.abs(x - tabColumns[index - 1] - step) < 0.001) && Math.abs(tabColumns[2]) < 0.001,
+    `五个页签等距横排且整行居中（列位 ${tabColumns.join(" / ")}）`,
+  );
 
   //#endregion
 

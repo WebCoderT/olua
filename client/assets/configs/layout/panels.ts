@@ -33,11 +33,20 @@ export const equipmentSlotLayout = {
     borderWidth: 1.5,
     color: T.text[1],
   },
-  /** 各分组容器（name = 节点名，horizontal = 横排还是竖排） */
+  /**
+   * 各分组容器（name = 节点名，horizontal = 横排还是竖排）
+   *
+   * 几何按 06-role-info 稿的五列结构落（面板 660×520，原点在弹窗中心）：
+   * 左装备列 -286 / 内观（服务端 `equip_in_aligns` 的 inPosition，客户端不摆）/ 右装备列 55 /
+   * 属性列 165 / 六入口列 285。**内观是服务端对齐数据，这里不参与重排** ——
+   * 衣服中心实测在 x -75~-153，人物本体约占 -190~10，与两列都不会压住。
+   * 底部三格（衣服 / 其他1 / 其他2）原在旧版底边横排，稿没有这一列，改放到内观列底部
+   * （人物脚下），三格 170×50 与左右两列纵向错开。
+   */
   groups: {
-    left: { name: "equipment_slots_left", position: new Vec2(-240, 40), size: new Size(50, 290), horizontal: false },
-    right: { name: "equipment_slots_right", position: new Vec2(80, 40), size: new Size(50, 290), horizontal: false },
-    bottom: { name: "equipment_slots_bottom", position: new Vec2(-75, -203.5), size: new Size(170, 50), horizontal: true },
+    left: { name: "equipment_slots_left", position: new Vec2(-286, 20), size: new Size(50, 290), horizontal: false },
+    right: { name: "equipment_slots_right", position: new Vec2(55, 20), size: new Size(50, 290), horizontal: false },
+    bottom: { name: "equipment_slots_bottom", position: new Vec2(-126, -150), size: new Size(170, 50), horizontal: true },
   },
 };
 
@@ -48,7 +57,7 @@ export const equipmentSlotLayout = {
 /** 背包格子网格布局（弹窗内固定几何；行列数见 configs/role 的 bagRow / bagCol） */
 export const bagGridLayout = {
   name: "bag_grid",
-  position: new Vec2(0, 17),
+  position: new Vec2(0, 8),
   size: new Size(580, 368),
   /** 行间距与单行尺寸（行宽 ÷ 格子宽决定每行格子数） */
   rowSpacing: 3,
@@ -111,18 +120,16 @@ export const bagGridLayout = {
 /**
  * 属性列表布局（尺寸高度 0 = 由内容自适应）
  *
- * 高度是**算过的**：列表锚点在顶边 y=205，内容一路向下长，而弹窗右侧那列功能按钮
- * （称号 / 战魂 / 军衔 / 时装 / 社交，见 dialogs.roleInfoDialogLayout）最上面一枚占 -49~-13。
- * 排完 8 行基础属性后的底边必须留在 -13 之上，否则文字会压到按钮上（#470）。
- * 公式（1 个标题 + N 行，行数取 `goodShowAttributesLabel` 的条目数）：
+ * 锚点在**上边中点**（`applyRoleAttributeListStyle` 设 anchorPoint (0.5, 1)），x 是列中心。
+ * 列宽按 06-role-info 稿（158）；高度是算出来的：1 个标题 + N 行（N 取 `goodShowAttributesLabel` 条目数）
  *   高度 = 2×padding + titleHeight + N×rowHeight + N×spacing
- * 当前 2×8 + 14 + 8×18 + 8×4 = 206 → 底边 y=-1，离按钮顶边还有 12px。
- * **改这里的任何一个数，都要重算这条**（`client/tools/test-role-attr-list.cjs` 会判定）。
+ * 当前 2×8 + 14 + 8×18 + 8×4 = 206 → 底边 y = 205 - 206 = -1。
+ * #1059 起六入口整体挪到最右一列（x 285），属性列与入口列不再纵向争位置（旧版要卡「底边不能让按钮」）。
  */
 export const roleAttributeListLayout = {
   name: "role_attributes",
-  position: new Vec2(217, 205),
-  size: new Size(150, 0),
+  position: new Vec2(165, 205),
+  size: new Size(158, 0),
   /** 条目纵向间距与容器内边距 */
   spacing: 4,
   padding: 8,

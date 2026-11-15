@@ -1,6 +1,7 @@
-import { isValid, Label, Node } from "cc";
+import { isValid, Label, Node, Size, Vec2 } from "cc";
 import StorageManager from "../../core/StorageManager";
 import GameUiHelper from "../../helpers/GameUiHelper";
+import UiHelper from "../../helpers/UiHelper";
 import LayerManager from "../../core/LayerManager";
 import BagGridView, { BagCellAction } from "../panel/BagGridView";
 import ConfirmDialog from "./ConfirmDialog";
@@ -29,6 +30,8 @@ export default class BagDialog {
   private dialog: Node | null = null;
   /** 背包格子网格 */
   private bagGrid: BagGridView | null = null;
+  /** 计数行左边的「已用 / 总数 格」（每次刷新背包都要改字，所以留引用） */
+  private countLabel: Label | null = null;
   /** 回收按钮（两步确认要改它的文案，所以留引用） */
   private recycleButton: Node | null = null;
   /** 回收按钮是否处于「待确认」状态（第二次点击才真的回收） */
@@ -68,7 +71,7 @@ export default class BagDialog {
     this.clearDiscardPending();
     this.closeDiscardConfirm();
     // 弹窗框与背包格子由通用零件拼装
-    const dialog = GameUiHelper.createDialog(bagDialogLayout.name, bagDialogLayout.title);
+    const dialog = GameUiHelper.createDialog(bagDialogLayout.name, bagDialogLayout.title, new Vec2(), bagDialogLayout.size, bagDialogLayout.eyebrow);
     // 底部「一键整理」：合并同类可叠加物并重排（搬运与提示都在数据层，这里只上报点击）
     const tidyButton = GameUiHelper.createMiddleButton(
       bagDialogLayout.tidyButton.name,
@@ -125,6 +128,9 @@ export default class BagDialog {
     // 于是这次 TOUCH_START 到不了弹窗根 —— 在网格上再挂一次「点到我 = 所属弹窗置顶」
     // （鼠标通道不受影响：MOUSE_DOWN 照旧冒泡到弹窗根，这里只是把触摸通道补齐）
     GameUiHelper.bindDialogRaiseOnPress(this.bagGrid);
+    // 计数行 + 页脚（稿 05-bag 的 .count-line 与 .panel-foot）
+    this.buildCountAndFoot(dialog);
+    this.refreshCount();
     this.dialog = dialog;
     LayerManager.addDialogToUILayer(dialog);
   }
@@ -139,7 +145,74 @@ export default class BagDialog {
     // 拖出弹窗、正等销毁确认的那件物品同理：格子即将重建，先放开扣留（恢复不透明度，之后节点即销毁）
     this.bagGrid?.releaseDiscardHold();
     this.bagGrid?.refresh(StorageManager.findOnlineRole());
+    this.refreshCount();
   }
+
+  //#region 计数行 / 页脚
+
+  /**
+   * 计数行与页脚（稿 05-bag 的 `.count-line` 与 `.panel-foot`）
+   *
+   * 计数行：左边「已用 / 总数 格」（实时算，见 refreshCount），右边一行操作提示；
+   * 页脚：走通用件 `createDialogFoot`（通栏线 + 两端小字），几何来自 `dialogFootLayout`。
+   * 几何全在 configs/layout/dialogs.bagDialogLayout（countLine / foot），这里只摆放与取文案。
+   */
+  private buildCountAndFoot(dialog: Node) {
+    const line = bagDialogLayout.countLine;
+    const countNode = UiHelper.createLabel(
+      "bag_count_label",
+      "",
+      line.color,
+      line.fontSize,
+      new Vec2(line.leftX, line.y),
+      new Size(line.width, line.height),
+      Label.HorizontalAlign.LEFT,
+    );
+    this.countLabel = countNode.getComponent(Label);
+    dialog.addChild(countNode);
+    dialog.addChild(
+      UiHelper.createLabel(
+        "bag_count_hint",
+        getText("bag_count_hint"),
+        line.color,
+        line.fontSize,
+        new Vec2(line.rightX, line.y),
+        new Size(line.width, line.height),
+        Label.HorizontalAlign.RIGHT,
+      ),
+    );
+    dialog.addChild(
+      GameUiHelper.createDialogFoot(
+        "bag_foot",
+        bagDialogLayout.size.width,
+        bagDialogLayout.foot,
+        getText("bag_foot_left"),
+        getText("bag_foot_right"),
+      ),
+    );
+  }
+
+  /**
+   * 刷新计数行：已用格数 / 服务端给的格子总数
+   *
+   * 都从 `role.bag` 现算（服务端权威，客户端零副本）：不写死 48 / 77，
+   * 服务端改容量时这里自动跟上。
+   */
+  private refreshCount() {
+    if (!this.countLabel || !isValid(this.countLabel.node)) return;
+    const bag = StorageManager.findOnlineRole()?.bag ?? [];
+    let total = 0;
+    let used = 0;
+    for (const row of bag) {
+      for (const cell of row) {
+        total += 1;
+        if (cell) used += 1;
+      }
+    }
+    this.countLabel.string = getText("bag_count_line", { used, total });
+  }
+
+  //#endregion
 
   /**
    * 格子操作：丢弃模式下点格子 = 丢弃；否则左键使用物品、右键穿戴装备

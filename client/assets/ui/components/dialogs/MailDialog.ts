@@ -6,7 +6,7 @@ import type { MailClaimAllOutcome } from "../../core/MailStore";
 import SoundManager from "../../core/SoundManager";
 import UiHelper from "../../helpers/UiHelper";
 import { items } from "../../../configs/items";
-import { mailChannels, mailDialogLayout as layout, mailTexts as texts } from "../../../configs/mail";
+import { mailChannels, mailDialogLayout as layout, mailFootTexts, mailKindLabels, mailTexts as texts } from "../../../configs/mail";
 import type { MailChannelKey } from "../../../configs/mail";
 import { blockClickThrough } from "../../utils/input/UiHit";
 import { clearChildren } from "../../utils/node/NodeTree";
@@ -68,8 +68,12 @@ export default class MailDialog {
       return;
     }
     if (this.dialog && !isValid(this.dialog)) this.reset();
-    const dialog = GameUiHelper.createDialog(layout.name, layout.title, new Vec2(), layout.size);
+    const dialog = GameUiHelper.createDialog(layout.name, layout.title, new Vec2(), layout.size, layout.eyebrow);
     blockClickThrough(dialog);
+    // 页脚（稿 09-mail 的 .panel-foot）：左操作提示 / 右一键领取范围
+    dialog.addChild(
+      GameUiHelper.createDialogFoot("mail_foot", layout.size.width, layout.foot, mailFootTexts.left, mailFootTexts.right),
+    );
     LayerManager.addDialogToUILayer(dialog);
     this.dialog = dialog;
     this.body = UiHelper.createGroupNode(`${layout.name}_body`, new Vec2());
@@ -273,6 +277,8 @@ export default class MailDialog {
     );
     desc.getComponent(Label).overflow = Label.Overflow.CLAMP;
     node.addChild(desc);
+    node.addChild(this.createFlag(row));
+    node.addChild(this.createMeta(row));
     node.addChild(this.createAction(row, busy));
     node.addChild(this.createRemove(row, busy));
     // 点行标已读（已读的行不用再请求）
@@ -281,6 +287,68 @@ export default class MailDialog {
       SoundManager.bindClick(node);
     }
     return node;
+  }
+
+  /**
+   * 未读标记点（稿 09-mail 的 `.flag`）：未读 = 金色实心，已读 = 一圈弱线空心
+   *
+   * 与行底色两套信号叠用是有意的：底色在满屏列表里要扫一眼才看得出，
+   * 左边一个点亮的小金点在同一列上排下去，一眼就知道上面几封没读。
+   */
+  private createFlag(row: MailView) {
+    const config = layout.row;
+    const node = UiHelper.createNode(`mail_flag_${row.id}`, config.flagPosition, config.flagSize);
+    const graphics = node.addComponent(Graphics);
+    const radius = config.flagSize.width / 2;
+    graphics.lineWidth = 1;
+    if (row.read) {
+      graphics.strokeColor = config.flagOffColor;
+      graphics.circle(0, 0, radius);
+      graphics.stroke();
+    } else {
+      graphics.fillColor = config.flagColor;
+      graphics.circle(0, 0, radius);
+      graphics.fill();
+    }
+    return node;
+  }
+
+  /**
+   * 来源与时间（稿 `.meta`：右对齐两行，贴在两枚按钮左边）
+   *
+   * 上一行来源标签取 `mailKindLabels`（服务端 `kind` 的中文，映射不到就原样显示），
+   * 下一行是收到时间 `MM-DD HH:mm`。
+   */
+  private createMeta(row: MailView) {
+    const config = layout.row;
+    const node = UiHelper.createNode(`mail_meta_${row.id}`, config.metaPosition, config.metaSize);
+    const lineHeight = config.metaSize.height / 2;
+    const lines = [mailKindLabels[row.kind] ?? row.kind, this.formatTime(row.createdAt)];
+    lines.forEach((text, index) => {
+      node.addChild(
+        UiHelper.createLabel(
+          `mail_meta_${index === 0 ? "kind" : "time"}_${row.id}`,
+          text,
+          config.metaColor,
+          config.metaFontSize,
+          new Vec2(0, lineHeight / 2 - index * lineHeight),
+          new Size(config.metaSize.width, lineHeight),
+          Label.HorizontalAlign.RIGHT,
+        ),
+      );
+    });
+    return node;
+  }
+
+  /** 收到时间（稿的「今天 14:22」那种相对写法要读服务器时区，这里统一给绝对时间 MM-DD HH:mm） */
+  private formatTime(timestamp: number): string {
+    const at = new Date(timestamp);
+    // 编译目标没有 ES2017 的 padStart，两位补零自己来（按长度判断，不写数值阈值）
+    const pad = (value: number) => {
+      const text = `${value}`;
+      return text.length >= 2 ? text : `0${text}`;
+    };
+    return `${pad(at.getMonth() + 1)}-${pad(at.getDate())} ${pad(at.getHours())}:${pad(at.getMinutes())}`;
   }
 
   /** 附件摘要（绑定元宝 / 经验 / 物品）；没有附件就显示正文 */

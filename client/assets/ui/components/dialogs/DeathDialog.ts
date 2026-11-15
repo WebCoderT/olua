@@ -1,7 +1,7 @@
 import { Graphics, Node, UITransform } from "cc";
 import UiHelper from "../../helpers/UiHelper";
 import GameUiHelper from "../../helpers/GameUiHelper";
-import { deathDialogLayout } from "../../../configs/hudLayout";
+import { buttonTone, deathDialogLayout, T } from "../../../configs/hudLayout";
 
 /** 复活方式回调（由组合根注入，见 ui/Game.reviveRole） */
 interface DeathDialogCallbacks {
@@ -32,11 +32,43 @@ export default class DeathDialog extends Node {
     graphics.rect(-screenSize.width / 2, -screenSize.height / 2, screenSize.width, screenSize.height);
     graphics.fill();
     this.addChild(mask);
+    // 死亡面板（稿 20-overlay 的 `.death`：560 宽主面板，深底 + 上半暗朱亮带）
+    const panel = layout.panel;
+    const panelNode = UiHelper.createNode(panel.name, panel.position, panel.size);
+    const panelGraphics = panelNode.addComponent(Graphics);
+    panelGraphics.fillColor = panel.fill;
+    panelGraphics.roundRect(-panel.size.width / 2, -panel.size.height / 2, panel.size.width, panel.size.height, panel.radius);
+    panelGraphics.fill();
+    panelGraphics.fillColor = panel.fillTop;
+    const bandHeight = panel.size.height * panel.fillTopRatio;
+    panelGraphics.roundRect(-panel.size.width / 2, panel.size.height / 2 - bandHeight, panel.size.width, bandHeight, panel.radius);
+    panelGraphics.fill();
+    panelGraphics.lineWidth = T.border.widthStrong;
+    panelGraphics.strokeColor = panel.border;
+    panelGraphics.roundRect(-panel.size.width / 2, -panel.size.height / 2, panel.size.width, panel.size.height, panel.radius);
+    panelGraphics.stroke();
+    this.addChild(panelNode);
     // 死亡提示与两个复活按钮（居中偏下排布）
     const title = layout.title;
     this.addChild(UiHelper.createLabel("death_title", title.text, title.color, title.fontSize, title.position, title.size));
-    const reviveInPlaceButton = GameUiHelper.createMiddleButton(layout.reviveInPlaceButton.name, layout.reviveInPlaceButton.text, layout.reviveInPlaceButton.position);
-    const reviveSafeButton = GameUiHelper.createMiddleButton(layout.reviveSafeButton.name, layout.reviveSafeButton.text, layout.reviveSafeButton.position);
+    const subtitle = layout.subtitle;
+    this.addChild(UiHelper.createLabel("death_subtitle", subtitle.text, subtitle.color, subtitle.fontSize, subtitle.position, subtitle.size));
+    const reviveInPlaceButton = GameUiHelper.createToneButton(
+      layout.reviveInPlaceButton.name,
+      layout.reviveInPlaceButton.text,
+      layout.reviveInPlaceButton.position,
+      layout.buttonSize,
+      layout.buttonFontSize,
+      buttonTone.primary,
+    );
+    const reviveSafeButton = GameUiHelper.createToneButton(
+      layout.reviveSafeButton.name,
+      layout.reviveSafeButton.text,
+      layout.reviveSafeButton.position,
+      layout.buttonSize,
+      layout.buttonFontSize,
+      buttonTone.ghost,
+    );
     reviveInPlaceButton.on(Node.EventType.TOUCH_END, () => callbacks.onReviveInPlace(), this);
     reviveSafeButton.on(Node.EventType.TOUCH_END, () => callbacks.onReviveSafe(), this);
     this.addChild(reviveInPlaceButton);

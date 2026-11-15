@@ -45,18 +45,46 @@ export const dialogFrame = {
       trailOffset: 14,
     },
   },
+  /**
+   * 头部眉题（ui.css `.panel-eyebrow`）：左上角一行小字（`BAG · B` 这类英文缩写），
+   * 距弹窗左边缘 `padDialog`、距上边缘 `sp6`，字号 f10、金色、字距加大
+   *
+   * 与标题（居中）分工：眉题给键盘快捷键与分区信息，标题才是中文名。
+   * 宽高只决定文本对齐框（LEFT + CENTER），不动不影响排版。
+   */
+  eyebrow: {
+    left: T.spacing.padDialog,
+    top: T.spacing.sp6,
+    width: 240,
+    height: 14,
+    fontSize: T.fontSize.f10,
+    color: T.gold[2],
+  },
   /** 标题：距弹窗上边缘的内缩、文本高度、宽度两侧内缩、字号与颜色（摆放见 GameUiHelper.createDialog） */
   title: {
-    insetTop: 15,
-    height: 30,
+    /** ui.css `.panel-head` 的 padding-top（--sp-7） */
+    insetTop: T.spacing.sp7,
+    height: 24,
     widthPadding: 60,
     fontSize: T.fontSize.f20,
     color: T.text[1],
-    /** 标题下的短金线（ui.css .panel-title::after，44×1） */
-    rule: { width: T.border.titleRuleWidth, height: T.border.titleRuleHeight, color: T.gold[3], gap: 6 },
+    /** 标题下的短金线（ui.css .panel-title::after，44×1，margin-top --sp-3） */
+    rule: { width: T.border.titleRuleWidth, height: T.border.titleRuleHeight, color: T.gold[3], gap: T.spacing.sp3 },
   },
-  /** 关闭按钮：尺寸（公共尺寸，见 sizes.uiSize）+ 距弹窗上/右边缘的内缩 + 矢量化 × 的字号与色 */
-  closeButton: { size: uiSize.closeButtonSize, inset: 15, text: "×", fontSize: T.fontSize.f18, color: T.text[3], hoverColor: T.text[1] },
+  /**
+   * 关闭按钮：尺寸（公共尺寸，见 sizes.uiSize）+ 距弹窗右/上边缘的内缩 + 矢量化 × 的字号与色
+   *
+   * 内缩按 ui.css `.panel-close` 的 `top:10px; right:12px` 反推中心点（按钮 30×30 居中，故各加 15）。
+   */
+  closeButton: {
+    size: uiSize.closeButtonSize,
+    insetX: 27,
+    insetY: 25,
+    text: "×",
+    fontSize: T.fontSize.f18,
+    color: T.text[3],
+    hoverColor: T.text[1],
+  },
   /**
    * 背景图：九宫拼装配置（resources/dialog 下的九块拆图，取图名见 images.dialog*）
    *
@@ -90,6 +118,32 @@ export const dialogFrame = {
   closeImage: uiImages.closeButton,
 };
 
+/**
+ * 弹窗页脚几何（ui.css `.panel-foot`）：顶部 1px 分隔线 + 两端各一行小字
+ *
+ * 16 个弹窗里 13 个有页脚，几何只随面板尺寸变，所以按尺寸算而不是逐屏手抄：
+ * 线距面板底 24（`--sp-6` + 字高的一半）、字中心距底 8；两端文字块宽 `textWidth`，
+ * 内缘距面板边 `inset`（= `--pad-dialog` 20）→ 左块中心 = -半宽 + inset + 半宽文字块。
+ *
+ * @param size 弹窗尺寸（页脚按**面板高度**贴底，不含外框）
+ * @param textWidth 单侧文字块宽（两端各一块，居中会让长句截断，所以给足）
+ */
+export function dialogFootLayout(size: Size, textWidth = 300, inset = T.spacing.padDialog) {
+  const halfWidth = size.width / 2;
+  const halfHeight = size.height / 2;
+  return {
+    lineY: -halfHeight + 24,
+    textY: -halfHeight + 8,
+    leftX: -halfWidth + inset + textWidth / 2,
+    rightX: halfWidth - inset - textWidth / 2,
+    width: textWidth,
+    height: 14,
+    fontSize: T.fontSize.f11,
+    color: T.text[4],
+    lineColor: T.line[1],
+  };
+}
+
 //#endregion
 
 //#region 战魂弹窗（左中右三栏）
@@ -100,11 +154,18 @@ export const dialogFrame = {
  * 三个弹窗的结构与坐标完全同源（左列表 + 中展示 + 右属性列），差异只在文案、
  * 列表名与中间栏的内容（动画 / 徽记）。数值直接改这里。
  */
+/**
+ * 成长线三窗（军衔 / 称号 / 战魂）共用的左栏卡片列表
+ *
+ * 稿 17-growth 是三栏：左 216 列表 / 中 1fr / 右 224，栏间距 col-gap，整体左右各留 18。
+ * 面板 880×540 → 内容宽 844，中栏 380；左栏中心 -244、中栏 4、右栏 310。
+ * 列表顶 225（头部 45 下沿）、高 392 → 中心 29。
+ */
 const growthCardList = (name: string, extra?: { borderWidth: number }) => ({
   name,
-  position: new Vec2(-320, -5),
-  size: new Size(210, 490),
-  cardSize: new Size(192, 44),
+  position: new Vec2(-244, 29),
+  size: new Size(216, 392),
+  cardSize: new Size(200, 44),
   cardFontSize: 13,
   stateFontSize: 11,
   /** 卡片文字颜色：选中 / 未激活 / 已激活 */
@@ -113,30 +174,31 @@ const growthCardList = (name: string, extra?: { borderWidth: number }) => ({
   activeColor: T.jade,
   ...extra,
 });
-const growthAnimation = { position: new Vec2(0, 30), size: new Size(300, 300) };
+const growthAnimation = { position: new Vec2(4, 30), size: new Size(300, 300) };
 const growthAttribute = {
-  position: new Vec2(250, 240),
-  width: 210,
+  position: new Vec2(310, 205),
+  width: 216,
   spacing: 6,
   fontSize: 12,
   titleColor: T.gold[4],
   rowNameColor: T.text[3],
   rowDiffColor: T.jade,
 };
-const growthBindGold = { position: new Vec2(250, -160), size: new Size(200, 16), fontSize: 12 };
+const growthBindGold = { position: new Vec2(310, -150), size: new Size(216, 16), fontSize: 12 };
 
 /** 战魂弹窗布局 */
 export const warSoulDialogLayout = {
   name: "war_soul_dialog",
   title: "战魂",
-  size: new Size(880, 560),
+  eyebrow: "GROWTH · SOUL",
+  size: new Size(880, 540),
   /** 左：等级卡片竖向滚动列表（卡片按等级从上到下，状态用颜色区分） */
   list: growthCardList("soul_list"),
   /** 中：战魂动画（帧率取各等级配置 configs/soul 的 animationFrameRate） */
   animation: growthAnimation,
   /** 中：名称 / 描述 / 当前战魂 / 外显勾选框（槽位坐标，子件坐标以槽位中心为原点） */
   info: {
-    position: new Vec2(0, -145),
+    position: new Vec2(4, -145),
     name: { position: new Vec2(0, 42), size: new Size(320, 22), fontSize: 16, color: Color.WHITE },
     description: { position: new Vec2(0, 20), size: new Size(330, 16), fontSize: 11, color: T.text[3] },
     current: { position: new Vec2(0, -22), size: new Size(320, 18), fontSize: 12, color: T.gold[4] },
@@ -148,7 +210,9 @@ export const warSoulDialogLayout = {
   /** 右：绑定元宝余额 */
   bindGold: growthBindGold,
   /** 右：升级按钮（满级 / 当前阶不在成长链上时都置灰，文案分别走 maxedText、lockedText） */
-  upgradeButton: { position: new Vec2(250, -205), text: "升 级", maxedText: "已满级", lockedText: "不可续升" },
+  upgradeButton: { position: new Vec2(310, -205), text: "升 级", maxedText: "已满级", lockedText: "不可续升" },
+  foot: dialogFootLayout(new Size(880, 540), 300),
+  footTexts: { left: "左栏列出全部等级 · 点一档看差异", right: "升级消耗绑定元宝，由服务端结算" },
 };
 
 //#endregion
@@ -162,14 +226,15 @@ export const warSoulDialogLayout = {
 export const titleUpgradeDialogLayout = {
   name: "title_upgrade_dialog",
   title: "称号",
-  size: new Size(880, 560),
+  eyebrow: "GROWTH · TITLE",
+  size: new Size(880, 540),
   /** 左：等级卡片竖向滚动列表（卡片按等级从上到下，状态用颜色区分；34 个称号与战魂 37 个同容器尺寸） */
   list: growthCardList("title_list"),
   /** 中：称号动画（名牌帧原始宽 156~245，弹窗内按 RAW 原尺寸展示） */
   animation: growthAnimation,
   /** 中：名称 / 描述 / 当前称号（槽位坐标，子件坐标以槽位中心为原点；比战魂少一行——没有外显勾选框） */
   info: {
-    position: new Vec2(0, -145),
+    position: new Vec2(4, -145),
     name: { position: new Vec2(0, 42), size: new Size(320, 22), fontSize: 16, color: Color.WHITE },
     description: { position: new Vec2(0, 20), size: new Size(330, 16), fontSize: 11, color: T.text[3] },
     current: { position: new Vec2(0, -8), size: new Size(320, 18), fontSize: 12, color: T.gold[4] },
@@ -179,7 +244,9 @@ export const titleUpgradeDialogLayout = {
   /** 右：绑定元宝余额 */
   bindGold: growthBindGold,
   /** 右：升级按钮（满级 / 当前称号不在成长链上时都置灰，文案分别走 maxedText、lockedText） */
-  upgradeButton: { position: new Vec2(250, -205), text: "升 级", maxedText: "已满级", lockedText: "不可续升" },
+  upgradeButton: { position: new Vec2(310, -205), text: "升 级", maxedText: "已满级", lockedText: "不可续升" },
+  foot: dialogFootLayout(new Size(880, 540), 300),
+  footTexts: { left: "左栏列出全部等级 · 点一档看差异", right: "升级消耗绑定元宝，由服务端结算" },
 };
 
 //#endregion
@@ -194,12 +261,13 @@ export const titleUpgradeDialogLayout = {
 export const rankUpgradeDialogLayout = {
   name: "rank_upgrade_dialog",
   title: "军衔",
-  size: new Size(880, 560),
+  eyebrow: "GROWTH · RANK",
+  size: new Size(880, 540),
   /** 左：阶数卡片竖向滚动列表（100 阶从上到下，状态用颜色区分） */
   list: growthCardList("rank_list", { borderWidth: 2 }),
   /** 中：军衔徽记（文字牌：段名 + 红色军衔名 + 阶数进度） */
   badge: {
-    position: new Vec2(0, 30),
+    position: new Vec2(4, 30),
     size: new Size(320, 210),
     fill: T.surface[2],
     borderColor: T.gold[4],
@@ -213,7 +281,7 @@ export const rankUpgradeDialogLayout = {
   },
   /** 中：名称 / 描述 / 当前军衔（槽位坐标，子件坐标以槽位中心为原点） */
   info: {
-    position: new Vec2(0, -145),
+    position: new Vec2(4, -145),
     name: { position: new Vec2(0, 42), size: new Size(320, 22), fontSize: 16, color: Color.WHITE },
     description: { position: new Vec2(0, 20), size: new Size(330, 16), fontSize: 11, color: T.text[3] },
     current: { position: new Vec2(0, -8), size: new Size(320, 18), fontSize: 12, color: T.gold[4] },
@@ -223,7 +291,9 @@ export const rankUpgradeDialogLayout = {
   /** 右：绑定元宝余额 */
   bindGold: growthBindGold,
   /** 右：晋升按钮（满衔时文案与置灰） */
-  upgradeButton: { position: new Vec2(250, -205), text: "晋 升", maxedText: "已满衔", lockedText: "不可进阶" },
+  upgradeButton: { position: new Vec2(310, -205), text: "晋 升", maxedText: "已满衔", lockedText: "不可进阶" },
+  foot: dialogFootLayout(new Size(880, 540), 300),
+  footTexts: { left: "左栏列出全部阶位 · 点一档看差异", right: "晋升消耗绑定元宝，由服务端结算" },
 };
 
 //#endregion
@@ -246,15 +316,22 @@ export const mapTeleportDialogLayout = {
 
 //#region 小地图弹窗（当前地图的整图预览）
 
-/** 弹窗尺寸为 dialogFrame.size（600×500） */
+/** 弹窗尺寸 720×520（ui.css --dlg-w-lg 一级；19-world-map 稿） */
 export const mapPreviewDialogLayout = {
   name: "map_preview_dialog",
+  eyebrow: "WORLD MAP",
+  size: new Size(720, 520),
   /** 标题兜底文案（正常显示当前地图名，见 SmallMap 传入） */
   title: "小地图",
-  /** 预览区：地图 preview.jpg 整图铺满；点击按比例换算成世界坐标（左键寻路 / 右键传送） */
-  preview: { name: "map_preview", position: new Vec2(0, -18), size: new Size(560, 392) },
-  /** 预览区下方的操作提示 */
-  hint: { text: "左键点击自动寻路，右键点击直接传送", position: new Vec2(0, -226), size: new Size(420, 20), fontSize: 14, color: T.gold[4] },
+  /**
+   * 预览区：地图 preview.jpg 整图铺满；点击按比例换算成世界坐标（左键寻路 / 右键传送）
+   *
+   * 稿 19-map 的 `.mview`：内容宽 680、高 330，顶边 205（头部下沿）→ 中心 40、底 -125。
+   * 点击换算按**这个尺寸**的比例走，改尺寸不用动代码。
+   */
+  preview: { name: "map_preview", position: new Vec2(0, 40), size: new Size(680, 330) },
+  /** 操作提示（稿的 `.hint` 叠在预览区底部内侧的渐变带上） */
+  hint: { text: "左键点击自动寻路，右键点击直接传送", position: new Vec2(0, -108), size: new Size(660, 20), fontSize: T.fontSize.f11, color: T.gold[4] },
   /**
    * 预览图上的静态文字标记（开窗时按配置快照的点位 / 区域建一次，随预览图一起移动/缩放）
    * 三类标记：NPC 白点 + 点上方紧挨着的名称、刷怪区中心的怪物名称
@@ -290,34 +367,52 @@ export const mapPreviewDialogLayout = {
     /** 终点圆点半径（像素）：比途中的点大一圈 */
     endDotRadius: 7,
   },
+  /** 页脚（稿 19-map 的 .panel-foot） */
+  foot: dialogFootLayout(new Size(720, 520), 300),
+  footTexts: { left: "左键寻路 · 右键直接传送", right: "传送有冷却，战斗中不可用" },
 };
 
 //#endregion
 
 //#region 角色信息弹窗
 
-/** 弹窗尺寸为 dialogFrame.size（600×500） */
+/**
+ * 角色信息弹窗（06-role-info 稿）
+ *
+ * 面板 660×520：五列结构 = 左装备列 / 内观 / 右装备列 / 属性列 / 六入口列
+ * （装备列与属性列的几何在 layout/panels，内观是服务端 `equip_in_aligns` 的对齐数据，不在这里摆）。
+ */
 export const roleInfoDialogLayout = {
   name: "role_info_dialog",
   title: "角色信息",
+  eyebrow: "CHARACTER · C",
+  /** 弹窗尺寸 660×520（06-role-info 稿） */
+  size: new Size(660, 520),
   /** 装饰背景（含属性区底图） */
-  background: { image: uiImages.roleInfoDialogBackground, position: new Vec2(-78, -19), size: new Size(431, 452) },
+  background: { image: uiImages.roleInfoDialogBackground, position: new Vec2(-58, -19), size: new Size(431, 452) },
   /**
-   * 「军衔」「称号」「战魂」三个入口按钮（弹窗右侧竖排相邻三格，几何按中号按钮 123×36 推导）：
-   * 称号在右下空区（y -215），战魂紧贴其上一格（-215 + 36 + 10 间距 = -169），
-   * 军衔再往上一格（-169 + 36 + 10 = -123）；三者横坐标同为 x 200 → 按钮占 x 138.5~261.5，
-   * 与右列装备槽（x 55~105）、底部装备槽（x -160~10）都不相交。
-   * 三个系统都走这里，不走 NPC（战魂使者 NPC 仍保留，见 configs/npc）。
+   * 六入口按钮的公共外观（稿 `.entries .btn`：76 宽、f12、ghost 档）
+   * 宽度取 84（= 稿的列宽），六个按钮等距排成一列，靠右缘留 3
    */
-  titleButton: { name: "role_title_button", position: new Vec2(200, -215), text: "称 号" },
-  soulButton: { name: "role_soul_button", position: new Vec2(200, -169), text: "战 魂" },
-  rankButton: { name: "role_rank_button", position: new Vec2(200, -123), text: "军 衔" },
-  /** 时装（衣柜）入口，继续往上排一格（-123 + 36 + 10 = -77），四格同列等距 */
-  fashionButton: { name: "role_fashion_button", position: new Vec2(200, -77), text: "时 装" },
-  /** 社交（帮会 / 好友）入口，再往上排一格（-77 + 36 + 10 = -31），五格同列等距 */
-  socialButton: { name: "role_social_button", position: new Vec2(200, -31), text: "社 交" },
-  /** 属性加点入口（#833），再往上排一格（-31 + 36 + 10 = 15），六格同列等距 */
-  attrButton: { name: "role_attr_button", position: new Vec2(200, 15), text: "属 性" },
+  entryButton: { size: new Size(84, 32), fontSize: T.fontSize.f12 },
+  /**
+   * 六入口（最右一列，从上到下 = 属性 / 社交 / 时装 / 军衔 / 称号 / 战魂，与稿一致）
+   *
+   * 六个按钮 32 高 + 8 间距 → 总高 232，纵向居中（中心 100 / 60 / 20 / -20 / -60 / -100）。
+   * 横坐标 285 → 占 x 243~327（面板半宽 330）；属性列右缘 244，**间距 1**，改列宽时两处一起看。
+   * 三个系统（军衔/称号/战魂）都走这里，不走 NPC（战魂使者 NPC 仍保留，见 configs/npc）。
+   */
+  attrButton: { name: "role_attr_button", position: new Vec2(285, 100), text: "属 性" },
+  socialButton: { name: "role_social_button", position: new Vec2(285, 60), text: "社 交" },
+  fashionButton: { name: "role_fashion_button", position: new Vec2(285, 20), text: "时 装" },
+  rankButton: { name: "role_rank_button", position: new Vec2(285, -20), text: "军 衔" },
+  titleButton: { name: "role_title_button", position: new Vec2(285, -60), text: "称 号" },
+  soulButton: { name: "role_soul_button", position: new Vec2(285, -100), text: "战 魂" },
+  /**
+   * 页脚（稿 `.panel-foot`）：顶部 1px 分隔线 + 两端各一行小字
+   * 几何由面板尺寸算（见 dialogFootLayout），文案进 configs/texts
+   */
+  foot: dialogFootLayout(new Size(660, 520)),
 };
 
 /**
@@ -330,27 +425,30 @@ export const roleInfoDialogLayout = {
 export const fashionDialogLayout = {
   name: "fashion_dialog",
   title: "衣 柜",
-  /** 顶部「当前穿戴」提示 */
-  current: { position: new Vec2(0, 205), fontSize: 16 },
-  /** 列表（卡片区，四列） */
-  list: { name: "fashion_list", position: new Vec2(0, -20), size: new Size(556, 396) },
-  /** 单张卡片（相对列表内容左上角逐格排布） */
+  eyebrow: "FASHION",
+  /** 弹窗尺寸 600×500（18-fashion 稿） */
+  size: new Size(600, 500),
+  /** 顶部「当前穿戴」提示（稿 `.fcur`：头条一个绿点 + 一句，f12；头部下沿 205 − 半行高 10 = 195） */
+  current: { position: new Vec2(0, 195), fontSize: T.fontSize.f12 },
+  /** 列表（卡片区，四列；稿 `.fgrid` 330 高，中心 8） */
+  list: { name: "fashion_list", position: new Vec2(0, 8), size: new Size(560, 330) },
+  /** 单张卡片（相对列表内容左上角逐格排布；稿 `.fcard` 152 高，四列宽 132.5） */
   card: {
-    size: new Size(130, 104),
+    size: new Size(132, 152),
     /** 卡片间距（横 / 纵） */
-    gap: new Vec2(12, 10),
+    gap: new Vec2(T.spacing.sp3, T.spacing.sp3),
     /** 一行几列 */
     columns: 4,
     /** 外观图标（尺寸与在卡片内的位置） */
     iconSize: new Size(64, 64),
-    iconPosition: new Vec2(0, 16),
+    iconPosition: new Vec2(0, 36),
     /** 名称（字号与在卡片内的位置、尺寸） */
-    labelFontSize: 14,
-    labelPosition: new Vec2(0, -38),
-    labelSize: new Size(122, 20),
+    labelFontSize: T.fontSize.f13,
+    labelPosition: new Vec2(0, -20),
+    labelSize: new Size(120, 20),
     /** 状态角标（已穿戴 / 可穿戴） */
-    stateFontSize: 12,
-    statePosition: new Vec2(0, -56),
+    stateFontSize: T.fontSize.f10,
+    statePosition: new Vec2(0, -50),
     /** 卡片底色（Graphics 自绘，不依赖底图） */
     fill: T.surface[2],
     /** 已穿戴卡片的描边色 */
@@ -378,6 +476,9 @@ export const fashionDialogLayout = {
   },
   /** 顶部提示文案（{label} 替换为时装名） */
   currentText: { worn: "当前穿戴：{label}", none: "当前没有穿时装" },
+  /** 页脚（稿 18-fashion 的 .panel-foot） */
+  foot: dialogFootLayout(new Size(600, 500), 250),
+  footTexts: { left: "点卡片即穿脱 · 未拥有的看得到穿不了", right: "时装只改外观，不影响属性" },
 };
 
 //#endregion
@@ -391,11 +492,39 @@ export const fashionDialogLayout = {
 export const bagDialogLayout = {
   name: "bag_dialog",
   title: "背包",
+  eyebrow: "BAG · B",
   /**
-   * 底部三个操作按钮（子件坐标以弹窗中心为原点；背包网格底边在 -167，三钮并排落在网格下方）
+   * 弹窗尺寸 600×540
+   *
+   * 稿（05-bag）标的是 600×500，但把稿里的四段内容竖排真实累加是 ~518：
+   * 头部 45（sp7 + 标题 23 + 金线 6+1）+ 计数行 14 + 10 + 网格 368 + 按钮区 16+36 + 页脚 29。
+   * 稿的面板没有固定高度（`.wrap` 给了 500 但内容溢出可见），客户端弹窗有硬边界，
+   * 所以取内容实际高度 540 —— 与 06/11/12/15 同档，**格子仍是 11×7=77、尺寸仍 50×50**。
+   */
+  size: new Size(600, 540),
+  /**
+   * 格子计数行（稿 05-bag 的 `.count-line`）：左「已用 / 总数 格」，右操作提示，
+   * f11 + text-4；两端坐标是**标签中心**（宽 250，内缘距面板边 20）
+   */
+  countLine: {
+    y: 214,
+    leftX: -155,
+    rightX: 155,
+    width: 250,
+    height: 14,
+    fontSize: T.fontSize.f11,
+    color: T.text[4],
+  },
+  /**
+   * 页脚（稿 05-bag 的 `.panel-foot`）：顶部 1px 分隔线 + 两端各一行小字
+   * 几何由面板尺寸算（见 dialogFootLayout）：540 高 → 线 -246、字 -262
+   */
+  foot: dialogFootLayout(new Size(600, 540), 250),
+  /**
+   * 底部三个操作按钮（子件坐标以弹窗中心为原点；背包网格底边在 -176，三钮并排落在网格下方）
    * 中号按钮宽 123（见 sizes.uiSize.middleButtonSize），各错开 140 → 两两间距 17，整体左右各留 98
    */
-  tidyButton: { name: "bag_tidy_button", position: new Vec2(-140, -212) },
+  tidyButton: { name: "bag_tidy_button", position: new Vec2(-140, -224) },
   /**
    * 「一键回收」：把背包里的装备整格换成绑定元宝（身上穿着的不算）
    * 回收不可撤销，所以按钮是**两步确认**：第一次点击先看数（件数 + 可得绑定元宝）并变成「确认回收」，
@@ -403,7 +532,7 @@ export const bagDialogLayout = {
    */
   recycleButton: {
     name: "bag_recycle_button",
-    position: new Vec2(0, -212),
+    position: new Vec2(0, -224),
     /** 待确认状态保持时间（毫秒），到点自动变回「一键回收」 */
     confirmTimeout: 3000,
   },
@@ -417,7 +546,7 @@ export const bagDialogLayout = {
    */
   discardButton: {
     name: "bag_discard_button",
-    position: new Vec2(140, -212),
+    position: new Vec2(140, -224),
     /** 待确认状态保持时间（毫秒），到点自动放弃（与回收、删除角色同一套口径） */
     confirmTimeout: 3000,
   },
@@ -527,32 +656,44 @@ export const mallDialogLayout = {
 export const skillListDialogLayout = {
   name: "skill_list_dialog",
   title: "技能",
-  // 宽 350 = 原来的 280 + 升级按钮那一列（#828）
-  size: new Size(350, 400),
+  eyebrow: "SKILL · K",
+  /** 弹窗尺寸 380×440（07-skill 稿） */
+  size: new Size(380, 440),
   /**
-   * 剩余技能点（#828）：紧贴标题下沿的一行
+   * 剩余技能点（#828，稿 07-skill 的 `.pt-line`）：一行两端 = 左标签「技能点」+ 右数值，
+   * 行底一条通栏 1px 分隔线，下面紧接技能列表。
    *
-   * 位置 152 = 弹窗半高 200 − 标题占位（insetTop 15 + height 30 + 间隙 3）；
+   * 几何按面板 440 高算：头部下沿 175 − 上内距 2 − 半行高 8 → 行中心 165，
+   * 分隔线 147，列表顶 139（间距 8）。
    * 升级成功后就地改这一行的数字，不重开弹窗（重开会把滚动位置弹回顶部）。
    */
-  points: { name: "skill_points", position: new Vec2(0, 152), size: new Size(330, 18), fontSize: 12 },
+  points: {
+    name: "skill_points",
+    y: 165,
+    height: 20,
+    /** 左标签（左对齐）与右数值（右对齐）：各自 120 宽，内缘距面板边 20 */
+    label: { x: -110, width: 120, fontSize: T.fontSize.f12, color: T.text[3] },
+    value: { x: 110, width: 120, fontSize: T.fontSize.f16, color: T.gold[4] },
+    /** 行底分隔线（通栏 = 内容宽 340） */
+    rule: { y: 147, color: T.line[1] },
+  },
   /** 技能滚动列表（子件坐标以弹窗中心为原点） */
-  list: { name: "skill_list", position: new Vec2(0, -22), size: new Size(330, 320) },
+  list: { name: "skill_list", position: new Vec2(0, -22), size: new Size(340, 322) },
   /**
    * 技能行：图标 + （名称 / 说明）两行文字 + 升级按钮（#828）。
    *
-   * 说明必须**换行**：205 宽 × 10 号字一行只放得下 ~20 字，而 `configs/skill-data.ts` 里的说明
-   * 普遍 40~73 字 —— 单行 CLAMP 会把后半句直接切掉（#481，真机上看就是「说到一半」）。
+   * 说明必须**换行**：说明列 223.5 宽 × 10 号字一行只放得下 ~20 字，而 `configs/skill-data.ts`
+   * 里的说明普遍 40~73 字 —— 单行 CLAMP 会把后半句直接切掉（#481，真机上看就是「说到一半」）。
    * 行高按估算行数自适应（`TextLayout.wrappedHeight`），最多 `maxLines` 行（实测最长 73 字 → 4 行）。
    */
   row: {
-    /** 行宽 = 图标 + 间距 + 说明列 + 间距 + 升级按钮（310 = 40 + 5 + 202 + 6.5 + 56.5） */
-    width: 310,
+    /** 行宽 = 图标 + 间距 + 说明列 + 间距 + 升级按钮（340 = 40 + 10 + 223.5 + 10 + 56.5，与列表同宽） */
+    width: 340,
     iconSize: 40,
-    gap: 5,
+    gap: 10,
     desc: {
       /** 说明列宽（= 行宽 − 图标 − 间距 − 升级按钮 − 按钮左间距） */
-      width: 202,
+      width: 223.5,
       /** 名称行与说明之间的间距 */
       gap: 3,
       nameHeight: 20,
@@ -569,8 +710,10 @@ export const skillListDialogLayout = {
      * 尺寸用公共小按钮（56.5 × 24，九宫格不会被压变形）；标注「升级」，
      * **不显示花费** —— `当前等级` 这条公式只在服务端，写到这里就是第二个真相。
      */
-    upgrade: { width: 56.5, height: 24, gap: 6.5, label: "升级" },
+    upgrade: { width: 56.5, height: 24, gap: 10, label: "升级" },
   },
+  /** 页脚（稿 `.panel-foot`）：左操作提示 / 右升级说明；两块各 160 宽不重叠 */
+  foot: dialogFootLayout(new Size(380, 440), 160),
 };
 
 //#endregion
@@ -631,16 +774,42 @@ export const skillShortcutSettingDialogLayout = {
 
 //#region 死亡弹窗（全屏遮罩）
 
-/** 死亡遮罩弹窗布局（自身即全屏节点，坐标为全屏节点中心） */
+/**
+ * 死亡遮罩弹窗布局（自身即全屏节点，坐标为全屏节点中心）
+ *
+ * 稿 20-overlay 的 `.death`：560 宽的主面板（暗朱径向渐变压在纯色上，Graphics 用
+ * 「整块深底 + 上半一条暗朱亮带」近似）+ 标题 36 + 一句说明 + 两枚 196×46 的按钮。
+ */
 export const deathDialogLayout = {
   name: "death_dialog",
   /** 遮罩颜色（黑色半透明，盖住整个屏幕并挡住世界点击） */
   maskColor: T.surface.scrim,
-  /** 标题「您已死亡」 */
-  title: { text: "您已死亡", position: new Vec2(0, 90), size: new Size(400, 60), fontSize: 36, color: Color.WHITE },
-  /** 两个复活按钮（居中偏下对称排布） */
-  reviveInPlaceButton: { name: "revive_in_place_button", text: "原地复活", position: new Vec2(-140, -30) },
-  reviveSafeButton: { name: "revive_safe_button", text: "安全复活", position: new Vec2(140, -30) },
+  /** 主面板（稿 `.death`：560 宽，内容 44/40 内距；这里给固定外框） */
+  panel: {
+    name: "death_panel",
+    position: new Vec2(0, 0),
+    size: new Size(560, 260),
+    fill: T.surface[0],
+    fillTop: T.ember[1],
+    fillTopRatio: 0.5,
+    border: T.line[2],
+    radius: T.radius.r3,
+  },
+  /** 标题「您已死亡」（稿 38px → 收敛到令牌 f40，不为单屏造新档） */
+  title: { text: "您已死亡", position: new Vec2(0, 64), size: new Size(520, 48), fontSize: T.fontSize.f40, color: T.ember[4] },
+  /** 标题下的一句说明（复活代价与去处） */
+  subtitle: {
+    text: "可原地复活（消耗一枚还魂丹），或回到城内安全复活",
+    position: new Vec2(0, 20),
+    size: new Size(500, 20),
+    fontSize: T.fontSize.f12,
+    color: T.text[3],
+  },
+  /** 两个复活按钮（稿 `.acts`：196×46、间距 16、居中 → 中心 ±106） */
+  buttonSize: new Size(196, 46),
+  buttonFontSize: T.fontSize.f16,
+  reviveInPlaceButton: { name: "revive_in_place_button", text: "原地复活", position: new Vec2(-106, -62) },
+  reviveSafeButton: { name: "revive_safe_button", text: "安全复活", position: new Vec2(106, -62) },
 };
 
 //#endregion
@@ -660,13 +829,13 @@ export const confirmDialogLayout = {
   maskColor: T.surface.scrim,
   /** 居中面板：尺寸（背景为通用弹窗背景的九宫拼装，见 createDialogPanel） */
   panel: { name: "confirm_panel", size: new Size(420, 210) },
-  /** 标题（面板上部，配色与通用弹窗标题一致） */
-  title: { name: "confirm_title", position: new Vec2(0, 68), size: new Size(360, 26), fontSize: 16, color: T.ember[4] },
+  /** 标题（面板上部，配色与通用弹窗标题一致；稿 f17 → 收敛到 f18） */
+  title: { name: "confirm_title", position: new Vec2(0, 62), size: new Size(360, 26), fontSize: T.fontSize.f18, color: T.ember[4] },
   /** 正文：宽度固定、高度按内容自适应（可换行，锚点居中故向上下对称撑开） */
-  message: { name: "confirm_message", position: new Vec2(0, 18), width: 340, fontSize: 14, lineHeight: 20, color: Color.WHITE },
-  /** 两个按钮（中号按钮宽 123：x 错开 90 → 间隙 57，整体在面板内居中） */
-  confirmButton: { name: "confirm_ok_button", position: new Vec2(-90, -58) },
-  cancelButton: { name: "confirm_cancel_button", position: new Vec2(90, -58) },
+  message: { name: "confirm_message", position: new Vec2(0, 8), width: 336, fontSize: T.fontSize.f13, lineHeight: 20, color: T.text[2] },
+  /** 两个按钮（中号按钮宽 123：中心 ±64 → 间隙 5，整体在面板内居中） */
+  confirmButton: { name: "confirm_ok_button", position: new Vec2(-64, -56) },
+  cancelButton: { name: "confirm_cancel_button", position: new Vec2(64, -56) },
 };
 
 //#endregion
@@ -786,37 +955,59 @@ export const hoverTipLayout = {
 export const announcementBoardDialogLayout = {
   name: "announcement_board_dialog",
   title: "公告",
+  eyebrow: "ANNOUNCEMENT",
   size: new Size(720, 500),
+  /**
+   * 左右两栏（稿 10-announcement 的 `.board-body`）：左 280 列表 + 14 间距 + 右 390 详情，
+   * 两栏同高 388（面板 500 − 头部 45 − 页脚下留白），顶边 205。
+   * 左列中心 -202、右列中心 147。
+   */
   /** 左：公告条目滚动列表（行高固定，正文在右栏） */
   list: {
     name: "announcement_list",
-    position: new Vec2(-215, -20),
-    size: new Size(280, 400),
-    itemSize: new Size(268, 58),
+    position: new Vec2(-202, 11),
+    size: new Size(280, 388),
+    /** 条目：上下 10 内距 + 标题两行 36 + 4 + 来源行 16 + 10 = 76 */
+    itemSize: new Size(268, 76),
     /** 条目间距（条目内部的两行文字几何见下面两项） */
-    itemGap: 4,
-    itemTitleFontSize: 13,
-    itemMetaFontSize: 11,
-    /** 条目的标题与第二行（左对齐；左侧留出未读圆点的位置，所以左边界不贴条目边） */
-    itemTitle: { position: new Vec2(4, 12), size: new Size(244, 18) },
-    itemMeta: { position: new Vec2(4, -11), size: new Size(244, 16) },
-    /** 未读条目用亮色标题 + 左侧圆点，已读压暗（一眼看出哪几条是新的） */
+    itemGap: T.spacing.sp3,
+    itemTitleFontSize: T.fontSize.f13,
+    itemMetaFontSize: T.fontSize.f10,
+    /** 条目的标题（两行，可换行）与来源行（左对齐） */
+    itemTitle: { position: new Vec2(4, 14), size: new Size(244, 36), lineHeight: 18 },
+    itemMeta: { position: new Vec2(4, -22), size: new Size(244, 16) },
+    /** 未读条目用亮色标题 + 左上圆点，已读压暗（一眼看出哪几条是新的） */
     unreadTitleColor: T.gold[4],
     readTitleColor: T.text[4],
     itemMetaColor: T.text[4],
+    /** 条目底（稿 `.bi`：深底 + 一圈弱线 + 圆角；选中时再叠一层金底） */
+    itemFill: T.surface.sunken,
+    itemBorder: T.line[1],
+    itemRadius: T.radius.r2,
     /** 选中条目的底色（Graphics 自绘，不依赖底图） */
     selectedFill: T.gold[1],
-    /** 未读圆点（相对条目中心；用 uiImages.dot） */
-    itemDot: { position: new Vec2(-126, 13), size: new Size(8, 8) },
+    /** 未读圆点（稿 `.dot` 在条目右上角；相对条目中心） */
+    itemDot: { position: new Vec2(118, 22), size: new Size(8, 8) },
   },
-  /** 右：选中公告的详情（标题 / 级别 · 时间窗 / 正文滚动区） */
+  /** 右：选中公告的详情（外框 + 标题 / 级别 · 时间窗 / 分隔线 / 正文滚动区） */
   detail: {
-    title: { name: "announcement_detail_title", position: new Vec2(140, 172), size: new Size(368, 24), fontSize: 15, color: T.gold[4] },
+    /** 右栏外框（稿 `.br`：一圈弱线 + 深底 + 圆角） */
+    frame: {
+      name: "announcement_detail_frame",
+      position: new Vec2(147, 11),
+      size: new Size(390, 388),
+      fill: T.surface.sunken,
+      border: T.line[1],
+      radius: T.radius.r2,
+    },
+    title: { name: "announcement_detail_title", position: new Vec2(147, 179), size: new Size(354, 24), fontSize: T.fontSize.f16, color: T.gold[5] },
     /** 级别 · 时间窗（没有选中公告时这里显示空态 / 失败提示） */
-    meta: { name: "announcement_detail_meta", position: new Vec2(140, 148), size: new Size(368, 18), fontSize: 11, color: T.text[4] },
-    scroll: { name: "announcement_body_scroll", position: new Vec2(140, -28), size: new Size(372, 330) },
+    meta: { name: "announcement_detail_meta", position: new Vec2(147, 154), size: new Size(354, 16), fontSize: T.fontSize.f11, color: T.text[4] },
+    /** 头部与正文之间的分隔线（稿 `.br-head` 的 border-bottom） */
+    divider: { y: 136, color: T.line[1] },
+    scroll: { name: "announcement_body_scroll", position: new Vec2(147, -24), size: new Size(354, 290) },
     /** 正文：宽度固定、高度按内容自适应（可换行） */
-    body: { name: "announcement_body", fontSize: 13, lineHeight: 20, width: 364, color: T.text[1] },
+    body: { name: "announcement_body", fontSize: T.fontSize.f13, lineHeight: 22, width: 346, color: T.text[2] },
   },
 };
 
@@ -1042,30 +1233,34 @@ export const guildDialogLayout = {
 export const socialDialogLayout = {
   name: "social_dialog",
   title: "社 交",
+  eyebrow: "SOCIAL",
   /** 比通用弹窗高 60：多出来的一行放页签（帮会页的坐标因此可以原样复用） */
   size: new Size(600, 560),
-  /** 页签栏（选中金色底、未选中暗色底；x 是各页签中心，从「帮会」到「附近」） */
+  /**
+   * 页签栏（选中金色底、未选中暗色底；x 是各页签中心，从「帮会」到「附近」）
+   * 稿 13-social：五枚 96 宽 + 6 间距 = 504（内容宽 560），整行居中 → ±102 步进
+   */
   tabs: {
-    y: 232,
-    size: new Size(104, 32),
-    columns: [-208, -104, 0, 104, 208],
+    y: 219,
+    size: new Size(96, 32),
+    columns: [-204, -102, 0, 102, 204],
     /** 与 texts.tabs 一一对应，别只改一处 */
-    radius: 6,
+    radius: T.radius.r2,
     activeFill: T.gold[4],
     activeText: T.surface[3],
     idleFill: T.surface[2],
     idleText: T.text[1],
     idleBorder: T.surface[3],
-    fontSize: 13,
+    fontSize: T.fontSize.f14,
   },
   /** 列表行（与帮会列表同一套几何与配色） */
   row: {
-    size: new Size(556, 48),
+    size: new Size(556, 52),
     fill: T.surface[1],
     border: T.surface[3],
-    radius: 6,
-    nameFontSize: 14,
-    metaFontSize: 11,
+    radius: T.radius.r2,
+    nameFontSize: T.fontSize.f13,
+    metaFontSize: T.fontSize.f11,
     metaColor: T.text[3],
     columns: {
       name: -180,
@@ -1106,8 +1301,8 @@ export const socialDialogLayout = {
   },
   /** 加人/标人一行（好友页与敌人页共用，贴在框底） */
   addRow: {
-    input: { position: new Vec2(-70, -232), size: new Vec2(400, 30) },
-    button: { position: new Vec2(195, -232) },
+    input: { position: new Vec2(-70, -226), size: new Vec2(400, 30) },
+    button: { position: new Vec2(195, -226) },
   },
   /** 小字（段落标题用金色，空态用灰） */
   titleColor: T.gold[4],
@@ -1189,14 +1384,14 @@ export const reportDialogLayout = {
   category: {
     y: 44,
     columns: [-135, -45, 45, 135],
-    size: new Size(84, 28),
+    size: new Size(84, 30),
     activeFill: T.gold[4],
     activeText: T.surface[3],
     idleFill: T.surface[2],
     idleText: T.text[1],
     idleBorder: T.surface[3],
-    radius: 6,
-    fontSize: 13,
+    radius: T.radius.r2,
+    fontSize: T.fontSize.f12,
   },
   /** 补充说明输入框（单行，200 字上限在服务端 DTO 里） */
   reason: { name: "report_reason", position: new Vec2(0, -14), size: new Vec2(400, 30) },
@@ -1373,31 +1568,33 @@ export const chatDialogLayout = {
 export const questDialogLayout = {
   name: "quest_dialog",
   title: "任 务",
-  size: new Size(600, 560),
+  eyebrow: "QUEST",
+  size: new Size(600, 540),
   /** 页签（两枚，与聊天弹窗同款式；角标直接在页签文案后追加「·N」，不另设小字样式） */
   tabs: {
-    y: 232,
-    size: new Size(140, 32),
-    columns: [-76, 76],
-    radius: 6,
+    /** 头部下沿 225 − 半行高 16 = 209（下边距 12 之后是列表顶 181） */
+    y: 209,
+    size: new Size(96, 32),
+    columns: [-51, 51],
+    radius: T.radius.r2,
     activeFill: T.gold[4],
     activeText: T.surface[3],
     idleFill: T.surface[2],
     idleText: T.text[1],
     idleBorder: T.surface[3],
-    fontSize: 13,
+    fontSize: T.fontSize.f14,
   },
-  /** 任务列表（框体主体） */
-  list: { name: "quest_list", position: new Vec2(0, -6), size: new Size(556, 420) },
+  /** 任务列表（框体主体；稿 `.qlist` 396 高，中心 -17） */
+  list: { name: "quest_list", position: new Vec2(0, -17), size: new Size(556, 396) },
   /** 任务行：名称 + 进度（左）+ 动作按钮（右） */
   row: {
-    size: new Size(552, 56),
+    size: new Size(552, 64),
     fill: T.surface[1],
     border: T.surface[3],
-    radius: 6,
-    nameFontSize: 13,
-    textFontSize: 11,
-    nameColor: T.text[1],
+    radius: T.radius.r2,
+    nameFontSize: T.fontSize.f14,
+    textFontSize: T.fontSize.f11,
+    nameColor: T.gold[5],
     metaColor: T.text[3],
     readyColor: T.jade,
     /**
@@ -1433,6 +1630,9 @@ export const questDialogLayout = {
     /** 接取成功的飘字（{name} = 任务名） */
     acceptedTip: "已接取「{name}」",
   },
+  /** 页脚（稿 11-quest 的 .panel-foot）：左入口说明 / 右结算说明 */
+  foot: dialogFootLayout(new Size(600, 540), 250),
+  footTexts: { left: "左侧任务追踪整块可点打开本窗", right: "交付奖励由服务端结算" },
 };
 
 //#endregion
@@ -1452,32 +1652,33 @@ export const questDialogLayout = {
 export const partyDialogLayout = {
   name: "party_dialog",
   title: "队 伍",
-  size: new Size(600, 560),
-  /** 页签（两枚，与任务弹窗同宽） */
+  eyebrow: "PARTY · G",
+  size: new Size(600, 540),
+  /** 页签（两枚 96 宽，与任务弹窗同款；头部下沿 225 − 小结 30 − 半行高 16 = 179） */
   tabs: {
-    y: 232,
-    size: new Size(140, 32),
-    columns: [-76, 76],
-    radius: 6,
+    y: 179,
+    size: new Size(96, 32),
+    columns: [-51, 51],
+    radius: T.radius.r2,
     activeFill: T.gold[4],
     activeText: T.surface[3],
     idleFill: T.surface[2],
     idleText: T.text[1],
     idleBorder: T.surface[3],
-    fontSize: 13,
+    fontSize: T.fontSize.f14,
   },
-  /** 顶部小结（「3 / 4 人 · 同图 2 人」；没队伍时显示一句引导） */
-  summary: { position: new Vec2(0, 200), size: new Size(556, 20), fontSize: 12, color: T.text[3] },
-  /** 成员 / 候选列表（框体主体） */
-  list: { name: "party_member_list", position: new Vec2(0, -8), size: new Size(556, 392) },
+  /** 顶部小结（「3 / 4 人 · 同图 2 人」；没队伍时显示一句引导）—— 稿 `.psum` 在页签上方 */
+  summary: { position: new Vec2(0, 215), size: new Size(556, 20), fontSize: T.fontSize.f12, color: T.text[3] },
+  /** 成员 / 候选列表（稿 `.plist` 360 高，中心 -27） */
+  list: { name: "party_member_list", position: new Vec2(0, -27), size: new Size(556, 360) },
   /** 成员行：名字 + 等级/状态（左）+ 动作按钮（右，最多两枚） */
   row: {
     size: new Size(552, 56),
     fill: T.surface[1],
     border: T.surface[3],
-    radius: 6,
-    nameFontSize: 13,
-    metaFontSize: 11,
+    radius: T.radius.r2,
+    nameFontSize: T.fontSize.f13,
+    metaFontSize: T.fontSize.f11,
     nameColor: T.text[1],
     metaColor: T.text[3],
     leaderColor: T.gold[4],
@@ -1499,19 +1700,19 @@ export const partyDialogLayout = {
     size: new Size(552, 52),
     fill: T.surface[2],
     border: T.gold[2],
-    radius: 6,
+    radius: T.radius.r2,
     acceptX: 150,
     declineX: 232,
     /** 同上：文本框左缘 + 16 = 行内左缘（x = −100，宽 320），两枚小按钮落在 121.75~260.25 不越行 */
     nameX: -100,
     nameSize: new Size(320, 20),
-    textFontSize: 12,
+    textFontSize: T.fontSize.f12,
   },
-  /** 底部按钮（邀请 / 退出 / 解散；不是队长的「解散」不画） */
+  /** 底部按钮（邀请 / 退出 / 解散；不是队长的「解散」不画）—— 列表底 -207 − 12 − 半高 15 = -234 */
   footer: {
-    invite: new Vec2(-150, -244),
-    leave: new Vec2(0, -244),
-    disband: new Vec2(150, -244),
+    invite: new Vec2(-150, -234),
+    leave: new Vec2(0, -234),
+    disband: new Vec2(150, -234),
   },
   /** 文案 */
   texts: {
@@ -1592,37 +1793,38 @@ export const partyDialogLayout = {
 export const leaderboardDialogLayout = {
   name: "leaderboard_dialog",
   title: "排 行 榜",
-  size: new Size(600, 560),
-  /** 页签（三枚，与任务 / 队伍弹窗同款式） */
+  eyebrow: "LEADERBOARD",
+  size: new Size(600, 540),
+  /** 页签（三枚 96 宽 + 6 间距，整行居中；头部下沿 225 − 半行高 16 = 209） */
   tabs: {
-    y: 232,
-    size: new Size(120, 32),
-    columns: [-130, 0, 130],
-    radius: 6,
+    y: 209,
+    size: new Size(96, 32),
+    columns: [-102, 0, 102],
+    radius: T.radius.r2,
     activeFill: T.gold[4],
     activeText: T.surface[3],
     idleFill: T.surface[2],
     idleText: T.text[1],
     idleBorder: T.surface[3],
-    fontSize: 13,
+    fontSize: T.fontSize.f14,
   },
-  /** 顶部小结（共几人上榜 + 这份快照的时刻） */
+  /** 顶部小结（共几人上榜 + 这份快照的时刻；稿 `.rsum` 在页签下居中） */
   summary: {
-    position: new Vec2(0, 200),
+    position: new Vec2(0, 175),
     size: new Size(556, 20),
-    fontSize: 12,
-    color: T.text[3],
+    fontSize: T.fontSize.f11,
+    color: T.text[4],
     /** 「刚刚更新」的界线（毫秒）：快照比这个还新就不写时分 */
     freshMs: 60_000,
   },
-  /** 榜单列表（可滚动） */
-  list: { name: "leaderboard_list", position: new Vec2(0, 6), size: new Size(556, 372) },
-  /** 一条名次：名次（左）+ 名字 + 关键数值（右） */
+  /** 榜单列表（稿 `.rlist` 330 高，中心 -10） */
+  list: { name: "leaderboard_list", position: new Vec2(0, -10), size: new Size(556, 330) },
+  /** 一条名次：名次（左）+ 名字 + 关键数值（右）；稿 `.rrow` 46 高 */
   row: {
-    size: new Size(552, 44),
+    size: new Size(552, 46),
     fill: T.surface[1],
     border: T.surface[3],
-    radius: 6,
+    radius: T.radius.r2,
     rankX: -252,
     rankSize: new Size(44, 20),
     rankFontSize: 14,
@@ -1647,16 +1849,19 @@ export const leaderboardDialogLayout = {
     selfFill: T.surface[3],
     selfBorder: T.gold[4],
   },
-  /** 底部固定的「我的名次」条 */
+  /** 底部固定的「我的名次」条（稿 `.rself` 42 高，列表底 -175 − 10 − 21 = -206） */
   selfRow: {
-    position: new Vec2(0, -238),
-    size: new Size(552, 40),
+    position: new Vec2(0, -206),
+    size: new Size(552, 42),
     fill: T.surface[2],
     border: T.gold[2],
-    radius: 6,
-    textFontSize: 12,
+    radius: T.radius.r2,
+    textFontSize: T.fontSize.f11,
     textColor: T.gold[4],
   },
+  /** 页脚（稿 15-rank 的 .panel-foot） */
+  foot: dialogFootLayout(new Size(600, 540), 250),
+  footTexts: { left: "每小时刷新一次 · 只列在线过的角色", right: "点击页签切换维度" },
   /** 文案 */
   texts: {
     tabs: ["等 级", "战 力", "击 杀"],
