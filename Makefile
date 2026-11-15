@@ -461,7 +461,7 @@ audit-shared-data: ## 配置快照完整（表齐 / 每张非空 / 行数自洽�
 audit-equip-align-catalog: ## 装备对齐清单（管理端工作台的数据源）是否与客户端 configs 逐字节一致 + 无展开变体 / 缺方向 / 缩成点
 	@$(NODE) tools/audit-equip-align-catalog.cjs
 
-audit-docs-toc: ## docs/README 目录表的行数 / 序号 / 双向登记是否与磁盘一致（改完文档先 --write）
+audit-docs-toc: ## docs/README 目录表的登记 / 序号 / 死链 / 接口数是否与磁盘一致（加接口后先 --write）
 	@$(NODE) tools/audit-docs-toc.cjs
 
 

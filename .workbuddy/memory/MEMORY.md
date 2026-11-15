@@ -99,10 +99,12 @@ admin 退回 `127.0.0.1:8081` —— 宿主机 `:80` 只能有一个主人；开
   `test:e2e:backup` → `test/backup.cjs`；全仓一律按脚本数，别再写 90/91）；`make audit` **18 项**；
   表 **76 = 39 配置 + 37 运行时**；管理端 **53 页面 / 54 路由**；客户端 **32 个 Manager**；结算缓存 **14**；
   `docs/37` 是最高优先单一来源。
-- **`docs/README` 的派生数字有守点**（#1039 / #1042）：`audit-docs-toc` 按磁盘与 `openapi.json` 现算
-  （目录行数 + `N 个接口` / `N 个 admin 接口` + 每篇都要登记），**改完文档或加了接口，合并前先跑
-  `node tools/audit-docs-toc.cjs --write`**，否则 `make audit` 红。**并行会话特别容易踩**：算完到合并之间
-  别人又改了文档，合进去立刻红（#1042 就是这样，顺带抓出接口数 266→268 没跟）。
+- **`docs/README` 的目录表有守点**（#1039 / #1042 / #1045）：`audit-docs-toc` 守**四类**——每篇都要登记
+  （编号表或附录表）、序号 == 文件名前缀、链接不得死链、`N 个接口` / `N 个 admin 接口` == `openapi.json`
+  现算；**加/删接口后合并前跑 `node tools/audit-docs-toc.cjs --write`**，否则 `make audit` 红。
+- **「行数」列已删除（#1045）**，别再往目录表加回去：行数是唯一「改任何一篇正文一个字都可能变」的
+  派生数字，冲突面 100%，并行会话「算完 → 合并」之间必漂（#1042 加守点首跑就红）。原则：**派生数字
+  要么精确维护、要么不写**，写「大致准」的行数等于假精确。
 - **新增 env 键 / 文案 / 节点名 / 颜色的 PR，静态审计预判三处登记**：`.env.example`（`audit-api-hardcode`）+
   `tools/config-leak-allowlist.json`（config-leak）+ 进了配置快照的键还要加 `e2e-guard` 的 `EXPECTED_CONFIG_KEYS`。
   新增 e2e 脚本别忘 `tools/run-e2e.cjs` 的 `WEIGHT`（漏了只是分片不均，不报错）。
