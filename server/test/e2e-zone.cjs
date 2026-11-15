@@ -247,9 +247,10 @@ function connect(url) {
     const adminToken = adminReg.data && adminReg.data.token;
     checkEqual(adminReg.data && adminReg.data.admin.role, "super_admin", "准备：超级管理员已注册");
 
-    const zone2 = await api(baseUrl, "POST", "admin/zones", { token: adminToken, zoneId: ADMIN_ZONE, body: { name: "二区" } });
+    const zone2 = await api(baseUrl, "POST", "admin/zones", { token: adminToken, zoneId: ADMIN_ZONE, body: { name: "二区", recommended: true } });
     check(!!(zone2.data && zone2.data.id >= 2), "开新区「二区」成功", JSON.stringify(zone2.data));
     const zone2Id = zone2.data && zone2.data.id;
+    checkEqual(zone2.data && zone2.data.recommended, true, "开区可以标「推荐」（运营字段落在库里）");
 
     const regC = await api(baseUrl, "POST", "auth/register", { body: { username: "zone_player_c", password: "pass1234" } });
     const tokenC = regC.data && regC.data.token;
@@ -258,12 +259,16 @@ function connect(url) {
     const mineC = await api(baseUrl, "GET", "zones/mine", { token: tokenC });
     const mineCRow = (mineC.data || []).find((zone) => zone.id === zone2Id);
     check(!!mineCRow && mineCRow.current === true, "GET /zones/mine 的 current 是二区", JSON.stringify(mineC.data));
+    // #962：选服弹窗要标「推荐」，玩家侧 DTO 必须把它带出来（P5 只落在库里、只在管理端发）
+    checkEqual(mineCRow && mineCRow.recommended, true, "GET /zones/mine 带出推荐标记（选服弹窗用）");
 
     const selectMissing = await api(baseUrl, "POST", "zones/select", { token: tokenC, body: { zoneId: 999 } });
     checkEqual(selectMissing.code, 50025, "选不存在的区被拒（ZONE_NOT_FOUND 50025）", selectMissing.message);
 
     const zones1 = await api(baseUrl, "GET", "zones");
     check(Array.isArray(zones1.data) && zones1.data.length === 2 && zones1.data[0].id === 1 && zones1.data[1].id === zone2Id, "开区后活区列表变成两个（按开区顺序）", JSON.stringify(zones1.data && zones1.data.map((z) => z.id)));
+    checkEqual(zones1.data[0] && zones1.data[0].recommended, false, "公共列表里一区不是推荐区（默认 false）");
+    checkEqual(zones1.data[1] && zones1.data[1].recommended, true, "公共列表里二区带推荐标记");
 
     //#endregion
 

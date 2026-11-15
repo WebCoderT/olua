@@ -3,14 +3,18 @@ import GameUiHelper from "./helpers/GameUiHelper";
 import { occupations } from "../configs/role";
 import StorageManager from "./core/StorageManager";
 import SceneManager from "./core/SceneManager";
+import SoundManager from "./core/SoundManager";
 import { OECCUPATION, SEX } from "../types/role";
 import { getAnchoredPosition } from "./utils/layout/ScreenLayout";
 import { roleSelectorLayout, tipsLayout, uiImages } from "../configs/hudLayout";
 import { getText } from "../configs/texts";
-import { RoleApi } from "./utils/net/Api";
-import type { RoleSummary } from "./utils/net/Api";
+import { RoleApi, ZoneApi } from "./utils/net/Api";
+import type { MyZone, RoleSummary } from "./utils/net/Api";
 import ApiError, { describeError, ApiErrorKind } from "./utils/net/ApiError";
 import { installNetwork, logoutToLogin, returnToLogin } from "./utils/net/NetworkSetup";
+import { HAS_MOUSE, bindMousePress } from "./utils/input/Pointer";
+import ZoneSelectDialog from "./components/dialogs/ZoneSelectDialog";
+import ZoneStore from "./core/ZoneStore";
 const { ccclass } = _decorator;
 
 /** 删除角色按钮的节点名前缀（按钮文字挂在 `<节点名>_label` 上，改文案时按它取；节点名带角色 id 便于排查） */
@@ -86,6 +90,14 @@ export class RoleSelector extends Component {
   private roleSummaries: RoleSummary[] = [];
   /** 是否有请求在途（创建 / 进游戏），避免连点重复提交 */
   private busy = false;
+  /** 选服弹窗（#962）：从顶部那颗「区服：X（点击切换）」手动打开，登录时不自动弹 */
+  private zoneDialog = new ZoneSelectDialog();
+  /** 当前区服文案节点（舞台顶部） */
+  private zoneLabel: Node | null = null;
+  /** 当前区名（拉不到区服列表时为空 —— 宁可空着，也不显示一个猜出来的区名） */
+  private zoneName = "";
+  /** 活区数（≥2 才给「点击切换」并响应点击；单区服点了也是它） */
+  private zoneCount = 0;
   /**
    * 背景节点与它的素材原始尺寸
    *
@@ -110,7 +122,123 @@ export class RoleSelector extends Component {
     this.mainView = this.createMainView();
     // 底部栏贴底（位置是常量，见 dockBottomBar）
     this.dockBottomBar();
-    // 角色列表来自服务端（拉取失败由网络层统一提示，列表保持空）
+    // 区先对齐、再拉角色（#962）：区不对，`GET /roles` 拉回来的就是另一组角色
+    void this.bootstrap();
+  }
+
+  /**
+   * 进场景的第一步：对齐当前区 → 拉角色列表
+   *
+   * 分成两步而不是并行：`GET /roles` 按「当前浏览区」过滤，区还没对齐就拉，
+   * 拉到的是上一次的区（换过设备 / 服务端侧换过区时就是错的）。
+   */
+  private async bootstrap() {
+    await this.ensureZone();
+    if (!isValid(this.node)) return;
+    await this.loadRoles();
+  }
+
+  /**
+   * 对齐当前区（#962）
+   *
+   * 目标区的优先级：
+   * 1. **本机记着的那个区**（`ZoneStore`，还活着且开放）—— 玩家自己选过的，最该被尊重；
+   * 2. 服务端记着的当前区（`current`，还开放）—— 它在别的设备上也记着，比「猜」可靠；
+   * 3. **最新的开放区**（id 最大 = 最后建的）—— 新号 / 上次那个区被关了时的落点。
+   *    运营想让新玩家去哪个区，用管理端的排序与「推荐」表达，不靠客户端猜。
+   *
+   * 与目标区不一致时才 `POST /zones/select`（同区 select 是空操作，但没必要为幂等白发一枪）。
+   * **拉不到列表不阻塞**：按服务端记着的区继续（角色列表本来也按那个区拉），只提示一句 ——
+   * 区服系统出问题不该让人连游戏都进不去。
+   */
+  private async ensureZone() {
+    let zones: MyZone[];
+    try {
+      zones = await ZoneApi.mine();
+    } catch (error) {
+      console.warn(`[RoleSelector] 区服列表加载失败（按服务端记着的区继续）：${describeError(error)}`);
+      GameUiHelper.createTip("zone_load_failed_tip");
+      return;
+    }
+    if (!isValid(this.node)) return;
+    this.zoneCount = zones.length;
+    const target = this.pickDefaultZone(zones);
+    if (!target) {
+      this.renderZoneLabel();
+      return;
+    }
+    if (!target.current) {
+      try {
+        await ZoneApi.select({ zoneId: target.id });
+      } catch (error) {
+        // 切不过去就留在服务端原来那个区 —— 别把人卡在选角页（提示已由网络层飘过）
+        console.warn(`[RoleSelector] 默认区切换失败（留在当前区）：${describeError(error)}`);
+        const fallback = zones.find((zone) => zone.current);
+        this.applyZone(fallback ?? null);
+        return;
+      }
+      if (!isValid(this.node)) return;
+    }
+    ZoneStore.set(target.id, target.name);
+    this.applyZone(target);
+  }
+
+  /** 默认区（优先级见 ensureZone 的注释）；一个都不满足时返回 null */
+  private pickDefaultZone(zones: MyZone[]): MyZone | null {
+    const open = zones.filter((zone) => zone.status === "open");
+    const remembered = ZoneStore.get();
+    const rememberedHit = remembered ? open.find((zone) => zone.id === remembered.id) : undefined;
+    if (rememberedHit) return rememberedHit;
+    const currentHit = open.find((zone) => zone.current);
+    if (currentHit) return currentHit;
+    // 最新的开放区：id 自增，最大 = 最后建的
+    return open.length > 0 ? open.reduce((newest, zone) => (zone.id > newest.id ? zone : newest)) : null;
+  }
+
+  /** 记下当前区并刷新顶部文案（区名来自服务端，客户端不自己拼） */
+  private applyZone(zone: MyZone | null) {
+    if (zone) this.zoneName = zone.name;
+    this.renderZoneLabel();
+  }
+
+  /**
+   * 刷新区服文案
+   *
+   * 两个及以上活区才写「（点击切换）」；单区服写不带动作的那句，点了也不响应
+   * （见 openZonePicker）。区名还没拿到时留空 —— 不显示一个猜出来的区名。
+   */
+  private renderZoneLabel() {
+    if (!this.zoneLabel || !isValid(this.zoneLabel, true)) return;
+    const label = this.zoneLabel.getComponent(Label);
+    if (!this.zoneName) {
+      label.string = "";
+      return;
+    }
+    label.string = getText(this.zoneCount > 1 ? "zone_switch_label" : "zone_current_label", { zone: this.zoneName });
+  }
+
+  /** 打开选服弹窗（单区服不响应：弹出来也只有它自己） */
+  private async openZonePicker() {
+    if (this.zoneCount < 2 || !this.stage) return;
+    await this.zoneDialog.open(this.node, (zone) => this.onZonePicked(zone));
+  }
+
+  /**
+   * 换区之后
+   *
+   * 换区 = 换一组角色，所以：退出管理模式（各角色格子上的删除按钮指向的是**旧区**的角色 id）、
+   * 清掉选中态（底部「角色 ---」、开始游戏按钮置灰），再按新区重拉列表。
+   */
+  private onZonePicked(zone: MyZone) {
+    this.zoneName = zone.name;
+    this.renderZoneLabel();
+    // manageNodes 必须先清：删除按钮按角色 id 绑定，留着会对着旧区的角色 id 发删除请求
+    this.manageMode = false;
+    this.cancelDeleteConfirm();
+    this.clearManageNodes();
+    this.clearSelectedRole();
+    this.roleSummaries = [];
+    this.showOwnerRolesUI();
     void this.loadRoles();
   }
 
@@ -272,6 +400,18 @@ export class RoleSelector extends Component {
     const manageRoleButton = GameUiHelper.createTexturedButton(manageLayout.name, manageLayout.image, "", manageLayout.position, manageLayout.size);
     manageRoleButton.on(Node.EventType.TOUCH_END, () => this.toggleManageRole());
     this.stage!.addChild(manageRoleButton);
+    // 当前区服（#962）：舞台顶部，点它打开选服弹窗。文案与「能不能点」由 renderZoneLabel 按活区数决定。
+    // 点击走统一指针入口（PC 走 bindMousePress 防穿透到角色格子，触屏走 TOUCH_END）——
+    // 审计 tools/audit-ui-click-through.cjs 守这条
+    const zoneLayout = layout.zoneLabel;
+    this.zoneLabel = GameUiHelper.createText(zoneLayout.name, "", zoneLayout.fontSize, zoneLayout.position, zoneLayout.size, zoneLayout.color);
+    SoundManager.bindClick(this.zoneLabel);
+    if (HAS_MOUSE) {
+      bindMousePress(this.zoneLabel, () => void this.openZonePicker(), this);
+    } else {
+      this.zoneLabel.on(Node.EventType.TOUCH_END, () => void this.openZonePicker(), this);
+    }
+    this.stage!.addChild(this.zoneLabel);
     // 选中角色信息框（名称 + 等级）：挂在**底部栏**下（它本来就是底部栏的一部分），
     // position 相对底部栏中心（见 configs 里 selectedInfo 的注释）
     const infoLayout = layout.selectedInfo;

@@ -1,16 +1,14 @@
-import { _decorator, Component, EditBox, Label, Layout, Node, UITransform, Vec2, isValid } from "cc";
+import { _decorator, Component, EditBox, Layout, Node, UITransform, Vec2 } from "cc";
 import GameUiHelper from "./helpers/GameUiHelper";
 import StorageManager from "./core/StorageManager";
 import SceneManager from "./core/SceneManager";
 import SoundManager from "./core/SoundManager";
 import { loginLayout } from "../configs/hudLayout";
-import { getText } from "../configs/texts";
-import { AuthApi, ZoneApi } from "./utils/net/Api";
-import type { AuthResult, Zone } from "./utils/net/Api";
+import { AuthApi } from "./utils/net/Api";
+import type { AuthResult } from "./utils/net/Api";
 import { describeError } from "./utils/net/ApiError";
 import { installNetwork } from "./utils/net/NetworkSetup";
 import Session from "./utils/net/Session";
-import { HAS_MOUSE, bindMousePress } from "./utils/input/Pointer";
 import AnnouncementNoticeDialog from "./components/dialogs/AnnouncementNoticeDialog";
 const { ccclass } = _decorator;
 
@@ -20,6 +18,10 @@ const { ccclass } = _decorator;
  * 账号体系统一走服务端（见 ui/utils/net）：登录/注册成功后把令牌存进 Session，
  * 请求层随后自动带上它 —— 客户端不再自己造账号，也不再硬编码任何地址。
  * 两个按钮共用一个 submitting 标记，避免连点重复提交。
+ *
+ * **本页不显示也不选任何区服**（#962）：登录前还不知道这个账号有哪几个区，
+ * 在这里摆一个「区服：一区」只是把服务器上的第一个开放区当成玩家的选择，是假信息。
+ * 区从选角页开始才有意义（那里有「区服：X（点击切换）」）。
  *
  * 结构与选角场景不同：铺满屏幕的背景 + 一块 **cc.Layout 垂直布局的「舞台」**，
  * 其余元素全部挂在舞台下从上到下排 —— 顺序见 configs/layout/scenes.loginLayout.order，
@@ -39,19 +41,6 @@ export class Login extends Component {
   private submitting = false;
   /** 公告提醒弹窗（进登录页时把生效中的重要公告摊开给玩家看，见该类的说明） */
   private announcementNotice = new AnnouncementNoticeDialog();
-  /** 活区列表（注册时从中选一个；拉取失败退化为空 —— 注册不带 zoneId，服务端落一区） */
-  private zones: Zone[] = [];
-  /** 当前选中的区服下标（zones 的下标；tap 循环切换） */
-  private zoneIndex = 0;
-  /** 区服选择文案节点（创建后即由 renderZone 按 zoneState 刷新） */
-  private zoneLabel: Node | null = null;
-  /**
-   * 与服务器的连接状态（区服文案按它显示）：
-   * - `connecting`：进页面就是它，活区列表还在拉（显示「连接中…」）；
-   * - `ready`：列表拉到了，区服文案正常；
-   * - `unreachable`：拉取失败（连不上服务器），显示「暂时无法连接服务器」。
-   */
-  private zoneState: "connecting" | "ready" | "unreachable" = "connecting";
 
   start() {
     // 全局接线（幂等）：令牌失效回登录场景、请求失败统一飘字
@@ -105,22 +94,14 @@ export class Login extends Component {
     registerButton.on(Node.EventType.TOUCH_END, () => void this.register());
     // logo
     const logo = GameUiHelper.createImage(layout.logo.name, layout.logo.image, new Vec2(), layout.logo.size);
-    // 区服选择（多开区 #295）：先摆一个空文案节点，活区列表拉到后再刷新内容。
-    // 点击换区走统一指针入口（PC 走 bindMousePress 防穿透，触屏走 TOUCH_END）—— 审计 audit-ui-click-through 守这条
-    this.zoneLabel = GameUiHelper.createText("login_zone", "", layout.zoneSelector.fontSize, new Vec2(), layout.zoneSelector.size, layout.zoneSelector.color);
-    this.bindZonePicker();
-    // 进页面即显示「连接中…」，拉到列表 / 确认连不上后再由 loadZones 刷新
-    this.renderZone();
     // 元素按 key 登记，按 loginLayout.order 的顺序挂进舞台（挂载顺序 = 屏幕顺序，Layout 照它排）
-    this.widgets = { logo, account: account.node, password: password.node, zoneSelector: this.zoneLabel, loginButton, registerButton };
+    this.widgets = { logo, account: account.node, password: password.node, loginButton, registerButton };
     for (const key of layout.order) {
       const widget = this.widgets[key];
       // 配置里写了但没建节点 = 元素被漏掉，登录页会少一块且位置对不上 —— 当场报出来，别静默跳过
       if (!widget) throw new Error(`login_stage is missing widget "${key}" (see loginLayout.order in configs/layout/scenes)`);
       this.stage.addChild(widget);
     }
-    // 拉活区列表（公共接口，无需令牌；不阻塞登录页出现，失败静默 —— 注册落默认区）
-    void this.loadZones();
     // 走到这里必然没有登录态（上方已拦截直接跳选角）：清掉上个账号的角色缓存与选中标记，
     // 避免换账号时串号 —— 有登录态的刷新不动缓存，回来还在原账号上
     StorageManager.clear();
@@ -137,76 +118,12 @@ export class Login extends Component {
     await this.submit(() => AuthApi.login({ username: credentials.username, password: credentials.password }));
   }
 
-  /** 注册（成功后直接进选角场景，无需再登录一次；带上当前选中的区服） */
+  /** 注册（成功后直接进选角场景，无需再登录一次） */
   async register() {
     const credentials = this.readCredentials();
     if (!credentials) return;
-    const zone = this.zones[this.zoneIndex];
-    await this.submit(() =>
-      AuthApi.register({
-        username: credentials.username,
-        password: credentials.password,
-        ...(zone ? { zoneId: zone.id } : {}),
-      }),
-    );
-  }
-
-  /**
-   * 拉活区列表（公共接口）：拉到 → 区服文案正常；拉不到 → 区服位置显示「暂时无法连接服务器」。
-   * 只有一个区就不给「点击切换」的提示（切了也是它）。失败的另一面不变：注册不带 zoneId，
-   * 服务端落默认区 —— 文案是给玩家看的信号，不改变请求行为。
-   */
-  private async loadZones() {
-    try {
-      const zones = await ZoneApi.list();
-      if (!isValid(this.zoneLabel, true)) return;
-      this.zones = zones ?? [];
-      this.zoneIndex = 0;
-      this.zoneState = "ready";
-      this.renderZone();
-    } catch (error) {
-      console.warn(`[Login] 区服列表拉取失败（注册将落默认区）：${describeError(error)}`);
-      if (!isValid(this.zoneLabel, true)) return;
-      this.zoneState = "unreachable";
-      this.renderZone();
-    }
-  }
-
-  /** 区服选择器的点击接线：PC 走 bindMousePress（按压起点在本节点才响应，防穿透），触屏走 TOUCH_END */
-  private bindZonePicker() {
-    if (!this.zoneLabel) return;
-    // 点击音（#685）：区服选择是文字型按钮，不走 UiHelper.createButton，自己贴一行。
-    // 只绑 TOUCH_END —— PC 上鼠标点击同样会派发 touch 通道，绑两路会响两声
-    SoundManager.bindClick(this.zoneLabel);
-    if (HAS_MOUSE) {
-      bindMousePress(this.zoneLabel, () => this.cycleZone(), this);
-      return;
-    }
-    this.zoneLabel.on(Node.EventType.TOUCH_END, () => this.cycleZone(), this);
-  }
-
-  /** 点一下换下一个区（循环；单区时无事发生） */
-  private cycleZone() {
-    if (this.zones.length < 2) return;
-    this.zoneIndex = (this.zoneIndex + 1) % this.zones.length;
-    this.renderZone();
-  }
-
-  /** 刷新区服文案：连接中 / 无法连接 / 正常（文案全部来自 configs/texts） */
-  private renderZone() {
-    if (!this.zoneLabel || !isValid(this.zoneLabel, true)) return;
-    const label = this.zoneLabel.getComponent(Label);
-    if (this.zoneState !== "ready") {
-      label.string = getText(this.zoneState === "connecting" ? "login_zone_connecting" : "login_zone_unreachable");
-      return;
-    }
-    const zone = this.zones[this.zoneIndex];
-    if (!zone) {
-      label.string = "";
-      return;
-    }
-    const key = this.zones.length > 1 ? "login_zone_picker" : "login_zone_label";
-    label.string = getText(key, { zone: zone.name });
+    // 注册只建账号（#962）：区是角色的属性，进选角页后从顶部「区服」里选 / 建角时落在当前区
+    await this.submit(() => AuthApi.register({ username: credentials.username, password: credentials.password }));
   }
 
   /** 读输入框（为空时提示并返回 null） */

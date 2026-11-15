@@ -819,6 +819,63 @@ export const announcementNoticeDialogLayout = {
   confirmButton: { name: "announcement_notice_confirm_button", text: "我知道了", position: new Vec2(0, -200) },
 };
 
+/**
+ * 选服弹窗（全屏模态，#962）
+ *
+ * 从**选角页顶部**的「区服：X（点击切换）」手动打开 —— 登录时不自动弹：
+ * 绝大多数登录都是回自己那个区，每次都逼人点一次确认只会变成肌肉记忆。
+ *
+ * 列出**全部未合并的区**（含维护中 / 已关闭，置灰点不动）：玩家要看到「这区还在、
+ * 只是进不去」，而不是让它从列表里凭空消失。进过哪些区由服务端给
+ * （`GET /zones/mine` 的 `roleCount` / `current`），客户端不自己记一份。
+ *
+ * 行内三列：区名（左）/ 角色数 · 状态（中）/ 角标「上次在」「推荐」（右）。
+ */
+export const zoneSelectLayout = {
+  name: "zone_select_dialog",
+  maskColor: new Color(0, 0, 0, 170),
+  panel: { name: "zone_select_panel", size: new Size(560, 500) },
+  /** 标题文本的位置与样式（配色与通用弹窗标题一致） */
+  titleLabel: { name: "zone_select_title", position: new Vec2(0, 220), size: new Size(480, 28), fontSize: 18, color: new Color("#FF8B8B") },
+  /** 说明行：为什么必须先选一个区（不同区的角色互不相通） */
+  hint: { position: new Vec2(0, 188), size: new Size(500, 20), fontSize: 12, color: new Color(150, 158, 172, 255) },
+  /** 区列表（纵向滚动，每行固定高、行间距见 row.gap） */
+  list: { name: "zone_select_list", position: new Vec2(0, -20), size: new Size(500, 356) },
+  row: {
+    size: new Size(496, 58),
+    /** 行间距（滚动区 content 的 Layout.spacingY） */
+    gap: 10,
+    fill: new Color(22, 26, 34, 190),
+    border: new Color(64, 74, 90, 255),
+    /** 当前浏览区的高亮描边（与帮会列表「自己那一行」同一口径） */
+    currentBorder: new Color(255, 200, 80, 255),
+    /** 进不去的区（维护中 / 已关闭）：底色压暗、区名变灰。点它有提示，不是静默无反应 */
+    disabledFill: new Color(16, 18, 24, 150),
+    radius: 6,
+    /** 区名（左列，相对行中心） */
+    nameX: -178,
+    nameSize: new Size(200, 22),
+    nameFontSize: 16,
+    nameColor: new Color(226, 226, 226, 255),
+    disabledNameColor: new Color(120, 126, 138, 255),
+    /** 角色数 · 状态（中列） */
+    metaX: -18,
+    metaSize: new Size(220, 18),
+    metaFontSize: 12,
+    metaColor: new Color(160, 172, 190, 255),
+    /** 角标：从 tagRightX 起往左一个个摆（最多两个：「上次在」「推荐」） */
+    tagRightX: 226,
+    tagGap: 6,
+    tagSize: new Size(56, 20),
+    tagFontSize: 11,
+    tagFill: new Color(255, 200, 80, 40),
+    tagBorder: new Color(255, 200, 80, 160),
+    tagColor: new Color(255, 209, 102, 255),
+  },
+  /** 取消按钮（面板底部居中）：打开选服窗不等于必须换区 */
+  closeButton: { name: "zone_select_close_button", text: "取消", position: new Vec2(0, -218) },
+};
+
 //#endregion
 
 //#region 社交 · 帮会（#388）

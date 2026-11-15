@@ -3,8 +3,10 @@ import GameUiHelper from "../../helpers/GameUiHelper";
 import LayerManager from "../../core/LayerManager";
 import LeaderboardStore, { LEADERBOARD_BOARD } from "../../core/LeaderboardStore";
 import type { LeaderboardBoard } from "../../core/LeaderboardStore";
+import ZoneStore from "../../core/ZoneStore";
 import UiHelper from "../../helpers/UiHelper";
 import { leaderboardDialogLayout as layout } from "../../../configs/hudLayout";
+import { getText } from "../../../configs/texts";
 import { blockClickThrough } from "../../utils/input/UiHit";
 import { clearChildren } from "../../utils/node/NodeTree";
 import type { LeaderboardEntry } from "../../utils/net/ApiModels";
@@ -118,15 +120,28 @@ export default class LeaderboardDialog {
     this.renderSelf(body, state.self ? state.self.rank : 0, state.self ? state.self.entry : null);
   }
 
-  /** 顶部小结：共几人上榜 + 这份快照的时刻 */
+  /**
+   * 顶部小结：共几人上榜 + 这份快照的时刻
+   *
+   * 前面挂区名（#962）：榜是**按区**的（P3 起全服混排下线），不写区名玩家会以为是全服数据。
+   * 区名取自 `ZoneStore`（选角页换区时写入），拿不到就只写原句 —— 不编一个区名。
+   */
   private renderSummary(body: Node, total: number, computedAt: number) {
+    const zone = ZoneStore.currentName();
     const text = layout.texts.summary
       .split("{total}")
       .join(`${total}`)
       .split("{updated}")
       .join(this.updatedText(computedAt));
     body.addChild(
-      UiHelper.createLabel("leaderboard_summary", text, layout.summary.color, layout.summary.fontSize, layout.summary.position, layout.summary.size),
+      UiHelper.createLabel(
+        "leaderboard_summary",
+        `${zone ? getText("zone_title_prefix", { zone }) : ""}${text}`,
+        layout.summary.color,
+        layout.summary.fontSize,
+        layout.summary.position,
+        layout.summary.size,
+      ),
     );
   }
 

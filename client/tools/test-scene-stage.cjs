@@ -69,11 +69,11 @@ function inside(rect, canvas = CANVAS) {
 /** 登录舞台元素块（键 = loginLayout.order 里的 key）—— 位置不写在元素上，由 cc.Layout 统一排 */
 function loginBlocks() {
   const layout = loginLayout;
+  // 区服选择已不在登录页（#962：登录前不知道账号有哪几个区，「区服：X」是假信息）
   return {
     logo: layout.logo,
     account: layout.account,
     password: layout.password,
-    zoneSelector: layout.zoneSelector,
     loginButton: layout.loginButton,
     registerButton: layout.registerButton,
   };
@@ -119,6 +119,8 @@ function roleSelectorElements() {
     ["创建角色按钮", layout.createRoleButton],
     ["管理角色按钮", layout.manageRoleButton],
     ["返回按钮", layout.backButton],
+    // 当前区服（#962）：舞台顶部居中，点它开选服弹窗
+    ["区服文案", layout.zoneLabel],
     // 选中信息框挂在底部栏下（见 RoleSelector.createMainView）：换算回舞台坐标再判画布包含
     ["选中信息框", { position: { x: layout.selectedInfo.position.x, y: layout.selectedInfo.position.y + barCenterY }, size: layout.selectedInfo.size }],
     ["管理提示条", { position: layout.manageRole.hint.position, size: layout.manageRole.hint.size }],
@@ -245,17 +247,20 @@ console.log("\n== E. 源码接线断言（不再有分辨率适配） ==");
   check(/for \(const key of layout\.order\)[\s\S]{0,260}?this\.stage\.addChild\(widget\)/.test(login), "Login：按 loginLayout.order 的顺序挂进舞台（挂载顺序 = 屏幕顺序）");
   check(/createFullScreenImage\("login_background"/.test(login) && !/this\.stage\.addChild\(GameUiHelper\.createFullScreenImage/.test(login), "Login：背景挂在场景根（不在舞台内，铺满整个屏幕）");
   check(
-    /this\.widgets = \{ logo, account: account\.node, password: password\.node, zoneSelector: this\.zoneLabel, loginButton, registerButton \}/.test(login),
-    "Login：元素按 key 登记（与 order 的 key 一一对应）",
+    /this\.widgets = \{ logo, account: account\.node, password: password\.node, loginButton, registerButton \}/.test(login) &&
+      !/zoneSelector/.test(login),
+    "Login：元素按 key 登记（与 order 的 key 一一对应），且不含区服选择（#962 移到选角页）",
   );
   check(!/getColumnCenters|stackWidgets/.test(login), "Login：不再自己算纵向坐标（交给引擎 Layout）");
-  check(!/layout\.(account|password|loginButton|registerButton|logo|zoneSelector)\.position/.test(login), "Login：不再读写死坐标（位置交给 Layout）");
-  // 区服位置的两态提示：连不上服务器时不是空白，玩家能看到「暂时无法连接服务器」
-  check(/zoneState: "connecting" \| "ready" \| "unreachable"/.test(login), "Login：区服连接状态只有 connecting / ready / unreachable 三个值");
-  check(/getText\(this\.zoneState === "connecting" \? "login_zone_connecting" : "login_zone_unreachable"\)/.test(login), "Login：连接中与无法连接的文案都来自 configs/texts（代码里不写中文）");
-  check(/this\.zoneState = "ready";/.test(login) && /this\.zoneState = "unreachable";/.test(login), "Login：loadZones 拉到置 ready、拉不到置 unreachable（两个分支都刷新区服文案）");
+  check(!/layout\.(account|password|loginButton|registerButton|logo)\.position/.test(login), "Login：不再读写死坐标（位置交给 Layout）");
+  // 区服选择整体搬走（#962）：登录前不知道这个账号有哪几个区，摆一个「区服：一区」只是把
+  // 服务器上的第一个开放区当成玩家的选择。区名现在只在选角页出现（断言见下面 RoleSelector 段）
+  check(
+    !/zoneState|cycleZone|loadZones|ZoneApi/.test(login),
+    "Login：不再拉活区列表、不再有区服循环切换（登录页与区无关）",
+  );
   const texts = fs.readFileSync(TEXTS_FILE, "utf8");
-  check(/login_zone_connecting: "连接中…"/.test(texts) && /login_zone_unreachable: "暂时无法连接服务器"/.test(texts), "texts：连接中 / 无法连接两条文案存在（区服位置不再是空白）");
+  check(!/login_zone_/.test(texts), "texts：登录页那四条区服文案已删（区名只在选角页，走 zone_* 一套）");
   // 已有登录态直接进选角：误刷新不重输账号密码；未登录才清缓存（保留登录态刷新时的角色缓存）
   check(/if \(Session\.isLoggedIn\) \{\s*\n\s*SceneManager\.loadScene\("RoleSelector"\);\s*\n\s*return;/.test(login), "Login：已有登录态直接跳选角（误刷新不用重输，令牌过期由 401 兜底送回登录）");
   check(/StorageManager\.clear\(\);/.test(login), "Login：未登录才清本地缓存（有登录态的刷新不动角色缓存）");
