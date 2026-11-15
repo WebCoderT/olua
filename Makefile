@@ -64,7 +64,7 @@ CREATOR ?= CocosCreator
         client-check client-test client-test-one client-gen-monster client-gen-drops \
         client-clean-frames client-clean-frames-apply client-open client-gen-declarations \
         server-dev server-build server-start server-e2e server-e2e-roles server-e2e-guard \
-        server-e2e-mail server-e2e-account-email server-e2e-realtime server-e2e-combat server-e2e-world server-e2e-world-viewers server-e2e-dual server-e2e-game-config server-e2e-config-version server-e2e-event-log server-e2e-backup server-e2e-zone server-e2e-guild server-e2e-social server-e2e-chat server-e2e-quest server-e2e-sell server-e2e-bag server-e2e-blocks server-e2e-party server-e2e-rank server-e2e-achievement server-e2e-game-mail server-e2e-equip-align server-e2e-equip-in-align server-e2e-map server-verify db-backup db-restore config-export config-import config-check gen-api \
+        server-e2e-mail server-e2e-account-email server-e2e-realtime server-e2e-combat server-e2e-drop server-e2e-world server-e2e-world-viewers server-e2e-dual server-e2e-game-config server-e2e-config-version server-e2e-event-log server-e2e-backup server-e2e-zone server-e2e-guild server-e2e-social server-e2e-chat server-e2e-quest server-e2e-sell server-e2e-bag server-e2e-blocks server-e2e-party server-e2e-rank server-e2e-achievement server-e2e-game-mail server-e2e-equip-align server-e2e-equip-in-align server-e2e-map server-verify db-backup db-restore config-export config-import config-check gen-api \
         resources-manifest resources-verify resources-pack resources-upload resources-download image-manifest \
         admin-dev admin-build admin-typecheck admin-preview \
         icons \
@@ -259,6 +259,9 @@ server-e2e-realtime: ## 服务端实时通道专项 e2e（50 条：票据换连�
 
 server-e2e-combat: ## 服务端伤害结算专项 e2e（服务端算伤害 / 幂等 / 死亡判定 / 掉落拾取 / 绑定与溯源 / 怪物技能）
 	@cd server && $(NPM) run test:e2e:combat
+
+server-e2e-drop: ## 地面掉落（世界实体）专项 e2e（同图可见 / id 全局唯一 / 投影表 / 保护期 / 过期 / 重启清场）
+	@cd server && $(NPM) run test:e2e:drop
 
 server-e2e-world: ## 服务端世界权威专项 e2e（22 条：播种 / 共享 / tick 重生 / 优雅关闭与重启恢复；临时文件库）
 	@cd server && $(NPM) run test:e2e:world

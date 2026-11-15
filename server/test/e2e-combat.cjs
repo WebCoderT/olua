@@ -281,6 +281,11 @@ function connect(url) {
     players: [],
     /** 拾取结果帧（#325：成功与拒绝都在内） */
     pickeds: [],
+    /** 地面掉落出现 / 消失帧（#802：世界实体，同图所有人收到同一份） */
+    dropSpawns: [],
+    dropRemoves: [],
+    /** 进图门槛的回执（换图被拒时只有它，没有 world 帧 —— 诊断用） */
+    enterResults: [],
     /** error 帧（#325：格式不对的 pick 等低频错误） */
     errors: [],
     /** 按 castId 等结算帧（幂等重发会来两帧，取最新的） */
@@ -314,6 +319,9 @@ function connect(url) {
       if (frame.type === "monster-ai") session.ais.push(frame.data);
       if (frame.type === "players") session.players.push(frame.data);
       if (frame.type === "picked") session.pickeds.push(frame.data);
+      if (frame.type === "dropSpawn") session.dropSpawns.push(frame.data);
+      if (frame.type === "dropRemove") session.dropRemoves.push(frame.data);
+      if (frame.type === "mapEnterResult") session.enterResults.push(frame.data);
       if (frame.type === "error") session.errors.push(frame.data);
     } catch {
       /* 非 JSON 帧不记 */
@@ -1056,9 +1064,9 @@ function connect(url) {
 
     //#endregion
 
-    //#region 九、掉落拾取（#325）：归属与格子级入包（pick 帧）
+    //#region 九、掉落拾取（#802）：地面是世界实体，入包权威在服务端（pick / picked 帧）
 
-    group("九、掉落拾取：归属与格子级入包的权威在服务端（pick / picked 帧）");
+    group("九、掉落拾取：地面是世界实体，归属与格子级入包的权威在服务端（pick / picked 帧）");
 
     // 掉落确定性：怪物 1 改成「必掉 drug_hp_1 x2」（picks 1 × chance 1 × count [2,2]）
     await api(baseUrl, "PATCH", "admin/monster-drops/1", {
@@ -1080,38 +1088,40 @@ function connect(url) {
     };
 
     /**
-     * 发一次拾取并等它自己的 picked 帧（只等发送之后到达的：同一 castId 的旧帧不回填）
+     * 发一次拾取并等它自己的 picked 帧（只等发送之后到达的：同一 dropId 的旧帧不回填）
+     *
+     * #802 起 `pick` 只认**世界实体 id**（`{ dropId }`），不再有 `castId + 下标`：
+     * 掉落是地面上的东西，账本也不再按账号隔离，所以「谁打出来的」不再参与定位。
      *
      * `options.spot` 缺省 = 站到 `player.lastSpot`（这只怪倒下的地方，正常玩家的行为）；
-     * 显式给一个点 = 故意从别处捡（距离闸用例）；`null` = 一帧位置都不报（`no_position` 用例）。
+     * 显式给一个点 = 故意从别处捡（距离闸用例）；`null` = 一帧位置都不报（位置未知用例）。
      * pos 与 pick 走同一条连接、服务端按序处理，所以不会出现「位置还没到、拾取先判」。
      */
-    const pick = (player, castId, index, options = {}) => {
+    const pick = (player, dropId, options = {}) => {
       const spot = options.spot === null ? null : options.spot || player.lastSpot;
       if (spot) standAtSpot(player, spot);
       const before = player.session.pickeds.length;
-      player.session.socket.send(JSON.stringify({ type: "pick", data: { castId, index } }));
-      return waitFor(`castId=${castId} index=${index} 的 picked 帧`, async () => {
-        const hits = player.session.pickeds.slice(before).filter((frame) => frame.castId === castId && frame.index === index);
+      player.session.socket.send(JSON.stringify({ type: "pick", data: { dropId } }));
+      return waitFor(`dropId=${dropId} 的 picked 帧`, async () => {
+        const hits = player.session.pickeds.slice(before).filter((frame) => frame.dropId === dropId);
         return hits.length > 0 ? hits[hits.length - 1] : null;
       }, 5_000);
     };
 
-    // —— A. 正常拾取：按账本原子入包，revision 推进，存档可查 ——
+    /** 结算里第一件掉落的 dropId（后续用例都靠它定位地面实体） */
+    const dropIdIn = (killed) => {
+      const drops = killed && killed.reward && killed.reward.drops;
+      return Array.isArray(drops) && drops[0] && typeof drops[0].dropId === "string" ? drops[0].dropId : "";
+    };
 
-    const picker = await newPlayer("combat_rpk");
-    // 服务端不扩容（与商城同一语义）：初始 bag 是空数组（没有网格），先把存档原样带回、
-    // 只把 bag 换成规范化空网格（4×10），给「服务端不扩容」一个前提
-    const pickerInitial = await api(baseUrl, "GET", `roles/${picker.roleId}`, { token: picker.token });
-    const emptyGrid = Array.from({ length: 4 }, () => Array.from({ length: 10 }, () => null));
-    const savedGrid = await api(baseUrl, "PUT", `roles/${picker.roleId}`, {
-      token: picker.token,
-      body: {
-        revision: pickerInitial.data && pickerInitial.data.revision,
-        data: { ...(pickerInitial.data.data || {}), bag: emptyGrid },
-      },
-    });
-    check(savedGrid.code === 0, "A：背包已存成规范化空网格（4×10，服务端不扩容语义的前提）", savedGrid.message);
+    // —— A. 正常拾取：地面实体对同图所有人可见，按 dropId 原子入包 ——
+
+    const picker = await newGridPlayer("combat_rpk");
+    // 旁观者：掉落是**世界实体**，另一个连接也得收到同一份 dropSpawn（dropId 与坐标一致）
+    const watcher = await newGridPlayer("combat_rpw");
+    const watcherWorld = await enterAt(watcher, "1");
+    check(!!(watcherWorld && watcherWorld.mapId === "1"), "A：旁观者已进图 1（同图才有掉落广播）", JSON.stringify(watcherWorld && watcherWorld.mapId));
+
     const mobK = await aliveMonster(picker, "1");
     check(!!mobK, "A：等到了活着的怪", JSON.stringify(mobK));
     const killedK = mobK ? await killMonster(picker, mobK.monsterKey, mobK.instanceId) : null;
@@ -1125,8 +1135,36 @@ function connect(url) {
       "A：击杀结算带确定的掉落（只掉改表里那件、件数 > 0、不绑定）",
       JSON.stringify(killedK && killedK.reward && killedK.reward.drops),
     );
-    const pickedFirst = killedK ? await pick(picker, killedK.castId, 0) : null;
+    const dropK = dropIdIn(killedK);
+    check(/^d_\d+_.+_\d+$/.test(dropK), "A：掉落带世界 id（d_<区>_<图>_<序号>，全局唯一的那一份）", dropK);
+    const seenByWatcher = await waitFor("旁观者收到同一件掉落的 dropSpawn", async () => {
+      for (const frame of watcher.session.dropSpawns) {
+        const hit = (frame.drops || []).find((drop) => drop.dropId === dropK);
+        if (hit) return hit;
+      }
+      return null;
+    }, 5_000);
+    check(
+      !!(seenByWatcher && seenByWatcher.goodId === "drug_hp_1" && Number.isInteger(seenByWatcher.x) && Number.isInteger(seenByWatcher.y)),
+      "A：同图旁观者收到 dropSpawn（世界实体，不再只存在于击杀者的账本里）",
+      JSON.stringify(seenByWatcher),
+    );
+    // 进图快照与增量广播必须是**同一份**：客户端不该自己再算一次落点
+    const snapK = await picker.session.joinWorld("1");
+    const inSnapshot = snapK && Array.isArray(snapK.drops) ? snapK.drops.find((drop) => drop.dropId === dropK) : null;
+    check(
+      !!(inSnapshot && seenByWatcher) && inSnapshot.x === seenByWatcher.x && inSnapshot.y === seenByWatcher.y,
+      "A：world 快照里的落点与 dropSpawn 广播逐字段一致（dropId / x / y）",
+      JSON.stringify({ snapshot: inSnapshot, spawn: seenByWatcher }),
+    );
+
+    const pickedFirst = killedK ? await pick(picker, dropK) : null;
     check(!!(pickedFirst && pickedFirst.ok && pickedFirst.alreadyPicked === false), "A：首次拾取成功（alreadyPicked = false）", JSON.stringify(pickedFirst));
+    check(
+      !!(pickedFirst && pickedFirst.ok) && pickedFirst.goodId === "drug_hp_1" && typeof pickedFirst.count === "number" && pickedFirst.count > 0,
+      "A：picked 应答带回 dropId 对应的物品与件数（客户端不必自己记）",
+      JSON.stringify({ dropId: pickedFirst && pickedFirst.dropId, goodId: pickedFirst && pickedFirst.goodId, count: pickedFirst && pickedFirst.count }),
+    );
     check(
       !!(pickedFirst && pickedFirst.ok) &&
         Array.isArray(pickedFirst.placed) &&
@@ -1149,151 +1187,161 @@ function connect(url) {
       "A：掉落已落进存档（data.bag[0][0] 是 drug_hp_1，与 picked.placed 同一格）",
       JSON.stringify(firstCell),
     );
+    // 拾取要广播给同图所有人：别人屏幕上那件东西也得消失
+    const removedSeen = await waitFor("旁观者收到 dropRemove", async () => {
+      for (const frame of watcher.session.dropRemoves) {
+        if ((frame.dropIds || []).includes(dropK)) return frame;
+      }
+      return null;
+    }, 5_000);
+    check(
+      !!(removedSeen && removedSeen.reason === "picked"),
+      "A：拾取后同图收到 dropRemove（reason = picked，不是靠客户端各自猜）",
+      JSON.stringify(removedSeen),
+    );
 
-    // —— B. 重复拾取幂等：同一 castId/index 再拾，原样应答不重复入包 ——
+    // —— B. 应答丢包后的重发：同一个 dropId 再来一次，幂等成功且不重复入包 ——
 
-    const pickedAgain = killedK ? await pick(picker, killedK.castId, 0) : null;
-    check(!!(pickedAgain && pickedAgain.ok && pickedAgain.alreadyPicked === true), "B：重复拾取幂等应答（alreadyPicked = true）", JSON.stringify(pickedAgain));
+    const pickedAgain = killedK ? await pick(picker, dropK) : null;
+    check(!!(pickedAgain && pickedAgain.ok && pickedAgain.alreadyPicked === true), "B：同一 dropId 重发幂等应答（alreadyPicked = true）", JSON.stringify(pickedAgain));
     check(!!(pickedAgain && pickedAgain.ok) && Array.isArray(pickedAgain.placed) && pickedAgain.placed.length === 0, "B：幂等重放没有新的入包格子（placed 为空）");
     check(
       !!(pickedAgain && pickedAgain.ok) && pickedFirst && pickedFirst.ok && pickedAgain.revision === pickedFirst.revision,
-      "B：幂等重放不再推进修订号",
+      "B：幂等重放不推进修订号",
       JSON.stringify({ again: pickedAgain && pickedAgain.ok && pickedAgain.revision, first: pickedFirst && pickedFirst.ok && pickedFirst.revision }),
     );
 
-    // —— C. 非归属者拒拾：账本按账号隔离，别人的 castId 查不到账 ——
+    // —— C. 归属保护期：别人的掉落捡不起来，保护期过去才开放（#802 的新语义）——
 
-    const outsider = await newPlayer("combat_rpo");
-    const stolenPick = killedK ? await pick(outsider, killedK.castId, 0) : null;
-    check(!!(stolenPick && stolenPick.ok === false && stolenPick.code === "unknown_drop"), "C：非归属者拾取被拒（unknown_drop，归属天然成立）", JSON.stringify(stolenPick));
+    const outsider = await newGridPlayer("combat_rpo");
+    // 必须先真的进图：#802 的图判定读的是**服务端记下的位置**（worldJoin 放行那一刻写），
+    // 没进过图的人拿不到任何掉落（不是「不知道就不判」）
+    const outsiderWorld = await enterAt(outsider, "1");
+    check(!!(outsiderWorld && outsiderWorld.mapId === "1"), "C：旁观者已进图 1（否则图判定会先把它挡住）");
+    const mobP1 = await aliveMonster(picker, "1");
+    const killedP1 = mobP1 ? await killMonster(picker, mobP1.monsterKey, mobP1.instanceId) : null;
+    const dropC = dropIdIn(killedP1);
+    check(!!dropC, "C：又打出一份掉落在保护期内（新的靶子）", dropC);
+    const stolenPick = dropC ? await pick(outsider, dropC, { spot: null }) : null;
+    check(
+      !!(stolenPick && stolenPick.ok === false && stolenPick.code === "protected") &&
+        typeof stolenPick.waitMs === "number" &&
+        stolenPick.waitMs > 0 &&
+        typeof stolenPick.ownerName === "string" &&
+        stolenPick.ownerName.length > 0,
+      "C：保护期内非归属者被拒（protected，带 waitMs 与归属者名字）",
+      JSON.stringify(stolenPick),
+    );
+    // 把保护期压 0 只影响**新掉落**（保护期在 spawn 时固化进实体，不回溯）—— 所以再打一份
+    const protectBefore = (await api(baseUrl, "GET", "admin/runtime-params", { token: adminToken, zoneId: ADMIN_ZONE })).data.drop.protectMs;
+    const protectedOff = await api(baseUrl, "PATCH", "admin/runtime-params", { token: adminToken, zoneId: ADMIN_ZONE, body: { drop: { protectMs: 0 } } });
+    check(protectedOff.code === 0, "C：保护期已压到 0（改完立即生效）", protectedOff.message);
+    const mobC2 = await aliveMonster(picker, "1");
+    const killedC2 = mobC2 ? await killMonster(picker, mobC2.monsterKey, mobC2.instanceId) : null;
+    const dropC2 = dropIdIn(killedC2);
+    const openPick = dropC2 ? await pick(outsider, dropC2, { spot: null }) : null;
+    check(
+      !!(openPick && openPick.ok && openPick.alreadyPicked === false),
+      "C：保护期为 0 时同一份掉落别人也能捡（归属只是「优先权」，不是永久上锁）",
+      JSON.stringify(openPick),
+    );
+    const restoredProtect = await api(baseUrl, "PATCH", "admin/runtime-params", {
+      token: adminToken, zoneId: ADMIN_ZONE, body: { drop: { protectMs: protectBefore } },
+    });
+    check(restoredProtect.code === 0, "C：保护期已还原成改之前的值", restoredProtect.message);
 
-    // —— D. 未知账拒拾：不存在的 castId / 越界的下标 / 格式不对的消息 ——
+    // —— D. 不存在的 dropId / 格式不对的消息 ——
 
-    const unknownCast = killedK ? await pick(picker, killedK.castId + 99999, 0) : null;
-    check(!!(unknownCast && unknownCast.ok === false && unknownCast.code === "unknown_drop"), "D：不存在的 castId 被拒（unknown_drop）", JSON.stringify(unknownCast));
-    const unknownIndex = killedK ? await pick(picker, killedK.castId, 9) : null;
-    check(!!(unknownIndex && unknownIndex.ok === false && unknownIndex.code === "unknown_drop"), "D：越界的下标被拒（unknown_drop）", JSON.stringify(unknownIndex));
+    const unknownDrop = await pick(picker, "d_1_1_999999", { spot: null });
+    check(!!(unknownDrop && unknownDrop.ok === false && unknownDrop.code === "unknown_drop"), "D：不存在的 dropId 被拒（unknown_drop）", JSON.stringify(unknownDrop));
     picker.session.socket.send(JSON.stringify({ type: "pick", data: {} }));
     const badPick = await waitFor("格式不对的 pick 回 error 帧", async () => {
       return picker.session.errors.find((frame) => typeof frame.message === "string" && frame.message.includes("pick")) || null;
     }, 5_000);
     check(!!badPick, "D：格式不对的 pick 回 error 帧且不断开连接", JSON.stringify(badPick));
 
-    // —— E. 背包满拒拾：整份放不下 → 20012，存档与修订号都不动 ——
+    // —— E. 会话事件不清地面：targetsReset / 换图都不该让东西凭空消失 ——
 
-    // 4×10 全塞满 material_iron（可叠加物品堆满每一格：药再也吃不进已有堆，也找不到空格）
-    // 背包内容自 #556 起是服务端权威：玩家侧上报的内容会被库里那份回填（只借客户端的网格尺寸），
-    // 所以「塞满背包」这种造状态必须走管理端结构化编辑（稀疏格式，一行一格）
-    const fullCells = [];
-    for (let row = 0; row < 4; row++) for (let col = 0; col < 10; col++) fullCells.push({ row, col, id: "material_iron", count: 99 });
-    const savedFull = await api(baseUrl, "PATCH", `admin/roles/${picker.roleId}`, { token: adminToken, zoneId: ADMIN_ZONE, body: { bag: fullCells } });
-    check(savedFull.code === 0, "E：背包已存成全满（4×10 格 material_iron x99，管理端结构化编辑）", savedFull.message);
-
-    const mobFull = await aliveMonster(picker, "1");
-    check(!!mobFull, "E：等到了活着的怪（上一只已按 5s 重生）", JSON.stringify(mobFull));
-    const killedFull = mobFull ? await killMonster(picker, mobFull.monsterKey, mobFull.instanceId) : null;
-    check(!!(killedFull && killedFull.reward && killedFull.reward.drops.length === 1), "E：击杀结算带掉落（拾取要被拒的那份）", JSON.stringify(killedFull && killedFull.reward && killedFull.reward.drops));
-    const pickedFull = killedFull ? await pick(picker, killedFull.castId, 0) : null;
-    check(!!(pickedFull && pickedFull.ok === false && pickedFull.code === "bag_full"), "E：背包满被拒拾（bag_full）", JSON.stringify(pickedFull));
-
-    const roleAfterFull = await api(baseUrl, "GET", `roles/${picker.roleId}`, { token: picker.token });
-    const bagAfterFull = roleAfterFull.data && roleAfterFull.data.data && roleAfterFull.data.data.bag;
-    const hasDrug = Array.isArray(bagAfterFull) && bagAfterFull.some((line) => line.some((cell) => cell && cell.id === "drug_hp_1"));
-    check(!hasDrug, "E：拒拾后存档背包一个字节都没动（没有药混进来）", JSON.stringify(bagAfterFull && bagAfterFull[0]));
-    check(
-      roleAfterFull.code === 0 && killedFull && killedFull.reward && roleAfterFull.data.revision === killedFull.reward.revision,
-      "E：修订号与击杀入账后一致（拒拾本身不写库）",
-      JSON.stringify({ kill: killedFull && killedFull.reward && killedFull.reward.revision, after: roleAfterFull.data && roleAfterFull.data.revision }),
-    );
-
-    // —— F. 会话清账：targetsReset 之后掉落账本随幂等账一起清 ——
-
+    // #802 之前掉落挂在「击杀者的私人账本」上，换图 / targetsReset 顺手就清了；
+    // 现在它是世界实体，生命周期只由 expireAt 决定 —— 这两条判的正是这次语义变化。
+    const mobF = await aliveMonster(picker, "1");
+    const killedF = mobF ? await killMonster(picker, mobF.monsterKey, mobF.instanceId) : null;
+    const dropF = dropIdIn(killedF);
     picker.session.socket.send(JSON.stringify({ type: "targetsReset" }));
     await sleep(100);
-    const pickedAfterReset = killedFull ? await pick(picker, killedFull.castId, 0) : null;
-    check(!!(pickedAfterReset && pickedAfterReset.ok === false && pickedAfterReset.code === "unknown_drop"), "F：targetsReset 后账本已清（换图旧掉落不再可拾）", JSON.stringify(pickedAfterReset));
+    const pickedAfterReset = dropF ? await pick(picker, dropF, { spot: null }) : null;
+    check(
+      !!(pickedAfterReset && pickedAfterReset.ok && pickedAfterReset.alreadyPicked === false),
+      "E：targetsReset 之后掉落仍在（地面实体不随会话账本清空，只能被捡走或过期）",
+      JSON.stringify(pickedAfterReset),
+    );
 
-    // —— G. 换图即清账：不发 targetsReset，只 worldJoin 也必须清（#817）——
+    // —— F. 换图：不在同一张图拒拾（not_on_map），走回来还能捡 ——
 
-    // F 靠的是客户端主动发 `targetsReset` —— 那是**客户端消息**，改包不发就还能隔图吸掉落。
-    // 判据必须由服务端在放行 worldJoin 时自己给出：换图那一刻账本就没了。
     // 图 2 有进图门槛，先把等级提上去（picker 此时已经站在图 1，换图要走门槛判定）
     await api(baseUrl, "PATCH", `admin/roles/${picker.roleId}`, { token: adminToken, zoneId: ADMIN_ZONE, body: { level: 60 } });
     const mobG = await aliveMonster(picker, "1");
     const killedG = mobG ? await killMonster(picker, mobG.monsterKey, mobG.instanceId) : null;
-    check(!!killedG, "G：在图 1 打出一份掉落（先不拾）", JSON.stringify(killedG && killedG.castId));
+    const dropG = dropIdIn(killedG);
+    check(!!dropG, "F：在图 1 打出一份掉落（先不拾）", dropG);
     await enterAt(picker, "2");
-    const crossPick = killedG ? await pick(picker, killedG.castId, 0) : null;
     check(
-      !!crossPick && crossPick.ok === false && crossPick.code === "unknown_drop",
-      "G：换到图 2 后拾图 1 的掉落 → 拒（unknown_drop，服务端自己清的账）",
+      picker.session.worlds.some((frame) => frame.mapId === "2"),
+      "F：已经换到图 2（world 帧回来了）",
+      JSON.stringify({ enters: picker.session.enterResults.slice(-2), worlds: picker.session.worlds.map((frame) => frame.mapId).slice(-3) }),
+    );
+    const crossPick = dropG ? await pick(picker, dropG, { spot: null }) : null;
+    check(
+      !!(crossPick && crossPick.ok === false && crossPick.code === "not_on_map"),
+      "F：换到图 2 后拾图 1 的掉落 → 拒（not_on_map，不是 unknown_drop：东西还在那张图的地上）",
       JSON.stringify(crossPick),
     );
     await enterAt(picker, "1");
-    const backPick = killedG ? await pick(picker, killedG.castId, 0) : null;
+    const backPick = dropG ? await pick(picker, dropG) : null;
     check(
-      !!backPick && backPick.ok === false && backPick.code === "unknown_drop",
-      "G：换回图 1 也拾不到（账本在换图那一刻就清了，不会因为回去而复活）",
+      !!(backPick && backPick.ok && backPick.alreadyPicked === false),
+      "F：走回图 1 还能捡（图卸载不清掉落，逛一圈回来东西还在原地）",
       JSON.stringify(backPick),
     );
 
-    // —— H. 距离闸（#817）：隔远拒拾、走回来可拾、已拾的幂等放行、0 = 关闭校验 ——
+    // —— G. 距离闸（#817）：隔远拒拾、走回来可拾、0 = 关闭校验 ——
 
-    // 掉落点 = 怪倒下的地方（账本逐条记，区域技能一次三只也各记各的）。闸判三件事：
+    // 掉落点 = 散落后的世界坐标（服务端算，实体上固化）。闸判三件事：
     // 有没有位置、是不是同一张图、离掉落点多远；半径是运营可配的 `drop.pickAcceptRadius`。
     const farPicker = await newGridPlayer("combat_rpf");
     const mobH = await aliveMonster(farPicker, "1");
-    check(!!mobH, "H：等到了活着的怪", JSON.stringify(mobH));
+    check(!!mobH, "G：等到了活着的怪", JSON.stringify(mobH));
     const killedH = mobH ? await killMonster(farPicker, mobH.monsterKey, mobH.instanceId) : null;
-    check(
-      !!(killedH && killedH.reward && killedH.reward.drops.length === 1),
-      "H：击杀结算带一份掉落（拾取距离闸的靶子）",
-      JSON.stringify(killedH && killedH.reward && killedH.reward.drops),
-    );
+    const dropH = dropIdIn(killedH);
+    check(!!dropH, "G：击杀结算带一份掉落（拾取距离闸的靶子）", dropH);
     const farSpot = { mapId: "1", x: (mobH ? mobH.x : 0) + 800, y: mobH ? mobH.y : 0 };
-    const pickedFar = killedH ? await pick(farPicker, killedH.castId, 0, { spot: farSpot }) : null;
+    const pickedFar = dropH ? await pick(farPicker, dropH, { spot: farSpot }) : null;
     check(
       !!(pickedFar && pickedFar.ok === false && pickedFar.code === "too_far"),
-      "H：站在 800px 外拾取被拒（too_far，不是静默失败也不是把东西发过来）",
+      "G：站在 800px 外拾取被拒（too_far，不是静默失败也不是把东西发过来）",
       JSON.stringify(pickedFar),
     );
-    const pickedNear = killedH ? await pick(farPicker, killedH.castId, 0) : null;
+    const pickedNear = dropH ? await pick(farPicker, dropH) : null;
     check(
       !!(pickedNear && pickedNear.ok && pickedNear.alreadyPicked === false),
-      "H：走回掉落点再拾就成功（前面的拒拾没把账本条目吃掉）",
+      "G：走回掉落点再拾就成功（前面的拒拾没把实体吃掉）",
       JSON.stringify(pickedNear),
     );
-    const repickFromFar = killedH ? await pick(farPicker, killedH.castId, 0, { spot: farSpot }) : null;
-    check(
-      !!(repickFromFar && repickFromFar.ok && repickFromFar.alreadyPicked === true),
-      "H：已拾的幂等重放不受距离限制（应答丢包后的重发不能被判成作弊）",
-      JSON.stringify(repickFromFar),
-    );
 
-    // 没报过位置：拒绝而不是放行（放行等于给「不上报位置」开一个绕过闸的开关）
-    const noPosPlayer = await newGridPlayer("combat_rpn");
-    const mobN = await aliveMonster(noPosPlayer, "1");
-    const killedN = mobN ? await killMonster(noPosPlayer, mobN.monsterKey, mobN.instanceId) : null;
-    const pickedNoPos = killedN ? await pick(noPosPlayer, killedN.castId, 0, { spot: null }) : null;
-    check(
-      !!(pickedNoPos && pickedNoPos.ok === false && pickedNoPos.code === "no_position"),
-      "H：一帧位置都没报过 → 拒拾（no_position，位置未知不等于站在旁边）",
-      JSON.stringify(pickedNoPos),
-    );
-
-    // 0 = 关闭校验（排查问题用的开关）：改完立刻生效（结算现读库，不等客户端重进）
-    // 基线从接口读（与后面还原 `bindChance` 同一手法：不引配置快照那份第二来源）
+    // 0 = 关闭校验（排查问题用的开关）：改完立刻生效（pick 现读库，不等客户端重进）
+    // 基线从接口读（与后面还原 bindChance 同一手法：不引配置快照那份第二来源）
     const paramsBeforeRadius = await api(baseUrl, "GET", "admin/runtime-params", { token: adminToken, zoneId: ADMIN_ZONE });
     const acceptBefore = paramsBeforeRadius.data.drop.pickAcceptRadius;
     await api(baseUrl, "PATCH", "admin/runtime-params", { token: adminToken, zoneId: ADMIN_ZONE, body: { drop: { pickAcceptRadius: 0 } } });
     const mobH2 = await aliveMonster(farPicker, "1");
     const killedH2 = mobH2 ? await killMonster(farPicker, mobH2.monsterKey, mobH2.instanceId) : null;
-    const pickedOff = killedH2
-      ? await pick(farPicker, killedH2.castId, 0, { spot: { mapId: "1", x: mobH2.x + 800, y: mobH2.y } })
+    const dropH2 = dropIdIn(killedH2);
+    const pickedOff = dropH2
+      ? await pick(farPicker, dropH2, { spot: { mapId: "1", x: mobH2.x + 800, y: mobH2.y } })
       : null;
     check(
       !!(pickedOff && pickedOff.ok && pickedOff.alreadyPicked === false),
-      "H：pickAcceptRadius = 0 时闸关闭（同一个人 800px 外也能拾，开关真的有作用）",
+      "G：pickAcceptRadius = 0 时闸关闭（同一个人 800px 外也能拾，开关真的有作用）",
       JSON.stringify(pickedOff),
     );
     const restoredP = await api(baseUrl, "PATCH", "admin/runtime-params", {
@@ -1301,7 +1349,57 @@ function connect(url) {
       body: { drop: { pickAcceptRadius: acceptBefore } },
     });
     // 还原是准备卫生：判「写回了」而不是「等于某个数」
-    check(restoredP.code === 0, "H：拾取半径已还原成改之前的值", restoredP.message);
+    check(restoredP.code === 0, "G：拾取半径已还原成改之前的值", restoredP.message);
+
+    // 没报过位置：**放行**（docs/18 §5.3 第 6 步 fail-open）——刚进图的几百毫秒位置是空的，
+    // 这时拒绝会让正常玩家莫名捡不起来；风险窗口远小于误拒的代价。
+    const noPosPlayer = await newGridPlayer("combat_rpn");
+    const mobN = await aliveMonster(noPosPlayer, "1");
+    const killedN = mobN ? await killMonster(noPosPlayer, mobN.monsterKey, mobN.instanceId) : null;
+    const dropN = dropIdIn(killedN);
+    // 击杀者自己就是归属者，保护期不影响；位置一帧不报 → 闸不参与判定
+    const pickedNoPos = dropN ? await pick(noPosPlayer, dropN, { spot: null }) : null;
+    check(
+      !!(pickedNoPos && pickedNoPos.ok && pickedNoPos.alreadyPicked === false),
+      "G：一帧位置都没报过 → 放行（位置未知不等于隔空取物，fail-open）",
+      JSON.stringify(pickedNoPos),
+    );
+
+    // —— H. 背包满拒拾：整份放不下 → bag_full，存档与修订号都不动 ——
+
+    // 4×10 全塞满 material_iron（可叠加物品堆满每一格：药再也吃不进已有堆，也找不到空格）
+    // 背包内容自 #556 起是服务端权威：玩家侧上报的内容会被库里那份回填（只借客户端的网格尺寸），
+    // 所以「塞满背包」这种造状态必须走管理端结构化编辑（稀疏格式，一行一格）
+    const fullPlayer = await newGridPlayer("combat_rpnf");
+    const fullCells = [];
+    for (let row = 0; row < 4; row++) for (let col = 0; col < 10; col++) fullCells.push({ row, col, id: "material_iron", count: 99 });
+    const savedFull = await api(baseUrl, "PATCH", `admin/roles/${fullPlayer.roleId}`, { token: adminToken, zoneId: ADMIN_ZONE, body: { bag: fullCells } });
+    check(savedFull.code === 0, "H：背包已存成全满（4×10 格 material_iron x99，管理端结构化编辑）", savedFull.message);
+
+    const mobFull = await aliveMonster(fullPlayer, "1");
+    check(!!mobFull, "H：等到了活着的怪（上一只已按 5s 重生）", JSON.stringify(mobFull));
+    const killedFull = mobFull ? await killMonster(fullPlayer, mobFull.monsterKey, mobFull.instanceId) : null;
+    const dropFull = dropIdIn(killedFull);
+    check(!!dropFull, "H：击杀结算带掉落（拾取要被拒的那份）", dropFull);
+    const pickedFull = dropFull ? await pick(fullPlayer, dropFull) : null;
+    check(!!(pickedFull && pickedFull.ok === false && pickedFull.code === "bag_full"), "H：背包满被拒拾（bag_full）", JSON.stringify(pickedFull));
+
+    const roleAfterFull = await api(baseUrl, "GET", `roles/${fullPlayer.roleId}`, { token: fullPlayer.token });
+    const bagAfterFull = roleAfterFull.data && roleAfterFull.data.data && roleAfterFull.data.data.bag;
+    const hasDrug = Array.isArray(bagAfterFull) && bagAfterFull.some((line) => line.some((cell) => cell && cell.id === "drug_hp_1"));
+    check(!hasDrug, "H：拒拾后存档背包一个字节都没动（没有药混进来）", JSON.stringify(bagAfterFull && bagAfterFull[0]));
+    check(
+      roleAfterFull.code === 0 && killedFull && killedFull.reward && roleAfterFull.data.revision === killedFull.reward.revision,
+      "H：修订号与击杀入账后一致（拒拾本身不写库）",
+      JSON.stringify({ kill: killedFull && killedFull.reward && killedFull.reward.revision, after: roleAfterFull.data && roleAfterFull.data.revision }),
+    );
+    // 背包满被拒之后东西还在：捡不起来 ≠ 消失，腾出格子还能再来
+    const stillThere = await pick(fullPlayer, dropFull, { spot: null });
+    check(
+      !!(stillThere && stillThere.ok === false && stillThere.code === "bag_full"),
+      "H：拒拾不会让实体消失（腾出格子后还能再来，不是一次性作废）",
+      JSON.stringify(stillThere),
+    );
 
     // 还原怪物 1 的掉落配置（seed 是内联条目池）
     await api(baseUrl, "PATCH", "admin/monster-drops/1", {
@@ -1309,7 +1407,6 @@ function connect(url) {
       body: { tableId: null, picks: dropRowOne.picks, entries: dropRowOne.entries },
     });
 
-    //#endregion
 
     //#region 十一、绑定与溯源（#789 / #816）：掉落时判定绑定，入包后可见，背包操作与穿脱都只换地方
 
@@ -1416,7 +1513,7 @@ function connect(url) {
 
     const equipDrop = await killWith(binder, "weapon_1", {}, [1, 1]);
     check(!!equipDrop && equipDrop.drops.length >= 1, "B：装备掉落已抽取", JSON.stringify(equipDrop && equipDrop.drops));
-    const pickedEquip = equipDrop ? await pick(binder, equipDrop.killed.castId, 0) : null;
+    const pickedEquip = equipDrop ? await pick(binder, dropIdIn(equipDrop.killed)) : null;
     const equipCell = pickedEquip && pickedEquip.ok ? pickedEquip.placed[0] : null;
     check(
       !!equipCell && equipCell.from && equipCell.from.role === "combat_rbn1",
@@ -1437,7 +1534,7 @@ function connect(url) {
 
     // 非装备（药品）不记溯源：用户口径「只有装备会溯源，其他物品只按是否绑定分成两个」
     const drugDrop = await killWith(binder, "drug_hp_1");
-    const pickedDrug = drugDrop ? await pick(binder, drugDrop.killed.castId, 0) : null;
+    const pickedDrug = drugDrop ? await pick(binder, dropIdIn(drugDrop.killed)) : null;
     const drugCell = pickedDrug && pickedDrug.ok ? pickedDrug.placed[0] : null;
     check(!!drugCell && drugCell.id === "drug_hp_1", "B：药品掉落入包", JSON.stringify(drugCell));
     check(!!drugCell && drugCell.from === undefined, "B：药品不带溯源（只有装备记来源）", JSON.stringify(drugCell && drugCell.from));
@@ -1458,11 +1555,11 @@ function connect(url) {
     // 绑一堆药 + 再掉一堆同种未绑定的药，然后做一次「把绑定堆搬到空格」的整理：
     // 客户端只报 {row,col,id,count}（契约里没有 bound），服务端必须把绑定态认领回来
     const boundDrug = await killWith(binder, "drug_hp_1", { bindDrops: true });
-    const pickedBound = boundDrug ? await pick(binder, boundDrug.killed.castId, 0) : null;
+    const pickedBound = boundDrug ? await pick(binder, dropIdIn(boundDrug.killed)) : null;
     const boundCell = pickedBound && pickedBound.ok ? pickedBound.placed[0] : null;
     check(!!boundCell && boundCell.bound === true, "C：绑定的那一堆入包（bound = true）", JSON.stringify(boundCell));
     const looseDrug = await killWith(binder, "drug_hp_1");
-    const pickedLoose = looseDrug ? await pick(binder, looseDrug.killed.castId, 0) : null;
+    const pickedLoose = looseDrug ? await pick(binder, dropIdIn(looseDrug.killed)) : null;
     check(!!pickedLoose && pickedLoose.ok, "C：再来一堆同种但未绑定的药", JSON.stringify(pickedLoose && pickedLoose.ok && pickedLoose.placed));
 
     const roleBeforeMove = await api(baseUrl, "GET", `roles/${binder.roleId}`, { token: binder.token });
@@ -1552,7 +1649,7 @@ function connect(url) {
 
     // 出售走的是另一条扣法（takeGoodsFromBag，按 id 点数扣）—— 造一堆绑定材料卖掉一半
     const boundMat = await killWith(binder, "material_hide", { bindDrops: true }, [4, 4]);
-    const pickedMat = boundMat ? await pick(binder, boundMat.killed.castId, 0) : null;
+    const pickedMat = boundMat ? await pick(binder, dropIdIn(boundMat.killed)) : null;
     const matCell = pickedMat && pickedMat.ok ? pickedMat.placed[0] : null;
     check(!!matCell && matCell.bound === true, "D：绑定的材料入包（bound = true）", JSON.stringify(matCell));
     const soldHalf = await api(baseUrl, "POST", `roles/${binder.roleId}/sell`, {
@@ -1607,7 +1704,7 @@ function connect(url) {
 
     // 打一件**强制绑定**的武器（B 段那件 weapon_1 是未绑定的，正好留着一个同 id 的对照）
     const boundEquipDrop = await killWith(binder, "weapon_1", { bindDrops: true }, [1, 1]);
-    const pickedBoundEquip = boundEquipDrop ? await pick(binder, boundEquipDrop.killed.castId, 0) : null;
+    const pickedBoundEquip = boundEquipDrop ? await pick(binder, dropIdIn(boundEquipDrop.killed)) : null;
     const boundEquipCell = pickedBoundEquip && pickedBoundEquip.ok ? pickedBoundEquip.placed[0] : null;
     check(
       !!boundEquipCell && boundEquipCell.id === "weapon_1" && boundEquipCell.bound === true && !!boundEquipCell.from,

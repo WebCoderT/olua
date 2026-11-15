@@ -6675,6 +6675,22 @@ export type DropRuntimeParams = {
    * 随机绑定概率（百分比 0~100）：物品与怪物都没有「强制绑定」时，按它掷一次决定这一件是否绑定角色。0 = 从不随机绑定
    */
   bindChance: number;
+  /**
+   * 掉落物存活时长（毫秒，#802）：到点从地面消失并记一条 expired 流水。末段没有任何提示（不闪、不显示秒数）—— 改这个值会让「单图 200 件上限」更早/更晚触发
+   */
+  ttlMs: number;
+  /**
+   * 归属保护期（毫秒）：这之前只有归属者与掉落时的同队队友能捡
+   */
+  protectMs: number;
+  /**
+   * 单图地面掉落上限（件）：超出按落下的先后挤掉最旧的
+   */
+  maxGroundPerMap: number;
+  /**
+   * boss 掉落是否发全服公告（30 秒最多一条）
+   */
+  announceBoss: boolean;
 };
 
 export type AutoBattleParams = {
@@ -7078,6 +7094,22 @@ export type UpdateDropRuntimeParams = {
    * 随机绑定概率（百分比 0~100；0 = 从不随机绑定）
    */
   bindChance?: number;
+  /**
+   * 掉落物存活时长（毫秒，10000~300000）
+   */
+  ttlMs?: number;
+  /**
+   * 归属保护期（毫秒）：不得超过 ttlMs
+   */
+  protectMs?: number;
+  /**
+   * 单图地面掉落上限（件，20~1000）
+   */
+  maxGroundPerMap?: number;
+  /**
+   * boss 掉落是否发全服公告
+   */
+  announceBoss?: boolean;
 };
 
 export type UpdateAutoBattleParams = {

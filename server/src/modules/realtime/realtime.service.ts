@@ -29,6 +29,7 @@ import { EventLogService } from "../event-log/event-log.service";
 import { ChatService } from "./chat.service";
 import { CombatSettlementService } from "./combat-settlement.service";
 import { MonsterAiService } from "./monster-ai.service";
+import { DropService } from "./drop.service";
 import { PlayerPresenceService } from "./player-presence.service";
 import { AoiService } from "./aoi.service";
 import { MONSTER_ENTITY, PLAYER_ENTITY, monsterEntityOf, playerEntityOf } from "./aoi-math";
@@ -248,7 +249,22 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
     private readonly runtimeConfig: RuntimeConfigService,
     private readonly eventLogs: EventLogService,
     private readonly paths: PathService,
-  ) {}
+    /** 地面掉落物的世界权威（#802）：进图快照、拾取、广播都走它 */
+    private readonly drops: DropService,
+  ) {
+    // 广播出口：掉落是**图级**的，所以按（区, 图）找观看者，而不是按房号 ——
+    // #812 分线之后如果掉落要按线隔离，这里换成 roomKey 即可（其余不动）
+    this.drops.onBroadcast = (zoneId, mapId, frame) => {
+      for (const accountId of this.world.viewersOf(roomKey(zoneId, mapId))) {
+        const socket = this.connections.get(accountId);
+        if (socket) this.send(socket, frame);
+      }
+    };
+    // 稀有掉落公告（#802）：全服一条，遍历全部连接 —— 实时进程持有所有 WS 连接，不需要跨进程
+    this.drops.onAnnounce = (frame) => {
+      for (const socket of this.connections.values()) this.send(socket, frame);
+    };
+  }
 
   //#region 取票据（HTTP 接口调用）
 
@@ -802,14 +818,14 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
       return;
     }
     if (parsed?.type === "pick") {
-      // 拾取（#325）：按结算侧的掉落账本格子级入包，结果以 picked 帧发回。
+      // 拾取（#802）：按**世界实体 id** 定位，校验与入包全在 DropService，结果以 picked 帧发回。
       // 格式不对回 error 帧（低频操作，值得一次明确告知而不是悄悄丢弃）
       const request = parsePick(parsed.data);
       if (!request) {
-        this.send(socket, { type: "error", data: { message: "pick 消息缺 castId / index" } });
+        this.send(socket, { type: "error", data: { message: "pick 消息缺 dropId" } });
         return;
       }
-      const data = this.combat.pickDrop(socket.identity.id, request.castId, request.index);
+      const data = this.drops.pick(socket.identity.id, request.dropId);
       const frame: RealtimePickedMessage = { type: "picked", data };
       this.send(socket, frame);
       return;
@@ -943,7 +959,12 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
       // `targetsReset` —— 那是一条客户端消息，改包不发就能把上一张图的地面掉落吸进包。
       // 世界状态不受影响（怪物的血量与位置是共享的，不随谁换图而重置）
       this.combat.resetTargets(socket.identity.id);
-      const frame: RealtimeWorldMessage = { type: "world", data: snapshot };
+      // 地面掉落物的全量随 world 帧下发（#802）：增量广播帮不上「刚进图的人」，
+      // 而图卸载**不**清掉落（生命周期只由 expireAt 决定），所以逛一圈回来还能看到原地的东西
+      const frame: RealtimeWorldMessage = {
+        type: "world",
+        data: { ...snapshot, drops: this.drops.snapshotOf(zoneId, join.mapId) },
+      };
       this.send(socket, frame);
       // 玩家互见（#324）：随 world 应答发一份同图全量快照（增量帮不上「刚进图的人」）
       this.presence.join(socket.identity.id, roomId);
@@ -1730,18 +1751,16 @@ const parseMapEnter = parseWorldJoin;
 
 /** pick.data 的解析结果（#325：格式不对回 error 帧，低频操作值得明确告知） */
 interface ParsedPick {
-  castId: number;
-  index: number;
+  /** 地面实体的 id（#802 起按它定位，不再用 castId + 下标） */
+  dropId: string;
 }
 
 function parsePick(raw: unknown): ParsedPick | null {
   if (!raw || typeof raw !== "object") return null;
   const data = raw as Record<string, unknown>;
-  const castId = data.castId;
-  const index = data.index;
-  if (typeof castId !== "number" || !Number.isFinite(castId)) return null;
-  if (typeof index !== "number" || !Number.isInteger(index) || index < 0) return null;
-  return { castId, index };
+  const dropId = data.dropId;
+  if (typeof dropId !== "string" || dropId.length === 0 || dropId.length > 64) return null;
+  return { dropId };
 }
 
 /** chat.data 的解析结果（#395：格式不对回 error 帧，低频操作值得明确告知） */

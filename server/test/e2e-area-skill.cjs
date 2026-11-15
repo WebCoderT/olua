@@ -292,13 +292,19 @@ function connect(url) {
         timeoutMs,
       );
     },
-    sendPick(castId, index) {
-      socket.send(JSON.stringify({ type: "pick", data: { castId, index } }));
+    /**
+     * 发一次拾取（#802 起只认世界实体 id）
+     *
+     * 以前是 `{ castId, index }` —— 那是「击杀者的私人账本」形态：一次施放打死三只，
+     * 掉落按顺序堆在同一个账本里，用下标记。现在每件是地面上的独立实体，各有 dropId。
+     */
+    sendPick(dropId) {
+      socket.send(JSON.stringify({ type: "pick", data: { dropId } }));
     },
-    async pickedOf(castId, index) {
+    async pickedOf(dropId) {
       return waitFor(
-        `pick castId=${castId} index=${index}`,
-        async () => session.pickeds.find((frame) => frame.castId === castId && frame.index === index) || null,
+        `pick dropId=${dropId}`,
+        async () => session.pickeds.filter((frame) => frame.dropId === dropId).pop() ?? null,
       );
     },
   };
@@ -535,28 +541,40 @@ async function standAt(session, mapId, point) {
       Array.isArray(bagRows) ? `${bagRows.length}×${bagRows[0] && bagRows[0].length}` : JSON.stringify(bagRows),
     );
 
-    // 掉落账本：三只各掉 1 件，合并成一份（拾取帧只有 castId + index，没有 targetId）
-    const dropCount = (kill && kill.hits ? kill.hits : []).reduce((sum, hit) => sum + ((hit.reward && hit.reward.drops.length) || 0), 0);
-    checkEqual(dropCount, 3, "三只各掉 1 件，一共 3 件");
+    // 掉落是地面实体（#802）：每件各有 dropId，逐件拾取。判「形状 + id 不撞车」，
+    // 不判件数 —— 一件还是三件由掉落表算出，改表就红（#966 口径）。
+    const dropIds = (kill && kill.hits ? kill.hits : [])
+      .flatMap((hit) => (hit.reward && Array.isArray(hit.reward.drops) ? hit.reward.drops : []))
+      .map((drop) => drop.dropId);
+    check(
+      dropIds.length > 0 && dropIds.every((dropId) => typeof dropId === "string" && dropId.length > 0),
+      "每件掉落都带世界 id（dropId，客户端据此定位而不是靠下标）",
+      JSON.stringify(dropIds),
+    );
+    check(
+      new Set(dropIds).size === dropIds.length,
+      "一次施放打死的多只怪，掉落 id 互不撞车（同批生成的也不复用）",
+      JSON.stringify(dropIds),
+    );
 
     const picked = [];
     // 拾取距离闸（#817）读的是在场表里那份坐标，而结算 / 读档这几步可能已过去几秒 ——
     // 补一帧（坐标没变，仲裁直接过），别让「位置过期」把这条用例判成 no_position
     session.sendPos(KILL_MAP, killCenter.x, killCenter.y);
-    for (let index = 0; index < dropCount; index += 1) {
-      session.sendPick(killCastId, index);
-      const result = await session.pickedOf(killCastId, index);
+    for (const dropId of dropIds) {
+      session.sendPick(dropId);
+      const result = await session.pickedOf(dropId);
       picked.push(result ? (result.ok ? "ok" : result.code) : "timeout");
     }
     check(
-      picked.length === dropCount && picked.every((item) => item === "ok"),
-      "账本合并成一份：index 0..N-1 逐件都能拾（下标接着数，不是每只从 0 数）",
+      picked.length === dropIds.length && picked.every((item) => item === "ok"),
+      "同一次施放打出的每一件都能逐件拾取（各自独立，不是「一份账本按下标数」）",
       JSON.stringify(picked),
     );
 
-    session.sendPick(killCastId, dropCount);
-    const overflow = await session.pickedOf(killCastId, dropCount);
-    checkEqual(overflow && overflow.code, "unknown_drop", "index 越界报 unknown_drop（账本只装这次施放的掉落）");
+    session.sendPick("d_999_999_999");
+    const overflow = await session.pickedOf("d_999_999_999");
+    checkEqual(overflow && overflow.code, "unknown_drop", "不存在的 dropId 报 unknown_drop");
     //#endregion
 
     console.log(`\n${failed === 0 ? "✅" : "❌"} 自身 / 区域 / 群体技能：${passed} 条通过 / ${failed} 条失败`);

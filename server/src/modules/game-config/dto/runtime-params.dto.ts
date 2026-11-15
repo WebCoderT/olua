@@ -62,6 +62,33 @@ export class DropRuntimeParamsDto {
   @Min(0)
   @Max(100)
   bindChance: number;
+
+  @ApiProperty({
+    description:
+      "掉落物存活时长（毫秒，#802）：到点从地面消失并记一条 expired 流水。" +
+      "末段没有任何提示（不闪、不显示秒数）—— 改这个值会让「单图 200 件上限」更早/更晚触发",
+    example: 180000,
+  })
+  @IsInt()
+  @Min(10000)
+  @Max(300000)
+  ttlMs: number;
+
+  @ApiProperty({ description: "归属保护期（毫秒）：这之前只有归属者与掉落时的同队队友能捡", example: 30000 })
+  @IsInt()
+  @Min(0)
+  @Max(300000)
+  protectMs: number;
+
+  @ApiProperty({ description: "单图地面掉落上限（件）：超出按落下的先后挤掉最旧的", example: 200 })
+  @IsInt()
+  @Min(20)
+  @Max(1000)
+  maxGroundPerMap: number;
+
+  @ApiProperty({ description: "boss 掉落是否发全服公告（30 秒最多一条）", example: true })
+  @IsBoolean()
+  announceBoss: boolean;
 }
 
 /** 自动战斗 / 寻路参数（`configs/autoBattle.ts` 的行为部分，样式与颜色不在其中） */
@@ -257,6 +284,32 @@ export class UpdateDropRuntimeParamsDto {
   @Min(0)
   @Max(100)
   bindChance?: number;
+
+  @ApiPropertyOptional({ description: "掉落物存活时长（毫秒，10000~300000）" })
+  @IsOptional()
+  @IsInt()
+  @Min(10000)
+  @Max(300000)
+  ttlMs?: number;
+
+  @ApiPropertyOptional({ description: "归属保护期（毫秒）：不得超过 ttlMs" })
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(300000)
+  protectMs?: number;
+
+  @ApiPropertyOptional({ description: "单图地面掉落上限（件，20~1000）" })
+  @IsOptional()
+  @IsInt()
+  @Min(20)
+  @Max(1000)
+  maxGroundPerMap?: number;
+
+  @ApiPropertyOptional({ description: "boss 掉落是否发全服公告" })
+  @IsOptional()
+  @IsBoolean()
+  announceBoss?: boolean;
 }
 
 /** 部分更新：自动战斗分组 */

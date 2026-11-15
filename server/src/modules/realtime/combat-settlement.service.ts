@@ -1,10 +1,8 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { bindOnDropOf, growthScalarOf, itemTypeOf, skillOf } from "../../common/runtime-config-cache";
-import { BizCode } from "../../common/constants/biz-code";
 import { ATTACK_ATTRIBUTES, DEFENSE_BY_ATTACK, MONSTER_STAT_COLUMN, type AttackAttribute } from "../../common/constants/game-enums";
 import { PARTY_EXP_SHARE_DISTANCE_DEFAULT } from "../../common/constants/social";
-import { BizException } from "../../common/errors/biz.exception";
 import { DropTableRepository } from "../../database/repositories/drop-table.repository";
 import { GrowthRepository } from "../../database/repositories/growth.repository";
 import { MonsterDropRepository } from "../../database/repositories/monster-drop.repository";
@@ -13,7 +11,6 @@ import { RuntimeParamsRepository } from "../../database/repositories/runtime-par
 import { MonsterRow } from "../../database/rows";
 import { DEFAULT_CRIT_DAMAGE, roleAttributeSourceOf, summarizeRoleAttributes } from "../combat/role-attributes";
 import { RolesService } from "../roles/roles.service";
-import type { BagOrigin } from "../roles/role-inventory";
 import { GameEventsService } from "../../common/events/game-events.service";
 import { PartyService } from "../party/party.service";
 import { WorldService } from "../world/world.service";
@@ -22,7 +19,8 @@ import { MapMonitorService } from "./map-monitor.service";
 import { MonsterAiService } from "./monster-ai.service";
 import { PlayerPresenceService } from "./player-presence.service";
 import { CastGuardService } from "./cast-guard.service";
-import type { RealtimeKillReward, RealtimePickedData, RealtimeSettleData, RealtimeSettleHit, RealtimeSettleOk } from "./realtime.protocol";
+import { DropService } from "./drop.service";
+import type { RealtimeKillReward, RealtimeSettleData, RealtimeSettleHit, RealtimeSettleOk } from "./realtime.protocol";
 
 /**
  * 伤害结算（#34：客户端发指令，服务端算结果）
@@ -75,15 +73,6 @@ export class CombatSettlementService {
    */
   private readonly recentSettles = new Map<string, Map<string, RecentSettle>>();
 
-  /**
-   * 掉落账本（#325）：账号 → castId → 该次击杀的掉落条目（picked 标记是否已拾）
-   *
-   * settle 帧的 reward 只发给击杀者本人 —— 别的账号既看不到这份掉落也没有账可查，
-   * 归属校验因此天然成立（伪造的 castId 在这里查不到账）。账目随幂等账一起清理
-   * （换图 / 断线），容量与幂等账同一上限：掉落长期不拾本来就该消失，内存不能陪它涨。
-   */
-  private readonly dropLedgers = new Map<string, Map<number, DropLedgerEntry[]>>();
-
   /** 已经报过「群体技能没配作用半径」的技能 id（缓存 1 秒重建，不去重会刷屏） */
   private readonly warnedNoRadius = new Set<string>();
 
@@ -105,6 +94,8 @@ export class CombatSettlementService {
     private readonly runtimeParams: RuntimeParamsRepository,
     /** 分成距离阈值（#877 的 PARTY_EXP_SHARE_DISTANCE）走配置，e2e 压小用 */
     private readonly config: ConfigService,
+    /** 地面掉落物的世界权威（#802）：算完的掉落交给它实体化、广播、过期 */
+    private readonly drops: DropService,
   ) {}
 
   /** 结算一次出手（结果直接作为 settle 帧的 data 发回） */
@@ -127,117 +118,26 @@ export class CombatSettlementService {
   }
 
   /**
-   * 清掉本账号的幂等账与掉落账本（世界状态不受影响）
+   * 清掉本账号的幂等账（世界状态不受影响）
    *
    * 两个调用方：`worldJoin` 放行时服务端**自己**调（#817：换图清账不能依赖客户端消息），
    * 以及客户端发来的 `targetsReset`（旧客户端 / 主动清，双保险）。
+   *
+   * **#802 起不再清掉落**：掉落是世界实体（与账号 / 连接无关），换图只是你自己不在那张图了，
+   * 东西还躺在地上等人捡（`pick` 会因为 `not_on_map` 拒你）。这是行为变化。
    */
   resetTargets(accountId: string): void {
     // 幂等账照样清（#827）：键里虽然带了 `roleId:mapId`，但客户端换图 / 换角色后是否重置
     // `castSeq` 不由服务端决定 —— 万一它归 0，不清账就会把上一场的结果当成「重复」发回去。
     // 「换图不会撞」由键保证，「castSeq 归 0 也不撞」由这里保证，两道都要。
     this.recentSettles.delete(accountId);
-    // 掉落账本随之清：换图后旧图的掉落不再可拾（客户端换图也会清掉地面掉落物）
-    this.dropLedgers.delete(accountId);
   }
 
-  /** 连接断开：清幂等账（世界状态是共享的，不随任何账号的连接断开而清） */
+  /** 连接断开：清幂等账（世界状态是共享的，不随任何账号的连接断开而清，掉落同理 #802） */
   dropAccount(accountId: string): void {
     this.recentSettles.delete(accountId);
-    this.dropLedgers.delete(accountId);
     // 判定链的进程内状态一起清（#813）：冷却与令牌桶是「这条会话的节奏」，人走了就不必留着
     this.guard.dropAccount(accountId);
-  }
-
-  /**
-   * 拾取一次击杀的掉落（#325：账本校验 + 格子级入包，都在这里编排）
-   *
-   * 流程：账本里找到那条掉落 → 已拾过的幂等应答 → 距离闸 → 交给 RolesService.pickDrop
-   * 入包 → 入包成功才在账本上标记已拾。**标记放在入包成功之后**：背包满被拒时地面
-   * 掉落物必须还在，玩家腾出格子后同一 castId/index 可以再拾。
-   *
-   * ## 三道归属闸
-   *
-   * - **跨图**（#817 第一半）：账本按账号存、`worldJoin` 放行时整份清掉 —— 换图后旧图的
-   *   castId 查不到条目，直接 `unknown_drop`。清账由**服务端**在 join 时做，不看客户端
-   *   发不发 `targetsReset`（那条消息改包就能省掉）。
-   * - **距离**（#817 第二半，`pickDistanceRefusal`）：账本里每条掉落现在自带 `mapId` 与
-   *   掉落点，与玩家最近一次上报的坐标比。上限是运营可配的 `drop.pickAcceptRadius`，
-   *   刻意**不复用** `autoPickupRadius`：那个是客户端「走到多近就自动发 pick」的手感，
-   *   调松它不该顺带把「隔半张地图捡东西」变成合法操作。
-   * - **幂等**：`alreadyPicked` 原样重放成功，**不**再过一遍距离闸 —— 拾取成功的应答丢包后
-   *   客户端重发是正常行为，那时候人可能已经走开了，拦它等于让「捡到了但没提示」变成报错。
-   */
-  pickDrop(accountId: string, castId: number, index: number): RealtimePickedData {
-    const fail = (code: string, message: string): RealtimePickedData => ({ castId, index, ok: false, code, message });
-
-    const ledger = this.dropLedgers.get(accountId)?.get(castId);
-    const entry = ledger && index >= 0 && index < ledger.length ? ledger[index] : undefined;
-    if (!entry) return fail("unknown_drop", `找不到这次掉落（castId=${castId} 第 ${index} 件）：不存在、已随会话清理或不属于你`);
-    if (entry.picked) {
-      const revision = this.roles.onlineRevision(accountId);
-      return revision === null
-        ? fail("no_role", "当前没有在线角色，无法拾取")
-        : { castId, index, ok: true, revision, placed: [], alreadyPicked: true };
-    }
-
-    const refusal = this.pickDistanceRefusal(accountId, entry);
-    if (refusal) return fail(refusal.code, refusal.message);
-
-    try {
-      const result = this.roles.pickDrop(accountId, entry.goodId, entry.count, { bound: entry.bound, from: entry.from });
-      entry.picked = true;
-      return { castId, index, ok: true, revision: result.revision, placed: result.placed, alreadyPicked: false };
-    } catch (error) {
-      // 业务拒绝（背包满 / 角色被踢等）转成 picked 错误帧 —— 连接不断，地面掉落物保留
-      if (error instanceof BizException) {
-        const code = error.code === BizCode.MALL_BAG_FULL
-          ? "bag_full"
-          : error.code === BizCode.ROLE_KICKED
-            ? "role_kicked"
-            : error.code === BizCode.ROLE_NOT_FOUND
-              ? "no_role"
-              : "pick_failed";
-        return fail(code, error.message);
-      }
-      throw error;
-    }
-  }
-
-  /**
-   * 拾取距离闸（#817）：返回拒绝理由，`null` = 放行
-   *
-   * 三个拒绝码都是**新增**的（帧类型不变，还是 `picked`，客户端对未知 code 只 warn 不崩），
-   * 玩家侧的体验兜底靠客户端自己：点远处掉落物会先走过去（`ScreenClickInput` →
-   * `AutoBattle.requestMoveTo`），所以正常情况下这一闸根本不该被触发。
-   *
-   * 三种「不知道他在哪」的处理方式：
-   * - `pickAcceptRadius <= 0`：明确关闭校验（排查问题时用），放行；
-   * - 参数缺键 / 坏值：**放行** —— 闸是加固不是玩法，配漏了让全服捡不起东西比漏判严重得多；
-   *   缺键由 `RuntimeParamsService` 的启动自检点名报错，不会静默；
-   * - 位置缺失 / 过期：**拒绝** —— 与任务 NPC 距离闸同一取向（放行等于给「不上报位置」开绕过开关）。
-   */
-  private pickDistanceRefusal(accountId: string, entry: DropLedgerEntry): { code: string; message: string } | null {
-    const limit = this.pickAcceptRadius();
-    if (limit <= 0) return null;
-
-    const spot = this.presence.positionOf(accountId);
-    if (!spot) {
-      return { code: "no_position", message: "还没收到过你的位置上报，无法判断你是不是站在这件掉落物旁边（动一下再捡）" };
-    }
-    // pos 与 pick 走同一条连接，客户端每 250ms 上报一次：拾取帧到了、位置却几秒没更新，
-    // 只可能是这个客户端故意不上报（正常客户端不可能出现这种情况）
-    if (Date.now() - spot.at > PICK_POS_STALE_MS) {
-      return { code: "no_position", message: "你的位置上报已过期，无法判断距离（动一下再捡）" };
-    }
-    if (spot.mapId !== entry.mapId) {
-      return { code: "wrong_map", message: `掉落物在 ${entry.mapId}，你在 ${spot.mapId}（换图后旧图的掉落会清空）` };
-    }
-    const distance = Math.hypot(spot.x - entry.x, spot.y - entry.y);
-    if (distance > limit) {
-      return { code: "too_far", message: `离掉落物 ${Math.round(distance)}px，超出可拾取距离 ${limit}px —— 走近再捡` };
-    }
-    return null;
   }
 
   //#region 内部实现
@@ -420,7 +320,7 @@ export class CombatSettlementService {
 
     const killerName = this.roleNameOf(role);
     const hits: RealtimeSettleHit[] = [];
-    /** 这一发打出来的所有掉落（多只怪各掉各的，但账本按**一次施放**记一份：拾取帧只有 castId） */
+    /** 这一发打出来的所有掉落（#802 起只是给日志 / 事件用的汇总，实体化在每只怪的击杀分支里做） */
     const drops: Array<{ goodId: string; count: number; bound: boolean; monsterKey: string; mapId: string; x: number; y: number }> = [];
 
     for (const entry of candidates) {
@@ -465,7 +365,23 @@ export class CombatSettlementService {
           y: entry.y,
         });
         this.roles.recordKill(role.id);
-        // 掉落点逐只记（#817）：这一堆东西躺在**这只怪**倒下的地方，拾取距离闸以它为参照
+        // 掉落逐只实体化（#802）：这一堆东西躺在**这只怪**倒下的地方。
+        // 每只各自 spawn（各自散落、各自 dropId）—— 与「一次施放一份账本」的旧形态不同，
+        // 现在定位靠 dropId，不需要再按施放合并。
+        this.attachDrops(reward, {
+          mapId: entry.monster.mapId,
+          ownerAccountId: accountId,
+          x: entry.x,
+          y: entry.y,
+          ownerRoleId: role.id,
+          ownerName: killerName,
+          source: {
+            instanceId: entry.monster.instanceId,
+            monsterKey: entry.monster.monsterKey,
+            label: stats.label,
+            tier: stats.tier,
+          },
+        });
         for (const drop of reward.drops) {
           drops.push({ ...drop, monsterKey: entry.monster.monsterKey, mapId: spot.mapId, x: entry.x, y: entry.y });
         }
@@ -541,12 +457,6 @@ export class CombatSettlementService {
       if (hitStatus) hit.status = hitStatus;
       if (reward) hit.reward = reward;
       hits.push(hit);
-    }
-
-    // 掉落账本按「一次施放」记一份（拾取帧只有 castId + index，没有 targetId）；
-    // 每一条自带 monsterKey 溯源，所以多只怪的掉落混在一份账里也不会认错来源
-    if (drops.length) {
-      this.rememberDrops(accountId, cast.castId, drops, { killerName, monsterKey: hits[0]?.monsterKey ?? "" });
     }
 
     // 观看者只看到「他放了一个技能」：一次出手记一次，目标取最近的那只（打空时为空串）
@@ -792,17 +702,19 @@ export class CombatSettlementService {
       });
       // 击杀计数（#400）：排行榜的原料。与经验分开记 —— 等级差过大时经验为 0，但这一杀算数
       this.roles.recordKill(role.id);
-      // 掉落记账（#325）：只在新结算路径记 —— 幂等重发走 recentSettles 原样重放，不重复入账。
-      // 掉落点 = 这一下打在哪（`hitSpot`，与死亡点、伤害日志同一个坐标，#817 的闸就认它）
-      this.rememberDrops(
-        accountId,
-        cast.castId,
-        reward.drops.map((drop) => ({ ...drop, mapId: target.mapId, x: hitSpot.x, y: hitSpot.y })),
-        {
-          killerName: this.roleNameOf(role),
-          monsterKey: cast.monsterKey,
-        },
-      );
+      // 掉落生成（#802）：账本没了 —— 算出来的东西直接变成世界实体（内存 + 广播 + 投影表）。
+      // 落点 = 这一下打在哪（`hitSpot`，与死亡点、伤害日志同一个坐标），散落偏移由 DropService 算，
+      // 客户端拿到的是**同一份**坐标（#804 起不再自己散落）。
+      // 幂等重发走上面的 recentSettles 原样重放，不会重复生成。
+      this.attachDrops(reward, {
+        mapId: target.mapId,
+        ownerAccountId: accountId,
+        x: hitSpot.x,
+        y: hitSpot.y,
+        ownerRoleId: role.id,
+        ownerName: this.roleNameOf(role),
+        source: { instanceId: cast.targetId, monsterKey: cast.monsterKey, label: stats.label, tier: stats.tier },
+      });
       // 击杀事件（#401 起走总线）：任务进度与成就进度都是订阅方，各自兜异常 ——
       // 任何一方写库失败都不回滚这次击杀（世界状态是权威，少记一笔进度可接受）
       this.events.emit("monster:killed", {
@@ -989,6 +901,43 @@ export class CombatSettlementService {
   }
 
   /**
+   * 把一次击杀抽出来的掉落交给世界（#802）
+   *
+   * 三件事：取「掉落那一刻」的队伍快照（保护期的依据，队伍解散即退化为全员可捡）、
+   * 让 `DropService` 生成实体（落点与散落偏移都在那边算）、把 `dropId` 回填进
+   * `settle.reward.drops`（对账 / 排查用；客户端铺地一律等 `dropSpawn`，不等这一帧）。
+   */
+  private attachDrops(
+    reward: RealtimeKillReward,
+    spot: {
+      mapId: string;
+      ownerAccountId: string;
+      x: number;
+      y: number;
+      ownerRoleId: string;
+      ownerName: string;
+      source: { instanceId: string; monsterKey: string; label: string; tier: string };
+    },
+  ): void {
+    if (!reward.drops.length) return;
+    const created = this.drops.spawn({
+      mapId: spot.mapId,
+      x: spot.x,
+      y: spot.y,
+      owner: { accountId: spot.ownerAccountId, roleId: spot.ownerRoleId, name: spot.ownerName },
+      // 空串 = 没队伍（`partyIdOfRole` 无队返回 ""）；统一成 null 让实体只有一个「无队」表示
+      partyId: this.party.partyIdOfRole(spot.ownerRoleId) || null,
+      source: spot.source,
+      drops: reward.drops.map((drop) => ({ goodId: drop.goodId, count: drop.count, bound: drop.bound })),
+    });
+    // spawn 按输入顺序返回，下标一一对应（数量为 0 的条目已在抽取阶段被过滤掉）
+    created.forEach((entity, index) => {
+      const entry = reward.drops[index];
+      if (entry) entry.dropId = entity.dropId;
+    });
+  }
+
+  /**
    * 队友经验分成（#399）
    *
    * 规则（写进 #399 认领留言的第 4 条）：**同图且距击杀点足够近的在线队友**每人得
@@ -1124,10 +1073,20 @@ export class CombatSettlementService {
     if (!table) return [];
     const monsterBind = row?.bind_drops === 1;
     const bindChance = this.dropBindChance();
-    return rollDropTable(table).map((drop) => ({
-      ...drop,
-      bound: monsterBind || bindOnDropOf(drop.goodId) || Math.random() * 100 < bindChance,
-    }));
+    const result: Array<{ goodId: string; count: number; bound: boolean }> = [];
+    for (const drop of rollDropTable(table)) {
+      // 掉落表是管理端可改的数据：配了不存在的物品 id 就在这里拦下（#802）。
+      // 以前是等拾取时才报错 —— 那件东西会永远躺在地上，谁都捡不起来，也没有任何提示。
+      if (!itemTypeOf(drop.goodId)) {
+        this.logger.warn(`掉落表里配了不存在的物品 ${drop.goodId}（来源怪物 ${monsterKey}）：这一件不生成`);
+        continue;
+      }
+      result.push({
+        ...drop,
+        bound: monsterBind || bindOnDropOf(drop.goodId) || Math.random() * 100 < bindChance,
+      });
+    }
+    return result;
   }
 
   /**
@@ -1140,18 +1099,6 @@ export class CombatSettlementService {
     const value = Number(this.dropParams().bindChance);
     if (!Number.isFinite(value)) return 0;
     return Math.min(100, Math.max(0, value));
-  }
-
-  /**
-   * 拾取距离闸的半径（像素，读 `runtime_params.drop_params.pickAcceptRadius`，#817）
-   *
-   * 缺键 / 坏值 → 0 = 不校验（见 `pickDistanceRefusal` 的说明：闸是加固，配漏了不该
-   * 让全服捡不起东西；缺键在启动自检里已经点名报错）。
-   * 负数一律当 0，超上限的脏值不夹到某个魔法数 —— 运营写成 99999 就是「等于不限」。
-   */
-  private pickAcceptRadius(): number {
-    const value = Number(this.dropParams().pickAcceptRadius);
-    return Number.isFinite(value) && value > 0 ? value : 0;
   }
 
   /** 掉落参数原样（`runtime_params.drop_params`；坏 JSON / 空列 → 空对象，不带任何默认值） */
@@ -1199,93 +1146,16 @@ export class CombatSettlementService {
     book.set(key, { result, at: now });
   }
 
-  /**
-   * 记住一次击杀的掉落（#325；容量与幂等账同一上限，超出挤掉最旧的一次击杀）
-   *
-   * #789 起账本条目多两件事：**绑定**（拾取时原样写进背包格子）与**溯源**（谁杀的 /
-   * 哪个怪 / 什么时候）。溯源只给装备 —— 用户口径是「只有装备会溯源，其他物品只按是否
-   * 绑定分成两种」，一堆药记「谁掉的」没有意义，而且会让存档无谓变大。
-   *
-   * #824 起条目自己带 `monsterKey`：一次区域施放可能同时打死三只不同的怪，账本却只有
-   * 一份（拾取帧只有 `castId` + `index`，没有 targetId）。不逐条记来源，三只怪的掉落
-   * 就都溯源成「第一只」了。
-   *
-   * #817 起条目还要带 `mapId` + 掉落点坐标（同样必须**逐条**）：拾取时的距离闸拿它当参照，
-   * 记成一份就等于「一次群攻的三堆东西只有第一堆的位置是对的」，另外两堆永远捡不起来。
-   * 坐标由调用方随条目带上（单体用命中点、区域用各自怪的实时坐标），这里只搬运。
-   */
-  private rememberDrops(
-    accountId: string,
-    castId: number,
-    drops: Array<{ goodId: string; count: number; bound: boolean; monsterKey?: string; mapId: string; x: number; y: number }>,
-    origin: KillOrigin,
-  ): void {
-    if (!drops.length) return;
-    let book = this.dropLedgers.get(accountId);
-    if (!book) {
-      book = new Map<number, DropLedgerEntry[]>();
-      this.dropLedgers.set(accountId, book);
-    }
-    if (book.size >= DROP_LEDGER_CAPACITY) {
-      const oldest = book.keys().next().value;
-      if (oldest !== undefined) book.delete(oldest);
-    }
-    const at = Date.now();
-    book.set(
-      castId,
-      drops.map((drop) => ({
-        goodId: drop.goodId,
-        count: drop.count,
-        bound: drop.bound,
-        from: itemTypeOf(drop.goodId) === "equipment" ? { role: origin.killerName, monster: drop.monsterKey ?? origin.monsterKey, at } : undefined,
-        mapId: drop.mapId,
-        x: drop.x,
-        y: drop.y,
-        picked: false,
-      })),
-    );
-  }
-
   //#endregion
 }
 
 //#region 类型与小工具（纯函数，e2e 可对照）
-
-/** 一次击杀的身份信息（掉落溯源用：#789） */
-interface KillOrigin {
-  /** 击杀者角色名（掉落那一刻的名字） */
-  killerName: string;
-  /** 怪物 key —— 客户端用怪物配置翻成中文名 */
-  monsterKey: string;
-}
 
 /** 幂等账的一条（#827：结果 + 写入时刻，供 TTL 剔除） */
 interface RecentSettle {
   result: RealtimeSettleData;
   /** 写入时刻（`Date.now()`） */
   at: number;
-}
-
-/** 掉落账本里的一条（#325 账本 + #789 绑定与溯源 + #817 掉落点） */
-interface DropLedgerEntry {
-  goodId: string;
-  count: number;
-  /** 是否绑定角色（拾取时原样写进背包格子） */
-  bound: boolean;
-  /** 溯源，只有装备会有 */
-  from?: BagOrigin;
-  /**
-   * 掉落点（#817 拾取距离闸的唯一参照）：**怪倒下的地方**，不是玩家拾取那一刻的位置。
-   *
-   * 拿它而不是「施法者坐标」有两个理由：一是区域技能一次打死几只，每只各掉各的，
-   * 只有逐条记才不会把 8 条掉落全指向主目标；二是客户端把掉落物摆在地上时用的就是
-   * 这个点（`entry.x/y` 是服务端广播的实时坐标），闸与画面才对得上。
-   */
-  mapId: string;
-  x: number;
-  y: number;
-  /** 是否已被拾取（幂等：同一次击杀的同一件不能入包两次） */
-  picked: boolean;
 }
 
 /** 客户端 cast 消息解析后的形状 */
@@ -1313,26 +1183,6 @@ const CAST_DEDUPE_TTL_MS = 120_000;
  * **这个数只是内存兜底**，过期才是主逻辑；256 那种固定值会让「打得久」变成可重放。
  */
 const CAST_DEDUPE_CAPACITY = 1024;
-
-/**
- * 掉落账本容量（#827 起与幂等账同量级，但**不按时间过期**）
- *
- * 一次施放占一个槽（不管掉了几件）。过期在这里不合适 —— 地上的东西还在屏幕上，
- * 账先没了就是「看得见捡不起来」（`unknown_drop`）。所以掉落账本只靠容量兜底：
- * 换图 / 断线会整份清，剩下的上限按 1024 次施放算（远超一波刷怪的规模）。
- */
-const DROP_LEDGER_CAPACITY = 1024;
-
-/**
- * 拾取时「位置算过期」的窗口（毫秒，#817）
- *
- * 客户端 `Game.reportPosition` 每 250ms 发一帧 `pos`，与 `pick` 走同一条连接 —— 拾取帧
- * 到了、位置却 5 秒没更新，只可能是这个客户端**故意**不上报（正常客户端不可能出现）。
- * 所以这个窗口不是「手感容差」，是**反作弊判据**：放行等于「停止上报位置就不再受距离约束」。
- * 与任务 NPC 距离闸（`QUEST_POS_STALE_MS`，10 秒）刻意不共用一个常量：那一个是
- * 「从别处走过来需要多久」的容差，这一个只需要覆盖帧间隔。
- */
-const PICK_POS_STALE_MS = 5_000;
 
 /**
  * 一次区域 / 群体施放最多命中几只（#824）

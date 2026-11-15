@@ -17,12 +17,12 @@ export interface DropRuntimeParams {
   /** 自动拾取半径（像素）：角色脚底与掉落物距离小于该值即拾取 */
   autoPickupRadius: number;
   /**
-   * 服务端拾取距离闸（像素，#817）：玩家与这一幕掉落**掉出来时所在的位置**的距离超过它，
-   * 拾取请求直接拒。
+   * 服务端拾取距离闸（像素，#817 / #802）：玩家与掉落物**落点的距离**超过它，拾取请求直接拒。
    *
    * 与 `autoPickupRadius` 是**两把尺子**：那个是客户端「走到多近就自动发 pick」的手感，
    * 这个是服务端「认不认这一发 pick」的权威。故意不复用：手感可以调到 200 让大家图省事，
-   * 但不能因此把「隔半张地图捡东西」变成合法操作。
+   * 但不能因此把「隔半张地图捡东西」变成合法操作。实际生效值取两者较大 —— 比自动拾取
+   * 半径还小的闸只会把正常玩家拦在门外。
    *
    * 0 = 关闭校验（只用于排查问题，出货状态别设 0：等于把 #817 又打开）。
    */
@@ -41,6 +41,19 @@ export interface DropRuntimeParams {
    * 0 = 从不随机绑定（出厂值，等于「只有配置写死的那几件会绑」）。
    */
   bindChance: number;
+  /**
+   * 掉落物存活时长（毫秒，#802；默认 180000 = 3 分钟）
+   *
+   * 到点从地面消失并记一条 `expired` 流水。**末段零提示**（不闪、不变色、不显示秒数）：
+   * 快消失的东西不该催玩家 —— 这是 2026-11-08 拍板的口径，所以没有 `warnMs` 这一列。
+   */
+  ttlMs: number;
+  /** 归属保护期（毫秒，默认 30000）：这之前只有归属者与**掉落时**的同队队友能捡 */
+  protectMs: number;
+  /** 单图地面掉落上限（默认 200）：超出按 `createdAt` 挤掉最旧的（记 `overflow`） */
+  maxGroundPerMap: number;
+  /** boss 掉落是否发全服公告（默认 true；30 秒最多一条） */
+  announceBoss: boolean;
 }
 
 /** 自动战斗 / 寻路参数（客户端消费；服务端只负责下发） */
@@ -214,7 +227,19 @@ export const MOVEMENT_GUARD_KEYS: Array<keyof MovementGuardParams> = [
 
 /** 三组的键清单（**启动自检用**：库里少了哪个键就点名报错，不静默补默认值） */
 export const RUNTIME_PARAM_KEYS: Record<keyof RuntimeParams, string[]> = {
-  drop: ["autoPickupRadius", "pickAcceptRadius", "fullTipInterval", "scatterMinDistance", "pickReplyTimeout", "bindChance"],
+  drop: [
+    "autoPickupRadius",
+    "pickAcceptRadius",
+    "fullTipInterval",
+    "scatterMinDistance",
+    "pickReplyTimeout",
+    "bindChance",
+    // #802：地面实体的存活 / 保护期 / 容量 / 公告（距离闸沿用上面的 pickAcceptRadius）
+    "ttlMs",
+    "protectMs",
+    "maxGroundPerMap",
+    "announceBoss",
+  ],
   autoBattle: [
     "maxTargetDistance",
     "moveByRun",

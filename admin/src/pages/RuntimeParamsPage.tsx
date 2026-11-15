@@ -152,6 +152,16 @@ export function RuntimeParamsPage() {
       >
         {draft ? (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <Field label="boss 掉落公告" hint="关掉就不发全服公告（只对 boss 档怪生效，30 秒最多一条）">
+              <Select
+                value={draft.drop.announceBoss}
+                disabled={!canWrite}
+                onChange={(event) => setField("drop", "announceBoss", event.target.value)}
+              >
+                <option value="true">发公告</option>
+                <option value="false">不发</option>
+              </Select>
+            </Field>
             {DROP_FIELDS.map((field) => (
               <Field key={field.key} label={field.label} hint={field.hint}>
                 <Input
@@ -301,6 +311,9 @@ const DROP_FIELDS: FieldSpec[] = [
   { key: "pickReplyTimeout", label: "拾取应答超时（毫秒）", hint: "超时视为本轮失败，允许重拾" },
   { key: "fullTipInterval", label: "背包满提示间隔（毫秒）", hint: "防止自动拾取时每帧刷屏" },
   { key: "bindChance", label: "随机绑定概率（%）", hint: "物品与怪物都没写「强制绑定」时，按它掷一次（服务端掉落结算读它）" },
+  { key: "ttlMs", label: "掉落存活时长（毫秒）", hint: "到点从地面消失；末段不给任何提示（不闪、不显示秒数）" },
+  { key: "protectMs", label: "归属保护期（毫秒）", hint: "这之前只有击杀者与掉落时的同队队友能捡；不得超过存活时长" },
+  { key: "maxGroundPerMap", label: "单图地面上限（件）", hint: "超出按落下的先后挤掉最旧的；存活时长调长时建议一起调大" },
 ];
 
 const AUTO_FIELDS: FieldSpec[] = [
@@ -363,6 +376,10 @@ function toDraft(row: RuntimeParams): Draft {
       pickReplyTimeout: String(row.drop.pickReplyTimeout),
       fullTipInterval: String(row.drop.fullTipInterval),
       bindChance: String(row.drop.bindChance ?? 0),
+      ttlMs: String(row.drop.ttlMs ?? 0),
+      protectMs: String(row.drop.protectMs ?? 0),
+      maxGroundPerMap: String(row.drop.maxGroundPerMap ?? 0),
+      announceBoss: row.drop.announceBoss === false ? "false" : "true",
     },
     autoBattle: {
       moveByRun: row.autoBattle.moveByRun ? "true" : "false",
@@ -417,17 +434,36 @@ function buildPayload(
     const pickReplyTimeout = num("pickReplyTimeout");
     const fullTipInterval = num("fullTipInterval");
     const bindChance = num("bindChance");
+    const ttlMs = num("ttlMs");
+    const protectMs = num("protectMs");
+    const maxGroundPerMap = num("maxGroundPerMap");
     if (
       autoPickupRadius === null ||
       pickAcceptRadius === null ||
       scatterMinDistance === null ||
       pickReplyTimeout === null ||
       fullTipInterval === null ||
-      bindChance === null
+      bindChance === null ||
+      ttlMs === null ||
+      protectMs === null ||
+      maxGroundPerMap === null
     ) {
       return null;
     }
-    return { drop: { autoPickupRadius, pickAcceptRadius, scatterMinDistance, pickReplyTimeout, fullTipInterval, bindChance } };
+    return {
+      drop: {
+        autoPickupRadius,
+        pickAcceptRadius,
+        scatterMinDistance,
+        pickReplyTimeout,
+        fullTipInterval,
+        bindChance,
+        ttlMs,
+        protectMs,
+        maxGroundPerMap,
+        announceBoss: values.announceBoss === "true",
+      },
+    };
   }
   if (group === "guild") {
     const nameMin = num("nameMin");

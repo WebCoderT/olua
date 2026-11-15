@@ -26,6 +26,7 @@
     "test:e2e:realtime-stats": "node --disable-warning=ExperimentalWarning test/e2e-realtime-stats.cjs",
     "test:e2e:protocol-slim": "node --disable-warning=ExperimentalWarning test/e2e-protocol-slim.cjs",
     "test:e2e:combat": "node --disable-warning=ExperimentalWarning test/e2e-combat.cjs",
+    "test:e2e:drop": "node --disable-warning=ExperimentalWarning test/e2e-drop.cjs",
     "test:e2e:cast-guard": "node --disable-warning=ExperimentalWarning test/e2e-cast-guard.cjs",
     "test:e2e:status-player": "node --disable-warning=ExperimentalWarning test/e2e-status-player.cjs",
     "test:e2e:world": "node --disable-warning=ExperimentalWarning test/e2e-world.cjs",

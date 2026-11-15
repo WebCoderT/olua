@@ -360,6 +360,76 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
       -- 上面那条是 (zone_id, map_id, id)，前缀用不上 —— 时间闸与图无关。
       CREATE INDEX IF NOT EXISTS idx_map_monitor_events_at ON map_monitor_events(at);
 
+      -- 地面掉落物的**当前投影**（#802）：实时进程写、存档进程（管理端）读。
+      -- 权威在实时进程内存（DropService.ground），这张表只是跨进程的那一条路 ——
+      -- 进程重启会整份清空（每条记一行 restart_lost 流水），所以它不进 config-sync。
+      CREATE TABLE IF NOT EXISTS world_drops (
+        drop_id             TEXT PRIMARY KEY,
+        zone_id             INTEGER NOT NULL,
+        map_id              TEXT    NOT NULL,
+        good_id             TEXT    NOT NULL,
+        count               INTEGER NOT NULL,
+        bound               INTEGER NOT NULL DEFAULT 0,
+        x                   REAL    NOT NULL,
+        y                   REAL    NOT NULL,
+        owner_account_id    TEXT    NOT NULL,
+        owner_role_id       TEXT    NOT NULL,
+        owner_name          TEXT    NOT NULL,
+        party_id            TEXT,
+        monster_key         TEXT    NOT NULL,
+        monster_instance_id TEXT    NOT NULL,
+        origin_role         TEXT,
+        origin_at           INTEGER,
+        created_at          INTEGER NOT NULL,
+        expire_at           INTEGER NOT NULL,
+        protect_until       INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_world_drops_map ON world_drops(zone_id, map_id, created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_world_drops_expire ON world_drops(expire_at);
+
+      -- 掉落的**终态流水**（#802 建表、#803 起才是写入方）：一件掉落的一生只写一行。
+      -- 物品名与怪物名是冗余存下来的 —— 物品日后被删，这条记录仍要能看懂。
+      CREATE TABLE IF NOT EXISTS drop_records (
+        id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+        drop_id             TEXT    NOT NULL,
+        zone_id             INTEGER NOT NULL,
+        map_id              TEXT    NOT NULL,
+        good_id             TEXT    NOT NULL,
+        good_type           TEXT,
+        good_label          TEXT,
+        count               INTEGER NOT NULL,
+        bound               INTEGER NOT NULL DEFAULT 0,
+        monster_key         TEXT    NOT NULL,
+        monster_label       TEXT,
+        monster_instance_id TEXT    NOT NULL,
+        owner_account_id    TEXT    NOT NULL,
+        owner_role_id       TEXT    NOT NULL,
+        owner_name          TEXT    NOT NULL,
+        result              TEXT    NOT NULL,
+        picked_account_id   TEXT,
+        picked_role_id      TEXT,
+        picked_name         TEXT,
+        created_at          INTEGER NOT NULL,
+        resolved_at         INTEGER NOT NULL,
+        lived_ms            INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_drop_records_time ON drop_records(created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_drop_records_map ON drop_records(zone_id, map_id, created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_drop_records_owner ON drop_records(owner_name, created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_drop_records_result ON drop_records(result, created_at DESC);
+
+      -- 清空某图地面的**跨进程指令**（#805 的写入口；本刀只建表不接）。
+      -- 不复用 runtime_params 里的时间戳：清空是按图发起的，可能同时对三张图发起，时间戳会互相覆盖。
+      CREATE TABLE IF NOT EXISTS drop_clear_requests (
+        id           INTEGER PRIMARY KEY AUTOINCREMENT,
+        zone_id      TEXT    NOT NULL,
+        map_id       TEXT    NOT NULL,
+        requested_at INTEGER NOT NULL,
+        done_at      INTEGER,
+        cleared      INTEGER NOT NULL DEFAULT 0
+      );
+      CREATE INDEX IF NOT EXISTS idx_drop_clear_pending ON drop_clear_requests(done_at, id);
+
       -- 角色位置快照（#930 的产物，服务 #862/#863 的距离校验）：
       -- 一行 = 一个进过图的角色的最新坐标 + 那一次的时刻。
       --

@@ -290,6 +290,89 @@ export interface RealtimeDropEntry {
   count: number;
   /** 是否绑定角色（不可交易） */
   bound: boolean;
+  /**
+   * 地面实体的 id（#802）
+   *
+   * `settle.reward.drops` 里带上它，是为了让杀怪的人**对得上号**（日志 / 排查 / 后续
+   * 「这件东西最后去哪了」）。客户端铺地**不用**这个字段 —— 铺地一律等 `dropSpawn`，
+   * 否则击杀者与旁观者会走两条不同的路径，而它们本该完全一样（docs/18 §4.3）。
+   */
+  dropId?: string;
+}
+
+/**
+ * 地面上的一个掉落物（#802）
+ *
+ * `world.drops`（进图快照）与 `dropSpawn`（增量广播）**共用这一个形状**：客户端两条路
+ * 走同一段代码铺地，不会出现「进图看到的和后来掉的不一样」。
+ *
+ * 时间给了三份：`protectUntil` / `expireAt` 是**绝对毫秒**（服务端时钟，用于跨端对账），
+ * `expireInMs` / `protectInMs` 是**相对量**（客户端倒计时只准用它，避免时钟漂移）。
+ */
+export interface RealtimeDropSnapshot {
+  dropId: string;
+  goodId: string;
+  count: number;
+  bound: boolean;
+  /** 落点（世界坐标，服务端算好；客户端不再自己散落） */
+  x: number;
+  y: number;
+  /** 归属者显示名（客户端显示「XX 的物品」） */
+  ownerName: string;
+  /** 归属者账号（只用于「是不是我的」这种展示判断，不作权威） */
+  ownerAccountId: string;
+  /** 保护期结束时刻（绝对毫秒） */
+  protectUntil: number;
+  /** 过期时刻（绝对毫秒） */
+  expireAt: number;
+  /** 距过期还剩多少毫秒（相对量，客户端倒计时用它） */
+  expireInMs: number;
+  /** 距保护期结束还剩多少毫秒（0 = 已开放给所有人） */
+  protectInMs: number;
+}
+
+/** 服务端 → 客户端：一批掉落出现（同图广播，**含击杀者**） */
+export interface RealtimeDropSpawnMessage {
+  type: "dropSpawn";
+  data: {
+    mapId: string;
+    drops: RealtimeDropSnapshot[];
+    /** 服务端此刻的毫秒时间戳（客户端可选用于校准，判断漂移用） */
+    serverNow: number;
+  };
+}
+
+/** 服务端 → 客户端：一批掉落消失 */
+export interface RealtimeDropRemoveMessage {
+  type: "dropRemove";
+  data: {
+    mapId: string;
+    dropIds: string[];
+    /** picked = 被捡走 / expired = 过期 / overflow = 单图超限被挤掉 */
+    reason: "picked" | "expired" | "overflow";
+    /** reason=picked 时给拾取者名字（客户端可飘一句「XX 捡走了 …」） */
+    byName?: string;
+  };
+}
+
+/**
+ * 服务端 → 客户端：稀有掉落全服公告（#802）
+ *
+ * 现存聊天帧的 `world` 频道只发给**同图**观看者（#876 之后连世界频道也是按图路由），
+ * 所以「全服公告」不能借用聊天，要单独一条。抑制规则在服务端：全服 30 秒最多一条。
+ */
+export interface RealtimeDropNoticeMessage {
+  type: "dropNotice";
+  data: {
+    /** 击杀者显示名 */
+    killerName: string;
+    /** 怪物显示名 */
+    monsterLabel: string;
+    /** 地图 id（客户端翻成地图名） */
+    mapId: string;
+    /** 这一次公告里点名的物品（最多三件，按稀有度/顺序取前几件） */
+    items: Array<{ goodId: string; label: string; count: number }>;
+  };
 }
 
 export interface RealtimeKillReward {
@@ -440,6 +523,13 @@ export interface RealtimeWorldMessage {
     capacity?: number;
     /** 全量列表（规模 = 单图怪物数，最多几百只，全量比增量简单且不易漂移） */
     monsters: RealtimeWorldMonster[];
+    /**
+     * 地面掉落物的全量快照（#802；没人捡完就换图 / 断线重连靠它恢复）
+     *
+     * 增量广播（`dropSpawn`）帮不上「刚进图的人」，所以要有一份全量。图卸载**不**清掉落
+     * （生命周期只由 `expireAt` 决定），所以逛一圈回来（< 180 秒）还能看到原地的东西。
+     */
+    drops?: RealtimeDropSnapshot[];
   };
 }
 
@@ -814,23 +904,20 @@ export interface RealtimeEntityLeaveData {
 //#region 掉落拾取（#325：地面掉落物归属击杀者，拾取入包的权威在服务端）
 
 /**
- * 客户端 → 服务端：拾取一次击杀的掉落
+ * 客户端 → 服务端：拾取地上的一件掉落物（#802 起按**世界实体 id** 定位）
  *
- * 掉落内容在 settle 帧的 `reward.drops` 里（只发给击杀者本人 —— 归属天然成立，别
- * 的账号既看不到也没有账可查），这里用「击杀那次的 castId + drops 数组下标」定位。
- * 服务端按账本里的那一条做**格子级入包**（药品/材料可叠加、装备占一格），背包放不下
- * 整份就拒拾（地面掉落物保留）；成功后该下标标记已拾，重复拾取幂等应答、不重复入包。
+ * 以前是「击杀那次的 castId + drops 数组下标」—— 那是按账号记账的形态（别人的掉落既看
+ * 不到也没有账可查）。掉落变成世界实体之后，定位自然是实体自己的 id：谁掉的、掉在哪、
+ * 谁能捡都由服务端判，客户端只需要说「我要这一件」。
  *
- * 为什么走帧不走 HTTP：settle 的幂等账（掉落账本随之）在**实时进程**的内存里，
- * HTTP 进程拿不到 —— 跨进程要么落库一张表要么把账本挪走，都比一条帧贵。
+ * 为什么走帧不走 HTTP：世界状态（含掉落）只活在**实时进程**的内存里，HTTP 跑在存档进程，
+ * 跨进程要多绕一圈库，而拾取是每秒都可能发生的操作。
  */
 export interface RealtimePickMessage {
   type: "pick";
   data: {
-    /** 击杀那次的出手序号（settle 帧 reward 所在的那条 castId） */
-    castId: number;
-    /** reward.drops 的数组下标 */
-    index: number;
+    /** 地面实体的 id（`dropSpawn` / `world.drops` 里给的那个） */
+    dropId: string;
   };
 }
 
@@ -848,8 +935,8 @@ export interface RealtimePlacedCell {
 
 /** 拾取成功（含幂等重放：该掉落此前已拾取过，placed 为空、revision 原样） */
 export interface RealtimePickedOk {
-  castId: number;
-  index: number;
+  /** 地面实体的 id（#802 起按它定位；客户端据此移除节点） */
+  dropId: string;
   ok: true;
   /**
    * 拾取后的角色修订号：入包推进了 revision，客户端照搬做新基线，
@@ -860,16 +947,30 @@ export interface RealtimePickedOk {
   placed: RealtimePlacedCell[];
   /** true = 该掉落此前已拾取过（重复拾取的幂等应答，未重复入包） */
   alreadyPicked: boolean;
+  /** 这次拾取的是什么东西（客户端飘字用，不再从地面节点上取） */
+  goodId: string;
+  count: number;
 }
 
 /** 拾取被拒（地面掉落物保留，背包满时可稍后再试） */
 export interface RealtimePickedError {
-  castId: number;
-  index: number;
+  /** 地面实体的 id（格式错时为空串） */
+  dropId: string;
   ok: false;
-  /** 机器可读的拒绝原因（bad_request / unknown_drop / bag_full / no_role / role_kicked / pick_failed） */
+  /**
+   * 机器可读的拒绝原因（docs/18 §4.2 的九步校验一一对应）
+   *
+   * `unknown_drop`（不存在/已清场）/ `not_on_map`（不在同一图）/ `expired` / `already_picked` /
+   * `protected` / `too_far` / `no_role` / `role_kicked` / `item_gone` / `bag_full` / `pick_failed`
+   */
   code: string;
   message: string;
+  /** protected 专用：还要等多少毫秒保护期结束 */
+  waitMs?: number;
+  /** protected 专用：归属者名字（文案「XX 击杀的物品」） */
+  ownerName?: string;
+  /** already_picked 专用：拾取者名字 */
+  byName?: string;
 }
 
 export type RealtimePickedData = RealtimePickedOk | RealtimePickedError;
@@ -1241,6 +1342,9 @@ export type RealtimeServerMessage =
   | RealtimeMonsterAiMessage
   | RealtimePlayersMessage
   | RealtimePickedMessage
+  | RealtimeDropSpawnMessage
+  | RealtimeDropRemoveMessage
+  | RealtimeDropNoticeMessage
   | RealtimeChatBroadcast
   | RealtimeQuestMessage
   | RealtimePartySnapshotMessage

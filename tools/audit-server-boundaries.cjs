@@ -238,6 +238,10 @@ const REPO_EDGES = {
   // 合并区（#961）：zone 域把源区 pending 置 failed（`failPendingOfZone`）—— 必须在合并
   // 事务里做，否则实时进程下一拍就在**死区**上重载并重新播种，合并等于白做
   "database/repositories/world-reload-request.repository.ts": ["modules/map", "modules/world", "modules/zone"],
+  // 地面掉落（#802）：**权威在实时进程内存，这张表是投影** —— 实时域 100ms 一拍批量写
+  // （生成 / 拾取 / 过期），管理端只读（「这张图地上现在有什么」）。没有第三个模块连它：
+  // 掉落从生成那一刻起就不归存档域管（角色身上的是「已入包」，那是 roles 表的事）
+  "database/repositories/world-drop.repository.ts": ["modules/realtime"],
   // NPC 点位（#672）：点位归后台，只有地图域读写（管理端画布 + 配置快照）
   "database/repositories/map-npc.repository.ts": ["modules/map", "modules/quest"],
   // 碰撞盒（#676）：与点位同理 —— 只有地图域读写（画布增删改 + 配置快照下发）；
