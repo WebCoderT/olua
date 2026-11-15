@@ -907,36 +907,57 @@ export const announcementBoardDialogLayout = {
   title: "公告",
   eyebrow: "ANNOUNCEMENT",
   size: new Size(720, 500),
+  /**
+   * 左右两栏（稿 10-announcement 的 `.board-body`）：左 280 列表 + 14 间距 + 右 390 详情，
+   * 两栏同高 388（面板 500 − 头部 45 − 页脚下留白），顶边 205。
+   * 左列中心 -202、右列中心 147。
+   */
   /** 左：公告条目滚动列表（行高固定，正文在右栏） */
   list: {
     name: "announcement_list",
-    position: new Vec2(-215, -20),
-    size: new Size(280, 400),
-    itemSize: new Size(268, 58),
+    position: new Vec2(-202, 11),
+    size: new Size(280, 388),
+    /** 条目：上下 10 内距 + 标题两行 36 + 4 + 来源行 16 + 10 = 76 */
+    itemSize: new Size(268, 76),
     /** 条目间距（条目内部的两行文字几何见下面两项） */
-    itemGap: 4,
-    itemTitleFontSize: 13,
-    itemMetaFontSize: 11,
-    /** 条目的标题与第二行（左对齐；左侧留出未读圆点的位置，所以左边界不贴条目边） */
-    itemTitle: { position: new Vec2(4, 12), size: new Size(244, 18) },
-    itemMeta: { position: new Vec2(4, -11), size: new Size(244, 16) },
-    /** 未读条目用亮色标题 + 左侧圆点，已读压暗（一眼看出哪几条是新的） */
+    itemGap: T.spacing.sp3,
+    itemTitleFontSize: T.fontSize.f13,
+    itemMetaFontSize: T.fontSize.f10,
+    /** 条目的标题（两行，可换行）与来源行（左对齐） */
+    itemTitle: { position: new Vec2(4, 14), size: new Size(244, 36), lineHeight: 18 },
+    itemMeta: { position: new Vec2(4, -22), size: new Size(244, 16) },
+    /** 未读条目用亮色标题 + 左上圆点，已读压暗（一眼看出哪几条是新的） */
     unreadTitleColor: T.gold[4],
     readTitleColor: T.text[4],
     itemMetaColor: T.text[4],
+    /** 条目底（稿 `.bi`：深底 + 一圈弱线 + 圆角；选中时再叠一层金底） */
+    itemFill: T.surface.sunken,
+    itemBorder: T.line[1],
+    itemRadius: T.radius.r2,
     /** 选中条目的底色（Graphics 自绘，不依赖底图） */
     selectedFill: T.gold[1],
-    /** 未读圆点（相对条目中心；用 uiImages.dot） */
-    itemDot: { position: new Vec2(-126, 13), size: new Size(8, 8) },
+    /** 未读圆点（稿 `.dot` 在条目右上角；相对条目中心） */
+    itemDot: { position: new Vec2(118, 22), size: new Size(8, 8) },
   },
-  /** 右：选中公告的详情（标题 / 级别 · 时间窗 / 正文滚动区） */
+  /** 右：选中公告的详情（外框 + 标题 / 级别 · 时间窗 / 分隔线 / 正文滚动区） */
   detail: {
-    title: { name: "announcement_detail_title", position: new Vec2(140, 172), size: new Size(368, 24), fontSize: 15, color: T.gold[4] },
+    /** 右栏外框（稿 `.br`：一圈弱线 + 深底 + 圆角） */
+    frame: {
+      name: "announcement_detail_frame",
+      position: new Vec2(147, 11),
+      size: new Size(390, 388),
+      fill: T.surface.sunken,
+      border: T.line[1],
+      radius: T.radius.r2,
+    },
+    title: { name: "announcement_detail_title", position: new Vec2(147, 179), size: new Size(354, 24), fontSize: T.fontSize.f16, color: T.gold[5] },
     /** 级别 · 时间窗（没有选中公告时这里显示空态 / 失败提示） */
-    meta: { name: "announcement_detail_meta", position: new Vec2(140, 148), size: new Size(368, 18), fontSize: 11, color: T.text[4] },
-    scroll: { name: "announcement_body_scroll", position: new Vec2(140, -28), size: new Size(372, 330) },
+    meta: { name: "announcement_detail_meta", position: new Vec2(147, 154), size: new Size(354, 16), fontSize: T.fontSize.f11, color: T.text[4] },
+    /** 头部与正文之间的分隔线（稿 `.br-head` 的 border-bottom） */
+    divider: { y: 136, color: T.line[1] },
+    scroll: { name: "announcement_body_scroll", position: new Vec2(147, -24), size: new Size(354, 290) },
     /** 正文：宽度固定、高度按内容自适应（可换行） */
-    body: { name: "announcement_body", fontSize: 13, lineHeight: 20, width: 364, color: T.text[1] },
+    body: { name: "announcement_body", fontSize: T.fontSize.f13, lineHeight: 22, width: 346, color: T.text[2] },
   },
 };
 
@@ -1165,28 +1186,31 @@ export const socialDialogLayout = {
   eyebrow: "SOCIAL",
   /** 比通用弹窗高 60：多出来的一行放页签（帮会页的坐标因此可以原样复用） */
   size: new Size(600, 560),
-  /** 页签栏（选中金色底、未选中暗色底；x 是各页签中心，从「帮会」到「附近」） */
+  /**
+   * 页签栏（选中金色底、未选中暗色底；x 是各页签中心，从「帮会」到「附近」）
+   * 稿 13-social：五枚 96 宽 + 6 间距 = 504（内容宽 560），整行居中 → ±102 步进
+   */
   tabs: {
-    y: 232,
-    size: new Size(104, 32),
-    columns: [-208, -104, 0, 104, 208],
+    y: 219,
+    size: new Size(96, 32),
+    columns: [-204, -102, 0, 102, 204],
     /** 与 texts.tabs 一一对应，别只改一处 */
-    radius: 6,
+    radius: T.radius.r2,
     activeFill: T.gold[4],
     activeText: T.surface[3],
     idleFill: T.surface[2],
     idleText: T.text[1],
     idleBorder: T.surface[3],
-    fontSize: 13,
+    fontSize: T.fontSize.f14,
   },
   /** 列表行（与帮会列表同一套几何与配色） */
   row: {
-    size: new Size(556, 48),
+    size: new Size(556, 52),
     fill: T.surface[1],
     border: T.surface[3],
-    radius: 6,
-    nameFontSize: 14,
-    metaFontSize: 11,
+    radius: T.radius.r2,
+    nameFontSize: T.fontSize.f13,
+    metaFontSize: T.fontSize.f11,
     metaColor: T.text[3],
     columns: {
       name: -180,
@@ -1227,8 +1251,8 @@ export const socialDialogLayout = {
   },
   /** 加人/标人一行（好友页与敌人页共用，贴在框底） */
   addRow: {
-    input: { position: new Vec2(-70, -232), size: new Vec2(400, 30) },
-    button: { position: new Vec2(195, -232) },
+    input: { position: new Vec2(-70, -226), size: new Vec2(400, 30) },
+    button: { position: new Vec2(195, -226) },
   },
   /** 小字（段落标题用金色，空态用灰） */
   titleColor: T.gold[4],
@@ -1498,28 +1522,29 @@ export const questDialogLayout = {
   size: new Size(600, 540),
   /** 页签（两枚，与聊天弹窗同款式；角标直接在页签文案后追加「·N」，不另设小字样式） */
   tabs: {
-    y: 232,
-    size: new Size(140, 32),
-    columns: [-76, 76],
-    radius: 6,
+    /** 头部下沿 225 − 半行高 16 = 209（下边距 12 之后是列表顶 181） */
+    y: 209,
+    size: new Size(96, 32),
+    columns: [-51, 51],
+    radius: T.radius.r2,
     activeFill: T.gold[4],
     activeText: T.surface[3],
     idleFill: T.surface[2],
     idleText: T.text[1],
     idleBorder: T.surface[3],
-    fontSize: 13,
+    fontSize: T.fontSize.f14,
   },
-  /** 任务列表（框体主体） */
-  list: { name: "quest_list", position: new Vec2(0, -6), size: new Size(556, 420) },
+  /** 任务列表（框体主体；稿 `.qlist` 396 高，中心 -17） */
+  list: { name: "quest_list", position: new Vec2(0, -17), size: new Size(556, 396) },
   /** 任务行：名称 + 进度（左）+ 动作按钮（右） */
   row: {
-    size: new Size(552, 56),
+    size: new Size(552, 64),
     fill: T.surface[1],
     border: T.surface[3],
-    radius: 6,
-    nameFontSize: 13,
-    textFontSize: 11,
-    nameColor: T.text[1],
+    radius: T.radius.r2,
+    nameFontSize: T.fontSize.f14,
+    textFontSize: T.fontSize.f11,
+    nameColor: T.gold[5],
     metaColor: T.text[3],
     readyColor: T.jade,
     /**
@@ -1555,6 +1580,9 @@ export const questDialogLayout = {
     /** 接取成功的飘字（{name} = 任务名） */
     acceptedTip: "已接取「{name}」",
   },
+  /** 页脚（稿 11-quest 的 .panel-foot）：左入口说明 / 右结算说明 */
+  foot: dialogFootLayout(new Size(600, 540), 250),
+  footTexts: { left: "左侧任务追踪整块可点打开本窗", right: "交付奖励由服务端结算" },
 };
 
 //#endregion
@@ -1576,31 +1604,31 @@ export const partyDialogLayout = {
   title: "队 伍",
   eyebrow: "PARTY · G",
   size: new Size(600, 540),
-  /** 页签（两枚，与任务弹窗同宽） */
+  /** 页签（两枚 96 宽，与任务弹窗同款；头部下沿 225 − 小结 30 − 半行高 16 = 179） */
   tabs: {
-    y: 232,
-    size: new Size(140, 32),
-    columns: [-76, 76],
-    radius: 6,
+    y: 179,
+    size: new Size(96, 32),
+    columns: [-51, 51],
+    radius: T.radius.r2,
     activeFill: T.gold[4],
     activeText: T.surface[3],
     idleFill: T.surface[2],
     idleText: T.text[1],
     idleBorder: T.surface[3],
-    fontSize: 13,
+    fontSize: T.fontSize.f14,
   },
-  /** 顶部小结（「3 / 4 人 · 同图 2 人」；没队伍时显示一句引导） */
-  summary: { position: new Vec2(0, 200), size: new Size(556, 20), fontSize: 12, color: T.text[3] },
-  /** 成员 / 候选列表（框体主体） */
-  list: { name: "party_member_list", position: new Vec2(0, -8), size: new Size(556, 392) },
+  /** 顶部小结（「3 / 4 人 · 同图 2 人」；没队伍时显示一句引导）—— 稿 `.psum` 在页签上方 */
+  summary: { position: new Vec2(0, 215), size: new Size(556, 20), fontSize: T.fontSize.f12, color: T.text[3] },
+  /** 成员 / 候选列表（稿 `.plist` 360 高，中心 -27） */
+  list: { name: "party_member_list", position: new Vec2(0, -27), size: new Size(556, 360) },
   /** 成员行：名字 + 等级/状态（左）+ 动作按钮（右，最多两枚） */
   row: {
     size: new Size(552, 56),
     fill: T.surface[1],
     border: T.surface[3],
-    radius: 6,
-    nameFontSize: 13,
-    metaFontSize: 11,
+    radius: T.radius.r2,
+    nameFontSize: T.fontSize.f13,
+    metaFontSize: T.fontSize.f11,
     nameColor: T.text[1],
     metaColor: T.text[3],
     leaderColor: T.gold[4],
@@ -1622,19 +1650,19 @@ export const partyDialogLayout = {
     size: new Size(552, 52),
     fill: T.surface[2],
     border: T.gold[2],
-    radius: 6,
+    radius: T.radius.r2,
     acceptX: 150,
     declineX: 232,
     /** 同上：文本框左缘 + 16 = 行内左缘（x = −100，宽 320），两枚小按钮落在 121.75~260.25 不越行 */
     nameX: -100,
     nameSize: new Size(320, 20),
-    textFontSize: 12,
+    textFontSize: T.fontSize.f12,
   },
-  /** 底部按钮（邀请 / 退出 / 解散；不是队长的「解散」不画） */
+  /** 底部按钮（邀请 / 退出 / 解散；不是队长的「解散」不画）—— 列表底 -207 − 12 − 半高 15 = -234 */
   footer: {
-    invite: new Vec2(-150, -244),
-    leave: new Vec2(0, -244),
-    disband: new Vec2(150, -244),
+    invite: new Vec2(-150, -234),
+    leave: new Vec2(0, -234),
+    disband: new Vec2(150, -234),
   },
   /** 文案 */
   texts: {
