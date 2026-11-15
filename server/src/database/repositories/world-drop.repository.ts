@@ -27,9 +27,20 @@ import { WorldDropRow } from "../rows";
 export class WorldDropRepository {
   constructor(private readonly db: DatabaseService) {}
 
-  /** 全部残留行（只取 id：重启清场要的是「有多少件」与「删掉」） */
+  /** 全部残留行（只取 id：启动日志「上一进程留下多少件」用） */
   listAllIds(): string[] {
     return this.db.all<{ drop_id: string }>("SELECT drop_id FROM world_drops").map((row) => row.drop_id);
+  }
+
+  /**
+   * 全部残留行（完整行）
+   *
+   * 重启清场要拿它把每一件转成一条 `restart_lost` 流水（#803）—— 只删不记的话，
+   * 「上一进程地上那些东西最后怎么了」就永远没人答得上来。行数上限是 `maxGroundPerMap × 图数`，
+   * 一次全读没有压力。
+   */
+  listAll(): WorldDropRow[] {
+    return this.db.all<WorldDropRow>("SELECT * FROM world_drops ORDER BY created_at ASC");
   }
 
   /** 一张图的全部行（管理端「当前地面」用；区是服务端参数，不是请求参数） */
@@ -56,9 +67,9 @@ export class WorldDropRepository {
       `INSERT INTO world_drops (
         drop_id, zone_id, map_id, good_id, count, bound, x, y,
         owner_account_id, owner_role_id, owner_name, party_id,
-        monster_key, monster_instance_id, origin_role, origin_at,
+        monster_key, monster_label, monster_instance_id, origin_role, origin_at,
         created_at, expire_at, protect_until
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(drop_id) DO UPDATE SET
         x = excluded.x, y = excluded.y, count = excluded.count,
         expire_at = excluded.expire_at, protect_until = excluded.protect_until`,
@@ -76,6 +87,7 @@ export class WorldDropRepository {
         row.owner_name,
         row.party_id,
         row.monster_key,
+        row.monster_label,
         row.monster_instance_id,
         row.origin_role,
         row.origin_at,

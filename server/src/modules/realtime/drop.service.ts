@@ -1,8 +1,11 @@
 import { Injectable, Logger, OnApplicationBootstrap, OnApplicationShutdown } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
 import { BizCode } from "../../common/constants/biz-code";
+import { DROP_OVERFLOW_REASON, DROP_RESULT, DropOverflowReason, DropResult } from "../../common/constants/drop";
 import { BizException } from "../../common/errors/biz.exception";
 import { itemLabelOf, itemTypeOf } from "../../common/runtime-config-cache";
 import { legacyWorldKey } from "../../common/utils/room-key.util";
+import { DropRecordInsert, DropRecordRepository } from "../../database/repositories/drop-record.repository";
 import { WorldDropRepository } from "../../database/repositories/world-drop.repository";
 import type { WorldDropRow } from "../../database/rows";
 import { RuntimeParamsRepository } from "../../database/repositories/runtime-params.repository";
@@ -46,6 +49,18 @@ import type {
  * 本服务是 `RealtimeModule` 的 provider，而 `RealtimeModule` 只在
  * `AppModule.register({ realtime: true })` 时装载 —— 存档进程（3100）根本不实例化它。
  * 所以「管理端重启把地上的东西清空」这种事不会发生，不需要再判一次环境变量。
+ *
+ * ## 终态写一条流水（#803）
+ *
+ * 地面上的东西每次进终态（`picked` / `expired` / `overflow`）都往 `drop_records` 写**一行**，
+ * 连同重启清场作废的那批（`restart_lost`）—— 这张表是 append-only 的历史，回答「这件东西
+ * 最后去哪了」。三条纪律：
+ *
+ * - **不阻塞拾取**：`resolve()` 只把行推进队列，真正的 INSERT 在 100ms 的 `flush()` 里攒成
+ *   一批（`insertMany` 一个事务），与投影表的写入同一拍；
+ * - **写失败只 warn**：世界状态是权威，少一条流水远比让一次真实的拾取报错要好；
+ * - **两道保留闸**：每图条数（攒够一批才裁）+ 天数（独立节拍扫全表）—— 条数闸只在写入时
+ *   触发，管不住「这张图从此没人打」的死图，所以天数闸不能省。
  */
 @Injectable()
 export class DropService implements OnApplicationBootstrap, OnApplicationShutdown {
@@ -79,12 +94,20 @@ export class DropService implements OnApplicationBootstrap, OnApplicationShutdow
   private readonly pendingSpawn = new Map<string, DropEntity[]>();
   /** 待广播的移除（flush 时按（图, 原因）合并） */
   private readonly pendingRemove = new Map<string, { zoneId: number; mapId: string; ids: string[]; reason: DropRemoveReason; byName?: string }>();
+  /** 待写流水的终态（flush 时一批 INSERT；不为每件掉落单开事务，也不阻塞拾取路径） */
+  private readonly pendingRecords: DropRecordInsert[] = [];
+  /** `区:图` → 上次裁剪之后又写了几条（攒够 `dropRecordTrimEvery` 才 DELETE 一次） */
+  private readonly pendingTrim = new Map<string, number>();
 
   /** 每个区一份自增序号（进程重启从 1 开始也没关系：旧 id 已随清场消失） */
   private readonly seqByZone = new Map<number, number>();
 
   /** 稀有掉落公告的抑制时间戳（全服 30 秒最多一条） */
   private announcedAt = 0;
+  /** 上次扫天数闸的时刻（0 = 还没扫过 → 第一次 flush 就补跑一次） */
+  private lastPruneAt = 0;
+  /** 天数闸「已关闭」的 warn 只打一次（否则每 100ms 一条，日志会被自己刷爆） */
+  private pruneDisabledWarned = false;
 
   private flushTimer: NodeJS.Timeout | null = null;
   private sweepTimer: NodeJS.Timeout | null = null;
@@ -96,10 +119,12 @@ export class DropService implements OnApplicationBootstrap, OnApplicationShutdow
 
   constructor(
     private readonly worldDrops: WorldDropRepository,
+    private readonly dropRecords: DropRecordRepository,
     private readonly roles: RolesService,
     private readonly presence: PlayerPresenceService,
     private readonly party: PartyService,
     private readonly runtimeParams: RuntimeParamsRepository,
+    private readonly config: ConfigService,
   ) {}
 
   //#region 生命周期
@@ -127,11 +152,18 @@ export class DropService implements OnApplicationBootstrap, OnApplicationShutdow
    *
    * 上一进程留下的地面掉落没有意义了 —— 客户端那条连接也断了，重连时拿到的 `world`
    * 快照必须是「地面上什么都没有」，否则屏幕上会立着一堆捡不起来的东西。
+   *
+   * 清之前先把每一行转成一条 `restart_lost` 流水（#803）：倒过来（先清后记）一旦写库失败，
+   * 这批掉落就彻底没有痕迹了 —— 玩家会问「我刚才掉的东西呢」，而库里连它存在过都查不到。
+   * 行数上限是 `maxGroundPerMap × 图数`，一次全读 + 一次批量写没有压力。
    */
   private clearOnRestart(): void {
-    const cleared = this.worldDrops.clearAll();
-    if (cleared > 0) {
-      this.logger.warn(`重启清场：${cleared} 件地面掉落已作废（drop_records 的 restart_lost 由 #803 接）`);
+    const leftover = this.worldDrops.listAll();
+    if (leftover.length > 0) {
+      const now = Date.now();
+      this.recordRestartLost(leftover, now);
+      this.worldDrops.clearAll();
+      this.logger.warn(`重启清场：${leftover.length} 件地面掉落已作废（转成 restart_lost 流水）`);
     }
     this.ground.clear();
     this.byId.clear();
@@ -139,6 +171,17 @@ export class DropService implements OnApplicationBootstrap, OnApplicationShutdow
     this.dirty.clear();
     this.pendingSpawn.clear();
     this.pendingRemove.clear();
+    this.pendingRecords.length = 0;
+    this.pendingTrim.clear();
+  }
+
+  /** 上一进程留下的投影行 → `restart_lost` 流水（写失败只 warn：这些掉落本来就要消失） */
+  private recordRestartLost(rows: WorldDropRow[], now: number): void {
+    try {
+      this.dropRecords.insertMany(rows.map((row) => this.recordOfRow(row, now)));
+    } catch (error) {
+      this.logger.warn(`重启清场的 ${rows.length} 件掉落没写进流水：${error instanceof Error ? error.message : String(error)}`);
+    }
   }
 
   //#endregion
@@ -410,13 +453,19 @@ export class DropService implements OnApplicationBootstrap, OnApplicationShutdow
         .slice(0, alive.length - cap)
         .forEach((entity) => {
           this.logger.warn(`单图掉落超上限（${key}）：挤掉最旧的 ${entity.dropId}（${entity.goodId}）`);
-          this.resolve(entity, "overflow");
+          this.resolve(entity, "overflow", DROP_OVERFLOW_REASON.AUTO);
         });
     }
   }
 
-  /** 把实体推进终态：从内存删、进「短期回放记忆」、排队删库、排队广播 */
-  private resolve(entity: DropEntity, reason: DropRemoveReason): void {
+  /**
+   * 把实体推进终态：从内存删、进「短期回放记忆」、排队删库、排队广播、排队写流水
+   *
+   * @param result 终态（同时也是 `drop_records.result` 的取值）
+   * @param detail 只有 `overflow` 用得上：`auto`（超单图上限被挤掉）/ `manual_clear`
+   *   （管理端清空，#805）。其余结果传空 —— 细分信息那一列对它们没有意义
+   */
+  private resolve(entity: DropEntity, result: DropRemoveReason, detail?: DropOverflowSource): void {
     const field = this.ground.get(legacyWorldKey(entity.zoneId, entity.mapId));
     field?.delete(entity.dropId);
     if (field && field.size === 0) this.ground.delete(legacyWorldKey(entity.zoneId, entity.mapId));
@@ -424,11 +473,16 @@ export class DropService implements OnApplicationBootstrap, OnApplicationShutdow
     this.dirty.delete(entity);
     // 留着让重发的 pick 收回 alreadyPicked（`sweep` 到期丢；不占快照、不写库）
     this.recent.set(entity.dropId, { entity, at: Date.now() });
-    this.queueRemove(entity, reason);
+    this.pendingRecords.push(this.recordOf(entity, result, detail));
+    this.queueRemove(entity, result);
   }
 
-  /** 100ms 一拍：批量落库 + 批量广播 */
+  /** 100ms 一拍：批量落流水 + 批量落投影 + 批量广播 */
   private flush(): void {
+    // 流水先写：万一这一拍中途出问题，宁可「留一条流水 + 一行没人捡的投影」（下次启动会清场
+    // 并再记一条 restart_lost），也不要「投影删了、流水没写」—— 后者是彻底没有痕迹
+    this.flushRecords();
+
     if (this.dirty.size) {
       const rows = Array.from(this.dirty);
       this.dirty.clear();
@@ -473,6 +527,77 @@ export class DropService implements OnApplicationBootstrap, OnApplicationShutdow
         this.onBroadcast?.(batch.zoneId, batch.mapId, frame);
       }
     }
+
+    // 天数闸每 `dropRecordPruneMs` 扫一次（挂在 flush 上：这个定时器与有没有掉落无关，恒在跑）
+    this.maybePrune();
+  }
+
+  /**
+   * 把攒下的终态写成流水（一拍一批），并在写完顺手做条数闸
+   *
+   * 三条刻意的处理：
+   * - **写失败只 warn**：流水是历史，世界状态才是权威 —— 一条写不进去不该让这一拍的广播也停掉；
+   * - **失败就跳过裁剪**：这一批没进去，按条数裁会把「刚写的那几条还没进库」算错；
+   * - **裁剪按图攒批**：每件掉落都 `DELETE` 一次会让 WAL 白涨（与地图监控事件同一口径）。
+   */
+  private flushRecords(): void {
+    if (this.pendingRecords.length === 0) return;
+    const batch = this.pendingRecords.splice(0);
+    try {
+      this.dropRecords.insertMany(batch);
+    } catch (error) {
+      this.logger.warn(`掉落流水写入失败（${batch.length} 条）：${error instanceof Error ? error.message : String(error)}`);
+      return;
+    }
+    for (const record of batch) this.trimIfNeeded(record.zone_id, record.map_id);
+  }
+
+  /** 条数闸：同一张图写够 `dropRecordTrimEvery` 条就裁一次（只留最近 `dropRecordKeepPerMap` 条） */
+  private trimIfNeeded(zoneId: number, mapId: string): void {
+    const key = `${zoneId}:${mapId}`;
+    const pending = (this.pendingTrim.get(key) ?? 0) + 1;
+    const every = this.trimEvery();
+    if (pending < every) {
+      this.pendingTrim.set(key, pending);
+      return;
+    }
+    this.pendingTrim.set(key, 0);
+    try {
+      const keep = this.keepPerMap();
+      const removed = this.dropRecords.trimPerMap(zoneId, mapId, keep);
+      if (removed > 0) this.logger.debug(`掉落流水（区 ${zoneId} 图 ${mapId}）裁掉 ${removed} 条（每图保留 ${keep}）`);
+    } catch (error) {
+      this.logger.warn(`掉落流水裁剪失败：${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  /**
+   * 天数闸：删掉超过保留期的流水（#803）
+   *
+   * 与条数闸是两道独立的闸（取先到）：那一道只在写入时跑，管不住「这张图从此没人打」——
+   * 没有写入就没有裁剪。这一道按 `created_at` 扫全表，与有没有人在写都无关。
+   *
+   * `≤ 0` 视为**关闭**（不是「保留 0 天 = 全删」）：运维想留全量时把它设成 0，
+   * 而不是看着它把库清空。
+   */
+  private maybePrune(): void {
+    const now = Date.now();
+    if (now - this.lastPruneAt < this.pruneIntervalMs()) return;
+    this.lastPruneAt = now;
+    const days = this.retentionDays();
+    if (days <= 0) {
+      if (!this.pruneDisabledWarned) {
+        this.logger.warn("DROP_RECORD_RETENTION_DAYS ≤ 0：掉落流水的天数闸已关闭，只按每图条数裁剪");
+        this.pruneDisabledWarned = true;
+      }
+      return;
+    }
+    try {
+      const removed = this.dropRecords.trimOlderThan(now - days * 24 * 60 * 60 * 1000);
+      if (removed > 0) this.logger.log(`掉落流水天数闸：删掉 ${removed} 条超过 ${days} 天的旧记录`);
+    } catch (error) {
+      this.logger.warn(`掉落流水天数闸失败：${error instanceof Error ? error.message : String(error)}`);
+    }
   }
 
   /** 实体 → 投影行（字段名的唯一映射点：实体是驼峰、库是下划线，别在两处各转一遍） */
@@ -491,12 +616,83 @@ export class DropService implements OnApplicationBootstrap, OnApplicationShutdow
       owner_name: entity.owner.name,
       party_id: entity.partyId,
       monster_key: entity.source.monsterKey,
+      monster_label: entity.source.label,
       monster_instance_id: entity.source.instanceId,
       origin_role: entity.from?.role ?? null,
       origin_at: entity.from?.at ?? null,
       created_at: entity.createdAt,
       expire_at: entity.expireAt,
       protect_until: entity.protectUntil,
+    };
+  }
+
+  /**
+   * 实体 → 流水行（`drop_records` 的唯一映射点）
+   *
+   * 与 `rowOf`（投影行）分开而不是复用：两张表的用途不同 —— 投影行答「现在地上有什么」，
+   * 流水行答「这件东西最后怎么了」，后者多了结果、拾取人、存活时长，少了坐标与保护期。
+   *
+   * `resolved_at` 取拾取那一刻（`pickedBy.at`）而不是 `Date.now()`：两者在手感上同一毫秒，
+   * 但用它算出来的 `lived_ms` 与「掉落 → 入包」的真实间隔严格一致，不会因为一拍延迟差几毫秒。
+   */
+  private recordOf(entity: DropEntity, result: DropRecordResult, detail?: DropOverflowSource): DropRecordInsert {
+    const resolvedAt = entity.pickedBy?.at ?? Date.now();
+    return {
+      drop_id: entity.dropId,
+      zone_id: entity.zoneId,
+      map_id: entity.mapId,
+      good_id: entity.goodId,
+      good_type: itemTypeOf(entity.goodId),
+      good_label: entity.goodLabel,
+      count: entity.count,
+      bound: entity.bound ? 1 : 0,
+      monster_key: entity.source.monsterKey,
+      monster_label: entity.source.label,
+      monster_instance_id: entity.source.instanceId,
+      owner_account_id: entity.owner.accountId,
+      owner_role_id: entity.owner.roleId,
+      owner_name: entity.owner.name,
+      result,
+      reason: detail ?? null,
+      picked_account_id: entity.pickedBy?.accountId ?? null,
+      picked_role_id: entity.pickedBy?.roleId ?? null,
+      picked_name: entity.pickedBy?.name ?? null,
+      created_at: entity.createdAt,
+      resolved_at: resolvedAt,
+      lived_ms: resolvedAt - entity.createdAt,
+    };
+  }
+
+  /**
+   * 投影行 → 流水行（只给重启清场用：那批实体已经不在内存里了，只剩库里的行）
+   *
+   * 少了两样东西，都是**内存里才有的**：`goodLabel`（按当前配置现查，取不到回落 `good_id`）、
+   * 拾取人（`restart_lost` 本来就没被谁捡走）。所以这一支永远写 `picked_*` 为 null。
+   */
+  private recordOfRow(row: WorldDropRow, now: number): DropRecordInsert {
+    return {
+      drop_id: row.drop_id,
+      zone_id: row.zone_id,
+      map_id: row.map_id,
+      good_id: row.good_id,
+      good_type: itemTypeOf(row.good_id),
+      good_label: itemLabelOf(row.good_id) ?? row.good_id,
+      count: row.count,
+      bound: row.bound,
+      monster_key: row.monster_key,
+      monster_label: row.monster_label,
+      monster_instance_id: row.monster_instance_id,
+      owner_account_id: row.owner_account_id,
+      owner_role_id: row.owner_role_id,
+      owner_name: row.owner_name,
+      result: DROP_RESULT.RESTART_LOST,
+      reason: null,
+      picked_account_id: null,
+      picked_role_id: null,
+      picked_name: null,
+      created_at: row.created_at,
+      resolved_at: now,
+      lived_ms: Math.max(0, now - row.created_at),
     };
   }
 
@@ -635,6 +831,33 @@ export class DropService implements OnApplicationBootstrap, OnApplicationShutdow
 
   //#endregion
 
+  //#region 流水保留闸的参数（部署级配置，不是运营参数 —— 改它要重启进程）
+
+  /** 每图保留多少条流水（条数闸；测试把它压小才验得到「超了会裁」） */
+  private keepPerMap(): number {
+    return this.config.get<number>("dropRecordKeepPerMap") ?? DROP_RECORD_KEEP_PER_MAP_DEFAULT;
+  }
+
+  /** 攒够多少条新流水才裁一次（每写一条就 DELETE 会让 WAL 白涨） */
+  private trimEvery(): number {
+    const value = this.config.get<number>("dropRecordTrimEvery") ?? DROP_RECORD_TRIM_EVERY_DEFAULT;
+    // 0 / 负数会让「攒够才裁」退化成「每批都裁」，按 1 处理（= 每次写都裁，但不至于死循环）
+    return Number.isFinite(value) && value >= 1 ? Math.floor(value) : 1;
+  }
+
+  /** 天数闸的保留期（天；≤ 0 = 关闭） */
+  private retentionDays(): number {
+    return this.config.get<number>("dropRecordRetentionDays") ?? DROP_RECORD_RETENTION_DAYS_DEFAULT;
+  }
+
+  /** 天数闸的扫描间隔（毫秒；配成 ≤ 0 / 坏值时回落默认 —— 别让它变成每 100ms 扫一次全表） */
+  private pruneIntervalMs(): number {
+    const value = this.config.get<number>("dropRecordPruneMs") ?? DROP_RECORD_PRUNE_MS_DEFAULT;
+    return Number.isFinite(value) && value > 0 ? value : DROP_RECORD_PRUNE_MS_DEFAULT;
+  }
+
+  //#endregion
+
   private nameOfRole(role: { data?: Record<string, unknown> }): string {
     const name = role?.data?.name;
     return typeof name === "string" ? name : "";
@@ -673,6 +896,17 @@ export interface DropEntity {
 export type DropStatus = "ground" | "picked" | "expired" | "overflow";
 export type DropRemoveReason = Extract<DropStatus, "picked" | "expired" | "overflow">;
 
+/**
+ * 写进 `drop_records.result` 的取值（唯一来源是 `common/constants/drop`）
+ *
+ * 三个内存终态 + `restart_lost`（进程重启时地上还没被捡走的那批）。`ground` 不在里面：
+ * 它还没结束，没有「结果」可言。这里只是给本文件一个短名字，枚举值本身不在这里定义。
+ */
+export type DropRecordResult = DropResult;
+
+/** `overflow` 的来源（`auto` = 超上限挤掉 / `manual_clear` = 管理端清空，#805） */
+export type DropOverflowSource = DropOverflowReason;
+
 /** `spawn()` 的输入：结算侧算完经验与掉落之后交给这里 */
 export interface DropSpawnInput {
   mapId: string;
@@ -696,6 +930,19 @@ const DROP_TTL_MS_DEFAULT = 180_000;
 const DROP_PROTECT_MS_DEFAULT = 30_000;
 const DROP_PICK_RANGE_DEFAULT = 120;
 const DROP_MAX_PER_MAP_DEFAULT = 200;
+
+/**
+ * 掉落流水（`drop_records`）的两道保留闸（#803）
+ *
+ * 与地图监控事件同一口径、同一取值理由：`keepPerMap` 2000 条 ≈ 一个活跃图几小时到几天的
+ * 可追溯窗口；`trimEvery` 200 条攒一批裁一次；天数闸 7 天兜住「这张图从此没人打」的死图
+ * —— 条数闸只在写入时触发，没有写入就没有裁剪。
+ */
+const DROP_RECORD_KEEP_PER_MAP_DEFAULT = 2_000;
+const DROP_RECORD_TRIM_EVERY_DEFAULT = 200;
+const DROP_RECORD_RETENTION_DAYS_DEFAULT = 7;
+/** 天数闸的扫描间隔（6 小时：一天几次全表 DELETE 已经足够，流水不是审计） */
+const DROP_RECORD_PRUNE_MS_DEFAULT = 6 * 60 * 60 * 1000;
 
 /**
  * 距离校验里「位置算过期」的窗口（毫秒）

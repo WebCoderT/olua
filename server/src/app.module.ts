@@ -13,6 +13,7 @@ import { AnnouncementModule } from "./modules/announcement/announcement.module";
 import { GameConfigModule } from "./modules/game-config/game-config.module";
 import { AuditModule } from "./modules/audit/audit.module";
 import { EventLogModule } from "./modules/event-log/event-log.module";
+import { DropsModule } from "./modules/drops/drops.module";
 import { AuthModule } from "./modules/auth/auth.module";
 import { HealthModule } from "./modules/health/health.module";
 import { MailModule } from "./modules/mail/mail.module";
@@ -72,6 +73,8 @@ export class AppModule {
         AuditModule,
         // 玩家行为流水（#886）：两个进程都要有 —— 进图事件在实时进程写，其余在 API 进程写
         EventLogModule,
+        // 掉落流水（#803）：写入在实时进程、读取在本进程 —— 两个进程都要有（仓储在 @Global 的 DatabaseModule）
+        DropsModule,
         SystemModule,
         AnnouncementModule,
         GameConfigModule,

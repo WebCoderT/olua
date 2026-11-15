@@ -271,7 +271,7 @@ export const routes = {
      */
     version: "/admin/config/version",
   },
-  /** adminDrop 模块（7 个接口） */
+  /** adminDrop 模块（9 个接口） */
   adminDrop: {
     /**
      * 具名掉落表列表（GET /admin/drop-tables）
@@ -297,6 +297,18 @@ export const routes = {
      * **部分更新**：只改请求体里出现的字段（picks / entries）。
      */
     updateTable: (id: string) => `/admin/drop-tables/${encodeURIComponent(id)}`,
+    /**
+     * 掉落流水（GET /admin/drops/records）
+     *
+     * 一页掉落终态记录（一件掉落的一生只有一行）：谁打的、掉在哪张图、在地上待了多久、最后被谁捡走 / 怎么消失的。
+     */
+    recordList: "/admin/drops/records",
+    /**
+     * 掉落流水概况（按终态分组计数）（GET /admin/drops/records/summary）
+     *
+     * 页面顶部的概况卡：按终态（picked / expired / overflow / restart_lost）分组计数。
+     */
+    recordSummary: "/admin/drops/records/summary",
     /**
      * 每怪掉落列表（GET /admin/monster-drops）
      *

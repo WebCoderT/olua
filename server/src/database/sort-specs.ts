@@ -374,3 +374,18 @@ export const ACHIEVEMENT_SORT: SortSpec<"id" | "category" | "label" | "sortOrder
   default: "sortOrder",
   defaultOrder: "asc",
 };
+
+/**
+ * 掉落流水（#803）：默认按终态时刻倒序 —— 运维看的是「刚才地上那些东西去哪了」。
+ *
+ * 存活时长也能排：排查「是不是有人守着高价值掉落不捡」时按 `livedMs` 升序看最短的那批。
+ */
+export const DROP_RECORD_SORT: SortSpec<"createdAt" | "resolvedAt" | "livedMs"> = {
+  columns: {
+    createdAt: "created_at",
+    resolvedAt: "resolved_at",
+    livedMs: "lived_ms",
+  },
+  default: "resolvedAt",
+  defaultOrder: "desc",
+};

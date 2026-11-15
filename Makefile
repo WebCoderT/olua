@@ -260,8 +260,11 @@ server-e2e-realtime: ## 服务端实时通道专项 e2e（50 条：票据换连�
 server-e2e-combat: ## 服务端伤害结算专项 e2e（服务端算伤害 / 幂等 / 死亡判定 / 掉落拾取 / 绑定与溯源 / 怪物技能）
 	@cd server && $(NPM) run test:e2e:combat
 
-server-e2e-drop: ## 地面掉落（世界实体）专项 e2e（同图可见 / id 全局唯一 / 投影表 / 保护期 / 过期 / 重启清场）
+server-e2e-drop: ## 地面掉落（世界实体）专项 e2e（同图可见 / id 全局唯一 / 投影表 / 保护期 / 过期 / 挤掉 / 重启清场 / 四种终态流水）
 	@cd server && $(NPM) run test:e2e:drop
+
+server-e2e-drop-records: ## 掉落流水读接口与保留闸专项 e2e（筛选 / 分页上限 / 排序白名单 / 缺区头 400 / 条数闸与天数闸）
+	@cd server && $(NPM) run test:e2e:drop-records
 
 server-e2e-world: ## 服务端世界权威专项 e2e（22 条：播种 / 共享 / tick 重生 / 优雅关闭与重启恢复；临时文件库）
 	@cd server && $(NPM) run test:e2e:world

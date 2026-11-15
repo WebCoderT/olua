@@ -231,6 +231,13 @@ import {
   ConfigRevisionTableDiffDto,
   ConfigVersionDto,
 } from "../modules/game-config/dto/config-revision.dto";
+import {
+  DropRecordDto,
+  DropRecordPageDto,
+  DropRecordQueryDto,
+  DropRecordSummaryDto,
+  DropRecordSummaryItemDto,
+} from "../modules/drops/dto/drop-record.dto";
 
 /**
  * Swagger 文档要注册的模型清单
@@ -652,4 +659,10 @@ export const SWAGGER_MODELS = [
   ConfigRevisionDiffDto,
   ConfigRestoreResultDto,
   ConfigRevisionQueryDto,
+  // 掉落终态流水（#803）：一件掉落的一生一行，管理端按区读
+  DropRecordDto,
+  DropRecordPageDto,
+  DropRecordQueryDto,
+  DropRecordSummaryDto,
+  DropRecordSummaryItemDto,
 ];

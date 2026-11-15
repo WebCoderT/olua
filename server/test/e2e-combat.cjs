@@ -1088,17 +1088,33 @@ function connect(url) {
     };
 
     /**
+     * 这件掉落在世界里的**实际落点**（从 `dropSpawn` 广播里找，含击杀者自己那份）
+     *
+     * 拾取的缺省位置必须是它：`player.lastSpot` 记的是「怪最后一次被观察到的位置」，
+     * 而怪会游走 —— 等它倒下时人可能已经在几屏之外，`#817` 的距离闸就会判 `too_far`
+     * （实测 3197px）。那会让「东西还在不在」的断言红在一个与它无关的准备误差上。
+     */
+    const spotOfDrop = (player, dropId) => {
+      for (let i = player.session.dropSpawns.length - 1; i >= 0; i--) {
+        const frame = player.session.dropSpawns[i];
+        const hit = (frame.drops || []).find((drop) => drop.dropId === dropId);
+        if (hit) return { mapId: frame.mapId, x: hit.x, y: hit.y };
+      }
+      return null;
+    };
+
+    /**
      * 发一次拾取并等它自己的 picked 帧（只等发送之后到达的：同一 dropId 的旧帧不回填）
      *
      * #802 起 `pick` 只认**世界实体 id**（`{ dropId }`），不再有 `castId + 下标`：
      * 掉落是地面上的东西，账本也不再按账号隔离，所以「谁打出来的」不再参与定位。
      *
-     * `options.spot` 缺省 = 站到 `player.lastSpot`（这只怪倒下的地方，正常玩家的行为）；
+     * `options.spot` 缺省 = 走到这件掉落自己的落点（正常玩家的行为，见 `spotOfDrop`）；
      * 显式给一个点 = 故意从别处捡（距离闸用例）；`null` = 一帧位置都不报（位置未知用例）。
      * pos 与 pick 走同一条连接、服务端按序处理，所以不会出现「位置还没到、拾取先判」。
      */
     const pick = (player, dropId, options = {}) => {
-      const spot = options.spot === null ? null : options.spot || player.lastSpot;
+      const spot = options.spot === null ? null : options.spot || spotOfDrop(player, dropId) || player.lastSpot;
       if (spot) standAtSpot(player, spot);
       const before = player.session.pickeds.length;
       player.session.socket.send(JSON.stringify({ type: "pick", data: { dropId } }));
@@ -1112,6 +1128,25 @@ function connect(url) {
     const dropIdIn = (killed) => {
       const drops = killed && killed.reward && killed.reward.drops;
       return Array.isArray(drops) && drops[0] && typeof drops[0].dropId === "string" ? drops[0].dropId : "";
+    };
+
+    /**
+     * 打出一份掉落（准备段用：后面几段要的是「地上有一件东西」，不是「这一只怪一刀死」）
+     *
+     * 为什么不直接 `killMonster` 一次就算：它只要有一次 cast 回 `ok:false` 就返回 null，
+     * 而怪是会游走的 —— 玩家还站在上一段的位置上，采样那一瞬间怪走远了就是「不在范围」。
+     * 这一下会让后面的断言（「targetsReset 之后还能捡」）红在一个**准备没做成**上，
+     * 报出来的却像是掉落语义坏了。所以重试到拿到 dropId 为止：每轮先 `aliveMonster`
+     * 把玩家挪到那只怪旁边再打。
+     */
+    const killForDrop = async (player, mapId = "1", tries = 3) => {
+      for (let i = 0; i < tries; i++) {
+        const mob = await aliveMonster(player, mapId);
+        const killed = mob ? await killMonster(player, mob.monsterKey, mob.instanceId) : null;
+        const dropId = dropIdIn(killed);
+        if (dropId) return dropId;
+      }
+      return "";
     };
 
     // —— A. 正常拾取：地面实体对同图所有人可见，按 dropId 原子入包 ——
@@ -1264,12 +1299,11 @@ function connect(url) {
 
     // #802 之前掉落挂在「击杀者的私人账本」上，换图 / targetsReset 顺手就清了；
     // 现在它是世界实体，生命周期只由 expireAt 决定 —— 这两条判的正是这次语义变化。
-    const mobF = await aliveMonster(picker, "1");
-    const killedF = mobF ? await killMonster(picker, mobF.monsterKey, mobF.instanceId) : null;
-    const dropF = dropIdIn(killedF);
+    const dropF = await killForDrop(picker, "1");
+    check(!!dropF, "E：在图 1 打出一份掉落（先不拾）", dropF);
     picker.session.socket.send(JSON.stringify({ type: "targetsReset" }));
     await sleep(100);
-    const pickedAfterReset = dropF ? await pick(picker, dropF, { spot: null }) : null;
+    const pickedAfterReset = dropF ? await pick(picker, dropF) : null;
     check(
       !!(pickedAfterReset && pickedAfterReset.ok && pickedAfterReset.alreadyPicked === false),
       "E：targetsReset 之后掉落仍在（地面实体不随会话账本清空，只能被捡走或过期）",
@@ -1280,9 +1314,7 @@ function connect(url) {
 
     // 图 2 有进图门槛，先把等级提上去（picker 此时已经站在图 1，换图要走门槛判定）
     await api(baseUrl, "PATCH", `admin/roles/${picker.roleId}`, { token: adminToken, zoneId: ADMIN_ZONE, body: { level: 60 } });
-    const mobG = await aliveMonster(picker, "1");
-    const killedG = mobG ? await killMonster(picker, mobG.monsterKey, mobG.instanceId) : null;
-    const dropG = dropIdIn(killedG);
+    const dropG = await killForDrop(picker, "1");
     check(!!dropG, "F：在图 1 打出一份掉落（先不拾）", dropG);
     await enterAt(picker, "2");
     check(
