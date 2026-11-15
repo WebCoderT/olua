@@ -4,12 +4,12 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>项目概览 · olua 开源项目</title>
-  <meta name="description" content="olua 是一个免费开源（MIT）的 2D 即时战斗游戏项目：Cocos Creator 客户端 + NestJS 服务端 + React 运营后台，70 项已实现能力，14 万行 TypeScript，任何人可自行部署。" />
+  <meta name="description" content="olua 是一个免费开源（MIT）的 2D 即时战斗游戏项目：Cocos Creator 客户端 + NestJS 服务端 + React 运营后台，70 项已实现能力，18 万行 TypeScript，任何人可自行部署。" />
   <link rel="canonical" href="https://yimw.cn/project.html" />
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://yimw.cn/project.html" />
   <meta property="og:title" content="项目概览 · olua 开源项目" />
-  <meta property="og:description" content="olua 是一个免费开源（MIT）的 2D 即时战斗游戏项目：Cocos Creator 客户端 + NestJS 服务端 + React 运营后台，70 项已实现能力，14 万行 TypeScript，任何人可自行部署。" />
+  <meta property="og:description" content="olua 是一个免费开源（MIT）的 2D 即时战斗游戏项目：Cocos Creator 客户端 + NestJS 服务端 + React 运营后台，70 项已实现能力，18 万行 TypeScript，任何人可自行部署。" />
   <meta property="og:image" content="https://yimw.cn/assets/img/game.jpg" />
   <meta name="twitter:card" content="summary_large_image" />
   <link rel="icon" href="assets/icons/favicon.ico" sizes="any" />
@@ -87,15 +87,23 @@
       <p class="section__sub">数字全部来自仓库统计，不是估算</p>
     </div>
 
+    <!-- 体量数字口径（2026-11-15 实测，改数字前先按下面命令复算）：
+         行数 = find <dir> -name "*.ts*" -exec cat {} + | wc -l（含空行与注释，不含 library/）
+           client/assets 5.46 万 · server/src 7.92 万 · admin/src 5.36 万 → 合计 18.7 万
+         模块 = ls server/src/modules | wc -l
+         接口 / 路径 = server/openapi.json 的 operationId 数 / paths 数
+         表 = sqlite_master 里非 sqlite_* 的表
+         页面 = ls admin/src/pages/*.tsx | wc -l
+         e2e / 审计 = server/package.json 的 test:e2e* 脚本数 / tools/audit-*.cjs 个数 -->
     <div class="metrics metrics--8 reveal">
-      <div class="metric"><b>14.4 万</b><span>行 TypeScript</span><i>三端 + 工具脚本</i></div>
-      <div class="metric"><b>23</b><span>服务端模块</span><i>NestJS</i></div>
-      <div class="metric"><b>209</b><span>接口操作</span><i>169 条路径</i></div>
-      <div class="metric"><b>59</b><span>张数据表</span><i>SQLite</i></div>
-      <div class="metric"><b>50</b><span>后台页面</span><i>React</i></div>
+      <div class="metric"><b>18.7 万</b><span>行 TypeScript</span><i>三端源码</i></div>
+      <div class="metric"><b>25</b><span>服务端模块</span><i>NestJS</i></div>
+      <div class="metric"><b>268</b><span>接口操作</span><i>215 条路径</i></div>
+      <div class="metric"><b>76</b><span>张数据表</span><i>SQLite</i></div>
+      <div class="metric"><b>53</b><span>后台页面</span><i>React</i></div>
       <div class="metric"><b>70</b><span>已实现能力</span><i>按域统计</i></div>
-      <div class="metric"><b>39</b><span>套 e2e</span><i>真服务真库</i></div>
-      <div class="metric"><b>15</b><span>项跨端审计</span><i>静态守点</i></div>
+      <div class="metric"><b>92</b><span>套 e2e</span><i>真服务真库</i></div>
+      <div class="metric"><b>18</b><span>项跨端审计</span><i>静态守点</i></div>
     </div>
   </section>
 
@@ -113,7 +121,7 @@
         <p class="trio__role">玩家看到的全部</p>
         <p>登录、选角、战斗、背包、商城、社交、小地图。Cocos 工程，用 Creator 打开 <code>client/</code> 目录即可运行。</p>
         <p style="margin-top:10px;">只负责输入与表现：数值等快照、结果等服务端，本地不判定任何战斗结果。</p>
-        <div class="trio__stack">Cocos Creator 3.8.7<br />TypeScript · Box2D<br />186 个 TS 文件 / 4.65 万行</div>
+        <div class="trio__stack">Cocos Creator 3.8.7<br />TypeScript · Box2D<br />193 个 TS 文件 / 5.5 万行</div>
       </article>
 
       <article class="trio__card" data-tag="server /">
@@ -121,7 +129,7 @@
         <p class="trio__role">唯一的权威数据源</p>
         <p>账号、角色、地图、怪物、战斗结算、掉落、邮件、排行榜。两个进程共用一个 SQLite 文件，Swagger 从这里生成契约。</p>
         <p style="margin-top:10px;">客户端与管理端的接口文件都由它产出，不手写。</p>
-        <div class="trio__stack">NestJS 12<br />node:sqlite · JWT · Swagger<br />23 模块 / 4.95 万行</div>
+        <div class="trio__stack">NestJS 12<br />node:sqlite · JWT · Swagger<br />25 模块 / 7.9 万行</div>
       </article>
 
       <article class="trio__card" data-tag="admin /">
@@ -129,7 +137,7 @@
         <p class="trio__role">运营改数据的地方</p>
         <p>账号角色、地图与刷怪区、NPC 与碰撞盒、掉落表、装备体系与外观、特效、公告邮件、权限与操作日志。</p>
         <p style="margin-top:10px;">页面 50 个，改完落库即生效，不用重启服务端。</p>
-        <div class="trio__stack">React 19 + Vite<br />Tailwind CSS v4<br />50 页面 / 4.11 万行</div>
+        <div class="trio__stack">React 19 + Vite<br />Tailwind CSS v4<br />53 页面 / 5.4 万行</div>
       </article>
     </div>
 
@@ -348,17 +356,17 @@
 │
 ├── <b>server/</b>          <i># NestJS，唯一权威</i>
 │   ├── src/
-│   │   ├── modules/   <i># 23 个业务模块</i>
+│   │   ├── modules/   <i># 25 个业务模块</i>
 │   │   ├── database/  <i># 建表 / 快照 / 仓储</i>
 │   │   └── main.ts · main.realtime.ts <i># 两个进程入口</i>
-│   ├── test/          <i># 39 套 e2e</i>
+│   ├── test/          <i># 92 套 e2e</i>
 │   ├── data/config-sync.sql <i># 出厂快照（空库自举）</i>
 │   └── openapi.json   <i># 契约源，提交进仓库</i>
 │
 ├── <b>admin/</b>           <i># React 运营后台</i>
-│   └── src/pages/     <i># 50 个页面</i>
+│   └── src/pages/     <i># 53 个页面</i>
 │
-├── <b>tools/</b>           <i># 跨端脚本：契约生成 + 15 项审计</i>
+├── <b>tools/</b>           <i># 跨端脚本：契约生成 + 18 项审计</i>
 ├── <b>website/</b>         <i># 本项目官网（纯静态）</i>
 ├── <b>docs/</b>            <i># 部署说明</i>
 ├── Makefile           <i># 三端常用动作收在一处</i>

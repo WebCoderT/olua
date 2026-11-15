@@ -65,6 +65,14 @@
         服务端与实时进程都不映射宿主机端口，所有流量从 <code>:80</code> 按 <code>server_name</code> 分流进入。
       </div>
 
+      <div class="callout reveal">
+        <b>要开 HTTPS：</b>在 <code>deploy.env</code> 里设 <code>OLUA_TLS=on</code>，compose 会再起两个容器 ——
+        <code>edge</code>（nginx，独占 <code>:80</code> / <code>:443</code>，一张多域名 SAN 证书整站反代）与
+        <code>certbot</code>（到期前自动续期）。此时 <code>admin</code> 退到 <code>127.0.0.1:8081</code>，不再占公网端口 ——
+        宿主机 <code>:80</code> 只能有一个主人。<code>:80</code> 只保留 ACME 校验与 301 跳转；
+        首次签发用 <code>deploy.sh --tls-init</code>（先腾出 <code>:80</code> 用 standalone 签，之后续期走 webroot）。
+      </div>
+
       <h3 class="reveal">环境要求</h3>
       <ul class="reveal">
         <li>一台 Linux 主机（2C4G 起步，磁盘 ≥ 10GB——游戏资源约 2.5GB）；</li>
