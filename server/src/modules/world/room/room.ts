@@ -35,6 +35,15 @@ export interface Room {
   trimGraceUntil: number;
   /** 容量（`map_rules.max_players_per_room`，0 = 不限）；第③刀只记录，不据此拒人 */
   capacity: number;
+  /**
+   * 上一次「空房低频 tick」的时刻（毫秒；#1001）
+   *
+   * 只对**空房**有意义：没人看的房间默认冻结（状态留到下一个观看者进图时由
+   * `ensure` 一次性补算），配了 `simulateWhenEmpty` 的图按 `EMPTY_ROOM_TICK_MS`
+   * 推进一次。放房间上而不是全局一个计时器：每间房的节拍互不相干，
+   * 一张图的开线 / 卸载不该牵动别的图。
+   */
+  lastEmptyTickAt: number;
 }
 
 /** 这间房现在有没有人看（空闲回收与「无人冻结」的判据） */

@@ -21,6 +21,7 @@ import { RealtimeController } from "./realtime.controller";
 import { RealtimeService } from "./realtime.service";
 import { SoakPointService } from "./soak-point.service";
 import { StatusTickService } from "./status-tick.service";
+import { TransferGuardService } from "./transfer-guard.service";
 import { DropService } from "./drop.service";
 
 /**
@@ -56,6 +57,9 @@ import { DropService } from "./drop.service";
     // 出手判定链（#813）：存活 / 跨图 / 距离 / 冷却 / 耗蓝 / 频率。
     // 状态（冷却表、令牌桶）是进程内内存态 —— 只有实时进程会判出手，所以只该有一份
     CastGuardService,
+    // 传送代价的节奏器（#1001）：按角色记上次传送时刻、判「算不算战斗中」。
+    // 与 CastGuardService 同一性质（进程内、重启清零），所以也住本模块
+    TransferGuardService,
     MonsterAiService,
     PlayerPresenceService,
     // 视野裁剪（#810）：格子索引 + 每拍的进出差量。状态是**进程内内存态**（索引随房间

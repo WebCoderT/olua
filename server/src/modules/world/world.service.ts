@@ -23,6 +23,18 @@ import {
  */
 export const MERGE_TRIM_GRACE_MS = 5 * 60_000;
 
+/**
+ * 空房低频 tick 的间隔（毫秒；#1001）
+ *
+ * 只有 `map_rules.simulate_when_empty = true` 的图才用它。5 秒是「世界在走」与
+ * 「别把一整晚没人看的图按真实时间快进」之间的折中：一次推进一根时间轴上的到期判定，
+ * 而不是把 8 小时的每 30 秒一次重生**逐次补算**（那会在有人进图那帧刷出几百只怪）。
+ *
+ * 与 `WORLD_TICK_MS` 的关系：有人看的房按 `WORLD_TICK_MS`（默认 1s）跑，空房按这里跑，
+ * 两者互不干扰 —— 空房 tick 只是「隔几拍才看一眼」，不是另开一条时间轴。
+ */
+export const EMPTY_ROOM_TICK_MS = 5_000;
+
 /** 重载结果的形状（世界层只报事实，「重播了几只」由调用方去记日志 / 写回执） */
 export interface RoomReloadResult {
   roomId: string;
@@ -62,6 +74,8 @@ export interface RoomReloadResult {
  *    房间当场按库重载并广播**，没人看的保持惰性（下次 join 再加载）。代际从 #961 起按区记
  *    （原来的 `world_meta.epoch` 是全局单值，合并一次所有图都白重建）；
  * 2. 重生：死亡满 `worldRespawnMs` 的实例复活（满血、回出生点），并通知观看者；
+ *    **没人看的房默认不跑**（#1001）：空房冻结，回来时由 `RoomManager.ensure` 一次性补算；
+ *    配了 `map_rules.simulate_when_empty` 的图按 `EMPTY_ROOM_TICK_MS`（5s）推进一次；
  * 3. 密度对齐（#852）：按「目标数 vs 当前实例数」的差量补 / 裁，每次最多补 2 只 ——
  *    运营改 `max` 或密度系数**下一秒就见效**（实现见 `RoomManager.alignDensity`）；
  * 4. 落盘：把脏实例批量写回 SQLite —— 受击只标脏，真正的写由这里按 `worldPersistMs`
@@ -333,13 +347,23 @@ export class WorldService implements OnApplicationBootstrap, OnApplicationShutdo
     const now = Date.now();
     this.checkEpoch();
     for (const room of this.roomManager.list()) {
-      let changed = processRespawns(room.monsters, now) > 0;
-      // 密度对齐只对「有人看」的房间做：没人看的房按 docs/27「无人冻结」停常规刷怪，
-      // 何况没有观看者时人数系数恒为 1，对齐也没意义
       if (room.viewers.size > 0) {
+        let changed = processRespawns(room.monsters, now) > 0;
+        // 密度对齐只对「有人看」的房间做：没人看的房按 docs/27「无人冻结」停常规刷怪，
+        // 何况没有观看者时人数系数恒为 1，对齐也没意义
         changed = this.roomManager.alignDensity(room, now, this.refillPerTick()) > 0 || changed;
+        if (changed) this.onWorldChanged?.(room.roomId);
+        continue;
       }
-      if (changed) this.onWorldChanged?.(room.roomId);
+      // 空房（#1001）：默认**冻结** —— 没人看，每秒推进一遍只是白烧 CPU，而结果与
+      // 「下一个观看者进图时一次性补算」（`RoomManager.ensure` 里那次 `processRespawns`）
+      // 完全相同。配了 `simulate_when_empty` 的图按 `EMPTY_ROOM_TICK_MS` 推进，
+      // 让**库里那份世界**真的随时间走（否则一张挂着的空图，怪永远停在死掉那一刻）。
+      if (now - room.lastEmptyTickAt < EMPTY_ROOM_TICK_MS) continue;
+      room.lastEmptyTickAt = now;
+      if (!this.roomManager.simulateWhenEmptyOf(room.mapId)) continue;
+      // 空房没有观看者：不广播（`onWorldChanged` 发了也没人接），但脏标记交给节流落盘
+      processRespawns(room.monsters, now);
     }
     // 落盘按 worldPersistMs 节流（#849）：受击只标脏，真正的写在节流点一次事务写完
     if (now - this.lastPersistAt >= this.persistMs()) {

@@ -35,6 +35,7 @@ import { PlayerPresenceService } from "./player-presence.service";
 import { AoiService } from "./aoi.service";
 import { MONSTER_ENTITY, PLAYER_ENTITY, monsterEntityOf, playerEntityOf } from "./aoi-math";
 import { PathService } from "./path.service";
+import { TransferGuardService } from "./transfer-guard.service";
 import { QuestService } from "../quest/quest.service";
 import {
   CHAT_CHANNELS,
@@ -265,6 +266,8 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
     private readonly runtimeConfig: RuntimeConfigService,
     private readonly eventLogs: EventLogService,
     private readonly paths: PathService,
+    /** 传送代价（#1001）：按角色记冷却、判「算不算战斗中」。进程内内存态 */
+    private readonly transfers: TransferGuardService,
     /** 地面掉落物的世界权威（#802）：进图快照、拾取、广播都走它 */
     private readonly drops: DropService,
   ) {
@@ -1054,6 +1057,30 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
         this.send(socket, this.mapEnterResultOf(socket.identity.id, join.mapId));
         return;
       }
+      // 传送代价（#1001）：**落地这一刻才是权威** —— `mapEnter` 那次只是提前问，
+      // 改包绕过它直发 worldJoin 的走的就是这里，所以判据、扣钱、记冷却都必须在这条路上。
+      // 顺序与 `mapEnterResultOf` 一致（门槛 → 容量 → 代价），否则「提前问」会与「落地」打架。
+      const transfer = this.transferOf(socket.identity.id, join.mapId);
+      const blocked = this.transferBlockOf(transfer, socket.identity.id);
+      if (blocked) {
+        this.send(socket, { type: "mapEnterResult", data: { mapId: join.mapId, ok: false, ...blocked } });
+        return;
+      }
+      if (transfer && transfer.cost > 0) {
+        // 扣钱走存档的既有口径（与商城 / 建帮同一个方法）：现读余额、乐观锁写回、余额不足抛 20011
+        try {
+          this.roles.spendBindGold(socket.identity.id, transfer.cost, "传送");
+        } catch {
+          // 余额在 `mapEnter` 之后被别处花掉了（商城 / 建帮 / 另一条连接）：按 money 拒，
+          // 把人留在原地。**不能**吞掉异常继续进图 —— 免费传送比一条错误提示严重得多
+          this.send(socket, this.mapEnterResultOf(socket.identity.id, join.mapId));
+          return;
+        }
+      }
+      // 冷却从「真的走了」那一刻起算（被拒的那次上面已经 return，不吃冷却）。
+      // **只有目标图配了冷却才记**：去一张 `transfer_cooldown_ms = 0` 的图不该在
+      // 下一个目的地那边变成「刚才传送过」—— 冷却属于「配了冷却的那些图」这件事本身。
+      if (transfer && transfer.cooldownMs > 0) this.transfers.record(transfer.roleId);
       const roomId = roomKey(zoneId, join.mapId, pick.slot);
       // 记住「他在哪个区玩」（#961 维护 / 合并踢线的名单来源；见 TrackedSocket.worldZoneId）
       socket.worldZoneId = zoneId;
@@ -1258,8 +1285,71 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
     // 门槛过了才看容量（#1000）：等级不够的人不该看到「本图已满」——那会把人往错的方向引
     const full = this.roomFullRejectOf(accountId, mapId);
     if (full) return { type: "mapEnterResult", data: { mapId, ok: false, ...full } };
+    // 代价最后判（#1001）：去不了的图不该先告诉你「要 200 元宝」。
+    // 顺序与 `worldJoin` 完全一致（门槛 → 容量 → 代价），否则「提前问」与「落地」会互相打脸
+    const transfer = this.transferOf(accountId, mapId);
+    const blocked = this.transferBlockOf(transfer, accountId);
+    if (blocked) return { type: "mapEnterResult", data: { mapId, ok: false, ...blocked } };
     return { type: "mapEnterResult", data: { mapId, ok: true } };
   }
+
+  //#region 传送代价（#1001）
+
+  /**
+   * 这张图的传送代价（`null` = 这一趟不算换图，不收钱也不吃冷却）
+   *
+   * **不算换图的三种情况**：目标图 == 服务端记下的位置（登录 / 断线重连 / 就站在里面）、
+   * 还没有位置记录（首次进图）、没有在线角色（随后由踢下线巡检处理）。
+   * 与 `roomFullRejectOf` 的「回来的人放行」是同一条理由：代价是「去别的地方」的价，
+   * 不是「回到你已经待着的地方」的价 —— 否则一次断线重连就白扣一次钱。
+   *
+   * 读**目标图**的规则：`transfer_*` 三列描述的是「进这张图要付什么」，
+   * 所以 `transferCostMoney` 是这张图的票价，不是离开上一张图的过路费。
+   * 现读库（`rulesConfigOf`）：运营改完下一次换图就生效，不需要重载房间。
+   */
+  private transferOf(accountId: string, mapId: string): TransferCost | null {
+    const row = this.roles.onlineRoleRow(accountId);
+    if (!row) return null;
+    const data = decodeStoredRoleData(row.data);
+    const current = typeof data.mapAt === "string" ? data.mapAt : "";
+    if (!current || current === mapId) return null;
+    const rules = this.maps.rulesConfigOf(mapId);
+    return {
+      roleId: row.id,
+      cost: Math.max(0, Math.trunc(rules.transferCostMoney)),
+      cooldownMs: Math.max(0, Math.trunc(rules.transferCooldownMs)),
+      denyInCombat: rules.denyTransferInCombat,
+      bindGold: Math.max(0, Math.floor(Number(data.bindGold) || 0)),
+      mapLabel: this.maps.labelOf(mapId),
+    };
+  }
+
+  /**
+   * 这一趟能不能走（`null` = 能走）
+   *
+   * 判据顺序 = 玩家看到的顺序：**战斗 → 冷却 → 钱**。「你正在打架」比「你还差 30 元宝」
+   * 更该先说 —— 钱的问题等他打完再说，而不是让人先去凑钱再被告诉打不完不能走。
+   *
+   * 只读，不写任何东西：真正的扣钱与记冷却在 `worldJoin` 落地时做（那里才是权威）。
+   */
+  private transferBlockOf(
+    transfer: TransferCost | null,
+    accountId: string,
+  ): { field: "in_combat" | "cooldown" | "money"; need: number; mapLabel: string } | null {
+    if (!transfer) return null;
+    if (transfer.denyInCombat && this.transfers.inCombatOf(accountId)) {
+      return { field: "in_combat", need: 0, mapLabel: transfer.mapLabel };
+    }
+    const remainMs = this.transfers.remainMsOf(transfer.roleId, transfer.cooldownMs);
+    if (remainMs > 0) return { field: "cooldown", need: remainMs, mapLabel: transfer.mapLabel };
+    // `need` 给的是**还差多少**而不是票价：客户端要显示「还差 120」，票价它从配置快照里自己就有
+    if (transfer.cost > 0 && transfer.bindGold < transfer.cost) {
+      return { field: "money", need: transfer.cost - transfer.bindGold, mapLabel: transfer.mapLabel };
+    }
+    return null;
+  }
+
+  //#endregion
 
   //#endregion
 
@@ -2078,9 +2168,29 @@ const PATH_FIND_MIN_INTERVAL_MS = 100;
  */
 const CAST_DISPLACEMENT_MAX = 320;
 
+/**
+ * 一次换图的传送代价（#1001；`transferOf` 的产物，判据与扣款共用这一份读数）
+ *
+ * 读一次库、判两次（`mapEnter` 的提前问 + `worldJoin` 的落地）—— 两处各自读一遍会多两次
+ * 存档解析，而且「提前问说够钱、落地又说不够」的窗口还会被放大。
+ */
+interface TransferCost {
+  /** 谁的冷却（按角色记：同账号换角色不继承上一个角色的冷却） */
+  roleId: string;
+  /** 票价（绑定元宝；0 = 免费） */
+  cost: number;
+  /** 冷却（毫秒；0 = 无冷却） */
+  cooldownMs: number;
+  /** 战斗中是否禁止换图（`map_rules.deny_transfer_in_combat`） */
+  denyInCombat: boolean;
+  /** 当前余额（只用于判够不够；真正扣钱由 `spendBindGold` 现读，两者之间还有一道乐观锁） */
+  bindGold: number;
+  /** 图名（提示里要用） */
+  mapLabel: string;
+}
+
 /** 解析一条 `pathFind` 帧（字段不全 / 非有限数一律当垃圾帧丢掉） */
-function parsePathFind(raw: unknown): { mapId: string; to: { x: number; y: number }; seq: number } | null {
-  if (!raw || typeof raw !== "object") return null;
+function parsePathFind(raw: unknown): { mapId: string; to: { x: number; y: number }; seq: number } | null {  if (!raw || typeof raw !== "object") return null;
   const data = raw as Record<string, unknown>;
   if (typeof data.mapId !== "string" || !data.mapId) return null;
   const to = data.to as Record<string, unknown> | undefined;
