@@ -1,15 +1,15 @@
 #!/usr/bin/env node
 /**
- * 选服（客户端侧，#962）单测
+ * 区服（客户端侧，#962 / #1009）单测
  *
  * 盯的不变量（改登录 → 选角这条路之后必须全绿）：
- * · 登录页与区无关：不拉活区列表、没有区服文案、注册不带 zoneId
- * · 默认区优先级：本机记着的（还开放）→ 服务端当前区（还开放）→ 最新的开放区（id 最大）
- * · 选角页顺序：先对齐区、再拉角色（反了会拉到上一个区的角色）
- * · 选服弹窗：打开时**重拉** `/zones/mine`（状态会变）、维护 / 关闭的区本地就挡下、
- *   成功后先写本机记录再回调
+ * · 登录页就定区：拉公共活区列表 `GET /zones`（登录前没有令牌，不碰 `/zones/mine`）
+ * · 默认区优先级：本机记着的（还开放）→ 运营推荐（还开放）→ 最新的开放区（id 最大）
+ * · 登录后顺序：存会话 → 按所选区 `POST /zones/select` → 进选角页（早一步拉到的是旧区的角色）
+ * · select 失败不挡进游戏：重拉列表换个还能进的区并飘字，换不了就按服务端记着的区继续
+ * · 选角页不再碰区：没有区服节点 / 选服弹窗 / ensureZone，进场景直接拉角色
+ * · 选服弹窗：数据源是公共 `list`、不可进的区本地挡下、选完只写本机（不假装切成功）
  * · 单区服不给「点击切换」、点它也不开弹窗
- * · 换区之后：退出管理模式 + 清选中态 + 重拉列表（删除按钮指着旧区的角色 id 会误删）
  * · ZoneStore：脏数据当「没记录」、区名一起存（榜单 / 帮会标题要用）
  *
  * 用法：node client/tools/test-zone-select.cjs
@@ -38,14 +38,17 @@ if (sandbox) {
   const loginSource = read("assets/ui/Login.ts");
   const selectorSource = read("assets/ui/RoleSelector.ts");
   const dialogSource = read("assets/ui/components/dialogs/ZoneSelectDialog.ts");
-  const storeSource = read("assets/ui/core/ZoneStore.ts");
   const leaderboardSource = read("assets/ui/components/dialogs/LeaderboardDialog.ts");
   const guildSource = read("assets/ui/components/dialogs/GuildPanel.ts");
   const textsSource = read("assets/configs/texts.ts");
   const scenesSource = read("assets/configs/layout/scenes.ts");
   const dialogsLayoutSource = read("assets/configs/layout/dialogs.ts");
-  /** 去掉注释后的源码（用来断言「代码里没有裸中文文案」） */
+  /** 去掉注释后的源码（用来断言「代码里没有裸中文文案」与「没有再调某个接口」） */
   const strip = (source) => source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\n]*/g, "");
+
+  const login = strip(loginSource);
+  const selector = strip(selectorSource);
+  const dialog = strip(dialogSource);
 
   console.log("\n== 一、ZoneStore：本机记着的选区（真实读写） ==");
   {
@@ -71,96 +74,121 @@ if (sandbox) {
     ls.removeItem("olua.zone");
   }
 
-  console.log("\n== 二、登录页：与区无关（选服整体搬到选角页） ==");
+  console.log("\n== 二、登录页：进页面就把区定下来 ==");
   {
-    const login = strip(loginSource);
-    check(!/ZoneApi/.test(login), "Login 不再调任何区接口（登录前不知道账号有哪几个区）");
-    check(!/zoneSelector|cycleZone|loadZones|zoneLabel/.test(login), "Login 不再有区服节点 / 循环切换 / 活区列表拉取");
+    // 数据源：登录前没有令牌，只能拿公共活区列表
+    check(/ZoneApi\.list\(\)/.test(login), "登录页拉公共活区列表 GET /zones（区名 / 状态 / 推荐）");
+    check(!/ZoneApi\.mine\(\)/.test(login), "不调 /zones/mine（登录前没有令牌，会 401）");
+    check(/void this\.loadZones\(\)/.test(login), "进页面就拉列表（不 await：区服不该拖慢登录页出现）");
+
+    const load = /private async loadZones\(\): Promise<void> \{([\s\S]*?)\n  \}/.exec(login);
+    check(!!load, "有 loadZones（拉列表 → 选默认区 → 刷新区名，集中一处）");
+    const loadBody = load ? load[1] : "";
+    check(/zone_load_failed_tip/.test(loadBody), "拉不到列表只提示一句，不阻塞登录");
+    check(/ZoneStore\.set\(target\.id, target\.name\)/.test(loadBody), "默认区写进本机记录（下次进登录页仍停在它）");
+    check(/this\.renderZoneLabel\(\)/.test(loadBody), "选完刷新顶部区名");
+    check(/this\.zoneCount = zones\.length/.test(loadBody), "记下活区数（决定写不写「点击切换」）");
+
+    // 默认区优先级的三个分支（顺序就是语义：先认本机记录，再认运营推荐，最后才挑最新）
+    const pick = /private pickDefaultZone\(zones: Zone\[\]\): Zone \| null \{([\s\S]*?)\n  \}/.exec(login);
+    check(!!pick, "有 pickDefaultZone（默认区挑法集中一处）");
+    const pickBody = pick ? pick[1] : "";
+    const iRemembered = pickBody.indexOf("rememberedHit");
+    const iRecommended = pickBody.indexOf("recommended");
+    const iNewest = pickBody.indexOf("open.reduce");
+    check(
+      iRemembered >= 0 && iRemembered < iRecommended && iRecommended < iNewest,
+      "默认区优先级：本机记录 → 运营推荐 → 最新的开放区（id 最大）",
+    );
+    check(/zone\.status === "open"/.test(pickBody), "三个分支都只在「还开放」的区里挑（维护/关闭的区不该成为默认落点）");
+
+    check(/zone_switch_label/.test(login) && /zone_current_label/.test(login), "两个及以上活区才写「（点击切换）」，单区服写不带动作的那句");
+    check(
+      /private async openZonePicker\(\): Promise<void> \{\s*\n\s*if \(this\.zoneCount < 2\) return;/.test(login),
+      "单区服点它不开弹窗（弹出来也只有它自己）",
+    );
+    check(/this\.zoneDialog\.open\(this\.node, this\.pickedZone\?\.id \?\? null/.test(login), "点区名 → 打开选服弹窗，并把当前选中的区传进去（高亮「上次在」）");
+
+    // 登录页的区服是可点节点：必须走统一指针入口（PC 防穿透到输入框），静态审计也守这条
+    check(
+      /SoundManager\.bindClick\(zoneLabel\)/.test(login) && /bindMousePress\(zoneLabel/.test(login),
+      "区名走统一指针入口（bindMousePress 防穿透到账号输入框）",
+    );
+    check(/layout\.zoneLabel/.test(login) && /layout\.order/.test(login), "区服节点进 loginLayout.order（纵向位置交给 Layout）");
+  }
+
+  console.log("\n== 三、登录后：先落区、再进选角 ==");
+  {
+    const submit = /private async submit\(action: \(\) => Promise<AuthResult>\) \{([\s\S]*?)\n  \}/.exec(login);
+    check(!!submit, "有 submit（登录与注册共用一条路）");
+    const body = submit ? submit[1] : "";
+    const iSave = body.indexOf("Session.save(");
+    const iZone = body.indexOf("await this.applyZone()");
+    const iScene = body.indexOf('loadScene("RoleSelector")');
+    check(
+      iSave >= 0 && iZone > iSave && iScene > iZone,
+      "顺序：存会话 → applyZone（POST /zones/select）→ 进选角页（区没落地就拉，拿到的是另一个区的角色）",
+    );
+
+    const apply = /private async applyZone\(\): Promise<boolean> \{([\s\S]*?)\n  \}/.exec(login);
+    check(!!apply, "有 applyZone（登录后把所选区落到服务端，返回「有没有换兜底区」）");
+    const applyBody = apply ? apply[1] : "";
+    check(/await ZoneApi\.select\(\{ zoneId: zone\.id \}\)/.test(applyBody), "按登录页选的区 POST /zones/select");
+    check(/pickFallbackZone\(zone\.id\)/.test(applyBody), "select 失败时挑一个兜底区（不把人卡在登录页）");
+    check(/zone_fallback_tip/.test(applyBody), "兜底换区要飘字说明（否则玩家以为选的那个区生效了）");
+    check(
+      /if \(fellBack\) await this\.waitTipGone\(\)/.test(body),
+      "兜底换过区就等飘字走完再换场景（飘字挂在登录页 Canvas 上，立刻换场景会被销毁）",
+    );
+
+    const fallback = /private async pickFallbackZone\(failedId: number\): Promise<Zone \| null> \{([\s\S]*?)\n  \}/.exec(login);
+    check(!!fallback, "有 pickFallbackZone");
+    const fallbackBody = fallback ? fallback[1] : "";
+    check(
+      /const failed = zones\.find\(\(zone\) => zone\.id === failedId\)/.test(fallbackBody) &&
+        /if \(failed && failed\.status === "open"\) return null;/.test(fallbackBody),
+      "区还在开放就不换区（一次网络抖动不该把玩家换到别的区）",
+    );
+    check(/zone\.status === "open"/.test(fallbackBody), "兜底只挑还开放的区（维护 / 关闭的换过去照样进不去）");
+    check(/ZoneApi\.list\(\)/.test(fallbackBody), "兜底前重拉一次列表（区刚维护 / 关闭 / 合并，缓存会骗人）");
+
     check(
       /AuthApi\.register\(\{ username: credentials\.username, password: credentials\.password \}\)/.test(login),
       "注册只发账号密码（不带 zoneId —— 区是角色的属性）",
     );
-    check(!/login_zone_/.test(textsSource), "texts 里那四条登录页区服文案已删干净（没人再引用）");
   }
 
-  console.log("\n== 三、选角页：先对齐区、再拉角色 ==");
+  console.log("\n== 四、选角页：不再碰区，直接拉角色 ==");
   {
-    const selector = strip(selectorSource);
-    const bootstrap = /private async bootstrap\(\) \{([\s\S]*?)\n  \}/.exec(selector);
-    check(!!bootstrap, "有 bootstrap（进场景的第一步）");
-    const body = bootstrap ? bootstrap[1] : "";
+    check(!/ZoneApi/.test(selector), "RoleSelector 不再调任何区接口（区在登录页就定了）");
+    check(!/ZoneStore/.test(selector) && !/ZoneSelectDialog/.test(selector), "选角页不再读 ZoneStore、不再持有选服弹窗");
     check(
-      body.indexOf("await this.ensureZone()") >= 0 &&
-        body.indexOf("await this.ensureZone()") < body.indexOf("await this.loadRoles()"),
-      "bootstrap 里 ensureZone 在 loadRoles 之前（区不对，GET /roles 拉回来的是另一组角色）",
+      !/ensureZone|pickDefaultZone|renderZoneLabel|openZonePicker|onZonePicked|zoneLabel|zoneCount/.test(selector),
+      "换区那套已经整体移走（没有残留的半截逻辑）",
     );
     const startBody = /\n  start\(\) \{([\s\S]*?)\n  \}/.exec(selector);
-    check(
-      !!startBody && /void this\.bootstrap\(\)/.test(startBody[1]) && !/this\.loadRoles\(\)/.test(startBody[1]),
-      "start 只调 bootstrap，不再直接 loadRoles",
-    );
-
-    // 默认区优先级的三个分支（顺序就是语义：先认本机记录，再认服务端，最后才挑最新）
-    const pick = /private pickDefaultZone\(zones: MyZone\[\]\): MyZone \| null \{([\s\S]*?)\n  \}/.exec(selector);
-    check(!!pick, "有 pickDefaultZone（默认区挑法集中一处）");
-    const pickBody = pick ? pick[1] : "";
-    const iRemembered = pickBody.indexOf("rememberedHit");
-    const iCurrent = pickBody.indexOf("currentHit");
-    const iNewest = pickBody.indexOf("open.reduce");
-    check(
-      iRemembered >= 0 && iRemembered < iCurrent && iCurrent < iNewest,
-      "默认区优先级：本机记录 → 服务端当前区 → 最新的开放区（id 最大）",
-    );
-    check(/zone\.status === "open"/.test(pickBody), "三个分支都只在「还开放」的区里挑（维护/关闭的区不该成为默认落点）");
-
-    check(/ZoneApi\.mine\(\)/.test(selector), "选角页拉 GET /zones/mine（current / roleCount / status 都来自它）");
-    check(/ZoneApi\.select\(\{ zoneId: target\.id \}\)/.test(selector), "默认区与服务端不一致时 POST /zones/select");
-    check(/ZoneStore\.set\(target\.id, target\.name\)/.test(selector), "对齐成功后写本机记录（下次打开仍停在它）");
-    check(
-      /拉不到列表不阻塞/.test(selectorSource) || /zone_load_failed_tip/.test(selector),
-      "拉不到列表不阻塞进游戏（只提示一句，按服务端记着的区继续）",
-    );
+    check(!!startBody && /void this\.loadRoles\(\)/.test(startBody[1]), "start 直接 loadRoles（按服务端记着的当前浏览区拉）");
+    check(!/bootstrap/.test(selector), "不再有 bootstrap（对齐区那一步没了）");
   }
 
-  console.log("\n== 四、选角页：顶部区名与打开弹窗 ==");
+  console.log("\n== 五、选服弹窗：公共列表、挡下不可进的区、只落本机 ==");
   {
-    const selector = strip(selectorSource);
-    check(/zoneLabel/.test(scenesSource) && /role_selector_zone/.test(scenesSource), "布局配置里有区服文案节点（舞台顶部居中）");
-    check(/zone_switch_label/.test(selector) && /zone_current_label/.test(selector), "两个及以上活区才写「（点击切换）」，单区服写不带动作的那句");
-    check(
-      /private async openZonePicker\(\) \{\s*\n\s*if \(this\.zoneCount < 2 \|\| !this\.stage\) return;/.test(selector),
-      "单区服点它不开弹窗（弹出来也只有它自己）",
-    );
-    check(/this\.zoneDialog\.open\(this\.node, \(zone\) => this\.onZonePicked\(zone\)\)/.test(selector), "点区名 → 打开选服弹窗，选完回调 onZonePicked");
-
-    // 换区之后必须做的事：删除按钮挂钩角色 id，留着会对着旧区的 id 发删除
-    const picked = /private onZonePicked\(zone: MyZone\) \{([\s\S]*?)\n  \}/.exec(selector);
-    check(!!picked, "有 onZonePicked（换区之后统一收口）");
-    const pickedBody = picked ? picked[1] : "";
-    check(/this\.manageMode = false/.test(pickedBody) && /this\.clearManageNodes\(\)/.test(pickedBody), "换区退出管理模式并清掉删除按钮（它们指着旧区的角色 id）");
-    check(/this\.clearSelectedRole\(\)/.test(pickedBody), "换区清掉选中态（底部「角色 ---」、开始游戏置灰）");
-    check(/void this\.loadRoles\(\)/.test(pickedBody), "换区后按新区重拉角色列表");
-    check(/this\.roleSummaries = \[\]/.test(pickedBody), "换区先把旧角色列表清空（否则底部还挂着上一个区的角色名）");
-  }
-
-  console.log("\n== 五、选服弹窗：重拉、挡下不可进的区、先落本机再回调 ==");
-  {
-    const dialog = strip(dialogSource);
-    check(/zones = await ZoneApi\.mine\(\)/.test(dialog), "每次打开都重拉 /zones/mine（运营刚改过状态，缓存会骗人）");
+    check(/zones = await ZoneApi\.list\(\)/.test(dialog), "数据源是公共 GET /zones（登录前没有令牌）");
+    check(!/ZoneApi\.mine\(\)/.test(dialog), "不调 /zones/mine");
+    check(!/ZoneApi\.select\(/.test(dialog), "选完不发 select（登录前没令牌，真正落地在登录成功之后）");
     check(!/silent: true/.test(dialog), "拉列表不静默（拉不到要让玩家知道，静默会让人以为点坏了）");
     check(
       /if \(zone\.status !== "open"\) \{[\s\S]{0,220}?zone_unavailable_tip/.test(dialog) ||
         /zone\.status !== "open"[\s\S]{0,260}?zone_closed_tip/.test(dialog),
       "维护 / 关闭的区本地就挡下并给提示（不浪费一次往返，也不静默）",
     );
-    check(/await ZoneApi\.select\(\{ zoneId: zone\.id \}\)/.test(dialog), "点可进的区 → POST /zones/select");
-    const selectIdx = dialog.indexOf("await ZoneApi.select(");
     const storeIdx = dialog.indexOf("ZoneStore.set(zone.id, zone.name)");
     const callbackIdx = dialog.indexOf("onPicked?.(zone)");
-    check(selectIdx >= 0 && storeIdx > selectIdx && callbackIdx > storeIdx, "顺序：服务端 select 成功 → 写本机记录 → 回调刷新（服务端是权威）");
-    check(/zone\.current/.test(dialog), "当前区高亮（描边 + 「上次在」角标）");
+    check(storeIdx >= 0 && callbackIdx > storeIdx, "顺序：先写本机记录 → 再回调刷新区名");
+    check(/zone\.id === currentZoneId/.test(dialog), "当前选中的区那行高亮（描边 + 「上次在」角标）");
     check(/zone\.recommended/.test(dialog), "推荐区有角标（recommended 由 P5 落在库里、P6 补进玩家侧 DTO）");
-    check(/zone\.roleCount > 0/.test(dialog), "行内显示「我在这个区有几个角色」（0 时另给一条文案）");
+    check(!/roleCount/.test(dialog), "不再显示角色数（登录前拿不到，也不需要）");
+    check(/zone_status_open/.test(dialog), "开放区那行也写清状态（中间一列不留空）");
     check(/if \(this\.dialog && isValid\(this\.dialog\)\) return;/.test(dialog), "已经开着就不再叠一个（连点顶部那颗区名）");
   }
 
@@ -170,7 +198,6 @@ if (sandbox) {
     const guild = strip(guildSource);
     check(/ZoneStore\.currentName\(\)/.test(board) && /zone_title_prefix/.test(board), "排行榜小结前挂区名（榜是按区的，不写会以为是全服）");
     check(/ZoneStore\.currentName\(\)/.test(guild) && /zone_title_prefix/.test(guild), "帮会列表标题前挂区名");
-    check(!/ZoneStore\.currentName\(\)/.test(strip(loginSource)), "登录页不读 ZoneStore（登录页与区无关）");
   }
 
   console.log("\n== 七、文案与布局：全部走 configs，代码里没有裸中文 ==");
@@ -180,20 +207,23 @@ if (sandbox) {
       "zone_switch_label",
       "zone_select_title",
       "zone_select_hint",
-      "zone_role_count",
-      "zone_role_count_empty",
       "zone_tag_current",
       "zone_tag_recommended",
+      "zone_status_open",
       "zone_status_maintenance",
       "zone_status_closed",
       "zone_unavailable_tip",
       "zone_closed_tip",
-      "zone_switched_tip",
+      "zone_picked_tip",
+      "zone_fallback_tip",
       "zone_load_failed_tip",
       "zone_title_prefix",
     ];
     const missing = keys.filter((key) => !new RegExp(`\\b${key}:`).test(textsSource));
     check(missing.length === 0, `区名相关文案 ${keys.length} 条都在 configs/texts`, missing.length ? `缺：${missing.join("、")}` : "");
+    const retired = ["zone_role_count", "zone_role_count_empty", "zone_switched_tip"];
+    const left = retired.filter((key) => new RegExp(`\\b${key}:`).test(textsSource));
+    check(left.length === 0, "登录前拿不到角色数 / 选完不落服务端，三条旧文案已退休", left.length ? `还在：${left.join("、")}` : "");
 
     // ui/ 里不写面向玩家的中文（注释与 console 日志先剥掉：前者不进构建，后者是给开发者看的）
     const CJK = /[\u4e00-\u9fa5]/;
@@ -211,18 +241,18 @@ if (sandbox) {
       !/new (Size|Vec2|Color)\(\s*-?\d/.test(strip(dialogSource)),
       "弹窗组件里不出现硬编码的坐标 / 尺寸 / 色值（数值全部来自配置，传进去的只是 row.* 字段）",
     );
+    // 区服节点挪到登录页：选角页不许再有（#1009）
+    check(/zoneLabel: \{ name: "login_zone"/.test(scenesSource), "loginLayout.zoneLabel 在配置里（登录页顶部那颗）");
+    check(!/role_selector_zone/.test(scenesSource), "roleSelectorLayout 里那颗区服文案已删（选角页不再显示 / 切换区服）");
   }
 
   console.log("\n== 八、文件与生成物 ==");
   {
-    const files = [
-      "assets/ui/components/dialogs/ZoneSelectDialog.ts",
-      "assets/ui/core/ZoneStore.ts",
-    ];
+    const files = ["assets/ui/components/dialogs/ZoneSelectDialog.ts", "assets/ui/core/ZoneStore.ts"];
     const missingMeta = files.filter((rel) => !fs.existsSync(path.join(PROJECT_ROOT, rel + ".meta")));
     check(missingMeta.length === 0, "新脚本都带 Cocos .meta（没有 meta 引擎不认）", missingMeta.length ? `缺：${missingMeta.join("、")}` : "");
     check(fs.existsSync(path.join(PROJECT_ROOT, "assets/ui/components/dialogs/ZoneSelectDialog.ts")), "选服弹窗文件在 dialogs 目录下");
   }
 
-  finish("选服（客户端）");
+  finish("区服（客户端）");
 }
