@@ -73,11 +73,16 @@ compose 五服务：admin:80 唯一入口 / game:8080 / server:3100 / realtime:3
 - **新页面一律 `cd admin && npm run new:page -- <Name>` 起步**（合规骨架 + `__UI_CAPTURE__` 状态清单）；显示效果靠人眼看截图，不写断言。细则 → `.workbuddy/skills/olua-admin-ui/`（legend 版）。
 
 ## 进度
-- 细节 → `topics/进度年表.md`。最近：**#957 P1 角色带区（PR #970 `706ddc19`，已关）**：
+- 细节 → `topics/进度年表.md`。最近：**#1009 选区前移到登录页（PR #1014 `9269ecc1`，已关）**：
+  登录页顶部「区服：X（点击切换）」+ 公共 `GET /zones`（登录前无令牌），默认区 = 本机记录（还开放）
+  → 运营推荐 → 最新开放区；`submit` = 存会话 → `POST /zones/select` → 进选角页；选角页删掉整套
+  `ensureZone` / 区名节点 / 弹窗，`start()` 直接 `loadRoles()`。`test-zone-select` 62 条、
+  `test-scene-stage` 登录 6 / 选角 8 元素在画布内。
+  **#957 P1 角色带区（PR #970 `706ddc19`，已关）**：
   `roles.zone_id` 是区归属唯一权威、`accounts.zone_id` 改名 `active_zone_id`（当前浏览区）；
   玩家侧零区参数、跨区 roleId 一律 20002；新增 `GET /zones/mine` + `POST /zones/select`（换区清在线角色）；
   合区搬角色 + 同账号同名**自动改名**。`e2e-zone-roles` 45 / `e2e-zone-no-param` 12 /
-  `e2e-zone-migrate` 12（旧库升级幂等），e2e 清单 **88 套** · #956 P0 守点（PR #968）·
+  `e2e-zone-migrate` 12（旧库升级幂等），e2e 清单 **89 套** · #956 P0 守点（PR #968）·
   **#810 AOI 视野裁剪（PR #953 服务端 + #965 客户端，已关）**：
   512px 格子 3×3 邻域、`entityEnter`/`entityLeave`、同格只序列化一次、离开延迟 1s 合并；
   客户端 upsert 建 / `despawn` 拆、快照缺席不演死亡。`e2e-aoi` 30 条 + 协议 38 条 + 客户端 66 套 ·
@@ -123,10 +128,13 @@ compose 五服务：admin:80 唯一入口 / game:8080 / server:3100 / realtime:3
 - **epic #954 区服模型补完 —— 全部完成**（P0~P7 八个子 issue 全关，2026-11-15 关 epic）：
   #956 守点 #968 · #957 角色带区 #970 · #958 社交 #976 · #959 排行榜 #978 · #960 管理端单区 #984 ·
   #961 运营合区 #985 · #963 公告按区 #986 · #962 客户端选服 #989（`f6d8f35c`）。
-  **P6 口径（用户拍的）**：选服弹窗**不自动弹** —— 登录后直接进选角页停在上次那个区，弹窗从选角页
-  顶部「区服：X（点击切换）」手动打开，单区服不响应。默认区 = 本机 `ZoneStore`（还开放）→
-  服务端 `current`（还开放）→ 最新开放区；`RoleSelector.bootstrap` 必须 `ensureZone` → `loadRoles`
-  （顺序反了会拉到上一个区的角色）；换区要退出管理模式并清删除按钮（按角色 id 绑定，会给旧区发删除）。
+  **P6 原口径（#962）已被 #1009 推翻**：区改到**登录页**选（PR #1014 `9269ecc1`）——登录页顶部
+  「区服：X（点击切换）」+ 公共 `GET /zones`（登录前没令牌，`/zones/mine` 调不了；也不需要角色数），
+  默认区 = 本机 `ZoneStore`（还开放）→ 运营推荐 → 最新开放区；`Login.submit` = 存会话 →
+  `applyZone()`（`POST /zones/select`）→ 进选角页；**选角页彻底不碰区**（无 `ensureZone` / 无区名节点，
+  `start()` 直接 `loadRoles()`）。换区 = 返回登录页重选。弹窗仍**不自动弹**、单区服不响应。
+  兜底：`select` 失败先看区还开不开 —— 还开放就是网络抖动**不换区**；确实进不去才换推荐 / 最新开放区，
+  且等飘字走完再换场景（飘字挂在登录页 Canvas 上，立刻换场景会被销毁）。
   P8 按区分片并入 #770 口径；#438 群发按区等主体落地（docs/39 §3.7 有重开条件）。
 - **#438 运营群发（PR #994 `c1ed3a9b`，已关）**：每角色一行 `role_mails`（+ `batch_id` 列与部分索引），
   `mail_broadcasts` 是幂等闸门兼进度账（`INSERT OR IGNORE` + `changes === 0` → `duplicated: true`，
