@@ -431,13 +431,48 @@ export const bagDialogLayout = {
   name: "bag_dialog",
   title: "背包",
   eyebrow: "BAG · B",
-  /** 弹窗尺寸 600×500（05-bag 稿；也是 dialogFrame 的缺省档） */
-  size: new Size(600, 500),
   /**
-   * 底部三个操作按钮（子件坐标以弹窗中心为原点；背包网格底边在 -167，三钮并排落在网格下方）
+   * 弹窗尺寸 600×540
+   *
+   * 稿（05-bag）标的是 600×500，但把稿里的四段内容竖排真实累加是 ~518：
+   * 头部 45（sp7 + 标题 23 + 金线 6+1）+ 计数行 14 + 10 + 网格 368 + 按钮区 16+36 + 页脚 29。
+   * 稿的面板没有固定高度（`.wrap` 给了 500 但内容溢出可见），客户端弹窗有硬边界，
+   * 所以取内容实际高度 540 —— 与 06/11/12/15 同档，**格子仍是 11×7=77、尺寸仍 50×50**。
+   */
+  size: new Size(600, 540),
+  /**
+   * 格子计数行（稿 05-bag 的 `.count-line`）：左「已用 / 总数 格」，右操作提示，
+   * f11 + text-4；两端坐标是**标签中心**（宽 250，内缘距面板边 20）
+   */
+  countLine: {
+    y: 214,
+    leftX: -155,
+    rightX: 155,
+    width: 250,
+    height: 14,
+    fontSize: T.fontSize.f11,
+    color: T.text[4],
+  },
+  /**
+   * 页脚（稿 05-bag 的 `.panel-foot`）：顶部 1px 分隔线 + 两端各一行小字。
+   * 行在 -246、字在 -262（面板半高 270，字高 14 → 底缘留 4）
+   */
+  foot: {
+    lineY: -246,
+    textY: -262,
+    leftX: -155,
+    rightX: 155,
+    width: 300,
+    height: 14,
+    fontSize: T.fontSize.f11,
+    color: T.text[4],
+    lineColor: T.line[1],
+  },
+  /**
+   * 底部三个操作按钮（子件坐标以弹窗中心为原点；背包网格底边在 -176，三钮并排落在网格下方）
    * 中号按钮宽 123（见 sizes.uiSize.middleButtonSize），各错开 140 → 两两间距 17，整体左右各留 98
    */
-  tidyButton: { name: "bag_tidy_button", position: new Vec2(-140, -212) },
+  tidyButton: { name: "bag_tidy_button", position: new Vec2(-140, -224) },
   /**
    * 「一键回收」：把背包里的装备整格换成绑定元宝（身上穿着的不算）
    * 回收不可撤销，所以按钮是**两步确认**：第一次点击先看数（件数 + 可得绑定元宝）并变成「确认回收」，
@@ -445,7 +480,7 @@ export const bagDialogLayout = {
    */
   recycleButton: {
     name: "bag_recycle_button",
-    position: new Vec2(0, -212),
+    position: new Vec2(0, -224),
     /** 待确认状态保持时间（毫秒），到点自动变回「一键回收」 */
     confirmTimeout: 3000,
   },
@@ -459,7 +494,7 @@ export const bagDialogLayout = {
    */
   discardButton: {
     name: "bag_discard_button",
-    position: new Vec2(140, -212),
+    position: new Vec2(140, -224),
     /** 待确认状态保持时间（毫秒），到点自动放弃（与回收、删除角色同一套口径） */
     confirmTimeout: 3000,
   },

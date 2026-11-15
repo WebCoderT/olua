@@ -230,9 +230,18 @@ check(/isValid\(this\.dialog\)\) \{\s*this\.dialog = null;[\s\S]{0,160}this\.dis
   const block = layoutSource.slice(start, end);
   check(start > 0 && end > start, "能定位 bagDialogLayout 配置块");
   check(/discardButton:\s*\{[\s\S]*name: "bag_discard_button"[\s\S]*confirmTimeout: 3000/.test(block), "discardButton 配置齐备（名称/位置/超时）");
-  const xs = Array.from(block.matchAll(/position: new Vec2\((-?\d+), -212\)/g)).map((m) => Number(m[1]));
-  check(xs.length === 3 && new Set(xs).size === 3, `底部三个按钮横向错开（x = ${xs.join(" / ")}）`);
-  check(xs[0] < xs[1] && xs[1] < xs[2], "三按钮按 整理 → 回收 → 丢弃 从左到右排列");
+  // 只断结构不断数值：三个按钮的 x 互不相同且递增，且 y **齐平**（一排并排）；
+  // 具体 y 由稿的松紧决定，写死会让「按稿调间距」变成改测试
+  const posOf = (key) => {
+    const re = new RegExp(key + ":\\s*\\{[\\s\\S]{0,240}?position: new Vec2\\((-?\\d+), (-?\\d+)\\)");
+    const m = re.exec(block);
+    return m ? { x: Number(m[1]), y: Number(m[2]) } : null;
+  };
+  const buttons = ["tidyButton", "recycleButton", "discardButton"].map(posOf);
+  check(buttons.every(Boolean), "整理 / 回收 / 丢弃三个按钮都配了位置");
+  check(new Set(buttons.map((b) => b.x)).size === 3, `底部三个按钮横向错开（x = ${buttons.map((b) => b.x).join(" / ")}）`);
+  check(buttons[0].x < buttons[1].x && buttons[1].x < buttons[2].x, "三按钮按 整理 → 回收 → 丢弃 从左到右排列");
+  check(new Set(buttons.map((b) => b.y)).size === 1, "三按钮在同一行（y 齐平）");
 }
 
 // 文案：全部登记在 configs/texts（组件里不写裸中文）

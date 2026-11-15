@@ -48,7 +48,7 @@ export const equipmentSlotLayout = {
 /** 背包格子网格布局（弹窗内固定几何；行列数见 configs/role 的 bagRow / bagCol） */
 export const bagGridLayout = {
   name: "bag_grid",
-  position: new Vec2(0, 17),
+  position: new Vec2(0, 8),
   size: new Size(580, 368),
   /** 行间距与单行尺寸（行宽 ÷ 格子宽决定每行格子数） */
   rowSpacing: 3,

@@ -391,6 +391,16 @@ export const uiTexts = {
   /** 「丢弃」按钮（正常态 / 丢弃模式激活态 —— 点击开关丢弃模式） */
   label_bag_discard: "丢弃",
   label_bag_discard_exit: "退出丢弃",
+  /**
+   * 背包计数行（稿 05-bag 的 `.count-line`）：左「已用 / 总数 格」，右操作提示
+   *
+   * {used} 已占格数、{total} 服务端给的格子总数 —— 都是实时算的真实值，不写死
+   */
+  bag_count_line: "{used} / {total} 格",
+  bag_count_hint: "拖到窗口外丢弃 · 右键穿戴 · 左键使用",
+  /** 背包页脚（稿 05-bag 的 `.panel-foot` 两端小字） */
+  bag_foot_left: "右键穿戴 · 左键使用/喝药 · 拖拽换位",
+  bag_foot_right: "回收可得绑定元宝",
 
   //#region 界面标签：通用确认框（几何见 configs/layout/dialogs.confirmDialogLayout）
   /** 「确定」按钮（确认不可恢复的操作） */
