@@ -36,6 +36,10 @@
 - **配置管理面的断言跟「种子行 / 默认常量」对齐，不手抄值**（2026-11-15 #966 第七批）：`npc.scaleX = 1.5`、
   时装 `sellPrice = 0`、`prefixColors.length = 5` 这类都在抄种子；改成与 `config-snapshot` 的行逐字段比，
   或与 dist 导出的 `PARTY_MEMBER_LIMIT_DEFAULT` 比 —— 运营/策划调值不假红，「没落库 / 脏值透传」照样红。
+- **「每张表都必须归类」有常驻守点**（2026-11-15 #438）：`e2e-guard` 用系统信息页给出的 `sqlite_master`
+  全量清单，对 `config-tables.cjs` 的两份清单做**双向**比对（库里有清单没有 / 清单有库里没有）。
+  `assertAllClassified()` 只在 `make config-export` 跑，常年没人导配置就发现不了 —— `zone_world_meta`（#961）
+  就这么漏了一整轮，谁去导配置谁当场炸。改守点后按惯例做了反证（摘掉 `mail_broadcasts` → 红且指名道姓）。
 
 - 工具链：只信 Grep 工具（BSD grep 交替恒空）· 批量替换 `perl -pi -e` · `curl --noproxy '*'` · 判进程 `kill -0`。
 
@@ -50,7 +54,7 @@
   自动进 `make audit`（现 16 个）；白名单 `tools/zone-scope-allowlist.json` 18 条，**不再命中或同名命中 >1 处都算红**。
 - 方向恒 `apply-snapshot → game-config → types`；一份数据一个来源；客户端零兜底；进 `SERVER_INVENTORY_FIELDS`
   的字段不得写也不得补默认值；纯服务端参数别进 `RuntimeParamsDto`。
-- 已展开域见 `topics/架构不变量.md`（战斗 #822~#826 · AI #853~#858 · 背包 #835~#842 · 邮件 #866~#870 · 商城
+- 已展开域见 `topics/架构不变量.md`（战斗 #822~#826 · AI #853~#858 · 背包 #835~#842 · 邮件 #866~#870 + **#438 群发**（每角色一行 + 批次号幂等 + 全服遍历未合并区）· 商城
   #846 · 进图 #859/#861 · 任务 #862~#865 · 拾取 #817 · 帮会 #871/#872 · 刷怪 #930 · 移动 #811 · **Room #809**：
   roomId 三键 `zone:map:slot` 唯一口径 `room-key.util.ts`，热重载 `world_reload_requests`）。
 
@@ -71,7 +75,7 @@ compose 五服务：admin:80 唯一入口 / game:8080 / server:3100 / realtime:3
   `roles.zone_id` 是区归属唯一权威、`accounts.zone_id` 改名 `active_zone_id`（当前浏览区）；
   玩家侧零区参数、跨区 roleId 一律 20002；新增 `GET /zones/mine` + `POST /zones/select`（换区清在线角色）；
   合区搬角色 + 同账号同名**自动改名**。`e2e-zone-roles` 45 / `e2e-zone-no-param` 12 /
-  `e2e-zone-migrate` 12（旧库升级幂等），e2e 清单 **85 套** · #956 P0 守点（PR #968）·
+  `e2e-zone-migrate` 12（旧库升级幂等），e2e 清单 **86 套** · #956 P0 守点（PR #968）·
   **#810 AOI 视野裁剪（PR #953 服务端 + #965 客户端，已关）**：
   512px 格子 3×3 邻域、`entityEnter`/`entityLeave`、同格只序列化一次、离开延迟 1s 合并；
   客户端 upsert 建 / `despawn` 拆、快照缺席不演死亡。`e2e-aoi` 30 条 + 协议 38 条 + 客户端 66 套 ·
@@ -98,20 +102,29 @@ compose 五服务：admin:80 唯一入口 / game:8080 / server:3100 / realtime:3
   服务端 `current`（还开放）→ 最新开放区；`RoleSelector.bootstrap` 必须 `ensureZone` → `loadRoles`
   （顺序反了会拉到上一个区的角色）；换区要退出管理模式并清删除按钮（按角色 id 绑定，会给旧区发删除）。
   P8 按区分片并入 #770 口径；#438 群发按区等主体落地（docs/39 §3.7 有重开条件）。
+- **#438 运营群发（PR #994 `c1ed3a9b`，已关）**：每角色一行 `role_mails`（+ `batch_id` 列与部分索引），
+  `mail_broadcasts` 是幂等闸门兼进度账（`INSERT OR IGNORE` + `changes === 0` → `duplicated: true`，
+  **一行不写**；不按标题+正文去重）。权限两个点：`gameMail:broadcast`（管理员，只发当前区）/
+  `gameMail:broadcast-all`（超管），判断在业务里（同接口按入参决定权限，装饰器表达不了）。
+  「全服」= 遍历 `ZoneService.states()` 里 `mergedInto === null` 的区逐个发，**不写不带区的 SQL**
+  （`audit-zone-scope` 零豁免）；keyset 分页（`id > 上批末尾`）而非 OFFSET；一批一事务（插行 +
+  累加 `sent_count`）；批间 `await setImmediate` —— `DatabaseService` 是同步驱动，不让出会堵死整个进程。
+  群发邮件永不过期（`ttlMs: 0`）。`role_mails.batch_id` 刻意不给默认值（NULL = 不属于任何群发）。
+  中断：`finished_at` 停在 NULL，已写行算数、不补不删。`e2e-game-mail-broadcast` 46 条（批大小调 2 强制跨批）。
 - 当前 open：#9 包体积 · #12~#19 素材 · #295 阶段三 ·
   #403 帮会战 · #742 TLS · #808 地图重构（剩 **#812 分线副本**；
   结算读 `map_rules`、掉落进 Room 暂未落地，重开条件见 docs/20）· **#801 掉落 epic 剩 #803/#804/#805** ·
-  #770 同步分片 · #438 群发。保持现状：技能 1011 / 快捷键 6 格 / 装备 7 部位。
+  #770 同步分片。保持现状：技能 1011 / 快捷键 6 格 / 装备 7 部位。
 - **掉落已是世界实体（#802，PR #993 `89065e2a`，已关）**：`DropService` 是唯一权威（`ground`/`byId` + 终态
   `recent` 留 60s 接重发），`world_drops` 是投影（100ms 批量 upsert、重启清空），`drop_records` /
   `drop_clear_requests` 只建表（分别给 #803 / #805）。`pick` 只带 `dropId`、九步校验、11 种 `code`；
   第 2 步判图读 `roles.zoneOf` + `MapAtOfOnlineRole`（**不是在场表缓存**）。参数键名沿用库里的
   `pickAcceptRadius`（设计稿的 `pickRange` 已统一掉，0 = 闸关闭），新增只有 `ttlMs`/`protectMs`/
   `maxGroundPerMap`/`announceBoss`。**#804 之前客户端捡不起东西**（仍发 castId+下标），已定先合再改。
-- `docs/14` 无生成脚本，改接口手工加行；现口径 **257 = 8 + 68 + 181**。client 单测可当门禁（**68 套**）。
+- `docs/14` 无生成脚本，改接口手工加行；现口径 **260 = 8 + 68 + 184**。client 单测可当门禁（**68 套**）。
   `docs/37` 是最高优先单一来源。
 - **新增 env 键 / 文案 / 节点名 / 颜色的 PR，静态审计要预判两处登记**：`.env.example`（audit-api-hardcode）+
   `tools/config-leak-allowlist.json`（config-leak）。
-- **CI 红的判据**：先在本地完整 verify（**85 套**）复跑——**本地能精确复现 = 代码/测试问题**（改字段名最容易漏
+- **CI 红的判据**：先在本地完整 verify（**86 套**）复跑——**本地能精确复现 = 代码/测试问题**（改字段名最容易漏
   「函数体内读点」，如 `find(m => m.instanceId === …)`）；只有本地绿而 CI 红才考虑分片负载，`gh run rerun --failed`。
   同一套件连续 ≥2 轮同断言红不要再当抖动。改广播帧字段后记得全量本地 verify，「本地绿」结论会过期。
