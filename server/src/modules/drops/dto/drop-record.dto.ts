@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
-import { IsIn, IsInt, IsOptional, IsString, MaxLength, Min } from "class-validator";
+import { IsBoolean, IsIn, IsInt, IsOptional, IsString, MaxLength, Min } from "class-validator";
 import { PageMetaDto, PageQueryDto } from "../../../common/dto/api-envelope.dto";
 import { DROP_RESULTS, DROP_RESULT_LABELS, DropResult, isKnownDropResult } from "../../../common/constants/drop";
 import { DropRecordRow } from "../../../database/rows";
@@ -39,6 +39,7 @@ export class DropRecordDto {
   count: number;
 
   @ApiProperty({ description: "是否绑定（绑定物品不可交易）" })
+  @IsBoolean()
   bound: boolean;
 
   @ApiProperty({ description: "来源怪物 key", example: "slime_1" })

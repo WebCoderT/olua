@@ -165,6 +165,7 @@ export class EquipmentDto {
       "掉落时强制绑定（#789）：true = 这件装备一掉出来就绑定角色、不可交易。" +
       "三种绑定判定之一（另两个：怪物侧「掉落强制绑定」、掉落参数里的随机概率），任一为真即绑定",
   })
+  @IsBoolean()
   bindOnDrop: boolean;
 
   @ApiProperty({ description: "最近更新时间（毫秒）" })

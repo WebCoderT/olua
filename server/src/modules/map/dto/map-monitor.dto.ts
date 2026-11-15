@@ -1,6 +1,6 @@
 import { ApiProperty } from "@nestjs/swagger";
 import { Type } from "class-transformer";
-import { IsInt, IsOptional, IsString, Matches, Max, Min } from "class-validator";
+import { IsBoolean, IsInt, IsOptional, IsString, Matches, Max, Min } from "class-validator";
 
 /**
  * 实时地图监控的 DTO（#665）
@@ -61,6 +61,7 @@ export class MapMonitorMonsterDto {
   maxHp: number;
 
   @ApiProperty({ description: "是否存活（false = 死亡等重生）" })
+  @IsBoolean()
   alive: boolean;
 
   @ApiProperty({ description: "距重生还剩多少毫秒（存活时为 null）", type: Number, nullable: true })
@@ -91,6 +92,7 @@ export class MapMonitorPlayerDto {
   maxHp: number;
 
   @ApiProperty({ description: "是否在移动" })
+  @IsBoolean()
   moving: boolean;
 }
 
@@ -164,6 +166,7 @@ export class MapMonitorEventDto {
   maxHp: number;
 
   @ApiProperty({ description: "这一下是否致死（damage = 打死怪，hit = 打倒玩家）" })
+  @IsBoolean()
   killed: boolean;
 
   @ApiProperty({ description: "这一下把怪推开的距离（像素；damage 才有，0 = 没推）" })

@@ -1,4 +1,5 @@
 import { ApiProperty } from "@nestjs/swagger";
+import { IsBoolean } from "class-validator";
 
 /** 运行时信息 */
 export class SystemRuntimeDto {
@@ -77,9 +78,11 @@ export class SystemConfigItemDto {
   value: string;
 
   @ApiProperty({ description: "是否是脱敏项（值不是原文，只给形态）" })
+  @IsBoolean()
   sensitive: boolean;
 
   @ApiProperty({ description: "是否需要运维注意（如仍在使用默认 JWT 密钥）" })
+  @IsBoolean()
   warning: boolean;
 }
 
@@ -92,6 +95,7 @@ export class SystemConfigItemDto {
  */
 export class SystemBackupDto {
   @ApiProperty({ description: "是否开启了自动备份", example: true })
+  @IsBoolean()
   enabled: boolean;
 
   @ApiProperty({ description: "未启用时给人看的原因（内存库 / 开关关了）", example: "" })

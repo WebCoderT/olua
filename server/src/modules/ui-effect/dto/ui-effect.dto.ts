@@ -36,6 +36,7 @@ export class UiEffectDto {
   durationMs: number;
 
   @ApiProperty({ description: "开关（false = 关：客户端不再创建特效节点）" })
+  @IsBoolean()
   enabled: boolean;
 
   @ApiProperty({ description: "最后一个改它的管理员账号名（追账用，与审计日志能对上）" })
@@ -69,6 +70,7 @@ export class UiEffectConfigDto {
   durationMs: number;
 
   @ApiProperty({ description: "开关（false = 关：客户端不播这个特效）" })
+  @IsBoolean()
   enabled: boolean;
 }
 

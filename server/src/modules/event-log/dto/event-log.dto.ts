@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
-import { IsIn, IsInt, IsOptional, IsString, MaxLength, Min } from "class-validator";
+import { IsBoolean, IsIn, IsInt, IsOptional, IsString, MaxLength, Min } from "class-validator";
 import { PageMetaDto, PageQueryDto } from "../../../common/dto/api-envelope.dto";
 import { EVENT_TYPE_LABELS, EventType, isKnownEventType } from "../../../common/constants/event-type";
 import { EventLogRow } from "../../../database/rows";
@@ -52,6 +52,7 @@ export class EventLogDto {
   ip: string | null;
 
   @ApiProperty({ description: "是否成功（目前只有登录失败会为 false）" })
+  @IsBoolean()
   success: boolean;
 
   @ApiProperty({ description: "发生时间（毫秒）" })

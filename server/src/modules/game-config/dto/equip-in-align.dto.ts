@@ -63,6 +63,7 @@ export class EquipInAlignDto {
     description:
       "true = 用手调的绝对位置（工作台调过）；false = 客户端按当前衣服的内容 bbox 自动算，`inPosition` 不参与（只对武器有意义，衣服恒为 true）",
   })
+  @IsBoolean()
   inManual: boolean;
 
   @ApiProperty({ description: "最近更新时间（毫秒）" })

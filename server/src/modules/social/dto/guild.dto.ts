@@ -166,15 +166,19 @@ export class MyGuildDto {
   myRankLabel: string;
 
   @ApiProperty({ description: "我能不能审批入帮申请（帮主 / 副帮主）", example: false })
+  @IsBoolean()
   canReview: boolean;
 
   @ApiProperty({ description: "我能不能改公告 / 踢人（帮主 / 副帮主）", example: false })
+  @IsBoolean()
   canManage: boolean;
 
   @ApiProperty({ description: "我能不能解散（仅帮主）", example: false })
+  @IsBoolean()
   canDisband: boolean;
 
   @ApiProperty({ description: "我能不能任命 / 卸任副帮主（仅帮主，#871）", example: false })
+  @IsBoolean()
   canAppoint: boolean;
 
   @ApiProperty({ description: "成员列表（帮主 → 副帮主 → 成员，同职位按入帮时间）", type: [GuildMemberDto] })

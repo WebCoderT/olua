@@ -132,6 +132,7 @@ export class MonsterPresentationDto {
   @ApiProperty({ description: "移动速度（刚体线速度单位）" })
   moveSpeed: number;
   @ApiProperty({ description: "是否主动攻击玩家（服务端权威 AI 读它决定要不要扑人；关掉后只游走、被打才记恨）" })
+  @IsBoolean()
   aggressive: boolean;
   @ApiProperty({ description: "检测范围（像素半径）：主动怪在这个距离内发现玩家" })
   detectRange: number;

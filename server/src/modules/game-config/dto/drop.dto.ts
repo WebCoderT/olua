@@ -157,6 +157,7 @@ export class MonsterDropDto {
       "掉落整体强制绑定（#789）：true = 这只怪掉出来的东西一律绑定角色。" +
       "与物品自身的「掉落强制绑定」是「或」的关系；两个都不为真时按掉落参数里的概率掷一次",
   })
+  @IsBoolean()
   bindDrops: boolean;
 
   @ApiProperty({ description: "最近更新时间（毫秒）" })
@@ -202,6 +203,7 @@ export class MonsterDropSummaryDto {
   entryCount: number;
 
   @ApiProperty({ description: "掉落整体强制绑定（#789）：true = 这只怪掉出来的东西一律绑定角色。与物品自身的「掉落强制绑定」是「或」的关系" })
+  @IsBoolean()
   bindDrops: boolean;
 
   static from(row: MonsterDropRow): MonsterDropSummaryDto {

@@ -3,6 +3,7 @@ import { RoleRow, RoleWithAccountRow } from "../../../database/rows";
 import { OCCUPATION_HINT, SEX_HINT } from "../../../common/constants/game-enums";
 import { compareRoleAttributesOfRole } from "../../combat/role-attribute-comparison";
 import { decodeStoredRoleData } from "../role-data.util";
+import { IsBoolean } from "class-validator";
 
 /** 角色概要（列表接口用：不含 data，体量小；画选角列表只需要这几项） */
 export class RoleSummaryDto {
@@ -31,6 +32,7 @@ export class RoleSummaryDto {
   level: number;
 
   @ApiProperty({ description: "是否当前选中（在线）角色" })
+  @IsBoolean()
   online: boolean;
 
   /**
@@ -93,6 +95,7 @@ export class RoleDto extends RoleSummaryDto {
    * 下一次解析成功会自动清掉。给运营一个能看见的位置 —— 没有它，坏档只能靠查库发现。
    */
   @ApiProperty({ description: "存档已损坏（进不了游戏，需人工修复 data）" })
+  @IsBoolean()
   corrupted: boolean;
 
   static fromRow(row: RoleWithAccountRow, onlineRoleId: string | null): AdminRoleDto {
@@ -189,9 +192,11 @@ export class RoleDerivedDto {
     description:
       "两份对不上（口径不一致）。不等于作弊 —— 玩家在升级与重算之间存档也会命中；客户端配置漂移、存档留着旧装备 id 同样会命中。它只表示「这里值得看一眼」",
   })
+  @IsBoolean()
   mismatch: boolean;
 
   @ApiProperty({ description: "这次到底比成了没有（false = 服务端算不出来，此时 mismatch 无意义）" })
+  @IsBoolean()
   comparable: boolean;
 
   @ApiProperty({ description: "查不到属性的装备 id（客户端删了装备 / 存档留着旧 id 时命中，属性会悄悄少一截）", type: [String] })

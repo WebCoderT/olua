@@ -78,6 +78,7 @@ export class SkillDto {
   effect: string;
 
   @ApiProperty({ description: "特效是否播在自己身上" })
+  @IsBoolean()
   effectOnSelf: boolean;
 
   @ApiProperty({ description: "冷却（秒）" })
@@ -106,9 +107,11 @@ export class SkillDto {
   castLockMs: number;
 
   @ApiProperty({ description: "是否要求有合法目标（自身 / 状态型技能可关）" })
+  @IsBoolean()
   requireTarget: boolean;
 
   @ApiProperty({ description: "是否可被自动战斗 / 挂机释放" })
+  @IsBoolean()
   canAuto: boolean;
 
   @ApiProperty({

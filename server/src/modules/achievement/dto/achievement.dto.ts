@@ -1,5 +1,5 @@
 import { ApiProperty } from "@nestjs/swagger";
-import { IsString, MaxLength, MinLength } from "class-validator";
+import { IsBoolean, IsString, MaxLength, MinLength } from "class-validator";
 import { AchievementRow } from "../../../database/rows";
 
 /** 客户端看到的一条成就（配置 + 我的状态，一次给全） */
@@ -32,12 +32,15 @@ export class AchievementViewDto {
   target: number;
 
   @ApiProperty({ description: "是否已达成" })
+  @IsBoolean()
   achieved: boolean;
 
   @ApiProperty({ description: "是否已领奖（已领 = 不可再领）" })
+  @IsBoolean()
   claimed: boolean;
 
   @ApiProperty({ description: "未达成时是否默认折叠（不剧透条件）" })
+  @IsBoolean()
   hidden: boolean;
 
   @ApiProperty({ description: "分类内展示顺序（小的在前）" })
@@ -103,6 +106,7 @@ export class AchievementClaimResultDto {
   level: number;
 
   @ApiProperty({ description: "是否升级" })
+  @IsBoolean()
   leveledUp: boolean;
 
   @ApiProperty({
