@@ -60,6 +60,12 @@ git add admin/src/index.css   # ✅ 逐个文件
 - **dev server 端口**：多会话同时起 vite 要显式错开（`npm run dev -- --port 5273 --strictPort`），5173 默认口会撞。
 - **master 会前进**：另一个会话合并 PR 后 master 就变了。自己的分支 PR 前按惯例 rebase 到最新 master 再跑门禁，冲突只出现在同文件同段。
 - **硬链接的边界**：`cp -al` 对 node_modules 安全（只读为主）；如果某个包运行时写自己的文件（极少见），单独 `npm install` 那个包即可。
+- **别 `ln -s` 到别人的 worktree**：`ln -sfn ~/worktrees/olua-<别人issue>/server/node_modules server/node_modules`
+  看着最省事，但那个目录的主人是**对方** —— 它跑一次 `npm ci`（`npm ci` 是先删目录再装）、或者那个
+  worktree 被 `git worktree remove`，你的依赖当场消失。实测（2026-11-15 #805）：e2e 跑到一半 `@nestjs`
+  没了，报 `No driver (HTTP) has been selected ... install the "@nestjs/platform-express" package`，
+  看着像代码坏了，实际是别人在装依赖。要省时间就 `cp -al`（硬链接，对方删了也不影响你），
+  要么老老实实自己 `npm ci`；跑门禁前先 `ls server/node_modules/@nestjs` 确认一下。
 
 ## 五、验收
 

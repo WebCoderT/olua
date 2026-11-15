@@ -10,6 +10,8 @@
   `make e2e-all`（+ `make client-test`），本地连跑 2~3 次绿就合；不要因为 CI 红反复改测试，也不要推送去触发 CI。
 - **多会话并行 = worktree**（#948）：改动一律在自己的 worktree（`~/worktrees/olua-<issue>`）；动笔前 `git status`
   确认改动归属；只 `git add <明确路径>`；记忆/日志也只写自己 worktree。细则 → `.workbuddy/skills/olua-branch-worktree/`。
+  依赖要 **`cp -al` 硬链接或自己 `npm ci`**，**别 `ln -s` 到别人的 worktree** —— 对方 `npm ci` / `worktree remove`
+  一执行你的依赖就没了（#805 踩到，e2e 报 `No driver (HTTP) has been selected`）。
 - 仓库 PUBLIC：密钥 / IP / 邀请码 / JWT 不进记忆、不进版本库。**`website/` 永不改动**。
 - **现状 ≠ 正确**：issue 正文先按行号实测 `server/src` + `admin/src` 再动手。
 - **待决定项实时问**（AskUserQuestion 一轮 1~4 个）；文档禁写「不做」（写「暂时放置 + 重开条件」）；
