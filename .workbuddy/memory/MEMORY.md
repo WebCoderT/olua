@@ -91,7 +91,9 @@ admin 退回 `127.0.0.1:8081` —— 宿主机 `:80` 只能有一个主人；开
   （部署侧已落 #1033：边缘 edge + certbot、官网链接换 https；**只差 443 放行 + `--tls-init` + 外网核**）·
   #403 帮会战（远期占位）。保持现状：技能 1011 / 快捷键 6 格 / 装备 7 部位。
 - **口径数字**：`docs/14` 无生成脚本、改接口手工加行，现 **266 = 8 + 68 + 190**；client 单测 **70 套**；
-  e2e **92 套**；`make audit` **17 项**；`docs/37` 是最高优先单一来源。
+  e2e **92 套**（**按 `test:e2e*` 脚本数**，`ls server/test/e2e*.cjs` 是 91 个文件，差的那 1 个是
+  `test:e2e:backup` → `test/backup.cjs`；全仓一律按脚本数，别再写 90/91）；`make audit` **17 项**；
+  `docs/37` 是最高优先单一来源。
 - **新增 env 键 / 文案 / 节点名 / 颜色的 PR，静态审计预判三处登记**：`.env.example`（`audit-api-hardcode`）+
   `tools/config-leak-allowlist.json`（config-leak）+ 进了配置快照的键还要加 `e2e-guard` 的 `EXPECTED_CONFIG_KEYS`。
   新增 e2e 脚本别忘 `tools/run-e2e.cjs` 的 `WEIGHT`（漏了只是分片不均，不报错）。
