@@ -86,8 +86,8 @@ if (sandbox) {
     const loadBody = load ? load[1] : "";
     check(/zone_load_failed_tip/.test(loadBody), "拉不到列表只提示一句，不阻塞登录");
     check(/ZoneStore\.set\(target\.id, target\.name\)/.test(loadBody), "默认区写进本机记录（下次进登录页仍停在它）");
-    check(/this\.renderZoneLabel\(\)/.test(loadBody), "选完刷新顶部区名");
-    check(/this\.zoneCount = zones\.length/.test(loadBody), "记下活区数（决定写不写「点击切换」）");
+    check(/this\.renderServerButton\(\)/.test(loadBody), "选完刷新面板里的选服按钮（区名 / 状态字）");
+    check(/this\.zoneCount = zones\.length/.test(loadBody), "记下活区数（决定选服按钮响不响应点击）");
 
     // 默认区优先级的三个分支（顺序就是语义：先认本机记录，再认运营推荐，最后才挑最新）
     const pick = /private pickDefaultZone\(zones: Zone\[\]\): Zone \| null \{([\s\S]*?)\n  \}/.exec(login);
@@ -102,19 +102,16 @@ if (sandbox) {
     );
     check(/zone\.status === "open"/.test(pickBody), "三个分支都只在「还开放」的区里挑（维护/关闭的区不该成为默认落点）");
 
-    check(/zone_switch_label/.test(login) && /zone_current_label/.test(login), "两个及以上活区才写「（点击切换）」，单区服写不带动作的那句");
+    check(/zone_status_open/.test(login) && /zone_status_maintenance/.test(login), "选服按钮按区状态写字（开放中 / 维护中，文案走 configs/texts）");
     check(
       /private async openZonePicker\(\): Promise<void> \{\s*\n\s*if \(this\.zoneCount < 2\) return;/.test(login),
       "单区服点它不开弹窗（弹出来也只有它自己）",
     );
     check(/this\.zoneDialog\.open\(this\.node, this\.pickedZone\?\.id \?\? null/.test(login), "点区名 → 打开选服弹窗，并把当前选中的区传进去（高亮「上次在」）");
 
-    // 登录页的区服是可点节点：必须走统一指针入口（PC 防穿透到输入框），静态审计也守这条
-    check(
-      /SoundManager\.bindClick\(zoneLabel\)/.test(login) && /bindMousePress\(zoneLabel/.test(login),
-      "区名走统一指针入口（bindMousePress 防穿透到账号输入框）",
-    );
-    check(/layout\.zoneLabel/.test(login) && /layout\.order/.test(login), "区服节点进 loginLayout.order（纵向位置交给 Layout）");
+    // 登录页的选服按钮是可点节点：走 bindClick 统一接线（点击音 + 鼠标通道拦截防穿透），静态审计也守这条
+    check(/this\.bindClick\(serverButton/.test(login), "选服按钮走 bindClick 统一接线（blockClickThrough 防穿透到账号输入框）");
+    check(/panel\.server/.test(login) && /login_server_button/.test(scenesSource), "选服按钮的几何 / 文案位置在 loginLayout.panel.server（#1036 整版布局）");
   }
 
   console.log("\n== 三、登录后：先落区、再进选角 ==");
@@ -241,8 +238,8 @@ if (sandbox) {
       !/new (Size|Vec2|Color)\(\s*-?\d/.test(strip(dialogSource)),
       "弹窗组件里不出现硬编码的坐标 / 尺寸 / 色值（数值全部来自配置，传进去的只是 row.* 字段）",
     );
-    // 区服节点挪到登录页：选角页不许再有（#1009）
-    check(/zoneLabel: \{ name: "login_zone"/.test(scenesSource), "loginLayout.zoneLabel 在配置里（登录页顶部那颗）");
+    // 区服入口在登录页的面板里（#1036 整版布局）：选角页不许再有（#1009）
+    check(/name: "login_server_button"/.test(scenesSource), "loginLayout.panel.server 在配置里（登录页面板里的选服按钮）");
     check(!/role_selector_zone/.test(scenesSource), "roleSelectorLayout 里那颗区服文案已删（选角页不再显示 / 切换区服）");
   }
 

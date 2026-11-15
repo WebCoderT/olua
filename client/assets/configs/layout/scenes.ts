@@ -9,74 +9,201 @@ import { uiImages } from "./images";
  * 1 设计像素 = 1 屏幕像素，舞台**不缩放**，这里写多少屏幕上就是多少，没有「按窗口尺寸换算」。
  * 背景图不在舞台内（铺满整个屏幕，始终盖住窗口）
  *
- * 两者的排版方式不同，别混用：
- * - 登录：元素**纵向从上到下排**（cc.Layout 垂直布局，间距只有 spacingY 一个数，顺序见 order）；
- * - 选角：仍是手工坐标（构图是「两侧按钮 + 中间站位」的二维布局，纵向流式排不出来）
+ * 三者的排版方式不同，别混用：
+ * - 登录（#1036 起）：**绝对坐标整版布局**（对齐 design/olua-login 设计稿：顶栏 + 左侧文案区 +
+ *   右侧登录面板 + 底部条，是二维构图，纵向流式排不出来；几何 / 配色 / 文案 key / 时长全部在
+ *   loginLayout 里，ui/Login.ts 只负责按它组装）；
+ * - 选角：同为绝对坐标（构图是「两侧按钮 + 中间站位」的二维布局）；
+ * - 加载：绝对坐标 + 居中零件。
  */
 
 //#region 登录场景
 
 /**
- * 登录界面布局
+ * 登录界面布局（#1036，按 design/olua-login/index.html 整版复刻）
  *
- * 舞台就是一个 **cc.Layout 垂直布局容器**（Login.ts 里 addComponent(Layout)）：
- * - 元素**不写坐标**：纵向位置由 Layout 统一排（从上到下，间距全部 = `spacingY` 这一个数），
- *   水平方向一律居中（元素建在 x=0，Layout 的 VERTICAL 不动 x）；
- * - **高度随内容自动变**（resizeMode = CONTAINER：= paddingTop + 各元素高 + (n-1)×spacingY + paddingBottom），
- *   **宽度固定不变**（引擎在 VERTICAL 布局下只写容器高度、不碰宽度）；
- * - 屏幕顺序 = `order` 数组顺序（元素加进舞台的顺序）；加/删/换元素改 order 一行即可。
- *
- * 想调「元素之间的距离」只改 `spacingY`，想调「整块离顶/离底多远」改 paddingTop / paddingBottom。
+ * 坐标 = 舞台中心系（原点在屏幕中心，y 向上为正）；元素一律锚点居中，
+ * 「左对齐文本」通过「左边缘 x + 宽度的一半」给中心坐标。
+ * 四个区块：topbar（顶部品牌/版本/声音）→ hero（左侧文案区）→ panel（右侧登录面板）→
+ * bottombar（底部版权/协议）。文案 key 见 configs/texts 的 login_* 段。
  */
 export const loginLayout = {
-  /** 舞台宽度（固定值；高度由 Layout 按内容算，不在这里配） */
-  width: 1080,
-  /** 相邻元素的统一间距（Layout.spacingY） */
-  spacingY: 30,
-  /** 最后一项与舞台底边的距离（Layout.paddingBottom） */
-  paddingBottom: 0,
-  /**
-   * 纵向排列顺序（从上到下）：元素按这个顺序挂进舞台，Layout 按挂载顺序排。
-   * 每一项必须在下面有对应的元素定义（Login.ts 会校验，缺了当场报错）
-   *
-   * 区服（#1009）在账号密码与「账号登录」之间：**先选进哪个区，再登录** ——
-   * 登录成功后先按这个区落一次 `POST /zones/select`，选角页拉到的就是这个区的角色。
-   */
-  order: ["logo", "account", "password", "zoneLabel", "loginButton", "registerButton"],
+  /** 舞台尺寸 = 设计分辨率（见 ScreenLayout.designResolution；容器尺寸，不缩放） */
+  stageSize: new Size(1920, 1080),
+  /** 背景图（#1036：设计稿 hero-bg 黄昏沙城 1600×900，与屏幕同比例，铺满不变形不裁切） */
   background: uiImages.loginBackground,
 
-  /** 账号输入框 */
-  account: { placeholder: "请输入您的游戏账号", size: new Size(600, 80), icon: uiImages.loginAccountIcon, password: false },
-  /** 密码输入框 */
-  password: { placeholder: "请输入您的游戏密码", size: new Size(600, 80), icon: uiImages.loginPasswordIcon, password: true },
-  /** 登录按钮 */
-  loginButton: {
-    name: "login_button",
-    image: uiImages.loginButton,
-    text: "账号登录",
-    size: new Size(300, 80),
-    textColor: new Color("#f4fc00"),
-    fontSize: 30,
+  /** 设计稿调色板（olua-login :root：暖炭褐底 / 暗褐世界 / 朱红信号 / 骨白墨 + 古铜金阶） */
+  palette: {
+    /** 主金（描边 / 强调字） */
+    gold: new Color(194, 146, 69, 255),
+    /** 深金（面板边框） */
+    goldDark: new Color(140, 106, 51, 255),
+    /** 弱金线（rgba(194,146,69,.24)） */
+    line: new Color(194, 146, 69, 61),
+    /** 骨白正文 */
+    ink: new Color(237, 226, 204, 255),
+    /** 骨白 82%（副文案） */
+    inkSoft: new Color(237, 226, 204, 209),
+    /** 暖灰棕（次要文案 / 图标） */
+    muted: new Color(167, 143, 108, 255),
+    /** 朱红（主按钮 / 公告条左缘） */
+    accent: new Color(198, 58, 32, 255),
+    /** 朱红亮阶（按钮上高光渐变） */
+    accentLight: new Color(224, 86, 47, 255),
+    /** 朱红描边 */
+    accentBorder: new Color(232, 115, 77, 255),
+    /** 主按钮文字 */
+    btnText: new Color(255, 246, 232, 255),
+    /** 面板底（暗褐 95%） */
+    panelFill: new Color(31, 22, 14, 244),
+    /** 输入框 / 选服条底（rgba(0,0,0,.34)） */
+    fieldFill: new Color(0, 0, 0, 87),
+    /** 公告条底（rgba(14,9,5,.55)） */
+    noticeFill: new Color(14, 9, 5, 140),
+    /** 顶栏版本胶囊底 */
+    pillFill: new Color(22, 16, 9, 140),
+    /** 职业标签选中底（暗褐世界色） */
+    tabActiveFill: new Color(36, 26, 17, 255),
+    /** 勾选框勾的颜色（面板底色） */
+    checkMark: new Color(23, 16, 9, 255),
+    /** 全透明填充（未选中的职业标签底） */
+    transparent: new Color(0, 0, 0, 0),
+    /** 主按钮上半高光阶（白 18%） */
+    highlight: new Color(255, 255, 255, 46),
   },
-  /** 注册按钮（与登录共用上方的账号/密码输入框；账号唯一性与格式由服务端校验） */
-  registerButton: {
-    name: "register_button",
-    image: uiImages.smallButtonBackground,
-    text: "注册账号",
-    size: new Size(240, 56),
-    textColor: new Color("#f4fc00"),
-    fontSize: 24,
+  /** 圆角半径（设计稿 --r-shell / --r-control） */
+  radius: { shell: 6, control: 4 },
+
+  /** 顶栏：左品牌（真实 LOGO 图）+ 右配置版本胶囊与背景音开关 */
+  topbar: {
+    /** 品牌 LOGO（resources/logo.png 金色 Olua 花体，1042×404 等比缩到 176 宽） */
+    brand: { name: "login_brand_logo", image: uiImages.gameLogo, position: new Vec2(-812, 494), size: new Size(176, 68) },
+    /** 版本胶囊（文字 = login_version_label，值来自 GET /game-config/version；拉取失败整颗隐藏） */
+    version: {
+      name: "login_version_pill",
+      position: new Vec2(767, 496),
+      size: new Size(150, 40),
+      fontSize: 16,
+      textKey: "login_version_label",
+    },
+    /** 背景音开关（登录页 BGM on/off；喇叭图标用 Graphics 画，见 Login.drawSpeaker） */
+    music: { name: "login_music_button", position: new Vec2(878, 496), size: new Size(44, 44), fontSize: 16 },
   },
-  /** 顶部 logo */
-  logo: { name: "game_logo", image: uiImages.gameLogo, size: new Size(600, 200) },
-  /**
-   * 区服（#1009）：登录前就选好「进哪个区」，点它打开选服弹窗
-   *
-   * 没有坐标：纵向位置由 Layout 排（与其它元素同一口径）。宽度 640 与账号输入框同宽，
-   * 高度 30 只够一行字；颜色与选角页原本那颗区服文案一致（#FFD166，暖黄）。
-   * 单区服（只有一个活区）不写「（点击切换）」也不响应点击，见 Login.renderZoneLabel。
-   */
-  zoneLabel: { name: "login_zone", size: new Size(640, 30), fontSize: 20, color: new Color("#FFD166") },
+
+  /** 首屏左列（文案区）：左边缘统一在 x=-900（屏幕左缘往里 60px），y 从上往下 */
+  hero: {
+    /** 左列左边缘（所有左对齐元素的起点） */
+    leftEdgeX: -900,
+    /** 眉题前置金线（28×2）+ 眉题文字（左对齐） */
+    eyebrow: {
+      line: { name: "login_eyebrow_line", position: new Vec2(-886, 172), size: new Size(28, 2) },
+      label: { textKey: "login_eyebrow", position: new Vec2(-590, 172), size: new Size(520, 30), fontSize: 16 },
+    },
+    /** 主标题：真实 LOGO 图（1042×404 等比缩到 440 宽；设计稿的大字标题用它替换） */
+    logo: { name: "login_hero_logo", image: uiImages.gameLogo, position: new Vec2(-680, 64), size: new Size(440, 171) },
+    /** 一句话简介（两行内，左对齐，wrapped label） */
+    tagline: { textKey: "login_tagline", position: new Vec2(-620, -68), width: 560, fontSize: 17, lineHeight: 30 },
+    /** 职业预览标签（三颗胶囊，从左往右；点它切换下方说明文案） */
+    classTabs: {
+      /** 每颗胶囊尺寸与整排第一个的左边缘 */
+      size: new Size(128, 44),
+      gap: 12,
+      firstLeftEdgeX: -900,
+      positionY: -148,
+      fontSize: 17,
+      /** 与本作三职业一一对应：label = 标签字，descKey = 说明文案 key（默认选中第一颗） */
+      classes: [
+        { key: "warrior", labelKey: "login_class_warrior", descKey: "login_class_desc_warrior" },
+        { key: "mage", labelKey: "login_class_mage", descKey: "login_class_desc_mage" },
+        { key: "taoist", labelKey: "login_class_taoist", descKey: "login_class_desc_taoist" },
+      ],
+    },
+    /** 职业说明（随选中的标签换文案） */
+    classDesc: { name: "login_class_desc", position: new Vec2(-590, -206), size: new Size(620, 28), fontSize: 15 },
+    /** 公告栏（滚动展示生效中的公告标题；没有公告整条隐藏） */
+    notice: {
+      name: "login_notice_bar",
+      position: new Vec2(-590, -272),
+      size: new Size(620, 48),
+      /** 轮换间隔与淡入淡出时长（毫秒） */
+      rollMs: 4000,
+      fadeMs: 300,
+      /** 标签字 / 滚动行的字号 */
+      labelFontSize: 14,
+      rowFontSize: 14,
+    },
+  },
+
+  /** 右侧登录面板（470 宽，圆角壳 + 四角金点装饰） */
+  panel: {
+    name: "login_panel",
+    position: new Vec2(665, -30),
+    size: new Size(470, 560),
+    /** 面板内宽（尺寸 470 - 左右各 32 内边距） */
+    innerWidth: 406,
+    /** 标题（字距已写进文案）+ 标题下金线 */
+    title: { textKey: "login_panel_title", position: new Vec2(0, 208), size: new Size(300, 30), fontSize: 22 },
+    titleUnderline: { name: "login_panel_title_line", position: new Vec2(0, 186), size: new Size(44, 2) },
+    /** 账号 / 密码输入框（56 高；图标沿用现有 icon-account / icon-password） */
+    account: { name: "login_field_account", placeholder: "请输入账号", position: new Vec2(0, 146), size: new Size(406, 56), icon: uiImages.loginAccountIcon, password: false, inputFontSize: 20, inputHeight: 44, inputInset: 96 },
+    password: { name: "login_field_password", placeholder: "请输入密码", position: new Vec2(0, 76), size: new Size(406, 56), icon: uiImages.loginPasswordIcon, password: true, inputFontSize: 20, inputHeight: 44, inputInset: 96 },
+    /** 密码显隐按钮（挂在密码框内右侧；眼睛图标 Graphics 画，见 Login.drawEye） */
+    eye: { name: "login_password_eye", offsetX: 180, offsetY: 76, size: new Size(30, 30) },
+    /** 选服按钮（点它开 ZoneSelectDialog；区名与状态来自 GET /zones） */
+    server: {
+      name: "login_server_button",
+      position: new Vec2(0, 6),
+      size: new Size(406, 56),
+      /** 「区服」标签 / 区名 / 状态字 / 箭头的横向位置与宽度（相对按钮中心） */
+      labelX: -170,
+      labelSize: new Size(60, 56),
+      nameX: -25,
+      nameSize: new Size(170, 56),
+      statusX: 125,
+      statusSize: new Size(100, 56),
+      caretX: 178,
+      fontSize: 16,
+      statusFontSize: 14,
+    },
+    /** 记住账号行：勾选框 + 文案（左）/ 忘记密码（右） */
+    remember: {
+      positionY: -46,
+      checkbox: { name: "login_remember_checkbox", offsetX: -179, size: new Size(22, 22) },
+      label: { textKey: "login_remember", offsetX: -110, size: new Size(110, 24), fontSize: 14 },
+      forgot: { textKey: "login_forgot", offsetX: 130, size: new Size(140, 24), fontSize: 14 },
+    },
+    /** 主按钮（朱红渐变；文案 = login_enter_button） */
+    loginButton: {
+      name: "login_enter_button_node",
+      textKey: "login_enter_button",
+      position: new Vec2(0, -110),
+      size: new Size(406, 62),
+      fontSize: 20,
+    },
+    /** 次要入口行：注册新账号 / 游戏修复 */
+    altRow: {
+      positionY: -172,
+      register: { textKey: "login_register", offsetX: -110, size: new Size(160, 24), fontSize: 14 },
+      repair: { textKey: "login_repair", offsetX: 110, size: new Size(140, 24), fontSize: 14 },
+    },
+    /** 面板脚注（合规文案）：1px 分隔线 + 一行小字 */
+    foot: {
+      line: { name: "login_panel_foot_line", position: new Vec2(0, -206), size: new Size(406, 1) },
+      text: { textKey: "login_foot_notice", position: new Vec2(0, -228), size: new Size(406, 22), fontSize: 12 },
+    },
+  },
+
+  /** 底部条：版权（左）/ 协议入口（右，点击飘字说明） */
+  bottombar: {
+    positionY: -508,
+    copyright: { textKey: "login_copyright", position: new Vec2(-650, -508), size: new Size(500, 24), fontSize: 14 },
+    links: [
+      { textKey: "login_link_agreement", position: new Vec2(565, -508), size: new Size(110, 24), fontSize: 14 },
+      { textKey: "login_link_privacy", position: new Vec2(700, -508), size: new Size(110, 24), fontSize: 14 },
+      { textKey: "login_link_minor", position: new Vec2(835, -508), size: new Size(130, 24), fontSize: 14 },
+    ],
+  },
 };
 
 //#endregion
