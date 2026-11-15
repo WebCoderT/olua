@@ -101,7 +101,7 @@
         <div class="layer__tag">STORAGE</div>
         <div class="layer__body">
           <h4>SQLite 单库 · WAL</h4>
-          <p><b>76 张表</b>，两个进程共享同一个文件。各写各的表（存档进程写账号角色，实时进程写世界怪物），低频并发交给 WAL + <span class="mono">busy_timeout</span>。</p>
+          <p><b>77 张表</b>，两个进程共享同一个文件。各写各的表（存档进程写账号角色，实时进程写世界怪物），低频并发交给 WAL + <span class="mono">busy_timeout</span>。</p>
           <p>没有 Postgres、没有 Redis、没有消息队列 —— 一个文件就是全部状态，拷走即可迁移。</p>
         </div>
       </div>

@@ -283,8 +283,8 @@ git pull && make config-import       # 整表替换配置；账号与角色存�
 | `make config-import` | `data/config-sync.sql` → 库（整表替换，一个事务） |
 | `make config-check` | 快照是否落后于当前库（落后退出码 1，报「哪张表第几行」） |
 
-**哪些表进文件**：唯一分类处是 `scripts/lib/config-tables.cjs` —— 39 张配置表 + 37 张
-运行时表。账号 / 角色存档 / 审计 / 世界怪物实例永远不进。库里出现**没归类的表**时导出
+**哪些表进文件**：唯一分类处是 `scripts/lib/config-tables.cjs` —— 39 张配置表 + 38 张运行时表。
+账号 / 角色存档 / 审计 / 世界怪物实例永远不进。库里出现**没归类的表**时导出
 直接报错（新加表忘了分类，比漏同步更难查）。
 
 **为什么是整表替换而不是 upsert**：upsert 表达不了删除。配置里删掉一条之后，upsert 会让

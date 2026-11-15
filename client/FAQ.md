@@ -167,7 +167,7 @@ Cocos 的 `TiledMap` 默认把瓦片画在「地图中心为原点」的本地�
 - **自查（改完跑一下）**：
   - `node ../tools/audit-config-leak.cjs` —— 报出「散落在 ui/ 里的可配置项」+ 反向检查「代码引用的文案 key 是否都已在 `configs/texts` 登记」。开发期日志（`console.*`）与内部节点名不算外泄，前者直接跳过，后者登记在 `../tools/config-leak-allowlist.json` 并写明原因
   - `node tools/test-texts.cjs` —— 文案模板单测（占位符替换、漏参保留、未登记 key 兜底）
-  - `make config-export` —— 在管理端改完数据后跑它，把当前库里的 32 张配置表整份重写成 `server/data/config-sync.sql`（提交这个文件 = 同步给别人；`make config-check` 会告诉你快照有没有落后于库）
+  - `make config-export` —— 在管理端改完数据后跑它，把当前库里的 39 张配置表整份重写成 `server/data/config-sync.sql`（提交这个文件 = 同步给别人；`make config-check` 会告诉你快照有没有落后于库）
 - **改配置不生效？** 先看这条是不是「配置改了但代码里又存了一份」：审计脚本的第 1 段就是专门抓这个的，报 0 处才算收敛
 
 ### 背包「一键整理」的排序想改（升序 / 部位先后 / 谁排前面）？
