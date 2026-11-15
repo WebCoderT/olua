@@ -75,7 +75,7 @@ compose 五服务：admin:80 唯一入口 / game:8080 / server:3100 / realtime:3
   `roles.zone_id` 是区归属唯一权威、`accounts.zone_id` 改名 `active_zone_id`（当前浏览区）；
   玩家侧零区参数、跨区 roleId 一律 20002；新增 `GET /zones/mine` + `POST /zones/select`（换区清在线角色）；
   合区搬角色 + 同账号同名**自动改名**。`e2e-zone-roles` 45 / `e2e-zone-no-param` 12 /
-  `e2e-zone-migrate` 12（旧库升级幂等），e2e 清单 **87 套** · #956 P0 守点（PR #968）·
+  `e2e-zone-migrate` 12（旧库升级幂等），e2e 清单 **88 套** · #956 P0 守点（PR #968）·
   **#810 AOI 视野裁剪（PR #953 服务端 + #965 客户端，已关）**：
   512px 格子 3×3 邻域、`entityEnter`/`entityLeave`、同格只序列化一次、离开延迟 1s 合并；
   客户端 upsert 建 / `despawn` 拆、快照缺席不演死亡。`e2e-aoi` 30 条 + 协议 38 条 + 客户端 66 套 ·
@@ -101,7 +101,7 @@ compose 五服务：admin:80 唯一入口 / game:8080 / server:3100 / realtime:3
   三层闸门：路径 `s<k>` 不符 → `421/50150`；票里的区不符 → 同上且**不消耗票**；`worldJoin` 用角色
   **现在的**区复核 → `close(4003)`，客户端**重取票**后立刻重连（连错 ≥3 次才退回退避）。
   `REALTIME_EMBEDDED=true` 时 `shardCount()` 强制 1（配错不该让人起不来）。`e2e-realtime-shard` 27 条。
-  下一步：**#812 分线/副本/map_rules**，或 #803/#804/#805 掉落。
+  下一步：**#812 分线/副本/map_rules**，或 #804/#805 掉落（#803 已落）。
 - **epic #954 区服模型补完 —— 全部完成**（P0~P7 八个子 issue 全关，2026-11-15 关 epic）：
   #956 守点 #968 · #957 角色带区 #970 · #958 社交 #976 · #959 排行榜 #978 · #960 管理端单区 #984 ·
   #961 运营合区 #985 · #963 公告按区 #986 · #962 客户端选服 #989（`f6d8f35c`）。
@@ -119,9 +119,17 @@ compose 五服务：admin:80 唯一入口 / game:8080 / server:3100 / realtime:3
   累加 `sent_count`）；批间 `await setImmediate` —— `DatabaseService` 是同步驱动，不让出会堵死整个进程。
   群发邮件永不过期（`ttlMs: 0`）。`role_mails.batch_id` 刻意不给默认值（NULL = 不属于任何群发）。
   中断：`finished_at` 停在 NULL，已写行算数、不补不删。`e2e-game-mail-broadcast` 46 条（批大小调 2 强制跨批）。
+- **#803 掉落终态流水（PR #999 `ef4760a8`，已关）**：`drop_records` append-only，四种终态各一行
+  （`picked`/`expired`/`overflow`/`restart_lost`）；`resolve()` 只入队、`flush()` 一拍 `insertMany`
+  一事务（**不阻塞拾取**，**先写流水再删投影**，失败只 warn）；`overflow` 用可空 `reason` 分
+  `auto`/`manual_clear`（#805），**不加 result 枚举**；`lived_ms = resolved_at - created_at`。
+  两道保留闸取先到：每图 2000 条（攒 200 裁）+ 7 天（每 6h 扫，`≤0` 关闭）。
+  读接口 `GET /admin/drops/records` + `/summary`（`modules/drops`，区走 `X-Zone-Id`，权限复用
+  `event:read`，排序白名单，**不按 `drop_id` 去重**，`summary` 不吃 `result` 且四态恒出现）。
+  `e2e-drop` 38→60 · 新增 `e2e-drop-records` 37。**#804 之前客户端捡不起东西照旧**。
 - 当前 open：#9 包体积 · #12~#19 素材 · #295 阶段三 ·
   #403 帮会战 · #742 TLS · #808 地图重构（剩 **#812 分线副本**；
-  结算读 `map_rules`、掉落进 Room 暂未落地，重开条件见 docs/20）· **#801 掉落 epic 剩 #803/#804/#805**。
+  结算读 `map_rules`、掉落进 Room 暂未落地，重开条件见 docs/20）· **#801 掉落 epic 剩 #804/#805**。
   保持现状：技能 1011 / 快捷键 6 格 / 装备 7 部位。
 - **掉落已是世界实体（#802，PR #993 `89065e2a`，已关）**：`DropService` 是唯一权威（`ground`/`byId` + 终态
   `recent` 留 60s 接重发），`world_drops` 是投影（100ms 批量 upsert、重启清空），`drop_records` /
@@ -129,12 +137,12 @@ compose 五服务：admin:80 唯一入口 / game:8080 / server:3100 / realtime:3
   第 2 步判图读 `roles.zoneOf` + `MapAtOfOnlineRole`（**不是在场表缓存**）。参数键名沿用库里的
   `pickAcceptRadius`（设计稿的 `pickRange` 已统一掉，0 = 闸关闭），新增只有 `ttlMs`/`protectMs`/
   `maxGroundPerMap`/`announceBoss`。**#804 之前客户端捡不起东西**（仍发 castId+下标），已定先合再改。
-- `docs/14` 无生成脚本，改接口手工加行；现口径 **260 = 8 + 68 + 184**。client 单测可当门禁（**68 套**）。
+- `docs/14` 无生成脚本，改接口手工加行；现口径 **262 = 8 + 68 + 186**。client 单测可当门禁（**68 套**）。
   `docs/37` 是最高优先单一来源。
 - **新增 env 键 / 文案 / 节点名 / 颜色的 PR，静态审计要预判三处登记**：`.env.example`（audit-api-hardcode）+
   `tools/config-leak-allowlist.json`（config-leak）+ **进了配置快照的键还要加 `e2e-guard` 的
   `EXPECTED_CONFIG_KEYS`**（#770 踩到：前两项都过了，`make e2e-all` 才在 guard 十节报「白名单之外的项」）。
   新增 e2e 脚本别忘了 `tools/run-e2e.cjs` 的 `WEIGHT`（漏了只是分片不均，不报错）。
-- **CI 红的判据**：先在本地完整 verify（**87 套**）复跑——**本地能精确复现 = 代码/测试问题**（改字段名最容易漏
+- **CI 红的判据**：先在本地完整 verify（**88 套**）复跑——**本地能精确复现 = 代码/测试问题**（改字段名最容易漏
   「函数体内读点」，如 `find(m => m.instanceId === …)`）；只有本地绿而 CI 红才考虑分片负载，`gh run rerun --failed`。
   同一套件连续 ≥2 轮同断言红不要再当抖动。改广播帧字段后记得全量本地 verify，「本地绿」结论会过期。
