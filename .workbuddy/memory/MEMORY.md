@@ -97,8 +97,10 @@ compose 五服务：admin:80 唯一入口 / game:8080 / server:3100 / realtime:3
   B/C 已拆 #1000 分线 / #1001 副本与传送代价。`e2e-map-rules` 34 条。
 - **`SaveMapRulesDto` 那个真 bug（2026-11-15）**：6 个布尔字段只挂 `@ApiProperty`、没有校验装饰器，
   `ValidationPipe({ whitelist: true })` 把它们**全部剥掉** → 保存一次规则就把所有开关写成 `false`
-  （`allowDrop` 变 false，掉落一件都不出）。写 DTO 的 boolean 必须有 `@IsBoolean`；
-  全仓扫过 `src/**/dto/**` 还有 **77 处**缺（多数是只读响应 DTO 无妨），是否加静态守点另议。
+  （`allowDrop` 变 false，掉落一件都不出）。**写 DTO 的 `boolean` 必须有 `@IsBoolean`**；
+  全仓 **78 处已一次修完**（PR #1011 `a7aaeab5`，31 文件：77 必填加 `@IsBoolean()`、
+  1 可选加 `@IsOptional() @IsBoolean()`；13 个文件合并 import）。只读响应 DTO 也补 —— 运行期无影响，
+  价值是复用为入参时不静默丢值。静态守点按用户口径**暂不加**（要加就单独立项）。
 - **同步系列五刀全部落地**：#767 基线 → #768 10Hz+瘦身 → **#769 插值（PR #991 `14d7b285`，已关）**：
   `players` / `monster-ai` 两帧带**帧级 `t`**（同一拍共用一个值、AOI 裁剪后原样带上）；
   客户端 `ui/core/SnapshotInterpolator`（缓冲 4 条、线性插值、外插上限 100ms、同 t 覆盖 /
