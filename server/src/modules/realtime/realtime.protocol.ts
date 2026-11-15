@@ -578,6 +578,81 @@ export interface RealtimeChangeChannelResultMessage {
   };
 }
 
+//#region 副本（#1001 第二刀）
+
+/**
+ * 客户端 → 服务端：进一场副本
+ *
+ * 与 `worldJoin` 的分工：`worldJoin` 进的是「一张图的某条线」（服务端按容量自动选线），
+ * 副本进的是**管理端开出来的那一场**（`instanceId` 指名道姓，不选线、不参与公共线容量）。
+ *
+ * `instanceId` 就是房间键（`<区>:<图>:i<序号>`，如 `1:3:i7`）—— 与日志 / 监控 / 房间键
+ * 完全一致，排查时一眼对得上。它由管理端 `POST /admin/maps/:id/instances` 开出。
+ *
+ * 成功不回 `instanceEnterResult`，直接回一帧 `world`（与 `worldJoin` 同一形状，
+ * `slot = "i7"`、`channel = -1`）—— 客户端拿它建场景，不用多一步握手。
+ */
+export interface RealtimeInstanceEnterMessage {
+  type: "instanceEnter";
+  data: {
+    /** 副本 id（管理端开出来时返回的那个） */
+    instanceId: string;
+  };
+}
+
+/**
+ * 服务端 → 客户端：进副本**失败**（成功走 `world` 帧，不发这一帧）
+ *
+ * `field` 与 `mapEnterResult` 同一套取值风格 —— 服务端不生产面向玩家的句子：
+ * - `unknown`：没有这一场（id 拼错 / 行被清掉了）
+ * - `closed`：这一场已经收场（人走光了 / 管理端关了 / 世界丢了）
+ * - `expired`：时限已到（与 `closed` 分开：客户端文案是「这场已经结束了」而不是「进不去」）
+ * - `full`：人满了（`need` = 人数上限）
+ * - `forbidden`：不在这一场的名单里
+ * - `zone`：本区维护中 / 已合并 / 这场不归本进程
+ */
+export interface RealtimeInstanceEnterResultMessage {
+  type: "instanceEnterResult";
+  data: {
+    instanceId: string;
+    /** 这一场的底图（客户端切场景要它；`unknown` 时是空串） */
+    mapId: string;
+    ok: boolean;
+    field?: "unknown" | "closed" | "expired" | "full" | "forbidden" | "zone";
+    /** `full` 时是人数上限 */
+    need?: number;
+    /** 图名（提示里要用） */
+    mapLabel?: string;
+    /** 散场回哪张图（提示「结束后回 X」用；`unknown` 时没有） */
+    originMapId?: string;
+  };
+}
+
+/**
+ * 服务端 → 客户端：这一场快要收场了（时限前 `closingLeadOf(ttlMs)` 广播一次）
+ *
+ * 只广播一次（不是每秒倒计时）：客户端要倒计时自己按 `inMs` 减就能算，
+ * 每秒一帧等于给每个在场的人白推 30 帧。
+ *
+ * 到点之后服务端会把人**送回 `originMapId`**（进副本前那张图），并紧跟着发一帧
+ * `world`（也就是「你已经不在这张图了」的权威快照）—— 客户端照常规换图流程处理即可。
+ */
+export interface RealtimeInstanceClosingMessage {
+  type: "instanceClosing";
+  data: {
+    instanceId: string;
+    mapId: string;
+    /** 还有多久收场（毫秒） */
+    inMs: number;
+    /** 散场之后回哪张图 */
+    originMapId: string;
+    mapLabel?: string;
+    originMapLabel?: string;
+  };
+}
+
+//#endregion
+
 /** 世界快照里的一只怪（权威状态；坐标 = 出生点，游走等表现层移动不在此列） */
 export interface RealtimeWorldMonster {
   /** 实例 id（**服务端发牌**，全服唯一、跨重启稳定；cast 的 targetId 用它） */
@@ -1469,7 +1544,9 @@ export type RealtimeServerMessage =
   | RealtimeEntityEnterMessage
   | RealtimeEntityLeaveMessage
   | RealtimeZoneMaintenanceMessage
-  | RealtimeZoneMergedMessage;
+  | RealtimeZoneMergedMessage
+  | RealtimeInstanceEnterResultMessage
+  | RealtimeInstanceClosingMessage;
 
 /**
  * 关闭码

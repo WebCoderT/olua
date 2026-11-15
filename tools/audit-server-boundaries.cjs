@@ -106,6 +106,10 @@ const ALLOWED_EDGES = [
   { from: "modules/realtime", to: "modules/combat/role-attributes.ts", why: "结算取属性汇总" },
   { from: "modules/realtime", to: "modules/combat/status-combat.ts", why: "受击算格挡与减伤（#822，纯函数）" },
   { from: "modules/realtime", to: "modules/world/world.service.ts", why: "世界权威公开服务" },
+  // 副本生命周期（#1001 第二刀）：实时通道每秒问一次「该提醒谁、该收谁」，并据此
+  // 广播 `instanceClosing` / 把人送回原图 —— 判据（`entryOfRoom` / `sweep`）只有世界域
+  // 那一份，通道侧不许自己再算一遍「过期没 / 空房多久了」。它不碰仓储（类型也经它转出）
+  { from: "modules/realtime", to: "modules/world/map-instance.service.ts", why: "副本进本判据 + 收场扫地（#1001 第二刀）" },
   // 怪物实例的类型契约（#809）：AI 与监控采集器都要按实例读 `slot / areaId / hp / respawnAt`。
   // 只有类型与两个纯函数（行 ↔ 对象、快照投影）—— 活的生命周期仍在 world 域，realtime 只消费
   { from: "modules/realtime", to: "modules/world/world-monster.ts", why: "怪物实例类型与快照投影（#809）" },
@@ -245,6 +249,10 @@ const REPO_EDGES = {
   // 合并区（#961）：zone 域把源区 pending 置 failed（`failPendingOfZone`）—— 必须在合并
   // 事务里做，否则实时进程下一拍就在**死区**上重载并重新播种，合并等于白做
   "database/repositories/world-reload-request.repository.ts": ["modules/map", "modules/world", "modules/zone"],
+  // 副本登记（#1001 第二刀）：**两个域各占一半**，理由与单图热重载同一条 ——
+  // 写在地图域（管理端「开一场 / 让这场收场」写行），读 + 守在世界域（实时进程每秒扫地：
+  // 该提醒谁、该收谁）。跨进程只共享这张表，所以两边都得直连，没有「谁转发给谁」这条路。
+  "database/repositories/map-instance.repository.ts": ["modules/map", "modules/world"],
   // 地面掉落（#802）：**权威在实时进程内存，这张表是投影** —— 实时域 100ms 一拍批量写
   // （生成 / 拾取 / 过期），管理端只读（「这张图地上现在有什么」）。没有第三个模块连它：
   // 掉落从生成那一刻起就不归存档域管（角色身上的是「已入包」，那是 roles 表的事）

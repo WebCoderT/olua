@@ -2,7 +2,7 @@ import { Injectable, Logger, OnApplicationBootstrap, OnApplicationShutdown } fro
 import { ConfigService } from "@nestjs/config";
 import { WorldMonsterRepository } from "../../database/repositories/world-monster.repository";
 import { ZoneRepository } from "../../database/repositories/zone.repository";
-import { channelOfSlot } from "../../common/utils/room-key.util";
+import { channelOfSlot, isInstanceSlot, splitRoomKey } from "../../common/utils/room-key.util";
 import { Room } from "./room/room";
 import { RoomManager } from "./room/room.manager";
 import {
@@ -341,6 +341,32 @@ export class WorldService implements OnApplicationBootstrap, OnApplicationShutdo
 
   //#endregion
 
+  //#region 副本房销毁（#1001 第二刀）
+
+  /**
+   * 销毁一间副本房：删这批实例的库行 + 从内存摘掉
+   *
+   * **不落盘**（与代际作废同一条理由）：这些实例马上就要从库里消失，先把脏行写回去
+   * 再删一遍只是多两次写。收场时调它，之后这场副本的世界就彻底不存在了 ——
+   * 这也正是「副本不允许从库恢复」的另一半（`RoomManager.ensure` 那一半负责兜底清残留）。
+   *
+   * @returns 删掉的实例行数（日志 / e2e 观察用）
+   */
+  destroyInstanceRoom(roomId: string): number {
+    const room = this.roomManager.get(roomId);
+    const { zoneId, mapId, slot } = splitRoomKey(roomId);
+    const removed = this.worldMonsters.removeByRoom(zoneId, mapId, slot);
+    if (room) {
+      // 脏标记留着没有意义（行已经删了），顺手清掉，免得后续一次 flushDirty 又写回来
+      for (const monster of room.monsters.values()) monster.dirty = false;
+      room.monsters.clear();
+      this.roomManager.destroy(roomId);
+    }
+    return removed;
+  }
+
+  //#endregion
+
   //#region tick：代际巡检 + 重生 + 密度 + 节流落盘 + 空闲回收
 
   private tick(): void {
@@ -419,6 +445,9 @@ export class WorldService implements OnApplicationBootstrap, OnApplicationShutdo
     for (const room of evicted) {
       // 连接还在但没人看（空房）的就不重载：惰性，下次 join 再按库加载
       if (room.viewers.length === 0) continue;
+      // 副本房**不按库重载**（#1001 第二刀）：副本不允许从库恢复，重载等于把上一场的
+      // 残骸复活成新的一场的世界。作废之后由副本生命周期判「世界丢了」并把人送回原图
+      if (isInstanceSlot(room.slot)) continue;
       // 库里没有这一房的实例 = 它已经被合并/搬走：不重载、更不重新播种（见上面的注释）
       if (this.worldMonsters.listByRoom(room.zoneId, room.mapId, room.slot).length === 0) continue;
       const loaded = this.roomManager.ensure(room.roomId);

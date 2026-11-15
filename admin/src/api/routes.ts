@@ -943,6 +943,27 @@ export const routes = {
      */
     updateSpawnArea: (id: string, areaId: string) => `/admin/maps/${encodeURIComponent(id)}/spawn-areas/${encodeURIComponent(areaId)}`,
   },
+  /** adminMapInstance 模块（3 个接口） */
+  adminMapInstance: {
+    /**
+     * 这张图在当前区的副本（GET /admin/maps/{id}/instances）
+     *
+     * 还开着的副本（按开场先后）+ 最近收场的 10 场。
+     */
+    list: (id: string) => `/admin/maps/${encodeURIComponent(id)}/instances`,
+    /**
+     * 在这张图上开一场副本（POST /admin/maps/{id}/instances）
+     *
+     * 写一行登记（`map_instances`），**世界由第一个进场的人惰性加载**：那一刻按刷怪区现播种，
+     */
+    create: (id: string) => `/admin/maps/${encodeURIComponent(id)}/instances`,
+    /**
+     * 让一场副本收场（通关 / 强制散场）（POST /admin/maps/{id}/instances/{slot}/close）
+     *
+     * **只写登记行**：真正的「把人送回原图 + 销毁这场的世界」由实时进程下一拍扫地做
+     */
+    close: (id: string, slot: string) => `/admin/maps/${encodeURIComponent(id)}/instances/${encodeURIComponent(slot)}/close`,
+  },
   /** adminMoneyItem 模块（4 个接口） */
   adminMoneyItem: {
     /**

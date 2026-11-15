@@ -42,6 +42,7 @@ import { WorldDropRepository } from "./repositories/world-drop.repository";
 import { DropRecordRepository } from "./repositories/drop-record.repository";
 // 清空某图地面的跨进程待办（#805）：管理端插一行、实时进程轮询执行并回写
 import { DropClearRequestRepository } from "./repositories/drop-clear-request.repository";
+import { MapInstanceRepository } from "./repositories/map-instance.repository";
 import { WorldReloadRequestRepository } from "./repositories/world-reload-request.repository";
 import { ZoneRepository } from "./repositories/zone.repository";
 // 配置版本链（#881 / #882）：`config_version` / `config_revisions` + 38 张配置表的整表 dump / 替换
@@ -99,6 +100,7 @@ import { RolePositionRepository } from "./repositories/role-position.repository"
     MapRepository,
     MapRuleRepository,
     WorldReloadRequestRepository,
+    MapInstanceRepository,
     WorldDropRepository,
     DropRecordRepository,
     DropClearRequestRepository,
@@ -164,6 +166,7 @@ import { RolePositionRepository } from "./repositories/role-position.repository"
     MapRepository,
     MapRuleRepository,
     WorldReloadRequestRepository,
+    MapInstanceRepository,
     WorldDropRepository,
     DropRecordRepository,
     DropClearRequestRepository,

@@ -6,6 +6,7 @@ import { MapCanvas, type CanvasMode, type DrawBox, type DrawPoint, type MapLayer
 import { CollisionFormDialog } from "../components/map/CollisionForm";
 import { MapMonitorDialog } from "../components/map/MapMonitor";
 import { MapRulesDialog, ReloadWorldDialog } from "../components/map/MapOps";
+import { MapInstancesDialog } from "../components/map/MapInstances";
 import { NpcPointFormDialog } from "../components/map/NpcPointForm";
 import { outOfBoundsCount, pointsOutOfBounds } from "../components/map/bounds";
 import { SpawnAreaFormDialog } from "../components/map/SpawnAreaForm";
@@ -34,7 +35,18 @@ interface MapForm {
 }
 
 /** 打开中的观测弹窗（页面主视图只留配置 + 地图，其余按需打开） */
-type DialogKey = "layers" | "points" | "spawn" | "collisions" | "monsters" | "sources" | "monitor" | "reload" | "rules" | null;
+type DialogKey =
+  | "layers"
+  | "points"
+  | "spawn"
+  | "collisions"
+  | "monsters"
+  | "sources"
+  | "monitor"
+  | "reload"
+  | "rules"
+  | "instances"
+  | null;
 
 /** 叠加层的默认开关：碰撞盒数量大（每图上百个），默认关；其余默认开 */
 const DEFAULT_LAYERS: MapLayerVisibility = { spawn: true, npc: true, revive: true, collision: false };
@@ -506,6 +518,9 @@ export function MapsPage() {
                     <Button variant="ghost" onClick={() => setDialog("rules")}>
                       玩法规则
                     </Button>
+                    <Button variant="ghost" onClick={() => setDialog("instances")}>
+                      副本
+                    </Button>
                     <Button variant="ghost" onClick={() => setDialog("layers")}>
                       图层（{detail.layerCount}）
                     </Button>
@@ -633,6 +648,14 @@ export function MapsPage() {
       {detail ? (
         <MapRulesDialog
           open={dialog === "rules"}
+          mapId={detail.id}
+          mapLabel={detail.label}
+          onClose={() => setDialog(null)}
+        />
+      ) : null}
+      {detail ? (
+        <MapInstancesDialog
+          open={dialog === "instances"}
           mapId={detail.id}
           mapLabel={detail.label}
           onClose={() => setDialog(null)}

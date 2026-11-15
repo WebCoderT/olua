@@ -10497,6 +10497,118 @@ export type MapRevivePointCleared = {
   cleared: boolean;
 };
 
+export type MapInstance = {
+  /**
+   * 副本 id（= 房间键 `<区>:<图>:i<序号>`，客户端 instanceEnter 带它）
+   */
+  instanceId: string;
+  /**
+   * 槽位（`i<序号>`；日志 / 监控里看到的就是它）
+   */
+  slot: string;
+  /**
+   * 所属区
+   */
+  zoneId: number;
+  /**
+   * 底图 id
+   */
+  mapId: string;
+  /**
+   * 散场之后送回哪张图
+   */
+  originMapId: string;
+  /**
+   * 人数上限（0 = 不限）
+   */
+  maxPlayers: number;
+  /**
+   * 时限（毫秒）
+   */
+  ttlMs: number;
+  /**
+   * 开场时刻（毫秒）
+   */
+  createdAt: number;
+  /**
+   * 到点收场的时刻（毫秒）
+   */
+  expiresAt: number;
+  /**
+   * 距收场还剩多少毫秒（已收场为 0）
+   */
+  remainMs: number;
+  /**
+   * 第一次有人进去的时刻（null = 还没人进过）
+   */
+  startedAt: number | null;
+  /**
+   * 收场时刻（null = 还开着）
+   */
+  closedAt: number | null;
+  /**
+   * 收场原因（emptied / expired / cleared / forced / world_lost；还开着为 null）
+   */
+  closeReason: string | null;
+  /**
+   * 允许进场的角色 id 名单（空 = 谁都能进）
+   */
+  ownerRoleIds: string[];
+  /**
+   * 此刻在场人数（来自实时进程的开场登记；没人进过就是 0）
+   */
+  players: number;
+};
+
+export type MapInstanceList = {
+  /**
+   * 地图 id
+   */
+  mapId: string;
+  /**
+   * 区 id
+   */
+  zoneId: number;
+  /**
+   * 还开着的场数
+   */
+  total: number;
+  /**
+   * 还开着的副本（按开场先后）
+   */
+  open: MapInstance[];
+  /**
+   * 最近收场的（最多 10 场；原因比行本身有用）
+   */
+  recent: MapInstance[];
+};
+
+export type CreateInstance = {
+  /**
+   * 时限（毫秒；不填 = 出厂 30 分钟，上限 24 小时）
+   */
+  ttlMs?: number;
+  /**
+   * 人数上限（不填 = 出厂 6；0 = 不限，上限 100）
+   */
+  maxPlayers?: number;
+  /**
+   * 散场之后把人送回哪张图（不填 = 这张副本的底图的公共线）
+   */
+  originMapId?: string;
+  /**
+   * 允许进场的角色 id 名单（不填 = 谁都能进；填了就只认名单）
+   */
+  ownerRoleIds?: string[];
+};
+
+export type CloseInstance = {
+  /**
+   * 收场原因：cleared = 通关（任务系统标记）/ forced = 强制散场（运营把人赶出来）
+   */
+  reason?: "cleared" | "forced";
+};
+
 export type UiEffect = {
   /**
    * 特效 key（升级特效 = upgrade、掉落光效 = light-1~light-6；取值域见 UI_EFFECT_KEYS）

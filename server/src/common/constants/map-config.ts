@@ -103,6 +103,22 @@ export const COLLISION_BOX_LIMITS = {
   minSize: 1,
 } as const;
 
+/**
+ * 开一场副本的取值域（#1001 第二刀）
+ *
+ * 与 `MAP_ENTER_LIMITS` 同一套写法：**DTO 的 `@Min/@Max` 与仓储的护栏读同一份数字**，
+ * 不各写一个。上限不是玩法，是「填错了」的护栏 —— 时限填成 240 小时、人数填成 1000，
+ * 那一定是把毫秒当分钟、或者多按了一个 0。
+ */
+export const INSTANCE_LIMITS = {
+  /** 时限：至少 1 秒（0 等于「开出来就收场」），最多 24 小时 */
+  ttlMs: { min: 1_000, max: 24 * 60 * 60_000 },
+  /** 人数上限：0 = 不限（单机调试用），最多 100 */
+  maxPlayers: { min: 0, max: 100 },
+  /** 名单长度（一个队 / 一个团都够了；再长是把整张玩家表贴进来了） */
+  ownersMax: 100,
+} as const;
+
 /** 一张图的出厂配置（落库前的默认值） */
 export interface MapDefault {
   id: string;

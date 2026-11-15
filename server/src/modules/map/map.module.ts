@@ -1,5 +1,6 @@
 import { Module } from "@nestjs/common";
 import { AdminMapController } from "./map.controller";
+import { AdminMapInstanceController } from "./map-instance.controller";
 import { MapService } from "./map.service";
 
 /**
@@ -12,11 +13,14 @@ import { MapService } from "./map.service";
  *
  * 仓储由全局 DatabaseModule 提供；seed 在 `MapService.onModuleInit`（按资源清单补行，
  * `INSERT OR IGNORE` 幂等，api 与 realtime 两个进程各跑一次也无副作用）。
+ * 副本接口单独一个控制器（`AdminMapInstanceController`）：地图配置是全区共用，
+ * 而副本是分区的（同一个 slot 在不同区是两场），区口径相反，混在一个类里迟早漏 `X-Zone-Id`。
+ *
  * `exports: MapService` 是给 `ClientConfigService`（配置快照）用的 —— 客户端拿到快照后
  * 在 `changeOnMap` 里自己判进入条件（服务端不拦连接，原因见 `MapService` 顶部）。
  */
 @Module({
-  controllers: [AdminMapController],
+  controllers: [AdminMapController, AdminMapInstanceController],
   providers: [MapService],
   exports: [MapService],
 })

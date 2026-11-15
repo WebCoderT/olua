@@ -324,6 +324,44 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
       );
       CREATE INDEX IF NOT EXISTS idx_world_reload_pending ON world_reload_requests(status, requested_at);
 
+      -- 副本登记簿（#1001 第二刀 / docs/20 §2.8）
+      --
+      -- 一行 = 一场副本（「谁开的、哪张图、几个人上限、什么时候必须收场」）。
+      -- **房间本身不在库里**：副本的世界（怪物）与普通房间同一套 world_monsters，
+      -- 靠 slot 段区分，而「副本不允许从库恢复」—— 房间没了就是世界没了，
+      -- 所以这张表只记**登记**（还允不允许进、还差多久收场），不记世界状态。
+      --
+      -- id 就是发牌序号：slot = 'i' || id（i7 = 第 7 场）。重启后新开的副本
+      -- 从 max(id) 往后接，不会与内存里 / 日志里出现过的 id 撞车。
+      --
+      -- started_at：第一次真的有人进去的时刻。**null = 还没人进过**，与「进过但世界已经
+      -- 丢了（进程重启）」是两件不同的事 —— 前者按刷怪区现播种，后者拒绝并清残留行。
+      --
+      -- closed_at / close_reason：收场（所有人离开 / 超时 / 通关 / 管理端强制）。
+      -- 行不删，留着看「这场副本怎么结束的」；world_monsters 里那批怪在收场时删干净。
+      CREATE TABLE IF NOT EXISTS map_instances (
+        id             INTEGER PRIMARY KEY AUTOINCREMENT,
+        zone_id        INTEGER NOT NULL,
+        map_id         TEXT    NOT NULL,
+        slot           TEXT    NOT NULL,
+        -- 散场回哪张图（进场前那张图；issue 原口径是「送回主城」，改成回原地）
+        origin_map_id  TEXT    NOT NULL,
+        -- JSON 数组：允许进场的角色 id。空数组 = 谁都能进（管理端开的公开本）
+        owner_role_ids TEXT    NOT NULL DEFAULT '[]',
+        max_players    INTEGER NOT NULL,
+        ttl_ms         INTEGER NOT NULL,
+        created_at     INTEGER NOT NULL,
+        expires_at     INTEGER NOT NULL,
+        started_at     INTEGER,
+        closed_at      INTEGER,
+        close_reason   TEXT,
+        created_by     TEXT
+      );
+      -- 按 slot 唯一（同一个 slot 只能是同一场）；进副本判定与列表都靠它
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_map_instances_slot ON map_instances(zone_id, map_id, slot);
+      -- 扫地（超时 / 收场）只看还开着的那几行
+      CREATE INDEX IF NOT EXISTS idx_map_instances_open ON map_instances(closed_at, expires_at);
+
       -- 实时地图监控（#665）：世界进程每秒把「这张图现在长什么样」投影成一行，管理端只读它。
       --
       -- 为什么还要一张镜像表（world_monsters 不是已经有状态了吗）：那张表的 x/y 是**出生点**

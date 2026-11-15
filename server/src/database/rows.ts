@@ -544,6 +544,30 @@ export interface WorldReloadRequestRow {
   detail: string | null;
 }
 
+/** 副本登记（`map_instances` 表；#1001 第二刀，跨进程：管理端开、实时进程守） */
+export interface MapInstanceRow {
+  /** 发牌序号，同时是 `slot` 的数字部分（`slot = "i" + id`） */
+  id: number;
+  zone_id: number;
+  map_id: string;
+  /** `"i<id>"`（`room-key.util` 的副本那一档） */
+  slot: string;
+  /** 散场回哪张图 */
+  origin_map_id: string;
+  /** JSON 数组：允许进场的角色 id；`[]` = 谁都能进 */
+  owner_role_ids: string;
+  max_players: number;
+  ttl_ms: number;
+  created_at: number;
+  expires_at: number;
+  /** 第一次真的有人进去的时刻；null = 还没人进过（与「世界已丢」不同，见 database.service 的注释） */
+  started_at: number | null;
+  closed_at: number | null;
+  /** 'emptied' / 'expired' / 'cleared' / 'forced' / 'world_lost' */
+  close_reason: string | null;
+  created_by: string | null;
+}
+
 /** 实时地图监控的一条文字事件（`map_monitor_events` 表；#665；`payload` 见 `MapMonitorEvent`） */
 export interface MapMonitorEventRow {
   id: number;

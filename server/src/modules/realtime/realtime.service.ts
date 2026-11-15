@@ -10,10 +10,12 @@ import { ZONE_STATUS } from "../../common/constants/zone-status";
 import type { ApiEnvelope, AuthenticatedUser } from "../../common/interfaces/api-envelope.interface";
 import { AccountRepository } from "../../database/repositories/account.repository";
 import { ZoneRepository } from "../../database/repositories/zone.repository";
-import type { RoleRow } from "../../database/rows";
+import type { MapInstanceRow, RoleRow } from "../../database/rows";
 import { WorldService } from "../world/world.service";
+import { INSTANCE_EMPTY_GRACE_MS, MapInstanceService, roomKeyOf } from "../world/map-instance.service";
+import type { InstanceCloseReason } from "../world/map-instance.service";
 import { worldMonsterSnapshotOf } from "../world/world-monster";
-import { roomKey } from "../../common/utils/room-key.util";
+import { isInstanceSlot, roomKey, splitRoomKey } from "../../common/utils/room-key.util";
 import { ownsZone, shardCountOf, shardOf, shardSegment } from "../../common/utils/shard.util";
 import { newTicketNonce, sealTicket, openTicket } from "./realtime-ticket.util";
 import { MapService, START_MAP_ID, type MapEnterReject } from "../map/map.service";
@@ -47,6 +49,8 @@ import {
   type RealtimeEntityEnterMessage,
   type RealtimeEntityLeaveMessage,
   type RealtimeIdentity,
+  type RealtimeInstanceClosingMessage,
+  type RealtimeInstanceEnterResultMessage,
   type RealtimeMapEnterResultMessage,
   type RealtimeMonsterAiMessage,
   type RealtimePickedMessage,
@@ -119,6 +123,15 @@ type TicketResult =
  * 同一张过期票就会一会儿报「已过期」一会儿报「无效」。
  */
 const TICKET_SWEEP_MIN_MS = 60_000;
+
+/**
+ * 副本扫地的间隔（毫秒；#1001 第二刀）
+ *
+ * 1 秒与 `WORLD_TICK_MS` 的出厂值同量级：收场广播要「限时前差不多 30 秒」，
+ * 超时与空房宽限到期也该按秒收口。**刻意不配成 env** —— 它读的是一张几十字节的登记表，
+ * 而为它多开一个键，只会让「本地与线上节拍不同」多一种假红来源。
+ */
+const INSTANCE_SWEEP_MS = 1000;
 
 /** 关闭时留给对端回 close 帧的宽限期（毫秒），到点还没走完的直接强拆 */
 const SHUTDOWN_GRACE_MS = 1000;
@@ -229,6 +242,20 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
   private readonly maintenanceAnnounced = new Map<number, number>();
   /** 角色快照轮询定时器（见 syncRoles；0 = 关闭推送） */
   private roleSyncTimer: NodeJS.Timeout | null = null;
+  /** 副本扫地定时器（#1001 第二刀：收场广播 + 超时 / 空房 / 世界丢失的收场） */
+  private instanceTimer: NodeJS.Timeout | null = null;
+  /**
+   * 每个人「进副本之前在哪张图」（#1001 第二刀；散场往回送）
+   *
+   * 为什么按**账号**记而不是记在副本行上：一队人可能从不同的图进同一个本，
+   * 「送回进副本前那张图」是个**人的属性**，不是这一场的属性。行上的 `origin_map_id`
+   * 只是兜底（这个 map 里没有记录时用它 —— 比如进副本那一刻 `mapAt` 还是空的）。
+   *
+   * 只在内存：副本本身也不跨进程重启（`started_at` 非空但房间不在 = 世界丢了，直接收场），
+   * 所以这份记录与它服务的对象同生共死。**落回任何非副本房间就删**（`attachToRoom`），
+   * 收场送人时也删 —— 两个理由一样：这份记录只在「他正待在副本里」时才有意义。
+   */
+  private readonly instanceOrigins = new Map<string, string>();
   /** 运营配置定期重装定时器（见 configRefreshMs；0 = 关闭重装） */
   private configRefreshTimer: NodeJS.Timeout | null = null;
   /** 握手路径（`/<API_PREFIX>/realtime`），bootstrap 时按前缀算出来 */
@@ -268,6 +295,8 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
     private readonly paths: PathService,
     /** 传送代价（#1001）：按角色记冷却、判「算不算战斗中」。进程内内存态 */
     private readonly transfers: TransferGuardService,
+    /** 副本生命周期（#1001 第二刀）：判「能不能进、几时收场」，效果（广播 / 送人）在本服务里 */
+    private readonly instanceService: MapInstanceService,
     /** 地面掉落物的世界权威（#802）：进图快照、拾取、广播都走它 */
     private readonly drops: DropService,
   ) {
@@ -371,6 +400,10 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
       this.statsIntervalMs = statsMs;
       this.statsTimer = setInterval(() => this.flushStats(), statsMs).unref();
     }
+    // 副本扫地（#1001 第二刀）：1 秒一拍 —— 收场广播要「差不多准」（限时前 30 秒），
+    // 超时与空房宽限到期也要按秒收口。**不可配**：它读的是登记表（几十字节），
+    // 而为它多开一个 env 键只是让「本地与线上节拍不同」多一种假红来源
+    this.instanceTimer = setInterval(() => this.sweepInstances(), INSTANCE_SWEEP_MS).unref();
     // 世界状态变化（重生等）由世界层通知，这里补上广播出口（世界层不知道连接的存在）。
     // #809 起回调按**房间**（`zone:map:slot`）传参：分线之后「一张图」不等于「一份世界」
     this.world.onWorldChanged = (roomId) => this.broadcastWorld(roomId);
@@ -498,6 +531,16 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
     return Math.max(0, Number(this.config.get<number>("realtimeStatsIntervalMs") ?? 10_000));
   }
 
+  /**
+   * 副本「人走光之后」的宽限期（毫秒；#1001 第二刀）
+   *
+   * 现读配置而不是 `bootstrap` 时定死：只在扫地那一拍用一次，而它正是 e2e 会压到几秒
+   * 的那个旋钮（压不到就只能干等 30 秒才验得到 `emptied`）。
+   */
+  private instanceEmptyGraceMs(): number {
+    return Math.max(0, Number(this.config.get<number>("worldInstanceEmptyGraceMs") ?? INSTANCE_EMPTY_GRACE_MS));
+  }
+
   //#endregion
 
   //#region 广播统计（#767：同步延迟测量基线）
@@ -582,7 +625,7 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
    */
   async onModuleDestroy(): Promise<void> {
     this.closing = true;
-    for (const timer of [this.heartbeatTimer, this.ticketSweepTimer, this.kickPollTimer, this.zoneStatusTimer, this.roleSyncTimer, this.configRefreshTimer, this.statsTimer]) if (timer) clearInterval(timer);
+    for (const timer of [this.heartbeatTimer, this.ticketSweepTimer, this.kickPollTimer, this.zoneStatusTimer, this.roleSyncTimer, this.configRefreshTimer, this.statsTimer, this.instanceTimer]) if (timer) clearInterval(timer);
     this.heartbeatTimer = null;
     this.ticketSweepTimer = null;
     this.kickPollTimer = null;
@@ -590,6 +633,7 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
     this.configRefreshTimer = null;
     this.roleSyncTimer = null;
     this.statsTimer = null;
+    this.instanceTimer = null;
     this.usedTicketNonces.clear();
 
     const sockets = [...this.connections.values()];
@@ -1002,6 +1046,17 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
       this.send(socket, this.mapEnterResultOf(socket.identity.id, intent.mapId));
       return;
     }
+    if (parsed?.type === "instanceEnter") {
+      // 进副本（#1001 第二刀）：与 worldJoin 分开是一条消息 —— 副本有「哪一场」这个维度，
+      // 塞进 worldJoin 会让「进图」同时承担两套语义（选线 vs 指名某一场）
+      const request = parseInstanceEnter(parsed.data);
+      if (!request) {
+        this.send(socket, { type: "error", data: { message: "instanceEnter 消息缺 instanceId" } });
+        return;
+      }
+      this.enterInstance(socket, request.instanceId);
+      return;
+    }
     if (parsed?.type === "worldJoin") {
       // 进图登记（播种 / 恢复 / 换图都走这里），应答一张权威快照。
       // 区号从账号行现查（#295 阶段二）：账号归哪个区就进哪个区的世界；
@@ -1082,49 +1137,7 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
       // 下一个目的地那边变成「刚才传送过」—— 冷却属于「配了冷却的那些图」这件事本身。
       if (transfer && transfer.cooldownMs > 0) this.transfers.record(transfer.roleId);
       const roomId = roomKey(zoneId, join.mapId, pick.slot);
-      // 记住「他在哪个区玩」（#961 维护 / 合并踢线的名单来源；见 TrackedSocket.worldZoneId）
-      socket.worldZoneId = zoneId;
-      // 快照里的坐标按 AI 实时位置覆盖（#670）：出生点不是「他现在在哪」，见 withLiveMonsterPositions
-      const snapshot = this.withLiveMonsterPositions(this.world.join(roomId, socket.identity.id));
-      // 位置以「被接受的 join」为准写回存档（#606）：客户端报 OnMap 是客户端的事，
-      // 服务端只记自己放行过的图 —— 下次登录拿它当「他本来就在这」的判据
-      this.roles.setMapAt(socket.identity.id, join.mapId);
-      // 换图即清掉落账本与幂等账（#817）：**必须由服务端自己清**，不能指望客户端发
-      // `targetsReset` —— 那是一条客户端消息，改包不发就能把上一张图的地面掉落吸进包。
-      // 世界状态不受影响（怪物的血量与位置是共享的，不随谁换图而重置）
-      this.combat.resetTargets(socket.identity.id);
-      // 地面掉落物的全量随 world 帧下发（#802）：增量广播帮不上「刚进图的人」，
-      // 而图卸载**不**清掉落（生命周期只由 expireAt 决定），所以逛一圈回来还能看到原地的东西
-      const frame: RealtimeWorldMessage = {
-        type: "world",
-        data: { ...snapshot, drops: this.drops.snapshotOf(zoneId, join.mapId) },
-      };
-      this.send(socket, frame);
-      // 玩家互见（#324）：随 world 应答发一份同图全量快照（增量帮不上「刚进图的人」）
-      this.presence.join(socket.identity.id, roomId);
-      // AOI 基线（#810）：进图这一刻还不知道他在哪（pos 帧随后才到），所以上面给的是
-      // **全量**；这里把基线对齐成「客户端手上现有的东西」，第一拍 AOI 就只做一件事 ——
-      // 把 3×3 格外的实体 leave 掉（不 seed 的话那些域外实体会永久留在他的画面上）
-      this.aoi.seed(roomId, socket.identity.id, [
-        ...snapshot.monsters.map((monster) => monsterEntityOf(monster.instanceId)),
-        ...this.presence.positionsOn(roomId).map((player) => playerEntityOf(player.accountId)),
-      ]);
-      // 队伍（#399）：快照只在变化时发，重连 / 换图的人错过了那些变化 —— 进图补一份。
-      // 角色 id 取**账号行**的在线角色（不是在场表）：进图这一刻 pos 帧可能还没到，
-      // 而在场表里没条目就查不到「这个角色挂在谁的连接上」，队伍状态会假死到下一次变化
-      const onlineRoleId = this.accounts.findById(socket.identity.id)?.online_role_id ?? "";
-      if (onlineRoleId) this.party.pushSnapshotToAccount(socket.identity.id, onlineRoleId, join.mapId);
-      // 进图流水（#886）：记的是「**真的站进去了**」这一步，不是 `mapEnter` 的意图 ——
-      // 被门槛拒的那次上面已经 return，改包绕过 mapEnter 直发 worldJoin 的也走不到这里
-      const enterRole = onlineRoleId ? this.roles.onlineRoleRow(socket.identity.id) : null;
-      this.eventLogs.record({
-        type: EVENT_TYPE.ENTER_MAP,
-        accountId: socket.identity.id,
-        roleId: onlineRoleId || null,
-        roleName: enterRole?.name ?? null,
-        zoneId,
-        mapId: join.mapId,
-      });
+      this.attachToRoom(socket, { zoneId, mapId: join.mapId, slot: pick.slot, roomId });
       return;
     }
     if (parsed?.type === "changeChannel") {
@@ -1350,6 +1363,225 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
   }
 
   //#endregion
+
+  //#region 副本（#1001 第二刀）
+
+  /**
+   * 落地进一间房（`worldJoin` / `instanceEnter` / 副本散场共用）
+   *
+   * **抽出来是为了「进图之后该做的事」只有一份**：写位置、清掉落账本、发 world 帧、
+   * 登记互见、AOI 基线、队伍快照、进图流水。以前这些全在 `worldJoin` 里，副本再抄一份
+   * 必然漂移（最典型的漏项是 `combat.resetTargets`：漏了就能靠改包把上一张图的掉落吸进包）。
+   *
+   * `mapId` 与 `slot` 分开传：副本的 `mapId` 是底图、`slot` 是 `i<n>`。`setMapAt` 记的是
+   * **底图**（不是副本 id）—— 下次登录他落在底图的公共线上，而不是回到一场可能已经收场的副本。
+   *
+   * 参数名刻意是 `dest` 而不是 `input`：这里的 `zoneId` 是**服务端算出来的**
+   * （`roles.zoneOf` / 副本行上的 `zone_id`），不是请求参数 —— 换个名字既少一次误读，
+   * 也不让「区入参」那条静态守点把它当客户端传来的区（**参数名不等于来源**）。
+   */
+  private attachToRoom(
+    socket: TrackedSocket,
+    dest: { zoneId: number; mapId: string; slot: string; roomId: string },
+  ): void {
+    const accountId = socket.identity.id;
+    // 记住「他在哪个区玩」（#961 维护 / 合并踢线的名单来源；见 TrackedSocket.worldZoneId）
+    socket.worldZoneId = dest.zoneId;
+    // 落到**非副本**房间 = 他已经离开副本了，那份「进副本前那张图」的记账作废
+    // （下次进本按当时的 `mapAt` 重新记 —— 不删的话两场副本之间会串用上一次的原图）
+    if (!isInstanceSlot(dest.slot)) this.instanceOrigins.delete(accountId);
+    // 快照里的坐标按 AI 实时位置覆盖（#670）：出生点不是「他现在在哪」，见 withLiveMonsterPositions
+    const snapshot = this.withLiveMonsterPositions(this.world.join(dest.roomId, accountId));
+    // 位置以「被接受的 join」为准写回存档（#606）：客户端报 OnMap 是客户端的事，
+    // 服务端只记自己放行过的图 —— 下次登录拿它当「他本来就在这」的判据
+    this.roles.setMapAt(accountId, dest.mapId);
+    // 换图即清掉落账本与幂等账（#817）：**必须由服务端自己清**，不能指望客户端发
+    // `targetsReset` —— 那是一条客户端消息，改包不发就能把上一张图的地面掉落吸进包。
+    // 世界状态不受影响（怪物的血量与位置是共享的，不随谁换图而重置）
+    this.combat.resetTargets(accountId);
+    // 地面掉落物的全量随 world 帧下发（#802）：增量广播帮不上「刚进图的人」，
+    // 而图卸载**不**清掉落（生命周期只由 expireAt 决定），所以逛一圈回来还能看到原地的东西
+    const frame: RealtimeWorldMessage = {
+      type: "world",
+      data: { ...snapshot, drops: this.drops.snapshotOf(dest.zoneId, dest.mapId) },
+    };
+    this.send(socket, frame);
+    // 玩家互见（#324）：随 world 应答发一份同图全量快照（增量帮不上「刚进图的人」）
+    this.presence.join(accountId, dest.roomId);
+    // AOI 基线（#810）：进图这一刻还不知道他在哪（pos 帧随后才到），所以上面给的是
+    // **全量**；这里把基线对齐成「客户端手上现有的东西」，第一拍 AOI 就只做一件事 ——
+    // 把 3×3 格外的实体 leave 掉（不 seed 的话那些域外实体会永久留在他的画面上）
+    this.aoi.seed(dest.roomId, accountId, [
+      ...snapshot.monsters.map((monster) => monsterEntityOf(monster.instanceId)),
+      ...this.presence.positionsOn(dest.roomId).map((player) => playerEntityOf(player.accountId)),
+    ]);
+    // 队伍（#399）：快照只在变化时发，重连 / 换图的人错过了那些变化 —— 进图补一份。
+    // 角色 id 取**账号行**的在线角色（不是在场表）：进图这一刻 pos 帧可能还没到，
+    // 而在场表里没条目就查不到「这个角色挂在谁的连接上」，队伍状态会假死到下一次变化
+    const onlineRoleId = this.accounts.findById(accountId)?.online_role_id ?? "";
+    if (onlineRoleId) this.party.pushSnapshotToAccount(accountId, onlineRoleId, dest.mapId);
+    // 进图流水（#886）：记的是「**真的站进去了**」这一步，不是 `mapEnter` 的意图 ——
+    // 被门槛拒的那次上面已经 return，改包绕过 mapEnter 直发 worldJoin 的也走不到这里
+    const enterRole = onlineRoleId ? this.roles.onlineRoleRow(accountId) : null;
+    this.eventLogs.record({
+      type: EVENT_TYPE.ENTER_MAP,
+      accountId,
+      roleId: onlineRoleId || null,
+      roleName: enterRole?.name ?? null,
+      zoneId: dest.zoneId,
+      mapId: dest.mapId,
+    });
+  }
+
+  /** 拒绝一次进副本（服务端不生产面向玩家的句子，只给 field / need） */
+  private rejectInstance(socket: TrackedSocket, data: RealtimeInstanceEnterResultMessage["data"]): void {
+    this.send(socket, { type: "instanceEnterResult", data } satisfies RealtimeInstanceEnterResultMessage);
+  }
+
+  /**
+   * 进副本（#1001 第二刀）
+   *
+   * 判据全在 `MapInstanceService`（它读 `map_instances` 与房间状态），这里只做三件事：
+   * 1. 补通道才知道的判据（这条连接所在的区、区状态）；
+   * 2. 判定说「这一场早该收了」时先收场（超时 / 世界丢了）；
+   * 3. 放行时落地 + 首次进场标 `started_at`。
+   *
+   * **区按在线角色算**（与 `worldJoin` 同一个入口）：副本行里的 `zone_id` 必须等于它，
+   * 否则就是拿别的区的副本 id 来串场 —— 拒绝，不去猜他想干什么。
+   */
+  private enterInstance(socket: TrackedSocket, instanceId: string): void {
+    const accountId = socket.identity.id;
+    const now = Date.now();
+    const ref = splitRoomKey(instanceId);
+    const row = isInstanceSlot(ref.slot) ? this.instanceService.findRow(ref.zoneId, ref.mapId, ref.slot) : null;
+    const mapLabel = row ? this.maps.labelOf(row.map_id) : "";
+    const base = { instanceId, mapId: row?.map_id ?? ref.mapId, mapLabel };
+    if (!row) {
+      this.rejectInstance(socket, { ...base, ok: false, field: "unknown" });
+      return;
+    }
+    // 区闸门（#961）：维护中 / 已合并的区不许进；另外「这场不归本进程」也走同一个 field ——
+    // 客户端看到的都是「现在进不去，换个时候」，具体原因看服务端日志
+    const zoneId = this.roles.zoneOf(accountId);
+    const zoneState = this.zones.stateOf(zoneId);
+    if (
+      zoneId !== row.zone_id ||
+      !this.owns(zoneId) ||
+      !zoneState ||
+      zoneState.merged_into !== null ||
+      zoneState.status !== ZONE_STATUS.OPEN
+    ) {
+      this.rejectInstance(socket, { ...base, ok: false, field: "zone", originMapId: row.origin_map_id });
+      return;
+    }
+    const roleId = this.roles.onlineRoleRow(accountId)?.id ?? "";
+    const verdict = this.instanceService.entryOfRoom({ roomId: roomKeyOf(row), accountId, roleId, now });
+    if (!verdict.ok) {
+      // 判定顺带说「这一场该收了」：先收（把人送回原图、清残留行）再回拒绝帧。
+      // 不收的话下一拍扫地又会判一次，而「进不去的那一行」会一直挂在那儿
+      if (verdict.settleReason) this.settleInstance(row, verdict.settleReason, now, socket);
+      this.rejectInstance(socket, {
+        ...base,
+        ok: false,
+        field: verdict.field,
+        ...(verdict.field === "full" ? { need: row.max_players } : {}),
+        originMapId: row.origin_map_id,
+      });
+      return;
+    }
+    // 「进副本前那张图」：**必须在 attachToRoom 之前读** —— 它会把人 `setMapAt` 成副本底图，
+    // 之后再读就只能读到副本自己了（那样散场永远回到底图的公共线）。
+    // **已经在里面的人（重进 / 断线重连）不覆盖**：他这会儿的 `mapAt` 已经是副本底图，
+    // 覆盖了就等于「散场把他扔到这张图的公共线」，一队人从不同图来的信息就丢了。
+    if (!this.instanceOrigins.has(accountId)) {
+      const before = this.roles.mapAtOfOnlineRole(accountId);
+      if (before) this.instanceOrigins.set(accountId, before);
+    }
+    this.attachToRoom(socket, { zoneId: row.zone_id, mapId: row.map_id, slot: row.slot, roomId: roomKeyOf(row) });
+    // 首次进场才标：`started_at` 非空 = 这场已经开过，之后房间不在内存就说明世界丢了
+    this.instanceService.markStarted(row, now);
+  }
+
+  /**
+   * 副本扫地（每秒一次；#1001 第二刀）
+   *
+   * 「该广播谁、该收谁」由 `MapInstanceService.sweep` 判，这里只做效果：
+   * - `closing` → 给这一场里的每个人发一帧 `instanceClosing`（限时前的一次提醒）；
+   * - `settle` → 把人**送回 `originMapId`**（进副本前那张图），再销毁房间、标记收场。
+   *
+   * 顺序不能反：先送人再销毁房间 —— 反过来的话 `attachToRoom` 会对着一个已经被摘掉的
+   * 房间找人，`world.join` 会当场按刷怪区给它重新播种一份（副本的世界就这么被复活了）。
+   */
+  private sweepInstances(): void {
+    if (this.closing) return;
+    const now = Date.now();
+    for (const decision of this.instanceService.sweep(now, this.instanceEmptyGraceMs())) {
+      const row = decision.row;
+      if (decision.kind === "closing") {
+        // 一人一帧（不是 `sendToViewers`）：`originMapId` 是**他自己**进场前那张图，
+        // 一队人可能来自不同图。这一帧一次生命周期只发一次、房内最多几个人，
+        // 多序列化几次比「给三个人显示同一个错误的回城点」便宜得多
+        for (const accountId of this.world.viewersOf(roomKeyOf(row))) {
+          const socket = this.connections.get(accountId);
+          if (!socket) continue;
+          const origin = this.instanceOrigins.get(accountId) ?? row.origin_map_id;
+          const frame: RealtimeInstanceClosingMessage = {
+            type: "instanceClosing",
+            data: {
+              instanceId: roomKeyOf(row),
+              mapId: row.map_id,
+              inMs: decision.inMs,
+              originMapId: origin,
+              mapLabel: this.maps.labelOf(row.map_id),
+              originMapLabel: this.maps.labelOf(origin),
+            },
+          };
+          this.send(socket, frame);
+        }
+        continue;
+      }
+      this.settleInstance(row, decision.reason, now);
+    }
+  }
+
+  /**
+   * 收一场副本：把里面的人送回原图 → 销毁房间（含库行）→ 标记收场
+   *
+   * `except` 是「正在这个请求里被判定的那个人」：他不是被散场送走的，而是本该收到
+   * 一帧拒绝（比如他拿着过期的 id 硬要进）—— 把他一起送回原图会让客户端莫名其妙换一次图。
+   */
+  private settleInstance(row: MapInstanceRow, reason: InstanceCloseReason, now: number, except?: TrackedSocket): void {
+    const roomId = roomKeyOf(row);
+    const inside = [...this.world.viewersOf(roomId)];
+    for (const accountId of inside) {
+      const socket = this.connections.get(accountId);
+      if (!socket || socket === except) continue;
+      // 回**他自己**进场前那张图；没有记录（进副本那一刻 mapAt 还是空的）才退回行上的兜底
+      this.relocateTo(socket, this.instanceOrigins.get(accountId) ?? row.origin_map_id);
+    }
+    for (const accountId of inside) this.instanceOrigins.delete(accountId);
+    const removed = this.world.destroyInstanceRoom(roomId);
+    this.instanceService.markClosed(row, reason, now);
+    this.logger.log(`副本 ${roomId} 收场（${reason}）：送走 ${inside.length} 人、清掉 ${removed} 只实例`);
+  }
+
+  /**
+   * 把一个人送进某张图的公共线（副本散场用）
+   *
+   * **不判容量**：散场是「你必须离开这里」，满了也得给人一个落脚点 ——
+   * `pickRoom` 在全满时仍返回最空的那条线（`full: true`），这里刻意不读 `full`。
+   * 也不收传送代价：他不是主动要去那张图，是被送回去的。
+   */
+  private relocateTo(socket: TrackedSocket, mapId: string): void {
+    const zoneId = socket.worldZoneId ?? this.roles.zoneOf(socket.identity.id);
+    const pick = this.world.pickRoom(zoneId, mapId);
+    this.attachToRoom(socket, {
+      zoneId,
+      mapId,
+      slot: pick.slot,
+      roomId: roomKey(zoneId, mapId, pick.slot),
+    });
+  }
 
   //#endregion
 
@@ -2101,6 +2333,20 @@ function parseChangeChannel(raw: unknown): ParsedChangeChannel | null {
   const channel = toChannel(data.channel);
   if (channel === undefined) return null;
   return { channel };
+}
+
+/**
+ * instanceEnter.data 的解析（#1001 第二刀）
+ *
+ * `instanceId` 就是房间键（`1:3:i7`），长度上限按房间键的量级给 —— 它不是自由文本，
+ * 拼错 / 超长的直接当格式错误（回 error 帧），不浪费一次库查询。
+ */
+function parseInstanceEnter(raw: unknown): { instanceId: string } | null {
+  if (!raw || typeof raw !== "object") return null;
+  const data = raw as Record<string, unknown>;
+  const instanceId = data.instanceId;
+  if (typeof instanceId !== "string" || instanceId.length === 0 || instanceId.length > 64) return null;
+  return { instanceId };
 }
 
 /** pick.data 的解析结果（#325：格式不对回 error 帧，低频操作值得明确告知） */

@@ -367,6 +367,17 @@ export interface AppConfiguration {
    * 重新加载时会按当前时刻一次性补上到期未处理的重生。
    */
   worldMapIdleMs: number;
+  /**
+   * 副本「人走光之后」的宽限期（毫秒；#1001 第二刀）
+   *
+   * 最后一个人离开不等于这一场该立刻销毁：客户端闪断、换线失败回退、回城取东西再回来 ——
+   * 这些都表现成「一瞬间房里没人」。给一段宽限，宽限内有人回来就续命（还是同一场世界）。
+   * 到期才真的收场（`emptied`）。
+   *
+   * 与 `worldMapIdleMs` 的区别：那个是「没人看的普通房间隔多久从内存卸载」（状态在库里），
+   * 这个是「没人进的副本隔多久连世界一起销毁」（副本不从库恢复）。
+   */
+  worldInstanceEmptyGraceMs: number;
   //#endregion
 
   //#region 怪物 AI（#323：目标 / 移动 / 普攻权威在服务端）
@@ -703,6 +714,7 @@ export default function configuration(): AppConfiguration {
     worldPersistMs: Number(process.env.WORLD_PERSIST_MS ?? 5000),
     worldRespawnMs: Number(process.env.WORLD_RESPAWN_MS ?? 30 * 1000),
     worldMapIdleMs: Number(process.env.WORLD_MAP_IDLE_MS ?? 10 * 60 * 1000),
+    worldInstanceEmptyGraceMs: Number(process.env.WORLD_INSTANCE_EMPTY_GRACE_MS ?? 30 * 1000),
     monsterAiTickMs: Number(process.env.MONSTER_AI_TICK_MS ?? 100),
     monsterAiBroadcastMs: Number(process.env.MONSTER_AI_BROADCAST_MS ?? 100),
     monsterAiPosStaleMs: Number(process.env.MONSTER_AI_POS_STALE_MS ?? 3000),
