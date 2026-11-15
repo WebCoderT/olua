@@ -917,6 +917,9 @@ const EXPECTED_CONFIG_KEYS = [
   // 实时通道（票据一次性 / 心跳 / 优雅关闭的行为验证在 test/e2e-realtime.cjs 里单独做）
   "REALTIME_TICKET_TTL_MS",
   "REALTIME_HEARTBEAT_MS",
+  // 实时按区分片（#770）：行为验证在 e2e-realtime-shard 里做（两个实时进程），这里只守白名单
+  "REALTIME_SHARD_COUNT",
+  "REALTIME_SHARD_INDEX",
 ];
 
 /**

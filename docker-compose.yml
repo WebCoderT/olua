@@ -59,6 +59,10 @@ services:
   # 伤害结算都在这里，与存档进程共享同一个 SQLite 文件（WAL + busy_timeout，各写各的表）。
   # **不映射到宿主机**：game 容器把 /api/realtime* 按路径反代到这里（含 WS upgrade 头），
   # 对外仍只有一个 8080。
+  #
+  # #770 按区分片：`REALTIME_SHARD_COUNT` 是**全局面板**（每个实时进程都要配成一样），
+  # 各进程用 `REALTIME_SHARD_INDEX` 说自己是谁；nginx 按 `/api/realtime/s<k>` 前缀分流。
+  # 默认 1 片 = 只有下面这一个进程，行为与拆进程以来完全一致。
   server-realtime:
     build: ./server
     image: olua-server:local
@@ -76,12 +80,46 @@ services:
       CORS_ORIGINS: ${OLUA_CORS_ORIGINS:-}
       # 健康检查（见下面的 healthcheck 覆盖）打这个端口；实时进程监听 REALTIME_PORT
       REALTIME_PORT: "3101"
+      # 分片数（改它必须同时把 server-realtime-1 拉起来，否则那一片的区没人接）
+      REALTIME_SHARD_COUNT: ${OLUA_REALTIME_SHARDS:-1}
+      REALTIME_SHARD_INDEX: "0"
     volumes:
       # 与 server **同一个具名卷**：两进程读写同一个库文件（WAL 承接并发）
       - olua-data:/app/data
     command: ["node", "dist/main.realtime.js"]
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3101/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+
+  # 第 2 片（#770）：**只有 `OLUA_REALTIME_SHARDS=2` 时才需要**，所以挂 profile ——
+  # `docker compose --profile shard-2 up -d` 才会起来；1 片部署下它完全不参与。
+  # 端口只在本机网络里，nginx 用 `/api/realtime/s1` 前缀把连接转进来（见 nginx-game.conf）。
+  server-realtime-1:
+    profiles: ["shard-2"]
+    build: ./server
+    image: olua-server:local
+    restart: unless-stopped
+    depends_on:
+      - server
+    env_file:
+      - ./server/.env
+    environment:
+      NODE_ENV: production
+      DB_PATH: /app/data/olua.db
+      CONFIG_SNAPSHOT_PATH: /app/config-sync.sql
+      TRUST_PROXY: "true"
+      CORS_ORIGINS: ${OLUA_CORS_ORIGINS:-}
+      REALTIME_PORT: "3102"
+      REALTIME_SHARD_COUNT: ${OLUA_REALTIME_SHARDS:-1}
+      REALTIME_SHARD_INDEX: "1"
+    volumes:
+      - olua-data:/app/data
+    command: ["node", "dist/main.realtime.js"]
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3102/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 30s
       timeout: 5s
       start_period: 15s

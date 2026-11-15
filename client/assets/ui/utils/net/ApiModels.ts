@@ -10147,6 +10147,12 @@ export type RealtimeTicket = {
    * 有效期（毫秒）；过期后必须重新取票
    */
   expiresIn: number;
+  /**
+   * 这张票该连哪个分片（#770 按区分片）：连接地址是 `…/realtime/s<shard>?ticket=…`。
+   *
+   * 不分片的部署里恒为 `0`，且不带 `/s0` 的老地址同样可用（旧客户端不需要改）。
+   */
+  shard: number;
 };
 
 export type PageMeta = {

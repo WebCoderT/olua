@@ -1,6 +1,7 @@
 import { join } from "node:path";
 import { ROLE_MAX_PER_ACCOUNT_DEFAULT } from "../common/constants/role";
 import { PARTY_EXP_SHARE_DISTANCE_DEFAULT, PARTY_MIN_LEVEL_DEFAULT } from "../common/constants/social";
+import { shardCountOf } from "../common/utils/shard.util";
 
 /** 内置的开发用 JWT 密钥（生产必须换掉；唯一出现处，比较也只用 `jwtSecretIsDefault`） */
 const DEFAULT_JWT_SECRET = "olua-dev-secret-please-change-me";
@@ -243,6 +244,24 @@ export interface AppConfiguration {
   realtimeEmbedded: boolean;
   /** 实时进程的监听端口（只有独立进程形态会用到；nginx 把 `/api/realtime*` 反代到它） */
   realtimePort: number;
+  /**
+   * 实时进程分片数（#770，按区分片）
+   *
+   * `1`（默认）= 不分片，行为与 #770 之前**完全一致**：`/api/realtime` 原样可用，
+   * 票里也照旧带 `shard: 0`（客户端忽略即可）。真要扩容时按「分片数 × 进程」起容器，
+   * 每个进程用 `REALTIME_SHARD_INDEX` 说自己是谁。
+   *
+   * **改这个值等于换拓扑**：所有区的连接都会在下一次重连时换片（存档不动），
+   * 所以它不该被当成热配置 —— 只有重启才会读到新值。
+   */
+  realtimeShardCount: number;
+  /**
+   * 本进程的分片号（`0 .. count-1`）
+   *
+   * 越界时按 0 处理而不是拒绝启动：分片是**扩容手段**，配置写错退化成单进程
+   * 是最不伤人的失败方式（`shardCountOf` / `ownsZone` 同一条理由）。
+   */
+  realtimeShardIndex: number;
   /**
    * 踢下线巡检间隔（毫秒；`0` = 关闭巡检）
    *
@@ -624,6 +643,8 @@ export default function configuration(): AppConfiguration {
     realtimeHeartbeatMs: Number(process.env.REALTIME_HEARTBEAT_MS ?? 30 * 1000),
     realtimeEmbedded: process.env.REALTIME_EMBEDDED !== "false",
     realtimePort: Number(process.env.REALTIME_PORT ?? 3101),
+    realtimeShardCount: shardCountOf(process.env.REALTIME_SHARD_COUNT ?? 1),
+    realtimeShardIndex: Number(process.env.REALTIME_SHARD_INDEX ?? 0),
     realtimeKickPollMs: Number(process.env.REALTIME_KICK_POLL_MS ?? 3 * 1000),
     /**
      * 区状态巡检间隔（毫秒，#961）

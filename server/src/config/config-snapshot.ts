@@ -206,6 +206,27 @@ const CONFIG_SNAPSHOT: ConfigSnapshotSpec[] = [
     warning: (read) => read<number>("realtimeHeartbeatMs") <= 0,
     advice: "REALTIME_HEARTBEAT_MS<=0：实时通道不做存活探测，掉线的连接会一直占着内存，只有重启才收得回来",
   },
+  {
+    key: "REALTIME_SHARD_COUNT",
+    field: "realtimeShardCount",
+    render: (read) => `${Number(read("realtimeShardCount")) || 1} 片（按区分片，zoneId % N）`,
+    // 内嵌形态只有一个进程：配了 N>1 也只会按 1 跑，这类「配了但没生效」必须在启动自检里喊
+    warning: (read) => Number(read("realtimeShardCount")) > 1 && (read<boolean>("realtimeEmbedded") ?? true),
+    advice: "REALTIME_SHARD_COUNT>1 但 REALTIME_EMBEDDED=true：内嵌形态只有一个实时进程，分片不会生效（按 1 片跑）",
+  },
+  {
+    key: "REALTIME_SHARD_INDEX",
+    field: "realtimeShardIndex",
+    render: (read) => `第 ${Number(read("realtimeShardIndex")) || 0} 片`,
+    // 分片号越界时服务端按 0 处理（不拒绝启动）—— 但这意味着「两个进程都以为自己是 0」，
+    // 表现是某些区的玩家连上后互相看不见，比直接起不来更难查
+    warning: (read) => {
+      const count = Number(read("realtimeShardCount")) || 1;
+      const index = Number(read("realtimeShardIndex")) || 0;
+      return count > 1 && (index < 0 || index >= count);
+    },
+    advice: "REALTIME_SHARD_INDEX 超出了 REALTIME_SHARD_COUNT：本进程会被当成第 0 片，可能与其他进程抢同一批区",
+  },
 ];
 
 /** 渲染整张快照（顺序即信息页的展示顺序） */
