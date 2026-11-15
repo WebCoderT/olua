@@ -103,6 +103,7 @@ export class AchievementDto {
   sortOrder: number;
 
   @ApiProperty({ description: "未达成时是否默认折叠（不剧透条件）" })
+  @IsBoolean()
   hidden: boolean;
 
   @ApiProperty({ description: "最近更新时间（毫秒）" })

@@ -60,6 +60,7 @@ export class EquipAlignDto {
     description:
       "true = `outPositions` 是**绝对位置**（工作台手调的结果）；false = 运行时按身体帧自动算，`outPositions` 只当微调。武器的渐进语义，见 configs/equipAlign",
   })
+  @IsBoolean()
   outManual: boolean;
 
   @ApiProperty({ description: "最近更新时间（毫秒）" })

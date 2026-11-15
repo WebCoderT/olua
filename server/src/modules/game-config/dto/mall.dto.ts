@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
 import { Type } from "class-transformer";
-import { IsIn, IsInt, IsOptional, IsString, Max, MaxLength, Min, MinLength } from "class-validator";
+import { IsBoolean, IsIn, IsInt, IsOptional, IsString, Max, MaxLength, Min, MinLength } from "class-validator";
 import { PageMetaDto, PageQueryDto } from "../../../common/dto/api-envelope.dto";
 import { EQUIPMENT_SLOT_KEYS } from "./equipment.dto";
 
@@ -259,6 +259,7 @@ export class MallCatalogItemDto {
   suffix: number;
 
   @ApiProperty({ description: "是否已在商城上架（一件物品全商城只能挂一行）" })
+  @IsBoolean()
   listed: boolean;
 }
 
@@ -437,6 +438,7 @@ export class MallLimitDto {
   stock: number;
 
   @ApiProperty({ description: "现在能不能买（等级 / 余额另有判据，这里只看限购与库存）" })
+  @IsBoolean()
   purchasable: boolean;
 }
 
@@ -458,5 +460,6 @@ export class MallStockResetDto {
   sold: number;
 
   @ApiProperty({ description: "恒为 true（重置成功）" })
+  @IsBoolean()
   reset: boolean;
 }

@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
-import { IsString, MaxLength, MinLength } from "class-validator";
+import { IsBoolean, IsOptional, IsString, MaxLength, MinLength } from "class-validator";
 
 /** 口令长度约定（与注册接口保持一致，改一处即可） */
 export const PASSWORD_MIN_LENGTH = 6;
@@ -43,5 +43,7 @@ export class ResetPasswordResultDto {
     description: "提示：口令变更后，该对象此前签发的令牌**已全部作废**，需要用它重新登录",
     example: true,
   })
+  @IsOptional()
+  @IsBoolean()
   revokedTokens?: boolean;
 }

@@ -1,6 +1,7 @@
 import { ApiProperty } from "@nestjs/swagger";
 import { AccountDto } from "../../auth/dto/account.dto";
 import { RoleSummaryDto } from "../../roles/dto/role.dto";
+import { IsBoolean } from "class-validator";
 
 /** 账号详情（账号 + 其名下角色概要） */
 export class AdminAccountDetailDto {
@@ -127,5 +128,6 @@ export class StatsRecentItemDto {
   targetId: string | null;
 
   @ApiProperty({ description: "是否成功" })
+  @IsBoolean()
   success: boolean;
 }

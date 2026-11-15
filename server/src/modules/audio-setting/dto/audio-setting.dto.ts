@@ -46,9 +46,11 @@ export class AudioSettingDto {
   volume: number;
 
   @ApiProperty({ description: "是否循环播放（背景音 true、点击音 false）" })
+  @IsBoolean()
   loop: boolean;
 
   @ApiProperty({ description: "开关（false = 客户端整个不播，连文件都不读）" })
+  @IsBoolean()
   enabled: boolean;
 
   @ApiProperty({ description: "最后一个改它的管理员账号名（追账用，与审计日志能对上）" })
@@ -112,9 +114,11 @@ export class AudioConfigDto {
   volume: number;
 
   @ApiProperty({ description: "是否循环播放（true 的那一项是背景音：切场景要停）" })
+  @IsBoolean()
   loop: boolean;
 
   @ApiProperty({ description: "开关（false = 客户端整个不播，连文件都不读）" })
+  @IsBoolean()
   enabled: boolean;
 }
 

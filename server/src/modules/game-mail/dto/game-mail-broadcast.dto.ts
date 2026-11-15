@@ -1,5 +1,5 @@
 import { ApiProperty } from "@nestjs/swagger";
-import { IsIn, IsInt, IsOptional, IsString, Matches, Max, Min } from "class-validator";
+import { IsBoolean, IsIn, IsInt, IsOptional, IsString, Matches, Max, Min } from "class-validator";
 import { MailBroadcastRow } from "../../../database/rows";
 import { parseRewardItems } from "../../../common/utils/reward-items.util";
 import { AdminSendMailDto, MailAttachmentDto } from "./game-mail.dto";
@@ -160,6 +160,7 @@ export class BroadcastViewDto {
   finishedAt: number | null;
 
   @ApiProperty({ description: "true = 这个批次号之前已经发过，本次没有再写任何一行" })
+  @IsBoolean()
   duplicated: boolean;
 
   static of(row: MailBroadcastRow, duplicated = false): BroadcastViewDto {

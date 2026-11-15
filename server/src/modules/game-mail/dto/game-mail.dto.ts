@@ -1,6 +1,6 @@
 import { ApiProperty } from "@nestjs/swagger";
 import { Type } from "class-transformer";
-import { ArrayMaxSize, IsArray, IsIn, IsInt, IsOptional, IsString, Max, MaxLength, Min, ValidateNested } from "class-validator";
+import { ArrayMaxSize, IsArray, IsBoolean, IsIn, IsInt, IsOptional, IsString, Max, MaxLength, Min, ValidateNested } from "class-validator";
 import { RoleMailRow } from "../../../database/rows";
 import { parseRewardItems } from "../../../common/utils/reward-items.util";
 
@@ -97,9 +97,11 @@ export class MailViewDto {
   attachments: MailAttachmentDto[];
 
   @ApiProperty({ description: "是否已读" })
+  @IsBoolean()
   read: boolean;
 
   @ApiProperty({ description: "附件是否已领（已领 = 不可再领，且可以删）" })
+  @IsBoolean()
   claimed: boolean;
 
   @ApiProperty({ description: "收到时间（毫秒时间戳）" })
@@ -186,6 +188,7 @@ export class MailClaimResultDto {
   level: number;
 
   @ApiProperty({ description: "本次是否升级了" })
+  @IsBoolean()
   leveledUp: boolean;
 }
 
@@ -244,9 +247,11 @@ export class MailClaimAllResultDto {
   level: number;
 
   @ApiProperty({ description: "本次是否升级了" })
+  @IsBoolean()
   leveledUp: boolean;
 
   @ApiProperty({ description: "是否至少有一封因背包满没领到（true = 清出格子后还能再领）" })
+  @IsBoolean()
   stoppedByBag: boolean;
 
   @ApiProperty({ description: "没领到的封数（= failures.length）" })

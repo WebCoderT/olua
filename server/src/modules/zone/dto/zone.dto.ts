@@ -27,6 +27,7 @@ export class ZoneDto {
    * 与 `status` 同一档：只发展示要用的布尔，不发 `sort` / `opened_at` / `note`。
    */
   @ApiProperty({ description: "是否运营推荐区（选服弹窗里标「推荐」）", example: false })
+  @IsBoolean()
   recommended: boolean;
 
   static from(row: ZoneRow): ZoneDto {
@@ -113,6 +114,7 @@ export class AdminZoneDto {
   openedAt: number;
 
   @ApiProperty({ description: "是否推荐区（选服弹窗里标「推荐」）", example: false })
+  @IsBoolean()
   recommended: boolean;
 
   @ApiProperty({ description: "运营备注（仅后台可见）", type: "string", nullable: true, example: null })
@@ -286,6 +288,7 @@ export class MergePrecheckDto {
   blockers: string[];
 
   @ApiProperty({ description: "预检是否通过", example: true })
+  @IsBoolean()
   ok: boolean;
 }
 
@@ -373,6 +376,7 @@ export class MyZoneDto extends ZoneDto {
   roleCount: number;
 
   @ApiProperty({ description: "是不是当前浏览区（选角页拉的就是它）", example: true })
+  @IsBoolean()
   current: boolean;
 
   /**

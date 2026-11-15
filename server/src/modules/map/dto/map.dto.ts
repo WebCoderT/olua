@@ -90,6 +90,7 @@ export class MapCollisionDto {
   h: number;
 
   @ApiProperty({ description: "整块落在图外（画面上完全看不到；允许存在，四面围墙就是超出的）" })
+  @IsBoolean()
   fullyOutside: boolean;
 }
 
@@ -126,6 +127,7 @@ export class SaveMapCollisionDto {
 /** 删除碰撞盒的结果（要回 id：前端靠它从本地列表里摘掉那一行） */
 export class MapCollisionDeletedDto {
   @ApiProperty({ description: "恒为 true（失败会抛 404，不会有 false）" })
+  @IsBoolean()
   deleted: boolean;
 
   @ApiProperty({ description: "被删掉的碰撞盒行 id" })
@@ -210,6 +212,7 @@ export class MapSpawnAreaDto {
   @ApiProperty({
     description: "是否整体落在图内（世界坐标 `[0, W] × [-H, 0]`，容差 1px）；false = 坐标口径错了或区域摆到了图外",
   })
+  @IsBoolean()
   inBounds: boolean;
 
   @ApiProperty({ description: "四边越界量（inBounds 时全 0）", type: MapSpawnAreaOverflowDto })
@@ -242,6 +245,7 @@ export class MapNpcDto {
   cy: number;
 
   @ApiProperty({ description: "是否落在图内（`[0, W] × [-H, 0]`，容差 1px）" })
+  @IsBoolean()
   inBounds: boolean;
 }
 
@@ -269,6 +273,7 @@ export class MapRevivePointDto {
   cy: number;
 
   @ApiProperty({ description: "是否落在图内（`[0, W] × [-H, 0]`，容差 1px）" })
+  @IsBoolean()
   inBounds: boolean;
 }
 
@@ -312,6 +317,7 @@ export class SaveRevivePointDto {
 /** 删除 NPC 点位的结果（不留 204 空响应：前端要拿到 id 才能从本地列表里摘掉那一行） */
 export class MapNpcDeletedDto {
   @ApiProperty({ description: "恒为 true（失败会抛 404，不会有 false）" })
+  @IsBoolean()
   deleted: boolean;
 
   @ApiProperty({ description: "被删掉的点位行 id" })
@@ -321,6 +327,7 @@ export class MapNpcDeletedDto {
 /** 清掉复活点的结果 */
 export class MapRevivePointClearedDto {
   @ApiProperty({ description: "恒为 true（本来就没有复活点时也返回 true —— 清空是幂等的）" })
+  @IsBoolean()
   cleared: boolean;
 }
 
@@ -439,6 +446,7 @@ export class MapSummaryDto {
   npcPointCount: number;
 
   @ApiProperty({ description: "服务端是否设了复活点（maps.revive_cx/cy 非空）" })
+  @IsBoolean()
   hasRevivePoint: boolean;
 
   @ApiProperty({ description: "服务端碰撞盒行数（map_collisions；#676 起碰撞归后台）" })
@@ -742,6 +750,7 @@ export class SaveSpawnAreaDto {
 /** 删除刷怪区的结果（不留 204 空响应：前端要拿到 id 才能从本地列表里摘掉那一行） */
 export class MapSpawnAreaDeletedDto {
   @ApiProperty({ description: "恒为 true（失败会抛 404，不会有 false）" })
+  @IsBoolean()
   deleted: boolean;
 
   @ApiProperty({ description: "被删掉的行 id" })
@@ -800,6 +809,7 @@ export class MapReloadResultDto {
   requestId: number;
 
   @ApiProperty({ description: "与已有的 pending 请求合并了（运营连点两下只重播一次）" })
+  @IsBoolean()
   merged: boolean;
 
   @ApiProperty({ description: "房号 `<zone>:<map>:<slot>`" })
@@ -857,6 +867,7 @@ export class MapRulesDto {
   mapId: string;
 
   @ApiProperty({ description: "库里有没有这一行（false = 下面全是出厂默认值）" })
+  @IsBoolean()
   inherited: boolean;
 
   @ApiProperty({ description: "经验倍率（服务端结算时乘，不下发客户端）" })
@@ -869,15 +880,19 @@ export class MapRulesDto {
   moneyRate: number;
 
   @ApiProperty({ description: "允许同图玩家互相攻击（PK）" })
+  @IsBoolean()
   allowPk: boolean;
 
   @ApiProperty({ description: "允许自动挂机" })
+  @IsBoolean()
   allowAutoBattle: boolean;
 
   @ApiProperty({ description: "允许被拉人 / 回城" })
+  @IsBoolean()
   allowRecall: boolean;
 
   @ApiProperty({ description: "这张图掉不掉东西（false = 活动图）" })
+  @IsBoolean()
   allowDrop: boolean;
 
   @ApiProperty({ description: "单房间人数上限（0 = 不限；出厂 30）" })
@@ -893,12 +908,14 @@ export class MapRulesDto {
   transferCooldownMs: number;
 
   @ApiProperty({ description: "战斗中禁止传送" })
+  @IsBoolean()
   denyTransferInCombat: boolean;
 
   @ApiProperty({ description: "中间级重生时长（毫秒；null = 继承全局）", nullable: true })
   respawnMsOverride: number | null;
 
   @ApiProperty({ description: "无人时继续跑世界（false = 冻结，现状）" })
+  @IsBoolean()
   simulateWhenEmpty: boolean;
 
   @ApiProperty({ description: "最后修改人（空串 = 没改过 / 出厂）" })

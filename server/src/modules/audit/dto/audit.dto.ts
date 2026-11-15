@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
-import { IsIn, IsInt, IsOptional, IsString, MaxLength, Min } from "class-validator";
+import { IsBoolean, IsIn, IsInt, IsOptional, IsString, MaxLength, Min } from "class-validator";
 import { Type } from "class-transformer";
 import { PageMetaDto, PageQueryDto } from "../../../common/dto/api-envelope.dto";
 import { ADMIN_ROLES } from "../../../common/constants/permission";
@@ -73,6 +73,7 @@ export class AuditLogDto {
   statusCode: number | null;
 
   @ApiProperty({ description: "是否成功" })
+  @IsBoolean()
   success: boolean;
 
   @ApiProperty({ description: "失败时的业务码", type: "number", nullable: true })
@@ -226,6 +227,7 @@ export class AuditExportDto {
   total: number;
 
   @ApiProperty({ description: "是否因达到导出上限被截断（true 时界面要提示先缩小筛选范围）" })
+  @IsBoolean()
   truncated: boolean;
 }
 

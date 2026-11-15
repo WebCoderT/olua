@@ -39,6 +39,7 @@ export class LevelScrollDto {
   sellPrice: number;
 
   @ApiProperty({ description: "掉落时强制绑定（#789）：true = 掉出来就绑定角色、不可交易" })
+  @IsBoolean()
   bindOnDrop: boolean;
 
   @ApiProperty({ description: "最近更新时间（毫秒）" })

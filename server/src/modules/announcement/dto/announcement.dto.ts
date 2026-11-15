@@ -63,6 +63,7 @@ export class AnnouncementDto {
   level: string;
 
   @ApiProperty({ description: "是否启用（手动下线开关；与时间窗是两道独立的闸）" })
+  @IsBoolean()
   enabled: boolean;
 
   @ApiProperty({ description: "生效开始时间（毫秒）；null = 立即生效", type: "number", nullable: true })
@@ -94,6 +95,7 @@ export class AnnouncementDto {
    * 迟早与服务端 SQL 里的那份漂移（例如一端用 `>`、一端用 `>=`）。
    */
   @ApiProperty({ description: "当前是否生效中（由服务端判定，界面不要自己算）" })
+  @IsBoolean()
   active: boolean;
 
   static from(row: AnnouncementRow, now: number): AnnouncementDto {

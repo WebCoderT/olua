@@ -127,6 +127,7 @@ export class StatusDto {
   effect: string;
 
   @ApiProperty({ description: "身上特效是否只播一遍并停在尾帧（脉冲类特效配 true）" })
+  @IsBoolean()
   effectHoldLast: boolean;
 
   @ApiProperty({ description: "战斗数值修正（缺省 = 纯表现状态）", type: StatusCombatDto })
