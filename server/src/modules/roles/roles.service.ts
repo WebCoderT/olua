@@ -106,6 +106,9 @@ export interface KillExpResult {
 /** 一次拾取入包的结果（picked 帧的 ok 应答据此组装） */
 export interface PickDropResult {
   revision: number;
+  /** 实际入包的物品与数量（#802：逐帧飘字用它，客户端不再从地面节点上取） */
+  goodId: string;
+  count: number;
   /** 实际写入的格子；`bound` / `from` 随格子一起回给客户端（详情弹窗要显示） */
   placed: Array<{ row: number; col: number; id: string; count: number; bound?: boolean; from?: BagOrigin }>;
 }
@@ -869,7 +872,7 @@ export class RolesService {
       amount: Math.max(1, Math.floor(count)),
       detail: meta.bound ? { bound: true } : null,
     });
-    return { revision: row.revision, placed };
+    return { revision: row.revision, placed, goodId, count: Math.max(1, Math.floor(count)) };
   }
 
   /**

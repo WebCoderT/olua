@@ -421,13 +421,15 @@ function connect(url) {
     );
     check(!!(killDetail && killDetail.tier), "击杀流水带 tier（normal / elite / boss）", JSON.stringify(killDetail && killDetail.tier));
 
-    // 拾取：等 picked 帧；账本下标从 0 起
+    // 拾取：#802 起按地面实体的 `dropId` 定位（不再是 castId + 账本下标）
     // #817 起拾取有距离闸（掉落点在怪倒下的地方），先报一帧位置 —— 真实客户端每 250ms 就有一帧
     session.socket.send(JSON.stringify({ type: "pos", data: { mapId: MAP_ID, x: mob ? mob.x : 0, y: mob ? mob.y : 0, hp: 100 } }));
+    const droppedOne = first && first.reward && Array.isArray(first.reward.drops) ? first.reward.drops[0] : null;
+    const dropId = droppedOne && droppedOne.dropId;
     const pickBefore = session.pickeds.length;
-    session.socket.send(JSON.stringify({ type: "pick", data: { castId: first && first.castId, index: 0 } }));
+    session.socket.send(JSON.stringify({ type: "pick", data: { dropId } }));
     const picked = await waitFor("picked 帧", async () => {
-      const hits = session.pickeds.slice(pickBefore);
+      const hits = session.pickeds.slice(pickBefore).filter((frame) => frame.dropId === dropId);
       return hits.length > 0 ? hits[hits.length - 1] : null;
     });
     check(!!(picked && picked.ok), "掉落拾取成功", JSON.stringify(picked));
@@ -435,7 +437,8 @@ function connect(url) {
     const pickEvent = latestEvent(dbPath, "pick");
     check(!!pickEvent, "拾取写下一条 pick");
     checkEqual(pickEvent && pickEvent.target, DROP_GOOD, "拾取流水的 target 是物品 id");
-    checkEqual(pickEvent && pickEvent.amount, 2, "拾取流水记下数量（2 个）");
+    // 数量与结算报的件数比（不写死 2：件数是掉落表算出来的数据，#966）
+    checkEqual(pickEvent && pickEvent.amount, droppedOne && droppedOne.count, "拾取流水记下的数量与结算报的一致");
     checkEqual(pickEvent && pickEvent.map_id, MAP_ID, "拾取流水带 mapId");
     checkEqual(pickEvent && pickEvent.role_name, "流水观察者", "拾取流水带角色名");
 

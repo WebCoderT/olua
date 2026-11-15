@@ -118,6 +118,12 @@ const RUNTIME_TABLES = Object.freeze([
   "mall_stock",
   "map_monitor_events",
   "map_monitor_state",
+  // 掉落的地面投影与终态流水（#802）：权威在实时进程内存，表只是跨进程通道与可查历史 ——
+  // 投影重启清空、流水按 7 天裁剪，两者都绝不进同步文件（否则「别人的地上有几件」会盖掉我的）
+  "world_drops",
+  "drop_records",
+  // 清空某图地面的跨进程指令（#802 建表、#805 接）：一行一次请求，只增不删
+  "drop_clear_requests",
   "parties",
   "party_members",
   "quest_progress",

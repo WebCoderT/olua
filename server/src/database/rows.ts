@@ -440,6 +440,37 @@ export interface MapRuleRow {
   updated_at: number;
 }
 
+/**
+ * 一件地面掉落（`world_drops` 表；#802）
+ *
+ * **投影行，不是权威**：权威在实时进程内存（`DropService.ground`），这里 100ms 一拍批量写，
+ * 只为让管理端能读到「这张图现在地上有什么」。所以没有乐观锁列，也没有更新者列。
+ */
+export interface WorldDropRow {
+  drop_id: string;
+  zone_id: number;
+  map_id: string;
+  good_id: string;
+  count: number;
+  /** 0 / 1（SQLite 没有 boolean） */
+  bound: number;
+  x: number;
+  y: number;
+  owner_account_id: string;
+  owner_role_id: string;
+  owner_name: string;
+  /** 掉落那一刻归属者所在的队伍（保护期判定用；null = 无队伍） */
+  party_id: string | null;
+  monster_key: string;
+  monster_instance_id: string;
+  /** 只有装备有溯源（#789）：来源角色名 / 时间戳 */
+  origin_role: string | null;
+  origin_at: number | null;
+  created_at: number;
+  expire_at: number;
+  protect_until: number;
+}
+
 /** 单图热重载请求（`world_reload_requests` 表；#809，跨进程的一张待办表） */
 export interface WorldReloadRequestRow {
   id: number;

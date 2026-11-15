@@ -168,6 +168,9 @@ const WORLD = path.join(SERVER, "modules", "world", "world.service.ts");
 // 判据不变，只是**盯的位置跟着搬** —— 世界权威不可能因为换了文件就搬到客户端去。
 const ROOM_MANAGER = path.join(SERVER, "modules", "world", "room", "room.manager.ts");
 const SETTLEMENT = path.join(SERVER, "modules", "realtime", "combat-settlement.service.ts");
+// #802：拾取从「结算域顺手入包」搬进了地面实体服务（DropService 是 pick 的唯一入口）。
+// 判据不变（入包必须在服务端），盯的位置跟着搬 —— 权威不可能因为换了文件就搬到客户端去
+const DROP_SERVICE = path.join(SERVER, "modules", "realtime", "drop.service.ts");
 
 requirePatterns(ROOM_MANAGER, [
   { pattern: /spawnAreas\.listByMap\(/, hint: "播种必须读 map_spawn_areas（不是客户端配置）" },
@@ -189,7 +192,13 @@ requirePatterns(WORLD, [
 
 requirePatterns(SETTLEMENT, [
   { pattern: /rollDrops\(/, hint: "掉落抽取必须在服务端" },
-  { pattern: /roles\.pickDrop\(/, hint: "入包必须在服务端（pick 帧的落点）" },
+]);
+
+requirePatterns(DROP_SERVICE, [
+  // 入包只有这一个入口：`DropService.pick`（九步校验 → roles.pickDrop → 状态迁移 → 广播）
+  { pattern: /this\.roles\.pickDrop\(/, hint: "入包必须在服务端（pick 帧的落点）" },
+  // 地面实体必须落进投影表：否则管理端读不到「这张图地上现在有什么」，重启清场也没依据
+  { pattern: /this\.worldDrops\.upsert\(/, hint: "地面掉落必须写进投影表（world_drops）" },
 ]);
 
 // ---------------------------------------------------------------------------
