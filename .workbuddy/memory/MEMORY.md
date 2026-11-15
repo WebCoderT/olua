@@ -12,7 +12,8 @@
   确认改动归属；只 `git add <明确路径>`；记忆/日志也只写自己 worktree。细则 → `.workbuddy/skills/olua-branch-worktree/`。
   依赖要 **`cp -al` 硬链接或自己 `npm ci`**，**别 `ln -s` 到别人的 worktree** —— 对方 `npm ci` / `worktree remove`
   一执行你的依赖就没了（#805 踩到，e2e 报 `No driver (HTTP) has been selected`）。
-- 仓库 PUBLIC：密钥 / IP / 邀请码 / JWT 不进记忆、不进版本库。**`website/` 永不改动**。
+- 仓库 PUBLIC：密钥 / IP / 邀请码 / JWT 不进记忆、不进版本库。**`website/` 默认不动**（要动先问；
+  #742 把四个域名的链接换成 https 是用户亲口同意的例外）。
 - **现状 ≠ 正确**：issue 正文先按行号实测 `server/src` + `admin/src` 再动手。
 - **待决定项实时问**（AskUserQuestion 一轮 1~4 个）；文档禁写「不做」（写「暂时放置 + 重开条件」）；
   「已定」只标用户亲口拍过的。用户说「我自己细化 / 我在改」→ 改完本地就停。
@@ -71,6 +72,9 @@
 指针事件配 `UITransform`；Game 挂 Canvas → 五世界层建好再 `setWorldPosition(0,0,0)`；显隐与摆位绑「片段就绪」。
 compose 五服务：admin:80 唯一入口 / game:8080 / server:3100 / realtime:3101 / website 不映射端口；
 出厂快照进镜像、卷 `olua_olua-data`；客户端地址由 `DEV_MODE` 唯一开关决定。
+**开 HTTPS（#742，`profiles: ["tls"]`）时加 `edge`（独占 :80/:443，443 → admin:80）与 `certbot`**，
+admin 退回 `127.0.0.1:8081` —— 宿主机 `:80` 只能有一个主人；开关是 `deploy.env` 的 `OLUA_TLS=on`，
+由 `deploy.sh` 派生 `COMPOSE_PROFILES=tls` + 两行端口变量，首次签发 `--tls-init`（standalone）。
 
 ## admin 视觉 = legend 设计系统（#946，PR #947/#950/#951）
 - token 唯一来源 `admin/src/index.css` 的 `@theme`（surface/line/ink/gold/ember/jade/warn 语义名）；设计稿单一
@@ -82,8 +86,10 @@ compose 五服务：admin:80 唯一入口 / game:8080 / server:3100 / realtime:3
 
 ## 进度与口径（细节 → `topics/进度年表.md`）
 - **当前 open**（2026-11-15 核）：**#1025 资源清单过期**（verify 红，暂缓发布）· **#1001 副本 instance**
-  （#808 epic 只剩这一刀；第一刀「传送代价 + 空房 tick + 管理端」已落，见年表）· #772 epic 延迟与分片 ·
-  #742 TLS · #403 帮会战（远期占位）。保持现状：技能 1011 / 快捷键 6 格 / 装备 7 部位。
+  （#808 epic 只剩这一刀；第一刀「传送代价 + 空房 tick + 管理端」已落，见年表）· #1030 同图远程打
+  （#813 第三道距离闸，口径已定、另一条线在做）· #772 epic 延迟与分片 · **#742 TLS**
+  （部署侧已落 #1033：边缘 edge + certbot、官网链接换 https；**只差 443 放行 + `--tls-init` + 外网核**）·
+  #403 帮会战（远期占位）。保持现状：技能 1011 / 快捷键 6 格 / 装备 7 部位。
 - **口径数字**：`docs/14` 无生成脚本、改接口手工加行，现 **266 = 8 + 68 + 190**；client 单测 **70 套**；
   e2e **92 套**；`make audit` **17 项**；`docs/37` 是最高优先单一来源。
 - **新增 env 键 / 文案 / 节点名 / 颜色的 PR，静态审计预判三处登记**：`.env.example`（`audit-api-hardcode`）+
