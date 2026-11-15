@@ -2,12 +2,16 @@
 
 > [简体中文](README.md) | English
 
-> This is **the root directory of the Cocos Creator project** — open this directory in Cocos Creator, not the repository root.
->
-> Project overview: [../README.en.md](../README.en.md); client questions: [FAQ.en.md](FAQ.en.md);
-> admin questions: [../admin/README.en.md](../admin/README.en.md); cross-side FAQ: [../FAQ.en.md](../FAQ.en.md). The English edition of the server document lands in a follow-up issue and will be linked here once available.
+**In plain words: this directory IS the game.** The characters, maps, monsters, bag and skills you see in the
+browser are all drawn by the code in here. It makes no decisions of its own — health, damage and loot all come
+from the server; this side only plays the result out on screen.
 
-A **Cocos Creator 3.8.7** prototype of 2D character growth and equipment gameplay, covering login, character selection, map exploration, combat, the bag and the mall,
+> This is **the root directory of the Cocos Creator project** — open this directory in Cocos Creator, not the repository root.
+> Just want to play? Open <http://game.yimw.cn>, nothing to install.
+> Project overview: [../README.en.md](../README.en.md); client questions: [FAQ.en.md](FAQ.en.md);
+> admin questions: [../admin/README.en.md](../admin/README.en.md); cross-side FAQ: [../FAQ.en.md](../FAQ.en.md); server: [../server/README.en.md](../server/README.en.md).
+
+A **Cocos Creator 3.8.7** game of 2D character growth and equipment gameplay, covering login, character selection, map exploration, combat, the bag and the mall,
 plus three growth lines (war soul / title / rank). The server is authoritative for character data; the local copy is only a cache.
 **Monster instances, damage settlement, drop rolling and bag writes are server-side too** (#581): entering a map only
 sends `sendWorldJoin`, incoming instances become nodes, incoming rewards are played out, and clicking a ground item only

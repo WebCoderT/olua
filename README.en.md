@@ -2,337 +2,214 @@
 
 > [简体中文](README.md) | English
 
-> **A learning project written entirely by AI (Vibe Coding)**: every line of code in this repository is AI-written; humans only request features and look at the result.
-> **It is NOT a game ready for live operation** — it is a learning / research project by a few people from development and AI backgrounds.
+**A 2D role-playing game you can play right in the browser.** Create a character, explore maps, fight monsters,
+loot equipment, level up, join a guild — the whole loop works end to end; this is not a tech demo.
+The project is **free and open source**: play the live instance or deploy your own copy.
 
-A 2D character-growth and equipment prototype built on Cocos Creator 3.8.7, together with a NestJS server and a React admin console:
-the three sides run login, character creation, growth, equipment, map exploration and combat end to end.
-
-**Free, open source, and anyone can deploy their own copy.** There is a live instance:
-
-| URL | What it is |
+| What you want | Where to go |
 | --- | --- |
-| <http://yimw.cn> | Project site (overview / data flow / engineering / design notes / deployment) |
-| <http://game.yimw.cn> | Game client (web build, playable right away) |
-| <http://admin.yimw.cn> | Admin console |
+| Play right now | <http://game.yimw.cn> (web build, no download) |
+| See what the project looks like | <http://yimw.cn> (site: gameplay, screenshots, architecture, deployment) |
+| Open the admin console | <http://admin.yimw.cn> (edit configs, post announcements, manage accounts) |
 
-To run your own copy, see [`docs/deploy.md`](docs/deploy.md) and the [deployment page](http://yimw.cn/deploy.html).
+> Code lives on [GitHub](https://github.com/WebCoderT/olua); [Gitee](https://gitee.com/putiwan/olua) is a read-only mirror.
+> If you find it interesting, a **Star ⭐** is appreciated.
 
-The primary repository lives on **GitHub** (`github.com/WebCoderT/olua`); [putiwan/olua](https://gitee.com/putiwan/olua) on Gitee is a read-only sync mirror —
-code, issues, PRs and CI all happen on GitHub (the mirror syncs periodically, may lag, and GitHub is authoritative).
+## What kind of game is this
 
-[![star](https://gitee.com/putiwan/olua/badge/star.svg?theme=gvp)](https://gitee.com/putiwan/olua/stargazers)
-[![fork](https://gitee.com/putiwan/olua/badge/fork.svg?theme=gvp)](https://gitee.com/putiwan/olua/members)
+A top-down 2D world in the style of classic oriental MMORPGs: keyboard to move, mouse to fight.
+The tedious parts of the genre are deliberately gone — no crafting trees, no pay walls, no forced grouping.
 
-> If this project helps you (ideas, architecture, the AI-collaboration workflow), please give it a **Star ⭐** on [GitHub](https://github.com/WebCoderT/olua) or [Gitee](https://gitee.com/putiwan/olua) — it is the biggest encouragement for a pure-AI learning project and the motivation to keep updating it.
+You create a character, spawn in the starter map, and a 6-step tutorial teaches you to walk, fight, loot and open
+your bag. From there it's your call:
 
-## The three sides
+- **Get stronger**: kill monsters for experience; leveling refills your bars and unlocks harder maps. Equipment drops
+  from monsters, or buy it outright in the mall.
+- **Look better**: every piece of equipment rolls a prefix and a suffix. The same sword becomes a different quality
+  item — with a glowing frame on its bag slot and an animated background in its detail panel.
+- **Collect**: three growth tracks — Soul (37 ranks), Title (34 ranks), Military Rank (100 ranks) — each adds stats
+  and shows above your character.
+- **Be social**: you see other players on the same map; add friends, block trolls, report abuse, found a guild,
+  recruit members, post announcements, team up and split experience.
+- **Take it easy**: auto-battle with pathfinding — click a monster and your character walks over and fights.
+  The bag has one-click sorting and one-click recycling.
 
-The repository splits into three **peer directories**, each with its own README and FAQ.
+Death is cheap: revive where you fell, or teleport back to town at full health.
 
-| Side | What it is | Tech stack | Directory | Docs |
-| --- | --- | --- | --- | --- |
-| **Client** | The Cocos Creator game (login / character select / combat / bag / mall…) | Cocos Creator 3.8.7 + TypeScript | [`client/`](client/) | [README](client/README.en.md) · [FAQ](client/FAQ.en.md) |
-| **Server** | Account / character / admin APIs, SQLite persistence, Swagger docs | NestJS 12 + `node:sqlite` + JWT | [`server/`](server/) | [README](server/README.en.md) · [FAQ](server/FAQ.en.md) |
-| **Admin** | The operator console (accounts / characters / announcements / logs / maps) | React 19 + Vite + Tailwind v4 | [`admin/`](admin/) | [README](admin/README.en.md) · [FAQ](admin/FAQ.en.md) |
-
-The client is the game the player plays, the server is the only authoritative data source (local storage is just a cache), and the admin lets operators edit data.
-The API contract is generated one-way from the server to the other two sides:
-
-```
-client (Cocos)    ─┐
-                   ├─→  server (NestJS + SQLite)  ←─  admin (React)
-admin (React)    ─┘      ↑ the only hand-written place for APIs
-                         └─ swagger:emit → openapi.json → gen-api → generated API files on both consumers
-```
-
-## Screenshots
+## What it looks like
 
 <p align="center">
-  <img src="website/assets/img/login.jpg" width="49%" alt="Login: account / password / server" />
+  <img src="website/assets/img/login.jpg" width="49%" alt="Login: account, password, server select" />
   <img src="website/assets/img/role-select.jpg" width="49%" alt="Character select and creation" />
 </p>
 <p align="center">
-  <img src="website/assets/img/game.jpg" width="49%" alt="In-game: combat, bag and loot beams" />
+  <img src="website/assets/img/game.jpg" width="49%" alt="In-game: combat, bag, loot beams on the ground" />
   <img src="website/assets/img/combat.jpg" width="49%" alt="Multi-player combat and skill effects" />
 </p>
 <p align="center">
   <img src="website/assets/img/equip-detail.jpg" width="49%" alt="Equipment detail: quality frame and stats" />
-  <img src="website/assets/img/mall.jpg" width="49%" alt="Mall: every equipment listed" />
+  <img src="website/assets/img/mall.jpg" width="49%" alt="Mall: all equipment auto-listed" />
 </p>
 
-**Admin console** (ops backend, runs in the browser):
+The admin console (browser-based, for operators editing game data):
 
 <p align="center">
-  <img src="website/assets/img/admin-dashboard.jpg" width="49%" alt="Admin overview: accounts, roles, online, growth" />
-  <img src="website/assets/img/admin-align.jpg" width="49%" alt="Admin equipment alignment: 8-direction frames" />
+  <img src="website/assets/img/admin-dashboard.jpg" width="49%" alt="Admin overview: accounts, characters, online trend" />
+  <img src="website/assets/img/admin-align.jpg" width="49%" alt="Admin equipment alignment: positioning sprites" />
 </p>
 
-> Covers login / character select / combat / equipment / mall and the admin console. For more in-game
-> screens (skills, titles, teleport, mini-map), see the [website](https://github.com/WebCoderT/olua/tree/master/website)
-> gallery, or run the project yourself.
+## What you can play
 
-## Quick start
+### Accounts and characters
 
-The shortest path to a running stack. Each side's README has the details and every environment variable.
+- Register, log in, pick a server; up to 3 characters per account, all data stored server-side — switch computers
+  and continue where you left off.
+- Progress auto-saves as you play, with an extra save on map change and logout.
+- Deleting a character takes two confirmations, so no accidental losses.
 
-### 1. Server (start it first — the client and admin depend on it)
+### Maps and exploration
 
-```bash
-cd server
-npm install
-cp .env.example .env     # first time: port / secrets / limits all live here, explained in the comments
-npm run dev              # development (watch mode); or npm run start for the built output
-```
+- Multiple maps, each with its own level and combat-power gate; the teleporter tells you exactly what you're short of.
+- Every map has a revive point; entering and teleporting always start there.
+- The minimap follows you with red dots for real monster positions; click to enlarge, left-click for auto-pathing,
+  right-click to teleport.
+- Walking routes around trees and walls — you never get stuck on obstacles.
 
-- API docs: <http://localhost:3100/api-docs> (JSON at `/api-docs-json`)
-- Health check: <http://localhost:3100/api/health>
-- **Connecting from a phone or another machine**: leave `SERVER_HOST` empty to listen on all interfaces and the
-  startup log prints the addresses to use; the client and admin UI both derive the API host from the page they
-  are opened on, so no configuration is needed
-- Verify everything with one command: `npm run verify`
+### Combat
 
-### 2. Client (Cocos)
+- WASD to move, left-click to walk, right-click to run, click a monster to attack; an on-screen joystick works in
+  mobile browsers too.
+- Skills have cooldowns and mana costs, with effects and floating numbers; monsters have skills of their own.
+- Damage is computed by the server, so everyone sees the same health bars — no "died on my screen, alive on yours".
+- On death the screen freezes; revive in place or return to town at full health.
 
-1. Install and open Cocos Creator 3.8.7.
-2. Open **`client/`** through Creator's "Open" / "Open Project" (it is the Cocos project root).
-3. In the editor, open a scene under `client/assets/scenes`.
-4. Run the project with the preview or play button.
+### Growth
 
-The client has no npm scripts; it relies on the Cocos Creator editor to launch and preview.
-Which server it talks to is decided solely by `baseUrl` in `client/assets/configs/network.ts` (use the LAN IP for on-device debugging).
-
-### 3. Admin (React)
-
-```bash
-cd admin
-npm install
-cp .env.example .env.development   # first time: the API base URL lives here (VITE_API_BASE_URL)
-npm run dev                        # development; npm run build produces dist
-```
-
-Admin registration needs `ADMIN_REGISTER_CODE` set in `server/.env` (leave it empty for open registration), and registration asks for the same code.
-The **first** administrator to register becomes the super administrator (all permissions); later ones are promoted by the super admin on the "Administrators" page.
-
-### 4. Changing an API = changing the server + regenerating
-
-The client and admin **hand-write no API files at all**: paths, method names, request / response types are all produced from the server's Swagger document.
-That way "the server changed a field and the other two forgot" becomes a **compile error** instead of an `undefined` in production.
-
-```bash
-cd server && npm run gen:api     # = swagger:emit + node ../tools/gen-api.cjs
-```
-
-```
-server/src (controller + DTO + decorators)  ← the only hand-written place
-        │  cd server && npm run swagger:emit
-        ▼
-server/openapi.json (machine-readable contract, committed to the repo)
-        │  node tools/gen-api.cjs
-        ▼
-client  client/assets/ui/utils/net/{ApiRoutes,ApiModels,Api}.ts
-admin   admin/src/api/{routes,models,endpoints}.ts
-```
-
-The standard steps: change the server's controller / DTO / decorators (every endpoint needs an `operationId`) → `npm run gen:api` →
-`tsc` / `npm run build` on both consumers, where incompatible signatures fail the build. **Never hand-edit the generated files** — `tools/audit-api-generated.cjs` watches them.
-
-## Common commands
-
-The repository root ships a Makefile collecting the three sides' routine actions in one place (`make help` lists everything):
-
-```bash
-make install        # first time: install server / admin dependencies
-make env            # generate server/.env (skipped if it already exists)
-make dev            # start server :3100 and admin :5173 together; Ctrl-C exits both
-
-make client-check   # client typecheck (Cocos' bundled tsc; 0 errors means pass)
-make client-test    # client unit tests
-make server-verify  # verify the server with one command (compile + e2e + generated-artifact audit)
-make admin-build    # admin typecheck + build
-make gen-api        # after changing APIs: regenerate the contract and both consumers' API files
-make audit          # cross-side audit scripts
-
-make check          # static checks: client tsc + admin typecheck + audits
-make test           # all tests: client unit tests + server e2e
-make verify         # full gate: check + builds on all three sides + all tests (run before committing)
-```
-
-- Run a single client suite: `make client-test-one T=test-bag-tidy`
-- Different machine / different Cocos version: `make TSC=/path/to/tsc client-check`
-- Restricted terminals (with `NODE_OPTIONS` injected) need no special handling — the Makefile clears it already
-
-## Resource sync (resources are not in the repo)
-
-`client/assets/resources/` is large and **deliberately not in the repository**. Multiple people / machines stay in sync with a "manifest lock + GitHub Release distribution":
-
-- **Manifest**: `resources.manifest.json` is committed, recording every file's sha1 + size (including `.meta` — Cocos uuids live on the meta files).
-- **Distribution**: split zip volumes are attached to a GitHub Release (tag = `resources-<version>`).
-
-```bash
-make resources-verify                      # run after pulling: local resources vs the manifest
-make resources-download VERSION=<v>        # when out of sync or on a new machine: download, extract, verify
-```
-
-After changing assets, the person who changed them publishes: `make resources-manifest` → `make resources-pack` → `make resources-upload` (needs `gh` logged in).
-Convention: **merge the PR carrying the new manifest first, then run upload**.
-
-## Feature list
-
-Implemented features only; each side's README covers its own capabilities in more detail.
-
-### Account and characters
-
-| Feature | Notes |
-| --- | --- |
-| Sign-up / login | Accounts live on the server, passwords are scrypt-hashed with a salt, tokens last 7 days |
-| Character select and creation | Up to 3 characters per account, list and data both on the server |
-| Cloud save | Changes are debounced and pushed together after 1.5 seconds, flushed immediately on map change and logout |
-| Save migration | Missing fields are filled in automatically when a save is read |
-| Delete character | Two-step confirmation on the select screen, deleted by the server |
-| Admin account and character management | Multi-criteria filtering, structured editing, batch delete, password reset, force logout |
-| Audit log | Every admin write endpoint is logged automatically; password-like fields are masked before storage |
-| Permissions | Super administrator / administrator / read-only viewer, permissions granular to each endpoint |
-| Announcements and mail | The effective time window is decided by the server; mail is queued and delivered by a scheduler with retries |
-| Login rate limiting | Counted per username and per source IP |
-
-### Maps and scenes
-
-| Feature | Notes |
-| --- | --- |
-| Scene switching with a loading transition | Progress shown while changing maps |
-| Tiled object groups | NPC points, revive points, rectangular spawn areas, collision areas |
-| Revive-point spawning | Entering a map or teleporting always spawns at the revive point |
-| Mini-map | Base map scaled to the viewport and panned with the character; red dots are real monster positions |
-| Mini-map preview dialog | Full-map preview, left click auto-paths, right click teleports |
-| Map teleporter | Grouped by map type, shows the reason when a requirement is not met |
-| Map gameplay config | Label / type / entry level / combat / War Soul tier edited in the admin, effective on save |
-| Collision debug view | A toggle draws collision boxes |
-
-### Character growth
-
-| Feature | Notes |
-| --- | --- |
-| Level and attribute growth | Attack / defence ranges and combat power derived from level |
-| Kill EXP | Decays with the level gap; no EXP when the gap reaches 6 levels or more |
-| Level-up flow | Attributes recomputed, HP and MP refilled, level-up effect |
-| War Soul | 37 tiers, upgraded with bound ingots, attributes count towards combat power and map requirements |
-| Title | 34 tiers, the nameplate stays visible above the character |
-| Rank | 100 tiers, shown as red text above the HP bar |
-| HP regen per second | Added together from level, defensive equipment, War Soul, Title and Rank |
-| HP / MP | Health and mana orbs, live HP above the head, natural mana regen |
+- Experience from kills; higher level means stronger stats. Monsters too far below you give nothing, so no
+  farming newbie maps forever.
+- Soul (37), Title (34), Rank (100): three tracks upgraded with in-game currency, all counted into combat power.
+- Combat power is one number — and also the gate to advanced maps.
 
 ### Equipment and items
 
-| Feature | Notes |
-| --- | --- |
-| Equip / unequip with attribute totals | Validates level / gender / class, recomputed on every change |
-| Appearance and inner view | 8-direction appearance position and scale; a gender-based default body when no clothes are worn |
-| Prefix and suffix variants | 5 prefixes × 3 suffixes, 15 variants per base item (each base item adds 15 rows; no fixed total) |
-| Quality borders and detail backgrounds | Border and background animations chosen by the prefix / suffix combination |
-| Drops | The server rolls the weighted tables and writes the bag; the client only plays the ring scatter and pickup |
-| Per-monster drop tables | One list per monster, each entry with weight / chance / count |
-| Drop light beams | A beam plays on the ground according to the prefix quality; its offset / scale / rotation / duration / toggle are tuned in the admin "UI effects" page (`light-1`…`light-6`) |
-| Bag tidy | Merges stackables and re-sorts by level / slot, pure functions covered by unit tests |
-| Bag drag / recycle / discard | Move or swap cells, recycle into bound ingots, drag out of the dialog to destroy a stack |
-| Mall | Every item is listed automatically, paged card browsing, purchases go straight into the bag |
-| Fashion | 20 outfits, appearance only, no stat changes |
+- Equipment has slots and level requirements; equipping recalculates stats instantly, and your appearance changes
+  (all 8 directions).
+- Prefix + suffix combos create quality tiers; bag frames and detail-panel backgrounds play different animations.
+- Monsters drop equipment: glowing beams appear on the ground — the higher the quality, the brighter — walk over
+  to pick up.
+- The bag sorts, drags, recycles into currency with one click, or destroys unwanted stacks.
+- The mall auto-lists every equipment variant, browsable by page; 20 fashion outfits change looks but not stats.
 
-### Combat and skills
+### Social
 
-| Feature | Notes |
-| --- | --- |
-| Skill system | One trigger entry, cooldown / mana / range checks |
-| Keyboard and mouse | WASD to move, left click to walk, right click to run, click a monster to attack |
-| Auto-battle | Quick attack and idle-farming toggles, A* pathfinding around obstacles |
-| Damage settled on the server | The server computes damage from the shared snapshot, castId makes it idempotent, the client only plays it back |
-| Dash skill | Teleports to the mouse position and plays a landing effect |
-| Status buffs | Statuses applied by skills, looping effects on the body, icon timers |
-| Monster skills | Cast by the server-side AI, the client only plays the effects |
-| Players seeing each other | Players on the same map see each other's appearance and HP, broadcast incrementally at 10 Hz (100ms, #768) |
-| Path line | While auto-pathing, the ground and the mini-map both draw a dotted white route |
+- Player names are colored by relationship: friends green, teammates gold, guildmates blue, enemies red, blocked gray.
+- Friendship requires mutual consent; enmity is one-way and the other side is never notified.
+- Guilds: create, apply, approve, kick, transfer, disband; the leader edits the guild announcement.
+- Teams form on invite, the leader is the only writer, and quitting hands leadership over automatically;
+  teammates on the same map share experience.
+- Leaderboards for level, combat power and kills — you stay ranked even offline.
+- Achievements grant rewards on completion; if your bag is full, the reward goes to your in-game mail.
 
-### Monsters, death and revival
+### Interface
 
-| Feature | Notes |
-| --- | --- |
-| Area spawning | The server spawns inside a map's spawn rectangles; the client only registers the map, never spawns |
-| World authority | Monster instances live on the server, shared across accounts, persisted across restarts |
-| Monster AI | Idle wandering, active chasing, enrage on being hit, basic attacks |
-| Death animation | The node is removed only after the falling animation finishes |
-| Death and revival | Controls locked on death, revive in place or at the map's revive point |
+- Health orb, mana orb, experience bar, hotkey bar and minimap all fit on one screen.
+- Overlapping dialogs: click one and it floats to the top.
+- Hover a skill or status icon for its description and remaining time.
+- A 6-step beginner tutorial highlights without blocking input.
 
-### Guilds and social
+## Run your own copy
 
-| Feature | Notes |
-| --- | --- |
-| Guild | Create / apply / approve / roster / kick / transfer / disband |
-| Party | Inviting creates a party, the leader is the only writer, leadership transfers automatically on leaving |
-| Party EXP sharing | Party members on the same map get 50%; other maps or a large level gap get nothing |
-| Friends and enemies | Friends are mirrored on both sides, enemies are one-way and invisible to the other side |
-| Blocking and reporting | Filtering happens on the server, reports are stored without any punishment |
-| Leaderboards | Level / combat power / kills, ranks computed on the server, offline characters still rank |
-| Achievements | Counters for cumulative goals, live computation for state goals, rewards on claim, mailed when the bag is full |
-| In-game mail | Inbox with attachment claiming, split into system / reward / social / combat channels |
-| Name colours by relation | Blocked grey, enemy red, party member gold, guildmate blue, friend green |
+### Easiest: any server with Docker
 
-### UI and systems
-
-| Feature | Notes |
-| --- | --- |
-| HUD | Character info bar, health and mana orbs, EXP bar, shortcut bar, mini-map |
-| Dialog stacking | With several dialogs open, the one you click rises above the others |
-| Hover tooltips | Statuses and skill slots show name / description / remaining time |
-| Virtual joystick | A short drag walks, a long drag runs |
-| Screen adaptation | Single resolution 1920×1080, letterboxed when the window ratio differs |
-| Clicks never fall through the UI | A release caught by the UI is handed back to the world, so walking never sticks |
-| Asset preloading | Maps / NPCs / monsters / appearance frames are preloaded before entering a map |
-| Tutorial | 6 steps, the overlay never blocks clicks, progress stored in the character save |
-| Announcements | Important announcements pop up on the login screen, the in-game entry shows an unread dot |
-
-## Repository layout
-
-```
-olua/
-├── README.md · FAQ.md      # overview and cross-side issues (this file)
-├── client/                 # the client: a Cocos Creator project (open this directory)
-├── server/                 # the server: NestJS
-├── admin/                  # the admin: React
-├── tools/                  # project-level scripts (cross-side)
-├── website/                # the project site (a static single page)
-├── docs/                   # deployment notes
-└── resources_dist/         # asset manifest (for publishing)
+```bash
+git clone https://github.com/WebCoderT/olua.git && cd olua
+cp server/.env.example server/.env      # at minimum set JWT_SECRET and ADMIN_REGISTER_CODE
+docker compose up -d --build
 ```
 
-Each side's README covers its internal layout. Two global conventions: **everything tunable on the client lives in `assets/configs`** (numbers, copy, layout, colours, durations and asset paths never sit in the logic); **every API file is generated from the server**, so a signature mismatch fails the build.
+This starts five containers — site, admin, game, API and realtime — exposing only ports 80 and 8080.
+Domains, HTTPS, backups, upgrades and rollbacks are covered in [`docs/deploy.md`](docs/deploy.md).
 
-## Tech stack
+### Local development: three commands
 
-- Cocos Creator 3.8.7 + TypeScript + Box2D physics
-- Server: NestJS 12 + `node:sqlite` (built into Node 22, no native modules) + JWT + Swagger
-- Admin: React 19 + TypeScript + Vite + Tailwind CSS v4
-- Storage: one shared SQLite file in WAL mode, multiple processes each writing their own tables (reasoning in the [FAQ](FAQ.en.md))
-- How it is built: written entirely by AI (Vibe Coding), humans only request features and accept the result
+```bash
+cd server && npm install && cp .env.example .env && npm run dev   # API on :3100
+cd admin  && npm install && cp .env.example .env.development && npm run dev   # console on :5173
+# open the client/ directory with Cocos Creator 3.8.7 and hit preview
+```
 
-## Docs
+Once the server is up, <http://localhost:3100/api-docs> lists every API; the first admin account registered
+becomes the super admin.
 
-| Document | Contents |
+> The game assets (2.4 GB) are not in the repository — download them per the "Assets" section at the end of this
+> file before opening the Cocos project.
+
+## How this project was written
+
+**Every line of code was written by AI.** The human only does three things: request features, look at the result,
+and say "not good enough".
+
+So besides the game itself, this repository is a field record of "can AI write a complete project on its own":
+how requirements were broken down, how AI mistakes were corrected, and where a human had to make the call —
+all preserved in the commit history and `docs/`.
+
+Technically it looks like any open-source game project: Cocos Creator client, NestJS server, React admin,
+SQLite database. The difference is that **none of it was typed by a human**.
+
+## For developers
+
+The repository splits into three peer directories, each with its own README and FAQ:
+
+| Side | What it is | Built with | Directory |
+| --- | --- | --- | --- |
+| Client | the game players play | Cocos Creator 3.8.7 + TypeScript | [`client/`](client/) · [README](client/README.en.md) |
+| Server | saves, combat resolution, all APIs | NestJS + SQLite | [`server/`](server/) · [README](server/README.en.md) |
+| Admin | operator console for editing data | React + Vite + Tailwind | [`admin/`](admin/) · [README](admin/README.en.md) |
+
+Two rules worth knowing first:
+
+1. **The server decides.** Health, damage, drops and bags on the client are display only; the data of record lives
+   on the server, and the client never invents its own numbers when disconnected.
+2. **APIs are written once.** Endpoint definitions live on the server; the client and admin API files are generated
+   from them, so a missed field change fails the build instead of shipping an `undefined`.
+
+Common commands (from the repository root, `make help` lists all):
+
+```bash
+make install        # install dependencies
+make dev            # start server and admin console together
+make check          # type checks + cross-cutting audits
+make test           # client unit tests + server end-to-end tests
+make verify         # run this before committing: all of the above + builds
+```
+
+Further reading:
+
+| Document | Content |
 | --- | --- |
-| [README.md](README.en.md) | This file: three-side index, quick start, feature list |
-| [FAQ.md](FAQ.en.md) | Cross-side: single source of address, contract pipeline, environment traps, how to run regressions |
-| [client/README.md](client/README.en.md) · [client/FAQ.md](client/FAQ.en.md) | Client: opening the project, architecture and conventions, preview errors |
-| [server/README.md](server/README.en.md) · [server/FAQ.md](server/FAQ.en.md) | Server: startup and environment variables, data model, auth and permissions |
-| [admin/README.md](admin/README.en.md) · [admin/FAQ.md](admin/FAQ.en.md) | Admin: startup and build, permission-driven UI, page list |
+| [`docs/`](docs/README.md) | 40 code documents: every chain traced from database to screen |
+| [`FAQ.md`](FAQ.md) | Why things are designed this way, and the pitfalls already stepped in |
+| [`website/`](website/index.html) | Site: gameplay details, architecture, engineering, design trade-offs |
 
-## License and commercial use
+## License
 
-- This project is open source under the **[MIT License](LICENSE)**.
-- **Commercial use is allowed**: you are free to modify, distribute, deploy and use this project commercially, provided the original copyright notice and license text are kept.
-- **No free commercial support**: all work arising from using this project for commercial purposes (running live servers, re-selling, providing paid services, deployment, tuning, scaling, compliance, after-sales, etc.) is entirely on the user. The author owes no obligation and **does not accept any form of free commercial consulting or technical support requests**.
-- Feedback is limited to the open-source community channels: issues and PRs are welcome, but response times are not guaranteed and none of this constitutes a support commitment.
+[MIT](LICENSE): fork it, modify it, distribute it, use it commercially — just keep the copyright notice.
+Everything commercial deployment requires (ops, scaling, compliance, support) is on you; the author provides
+no free technical support. Issues are welcome, with no response-time guarantee.
 
-## Assets and contact
+## Assets
 
-Assets are too large for version control; contact me if you need them.
+Game assets total 2.4 GB and are **intentionally kept out of the repository**, distributed as
+"manifest + GitHub Release volumes": the manifest `resources.manifest.json` is committed with the code, and the
+volume zips live on the Release tagged `resources-<version>`.
+
+```bash
+make resources-verify                    # after cloning, check local assets against the manifest
+make resources-download VERSION=<version>  # mismatch or fresh machine: download, extract, verify
+```
+
+After changing assets, publish them: `make resources-manifest` → `make resources-pack` → `make resources-upload` (requires a logged-in `gh`).
+
+## Contact
 
 ![QQ group](website/assets/img/qq-group.jpg)

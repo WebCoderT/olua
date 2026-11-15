@@ -2,10 +2,15 @@
 
 > [简体中文](README.md) | English
 
+**In plain words: this is the operator's remote control.** Every number a player sees — how much attack an
+equipment grants, which map a level unlocks, what monsters drop, what the announcement says — can be edited in
+the browser, and players see the change the next time they enter the game. Which buttons you see depends on your
+permissions, but the server is the one that actually says no; this is just the door.
+
 > Operations backend covering eight areas: accounts / characters / admins / announcements / mails / message sending / audit logs / player reports. The interface shows and hides by **permission point**, and the server validates independently.
 >
 > Project overview: [../README.en.md](../README.en.md); admin questions: [FAQ.en.md](FAQ.en.md);
-> root cross-side FAQ: [../FAQ.en.md](../FAQ.en.md). The English editions of the client and server documents land in follow-up issues and will be linked here once available.
+> client: [../client/README.en.md](../client/README.en.md) · server: [../server/README.en.md](../server/README.en.md) · cross-side FAQ: [../FAQ.en.md](../FAQ.en.md).
 
 ## Tech stack
 
