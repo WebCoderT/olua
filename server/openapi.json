@@ -27334,6 +27334,18 @@
             "items": {
               "$ref": "#/components/schemas/MapCollisionBoxDto"
             }
+          },
+          "maxPlayersPerRoom": {
+            "type": "number",
+            "description": "单房间人数上限（#812；0 = 不限）。客户端传送弹窗显示 `23/30` 的分母；**人数**那一半要等分线（#1000）"
+          },
+          "maxChannels": {
+            "type": "number",
+            "description": "分线数量（#812；1 = 不分线）。客户端据此决定要不要显示「换线」入口，真正的开线逻辑在 #1000"
+          },
+          "transferCostMoney": {
+            "type": "number",
+            "description": "传送花费（#812；0 = 免费）。**只进快照供客户端预判**，扣款仍以服务端为准（#1001）"
           }
         },
         "required": [
@@ -27347,7 +27359,10 @@
           "npcs",
           "revive",
           "spawnAreas",
-          "collisions"
+          "collisions",
+          "maxPlayersPerRoom",
+          "maxChannels",
+          "transferCostMoney"
         ]
       },
       "MapTypeGroupDto": {

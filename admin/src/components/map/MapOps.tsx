@@ -218,31 +218,62 @@ function numOr(value: string, fallback: number): number {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
+/**
+ * **还没接进链路**的字段 → 控件置灰 + 标注「未接入」（#812 口径）
+ *
+ * 为什么必须标：`map_rules` 15 列一次建齐（避免二次 ALTER），但这一轮只有
+ * `expRate` / `dropRate` / `allowDrop` 真的进了结算链。剩下的列如果照旧可编辑，
+ * 运营改完 `maxChannels = 3` 会以为「这张图能开三条线了」—— 而实际行为要等 #1000。
+ * #747（死配置）就是这么来的。
+ *
+ * 值照旧随整份覆盖提交（表单里保留的是读回来的原值），所以置灰不会把别人配的东西清掉。
+ */
+const UNWIRED_HINTS: Partial<Record<keyof RulesForm, string>> = {
+  moneyRate: "未接入：金币掉落走 drop_tables 的货币物品，与经验不是同一条链",
+  allowPk: "未接入：真 PK 玩法在 #403",
+  allowAutoBattle: "未接入：等分线 / 副本落地后接（关掉挂机要连客户端一起改）",
+  allowRecall: "未接入：拉人与回城还没有统一入口",
+  maxPlayersPerRoom: "未接入：容量闸门在 #1000（分线）—— 现在只影响客户端显示的上限",
+  maxChannels: "未接入：分线在 #1000",
+  transferCostMoney: "未接入：扣款在 #1001",
+  transferCooldownMs: "未接入：冷却计时在 #1001",
+  denyTransferInCombat: "未接入：战斗中拦截在 #1001",
+  respawnMsOverride: "未接入：重生时长的三级继承在 #1001 / docs/27",
+  simulateWhenEmpty: "未接入：空房低频 tick 在 #1001",
+};
+
 /** 一个开关（checkbox + 说明 —— 说明比标题更重要，开关本身谁都会点） */
 function RuleToggle({
   checked,
   title,
   hint,
   disabled,
+  unwired,
   onChange,
 }: {
   checked: boolean;
   title: string;
   hint: string;
   disabled?: boolean;
+  /** 字段还没接进链路：置灰 + 「未接入」徽章（说明文字已含「未接入：…」，这里只管视觉） */
+  unwired?: boolean;
   onChange: (next: boolean) => void;
 }) {
+  const locked = disabled || unwired;
   return (
-    <label className={`flex cursor-pointer items-start gap-2 rounded-lg border border-line bg-surface-2/40 px-2.5 py-2 text-xs ${disabled ? "cursor-not-allowed opacity-60" : ""}`}>
+    <label className={`flex cursor-pointer items-start gap-2 rounded-lg border border-line bg-surface-2/40 px-2.5 py-2 text-xs ${locked ? "cursor-not-allowed opacity-60" : ""}`}>
       <input
         type="checkbox"
         checked={checked}
-        disabled={disabled}
+        disabled={locked}
         onChange={(event) => onChange(event.target.checked)}
         className="mt-0.5 accent-gold"
       />
       <span>
-        <span className="text-ink-2">{title}</span>
+        <span className="flex items-center gap-1.5 text-ink-2">
+          {title}
+          {unwired ? <Badge tone="muted">未接入</Badge> : null}
+        </span>
         <span className="block text-[10px] leading-4 text-ink-5">{hint}</span>
       </span>
     </label>
@@ -361,7 +392,11 @@ export function MapRulesDialog({
         <div className="space-y-4">
           {rules.inherited ? (
             <Notice tone="warn">
-              这张图<b>没有单独的规则行</b>（inherited）—— 下面显示的全是出厂默认值。保存后才会落一行；
+              <span className="mb-1 flex items-center gap-1.5">
+                <Badge tone="warn">未覆盖</Badge>
+                <span className="text-[11px]">这张图没有单独的规则行</span>
+              </span>
+              下面显示的全是<b>出厂默认值</b>（`DEFAULT_MAP_RULES`）。保存后才会落一行；
               在那之前改全局默认值，这张图会跟着变。
             </Notice>
           ) : (
@@ -372,7 +407,10 @@ export function MapRulesDialog({
           )}
 
           <section>
-            <h4 className="mb-1.5 text-xs font-medium text-ink-3">结算倍率（服务端结算时乘）</h4>
+            <h4 className="mb-1.5 text-xs font-medium text-ink-3">
+              结算倍率（服务端结算时乘）
+              <span className="ml-2 text-[10px] font-normal text-ink-5">改完下一笔结算就生效，不用重载房间</span>
+            </h4>
             <div className="grid grid-cols-3 gap-2">
               <FormField label="经验">
                 <Input type="number" min={0} max={100} step={0.1} value={form.expRate} onChange={(event) => patch("expRate", event.target.value)} />
@@ -380,8 +418,8 @@ export function MapRulesDialog({
               <FormField label="掉落">
                 <Input type="number" min={0} max={100} step={0.1} value={form.dropRate} onChange={(event) => patch("dropRate", event.target.value)} />
               </FormField>
-              <FormField label="金钱">
-                <Input type="number" min={0} max={100} step={0.1} value={form.moneyRate} onChange={(event) => patch("moneyRate", event.target.value)} />
+              <FormField label="金钱" hint={UNWIRED_HINTS.moneyRate}>
+                <Input type="number" min={0} max={100} step={0.1} disabled value={form.moneyRate} onChange={() => undefined} />
               </FormField>
             </div>
           </section>
@@ -389,49 +427,51 @@ export function MapRulesDialog({
           <section>
             <h4 className="mb-1.5 text-xs font-medium text-ink-3">规则开关</h4>
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-              <RuleToggle checked={form.allowPk} hint="允许同图玩家互相攻击" title="允许 PK" disabled={!canWrite} onChange={(next) => patch("allowPk", next)} />
-              <RuleToggle checked={form.allowAutoBattle} hint="关闭后这张图的自动挂机不生效" title="允许自动挂机" disabled={!canWrite} onChange={(next) => patch("allowAutoBattle", next)} />
-              <RuleToggle checked={form.allowRecall} hint="允许被拉人 / 回城" title="允许召回" disabled={!canWrite} onChange={(next) => patch("allowRecall", next)} />
-              <RuleToggle checked={form.allowDrop} hint="false = 活动图：怪倒了不掉东西" title="这张图掉落物品" disabled={!canWrite} onChange={(next) => patch("allowDrop", next)} />
-              <RuleToggle checked={form.denyTransferInCombat} hint="战斗中禁止传送出图" title="战斗中禁传送" disabled={!canWrite} onChange={(next) => patch("denyTransferInCombat", next)} />
-              <RuleToggle checked={form.simulateWhenEmpty} hint="没人时也 tick（泡点 / 定时事件图用）；关着 = 冻结省 CPU" title="无人时继续跑世界" disabled={!canWrite} onChange={(next) => patch("simulateWhenEmpty", next)} />
+              <RuleToggle checked={form.allowPk} hint={UNWIRED_HINTS.allowPk ?? ""} title="允许 PK" unwired onChange={(next) => patch("allowPk", next)} />
+              <RuleToggle checked={form.allowAutoBattle} hint={UNWIRED_HINTS.allowAutoBattle ?? ""} title="允许自动挂机" unwired onChange={(next) => patch("allowAutoBattle", next)} />
+              <RuleToggle checked={form.allowRecall} hint={UNWIRED_HINTS.allowRecall ?? ""} title="允许召回" unwired onChange={(next) => patch("allowRecall", next)} />
+              <RuleToggle checked={form.allowDrop} hint="false = 活动图：怪倒了不掉东西（这一条**已接入**结算）" title="这张图掉落物品" disabled={!canWrite} onChange={(next) => patch("allowDrop", next)} />
+              <RuleToggle checked={form.denyTransferInCombat} hint={UNWIRED_HINTS.denyTransferInCombat ?? ""} title="战斗中禁传送" unwired onChange={(next) => patch("denyTransferInCombat", next)} />
+              <RuleToggle checked={form.simulateWhenEmpty} hint={UNWIRED_HINTS.simulateWhenEmpty ?? ""} title="无人时继续跑世界" unwired onChange={(next) => patch("simulateWhenEmpty", next)} />
             </div>
           </section>
 
           <section>
             <h4 className="mb-1.5 text-xs font-medium text-ink-3">容量与传送</h4>
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-              <FormField label="单房人数上限">
-                <Input type="number" min={0} max={1000} value={form.maxPlayersPerRoom} onChange={(event) => patch("maxPlayersPerRoom", event.target.value)} />
+              <FormField label="单房人数上限" hint={UNWIRED_HINTS.maxPlayersPerRoom}>
+                <Input type="number" min={0} max={1000} disabled value={form.maxPlayersPerRoom} onChange={() => undefined} />
               </FormField>
-              <FormField label="分线数量上限">
-                <Input type="number" min={1} max={20} value={form.maxChannels} onChange={(event) => patch("maxChannels", event.target.value)} />
+              <FormField label="分线数量上限" hint={UNWIRED_HINTS.maxChannels}>
+                <Input type="number" min={1} max={20} disabled value={form.maxChannels} onChange={() => undefined} />
               </FormField>
-              <FormField label="传送花费（铜钱）">
-                <Input type="number" min={0} value={form.transferCostMoney} onChange={(event) => patch("transferCostMoney", event.target.value)} />
+              <FormField label="传送花费（铜钱）" hint={UNWIRED_HINTS.transferCostMoney}>
+                <Input type="number" min={0} disabled value={form.transferCostMoney} onChange={() => undefined} />
               </FormField>
-              <FormField label="传送冷却（毫秒）">
-                <Input type="number" min={0} step={1000} value={form.transferCooldownMs} onChange={(event) => patch("transferCooldownMs", event.target.value)} />
+              <FormField label="传送冷却（毫秒）" hint={UNWIRED_HINTS.transferCooldownMs}>
+                <Input type="number" min={0} step={1000} disabled value={form.transferCooldownMs} onChange={() => undefined} />
               </FormField>
             </div>
             <FormField
               label="这张图的重生时长（毫秒）"
-              hint="留空 = 继承全局 worldRespawnMs；填了就覆盖中间级重生时长（活动图重刷快一点用）"
+              hint={UNWIRED_HINTS.respawnMsOverride}
             >
               <Input
                 type="number"
                 min={0}
                 step={1000}
+                disabled
                 placeholder="继承全局"
                 value={form.respawnMsOverride}
-                onChange={(event) => patch("respawnMsOverride", event.target.value)}
+                onChange={() => undefined}
               />
             </FormField>
           </section>
 
           <p className="text-[11px] text-ink-5">
-            保存是<b>整份覆盖</b>：没提到的字段按页面上显示的值落库。容量与传送开关在下次进图 / 传送校验时生效；
-            倍率在下一笔结算就生效。
+            保存是<b>整份覆盖</b>：没提到的字段按页面上显示的值落库。置灰并标「未接入」的字段
+            这一版还没接进链路（改数值也不会有行为变化），等对应的刀落地后自动变可编辑。
+            已接入的三项（经验 / 掉落倍率、是否掉落）在<b>下一笔结算</b>就生效。
           </p>
         </div>
       )}

@@ -18,7 +18,16 @@ import {
   spawnAreaOverflow,
 } from "../../common/utils/spawn-area-bounds.util";
 import { spawnTargetOf } from "../../common/utils/spawn-density.util";
-import { MapRuleRepository, mapRulesOf } from "../../database/repositories/map-rule.repository";
+import { MapRuleRepository, mapRulesOf, type MapRules } from "../../database/repositories/map-rule.repository";
+
+/**
+ * 规则的类型随地图域一起导出（#812）
+ *
+ * 消费方（实时进程的结算）要标 `MapRules` 时从这里引，**不要**去摸
+ * `database/repositories/map-rule.repository` —— 边界审计对 type-only import 同样计数，
+ * 而仓储文件只对「拥有这张表的域」开放。
+ */
+export type { MapRules } from "../../database/repositories/map-rule.repository";
 import { MapCollisionRepository } from "../../database/repositories/map-collision.repository";
 import { MapMonitorRepository } from "../../database/repositories/map-monitor.repository";
 import { MapNpcRepository } from "../../database/repositories/map-npc.repository";
@@ -207,19 +216,30 @@ export class MapService {
    * 尺寸与图层数仍然不发：客户端自己有 TMX。
    */
   configs(): MapConfigDto[] {
-    return this.maps.listAll().map((row) => ({
-      id: row.map_id,
-      label: row.label,
-      type: row.type,
-      typeLabel: MAP_TYPE_LABELS[row.type as MapTypeValue] ?? row.type,
-      level: row.level,
-      combat: row.combat,
-      soulOfWar: row.soul_of_war,
-      npcs: this.npcPoints.listByMap(row.map_id).map((point) => this.npcPointDtoOf(point)),
-      revive: this.revivePointDtoOf(row),
-      spawnAreas: this.spawnAreas.listByMap(row.map_id).map((area) => this.spawnAreaPointDtoOf(area)),
-      collisions: this.collisions.listByMap(row.map_id).map((box) => this.collisionBoxDtoOf(box)),
-    }));
+    // 规则一次全读、按 mapId 索引：一行 `map_rules` 都没有时 `mapRulesOf(null)` 给出厂默认，
+    // 所以每张图都会带上三项（客户端不需要区分「没配过」与「配成默认值」）
+    const rulesOf = new Map(this.mapRules.list().map((row) => [row.map_id, mapRulesOf(row)]));
+    return this.maps.listAll().map((row) => {
+      const rules = rulesOf.get(row.map_id) ?? mapRulesOf(null);
+      return {
+        id: row.map_id,
+        label: row.label,
+        type: row.type,
+        typeLabel: MAP_TYPE_LABELS[row.type as MapTypeValue] ?? row.type,
+        level: row.level,
+        combat: row.combat,
+        soulOfWar: row.soul_of_war,
+        npcs: this.npcPoints.listByMap(row.map_id).map((point) => this.npcPointDtoOf(point)),
+        revive: this.revivePointDtoOf(row),
+        spawnAreas: this.spawnAreas.listByMap(row.map_id).map((area) => this.spawnAreaPointDtoOf(area)),
+        collisions: this.collisions.listByMap(row.map_id).map((box) => this.collisionBoxDtoOf(box)),
+        // 只进「客户端要预判」的三项（#812 / docs/20 §12 第 10 条）：
+        // 倍率一律不进 —— 客户端算的经验与服务端给的迟早会漂
+        maxPlayersPerRoom: rules.maxPlayersPerRoom,
+        maxChannels: rules.maxChannels,
+        transferCostMoney: rules.transferCostMoney,
+      };
+    });
   }
 
   //#region 进图条件（#606）
@@ -539,6 +559,19 @@ export class MapService {
   rulesOf(id: string): MapRulesDto {
     this.requireRow(id);
     return this.rulesDtoOf(id);
+  }
+
+  /**
+   * 一张图的玩法规则（#812）：没有 `map_rules` 行 = 出厂默认 `DEFAULT_MAP_RULES`
+   *
+   * 这是给**运行时消费方**（实时进程的结算与房间）的那份，与上面的 `rulesOf` 刻意分开：
+   * - `rulesOf` 是管理端视图（带 `inherited` 与落款、地图不存在抛 404）；
+   * - 这一份只要配置值，**不抛异常也不校验地图存在** —— 结算发生在已经进图的角色身上，
+   *   地图必然存在，不该让「读个倍率」多一条失败路径。
+   * 现读库、不缓存：运营改完倍率下一刀结算就生效，不需要重载房间。
+   */
+  rulesConfigOf(id: string): MapRules {
+    return mapRulesOf(this.mapRules.find(id));
   }
 
   /**

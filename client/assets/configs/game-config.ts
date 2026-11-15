@@ -2217,6 +2217,13 @@ export function applyMapRows(rows: MapConfigRow[], groups: MapTypeGroupRow[]): v
       collisions: (row.collisions ?? [])
         .filter((box) => box && Number(box.w) > 0 && Number(box.h) > 0)
         .map((box) => ({ x: Number(box.x) || 0, y: Number(box.y) || 0, w: Number(box.w) || 0, h: Number(box.h) || 0 })),
+      // 房间形状与传送费（#812）：只进「客户端要预判」的三项，倍率不进快照。
+      // 服务端**总是**带这三项（`map.configs()` 对没配过的图也给出厂默认），所以这里的
+      // `|| 0` 只防「字段是 undefined」这种版本错位，不构成第二套默认值 —— 数值口径
+      // 的唯一来源仍是 `DEFAULT_MAP_RULES`
+      maxPlayersPerRoom: Math.max(0, Number(row.maxPlayersPerRoom) || 0),
+      maxChannels: Math.max(1, Number(row.maxChannels) || 1),
+      transferCostMoney: Math.max(0, Number(row.transferCostMoney) || 0),
     });
   }
   mapTypeGroups.length = 0;

@@ -16,6 +16,7 @@ import { PartyService } from "../party/party.service";
 import { WorldService } from "../world/world.service";
 import { roomKey } from "../../common/utils/room-key.util";
 import { MapMonitorService } from "./map-monitor.service";
+import { MapService, type MapRules } from "../map/map.service";
 import { MonsterAiService } from "./monster-ai.service";
 import { PlayerPresenceService } from "./player-presence.service";
 import { CastGuardService } from "./cast-guard.service";
@@ -96,6 +97,15 @@ export class CombatSettlementService {
     private readonly config: ConfigService,
     /** 地面掉落物的世界权威（#802）：算完的掉落交给它实体化、广播、过期 */
     private readonly drops: DropService,
+    /**
+     * 地图级玩法规则（#812 / docs/20 §5.5）：经验与掉落的倍率、是否允许掉落
+     *
+     * 走**地图域的公开口**而不是自己注入 `map-rule` 仓储：规则是「这张图的玩法配置」，
+     * 归地图域拥有（仓储白名单只开了 map 与 world 两个域）。每次结算**现读库**，
+     * 与 `enterRejectOf` / 怪物数值同一取向 —— 运营改完下一刀生效，不需要重载房间。
+     * 倍率只在服务端乘，**不进客户端快照**（否则两端算出来的经验会漂）。
+     */
+    private readonly maps: MapService,
   ) {}
 
   /** 结算一次出手（结果直接作为 settle 帧的 data 发回） */
@@ -879,16 +889,20 @@ export class CombatSettlementService {
     killerName: string,
     killSpot: { mapId: string; x: number; y: number },
   ): RealtimeKillReward {
-    const exp = this.killExpFor(roleLevel, stats.level);
-    // 无经验（等级差过大）不入账不推 revision；有经验但落账失败（打到一半被踢）跳过奖励
+    // 地图倍率（#812）：现读库，改完下一刀生效。`expRate = 0` 的图不给经验（活动图 / 试炼场）
+    const rules = this.rulesOfMap(killSpot.mapId);
+    const exp = scaleExp(this.killExpFor(roleLevel, stats.level), rules.expRate);
+    // 无经验（等级差过大 / 这张图不给经验）不入账不推 revision；有经验但落账失败（打到一半被踢）跳过奖励
     const applied = exp > 0 ? this.roles.applyKillExp(accountId, roleId, exp) : null;
     if (exp > 0 && !applied) {
       this.logger.warn(`击杀奖励入账失败：账号 ${accountId} 角色 ${roleId}（可能已被下线），本次经验 ${exp} 未记`);
       return { exp: 0, level: roleLevel, expNow: 0, expNeed: 0, leveledUp: false, revision: roleRevision, drops: [] };
     }
     // 队友分成（#399）：与击杀者的入账分开走 —— 击杀者那份照旧全额，
-    // 队友那份按他自己的等级差算，失败也不该影响击杀者的这一笔
-    this.sharePartyExp(accountId, roleId, killerName, killSpot, stats.level);
+    // 队友那份按他自己的等级差算，失败也不该影响击杀者的这一笔。
+    // **倍率同口径**（#812）：队友也乘 `expRate`，否则同图两个人拿到的倍率不一致，
+    // 「带人刷高倍率图」会变成对队友的惩罚（表现上就是一条报错）
+    this.sharePartyExp(accountId, roleId, killerName, killSpot, stats.level, rules);
     return {
       exp,
       level: applied ? applied.level : roleLevel,
@@ -896,7 +910,7 @@ export class CombatSettlementService {
       expNeed: applied ? applied.expNeed : 0,
       leveledUp: applied ? applied.leveledUp : false,
       revision: applied ? applied.revision : roleRevision,
-      drops: this.rollDrops(monsterKey),
+      drops: this.rollDrops(monsterKey, rules),
     };
   }
 
@@ -960,6 +974,7 @@ export class CombatSettlementService {
     killerName: string,
     killSpot: { mapId: string; x: number; y: number },
     monsterLevel: number,
+    rules: MapRules,
   ): void {
     const share = this.party.expMateShare();
     if (share <= 0) return;
@@ -972,7 +987,8 @@ export class CombatSettlementService {
       // 在线角色不是他（切角色 / 连接还没换过来）就跳过：入账必须落在**当前在线角色**上
       if (!role || role.id !== mate.roleId) continue;
       if (!this.withinShareDistance(mate.accountId, roomId, killSpot)) continue;
-      const gain = Math.floor(this.killExpFor(role.level, monsterLevel) * share);
+      // 顺序与击杀者同口径（docs/20 §5.5）：**先乘地图倍率、再乘队伍分成**，最后取整一次
+      const gain = Math.floor(this.killExpFor(role.level, monsterLevel) * rules.expRate * share);
       if (gain <= 0) continue;
       const applied = this.roles.applyKillExp(mate.accountId, mate.roleId, gain);
       if (!applied) continue;
@@ -1040,6 +1056,16 @@ export class CombatSettlementService {
   }
 
   /**
+   * 一张图的规则（#812）：`map_rules` 一行不存在 = 出厂默认（`DEFAULT_MAP_RULES`）
+   *
+   * 经地图域公开口现读，与 `enterRejectOf` / 怪物数值同一取向 —— 运营改完倍率下一刀就生效，
+   * 不需要重载房间。房间对象上那份 `capacity` 是「进图那一刻的快照」，与这里不共用。
+   */
+  private rulesOfMap(mapId: string): MapRules {
+    return this.maps.rulesConfigOf(mapId);
+  }
+
+  /**
    * 抽取一次掉落（读库：monster_drops → drop_tables，管理端改值即时生效）
    *
    * 三选一与 #254 管理端语义一致：table = 引用具名表（行内 picks 可覆盖件数）、
@@ -1053,7 +1079,10 @@ export class CombatSettlementService {
    * 判定放在抽取这一侧而不是拾取那一侧：同一次击杀的同一份掉落，掉落账本与
    * 客户端拿到的 reward 必须说同一件事，拾取时再算一次就可能前后不一致。
    */
-  private rollDrops(monsterKey: string): Array<{ goodId: string; count: number; bound: boolean }> {
+  private rollDrops(monsterKey: string, rules: MapRules): Array<{ goodId: string; count: number; bound: boolean }> {
+    // 这张图不掉东西（活动图 / 剧情图的常态）：**一件都不抽**，而不是抽完再丢 ——
+    // 世界侧因此不会生成实体，客户端也不会收到 `dropSpawn`，表现上就是「地上什么都没有」
+    if (!rules.allowDrop) return [];
     const row = this.monsterDrops.findByKey(monsterKey);
     let table: { picks: number | [number, number]; entries: DropEntryRow[] } | null = null;
     if (row && row.source === "table" && row.table_id) {
@@ -1074,7 +1103,7 @@ export class CombatSettlementService {
     const monsterBind = row?.bind_drops === 1;
     const bindChance = this.dropBindChance();
     const result: Array<{ goodId: string; count: number; bound: boolean }> = [];
-    for (const drop of rollDropTable(table)) {
+    for (const drop of rollDropTable(table, rules.dropRate)) {
       // 掉落表是管理端可改的数据：配了不存在的物品 id 就在这里拦下（#802）。
       // 以前是等拾取时才报错 —— 那件东西会永远躺在地上，谁都捡不起来，也没有任何提示。
       if (!itemTypeOf(drop.goodId)) {
@@ -1418,11 +1447,46 @@ function dropRandomInt(min: number, max: number): number {
 }
 
 /**
+ * 经验乘地图倍率（#812）：`floor(基础值 × rate)`，负数与 NaN 一律归 0
+ *
+ * 单独抽成纯函数是为了能直接对表断言（`e2e-map-rules` 拿 dist 里的它跑一组用例）——
+ * 走真实击杀去验「恰好 2 倍」既慢又会因为中途升级而假红。
+ */
+export function scaleExp(base: number, rate: number): number {
+  const factor = Number.isFinite(rate) && rate > 0 ? rate : 0;
+  const value = Number.isFinite(base) ? base : 0;
+  return Math.max(0, Math.floor(value * factor));
+}
+
+/**
+ * 掉落概率乘地图倍率（#812）：`min(1, chance × rate)`
+ *
+ * **乘在 `chance` 而不是 `picks` 上**（2026-11-15 拍板）：掉落表是「先定抽取次数 → 每次按权重
+ * 抽一条 → 过 chance 闸」的模型，乘 `picks` 会让 `rate = 2` 变成「抽两次」= 掉落真的翻倍，
+ * 与运营对「这张图掉率翻倍」的直觉一致但会把事件次数也翻倍（掉落流水、消耗品产出都翻倍）；
+ * 乘 `chance` 只改「抽到的那条落不落地」，事件次数不变。
+ *
+ * 封顶 1：`rate = 3` 时 `chance = 1` 的条目仍然是必掉（不是概率 3.0）——
+ * 这也是「不掉率」口径 `P' = min(1, P × rate)` 的等价写法。
+ */
+export function scaleDropChance(chance: number, rate: number): number {
+  const base = Number.isFinite(chance) ? chance : 0;
+  const factor = Number.isFinite(rate) && rate > 0 ? rate : 0;
+  return Math.max(0, Math.min(1, base * factor));
+}
+
+/**
  * 结算一次掉落表（与客户端 utils/drop/DropRoller.rollDropTable 同一口径）：
  * 先定抽取次数（数字 = 固定，[min, max] = 区间随机），再按权重独立抽取该次数
  * （可重复命中同一条目），每次命中后过概率、数量取区间随机，同一物品合并数量。
+ *
+ * `dropRate` = 地图的掉率倍率（#812）：只作用在 `chance` 闸上，见 `scaleDropChance`。
+ * **抽取次数不乘** —— 乘了就等于「同一只怪掉两次」，流水与产出都会翻倍。
  */
-function rollDropTable(table: { picks: number | [number, number]; entries: DropEntryRow[] }): Array<{ goodId: string; count: number }> {
+function rollDropTable(
+  table: { picks: number | [number, number]; entries: DropEntryRow[] },
+  dropRate = 1,
+): Array<{ goodId: string; count: number }> {
   const picks = Array.isArray(table.picks)
     ? Math.max(0, dropRandomInt(table.picks[0], table.picks[1]))
     : Math.max(0, Math.floor(table.picks ?? 1));
@@ -1441,8 +1505,8 @@ function rollDropTable(table: { picks: number | [number, number]; entries: DropE
         break;
       }
     }
-    // 概率判定（默认必掉）与数量（默认 1）
-    if (Math.random() > (entry.chance ?? 1)) continue;
+    // 概率判定（默认必掉；地图掉率在这里乘，封顶 1）与数量（默认 1）
+    if (Math.random() > scaleDropChance(entry.chance ?? 1, dropRate)) continue;
     const count = dropRandomInt(entry.count?.[0] ?? 1, entry.count?.[1] ?? 1);
     if (count <= 0) continue;
     const existed = results.find((result) => result.goodId === entry.goodId);
