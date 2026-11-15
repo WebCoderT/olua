@@ -74,6 +74,7 @@ export class ClientConfigController {
    * 为一个已经在响应头里的数字去改客户端的整份契约不值得。
    */
   @Get("version")
+  @Public()
   @ApiPlayerDoc({
     operationId: "gameConfig.version",
     summary: "配置版本（轮询用）",
@@ -81,7 +82,8 @@ export class ClientConfigController {
       "当前配置版本号：每次管理端写配置成功 +1（0 = 从没改过）。\n\n" +
       "客户端拿它跟本地那份比：**不相等**就重拉 `GET /game-config`（不判大小 —— 库被恢复成旧备份时版本会回退）。\n" +
       "建议 60 秒一次，只在游戏内轮询；拉取失败保留旧表继续用，下一轮再试。\n\n" +
-      "需要玩家令牌（与快照同口径）。",
+      "公开接口（#1036）：登录页顶栏要显示配置版本号，那时还没有玩家令牌 —— " +
+      "与 `GET /game-config/audio`、`GET /announcements/active` 同一口径（一个整数，无玩家数据）。",
   })
   @ApiDataResponse(ConfigVersionDto, { description: "当前配置版本" })
   version(): ConfigVersionDto {

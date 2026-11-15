@@ -512,6 +512,63 @@ export const uiTexts = {
    */
   zone_load_failed_tip: "区服列表拉取失败，按上次的区进入",
   /**
+   * 登录页整版文案（#1036，按 design/olua-login 设计稿）
+   *
+   * 全部是玩家可见文案，按仓库惯例收在这里（config-leak 审计：ui/ 不写中文字面量）。
+   * 顶栏 / 面板标题这类要拉宽字距的标题直接把空格写进文案（客户端 Label 没有字距属性）。
+   */
+
+  /** 左上品牌副标（主标是真实 LOGO 图，见 images.ts.gameLogo） */
+  login_brand_sub: "OLUA",
+  /** 顶栏版本胶囊（{version} = 服务端配置版本号，GET /game-config/version） */
+  login_version_label: "VER {version}",
+  /** 版本号拉取失败：整个胶囊隐藏，不显示编造的版本 */
+  login_version_unavailable: "-",
+  /** 首屏左列眉题 */
+  login_eyebrow: "全新资料片 · 沙城争霸",
+  /** 首屏左列一句话简介 */
+  login_tagline: "屠龙再启，兄弟聚首；一刀一级，热血攻沙。尘封的石门今日再度开启，等待归来的城主。",
+  /** 职业预览标签：战士 / 法师 / 道士（与本作三职业对应） */
+  login_class_warrior: "战士",
+  login_class_mage: "法师",
+  login_class_taoist: "道士",
+  /** 职业预览说明（点对应标签时显示） */
+  login_class_desc_warrior: "近战肉搏，高血高防；一柄重剑冲锋破甲，是沙城里最可靠的前排。",
+  login_class_desc_mage: "远程法术，火墙雷电群攻清场；爆发极高，走位决定生死。",
+  login_class_desc_taoist: "召唤神兽，施毒治愈辅助；攻守兼备，是队伍里稳得住的后背。",
+  /** 公告栏左端的标签字 */
+  login_notice_label: "公告",
+  /** 登录面板标题 */
+  login_panel_title: "账 号 登 录",
+  /** 选服按钮：区列表还没拿到时的占位 */
+  login_zone_unknown: "正在获取区服列表…",
+  /** 选服按钮左端的固定标签字 */
+  login_server_label: "区服",
+  /** 记住账号勾选框 */
+  login_remember: "记住账号",
+  /** 忘记密码入口（客户端暂无找回功能：飘字说明，暂时放置） */
+  login_forgot: "忘记密码",
+  login_forgot_tip: "找回密码：请通过官网账号中心验证",
+  /** 主按钮（设计稿「进入游戏」） */
+  login_enter_button: "进 入 游 戏",
+  /** 面板次要入口：注册新账号（与登录共用上方账号/密码输入框） */
+  login_register: "注册新账号",
+  /** 面板底部合规文案 */
+  login_foot_notice: "健康游戏忠告 · 抵制不良游戏",
+  /** 底部条版权 */
+  login_copyright: "© 2026 Olua 运营团队 · 保留所有权利",
+  /** 底部条协议入口（客户端暂无协议页：飘字说明，暂时放置） */
+  login_link_agreement: "用户协议",
+  login_link_privacy: "隐私政策",
+  login_link_minor: "未成年人保护",
+  login_link_todo_tip: "相关协议与政策请前往官网查看",
+  /** 游戏修复入口（客户端暂无资源校验功能：飘字说明，暂时放置） */
+  login_repair: "游戏修复",
+  login_repair_tip: "正在校验本地资源完整性…",
+  /** 背景音开关（登录页背景音见 SoundManager.login_bgm） */
+  login_music_off_tip: "背景音乐已静音",
+  login_music_on_tip: "背景音乐已开启",
+  /**
    * 地图标题后的线号后缀（#1016；{channel} = 玩家视角的线号 = 服务端 channel + 1）
    *
    * 服务端口径里公共线是 `0`、分线 `1..N`（见 room-key.util），玩家眼里的「1 线」就是公共线。

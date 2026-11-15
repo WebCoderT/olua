@@ -145,7 +145,8 @@ export const uiImages = {
   roleInfoDialogBackground: uiCommon("personal-information-bg"),
 
   // ---------------- 登录界面 ----------------
-  loginBackground: uiLogin("bg"),
+  /** 登录背景（#1036：设计稿 hero-bg，黄昏沙城 1600×900，16:9 与屏幕同比例正好铺满） */
+  loginBackground: uiLogin("hero-bg"),
   loginInputBackground: uiLogin("input-bg"),
   loginAccountIcon: uiLogin("icon-account"),
   loginPasswordIcon: uiLogin("icon-password"),
