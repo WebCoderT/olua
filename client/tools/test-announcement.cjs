@@ -255,7 +255,7 @@ if (sandbox) {
     ["name", "title", "size", "list", "detail"].forEach((key) => check(new RegExp(`\\b${key}:`).test(boardBlock), `announcementBoardDialogLayout 配了 ${key}`));
     check(/itemSize: new Size\(268, 58\)/.test(boardBlock), "条目行高固定（正文在右栏，列表只扫标题）");
     check(/itemDot: \{ position: new Vec2\(-126, 13\)/.test(boardBlock), "未读圆点几何在配置里");
-    check(/selectedFill: new Color\(70, 60, 44, 220\)/.test(boardBlock), "选中底色在配置里（Graphics 自绘）");
+    check(/selectedFill: T\.gold\[1\]/.test(boardBlock), "选中底色在配置里（Graphics 自绘，取令牌 gold-1）");
     check(/unreadTitleColor[\s\S]{0,200}readTitleColor[\s\S]{0,200}itemMetaColor/.test(boardBlock), "未读/已读/元信息三套文字颜色都在配置里");
     check(/body: \{ name: "announcement_body"[\s\S]{0,160}(fontSize|lineHeight|width):/.test(boardBlock), "正文宽度与行高仍走配置（换行文本靠 lineHeight 撑高；具体数值手调，不断言）");
 

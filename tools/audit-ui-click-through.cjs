@@ -57,6 +57,8 @@ const SHIELD_FACTORIES = [
   "createMiddleButton",
   "createSmallButtion",
   "createSmallButton",
+  "createToneButton",
+  "createVectorButton",
   "createToggle",
   "createToggleGroup",
   "createScrollView",

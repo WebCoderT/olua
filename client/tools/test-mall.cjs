@@ -363,8 +363,8 @@ if (sandbox) {
     check(/columns: 3/.test(block), "一行 3 张卡片（列数在配置里）");
     check(/card: \{[\s\S]{0,400}iconSize: new Size\(40, 40\)/.test(block), "商品卡片的图标尺寸在配置里");
     check(/buyButton: \{ size: new Size\(64, 20\), fontSize: 12, gapY: 2 \}/.test(block), "购买按钮（小号）几何在配置里");
-    check(/price: \{ fontSize: 10, reserve: 50, color: new Color\(255, 214, 102\) \}/.test(block), "价格行（字号 / 预留宽度 / 金色）在配置里");
-    check(/fill: new Color\(24, 20, 16, 220\)/.test(block), "卡片底色在配置里（Graphics 自绘，不依赖底图）");
+    check(/price: \{ fontSize: 10, reserve: 50, color: T\.gold\[4\] \}/.test(block), "价格行（字号 / 预留宽度 / 金色令牌）在配置里");
+    check(/fill: T\.surface\[2\]/.test(block), "卡片底色在配置里（Graphics 自绘，令牌 surface-2）");
     check(/rowsPerPage: 2/.test(block), "每页 2 行（每页 3 × 2 = 6 件）");
     check(/pageIndicator: \{ name: "mall_page_indicator", position: new Vec2\(0, -105\)/.test(block), "页码几何在配置里（居中于卡片区）");
     check(/firstButton:[\s\S]{0,200}prevButton:[\s\S]{0,200}nextButton:[\s\S]{0,200}lastButton:/.test(block), "首/上/下/末四个翻页按钮几何在配置里");

@@ -100,8 +100,8 @@ function main() {
   );
   const dialogs = readSrc("configs/layout/dialogs.ts");
   check(
-    /compare: \{/.test(dialogs) && /gainColor: new Color\(120, 220, 120\)/.test(dialogs) && /lossColor: new Color\(255, 80, 80\)/.test(dialogs) && /sameColor: new Color\(170, 170, 170\)/.test(dialogs),
-    "对比配色进 configs/layout/dialogs.goodDetailLayout.compare（变强绿 / 变弱红 / 持平灰）",
+    /compare: \{/.test(dialogs) && /gainColor: T\.jade/.test(dialogs) && /lossColor: T\.ember\[4\]/.test(dialogs) && /sameColor: T\.text\[3\]/.test(dialogs),
+    "对比配色进 configs/layout/dialogs.goodDetailLayout.compare（变强 jade / 变弱 ember-4 / 持平 text-3）",
   );
 
   finish("Ctrl 装备对比：数据层行为与接线全部符合口径");

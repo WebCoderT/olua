@@ -1,9 +1,9 @@
-import { Node, UITransform, Vec2 } from "cc";
+import { Node, UITransform } from "cc";
 import { Role } from "../../../entities/Role";
 import { SkillId } from "../../../types/skill";
 import { ShortcutKeys } from "../../../types/role";
 import GameUiHelper, { BottomNavBarButton } from "../../helpers/GameUiHelper";
-import { bottomBarLayout, uiImages } from "../../../configs/hudLayout";
+import { bottomBarLayout, T } from "../../../configs/hudLayout";
 import { bottomNavItems } from "../../../configs/bottomNav";
 import RoleUIManager from "../../core/RoleUIManager";
 import RoleInfoDialog from "../dialogs/RoleInfoDialog";
@@ -62,7 +62,8 @@ export default class BottomBar extends Node {
     // 底部栏主体（尺寸/位置/背景：固定值见 configs/hudLayout.bottomBar，改位置直接改配置）
     this.addComponent(UITransform).setContentSize(bottomBarLayout.size);
     this.setPosition(bottomBarLayout.position.x, bottomBarLayout.position.y, 0);
-    this.addChild(GameUiHelper.createImage("bottom_nav_bar_background", uiImages.bottomBarBackground, new Vec2(), bottomBarLayout.size));
+    // 底板（#1059：矢量半透明长条，替代原底图；圆角走 --r-4）
+    this.addChild(GameUiHelper.createGlassPlate("bottom_nav_bar_background", bottomBarLayout.size, T.radius.r4, T.line[1]));
     // 子组件
     this.navBar = new BottomNavBar(this.bottomNavBarButtons, role);
     this.addChild(this.navBar);

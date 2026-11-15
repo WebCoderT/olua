@@ -158,7 +158,9 @@ if (sandbox) {
   console.log("\n== 四、选角页：不再碰区，直接拉角色 ==");
   {
     check(!/ZoneApi/.test(selector), "RoleSelector 不再调任何区接口（区在登录页就定了）");
-    check(!/ZoneStore/.test(selector) && !/ZoneSelectDialog/.test(selector), "选角页不再读 ZoneStore、不再持有选服弹窗");
+    // #1059：顶栏要显示「区服 · 账号」，所以允许**只读** ZoneStore.get()；
+    // 换区仍然只能在登录页 —— 这里守「不持有选服弹窗、不写 ZoneStore」
+    check(/ZoneStore\.get\(\)/.test(selector) && !/ZoneStore\.set\(/.test(selector) && !/ZoneSelectDialog/.test(selector), "选角页只读区名做展示，换区与选服弹窗都不在这里");
     check(
       !/ensureZone|pickDefaultZone|renderZoneLabel|openZonePicker|onZonePicked|zoneLabel|zoneCount/.test(selector),
       "换区那套已经整体移走（没有残留的半截逻辑）",

@@ -1,6 +1,7 @@
 import { Color, Size, Vec2 } from "cc";
 import { uiImages } from "./images";
 import { uiSize } from "./sizes";
+import { T } from "./tokens";
 
 /**
  * 各类弹窗的布局与用图
@@ -14,18 +15,48 @@ import { uiSize } from "./sizes";
 
 /** 通用弹窗框几何（所有弹窗共用：位置跟随拖动，尺寸可被各弹窗覆盖） */
 export const dialogFrame = {
-  /** 缺省弹窗尺寸（createDialog 不传尺寸时使用） */
-  size: new Size(600, 500),
+  /** 缺省弹窗尺寸（createDialog 不传尺寸时使用；ui.css --dlg-w-md / --dlg-h-md） */
+  size: new Size(T.stage.dlgWidthMd, T.stage.dlgHeightMd),
+  /**
+   * 面板本体（ui.css `.panel--rivet`）：
+   * 暖炭褐底 + 顶部略亮的明暗过渡 + 1px 古铜金线 + 四角铆钉，全部 Graphics 现画，
+   * 不再用九宫拼图 —— 弹窗尺寸变化时金线始终是 1px、铆钉始终是同一个圆，不会跟着拉伸变形。
+   */
+  panel: {
+    /** 底板主色（surface-2） */
+    fill: T.surface[2],
+    /** 顶部明暗过渡带（surface-3 半透明，模拟 linear-gradient 165deg 的亮端） */
+    fillTop: T.surface[2],
+    /** 过渡带占面板高度的比例（自顶向下） */
+    fillTopRatio: 0.42,
+    /** 外框金线（line-3）与线宽 */
+    border: T.line[3],
+    borderWidth: T.border.width,
+    /** 内侧一圈极弱高光（模拟 inset 0 1px 0 rgba(255,255,255,.06)） */
+    innerHighlight: T.overlay.highlight,
+    /** 圆角（--r-3） */
+    radius: T.radius.r3,
+    /** 四角铆钉：直径、金色、距面板边缘的内缩、铆钉旁的小拖尾点（直径与偏移） */
+    rivet: {
+      size: T.border.rivet,
+      color: T.gold[3],
+      inset: 9,
+      trailSize: 3,
+      trailOffset: 14,
+    },
+  },
   /** 标题：距弹窗上边缘的内缩、文本高度、宽度两侧内缩、字号与颜色（摆放见 GameUiHelper.createDialog） */
   title: {
     insetTop: 15,
     height: 30,
     widthPadding: 60,
-    fontSize: 14,
-    color: new Color("#FF8B8B"),
+    fontSize: T.fontSize.f20,
+    color: T.text[1],
+    /** 标题下的短金线（ui.css .panel-title::after，44×1） */
+    rule: { width: T.border.titleRuleWidth, height: T.border.titleRuleHeight, color: T.gold[3], gap: 6 },
   },
-  /** 关闭按钮：尺寸（公共尺寸，见 sizes.uiSize）+ 距弹窗上/右边缘的内缩 */
-  closeButton: { size: uiSize.closeButtonSize, inset: 15 },
+  /** 关闭按钮：尺寸（公共尺寸，见 sizes.uiSize）+ 距弹窗上/右边缘的内缩 + 矢量化 × 的字号与色 */
+  closeButton: { size: uiSize.closeButtonSize, inset: 15, text: "×", fontSize: T.fontSize.f18, color: T.text[3], hoverColor: T.text[1] },
   /**
    * 背景图：九宫拼装配置（resources/dialog 下的九块拆图，取图名见 images.dialog*）
    *
@@ -77,9 +108,9 @@ const growthCardList = (name: string, extra?: { borderWidth: number }) => ({
   cardFontSize: 13,
   stateFontSize: 11,
   /** 卡片文字颜色：选中 / 未激活 / 已激活 */
-  selectedColor: new Color(255, 214, 102),
-  lockedColor: new Color(140, 140, 140),
-  activeColor: new Color(120, 220, 120),
+  selectedColor: T.gold[4],
+  lockedColor: T.text[4],
+  activeColor: T.jade,
   ...extra,
 });
 const growthAnimation = { position: new Vec2(0, 30), size: new Size(300, 300) };
@@ -88,9 +119,9 @@ const growthAttribute = {
   width: 210,
   spacing: 6,
   fontSize: 12,
-  titleColor: new Color(255, 214, 102),
-  rowNameColor: new Color(170, 170, 170),
-  rowDiffColor: new Color(120, 220, 120),
+  titleColor: T.gold[4],
+  rowNameColor: T.text[3],
+  rowDiffColor: T.jade,
 };
 const growthBindGold = { position: new Vec2(250, -160), size: new Size(200, 16), fontSize: 12 };
 
@@ -107,8 +138,8 @@ export const warSoulDialogLayout = {
   info: {
     position: new Vec2(0, -145),
     name: { position: new Vec2(0, 42), size: new Size(320, 22), fontSize: 16, color: Color.WHITE },
-    description: { position: new Vec2(0, 20), size: new Size(330, 16), fontSize: 11, color: new Color(170, 170, 170) },
-    current: { position: new Vec2(0, -22), size: new Size(320, 18), fontSize: 12, color: new Color(255, 223, 170) },
+    description: { position: new Vec2(0, 20), size: new Size(330, 16), fontSize: 11, color: T.text[3] },
+    current: { position: new Vec2(0, -22), size: new Size(320, 18), fontSize: 12, color: T.gold[4] },
     /** 外显勾选框（勾选后当前等级动画挂到主角右上角，位置见 hud.roleShowLayout.soul） */
     toggle: { position: new Vec2(0, -48), size: new Size(90, 22), fontSize: 13, text: "外显", boxSize: 16, textGap: 18 },
   },
@@ -140,8 +171,8 @@ export const titleUpgradeDialogLayout = {
   info: {
     position: new Vec2(0, -145),
     name: { position: new Vec2(0, 42), size: new Size(320, 22), fontSize: 16, color: Color.WHITE },
-    description: { position: new Vec2(0, 20), size: new Size(330, 16), fontSize: 11, color: new Color(170, 170, 170) },
-    current: { position: new Vec2(0, -8), size: new Size(320, 18), fontSize: 12, color: new Color(255, 223, 170) },
+    description: { position: new Vec2(0, 20), size: new Size(330, 16), fontSize: 11, color: T.text[3] },
+    current: { position: new Vec2(0, -8), size: new Size(320, 18), fontSize: 12, color: T.gold[4] },
   },
   /** 右：属性列表（含下一级增量） */
   attribute: growthAttribute,
@@ -170,22 +201,22 @@ export const rankUpgradeDialogLayout = {
   badge: {
     position: new Vec2(0, 30),
     size: new Size(320, 210),
-    fill: new Color(26, 18, 14, 220),
-    borderColor: new Color(255, 214, 102),
+    fill: T.surface[2],
+    borderColor: T.gold[4],
     borderWidth: 2,
     /** 段名（如「王爵」） */
-    tier: { position: new Vec2(0, 62), size: new Size(290, 22), fontSize: 14, color: new Color(255, 214, 102) },
+    tier: { position: new Vec2(0, 62), size: new Size(290, 22), fontSize: 14, color: T.gold[4] },
     /** 军衔名（红字，与头顶那行同一个色） */
-    label: { position: new Vec2(0, 4), size: new Size(290, 40), fontSize: 26, color: new Color(255, 60, 60) },
+    label: { position: new Vec2(0, 4), size: new Size(290, 40), fontSize: 26, color: T.ember[3] },
     /** 阶数进度（第 N 阶 / 共 100 阶） */
-    progress: { position: new Vec2(0, -56), size: new Size(290, 18), fontSize: 12, color: new Color(170, 170, 170) },
+    progress: { position: new Vec2(0, -56), size: new Size(290, 18), fontSize: 12, color: T.text[3] },
   },
   /** 中：名称 / 描述 / 当前军衔（槽位坐标，子件坐标以槽位中心为原点） */
   info: {
     position: new Vec2(0, -145),
     name: { position: new Vec2(0, 42), size: new Size(320, 22), fontSize: 16, color: Color.WHITE },
-    description: { position: new Vec2(0, 20), size: new Size(330, 16), fontSize: 11, color: new Color(170, 170, 170) },
-    current: { position: new Vec2(0, -8), size: new Size(320, 18), fontSize: 12, color: new Color(255, 223, 170) },
+    description: { position: new Vec2(0, 20), size: new Size(330, 16), fontSize: 11, color: T.text[3] },
+    current: { position: new Vec2(0, -8), size: new Size(320, 18), fontSize: 12, color: T.gold[4] },
   },
   /** 右：属性列表（含下一阶增量） */
   attribute: growthAttribute,
@@ -206,7 +237,7 @@ export const mapTeleportDialogLayout = {
   /** 内容列（纵向容器，高度自适应）：顶部位置与宽度（弹窗 600，左右各留 10） */
   content: { name: "map_teleport_content", width: 580, top: 215, groupSpacing: 16 },
   /** 分组标题 */
-  groupTitle: { fontSize: 14, height: 20, color: new Color(255, 214, 102) },
+  groupTitle: { fontSize: 14, height: 20, color: T.gold[4] },
   /** 地图按钮网格：每行 4 个（4 × 123 + 3 × 20 = 552，在 580 容器内水平居中） */
   grid: { spacingX: 20, spacingY: 12 },
 };
@@ -223,7 +254,7 @@ export const mapPreviewDialogLayout = {
   /** 预览区：地图 preview.jpg 整图铺满；点击按比例换算成世界坐标（左键寻路 / 右键传送） */
   preview: { name: "map_preview", position: new Vec2(0, -18), size: new Size(560, 392) },
   /** 预览区下方的操作提示 */
-  hint: { text: "左键点击自动寻路，右键点击直接传送", position: new Vec2(0, -226), size: new Size(420, 20), fontSize: 14, color: new Color(255, 223, 170) },
+  hint: { text: "左键点击自动寻路，右键点击直接传送", position: new Vec2(0, -226), size: new Size(420, 20), fontSize: 14, color: T.gold[4] },
   /**
    * 预览图上的静态文字标记（开窗时按配置快照的点位 / 区域建一次，随预览图一起移动/缩放）
    * 三类标记：NPC 白点 + 点上方紧挨着的名称、刷怪区中心的怪物名称
@@ -236,12 +267,12 @@ export const mapPreviewDialogLayout = {
     /** NPC 白点颜色 */
     npcDotColor: Color.WHITE,
     /** NPC 名称文字颜色与字号 */
-    npcLabelColor: new Color(255, 255, 255),
+    npcLabelColor: T.text[1],
     npcLabelFontSize: 12,
     /** NPC 名称与白点的间距（像素：文字底边到白点边缘的距离） */
     npcLabelGap: 2,
     /** 刷怪区怪物名称文字颜色与字号 */
-    monsterLabelColor: new Color(255, 217, 138),
+    monsterLabelColor: T.gold[4],
     monsterLabelFontSize: 12,
   },
   /**
@@ -251,7 +282,7 @@ export const mapPreviewDialogLayout = {
    */
   route: {
     /** 点与终点圆点的颜色 */
-    color: new Color(255, 255, 255, 235),
+    color: T.text[1],
     /** 单个点半径（像素） */
     dotRadius: 2.5,
     /** 相邻点间距（像素） */
@@ -321,19 +352,19 @@ export const fashionDialogLayout = {
     stateFontSize: 12,
     statePosition: new Vec2(0, -56),
     /** 卡片底色（Graphics 自绘，不依赖底图） */
-    fill: new Color(24, 20, 16, 220),
+    fill: T.surface[2],
     /** 已穿戴卡片的描边色 */
-    activeBorder: new Color(214, 174, 96, 255),
+    activeBorder: T.gold[3],
     /** 普通卡片描边色 */
-    border: new Color(92, 78, 52, 255),
+    border: T.gold[1],
     /** 未穿戴卡片的角标颜色 */
-    stateColor: new Color(170, 170, 170, 255),
+    stateColor: T.text[3],
     /** 可购买卡片的价格角标色（与绑定元宝同色系） */
-    buyColor: new Color(226, 192, 116, 255),
+    buyColor: T.gold[4],
     /** 未拥有卡片的底色 / 描边 / 图标与名称置灰色（#596：没有的看得到、穿不了） */
-    lockedFill: new Color(16, 14, 12, 200),
-    lockedBorder: new Color(52, 46, 36, 255),
-    lockedTint: new Color(128, 122, 112, 255),
+    lockedFill: T.surface[1],
+    lockedBorder: T.surface[3],
+    lockedTint: T.text[4],
   },
   /** 卡片上的状态文案（#596：未拥有的按获取渠道分流 —— 可购买的显示价格，其余置灰） */
   stateText: {
@@ -410,7 +441,7 @@ export const mallDialogLayout = {
   size: new Size(850, 542),
   closeButton: { position: new Vec2(357, 171), size: uiSize.closeButtonSize },
   /** 绑定元宝余额（柜台正中） */
-  bindGold: { position: new Vec2(0, -182), size: new Size(220, 18), fontSize: 12, color: new Color(255, 214, 102) },
+  bindGold: { position: new Vec2(0, -182), size: new Size(220, 18), fontSize: 12, color: T.gold[4] },
   /**
    * 分类页签（#758：一排横排按钮，居中均分；挂在弹窗上、卡片区外 —— 换分类时页签不重建）
    *
@@ -431,7 +462,7 @@ export const mallDialogLayout = {
   /** 商品卡片区（橱窗开口内、页签之下；分页显示，每页只建 columns × rowsPerPage 张卡片） */
   list: { name: "mall_list", position: new Vec2(0, -40), size: new Size(395, 234) },
   /** 分类下没有商品时的空提示（居中，与页签/卡片同层） */
-  emptyTip: { name: "mall_empty_tip", position: new Vec2(0, -40), size: new Size(300, 20), fontSize: 12, color: new Color(170, 160, 150) },
+  emptyTip: { name: "mall_empty_tip", position: new Vec2(0, -40), size: new Size(300, 20), fontSize: 12, color: T.text[3] },
   /** 商品卡片（一行 columns 张均分列表宽：图标 → 名称 → 前后缀 → 购买按钮，几何都由这里推） */
   card: {
     columns: 3,
@@ -440,20 +471,20 @@ export const mallDialogLayout = {
     height: 100,
     paddingTop: 4,
     /** 卡片底：Graphics 自绘的填充与金边（橱窗底色深，描一圈细金边出层次；不依赖底图拉伸） */
-    fill: new Color(24, 20, 16, 220),
-    borderColor: new Color("#8A6A2F"),
+    fill: T.surface[2],
+    borderColor: T.gold[2],
     borderWidth: 1,
     paddingX: 6,
     iconSize: new Size(40, 40),
     /** 名称两段式：本体一行（前缀色大字，超长自动缩字）+ 前缀+后缀一行（同色小字）；gapY = 与上一行的间距 */
-    name: { fontSize: 12, lineHeight: 16, gapY: 2, plainColor: new Color(235, 232, 226) },
+    name: { fontSize: 12, lineHeight: 16, gapY: 2, plainColor: T.text[1] },
     /**
      * 品质行（10 号字，与价格同行）
      *
      * 装备写「前缀 + 后缀」并用前缀色；`kindColor` 是非装备（药品）写在那一行的「药品」二字，
      * 用中性灰 —— 药品没有品质，不该借用某一档品质的颜色。
      */
-    extra: { fontSize: 10, lineHeight: 12, gapY: 2, kindColor: new Color(160, 150, 140) },
+    extra: { fontSize: 10, lineHeight: 12, gapY: 2, kindColor: T.text[4] },
     /**
      * 价格（与「前缀+后缀」同一行，右侧贴边、金色）
      *
@@ -463,7 +494,7 @@ export const mallDialogLayout = {
      * `reserve` 50 = 4 位数字 + 空格 + 2 个全角「绑元」（10 号字 ≈ 22 + 5 + 20 = 47，留 3 余量），
      * 光秃秃一个数字会被误读成数量，所以带单位。
      */
-    price: { fontSize: 10, reserve: 50, color: new Color(255, 214, 102) },
+    price: { fontSize: 10, reserve: 50, color: T.gold[4] },
 
     /** 购买按钮（居中）：尺寸、字号与间距 */
     buyButton: { size: new Size(64, 20), fontSize: 12, gapY: 2 },
@@ -479,7 +510,7 @@ export const mallDialogLayout = {
   pagination: {
     rowsPerPage: 2,
     /** 页码（第 X / Y 页） */
-    pageIndicator: { name: "mall_page_indicator", position: new Vec2(0, -105), size: new Size(100, 20), fontSize: 12, color: new Color(255, 214, 102) },
+    pageIndicator: { name: "mall_page_indicator", position: new Vec2(0, -105), size: new Size(100, 20), fontSize: 12, color: T.gold[4] },
     /** 四个翻页按钮（首 / 上 / 下 / 末） */
     firstButton: { name: "mall_first_page_button", position: new Vec2(-150, -105), size: new Size(56, 24), fontSize: 12 },
     prevButton: { name: "mall_prev_page_button", position: new Vec2(-86, -105), size: new Size(56, 24), fontSize: 12 },
@@ -604,7 +635,7 @@ export const skillShortcutSettingDialogLayout = {
 export const deathDialogLayout = {
   name: "death_dialog",
   /** 遮罩颜色（黑色半透明，盖住整个屏幕并挡住世界点击） */
-  maskColor: new Color(0, 0, 0, 160),
+  maskColor: T.surface.scrim,
   /** 标题「您已死亡」 */
   title: { text: "您已死亡", position: new Vec2(0, 90), size: new Size(400, 60), fontSize: 36, color: Color.WHITE },
   /** 两个复活按钮（居中偏下对称排布） */
@@ -626,11 +657,11 @@ export const deathDialogLayout = {
 export const confirmDialogLayout = {
   name: "confirm_dialog",
   /** 遮罩颜色（黑色半透明，盖住整个屏幕并挡住下层点击；与死亡遮罩同色） */
-  maskColor: new Color(0, 0, 0, 160),
+  maskColor: T.surface.scrim,
   /** 居中面板：尺寸（背景为通用弹窗背景的九宫拼装，见 createDialogPanel） */
   panel: { name: "confirm_panel", size: new Size(420, 210) },
   /** 标题（面板上部，配色与通用弹窗标题一致） */
-  title: { name: "confirm_title", position: new Vec2(0, 68), size: new Size(360, 26), fontSize: 16, color: new Color("#FF8B8B") },
+  title: { name: "confirm_title", position: new Vec2(0, 68), size: new Size(360, 26), fontSize: 16, color: T.ember[4] },
   /** 正文：宽度固定、高度按内容自适应（可换行，锚点居中故向上下对称撑开） */
   message: { name: "confirm_message", position: new Vec2(0, 18), width: 340, fontSize: 14, lineHeight: 20, color: Color.WHITE },
   /** 两个按钮（中号按钮宽 123：x 错开 90 → 间隙 57，整体在面板内居中） */
@@ -653,23 +684,23 @@ export const goodDetailLayout = {
   /** 头部行间距（图标与名称行） */
   headerSpacing: 10,
   /** 基础信息行（等级与部位）：字号与配色（灰字，弱于正文） */
-  info: { fontSize: 12, size: new Size(220, 18), color: new Color("#9A9A9A") },
+  info: { fontSize: 12, size: new Size(220, 18), color: T.text[3] },
   /** 回收价行：字号与配色（金色，与绑定元宝呼应） */
-  recycle: { fontSize: 12, size: new Size(220, 18), color: new Color("#FFD700") },
+  recycle: { fontSize: 12, size: new Size(220, 18), color: T.amber },
   /**
    * 绑定标记行（「已绑定 · 不可交易」，#789）
    *
    * 只在**这件物品确实绑定**时出现：颜色取琥珀色（与标签行同调但更醒目），排版占一行。
    * 不绑定时不占位 —— 多数掉落物没绑定，留一行空位会让详情弹窗白白变高。
    */
-  bound: { fontSize: 12, size: new Size(220, 18), color: new Color(255, 178, 92) },
+  bound: { fontSize: 12, size: new Size(220, 18), color: T.gold[4] },
   /**
    * 掉落溯源段（谁掉的 / 哪个怪 / 什么时间，#789；只有装备带溯源）
    *
    * 三行弱灰字，排在回收价下方：颜色比正文淡（它是背景信息，不是玩家要拿它做决策的数据）。
    * 行高 15 与字号 11 配套，三行合计约 45 像素，弹窗仍在一块可见区内。
    */
-  origin: { fontSize: 11, lineHeight: 15, size: new Size(220, 15), color: new Color(150, 150, 150) },
+  origin: { fontSize: 11, lineHeight: 15, size: new Size(220, 15), color: T.text[4] },
   /** 介绍文本 */
   description: { fontSize: 12, size: new Size(220, 50), lineHeight: 16 },
   /**
@@ -678,13 +709,13 @@ export const goodDetailLayout = {
    */
   compare: {
     /** 段标题（「对比 · 身上穿戴」）配色（金色，与回收价行同调） */
-    titleColor: new Color(255, 214, 102),
+    titleColor: T.gold[4],
     /** 差值着色：变强绿 / 变弱红 / 持平灰（绿与战魂弹窗的增量色一致） */
-    gainColor: new Color(120, 220, 120),
-    lossColor: new Color(255, 80, 80),
-    sameColor: new Color(170, 170, 170),
+    gainColor: T.jade,
+    lossColor: T.ember[4],
+    sameColor: T.text[3],
     /** 未按 Ctrl 时的发现提示行（灰字，弱于正文） */
-    hintColor: new Color(150, 150, 150),
+    hintColor: T.text[4],
     hintFontSize: 11,
   },
   /** 标题（装备为三段着色，其他物品单行可换行） */
@@ -693,7 +724,7 @@ export const goodDetailLayout = {
   tag: {
     rowSize: new Size(220, 18),
     /** 标签文字颜色（与白色正文区分，突出标签） */
-    color: new Color(255, 214, 102),
+    color: T.gold[4],
     fontSize: 11,
     /** 标签之间的横向间距 */
     spacing: 6,
@@ -770,22 +801,22 @@ export const announcementBoardDialogLayout = {
     itemTitle: { position: new Vec2(4, 12), size: new Size(244, 18) },
     itemMeta: { position: new Vec2(4, -11), size: new Size(244, 16) },
     /** 未读条目用亮色标题 + 左侧圆点，已读压暗（一眼看出哪几条是新的） */
-    unreadTitleColor: new Color(255, 214, 102),
-    readTitleColor: new Color(150, 150, 150),
-    itemMetaColor: new Color(130, 130, 130),
+    unreadTitleColor: T.gold[4],
+    readTitleColor: T.text[4],
+    itemMetaColor: T.text[4],
     /** 选中条目的底色（Graphics 自绘，不依赖底图） */
-    selectedFill: new Color(70, 60, 44, 220),
+    selectedFill: T.gold[1],
     /** 未读圆点（相对条目中心；用 uiImages.dot） */
     itemDot: { position: new Vec2(-126, 13), size: new Size(8, 8) },
   },
   /** 右：选中公告的详情（标题 / 级别 · 时间窗 / 正文滚动区） */
   detail: {
-    title: { name: "announcement_detail_title", position: new Vec2(140, 172), size: new Size(368, 24), fontSize: 15, color: new Color(255, 214, 102) },
+    title: { name: "announcement_detail_title", position: new Vec2(140, 172), size: new Size(368, 24), fontSize: 15, color: T.gold[4] },
     /** 级别 · 时间窗（没有选中公告时这里显示空态 / 失败提示） */
-    meta: { name: "announcement_detail_meta", position: new Vec2(140, 148), size: new Size(368, 18), fontSize: 11, color: new Color(150, 150, 150) },
+    meta: { name: "announcement_detail_meta", position: new Vec2(140, 148), size: new Size(368, 18), fontSize: 11, color: T.text[4] },
     scroll: { name: "announcement_body_scroll", position: new Vec2(140, -28), size: new Size(372, 330) },
     /** 正文：宽度固定、高度按内容自适应（可换行） */
-    body: { name: "announcement_body", fontSize: 13, lineHeight: 20, width: 364, color: new Color(226, 226, 226) },
+    body: { name: "announcement_body", fontSize: 13, lineHeight: 20, width: 364, color: T.text[1] },
   },
 };
 
@@ -799,10 +830,10 @@ export const announcementBoardDialogLayout = {
 export const announcementNoticeDialogLayout = {
   name: "announcement_notice_dialog",
   title: "公告",
-  maskColor: new Color(0, 0, 0, 170),
+  maskColor: T.surface.scrim,
   panel: { name: "announcement_notice_panel", size: new Size(640, 460) },
   /** 标题文本的位置与样式（配色与通用弹窗标题一致） */
-  titleLabel: { name: "announcement_notice_title", position: new Vec2(0, 200), size: new Size(560, 26), fontSize: 16, color: new Color("#FF8B8B") },
+  titleLabel: { name: "announcement_notice_title", position: new Vec2(0, 200), size: new Size(560, 26), fontSize: 16, color: T.ember[4] },
   /** 公告列表（纵向滚动，每一条自己撑高） */
   list: { name: "announcement_notice_list", position: new Vec2(0, 20), size: new Size(576, 350) },
   /** 单条公告：标题 / 级别 · 时间窗 / 正文，纵向排列且高度按内容自适应 */
@@ -811,9 +842,9 @@ export const announcementNoticeDialogLayout = {
     /** 条目之间与条目内部的纵向间距 */
     itemGap: 22,
     rowGap: 6,
-    title: { fontSize: 15, lineHeight: 21, color: new Color(255, 214, 102) },
-    meta: { fontSize: 11, lineHeight: 16, color: new Color(140, 140, 140) },
-    body: { fontSize: 13, lineHeight: 20, color: new Color(226, 226, 226) },
+    title: { fontSize: 15, lineHeight: 21, color: T.gold[4] },
+    meta: { fontSize: 11, lineHeight: 16, color: T.text[4] },
+    body: { fontSize: 13, lineHeight: 20, color: T.text[1] },
   },
   /** 「我知道了」按钮（中号按钮，面板底部居中） */
   confirmButton: { name: "announcement_notice_confirm_button", text: "我知道了", position: new Vec2(0, -200) },
@@ -833,44 +864,44 @@ export const announcementNoticeDialogLayout = {
  */
 export const zoneSelectLayout = {
   name: "zone_select_dialog",
-  maskColor: new Color(0, 0, 0, 170),
+  maskColor: T.surface.scrim,
   panel: { name: "zone_select_panel", size: new Size(560, 500) },
   /** 标题文本的位置与样式（配色与通用弹窗标题一致） */
-  titleLabel: { name: "zone_select_title", position: new Vec2(0, 220), size: new Size(480, 28), fontSize: 18, color: new Color("#FF8B8B") },
+  titleLabel: { name: "zone_select_title", position: new Vec2(0, 220), size: new Size(480, 28), fontSize: 18, color: T.ember[4] },
   /** 说明行：为什么必须先选一个区（不同区的角色互不相通） */
-  hint: { position: new Vec2(0, 188), size: new Size(500, 20), fontSize: 12, color: new Color(150, 158, 172, 255) },
+  hint: { position: new Vec2(0, 188), size: new Size(500, 20), fontSize: 12, color: T.text[3] },
   /** 区列表（纵向滚动，每行固定高、行间距见 row.gap） */
   list: { name: "zone_select_list", position: new Vec2(0, -20), size: new Size(500, 356) },
   row: {
     size: new Size(496, 58),
     /** 行间距（滚动区 content 的 Layout.spacingY） */
     gap: 10,
-    fill: new Color(22, 26, 34, 190),
-    border: new Color(64, 74, 90, 255),
+    fill: T.surface[1],
+    border: T.surface[3],
     /** 当前浏览区的高亮描边（与帮会列表「自己那一行」同一口径） */
-    currentBorder: new Color(255, 200, 80, 255),
+    currentBorder: T.gold[4],
     /** 进不去的区（维护中 / 已关闭）：底色压暗、区名变灰。点它有提示，不是静默无反应 */
-    disabledFill: new Color(16, 18, 24, 150),
+    disabledFill: T.surface[1],
     radius: 6,
     /** 区名（左列，相对行中心） */
     nameX: -178,
     nameSize: new Size(200, 22),
     nameFontSize: 16,
-    nameColor: new Color(226, 226, 226, 255),
-    disabledNameColor: new Color(120, 126, 138, 255),
+    nameColor: T.text[1],
+    disabledNameColor: T.text[4],
     /** 角色数 · 状态（中列） */
     metaX: -18,
     metaSize: new Size(220, 18),
     metaFontSize: 12,
-    metaColor: new Color(160, 172, 190, 255),
+    metaColor: T.text[3],
     /** 角标：从 tagRightX 起往左一个个摆（最多两个：「上次在」「推荐」） */
     tagRightX: 226,
     tagGap: 6,
     tagSize: new Size(56, 20),
     tagFontSize: 11,
-    tagFill: new Color(255, 200, 80, 40),
-    tagBorder: new Color(255, 200, 80, 160),
-    tagColor: new Color(255, 209, 102, 255),
+    tagFill: T.line[2],
+    tagBorder: T.line[3],
+    tagColor: T.gold[4],
   },
   /** 取消按钮（面板底部居中）：打开选服窗不等于必须换区 */
   closeButton: { name: "zone_select_close_button", text: "取消", position: new Vec2(0, -218) },
@@ -895,22 +926,22 @@ export const guildDialogLayout = {
   title: "社 交",
   // ---- 未加入帮会 ----
   guest: {
-    hint: { position: new Vec2(0, 208), size: new Size(560, 22), fontSize: 15, color: new Color(226, 226, 226) },
+    hint: { position: new Vec2(0, 208), size: new Size(560, 22), fontSize: 15, color: T.text[1] },
     nameInput: { position: new Vec2(-60, 170), size: new Vec2(360, 34), placeholder: "输入帮会名（2~12 字）" },
     createButton: { name: "guild_create_button", text: "创建帮会", position: new Vec2(195, 170) },
-    listTitle: { position: new Vec2(0, 138), size: new Size(560, 20), fontSize: 13, color: new Color(255, 214, 102) },
+    listTitle: { position: new Vec2(0, 138), size: new Size(560, 20), fontSize: 13, color: T.gold[4] },
     list: { name: "guild_list", position: new Vec2(0, -56), size: new Size(556, 340) },
   },
   // ---- 已加入帮会 ----
   member: {
-    header: { position: new Vec2(-110, 208), size: new Size(340, 24), fontSize: 16, color: new Color(255, 214, 102) },
-    summary: { position: new Vec2(140, 208), size: new Size(280, 22), fontSize: 12, color: new Color(180, 190, 205) },
-    notice: { position: new Vec2(0, 176), size: new Size(548, 22), fontSize: 12, color: new Color(200, 208, 220) },
+    header: { position: new Vec2(-110, 208), size: new Size(340, 24), fontSize: 16, color: T.gold[4] },
+    summary: { position: new Vec2(140, 208), size: new Size(280, 22), fontSize: 12, color: T.text[3] },
+    notice: { position: new Vec2(0, 176), size: new Size(548, 22), fontSize: 12, color: T.text[2] },
     noticeInput: { position: new Vec2(-60, 146), size: new Vec2(360, 30), placeholder: "输入新公告（0~200 字）" },
     saveButton: { name: "guild_notice_save_button", text: "保存公告", position: new Vec2(195, 146), small: true },
-    memberTitle: { position: new Vec2(0, 116), size: new Size(560, 20), fontSize: 13, color: new Color(255, 214, 102) },
+    memberTitle: { position: new Vec2(0, 116), size: new Size(560, 20), fontSize: 13, color: T.gold[4] },
     memberList: { name: "guild_member_list", position: new Vec2(0, 14), size: new Size(556, 168) },
-    applicantTitle: { position: new Vec2(0, -88), size: new Size(560, 20), fontSize: 13, color: new Color(255, 214, 102) },
+    applicantTitle: { position: new Vec2(0, -88), size: new Size(560, 20), fontSize: 13, color: T.gold[4] },
     applicantList: { name: "guild_applicant_list", position: new Vec2(0, -158), size: new Size(556, 116) },
     /** 退出 / 解散二选一（帮主只能解散、成员只能退出），一律摆 singleButtonPosition */
     leaveButton: { name: "guild_leave_button", text: "退出帮会", small: true },
@@ -922,13 +953,13 @@ export const guildDialogLayout = {
   row: {
     size: new Size(556, 48),
     /** 行底色 / 描边 / 自己的那一行的高亮描边 */
-    fill: new Color(22, 26, 34, 190),
-    border: new Color(64, 74, 90, 255),
-    selfBorder: new Color(255, 200, 80, 255),
+    fill: T.surface[1],
+    border: T.surface[3],
+    selfBorder: T.gold[4],
     /** 行内文字：主名 / 次要信息 */
     nameFontSize: 14,
     metaFontSize: 11,
-    metaColor: new Color(160, 172, 190, 255),
+    metaColor: T.text[3],
     radius: 6,
     /** 行内各列的中心 x（相对行中心） */
     columns: {
@@ -1020,22 +1051,22 @@ export const socialDialogLayout = {
     columns: [-208, -104, 0, 104, 208],
     /** 与 texts.tabs 一一对应，别只改一处 */
     radius: 6,
-    activeFill: new Color(255, 200, 80, 230),
-    activeText: new Color(38, 30, 12, 255),
-    idleFill: new Color(28, 33, 42, 200),
-    idleText: new Color(190, 200, 214, 255),
-    idleBorder: new Color(64, 74, 90, 255),
+    activeFill: T.gold[4],
+    activeText: T.surface[3],
+    idleFill: T.surface[2],
+    idleText: T.text[1],
+    idleBorder: T.surface[3],
     fontSize: 13,
   },
   /** 列表行（与帮会列表同一套几何与配色） */
   row: {
     size: new Size(556, 48),
-    fill: new Color(22, 26, 34, 190),
-    border: new Color(64, 74, 90, 255),
+    fill: T.surface[1],
+    border: T.surface[3],
     radius: 6,
     nameFontSize: 14,
     metaFontSize: 11,
-    metaColor: new Color(160, 172, 190, 255),
+    metaColor: T.text[3],
     columns: {
       name: -180,
       meta: -40,
@@ -1079,7 +1110,7 @@ export const socialDialogLayout = {
     button: { position: new Vec2(195, -232) },
   },
   /** 小字（段落标题用金色，空态用灰） */
-  titleColor: new Color(255, 214, 102, 255),
+  titleColor: T.gold[4],
   titleFontSize: 12,
   /** 文案 */
   texts: {
@@ -1149,21 +1180,21 @@ export const socialDialogLayout = {
  */
 export const reportDialogLayout = {
   name: "report_dialog",
-  maskColor: new Color(0, 0, 0, 170),
+  maskColor: T.surface.scrim,
   panel: { name: "report_panel", size: new Size(460, 320) },
-  title: { name: "report_title", position: new Vec2(0, 122), size: new Size(400, 26), fontSize: 16, color: new Color("#FF8B8B") },
+  title: { name: "report_title", position: new Vec2(0, 122), size: new Size(400, 26), fontSize: 16, color: T.ember[4] },
   /** 提示行（被举报人 + 一句话说明举报只落库） */
-  hint: { name: "report_hint", position: new Vec2(0, 86), size: new Size(400, 20), fontSize: 13, color: new Color("#C8C8C8") },
+  hint: { name: "report_hint", position: new Vec2(0, 86), size: new Size(400, 20), fontSize: 13, color: T.text[2] },
   /** 类别小按钮：一行四个（中心 x 从 -135 到 135，间隔 90） */
   category: {
     y: 44,
     columns: [-135, -45, 45, 135],
     size: new Size(84, 28),
-    activeFill: new Color(255, 200, 80, 230),
-    activeText: new Color(38, 30, 12, 255),
-    idleFill: new Color(28, 33, 42, 220),
-    idleText: new Color(190, 200, 214, 255),
-    idleBorder: new Color(64, 74, 90, 255),
+    activeFill: T.gold[4],
+    activeText: T.surface[3],
+    idleFill: T.surface[2],
+    idleText: T.text[1],
+    idleBorder: T.surface[3],
     radius: 6,
     fontSize: 13,
   },
@@ -1200,41 +1231,41 @@ export const reportDialogLayout = {
  */
 export const chatDialogLayout = {
   name: "chat_box",
-  size: new Size(440, 280),
+  size: new Size(470, 302),
   /** 常驻停靠：屏幕左下角（屏幕坐标，原点在屏幕中心；固定值直接手调 —— 旧实现按「贴左下 + 边距 24/205」算出） */
-  position: new Vec2(-730, -395),
+  position: new Vec2(-705, -371),
   /** 窗体底板（半透明深色 + 金色细边；颜色必须在配置里，组件不写字面量） */
   box: {
-    fill: new Color(0, 0, 0, 215),
-    border: new Color(0, 0, 0, 255),
+    fill: T.surface.scrim,
+    border: T.surface[0],
     radius: 2,
     borderWidth: 1.5,
     padding: 20,
   },
   /** 页签（四个：世界 / 同图 / 帮会 / 私聊；贴窗顶一排。#876 起四页签压窄排开） */
   tabs: {
-    y: 116,
-    size: new Size(98, 26),
-    columns: [-153, -51, 51, 153],
+    y: 126,
+    size: new Size(100, 26),
+    columns: [-160, -54, 54, 160],
     radius: 6,
-    activeFill: new Color(255, 200, 80, 230),
-    activeText: new Color(38, 30, 12, 255),
-    idleFill: new Color(28, 33, 42, 200),
-    idleText: new Color(190, 200, 214, 255),
-    idleBorder: new Color(64, 74, 90, 255),
+    activeFill: T.gold[4],
+    activeText: T.surface[3],
+    idleFill: T.surface[2],
+    idleText: T.text[1],
+    idleBorder: T.surface[3],
     fontSize: 12,
   },
   /** 消息列表（窗体主体） */
-  list: { name: "chat_message_list", position: new Vec2(0, 2), size: new Size(392, 196) },
+  list: { name: "chat_message_list", position: new Vec2(0, 2), size: new Size(422, 216) },
   /** 消息行：发送者名（按关系上色）+ 正文 */
   row: {
     size: new Size(388, 26),
-    fill: new Color(22, 26, 34, 150),
-    border: new Color(64, 74, 90, 255),
+    fill: T.surface[1],
+    border: T.surface[3],
     radius: 6,
     nameFontSize: 11,
     textFontSize: 11,
-    metaColor: new Color(160, 172, 190, 255),
+    metaColor: T.text[3],
     /**
      * 名字列 / 正文列（文本列吃剩下的宽度）。
      * 两列都左对齐，bbox 左缘 = 中心 x − 宽/2 必须落在行内（留白 16，半宽 194 → 限 −178），
@@ -1256,8 +1287,8 @@ export const chatDialogLayout = {
       position: new Vec2(-85, -122),
       size: new Vec2(220, 26),
       fontSize: 13,
-      fill: new Color(10, 13, 20, 220),
-      border: new Color(64, 74, 90, 255),
+      fill: T.surface[0],
+      border: T.surface[3],
       radius: 6,
     },
     send: { position: new Vec2(65, -122) },
@@ -1286,8 +1317,8 @@ export const chatDialogLayout = {
     spacing: 34,
     maxCount: 3,
     fontSize: 12,
-    fill: new Color(16, 20, 26, 200),
-    border: new Color(64, 74, 90, 255),
+    fill: T.surface[1],
+    border: T.surface[3],
     radius: 6,
     /** 停留毫秒（到了自己消失；新消息来了重置计时） */
     lifetimeMs: 6000,
@@ -1295,7 +1326,7 @@ export const chatDialogLayout = {
     textMaxLength: 40,
   },
   /** 小字 */
-  titleColor: new Color(255, 214, 102, 255),
+  titleColor: T.gold[4],
   titleFontSize: 12,
   /** 文案 */
   texts: {
@@ -1349,11 +1380,11 @@ export const questDialogLayout = {
     size: new Size(140, 32),
     columns: [-76, 76],
     radius: 6,
-    activeFill: new Color(255, 200, 80, 230),
-    activeText: new Color(38, 30, 12, 255),
-    idleFill: new Color(28, 33, 42, 200),
-    idleText: new Color(190, 200, 214, 255),
-    idleBorder: new Color(64, 74, 90, 255),
+    activeFill: T.gold[4],
+    activeText: T.surface[3],
+    idleFill: T.surface[2],
+    idleText: T.text[1],
+    idleBorder: T.surface[3],
     fontSize: 13,
   },
   /** 任务列表（框体主体） */
@@ -1361,14 +1392,14 @@ export const questDialogLayout = {
   /** 任务行：名称 + 进度（左）+ 动作按钮（右） */
   row: {
     size: new Size(552, 56),
-    fill: new Color(22, 26, 34, 150),
-    border: new Color(64, 74, 90, 255),
+    fill: T.surface[1],
+    border: T.surface[3],
     radius: 6,
     nameFontSize: 13,
     textFontSize: 11,
-    nameColor: new Color(232, 238, 246, 255),
-    metaColor: new Color(160, 172, 190, 255),
-    readyColor: new Color(120, 220, 140, 255),
+    nameColor: T.text[1],
+    metaColor: T.text[3],
+    readyColor: T.jade,
     /**
      * 两行文字的 x 是**文本框中心**，且 `UiHelper.createLabel` 是 CLAMP + 左对齐 → 文字从
      * 文本框左缘（nameX − 宽/2）起排。所以 x 必须让「左缘 = 行左缘 + 16」：
@@ -1428,29 +1459,29 @@ export const partyDialogLayout = {
     size: new Size(140, 32),
     columns: [-76, 76],
     radius: 6,
-    activeFill: new Color(255, 200, 80, 230),
-    activeText: new Color(38, 30, 12, 255),
-    idleFill: new Color(28, 33, 42, 200),
-    idleText: new Color(190, 200, 214, 255),
-    idleBorder: new Color(64, 74, 90, 255),
+    activeFill: T.gold[4],
+    activeText: T.surface[3],
+    idleFill: T.surface[2],
+    idleText: T.text[1],
+    idleBorder: T.surface[3],
     fontSize: 13,
   },
   /** 顶部小结（「3 / 4 人 · 同图 2 人」；没队伍时显示一句引导） */
-  summary: { position: new Vec2(0, 200), size: new Size(556, 20), fontSize: 12, color: new Color(160, 172, 190, 255) },
+  summary: { position: new Vec2(0, 200), size: new Size(556, 20), fontSize: 12, color: T.text[3] },
   /** 成员 / 候选列表（框体主体） */
   list: { name: "party_member_list", position: new Vec2(0, -8), size: new Size(556, 392) },
   /** 成员行：名字 + 等级/状态（左）+ 动作按钮（右，最多两枚） */
   row: {
     size: new Size(552, 56),
-    fill: new Color(22, 26, 34, 150),
-    border: new Color(64, 74, 90, 255),
+    fill: T.surface[1],
+    border: T.surface[3],
     radius: 6,
     nameFontSize: 13,
     metaFontSize: 11,
-    nameColor: new Color(232, 238, 246, 255),
-    metaColor: new Color(160, 172, 190, 255),
-    leaderColor: new Color(255, 209, 102, 255),
-    offlineColor: new Color(140, 148, 162, 255),
+    nameColor: T.text[1],
+    metaColor: T.text[3],
+    leaderColor: T.gold[4],
+    offlineColor: T.text[4],
     /**
      * 动作按钮的水平中心（两枚时左右各一；一枚时用 actionX）
      * 小按钮宽 56.5：184 / 244 → 155.75~212.25 与 215.75~272.25，两枚间距 3.5、右缘留 3.75 不越行（#477）
@@ -1466,8 +1497,8 @@ export const partyDialogLayout = {
   /** 邀请行（队伍页顶部的「某人邀请你」，高一点点放两枚按钮） */
   inviteRow: {
     size: new Size(552, 52),
-    fill: new Color(38, 33, 22, 190),
-    border: new Color(120, 100, 52, 255),
+    fill: T.surface[2],
+    border: T.gold[2],
     radius: 6,
     acceptX: 150,
     declineX: 232,
@@ -1568,11 +1599,11 @@ export const leaderboardDialogLayout = {
     size: new Size(120, 32),
     columns: [-130, 0, 130],
     radius: 6,
-    activeFill: new Color(255, 200, 80, 230),
-    activeText: new Color(38, 30, 12, 255),
-    idleFill: new Color(28, 33, 42, 200),
-    idleText: new Color(190, 200, 214, 255),
-    idleBorder: new Color(64, 74, 90, 255),
+    activeFill: T.gold[4],
+    activeText: T.surface[3],
+    idleFill: T.surface[2],
+    idleText: T.text[1],
+    idleBorder: T.surface[3],
     fontSize: 13,
   },
   /** 顶部小结（共几人上榜 + 这份快照的时刻） */
@@ -1580,7 +1611,7 @@ export const leaderboardDialogLayout = {
     position: new Vec2(0, 200),
     size: new Size(556, 20),
     fontSize: 12,
-    color: new Color(160, 172, 190, 255),
+    color: T.text[3],
     /** 「刚刚更新」的界线（毫秒）：快照比这个还新就不写时分 */
     freshMs: 60_000,
   },
@@ -1589,15 +1620,15 @@ export const leaderboardDialogLayout = {
   /** 一条名次：名次（左）+ 名字 + 关键数值（右） */
   row: {
     size: new Size(552, 44),
-    fill: new Color(22, 26, 34, 150),
-    border: new Color(64, 74, 90, 255),
+    fill: T.surface[1],
+    border: T.surface[3],
     radius: 6,
     rankX: -252,
     rankSize: new Size(44, 20),
     rankFontSize: 14,
-    rankColor: new Color(160, 172, 190, 255),
+    rankColor: T.text[3],
     /** 前三名的名次数字用金色（一眼看出榜头） */
-    topRankColor: new Color(255, 209, 102, 255),
+    topRankColor: T.gold[4],
     /** 金色名次的界线：名次 ≤ 这个数就用金色（第 4 名开始是普通灰） */
     topRankThreshold: 3,
     /**
@@ -1607,24 +1638,24 @@ export const leaderboardDialogLayout = {
     nameX: -112,
     nameSize: new Size(220, 20),
     nameFontSize: 13,
-    nameColor: new Color(232, 238, 246, 255),
+    nameColor: T.text[1],
     metaX: 134,
     metaSize: new Size(240, 18),
     metaFontSize: 11,
-    metaColor: new Color(160, 172, 190, 255),
+    metaColor: T.text[3],
     /** 我自己那一行的底色与边框（滚到哪都认得出来） */
-    selfFill: new Color(46, 40, 24, 210),
-    selfBorder: new Color(255, 200, 80, 255),
+    selfFill: T.surface[3],
+    selfBorder: T.gold[4],
   },
   /** 底部固定的「我的名次」条 */
   selfRow: {
     position: new Vec2(0, -238),
     size: new Size(552, 40),
-    fill: new Color(32, 30, 22, 220),
-    border: new Color(120, 100, 52, 255),
+    fill: T.surface[2],
+    border: T.gold[2],
     radius: 6,
     textFontSize: 12,
-    textColor: new Color(255, 214, 102, 255),
+    textColor: T.gold[4],
   },
   /** 文案 */
   texts: {
@@ -1665,35 +1696,35 @@ export const leaderboardDialogLayout = {
  */
 export const channelSelectLayout = {
   name: "channel_select_dialog",
-  maskColor: new Color(0, 0, 0, 170),
+  maskColor: T.surface.scrim,
   panel: { name: "channel_select_panel", size: new Size(420, 400) },
   /** 标题（配色与选服弹窗同一套） */
-  titleLabel: { name: "channel_select_title", position: new Vec2(0, 170), size: new Size(360, 28), fontSize: 18, color: new Color("#FF8B8B") },
+  titleLabel: { name: "channel_select_title", position: new Vec2(0, 170), size: new Size(360, 28), fontSize: 18, color: T.ember[4] },
   /** 说明行：告诉玩家换线意味着什么（各线怪物与掉落独立，人挤就换线） */
-  hint: { position: new Vec2(0, 142), size: new Size(380, 20), fontSize: 12, color: new Color(150, 158, 172, 255) },
+  hint: { position: new Vec2(0, 142), size: new Size(380, 20), fontSize: 12, color: T.text[3] },
   /** 线列表（纵向滚动；行高与间距见 row） */
   list: { name: "channel_select_list", position: new Vec2(0, -8), size: new Size(372, 240) },
   row: {
     size: new Size(368, 52),
     /** 行间距（滚动区 content 的 Layout.spacingY） */
     gap: 10,
-    fill: new Color(22, 26, 34, 190),
-    border: new Color(64, 74, 90, 255),
+    fill: T.surface[1],
+    border: T.surface[3],
     /** 当前所在线的高亮描边（与选服弹窗「上次在」同一套金色） */
-    currentBorder: new Color(255, 200, 80, 255),
+    currentBorder: T.gold[4],
     radius: 6,
     /** 线名（左列） */
     nameX: -120,
     nameSize: new Size(180, 22),
     nameFontSize: 16,
-    nameColor: new Color(226, 226, 226, 255),
+    nameColor: T.text[1],
     /** 「当前」角标（贴右） */
     tagX: 140,
     tagSize: new Size(52, 20),
     tagFontSize: 11,
-    tagFill: new Color(255, 200, 80, 40),
-    tagBorder: new Color(255, 200, 80, 160),
-    tagColor: new Color(255, 209, 102, 255),
+    tagFill: T.line[2],
+    tagBorder: T.line[3],
+    tagColor: T.gold[4],
   },
   /** 取消按钮：打开选线窗不等于必须换 */
   closeButton: { name: "channel_select_close_button", text: "取消", position: new Vec2(0, -158) },

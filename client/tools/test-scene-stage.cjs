@@ -11,10 +11,10 @@
  * 盯的不变量（改布局后必须全绿）：
  * · 画布尺寸 = 1920×1080，且与 client/settings/v2/packages/project.json 的 designResolution 一致
  * · ScreenLayout 里不再出现任何跟窗口 / 分辨率设置有关的代码（view / screen / ResolutionPolicy）
- * · 登录舞台、选角舞台的全部元素（含角色站位 / 删除按钮 / 创建弹窗）**整块落在 1920×1080 画布内**
+ * · 登录舞台、选角舞台的全部元素（含属性 chips / 角色卡视口 / 创建弹窗）**整块落在 1920×1080 画布内**
  * · 登录舞台是绝对坐标整版布局（#1036，对齐 design/olua-login）：四大块 + 面板内元素的坐标全在
  *   loginLayout 里，面板内元素换算回舞台坐标后仍落在面板壳内（沙箱跑不了引擎组件，用纯算术判）
- * · 选角底部栏：宽度 = 画布宽、贴屏幕底边、与原素材同比例（不拉伸变形）
+ * · 选角三栏（左文案 / 中立绘 / 右角色面板）与卡片网格：元素都在画布内、每排两张
  * · 三个场景启动时不设置分辨率、不注册窗口重排、舞台不 setScale
  *
  * 用法：node client/tools/test-scene-stage.cjs
@@ -31,6 +31,7 @@ const GAME_FILE = path.join(PROJECT_ROOT, "assets/ui/Game.ts");
 const SCREEN_LAYOUT_FILE = path.join(PROJECT_ROOT, "assets/ui/utils/layout/ScreenLayout.ts");
 const PROJECT_SETTINGS = path.join(PROJECT_ROOT, "settings/v2/packages/project.json");
 const TEXTS_FILE = path.join(PROJECT_ROOT, "assets/configs/texts.ts");
+const SCENES_FILE = path.join(PROJECT_ROOT, "assets/configs/layout/scenes.ts");
 
 let outDir;
 try {
@@ -116,26 +117,50 @@ function loginElements() {
 /** 选角舞台的全部元素（中心 + 尺寸），清单从配置推导 */
 function roleSelectorElements() {
   const layout = roleSelectorLayout;
-  // 底部栏贴屏幕底边 → 其中心在画布 (0, -画布高/2 + 栏高/2)；挂在它下面的元素配置坐标相对这个中心
-  const barCenterY = -CANVAS.height / 2 + layout.bottomBar.size.height / 2;
   const elements = [
-    ["创建角色按钮", layout.createRoleButton],
-    ["管理角色按钮", layout.manageRoleButton],
-    ["返回按钮", layout.backButton],
-    // 选中信息框挂在底部栏下（见 RoleSelector.createMainView）：换算回舞台坐标再判画布包含
-    ["选中信息框", { position: { x: layout.selectedInfo.position.x, y: layout.selectedInfo.position.y + barCenterY }, size: layout.selectedInfo.size }],
-    ["管理提示条", { position: layout.manageRole.hint.position, size: layout.manageRole.hint.size }],
+    ["顶栏品牌", layout.topbar.brand],
+    ["顶栏区服账号", layout.topbar.who],
+    ["顶栏退出登录", layout.topbar.logoutButton],
+    ["底栏左", layout.footer.left],
+    ["底栏右", layout.footer.right],
+    ["左栏眉题", layout.hero.cap],
+    ["左栏角色名", layout.hero.name],
+    ["左栏说明", { position: layout.hero.sub.position, size: layout.hero.sub.size }],
+    ["进游戏按钮", layout.hero.cta.enter],
+    ["返回登录按钮", layout.hero.cta.back],
+    ["中间立绘", { position: layout.stageChar.position, size: layout.stageChar.size }],
+    ["脚下名牌", { position: layout.stageChar.plate.position, size: layout.stageChar.plate.size }],
+    ["角色面板", layout.roster],
+    ["管理提示条", { position: layout.manageHint.position, size: layout.manageHint.size }],
     ["创建角色弹窗", layout.createDialog],
-    // 弹窗右上角关闭按钮：坐标相对弹窗中心，换算回舞台坐标再判画布包含
-    ["弹窗关闭按钮", { position: { x: layout.createDialog.position.x + layout.createDialog.closeButton.position.x, y: layout.createDialog.position.y + layout.createDialog.closeButton.position.y }, size: layout.createDialog.closeButton.size }],
+    ["弹窗关闭按钮", {
+      position: {
+        x: layout.createDialog.position.x + layout.createDialog.closeButton.position.x,
+        y: layout.createDialog.position.y + layout.createDialog.closeButton.position.y,
+      },
+      size: layout.createDialog.closeButton.size,
+    }],
   ];
+  // 属性 chips：横排在左栏正文里（容器中心 = 左边缘 + 半个正文宽），逐个判在画布内
+  let cursor = -layout.hero.width / 2;
+  for (const item of layout.hero.chips.items) {
+    elements.push([
+      `属性 chip（${item.key}）`,
+      {
+        position: { x: layout.hero.leftEdgeX + layout.hero.width / 2 + cursor + item.size.width / 2, y: layout.hero.chips.positionY },
+        size: item.size,
+      },
+    ]);
+    cursor += item.size.width + layout.hero.chips.gap;
+  }
   // 角色滚动网格：视口是一块画布内的矩形（行列交给引擎 Layout 排，行数多了在视口里滚，
-  // 所以只判视口本身在画布内，不逐个判单元格）。每排个数由视口宽与单元格/间距推导，守点是 6。
-  const scroll = layout.roleScroll;
+  // 所以只判视口本身在画布内，不逐个判单元格）。每排张数由视口宽与卡片/间距推导，守点是 2。
+  const scroll = layout.roster.scroll;
   elements.push(["角色滚动视口", { position: scroll.position, size: scroll.viewSize }]);
   const availableWidth = scroll.viewSize.width - scroll.paddingX * 2;
-  const perRow = Math.floor((availableWidth - scroll.cell.width) / (scroll.cell.width + scroll.spacingX)) + 1;
-  check(perRow === 6, `角色滚动网格每排 ${perRow} 个（= (视口宽 − paddingX×2 − 单元格宽) ÷ (单元格宽 + spacingX) + 1，期望 6）`);
+  const cardWidth = layout.roster.card.size.width;
+  const perRow = Math.floor((availableWidth - cardWidth) / (cardWidth + layout.roster.card.spacingX)) + 1;
+  check(perRow === 2, `角色卡每排 ${perRow} 张（= (视口宽 − paddingX×2 − 卡片宽) ÷ (卡片宽 + spacingX) + 1，稿件是两列）`);
   return elements;
 }
 
@@ -205,15 +230,14 @@ console.log("\n== C2. 登录舞台：绝对坐标整版布局（#1036，对齐 d
   check(!/addComponent\(Layout\)/.test(loginStageSource), "登录舞台不再用 cc.Layout 流式布局（#1036 起为绝对坐标整版布局，坐标全在 loginLayout）");
 }
 
-console.log("\n== D. 选角底部栏：横跨整屏 + 贴底 + 与原素材同比例 ==");
+console.log("\n== D. 选角：底部牌匾栏已拆（#1059 改为三栏 + 右角色面板） ==");
 {
-  const bar = roleSelectorLayout.bottomBar;
-  check(!("position" in bar), "配置不写死 position（位置由 dockBottomBar 算）");
-  // 横跨整屏 / 宽高比 / 贴底都属于显示效果，靠人眼看
-  check(
-    inside(rectOf({ x: 0, y: -designResolution.height / 2 + bar.size.height / 2 }, bar.size)),
-    "整条在画布内（不跑出屏幕；位置与尺寸手调）",
-  );
+  const scenesSource = fs.readFileSync(SCENES_FILE, "utf8");
+  const retired = ["roleSelectorBottomBar", "roleSelectorStartButton", "roleSelectorNewRoleButton", "roleSelectorManageButton", "roleSelectorBackButton", "roleSelectorIdleInfo"];
+  const stillUsed = retired.filter((key) => new RegExp(`uiImages\\.${key}\\b`).test(scenesSource));
+  check(stillUsed.length === 0, "底部牌匾那六张图不再被布局引用（素材保留，改版后没人画它们）", stillUsed.join("、"));
+  check(!("bottomBar" in roleSelectorLayout), "roleSelectorLayout 里没有 bottomBar 了");
+  // 面板两列 / 卡片 252 高 / 头部 56 高属显示效果，靠人眼看
 }
 
 console.log("\n== E. 源码接线断言（不再有分辨率适配） ==");
@@ -231,16 +255,22 @@ console.log("\n== E. 源码接线断言（不再有分辨率适配） ==");
 
   // Loading 场景：只守「元素没跑到画布外」（跑出去就是看不见 = 真故障）；
   // 具体尺寸、居中与否、字号大小属于显示效果，改配置后靠人眼看
-  check(inside(rectOf(loadingLayout.loadingAnimation.position, loadingLayout.loadingAnimation.size), CANVAS), "Loading：加载动画在画布内（尺寸/位置手调，不断言）");
-  check(inside(rectOf(loadingLayout.bar.position, loadingLayout.bar.size), CANVAS), "Loading：进度条在画布内（尺寸/位置手调，不断言）");
-  check(inside(rectOf(loadingLayout.progress.position, { width: 300, height: 30 }), CANVAS), "Loading：进度文字在画布内（位置/字号手调，不断言）");
   check(
-    /new Node\(`\$\{barLayout\.name\}_fill_mask`\)/.test(loading) && /addComponent\(Mask\)/.test(loading) && /widthFrac \* loadingLayout\.bar\.size\.width/.test(loading) && !/FillType/.test(loading),
-    "Loading：填充图挂 Mask 下、Mask 宽度 = 进度 × widthFrac × 条宽（内条从左缘起显示宽度，图不拉伸；不再用会把纹理压扁的 FILLED）",
+    inside(rectOf(loadingLayout.ring.center, { width: loadingLayout.ring.radius * 2, height: loadingLayout.ring.radius * 2 }), CANVAS),
+    "Loading：进度环在画布内（半径/环心手调，不断言）",
   );
   check(
-    /playLoopAtlas\("loading_animation"/.test(loading),
-    "Loading：帧动画走 playLoopAtlas 循环播放",
+    inside(rectOf(loadingLayout.bar.position, { width: loadingLayout.bar.width, height: loadingLayout.bar.height }), CANVAS),
+    "Loading：底部通栏细线在画布内（宽度/位置手调，不断言）",
+  );
+  check(inside(rectOf(loadingLayout.progress.position, { width: 300, height: 30 }), CANVAS), "Loading：进度文字在画布内（位置/字号手调，不断言）");
+  check(
+    /paintRing\(/.test(loading) && /graphics\.arc\(/.test(loading),
+    "Loading：环形进度用 Graphics 画弧（arc + stroke，不依赖进度条底图）",
+  );
+  check(
+    /paintBar\(/.test(loading) && /stepDots\.forEach/.test(loading),
+    "Loading：底部细线与四阶段刻度随进度重画（阶段状态取自配置 bar.steps）",
   );
   check(!/onWindowResize\(/.test(login) && !/onWindowResize\(/.test(selector), "两个场景都不再注册窗口尺寸变化重排");
 
@@ -271,35 +301,40 @@ console.log("\n== E. 源码接线断言（不再有分辨率适配） ==");
   check(/if \(Session\.isLoggedIn\) \{\s*\n\s*SceneManager\.loadScene\("RoleSelector"\);\s*\n\s*return;/.test(login), "Login：已有登录态直接跳选角（误刷新不用重输，令牌过期由 401 兜底送回登录）");
   check(/StorageManager\.clear\(\);/.test(login), "Login：未登录才清本地缓存（有登录态的刷新不动角色缓存）");
 
-  check(/this\.node\.addChild\(bottomBar\);\s*\n\s*this\.bottomBar = bottomBar;/.test(selector), "RoleSelector：底部栏挂在场景根（不在舞台子树里）");
-  check(!/this\.stage!\.addChild\(bottomBar\)/.test(selector), "RoleSelector：底部栏不挂进舞台（否则跟着舞台走、两侧露背景）");
-  check(!/setScale/.test(selector), "RoleSelector：舞台与底部栏都不 setScale（尺寸在配置里按 1080p 定死）");
-  check(/getAnchoredPosition\(size, "bottom-center"/.test(selector), "RoleSelector：底部栏贴底走 getAnchoredPosition 的 bottom-center 档");
-  check(/dockBottomBar\(\)/.test(selector), "RoleSelector：底部栏位置由 dockBottomBar 算");
+  // 立绘是 800×800 画布的帧图集，缩到卡片 / 放大到舞台都要 setScale —— 那是素材比例，不是分辨率适配；
+  // 这里守的是「舞台容器自己不被缩放」
+  check(!/this\.stage!?\.setScale/.test(selector) && /preview\.setScale\(/.test(selector), "RoleSelector：舞台容器不 setScale（立绘缩放只为素材比例，尺寸在配置里按 1080p 定死）");
   check(
-    /bottomBar\.addChild\(selectedInfoBox\)/.test(selector) && !/this\.stage!\.addChild\(selectedInfoBox\)/.test(selector),
-    "RoleSelector：选中信息框挂在底部栏下（selected_role_info_background 是 role_selector_bottom_bar 的子节点）",
-  );
-  check(/NAME_PLATE_PREFIX/.test(selector) && /label_role_name_plate/.test(selector) && /(namePlate|plate)\.offset/.test(selector), "RoleSelector：每个站位脚下有名字与等级名牌（文案走 texts、偏移走配置，随列表重建）");
-  check(
-    /Layout\.Type\.GRID/.test(selector) && /AxisDirection\.HORIZONTAL/.test(selector) && /roleScroll/.test(selector),
-    "RoleSelector：角色网格交给引擎 Layout（GRID + 横向起始轴，换行点 = 内容宽；一排几个改 roleScroll 配置）",
+    /buildTopbar\(\)/.test(selector) && /buildFooter\(\)/.test(selector) && /buildHero\(\)/.test(selector) && /buildStageChar\(\)/.test(selector) && /buildRoster\(\)/.test(selector),
+    "RoleSelector：五块接线齐全（顶栏 / 底栏 / 左栏 / 中间立绘 / 右角色面板，#1059 三栏构图）",
   );
   check(
-    /createScrollView\(/.test(selector) && /role_cell_/.test(selector) && /roleScrollContent!\.addChild\(cell\)/.test(selector),
-    "RoleSelector：预览装进单元格挂滚动内容下（超出一屏上下滚，角色多了不再画不进画布）",
+    /createDialogPanel\(layout\.name, layout\.size\)/.test(selector) && /roleSelectorLayout\.roster/.test(selector),
+    "RoleSelector：右角色面板走通用矢量底板（createDialogPanel + 配置里的尺寸）",
   );
   check(
-    /roleScrollContent\?\.getChildByName/.test(selector) && /cell\.addChild\(button\)/.test(selector),
-    "RoleSelector：管理模式删除按钮挂单元格下（躲开预览的选中冒泡，又跟着滚动区走不与角色错位）",
+    /NAME_PLATE_PREFIX/.test(selector) && /label_role_name_plate/.test(selector) && /cardLayout\.name\.offsetX/.test(selector),
+    "RoleSelector：每张卡上有名字（文案走 texts、坐标走 card.name 配置，随列表重建）",
+  );
+  check(
+    /Layout\.Type\.GRID/.test(selector) && /AxisDirection\.HORIZONTAL/.test(selector) && /layout\.card\.spacingX/.test(selector),
+    "RoleSelector：角色卡网格交给引擎 Layout（GRID + 横向起始轴，换行点 = 内容宽；一排几张改 roster.card 配置）",
+  );
+  check(
+    /createScrollView\(/.test(selector) && /role_cell_/.test(selector) && /content\.addChild\(card\)/.test(selector),
+    "RoleSelector：角色卡装进单元格挂滚动内容下（超出一屏上下滚，角色多了不再画不进画布）",
+  );
+  check(
+    /this\.cardOf\(/.test(selector) && /card\.addChild\(button\)/.test(selector),
+    "RoleSelector：管理模式删除按钮挂角色卡下（躲开预览的选中冒泡，又跟着滚动区走不与角色错位）",
   );
   check(
     /this\.updateOccupationSelection\(view\)/.test(selector) && /this\.createView\) this\.updateOccupationSelection\(this\.createView\)/.test(selector),
     "RoleSelector：创建弹窗首次渲染显式传 view（首次调用时 this.createView 还没赋值，读它会空手而归 → 描述与预览打开全空）",
   );
   check(
-    /const backLayout = layout\.backButton/.test(selector) && /backButton\.on\(Node\.EventType\.TOUCH_END, \(\) => logoutToLogin\(\)\)/.test(selector) && !/backToLoginButton/.test(selector),
-    "RoleSelector：返回按钮常驻（进场景即建，不随弹窗开关），点击主动登出（logoutToLogin：先吊销令牌 #880 再回登录）",
+    /const back = hero\.cta\.back/.test(selector) && /backButton\.on\(Node\.EventType\.TOUCH_END, \(\) => logoutToLogin\(\),? ?this?\)/.test(selector),
+    "RoleSelector：返回登录在左栏 CTA 里常驻，点击主动登出（logoutToLogin：先吊销令牌 #880 再回登录）",
   );
   check(
     /closeLayout = layout\.closeButton/.test(selector) && /dialog\.addChild\(closeButton\)/.test(selector) && /cancelCreateRoleUI\(\)/.test(selector),
@@ -342,4 +377,4 @@ console.log("\n== F. 构建模板：画布铺满窗口（页面层自适应） =
   check(/--safe-top/.test(css), "保留安全区 CSS 变量（引擎 safeAreaEdge 读它们）");
 }
 
-finish("单分辨率布局全部通过（画布 1920×1080 / 两场景元素在画布内 / 底部栏横跨贴底 / 无分辨率适配代码）");
+finish("单分辨率布局全部通过（画布 1920×1080 / 两场景元素在画布内 / 选角三栏两列卡片 / 无分辨率适配代码）");

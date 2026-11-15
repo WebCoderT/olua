@@ -1,36 +1,61 @@
-import { _decorator, Color, Component, EditBox, EventHandler, isValid, Label, Layout, Node, ScrollView, Size, Sprite, ToggleContainer, UITransform, Vec2 } from "cc";
+import { _decorator, Color, Component, EditBox, EventHandler, Graphics, isValid, Label, Layout, Node, ScrollView, Size, Sprite, ToggleContainer, UIOpacity, UITransform, Vec2 } from "cc";
 import GameUiHelper from "./helpers/GameUiHelper";
+import UiHelper from "./helpers/UiHelper";
 import { occupations } from "../configs/role";
 import StorageManager from "./core/StorageManager";
 import SceneManager from "./core/SceneManager";
+import SoundManager from "./core/SoundManager";
 import { OECCUPATION, SEX } from "../types/role";
-import { getAnchoredPosition } from "./utils/layout/ScreenLayout";
-import { roleSelectorLayout, tipsLayout, uiImages } from "../configs/hudLayout";
+import { roleSelectorLayout, tipsLayout } from "../configs/hudLayout";
 import { getText } from "../configs/texts";
 import { RoleApi } from "./utils/net/Api";
 import type { RoleSummary } from "./utils/net/Api";
 import ApiError, { describeError, ApiErrorKind } from "./utils/net/ApiError";
 import { installNetwork, logoutToLogin, returnToLogin } from "./utils/net/NetworkSetup";
+import Session from "./utils/net/Session";
+import ZoneStore from "./core/ZoneStore";
+import { blockClickThrough } from "./utils/input/UiHit";
+import { T } from "../configs/layout/tokens";
+import { buttonTone } from "../configs/layout/sizes";
 const { ccclass } = _decorator;
 
 /** 删除角色按钮的节点名前缀（按钮文字挂在 `<节点名>_label` 上，改文案时按它取；节点名带角色 id 便于排查） */
 const DELETE_ROLE_BUTTON_PREFIX = "delete_role_";
 
-/** 角色名牌的节点名前缀（节点名带角色 id 便于排查） */
+/** 角色卡里的名字 / 等级节点名前缀（节点名带角色 id 便于排查） */
 const NAME_PLATE_PREFIX = "role_name_plate_";
+const LEVEL_LABEL_PREFIX = "role_level_";
+const CARD_BADGE_PREFIX = "role_card_badge_";
 
-/** 角色单元格的节点名前缀（滚动网格里每个角色的容器：预览 + 名牌 + 管理模式的删除按钮） */
+/** 角色卡（滚动网格里的单元格：立绘缩略 + 名字 + 职业/等级 + 选中角标 + 管理模式的删除按钮） */
 const ROLE_CELL_PREFIX = "role_cell_";
 
-/** 角色预览（单元格里的动画容器）节点名前缀：选中态切换要按 id 找回它 */
+/** 角色立绘（帧动画容器）节点名前缀：选中态切换要按 id 找回它 */
 const ROLE_PREVIEW_PREFIX = "role_preview_";
+
+/** 中间大立绘的节点名（选中角色时重建，按名字清理） */
+const STAGE_CHAR_PREFIX = "role_stage_preview_";
 
 /** 选角主视图引用（本组件拼装并持有） */
 interface RoleSelectorMainView {
   beginGameButton: Node;
-  selectedRoleName: Node;
-  selectedRoleLevel: Node;
-  ownerRoleNodes: Node[];
+  manageButton: Node;
+  rosterCount: Label;
+  /** 左栏：角色名 / 说明 / 属性 chips 容器 */
+  heroName: Label;
+  heroSub: Label;
+  chips: Node;
+  /** 中间：立绘容器 + 脚下名牌 */
+  stageChar: Node;
+  stagePlate: Node;
+  stagePlateName: Label;
+  stagePlateLevel: Label;
+  /** 右面板：滚动区（空列表时整块隐藏）、创建角色卡、空状态 */
+  scrollView: Node;
+  createCard: Node | null;
+  emptyNode: Node;
+  /** 角色卡：角色 id → 卡片节点（选中态与删除按钮都按它找） */
+  cards: Map<string, Node>;
 }
 
 /** 创建角色弹窗视图引用（本组件拼装并持有） */
@@ -52,27 +77,22 @@ interface RoleSelectorCreateView {
  * （游戏内各处读角色是同步的，所以必须有一份本地完整数据，见 StorageManager.cacheRole）。
  * 协议见 ui/utils/net —— 本组件不写路径、不拼地址、不管令牌。
  *
- * 结构：铺满屏幕的背景（始终盖住整个窗口）+ 一块「舞台」，
- * 其余元素全部挂在舞台下并按设计坐标摆放（坐标以舞台中心为原点，画布 = 1920×1080）。
- * 舞台不缩放 —— 本作只有 1920×1080 一个分辨率，1 设计像素 = 1 屏幕像素
- * （见 ScreenLayout.designResolution），新增元素按 1080p 画布摆坐标即可。
- * 位置/尺寸/用图统一见 configs/hudLayout.roleSelectorLayout
+ * **界面整版对齐设计稿**（#1059，design/olua-ui/screens/02-role-select）：1920×1080 绝对坐标，
+ * 顶栏 / 三栏（左文案 + 中立绘 + 右角色面板）/ 底栏。几何 / 字号 / 配色全部来自
+ * `configs/layout/scenes.ts` 的 roleSelectorLayout 与 `configs/layout/tokens.ts`，
+ * 本文件只负责组装与接线。稿件里那条底部牌匾栏（开始游戏 / 创建 / 管理 / 返回四颗图按钮）已拆掉：
+ * 开始游戏与返回登录进左栏 CTA，创建与管理进右面板，牌匾图不再引用（素材保留）。
  */
 @ccclass("RoleSelector")
 export class RoleSelector extends Component {
   private mainView: RoleSelectorMainView;
   private createView: RoleSelectorCreateView | null = null;
   private ownerRoleSelectedId: string | null = null;
-  /** 舞台容器（除背景与底部栏外的所有元素都挂这里，不缩放；见 dockBottomBar） */
+  /** 舞台容器（除背景外的所有元素都挂这里，不缩放） */
   private stage: Node | null = null;
-  /**
-   * 底部栏（不在舞台内）：横跨整屏 + 贴屏幕底边，位置由 dockBottomBar 算
-   * （素材带牌匾装饰是整图，尺寸在配置里按 1080p 画布定死，跟舞台走会两侧露背景）
-   */
-  private bottomBar: Node | null = null;
-  /** 角色滚动网格的内容容器（单元格都挂它下面，Layout GRID 自动排布与撑高） */
+  /** 角色滚动网格的内容容器（卡片都挂它下面，Layout GRID 自动排布与撑高） */
   private roleScrollContent: Node | null = null;
-  /** 是否处于管理模式（「管理」按钮开关，开启后各角色站位上方出现删除按钮） */
+  /** 是否处于管理模式（「管理」按钮开关，开启后各角色卡中央出现删除按钮） */
   private manageMode = false;
   /** 管理模式的临时节点（提示条 + 各角色的删除按钮）：退出管理模式或刷新列表时统一销毁 */
   private manageNodes: Node[] = [];
@@ -86,12 +106,13 @@ export class RoleSelector extends Component {
   private roleSummaries: RoleSummary[] = [];
   /** 是否有请求在途（创建 / 进游戏），避免连点重复提交 */
   private busy = false;
+  /** 进游戏按钮（置灰 / 恢复用；buildHero 时 mainView 还没赋值，所以单独持有） */
+  private beginGameNode: Node | null = null;
   /**
    * 背景节点与它的素材原始尺寸
    *
-   * 背景是**等比铺满（cover）**、不是拉伸：素材是 650×1154 的竖图，画布是 1920×1080，
-   * 直接铺会在横竖两轴上都变形（纵横比差 3.87 倍，整屏糊）。cover 只缩放、多出的部分落在屏外
-   * （尺寸在素材加载完后算一次，见 fitBackground）。
+   * 背景是**等比铺满（cover）**、不是拉伸：多出的部分落在屏外（尺寸在素材加载完后算一次，
+   * 见 fitBackground）。
    */
   private background: Node | null = null;
   private backgroundTexture: Size | null = null;
@@ -105,11 +126,9 @@ export class RoleSelector extends Component {
       this.fitBackground();
     });
     this.node.addChild(this.background);
-    // 舞台容器：各元素按设计坐标摆在它下面（见 configs/hudLayout.roleSelectorLayout）
+    // 舞台容器：各元素按设计坐标摆在它下面（见 configs/layout/scenes.roleSelectorLayout）
     this.stage = this.createStage();
     this.mainView = this.createMainView();
-    // 底部栏贴底（位置是常量，见 dockBottomBar）
-    this.dockBottomBar();
     // 角色列表（#1009）：区在登录页就定好了（Login.applyZone 已经 POST /zones/select），
     // 这里直接按服务端记着的当前浏览区拉 —— 不再自己对齐区
     void this.loadRoles();
@@ -126,29 +145,12 @@ export class RoleSelector extends Component {
     this.cancelDeleteConfirm();
   }
 
-  /**
-   * 创建舞台容器：尺寸为设计分辨率，各元素坐标以舞台中心为原点（与布局配置一致）
-   */
+  /** 创建舞台容器：尺寸为设计分辨率，各元素坐标以舞台中心为原点（与布局配置一致） */
   private createStage() {
     const stage = new Node("role_selector_stage");
     stage.addComponent(UITransform).setContentSize(roleSelectorLayout.stageSize);
     this.node.addChild(stage);
     return stage;
-  }
-
-  /**
-   * 底部栏贴底（贴屏幕下边缘、整条居中）
-   *
-   * 只有位置要算：尺寸是配置里的常量（= 1080p 画布宽），单分辨率下这里没有任何
-   * 「按窗口尺寸推导缩放」的余地 —— 那正是本次删掉的东西。
-   */
-  dockBottomBar() {
-    const bar = this.bottomBar;
-    if (!bar || !isValid(bar, true)) return;
-    const { size } = roleSelectorLayout.bottomBar;
-    // 贴底：bottom-center 语义 = 区块中心到屏幕下边缘 = 高度的一半（setPosition 不吃 Vec2，拆开传）
-    const position = getAnchoredPosition(size, "bottom-center", 0, size.height / 2);
-    bar.setPosition(position.x, position.y, 0);
   }
 
   /** 「开始游戏」：把选中角色同步到服务端（成为该账号的在线角色）并拉完整数据，然后进游戏场景 */
@@ -202,7 +204,7 @@ export class RoleSelector extends Component {
    * 进入游戏
    *
    * 一次请求做两件事：服务端把该角色记为该账号的在线角色，并返回**完整角色数据**；
-   * 把完整数据写进本地缓存后，游戏内所有同步读取（findOnlineRole/getRoles）照旧可用。
+   * 把完整数据写进本地缓存后，游戏内所有同步读取（findOnlineRole/getRoles）照常可用。
    */
   private async enterGame(roleId: string) {
     if (this.busy) return;
@@ -220,135 +222,578 @@ export class RoleSelector extends Component {
     }
   }
 
-  /** 拼装选角主视图（元素全部挂舞台，坐标见 configs/hudLayout.roleSelectorLayout） */
+  //#region 界面组装
+
+  /** 拼装选角主视图（顶栏 / 左栏 / 中立绘 / 右角色面板 / 底栏，坐标见 roleSelectorLayout） */
   private createMainView(): RoleSelectorMainView {
-    // 位置/尺寸与用图统一见 configs/hudLayout.roleSelectorLayout
-    const layout = roleSelectorLayout;
-    // 底部栏（不在舞台内，挂场景根；位置见 dockBottomBar —— 初次位置由它算，这里不用摆）
-    const bottomBar = GameUiHelper.createImage(layout.bottomBar.name, layout.bottomBar.image, undefined, layout.bottomBar.size);
-    this.node.addChild(bottomBar);
-    this.bottomBar = bottomBar;
-    // 开始游戏按钮（默认置灰，选中角色后可用）
-    const beginLayout = layout.beginGameButton;
-    const beginGameButton = GameUiHelper.createTexturedButton(beginLayout.name, beginLayout.image, "", beginLayout.position, beginLayout.size);
-    beginGameButton.getComponent(Sprite).grayscale = true;
-    beginGameButton.on(Node.EventType.TOUCH_END, () => this.beginGame());
-    bottomBar.addChild(beginGameButton);
-    // 常驻返回按钮（左下）：主动退出登录（换账号 / 误进选角都能用）。
-    // 走 NetworkSetup.logoutToLogin —— 先请求服务端吊销令牌（#880）再清本地会话回登录场景；
-    // 「需要重新登录」兜底仍走 returnToLogin，两条路只差「先不先吊销」这一步，终点同一个。
-    // 创建角色弹窗的关闭在弹窗右上角（closeButton），不走这颗按钮
-    const backLayout = layout.backButton;
-    const backButton = GameUiHelper.createTexturedButton(backLayout.name, backLayout.image, "", backLayout.position, backLayout.size);
-    backButton.on(Node.EventType.TOUCH_END, () => logoutToLogin());
+    this.buildTopbar();
+    this.buildFooter();
+    const heroName = this.buildHero();
+    const stage = this.buildStageChar();
+    const roster = this.buildRoster();
+    return {
+      beginGameButton: heroName.beginGameButton,
+      manageButton: roster.manageButton,
+      rosterCount: roster.count,
+      heroName: heroName.name,
+      heroSub: heroName.sub,
+      chips: heroName.chips,
+      stageChar: stage.charContainer,
+      stagePlate: stage.plate,
+      stagePlateName: stage.plateName,
+      stagePlateLevel: stage.plateLevel,
+      scrollView: roster.scrollView,
+      createCard: null,
+      emptyNode: roster.emptyNode,
+      cards: new Map<string, Node>(),
+    };
+  }
+
+  /** 顶栏：品牌（左）/ 「区服 · 账号」胶囊 + 退出登录（右） */
+  private buildTopbar(): void {
+    const { topbar } = roleSelectorLayout;
+    this.stage!.addChild(GameUiHelper.createImage(topbar.brand.name, topbar.brand.image, topbar.brand.position, topbar.brand.size));
+    const zoneName = ZoneStore.get()?.name ?? "";
+    const account = Session.account?.username ?? "";
+    const who = UiHelper.createLabel(topbar.who.name, getText("role_select_who", { zone: zoneName, account }), T.text[3], topbar.who.fontSize, topbar.who.position, topbar.who.size);
+    this.stage!.addChild(who);
+    // 退出登录：ghost 档（先吊销令牌再回登录，与「需要重新登录」兜底共用一条终点）
+    const logout = GameUiHelper.createToneButton(
+      topbar.logoutButton.name,
+      getText(topbar.logoutButton.textKey),
+      topbar.logoutButton.position,
+      topbar.logoutButton.size,
+      topbar.logoutButton.fontSize,
+      buttonTone.ghost,
+    );
+    logout.on(Node.EventType.TOUCH_END, () => logoutToLogin(), this);
+    this.stage!.addChild(logout);
+  }
+
+  /** 底栏：两段小字（左标识 / 右合规，左右各贴边距 56） */
+  private buildFooter(): void {
+    const { footer } = roleSelectorLayout;
+    this.stage!.addChild(UiHelper.createLabel(footer.left.textKey, getText(footer.left.textKey), T.text[4], footer.left.fontSize, footer.left.position, footer.left.size));
+    this.stage!.addChild(
+      UiHelper.createLabel(footer.right.textKey, getText(footer.right.textKey), T.text[4], footer.right.fontSize, footer.right.position, footer.right.size),
+    );
+  }
+
+  /** 左栏：眉题 / 角色名 / 说明 / 属性 chips / 进游戏 + 返回登录 */
+  private buildHero(): { name: Label; sub: Label; chips: Node; beginGameButton: Node } {
+    // 返回的三块（名字 / 说明 / chips 容器）由 selectRole 按选中角色刷新
+    const { hero } = roleSelectorLayout;
+    this.stage!.addChild(UiHelper.createLabel(`${hero.cap.textKey}_label`, getText(hero.cap.textKey), T.gold[3], hero.cap.fontSize, hero.cap.position, hero.cap.size, Label.HorizontalAlign.LEFT));
+    const nameNode = UiHelper.createLabel("role_hero_name", hero.name.placeholder, T.text[1], hero.name.fontSize, hero.name.position, hero.name.size, Label.HorizontalAlign.LEFT);
+    this.stage!.addChild(nameNode);
+    const subNode = UiHelper.createWrappedLabel(
+      "role_hero_sub",
+      getText(hero.sub.placeholderKey),
+      T.text[3],
+      hero.sub.fontSize,
+      hero.sub.lineHeight,
+      hero.sub.position,
+      hero.sub.size.width,
+      Label.HorizontalAlign.LEFT,
+    );
+    this.stage!.addChild(subNode);
+    // 属性 chips（内容随选中角色重建，见 renderChips；容器中心按「左边缘 + 半个正文宽」摆）
+    const chips = UiHelper.createNode("role_hero_chips", new Vec2(hero.leftEdgeX + hero.width / 2, hero.chips.positionY), new Size(hero.width, hero.chips.height));
+    this.stage!.addChild(chips);
+    // 进游戏（主行动档，未选中置灰）
+    const enter = hero.cta.enter;
+    const beginGameButton = GameUiHelper.createToneButton(enter.name, getText(enter.textKey), enter.position, enter.size, enter.fontSize, buttonTone.primary);
+    beginGameButton.on(Node.EventType.TOUCH_END, () => this.beginGame(), this);
+    this.beginGameNode = beginGameButton;
+    this.stage!.addChild(beginGameButton);
+    // 返回登录（ghost 档，带一个左向箭头）
+    const back = hero.cta.back;
+    const backButton = GameUiHelper.createToneButton(back.name, getText(back.textKey), back.position, back.size, back.fontSize, buttonTone.ghost);
+    this.drawBackArrow(backButton, back.arrowWidth);
+    backButton.on(Node.EventType.TOUCH_END, () => logoutToLogin(), this);
     this.stage!.addChild(backButton);
-    // 角色滚动网格：一排 7 个、排满换行、超出视口上下滚。排布全交给引擎 Layout
-    // （GRID + 横向起始轴 + CONTAINER：换行点 = 内容宽，CONTAINER 只撑高不改宽），
-    // 数字与换行推导见 configs 里 roleScroll 的注释 —— 这里只把配置接上
-    const scrollLayout = layout.roleScroll;
-    const scrollView = GameUiHelper.createScrollView(scrollLayout.name, scrollLayout.position, scrollLayout.viewSize);
+    this.setBeginGameEnabled(false);
+    return { name: nameNode.getComponent(Label)!, sub: subNode.getComponent(Label)!, chips, beginGameButton };
+  }
+
+  /** 中间：底光 + 脚下环 + 立绘容器 + 脚下名牌 */
+  private buildStageChar(): { charContainer: Node; plate: Node; plateName: Label; plateLevel: Label } {
+    const layout = roleSelectorLayout.stageChar;
+    // 底光：Graphics 没有径向渐变，用几圈递减 alpha 的同心圆叠出来
+    const glow = UiHelper.createNode("role_stage_glow", layout.glow.position, new Size(layout.glow.radius * 2, layout.glow.radius * 2));
+    const glowGraphics = glow.addComponent(Graphics);
+    for (let i = layout.glow.rings; i >= 1; i--) {
+      const radius = (layout.glow.radius * i) / layout.glow.rings;
+      glowGraphics.fillColor = new Color(layout.glow.color.r, layout.glow.color.g, layout.glow.color.b, layout.glow.alpha);
+      glowGraphics.circle(0, 0, radius);
+      glowGraphics.fill();
+    }
+    this.stage!.addChild(glow);
+    // 脚下环：两圈细金线（外粗内细，稿件 .ring）
+    const ring = UiHelper.createNode("role_stage_ring", layout.ring.position, new Size(layout.ring.radius * 2, layout.ring.radius * 2));
+    const ringGraphics = ring.addComponent(Graphics);
+    ringGraphics.lineWidth = layout.ring.width;
+    ringGraphics.strokeColor = layout.ring.color;
+    ringGraphics.ellipse(0, 0, layout.ring.radius, layout.ring.radius * 0.28);
+    ringGraphics.stroke();
+    ringGraphics.strokeColor = T.line[1];
+    ringGraphics.ellipse(0, 0, layout.ring.radius * 0.82, layout.ring.radius * 0.22);
+    ringGraphics.stroke();
+    this.stage!.addChild(ring);
+    // 立绘容器（选中角色时往里塞帧动画，见 renderStageChar）
+    const charContainer = UiHelper.createNode(layout.name, layout.position, layout.size);
+    this.stage!.addChild(charContainer);
+    // 脚下名牌：金边胶囊 + 名字 + 等级
+    const plate = UiHelper.createNode(layout.plate.name, layout.plate.position, layout.plate.size);
+    const plateGraphics = plate.addComponent(Graphics);
+    plateGraphics.fillColor = T.surface[3];
+    plateGraphics.roundRect(-layout.plate.size.width / 2, -layout.plate.size.height / 2, layout.plate.size.width, layout.plate.size.height, layout.plate.size.height / 2);
+    plateGraphics.fill();
+    plateGraphics.lineWidth = T.border.width;
+    plateGraphics.strokeColor = T.gold[2];
+    plateGraphics.roundRect(-layout.plate.size.width / 2, -layout.plate.size.height / 2, layout.plate.size.width, layout.plate.size.height, layout.plate.size.height / 2);
+    plateGraphics.stroke();
+    const plateName = UiHelper.createLabel("role_stage_plate_name", "", T.text[1], layout.plate.fontSize, new Vec2(-layout.plate.gap, 0), new Size(layout.plate.size.width / 2, layout.plate.size.height));
+    const plateLevel = UiHelper.createLabel("role_stage_plate_level", "", T.gold[4], layout.plate.levelFontSize, new Vec2(layout.plate.gap + 10, 0), new Size(layout.plate.size.width / 2 - 20, layout.plate.size.height));
+    plate.addChild(plateName);
+    plate.addChild(plateLevel);
+    plate.active = false;
+    this.stage!.addChild(plate);
+    return { charContainer, plate, plateName: plateName.getComponent(Label)!, plateLevel: plateLevel.getComponent(Label)! };
+  }
+
+  /** 右面板：头部（标题 / 数量 / 管理）+ 两列角色卡滚动区 + 空状态 */
+  private buildRoster(): { manageButton: Node; count: Label; scrollView: Node; emptyNode: Node } {
+    const layout = roleSelectorLayout.roster;
+    const panel = GameUiHelper.createDialogPanel(layout.name, layout.size);
+    panel.setPosition(layout.position.x, layout.position.y, 0);
+    this.stage!.addChild(panel);
+    // 头部
+    panel.addChild(UiHelper.createLabel(`${layout.name}_title`, getText(layout.head.title.textKey), T.text[1], layout.head.title.fontSize, layout.head.title.position, layout.head.title.size, Label.HorizontalAlign.LEFT));
+    const countLabel = UiHelper.createLabel(`${layout.name}_count`, "", T.gold[2], layout.head.count.fontSize, layout.head.count.position, layout.head.count.size, Label.HorizontalAlign.LEFT);
+    panel.addChild(countLabel);
+    const manageButton = GameUiHelper.createToneButton(
+      layout.head.manageButton.name,
+      getText("role_select_manage"),
+      layout.head.manageButton.position,
+      layout.head.manageButton.size,
+      layout.head.manageButton.fontSize,
+      buttonTone.ghost,
+    );
+    manageButton.on(Node.EventType.TOUCH_END, () => this.toggleManageRole(), this);
+    panel.addChild(manageButton);
+    const divider = UiHelper.createNode(`${layout.name}_divider`, layout.head.divider.position, layout.head.divider.size);
+    const dividerGraphics = divider.addComponent(Graphics);
+    dividerGraphics.fillColor = T.line[1];
+    dividerGraphics.rect(-layout.head.divider.size.width / 2, -layout.head.divider.size.height / 2, layout.head.divider.size.width, layout.head.divider.size.height);
+    dividerGraphics.fill();
+    panel.addChild(divider);
+    // 卡片滚动区：一排两张（内容宽 468 = 228×2 + 12），排满换行、超出视口上下滚。排布交给引擎 Layout
+    const scroll = layout.scroll;
+    const scrollView = GameUiHelper.createScrollView(scroll.name, scroll.position, scroll.viewSize);
     scrollView.getComponent(ScrollView)!.horizontal = false;
-    const content = scrollView.getChildByName(`${scrollLayout.name}_content`)!;
+    const content = scrollView.getChildByName(`${scroll.name}_content`)!;
     const grid = content.getComponent(Layout)!;
     grid.type = Layout.Type.GRID;
     grid.resizeMode = Layout.ResizeMode.CONTAINER;
     grid.startAxis = Layout.AxisDirection.HORIZONTAL;
     grid.verticalDirection = Layout.VerticalDirection.TOP_TO_BOTTOM;
     grid.horizontalDirection = Layout.HorizontalDirection.LEFT_TO_RIGHT;
-    grid.spacingX = scrollLayout.spacingX;
-    grid.spacingY = scrollLayout.spacingY;
-    grid.paddingLeft = scrollLayout.paddingX;
-    grid.paddingRight = scrollLayout.paddingX;
-    grid.paddingTop = scrollLayout.paddingY;
-    grid.paddingBottom = scrollLayout.paddingY;
+    grid.spacingX = layout.card.spacingX;
+    grid.spacingY = layout.card.spacingY;
+    grid.paddingLeft = scroll.paddingX;
+    grid.paddingRight = scroll.paddingX;
+    grid.paddingTop = scroll.paddingY;
+    grid.paddingBottom = scroll.paddingY;
     this.stage!.addChild(scrollView);
     this.roleScrollContent = content;
-    // 创建角色按钮
-    const createLayout = layout.createRoleButton;
-    const createRoleButton = GameUiHelper.createTexturedButton(createLayout.name, createLayout.image, "", createLayout.position, createLayout.size);
-    createRoleButton.on(Node.EventType.TOUCH_END, () => this.createRoleUI());
-    this.stage!.addChild(createRoleButton);
-    // 管理角色按钮（管理模式的开关：开启后各角色站位上方出现删除按钮，见 toggleManageRole）
-    const manageLayout = layout.manageRoleButton;
-    const manageRoleButton = GameUiHelper.createTexturedButton(manageLayout.name, manageLayout.image, "", manageLayout.position, manageLayout.size);
-    manageRoleButton.on(Node.EventType.TOUCH_END, () => this.toggleManageRole());
-    this.stage!.addChild(manageRoleButton);
-    // 选中角色信息框（名称 + 等级）：挂在**底部栏**下（它本来就是底部栏的一部分），
-    // position 相对底部栏中心（见 configs 里 selectedInfo 的注释）
-    const infoLayout = layout.selectedInfo;
-    const selectedInfoBox = GameUiHelper.createImage(infoLayout.name, infoLayout.image, infoLayout.position, infoLayout.size);
-    selectedInfoBox.addChild(GameUiHelper.createText(infoLayout.nameLabel.name, infoLayout.nameLabel.text, infoLayout.nameLabel.fontSize, infoLayout.nameLabel.position, infoLayout.nameLabel.size));
-    selectedInfoBox.addChild(GameUiHelper.createText(infoLayout.levelLabel.name, infoLayout.levelLabel.text, infoLayout.levelLabel.fontSize, infoLayout.levelLabel.position, infoLayout.levelLabel.size));
-    bottomBar.addChild(selectedInfoBox);
-    return {
-      beginGameButton,
-      selectedRoleName: selectedInfoBox.getChildByName(infoLayout.nameLabel.name),
-      selectedRoleLevel: selectedInfoBox.getChildByName(infoLayout.levelLabel.name),
-      ownerRoleNodes: [],
-    };
+    // 空状态（没有角色时替掉卡片网格，见 showOwnerRolesUI）
+    const emptyLayout = roleSelectorLayout.empty;
+    const emptyNode = UiHelper.createNode(emptyLayout.name, new Vec2(), roleSelectorLayout.roster.size);
+    emptyNode.setPosition(layout.position.x, layout.position.y, 0);
+    emptyNode.addChild(UiHelper.createLabel(`${emptyLayout.name}_title`, getText(emptyLayout.titleTextKey), T.text[2], emptyLayout.titleFontSize, new Vec2(0, emptyLayout.titlePosition.y - layout.position.y), new Size(400, 24)));
+    emptyNode.addChild(
+      UiHelper.createWrappedLabel(
+        `${emptyLayout.name}_sub`,
+        getText(emptyLayout.subTextKey),
+        T.text[4],
+        emptyLayout.subFontSize,
+        22,
+        new Vec2(0, emptyLayout.subPosition.y - layout.position.y),
+        emptyLayout.subWidth,
+      ),
+    );
+    const emptyButton = GameUiHelper.createToneButton(
+      `${emptyLayout.name}_button`,
+      getText(emptyLayout.buttonTextKey),
+      new Vec2(0, emptyLayout.buttonPosition.y - layout.position.y),
+      emptyLayout.buttonSize,
+      emptyLayout.buttonFontSize,
+      buttonTone.gold,
+    );
+    emptyButton.on(Node.EventType.TOUCH_END, () => this.createRoleUI(), this);
+    emptyNode.addChild(emptyButton);
+    emptyNode.active = false;
+    this.stage!.addChild(emptyNode);
+    return { manageButton, count: countLabel.getComponent(Label)!, scrollView, emptyNode };
   }
 
-  /** 按服务端角色列表重建站位预览（列表变化：进场景 / 新建 / 删除后调用） */
+  /** 返回登录按钮上的左向箭头（贴在文字左侧，图形现画） */
+  private drawBackArrow(button: Node, width: number): void {
+    const arrow = UiHelper.createNode(`${button.name}_arrow`, new Vec2(-width * 2 - 12, 0), new Size(width, width));
+    const graphics = arrow.addComponent(Graphics);
+    graphics.lineWidth = 1.5;
+    graphics.strokeColor = T.text[3];
+    const half = width / 2;
+    graphics.moveTo(-half, 0);
+    graphics.lineTo(half, 0);
+    graphics.moveTo(-half + 4, 4);
+    graphics.lineTo(-half, 0);
+    graphics.lineTo(-half + 4, -4);
+    graphics.stroke();
+    button.addChild(arrow);
+  }
+
+  /** 进游戏按钮可用 / 置灰（矢量按钮没有 Sprite，用半透明表达不可用） */
+  private setBeginGameEnabled(enabled: boolean): void {
+    const button = this.beginGameNode;
+    if (!button || !isValid(button, true)) return;
+    const opacity = button.getComponent(UIOpacity) ?? button.addComponent(UIOpacity);
+    opacity.opacity = enabled ? 255 : 150;
+  }
+
+  /** 按服务端角色列表重建右面板卡片（列表变化：进场景 / 新建 / 删除后调用） */
   showOwnerRolesUI() {
-    this.mainView.ownerRoleNodes.forEach((node) => {
+    const view = this.mainView;
+    view.cards.forEach((node) => {
       if (isValid(node)) node.destroy();
     });
-    this.mainView.ownerRoleNodes.length = 0;
-    this.roleSummaries.forEach((role) => {
-      const cell = this.createRoleCell(role);
-      this.roleScrollContent!.addChild(cell);
-      this.mainView.ownerRoleNodes.push(cell);
-    });
+    view.cards.clear();
+    view.createCard?.destroy();
+    view.createCard = null;
+    const content = this.roleScrollContent;
+    if (!content) return;
+    content.removeAllChildren();
+    const isEmpty = this.roleSummaries.length === 0;
+    view.scrollView.active = !isEmpty;
+    view.emptyNode.active = isEmpty;
+    view.rosterCount.string = getText("role_select_count", { count: this.roleSummaries.length });
+    if (!isEmpty) {
+      this.roleSummaries.forEach((role) => {
+        const card = this.createRoleCard(role);
+        content.addChild(card);
+        view.cards.set(role.id, card);
+      });
+      view.createCard = this.createCreateCard();
+      content.addChild(view.createCard);
+    }
     // 管理模式下列表变了（如刚删掉一个角色）→ 删除按钮按新列表重建
     if (this.manageMode) this.refreshManageControls();
-    // 选中态挂在单元格里，重建列表时随节点一起销毁了 → 选中的角色还在列表就重新亮起来
-    // （站立帧 → 展示帧 + 脚下特效，见 GameUiHelper.setRolePreviewSelected）
-    if (this.ownerRoleSelectedId) this.setRoleSelected(this.ownerRoleSelectedId, true);
+    // 选中态挂在卡片里，重建列表时随节点一起销毁了 → 选中的角色还在列表就重新亮起来
+    if (this.ownerRoleSelectedId) this.selectRole(this.ownerRoleSelectedId);
+    else this.clearSelectedRole();
   }
 
   /**
-   * 造一个角色的「单元格」：预览（点击选中）+ 脚下名牌，装进滚动网格由 Layout 排布。
-   * 预览贴单元格底部（预览中心 = 单元格中心向下 (单元格高 − 预览高) / 2，见 roleScroll.cell 的注释）；
-   * 名牌挂在单元格下而不是预览下，与预览是兄弟节点 —— 预览只管选中，别的东西不进它的子树。
+   * 造一张角色卡：立绘缩略（帧动画）+ 名字 + 职业/等级 + 选中角标
+   *
+   * 点击整张卡选中角色（事件绑在卡片上：缩略图与文字都是它的子节点，点击都会冒泡上来）；
+   * 管理模式的删除按钮也挂在卡片下，但会在自己的处理里 stopPropagation，避免连带选中。
    */
-  private createRoleCell(role: RoleSummary): Node {
-    const { cell: cellSize } = roleSelectorLayout.roleScroll;
-      const previewSize = roleSelectorLayout.previewSize;
-    // 预览贴底：预览中心 = 单元格中心向下 (单元格高 − 预览高) / 2
-    const previewY = -(cellSize.height - previewSize.height) / 2;
+  private createRoleCard(role: RoleSummary): Node {
+    const cardLayout = roleSelectorLayout.roster.card;
     const cell = new Node(`${ROLE_CELL_PREFIX}${role.id}`);
-    cell.addComponent(UITransform).setContentSize(cellSize);
-    const preview = GameUiHelper.createRolePreview(`${ROLE_PREVIEW_PREFIX}${role.id}`, 1, role.occupation, role.sex, new Vec2(0, previewY), previewSize);
-    preview.on(Node.EventType.TOUCH_END, () => this.onlineRole(role.id));
+    cell.addComponent(UITransform).setContentSize(cardLayout.size);
+    const preview = GameUiHelper.createRolePreview(
+      `${ROLE_PREVIEW_PREFIX}${role.id}`,
+      1,
+      role.occupation,
+      role.sex,
+      new Vec2(0, cardLayout.preview.offsetY),
+      cardLayout.preview.size,
+    );
+    preview.setScale(cardLayout.preview.scale, cardLayout.preview.scale, 1);
     cell.addChild(preview);
-    // 名字与等级挂在脚下（偏移相对预览中心，见 roleSelectorLayout.namePlate —— 头顶留给管理模式的删除按钮）
-    const plate = roleSelectorLayout.namePlate;
-    cell.addChild(GameUiHelper.createText(
+    const name = UiHelper.createLabel(
       `${NAME_PLATE_PREFIX}${role.id}`,
       getText("label_role_name_plate", { name: role.name, level: role.level }),
-      plate.fontSize,
-      new Vec2(plate.offset.x, previewY + plate.offset.y),
-      plate.size,
-      plate.color,
-    ));
+      cardLayout.name.color,
+      cardLayout.name.fontSize,
+      new Vec2(cardLayout.name.offsetX, cardLayout.name.offsetY),
+      cardLayout.name.size,
+      Label.HorizontalAlign.LEFT,
+    );
+    cell.addChild(name);
+    // 职业：色点 + 职业名（色点用 Graphics，颜色取职业色）
+    const meta = cardLayout.meta;
+    const dot = UiHelper.createNode(`${NAME_PLATE_PREFIX}${role.id}_class_dot`, new Vec2(meta.offsetX - meta.size.width / 2 + meta.dot / 2, meta.offsetY), new Size(meta.dot, meta.dot));
+    const dotGraphics = dot.addComponent(Graphics);
+    dotGraphics.fillColor = this.classColor(role.occupation);
+    dotGraphics.circle(0, 0, meta.dot / 2);
+    dotGraphics.fill();
+    cell.addChild(dot);
+    const className = occupations.get(role.occupation as OECCUPATION)?.name ?? "";
+    cell.addChild(
+      UiHelper.createLabel(
+        `${NAME_PLATE_PREFIX}${role.id}_class`,
+        className,
+        meta.color,
+        meta.fontSize,
+        new Vec2(meta.offsetX + meta.dot + meta.dotGap, meta.offsetY),
+        meta.size,
+        Label.HorizontalAlign.LEFT,
+      ),
+    );
+    cell.addChild(
+      UiHelper.createLabel(`${LEVEL_LABEL_PREFIX}${role.id}`, `Lv.${role.level}`, cardLayout.level.color, cardLayout.level.fontSize, new Vec2(cardLayout.level.offsetX, cardLayout.level.offsetY), cardLayout.level.size, Label.HorizontalAlign.RIGHT),
+    );
+    // 选中角标（金底深字，默认隐藏，选中时点亮）
+    const badge = this.createBadge(`${CARD_BADGE_PREFIX}${role.id}`, cardLayout.badge.textKey);
+    badge.setPosition(cardLayout.badge.offset.x, cardLayout.badge.offset.y, 0);
+    badge.active = false;
+    cell.addChild(badge);
+    this.paintCard(cell, false);
+    SoundManager.bindClick(cell);
+    blockClickThrough(cell);
+    cell.on(Node.EventType.TOUCH_END, () => {
+      if (!this.manageMode) this.onlineRole(role.id);
+    }, this);
     return cell;
   }
 
-  //#region 角色管理（删除）
+  /** 「创建角色」卡（虚线 + 加号，放在卡片网格末尾） */
+  private createCreateCard(): Node {
+    const cardLayout = roleSelectorLayout.roster.card;
+    const cell = new Node("role_create_card");
+    cell.addComponent(UITransform).setContentSize(cardLayout.size);
+    const graphics = cell.addComponent(Graphics);
+    const w = cardLayout.size.width;
+    const h = cardLayout.size.height;
+    graphics.lineWidth = T.border.width;
+    graphics.strokeColor = T.line[2];
+    graphics.roundRect(-w / 2, -h / 2, w, h, T.radius.r2);
+    graphics.stroke();
+    // 加号：一圈细环 + 一横一竖
+    const plus = cardLayout.create.plusSize;
+    graphics.strokeColor = T.text[3];
+    graphics.circle(0, 26, plus / 2);
+    graphics.stroke();
+    graphics.moveTo(-plus / 4, 26);
+    graphics.lineTo(plus / 4, 26);
+    graphics.moveTo(0, 26 - plus / 4);
+    graphics.lineTo(0, 26 + plus / 4);
+    graphics.stroke();
+    cell.addChild(UiHelper.createLabel("role_create_card_label", getText(cardLayout.create.textKey), T.text[3], cardLayout.create.fontSize, new Vec2(0, -24), new Size(w, 22)));
+    cell.addChild(UiHelper.createLabel("role_create_card_sub", getText(cardLayout.create.subTextKey), T.text[4], cardLayout.create.subFontSize, new Vec2(0, -46), new Size(w, 18)));
+    SoundManager.bindClick(cell);
+    blockClickThrough(cell);
+    cell.on(Node.EventType.TOUCH_END, () => this.createRoleUI(), this);
+    return cell;
+  }
+
+  /** 画一张卡的底板（未选中：暗褐 + 弱金线；选中：金边 + 一层淡金罩） */
+  private paintCard(cell: Node, selected: boolean): void {
+    const cardLayout = roleSelectorLayout.roster.card;
+    const graphics = cell.getComponent(Graphics) ?? cell.addComponent(Graphics);
+    const w = cardLayout.size.width;
+    const h = cardLayout.size.height;
+    graphics.clear();
+    // 底板：主体色整块 + 上半一条更亮的带（Graphics 没有渐变，两层矩形叠）
+    graphics.fillColor = T.surface[2];
+    graphics.roundRect(-w / 2, -h / 2, w, h, T.radius.r2);
+    graphics.fill();
+    graphics.fillColor = T.surface[3];
+    graphics.roundRect(-w / 2, -h / 2 + h * 0.45, w, h * 0.55, T.radius.r2);
+    graphics.fill();
+    if (selected) {
+      graphics.fillColor = T.line[1];
+      graphics.roundRect(-w / 2, -h / 2, w, h, T.radius.r2);
+      graphics.fill();
+    }
+    graphics.lineWidth = selected ? T.border.widthStrong : T.border.width;
+    graphics.strokeColor = selected ? T.gold[3] : T.line[2];
+    graphics.roundRect(-w / 2, -h / 2, w, h, T.radius.r2);
+    graphics.stroke();
+  }
+
+  /** 选中角标（金底深字小胶囊） */
+  private createBadge(name: string, textKey: string): Node {
+    const badgeLayout = roleSelectorLayout.roster.card.badge;
+    const node = UiHelper.createNode(name, new Vec2(), badgeLayout.size);
+    const graphics = node.addComponent(Graphics);
+    graphics.fillColor = T.gold[3];
+    graphics.roundRect(-badgeLayout.size.width / 2, -badgeLayout.size.height / 2, badgeLayout.size.width, badgeLayout.size.height, badgeLayout.size.height / 2);
+    graphics.fill();
+    node.addChild(UiHelper.createLabel(`${name}_label`, getText(textKey), T.text.onGold, badgeLayout.font, new Vec2(), badgeLayout.size));
+    return node;
+  }
+
+  /** 职业色（芯片 / 卡片色点共用） */
+  private classColor(occupation: string): Color {
+    if (occupation === OECCUPATION.FA) return T.classColor.mage;
+    if (occupation === OECCUPATION.DAO) return T.classColor.taoist;
+    return T.classColor.warrior;
+  }
+
+  //#endregion
+
+  //#region 选中态
+
+  /** 按角色 id 取卡片节点（列表重建会换新节点，所以每次按表查，不缓存引用） */
+  private cardOf(roleId: string): Node | null {
+    return this.mainView.cards.get(roleId) ?? null;
+  }
+
+  /** 按角色 id 取卡片里的立绘节点（选中态切换用） */
+  private rolePreview(roleId: string): Node | null {
+    return this.cardOf(roleId)?.getChildByName(`${ROLE_PREVIEW_PREFIX}${roleId}`) ?? null;
+  }
 
   /**
-   * 「管理」按钮：进入 / 退出管理模式
-   * 管理模式 = 每个角色正中间出现删除按钮（挂单元格下、预览的兄弟节点 —— 预览自带 TOUCH_END 选中事件，
-   * 按钮挂在它下面会被冒泡吞掉，点删除会连带选中该角色）
+   * 切换某个角色立绘的选中态（站立帧 ↔ 展示帧 + 脚下 select_player 特效）
+   * 节点可能已随列表重建销毁（新建 / 删除角色后），找不到就跳过 —— 重建后由 showOwnerRolesUI 补回
    */
+  private setRoleSelected(roleId: string, selected: boolean) {
+    const summary = this.roleSummaries.find((item) => item.id === roleId);
+    const preview = this.rolePreview(roleId);
+    if (!summary || !preview) return;
+    GameUiHelper.setRolePreviewSelected(preview, selected, summary.occupation, summary.sex);
+  }
+
+  /** 点选角色：刷新左栏文案 / chips / 中间立绘 / 卡片选中态 */
+  private onlineRole(roleId: string) {
+    const previous = this.ownerRoleSelectedId;
+    const summary = this.roleSummaries.find((item) => item.id === roleId);
+    if (!summary) return;
+    // 换人选中：先把上一个换回站立帧
+    if (previous && previous !== roleId) this.setRoleSelected(previous, false);
+    this.selectRole(roleId);
+    this.setRoleSelected(roleId, true);
+  }
+
+  /**
+   * 把某个角色设成「当前选中」并刷新界面（不碰帧动画，帧动画由 onlineRole / showOwnerRolesUI 负责）
+   *
+   * 一个入口管全部视觉：左栏（名字 / 说明 / chips）、中间立绘与名牌、卡片的金边与角标、进游戏按钮。
+   * 重复调用同一个 id 是幂等的（showOwnerRolesUI 重建列表后也走这里补状态）。
+   */
+  private selectRole(roleId: string): void {
+    const summary = this.roleSummaries.find((item) => item.id === roleId);
+    if (!summary) return;
+    this.ownerRoleSelectedId = roleId;
+    const hero = roleSelectorLayout.hero;
+    this.mainView.heroName.string = summary.name;
+    this.mainView.heroSub.string = getText(hero.sub.textKey, { level: summary.level });
+    this.renderChips(summary);
+    this.renderStageChar(summary);
+    this.mainView.cards.forEach((card, id) => {
+      const selected = id === roleId;
+      this.paintCard(card, selected);
+      const badge = card.getChildByName(`${CARD_BADGE_PREFIX}${id}`);
+      if (badge) badge.active = selected;
+    });
+    this.setBeginGameEnabled(true);
+  }
+
+  /** 左栏属性 chips：职业（带色点）/ 性别 / 等级（按配置的顺序横排） */
+  private renderChips(role: RoleSummary | null): void {
+    const chipsLayout = roleSelectorLayout.hero.chips;
+    const container = this.mainView.chips;
+    container.removeAllChildren();
+    const items: Array<{ text: string; color?: Color; dot?: Color }> = [];
+    if (!role) {
+      items.push({ text: getText(chipsLayout.emptyKey) });
+    } else {
+      items.push({ text: occupations.get(role.occupation as OECCUPATION)?.name ?? "", dot: this.classColor(role.occupation) });
+      items.push({ text: getText("role_select_chip_sex", { sex: getText(role.sex === SEX.GRIL ? "label_sex_girl" : "label_sex_boy") }) });
+      items.push({ text: getText("role_select_chip_level", { level: role.level }) });
+    }
+    // chips 容器以「左栏正文中心」为原点，所以从左边缘的局部坐标 = -hero.width / 2
+    let cursor = -roleSelectorLayout.hero.width / 2;
+    items.forEach((item, index) => {
+      const itemLayout = chipsLayout.items[index];
+      const size = itemLayout?.size ?? new Size(140, chipsLayout.height);
+      const centerX = cursor + size.width / 2;
+      const chip = UiHelper.createNode(`role_chip_${itemLayout?.key ?? "empty"}`, new Vec2(centerX, 0), size);
+      const graphics = chip.addComponent(Graphics);
+      graphics.fillColor = T.surface.sunken;
+      graphics.roundRect(-size.width / 2, -size.height / 2, size.width, size.height, T.radius.r2);
+      graphics.fill();
+      graphics.lineWidth = T.border.width;
+      graphics.strokeColor = role ? T.line[2] : T.line[1];
+      graphics.roundRect(-size.width / 2, -size.height / 2, size.width, size.height, T.radius.r2);
+      graphics.stroke();
+      let textX = 0;
+      if (item.dot) {
+        const dotSize = chipsLayout.dot;
+        graphics.fillColor = item.dot;
+        graphics.circle(-size.width / 2 + T.spacing.sp7 + dotSize / 2, 0, dotSize / 2);
+        graphics.fill();
+        textX = (dotSize + T.spacing.sp3) / 2;
+      }
+      const label = UiHelper.createLabel(`role_chip_${itemLayout?.key ?? "empty"}_label`, item.text, role ? T.text[2] : T.text[4], chipsLayout.fontSize, new Vec2(textX, 0), new Size(size.width - 28, size.height));
+      chip.addChild(label);
+      container.addChild(chip);
+      cursor += size.width + chipsLayout.gap;
+    });
+  }
+
+  /** 中间立绘：按选中角色重建（脚下特效随展示帧一起播） */
+  private renderStageChar(role: RoleSummary | null): void {
+    const layout = roleSelectorLayout.stageChar;
+    const container = this.mainView.stageChar;
+    container.removeAllChildren();
+    if (!role) {
+      this.mainView.stagePlate.active = false;
+      return;
+    }
+    const preview = GameUiHelper.createRolePreview(
+      `${STAGE_CHAR_PREFIX}${role.id}`,
+      1,
+      role.occupation,
+      role.sex,
+      new Vec2(),
+      layout.size,
+    );
+    preview.setScale(layout.scale, layout.scale, 1);
+    container.addChild(preview);
+    GameUiHelper.setRolePreviewSelected(preview, true, role.occupation, role.sex);
+    this.mainView.stagePlate.active = true;
+    this.mainView.stagePlateName.string = role.name;
+    this.mainView.stagePlateLevel.string = `LV.${role.level}`;
+  }
+
+  /** 复位角色选中态：左栏回占位、chips 回空、立绘与名牌隐藏、进游戏按钮置灰（选中角色被删除后调用） */
+  clearSelectedRole() {
+    if (this.ownerRoleSelectedId) this.setRoleSelected(this.ownerRoleSelectedId, false);
+    this.ownerRoleSelectedId = null;
+    const hero = roleSelectorLayout.hero;
+    this.mainView.heroName.string = hero.name.placeholder;
+    this.mainView.heroSub.string = getText(hero.sub.placeholderKey);
+    this.renderChips(null);
+    this.renderStageChar(null);
+    this.mainView.cards.forEach((card, id) => {
+      this.paintCard(card, false);
+      const badge = card.getChildByName(`${CARD_BADGE_PREFIX}${id}`);
+      if (badge) badge.active = false;
+    });
+    this.setBeginGameEnabled(false);
+  }
+
+  //#endregion
+
+  //#region 角色管理（删除）
+
+  /** 「管理」按钮：进入 / 退出管理模式（卡片中央出现删除按钮） */
   private toggleManageRole() {
-    if (this.manageMode) {
-      this.manageMode = false;
+    this.manageMode = !this.manageMode;
+    const label = this.mainView.manageButton.getChildByName(`${roleSelectorLayout.roster.head.manageButton.name}_label`)?.getComponent(Label);
+    if (label) label.string = getText(this.manageMode ? "role_select_manage_done" : "role_select_manage");
+    if (!this.manageMode) {
       this.cancelDeleteConfirm();
       this.clearManageNodes();
       return;
     }
-    this.manageMode = true;
     this.refreshManageControls();
   }
 
@@ -356,31 +801,37 @@ export class RoleSelector extends Component {
   private refreshManageControls() {
     this.clearManageNodes();
     if (!this.manageMode || !this.stage) return;
-    const layout = roleSelectorLayout.manageRole;
-    // 提示条（文案见 configs/texts.label_role_delete_hint）
-    const hint = GameUiHelper.createText(layout.hint.name, getText("label_role_delete_hint"), layout.hint.fontSize, layout.hint.position, layout.hint.size, layout.hint.color);
+    const hintLayout = roleSelectorLayout.manageHint;
+    const hint = UiHelper.createNode(hintLayout.name, hintLayout.position, hintLayout.size);
+    const hintGraphics = hint.addComponent(Graphics);
+    hintGraphics.fillColor = T.surface[3];
+    hintGraphics.roundRect(-hintLayout.size.width / 2, -hintLayout.size.height / 2, hintLayout.size.width, hintLayout.size.height, hintLayout.size.height / 2);
+    hintGraphics.fill();
+    hintGraphics.lineWidth = T.border.width;
+    hintGraphics.strokeColor = T.amber;
+    hintGraphics.roundRect(-hintLayout.size.width / 2, -hintLayout.size.height / 2, hintLayout.size.width, hintLayout.size.height, hintLayout.size.height / 2);
+    hintGraphics.stroke();
+    hint.addChild(UiHelper.createLabel(`${hintLayout.name}_label`, getText(hintLayout.textKey), T.amber, hintLayout.fontSize, new Vec2(), hintLayout.size));
     this.stage.addChild(hint);
     this.manageNodes.push(hint);
-    // 每个角色正中间一个删除按钮（偏移 (0,0) = 预览中心，见 manageRole.deleteButtonOffset）：挂在**单元格**下（预览的兄弟节点，躲开预览的选中冒泡），
-    // 跟着滚动内容走 —— 挂舞台上的话，滚动后按钮就与角色错位了
+    // 每张卡正中间一个删除按钮：挂在**卡片**下（预览的兄弟节点，躲开预览的选中冒泡），跟着滚动内容走
+    const deleteLayout = roleSelectorLayout.roster.card.deleteButton;
     this.roleSummaries.forEach((role) => {
-      const cell = this.roleScrollContent?.getChildByName(`${ROLE_CELL_PREFIX}${role.id}`);
-      if (!cell) return;
-      // 偏移相对**预览中心**（见 manageRole.deleteButtonOffset 的注释）；预览贴单元格底部，先换算回单元格局部
-      const { cell: cellSize } = roleSelectorLayout.roleScroll;
-      const previewSize = roleSelectorLayout.previewSize;
-      const previewY = -(cellSize.height - previewSize.height) / 2;
-      const button = GameUiHelper.createTexturedButton(
+      const card = this.cardOf(role.id);
+      if (!card) return;
+      const button = GameUiHelper.createToneButton(
         `${DELETE_ROLE_BUTTON_PREFIX}${role.id}`,
-        uiImages.middleRedButtonBackground,
         getText("label_role_delete"),
-        new Vec2(layout.deleteButtonOffset.x, previewY + layout.deleteButtonOffset.y),
-        layout.deleteButtonSize,
-        Color.WHITE,
-        layout.deleteButtonFontSize,
+        new Vec2(0, 0),
+        deleteLayout.size,
+        deleteLayout.fontSize,
+        buttonTone.danger,
       );
-      button.on(Node.EventType.TOUCH_END, () => this.onDeleteRoleClick(role.id, button), this);
-      cell.addChild(button);
+      button.on(Node.EventType.TOUCH_END, (event: { propagationStopped: boolean }) => {
+        event.propagationStopped = true;
+        this.onDeleteRoleClick(role.id, button);
+      }, this);
+      card.addChild(button);
       this.manageNodes.push(button);
     });
   }
@@ -401,7 +852,6 @@ export class RoleSelector extends Component {
    * 2. 期间再点同一个按钮：调服务端真删（服务端成功后才动本地缓存与列表）；
    * 3. 超时（manageRole.confirmTimeout）、点了别的角色的删除按钮、退出管理模式或关场景：文案复位，
    *    下次点击重新从第 1 步开始。
-   * 不弹确认框的原因与背包回收一致：不新增节点与鼠标监听，也就没有层级与点击穿透的坑
    */
   private onDeleteRoleClick(roleId: string, button: Node) {
     // 点了别的角色的删除按钮 → 先放弃上一个待确认状态（避免两个按钮同时挂着「确认删除」）
@@ -461,61 +911,20 @@ export class RoleSelector extends Component {
     if (label) label.string = text;
   }
 
-  /** 复位角色选中态：名称/等级回占位文案、「开始游戏」按钮置灰、角色回到站立帧（选中角色被删除后调用） */
-  private clearSelectedRole() {
-    const info = roleSelectorLayout.selectedInfo;
-    if (this.ownerRoleSelectedId) this.setRoleSelected(this.ownerRoleSelectedId, false);
-    this.ownerRoleSelectedId = null;
-    this.mainView.beginGameButton.getComponent(Sprite).grayscale = true;
-    this.mainView.selectedRoleName.getComponent(Label).string = info.nameLabel.text;
-    this.mainView.selectedRoleLevel.getComponent(Label).string = info.levelLabel.text;
-  }
-
   //#endregion
-
-  /** 按角色 id 取预览节点（列表重建会换新节点，所以每次按名字查，不缓存引用） */
-  private rolePreview(roleId: string): Node | null {
-    const cell = this.roleScrollContent?.getChildByName(`${ROLE_CELL_PREFIX}${roleId}`);
-    return cell?.getChildByName(`${ROLE_PREVIEW_PREFIX}${roleId}`) ?? null;
-  }
-
-  /**
-   * 切换某个角色预览的选中态（站立帧 ↔ 展示帧 + 脚下 select_player 特效）
-   * 节点可能已随列表重建销毁（新建 / 删除角色后），找不到就跳过 —— 重建后由 showOwnerRolesUI 补回
-   */
-  private setRoleSelected(roleId: string, selected: boolean) {
-    const summary = this.roleSummaries.find((item) => item.id === roleId);
-    const preview = this.rolePreview(roleId);
-    if (!summary || !preview) return;
-    GameUiHelper.setRolePreviewSelected(preview, selected, summary.occupation, summary.sex);
-  }
-
-  private onlineRole(roleId: string) {
-    const previous = this.ownerRoleSelectedId;
-    this.ownerRoleSelectedId = roleId;
-    const summary = this.roleSummaries.find((item) => item.id === roleId);
-    if (!summary) return;
-    // 开始游戏按钮可用，并更新名字与等级显示
-    this.mainView.beginGameButton.getComponent(Sprite).grayscale = false;
-    this.mainView.selectedRoleName.getComponent(Label).string = summary.name;
-    this.mainView.selectedRoleLevel.getComponent(Label).string = summary.level.toString();
-    // 换人选中：先把上一个换回站立帧，再点亮这一个（重复点同一个角色 = 展示动画从头播一遍）
-    if (previous && previous !== roleId) this.setRoleSelected(previous, false);
-    this.setRoleSelected(roleId, true);
-  }
 
   createRoleUI() {
     if (this.createView) return;
     this.createView = this.createCreateRoleView();
   }
 
-  /** 拼装创建角色弹窗视图（位置/尺寸与用图见 configs/hudLayout.roleSelectorLayout.createDialog） */
+  /** 拼装创建角色弹窗视图（位置/尺寸与用图见 configs/layout/scenes.roleSelectorLayout.createDialog） */
   private createCreateRoleView(): RoleSelectorCreateView {
     const layout = roleSelectorLayout.createDialog;
     // 弹窗主体与标题
     const dialog = GameUiHelper.createImage(layout.name, layout.image, layout.position, layout.size);
     this.stage!.addChild(dialog);
-    // 右上角关闭按钮（backButton 已改常驻的「返回登录」，不再兼职关弹窗）
+    // 右上角关闭按钮（返回登录已移到左栏 CTA，不再兼职关弹窗）
     const closeLayout = layout.closeButton;
     const closeButton = GameUiHelper.createTexturedButton(closeLayout.name, closeLayout.image, getText("label_close"), closeLayout.position, closeLayout.size, Color.WHITE, closeLayout.fontSize);
     closeButton.on(Node.EventType.TOUCH_END, () => this.cancelCreateRoleUI());
@@ -554,7 +963,6 @@ export class RoleSelector extends Component {
     occupationToggleGroup.getComponent(ToggleContainer).checkEvents.push(eventHandler);
     sexToggleGroup.getComponent(ToggleContainer).checkEvents.push(eventHandler);
     // 默认选中项不用手动设：Toggle 出厂即「已选中」，组激活时 ensureValidState 会把「第一个之外的」关掉
-    // （探针实测：当帧 activeToggles() 就有第一项）—— 但下面的首次渲染必须把 view 显式传进去，见 updateOccupationSelection
 
     const view: RoleSelectorCreateView = {
       closeButton,
@@ -621,8 +1029,7 @@ export class RoleSelector extends Component {
       GameUiHelper.createTip("role_create_success_tip");
       this.cancelCreateRoleUI();
       await this.loadRoles();
-      // 新建完直接选中它：否则玩家会看着自己刚建的角色站在原地，底部还是「角色 ---」、
-      // 「开始游戏」按不动（还得先点一下角色才算选中，这一步没有任何信息量）
+      // 新建完直接选中它：否则玩家会看着自己刚建的角色站在列表里，左栏还是「选择角色」、进游戏按不动
       this.onlineRole(detail.id);
     } catch (error) {
       console.warn(`[RoleSelector] 创建角色失败：${describeError(error)}`);

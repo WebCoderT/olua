@@ -78,7 +78,9 @@ try {
     const selector = read("assets/ui/RoleSelector.ts");
     const helper = read("assets/ui/helpers/GameUiHelper.ts");
 
-    check(!/\bGraphics\b/.test(selector), "选角组件不再用 Graphics 画框");
+    // #1059：卡片底板 / 角标 / 名牌改用 Graphics 现画（矢量替代位图），但「选中」不再画框 ——
+    // 判定靠展示帧 + 脚下特效，所以这里守的是「没有画框代码」，不是「没有 Graphics」
+    check(!/selectionFrame|drawSelectionFrame|whiteFrame/.test(selector), "选中态不用画框表达（选中靠展示帧 + 脚下特效）");
     check(!/selectionFrame/.test(selector), "选角组件不再有 selectionFrame 残留");
     check((selector.match(/this\.setRoleSelected\(/g) ?? []).length >= 3, "点选 / 复位 / 列表重建后三处都切选中态");
     check(selector.includes("ROLE_PREVIEW_PREFIX"), "预览节点按统一前缀命名（才能按 id 找回）");

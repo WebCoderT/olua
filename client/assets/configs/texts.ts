@@ -313,6 +313,47 @@ export const uiTexts = {
   /** 创建角色弹窗右上角关闭按钮（通用红底图 + 这行字，见 configs/hudLayout.roleSelectorLayout.createDialog.closeButton） */
   label_close: "×",
 
+  //#region 界面标签：选角（#1059 按 design/olua-ui/screens/02-role-select 重排）
+  /** 顶栏「区服 · 账号」胶囊（{zone} = 区名，{account} = 账号名） */
+  role_select_who: "{zone} · {account}",
+  /** 顶栏退出登录 */
+  role_select_logout: "退出登录",
+  /** 底栏左侧标识 */
+  role_select_footer_left: "OLUA · ROLE SELECT",
+  /** 左栏眉题 */
+  role_select_cap: "SELECT YOUR HERO",
+  /** 左栏一句话说明（{level} = 角色等级） */
+  role_select_sub: "这位英雄已在沙城征战 {level} 级，装备与背包都保存在服务端。",
+  /** 左栏说明：一个角色都没有时 */
+  role_select_sub_empty: "这个区还没有角色，创建一位英雄开始你的传奇。",
+  /** 左栏属性 chip：性别（{sex} = 男 / 女） */
+  role_select_chip_sex: "性别 {sex}",
+  /** 左栏属性 chip：等级（{level} = 角色等级） */
+  role_select_chip_level: "等级 Lv.{level}",
+  /** 左栏属性 chip：没有角色时的占位 */
+  role_select_chip_empty: "尚无角色",
+  /** 左栏主按钮（进游戏） */
+  role_select_enter: "进 入 游 戏",
+  /** 左栏次按钮（返回登录） */
+  role_select_back: "返回登录",
+  /** 右面板标题 */
+  role_select_roster_title: "我的角色",
+  /** 右面板数量（只报个数，上限在服务端） */
+  role_select_count: "共 {count} 位",
+  /** 右面板管理模式开关（打开 / 关闭两态） */
+  role_select_manage: "管理",
+  role_select_manage_done: "完成",
+  /** 角色卡上的「已选择」角标 */
+  role_select_selected_badge: "已选择",
+  /** 卡片网格末尾的建号卡 */
+  role_select_new_card: "创建角色",
+  role_select_new_card_sub: "新建一位英雄",
+  /** 一个角色都没有时的空状态 */
+  role_select_empty_title: "还没有角色",
+  role_select_empty_sub: "创建第一位英雄，从黄昏的沙场开始你的传奇。",
+  role_select_empty_create: "创建第一位角色",
+  //#endregion
+
   //#region 界面标签：属性与装备
   /** 属性分组标题（特殊属性暂未接入，等有行可填时再加回来，见 GameUiHelper.applyRoleAttributeListStyle 的注释） */
   label_attributes_base: "基础属性",
@@ -447,6 +488,12 @@ export const uiTexts = {
   progress_none: "无需预加载",
   /** 阶段：帧动画（{done}/{total}） */
   progress_frames: "帧动画 {done}/{total}",
+  /** 底部四阶段刻度的短名（#1059）：场景资源 / 帧动画 / 进入世界 */
+  progress_stage_scene: "场景资源",
+  progress_frames_short: "帧动画",
+  progress_world: "进入世界",
+  /** 失败面板标题（#1059；正文沿用 progress_config_failed） */
+  progress_failed_title: "加载失败",
 
   //#region 网络与账号（服务端互动；兜底文案 —— 服务端给了提示语时优先用服务端的）
   /** 连不上服务端 */
@@ -538,12 +585,12 @@ export const uiTexts = {
   login_class_desc_taoist: "召唤神兽，施毒治愈辅助；攻守兼备，是队伍里稳得住的后背。",
   /** 公告栏左端的标签字 */
   login_notice_label: "公告",
+  /** 登录面板左上角小字（稿件 .panel-eyebrow，10px 字距很开） */
+  login_panel_eyebrow: "ACCOUNT",
   /** 登录面板标题 */
   login_panel_title: "账 号 登 录",
   /** 选服按钮：区列表还没拿到时的占位 */
   login_zone_unknown: "正在获取区服列表…",
-  /** 选服按钮左端的固定标签字 */
-  login_server_label: "区服",
   /** 记住账号勾选框 */
   login_remember: "记住账号",
   /** 忘记密码入口（客户端暂无找回功能：飘字说明，暂时放置） */
