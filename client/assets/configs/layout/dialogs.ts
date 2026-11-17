@@ -72,11 +72,19 @@ export const dialogFrame = {
     insetTop: T.spacing.sp7,
     height: 24,
     widthPadding: 60,
-    fontSize: T.fontSize.f20,
+    /** 用户拍板（2026-11-18）：全弹窗标题统一 12 号 */
+    fontSize: T.fontSize.f12,
     color: T.text[1],
     /** 标题下的短金线（ui.css .panel-title::after，44×1，margin-top --sp-3） */
     rule: { width: T.border.titleRuleWidth, height: T.border.titleRuleHeight, color: T.gold[3], gap: T.spacing.sp3 },
   },
+  /**
+   * 标题栏拖拽柄（#1090：只有标题栏可拖动弹窗，内容区拖动不影响弹窗位置）
+   *
+   * 通栏透明条带，从弹窗顶边覆盖到标题金线之下（padding-top 28 + 标题 24 + 金线区 ≈ 56），
+   * 垫在标题/眉题/关闭键之下 —— 按标题文字、眉题都是拖拽，按关闭键是关窗。
+   */
+  headDrag: { height: 56 },
   /**
    * 关闭按钮：尺寸（公共尺寸，见 sizes.uiSize）+ 距弹窗右/上边缘的内缩 + 矢量化 × 的字号与色
    *
@@ -817,8 +825,8 @@ export const confirmDialogLayout = {
   maskColor: T.surface.scrim,
   /** 居中面板：尺寸（矢量底板 + 四角铆钉，见 createDialogPanel） */
   panel: { name: "confirm_panel", size: new Size(420, 210) },
-  /** 标题（稿 20-overlay .panel-title：f20 亮字居中 + 44×1 金下划线，同登录/选角面板标题口径） */
-  title: { name: "confirm_title", position: new Vec2(0, 72), size: new Size(360, 26), fontSize: T.fontSize.f20, color: T.text[1] },
+  /** 标题（稿 20-overlay .panel-title：亮字居中 + 44×1 金下划线；字号随 2026-11-18 拍板统一 12 号） */
+  title: { name: "confirm_title", position: new Vec2(0, 72), size: new Size(360, 26), fontSize: T.fontSize.f12, color: T.text[1] },
   titleUnderline: { position: new Vec2(0, 47), size: new Size(44, 1) },
   /** 右上角关闭按钮（稿 .panel-close：30×30，右缘 12 / 顶缘 10；点它 = 取消） */
   closeButton: { name: "confirm_close_button", position: new Vec2(183, 80), size: new Size(30, 30), fontSize: T.fontSize.f18 },

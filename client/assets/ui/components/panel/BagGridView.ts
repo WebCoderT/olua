@@ -174,20 +174,16 @@ export default class BagGridView extends Node {
   /**
    * 把网格区域内的触摸收在网格里：四个触摸事件一律停住冒泡，不再往上传给弹窗
    *
-   * 为什么必须收：背包弹窗的背景上挂着可拖动组件（GameUiHelper.createDialogBg → components/input/Draggable），
-   * 按住弹窗能把它整个搬走；而节点的触摸事件是**冒泡**的（引擎 node-event-processor 派发 TOUCH_* 时
-   * 一律 `event.bubbles = true`），在格子上按下的触摸会一路冒泡到弹窗背景 ——
-   * 于是玩家一拖物品，弹窗也跟着一起跑。
+   * 为什么必须收：弹窗的拖拽柄在标题栏（GameUiHelper.createDialog → components/input/Draggable，
+   * #1090 起只有标题栏可拖动弹窗），网格触摸照理会冒泡到弹窗根触发「点中弹窗浮层」；
+   * 收住之后网格区域的按下不再算「点中弹窗」，同时确保一拖物品不会牵连任何弹窗级行为。
    *
    * 为什么登记在网格容器上、而不是每个格子各收各的（两种按下一次兜住）：
    * · 按在有物品的格子上：格子自己注册了 TOUCH_START，先独占这次触摸，之后事件从格子往上冒泡
    *   （格子 → 行容器 → 网格容器 → 弹窗），路过这里就被停下，弹窗收不到；
    * · 按在空格子或网格的空白处：没有更深的节点认领，这次触摸由**网格容器自己**独占
    *   （它在命中列表里、也有 UITransform），事件同样到不了弹窗。
-   * 于是「网格区域内怎么按都不会拖动弹窗」，而「按住物品拖动的是物品」照旧成立。
-   *
-   * 反向的兜底在 Draggable 那边：按下点自带拖动手势（注册过 TOUCH_MOVE）时弹窗不抢这次拖动，
-   * 免得以后往弹窗里加滚动视图、滑条这类子手势时再踩同一个坑。
+   * 于是「网格区域内怎么按都不牵连弹窗」，而「按住物品拖动的是物品」照旧成立。
    */
   private setupTouchOwnership() {
     this.on(Node.EventType.TOUCH_START, this.stopTouchBubble, this);

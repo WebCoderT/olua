@@ -347,8 +347,8 @@ export const monsterInfoPanelLayout = {
   /** 等级（右对齐，朱红文字） */
   level: { position: new Vec2(112, 22), size: new Size(60, 14), fontSize: T.fontSize.f10, color: T.ember[4] },
   /** 血量条与血量文字（文字盖在条内居中，条加高到 14 才不裁字） */
-  hpBar: { position: new Vec2(10, 2), size: new Size(190, 14) },
-  hpText: { position: new Vec2(10, 2), size: new Size(120, 12), fontSize: T.fontSize.f10 },
+  hpBar: { position: new Vec2(34, 2), size: new Size(190, 14) },
+  hpText: { position: new Vec2(34, 2), size: new Size(120, 12), fontSize: T.fontSize.f10 },
   /** 技能行（未配置技能则不渲染；稿 `.monster .skills i` 18×18 朱红薄底 + 内发光） */
   skillRow: { position: new Vec2(62, -24), slotSize: 18, spacing: 3 },
 };
