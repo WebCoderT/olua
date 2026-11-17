@@ -473,8 +473,20 @@ export const uiTexts = {
   label_attr_agi_desc: "暴击率",
   label_attr_vit_desc: "生命上限 / 物防",
   label_attr_spi_desc: "法术攻击 / 法力",
-  /** 剩余属性点（{points} = 当前可分配点数） */
-  label_attr_points: "属性点：{points}",
+  /** 属性弹窗（22-attributes 稿）：剩余点数行（{points} = 当前可分配点数） */
+  label_attr_points_left: "剩余属性点",
+  label_attr_points_value: "{points} 点",
+  /** 战斗属性总览的段标题与两个不在 BattleAttributes 显示名表里的键（魔法上限 / 战斗力） */
+  label_attributes_combat: "战斗属性",
+  label_attr_max_mp: "魔法上限",
+  label_attr_combat_power: "战斗力",
+  /** 四维加点段标题 */
+  label_attributes_alloc: "四维加点",
+  /** 洗点条说明（不写价格：价格只在服务端 growth_scalars.attrResetCost） */
+  label_attr_reset_note: "洗点会退还全部已分配点数，并消耗一笔绑定元宝，不可撤销。",
+  /** 底部说明条两行（稿 .panel-foot） */
+  label_attr_foot_left: "属性数值由服务端汇总下发，含装备 / 称号 / 军衔加成",
+  label_attr_foot_right: "剩余点数为 0 时「＋」置灰",
   /** 加点成功的浮动提示（{attr} 四维名 / {points} 剩余点数） */
   label_attr_allocate_tip: "{attr} +1（剩 {points} 点）",
   /** 洗点成功的浮动提示（{refund} 退还点数 / {cost} 消耗的绑定元宝） */

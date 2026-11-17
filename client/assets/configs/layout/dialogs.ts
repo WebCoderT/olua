@@ -706,47 +706,104 @@ export const skillListDialogLayout = {
 
 //#endregion
 
-//#region 属性加点弹窗（#833）
+//#region 属性弹窗（#833 加点；22-attributes 稿改为总览＋加点合一）
 
 /**
- * 属性加点弹窗布局
+ * 属性弹窗布局（22-attributes 稿：420×580，panel--rivet）
  *
- * 四行固定（力量 / 敏捷 / 体质 / 精神），所以不用 ScrollView —— 四行还要滚是给自己找麻烦。
- * 行内从左到右：名称、已分配点数、作用说明、「+」按钮；底部一枚「洗点」。
+ * 替换 06 稿时代的 320×300 加点小弹窗：角色信息「属性」入口改开本窗。
+ * 三段自上而下（一屏看完）：剩余属性点 → 战斗属性总览（两列 10 项）→ 四维加点 + 洗点条，
+ * 底部一条说明（稿 .panel-foot）。战斗属性数值全部来自服务端 roleUpdate 下发的
+ * `BattleAttributes`（装备/称号/战魂/军衔加成已汇总），客户端零计算、只展示。
  *
- * 说明列故意只写「物理攻击」这类短语而不是百分比：系数在服务端
- * （`growth_scalars.attrPointRatio`，运营随时能改），界面上写死「每点 +0.5%」
- * 就是第二个真相 —— 改配置那天它会开始骗人。
+ * 四行加点固定（力量 / 敏捷 / 体质 / 精神），不用 ScrollView。行内从左到右：
+ * 名称、已分配点数、作用说明、「+」按钮。说明列故意只写「物理攻击」这类短语
+ * 而不是百分比：系数在服务端（`growth_scalars.attrPointRatio`，运营随时能改），
+ * 界面上写死「每点 +0.5%」就是第二个真相 —— 改配置那天它会开始骗人。
+ *
+ * y 坐标按 22 稿逐段折算（中心原点、向上为正；头部下沿距顶 44 由 createDialog 统一画）。
  */
 export const attrAllocateDialogLayout = {
   name: "attr_allocate_dialog",
-  title: "属性点",
-  eyebrow: "加点",
-  size: new Size(320, 300),
-  /** 剩余点数（与技能面板同一条：紧贴标题下沿，加完就地改数字，不重开弹窗） */
-  points: { name: "attr_points", position: new Vec2(0, 102), size: new Size(300, 18), fontSize: 12 },
-  /** 四行的容器（锚点左上，子件按行序往下排） */
-  list: { name: "attr_list", position: new Vec2(0, 86), size: new Size(300, 168), gap: 8 },
+  title: "属性",
+  eyebrow: "角色",
+  size: new Size(420, 580),
+  /** 剩余点数行（稿 .pt-row）：左灰标签 + 右金色数值，加完就地改数字，不重开弹窗 */
+  points: {
+    name: "attr_points",
+    y: 211,
+    width: 388,
+    height: 18,
+    label: { x: -119, width: 150, fontSize: T.fontSize.f13, color: T.text[3] },
+    value: { name: "attr_points_value", x: 144, width: 100, fontSize: T.fontSize.f16, color: T.gold[4] },
+    /** 行下沿细分隔线（稿 .pt-row 的 border-bottom） */
+    dividerY: 194,
+  },
+  /** 战斗属性总览（稿 .attr-grid）：两列 × 5 行，行序见 keys；maxMp / combat 不在 BattleAttributes 显示名表里，文案键见 texts */
+  overview: {
+    title: { name: "attr_overview_title", y: 186, fontSize: T.fontSize.f13, color: T.gold[4] },
+    dividerY: 176,
+    /** 行序 = 稿序：三攻 → 三防 → 血 / 回血 / 法力 / 战力 */
+    keys: [
+      "physicalAttack",
+      "magicAttack",
+      "taoistAttack",
+      "physicalDefense",
+      "magicDefense",
+      "taoistDefense",
+      "maxHp",
+      "hpRecover",
+      "maxMp",
+      "combat",
+    ] as const,
+    row: { width: 186, height: 18, pitch: 24, firstY: 158, colX: [-101, 101], labelWidth: 50, fontSize: T.fontSize.f12 },
+  },
+  /** 四维加点（稿 .attr-rows）：整幅容器（中心锚点），子件按 firstY − index×(行高+gap) 摆 */
+  list: {
+    name: "attr_rows",
+    size: new Size(388, 190),
+    title: { name: "attr_alloc_title", y: 22, fontSize: T.fontSize.f13, color: T.gold[4] },
+    dividerY: 12,
+    firstY: -9,
+    gap: 9,
+  },
   row: {
-    width: 296,
+    width: 388,
     height: 34,
     /** 名称列（左对齐）：力量 / 敏捷 / 体质 / 精神 */
-    nameWidth: 70,
-    nameFontSize: 13,
+    nameWidth: 52,
+    nameFontSize: T.fontSize.f13,
     /** 已分配点数（居中，等宽一格，避免数字位数变化时整行跳） */
-    valueWidth: 54,
-    valueFontSize: 13,
+    valueWidth: 58,
+    valueFontSize: T.fontSize.f13,
     /** 作用说明（左对齐、小字） */
-    descWidth: 118,
-    descFontSize: 10,
+    descWidth: 200,
+    descFontSize: T.fontSize.f10,
     /** 「+」按钮：贴行右缘 */
     add: { width: 30, height: 24, label: "+" },
   },
-  /** 洗点按钮（四行下方居中） */
-  reset: { name: "attr_reset_button", position: new Vec2(0, -112), width: 120, height: 30, label: "洗 点" },
+  /** 洗点条（稿 .attr-foot）：左说明（不写价格 —— 价格只在服务端）+ 右 danger 按钮 */
+  reset: {
+    name: "attr_reset_button",
+    x: 146,
+    y: -188,
+    width: 96,
+    height: 32,
+    label: "洗 点",
+    dividerY: -167,
+    note: { name: "attr_reset_note", x: -66, width: 244, fontSize: T.fontSize.f10, color: T.text[4] },
+  },
+  /** 底部说明条（稿 .panel-foot）：两行小字（稿同位） */
+  foot: {
+    dividerY: -254,
+    y: -272,
+    left: { name: "attr_foot_left", x: -84, width: 260, fontSize: T.fontSize.f11, color: T.text[4] },
+    right: { name: "attr_foot_right", x: 118, width: 150, fontSize: T.fontSize.f11, color: T.text[4] },
+  },
 };
 
 //#endregion
+
 
 //#region 技能快捷键设置弹窗
 
@@ -812,8 +869,8 @@ export const settingsDialogLayout = {
     width: 400,
     height: 52,
     /** 名称列 / 说明列：左对齐文本框（中心 x、宽）与上下偏移 */
-    name: { x: -84, width: 236, height: 20, offsetY: 12, fontSize: T.fontSize.f14, color: T.text[1] },
-    desc: { x: -84, width: 248, height: 16, offsetY: -11, fontSize: T.fontSize.f11, color: T.text[3] },
+    name: { x: -74, width: 236, height: 20, offsetY: 12, fontSize: T.fontSize.f14, color: T.text[1] },
+    desc: { x: -68, width: 248, height: 16, offsetY: -11, fontSize: T.fontSize.f11, color: T.text[3] },
     /** 行内按钮（右侧）：100×32，中心距行右缘 66（行宽 400 → 按钮 x = 134） */
     buttonSize: new Size(100, 32),
     buttonFontSize: T.fontSize.f12,

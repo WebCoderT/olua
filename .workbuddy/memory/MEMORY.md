@@ -87,3 +87,8 @@ compose 五服务：admin:80 唯一入口 / game:8080 / server:3100 / realtime:3
 - **新 PR 预判三处登记**：`.env.example`（`audit-api-hardcode`）+ `tools/config-leak-allowlist.json`（config-leak）+
   `e2e-guard` 的 `EXPECTED_CONFIG_KEYS`；新增 e2e 脚本补 `tools/run-e2e.cjs` 的 `WEIGHT`（漏了只是分片不均，不报错）。
 - 掉落 epic #801 已关（四刀全落）；区服 epic #954（P0~P7）全关；**#1009 推翻 #962 的 P6 口径** —— 选区前移到登录页。
+
+## 引擎坑（补）
+- **滚动网格首行边框被 mask 裁掉**（#1104）：`createScrollView` 的 content `anchorY=1` 压视口顶边，
+  网格 `paddingTop=0` 时首行子元素的边框正好压在裁剪线上整条消失。滚动区四边留 3px（> 边框厚），
+  视口同步放大保持内容宽不变。排查「UI 缺一条边」先查 mask 裁剪再查绘制。
