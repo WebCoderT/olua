@@ -9,6 +9,7 @@ import GameUiHelper, { BottomNavBarButton } from "../../helpers/GameUiHelper";
  */
 function navKeyCode(name: string): number | null {
   if (name === "Enter") return KeyCode.ENTER;
+  if (name === "ESC") return KeyCode.ESCAPE;
   if (/^[A-Z]$/.test(name)) return name.charCodeAt(0);
   return null;
 }

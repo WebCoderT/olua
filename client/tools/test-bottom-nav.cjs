@@ -22,7 +22,7 @@ const { prepare, check, finish, fail } = require("./lib/configs-sandbox.cjs");
  * 接上回调后要把它从这里删掉（并把 bottomNav.ts 里的 comingSoon 改成 false）；
  * 新增入口忘了接回调却也没登记 → 这里会红，逼人做一次明确决定。
  */
-const EXPECTED_COMING_SOON = ["friend", "settings"];
+const EXPECTED_COMING_SOON = ["friend"];
 
 try {
   const outDir = prepare("olua-bottom-nav", ["configs/bottomNav.ts"]);

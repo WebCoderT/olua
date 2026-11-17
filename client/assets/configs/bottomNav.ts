@@ -41,6 +41,6 @@ export const bottomNavItems: BottomNavItem[] = [
   { key: "group", label: "组队", openLevel: 10, shortcutKey: "G", comingSoon: false },
   { key: "friend", label: "好友", openLevel: 10, shortcutKey: "F", comingSoon: true },
   { key: "mall", label: "商城", openLevel: 1, shortcutKey: "M", comingSoon: false },
-  /** 稿的「设置」：独立一颗（第二条竖分隔线之后）；客户端暂无设置弹窗，先占位提示 */
-  { key: "settings", label: "设置", openLevel: 1, shortcutKey: "ESC", comingSoon: true },
+  /** 稿的「设置」：独立一颗（第二条竖分隔线之后）；打开设置弹窗（选择角色 / 退出登录，稿 21-settings） */
+  { key: "settings", label: "设置", openLevel: 1, shortcutKey: "ESC", comingSoon: false },
 ];

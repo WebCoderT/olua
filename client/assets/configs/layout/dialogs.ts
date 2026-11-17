@@ -778,6 +778,51 @@ export const skillShortcutSettingDialogLayout = {
 
 //#endregion
 
+//#region 设置弹窗（稿 21-settings）
+
+/**
+ * 设置弹窗布局（底部导航「设置」入口 / ESC 打开；稿 21-settings）
+ *
+ * 两行动作（选择角色 / 退出登录）：行是玻璃底板 + 左侧「名称 + 说明小字」+ 右侧行内按钮。
+ * 标题 / 眉题 / 关闭键 / 标题栏拖拽柄全部由 createDialog 按 dialogFrame 统一画（眉题「系统」）。
+ * 头部下沿（短金线中心）距顶 44 —— 本窗 220 高时即 y=66；两行从金线下方 10px 起排。
+ */
+export const settingsDialogLayout = {
+  name: "settings_dialog",
+  /** 标题与眉题（眉题全中文分区词，与标题不用词重复——标题/眉题去重口径，2026-11-18） */
+  title: "设置",
+  eyebrow: "系统",
+  /** 稿 `.settings`：460×220 */
+  size: new Size(460, 220),
+  /** 两行动作的公共几何：行底板 400×52、中心 x=0、第一行中心 y=30、行间距（中心距）68 */
+  rows: {
+    /** 选择角色行（按钮 = 金键：常规主动作；点击直接执行，不二次确认——2026-11-18 用户拍板） */
+    select: {
+      name: "settings_select_row",
+      y: 30,
+      button: { name: "settings_select_button", tone: "gold" as const },
+    },
+    /** 退出登录行（按钮 = 危险档：暗朱底；点击弹确认框再执行） */
+    logout: {
+      name: "settings_logout_row",
+      y: -38,
+      button: { name: "settings_logout_button", tone: "danger" as const },
+    },
+    /** 行底板尺寸与两侧内距（名称/说明左对齐起点、按钮右对齐终点） */
+    width: 400,
+    height: 52,
+    /** 名称列 / 说明列：左对齐文本框（中心 x、宽）与上下偏移 */
+    name: { x: -84, width: 236, height: 20, offsetY: 12, fontSize: T.fontSize.f14, color: T.text[1] },
+    desc: { x: -84, width: 248, height: 16, offsetY: -11, fontSize: T.fontSize.f11, color: T.text[3] },
+    /** 行内按钮（右侧）：100×32，中心距行右缘 66（行宽 400 → 按钮 x = 134） */
+    buttonSize: new Size(100, 32),
+    buttonFontSize: T.fontSize.f12,
+    buttonX: 134,
+  },
+};
+
+//#endregion
+
 //#region 死亡弹窗（全屏遮罩）
 
 /**
