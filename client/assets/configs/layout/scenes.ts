@@ -424,7 +424,7 @@ export const roleSelectorLayout = {
    * 右侧角色面板（500×920，矢量底板 + 四角铆钉）
    *
    * 头部 56 高（标题 / 数量 / 管理按钮 + 一条分隔线），下面是两列 228×252 的角色卡滚动区：
-   * 可用宽 468 = 228×2 + 12，所以一排两张，行距 12；卡片超出视口在滚动区里上下滚。
+   * 可用宽 474 − 3×2 = 468 = 228×2 + 12，所以一排两张，行距 12；卡片超出视口在滚动区里上下滚。
    */
   roster: {
     name: "role_roster_panel",
@@ -439,14 +439,16 @@ export const roleSelectorLayout = {
       manageButton: { name: "manage_role_button", position: new Vec2(196, 430), size: new Size(72, 28), fontSize: T.fontSize.f12 },
       divider: { position: new Vec2(0, 404), size: new Size(500, 1) },
     },
-    /** 滚动区：视口在舞台上的绝对位置与尺寸（内容宽 = 视口宽，换行由网格配置决定）；
-     *  视口底部给「创建角色」固定按钮让出 64px（按钮不随列表滚动） */
+    /** 滚动区：视口在舞台上的绝对位置与尺寸；视口底部给「创建角色」固定按钮让出 64px（按钮不随列表滚动）。
+     *  padding 3：content 顶边 = mask 裁剪线，padding 0 时第一行卡片的边框正好压在裁剪线上被整条裁掉
+     *  （表现为「选中金边缺上边」）；四边各留 3px（> 边框厚 2px）把边框推离裁剪线。
+     *  视口随之 468×768 → 474×774：内容宽 474 − 3×2 = 468 = 228×2 + 12，两列布局不变。 */
     scroll: {
       name: "role_scroll_view",
       position: new Vec2(654, -18),
-      viewSize: new Size(468, 768),
-      paddingX: 0,
-      paddingY: 0,
+      viewSize: new Size(474, 774),
+      paddingX: 3,
+      paddingY: 3,
     },
     /** 「创建角色」固定按钮：钉在滚动区与面板底缘之间（舞台绝对坐标，同 scroll 口径） */
     createButton: { name: "open_create_role_button", position: new Vec2(654, -443), size: new Size(240, 44), fontSize: T.fontSize.f14 },
