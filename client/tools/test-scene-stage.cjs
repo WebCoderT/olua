@@ -93,7 +93,6 @@ function loginElements() {
     },
   ]);
   return [
-    ["topbar.brand", { position: topbar.brand.position, size: topbar.brand.size }],
     ["topbar.version", { position: topbar.version.position, size: topbar.version.size }],
     ["topbar.music", { position: topbar.music.position, size: topbar.music.size }],
     ["hero.eyebrow.line", { position: hero.eyebrow.line.position, size: hero.eyebrow.line.size }],
@@ -118,7 +117,6 @@ function loginElements() {
 function roleSelectorElements() {
   const layout = roleSelectorLayout;
   const elements = [
-    ["顶栏品牌", layout.topbar.brand],
     ["顶栏区服账号", layout.topbar.who],
     ["顶栏退出登录", layout.topbar.logoutButton],
     ["底栏左", layout.footer.left],
@@ -133,12 +131,19 @@ function roleSelectorElements() {
     ["角色面板", layout.roster],
     ["管理提示条", { position: layout.manageHint.position, size: layout.manageHint.size }],
     ["创建角色弹窗", layout.createDialog],
-    ["弹窗关闭按钮", {
+    ["弹窗创建按钮", {
       position: {
-        x: layout.createDialog.position.x + layout.createDialog.closeButton.position.x,
-        y: layout.createDialog.position.y + layout.createDialog.closeButton.position.y,
+        x: layout.createDialog.position.x + layout.createDialog.createButton.position.x,
+        y: layout.createDialog.position.y + layout.createDialog.createButton.position.y,
       },
-      size: layout.createDialog.closeButton.size,
+      size: layout.createDialog.createButton.size,
+    }],
+    ["弹窗取消按钮", {
+      position: {
+        x: layout.createDialog.position.x + layout.createDialog.cancelButton.position.x,
+        y: layout.createDialog.position.y + layout.createDialog.cancelButton.position.y,
+      },
+      size: layout.createDialog.cancelButton.size,
     }],
   ];
   // 属性 chips：横排在左栏正文里（容器中心 = 左边缘 + 半个正文宽），逐个判在画布内
@@ -181,7 +186,9 @@ console.log("\n== A. 画布 = 1920×1080，且与项目设置一致 ==");
     design.width === designResolution.width && design.height === designResolution.height,
     `项目设置（${design.width}×${design.height}）与代码常量一致 —— 改分辨率必须两处一起改`,
   );
-  check(design.fitWidth === true && design.fitHeight === true, "项目设置为等比完整显示（fitWidth + fitHeight）：窗口比例不符时留黑边，不裁画面");
+  // 当前项目设置：fitHeight 等比、fitWidth 关（编辑器里调成单边适配；非 16:9 窗口按高度缩放、宽度裁切）。
+  // 改回双 fit 或单 fit 时这里与项目设置一起改。
+  check(design.fitWidth === false && design.fitHeight === true, "项目设置为单边等比（fitHeight）：按高度缩放，与设计稿整幅铺满的口径一致");
 
   // 代码里不许再出现「运行时改分辨率 / 读窗口」的入口，否则单分辨率又会被悄悄破坏
   const screenLayoutSource = fs.readFileSync(SCREEN_LAYOUT_FILE, "utf8");
@@ -313,8 +320,8 @@ console.log("\n== E. 源码接线断言（不再有分辨率适配） ==");
     "RoleSelector：右角色面板走通用矢量底板（createDialogPanel + 配置里的尺寸）",
   );
   check(
-    /NAME_PLATE_PREFIX/.test(selector) && /label_role_name_plate/.test(selector) && /cardLayout\.name\.offsetX/.test(selector),
-    "RoleSelector：每张卡上有名字（文案走 texts、坐标走 card.name 配置，随列表重建）",
+    /NAME_PLATE_PREFIX/.test(selector) && /cardLayout\.name\.offsetX/.test(selector),
+    "RoleSelector：每张卡上有名字（只显示名字不带等级，坐标走 card.name 配置，随列表重建）",
   );
   check(
     /Layout\.Type\.GRID/.test(selector) && /AxisDirection\.HORIZONTAL/.test(selector) && /layout\.card\.spacingX/.test(selector),
@@ -329,16 +336,16 @@ console.log("\n== E. 源码接线断言（不再有分辨率适配） ==");
     "RoleSelector：管理模式删除按钮挂角色卡下（躲开预览的选中冒泡，又跟着滚动区走不与角色错位）",
   );
   check(
-    /this\.updateOccupationSelection\(view\)/.test(selector) && /this\.createView\) this\.updateOccupationSelection\(this\.createView\)/.test(selector),
-    "RoleSelector：创建弹窗首次渲染显式传 view（首次调用时 this.createView 还没赋值，读它会空手而归 → 描述与预览打开全空）",
+    /selectedSex: SEX\.BOY,/.test(selector) && /selectedOccupation: OECCUPATION\.ZHAN,/.test(selector),
+    "RoleSelector：创建弹窗默认选中男性与战士（重绘后的文字选项版，不再有描述图与预览）",
   );
   check(
     /const back = hero\.cta\.back/.test(selector) && /backButton\.on\(Node\.EventType\.TOUCH_END, \(\) => logoutToLogin\(\),? ?this?\)/.test(selector),
     "RoleSelector：返回登录在左栏 CTA 里常驻，点击主动登出（logoutToLogin：先吊销令牌 #880 再回登录）",
   );
   check(
-    /closeLayout = layout\.closeButton/.test(selector) && /dialog\.addChild\(closeButton\)/.test(selector) && /cancelCreateRoleUI\(\)/.test(selector),
-    "RoleSelector：创建弹窗右上角有自己的关闭按钮（backButton 常驻回登录后，关弹窗不再兼职）",
+    /cancelButton\.on\(Node\.EventType\.TOUCH_END, \(\) => this\.cancelCreateRoleUI\(\)\)/.test(selector) && /cancelCreateRoleUI\(\) \{/.test(selector),
+    "RoleSelector：创建弹窗底部有独立的「取消」按钮（重绘后无右上角 ×，取消与创建并排双按钮）",
   );
   check(
     /GameUiHelper\.setRolePreviewSelected\(/.test(selector) && /this\.setRoleSelected\(previous, false\)/.test(selector) && /this\.setRoleSelected\(roleId, true\)/.test(selector),

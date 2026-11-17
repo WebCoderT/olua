@@ -172,7 +172,7 @@ for (const [file, registeredCount, plainCount] of dialogFiles) {
   check(registered === registeredCount && plain === plainCount, `${file}：弹窗全部走 addDialogToUILayer（${registeredCount} 个），临时层仍走 addToUILayer（${plainCount} 个）`, `实测 登记 ${registered} / 普通 ${plain}`);
 }
 const mallSource = read(path.join(DIALOG_DIR, "MallDialog.ts"));
-check(/GameUiHelper\.bindDialogRaiseOnPress\(dialog\)/.test(mallSource), "商城自有底图（没走 createDialogBg）单独挂一次置顶");
+check(/GameUiHelper\.createDialog\(layout\.name/.test(mallSource), "商城面板走标准弹窗框（createDialog 自带置顶 / 拦截 / 拖动，不再需要单独挂）");
 const bagSource = read(path.join(DIALOG_DIR, "BagDialog.ts"));
 check(/GameUiHelper\.bindDialogRaiseOnPress\(this\.bagGrid\)/.test(bagSource), "背包网格自己挂一次置顶（它在 setupTouchOwnership 里收住触摸，TOUCH_START 到不了弹窗根）");
 check(/TOUCH_START, this\.stopTouchBubble/.test(read(path.join(PROJECT_ROOT, "assets/ui/components/panel/BagGridView.ts"))), "背包网格仍然停住触摸冒泡（拖动不带着弹窗一起动，这是它必须自己挂置顶的原因）");

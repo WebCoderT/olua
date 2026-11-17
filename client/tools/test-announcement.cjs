@@ -272,19 +272,14 @@ if (sandbox) {
     check(/confirmButton: \{ name: "announcement_notice_confirm_button", text: "我知道了"/.test(noticeBlock), "「我知道了」的几何与文案都在配置里");
     check(/item: \{[\s\S]{0,400}itemGap: \d/.test(noticeBlock), "条目间距仍走配置（提醒弹窗一条条纵向摊开；具体数值手调，不断言）");
 
-    // 小地图入口与红点
-    check(/mailEntry: "mail"/.test(hudSource), "消息入口指定为 ui/minimap 的 mail 图标（素材已存在，不新增资源）");
-    check(/entryIcons: \["world", "achievement", "mail", "config", "sound"\]/.test(hudSource), "mail 本来就在入口图标列表里");
-    // #457：入口图标名必须逐个对得上 ui/minimap 目录里的文件。原来末尾那颗占位「屏蔽 副本」在包里
-    // 的文件名是乱码，配置写正常中文名 → 每次进游戏 console.error 一条、入口列少一颗。
-    {
-      const list = /entryIcons: \[([^\]]+)\]/.exec(hudSource);
-      const names = list ? list[1].split(",").map((item) => item.trim().replace(/^"|"$/g, "")).filter(Boolean) : [];
-      const missing = names.filter((icon) => !fs.existsSync(path.join(PROJECT_ROOT, `assets/resources/ui/minimap/${icon}.png`)));
-      check(names.length > 0 && missing.length === 0, "每个入口图标都能在 ui/minimap 目录找到同名图", `缺：${missing.join(" / ") || "无"}`);
-    }
-    check(/entryDot: \{ position: new Vec2\(9, 9\), size: new Size\(9, 9\) \}/.test(hudSource), "未读红点几何在配置里");
-    check(fs.existsSync(path.join(PROJECT_ROOT, "assets/resources/ui/minimap/mail.png")), "公告入口素材存在（resources/ui/minimap/mail.png）");
+    // 小地图入口与红点（稿 .map-rail：2 列 34px、7 颗描边图标，不再用 ui/minimap 图标）
+    check(/mailEntry: "mail"/.test(hudSource), "消息入口仍指定为 mail（红点与公告板都跟它走）");
+    // rail 是稿 .map-rail 的 7 颗描边图标（世界/线路/排行榜/成就/消息+红点/设置/声音）
+    check(
+      /entryIcons: \["world", "channel", "ranking", "achievement", "mail", "config", "sound"\]/.test(hudSource) && /createRailIconButton/.test(smallMapSource),
+      "mail 在入口 rail 清单里（矢量图标按钮，无图标素材）",
+    );
+    check(/entryDot: \{ position: new Vec2\(12, 12\), size: new Size\(8, 8\) \}/.test(hudSource), "未读红点几何在配置里（稿 .reddot：8px、right/top 1px）");
 
     // 新增脚本都带 .meta（进 Cocos 工程的前提）
     [

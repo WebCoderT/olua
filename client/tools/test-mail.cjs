@@ -239,7 +239,7 @@ try {
   check(/await GameMailApi\.mine\(\{ silent: true \}\)/.test(smallMap), "进游戏静默探一次邮件（拉不到不弹提示）");
   check(/this\.setMailUnread\(box \? box\.unread \+ box\.unclaimed : 0\)/.test(smallMap), "探测口径与面板回调一致（未读 + 未领）");
   check(/mailEntry: "mail"/.test(hud), "入口图标名在配置里（复用现成 ui/minimap/mail 素材）");
-  check(/entryDot: \{ position: new Vec2\(9, 9\), size: new Size\(9, 9\) \}/.test(hud), "红点几何在配置里");
+  check(/entryDot: \{ position: new Vec2\(12, 12\), size: new Size\(8, 8\) \}/.test(hud), "红点几何在配置里（稿 .reddot：8px、right/top 1px）");
 
   const game = read(CLIENT_GAME);
   check(/MailStore\.clear\(\);/.test(game), "离开游戏清收件箱（邮件是发给具体角色的）");

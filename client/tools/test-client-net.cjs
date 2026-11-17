@@ -135,9 +135,9 @@ async function expectFailure(action) {
     "开发地址的主机取自页面（手机用局域网 IP 打开就连那个 IP）",
     devUrlLan,
   );
-  const devUrlFallback = devBaseUrlFor("");
-  check(/^http:\/\/localhost:\d+\/api$/.test(devUrlFallback), "拿不到页面主机时回落本机（原生包 / 单测沙箱）", devUrlFallback);
-  check(networkConfig.baseUrl === devUrlFallback, "沙箱里没有页面信息，baseUrl 就是回落值", networkConfig.baseUrl);
+  const devUrlLocal = devBaseUrlFor("localhost");
+  check(/^http:\/\/localhost:\d+\/api$/.test(devUrlLocal), "可信主机（localhost）拼出开发地址", devUrlLocal);
+  check(networkConfig.baseUrl === devUrlLocal, "沙箱里没有可信页面主机（pageHostname 回落 localhost），baseUrl 就是 localhost 开发地址", networkConfig.baseUrl);
 
   console.log("— A. 统一响应包裹：成功只交 data，失败归一成 ApiError —");
 
@@ -493,8 +493,8 @@ async function expectFailure(action) {
     "baseUrl 由 DEV_MODE 三元给出（开发地址按页面主机派生，打包走同源相对路径）",
   );
   check(
-    /if \(typeof window === "undefined" \|\| !window\.location\) return "";/.test(networkSource),
-    "页面信息缺失时返回空串（原生包 / 单测沙箱不会因读 window 报错）",
+    /function pageHostname\(\): string \{[\s\S]{0,400}return usable \? hostname : "localhost";/.test(networkSource),
+    "pageHostname 只信可信主机（localhost / IP / 带点域名），其余（编辑器伪主机 scene / file:// 空串）回落 localhost",
   );
   //#endregion
 

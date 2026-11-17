@@ -61,15 +61,21 @@ try {
   check(/static resetChannel\(\): void \{\s*\n\s*this\.lastChannel = 0;/.test(combat), "resetChannel 清线状态（离开游戏用）");
 
   console.log("\n— D. 小地图标题带线号 —");
-  check(/map_channel_suffix/.test(smallMap), "标题后缀走文案 key（不在组件里写死「· N 线」）");
-  check(/channel > 0 \? `\$\{label\}\$\{getText\("map_channel_suffix"/.test(smallMap), "channel > 0 才拼后缀，公共线保持纯图名");
+  check(/map_channel_suffix/.test(smallMap), "线号副文字走文案 key（不在组件里写死「· N 线」）");
+  check(
+    /const suffix = channel > 0 \? getText\("map_channel_suffix", \{ channel: channel \+ 1 \}\) : ""/.test(smallMap),
+    "channel > 0 才显示副文字，公共线为空（稿 .map-head 的 span）",
+  );
   check(/getText\("map_channel_suffix", \{ channel: channel \+ 1 \}\)/.test(smallMap), "玩家视角线号 = 服务端 channel + 1");
 
   console.log("\n— E. 换线入口的渲染条件 —");
   check(/config\.maxChannels > 1/.test(smallMap), "maxChannels > 1 才算交互入口（单线图保持装饰图）");
   check(/maps\.get\(role\.onMap\)/.test(smallMap), "线数读配置快照的 maps（#812 已下发，开弹窗不拉接口）");
   check(/CombatChannel\.currentChannel/.test(smallMap), "当前线读 world 帧带回的 channel");
-  check(/bindPointerAction\(serverLineEntry, \(\) => this\.openChannelSelect\(\)/.test(read(SMALL_MAP)), "入口绑在「服务器线路」标签上");
+  check(
+    /if \(icon === "channel"\) bindPointerAction\(button, \(\) => this\.openChannelSelect\(\), this\)/.test(smallMap),
+    "「线路」入口是 rail 里的描边图标（稿 .map-rail 的 7 颗之一）",
+  );
   check(/channelDialog\.open\(config\.maxChannels, CombatChannel\.currentChannel\)/.test(read(SMALL_MAP)), "弹窗拿到线数与当前线");
   check(/channel_select_title/.test(texts) && /channelSelectLayout/.test(dialogsLayout), "弹窗标题文案与布局配置都已登记");
 
