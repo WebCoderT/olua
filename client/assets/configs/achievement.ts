@@ -43,7 +43,7 @@ export const achievementTexts = {
 export const achievementDialogLayout = {
   name: "achievement_dialog",
   title: "成就",
-  eyebrow: "ACHIEVEMENT",
+  eyebrow: "荣誉",
   size: new Size(580, 440),
   /** 顶部页签（三枚 96 宽 + 6 间距，整行居中；头部下沿 175 − 半行高 16 = 159） */
   tabs: {

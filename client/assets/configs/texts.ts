@@ -152,7 +152,7 @@ export const uiTexts = {
   /** 商城购买按钮 */
   label_mall_buy: "购 买",
   /** 购买等级不足时的按钮文案（{level} = 商城配置的购买等级；按钮同时置灰禁点，#758） */
-  mall_level_lock: "Lv.{level} 解锁",
+  mall_level_lock: "{level} 级解锁",
   /** 当前分类没有商品 / 商城还没建分类时的空提示（#758） */
   mall_empty_tip: "暂无商品，请稍后再来",
   /**
@@ -319,7 +319,7 @@ export const uiTexts = {
   /** 管理模式提示条 */
   label_role_delete_hint: "点击角色上方的删除按钮移除角色",
   /** 选角界面角色名牌（脚下；{name} = 角色名，{level} = 等级） */
-  label_role_name_plate: "{name} Lv.{level}",
+  label_role_name_plate: "{name} {level}级",
   /** 创建角色弹窗右上角关闭按钮（通用红底图 + 这行字，见 configs/hudLayout.roleSelectorLayout.createDialog.closeButton） */
   label_close: "×",
 
@@ -329,19 +329,19 @@ export const uiTexts = {
   /** 顶栏退出登录 */
   role_select_logout: "退出登录",
   /** 底栏左侧标识 */
-  role_select_footer_left: "OLUA · ROLE SELECT",
+  role_select_footer_left: "角 色 选 择",
   /** 左栏眉题 */
-  role_select_cap: "SELECT YOUR HERO",
+  role_select_cap: "选 择 您 的 英 雄",
   /** 左栏一句话说明（{level} = 角色等级） */
   role_select_sub: "这位英雄已在沙城征战 {level} 级，装备与背包都保存在服务端。",
   /** 左栏说明：一个角色都没有时 */
-  role_select_sub_empty: "这个区还没有角色，创建一位英雄开始你的传奇。",
+  role_select_sub_empty: "选择一位英雄开始你的传奇，或创建一位新的英雄。",
   /** 左栏属性 chip：性别（{sex} = 男 / 女） */
   role_select_chip_sex: "性别 {sex}",
   /** 左栏属性 chip：等级（{level} = 角色等级） */
-  role_select_chip_level: "等级 Lv.{level}",
+  role_select_chip_level: "等级 {level}",
   /** 左栏属性 chip：没有角色时的占位 */
-  role_select_chip_empty: "尚无角色",
+  role_select_chip_empty: "尚未选择角色",
   /** 左栏主按钮（进游戏） */
   role_select_enter: "进 入 游 戏",
   /** 左栏次按钮（返回登录） */
@@ -428,13 +428,13 @@ export const uiTexts = {
   /** 等级压制飘字（#826 第三批；{value} = 压制后的实际伤害，可能为 0） */
   label_damage_suppressed: "压制 {value}",
   /** 闪避飘字 */
-  label_damage_miss: "MISS",
+  label_damage_miss: "闪避",
   /** 技能释放飘字（{skill}） */
   label_skill_release: "释放{skill}",
   /** 经验飘字（{exp}） */
   label_exp_gain: "+{exp} 经验",
-  /** 技能熟练等级前缀（lv.N）/ 未学习 */
-  label_skill_level: "lv.{level}",
+  /** 技能熟练等级后缀（N 级）/ 未学习 */
+  label_skill_level: "{level} 级",
   label_skill_unlearned: "未学习",
   /** 技能行右端的键位标注（稿 07-skill 的 `.nm .key`；{key} = 键位名） */
   label_skill_shortcut: "快捷键 {key}",
@@ -449,7 +449,7 @@ export const uiTexts = {
   mall_foot_left: "购买直接扣绑定元宝 · 服务端权威扣款",
   mall_foot_right: "等级 / 售罄 / 买满 自动置灰",
   /** 技能升级成功的浮动提示（{skill} 技能名 / {level} 新等级 / {cost} 花费 / {remain} 剩余点数） */
-  label_skill_upgrade_tip: "「{skill}」升到 lv.{level}（花 {cost} 点，剩 {remain} 点）",
+  label_skill_upgrade_tip: "「{skill}」升到 {level} 级（花 {cost} 点，剩 {remain} 点）",
   /** 四维名称（#833 属性加点；键与服务端 ATTR_KEYS / 存档 data.attrs 逐项一致） */
   label_attr_str: "力量",
   label_attr_agi: "敏捷",
@@ -606,7 +606,7 @@ export const uiTexts = {
   /** 版本号拉取失败：整个胶囊隐藏，不显示编造的版本 */
   login_version_unavailable: "-",
   /** 首屏左列眉题 */
-  login_eyebrow: "全新资料片 · 沙城争霸",
+  login_eyebrow: "全新开源游戏",
   /** 首屏左列一句话简介 */
   login_tagline: "屠龙再启，兄弟聚首；一刀一级，热血攻沙。尘封的石门今日再度开启，等待归来的城主。",
   /** 职业预览标签：战士 / 法师 / 道士（与本作三职业对应） */
