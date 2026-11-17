@@ -516,7 +516,7 @@ export class Game extends Component {
       }
       this.recoverTimer = 0;
     }
-    // 自动战斗提示（屏幕中间循环播放：「自动战斗中」挂机期间 /「自动寻路中」自动走位期间，允许同显，挂特效层）
+    // 自动战斗提示（屏幕中间：「自动战斗中」挂机期间 /「自动寻路中」自动寻路期间；两者互斥、寻路优先，挂特效层）
     AutoBattleTips.update(this.roleDisplay);
     // 路线指示线（自动寻路期间在大地图地面上画出「角色 → 目标」的路线；无路线时清空）
     RouteIndicator.update(this.roleDisplay);

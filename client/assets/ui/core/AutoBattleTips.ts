@@ -1,5 +1,5 @@
 import { isValid, Node } from "cc";
-import { T, tipsLayout } from "../../configs/hudLayout";
+import { T } from "../../configs/hudLayout";
 import { getText } from "../../configs/texts";
 import type RoleDisplay from "../components/role/RoleDisplay";
 import GameUiHelper from "../helpers/GameUiHelper";
@@ -13,12 +13,12 @@ interface TipView {
 
 /**
  * 自动战斗提示（静态控制器）
- * 跟随主角的两个矢量胶囊提示，互相独立、允许同时出现，均挂在特效层：
- * - 「自动战斗中」（金）：自动挂机开启期间一直显示
- * - 「自动寻路中」（灰）：自动战斗走位（A* 寻路移动）期间显示
+ * 跟随主角的两个矢量胶囊提示，挂在特效层；**互斥，不允许同显**（2026-11-18 用户拍板），
+ * 自动寻路优先级更高：
+ * - 「自动战斗中」（金）：自动挂机开启且**不在**自动寻路期间显示
+ * - 「自动寻路中」（灰）：自动寻路（A* 移动）期间显示，此时战斗提示让位
  * 屏幕中心即相机中心，相机跟随主角，因此把提示节点世界坐标每帧对齐主角世界坐标即可；
- * 两个提示同时显示时寻路提示向下让位（tipsLayout.autoTipPathOffsetY），避免重叠。
- * 让位偏移见 configs/hudLayout.tipsLayout，由组合根在 Game.update 每帧调用 update；
+ * 由组合根在 Game.update 每帧调用 update；
  * 场景卸载时 reset 清引用（节点随特效层销毁）
  */
 export default class AutoBattleTips {
@@ -27,7 +27,7 @@ export default class AutoBattleTips {
   /** 自动寻路中提示 */
   private static pathTip: TipView | null = null;
 
-  /** 每帧驱动（组合根调用）：按挂机开关与自动走位状态显隐并定位提示 */
+  /** 每帧驱动（组合根调用）：按挂机开关与自动走位状态显隐并定位提示（互斥，寻路优先） */
   static update(roleDisplay: RoleDisplay | null) {
     const hangEnabled = AutoBattle.isHangEnabled();
     const pathing = !!roleDisplay && isValid(roleDisplay) && roleDisplay.isAutoMoving();
@@ -38,15 +38,11 @@ export default class AutoBattleTips {
     }
     if (!roleDisplay || !isValid(roleDisplay) || !this.ensureTips()) return;
     const position = roleDisplay.getWorldPosition();
-    // 自动战斗中：屏幕正中
-    this.setTipVisible(this.attackTip, hangEnabled);
-    if (hangEnabled) this.attackTip!.node.setWorldPosition(position.x, position.y, 0);
-    // 自动寻路中：与战斗提示同显时向下让位，单独显示时也在屏幕正中
+    // 互斥：寻路期间只显示「自动寻路中」（优先级高），其余时间挂机开着才显示「自动战斗中」
+    this.setTipVisible(this.attackTip, hangEnabled && !pathing);
     this.setTipVisible(this.pathTip, pathing);
-    if (pathing) {
-      const offsetY = hangEnabled ? tipsLayout.autoTipPathOffsetY : 0;
-      this.pathTip!.node.setWorldPosition(position.x, position.y + offsetY, 0);
-    }
+    const tip = pathing ? this.pathTip : this.attackTip;
+    tip?.node.setWorldPosition(position.x, position.y, 0);
   }
 
   /** 场景卸载（组合根 onDestroy 调用）：提示节点随特效层销毁，这里只清引用 */
