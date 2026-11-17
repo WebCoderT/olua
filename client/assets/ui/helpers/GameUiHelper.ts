@@ -1478,11 +1478,13 @@ export default class GameUiHelper {
 
   /**
    * 创建游戏通用弹窗背景
+   *
+   * 拖拽不在根上（#1090：只有标题栏可拖动弹窗）—— createDialog 会在标题栏加一条
+   * 透明的拖拽柄（components/input/Draggable），内容区怎么拖都不影响弹窗位置。
    */
   static createDialogBg(name: string, position: Vec2 = new Vec2(), size: Size = dialogFrame.size) {
     const dialog = this.createDialogPanel(name, size);
     dialog.setPosition(position.x, position.y, 0);
-    dialog.addComponent(Draggable);
     // 弹窗面板整体在鼠标通道上拦截：弹窗打开时点它任意位置（含空白处）都不再穿透到下层的 HUD
     // （关闭按钮这类只走 touch 通道的 Button 对 mouse 通道不可见，详见 utils/input/UiHit.blockClickThrough）
     blockClickThrough(dialog);
@@ -1527,6 +1529,15 @@ export default class GameUiHelper {
   static createDialog(name: string, title: string, position: Vec2 = new Vec2(), size: Size = dialogFrame.size, eyebrow = "") {
     // 弹窗
     const dialog = this.createDialogBg(name, position, size);
+    // 标题栏拖拽柄（#1090：只有标题栏可拖动弹窗）：通栏透明条带，垫在标题/眉题/关闭键之下
+    // （先 add，兄弟节点后加的命中优先级更高 —— 按关闭键不会触发拖拽，按标题文字拖的是柄）
+    const head = UiHelper.createNode(
+      `${name}_head_drag`,
+      new Vec2(0, size.height / 2 - dialogFrame.headDrag.height / 2),
+      new Size(size.width, dialogFrame.headDrag.height),
+    );
+    head.addComponent(Draggable).dragTarget = dialog;
+    dialog.addChild(head);
     // 眉题：左上角一行小字，左对齐（不画底、不拦点击 —— 纯标注）
     if (eyebrow) {
       const cap = dialogFrame.eyebrow;

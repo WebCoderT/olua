@@ -1,22 +1,28 @@
 import { _decorator, Component, EventTouch, Node } from "cc";
-import { blockClickThrough } from "../../utils/input/UiHit";
 const { ccclass } = _decorator;
 
 /**
- * 拖拽行为组件（挂在节点上使其可拖动）
- * 由 GameUiHelper.createDialogBg 挂到弹窗背景上，实现弹窗拖拽移动；
- * 拖拽期间拦截触摸事件冒泡，避免触发底下的 ScrollView 滚动
+ * 拖拽行为组件（挂在节点上使其可拖动，拖的是 dragTarget —— 缺省拖自身）
+ *
+ * #1090 用户拍板：**只有标题栏可以拖动弹窗**，内容区（列表/网格/空白）怎么拖都不影响弹窗位置。
+ * 所以本组件只由 GameUiHelper.createDialog 挂在「标题栏拖拽柄」条带上（透明、垫在标题与
+ * 关闭键之下），dragTarget 指向弹窗根；弹窗根上不再挂拖拽。
+ *
+ * 为什么内容区天生拖不动弹窗：触摸被引擎认领给「按下点的最深带 touch 监听节点」
+ * （cocos/2d/event/pointer-event-dispatcher），列表（ScrollView）、背包格（物品拖动）都
+ * 在更深处认领了触摸，事件根本不会到标题栏柄上；关闭按钮是柄的**兄弟**节点且命中更深，
+ * 按它也走不到这里 —— 拖拽只可能从柄自己的空白条上开始。
  */
 @ccclass("Draggable")
 export class Draggable extends Component {
-  /** 是否处于拖拽中 */
-  private dragging = false;
+  /** 被拖动的节点（弹窗根）；不设置则拖自身 */
+  dragTarget: Node | null = null;
+
+  /** 按下点是否落在拖拽柄上（只有认领给柄自己的按下才算数） */
+  private pressed = false;
 
   /** 注册触摸监听 */
   start() {
-    // 可拖拽节点必然是可点元素（弹窗背景），拖拽逻辑走 TOUCH_* 通道；
-    // 这里在鼠标通道补一次命中拦截，避免按住拖动时点击穿透到下层 UI（见 utils/input/UiHit.blockClickThrough）
-    blockClickThrough(this.node);
     this.node.on(Node.EventType.TOUCH_START, this.onTouchStart, this);
     this.node.on(Node.EventType.TOUCH_MOVE, this.onTouchMove, this);
     this.node.on(Node.EventType.TOUCH_END, this.onTouchEnd, this);
@@ -31,35 +37,23 @@ export class Draggable extends Component {
     this.node.off(Node.EventType.TOUCH_CANCEL, this.onTouchEnd, this);
   }
 
-  /**
-   * 开始拖拽（拦截冒泡，防止 ScrollView 跟着滚）
-   *
-   * 按下点**自带拖动手势**时（背包格子的物品拖动、滚动视图、滑条…这类都在自己的节点上注册了
-   * TOUCH_MOVE），这次拖动归它，弹窗不抢：子节点的触摸会冒泡到这里，但「谁有自己的拖动」一望可辨 ——
-   * 注册过 TOUCH_MOVE 的就是。少了这一条，子节点一拖、整个弹窗跟着一起动
-   * （背包那边还会自己把触摸收住，这里是通用兜底，见 components/panel/BagGridView.setupTouchOwnership）。
-   * 判 `!== this.node`：弹窗自己就是拖拽柄，也注册了 TOUCH_MOVE，别把自己也拦掉 ——
-   * 按下点没有命中任何子节点时（弹窗空白处、标题这类没有手势的子节点），弹窗照旧可以拖。
-   */
+  /** 按下：认领给柄自己才开始记（子件/兄弟件的按下不拖） */
   private onTouchStart(event: EventTouch) {
-    // 每次按下都从「不拖」开始：上一次的残留状态不该让弹窗跟着动
-    this.dragging = false;
-    if (event.target && event.target !== this.node && event.target.hasEventListener(Node.EventType.TOUCH_MOVE)) return;
-    this.dragging = true;
-    event.propagationStopped = true;
+    this.pressed = event.target === this.node;
   }
 
-  /** 按屏幕像素级偏移移动节点 */
+  /** 按屏幕像素级偏移移动目标节点（拖动期间停住冒泡） */
   private onTouchMove(event: EventTouch) {
     event.propagationStopped = true;
-    if (!this.dragging) return;
+    if (!this.pressed) return;
+    const target = this.dragTarget ?? this.node;
     const delta = event.getUIDelta();
-    this.node.position = this.node.position.add3f(delta.x, delta.y, 0);
+    target.setPosition(target.position.x + delta.x, target.position.y + delta.y, 0);
   }
 
   /** 结束拖拽 */
   private onTouchEnd(event: EventTouch) {
     event.propagationStopped = true;
-    this.dragging = false;
+    this.pressed = false;
   }
 }
