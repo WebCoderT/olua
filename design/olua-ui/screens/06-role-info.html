@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>06 · 角色信息 · Olua UI</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Noto+Serif+SC:wght@700;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../tokens.css">
+<link rel="stylesheet" href="../ui.css">
+<style>
+/* ── 角色信息 600×520 + 属性加点 320×300（叠放，对应客户端互相叠开的行为） ── */
+.stack-pos{position:relative;width:660px;height:520px}
+.body{display:grid;grid-template-columns:56px 216px 56px 158px 84px;gap:12px;height:396px;padding:0 16px}
+.eqcol{display:flex;flex-direction:column;gap:10px;justify-content:center}
+.eqcol .slot{width:56px;height:56px;margin:0 auto}
+.preview{position:relative;border-radius:var(--r-2);border:var(--bw-1) solid var(--line-1);
+  background:radial-gradient(circle at 50% 36%,rgba(194,146,69,.14),rgba(0,0,0,.42) 72%);overflow:hidden}
+.preview img{width:100%;height:100%;object-fit:cover;object-position:50% 14%}
+.preview .ring{position:absolute;left:50%;bottom:34px;transform:translateX(-50%);width:150px;height:48px}
+.attrs{padding-top:6px}
+.attrs h4{font-family:var(--font-display);font-size:13px;letter-spacing:.2em;color:var(--gold-4);margin-bottom:6px}
+.attrs .divider{margin-bottom:4px}
+.entries{display:flex;flex-direction:column;gap:8px;justify-content:center}
+.entries .btn{width:84px;height:32px;font-size:12px;letter-spacing:.1em;justify-content:center;padding:0}
+.entries .btn.on{border-color:var(--gold-3);color:var(--gold-5);background:linear-gradient(180deg,#3A2C1A,#241A10)}
+.hint-better{position:absolute;left:96px;top:352px;font-size:10px;color:var(--jade);
+  background:rgba(53,112,79,.28);border:1px solid rgba(111,191,142,.5);border-radius:var(--r-1);padding:2px 6px}
+/* 属性加点子弹窗 */
+.attr-dlg{position:absolute;right:-344px;top:30px;width:320px;padding-bottom:16px}
+.attr-dlg .panel-body{padding-top:2px}
+.attr-rows{display:flex;flex-direction:column;gap:9px;margin-top:4px}
+.arow{display:grid;grid-template-columns:52px 1fr 58px 30px;align-items:center;gap:8px;height:34px;
+  padding:0 10px;border-radius:var(--r-2);border:var(--bw-1) solid var(--line-1);background:rgba(0,0,0,.24)}
+.arow b{font-size:13px;color:var(--text-1);font-weight:400}
+.arow .d{font-size:10.5px;color:var(--text-4)}
+.arow .v{font-family:var(--font-num);font-size:15px;color:var(--gold-4);text-align:right}
+.arow .plus{width:30px;height:24px;border-radius:var(--r-1);border:var(--bw-1) solid var(--line-3);
+  display:grid;place-items:center;color:var(--gold-4);font-size:14px;background:rgba(0,0,0,.3)}
+.arow .plus:hover{border-color:var(--gold-4);background:rgba(194,146,69,.12)}
+.attr-foot{display:flex;justify-content:center;margin-top:12px}
+</style>
+</head>
+<body>
+<div class="stage"><div class="stage-inner">
+  <div class="stage-bg stage-bg--blur"><img src="../assets/hero-bg.jpg"></div>
+  <div class="stage-scrim"></div>
+
+  <div class="layer layer--dialog center">
+    <div style="display:flex;align-items:flex-start;gap:24px;position:relative">
+
+      <!-- 角色信息主窗 -->
+      <div class="panel panel--rivet stack-pos">
+        <div class="panel-head">
+          <span class="panel-eyebrow">CHARACTER · C</span>
+          <h2 class="panel-title">角色信息</h2>
+          <button class="panel-close" aria-label="关闭">×</button>
+        </div>
+        <div class="body">
+          <!-- 左列装备 -->
+          <div class="eqcol">
+            <div class="slot slot--q5"><span style="font-family:var(--font-display);font-size:20px;color:var(--q-legend)">盔</span><span class="slot-corner">换</span></div>
+            <div class="slot slot--q4"><span style="font-family:var(--font-display);font-size:20px;color:var(--q-epic)">甲</span></div>
+            <div class="slot slot--q3"><span style="font-family:var(--font-display);font-size:20px;color:var(--q-rare)">护</span></div>
+            <div class="slot slot--q3"><span style="font-family:var(--font-display);font-size:20px;color:var(--q-rare)">靴</span></div>
+            <div class="slot slot--empty"></div>
+          </div>
+
+          <!-- 内观 -->
+          <div class="preview">
+            <img src="../assets/char-warrior-m.png" alt="内观">
+            <div class="ring"></div>
+            <span class="hint-better">头盔有更好装备 →</span>
+          </div>
+
+          <!-- 右列装备 -->
+          <div class="eqcol">
+            <div class="slot slot--q5"><span style="font-family:var(--font-display);font-size:20px;color:var(--q-legend)">武</span></div>
+            <div class="slot slot--q4"><span style="font-family:var(--font-display);font-size:20px;color:var(--q-epic)">链</span></div>
+            <div class="slot slot--q3"><span style="font-family:var(--font-display);font-size:20px;color:var(--q-rare)">戒</span></div>
+            <div class="slot slot--q2"><span style="font-family:var(--font-display);font-size:20px;color:var(--q-fine)">戒</span></div>
+            <div class="slot slot--empty"></div>
+          </div>
+
+          <!-- 属性 -->
+          <div class="attrs">
+            <h4>基础属性</h4>
+            <div class="divider"></div>
+            <dl>
+              <div class="kv"><dt>物理攻击</dt><dd>486</dd></div>
+              <div class="kv"><dt>魔法攻击</dt><dd>112</dd></div>
+              <div class="kv"><dt>物理防御</dt><dd>392</dd></div>
+              <div class="kv"><dt>魔法防御</dt><dd>268</dd></div>
+              <div class="kv"><dt>生命上限</dt><dd>2,560</dd></div>
+              <div class="kv"><dt>魔法上限</dt><dd>1,860</dd></div>
+              <div class="kv"><dt>暴击率</dt><dd>12.4%</dd></div>
+              <div class="kv"><dt>战斗力</dt><dd class="up">12,480</dd></div>
+            </dl>
+          </div>
+
+          <!-- 六入口 -->
+          <div class="entries">
+            <button class="btn btn--ghost on">属性</button>
+            <button class="btn btn--ghost">社交</button>
+            <button class="btn btn--ghost">时装</button>
+            <button class="btn btn--ghost">军衔</button>
+            <button class="btn btn--ghost">称号</button>
+            <button class="btn btn--ghost">战魂</button>
+          </div>
+        </div>
+        <div class="panel-foot">
+          <span>右键脱下装备 · 点击「换」一键换更好</span>
+          <span>六个入口与主窗叠放，点谁谁置顶</span>
+        </div>
+      </div>
+
+      <!-- 属性加点子弹窗 -->
+      <div class="panel panel--bracket attr-dlg">
+        <span class="corner"></span><span class="corner"></span><span class="corner"></span><span class="corner"></span>
+        <div class="panel-head" style="padding:14px 18px 8px">
+          <h2 class="panel-title" style="font-size:16px">属性加点</h2>
+          <button class="panel-close" style="top:8px;right:8px" aria-label="关闭">×</button>
+        </div>
+        <div class="panel-body">
+          <div class="kv" style="border-bottom:1px solid var(--line-1);padding-bottom:8px;margin-bottom:8px">
+            <dt style="font-size:13px">属性点</dt><dd class="up" style="font-size:16px">7 点</dd>
+          </div>
+          <div class="attr-rows">
+            <div class="arow"><b>力量</b><span class="d">物理攻击</span><span class="v">186</span><button class="plus">＋</button></div>
+            <div class="arow"><b>敏捷</b><span class="d">暴击率</span><span class="v">142</span><button class="plus">＋</button></div>
+            <div class="arow"><b>体质</b><span class="d">生命 / 物防</span><span class="v">203</span><button class="plus">＋</button></div>
+            <div class="arow"><b>精神</b><span class="d">法攻 / 法力</span><span class="v">88</span><button class="plus" style="opacity:.4;cursor:not-allowed">＋</button></div>
+          </div>
+          <div class="attr-foot"><button class="btn btn--danger btn--sm">洗 点</button></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+</div></div>
+<script src="../stage.js"></script>
+</body>
+</html>

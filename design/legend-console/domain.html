@@ -1,0 +1,774 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>OLUA 传奇 · 游戏领域组件</title>
+<style>
+:root{
+  --void:#090705; --stone-1:#12100C; --stone-2:#1B1712; --stone-3:#241E17;
+  --gold:#C9A24D; --gold-hi:#F0DCAC; --gold-dim:#6B562F;
+  --fire:#B9441F; --fire-hi:#E4743A; --jade:#6FA96B;
+  --ink:#EEE5D2; --ink-2:#B7A88F; --ink-3:#7E7059;
+  --line:rgba(201,162,77,.18); --line-soft:rgba(201,162,77,.09);
+  --font-display:"Songti SC","Source Han Serif SC","Noto Serif SC","STSong",serif;
+  --font-ui:"PingFang SC","Hiragino Sans GB","Microsoft YaHei",system-ui,sans-serif;
+  --font-mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  --r:2px; --ease:cubic-bezier(.22,.61,.36,1);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--void);color:var(--ink);font:400 13.5px/1.65 var(--font-ui);-webkit-font-smoothing:antialiased}
+body::before{
+  content:"";position:fixed;inset:0;pointer-events:none;opacity:.11;mix-blend-mode:overlay;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.86' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+ul{list-style:none}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+input{font:inherit;color:inherit}
+.page{max-width:1180px;margin:0 auto;padding:clamp(28px,4vw,56px) clamp(18px,3vw,36px) 80px}
+
+.top{margin-bottom:34px;padding-bottom:22px;border-bottom:1px solid var(--line-soft)}
+.crumb{display:flex;align-items:center;gap:9px;font-family:var(--font-mono);font-size:9.5px;letter-spacing:.16em;color:var(--ink-3)}
+.crumb a:hover{color:var(--gold)}
+.crumb i{width:12px;height:1px;background:var(--gold-dim)}
+.top h1{margin-top:16px;font-family:var(--font-display);font-size:clamp(26px,3.2vw,34px);font-weight:700;letter-spacing:.10em}
+.top h1 small{display:inline-block;margin-left:12px;vertical-align:middle;font-family:var(--font-mono);font-size:9.5px;font-weight:400;letter-spacing:.2em;color:var(--gold-dim);border:1px solid var(--line);border-radius:var(--r);padding:3px 7px}
+.top p{margin-top:9px;max-width:76ch;font-size:12.5px;line-height:1.8;color:var(--ink-3)}
+.top p b{color:var(--ink-2);font-weight:500}
+
+.sec{margin-top:44px}
+.sec-head{display:flex;align-items:baseline;gap:12px;margin-bottom:6px}
+.sec-head .idx{font-family:var(--font-mono);font-size:9.5px;letter-spacing:.16em;color:var(--gold-dim);border:1px solid var(--line);padding:2px 6px;border-radius:1px}
+.sec-head h2{font-family:var(--font-display);font-size:19px;font-weight:700;letter-spacing:.09em}
+.sec-head .en{font-family:var(--font-mono);font-size:8.5px;letter-spacing:.2em;text-transform:uppercase;color:var(--ink-3)}
+.sec-head .src{margin-left:auto;font-family:var(--font-mono);font-size:9px;letter-spacing:.1em;color:var(--gold-dim)}
+.sec > .desc{margin-bottom:16px;max-width:76ch;font-size:12px;line-height:1.8;color:var(--ink-3)}
+.sec > .desc b{color:var(--ink-2);font-weight:500}
+.demo{position:relative;padding:20px;border:1px solid var(--line);border-radius:var(--r);background:linear-gradient(170deg,var(--stone-2),#14110D)}
+.demo::before{content:"";position:absolute;inset:4px;border:1px solid rgba(201,162,77,.05);pointer-events:none}
+.demo > *{position:relative}
+.cap{margin-top:9px;font-size:11px;line-height:1.7;color:var(--ink-3)}
+.cap b{color:var(--ink-2);font-weight:500}
+.row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px}
+.badge{display:inline-flex;align-items:center;gap:5px;height:20px;padding:0 7px;border-radius:1px;font-family:var(--font-mono);font-size:9.5px;letter-spacing:.08em;border:1px solid}
+.badge.gold{border-color:var(--gold-dim);color:var(--gold-hi);background:rgba(201,162,77,.08)}
+.badge.red{border-color:rgba(185,68,31,.5);color:#E88A62;background:rgba(185,68,31,.10)}
+.badge.slate{border-color:var(--line);color:var(--ink-2);background:rgba(255,255,255,.02)}
+.btn{display:inline-flex;align-items:center;gap:7px;height:32px;padding:0 13px;border-radius:var(--r);font-size:12.5px;font-weight:500;transition:filter .2s,border-color .2s,background .2s}
+.btn.primary{color:#1A1206;background:linear-gradient(180deg,#E8CE8C,#D0AC60 38%,#B58C3D 72%,#987333);box-shadow:inset 0 1px 0 rgba(255,255,255,.55),0 10px 20px -14px rgba(201,162,77,.6)}
+.btn.primary:hover{filter:brightness(1.07)}
+.btn.outline{border:1px solid var(--line);color:var(--ink-2);background:linear-gradient(180deg,rgba(255,255,255,.03),rgba(0,0,0,.18))}
+.btn.outline:hover{border-color:rgba(201,162,77,.4);color:var(--ink)}
+.btn.sm{height:26px;padding:0 9px;font-size:11.5px}
+
+/* ═══════ 资源缩略图 ═══════ */
+.thumb{
+  width:42px;height:42px;flex:0 0 auto;border:1px solid var(--line);border-radius:1px;
+  display:grid;place-items:center;overflow:hidden;position:relative;cursor:zoom-in;
+  background:linear-gradient(180deg,rgba(0,0,0,.42),rgba(0,0,0,.2));
+  transition:box-shadow .2s,border-color .2s;
+}
+.thumb:hover{border-color:rgba(201,162,77,.55);box-shadow:0 0 0 2px rgba(201,162,77,.18)}
+.thumb .px{position:absolute;inset:0;opacity:.45;
+  background-image:linear-gradient(45deg,rgba(201,162,77,.10) 25%,transparent 25%,transparent 75%,rgba(201,162,77,.10) 75%),
+                   linear-gradient(45deg,rgba(201,162,77,.10) 25%,transparent 25%,transparent 75%,rgba(201,162,77,.10) 75%);
+  background-size:8px 8px;background-position:0 0,4px 4px}
+.thumb .gl{
+  position:relative;font-family:var(--font-display);font-size:17px;font-weight:700;color:var(--gold-hi);
+  text-shadow:0 0 12px rgba(201,162,77,.45);
+}
+.thumb.no{cursor:default}
+.thumb.no span{font-family:var(--font-mono);font-size:9px;color:var(--ink-3);letter-spacing:.08em}
+.thumb.lg{width:64px;height:64px}
+.thumb.lg .gl{font-size:26px}
+.thumb.sm{width:28px;height:28px}
+.thumb.sm .gl{font-size:12px}
+
+/* 帧动画演示：六格连排，当前帧循环点亮 */
+.atlas{display:flex;gap:4px;align-items:center}
+.atlas .f{
+  width:34px;height:34px;border:1px solid var(--line-soft);border-radius:1px;position:relative;
+  background:rgba(0,0,0,.3);display:grid;place-items:center;
+}
+.atlas .f i{position:absolute;inset:3px;border-radius:1px;background:radial-gradient(circle at 50% 58%,rgba(201,162,77,var(--o,.16)),transparent 70%)}
+.atlas .f.cur{border-color:var(--gold);box-shadow:0 0 10px rgba(201,162,77,.28)}
+.atlas .f.cur i{--o:.5}
+.atlas .idx{font-family:var(--font-mono);font-size:9px;color:var(--ink-3);margin-left:10px}
+
+/* ═══════ EntityCard / 装备槽 ═══════ */
+.ecard{
+  position:relative;width:100%;padding:10px 8px 9px;border:1px solid var(--line);border-radius:var(--r);
+  background:linear-gradient(180deg,rgba(0,0,0,.34),rgba(0,0,0,.18));
+  display:flex;flex-direction:column;align-items:center;gap:7px;cursor:pointer;text-align:center;
+  transition:border-color .2s,background .2s,box-shadow .2s;
+}
+.ecard:hover{border-color:rgba(201,162,77,.45);background:rgba(201,162,77,.06)}
+.ecard .nm{font-size:11px;color:var(--ink-2);line-height:1.4}
+.ecard .sub{font-size:9.5px;font-family:var(--font-mono);color:var(--ink-3)}
+.ecard .rm{
+  position:absolute;top:-1px;right:-1px;width:15px;height:15px;display:grid;place-items:center;
+  background:#2A160E;color:#E88A62;font-size:9px;border:1px solid rgba(185,68,31,.45);
+  opacity:0;transition:opacity .15s;
+}
+.ecard:hover .rm{opacity:1}
+.ecard.empty{border-style:dashed;border-color:rgba(201,162,77,.22);background:none;color:var(--ink-3);justify-content:center;min-height:86px}
+.ecard.empty:hover{border-color:rgba(201,162,77,.4);color:var(--ink-2)}
+.ecard.empty .plus{font-size:16px;color:var(--gold-dim)}
+
+/* 装备槽布局：环绕人物 */
+.slots{
+  display:grid;grid-template-columns:repeat(3,86px);grid-template-rows:repeat(3,86px);gap:10px;
+  justify-content:center;position:relative;
+}
+.slots .figure{
+  grid-column:2;grid-row:2;display:grid;place-items:center;
+  border:1px solid var(--line-soft);border-radius:var(--r);
+  background:radial-gradient(60% 60% at 50% 40%,rgba(201,162,77,.08),transparent 75%);
+  color:var(--gold-dim);
+}
+.slot-tag{font-family:var(--font-mono);font-size:8px;letter-spacing:.1em;color:var(--ink-3);text-align:center;margin-top:4px}
+.slots .cellwrap{display:flex;flex-direction:column;justify-content:flex-start}
+
+/* ═══════ 选择器 ═══════ */
+.pick-search{position:relative;margin-bottom:12px}
+.pick-search input{width:100%;height:34px;padding:0 12px 0 32px;border:1px solid rgba(201,162,77,.22);border-radius:var(--r);
+  background:linear-gradient(180deg,rgba(0,0,0,.42),rgba(0,0,0,.24));color:var(--ink);font-size:12.5px}
+.pick-search input:focus{outline:none;border-color:var(--gold);box-shadow:0 0 0 3px rgba(201,162,77,.10)}
+.pick-search svg{position:absolute;left:10px;top:10px;color:var(--ink-3)}
+.pick-groups{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+.pick-groups button{
+  height:24px;padding:0 10px;font-size:11px;color:var(--ink-3);border:1px solid var(--line-soft);border-radius:var(--r);
+  transition:color .18s,border-color .18s,background .18s;
+}
+.pick-groups button:hover{color:var(--ink-2);border-color:var(--line)}
+.pick-groups button.on{color:#1A1206;background:linear-gradient(180deg,#E4C87F,#BE9644);border-color:transparent;font-weight:600}
+.pick-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(84px,1fr));gap:8px}
+.pick-item{
+  padding:8px 4px 7px;border:1px solid var(--line-soft);border-radius:var(--r);text-align:center;cursor:pointer;
+  display:flex;flex-direction:column;align-items:center;gap:5px;position:relative;
+  transition:border-color .18s,background .18s;
+}
+.pick-item:hover{border-color:rgba(201,162,77,.4);background:rgba(201,162,77,.06)}
+.pick-item .nm{font-size:10px;color:var(--ink-2);line-height:1.35}
+.pick-item.sel{border-color:var(--gold);background:rgba(201,162,77,.09)}
+.pick-item.sel::after{content:"";position:absolute;top:3px;right:3px;width:5px;height:5px;background:var(--gold);transform:rotate(45deg)}
+.pick-item.multiple.sel::after{content:"✓";position:absolute;top:2px;right:3px;width:auto;height:auto;transform:none;background:none;
+  color:var(--gold-hi);font-family:var(--font-mono);font-size:10px}
+.pick-more{margin-top:10px;width:100%;height:30px;border:1px dashed rgba(201,162,77,.28);border-radius:var(--r);
+  font-size:11px;color:var(--ink-3);transition:color .2s,border-color .2s}
+.pick-more:hover{color:var(--gold);border-color:rgba(201,162,77,.5)}
+.pick-foot{display:flex;align-items:center;justify-content:space-between;margin-top:12px;padding-top:11px;border-top:1px solid var(--line-soft)}
+.pick-foot .sel-info{font-size:11.5px;color:var(--ink-2)}
+.pick-foot .sel-info b{color:var(--gold-hi);font-weight:500}
+
+/* EntityPickButton（字段自带选择器） */
+.pickbtn{
+  width:100%;height:34px;display:flex;align-items:center;gap:9px;padding:0 9px;
+  border:1px solid rgba(201,162,77,.22);border-radius:var(--r);
+  background:linear-gradient(180deg,rgba(0,0,0,.42),rgba(0,0,0,.24));
+  cursor:pointer;transition:border-color .2s;text-align:left;
+}
+.pickbtn:hover{border-color:rgba(201,162,77,.4)}
+.pickbtn .nm{font-size:12.5px;color:var(--ink)}
+.pickbtn .id{font-family:var(--font-mono);font-size:10px;color:var(--ink-3)}
+.pickbtn .sw{margin-left:auto;color:var(--ink-3);font-size:10px}
+.pickbtn.emptyv{color:var(--ink-3);font-size:12.5px}
+
+/* ═══════ LevelLadder ═══════ */
+.ladder{display:grid;grid-template-columns:150px 1fr;gap:18px;align-items:start}
+.ladder .cur{
+  display:flex;flex-direction:column;align-items:center;gap:9px;padding:16px 10px 13px;
+  border:1px solid var(--gold-dim);border-radius:var(--r);
+  background:radial-gradient(80% 60% at 50% 0%,rgba(201,162,77,.10),transparent 70%),rgba(0,0,0,.28);
+}
+.ladder .cur .nm{font-family:var(--font-display);font-size:14px;font-weight:700;letter-spacing:.08em;color:var(--gold-hi)}
+.ladder .cur .ds{font-size:10.5px;color:var(--ink-3);text-align:center;line-height:1.6}
+.ladder .cur .cost{font-family:var(--font-mono);font-size:9.5px;color:var(--ink-3);border-top:1px solid var(--line-soft);padding-top:7px;width:100%;text-align:center}
+.steps{display:flex;flex-direction:column}
+.step{
+  display:grid;grid-template-columns:26px 44px 1fr 84px;gap:12px;align-items:center;
+  padding:9px 10px;border-bottom:1px solid rgba(201,162,77,.055);cursor:pointer;border-radius:var(--r);
+  transition:background .16s;
+}
+.step:hover{background:rgba(201,162,77,.05)}
+.step.cur{background:rgba(201,162,77,.09);box-shadow:inset 2px 0 0 var(--gold)}
+.step .lv{font-family:var(--font-mono);font-size:10px;color:var(--gold-dim)}
+.step .nm2{font-size:12.5px;color:var(--ink-2)}
+.step.cur .nm2{color:var(--gold-hi)}
+.step .ds2{font-size:10.5px;color:var(--ink-3);line-height:1.5;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.step .cost2{font-family:var(--font-mono);font-size:9.5px;color:var(--ink-3);text-align:right}
+.step.locked{opacity:.45}
+
+/* ═══════ BagGrid ═══════ */
+.bag{display:grid;grid-template-columns:repeat(11,1fr);gap:4px;max-width:520px}
+.bcell{
+  position:relative;aspect-ratio:1;border:1px solid rgba(201,162,77,.14);border-radius:1px;
+  display:grid;place-items:center;cursor:pointer;overflow:hidden;
+  background:linear-gradient(180deg,rgba(0,0,0,.3),rgba(0,0,0,.14));
+  transition:border-color .15s,background .15s;
+}
+.bcell:hover{border-color:rgba(201,162,77,.5)}
+.bcell.empty{border-style:dashed}
+.bcell.empty::after{content:"+";color:rgba(201,162,77,.3);font-size:11px}
+.bcell .gl{font-family:var(--font-display);font-size:14px;font-weight:700;color:var(--gold-hi);text-shadow:0 0 10px rgba(201,162,77,.4)}
+.bcell .qty{
+  position:absolute;right:1px;bottom:0;font-family:var(--font-mono);font-size:8.5px;color:var(--gold-hi);
+  text-shadow:0 1px 2px rgba(0,0,0,.9);
+}
+.bcell.oob{border-color:rgba(185,68,31,.6);background:rgba(185,68,31,.08)}
+.bcell.oob .gl{color:#E88A62;text-shadow:none}
+
+/* ═══════ SkillList ═══════ */
+.skills{max-width:560px}
+.skill{display:grid;grid-template-columns:38px 1fr 64px 26px;gap:11px;align-items:center;padding:8px 6px;border-bottom:1px solid rgba(201,162,77,.055)}
+.skill:last-child{border-bottom:0}
+.skill .inf .n{font-size:12.5px;color:var(--ink)}
+.skill .inf .d{font-size:10.5px;color:var(--ink-3);line-height:1.5;margin-top:1px;display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden}
+.skill input{
+  height:28px;width:100%;padding:0 8px;border:1px solid rgba(201,162,77,.22);border-radius:var(--r);
+  background:rgba(0,0,0,.32);color:var(--ink);font-family:var(--font-mono);font-size:11.5px;text-align:center;
+}
+.skill input:focus{outline:none;border-color:var(--gold)}
+.skill .rm{color:var(--ink-3);width:22px;height:22px;display:grid;place-items:center;border-radius:var(--r)}
+.skill .rm:hover{color:var(--fire-hi);background:rgba(185,68,31,.1)}
+
+/* ═══════ Attributes ═══════ */
+.attrs{max-width:520px}
+.attr{display:grid;grid-template-columns:86px 1fr 26px 1fr;gap:10px;align-items:center;padding:7px 6px;border-bottom:1px solid rgba(201,162,77,.055);font-size:12px}
+.attr .k{color:var(--ink-3)}
+.attr .old{font-family:var(--font-mono);font-size:11.5px;color:var(--ink-2);text-align:right}
+.attr .arr{color:var(--gold-dim);text-align:center;font-size:10px}
+.attr .new input{
+  width:100%;height:28px;padding:0 8px;border:1px solid rgba(201,162,77,.3);border-radius:var(--r);
+  background:rgba(201,162,77,.05);color:var(--gold-hi);font-family:var(--font-mono);font-size:11.5px;text-align:right;
+}
+.attr .new input:focus{outline:none;border-color:var(--gold)}
+.attr.changed .old{text-decoration:line-through;text-decoration-color:rgba(185,68,31,.5);color:var(--ink-3)}
+
+/* ═══════ Drop ═══════ */
+.drop-tabs{display:flex;gap:2px;border-bottom:1px solid var(--line-soft);margin-bottom:14px}
+.drop-tabs button{position:relative;padding:8px 14px 9px;font-size:12.5px;color:var(--ink-3)}
+.drop-tabs button.on{color:var(--gold-hi)}
+.drop-tabs button.on::after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:1px;background:var(--gold)}
+.drop-row{
+  display:grid;grid-template-columns:40px 1fr 74px 74px 86px 26px;gap:9px;align-items:center;
+  padding:7px 4px;border-bottom:1px solid rgba(201,162,77,.05);font-size:11.5px;
+}
+.drop-row .w,.drop-row .c{height:28px;padding:0 7px;border:1px solid rgba(201,162,77,.2);border-radius:var(--r);
+  background:rgba(0,0,0,.3);color:var(--ink);font-family:var(--font-mono);font-size:11px;text-align:right}
+.drop-row .w:focus,.drop-row .c:focus{outline:none;border-color:var(--gold)}
+.drop-row .bar{position:relative;height:4px;border-radius:1px;background:rgba(255,255,255,.04);grid-column:1/-1;margin-top:-2px}
+.drop-row .bar i{position:absolute;left:0;top:0;bottom:0;border-radius:1px;background:linear-gradient(90deg,rgba(201,162,77,.5),var(--gold))}
+.drop-add{margin-top:10px;width:100%;height:30px;border:1px dashed rgba(201,162,77,.28);border-radius:var(--r);font-size:11.5px;color:var(--ink-3)}
+.drop-add:hover{color:var(--gold);border-color:rgba(201,162,77,.5)}
+
+/* ═══════ MapCanvas ═══════ */
+.map-modes{display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap}
+.map-modes button{
+  height:26px;padding:0 11px;font-size:11px;color:var(--ink-3);border:1px solid var(--line-soft);border-radius:var(--r);
+  display:inline-flex;align-items:center;gap:6px;transition:color .18s,border-color .18s;
+}
+.map-modes button:hover{color:var(--ink-2);border-color:var(--line)}
+.map-modes button.on{color:var(--gold-hi);border-color:var(--gold-dim);background:rgba(201,162,77,.1)}
+.map-modes button i{width:7px;height:7px;border-radius:1px;background:currentColor}
+.map-legend{display:flex;gap:16px;flex-wrap:wrap;margin-top:10px;font-size:10.5px;color:var(--ink-3)}
+.map-legend span{display:inline-flex;align-items:center;gap:6px}
+.map-legend i{width:8px;height:8px;border-radius:1px}
+
+/* ═══════ BanStatus ═══════ */
+.banbox{max-width:460px}
+.ban-head{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.ban-head b{font-size:13px;color:var(--ink)}
+.ban-list{display:grid;grid-template-columns:76px 1fr;gap:6px 14px;font-size:12px}
+.ban-list .k{color:var(--ink-3)}
+.ban-list .v{color:var(--ink-2);font-variant-numeric:tabular-nums}
+.ban-list .v.mono{font-family:var(--font-mono);font-size:11px}
+
+.foot{margin-top:56px;padding-top:18px;border-top:1px solid var(--line-soft);display:flex;justify-content:space-between;flex-wrap:wrap;gap:12px;font-family:var(--font-mono);font-size:9px;letter-spacing:.14em;color:var(--ink-3)}
+html.static *{animation:none!important}
+@keyframes frameLoop{0%,100%{--x:0}16%{--x:1}33%{--x:2}50%{--x:3}66%{--x:4}83%{--x:5}}
+</style>
+</head>
+<body>
+<div class="page">
+
+  <header class="top">
+    <div class="crumb">
+      <a href="./index.html">设计系统</a><i></i><a href="./components.html">通用组件</a><i></i><span>游戏领域组件</span>
+    </div>
+    <h1>游戏领域组件<small>DOMAIN</small></h1>
+    <p>
+      管理端真正的特色：<b>运营看的是图，不是 id</b>。资源缩略图、帧动画、实体选择器、装备槽、背包格、技能行、
+      地图画布、掉落编辑 —— 全部从「填表」改成「认东西」。这一页的每个组件都对应 admin 真实实现
+      （<b>GameImage / FrameAnimation / entity/* / ImagePicker / drop/* / map/*</b>）。
+    </p>
+  </header>
+
+  <!-- 1 资源缩略图 -->
+  <section class="sec">
+    <div class="sec-head"><span class="idx">01</span><h2>资源缩略图</h2><span class="en">Game Icon · Frame</span><span class="src">GameImage.tsx · EntityImage.tsx</span></div>
+    <p class="desc">
+      两类素材两种渲染：<b>单图</b>（装备 / 药品 / 物品 / 技能）直接 <code>&lt;img&gt;</code>；
+      <b>图集</b>（称号 / 战魂 / NPC）解析 plist 取文档序<b>第一帧</b>画 canvas。
+      资源不存在给「无图」占位 —— 不让一格 404 撑破整张表。
+    </p>
+    <div class="demo">
+      <div class="row" style="gap:18px">
+        <span class="thumb lg"><span class="px"></span><span class="gl">屠</span></span>
+        <span class="thumb"><span class="px"></span><span class="gl">烈</span></span>
+        <span class="thumb sm"><span class="px"></span><span class="gl">药</span></span>
+        <span class="thumb lg no"><span>无图</span></span>
+        <span class="thumb no"><span>无图</span></span>
+        <span style="font-size:11.5px;color:var(--ink-3);margin-left:8px">演示用文字代图（真实环境直连 /game-resources 像素图）</span>
+      </div>
+      <p class="cap">三档尺寸 64 / 42 / 28；悬停出 <b>2px 金环 + 放大光标</b>，点击开灯箱（portal 到 body，Esc / 点遮罩关）</p>
+    </div>
+
+    <div class="demo" style="margin-top:12px">
+      <div class="row" style="gap:22px;align-items:flex-start">
+        <div>
+          <div class="atlas" style="--t:0s">
+            <span class="f cur"><i></i></span><span class="f"><i></i></span><span class="f"><i></i></span>
+            <span class="f"><i></i></span><span class="f"><i></i></span><span class="f"><i></i></span>
+            <span class="idx">frame 1 / 6</span>
+          </div>
+          <p class="cap" style="margin-top:8px">plist 文档序 6 帧 · 12fps</p>
+        </div>
+        <div>
+          <div class="atlas" style="--t:.3s">
+            <span class="f"><i></i></span><span class="f"><i></i></span><span class="f cur"><i></i></span>
+            <span class="f"><i></i></span><span class="f"><i></i></span><span class="f"><i></i></span>
+            <span class="idx">frame 3 / 6</span>
+          </div>
+          <p class="cap" style="margin-top:8px">空帧阈值与客户端同值 · <b>共享 rAF 时钟</b>（多动画同频，不各开定时器）</p>
+        </div>
+      </div>
+      <p class="cap">列表页用<b>首帧</b>（缩略图不播），详情卡才开 <b>FrameAnimation 循环</b> —— 动画优先于静态图标</p>
+    </div>
+  </section>
+
+  <!-- 2 装备槽 -->
+  <section class="sec">
+    <div class="sec-head"><span class="idx">02</span><h2>装备槽</h2><span class="en">Equip Slots</span><span class="src">EquipSlots.tsx · EntityCard.tsx</span></div>
+    <p class="desc">
+      槽位顺序的权威在<b>客户端部位表</b>（EQUIPMENT_SLOT_ORDER，7 部位）；数据里有而部位表没有的脏键<b>追加显示、不静默丢</b>——
+      界面少画一格，玩家身上那件装备存档一次就真没了。空槽虚线「未穿」，悬停出清除钮。
+    </p>
+    <div class="demo">
+      <div class="split" style="align-items:flex-start;justify-content:center;gap:44px">
+        <div>
+          <div class="slots">
+            <div class="cellwrap" style="grid-column:2;grid-row:1">
+              <div class="ecard"><span class="thumb sm"><span class="px"></span><span class="gl">盔</span></span><span class="nm">圣战头盔</span><span class="rm">✕</span></div>
+              <span class="slot-tag">头盔</span>
+            </div>
+            <div class="cellwrap" style="grid-column:1;grid-row:2">
+              <div class="ecard"><span class="thumb sm"><span class="px"></span><span class="gl">链</span></span><span class="nm">灵魂项链</span><span class="rm">✕</span></div>
+              <span class="slot-tag">项链</span>
+            </div>
+            <div class="figure">
+              <svg width="44" height="60" viewBox="0 0 44 60" fill="none" stroke="currentColor" stroke-width="1.4">
+                <circle cx="22" cy="12" r="7"/><path d="M22 19v18"/><path d="M10 26h24"/><path d="M22 37l-7 17M22 37l7 17"/>
+              </svg>
+            </div>
+            <div class="cellwrap" style="grid-column:3;grid-row:2">
+              <div class="ecard"><span class="thumb sm"><span class="px"></span><span class="gl">镯</span></span><span class="nm">圣战手镯</span><span class="rm">✕</span></div>
+              <span class="slot-tag">手镯</span>
+            </div>
+            <div class="cellwrap" style="grid-column:1;grid-row:3">
+              <div class="ecard"><span class="thumb sm"><span class="px"></span><span class="gl">屠</span></span><span class="nm">屠龙刀 <span class="badge gold" style="height:15px;font-size:8px;padding:0 4px">+7</span></span><span class="rm">✕</span></div>
+              <span class="slot-tag">武器</span>
+            </div>
+            <div class="cellwrap" style="grid-column:2;grid-row:3">
+              <div class="ecard"><span class="thumb sm"><span class="px"></span><span class="gl">甲</span></span><span class="nm">天魔神甲</span><span class="rm">✕</span></div>
+              <span class="slot-tag">衣服</span>
+            </div>
+            <div class="cellwrap" style="grid-column:3;grid-row:3">
+              <div class="ecard empty"><span class="plus">＋</span><span style="font-size:10px">未穿</span></div>
+              <span class="slot-tag">腰带</span>
+            </div>
+          </div>
+          <p class="cap" style="text-align:center;margin-top:12px">环绕人物剪影 · 中央无交互 · <b>脏数据键追加在末行</b>（此处未出现）</p>
+        </div>
+
+        <div style="max-width:280px">
+          <div class="col" style="gap:10px">
+            <div class="ecard" style="min-height:86px">
+              <span class="thumb"><span class="px"></span><span class="gl">戒</span></span>
+              <span class="nm">麻痹戒指</span><span class="sub">特殊 · 全服唯一</span>
+              <span class="rm">✕</span>
+            </div>
+            <div class="ecard empty"><span class="plus">＋</span><span style="font-size:11px">点击装备戒指</span></div>
+          </div>
+          <p class="cap" style="margin-top:10px">实体卡 = 装备槽 / 背包 / 技能行的最小单元：<b>图 + 名字 + 一行说明</b>；空态虚线示意「这里能放东西」</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3 实体选择器 -->
+  <section class="sec">
+    <div class="sec-head"><span class="idx">03</span><h2>实体选择器</h2><span class="en">Entity Picker</span><span class="src">EntityPickerList.tsx · catalog.ts · 8 种实体共用</span></div>
+    <p class="desc">
+      装备 / 物品 / 技能 / 药品 / 时装 / 地图 / 怪物 / NPC 全走同一组件 —— 调用方只传 <code>catalog.entityOptions(kind)</code>。
+      搜索 + 分组 + 网格；超过渲染上限先画一批，底部「再显示 N 项」<b>能翻到底</b>，不是只提示缩小范围。
+    </p>
+    <div class="grid2">
+      <div class="demo">
+        <div class="pick-search">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="11" cy="11" r="7"/><path d="m16.5 16.5 4 4"/></svg>
+          <input placeholder="搜索装备名或 id…">
+        </div>
+        <div class="pick-groups">
+          <button class="on">全部</button><button>武器</button><button>头盔</button><button>衣服</button><button>项链</button><button>手镯</button><button>戒指</button><button>腰带</button>
+        </div>
+        <div class="pick-grid">
+          <div class="pick-item sel"><span class="thumb sm"><span class="px"></span><span class="gl">屠</span></span><span class="nm">屠龙刀</span></div>
+          <div class="pick-item"><span class="thumb sm"><span class="px"></span><span class="gl">裁</span></span><span class="nm">裁决之杖</span></div>
+          <div class="pick-item"><span class="thumb sm"><span class="px"></span><span class="gl">骨</span></span><span class="nm">骨玉权杖</span></div>
+          <div class="pick-item"><span class="thumb sm"><span class="px"></span><span class="gl">龙</span></span><span class="nm">龙纹剑</span></div>
+          <div class="pick-item"><span class="thumb sm"><span class="px"></span><span class="gl">井</span></span><span class="nm">井中月</span></div>
+          <div class="pick-item"><span class="thumb sm"><span class="px"></span><span class="gl">炼</span></span><span class="nm">炼狱</span></div>
+          <div class="pick-item"><span class="thumb sm"><span class="px"></span><span class="gl">铜</span></span><span class="nm">铜锤</span></div>
+          <div class="pick-item"><span class="thumb sm"><span class="px"></span><span class="gl">偃</span></span><span class="nm">偃月</span></div>
+        </div>
+        <button class="pick-more">再显示 58 项（共 66）</button>
+        <div class="pick-foot">
+          <span class="sel-info">已选 <b>屠龙刀</b> · weapon_1_p0s7</span>
+          <button class="btn primary sm">确认</button>
+        </div>
+        <p class="cap"><b>单选</b>：选中即金框 + 右上金菱</p>
+      </div>
+
+      <div class="demo">
+        <div class="pick-search">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="11" cy="11" r="7"/><path d="m16.5 16.5 4 4"/></svg>
+          <input placeholder="搜索邮件附件…">
+        </div>
+        <div class="pick-groups">
+          <button class="on">全部</button><button>药品</button><button>材料</button><button>卷轴</button>
+        </div>
+        <div class="pick-grid">
+          <div class="pick-item multiple sel"><span class="thumb sm"><span class="px"></span><span class="gl">金</span></span><span class="nm">金创药</span></div>
+          <div class="pick-item multiple sel"><span class="thumb sm"><span class="px"></span><span class="gl">魔</span></span><span class="nm">魔法药</span></div>
+          <div class="pick-item multiple sel"><span class="thumb sm"><span class="px"></span><span class="gl">祝</span></span><span class="nm">祝福油</span></div>
+          <div class="pick-item"><span class="thumb sm"><span class="px"></span><span class="gl">传</span></span><span class="nm">传送戒指</span></div>
+          <div class="pick-item"><span class="thumb sm"><span class="px"></span><span class="gl">回</span></span><span class="nm">回城卷</span></div>
+          <div class="pick-item"><span class="thumb sm"><span class="px"></span><span class="gl">随</span></span><span class="nm">随机传送卷</span></div>
+        </div>
+        <div class="pick-foot">
+          <span class="sel-info">已勾选 <b>3</b> 项</span>
+          <button class="btn primary sm">加入 3 项</button>
+        </div>
+        <p class="cap"><b>多选</b>：点击即勾 / 取消，底部出现「加入 N 项」；已选的实心金勾</p>
+      </div>
+    </div>
+
+    <div class="demo" style="margin-top:12px">
+      <p class="cap" style="margin:0 0 10px"><b>EntityPickButton</b>：字段自带选择器 —— 掉落条目从「背 drug_hp_1 这种 id」变成点开就认图</p>
+      <div class="grid2">
+        <div class="pickbtn">
+          <span class="thumb sm"><span class="px"></span><span class="gl">金</span></span>
+          <span><span class="nm">金创药（中）</span><br><span class="id">drug_hp_2</span></span>
+          <span class="sw">更换 ▾</span>
+        </div>
+        <div class="pickbtn emptyv">
+          <span>点击选择掉落物品…</span>
+          <span class="sw">▾</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 4 等级阶梯 -->
+  <section class="sec">
+    <div class="sec-head"><span class="idx">04</span><h2>养成等级阶梯</h2><span class="en">Level Ladder</span><span class="src">LevelLadder.tsx · 称号 / 战魂 / 军衔共用</span></div>
+    <p class="desc">
+      替代「数字输入框 + 记住 31 级是什么称号」：左侧当前档大图 + 说明 + 消耗，右侧按档挑选。
+      0 = 未激活，清空写回 0 而不是 undefined。
+    </p>
+    <div class="demo">
+      <div class="ladder">
+        <div class="cur">
+          <span class="thumb lg"><span class="px"></span><span class="gl">王</span></span>
+          <span class="nm">沙城之主</span>
+          <span class="ds">攻占沙巴克并守满 7 天的帮主专属</span>
+          <span class="cost">消耗：城主令 ×1</span>
+        </div>
+        <div class="steps">
+          <div class="step"><span class="lv">01</span><span class="thumb sm"><span class="px"></span><span class="gl">兵</span></span><span class="nm2">初出茅庐</span><span class="cost2">声望 ×100</span></div>
+          <div class="step"><span class="lv">02</span><span class="thumb sm"><span class="px"></span><span class="gl">勇</span></span><span class="nm2">小有名气</span><span class="cost2">声望 ×500</span></div>
+          <div class="step"><span class="lv">03</span><span class="thumb sm"><span class="px"></span><span class="gl">豪</span></span><span class="nm2">一方豪杰</span><span class="cost2">声望 ×2,000</span></div>
+          <div class="step cur"><span class="lv">07</span><span class="thumb sm"><span class="px"></span><span class="gl">王</span></span><span class="nm2">沙城之主</span><span class="cost2">城主令 ×1</span></div>
+          <div class="step locked"><span class="lv">08</span><span class="thumb sm"><span class="px"></span><span class="gl">尊</span></span><span class="nm2">传奇至尊</span><span class="cost2">尚未开放</span></div>
+        </div>
+      </div>
+      <p class="cap">当前档左金条 + 亮字；未开放档压暗锁态。每档都带自己的动画首帧 —— <b>一眼能认</b></p>
+    </div>
+  </section>
+
+  <!-- 5 背包 -->
+  <section class="sec">
+    <div class="sec-head"><span class="idx">05</span><h2>背包格子</h2><span class="en">Bag Grid</span><span class="src">BagGrid.tsx · 尺寸权威在客户端配置</span></div>
+    <p class="desc">
+      按 rows × cols 铺成真实网格（演示 4×11，游戏内 7×11）：空格虚线「+」，有东西显示图标 + 数量角标。
+      <b>越界格子照实报出</b>（红框）—— 丢一件装备比多一行提示严重得多。
+    </p>
+    <div class="demo">
+      <div class="bag">
+        <div class="bcell"><span class="gl">金</span><span class="qty">×99</span></div>
+        <div class="bcell"><span class="gl">魔</span><span class="qty">×99</span></div>
+        <div class="bcell"><span class="gl">祝</span><span class="qty">×3</span></div>
+        <div class="bcell"><span class="gl">屠</span><span class="qty">×1</span></div>
+        <div class="bcell empty"></div>
+        <div class="bcell"><span class="gl">回</span><span class="qty">×20</span></div>
+        <div class="bcell"><span class="gl">随</span><span class="qty">×50</span></div>
+        <div class="bcell empty"></div>
+        <div class="bcell empty"></div>
+        <div class="bcell"><span class="gl">传</span><span class="qty">×1</span></div>
+        <div class="bcell empty"></div>
+        <div class="bcell"><span class="gl">战</span><span class="qty">×12</span></div>
+        <div class="bcell oob"><span class="gl">残</span><span class="qty">×2</span></div>
+        <div class="bcell empty"></div>
+        <div class="bcell empty"></div>
+        <div class="bcell"><span class="gl">书</span><span class="qty">×1</span></div>
+        <div class="bcell empty"></div>
+        <div class="bcell"><span class="gl">钻</span><span class="qty">×8</span></div>
+        <div class="bcell empty"></div>
+        <div class="bcell empty"></div>
+        <div class="bcell empty"></div>
+        <div class="bcell empty"></div>
+        <div class="bcell"><span class="gl">盔</span><span class="qty">×1</span></div>
+        <div class="bcell"><span class="gl">甲</span><span class="qty">×1</span></div>
+        <div class="bcell empty"></div>
+        <div class="bcell empty"></div>
+        <div class="bcell"><span class="gl">链</span><span class="qty">×1</span></div>
+        <div class="bcell empty"></div>
+        <div class="bcell empty"></div>
+        <div class="bcell empty"></div>
+        <div class="bcell empty"></div>
+        <div class="bcell empty"></div>
+        <div class="bcell empty"></div>
+        <div class="bcell empty"></div>
+        <div class="bcell empty"></div>
+        <div class="bcell empty"></div>
+        <div class="bcell empty"></div>
+        <div class="bcell empty"></div>
+        <div class="bcell empty"></div>
+        <div class="bcell empty"></div>
+        <div class="bcell empty"></div>
+        <div class="bcell empty"></div>
+        <div class="bcell empty"></div>
+        <div class="bcell empty"></div>
+      </div>
+      <p class="cap" style="margin-top:10px">红框格 = <b>越界残留</b>（外部把尺寸改小后库里仍存的物品），点开可以搬走或清除，但不静默消失</p>
+    </div>
+  </section>
+
+  <!-- 6 技能 / 属性 -->
+  <section class="sec">
+    <div class="sec-head"><span class="idx">06</span><h2>技能行与属性编辑</h2><span class="en">Skill List · Attributes</span><span class="src">SkillList.tsx · AttributesEditor.tsx</span></div>
+    <p class="desc">
+      技能行 = 图标 + 名字 + 描述 + 等级自由输入（客户端上限不是一张表，管理端不编上限）。
+      属性编辑 = 旧值划线 + 新值金色右对齐，<b>改了什么一眼可查</b>。
+    </p>
+    <div class="grid2">
+      <div class="demo">
+        <div class="skills">
+          <div class="skill">
+            <span class="thumb sm"><span class="px"></span><span class="gl">烈</span></span>
+            <span class="inf"><span class="n">烈火剑法</span><span class="d">对目标造成 180% 物理伤害，附加 3 秒破甲</span></span>
+            <input value="7" aria-label="烈火剑法等级">
+            <button class="rm">✕</button>
+          </div>
+          <div class="skill">
+            <span class="thumb sm"><span class="px"></span><span class="gl">刺</span></span>
+            <span class="inf"><span class="n">刺杀剑术</span><span class="d">隔位攻击，无视目标部分防御</span></span>
+            <input value="4" aria-label="刺杀剑术等级">
+            <button class="rm">✕</button>
+          </div>
+          <div class="skill">
+            <span class="thumb sm"><span class="px"></span><span class="gl">半</span></span>
+            <span class="inf"><span class="n">半月弯刀</span><span class="d">对身周 5 目标造成 120% 伤害</span></span>
+            <input value="3" aria-label="半月弯刀等级">
+            <button class="rm">✕</button>
+          </div>
+        </div>
+        <div style="margin-top:12px"><button class="btn outline sm">＋ 添加技能</button></div>
+      </div>
+
+      <div class="demo">
+        <div class="attrs">
+          <div class="attr"><span class="k">攻击力</span><span class="old">184</span><span class="arr">→</span><span class="new"><input value="210"></span></div>
+          <div class="attr changed"><span class="k">防御力</span><span class="old">96</span><span class="arr">→</span><span class="new"><input value="88"></span></div>
+          <div class="attr"><span class="k">魔法力</span><span class="old">42</span><span class="arr">→</span><span class="new"><input value="42"></span></div>
+          <div class="attr changed"><span class="k">生命值</span><span class="old">1,260</span><span class="arr">→</span><span class="new"><input value="1,480"></span></div>
+          <div class="attr"><span class="k">敏捷</span><span class="old">31</span><span class="arr">→</span><span class="new"><input value="31"></span></div>
+        </div>
+        <p class="cap" style="margin-top:10px">划线 = 与服务端最新值的差异；未变化的行输入框退化为普通态</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 7 掉落编辑 -->
+  <section class="sec">
+    <div class="sec-head"><span class="idx">07</span><h2>掉落编辑</h2><span class="en">Drop Editors</span><span class="src">drop/DropEditors.tsx · MonsterDropDialog.tsx</span></div>
+    <p class="desc">
+      三种来源：<b>具名表</b>（引用共享配置）/ <b>内联</b>（本怪私有条目）/ <b>兜底</b>（无配置时）。
+      内联模式下每行 = 实体选择 + 权重 + 概率 + 数量区间；权重占比实时画成比例条。
+    </p>
+    <div class="demo">
+      <div class="drop-tabs">
+        <button>具名表 · 沃玛教主标准掉落</button>
+        <button class="on">内联 · 3 条</button>
+        <button>兜底</button>
+      </div>
+      <div>
+        <div class="drop-row" style="color:var(--ink-3);font-family:var(--font-mono);font-size:9px;letter-spacing:.12em;border-bottom:1px solid var(--line)">
+          <span>图</span><span>物品</span><span style="text-align:right">权重</span><span style="text-align:right">概率 %</span><span style="text-align:right">数量</span><span></span>
+        </div>
+        <div class="drop-row">
+          <span class="thumb sm"><span class="px"></span><span class="gl">屠</span></span>
+          <div class="pickbtn" style="height:28px"><span class="nm">屠龙刀</span><span class="id">weapon_1_p0s7</span></div>
+          <input class="w" value="5">
+          <input class="c" value="100">
+          <input class="c" value="1" style="border-style:dashed">
+          <button class="iconbtn danger" title="移除"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 7h16l-1.4 12.2a2 2 0 0 1-2 1.8H7.4a2 2 0 0 1-2-1.8Z"/><path d="M9 7V5a3 3 0 0 1 6 0v2"/></svg></button>
+          <div class="bar"><i style="width:6%"></i></div>
+        </div>
+        <div class="drop-row">
+          <span class="thumb sm"><span class="px"></span><span class="gl">祝</span></span>
+          <div class="pickbtn" style="height:28px"><span class="nm">祝福油</span><span class="id">item_oil_1</span></div>
+          <input class="w" value="30">
+          <input class="c" value="35">
+          <input class="c" value="1 - 2">
+          <button class="iconbtn danger" title="移除"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 7h16l-1.4 12.2a2 2 0 0 1-2 1.8H7.4a2 2 0 0 1-2-1.8Z"/><path d="M9 7V5a3 3 0 0 1 6 0v2"/></svg></button>
+          <div class="bar"><i style="width:37%"></i></div>
+        </div>
+        <div class="drop-row">
+          <span class="thumb sm"><span class="px"></span><span class="gl">金</span></span>
+          <div class="pickbtn" style="height:28px"><span class="nm">金创药（中）</span><span class="id">drug_hp_2</span></div>
+          <input class="w" value="65">
+          <input class="c" value="80">
+          <input class="c" value="2 - 5">
+          <button class="iconbtn danger" title="移除"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 7h16l-1.4 12.2a2 2 0 0 1-2 1.8H7.4a2 2 0 0 1-2-1.8Z"/><path d="M9 7V5a3 3 0 0 1 6 0v2"/></svg></button>
+          <div class="bar"><i style="width:57%"></i></div>
+        </div>
+        <button class="drop-add">＋ 添加掉落条目</button>
+        <p class="cap">底部金色比例条 = 该行权重占总量比（6% / 37% / 57%）；数量留空 = 固定 1，用虚线框区别于实填</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 8 地图画布 -->
+  <section class="sec">
+    <div class="sec-head"><span class="idx">08</span><h2>地图画布</h2><span class="en">Map Canvas</span><span class="src">map/MapCanvas.tsx · 五种模式</span></div>
+    <p class="desc">
+      view / spawn / npc / revive / collision 五模式切换。刷怪区画矩形（最小 16px）、NPC 与复活点画点、碰撞画笔刷。
+      图层可开关（底图 / 刷怪 / NPC / 复活 / 碰撞）。
+    </p>
+    <div class="demo">
+      <div class="map-modes">
+        <button class="on"><i></i>浏览</button>
+        <button><i style="color:var(--fire-hi)"></i>刷怪区</button>
+        <button><i style="color:var(--gold-hi)"></i>NPC</button>
+        <button><i style="color:var(--jade)"></i>复活点</button>
+        <button><i style="color:var(--ink-3)"></i>碰撞</button>
+        <span style="margin-left:auto;font-family:var(--font-mono);font-size:9.5px;color:var(--ink-3)">苍月岛 · map_3 · 128×96 格 · 缩放 1:1</span>
+      </div>
+      <div style="position:relative;border:1px solid var(--line);border-radius:var(--r);overflow:hidden">
+        <svg viewBox="0 0 640 360" style="display:block;width:100%">
+          <!-- 底图：地形 -->
+          <rect width="640" height="360" fill="#151009"/>
+          <rect width="640" height="360" fill="url(#terrain)"/>
+          <defs>
+            <pattern id="terrain" width="40" height="40" patternUnits="userSpaceOnUse">
+              <rect width="40" height="40" fill="transparent"/>
+              <path d="M0 40h40" stroke="rgba(201,162,77,.05)"/>
+              <path d="M40 0v40" stroke="rgba(201,162,77,.05)"/>
+            </pattern>
+            <pattern id="water" width="20" height="12" patternUnits="userSpaceOnUse">
+              <rect width="20" height="12" fill="#132018"/>
+              <path d="M0 8 Q5 5 10 8 T20 8" stroke="rgba(111,169,107,.25)" fill="none"/>
+            </pattern>
+          </defs>
+          <!-- 地形块：水面 / 草地 / 山岩 -->
+          <ellipse cx="120" cy="290" rx="130" ry="70" fill="url(#water)" opacity=".9"/>
+          <path d="M0 120 Q 140 60 260 130 T 520 100 L 640 150 L 640 0 L 0 0 Z" fill="#1D1710"/>
+          <path d="M400 360 L 460 260 L 540 320 L 600 240 L 640 300 L 640 360 Z" fill="#1D1710"/>
+          <!-- 主路径 -->
+          <path d="M60 340 C 160 300, 220 240, 330 210 S 520 190, 600 140" fill="none" stroke="rgba(201,162,77,.22)" stroke-width="14" stroke-linecap="round"/>
+          <path d="M60 340 C 160 300, 220 240, 330 210 S 520 190, 600 140" fill="none" stroke="rgba(201,162,77,.4)" stroke-width="1.5" stroke-dasharray="1 0"/>
+          <!-- 刷怪区（火色半透明矩形，可拖拽调整） -->
+          <g>
+            <rect x="120" y="150" width="180" height="110" fill="rgba(185,68,31,.16)" stroke="rgba(228,116,58,.65)" stroke-width="1" stroke-dasharray="5 3"/>
+            <rect x="122" y="152" width="8" height="8" fill="var(--fire-hi)"/><rect x="290" y="152" width="8" height="8" fill="var(--fire-hi)"/>
+            <text x="126" y="146" font-family="ui-monospace,Menlo" font-size="9" fill="#E4743A">spawn_1 · 沃玛战士 ×12</text>
+          </g>
+          <g>
+            <rect x="380" y="220" width="150" height="90" fill="rgba(185,68,31,.12)" stroke="rgba(228,116,58,.5)" stroke-width="1" stroke-dasharray="5 3"/>
+            <text x="386" y="216" font-family="ui-monospace,Menlo" font-size="9" fill="#E4743A">spawn_2 · 沃玛卫士 ×8</text>
+          </g>
+          <!-- NPC 点 -->
+          <g fill="#F0DCAC">
+            <rect x="322" y="204" width="8" height="8" transform="rotate(45 326 208)" stroke="#14100B" stroke-width="1"/>
+            <rect x="96" y="316" width="8" height="8" transform="rotate(45 100 320)" stroke="#14100B" stroke-width="1"/>
+          </g>
+          <!-- 复活点 -->
+          <g>
+            <circle cx="200" cy="330" r="9" fill="none" stroke="#6FA96B" stroke-width="1.4"/>
+            <path d="M200 323v14M193 330h14" stroke="#6FA96B" stroke-width="1.2"/>
+            <text x="214" y="334" font-family="ui-monospace,Menlo" font-size="9" fill="#8FC98A">revive_1</text>
+          </g>
+          <!-- 当前编辑反馈：悬停中的 NPC -->
+          <g>
+            <rect x="316" y="198" width="20" height="20" fill="none" stroke="rgba(240,220,172,.5)" stroke-width="1"/>
+            <text x="340" y="196" font-family="ui-monospace,Menlo" font-size="9" fill="#F0DCAC">npc_药店老板</text>
+          </g>
+          <!-- 碰撞示意（右上角笔刷块） -->
+          <g opacity=".5">
+            <rect x="560" y="40" width="24" height="24" fill="#0B0907" stroke="rgba(126,112,89,.5)" stroke-width="1"/>
+            <rect x="584" y="40" width="24" height="24" fill="#0B0907" stroke="rgba(126,112,89,.5)" stroke-width="1"/>
+            <rect x="560" y="64" width="24" height="24" fill="#0B0907" stroke="rgba(126,112,89,.5)" stroke-width="1"/>
+          </g>
+        </svg>
+      </div>
+      <div class="map-legend">
+        <span><i style="background:rgba(228,116,58,.6)"></i>刷怪区（可拖角调整，最小 16px）</span>
+        <span><i style="background:#F0DCAC;transform:rotate(45deg)"></i>NPC 点</span>
+        <span><i style="background:#6FA96B;border-radius:50%"></i>复活点</span>
+        <span><i style="background:#0B0907;border:1px solid rgba(126,112,89,.5)"></i>碰撞块</span>
+        <span><i style="background:rgba(201,162,77,.3);border-radius:99px;height:3px;width:14px"></i>主路径</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- 9 封禁状态 -->
+  <section class="sec">
+    <div class="sec-head"><span class="idx">09</span><h2>封禁状态卡</h2><span class="en">Ban Status</span><span class="src">BanStatus.tsx</span></div>
+    <p class="desc">账号行内是「封禁中」徽章；详情卡展开原因、期限与操作人 —— 信息够做判断，不够做翻案。</p>
+    <div class="demo">
+      <div class="banbox">
+        <div class="ban-head">
+          <span class="badge red"><i></i>封禁中</span>
+          <b>acc_9c31ff · 墨白的影子</b>
+          <button class="btn outline sm" style="margin-left:auto">解封</button>
+        </div>
+        <div class="ban-list">
+          <span class="k">类型</span><span class="v">临时封禁 · 剩余 6 天 14 小时</span>
+          <span class="k">原因</span><span class="v">外挂行为：移动速度异常（第 3 次触发）</span>
+          <span class="k">操作人</span><span class="v">墨白</span>
+          <span class="k">日志</span><span class="v mono">audit_8841 · 2026-11-12 23:41</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer class="foot">
+    <span>DOMAIN · 9 节 · entity / drop / map / 资源全家桶</span>
+    <span>石 · 金 · 火</span>
+  </footer>
+</div>
+</body>
+</html>

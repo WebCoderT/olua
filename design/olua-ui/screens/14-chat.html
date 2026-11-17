@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>14 · 聊天 · Olua UI</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Noto+Serif+SC:wght@700;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../tokens.css">
+<link rel="stylesheet" href="../ui.css">
+<style>
+/* ── 聊天窗 424×302（chatDialogLayout 口径，与 HUD 左下停靠窗同一组件）：四频道页签 + 消息列表 + 输入行；
+      私聊选人页叠在同一窗内；#state=pick 演示选人 ── */
+.chatd{position:absolute;left:20px;bottom:18px;width:424px;height:302px;display:flex;flex-direction:column}
+.chat-head{display:flex;align-items:center;gap:5px;padding:9px 12px 8px;border-bottom:1px solid rgba(0,0,0,.55)}
+.chat-head .tabs{display:flex;gap:5px}
+.chat-head .tabs button{height:22px;padding:0 9px;font-size:11px;border-radius:var(--r-2);
+  border:var(--bw-1) solid var(--line-2);background:rgba(0,0,0,.42);color:var(--text-3);letter-spacing:.05em}
+.chat-head .tabs button.is-on{background:linear-gradient(180deg,var(--gold-4),var(--gold-3));
+  border-color:var(--gold-3);color:var(--text-on-gold);font-weight:600}
+.chat-head .tabs button .badge{margin-left:5px;height:14px;min-width:14px;padding:0 3px;font-size:9px;
+  border-radius:999px;background:var(--ember-4);color:var(--text-on-ember);display:inline-grid;place-items:center}
+.chat-head .tools{margin-left:auto;display:flex;gap:4px}
+.chat-head .tools button{width:22px;height:22px;display:grid;place-items:center;border-radius:var(--r-1);
+  border:var(--bw-1) solid var(--line-2);background:rgba(0,0,0,.35);color:var(--text-3);font-size:11px}
+.chat-head .tools button:hover{color:var(--gold-4);border-color:var(--line-1)}
+.cmsgs{flex:1;min-height:0;overflow:hidden;padding:7px 12px;display:flex;flex-direction:column;gap:4px;justify-content:flex-end}
+.cmsg{font-size:11.5px;line-height:1.5;color:var(--text-2);text-shadow:0 1px 2px #000}
+.cmsg .t{font-family:var(--font-num);font-size:9.5px;color:var(--text-4);margin-right:7px}
+.cmsg b{font-weight:400;margin-right:4px}
+.cmsg--world b{color:var(--gold-4)}
+.cmsg--guild b{color:#8FBFD8}
+.cmsg--sys{color:var(--text-3)}
+.cmsg--sys em{font-style:normal;color:var(--jade)}
+.cmsg--private b{color:#C9A6E0}
+.cmsg .quote{color:var(--text-4)}
+/* 输入行：频道 chip 56×26 + 输入 + 发送（chatDialogLayout.inputRow） */
+.chat-in{display:flex;align-items:center;gap:6px;padding:8px 12px 10px;border-top:1px solid rgba(0,0,0,.55)}
+.chat-in .chip{flex:none;height:26px;padding:0 8px;border-radius:var(--r-1);border:var(--bw-1) solid var(--line-2);
+  background:rgba(0,0,0,.42);font-size:11px;color:var(--gold-4);display:flex;align-items:center;gap:4px;letter-spacing:.06em}
+.chat-in .chip i{font-style:normal;font-size:9px;color:var(--text-4)}
+.chat-in .input{flex:1;min-width:0;height:26px;font-size:11.5px;background:rgba(0,0,0,.42)}
+.chat-in .btn{flex:none;height:26px;min-width:56px;font-size:11.5px}
+/* 私聊选人页（叠在消息列表位置）：hint 380×18 + 列表 392×170 */
+.pick{flex:1;min-height:0;display:none;flex-direction:column;padding:7px 16px}
+.pick-hint{font-size:11px;color:var(--text-4);padding:2px 0 8px;text-align:center}
+.pick .rows{flex:1;overflow:hidden;display:flex;flex-direction:column;gap:2px}
+.pick .prow{height:38px;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--line-1)}
+.pick .prow:last-child{border-bottom:0}
+.pick .prow .who{flex:1;min-width:0;font-size:12px;color:var(--text-2)}
+.pick .prow .who i{font-style:normal;font-size:10px;color:var(--text-4);margin-left:8px}
+/* 世界内气泡（叠加在世界上的演示） */
+.bubble{position:absolute;left:620px;top:250px;display:flex;flex-direction:column;gap:10px}
+.bubble .b{max-width:430px;padding:7px 14px;border-radius:var(--r-pill);border:var(--bw-1) solid var(--line-2);
+  background:rgba(20,13,7,.92);font-size:12px;color:var(--text-2);box-shadow:var(--shadow-card)}
+.bubble .b b{font-weight:400;color:var(--gold-4);margin-right:6px}
+/* 右侧规格注记（说明本窗与 HUD 停靠窗同组件同尺寸） */
+.spec{position:absolute;right:40px;bottom:60px;width:280px}
+.spec .row{display:flex;justify-content:space-between;font-size:11px;color:var(--text-3);padding:3px 0}
+.spec .row span:last-child{font-family:var(--font-num);color:var(--text-2)}
+</style>
+</head>
+<body>
+<div class="stage"><div class="stage-inner">
+  <div class="stage-bg stage-bg--blur"><img src="../assets/hero-bg.jpg"></div>
+  <div class="stage-scrim"></div>
+
+  <div class="layer layer--hud">
+
+    <!-- 停靠窗：left 20 / bottom 18，与 04 HUD 常驻聊天窗完全同位同尺寸 -->
+    <div class="panel panel--rivet chatd">
+      <div class="chat-head">
+        <div class="tabs">
+          <button class="is-on">世界</button>
+          <button>同图</button>
+          <button>帮会</button>
+          <button>私聊<span class="badge">2</span></button>
+        </div>
+        <div class="tools"><button aria-label="清空">⌫</button><button aria-label="收起">▾</button></div>
+      </div>
+
+      <div class="cmsgs" id="msgpage">
+        <div class="cmsg cmsg--sys"><span class="t">21:02</span>[系统] 欢迎回到沙城，<em>苍狼</em></div>
+        <div class="cmsg cmsg--world"><span class="t">21:04</span><b>断刃:</b>东门集合，行会战半小时后开打</div>
+        <div class="cmsg cmsg--world"><span class="t">21:05</span><b>拾荒者:</b>收 40 级紫装，带价私</div>
+        <div class="cmsg cmsg--world"><span class="t">21:06</span><b>冷月:</b><span class="quote">回复 断刃：</span>带上我这把奶</div>
+        <div class="cmsg cmsg--guild"><span class="t">21:07</span><b>老刀:</b>匪首刷新了，来人</div>
+        <div class="cmsg cmsg--guild"><span class="t">21:07</span><b>疾风:</b>马上到</div>
+        <div class="cmsg cmsg--sys"><span class="t">21:08</span>[系统] 你获得了 <em>屠龙·裂空</em>（传说）</div>
+        <div class="cmsg cmsg--private"><span class="t">21:09</span><b>→ 夜鸦:</b>等我两分钟，买药</div>
+      </div>
+
+      <!-- 私聊选人页（进入私聊页签先选人；叠在同一窗内，hint + 列表） -->
+      <div class="pick" id="pickpage">
+        <p class="pick-hint">选择私聊对象（聊过的 + 附近的人）</p>
+        <div class="rows">
+          <div class="prow">
+            <div class="who">夜鸦<i>聊过 · Lv.38 · 法师</i></div>
+            <button class="btn btn--xs btn--gold">私 聊</button>
+          </div>
+          <div class="prow">
+            <div class="who">断刃<i>附近 · Lv.45 · 战士</i></div>
+            <button class="btn btn--xs btn--gold">私 聊</button>
+          </div>
+          <div class="prow">
+            <div class="who">冷月<i>附近 · Lv.29 · 道士</i></div>
+            <button class="btn btn--xs btn--gold">私 聊</button>
+          </div>
+        </div>
+        <div class="chat-in" style="padding:8px 0 0;border-top:0">
+          <input class="input" placeholder="（附近没有其他玩家，也还没聊过天）" disabled>
+        </div>
+      </div>
+
+      <div class="chat-in">
+        <button class="chip">世界<i>▾</i></button>
+        <input class="input" placeholder="对全世界说点什么…">
+        <button class="btn btn--gold">发送</button>
+      </div>
+    </div>
+
+    <!-- 世界内气泡 -->
+    <div class="bubble">
+      <div class="b"><b>断刃:</b>东门集合，行会战半小时后开打</div>
+      <div class="b"><b>老刀:</b>匪首刷新了，来人</div>
+      <div class="b"><b>冷月:</b>带上我这把奶</div>
+    </div>
+
+    <!-- 规格注记 -->
+    <div class="panel panel--bracket spec">
+      <div class="panel-head"><span class="panel-eyebrow">CHAT SPEC</span><h2 class="panel-title">同组件口径</h2></div>
+      <div class="panel-body">
+        <div class="row"><span>窗体</span><span>424 × 302</span></div>
+        <div class="row"><span>停靠</span><span>left 20 · bottom 18</span></div>
+        <div class="row"><span>页签</span><span>4 × 50×22 · gap 5</span></div>
+        <div class="row"><span>消息列表</span><span>400 × 210</span></div>
+        <div class="row"><span>输入行</span><span>chip 56×26 · 发送 56×26</span></div>
+        <div class="row"><span>私聊选人</span><span>hint 380×18 · 列表 392×170</span></div>
+        <div class="row"><span>频道</span><span>世界 / 同图 / 帮会 / 私聊</span></div>
+      </div>
+    </div>
+
+  </div>
+
+</div></div>
+<script src="../stage.js"></script>
+<script>
+if (/state=pick/.test(location.hash)){
+  document.getElementById('msgpage').style.display = 'none';
+  document.getElementById('pickpage').style.display = 'flex';
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Olua · 客户端 UI 设计参数与组件库 v1.0</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Noto+Serif+SC:wght@700;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="tokens.css">
+<link rel="stylesheet" href="ui.css">
+<style>
+/* 文档页专用：允许滚动，两栏（左导航 + 右内容） */
+html,body{height:auto;overflow:auto}
+body{background:var(--surface-1);color:var(--text-2)}
+.doc{display:grid;grid-template-columns:260px minmax(0,1fr);min-height:100vh}
+.nav{
+  position:sticky;top:0;height:100vh;overflow:auto;padding:28px 20px 40px;
+  border-right:1px solid var(--line-1);background:linear-gradient(180deg,#150F08,#100B06);
+}
+.nav-brand{display:flex;align-items:center;gap:11px;margin-bottom:26px}
+.nav-brand .mark{width:36px;height:36px;border:1px solid var(--gold-2);border-radius:var(--r-2);
+  display:grid;place-items:center;color:var(--gold-3);background:rgba(20,13,7,.6)}
+.nav-brand b{font-family:var(--font-display);font-size:18px;letter-spacing:.16em;color:var(--text-1)}
+.nav-brand span{display:block;font-family:var(--font-num);font-size:9px;letter-spacing:.3em;color:var(--text-4);margin-top:3px}
+.nav h4{font-family:var(--font-num);font-size:10px;letter-spacing:.24em;color:var(--gold-2);
+  margin:22px 0 8px;text-transform:uppercase}
+.nav a{display:block;padding:6px 10px;border-radius:var(--r-2);font-size:13px;color:var(--text-3);
+  border-left:2px solid transparent;transition:.2s}
+.nav a:hover{color:var(--text-1);background:rgba(194,146,69,.07);border-left-color:var(--gold-2)}
+.nav a.on{color:var(--gold-4);background:rgba(194,146,69,.1);border-left-color:var(--gold-3)}
+.nav a i{font-family:var(--font-num);font-size:10px;color:var(--gold-1);margin-right:7px;font-style:normal}
+
+.main{padding:44px 56px 96px;max-width:1400px}
+.doc-head{padding-bottom:30px;border-bottom:1px solid var(--line-1);margin-bottom:44px}
+.doc-head .cap{color:var(--gold-3)}
+.doc-head h1{font-family:var(--font-display);font-weight:900;font-size:44px;letter-spacing:.08em;
+  color:var(--text-1);margin:10px 0 12px;line-height:1.1}
+.doc-head p{max-width:70ch;font-size:14px;line-height:1.85;color:var(--text-3)}
+.lock{display:inline-flex;align-items:center;gap:8px;margin-top:16px;padding:7px 14px;border-radius:var(--r-pill);
+  border:1px solid rgba(111,191,142,.45);background:rgba(111,191,142,.08);color:#9FDDB6;font-size:12px}
+
+section{margin-bottom:56px;scroll-margin-top:24px}
+.sec-head{display:flex;align-items:baseline;gap:14px;margin-bottom:20px}
+.sec-head .idx{font-family:var(--font-num);font-size:12px;letter-spacing:.2em;color:var(--gold-2)}
+.sec-head h2{font-family:var(--font-display);font-weight:700;font-size:24px;letter-spacing:.14em;color:var(--text-1)}
+.sec-head p{font-size:12px;color:var(--text-4);margin-left:auto}
+
+/* 色板 */
+.sw-group{margin-bottom:26px}
+.sw-group h5{font-size:12px;letter-spacing:.16em;color:var(--text-3);margin-bottom:10px}
+.sw-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(158px,1fr));gap:10px}
+.sw{border:1px solid var(--line-1);border-radius:var(--r-2);overflow:hidden;background:var(--surface-2)}
+.sw i{display:block;height:48px;border-bottom:1px solid rgba(0,0,0,.4)}
+.sw b{display:block;font-family:var(--font-num);font-size:10.5px;color:var(--text-2);padding:7px 9px 0;font-weight:400}
+.sw span{display:block;font-family:var(--font-num);font-size:10px;color:var(--gold-2);padding:1px 9px}
+.sw em{display:block;font-size:11px;color:var(--text-4);padding:2px 9px 8px;font-style:normal}
+
+/* 参数行 */
+table.spec{width:100%;border-collapse:collapse;font-size:13px}
+table.spec th{text-align:left;font-family:var(--font-num);font-size:10px;letter-spacing:.18em;
+  color:var(--gold-2);font-weight:400;padding:8px 10px;border-bottom:1px solid var(--line-2)}
+table.spec td{padding:9px 10px;border-bottom:1px solid var(--line-1);color:var(--text-3);vertical-align:top}
+table.spec td:first-child{font-family:var(--font-num);color:var(--gold-4);font-size:12px;white-space:nowrap}
+table.spec td:nth-child(2){color:var(--text-1);font-family:var(--font-num);font-size:12px;white-space:nowrap}
+table.spec code{font-family:var(--font-num);color:var(--gold-4);font-size:12px}
+
+/* 字号样张 */
+.type-row{display:flex;align-items:baseline;gap:20px;padding:10px 0;border-bottom:1px solid var(--line-1)}
+.type-row .k{width:90px;flex:0 0 auto;font-family:var(--font-num);font-size:11px;color:var(--gold-2)}
+.type-row .s{flex:1;color:var(--text-1)}
+.type-row .u{width:120px;flex:0 0 auto;font-size:11px;color:var(--text-4);text-align:right}
+
+/* 组件展示盒 */
+.box{border:1px solid var(--line-1);border-radius:var(--r-3);background:rgba(18,12,7,.6);padding:22px;margin-bottom:14px}
+.box-t{font-family:var(--font-num);font-size:10px;letter-spacing:.2em;color:var(--gold-2);margin-bottom:16px}
+.stack{display:flex;flex-wrap:wrap;align-items:center;gap:12px}
+.stack--col{flex-direction:column;align-items:stretch}
+
+/* 界面索引 */
+.screens{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:14px}
+.scr{display:block;border:1px solid var(--line-2);border-radius:var(--r-3);overflow:hidden;
+  background:linear-gradient(165deg,var(--surface-3),var(--surface-2));transition:.28s var(--ease)}
+.scr:hover{transform:translateY(-3px);border-color:var(--gold-2);box-shadow:var(--shadow-card)}
+.scr-top{position:relative;height:104px;background:linear-gradient(140deg,#2A1E12,#150F08);overflow:hidden;
+  display:grid;place-items:center;border-bottom:1px solid var(--line-1)}
+.scr-top .no{position:absolute;left:12px;top:9px;font-family:var(--font-num);font-size:11px;letter-spacing:.16em;color:var(--gold-2)}
+.scr-top .glyph{font-family:var(--font-display);font-size:34px;color:rgba(194,146,69,.34);letter-spacing:.2em}
+.scr-body{padding:12px 14px 14px}
+.scr-body b{display:block;font-family:var(--font-display);font-size:16px;letter-spacing:.1em;color:var(--text-1)}
+.scr-body span{display:block;font-size:11.5px;color:var(--text-4);margin-top:5px;line-height:1.6}
+.scr-body i{display:block;font-family:var(--font-num);font-size:10px;color:var(--gold-1);margin-top:7px;font-style:normal}
+
+.note{border-left:2px solid var(--ember-2);background:rgba(198,58,32,.07);padding:12px 16px;
+  font-size:12.5px;line-height:1.8;color:var(--text-3);border-radius:0 var(--r-2) var(--r-2) 0}
+.note b{color:var(--text-1)}
+</style>
+</head>
+<body>
+<div class="doc">
+
+<aside class="nav">
+  <div class="nav-brand">
+    <span class="mark">
+      <svg class="ic" viewBox="0 0 256 256" fill="currentColor"><path d="M216,32H152a8,8,0,0,0-6.34,3.12l-64,83.21L72,108.69a16,16,0,0,0-22.64,0l-12.69,12.7a16,16,0,0,0,0,22.63l20,20-28,28a16,16,0,0,0,0,22.63l12.69,12.68a16,16,0,0,0,22.62,0l28-28,20,20a16,16,0,0,0,22.64,0l12.69-12.7a16,16,0,0,0,0-22.63l-9.64-9.64,83.21-64A8,8,0,0,0,224,104V40A8,8,0,0,0,216,32ZM52.69,216,40,203.32l28-28L80.68,188Zm70.61-8L48,132.71,60.7,120,136,195.31ZM208,100.06l-81.74,62.88L115.32,152l50.34-50.34a8,8,0,0,0-11.32-11.31L104,140.68,93.07,129.74,155.94,48H208Z"/></svg>
+    </span>
+    <span><b>Olua</b><span>UI SYSTEM</span></span>
+  </div>
+
+  <h4>参数</h4>
+  <a href="#color" class="on">色彩</a>
+  <a href="#type">字体与字号</a>
+  <a href="#metric">间距 · 圆角 · 阴影</a>
+  <a href="#motion">动效 · 层级 · 舞台</a>
+
+  <h4>组件</h4>
+  <a href="#c-panel">面板与弹窗骨架</a>
+  <a href="#c-btn">按钮 · 表单</a>
+  <a href="#c-list">页签 · 列表 · 卡片</a>
+  <a href="#c-slot">格子 · 进度 · 角标</a>
+  <a href="#c-feedback">提示 · 空态 · 飘字</a>
+
+  <h4>界面（20）</h4>
+  <div id="nav-screens"></div>
+</aside>
+
+<main class="main">
+  <header class="doc-head">
+    <div class="cap">OLUA · CLIENT UI REBUILD / v1.0</div>
+    <h1>客户端界面重构 · 设计参数</h1>
+    <p>以「黄昏沙城」传奇风为基调，把登录页那套设计语言固化成可执行参数：暖炭褐底 + 古铜金线 + 朱红主行动 + 骨白墨字。
+       所有 20 个界面（4 个场景 + 16 组弹窗）只引用 <code>tokens.css</code> 与 <code>ui.css</code>，不再出现裸色值、裸字号、裸圆角。</p>
+    <div class="lock">
+      <svg class="ic" viewBox="0 0 256 256" fill="currentColor"><path d="M208,80H176V56a48,48,0,0,0-96,0V80H48A16,16,0,0,0,32,96V208a16,16,0,0,0,16,16H208a16,16,0,0,0,16-16V96A16,16,0,0,0,208,80ZM96,56a32,32,0,0,1,64,0V80H96ZM208,208H48V96H208V208Zm-68-56a12,12,0,1,1-12-12,12,12,0,0,1,12,12Z"/></svg>
+      参数已锁定 · 2026-11-15 · 后续改动走版本号 v1.x
+    </div>
+  </header>
+
+  <!-- ══════════ 色彩 ══════════ -->
+  <section id="color">
+    <div class="sec-head">
+      <span class="idx">01</span><h2>色彩</h2>
+      <p>四族分工不交叉：褐＝底、金＝结构与数值、朱红＝行动与危险、语义色＝状态</p>
+    </div>
+    <div id="swatches"></div>
+    <div class="note"><b>用色纪律：</b>金底必配深字（<code>--text-on-gold</code>）；朱红只用于主行动/危险/生命；品质色只出现在物品边框与名称，不做装饰；
+      同一个面板里金色面积不超过 20%，其余靠线路与留白撑结构。</div>
+  </section>
+
+  <!-- ══════════ 字体 ══════════ -->
+  <section id="type">
+    <div class="sec-head"><span class="idx">02</span><h2>字体与字号</h2><p>中文衬线做标题，无衬线做界面，Cinzel 管数字</p></div>
+    <table class="spec">
+      <tr><th>令牌</th><th>值</th><th>用途</th></tr>
+      <tr><td>--font-display</td><td>Noto Serif SC 700/900</td><td>场景标题、弹窗标题、主按钮、卡片名 —— 传奇气的来源</td></tr>
+      <tr><td>--font-ui</td><td>PingFang SC / 微软雅黑</td><td>正文、列表、说明、输入框</td></tr>
+      <tr><td>--font-num</td><td>Cinzel 600</td><td>所有数字、坐标、页码、序号、版本号（等宽对齐）</td></tr>
+    </table>
+    <div style="margin-top:22px" id="type-scale"></div>
+  </section>
+
+  <!-- ══════════ 间距 / 圆角 / 阴影 ══════════ -->
+  <section id="metric">
+    <div class="sec-head"><span class="idx">03</span><h2>间距 · 圆角 · 阴影</h2><p>4 的倍数为主，HUD 微调允许 2/6/10</p></div>
+    <table class="spec">
+      <tr><th>令牌</th><th>值</th><th>用途</th></tr>
+      <tr><td>--sp-2 … --sp-16</td><td>4 → 80</td><td>组件内边距、区块间距、栅格间隙</td></tr>
+      <tr><td>--pad-dialog</td><td>20 / 14</td><td>弹窗左右 20、上下 14（28 个弹窗统一）</td></tr>
+      <tr><td>--gap-row</td><td>6</td><td>列表行间距</td></tr>
+      <tr><td>--gap-slot</td><td>3</td><td>背包格子间距（客户端原值）</td></tr>
+      <tr><td>--r-1 … --r-4</td><td>2 / 4 / 6 / 10</td><td>格子内嵌 / 卡片输入按钮 / 面板弹窗 / 大块与常驻小窗</td></tr>
+      <tr><td>--shadow-panel</td><td>0 26px 64px -22px</td><td>弹窗投影（唯一的大投影）</td></tr>
+      <tr><td>--shadow-gold</td><td>1px 金环 + 26px 光晕</td><td>选中态、金色按钮悬停</td></tr>
+      <tr><td>--glow-ember</td><td>0 0 16px</td><td>红点、危险按钮、生命液面</td></tr>
+    </table>
+    <div class="box" style="margin-top:18px">
+      <div class="box-t">SHADOW / GLOW</div>
+      <div class="stack">
+        <div style="width:150px;height:74px;border-radius:var(--r-3);border:1px solid var(--line-3);background:var(--surface-2);box-shadow:var(--shadow-panel);display:grid;place-items:center;font-size:11px;color:var(--text-3)">panel</div>
+        <div style="width:150px;height:74px;border-radius:var(--r-2);border:1px solid var(--gold-2);background:var(--surface-3);box-shadow:var(--shadow-gold);display:grid;place-items:center;font-size:11px;color:var(--gold-4)">gold</div>
+        <div style="width:150px;height:74px;border-radius:var(--r-2);border:1px solid rgba(224,86,47,.6);background:var(--surface-3);box-shadow:var(--glow-ember);display:grid;place-items:center;font-size:11px;color:var(--ember-4)">ember</div>
+        <div style="width:150px;height:74px;border-radius:var(--r-2);border:1px solid rgba(111,191,142,.5);background:var(--surface-3);box-shadow:var(--glow-jade);display:grid;place-items:center;font-size:11px;color:var(--jade)">jade</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════ 动效 / 层级 ══════════ -->
+  <section id="motion">
+    <div class="sec-head"><span class="idx">04</span><h2>动效 · 层级 · 舞台</h2><p>动效只服务「反馈」与「入场」，不做装饰性循环</p></div>
+    <table class="spec">
+      <tr><th>令牌</th><th>值</th><th>用途</th></tr>
+      <tr><td>--dur-1 / 2 / 3</td><td>140 / 260 / 520ms</td><td>悬停反馈 / 页签展开 / 面板入场</td></tr>
+      <tr><td>--dur-4</td><td>1400ms</td><td>金环脉冲一个周期（选角脚下、选中怪物）</td></tr>
+      <tr><td>--dur-toast</td><td>2600ms</td><td>飘字停留（与客户端 3s 淡出一致）</td></tr>
+      <tr><td>--ease</td><td>cubic-bezier(.22,.61,.36,1)</td><td>通用出入；入场用 --ease-out</td></tr>
+      <tr><td>--z-hud → --z-guide</td><td>10 / 20 / 100 / 200 / 300 / 400 / 500</td><td>世界 → 掉落 → 弹窗 → 模态 → 悬停 → 飘字 → 引导</td></tr>
+      <tr><td>--stage-w/h</td><td>1920 × 1080</td><td>舞台等比缩放（stage.js 按窗口 fit，永不裁切）</td></tr>
+      <tr><td>--hud-*</td><td>球 90 / 格 42 / 导航 282 / 小地图 280</td><td>HUD 关键尺寸，与客户端 configs/layout 对齐</td></tr>
+    </table>
+  </section>
+
+  <!-- ══════════ 组件 ══════════ -->
+  <section id="c-panel">
+    <div class="sec-head"><span class="idx">05</span><h2>面板与弹窗骨架</h2><p>28 个弹窗共用一套：铆钉四角 + 居中标题 + 右上关闭</p></div>
+    <div class="box">
+      <div class="box-t">PANEL · 600×420（标准弹窗）</div>
+      <div class="panel panel--rivet" style="width:600px;height:420px">
+        <div class="panel-head">
+          <span class="panel-eyebrow">SECTION 01</span>
+          <h3 class="panel-title">面板标题</h3>
+          <p class="panel-sub">副标题放一行说明，可以没有</p>
+          <button class="panel-close" aria-label="关闭">×</button>
+        </div>
+        <div class="panel-body">
+          <div class="empty" style="height:180px">
+            <svg class="ic" viewBox="0 0 256 256" fill="currentColor"><path d="M224,128a8,8,0,0,1-8,8H136v80a8,8,0,0,1-16,0V136H40a8,8,0,0,1,0-16h80V40a8,8,0,0,1,16,0v80h80A8,8,0,0,1,224,128Z"/></svg>
+            <b>内容区</b><p>单列列表 / 两栏详情 / 三栏成长 / 卡片网格，四选一</p>
+          </div>
+        </div>
+        <div class="panel-foot"><span>左侧脚注</span><span>右侧脚注</span></div>
+      </div>
+    </div>
+    <div class="box">
+      <div class="box-t">PANEL · BRACKET（大面板：商城 / 公告 / 地图）</div>
+      <div class="panel panel--bracket" style="width:520px;height:120px;display:grid;place-items:center;color:var(--text-3);font-size:12px">
+        <span class="corner"></span><span class="corner"></span><span class="corner"></span><span class="corner"></span>
+        L 形铜条包角，比铆钉克制，用于整块画像与地图
+      </div>
+    </div>
+  </section>
+
+  <section id="c-btn">
+    <div class="sec-head"><span class="idx">06</span><h2>按钮 · 表单</h2><p>三种体量：48 主行动 / 36 常规 / 24 行内</p></div>
+    <div class="box">
+      <div class="box-t">BUTTON</div>
+      <div class="stack">
+        <button class="btn btn--primary" style="width:240px">进 入 游 戏</button>
+        <button class="btn btn--gold">常规金</button>
+        <button class="btn">常规</button>
+        <button class="btn btn--ghost">次要</button>
+        <button class="btn btn--danger">危险</button>
+        <button class="btn btn--sm">小按钮</button>
+        <button class="btn btn--xs btn--danger">删除</button>
+        <button class="btn" disabled>置灰</button>
+      </div>
+    </div>
+    <div class="box">
+      <div class="box-t">FORM</div>
+      <div class="stack" style="gap:16px">
+        <div class="field" style="width:280px">
+          <svg class="ic" viewBox="0 0 256 256" fill="currentColor"><path d="M230.92,212c-15.23-26.33-38.7-45.21-66.09-54.16a72,72,0,1,0-73.66,0C63.78,166.78,40.31,185.66,25.08,212a8,8,0,1,0,13.85,8c18.84-32.56,52.14-52,89.07-52s70.23,19.44,89.07,52a8,8,0,1,0,13.85-8ZM72,96a56,56,0,1,1,56,56A56.06,56.06,0,0,1,72,96Z"/></svg>
+          <input class="input" placeholder="请输入账号">
+        </div>
+        <div class="field field--plain" style="width:220px"><input class="input" placeholder="无图标输入"></div>
+        <label class="check-line"><input type="checkbox" class="checkbox" checked>记住账号</label>
+        <div class="tabs" style="justify-content:flex-start">
+          <button class="tab is-on">进行中<span class="badge">3</span></button>
+          <button class="tab">可 接</button>
+          <button class="tab">已 完 成</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="c-list">
+    <div class="sec-head"><span class="idx">07</span><h2>页签 · 列表 · 卡片</h2><p>行高 48 为基准，56/72 用于邮件与任务</p></div>
+    <div class="box">
+      <div class="box-t">LIST ROW · 四态</div>
+      <div class="list" style="max-width:560px">
+        <div class="row row--jade">
+          <span class="badge badge--jade">可交</span>
+          <div class="row-main"><span class="row-name">剿灭沙盗匪首</span><span class="row-sub">可交付 · 奖励 1200 经验 · 80 绑定元宝</span></div>
+          <div class="row-actions"><button class="btn btn--xs btn--gold">交 付</button></div>
+        </div>
+        <div class="row">
+          <span class="badge">1/3</span>
+          <div class="row-main"><span class="row-name">采集荒漠血草</span><span class="row-sub">进度 1 / 3</span></div>
+          <div class="row-actions"><span class="tiny dim">进行中</span></div>
+        </div>
+        <div class="row row--active">
+          <div class="row-main"><span class="row-name">【系统】跨服攻城战报名开启</span><span class="row-sub">重要 · 11.18 → 11.25</span></div>
+          <span class="row-meta">11-18</span>
+        </div>
+        <div class="row" style="opacity:.55">
+          <div class="row-main"><span class="row-name">已领取的奖励邮件</span><span class="row-sub">宫本武藏 · 附件已领</span></div>
+          <span class="badge badge--muted">已领</span>
+        </div>
+      </div>
+    </div>
+    <div class="box">
+      <div class="box-t">CARD · 角色卡 / 商品卡</div>
+      <div class="stack">
+        <div class="card card--on" style="width:132px;height:150px;padding:10px">
+          <div style="height:88px;border-radius:var(--r-1);background:linear-gradient(160deg,#3A2C1A,#1A1209);display:grid;place-items:center;color:var(--gold-3);font-family:var(--font-display);font-size:26px">战</div>
+          <div class="card-name" style="margin-top:8px">苍狼</div>
+          <div class="card-meta">战士 · Lv.42</div>
+        </div>
+        <div class="card" style="width:132px;height:150px;padding:10px">
+          <div style="height:88px;border-radius:var(--r-1);background:linear-gradient(160deg,#2A2440,#12101C);display:grid;place-items:center;color:var(--class-mage);font-family:var(--font-display);font-size:26px">法</div>
+          <div class="card-name" style="margin-top:8px">夜鸦</div>
+          <div class="card-meta">法师 · Lv.38</div>
+        </div>
+        <div class="card card--dim" style="width:132px;height:150px;padding:10px">
+          <div style="height:88px;border-radius:var(--r-1);background:#181009;display:grid;place-items:center;color:var(--text-4);font-size:11px">未拥有</div>
+          <div class="card-name" style="margin-top:8px">玄铁重铠</div>
+          <div class="card-meta">时装 · 128 绑元</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="c-slot">
+    <div class="sec-head"><span class="idx">08</span><h2>格子 · 进度 · 角标</h2><p>格子 50×50（背包）/ 42×44（快捷栏），品质只走描边与内发光</p></div>
+    <div class="box">
+      <div class="box-t">SLOT · 品质六档 + 数量 / 冷却 / 换装角标</div>
+      <div class="stack">
+        <div class="slot slot--q1"><span style="font-size:18px;color:var(--q-common)">剑</span><span class="slot-num">×12</span></div>
+        <div class="slot slot--q2"><span style="font-size:18px;color:var(--q-fine)">盾</span><span class="slot-num">×3</span></div>
+        <div class="slot slot--q3"><span style="font-size:18px;color:var(--q-rare)">盔</span><span class="slot-num">×1</span></div>
+        <div class="slot slot--q4"><span style="font-size:18px;color:var(--q-epic)">袍</span><span class="slot-corner">换</span></div>
+        <div class="slot slot--q5"><span style="font-size:18px;color:var(--q-legend)">刃</span></div>
+        <div class="slot slot--q6"><span style="font-size:18px;color:var(--q-myth)">印</span></div>
+        <div class="slot slot--empty"></div>
+        <div class="slot slot--q3 slot--cd"><span style="font-size:18px;color:var(--q-rare)">火</span><span class="slot-cd">2.4</span></div>
+        <div class="slot slot--q2"><span style="font-size:18px;color:var(--q-fine)">斩</span><span class="slot-key">1</span></div>
+      </div>
+    </div>
+    <div class="box">
+      <div class="box-t">BAR / ORB</div>
+      <div class="stack" style="gap:26px">
+        <div style="width:240px">
+          <div class="bar bar--hp" style="height:14px"><div class="bar-fill" style="width:72%"></div><span class="bar-label">1,842 / 2,560</span></div>
+          <div class="bar bar--mp" style="height:10px;margin-top:8px"><div class="bar-fill" style="width:45%"></div></div>
+          <div class="bar bar--exp" style="height:6px;margin-top:8px"><div class="bar-fill" style="width:63%"></div></div>
+          <div class="bar bar--jade" style="height:6px;margin-top:8px"><div class="bar-fill" style="width:88%"></div></div>
+        </div>
+        <div class="orb orb--hp"><div class="orb-fill"><i style="height:72%"></i></div><span class="orb-val num">1842</span></div>
+        <div class="orb orb--mp"><div class="orb-fill"><i style="height:45%"></i></div><span class="orb-val num">860</span></div>
+      </div>
+    </div>
+    <div class="box">
+      <div class="box-t">BADGE / TAG / DOT</div>
+      <div class="stack">
+        <span class="badge">12</span>
+        <span class="badge badge--gold">9+</span>
+        <span class="badge badge--jade">可交</span>
+        <span class="badge badge--ember">3</span>
+        <span class="badge badge--amber">待确认</span>
+        <span class="badge badge--muted">已领</span>
+        <span class="tag tag--gold">上次在</span>
+        <span class="tag tag--jade">推荐</span>
+        <span class="tag tag--ember">爆满</span>
+        <span class="tag tag--muted">维护中</span>
+        <span class="dot"></span>
+      </div>
+    </div>
+  </section>
+
+  <section id="c-feedback">
+    <div class="sec-head"><span class="idx">09</span><h2>提示 · 空态 · 飘字</h2><p>失败红、成功绿、待确认琥珀；空态用一句话，不画插图</p></div>
+    <div class="box">
+      <div class="box-t">TOAST / TIP / EMPTY</div>
+      <div class="stack" style="align-items:flex-start;gap:18px">
+        <div class="stack--col" style="gap:10px">
+          <span class="toast"><span class="dot"></span>已到达目的地</span>
+          <span class="toast toast--ok">拾取 玄铁重铠</span>
+          <span class="toast toast--err">绑定元宝不足，无法购买</span>
+          <span class="toast toast--warn">再点一次确认删除，3 秒后自动取消</span>
+        </div>
+        <div class="tip">
+          <div class="tip-head"><span class="ic" style="display:grid;place-items:center;border:1px solid var(--q-legend);border-radius:3px;color:var(--q-legend);font-size:11px">刃</span><b>屠龙·裂空</b></div>
+          <div class="tip-line"><span>攻击</span><span>186 → 214（+28）</span></div>
+          <div class="tip-line"><span>暴击</span><span>+4.5%</span></div>
+          <div class="tip-line"><span>需要等级</span><span>40</span></div>
+          <div class="tip-desc">沙城铁匠以陨铁重铸，斩落过三条巨龙的脊骨。</div>
+        </div>
+        <div class="empty" style="width:260px">
+          <svg class="ic" viewBox="0 0 256 256" fill="currentColor"><path d="M216,40H40A16,16,0,0,0,24,56V200a16,16,0,0,0,16,16H216a16,16,0,0,0,16-16V56A16,16,0,0,0,216,40Zm0,160H40V56H216V200ZM76,96h104a8,8,0,0,1,0,16H76a8,8,0,0,1,0-16Zm0,40h64a8,8,0,0,1,0,16H76a8,8,0,0,1,0-16Z"/></svg>
+          <b>还没有邮件</b><p>系统奖励与好友留言都会送来这里</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════ 界面索引 ══════════ -->
+  <section id="screens">
+    <div class="sec-head"><span class="idx">10</span><h2>界面索引 · 20</h2><p>点开看每一屏的完整稿（1920×1080，等比适配）</p></div>
+    <div class="screens" id="screen-grid"></div>
+  </section>
+
+  <div class="note"><b>与客户端的对应关系：</b>每一屏都对应 <code>client/assets/ui/</code> 下的真实实现，功能一条不增不减；
+    改的是信息层级、位置与视觉，不改交互语义（两步确认 3 秒、悬停详情、拖动、置顶、置灰可点仍提示）。</div>
+</main>
+</div>
+
+<script>
+/* ── 色板数据 ─────────────────────────────────────────── */
+const GROUPS = [
+  {name:'底色与面（暖炭褐，5 级）', items:[
+    ['--surface-0','#0E0905','场景最底 / 遮罩基色'],
+    ['--surface-1','#120C07','页面底'],
+    ['--surface-2','#191209','面板底板'],
+    ['--surface-3','#221A11','行 / 输入 / 卡片'],
+    ['--surface-4','#2C2116','hover / 当前页签'],
+    ['--surface-5','#372A1C','拖拽落点 / 强调块'],
+    ['--surface-glass','rgba(25,18,9,.86)','HUD 半透明面板'],
+    ['--surface-scrim','rgba(0,0,0,.62)','模态遮罩']
+  ]},
+  {name:'古铜金阶（结构 / 数值）', items:[
+    ['--gold-1','#6E5228','压暗图标 / 禁用金'],
+    ['--gold-2','#8C6A33','次级描边 / 金属暗部'],
+    ['--gold-3','#C29245','主金：图标 / 进度 / 选中底'],
+    ['--gold-4','#E8C887','亮金：标题渐变 / 数值'],
+    ['--gold-5','#F7E9C6','高光金：反光 / 强调字']
+  ]},
+  {name:'朱红阶（主行动 / 危险 / 生命）', items:[
+    ['--ember-1','#7E2110','按钮底 / 血槽深端'],
+    ['--ember-2','#C63A20','朱红：CTA / 危险 / 生命'],
+    ['--ember-3','#E0562F','亮朱：渐变亮端 / 悬停'],
+    ['--ember-4','#FF8A62','朱红文字 / 失败飘字']
+  ]},
+  {name:'文字（骨白墨）', items:[
+    ['--text-1','#EDE2CC','主文字'],
+    ['--text-2','rgba(237,226,204,.80)','正文'],
+    ['--text-3','rgba(237,226,204,.58)','次要说明 / 元信息'],
+    ['--text-4','rgba(237,226,204,.34)','占位 / 禁用'],
+    ['--text-on-gold','#1A1206','金底上的深字'],
+    ['--text-on-ember','#FFF6E8','朱红底上的字']
+  ]},
+  {name:'语义色', items:[
+    ['--jade','#6FBF8E','成功 / 可交付 / 正向'],
+    ['--amber','#D9A227','警告 / 待确认'],
+    ['--frost','#4A9BC4','法力 / 信息 / 冷光'],
+    ['--hp','#C63A20','生命'],
+    ['--mp','#4A9BC4','法力']
+  ]},
+  {name:'品质六档（物品描边）', items:[
+    ['--q-common','#B9B0A0','粗劣'],
+    ['--q-fine','#6FBF8E','精良'],
+    ['--q-rare','#6F9FD8','稀有'],
+    ['--q-epic','#B37BD8','史诗'],
+    ['--q-legend','#E8A33C','传说'],
+    ['--q-myth','#E0562F','神话']
+  ]},
+  {name:'职业色', items:[
+    ['--class-warrior','#C9553A','战士'],
+    ['--class-mage','#6F8FD8','法师'],
+    ['--class-taoist','#5FA88F','道士']
+  ]}
+];
+document.getElementById('swatches').innerHTML = GROUPS.map(g => `
+  <div class="sw-group">
+    <h5>${g.name}</h5>
+    <div class="sw-grid">
+      ${g.items.map(([k,v,note])=>`
+        <div class="sw"><i style="background:${v}"></i><b>${k}</b><span>${v}</span><em>${note}</em></div>
+      `).join('')}
+    </div>
+  </div>`).join('');
+
+/* ── 字号阶 ───────────────────────────────────────────── */
+const TYPE = [
+  ['--fs-72','72','沙城','仅品牌字（登录 / 选角）'],
+  ['--fs-56','56','Olua','场景主标题'],
+  ['--fs-40','40','1842','强调数字'],
+  ['--fs-32','32','选择角色','场景标题'],
+  ['--fs-28','28','沙城争霸','场景副标题'],
+  ['--fs-24','24','消息中心','弹窗主标题'],
+  ['--fs-20','20','苍狼 Lv.42','面板标题 / 名牌'],
+  ['--fs-18','18','进入游戏','主按钮 / 卡片名'],
+  ['--fs-16','16','基础属性','区块小标题'],
+  ['--fs-14','14','剿灭沙盗匪首','弹窗标题 / 行主文字'],
+  ['--fs-13','13','装备等级不足，无法穿戴','列表正文'],
+  ['--fs-12','12','共 30 人上榜 · 刚刚更新','行次要 / HUD 提示'],
+  ['--fs-11','11','版本 2.8.1 · 健康游戏忠告','极小说明'],
+  ['--fs-10','10','×12 / Lv.42 / 1线','角标 / 键名 / 坐标']
+];
+document.getElementById('type-scale').innerHTML = TYPE.map(([k,px,sample,use])=>`
+  <div class="type-row">
+    <span class="k">${k}</span>
+    <span class="s" style="font-size:${px}px;line-height:1.25">${sample}</span>
+    <span class="u">${use}</span>
+  </div>`).join('');
+
+/* ── 界面索引 ─────────────────────────────────────────── */
+const SCREENS = [
+  ['01','login','登录','账号密码 / 选区弹窗(#state=zone) / 职业预览 / 公告','Login.ts + ZoneSelectDialog'],
+  ['02','role-select','选择角色','角色网格 / 创建 / 管理模式删除','RoleSelector.ts'],
+  ['03','loading','加载过场','进度 / 配置与资源阶段 / 失败重试','Loading.ts'],
+  ['04','hud','主界面 HUD','血蓝球 / 快捷栏 / 小地图 / 任务 / 聊天 / 移动端摇杆+选中光圈(#state=mobile)','Game.ts + hud/*'],
+  ['05','bag','背包','50 格网格 / 穿戴 / 整理 / 回收 / 丢弃','BagDialog.ts'],
+  ['06','role-info','角色信息','装备槽 / 属性 / 加点 / 六入口','RoleInfoDialog.ts'],
+  ['07','skill','技能','技能列表 / 升级 / 快捷键设置','SkillListDialog.ts'],
+  ['08','mall','商城','分类 / 商品卡 / 分页 / 限购库存','MallDialog.ts'],
+  ['09','mail','消息中心','五频道 / 附件领取 / 一键领取','MailDialog.ts'],
+  ['10','announcement','公告','公告板左右分栏 + 进服强提示','Announcement*.ts'],
+  ['11','quest','任务','进行中 / 可接 / 交付','QuestDialog.ts'],
+  ['12','party','队伍','成员 / 邀请 / 转让 / 踢出','PartyDialog.ts'],
+  ['13','social','社交与帮会','好友 / 敌人 / 附近 / 黑名单 / 帮会','SocialDialog.ts'],
+  ['14','chat','聊天','四频道 / 私聊选人 / 世界气泡','ChatDialog.ts'],
+  ['15','rank','排行榜','等级 / 战力 / 击杀 / 我的名次','LeaderboardDialog.ts'],
+  ['16','achievement','成就','三分类 / 进度 / 领取','AchievementDialog.ts'],
+  ['17','growth','成长线','军衔 / 称号 / 战魂 三栏同构','Rank/Title/WarSoul'],
+  ['18','fashion','时装','试穿 / 购买 / 五态卡片','FashionDialog.ts'],
+  ['19','map','地图与线路','地图预览 / 大陆传送官(#state=teleport) / 选线','MapPreview/Teleport/…'],
+  ['20','overlay','通用弹层','确认 / 死亡 / 举报 / 悬停 / 引导','Confirm/Death/Report/…']
+];
+document.getElementById('screen-grid').innerHTML = SCREENS.map(([no,id,name,desc,file])=>`
+  <a class="scr" href="screens/${no}-${id}.html" target="_blank">
+    <div class="scr-top"><span class="no">${no}</span><span class="glyph">${name.slice(0,1)}</span></div>
+    <div class="scr-body"><b>${name}</b><span>${desc}</span><i>${file}</i></div>
+  </a>`).join('');
+document.getElementById('nav-screens').innerHTML = SCREENS.map(([no,id,name])=>`
+  <a href="screens/${no}-${id}.html" target="_blank"><i>${no}</i>${name}</a>`).join('');
+
+/* ── 左侧导航高亮 ─────────────────────────────────────── */
+const links = [...document.querySelectorAll('.nav a[href^="#"]')];
+const io = new IntersectionObserver(es=>{
+  es.forEach(e=>{
+    if (e.isIntersecting){
+      links.forEach(a=>a.classList.toggle('on', a.getAttribute('href') === '#'+e.target.id));
+    }
+  });
+},{rootMargin:'-10% 0px -70% 0px'});
+document.querySelectorAll('section[id]').forEach(s=>io.observe(s));
+</script>
+</body>
+</html>

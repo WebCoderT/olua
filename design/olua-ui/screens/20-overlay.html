@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>20 · 通用弹层 · Olua UI</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Noto+Serif+SC:wght@700;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../tokens.css">
+<link rel="stylesheet" href="../ui.css">
+<style>
+/* ── 通用弹层拼版：确认 / 死亡 / 举报 / 引导 / 悬停 / Toast，一屏看全 ── */
+.sheet{position:absolute;inset:0;display:grid;grid-template-columns:1fr 1fr;grid-template-rows:auto auto;
+  gap:34px;padding:64px 120px;align-items:start;justify-items:center;z-index:var(--z-dialog)}
+.cell{position:relative}
+.cell-t{position:absolute;left:0;top:-26px;font-family:var(--font-num);font-size:10px;
+  letter-spacing:.2em;color:var(--gold-2)}
+.confirm{width:420px}
+.confirm .body{padding:6px 34px 0;text-align:center}
+.confirm .body p{font-size:13.5px;line-height:1.9;color:var(--text-2)}
+.confirm .acts{display:flex;justify-content:center;gap:14px;padding:20px 0 22px}
+.death{width:560px;text-align:center;padding:44px 40px 40px;
+  background:radial-gradient(120% 100% at 50% 0%,rgba(126,33,16,.32),rgba(12,7,4,.96) 62%)}
+.death h2{font-family:var(--font-display);font-weight:900;font-size:38px;letter-spacing:.34em;color:var(--ember-4);
+  text-shadow:0 0 30px rgba(224,86,47,.4)}
+.death p{margin-top:12px;font-size:12px;color:var(--text-3);letter-spacing:.1em}
+.death .acts{display:flex;justify-content:center;gap:16px;margin-top:26px}
+.death .acts .btn{width:196px;height:46px;letter-spacing:.22em;white-space:nowrap}
+.report{width:460px}
+.report .hint{font-size:11px;color:var(--text-4);text-align:center;padding:2px 0 12px}
+.cats{display:flex;justify-content:center;gap:10px;padding-bottom:14px}
+.cats .cat{height:30px;padding:0 14px;border-radius:var(--r-2);border:var(--bw-1) solid var(--line-2);
+  font-size:12px;color:var(--text-3);background:rgba(0,0,0,.3)}
+.cats .cat.on{background:linear-gradient(180deg,var(--gold-4),var(--gold-3));border-color:var(--gold-5);
+  color:var(--text-on-gold)}
+.report .acts{display:flex;justify-content:center;gap:14px;padding:14px 0 4px}
+/* 引导：挖洞 + 气泡 */
+.guide{width:560px;height:240px;border-radius:var(--r-3);position:relative;overflow:hidden;
+  background:rgba(10,7,4,.86);border:var(--bw-1) solid var(--line-1)}
+.guide .hole{position:absolute;left:40px;top:56px;width:150px;height:90px;border-radius:var(--r-2);
+  border:var(--bw-2) solid var(--gold-3);box-shadow:0 0 0 2000px rgba(8,5,3,.78),var(--glow-gold)}
+.guide .hole-lbl{position:absolute;left:40px;top:160px;width:150px;text-align:center;font-size:10px;color:var(--text-4)}
+.guide .gb{position:absolute;right:26px;top:36px;width:300px;padding:14px 16px;border-radius:var(--r-2);
+  border:var(--bw-1) solid var(--gold-2);background:rgba(23,16,9,.97);box-shadow:var(--shadow-panel)}
+.guide .gb h4{font-family:var(--font-display);font-size:14px;letter-spacing:.18em;color:var(--gold-4)}
+.guide .gb p{margin-top:7px;font-size:11.5px;line-height:1.75;color:var(--text-2)}
+.guide .gb .foot2{display:flex;align-items:center;justify-content:space-between;margin-top:12px}
+.guide .gb .prog{font-family:var(--font-num);font-size:10px;color:var(--text-4);letter-spacing:.12em}
+/* 悬停 + toast 列 */
+.sidecol{display:flex;flex-direction:column;align-items:center;gap:22px;padding-top:26px}
+</style>
+</head>
+<body>
+<div class="stage"><div class="stage-inner">
+  <div class="stage-bg stage-bg--blur"><img src="../assets/hero-bg.jpg"></div>
+  <div class="stage-scrim" style="background:rgba(8,5,3,.8)"></div>
+
+  <div class="sheet">
+
+    <!-- 确认框 -->
+    <div class="cell confirm">
+      <span class="cell-t">CONFIRM · 危险操作二次确认</span>
+      <div class="panel panel--bracket">
+        <span class="corner"></span><span class="corner"></span><span class="corner"></span><span class="corner"></span>
+        <div class="panel-head" style="padding-bottom:6px">
+          <h2 class="panel-title" style="font-size:17px">销毁物品</h2>
+          <button class="panel-close" style="top:9px;right:9px" aria-label="关闭">×</button>
+        </div>
+        <div class="body">
+          <p>确定销毁「金创药（大）」×12？<br>销毁后无法恢复。</p>
+          <div class="acts">
+            <button class="btn btn--danger" style="min-width:110px">确 定</button>
+            <button class="btn btn--ghost" style="min-width:110px">取 消</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 死亡 -->
+    <div class="cell">
+      <span class="cell-t">DEATH · 不可关闭，二选一复活</span>
+      <div class="panel panel--rivet death">
+        <h2>您已死亡</h2>
+        <p>可原地复活（消耗一枚还魂丹），或回到城内安全复活</p>
+        <div class="acts">
+          <button class="btn btn--primary">原地复活</button>
+          <button class="btn btn--ghost" style="border-color:var(--line-3)">安全复活</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 举报 -->
+    <div class="cell report">
+      <span class="cell-t">REPORT · 只提交管理端，不通知对方</span>
+      <div class="panel panel--bracket">
+        <span class="corner"></span><span class="corner"></span><span class="corner"></span><span class="corner"></span>
+        <div class="panel-head" style="padding-bottom:4px">
+          <h2 class="panel-title" style="font-size:16px">举报「拾荒者」</h2>
+          <button class="panel-close" style="top:8px;right:8px" aria-label="关闭">×</button>
+        </div>
+        <div class="panel-body" style="padding-top:0">
+          <p class="hint">举报只提交给管理端人工处理，不会通知对方</p>
+          <div class="cats">
+            <button class="cat on">骚扰辱骂</button>
+            <button class="cat">外挂刷资源</button>
+            <button class="cat">名字违规</button>
+            <button class="cat">其他</button>
+          </div>
+          <div class="field field--plain"><input class="input input--sm" placeholder="补充说明（可留空）"></div>
+          <div class="acts">
+            <button class="btn btn--gold btn--sm">提交举报</button>
+            <button class="btn btn--ghost btn--sm">取消</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 引导 + 悬停 + Toast -->
+    <div class="cell" style="justify-self:center">
+      <span class="cell-t">GUIDE / TIP / TOAST</span>
+      <div class="sidecol">
+        <div class="guide">
+          <div class="hole"></div>
+          <div class="hole-lbl">背包（B）</div>
+          <div class="gb">
+            <h4>打开背包</h4>
+            <p>点击底栏的「背包」或按 B 键。打怪掉落的物品都会进入背包，记得及时整理。</p>
+            <div class="foot2">
+              <span class="prog">STEP 2 / 6</span>
+              <span style="display:flex;gap:8px">
+                <button class="btn btn--xs btn--ghost">跳过</button>
+                <button class="btn btn--xs btn--gold">下一步</button>
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div class="tip" style="width:250px">
+          <div class="tip-head"><b style="color:var(--q-rare)">突刺</b><span class="badge">lv.3</span></div>
+          <div class="tip-line"><span>类型</span><span>单体（敌方）</span></div>
+          <div class="tip-line"><span>魔法消耗</span><span>18</span></div>
+          <div class="tip-line"><span>冷却时间</span><span>5 秒</span></div>
+          <div class="tip-line"><span>使用距离</span><span>2 格</span></div>
+          <div class="tip-line"><span>冷却剩余</span><span>2.4 秒</span></div>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:9px;align-items:center">
+          <span class="toast"><span class="dot"></span>已到达目的地</span>
+          <span class="toast toast--ok">拾取 屠龙·裂空</span>
+          <span class="toast toast--err">距离太远，请靠近后再拾取</span>
+          <span class="toast toast--warn">再点一次确认回收，3 秒后自动取消</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+</div></div>
+<script src="../stage.js"></script>
+</body>
+</html>

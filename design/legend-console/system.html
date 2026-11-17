@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>OLUA 传奇 · 设计系统总纲</title>
+<style>
+:root{
+  --void:#090705; --stone-0:#0E0B08; --stone-1:#12100C; --stone-2:#1B1712;
+  --stone-3:#241E17; --stone-4:#2C241A;
+  --gold:#C9A24D; --gold-hi:#F0DCAC; --gold-dim:#6B562F; --gold-soft:rgba(201,162,77,.10);
+  --fire:#B9441F; --fire-hi:#E4743A; --jade:#6FA96B;
+  --ink:#EEE5D2; --ink-2:#B7A88F; --ink-3:#7E7059;
+  --line:rgba(201,162,77,.18); --line-soft:rgba(201,162,77,.09);
+  --font-display:"Songti SC","Source Han Serif SC","Noto Serif SC","STSong",serif;
+  --font-ui:"PingFang SC","Hiragino Sans GB","Microsoft YaHei",system-ui,sans-serif;
+  --font-mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  --r:2px; --ease:cubic-bezier(.22,.61,.36,1);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{
+  background:var(--void);color:var(--ink);
+  font:400 14px/1.65 var(--font-ui);-webkit-font-smoothing:antialiased;
+}
+body::before{
+  content:"";position:fixed;inset:0;pointer-events:none;opacity:.12;mix-blend-mode:overlay;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.86' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+a{color:inherit;text-decoration:none}
+ul{list-style:none}
+::selection{background:rgba(201,162,77,.26);color:#fff}
+
+.page{position:relative;max-width:1160px;margin:0 auto;padding:clamp(30px,4.5vw,72px) clamp(20px,3vw,40px) 80px}
+
+/* ───── 封面 ───── */
+.cover{position:relative;padding-bottom:34px;border-bottom:1px solid var(--line-soft)}
+.eyebrow{
+  display:flex;align-items:center;gap:14px;
+  font-family:var(--font-mono);font-size:10px;letter-spacing:.34em;text-transform:uppercase;color:var(--gold);
+}
+.eyebrow::before{content:"";width:34px;height:1px;background:var(--gold-dim)}
+.cover h1{
+  margin-top:26px;font-family:var(--font-display);font-size:clamp(38px,5.2vw,62px);
+  font-weight:700;line-height:1.06;letter-spacing:.06em;
+}
+.cover h1 em{
+  font-style:normal;
+  background:linear-gradient(180deg,#F6E7C4 6%,#C9A24D 58%,#8A6C34 100%);
+  -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;
+}
+.cover .lede{margin-top:20px;max-width:62ch;font-size:14.5px;line-height:1.9;color:var(--ink-2)}
+.cover .lede b{color:var(--ink);font-weight:600}
+.meta-row{display:flex;flex-wrap:wrap;gap:26px;margin-top:30px;font-family:var(--font-mono);font-size:10px;letter-spacing:.1em;color:var(--ink-3)}
+.meta-row b{display:block;margin-top:4px;color:var(--gold-hi);font-weight:500;letter-spacing:.04em;font-size:12px}
+
+/* ───── 目录 ───── */
+.toc{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px;margin-top:30px}
+.toc a{
+  position:relative;padding:15px 16px;border:1px solid var(--line);border-radius:var(--r);
+  background:linear-gradient(170deg,var(--stone-2),#15120E);
+  transition:border-color .22s var(--ease),background .22s;
+}
+.toc a:hover{border-color:rgba(201,162,77,.42);background:linear-gradient(170deg,#241E17,#171310)}
+.toc a::before{content:"";position:absolute;inset:4px;border:1px solid rgba(201,162,77,.05);pointer-events:none}
+.toc .n{font-family:var(--font-mono);font-size:9px;letter-spacing:.2em;color:var(--gold-dim)}
+.toc b{display:block;margin-top:8px;font-size:14px;font-weight:600;letter-spacing:.06em}
+.toc p{margin-top:6px;font-size:11.5px;line-height:1.6;color:var(--ink-3)}
+
+/* ───── 章节 ───── */
+.sec{margin-top:56px}
+.sec-head{display:flex;align-items:baseline;gap:14px}
+.sec-head .idx{
+  font-family:var(--font-mono);font-size:10px;letter-spacing:.18em;color:var(--gold-dim);
+  border:1px solid var(--line);border-radius:1px;padding:2px 6px;
+}
+.sec-head h2{font-family:var(--font-display);font-size:22px;font-weight:700;letter-spacing:.10em}
+.sec-head .en{
+  font-family:var(--font-mono);font-size:9px;letter-spacing:.22em;text-transform:uppercase;color:var(--ink-3);
+}
+.sec > .desc{margin-top:10px;max-width:70ch;font-size:13px;line-height:1.85;color:var(--ink-3)}
+.sec > .desc b{color:var(--ink-2);font-weight:500}
+
+/* ───── 原则 ───── */
+.principles{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px;margin-top:20px}
+.pr{padding:18px 20px;border:1px solid var(--line);border-radius:var(--r);background:linear-gradient(170deg,var(--stone-2),#14110D)}
+.pr .no{font-family:var(--font-mono);font-size:10px;letter-spacing:.16em;color:var(--gold)}
+.pr h3{margin-top:10px;font-size:15px;font-weight:600;letter-spacing:.04em}
+.pr p{margin-top:8px;font-size:12.5px;line-height:1.8;color:var(--ink-3)}
+.pr p b{color:var(--ink-2);font-weight:500}
+
+/* ───── 色板 ───── */
+.swatches{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-top:20px}
+.sw{border:1px solid var(--line);border-radius:var(--r);overflow:hidden;background:#15120E}
+.sw .chip{height:62px;position:relative}
+.sw .chip span{
+  position:absolute;right:8px;bottom:6px;font-family:var(--font-mono);font-size:9px;
+  letter-spacing:.08em;color:rgba(255,255,255,.62);mix-blend-mode:luminosity;
+}
+.sw .info{padding:9px 11px 11px}
+.sw b{display:block;font-size:12px;font-weight:600;letter-spacing:.04em}
+.sw em{display:block;margin-top:3px;font-style:normal;font-size:10.5px;line-height:1.55;color:var(--ink-3)}
+
+/* 配色比例条 */
+.ratio{display:flex;height:34px;margin-top:18px;border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+.ratio div{display:grid;place-items:center;font-family:var(--font-mono);font-size:9.5px;letter-spacing:.1em;color:rgba(0,0,0,.62)}
+.ratio div:nth-child(4){color:rgba(240,220,172,.9)}
+
+/* ───── 字体 ───── */
+.type-table{margin-top:18px;border-top:1px solid var(--line-soft)}
+.type-row{
+  display:grid;grid-template-columns:120px 1fr 190px;gap:18px;align-items:center;
+  padding:15px 0;border-bottom:1px solid var(--line-soft);
+}
+.type-row .spec{font-family:var(--font-mono);font-size:9.5px;letter-spacing:.1em;color:var(--ink-3);line-height:1.9}
+.type-row .spec b{display:block;color:var(--gold);font-weight:500;letter-spacing:.14em}
+.type-row .demo{min-width:0}
+.type-row .use{font-size:11.5px;line-height:1.7;color:var(--ink-3)}
+.disp{font-family:var(--font-display);font-weight:700;letter-spacing:.08em;font-size:30px}
+.h2d{font-family:var(--font-display);font-weight:700;letter-spacing:.10em;font-size:20px}
+.bodyd{font-size:13.5px;color:var(--ink-2)}
+.labeld{font-family:var(--font-mono);font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:var(--ink-3)}
+.numd{font-family:var(--font-mono);font-size:26px;letter-spacing:-.01em;color:var(--gold-hi);font-variant-numeric:tabular-nums}
+
+/* ───── 间距 ───── */
+.scale{display:flex;align-items:flex-end;gap:8px;margin-top:20px;flex-wrap:wrap}
+.scale div{text-align:center;font-family:var(--font-mono);font-size:9px;color:var(--ink-3)}
+.scale i{display:block;background:linear-gradient(180deg,rgba(201,162,77,.55),rgba(201,162,77,.14));border:1px solid var(--line);border-radius:1px;margin-bottom:6px}
+
+/* ───── 描边 / 圆角 / 阴影 ───── */
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-top:18px}
+.tile{
+  padding:20px;border:1px solid var(--line);border-radius:var(--r);
+  background:linear-gradient(170deg,var(--stone-2),#14110D);min-height:104px;
+  display:flex;flex-direction:column;justify-content:center;gap:10px;
+}
+.tile .nm{font-family:var(--font-mono);font-size:9.5px;letter-spacing:.16em;color:var(--gold);text-transform:uppercase}
+.tile p{font-size:11.5px;line-height:1.7;color:var(--ink-3)}
+.line-demo{height:0;border-top:1px solid var(--line)}
+.line-demo.strong{border-top-color:var(--gold-dim)}
+.line-demo.double{border-top:1px solid var(--gold-dim);box-shadow:0 3px 0 -2px rgba(201,162,77,.35)}
+.shadow-demo{height:44px;border:1px solid var(--line);border-radius:var(--r);background:linear-gradient(170deg,var(--stone-3),#14110D);
+  box-shadow:0 20px 40px -22px rgba(0,0,0,.95),inset 0 1px 0 rgba(240,220,172,.10)}
+.radius-demo{display:flex;gap:10px;align-items:center}
+.radius-demo span{
+  width:46px;height:34px;display:grid;place-items:center;font-family:var(--font-mono);font-size:9px;color:var(--ink-3);
+  border:1px solid var(--line);background:rgba(201,162,77,.06);
+}
+
+/* ───── 图标网格 ───── */
+.icons{display:grid;grid-template-columns:repeat(auto-fill,minmax(86px,1fr));gap:10px;margin-top:20px}
+.ic{
+  display:flex;flex-direction:column;align-items:center;gap:8px;padding:14px 6px 10px;
+  border:1px solid var(--line-soft);border-radius:var(--r);color:var(--gold);
+  transition:border-color .2s,background .2s;
+}
+.ic:hover{border-color:var(--line);background:rgba(201,162,77,.05)}
+.ic span{font-family:var(--font-mono);font-size:9px;letter-spacing:.06em;color:var(--ink-3)}
+
+/* ───── 动效 ───── */
+.motion{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-top:18px}
+.mo{padding:16px 18px;border:1px solid var(--line);border-radius:var(--r);background:linear-gradient(170deg,var(--stone-2),#14110D)}
+.mo b{display:block;font-family:var(--font-mono);font-size:11px;letter-spacing:.06em;color:var(--gold-hi)}
+.mo span{display:block;margin-top:5px;font-size:11.5px;color:var(--ink-3);line-height:1.7}
+.mo .curve{height:26px;margin-top:10px;border-bottom:1px solid var(--line-soft)}
+
+/* ───── 禁忌 ───── */
+.dont{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px;margin-top:18px}
+.dont div{
+  position:relative;padding:14px 16px 14px 40px;border:1px solid rgba(185,68,31,.28);border-radius:var(--r);
+  background:rgba(185,68,31,.06);font-size:12.5px;line-height:1.75;color:var(--ink-2);
+}
+.dont div::before{
+  content:"";position:absolute;left:16px;top:20px;width:8px;height:8px;background:var(--fire);transform:rotate(45deg);
+}
+
+/* ───── 页脚 ───── */
+.foot{
+  margin-top:64px;padding-top:20px;border-top:1px solid var(--line-soft);
+  display:flex;flex-wrap:wrap;gap:14px;justify-content:space-between;
+  font-family:var(--font-mono);font-size:9.5px;letter-spacing:.14em;color:var(--ink-3);
+}
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- 封面 -->
+  <header class="cover">
+    <p class="eyebrow">Design System · v1</p>
+    <h1>OLUA<br><em>传奇管理端设计系统</em></h1>
+    <p class="lede">
+      这一套稿子覆盖管理端<b>全部三十余个组件</b>：从按钮、输入框到装备槽、背包格、地图画布。
+      视觉母题取自传奇的<b>石 · 金 · 火</b>——深石灰为底、金线做秩序、火色只留给危险与警示。
+      后台不是游戏，所以气氛克制到只剩一条金边；但每一个可点的地方，都要让人知道自己在点一件「铁器」。
+    </p>
+
+    <div class="meta-row">
+      <div>FONT<b>宋体衬线 + 苹方 + 等宽数字</b></div>
+      <div>RADIUS<b>2px · 全站统一锐角</b></div>
+      <div>GRID<b>238 侧栏 + 12 栅格 / gap 14</b></div>
+      <div>COLOR<b>4 色族 · 16 级</b></div>
+      <div>STATES<b>每个控件 ≥ 5 态</b></div>
+    </div>
+
+    <nav class="toc">
+      <a href="./index.html">
+        <span class="n">00 / INDEX</span>
+        <b>设计系统入口</b>
+        <p>四页目录与浏览顺序，含页面示意图</p>
+      </a>
+      <a href="./components.html">
+        <span class="n">01 / COMPONENTS</span>
+        <b>通用组件</b>
+        <p>按钮、输入、下拉、徽章、提示、卡片、页头、筛选、表格、分页、弹窗、Toast</p>
+      </a>
+      <a href="./domain.html">
+        <span class="n">02 / DOMAIN</span>
+        <b>游戏领域组件</b>
+        <p>资源缩略图、帧动画、实体选择器、装备槽、等级阶梯、背包、技能、地图、掉落</p>
+      </a>
+      <a href="./controls.html">
+        <span class="n">03 / STATES</span>
+        <b>控件状态图谱</b>
+        <p>每类控件的全部状态并排钉住，逐格核对</p>
+      </a>
+      <a href="./dashboard.html">
+        <span class="n">04 / PAGE</span>
+        <b>概览页样张</b>
+        <p>把上述组件组合成一屏真实页面</p>
+      </a>
+      <a href="../legend-login/index.html">
+        <span class="n">05 / PAGE</span>
+        <b>登录页样张</b>
+        <p>同一套语言的门内 / 门外</p>
+      </a>
+    </nav>
+  </header>
+
+  <!-- 1 原则 -->
+  <section class="sec">
+    <div class="sec-head"><span class="idx">01</span><h2>三条原则</h2><span class="en">Principles</span></div>
+    <p class="desc">后面所有具体数值都是这三条的推论。冲突时按序号取舍。</p>
+    <div class="principles">
+      <div class="pr">
+        <span class="no">原则 01</span>
+        <h3>同一类东西只有一个来源</h3>
+        <p>页头、卡片、弹窗、字段标签、装备槽，全站各只有一处实现。
+          页面里出现第二份「长得差不多」的拷贝，就是下一次不一致的起点 ——
+          <b>宁可在组件里加一个 props，也不在页面里复制一段 class</b>。</p>
+      </div>
+      <div class="pr">
+        <span class="no">原则 02</span>
+        <h3>一屏能看完的不要让人滚</h3>
+        <p>滚动的代价不是操作次数，而是<b>对照关系丢失</b>——上下两段数值彼此看不见。
+          先问「这一屏要回答什么问题」，再决定哪些内容进弹窗、哪些压成一行。</p>
+      </div>
+      <div class="pr">
+        <span class="no">原则 03</span>
+        <h3>要改的才给控件</h3>
+        <p>只读字段用纯文本，不用灰掉的输入框 —— 灰框看起来像「你没权限」，
+          会让人去找解锁开关。<b>纯文本才是「这里本来就不改」</b>。</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 2 色彩 -->
+  <section class="sec">
+    <div class="sec-head"><span class="idx">02</span><h2>色彩</h2><span class="en">Color</span></div>
+    <p class="desc">
+      四个色族各有明确职责，<b>不许交叉借用</b>：石管背景与层次、金管交互与选中、火管危险与错误、玉只管「服务正常」。
+      面积比大致 70 : 20 : 8 : 2 —— 暗色占绝对主导，金色是唯一的高光。
+    </p>
+
+    <div class="swatches">
+      <div class="sw"><div class="chip" style="background:#090705"><span>#090705</span></div>
+        <div class="info"><b>Void 虚空</b><em>页面最底，遮罩、间隙</em></div></div>
+      <div class="sw"><div class="chip" style="background:#0E0B08"><span>#0E0B08</span></div>
+        <div class="info"><b>Stone 0</b><em>后台页面底，长时间阅读</em></div></div>
+      <div class="sw"><div class="chip" style="background:#12100C"><span>#12100C</span></div>
+        <div class="info"><b>Stone 1</b><em>侧栏、页脚</em></div></div>
+      <div class="sw"><div class="chip" style="background:#1B1712"><span>#1B1712</span></div>
+        <div class="info"><b>Stone 2</b><em>卡片上缘</em></div></div>
+      <div class="sw"><div class="chip" style="background:#241E17"><span>#241E17</span></div>
+        <div class="info"><b>Stone 3</b><em>卡片下缘、悬停</em></div></div>
+      <div class="sw"><div class="chip" style="background:#C9A24D"><span>#C9A24D</span></div>
+        <div class="info"><b>Gold 金</b><em>框线、焦点、选中、主操作</em></div></div>
+      <div class="sw"><div class="chip" style="background:#F0DCAC"><span>#F0DCAC</span></div>
+        <div class="info"><b>Gold Hi 金高光</b><em>数字、标题强调</em></div></div>
+      <div class="sw"><div class="chip" style="background:#6B562F"><span>#6B562F</span></div>
+        <div class="info"><b>Gold Dim 金暗</b><em>分隔线、禁用金</em></div></div>
+      <div class="sw"><div class="chip" style="background:#B9441F"><span>#B9441F</span></div>
+        <div class="info"><b>Fire 火</b><em>错误、危险、封禁</em></div></div>
+      <div class="sw"><div class="chip" style="background:#E4743A"><span>#E4743A</span></div>
+        <div class="info"><b>Fire Hi 火高光</b><em>火星、错误文案</em></div></div>
+      <div class="sw"><div class="chip" style="background:#6FA96B"><span>#6FA96B</span></div>
+        <div class="info"><b>Jade 玉</b><em>仅「服务正常 / 在线」</em></div></div>
+      <div class="sw"><div class="chip" style="background:#EEE5D2"><span style="color:#3a2f1e;mix-blend-mode:normal">#EEE5D2</span></div>
+        <div class="info"><b>Ink 墨</b><em>正文主色（不是纯白）</em></div></div>
+    </div>
+
+    <div class="ratio">
+      <div style="flex:70;background:#14100C">石 70%</div>
+      <div style="flex:20;background:#2A2219;color:rgba(240,220,172,.5)">层次 20%</div>
+      <div style="flex:8;background:#C9A24D;color:#1A1206">金 8%</div>
+      <div style="flex:2;background:#B9441F;color:#fff">火 2%</div>
+    </div>
+  </section>
+
+  <!-- 3 字体 -->
+  <section class="sec">
+    <div class="sec-head"><span class="idx">03</span><h2>排版</h2><span class="en">Typography</span></div>
+    <p class="desc">
+      三种字族各管一段：<b>宋体衬线</b>只用于页面与卡片标题（仪式感），<b>苹方</b>承担全部正文与操作，<b>等宽</b>专管数字、ID、时间码。
+      数字一律 <code>tabular-nums</code>，否则表格里的数值会左右跳。
+    </p>
+
+    <div class="type-table">
+      <div class="type-row">
+        <div class="spec"><b>DISPLAY</b>30–62px / 1.06<br>Songti SC 700</div>
+        <div class="demo"><span class="disp">执剑者，入席。</span></div>
+        <div class="use">仅登录页与设计稿封面；后台内部不使用</div>
+      </div>
+      <div class="type-row">
+        <div class="spec"><b>H1 页标题</b>22–26px / 1.2<br>Songti 700 · ls .10em</div>
+        <div class="demo"><span class="h2d">账号管理</span></div>
+        <div class="use">每页唯一；进「页头」组件，页面不许自写 h1</div>
+      </div>
+      <div class="type-row">
+        <div class="spec"><b>H2 卡片标题</b>13.5px / 1.4<br>苹方 600 · ls .10em</div>
+        <div class="demo"><span style="font-size:13.5px;font-weight:600;letter-spacing:.10em">增长趋势</span></div>
+        <div class="use">卡片头部左侧，右侧配 mono 大写英文短标</div>
+      </div>
+      <div class="type-row">
+        <div class="spec"><b>BODY</b>13–13.5px / 1.6<br>苹方 400</div>
+        <div class="demo"><span class="bodyd">数据实时来自服务端；封禁与改角色等操作在对应页面进行。</span></div>
+        <div class="use">正文、表格单元格、说明段</div>
+      </div>
+      <div class="type-row">
+        <div class="spec"><b>LABEL</b>9.5–10px / 1.4<br>等宽 · ls .18–.26em</div>
+        <div class="demo"><span class="labeld">Accounts · 账号总数</span></div>
+        <div class="use">字段标签、图表轴、表格表头、页脚</div>
+      </div>
+      <div class="type-row">
+        <div class="spec"><b>NUMERIC</b>26–32px<br>等宽 500 · tabular</div>
+        <div class="demo"><span class="numd">12,486</span></div>
+        <div class="use">KPI、金额、计数；千分位统一英文逗号</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 4 间距与栅格 -->
+  <section class="sec">
+    <div class="sec-head"><span class="idx">04</span><h2>间距与栅格</h2><span class="en">Spacing &amp; Grid</span></div>
+    <p class="desc">
+      4pt 基准，只允许用下面七个刻度。<b>卡片内边距 16–18</b>、<b>卡片间距 14</b>、<b>栅格 gap 14</b> ——
+      三者相等是为了让「卡片之间」与「卡片之内」看起来是同一种呼吸。
+    </p>
+    <div class="scale">
+      <div><i style="width:24px;height:4px"></i>4</div>
+      <div><i style="width:24px;height:8px"></i>8</div>
+      <div><i style="width:24px;height:12px"></i>12</div>
+      <div><i style="width:24px;height:14px"></i>14</div>
+      <div><i style="width:24px;height:18px"></i>18</div>
+      <div><i style="width:24px;height:24px"></i>24</div>
+      <div><i style="width:24px;height:32px"></i>32</div>
+      <div><i style="width:24px;height:40px"></i>40</div>
+      <div><i style="width:24px;height:56px"></i>56</div>
+    </div>
+
+    <div class="tiles" style="margin-top:22px">
+      <div class="tile">
+        <span class="nm">Grid · 12 列</span>
+        <div style="display:grid;grid-template-columns:repeat(12,1fr);gap:4px">
+          <i style="height:26px;background:rgba(201,162,77,.28);border:1px solid var(--line)"></i>
+          <i style="height:26px;background:rgba(201,162,77,.28);border:1px solid var(--line)"></i>
+          <i style="height:26px;background:rgba(201,162,77,.28);border:1px solid var(--line)"></i>
+          <i style="height:26px;background:rgba(201,162,77,.28);border:1px solid var(--line)"></i>
+          <i style="height:26px;background:rgba(201,162,77,.28);border:1px solid var(--line)"></i>
+          <i style="height:26px;background:rgba(201,162,77,.28);border:1px solid var(--line)"></i>
+          <i style="height:26px;background:rgba(201,162,77,.28);border:1px solid var(--line)"></i>
+          <i style="height:26px;background:rgba(201,162,77,.28);border:1px solid var(--line)"></i>
+          <i style="height:26px;background:rgba(201,162,77,.28);border:1px solid var(--line)"></i>
+          <i style="height:26px;background:rgba(201,162,77,.28);border:1px solid var(--line)"></i>
+          <i style="height:26px;background:rgba(201,162,77,.28);border:1px solid var(--line)"></i>
+          <i style="height:26px;background:rgba(201,162,77,.28);border:1px solid var(--line)"></i>
+        </div>
+        <p>常用切分：8+4（主图 + 侧分布）、4+4+4（三块分布）、12（长表）</p>
+      </div>
+      <div class="tile">
+        <span class="nm">Shell · 238 + 1fr</span>
+        <div style="display:flex;gap:2px;height:44px">
+          <i style="width:74px;background:#100D0A;border:1px solid var(--line)"></i>
+          <i style="flex:1;background:#16120E;border:1px solid var(--line)"></i>
+        </div>
+        <p>侧栏固定 238；主区自增。<b>遮罩/抽屉不许放进网格</b>，否则会吃掉一列</p>
+      </div>
+      <div class="tile">
+        <span class="nm">Density · 紧凑档</span>
+        <div style="font-family:var(--font-mono);font-size:10.5px;line-height:1.9;color:var(--ink-3)">
+          卡片 padding 16/18<br>按钮 h 32–34 · 表格行 38<br>控件 h 34（登录页 44）
+        </div>
+        <p>后台默认紧凑：一屏多一行，比多一层留白更值钱</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 5 描边 圆角 阴影 -->
+  <section class="sec">
+    <div class="sec-head"><span class="idx">05</span><h2>描边 · 圆角 · 阴影</h2><span class="en">Borders &amp; Depth</span></div>
+    <p class="desc">
+      <b>全站 2px 锐角</b>——传奇的器物是铁的、切边的，圆角一大就变成手机 App。
+      深度不靠投影堆叠，靠<b>三件套</b>：1px 金线外框、4px 内缩的第二道线（内衬）、顶部 1px 高光。
+    </p>
+    <div class="tiles">
+      <div class="tile">
+        <span class="nm">Hairline · 金线三档</span>
+        <div class="line-demo"></div>
+        <div class="line-demo strong"></div>
+        <div class="line-demo double"></div>
+        <p>18%（分隔）/ 42%（边框）/ 双线（外框 + 内衬）</p>
+      </div>
+      <div class="tile">
+        <span class="nm">Radius · 只有一档</span>
+        <div class="radius-demo">
+          <span style="border-radius:2px">2 面板</span>
+          <span style="border-radius:1px">1 徽章</span>
+          <span style="border-radius:99px">99 圆点</span>
+        </div>
+        <p>圆角只允许 2 / 1 / 99（99 仅状态圆点与开关）</p>
+      </div>
+      <div class="tile">
+        <span class="nm">Depth · 三件套</span>
+        <div class="shadow-demo"></div>
+        <p>外投影 0 18px 40px -28px + 内顶高光 8% + 4px 内衬线</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 6 图标 -->
+  <section class="sec">
+    <div class="sec-head"><span class="idx">06</span><h2>图标</h2><span class="en">Iconography</span></div>
+    <p class="desc">
+      24×24 画布，<b>1.5px 线性描边、圆头端点、无填充</b>（状态点与箭头除外）。
+      图标永远是 <code>currentColor</code>，随文字与状态变色 —— 不做多色图标。
+    </p>
+    <div class="icons">
+      <div class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 10.5 12 3l9 7.5"/><path d="M5.5 9.5V20h13V9.5"/><path d="M10 20v-5h4v5"/></svg><span>概览</span></div>
+      <div class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="8" r="3.4"/><path d="M5 20c0-3.6 3.1-6 7-6s7 2.4 7 6"/></svg><span>账号</span></div>
+      <div class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="9" cy="8" r="3"/><path d="M3 19c0-3.2 2.7-5.4 6-5.4s6 2.2 6 5.4"/><path d="M16 5.4a3 3 0 0 1 0 5.6"/><path d="M17.5 13.8c2.1.6 3.5 2.3 3.5 4.7"/></svg><span>角色</span></div>
+      <div class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 18v-5M9 18V8M14 18v-7M19 18V5"/><path d="M2.5 20.5h19"/></svg><span>在线</span></div>
+      <div class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="5" y="10.5" width="14" height="9.5" rx="1.5"/><path d="M8.5 10.5V7.5a3.5 3.5 0 0 1 7 0v3"/></svg><span>封禁</span></div>
+      <div class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M20 11a8 8 0 1 0-2.3 6.3"/><path d="M20 5v6h-6"/></svg><span>刷新</span></div>
+      <div class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="11" cy="11" r="7"/><path d="m16.5 16.5 4 4"/></svg><span>搜索</span></div>
+      <div class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 6h16M4 12h16M4 18h10"/></svg><span>筛选</span></div>
+      <div class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 5v14M5 12h14"/></svg><span>新建</span></div>
+      <div class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 7h16l-1.4 12.2a2 2 0 0 1-2 1.8H7.4a2 2 0 0 1-2-1.8Z"/><path d="M9 7V5a3 3 0 0 1 6 0v2"/></svg><span>删除</span></div>
+      <div class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M4 20h16"/></svg><span>导出</span></div>
+      <div class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 19V5a1 1 0 0 1 1-1h11l4 4v11a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1Z"/><path d="M8 12h8M8 16h5"/></svg><span>日志</span></div>
+      <div class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6 4h12l1.5 5-7.5 11L4.5 9Z"/><path d="M4.5 9h15"/></svg><span>装备</span></div>
+      <div class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 7h16v13H4z"/><path d="M8 7V4h8v3"/><path d="M9 13h6"/></svg><span>背包</span></div>
+      <div class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 6.5 12 3l9 3.5-9 3.5Z"/><path d="M3 17.5 12 14l9 3.5-9 3.5Z"/><path d="M3 12 12 8.5 21 12l-9 3.5Z"/></svg><span>地图</span></div>
+      <div class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 3v6M12 15v6"/><circle cx="12" cy="12" r="2.6"/><path d="m5 8 3 3M16 13l3 3M19 8l-3 3M8 13l-3 3"/></svg><span>技能</span></div>
+      <div class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 5h16v11H4z"/><path d="M8 20h8"/><path d="M12 16v4"/><path d="m9.5 9 2 2 3-3.5"/></svg><span>配置</span></div>
+      <div class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="8.5"/><path d="M12 8v5l3 2"/></svg><span>时间</span></div>
+      <div class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3"/><path d="m10 8-4 4 4 4"/><path d="M6 12h9"/></svg><span>退出</span></div>
+    </div>
+  </section>
+
+  <!-- 7 动效 -->
+  <section class="sec">
+    <div class="sec-head"><span class="idx">07</span><h2>动效</h2><span class="en">Motion</span></div>
+    <p class="desc">
+      动效只回答「什么变了」和「从哪来」。<b>后台禁止位移弹跳</b>（hover 位移、卡片浮起）——
+      列表里几十个元素同时跳，视线会散；只允许<b>边界点亮</b>与透明度变化。
+    </p>
+    <div class="motion">
+      <div class="mo">
+        <b>150–220ms · 微交互</b>
+        <span>hover / focus / 选中。曲线 cubic-bezier(.22,.61,.36,1)</span>
+        <svg class="curve" viewBox="0 0 100 26" preserveAspectRatio="none"><path d="M0 26 C 40 26 55 0 100 0" fill="none" stroke="#C9A24D" stroke-width="1.2"/></svg>
+      </div>
+      <div class="mo">
+        <b>260–340ms · 浮层</b>
+        <span>下拉、弹窗、抽屉；位移 ≤8px 并同时淡入</span>
+        <svg class="curve" viewBox="0 0 100 26" preserveAspectRatio="none"><path d="M0 22 C 30 22 50 4 100 0" fill="none" stroke="#C9A24D" stroke-width="1.2"/></svg>
+      </div>
+      <div class="mo">
+        <b>600–900ms · 入场</b>
+        <span>页面级 stagger，逐 60ms 递延；每次进页面只演一次</span>
+        <svg class="curve" viewBox="0 0 100 26" preserveAspectRatio="none"><path d="M0 20 C 25 6 45 2 100 0" fill="none" stroke="#C9A24D" stroke-width="1.2"/></svg>
+      </div>
+      <div class="mo">
+        <b>4.6s · 环境</b>
+        <span>主按钮剑光、火星、火光呼吸；只做「活着」的暗示</span>
+        <svg class="curve" viewBox="0 0 100 26" preserveAspectRatio="none"><path d="M0 13 Q 25 0 50 13 T 100 13" fill="none" stroke="#B9441F" stroke-width="1.2"/></svg>
+      </div>
+    </div>
+  </section>
+
+  <!-- 8 禁忌 -->
+  <section class="sec">
+    <div class="sec-head"><span class="idx">08</span><h2>禁忌清单</h2><span class="en">Never</span></div>
+    <p class="desc">这些不是审美偏好，是会立刻让界面「像拼出来的」的几件事。</p>
+    <div class="dont">
+      <div>圆角超过 2px（卡片 8px、按钮全圆角）</div>
+      <div>一屏出现两枚实心金按钮</div>
+      <div>彩虹渐变、紫蓝科技渐变</div>
+      <div>用蓝 / 紫 / 粉做功能色（不在色板内）</div>
+      <div>hover 位移、卡片浮起、放大 1.02</div>
+      <div>字号跳档（11 → 15 → 22 混用同一层级）</div>
+      <div>只读字段做成灰掉的输入框</div>
+      <div>表格数字不设 tabular-nums</div>
+      <div>页面自己写 h1 / 遮罩 / 卡片 / 字段标签</div>
+      <div>同屏出现两种弹窗宽度规格</div>
+    </div>
+  </section>
+
+  <footer class="foot">
+    <span>OLUA LEGEND CONSOLE · DESIGN SYSTEM v1</span>
+    <span>石 · 金 · 火</span>
+  </footer>
+</div>
+</body>
+</html>

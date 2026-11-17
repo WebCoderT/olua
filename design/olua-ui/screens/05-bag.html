@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>05 · 背包 · Olua UI</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Noto+Serif+SC:wght@700;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../tokens.css">
+<link rel="stylesheet" href="../ui.css">
+<style>
+/* ── 背包：11×7 格 + 悬停详情 + 底部三操作 ── */
+.wrap{position:relative;width:600px;height:540px}
+.wrap .panel-body{padding-inline:10px}
+.grid{display:grid;grid-template-columns:repeat(11,50px);gap:var(--gap-slot);justify-content:center}
+.slot .glyph{font-family:var(--font-display);font-size:19px}
+/* 拖拽示意：源格压暗 + 落点金色描边 */
+.slot--dragging{opacity:.32}
+.slot--target{border:var(--bw-2) solid var(--gold-3);box-shadow:inset 0 0 0 3px rgba(194,146,69,.25),var(--shadow-gold)}
+/* 丢弃模式：光标提示 */
+.bag-foot{display:flex;align-items:center;justify-content:center;gap:14px;margin-top:16px}
+.bag-foot .btn{min-width:118px}
+.bag-foot .btn.warn{border-color:rgba(217,162,39,.65);color:#F3DEA6;background:linear-gradient(180deg,#3A2C10,#241A0A)}
+.count-line{display:flex;align-items:center;justify-content:space-between;margin:0 4px 10px;
+  font-size:11px;color:var(--text-4);letter-spacing:.06em}
+/* 悬停详情跟随在格子右上（面板内层相对定位） */
+.tip-pos{position:absolute;left:316px;top:104px;z-index:50}
+</style>
+</head>
+<body>
+<div class="stage"><div class="stage-inner">
+  <div class="stage-bg stage-bg--blur"><img src="../assets/hero-bg.jpg"></div>
+  <div class="stage-scrim"></div>
+
+  <div class="layer layer--dialog center">
+    <div class="panel panel--rivet wrap">
+      <div class="panel-head">
+        <span class="panel-eyebrow">BAG · B</span>
+        <h2 class="panel-title">背包</h2>
+        <button class="panel-close" aria-label="关闭">×</button>
+      </div>
+      <div class="panel-body">
+        <div class="count-line">
+          <span>34 / 77 格</span>
+          <span>拖到窗口外丢弃 · 右键穿戴 · 左键使用</span>
+        </div>
+
+        <div class="grid" id="bag"></div>
+
+        <div class="bag-foot">
+          <button class="btn btn--ghost">一键整理</button>
+          <button class="btn btn--gold">一键回收</button>
+          <button class="btn btn--danger">丢 弃</button>
+        </div>
+      </div>
+        <div class="panel-foot"><span>右键穿戴 · 左键使用/喝药 · 拖拽换位</span><span>回收可得绑定元宝</span></div>
+
+        <!-- 悬停详情：跟随锚点，默认在上方，放不下翻到下方 -->
+        <div class="tip tip-pos">
+      <div class="tip-head"><b style="color:var(--q-legend)">屠龙·裂空</b><span class="badge badge--gold">传说</span></div>
+      <div class="tip-line"><span>部位</span><span>武器</span></div>
+      <div class="tip-line"><span>等级</span><span>40</span></div>
+      <div class="tip-line"><span>攻击</span><span>186</span></div>
+      <div class="tip-line"><span>战斗力</span><span>2,140</span></div>
+      <div class="tip-line"><span>回收价</span><span>1,200 绑定元宝</span></div>
+      <div class="tip-desc">按住 Ctrl 与身上装备对比</div>
+        </div>
+      </div>
+    </div>
+
+</div></div>
+<script src="../stage.js"></script>
+<script>
+/* 生成 11×7 背包：有品质、有数量、有空格；一格处于拖拽、一格是落点 */
+const ITEMS = [
+  [0,'q5','屠',''],[1,'q3','盔','×1'],[2,'q2','药','×12'],[4,'q4','袍','×1'],
+  [7,'q1','木','×30'],[9,'q3','戒','×2'],[13,'q2','卷','×5'],[15,'q4','玉','×1'],
+  [17,'q1','矿','×64'],[22,'q3','靴','×1'],[24,'q2','符','×9'],[26,'q6','印','×1'],
+  [29,'q2','药','×8'],[33,'q3','链','×1'],[36,'q5','刃','×1'],[40,'q1','布','×22'],
+  [44,'q4','弓','×1'],[47,'q2','书','×3'],[51,'q3','甲','×1'],[55,'q2','丹','×6'],
+  [58,'q1','草','×17'],[63,'q4','冠','×1'],[66,'q2','钱','×9'],[70,'q3','盾','×1'],
+  [74,'q2','酒','×4']
+];
+const QCOLOR = {q1:'var(--q-common)',q2:'var(--q-fine)',q3:'var(--q-rare)',q4:'var(--q-epic)',q5:'var(--q-legend)',q6:'var(--q-myth)'};
+const grid = document.getElementById('bag');
+let html = '';
+for (let i = 0; i < 77; i++){
+  const it = ITEMS.find(x => x[0] === i);
+  const cls = i === 24 ? 'slot--dragging' : (i === 12 ? 'slot--target' : '');
+  if (it){
+    const [, q, glyph, num] = it;
+    html += `<div class="slot ${q} ${cls}"><span class="glyph" style="color:${QCOLOR[q]}">${glyph}</span>${num ? `<span class="slot-num">${num}</span>` : ''}</div>`;
+  } else {
+    html += `<div class="slot slot--empty ${cls}"></div>`;
+  }
+}
+grid.innerHTML = html;
+</script>
+</body>
+</html>

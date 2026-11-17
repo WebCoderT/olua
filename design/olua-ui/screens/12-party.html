@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>12 · 队伍 · Olua UI</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Noto+Serif+SC:wght@700;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../tokens.css">
+<link rel="stylesheet" href="../ui.css">
+<style>
+/* ── 队伍 600×560：队员/邀请 两页签 + 邀请行置顶 ── */
+.party{position:relative;width:600px;height:540px}
+.psum{display:flex;align-items:center;justify-content:space-between;padding:0 2px 10px;font-size:12px;color:var(--text-3)}
+.psum b{font-family:var(--font-num);color:var(--gold-4);font-weight:400}
+.plist{display:flex;flex-direction:column;gap:8px;height:360px;overflow:auto;padding-right:4px}
+.invite{border:var(--bw-1) solid rgba(217,162,39,.55);background:linear-gradient(90deg,rgba(217,162,39,.12),transparent)}
+.prow{height:56px}
+.prow .nm{display:flex;align-items:center;gap:7px}
+.prow .nm .lead{font-size:9px;padding:1px 6px;border-radius:var(--r-1);background:var(--gold-3);color:var(--text-on-gold);letter-spacing:.08em}
+.prow .nm .self{font-size:9px;padding:1px 6px;border-radius:var(--r-1);border:1px solid var(--line-2);color:var(--text-3)}
+.prow .st{margin-left:auto;font-family:var(--font-num);font-size:11px;color:var(--text-4)}
+.prow .st.on{color:var(--jade)}
+.prow .st.off{color:var(--ember-4)}
+.pacts{display:flex;gap:6px}
+.pfoot{display:flex;justify-content:center;gap:12px;padding-top:12px}
+</style>
+</head>
+<body>
+<div class="stage"><div class="stage-inner">
+  <div class="stage-bg stage-bg--blur"><img src="../assets/hero-bg.jpg"></div>
+  <div class="stage-scrim"></div>
+
+  <div class="layer layer--dialog center">
+    <div class="panel panel--rivet party">
+      <div class="panel-head">
+        <span class="panel-eyebrow">PARTY · G</span>
+        <h2 class="panel-title">队伍</h2>
+        <button class="panel-close" aria-label="关闭">×</button>
+      </div>
+      <div class="panel-body">
+
+        <div class="tabs" style="margin-bottom:10px">
+          <button class="tab is-on">队 员</button>
+          <button class="tab">邀 请<span class="badge">1</span></button>
+        </div>
+
+        <div class="psum"><span>义薄云天的队伍</span><span><b>4 / 6</b> 人 · 经验加成 +12%</span></div>
+
+        <div class="plist scroll">
+          <div class="row invite" style="height:64px">
+            <div class="row-main">
+              <span class="row-name" style="color:#F3DEA6">断刃 邀请你加入队伍（4/6）</span>
+              <span class="row-sub">邀请 1.5 秒内未回应自动过期 · 按 G 键随时查看</span>
+            </div>
+            <div class="row-actions">
+              <button class="btn btn--xs btn--gold">同意</button>
+              <button class="btn btn--xs btn--ghost">拒绝</button>
+            </div>
+          </div>
+
+          <div class="row prow row--me">
+            <div class="row-main">
+              <span class="row-name">苍狼 <span class="self">我</span></span>
+              <span class="row-sub">Lv.42 · 战士</span>
+            </div>
+            <span class="st on">在线</span>
+          </div>
+
+          <div class="row prow">
+            <div class="row-main">
+              <span class="row-name"><span class="lead">队长</span>断刃</span>
+              <span class="row-sub">Lv.45 · 战士</span>
+            </div>
+            <div class="pacts">
+              <span class="st on">在线</span>
+              <button class="btn btn--xs btn--ghost">转让</button>
+              <button class="btn btn--xs btn--danger">踢出</button>
+            </div>
+          </div>
+
+          <div class="row prow">
+            <div class="row-main">
+              <span class="row-name">夜鸦</span>
+              <span class="row-sub">Lv.38 · 法师</span>
+            </div>
+            <div class="pacts">
+              <span class="st on">在线</span>
+              <button class="btn btn--xs btn--ghost">转让</button>
+              <button class="btn btn--xs btn--danger">踢出</button>
+            </div>
+          </div>
+
+          <div class="row prow" style="opacity:.72">
+            <div class="row-main">
+              <span class="row-name">青玄</span>
+              <span class="row-sub">Lv.27 · 道士</span>
+            </div>
+            <div class="pacts">
+              <span class="st off">异图</span>
+              <button class="btn btn--xs btn--ghost">转让</button>
+              <button class="btn btn--xs btn--danger">踢出</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="pfoot">
+          <button class="btn btn--sm btn--gold">邀 请</button>
+          <button class="btn btn--sm btn--ghost">退出队伍</button>
+          <button class="btn btn--sm btn--danger">解散队伍</button>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+</div></div>
+<script src="../stage.js"></script>
+</body>
+</html>

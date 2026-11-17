@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>07 · 技能 · Olua UI</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Noto+Serif+SC:wght@700;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../tokens.css">
+<link rel="stylesheet" href="../ui.css">
+<style>
+/* ── 技能列表 380×440 + 设置快捷键 370×200 ── */
+.skill-dlg{position:relative;width:380px;height:440px}
+.skill-dlg .panel-body{padding-top:0}
+.pt-line{display:flex;align-items:center;justify-content:space-between;padding:2px 2px 10px;
+  border-bottom:var(--bw-1) solid var(--line-1);margin-bottom:8px}
+.pt-line b{font-size:12px;color:var(--text-3);letter-spacing:.08em}
+.pt-line .num{font-size:16px;color:var(--gold-4)}
+.slist{display:flex;flex-direction:column;gap:7px;height:322px;overflow:auto;padding-right:4px}
+.srow{display:flex;align-items:center;gap:10px;padding:7px 9px;border-radius:var(--r-2);
+  border:var(--bw-1) solid var(--line-1);background:rgba(0,0,0,.24)}
+.srow:hover{border-color:var(--line-2)}
+.srow.dim{filter:saturate(.4) brightness(.66)}
+.srow .ic-skill{width:40px;height:40px;border-radius:var(--r-1);display:grid;place-items:center;flex:0 0 auto;
+  font-family:var(--font-display);font-size:19px}
+.srow .mid{flex:1;min-width:0}
+.srow .nm{display:flex;align-items:baseline;gap:7px}
+.srow .nm b{font-size:13.5px;color:var(--text-1);font-weight:400}
+.srow .nm .lv{font-family:var(--font-num);font-size:10px;color:var(--gold-4)}
+.srow .nm .key{font-family:var(--font-num);font-size:9px;color:var(--text-4);margin-left:auto}
+.srow .ds{font-size:11px;color:var(--text-3);margin-top:2px;line-height:1.5;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+/* 快捷键子弹窗 */
+.key-dlg{position:absolute;left:398px;top:150px;width:370px}
+.keys{display:flex;gap:10px;justify-content:center;padding:4px 0 6px}
+.keybtn{width:56px;height:52px;border-radius:var(--r-2);border:var(--bw-1) solid var(--line-2);
+  background:linear-gradient(180deg,#2C2116,#1A1209);display:flex;flex-direction:column;align-items:center;
+  justify-content:center;gap:2px;font-family:var(--font-num);font-size:16px;color:var(--text-1);transition:.2s}
+.keybtn span{font-size:9px;color:var(--text-4);font-family:var(--font-ui)}
+.keybtn:hover{border-color:var(--gold-3)}
+.keybtn.on{border-color:var(--gold-4);color:var(--gold-5);box-shadow:var(--shadow-gold)}
+.keybtn.on span{color:var(--gold-4)}
+.key-hint{text-align:center;font-size:10.5px;color:var(--text-4);letter-spacing:.06em}
+</style>
+</head>
+<body>
+<div class="stage"><div class="stage-inner">
+  <div class="stage-bg stage-bg--blur"><img src="../assets/hero-bg.jpg"></div>
+  <div class="stage-scrim"></div>
+
+  <div class="layer layer--dialog center">
+    <div style="display:flex;align-items:flex-start">
+
+      <!-- 技能列表 -->
+      <div class="panel panel--rivet skill-dlg">
+        <div class="panel-head">
+          <span class="panel-eyebrow">SKILL · K</span>
+          <h2 class="panel-title">技能</h2>
+          <button class="panel-close" aria-label="关闭">×</button>
+        </div>
+        <div class="panel-body">
+          <div class="pt-line"><b>技能点</b><span class="num">3</span></div>
+          <div class="slist scroll">
+            <div class="srow">
+              <div class="ic-skill" style="background:rgba(198,58,32,.18);border:1px solid rgba(224,86,47,.55);color:var(--ember-4)">斩</div>
+              <div class="mid">
+                <div class="nm"><b>烈火剑法</b><span class="lv">lv.4</span><span class="key">快捷键 1</span></div>
+                <div class="ds">挥出灼热剑气，对面前敌人造成 180% 伤害并点燃 3 秒。冷却 6 秒。</div>
+              </div>
+              <button class="btn btn--xs btn--gold">升级</button>
+            </div>
+
+            <div class="srow">
+              <div class="ic-skill" style="background:rgba(111,159,216,.16);border:1px solid rgba(111,159,216,.55);color:var(--q-rare)">刺</div>
+              <div class="mid">
+                <div class="nm"><b>突刺</b><span class="lv">lv.3</span><span class="key">快捷键 2</span></div>
+                <div class="ds">向前突进两格并刺击，命中后 1 秒内下一次攻击必定暴击。</div>
+              </div>
+              <button class="btn btn--xs btn--gold">升级</button>
+            </div>
+
+            <div class="srow">
+              <div class="ic-skill" style="background:rgba(111,191,142,.16);border:1px solid rgba(111,191,142,.55);color:var(--jade)">愈</div>
+              <div class="mid">
+                <div class="nm"><b>治愈术</b><span class="lv">lv.2</span><span class="key">快捷键 5</span></div>
+                <div class="ds">恢复 320 点生命，魔法消耗 40。队伍成员共享 50% 效果。</div>
+              </div>
+              <button class="btn btn--xs btn--gold">升级</button>
+            </div>
+
+            <div class="srow dim">
+              <div class="ic-skill" style="background:rgba(185,176,160,.12);border:1px solid var(--line-2);color:var(--q-common)">半月</div>
+              <div class="mid">
+                <div class="nm"><b>半月弯刀</b><span class="lv">未学习</span></div>
+                <div class="ds">开启等级 30 · 对周围敌人造成 140% 伤害。</div>
+              </div>
+            </div>
+
+            <div class="srow dim">
+              <div class="ic-skill" style="background:rgba(185,176,160,.12);border:1px solid var(--line-2);color:var(--q-common)">战</div>
+              <div class="mid">
+                <div class="nm"><b>战魂附体</b><span class="lv">未学习</span></div>
+                <div class="ds">开启等级 38 · 短时间内攻击力提升 20%。</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="panel-foot"><span>悬停看详情 · 点图标设置快捷键</span><span>升级消耗技能点</span></div>
+      </div>
+
+      <!-- 设置快捷键子弹窗 -->
+      <div class="panel panel--bracket key-dlg">
+        <span class="corner"></span><span class="corner"></span><span class="corner"></span><span class="corner"></span>
+        <div class="panel-head" style="padding:14px 18px 6px">
+          <h2 class="panel-title" style="font-size:16px">设置快捷键</h2>
+          <button class="panel-close" style="top:8px;right:8px" aria-label="关闭">×</button>
+        </div>
+        <div class="panel-body">
+          <p class="key-hint">选择一个键位，立即生效并关闭</p>
+          <div class="keys">
+            <button class="keybtn on">1<span>烈火剑法</span></button>
+            <button class="keybtn">2<span>突刺</span></button>
+            <button class="keybtn">3<span>空</span></button>
+            <button class="keybtn">4<span>空</span></button>
+            <button class="keybtn">5<span>治愈术</span></button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+</div></div>
+<script src="../stage.js"></script>
+</body>
+</html>

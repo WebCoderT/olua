@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>18 · 时装 · Olua UI</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Noto+Serif+SC:wght@700;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../tokens.css">
+<link rel="stylesheet" href="../ui.css">
+<style>
+/* ── 时装 600×500：四列卡片，五态（已穿戴/已拥有/可购买/未开放/无外观） ── */
+.fash{position:relative;width:600px;height:500px}
+.fcur{display:flex;align-items:center;gap:9px;padding:0 2px 12px;font-size:12px;color:var(--text-3)}
+.fcur b{color:var(--gold-4);font-weight:400}
+.fcur i{width:6px;height:6px;border-radius:50%;background:var(--jade);display:block;box-shadow:var(--glow-jade)}
+.fgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;height:330px;overflow:auto;padding-right:4px;align-content:start}
+.fcard{height:152px;padding:10px;display:flex;flex-direction:column;gap:6px}
+.fcard .fig{height:82px;border-radius:var(--r-1);display:grid;place-items:center;overflow:hidden;
+  font-family:var(--font-display);font-size:26px}
+.fcard .st{margin-top:auto;font-size:10px;letter-spacing:.06em}
+.fcard.worn{border-color:rgba(111,191,142,.6);box-shadow:0 0 0 1px rgba(111,191,142,.3),var(--shadow-card)}
+.fcard.worn .st{color:var(--jade)}
+.fcard.owned .st{color:var(--gold-4)}
+.fcard.buyable .st{color:var(--text-3)}
+.fcard.buyable{cursor:pointer}
+.fcard.locked{filter:saturate(.4) brightness(.7)}
+.fcard.locked .st{color:var(--text-4)}
+</style>
+</head>
+<body>
+<div class="stage"><div class="stage-inner">
+  <div class="stage-bg stage-bg--blur"><img src="../assets/hero-bg.jpg"></div>
+  <div class="stage-scrim"></div>
+
+  <div class="layer layer--dialog center">
+    <div class="panel panel--rivet fash">
+      <div class="panel-head">
+        <span class="panel-eyebrow">FASHION</span>
+        <h2 class="panel-title">时装</h2>
+        <button class="panel-close" aria-label="关闭">×</button>
+      </div>
+      <div class="panel-body">
+
+        <div class="fcur"><i></i>当前穿戴：<b>玄铁重铠</b> · 只改变外观，不影响属性</div>
+
+        <div class="fgrid scroll">
+          <div class="card fcard worn">
+            <div class="fig" style="background:linear-gradient(160deg,#2E3A2A,#141C10);color:#A8D8B0">玄</div>
+            <div class="card-name">玄铁重铠</div>
+            <div class="st">已穿戴 · 点击脱下</div>
+          </div>
+
+          <div class="card fcard owned">
+            <div class="fig" style="background:linear-gradient(160deg,#3A2620,#1C0F0A);color:#E8926B">赤</div>
+            <div class="card-name">赤焰战袍</div>
+            <div class="st">已拥有 · 点击穿上</div>
+          </div>
+
+          <div class="card fcard owned">
+            <div class="fig" style="background:linear-gradient(160deg,#23303E,#0D141B);color:#7FB4DC">苍</div>
+            <div class="card-name">苍波行衣</div>
+            <div class="st">已拥有 · 点击穿上</div>
+          </div>
+
+          <div class="card fcard buyable">
+            <div class="fig" style="background:linear-gradient(160deg,#3A2C1A,#1A1209);color:var(--gold-4)">金</div>
+            <div class="card-name">鎏金圣甲</div>
+            <div class="st">购买 · 1,280 绑元</div>
+          </div>
+
+          <div class="card fcard buyable">
+            <div class="fig" style="background:linear-gradient(160deg,#2C2138,#120C1A);color:#C79BE0">夜</div>
+            <div class="card-name">夜行客装</div>
+            <div class="st">购买 · 680 绑元</div>
+          </div>
+
+          <div class="card fcard buyable">
+            <div class="fig" style="background:linear-gradient(160deg,#1E3230,#0B1715);color:#7FCBB2">青</div>
+            <div class="card-name">青竹道袍</div>
+            <div class="st">购买 · 460 绑元</div>
+          </div>
+
+          <div class="card fcard locked">
+            <div class="fig" style="background:#181009;color:var(--text-4)">雪</div>
+            <div class="card-name">踏雪无痕</div>
+            <div class="st">未开放</div>
+          </div>
+
+          <div class="card fcard locked">
+            <div class="fig" style="background:#181009;color:var(--text-4)">皇</div>
+            <div class="card-name">城主龙袍</div>
+            <div class="st">未开放</div>
+          </div>
+        </div>
+
+      </div>
+      <div class="panel-foot"><span>购买并穿上一步完成，服务端扣款</span><span>内观与 world 外观即时刷新</span></div>
+    </div>
+  </div>
+
+</div></div>
+<script src="../stage.js"></script>
+</body>
+</html>

@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>19 · 地图与线路 · Olua UI</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Noto+Serif+SC:wght@700;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../tokens.css">
+<link rel="stylesheet" href="../ui.css">
+<style>
+/* ── 地图预览 720×520（左键寻路 / 右键传送）＋ 选线 400×380 ── */
+.mapd{position:relative;width:720px;height:520px}
+.mview{position:relative;height:330px;border-radius:var(--r-2);overflow:hidden;
+  border:var(--bw-1) solid var(--line-2);background:radial-gradient(circle at 50% 46%,#2C2216,#100B07 78%)}
+.mview .grid{position:absolute;inset:0;opacity:.3;
+  background:repeating-linear-gradient(0deg,rgba(194,146,69,.09) 0 1px,transparent 1px 30px),
+             repeating-linear-gradient(90deg,rgba(194,146,69,.09) 0 1px,transparent 1px 30px)}
+.mview .road{position:absolute;left:40px;top:250px;width:2px;height:2px;border-radius:50%;
+  background-image:radial-gradient(circle,rgba(232,200,135,.9) 1.4px,transparent 1.8px);
+  background-size:12px 12px}
+.mview .hint{position:absolute;left:0;right:0;bottom:0;padding:8px 14px;font-size:11px;color:var(--text-3);
+  background:linear-gradient(180deg,transparent,rgba(10,7,4,.85));text-align:center;letter-spacing:.04em}
+.mview .hint em{font-style:normal;color:var(--gold-4)}
+.mpins .npc{position:absolute;text-align:center;font-size:10px;color:#D8CFC0;text-shadow:0 1px 2px #000}
+.mpins .npc i{display:block;width:6px;height:6px;border-radius:50%;background:var(--gold-4);margin:0 auto 3px;box-shadow:0 0 6px rgba(232,200,135,.8)}
+.mpins .mob{position:absolute;width:6px;height:6px;border-radius:50%;background:var(--ember-3);box-shadow:0 0 8px rgba(224,86,47,.8)}
+.mpins .zone{position:absolute;font-size:10px;letter-spacing:.1em;color:#FFD98A;text-shadow:0 1px 3px #000;opacity:.85}
+.me-big{position:absolute;left:52%;top:56%;width:10px;height:10px;border-radius:50%;background:#F7E9C6;
+  transform:translate(-50%,-50%);box-shadow:0 0 12px rgba(247,233,198,.9)}
+.me-big::after{content:"";position:absolute;inset:-8px;border-radius:50%;border:1px solid rgba(247,233,198,.55);
+  animation:ringPulse var(--dur-4) var(--ease-in-out) infinite}
+/* 选线 */
+.chan{position:relative;width:420px;height:400px}
+/* 大陆传送官弹窗（mapTeleportDialogLayout：弹窗 600 宽，内容列 580、分组标题 + 4 列按钮网格 123×34 gap20/12） */
+.tport{position:relative;width:600px;height:400px;display:none}
+.tport .groups{height:288px;overflow:auto;display:flex;flex-direction:column;gap:16px;padding-right:2px}
+.tport .gt{font-size:14px;height:20px;color:var(--gold-4);letter-spacing:.1em}
+.tport .tgrid{display:grid;grid-template-columns:repeat(4,123px);gap:12px 20px;justify-content:center;margin-top:8px}
+.tport .tbtn{height:34px;display:flex;align-items:center;justify-content:center;gap:6px;font-size:12px;color:var(--text-2);
+  border:var(--bw-1) solid var(--line-2);border-radius:var(--r-1);background:rgba(0,0,0,.32)}
+.tport .tbtn:hover{border-color:var(--gold-3);color:var(--gold-5)}
+.tport .tbtn i{font-style:normal;font-family:var(--font-num);font-size:10px;color:var(--text-4)}
+.crow{height:50px;justify-content:flex-start;gap:12px;cursor:pointer}
+.crow .cn{font-size:14px;letter-spacing:.06em}
+.crow .load{margin-left:auto;display:flex;align-items:center;gap:7px;font-size:11px;color:var(--text-3)}
+.crow .load i{width:34px;height:5px;border-radius:var(--r-pill);background:rgba(0,0,0,.5);position:relative;overflow:hidden}
+.crow .load i b{position:absolute;inset:0 auto 0 0;background:var(--jade);border-radius:var(--r-pill)}
+.crow .load i.warn b{background:var(--amber)}
+.crow .load i.full b{background:var(--ember-2)}
+.crow .tagc{font-size:9px;padding:1px 7px;border-radius:var(--r-pill);letter-spacing:.08em}
+.crow.cur{border-color:var(--gold-3)}
+.crow.locked{opacity:.5;cursor:not-allowed}
+</style>
+</head>
+<body>
+<div class="stage"><div class="stage-inner">
+  <div class="stage-bg stage-bg--blur"><img src="../assets/hero-bg.jpg"></div>
+  <div class="stage-scrim"></div>
+
+  <div class="layer layer--dialog center">
+    <div style="display:flex;align-items:center;gap:28px">
+
+      <!-- 地图预览 -->
+      <div class="panel panel--rivet mapd">
+        <div class="panel-head">
+          <span class="panel-eyebrow">WORLD MAP</span>
+          <h2 class="panel-title">沙城 · 黄昏</h2>
+          <button class="panel-close" aria-label="关闭">×</button>
+        </div>
+        <div class="panel-body">
+          <div class="mview">
+            <div class="grid"></div>
+            <svg style="position:absolute;inset:0;width:100%;height:100%" viewBox="0 0 684 330" preserveAspectRatio="none">
+              <path d="M60 210 L150 150 L232 168 L306 108 L398 128 L472 84 L560 108 L624 210 L600 296 L84 300 Z"
+                fill="rgba(194,146,69,.05)" stroke="rgba(194,146,69,.4)" stroke-width="1.4"/>
+              <rect x="296" y="76" width="92" height="56" fill="none" stroke="rgba(194,146,69,.55)" stroke-width="1.4"/>
+              <path d="M342 132 L342 168 M306 104 L342 132 L392 104" fill="none" stroke="rgba(194,146,69,.55)" stroke-width="1"/>
+            </svg>
+            <div class="mpins">
+              <span class="zone" style="left:118px;top:186px">落霞村</span>
+              <span class="zone" style="left:452px;top:210px">匪盗营地</span>
+              <span class="zone" style="left:236px;top:96px">皇城</span>
+              <span class="npc" style="left:150px;top:236px"><i></i>铁匠</span>
+              <span class="npc" style="left:262px;top:190px"><i></i>药店</span>
+              <span class="npc" style="left:420px;top:132px"><i></i>传送官</span>
+              <span class="mob" style="left:35%;top:64%"></span>
+              <span class="mob" style="left:48%;top:74%"></span>
+              <span class="mob" style="left:72%;top:52%"></span>
+              <span class="mob" style="left:64%;top:40%"></span>
+              <span class="mob" style="left:28%;top:52%"></span>
+            </div>
+            <div class="road" style="left:52%;top:56%;width:180px;height:2px"></div>
+            <span class="me-big"></span>
+            <div class="hint"><em>左键</em> 点击自动寻路 · <em>右键</em> 点击直接传送（死亡状态不可传送）</div>
+          </div>
+        </div>
+        <div class="panel-foot"><span>路线点状线 · 终点放大高亮</span><span>怪物红点 / NPC 金点 / 玩家白点</span></div>
+      </div>
+
+      <!-- 选线 -->
+      <div class="panel panel--bracket chan">
+        <span class="corner"></span><span class="corner"></span><span class="corner"></span><span class="corner"></span>
+        <div class="panel-head" style="padding:16px 18px 6px">
+          <h2 class="panel-title" style="font-size:17px">选择线路</h2>
+          <button class="panel-close" style="top:9px;right:9px" aria-label="关闭">×</button>
+        </div>
+        <div class="panel-body">
+          <p style="text-align:center;font-size:11px;color:var(--text-4);margin-bottom:12px;line-height:1.7">
+            人多拥挤的线路可以去别的线<br>怪物与掉落各线各一份</p>
+          <div class="list">
+            <div class="row crow cur">
+              <span class="badge badge--gold">当前</span>
+              <span class="cn">1 线</span>
+              <span class="load"><i class="warn"><b style="width:72%"></b></i>较挤</span>
+            </div>
+            <div class="row crow">
+              <span class="cn">2 线</span>
+              <span class="load"><i><b style="width:38%"></b></i>流畅</span>
+            </div>
+            <div class="row crow">
+              <span class="cn">3 线</span>
+              <span class="load"><i><b style="width:52%"></b></i>流畅</span>
+            </div>
+            <div class="row crow locked">
+              <span class="cn">4 线</span>
+              <span class="load"><i class="full"><b style="width:100%"></b></i>已满</span>
+            </div>
+          </div>
+        </div>
+        <div class="panel-foot" style="justify-content:center"><span>满员线路由服务端拒绝并推荐空线</span></div>
+      </div>
+
+      <!-- 大陆传送官弹窗（#state=teleport 直达；与选线窗互斥展示） -->
+      <div class="panel panel--rivet tport">
+        <div class="panel-head">
+          <span class="panel-eyebrow">TELEPORT</span>
+          <h2 class="panel-title">大陆传送官</h2>
+          <button class="panel-close" aria-label="关闭">×</button>
+        </div>
+        <div class="panel-body">
+          <div class="groups">
+            <div>
+              <div class="gt">主城</div>
+              <div class="tgrid">
+                <button class="tbtn">沙城<i>当前</i></button>
+                <button class="tbtn">落霞村</button>
+                <button class="tbtn">皇城</button>
+                <button class="tbtn">集市</button>
+              </div>
+            </div>
+            <div>
+              <div class="gt">野外</div>
+              <div class="tgrid">
+                <button class="tbtn">匪盗营地</button>
+                <button class="tbtn">枯骨荒原</button>
+                <button class="tbtn">迷雾林</button>
+                <button class="tbtn">赤炎峡谷</button>
+                <button class="tbtn">黑石山道</button>
+                <button class="tbtn">苍月湖畔</button>
+                <button class="tbtn">古战场</button>
+                <button class="tbtn">风语平原</button>
+              </div>
+            </div>
+            <div>
+              <div class="gt">副本</div>
+              <div class="tgrid">
+                <button class="tbtn">经验副本<i>Lv.20</i></button>
+                <button class="tbtn">装备副本<i>Lv.30</i></button>
+                <button class="tbtn">材料洞窟<i>Lv.35</i></button>
+                <button class="tbtn">沙城密道<i>行会</i></button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="panel-foot"><span>左键传送 · 死亡状态不可传送</span><span>未解锁的地图由服务端拒绝并提示</span></div>
+      </div>
+
+    </div>
+  </div>
+
+</div></div>
+<script src="../stage.js"></script>
+<script>
+if (/state=teleport/.test(location.hash)){
+  document.querySelector('.chan').style.display = 'none';
+  document.querySelector('.tport').style.display = 'flex';
+  document.querySelector('.tport').style.flexDirection = 'column';
+}
+</script>
+</body>
+</html>

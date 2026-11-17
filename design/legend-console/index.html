@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>OLUA 传奇 · 设计系统入口</title>
+<style>
+:root{
+  --void:#090705; --stone-2:#1B1712; --stone-3:#241E17;
+  --gold:#C9A24D; --gold-hi:#F0DCAC; --gold-dim:#6B562F;
+  --fire:#B9441F; --fire-hi:#E4743A; --jade:#6FA96B;
+  --ink:#EEE5D2; --ink-2:#B7A88F; --ink-3:#7E7059;
+  --line:rgba(201,162,77,.18); --line-soft:rgba(201,162,77,.09);
+  --font-display:"Songti SC","Source Han Serif SC","Noto Serif SC","STSong",serif;
+  --font-ui:"PingFang SC","Hiragino Sans GB","Microsoft YaHei",system-ui,sans-serif;
+  --font-mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  --r:2px; --ease:cubic-bezier(.22,.61,.36,1);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+a{color:inherit;text-decoration:none}
+body{
+  min-height:100vh;display:flex;align-items:center;justify-content:center;padding:40px 20px;
+  background:
+    radial-gradient(90% 60% at 50% -10%, rgba(120,52,20,.28) 0%, transparent 60%),
+    radial-gradient(50% 40% at 50% 108%, rgba(150,72,26,.22) 0%, transparent 62%),
+    var(--void);
+  color:var(--ink);font:400 14px/1.65 var(--font-ui);-webkit-font-smoothing:antialiased;
+}
+body::before{
+  content:"";position:fixed;inset:0;pointer-events:none;opacity:.12;mix-blend-mode:overlay;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.86' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+.page{position:relative;width:min(920px,100%)}
+
+.head{text-align:center;margin-bottom:44px}
+.crest{margin:0 auto 18px}
+.head .mono{font-family:var(--font-mono);font-size:10px;letter-spacing:.34em;color:var(--gold);text-transform:uppercase}
+.head h1{
+  margin-top:14px;font-family:var(--font-display);font-size:clamp(34px,5vw,52px);
+  font-weight:700;letter-spacing:.12em;line-height:1.1;
+}
+.head h1 em{
+  font-style:normal;
+  background:linear-gradient(180deg,#F6E7C4 6%,#C9A24D 58%,#8A6C34 100%);
+  -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;
+}
+.head p{margin-top:14px;font-size:13px;color:var(--ink-3)}
+.head p b{color:var(--ink-2);font-weight:500}
+
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+@media (max-width:820px){.grid{grid-template-columns:repeat(2,1fr)}}
+@media (max-width:560px){.grid{grid-template-columns:1fr}}
+
+a.entry{
+  position:relative;display:block;padding:1px;border-radius:var(--r);
+  background:linear-gradient(180deg,var(--gold-dim),rgba(107,86,47,.22) 30%,rgba(107,86,47,.22) 72%,var(--gold-dim));
+  transition:transform .18s var(--ease),box-shadow .25s var(--ease);
+}
+a.entry:hover{transform:translateY(-2px);box-shadow:0 24px 44px -24px rgba(0,0,0,.95),0 0 30px -10px rgba(201,162,77,.25)}
+.inner{
+  position:relative;height:100%;padding:16px 16px 14px;border-radius:var(--r);
+  background:linear-gradient(170deg,var(--stone-2) 0%,#16120E 50%,#11100C 100%);
+}
+.inner::before{content:"";position:absolute;inset:4px;border:1px solid rgba(201,162,77,.06);pointer-events:none}
+.mini{height:56px;border:1px solid var(--line-soft);border-radius:var(--r);margin-bottom:13px;position:relative;overflow:hidden}
+.mini .bar{position:absolute;left:0;top:0;bottom:0;width:22%;background:#100D0A;border-right:1px solid var(--line-soft)}
+.mini .ln{position:absolute;background:rgba(201,162,77,.3);height:3px;border-radius:1px}
+.mini .blk{position:absolute;border:1px solid var(--line-soft);background:rgba(201,162,77,.07);border-radius:1px}
+.mini .gldot{position:absolute;width:6px;height:6px;background:var(--gold);transform:rotate(45deg)}
+.entry .n{font-family:var(--font-mono);font-size:8.5px;letter-spacing:.22em;color:var(--gold-dim)}
+.entry b{display:block;margin-top:8px;font-size:15px;font-weight:600;letter-spacing:.08em;color:var(--ink)}
+.entry p{margin-top:7px;font-size:11px;line-height:1.65;color:var(--ink-3)}
+.entry .go{
+  position:absolute;right:14px;top:14px;font-family:var(--font-mono);font-size:9px;
+  color:var(--ink-3);transition:color .2s;
+}
+a.entry:hover .go{color:var(--gold)}
+
+.foot{margin-top:34px;text-align:center;font-family:var(--font-mono);font-size:9px;letter-spacing:.2em;color:var(--ink-3)}
+.foot span{margin:0 10px}
+.foot i{width:4px;height:4px;background:var(--gold-dim);display:inline-block;transform:rotate(45deg);margin:0 4px;vertical-align:middle}
+</style>
+</head>
+<body>
+<div class="page">
+
+  <header class="head">
+    <svg class="crest" width="42" height="50" viewBox="0 0 34 40" fill="none" aria-hidden="true">
+      <path d="M17 1.5 L32.2 6.6 V20.4 C32.2 29.6 25.6 35.6 17 38.6 C8.4 35.6 1.8 29.6 1.8 20.4 V6.6 Z"
+            stroke="#C9A24D" stroke-width="1.2" fill="rgba(201,162,77,.06)"/>
+      <path d="M17 5.2 L28.6 9 V20.2 C28.6 27.4 23.4 32.2 17 34.7 C10.6 32.2 5.4 27.4 5.4 20.2 V9 Z"
+            stroke="rgba(201,162,77,.35)" stroke-width=".8"/>
+      <path d="M17 10.5 V26.5" stroke="#F0DCAC" stroke-width="1.4"/>
+      <path d="M12.6 15.4 H21.4" stroke="#C9A24D" stroke-width="1.1"/>
+      <path d="M17 26.5 L15 29.6 H19 Z" fill="#C9A24D"/>
+    </svg>
+    <div class="mono">Design System · Entry</div>
+    <h1>传奇管理端<br><em>设计系统</em></h1>
+    <p>覆盖管理端全部 <b>30+ 组件</b>的重设计 · 六份稿子 · 同一套<b>石 · 金 · 火</b>token</p>
+  </header>
+
+  <nav class="grid">
+    <a class="entry" href="./system.html">
+      <div class="inner">
+        <span class="go">→</span>
+        <div class="mini">
+          <span class="gldot" style="left:18px;top:18px"></span>
+          <span class="ln" style="left:34px;top:22px;width:130px"></span>
+          <span class="ln" style="left:34px;top:34px;width:90px;opacity:.5"></span>
+          <div style="position:absolute;right:12px;top:12px;display:flex;gap:5px">
+            <i style="width:22px;height:26px;background:#C9A24D;border-radius:1px"></i>
+            <i style="width:22px;height:26px;background:#B9441F;border-radius:1px"></i>
+            <i style="width:22px;height:26px;background:#6FA96B;border-radius:1px"></i>
+          </div>
+        </div>
+        <span class="n">00 / FOUNDATION</span>
+        <b>总纲</b>
+        <p>三条原则 · 色彩 · 排版 · 栅格 · 图标 · 动效 · 禁忌清单</p>
+      </div>
+    </a>
+
+    <a class="entry" href="./components.html">
+      <div class="inner">
+        <span class="go">→</span>
+        <div class="mini">
+          <span class="ln" style="left:14px;top:14px;width:44px"></span>
+          <span class="blk" style="left:14px;top:26px;width:120px;height:20px"></span>
+          <span class="blk" style="right:14px;top:26px;width:64px;height:20px;background:rgba(201,162,77,.28)"></span>
+        </div>
+        <span class="n">01 / COMPONENTS</span>
+        <b>通用组件</b>
+        <p>按钮 · 输入 · 徽章 · 卡片 · 页头 · 筛选 · 表格 · 分页 · 弹窗 · Toast · 14 节</p>
+      </div>
+    </a>
+
+    <a class="entry" href="./domain.html">
+      <div class="inner">
+        <span class="go">→</span>
+        <div class="mini">
+          <span class="blk" style="left:26px;top:12px;width:22px;height:22px;transform:rotate(45deg)"></span>
+          <span class="blk" style="left:60px;top:26px;width:90px;height:16px;background:rgba(185,68,31,.25);border-color:rgba(228,116,58,.4)"></span>
+          <span class="blk" style="left:170px;top:30px;width:30px;height:16px;background:rgba(111,169,107,.2)"></span>
+          <span class="blk" style="left:220px;top:14px;width:52px;height:32px;background:rgba(201,162,77,.14)"></span>
+        </div>
+        <span class="n">02 / DOMAIN</span>
+        <b>游戏领域组件</b>
+        <p>资源缩略图 · 装备槽 · 选择器 · 背包 · 技能 · 地图画布 · 掉落 · 9 节</p>
+      </div>
+    </a>
+
+    <a class="entry" href="./controls.html">
+      <div class="inner">
+        <span class="go">→</span>
+        <div class="mini">
+          <span class="blk" style="left:14px;top:12px;width:80px;height:14px"></span>
+          <span class="blk" style="left:14px;top:32px;width:80px;height:14px;border-color:rgba(228,116,58,.5);background:rgba(185,68,31,.12)"></span>
+          <span class="blk" style="right:40px;top:12px;width:52px;height:34px;background:rgba(201,162,77,.3)"></span>
+          <span class="blk" style="right:14px;top:18px;width:14px;height:22px;background:rgba(201,162,77,.2)"></span>
+        </div>
+        <span class="n">03 / STATES</span>
+        <b>控件状态图谱</b>
+        <p>每个控件 ≥5 态并排钉住，评审不必摸鼠标</p>
+      </div>
+    </a>
+
+    <a class="entry" href="./dashboard.html">
+      <div class="inner">
+        <span class="go">→</span>
+        <div class="mini">
+          <span class="bar"></span>
+          <span class="blk" style="left:32px;top:10px;width:60px;height:16px"></span>
+          <span class="blk" style="left:100px;top:10px;width:60px;height:16px"></span>
+          <span class="blk" style="left:32px;top:32px;width:128px;height:14px;background:rgba(201,162,77,.22)"></span>
+        </div>
+        <span class="n">04 / PAGE</span>
+        <b>概览页样张</b>
+        <p>KPI · 趋势 · 分布 · 审计动态，组合成真实一屏</p>
+      </div>
+    </a>
+
+    <a class="entry" href="../legend-login/index.html">
+      <div class="inner">
+        <span class="go">→</span>
+        <div class="mini">
+          <span class="blk" style="right:16px;top:8px;bottom:8px;width:150px;background:rgba(201,162,77,.1)"></span>
+          <span class="ln" style="left:16px;top:16px;width:110px;height:5px;background:rgba(240,220,172,.75)"></span>
+          <span class="ln" style="left:16px;top:28px;width:76px;height:5px;opacity:.4"></span>
+          <span class="ln" style="left:16px;top:40px;width:92px;height:3px;opacity:.25"></span>
+        </div>
+        <span class="n">05 / PAGE</span>
+        <b>登录页样张</b>
+        <p>同一套语言的门内 / 门外：执剑者，入席</p>
+      </div>
+    </a>
+  </nav>
+
+  <footer class="foot">
+    <span>OLUA LEGEND CONSOLE</span><i></i>
+    <span>DESIGN SYSTEM v1</span><i></i>
+    <span>石 · 金 · 火</span>
+  </footer>
+</div>
+</body>
+</html>
