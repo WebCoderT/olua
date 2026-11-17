@@ -3,6 +3,7 @@ import {
   Color,
   EditBox,
   Font,
+  Graphics,
   isValid,
   Label,
   Node,
@@ -20,6 +21,7 @@ import {
   Mask,
 } from "cc";
 import { uiImages, uiTheme } from "../../configs/hudLayout";
+import { T } from "../../configs/layout/tokens";
 import SoundManager from "../core/SoundManager";
 import { blockClickThrough } from "../utils/input/UiHit";
 import { designResolution } from "../utils/layout/ScreenLayout";
@@ -56,6 +58,22 @@ export default class UiHelper {
     node.name = name;
     node.setPosition(position.x, position.y, 0);
     return node;
+  }
+
+  /**
+   * 用 Graphics 画 1px 级矩形边框。
+   * 引擎坑：Graphics.stroke() 在 1px 线宽下整条不渲染（实机验证），
+   * 因此用"四条 1px 高/宽的填充矩形"拼出边框。
+   */
+  static paintRectBorder(graphics: Graphics, size: Size, color: Color, width = 1) {
+    const halfW = size.width / 2;
+    const halfH = size.height / 2;
+    graphics.fillColor = color;
+    graphics.rect(-halfW, halfH - width, size.width, width);
+    graphics.rect(-halfW, -halfH, size.width, width);
+    graphics.rect(-halfW, -halfH + width, width, size.height - width * 2);
+    graphics.rect(halfW - width, -halfH + width, width, size.height - width * 2);
+    graphics.fill();
   }
 
   /**
@@ -253,6 +271,45 @@ export default class UiHelper {
    * @param isPassword 是否密码输入
    * @param fontSize 文字与占位符字号（默认 24）
    */
+  /**
+   * 矢量输入框（登录页账号 / 密码同一口径）：`surface.input` 圆角暗底 + 1px 弱线描边 + EditBox
+   *
+   * 这是输入框的**唯一视觉来源**——登录重排后新输入框一律用它，不再用图片底那张
+   * loginInputBackground（弹窗与登录页底色 / 圆角 / 字号不一致就是从混用两张底开始的）。
+   * @param placeholder 占位文案
+   * @param position 框中心相对父节点位置
+   * @param size 框体尺寸
+   * @param options.icon 左侧图标（登录页用；传了会把文字区往右收）
+   * @param options.password 密码掩码
+   * @param options.fontSize 输入字号（默认 f14，登录页口径）
+   * @param options.inset 文字区总收缩（默认 24 = 左右各 12；登录页带图标是 84）
+   * @param options.height 文字区高度（默认 34，登录页口径）
+   */
+  static createVectorInputField(
+    placeholder: string,
+    position: Vec2,
+    size: Size,
+    options: { icon?: string; password?: boolean; fontSize?: number; inset?: number; height?: number } = {},
+  ) {
+    const background = this.createNode("input_background", position, size);
+    const graphics = background.addComponent(Graphics);
+    graphics.fillColor = T.surface.input;
+    graphics.roundRect(-size.width / 2, -size.height / 2, size.width, size.height, T.radius.r2);
+    graphics.fill();
+    graphics.lineWidth = 1;
+    graphics.strokeColor = T.line[2];
+    graphics.roundRect(-size.width / 2, -size.height / 2, size.width, size.height, T.radius.r2);
+    graphics.stroke();
+    if (options.icon) {
+      background.addChild(this.createSprite("input_icon", options.icon, new Vec2(-size.width / 2 + 22, 0), new Size(20, 20)));
+    }
+    const inset = options.inset ?? 24;
+    const height = options.height ?? 34;
+    const input = this.createInputBox("input", placeholder, new Vec2(), new Vec2(size.width - inset, height), options.password ?? false, options.fontSize ?? T.fontSize.f14);
+    background.addChild(input);
+    return { node: background, input };
+  }
+
   static createInputBox(name: string, placeholder: string, position: Vec2, size: Vec2, isPassword: boolean = false, fontSize: number = 24) {
     const node = this.createNode(name, position, size);
     const editBox = node.addComponent(EditBox);

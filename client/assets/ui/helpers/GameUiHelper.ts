@@ -25,6 +25,10 @@ import UiHelper from "./UiHelper";
 import { wrappedHeight } from "./TextLayout";
 import AnimationHelper from "./AnimationHelper";
 import { Draggable } from "../components/input/Draggable";
+import VectorBarBridge from "../components/common/VectorBarBridge";
+import { drawVectorIcon, type VectorIconShape } from "./VectorIcon";
+import { icons } from "../../configs/layout/icons";
+import VectorPlate from "../components/common/VectorPlate";
 import { isCtrlPressed, onCtrlChange } from "../utils/input/ModifierKeys";
 import { debugConfig } from "../../configs/debug";
 import { getText, TextParams } from "../../configs/texts";
@@ -41,7 +45,6 @@ import { Equipment, EQUIPMENT_TYPE, Goods, isEquipment } from "../../types/good"
 import { Monster } from "../../types/monster";
 import type { DropOwner } from "../../types/drop";
 import { NPC } from "../../types/map";
-import { OECCUPATION } from "../../types/role";
 import { SkillId } from "../../types/skill";
 import { SoulAttributes, SoulLevelConfig } from "../../types/soul";
 import { TitleAttributes, TitleLevelConfig } from "../../types/title";
@@ -127,6 +130,11 @@ export interface SmallMapDot {
   color: Color;
   /** 点半径 */
   radius: number;
+  /**
+   * 外环半径（可选；稿 `.map-view .me::after`：玩家点带一圈半透明细环，怪物点没有）
+   * 环宽恒 1px，颜色与点同色、alpha 减半
+   */
+  ringRadius?: number;
 }
 
 /**
@@ -284,82 +292,107 @@ export default class GameUiHelper {
     return button;
   }
 
-  /**
-   * 创建带图标的输入框组（背景 + 可选图标 + 输入框），返回背景节点与输入框节点
-   *
-   * 内层 EditBox 的宽度 = 背景宽 − 左右留白。留白按**有没有图标**取（见 uiTheme.inputField）：
-   * 带图标的（登录页，左侧图标 + 文字起始位）要留 200；不带图标的（创建角色弹窗）只留边距。
-   * 原来这里对两种情况都写死减 200，弹窗的 240 宽背景减完只剩 40 —— 背景条看着是整条，
-   * 实际只有右端一小截能点（真机点左半边拿不到焦点，见 #457）。
-   */
-  static createInputField(placeholder: string, position: Vec2 = new Vec2(), size: Size = new Size(600, 80), icon?: string, password: boolean = false) {
-    const background = UiHelper.createSprite("input_background", uiImages.loginInputBackground, position, size);
-    if (icon) background.addChild(UiHelper.createSprite("input_icon", icon, new Vec2(-size.width / 2 + 60, 0), new Size(40, 40)));
-    const inset = icon ? uiTheme.inputField.iconInset : uiTheme.inputField.plainInset;
-    const input = UiHelper.createInputBox("input", placeholder, new Vec2(0, 0), new Vec2(size.width - inset, uiTheme.inputField.height), password);
-    background.addChild(input);
-    return { node: background, input };
-  }
-
   /** 创建开关组 */
   static createToggleGroup(name: string, toggles: Node[], spacing: number, position: Vec2 = new Vec2()) {
     return UiHelper.createToggleGroup(name, toggles, spacing, position);
   }
 
   /**
-   * 创建货币显示零件（图标 + 数值，内容在零件内左对齐：图标贴左边缘、数值紧随其右）
+   * 创建货币显示零件（图标 + 名称 + 数值，内容在零件内左对齐）
+   *
+   * 稿 `.info .cur`：金色小方块图标 + 「绑定元宝」说明字（11px text-3）+ 数值（11px 金-4）。
+   * 名称是可选的：不传 spec.label 就是旧口径（只有图标 + 数值）。
    * @param icon 货币图标资源路径
    * @param value 数值
    * @param position 零件中心位置
    * @param size 零件尺寸（父容器等分时传容器宽度/份数）
+   * @param spec 图标尺寸 / 名称 / 数值的配色与宽度（见 hudLayout.roleInfoBarLayout.currencyBar）
    */
-  static createCurrencyItem(icon: string, value: string | number, position: Vec2 = new Vec2(), size: Size = new Size(43, 12)) {
+  static createCurrencyItem(
+    icon: string,
+    value: string | number,
+    position: Vec2 = new Vec2(),
+    size: Size = new Size(43, 12),
+    spec?: {
+      iconSize?: Size;
+      label?: { text: string; fontSize: number; color: Color; width: number; gap: number };
+      value?: { fontSize: number; color: Color; gap: number };
+    },
+  ) {
     const node = UiHelper.createNode("currency_item", position, size);
-    const iconWidth = 15;
-    const iconGap = 3;
+    const iconSize = spec?.iconSize ?? new Size(15, 10);
     const left = -size.width / 2;
-    node.addChild(UiHelper.createSprite("currency_icon", icon, new Vec2(left + iconWidth / 2, 0), new Size(iconWidth, 10)));
-    const valueLabelNode = UiHelper.createLabel(
+    node.addChild(UiHelper.createSprite("currency_icon", icon, new Vec2(left + iconSize.width / 2, 0), iconSize));
+    let cursor = left + iconSize.width;
+    if (spec?.label) {
+      cursor += spec.label.gap;
+      node.addChild(
+        UiHelper.createLabel(
+          "currency_label",
+          spec.label.text,
+          spec.label.color,
+          spec.label.fontSize,
+          new Vec2(cursor + spec.label.width / 2, 0),
+          new Size(spec.label.width, size.height),
+          Label.HorizontalAlign.LEFT,
+        ),
+      );
+      cursor += spec.label.width;
+    }
+    cursor += spec?.value?.gap ?? 3;
+    const valueNode = UiHelper.createLabel(
       "currency_value",
       value.toString(),
-      Color.WHITE,
-      12,
-      new Vec2(left + iconWidth + iconGap, 0),
-      new Size(size.width - iconWidth - iconGap, size.height),
+      spec?.value?.color ?? Color.WHITE,
+      spec?.value?.fontSize ?? 12,
+      new Vec2(cursor, 0),
+      new Size(Math.max(10, size.width / 2 - cursor), size.height),
       Label.HorizontalAlign.LEFT,
     );
-    valueLabelNode.getComponent(UITransform).setAnchorPoint(0, 0.5);
-    node.addChild(valueLabelNode);
-    return { node, valueLabel: valueLabelNode.getComponent(Label) };
+    valueNode.getComponent(UITransform).setAnchorPoint(0, 0.5);
+    node.addChild(valueNode);
+    return { node, valueLabel: valueNode.getComponent(Label) };
   }
 
   /**
-   * 创建战斗力显示零件（图标 + 数字图集文本，数值紧随图标右边缘）
+   * 创建战斗力显示零件（`战斗力` 小字标签在上、红色数值在下，**右对齐**贴信息栏右缘）
    * 图标尺寸见 hudLayout.roleInfoBarLayout.combat.iconSize
    * @return node 零件节点、combatLabel 战斗力文本（供刷新）
    */
   static createCombatPower(role: Role, position: Vec2 = new Vec2()) {
-    const { iconSize, labelGap } = roleInfoBarLayout.combat;
+    const layout = roleInfoBarLayout.combat;
     const node = UiHelper.createNode("combat_power", position);
-    node.addChild(UiHelper.createSprite("combat_icon", uiImages.combatIcon, new Vec2(), iconSize));
-    const labelX = iconSize.width / 2 + labelGap;
     // 战斗力数字用默认字体（曾引用 font/combat 数字图集，素材包里从来没有过这个资源，
     // 加载恒失败后静默回退——2026-10-26 资源引用审计把它当断链清掉；要上数字图集先补素材）
-    const labelNode = UiHelper.createLabel("combat_number", role.combat.toString(), Color.WHITE, 20, new Vec2(labelX, 0), new Size(200, iconSize.height), Label.HorizontalAlign.LEFT);
-    labelNode.getComponent(UITransform).setAnchorPoint(0, 0.5);
-    const combatLabel = labelNode.getComponent(Label);
+    // 新稿口径：`战斗力` 小字标签在上、红色数值在下，纯文字无图标、整块右对齐
+    const labelNode = UiHelper.createLabel("combat_label", layout.label.text, layout.label.color, layout.label.fontSize, layout.label.position, layout.label.size, Label.HorizontalAlign.RIGHT);
+    const label = labelNode.getComponent(Label);
+    if (label) label.spacingX = layout.label.spacingX;
     node.addChild(labelNode);
-    return { node, combatLabel };
+    const valueNode = UiHelper.createLabel("combat_number", role.combat.toString(), layout.value.color, layout.value.fontSize, layout.value.position, layout.value.size, Label.HorizontalAlign.RIGHT);
+    node.addChild(valueNode);
+    return { node, combatLabel: valueNode.getComponent(Label)! };
   }
 
   /**
    * 创建角色头像（按职业与性别取图，尺寸见 hudLayout.roleInfoBar.portrait）
-   * 打开 Sprite 的 trim：头像图四周透明边距较多，裁剪后内容正好填满零件尺寸
+   * 稿 `.info .avatar`：54×58、1px 金-2 边框 + 深褐渐变底 —— 头像图叠在金线框里，
+   * 边框用「填外框再内缩填底」画（1px 描边在实机不渲染）
    */
   static createAvatarPortrait(role: Role, position: Vec2 = new Vec2(), size: Size = roleInfoBarLayout.portrait.size) {
-    const node = UiHelper.createSprite(`role_avatar_${role.occupation}_${role.sex}`, avatarImage(role.occupation, role.sex), position, size);
-    node.getComponent(Sprite)!.trim = true;
-    return node;
+    const frame = UiHelper.createNode(`role_avatar_${role.occupation}_${role.sex}`, position, size);
+    const layout = roleInfoBarLayout.portrait;
+    const graphics = frame.addComponent(Graphics);
+    graphics.fillColor = layout.border;
+    graphics.roundRect(-size.width / 2, -size.height / 2, size.width, size.height, T.radius.r2);
+    graphics.fill();
+    graphics.fillColor = T.surface[3];
+    graphics.roundRect(-size.width / 2 + 1, -size.height / 2 + 1, size.width - 2, size.height - 2, Math.max(0, T.radius.r2 - 1));
+    graphics.fill();
+    const portrait = UiHelper.createSprite("role_avatar_art", avatarImage(role.occupation, role.sex), new Vec2(), new Size(size.width - 2, size.height - 2));
+    portrait.getComponent(Sprite)!.trim = true;
+    frame.addChild(portrait);
+    return frame;
   }
 
   /** 创建装备插槽（名称即装备类型，便于按类型查找） */
@@ -536,85 +569,85 @@ export default class GameUiHelper {
 
   //#endregion
 
-  //#region 选角开关组零件
-
-  /** 创建性别选择开关组（选中值为节点名 "1"/"2"；位置与开关几何见 configs/hudLayout.roleSelectorLayout.createDialog.sexToggle） */
-  static createSexToggleGroup(position: Vec2 = roleSelectorLayout.createDialog.sexToggle.position) {
-    const { spacing, toggleSize } = roleSelectorLayout.createDialog.sexToggle;
-    return UiHelper.createToggleGroup(
-      "role_sex_toggle_group",
-      [
-        UiHelper.createToggle("1", uiImages.sexToggle.boy.on, uiImages.sexToggle.boy.off, new Vec2(), toggleSize),
-        UiHelper.createToggle("2", uiImages.sexToggle.girl.on, uiImages.sexToggle.girl.off, new Vec2(), toggleSize),
-      ],
-      spacing,
-      position,
-    );
-  }
-
-  /** 创建职业选择开关组（选中值为 OECCUPATION 枚举；位置与开关几何见 configs/hudLayout.roleSelectorLayout.createDialog.occupationToggle） */
-  static createOccupationToggleGroup(position: Vec2 = roleSelectorLayout.createDialog.occupationToggle.position) {
-    const { spacing, toggleSize } = roleSelectorLayout.createDialog.occupationToggle;
-    return UiHelper.createToggleGroup(
-      "role_occupation_toggle_group",
-      [
-        UiHelper.createToggle(OECCUPATION.ZHAN, uiImages.occupationToggle.zhan.on, uiImages.occupationToggle.zhan.off, new Vec2(), toggleSize),
-        UiHelper.createToggle(OECCUPATION.FA, uiImages.occupationToggle.fa.on, uiImages.occupationToggle.fa.off, new Vec2(), toggleSize),
-        UiHelper.createToggle(OECCUPATION.DAO, uiImages.occupationToggle.dao.on, uiImages.occupationToggle.dao.off, new Vec2(), toggleSize),
-      ],
-      spacing,
-      position,
-    );
-  }
-
-  //#endregion
-
   //#region 底部导航
 
   /**
    * 为已有节点施加底部导航按钮样式（组件自身即按钮时使用）
+   * 新稿（04-hud）口径：**矢量底板按钮**（44×44 玻璃底板 + 功能名文字 + 右上角快捷键字母），
+   * 不再用带烙字的图标图。解锁 = 金边亮金字；未解锁 = 灰边灰字（置灰语义由组件持 flag 判断）
    * @param node 目标节点
    * @param button 按钮配置
-   * @param role 当前角色（用于判断功能是否解锁并置灰）
-   * @returns 该节点的 Sprite 组件
+   * @param role 当前角色（用于判断功能是否解锁）
+   * @returns 文字 Label 与是否未解锁（组件点击时据此提示等级）
    */
-  static applyBottomNavBarButtonStyle(node: Node, button: BottomNavBarButton, role: Role) {
+  /**
+   * 底部导航 key → 描边图标（data 见 configs/layout/icons.ts，逐字抄设计稿）
+   *
+   * 未知 key 返回空形状（画不出东西，但不崩）——新增导航入口时记得在这里补一条
+   */
+  static navIconOf(key: string): VectorIconShape {
+    const map: Record<string, VectorIconShape> = {
+      role: icons.navRole,
+      bag: icons.navBag,
+      friend: icons.navFriend,
+      group: icons.navGroup,
+      skill: icons.navSkill,
+      mall: icons.navMall,
+      settings: icons.navSettings,
+    };
+    return map[key] ?? { paths: [] };
+  }
+
+  static applyBottomNavBarButtonStyle(node: Node, button: BottomNavBarButton, role: Role): { label: Label; locked: boolean } {
     const layout = bottomBarLayout.navButton;
     const uiTransform = node.getComponent(UITransform) ?? node.addComponent(UITransform);
     uiTransform.setContentSize(layout.size);
     const buttonComponent = node.getComponent(Button) ?? node.addComponent(Button);
     buttonComponent.transition = Button.Transition.SCALE;
-    const sprite = node.getComponent(Sprite) ?? node.addComponent(Sprite);
-    sprite.sizeMode = Sprite.SizeMode.CUSTOM;
-    sprite.trim = false;
-    this.updateNodeIcon(node, button.icon);
-    node.addChild(UiHelper.createLabel("shortcut_key", button.shortcutKey, Color.WHITE, layout.key.fontSize, layout.key.position, layout.key.size));
-    // 判断是否解锁
-    if (button.openLevel > role.level) sprite.grayscale = true;
+    const locked = button.openLevel > role.level;
+    // 底板与快捷格 / 小地图 rail 用**同一条发丝线**（稿 .nbtn 的 border 是 line-2）：
+    // 早前这里按解锁态切 gold[2]，结果底栏自己的按钮比旁边技能格的边亮一档，一排里两种线
+    const plate = this.createGlassPlate("nav_plate", layout.size, T.radius.r2, T.line[2]);
+    node.addChild(plate);
+    // 图标（稿 .nbtn .ic：16px 描边图，gold-3；未解锁置灰）
+    const iconNode = UiHelper.createNode("nav_icon", layout.icon.position, layout.icon.size);
+    drawVectorIcon(iconNode, this.navIconOf(button.key), layout.icon.size, locked ? T.text[4] : T.gold[3], 2);
+    node.addChild(iconNode);
+    const labelNode = UiHelper.createLabel("nav_label", button.label, locked ? T.text[3] : T.text[2], layout.label.fontSize, layout.label.position, layout.label.size);
+    node.addChild(labelNode);
+    node.addChild(UiHelper.createLabel("shortcut_key", button.shortcutKey, T.text[4], layout.key.fontSize, layout.key.position, layout.key.size));
     // 组件自身即按钮（点击走 TOUCH_END），鼠标通道补一次命中拦截，避免点底部栏时穿透到下层 UI
     blockClickThrough(node);
-    return sprite;
+    return { label: labelNode.getComponent(Label)!, locked };
   }
 
   /**
    * 为已有节点施加自动挂机开关按钮样式（组件自身即按钮时使用）
-   * 圆形图标随挂机状态切换（关闭=收剑 / 开启=举剑），位置在底部栏中段（快捷键栏与功能按键区之间的空档），
-   * 图标下方带「挂机」文字；图标资源见 uiImages.autoFightOff / autoFightOn，切换由组件调 updateNodeIcon
+   * 新稿（04-hud）口径：战斗列顶行的**细长横条**（与技能格等宽 256×26），矢量底板 +
+   * 刀剑图标 + 「挂机」文字；底板边框与图标/文字颜色随挂机状态切换
+   * （开 = 金 `#F3DEA6` + 金边，关 = text-2 + line-2），由组件拿返回值在 refresh 里改
    * @param node 目标节点
+   * @returns 底板节点 / 文字 Label / 图标换色（状态切换时重画）
    */
-  static applyAutoFightButtonStyle(node: Node) {
+  static applyAutoFightButtonStyle(node: Node): { plate: Node; label: Label; setIconColor: (color: Color) => void } {
     const layout = bottomBarLayout.autoFight;
     const uiTransform = node.addComponent(UITransform);
     uiTransform.setContentSize(layout.size);
     node.setPosition(layout.position.x, layout.position.y, 0);
-    const sprite = node.addComponent(Sprite);
-    sprite.sizeMode = Sprite.SizeMode.CUSTOM;
-    sprite.trim = false;
-    this.updateNodeIcon(node, uiImages.autoFightOff);
-    node.addChild(UiHelper.createLabel("auto_fight_label", layout.label.text, Color.WHITE, layout.label.fontSize, layout.label.position, layout.label.size));
+    const plate = this.createGlassPlate("auto_fight_plate", layout.size, T.radius.r2, T.line[2]);
+    node.addChild(plate);
+    // 图标（稿 `.auto svg{width:14px;height:14px}`，与文字同排）
+    const iconNode = UiHelper.createNode("auto_fight_icon", layout.icon.position, layout.icon.size);
+    const setIconColor = (color: Color) => drawVectorIcon(iconNode, icons.autoFight, layout.icon.size, color, layout.icon.stroke);
+    setIconColor(T.text[2]);
+    node.addChild(iconNode);
+    const labelNode = UiHelper.createLabel("auto_fight_label", layout.label.text, T.text[2], layout.label.fontSize, layout.label.position, layout.label.size);
+    const label = labelNode.getComponent(Label)!;
+    label.spacingX = layout.label.spacingX;
+    node.addChild(labelNode);
     // 组件自身即按钮（点击走 TOUCH_END），鼠标通道补一次命中拦截
     blockClickThrough(node);
-    return sprite;
+    return { plate, label, setIconColor };
   }
 
   //#endregion
@@ -622,39 +655,63 @@ export default class GameUiHelper {
   //#region 血条与经验条
 
   /**
-   * 创建游戏经验条
+   * 矢量进度条（新稿口径，HUD 不再用进度条贴图）：深色圆角底 + 纯色圆角填充
+   * 填充宽度随进度重画（Graphics 立即模式），进度更新走返回的 setProgress
    * @param name 元素名称
-   * @param progress 进度
+   * @param progress 初始进度（0~1）
    * @param position 位置
    * @param size 尺寸
-   * @return 经验条
+   * @param fillColor 填充色（经验 = 金、生命 = 朱红）
    */
-  static createExpBar(name: string, progress: number, position: Vec2 = new Vec2(), size: Size = new Size()) {
-    return this.createBar(name, progress, "", uiImages.expBarFill, position, size);
+  static createVectorBar(name: string, progress: number, position: Vec2, size: Size, fillColor: Color): { node: Node; setProgress: (p: number) => void } {
+    const node = UiHelper.createNode(name, position, size);
+    const radius = Math.min(size.height / 2, 4);
+    const drawBg = () => {
+      const bg = node.addComponent(Graphics);
+      bg.fillColor = T.surface.scrim;
+      bg.roundRect(-size.width / 2, -size.height / 2, size.width, size.height, radius);
+      bg.fill();
+      bg.lineWidth = T.border.width;
+      bg.strokeColor = T.line[1];
+      bg.roundRect(-size.width / 2, -size.height / 2, size.width, size.height, radius);
+      bg.stroke();
+    };
+    drawBg();
+    const fillNode = UiHelper.createNode(`${name}_fill`, new Vec2(-size.width / 2, 0), new Size(size.width - 4, size.height - 2));
+    fillNode.getComponent(UITransform).setAnchorPoint(0, 0.5);
+    const fill = fillNode.addComponent(Graphics);
+    node.addChild(fillNode);
+    const fillHeight = size.height - 2;
+    const drawFill = (p: number) => {
+      fill.clear();
+      if (p <= 0) return;
+      fill.fillColor = fillColor;
+      fill.roundRect(0, -fillHeight / 2, Math.max((size.width - 4) * p, fillHeight), fillHeight, fillHeight / 2);
+      fill.fill();
+    };
+    drawFill(progress);
+    // 进度桥：同节点挂 ProgressBar 作为进度状态持有者（旧调用方按 getComponent(ProgressBar) 刷进度），
+    // VectorBarBridge 每帧把 progress 同步给 drawFill —— 新旧两种刷入口都通
+    const progressBar = node.addComponent(ProgressBar);
+    progressBar.mode = ProgressBar.Mode.HORIZONTAL;
+    progressBar.progress = progress;
+    node.addComponent(VectorBarBridge).setProgress = drawFill;
+    return { node, setProgress: drawFill };
   }
 
-  /** 创建血条（底图与填充图见 uiImages.hpBarBackground / hpBarFill） */
+  /** 创建血条（矢量：暗底圆槽 + 朱红填充，头顶信息栏 / 怪物头顶共用；进度按 ProgressBar 组件刷） */
   static createHpBar(name: string, progress: number, position: Vec2 = new Vec2(), size: Size = new Size()) {
-    return this.createBar(name, progress, uiImages.hpBarBackground, uiImages.hpBarFill, position, size, Color.RED);
+    return this.createVectorBar(name, progress, position, size, T.ember[3]).node;
   }
 
-  /**
-   * 创建进度条的公共方法
-   * @param name 元素名称
-   * @param progress 进度
-   * @param bgSrc 背景图（空字符串则无背景）
-   * @param barSrc 填充图
-   * @param position 位置
-   * @param size 尺寸
-   * @param barColor 填充图着色（可选）
-   */
-  private static createBar(name: string, progress: number, bgSrc: string, barSrc: string, position: Vec2, size: Size, barColor?: Color) {
-    const bar = UiHelper.createProgressBar(name, progress, bgSrc, position, size);
-    const barFill = UiHelper.createSprite(`${name}_progress`, barSrc, new Vec2(), size);
-    if (barColor) barFill.getComponent(Sprite).color = barColor;
-    bar.addChild(barFill);
-    bar.getComponent(ProgressBar).barSprite = barFill.getComponent(Sprite);
-    return bar;
+  /** 创建矢量小圆点（说明性图标 / 未读红点：替代 ui/common/dot 贴图） */
+  static createVectorDot(name: string, color: Color, position: Vec2 = new Vec2(), size: Size = new Size(10, 10)) {
+    const node = UiHelper.createNode(name, position, size);
+    const graphics = node.addComponent(Graphics);
+    graphics.fillColor = color;
+    graphics.circle(0, 0, size.width / 2);
+    graphics.fill();
+    return node;
   }
 
   /**
@@ -804,14 +861,19 @@ export default class GameUiHelper {
    * 逐帧内容位置与缩放比稳定不抖动（若裁剪，各帧裁剪矩形不同会被拉伸成不同缩放比而抖动）
    * 节点默认隐藏，帧动画由调用方通过 AnimationHelper.playLoopWithFrames 装载
    */
-  static createAutoBattleTip(name: string): { node: Node; animate: Animation } {
-    const node = UiHelper.createSprite(name, "", new Vec2(), tipsLayout.autoTipSize);
-    const sprite = node.getComponent(Sprite)!;
-    sprite.sizeMode = Sprite.SizeMode.CUSTOM;
-    sprite.trim = false;
-    const animate = node.addComponent(Animation);
+  /**
+   * 创建自动战斗状态提示（跟随主角的矢量胶囊：暗底 + 描边 + 状态文字，替代原帧动画图集）
+   * @param name 元素名称
+   * @param text 状态文字（自动战斗中 / 自动寻路中）
+   * @param accent 描边与文字的强调色（战斗 = 金、寻路 = 灰）
+   */
+  static createAutoBattleTip(name: string, text: string, accent: Color): Node {
+    const node = UiHelper.createNode(name, new Vec2(), tipsLayout.autoTipSize);
+    node.addChild(this.createGlassPlate(`${name}_plate`, tipsLayout.autoTipSize, tipsLayout.autoTipRadius, accent));
+    node.addChild(this.createVectorDot(`${name}_dot`, accent, new Vec2(-tipsLayout.autoTipSize.width / 2 + 16, 0), new Size(8, 8)));
+    node.addChild(UiHelper.createLabel(`${name}_label`, text, accent, tipsLayout.autoTipFontSize, new Vec2(6, 0), new Size(tipsLayout.autoTipSize.width - 28, tipsLayout.autoTipSize.height)));
     node.active = false;
-    return { node, animate };
+    return node;
   }
 
   //#endregion
@@ -834,11 +896,15 @@ export default class GameUiHelper {
 
   /**
    * 创建状态图标零件（头像下方状态图标条的一项，见 ui/components/hud/StatusIconBar）
-   * 图标来源为状态配置（configs/status 的 icon，resources 下精灵路径），尺寸统一见 hudLayout
+   * 图标来源为状态配置（configs/status 的 icon，resources 下精灵路径）；
+   * 稿 `.buff` 是 26×26 的深褐小方块 + 1px line-3 金线框，图标缩在内侧（28 → 26 后留 2px 边）
    */
   static createStatusIcon(badge: StatusBadge): Node {
     const size = roleInfoBarLayout.statusBar.iconSize;
-    return UiHelper.createSprite(`status_icon_${badge.id}`, badge.icon, new Vec2(), size);
+    const node = UiHelper.createNode(`status_icon_${badge.id}`, new Vec2(), size);
+    node.addChild(this.createGlassPlate("status_plate", size, T.radius.r1, T.line[3], T.surface[2]));
+    node.addChild(UiHelper.createSprite("status_art", badge.icon, new Vec2(), new Size(size.width - 6, size.height - 6)));
+    return node;
   }
 
   /**
@@ -998,18 +1064,12 @@ export default class GameUiHelper {
 
   /**
    * 为已有节点施加悬停详情弹窗主体样式（尺寸/背景/内边距见 configs/layout/dialogs 的 hoverTipLayout）
-   * 节点自身即背景精灵（CUSTOM 模式跟随内容尺寸），纵向 Layout 容器按内容自适应高度
+   * 节点自身即弹窗背景（矢量底板，VectorPlate 随内容尺寸重画），纵向 Layout 容器按内容自适应高度
    */
   static applyHoverTipBodyStyle(node: Node) {
     const transform = node.addComponent(UITransform);
     transform.setContentSize(hoverTipLayout.size);
-    const sprite = node.addComponent(Sprite);
-    sprite.sizeMode = Sprite.SizeMode.CUSTOM;
-    sprite.trim = false;
-    UiHelper.loadSprite(hoverTipLayout.background, (spriteFrame) => {
-      if (!isValid(node) || !sprite.isValid) return;
-      sprite.spriteFrame = spriteFrame;
-    });
+    node.addComponent(VectorPlate);
     const layout = node.addComponent(Layout);
     layout.type = Layout.Type.VERTICAL;
     layout.resizeMode = Layout.ResizeMode.CONTAINER;
@@ -1219,22 +1279,20 @@ export default class GameUiHelper {
    * 尺寸 / 配色 / 停靠边距全在 `configs/layout/dialogs.chatDialogLayout`。
    */
   static createChatBox(): Node {
-    const node = UiHelper.createNode(chatDialogLayout.name, new Vec2(), chatDialogLayout.size);
-    const graphics = node.addComponent(Graphics);
-    const half = chatDialogLayout.size;
-    const box = chatDialogLayout.box;
-    const path = () => graphics.roundRect(-half.width / 2, -half.height / 2, half.width, half.height, box.radius);
-    graphics.fillColor = box.fill;
-    path();
-    graphics.fill();
-    graphics.lineWidth = box.borderWidth;
-    graphics.strokeColor = box.border;
-    path();
-    graphics.stroke();
+    const layout = chatDialogLayout;
+    // 稿 `.chat .panel` 是 `panel panel--rivet`：1px 金线 + 四角铆钉 + 顶部亮带，
+    // 所以直接复用弹窗面板的矢量画法，只把底 / 顶带 / 边 / 圆角换成稿 `.panel` 的暖褐色阶
+    const node = this.createDialogPanel(layout.name, layout.size, {
+      fill: layout.box.fill,
+      fillTop: layout.box.fillTop,
+      fillTopRatio: layout.box.fillTopRatio,
+      border: layout.box.border,
+      radius: layout.box.radius,
+    });
     // 窗体整体拦截指针：聊天窗底下是可点地的世界，盖住的区域不该再把点击漏给寻路
     blockClickThrough(node);
     // 停靠左下角（固定值，见 chatDialogLayout.position；窗口缩放时由 ChatDialog.refreshDock 重贴）
-    node.setPosition(chatDialogLayout.position.x, chatDialogLayout.position.y, 0);
+    node.setPosition(layout.position.x, layout.position.y, 0);
     return node;
   }
 
@@ -1246,15 +1304,111 @@ export default class GameUiHelper {
    */
   static createGlassPlate(name: string, size: Size, radius: number, border: Color = T.line[2], fill: Color = T.surface.glass) {
     const node = UiHelper.createNode(name, new Vec2(), size);
-    const graphics = node.addComponent(Graphics);
-    graphics.fillColor = fill;
-    graphics.roundRect(-size.width / 2, -size.height / 2, size.width, size.height, radius);
-    graphics.fill();
-    graphics.lineWidth = T.border.width;
-    graphics.strokeColor = border;
-    graphics.roundRect(-size.width / 2, -size.height / 2, size.width, size.height, radius);
-    graphics.stroke();
+    this.drawGlassPlate(node.addComponent(Graphics), size, radius, border, fill);
     return node;
+  }
+
+  /**
+   * HUD 底衬（稿 `.bottom::before` 的底部暗角）
+   *
+   * 稿是 `radial-gradient(58% 100% at 50% 100%, rgba(10,7,4,.82), transparent 74%)`：
+   * **椭圆**径向渐变，圆心在底栏正中、底边最暗，向上与左右同时淡出。
+   *
+   * Graphics 没有渐变填充 → 用「同心半透明椭圆逐层叠」近似：每层 alpha 很小，
+   * 越靠中心叠得越多，中心自然累积到目标浓度（比竖条渐变多一个左右方向的收边，
+   * 底栏两侧不再是一条硬边）。
+   */
+  static createHudBackdrop(name: string, spec: { size: Size; steps: number; color: Color }) {
+    const node = UiHelper.createNode(name, new Vec2(), spec.size);
+    const graphics = node.addComponent(Graphics);
+    const { width, height } = spec.size;
+    const steps = Math.max(1, spec.steps);
+    // 每层 alpha：n 层叠加后中心 ≈ 目标浓度（target = spec.color.a / 255）
+    const target = Math.min(0.98, spec.color.a / 255);
+    const layerAlpha = Math.round(255 * (1 - Math.pow(1 - target, 1 / steps)));
+    for (let i = steps; i >= 1; i--) {
+      const k = i / steps;
+      const color = spec.color.clone();
+      color.a = layerAlpha;
+      graphics.fillColor = color;
+      // 椭圆中心压在本节点底边（= 屏幕底）：横向半径取稿的 58% 宽、纵向半径 = 全高
+      // （稿 `radial-gradient(58% 100% at 50% 100%)` 的两个百分比就是横/纵半径，不是直径）
+      graphics.ellipse(0, -height / 2, width * 0.58 * k, height * k);
+      graphics.fill();
+    }
+    return node;
+  }
+
+  /**
+   * 竖分隔线（稿 `.vsep`：1px 宽、上下透明、中间 line-3）
+   *
+   * 稿是 `linear-gradient(180deg, transparent, line-3 18% 82%, transparent)`：
+   * 按高度切竖条，两端 alpha 收到 0，中段满色。
+   */
+  static createVerticalRule(name: string, size: Size, color: Color) {
+    const node = UiHelper.createNode(name, new Vec2(), size);
+    const graphics = node.addComponent(Graphics);
+    const steps = 9;
+    const stepHeight = size.height / steps;
+    for (let i = 0; i < steps; i++) {
+      const t = (i + 0.5) / steps;
+      // 两端 18% / 82% 之外全透明，中间满色（线性过渡）
+      const fade = Math.min(1, Math.min(t, 1 - t) / 0.32);
+      const tint = color.clone();
+      tint.a = Math.round(color.a * fade);
+      if (tint.a <= 0) continue;
+      graphics.fillColor = tint;
+      graphics.rect(-size.width / 2, -size.height / 2 + i * stepHeight, size.width, stepHeight + 0.5);
+      graphics.fill();
+    }
+    return node;
+  }
+
+  /**
+   * 重绘玻璃底板（Graphics 是立即模式：状态切换要换边框颜色时不能只改 strokeColor，必须清掉重画）
+   * @param plate createGlassPlate 返回的底板节点
+   */
+  static restyleGlassPlate(plate: Node, size: Size, radius: number, border: Color) {
+    const graphics = plate?.getComponent(Graphics);
+    if (!graphics) return;
+    graphics.clear();
+    this.drawGlassPlate(graphics, size, radius, border);
+  }
+
+  /** 玻璃底板绘制（建与重绘共用一套几何与配色） */
+  private static drawGlassPlate(graphics: Graphics, size: Size, radius: number, border: Color, fill: Color = T.surface.glass) {
+    const left = -size.width / 2;
+    const bottom = -size.height / 2;
+    const bw = Math.max(1, T.border.width);
+    // ⚠️ 引擎坑：Graphics 的 **1px 描边整条不渲染**（2px 正常）——稿里的 1px 古铜发丝线
+    // 用 stroke 画在实机上是不可见的（弹窗、rail、视口框全都「没有边框」就是这个原因）。
+    // 这里改成「先按描边色填满整块，再内缩 1px 填主体色」，得到恒 1px 的清晰边线。
+    if (border.a > 0 && fill.a > 0) {
+      graphics.fillColor = border;
+      graphics.roundRect(left, bottom, size.width, size.height, radius);
+      graphics.fill();
+      graphics.fillColor = fill;
+      graphics.roundRect(left + bw, bottom + bw, size.width - bw * 2, size.height - bw * 2, Math.max(0, radius - bw));
+      graphics.fill();
+      return;
+    }
+    if (fill.a > 0) {
+      graphics.fillColor = fill;
+      graphics.roundRect(left, bottom, size.width, size.height, radius);
+      graphics.fill();
+    }
+    if (border.a > 0) {
+      // 透明填充（只描边的视口框）：四条 1px 实心窄条 —— 圆角处留直角，线宽 1px 时看不出来
+      graphics.fillColor = border;
+      graphics.rect(left, bottom + size.height - bw, size.width, bw);
+      graphics.fill();
+      graphics.rect(left, bottom, size.width, bw);
+      graphics.fill();
+      graphics.rect(left, bottom, bw, size.height);
+      graphics.fill();
+      graphics.rect(left + size.width - bw, bottom, bw, size.height);
+      graphics.fill();
+    }
   }
 
   /**
@@ -1265,30 +1419,38 @@ export default class GameUiHelper {
    * 不会被拉伸成椭圆；配色与几何见 configs/layout/dialogs.dialogFrame.panel。
    * 返回的容器尺寸即弹窗尺寸，后续子件坐标以弹窗中心为原点（与 createDialog 系列一致）。
    */
-  static createDialogPanel(name: string, size: Size = dialogFrame.size) {
-    const { fill, fillTop, fillTopRatio, border, borderWidth, innerHighlight, radius, rivet } = dialogFrame.panel;
+  static createDialogPanel(name: string, size: Size = dialogFrame.size, style: { fill?: Color; fillTop?: Color; fillTopRatio?: number; border?: Color; radius?: number } = {}) {
+    const panelStyle = dialogFrame.panel;
+    const { borderWidth, innerHighlight, rivet } = panelStyle;
+    // 默认是弹窗那一套（不透明面板）；HUD 常驻件（聊天小窗）传 style 换成稿 `.panel` 的近不透明暖褐
+    const fill = style.fill ?? panelStyle.fill;
+    // 顶亮带跟着 fill 一起覆盖：只换底不换带会剩一条与稿无关的亮棕（聊天窗就是这种情况）
+    const fillTop = style.fillTop ?? panelStyle.fillTop;
+    const fillTopRatio = style.fillTopRatio ?? panelStyle.fillTopRatio;
+    const border = style.border ?? panelStyle.border;
+    const radius = style.radius ?? panelStyle.radius;
     const panel = UiHelper.createNode(name, new Vec2(), size);
     const graphics = panel.addComponent(Graphics);
     const left = -size.width / 2;
     const bottom = -size.height / 2;
-    // 1) 底板：主体色整块 + 顶部一条半透明亮带（Graphics 没有渐变，用两层矩形叠出上亮下暗）
-    graphics.fillColor = fill;
+    const bw = Math.max(1, borderWidth);
+    // 1) 外框：先用金线色填满整块、再内缩 bw 填主体色 —— Graphics 的 1px 描边在实机上整条不渲染
+    //    （详见 drawGlassPlate 的注释），只有「填两块」才拿得到恒 1px 的清晰边线
+    graphics.fillColor = border;
     graphics.roundRect(left, bottom, size.width, size.height, radius);
     graphics.fill();
+    graphics.fillColor = fill;
+    graphics.roundRect(left + bw, bottom + bw, size.width - bw * 2, size.height - bw * 2, Math.max(0, radius - bw));
+    graphics.fill();
+    // 2) 顶部一条半透明亮带（Graphics 没有渐变，用两层矩形叠出上亮下暗）
     const bandHeight = size.height * fillTopRatio;
     graphics.fillColor = fillTop;
-    graphics.roundRect(left, bottom + size.height - bandHeight, size.width, bandHeight, radius);
+    graphics.roundRect(left + bw, bottom + size.height - bandHeight, size.width - bw * 2, bandHeight - bw, Math.max(0, radius - bw));
     graphics.fill();
-    // 2) 外框 1px 金线（恒定粗细，不随面板尺寸拉伸）
-    graphics.lineWidth = borderWidth;
-    graphics.strokeColor = border;
-    graphics.roundRect(left, bottom, size.width, size.height, radius);
-    graphics.stroke();
-    // 3) 内侧一圈极弱高光：贴顶边往下 2px，撑出「金属压边」的厚度感
-    graphics.lineWidth = borderWidth;
-    graphics.strokeColor = innerHighlight;
-    graphics.roundRect(left + 2, bottom + 2, size.width - 4, size.height - 4, Math.max(0, radius - 1));
-    graphics.stroke();
+    // 3) 内侧一圈极弱高光：贴顶边往下 2px，撑出「金属压边」的厚度感（同样用 1px 填充条）
+    graphics.fillColor = innerHighlight;
+    graphics.rect(left + bw + 1, bottom + size.height - bw - 2, size.width - (bw + 1) * 2, 1);
+    graphics.fill();
     // 4) 四角铆钉（ui.css .panel--rivet）：左上实心 + 右上 / 左下 / 右下各一颗，各带一个小拖尾点
     const r = rivet.size / 2;
     const inset = rivet.inset;
@@ -1486,17 +1648,17 @@ export default class GameUiHelper {
    * 创建游戏大按钮（主行动档：朱红渐变 + 亮朱描边，ui.css .btn--primary）
    */
   static createBigButton(name: string, text: string, position: Vec2 = new Vec2()) {
-    return this.createPlateButton(name, text, uiImages.bigButtonBackground, position, uiSize.bigButtonSize, uiSize.bigButtonFontSize, buttonTone.primary);
+    return this.createPlateButton(name, text, "", position, uiSize.bigButtonSize, uiSize.bigButtonFontSize, buttonTone.primary);
   }
 
   /** 创建游戏中按钮（常规档：暗褐金属 + 金线，ui.css .btn） */
   static createMiddleButton(name: string, text: string, position: Vec2 = new Vec2()) {
-    return this.createPlateButton(name, text, uiImages.middleButtonBackground, position, uiSize.middleButtonSize, uiSize.middleButtonFontSize, buttonTone.normal);
+    return this.createPlateButton(name, text, "", position, uiSize.middleButtonSize, uiSize.middleButtonFontSize, buttonTone.normal);
   }
 
   /** 创建游戏小按钮（行内档：24 高，ui.css .btn--xs） */
   static createSmallButtion(name: string, text: string, position: Vec2 = new Vec2()) {
-    return this.createPlateButton(name, text, uiImages.smallButtonBackground, position, uiSize.smallButtonSize, uiSize.smallButtonFontSize, buttonTone.normal);
+    return this.createPlateButton(name, text, "", position, uiSize.smallButtonSize, uiSize.smallButtonFontSize, buttonTone.normal);
   }
 
   /**
@@ -1524,19 +1686,27 @@ export default class GameUiHelper {
     const w = size.width;
     const h = size.height;
     const radius = buttonStyle.radius;
-    graphics.fillColor = tone.fill;
-    graphics.roundRect(-w / 2, -h / 2, w, h, radius);
-    graphics.fill();
-    if (tone.fillTopRatio > 0) {
-      const bandH = h * tone.fillTopRatio;
-      graphics.fillColor = tone.fillTop;
-      graphics.roundRect(-w / 2, h / 2 - bandH, w, bandH, radius);
+    const bw = buttonStyle.borderWidth;
+    // 底色 + 上半亮带（模拟 180deg 渐变）：内缩 bw，把一圈边框让出来
+    if (tone.fill.a > 0) {
+      graphics.fillColor = tone.fill;
+      graphics.roundRect(-w / 2 + bw, -h / 2 + bw, w - bw * 2, h - bw * 2, radius);
       graphics.fill();
+      if (tone.fillTopRatio > 0) {
+        const bandH = (h - bw * 2) * tone.fillTopRatio;
+        graphics.fillColor = tone.fillTop;
+        graphics.roundRect(-w / 2 + bw, h / 2 - bw - bandH, w - bw * 2, bandH, radius);
+        graphics.fill();
+      }
     }
-    graphics.lineWidth = buttonStyle.borderWidth;
-    graphics.strokeColor = tone.border;
-    graphics.roundRect(-w / 2, -h / 2, w, h, radius);
-    graphics.stroke();
+    // 边框：**不能用 stroke** —— 1px 描边在 web 构建里整条不渲染（引擎坑，见 tab-kit 同款注释），
+    // 用四条 1px 填充代替。ghost 档没有底色，边框就是它全部的可见部分
+    graphics.fillColor = tone.border;
+    graphics.rect(-w / 2, h / 2 - bw, w, bw);
+    graphics.rect(-w / 2, -h / 2, w, bw);
+    graphics.rect(-w / 2, -h / 2 + bw, bw, h - bw * 2);
+    graphics.rect(w / 2 - bw, -h / 2 + bw, bw, h - bw * 2);
+    graphics.fill();
     node.addChild(UiHelper.createLabel(`${name}_label`, text, tone.text, fontSize, new Vec2(), size));
     return node;
   }
@@ -2172,7 +2342,9 @@ export default class GameUiHelper {
    *   「掉落者 / 怪物 / 掉落于」。**缺省 = 不显示**，比如身上装备槽只存 id、没有元数据
    */
   static createGoodDetailDialog(good: Goods, anchor: Node, compare: Equipment | "hint" | null = null, meta?: BagCellMeta) {
-    const dialog = UiHelper.createSprite(goodDetailLayout.name, goodDetailLayout.background, new Vec2(), goodDetailLayout.size);
+    // 弹窗主体即矢量底板（VectorPlate 随内容尺寸重画，替代原九宫格背景贴图）
+    const dialog = UiHelper.createNode(goodDetailLayout.name, new Vec2(), goodDetailLayout.size);
+    dialog.addComponent(VectorPlate);
     // 装备详情背景（前后缀决定的品质背景动画）：独立子节点垫底，加载完成前先显示静态底图
     const background = this.createEquipmentDetailBackground(dialog, good);
     if (background) dialog.addChild(background.node);
@@ -2326,10 +2498,6 @@ export default class GameUiHelper {
     if (compare === "hint") content.addChild(this.createGoodCompareHintRow());
     if (compare && compare !== "hint") content.addChild(this.createGoodCompareSection(good as Equipment, compare));
 
-    // 脚步图标（图片来源与尺寸见 configs/layout/dialogs.goodDetailLayout.footerLogo）
-    const footerLogo = UiHelper.createSprite("logo", goodDetailLayout.footerLogo.image, new Vec2(), goodDetailLayout.footerLogo.size);
-    content.addChild(footerLogo);
-
     // 弹窗尺寸跟随内容（#700：Layout 撑的是 content，弹窗自身不再被 Layout 管）
     const dialogTransform = dialog.getComponent(UITransform)!;
     const contentTransform = content.getComponent(UITransform)!;
@@ -2383,7 +2551,7 @@ export default class GameUiHelper {
   static createAttributeLabel(key: keyof BattleAttributes, value: readonly number[] | number, size: Size = new Size(220, 20)) {
     const attributeLabel = UiHelper.createFlexRow(key, 10, new Vec2(), size);
 
-    const icon = UiHelper.createSprite("icon", uiImages.dot, new Vec2(), new Size(10, 10));
+    const icon = this.createVectorDot("icon", T.gold[3], new Vec2(), new Size(10, 10));
     attributeLabel.addChild(icon);
 
     const label = UiHelper.createLabel(key, goodShowAttributesLabel.get(key), Color.WHITE, 12, new Vec2(), new Size(50, size.height));
@@ -2446,7 +2614,7 @@ export default class GameUiHelper {
     const combatDelta = goodCombat - wornCombat;
     const combatColor = combatDelta > 0 ? style.gainColor : combatDelta < 0 ? style.lossColor : style.sameColor;
     const combatRow = UiHelper.createFlexRow("good_detail_compare_combat", 10, new Vec2(), new Size(220, 20));
-    combatRow.addChild(UiHelper.createSprite("icon", uiImages.dot, new Vec2(), new Size(10, 10)));
+    combatRow.addChild(this.createVectorDot("icon", T.gold[3], new Vec2(), new Size(10, 10)));
     combatRow.addChild(UiHelper.createLabel("combat_label", getText("label_combat"), Color.WHITE, 12, new Vec2(), new Size(50, 20), Label.HorizontalAlign.LEFT, Label.VerticalAlign.CENTER));
     combatRow.addChild(
       UiHelper.createLabel(
@@ -2618,9 +2786,19 @@ export default class GameUiHelper {
 
   //#region 背包
 
-  /** 创建背包格子 */
+  /** 创建背包格子（矢量：暗底圆角小格 + 细描边，对齐 05-bag 稿，不再用格子贴图） */
   static createRoleBagCell(row: number, col: number) {
-    return UiHelper.createSprite(`bag_slot_${row}_${col}`, bagGridLayout.cellImage, new Vec2(), bagGridLayout.cellSize);
+    const size = bagGridLayout.cellSize;
+    const cell = UiHelper.createNode(`bag_slot_${row}_${col}`, new Vec2(), size);
+    const graphics = cell.addComponent(Graphics);
+    graphics.fillColor = T.surface[3];
+    graphics.roundRect(-size.width / 2, -size.height / 2, size.width, size.height, T.radius.r1);
+    graphics.fill();
+    graphics.lineWidth = T.border.width;
+    graphics.strokeColor = T.line[2];
+    graphics.roundRect(-size.width / 2, -size.height / 2, size.width, size.height, T.radius.r1);
+    graphics.stroke();
+    return cell;
   }
 
   /** 创建背包格子行（在 parent 下逐行生成格子并返回 [行][列] 索引） */
@@ -2734,16 +2912,24 @@ export default class GameUiHelper {
   /** 为快捷键节点附加图标样式与按键名，返回冷却倒计时文字引用（几何见 hudLayout.bottomBar.shortcutSlot） */
   static applyShortcutKeyStyle(node: Node, label: string) {
     const layout = bottomBarLayout.shortcutSlot;
-    const sprite = node.addComponent(Sprite);
-    sprite.sizeMode = Sprite.SizeMode.CUSTOM;
-    node.getComponent(UITransform).setContentSize(layout.size);
-    node.addChild(UiHelper.createLabel("shortcut_key_label", label, Color.WHITE, layout.key.fontSize, layout.key.position, layout.key.size));
-    const cooldownNode = UiHelper.createLabel("shortcut_key_cooldown", "", Color.WHITE, layout.cooldown.fontSize, layout.cooldown.position, layout.cooldown.size);
+    // 槽位本体是裸 Node（ShortcutKeySlot extends Node），矢量改造后不再挂 Sprite，
+    // 所以 UITransform 得自己补 —— 以前是靠 addComponent(Sprite) 的 @requireComponent 顺带带出来的
+    (node.getComponent(UITransform) ?? node.addComponent(UITransform)).setContentSize(layout.size);
+    // 底板与导航按钮同一条发丝线（稿 .sslot 的 border 是 line-2）
+    node.addChild(this.createGlassPlate("slot_plate", layout.size, T.radius.r1, T.line[2]));
+    const iconNode = UiHelper.createSprite("slot_icon", "", new Vec2(), layout.size);
+    node.addChild(iconNode);
+    // 空槽占位（稿 `.sslot.is-empty`：12px text-4 的槽位名）；绑上技能后由组件隐藏
+    const emptyNode = UiHelper.createLabel("shortcut_empty", layout.emptyText, layout.emptyColor, layout.emptyFontSize, new Vec2(0, 2), new Size(layout.size.width, 16));
+    node.addChild(emptyNode);
+    // 快捷键字母与冷却倒计时（稿 .sslot .k = text-4；冷却字 = text-2）
+    node.addChild(UiHelper.createLabel("shortcut_key_label", label, T.text[4], layout.key.fontSize, layout.key.position, layout.key.size));
+    const cooldownNode = UiHelper.createLabel("shortcut_key_cooldown", "", T.text[2], layout.cooldown.fontSize, layout.cooldown.position, layout.cooldown.size);
     cooldownNode.active = false;
     node.addChild(cooldownNode);
     // 组件自身即按钮（点击走 TOUCH_END），鼠标通道补一次命中拦截
     blockClickThrough(node);
-    return { cooldownLabel: cooldownNode.getComponent(Label) };
+    return { cooldownLabel: cooldownNode.getComponent(Label), iconSprite: iconNode.getComponent(Sprite)!, emptyLabel: emptyNode.getComponent(Label)! };
   }
 
   /** 更新节点图标（异步加载 SpriteFrame） */
@@ -2765,27 +2951,116 @@ export default class GameUiHelper {
    * 坐标相对球心），默认值仅是兜底
    */
   static createHpText(text: string, position: Vec2 = new Vec2(), size: Size = new Size(120, 10), name = "hp_text", fontSize = 12) {
-    return UiHelper.createLabel(name, text, Color.WHITE, fontSize, position, size);
+    const node = UiHelper.createLabel(name, text, T.text[1], fontSize, position, size);
+    // 稿 `.orb-val` 是 text-shadow: 0 2px 4px #000 —— Label 没有投影，用 2px 深色描边近似，
+    // 否则数值压在红色液面上（尤其满血时）会糊成一片
+    const label = node.getComponent(Label);
+    if (label) {
+      label.enableOutline = true;
+      label.outlineWidth = 2;
+      label.outlineColor = T.surface[0];
+    }
+    return node;
   }
 
   /**
-   * 创建圆形血量/魔法值显示零件（底图 + 竖向进度条）
-   * 返回底图节点与其内部的进度条节点；尺寸见 hudLayout.bottomBar.hpOrb.size / mpOrb.size，
-   * 位置由调用方（RoleHpOrb / RoleMpOrb 的包装节点）决定，这里默认在原点
-   * 底图见 uiImages.hpOrbBase；填充图缺省为 uiImages.hpOrbFill，魔法球传 uiImages.mpOrbFill
+   * 创建圆形血量/魔法值显示零件（矢量球，见 createRoundOrb）
    */
-  static createRoundHpBar(progress: number, position: Vec2 = new Vec2(), size: Size = bottomBarLayout.hpOrb.size, fillImage: string = uiImages.hpOrbFill): { barSprite: Node; hpBar: Node } {
-    const barSprite = UiHelper.createSprite("hp_bar_sprite", uiImages.hpOrbBase, position, size);
-    const hpBar = UiHelper.createProgressBar("hp_bar", progress, "", new Vec2(), size);
-    const hpProgress = UiHelper.createSprite("hp_bar_progress", fillImage, new Vec2(), size);
-    hpProgress.getComponent(Sprite).type = Sprite.Type.TILED;
-    hpProgress.setPosition(0, 0);
-    hpProgress.getComponent(UITransform).setAnchorPoint(0.5, 0);
-    hpBar.addChild(hpProgress);
-    hpBar.getComponent(ProgressBar).barSprite = hpProgress.getComponent(Sprite);
-    hpBar.getComponent(ProgressBar).mode = ProgressBar.Mode.VERTICAL;
-    barSprite.addChild(hpBar);
-    return { barSprite, hpBar };
+  /**
+   * 矢量圆形球（逐值对齐 design/olua-ui 的 `.orb`）：血球 / 魔法球不再用贴图
+   *
+   * 稿的球体是四层叠出来的，这里用同一个 Graphics 顺序画：
+   *   1. 2px 古铜金外环（`border: 2px solid gold-2`）—— 先填金、再内缩 2px 填球腔
+   *      （1px Stroke 在实机整条不渲染，见 drawGlassPlate 的引擎坑注释）
+   *   2. 球腔：`radial-gradient(circle at 50% 34%, #2A1D12, #0C0805 72%)` —— Graphics 没有径向渐变，
+   *      用「深底 + 偏上三层柔光圆」近似（圆心抬 6px，最大半径恰好落在环内，不溢出）
+   *   3. 液面：内缩 5px 的圆形遮罩 + **竖向渐变**（亮端在上、深端在下，稿 `.orb--hp .orb-fill i`）
+   *   4. 液面上沿 1px 黑圈（稿 `.orb::after{inset:6px}`，画在液面之上）
+   *
+   * @param progress 初始进度（0~1）
+   * @param position 位置
+   * @param size 球尺寸（宽高相等）
+   * @param fillTop 液面亮端（血 = hpHi / 法力 = mpHi）
+   * @param fillBottom 液面深端（血 = ember1 / 法力 = frostDeep）
+   * @returns 球节点与进度刷新（节点含球体与液面，数值文字由调用方另挂）
+   */
+  static createRoundOrb(
+    progress: number,
+    position: Vec2,
+    size: Size,
+    fillTop: Color,
+    fillBottom: Color,
+    skin: typeof bottomBarLayout.orb = bottomBarLayout.orb,
+  ): { node: Node; setProgress: (p: number) => void } {
+    const radius = size.width / 2;
+    const node = UiHelper.createNode("orb", position, size);
+    const rim = skin.rim;
+    const base = node.addComponent(Graphics);
+    // 1) 外金环 + 球腔深底
+    base.fillColor = T.gold[2];
+    base.circle(0, 0, radius);
+    base.fill();
+    base.fillColor = T.surface[1];
+    base.circle(0, 0, radius - rim);
+    base.fill();
+    // 2) 球腔柔光（圆心上移，半径加起来不超过 rim 内沿，正好不外溢）
+    const cavity = radius - rim;
+    for (const layer of skin.sheen) {
+      const tint = layer.color.clone();
+      tint.a = layer.alpha;
+      base.fillColor = tint;
+      base.circle(0, skin.sheenCenterY, Math.round((cavity - skin.sheenCenterY) * layer.scale));
+      base.fill();
+    }
+    // 3) 液面：圆形遮罩（GRAPHICS_STENCIL）+ 底部对齐的竖向渐变条
+    //
+    // **顺序不能反**：Mask 的 stencil 图形取的是「节点上已有的 Graphics」（引擎 Mask._createGraphics
+    // 里 `getComponent(Graphics) ?? addComponent(Graphics)`）。所以必须先把 Graphics 挂上、再设 type，
+    // 否则设 type 时引擎会自建一个空白 Graphics 当 stencil，而我们的圆画在第二个 Graphics 上 ——
+    // 模板里什么都没有，液面矩形就整块露出来（2026-11-16 浏览器实测：血球/魔法球渲染成纯色方块）
+    const innerRadius = radius - skin.liquidInset;
+    const maskNode = UiHelper.createNode("orb_mask", new Vec2(), new Size(innerRadius * 2, innerRadius * 2));
+    const stencil = maskNode.addComponent(Graphics);
+    const mask = maskNode.addComponent(Mask);
+    mask.type = Mask.Type.GRAPHICS_STENCIL;
+    stencil.clear();
+    stencil.circle(0, 0, innerRadius);
+    stencil.fill();
+    node.addChild(maskNode);
+    const liquidNode = UiHelper.createNode("orb_liquid", new Vec2(0, -innerRadius), new Size(innerRadius * 2, innerRadius * 2));
+    const liquid = liquidNode.addComponent(Graphics);
+    maskNode.addChild(liquidNode);
+    // 渐变条数：横条越多越平滑（同一个 Graphics，DrawCall 不变）
+    const gradientSteps = skin.gradientSteps;
+    /** 液面颜色插值：t = 0 顶部（亮端）→ 1 底部（深端）；稿的深端停在 70% 处不再变暗 */
+    const colorAt = (t: number) => {
+      const k = Math.min(1, t / skin.gradientStop);
+      const mix = (a: number, b: number) => Math.round(a + (b - a) * k);
+      return new Color(mix(fillTop.r, fillBottom.r), mix(fillTop.g, fillBottom.g), mix(fillTop.b, fillBottom.b), 255);
+    };
+    const drawLiquid = (p: number) => {
+      liquid.clear();
+      if (p <= 0) return;
+      const height = Math.max(innerRadius * 2 * p, 1);
+      const strip = height / gradientSteps;
+      for (let i = 0; i < gradientSteps; i++) {
+        // node 坐标 y 向上：i = 0 是**最下面**那条 → 颜色取「离顶部最远」
+        liquid.fillColor = colorAt(1 - (i + 0.5) / gradientSteps);
+        liquid.rect(-innerRadius, i * strip, innerRadius * 2, strip + 0.5);
+        liquid.fill();
+      }
+    };
+    drawLiquid(progress);
+    // 4) 液面上沿的黑圈（稿 .orb::after：inset 6px、1px 黑）——2px 描边才渲染得出来
+    //    （同一节点不能挂两个 Graphics，单独开一个子节点，排在液面之后即压在液面上）
+    const ringNode = UiHelper.createNode("orb_ring", new Vec2(), size);
+    const ring = ringNode.addComponent(Graphics);
+    ring.lineWidth = skin.ringWidth;
+    ring.strokeColor = T.surface.scrim;
+    ring.circle(0, 0, radius - skin.ringInset);
+    ring.stroke();
+    node.addChild(ringNode);
+    return { node, setProgress: drawLiquid };
   }
 
   //#endregion
@@ -2969,7 +3244,18 @@ export default class GameUiHelper {
 
   /** 创建怪物头像（左侧，取怪物图标；位置与尺寸见 hudLayout.monsterInfoPanel.avatar） */
   static createMonsterAvatar(monster: Monster, position: Vec2 = monsterInfoPanelLayout.avatar.position, size: Size = monsterInfoPanelLayout.avatar.size) {
-    return UiHelper.createSprite("monster_avatar", monster.icon, position, size);
+    const layout = monsterInfoPanelLayout.avatar;
+    const frame = UiHelper.createNode("monster_avatar", position, size);
+    const graphics = frame.addComponent(Graphics);
+    // 稿 `.monster .face`：1px 朱红半透明边 + 径向深褐底（1px 描边用填两块画）
+    graphics.fillColor = layout.border;
+    graphics.roundRect(-size.width / 2, -size.height / 2, size.width, size.height, T.radius.r2);
+    graphics.fill();
+    graphics.fillColor = T.surface[2];
+    graphics.roundRect(-size.width / 2 + 1, -size.height / 2 + 1, size.width - 2, size.height - 2, Math.max(0, T.radius.r2 - 1));
+    graphics.fill();
+    frame.addChild(UiHelper.createSprite("monster_face", monster.icon, new Vec2(), new Size(size.width - 4, size.height - 4)));
+    return frame;
   }
 
   /**
@@ -3014,10 +3300,113 @@ export default class GameUiHelper {
   static drawSmallMapDots(graphics: Graphics, dots: SmallMapDot[]) {
     graphics.clear();
     dots.forEach((dot) => {
+      if (dot.ringRadius) {
+        graphics.lineWidth = 1;
+        graphics.strokeColor = (() => {
+          const ring = dot.color.clone();
+          ring.a = Math.round(ring.a * 0.5);
+          return ring;
+        })();
+        graphics.circle(dot.x, dot.y, dot.ringRadius);
+        graphics.stroke();
+      }
       graphics.fillColor = dot.color;
       graphics.circle(dot.x, dot.y, dot.radius);
       graphics.fill();
     });
+  }
+
+  /**
+   * 小地图内容区的径向底色 + 22px 网格（稿 `.map-view` 的 background + .grid）
+   *
+   * Graphics 没有径向渐变：外圈整块 rect（最暗）+ 两层同心圆（逐层提亮）近似；
+   * 网格线是稿 `repeating-linear-gradient` 22px 一道的等价画法（金线 alpha 在配置里已折算）
+   */
+  static createSmallMapBackdrop(name: string, position: Vec2, size: Size, spec: {
+    outer: Color; mid: Color; midRadius: number; inner: Color; innerRadius: number;
+  }) {
+    const node = UiHelper.createNode(name, position, size);
+    const g = node.addComponent(Graphics);
+    g.fillColor = spec.outer;
+    g.roundRect(-size.width / 2, -size.height / 2, size.width, size.height, T.radius.r2);
+    g.fill();
+    g.fillColor = spec.mid;
+    g.circle(0, 0, spec.midRadius);
+    g.fill();
+    g.fillColor = spec.inner;
+    g.circle(0, 0, spec.innerRadius);
+    g.fill();
+    return node;
+  }
+
+  /**
+   * 小地图内容区的 22px 网格（稿 `.map-view .grid`）
+   *
+   * 单独一层、**画在底图之上**：稿里网格在 .terrain 之下（地形只是稀疏折线），客户端底图是满幅
+   * 不透明贴图，网格压在图下就完全看不见了
+   */
+  static createSmallMapGrid(name: string, position: Vec2, size: Size, spec: { step: number; color: Color; alpha: number }) {
+    const node = UiHelper.createNode(name, position, size);
+    const g = node.addComponent(Graphics);
+    const color = spec.color.clone();
+    color.a = spec.alpha;
+    g.lineWidth = 1;
+    g.strokeColor = color;
+    for (let x = -size.width / 2 + spec.step; x < size.width / 2; x += spec.step) {
+      g.moveTo(x, -size.height / 2);
+      g.lineTo(x, size.height / 2);
+    }
+    for (let y = -size.height / 2 + spec.step; y < size.height / 2; y += spec.step) {
+      g.moveTo(-size.width / 2, y);
+      g.lineTo(size.width / 2, y);
+    }
+    g.stroke();
+    return node;
+  }
+
+  /** 小地图压暗薄纱（稿地形底是近黑；实拍底图半透明贴上去仍偏亮，再压一层才到稿的调子） */
+  static createSmallMapScrim(name: string, position: Vec2, size: Size, color: Color) {
+    const node = UiHelper.createNode(name, position, size);
+    const g = node.addComponent(Graphics);
+    g.fillColor = color;
+    g.roundRect(-size.width / 2, -size.height / 2, size.width, size.height, T.radius.r2);
+    g.fill();
+    return node;
+  }
+
+  /**
+   * 小地图内容区的内暗角（稿 `.map-view .vign` 的 `inset 0 0 26px rgba(0,0,0,.75)`）
+   *
+   * Graphics 没有内阴影：从边缘向内画 steps 圈逐层减淡的描边近似（每层 width px，
+   * alpha 线性衰减到 0），叠出来的观感与 CSS inset shadow 相当
+   */
+  static createSmallMapVignette(name: string, position: Vec2, size: Size, spec: { steps: number; width: number; color: Color }) {
+    const node = UiHelper.createNode(name, position, size);
+    const g = node.addComponent(Graphics);
+    // 四条边各画 steps 条实心窄条，alpha 由外向内线性衰减 → 观感接近 CSS inset shadow；
+    // 用描边圆角矩形叠会留下可见的同心底纹（第一版踩过）
+    const left = -size.width / 2;
+    const bottom = -size.height / 2;
+    for (let i = 0; i < spec.steps; i++) {
+      const inset = i * spec.width;
+      const color = spec.color.clone();
+      color.a = Math.round((spec.color.a * (spec.steps - i)) / spec.steps);
+      g.fillColor = color;
+      // 上 / 下（整幅宽）
+      g.rect(left + inset, bottom + size.height - inset - spec.width, size.width - inset * 2, spec.width);
+      g.fill();
+      g.rect(left + inset, bottom + inset, size.width - inset * 2, spec.width);
+      g.fill();
+      // 左 / 右（跳过上下条占掉的高度，否则四角会叠成明显的三角形）
+      const sideY = bottom + inset + spec.width;
+      const sideH = size.height - (inset + spec.width) * 2;
+      if (sideH <= 0) continue;
+      g.rect(left + inset, sideY, spec.width, sideH);
+      g.fill();
+      g.rect(left + size.width - inset - spec.width, sideY, spec.width, sideH);
+      g.fill();
+    }
+    return node;
   }
 
   /**
@@ -3235,21 +3624,13 @@ export default class GameUiHelper {
     node.addChild(desc);
     // 「+」按钮：贴行右缘
     const addCfg = cfg.add;
-    const addButton = UiHelper.createButton(
+    const addButton = this.createToneButton(
       `${key}_add_button`,
-      uiImages.smallButtonBackground,
+      addCfg.label,
       new Vec2(cfg.width / 2 - addCfg.width / 2, 0),
       new Size(addCfg.width, addCfg.height),
-    );
-    addButton.addChild(
-      UiHelper.createLabel(
-        `${key}_add_label`,
-        addCfg.label,
-        Color.WHITE,
-        uiSize.smallButtonFontSize,
-        new Vec2(),
-        new Size(addCfg.width, addCfg.height),
-      ),
+      uiSize.smallButtonFontSize,
+      buttonTone.normal,
     );
     addButton.on(Node.EventType.TOUCH_END, onAdd, this);
     node.addChild(addButton);
@@ -3272,14 +3653,13 @@ export default class GameUiHelper {
   /** 创建洗点按钮（#833）：四行下方居中，点击由调用方弹确认框（洗点要花钱，不能一点就扣） */
   static createAttrResetButton(onReset: () => void): Node {
     const cfg = attrAllocateDialogLayout.reset;
-    const button = UiHelper.createButton(
+    const button = this.createToneButton(
       cfg.name,
-      uiImages.smallButtonBackground,
+      cfg.label,
       cfg.position,
       new Size(cfg.width, cfg.height),
-    );
-    button.addChild(
-      UiHelper.createLabel("attr_reset_label", cfg.label, Color.WHITE, uiSize.smallButtonFontSize, new Vec2(), new Size(cfg.width, cfg.height)),
+      uiSize.smallButtonFontSize,
+      buttonTone.normal,
     );
     button.on(Node.EventType.TOUCH_END, onReset, this);
     return button;
@@ -3301,7 +3681,13 @@ export default class GameUiHelper {
    * 浮动提示告诉玩家。到顶的技能照样给按钮：玩家点一下收到 20036「已经练到顶」，
    * 比界面上悄悄少一个按钮更好懂（客户端不知道档数，猜不出来）。
    */
-  static createSkillItem(role: Role, skillId: SkillId, onOpenShortcutKey: () => void, onUpgrade: () => void): Node {
+  static createSkillItem(
+    role: Role,
+    skillId: SkillId,
+    onOpenShortcutKey: () => void,
+    onUpgrade: () => void,
+    shortcutLabel = "",
+  ): Node {
     const skillConfig = skills.get(skillId);
     const rowCfg = skillListDialogLayout.row;
     const descCfg = rowCfg.desc;
@@ -3314,7 +3700,7 @@ export default class GameUiHelper {
     const node = UiHelper.createNode(skillId, new Vec2(), new Size(rowCfg.width, rowHeight));
     const left = -rowCfg.width / 2;
     const top = rowHeight / 2;
-    const iconCenterX = left + rowCfg.iconSize / 2;
+    const iconCenterX = left + rowCfg.iconInsetLeft + rowCfg.iconSize / 2;
     // 图标垂直中心：贴行顶（见上方说明，不用 Layout 居中）。升级按钮与它同一水平线
     const iconCenterY = top - descCfg.paddingY - rowCfg.iconSize / 2;
     const skillIcon = UiHelper.createSprite(
@@ -3331,23 +3717,42 @@ export default class GameUiHelper {
     }
     node.addChild(skillIcon);
     // 说明列：锚点 (0.5, 1)、高度按内容自适应 → 位置直接给「左上角」
-    const descLeft = left + rowCfg.iconSize + rowCfg.gap;
+    const descLeft = left + rowCfg.iconInsetLeft + rowCfg.iconSize + rowCfg.gap;
     const description = UiHelper.createFlexCol(
       `${skillId}_desc`,
       descCfg.gap,
       new Vec2(descLeft + descCfg.width / 2, top - descCfg.paddingY),
       new Size(descCfg.width, 0),
     );
+    // 名称行：左侧「名称 (lv.N)」，右端「快捷键 N」右对齐（07 稿 .nm 的 .key；没绑键位时不画）
+    const shortcutCfg = rowCfg.shortcut;
+    const nameWidth = shortcutLabel ? descCfg.width - shortcutCfg.width : descCfg.width;
     const skillLabel = UiHelper.createLabel(
       "skill_label",
       `${skillConfig.label} (${role.skills[skillId] ? getText("label_skill_level", { level: role.skills[skillId] }) : getText("label_skill_unlearned")})`,
       Color.WHITE,
       descCfg.nameFontSize,
       new Vec2(),
-      new Size(descCfg.width, descCfg.nameHeight),
+      new Size(nameWidth, descCfg.nameHeight),
     );
     skillLabel.getComponent(Label).horizontalAlign = Label.HorizontalAlign.LEFT;
     description.addChild(skillLabel);
+    if (shortcutLabel) {
+      // 挂行节点而不是说明列：说明列是纵向 Layout，塞进去会被当第二行排列
+      const keyLabel = UiHelper.createLabel(
+        `${skillId}_shortcut`,
+        shortcutLabel,
+        T.text[3],
+        shortcutCfg.fontSize,
+        new Vec2(
+          descLeft + descCfg.width - shortcutCfg.width / 2,
+          top - descCfg.paddingY - descCfg.nameHeight / 2,
+        ),
+        new Size(shortcutCfg.width, descCfg.nameHeight),
+        Label.HorizontalAlign.RIGHT,
+      );
+      node.addChild(keyLabel);
+    }
     const skillDesc = UiHelper.createLabel(
       `${skillId}_desc_text`,
       descText,
@@ -3366,21 +3771,13 @@ export default class GameUiHelper {
     // 「升一个还没学的技能」在服务端也是 20034，界面上不该给这个入口
     if (role.skills[skillId]) {
       const upgradeCfg = rowCfg.upgrade;
-      const upgradeButton = UiHelper.createButton(
+      const upgradeButton = this.createToneButton(
         `${skillId}_upgrade_button`,
-        uiImages.smallButtonBackground,
-        new Vec2(rowCfg.width / 2 - upgradeCfg.width / 2, iconCenterY),
+        upgradeCfg.label,
+        new Vec2(rowCfg.width / 2 - rowCfg.insetRight - upgradeCfg.width / 2, iconCenterY),
         new Size(upgradeCfg.width, upgradeCfg.height),
-      );
-      upgradeButton.addChild(
-        UiHelper.createLabel(
-          `${skillId}_upgrade_label`,
-          upgradeCfg.label,
-          Color.WHITE,
-          uiSize.smallButtonFontSize,
-          new Vec2(),
-          new Size(upgradeCfg.width, upgradeCfg.height),
-        ),
+        uiSize.smallButtonFontSize,
+        buttonTone.gold,
       );
       upgradeButton.on(Node.EventType.TOUCH_END, onUpgrade, this);
       node.addChild(upgradeButton);
