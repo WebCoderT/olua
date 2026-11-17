@@ -382,6 +382,8 @@ export default class UiHelper {
     // 如果是密码输入框，则设置输入标志为密码模式
     if (isPassword) {
       editBox.inputFlag = EditBox.InputFlag.PASSWORD;
+    } else {
+      this.keepLabelVisibleWhileEditing(node, editBox);
     }
     editBox.textLabel.fontSize = fontSize;
     editBox.placeholderLabel.fontSize = fontSize;
@@ -390,6 +392,63 @@ export default class UiHelper {
     this.setupEditBoxLabel(editBox.textLabel, size);
     this.setupEditBoxLabel(editBox.placeholderLabel, size);
     return node;
+  }
+
+  /**
+   * 编辑期间保持自绘 Label 常显（覆盖引擎 Web 端「隐藏 Label、改用 DOM input 显示文字」的默认行为）
+   *
+   * 引擎 Web 端 EditBox（edit-box-impl.ts）在 beginEditing 时会 `_hideLabels` 并把文字画进一个
+   * 绝对定位的 DOM `<input>` 覆盖层（位置由 `_updateMatrix` 按节点世界矩阵算）。本项目 Game 场景是
+   * 「UILayer 每帧跟着主角搬 + 相机跟随」的非常规结构，实测该覆盖层落位不可靠：打字看不见、
+   * 中文输入法组词也不可见，按回车（失焦恢复 Label）文字才出现（2026-11-18 用户实测）。
+   *
+   * 反着来：文字显示一律走自绘 Label —— 引擎每次输入都会触发 `text-changed` 并同步 `string`，
+   * 本就是实时的，我们只需在编辑期间把被引擎藏掉的 Label 重新点亮；DOM input 退化为纯键盘/输入法
+   * 载体，其文字设为透明、仅保留光标，避免与 Label 叠出双份文字。输入法组词期间引擎不上报内容，
+   * 这里额外把 DOM 草稿同步进 Label 让组词预览可见（仅改显示层，不动 EditBox.string，提交后引擎自己会同步）。
+   * 密码框不走这套：登录页的掩码圆点依赖 DOM 显示。
+   */
+  private static keepLabelVisibleWhileEditing(node: Node, editBox: EditBox) {
+    node.on(EditBox.EventType.EDITING_DID_BEGAN, () => {
+      // 引擎的事件在 _showDom（藏 Label）之前发出，延一拍等引擎藏完再点亮，否则会被盖回去
+      setTimeout(() => {
+        editBox.textLabel.node.active = editBox.string !== "";
+        this.hideDomInputText(editBox);
+      }, 0);
+    });
+    // 每次输入引擎都会先同步 string 再发事件，这里把 Label 点回来即可（组词期间引擎不同步，由 DOM 预览监听补）
+    node.on(EditBox.EventType.TEXT_CHANGED, () => {
+      editBox.textLabel.node.active = true;
+    });
+  }
+
+  /** 已装过「组词预览」监听的 DOM input（同一元素只装一次，元素随 EditBox 销毁一起回收） */
+  private static domPreviewAttached = new WeakSet<object>();
+
+  /**
+   * 把正在编辑的 DOM input 文字藏成透明（只留光标），并装上「组词预览」监听。
+   * 引擎每次 beginEditing 都会按 Label 颜色重设 DOM 文字色，因此每个编辑会话都要重新藏一次。
+   */
+  private static hideDomInputText(editBox: EditBox) {
+    const domDocument: Document | undefined = (globalThis as { document?: Document }).document;
+    if (!domDocument) return;
+    const element = domDocument.activeElement as (HTMLInputElement & { dataset?: DOMStringMap }) | null;
+    if (!element) return;
+    const tag = element.tagName;
+    if (tag !== "INPUT" && tag !== "TEXTAREA") return;
+    element.style.color = "transparent";
+    element.style.caretColor = editBox.textLabel.color.toCSS();
+    if (!this.domPreviewAttached.has(element)) {
+      this.domPreviewAttached.add(element);
+      // 组词（composition）期间引擎锁输入不上报：把 DOM 草稿直接写进显示层 Label，
+      // 预览内容只改 textLabel.string 不动 EditBox.string，选字提交后引擎会用正式文本覆盖
+      element.addEventListener("input", () => {
+        const draft = element.value;
+        if (draft === editBox.string) return;
+        editBox.textLabel.string = draft;
+        editBox.textLabel.node.active = draft !== "";
+      });
+    }
   }
 
   /** 统一设置 EditBox 内部 Label 的对齐与锚点 */
