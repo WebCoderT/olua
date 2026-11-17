@@ -46,9 +46,9 @@ import { Monster } from "../../types/monster";
 import type { DropOwner } from "../../types/drop";
 import { NPC } from "../../types/map";
 import { SkillId } from "../../types/skill";
-import { SoulAttributes, SoulLevelConfig } from "../../types/soul";
-import { TitleAttributes, TitleLevelConfig } from "../../types/title";
-import { RankAttributes, RankLevelConfig } from "../../types/rank";
+import { SoulLevelConfig } from "../../types/soul";
+import { TitleLevelConfig } from "../../types/title";
+import { RankLevelConfig } from "../../types/rank";
 import { StatusBadge } from "../../types/status";
 import GameHelper from "../core/GameHelper";
 import SoundManager from "../core/SoundManager";
@@ -58,7 +58,7 @@ import { goodShowAttributes, goodShowAttributesLabel } from "../../configs/good"
 import { equipmentAttributeDiffs, equipmentCombatValue, equipmentSlots, formatSignedAttributeValue, getEquipmentNameParts, getRecyclePrice } from "../../configs/equipments";
 import { soulAttributeLabels } from "../../configs/game-config";
 import { titleAttributeLabels } from "../../configs/game-config";
-import { getRankLevel, rankAttributeLabels, rankMaxLevel } from "../../configs/game-config";
+import { getRankLevel, rankAttributeLabels } from "../../configs/game-config";
 import { skills } from "../../configs/skill";
 import LayerManager from "../core/LayerManager";
 import { clearChildren } from "../utils/node/NodeTree";
@@ -265,8 +265,8 @@ export default class GameUiHelper {
   }
 
   /** 创建滚动视图（内容纵向排列、可上下滑动） */
-  static createScrollView(name: string, position: Vec2, size: Size) {
-    return UiHelper.createScrollView(name, position, size);
+  static createScrollView(name: string, position: Vec2, size: Size, spacing: number = 3, padding: number = 0) {
+    return UiHelper.createScrollView(name, position, size, spacing, padding);
   }
 
   /**
@@ -1751,6 +1751,188 @@ export default class GameUiHelper {
     return UiHelper.createLabel(name, getText("label_growth_chain_empty"), color, fontSize, new Vec2(), new Size(width, 28), Label.HorizontalAlign.CENTER);
   }
 
+  /**
+   * 三栏养成弹窗的中栏容器（稿 17-growth 的 `.gcenter`：line-1 边 + 深底 + 圆角 r2）
+   * 垫在动画 / 徽记 / 文字之下，让中栏与左右两栏一样有边界感
+   */
+  static createGrowthCenter(name: string, spec: { position: Vec2; size: Size; fill: Color; border: Color; radius: number }) {
+    const node = UiHelper.createNode(name, spec.position, spec.size);
+    const graphics = node.addComponent(Graphics);
+    UiHelper.paintRoundedPanel(graphics, spec.size, spec.radius, spec.fill, spec.border, 1);
+    return node;
+  }
+
+  /**
+   * 成长线左栏卡片（稿 17-growth 的 `.gitem`：212×46、圆角 r2、`rgba(0,0,0,.24)` 底 + line-1 边）
+   *
+   * 结构与三窗同源：底/边（Graphics 重画）→ 26px 阶号圆徽 → 名称（f13 左对齐）→ 右侧状态（f11）。
+   * 选中态金边 + 金色淡底、圆徽变金底深字；未激活的名称与状态走 text-4。
+   * @param step 阶号（圆徽里的数字）
+   * @param label 名称（只放名字，不再拼「N 阶 ·」——阶号在圆徽里）
+   * @param stateText 右侧状态（已激活 / 未激活 / 已授衔 / 未授衔，各线自己给）
+   */
+  static createGrowthCard(
+    name: string,
+    step: number,
+    label: string,
+    stateText: string,
+    activated: boolean,
+    selected: boolean,
+    spec: {
+      cardSize: Size;
+      radius: number;
+      stepSize: number;
+      stepFontSize: number;
+      cardFontSize: number;
+      stateFontSize: number;
+      fill: Color;
+      fillSelected: Color;
+      borderColor: Color;
+      borderSelected: Color;
+      selectedColor: Color;
+      activeColor: Color;
+      lockedColor: Color;
+      stepRing: Color;
+      stepFill: Color;
+      stepText: Color;
+      stepFillSelected: Color;
+      stepTextSelected: Color;
+      borderWidth?: number;
+    },
+    onClick: () => void,
+  ) {
+    const card = UiHelper.createNode(name, new Vec2(), spec.cardSize);
+    const button = card.addComponent(Button);
+    button.transition = Button.Transition.SCALE;
+    // 底 + 边（先加，绘制在圆徽与文字之下）
+    const bg = new Node(`${name}_bg`);
+    bg.addComponent(UITransform).setContentSize(spec.cardSize);
+    bg.addComponent(Graphics);
+    card.addChild(bg);
+    // 阶号圆徽（稿 .step：26 圆、11 号字）
+    const badge = UiHelper.createNode(`${name}_step`, new Vec2(-spec.cardSize.width / 2 + 12 + spec.stepSize / 2, 0), new Size(spec.stepSize, spec.stepSize));
+    badge.addComponent(Graphics);
+    badge.addChild(UiHelper.createLabel(`${name}_step_label`, `${step}`, spec.stepText, spec.stepFontSize, new Vec2(), new Size(spec.stepSize, spec.stepSize)));
+    card.addChild(badge);
+    // 名称（圆徽右侧、左对齐）与右侧状态
+    const stateWidth = 56;
+    const textLeft = -spec.cardSize.width / 2 + 12 + spec.stepSize + 10;
+    const nameWidth = spec.cardSize.width - (12 + spec.stepSize + 10) - stateWidth - 12;
+    card.addChild(
+      UiHelper.createLabel(`${name}_label`, label, spec.selectedColor, spec.cardFontSize, new Vec2(textLeft + nameWidth / 2, 0), new Size(nameWidth, spec.cardSize.height), Label.HorizontalAlign.LEFT),
+    );
+    card.addChild(
+      UiHelper.createLabel(`${name}_state`, stateText, spec.activeColor, spec.stateFontSize, new Vec2(spec.cardSize.width / 2 - 12 - stateWidth / 2, 0), new Size(stateWidth, spec.cardSize.height)),
+    );
+    this.paintGrowthCard(card, spec, activated, selected, stateText);
+    card.on(Node.EventType.TOUCH_END, onClick, this);
+    // 按钮点击音（#685）：手写按钮不走 UiHelper.createButton，声音得自己贴一行
+    SoundManager.bindClick(card);
+    // 手写的 Button + TOUCH_END（不走 UiHelper.createButton），鼠标通道同样补一次命中拦截
+    blockClickThrough(card);
+    return card;
+  }
+
+  /**
+   * 重画一张已有成长卡片的选中/激活外观（不建节点）
+   * 军衔 100 阶切换选中走它（重建 100 张卡片会重演商城「打开就卡」那个坑）
+   */
+  static paintGrowthCard(
+    card: Node,
+    spec: { cardSize: Size; radius: number; stepSize: number; fill: Color; fillSelected: Color; borderColor: Color; borderSelected: Color; selectedColor: Color; activeColor: Color; lockedColor: Color; stepRing: Color; stepFill: Color; stepText: Color; stepFillSelected: Color; stepTextSelected: Color; borderWidth?: number },
+    activated: boolean,
+    selected: boolean,
+    stateText: string,
+  ) {
+    const bg = card.getChildByName(`${card.name}_bg`)?.getComponent(Graphics);
+    if (bg) {
+      bg.clear();
+      // 先铺半透明底、再压 1px 边：不能走 paintRoundedPanel（它是「外框色填整块 → 内缩填主体」，
+      // 半透明主体盖不住底下的边色，卡片会整块发亮 —— 实机核对时第一版就是这样）
+      bg.fillColor = selected ? spec.fillSelected : spec.fill;
+      bg.roundRect(-spec.cardSize.width / 2, -spec.cardSize.height / 2, spec.cardSize.width, spec.cardSize.height, spec.radius);
+      bg.fill();
+      UiHelper.paintRectBorder(bg, spec.cardSize, selected ? spec.borderSelected : spec.borderColor, selected ? (spec.borderWidth ?? 1) : 1);
+    }
+    const badge = card.getChildByName(`${card.name}_step`);
+    const graphics = badge?.getComponent(Graphics);
+    if (graphics) {
+      graphics.clear();
+      const radius = spec.stepSize / 2;
+      // 圆环用「外圆填环色 → 内圆填底色」拼（1px stroke 实机不渲染，同 paintRoundedPanel 的坑）
+      graphics.fillColor = selected ? spec.stepFillSelected : spec.stepRing;
+      graphics.circle(0, 0, radius);
+      graphics.fill();
+      graphics.fillColor = selected ? spec.stepFillSelected : spec.stepFill;
+      graphics.circle(0, 0, radius - 1);
+      graphics.fill();
+    }
+    const stepLabel = card.getChildByName(`${card.name}_step_label`)?.getComponent(Label);
+    if (stepLabel) stepLabel.color = selected ? spec.stepTextSelected : spec.stepText;
+    const nameLabel = card.getChildByName(`${card.name}_label`)?.getComponent(Label);
+    if (nameLabel) nameLabel.color = selected ? spec.selectedColor : activated ? Color.WHITE : spec.lockedColor;
+    const stateLabel = card.getChildByName(`${card.name}_state`)?.getComponent(Label);
+    if (stateLabel) {
+      stateLabel.string = stateText;
+      stateLabel.color = activated ? spec.activeColor : spec.lockedColor;
+    }
+    // 未激活卡片整体变暗（稿 `.gitem.locked{opacity:.6}`）：选中项不管授没授衔都保持全亮
+    const opacity = card.getComponent(UIOpacity) ?? card.addComponent(UIOpacity);
+    opacity.opacity = activated || selected ? 255 : 153;
+  }
+
+  /**
+   * 成长线右栏的一行「名称 …… 数值」（稿 `.gcost .kv`：名称贴右栏左缘、数值贴右栏右缘）
+   */
+  static createGrowthCostRow(name: string, label: string, value: string, y: number, spec: { leftX: number; rightX: number; fontSize: number; valueFontSize: number; nameColor: Color; valueColor: Color }) {
+    const width = spec.rightX - spec.leftX;
+    const node = UiHelper.createNode(name, new Vec2((spec.leftX + spec.rightX) / 2, y), new Size(width, 18));
+    node.addChild(UiHelper.createLabel(`${name}_label`, label, spec.nameColor, spec.fontSize, new Vec2(-width / 2 + 60, 0), new Size(120, 18), Label.HorizontalAlign.LEFT));
+    node.addChild(UiHelper.createLabel(`${name}_value`, value, spec.valueColor, spec.valueFontSize, new Vec2(width / 2 - 70, 0), new Size(140, 18), Label.HorizontalAlign.RIGHT));
+    return node;
+  }
+
+  /** 成长线右栏「消耗区」顶部的 1px 分隔线（稿 .gcost 的 border-top；1px stroke 不渲染，用填充条画） */
+  static createGrowthCostDivider(name: string, spec: { leftX: number; rightX: number; line: { y: number; width: number; color: Color } }) {
+    const node = UiHelper.createNode(name, new Vec2((spec.leftX + spec.rightX) / 2, spec.line.y), new Size(spec.line.width, 1));
+    const graphics = node.addComponent(Graphics);
+    graphics.fillColor = spec.line.color;
+    graphics.rect(-spec.line.width / 2, -0.5, spec.line.width, 1);
+    graphics.fill();
+    return node;
+  }
+
+  /**
+   * 成长线右栏按钮下的提示行（稿 `.showline`：半透明底 + 1px 边 + r2 的框，左侧金勾 + 小字）
+   * 文案由各窗给（军衔含当前预览的军衔名，切换选中时要重设，见 rank 弹窗）；
+   * 文字块定高、在框内垂直居中 —— 1 行 / 2 行都不会把金勾顶偏或撑出框。
+   */
+  static createGrowthShowline(
+    name: string,
+    text: string,
+    spec: { position: Vec2; size: Size; radius: number; fill: Color; border: Color; padding: number; gap: number; fontSize: number; color: Color; checkColor: Color; checkSize: number },
+  ) {
+    const node = UiHelper.createNode(name, spec.position, spec.size);
+    // 底框：先铺半透明底、再压 1px 边（半透明主体盖不住 paintRoundedPanel 的边色，同卡片的坑）
+    const bg = UiHelper.createNode(`${name}_bg`, new Vec2(), spec.size);
+    const graphics = bg.addComponent(Graphics);
+    graphics.fillColor = spec.fill;
+    graphics.roundRect(-spec.size.width / 2, -spec.size.height / 2, spec.size.width, spec.size.height, spec.radius);
+    graphics.fill();
+    UiHelper.paintRectBorder(graphics, spec.size, spec.border, 1);
+    node.addChild(bg);
+    // 金勾贴左内边距、纵向居中
+    const check = UiHelper.createNode(`${name}_check`, new Vec2(-spec.size.width / 2 + spec.padding + spec.checkSize / 2, 0), new Size(spec.checkSize, spec.checkSize));
+    drawVectorIcon(check, icons.growthCheck, new Size(spec.checkSize, spec.checkSize), spec.checkColor, 1.7);
+    node.addChild(check);
+    // 文字块：宽 = 框宽 − 两侧内边距 − 勾与间距；高 = 框高 − 上下内边距
+    const textLeft = -spec.size.width / 2 + spec.padding + spec.checkSize + spec.gap;
+    const width = spec.size.width - spec.padding * 2 - spec.checkSize - spec.gap;
+    const height = spec.size.height - spec.padding * 2;
+    node.addChild(UiHelper.createWrappedLabel(`${name}_text`, text, spec.color, spec.fontSize, 13, new Vec2(textLeft + width / 2, 0), width, Label.HorizontalAlign.LEFT, height));
+    return node;
+  }
+
   //#endregion
 
   //#region 战魂
@@ -1763,47 +1945,45 @@ export default class GameUiHelper {
    * @param onClick 点击回调（切换选中预览）
    */
   static createSoulCard(config: SoulLevelConfig, activated: boolean, selected: boolean, onClick: () => void) {
-    const card = UiHelper.createNode(`soul_card_${config.level}`, new Vec2(), soul.list.cardSize);
-    const button = card.addComponent(Button);
-    button.transition = Button.Transition.SCALE;
-    // 选中描边（后添加绘制在文字之下，故先加描边再加文字）
-    if (selected) {
-      const border = new Node("soul_card_border");
-      const graphics = border.addComponent(Graphics);
-      graphics.lineWidth = 2;
-      graphics.strokeColor = soul.list.selectedColor;
-      graphics.rect(-soul.list.cardSize.width / 2, -soul.list.cardSize.height / 2, soul.list.cardSize.width, soul.list.cardSize.height);
-      graphics.stroke();
-      card.addChild(border);
-    }
-    const nameColor = selected ? soul.list.selectedColor : activated ? Color.WHITE : soul.list.lockedColor;
-    card.addChild(
-      UiHelper.createLabel(
-        "soul_card_label",
-        `${config.level} 阶 · ${config.label}`,
-        nameColor,
-        soul.list.cardFontSize,
-        new Vec2(-8, 0),
-        new Size(soul.list.cardSize.width - 70, soul.list.cardSize.height),
-        Label.HorizontalAlign.LEFT,
-      ),
+    return this.createGrowthCard(
+      `soul_card_${config.level}`,
+      config.level,
+      config.label,
+      activated ? getText("label_soul_active") : getText("label_soul_locked"),
+      activated,
+      selected,
+      soul.list,
+      onClick,
     );
-    card.addChild(
-      UiHelper.createLabel(
-        "soul_card_state",
-        activated ? getText("label_soul_active") : getText("label_soul_locked"),
-        activated ? soul.list.activeColor : soul.list.lockedColor,
-        soul.list.stateFontSize,
-        new Vec2(soul.list.cardSize.width / 2 - 36, 0),
-        new Size(52, soul.list.cardSize.height),
-      ),
-    );
-    card.on(Node.EventType.TOUCH_END, onClick, this);
-    // 按钮点击音（#685）：手写按钮不走 UiHelper.createButton，声音得自己贴一行
-    SoundManager.bindClick(card);
-    // 手写的 Button + TOUCH_END（不走 UiHelper.createButton），鼠标通道同样补一次命中拦截
-    blockClickThrough(card);
-    return card;
+  }
+
+  /**
+   * 成长线右栏属性表（稿 17-growth 的 `.gside`：13 号金字的标题 + 属性行）
+   * 行内三段：属性名（左，text-3）→ 当前值（白）→ 下一级增量（绿，右对齐）
+   * @param title 列标题（战魂/称号「升级加成」、军衔「晋升加成」）
+   */
+  private static createGrowthAttributeList(
+    name: string,
+    title: string,
+    rows: Array<{ label: string; valueText: string; diffText: string | null }>,
+    spec: { width: number; spacing: number; fontSize: number; titleFontSize: number; titleColor: Color; rowNameColor: Color; rowDiffColor: Color },
+  ) {
+    const column = UiHelper.createFlexCol(name, spec.spacing, new Vec2(), new Size(spec.width, 0));
+    column.addChild(UiHelper.createLabel(`${name}_title`, title, spec.titleColor, spec.titleFontSize, new Vec2(), new Size(spec.width, 22), Label.HorizontalAlign.LEFT));
+    const nameWidth = 52;
+    const valueWidth = 78;
+    rows.forEach((row, index) => {
+      const line = UiHelper.createFlexRow(`${name}_row_${index}`, 0, new Vec2(), new Size(spec.width, 18));
+      line.addChild(UiHelper.createLabel("name", row.label, spec.rowNameColor, spec.fontSize, new Vec2(), new Size(nameWidth, 18), Label.HorizontalAlign.LEFT));
+      line.addChild(UiHelper.createLabel("value", row.valueText, Color.WHITE, spec.fontSize, new Vec2(), new Size(valueWidth, 18), Label.HorizontalAlign.LEFT));
+      if (row.diffText) {
+        line.addChild(
+          UiHelper.createLabel("diff", row.diffText, spec.rowDiffColor, spec.fontSize, new Vec2(), new Size(spec.width - nameWidth - valueWidth - 8, 18), Label.HorizontalAlign.RIGHT),
+        );
+      }
+      column.addChild(line);
+    });
+    return column;
   }
 
   /**
@@ -1812,24 +1992,16 @@ export default class GameUiHelper {
    * @param next 下一级配置（没有传 null，如已满级）
    */
   static createSoulAttributeList(config: SoulLevelConfig, next: SoulLevelConfig | null) {
-    const column = UiHelper.createFlexCol("soul_attribute_list", soul.attribute.spacing, new Vec2(), new Size(soul.attribute.width, 0));
-    column.addChild(UiHelper.createLabel("soul_attribute_title", `${config.level} 阶 · ${config.label}`, soul.attribute.titleColor, 15, new Vec2(), new Size(soul.attribute.width, 22)));
-    const rows: Array<{ label: string; get: (attributes: SoulAttributes) => number | [number, number] }> = soulAttributeLabels.map((item) => ({
-      label: item.label,
-      get: (attributes) => attributes[item.key],
-    }));
-    rows.forEach((row, index) => {
-      const line = UiHelper.createFlexRow(`soul_attribute_row_${index}`, 0, new Vec2(), new Size(soul.attribute.width, 18));
-      line.addChild(UiHelper.createLabel("name", row.label, soul.attribute.rowNameColor, soul.attribute.fontSize, new Vec2(), new Size(40, 18), Label.HorizontalAlign.LEFT));
-      const value = row.get(config.attributes);
-      const diff = next ? this.formatSoulAttributeDiff(value, row.get(next.attributes)) : "";
-      // 带下一级增量时整行值用绿色（白色 = 当前无增量可看）
-      const text = `${this.formatSoulAttributeValue(value)}${diff ? `  ${diff}` : ""}`;
-      const valueLabel = UiHelper.createLabel("value", text, diff ? soul.attribute.rowDiffColor : Color.WHITE, soul.attribute.fontSize, new Vec2(), new Size(soul.attribute.width - 40, 18), Label.HorizontalAlign.LEFT);
-      line.addChild(valueLabel);
-      column.addChild(line);
-    });
-    return column;
+    return this.createGrowthAttributeList(
+      "soul_attribute_list",
+      getText("label_growth_bonus"),
+      soulAttributeLabels.map((item) => ({
+        label: item.label,
+        valueText: this.formatSoulAttributeValue(config.attributes[item.key]),
+        diffText: next ? this.formatSoulAttributeDiff(config.attributes[item.key], next.attributes[item.key]) : null,
+      })),
+      soul.attribute,
+    );
   }
 
   /** 属性值文案：数值直接显示，区间属性显示为「min ~ max」 */
@@ -1857,6 +2029,13 @@ export default class GameUiHelper {
     sprite.trim = false;
     AnimationHelper.loadLoopFrames(config.animation).then((frames) => {
       if (!isValid(node) || !frames.length) return;
+      // 帧图集是整格方图（RAW 会按原始像素把节点撑到 800 见方），按槽位等比缩放——
+      // 否则立绘会溢出中栏、压住左右两栏与底部信息（实机截图核对 #1111）
+      const raw = frames[0]?.originalSize ?? frames[0]?.rect?.size;
+      if (raw && raw.width > 0 && raw.height > 0) {
+        const scale = Math.min(size.width / raw.width, size.height / raw.height);
+        node.setScale(scale, scale, 1);
+      }
       AnimationHelper.playLoopWithFrames("soul_stand", node, frames, config.animationFrameRate);
     });
     return node;
@@ -1872,22 +2051,23 @@ export default class GameUiHelper {
     const node = UiHelper.createNode("soul_show_toggle", new Vec2(), toggle.size);
     const button = node.addComponent(Button);
     button.transition = Button.Transition.SCALE;
-    // 勾选框（小方框，勾选时填充金色并画对勾）
+    // 勾选框（小方框）：未勾选是空心框（line-2 发丝线），勾选后填金 + 深金对勾
     const box = new Node("soul_show_box");
     box.addComponent(UITransform).setContentSize(toggle.boxSize, toggle.boxSize);
     box.setPosition(-toggle.size.width / 2 + half, 0);
     const graphics = box.addComponent(Graphics);
-    graphics.lineWidth = 1.5;
-    graphics.strokeColor = checked ? soul.list.selectedColor : soul.list.lockedColor;
-    graphics.fillColor = checked ? soul.list.selectedColor : Color.WHITE;
-    graphics.rect(-half, -half, toggle.boxSize, toggle.boxSize);
-    graphics.fill();
-    graphics.stroke();
     if (checked) {
-      box.addChild(UiHelper.createLabel("soul_show_check", "✓", Color.WHITE, toggle.fontSize, new Vec2(), new Size(toggle.boxSize, toggle.boxSize)));
+      graphics.fillColor = soul.list.selectedColor;
+      graphics.rect(-half, -half, toggle.boxSize, toggle.boxSize);
+      graphics.fill();
+    }
+    // 1px 边框用填充条画（stroke 实机不渲染，同卡片 / 按钮的坑）
+    UiHelper.paintRectBorder(graphics, new Size(toggle.boxSize, toggle.boxSize), checked ? soul.list.selectedColor : soul.list.stepRing, 1);
+    if (checked) {
+      box.addChild(UiHelper.createLabel("soul_show_check", "✓", T.text.onGold, toggle.fontSize, new Vec2(), new Size(toggle.boxSize, toggle.boxSize)));
     }
     node.addChild(box);
-    node.addChild(UiHelper.createLabel("soul_show_text", toggle.text, Color.WHITE, toggle.fontSize, new Vec2(toggle.textGap, 0), new Size(60, toggle.size.height), Label.HorizontalAlign.LEFT));
+    node.addChild(UiHelper.createLabel("soul_show_text", toggle.text, T.text[2], toggle.fontSize, new Vec2(toggle.textGap, 0), new Size(60, toggle.size.height), Label.HorizontalAlign.LEFT));
     node.on(Node.EventType.TOUCH_END, () => onClick(!checked), this);
     // 按钮点击音（#685）：手写按钮不走 UiHelper.createButton，声音得自己贴一行
     SoundManager.bindClick(node);
@@ -1901,13 +2081,6 @@ export default class GameUiHelper {
   //#region 称号
 
   /**
-   * 创建称号等级卡片（左侧列表行）：等级 + 名称 + 激活状态，选中加金色描边（与战魂卡片同一套样式）
-   * @param config 该等级的称号配置
-   * @param currentLevel 角色当前称号等级（决定激活状态）
-   * @param selected 是否为当前选中项
-   * @param onClick 点击回调（切换选中预览）
-   */
-  /**
    * 创建称号等级卡片（左侧列表行）：等级 + 名称 + 激活状态，选中加金色描边
    * @param config 该等级的称号配置
    * @param activated 是否已到达 —— **由调用方按升级链序判定**（链序 ≠ 等级号，这里不做比较）
@@ -1915,47 +2088,16 @@ export default class GameUiHelper {
    * @param onClick 点击回调（切换选中预览）
    */
   static createTitleCard(config: TitleLevelConfig, activated: boolean, selected: boolean, onClick: () => void) {
-    const card = UiHelper.createNode(`title_card_${config.level}`, new Vec2(), titleUpgradeDialogLayout.list.cardSize);
-    const button = card.addComponent(Button);
-    button.transition = Button.Transition.SCALE;
-    // 选中描边（后添加绘制在文字之下，故先加描边再加文字）
-    if (selected) {
-      const border = new Node("title_card_border");
-      const graphics = border.addComponent(Graphics);
-      graphics.lineWidth = 2;
-      graphics.strokeColor = titleUpgradeDialogLayout.list.selectedColor;
-      graphics.rect(-titleUpgradeDialogLayout.list.cardSize.width / 2, -titleUpgradeDialogLayout.list.cardSize.height / 2, titleUpgradeDialogLayout.list.cardSize.width, titleUpgradeDialogLayout.list.cardSize.height);
-      graphics.stroke();
-      card.addChild(border);
-    }
-    const nameColor = selected ? titleUpgradeDialogLayout.list.selectedColor : activated ? Color.WHITE : titleUpgradeDialogLayout.list.lockedColor;
-    card.addChild(
-      UiHelper.createLabel(
-        "title_card_label",
-        `${config.level} 阶 · ${config.label}`,
-        nameColor,
-        titleUpgradeDialogLayout.list.cardFontSize,
-        new Vec2(-8, 0),
-        new Size(titleUpgradeDialogLayout.list.cardSize.width - 70, titleUpgradeDialogLayout.list.cardSize.height),
-        Label.HorizontalAlign.LEFT,
-      ),
+    return this.createGrowthCard(
+      `title_card_${config.level}`,
+      config.level,
+      config.label,
+      activated ? getText("label_title_active") : getText("label_title_locked"),
+      activated,
+      selected,
+      titleUpgradeDialogLayout.list,
+      onClick,
     );
-    card.addChild(
-      UiHelper.createLabel(
-        "title_card_state",
-        activated ? getText("label_title_active") : getText("label_title_locked"),
-        activated ? titleUpgradeDialogLayout.list.activeColor : titleUpgradeDialogLayout.list.lockedColor,
-        titleUpgradeDialogLayout.list.stateFontSize,
-        new Vec2(titleUpgradeDialogLayout.list.cardSize.width / 2 - 36, 0),
-        new Size(52, titleUpgradeDialogLayout.list.cardSize.height),
-      ),
-    );
-    card.on(Node.EventType.TOUCH_END, onClick, this);
-    // 按钮点击音（#685）：手写按钮不走 UiHelper.createButton，声音得自己贴一行
-    SoundManager.bindClick(card);
-    // 手写的 Button + TOUCH_END（不走 UiHelper.createButton），鼠标通道同样补一次命中拦截
-    blockClickThrough(card);
-    return card;
   }
 
   /**
@@ -1964,24 +2106,16 @@ export default class GameUiHelper {
    * @param next 下一级配置（没有传 null，如已满级）
    */
   static createTitleAttributeList(config: TitleLevelConfig, next: TitleLevelConfig | null) {
-    const column = UiHelper.createFlexCol("title_attribute_list", titleUpgradeDialogLayout.attribute.spacing, new Vec2(), new Size(titleUpgradeDialogLayout.attribute.width, 0));
-    column.addChild(UiHelper.createLabel("title_attribute_title", `${config.level} 阶 · ${config.label}`, titleUpgradeDialogLayout.attribute.titleColor, 15, new Vec2(), new Size(titleUpgradeDialogLayout.attribute.width, 22)));
-    const rows: Array<{ label: string; get: (attributes: TitleAttributes) => number | [number, number] }> = titleAttributeLabels.map((item) => ({
-      label: item.label,
-      get: (attributes) => attributes[item.key],
-    }));
-    rows.forEach((row, index) => {
-      const line = UiHelper.createFlexRow(`title_attribute_row_${index}`, 0, new Vec2(), new Size(titleUpgradeDialogLayout.attribute.width, 18));
-      line.addChild(UiHelper.createLabel("name", row.label, titleUpgradeDialogLayout.attribute.rowNameColor, titleUpgradeDialogLayout.attribute.fontSize, new Vec2(), new Size(40, 18), Label.HorizontalAlign.LEFT));
-      const value = row.get(config.attributes);
-      const diff = next ? this.formatSoulAttributeDiff(value, row.get(next.attributes)) : "";
-      // 带下一级增量时整行值用绿色（白色 = 当前无增量可看）
-      const text = `${this.formatSoulAttributeValue(value)}${diff ? `  ${diff}` : ""}`;
-      const valueLabel = UiHelper.createLabel("value", text, diff ? titleUpgradeDialogLayout.attribute.rowDiffColor : Color.WHITE, titleUpgradeDialogLayout.attribute.fontSize, new Vec2(), new Size(titleUpgradeDialogLayout.attribute.width - 40, 18), Label.HorizontalAlign.LEFT);
-      line.addChild(valueLabel);
-      column.addChild(line);
-    });
-    return column;
+    return this.createGrowthAttributeList(
+      "title_attribute_list",
+      getText("label_growth_bonus"),
+      titleAttributeLabels.map((item) => ({
+        label: item.label,
+        valueText: this.formatSoulAttributeValue(config.attributes[item.key]),
+        diffText: next ? this.formatSoulAttributeDiff(config.attributes[item.key], next.attributes[item.key]) : null,
+      })),
+      titleUpgradeDialogLayout.attribute,
+    );
   }
 
   /**
@@ -2016,68 +2150,25 @@ export default class GameUiHelper {
    * @param onClick 点击回调（切换选中预览）
    */
   static createRankCard(config: RankLevelConfig, activated: boolean, selected: boolean, onClick: () => void) {
-    const card = UiHelper.createNode(`rank_card_${config.level}`, new Vec2(), rankUpgradeDialogLayout.list.cardSize);
-    const button = card.addComponent(Button);
-    button.transition = Button.Transition.SCALE;
-    card.addChild(
-      UiHelper.createLabel(
-        "rank_card_label",
-        `${config.level} 阶 · ${config.label}`,
-        Color.WHITE,
-        rankUpgradeDialogLayout.list.cardFontSize,
-        new Vec2(-8, 0),
-        new Size(rankUpgradeDialogLayout.list.cardSize.width - 70, rankUpgradeDialogLayout.list.cardSize.height),
-        Label.HorizontalAlign.LEFT,
-      ),
+    return this.createGrowthCard(
+      `rank_card_${config.level}`,
+      config.level,
+      config.label,
+      activated ? getText("label_rank_active") : getText("label_rank_locked"),
+      activated,
+      selected,
+      rankUpgradeDialogLayout.list,
+      onClick,
     );
-    card.addChild(
-      UiHelper.createLabel(
-        "rank_card_state",
-        "",
-        Color.WHITE,
-        rankUpgradeDialogLayout.list.stateFontSize,
-        new Vec2(rankUpgradeDialogLayout.list.cardSize.width / 2 - 36, 0),
-        new Size(52, rankUpgradeDialogLayout.list.cardSize.height),
-      ),
-    );
-    // 选中状态、授衔状态与描边统一交给 updateRankCard（建与刷同一个口径）
-    this.updateRankCard(card, activated, selected);
-    card.on(Node.EventType.TOUCH_END, onClick, this);
-    // 按钮点击音（#685）：手写按钮不走 UiHelper.createButton，声音得自己贴一行
-    SoundManager.bindClick(card);
-    // 手写的 Button + TOUCH_END（不走 UiHelper.createButton），鼠标通道同样补一次命中拦截
-    blockClickThrough(card);
-    return card;
   }
 
   /**
    * 刷新一张已有军衔卡片的选中/授衔外观（切换选中、晋升后重刷状态都走它，不重建卡片）
-   * 只动颜色、文字与「选中描边」这一个子节点，杜绝「点一下重建 100 张卡片」
+   * 底/边/圆徽/文字全部按状态重画，杜绝「点一下重建 100 张卡片」
    * @param granted 是否已授衔（调用方按阶比较：`config.level <= role.rank`）
    */
   static updateRankCard(card: Node, granted: boolean, selected: boolean) {
-    // 选中描边：画在文字之下，故插到第 0 位；取消选中时摘除并销毁
-    const border = card.getChildByName("rank_card_border");
-    if (selected && !border) {
-      const node = new Node("rank_card_border");
-      const graphics = node.addComponent(Graphics);
-      const cardSize = rankUpgradeDialogLayout.list.cardSize;
-      graphics.lineWidth = rankUpgradeDialogLayout.list.borderWidth;
-      graphics.strokeColor = rankUpgradeDialogLayout.list.selectedColor;
-      graphics.rect(-cardSize.width / 2, -cardSize.height / 2, cardSize.width, cardSize.height);
-      graphics.stroke();
-      card.insertChild(node, 0);
-    } else if (!selected && border) {
-      border.removeFromParent();
-      border.destroy();
-    }
-    const nameLabel = card.getChildByName("rank_card_label")?.getComponent(Label);
-    if (nameLabel) nameLabel.color = selected ? rankUpgradeDialogLayout.list.selectedColor : granted ? Color.WHITE : rankUpgradeDialogLayout.list.lockedColor;
-    const stateLabel = card.getChildByName("rank_card_state")?.getComponent(Label);
-    if (stateLabel) {
-      stateLabel.string = granted ? getText("label_rank_active") : getText("label_rank_locked");
-      stateLabel.color = granted ? rankUpgradeDialogLayout.list.activeColor : rankUpgradeDialogLayout.list.lockedColor;
-    }
+    this.paintGrowthCard(card, rankUpgradeDialogLayout.list, granted, selected, granted ? getText("label_rank_active") : getText("label_rank_locked"));
   }
 
   /**
@@ -2086,42 +2177,47 @@ export default class GameUiHelper {
    * @param next 下一阶配置（没有传 null，如已满衔）
    */
   static createRankAttributeList(config: RankLevelConfig, next: RankLevelConfig | null) {
-    const column = UiHelper.createFlexCol("rank_attribute_list", rankUpgradeDialogLayout.attribute.spacing, new Vec2(), new Size(rankUpgradeDialogLayout.attribute.width, 0));
-    column.addChild(UiHelper.createLabel("rank_attribute_title", `${config.level} 阶 · ${config.label}`, rankUpgradeDialogLayout.attribute.titleColor, 15, new Vec2(), new Size(rankUpgradeDialogLayout.attribute.width, 22)));
-    const rows: Array<{ label: string; get: (attributes: RankAttributes) => number | [number, number] }> = rankAttributeLabels.map((item) => ({
-      label: item.label,
-      get: (attributes) => attributes[item.key],
-    }));
-    rows.forEach((row, index) => {
-      const line = UiHelper.createFlexRow(`rank_attribute_row_${index}`, 0, new Vec2(), new Size(rankUpgradeDialogLayout.attribute.width, 18));
-      line.addChild(UiHelper.createLabel("name", row.label, rankUpgradeDialogLayout.attribute.rowNameColor, rankUpgradeDialogLayout.attribute.fontSize, new Vec2(), new Size(40, 18), Label.HorizontalAlign.LEFT));
-      const value = row.get(config.attributes);
-      const diff = next ? this.formatSoulAttributeDiff(value, row.get(next.attributes)) : "";
-      // 带下一阶增量时整行值用绿色（白色 = 当前无增量可看）
-      const text = `${this.formatSoulAttributeValue(value)}${diff ? `  ${diff}` : ""}`;
-      const valueLabel = UiHelper.createLabel("value", text, diff ? rankUpgradeDialogLayout.attribute.rowDiffColor : Color.WHITE, rankUpgradeDialogLayout.attribute.fontSize, new Vec2(), new Size(rankUpgradeDialogLayout.attribute.width - 40, 18), Label.HorizontalAlign.LEFT);
-      line.addChild(valueLabel);
-      column.addChild(line);
-    });
-    return column;
+    return this.createGrowthAttributeList(
+      "rank_attribute_list",
+      getText("label_rank_bonus"),
+      rankAttributeLabels.map((item) => ({
+        label: item.label,
+        valueText: this.formatSoulAttributeValue(config.attributes[item.key]),
+        diffText: next ? this.formatSoulAttributeDiff(config.attributes[item.key], next.attributes[item.key]) : null,
+      })),
+      rankUpgradeDialogLayout.attribute,
+    );
   }
 
   /**
    * 创建军衔徽记（弹窗中间那栏的展示物；军衔没有帧动画，徽记就是它的「外观」）
-   * 结构：金色描边的深色牌 → 段名（金色小字）→ 军衔名（红字大字，与头顶那行同一个色）→ 阶数进度（灰色小字）
+   * 按稿 17-growth 的 `.emblem`：150 圆、金环 + 深底，环内一枚大字（军衔名末字）+ 段名小字
+   * 军衔全名与「第 N 阶 / 共 M 阶」由中栏的信息行显示（name / current），不在环里重复
    * @param config 展示的军衔阶配置
    */
   static createRankBadge(config: RankLevelConfig) {
     const layout = rankUpgradeDialogLayout.badge;
     const node = UiHelper.createNode("rank_badge", new Vec2(), layout.size);
-    // 牌底（Graphics 自绘，不依赖底图拉伸）
+    // 圆徽（外圆填环色 → 内圆填底色，1px 级 stroke 实机不渲染，同 paintRoundedPanel 的坑）
     const plate = new Node("rank_badge_plate");
     const graphics = plate.addComponent(Graphics);
-    UiHelper.paintRoundedPanel(graphics, layout.size, 0, layout.fill, layout.borderColor, layout.borderWidth);
+    const radius = layout.size.width / 2;
+    graphics.fillColor = layout.borderColor;
+    graphics.circle(0, 0, radius);
+    graphics.fill();
+    graphics.fillColor = layout.fill;
+    graphics.circle(0, 0, radius - layout.borderWidth);
+    graphics.fill();
     node.addChild(plate);
+    // 虚线外环（稿 .emblem::after）：金环外一圈小圆点，同盘绘制（在 plate 的 Graphics 上画）
+    graphics.fillColor = layout.ring.color;
+    for (let i = 0; i < layout.ring.dots; i++) {
+      const angle = (i / layout.ring.dots) * Math.PI * 2;
+      graphics.circle(Math.cos(angle) * layout.ring.radius, Math.sin(angle) * layout.ring.radius, layout.ring.dotSize / 2);
+      graphics.fill();
+    }
+    node.addChild(UiHelper.createLabel("rank_badge_glyph", config.label.slice(-1), layout.glyph.color, layout.glyph.fontSize, layout.glyph.position, layout.glyph.size));
     node.addChild(UiHelper.createLabel("rank_badge_tier", config.tier, layout.tier.color, layout.tier.fontSize, layout.tier.position, layout.tier.size));
-    node.addChild(UiHelper.createLabel("rank_badge_label", config.label, layout.label.color, layout.label.fontSize, layout.label.position, layout.label.size));
-    node.addChild(UiHelper.createLabel("rank_badge_progress", getText("label_rank_progress", { level: config.level, total: rankMaxLevel() }), layout.progress.color, layout.progress.fontSize, layout.progress.position, layout.progress.size));
     return node;
   }
 

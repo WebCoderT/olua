@@ -1,4 +1,4 @@
-import { Color, isValid, Label, Node, ScrollView, Sprite, Vec2 } from "cc";
+import { Label, isValid, Node, ScrollView, Sprite, Vec2 } from "cc";
 import GameUiHelper from "../../helpers/GameUiHelper";
 import LayerManager from "../../core/LayerManager";
 import StorageManager from "../../core/StorageManager";
@@ -7,6 +7,7 @@ import UiHelper from "../../helpers/UiHelper";
 import { getSoulLevel, nextSoulUpgrade, soulUpgradeChain } from "../../../configs/game-config";
 import type { SoulLevelConfig } from "../../../types/soul";
 import { warSoulDialogLayout } from "../../../configs/hudLayout";
+import { buttonTone } from "../../../configs/layout/sizes";
 import { getText } from "../../../configs/texts";
 import { clearChildren } from "../../utils/node/NodeTree";
 
@@ -39,6 +40,7 @@ export default class WarSoulDialog {
   private infoSlot: Node | null = null;
   private attributeSlot: Node | null = null;
   private upgradeButton: Node | null = null;
+  private costValue: Node | null = null;
   private bindGoldLabel: Node | null = null;
 
   /** 打开弹窗 */
@@ -51,21 +53,34 @@ export default class WarSoulDialog {
     dialog.addChild(
       GameUiHelper.createDialogFoot("war_soul_foot", layout.size.width, layout.foot, layout.footTexts.left, layout.footTexts.right),
     );
+    // 中栏容器（稿 .gcenter：边框 + 深底，垫在动画与文字之下）
+    dialog.addChild(GameUiHelper.createGrowthCenter("soul_center", layout.center));
     // 左：战魂等级列表（可上下滑动）
-    const list = GameUiHelper.createScrollView(layout.list.name, layout.list.position, layout.list.size);
+    const list = GameUiHelper.createScrollView(layout.list.name, layout.list.position, layout.list.size, layout.list.gap, 3);
     this.listContent = list.getComponent(ScrollView).content;
     dialog.addChild(list);
     // 中：战魂动画与信息（槽位节点内容随选中等级重建）
     this.animationSlot = UiHelper.createGroupNode("soul_animation_slot", layout.animation.position);
     dialog.addChild(this.animationSlot);
-    this.infoSlot = UiHelper.createGroupNode("soul_info_slot", layout.info.position);
+    this.infoSlot = UiHelper.createGroupNode("soul_info_slot", new Vec2());
     dialog.addChild(this.infoSlot);
-    // 右：属性面板 / 绑定元宝 / 升级按钮
+    // 右：属性面板 / 消耗与余额 / 提示行 / 升级按钮（稿 .gside 与 .gcost）
     this.attributeSlot = UiHelper.createGroupNode("soul_attribute_slot", layout.attribute.position);
     dialog.addChild(this.attributeSlot);
-    this.bindGoldLabel = UiHelper.createLabel("soul_bind_gold", "", Color.WHITE, layout.bindGold.fontSize, layout.bindGold.position, layout.bindGold.size);
-    dialog.addChild(this.bindGoldLabel);
-    this.upgradeButton = GameUiHelper.createMiddleButton("soul_upgrade_button", layout.upgradeButton.text, layout.upgradeButton.position);
+    dialog.addChild(GameUiHelper.createGrowthCostDivider("soul_cost_divider", layout.cost));
+    dialog.addChild(GameUiHelper.createGrowthCostRow("soul_cost", getText("label_growth_cost"), getText("label_growth_cost_none"), layout.cost.costY, layout.cost));
+    dialog.addChild(GameUiHelper.createGrowthCostRow("soul_balance", getText("label_growth_balance"), "", layout.cost.balanceY, layout.cost));
+    this.costValue = dialog.getChildByName("soul_cost")?.getChildByName("soul_cost_value") ?? null;
+    this.bindGoldLabel = dialog.getChildByName("soul_balance")?.getChildByName("soul_balance_value") ?? null;
+    dialog.addChild(GameUiHelper.createGrowthShowline("soul_showline", layout.showline.text, layout.showline));
+    this.upgradeButton = GameUiHelper.createToneButton(
+      "soul_upgrade_button",
+      layout.upgradeButton.text,
+      layout.upgradeButton.position,
+      layout.upgradeButton.size,
+      layout.upgradeButton.fontSize,
+      buttonTone.primary,
+    );
     this.upgradeButton.on(
       Node.EventType.TOUCH_END,
       async () => {
@@ -115,11 +130,14 @@ export default class WarSoulDialog {
     if (this.animationNode && isValid(this.animationNode)) this.animationNode.destroy();
     this.animationNode = GameUiHelper.createSoulAnimation(config);
     this.animationSlot.addChild(this.animationNode);
-    // 中间信息：名称 / 描述 / 当前战魂（位置、尺寸、字号与配色见 layout.info）
+    // 中间信息：名称 / 描述 / 当前战魂（位置、尺寸、字号与配色见 layout.info；坐标是大盘绝对坐标）
     clearChildren(this.infoSlot);
     const info = layout.info;
     this.infoSlot.addChild(UiHelper.createLabel("soul_name", config.label, info.name.color, info.name.fontSize, info.name.position, info.name.size));
-    this.infoSlot.addChild(UiHelper.createLabel("soul_desc", config.description, info.description.color, info.description.fontSize, info.description.position, info.description.size));
+    // 描述是长文本：换行 + 高度自适应（position.y 是文字块上边缘）
+    this.infoSlot.addChild(
+      UiHelper.createWrappedLabel("soul_desc", config.description, info.description.color, info.description.fontSize, info.description.lineHeight, info.description.position, info.description.width, undefined, info.description.height),
+    );
     const current = getSoulLevel(role.soulOfWar);
     this.infoSlot.addChild(
       UiHelper.createLabel("soul_current", current ? getText("label_soul_current", { level: role.soulOfWar, label: current.label }) : getText("label_soul_none"), info.current.color, info.current.fontSize, info.current.position, info.current.size),
@@ -138,11 +156,11 @@ export default class WarSoulDialog {
     clearChildren(this.attributeSlot);
     const nextStep = nextSoulUpgrade(this.selectedLevel);
     this.attributeSlot.addChild(GameUiHelper.createSoulAttributeList(config, nextStep.kind === "next" ? nextStep.config : null));
-    // 升级按钮与绑定元宝（按钮始终针对当前战魂在链上的下一阶；到链尾 / 断链都置灰，文案分开）
+    // 升级按钮与消耗/余额（按钮始终针对当前战魂在链上的下一阶；到链尾 / 断链都置灰，文案分开）
+    const step = nextSoulUpgrade(role.soulOfWar);
     if (this.upgradeButton) {
       const sprite = this.upgradeButton.getComponent(Sprite);
       const label = this.upgradeButton.getChildByName("soul_upgrade_button_label")?.getComponent(Label);
-      const step = nextSoulUpgrade(role.soulOfWar);
       if (label) {
         label.string =
           step.kind === "next"
@@ -153,6 +171,10 @@ export default class WarSoulDialog {
       }
       if (sprite) sprite.grayscale = step.kind !== "next";
     }
-    if (this.bindGoldLabel) this.bindGoldLabel.getComponent(Label).string = getText("label_bind_gold", { value: role.bindGold });
+    // 消耗行：下一阶的价格（满级 / 断链时没有下一阶，显示占位符）
+    const costLabel = this.costValue?.getComponent(Label);
+    if (costLabel) costLabel.string = step.kind === "next" ? getText("label_growth_cost_value", { value: step.config.bindGold }) : getText("label_growth_cost_none");
+    const balanceLabel = this.bindGoldLabel?.getComponent(Label);
+    if (balanceLabel) balanceLabel.string = `${role.bindGold}`;
   }
 }

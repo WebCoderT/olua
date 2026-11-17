@@ -144,34 +144,109 @@ export function dialogFootLayout(size: Size, textWidth = 300, inset = T.spacing.
 /**
  * 成长线三窗（军衔 / 称号 / 战魂）共用的左栏卡片列表
  *
- * 稿 17-growth 是三栏：左 216 列表 / 中 1fr / 右 224，栏间距 col-gap，整体左右各留 18。
- * 面板 880×540 → 内容宽 844，中栏 380；左栏中心 -244、中栏 4、右栏 310。
- * 列表顶 225（头部 45 下沿）、高 392 → 中心 29。
+ * 稿 17-growth 的 `.gbody`：`padding:0 18px`、三列 `216px 1fr 224px`、`gap:18`、高 392。
+ * 面板 880×540 → 内容带 -422..422（宽 844）：
+ * 左栏 216（中心 -314）· 间距 18 · 中栏 368（中心 -4）· 间距 18 · 右栏 224（中心 310）。
+ * 纵向：内容顶 225（头部下沿）、高 392 → 底 -167、中心 29。
+ *
+ * 卡片按稿 `.gitem`：212×46、行距 6、圆角 r2、`rgba(0,0,0,.24)` 底 + line-1 边；
+ * 选中金边 + 金色淡底；左侧 26px 圆形阶号徽章（选中金底深字）。
  */
 const growthCardList = (name: string, extra?: { borderWidth: number }) => ({
   name,
-  position: new Vec2(-244, 29),
+  position: new Vec2(-314, 29),
   size: new Size(216, 392),
-  cardSize: new Size(200, 44),
-  cardFontSize: 13,
-  stateFontSize: 11,
-  /** 卡片文字颜色：选中 / 未激活 / 已激活 */
+  /** 卡片尺寸与行距（稿 .gitem 46 高、.glist gap 6；宽 = 216 − 右 4 内缩） */
+  cardSize: new Size(212, 46),
+  gap: 6,
+  radius: T.radius.r2,
+  /** 阶号圆徽（稿 .step：26 圆、字号 11） */
+  stepSize: 26,
+  stepFontSize: T.fontSize.f11,
+  cardFontSize: T.fontSize.f13,
+  stateFontSize: T.fontSize.f11,
+  /** 卡片底 / 边：常态 `rgba(0,0,0,.24)` + line-1，选中金淡底 + 金边 */
+  fill: T.surface.input,
+  fillSelected: T.line[1],
+  borderColor: T.line[1],
+  borderSelected: T.gold[3],
+  /** 卡片文字颜色：选中 / 已激活 / 未激活 */
   selectedColor: T.gold[4],
-  lockedColor: T.text[4],
   activeColor: T.jade,
+  lockedColor: T.text[4],
+  /** 圆徽：环 / 底 / 字（选中 = 金底深字） */
+  stepRing: T.line[2],
+  stepFill: T.surface[3],
+  stepText: T.text[3],
+  stepFillSelected: T.gold[3],
+  stepTextSelected: T.text.onGold,
   ...extra,
 });
-const growthAnimation = { position: new Vec2(4, 30), size: new Size(300, 300) };
+
+/** 中栏容器（稿 `.gcenter`：line-1 边框 + 深底 + 圆角 r2，撑满三栏高度） */
+const growthCenter = {
+  position: new Vec2(-4, 29),
+  size: new Size(368, 392),
+  fill: T.surface.sunken,
+  border: T.line[1],
+  radius: T.radius.r2,
+};
+
 const growthAttribute = {
-  position: new Vec2(310, 205),
-  width: 216,
+  /** 属性列顶边贴内容区顶（稿 .gside 的 padding-top 8）：纵向容器锚点顶对齐，位置即顶边 */
+  position: new Vec2(310, 213),
+  width: 224,
   spacing: 6,
-  fontSize: 12,
+  fontSize: T.fontSize.f12,
+  titleFontSize: T.fontSize.f13,
   titleColor: T.gold[4],
   rowNameColor: T.text[3],
   rowDiffColor: T.jade,
 };
-const growthBindGold = { position: new Vec2(310, -150), size: new Size(216, 16), fontSize: 12 };
+
+/**
+ * 右栏底部「消耗 / 余额」两行（稿 `.gcost`：分隔线 + 两行 kv + 块级按钮）
+ * 行两侧对齐：名称贴右栏左缘、数值贴右栏右缘。
+ */
+const growthCost = {
+  line: { y: -8, width: 224, color: T.line[1] },
+  costY: -26,
+  balanceY: -50,
+  leftX: 198,
+  rightX: 422,
+  fontSize: T.fontSize.f11,
+  valueFontSize: T.fontSize.f12,
+  nameColor: T.text[3],
+  valueColor: T.text[1],
+};
+
+/** 升级/晋升按钮（稿 `.gbtn.btn--block`：通栏 224×46、16 号字） */
+const growthUpgradeButton = {
+  size: new Size(224, 46),
+  fontSize: T.fontSize.f16,
+  position: new Vec2(310, -90),
+};
+
+/**
+ * 按钮下的提示行（稿 `.showline`：半透明底 + line-1 边 + r2 的框，金勾 + 小字两行内）
+ * 高度按「2 行 11 号字 + 上下 8 内边距」定，文字块在框内垂直居中（1 行也居中）
+ */
+const growthShowline = {
+  position: new Vec2(310, -140),
+  size: new Size(224, 44),
+  radius: T.radius.r2,
+  fill: T.surface.input,
+  border: T.line[1],
+  padding: 8,
+  gap: 8,
+  fontSize: T.fontSize.f11,
+  color: T.text[3],
+  checkColor: T.gold[3],
+  checkSize: 15,
+};
+
+/** 中栏名称下的描述文字块高度：固定 2 行（稿 `.gdesc` line-height 1.8），1 行也按 2 行占位保证纵向节奏 */
+const growthDescHeight = 34;
 
 /** 战魂弹窗布局 */
 export const warSoulDialogLayout = {
@@ -182,23 +257,33 @@ export const warSoulDialogLayout = {
   size: new Size(880, 540),
   /** 左：等级卡片竖向滚动列表（卡片按等级从上到下，状态用颜色区分） */
   list: growthCardList("soul_list"),
-  /** 中：战魂动画（帧率取各等级配置 configs/soul 的 animationFrameRate） */
-  animation: growthAnimation,
-  /** 中：名称 / 描述 / 当前战魂 / 外显勾选框（槽位坐标，子件坐标以槽位中心为原点） */
+  /** 中：三栏容器底（边框 + 深底），垫在动画与文字之下 */
+  center: growthCenter,
+  /** 中：战魂动画（帧率取各等级配置 configs/soul 的 animationFrameRate；按槽位等比缩放） */
+  animation: { position: new Vec2(-4, 102), size: new Size(300, 224) },
+  /**
+   * 中：名称 / 描述 / 当前战魂 / 外显勾选框（子件坐标以弹窗中心为原点）
+   * 纵向节奏按稿 `.gcenter`（flex 居中、gap 12）：整组在 392 高的中栏里上下留白相等（中栏绝对范围 225 ~ -167，中心 29），
+   * 自顶向下 = 动画 224 → 12 → 名称 26 → 12 → 描述 34 → 10 → 当前 18 → 12 → 外显 22。
+   */
   info: {
-    position: new Vec2(4, -145),
-    name: { position: new Vec2(0, 42), size: new Size(320, 22), fontSize: 16, color: Color.WHITE },
-    description: { position: new Vec2(0, 20), size: new Size(330, 16), fontSize: 11, color: T.text[3] },
-    current: { position: new Vec2(0, -22), size: new Size(320, 18), fontSize: 12, color: T.gold[4] },
+    name: { position: new Vec2(-4, -35), size: new Size(340, 26), fontSize: T.fontSize.f20, color: T.gold[5] },
+    /** 描述是换行文本，定高 2 行、position 是**文字块中心**（1 行时也在块内居中） */
+    description: { position: new Vec2(-4, -77), width: 340, height: growthDescHeight, lineHeight: 15, fontSize: T.fontSize.f11, color: T.text[3] },
+    current: { position: new Vec2(-4, -113), size: new Size(340, 18), fontSize: T.fontSize.f11, color: T.gold[4] },
     /** 外显勾选框（勾选后当前等级动画挂到主角右上角，位置见 hud.roleShowLayout.soul） */
-    toggle: { position: new Vec2(0, -48), size: new Size(90, 22), fontSize: 13, text: "外显", boxSize: 16, textGap: 18 },
+    toggle: { position: new Vec2(-4, -145), size: new Size(120, 22), fontSize: T.fontSize.f12, text: "外显", boxSize: 16, textGap: 18 },
   },
   /** 右：属性列表（含下一级增量） */
   attribute: growthAttribute,
+  /** 右：消耗 / 余额两行 */
+  cost: growthCost,
   /** 右：绑定元宝余额 */
-  bindGold: growthBindGold,
+  bindGold: { fontSize: T.fontSize.f11 },
   /** 右：升级按钮（满级 / 当前阶不在成长链上时都置灰，文案分别走 maxedText、lockedText） */
-  upgradeButton: { position: new Vec2(310, -205), text: "升 级", maxedText: "已满级", lockedText: "不可续升" },
+  upgradeButton: { ...growthUpgradeButton, text: "升 级", maxedText: "已满级", lockedText: "不可续升", tone: "gold" },
+  /** 按钮下提示行文案（稿 .showline） */
+  showline: { ...growthShowline, text: "勾选「外显」后，当前战魂挂在主角右上角" },
   foot: dialogFootLayout(new Size(880, 540), 300),
   footTexts: { left: "左栏列出全部等级 · 点一档看差异", right: "升级消耗绑定元宝，由服务端结算" },
 };
@@ -219,21 +304,25 @@ export const titleUpgradeDialogLayout = {
   size: new Size(880, 540),
   /** 左：等级卡片竖向滚动列表（卡片按等级从上到下，状态用颜色区分；34 个称号与战魂 37 个同容器尺寸） */
   list: growthCardList("title_list"),
-  /** 中：称号动画（名牌帧原始宽 156~245，弹窗内按 RAW 原尺寸展示） */
-  animation: growthAnimation,
-  /** 中：名称 / 描述 / 当前称号（槽位坐标，子件坐标以槽位中心为原点；比战魂少一行——没有外显勾选框） */
+  /** 中：三栏容器底 */
+  center: growthCenter,
+  /** 中：称号动画（名牌帧原始宽 156~245，弹窗内按 RAW 原尺寸展示，槽位只做居中） */
+  animation: { position: new Vec2(-4, 85), size: new Size(300, 110) },
+  /** 中：名称 / 描述 / 当前称号（比战魂少一行——没有外显勾选框；整组在中栏内垂直居中） */
   info: {
-    position: new Vec2(4, -145),
-    name: { position: new Vec2(0, 42), size: new Size(320, 22), fontSize: 16, color: Color.WHITE },
-    description: { position: new Vec2(0, 20), size: new Size(330, 16), fontSize: 11, color: T.text[3] },
-    current: { position: new Vec2(0, -8), size: new Size(320, 18), fontSize: 12, color: T.gold[4] },
+    name: { position: new Vec2(-4, 5), size: new Size(340, 26), fontSize: T.fontSize.f20, color: T.gold[5] },
+    description: { position: new Vec2(-4, -37), width: 340, height: growthDescHeight, lineHeight: 15, fontSize: T.fontSize.f11, color: T.text[3] },
+    current: { position: new Vec2(-4, -73), size: new Size(340, 18), fontSize: T.fontSize.f11, color: T.gold[4] },
   },
   /** 右：属性列表（含下一级增量） */
   attribute: growthAttribute,
-  /** 右：绑定元宝余额 */
-  bindGold: growthBindGold,
+  /** 右：消耗 / 余额两行 */
+  cost: growthCost,
+  bindGold: { fontSize: T.fontSize.f11 },
   /** 右：升级按钮（满级 / 当前称号不在成长链上时都置灰，文案分别走 maxedText、lockedText） */
-  upgradeButton: { position: new Vec2(310, -205), text: "升 级", maxedText: "已满级", lockedText: "不可续升" },
+  upgradeButton: { ...growthUpgradeButton, text: "升 级", maxedText: "已满级", lockedText: "不可续升", tone: "gold" },
+  /** 按钮下提示行文案 */
+  showline: { ...growthShowline, text: "称号解锁后常显头顶，全服可见" },
   foot: dialogFootLayout(new Size(880, 540), 300),
   footTexts: { left: "左栏列出全部等级 · 点一档看差异", right: "升级消耗绑定元宝，由服务端结算" },
 };
@@ -255,33 +344,40 @@ export const rankUpgradeDialogLayout = {
   size: new Size(880, 540),
   /** 左：阶数卡片竖向滚动列表（100 阶从上到下，状态用颜色区分） */
   list: growthCardList("rank_list", { borderWidth: 2 }),
-  /** 中：军衔徽记（文字牌：段名 + 红色军衔名 + 阶数进度） */
+  /** 中：三栏容器底 */
+  center: growthCenter,
+  /**
+   * 中：军衔徽记（稿 `.emblem`：150 圆、金环 + 深底，环内一枚大字 + 段名小字；
+   * 军衔没有素材动画，徽记就是它的外观）
+   */
   badge: {
-    position: new Vec2(4, 30),
-    size: new Size(320, 210),
+    position: new Vec2(-4, 85),
+    size: new Size(150, 150),
     fill: T.surface[2],
-    borderColor: T.gold[4],
+    borderColor: T.gold[2],
     borderWidth: 2,
-    /** 段名（如「王爵」） */
-    tier: { position: new Vec2(0, 62), size: new Size(290, 22), fontSize: 14, color: T.gold[4] },
-    /** 军衔名（红字，与头顶那行同一个色） */
-    label: { position: new Vec2(0, 4), size: new Size(290, 40), fontSize: 26, color: T.ember[3] },
-    /** 阶数进度（第 N 阶 / 共 100 阶） */
-    progress: { position: new Vec2(0, -56), size: new Size(290, 18), fontSize: 12, color: T.text[3] },
+    /** 环内大字（军衔名的末字） */
+    glyph: { position: new Vec2(0, 8), size: new Size(120, 52), fontSize: 40, color: T.gold[4] },
+    /** 段名（如「王爵」，金环内下方的小字） */
+    tier: { position: new Vec2(0, -38), size: new Size(120, 16), fontSize: T.fontSize.f11, color: T.gold[2] },
+    /** 稿 `.emblem::after` 的虚线外环（金环外一圈小点，圆点数 / 半径 / 点径 / 点色） */
+    ring: { dots: 36, radius: 83, dotSize: 3, color: T.line[2] },
   },
-  /** 中：名称 / 描述 / 当前军衔（槽位坐标，子件坐标以槽位中心为原点） */
+  /** 中：名称 / 描述 / 当前军衔（整组在中栏内垂直居中：徽记 150 → 12 → 名称 → 12 → 描述 → 10 → 当前） */
   info: {
-    position: new Vec2(4, -145),
-    name: { position: new Vec2(0, 42), size: new Size(320, 22), fontSize: 16, color: Color.WHITE },
-    description: { position: new Vec2(0, 20), size: new Size(330, 16), fontSize: 11, color: T.text[3] },
-    current: { position: new Vec2(0, -8), size: new Size(320, 18), fontSize: 12, color: T.gold[4] },
+    name: { position: new Vec2(-4, -15), size: new Size(340, 26), fontSize: T.fontSize.f20, color: T.gold[5] },
+    description: { position: new Vec2(-4, -57), width: 340, height: growthDescHeight, lineHeight: 15, fontSize: T.fontSize.f11, color: T.text[3] },
+    current: { position: new Vec2(-4, -93), size: new Size(340, 18), fontSize: T.fontSize.f11, color: T.gold[4] },
   },
   /** 右：属性列表（含下一阶增量） */
   attribute: growthAttribute,
-  /** 右：绑定元宝余额 */
-  bindGold: growthBindGold,
+  /** 右：消耗 / 余额两行 */
+  cost: growthCost,
+  bindGold: { fontSize: T.fontSize.f11 },
   /** 右：晋升按钮（满衔时文案与置灰） */
-  upgradeButton: { position: new Vec2(310, -205), text: "晋 升", maxedText: "已满衔", lockedText: "不可进阶" },
+  upgradeButton: { ...growthUpgradeButton, text: "晋 升", maxedText: "已满衔", lockedText: "不可进阶", tone: "gold" },
+  /** 按钮下提示行（文案含当前预览的军衔名，见 texts 的 hint_rank_show） */
+  showline: { ...growthShowline, text: "" },
   foot: dialogFootLayout(new Size(880, 540), 300),
   footTexts: { left: "左栏列出全部阶位 · 点一档看差异", right: "晋升消耗绑定元宝，由服务端结算" },
 };

@@ -1,10 +1,11 @@
-import { Color, isValid, Label, Layout, Node, ScrollView, Sprite, Vec2 } from "cc";
+import { isValid, Label, Layout, Node, ScrollView, Sprite, Vec2 } from "cc";
 import GameUiHelper from "../../helpers/GameUiHelper";
 import LayerManager from "../../core/LayerManager";
 import StorageManager from "../../core/StorageManager";
 import UiHelper from "../../helpers/UiHelper";
 import { getRankLevel, nextRankUpgrade, rankLevels, rankMaxLevel } from "../../../configs/game-config";
 import { rankUpgradeDialogLayout } from "../../../configs/hudLayout";
+import { buttonTone } from "../../../configs/layout/sizes";
 import { getText } from "../../../configs/texts";
 import { clearChildren } from "../../utils/node/NodeTree";
 
@@ -37,7 +38,9 @@ export default class RankUpgradeDialog {
   private infoSlot: Node | null = null;
   private attributeSlot: Node | null = null;
   private upgradeButton: Node | null = null;
+  private costValue: Node | null = null;
   private bindGoldLabel: Node | null = null;
+  private showlineLabel: Node | null = null;
 
   /** 打开弹窗 */
   open() {
@@ -49,8 +52,10 @@ export default class RankUpgradeDialog {
     dialog.addChild(
       GameUiHelper.createDialogFoot("rank_upgrade_foot", layout.size.width, layout.foot, layout.footTexts.left, layout.footTexts.right),
     );
+    // 中栏容器（稿 .gcenter：边框 + 深底，垫在徽记与文字之下）
+    dialog.addChild(GameUiHelper.createGrowthCenter("rank_center", layout.center));
     // 左：军衔阶数列表（可上下滑动，100 阶只建一次）
-    const list = GameUiHelper.createScrollView(layout.list.name, layout.list.position, layout.list.size);
+    const list = GameUiHelper.createScrollView(layout.list.name, layout.list.position, layout.list.size, layout.list.gap, 3);
     this.listView = list.getComponent(ScrollView);
     this.listContent = this.listView.content;
     dialog.addChild(list);
@@ -58,14 +63,26 @@ export default class RankUpgradeDialog {
     // 中：军衔徽记与信息（槽位节点内容随选中阶重建）
     this.badgeSlot = UiHelper.createGroupNode("rank_badge_slot", layout.badge.position);
     dialog.addChild(this.badgeSlot);
-    this.infoSlot = UiHelper.createGroupNode("rank_info_slot", layout.info.position);
+    this.infoSlot = UiHelper.createGroupNode("rank_info_slot", new Vec2());
     dialog.addChild(this.infoSlot);
-    // 右：属性面板 / 绑定元宝 / 晋升按钮
+    // 右：属性面板 / 消耗与余额 / 提示行 / 晋升按钮
     this.attributeSlot = UiHelper.createGroupNode("rank_attribute_slot", layout.attribute.position);
     dialog.addChild(this.attributeSlot);
-    this.bindGoldLabel = UiHelper.createLabel("rank_bind_gold", "", Color.WHITE, layout.bindGold.fontSize, layout.bindGold.position, layout.bindGold.size);
-    dialog.addChild(this.bindGoldLabel);
-    this.upgradeButton = GameUiHelper.createMiddleButton("rank_upgrade_button", layout.upgradeButton.text, layout.upgradeButton.position);
+    dialog.addChild(GameUiHelper.createGrowthCostDivider("rank_cost_divider", layout.cost));
+    dialog.addChild(GameUiHelper.createGrowthCostRow("rank_cost", getText("label_rank_cost"), getText("label_growth_cost_none"), layout.cost.costY, layout.cost));
+    dialog.addChild(GameUiHelper.createGrowthCostRow("rank_balance", getText("label_growth_balance"), "", layout.cost.balanceY, layout.cost));
+    this.costValue = dialog.getChildByName("rank_cost")?.getChildByName("rank_cost_value") ?? null;
+    this.bindGoldLabel = dialog.getChildByName("rank_balance")?.getChildByName("rank_balance_value") ?? null;
+    dialog.addChild(GameUiHelper.createGrowthShowline("rank_showline", "", layout.showline));
+    this.showlineLabel = dialog.getChildByName("rank_showline")?.getChildByName("rank_showline_text") ?? null;
+    this.upgradeButton = GameUiHelper.createToneButton(
+      "rank_upgrade_button",
+      layout.upgradeButton.text,
+      layout.upgradeButton.position,
+      layout.upgradeButton.size,
+      layout.upgradeButton.fontSize,
+      buttonTone.primary,
+    );
     this.upgradeButton.on(
       Node.EventType.TOUCH_END,
       async () => {
@@ -151,11 +168,14 @@ export default class RankUpgradeDialog {
     // 中：军衔徽记（文字牌，随选中阶更换）
     clearChildren(this.badgeSlot);
     this.badgeSlot.addChild(GameUiHelper.createRankBadge(config));
-    // 中：信息（衔名 / 描述 / 当前军衔，位置、尺寸、字号与配色见 layout.info）
+    // 中：信息（衔名 / 描述 / 当前军衔，位置、尺寸、字号与配色见 layout.info；坐标是大盘绝对坐标）
     clearChildren(this.infoSlot);
     const info = layout.info;
     this.infoSlot.addChild(UiHelper.createLabel("rank_name", config.label, info.name.color, info.name.fontSize, info.name.position, info.name.size));
-    this.infoSlot.addChild(UiHelper.createLabel("rank_desc", config.description, info.description.color, info.description.fontSize, info.description.position, info.description.size));
+    // 描述是长文本：换行 + 高度自适应（position.y 是文字块上边缘）
+    this.infoSlot.addChild(
+      UiHelper.createWrappedLabel("rank_desc", config.description, info.description.color, info.description.fontSize, info.description.lineHeight, info.description.position, info.description.width, undefined, info.description.height),
+    );
     const current = getRankLevel(role.rank);
     this.infoSlot.addChild(
       UiHelper.createLabel("rank_current", current ? getText("label_rank_current", { level: role.rank, label: current.label }) : getText("label_rank_none"), info.current.color, info.current.fontSize, info.current.position, info.current.size),
@@ -164,11 +184,14 @@ export default class RankUpgradeDialog {
     clearChildren(this.attributeSlot);
     const nextStep = nextRankUpgrade(this.selectedLevel);
     this.attributeSlot.addChild(GameUiHelper.createRankAttributeList(config, nextStep.kind === "next" ? nextStep.config : null));
-    // 晋升按钮与绑定元宝（按钮始终针对当前军衔在链上的下一阶；满衔置灰，文案随 maxedText 切换）
+    // 按钮下提示行：稿 .showline 的文案带当前预览的军衔名，切换选中要跟着换
+    const showlineLabel = this.showlineLabel?.getComponent(Label);
+    if (showlineLabel) showlineLabel.string = getText("hint_rank_show", { label: config.label });
+    // 晋升按钮与消耗/余额（按钮始终针对当前军衔在链上的下一阶；满衔置灰，文案随 maxedText 切换）
+    const step = nextRankUpgrade(role.rank);
     if (this.upgradeButton) {
       const sprite = this.upgradeButton.getComponent(Sprite);
       const label = this.upgradeButton.getChildByName("rank_upgrade_button_label")?.getComponent(Label);
-      const step = nextRankUpgrade(role.rank);
       if (label) {
         label.string =
           step.kind === "next"
@@ -179,6 +202,10 @@ export default class RankUpgradeDialog {
       }
       if (sprite) sprite.grayscale = step.kind !== "next";
     }
-    if (this.bindGoldLabel) this.bindGoldLabel.getComponent(Label).string = getText("label_bind_gold", { value: role.bindGold });
+    // 消耗行：下一阶的价格（满衔 / 断链时没有下一阶，显示占位符）
+    const costLabel = this.costValue?.getComponent(Label);
+    if (costLabel) costLabel.string = step.kind === "next" ? getText("label_growth_cost_value", { value: step.config.bindGold }) : getText("label_growth_cost_none");
+    const balanceLabel = this.bindGoldLabel?.getComponent(Label);
+    if (balanceLabel) balanceLabel.string = `${role.bindGold}`;
   }
 }
