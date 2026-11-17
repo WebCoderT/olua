@@ -412,13 +412,13 @@ export default class GameUiHelper {
     const node = UiHelper.createNode("equipment_upgrade_hint", layout.position, layout.size);
     const plate = new Node("equipment_upgrade_hint_plate");
     const graphics = plate.addComponent(Graphics);
-    graphics.fillColor = layout.fill;
+    // 圆形边框同样走「填外圈 → 内缩填主体」（1px 级 stroke 实机不渲染）
+    graphics.fillColor = layout.borderColor;
     graphics.circle(0, 0, layout.size.width / 2);
     graphics.fill();
-    graphics.lineWidth = layout.borderWidth;
-    graphics.strokeColor = layout.borderColor;
-    graphics.circle(0, 0, layout.size.width / 2);
-    graphics.stroke();
+    graphics.fillColor = layout.fill;
+    graphics.circle(0, 0, layout.size.width / 2 - layout.borderWidth);
+    graphics.fill();
     node.addChild(plate);
     node.addChild(UiHelper.createLabel("equipment_upgrade_hint_text", getText("label_equip_upgrade_hint"), layout.color, layout.fontSize, new Vec2(), layout.size));
     node.active = false;
@@ -668,13 +668,8 @@ export default class GameUiHelper {
     const radius = Math.min(size.height / 2, 4);
     const drawBg = () => {
       const bg = node.addComponent(Graphics);
-      bg.fillColor = T.surface.scrim;
-      bg.roundRect(-size.width / 2, -size.height / 2, size.width, size.height, radius);
-      bg.fill();
-      bg.lineWidth = T.border.width;
-      bg.strokeColor = T.line[1];
-      bg.roundRect(-size.width / 2, -size.height / 2, size.width, size.height, radius);
-      bg.stroke();
+      // 1px 描边实机不渲染：外框色填整块 → 内缩填主体色（UiHelper.paintRoundedPanel）
+      UiHelper.paintRoundedPanel(bg, size, radius, T.surface.scrim, T.line[1]);
     };
     drawBg();
     const fillNode = UiHelper.createNode(`${name}_fill`, new Vec2(-size.width / 2, 0), new Size(size.width - 4, size.height - 2));
@@ -1426,7 +1421,6 @@ export default class GameUiHelper {
     const fill = style.fill ?? panelStyle.fill;
     // 顶亮带跟着 fill 一起覆盖：只换底不换带会剩一条与稿无关的亮棕（聊天窗就是这种情况）
     const fillTop = style.fillTop ?? panelStyle.fillTop;
-    const fillTopRatio = style.fillTopRatio ?? panelStyle.fillTopRatio;
     const border = style.border ?? panelStyle.border;
     const radius = style.radius ?? panelStyle.radius;
     const panel = UiHelper.createNode(name, new Vec2(), size);
@@ -1434,19 +1428,31 @@ export default class GameUiHelper {
     const left = -size.width / 2;
     const bottom = -size.height / 2;
     const bw = Math.max(1, borderWidth);
-    // 1) 外框：先用金线色填满整块、再内缩 bw 填主体色 —— Graphics 的 1px 描边在实机上整条不渲染
-    //    （详见 drawGlassPlate 的注释），只有「填两块」才拿得到恒 1px 的清晰边线
-    graphics.fillColor = border;
+    // 1) 外框 + 底衬：稿的边线是 rgba(194,146,69,.48) 叠在面板底色上，
+    //    而 Graphics 的 1px 描边在实机上整条不渲染（见 drawGlassPlate 的注释）——
+    //    所以先把边线色与面板底色合成为不透明色，再用它铺整块、内缩填底色，恒 1px 的金边就出来了；
+    //    若直接铺半透明边线，它会跟面板**外面**的亮地图混成灰线
+    const ringColor = UiHelper.blendOver(border, fill);
+    graphics.fillColor = ringColor;
     graphics.roundRect(left, bottom, size.width, size.height, radius);
     graphics.fill();
     graphics.fillColor = fill;
     graphics.roundRect(left + bw, bottom + bw, size.width - bw * 2, size.height - bw * 2, Math.max(0, radius - bw));
     graphics.fill();
-    // 2) 顶部一条半透明亮带（Graphics 没有渐变，用两层矩形叠出上亮下暗）
-    const bandHeight = size.height * fillTopRatio;
-    graphics.fillColor = fillTop;
-    graphics.roundRect(left + bw, bottom + size.height - bandHeight, size.width - bw * 2, bandHeight - bw, Math.max(0, radius - bw));
-    graphics.fill();
+    // 2) 竖向渐变（稿 `.panel` 的 165deg：surface-3 → surface-2 62% → #150F08）——
+    //    纯色亮带会把上半面板压成一片发亮的死平色，格子与金线都没了对比
+    UiHelper.paintVerticalGradient(
+      graphics,
+      size,
+      [
+        { t: 0, color: fillTop },
+        { t: 0.62, color: fill },
+        { t: 1, color: panelStyle.gradientBottom },
+      ],
+      bw,
+      radius,
+      panelStyle.gradientSteps,
+    );
     // 3) 内侧一圈极弱高光：贴顶边往下 2px，撑出「金属压边」的厚度感（同样用 1px 填充条）
     graphics.fillColor = innerHighlight;
     graphics.rect(left + bw + 1, bottom + size.height - bw - 2, size.width - (bw + 1) * 2, 1);
@@ -2093,13 +2099,7 @@ export default class GameUiHelper {
     // 牌底（Graphics 自绘，不依赖底图拉伸）
     const plate = new Node("rank_badge_plate");
     const graphics = plate.addComponent(Graphics);
-    graphics.fillColor = layout.fill;
-    graphics.rect(-layout.size.width / 2, -layout.size.height / 2, layout.size.width, layout.size.height);
-    graphics.fill();
-    graphics.lineWidth = layout.borderWidth;
-    graphics.strokeColor = layout.borderColor;
-    graphics.rect(-layout.size.width / 2, -layout.size.height / 2, layout.size.width, layout.size.height);
-    graphics.stroke();
+    UiHelper.paintRoundedPanel(graphics, layout.size, 0, layout.fill, layout.borderColor, layout.borderWidth);
     node.addChild(plate);
     node.addChild(UiHelper.createLabel("rank_badge_tier", config.tier, layout.tier.color, layout.tier.fontSize, layout.tier.position, layout.tier.size));
     node.addChild(UiHelper.createLabel("rank_badge_label", config.label, layout.label.color, layout.label.fontSize, layout.label.position, layout.label.size));
@@ -2786,18 +2786,13 @@ export default class GameUiHelper {
 
   //#region 背包
 
-  /** 创建背包格子（矢量：暗底圆角小格 + 细描边，对齐 05-bag 稿，不再用格子贴图） */
+  /** 创建背包格子（矢量：稿 05-bag 的 `.slot` —— **无底色**、只有一圈 1px 金线，格子透出面板底色） */
   static createRoleBagCell(row: number, col: number) {
     const size = bagGridLayout.cellSize;
     const cell = UiHelper.createNode(`bag_slot_${row}_${col}`, new Vec2(), size);
     const graphics = cell.addComponent(Graphics);
-    graphics.fillColor = T.surface[3];
-    graphics.roundRect(-size.width / 2, -size.height / 2, size.width, size.height, T.radius.r1);
-    graphics.fill();
-    graphics.lineWidth = T.border.width;
-    graphics.strokeColor = T.line[2];
-    graphics.roundRect(-size.width / 2, -size.height / 2, size.width, size.height, T.radius.r1);
-    graphics.stroke();
+    // 1px 级 stroke 实机不渲染 → 四条 1px 填充拼边框（半径 r1 只有 2px，直角差异不可辨）
+    UiHelper.paintRectBorder(graphics, size, T.line[2]);
     return cell;
   }
 

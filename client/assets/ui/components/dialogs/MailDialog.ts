@@ -300,11 +300,11 @@ export default class MailDialog {
     const node = UiHelper.createNode(`mail_flag_${row.id}`, config.flagPosition, config.flagSize);
     const graphics = node.addComponent(Graphics);
     const radius = config.flagSize.width / 2;
-    graphics.lineWidth = 1;
     if (row.read) {
-      graphics.strokeColor = config.flagOffColor;
-      graphics.circle(0, 0, radius);
-      graphics.stroke();
+      // 已读：一圈 1px 级 stroke 实机不渲染（引擎坑），改为小一号的实心暗点
+      graphics.fillColor = config.flagOffColor;
+      graphics.circle(0, 0, radius * 0.45);
+      graphics.fill();
     } else {
       graphics.fillColor = config.flagColor;
       graphics.circle(0, 0, radius);

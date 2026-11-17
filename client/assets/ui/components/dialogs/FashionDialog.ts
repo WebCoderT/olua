@@ -115,13 +115,9 @@ export default class FashionDialog {
     const equipped = fashion.id === wornId;
     const buyable = !owned && fashion.acquireChannel === "upgrade" && (fashion.sellPrice ?? 0) > 0;
     const graphics = node.addComponent(Graphics);
-    graphics.fillColor = owned || equipped ? card.fill : card.lockedFill;
-    graphics.roundRect(-card.size.width / 2, -card.size.height / 2, card.size.width, card.size.height, 6);
-    graphics.fill();
-    graphics.lineWidth = equipped ? 2 : 1;
-    graphics.strokeColor = equipped ? card.activeBorder : owned ? card.border : card.lockedBorder;
-    graphics.roundRect(-card.size.width / 2, -card.size.height / 2, card.size.width, card.size.height, 6);
-    graphics.stroke();
+    const fill = owned || equipped ? card.fill : card.lockedFill;
+    const border = equipped ? card.activeBorder : owned ? card.border : card.lockedBorder;
+    UiHelper.paintRoundedPanel(graphics, card.size, 6, fill, border, equipped ? 2 : 1);
     // 外观图标（没有外观资源的时装也要能展示，用图标占位；未拥有的置灰）
     const icon = GameUiHelper.createImage(`fashion_icon_${fashion.id}`, fashion.icon, card.iconPosition, card.iconSize);
     if (!owned && !equipped) {

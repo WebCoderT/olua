@@ -34,6 +34,10 @@ export const dialogFrame = {
     /** 外框金线（line-3）与线宽 */
     border: T.line[3],
     borderWidth: T.border.width,
+    /** 渐变收尾色（稿 `.panel` 165deg 渐变的最底端 #150F08） */
+    gradientBottom: T.surface.panelDeep,
+    /** 渐变条数（Graphics 无渐变 API，用等高色带插值；40 条在高 540 的面板上肉眼无缝） */
+    gradientSteps: 40,
     /** 内侧一圈极弱高光（模拟 inset 0 1px 0 rgba(255,255,255,.06)） */
     innerHighlight: T.overlay.highlight,
     /** 圆角（--r-3） */
@@ -478,9 +482,10 @@ export const bagDialogLayout = {
    * f11 + text-4；两端坐标是**标签中心**（宽 250，内缘距面板边 20）
    */
   countLine: {
-    y: 214,
-    leftX: -155,
-    rightX: 155,
+    /** 稿 05-bag 实测：计数行 675..1245 × 326..343，面板 660..1260 × 270..810 → 中心 y = +206 */
+    y: 206,
+    leftX: -160,
+    rightX: 160,
     width: 250,
     height: 14,
     fontSize: T.fontSize.f11,
@@ -492,10 +497,11 @@ export const bagDialogLayout = {
    */
   foot: dialogFootLayout(new Size(600, 540), 250),
   /**
-   * 底部三个操作按钮（子件坐标以弹窗中心为原点；背包网格底边在 -176，三钮并排落在网格下方）
-   * 中号按钮宽 123（见 sizes.uiSize.middleButtonSize），各错开 140 → 两两间距 17，整体左右各留 98
+   * 底部三个操作按钮（子件坐标以弹窗中心为原点；稿 05-bag 实测：118×36、两两间距 14、中心 ±132、
+   * 按钮条中心距面板顶 485 → y = -215）—— 与稿一致，不再用 123 宽的中号档
    */
-  tidyButton: { name: "bag_tidy_button", position: new Vec2(-140, -224) },
+  buttonSize: new Size(118, 36),
+  tidyButton: { name: "bag_tidy_button", position: new Vec2(-132, -215) },
   /**
    * 「一键回收」：把背包里的装备整格换成绑定元宝（身上穿着的不算）
    * 回收不可撤销，所以按钮是**两步确认**：第一次点击先看数（件数 + 可得绑定元宝）并变成「确认回收」，
@@ -503,7 +509,7 @@ export const bagDialogLayout = {
    */
   recycleButton: {
     name: "bag_recycle_button",
-    position: new Vec2(0, -224),
+    position: new Vec2(0, -215),
     /** 待确认状态保持时间（毫秒），到点自动变回「一键回收」 */
     confirmTimeout: 3000,
   },
@@ -517,7 +523,7 @@ export const bagDialogLayout = {
    */
   discardButton: {
     name: "bag_discard_button",
-    position: new Vec2(140, -224),
+    position: new Vec2(132, -215),
     /** 待确认状态保持时间（毫秒），到点自动放弃（与回收、删除角色同一套口径） */
     confirmTimeout: 3000,
   },

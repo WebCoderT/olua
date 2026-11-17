@@ -578,14 +578,7 @@ export default class SocialDialog {
     const row = layout.row;
     const node = UiHelper.createNode(name, new Vec2(), row.size);
     const graphics = node.addComponent(Graphics);
-    const path = () => graphics.roundRect(-row.size.width / 2, -row.size.height / 2, row.size.width, row.size.height, row.radius);
-    graphics.fillColor = row.fill;
-    path();
-    graphics.fill();
-    graphics.lineWidth = 1;
-    graphics.strokeColor = row.border;
-    path();
-    graphics.stroke();
+    UiHelper.paintRoundedPanel(graphics, row.size, row.radius, row.fill, row.border);
     return node;
   }
 

@@ -5,6 +5,7 @@ import StorageManager from "./core/StorageManager";
 import SceneManager from "./core/SceneManager";
 import SoundManager from "./core/SoundManager";
 import { loginLayout, tipsLayout } from "../configs/hudLayout";
+import { T } from "../configs/layout/tokens";
 import { getText } from "../configs/texts";
 import { AuthApi, AnnouncementApi, GameConfigApi, ZoneApi } from "./utils/net/Api";
 import type { AuthResult, Zone } from "./utils/net/Api";
@@ -465,13 +466,14 @@ export class Login extends Component {
       const active = tab.key === key;
       const graphics = this.addGraphics(tab.node);
       graphics.clear();
-      graphics.fillColor = active ? palette.tabActiveFill : palette.transparent;
-      graphics.roundRect(-tabSize.width / 2, -tabSize.height / 2, tabSize.width, tabSize.height, tabSize.height / 2);
-      graphics.fill();
-      graphics.lineWidth = 1;
-      graphics.strokeColor = active ? palette.gold : palette.line;
-      graphics.roundRect(-tabSize.width / 2, -tabSize.height / 2, tabSize.width, tabSize.height, tabSize.height / 2);
-      graphics.stroke();
+      // 未选中补半透明暗底（稿的胶囊是暗底描边；纯透明底 + 1px 描边实机不渲染）
+      UiHelper.paintRoundedPanel(
+        graphics,
+        tabSize,
+        tabSize.height / 2,
+        active ? palette.tabActiveFill : T.surface.scrim,
+        active ? palette.gold : palette.line,
+      );
       tab.label.color = active ? palette.ink : palette.muted;
       // 图标是图片：靠 tint 跟着文字一起变（烘的是全亮骨白，未选中压到 58%）
       if (tab.icon && isValid(tab.icon, true)) tab.icon.color = active ? palette.ink : palette.muted;

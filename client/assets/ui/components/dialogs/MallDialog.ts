@@ -226,17 +226,18 @@ export default class MallDialog {
     // 卡片底：Graphics 自绘（稿 linear-gradient 170deg surface-3 → surface-2，Graphics 没有渐变用亮带叠；
     // 细灰描边勾卡片），配色见 mallDialogLayout.card 注释
     const graphics = card.addComponent(Graphics);
-    graphics.fillColor = T.surface[3];
+    // 卡片底（稿 linear-gradient 170deg surface-3 → surface-2 + 细灰边框）：
+    // 1px 级 stroke 实机不渲染，走「外框色整块 → 内缩填主体 → 顶部亮带」三段填充
+    graphics.fillColor = T.line[2];
     graphics.roundRect(-width / 2, -height / 2, width, height, T.radius.r2);
+    graphics.fill();
+    graphics.fillColor = T.surface[3];
+    graphics.roundRect(-width / 2 + T.border.width, -height / 2 + T.border.width, width - T.border.width * 2, height - T.border.width * 2, T.radius.r2 - T.border.width);
     graphics.fill();
     const bandHeight = height * 0.4;
     graphics.fillColor = T.surface[2];
-    graphics.roundRect(-width / 2, -height / 2, width, bandHeight, T.radius.r2);
+    graphics.roundRect(-width / 2 + T.border.width, -height / 2 + T.border.width, width - T.border.width * 2, bandHeight, T.radius.r2 - T.border.width);
     graphics.fill();
-    graphics.lineWidth = T.border.width;
-    graphics.strokeColor = T.line[2];
-    graphics.roundRect(-width / 2, -height / 2, width, height, T.radius.r2);
-    graphics.stroke();
     // 纵向节奏：顶行贴顶、购买行贴底，中间留给限购/库存行
     const topEdge = height / 2 - padding;
     const iconY = topEdge - layout.card.iconSize.height / 2;

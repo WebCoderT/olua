@@ -77,6 +77,77 @@ export default class UiHelper {
   }
 
   /**
+   * 把带透明度的前景色压到不透明背景色上，返回不透明结果色。
+   * 用途：1px 边框用「填两块」画时，半透明边线若直接落在面板最底层，会跟面板**外面**的背景
+   * （世界地图那种亮底）混色 —— 稿里的边线是叠在面板底色上的，所以先合成到面板底色再画。
+   */
+  static blendOver(fg: Color, bg: Color): Color {
+    const a = fg.a / 255;
+    return new Color(
+      Math.round(fg.r * a + bg.r * (1 - a)),
+      Math.round(fg.g * a + bg.g * (1 - a)),
+      Math.round(fg.b * a + bg.b * (1 - a)),
+      255,
+    );
+  }
+
+  /**
+   * 竖向渐变（Graphics 没有渐变 API，用 N 条等高色带插值近似；稿的面板是 165deg 线性渐变）
+   * @param stops 由顶到底的色标（t: 0=顶 1=底，须按 t 递增）
+   * @param inset 四周内缩（让出边框宽度）
+   * @param radius 顶部圆角（首尾两条色带横向收窄，避免把圆角盖成直角）
+   * @param steps 色带条数（40 条在高 540 的面板上肉眼无缝）
+   */
+  static paintVerticalGradient(graphics: Graphics, size: Size, stops: Array<{ t: number; color: Color }>, inset: number, radius: number, steps: number) {
+    const width = size.width - inset * 2;
+    const top = size.height / 2 - inset;
+    const height = size.height - inset * 2;
+    const stepHeight = height / steps;
+    const sample = (t: number) => {
+      for (let i = 0; i < stops.length - 1; i++) {
+        const from = stops[i];
+        const to = stops[i + 1];
+        if (t <= to.t) {
+          const k = (t - from.t) / Math.max(1e-6, to.t - from.t);
+          return new Color(
+            Math.round(from.color.r + (to.color.r - from.color.r) * k),
+            Math.round(from.color.g + (to.color.g - from.color.g) * k),
+            Math.round(from.color.b + (to.color.b - from.color.b) * k),
+            255,
+          );
+        }
+      }
+      return stops[stops.length - 1].color;
+    };
+    for (let i = 0; i < steps; i++) {
+      graphics.fillColor = sample((i + 0.5) / steps);
+      const shrink = radius > 0 && (i === 0 || i === steps - 1) ? radius * 0.5 : 0;
+      graphics.rect(-width / 2 + shrink, top - (i + 1) * stepHeight, width - shrink * 2, stepHeight + 0.5);
+      graphics.fill();
+    }
+  }
+
+  /**
+   * 画「圆角面板」：外框色填整块 → 内缩 borderWidth 填主体色，两块填充拼出边框。
+   * 引擎坑同上：1px stroke 实机不渲染，一律走本方法（与 GameUiHelper.createDialogPanel 同构）。
+   * @param fill 主体色；传 null 表示只画边框（退化为四条 1px 填充的直角框，1px 下圆角差异不可辨）
+   */
+  static paintRoundedPanel(graphics: Graphics, size: Size, radius: number, fill: Color | null, border: Color, borderWidth = 1) {
+    if (!fill) {
+      this.paintRectBorder(graphics, size, border, borderWidth);
+      return;
+    }
+    const left = -size.width / 2;
+    const bottom = -size.height / 2;
+    graphics.fillColor = border;
+    graphics.roundRect(left, bottom, size.width, size.height, radius);
+    graphics.fill();
+    graphics.fillColor = fill;
+    graphics.roundRect(left + borderWidth, bottom + borderWidth, size.width - borderWidth * 2, size.height - borderWidth * 2, Math.max(0, radius - borderWidth));
+    graphics.fill();
+  }
+
+  /**
    * 加载 SpriteFrame 资源并回调，统一错误日志
    */
   static loadSprite(src: string, onLoad: (spriteFrame: SpriteFrame) => void) {
@@ -293,13 +364,7 @@ export default class UiHelper {
   ) {
     const background = this.createNode("input_background", position, size);
     const graphics = background.addComponent(Graphics);
-    graphics.fillColor = T.surface.input;
-    graphics.roundRect(-size.width / 2, -size.height / 2, size.width, size.height, T.radius.r2);
-    graphics.fill();
-    graphics.lineWidth = 1;
-    graphics.strokeColor = T.line[2];
-    graphics.roundRect(-size.width / 2, -size.height / 2, size.width, size.height, T.radius.r2);
-    graphics.stroke();
+    this.paintRoundedPanel(graphics, size, T.radius.r2, T.surface.input, T.line[2]);
     if (options.icon) {
       background.addChild(this.createSprite("input_icon", options.icon, new Vec2(-size.width / 2 + 22, 0), new Size(20, 20)));
     }

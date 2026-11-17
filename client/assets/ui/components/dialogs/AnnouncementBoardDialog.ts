@@ -70,13 +70,7 @@ export default class AnnouncementBoardDialog {
     const frame = detail.frame;
     const frameNode = UiHelper.createNode(frame.name, frame.position, frame.size);
     const frameGraphics = frameNode.addComponent(Graphics);
-    frameGraphics.fillColor = frame.fill;
-    frameGraphics.roundRect(-frame.size.width / 2, -frame.size.height / 2, frame.size.width, frame.size.height, frame.radius);
-    frameGraphics.fill();
-    frameGraphics.lineWidth = T.border.width;
-    frameGraphics.strokeColor = frame.border;
-    frameGraphics.roundRect(-frame.size.width / 2, -frame.size.height / 2, frame.size.width, frame.size.height, frame.radius);
-    frameGraphics.stroke();
+    UiHelper.paintRoundedPanel(frameGraphics, frame.size, frame.radius, frame.fill, frame.border, T.border.width);
     dialog.addChild(frameNode);
     // 头部与正文之间的分隔线（稿 `.br-head` 的 border-bottom）
     const dividerWidth = frame.size.width - T.spacing.padDialog * 2;
@@ -177,20 +171,13 @@ export default class AnnouncementBoardDialog {
     // 条目底（稿 `.bi`：深底 + 一圈弱线 + 圆角）
     const base = UiHelper.createNode(`${item.name}_item_base_${index}`, new Vec2(), item.itemSize);
     const baseGraphics = base.addComponent(Graphics);
-    const half = { w: item.itemSize.width / 2, h: item.itemSize.height / 2 };
-    baseGraphics.fillColor = item.itemFill;
-    baseGraphics.roundRect(-half.w, -half.h, item.itemSize.width, item.itemSize.height, item.itemRadius);
-    baseGraphics.fill();
-    baseGraphics.lineWidth = T.border.width;
-    baseGraphics.strokeColor = item.itemBorder;
-    baseGraphics.roundRect(-half.w, -half.h, item.itemSize.width, item.itemSize.height, item.itemRadius);
-    baseGraphics.stroke();
+    UiHelper.paintRoundedPanel(baseGraphics, item.itemSize, item.itemRadius, item.itemFill, item.itemBorder, T.border.width);
     card.addChild(base);
     // 选中底色（先加，压在文字下面；切换选中只改 active，不重建列表）
     const highlight = UiHelper.createNode(`${item.name}_item_selected_${index}`, new Vec2());
     const graphics = highlight.addComponent(Graphics);
     graphics.fillColor = item.selectedFill;
-    graphics.roundRect(-half.w, -half.h, item.itemSize.width, item.itemSize.height, item.itemRadius);
+    graphics.roundRect(-item.itemSize.width / 2, -item.itemSize.height / 2, item.itemSize.width, item.itemSize.height, item.itemRadius);
     graphics.fill();
     highlight.active = false;
     card.addChild(highlight);
