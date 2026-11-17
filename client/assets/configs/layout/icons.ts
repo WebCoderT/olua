@@ -97,8 +97,4 @@ export const icons = {
   autoFight: {
     paths: ["M4 20l7-7M14 4l6 2-2 6-9 9-4-4 9-9z"],
   },
-  /** 聊天头部工具：清屏（橡皮/清扫） */
-  chatClear: {
-    paths: ["M4 19h16M6.5 15.5 14 8l4 4-6.5 6.5H7.5v-3zM15 6.5l2.5 2.5"],
-  },
 } satisfies Record<string, VectorIconShape>;

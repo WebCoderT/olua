@@ -1441,7 +1441,8 @@ export const reportDialogLayout = {
  * 聊天窗布局（世界 / 帮会 / 私聊三页签）
  *
  * **#469 起不再是居中大弹窗**：按主流网游的习惯改成**常驻左下角的小窗**（440×280），
- * 进游戏自动打开（引导进行中除外），底部入口 / Enter 仍是开关。
+ * 进游戏自动打开（引导进行中除外）。**常驻不可关闭**（2026-11-18 用户拍板）：
+ * 稿里的两颗工具钮（清屏 / 收起）已删，窗体没有关闭入口。
  *
  * 停靠位置算过两侧邻居：左下角摇杆 175×172（margin 24/18，顶到 y=-185），
  * 任务追踪栏三行到 y=124 —— 本窗 marginY 205（下缘 y=-170）到 y=110，两头都不叠。
@@ -1492,20 +1493,6 @@ export const chatDialogLayout = {
     idleText: T.text[3],
     idleBorder: T.line[2],
     fontSize: T.fontSize.f11,
-  },
-  /**
-   * 头部右侧工具（稿 `.chat-tools`：清屏 / 收起两颗 22×22 纯图标小方钮）
-   * `right` 是最右一颗的中心 x（面板内右缘 200 − 11）
-   */
-  tools: {
-    y: 131,
-    size: 22,
-    gap: 4,
-    right: 189,
-    iconSize: 12,
-    color: T.text[4],
-    /** 两颗按钮的图标数据见 configs/layout/icons.ts */
-    icons: ["chatClear", "headChevron"] as const,
   },
   /**
    * 头/底的 1px 暗分隔线（稿 `.chat-head{border-bottom:1px solid rgba(0,0,0,.55)}`、
