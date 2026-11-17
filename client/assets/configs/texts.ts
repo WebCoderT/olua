@@ -482,11 +482,14 @@ export const uiTexts = {
   label_attr_combat_power: "战斗力",
   /** 四维加点段标题 */
   label_attributes_alloc: "四维加点",
-  /** 洗点条说明（不写价格：价格只在服务端 growth_scalars.attrResetCost） */
-  label_attr_reset_note: "洗点会退还全部已分配点数，并消耗一笔绑定元宝，不可撤销。",
-  /** 底部说明条两行（稿 .panel-foot） */
-  label_attr_foot_left: "属性数值由服务端汇总下发，含装备 / 称号 / 军衔加成",
-  label_attr_foot_right: "剩余点数为 0 时「＋」置灰",
+  /**
+   * 洗点条说明（不写价格：价格只在服务端 growth_scalars.attrResetCost）。
+   * 注意：说明条走 createLabel（CLAMP + 不换行），文案必须单行放得下（余量 ≥ 40px）。
+   */
+  label_attr_reset_note: "洗点退还全部点数 · 消耗绑定元宝 · 不可撤销",
+  /** 底部说明条两行（稿 .panel-foot；同上，单行口径） */
+  label_attr_foot_left: "数值由服务端汇总下发 · 含装备称号军衔加成",
+  label_attr_foot_right: "点数为 0 时「＋」置灰",
   /** 加点成功的浮动提示（{attr} 四维名 / {points} 剩余点数） */
   label_attr_allocate_tip: "{attr} +1（剩 {points} 点）",
   /** 洗点成功的浮动提示（{refund} 退还点数 / {cost} 消耗的绑定元宝） */
