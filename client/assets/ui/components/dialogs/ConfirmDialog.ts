@@ -2,6 +2,9 @@ import { EventTouch, Graphics, Label, Node, Size, UITransform } from "cc";
 import UiHelper from "../../helpers/UiHelper";
 import GameUiHelper from "../../helpers/GameUiHelper";
 import { confirmDialogLayout } from "../../../configs/hudLayout";
+import { T } from "../../../configs/layout/tokens";
+import { buttonTone } from "../../../configs/layout/sizes";
+import { getText } from "../../../configs/texts";
 import { blockClickThrough } from "../../utils/input/UiHit";
 import { designResolution } from "../../utils/layout/ScreenLayout";
 
@@ -57,13 +60,25 @@ export default class ConfirmDialog extends Node {
     graphics.rect(-screenSize.width / 2, -screenSize.height / 2, screenSize.width, screenSize.height);
     graphics.fill();
     this.addChild(mask);
-    // 居中面板：标题 / 正文 / 确定 · 取消
+    // 居中面板：标题 + 金下划线 / 正文 / 确定 · 取消 / 右上角关闭（全部按稿 20-overlay 的 CONFIRM）
     const panel = GameUiHelper.createDialogPanel(layout.panel.name, layout.panel.size);
     this.addChild(panel);
     panel.addChild(UiHelper.createLabel(layout.title.name, options.title, layout.title.color, layout.title.fontSize, layout.title.position, layout.title.size));
+    const underline = UiHelper.createNode(`${layout.panel.name}_underline`, layout.titleUnderline.position, layout.titleUnderline.size);
+    const underlineGraphics = underline.addComponent(Graphics);
+    underlineGraphics.fillColor = T.gold[3];
+    underlineGraphics.rect(-layout.titleUnderline.size.width / 2, -layout.titleUnderline.size.height / 2, layout.titleUnderline.size.width, layout.titleUnderline.size.height);
+    underlineGraphics.fill();
+    panel.addChild(underline);
+    // 右上角关闭（ghost「×」）：与「取消」同义 —— 点哪个都不动数据
+    const closeLayout = layout.closeButton;
+    const closeButton = GameUiHelper.createToneButton(closeLayout.name, getText("label_close"), closeLayout.position, closeLayout.size, closeLayout.fontSize, buttonTone.ghost);
+    closeButton.on(Node.EventType.TOUCH_END, () => this.finish(this.handleCancel), this);
+    panel.addChild(closeButton);
     panel.addChild(this.createMessage(options.message));
-    const confirmButton = GameUiHelper.createMiddleButton(layout.confirmButton.name, options.confirmText, layout.confirmButton.position);
-    const cancelButton = GameUiHelper.createMiddleButton(layout.cancelButton.name, options.cancelText, layout.cancelButton.position);
+    // 确定 = 危险朱红（稿 .btn--danger），取消 = ghost（稿 .btn--ghost）
+    const confirmButton = GameUiHelper.createToneButton(layout.confirmButton.name, options.confirmText, layout.confirmButton.position, layout.confirmButton.size, layout.confirmButton.fontSize, buttonTone.danger);
+    const cancelButton = GameUiHelper.createToneButton(layout.cancelButton.name, options.cancelText, layout.cancelButton.position, layout.cancelButton.size, layout.cancelButton.fontSize, buttonTone.ghost);
     confirmButton.on(Node.EventType.TOUCH_END, () => this.finish(this.handleConfirm), this);
     cancelButton.on(Node.EventType.TOUCH_END, () => this.finish(this.handleCancel), this);
     panel.addChild(confirmButton);

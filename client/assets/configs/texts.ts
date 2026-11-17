@@ -202,6 +202,10 @@ export const uiTexts = {
   skill_distance_tip: "距离太远，无法攻击！",
 
   //#region 浮动提示：自动战斗与寻路
+  /** 自动战斗状态提示（挂机开启期间跟随主角常显） */
+  auto_battle_status_attack: "自动战斗中",
+  /** 自动寻路状态提示（自动战斗走位期间跟随主角常显） */
+  auto_battle_status_path: "自动寻路中",
   /** 没有可自动释放的技能 */
   auto_battle_no_skill_tip: "没有可自动释放的技能，无法挂机",
   /** 挂机开启 */
@@ -243,8 +247,9 @@ export const uiTexts = {
   feature_coming_soon: "{feature}功能正在开发中",
 
   //#region 浮动提示：选角与角色管理
-  /** 删除角色的两步确认（第一次点击，{name} = 角色名） */
-  role_delete_confirm_tip: "再点一次确认删除角色「{name}」，删除后无法恢复",
+  /** 删除角色的确认弹窗（{name} = 角色名） */
+  role_delete_confirm_title: "删除角色",
+  role_delete_confirm_text: "确定删除角色「{name}」吗？删除后无法恢复。",
   /** 删除成功（{name}） */
   role_delete_done_tip: "角色「{name}」已删除",
   /** 待删除的角色已不存在（存档被外部改动等） */
@@ -301,11 +306,16 @@ export const uiTexts = {
   /** 性别文案（校验提示用） */
   label_sex_boy: "男性",
   label_sex_girl: "女性",
-  /** 删除角色按钮（正常态 / 两步确认的待确认态，见 configs/hudLayout.roleSelectorLayout.manageRole） */
+  /** 删除角色按钮（确认弹窗的红色主按钮也用它，见 configs/hudLayout.roleSelectorLayout） */
   label_role_delete: "删除",
-  label_role_delete_confirm: "确认删除",
-  /** 创建角色弹窗的确认按钮（用通用红底图 + 这行字，见 configs/hudLayout.roleSelectorLayout.createDialog.createButton） */
+  /** 创建角色弹窗的确认按钮（矢量朱红主按钮 + 这行字，见 configs/layout/scenes.roleSelectorLayout.createDialog.createButton） */
   label_role_create: "创建",
+  /** 创建角色弹窗标题（文字，替代原图片标题） */
+  role_create_title: "创建角色",
+  /** 创建角色弹窗分组小字：性别 / 职业 / 角色名称（选项也是文字） */
+  role_create_gender_label: "性别",
+  role_create_occupation_label: "职业",
+  role_create_name_label: "角色名称",
   /** 管理模式提示条 */
   label_role_delete_hint: "点击角色上方的删除按钮移除角色",
   /** 选角界面角色名牌（脚下；{name} = 角色名，{level} = 等级） */
@@ -347,7 +357,6 @@ export const uiTexts = {
   role_select_selected_badge: "已选择",
   /** 卡片网格末尾的建号卡 */
   role_select_new_card: "创建角色",
-  role_select_new_card_sub: "新建一位英雄",
   /** 一个角色都没有时的空状态 */
   role_select_empty_title: "还没有角色",
   role_select_empty_sub: "创建第一位英雄，从黄昏的沙场开始你的传奇。",
@@ -427,11 +436,18 @@ export const uiTexts = {
   /** 技能熟练等级前缀（lv.N）/ 未学习 */
   label_skill_level: "lv.{level}",
   label_skill_unlearned: "未学习",
+  /** 技能行右端的键位标注（稿 07-skill 的 `.nm .key`；{key} = 键位名） */
+  label_skill_shortcut: "快捷键 {key}",
+  /** 快捷键设置弹窗（稿 07-skill 的 .key-dlg）：副标题 / 空键位 */
+  label_shortcut_hint: "选择一个键位，立即生效并关闭",
+  label_shortcut_empty: "空",
   /** 技能点行的左标签（稿 07-skill 的 `.pt-line`；数值是同行右侧的数字，不带前缀） */
   label_skill_points: "技能点",
   /** 技能弹窗页脚（稿 07-skill 的 .panel-foot）：左操作提示 / 右升级说明 */
   skill_foot_left: "悬停看详情 · 点图标设置快捷键",
   skill_foot_right: "升级消耗技能点",
+  mall_foot_left: "购买直接扣绑定元宝 · 服务端权威扣款",
+  mall_foot_right: "等级 / 售罄 / 买满 自动置灰",
   /** 技能升级成功的浮动提示（{skill} 技能名 / {level} 新等级 / {cost} 花费 / {remain} 剩余点数） */
   label_skill_upgrade_tip: "「{skill}」升到 lv.{level}（花 {cost} 点，剩 {remain} 点）",
   /** 四维名称（#833 属性加点；键与服务端 ATTR_KEYS / 存档 data.attrs 逐项一致） */
@@ -583,6 +599,8 @@ export const uiTexts = {
 
   /** 左上品牌副标（主标是真实 LOGO 图，见 images.ts.gameLogo） */
   login_brand_sub: "OLUA",
+  /** 首屏主标（金文字，替代原 LOGO 图；与选角页品牌字同一档 f72） */
+  login_hero_title: "Olua",
   /** 顶栏版本胶囊（{version} = 服务端配置版本号，GET /game-config/version） */
   login_version_label: "VER {version}",
   /** 版本号拉取失败：整个胶囊隐藏，不显示编造的版本 */
@@ -602,7 +620,7 @@ export const uiTexts = {
   /** 公告栏左端的标签字 */
   login_notice_label: "公告",
   /** 登录面板左上角小字（稿件 .panel-eyebrow，10px 字距很开） */
-  login_panel_eyebrow: "ACCOUNT",
+  login_panel_eyebrow: "OLUA",
   /** 登录面板标题 */
   login_panel_title: "账 号 登 录",
   /** 选服按钮：区列表还没拿到时的占位 */

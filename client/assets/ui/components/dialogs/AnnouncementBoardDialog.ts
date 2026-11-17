@@ -2,7 +2,7 @@ import { Button, Graphics, Label, Layout, Node, ScrollView, Size, Vec2, isValid 
 import { AnnouncementApi } from "../../utils/net/Api";
 import type { AnnouncementView } from "../../../configs/announcement";
 import { buildAnnouncementViews } from "../../../configs/announcement";
-import { announcementBoardDialogLayout as layout, T, uiImages } from "../../../configs/hudLayout";
+import { announcementBoardDialogLayout as layout, T } from "../../../configs/hudLayout";
 import { getText } from "../../../configs/texts";
 import AnnouncementReadStore from "../../core/AnnouncementReadStore";
 import LayerManager from "../../core/LayerManager";
@@ -195,9 +195,9 @@ export default class AnnouncementBoardDialog {
     highlight.active = false;
     card.addChild(highlight);
     this.highlights.set(view.id, highlight);
-    // 未读圆点（已读的条目不显示）
+    // 未读圆点（已读的条目不显示；矢量红点，替代 dot 贴图）
     if (view.unread) {
-      const dot = UiHelper.createSprite(`${item.name}_item_dot_${index}`, uiImages.dot, item.itemDot.position, item.itemDot.size);
+      const dot = GameUiHelper.createVectorDot(`${item.name}_item_dot_${index}`, T.ember[3], item.itemDot.position, item.itemDot.size);
       card.addChild(dot);
     }
     // 标题（未读用亮色，已读压暗）+ 级别 · 时间窗

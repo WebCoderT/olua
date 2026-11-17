@@ -8,7 +8,7 @@ import EquipmentSlotGroup, { EQUIPMENT_SLOT_SIDES } from "../panel/EquipmentSlot
 import RoleAttributeList from "../panel/RoleAttributeList";
 import RoleInShowView from "../panel/RoleInShowView";
 import { refreshInAlign } from "../../utils/net/ConfigLoader";
-import { buttonTone, roleInfoDialogLayout } from "../../../configs/hudLayout";
+import { buttonTone, roleInfoDialogLayout, T } from "../../../configs/hudLayout";
 import { getText } from "../../../configs/texts";
 import TitleUpgradeDialog from "./TitleUpgradeDialog";
 import WarSoulDialog from "./WarSoulDialog";
@@ -51,7 +51,9 @@ export default class RoleInfoDialog {
     this.dialog = GameUiHelper.createDialog(roleInfoDialogLayout.name, roleInfoDialogLayout.title, new Vec2(), roleInfoDialogLayout.size, roleInfoDialogLayout.eyebrow);
     // 装饰背景与战斗力图标
     const bgLayout = roleInfoDialogLayout.background;
-    const bg = GameUiHelper.createImage("role_information_background", bgLayout.image, bgLayout.position, bgLayout.size);
+    // 中区底板（稿 .inshow/.attr 区共用的暗色内衬：矢量玻璃底板，替代原装饰贴图）
+    const bg = GameUiHelper.createGlassPlate("role_information_background", bgLayout.size, T.radius.r2, T.line[2]);
+    bg.setPosition(bgLayout.position.x, bgLayout.position.y, 0);
     this.dialog.addChild(bg);
     // 装备槽分组（左/右/底三个方向），右键槽位脱下装备、左键角标一键换更好的
     this.equipmentGroups = EQUIPMENT_SLOT_SIDES.map((side) =>

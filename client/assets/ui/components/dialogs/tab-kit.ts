@@ -74,15 +74,22 @@ export function paintTabStrip<T extends string>(
     const graphics = node.getComponent(Graphics);
     if (graphics) {
       const half = style.size;
+      const left = -half.width / 2;
+      const bottom = -half.height / 2;
       graphics.clear();
-      graphics.roundRect(-half.width / 2, -half.height / 2, half.width, half.height, style.radius);
-      graphics.fillColor = isActive ? style.activeFill : style.idleFill;
-      graphics.fill();
-      if (!isActive) {
-        graphics.lineWidth = 1;
-        graphics.strokeColor = style.idleBorder;
-        graphics.roundRect(-half.width / 2, -half.height / 2, half.width, half.height, style.radius);
-        graphics.stroke();
+      if (isActive) {
+        graphics.fillColor = style.activeFill;
+        graphics.roundRect(left, bottom, half.width, half.height, style.radius);
+        graphics.fill();
+      } else {
+        // ⚠️ 1px 描边在实机整条不渲染（见 GameUiHelper.drawGlassPlate 的引擎坑注释）：
+        // 未选中页签的边框改成「先填边框色、再内缩 1px 填底」，否则一排页签看着是没有边的色块
+        graphics.fillColor = style.idleBorder;
+        graphics.roundRect(left, bottom, half.width, half.height, style.radius);
+        graphics.fill();
+        graphics.fillColor = style.idleFill;
+        graphics.roundRect(left + 1, bottom + 1, half.width - 2, half.height - 2, Math.max(0, style.radius - 1));
+        graphics.fill();
       }
     }
     const label = labelNode.getComponent(Label);
@@ -90,18 +97,16 @@ export function paintTabStrip<T extends string>(
   });
 }
 
-/** 圆角底板（行底 / 面板）：填充 + 1px 描边 + 挡点击穿透；尺寸与配色由调用方给 */
+/** 圆角底板（行底 / 面板）：填充 + 1px 边（填两块画，**不用 stroke** —— 1px 描边在实机整条不渲染）+ 挡点击穿透；尺寸与配色由调用方给 */
 export function createRoundedPanel(name: string, size: Size, fill: Color, border: Color, radius: number): Node {
   const node = UiHelper.createNode(name, new Vec2(), size);
   const graphics = node.addComponent(Graphics);
-  const path = () => graphics.roundRect(-size.width / 2, -size.height / 2, size.width, size.height, radius);
-  graphics.fillColor = fill;
-  path();
+  graphics.fillColor = border;
+  graphics.roundRect(-size.width / 2, -size.height / 2, size.width, size.height, radius);
   graphics.fill();
-  graphics.lineWidth = 1;
-  graphics.strokeColor = border;
-  path();
-  graphics.stroke();
+  graphics.fillColor = fill;
+  graphics.roundRect(-size.width / 2 + 1, -size.height / 2 + 1, size.width - 2, size.height - 2, Math.max(0, radius - 1));
+  graphics.fill();
   blockClickThrough(node);
   return node;
 }

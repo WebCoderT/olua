@@ -1,12 +1,10 @@
-import { Button, Color, Graphics, isValid, Label, Node, Size, UIOpacity, Vec2 } from "cc";
+import { Button, Color, Graphics, isValid, Label, Node, Size, UIOpacity, UITransform, Vec2 } from "cc";
 import GameUiHelper from "../../helpers/GameUiHelper";
 import LayerManager from "../../core/LayerManager";
 import StorageManager from "../../core/StorageManager";
 import UiHelper from "../../helpers/UiHelper";
-import { Draggable } from "../input/Draggable";
-import { blockClickThrough } from "../../utils/input/UiHit";
+import { buttonTone, mallDialogLayout, T } from "../../../configs/hudLayout";
 import { trackUiPress } from "../../utils/input/Pointer";
-import { mallDialogLayout, uiImages } from "../../../configs/hudLayout";
 import { getMallCategories, getMallDailyLimit, getMallPrice, getMallRequiredLevel, getMallStock, isMallGoodListed, mallGoodCategoryOf } from "../../../configs/game-config";
 import { getEquipmentNameParts } from "../../../configs/equipments";
 import { getSellableGoods } from "../../../configs/items";
@@ -114,20 +112,22 @@ export default class MallDialog {
 
   //#region 组装
 
-  /** 组装弹窗：背景图 + 关闭按钮 + 余额 + 商品分页 */
+  /** 组装弹窗：标准弹窗框 + 余额胶囊 + 商品分页（08-mall 稿，矢量面板，不再用整图背景） */
   private build() {
-    // 弹窗主体 = 商城背景图。不用 createDialogBg：那张图固定是通用弹窗框，商城有自己的门面底图；
-    // 拖动与鼠标拦截照旧补上（拖动的手势判定见 Draggable 的按下点判定）
-    const dialog = UiHelper.createSprite(layout.name, layout.background, new Vec2(), layout.size);
-    dialog.addComponent(Draggable);
-    blockClickThrough(dialog);
-    // 同屏多弹窗时，点哪个哪个浮到其它弹窗之上（自有底图没走 createDialogBg，这里补一次）
-    GameUiHelper.bindDialogRaiseOnPress(dialog);
-    const closeButton = UiHelper.createButton(`${layout.name}_close_button`, uiImages.closeButton, layout.closeButton.position, layout.closeButton.size);
-    closeButton.on(Node.EventType.TOUCH_END, () => this.close(), this);
-    dialog.addChild(closeButton);
-    this.bindGoldLabel = UiHelper.createLabel("mall_bind_gold", "", layout.bindGold.color, layout.bindGold.fontSize, layout.bindGold.position, layout.bindGold.size);
-    dialog.addChild(this.bindGoldLabel);
+    const dialog = GameUiHelper.createDialog(layout.name, layout.title, new Vec2(), layout.size, layout.eyebrow);
+    // 标准框的 × 只销毁节点；商城持有一页卡片与悬停详情的引用，走 close() 统一收尾
+    dialog.getChildByName(`${layout.name}_close_button`)?.on(Node.EventType.TOUCH_END, () => this.close(), this);
+    // 余额胶囊（稿 .balance：暗底胶囊 + 金点 + 文字，右上角）
+    const balance = GameUiHelper.createGlassPlate("mall_balance", layout.balance.size, layout.balance.size.height / 2, T.line[2], T.surface.scrim);
+    balance.setPosition(layout.balance.position.x, layout.balance.position.y, 0);
+    balance.addChild(GameUiHelper.createVectorDot("mall_balance_dot", T.gold[3], new Vec2(-layout.balance.size.width / 2 + 16, 0), new Size(layout.balance.dot, layout.balance.dot)));
+    this.bindGoldLabel = UiHelper.createLabel(
+      "mall_bind_gold", "", layout.balance.color, layout.balance.fontSize,
+      new Vec2(10, 0), new Size(layout.balance.size.width - 34, layout.balance.size.height),
+      Label.HorizontalAlign.LEFT,
+    );
+    balance.addChild(this.bindGoldLabel);
+    dialog.addChild(balance);
     // 商品卡片区（分页容器：卡片与页脚都挂在它下面；不建滚动视图）
     const area = UiHelper.createNode(layout.list.name, layout.list.position, layout.list.size);
     this.cardArea = area;
@@ -148,6 +148,8 @@ export default class MallDialog {
     this.pageCount = this.pageCountOf(this.activeCategory);
     // 分类页签（挂在弹窗上、卡片区外 —— 换分类时页签不重建，卡片整页重建）
     this.buildTabs(dialog);
+    // 面板页脚（稿 .panel-foot）：购买扣款口径 + 置灰说明
+    dialog.addChild(GameUiHelper.createDialogFoot("mall_foot", layout.size.width, layout.foot, getText("mall_foot_left"), getText("mall_foot_right")));
     this.renderPage(0);
     this.refreshBindGold();
     this.dialog = dialog;
@@ -171,7 +173,7 @@ export default class MallDialog {
    *
    * · 装备：三段名（前缀 + 本体 + 后缀），名称与品质行都用**前缀色** —— 与详情弹窗、地面掉落名同源，
    *   不在这里另写色表；
-   * · 药品：没有前后缀，名称单段用 `name.plainColor`，品质行写「药品」（`extra.kindColor`）。
+   * · 药品：没有前后缀，名称单段用 `name.plainColor`，类别行写「药品」（`kind.kindColor`）。
    *   那一行不能空着 —— 空着和「品质配置异常」看起来一样。
    */
   private nameOf(good: Goods): { label: string; color: Color; extra: string; extraColor: Color } {
@@ -180,7 +182,7 @@ export default class MallDialog {
         label: good.label,
         color: layout.card.name.plainColor,
         extra: getText("mall_good_kind_drug"),
-        extraColor: layout.card.extra.kindColor,
+        extraColor: layout.card.kind.kindColor,
       };
     }
     const parts = getEquipmentNameParts(good);
@@ -213,79 +215,95 @@ export default class MallDialog {
   }
 
   /**
-   * 创建单张商品卡片：图标（悬停看详情）+ 名称两段式（本体一行 + 前缀/后缀一行）+ 「购买」按钮
-   * 卡片内几何全部由布局配置推导（顶边距 → 图标 → 名称 → 前后缀 → 按钮），界面里不写死像素
+   * 创建单张商品卡片（08-mall 稿 .gcard）：顶行（图标 + 名称/类别）→ 限购/库存行 → 购买行（价格左、按钮右）
+   * 卡片内几何全部由布局配置推导（padding → 顶行 → stats → 购买行贴底），界面里不写死像素
    * @param roleLevel 角色当前等级（购买等级不足时按钮置灰禁点，文案换「Lv.X 解锁」）
    */
   private createCard(good: Goods, width: number, roleLevel: number) {
     const height = layout.card.height;
+    const padding = layout.card.padding;
     const card = UiHelper.createNode(`mall_card_${good.id}`, new Vec2(), new Size(width, height));
-    // 卡片底：Graphics 自绘（深色填充 + 细金边）。橱窗底色本来就深，描一圈金边把卡片勾出来；
-    // 自绘不依赖底图拉伸（格子底图换个比例拉会歪），配色见 mallDialogLayout.card
+    // 卡片底：Graphics 自绘（稿 linear-gradient 170deg surface-3 → surface-2，Graphics 没有渐变用亮带叠；
+    // 细灰描边勾卡片），配色见 mallDialogLayout.card 注释
     const graphics = card.addComponent(Graphics);
-    graphics.fillColor = layout.card.fill;
-    graphics.strokeColor = layout.card.borderColor;
-    graphics.lineWidth = layout.card.borderWidth;
-    graphics.rect(-width / 2, -height / 2, width, height);
+    graphics.fillColor = T.surface[3];
+    graphics.roundRect(-width / 2, -height / 2, width, height, T.radius.r2);
     graphics.fill();
+    const bandHeight = height * 0.4;
+    graphics.fillColor = T.surface[2];
+    graphics.roundRect(-width / 2, -height / 2, width, bandHeight, T.radius.r2);
+    graphics.fill();
+    graphics.lineWidth = T.border.width;
+    graphics.strokeColor = T.line[2];
+    graphics.roundRect(-width / 2, -height / 2, width, height, T.radius.r2);
     graphics.stroke();
-    // 纵向节奏：每件都是「上一件的下缘 − 配置的间距」，改尺寸/间距只动配置
-    const iconY = height / 2 - layout.card.paddingTop - layout.card.iconSize.height / 2;
-    const nameY = iconY - layout.card.iconSize.height / 2 - layout.card.name.gapY - layout.card.name.lineHeight / 2;
-    const extraY = nameY - layout.card.name.lineHeight / 2 - layout.card.extra.gapY - layout.card.extra.lineHeight / 2;
-    const buttonY = extraY - layout.card.extra.lineHeight / 2 - layout.card.buyButton.gapY - layout.card.buyButton.size.height / 2;
-    // 图标：鼠标悬停显示完整详情（与背包格子同一套零件：位置按锚点世界坐标现算）
-    const icon = UiHelper.createSprite(`mall_good_${good.id}`, good.icon, new Vec2(0, iconY), layout.card.iconSize);
+    // 纵向节奏：顶行贴顶、购买行贴底，中间留给限购/库存行
+    const topEdge = height / 2 - padding;
+    const iconY = topEdge - layout.card.iconSize.height / 2;
+    const textX = -width / 2 + padding + layout.card.iconSize.width + 10;
+    const textWidth = width / 2 - padding - textX;
+    const nameY = topEdge - layout.card.name.lineHeight / 2;
+    const kindY = nameY - layout.card.name.lineHeight / 2 - layout.card.kind.lineHeight / 2;
+    // 图标：鼠标悬停显示完整详情（位置按锚点世界坐标现算）
+    const icon = UiHelper.createSprite(`mall_good_${good.id}`, good.icon, new Vec2(-width / 2 + padding + layout.card.iconSize.width / 2, iconY), layout.card.iconSize);
     icon.on(Node.EventType.MOUSE_ENTER, () => this.openDetail(good, icon), this);
     // 图标只注册了悬停事件，这条链上（卡片 → 列表 → 弹窗）没有别的「按压起点记录点」，
     // 自己登记一次：按下图标时记下起点，抬起判定才不会拿到上一次按压的旧起点（见 utils/input/Pointer）
     trackUiPress(icon);
     card.addChild(icon);
-    // 名称两段式：本体一行（大字）+ 前缀/后缀一行（小字）——取段与取色同走 getEquipmentNameParts
-    // （与详情弹窗、地面掉落名同源，不另写色表）；卡片窄，本体名超长时自动缩字（SHRINK），
-    // 逐段配色的完整版在悬停详情里。药品没有前后缀（#763）：名称单段、品质行写「药品」
+    // 名称两段式：本体一行（前缀色）+ 前缀/后缀一行（同色小字）——取段与取色同走 getEquipmentNameParts
+    // （与详情弹窗、地面掉落名同源，不另写色表）；药品没有前后缀（#763）：名称单段、类别行写「药品」
     const parts = this.nameOf(good);
-    const textWidth = width - layout.card.paddingX * 2;
-    // 限购 / 库存（#846）：卡片只有 100 高、塞不下第四行，所以挤在品质行左侧（右侧还有价格）。
-    // 只显示「配置生效」的那些：不限购 / 不限量时一个字都不加，卡片与加这两个字段之前一模一样
-    const limitOf = this.limitBitsOf(good);
-    const extraText = limitOf ? `${parts.extra}${getText("mall_extra_sep")}${limitOf}` : parts.extra;
     const nameLabel = UiHelper.createLabel(
       `mall_card_name_${good.id}`,
       parts.label,
       parts.color,
       layout.card.name.fontSize,
-      new Vec2(0, nameY),
+      new Vec2(textX + textWidth / 2, nameY),
       new Size(textWidth, layout.card.name.lineHeight),
+      Label.HorizontalAlign.LEFT,
     );
     nameLabel.getComponent(Label)!.overflow = Label.Overflow.SHRINK;
     card.addChild(nameLabel);
-    // 品质行与价格同行：品质左对齐、价格右贴边（卡片没有第二行空间，算法见 layout.card.price 注释）
-    const priceReserve = layout.card.price.reserve;
-    const extraWidth = textWidth - priceReserve;
-    const leftEdge = -width / 2 + layout.card.paddingX;
-    const extraLabel = UiHelper.createLabel(
-      `mall_card_extra_${good.id}`,
-      extraText,
+    // 类别行（装备 = 前缀+后缀；药品 = 「药品」；那行不能空着 —— 空着和「品质配置异常」看起来一样）
+    const kindLabel = UiHelper.createLabel(
+      `mall_card_kind_${good.id}`,
+      parts.extra,
       parts.extraColor,
-      layout.card.extra.fontSize,
-      new Vec2(leftEdge + extraWidth / 2, extraY),
-      new Size(extraWidth, layout.card.extra.lineHeight),
+      layout.card.kind.fontSize,
+      new Vec2(textX + textWidth / 2, kindY),
+      new Size(textWidth, layout.card.kind.lineHeight),
       Label.HorizontalAlign.LEFT,
     );
-    // 缩字而不是溢出：品质文案变长时不许压到价格上（价格那一侧宽度是预留死的）
-    extraLabel.getComponent(Label)!.overflow = Label.Overflow.SHRINK;
-    card.addChild(extraLabel);
-    // 价格：玩家点「购买」之前必须看得到要花多少；扣款在服务端，这里展示同一套取价结果（getMallPrice）
+    kindLabel.getComponent(Label)!.overflow = Label.Overflow.SHRINK;
+    card.addChild(kindLabel);
+    // 限购 / 库存行（#846）：「今日 2/3 · 剩 5」。不限购（0）与不限量（-1）一个字都不加 ——
+    // 没配这两条的商城与加这两个字段之前长得一模一样
+    const limitOf = this.limitBitsOf(good);
+    if (limitOf) {
+      card.addChild(
+        UiHelper.createLabel(
+          `mall_card_stats_${good.id}`,
+          limitOf,
+          layout.card.stats.color,
+          layout.card.stats.fontSize,
+          new Vec2(-width / 2 + padding + 60, -6),
+          new Size(120, layout.card.stats.lineHeight),
+          Label.HorizontalAlign.LEFT,
+        ),
+      );
+    }
+    // 购买行（贴底）：价格左（玩家点「购买」之前必须看得到要花多少）、按钮右
+    const buyY = -height / 2 + padding + layout.card.buyButton.size.height / 2;
     card.addChild(
       UiHelper.createLabel(
         `mall_card_price_${good.id}`,
         getText("mall_price", { value: getMallPrice(good) }),
         layout.card.price.color,
         layout.card.price.fontSize,
-        new Vec2(width / 2 - layout.card.paddingX - priceReserve / 2, extraY),
-        new Size(priceReserve, layout.card.extra.lineHeight),
-        Label.HorizontalAlign.RIGHT,
+        new Vec2(-width / 2 + padding + layout.card.price.blockWidth / 2, buyY),
+        new Size(layout.card.price.blockWidth, layout.card.buyButton.size.height),
+        Label.HorizontalAlign.LEFT,
       ),
     );
     // 购买：规则判定与提示都在数据层（余额不足/背包满/下架都不会改数据），成功后只刷余额。
@@ -304,22 +322,15 @@ export default class MallDialog {
         : dailyFull
           ? getText("mall_daily_full")
           : getText("label_mall_buy");
-    const button = UiHelper.createButton(`mall_buy_${good.id}`, uiImages.smallButtonBackground, new Vec2(0, buttonY), layout.card.buyButton.size);
-    button.addChild(
-      UiHelper.createLabel(
-        `${button.name}_label`,
-        buttonText,
-        Color.WHITE,
-        layout.card.buyButton.fontSize,
-        new Vec2(),
-        layout.card.buyButton.size,
-      ),
-    );
+    const button = GameUiHelper.createToneButton(`mall_buy_${good.id}`, buttonText, new Vec2(width / 2 - padding - layout.card.buyButton.size.width / 2, buyY), layout.card.buyButton.size, layout.card.buyButton.fontSize, buttonTone.gold);
     if (locked) {
       const buttonComp = button.getComponent(Button);
       if (buttonComp) buttonComp.interactable = false;
       const opacity = button.addComponent(UIOpacity);
       opacity.opacity = 110;
+      // 整卡压暗（稿 .gcard.locked / .soldout 的置灰口径）
+      const cardOpacity = card.getComponent(UIOpacity) ?? card.addComponent(UIOpacity);
+      cardOpacity.opacity = layout.card.lockedOpacity;
     }
     button.on(
       Node.EventType.TOUCH_END,
@@ -357,6 +368,7 @@ export default class MallDialog {
    *
    * 分类个数不定（运营随时增删），所以页签宽度按个数压缩：先按配置宽度横排，总宽超过
    * `maxWidth` 就一起收窄，收到 `minWidth` 为止 —— 名字由 Label 的 SHRINK 兜（分类名最长 20 字）。
+   * 页签 = ghost 底板按钮：选中金描边金字，未选中灰描边压暗（refreshTabs 重描，不重建节点）。
    */
   private buildTabs(dialog: Node) {
     const t = layout.tabs;
@@ -366,11 +378,10 @@ export default class MallDialog {
     const step = width + t.gap;
     this.tabNodes = this.categories.map((category, index) => {
       const position = new Vec2(t.position.x + (index - (count - 1) / 2) * step, t.position.y);
-      const tab = UiHelper.createButton(`mall_tab_${category.id}`, uiImages.smallButtonBackground, position, new Size(width, t.size.height));
-      const label = UiHelper.createLabel(`${tab.name}_label`, category.label, Color.WHITE, t.fontSize, new Vec2(), new Size(width, t.size.height));
+      const tab = GameUiHelper.createToneButton(`mall_tab_${category.id}`, category.label, position, new Size(width, t.size.height), t.fontSize, buttonTone.ghost);
       // 页签收窄后长分类名必须缩字，溢出会糊到隔壁页签上
-      label.getComponent(Label)!.overflow = Label.Overflow.SHRINK;
-      tab.addChild(label);
+      const tabLabel = tab.getChildByName(`${tab.name}_label`)?.getComponent(Label);
+      if (tabLabel) tabLabel.overflow = Label.Overflow.SHRINK;
       tab.on(Node.EventType.TOUCH_END, () => this.switchCategory(category.id), this);
       dialog.addChild(tab);
       return tab;
@@ -387,12 +398,16 @@ export default class MallDialog {
     this.renderPage(0);
   }
 
-  /** 页签高亮：当前分类全亮，其余压暗（不重建节点，切页签零 GC） */
+  /** 页签高亮：当前分类金描边金字，其余灰描边压暗（不重建节点，切页签零 GC） */
   private refreshTabs() {
     const t = layout.tabs;
     this.tabNodes.forEach((tab, index) => {
       if (!isValid(tab)) return;
       const active = this.categories[index]?.id === this.activeCategory;
+      // ghost 底板画在按钮节点自身（createPlateButton 的画法），重描换描边色即可
+      GameUiHelper.restyleGlassPlate(tab, tab.getComponent(UITransform)!.contentSize, T.radius.r2, active ? T.gold[2] : T.line[2]);
+      const label = tab.getChildByName(`${tab.name}_label`)?.getComponent(Label);
+      if (label) label.color = active ? T.gold[4] : T.text[2];
       const opacity = tab.getComponent(UIOpacity) ?? tab.addComponent(UIOpacity);
       opacity.opacity = active ? 255 : t.inactiveOpacity;
     });
@@ -407,7 +422,7 @@ export default class MallDialog {
     return layout.card.columns * layout.pagination.rowsPerPage;
   }
 
-  /** 页脚翻页控件（挂在卡片区下；坐标以卡片区中心为原点，几何全在 configs） */
+  /** 页脚翻页控件（挂在卡片区下；坐标以卡片区中心为原点，几何全在 configs）：ghost 键一排 + 页码居中 */
   private buildPagination(area: Node) {
     const p = layout.pagination;
     this.firstPageButton = this.createPageButton(area, p.firstButton, "label_mall_first_page", () => this.renderPage(0));
@@ -418,10 +433,9 @@ export default class MallDialog {
     this.lastPageButton = this.createPageButton(area, p.lastButton, "label_mall_last_page", () => this.renderPage(this.pageCount - 1));
   }
 
-  /** 建一个翻页按钮（小号按钮 + 居中文字），返回节点供翻页后切换可用状态 */
-  private createPageButton(area: Node, cfg: { name: string; position: Vec2; size: Size; fontSize: number }, textKey: string, onClick: () => void) {
-    const button = UiHelper.createButton(cfg.name, uiImages.smallButtonBackground, cfg.position, cfg.size);
-    button.addChild(UiHelper.createLabel(`${cfg.name}_label`, getText(textKey), Color.WHITE, cfg.fontSize, new Vec2(), cfg.size));
+  /** 建一个翻页按钮（ghost 底板按钮 + 居中文字），返回节点供翻页后切换可用状态 */
+  private createPageButton(area: Node, cfg: { name: string; position: Vec2 }, textKey: string, onClick: () => void) {
+    const button = GameUiHelper.createToneButton(cfg.name, getText(textKey), cfg.position, layout.pagination.buttonSize, layout.pagination.pageIndicator.fontSize, buttonTone.ghost);
     button.on(Node.EventType.TOUCH_END, onClick, this);
     area.addChild(button);
     return button;

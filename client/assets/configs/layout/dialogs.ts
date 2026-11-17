@@ -1,5 +1,4 @@
 import { Color, Size, Vec2 } from "cc";
-import { uiImages } from "./images";
 import { uiSize } from "./sizes";
 import { T } from "./tokens";
 
@@ -25,9 +24,12 @@ export const dialogFrame = {
   panel: {
     /** 底板主色（surface-2） */
     fill: T.surface[2],
-    /** 顶部明暗过渡带（surface-3 半透明，模拟 linear-gradient 165deg 的亮端） */
-    fillTop: T.surface[2],
-    /** 过渡带占面板高度的比例（自顶向下） */
+    /**
+     * 顶部明暗过渡带（模拟 `.panel{background:linear-gradient(165deg,var(--surface-3),var(--surface-2) 62%,#150F08)}`
+     * 的亮端）：稿的亮端是 surface-3 —— 早前误配成与主色同档，等于没有渐变，面板一片死平
+     */
+    fillTop: T.surface[3],
+    /** 过渡带占面板高度的比例（自顶向下；稿里 62% 处已到 surface-2，故取 0.42 让亮端止于上半区） */
     fillTopRatio: 0.42,
     /** 外框金线（line-3）与线宽 */
     border: T.line[3],
@@ -85,37 +87,6 @@ export const dialogFrame = {
     color: T.text[3],
     hoverColor: T.text[1],
   },
-  /**
-   * 背景图：九宫拼装配置（resources/dialog 下的九块拆图，取图名见 images.dialog*）
-   *
-   * 为什么拆块：整图拉伸会让头部标题带（含两角回纹装饰）跟着弹窗尺寸变形。
-   * 切线依据（对源整图 637×499 的实测，原图已随拆块删除）：
-   * - 竖切 x=64 / x=573 —— 两角回纹装饰实测只延伸到 x≈53，角宽留余量；
-   * - 头行 y=0~42 —— 红色标题带（0~34）与其下过渡带（35~41）完整落在头行内；
-   * - 底行 8px —— 底缘细边框线。
-   * 拼装规则见 GameUiHelper.createDialogPanel：头行**高度恒定**、左右列固定角宽、中列/中行拉伸。
-   */
-  background: {
-    /** 左右角块宽（承载回纹，原样摆放不拉伸） */
-    cornerWidth: 64,
-    /** 头行高（红色标题带，任何弹窗尺寸下不变） */
-    headerHeight: 42,
-    /** 底行高（细边框线） */
-    footerHeight: 8,
-    pieces: {
-      headerLeft: uiImages.dialogHeaderLeft,
-      headerCenter: uiImages.dialogHeaderCenter,
-      headerRight: uiImages.dialogHeaderRight,
-      bodyLeft: uiImages.dialogBodyLeft,
-      bodyCenter: uiImages.dialogBodyCenter,
-      bodyRight: uiImages.dialogBodyRight,
-      footerLeft: uiImages.dialogFooterLeft,
-      footerCenter: uiImages.dialogFooterCenter,
-      footerRight: uiImages.dialogFooterRight,
-    },
-  },
-  /** 关闭按钮图 */
-  closeImage: uiImages.closeButton,
 };
 
 /**
@@ -388,8 +359,8 @@ export const roleInfoDialogLayout = {
   eyebrow: "CHARACTER · C",
   /** 弹窗尺寸 660×520（06-role-info 稿） */
   size: new Size(660, 520),
-  /** 装饰背景（含属性区底图） */
-  background: { image: uiImages.roleInfoDialogBackground, position: new Vec2(-58, -19), size: new Size(431, 452) },
+  /** 中区底板（稿的内衬区：矢量玻璃底板，尺寸/位置见下；不再用装饰贴图） */
+  background: { position: new Vec2(-58, -19), size: new Size(431, 452) },
   /**
    * 六入口按钮的公共外观（稿 `.entries .btn`：76 宽、f12、ghost 档）
    * 宽度取 84（= 稿的列宽），六个按钮等距排成一列，靠右缘留 3
@@ -557,95 +528,84 @@ export const bagDialogLayout = {
 //#region 商城弹窗
 
 /**
- * 商城弹窗布局（组件见 ui/components/dialogs/MallDialog）
+ * 商城弹窗布局（组件见 ui/components/dialogs/MallDialog；08-mall 稿）
  *
- * 弹窗即商城背景图（resources/ui/mall/bg，门面样式）：商品卡片区摆在背景图的「橱窗开口」里
- * （图中暗色门面区域，避开门面两侧的灯笼与龙柱），分页页脚压在开口下沿，绑定元宝余额落在柜台（橱窗下方）。
- * 换背景图时：size 要跟着图片实际尺寸改，各部件几何对着新图重新调。
+ * 面板走标准弹窗框（createDialog：眉题 MALL · M / 标题「商城」/ 矢量 ×），850×540。
+ * 纵向节奏（自顶向下）：余额胶囊 → 分类页签 → 3 列商品卡（两页行）→ 分页页脚 → 面板页脚。
  */
 export const mallDialogLayout = {
   name: "mall_dialog",
-  /** 背景图（CUSTOM 按下面的尺寸铺，当前图就是这个尺寸；换图同步改） */
-  background: uiImages.mallBackground,
-  size: new Size(850, 542),
-  closeButton: { position: new Vec2(357, 171), size: uiSize.closeButtonSize },
-  /** 绑定元宝余额（柜台正中） */
-  bindGold: { position: new Vec2(0, -182), size: new Size(220, 18), fontSize: 12, color: T.gold[4] },
+  title: "商城",
+  eyebrow: "MALL · M",
+  size: new Size(850, 540),
+  /** 绑定元宝余额胶囊（稿 .balance：金点 + 文字，右上角） */
+  balance: { position: new Vec2(289, 195), size: new Size(200, 30), fontSize: T.fontSize.f12, color: T.gold[4], dot: 10 },
   /**
    * 分类页签（#758：一排横排按钮，居中均分；挂在弹窗上、卡片区外 —— 换分类时页签不重建）
    *
-   * 摆在橱窗开口上沿（卡片区顶边再往上 12）：页签高 24，卡片区高度随之收窄给页签让位。
    * 分类个数不定（运营随时增删），页签从中心向两侧均分（index − (n−1)/2) × (宽 + gap)；
    * 总宽超过 `maxWidth` 时按个数压缩单页签宽度，**最窄不低于 `minWidth`** —— 文字由 SHRINK 兜。
+   * 选中页签 = 金描边金字，未选中 = 灰描边 + 压暗（refreshTabs 重描）。
    */
   tabs: {
-    position: new Vec2(0, 100),
-    size: new Size(64, 24),
+    position: new Vec2(0, 154),
+    size: new Size(88, 28),
     /** 页签宽度上限（= 配置宽度）与下限：分类多到排不下时先压到这个宽度，再窄名字就认不出了 */
     maxWidth: 380,
     minWidth: 40,
-    fontSize: 12,
+    fontSize: T.fontSize.f12,
     gap: 8,
-    inactiveOpacity: 110,
+    inactiveOpacity: 140,
   },
-  /** 商品卡片区（橱窗开口内、页签之下；分页显示，每页只建 columns × rowsPerPage 张卡片） */
-  list: { name: "mall_list", position: new Vec2(0, -40), size: new Size(395, 234) },
+  /** 商品卡片区（分页显示，每页只建 columns × rowsPerPage 张卡片；区中心即卡片坐标原点） */
+  list: { name: "mall_list", position: new Vec2(0, 7), size: new Size(802, 238) },
   /** 分类下没有商品时的空提示（居中，与页签/卡片同层） */
-  emptyTip: { name: "mall_empty_tip", position: new Vec2(0, -40), size: new Size(300, 20), fontSize: 12, color: T.text[3] },
-  /** 商品卡片（一行 columns 张均分列表宽：图标 → 名称 → 前后缀 → 购买按钮，几何都由这里推） */
+  emptyTip: { name: "mall_empty_tip", position: new Vec2(0, 7), size: new Size(300, 20), fontSize: T.fontSize.f12, color: T.text[3] },
+  /**
+   * 商品卡片（一行 columns 张均分列表宽；单卡 260×114 = 稿 .gcard）
+   *
+   * 卡内自上而下：顶行（46 图标 + 名称/类别两行）→ 限购/库存行 → 购买行（价格左、购买按钮右），
+   * 几何全部由布局推导（padding → 顶行 → stats → buy 行贴底），界面里不写死像素。
+   */
   card: {
     columns: 3,
     gapX: 10,
-    gapY: 6,
-    height: 100,
-    paddingTop: 4,
-    /** 卡片底：Graphics 自绘的填充与金边（橱窗底色深，描一圈细金边出层次；不依赖底图拉伸） */
-    fill: T.surface[2],
-    borderColor: T.gold[2],
-    borderWidth: 1,
-    paddingX: 6,
-    iconSize: new Size(40, 40),
-    /** 名称两段式：本体一行（前缀色大字，超长自动缩字）+ 前缀+后缀一行（同色小字）；gapY = 与上一行的间距 */
-    name: { fontSize: 12, lineHeight: 16, gapY: 2, plainColor: T.text[1] },
-    /**
-     * 品质行（10 号字，与价格同行）
-     *
-     * 装备写「前缀 + 后缀」并用前缀色；`kindColor` 是非装备（药品）写在那一行的「药品」二字，
-     * 用中性灰 —— 药品没有品质，不该借用某一档品质的颜色。
-     */
-    extra: { fontSize: 10, lineHeight: 12, gapY: 2, kindColor: T.text[4] },
-    /**
-     * 价格（与「前缀+后缀」同一行，右侧贴边、金色）
-     *
-     * 卡片上没有第二行空间（高 100 = 4 + 40 图标 + 2 + 16 名称 + 2 + 12 品质 + 2 + 20 按钮 + 4），
-     * 所以价格挤在品质行右侧：品质行让出 `reserve` 宽给价格，两段互不重叠（`client/tools/test-mall.cjs` 算过）。
-     * 取价一律走 `configs/mall.getMallPrice`（特殊价优先、未定价走统一价），**卡片不自己算钱**。
-     * `reserve` 50 = 4 位数字 + 空格 + 2 个全角「绑元」（10 号字 ≈ 22 + 5 + 20 = 47，留 3 余量），
-     * 光秃秃一个数字会被误读成数量，所以带单位。
-     */
-    price: { fontSize: 10, reserve: 50, color: T.gold[4] },
-
-    /** 购买按钮（居中）：尺寸、字号与间距 */
-    buyButton: { size: new Size(64, 20), fontSize: 12, gapY: 2 },
+    gapY: 10,
+    height: 114,
+    padding: 12,
+    /** 顶行左侧图标（稿 .fig：46×46 圆角小图，装备/物品图标按快照取图） */
+    iconSize: new Size(46, 46),
+    /** 名称（本体一行，前缀色，超长缩字）与类别行（前缀+后缀 / 药品，灰小字） */
+    name: { fontSize: 13, lineHeight: 18, plainColor: T.text[1] },
+    kind: { fontSize: 10, lineHeight: 13, kindColor: T.text[4] },
+    /** 限购 / 库存行（#846：今日 2/3 · 剩 5；无限制时不占位） */
+    stats: { fontSize: 10, lineHeight: 13, color: T.text[3] },
+    /** 购买行：价格（金，左对齐块）+ 购买按钮（金键，右贴边） */
+    price: { fontSize: 12, color: T.gold[4], blockWidth: 120 },
+    buyButton: { size: new Size(56, 24), fontSize: T.fontSize.f12 },
+    /** 置灰态（等级不足 / 售罄 / 买满）：整卡压暗到该不透明度 */
+    lockedOpacity: 160,
   },
   /**
-   * 分页：每页行数（每页件数 = columns × rowsPerPage）+ 页脚翻页控件
+   * 分页：每页行数（每页件数 = columns × rowsPerPage）+ 页脚翻页控件（稿 .pager：ghost 键 + 页码胶囊）
    *
    * 页脚是卡片区的子节点（坐标以卡片区中心为原点，卡片区挪位页脚跟着走）：
-   * 卡片区高 248、2 行卡片占 206，页脚落在下方空当（局部 y = -105：距卡片下缘 11、距区底 7）。
-   * 横向一个整行排满：首/末页贴两侧，上/下一页靠中间，页码居中，相邻间距一律 8
-   * （395 = 19.5 + 56 + 8 + 56 + 8 + 100 + 8 + 56 + 8 + 56 + 19.5）—— 按这个算式改按钮或页码宽度时，位置要一起重算。
+   * 五件一排居中 —— 首页 / 上一页 / 页码 / 下一页 / 末页，相邻间距 8。
    */
   pagination: {
     rowsPerPage: 2,
+    buttonSize: new Size(64, 24),
+    gap: 8,
     /** 页码（第 X / Y 页） */
-    pageIndicator: { name: "mall_page_indicator", position: new Vec2(0, -105), size: new Size(100, 20), fontSize: 12, color: T.gold[4] },
+    pageIndicator: { name: "mall_page_indicator", position: new Vec2(0, -138), size: new Size(100, 24), fontSize: T.fontSize.f12, color: T.text[3] },
     /** 四个翻页按钮（首 / 上 / 下 / 末） */
-    firstButton: { name: "mall_first_page_button", position: new Vec2(-150, -105), size: new Size(56, 24), fontSize: 12 },
-    prevButton: { name: "mall_prev_page_button", position: new Vec2(-86, -105), size: new Size(56, 24), fontSize: 12 },
-    nextButton: { name: "mall_next_page_button", position: new Vec2(86, -105), size: new Size(56, 24), fontSize: 12 },
-    lastButton: { name: "mall_last_page_button", position: new Vec2(150, -105), size: new Size(56, 24), fontSize: 12 },
+    firstButton: { name: "mall_first_page_button", position: new Vec2(-162, -138) },
+    prevButton: { name: "mall_prev_page_button", position: new Vec2(-90, -138) },
+    nextButton: { name: "mall_next_page_button", position: new Vec2(90, -138) },
+    lastButton: { name: "mall_last_page_button", position: new Vec2(162, -138) },
   },
+  /** 面板页脚（稿 .panel-foot）：顶部 1px 分隔线 + 两端各一行小字 */
+  foot: dialogFootLayout(new Size(850, 540)),
 };
 
 //#endregion
@@ -687,13 +647,17 @@ export const skillListDialogLayout = {
    * 行高按估算行数自适应（`TextLayout.wrappedHeight`），最多 `maxLines` 行（实测最长 73 字 → 4 行）。
    */
   row: {
-    /** 行宽 = 图标 + 间距 + 说明列 + 间距 + 升级按钮（340 = 40 + 10 + 223.5 + 10 + 56.5，与列表同宽） */
+    /** 行宽 = 图标 + 间距 + 说明列 + 间距 + 升级按钮（340 = 40 + 10 + 198 + 10 + 56 + 右内距 26） */
     width: 340,
     iconSize: 40,
     gap: 10,
+    /** 图标行内左内距（07 稿：图标左缘距行左缘 8） */
+    iconInsetLeft: 8,
+    /** 行右内距（07 稿：升级按钮右缘距行右缘 12） */
+    insetRight: 12,
     desc: {
-      /** 说明列宽（= 行宽 − 图标 − 间距 − 升级按钮 − 按钮左间距） */
-      width: 223.5,
+      /** 说明列宽（= 稿 .mid 的 198） */
+      width: 198,
       /** 名称行与说明之间的间距 */
       gap: 3,
       nameHeight: 20,
@@ -711,6 +675,8 @@ export const skillListDialogLayout = {
      * **不显示花费** —— `当前等级` 这条公式只在服务端，写到这里就是第二个真相。
      */
     upgrade: { width: 56.5, height: 24, gap: 10, label: "升级" },
+    /** 名称行右端的快捷键标注（07 稿 `.key`：右对齐、f10、暗字；没绑键位时不画） */
+    shortcut: { width: 90, fontSize: 10 },
   },
   /** 页脚（稿 `.panel-foot`）：左操作提示 / 右升级说明；两块各 160 宽不重叠 */
   foot: dialogFootLayout(new Size(380, 440), 160),
@@ -765,9 +731,25 @@ export const attrAllocateDialogLayout = {
 export const skillShortcutSettingDialogLayout = {
   name: "skill_shortcut_setting_dialog",
   title: "设置快捷键",
-  size: new Size(370, 200),
-  /** 快捷键选项行（横向布局容器） */
-  optionsRow: { name: "shortcut_key_options", spacing: 10, position: new Vec2(), size: new Size(350, 50) },
+  /** 弹窗尺寸 370×140（07-skill 稿的 .key-dlg，四角带 bracket 角标） */
+  size: new Size(370, 140),
+  /** 副标题（稿 .key-hint）：标题下方一行灰字，居中 */
+  hint: { y: 15, width: 328, height: 16, fontSize: T.fontSize.f11, color: T.text[3] },
+  /**
+   * 键位卡片行（稿 .keys）：5 张 56×52 卡片，间距 10（中心距 66），行中心 −23。
+   * 卡片上「数字」大、「技能名」小；选中键位 = 金框金字（稿 .keybtn.on）。
+   */
+  optionsRow: {
+    name: "shortcut_key_options",
+    spacing: 10,
+    y: -23,
+    width: 328,
+    height: 52,
+    keySize: new Size(56, 52),
+    number: { fontSize: T.fontSize.f16, offsetY: 8, color: T.text[1] },
+    label: { fontSize: T.fontSize.f10, offsetY: -14, color: T.text[3] },
+    selected: { border: T.gold[2], number: T.gold[5], label: T.gold[4] },
+  },
 };
 
 //#endregion
@@ -827,15 +809,18 @@ export const confirmDialogLayout = {
   name: "confirm_dialog",
   /** 遮罩颜色（黑色半透明，盖住整个屏幕并挡住下层点击；与死亡遮罩同色） */
   maskColor: T.surface.scrim,
-  /** 居中面板：尺寸（背景为通用弹窗背景的九宫拼装，见 createDialogPanel） */
+  /** 居中面板：尺寸（矢量底板 + 四角铆钉，见 createDialogPanel） */
   panel: { name: "confirm_panel", size: new Size(420, 210) },
-  /** 标题（面板上部，配色与通用弹窗标题一致；稿 f17 → 收敛到 f18） */
-  title: { name: "confirm_title", position: new Vec2(0, 62), size: new Size(360, 26), fontSize: T.fontSize.f18, color: T.ember[4] },
-  /** 正文：宽度固定、高度按内容自适应（可换行，锚点居中故向上下对称撑开） */
-  message: { name: "confirm_message", position: new Vec2(0, 8), width: 336, fontSize: T.fontSize.f13, lineHeight: 20, color: T.text[2] },
-  /** 两个按钮（中号按钮宽 123：中心 ±64 → 间隙 5，整体在面板内居中） */
-  confirmButton: { name: "confirm_ok_button", position: new Vec2(-64, -56) },
-  cancelButton: { name: "confirm_cancel_button", position: new Vec2(64, -56) },
+  /** 标题（稿 20-overlay .panel-title：f20 亮字居中 + 44×1 金下划线，同登录/选角面板标题口径） */
+  title: { name: "confirm_title", position: new Vec2(0, 72), size: new Size(360, 26), fontSize: T.fontSize.f20, color: T.text[1] },
+  titleUnderline: { position: new Vec2(0, 47), size: new Size(44, 1) },
+  /** 右上角关闭按钮（稿 .panel-close：30×30，右缘 12 / 顶缘 10；点它 = 取消） */
+  closeButton: { name: "confirm_close_button", position: new Vec2(183, 80), size: new Size(30, 30), fontSize: T.fontSize.f18 },
+  /** 正文：宽度固定、高度按内容自适应（稿 .body p：f14 居中、行高 26 ≈ 1.9） */
+  message: { name: "confirm_message", position: new Vec2(0, 6), width: 336, fontSize: T.fontSize.f14, lineHeight: 26, color: T.text[2] },
+  /** 双按钮（稿 .acts：各宽 110 高 40、间隙 14、整体距底缘约 21；确定 = 危险朱红，取消 = ghost） */
+  confirmButton: { name: "confirm_ok_button", position: new Vec2(-62, -64), size: new Size(110, 40), fontSize: T.fontSize.f14 },
+  cancelButton: { name: "confirm_cancel_button", position: new Vec2(62, -64), size: new Size(110, 40), fontSize: T.fontSize.f14 },
 };
 
 //#endregion
@@ -846,7 +831,6 @@ export const confirmDialogLayout = {
 export const goodDetailLayout = {
   name: "good_detail",
   size: new Size(240, 200),
-  background: uiImages.goodDetailBackground,
   /** 内容区：纵向网格排版的内边距与行间距（头部 / 基础信息 / 回收价 / 标签 / 介绍依次排） */
   padding: 10,
   rowSpacing: 8,
@@ -901,8 +885,6 @@ export const goodDetailLayout = {
     minWidth: 24,
     paddingX: 8,
   },
-  /** 底部装饰 logo（复用游戏 logo 图，尺寸比登录页小一圈） */
-  footerLogo: { image: uiImages.gameLogo, size: new Size(220, 80) },
   /**
    * 摆放（鼠标悬停在物品上时弹窗的位置，规则见 ui/utils/layout/ScreenLayout.getPopupPosition）
    * 弹窗锚点恒为 0.5/0.5（内容排版交给自身 Layout），位置按「物品中心 + 这些间距」算：
@@ -925,7 +907,6 @@ export const hoverTipLayout = {
   name: "hover_tip",
   /** 初始尺寸（高度只是占位，Layout 会按内容自适应） */
   size: new Size(240, 40),
-  background: uiImages.goodDetailBackground,
   /** 内容区内边距与行间距 */
   padding: 10,
   rowSpacing: 6,
@@ -1116,29 +1097,35 @@ export const guildDialogLayout = {
   name: "guild_dialog",
   title: "社 交",
   // ---- 未加入帮会 ----
+  /**
+   * 页面坐标（#389 起本面板内嵌在社交弹窗 600×560 的「帮会」页里，自己不开弹窗）
+   *
+   * 社交弹窗顶部多出一条页签栏（tabs.y 219 / 高 32 → 占 203~235），原来的顶部行
+   * 必须整体下移 60 才不压在页签上（y 208 → 148）。底部到 −236 为止，留出面板下沿。
+   */
   guest: {
-    hint: { position: new Vec2(0, 208), size: new Size(560, 22), fontSize: 15, color: T.text[1] },
-    nameInput: { position: new Vec2(-60, 170), size: new Vec2(360, 34), placeholder: "输入帮会名（2~12 字）" },
-    createButton: { name: "guild_create_button", text: "创建帮会", position: new Vec2(195, 170) },
-    listTitle: { position: new Vec2(0, 138), size: new Size(560, 20), fontSize: 13, color: T.gold[4] },
-    list: { name: "guild_list", position: new Vec2(0, -56), size: new Size(556, 340) },
+    hint: { position: new Vec2(0, 148), size: new Size(560, 22), fontSize: 15, color: T.text[1] },
+    nameInput: { position: new Vec2(-60, 110), size: new Vec2(360, 34), placeholder: "输入帮会名（2~12 字）" },
+    createButton: { name: "guild_create_button", text: "创建帮会", position: new Vec2(195, 110) },
+    listTitle: { position: new Vec2(0, 78), size: new Size(560, 20), fontSize: 13, color: T.gold[4] },
+    list: { name: "guild_list", position: new Vec2(0, -86), size: new Size(556, 300) },
   },
   // ---- 已加入帮会 ----
   member: {
-    header: { position: new Vec2(-110, 208), size: new Size(340, 24), fontSize: 16, color: T.gold[4] },
-    summary: { position: new Vec2(140, 208), size: new Size(280, 22), fontSize: 12, color: T.text[3] },
-    notice: { position: new Vec2(0, 176), size: new Size(548, 22), fontSize: 12, color: T.text[2] },
-    noticeInput: { position: new Vec2(-60, 146), size: new Vec2(360, 30), placeholder: "输入新公告（0~200 字）" },
-    saveButton: { name: "guild_notice_save_button", text: "保存公告", position: new Vec2(195, 146), small: true },
-    memberTitle: { position: new Vec2(0, 116), size: new Size(560, 20), fontSize: 13, color: T.gold[4] },
-    memberList: { name: "guild_member_list", position: new Vec2(0, 14), size: new Size(556, 168) },
-    applicantTitle: { position: new Vec2(0, -88), size: new Size(560, 20), fontSize: 13, color: T.gold[4] },
-    applicantList: { name: "guild_applicant_list", position: new Vec2(0, -158), size: new Size(556, 116) },
+    header: { position: new Vec2(-110, 148), size: new Size(340, 24), fontSize: 16, color: T.gold[4] },
+    summary: { position: new Vec2(140, 148), size: new Size(280, 22), fontSize: 12, color: T.text[3] },
+    notice: { position: new Vec2(0, 116), size: new Size(548, 22), fontSize: 12, color: T.text[2] },
+    noticeInput: { position: new Vec2(-60, 86), size: new Vec2(360, 30), placeholder: "输入新公告（0~200 字）" },
+    saveButton: { name: "guild_notice_save_button", text: "保存公告", position: new Vec2(195, 86), small: true },
+    memberTitle: { position: new Vec2(0, 56), size: new Size(560, 20), fontSize: 13, color: T.gold[4] },
+    memberList: { name: "guild_member_list", position: new Vec2(0, -34), size: new Size(556, 160) },
+    applicantTitle: { position: new Vec2(0, -126), size: new Size(560, 20), fontSize: 13, color: T.gold[4] },
+    applicantList: { name: "guild_applicant_list", position: new Vec2(0, -184), size: new Size(556, 104) },
     /** 退出 / 解散二选一（帮主只能解散、成员只能退出），一律摆 singleButtonPosition */
     leaveButton: { name: "guild_leave_button", text: "退出帮会", small: true },
     disbandButton: { name: "guild_disband_button", text: "解散帮会", small: true },
     /** 只剩一个按钮时（帮主只能解散、成员只能退出）居中摆放，避免偏在一边 */
-    singleButtonPosition: new Vec2(0, -232),
+    singleButtonPosition: new Vec2(0, -254),
   },
   /** 列表行（三种行共用同一套几何与配色） */
   row: {
@@ -1426,68 +1413,131 @@ export const reportDialogLayout = {
  */
 export const chatDialogLayout = {
   name: "chat_box",
-  size: new Size(470, 302),
-  /** 常驻停靠：屏幕左下角（屏幕坐标，原点在屏幕中心；固定值直接手调 —— 旧实现按「贴左下 + 边距 24/205」算出） */
-  position: new Vec2(-705, -371),
-  /** 窗体底板（半透明深色 + 金色细边；颜色必须在配置里，组件不写字面量） */
+  /** 稿 `.chat{width:424px;height:302px}` */
+  size: new Size(424, 302),
+  /** 常驻停靠：屏幕左下角（稿 left 20 / bottom 18 → 中心 (-960+20+212, -540+18+151)） */
+  position: new Vec2(-728, -371),
+  /**
+   * 窗体底板（稿 `.chat .panel` 是 `panel panel--rivet`：暖炭褐半透明 + 古铜金发丝线 + r-3 + 四角铆钉）
+   *
+   * **必须与其它 HUD 面板同一套**：早前这里是 `scrim`（纯黑 62%）+ `surface[0]` 描边，
+   * 在小地图与底栏旁边看就是「一个没有边框的黑洞」—— 暖褐面板之间夹一块冷黑，
+   * 三处 UI 各说各话（2026-11-17 用户指出）。面板类统一 `surface.glass` + `line[3]`。
+   */
   box: {
-    fill: T.surface.scrim,
-    border: T.surface[0],
-    radius: 2,
-    borderWidth: 1.5,
-    padding: 20,
+    /** 稿 `.chat .panel` = `panel--rivet`：linear-gradient(160deg,rgba(28,20,12,.94),rgba(16,11,7,.9)) */
+    fill: new Color(19, 13, 8, 240),
+    /** 渐变亮端（顶）与过渡带占比：Graphics 没有渐变，用「底 + 顶带」近似 */
+    fillTop: new Color(28, 20, 12, 240),
+    fillTopRatio: 0.5,
+    border: T.line[3],
+    radius: T.radius.r3,
+    borderWidth: T.border.width,
+    padding: 12,
   },
-  /** 页签（四个：世界 / 同图 / 帮会 / 私聊；贴窗顶一排。#876 起四页签压窄排开） */
+  /**
+   * 页签（四个：世界 / 同图 / 帮会 / 私聊；贴窗顶左侧一格排开）
+   *
+   * 稿 `.chat-tabs{display:flex;gap:5px}` + `button{height:22px;padding:0 9px;font-size:11px}`：
+   * 四个页签只占头部左半（约 175px），不是四条通栏；选中 = 金渐变底 + `text-on-gold` 字，
+   * 未选中 = 半透明黑底 + `line-2` 描边 + `text-3` 字。
+   */
   tabs: {
-    y: 126,
-    size: new Size(100, 26),
-    columns: [-160, -54, 54, 160],
-    radius: 6,
-    activeFill: T.gold[4],
-    activeText: T.surface[3],
-    idleFill: T.surface[2],
-    idleText: T.text[1],
-    idleBorder: T.surface[3],
-    fontSize: 12,
+    y: 131,
+    size: new Size(50, 22),
+    columns: [-175, -120, -65, -10],
+    radius: T.radius.r2,
+    /** 稿是 `linear-gradient(180deg,gold-4,gold-3)`：平涂取中间档 gold-3，文字用深色 */
+    activeFill: T.gold[3],
+    activeText: T.text.onGold,
+    idleFill: T.surface.sunken,
+    idleText: T.text[3],
+    idleBorder: T.line[2],
+    fontSize: T.fontSize.f11,
   },
-  /** 消息列表（窗体主体） */
-  list: { name: "chat_message_list", position: new Vec2(0, 2), size: new Size(422, 216) },
-  /** 消息行：发送者名（按关系上色）+ 正文 */
+  /**
+   * 头部右侧工具（稿 `.chat-tools`：清屏 / 收起两颗 22×22 纯图标小方钮）
+   * `right` 是最右一颗的中心 x（面板内右缘 200 − 11）
+   */
+  tools: {
+    y: 131,
+    size: 22,
+    gap: 4,
+    right: 189,
+    iconSize: 12,
+    color: T.text[4],
+    /** 两颗按钮的图标数据见 configs/layout/icons.ts */
+    icons: ["chatClear", "headChevron"] as const,
+  },
+  /**
+   * 头/底的 1px 暗分隔线（稿 `.chat-head{border-bottom:1px solid rgba(0,0,0,.55)}`、
+   * `.chat-in{border-top:1px solid rgba(0,0,0,.55)}`）
+   * 位置是分隔线在面板内的中心 y：头部下沿 = 151 - (9+22+8) = 112，输入行上沿 = -151 + 44 = -107
+   */
+  dividers: { color: new Color(0, 0, 0, 140), headY: 112, inputY: -107 },
+  /** 消息列表（窗体主体，位于两条分隔线之间） */
+  list: { name: "chat_message_list", position: new Vec2(0, 2), size: new Size(400, 210) },
+  /**
+   * 消息行：时间戳 + 发送者名（按关系上色）+ 正文
+   *
+   * 稿 `.msg` 是**纯文字行**（没有行底板）：`[19:58] [世界] 铁头: 收 40 级武器`。
+   * 早前每行一块 `surface[1]` 深底 + 看不见的 `surface[3]` 描边，聊天气泡区看着像一排黑条；
+   * 这里底板与描边都置透明（组件据此跳过绘制），文字色单独给 `text`。
+   */
   row: {
-    size: new Size(388, 26),
-    fill: T.surface[1],
-    border: T.surface[3],
+    size: new Size(376, 22),
+    fill: T.overlay.transparent,
+    border: T.overlay.transparent,
     radius: 6,
-    nameFontSize: 11,
-    textFontSize: 11,
+    nameFontSize: T.fontSize.f11,
+    textFontSize: T.fontSize.f11,
+    /** 时间戳（稿 `.msg .t`：9.5px、text-4、等宽） */
+    timeX: -172,
+    timeSize: new Size(34, 16),
+    timeFontSize: T.fontSize.f10,
+    /** 名字列（时间戳右侧；名字 bbox 右缘与正文左缘留 2px 缝） */
+    nameX: -104,
+    nameSize: new Size(96, 16),
+    /** 正文列（吃剩下的宽度） */
+    textX: 54,
+    textSize: new Size(208, 18),
     metaColor: T.text[3],
-    /**
-     * 名字列 / 正文列（文本列吃剩下的宽度）。
-     * 两列都左对齐，bbox 左缘 = 中心 x − 宽/2 必须落在行内（留白 16，半宽 194 → 限 −178），
-     * 且名字 bbox 右缘与正文 bbox 左缘衔接不重叠（守卫：test-dialog-row-bounds.cjs）：
-     *   名字 −178..−58（nameX −118 / 宽 120），正文 −58..178（textX 60 / 宽 236）
-     */
-    nameX: -118,
-    nameSize: new Size(120, 18),
-    textX: 60,
-    textSize: new Size(236, 20),
+    /** 正文色（稿 `--text-2`） */
+    text: T.text[2],
   },
-  /** 输入行（贴窗底；私聊有对象时旁边多一枚「返回」） */
+  /**
+   * 输入行（贴窗底；私聊有对象时旁边多一枚「返回」）
+   *
+   * 稿 `.chat-in{padding:8px 12px 10px}`：左侧频道 chip（26 高）｜ 输入框（26 高，吃满剩余）｜
+   * 金色发送键（26 高、最小 56 宽）。
+   */
   inputRow: {
+    /** 当前频道 chip（稿 `.chat-in .chip`：26 高、`line-2` 边、金-4 字 + ▾） */
+    chip: { position: new Vec2(-172, -122), size: new Vec2(56, 26), fontSize: T.fontSize.f11, fill: T.surface.input, border: T.line[2], radius: T.radius.r1 },
     /**
      * 输入条：26 高的窄框必须有底板 + 小字号 —— 默认 24 号字的字形就 24 高，
      * 在 26 高的框里会顶出上下边、贴到窗体边框上（#477 顺带发现）
      */
     input: {
-      position: new Vec2(-85, -122),
+      position: new Vec2(-26, -122),
       size: new Vec2(220, 26),
-      fontSize: 13,
-      fill: T.surface[0],
-      border: T.surface[3],
-      radius: 6,
+      fontSize: T.fontSize.f11,
+      /** 稿 `.chat-in .input`：rgba(0,0,0,.42) 沉底 + `line-2` 发丝线 */
+      fill: T.surface.input,
+      border: T.line[2],
+      radius: T.radius.r2,
     },
-    send: { position: new Vec2(65, -122) },
-    back: { position: new Vec2(130, -122) },
+    /** 发送键（稿 `.btn--gold`：金渐变底 + 深字，min-width 56） */
+    send: {
+      position: new Vec2(112, -122),
+      size: new Vec2(56, 26),
+      fontSize: T.fontSize.f11,
+      fill: T.gold[3],
+      fillTop: T.gold[4],
+      border: T.gold[5],
+      text: T.text.onGold,
+    },
+    back: { position: new Vec2(176, -122), size: new Vec2(44, 26) },
   },
   /** 私聊选人页：一行说明 + 候选列表（聊天记录里出现过的 + 附近的人） */
   privatePick: {
@@ -1525,7 +1575,7 @@ export const chatDialogLayout = {
   titleFontSize: 12,
   /** 文案 */
   texts: {
-    tabs: ["世 界", "同 图", "帮 会", "私 聊"],
+    tabs: ["世界", "同图", "帮会", "私聊"],
     worldEmpty: "（还没有人说第一句——输入框在下面）",
     mapEmpty: "（同图频道还没有消息；跟眼前的人打个招呼）",
     guildEmpty: "（帮会频道还没有消息；没有帮会时发不出去）",

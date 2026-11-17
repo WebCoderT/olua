@@ -86,11 +86,14 @@ export default class SkillListDialog {
     }
     content.removeAllChildren();
     oeccupationSkills.get(role.occupation).forEach((skillId) => {
+      // 该技能绑在哪个键位上（07 稿 .nm 的 .key）：没绑就不显示
+      const bound = role.shortcutKeys.find((config) => config.skillId === skillId);
       const item = GameUiHelper.createSkillItem(
         role,
         skillId,
         () => this.shortcutKeySettingDialog.open(role, skillId),
         () => void this.upgrade(skillId),
+        bound ? getText("label_skill_shortcut", { key: bound.label }) : "",
       );
       // 鼠标悬停技能图标弹出技能详情（图标是技能行的第一个子节点，节点名 = 技能 id）
       const icon = item.getChildByName(skillId);

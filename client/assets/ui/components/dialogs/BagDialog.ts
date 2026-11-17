@@ -5,7 +5,7 @@ import UiHelper from "../../helpers/UiHelper";
 import LayerManager from "../../core/LayerManager";
 import BagGridView, { BagCellAction } from "../panel/BagGridView";
 import ConfirmDialog from "./ConfirmDialog";
-import { bagDialogLayout } from "../../../configs/hudLayout";
+import { bagDialogLayout, buttonTone, uiSize } from "../../../configs/hudLayout";
 import { getText } from "../../../configs/texts";
 import { BagCellPos } from "../../../types/good";
 import GuideStore from "../../core/GuideStore";
@@ -73,10 +73,14 @@ export default class BagDialog {
     // 弹窗框与背包格子由通用零件拼装
     const dialog = GameUiHelper.createDialog(bagDialogLayout.name, bagDialogLayout.title, new Vec2(), bagDialogLayout.size, bagDialogLayout.eyebrow);
     // 底部「一键整理」：合并同类可叠加物并重排（搬运与提示都在数据层，这里只上报点击）
-    const tidyButton = GameUiHelper.createMiddleButton(
+    // 底部三键按 05 稿的色调分档：整理 = ghost（次要）、回收 = 金键（次要主动作）、丢弃 = 危险（暗朱）
+    const tidyButton = GameUiHelper.createToneButton(
       bagDialogLayout.tidyButton.name,
       getText("label_bag_tidy"),
       bagDialogLayout.tidyButton.position,
+      uiSize.middleButtonSize,
+      uiSize.middleButtonFontSize,
+      buttonTone.ghost,
     );
     tidyButton.on(
       Node.EventType.TOUCH_END,
@@ -93,10 +97,13 @@ export default class BagDialog {
     );
     dialog.addChild(tidyButton);
     // 底部「一键回收」：回收不可撤销 → 两步确认（见 onRecycleClick）
-    const recycleButton = GameUiHelper.createMiddleButton(
+    const recycleButton = GameUiHelper.createToneButton(
       bagDialogLayout.recycleButton.name,
       getText("label_bag_recycle"),
       bagDialogLayout.recycleButton.position,
+      uiSize.middleButtonSize,
+      uiSize.middleButtonFontSize,
+      buttonTone.gold,
     );
     recycleButton.on(
       Node.EventType.TOUCH_END,
@@ -109,10 +116,13 @@ export default class BagDialog {
     dialog.addChild(recycleButton);
     this.recycleButton = recycleButton;
     // 底部「丢弃」：开关式（开启后点格子即丢弃，不可恢复 → 两步确认见 onDiscardCell）
-    const discardButton = GameUiHelper.createMiddleButton(
+    const discardButton = GameUiHelper.createToneButton(
       bagDialogLayout.discardButton.name,
       getText("label_bag_discard"),
       bagDialogLayout.discardButton.position,
+      uiSize.middleButtonSize,
+      uiSize.middleButtonFontSize,
+      buttonTone.danger,
     );
     discardButton.on(Node.EventType.TOUCH_END, () => this.toggleDiscardMode(), this);
     dialog.addChild(discardButton);
