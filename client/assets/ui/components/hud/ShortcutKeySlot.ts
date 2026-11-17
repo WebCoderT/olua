@@ -19,13 +19,20 @@ export default class ShortcutKeySlot extends Node {
   private onClick?: Function;
   /** 绑定的技能 id（冷却查询用，未绑定无冷却显示） */
   private skillId?: SkillId;
+  /** 技能图标（矢量底板之上的独立 Sprite 子节点；冷却置灰改它，不动底板） */
+  private iconSprite: Sprite;
   /** 冷却倒计时文字（由 GameUiHelper 生成） */
   private cooldownLabel: Label;
+  /** 空槽占位字（未绑技能时显示，绑上后隐藏） */
+  private emptyLabel: Label;
 
   constructor(label: string, listenKey: number, spriteSrc?: string, onClick?: Function, skillId?: SkillId) {
     super(`shortcut_key_${label}`);
     this.listenKey = listenKey;
-    this.cooldownLabel = GameUiHelper.applyShortcutKeyStyle(this, label).cooldownLabel;
+    const style = GameUiHelper.applyShortcutKeyStyle(this, label);
+    this.cooldownLabel = style.cooldownLabel;
+    this.iconSprite = style.iconSprite;
+    this.emptyLabel = style.emptyLabel;
     this.updateIcon(spriteSrc, onClick, skillId);
     // 场景销毁时移除全局键盘监听，避免重进场景后残留
     this.once(Node.EventType.NODE_DESTROYED, () => this.offKeyDown());
@@ -41,8 +48,10 @@ export default class ShortcutKeySlot extends Node {
     this.off(Node.EventType.MOUSE_ENTER, this.onHoverEnter, this);
     this.off(Node.EventType.MOUSE_LEAVE, HoverTipManager.hide, HoverTipManager);
     this.offKeyDown();
+    // 空槽显示占位字（稿 .sslot.is-empty），绑上技能后隐藏并换成技能图标
+    this.emptyLabel.node.active = !this.spriteSrc;
     if (!this.spriteSrc) return;
-    GameUiHelper.updateNodeIcon(this, this.spriteSrc);
+    GameUiHelper.updateNodeIcon(this.iconSprite.node, this.spriteSrc);
     if (this.onClick) {
       this.on(Node.EventType.TOUCH_END, this.onClick, this);
       input.on(Input.EventType.KEY_DOWN, this.onKeyDown, this);
@@ -64,12 +73,12 @@ export default class ShortcutKeySlot extends Node {
     if (!this.skillId) return;
     const remaining = SkillManager.getCooldownRemaining(this.skillId);
     if (remaining > 0) {
-      this.getComponent(Sprite).grayscale = true;
+      this.iconSprite.grayscale = true;
       this.cooldownLabel.node.active = true;
       // 最多保留 2 位小数
       this.cooldownLabel.string = remaining.toFixed(2);
     } else {
-      this.getComponent(Sprite).grayscale = false;
+      this.iconSprite.grayscale = false;
       this.cooldownLabel.node.active = false;
     }
   }

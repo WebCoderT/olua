@@ -1,5 +1,6 @@
-import { Color, Label, Node, Size, UITransform, Vec2 } from "cc";
+import { Graphics, Label, Node, Size, UITransform, Vec2 } from "cc";
 import GameUiHelper from "../../helpers/GameUiHelper";
+import UiHelper from "../../helpers/UiHelper";
 import RoleUIManager from "../../core/RoleUIManager";
 import StatusIconBar from "./StatusIconBar";
 import { Role } from "../../../entities/Role";
@@ -41,21 +42,27 @@ export default class RoleInfoBar extends Node {
     this.applyFixedPosition();
     // 底板（#1059：矢量半透明面板，不再用底图）
     this.addChild(GameUiHelper.createGlassPlate("role_info_background", layout.backgroundSize, T.radius.r3, T.line[3]));
-    // 名称与等级
-    this.nameLabel = GameUiHelper.createText("role_name", role.name, layout.name.fontSize, layout.name.position, layout.name.size, Color.WHITE, Label.HorizontalAlign.LEFT).getComponent(Label);
+    // 名称与等级（稿 `.info .nm`：名称 17px 骨白 + 「N 级」11px 金-4，同一行基线）
+    this.nameLabel = GameUiHelper.createText("role_name", role.name, layout.name.fontSize, layout.name.position, layout.name.size, T.text[1], Label.HorizontalAlign.LEFT).getComponent(Label);
     this.addChild(this.nameLabel.node);
-    this.levelLabel = GameUiHelper.createText("role_level", role.level.toString(), layout.level.fontSize, layout.level.position, layout.level.size).getComponent(Label);
+    this.levelLabel = GameUiHelper.createText("role_level", `${role.level} 级`, layout.level.fontSize, layout.level.position, layout.level.size, layout.level.color).getComponent(Label);
     this.addChild(this.levelLabel.node);
+    this.placeLevel(role.name);
     // 头像
     this.addChild(GameUiHelper.createAvatarPortrait(role, layout.portrait.position, layout.portrait.size));
     // 货币区：唯一货币（绑定元宝）放在横向布局容器里，占容器全宽、内容左对齐
     const currencyBar = GameUiHelper.createRow("role_currency_bar", layout.currencyBar.spacing, layout.currencyBar.position, layout.currencyBar.size);
     const itemSize = new Size(layout.currencyBar.size.width / CURRENCY_COUNT, layout.currencyBar.size.height);
-    const bindGold = GameUiHelper.createCurrencyItem(uiImages.bindGold, role.bindGold, new Vec2(), itemSize);
+    const bindGold = GameUiHelper.createCurrencyItem(uiImages.bindGold, role.bindGold, new Vec2(), itemSize, {
+      iconSize: layout.currencyBar.iconSize,
+      label: layout.currencyBar.label,
+      value: layout.currencyBar.value,
+    });
     this.bindGoldCountLabel = bindGold.valueLabel;
     currencyBar.addChild(bindGold.node);
     this.addChild(currencyBar);
-    // 战斗力
+    // 战斗力（右侧一小块：左边一条 1px line-2 竖线把货币区分开，标签/数值都右对齐）
+    this.addChild(this.createCombatDivider());
     const combat = GameUiHelper.createCombatPower(role, layout.combat.position);
     this.combatLabel = combat.combatLabel;
     this.combatNode = combat.node;
@@ -80,9 +87,38 @@ export default class RoleInfoBar extends Node {
   /** 数据变更后刷新显示 */
   updateRole(role: Role) {
     this.nameLabel.string = role.name;
-    this.levelLabel.string = role.level.toString();
+    this.levelLabel.string = `${role.level} 级`;
+    this.placeLevel(role.name);
     this.bindGoldCountLabel.string = role.bindGold.toString();
     this.updateCombat(role.combat);
+  }
+
+  /**
+   * 「N 级」紧跟在名称右缘（稿 `.info .nm{display:flex;align-items:baseline;gap:8px}`）
+   *
+   * 客户端两个 Label 是固定 bbox，只能按名字的**估算宽度**把等级摆到名字后面：
+   * 汉字按整字宽、ASCII 按 0.56 字宽（角色名基本是中文，误差只在英文名上）；
+   * 再夹一道上限，别让超长名字把等级顶进战斗力分隔线。
+   */
+  private placeLevel(name: string) {
+    const layout = roleInfoBarLayout;
+    const leftEdge = layout.name.position.x - layout.name.size.width / 2;
+    let width = 0;
+    for (const ch of name) width += ch.charCodeAt(0) > 0x2e80 ? layout.name.fontSize : layout.name.fontSize * 0.56;
+    const maxX = layout.combat.divider.x - layout.level.size.width / 2 - 4;
+    const x = Math.min(leftEdge + width + 8 + layout.level.size.width / 2, maxX);
+    this.levelLabel.node.setPosition(x, layout.level.position.y, 0);
+  }
+
+  /** 战斗力块左侧的竖分隔线（稿 `.info .pw{border-left:1px solid line-2}`，1px 填充条画） */
+  private createCombatDivider() {
+    const cfg = roleInfoBarLayout.combat.divider;
+    const node = UiHelper.createNode("combat_divider", new Vec2(cfg.x, 0), new Size(1, cfg.height));
+    const graphics = node.addComponent(Graphics);
+    graphics.fillColor = cfg.color;
+    graphics.rect(-0.5, -cfg.height / 2, 1, cfg.height);
+    graphics.fill();
+    return node;
   }
 
   /**

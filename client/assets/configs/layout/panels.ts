@@ -1,5 +1,4 @@
 import { Size, Vec2 } from "cc";
-import { uiImages } from "./images";
 import { T } from "./tokens";
 
 /**
@@ -62,9 +61,8 @@ export const bagGridLayout = {
   /** 行间距与单行尺寸（行宽 ÷ 格子宽决定每行格子数） */
   rowSpacing: 3,
   rowSize: new Size(580, 50),
-  /** 单个格子尺寸与底图 */
+  /** 单个格子尺寸（底板由 GameUiHelper 矢量现画，不再用贴图） */
   cellSize: new Size(50, 50),
-  cellImage: uiImages.bagSlotGrid,
 
   /**
    * 叠加数量角标（可叠加物品格子右下角的数字，内容见 configs/items.getStackBadge）

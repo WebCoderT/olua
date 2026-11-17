@@ -1,7 +1,7 @@
-import { Graphics, isValid, Label, Node, Size, Sprite, SpriteFrame, UITransform, Vec2, Vec3 } from "cc";
+import { Graphics, isValid, Label, Node, Size, Sprite, SpriteFrame, UIOpacity, UITransform, Vec2, Vec3 } from "cc";
 import { mapLabelOf, maps } from "../../../configs/game-config";
 import { getSmallMapScale, smallMapConfig } from "../../../configs/smallMap";
-import { uiImages, mapPreviewImage, uiMinimap, smallMapLayout } from "../../../configs/hudLayout";
+import { T, mapPreviewImage, smallMapLayout } from "../../../configs/hudLayout";
 import { buildAnnouncementViews, countUnread } from "../../../configs/announcement";
 import { getText } from "../../../configs/texts";
 import AutoBattle from "../../core/AutoBattle";
@@ -9,6 +9,9 @@ import AnnouncementReadStore from "../../core/AnnouncementReadStore";
 import MonsterManager from "../../core/MonsterManager";
 import StorageManager from "../../core/StorageManager";
 import GameUiHelper, { SmallMapDot } from "../../helpers/GameUiHelper";
+import UiHelper from "../../helpers/UiHelper";
+import { drawVectorIcon, type VectorIconShape } from "../../helpers/VectorIcon";
+import { icons } from "../../../configs/layout/icons";
 import { getMapWorldRect } from "../../utils/map/MapPointMath";
 import { bindPointerAction } from "../../utils/input/Pointer";
 import { loadResourceAsync } from "../../utils/resource/ResourceLoader";
@@ -24,21 +27,35 @@ import type RoleDisplay from "../role/RoleDisplay";
 
 /**
  * 小地图组件（右上角常驻 HUD，自身即容器节点）
- * 结构（所有子节点位置均以「地图内容区中心」为原点）：
- * - 地图名称条：紧挨地图内容区上方（贴住上边缘）
- * - 功能入口按钮：单列竖排的布局容器（Layout 纵向），位于地图内容区左侧
- * - 地图区域：真实小地图——当前地图的 preview.jpg，裁剪在内容区大小（layout.contentSize）的视口内，
- *   按「内容区 ↔ 世界视野」等比缩放后随角色平移（缩放见 configs/smallMap.getSmallMapScale）
- * - 地图正下方：服务器线路与排行榜（横向布局容器，排行榜在左；#400 起「排行榜」可点开，榜单是**本区**的；
- *   #1016 起「线路」在分线图上也是换线入口——线号动态盖写，点开选线弹窗）
- * - 最下方：世界坐标条
- * 位置、尺寸与图片来源全部来自 configs/hudLayout.smallMap（入口图标按名字走 uiMinimap 取图）
- * 地图区域上实时绘制坐标点：角色黑点固定在内容区中心（底图随之平移，故黑点下方永远是角色真实所在位置），
+ * 结构（逐值对照 design/olua-ui/screens/04-hud.html 的 .map 段；子件坐标以面板中心为原点）：
+ * - 面板底板：304×250 的铆钉面板（复用弹窗同款 createDialogPanel：r3 + line-3 边 + 四角铆钉）
+ * - 标题条（.map-head）：图名（gold-5）+「· N 线」副文字（text-4，分线图才显示）+ 下拉箭头
+ * - 功能入口 rail（.map-rail）：面板左外侧的 2 列网格，7 颗 34×34 描边图标
+ *   （世界/线路/排行榜/成就/消息+红点/设置/声音）
+ * - 地图区域（.map-view）：280×170 视口 —— 径向底色 + 22px 网格 + 真实底图 preview.jpg（opacity .5）
+ *   按「内容区 ↔ 世界视野」等比缩放后随角色平移（缩放见 configs/smallMap.getSmallMapScale）+ 内暗角
+ * - 底部（.map-foot）：只剩右下角世界坐标 `X 128 Y 96`（排行榜/线路在 rail 里，不在这）
+ * 位置、尺寸与配色全部来自 configs/hudLayout.smallMap
+ * 地图区域上实时绘制坐标点：角色白点（带外环）固定在内容区中心（底图随之平移，故点位下方永远是角色真实所在位置），
  * 怪物红点 = 怪物世界坐标与角色的差值 × 缩放，因此红点落在底图上的位置即怪物真实位置，
  * 视野（内容区覆盖的世界范围）之外的怪物不显示；底图与点位共用同一个缩放比例，换图/调视野都不会错位
  * 自动寻路期间（点击寻路/追怪）还会画上路线指示线（起点为中心的角色黑点，与大地图同一处路线、同一缩放口径）
  * 地图名称与世界坐标文本同样按 smallMapConfig.refreshInterval 节流刷新
  */
+/** rail 入口 key → 描边图标（数据逐字取自 design/olua-ui/screens/04-hud.html 的 .map-rail） */
+function railIconOf(key: string): VectorIconShape {
+  const map: Record<string, VectorIconShape> = {
+    world: icons.mapWorld,
+    channel: icons.mapChannel,
+    ranking: icons.mapRanking,
+    achievement: icons.mapAchievement,
+    mail: icons.mapMail,
+    config: icons.mapSettings,
+    sound: icons.mapSound,
+  };
+  return map[key] ?? { paths: [] };
+}
+
 export default class SmallMap extends Node {
   /** 地图名称文本 */
   private mapNameLabel: Label;
@@ -61,18 +78,13 @@ export default class SmallMap extends Node {
   /** 公告板弹窗（左侧「公告」入口打开；它的未读数回调驱动入口红点） */
   private announcementDialog: AnnouncementBoardDialog;
   /**
-   * 排行榜弹窗（#400：地图正下方那颗「排行榜」标签打开）
+   * 排行榜弹窗（#400）
    *
-   * 入口放这里而不是底部功能栏：底部那一行已经排满（10 个图标贴着血球与快捷栏），
-   * 而小地图下方这颗「排行榜」标签是**美术稿里本来就有的**（`ui/minimap/ranking-list`），
-   * 之前只是装饰图。把它变成可点的，语义与位置都不用再争。
+   * 入口是稿 .map-rail 里的「排行榜」描边图标（见 createEntryButtons），原横幅与图标素材已删。
    */
   private leaderboardDialog = new LeaderboardDialog();
   /**
-   * 成就面板（#401：左侧竖排入口的第二颗图标「成就」）
-   *
-   * 这颗图标美术稿里本来就有（`ui/minimap/achievement`），之前是纯占位 ——
-   * 用现成的入口图，既不新增素材，也不用在挤满的底部功能栏里再塞一格。
+   * 成就面板（#401：rail 里那颗「成就」描边图标，见 createEntryButtons）
    */
   private achievementDialog = new AchievementDialog();
   /**
@@ -86,16 +98,16 @@ export default class SmallMap extends Node {
     onOpenAnnouncement: () => this.openAnnouncementDialog(),
   });
   /**
-   * 选线弹窗（#1016：小地图下方那颗「N 线」标签打开）
+   * 选线弹窗（#1016：rail 里那颗「线路」图标打开）
    *
    * 只在 `maxChannels > 1` 的图上可点（单线图没有可换的东西，标签保持装饰图原样）。
    * 线数读配置快照（`maps`），当前线读 `world` 帧带回的 `channel` —— 开弹窗不拉接口。
    */
   private channelDialog = new ChannelSelectDialog();
-  /** 服务器线路标签（换线入口；动态线号层盖在它身上） */
-  private serverLineEntry: Node | null = null;
-  /** 「N 线」动态线号层（盖在底图烙死的「1 线」字上；null = 还没建过）。1 线时整层隐藏 */
-  private channelTag: { patch: Graphics; label: Label } | null = null;
+  /** 标题条的「· N 线」副文字（分线图上显示真实线号，公共线为空；未建标题条时为 null） */
+  private channelLabel: Label | null = null;
+  /** 标题条右侧的下拉箭头（有无副文字时位置不同，见 updateChannelTag） */
+  private chevronNode: Node | null = null;
   /** 入口红点（未读邮件 + 未领附件 + 未读公告，有任一项才显示） */
   private entryDot: Node | null = null;
   /** 邮件侧待处理数（未读 + 未领，由邮件面板与进游戏时的一次探测维护） */
@@ -116,9 +128,12 @@ export default class SmallMap extends Node {
     // 主体（尺寸与右上角固定位置：见 configs/hudLayout.smallMap，改位置直接改配置）
     this.addComponent(UITransform).setContentSize(smallMapLayout.size);
     this.setPosition(smallMapLayout.position.x, smallMapLayout.position.y, 0);
+    // 面板底板（稿 .map .panel：与弹窗同款铆钉面板，只是尺寸 304×250）
+    this.addChild(GameUiHelper.createDialogPanel("small_map_panel", smallMapLayout.size));
     this.createEntryButtons();
+    this.createHead();
     this.createMapArea();
-    this.createBottomInfo();
+    this.createCoordinate();
     // 进游戏先探一次未读（失败静默：拉不到就不显示红点）
     void this.refreshAnnouncementUnread();
     void this.refreshMailUnread();
@@ -188,85 +203,142 @@ export default class SmallMap extends Node {
 
   //#region 结构拼装
 
-  /** 左侧：功能入口按钮（单列竖排的纵向布局容器，整体对齐地图内容区中心） */
+  /** 左侧：功能入口按钮（两列网格，见 hudLayout.smallMapLayout.entryGrid；顶边与地图面板对齐） */
   private createEntryButtons() {
     const layout = smallMapLayout;
-    const count = layout.entryIcons.length;
-    const columnHeight = count * layout.entryIconSize + (count - 1) * layout.entryIconGap;
-    const column = GameUiHelper.createColumn("small_map_entry_buttons", layout.entryIconGap, layout.entryColumnPosition, new Size(layout.entryIconSize, columnHeight));
-    // 按钮位置由 Layout 统一排列；「世界」打开小地图弹窗、「成就」打开成就面板、
-    // 「邮件」打开消息中心（邮件 + 公告入口，见 mailDialog），其余入口暂为占位
+    const grid = layout.entryGrid;
+    const rows = Math.ceil(layout.entryIcons.length / grid.columns);
+    const gridWidth = grid.columns * grid.buttonSize + (grid.columns - 1) * grid.gap;
+    const gridHeight = rows * grid.buttonSize + (rows - 1) * grid.gap;
+    // 网格容器：子节点排列完全交给 Layout（按行填充），整体顶边与地图面板顶边对齐
+    const container = GameUiHelper.createGrid(
+      "small_map_entry_buttons", grid.gap, grid.gap, layout.entryGridPosition, new Size(gridWidth, gridHeight),
+    );
+    // 「世界」打开小地图弹窗、「线路」分线图上开选线弹窗、「排行榜」打开本区榜、
+    // 「成就」打开成就面板、「邮件」打开消息中心（邮件 + 公告入口，见 mailDialog）；config/sound 暂为占位
     layout.entryIcons.forEach((icon) => {
-      const button = GameUiHelper.createTexturedButton(`small_map_entry_${icon}`, uiMinimap(icon), "", new Vec2(), new Size(layout.entryIconSize, layout.entryIconSize));
+      // rail 是稿 .map-rail 的 7 颗描边图标（34×34、2 列；图标数据见 configs/layout/icons.ts）
+      const button = this.createRailIconButton(icon);
       if (icon === "world") bindPointerAction(button, () => this.openMapPreviewDialog(), this);
+      if (icon === "channel") bindPointerAction(button, () => this.openChannelSelect(), this);
+      if (icon === "ranking") bindPointerAction(button, () => this.leaderboardDialog.open(), this);
       if (icon === "achievement") bindPointerAction(button, () => this.achievementDialog.open(), this);
       if (icon === layout.mailEntry) {
         bindPointerAction(button, () => this.mailDialog.open(), this);
         this.entryDot = this.createEntryDot(button);
       }
-      column.addChild(button);
+      container.addChild(button);
     });
-    this.addChild(column);
+    this.addChild(container);
   }
 
-  /** 消息入口的未读红点（常驻子节点，按未读数切显隐；红点图用通用小圆点） */
+  /**
+   * 文字兜底按钮（排行榜 / 线路没有方形图标）：34×34 玻璃底板 + 居中文字
+   * 文字节点名固定 `{key}_text`（线号刷新按名字取件）
+   */
+  /**
+   * rail 里的单颗入口按钮：矢量玻璃底板 + **描边图标**（稿 .map-rail 没有文字）
+   *
+   * 图标 18px 居中（稿 .ic 默认 18），数据见 configs/layout/icons.ts；未知 key 画空但按钮仍在，
+   * 免得新增入口时整列错位
+   */
+  private createRailIconButton(key: string) {
+    const layout = smallMapLayout.entryGrid;
+    const button = new Node(`small_map_entry_${key}`);
+    button.addComponent(UITransform).setContentSize(layout.buttonSize, layout.buttonSize);
+    // 稿 `.map-rail button{background:rgba(22,15,9,.92)}` ≈ surface-2（比 HUD 玻璃底更深一档）
+    button.addChild(GameUiHelper.createGlassPlate(`${key}_plate`, new Size(layout.buttonSize, layout.buttonSize), T.radius.r2, T.line[2], T.surface[2]));
+    const iconNode = UiHelper.createNode(`${key}_icon`, new Vec2(), new Size(18, 18));
+    // 稿 `.map-rail button{color:var(--text-2)}`：rail 图标是**骨白**、不是金色
+    // （金色只给底栏导航 `.nbtn .ic`）—— 早前两处都画成 gold[3]，实机上 rail 一片暗棕
+    drawVectorIcon(iconNode, railIconOf(key), new Size(18, 18), T.text[2], 2);
+    button.addChild(iconNode);
+    return button;
+  }
+
+  /**
+   * 标题条（稿 .map-head：高 40、内容居中）：图名 gold-5 +「· N 线」副文字 + 下拉箭头
+   *
+   * 副文字与图名分两个 Label（稿里 span 与 b 是两种颜色字号）：名字节点够宽居中摆放，
+   * 副文字左对齐、左缘按 3 字图名估算（图名长度变化时会有 ±几像素的间隙差，稿的 flex 居中做不到等价）
+   */
+  private createHead() {
+    const head = smallMapLayout.head;
+    this.mapNameLabel = GameUiHelper.createText("small_map_name", "", head.nameFontSize, new Vec2(-14, head.y), new Size(200, 18), head.nameColor).getComponent(Label);
+    // 稿 `.map-head b{letter-spacing:.16em}`：图名要拉开字距，否则和副文字挤成一团
+    this.mapNameLabel.spacingX = head.nameSpacingX;
+    this.addChild(this.mapNameLabel.node);
+    this.channelLabel = GameUiHelper.createText(
+      "small_map_channel", "", head.channel.fontSize, head.channel.position, head.channel.size, head.channel.color,
+      Label.HorizontalAlign.LEFT,
+    ).getComponent(Label);
+    this.addChild(this.channelLabel.node);
+    const chevron = UiHelper.createNode("small_map_chevron", head.chevron.position, head.chevron.size);
+    drawVectorIcon(chevron, icons.headChevron, head.chevron.size, head.chevron.color, 2);
+    this.chevronNode = chevron;
+    this.addChild(chevron);
+  }
+
+  /** 消息入口的未读红点（常驻子节点，按未读数切显隐；矢量红点，替代 dot 贴图） */
   private createEntryDot(button: Node) {
-    const dot = GameUiHelper.createImage(`${button.name}_unread`, uiImages.dot, smallMapLayout.entryDot.position, smallMapLayout.entryDot.size);
+    const dot = GameUiHelper.createVectorDot(`${button.name}_unread`, T.ember[3], smallMapLayout.entryDot.position, smallMapLayout.entryDot.size);
     dot.active = false;
     button.addChild(dot);
     return dot;
   }
 
-  /** 中部：地图名称条（紧贴地图内容区上方）+ 真实地图底图（视口裁剪）+ 坐标点绘制层 */
+  /** 中部：地图内容区（稿 .map-view：径向底色 + 网格 + 真实底图视口 + 坐标点 + 内暗角） */
   private createMapArea() {
     const layout = smallMapLayout;
-    // 地图框底图（装饰与占位：真实底图未装载/加载失败时露出的就是它，其中心即本组件所有子节点位置的坐标原点）
-    this.addChild(GameUiHelper.createImage("small_map_placeholder", uiImages.smallMapFrame, new Vec2(), layout.mapFrameSize));
+    const view = layout.mapView;
     // 真实小地图：内容区大小的视口（Mask 裁剪）+ 底图（尺寸/缩放/位置由 updateMapImage 逐帧按真实坐标设置）
-    this.mapView = GameUiHelper.createSmallMapMapView(new Vec2(), layout.contentSize);
+    this.mapView = GameUiHelper.createSmallMapMapView(layout.contentPosition, layout.contentSize);
+    // 径向底色（稿 .map-view 的 background）：放在视口**内部** —— 画在外面时半径 125 的径向圆
+    // 会溢出面板下沿、还会盖住标题条（第一版踩过）；视口 Mask 顺带把它裁齐
+    this.mapView.addChild(GameUiHelper.createSmallMapBackdrop("small_map_placeholder", new Vec2(), layout.contentSize, view.backdrop));
     const mapImage = GameUiHelper.createSmallMapMapImage(layout.contentSize);
     this.mapImage = mapImage.getComponent(Sprite);
+    // 底图压暗到稿的水平（`.map-view .terrain{opacity:.5}`）：地图原画是亮石地，
+    // 原样贴上去会成为整个 HUD 最亮的一块，跟旁边暖褐面板完全不是一个调子
+    mapImage.addComponent(UIOpacity).opacity = view.imageOpacity;
     this.mapView.addChild(mapImage);
+    // 压暗薄纱（稿地形底接近纯黑，半透明实拍图还要再压一层才到同一亮度）
+    const scrim = view.scrim.color.clone();
+    scrim.a = view.scrim.alpha;
+    this.mapView.addChild(GameUiHelper.createSmallMapScrim("small_map_scrim", new Vec2(), layout.contentSize, scrim));
+    // 22px 网格：画在底图之上（见 createSmallMapGrid 注释）
+    this.mapView.addChild(GameUiHelper.createSmallMapGrid("small_map_grid", new Vec2(), layout.contentSize, view.grid));
     // 路线指示线层：放在视口内 → 超出内容区的路线被 Mask 裁掉；在底图之上、坐标点之下
-    this.routeGraphics = GameUiHelper.createSmallMapRouteLayer(new Vec2(), layout.contentSize);
+    this.routeGraphics = GameUiHelper.createSmallMapRouteLayer(layout.contentPosition, layout.contentSize);
     this.mapView.addChild(this.routeGraphics.node);
     this.addChild(this.mapView);
-    // 地图名称条：底边与地图内容区上边缘齐平（紧挨着上方）
-    const nameBar = GameUiHelper.createImage("small_map_name_bar", uiImages.smallMapNameBar, layout.nameBar.position, layout.nameBar.size);
-    this.mapNameLabel = GameUiHelper.createText("small_map_name", "", layout.nameBar.fontSize, new Vec2(), layout.nameBar.size, layout.nameBar.color).getComponent(Label);
-    nameBar.addChild(this.mapNameLabel.node);
-    this.addChild(nameBar);
-    // 坐标点绘制层（角色黑点/怪物红点画在内容区尺寸的矩形内，中心与地图中心一致；在视口之上，故点位永远盖在底图上）
-    this.dotsGraphics = GameUiHelper.createSmallMapDotLayer(new Vec2(), layout.contentSize);
+    // 内容区发丝线（稿 `.map-view{border:1px solid var(--line-1)}`）：底图是满幅贴图，
+    // 没有这一圈线时地图和面板之间是「硬切」，看不出视口边界
+    const frame = GameUiHelper.createGlassPlate("small_map_view_frame", layout.contentSize, T.radius.r2, view.border, T.overlay.transparent);
+    frame.setPosition(layout.contentPosition.x, layout.contentPosition.y, 0);
+    this.addChild(frame);
+    // 坐标点绘制层（角色白点/怪物红点画在内容区尺寸的矩形内，中心与地图中心一致；在视口之上，故点位永远盖在底图上）
+    this.dotsGraphics = GameUiHelper.createSmallMapDotLayer(layout.contentPosition, layout.contentSize);
     this.addChild(this.dotsGraphics.node);
+    // 内暗角（稿 .vign：inset 26px 黑 .75）：盖在点位之上，边缘渐暗 —— 层叠描边近似
+    this.addChild(GameUiHelper.createSmallMapVignette("small_map_vignette", layout.contentPosition, layout.contentSize, view.vignette));
     // 点击地图区域打开小地图弹窗（整图预览：左键寻路 / 右键传送）；点位层盖在底图上，点击由它接收
     bindPointerAction(this.dotsGraphics.node, () => this.openMapPreviewDialog(), this);
   }
 
-  /** 底部：服务器线路与排行榜（横向布局容器）+ 世界坐标条 */
-  private createBottomInfo() {
-    const layout = smallMapLayout;
-    // 线路/排行榜：横向布局容器，子节点排列完全交给 Layout（排行榜在左、服务器线在右）
-    // 容器宽度取两颗标签加空档的总宽，从而整体相对地图内容区居中
-    const tagRow = layout.tagRow;
-    const tags = GameUiHelper.createRow("small_map_tags", tagRow.gap, tagRow.position, new Size(tagRow.size.width * 2 + tagRow.gap, tagRow.size.height));
-    const rankingEntry = GameUiHelper.createImage("small_map_ranking_list", uiImages.smallMapRankingList, new Vec2(), tagRow.size);
-    // 排行榜标签（#400）：原来是纯装饰图，现在点开本区榜（等级 / 战力 / 击杀；#959 起分区分榜）
-    bindPointerAction(rankingEntry, () => this.leaderboardDialog.open(), this);
-    tags.addChild(rankingEntry);
-    // 服务器线路标签（#1016）：底图烙着「1 线」。分线图（maxChannels > 1）上它是换线入口 ——
-    // 线号不是 1 时盖一块底色补丁、写上真实线号（见 updateChannelTag）；点击开选线弹窗。
-    // 单线图上点了没有反应（守卫直接 return），底图原样保留
-    const serverLineEntry = GameUiHelper.createImage("small_map_server_line", uiImages.smallMapServerLine, new Vec2(), tagRow.size);
-    bindPointerAction(serverLineEntry, () => this.openChannelSelect(), this);
-    tags.addChild(serverLineEntry);
-    this.serverLineEntry = serverLineEntry;
-    this.addChild(tags);
-    // 世界坐标条：线路/排行榜下方
-    const positionFrame = GameUiHelper.createImage("small_map_position", uiImages.smallMapPosition, layout.positionBar.position, layout.positionBar.size);
-    this.positionLabel = GameUiHelper.createText("small_map_position_text", "", layout.positionBar.fontSize, new Vec2(), layout.positionBar.size).getComponent(Label);
-    positionFrame.addChild(this.positionLabel.node);
-    this.addChild(positionFrame);
+  /**
+   * 底部世界坐标（稿 .map-foot：只剩右下角坐标，格式 `X 128 Y 96`）
+   *
+   * 排行榜 / 线路在左侧 rail 里（稿 .map-rail 的 7 颗图标之一），底部没有胶囊 ——
+   * 早前「胶囊在地图正下方」是看漏稿，已改回（见 createEntryButtons）
+   */
+  private createCoordinate() {
+    const bar = smallMapLayout.positionBar;
+    this.positionLabel = GameUiHelper.createText(
+      "small_map_position_text", "", bar.fontSize, bar.position, bar.size, bar.color,
+      Label.HorizontalAlign.RIGHT,
+    ).getComponent(Label);
+    this.addChild(this.positionLabel.node);
   }
 
   //#endregion
@@ -288,68 +360,32 @@ export default class SmallMap extends Node {
     this.mapPreviewDialog.update();
   }
 
-  /** 刷新地图名称与世界坐标文本 */
+  /** 刷新地图名称、线号副文字与世界坐标文本 */
   private updateLabels(rolePosition: Vec3) {
     const role = StorageManager.findOnlineRole();
-    // 标题带线号（#1016）：分线（channel > 0）追加「· N 线」；公共线保持纯图名
-    this.mapNameLabel.string = role ? this.mapTitle(role.onMap, CombatChannel.currentChannel) : "";
-    this.positionLabel.string = `${Math.round(rolePosition.x)}, ${Math.round(rolePosition.y)}`;
+    // 图名是纯名字；线号走标题条右侧的副文字（稿 .map-head 的 span，见 updateChannelTag）
+    this.mapNameLabel.string = role ? mapLabelOf(role.onMap) : "";
+    // 稿 .map-foot .coord 的格式：`X 128 Y 96`
+    this.positionLabel.string = `X ${Math.round(rolePosition.x)} Y ${Math.round(rolePosition.y)}`;
     this.updateChannelTag(role);
   }
 
-  /** 地图标题：`卧龙城`（公共线）/ `卧龙城 · 2线`（分线，玩家视角线号 = 服务端 channel + 1） */
-  private mapTitle(mapId: string, channel: number): string {
-    const label = mapLabelOf(mapId);
-    return channel > 0 ? `${label}${getText("map_channel_suffix", { channel: channel + 1 })}` : label;
-  }
-
   /**
-   * 刷新换线入口的动态线号层（#1016）
+   * 刷新「线路」入口的文字（#1016 口径移到入口按钮上）
    *
-   * 底图烙的是「1 线」：公共线（channel 0）时底图原样、整层隐藏；分线时盖一块底色补丁
-   * 遮住烙字，写上真实线号。层只在第一次需要时建一次，之后按图与线切显隐 ——
-   * 单线图（`maxChannels <= 1`，含配置快照还没到）永远隐藏，保持纯装饰图。
+   * 分线图（`maxChannels > 1`）且真实线号 > 0 时显示「 · N线」（玩家视角 = 服务端 channel + 1），
+   * 公共线 / 单线图 / 配置快照未到都为空（稿 .map-head 的 span 在公共线上没有内容）。
+   * 点击行为见 openChannelSelect（入口在 rail 里，单线图守卫 return）
    */
   private updateChannelTag(role: ReturnType<typeof StorageManager.findOnlineRole>) {
+    if (!this.channelLabel || !isValid(this.channelLabel.node)) return;
     const config = role ? maps.get(role.onMap) : undefined;
-    const interactive = !!config && config.maxChannels > 1;
-    if (!interactive) {
-      if (this.channelTag) this.setChannelTagVisible(false);
-      return;
-    }
-    const channel = CombatChannel.currentChannel;
-    if (!this.channelTag) this.channelTag = this.createChannelTag();
-    if (!this.channelTag) return;
-    this.setChannelTagVisible(channel > 0);
-    if (channel > 0) this.channelTag.label.string = getText("channel_row_label", { channel: channel + 1 });
-  }
-
-  /** 线号层显隐（补丁与文字是同父的兄弟节点，要一起切） */
-  private setChannelTagVisible(visible: boolean) {
-    if (!this.channelTag) return;
-    this.channelTag.patch.node.active = visible;
-    this.channelTag.label.node.active = visible;
-  }
-
-  /**
-   * 建动态线号层（一次性）：补丁矩形盖住底图烙死的「1 线」两个字，线号文字盖在补丁上
-   * （几何 / 配色 / 节点名全部来自 configs/layout/hud.smallMapLayout.channelTag）
-   */
-  private createChannelTag(): { patch: Graphics; label: Label } | null {
-    const tag = this.serverLineEntry;
-    // serverLineEntry 在 createBottomInfo 里必然已建；拿不到说明结构被动过，宁可不显示线号
-    if (!tag || !isValid(tag)) return null;
-    const rect = smallMapLayout.channelTag.patch.rect;
-    const patchNode = new Node(smallMapLayout.channelTag.patch.name);
-    const patch = patchNode.addComponent(Graphics);
-    patch.fillColor = smallMapLayout.channelTag.patch.color;
-    patch.rect(rect.x, rect.y, rect.width, rect.height);
-    patch.fill();
-    tag.addChild(patchNode);
-    const text = smallMapLayout.channelTag.text;
-    const labelNode = GameUiHelper.createText(text.name, "", text.fontSize, text.position, text.size, text.color);
-    tag.addChild(labelNode);
-    return { patch, label: labelNode.getComponent(Label)! };
+    const channel = config && config.maxChannels > 1 ? CombatChannel.currentChannel : 0;
+    const suffix = channel > 0 ? getText("map_channel_suffix", { channel: channel + 1 }) : "";
+    this.channelLabel.string = suffix;
+    // 没有副文字时箭头紧跟图名，有线号时排在副文字之后（稿是 flex 居中，客户端给两个固定位）
+    const head = smallMapLayout.head.chevron;
+    this.chevronNode?.setPosition(suffix ? head.position.x : head.aloneX, head.position.y, 0);
   }
 
   /** 打开选线弹窗（#1016；单线图 / 配置没到时守卫直接 return，标签维持装饰图） */
@@ -444,7 +480,9 @@ export default class SmallMap extends Node {
     const halfWidth = smallMapLayout.contentSize.width / 2;
     const halfHeight = smallMapLayout.contentSize.height / 2;
     const scale = getSmallMapScale(smallMapLayout.contentSize.width);
-    const dots: SmallMapDot[] = [{ x: 0, y: 0, color: smallMapConfig.roleDotColor, radius: smallMapConfig.roleDotRadius }];
+    const dots: SmallMapDot[] = [
+      { x: 0, y: 0, color: smallMapConfig.roleDotColor, radius: smallMapConfig.roleDotRadius, ringRadius: smallMapConfig.roleDotRingRadius },
+    ];
     MonsterManager.getMonsterMap().forEach((monster, node) => {
       if (!isValid(node) || monster.hp <= 0) return;
       const monsterPosition = node.getWorldPosition();

@@ -1,4 +1,4 @@
-import { EventKeyboard, Input, input, KeyCode, Node, Sprite } from "cc";
+import { EventKeyboard, Input, input, KeyCode, Node } from "cc";
 import { Role } from "../../../entities/Role";
 import SoundManager from "../../core/SoundManager";
 import GameUiHelper, { BottomNavBarButton } from "../../helpers/GameUiHelper";
@@ -26,13 +26,16 @@ function navKeyCode(name: string): number | null {
 export default class BottomNavButton extends Node {
   /** 按钮配置（含功能回调与解锁等级） */
   private config: BottomNavBarButton;
+  /** 是否未解锁（矢量按钮没有 Sprite 可置灰，解锁语义改为持 flag；样式层已同步灰显） */
+  private locked: boolean;
 
   constructor(config: BottomNavBarButton, role: Role) {
     // 节点名用**稳定的 key**，不用图标路径：图标是外观、会换 —— 按名字找按钮的代码
     // （引导、验收脚本、自动化点击）会命中错的那一个（#486）
     super(`bottom_nav_${config.key}`);
     this.config = config;
-    GameUiHelper.applyBottomNavBarButtonStyle(this, config, role);
+    const style = GameUiHelper.applyBottomNavBarButtonStyle(this, config, role);
+    this.locked = style.locked;
     this.on(Node.EventType.TOUCH_END, this.onClick, this);
     // 点击音（#685）：只绑点击，快捷键（键盘）不响 —— 那是操作，不是「点了个按钮」
     SoundManager.bindClick(this);
@@ -48,9 +51,9 @@ export default class BottomNavButton extends Node {
     if (event.keyCode === navKeyCode(this.config.shortcutKey)) this.onClick();
   }
 
-  /** 点击 / 快捷键共用：未解锁（图标置灰）时提示解锁等级，否则执行功能回调 */
+  /** 点击 / 快捷键共用：未解锁（样式灰显）时提示解锁等级，否则执行功能回调 */
   private onClick() {
-    if (this.getComponent(Sprite).grayscale) {
+    if (this.locked) {
       GameUiHelper.createErrorTip("feature_locked_tip", { feature: this.config.label, level: this.config.openLevel });
       return;
     }

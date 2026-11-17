@@ -1,25 +1,24 @@
-import { Animation, isValid, Node } from "cc";
-import { uiImages, tipsLayout } from "../../configs/hudLayout";
+import { isValid, Node } from "cc";
+import { T, tipsLayout } from "../../configs/hudLayout";
+import { getText } from "../../configs/texts";
 import type RoleDisplay from "../components/role/RoleDisplay";
-import AnimationHelper from "../helpers/AnimationHelper";
 import GameUiHelper from "../helpers/GameUiHelper";
 import AutoBattle from "./AutoBattle";
 import LayerManager from "./LayerManager";
 
-/** 提示动画节点与其动画组件 */
+/** 提示节点视图 */
 interface TipView {
   node: Node;
-  animate: Animation;
 }
 
 /**
  * 自动战斗提示（静态控制器）
- * 屏幕中间循环播放的两个图集帧动画提示，互相独立、允许同时出现，均挂在特效层：
- * - 「自动战斗中」（uiImages.autoAttackTip）：自动挂机开启期间一直显示
- * - 「自动寻路中」（uiImages.autoPathTip）：自动战斗走位（A* 寻路移动）期间显示
+ * 跟随主角的两个矢量胶囊提示，互相独立、允许同时出现，均挂在特效层：
+ * - 「自动战斗中」（金）：自动挂机开启期间一直显示
+ * - 「自动寻路中」（灰）：自动战斗走位（A* 寻路移动）期间显示
  * 屏幕中心即相机中心，相机跟随主角，因此把提示节点世界坐标每帧对齐主角世界坐标即可；
- * 两个提示同时显示时寻路提示向下让位（tipsLayout.autoTipPathOffsetY），避免文字重叠
- * 帧率与让位偏移见 configs/hudLayout.tipsLayout，由组合根在 Game.update 每帧调用 update；
+ * 两个提示同时显示时寻路提示向下让位（tipsLayout.autoTipPathOffsetY），避免重叠。
+ * 让位偏移见 configs/hudLayout.tipsLayout，由组合根在 Game.update 每帧调用 update；
  * 场景卸载时 reset 清引用（节点随特效层销毁）
  */
 export default class AutoBattleTips {
@@ -27,8 +26,6 @@ export default class AutoBattleTips {
   private static attackTip: TipView | null = null;
   /** 自动寻路中提示 */
   private static pathTip: TipView | null = null;
-  /** 提示动画是否正在异步装载（装载完成前每帧直接跳过，避免重复创建节点） */
-  private static preparing = false;
 
   /** 每帧驱动（组合根调用）：按挂机开关与自动走位状态显隐并定位提示 */
   static update(roleDisplay: RoleDisplay | null) {
@@ -56,38 +53,25 @@ export default class AutoBattleTips {
   static reset() {
     this.attackTip = null;
     this.pathTip = null;
-    this.preparing = false;
   }
 
-  //#region 内部实现
-
-  /** 确保两个提示节点已创建且动画已装载（首次调用异步装载，期间返回 false） */
+  /** 确保两个提示节点已创建（矢量节点同步建，无需异步装载） */
   private static ensureTips(): boolean {
     if (this.attackTip && isValid(this.attackTip.node) && this.pathTip && isValid(this.pathTip.node)) return true;
-    if (this.preparing) return false;
-    this.preparing = true;
-    this.attackTip = this.createTip("auto_battle_attack_tip", uiImages.autoAttackTip);
-    this.pathTip = this.createTip("auto_battle_path_tip", uiImages.autoPathTip);
-    return false;
-  }
-
-  /** 创建一个提示节点挂到特效层，并异步装载图集帧后循环播放（装载完成时置 preparing 为 false） */
-  private static createTip(name: string, atlasSrc: string): TipView {
-    const tip = GameUiHelper.createAutoBattleTip(name);
-    LayerManager.addToEffectLayer(tip.node);
-    AnimationHelper.loadFramesFromAtlas(atlasSrc).then((frames) => {
-      // 场景可能已切换：节点失效就不再装载，reset 已把引用清空
-      if (!isValid(tip.node)) return;
-      if (frames.length) AnimationHelper.playLoopWithFrames(name, tip.node, frames, tipsLayout.autoTipFrameRate);
-      this.preparing = false;
-    });
-    return tip;
+    if ((this.attackTip && !isValid(this.attackTip.node)) || (this.pathTip && !isValid(this.pathTip.node))) {
+      this.attackTip = null;
+      this.pathTip = null;
+    }
+    // 战斗 = 金（挂机的主动状态）；寻路 = 灰（战斗的伴随状态，弱一档）
+    this.attackTip = { node: GameUiHelper.createAutoBattleTip("auto_battle_attack_tip", getText("auto_battle_status_attack"), T.gold[3]) };
+    this.pathTip = { node: GameUiHelper.createAutoBattleTip("auto_battle_path_tip", getText("auto_battle_status_path"), T.text[2]) };
+    LayerManager.addToEffectLayer(this.attackTip.node);
+    LayerManager.addToEffectLayer(this.pathTip.node);
+    return true;
   }
 
   /** 显隐一个提示（引用无效时静默跳过，下一帧 ensureTips 会重建） */
   private static setTipVisible(tip: TipView | null, visible: boolean) {
     if (tip && isValid(tip.node) && tip.node.active !== visible) tip.node.active = visible;
   }
-
-  //#endregion
 }

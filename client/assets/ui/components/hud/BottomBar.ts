@@ -1,9 +1,9 @@
-import { Node, UITransform } from "cc";
+import { Node, Size, UITransform } from "cc";
 import { Role } from "../../../entities/Role";
 import { SkillId } from "../../../types/skill";
 import { ShortcutKeys } from "../../../types/role";
 import GameUiHelper, { BottomNavBarButton } from "../../helpers/GameUiHelper";
-import { bottomBarLayout, T } from "../../../configs/hudLayout";
+import { bottomBarLayout } from "../../../configs/hudLayout";
 import { bottomNavItems } from "../../../configs/bottomNav";
 import RoleUIManager from "../../core/RoleUIManager";
 import RoleInfoDialog from "../dialogs/RoleInfoDialog";
@@ -14,6 +14,7 @@ import ChatDialog from "../dialogs/ChatDialog";
 import QuestDialog from "../dialogs/QuestDialog";
 import PartyDialog from "../dialogs/PartyDialog";
 import BottomNavBar from "./BottomNavBar";
+import BottomNavButton from "./BottomNavButton";
 import RoleExpBar from "./RoleExpBar";
 import RoleHpOrb from "./RoleHpOrb";
 import RoleMpOrb from "./RoleMpOrb";
@@ -21,10 +22,18 @@ import ShortcutKeyBar from "./ShortcutKeyBar";
 import AutoFightButton from "./AutoFightButton";
 
 /**
+ * 「设置」入口的 key（configs/bottomNav.bottomNavItems 里的最后一条）
+ *
+ * 稿把它单独摆在第二条竖分隔线之后（不在六颗主按钮那一排），所以组装时要把它从
+ * BottomNavBar 的列表里摘出来、按 bottomBarLayout.settingsButton 自己摆位。
+ */
+const SETTINGS_KEY = "settings";
+
+/**
  * 底部栏组件（底部 HUD 容器）
  * 只负责组装子组件与持有各功能弹窗，本身不产生任何 UI 零件：
- * 背景（GameUiHelper）+ 功能按键区（BottomNavBar）+ 经验条（RoleExpBar）+ 血量显示（RoleHpOrb）+ 魔法值显示（RoleMpOrb）+ 技能快捷键栏（ShortcutKeyBar）
- * 子组件添加顺序即绘制层级顺序（背景在最下、技能栏在最上）
+ * 功能按键区（BottomNavBar）+ 经验条（RoleExpBar）+ 血量显示（RoleHpOrb）+ 魔法值显示（RoleMpOrb）+ 技能快捷键栏（ShortcutKeyBar）+ 挂机开关（AutoFightButton）
+ * 新稿（04-hud）底部栏不画整条底板，各部分自带矢量底板；子组件添加顺序即绘制层级顺序
  */
 export default class BottomBar extends Node {
   /** 角色信息弹窗 */
@@ -59,14 +68,31 @@ export default class BottomBar extends Node {
     // 注册弹窗，供数据层刷新：装备穿脱后的槽位/内观（StorageManager 装备变更流程）、背包显示（拾取/使用物品）
     RoleUIManager.registerRoleInfoDialog(this.roleInfoDialog);
     RoleUIManager.registerBagDialog(this.bagDialog);
-    // 底部栏主体（尺寸/位置/背景：固定值见 configs/hudLayout.bottomBar，改位置直接改配置）
+    // 底部栏主体（尺寸/位置：固定值见 configs/hudLayout.bottomBar，改位置直接改配置）
     this.addComponent(UITransform).setContentSize(bottomBarLayout.size);
     this.setPosition(bottomBarLayout.position.x, bottomBarLayout.position.y, 0);
-    // 底板（#1059：矢量半透明长条，替代原底图；圆角走 --r-4）
-    this.addChild(GameUiHelper.createGlassPlate("bottom_nav_bar_background", bottomBarLayout.size, T.radius.r4, T.line[1]));
-    // 子组件
-    this.navBar = new BottomNavBar(this.bottomNavBarButtons, role);
+    // 新稿（04-hud）不再画整条底板：各部分（血球/战斗列/按键区）自带底板，直接浮在场景上
+    // 但要在最底下垫一层暗角（稿 `.bottom::before`）：否则格与格之间的缝会露出亮色地块
+    const backdrop = GameUiHelper.createHudBackdrop("bottom_backdrop", bottomBarLayout.backdrop);
+    backdrop.setPosition(bottomBarLayout.backdrop.position.x, bottomBarLayout.backdrop.position.y, 0);
+    this.addChild(backdrop);
+    // 子组件（添加顺序即绘制层级）
+    // 组间竖分隔线（稿 .vsep）：压在底衬之上、按钮之下，纯装饰不参与命中
+    for (let i = 0; i < bottomBarLayout.separators.positions.length; i++) {
+      const spec = bottomBarLayout.separators;
+      const rule = GameUiHelper.createVerticalRule(`bottom_vsep_${i}`, new Size(spec.width, spec.height), spec.color);
+      rule.setPosition(spec.positions[i].x, spec.positions[i].y, 0);
+      this.addChild(rule);
+    }
+    this.navBar = new BottomNavBar(this.bottomNavBarButtons.filter((button) => button.key !== SETTINGS_KEY), role);
     this.addChild(this.navBar);
+    // 「设置」独立一颗（稿放在第二条竖分隔线之后；逻辑与其它入口一致，未做时给「开发中」提示）
+    const settingsButton = this.bottomNavBarButtons.find((button) => button.key === SETTINGS_KEY);
+    if (settingsButton) {
+      const node = new BottomNavButton(settingsButton, role);
+      node.setPosition(bottomBarLayout.settingsButton.position.x, bottomBarLayout.settingsButton.position.y, 0);
+      this.addChild(node);
+    }
     this.expBar = new RoleExpBar(role);
     this.addChild(this.expBar);
     this.hpOrb = new RoleHpOrb(role);

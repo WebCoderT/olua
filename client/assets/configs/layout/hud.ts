@@ -14,7 +14,7 @@ import { T } from "./tokens";
 
 //#region 角色信息栏（左上角常驻）
 
-/** 角色信息栏布局（坐标以信息栏中心为原点） */
+/** 角色信息栏布局（坐标以信息栏中心为原点，逐值对照 04-hud 的 `.info` 段） */
 export const roleInfoBarLayout = {
   /** 信息栏自身尺寸（HUD 规范 344×84：左边缘距屏幕 20、顶边 18） */
   size: new Size(344, 84),
@@ -24,84 +24,196 @@ export const roleInfoBarLayout = {
   otherPosition: new Vec2(0, 0),
   /** 背景框尺寸（与信息栏同尺寸；#1059 起底板改矢量绘制） */
   backgroundSize: new Size(344, 84),
-  /** 名称（左对齐） */
-  name: { position: new Vec2(-14, 12), size: new Size(150, 20), fontSize: T.fontSize.f16 },
-  /** 等级 */
-  level: { position: new Vec2(104, 10), size: new Size(48, 18), fontSize: T.fontSize.f11 },
-  /** 头像（按职业/性别取图） */
-  portrait: { position: new Vec2(-131, 0), size: new Size(54, 58) },
-  /** 三种货币（同一个横向布局容器，子件均分容器宽度且内部左对齐） */
-  currencyBar: { position: new Vec2(-16, -16), size: new Size(200, 14), spacing: 0 },
-  /** 战斗力（图标尺寸；数值文本紧随图标右边缘，间隔 labelGap） */
-  combat: { position: new Vec2(108, 0), iconSize: new Size(60, 30), labelGap: 3 },
-  /** 状态图标条（首个图标中心对齐头像中心、向右排开，横向布局；图标来源为 configs/status 各状态的 icon） */
-  statusBar: { position: new Vec2(-131, -54), size: new Size(220, 24), spacing: 4, iconSize: new Size(24, 24) },
+  /** 名称（左对齐，17px 衬线体；bbox 从 who 列左缘 -92 起，宽 130） */
+  name: { position: new Vec2(-27, 10), size: new Size(130, 20), fontSize: 17 },
+  /** 等级（与名称同一基线，11px 金-4：显示成「42 级」） */
+  level: { position: new Vec2(56, 8), size: new Size(56, 16), fontSize: T.fontSize.f11, color: T.gold[4] },
+  /** 头像（按职业/性别取图；54×58 + 1px 金-2 边框 + 深褐底） */
+  portrait: { position: new Vec2(-131, 0), size: new Size(54, 58), border: T.gold[2], fill: new Size(54, 58) },
+  /**
+   * 三种货币（同一个横向布局容器，子件均分容器宽度且内部左对齐）
+   * 稿 `.info .cur`：金色小方块 9×9 + 「绑定元宝」11px text-3 + 数值 11px 金-4
+   */
+  currencyBar: {
+    position: new Vec2(-26, -18),
+    size: new Size(132, 14),
+    spacing: 0,
+    iconSize: new Size(10, 10),
+    label: { text: "绑定元宝", fontSize: T.fontSize.f11, color: T.text[3], width: 60, gap: 4 },
+    value: { fontSize: T.fontSize.f11, color: T.gold[4], width: 90, gap: 6 },
+  },
+  /**
+   * 战斗力（新稿口径：`战斗力` 小字标签在上、红色数值在下，**右对齐**一小块贴信息栏右缘；
+   * 左侧一条 1px line-2 竖线与货币区分开）。数值变化 ±飘字挂在同一节点（见 RoleInfoBar.updateCombat）
+   */
+  combat: {
+    position: new Vec2(116, 0),
+    /** 分隔线（稿 `.info .pw{border-left:1px solid line-2}`）：相对信息栏中心的 x + 上下高度 */
+    divider: { x: 83, height: 40, color: T.line[2] },
+    label: { text: "战斗力", position: new Vec2(0, 12), size: new Size(84, 12), fontSize: T.fontSize.f10, color: T.text[3], spacingX: 2 },
+    value: { position: new Vec2(0, -8), size: new Size(84, 22), fontSize: 19, color: T.ember[3] },
+  },
+  /** 状态图标条（首个图标中心对齐头像中心、向右排开，横向布局；稿 `.buff` 26×26 带金线框） */
+  statusBar: { position: new Vec2(-159, -63), size: new Size(240, 26), spacing: 4, iconSize: new Size(26, 26) },
 };
 
 //#endregion
 
 //#region 底部栏（底部常驻容器）
 
-/** 底部栏布局（自身坐标以屏幕中心为原点，子件坐标以底部栏中心为原点） */
+/**
+ * 底部栏布局（自身坐标以屏幕中心为原点，子件坐标以底部栏中心为原点）
+ *
+ * 按 design/olua-ui/screens/04-hud.html 新稿重排（2026-11-18 逐值对照）：
+ * 不再画整条底板（新稿元素直接浮在场景上），四组共用一条底线 ——
+ * 血球 ｜ 战斗列（挂机条 / 技能格 / 经验条，同一 256 宽竖列）｜ 竖分隔线 ｜ 六个功能键 ｜ 竖分隔线 ｜ 设置 ｜ 法力球
+ *
+ * 横向口径（稿实测，2026-11-18 用 getBoundingClientRect 量 `.bottom` 子树）：
+ *   mid-top 660 = 战斗列 256 + 13 + 竖线 1 + 18（含 `.nav{margin-left:6px}`）+ 功能键组 294
+ *                 + 13 + 竖线 1 + 18 + 设置 44
+ *   居中后战斗列中心 = -202、两条竖线 x = -60 / 267、功能键组中心 = 106、设置中心 = 308；
+ *   球组与 mid 间距 18 → 球心 = ±393；四组共用一条底线 -514（技能格 / 导航 / 竖线 / 球底边）
+ */
 export const bottomBarLayout = {
-  /** 底部栏主体 */
-  size: new Size(1092, 162),
-  /** 贴屏幕底部居中（屏幕坐标，原点在屏幕中心；固定值直接手调 —— 旧实现按「中心距下边缘 51」算出，换算结果就是 -489） */
-  position: new Vec2(0, -451),
+  /** 底部栏主体（仅作子件定位容器，本身不画底板；内容实际高 98，上下各留边） */
+  size: new Size(900, 110),
+  /** 贴屏幕底部居中（底边距屏幕 10px；固定值直接手调） */
+  position: new Vec2(0, -475),
+  /**
+   * 底衬（稿 `.bottom::before` 的底部暗角：*椭圆*径向渐变，中心在底栏正中、底边最暗、向上左右同时淡出）
+   *
+   * 底栏本身不画整条底板（新稿口径），但技能格与导航按钮之间会露出世界 ——
+   * 亮色地块（水面 / 浅石板）从缝里钻出来时，底栏就像几块板子漂在亮底上。
+   * 这层把世界压下去，三块 HUD 下面都有同一层暗底。
+   */
+  backdrop: {
+    /** 稿 `.bottom::before{inset:auto -46px -10px;height:126px}`：底栏宽 896 + 左右各 46 = 988 */
+    size: new Size(988, 126),
+    /** 椭圆中心压在下沿：::before 底边在底栏底（-522）下方 10 → 比底栏中心高 6 */
+    position: new Vec2(0, 6),
+    /** 同心椭圆层数（同色叠加出渐变；越多越平滑，DrawCall 不变） */
+    steps: 24,
+    /** 稿中心浓度 rgba(10,7,4,.82)（token 的 veil 是 .72，底衬按稿给足） */
+    color: new Color(10, 7, 4, 209),
+  },
   /**
    * 功能按键区（横向布局容器，按钮排列交给 Layout）
    *
-   * 当前 6 个入口 = 6×40 + 5×6 = 270，从容器**左缘**起排；容器宽留 400，
-   * 最右侧多出的宽度对应背景图上那个**宽格子 —— 什么都不放**（留白）。
-   * 入口清单见 configs/bottomNav.bottomNavItems；想再塞入口先看这 130 宽度装不装得下
+   * 6 个主入口 = 6×44 + 5×6 = 294（稿 `.nav{gap:6px}`），贴战斗列右侧；
+   * 「设置」不在这个容器里：稿把它单独放在第二条竖分隔线之后（见 settingsButton）。
+   * 入口清单见 configs/bottomNav.bottomNavItems。
    */
-  navBar: { spacing: 6, position: new Vec2(160, -8), size: new Size(366, 56) },
+  navBar: { spacing: 6, position: new Vec2(106, -17), size: new Size(294, 44) },
   /**
-   * 单个功能按键：图标尺寸 + 快捷键字母
+   * 单个功能按键（稿 .nbtn：44×44 竖排 —— 16px 描边图标 + 9px 功能名，右上角快捷键字母）
    *
-   * 字母放**右上角**：`ui/nav/*.png` 这些图标素材把中文名（角色/背包/好友…）画在图底部，
-   * 原来放在右下方 (15,-15) 正好压住最后一个字（真机上是「好友F」「组队G」这种，见 #466）。
+   * 图标是矢量描边（data 见 configs/layout/icons.ts 的 navRole/navBag/...），
+   * 不再用 ui/nav 下的贴图；字母放**右上角**（#466 经验：放右下会挤到功能名）
    */
   navButton: {
-    size: new Size(56, 56),
-    key: { position: new Vec2(20, 22), size: new Size(20, 20), fontSize: T.fontSize.f10 },
+    size: new Size(44, 44),
+    icon: { position: new Vec2(0, 6), size: new Size(16, 16) },
+    label: { position: new Vec2(0, -8.5), size: new Size(44, 14), fontSize: T.fontSize.f10 },
+    key: { position: new Vec2(16, 16), size: new Size(18, 18), fontSize: T.fontSize.f10 },
   },
-  /** 经验条 */
-  expBar: { position: new Vec2(0, -64), size: new Size(640, 7) },
   /**
-   * 血量球（role_hp_orb 节点：球底图/填充与血量文字都挂这个节点下）
+   * 经验条行（战斗列最下）：`N 级 [进度条] M%` 三段横排，总宽与战斗列等宽 256
+   * （barWidth 由总宽减去两端文字与间距推出，改 labelWidth / percentLabelWidth / gap 会联动）
+   */
+  expBar: {
+    position: new Vec2(-202, -32),
+    size: new Size(256, 5),
+    levelLabel: { width: 34, fontSize: T.fontSize.f10 },
+    percentLabel: { width: 26, fontSize: T.fontSize.f10 },
+    gap: 8,
+  },
+  /**
+   * 血量球（role_hp_orb 节点：球体/液面与血量文字都挂这个节点下）
    *
    * position 是 role_hp_orb **节点**在底部栏坐标系里的位置（固定值直接手调，
-   * 改它整球——球图加文字——一起动）；球图（底图与竖向填充）都在节点原点，
-   * 血量文字相对球心偏移
+   * 改它整球——球体加文字——一起动）；球体在节点原点，
+   * 血量文字居中在球心（对齐新稿：数值画在球内）
    */
   hpOrb: {
-    position: new Vec2(-470, -4),
+    position: new Vec2(-393, 6),
     size: new Size(90, 90),
-    text: { position: new Vec2(0, -51.5), size: new Size(120, 10), fontSize: 14 },
+    text: { position: new Vec2(0, 0), size: new Size(120, 14), fontSize: 14 },
+    /** 球下方的小标题（稿 `.orb-cap`：bottom -19 → 中心 -64；10px、字距拉开） */
+    caption: { text: "生命", position: new Vec2(0, -56), size: new Size(60, 12), fontSize: T.fontSize.f10, color: T.text[3], spacingX: 2 },
   },
   /**
-   * 魔法球（role_mp_orb 节点：结构与血球一致，填充图为蓝色魔法球）
+   * 魔法球（role_mp_orb 节点：结构与血球一致，液面换蓝）
    * 坐标口径与 hpOrb 相同：position 是节点在底部栏里的位置，文字相对球心偏移
    */
   mpOrb: {
-    position: new Vec2(470, -4),
+    position: new Vec2(393, 6),
     size: new Size(90, 90),
-    text: { position: new Vec2(0, -51.5), size: new Size(120, 10), fontSize: 14 },
+    text: { position: new Vec2(0, 0), size: new Size(120, 14), fontSize: 14 },
+    /** 球下方的小标题（稿 `.orb-cap`：bottom -19 → 中心 -64；10px、字距拉开） */
+    caption: { text: "法力", position: new Vec2(0, -56), size: new Size(60, 12), fontSize: T.fontSize.f10, color: T.text[3], spacingX: 2 },
   },
-  /** 快捷键栏（横向布局容器，5 格 = 5×44 + 4×4 = 224；居中在血球与功能按键区之间的空档） */
-  shortcutBar: { spacing: 4, position: new Vec2(-189, -8), size: new Size(308, 52) },
+  /** 快捷键栏（横向布局容器，5 格 = 5×48 + 4×4 = 256，与挂机条 / 经验条同宽同列） */
+  shortcutBar: { spacing: 4, position: new Vec2(-202, 9), size: new Size(256, 56) },
   /** 单个快捷键槽：图标尺寸 + 右下角按键名 + 居中冷却倒计时 */
   shortcutSlot: {
-    size: new Size(48, 52),
-    key: { position: new Vec2(23, -19), size: new Size(20, 10), fontSize: T.fontSize.f10 },
-    cooldown: { position: new Vec2(0, 0), size: new Size(40, 20), fontSize: 16 },
-  },
-  /** 自动挂机开关（底部栏中段空档，图标下方带文字） */
-  autoFight: {
     size: new Size(48, 56),
-    position: new Vec2(-377, 4),
-    label: { text: "挂机", position: new Vec2(0, -14), size: new Size(44, 12), fontSize: 10 },
+    /** 稿 `.sslot .k{right:3px;bottom:1px}` → 槽中心 (19, -23)，字号 9 */
+    key: { position: new Vec2(19, -23), size: new Size(20, 10), fontSize: 9 },
+    cooldown: { position: new Vec2(0, 0), size: new Size(40, 20), fontSize: 16 },
+    /** 空槽（未绑技能）：稿 `.sslot.is-empty` 虚线框 + 12px text-4；客户端没有技能名，用一个占位字 */
+    emptyColor: T.text[4],
+    emptyFontSize: T.fontSize.f12,
+    emptyText: "空",
+  },
+  /** 自动挂机开关（战斗列顶行的细长横条：矢量底板 + 刀剑图标 + 「挂机」文字；开 = 金边金字） */
+  autoFight: {
+    size: new Size(256, 26),
+    position: new Vec2(-202, 56),
+    label: { text: "挂机", position: new Vec2(4, 0), size: new Size(60, 12), fontSize: T.fontSize.f10, spacingX: 1 },
+    /** 稿 `.auto svg{width:14px}`：图标与文字同排（图标偏左、文字偏右） */
+    icon: { position: new Vec2(-16, 0), size: new Size(14, 14), stroke: 1.7 },
+    /** 开启态边框（稿 `.auto.on` 的 rgba(217,162,39,.7)）与字色（稿 #F3DEA6，取最近的 gold-5） */
+    onBorder: new Color(217, 162, 39, 178),
+    onColor: T.gold[5],
+  },
+  /**
+   * 球体皮肤（稿 `.orb` 的四层结构；血球 / 法力球共用）
+   *
+   * Graphics 没有径向渐变：球腔用「深底 + 几层偏心柔光圆」近似 —— 圆心抬 `sheenCenterY`，
+   * 最大半径恰好落在金环内沿，保证不溢出球外。
+   */
+  orb: {
+    /** 外环宽（稿 border 2px） */
+    rim: T.border.widthStrong,
+    /** 柔光圆心抬高（px，稿 radial 圆心在 50% 34%） */
+    sheenCenterY: 6,
+    /** 柔光层：scale 是相对「环内半径 − 抬高量」的比例 */
+    sheen: [
+      { scale: 1, color: T.surface[2], alpha: 255 },
+      { scale: 0.62, color: T.surface[3], alpha: 190 },
+      { scale: 0.3, color: T.surface[4], alpha: 130 },
+    ],
+    /** 液面内缩（稿 `.orb-fill{inset:5px}`） */
+    liquidInset: 5,
+    /** 液面上沿黑圈（稿 `.orb::after{inset:6px}`，2px 描边才渲染得出来） */
+    ringInset: 6,
+    ringWidth: 2,
+    /** 液面竖向渐变的切条数（同一个 Graphics，DrawCall 不变） */
+    gradientSteps: 16,
+    /** 渐变深端停靠位置（稿 70% 之后不再变暗） */
+    gradientStop: 0.7,
+  },
+  /** 「设置」独立按钮（稿第二条竖分隔线之后，44×44） */
+  settingsButton: { position: new Vec2(308, -17), size: new Size(44, 44) },
+  /**
+   * 组间竖分隔线（稿 `.vsep`：1px 宽、44 高、上下透明、中间 line-3）
+   * 两条：战斗列与功能键组之间、功能键组与设置之间
+   */
+  separators: {
+    positions: [new Vec2(-60, -17), new Vec2(267, -17)],
+    width: 1,
+    height: 44,
+    color: T.line[3],
   },
 };
 
@@ -135,22 +247,25 @@ export const joystickLayout = {
 /**
  * 小地图布局
  * 组件主体坐标以屏幕中心为原点；其余子件坐标以「地图内容区中心」为原点
- * （功能入口按钮列贴地图内容区左侧，名称条贴内容区上方，线路/排行榜贴内容区下方）
+ * （功能入口按钮网格贴地图内容区左侧且顶边与地图面板对齐，名称条贴内容区上方，坐标条贴下方）
+ */
+/**
+ * 右上小地图 —— **逐值对照 design/olua-ui/screens/04-hud.html 的 .map 段 + ui.css 的 .panel/.map-rail**
+ *
+ * 稿口径（1920×1080 基准，1 设计像素 = 1px）：`.map{right:20px;top:14px;width:304px}`，
+ * 面板高 = head 40 + view 上边距 8 + view 170 + foot 32 = 250。
+ * 组件原点 = 面板中心：x = 960 - 20 - 152 = 788，y = 540 - 14 - 125 = 401
  */
 export const smallMapLayout = {
-  /** 组件主体（尺寸需容纳整块内容，位置在屏幕右上角——屏幕坐标固定值，原点在屏幕中心，直接手调） */
-  size: new Size(304, 276),
-  position: new Vec2(788, 388),
+  /** 面板（稿 `.map .panel`：304 宽、r3、line-3 边、四角铆钉 —— 底板由 GameUiHelper.createDialogPanel 现画） */
+  size: new Size(304, 256),
+  position: new Vec2(788, 398),
   /**
-   * 功能入口图标：单列竖排，图标资源即 names 里的名字（ui/minimap 目录）
-   *
-   * **每一项都必须在 `resources/ui/minimap/` 有同名图**：这里写名字、图缺失时引擎只在控制台报一句
-   * `Bundle resources doesn't contain ...`，界面上表现为那一格是空的（不会报错、也不会挡住别的）。
-   * 原来末尾那颗占位 `"屏蔽 副本"` 就是这样 —— 配置写的是正常中文名，而 Release 包里的文件名
-   * 已是乱码（`灞忚斀 鍓?湰.png`），每次进游戏必报一条 error、入口列少一颗（#457）。
-   * 要加入口先确认素材已随 Release 分发、且文件名是合法 UTF-8。
+   * 功能入口 rail（稿 `.map-rail`）：**2 列 × 34px、间距 5、共 7 颗描边图标**
+   * 世界 / 线路 / 排行榜 / 成就 / 消息(+红点) / 设置 / 声音 —— 排行榜与线路**在 rail 里**，
+   * 底部（.map-foot）只剩世界坐标（早前「胶囊在地图下方」是看漏稿，#1076 尾批已改回）
    */
-  entryIcons: ["world", "achievement", "mail", "config", "sound"],
+  entryIcons: ["world", "channel", "ranking", "achievement", "mail", "config", "sound"],
   /**
    * 哪个入口开消息中心（邮件面板，公告板在面板里；#429 之前这颗只开公告板）
    *
@@ -158,51 +273,84 @@ export const smallMapLayout = {
    * 两路都是「有东西要处理」，分成两个红点反而要玩家去猜哪个更急。
    */
   mailEntry: "mail",
-  entryDot: { position: new Vec2(9, 9), size: new Size(9, 9) },
-  entryIconSize: 28,
-  entryIconGap: 6,
-  /** 按钮列的位置 */
-  entryColumnPosition: new Vec2(-152, -8),
-  /** 地图内容区底图（暂为空图占位，其中心即子件坐标原点） */
-  mapFrameSize: new Size(260, 205),
-  /** 地图内容区的可绘制区域（黑点/红点画在这里） */
-  contentSize: new Size(250, 185),
-  /** 地图名称条（贴在内容区正上方） */
-  nameBar: { position: new Vec2(0, 112), size: new Size(272, 40), fontSize: T.fontSize.f14, color: T.gold[4] },
-  /** 线路 / 排行榜标签行（横向布局容器，排行榜在左、线路在右） */
-  tagRow: { position: new Vec2(0, -118), size: new Size(85, 24), gap: 0 },
-  /**
-   * 「N 线」动态线号层（#1016）：盖在「服务器线路」标签底图烙死的「1 线」字上
-   *
-   * 补丁矩形取 banner 内区（素材 85×24：x∈[12,62]、y∈[4,17]，节点坐标以中心为原点），
-   * 颜色取内区纯色的中间值 —— 与上下渐变的偏差肉眼不可见；文字用与烙字同色系的暖金色。
-   * 只在分线（channel > 0）且 `maxChannels > 1` 时显示。
-   */
-  channelTag: {
-    patch: { name: "small_map_channel_patch", rect: { x: -30.5, y: -5, width: 50, height: 13 }, color: T.ember[1] },
-    text: { name: "small_map_channel_text", fontSize: 13, position: new Vec2(-5.5, 0), size: new Size(50, 14), color: T.gold[4] },
+  /** 未读红点（稿 `.map-rail .reddot`：8px、right/top 1px → 按钮中心坐标 (12,12)） */
+  entryDot: { position: new Vec2(12, 12), size: new Size(8, 8) },
+  /** rail 网格（稿 `grid-template-columns:34px 34px; gap:5px`） */
+  entryGrid: { columns: 2, buttonSize: 34, gap: 5 },
+  /** rail 容器中心：left = -152-81 = -233、宽 73；top = +125、高 = 4 行×34 + 3×5 = 151 */
+  entryGridPosition: new Vec2(-196.5, 53),
+  /** 标题条（稿 `.map-head`：高 40、内容居中 —— 图名 gold-5 + 「· N 线」text-4 + 下拉箭头 12px） */
+  head: {
+    /** 条带在面板内的中心 y（稿 `.map-head` 中心 505，面板中心 398 → +107） */
+    y: 107,
+    nameFontSize: T.fontSize.f14,
+    nameColor: T.gold[5],
+    /** 稿 `.map-head b{letter-spacing:.16em}`：14px 下约 2px */
+    nameSpacingX: 2,
+    /** 「· N 线」副文字（分线图才显示；公共线为空） */
+    channel: { position: new Vec2(39, 107), size: new Size(64, 14), fontSize: T.fontSize.f10, color: T.text[4] },
+    /**
+     * 下拉箭头（稿 `svg 12px color text-3`，路径 M6 9l6 6 6-6 → icons.headChevron）
+     * 有线号时排在「· N线」之后（x=88）；公共线没有副文字，箭头紧跟图名（x=30）——
+     * 稿是 flex 居中整组，客户端两个 Label 固定摆放，只能按有无副文字给两个位
+     */
+    chevron: { position: new Vec2(68, 107), aloneX: 30, size: new Size(12, 12), color: T.text[3] },
   },
-  /** 世界坐标条 */
-  positionBar: { position: new Vec2(0, -94), size: new Size(115, 21), fontSize: T.fontSize.f12 },
+  /**
+   * 地图内容区（稿 `.map-view`：280×170 = 304 - 左右 12 边距、r2、line-1 边）
+   * 中心 y = +85（head 底）- 8（margin）- 85（半高）= -8；黑点/红点/底图都画在这里
+   */
+  contentSize: new Size(280, 170),
+  contentPosition: new Vec2(0, -6),
+  /** 内容区视口的外观（稿 `.map-view` 径向底 + 22px 网格 + 底图 opacity .5 + 内暗角 26px） */
+  mapView: {
+    /** 视口边线（极弱，只用来分界） */
+    border: T.line[1],
+    /** 底图不透明度（0~255；稿 .terrain 是 .5） */
+    imageOpacity: 128,
+    /**
+     * 径向底色（稿 `radial-gradient(circle, #2A2015, #120D08 76%)`）：Graphics 没有径向渐变，
+     * 用「外圈 rect + 中圈/内圈两层圆」叠出近似 —— 色值取最接近的 surface 档
+     */
+    backdrop: { outer: T.surface[1], mid: T.surface[3], midRadius: 125, inner: T.surface[4], innerRadius: 62 },
+    /**
+     * 网格（稿 22px repeating：金 10% × opacity .35 ≈ alpha 9）。客户端网格画在**实拍底图之上**
+     * （稿的地形只是稀疏折线，网格在图下方也看得见；实拍图是满幅，alpha 9 会被完全吃掉），
+     * 所以这里取 20 ≈ 8%，与稿的可见强度对齐
+     */
+    grid: { step: 22, color: T.gold[3], alpha: 26 },
+    /** 压暗薄纱（稿地形底 #2A2015→#120D08 是近黑；实拍底图 50% 叠上去仍偏亮，再压一层到同一调子） */
+    scrim: { color: T.surface.veil, alpha: 130 },
+    /** 内暗角（稿 `inset 0 0 26px rgba(0,0,0,.75)`）：四边填充条近似，13 条 × 2px（条太宽会看出分层） */
+    vignette: { steps: 13, width: 2, color: Color.BLACK },
+  },
+  /** 底部世界坐标（稿 `.map-foot`：右对齐、右距 12 / 下距 12 → 右缘 x=140，文字中心 y≈-108；格式 `X 128 Y 96`） */
+  /** 底部世界坐标（稿 `.map-foot` 的 coord：右对齐、右缘 x=140（右距 12）、文字中心 y=-107） */
+  positionBar: { position: new Vec2(80, -107), size: new Size(120, 14), fontSize: T.fontSize.f10, color: T.text[4] },
 };
 
 //#endregion
 
 //#region 怪物信息面板（屏幕上方，选中怪物时显示）
 
-/** 怪物信息面板布局（坐标以面板中心为原点） */
+/** 怪物信息面板布局（坐标以面板中心为原点；逐值对照 04-hud 的 `.monster` 段） */
 export const monsterInfoPanelLayout = {
   size: new Size(276, 80),
   position: new Vec2(0, 484),
-  /** 左侧头像（取怪物图标） */
-  avatar: { position: new Vec2(-104, 0), size: new Size(56, 64) },
-  /** 名称（左对齐） */
-  name: { position: new Vec2(14, 22), size: new Size(150, 18), fontSize: T.fontSize.f14 },
-  /** 血量条与血量文字 */
-  hpBar: { position: new Vec2(10, 2), size: new Size(190, 11) },
-  hpText: { position: new Vec2(0, -22), size: new Size(80, 12), fontSize: T.fontSize.f10 },
-  /** 技能行（未配置技能则不渲染） */
-  skillRow: { position: new Vec2(62, -22), slotSize: 18, spacing: 4 },
+  /** 底板：稿是暖炭褐 + 朱红半透明边 `rgba(198,58,32,.5)`（与血条同族，提示「这是敌人」） */
+  border: new Color(198, 58, 32, 128),
+  fill: T.surface.glass,
+  /** 左侧头像（56×64，朱红边 + 深褐底） */
+  avatar: { position: new Vec2(-104, 0), size: new Size(56, 64), border: new Color(224, 86, 47, 153) },
+  /** 名称（左对齐，14px 骨白） */
+  name: { position: new Vec2(14, 22), size: new Size(150, 18), fontSize: T.fontSize.f14, color: T.text[1] },
+  /** 等级（右对齐，朱红文字） */
+  level: { position: new Vec2(112, 22), size: new Size(60, 14), fontSize: T.fontSize.f10, color: T.ember[4] },
+  /** 血量条与血量文字（文字盖在条内居中，条加高到 14 才不裁字） */
+  hpBar: { position: new Vec2(10, 2), size: new Size(190, 14) },
+  hpText: { position: new Vec2(10, 2), size: new Size(120, 12), fontSize: T.fontSize.f10 },
+  /** 技能行（未配置技能则不渲染；稿 `.monster .skills i` 18×18 朱红薄底 + 内发光） */
+  skillRow: { position: new Vec2(62, -24), slotSize: 18, spacing: 3 },
 };
 
 //#endregion
@@ -274,10 +422,11 @@ export const tipsLayout = {
   errorFadeDuration: 1.5,
   messageColor: Color.GREEN,
   errorColor: Color.RED,
-  /** 自动战斗提示图集动画：节点自定义尺寸（图集源画布等比缩放到该尺寸）、每秒帧数、两个提示同显时寻路提示向下让位的偏移（像素） */
-  autoTipSize: new Size(500, 500),
-  autoTipFrameRate: 20,
-  autoTipPathOffsetY: -100,
+  /** 自动战斗状态提示（跟随主角的矢量胶囊）：胶囊尺寸 / 圆角 / 字号、两个提示同显时寻路提示向下让位的偏移（像素） */
+  autoTipSize: new Size(140, 30),
+  autoTipRadius: 15,
+  autoTipFontSize: 14,
+  autoTipPathOffsetY: -60,
 };
 
 //#endregion
@@ -319,29 +468,46 @@ export const roleShowLayout = {
 //#region 任务追踪栏（#396：左侧常驻，进行中的任务最多三条）
 
 /**
- * 任务追踪栏布局
+ * 任务追踪栏布局（逐值对照 04-hud 的 `.quests` 段）
  *
  * 位置固定在屏幕左侧、角色信息栏（左上）与聊天气泡（左上偏内）之下的空档：
- * 聊天气泡从 y=290 往下每条 -34 最多三条（到 222），追踪栏从 190 往下排，
- * 两者不会叠。行数上限三条 —— 再多就盖住地图了，剩下的去任务面板看。
+ * 稿 `.quests{left:20px;top:300px;width:330px}` → 屏幕坐标 (-960+20+165, 540-300-12) = (-775, 228)？
+ * 这里 position 是**标题行**的中心（标题高 24）：y = 540 - 300 - 12 = 228。
+ * 行数上限三条 —— 再多就盖住地图了，剩下的去任务面板看。
  */
 export const questTrackerLayout = {
-  /** 首行位置（屏幕坐标原点在中心） */
-  position: new Vec2(-775, 210),
+  /** 标题行位置（屏幕坐标原点在中心；稿 `.quests .head` 中心 y = 230） */
+  position: new Vec2(-775, 230),
   /** 命中区宽度（文字左对齐铺满） */
   width: 330,
-  /** 每行高度（行间不再另加间距） */
-  rowHeight: 22,
-  /** 最多显示几条（超出部分不显示：「还有 N 条」提示） */
-  maxRows: 3,
-  fontSize: 12,
+  /** 标题行（稿 `.quests .head`：「任务」13px 金-4 + 计数 10px text-4 + 一条渐隐细线） */
+  head: {
+    height: 20,
+    title: "任务",
+    titleFontSize: T.fontSize.f13,
+    titleColor: T.gold[4],
+    titleSpacingX: 2,
+    /** 计数（`进行中 / 全部`，如 `3 / 8`）：标题右侧（稿中心 x = 计数中心 -888 → 偏移 32） */
+    countFontSize: T.fontSize.f10,
+    countColor: T.text[4],
+    countX: 32,
+    /** 渐隐细线：从标题右侧起铺到右缘（稿 `linear-gradient(90deg,line-2,transparent)`，起于 -867.5） */
+    rule: { startOffset: 52, color: T.line[2] },
+  },
+  /** 每行高度（稿 `.qrow{height:24px}`） */
+  rowHeight: 24,
+  /** 最多显示几条（稿 `.quests` 高 124 = 头 20 + 间距 8 + 4×24，超出显示「还有 N 条」） */
+  maxRows: 4,
+  fontSize: T.fontSize.f12,
   /** 任务名颜色 / 进度颜色（可交付时整行转绿） */
   nameColor: T.gold[4],
   progressColor: T.text[3],
+  progressFontSize: T.fontSize.f11,
   readyColor: T.jade,
   /** 超出提示（{count} = 还有几条没显示） */
   moreText: "还有 {count} 条任务，打开任务面板查看",
-  moreColor: T.text[3],
+  moreColor: T.text[4],
+  moreFontSize: T.fontSize.f11,
   /** 空态不显示任何东西（追踪栏占位也不留） */
   texts: {
     /** 进度格式：{done}/{total} */

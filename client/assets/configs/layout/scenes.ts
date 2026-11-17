@@ -39,6 +39,8 @@ export const loginLayout = {
   stageSize: new Size(1920, 1080),
   /** 背景图（#1036：设计稿 hero-bg 黄昏沙城 1600×900，与屏幕同比例，铺满不变形不裁切） */
   background: uiImages.loginBackground,
+  /** 背景上的黑色半透明遮罩（设计稿 hero-scrim 的均匀层近似：压暗底图，让文案与面板可读） */
+  scrim: { name: "login_background_scrim", color: T.overlay.heroScrim },
 
   /**
    * 设计稿调色板（#1059 起全部引用设计令牌 configs/layout/tokens；名字沿用登录页那一套，
@@ -47,6 +49,8 @@ export const loginLayout = {
   palette: {
     /** 主金（描边 / 强调字） */
     gold: T.gold[3],
+    /** 亮金（主标金文字 / 高光强调） */
+    goldLight: T.gold[4],
     /** 深金（面板边框） */
     goldDark: T.gold[2],
     /** 弱金线 */
@@ -91,10 +95,8 @@ export const loginLayout = {
   /** 圆角半径（--r-3 面板 / --r-2 控件） */
   radius: { shell: T.radius.r3, control: T.radius.r2 },
 
-  /** 顶栏（左右边距 64、上下 26）：左品牌（真实 LOGO 图）+ 右配置版本胶囊与背景音开关 */
+  /** 顶栏（左右边距 64、上下 26）：右配置版本胶囊与背景音开关（左上品牌 LOGO 已移除） */
   topbar: {
-    /** 品牌 LOGO（resources/logo.png 金色 Olua 花体，1042×404 等比缩到 160 宽，左边缘对齐 -896） */
-    brand: { name: "login_brand_logo", image: uiImages.gameLogo, position: new Vec2(-816, 483), size: new Size(160, 62) },
     /** 版本胶囊（文字 = login_version_label，值来自 GET /game-config/version；拉取失败整颗隐藏） */
     version: {
       name: "login_version_pill",
@@ -103,8 +105,18 @@ export const loginLayout = {
       fontSize: T.fontSize.f11,
       textKey: "login_version_label",
     },
-    /** 背景音开关（登录页 BGM on/off；喇叭图标用 Graphics 画，见 Login.drawSpeaker） */
-    music: { name: "login_music_button", position: new Vec2(877, 495), size: new Size(40, 40), fontSize: T.fontSize.f16 },
+    /**
+     * 背景音开关（登录页 BGM on/off）：喇叭图标用设计稿导出的 PNG（两态换图，不自绘）
+     */
+    music: {
+      name: "login_music_button",
+      position: new Vec2(877, 495),
+      size: new Size(40, 40),
+      fontSize: T.fontSize.f16,
+      icon: uiImages.loginSpeakerIcon,
+      iconOff: uiImages.loginSpeakerOffIcon,
+      iconSize: new Size(20, 20),
+    },
   },
 
   /** 首屏左列（文案区）：左边缘统一在 x=-864（屏幕左缘往里 96px），y 从上往下 */
@@ -117,7 +129,8 @@ export const loginLayout = {
       label: { textKey: "login_eyebrow", position: new Vec2(-704, 186), size: new Size(240, 24), fontSize: T.fontSize.f12 },
     },
     /** 主标题：真实 LOGO 图（1042×404 等比缩到 190 宽；稿件把这里当 72px 品牌字） */
-    logo: { name: "login_hero_logo", image: uiImages.gameLogo, position: new Vec2(-769, 120), size: new Size(190, 74) },
+    /** 主标（金色文字「Olua」，替代原 LOGO 图；框体沿用原图 190×74，字号用品牌字档 f72） */
+    logo: { name: "login_hero_logo", textKey: "login_hero_title", position: new Vec2(-769, 120), size: new Size(190, 74), fontSize: T.fontSize.f72 },
     /** 一句话简介（两行内，左对齐，wrapped label） */
     tagline: { textKey: "login_tagline", position: new Vec2(-584, 34), width: 560, fontSize: T.fontSize.f14, lineHeight: 30 },
     /** 职业预览标签（三颗胶囊，从左往右；点它切换下方说明文案） */
@@ -128,11 +141,15 @@ export const loginLayout = {
       firstLeftEdgeX: -864,
       positionY: -41,
       fontSize: T.fontSize.f13,
+      /** 图标（设计稿 SVG 导出的 16px PNG）与文字相对胶囊左内边距 18 的位置 */
+      iconSize: new Size(16, 16),
+      iconInset: 18,
+      iconGap: 8,
       /** 与本作三职业一一对应：label = 标签字，descKey = 说明文案 key（默认选中第一颗） */
       classes: [
-        { key: "warrior", labelKey: "login_class_warrior", descKey: "login_class_desc_warrior" },
-        { key: "mage", labelKey: "login_class_mage", descKey: "login_class_desc_mage" },
-        { key: "taoist", labelKey: "login_class_taoist", descKey: "login_class_desc_taoist" },
+        { key: "warrior", labelKey: "login_class_warrior", descKey: "login_class_desc_warrior", icon: uiImages.loginClassWarriorIcon },
+        { key: "mage", labelKey: "login_class_mage", descKey: "login_class_desc_mage", icon: uiImages.loginClassMageIcon },
+        { key: "taoist", labelKey: "login_class_taoist", descKey: "login_class_desc_taoist", icon: uiImages.loginClassTaoistIcon },
       ],
     },
     /** 职业说明（随选中的标签换文案；稿件 min-height 两行，换行不影响下面元素位置） */
@@ -147,8 +164,10 @@ export const loginLayout = {
       /** 轮换间隔与淡入淡出时长（毫秒；稿件 4 条 12 秒走完一轮） */
       rollMs: 3000,
       fadeMs: T.duration.dur2,
-      /** 「公告」标签（左内边距 16，字后空 14 才是滚动行） */
-      label: { textKey: "login_notice_label", offsetX: -262, size: new Size(60, 46), fontSize: T.fontSize.f12, inset: 16 },
+      /** 「公告」标签（左内边距 16，图标 15 + 空 7 才是文字，字后空 14 才是滚动行） */
+      label: { textKey: "login_notice_label", offsetX: -240, size: new Size(60, 46), fontSize: T.fontSize.f12, inset: 16 },
+      /** 公告图标（设计稿 SVG 导出的 PNG，15px，左内边距 16 起） */
+      icon: { name: "login_notice_icon", image: uiImages.loginNoticeIcon, offsetX: -284, size: new Size(15, 15) },
       /** 滚动行：左边缘 = 面板左 + 2(朱条) + 16 + 60 + 14 */
       row: { offsetX: 45, size: new Size(526, 46), fontSize: T.fontSize.f13 },
     },
@@ -175,28 +194,50 @@ export const loginLayout = {
     /** 账号 / 密码输入框（44 高；图标沿用现有 icon-account / icon-password，图标距左 14、宽 17） */
     account: { name: "login_field_account", placeholder: "请输入账号", position: new Vec2(0, 104), size: new Size(408, 44), icon: uiImages.loginAccountIcon, password: false, inputFontSize: T.fontSize.f14, inputHeight: 34, inputInset: 84 },
     password: { name: "login_field_password", placeholder: "请输入密码", position: new Vec2(0, 46), size: new Size(408, 44), icon: uiImages.loginPasswordIcon, password: true, inputFontSize: T.fontSize.f14, inputHeight: 34, inputInset: 84 },
-    /** 密码显隐按钮（挂在密码框内右侧；眼睛图标 Graphics 画，见 Login.drawEye） */
-    eye: { name: "login_password_eye", offsetX: 179, offsetY: 46, size: new Size(30, 30) },
-    /** 选服按钮（点它开 ZoneSelectDialog；区名与状态来自 GET /zones） */
+    /** 密码显隐按钮（挂在密码框内右侧，offset 相对密码框中心；眼睛图标两态换图，不自绘） */
+    eye: {
+      name: "login_password_eye",
+      offsetX: 179,
+      offsetY: 0,
+      size: new Size(30, 30),
+      icon: uiImages.loginEyeIcon,
+      iconOn: uiImages.loginEyeOnIcon,
+      iconSize: new Size(18, 18),
+    },
+    /**
+     * 选服按钮（点它开 ZoneSelectDialog；区名与状态来自 GET /zones）
+     *
+     * 行高 44 与输入框一致，上下间距同样 14（与账号 / 密码的 58 中心距同一节奏）。
+     * 地球与箭头都是设计稿导出的 PNG。
+     */
     server: {
       name: "login_server_button",
       position: new Vec2(0, -12),
       size: new Size(408, 44),
-      /** 地球小图（Graphics 画，见 Login.drawGlobe）与区名 / 状态字 / 箭头的横向位置与宽度（相对按钮中心） */
+      /** 地球小图（16px，左内边距 14 起）与区名 / 状态字 / 箭头的横向位置与宽度（相对按钮中心） */
       globeX: -178,
-      globeRadius: 7,
+      globeSize: new Size(16, 16),
+      globeIcon: uiImages.loginGlobeIcon,
       nameX: -30,
       nameSize: new Size(220, 44),
       statusX: 130,
       statusSize: new Size(80, 44),
       caretX: 188,
+      caretSize: new Size(12, 12),
+      caretIcon: uiImages.loginCaretIcon,
       fontSize: T.fontSize.f14,
       statusFontSize: T.fontSize.f11,
     },
-    /** 记住账号行：勾选框 + 文案（左）/ 忘记密码（右） */
+    /** 记住账号行：勾选框 + 文案（左）/ 忘记密码（右）；与上方选服行保持同一 14px 间距 */
     remember: {
-      positionY: -46,
-      checkbox: { name: "login_remember_checkbox", offsetX: -193, size: new Size(18, 18) },
+      positionY: -57,
+      checkbox: {
+        name: "login_remember_checkbox",
+        offsetX: -193,
+        size: new Size(18, 18),
+        icon: uiImages.loginCheckboxIcon,
+        iconChecked: uiImages.loginCheckboxCheckedIcon,
+      },
       label: { textKey: "login_remember", offsetX: -132, size: new Size(110, 20), fontSize: T.fontSize.f12 },
       forgot: { textKey: "login_forgot", offsetX: 152, size: new Size(100, 20), fontSize: T.fontSize.f12 },
     },
@@ -204,20 +245,20 @@ export const loginLayout = {
     loginButton: {
       name: "login_enter_button_node",
       textKey: "login_enter_button",
-      position: new Vec2(0, -98),
+      position: new Vec2(0, -102),
       size: new Size(408, 48),
       fontSize: T.fontSize.f18,
     },
     /** 次要入口行：注册新账号 / 游戏修复 */
     altRow: {
-      positionY: -145,
+      positionY: -150,
       register: { textKey: "login_register", offsetX: -100, size: new Size(150, 20), fontSize: T.fontSize.f13 },
       repair: { textKey: "login_repair", offsetX: 100, size: new Size(130, 20), fontSize: T.fontSize.f13 },
     },
     /** 面板脚注（合规文案）：1px 分隔线 + 一行小字 */
     foot: {
-      line: { name: "login_panel_foot_line", position: new Vec2(0, -172), size: new Size(408, 1) },
-      text: { textKey: "login_foot_notice", position: new Vec2(0, -192), size: new Size(408, 20), fontSize: T.fontSize.f10 },
+      line: { name: "login_panel_foot_line", position: new Vec2(0, -174), size: new Size(408, 1) },
+      text: { textKey: "login_foot_notice", position: new Vec2(0, -196), size: new Size(408, 20), fontSize: T.fontSize.f10 },
     },
   },
 
@@ -267,10 +308,11 @@ export const roleSelectorLayout = {
   stageSize: new Size(1920, 1080),
   /** 背景：与登录 / 加载同一张黄昏沙城（稿件 02 用的就是它） */
   background: uiImages.loginBackground,
+  /** 背景上的黑色半透明遮罩（与登录页 loginLayout.scrim 同一层：压暗底图，文字与卡片更可读） */
+  scrim: { name: "role_select_scrim", color: T.overlay.heroScrim },
 
-  /** 顶栏：品牌（左）/ 「区服 · 账号」胶囊 + 退出登录（右） */
+  /** 顶栏：「区服 · 账号」胶囊（右）+ 退出登录（左上品牌图已移除） */
   topbar: {
-    brand: { name: "role_select_brand", image: uiImages.gameLogo, position: new Vec2(-838, 490), size: new Size(132, 51) },
     /** 「雷霆一区 · player_01」胶囊（区名来自 ZoneStore，账号来自 Session） */
     who: { name: "role_select_who", position: new Vec2(704, 497), size: new Size(230, 30), fontSize: T.fontSize.f12 },
     /** 退出登录（ghost 档小按钮：先吊销令牌再回登录） */
@@ -389,21 +431,25 @@ export const roleSelectorLayout = {
     position: new Vec2(654, -24),
     size: new Size(500, 920),
     head: {
-      title: { textKey: "role_select_roster_title", position: new Vec2(-180, 430), size: new Size(240, 24), fontSize: T.fontSize.f16 },
-      /** 已建角色数（只报数量，不报上限：上限在服务端，客户端零副本） */
-      count: { position: new Vec2(-24, 430), size: new Size(100, 20), fontSize: T.fontSize.f11 },
+      /** 标题（左对齐；文字起点 = 面板左缘 + 18 内边距 = -232，即框心 -112） */
+      title: { textKey: "role_select_roster_title", position: new Vec2(-112, 430), size: new Size(240, 24), fontSize: T.fontSize.f16 },
+      /** 已建角色数（只报数量，不报上限：上限在服务端，客户端零副本）；紧跟标题后空 10 */
+      count: { position: new Vec2(-108, 430), size: new Size(100, 20), fontSize: T.fontSize.f11 },
       /** 管理 / 完成（切换卡片上的删除按钮） */
       manageButton: { name: "manage_role_button", position: new Vec2(196, 430), size: new Size(72, 28), fontSize: T.fontSize.f12 },
       divider: { position: new Vec2(0, 404), size: new Size(500, 1) },
     },
-    /** 滚动区：视口在舞台上的绝对位置与尺寸（内容宽 = 视口宽，换行由网格配置决定） */
+    /** 滚动区：视口在舞台上的绝对位置与尺寸（内容宽 = 视口宽，换行由网格配置决定）；
+     *  视口底部给「创建角色」固定按钮让出 64px（按钮不随列表滚动） */
     scroll: {
       name: "role_scroll_view",
-      position: new Vec2(654, -50),
-      viewSize: new Size(468, 832),
+      position: new Vec2(654, -18),
+      viewSize: new Size(468, 768),
       paddingX: 0,
       paddingY: 0,
     },
+    /** 「创建角色」固定按钮：钉在滚动区与面板底缘之间（舞台绝对坐标，同 scroll 口径） */
+    createButton: { name: "open_create_role_button", position: new Vec2(654, -443), size: new Size(240, 44), fontSize: T.fontSize.f14 },
     /** 角色卡（单元格）几何：立绘缩略图 + 名字 + 职业/等级 + 选中角标 */
     card: {
       size: new Size(228, 252),
@@ -418,17 +464,8 @@ export const roleSelectorLayout = {
       level: { offsetX: 67, offsetY: -106, size: new Size(70, 18), fontSize: T.fontSize.f11, color: T.gold[4] },
       /** 选中角标（左上「已选择」金底深字） */
       badge: { textKey: "role_select_selected_badge", font: T.fontSize.f10, size: new Size(54, 18), offset: new Vec2(-79, 109) },
-      /** 管理模式的删除按钮（压在卡片正中间） */
-      deleteButton: { size: new Size(84, 34), fontSize: T.fontSize.f12 },
-      /** 创建角色卡（虚线 + 加号） */
-      create: {
-        textKey: "role_select_new_card",
-        subTextKey: "role_select_new_card_sub",
-        fontSize: T.fontSize.f13,
-        subFontSize: T.fontSize.f10,
-        plusSize: 40,
-        plusFontSize: T.fontSize.f20,
-      },
+      /** 管理模式的删除按钮（右上角；朱红主按钮色，与卡片「已选择」角标同排） */
+      deleteButton: { size: new Size(84, 34), fontSize: T.fontSize.f12, offset: new Vec2(62, 99) },
     },
   },
 
@@ -457,27 +494,35 @@ export const roleSelectorLayout = {
     fontSize: T.fontSize.f12,
   },
 
-  /** 创建角色弹窗（沿用现有素材与内部几何，只跟着新配色走） */
+  /**
+   * 创建角色弹窗（按设计语言重绘：矢量面板 + 金线标题 + **文字选项胶囊**）
+   *
+   * 原稿的图片标题 / 分组图 / 职业说明图 / 立绘预览全部移除：
+   * - 标题与分组用文字（key 见 texts.role_create_*）；
+   * - 选项是文字胶囊：性别两颗（男 / 女）、职业三颗（名取 configs/role.occupations 的 name），
+   *   选中态 = 面板底 + 金描边 + 亮字（与登录页职业标签同一套两态）；
+   * - 创建时不显示动画预览与说明图（无 occupationPreview / occupationDescription）。
+   * 选项的枚举 key（SEX / OECCUPATION）与显示名在 RoleSelector.ts 组装，配置只管几何。
+   */
   createDialog: {
     name: "create_role_dialog",
-    image: uiImages.createRoleDialogBackground,
-    position: new Vec2(770, -125),
-    size: new Size(320, 580),
-    title: { name: "create_role_dialog_title", image: uiImages.createRoleTitleLabel, position: new Vec2(0, 242), size: new Size(128, 28) },
-    genderLabel: { name: "gender_label", image: uiImages.createRoleGenderLabel, position: new Vec2(0, 190), size: new Size(56, 25) },
-    occupationLabel: { name: "occupation_label", image: uiImages.createRoleOccupationLabel, position: new Vec2(0, 100), size: new Size(56, 25) },
-    /** 性别 / 职业开关组（横向容器：位置、间距、单个开关尺寸） */
-    sexToggle: { position: new Vec2(0, 148), spacing: 30, toggleSize: new Size(48, 48) },
-    occupationToggle: { position: new Vec2(0, 52), spacing: 30, toggleSize: new Size(48, 48) },
-    /** 名称输入框 */
-    nameInput: { placeholder: "输入角色名称", position: new Vec2(0, -26), size: new Size(240, 60) },
-    /** 创建按钮（默认置灰，输入名称后可用；文案见 configs/texts.label_role_create） */
-    createButton: { name: "confirm_create_role_button", image: uiImages.middleRedButtonBackground, position: new Vec2(0, -238), size: new Size(190, 48), fontSize: T.fontSize.f18 },
-    /** 职业说明图（尺寸取职业配置的 descriptionSize）与角色预览 */
-    occupationDescription: { position: new Vec2(0, -142) },
-    occupationPreview: { position: new Vec2(-245, -95), size: new Size(200, 360) },
-    /** 右上角关闭按钮：点它关弹窗（返回登录已移到左栏 CTA，不再兼职关弹窗） */
-    closeButton: { name: "close_create_role_button", image: uiImages.middleRedButtonBackground, position: new Vec2(138, 266), size: new Size(44, 44), fontSize: T.fontSize.f24 },
+    position: new Vec2(0, 0),
+    size: new Size(420, 440),
+    /** 标题（文字）+ 金色下划线，同登录面板标题口径 */
+    title: { textKey: "role_create_title", position: new Vec2(0, 172), size: new Size(300, 30), fontSize: T.fontSize.f20 },
+    titleUnderline: { position: new Vec2(0, 152), size: new Size(T.border.titleRuleWidth, T.border.titleRuleHeight) },
+    /** 分组小字（左对齐，文字起点 = 面板左缘 + 18 = -192，即框心 -137） */
+    genderLabel: { textKey: "role_create_gender_label", position: new Vec2(-137, 126), size: new Size(110, 20), fontSize: T.fontSize.f14 },
+    occupationLabel: { textKey: "role_create_occupation_label", position: new Vec2(-137, 44), size: new Size(110, 20), fontSize: T.fontSize.f14 },
+    /** 文字选项行：胶囊尺寸 + 行 y + 间距（性别 2 颗 / 职业 3 颗，横排居中） */
+    genderOptions: { positionY: 92, pillSize: new Size(96, 36), spacing: 12 },
+    occupationOptions: { positionY: 10, pillSize: new Size(86, 36), spacing: 10 },
+    /** 名称分组小字 + 输入框（44 高与登录页输入框一致；视觉走 UiHelper.createVectorInputField） */
+    nameInputLabel: { textKey: "role_create_name_label", position: new Vec2(-137, -30), size: new Size(110, 20), fontSize: T.fontSize.f14 },
+    nameInput: { placeholder: "输入角色名称", position: new Vec2(0, -68), size: new Size(320, 44) },
+    /** 底部双按钮：创建（矢量朱红主按钮，默认置灰）/ 取消（ghost，关闭弹窗） */
+    createButton: { name: "confirm_create_role_button", position: new Vec2(-88, -160), size: new Size(160, 44), fontSize: T.fontSize.f14 },
+    cancelButton: { name: "cancel_create_role_button", position: new Vec2(88, -160), size: new Size(160, 44), fontSize: T.fontSize.f14 },
   },
 
   /** 帧动画帧率（角色卡缩略与中间立绘共用） */
@@ -492,11 +537,6 @@ export const roleSelectorLayout = {
     /** 脚下选中特效（select_player@0）相对立绘中心的偏移、尺寸与帧率 */
     effect: { offset: new Vec2(0, -180), size: new Size(300, 100), frameRate: 12 },
   },
-  /** 管理角色（删除）的两步确认 */
-  manageRole: {
-    /** 待确认状态的超时（毫秒）：到点自动复位 */
-    confirmTimeout: 3000,
-  },
 };
 //#endregion
 
@@ -506,8 +546,6 @@ export const roleSelectorLayout = {
 export const loadingLayout = {
   /** 背景：与登录 / 选角同一张黄昏沙城（设计稿 03 用的就是它，压暗后当场景底） */
   background: uiImages.loginBackground,
-  /** 顶部左侧品牌（真实 LOGO 图，与登录页共用；小一号，压在暗背景上） */
-  brand: { name: "loading_brand", image: uiImages.gameLogo, position: new Vec2(-856, 500), size: new Size(120, 46) },
   /**
    * 中央环形进度：外圈断续刻度（缓慢旋转）+ 一圈底色轨 + 一段金色进度弧
    *

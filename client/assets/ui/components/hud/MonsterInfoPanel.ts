@@ -1,5 +1,5 @@
-import { Color, isValid, Label, Node, ProgressBar, UITransform, Vec2 } from "cc";
-import { monsterInfoPanelLayout, uiImages } from "../../../configs/hudLayout";
+import { Color, isValid, Label, Node, UITransform } from "cc";
+import { monsterInfoPanelLayout, T } from "../../../configs/hudLayout";
 import MonsterManager from "../../core/MonsterManager";
 import GameUiHelper from "../../helpers/GameUiHelper";
 
@@ -9,23 +9,23 @@ const BACKGROUND_NAME = "monster_info_background";
 /**
  * 怪物信息面板组件（自身即面板节点，位于 UI 中间顶部）
  * 动态创建：选中怪物时由创建器（RoleUIManager 注入）new 出来，取消选中或目标失效时由 RoleUIManager 销毁
- * 展示内容：背景 + 左侧头像 + 名称 + 血量 + 技能
+ * 展示内容：矢量底板（新稿：暗底朱红描边）+ 左侧头像 + 名称 + 等级 + 血量（矢量血条）+ 技能
  * 面板样式全部由 GameUiHelper 零件拼装，位置与尺寸见 configs/hudLayout.monsterInfoPanel
  */
 export default class MonsterInfoPanel extends Node {
   /** 当前选中的怪物节点 */
   private target: Node | null = null;
-  /** 血量进度条 */
-  private hpBar: ProgressBar | null = null;
+  /** 血量进度刷新（矢量血条返回的 setProgress） */
+  private setHpProgress: ((p: number) => void) | null = null;
   /** 血量文字 */
   private hpText: Label | null = null;
 
   constructor(target: Node) {
     super("monster_info");
-    // 面板主体（尺寸/位置/背景：固定值见 configs/hudLayout.monsterInfoPanel）
+    // 面板主体（尺寸/位置：固定值见 configs/hudLayout.monsterInfoPanel；底板为矢量玻璃板 + 朱红描边）
     this.addComponent(UITransform).setContentSize(monsterInfoPanelLayout.size);
     this.setPosition(monsterInfoPanelLayout.position.x, monsterInfoPanelLayout.position.y, 0);
-    this.addChild(GameUiHelper.createImage(BACKGROUND_NAME, uiImages.monsterInfoBackground, new Vec2(), monsterInfoPanelLayout.size));
+    this.addChild(GameUiHelper.createGlassPlate(BACKGROUND_NAME, monsterInfoPanelLayout.size, T.radius.r3, monsterInfoPanelLayout.border, monsterInfoPanelLayout.fill));
     this.select(target);
   }
 
@@ -38,14 +38,15 @@ export default class MonsterInfoPanel extends Node {
     if (!monster) return;
     // 左侧头像
     this.addChild(GameUiHelper.createMonsterAvatar(monster));
-    // 名称
-    this.addChild(GameUiHelper.createText("monster_name", monster.label, layout.name.fontSize, layout.name.position, layout.name.size, Color.WHITE, Label.HorizontalAlign.LEFT));
-    // 血量条
-    const hpBar = GameUiHelper.createHpBar("monster_hp", monster.hp / monster.maxHp, layout.hpBar.position, layout.hpBar.size);
-    this.hpBar = hpBar.getComponent(ProgressBar);
-    this.addChild(hpBar);
-    // 血量文字
-    this.hpText = GameUiHelper.createText("monster_hp_text", `${monster.hp} / ${monster.maxHp}`, layout.hpText.fontSize, layout.hpText.position, layout.hpText.size, Color.WHITE, Label.HorizontalAlign.LEFT).getComponent(Label);
+    // 名称（左对齐）与等级（右对齐，新稿同行）
+    this.addChild(GameUiHelper.createText("monster_name", monster.label, layout.name.fontSize, layout.name.position, layout.name.size, layout.name.color, Label.HorizontalAlign.LEFT));
+    this.addChild(GameUiHelper.createText("monster_level", `${monster.level} 级`, layout.level.fontSize, layout.level.position, layout.level.size, layout.level.color));
+    // 血量条（矢量，朱红填充；加高到 14：血量文字直接盖在条内居中，对齐新稿）
+    const hpBar = GameUiHelper.createVectorBar("monster_hp", monster.hp / monster.maxHp, layout.hpBar.position, layout.hpBar.size, T.ember[2]);
+    this.setHpProgress = hpBar.setProgress;
+    this.addChild(hpBar.node);
+    // 血量文字（与血条同位置：盖在条上居中）
+    this.hpText = GameUiHelper.createText("monster_hp_text", `${monster.hp} / ${monster.maxHp}`, layout.hpText.fontSize, layout.hpText.position, layout.hpText.size, Color.WHITE).getComponent(Label);
     this.addChild(this.hpText.node);
     // 技能行（怪物未配置技能则不渲染）
     // 怪物技能挂载映射在服务端（monster_skills 表），客户端快照还没有这段 —— 先给空清单（本行历史上也一直为空）
@@ -65,17 +66,17 @@ export default class MonsterInfoPanel extends Node {
     if (!this.target || !isValid(this.target)) return false;
     const monster = MonsterManager.getMonsterData(this.target);
     if (!monster) return false;
-    if (this.hpBar) this.hpBar.progress = monster.hp / monster.maxHp;
+    if (this.setHpProgress) this.setHpProgress(monster.hp / monster.maxHp);
     if (this.hpText) this.hpText.string = `${monster.hp} / ${monster.maxHp}`;
     return true;
   }
 
-  /** 清理动态内容（保留面板背景），同时释放引用 */
+  /** 清理动态内容（保留面板底板），同时释放引用 */
   private clearContent() {
     this.children.slice().forEach((child) => {
       if (child.name !== BACKGROUND_NAME) child.destroy();
     });
-    this.hpBar = null;
+    this.setHpProgress = null;
     this.hpText = null;
   }
 }

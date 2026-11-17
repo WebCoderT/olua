@@ -1,4 +1,5 @@
 import { Color } from "cc";
+import { T } from "./layout/tokens";
 
 /**
  * 小地图配置（右上角常驻 HUD）
@@ -15,14 +16,16 @@ export const smallMapConfig = {
    * 想让整张地图都装进小地图 → 把它调到「地图宽度的一半」以上（本工程地图 8192 像素宽，取 4200 即全图）
    */
   viewRadius: 600,
-  /** 角色黑点半径（像素） */
+  /** 角色点半径（像素；稿 .map-view .me 是 8px 直径的白点） */
   roleDotRadius: 4,
-  /** 怪物红点半径（像素） */
-  monsterDotRadius: 3,
-  /** 角色点颜色 */
-  roleDotColor: Color.BLACK,
-  /** 怪物点颜色 */
-  monsterDotColor: Color.RED,
+  /** 怪物点直径半径（像素；稿 .mob 是 5px 直径） */
+  monsterDotRadius: 2.5,
+  /** 角色点颜色（稿 #F7E9C6 = gold-5 高光金） */
+  roleDotColor: T.gold[5],
+  /** 角色点外环半径（稿 .me::after：inset -6 → 半径 4+6=10 的 1px 环，alpha .5） */
+  roleDotRingRadius: 10,
+  /** 怪物点颜色（稿 var(--ember-3)） */
+  monsterDotColor: T.ember[3],
   /** 路线指示线颜色（白色点状线：自动寻路期间画在小地图上的路线；与大地图的 routeLine 同一处路线） */
   routeColor: new Color(255, 255, 255, 235),
   /** 路线单个点半径（像素） */
