@@ -1610,30 +1610,10 @@ export default class StorageManager {
   }
 
   /**
-   * 洗点（#833）：四维归零、点数全退，扣绑定元宝
-   *
-   * 价格只在服务端（`growth_scalars.attrResetCost`）：客户端**不预检余额**，
-   * 不够就由服务端回 20011，提示里带准确金额。成功回执带 `cost` / `refund`，飘字直接用。
-   */
-  static async resetAttrsOnServer(): Promise<boolean> {
-    const role = this.findOnlineRole();
-    if (!role) return false;
-    let result: AttrChangeResult;
-    try {
-      result = await RoleApi.attrsReset(role.id, { revision: role.revision });
-    } catch {
-      return false;
-    }
-    this.applyAttrChangeResult(role, result);
-    GameUiHelper.createTip("label_attr_reset_tip", { refund: result.refund, cost: result.cost });
-    return true;
-  }
-
-  /**
-   * 加点 / 洗点回执的统一收尾（两个接口的回执同形，见 `AttrChangeResultDto`）
+   * 加点回执的统一收尾（见 `AttrChangeResultDto`；洗点入口已移除 #1113，回执形状不变）
    *
    * 三条都要做，缺一条就是「数值变了但界面没变」：
-   * 1. 照搬四维 / 余点 / 绑定元宝（**不本地算**：洗点扣了多少钱只有服务端知道）；
+   * 1. 照搬四维 / 余点 / 绑定元宝（**不本地算**：扣减明细只有服务端知道）；
    * 2. 属性面板重算后的数值一起刷（`refreshRoleAttributes`）；
    * 3. 落盘 + 对齐 revision（否则下一次保存必撞 20006）。
    */
@@ -1653,7 +1633,7 @@ export default class StorageManager {
     if (Array.isArray(data.physicalDefense)) role.physicalDefense = [Number(data.physicalDefense[0]), Number(data.physicalDefense[1])];
     if (Array.isArray(data.magicDefense)) role.magicDefense = [Number(data.magicDefense[0]), Number(data.magicDefense[1])];
     if (Array.isArray(data.taoistDefense)) role.taoistDefense = [Number(data.taoistDefense[0]), Number(data.taoistDefense[1])];
-    // 洗点会把上限降回去，服务端已经夹过血蓝，这里跟着收一次，免得血条显示超过上限
+    // 上限降低时服务端已经夹过血蓝，这里跟着收一次，免得血条显示超过上限
     role.hp = Math.min(role.hp, role.maxHp);
     role.revision = result.revision;
     this.updateOnlineRole(role);
