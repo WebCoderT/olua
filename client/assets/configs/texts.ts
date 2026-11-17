@@ -303,6 +303,20 @@ export const uiTexts = {
   label_rank_head: "【{rank}】",
   /** 绑定元宝余额（{value}） */
   label_bind_gold: "绑定元宝：{value}",
+  /** 成长线右栏「消耗」行的名称（称号 / 战魂是升级，军衔是晋升） */
+  label_growth_cost: "升级消耗",
+  label_rank_cost: "晋升消耗",
+  /** 成长线右栏属性表的列标题（稿 .gside h4：「晋升加成」/「升级加成」） */
+  label_growth_bonus: "升级加成",
+  label_rank_bonus: "晋升加成",
+  /** 成长线右栏「当前余额」行（稿 17-growth 的 .gcost 第二行） */
+  label_growth_balance: "当前余额",
+  /** 消耗值（{value} = 绑定元宝数，界面已带千分位） */
+  label_growth_cost_value: "{value} 绑定元宝",
+  /** 无法续升（满级 / 断链）时的消耗值占位 */
+  label_growth_cost_none: "—",
+  /** 军衔弹窗按钮下的提示行（{label} = 当前预览的军衔名，稿 .showline 的文案） */
+  hint_rank_show: "头顶将显示【{label}】红字，全服可见",
   /** 性别文案（校验提示用） */
   label_sex_boy: "男性",
   label_sex_girl: "女性",

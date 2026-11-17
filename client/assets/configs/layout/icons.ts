@@ -97,4 +97,8 @@ export const icons = {
   autoFight: {
     paths: ["M4 20l7-7M14 4l6 2-2 6-9 9-4-4 9-9z"],
   },
+  /** 成长线右栏提示行的对勾（稿 .showline 的内联 svg） */
+  growthCheck: {
+    paths: ["M5 12l5 5L20 7"],
+  },
 } satisfies Record<string, VectorIconShape>;

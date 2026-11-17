@@ -309,7 +309,19 @@ export default class UiHelper {
     position: Vec2,
     width: number,
     horizontalAlign?: Label["horizontalAlign"],
+    height?: number,
   ) {
+    // 定高模式（height 给出时）：换行 + 溢出裁剪 + 文字块在框内垂直居中。
+    // RESIZE_HEIGHT 的块会随行数长高、且锚点居中 → 行数一变就把上下邻居挤掉（成长弹窗描述踩过）；
+    // 定高模式行数多寡都占同一块，布局可算。
+    if (height) {
+      const fixed = this.createLabel(name, text, color, fontSize, position, new Size(width, height), horizontalAlign, Label.VerticalAlign.CENTER);
+      const label = fixed.getComponent(Label);
+      label.lineHeight = lineHeight;
+      label.overflow = Label.Overflow.CLAMP;
+      label.enableWrapText = true;
+      return fixed;
+    }
     const node = this.createLabel(name, text, color, fontSize, position, new Size(width, 0), horizontalAlign, Label.VerticalAlign.TOP);
     const label = node.getComponent(Label);
     label.lineHeight = lineHeight;
@@ -666,7 +678,13 @@ export default class UiHelper {
   }
 
   /** 创建滚动视图 */
-  static createScrollView(name: string, position: Vec2, size: Size) {
+  /**
+   * 竖向滚动区（滚动视口 + 顶对齐的自适应纵向内容容器）
+   * @param spacing 行间距（默认 3；成长线三窗的稿是 6）
+   * @param padding 内容顶部留白（默认 0；首行带描边的列表传 3，
+   *   否则首行边框正好压在 mask 裁剪线上、整条边被裁掉 —— 同 #1104 的网格坑）
+   */
+  static createScrollView(name: string, position: Vec2, size: Size, spacing: number = 3, padding: number = 0) {
     const node = this.createNode(name, position, size);
     node.addComponent(Mask);
     // 滚动区的拖动与点选同样只在 touch 通道；鼠标通道补一次拦截，滚动区内的点击不穿透到下层 UI
@@ -674,7 +692,7 @@ export default class UiHelper {
     const scrollView = node.addComponent(ScrollView);
     scrollView.inertia = false;
     scrollView.elastic = false;
-    const content = this.createFlexCol(`${name}_content`, 3, new Vec2(0, size.height / 2), size);
+    const content = this.createFlexCol(`${name}_content`, spacing, new Vec2(0, size.height / 2 - padding), size);
     node.addChild(content);
     const layout = content.getComponent(Layout);
     layout.resizeMode = Layout.ResizeMode.CONTAINER;
