@@ -8,6 +8,7 @@
 - issue → 分支 → PR（「关联 #n」，**不写 Closes**）→ 本地校验绿 → squash → 手动 `gh issue close`；长正文一律 `--body-file`。
 - **不跑 CI（2026-11-14 拍板）**：门禁 = `make ci-static` + `make e2e-all`（+ `make client-test`），本地连跑 2~3 次绿就合；
   别为 CI 红反复改测试，也别推送去触发 CI。
+- **不自行构建客户端（2026-11-16 拍板）**：用户不说「你自己测试」就不许跑 Cocos 构建；改完代码 + `make client-check` 即停，构建与验证等用户开口。
 - **多会话并行 = worktree**（#948）：改动只在自己的 `~/worktrees/olua-<issue>`；动笔前 `git status` 认领；只 `git add <明确路径>`。
   依赖要 `cp -al` 或自己 `npm ci`，**别 `ln -s` 到别人的 worktree**（对方 `npm ci` / `worktree remove` 会让你的依赖消失）。
   `make client-test` 另需两样 gitignore 产物：`client/temp/declarations`（`cp -R`，缺了 tsc 报 `Cannot find module 'cc'`）、
