@@ -68,8 +68,6 @@ export class Loading extends Component {
 
   private createBackground() {
     this.node.addChild(GameUiHelper.createFullScreenImage("loading_background", loadingLayout.background));
-    const brand = loadingLayout.brand;
-    this.node.addChild(GameUiHelper.createImage(brand.name, brand.image, brand.position, brand.size));
   }
 
   /** 中央进度环：刻度（慢转）+ 底轨 + 进度弧，环心上方摆百分比 */

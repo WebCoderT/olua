@@ -74,6 +74,8 @@ export const tokens = {
     highlight: new Color(255, 255, 255, 46),
     /** 全透明（未选中态的填充） */
     transparent: new Color(0, 0, 0, 0),
+    /** rgba(8,5,3,.35) 登录背景压暗遮罩（设计稿 hero-scrim 的均匀层近似，暗色取自 scrim 渐变） */
+    heroScrim: new Color(0, 0, 0, 180),
   },
 
   // ── 五、文字（骨白墨四档 + 金底 / 朱底上的字） ────────────────────

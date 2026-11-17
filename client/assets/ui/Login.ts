@@ -1,4 +1,4 @@
-import { _decorator, Color, Component, EditBox, Graphics, Label, Node, Size, sys, UIOpacity, UITransform, Vec2, isValid, tween } from "cc";
+import { _decorator, Color, Component, EditBox, Graphics, Label, Node, Size, Sprite, sys, UIOpacity, UITransform, Vec2, isValid, tween } from "cc";
 import GameUiHelper from "./helpers/GameUiHelper";
 import UiHelper from "./helpers/UiHelper";
 import StorageManager from "./core/StorageManager";
@@ -38,11 +38,15 @@ const REMEMBERED_ACCOUNT_KEY = "login_remembered_account";
  * 选角页的 `GET /roles` 才是这个区的角色。
  *
  * **界面整版对齐设计稿**（#1036，design/olua-login）：1920×1080 绝对坐标四大块 ——
- * 顶栏（品牌 LOGO / 配置版本 / 背景音开关）、左侧文案区（眉题 / LOGO 主标 / 简介 /
+ * 顶栏（配置版本 / 背景音开关）、左侧文案区（眉题 / LOGO 主标 / 简介 /
  * 职业预览标签 / 公告栏）、右侧登录面板（账号 / 密码 / 选服 / 记住账号 / 进入游戏 /
  * 注册与修复入口）、底部条（版权 / 协议入口）。几何 / 配色 / 文案 key / 时长全部来自
- * `configs/layout/scenes.ts` 的 loginLayout 与 `configs/texts.ts`，本文件只负责组装与接线；
- * 矢量装饰（金线 / 眼睛 / 喇叭 / 勾选框 / 箭头）用 Graphics 现画，颜色同样取自布局配置。
+ * `configs/layout/scenes.ts` 的 loginLayout 与 `configs/texts.ts`，本文件只负责组装与接线。
+ *
+ * **图标全部是图片**（设计稿 SVG 导出成 PNG，见 resources/ui/login/icon-*.png），
+ * 本文件不再用 Graphics 画任何图标；Graphics 只画线（金线 / 分隔线）与圆角底。
+ * 两态图标（眼睛 / 喇叭 / 勾选框）走同一个节点换 spriteFrame，不叠两个节点。
+ * 左上品牌 LOGO 已按需求移除，只剩顶栏右侧的版本胶囊与背景音开关。
  *
  * **真实数据**：区服列表 `GET /zones`、公告栏 `GET /announcements/active`（拉不到或没有
  * 生效中公告就整条隐藏）、顶栏版本 `GET /game-config/version`（#1036 起公开，拉不到隐藏
@@ -71,7 +75,7 @@ export class Login extends Component {
   private zoneCount = 0;
   /** 职业预览：标签节点与说明字（点标签换说明） */
   private classDescLabel: Label | null = null;
-  private classTabNodes: Array<{ key: string; node: Node; label: Label }> = [];
+  private classTabNodes: Array<{ key: string; node: Node; label: Label; icon: Sprite | null }> = [];
   private classDescKeys = new Map<string, string>();
   /** 公告栏：滚动行与待轮换的公告标题 */
   private noticeBar: Node | null = null;
@@ -80,15 +84,15 @@ export class Login extends Component {
   private noticeIndex = 0;
   /** 顶栏版本胶囊（拉取失败整颗隐藏） */
   private versionPill: Node | null = null;
-  /** 记住账号勾选态与勾选框（重画选中态用） */
+  /** 记住账号勾选态与勾选框（换两态图用） */
   private rememberChecked = false;
-  private rememberCheckbox: Graphics | null = null;
+  private rememberSprite: Sprite | null = null;
   /** 密码显隐：眼睛图标与当前状态 */
   private passwordVisible = false;
-  private eyeIcon: Graphics | null = null;
+  private eyeSprite: Sprite | null = null;
   /** 背景音开关状态与喇叭图标 */
   private muted = false;
-  private musicIcon: Graphics | null = null;
+  private musicSprite: Sprite | null = null;
   /** 主按钮（提交期间压暗） */
   private loginButtonNode: Node | null = null;
 
@@ -108,12 +112,19 @@ export class Login extends Component {
     const layout = loginLayout;
     // 背景（不在舞台内：铺满整个屏幕；#1036 起用设计稿 hero-bg，与屏幕同比例不裁切）
     this.node.addChild(GameUiHelper.createFullScreenImage("login_background", layout.background));
+    // 背景上的黑色半透明遮罩（设计稿 hero-scrim 的均匀层近似：压暗底图，文案与面板更可读）
+    const scrim = new Node(layout.scrim.name);
+    scrim.addComponent(UITransform).setContentSize(layout.stageSize.width, layout.stageSize.height);
+    this.fillRect(this.addGraphics(scrim), layout.stageSize, layout.scrim.color);
+    this.node.addChild(scrim);
     // 舞台容器：1920×1080 画布（不缩放），四大块按 z 顺序挂进来
     this.stage = new Node("login_stage");
     this.stage.addComponent(UITransform).setContentSize(layout.stageSize.width, layout.stageSize.height);
     this.node.addChild(this.stage);
     this.buildTopbar();
     this.buildHero();
+    // 职业标签默认激活第一颗（战士）：选中底色 / 描边 / 文字与图标变亮 + 说明文案对齐
+    this.selectClass(loginLayout.hero.classTabs.classes[0].key);
     this.buildPanel();
     this.buildBottombar();
     // 走到这里必然没有登录态（上方已拦截直接跳选角）：清掉上个账号的角色缓存与选中标记，
@@ -136,12 +147,12 @@ export class Login extends Component {
 
   //#region 界面组装
 
-  /** 顶栏：品牌 LOGO（左）/ 版本胶囊 + 背景音开关（右） */
+  /** 顶栏：配置版本胶囊 + 背景音开关（左上品牌 LOGO 已移除） */
   private buildTopbar(): void {
     const { topbar, palette, radius } = loginLayout;
-    this.stage!.addChild(GameUiHelper.createImage(topbar.brand.name, topbar.brand.image, topbar.brand.position, topbar.brand.size));
     // 版本胶囊：圆角 pill + 文本（值由 loadVersionPill 回填；拉取失败整颗隐藏）
     const pill = createRoundedPanel(topbar.version.name, topbar.version.size, palette.pillFill, palette.line, topbar.version.size.height / 2);
+    pill.setPosition(topbar.version.position.x, topbar.version.position.y, 0);
     const versionLabel = UiHelper.createLabel(
       `${topbar.version.name}_label`,
       getText(topbar.version.textKey, { version: getText("login_version_unavailable") }),
@@ -153,10 +164,12 @@ export class Login extends Component {
     pill.addChild(versionLabel);
     this.versionPill = pill;
     this.stage!.addChild(pill);
-    // 背景音开关：小方框 + Graphics 喇叭（静音时画叉）
+    // 背景音开关：圆角小方框 + 喇叭图（设计稿 PNG，静音换成带叉那张）
     const music = createRoundedPanel(topbar.music.name, topbar.music.size, palette.pillFill, palette.line, radius.control);
-    this.musicIcon = this.addGraphics(music);
-    this.drawSpeaker(this.musicIcon, this.muted);
+    music.setPosition(topbar.music.position.x, topbar.music.position.y, 0);
+    const musicIcon = this.createIcon(`${topbar.music.name}_icon`, this.muted ? topbar.music.iconOff : topbar.music.icon, topbar.music.iconSize);
+    this.musicSprite = musicIcon.sprite;
+    music.addChild(musicIcon.node);
     this.bindClick(music, () => this.toggleMusic());
     this.stage!.addChild(music);
   }
@@ -170,7 +183,10 @@ export class Login extends Component {
     this.stage!.addChild(eyebrowLine);
     this.stage!.addChild(this.createAlignedLabel(hero.eyebrow.label, palette.gold, Label.HorizontalAlign.LEFT));
     // 主标题：真实 LOGO 图（设计稿的大字标题用它替换）
-    this.stage!.addChild(GameUiHelper.createImage(hero.logo.name, hero.logo.image, hero.logo.position, hero.logo.size));
+    // 主标：金文字「Olua」（原 LOGO 图已换文字，框体同尺寸）
+    this.stage!.addChild(
+      UiHelper.createLabel(hero.logo.name, getText(hero.logo.textKey), palette.goldLight, hero.logo.fontSize, hero.logo.position, hero.logo.size),
+    );
     // 一句话简介：宽度固定、按内容换行
     this.stage!.addChild(
       UiHelper.createWrappedLabel(
@@ -184,18 +200,33 @@ export class Login extends Component {
         Label.HorizontalAlign.LEFT,
       ),
     );
-    // 职业预览标签：三颗胶囊横排（从左边缘起等距），点它切换说明文案
+    // 职业预览标签：三颗胶囊横排（从左边缘起等距），图标 + 文字，点它切换说明文案
     const tabSize = hero.classTabs.size;
+    const tabIconSize = hero.classTabs.iconSize;
+    // 图标中心 = 胶囊左缘 + 内边距 + 半个图标；文字中心 = 图标右侧 8px 之后的剩余宽度里居中
+    const iconX = -tabSize.width / 2 + hero.classTabs.iconInset + tabIconSize.width / 2;
+    const labelShift = (tabIconSize.width + hero.classTabs.iconGap) / 2;
     hero.classTabs.classes.forEach((cls, index) => {
       const leftEdge = hero.classTabs.firstLeftEdgeX + index * (tabSize.width + hero.classTabs.gap);
       const position = new Vec2(leftEdge + tabSize.width / 2, hero.classTabs.positionY);
       const node = createRoundedPanel(`login_class_tab_${cls.key}`, tabSize, palette.transparent, palette.line, tabSize.height / 2);
       node.setPosition(position.x, position.y, 0);
-      const tabLabel = UiHelper.createLabel(`login_class_tab_${cls.key}_label`, getText(cls.labelKey), palette.muted, hero.classTabs.fontSize, new Vec2(), tabSize);
+      const icon = this.createIcon(`login_class_tab_${cls.key}_icon`, cls.icon, tabIconSize, new Vec2(iconX, 0));
+      // 图标 PNG 烘的是全亮骨白，未选中时靠 tint 压到 58%（与文字同一套两态）
+      icon.sprite.color = palette.muted;
+      node.addChild(icon.node);
+      const tabLabel = UiHelper.createLabel(
+        `login_class_tab_${cls.key}_label`,
+        getText(cls.labelKey),
+        palette.muted,
+        hero.classTabs.fontSize,
+        new Vec2(labelShift, 0),
+        new Size(tabSize.width - hero.classTabs.iconInset - tabIconSize.width - hero.classTabs.iconGap, tabSize.height),
+      );
       node.addChild(tabLabel);
       const label = tabLabel.getComponent(Label)!;
       this.classDescKeys.set(cls.key, cls.descKey);
-      this.classTabNodes.push({ key: cls.key, node, label });
+      this.classTabNodes.push({ key: cls.key, node, label, icon: icon.sprite });
       this.bindClick(node, () => this.selectClass(cls.key));
       this.stage!.addChild(node);
     });
@@ -210,8 +241,11 @@ export class Login extends Component {
     // 公告栏：底条 + 朱红左缘 + 「公告」标签 + 滚动行（数据由 loadNoticeLines 回填，没有就整条隐藏）
     const notice = hero.notice;
     const bar = createRoundedPanel(notice.name, notice.size, palette.noticeFill, palette.line, radius.control);
+    bar.setPosition(notice.position.x, notice.position.y, 0);
     const accentEdge = this.addGraphics(bar);
     this.fillRect(accentEdge, new Size(notice.edgeWidth, notice.size.height), palette.accent, new Vec2(-notice.size.width / 2 + notice.edgeWidth / 2, 0));
+    // 公告图标（设计稿 PNG，15px）+ 「公告」标签
+    bar.addChild(GameUiHelper.createImage(notice.icon.name, notice.icon.image, new Vec2(notice.icon.offsetX, 0), notice.icon.size));
     const noticeTitle = UiHelper.createLabel(
       `${notice.name}_label`,
       getText(notice.label.textKey),
@@ -249,35 +283,34 @@ export class Login extends Component {
     const password = this.createField(panel.password);
     this.passwordInput = password.input;
     panelNode.addChild(password.node);
-    // 密码显隐（挂在密码框内右侧；眼睛 Graphics 现画，点它切换掩码）
+    // 密码显隐（挂在密码框内右侧；眼睛图标两态换图，点它切换掩码）
     const eye = UiHelper.createNode(panel.eye.name, new Vec2(panel.eye.offsetX, panel.eye.offsetY), panel.eye.size);
-    this.eyeIcon = this.addGraphics(eye);
-    this.drawEye(this.eyeIcon, this.passwordVisible);
-    this.bindClick(eye, () => this.togglePasswordVisible());
+    const eyeIcon = this.createIcon(`${panel.eye.name}_icon`, this.passwordVisible ? panel.eye.iconOn : panel.eye.icon, panel.eye.iconSize);
+    this.eyeSprite = eyeIcon.sprite;
+    eye.addChild(eyeIcon.node);
+    // 点击登记在图标节点上：容器只是 30×30 的定位框，没有渲染组件不参与命中
+    this.bindClick(eyeIcon.node, () => this.togglePasswordVisible());
     password.node.addChild(eye);
-    // 选服按钮（#1009）：地球小图 + 区名 / 状态字由 loadZones 回填
+    // 选服按钮（#1009）：地球小图（PNG）+ 区名 / 状态字由 loadZones 回填
     const serverButton = createRoundedPanel(panel.server.name, panel.server.size, palette.fieldFill, palette.line, radius.control);
-    const globe = UiHelper.createNode(`${panel.server.name}_globe`, new Vec2(panel.server.globeX, 0), new Size(panel.server.globeRadius * 3, panel.server.globeRadius * 3));
-    this.drawGlobe(this.addGraphics(globe), palette.muted, panel.server.globeRadius);
-    serverButton.addChild(globe);
+    serverButton.setPosition(panel.server.position.x, panel.server.position.y, 0);
+    serverButton.addChild(GameUiHelper.createImage(`${panel.server.name}_globe`, panel.server.globeIcon, new Vec2(panel.server.globeX, 0), panel.server.globeSize));
     const serverName = UiHelper.createLabel(`${panel.server.name}_name`, getText("login_zone_unknown"), palette.ink, panel.server.fontSize, new Vec2(panel.server.nameX, 0), panel.server.nameSize, Label.HorizontalAlign.LEFT);
     serverButton.addChild(serverName);
     this.serverNameLabel = serverName.getComponent(Label);
     const serverStatus = UiHelper.createLabel(`${panel.server.name}_status`, "", palette.accentText, panel.server.statusFontSize, new Vec2(panel.server.statusX, 0), panel.server.statusSize);
     serverButton.addChild(serverStatus);
     this.serverStatusLabel = serverStatus.getComponent(Label);
-    const caret = UiHelper.createNode(`${panel.server.name}_caret`, new Vec2(panel.server.caretX, 0), new Size(12, 12));
-    this.drawCaretDown(this.addGraphics(caret), palette.muted);
-    serverButton.addChild(caret);
+    serverButton.addChild(GameUiHelper.createImage(`${panel.server.name}_caret`, panel.server.caretIcon, new Vec2(panel.server.caretX, 0), panel.server.caretSize));
     this.bindClick(serverButton, () => void this.openZonePicker());
     panelNode.addChild(serverButton);
-    // 记住账号行：勾选框 + 文案（左）/ 忘记密码（右）
+    // 记住账号行：勾选框（两态 PNG）+ 文案（左）/ 忘记密码（右）
     const remember = panel.remember;
-    const checkbox = UiHelper.createNode(remember.checkbox.name, new Vec2(remember.checkbox.offsetX, remember.positionY), remember.checkbox.size);
-    this.rememberCheckbox = this.addGraphics(checkbox);
-    this.drawCheckbox(this.rememberCheckbox, this.rememberChecked);
-    this.bindClick(checkbox, () => this.toggleRemember());
-    panelNode.addChild(checkbox);
+    const checkboxIcon = this.createIcon(remember.checkbox.name, this.rememberChecked ? remember.checkbox.iconChecked : remember.checkbox.icon, remember.checkbox.size);
+    checkboxIcon.node.setPosition(remember.checkbox.offsetX, remember.positionY, 0);
+    this.rememberSprite = checkboxIcon.sprite;
+    this.bindClick(checkboxIcon.node, () => this.toggleRemember());
+    panelNode.addChild(checkboxIcon.node);
     const rememberLabel = this.createAlignedLabel(
       { name: `${remember.label.textKey}_label`, textKey: remember.label.textKey, position: new Vec2(remember.label.offsetX, remember.positionY), size: remember.label.size, fontSize: remember.label.fontSize },
       palette.muted,
@@ -349,7 +382,7 @@ export class Login extends Component {
     return UiHelper.createLabel(name, getText(item.textKey), color, item.fontSize, item.position ?? new Vec2(), item.size, align);
   }
 
-  /** 造一个输入框组（圆角暗底 + 左侧图标 + EditBox），几何与 GameUiHelper.createInputField 同一套口径 */
+  /** 造一个输入框组（圆角暗底 + 左侧图标 + EditBox）；视觉统一走 UiHelper.createVectorInputField */
   private createField(config: {
     name: string;
     placeholder: string;
@@ -361,33 +394,38 @@ export class Login extends Component {
     inputHeight: number;
     inputInset: number;
   }): { node: Node; input: Node } {
-    const { palette, radius } = loginLayout;
-    // 输入框要吃鼠标焦点，底板不做鼠标通道拦截（与旧版纯 Sprite 底板同行为）
-    const background = UiHelper.createNode(`${config.name}_background`, config.position, config.size);
-    const graphics = background.addComponent(Graphics);
-    graphics.fillColor = palette.fieldFill;
-    graphics.roundRect(-config.size.width / 2, -config.size.height / 2, config.size.width, config.size.height, radius.control);
-    graphics.fill();
-    graphics.lineWidth = 1;
-    graphics.strokeColor = palette.line;
-    graphics.roundRect(-config.size.width / 2, -config.size.height / 2, config.size.width, config.size.height, radius.control);
-    graphics.stroke();
-    background.addChild(UiHelper.createSprite("input_icon", config.icon, new Vec2(-config.size.width / 2 + 22, 0), new Size(20, 20)));
-    const input = UiHelper.createInputBox(
-      "input",
-      config.placeholder,
-      new Vec2(0, 0),
-      new Vec2(config.size.width - config.inputInset, config.inputHeight),
-      config.password,
-      config.inputFontSize,
-    );
-    background.addChild(input);
-    return { node: background, input };
+    // 视觉走 UiHelper.createVectorInputField（登录 / 弹窗输入框的唯一视觉来源），本方法只做配置转接
+    return UiHelper.createVectorInputField(config.placeholder, config.position, config.size, {
+      icon: config.icon,
+      password: config.password,
+      fontSize: config.inputFontSize,
+      inset: config.inputInset,
+      height: config.inputHeight,
+    });
   }
 
   //#endregion
 
-  //#region 矢量小装饰（Graphics 现画，颜色一律取自 loginLayout.palette）
+  //#region 图片图标与线条（图标一律是设计稿 SVG 导出的 PNG；Graphics 只画线与圆角底）
+
+  /**
+   * 造一个图片图标节点（设计稿 SVG 导出的 PNG）
+   *
+   * 返回节点与 Sprite：两态图标（眼睛 / 喇叭 / 勾选框）由调用方拿 sprite 换图，
+   * 不叠两个节点 —— 换图只改 spriteFrame，位置尺寸保持配置里的值。
+   */
+  private createIcon(name: string, src: string, size: Size, position: Vec2 = new Vec2()): { node: Node; sprite: Sprite } {
+    const node = UiHelper.createSprite(name, src, position, size);
+    return { node, sprite: node.getComponent(Sprite)! };
+  }
+
+  /** 两态换图：加载目标 PNG 后替换 spriteFrame（加载失败保持原图，不闪白） */
+  private swapIcon(sprite: Sprite | null, src: string): void {
+    if (!sprite || !isValid(sprite, true)) return;
+    UiHelper.loadSprite(src, (frame) => {
+      if (isValid(sprite, true)) sprite.spriteFrame = frame;
+    });
+  }
 
   /** 给节点补一个 Graphics 组件（重复调用复用同一个） */
   private addGraphics(node: Node): Graphics {
@@ -401,100 +439,6 @@ export class Login extends Component {
     graphics.fillColor = color;
     graphics.rect(offset.x - size.width / 2, offset.y - size.height / 2, size.width, size.height);
     graphics.fill();
-  }
-
-  /** 向下小箭头（选服按钮右端） */
-  private drawCaretDown(graphics: Graphics, color: Color): void {
-    graphics.fillColor = color;
-    graphics.moveTo(-6, -4);
-    graphics.lineTo(6, -4);
-    graphics.lineTo(0, 5);
-    graphics.close();
-    graphics.fill();
-  }
-
-  /** 地球小图（选服条左端）：一圈经线 + 一条赤道 + 一条竖椭圆，16px 见方的图标语汇 */
-  private drawGlobe(graphics: Graphics, color: Color, radius: number): void {
-    graphics.lineWidth = 1;
-    graphics.strokeColor = color;
-    graphics.circle(0, 0, radius);
-    graphics.stroke();
-    graphics.moveTo(-radius, 0);
-    graphics.lineTo(radius, 0);
-    graphics.stroke();
-    graphics.ellipse(0, 0, radius * 0.34, radius);
-    graphics.stroke();
-  }
-
-  /** 勾选框：选中 = 金底 + 勾，未选中 = 暗底 + 金边 */
-  private drawCheckbox(graphics: Graphics, checked: boolean): void {
-    const { palette, radius } = loginLayout;
-    const size = loginLayout.panel.remember.checkbox.size;
-    graphics.clear();
-    graphics.fillColor = checked ? palette.gold : palette.fieldFill;
-    graphics.roundRect(-size.width / 2, -size.height / 2, size.width, size.height, radius.control);
-    graphics.fill();
-    graphics.lineWidth = 1;
-    graphics.strokeColor = palette.goldDark;
-    graphics.roundRect(-size.width / 2, -size.height / 2, size.width, size.height, radius.control);
-    graphics.stroke();
-    if (!checked) return;
-    graphics.lineWidth = 2;
-    graphics.strokeColor = palette.checkMark;
-    graphics.moveTo(-6, 0);
-    graphics.lineTo(-1, 4);
-    graphics.lineTo(6, -4);
-    graphics.stroke();
-  }
-
-  /** 眼睛图标（密码显隐）：睁眼 = 椭圆 + 瞳孔；闭眼 = 斜杠划过 */
-  private drawEye(graphics: Graphics, visible: boolean): void {
-    const { palette } = loginLayout;
-    graphics.clear();
-    graphics.lineWidth = 1.5;
-    graphics.strokeColor = visible ? palette.gold : palette.muted;
-    graphics.ellipse(0, 0, 22, 13);
-    graphics.stroke();
-    graphics.fillColor = visible ? palette.gold : palette.muted;
-    graphics.circle(0, 0, 4.5);
-    graphics.fill();
-    if (visible) return;
-    graphics.lineWidth = 2;
-    graphics.strokeColor = palette.accentLight;
-    graphics.moveTo(-11, -9);
-    graphics.lineTo(11, 9);
-    graphics.stroke();
-  }
-
-  /** 喇叭图标（背景音开关）：静音时把声波换成朱红叉 */
-  private drawSpeaker(graphics: Graphics, muted: boolean): void {
-    const { palette } = loginLayout;
-    graphics.clear();
-    graphics.fillColor = palette.ink;
-    graphics.moveTo(-13, -5);
-    graphics.lineTo(-7, -5);
-    graphics.lineTo(-1, -11);
-    graphics.lineTo(-1, 11);
-    graphics.lineTo(-7, 5);
-    graphics.lineTo(-13, 5);
-    graphics.close();
-    graphics.fill();
-    if (muted) {
-      graphics.lineWidth = 2.5;
-      graphics.strokeColor = palette.accentLight;
-      graphics.moveTo(4, -6);
-      graphics.lineTo(13, 6);
-      graphics.moveTo(4, 6);
-      graphics.lineTo(13, -6);
-      graphics.stroke();
-      return;
-    }
-    graphics.lineWidth = 2;
-    graphics.strokeColor = palette.ink;
-    graphics.arc(2, 0, 6, -0.9, 0.9, false);
-    graphics.stroke();
-    graphics.arc(2, 0, 10, -0.9, 0.9, false);
-    graphics.stroke();
   }
 
   //#endregion
@@ -529,6 +473,8 @@ export class Login extends Component {
       graphics.roundRect(-tabSize.width / 2, -tabSize.height / 2, tabSize.width, tabSize.height, tabSize.height / 2);
       graphics.stroke();
       tab.label.color = active ? palette.ink : palette.muted;
+      // 图标是图片：靠 tint 跟着文字一起变（烘的是全亮骨白，未选中压到 58%）
+      if (tab.icon && isValid(tab.icon, true)) tab.icon.color = active ? palette.ink : palette.muted;
     });
     const descKey = this.classDescKeys.get(key);
     if (descKey && this.classDescLabel && isValid(this.classDescLabel.node, true)) {
@@ -536,17 +482,18 @@ export class Login extends Component {
     }
   }
 
-  /** 密码显隐：切换掩码并重画眼睛 */
+  /** 密码显隐：切换掩码并换眼睛图（睁眼 = 亮金那张） */
   private togglePasswordVisible(): void {
     this.passwordVisible = !this.passwordVisible;
     this.passwordInput.getComponent(EditBox).inputFlag = this.passwordVisible ? EditBox.InputFlag.DEFAULT : EditBox.InputFlag.PASSWORD;
-    if (this.eyeIcon && isValid(this.eyeIcon.node, true)) this.drawEye(this.eyeIcon, this.passwordVisible);
+    this.swapIcon(this.eyeSprite, this.passwordVisible ? loginLayout.panel.eye.iconOn : loginLayout.panel.eye.icon);
   }
 
-  /** 记住账号：切勾选态并重画勾选框（真正落盘在登录成功之后，见 persistRememberedAccount） */
+  /** 记住账号：切勾选态并换勾选框图（真正落盘在登录成功之后，见 persistRememberedAccount） */
   private toggleRemember(): void {
     this.rememberChecked = !this.rememberChecked;
-    if (this.rememberCheckbox && isValid(this.rememberCheckbox.node, true)) this.drawCheckbox(this.rememberCheckbox, this.rememberChecked);
+    const checkbox = loginLayout.panel.remember.checkbox;
+    this.swapIcon(this.rememberSprite, this.rememberChecked ? checkbox.iconChecked : checkbox.icon);
   }
 
   /** 背景音开关：只管登录页这一首背景音（静音 = 停，恢复 = 重播） */
@@ -554,7 +501,7 @@ export class Login extends Component {
     this.muted = !this.muted;
     if (this.muted) SoundManager.stopMusic();
     else void SoundManager.play("login_bgm");
-    if (this.musicIcon && isValid(this.musicIcon.node, true)) this.drawSpeaker(this.musicIcon, this.muted);
+    this.swapIcon(this.musicSprite, this.muted ? loginLayout.topbar.music.iconOff : loginLayout.topbar.music.icon);
     GameUiHelper.createTip(this.muted ? "login_music_off_tip" : "login_music_on_tip");
   }
 
@@ -563,7 +510,7 @@ export class Login extends Component {
     const remembered = sys.localStorage.getItem(REMEMBERED_ACCOUNT_KEY);
     if (!remembered) return;
     this.rememberChecked = true;
-    if (this.rememberCheckbox && isValid(this.rememberCheckbox.node, true)) this.drawCheckbox(this.rememberCheckbox, this.rememberChecked);
+    this.swapIcon(this.rememberSprite, loginLayout.panel.remember.checkbox.iconChecked);
     if (this.accountInput && isValid(this.accountInput, true)) this.accountInput.getComponent(EditBox).string = remembered;
   }
 

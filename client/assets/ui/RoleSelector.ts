@@ -1,4 +1,4 @@
-import { _decorator, Color, Component, EditBox, EventHandler, Graphics, isValid, Label, Layout, Node, ScrollView, Size, Sprite, ToggleContainer, UIOpacity, UITransform, Vec2 } from "cc";
+import { _decorator, Color, Component, EditBox, Graphics, isValid, Label, Layout, Node, ScrollView, Size, UIOpacity, UITransform, Vec2 } from "cc";
 import GameUiHelper from "./helpers/GameUiHelper";
 import UiHelper from "./helpers/UiHelper";
 import { occupations } from "../configs/role";
@@ -17,6 +17,8 @@ import ZoneStore from "./core/ZoneStore";
 import { blockClickThrough } from "./utils/input/UiHit";
 import { T } from "../configs/layout/tokens";
 import { buttonTone } from "../configs/layout/sizes";
+import { createRoundedPanel } from "./components/dialogs/tab-kit";
+import ConfirmDialog from "./components/dialogs/ConfirmDialog";
 const { ccclass } = _decorator;
 
 /** 删除角色按钮的节点名前缀（按钮文字挂在 `<节点名>_label` 上，改文案时按它取；节点名带角色 id 便于排查） */
@@ -50,24 +52,26 @@ interface RoleSelectorMainView {
   stagePlate: Node;
   stagePlateName: Label;
   stagePlateLevel: Label;
-  /** 右面板：滚动区（空列表时整块隐藏）、创建角色卡、空状态 */
+  /** 右面板：滚动区（空列表时整块隐藏）、固定的「创建角色」按钮（列表下方，不随滚动）、空状态 */
   scrollView: Node;
-  createCard: Node | null;
+  createButton: Node;
   emptyNode: Node;
   /** 角色卡：角色 id → 卡片节点（选中态与删除按钮都按它找） */
   cards: Map<string, Node>;
 }
 
-/** 创建角色弹窗视图引用（本组件拼装并持有） */
+/** 创建角色弹窗视图引用（本组件拼装并持有；选项为文字胶囊，选中值记在视图上） */
 interface RoleSelectorCreateView {
-  closeButton: Node;
   dialog: Node;
   nameInput: Node;
-  sexToggleGroup: Node;
-  occupationToggleGroup: Node;
+  /** 性别 / 职业文字胶囊节点（node.name = SEX / OECCUPATION 枚举值） */
+  sexOptionNodes: Node[];
+  occupationOptionNodes: Node[];
+  /** 当前选中的性别 / 职业（枚举值；默认男 / 战士） */
+  selectedSex: string;
+  selectedOccupation: string;
   createButton: Node;
-  occupationDescription: Node | null;
-  occupationPreview: Node | null;
+  cancelButton: Node;
 }
 
 /**
@@ -96,12 +100,8 @@ export class RoleSelector extends Component {
   private manageMode = false;
   /** 管理模式的临时节点（提示条 + 各角色的删除按钮）：退出管理模式或刷新列表时统一销毁 */
   private manageNodes: Node[] = [];
-  /** 待确认删除的角色 id（两步确认的第一步之后有值，见 onDeleteRoleClick） */
-  private pendingDeleteId: string | null = null;
-  /** 待确认删除按钮（复位文案要改它） */
-  private pendingDeleteButton: Node | null = null;
-  /** 待确认状态的超时定时器（到点自动复位） */
-  private deleteConfirmTimer: ReturnType<typeof setTimeout> | null = null;
+  /** 删除角色的确认弹窗（同一时刻只留一个；见 onDeleteRoleClick） */
+  private deleteConfirmDialog: ConfirmDialog | null = null;
   /** 服务端返回的角色列表（本场景的展示来源；本地角色缓存只在进游戏时才写） */
   private roleSummaries: RoleSummary[] = [];
   /** 是否有请求在途（创建 / 进游戏），避免连点重复提交 */
@@ -126,6 +126,19 @@ export class RoleSelector extends Component {
       this.fitBackground();
     });
     this.node.addChild(this.background);
+    // 背景上的黑色半透明遮罩（与登录页同一层 heroScrim：盖在背景上、舞台之下）
+    const scrim = new Node(roleSelectorLayout.scrim.name);
+    scrim.addComponent(UITransform).setContentSize(roleSelectorLayout.stageSize.width, roleSelectorLayout.stageSize.height);
+    const scrimGraphics = scrim.addComponent(Graphics);
+    scrimGraphics.fillColor = roleSelectorLayout.scrim.color;
+    scrimGraphics.rect(
+      -roleSelectorLayout.stageSize.width / 2,
+      -roleSelectorLayout.stageSize.height / 2,
+      roleSelectorLayout.stageSize.width,
+      roleSelectorLayout.stageSize.height,
+    );
+    scrimGraphics.fill();
+    this.node.addChild(scrim);
     // 舞台容器：各元素按设计坐标摆在它下面（见 configs/layout/scenes.roleSelectorLayout）
     this.stage = this.createStage();
     this.mainView = this.createMainView();
@@ -140,9 +153,9 @@ export class RoleSelector extends Component {
     GameUiHelper.fitCover(this.background, this.backgroundTexture);
   }
 
-  /** 场景卸载：清掉待确认定时器 */
+  /** 场景卸载：关掉还挂着的删除确认弹窗 */
   onDestroy() {
-    this.cancelDeleteConfirm();
+    this.closeDeleteConfirm();
   }
 
   /** 创建舞台容器：尺寸为设计分辨率，各元素坐标以舞台中心为原点（与布局配置一致） */
@@ -243,16 +256,15 @@ export class RoleSelector extends Component {
       stagePlateName: stage.plateName,
       stagePlateLevel: stage.plateLevel,
       scrollView: roster.scrollView,
-      createCard: null,
+      createButton: roster.createButton,
       emptyNode: roster.emptyNode,
       cards: new Map<string, Node>(),
     };
   }
 
-  /** 顶栏：品牌（左）/ 「区服 · 账号」胶囊 + 退出登录（右） */
+  /** 顶栏：「区服 · 账号」胶囊 + 退出登录（左上品牌图已移除，与登录页同一处理） */
   private buildTopbar(): void {
     const { topbar } = roleSelectorLayout;
-    this.stage!.addChild(GameUiHelper.createImage(topbar.brand.name, topbar.brand.image, topbar.brand.position, topbar.brand.size));
     const zoneName = ZoneStore.get()?.name ?? "";
     const account = Session.account?.username ?? "";
     const who = UiHelper.createLabel(topbar.who.name, getText("role_select_who", { zone: zoneName, account }), T.text[3], topbar.who.fontSize, topbar.who.position, topbar.who.size);
@@ -362,8 +374,8 @@ export class RoleSelector extends Component {
     return { charContainer, plate, plateName: plateName.getComponent(Label)!, plateLevel: plateLevel.getComponent(Label)! };
   }
 
-  /** 右面板：头部（标题 / 数量 / 管理）+ 两列角色卡滚动区 + 空状态 */
-  private buildRoster(): { manageButton: Node; count: Label; scrollView: Node; emptyNode: Node } {
+  /** 右面板：头部（标题 / 数量 / 管理）+ 两列角色卡滚动区 + 固定「创建角色」按钮 + 空状态 */
+  private buildRoster(): { manageButton: Node; count: Label; scrollView: Node; createButton: Node; emptyNode: Node } {
     const layout = roleSelectorLayout.roster;
     const panel = GameUiHelper.createDialogPanel(layout.name, layout.size);
     panel.setPosition(layout.position.x, layout.position.y, 0);
@@ -407,6 +419,18 @@ export class RoleSelector extends Component {
     grid.paddingBottom = scroll.paddingY;
     this.stage!.addChild(scrollView);
     this.roleScrollContent = content;
+    // 「创建角色」固定按钮：钉在滚动区下方（不在卡片网格里，不随列表滚动）
+    const createButtonLayout = layout.createButton;
+    const createButton = GameUiHelper.createToneButton(
+      createButtonLayout.name,
+      getText("role_select_new_card"),
+      createButtonLayout.position,
+      createButtonLayout.size,
+      createButtonLayout.fontSize,
+      buttonTone.gold,
+    );
+    createButton.on(Node.EventType.TOUCH_END, () => this.createRoleUI(), this);
+    this.stage!.addChild(createButton);
     // 空状态（没有角色时替掉卡片网格，见 showOwnerRolesUI）
     const emptyLayout = roleSelectorLayout.empty;
     const emptyNode = UiHelper.createNode(emptyLayout.name, new Vec2(), roleSelectorLayout.roster.size);
@@ -435,7 +459,7 @@ export class RoleSelector extends Component {
     emptyNode.addChild(emptyButton);
     emptyNode.active = false;
     this.stage!.addChild(emptyNode);
-    return { manageButton, count: countLabel.getComponent(Label)!, scrollView, emptyNode };
+    return { manageButton, count: countLabel.getComponent(Label)!, scrollView, createButton, emptyNode };
   }
 
   /** 返回登录按钮上的左向箭头（贴在文字左侧，图形现画） */
@@ -469,14 +493,14 @@ export class RoleSelector extends Component {
       if (isValid(node)) node.destroy();
     });
     view.cards.clear();
-    view.createCard?.destroy();
-    view.createCard = null;
     const content = this.roleScrollContent;
     if (!content) return;
     content.removeAllChildren();
     const isEmpty = this.roleSummaries.length === 0;
     view.scrollView.active = !isEmpty;
     view.emptyNode.active = isEmpty;
+    // 空状态自带的建号按钮顶掉了固定按钮，避免页面上出现两颗「创建角色」
+    view.createButton.active = !isEmpty;
     view.rosterCount.string = getText("role_select_count", { count: this.roleSummaries.length });
     if (!isEmpty) {
       this.roleSummaries.forEach((role) => {
@@ -484,8 +508,6 @@ export class RoleSelector extends Component {
         content.addChild(card);
         view.cards.set(role.id, card);
       });
-      view.createCard = this.createCreateCard();
-      content.addChild(view.createCard);
     }
     // 管理模式下列表变了（如刚删掉一个角色）→ 删除按钮按新列表重建
     if (this.manageMode) this.refreshManageControls();
@@ -516,7 +538,8 @@ export class RoleSelector extends Component {
     cell.addChild(preview);
     const name = UiHelper.createLabel(
       `${NAME_PLATE_PREFIX}${role.id}`,
-      getText("label_role_name_plate", { name: role.name, level: role.level }),
+      // 只显示名字不带等级（等级在卡片右下的 Lv. 标签；脚下名牌才用「名字 Lv.n」模板）
+      role.name,
       cardLayout.name.color,
       cardLayout.name.fontSize,
       new Vec2(cardLayout.name.offsetX, cardLayout.name.offsetY),
@@ -558,36 +581,6 @@ export class RoleSelector extends Component {
     cell.on(Node.EventType.TOUCH_END, () => {
       if (!this.manageMode) this.onlineRole(role.id);
     }, this);
-    return cell;
-  }
-
-  /** 「创建角色」卡（虚线 + 加号，放在卡片网格末尾） */
-  private createCreateCard(): Node {
-    const cardLayout = roleSelectorLayout.roster.card;
-    const cell = new Node("role_create_card");
-    cell.addComponent(UITransform).setContentSize(cardLayout.size);
-    const graphics = cell.addComponent(Graphics);
-    const w = cardLayout.size.width;
-    const h = cardLayout.size.height;
-    graphics.lineWidth = T.border.width;
-    graphics.strokeColor = T.line[2];
-    graphics.roundRect(-w / 2, -h / 2, w, h, T.radius.r2);
-    graphics.stroke();
-    // 加号：一圈细环 + 一横一竖
-    const plus = cardLayout.create.plusSize;
-    graphics.strokeColor = T.text[3];
-    graphics.circle(0, 26, plus / 2);
-    graphics.stroke();
-    graphics.moveTo(-plus / 4, 26);
-    graphics.lineTo(plus / 4, 26);
-    graphics.moveTo(0, 26 - plus / 4);
-    graphics.lineTo(0, 26 + plus / 4);
-    graphics.stroke();
-    cell.addChild(UiHelper.createLabel("role_create_card_label", getText(cardLayout.create.textKey), T.text[3], cardLayout.create.fontSize, new Vec2(0, -24), new Size(w, 22)));
-    cell.addChild(UiHelper.createLabel("role_create_card_sub", getText(cardLayout.create.subTextKey), T.text[4], cardLayout.create.subFontSize, new Vec2(0, -46), new Size(w, 18)));
-    SoundManager.bindClick(cell);
-    blockClickThrough(cell);
-    cell.on(Node.EventType.TOUCH_END, () => this.createRoleUI(), this);
     return cell;
   }
 
@@ -790,7 +783,7 @@ export class RoleSelector extends Component {
     const label = this.mainView.manageButton.getChildByName(`${roleSelectorLayout.roster.head.manageButton.name}_label`)?.getComponent(Label);
     if (label) label.string = getText(this.manageMode ? "role_select_manage_done" : "role_select_manage");
     if (!this.manageMode) {
-      this.cancelDeleteConfirm();
+      this.closeDeleteConfirm();
       this.clearManageNodes();
       return;
     }
@@ -814,7 +807,7 @@ export class RoleSelector extends Component {
     hint.addChild(UiHelper.createLabel(`${hintLayout.name}_label`, getText(hintLayout.textKey), T.amber, hintLayout.fontSize, new Vec2(), hintLayout.size));
     this.stage.addChild(hint);
     this.manageNodes.push(hint);
-    // 每张卡正中间一个删除按钮：挂在**卡片**下（预览的兄弟节点，躲开预览的选中冒泡），跟着滚动内容走
+    // 每张卡右上角一个删除按钮（朱红主按钮色）：挂在**卡片**下（预览的兄弟节点，躲开预览的选中冒泡），跟着滚动内容走
     const deleteLayout = roleSelectorLayout.roster.card.deleteButton;
     this.roleSummaries.forEach((role) => {
       const card = this.cardOf(role.id);
@@ -822,14 +815,14 @@ export class RoleSelector extends Component {
       const button = GameUiHelper.createToneButton(
         `${DELETE_ROLE_BUTTON_PREFIX}${role.id}`,
         getText("label_role_delete"),
-        new Vec2(0, 0),
+        deleteLayout.offset,
         deleteLayout.size,
         deleteLayout.fontSize,
-        buttonTone.danger,
+        buttonTone.primary,
       );
       button.on(Node.EventType.TOUCH_END, (event: { propagationStopped: boolean }) => {
         event.propagationStopped = true;
-        this.onDeleteRoleClick(role.id, button);
+        this.onDeleteRoleClick(role.id);
       }, this);
       card.addChild(button);
       this.manageNodes.push(button);
@@ -845,40 +838,48 @@ export class RoleSelector extends Component {
   }
 
   /**
-   * 删除按钮点击：两步确认（与背包「一键回收」同一套口径）
+   * 删除按钮点击：弹确认框（通用 ConfirmDialog，全屏模态）
    *
-   * 删除角色不可恢复，所以不让一次点击就生效：
-   * 1. 第一次点击：不改数据，只把要删的角色名报给玩家，按钮文案变「确认删除」；
-   * 2. 期间再点同一个按钮：调服务端真删（服务端成功后才动本地缓存与列表）；
-   * 3. 超时（manageRole.confirmTimeout）、点了别的角色的删除按钮、退出管理模式或关场景：文案复位，
-   *    下次点击重新从第 1 步开始。
+   * 删除角色不可恢复，不让一次点击就生效：确认框写明角色名与后果，点「确定」才真删；
+   * 「取消」或点其它删除按钮（旧框先关）都不动数据。场景卸载 / 退出管理模式时也会收框。
    */
-  private onDeleteRoleClick(roleId: string, button: Node) {
-    // 点了别的角色的删除按钮 → 先放弃上一个待确认状态（避免两个按钮同时挂着「确认删除」）
-    if (this.pendingDeleteId && this.pendingDeleteId !== roleId) this.cancelDeleteConfirm();
-    if (this.pendingDeleteId !== roleId) {
-      const summary = this.roleSummaries.find((item) => item.id === roleId);
-      if (!summary) {
-        GameUiHelper.createTip("role_delete_missing_tip");
-        this.refreshManageControls();
-        return;
-      }
-      this.pendingDeleteId = roleId;
-      this.pendingDeleteButton = button;
-      this.setDeleteButtonText(button, getText("label_role_delete_confirm"));
-      GameUiHelper.createTip("role_delete_confirm_tip", { name: summary.name });
-      // 到点自动复位：免得「确认删除」一直挂着被无意点掉
-      this.deleteConfirmTimer = setTimeout(() => this.cancelDeleteConfirm(), roleSelectorLayout.manageRole.confirmTimeout);
+  private onDeleteRoleClick(roleId: string) {
+    const summary = this.roleSummaries.find((item) => item.id === roleId);
+    if (!summary) {
+      GameUiHelper.createTip("role_delete_missing_tip");
+      this.refreshManageControls();
       return;
     }
-    // 第二步：确认删除（先复位按钮与定时器，再发请求）
-    void this.confirmDeleteRole(roleId);
+    // 保险：上一颗确认框还挂着（连点别的删除按钮）先收掉，同一时刻只留一个
+    this.closeDeleteConfirm();
+    const confirm = new ConfirmDialog({
+      title: getText("role_delete_confirm_title"),
+      message: getText("role_delete_confirm_text", { name: summary.name }),
+      confirmText: getText("label_role_delete"),
+      cancelText: getText("label_confirm_cancel"),
+      // 确定：真的删除（ConfirmDialog 先关自己再回调，这里只管清引用与发请求）
+      onConfirm: () => {
+        this.deleteConfirmDialog = null;
+        void this.confirmDeleteRole(roleId);
+      },
+      onCancel: () => {
+        this.deleteConfirmDialog = null;
+      },
+    });
+    this.deleteConfirmDialog = confirm;
+    // 确认框自身是全屏模态（盖住整个屏幕并独占输入，见 ConfirmDialog）：挂在场景根最后 = 全屏最上层
+    this.node.addChild(confirm);
+  }
+
+  /** 关掉删除确认弹窗（退出管理模式 / 场景卸载 / 重复弹出前调用；没开着时什么也不做） */
+  private closeDeleteConfirm() {
+    this.deleteConfirmDialog?.destroy();
+    this.deleteConfirmDialog = null;
   }
 
   /** 真删：服务端成功 → 本地缓存与列表同步更新；失败则列表保持原样（提示由网络层给出） */
   private async confirmDeleteRole(roleId: string) {
     const roleName = this.roleSummaries.find((item) => item.id === roleId)?.name ?? "";
-    this.cancelDeleteConfirm();
     try {
       await RoleApi.remove(roleId);
     } catch (error) {
@@ -893,24 +894,6 @@ export class RoleSelector extends Component {
     await this.loadRoles();
   }
 
-  /** 退出待确认状态：清定时器、按钮文案复位（删除成功后按钮已随列表销毁，只清状态） */
-  private cancelDeleteConfirm() {
-    if (this.deleteConfirmTimer !== null) {
-      clearTimeout(this.deleteConfirmTimer);
-      this.deleteConfirmTimer = null;
-    }
-    const button = this.pendingDeleteButton;
-    if (this.pendingDeleteId && button && isValid(button)) this.setDeleteButtonText(button, getText("label_role_delete"));
-    this.pendingDeleteId = null;
-    this.pendingDeleteButton = null;
-  }
-
-  /** 改删除按钮文案（按钮工厂把文字放在 `<按钮名>_label` 子节点上） */
-  private setDeleteButtonText(button: Node, text: string) {
-    const label = button.getChildByName(`${button.name}_label`)?.getComponent(Label);
-    if (label) label.string = text;
-  }
-
   //#endregion
 
   createRoleUI() {
@@ -918,88 +901,130 @@ export class RoleSelector extends Component {
     this.createView = this.createCreateRoleView();
   }
 
-  /** 拼装创建角色弹窗视图（位置/尺寸与用图见 configs/layout/scenes.roleSelectorLayout.createDialog） */
+  /** 拼装创建角色弹窗视图（几何见 configs/layout/scenes.roleSelectorLayout.createDialog；按设计语言重绘为文字选项版） */
   private createCreateRoleView(): RoleSelectorCreateView {
     const layout = roleSelectorLayout.createDialog;
-    // 弹窗主体与标题
-    const dialog = GameUiHelper.createImage(layout.name, layout.image, layout.position, layout.size);
+    // 弹窗主体：矢量面板（与右侧角色面板同一套底板，不再用整图背景）
+    const dialog = GameUiHelper.createDialogPanel(layout.name, layout.size);
+    dialog.setPosition(layout.position.x, layout.position.y, 0);
     this.stage!.addChild(dialog);
-    // 右上角关闭按钮（返回登录已移到左栏 CTA，不再兼职关弹窗）
-    const closeLayout = layout.closeButton;
-    const closeButton = GameUiHelper.createTexturedButton(closeLayout.name, closeLayout.image, getText("label_close"), closeLayout.position, closeLayout.size, Color.WHITE, closeLayout.fontSize);
-    closeButton.on(Node.EventType.TOUCH_END, () => this.cancelCreateRoleUI());
-    dialog.addChild(closeButton);
-    dialog.addChild(GameUiHelper.createImage(layout.title.name, layout.title.image, layout.title.position, layout.title.size));
-    dialog.addChild(GameUiHelper.createImage(layout.genderLabel.name, layout.genderLabel.image, layout.genderLabel.position, layout.genderLabel.size));
-    // 性别开关组
-    const sexToggleGroup = GameUiHelper.createSexToggleGroup();
-    dialog.addChild(sexToggleGroup);
-    dialog.addChild(GameUiHelper.createImage(layout.occupationLabel.name, layout.occupationLabel.image, layout.occupationLabel.position, layout.occupationLabel.size));
-    // 职业开关组
-    const occupationToggleGroup = GameUiHelper.createOccupationToggleGroup();
-    dialog.addChild(occupationToggleGroup);
-    // 名称输入框
-    const nameInput = GameUiHelper.createInputField(layout.nameInput.placeholder, layout.nameInput.position, layout.nameInput.size);
-    dialog.addChild(nameInput.node);
-    // 创建按钮（默认置灰，输入名称后可用）；文案见 configs/texts.label_role_create
-    const createLayout = layout.createButton;
-    const createButton = GameUiHelper.createTexturedButton(
-      createLayout.name,
-      createLayout.image,
-      getText("label_role_create"),
-      createLayout.position,
-      createLayout.size,
-      Color.WHITE,
-      createLayout.fontSize,
+    // 标题（文字）+ 金色下划线
+    dialog.addChild(UiHelper.createLabel(`${layout.name}_title`, getText(layout.title.textKey), T.text[1], layout.title.fontSize, layout.title.position, layout.title.size));
+    const underline = UiHelper.createNode(`${layout.name}_title_line`, layout.titleUnderline.position, layout.titleUnderline.size);
+    const underlineGraphics = underline.addComponent(Graphics);
+    underlineGraphics.fillColor = T.gold[3];
+    underlineGraphics.rect(-layout.titleUnderline.size.width / 2, -layout.titleUnderline.size.height / 2, layout.titleUnderline.size.width, layout.titleUnderline.size.height);
+    underlineGraphics.fill();
+    dialog.addChild(underline);
+    // 分组小字：性别 / 职业（左对齐，起点 = 面板左缘 + 18）
+    dialog.addChild(UiHelper.createLabel(`${layout.name}_gender_label`, getText(layout.genderLabel.textKey), T.text[3], layout.genderLabel.fontSize, layout.genderLabel.position, layout.genderLabel.size, Label.HorizontalAlign.LEFT));
+    dialog.addChild(UiHelper.createLabel(`${layout.name}_occupation_label`, getText(layout.occupationLabel.textKey), T.text[3], layout.occupationLabel.fontSize, layout.occupationLabel.position, layout.occupationLabel.size, Label.HorizontalAlign.LEFT));
+    // 性别文字胶囊（node.name = SEX 枚举值；显示名复用 label_sex_boy / label_sex_girl）
+    const sexKeys = [SEX.BOY, SEX.GRIL];
+    const sexOptionNodes = this.createTextOptionRow(
+      `${layout.name}_sex`,
+      sexKeys,
+      (key) => getText(key === SEX.BOY ? "label_sex_boy" : "label_sex_girl"),
+      layout.genderOptions,
     );
-    createButton.getComponent(Sprite).grayscale = true;
+    dialog.addChild(sexOptionNodes.row);
+    // 职业文字胶囊（显示名取 configs/role.occupations 的 name：战士 / 魔法师 / 道士）
+    const occupationKeys = [OECCUPATION.ZHAN, OECCUPATION.FA, OECCUPATION.DAO];
+    const occupationOptionNodes = this.createTextOptionRow(
+      `${layout.name}_occupation`,
+      occupationKeys,
+      (key) => occupations.get(key as OECCUPATION)!.name,
+      layout.occupationOptions,
+    );
+    dialog.addChild(occupationOptionNodes.row);
+    // 名称分组小字 + 输入框（与登录页账号 / 密码同一套矢量底，UiHelper.createVectorInputField）
+    dialog.addChild(UiHelper.createLabel(`${layout.name}_name_label`, getText(layout.nameInputLabel.textKey), T.text[3], layout.nameInputLabel.fontSize, layout.nameInputLabel.position, layout.nameInputLabel.size, Label.HorizontalAlign.LEFT));
+    const nameInput = UiHelper.createVectorInputField(layout.nameInput.placeholder, layout.nameInput.position, layout.nameInput.size);
+    dialog.addChild(nameInput.node);
+    // 创建按钮（矢量朱红主按钮；默认压暗，输入名称后恢复）+ 取消按钮（ghost，关闭弹窗）
+    const createLayout = layout.createButton;
+    const createButton = GameUiHelper.createToneButton(createLayout.name, getText("label_role_create"), createLayout.position, createLayout.size, createLayout.fontSize, buttonTone.primary);
     createButton.on(Node.EventType.TOUCH_END, () => void this.createRole());
     dialog.addChild(createButton);
-    // 职业/性别变更事件（通过场景组件回调）
-    const eventHandler = new EventHandler();
-    eventHandler.target = this.node;
-    eventHandler.component = "RoleSelector";
-    eventHandler.handler = "onOccupationChanged";
-    occupationToggleGroup.getComponent(ToggleContainer).checkEvents.push(eventHandler);
-    sexToggleGroup.getComponent(ToggleContainer).checkEvents.push(eventHandler);
-    // 默认选中项不用手动设：Toggle 出厂即「已选中」，组激活时 ensureValidState 会把「第一个之外的」关掉
+    const cancelLayout = layout.cancelButton;
+    const cancelButton = GameUiHelper.createToneButton(cancelLayout.name, getText("label_confirm_cancel"), cancelLayout.position, cancelLayout.size, cancelLayout.fontSize, buttonTone.ghost);
+    cancelButton.on(Node.EventType.TOUCH_END, () => this.cancelCreateRoleUI());
+    dialog.addChild(cancelButton);
 
     const view: RoleSelectorCreateView = {
-      closeButton,
       dialog,
       nameInput: nameInput.input,
-      sexToggleGroup,
-      occupationToggleGroup,
+      sexOptionNodes: sexOptionNodes.pills,
+      occupationOptionNodes: occupationOptionNodes.pills,
+      selectedSex: SEX.BOY,
+      selectedOccupation: OECCUPATION.ZHAN,
       createButton,
-      occupationDescription: null,
-      occupationPreview: null,
+      cancelButton,
     };
-    // 首次渲染**必须显式传 view**：此刻 this.createView 还没赋值（在 createRoleUI 的返回值赋值那一步），
-    // 不传的话方法里读 this.createView 是 null → 直接早退 → 弹窗打开描述与预览全空，要手动点一次才有
-    this.updateOccupationSelection(view);
+    // 点胶囊换选中值并重画两态（不弹说明图、不播预览动画）
+    sexOptionNodes.pills.forEach((pill) => {
+      pill.on(Node.EventType.TOUCH_END, () => {
+        view.selectedSex = pill.name;
+        this.refreshTextOptions(sexOptionNodes.pills, view.selectedSex);
+      }, this);
+    });
+    occupationOptionNodes.pills.forEach((pill) => {
+      pill.on(Node.EventType.TOUCH_END, () => {
+        view.selectedOccupation = pill.name;
+        this.refreshTextOptions(occupationOptionNodes.pills, view.selectedOccupation);
+      }, this);
+    });
+    // 默认选中第一颗（男 / 战士）：显式刷一遍两态
+    this.refreshTextOptions(view.sexOptionNodes, view.selectedSex);
+    this.refreshTextOptions(view.occupationOptionNodes, view.selectedOccupation);
     return view;
   }
 
-  /** 根据当前选中的职业与性别更新职业描述和预览（开关变更时回调） */
-  onOccupationChanged() {
-    if (this.createView) this.updateOccupationSelection(this.createView);
+  /**
+   * 一行文字选项胶囊：横排居中，node.name = 枚举 key（点选后由 refreshTextOptions 重画）
+   *
+   * 胶囊名**必须是纯枚举值**：refreshTextOptions 按它比对选中态，createRole() 也直接拿它当
+   * SEX / OECCUPATION 提交（曾错带 baseName 前缀，默认「男 / 战士」因此永远匹配不上）。
+   * 胶囊底是 createRoundedPanel 的 Graphics，两态重画直接清了重画（与登录页职业标签同一套视觉：
+   * 选中 = 面板底 + 金描边 + 亮字，未选中 = 透明底 + 弱线 + 灰字）。
+   */
+  private createTextOptionRow(
+    baseName: string,
+    keys: string[],
+    labelFor: (key: string) => string,
+    options: { positionY: number; pillSize: Size; spacing: number },
+  ): { row: Node; pills: Node[] } {
+    const row = new Node(`${baseName}_options`);
+    row.setPosition(0, options.positionY, 0);
+    const pills = keys.map((key, index) => {
+      const pill = createRoundedPanel(key, options.pillSize, T.overlay.transparent, T.line[2], options.pillSize.height / 2);
+      pill.setPosition((index - (keys.length - 1) / 2) * (options.pillSize.width + options.spacing), 0, 0);
+      pill.addChild(UiHelper.createLabel(`${key}_label`, labelFor(key), T.text[3], T.fontSize.f14, new Vec2(), options.pillSize));
+      SoundManager.bindClick(pill);
+      blockClickThrough(pill);
+      row.addChild(pill);
+      return pill;
+    });
+    return { row, pills };
   }
 
-  private updateOccupationSelection(view: RoleSelectorCreateView) {
-    const occupationId = view.occupationToggleGroup.getComponent(ToggleContainer).activeToggles()[0]?.node.name;
-    const sex = view.sexToggleGroup.getComponent(ToggleContainer).activeToggles()[0]?.node.name;
-    const occupation = occupationId && occupations.get(occupationId as OECCUPATION);
-    if (!occupation || !sex) return;
-
-    view.occupationDescription?.destroy();
-    view.occupationPreview?.destroy();
-
-    const descLayout = roleSelectorLayout.createDialog.occupationDescription;
-    view.occupationDescription = GameUiHelper.createImage("occupation_description", occupation.description, descLayout.position, occupation.descriptionSize);
-    view.dialog.addChild(view.occupationDescription);
-    const previewLayout = roleSelectorLayout.createDialog.occupationPreview;
-    view.occupationPreview = GameUiHelper.createRolePreview("role_creation_preview", 0, occupationId, sex, previewLayout.position, previewLayout.size);
-    view.dialog.addChild(view.occupationPreview);
+  /** 整行选项的两态重画：选中 = 面板底 + 金描边 + 亮字，未选中 = 透明底 + 弱线 + 灰字 */
+  private refreshTextOptions(pills: Node[], selectedKey: string): void {
+    pills.forEach((pill) => {
+      const active = pill.name === selectedKey;
+      const size = pill.getComponent(UITransform)!.contentSize;
+      const graphics = pill.getComponent(Graphics)!;
+      graphics.clear();
+      graphics.fillColor = active ? T.surface[3] : T.overlay.transparent;
+      graphics.roundRect(-size.width / 2, -size.height / 2, size.width, size.height, size.height / 2);
+      graphics.fill();
+      graphics.lineWidth = 1;
+      graphics.strokeColor = active ? T.gold[3] : T.line[2];
+      graphics.roundRect(-size.width / 2, -size.height / 2, size.width, size.height, size.height / 2);
+      graphics.stroke();
+      const label = pill.getChildByName(`${pill.name}_label`)!.getComponent(Label)!;
+      label.color = active ? T.text[1] : T.text[3];
+    });
   }
 
   cancelCreateRoleUI() {
@@ -1017,9 +1042,9 @@ export class RoleSelector extends Component {
    */
   async createRole() {
     if (!this.createView || this.busy) return;
-    // 读取表单（职业与性别取自选中开关的节点名称，即枚举值）
-    const occupation = (this.createView.occupationToggleGroup.getComponent(ToggleContainer).activeToggles()[0]?.node.name ?? "") as OECCUPATION;
-    const sex = (this.createView.sexToggleGroup.getComponent(ToggleContainer).activeToggles()[0]?.node.name ?? "") as SEX;
+    // 读取表单（名字来自输入框；职业与性别是视图上记着的选中枚举值）
+    const occupation = (this.createView.selectedOccupation || OECCUPATION.ZHAN) as OECCUPATION;
+    const sex = (this.createView.selectedSex || SEX.BOY) as SEX;
     const name = this.createView.nameInput.getComponent(EditBox).string.trim();
     if (!name) return;
     this.busy = true;
@@ -1039,7 +1064,10 @@ export class RoleSelector extends Component {
   }
 
   update() {
-    // 名称输入同步创建按钮可用状态
-    if (this.createView) this.createView.createButton.getComponent(Sprite).grayscale = !Boolean(this.createView.nameInput.getComponent(EditBox).string);
+    // 名称输入同步创建按钮可用状态（矢量按钮没有 Sprite，用半透明表达不可用）
+    if (!this.createView) return;
+    const hasName = Boolean(this.createView.nameInput.getComponent(EditBox).string.trim());
+    const opacity = this.createView.createButton.getComponent(UIOpacity) ?? this.createView.createButton.addComponent(UIOpacity);
+    opacity.opacity = hasName ? 255 : 140;
   }
 }
