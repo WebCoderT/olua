@@ -417,14 +417,7 @@ export default class GuildPanel {
     const row = layout.row;
     const node = UiHelper.createNode(name, new Vec2(), row.size);
     const graphics = node.addComponent(Graphics);
-    const path = () => graphics.roundRect(-row.size.width / 2, -row.size.height / 2, row.size.width, row.size.height, row.radius);
-    graphics.fillColor = row.fill;
-    path();
-    graphics.fill();
-    graphics.lineWidth = self ? 2 : 1;
-    graphics.strokeColor = self ? row.selfBorder : row.border;
-    path();
-    graphics.stroke();
+    UiHelper.paintRoundedPanel(graphics, row.size, row.radius, row.fill, self ? row.selfBorder : row.border, self ? 2 : 1);
     return node;
   }
 

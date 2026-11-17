@@ -56,12 +56,14 @@ export const equipmentSlotLayout = {
 /** 背包格子网格布局（弹窗内固定几何；行列数见 configs/role 的 bagRow / bagCol） */
 export const bagGridLayout = {
   name: "bag_grid",
-  position: new Vec2(0, 8),
-  size: new Size(580, 368),
-  /** 行间距与单行尺寸（行宽 ÷ 格子宽决定每行格子数） */
-  rowSpacing: 3,
-  rowSize: new Size(580, 50),
-  /** 单个格子尺寸（底板由 GameUiHelper 矢量现画，不再用贴图） */
+  /** 网格中心（稿 05-bag 实测：网格 670..1240 × 353..715，面板 660..1260 × 270..810 → 中心 +6） */
+  position: new Vec2(0, 6),
+  /** 570×362 = 11×50 + 10×2 宽、7×50 + 6×2 高（与稿的 slot 尺寸/间距一致） */
+  size: new Size(570, 362),
+  /** 行间距与单行尺寸（行宽 ÷ 格子宽决定每行格子数；稿 gap = 2） */
+  rowSpacing: 2,
+  rowSize: new Size(570, 50),
+  /** 单个格子尺寸（边框由 GameUiHelper 矢量现画，稿 .slot 无底色、只有 1px 金线） */
   cellSize: new Size(50, 50),
 
   /**

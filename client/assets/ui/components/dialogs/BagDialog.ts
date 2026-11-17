@@ -78,7 +78,7 @@ export default class BagDialog {
       bagDialogLayout.tidyButton.name,
       getText("label_bag_tidy"),
       bagDialogLayout.tidyButton.position,
-      uiSize.middleButtonSize,
+      bagDialogLayout.buttonSize,
       uiSize.middleButtonFontSize,
       buttonTone.ghost,
     );
@@ -101,7 +101,7 @@ export default class BagDialog {
       bagDialogLayout.recycleButton.name,
       getText("label_bag_recycle"),
       bagDialogLayout.recycleButton.position,
-      uiSize.middleButtonSize,
+      bagDialogLayout.buttonSize,
       uiSize.middleButtonFontSize,
       buttonTone.gold,
     );
@@ -120,7 +120,7 @@ export default class BagDialog {
       bagDialogLayout.discardButton.name,
       getText("label_bag_discard"),
       bagDialogLayout.discardButton.position,
-      uiSize.middleButtonSize,
+      bagDialogLayout.buttonSize,
       uiSize.middleButtonFontSize,
       buttonTone.danger,
     );

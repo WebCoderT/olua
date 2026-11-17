@@ -68,13 +68,13 @@ export default class ChatBubbles {
     node.addComponent(UITransform).setContentSize(bubble.size.width, bubble.size.height);
     node.getComponent(UITransform)?.setAnchorPoint(0, 1); // 左上锚点：往下堆
     const graphics = node.addComponent(Graphics);
-    graphics.fillColor = bubble.fill;
+    // 1px 级 stroke 实机不渲染：外框色填整块 → 内缩填主体色（左上锚点，矩形从 (0,-h) 起）
+    graphics.fillColor = bubble.border;
     graphics.roundRect(0, -bubble.size.height, bubble.size.width, bubble.size.height, bubble.radius);
     graphics.fill();
-    graphics.lineWidth = 1;
-    graphics.strokeColor = bubble.border;
-    graphics.roundRect(0, -bubble.size.height, bubble.size.width, bubble.size.height, bubble.radius);
-    graphics.stroke();
+    graphics.fillColor = bubble.fill;
+    graphics.roundRect(1, -bubble.size.height + 1, bubble.size.width - 2, bubble.size.height - 2, Math.max(0, bubble.radius - 1));
+    graphics.fill();
     const labelNode = UiHelper.createNode(
       `${layout.name}_bubble_text`,
       new Vec2(8, -bubble.size.height / 2),

@@ -79,7 +79,7 @@ export class Loading extends Component {
     // 外圈断续刻度：静态画一次，整圈节点慢速旋转（设计稿 26s 一转）
     const ticks = UiHelper.createNode("loading_ring_ticks", new Vec2(), new Size(ring.ticks.outer * 2, ring.ticks.outer * 2));
     const tickGraphics = ticks.addComponent(Graphics);
-    tickGraphics.lineWidth = T.border.width;
+    tickGraphics.lineWidth = 2;
     tickGraphics.strokeColor = ring.ticks.color;
     for (let i = 0; i < ring.ticks.count; i++) {
       const angle = (i * ring.ticks.stepDeg * Math.PI) / 180;
@@ -218,10 +218,6 @@ export class Loading extends Component {
       dot.fillColor = color;
       dot.circle(0, 0, bar.stepDot / 2);
       dot.fill();
-      dot.lineWidth = T.border.width;
-      dot.strokeColor = color;
-      dot.circle(0, 0, bar.stepDot / 2);
-      dot.stroke();
       const label = this.stepLabels[index];
       if (label) label.color = color;
     });

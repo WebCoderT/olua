@@ -358,13 +358,8 @@ export class RoleSelector extends Component {
     // 脚下名牌：金边胶囊 + 名字 + 等级
     const plate = UiHelper.createNode(layout.plate.name, layout.plate.position, layout.plate.size);
     const plateGraphics = plate.addComponent(Graphics);
-    plateGraphics.fillColor = T.surface[3];
-    plateGraphics.roundRect(-layout.plate.size.width / 2, -layout.plate.size.height / 2, layout.plate.size.width, layout.plate.size.height, layout.plate.size.height / 2);
-    plateGraphics.fill();
-    plateGraphics.lineWidth = T.border.width;
-    plateGraphics.strokeColor = T.gold[2];
-    plateGraphics.roundRect(-layout.plate.size.width / 2, -layout.plate.size.height / 2, layout.plate.size.width, layout.plate.size.height, layout.plate.size.height / 2);
-    plateGraphics.stroke();
+    // 金边胶囊：填外框 → 内缩填主体（1px 级 stroke 实机不渲染）
+    UiHelper.paintRoundedPanel(plateGraphics, layout.plate.size, layout.plate.size.height / 2, T.surface[3], T.gold[2], T.border.width);
     const plateName = UiHelper.createLabel("role_stage_plate_name", "", T.text[1], layout.plate.fontSize, new Vec2(-layout.plate.gap, 0), new Size(layout.plate.size.width / 2, layout.plate.size.height));
     const plateLevel = UiHelper.createLabel("role_stage_plate_level", "", T.gold[4], layout.plate.levelFontSize, new Vec2(layout.plate.gap + 10, 0), new Size(layout.plate.size.width / 2 - 20, layout.plate.size.height));
     plate.addChild(plateName);
@@ -591,22 +586,23 @@ export class RoleSelector extends Component {
     const w = cardLayout.size.width;
     const h = cardLayout.size.height;
     graphics.clear();
-    // 底板：主体色整块 + 上半一条更亮的带（Graphics 没有渐变，两层矩形叠）
-    graphics.fillColor = T.surface[2];
+    // 外框（1px 级 stroke 实机不渲染：先填外框色整块，再内缩填主体）
+    const bw = selected ? T.border.widthStrong : T.border.width;
+    graphics.fillColor = selected ? T.gold[3] : T.line[2];
     graphics.roundRect(-w / 2, -h / 2, w, h, T.radius.r2);
     graphics.fill();
+    // 底板：主体色整块 + 上半一条更亮的带（Graphics 没有渐变，两层矩形叠）
+    graphics.fillColor = T.surface[2];
+    graphics.roundRect(-w / 2 + bw, -h / 2 + bw, w - bw * 2, h - bw * 2, T.radius.r2 - bw);
+    graphics.fill();
     graphics.fillColor = T.surface[3];
-    graphics.roundRect(-w / 2, -h / 2 + h * 0.45, w, h * 0.55, T.radius.r2);
+    graphics.roundRect(-w / 2 + bw, -h / 2 + bw + h * 0.45, w - bw * 2, h * 0.55 - bw, T.radius.r2 - bw);
     graphics.fill();
     if (selected) {
       graphics.fillColor = T.line[1];
-      graphics.roundRect(-w / 2, -h / 2, w, h, T.radius.r2);
+      graphics.roundRect(-w / 2 + bw, -h / 2 + bw, w - bw * 2, h - bw * 2, T.radius.r2 - bw);
       graphics.fill();
     }
-    graphics.lineWidth = selected ? T.border.widthStrong : T.border.width;
-    graphics.strokeColor = selected ? T.gold[3] : T.line[2];
-    graphics.roundRect(-w / 2, -h / 2, w, h, T.radius.r2);
-    graphics.stroke();
   }
 
   /** 选中角标（金底深字小胶囊） */
@@ -709,13 +705,8 @@ export class RoleSelector extends Component {
       const centerX = cursor + size.width / 2;
       const chip = UiHelper.createNode(`role_chip_${itemLayout?.key ?? "empty"}`, new Vec2(centerX, 0), size);
       const graphics = chip.addComponent(Graphics);
-      graphics.fillColor = T.surface.sunken;
-      graphics.roundRect(-size.width / 2, -size.height / 2, size.width, size.height, T.radius.r2);
-      graphics.fill();
-      graphics.lineWidth = T.border.width;
-      graphics.strokeColor = role ? T.line[2] : T.line[1];
-      graphics.roundRect(-size.width / 2, -size.height / 2, size.width, size.height, T.radius.r2);
-      graphics.stroke();
+      // 1px 级 stroke 实机不渲染：走「填外框 → 内缩填主体」
+      UiHelper.paintRoundedPanel(graphics, size, T.radius.r2, T.surface.sunken, role ? T.line[2] : T.line[1]);
       let textX = 0;
       if (item.dot) {
         const dotSize = chipsLayout.dot;
@@ -797,13 +788,8 @@ export class RoleSelector extends Component {
     const hintLayout = roleSelectorLayout.manageHint;
     const hint = UiHelper.createNode(hintLayout.name, hintLayout.position, hintLayout.size);
     const hintGraphics = hint.addComponent(Graphics);
-    hintGraphics.fillColor = T.surface[3];
-    hintGraphics.roundRect(-hintLayout.size.width / 2, -hintLayout.size.height / 2, hintLayout.size.width, hintLayout.size.height, hintLayout.size.height / 2);
-    hintGraphics.fill();
-    hintGraphics.lineWidth = T.border.width;
-    hintGraphics.strokeColor = T.amber;
-    hintGraphics.roundRect(-hintLayout.size.width / 2, -hintLayout.size.height / 2, hintLayout.size.width, hintLayout.size.height, hintLayout.size.height / 2);
-    hintGraphics.stroke();
+    // 琥珀提示胶囊：填外框 → 内缩填主体（1px 级 stroke 实机不渲染）
+    UiHelper.paintRoundedPanel(hintGraphics, hintLayout.size, hintLayout.size.height / 2, T.surface[3], T.amber, T.border.width);
     hint.addChild(UiHelper.createLabel(`${hintLayout.name}_label`, getText(hintLayout.textKey), T.amber, hintLayout.fontSize, new Vec2(), hintLayout.size));
     this.stage.addChild(hint);
     this.manageNodes.push(hint);
@@ -1015,13 +1001,8 @@ export class RoleSelector extends Component {
       const size = pill.getComponent(UITransform)!.contentSize;
       const graphics = pill.getComponent(Graphics)!;
       graphics.clear();
-      graphics.fillColor = active ? T.surface[3] : T.overlay.transparent;
-      graphics.roundRect(-size.width / 2, -size.height / 2, size.width, size.height, size.height / 2);
-      graphics.fill();
-      graphics.lineWidth = 1;
-      graphics.strokeColor = active ? T.gold[3] : T.line[2];
-      graphics.roundRect(-size.width / 2, -size.height / 2, size.width, size.height, size.height / 2);
-      graphics.stroke();
+      // 未选中补暗底（稿的胶囊是暗底描边；纯透明底会让 1px 描边无处落、实机也不渲染）
+      UiHelper.paintRoundedPanel(graphics, size, size.height / 2, active ? T.surface[3] : T.surface[2], active ? T.gold[3] : T.line[2]);
       const label = pill.getChildByName(`${pill.name}_label`)!.getComponent(Label)!;
       label.color = active ? T.text[1] : T.text[3];
     });

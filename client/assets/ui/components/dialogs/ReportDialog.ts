@@ -143,14 +143,13 @@ export default class ReportDialog extends Node {
       if (graphics) {
         graphics.clear();
         const half = layout.category.size;
-        graphics.roundRect(-half.width / 2, -half.height / 2, half.width, half.height, layout.category.radius);
-        graphics.fillColor = active ? layout.category.activeFill : layout.category.idleFill;
-        graphics.fill();
         if (!active) {
-          graphics.lineWidth = 1;
-          graphics.strokeColor = layout.category.idleBorder;
+          // 未选中：暗底 + 1px 边框（stroke 实机不渲染，走「填两块」）
+          UiHelper.paintRoundedPanel(graphics, half, layout.category.radius, layout.category.idleFill, layout.category.idleBorder);
+        } else {
+          graphics.fillColor = layout.category.activeFill;
           graphics.roundRect(-half.width / 2, -half.height / 2, half.width, half.height, layout.category.radius);
-          graphics.stroke();
+          graphics.fill();
         }
       }
       const label = this.categoryLabels[index]?.getComponent(Label);

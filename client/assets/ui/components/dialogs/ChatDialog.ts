@@ -263,14 +263,7 @@ export default class ChatDialog {
     // 行底板按配置画（稿 .msg 是纯文字行 → 两个色都透明时整段跳过，不白建 Graphics）
     if (row.fill.a > 0 || row.border.a > 0) {
       const graphics = node.addComponent(Graphics);
-      const path = () => graphics.roundRect(-row.size.width / 2, -row.size.height / 2, row.size.width, row.size.height, row.radius);
-      graphics.fillColor = row.fill;
-      path();
-      graphics.fill();
-      graphics.lineWidth = 1;
-      graphics.strokeColor = row.border;
-      path();
-      graphics.stroke();
+      UiHelper.paintRoundedPanel(graphics, row.size, row.radius, row.fill.a > 0 ? row.fill : null, row.border);
     }
 
     // 时间戳（稿 `.msg .t`：9.5px、text-4、等宽数字，压在消息行最左）
@@ -342,13 +335,7 @@ export default class ChatDialog {
       // 行底板按配置画（与消息行同一口径：两色透明时跳过）
       if (row.fill.a > 0 || row.border.a > 0) {
         const graphics = node.addComponent(Graphics);
-        graphics.fillColor = row.fill;
-        graphics.roundRect(-row.size.width / 2, -row.size.height / 2, row.size.width, row.size.height, row.radius);
-        graphics.fill();
-        graphics.lineWidth = 1;
-        graphics.strokeColor = row.border;
-        graphics.roundRect(-row.size.width / 2, -row.size.height / 2, row.size.width, row.size.height, row.radius);
-        graphics.stroke();
+        UiHelper.paintRoundedPanel(graphics, row.size, row.radius, row.fill.a > 0 ? row.fill : null, row.border);
       }
       // 名字列用 pickRow（比消息行的名字列宽一倍：行里只有名字 + 按钮，名字给足才不被裁）
       const pickRow = layout.pickRow;

@@ -1,5 +1,6 @@
 import { _decorator, Color, Component, Graphics, Size, UITransform } from "cc";
 import { dialogFrame } from "../../../configs/layout/dialogs";
+import UiHelper from "../../helpers/UiHelper";
 
 const { ccclass } = _decorator;
 
@@ -42,17 +43,28 @@ export default class VectorPlate extends Component {
     const style = dialogFrame.panel;
     const g = this.graphics;
     g.clear();
-    // 底板：主体色整块 + 顶部一条亮带（与 createDialogPanel 同构，模拟 165deg 渐变的亮端）
+    // 底板（与 createDialogPanel 同构）：
+    // 边线色先与面板底色合成为不透明色（1px stroke 实机不渲染；半透明边线会与世界地图混成灰线），
+    // 再铺整块、内缩填底色，最后叠竖向渐变（稿 165deg：surface-3 → surface-2 62% → #150F08）
+    const bw = Math.max(1, style.borderWidth);
+    const ringColor = UiHelper.blendOver(this.borderColor, style.fill);
+    g.fillColor = ringColor;
+    g.roundRect(-width / 2, -height / 2, width, height, style.radius);
+    g.fill();
     g.fillColor = style.fill;
-    g.roundRect(-width / 2, -height / 2, width, height, style.radius);
+    g.roundRect(-width / 2 + bw, -height / 2 + bw, width - bw * 2, height - bw * 2, Math.max(0, style.radius - bw));
     g.fill();
-    const bandHeight = height * style.fillTopRatio;
-    g.fillColor = style.fillTop;
-    g.roundRect(-width / 2, height / 2 - bandHeight, width, bandHeight, style.radius);
-    g.fill();
-    g.lineWidth = style.borderWidth;
-    g.strokeColor = this.borderColor;
-    g.roundRect(-width / 2, -height / 2, width, height, style.radius);
-    g.stroke();
+    UiHelper.paintVerticalGradient(
+      g,
+      new Size(width, height),
+      [
+        { t: 0, color: style.fillTop },
+        { t: 0.62, color: style.fill },
+        { t: 1, color: style.gradientBottom },
+      ],
+      bw,
+      style.radius,
+      style.gradientSteps,
+    );
   }
 }

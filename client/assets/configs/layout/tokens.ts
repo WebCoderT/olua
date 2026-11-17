@@ -31,6 +31,8 @@ export const tokens = {
     veil: new Color(10, 7, 4, 184),
     /** rgba(0,0,0,.62) 模态遮罩 */
     scrim: new Color(0, 0, 0, 158),
+    /** #150F08 面板渐变的最底端（稿 `.panel` 165deg 渐变的收尾色） */
+    panelDeep: new Color(21, 15, 8, 255),
     /** rgba(25,18,9,.86) 半透明面板（HUD 常驻件） */
     glass: new Color(25, 18, 9, 219),
     /** rgba(0,0,0,.34) 输入框 / 选服条底 */
