@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>10 · 公告板 · Olua UI</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Noto+Serif+SC:wght@700;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../tokens.css">
+<link rel="stylesheet" href="../ui.css">
+<style>
+/* ── 公告板 720×500：左列表 + 右详情 ── */
+.board{position:relative;width:720px;height:500px}
+.board-body{display:grid;grid-template-columns:280px 1fr;gap:14px;height:388px;padding:0 18px}
+.bl{display:flex;flex-direction:column;gap:6px;overflow:auto;padding-right:4px}
+.bi{position:relative;padding:10px 12px;border-radius:var(--r-2);border:var(--bw-1) solid var(--line-1);
+  background:rgba(0,0,0,.24);cursor:pointer;transition:.2s}
+.bi:hover{border-color:var(--line-3)}
+.bi.on{border-color:var(--gold-3);background:linear-gradient(90deg,rgba(194,146,69,.14),transparent)}
+.bi .t{font-size:13px;color:var(--text-1);padding-right:16px;line-height:1.4}
+.bi .m{font-size:10.5px;color:var(--text-4);margin-top:4px;letter-spacing:.04em}
+.bi .dot{position:absolute;right:10px;top:12px}
+.br{display:flex;flex-direction:column;border:var(--bw-1) solid var(--line-1);border-radius:var(--r-2);
+  background:rgba(0,0,0,.3);overflow:hidden}
+.br-head{padding:14px 18px 10px;border-bottom:var(--bw-1) solid var(--line-1)}
+.br-head h3{font-family:var(--font-display);font-size:17px;letter-spacing:.14em;color:var(--gold-5)}
+.br-head .m{font-size:11px;color:var(--text-4);margin-top:5px;letter-spacing:.06em}
+.br-body{flex:1;overflow:auto;padding:14px 18px;font-size:13px;line-height:2;color:var(--text-2)}
+.br-body p{margin-bottom:12px}
+/* ── 公告详情强提示弹窗 640×460（announcementNoticeDialogLayout）：标题 560×26 + 正文 576×350 ── */
+.notice{position:relative;width:640px;height:460px;display:none;flex-direction:column}
+.notice-body{height:350px;overflow:auto;padding:0 18px;font-size:13px;line-height:2;color:var(--text-2);
+  border:var(--bw-1) solid var(--line-1);border-radius:var(--r-2);background:rgba(0,0,0,.3)}
+.notice-body p{margin-bottom:12px}
+</style>
+</head>
+<body>
+<div class="stage"><div class="stage-inner">
+  <div class="stage-bg stage-bg--blur"><img src="../assets/hero-bg.jpg"></div>
+  <div class="stage-scrim"></div>
+
+  <div class="layer layer--dialog center">
+    <div class="panel panel--rivet board">
+      <div class="panel-head">
+        <span class="panel-eyebrow">ANNOUNCEMENT</span>
+        <h2 class="panel-title">公告板</h2>
+        <button class="panel-close" aria-label="关闭">×</button>
+      </div>
+      <div class="board-body">
+        <div class="bl scroll">
+          <div class="bi on">
+            <div class="t">11.20 全新跨服沙城战开启</div>
+            <div class="m">重要 · 11.18 10:00 → 11.25 24:00</div>
+            <span class="dot"></span>
+          </div>
+          <div class="bi">
+            <div class="t">旧服角色找回通道开放</div>
+            <div class="m">普通 · 11.12 → 长期有效</div>
+          </div>
+          <div class="bi">
+            <div class="t">11.12 全服热更：攻城掉落上调</div>
+            <div class="m">普通 · 11.12 → 长期有效</div>
+          </div>
+          <div class="bi">
+            <div class="t">外挂与脚本处理公告（第三批）</div>
+            <div class="m">重要 · 11.05 → 长期有效</div>
+          </div>
+          <div class="bi">
+            <div class="t">新区「苍穹三区」开放预告</div>
+            <div class="m">普通 · 11.02 → 长期有效</div>
+          </div>
+        </div>
+
+        <div class="br">
+          <div class="br-head">
+            <h3>11.20 全新跨服沙城战开启</h3>
+            <div class="m">重要 · 11.18 10:00 → 11.25 24:00</div>
+          </div>
+          <div class="br-body scroll">
+            <p>本届沙城战首次开放<b style="color:var(--gold-4)">跨服匹配</b>：三个区服的行会将混编对战，皇城归属全服唯一。</p>
+            <p>报名窗口：11.18 10:00 起，各行会会长在帮会面板提交名单，11.19 24:00 截止；未满 8 人的行会将被合并到候补池。</p>
+            <p>本届奖励上调：城主任命金 <b style="color:var(--gold-4)">×3</b>，参战行会成员均可领取绑元分红；MVP 队伍全员获得限定称号「破军」。</p>
+            <p>战斗规则与上届一致：摧毁雕像后进入皇宫并坚持 15 分钟即占领；复活点争夺机制照旧，请提前布置药品与回城卷。</p>
+          </div>
+        </div>
+      </div>
+      <div class="panel-foot"><span>进入即整批标已读（先渲染再标记）</span><span>重要公告会在进服前强提示</span></div>
+    </div>
+
+    <!-- 进服强提示公告（详情弹窗）：默认隐藏，#state=notice 直达 -->
+    <div class="panel panel--rivet notice">
+      <div class="panel-head">
+        <span class="panel-eyebrow">NOTICE</span>
+        <h2 class="panel-title">11.20 全新跨服沙城战开启</h2>
+        <button class="panel-close" aria-label="关闭">×</button>
+      </div>
+      <div class="panel-body" style="display:flex;flex-direction:column;gap:12px">
+        <div class="notice-body scroll">
+          <p style="font-size:11px;color:var(--text-4);letter-spacing:.08em">重要 · 2026.11.18 10:00 → 11.25 24:00</p>
+          <p>本届沙城战首次开放<b style="color:var(--gold-4)">跨服匹配</b>：三个区服的行会将混编对战，皇城归属全服唯一。</p>
+          <p>报名窗口：11.18 10:00 起，各行会会长在帮会面板提交名单，11.19 24:00 截止；未满 8 人的行会将被合并到候补池。</p>
+          <p>本届奖励上调：城主任命金 <b style="color:var(--gold-4)">×3</b>，参战行会成员均可领取绑元分红；MVP 队伍全员获得限定称号「破军」。</p>
+          <p>战斗规则与上届一致：摧毁雕像后进入皇宫并坚持 15 分钟即占领；复活点争夺机制照旧，请提前布置药品与回城卷。</p>
+        </div>
+        <div style="display:flex;justify-content:center">
+          <button class="btn btn--gold" style="min-width:180px">知道了</button>
+        </div>
+      </div>
+      <div class="panel-foot"><span>进服前强提示 · 关闭后才进场景</span><span>同一篇公告也会出现在公告板列表</span></div>
+    </div>
+  </div>
+
+</div></div>
+<script src="../stage.js"></script>
+<script>
+if (/state=notice/.test(location.hash)){
+  document.querySelector('.board').style.display = 'none';
+  document.querySelector('.notice').style.display = 'flex';
+}
+</script>
+</body>
+</html>

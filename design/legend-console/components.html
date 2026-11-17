@@ -1,0 +1,862 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>OLUA 传奇 · 通用组件</title>
+<style>
+:root{
+  --void:#090705; --stone-0:#0E0B08; --stone-1:#12100C; --stone-2:#1B1712; --stone-3:#241E17;
+  --gold:#C9A24D; --gold-hi:#F0DCAC; --gold-dim:#6B562F;
+  --fire:#B9441F; --fire-hi:#E4743A; --jade:#6FA96B;
+  --ink:#EEE5D2; --ink-2:#B7A88F; --ink-3:#7E7059;
+  --line:rgba(201,162,77,.18); --line-soft:rgba(201,162,77,.09);
+  --font-display:"Songti SC","Source Han Serif SC","Noto Serif SC","STSong",serif;
+  --font-ui:"PingFang SC","Hiragino Sans GB","Microsoft YaHei",system-ui,sans-serif;
+  --font-mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  --r:2px; --ease:cubic-bezier(.22,.61,.36,1);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{
+  background:var(--void);color:var(--ink);
+  font:400 13.5px/1.65 var(--font-ui);-webkit-font-smoothing:antialiased;
+}
+body::before{
+  content:"";position:fixed;inset:0;pointer-events:none;opacity:.11;mix-blend-mode:overlay;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.86' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+a{color:inherit;text-decoration:none}
+ul{list-style:none}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+table{border-collapse:collapse;width:100%}
+
+.page{max-width:1180px;margin:0 auto;padding:clamp(28px,4vw,56px) clamp(18px,3vw,36px) 80px}
+
+/* 页头 */
+.top{margin-bottom:34px;padding-bottom:22px;border-bottom:1px solid var(--line-soft)}
+.crumb{display:flex;align-items:center;gap:9px;font-family:var(--font-mono);font-size:9.5px;letter-spacing:.16em;color:var(--ink-3)}
+.crumb a:hover{color:var(--gold)}
+.crumb i{width:12px;height:1px;background:var(--gold-dim)}
+.top h1{margin-top:16px;font-family:var(--font-display);font-size:clamp(26px,3.2vw,34px);font-weight:700;letter-spacing:.10em}
+.top h1 small{
+  display:inline-block;margin-left:12px;vertical-align:middle;font-family:var(--font-mono);
+  font-size:9.5px;font-weight:400;letter-spacing:.2em;color:var(--gold-dim);
+  border:1px solid var(--line);border-radius:var(--r);padding:3px 7px;
+}
+.top p{margin-top:9px;max-width:74ch;font-size:12.5px;line-height:1.8;color:var(--ink-3)}
+.top p b{color:var(--ink-2);font-weight:500}
+
+/* 章节 */
+.sec{margin-top:44px}
+.sec-head{display:flex;align-items:baseline;gap:12px;margin-bottom:14px}
+.sec-head .idx{font-family:var(--font-mono);font-size:9.5px;letter-spacing:.16em;color:var(--gold-dim);border:1px solid var(--line);padding:2px 6px;border-radius:1px}
+.sec-head h2{font-family:var(--font-display);font-size:19px;font-weight:700;letter-spacing:.09em}
+.sec-head .en{font-family:var(--font-mono);font-size:8.5px;letter-spacing:.2em;text-transform:uppercase;color:var(--ink-3)}
+.sec-head .src{margin-left:auto;font-family:var(--font-mono);font-size:9px;letter-spacing:.1em;color:var(--gold-dim)}
+.sec > .desc{margin-bottom:16px;max-width:74ch;font-size:12px;line-height:1.8;color:var(--ink-3)}
+.sec > .desc b{color:var(--ink-2);font-weight:500}
+
+/* 演示底板 */
+.demo{
+  position:relative;padding:22px;border:1px solid var(--line);border-radius:var(--r);
+  background:linear-gradient(170deg,var(--stone-2),#14110D);
+}
+.demo::before{content:"";position:absolute;inset:4px;border:1px solid rgba(201,162,77,.05);pointer-events:none}
+.demo > *{position:relative}
+.demo + .demo{margin-top:12px}
+.cap{margin-top:9px;font-size:11px;line-height:1.7;color:var(--ink-3)}
+.cap b{color:var(--ink-2);font-weight:500}
+.row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.col{display:flex;flex-direction:column;gap:10px}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px}
+.split{display:flex;gap:20px;flex-wrap:wrap}
+
+/* ═══════ Button ═══════ */
+.btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:7px;height:32px;padding:0 13px;
+  border-radius:var(--r);font-size:12.5px;font-weight:500;letter-spacing:.02em;
+  transition:border-color .2s var(--ease),background .2s,color .2s,filter .2s;
+}
+.btn.primary{
+  color:#1A1206;background:linear-gradient(180deg,#E8CE8C 0%,#D0AC60 38%,#B58C3D 72%,#987333 100%);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.55),inset 0 -1px 0 rgba(0,0,0,.28),0 10px 20px -14px rgba(201,162,77,.6);
+}
+.btn.primary:hover{filter:brightness(1.07)}
+.btn.primary:active{transform:translateY(1px);filter:brightness(.95)}
+.btn.outline{border:1px solid var(--line);color:var(--ink-2);background:linear-gradient(180deg,rgba(255,255,255,.03),rgba(0,0,0,.18))}
+.btn.outline:hover{border-color:rgba(201,162,77,.4);color:var(--ink);background:linear-gradient(180deg,rgba(201,162,77,.10),rgba(0,0,0,.16))}
+.btn.ghost{color:var(--ink-2)}
+.btn.ghost:hover{background:rgba(201,162,77,.08);color:var(--ink)}
+.btn.danger{color:#F3C6B4;border:1px solid rgba(185,68,31,.45);background:rgba(185,68,31,.12)}
+.btn.danger:hover{background:rgba(185,68,31,.2);border-color:rgba(185,68,31,.7);color:#FFD8C8}
+.btn.solid-danger{color:#FFF0E9;background:linear-gradient(180deg,#C4532C,#96331A);box-shadow:inset 0 1px 0 rgba(255,255,255,.18)}
+.btn.solid-danger:hover{filter:brightness(1.08)}
+.btn[disabled],.btn.is-disabled{opacity:.38;cursor:not-allowed;filter:saturate(.4)}
+.btn.sm{height:26px;padding:0 9px;font-size:11.5px}
+.btn.lg{height:38px;padding:0 18px;font-size:13.5px}
+.btn .spin{
+  width:12px;height:12px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;
+  animation:spin .8s linear infinite;opacity:.75;
+}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* 行内图标按钮 */
+.iconbtn{
+  width:26px;height:26px;display:inline-grid;place-items:center;border-radius:var(--r);
+  color:var(--ink-3);border:1px solid transparent;transition:color .18s,border-color .18s,background .18s;
+}
+.iconbtn:hover{color:var(--gold);border-color:var(--line);background:rgba(201,162,77,.07)}
+.iconbtn.danger:hover{color:var(--fire-hi);border-color:rgba(185,68,31,.4);background:rgba(185,68,31,.1)}
+
+/* ═══════ 控件 ═══════ */
+.ctrl{
+  width:100%;height:34px;padding:0 11px;border:1px solid rgba(201,162,77,.22);border-radius:var(--r);
+  background:linear-gradient(180deg,rgba(0,0,0,.42),rgba(0,0,0,.24));
+  color:var(--ink);font:400 13px/1 var(--font-ui);
+  transition:border-color .22s var(--ease),box-shadow .22s,background .22s;
+}
+.ctrl::placeholder{color:var(--ink-3)}
+.ctrl:hover{border-color:rgba(201,162,77,.34)}
+.ctrl:focus{outline:none;border-color:var(--gold);box-shadow:0 0 0 3px rgba(201,162,77,.10)}
+.ctrl.is-invalid{border-color:rgba(185,68,31,.8);box-shadow:0 0 0 3px rgba(185,68,31,.1)}
+.ctrl[disabled]{opacity:.4;cursor:not-allowed}
+textarea.ctrl{height:auto;min-height:76px;padding:9px 11px;line-height:1.7;resize:vertical}
+select.ctrl{appearance:none;padding-right:28px;
+  background-image:linear-gradient(45deg,transparent 50%,var(--gold) 50%),linear-gradient(135deg,var(--gold) 50%,transparent 50%);
+  background-position:calc(100% - 14px) 15px,calc(100% - 10px) 15px;background-size:4px 4px;background-repeat:no-repeat}
+
+.field{display:flex;flex-direction:column;gap:6px}
+.field > .lb{
+  font-family:var(--font-mono);font-size:9.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-3);
+}
+.field.readonly .val{
+  height:34px;display:flex;align-items:center;padding:0 2px;font-size:13px;color:var(--ink);
+  border-bottom:1px dashed rgba(201,162,77,.14);
+}
+.field .hint{font-size:11px;color:var(--ink-3)}
+
+/* 复选 / 单选 / 开关 */
+.check{display:inline-flex;align-items:center;gap:9px;font-size:12.5px;color:var(--ink-2);cursor:pointer}
+.check input{
+  appearance:none;width:15px;height:15px;border:1px solid rgba(201,162,77,.45);border-radius:1px;
+  background:rgba(0,0,0,.4);position:relative;cursor:pointer;transition:background .2s,border-color .2s;
+}
+.check input:hover{border-color:var(--gold);box-shadow:0 0 0 3px rgba(201,162,77,.07)}
+.check input:checked{background:var(--gold);border-color:var(--gold)}
+.check input:checked::after{content:"";position:absolute;left:4px;top:1px;width:5px;height:9px;border-right:2px solid #14100B;border-bottom:2px solid #14100B;transform:rotate(40deg)}
+.check input[type="radio"]{border-radius:50%}
+.check input[type="radio"]:checked{background:#14100B;border-color:var(--gold);box-shadow:inset 0 0 0 3px var(--gold)}
+.check input[type="radio"]:checked::after{display:none}
+
+.toggle{position:relative;width:36px;height:20px;border-radius:99px;border:1px solid rgba(201,162,77,.4);background:rgba(0,0,0,.4);cursor:pointer;transition:background .25s,border-color .25s}
+.toggle::after{content:"";position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;background:var(--ink-3);transition:transform .25s var(--ease),background .25s}
+.toggle.on{background:linear-gradient(180deg,#D9B96E,#A9833B);border-color:var(--gold)}
+.toggle.on::after{transform:translateX(16px);background:#14100B}
+
+/* 分段 */
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+.seg button{
+  height:28px;padding:0 11px;font-family:var(--font-mono);font-size:10px;letter-spacing:.06em;color:var(--ink-3);
+  border-right:1px solid var(--line-soft);transition:color .2s,background .2s;
+}
+.seg button:last-child{border-right:0}
+.seg button:hover{color:var(--ink-2);background:rgba(201,162,77,.06)}
+.seg button.on{color:#1A1206;background:linear-gradient(180deg,#E4C87F,#BE9644);font-weight:600}
+
+/* Tabs */
+.tabs{display:flex;gap:2px;border-bottom:1px solid var(--line-soft)}
+.tabs button{
+  position:relative;padding:9px 14px 10px;font-size:13px;color:var(--ink-3);
+  transition:color .2s,background .2s;
+}
+.tabs button:hover{color:var(--ink-2);background:rgba(201,162,77,.05)}
+.tabs button.on{color:var(--gold-hi)}
+.tabs button.on::after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:1px;background:var(--gold);box-shadow:0 0 10px rgba(201,162,77,.55)}
+.tabs button .cnt{
+  margin-left:6px;font-family:var(--font-mono);font-size:9.5px;color:var(--ink-3);
+  border:1px solid var(--line);border-radius:1px;padding:0 4px;
+}
+
+/* ═══════ Badge / Notice ═══════ */
+.badge{
+  display:inline-flex;align-items:center;gap:5px;height:20px;padding:0 7px;border-radius:1px;
+  font-family:var(--font-mono);font-size:9.5px;letter-spacing:.08em;border:1px solid;
+}
+.badge.green{border-color:rgba(111,169,107,.45);color:#9CD097;background:rgba(111,169,107,.10)}
+.badge.red{border-color:rgba(185,68,31,.5);color:#E88A62;background:rgba(185,68,31,.10)}
+.badge.slate{border-color:var(--line);color:var(--ink-2);background:rgba(255,255,255,.02)}
+.badge.gold{border-color:var(--gold-dim);color:var(--gold-hi);background:rgba(201,162,77,.08)}
+.badge.amber{border-color:rgba(201,162,77,.5);color:#E0BE7A;background:rgba(201,162,77,.09)}
+.badge i{width:4px;height:4px;border-radius:50%;background:currentColor}
+
+.notice{
+  display:flex;gap:11px;padding:11px 13px;border:1px solid;border-left-width:2px;border-radius:var(--r);
+  font-size:12px;line-height:1.75;
+}
+.notice .mk{
+  flex:0 0 auto;width:14px;height:14px;margin-top:2px;border:1px solid currentColor;border-radius:50%;
+  display:grid;place-items:center;font-family:var(--font-mono);font-size:9px;
+}
+.notice b{display:block;font-weight:600;margin-bottom:2px}
+.notice.amber{border-color:rgba(201,162,77,.34);border-left-color:var(--gold);background:rgba(201,162,77,.07);color:#E5CE9B}
+.notice.red{border-color:rgba(185,68,31,.36);border-left-color:var(--fire);background:rgba(185,68,31,.08);color:#EEB6A0}
+.notice.slate{border-color:var(--line);border-left-color:var(--gold-dim);background:rgba(255,255,255,.02);color:var(--ink-2)}
+.notice.green{border-color:rgba(111,169,107,.3);border-left-color:var(--jade);background:rgba(111,169,107,.07);color:#B4DDB0}
+
+/* ═══════ Card ═══════ */
+.card{
+  position:relative;border:1px solid var(--line);border-radius:var(--r);
+  background:linear-gradient(170deg,var(--stone-2) 0%,#16120E 46%,#12100C 100%);
+  box-shadow:0 18px 40px -30px rgba(0,0,0,.9),inset 0 1px 0 rgba(240,220,172,.05);
+}
+.card::before{content:"";position:absolute;inset:4px;border:1px solid rgba(201,162,77,.05);pointer-events:none}
+.card .hd{
+  display:flex;align-items:center;gap:10px;padding:14px 16px 12px;border-bottom:1px solid var(--line-soft);
+}
+.card .hd h3{font-size:13.5px;font-weight:600;letter-spacing:.10em}
+.card .hd .en{font-family:var(--font-mono);font-size:8.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--gold-dim)}
+.card .hd .act{margin-left:auto;display:flex;gap:8px;align-items:center}
+.card .hd .sub{font-size:11.5px;color:var(--ink-3)}
+.card .bd{padding:14px 16px 16px}
+.card.dense .bd{padding:10px 12px 12px}
+.card .ft{padding:10px 16px 12px;border-top:1px solid var(--line-soft);display:flex;justify-content:flex-end;gap:8px}
+
+/* StatCard */
+.stat{padding:14px 16px}
+.stat .lb{font-family:var(--font-mono);font-size:9.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-3)}
+.stat .v{margin-top:8px;font-family:var(--font-mono);font-size:27px;letter-spacing:-.01em;color:var(--gold-hi);font-variant-numeric:tabular-nums}
+.stat .h{margin-top:7px;font-size:11px;color:var(--ink-3)}
+
+/* PageHeader */
+.ph{display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap}
+.ph .back{
+  display:inline-flex;align-items:center;gap:6px;margin-bottom:4px;
+  font-size:11.5px;color:var(--ink-3);transition:color .2s;
+}
+.ph .back:hover{color:var(--gold)}
+.ph h1{
+  display:flex;align-items:center;gap:9px;
+  font-family:var(--font-display);font-size:22px;font-weight:700;letter-spacing:.09em;
+}
+.ph .desc{margin-top:6px;font-size:11.5px;line-height:1.7;color:var(--ink-3);max-width:66ch}
+.ph .act{margin-left:auto;display:flex;gap:8px;align-items:center}
+
+/* FilterBar */
+.filter .grid{display:flex;flex-wrap:wrap;align-items:flex-end;gap:12px}
+.filter .grid .field{width:132px}
+.filter .grid .field.wide{width:180px}
+.filter .grid .field.narrow{width:88px}
+.filter .act{margin-left:auto;display:flex;gap:8px;align-items:center}
+.filter .hint{margin-top:10px;padding-top:9px;border-top:1px solid var(--line-soft);font-size:11px;color:var(--ink-3)}
+
+/* ═══════ Table ═══════ */
+.tbl-wrap{overflow-x:auto}
+table.tbl{font-size:12.5px;min-width:660px}
+table.tbl thead th{
+  font-family:var(--font-mono);font-size:9px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-3);
+  font-weight:500;text-align:left;padding:0 10px 8px;border-bottom:1px solid var(--line);
+  white-space:nowrap;
+}
+table.tbl thead th.sortable{cursor:pointer;user-select:none}
+table.tbl thead th.sortable:hover{color:var(--ink-2)}
+table.tbl thead th .arrow{display:inline-block;margin-left:5px;font-size:8px;color:var(--gold)}
+table.tbl thead th.on{color:var(--gold-hi)}
+table.tbl tbody td{
+  padding:9px 10px;border-bottom:1px solid rgba(201,162,77,.055);color:var(--ink-2);white-space:nowrap;
+  font-variant-numeric:tabular-nums;
+}
+table.tbl tbody tr{transition:background .16s}
+table.tbl tbody tr:hover{background:rgba(201,162,77,.045)}
+table.tbl tbody tr.sel{background:rgba(201,162,77,.09);box-shadow:inset 2px 0 0 var(--gold)}
+table.tbl tbody tr:last-child td{border-bottom:0}
+table.tbl td .id{font-family:var(--font-mono);font-size:10.5px;color:var(--ink-3)}
+table.tbl td .acts{display:flex;gap:2px}
+table.tbl .num{text-align:right;font-family:var(--font-mono);font-size:11.5px}
+
+/* 分页 */
+.pager{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 2px 2px;font-size:11.5px;color:var(--ink-3)}
+.pager .mid{display:flex;align-items:center;gap:10px}
+.pager .pg{
+  min-width:26px;height:26px;padding:0 6px;display:grid;place-items:center;border-radius:var(--r);
+  font-family:var(--font-mono);font-size:10.5px;color:var(--ink-3);border:1px solid transparent;
+}
+.pager .pg:hover{border-color:var(--line);color:var(--ink)}
+.pager .pg.on{background:rgba(201,162,77,.14);border-color:var(--gold-dim);color:var(--gold-hi)}
+.pager .pg[disabled]{opacity:.35;cursor:not-allowed}
+
+/* 空态 / 加载 */
+.empty{display:flex;flex-direction:column;align-items:center;gap:8px;padding:34px 12px;text-align:center}
+.empty svg{color:var(--gold-dim)}
+.empty b{font-size:13px;color:var(--ink-2);font-weight:500}
+.empty span{font-size:11.5px;color:var(--ink-3)}
+.spinner{width:16px;height:16px;border:2px solid rgba(201,162,77,.25);border-top-color:var(--gold);border-radius:50%;animation:spin .9s linear infinite}
+.skel{height:9px;border-radius:1px;background:linear-gradient(90deg,rgba(201,162,77,.07),rgba(201,162,77,.16),rgba(201,162,77,.07));background-size:200% 100%;animation:sk 1.4s linear infinite}
+@keyframes sk{to{background-position:-200% 0}}
+
+/* Tooltip */
+.tip-host{position:relative;display:inline-block}
+.tip{
+  position:absolute;left:50%;bottom:calc(100% + 8px);transform:translateX(-50%);
+  padding:5px 9px;border:1px solid var(--gold-dim);border-radius:var(--r);
+  background:linear-gradient(180deg,#221B14,#16110C);box-shadow:0 12px 24px -14px rgba(0,0,0,.9);
+  font-size:11px;color:var(--ink);white-space:nowrap;opacity:0;transition:opacity .18s;
+}
+.tip::after{content:"";position:absolute;left:50%;top:100%;margin-left:-3px;border:3px solid transparent;border-top-color:var(--gold-dim)}
+.tip-host:hover .tip,.tip-host.show .tip{opacity:1}
+
+/* ═══════ Modal ═══════ */
+.modal{
+  position:relative;border:1px solid var(--gold-dim);border-radius:var(--r);
+  background:linear-gradient(170deg,#241D16,#171310 60%,#12100C);
+  box-shadow:0 34px 70px -30px rgba(0,0,0,.95),inset 0 1px 0 rgba(240,220,172,.06);
+}
+.modal::before{content:"";position:absolute;inset:5px;border:1px solid rgba(201,162,77,.08);pointer-events:none}
+.modal .mh{display:flex;align-items:flex-start;gap:12px;padding:16px 18px 13px;border-bottom:1px solid var(--line-soft)}
+.modal .mh h3{font-family:var(--font-display);font-size:17px;font-weight:700;letter-spacing:.09em}
+.modal .mh p{margin-top:5px;font-size:11.5px;color:var(--ink-3)}
+.modal .mh .x{margin-left:auto;color:var(--ink-3);font-size:11.5px;padding:2px 6px;border-radius:var(--r)}
+.modal .mh .x:hover{color:var(--ink);background:rgba(201,162,77,.08)}
+.modal .mb{padding:16px 18px}
+.modal .mf{padding:12px 18px 15px;border-top:1px solid var(--line-soft);display:flex;justify-content:flex-end;gap:8px}
+.modal.sm{max-width:420px;margin:0 auto}
+.modal.md{max-width:600px;margin:0 auto}
+.modal.lg{max-width:740px;margin:0 auto}
+.modal.xl{max-width:920px;margin:0 auto}
+.size-tag{display:flex;justify-content:center;margin-top:8px;font-family:var(--font-mono);font-size:9px;letter-spacing:.14em;color:var(--gold-dim)}
+
+/* 问题清单 */
+.problems{display:flex;flex-direction:column;gap:4px;padding:9px 12px;border:1px solid rgba(185,68,31,.3);border-left-width:2px;border-radius:var(--r);background:rgba(185,68,31,.07);font-size:11.5px;color:#EEB6A0}
+.problems li::before{content:"·";margin-right:6px;color:var(--fire-hi)}
+
+/* Toast */
+.toast{
+  display:inline-flex;align-items:center;gap:9px;padding:9px 16px;border:1px solid var(--gold-dim);border-radius:var(--r);
+  background:linear-gradient(180deg,#221B14,#16110C);box-shadow:0 22px 44px -20px rgba(0,0,0,.9);
+  font-size:12.5px;color:var(--ink);
+}
+.toast .dot{width:5px;height:5px;transform:rotate(45deg);background:var(--fire-hi);box-shadow:0 0 8px rgba(228,116,58,.9)}
+.toast.ok .dot{background:var(--jade);box-shadow:0 0 8px rgba(111,169,107,.9)}
+
+/* 拖放 / 缩略图占位 */
+.thumb{
+  width:38px;height:38px;border:1px solid var(--line);border-radius:1px;display:grid;place-items:center;
+  background:linear-gradient(180deg,rgba(0,0,0,.4),rgba(0,0,0,.2));color:var(--ink-3);
+  font-family:var(--font-mono);font-size:8px;letter-spacing:.06em;overflow:hidden;position:relative;
+}
+.thumb .px{position:absolute;inset:0;opacity:.5;
+  background-image:linear-gradient(45deg,rgba(201,162,77,.12) 25%,transparent 25%,transparent 75%,rgba(201,162,77,.12) 75%),
+                   linear-gradient(45deg,rgba(201,162,77,.12) 25%,transparent 25%,transparent 75%,rgba(201,162,77,.12) 75%);
+  background-size:8px 8px;background-position:0 0,4px 4px}
+
+.foot{margin-top:56px;padding-top:18px;border-top:1px solid var(--line-soft);display:flex;justify-content:space-between;flex-wrap:wrap;gap:12px;font-family:var(--font-mono);font-size:9px;letter-spacing:.14em;color:var(--ink-3)}
+</style>
+</head>
+<body>
+<div class="page">
+
+  <header class="top">
+    <div class="crumb">
+      <a href="./index.html">设计系统</a><i></i><a href="./system.html">总纲</a><i></i><span>通用组件</span>
+    </div>
+    <h1>通用组件<small>COMPONENTS</small></h1>
+    <p>
+      管理端 <b>components/ui.tsx</b> 里 12 个通用件 + 弹窗 / 表格 / 分页 / 筛选条 / 表单零件的全部重设计。
+      每个演示都是<b>真实页面里的用法</b>（角色管理、封禁确认、技能编辑），不是悬空样例。
+    </p>
+  </header>
+
+  <!-- 1 Button -->
+  <section class="sec">
+    <div class="sec-head"><span class="idx">01</span><h2>按钮</h2><span class="en">Button</span><span class="src">ui.tsx › Button · 4 变体</span></div>
+    <p class="desc">
+      一个区域只允许<b>一枚实心金按钮</b>。删除类操作用「火色描边」，只有二次确认框里才用实心火色 —— 让危险动作永远多一步。
+    </p>
+    <div class="demo">
+      <div class="row">
+        <button class="btn primary">进入管理端</button>
+        <button class="btn outline">重置</button>
+        <button class="btn ghost">取消</button>
+        <button class="btn danger">封禁账号</button>
+        <button class="btn solid-danger">确认封禁</button>
+      </div>
+      <p class="cap"><b>primary</b> 金锭 / <b>outline</b> 次操作 / <b>ghost</b> 无框 / <b>danger</b> 描边危险 / <b>solid-danger</b> 仅确认框</p>
+    </div>
+    <div class="demo">
+      <div class="row">
+        <button class="btn primary sm">新建</button>
+        <button class="btn primary">保存修改</button>
+        <button class="btn primary lg">提交并下发</button>
+        <span style="width:18px"></span>
+        <button class="btn primary" disabled>不可用</button>
+        <button class="btn primary"><span class="spin"></span>保存中…</button>
+        <button class="btn outline" disabled>重置</button>
+      </div>
+      <p class="cap">三档尺寸 26 / 32 / 38；<b>loading 与 disabled 必须可区分</b> —— 前者带转轮与进行时文案</p>
+    </div>
+  </section>
+
+  <!-- 2 IconButton -->
+  <section class="sec">
+    <div class="sec-head"><span class="idx">02</span><h2>行内动作</h2><span class="en">Icon Button</span></div>
+    <p class="desc">表格行、卡片右上角的小动作只用图标，<b>hover 才显形</b>，避免每行三个按钮把表格撑满。</p>
+    <div class="demo">
+      <div class="row" style="gap:16px">
+        <span class="row" style="gap:2px;padding:0 8px;border-right:1px solid var(--line-soft)">
+          <button class="iconbtn" title="编辑">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 20h4L20 8l-4-4L4 16Z"/></svg>
+          </button>
+          <button class="iconbtn" title="查看日志">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 19V5a1 1 0 0 1 1-1h11l4 4v11a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1Z"/><path d="M8 12h8M8 16h5"/></svg>
+          </button>
+          <button class="iconbtn danger" title="删除">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 7h16l-1.4 12.2a2 2 0 0 1-2 1.8H7.4a2 2 0 0 1-2-1.8Z"/><path d="M9 7V5a3 3 0 0 1 6 0v2"/></svg>
+          </button>
+        </span>
+        <span style="font-size:11.5px;color:var(--ink-3)">↑ 默认态 · ↓ 悬停态（编辑点亮金、删除点亮火）</span>
+      </div>
+      <div class="row" style="gap:2px;margin-top:10px;padding-left:9px">
+        <button class="iconbtn" style="color:var(--gold);border-color:var(--line);background:rgba(201,162,77,.07)">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 20h4L20 8l-4-4L4 16Z"/></svg>
+        </button>
+        <button class="iconbtn" style="color:var(--ink-2)"></button>
+        <button class="iconbtn danger" style="color:var(--fire-hi);border-color:rgba(185,68,31,.4);background:rgba(185,68,31,.1)">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 7h16l-1.4 12.2a2 2 0 0 1-2 1.8H7.4a2 2 0 0 1-2-1.8Z"/><path d="M9 7V5a3 3 0 0 1 6 0v2"/></svg>
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3 输入 / 字段 -->
+  <section class="sec">
+    <div class="sec-head"><span class="idx">03</span><h2>输入与字段</h2><span class="en">Input · Select · Field</span><span class="src">ui.tsx › Input / Select / Field</span></div>
+    <p class="desc">
+      字段默认<b>标签在上、控件在下</b>（<code>Field</code> 的既有口径）—— 标签左置会吃掉控件宽度。
+      <b>只读字段用纯文本 + 虚线下沿</b>，不做灰掉的输入框。
+    </p>
+    <div class="demo">
+      <div class="grid2">
+        <label class="field">
+          <span class="lb">角色名 / ID</span>
+          <input class="ctrl" placeholder="输入角色名或 id">
+        </label>
+        <label class="field">
+          <span class="lb">状态</span>
+          <select class="ctrl"><option>全部</option><option>在线</option><option>离线</option><option>封禁中</option></select>
+        </label>
+        <label class="field">
+          <span class="lb">等级区间</span>
+          <input class="ctrl is-invalid" value="1 - 999">
+        </label>
+        <label class="field readonly">
+          <span class="lb">账号 ID · 只读</span>
+          <span class="val">acc_8f21c4e0</span>
+        </label>
+        <label class="field">
+          <span class="lb">描述文案</span>
+          <textarea class="ctrl" placeholder="≤500 字，运营可见">击杀祖玛教主后出现的世界公告…</textarea>
+          <span class="hint">支持换行；超长由服务端截断</span>
+        </label>
+        <label class="field">
+          <span class="lb">已禁用</span>
+          <input class="ctrl" value="由系统维护" disabled>
+        </label>
+      </div>
+      <p class="cap">错误态：火色边 + 3px 火环；<b>只读</b>：虚线下沿 + 正常字色，看起来就是「这里不改」</p>
+    </div>
+  </section>
+
+  <!-- 4 复选 / 单选 / 开关 / 分段 -->
+  <section class="sec">
+    <div class="sec-head"><span class="idx">04</span><h2>选择类</h2><span class="en">Checkbox · Radio · Toggle · Segment · Tabs</span></div>
+    <p class="desc">勾选框 15px 方形；单选是同尺寸圆形内嵌金环；开关只用于偏好设置；分段用于 3–4 个互斥小集合。</p>
+    <div class="grid2">
+      <div class="demo">
+        <div class="col">
+          <label class="check"><input type="checkbox" checked><span>记住账号</span></label>
+          <label class="check"><input type="checkbox"><span>同步到其它区服</span></label>
+          <label class="check"><input type="checkbox" disabled checked><span>系统项（不可改）</span></label>
+          <div class="row" style="margin-top:4px">
+            <label class="check"><input type="radio" name="r1" checked><span>按天</span></label>
+            <label class="check"><input type="radio" name="r1"><span>按周</span></label>
+          </div>
+          <div class="row" style="margin-top:4px">
+            <span class="toggle on"></span><span style="font-size:11.5px;color:var(--ink-3)">新公告推送</span>
+            <span class="toggle"></span><span style="font-size:11.5px;color:var(--ink-3)">离线邮件</span>
+          </div>
+        </div>
+        <p class="cap">复选框、单选、开关三件套；触控区 ≥ 26px</p>
+      </div>
+      <div class="demo">
+        <div class="col">
+          <div class="seg">
+            <button class="on">7 天</button><button>14 天</button><button>30 天</button>
+          </div>
+          <div class="tabs">
+            <button class="on">角色<span class="cnt">1,284</span></button>
+            <button>装备<span class="cnt">96</span></button>
+            <button>技能<span class="cnt">12</span></button>
+          </div>
+        </div>
+        <p class="cap">分段 = 同一尺度上的取值切换；Tabs = 不同内容区。</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 5 Badge / Notice -->
+  <section class="sec">
+    <div class="sec-head"><span class="idx">05</span><h2>徽章与提示条</h2><span class="en">Badge · Notice</span><span class="src">ui.tsx › Badge 5 tone / Notice 4 tone</span></div>
+    <p class="desc">
+      分隔很明确：<b>Badge 是状态标签</b>（在线 / 封禁 / 已归档），<b>Notice 是解释或警告</b>（刷新后还在），
+      <b>Toast 是一次性结果</b>。三者不许互相代用。
+    </p>
+    <div class="demo">
+      <div class="row">
+        <span class="badge green"><i></i>在线</span>
+        <span class="badge red"><i></i>封禁中</span>
+        <span class="badge gold">管理员</span>
+        <span class="badge amber">待审核</span>
+        <span class="badge slate">已归档</span>
+      </div>
+      <p class="cap">tone：green 正常 / red 危险 / gold 权限与注意 / amber 待办 / slate 中性</p>
+    </div>
+    <div class="demo" style="margin-top:12px">
+      <div class="col">
+        <div class="notice amber"><span class="mk">!</span><div><b>掉落权重改动会立即生效</b>本区所有正在进行的战斗按新权重结算，建议在低峰期操作。</div></div>
+        <div class="notice red"><span class="mk">!</span><div><b>该角色处于封禁中</b>解封前无法修改装备；封禁原因：外挂行为（acc_8f21c4）。</div></div>
+        <div class="notice slate"><span class="mk">i</span><div>地图名以客户端 <code>configs/map</code> 为准，这里只显示编号。</div></div>
+        <div class="notice green"><span class="mk">✓</span><div><b>配置已下发</b>2 分钟内全服生效，可在「配置版本」里回滚。</div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 6 Card / StatCard -->
+  <section class="sec">
+    <div class="sec-head"><span class="idx">06</span><h2>卡片</h2><span class="en">Card · StatCard</span><span class="src">ui.tsx › Card（默认密集）/ StatCard</span></div>
+    <p class="desc">
+      卡片默认就是<b>紧凑档</b>（后台最常做的动作是扫列表，多一圈内边距只是多滚一次）。
+      标题右侧只放本卡片的动作，不放页面级动作。
+    </p>
+    <div class="grid2">
+      <div class="card">
+        <div class="hd">
+          <h3>技能列表</h3><span class="en">Skills</span>
+          <span class="act"><button class="btn outline sm">添加</button></span>
+        </div>
+        <div class="bd">
+          <p style="font-size:12px;color:var(--ink-3);line-height:1.8">带标题与动作的常规卡片。内容区 14/16 内边距，标题区 12 下边距。</p>
+        </div>
+      </div>
+      <div class="card dense">
+        <div class="hd" style="padding:10px 12px 9px">
+          <h3>最新公告</h3><span class="sub">3 条待发布</span>
+        </div>
+        <div class="bd">
+          <p style="font-size:12px;color:var(--ink-3);line-height:1.8">密集档（dense）：内边距压到 10/12，一屏能多塞两行，层次不变。</p>
+        </div>
+        <div class="ft"><button class="btn outline sm">查看全部</button></div>
+      </div>
+      <div class="card stat">
+        <span class="lb">Online · 在线账号</span>
+        <div class="v">1,284</div>
+        <div class="h">已选中在线角色</div>
+      </div>
+      <div class="card stat">
+        <span class="lb">Banned · 封禁中</span>
+        <div class="v" style="color:var(--ink)">37</div>
+        <div class="h">含永久与未到期临时封禁</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 7 PageHeader -->
+  <section class="sec">
+    <div class="sec-head"><span class="idx">07</span><h2>页头</h2><span class="en">Page Header</span><span class="src">PageHeader.tsx</span></div>
+    <p class="desc">
+      每页唯一 h1，字号只有一档（列表页与详情页之间不跳）。右侧只放<b>页面级动作</b>（查询 / 新建 / 刷新），
+      危险操作永远不放这里。
+    </p>
+    <div class="demo">
+      <div class="ph">
+        <div>
+          <h1>角色管理<span class="badge gold">1,284</span></h1>
+          <p class="desc">按账号、等级、在线状态筛选；修改角色属性会即时写入服务器，不走审批。</p>
+        </div>
+        <div class="act">
+          <button class="btn outline"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 11a8 8 0 1 0-2.3 6.3"/><path d="M20 5v6h-6"/></svg>刷新</button>
+          <button class="btn primary">新建角色</button>
+        </div>
+      </div>
+    </div>
+    <div class="demo" style="margin-top:12px">
+      <div class="ph">
+        <div>
+          <a class="back" href="#">← 返回角色列表</a>
+          <h1>刀锋 · 战士 Lv.42</h1>
+          <p class="desc">账号 acc_8f21c4 · 上次登录 2 小时前 · 所在地图 苍月岛</p>
+        </div>
+        <div class="act">
+          <button class="btn danger">封禁</button>
+          <button class="btn outline">查看日志</button>
+        </div>
+      </div>
+      <p class="cap">详情页带返回入口；此处 danger 是「进入封禁流程」而非直接封禁 —— <b>危险动作本身仍在确认框里</b></p>
+    </div>
+  </section>
+
+  <!-- 8 FilterBar -->
+  <section class="sec">
+    <div class="sec-head"><span class="idx">08</span><h2>筛选条</h2><span class="en">Filter Bar</span><span class="src">FilterBar.tsx</span></div>
+    <p class="desc">
+      条件块内部<b>标签在上、控件在下</b>，若干块横排成一行；右侧 <code>ml-auto</code> 放查询 / 重置 / 新建。
+      1440 宽下六个条件 + 两个按钮必须排成一行不折行。
+    </p>
+    <div class="demo filter">
+      <div class="grid">
+        <label class="field wide"><span class="lb">角色名 / ID</span><input class="ctrl" placeholder="刀锋 或 role_44a9"></label>
+        <label class="field narrow"><span class="lb">在线</span><select class="ctrl"><option>全部</option><option>在线</option><option>离线</option></select></label>
+        <label class="field narrow"><span class="lb">职业</span><select class="ctrl"><option>全部</option><option>战士</option><option>法师</option><option>道士</option></select></label>
+        <label class="field narrow"><span class="lb">等级</span><input class="ctrl" value="1-100"></label>
+        <label class="field"><span class="lb">状态</span><select class="ctrl"><option>正常</option><option>封禁中</option></select></label>
+        <label class="field"><span class="lb">注册时间</span><select class="ctrl"><option>近 7 天</option><option>近 30 天</option></select></label>
+        <div class="act">
+          <button class="btn outline sm">重置</button>
+          <button class="btn primary sm">查询</button>
+        </div>
+      </div>
+      <p class="hint">当前只显示「双线一区 · 龙渊」的角色；跨区查询请先在左上角切换区服。</p>
+    </div>
+  </section>
+
+  <!-- 9 Table -->
+  <section class="sec">
+    <div class="sec-head"><span class="idx">09</span><h2>表格</h2><span class="en">Table</span><span class="src">ui.tsx › tableClass / thead / th / td · sortable.tsx</span></div>
+    <p class="desc">
+      表头 mono 大写小字 + 金线分隔；行高 38；数值列右对齐并设 <code>tabular-nums</code>；
+      可排序列 hover 变亮、当前排序列箭头指向 + 标题转金。
+    </p>
+    <div class="demo" style="padding:16px 12px 12px">
+      <div class="tbl-wrap">
+        <table class="tbl">
+          <thead>
+            <tr>
+              <th style="width:44px"></th>
+              <th class="sortable on">角色 <span class="arrow">▲</span></th>
+              <th>账号</th>
+              <th class="sortable">等级 <span class="arrow" style="opacity:.35">↕</span></th>
+              <th>职业</th>
+              <th>所在地图</th>
+              <th class="sortable">战斗力 <span class="arrow" style="opacity:.35">↕</span></th>
+              <th>状态</th>
+              <th style="text-align:right">操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr class="sel">
+              <td><span class="thumb" style="width:26px;height:26px">图</span></td>
+              <td><span style="color:var(--ink)">刀锋</span> <span class="id">role_44a9</span></td>
+              <td class="id">acc_8f21c4</td>
+              <td class="num">42</td>
+              <td>战士</td>
+              <td>苍月岛</td>
+              <td class="num">18,420</td>
+              <td><span class="badge green"><i></i>在线</span></td>
+              <td><div class="acts" style="justify-content:flex-end">
+                <button class="iconbtn" title="编辑"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 20h4L20 8l-4-4L4 16Z"/></svg></button>
+                <button class="iconbtn danger" title="封禁"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="5" y="10.5" width="14" height="9.5" rx="1.5"/><path d="M8.5 10.5V7.5a3.5 3.5 0 0 1 7 0v3"/></svg></button>
+              </div></td>
+            </tr>
+            <tr>
+              <td><span class="thumb" style="width:26px;height:26px">图</span></td>
+              <td><span style="color:var(--ink)">夜阑</span> <span class="id">role_2b07</span></td>
+              <td class="id">acc_2b07de</td>
+              <td class="num">38</td>
+              <td>法师</td>
+              <td>比奇城</td>
+              <td class="num">15,960</td>
+              <td><span class="badge slate"><i></i>离线</span></td>
+              <td><div class="acts" style="justify-content:flex-end">
+                <button class="iconbtn" title="编辑"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 20h4L20 8l-4-4L4 16Z"/></svg></button>
+                <button class="iconbtn danger" title="封禁"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="5" y="10.5" width="14" height="9.5" rx="1.5"/><path d="M8.5 10.5V7.5a3.5 3.5 0 0 1 7 0v3"/></svg></button>
+              </div></td>
+            </tr>
+            <tr>
+              <td><span class="thumb" style="width:26px;height:26px">图</span></td>
+              <td><span style="color:var(--ink)">墨白的影子</span> <span class="id">role_9c31</span></td>
+              <td class="id">acc_9c31ff</td>
+              <td class="num">51</td>
+              <td>道士</td>
+              <td>沙巴克</td>
+              <td class="num">22,140</td>
+              <td><span class="badge red"><i></i>封禁中</span></td>
+              <td><div class="acts" style="justify-content:flex-end">
+                <button class="iconbtn" title="编辑"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 20h4L20 8l-4-4L4 16Z"/></svg></button>
+                <button class="iconbtn danger" title="封禁"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="5" y="10.5" width="14" height="9.5" rx="1.5"/><path d="M8.5 10.5V7.5a3.5 3.5 0 0 1 7 0v3"/></svg></button>
+              </div></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="cap" style="margin-left:10px">第一行为<b>选中态</b>（左金条 + 淡金底）；缩略图为图集首帧，见「游戏领域组件」页</p>
+    </div>
+
+    <!-- 空态 / 加载 -->
+    <div class="grid2" style="margin-top:12px">
+      <div class="demo" style="padding:0">
+        <div class="empty">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M4 7h16v13H4z"/><path d="M8 7V4h8v3"/><path d="M9 13h6"/></svg>
+          <b>没有符合条件的角色</b>
+          <span>换个关键词，或点「重置」清空全部条件</span>
+        </div>
+      </div>
+      <div class="demo">
+        <div class="col" style="gap:12px">
+          <div class="row" style="gap:9px"><span class="spinner"></span><span style="font-size:12px;color:var(--ink-3)">加载中…（spinner）</span></div>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <div class="skel" style="width:86%"></div>
+            <div class="skel" style="width:64%"></div>
+            <div class="skel" style="width:74%"></div>
+          </div>
+        </div>
+        <p class="cap">首次进页用<b>骨架</b>（结构可预期）；局部刷新用 spinner</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 10 分页 -->
+  <section class="sec">
+    <div class="sec-head"><span class="idx">10</span><h2>分页</h2><span class="en">Pagination</span><span class="src">Pagination.tsx · 每页 10/20/50/100</span></div>
+    <p class="desc">服务端分页：只上报页码与每页条数。左侧说明当前区间，右侧「每页」+ 页码 + 上一页/下一页。</p>
+    <div class="demo">
+      <div class="pager">
+        <span>共 1,284 条，当前 21–40</span>
+        <div class="mid">
+          <label class="check" style="font-size:11.5px">
+            <span style="color:var(--ink-3)">每页</span>
+            <select class="ctrl" style="width:66px;height:26px;font-size:11px"><option>20</option><option>50</option><option>100</option></select>
+          </label>
+          <button class="pg" disabled>‹</button>
+          <button class="pg on">2</button>
+          <button class="pg">3</button>
+          <button class="pg">4</button>
+          <span style="color:var(--ink-3)">…</span>
+          <button class="pg">65</button>
+          <button class="pg">›</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 11 Tooltip -->
+  <section class="sec">
+    <div class="sec-head"><span class="idx">11</span><h2>气泡提示</h2><span class="en">Tooltip</span></div>
+    <p class="desc">只用于解释<b>图标按钮</b>与被截断的文本；不要在按钮上重复写它自己的文字。</p>
+    <div class="demo">
+      <div class="row" style="gap:26px">
+        <span class="tip-host show">
+          <button class="iconbtn" style="color:var(--gold)"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 20h4L20 8l-4-4L4 16Z"/></svg></button>
+          <span class="tip">编辑角色属性（Enter）</span>
+        </span>
+        <span class="tip-host">
+          <span style="border-bottom:1px dashed rgba(201,162,77,.3);font-size:12.5px;color:var(--ink-2);cursor:help">战斗力权重口径</span>
+          <span class="tip">攻击×1.0 + 防御×0.8 + 魔防×0.6</span>
+        </span>
+      </div>
+    </div>
+  </section>
+
+  <!-- 12 Modal -->
+  <section class="sec">
+    <div class="sec-head"><span class="idx">12</span><h2>弹窗</h2><span class="en">Modal · 四档宽度</span><span class="src">Modal.tsx › sm / md / lg / xl</span></div>
+    <p class="desc">
+      宽度只有四档，<b>页面不许自己传 max-w</b>：sm 确认与单字段、md 普通编辑、lg 长表单、xl 工作台。
+      Esc 关闭、点遮罩关闭、内容区独立滚动、footer 固定 —— 全部由外壳提供。
+    </p>
+    <div class="grid2">
+      <div>
+        <div class="modal sm">
+          <div class="mh">
+            <div><h3>确认封禁</h3><p>封禁后该账号无法登录，已有角色在线会被踢下线</p></div>
+            <button class="x">关闭</button>
+          </div>
+          <div class="mb">
+            <div class="notice red" style="margin-bottom:12px"><span class="mk">!</span><div>此操作会立即生效，并写入操作日志（操作人：墨白）。</div></div>
+            <label class="field"><span class="lb">封禁原因</span><input class="ctrl" value="外挂行为" ></label>
+          </div>
+          <div class="mf">
+            <button class="btn ghost">取消</button>
+            <button class="btn solid-danger">确认封禁</button>
+          </div>
+        </div>
+        <div class="size-tag">SM · 420 · 确认 / 单字段</div>
+      </div>
+
+      <div>
+        <div class="modal md">
+          <div class="mh">
+            <div><h3>编辑技能</h3><p>等级上限由客户端配置决定，这里只校验 1–99</p></div>
+            <button class="x">关闭</button>
+          </div>
+          <div class="mb">
+            <div class="grid2" style="gap:12px">
+              <label class="field"><span class="lb">技能</span><div class="ctrl" style="display:flex;align-items:center;justify-content:space-between">烈火剑法 <span class="badge gold">skill_1003</span></div></label>
+              <label class="field"><span class="lb">等级</span><input class="ctrl" value="7"></label>
+            </div>
+            <div style="margin-top:12px">
+              <ul class="problems"><li>等级 7 会覆盖客户端默认值（3），确认无误再保存</li></ul>
+            </div>
+          </div>
+          <div class="mf">
+            <button class="btn ghost">取消</button>
+            <button class="btn primary">保存修改</button>
+          </div>
+        </div>
+        <div class="size-tag">MD · 600 · 普通编辑表单</div>
+      </div>
+    </div>
+    <p class="cap" style="margin-top:12px"><b>lg / xl</b> 用于技能/状态/任务/掉落这类长表单与对齐工作台，本页不重复展示；规格同 md，只加宽并让内容区滚动。</p>
+  </section>
+
+  <!-- 13 表单零件 -->
+  <section class="sec">
+    <div class="sec-head"><span class="idx">13</span><h2>表单零件</h2><span class="en">Form Bits</span><span class="src">form-bits.tsx</span></div>
+    <p class="desc">描述文案、校验清单、底部按钮条。校验清单<b>即时显示但不当权威</b> —— 真正的把关在服务端。</p>
+    <div class="demo">
+      <div class="grid2">
+        <label class="field">
+          <span class="lb">描述文案</span>
+          <textarea class="ctrl">对目标造成 180% 物理伤害，并附加 3 秒破甲。</textarea>
+          <span class="hint">≤500 字</span>
+        </label>
+        <div class="col">
+          <ul class="problems">
+            <li>冷却时间必须大于 0</li>
+            <li>消耗魔法不能超过 500</li>
+          </ul>
+          <div class="row" style="justify-content:flex-end;border-top:1px solid var(--line-soft);padding-top:12px">
+            <button class="btn outline">取消</button>
+            <button class="btn primary" disabled>保存修改</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 14 Toast -->
+  <section class="sec">
+    <div class="sec-head"><span class="idx">14</span><h2>结果提示</h2><span class="en">Toast</span><span class="src">ToastHost.tsx</span></div>
+    <p class="desc">页面底部居中浮现，2.2 秒自动消失。左侧菱形的颜色就是级别：绿=成功，火=失败。</p>
+    <div class="demo">
+      <div class="row" style="gap:16px">
+        <span class="toast ok"><span class="dot"></span>配置已下发，2 分钟内生效</span>
+        <span class="toast"><span class="dot"></span>保存失败：等级超出范围（40001）</span>
+      </div>
+    </div>
+  </section>
+
+  <footer class="foot">
+    <span>COMPONENTS · 14 节 · 与 system.html 同源 token</span>
+    <span>石 · 金 · 火</span>
+  </footer>
+</div>
+</body>
+</html>

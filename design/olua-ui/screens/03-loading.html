@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>03 · 加载过场 · Olua UI</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Noto+Serif+SC:wght@700;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../tokens.css">
+<link rel="stylesheet" href="../ui.css">
+<style>
+/* ── 加载：一屏只讲一件事——进度。禁止出现可交互元素（除失败重试） ── */
+.bg{position:absolute;inset:0;z-index:0}
+.bg img{width:100%;height:100%;object-fit:cover;object-position:60% 44%;
+  filter:brightness(.5) saturate(.85);animation:slowZoom 18s var(--ease-in-out) infinite alternate}
+@keyframes slowZoom{from{transform:scale(1)}to{transform:scale(1.06)}}
+.bg::after{content:"";position:absolute;inset:0;
+  background:radial-gradient(64% 60% at 50% 46%,rgba(10,7,4,.2),rgba(10,7,4,.92) 78%),
+             linear-gradient(180deg,rgba(10,7,4,.88),rgba(10,7,4,.42) 34%,rgba(10,7,4,.9))}
+
+.top{position:absolute;z-index:2;inset:0 0 auto;display:flex;align-items:center;justify-content:space-between;padding:30px 56px}
+.brand{display:flex;align-items:center;gap:10px;color:var(--text-3)}
+.brand b{font-family:var(--font-display);font-size:18px;letter-spacing:.18em;color:var(--text-2)}
+.brand span{font-family:var(--font-num);font-size:9px;letter-spacing:.3em;color:var(--text-4)}
+.zone{font-size:12px;letter-spacing:.1em;color:var(--gold-3)}
+.zone b{font-family:var(--font-num);font-weight:400;color:var(--text-2)}
+
+/* 中央：环 + 百分比 */
+.core{position:absolute;z-index:2;inset:0;display:grid;place-items:center}
+.ring-wrap{position:relative;width:300px;height:300px;display:grid;place-items:center}
+.ring-wrap svg{position:absolute;inset:0;transform:rotate(-90deg)}
+.ring-track{fill:none;stroke:rgba(194,146,69,.16);stroke-width:2}
+.ring-bar{fill:none;stroke:url(#grad);stroke-width:3;stroke-linecap:round;
+  stroke-dasharray:816;stroke-dashoffset:310;filter:drop-shadow(0 0 6px rgba(194,146,69,.55))}
+/* 外圈断续刻度：转起来才有「读条」感 */
+.ticks{position:absolute;inset:-18px;border-radius:50%;
+  background:repeating-conic-gradient(from 0deg,rgba(194,146,69,.42) 0deg .6deg,transparent .6deg 6deg);
+  -webkit-mask:radial-gradient(circle,transparent 61%,#000 62%,#000 64%,transparent 65%);
+          mask:radial-gradient(circle,transparent 61%,#000 62%,#000 64%,transparent 65%);
+  animation:spin 26s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.pct{font-family:var(--font-num);font-size:56px;letter-spacing:.02em;color:var(--gold-5);line-height:1;
+  text-shadow:0 0 24px rgba(194,146,69,.35)}
+.pct em{font-size:18px;font-style:normal;color:var(--gold-2);margin-left:4px;letter-spacing:.1em}
+.phase{margin-top:10px;text-align:center}
+.phase b{display:block;font-family:var(--font-display);font-size:17px;letter-spacing:.3em;color:var(--text-1)}
+.phase span{display:block;margin-top:8px;font-size:12px;color:var(--text-3);letter-spacing:.06em}
+
+/* 底部进度：通栏细线 + 三阶段刻度 */
+.progress{position:absolute;z-index:2;left:0;right:0;bottom:0;padding:0 0 28px}
+.pbar{position:relative;height:2px;background:rgba(194,146,69,.16);margin:0 56px}
+.pbar .fill{position:absolute;inset:0 auto 0 0;height:2px;background:linear-gradient(90deg,var(--gold-2),var(--gold-4));
+  box-shadow:0 0 12px rgba(194,146,69,.6);width:62%}
+.pbar .knob{position:absolute;left:62%;top:-3px;width:8px;height:8px;border-radius:50%;background:var(--gold-5);
+  box-shadow:0 0 12px rgba(232,200,135,.9);transform:translateX(-50%)}
+.steps{display:flex;justify-content:space-between;margin:12px 56px 0;font-family:var(--font-num);
+  font-size:10px;letter-spacing:.16em;color:var(--text-4)}
+.step{display:flex;align-items:center;gap:8px}
+.step i{width:5px;height:5px;border-radius:50%;border:1px solid var(--gold-2);display:block}
+.step.done{color:var(--gold-3)}
+.step.done i{background:var(--gold-3);border-color:var(--gold-3)}
+.step.now{color:var(--text-1)}
+.step.now i{background:var(--gold-5);border-color:var(--gold-5);box-shadow:0 0 10px rgba(247,233,198,.9)}
+
+/* 角落小贴士 */
+.tips{position:absolute;z-index:2;left:56px;bottom:96px;max-width:420px}
+.tips .cap{color:var(--gold-2)}
+.tips p{margin-top:8px;font-size:12.5px;line-height:1.85;color:var(--text-3)}
+.tips em{font-style:normal;color:var(--gold-4)}
+.meta{position:absolute;z-index:2;right:56px;bottom:96px;text-align:right;
+  font-family:var(--font-num);font-size:10px;letter-spacing:.14em;color:var(--text-4);line-height:1.9}
+
+/* 失败态 */
+.fail{position:absolute;z-index:3;inset:0;display:none;place-items:center;background:rgba(8,5,3,.82)}
+.fail .box{width:720px;text-align:center;padding:44px 48px}
+.fail h2{font-family:var(--font-display);font-size:24px;letter-spacing:.2em;color:var(--ember-4)}
+.fail p{margin:14px 0 6px;font-size:13px;line-height:1.9;color:var(--text-3)}
+.fail .detail{margin-top:10px;padding:10px 14px;border:var(--bw-1) solid rgba(198,58,32,.3);
+  border-radius:var(--r-2);background:rgba(0,0,0,.4);font-size:12px;color:#F0B4A2;line-height:1.8;text-align:left}
+.fail .acts{display:flex;justify-content:center;gap:12px;margin-top:22px}
+body.is-fail .fail{display:grid}
+</style>
+</head>
+<body>
+<div class="stage"><div class="stage-inner">
+
+  <div class="bg"><img src="../assets/hero-bg.jpg" alt="沙城"></div>
+
+  <header class="top">
+    <div class="brand">
+      <svg class="ic" viewBox="0 0 256 256" fill="currentColor" style="width:20px;height:20px;color:var(--gold-3)"><path d="M216,32H152a8,8,0,0,0-6.34,3.12l-64,83.21L72,108.69a16,16,0,0,0-22.64,0l-12.69,12.7a16,16,0,0,0,0,22.63l20,20-28,28a16,16,0,0,0,0,22.63l12.69,12.68a16,16,0,0,0,22.62,0l28-28,20,20a16,16,0,0,0,22.64,0l12.69-12.7a16,16,0,0,0,0-22.63l-9.64-9.64,83.21-64A8,8,0,0,0,224,104V40A8,8,0,0,0,216,32ZM52.69,216,40,203.32l28-28L80.68,188Zm70.61-8L48,132.71,60.7,120,136,195.31ZM208,100.06l-81.74,62.88L115.32,152l50.34-50.34a8,8,0,0,0-11.32-11.31L104,140.68,93.07,129.74,155.94,48H208Z"/></svg>
+      <div><b>Olua</b><span>OLUA</span></div>
+    </div>
+    <div class="zone">区服 <b>雷霆一区</b></div>
+  </header>
+
+  <div class="core">
+    <div>
+      <div class="ring-wrap">
+        <div class="ticks"></div>
+        <svg viewBox="0 0 300 300">
+          <defs>
+            <linearGradient id="grad" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stop-color="#F7E9C6"/><stop offset=".55" stop-color="#C29245"/><stop offset="1" stop-color="#8C6A33"/>
+            </linearGradient>
+          </defs>
+          <circle class="ring-track" cx="150" cy="150" r="130"/>
+          <circle class="ring-bar" cx="150" cy="150" r="130"/>
+        </svg>
+        <div>
+          <div class="pct">62<em>%</em></div>
+        </div>
+      </div>
+      <div class="phase"><b>帧动画</b><span>正在加载 沙城 · 黄昏 的素材 148 / 240</span></div>
+    </div>
+  </div>
+
+  <div class="tips">
+    <div class="cap">TIP OF THE DAY</div>
+    <p>按住 <em>Shift</em> 点击地面可以连续寻路；挂机时把<em>药品</em>拖进快捷栏，血量低于 30% 会自动服用。</p>
+  </div>
+  <div class="meta">
+    <div>BUILD 2.8.1.432</div>
+    <div>PING 42MS · 3 线</div>
+  </div>
+
+  <div class="progress">
+    <div class="pbar">
+      <div class="fill"></div><div class="knob"></div>
+    </div>
+    <div class="steps">
+      <span class="step done"><i></i>运营配置</span>
+      <span class="step done"><i></i>地图信息</span>
+      <span class="step now"><i></i>帧动画 148 / 240</span>
+      <span class="step"><i></i>进入世界</span>
+    </div>
+  </div>
+
+  <!-- 失败态：配置快照 / 资源加载失败 -->
+  <div class="fail">
+    <div class="panel panel--rivet box" style="width:720px">
+      <h2>加载失败</h2>
+      <p>服务端配置快照不完整，无法构建游戏世界。<br>请检查网络后重试，或联系客服。</p>
+      <div class="detail">缺失段：equip_slot · map_rule · drop_group<br>原因：GET /config/snapshot 返回 200 但 map_rule 段为空数组</div>
+      <div class="acts">
+        <button class="btn btn--primary" style="height:44px;font-size:16px">重 试</button>
+        <button class="btn btn--ghost">返回登录</button>
+      </div>
+    </div>
+  </div>
+
+</div></div>
+<script src="../stage.js"></script>
+<script>
+(function(){
+  if (/state=fail/.test(location.hash)) document.body.classList.add('is-fail');
+})();
+</script>
+</body>
+</html>

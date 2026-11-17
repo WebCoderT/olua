@@ -1,0 +1,1033 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>OLUA 传奇 · 管理端概览</title>
+<style>
+/* ══════════════════════════════════════════════════════════════
+   TOKENS —— 与登录页同一套「石 / 金 / 火」；后台多看的那一档更安静
+   ══════════════════════════════════════════════════════════════ */
+:root{
+  --void:#0A0806;
+  --stone-0:#0E0B08;   /* 页面底 */
+  --stone-1:#14100C;   /* 侧栏 */
+  --stone-2:#1A1510;   /* 卡片上缘 */
+  --stone-3:#221B14;   /* 卡片下缘 / 悬停 */
+  --stone-4:#2A2219;
+
+  --gold:#C9A24D;
+  --gold-hi:#F0DCAC;
+  --gold-dim:#6B562F;
+
+  --fire:#B9441F;
+  --fire-hi:#E4743A;
+  --jade:#6FA96B;      /* 唯一允许的"正常"态色，只用于状态点 */
+  --jade-dim:#3E5C3C;
+
+  --ink:#EDE4D0;
+  --ink-2:#B7A88F;
+  --ink-3:#7E7059;
+
+  --line:rgba(201,162,77,.16);
+  --line-soft:rgba(201,162,77,.08);
+
+  --font-display:"Songti SC","Source Han Serif SC","Noto Serif SC","STSong",serif;
+  --font-ui:"PingFang SC","Hiragino Sans GB","Microsoft YaHei",system-ui,sans-serif;
+  --font-mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+
+  --r:2px;
+  --sidebar:238px;
+  --ease:cubic-bezier(.22,.61,.36,1);
+  --ease-out:cubic-bezier(0,0,.2,1);
+}
+
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{
+  background:var(--stone-0);color:var(--ink);
+  font:400 14px/1.6 var(--font-ui);
+  -webkit-font-smoothing:antialiased;
+  overflow:hidden;
+}
+a{color:inherit;text-decoration:none}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+ul{list-style:none}
+svg{display:block}
+::selection{background:rgba(201,162,77,.26);color:#fff}
+:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+
+/* 石纹 + 极弱暖光：只在右上角透一点火气，不干扰阅读 */
+body::before{
+  content:"";position:fixed;inset:0;pointer-events:none;z-index:0;
+  background:
+    radial-gradient(70% 46% at 78% -6%, rgba(150,70,28,.16) 0%, transparent 62%),
+    radial-gradient(40% 30% at 100% 100%, rgba(150,70,28,.08) 0%, transparent 70%);
+}
+body::after{
+  content:"";position:fixed;inset:0;pointer-events:none;z-index:0;opacity:.13;mix-blend-mode:overlay;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.86' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* ══════════════════════════════════════════════════════════════
+   SHELL
+   ══════════════════════════════════════════════════════════════ */
+.shell{
+  position:relative;z-index:1;
+  display:grid;grid-template-columns:var(--sidebar) minmax(0,1fr);
+  height:100vh;height:100dvh;
+}
+
+/* ─────────── 侧栏 ─────────── */
+.side{
+  position:relative;display:flex;flex-direction:column;min-height:0;
+  background:
+    linear-gradient(180deg,rgba(201,162,77,.05) 0%,transparent 22%),
+    linear-gradient(180deg,var(--stone-1),#100D0A 70%);
+  border-right:1px solid var(--line-soft);
+}
+.side-brand{
+  display:flex;align-items:center;gap:11px;
+  padding:20px 18px 18px;border-bottom:1px solid var(--line-soft);
+}
+.crest{width:26px;height:31px;flex:0 0 auto}
+.side-brand b{
+  display:block;font-family:var(--font-display);font-size:16px;font-weight:700;
+  letter-spacing:.28em;line-height:1;color:var(--gold-hi);
+}
+.side-brand span{
+  display:block;margin-top:5px;font-family:var(--font-mono);font-size:8.5px;
+  letter-spacing:.30em;color:var(--ink-3);
+}
+
+.zone{
+  display:flex;align-items:center;gap:9px;margin:12px 12px 4px;padding:9px 11px;
+  border:1px solid var(--line);border-radius:var(--r);
+  background:linear-gradient(180deg,rgba(0,0,0,.34),rgba(0,0,0,.18));
+  font-family:var(--font-mono);font-size:11px;letter-spacing:.04em;color:var(--ink-2);
+  cursor:pointer;transition:border-color .22s var(--ease),color .22s;
+}
+.zone:hover{border-color:rgba(201,162,77,.34);color:var(--ink)}
+.zone i{width:5px;height:5px;border-radius:50%;background:var(--jade);box-shadow:0 0 6px rgba(111,169,107,.9);flex:0 0 auto}
+.zone .arrow{margin-left:auto;width:7px;height:7px;border-right:1px solid var(--gold-dim);border-bottom:1px solid var(--gold-dim);transform:rotate(45deg) translate(-1px,-1px)}
+
+.nav{flex:1;min-height:0;overflow-y:auto;padding:10px 10px 18px}
+.nav::-webkit-scrollbar{width:6px}
+.nav::-webkit-scrollbar-thumb{background:rgba(201,162,77,.18);border-radius:99px}
+.nav::-webkit-scrollbar-track{background:transparent}
+
+.nav-top{
+  display:flex;align-items:center;gap:10px;
+  padding:9px 11px;border-radius:var(--r);font-size:13px;color:var(--ink);
+  border-left:2px solid transparent;transition:background .2s,color .2s;
+}
+.nav-top svg{color:var(--gold);opacity:.9}
+.nav-top:hover{background:rgba(201,162,77,.07)}
+.nav-top.active{
+  background:linear-gradient(90deg,rgba(201,162,77,.15),rgba(201,162,77,.03));
+  border-left-color:var(--gold);color:var(--gold-hi);
+}
+
+.grp{margin-top:14px}
+.grp-head{
+  display:flex;align-items:center;gap:8px;width:100%;padding:6px 11px;
+  font-family:var(--font-mono);font-size:9.5px;letter-spacing:.20em;text-transform:uppercase;
+  color:var(--ink-3);transition:color .2s;
+}
+.grp-head:hover{color:var(--ink-2)}
+.grp-head .caret{
+  width:6px;height:6px;border-right:1px solid currentColor;border-bottom:1px solid currentColor;
+  transform:rotate(45deg) translateY(-1px);transition:transform .25s var(--ease);
+}
+.grp.collapsed .grp-head .caret{transform:rotate(-45deg) translateY(-1px)}
+.grp-head .count{margin-left:auto;font-size:9px;color:var(--gold-dim)}
+.grp-body{overflow:hidden;transition:height .3s var(--ease)}
+.grp.collapsed .grp-body{height:0}
+
+.grp-inner{margin-left:14px;border-left:1px solid var(--line-soft);padding-left:2px}
+.nav-sub-label{
+  padding:7px 12px 3px;font-size:11.5px;color:var(--ink-3);letter-spacing:.04em;
+}
+.nav-leaf{
+  display:block;padding:7px 12px;font-size:12.5px;color:var(--ink-2);
+  border-left:1px solid transparent;margin-left:-1px;
+  transition:color .18s,background .18s,border-color .18s;
+}
+.nav-leaf:hover{color:var(--ink);background:rgba(201,162,77,.05)}
+.nav-leaf.active{
+  color:var(--gold-hi);border-left-color:var(--gold);
+  background:linear-gradient(90deg,rgba(201,162,77,.12),transparent);
+}
+
+.side-foot{
+  padding:12px 14px 14px;border-top:1px solid var(--line-soft);
+  display:flex;align-items:center;gap:10px;
+}
+.avatar{
+  width:30px;height:30px;flex:0 0 auto;display:grid;place-items:center;
+  border:1px solid var(--gold-dim);border-radius:var(--r);
+  font-family:var(--font-display);font-size:13px;color:var(--gold-hi);
+  background:linear-gradient(180deg,rgba(201,162,77,.16),rgba(201,162,77,.04));
+}
+.side-foot .who{min-width:0}
+.side-foot .who b{display:block;font-size:12.5px;font-weight:600;color:var(--ink)}
+.side-foot .who span{display:block;font-family:var(--font-mono);font-size:9.5px;color:var(--ink-3);letter-spacing:.08em}
+.side-foot .out{margin-left:auto;color:var(--ink-3);transition:color .2s}
+.side-foot .out:hover{color:var(--fire-hi)}
+
+/* ─────────── 主区 ─────────── */
+.main{min-width:0;display:flex;flex-direction:column;height:100%}
+
+.top{
+  display:flex;align-items:center;gap:18px;
+  padding:0 clamp(18px,2.2vw,30px);height:60px;flex:0 0 auto;
+  border-bottom:1px solid var(--line-soft);
+  background:linear-gradient(180deg,rgba(26,21,16,.72),rgba(14,11,8,.42));
+  backdrop-filter:blur(6px);
+}
+.burger{display:none;color:var(--ink-2)}
+.crumb{display:flex;align-items:center;gap:9px;font-size:12px;color:var(--ink-3);letter-spacing:.04em}
+.crumb b{color:var(--ink-2);font-weight:500}
+.crumb .sep{color:var(--gold-dim)}
+
+.top-right{margin-left:auto;display:flex;align-items:center;gap:16px}
+.chip{
+  display:inline-flex;align-items:center;gap:8px;height:30px;padding:0 11px;
+  border:1px solid var(--line);border-radius:var(--r);
+  font-family:var(--font-mono);font-size:10.5px;letter-spacing:.06em;color:var(--ink-2);
+}
+.chip i{width:5px;height:5px;border-radius:50%;background:var(--jade);box-shadow:0 0 7px rgba(111,169,107,.9)}
+.clock{font-family:var(--font-mono);font-size:11.5px;letter-spacing:.06em;color:var(--ink-3);font-variant-numeric:tabular-nums}
+
+/* 内容滚动区 */
+.scroll{flex:1;min-height:0;overflow-y:auto;padding:clamp(18px,2.2vw,28px) clamp(18px,2.2vw,30px) 34px}
+.scroll::-webkit-scrollbar{width:8px}
+.scroll::-webkit-scrollbar-thumb{background:rgba(201,162,77,.16);border-radius:99px}
+.scroll::-webkit-scrollbar-track{background:transparent}
+.wrap{max-width:1360px;margin:0 auto;display:flex;flex-direction:column;gap:14px}
+
+/* 页头 */
+.head{display:flex;align-items:flex-end;gap:18px;flex-wrap:wrap;margin-bottom:2px}
+.head h1{
+  font-family:var(--font-display);font-size:clamp(26px,2.6vw,34px);font-weight:700;
+  letter-spacing:.10em;line-height:1.1;color:var(--ink);
+}
+.head h1 small{
+  display:inline-block;margin-left:12px;vertical-align:middle;
+  font-family:var(--font-mono);font-size:9.5px;font-weight:400;letter-spacing:.2em;
+  color:var(--gold-dim);border:1px solid var(--line);border-radius:var(--r);padding:3px 7px;
+}
+.head p{margin-top:7px;font-size:12.5px;color:var(--ink-3);letter-spacing:.02em}
+.head .tools{margin-left:auto;display:flex;align-items:center;gap:9px}
+
+.btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:7px;height:32px;padding:0 13px;
+  border:1px solid var(--line);border-radius:var(--r);font-size:12.5px;color:var(--ink-2);
+  background:linear-gradient(180deg,rgba(255,255,255,.03),rgba(0,0,0,.18));
+  transition:border-color .2s,color .2s,background .2s;
+}
+.btn:hover{border-color:rgba(201,162,77,.38);color:var(--ink);background:linear-gradient(180deg,rgba(201,162,77,.10),rgba(0,0,0,.16))}
+.btn:active{transform:translateY(1px)}
+.btn.spin svg{animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* 分段选择（时间范围） */
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+.seg button{
+  height:30px;padding:0 11px;font-family:var(--font-mono);font-size:10.5px;letter-spacing:.06em;
+  color:var(--ink-3);border-right:1px solid var(--line-soft);transition:color .2s,background .2s;
+}
+.seg button:last-child{border-right:0}
+.seg button:hover{color:var(--ink-2);background:rgba(201,162,77,.06)}
+.seg button.on{color:#1A1206;background:linear-gradient(180deg,#E4C87F,#BE9644);font-weight:600}
+
+/* ══════════════════════════════════════════════════════════════
+   卡片通用：金线 + 内衬线 + 角标
+   ══════════════════════════════════════════════════════════════ */
+.card{
+  position:relative;padding:16px 18px 18px;
+  border:1px solid var(--line);border-radius:var(--r);
+  background:linear-gradient(170deg,var(--stone-2) 0%,#16120E 46%,#12100C 100%);
+  box-shadow:0 18px 40px -28px rgba(0,0,0,.9),inset 0 1px 0 rgba(240,220,172,.05);
+}
+.card::before{
+  content:"";position:absolute;inset:4px;border:1px solid rgba(201,162,77,.055);pointer-events:none;
+}
+.card > *{position:relative}
+.card-head{display:flex;align-items:center;gap:10px;margin-bottom:14px}
+.card-head h2{
+  font-size:13.5px;font-weight:600;letter-spacing:.10em;color:var(--ink);
+}
+.card-head .en{
+  font-family:var(--font-mono);font-size:8.5px;letter-spacing:.2em;text-transform:uppercase;
+  color:var(--gold-dim);
+}
+.card-head .right{margin-left:auto;font-size:11.5px;color:var(--ink-3);font-family:var(--font-mono)}
+.card-note{font-size:11.5px;color:var(--ink-3);margin-top:-8px;margin-bottom:12px}
+
+/* 角上一枚菱形，和登录页四角饰同一语言 */
+.card .stud{
+  position:absolute;top:-1px;right:-1px;width:9px;height:9px;pointer-events:none;
+  background:linear-gradient(225deg,var(--gold),transparent 70%);
+}
+
+/* ══════════════════════════════════════════════════════════════
+   KPI
+   ══════════════════════════════════════════════════════════════ */
+.kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}
+.kpi{padding:14px 16px 12px}
+.kpi-top{display:flex;align-items:flex-start;gap:10px}
+.kpi-label{
+  font-family:var(--font-mono);font-size:9.5px;letter-spacing:.18em;text-transform:uppercase;
+  color:var(--ink-3);padding-top:2px;
+}
+.kpi-ic{margin-left:auto;color:var(--gold-dim)}
+.kpi-num{
+  margin-top:10px;font-family:var(--font-mono);font-size:clamp(26px,2.4vw,32px);font-weight:500;
+  letter-spacing:-.01em;line-height:1;color:var(--gold-hi);font-variant-numeric:tabular-nums;
+}
+.kpi-num.plain{color:var(--ink)}
+.kpi-foot{display:flex;align-items:center;gap:8px;margin-top:11px;font-size:11px;color:var(--ink-3)}
+.delta{display:inline-flex;align-items:center;gap:3px;font-family:var(--font-mono);font-size:10.5px}
+.delta.up{color:var(--jade)}
+.delta.down{color:var(--fire-hi)}
+.spark{margin-left:auto;width:64px;height:22px}
+
+/* ══════════════════════════════════════════════════════════════
+   主体栅格
+   ══════════════════════════════════════════════════════════════ */
+.grid{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:14px}
+.c8{grid-column:span 8}
+.c4{grid-column:span 4}
+.c6{grid-column:span 6}
+.c12{grid-column:span 12}
+
+/* ── 折线图 ── */
+.chart{position:relative;width:100%}
+.chart svg{width:100%;height:auto;overflow:visible}
+.axis-txt{font-family:var(--font-mono);font-size:9px;fill:var(--ink-3);letter-spacing:.04em}
+.legend{display:flex;align-items:center;gap:16px;margin-left:auto}
+.legend span{display:inline-flex;align-items:center;gap:6px;font-size:11px;color:var(--ink-2)}
+.legend i{width:14px;height:2px;border-radius:2px}
+.tip{
+  position:absolute;pointer-events:none;z-index:5;transform:translate(-50%,-125%);
+  padding:7px 10px;border:1px solid var(--gold-dim);border-radius:var(--r);
+  background:linear-gradient(180deg,#221B14,#16110C);
+  box-shadow:0 16px 30px -14px rgba(0,0,0,.9);
+  font-family:var(--font-mono);font-size:10.5px;line-height:1.7;color:var(--ink);
+  opacity:0;transition:opacity .15s;white-space:nowrap;
+}
+.tip.show{opacity:1}
+.tip b{color:var(--gold-hi);font-weight:500}
+
+/* ── 排名条 ── */
+.rows{display:flex;flex-direction:column;gap:9px}
+.row{display:grid;grid-template-columns:66px 1fr 44px;align-items:center;gap:10px;font-size:11.5px}
+.row .lb{color:var(--ink-2);font-family:var(--font-mono);font-size:10.5px;letter-spacing:.02em;white-space:nowrap}
+.row .track{position:relative;height:7px;background:rgba(255,255,255,.035);border-radius:1px;overflow:hidden}
+.row .bar{
+  position:absolute;inset:0 auto 0 0;height:100%;
+  background:linear-gradient(90deg,rgba(201,162,77,.42),var(--gold));
+  transform-origin:left center;animation:grow .9s var(--ease) both;
+}
+.row .bar.fire{background:linear-gradient(90deg,rgba(185,68,31,.45),var(--fire-hi))}
+.row .bar.jade{background:linear-gradient(90deg,rgba(111,169,107,.35),#8FC98A)}
+@keyframes grow{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+.row .vl{font-family:var(--font-mono);font-size:10.5px;color:var(--ink-3);text-align:right;font-variant-numeric:tabular-nums}
+
+/* ── 环形（职业 / 性别） ── */
+.donut-wrap{display:flex;align-items:center;gap:18px}
+.donut{position:relative;flex:0 0 auto}
+.donut .center{
+  position:absolute;inset:0;display:grid;place-content:center;text-align:center;
+}
+.donut .center b{
+  display:block;font-family:var(--font-mono);font-size:17px;font-weight:500;color:var(--gold-hi);
+  font-variant-numeric:tabular-nums;
+}
+.donut .center span{font-family:var(--font-mono);font-size:8.5px;letter-spacing:.16em;color:var(--ink-3)}
+.donut-legend{display:flex;flex-direction:column;gap:9px;flex:1;min-width:0}
+.donut-legend div{display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--ink-2)}
+.donut-legend i{width:7px;height:7px;border-radius:1px;flex:0 0 auto}
+.donut-legend em{
+  margin-left:auto;font-style:normal;font-family:var(--font-mono);font-size:10.5px;color:var(--ink-3);
+  font-variant-numeric:tabular-nums;
+}
+
+/* ── 最近动态 ── */
+.logs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 26px}
+.log{
+  display:grid;grid-template-columns:64px 1fr auto;gap:10px;align-items:baseline;
+  padding:9px 0;border-bottom:1px solid rgba(201,162,77,.06);font-size:12px;
+}
+.log:nth-last-child(-n+2){border-bottom:0}
+.log .t{font-family:var(--font-mono);font-size:10px;color:var(--ink-3);font-variant-numeric:tabular-nums}
+.log .who{color:var(--ink)}
+.log .act{color:var(--ink-2)}
+.log .tgt{color:var(--ink-3);margin-left:6px;font-family:var(--font-mono);font-size:10.5px}
+.tag{
+  font-family:var(--font-mono);font-size:9px;letter-spacing:.1em;padding:2px 6px;border-radius:1px;
+  border:1px solid var(--line);color:var(--ink-3);
+}
+.tag.bad{border-color:rgba(185,68,31,.5);color:#E88A62;background:rgba(185,68,31,.10)}
+
+/* ── 页脚备注 ── */
+.foot{
+  display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;
+  padding-top:4px;font-family:var(--font-mono);font-size:9.5px;letter-spacing:.1em;color:var(--ink-3);
+}
+
+/* ── 入场 ── */
+.rise{animation:rise .7s var(--ease) both;animation-delay:calc(var(--d,0) * 60ms)}
+@keyframes rise{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+
+/* ══════════════════════════════════════════════════════════════
+   交互反馈 —— 后台不做位移弹跳，只给边界「点亮」
+   ══════════════════════════════════════════════════════════════ */
+.nav-top:focus-visible,.nav-leaf:focus-visible,.grp-head:focus-visible{
+  outline:1px solid rgba(201,162,77,.7);outline-offset:-1px;border-radius:var(--r);
+}
+.kpi{transition:border-color .25s var(--ease),box-shadow .25s var(--ease)}
+.kpi:hover{
+  border-color:rgba(201,162,77,.36);
+  box-shadow:0 18px 40px -26px rgba(0,0,0,.9),0 0 26px -8px rgba(201,162,77,.14),
+             inset 0 1px 0 rgba(240,220,172,.08);
+}
+.seg button:active{box-shadow:inset 0 2px 3px rgba(0,0,0,.4)}
+.seg button:focus-visible{outline:1px solid var(--gold);outline-offset:-1px}
+.btn:focus-visible,.zone:focus-visible{outline:1px solid rgba(201,162,77,.7);outline-offset:1px}
+
+/* 图例可点：整条序列淡出，用于单看某一条 */
+.legend span{cursor:pointer;user-select:none;transition:opacity .25s var(--ease)}
+.legend span:hover{color:var(--ink)}
+.legend span.off{opacity:.30}
+.legend span.off i{background:var(--ink-3)!important}
+
+/* 最近动态：悬停浮起一层极淡的金雾，暗示可点进日志 */
+.log{transition:background .16s var(--ease)}
+.log:hover{background:rgba(201,162,77,.045)}
+.log:hover .act{color:var(--ink)}
+
+/* 输入控件通用焦点（若后续加搜索/筛选字段） */
+input.ctrl,select.ctrl,textarea.ctrl{
+  width:100%;height:34px;padding:0 11px;
+  border:1px solid var(--line);border-radius:var(--r);
+  background:linear-gradient(180deg,rgba(0,0,0,.4),rgba(0,0,0,.24));
+  color:var(--ink);font:400 13px/1 var(--font-ui);
+  transition:border-color .22s var(--ease),box-shadow .22s var(--ease);
+}
+input.ctrl::placeholder{color:var(--ink-3)}
+input.ctrl:hover{border-color:rgba(201,162,77,.3)}
+input.ctrl:focus{
+  outline:none;border-color:var(--gold);
+  box-shadow:0 0 0 3px rgba(201,162,77,.10);
+}
+
+/* ══════════════════════════════════════════════════════════════
+   响应式
+   ══════════════════════════════════════════════════════════════ */
+@media (max-width:1240px){
+  .c8,.c4{grid-column:span 12}
+  .kpis{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media (max-width:1080px){
+  .shell{grid-template-columns:1fr}
+  .side{
+    position:fixed;left:0;top:0;bottom:0;width:262px;z-index:40;
+    transform:translateX(-100%);transition:transform .3s var(--ease);
+    box-shadow:26px 0 60px -26px rgba(0,0,0,.95);
+  }
+  .side.open{transform:none}
+  .burger{display:grid;place-items:center;width:32px;height:32px;border:1px solid var(--line);border-radius:var(--r)}
+  .scrim{position:fixed;inset:0;z-index:35;background:rgba(0,0,0,.6);opacity:0;visibility:hidden;transition:opacity .3s,visibility .3s}
+  .scrim.on{opacity:1;visibility:visible}
+  .logs{grid-template-columns:1fr}
+  .log:nth-last-child(2){border-bottom:1px solid rgba(201,162,77,.06)}
+}
+@media (max-width:760px){
+  .c6{grid-column:span 12}
+  .head .tools{width:100%;margin-left:0}
+  .kpi-num{font-size:26px}
+  .top{padding:0 16px;gap:12px}
+  .chip{display:none}
+}
+@media (prefers-reduced-motion:reduce){
+  *{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
+}
+html.static *{animation:none!important;transition:none!important}
+</style>
+</head>
+<body>
+
+<div class="shell">
+
+  <!-- ══════════ 侧栏 ══════════ -->
+  <aside class="side" id="side">
+    <div class="side-brand">
+      <svg class="crest" viewBox="0 0 34 40" fill="none" aria-hidden="true">
+        <path d="M17 1.5 L32.2 6.6 V20.4 C32.2 29.6 25.6 35.6 17 38.6 C8.4 35.6 1.8 29.6 1.8 20.4 V6.6 Z"
+              stroke="#C9A24D" stroke-width="1.2" fill="rgba(201,162,77,.06)"/>
+        <path d="M17 5.2 L28.6 9 V20.2 C28.6 27.4 23.4 32.2 17 34.7 C10.6 32.2 5.4 27.4 5.4 20.2 V9 Z"
+              stroke="rgba(201,162,77,.35)" stroke-width=".8"/>
+        <path d="M17 10.5 V26.5" stroke="#F0DCAC" stroke-width="1.4"/>
+        <path d="M12.6 15.4 H21.4" stroke="#C9A24D" stroke-width="1.1"/>
+        <path d="M17 26.5 L15 29.6 H19 Z" fill="#C9A24D"/>
+      </svg>
+      <div>
+        <b>OLUA</b>
+        <span>LEGEND CONSOLE</span>
+      </div>
+    </div>
+
+    <button class="zone" type="button">
+      <i></i>双线一区 · 龙渊
+      <span class="arrow"></span>
+    </button>
+
+    <nav class="nav">
+      <a class="nav-top active" href="#">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+          <path d="M3 10.5 12 3l9 7.5"/><path d="M5.5 9.5V20h13V9.5"/><path d="M10 20v-5h4v5"/>
+        </svg>
+        概览
+      </a>
+
+      <div class="grp" data-grp>
+        <button class="grp-head" type="button"><span class="caret"></span>运营管理<span class="count">07</span></button>
+        <div class="grp-body"><div class="grp-inner">
+          <div class="nav-sub-label">账号与区服</div>
+          <a class="nav-leaf" href="#">账号管理</a>
+          <a class="nav-leaf" href="#">角色管理</a>
+          <a class="nav-leaf" href="#">区服管理</a>
+          <div class="nav-sub-label">玩家与社区</div>
+          <a class="nav-leaf" href="#">帮会管理</a>
+          <a class="nav-leaf" href="#">邮件</a>
+          <a class="nav-leaf" href="#">发消息</a>
+          <a class="nav-leaf" href="#">玩家举报</a>
+          <a class="nav-leaf" href="#">公告</a>
+        </div></div>
+      </div>
+
+      <div class="grp" data-grp>
+        <button class="grp-head" type="button"><span class="caret"></span>战斗与装备<span class="count">08</span></button>
+        <div class="grp-body"><div class="grp-inner">
+          <div class="nav-sub-label">装备</div>
+          <a class="nav-leaf" href="#">装备配置</a>
+          <a class="nav-leaf" href="#">前后缀管理</a>
+          <a class="nav-leaf" href="#">槽位与规则</a>
+          <div class="nav-sub-label">战斗配置</div>
+          <a class="nav-leaf" href="#">怪物配置</a>
+          <a class="nav-leaf" href="#">技能配置</a>
+          <a class="nav-leaf" href="#">掉落配置</a>
+          <a class="nav-leaf" href="#">战斗力权重</a>
+          <a class="nav-leaf" href="#">地图管理</a>
+        </div></div>
+      </div>
+
+      <div class="grp collapsed" data-grp>
+        <button class="grp-head" type="button"><span class="caret"></span>养成与玩法<span class="count">10</span></button>
+        <div class="grp-body"><div class="grp-inner">
+          <div class="nav-sub-label">角色养成</div>
+          <a class="nav-leaf" href="#">称号配置</a>
+          <a class="nav-leaf" href="#">战魂配置</a>
+          <a class="nav-leaf" href="#">军衔配置</a>
+          <div class="nav-sub-label">物品与商城</div>
+          <a class="nav-leaf" href="#">物品配置</a>
+          <a class="nav-leaf" href="#">药品配置</a>
+          <a class="nav-leaf" href="#">商城</a>
+        </div></div>
+      </div>
+
+      <div class="grp collapsed" data-grp>
+        <button class="grp-head" type="button"><span class="caret"></span>系统管理<span class="count">03</span></button>
+        <div class="grp-body"><div class="grp-inner">
+          <a class="nav-leaf" href="#">管理员</a>
+          <a class="nav-leaf" href="#">操作日志</a>
+          <a class="nav-leaf" href="#">配置版本</a>
+        </div></div>
+      </div>
+    </nav>
+
+    <div class="side-foot">
+      <div class="avatar">墨</div>
+      <div class="who">
+        <b>墨白</b>
+        <span>SUPER ADMIN</span>
+      </div>
+      <a class="out" href="#" title="退出登录">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+          <path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3"/><path d="M10 8l-4 4 4 4"/><path d="M6 12h9"/>
+        </svg>
+      </a>
+    </div>
+  </aside>
+
+  <!-- ══════════ 主区 ══════════ -->
+  <div class="main">
+    <header class="top">
+      <button class="burger" id="burger" aria-label="打开导航">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+          <path d="M4 7h16M4 12h16M4 17h16"/>
+        </svg>
+      </button>
+      <div class="crumb"><b>管理台</b><span class="sep">/</span><span>概览</span></div>
+      <div class="top-right">
+        <span class="chip"><i></i>服务正常</span>
+        <span class="clock" id="clock">--:--:--</span>
+      </div>
+    </header>
+
+    <div class="scroll">
+      <div class="wrap">
+
+        <!-- 页头 -->
+        <div class="head rise" style="--d:0">
+          <div>
+            <h1>概览<small>DEMO</small></h1>
+            <p>数据实时来自服务端 · 封禁与改角色等操作在对应页面进行</p>
+          </div>
+          <div class="tools">
+            <div class="seg" id="seg">
+              <button type="button" data-days="7" class="on">7 天</button>
+              <button type="button" data-days="14">14 天</button>
+              <button type="button" data-days="30">30 天</button>
+            </div>
+            <button class="btn" id="refresh" type="button">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                <path d="M20 11a8 8 0 1 0-2.3 6.3"/><path d="M20 5v6h-6"/>
+              </svg>
+              刷新
+            </button>
+          </div>
+        </div>
+
+        <!-- KPI -->
+        <div class="kpis">
+          <div class="card kpi rise" style="--d:1">
+            <span class="stud"></span>
+            <div class="kpi-top">
+              <span class="kpi-label">Accounts · 账号总数</span>
+              <span class="kpi-ic">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                  <circle cx="12" cy="8" r="3.4"/><path d="M5 20c0-3.6 3.1-6 7-6s7 2.4 7 6"/>
+                </svg>
+              </span>
+            </div>
+            <div class="kpi-num" data-count="12486">0</div>
+            <div class="kpi-foot">
+              <span class="delta up">▲ 48</span><span>今日新增</span>
+              <svg class="spark" viewBox="0 0 64 22" preserveAspectRatio="none" aria-hidden="true">
+                <path d="M1 17 L8 15 L15 16 L22 12 L29 13 L36 9 L43 10 L50 6 L57 7 L63 4" fill="none" stroke="#C9A24D" stroke-width="1.4"/>
+              </svg>
+            </div>
+          </div>
+
+          <div class="card kpi rise" style="--d:2">
+            <span class="stud"></span>
+            <div class="kpi-top">
+              <span class="kpi-label">Roles · 角色总数</span>
+              <span class="kpi-ic">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                  <circle cx="9" cy="8" r="3"/><path d="M3 19c0-3.2 2.7-5.4 6-5.4s6 2.2 6 5.4"/>
+                  <path d="M16 5.4a3 3 0 0 1 0 5.6"/><path d="M17.5 13.8c2.1.6 3.5 2.3 3.5 4.7"/>
+                </svg>
+              </span>
+            </div>
+            <div class="kpi-num" data-count="18932">0</div>
+            <div class="kpi-foot">
+              <span class="delta up">▲ 63</span><span>今日新增</span>
+              <svg class="spark" viewBox="0 0 64 22" preserveAspectRatio="none" aria-hidden="true">
+                <path d="M1 18 L8 16 L15 17 L22 14 L29 15 L36 11 L43 13 L50 9 L57 10 L63 6" fill="none" stroke="#C9A24D" stroke-width="1.4"/>
+              </svg>
+            </div>
+          </div>
+
+          <div class="card kpi rise" style="--d:3">
+            <span class="stud"></span>
+            <div class="kpi-top">
+              <span class="kpi-label">Online · 在线账号</span>
+              <span class="kpi-ic">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                  <path d="M4 18v-5M9 18V8M14 18v-7M19 18V5"/><path d="M2.5 20.5h19"/>
+                </svg>
+              </span>
+            </div>
+            <div class="kpi-num" data-count="1284">0</div>
+            <div class="kpi-foot">
+              <span style="display:inline-flex;align-items:center;gap:6px;color:var(--ink-3)">
+                <i style="width:5px;height:5px;background:var(--jade);border-radius:50%;box-shadow:0 0 6px rgba(111,169,107,.9)"></i>
+                已选中在线角色
+              </span>
+              <svg class="spark" viewBox="0 0 64 22" preserveAspectRatio="none" aria-hidden="true">
+                <path d="M1 12 L8 9 L15 13 L22 8 L29 11 L36 6 L43 10 L50 7 L57 9 L63 5" fill="none" stroke="#8FC98A" stroke-width="1.4"/>
+              </svg>
+            </div>
+          </div>
+
+          <div class="card kpi rise" style="--d:4">
+            <span class="stud"></span>
+            <div class="kpi-top">
+              <span class="kpi-label">Banned · 封禁中</span>
+              <span class="kpi-ic" style="color:rgba(185,68,31,.7)">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                  <rect x="5" y="10.5" width="14" height="9.5" rx="1.5"/><path d="M8.5 10.5V7.5a3.5 3.5 0 0 1 7 0v3"/>
+                </svg>
+              </span>
+            </div>
+            <div class="kpi-num plain" data-count="37">0</div>
+            <div class="kpi-foot">
+              <span class="delta down">▼ 4</span><span>较昨日</span>
+              <span style="margin-left:auto;font-family:var(--font-mono);font-size:10px;color:var(--ink-3)">含永久 / 临时</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 趋势 + 等级分布 -->
+        <div class="grid">
+          <section class="card c8 rise" style="--d:5">
+            <span class="stud"></span>
+            <div class="card-head">
+              <h2>增长趋势</h2>
+              <span class="en">Growth</span>
+              <div class="legend" id="legend">
+                <span data-series="accounts"><i style="background:#C9A24D"></i>新增账号</span>
+                <span data-series="roles"><i style="background:#B9441F"></i>新增角色</span>
+              </div>
+            </div>
+            <p class="card-note" id="trendNote">近 7 天：新增账号 0 · 新增角色 0</p>
+            <div class="chart" id="chart">
+              <div class="tip" id="tip"></div>
+            </div>
+          </section>
+
+          <section class="card c4 rise" style="--d:6">
+            <span class="stud"></span>
+            <div class="card-head">
+              <h2>等级分布</h2>
+              <span class="en">Levels</span>
+              <span class="right">每 10 级一档</span>
+            </div>
+            <div class="rows" id="levels"></div>
+          </section>
+        </div>
+
+        <!-- 职业 / 地图 / 性别 -->
+        <div class="grid">
+          <section class="card c4 rise" style="--d:7">
+            <span class="stud"></span>
+            <div class="card-head"><h2>职业分布</h2><span class="en">Classes</span></div>
+            <div class="donut-wrap" id="classes"></div>
+          </section>
+
+          <section class="card c4 rise" style="--d:8">
+            <span class="stud"></span>
+            <div class="card-head"><h2>所在地图</h2><span class="en">Maps</span><span class="right">Top 5</span></div>
+            <div class="rows" id="maps"></div>
+          </section>
+
+          <section class="card c4 rise" style="--d:9">
+            <span class="stud"></span>
+            <div class="card-head"><h2>性别分布</h2><span class="en">Gender</span></div>
+            <div class="donut-wrap" id="sexes"></div>
+          </section>
+        </div>
+
+        <!-- 最近动态 -->
+        <section class="card c12 rise" style="--d:10">
+          <span class="stud"></span>
+          <div class="card-head">
+            <h2>最近动态</h2>
+            <span class="en">Audit</span>
+            <span class="right">最近 8 条写操作 · 与「操作日志」同一张表</span>
+          </div>
+          <div class="logs" id="logs"></div>
+        </section>
+
+        <div class="foot">
+          <span>OLUA LEGEND CONSOLE · 设计稿 v1</span>
+          <span>DEMO DATA · 未连接服务端</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="scrim" id="scrim"></div>
+
+<script>
+(function(){
+  "use strict";
+
+  if(new URLSearchParams(location.search).has('static')) document.documentElement.classList.add('static');
+  const STATIC = document.documentElement.classList.contains('static');
+
+  /* ═══════════ 演示数据（形状与 /admin/stats 一致） ═══════════ */
+  const ACCOUNTS = [21,26,24,31,28,34,30,38,35,41,37,44,40,47,43,52,46,49,55,51,58,54,61,57,63,59,66,62,68,71];
+  const ROLES    = [28,32,30,37,35,40,38,45,42,48,46,52,49,56,53,61,58,63,67,64,70,66,73,69,76,72,79,75,82,86];
+
+  const LEVELS = [
+    {k:'1-10 级', v:4210},{k:'11-20 级', v:3120},{k:'21-30 级', v:2480},
+    {k:'31-40 级', v:1980},{k:'41-50 级', v:1420},{k:'51-60 级', v:980},
+    {k:'61-70 级', v:560},{k:'71-80 级', v:210},{k:'81-90 级', v:62}
+  ];
+  const CLASSES = [{k:'战士', v:7820, c:'#C9A24D'},{k:'法师', v:6410, c:'#C25B2E'},{k:'道士', v:4702, c:'#6FA96B'}];
+  const SEXES   = [{k:'男', v:12840, c:'#C9A24D'},{k:'女', v:6092, c:'#B9441F'}];
+  const MAPS    = [{k:'苍月岛', v:3200},{k:'比奇城', v:2800},{k:'沙巴克', v:2100},{k:'祖玛寺庙', v:1400},{k:'沃玛森林', v:900}];
+  const LOGS = [
+    {t:'09:42', who:'墨白', act:'封禁账号', tgt:'acc_8f21c4', ok:true},
+    {t:'09:31', who:'青锋', act:'修改角色等级', tgt:'role_44a9', ok:true},
+    {t:'09:18', who:'墨白', act:'发放邮件', tgt:'全区 · 补偿', ok:true},
+    {t:'09:02', who:'夜阑', act:'调整掉落权重', tgt:'map_3', ok:false},
+    {t:'08:55', who:'青锋', act:'解封账号', tgt:'acc_2b07de', ok:true},
+    {t:'08:40', who:'系统', act:'配置版本回滚', tgt:'cfg_v118', ok:true},
+    {t:'08:22', who:'夜阑', act:'新增公告', tgt:'停机维护', ok:true},
+    {t:'08:05', who:'墨白', act:'重置密码', tgt:'acc_9c31ff', ok:true}
+  ];
+
+  const fmt = n => n.toLocaleString('en-US');
+
+  /* ═══════════ KPI 数字滚动 ═══════════ */
+  document.querySelectorAll('[data-count]').forEach(el=>{
+    const target = Number(el.dataset.count);
+    if(STATIC){ el.textContent = fmt(target); return; }
+    const dur = 1100, t0 = performance.now();
+    const tick = now => {
+      const p = Math.min(1, (now - t0) / dur);
+      const e = 1 - Math.pow(1 - p, 3);
+      el.textContent = fmt(Math.round(target * e));
+      if(p < 1) requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  });
+
+  /* ═══════════ 排名条 ═══════════ */
+  function renderRows(host, items, tone, unit){
+    const max = Math.max(...items.map(x=>x.v));
+    host.innerHTML = items.map(x=>(
+      '<div class="row"><span class="lb">'+x.k+'</span>'+
+      '<span class="track"><span class="bar '+(tone||'')+'" style="width:'+(x.v/max*100).toFixed(1)+'%"></span></span>'+
+      '<span class="vl">'+fmt(x.v)+'</span></div>'
+    )).join('');
+  }
+  renderRows(document.getElementById('levels'), LEVELS, '');
+  renderRows(document.getElementById('maps'), MAPS, 'fire');
+
+  /* ═══════════ 环形图 ═══════════ */
+  function renderDonut(host, items, size){
+    const total = items.reduce((s,x)=>s+x.v,0);
+    const R = 38, C = 2*Math.PI*R, GAP = 3;
+    let offset = 0;
+    const arcs = items.map(x=>{
+      const len = x.v/total*C;
+      const seg = '<circle cx="50" cy="50" r="'+R+'" fill="none" stroke="'+x.c+'" stroke-width="11" '+
+        'stroke-dasharray="'+Math.max(0,len-GAP)+' '+(C-Math.max(0,len-GAP))+'" '+
+        'stroke-dashoffset="'+(-offset)+'" transform="rotate(-90 50 50)" stroke-linecap="butt"/>';
+      offset += len;
+      return seg;
+    }).join('');
+    host.innerHTML =
+      '<div class="donut" style="width:'+(size||108)+'px;height:'+(size||108)+'px">'+
+        '<svg viewBox="0 0 100 100">'+
+          '<circle cx="50" cy="50" r="'+R+'" fill="none" stroke="rgba(255,255,255,.04)" stroke-width="11"/>'+
+          arcs+
+        '</svg>'+
+        '<div class="center"><b>'+fmt(total)+'</b><span>TOTAL</span></div>'+
+      '</div>'+
+      '<div class="donut-legend">'+items.map(x=>
+        '<div><i style="background:'+x.c+'"></i>'+x.k+'<em>'+(x.v/total*100).toFixed(1)+'%</em></div>'
+      ).join('')+'</div>';
+  }
+  renderDonut(document.getElementById('classes'), CLASSES, 104);
+  renderDonut(document.getElementById('sexes'), SEXES, 104);
+
+  /* ═══════════ 最近动态 ═══════════ */
+  document.getElementById('logs').innerHTML = LOGS.map(x=>(
+    '<div class="log">'+
+      '<span class="t">'+x.t+'</span>'+
+      '<span><span class="who">'+x.who+'</span> <span class="act">'+x.act+'</span>'+
+        '<span class="tgt">'+x.tgt+'</span></span>'+
+      (x.ok ? '<span class="tag">成功</span>' : '<span class="tag bad">失败</span>')+
+    '</div>'
+  )).join('');
+
+  /* ═══════════ 趋势折线（手写 SVG，无库） ═══════════ */
+  const W = 760, H = 236, PAD = {l:40, r:14, t:14, b:28};
+  const chart = document.getElementById('chart');
+  const tip = document.getElementById('tip');
+  const note = document.getElementById('trendNote');
+  let days = 7;
+
+  function series(n){
+    return {
+      accounts: ACCOUNTS.slice(ACCOUNTS.length-n),
+      roles: ROLES.slice(ROLES.length-n)
+    };
+  }
+
+  function renderChart(n){
+    const {accounts, roles} = series(n);
+    const rawMax = Math.max(...accounts, ...roles);
+    /* max 对齐 4 等分的整数倍，保证 y 轴刻度全为整数 */
+    const max = Math.ceil(rawMax / 4) * 4;
+    const iw = W - PAD.l - PAD.r, ih = H - PAD.t - PAD.b;
+    const X = i => PAD.l + (accounts.length === 1 ? iw/2 : i / (accounts.length-1) * iw);
+    const Y = v => PAD.t + ih - v / max * ih;
+
+    const line = arr => arr.map((v,i)=> (i?'L':'M') + X(i).toFixed(1) + ' ' + Y(v).toFixed(1)).join(' ');
+    const area = arr => line(arr) + ' L' + X(arr.length-1).toFixed(1) + ' ' + (PAD.t+ih) + ' L' + PAD.l + ' ' + (PAD.t+ih) + ' Z';
+
+    /* 网格 + y 轴刻度：4 档 */
+    const gridN = 4;
+    let grid = '', ytxt = '';
+    for(let i=0;i<=gridN;i++){
+      const y = PAD.t + ih - i/gridN*ih;
+      const val = Math.round(max/gridN*i);
+      grid += '<line x1="'+PAD.l+'" y1="'+y.toFixed(1)+'" x2="'+(W-PAD.r)+'" y2="'+y.toFixed(1)+
+              '" stroke="rgba(201,162,77,'+(i===0?'.18':'.07')+')" stroke-width="1"'+(i===0?'':' stroke-dasharray="2 4"')+'/>';
+      ytxt += '<text class="axis-txt" x="'+(PAD.l-8)+'" y="'+(y+3.5).toFixed(1)+'" text-anchor="end">'+val+'</text>';
+    }
+
+    /* x 轴标签：最多 7 个，避免拥挤 */
+    const step = Math.max(1, Math.ceil(n/7));
+    let xtxt = '';
+    for(let i=0;i<n;i+=step){
+      const d = new Date(Date.now() - (n-1-i)*864e5);
+      xtxt += '<text class="axis-txt" x="'+X(i).toFixed(1)+'" y="'+(H-8)+'" text-anchor="middle">'+
+              (d.getMonth()+1)+'/'+d.getDate()+'</text>';
+    }
+
+    const totalA = accounts.reduce((a,b)=>a+b,0), totalR = roles.reduce((a,b)=>a+b,0);
+
+    /* 末端光点（分组成组，供图例切换显隐） */
+    const lastA = accounts.length-1;
+    const dots = '<g id="dots-accounts"><circle cx="'+X(lastA).toFixed(1)+'" cy="'+Y(accounts[lastA]).toFixed(1)+'" r="3.2" fill="#F0DCAC"/></g>'+
+                 '<g id="dots-roles"><circle cx="'+X(lastA).toFixed(1)+'" cy="'+Y(roles[lastA]).toFixed(1)+'" r="3.2" fill="#E4743A"/></g>';
+
+    chart.querySelector('svg')?.remove();
+    chart.insertAdjacentHTML('afterbegin',
+      '<svg viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="none" data-svg>'+
+        '<defs>'+
+          '<linearGradient id="ga" x1="0" y1="0" x2="0" y2="1">'+
+            '<stop offset="0%" stop-color="#C9A24D" stop-opacity=".26"/>'+
+            '<stop offset="100%" stop-color="#C9A24D" stop-opacity="0"/>'+
+          '</linearGradient>'+
+          '<linearGradient id="gr" x1="0" y1="0" x2="0" y2="1">'+
+            '<stop offset="0%" stop-color="#B9441F" stop-opacity=".22"/>'+
+            '<stop offset="100%" stop-color="#B9441F" stop-opacity="0"/>'+
+          '</linearGradient>'+
+        '</defs>'+
+        grid + ytxt + xtxt +
+        '<path id="area-roles" d="'+area(roles)+'" fill="url(#gr)"/>'+
+        '<path id="area-accounts" d="'+area(accounts)+'" fill="url(#ga)"/>'+
+        '<path id="path-roles" d="'+line(roles)+'" fill="none" stroke="#B9441F" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/>'+
+        '<path id="path-accounts" d="'+line(accounts)+'" fill="none" stroke="#C9A24D" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>'+
+        dots +
+        '<line id="hoverLine" x1="0" y1="'+PAD.t+'" x2="0" y2="'+(PAD.t+ih)+'" stroke="rgba(240,220,172,.35)" stroke-width="1" opacity="0"/>'+
+      '</svg>');
+
+    note.textContent = '近 '+n+' 天：新增账号 '+fmt(totalA)+' · 新增角色 '+fmt(totalR);
+
+    /* hover：找最近点，竖线 + tooltip */
+    const svg = chart.querySelector('svg');
+    const hoverLine = svg.querySelector('#hoverLine');
+    svg.addEventListener('mousemove', ev=>{
+      const box = svg.getBoundingClientRect();
+      const px = (ev.clientX - box.left) / box.width * W;
+      let best = 0, bd = Infinity;
+      for(let i=0;i<n;i++){ const d = Math.abs(X(i) - px); if(d < bd){ bd = d; best = i; } }
+      hoverLine.setAttribute('x1', X(best)); hoverLine.setAttribute('x2', X(best));
+      hoverLine.setAttribute('opacity','1');
+      const d = new Date(Date.now() - (n-1-best)*864e5);
+      tip.innerHTML = (d.getMonth()+1)+'/'+d.getDate()+
+        ' · 账号 <b>'+accounts[best]+'</b> · 角色 <b>'+roles[best]+'</b>';
+      tip.style.left = (X(best)/W*100)+'%';
+      tip.style.top = (Y(Math.max(accounts[best], roles[best]))/H*100)+'%';
+      tip.classList.add('show');
+    });
+    svg.addEventListener('mouseleave', ()=>{
+      hoverLine.setAttribute('opacity','0');
+      tip.classList.remove('show');
+    });
+  }
+
+  renderChart(days);
+
+  /* 图例点击：整条序列淡出（线 / 面积 / 光点一起），便于单看一条 */
+  document.querySelectorAll('#legend span').forEach(sp=>{
+    sp.addEventListener('click',()=>{
+      const off=sp.classList.toggle('off');
+      ['path-','area-','dots-'].forEach(prefix=>{
+        const el=chart.querySelector('#'+prefix+sp.dataset.series);
+        if(el) el.style.opacity=off?'0.08':'';
+      });
+    });
+  });
+
+  /* 时间范围切换 */
+  document.getElementById('seg').addEventListener('click', e=>{
+    const b = e.target.closest('button'); if(!b) return;
+    [...e.currentTarget.children].forEach(x=>x.classList.toggle('on', x === b));
+    days = Number(b.dataset.days);
+    renderChart(days);
+  });
+
+  /* 刷新：跑一遍加载态（设计稿不请求接口） */
+  const refresh = document.getElementById('refresh');
+  refresh.addEventListener('click', ()=>{
+    refresh.classList.add('spin');
+    setTimeout(()=>refresh.classList.remove('spin'), 700);
+  });
+
+  /* ═══════════ 侧栏分组折叠 ═══════════ */
+  document.querySelectorAll('[data-grp]').forEach(g=>{
+    const head = g.querySelector('.grp-head');
+    const body = g.querySelector('.grp-body');
+    body.style.height = g.classList.contains('collapsed') ? '0px' : body.scrollHeight + 'px';
+    head.addEventListener('click', ()=>{
+      const collapsed = g.classList.toggle('collapsed');
+      body.style.height = collapsed ? '0px' : body.scrollHeight + 'px';
+    });
+  });
+
+  /* ═══════════ 移动端抽屉 ═══════════ */
+  const side = document.getElementById('side'), scrim = document.getElementById('scrim');
+  document.getElementById('burger').addEventListener('click', ()=>{
+    side.classList.add('open'); scrim.classList.add('on');
+  });
+  scrim.addEventListener('click', ()=>{ side.classList.remove('open'); scrim.classList.remove('on'); });
+
+  /* ═══════════ 时钟 ═══════════ */
+  const clock = document.getElementById('clock');
+  const pad = v => String(v).padStart(2,'0');
+  const tickClock = ()=>{
+    const d = new Date();
+    clock.textContent = pad(d.getHours())+':'+pad(d.getMinutes())+':'+pad(d.getSeconds());
+  };
+  tickClock(); if(!STATIC) setInterval(tickClock, 1000);
+
+  /* 截图/自动化状态清单 */
+  window.__UI_CAPTURE__ = {
+    states:[
+      {id:'home',label:'概览首屏'},
+      {id:'range-30',label:'30 天趋势',go:async()=>document.querySelector('[data-days="30"]').click()},
+      {id:'collapse',label:'侧栏分组折叠',go:async()=>document.querySelectorAll('[data-grp] .grp-head')[0].click()},
+      {id:'mobile-nav',label:'移动端抽屉',go:async()=>{side.classList.add('open');scrim.classList.add('on');}}
+    ],
+    reset:async()=>{
+      document.querySelector('[data-days="7"]').click();
+      side.classList.remove('open'); scrim.classList.remove('on');
+      document.querySelectorAll('#legend span').forEach(sp=>{sp.classList.remove('off');});
+      renderChart(days);
+    }
+  };
+
+  /* ?state=<id>：直接进入某个状态，供截图/自动化使用 */
+  const want=new URLSearchParams(location.search).get('state');
+  if(want){
+    const st=window.__UI_CAPTURE__.states.find(x=>x.id===want);
+    if(st && st.go) st.go();
+  }
+})();
+</script>
+</body>
+</html>

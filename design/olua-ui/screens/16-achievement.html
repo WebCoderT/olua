@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>16 · 成就 · Olua UI</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Noto+Serif+SC:wght@700;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../tokens.css">
+<link rel="stylesheet" href="../ui.css">
+<style>
+/* ── 成就 560×430：三分类 + 小结 + 列表 ── */
+.ach{position:relative;width:580px;height:440px}
+.asum{display:flex;justify-content:center;gap:18px;font-size:11.5px;color:var(--text-4);padding-bottom:10px}
+.asum b{font-family:var(--font-num);color:var(--gold-4);font-weight:400}
+.alist{display:flex;flex-direction:column;gap:6px;height:262px;overflow:auto;padding-right:4px}
+.arow2{height:60px}
+.arow2 .pr{margin-left:auto;text-align:right;font-family:var(--font-num);font-size:11px;color:var(--text-4)}
+.arow2 .pr b{display:block;font-size:14px;color:var(--text-1);font-weight:400}
+.arow2.done{border-color:rgba(194,146,69,.4);background:linear-gradient(90deg,rgba(194,146,69,.12),transparent)}
+.arow2.locked{opacity:.62}
+</style>
+</head>
+<body>
+<div class="stage"><div class="stage-inner">
+  <div class="stage-bg stage-bg--blur"><img src="../assets/hero-bg.jpg"></div>
+  <div class="stage-scrim"></div>
+
+  <div class="layer layer--dialog center">
+    <div class="panel panel--rivet ach">
+      <div class="panel-head">
+        <span class="panel-eyebrow">ACHIEVEMENT</span>
+        <h2 class="panel-title">成就</h2>
+        <button class="panel-close" aria-label="关闭">×</button>
+      </div>
+      <div class="panel-body">
+
+        <div class="tabs" style="margin-bottom:8px">
+          <button class="tab is-on">成长</button>
+          <button class="tab">战斗</button>
+          <button class="tab">社交</button>
+        </div>
+        <div class="asum"><span>已达成 <b>14 / 36</b></span><span>已领 <b>11</b></span></div>
+
+        <div class="alist scroll">
+          <div class="row arow2 done">
+            <div class="row-main">
+              <span class="row-name">初入沙城</span>
+              <span class="row-sub">创建第一位角色</span>
+            </div>
+            <span class="pr"><b>1/1</b></span>
+            <button class="btn btn--xs btn--gold">领 取</button>
+          </div>
+
+          <div class="row arow2 done">
+            <div class="row-main">
+              <span class="row-name">百人斩</span>
+              <span class="row-sub">累计击杀 100 只怪物</span>
+            </div>
+            <span class="pr"><b>100/100</b></span>
+            <button class="btn btn--xs btn--gold">领 取</button>
+          </div>
+
+          <div class="row arow2">
+            <div class="row-main">
+              <span class="row-name">千锤百炼</span>
+              <span class="row-sub">累计击杀 1,000 只怪物</span>
+            </div>
+            <span class="pr"><b>486/1000</b></span>
+            <span class="badge badge--muted">未达成</span>
+          </div>
+
+          <div class="row arow2">
+            <div class="row-main">
+              <span class="row-name">富甲一方</span>
+              <span class="row-sub">绑定元宝累计获得 50,000</span>
+            </div>
+            <span class="pr"><b>31,240/50000</b></span>
+            <span class="badge badge--muted">未达成</span>
+          </div>
+
+          <div class="row arow2 locked">
+            <div class="row-main">
+              <span class="row-name">？？？</span>
+              <span class="row-sub">达成前一环成就后解锁</span>
+            </div>
+            <span class="pr"><b>—</b></span>
+            <span class="badge badge--muted">未达成</span>
+          </div>
+
+          <div class="row arow2">
+            <div class="row-main">
+              <span class="row-name">身经百战</span>
+              <span class="row-sub">参与 10 场行会战</span>
+            </div>
+            <span class="pr"><b>3/10</b></span>
+            <span class="badge badge--muted">未达成</span>
+          </div>
+        </div>
+
+      </div>
+      <div class="panel-foot"><span>背包满时奖励自动转邮件</span><span>已领取的行整行压暗</span></div>
+    </div>
+  </div>
+
+</div></div>
+<script src="../stage.js"></script>
+</body>
+</html>

@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>09 · 消息中心 · Olua UI</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Noto+Serif+SC:wght@700;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../tokens.css">
+<link rel="stylesheet" href="../ui.css">
+<style>
+/* ── 消息中心（邮件）560×440：小结 + 频道页签 + 列表 ── */
+.mail{position:relative;width:600px;height:450px}
+.mail-top{display:flex;align-items:center;gap:10px;padding:0 2px 12px}
+.mail-top .sum{font-size:12px;color:var(--text-3);letter-spacing:.04em}
+.mail-top .sum b{font-family:var(--font-num);color:var(--ember-4);font-weight:400}
+.mail-top .sum b.ok{color:var(--jade)}
+.mail-top .acts{margin-left:auto;display:flex;gap:8px}
+.mail-tabs{display:flex;gap:6px;justify-content:center;margin-bottom:10px}
+.mail-tabs .tab{min-width:84px;height:26px;font-size:12px}
+.mlist{display:flex;flex-direction:column;gap:6px;height:268px;overflow:auto;padding-right:4px}
+.mrow{display:flex;align-items:center;gap:10px;height:62px;padding:0 12px;border-radius:var(--r-2);
+  border:var(--bw-1) solid var(--line-1);background:rgba(0,0,0,.24)}
+.mrow.unread{border-color:rgba(194,146,69,.45);background:linear-gradient(90deg,rgba(194,146,69,.12),rgba(194,146,69,.02))}
+.mrow .flag{width:7px;height:7px;border-radius:50%;background:var(--gold-4);box-shadow:0 0 8px rgba(232,200,135,.8);flex:0 0 auto}
+.mrow .flag.off{background:transparent;box-shadow:none;border:1px solid var(--line-1)}
+.mrow .mid{flex:1;min-width:0}
+.mrow .t{font-size:13.5px;color:var(--text-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mrow.unread .t{color:var(--gold-5)}
+.mrow .s{font-size:11px;color:var(--text-3);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mrow .s em{font-style:normal;color:var(--gold-4)}
+.mrow .meta{flex:0 0 auto;text-align:right;font-family:var(--font-num);font-size:10px;color:var(--text-4);line-height:1.7}
+.mrow .acts{flex:0 0 auto;display:flex;flex-direction:column;gap:5px}
+.mrow .acts .btn{min-width:64px;height:22px;font-size:10.5px}
+.mail-empty{display:none}
+</style>
+</head>
+<body>
+<div class="stage"><div class="stage-inner">
+  <div class="stage-bg stage-bg--blur"><img src="../assets/hero-bg.jpg"></div>
+  <div class="stage-scrim"></div>
+
+  <div class="layer layer--dialog center">
+    <div class="panel panel--rivet mail">
+      <div class="panel-head">
+        <span class="panel-eyebrow">MAIL</span>
+        <h2 class="panel-title">消息中心</h2>
+        <button class="panel-close" aria-label="关闭">×</button>
+      </div>
+      <div class="panel-body">
+
+        <div class="mail-top">
+          <span class="sum">未读 <b>2</b> · 待领 <b class="ok">3</b></span>
+          <div class="acts">
+            <button class="btn btn--sm btn--gold">一键领取</button>
+            <button class="btn btn--sm btn--ghost">公告</button>
+          </div>
+        </div>
+
+        <div class="mail-tabs">
+          <button class="tab is-on">全部</button>
+          <button class="tab">系统<span class="badge">1</span></button>
+          <button class="tab">奖励<span class="badge">2</span></button>
+          <button class="tab">行会</button>
+          <button class="tab">好友</button>
+        </div>
+
+        <div class="mlist scroll">
+          <div class="mrow unread">
+            <span class="flag"></span>
+            <div class="mid">
+              <div class="t">沙城争霸报名奖励</div>
+              <div class="s">附件：绑定元宝 ×800 · 经验 ×12000 · <em>屠龙碎片</em> ×2</div>
+            </div>
+            <span class="meta">系统<br>今天 14:22</span>
+            <div class="acts">
+              <button class="btn btn--xs btn--gold">领 取</button>
+              <button class="btn btn--xs btn--ghost">删除</button>
+            </div>
+          </div>
+
+          <div class="mrow unread">
+            <span class="flag"></span>
+            <div class="mid">
+              <div class="t">好友申请已通过</div>
+              <div class="s">夜鸦 已添加你为好友</div>
+            </div>
+            <span class="meta">夜鸦<br>今天 11:03</span>
+            <div class="acts">
+              <button class="btn btn--xs btn--ghost">删除</button>
+            </div>
+          </div>
+
+          <div class="mrow">
+            <span class="flag off"></span>
+            <div class="mid">
+              <div class="t">行会仓库分红</div>
+              <div class="s">附件：绑定元宝 ×350 · <em>玄铁矿石</em> ×5</div>
+            </div>
+            <span class="meta">义薄云天<br>昨天 20:41</span>
+            <div class="acts">
+              <button class="btn btn--xs btn--gold">领 取</button>
+              <button class="btn btn--xs btn--ghost">删除</button>
+            </div>
+          </div>
+
+          <div class="mrow">
+            <span class="flag off"></span>
+            <div class="mid">
+              <div class="t">11.12 全服热更公告</div>
+              <div class="s">攻城战掉落概率上调，旧服角色找回通道开放</div>
+            </div>
+            <span class="meta">运营团队<br>11-12 10:00</span>
+            <div class="acts">
+              <button class="btn btn--xs btn--ghost">删除</button>
+            </div>
+          </div>
+
+          <div class="mrow">
+            <span class="flag off"></span>
+            <div class="mid">
+              <div class="t">装备回收返还</div>
+              <div class="s">附件已领取 · 绑定元宝 ×1,200</div>
+            </div>
+            <span class="meta">系统<br>11-10 09:18</span>
+            <div class="acts">
+              <button class="btn btn--xs btn--ghost">删除</button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+      <div class="panel-foot"><span>点行即标已读 · 未领附件就删除会二次提醒</span><span>一键领取只作用于当前频道</span></div>
+    </div>
+  </div>
+
+</div></div>
+<script src="../stage.js"></script>
+</body>
+</html>

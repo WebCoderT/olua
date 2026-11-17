@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>01 · 登录 · Olua UI</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Noto+Serif+SC:wght@700;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../tokens.css">
+<link rel="stylesheet" href="../ui.css">
+<style>
+/* ── 登录：左文案 + 右账号面板。保留：账号/密码/区服/登录/注册/公告/音效 ── */
+.hero{position:absolute;inset:0;z-index:0}
+.hero img{width:100%;height:100%;object-fit:cover;object-position:58% 42%;animation:heroIn 2.4s var(--ease-out) both}
+@keyframes heroIn{from{transform:scale(1.08);opacity:.3}to{transform:none;opacity:1}}
+.hero-scrim{position:absolute;inset:0;
+  background:
+    linear-gradient(180deg,rgba(8,5,3,.86) 0%,rgba(8,5,3,.22) 34%,rgba(8,5,3,.6) 76%,rgba(8,5,3,.94) 100%),
+    linear-gradient(90deg,rgba(8,5,3,.72) 0%,rgba(8,5,3,.14) 52%,rgba(8,5,3,.86) 100%)}
+
+/* 顶栏 */
+.top{position:absolute;z-index:var(--z-hud);inset:0 0 auto;display:flex;align-items:center;
+  justify-content:space-between;padding:26px 64px}
+.brand{display:flex;align-items:center;gap:13px}
+.brand-mark{width:44px;height:44px;border:var(--bw-1) solid var(--gold-3);border-radius:var(--r-2);
+  display:grid;place-items:center;color:var(--gold-4);background:rgba(20,13,7,.6);box-shadow:var(--shadow-card)}
+.brand-mark .ic{width:22px;height:22px}
+.brand b{font-family:var(--font-display);font-weight:900;font-size:24px;letter-spacing:.16em;line-height:1;color:var(--text-1)}
+.brand span{display:block;font-family:var(--font-num);font-size:9px;letter-spacing:.34em;color:var(--text-4);margin-top:6px}
+.top-tools{display:flex;align-items:center;gap:14px}
+.ver{font-family:var(--font-num);font-size:11px;letter-spacing:.16em;color:var(--text-3);
+  border:var(--bw-1) solid var(--line-2);border-radius:var(--r-pill);padding:7px 14px}
+
+/* 主体栅格 */
+.grid{position:absolute;z-index:2;inset:0;display:grid;
+  grid-template-columns:minmax(0,1fr) 476px;gap:120px;align-items:center;padding:120px 64px 96px 96px}
+.copy{display:flex;flex-direction:column;gap:22px;max-width:620px}
+.eyebrow{display:inline-flex;align-items:center;gap:10px;font-size:12px;letter-spacing:.24em;color:var(--gold-3)}
+.eyebrow::before{content:"";width:30px;height:1px;background:var(--gold-3)}
+.copy h1{font-family:var(--font-display);font-weight:900;font-size:var(--fs-72);letter-spacing:.08em;line-height:.96;color:var(--text-1)}
+.copy h1 em{font-style:normal;background:linear-gradient(180deg,var(--gold-5),var(--gold-2));
+  -webkit-background-clip:text;background-clip:text;color:transparent}
+.tagline{font-size:15px;line-height:1.95;color:var(--text-2);max-width:42ch}
+.class-tabs{display:flex;gap:10px;margin-top:4px}
+.ctab{display:inline-flex;align-items:center;gap:8px;height:40px;padding:0 18px;border-radius:var(--r-pill);
+  border:var(--bw-1) solid var(--line-2);font-size:13px;color:var(--text-3);transition:all var(--dur-2) var(--ease)}
+.ctab .ic{width:16px;height:16px}
+.ctab:hover{border-color:var(--gold-2);color:var(--text-1)}
+.ctab[aria-pressed="true"]{background:var(--surface-3);border-color:var(--gold-3);color:var(--text-1);box-shadow:var(--shadow-card)}
+.class-desc{font-size:13px;line-height:1.8;color:var(--text-2);min-height:46px}
+
+/* 公告跑马灯 */
+.notice{display:flex;align-items:center;gap:14px;border:var(--bw-1) solid var(--line-2);
+  border-left:2px solid var(--ember-2);border-radius:var(--r-2);background:rgba(10,7,4,.6);padding:12px 16px}
+.notice .lbl{display:inline-flex;align-items:center;gap:7px;font-size:12px;letter-spacing:.18em;color:var(--gold-3);flex:0 0 auto}
+.notice .lbl .ic{width:15px;height:15px}
+.track{flex:1;min-width:0;height:20px;overflow:hidden;position:relative}
+.track .roll{position:absolute;inset:0 auto auto 0;right:0;animation:roll 12s var(--ease) infinite}
+.track p{height:20px;line-height:20px;font-size:12.5px;color:var(--text-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+@keyframes roll{0%,20%{transform:translateY(0)}25%,45%{transform:translateY(-20px)}
+  50%,70%{transform:translateY(-40px)}75%,95%{transform:translateY(-60px)}100%{transform:translateY(0)}}
+
+/* 登录面板 */
+.login{width:476px;padding:34px 34px 22px}
+.login .panel-title{font-size:22px}
+.form{display:flex;flex-direction:column;gap:14px;margin-top:6px}
+.eye{position:absolute;right:10px;top:50%;transform:translateY(-50%);width:30px;height:30px;
+  display:grid;place-items:center;color:var(--text-3);border-radius:var(--r-1)}
+.eye:hover{color:var(--gold-4);background:rgba(0,0,0,.3)}
+.field .input{padding-right:46px}
+/* 区服选择：一行式，右侧状态与箭头 */
+.server{display:flex;align-items:center;gap:12px;height:44px;padding:0 14px;border-radius:var(--r-2);
+  border:var(--bw-1) solid var(--line-2);background:rgba(0,0,0,.34);transition:border-color var(--dur-2)}
+.server:hover{border-color:var(--gold-2)}
+.server .ic{width:16px;height:16px;color:var(--text-3)}
+.server b{font-size:14px;font-weight:400;color:var(--text-1)}
+.server .st{font-size:11px;letter-spacing:.1em;color:var(--ember-4)}
+.server .caret{margin-left:auto;color:var(--text-3);transition:transform var(--dur-2)}
+.row-mini{display:flex;align-items:center;justify-content:space-between;font-size:12px;color:var(--text-3);margin:2px 2px 4px}
+.row-mini a:hover{color:var(--gold-4)}
+.alt{display:flex;justify-content:center;gap:24px;font-size:12.5px;color:var(--text-3);margin-top:14px}
+.alt a:hover{color:var(--gold-4)}
+.foot{margin-top:18px;padding-top:12px;border-top:var(--bw-1) solid var(--line-1);
+  display:flex;justify-content:space-between;font-family:var(--font-num);font-size:10px;letter-spacing:.06em;color:var(--text-4)}
+
+/* 底部条 */
+.bottom{position:absolute;z-index:var(--z-hud);left:0;right:0;bottom:0;display:flex;
+  align-items:center;justify-content:space-between;padding:18px 64px;font-size:11.5px;color:var(--text-4)}
+.bottom nav{display:flex;gap:22px}
+.bottom a:hover{color:var(--gold-4)}
+
+/* 选区弹窗 560×500（zoneSelectLayout：遮罩 + 面板；标题 18 朱红 / 说明 12 / 列表 500×356 / 行 496×58 gap10） */
+.zmask{position:absolute;inset:0;z-index:var(--z-modal,60);display:none;place-items:center;
+  background:rgba(8,5,3,.62)}
+.zpanel{width:560px;height:500px;padding:26px 30px 18px;border-radius:var(--r-3);
+  border:var(--bw-1) solid var(--gold-2);background:linear-gradient(165deg,rgba(30,22,13,.97),rgba(16,11,7,.97));
+  box-shadow:var(--shadow-panel);display:flex;flex-direction:column}
+.ztitle{text-align:center;font-family:var(--font-display);font-size:18px;letter-spacing:.22em;color:var(--ember-4)}
+.zhint{text-align:center;font-size:12px;color:var(--text-3);margin-top:10px}
+.zlist{flex:1;min-height:0;overflow:auto;margin-top:14px;display:flex;flex-direction:column;gap:10px;padding-right:2px}
+.zrow{height:58px;flex:0 0 auto;display:flex;align-items:center;gap:12px;padding:0 16px;border-radius:6px;
+  border:var(--bw-1) solid var(--line-2);background:var(--surface-1,rgba(0,0,0,.3))}
+.zrow.cur{border-color:var(--gold-4)}
+.zrow .zn{width:200px;font-size:16px;color:var(--text-1)}
+.zrow .zm{flex:1;font-size:12px;color:var(--text-3)}
+.zrow .ztags{display:flex;gap:6px}
+.zrow .ztags i{font-style:normal;width:56px;height:20px;display:grid;place-items:center;font-size:11px;
+  color:var(--gold-4);border:var(--bw-1) solid var(--line-3);border-radius:var(--r-1);background:rgba(0,0,0,.35)}
+.zrow.off{background:rgba(0,0,0,.45)}
+.zrow.off .zn{color:var(--text-4)}
+.zrow.off .zm{color:var(--text-4)}
+.zfoot{margin-top:12px;padding-top:10px;border-top:var(--bw-1) solid var(--line-1);
+  font-size:10.5px;color:var(--text-4);text-align:center}
+</style>
+</head>
+<body>
+<div class="stage"><div class="stage-inner">
+
+  <div class="hero"><img src="../assets/hero-bg.jpg" alt="黄昏沙城"></div>
+  <div class="hero-scrim"></div>
+
+  <header class="top">
+    <a class="brand" href="../index.html">
+      <span class="brand-mark">
+        <svg class="ic" viewBox="0 0 256 256" fill="currentColor"><path d="M216,32H152a8,8,0,0,0-6.34,3.12l-64,83.21L72,108.69a16,16,0,0,0-22.64,0l-12.69,12.7a16,16,0,0,0,0,22.63l20,20-28,28a16,16,0,0,0,0,22.63l12.69,12.68a16,16,0,0,0,22.62,0l28-28,20,20a16,16,0,0,0,22.64,0l12.69-12.7a16,16,0,0,0,0-22.63l-9.64-9.64,83.21-64A8,8,0,0,0,224,104V40A8,8,0,0,0,216,32ZM52.69,216,40,203.32l28-28L80.68,188Zm70.61-8L48,132.71,60.7,120,136,195.31ZM208,100.06l-81.74,62.88L115.32,152l50.34-50.34a8,8,0,0,0-11.32-11.31L104,140.68,93.07,129.74,155.94,48H208Z"/></svg>
+      </span>
+      <span><b>Olua</b><span>OLUA</span></span>
+    </a>
+    <div class="top-tools">
+      <span class="ver">VER 2.8.1</span>
+      <button class="icon-btn" aria-label="声音开关">
+        <svg class="ic" viewBox="0 0 256 256" fill="currentColor"><path d="M155.51,24.81a8,8,0,0,0-8.42.88L77.25,80H32A16,16,0,0,0,16,96v64a16,16,0,0,0,16,16H77.25l69.84,54.31A8,8,0,0,0,160,224V32A8,8,0,0,0,155.51,24.81ZM32,96H72v64H32ZM144,207.64,88,164.09V91.91l56-43.55Zm54-106.08a40,40,0,0,1,0,52.88,8,8,0,0,1-12-10.58,24,24,0,0,0,0-31.72,8,8,0,0,1,12-10.58ZM248,128a79.9,79.9,0,0,1-20.37,53.34,8,8,0,0,1-11.92-10.67,64,64,0,0,0,0-85.33,8,8,0,1,1,11.92-10.67A79.83,79.83,0,0,1,248,128Z"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <div class="grid">
+    <!-- 左：品牌与职业 -->
+    <div class="copy">
+      <div class="eyebrow">全新资料片 · 沙城争霸</div>
+      <h1>Olua<em>·</em></h1>
+      <p class="tagline">屠龙再启，兄弟聚首。尘封的石门今日再度开启，等待归来的城主。</p>
+
+      <div class="class-tabs" role="tablist">
+        <button class="ctab" role="tab" aria-pressed="true">
+          <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 20l7-7M14 4l6 2-2 6-9 9-4-4 9-9z"/><path d="M4 20l3-1"/></svg>战士
+        </button>
+        <button class="ctab" role="tab" aria-pressed="false">
+          <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 3l4 6-4 12L8 9l4-6z"/><path d="M6 9h12"/></svg>法师
+        </button>
+        <button class="ctab" role="tab" aria-pressed="false">
+          <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 3l3 3v5c0 4-3 7-3 7s-3-3-3-7V6l3-3z"/><path d="M9 11h6"/></svg>道士
+        </button>
+      </div>
+      <p class="class-desc">近战肉搏，高血高防；一柄重剑冲锋破甲，是沙城里最可靠的前排。</p>
+
+      <div class="notice">
+        <span class="lbl">
+          <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M5 4h11a3 3 0 013 3v13H8a3 3 0 01-3-3V4z"/><path d="M9 8h6M9 12h6"/></svg>公告
+        </span>
+        <div class="track"><div class="roll">
+          <p>11.20 全新跨服沙城战开启，行会报名截止 11.19 24:00</p>
+          <p>旧服角色找回通道已在官网开放</p>
+          <p>严禁使用外挂与脚本，违者永久封禁</p>
+          <p>11.12 全服热更：攻城战掉落概率上调</p>
+        </div></div>
+      </div>
+    </div>
+
+    <!-- 右：账号面板 -->
+    <aside class="panel panel--rivet login">
+      <div class="panel-head" style="padding-bottom:20px">
+        <span class="panel-eyebrow">ACCOUNT</span>
+        <h2 class="panel-title">账号登录</h2>
+      </div>
+      <form class="form" onsubmit="return false">
+        <div class="field">
+          <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="8" r="3.4"/><path d="M4.6 20c1.4-3.3 4-5 7.4-5s6 1.7 7.4 5"/></svg>
+          <input class="input" placeholder="请输入账号" autocomplete="username">
+        </div>
+        <div class="field">
+          <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="4.5" y="10" width="15" height="10" rx="2"/><path d="M8 10V7.5a4 4 0 018 0V10"/></svg>
+          <input class="input" type="password" placeholder="请输入密码" autocomplete="current-password" style="padding-right:46px">
+          <button type="button" class="eye" aria-label="显示密码">
+            <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M2.5 12S6 6.5 12 6.5 21.5 12 21.5 12S18 17.5 12 17.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="2.6"/></svg>
+          </button>
+        </div>
+
+        <button type="button" class="server">
+          <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.4 2.4 3.6 5.3 3.6 8.5S14.4 18.1 12 20.5c-2.4-2.4-3.6-5.3-3.6-8.5S9.6 5.9 12 3.5z"/></svg>
+          <b>雷霆一区</b>
+          <span class="st">爆满</span>
+          <svg class="ic caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 9l6 6 6-6"/></svg>
+        </button>
+
+        <div class="row-mini">
+          <label class="check-line"><input type="checkbox" class="checkbox" checked>记住账号</label>
+          <a href="#">忘记密码</a>
+        </div>
+
+        <button class="btn btn--primary btn--block">进入游戏</button>
+      </form>
+      <div class="alt"><a href="#">注册新账号</a><a href="#">游戏修复</a></div>
+      <div class="foot"><span>BUILD 2.8.1.432</span><span>健康游戏忠告 · 抵制不良游戏</span></div>
+    </aside>
+  </div>
+
+  <div class="bottom">
+    <span>© 2026 Olua 运营团队 · 保留所有权利</span>
+    <nav><a href="#">用户协议</a><a href="#">隐私政策</a><a href="#">未成年人保护</a></nav>
+  </div>
+
+  <!-- 选区弹窗 560×500（ZoneSelectDialog：选区前移到登录页，#state=zone 直达） -->
+  <div class="zmask" id="zonemask">
+    <div class="zpanel">
+      <h2 class="ztitle">选择区服</h2>
+      <p class="zhint">不同区的角色互不相通 · 上次登录的区已标出</p>
+      <div class="zlist">
+        <div class="zrow cur">
+          <span class="zn">苍穹一区</span>
+          <span class="zm">2 个角色 · 流畅</span>
+          <span class="ztags"><i>上次在</i><i>推荐</i></span>
+        </div>
+        <div class="zrow">
+          <span class="zn">苍穹二区</span>
+          <span class="zm">尚未创建角色 · 流畅</span>
+          <span class="ztags"><i>推荐</i></span>
+        </div>
+        <div class="zrow">
+          <span class="zn">苍穹三区</span>
+          <span class="zm">1 个角色 · 较挤</span>
+          <span class="ztags"></span>
+        </div>
+        <div class="zrow off">
+          <span class="zn">问天一区</span>
+          <span class="zm">维护中 · 预计 14:00 开放</span>
+          <span class="ztags"></span>
+        </div>
+        <div class="zrow off">
+          <span class="zn">问天二区</span>
+          <span class="zm">已关闭 · 角色可申请转区</span>
+          <span class="ztags"></span>
+        </div>
+      </div>
+      <div class="zfoot"><span>维护中 / 已关闭的区可点击，提示后仍不可进入（不静默无反应）</span></div>
+    </div>
+  </div>
+
+</div></div>
+<script src="../stage.js"></script>
+<script>
+if (/state=zone/.test(location.hash)) document.getElementById('zonemask').style.display = 'grid';
+</script>
+</body>
+</html>

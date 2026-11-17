@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>02 · 选择角色 · Olua UI</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Noto+Serif+SC:wght@700;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../tokens.css">
+<link rel="stylesheet" href="../ui.css">
+<style>
+/* ── 选角：左信息 / 中立绘 / 右角色面板 ── */
+.bg{position:absolute;inset:0;z-index:0}
+.bg img{width:100%;height:100%;object-fit:cover;object-position:62% 38%;filter:brightness(.72) saturate(.92)}
+.bg::after{content:"";position:absolute;inset:0;background:
+  radial-gradient(70% 80% at 44% 54%,rgba(14,9,5,.12),rgba(14,9,5,.9) 82%),
+  linear-gradient(90deg,rgba(10,7,4,.94) 0%,rgba(10,7,4,.42) 34%,rgba(10,7,4,.5) 62%,rgba(10,7,4,.96) 100%)}
+
+.top{position:absolute;z-index:var(--z-hud);inset:0 0 auto;display:flex;align-items:center;
+  justify-content:space-between;padding:24px 56px}
+.brand{display:flex;align-items:center;gap:11px}
+.brand-mark{width:38px;height:38px;border:var(--bw-1) solid var(--gold-3);border-radius:var(--r-2);
+  display:grid;place-items:center;color:var(--gold-4);background:rgba(20,13,7,.6)}
+.brand b{font-family:var(--font-display);font-size:20px;letter-spacing:.16em;color:var(--text-1)}
+.brand span{display:block;font-family:var(--font-num);font-size:9px;letter-spacing:.3em;color:var(--text-4);margin-top:4px}
+.top-right{display:flex;align-items:center;gap:12px}
+.who{display:flex;align-items:center;gap:9px;font-size:12px;color:var(--text-3);
+  border:var(--bw-1) solid var(--line-2);border-radius:var(--r-pill);padding:7px 14px}
+.who b{font-family:var(--font-num);color:var(--gold-4);letter-spacing:.08em}
+
+/* 三栏 */
+.cols{position:absolute;z-index:2;inset:0;display:grid;
+  grid-template-columns:520px minmax(0,1fr) 500px;gap:0;padding:104px 56px 56px}
+.copy{display:flex;flex-direction:column;justify-content:center;gap:18px;padding-right:24px}
+.copy .cap{color:var(--gold-3);font-size:11px}
+.copy h1{font-family:var(--font-display);font-weight:900;font-size:64px;line-height:1.02;letter-spacing:.06em;color:var(--text-1)}
+.copy h1.is-empty{color:var(--text-3);font-size:52px}
+.copy .sub{font-size:13.5px;line-height:1.9;color:var(--text-3);max-width:34ch}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:2px}
+.chip{display:inline-flex;align-items:center;gap:7px;height:32px;padding:0 14px;border-radius:var(--r-2);
+  border:var(--bw-1) solid var(--line-2);background:rgba(0,0,0,.28);font-size:12.5px;color:var(--text-2)}
+.chip b{font-family:var(--font-num);color:var(--text-1);letter-spacing:.04em;font-weight:400}
+.chip--class b{color:var(--class-warrior)}
+.chip .dotc{width:7px;height:7px;border-radius:50%;background:var(--class-warrior)}
+.chip--none{color:var(--text-4);border-style:dashed}
+.cta{display:flex;flex-direction:column;gap:10px;margin-top:10px;max-width:330px}
+.cta .btn--primary{height:54px}
+.cta .back{display:inline-flex;align-items:center;gap:8px;height:42px;justify-content:center;
+  border:var(--bw-1) solid var(--line-2);border-radius:var(--r-2);font-size:13px;color:var(--text-3);
+  background:rgba(0,0,0,.24);transition:.24s}
+.cta .back:hover{border-color:var(--gold-2);color:var(--gold-4)}
+
+/* 中：立绘 */
+.stagechar{position:relative;display:grid;place-items:end center;padding-bottom:96px}
+.stagechar .glow{position:absolute;left:50%;bottom:150px;width:520px;height:520px;transform:translateX(-50%);
+  background:radial-gradient(circle,rgba(194,146,69,.16),transparent 68%);pointer-events:none}
+.stagechar img{position:relative;height:800px;width:auto;object-fit:contain;
+  filter:drop-shadow(0 30px 60px rgba(0,0,0,.7));animation:charIn var(--dur-3) var(--ease-out) both}
+@keyframes charIn{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:none}}
+.stagechar .ring{position:absolute;left:50%;bottom:132px;transform:translateX(-50%)}
+.plate{position:absolute;left:50%;bottom:74px;transform:translateX(-50%);
+  display:inline-flex;align-items:center;gap:10px;padding:8px 20px;border-radius:var(--r-pill);
+  border:var(--bw-1) solid var(--gold-2);background:rgba(21,15,8,.9);box-shadow:var(--shadow-card);
+  font-size:13px;letter-spacing:.06em;color:var(--text-1);white-space:nowrap}
+.plate .lv{font-family:var(--font-num);font-size:11px;color:var(--gold-4);letter-spacing:.1em}
+.stagechar.is-empty img,.stagechar.is-empty .plate,.stagechar.is-empty .ring{display:none}
+
+/* 右：角色面板 */
+.roster{width:500px;height:100%;display:flex;flex-direction:column;justify-self:end;overflow:hidden}
+.roster-head{display:flex;align-items:center;gap:10px;padding:16px 18px 12px;border-bottom:var(--bw-1) solid var(--line-1)}
+.roster-head h2{font-family:var(--font-display);font-size:17px;letter-spacing:.22em;color:var(--text-1)}
+.roster-head .count{font-family:var(--font-num);font-size:11px;color:var(--gold-2);letter-spacing:.1em}
+.roster-head .btn{margin-left:auto}
+.roster-body{flex:1;min-height:0;padding:14px 16px 18px;overflow:auto}
+.cards{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.rcard{position:relative;height:252px;padding:0;overflow:hidden;
+  border:var(--bw-1) solid var(--line-2);border-radius:var(--r-2);
+  background:linear-gradient(170deg,var(--surface-3),var(--surface-2));transition:.28s var(--ease)}
+.rcard:hover{transform:translateY(-3px);border-color:var(--gold-2);box-shadow:var(--shadow-card)}
+.rcard .art{position:absolute;inset:0;overflow:hidden}
+.rcard .art img{width:100%;height:100%;object-fit:cover;object-position:50% 12%;filter:saturate(.95) brightness(.92);
+  transition:transform 1s var(--ease)}
+.rcard:hover .art img{transform:scale(1.04)}
+.rcard .art::after{content:"";position:absolute;inset:0;
+  background:linear-gradient(180deg,rgba(10,7,4,.06) 30%,rgba(10,7,4,.9) 100%)}
+.rcard .info{position:absolute;left:0;right:0;bottom:0;padding:10px 12px 11px}
+.rcard .dotc{width:6px;height:6px;border-radius:50%;display:inline-block;margin-right:6px;vertical-align:1px}
+.rcard .nm{font-family:var(--font-display);font-size:17px;letter-spacing:.1em;color:var(--text-1)}
+.rcard .mt{display:flex;align-items:center;justify-content:space-between;margin-top:3px;
+  font-size:11px;color:var(--text-3)}
+.rcard .mt b{font-family:var(--font-num);color:var(--gold-4);font-weight:400;letter-spacing:.06em}
+.rcard.is-on{border-color:var(--gold-3);box-shadow:var(--shadow-gold),0 0 0 1px rgba(194,146,69,.3)}
+.rcard.is-on::before{content:"已选择";position:absolute;top:8px;left:8px;z-index:3;
+  padding:2px 8px;border-radius:var(--r-pill);background:var(--gold-3);color:var(--text-on-gold);
+  font-size:10px;letter-spacing:.1em}
+.rcard .del{position:absolute;z-index:4;left:50%;top:50%;transform:translate(-50%,-50%);
+  display:none;height:34px;padding:0 16px;border-radius:var(--r-2);border:var(--bw-1) solid rgba(224,86,47,.7);
+  background:rgba(30,10,6,.94);color:var(--ember-4);font-size:12px;letter-spacing:.06em;box-shadow:var(--shadow-card)}
+.rcard .del:hover{background:rgba(198,58,32,.9);color:var(--text-on-ember)}
+/* 创建卡 */
+.rcard--new{display:grid;place-items:center;border-style:dashed;border-color:var(--line-2);
+  background:rgba(0,0,0,.2);color:var(--text-3)}
+.rcard--new:hover{border-color:var(--gold-2);color:var(--gold-4);transform:translateY(-3px)}
+.rcard--new .plus{width:40px;height:40px;border-radius:50%;border:var(--bw-1) solid currentColor;
+  display:grid;place-items:center;margin:0 auto 10px;font-size:20px;line-height:1}
+.rcard--new span{display:block;text-align:center;font-size:12.5px;letter-spacing:.14em}
+.rcard--new em{display:block;text-align:center;font-size:10.5px;color:var(--text-4);font-style:normal;margin-top:4px}
+
+/* 管理模式提示条 */
+.hint{position:absolute;z-index:var(--z-dialog);left:50%;top:82px;transform:translateX(-50%);
+  display:none;align-items:center;gap:9px;padding:9px 20px;border-radius:var(--r-pill);
+  border:var(--bw-1) solid rgba(217,162,39,.6);background:rgba(52,36,10,.92);
+  box-shadow:0 8px 26px -12px rgba(0,0,0,.8);font-size:12.5px;color:#F3DEA6}
+.hint .dot{background:var(--amber);box-shadow:0 0 10px rgba(217,162,39,.7)}
+
+/* 管理模式状态 */
+body.manage .hint{display:inline-flex}
+body.manage .rcard .del{display:block}
+body.manage .rcard .art img{filter:brightness(.55) saturate(.8)}
+body.manage .rcard:hover{transform:none}
+body.manage .roster-head .btn{background:linear-gradient(180deg,var(--ember-3),var(--ember-2));
+  border-color:#E8734D;color:var(--text-on-ember)}
+
+/* 空列表 */
+.empty-roster{display:none;flex-direction:column;align-items:center;gap:12px;padding:56px 16px;text-align:center}
+.empty-roster b{font-family:var(--font-display);font-size:18px;letter-spacing:.12em;color:var(--text-2)}
+.empty-roster p{font-size:12px;color:var(--text-4);line-height:1.8;max-width:26ch}
+.empty-roster .btn{margin-top:6px}
+body.no-role .cards{display:none}
+body.no-role .empty-roster{display:flex}
+
+.foot{position:absolute;z-index:var(--z-hud);left:56px;right:56px;bottom:18px;display:flex;
+  justify-content:space-between;font-family:var(--font-num);font-size:10px;letter-spacing:.1em;color:var(--text-4)}
+</style>
+</head>
+<body>
+<div class="stage"><div class="stage-inner">
+
+  <div class="bg"><img src="../assets/hero-bg.jpg" alt="沙城"></div>
+
+  <header class="top">
+    <a class="brand" href="../index.html">
+      <span class="brand-mark">
+        <svg class="ic" viewBox="0 0 256 256" fill="currentColor"><path d="M216,32H152a8,8,0,0,0-6.34,3.12l-64,83.21L72,108.69a16,16,0,0,0-22.64,0l-12.69,12.7a16,16,0,0,0,0,22.63l20,20-28,28a16,16,0,0,0,0,22.63l12.69,12.68a16,16,0,0,0,22.62,0l28-28,20,20a16,16,0,0,0,22.64,0l12.69-12.7a16,16,0,0,0,0-22.63l-9.64-9.64,83.21-64A8,8,0,0,0,224,104V40A8,8,0,0,0,216,32ZM52.69,216,40,203.32l28-28L80.68,188Zm70.61-8L48,132.71,60.7,120,136,195.31ZM208,100.06l-81.74,62.88L115.32,152l50.34-50.34a8,8,0,0,0-11.32-11.31L104,140.68,93.07,129.74,155.94,48H208Z"/></svg>
+      </span>
+      <span><b>Olua</b><span>OLUA</span></span>
+    </a>
+    <div class="top-right">
+      <span class="who">雷霆一区 · <b>player_01</b></span>
+      <button class="btn btn--sm btn--ghost">退出登录</button>
+    </div>
+  </header>
+
+  <div class="hint"><span class="dot"></span>点击角色上方的删除按钮移除角色（再点一次确认，3 秒后自动取消）</div>
+
+  <div class="cols">
+    <!-- 左：角色信息 -->
+    <div class="copy">
+      <span class="cap">SELECT YOUR HERO</span>
+      <h1 id="copyTitle">苍狼</h1>
+      <p class="sub" id="copySub">这位英雄已在沙城征战四十二级，装备与背包都保存在服务端。</p>
+
+      <div class="chips" id="chips">
+        <span class="chip chip--class"><i class="dotc"></i>战士</span>
+        <span class="chip">性别 <b>男</b></span>
+        <span class="chip">等级 <b>Lv.42</b></span>
+        <span class="chip">战力 <b>12,480</b></span>
+      </div>
+
+      <div class="cta">
+        <button class="btn btn--primary">进 入 游 戏</button>
+        <a class="back" href="01-login.html">
+          <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" style="width:15px;height:15px"><path d="M10 6l-6 6 6 6M4 12h16"/></svg>
+          返回登录
+        </a>
+      </div>
+    </div>
+
+    <!-- 中：立绘 -->
+    <div class="stagechar" id="stagechar">
+      <div class="glow"></div>
+      <div class="ring"></div>
+      <img src="../assets/char-warrior-m.png" alt="苍狼 立绘" id="charImg">
+      <div class="plate"><span id="plateName">苍狼</span><span class="lv">LV.42</span></div>
+    </div>
+
+    <!-- 右：角色面板 -->
+    <aside class="panel panel--rivet roster">
+      <div class="roster-head">
+        <h2>我的角色</h2>
+        <span class="count">3 / 6</span>
+        <button class="btn btn--sm btn--ghost" id="manageBtn">管理</button>
+      </div>
+      <div class="roster-body scroll">
+        <div class="cards">
+          <article class="rcard is-on" data-name="苍狼" data-src="../assets/char-warrior-m.png" data-class="战士" data-sex="男" data-lv="42">
+            <div class="art"><img src="../assets/char-warrior-m.png" alt=""></div>
+            <div class="info">
+              <div class="nm">苍狼</div>
+              <div class="mt"><span><i class="dotc" style="background:var(--class-warrior)"></i>战士</span><b>LV.42</b></div>
+            </div>
+            <button class="del">删除</button>
+          </article>
+
+          <article class="rcard" data-name="夜鸦" data-src="../assets/char-mage-f.png" data-class="法师" data-sex="女" data-lv="38">
+            <div class="art"><img src="../assets/char-mage-f.png" alt=""></div>
+            <div class="info">
+              <div class="nm">夜鸦</div>
+              <div class="mt"><span><i class="dotc" style="background:var(--class-mage)"></i>法师</span><b>LV.38</b></div>
+            </div>
+            <button class="del">删除</button>
+          </article>
+
+          <article class="rcard" data-name="青玄" data-src="../assets/char-taoist-m.png" data-class="道士" data-sex="男" data-lv="27">
+            <div class="art"><img src="../assets/char-taoist-m.png" alt=""></div>
+            <div class="info">
+              <div class="nm">青玄</div>
+              <div class="mt"><span><i class="dotc" style="background:var(--class-taoist)"></i>道士</span><b>LV.27</b></div>
+            </div>
+            <button class="del">删除</button>
+          </article>
+
+          <article class="rcard rcard--new">
+            <div>
+              <div class="plus">＋</div>
+              <span>创建角色</span>
+              <em>还可创建 3 位</em>
+            </div>
+          </article>
+        </div>
+
+        <div class="empty-roster">
+          <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" style="width:30px;height:30px;color:var(--gold-2)"><path d="M12 5v14M5 12h14"/></svg>
+          <b>还没有角色</b>
+          <p>创建第一位英雄，从黄昏的沙场开始你的传奇。</p>
+          <button class="btn btn--gold">创建第一位角色</button>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <div class="foot"><span>OLUA · ROLE SELECT</span><span>BUILD 2.8.1.432</span></div>
+
+</div></div>
+
+<script src="../stage.js"></script>
+<script>
+/* 选中角色：更新左栏、立绘、卡片态（对应客户端角色卡点选） */
+const cards = [...document.querySelectorAll('.rcard[data-name]')];
+const title = document.getElementById('copyTitle');
+const sub = document.getElementById('copySub');
+const chips = document.getElementById('chips');
+const stagechar = document.getElementById('stagechar');
+const charImg = document.getElementById('charImg');
+const plateName = document.getElementById('plateName');
+const CLASS_COLOR = {战士:'var(--class-warrior)', 法师:'var(--class-mage)', 道士:'var(--class-taoist)'};
+
+function select(card){
+  cards.forEach(c => c.classList.toggle('is-on', c === card));
+  const d = card.dataset;
+  title.textContent = d.name;
+  title.classList.remove('is-empty');
+  stagechar.classList.remove('is-empty');
+  sub.textContent = `这位英雄已在沙城征战 ${d.lv} 级，装备与背包都保存在服务端。`;
+  chips.innerHTML = `
+    <span class="chip chip--class"><i class="dotc" style="background:${CLASS_COLOR[d.class]}"></i>${d.class}</span>
+    <span class="chip">性别 <b>${d.sex}</b></span>
+    <span class="chip">等级 <b>Lv.${d.lv}</b></span>
+    <span class="chip">战力 <b>12,480</b></span>`;
+  charImg.src = d.src;
+  plateName.textContent = d.name;
+  document.querySelector('.plate .lv').textContent = 'LV.' + d.lv;
+}
+cards.forEach(c => c.addEventListener('click', () => { if (!document.body.classList.contains('manage')) select(c); }));
+
+/* 管理模式：卡片中央出删除按钮，按钮先变「确认删除」，3 秒回退 */
+const manageBtn = document.getElementById('manageBtn');
+manageBtn.addEventListener('click', () => {
+  document.body.classList.toggle('manage');
+  const on = document.body.classList.contains('manage');
+  manageBtn.textContent = on ? '完成' : '管理';
+  document.querySelectorAll('.del').forEach(b => { b.textContent = '删除'; b.dataset.armed = ''; });
+});
+document.querySelectorAll('.del').forEach(btn => {
+  let timer = null;
+  btn.addEventListener('click', e => {
+    e.stopPropagation();
+    if (btn.dataset.armed !== '1'){
+      btn.dataset.armed = '1';
+      btn.textContent = '确认删除';
+      btn.style.borderColor = 'var(--gold-3)';
+      btn.style.color = 'var(--gold-5)';
+      timer = setTimeout(() => {
+        btn.dataset.armed = '';
+        btn.textContent = '删除';
+        btn.style.borderColor = '';
+        btn.style.color = '';
+      }, 3000);
+    } else {
+      clearTimeout(timer);
+      btn.closest('.rcard').remove();
+    }
+  });
+});
+
+/* #state=manage | empty 供走查与截图 */
+(function(){
+  const st = (location.hash.match(/state=(\w+)/) || [])[1];
+  if (st === 'manage') manageBtn.click();
+  if (st === 'empty'){
+    document.querySelectorAll('.rcard[data-name]').forEach(c => c.remove());
+    document.body.classList.add('no-role');
+    title.textContent = '选择角色';
+    title.classList.add('is-empty');
+    stagechar.classList.add('is-empty');
+    sub.textContent = '这个区还没有角色。创建一位英雄，从黄昏的沙场开始。';
+    chips.innerHTML = '<span class="chip chip--none">尚无角色</span><span class="chip chip--none">创建后自动选中</span>';
+    document.querySelector('.cta .btn--primary').disabled = true;
+  }
+})();
+</script>
+</body>
+</html>

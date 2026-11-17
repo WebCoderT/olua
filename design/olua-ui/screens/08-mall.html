@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>08 · 商城 · Olua UI</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Noto+Serif+SC:wght@700;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../tokens.css">
+<link rel="stylesheet" href="../ui.css">
+<style>
+/* ── 商城 850×540：余额条 + 分类页签 + 3×2 商品卡 + 分页 ── */
+.mall{position:relative;width:850px;height:540px}
+.mall-head{display:flex;align-items:center;justify-content:space-between;padding:0 4px 12px}
+.mall-head h2{font-family:var(--font-display);font-size:19px;letter-spacing:.3em;color:var(--text-1)}
+.mall-head h2::after{display:none}
+.balance{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-3);
+  border:var(--bw-1) solid var(--line-2);border-radius:var(--r-pill);padding:7px 16px;background:rgba(0,0,0,.3)}
+.balance i{width:10px;height:10px;border-radius:2px;background:linear-gradient(140deg,var(--gold-4),var(--gold-2));display:block}
+.balance b{font-family:var(--font-num);font-size:14px;color:var(--gold-4);font-weight:400;letter-spacing:.04em}
+.mall-tabs{display:flex;gap:8px;justify-content:center;margin-bottom:14px}
+.mall-tabs .tab{min-width:88px;height:28px;font-size:12.5px}
+.goods{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;height:238px}
+.gcard{display:flex;flex-direction:column;padding:12px;border-radius:var(--r-2);
+  border:var(--bw-1) solid var(--line-2);background:linear-gradient(170deg,var(--surface-3),var(--surface-2))}
+.gcard .top{display:flex;gap:10px;align-items:flex-start}
+.gcard .fig{width:46px;height:46px;border-radius:var(--r-1);display:grid;place-items:center;flex:0 0 auto;
+  font-family:var(--font-display);font-size:21px}
+.gcard .nm{font-size:13.5px;color:var(--text-1)}
+.gcard .kind{font-size:10px;color:var(--text-4);margin-top:2px;letter-spacing:.08em}
+.gcard .stats{margin-top:8px;display:flex;flex-direction:column;gap:3px;font-size:10.5px;color:var(--text-3)}
+.gcard .stats .up{color:var(--amber)}
+.gcard .buy{margin-top:auto;display:flex;align-items:center;justify-content:space-between;gap:8px;padding-top:8px}
+.gcard .price{font-family:var(--font-num);font-size:12.5px;color:var(--gold-4);letter-spacing:.04em;white-space:nowrap}
+.gcard.locked,.gcard.soldout{filter:grayscale(.55) brightness(.72)}
+.gcard .state{font-size:11px;color:var(--text-4)}
+.pager{display:flex;align-items:center;justify-content:center;gap:8px;margin-top:14px}
+.pager .btn{min-width:64px}
+.pager .page{font-family:var(--font-num);font-size:12px;color:var(--text-3);letter-spacing:.1em;
+  border:var(--bw-1) solid var(--line-1);border-radius:var(--r-2);padding:7px 14px;background:rgba(0,0,0,.24)}
+.pager .btn:disabled{opacity:.45}
+</style>
+</head>
+<body>
+<div class="stage"><div class="stage-inner">
+  <div class="stage-bg stage-bg--blur"><img src="../assets/hero-bg.jpg"></div>
+  <div class="stage-scrim"></div>
+
+  <div class="layer layer--dialog center">
+    <div class="panel panel--rivet mall">
+      <div class="panel-head">
+        <span class="panel-eyebrow">MALL · M</span>
+        <h2 class="panel-title">商城</h2>
+        <button class="panel-close" aria-label="关闭">×</button>
+      </div>
+      <div class="panel-body">
+
+        <div class="mall-head">
+          <span class="cap">BINDING GOLD MALL</span>
+          <div class="balance"><i></i>绑定元宝 <b>12,480</b></div>
+        </div>
+
+        <div class="mall-tabs">
+          <button class="tab is-on">常用</button>
+          <button class="tab">药品</button>
+          <button class="tab">装备</button>
+          <button class="tab">材料</button>
+          <button class="tab">礼包</button>
+        </div>
+
+        <div class="goods">
+          <div class="gcard">
+            <div class="top">
+              <div class="fig" style="background:rgba(111,191,142,.14);border:1px solid rgba(111,191,142,.5);color:var(--jade)">药</div>
+              <div><div class="nm">金创药（大）</div><div class="kind">药品 · 恢复 800 生命</div></div>
+            </div>
+            <div class="stats"><span>今日 2 / 10</span><span class="up">全服剩 342 件</span></div>
+            <div class="buy"><span class="price">80 绑元</span><button class="btn btn--xs btn--gold">购 买</button></div>
+          </div>
+
+          <div class="gcard">
+            <div class="top">
+              <div class="fig" style="background:rgba(111,159,216,.14);border:1px solid rgba(111,159,216,.55);color:var(--q-rare)">魔</div>
+              <div><div class="nm">魔法药（大）</div><div class="kind">药品 · 恢复 600 法力</div></div>
+            </div>
+            <div class="stats"><span>今日 0 / 10</span></div>
+            <div class="buy"><span class="price">60 绑元</span><button class="btn btn--xs btn--gold">购 买</button></div>
+          </div>
+
+          <div class="gcard">
+            <div class="top">
+              <div class="fig" style="background:rgba(179,123,216,.14);border:1px solid rgba(179,123,216,.55);color:var(--q-epic)">卷</div>
+              <div><div class="nm">传送卷轴</div><div class="kind">常用 · 回城 / 换图</div></div>
+            </div>
+            <div class="stats"><span>全服剩 58 件</span></div>
+            <div class="buy"><span class="price">120 绑元</span><button class="btn btn--xs btn--gold">购 买</button></div>
+          </div>
+
+          <div class="gcard locked">
+            <div class="top">
+              <div class="fig" style="background:rgba(232,163,60,.14);border:1px solid rgba(232,163,60,.55);color:var(--q-legend)">铠</div>
+              <div><div class="nm">玄铁重铠</div><div class="kind">装备 · 物防 +86</div></div>
+            </div>
+            <div class="stats"><span>需要等级 45</span></div>
+            <div class="buy"><span class="state">Lv.45 解锁</span><button class="btn btn--xs" disabled>购 买</button></div>
+          </div>
+
+          <div class="gcard soldout">
+            <div class="top">
+              <div class="fig" style="background:rgba(198,58,32,.16);border:1px solid rgba(224,86,47,.55);color:var(--ember-4)">礼</div>
+              <div><div class="nm">沙城福利礼包</div><div class="kind">礼包 · 限时</div></div>
+            </div>
+            <div class="stats"><span>今日 3 / 3</span></div>
+            <div class="buy"><span class="state">今日买满</span><button class="btn btn--xs" disabled>购 买</button></div>
+          </div>
+
+          <div class="gcard">
+            <div class="top">
+              <div class="fig" style="background:rgba(217,162,39,.14);border:1px solid rgba(217,162,39,.55);color:var(--amber)">洗</div>
+              <div><div class="nm">洗点符</div><div class="kind">常用 · 重置属性点</div></div>
+            </div>
+            <div class="stats"><span>今日 0 / 5</span></div>
+            <div class="buy"><span class="price">500 绑元</span><button class="btn btn--xs btn--gold">购 买</button></div>
+          </div>
+        </div>
+
+        <div class="pager">
+          <button class="btn btn--sm btn--ghost" disabled>首 页</button>
+          <button class="btn btn--sm btn--ghost">上一页</button>
+          <span class="page">第 2 / 5 页</span>
+          <button class="btn btn--sm btn--ghost">下一页</button>
+          <button class="btn btn--sm btn--ghost">末 页</button>
+        </div>
+
+      </div>
+      <div class="panel-foot"><span>购买直接扣绑定元宝，服务端权威扣款</span><span>等级 / 售罄 / 买满 自动置灰</span></div>
+    </div>
+  </div>
+
+</div></div>
+<script src="../stage.js"></script>
+</body>
+</html>

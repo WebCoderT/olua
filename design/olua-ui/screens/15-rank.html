@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>15 · 排行榜 · Olua UI</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Noto+Serif+SC:wght@700;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../tokens.css">
+<link rel="stylesheet" href="../ui.css">
+<style>
+/* ── 排行榜 600×560：三榜页签 + 名次列表 + 我的名次条 ── */
+.rank{position:relative;width:600px;height:540px}
+.rsum{text-align:center;font-size:11.5px;color:var(--text-4);padding-bottom:10px;letter-spacing:.04em}
+.rsum b{font-family:var(--font-num);color:var(--text-2);font-weight:400}
+.rlist{display:flex;flex-direction:column;gap:6px;height:330px;overflow:auto;padding-right:4px}
+.rrow{height:46px}
+.rrow .no{width:34px;height:26px;border-radius:var(--r-1);display:grid;place-items:center;flex:0 0 auto;
+  font-family:var(--font-num);font-size:12px;color:var(--text-3);border:1px solid var(--line-1)}
+.rrow.r1 .no{background:linear-gradient(180deg,var(--gold-4),var(--gold-2));color:var(--text-on-gold);border-color:var(--gold-5)}
+.rrow.r2 .no{background:linear-gradient(180deg,#C8CDD4,#8E97A3);color:#171C22;border-color:#E2E7EC}
+.rrow.r3 .no{background:linear-gradient(180deg,#C98B57,#8E5A32);color:#221204;border-color:#E0A976}
+.rrow .vals{margin-left:auto;font-family:var(--font-num);font-size:11px;color:var(--text-4);letter-spacing:.05em}
+.rrow .vals b{color:var(--text-1);font-weight:400}
+.rself{margin-top:10px;height:42px}
+.rself .no{width:34px;height:26px;border-radius:var(--r-1);display:grid;place-items:center;flex:0 0 auto;
+  font-family:var(--font-num);font-size:12px;color:var(--gold-5);border:1px solid var(--gold-3);background:rgba(194,146,69,.14)}
+</style>
+</head>
+<body>
+<div class="stage"><div class="stage-inner">
+  <div class="stage-bg stage-bg--blur"><img src="../assets/hero-bg.jpg"></div>
+  <div class="stage-scrim"></div>
+
+  <div class="layer layer--dialog center">
+    <div class="panel panel--rivet rank">
+      <div class="panel-head">
+        <span class="panel-eyebrow">LEADERBOARD</span>
+        <h2 class="panel-title">排行榜</h2>
+        <button class="panel-close" aria-label="关闭">×</button>
+      </div>
+      <div class="panel-body">
+
+        <div class="tabs" style="margin-bottom:8px">
+          <button class="tab is-on">等 级</button>
+          <button class="tab">战 力</button>
+          <button class="tab">击 杀</button>
+        </div>
+        <div class="rsum">雷霆一区 · 共 <b>1,284</b> 人上榜 · <b>刚刚</b>更新</div>
+
+        <div class="rlist scroll">
+          <div class="row rrow r1">
+            <span class="no">1</span>
+            <div class="row-main"><span class="row-name" style="color:var(--gold-5)">屠尽天下</span><span class="row-sub">Lv.58 · 战士</span></div>
+            <span class="vals">战力 <b>28,940</b></span>
+          </div>
+          <div class="row rrow r2">
+            <span class="no">2</span>
+            <div class="row-main"><span class="row-name">一刀两断</span><span class="row-sub">Lv.56 · 战士</span></div>
+            <span class="vals">战力 <b>26,310</b></span>
+          </div>
+          <div class="row rrow r3">
+            <span class="no">3</span>
+            <div class="row-main"><span class="row-name">月满西楼</span><span class="row-sub">Lv.55 · 法师</span></div>
+            <span class="vals">战力 <b>24,882</b></span>
+          </div>
+          <div class="row rrow">
+            <span class="no">4</span>
+            <div class="row-main"><span class="row-name">断刃</span><span class="row-sub">Lv.45 · 战士</span></div>
+            <span class="vals">战力 <b>18,220</b></span>
+          </div>
+          <div class="row rrow">
+            <span class="no">5</span>
+            <div class="row-main"><span class="row-name">老刀</span><span class="row-sub">Lv.48 · 道士</span></div>
+            <span class="vals">战力 <b>17,654</b></span>
+          </div>
+          <div class="row rrow">
+            <span class="no">6</span>
+            <div class="row-main"><span class="row-name">夜鸦</span><span class="row-sub">Lv.38 · 法师</span></div>
+            <span class="vals">战力 <b>14,102</b></span>
+          </div>
+          <div class="row rrow row--me">
+            <span class="no">17</span>
+            <div class="row-main"><span class="row-name" style="color:var(--gold-4)">苍狼（我）</span><span class="row-sub">Lv.42 · 战士</span></div>
+            <span class="vals">战力 <b>12,480</b></span>
+          </div>
+          <div class="row rrow">
+            <span class="no">18</span>
+            <div class="row-main"><span class="row-name">疾风</span><span class="row-sub">Lv.35 · 法师</span></div>
+            <span class="vals">战力 <b>11,930</b></span>
+          </div>
+        </div>
+
+        <div class="row rrow rself row--me">
+          <span class="no">17</span>
+          <div class="row-main"><span class="row-name">我的名次 · 等级榜</span><span class="row-sub">Lv.42 · 战士 · 战力 12,480</span></div>
+          <span class="badge badge--gold">第 17 名</span>
+        </div>
+
+      </div>
+      <div class="panel-foot"><span>按区服独立成榜（标题带区名）</span><span>60 秒内显示「刚刚」</span></div>
+    </div>
+  </div>
+
+</div></div>
+<script src="../stage.js"></script>
+</body>
+</html>

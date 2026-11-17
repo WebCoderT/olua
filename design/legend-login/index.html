@@ -1,0 +1,905 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>OLUA 传奇 · 管理端登录</title>
+<style>
+/* ══════════════════════════════════════════════════════════
+   TOKENS —— 石 / 金 / 火 三色系统，全站只许从这里取色
+   ══════════════════════════════════════════════════════════ */
+:root{
+  /* 石：从虚空到受光的石面，四级 */
+  --void:#090705;
+  --stone-1:#12100C;
+  --stone-2:#1B1712;
+  --stone-3:#241E17;
+
+  /* 金：唯一的功能色，用于框线、焦点、主操作 */
+  --gold:#C9A24D;
+  --gold-hi:#F0DCAC;
+  --gold-dim:#6B562F;
+
+  /* 火：只作气氛与危险态，不许大面积铺 */
+  --fire:#B9441F;
+  --fire-hi:#E4743A;
+
+  /* 墨：文字三级 */
+  --ink:#EEE5D2;
+  --ink-2:#C3B49A;
+  --ink-3:#8B7B61;
+
+  --line:rgba(201,162,77,.20);
+  --line-soft:rgba(201,162,77,.10);
+
+  --font-display:"Songti SC","Source Han Serif SC","Noto Serif SC","STSong",serif;
+  --font-ui:"PingFang SC","Hiragino Sans GB","Microsoft YaHei",system-ui,sans-serif;
+  --font-mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+
+  --gut:clamp(24px,5vw,88px);
+  --r:2px;            /* 传奇不用大圆角，只留一刀切的锐利 */
+  --ease:cubic-bezier(.22,.61,.36,1);
+  --ease-out:cubic-bezier(0,0,.2,1);
+}
+
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{
+  background:var(--void);color:var(--ink);
+  font:400 15px/1.6 var(--font-ui);
+  -webkit-font-smoothing:antialiased;
+  overflow-x:hidden;
+}
+img,svg{display:block}
+a{color:inherit;text-decoration:none}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+::selection{background:rgba(201,162,77,.28);color:#fff}
+:focus-visible{outline:2px solid var(--gold);outline-offset:3px}
+
+/* ══════════════════════════════════════════════════════════
+   背景层 —— 天幕 / 远山 / 城堡 / 雾 / 火星 / 火把光 / 暗角 / 石纹
+   全部纯 CSS+SVG，无外部资源
+   ══════════════════════════════════════════════════════════ */
+.stage{position:fixed;inset:0;overflow:hidden;pointer-events:none;z-index:0}
+
+.sky{
+  position:absolute;inset:0;
+  background:
+    radial-gradient(120% 78% at 58% 8%, rgba(120,38,16,.42) 0%, rgba(84,28,12,.16) 34%, transparent 62%),
+    radial-gradient(90% 60% at 50% 100%, rgba(150,72,26,.24) 0%, transparent 60%),
+    linear-gradient(180deg,#0B0806 0%,#14100B 42%,#1A1410 66%,#0A0705 100%);
+}
+
+/* 天际那道被火映红的光带 */
+.burn{
+  position:absolute;left:-10%;right:-10%;top:26%;height:38vh;
+  background:radial-gradient(50% 46% at 52% 100%, rgba(214,96,38,.30) 0%, rgba(180,64,24,.12) 42%, transparent 74%);
+  filter:blur(6px);
+  animation:burn 14s var(--ease) infinite alternate;
+}
+@keyframes burn{from{opacity:.55;transform:translateY(6px) scaleY(.94)}to{opacity:1;transform:translateY(-8px) scaleY(1.06)}}
+
+.ridge{position:absolute;left:0;right:0;bottom:0;width:100%;height:58vh;min-height:380px}
+
+/* 地面雾：把城堡的底部吃掉，避免"贴纸感" */
+.fog{
+  position:absolute;left:0;right:0;bottom:0;height:24vh;
+  background:linear-gradient(180deg,transparent 0%,rgba(14,11,8,.34) 46%,rgba(9,7,5,.88) 100%);
+}
+
+/* 火把溢光：贴地一层暖光，从下往上照亮构图 */
+.torch{
+  position:absolute;left:50%;bottom:-6vh;width:120vw;height:58vh;
+  transform:translateX(-50%);
+  background:radial-gradient(46% 62% at 50% 100%, rgba(226,132,52,.34) 0%, rgba(186,86,30,.13) 40%, transparent 72%);
+  filter:blur(14px);
+  animation:torch 7.5s ease-in-out infinite;
+}
+@keyframes torch{
+  0%,100%{opacity:.86;transform:translateX(-50%) scale(1)}
+  42%{opacity:1;transform:translateX(-50%) scale(1.04)}
+  68%{opacity:.9;transform:translateX(-50%) scale(.99)}
+}
+
+.vignette{
+  position:absolute;inset:0;
+  background:
+    radial-gradient(132% 96% at 50% 46%, transparent 42%, rgba(0,0,0,.62) 86%),
+    linear-gradient(90deg, rgba(6,5,3,.86) 0%, rgba(6,5,3,.30) 34%, transparent 58%);
+}
+
+/* 石纹：极淡的噪点，让大面积暗色不"塑料" */
+.grain{
+  position:absolute;inset:0;opacity:.16;mix-blend-mode:overlay;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.82' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='220' height='220' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* 火星：JS 注入，向上飘散 */
+.embers{position:absolute;inset:0}
+.ember{
+  position:absolute;bottom:-4vh;width:2px;height:2px;border-radius:50%;
+  background:var(--fire-hi);
+  box-shadow:0 0 6px 1px rgba(228,116,58,.65);
+  opacity:0;
+  animation:rise linear infinite;
+}
+@keyframes rise{
+  0%{opacity:0;transform:translate3d(0,0,0) scale(.6)}
+  12%{opacity:.9}
+  70%{opacity:.55}
+  100%{opacity:0;transform:translate3d(var(--drift,20px),-74vh,0) scale(1.05)}
+}
+
+/* ══════════════════════════════════════════════════════════
+   骨架
+   ══════════════════════════════════════════════════════════ */
+.shell{
+  position:relative;z-index:2;
+  min-height:100vh;min-height:100dvh;
+  display:grid;grid-template-rows:auto 1fr auto;
+}
+
+/* ——— 顶栏 ——— */
+.topbar{
+  display:flex;align-items:center;justify-content:space-between;gap:32px;
+  padding:26px var(--gut);border-bottom:1px solid var(--line-soft);
+  backdrop-filter:blur(2px);
+}
+.brand{display:flex;align-items:center;gap:14px}
+.crest{width:34px;height:40px;flex:0 0 auto}
+.brand-txt b{
+  display:block;font-family:var(--font-display);font-weight:700;font-size:20px;
+  letter-spacing:.30em;line-height:1;color:var(--gold-hi);
+}
+.brand-txt span{
+  display:block;margin-top:6px;font-family:var(--font-mono);font-size:9.5px;
+  letter-spacing:.34em;color:var(--ink-3);
+}
+.meta{display:flex;align-items:center;gap:22px;font-size:12px;color:var(--ink-3);letter-spacing:.04em}
+.alive{display:flex;align-items:center;gap:9px;font-family:var(--font-mono);font-size:11.5px;color:var(--ink-2)}
+.dot{width:6px;height:6px;border-radius:50%;background:#6FBF73;box-shadow:0 0 0 0 rgba(111,191,115,.6);animation:pulse 2.6s var(--ease-out) infinite}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(111,191,115,.55)}70%{box-shadow:0 0 0 7px rgba(111,191,115,0)}100%{box-shadow:0 0 0 0 rgba(111,191,115,0)}}
+.meta .sep{width:1px;height:14px;background:var(--line)}
+
+/* ——— 主体两栏 ——— */
+.body{
+  display:grid;grid-template-columns:minmax(0,1.08fr) minmax(360px,.72fr);
+  align-items:center;gap:clamp(32px,5vw,96px);
+  padding:clamp(28px,4vw,64px) var(--gut);
+}
+
+/* ——— 左侧：宣言 ——— */
+.hero{max-width:640px}
+.eyebrow{
+  display:flex;align-items:center;gap:14px;
+  font-family:var(--font-mono);font-size:10.5px;letter-spacing:.36em;color:var(--gold);text-transform:uppercase;
+}
+.eyebrow::before{content:"";width:34px;height:1px;background:var(--gold-dim)}
+
+.hero h1{
+  margin:22px 0 0;font-family:var(--font-display);font-weight:700;
+  font-size:clamp(46px,6.2vw,86px);line-height:1.02;letter-spacing:.04em;
+  color:var(--ink);
+  text-shadow:0 2px 0 rgba(0,0,0,.6),0 0 42px rgba(201,162,77,.14);
+}
+.hero h1 em{
+  font-style:normal;color:var(--gold-hi);
+  background:linear-gradient(180deg,#F6E7C4 6%,#C9A24D 58%,#8A6C34 100%);
+  -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;
+}
+.hero .lede{
+  margin-top:26px;max-width:46ch;font-size:15px;line-height:1.85;color:var(--ink-2);
+}
+.hero .lede b{color:var(--ink);font-weight:600}
+
+/* 三条值守条款：编号 + 词条，横向不堆卡片 */
+.creed{margin-top:44px;max-width:560px;border-top:1px solid var(--line-soft)}
+.creed li{
+  display:grid;grid-template-columns:44px 1fr;gap:16px;align-items:baseline;
+  padding:16px 0;border-bottom:1px solid var(--line-soft);list-style:none;
+  animation:slideIn .8s var(--ease) both;animation-delay:calc(.35s + var(--i,0) * .1s);
+}
+.creed .no{font-family:var(--font-mono);font-size:11px;letter-spacing:.12em;color:var(--gold-dim)}
+.creed h3{font-size:14px;font-weight:600;letter-spacing:.06em;color:var(--ink)}
+.creed p{margin-top:4px;font-size:12.5px;line-height:1.7;color:var(--ink-3)}
+
+/* ——— 右侧：登录闸门 ——— */
+.gate{
+  justify-self:end;width:100%;max-width:432px;
+  position:relative;padding:1px;               /* 外框金线 */
+  background:
+    linear-gradient(180deg,var(--gold-dim),rgba(107,86,47,.30) 26%,rgba(107,86,47,.30) 74%,var(--gold-dim));
+  box-shadow:0 40px 90px -40px rgba(0,0,0,.95),0 0 0 1px rgba(0,0,0,.5);
+  animation:gateIn 1s var(--ease) both .1s;
+}
+@keyframes gateIn{from{opacity:0;transform:translateY(26px) scale(.985)}to{opacity:1;transform:none}}
+
+/* 面板本体：内衬第二道 1px 线 + 石面渐变 */
+.panel{
+  position:relative;padding:clamp(24px,2.4vw,34px) clamp(22px,2.2vw,30px) 26px;
+  background:
+    radial-gradient(120% 60% at 50% 0%, rgba(201,162,77,.07) 0%, transparent 62%),
+    linear-gradient(168deg,#241D16 0%,#1A1510 46%,#14100C 100%);
+}
+.panel::before{
+  content:"";position:absolute;inset:6px;border:1px solid var(--line);
+  pointer-events:none;
+}
+
+/* 四角金饰：一对 L 形折线 */
+.corner{position:absolute;width:15px;height:15px;pointer-events:none}
+.corner::before,.corner::after{content:"";position:absolute;background:var(--gold)}
+.corner::before{width:15px;height:1px}
+.corner::after{width:1px;height:15px}
+.corner.tl{left:-1px;top:-1px}
+.corner.tr{right:-1px;top:-1px;transform:scaleX(-1)}
+.corner.bl{left:-1px;bottom:-1px;transform:scaleY(-1)}
+.corner.br{right:-1px;bottom:-1px;transform:scale(-1)}
+
+.gate-head{padding-bottom:20px;border-bottom:1px solid var(--line-soft)}
+.gate-head h2{
+  font-family:var(--font-display);font-size:26px;font-weight:700;letter-spacing:.14em;color:var(--ink);
+}
+.gate-head p{margin-top:8px;font-size:12px;letter-spacing:.04em;color:var(--ink-3)}
+
+/* 字段 */
+.field{margin-top:20px;position:relative}
+.field > label{
+  display:block;margin-bottom:9px;
+  font-family:var(--font-mono);font-size:10px;letter-spacing:.22em;text-transform:uppercase;
+  color:var(--ink-3);
+}
+.ctrl{
+  width:100%;height:46px;display:flex;align-items:center;gap:10px;
+  padding:0 13px;border:1px solid rgba(201,162,77,.22);border-radius:var(--r);
+  background:linear-gradient(180deg,rgba(0,0,0,.46),rgba(0,0,0,.30));
+  color:var(--ink);font-size:14px;
+  transition:border-color .25s var(--ease),box-shadow .25s var(--ease),background .25s var(--ease);
+}
+.ctrl::placeholder{color:#6E604A}
+.ctrl:hover{border-color:rgba(201,162,77,.36)}
+.ctrl:focus,.ctrl:focus-within{
+  outline:none;border-color:var(--gold);
+  background:linear-gradient(180deg,rgba(0,0,0,.56),rgba(0,0,0,.34));
+  box-shadow:0 0 0 3px rgba(201,162,77,.10),inset 0 1px 0 rgba(240,220,172,.10);
+}
+/* 已填：边框稍亮，字色提到最亮，和空态区分 */
+.ctrl:not(:placeholder-shown){border-color:rgba(201,162,77,.30);color:var(--ink)}
+/* 禁用 */
+.ctrl:disabled,.ctrl[aria-disabled="true"]{opacity:.42;cursor:not-allowed}
+.ctrl:disabled:hover{border-color:rgba(201,162,77,.22)}
+
+/* 错误态：火色边 + 左火条 + 字段下方文案；只在提交校验后出现 */
+.field.invalid .ctrl,
+.field.invalid .ctrl:focus{
+  border-color:rgba(185,68,31,.85);
+  background:linear-gradient(180deg,rgba(40,10,4,.55),rgba(0,0,0,.34));
+  box-shadow:0 0 0 3px rgba(185,68,31,.12),inset 0 0 18px rgba(185,68,31,.08);
+}
+.field.invalid > label{color:#D98A64}
+.err{
+  display:none;align-items:center;gap:7px;margin-top:8px;
+  font-size:11.5px;letter-spacing:.02em;color:#DE8A61;
+}
+.err::before{content:"";width:5px;height:5px;background:var(--fire);transform:rotate(45deg);flex:0 0 auto}
+.field.invalid .err{display:flex}
+.field.shake{animation:shake .34s var(--ease)}
+@keyframes shake{
+  0%,100%{transform:translateX(0)}
+  18%{transform:translateX(-5px)}
+  38%{transform:translateX(4px)}
+  58%{transform:translateX(-3px)}
+  78%{transform:translateX(2px)}
+}
+
+/* 服务器下拉 */
+.select{
+  justify-content:space-between;text-align:left;cursor:pointer;
+}
+.select .val{display:flex;align-items:center;gap:9px;font-size:14px;color:var(--ink)}
+.select .val i{
+  width:5px;height:5px;border-radius:50%;background:#6FBF73;font-style:normal;
+  box-shadow:0 0 6px rgba(111,191,115,.8);
+}
+.chev{width:10px;height:10px;border-right:1px solid var(--gold);border-bottom:1px solid var(--gold);
+  transform:rotate(45deg) translateY(-2px);transition:transform .3s var(--ease)}
+.select[aria-expanded="true"] .chev{transform:rotate(-135deg) translateY(-2px)}
+
+.menu{
+  position:absolute;z-index:20;left:0;right:0;top:calc(100% + 6px);
+  padding:6px;list-style:none;
+  border:1px solid var(--gold-dim);border-radius:var(--r);
+  background:linear-gradient(180deg,#221B14,#17120D);
+  box-shadow:0 26px 50px -22px rgba(0,0,0,.95);
+  opacity:0;visibility:hidden;transform:translateY(-6px);
+  transition:opacity .2s var(--ease),transform .2s var(--ease),visibility .2s;
+}
+.menu.open{opacity:1;visibility:visible;transform:none}
+.menu li{
+  position:relative;display:flex;align-items:center;justify-content:space-between;gap:12px;
+  padding:10px 11px 10px 24px;font-size:13px;color:var(--ink-2);cursor:pointer;border-radius:var(--r);
+  transition:background .18s,color .18s;
+}
+/* 悬停 / 键盘高亮共用一套（.kb 由方向键驱动） */
+.menu li:hover,.menu li.kb{background:rgba(201,162,77,.10);color:var(--ink)}
+/* 选中：左侧金色刻度 + 亮字，不靠背景色抢戏 */
+.menu li[aria-selected="true"]{color:var(--gold-hi);background:rgba(201,162,77,.07)}
+.menu li[aria-selected="true"]::before{
+  content:"";position:absolute;left:11px;top:50%;width:6px;height:6px;
+  transform:translateY(-50%) rotate(45deg);background:var(--gold);
+  box-shadow:0 0 8px rgba(201,162,77,.6);
+}
+.menu li em{font-style:normal;font-family:var(--font-mono);font-size:10.5px;color:var(--ink-3)}
+.menu li[aria-selected="true"] em{color:var(--gold-dim)}
+/* 不可选（维护中）：整项压暗，禁止光标，悬停不响应 */
+.menu li[aria-disabled="true"]{opacity:.38;cursor:not-allowed;color:var(--ink-3)}
+.menu li[aria-disabled="true"]:hover{background:none;color:var(--ink-3)}
+.menu li[aria-disabled="true"] em{color:var(--fire);opacity:.9}
+
+/* 密码框 */
+.pwd{position:relative}
+.pwd .ctrl{padding-right:46px;letter-spacing:.18em}
+.pwd .ctrl[type="password"]::placeholder{letter-spacing:.02em}
+.eye{
+  position:absolute;right:6px;top:50%;transform:translateY(-50%);
+  width:34px;height:34px;display:grid;place-items:center;color:var(--ink-3);
+  transition:color .2s;
+}
+.eye:hover{color:var(--gold)}
+.eye:active{transform:translateY(-50%) scale(.9)}
+.eye[aria-pressed="true"]{color:var(--gold)}
+.eye[aria-pressed="true"] svg{opacity:.55}
+
+/* 记住 / 忘记 */
+.row{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-top:18px}
+.check{display:inline-flex;align-items:center;gap:10px;font-size:12.5px;color:var(--ink-2);cursor:pointer;user-select:none}
+.check:hover{color:var(--ink)}
+.check input{
+  appearance:none;width:15px;height:15px;border:1px solid rgba(201,162,77,.45);
+  border-radius:1px;background:rgba(0,0,0,.4);position:relative;cursor:pointer;
+  transition:background .2s,border-color .2s,box-shadow .2s,transform .12s;
+}
+.check:hover input{border-color:var(--gold);box-shadow:0 0 0 3px rgba(201,162,77,.08)}
+.check input:active{transform:scale(.9)}
+.check input:checked{background:var(--gold);border-color:var(--gold);box-shadow:0 0 10px rgba(201,162,77,.35)}
+.check input:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+.check input:checked::after{
+  content:"";position:absolute;left:4px;top:1px;width:5px;height:9px;
+  border-right:2px solid #14100B;border-bottom:2px solid #14100B;transform:rotate(40deg);
+}
+.check.too-off{opacity:.45}
+.check.too-off input{background:rgba(0,0,0,.4);border-color:rgba(201,162,77,.2);cursor:not-allowed}
+.link{font-size:12.5px;color:var(--ink-3);border-bottom:1px solid transparent;transition:color .2s,border-color .2s,text-shadow .2s;padding-bottom:1px}
+.link:hover{color:var(--gold);border-color:var(--gold-dim);text-shadow:0 0 12px rgba(201,162,77,.35)}
+.link:active{color:var(--gold-hi)}
+
+/* 主按钮：金锭，唯一的实心高光 */
+.enter{
+  position:relative;overflow:hidden;
+  width:100%;height:50px;margin-top:24px;border-radius:var(--r);
+  display:flex;align-items:center;justify-content:center;gap:10px;
+  font-family:var(--font-display);font-size:16px;font-weight:700;letter-spacing:.22em;
+  color:#1A1206;
+  background:linear-gradient(180deg,#F2DFAC 0%,#D9B96E 34%,#BE9644 68%,#9C7734 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.62),
+    inset 0 -1px 0 rgba(0,0,0,.30),
+    0 14px 26px -14px rgba(201,162,77,.55);
+  transition:transform .16s var(--ease),box-shadow .25s var(--ease),filter .2s;
+}
+.enter:hover{filter:brightness(1.06);box-shadow:inset 0 1px 0 rgba(255,255,255,.7),0 18px 30px -14px rgba(201,162,77,.7)}
+.enter:active{transform:translateY(1px) scale(.997);filter:brightness(.96)}
+.enter:focus-visible{outline:2px solid var(--gold-hi);outline-offset:3px}
+.enter[disabled]{cursor:progress;filter:saturate(.5) brightness(.86)}
+/* 掠过剑光 */
+.enter::after{
+  content:"";position:absolute;top:-40%;bottom:-40%;width:38%;left:-46%;
+  background:linear-gradient(100deg,transparent,rgba(255,255,255,.62),transparent);
+  transform:skewX(-18deg);
+  animation:sheen 4.6s var(--ease) infinite;
+}
+@keyframes sheen{0%,62%{left:-46%}86%,100%{left:112%}}
+.enter[disabled]::after{animation:none;opacity:0}
+
+.foot-note{
+  margin-top:18px;text-align:center;font-size:11.5px;color:var(--ink-3);letter-spacing:.02em;
+}
+.foot-note a{color:var(--ink-2);border-bottom:1px solid var(--line);padding-bottom:1px}
+.foot-note a:hover{color:var(--gold);border-color:var(--gold-dim)}
+
+/* ——— 页脚 ——— */
+.footer{
+  display:flex;align-items:center;justify-content:space-between;gap:20px;flex-wrap:wrap;
+  padding:18px var(--gut) 22px;border-top:1px solid var(--line-soft);
+  font-size:11px;letter-spacing:.06em;color:var(--ink-3);
+}
+.footer .mono{font-family:var(--font-mono);font-size:10.5px;letter-spacing:.14em}
+
+/* ——— Toast ——— */
+.toast{
+  position:fixed;left:50%;bottom:38px;z-index:60;transform:translate(-50%,20px);
+  display:flex;align-items:center;gap:10px;
+  padding:12px 20px;border:1px solid var(--gold-dim);border-radius:var(--r);
+  background:linear-gradient(180deg,#221B14,#16110C);
+  box-shadow:0 24px 48px -20px rgba(0,0,0,.9);
+  font-size:13px;color:var(--ink);letter-spacing:.04em;
+  opacity:0;visibility:hidden;transition:opacity .26s var(--ease),transform .26s var(--ease),visibility .26s;
+}
+.toast.show{opacity:1;visibility:visible;transform:translate(-50%,0)}
+.toast::before{content:"";width:5px;height:5px;background:var(--fire-hi);transform:rotate(45deg);box-shadow:0 0 8px rgba(228,116,58,.9)}
+
+/* ——— 入场 ——— */
+@keyframes slideIn{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+.hero > *{animation:slideIn .9s var(--ease) both}
+.eyebrow{animation-delay:.06s}
+.hero h1{animation-delay:.14s}
+.hero .lede{animation-delay:.22s}
+
+/* ══════════════════════════════════════════════════════════
+   响应式
+   ══════════════════════════════════════════════════════════ */
+@media (max-width:1080px){
+  .hero h1{font-size:clamp(40px,6vw,60px)}
+  .creed{max-width:none}
+}
+@media (max-width:900px){
+  .body{grid-template-columns:1fr;gap:36px;padding-top:8px;align-items:start}
+  .gate{justify-self:stretch;max-width:none}
+  .creed{display:none}
+  .hero .lede{max-width:none;font-size:14px}
+  .vignette{background:radial-gradient(140% 80% at 50% 30%,transparent 30%,rgba(0,0,0,.72) 92%)}
+  .meta .sep,.meta .only-lg{display:none}
+}
+@media (max-width:520px){
+  .topbar{padding:18px 20px}
+  .brand-txt b{font-size:17px;letter-spacing:.22em}
+  .hero h1{font-size:38px}
+  .footer{justify-content:center;text-align:center}
+  .meta{min-width:0}
+  .alive{overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+  .alive .cnt{display:none}
+}
+@media (prefers-reduced-motion:reduce){
+  *{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
+}
+
+/* 静态模式（?static=1）：跳过入场动画，供截图/自动化用 */
+html.static *{animation:none!important;transition:none!important}
+html.static .ember{display:none}
+</style>
+</head>
+<body>
+
+<!-- ═══════ 背景层 ═══════ -->
+<div class="stage" aria-hidden="true">
+  <div class="sky"></div>
+  <div class="burn"></div>
+
+  <!-- 远山 + 城堡剪影：只做轮廓，靠雾与暗角吃掉细节 -->
+  <svg class="ridge" viewBox="0 0 1600 560" preserveAspectRatio="xMidYMax slice">
+    <defs>
+      <linearGradient id="hill" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="#3B2B1C"/>
+        <stop offset="100%" stop-color="#241A11"/>
+      </linearGradient>
+      <linearGradient id="keep" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="#14100A"/>
+        <stop offset="100%" stop-color="#0A0806"/>
+      </linearGradient>
+      <pattern id="merlon" width="26" height="14" patternUnits="userSpaceOnUse">
+        <rect width="17" height="14" fill="url(#keep)"/>
+      </pattern>
+      <radialGradient id="glow">
+        <stop offset="0%" stop-color="#E4743A" stop-opacity=".85"/>
+        <stop offset="100%" stop-color="#E4743A" stop-opacity="0"/>
+      </radialGradient>
+    </defs>
+
+    <!-- 最远山脊 -->
+    <path fill="url(#hill)" opacity=".85"
+      d="M0 372 L96 338 L172 356 L268 302 L352 336 L438 296 L524 330 L612 288 L700 322 L790 300 L880 332 L968 300 L1058 336 L1146 306 L1236 340 L1324 312 L1414 344 L1504 318 L1600 348 L1600 560 L0 560 Z"/>
+
+    <!-- 城堡群：中央主塔 + 双侧塔 + 长城墙 + 垛口 -->
+    <g fill="url(#keep)">
+      <!-- 长城墙：横贯两翼 -->
+      <rect x="336" y="452" width="928" height="108"/>
+      <rect x="336" y="444" width="928" height="14" fill="url(#merlon)"/>
+      <!-- 翼塔 -->
+      <rect x="432" y="398" width="52" height="162"/>
+      <polygon points="432,398 458,354 484,398"/>
+      <rect x="1116" y="406" width="52" height="154"/>
+      <polygon points="1116,406 1142,364 1168,406"/>
+      <!-- 内城墙 -->
+      <rect x="596" y="418" width="408" height="142"/>
+      <rect x="596" y="410" width="408" height="14" fill="url(#merlon)"/>
+      <!-- 次塔 -->
+      <rect x="662" y="352" width="62" height="208"/>
+      <polygon points="662,352 693,300 724,352"/>
+      <rect x="876" y="368" width="56" height="192"/>
+      <polygon points="876,368 904,322 932,368"/>
+      <!-- 主塔 -->
+      <rect x="760" y="308" width="80" height="252"/>
+      <polygon points="760,308 800,248 840,308"/>
+    </g>
+
+    <!-- 塔尖旗帜 -->
+    <g stroke="#0B0907" stroke-width="1.6">
+      <path d="M800 248 L800 214" />
+    </g>
+    <path d="M801 216 L826 222 L801 230 Z" fill="#7A2B16" opacity=".85"/>
+
+    <!-- 窗火：一片暖光点，让"城"在夜里活着 -->
+    <g fill="#D9663A">
+      <rect x="794" y="326" width="4" height="7" opacity=".95"/>
+      <rect x="804" y="326" width="4" height="7" opacity=".8"/>
+      <rect x="784" y="404" width="4" height="6" opacity=".7"/>
+      <rect x="812" y="404" width="4" height="6" opacity=".7"/>
+      <rect x="686" y="392" width="4" height="6" opacity=".7"/>
+      <rect x="700" y="452" width="4" height="6" opacity=".55"/>
+      <rect x="898" y="404" width="4" height="6" opacity=".7"/>
+      <rect x="910" y="452" width="4" height="6" opacity=".55"/>
+      <rect x="452" y="430" width="3" height="6" opacity=".6"/>
+      <rect x="1136" y="436" width="3" height="6" opacity=".6"/>
+      <rect x="520" y="470" width="3" height="5" opacity=".45"/>
+      <rect x="1060" y="470" width="3" height="5" opacity=".45"/>
+    </g>
+    <ellipse cx="800" cy="330" rx="120" ry="86" fill="url(#glow)" opacity=".55"/>
+    <ellipse cx="458" cy="380" rx="52" ry="44" fill="url(#glow)" opacity=".3"/>
+    <ellipse cx="1142" cy="386" rx="52" ry="44" fill="url(#glow)" opacity=".3"/>
+
+    <!-- 近景乱石与倒插的断矛 -->
+    <path fill="#080605" opacity=".95"
+      d="M0 486 L78 468 L146 486 L232 462 L318 488 L410 470 L500 492 L1600 492 L1600 560 L0 560 Z"/>
+    <g stroke="#0A0806" stroke-width="3" stroke-linecap="round" opacity=".9">
+      <path d="M214 500 L246 424"/>
+      <path d="M244 500 L270 440"/>
+      <path d="M1188 504 L1224 432"/>
+      <path d="M1218 502 L1248 448"/>
+      <path d="M960 508 L986 462"/>
+    </g>
+    <path d="M246 424 L258 418 L250 434 Z" fill="#0A0806"/>
+    <path d="M1224 432 L1238 428 L1228 442 Z" fill="#0A0806"/>
+  </svg>
+
+  <div class="fog"></div>
+  <div class="torch"></div>
+  <div class="embers" id="embers"></div>
+  <div class="vignette"></div>
+  <div class="grain"></div>
+</div>
+
+<!-- ═══════ 内容 ═══════ -->
+<div class="shell">
+
+  <header class="topbar">
+    <div class="brand">
+      <!-- 盾形纹章：外金内石，中间一把剑 -->
+      <svg class="crest" viewBox="0 0 34 40" fill="none" aria-hidden="true">
+        <path d="M17 1.5 L32.2 6.6 V20.4 C32.2 29.6 25.6 35.6 17 38.6 C8.4 35.6 1.8 29.6 1.8 20.4 V6.6 Z"
+              stroke="#C9A24D" stroke-width="1.2" fill="rgba(201,162,77,.06)"/>
+        <path d="M17 5.2 L28.6 9 V20.2 C28.6 27.4 23.4 32.2 17 34.7 C10.6 32.2 5.4 27.4 5.4 20.2 V9 Z"
+              stroke="rgba(201,162,77,.35)" stroke-width=".8"/>
+        <path d="M17 10.5 V26.5" stroke="#F0DCAC" stroke-width="1.4"/>
+        <path d="M12.6 15.4 H21.4" stroke="#C9A24D" stroke-width="1.1"/>
+        <path d="M17 26.5 L15 29.6 H19 Z" fill="#C9A24D"/>
+      </svg>
+      <div class="brand-txt">
+        <b>OLUA</b>
+        <span>LEGEND CONSOLE</span>
+      </div>
+    </div>
+
+    <div class="meta">
+      <span class="alive"><i class="dot"></i><span class="srv">双线一区 · 龙渊</span><span class="cnt">1,284 在线</span></span>
+      <i class="sep"></i>
+      <span class="mono only-lg">BUILD 1.4.2</span>
+    </div>
+  </header>
+
+  <main class="body">
+
+    <!-- 左：宣言 -->
+    <section class="hero">
+      <p class="eyebrow">Operations Access</p>
+      <h1>执剑者，<br><em>入席。</em></h1>
+      <p class="lede">
+        这里是 <b>OLUA 传奇</b> 的唯一管理入口 —— 玩家账号、区服状态、公告与版本下发，
+        皆由此门内决断。门内所见，即是全服。
+      </p>
+
+      <ul class="creed">
+        <li style="--i:0">
+          <span class="no">01</span>
+          <div><h3>账号与权限</h3><p>角色授权、封禁与申诉，操作留痕可追。</p></div>
+        </li>
+        <li style="--i:1">
+          <span class="no">02</span>
+          <div><h3>区服与在线</h3><p>分区负载、实时在线与掉线告警。</p></div>
+        </li>
+        <li style="--i:2">
+          <span class="no">03</span>
+          <div><h3>公告与版本</h3><p>停机公告、活动配置与客户端版本下发。</p></div>
+        </li>
+      </ul>
+    </section>
+
+    <!-- 右：登录闸门 -->
+    <section class="gate">
+      <span class="corner tl"></span><span class="corner tr"></span>
+      <span class="corner bl"></span><span class="corner br"></span>
+
+      <form class="panel" id="loginForm" novalidate>
+        <div class="gate-head">
+          <h2>账号登录</h2>
+          <p>仅限已授权的管理者 · 非法登录将记录 IP</p>
+        </div>
+
+        <div class="field">
+          <label for="serverBtn">登录区服</label>
+          <button type="button" class="ctrl select" id="serverBtn" aria-haspopup="listbox" aria-expanded="false">
+            <span class="val"><i></i><span id="serverLabel">双线一区 · 龙渊</span></span>
+            <span class="chev"></span>
+          </button>
+          <ul class="menu" id="serverMenu" role="listbox" aria-label="登录区服">
+            <li role="option" aria-selected="true" data-v="双线一区 · 龙渊">双线一区 · 龙渊<em>1,284</em></li>
+            <li role="option" aria-selected="false" data-v="双线二区 · 赤月">双线二区 · 赤月<em>932</em></li>
+            <li role="option" aria-selected="false" data-v="双线三区 · 苍月">双线三区 · 苍月<em>417</em></li>
+            <li role="option" aria-selected="false" aria-disabled="true" data-v="测试服 · 灰烬">测试服 · 灰烬<em>维护中</em></li>
+          </ul>
+        </div>
+
+        <div class="field" id="fieldAccount">
+          <label for="account">管理账号</label>
+          <input class="ctrl" id="account" type="text" placeholder="请输入账号" autocomplete="username" spellcheck="false" aria-describedby="errAccount">
+          <p class="err" id="errAccount"></p>
+        </div>
+
+        <div class="field" id="fieldPassword">
+          <label for="password">登录密码</label>
+          <div class="pwd">
+            <input class="ctrl" id="password" type="password" placeholder="请输入密码" autocomplete="current-password" aria-describedby="errPassword">
+            <button type="button" class="eye" id="eyeBtn" aria-label="显示密码" aria-pressed="false">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <path d="M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12Z"/>
+                <circle cx="12" cy="12" r="2.6"/>
+              </svg>
+            </button>
+          </div>
+          <p class="err" id="errPassword"></p>
+        </div>
+
+        <div class="row">
+          <label class="check"><input type="checkbox" id="remember" checked><span>记住账号</span></label>
+          <a class="link" href="#" id="forgot">忘记密码</a>
+        </div>
+
+        <button class="enter" type="submit" id="loginBtn">进入管理端</button>
+
+        <p class="foot-note">账号由超级管理员开通 · <a href="#">申请权限</a></p>
+      </form>
+    </section>
+
+  </main>
+
+  <footer class="footer">
+    <span>© 2026 OLUA GAMES · 保留所有权利</span>
+    <span class="mono">SERVER 1.4.2 · GATE v3</span>
+  </footer>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+(function(){
+  "use strict";
+
+  /* 静态模式：?static=1 时跳过所有动画（截图/自动化用） */
+  if(new URLSearchParams(location.search).has('static')) document.documentElement.classList.add('static');
+
+  /* ── 火星：造 26 颗，随机起跑，靠 CSS 变量控制漂移 ── */
+  const embers=document.getElementById('embers');
+  for(let i=0;i<26;i++){
+    const el=document.createElement('span');
+    el.className='ember';
+    const size=Math.random()*2+1;
+    el.style.left=(Math.random()*100)+'%';
+    el.style.width=el.style.height=size+'px';
+    el.style.setProperty('--drift',(Math.random()*90-30)+'px');
+    el.style.animationDuration=(11+Math.random()*13)+'s';
+    el.style.animationDelay=(-Math.random()*22)+'s';
+    el.style.opacity=String(.3+Math.random()*.5);
+    embers.appendChild(el);
+  }
+
+  /* ── 区服下拉：点击 + 键盘（↑↓ 移动 / Enter 选中 / Esc 关闭） ── */
+  const serverBtn=document.getElementById('serverBtn');
+  const serverMenu=document.getElementById('serverMenu');
+  const serverLabel=document.getElementById('serverLabel');
+  const options=()=>[...serverMenu.querySelectorAll('li')];
+  const usable=()=>options().filter(li=>li.getAttribute('aria-disabled')!=='true');
+  let kbIndex=-1;
+
+  function paintKb(){
+    options().forEach((li,i)=>li.classList.toggle('kb', i===kbIndex));
+    const cur=options()[kbIndex];
+    if(cur) cur.scrollIntoView({block:'nearest'});
+  }
+  function openMenu(){
+    serverMenu.classList.add('open');
+    serverBtn.setAttribute('aria-expanded','true');
+    /* 打开时把键盘焦点放到当前选中项 */
+    kbIndex=Math.max(0, options().findIndex(li=>li.getAttribute('aria-selected')==='true'));
+    paintKb();
+  }
+  function closeMenu(){
+    serverMenu.classList.remove('open');
+    serverBtn.setAttribute('aria-expanded','false');
+    kbIndex=-1; paintKb();
+  }
+  function pick(li){
+    if(!li || li.getAttribute('aria-disabled')==='true') return;
+    options().forEach(n=>n.setAttribute('aria-selected','false'));
+    li.setAttribute('aria-selected','true');
+    serverLabel.textContent=li.dataset.v;
+    closeMenu();
+  }
+
+  serverBtn.addEventListener('click',e=>{
+    e.stopPropagation();
+    serverMenu.classList.contains('open')?closeMenu():openMenu();
+  });
+  serverBtn.addEventListener('keydown',e=>{
+    if(e.key==='ArrowDown'||e.key==='ArrowUp'){
+      e.preventDefault();
+      if(!serverMenu.classList.contains('open')) openMenu();
+      const list=options().filter(li=>li.getAttribute('aria-disabled')!=='true');
+      const at=list.indexOf(options()[kbIndex]);
+      const next=e.key==='ArrowDown'?Math.min(list.length-1, at+1):Math.max(0, at-1);
+      kbIndex=options().indexOf(list[next]||list[0]);
+      paintKb();
+    }
+    if(e.key==='Enter'||e.key===' '){ e.preventDefault(); openMenu(); }
+  });
+  serverMenu.addEventListener('click',e=>pick(e.target.closest('li')));
+  serverMenu.addEventListener('mousemove',e=>{
+    const li=e.target.closest('li');
+    if(li){ kbIndex=options().indexOf(li); paintKb(); }
+  });
+  document.addEventListener('click',closeMenu);
+  document.addEventListener('keydown',e=>{
+    if(!serverMenu.classList.contains('open')) return;
+    if(e.key==='Escape'){ closeMenu(); serverBtn.focus(); }
+    if(e.key==='ArrowDown'||e.key==='ArrowUp'){
+      e.preventDefault();
+      const list=options().filter(li=>li.getAttribute('aria-disabled')!=='true');
+      const at=list.indexOf(options()[kbIndex]);
+      const next=e.key==='ArrowDown'?Math.min(list.length-1, at+1):Math.max(0, at-1);
+      kbIndex=options().indexOf(list[next]||list[0]);
+      paintKb();
+    }
+    if(e.key==='Enter'){
+      e.preventDefault();
+      const li=options()[kbIndex];
+      if(li && li.getAttribute('aria-disabled')!=='true') pick(li);
+    }
+    if(e.key==='Tab') closeMenu();
+  });
+
+  /* ── 密码显隐 ── */
+  const pwd=document.getElementById('password');
+  const eyeBtn=document.getElementById('eyeBtn');
+  eyeBtn.addEventListener('click',()=>{
+    const showing=pwd.type==='text';
+    pwd.type=showing?'password':'text';
+    eyeBtn.setAttribute('aria-pressed',String(!showing));
+    eyeBtn.setAttribute('aria-label',showing?'显示密码':'隐藏密码');
+    eyeBtn.style.color=showing?'':'#C9A24D';
+    pwd.focus();
+  });
+
+  /* ── Toast ── */
+  const toastEl=document.getElementById('toast');
+  let toastTimer=null;
+  function toast(msg){
+    toastEl.textContent=msg;
+    toastEl.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer=setTimeout(()=>toastEl.classList.remove('show'),2200);
+  }
+
+  /* ── 字段级错误：边线变火色 + 抖动 + 字段下方文案（不清空用户已输内容） ── */
+  const account=document.getElementById('account');
+  const fieldAccount=document.getElementById('fieldAccount');
+  const fieldPassword=document.getElementById('fieldPassword');
+  const errAccount=document.getElementById('errAccount');
+  const errPassword=document.getElementById('errPassword');
+
+  function fail(field, msgEl, text){
+    field.classList.add('invalid','shake');
+    msgEl.textContent=text;
+    setTimeout(()=>field.classList.remove('shake'), 380);
+    const ctrl=field.querySelector('.ctrl');
+    if(ctrl) ctrl.focus();
+  }
+  function clearErr(field, msgEl){
+    field.classList.remove('invalid','shake');
+    msgEl.textContent='';
+  }
+  account.addEventListener('input',()=>{ if(account.value.trim()) clearErr(fieldAccount, errAccount); });
+  pwd.addEventListener('input',()=>{ if(pwd.value.trim()) clearErr(fieldPassword, errPassword); });
+
+  /* ── 登录：校验 → 加载 → 结果 ── */
+  const form=document.getElementById('loginForm');
+  const loginBtn=document.getElementById('loginBtn');
+  let busy=false;
+
+  form.addEventListener('submit',e=>{
+    e.preventDefault();
+    if(busy) return;
+
+    if(!account.value.trim()){ fail(fieldAccount, errAccount, '请输入管理账号'); return; }
+    if(!pwd.value.trim()){ fail(fieldPassword, errPassword, '请输入登录密码'); return; }
+    if(pwd.value.trim().length<6){ fail(fieldPassword, errPassword, '密码长度不足 6 位'); return; }
+    clearErr(fieldAccount, errAccount);
+    clearErr(fieldPassword, errPassword);
+
+    busy=true;
+    loginBtn.disabled=true;
+    loginBtn.textContent='正在校验…';
+
+    /* 设计稿：不发请求，只演一遍真实时序 */
+    setTimeout(()=>{
+      busy=false;
+      loginBtn.disabled=false;
+      loginBtn.textContent='进入管理端';
+      fail(fieldPassword, errPassword, '账号或密码不正确');
+      toast('演示稿：未连接后端，此为交互演示');
+    },1500);
+  });
+
+  document.getElementById('forgot').addEventListener('click',e=>{
+    e.preventDefault();
+    toast('请通过官网账号中心验证身份后重置');
+  });
+
+  /* ── 截图/自动化状态清单 ── */
+  window.__UI_CAPTURE__={
+    states:[
+      {id:'home',label:'登录首屏'},
+      {id:'server-open',label:'区服下拉展开',go:async()=>openMenu()},
+      {id:'loading',label:'登录校验中',go:async()=>{
+        account.value='ops_master'; pwd.value='legend2026';
+        form.dispatchEvent(new Event('submit',{cancelable:true}));
+      }},
+      {id:'toast',label:'错误提示',go:async()=>toast('账号或密码错误')},
+      {id:'field-error',label:'字段校验错误',go:async()=>{
+        account.value=''; pwd.value='123';
+        form.dispatchEvent(new Event('submit',{cancelable:true}));
+      }},
+      {id:'filled',label:'已填 + 区服已选',go:async()=>{
+        account.value='ops_master'; pwd.value='legend2026';
+        account.dispatchEvent(new Event('input'));
+        pwd.dispatchEvent(new Event('input'));
+        pick(options()[1]);
+      }}
+    ],
+    reset:async()=>{
+      closeMenu();
+      account.value=''; pwd.value='';
+      clearErr(fieldAccount, errAccount); clearErr(fieldPassword, errPassword);
+      loginBtn.disabled=false; loginBtn.textContent='进入管理端';
+      toastEl.classList.remove('show');
+      pick(options()[0]);
+    }
+  };
+
+  /* ?state=<id>：直接进入某个状态，供截图/自动化使用 */
+  const want=new URLSearchParams(location.search).get('state');
+  if(want){
+    const st=window.__UI_CAPTURE__.states.find(x=>x.id===want);
+    if(st && st.go) st.go();
+  }
+})();
+</script>
+</body>
+</html>

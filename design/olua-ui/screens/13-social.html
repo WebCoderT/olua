@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>13 · 社交与帮会 · Olua UI</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Noto+Serif+SC:wght@700;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../tokens.css">
+<link rel="stylesheet" href="../ui.css">
+<style>
+/* ── 社交 600×560：帮会/好友/敌人/附近/黑名单 五页签；#state=guild 切帮会页 ── */
+.soc{position:relative;width:600px;height:560px}
+.soc-body{height:404px;overflow:auto;padding-right:4px}
+.sec{margin-bottom:14px}
+.sec-t{display:flex;align-items:center;gap:8px;margin-bottom:7px}
+.sec-t b{font-size:12px;letter-spacing:.1em;color:var(--gold-4);font-family:var(--font-display)}
+.sec-t span{font-family:var(--font-num);font-size:10px;color:var(--text-4)}
+.sec-t i{flex:1;height:1px;background:var(--line-1)}
+.srow{height:52px}
+.srow .nm{font-size:13.5px}
+.srow .nm.enemy{color:var(--ember-4)}
+.srow .nm.blocked{color:var(--text-4)}
+.srow .meta{font-size:11px;color:var(--text-3)}
+.srow .guild{color:var(--gold-3)}
+.srow .rel{font-size:9px;padding:1px 6px;border-radius:var(--r-1);border:1px solid var(--line-2);color:var(--text-3);margin-left:6px}
+.srow .rel.jade{color:var(--jade);border-color:rgba(111,191,142,.5)}
+.srow .rel.ember{color:var(--ember-4);border-color:rgba(224,86,47,.5)}
+.addline{display:flex;gap:8px;margin-top:4px}
+.addline .input{height:32px;font-size:12px}
+.addline .btn{min-width:92px}
+/* 帮会页 */
+.g-head{display:flex;align-items:center;justify-content:space-between;padding:2px 2px 10px;border-bottom:1px solid var(--line-1)}
+.g-head h3{font-family:var(--font-display);font-size:19px;letter-spacing:.2em;color:var(--gold-5)}
+.g-head span{font-size:11.5px;color:var(--text-3)}
+.notice-bar{display:flex;align-items:center;gap:8px;margin:10px 0;padding:8px 12px;border-radius:var(--r-2);
+  border:var(--bw-1) solid var(--line-1);background:rgba(0,0,0,.24);font-size:12px;color:var(--text-2)}
+.notice-bar b{font-size:11px;color:var(--gold-3);letter-spacing:.1em;flex:0 0 auto}
+.notice-bar em{font-style:normal;color:var(--text-3)}
+.notice-bar .btn{margin-left:auto}
+.gfoot{display:flex;justify-content:center;gap:12px;padding-top:12px}
+</style>
+</head>
+<body>
+<div class="stage"><div class="stage-inner">
+  <div class="stage-bg stage-bg--blur"><img src="../assets/hero-bg.jpg"></div>
+  <div class="stage-scrim"></div>
+
+  <div class="layer layer--dialog center">
+    <div class="panel panel--rivet soc">
+      <div class="panel-head">
+        <span class="panel-eyebrow">SOCIAL</span>
+        <h2 class="panel-title">社交</h2>
+        <button class="panel-close" aria-label="关闭">×</button>
+      </div>
+      <div class="panel-body">
+
+        <div class="tabs" style="margin-bottom:12px">
+          <button class="tab" data-go="guild">帮 会</button>
+          <button class="tab is-on" data-go="friends">好 友<span class="badge">2</span></button>
+          <button class="tab" data-go="friends">敌 人</button>
+          <button class="tab" data-go="friends">附 近</button>
+          <button class="tab" data-go="friends">黑名单</button>
+        </div>
+
+        <!-- 好友页 -->
+        <div class="soc-body scroll" id="page-friends">
+          <div class="sec">
+            <div class="sec-t"><b>别人加我</b><span>2</span><i></i></div>
+            <div class="list">
+              <div class="row srow">
+                <div class="row-main"><span class="row-name nm">疾风</span><span class="row-meta">Lv.35 · 法师 ·「义薄云天」</span></div>
+                <div class="row-actions"><button class="btn btn--xs btn--gold">同意</button><button class="btn btn--xs btn--ghost">拒绝</button></div>
+              </div>
+              <div class="row srow">
+                <div class="row-main"><span class="row-name nm">冷月</span><span class="row-meta">Lv.29 · 道士 · 无帮会</span></div>
+                <div class="row-actions"><button class="btn btn--xs btn--gold">同意</button><button class="btn btn--xs btn--ghost">拒绝</button></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="sec">
+            <div class="sec-t"><b>我的好友</b><span>8</span><i></i></div>
+            <div class="list">
+              <div class="row srow">
+                <div class="row-main"><span class="row-name nm">夜鸦 <span class="rel jade">好友</span></span><span class="row-meta">Lv.38 · 法师 ·「义薄云天」</span></div>
+                <div class="row-actions"><button class="btn btn--xs btn--ghost">私聊</button><button class="btn btn--xs btn--danger">删除</button></div>
+              </div>
+              <div class="row srow">
+                <div class="row-main"><span class="row-name nm">断刃 <span class="rel jade">好友</span></span><span class="row-meta">Lv.45 · 战士 · 无帮会</span></div>
+                <div class="row-actions"><button class="btn btn--xs btn--ghost">私聊</button><button class="btn btn--xs btn--danger">删除</button></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="sec">
+            <div class="sec-t"><b>我发出的申请</b><span>1</span><i></i></div>
+            <div class="list">
+              <div class="row srow" style="opacity:.72">
+                <div class="row-main"><span class="row-name nm">拾荒者</span><span class="row-meta">Lv.31 · 战士</span></div>
+                <div class="row-actions"><button class="btn btn--xs btn--ghost">撤回</button></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="addline">
+            <input class="input" placeholder="输入角色名加好友">
+            <button class="btn btn--gold">加好友</button>
+          </div>
+        </div>
+
+        <!-- 帮会页（已加入） -->
+        <div class="soc-body scroll" id="page-guild" style="display:none">
+          <div class="g-head">
+            <h3>义薄云天</h3>
+            <span>42 / 60 人 · 我的职位：<b style="color:var(--gold-4);font-weight:400">长老</b></span>
+          </div>
+
+          <div class="notice-bar">
+            <b>公告</b>
+            <em>每周三、六 20:00 行会副本，缺人勿放鸽子；攻城战报名找会长。</em>
+            <button class="btn btn--xs btn--ghost">编辑</button>
+          </div>
+
+          <div class="sec">
+            <div class="sec-t"><b>成员</b><span>42 / 60</span><i></i></div>
+            <div class="list">
+              <div class="row srow row--me">
+                <div class="row-main"><span class="row-name nm">苍狼（我）</span><span class="row-meta">Lv.42 · 长老</span></div>
+                <div class="row-actions"><span class="badge badge--gold">长老</span></div>
+              </div>
+              <div class="row srow">
+                <div class="row-main"><span class="row-name nm">老刀</span><span class="row-meta">Lv.48 · 会长</span></div>
+                <div class="row-actions"><button class="btn btn--xs btn--ghost">转让</button></div>
+              </div>
+              <div class="row srow">
+                <div class="row-main"><span class="row-name nm">夜鸦</span><span class="row-meta">Lv.38 · 精英</span></div>
+                <div class="row-actions"><button class="btn btn--xs btn--ghost">任命</button><button class="btn btn--xs btn--danger">踢出</button></div>
+              </div>
+              <div class="row srow">
+                <div class="row-main"><span class="row-name nm">疾风</span><span class="row-meta">Lv.35 · 帮众</span></div>
+                <div class="row-actions"><button class="btn btn--xs btn--ghost">任命</button><button class="btn btn--xs btn--danger">踢出</button></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="sec">
+            <div class="sec-t"><b>待审批</b><span>2</span><i></i></div>
+            <div class="list">
+              <div class="row srow">
+                <div class="row-main"><span class="row-name nm">冷月</span><span class="row-meta">Lv.29 · 想加入：常驻在线，可跟副本</span></div>
+                <div class="row-actions"><button class="btn btn--xs btn--gold">通过</button><button class="btn btn--xs btn--ghost">拒绝</button></div>
+              </div>
+              <div class="row srow">
+                <div class="row-main"><span class="row-name nm">铁牛</span><span class="row-meta">Lv.33 · 无留言</span></div>
+                <div class="row-actions"><button class="btn btn--xs btn--gold">通过</button><button class="btn btn--xs btn--ghost">拒绝</button></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="gfoot">
+            <button class="btn btn--sm btn--danger">退出帮会</button>
+          </div>
+        </div>
+
+      </div>
+      <div class="panel-foot"><span>切页先用本地快照出图，再由服务端覆盖</span><span>删除 / 拉黑 / 踢出均二次确认</span></div>
+    </div>
+  </div>
+
+</div></div>
+<script src="../stage.js"></script>
+<script>
+/* 页签切换（好友页含 敌人/附近/黑名单 的同构列表，此处仅演示帮会↔好友） */
+const pf = document.getElementById('page-friends');
+const pg = document.getElementById('page-guild');
+document.querySelectorAll('.tab[data-go]').forEach(t => t.addEventListener('click', () => {
+  document.querySelectorAll('.tab[data-go]').forEach(x => x.classList.remove('is-on'));
+  t.classList.add('is-on');
+  const g = t.dataset.go === 'guild';
+  pg.style.display = g ? '' : 'none';
+  pf.style.display = g ? 'none' : '';
+}));
+if (/state=guild/.test(location.hash)) document.querySelector('.tab[data-go="guild"]').click();
+</script>
+</body>
+</html>
