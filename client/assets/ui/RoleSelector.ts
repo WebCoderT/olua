@@ -395,7 +395,8 @@ export class RoleSelector extends Component {
     dividerGraphics.rect(-layout.head.divider.size.width / 2, -layout.head.divider.size.height / 2, layout.head.divider.size.width, layout.head.divider.size.height);
     dividerGraphics.fill();
     panel.addChild(divider);
-    // 卡片滚动区：一排两张（内容宽 468 = 228×2 + 12），排满换行、超出视口上下滚。排布交给引擎 Layout
+    // 卡片滚动区：一排两张（可用宽 = 视口 474 − padding 3×2 = 468 = 228×2 + 12），排满换行、超出视口上下滚。排布交给引擎 Layout
+    // padding 3 不是装饰：content 顶边 = mask 裁剪线，padding 0 时第一行卡片的边框正好压在裁剪线上被整条裁掉（缺上边）
     const scroll = layout.scroll;
     const scrollView = GameUiHelper.createScrollView(scroll.name, scroll.position, scroll.viewSize);
     scrollView.getComponent(ScrollView)!.horizontal = false;
