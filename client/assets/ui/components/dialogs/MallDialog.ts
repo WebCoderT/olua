@@ -217,7 +217,7 @@ export default class MallDialog {
   /**
    * 创建单张商品卡片（08-mall 稿 .gcard）：顶行（图标 + 名称/类别）→ 限购/库存行 → 购买行（价格左、按钮右）
    * 卡片内几何全部由布局配置推导（padding → 顶行 → stats → 购买行贴底），界面里不写死像素
-   * @param roleLevel 角色当前等级（购买等级不足时按钮置灰禁点，文案换「Lv.X 解锁」）
+   * @param roleLevel 角色当前等级（购买等级不足时按钮置灰禁点，文案换「N 级解锁」）
    */
   private createCard(good: Goods, width: number, roleLevel: number) {
     const height = layout.card.height;
@@ -308,7 +308,7 @@ export default class MallDialog {
       ),
     );
     // 购买：规则判定与提示都在数据层（余额不足/背包满/下架都不会改数据），成功后只刷余额。
-    // 购买等级不足（#758）：按钮置灰禁点、文案换「Lv.X 解锁」—— 服务端同样校验（50027），
+    // 购买等级不足（#758）：按钮置灰禁点、文案换「N 级解锁」—— 服务端同样校验（50027），
     // 这里置灰只是让玩家不用点了才被告知。限购买满 / 库存售罄（#846）同理：服务端 50029 / 50030
     const requiredLevel = getMallRequiredLevel(good.id ?? "");
     const levelLocked = requiredLevel > roleLevel;

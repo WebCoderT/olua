@@ -79,7 +79,7 @@ export const mailChannels: Array<{ key: MailChannelKey; label: string }> = [
 export const mailDialogLayout = {
   name: "mail_dialog",
   title: "消息",
-  eyebrow: "MAIL",
+  eyebrow: "信箱",
   size: new Size(600, 450),
   /** 顶部小结（左对齐，宽 240：内缘距面板边 20 → 中心 -160） */
   summary: {

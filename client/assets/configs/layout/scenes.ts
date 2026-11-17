@@ -349,7 +349,7 @@ export const roleSelectorLayout = {
     name: { position: new Vec2(-716, 86), size: new Size(376, 72), fontSize: T.fontSize.f56, placeholder: "选择角色" },
     /** 一句话说明（选角色后按等级填；未选中时是空列表文案） */
     /** 说明用的是「顶对齐 + 自动撑高」的 wrapped label：y 是文字块上边缘，往下长（配置里别再按中心算） */
-    sub: { textKey: "role_select_sub", position: new Vec2(-716, 40), size: new Size(376, 56), width: 376, fontSize: T.fontSize.f13, lineHeight: 26, placeholderKey: "role_select_sub_empty" },
+    sub: { textKey: "role_select_sub", position: new Vec2(-716, 30), size: new Size(376, 56), width: 376, fontSize: T.fontSize.f13, lineHeight: 26, placeholderKey: "role_select_sub_empty" },
     /** 属性 chips：从左边缘依次横排（职业带色点 / 性别 / 等级） */
     chips: {
       positionY: -30,
@@ -358,7 +358,7 @@ export const roleSelectorLayout = {
       gap: T.spacing.sp4,
       /** 职业色点直径 */
       dot: 7,
-      /** 三颗 chip 的固定宽度（够放下最长文案：魔法师 / 等级 Lv.99） */
+      /** 三颗 chip 的固定宽度（够放下最长文案：魔法师 / 等级 99 级） */
       items: [
         { key: "class", size: new Size(110, 32) },
         { key: "sex", size: new Size(104, 32) },
