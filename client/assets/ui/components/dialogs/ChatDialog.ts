@@ -15,8 +15,6 @@ import { clearChildren } from "../../utils/node/NodeTree";
 import GuideStore from "../../core/GuideStore";
 import { GUIDE_EVENT } from "../../../types/guide";
 import { createTabStrip, paintTabStrip } from "./tab-kit";
-import { drawVectorIcon } from "../../helpers/VectorIcon";
-import { icons } from "../../../configs/layout/icons";
 import { blockClickThrough } from "../../utils/input/UiHit";
 
 /** 聊天弹窗的四个页签（与协议频道同名，切换零映射） */
@@ -71,11 +69,6 @@ export default class ChatDialog {
   private tabLabels = new Map<ChatTab, Node>();
   /** 输入框（发送后按发送结果清空；引用留着避免每次 render 重建查询） */
   private input: Node | null = null;
-  /**
-   * 「清屏」时刻（按频道记）：只影响本地视图 —— 该时刻之前的消息不再画，
-   * 之后的新消息照常上屏。消息仓在 ChatStore（服务端帧的唯一落点），这里不清它的数据。
-   */
-  private clearedAt: Partial<Record<ChatTab, number>> = {};
   /** ChatStore 订阅（打开期间有效；关闭时退订） */
   private unsubscribe: (() => void) | null = null;
 
@@ -138,16 +131,15 @@ export default class ChatDialog {
   }
 
   /**
-   * 头部右侧的两颗工具钮（清屏 / 收起）+ 头/底两条 1px 暗分隔线
+   * 头/底两条 1px 暗分隔线
    *
-   * 稿 `.chat-tools button{width:22px;height:22px}`：纯图标小方钮，底色 rgba(0,0,0,.3)、
-   * `line-2` 边、图标 text-4；「清屏」只清本地视图（不动 ChatStore 的消息仓），
-   * 「收起」就是关窗（与点聊天入口同一个出口）。
+   * 稿 `.chat-tools button{width:22px;height:22px}` 的两颗工具钮（清屏 / 收起）**已删**：
+   * 聊天窗 #469 起是常驻左下角小窗，不提供关闭入口（2026-11-18 用户拍板），清屏也无必要。
    */
   private createChrome() {
     const dialog = this.dialog;
     if (!dialog) return;
-    const { tools, dividers } = layout;
+    const { dividers } = layout;
     // 分隔线：稿是 1px rgba(0,0,0,.55)，用填充条画（1px 描边在实机不渲染）
     const width = layout.size.width - 2;
     for (const y of [dividers.headY, dividers.inputY]) {
@@ -158,33 +150,6 @@ export default class ChatDialog {
       graphics.fill();
       dialog.addChild(line);
     }
-    // 两颗工具钮（右起：第 1 颗「收起」贴右缘，第 2 颗「清屏」在它左边）
-    const shapes = [icons.chatClear, icons.headChevron];
-    const actions = [() => this.clearCurrent(), () => this.close()];
-    shapes.forEach((shape, index) => {
-      const x = tools.right - (tools.size + tools.gap) * (1 - index);
-      const button = UiHelper.createNode(`chat_tool_${index}`, new Vec2(x, tools.y), new Size(tools.size, tools.size));
-      const graphics = button.addComponent(Graphics);
-      // 底板：半透明黑 + line-2 边（填外框 → 内缩填底）
-      graphics.fillColor = T.line[2];
-      graphics.roundRect(-tools.size / 2, -tools.size / 2, tools.size, tools.size, T.radius.r1);
-      graphics.fill();
-      graphics.fillColor = T.surface.sunken;
-      graphics.roundRect(-tools.size / 2 + 1, -tools.size / 2 + 1, tools.size - 2, tools.size - 2, T.radius.r1);
-      graphics.fill();
-      const iconNode = UiHelper.createNode("chat_tool_icon", new Vec2(), new Size(tools.iconSize, tools.iconSize));
-      drawVectorIcon(iconNode, shape, new Size(tools.iconSize, tools.iconSize), tools.color, 1.7);
-      button.addChild(iconNode);
-      button.on(Node.EventType.TOUCH_END, actions[index], this);
-      blockClickThrough(button);
-      dialog.addChild(button);
-    });
-  }
-
-  /** 清屏：把当前频道「此刻之前的消息」标记为不显示，只影响本地视图 */
-  private clearCurrent() {
-    this.clearedAt[this.tab] = Date.now();
-    this.render();
   }
 
   /** 切换页签（清空内容区重画；切走 = 该页已读） */
@@ -238,20 +203,17 @@ export default class ChatDialog {
     const all = this.tab === "private" && this.privatePeer
       ? ChatStore.conversationWith(this.privatePeer.roleId)
       : ChatStore.list(this.tab);
-    // 「清屏」只挡本地视图：该时刻之前的消息不画，之后的新消息照常上屏
-    const cleared = this.clearedAt[this.tab] ?? 0;
-    const entries = all.filter((entry) => entry.ts > cleared);
     const list = GameUiHelper.createScrollView(layout.list.name, layout.list.position, layout.list.size);
     body.addChild(list);
     const content = list.getComponent(ScrollView)?.content;
     if (!content) return;
-    if (entries.length === 0) {
+    if (all.length === 0) {
       // 私聊会话页不能复用选人页的 privateEmpty（那句是「先点选人挑一个对象」，
       // 这里对象已经挑好了 —— #495）
       const emptyText = this.tab === "private" && this.privatePeer ? layout.texts.privateChatEmpty : layout.texts[`${this.tab}Empty` as const];
       content.addChild(this.createEmptyLabel(emptyText));
     } else {
-      entries.forEach((entry) => content.addChild(this.createMessageRow(entry)));
+      all.forEach((entry) => content.addChild(this.createMessageRow(entry)));
     }
     this.addInputRow(body);
   }
