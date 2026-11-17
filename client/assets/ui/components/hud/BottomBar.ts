@@ -13,6 +13,7 @@ import SkillListDialog from "../dialogs/SkillListDialog";
 import ChatDialog from "../dialogs/ChatDialog";
 import QuestDialog from "../dialogs/QuestDialog";
 import PartyDialog from "../dialogs/PartyDialog";
+import SettingsDialog from "../dialogs/SettingsDialog";
 import BottomNavBar from "./BottomNavBar";
 import BottomNavButton from "./BottomNavButton";
 import RoleExpBar from "./RoleExpBar";
@@ -50,6 +51,8 @@ export default class BottomBar extends Node {
   private questDialog = new QuestDialog();
   /** 队伍弹窗（#399：成员 / 邀请 / 退出 / 解散；底部「组队」入口与邀请提示都落到它） */
   private partyDialog = new PartyDialog();
+  /** 设置弹窗（稿 21-settings：选择角色 / 退出登录） */
+  private settingsDialog = new SettingsDialog();
   /** 功能按键区 */
   private navBar: BottomNavBar;
   /** 经验条 */
@@ -121,6 +124,7 @@ export default class BottomBar extends Node {
       group: () => this.partyDialog.open(),
       mall: () => this.mallDialog.open(),
       skill: () => this.skillListDialog.open(),
+      settings: () => this.settingsDialog.open(),
     };
     return bottomNavItems.map((item) => {
       const comingSoon = () => GameUiHelper.createTip("feature_coming_soon", { feature: item.label });

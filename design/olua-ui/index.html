@@ -384,7 +384,7 @@ table.spec code{font-family:var(--font-num);color:var(--gold-4);font-size:12px}
 
   <!-- ══════════ 界面索引 ══════════ -->
   <section id="screens">
-    <div class="sec-head"><span class="idx">10</span><h2>界面索引 · 20</h2><p>点开看每一屏的完整稿（1920×1080，等比适配）</p></div>
+    <div class="sec-head"><span class="idx">10</span><h2>界面索引 · 21</h2><p>点开看每一屏的完整稿（1920×1080，等比适配）</p></div>
     <div class="screens" id="screen-grid"></div>
   </section>
 
@@ -503,7 +503,8 @@ const SCREENS = [
   ['17','growth','成长线','军衔 / 称号 / 战魂 三栏同构','Rank/Title/WarSoul'],
   ['18','fashion','时装','试穿 / 购买 / 五态卡片','FashionDialog.ts'],
   ['19','map','地图与线路','地图预览 / 大陆传送官(#state=teleport) / 选线','MapPreview/Teleport/…'],
-  ['20','overlay','通用弹层','确认 / 死亡 / 举报 / 悬停 / 引导','Confirm/Death/Report/…']
+  ['20','overlay','通用弹层','确认 / 死亡 / 举报 / 悬停 / 引导','Confirm/Death/Report/…'],
+  ['21','settings','设置','选择角色 / 退出登录（退出走确认框）','SettingsDialog.ts']
 ];
 document.getElementById('screen-grid').innerHTML = SCREENS.map(([no,id,name,desc,file])=>`
   <a class="scr" href="screens/${no}-${id}.html" target="_blank">

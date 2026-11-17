@@ -420,6 +420,19 @@ export const uiTexts = {
   /** 「取消」按钮（放弃操作，数据保持原样） */
   label_confirm_cancel: "取 消",
 
+  //#region 界面标签：设置弹窗（几何见 configs/layout/dialogs.settingsDialogLayout）
+  /** 选择角色行：按钮（直接执行 —— 清在线角色回选角，进度由 RoleSync 自动同步） */
+  settings_select_role: "选择角色",
+  /** 选择角色行的说明小字 */
+  settings_select_role_desc: "返回选角界面，当前进度已自动保存",
+  /** 退出登录行：按钮（二次确认后吊销令牌回登录页，见 NetworkSetup.logoutToLogin） */
+  settings_logout: "退出登录",
+  /** 退出登录行的说明小字 */
+  settings_logout_desc: "退出当前账号，返回登录页",
+  /** 退出登录的确认框：标题与正文（确认框几何见 confirmDialogLayout） */
+  settings_logout_confirm_title: "退出登录",
+  settings_logout_confirm_text: "确定要退出当前账号吗？退出后将返回登录页。",
+
   //#region 界面标签：飘字与技能列表
   /** 伤害飘字（{value} = 伤害数值） */
   label_damage: "-{value}",
