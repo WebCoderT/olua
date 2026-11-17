@@ -3585,9 +3585,64 @@ export default class GameUiHelper {
    * 与 `createSkillPointsLabel` 同款：返回节点，调用方自己拿 Label 改数字 ——
    * 加完点只改这一行 + 重建四行，不重开弹窗。
    */
-  static createAttrPointsLabel(): Node {
+  static createAttrPointsRow(): Node {
     const cfg = attrAllocateDialogLayout.points;
-    return UiHelper.createLabel(cfg.name, "", Color.WHITE, cfg.fontSize, cfg.position, cfg.size);
+    const row = UiHelper.createNode(cfg.name, new Vec2(0, cfg.y), new Size(cfg.width, cfg.height));
+    const label = UiHelper.createLabel(
+      `${cfg.name}_label`,
+      getText("label_attr_points_left"),
+      cfg.label.color,
+      cfg.label.fontSize,
+      new Vec2(cfg.label.x, 0),
+      new Size(cfg.label.width, cfg.height),
+      Label.HorizontalAlign.LEFT,
+    );
+    row.addChild(label);
+    // 数值单独一枚标签：加完点只改这一枚（调用方按 name 拿 Label）
+    const value = UiHelper.createLabel(
+      cfg.value.name,
+      "",
+      cfg.value.color,
+      cfg.value.fontSize,
+      new Vec2(cfg.value.x, 0),
+      new Size(cfg.value.width, cfg.height),
+      Label.HorizontalAlign.RIGHT,
+    );
+    row.addChild(value);
+    return row;
+  }
+
+  /**
+   * 属性总览的一行（22 稿 .attr-grid .kv）：金点 + 名称 + 数值
+   *
+   * 与 `createAttributeLabel` 同款视觉（金点 + 白名 + 数值），但不绑 BattleAttributes
+   * 显示名表 —— 总览里还有「魔法上限 / 战斗力」两个表外键，文案与数值都由调用方给。
+   */
+  static createAttrOverviewRow(name: string, labelText: string, valueText: string, valueGold = false): Node {
+    const cfg = attrAllocateDialogLayout.overview.row;
+    const row = UiHelper.createFlexRow(name, 10, new Vec2(), new Size(cfg.width, cfg.height));
+    row.addChild(this.createVectorDot("icon", T.gold[3], new Vec2(), new Size(10, 10)));
+    const label = UiHelper.createLabel(
+      `${name}_label`,
+      labelText,
+      Color.WHITE,
+      cfg.fontSize,
+      new Vec2(),
+      new Size(cfg.labelWidth, cfg.height),
+      Label.HorizontalAlign.LEFT,
+    );
+    row.addChild(label);
+    const value = UiHelper.createLabel(
+      `${name}_value`,
+      valueText,
+      valueGold ? T.gold[4] : Color.WHITE,
+      cfg.fontSize,
+      new Vec2(),
+      new Size(cfg.width - 20 - cfg.labelWidth - 10, cfg.height),
+      Label.HorizontalAlign.RIGHT,
+    );
+    row.addChild(value);
+    return row;
   }
 
   /**
@@ -3649,6 +3704,13 @@ export default class GameUiHelper {
       buttonTone.normal,
     );
     addButton.on(Node.EventType.TOUCH_END, onAdd, this);
+    // 剩余点数为 0：「＋」置灰不可点（22 稿的禁用画法，06 稿精神行同款）。
+    // #833 原取舍是「不禁用、点了收 20037 提示」，#1108 按认可稿推翻：置灰是即时反馈，
+    // 不用点一下才知道没点可加；服务端校验仍是权威（客户端置灰只是省一次必拒的请求）。
+    if ((role.attrPoints ?? 0) <= 0) {
+      addButton.getComponent(Button).interactable = false;
+      addButton.addComponent(UIOpacity).opacity = 110;
+    }
     node.addChild(addButton);
     return node;
   }
@@ -3661,8 +3723,7 @@ export default class GameUiHelper {
    */
   static createAttrListView(): Node {
     const cfg = attrAllocateDialogLayout.list;
-    const node = UiHelper.createNode(cfg.name, cfg.position, cfg.size);
-    node.getComponent(UITransform).setAnchorPoint(0.5, 1);
+    const node = UiHelper.createNode(cfg.name, new Vec2(), cfg.size);
     return node;
   }
 
@@ -3672,10 +3733,10 @@ export default class GameUiHelper {
     const button = this.createToneButton(
       cfg.name,
       cfg.label,
-      cfg.position,
+      new Vec2(cfg.x, cfg.y),
       new Size(cfg.width, cfg.height),
       uiSize.smallButtonFontSize,
-      buttonTone.normal,
+      buttonTone.danger,
     );
     button.on(Node.EventType.TOUCH_END, onReset, this);
     return button;

@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>22 · 属性 · Olua UI</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Noto+Serif+SC:wght@700;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../tokens.css">
+<link rel="stylesheet" href="../ui.css">
+<style>
+/* ── 属性 420×580：战斗属性总览（两列）＋ 四维加点 ＋ 洗点 ──
+   按 token 实测：头部 ~55 + 内容 ~431 + 底部说明条 ~46 ≈ 542，
+   总高 580（留 ~38 呼吸位）—— 所有元素都收在框内。
+   替换原 06 稿的 320×300 加点小弹窗：角色信息「属性」入口改开本窗，
+   也可从 HUD 独立打开。战斗属性数值全部来自服务端 roleUpdate 下发
+   （装备/称号/战魂/军衔加成已汇总），客户端零计算、只展示。 */
+.attributes{position:relative;width:420px;height:580px}
+.attributes .panel-body{padding:10px 16px 0}
+.attributes .divider{margin:6px 0 8px}
+/* 剩余点数行：紧贴标题下沿，加完就地改数字 */
+.pt-row{display:flex;align-items:baseline;justify-content:space-between;
+  border-bottom:1px solid var(--line-1);padding-bottom:8px}
+.pt-row dt{font-size:13px;color:var(--text-3)}
+.pt-row dd{font-family:var(--font-num);font-size:16px;color:var(--gold-4)}
+/* 战斗属性：两列 kv（六项攻防是区间，血/回血/法力/战力是单值） */
+.attrs h4{font-family:var(--font-display);font-size:13px;letter-spacing:.2em;color:var(--gold-4);margin-bottom:2px}
+.attr-grid{display:grid;grid-template-columns:1fr 1fr;column-gap:22px;row-gap:6px}
+.attr-grid .kv dt{font-size:12px}
+.attr-grid .kv dd{font-size:12.5px}
+.attr-grid .kv dd.combat{color:var(--gold-4)}
+/* 四维加点：行形状沿用 06 稿 .arow */
+.attr-rows{display:flex;flex-direction:column;gap:9px;margin-top:2px}
+.arow{display:grid;grid-template-columns:52px 1fr 58px 30px;align-items:center;gap:8px;height:34px;
+  padding:0 10px;border-radius:var(--r-2);border:var(--bw-1) solid var(--line-1);background:rgba(0,0,0,.24)}
+.arow b{font-size:13px;color:var(--text-1);font-weight:400}
+.arow .d{font-size:10.5px;color:var(--text-4)}
+.arow .v{font-family:var(--font-num);font-size:15px;color:var(--gold-4);text-align:right}
+.arow .plus{width:30px;height:24px;border-radius:var(--r-1);border:var(--bw-1) solid var(--line-3);
+  display:grid;place-items:center;color:var(--gold-4);font-size:14px;background:rgba(0,0,0,.3)}
+.arow .plus:hover{border-color:var(--gold-4);background:rgba(194,146,69,.12)}
+/* 点数耗尽态（#state=depleted）：＋ 整体置灰不可点，与 06 稿精神行的禁用画法一致 */
+.attributes.is-depleted .plus{opacity:.4;cursor:not-allowed;pointer-events:none}
+.attributes.is-depleted .pt-row dd{color:var(--text-4)}
+/* 洗点：底部一条，左说明右按钮 */
+.attr-foot{display:flex;align-items:center;justify-content:space-between;margin-top:12px;
+  border-top:1px solid var(--line-1);padding-top:10px}
+.attr-foot .note{font-size:10.5px;color:var(--text-4);line-height:1.6;max-width:230px}
+.attr-foot .btn{min-width:96px;height:32px;font-size:12px;flex:0 0 auto}
+</style>
+</head>
+<body>
+<div class="stage"><div class="stage-inner">
+  <div class="stage-bg stage-bg--blur"><img src="../assets/hero-bg.jpg"></div>
+  <div class="stage-scrim"></div>
+
+  <div class="layer layer--dialog center">
+    <div class="panel panel--rivet attributes">
+      <div class="panel-head">
+        <span class="panel-eyebrow">ATTRIBUTES</span>
+        <h2 class="panel-title">属性</h2>
+        <button class="panel-close" aria-label="关闭">×</button>
+      </div>
+      <div class="panel-body">
+
+        <!-- 剩余点数：加完点就地改数字，不重开弹窗 -->
+        <div class="pt-row"><dl style="display:flex;flex:1;justify-content:space-between;align-items:baseline;margin:0">
+          <dt>剩余属性点</dt><dd>7 点</dd>
+        </dl></div>
+
+        <!-- 战斗属性总览：六项攻防区间 + 血/回血/法力/战力，服务端汇总下发 -->
+        <div class="attrs">
+          <h4>战斗属性</h4>
+          <div class="divider"></div>
+          <div class="attr-grid">
+            <div class="kv"><dt>物理攻击</dt><dd>486~512</dd></div>
+            <div class="kv"><dt>魔法攻击</dt><dd>112~128</dd></div>
+            <div class="kv"><dt>道术攻击</dt><dd>40~52</dd></div>
+            <div class="kv"><dt>物理防御</dt><dd>392~430</dd></div>
+            <div class="kv"><dt>魔法防御</dt><dd>268~295</dd></div>
+            <div class="kv"><dt>道术防御</dt><dd>210~228</dd></div>
+            <div class="kv"><dt>最大血量</dt><dd>2,560</dd></div>
+            <div class="kv"><dt>每秒回血</dt><dd>18</dd></div>
+            <div class="kv"><dt>魔法上限</dt><dd>1,860</dd></div>
+            <div class="kv"><dt>战斗力</dt><dd class="combat">12,480</dd></div>
+          </div>
+        </div>
+
+        <!-- 四维加点：点＋发一次请求，服务端扣点重算，回执后就地重建 -->
+        <div class="attrs" style="margin-top:14px">
+          <h4>四维加点</h4>
+          <div class="divider"></div>
+          <div class="attr-rows">
+            <div class="arow"><b>力量</b><span class="d">物理攻击</span><span class="v">186</span><button class="plus" aria-label="力量加一点">＋</button></div>
+            <div class="arow"><b>敏捷</b><span class="d">暴击率</span><span class="v">142</span><button class="plus" aria-label="敏捷加一点">＋</button></div>
+            <div class="arow"><b>体质</b><span class="d">生命 / 物防</span><span class="v">203</span><button class="plus" aria-label="体质加一点">＋</button></div>
+            <div class="arow"><b>精神</b><span class="d">法攻 / 法力</span><span class="v">88</span><button class="plus" aria-label="精神加一点">＋</button></div>
+          </div>
+        </div>
+
+        <!-- 洗点：花钱且不可撤销，点击先弹确认框（价格只在服务端，界面不写数字） -->
+        <div class="attr-foot">
+          <span class="note">洗点会退还全部已分配点数，并消耗一笔绑定元宝，不可撤销。</span>
+          <button class="btn btn--danger">洗 点</button>
+        </div>
+
+      </div>
+      <div class="panel-foot">
+        <span>属性数值由服务端汇总下发，含装备 / 称号 / 军衔加成</span>
+        <span>剩余点数为 0 时「＋」置灰</span>
+      </div>
+    </div>
+  </div>
+
+</div></div>
+<script src="../stage.js"></script>
+</body>
+</html>
