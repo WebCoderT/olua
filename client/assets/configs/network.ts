@@ -44,14 +44,20 @@ const DEV_PORT = 3100;
  * @param pageHostname 当前页面的主机名（可为空）
  */
 export function devBaseUrlFor(pageHostname: string): string {
-  const host = pageHostname && pageHostname.trim() ? pageHostname.trim() : "localhost";
-  return `http://${host}:${DEV_PORT}/api`;
+  return `http://${pageHostname}:${DEV_PORT}/api`;
 }
 
-/** 当前页面的主机名（不在浏览器 / 预览环境里时返回空串） */
+/**
+ * 当前页面的主机名：只在**可信主机**上使用，否则一律回落 localhost
+ *
+ * 可信 = localhost / IPv4 / [IPv6] / 带点的域名（手机真机调试走局域网 IP，照常生效）。
+ * 不可信的实例：Cocos 编辑器内预览的页面主机是内部伪主机（`scene`，解析不了）、
+ * `file://` 直开是空串 —— 这些都不是能连到开发服务端的地址，统一按 localhost 走。
+ */
 function pageHostname(): string {
-  if (typeof window === "undefined" || !window.location) return "";
-  return window.location.hostname ?? "";
+  const hostname = typeof window !== "undefined" && window.location ? window.location.hostname : "";
+  const usable = /^(\d{1,3}(\.\d{1,3}){3}|\[[\da-f:]+\]|localhost|[\w-]+(\.[\w-]+)+)$/i.test(hostname);
+  return usable ? hostname : "localhost";
 }
 
 /** 打包产物走的同源地址（nginx 反代到服务端） */
