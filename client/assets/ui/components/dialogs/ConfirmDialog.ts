@@ -62,6 +62,8 @@ export default class ConfirmDialog extends Node {
     this.addChild(mask);
     // 居中面板：标题 + 金下划线 / 正文 / 确定 · 取消 / 右上角关闭（全部按稿 20-overlay 的 CONFIRM）
     const panel = GameUiHelper.createDialogPanel(layout.panel.name, layout.panel.size);
+    // 眉题（全弹窗统一副标题口径，见 createEyebrow）
+    panel.addChild(GameUiHelper.createEyebrow(`${layout.panel.name}_eyebrow`, layout.panel.size, layout.eyebrow));
     this.addChild(panel);
     panel.addChild(UiHelper.createLabel(layout.title.name, options.title, layout.title.color, layout.title.fontSize, layout.title.position, layout.title.size));
     const underline = UiHelper.createNode(`${layout.panel.name}_underline`, layout.titleUnderline.position, layout.titleUnderline.size);

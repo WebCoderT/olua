@@ -65,6 +65,8 @@ export default class ChannelSelectDialog {
     dialog.addChild(mask);
     // 居中面板
     const panel = GameUiHelper.createDialogPanel(layout.panel.name, layout.panel.size);
+    // 眉题（全弹窗统一副标题口径，见 createEyebrow）
+    panel.addChild(GameUiHelper.createEyebrow(`${layout.panel.name}_eyebrow`, layout.panel.size, layout.eyebrow));
     dialog.addChild(panel);
     const title = layout.titleLabel;
     panel.addChild(UiHelper.createLabel(title.name, getText("channel_select_title"), title.color, title.fontSize, title.position, title.size));

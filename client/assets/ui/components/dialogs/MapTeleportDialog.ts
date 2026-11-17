@@ -4,7 +4,7 @@ import LayerManager from "../../core/LayerManager";
 import StorageManager from "../../core/StorageManager";
 import { mapLabelOf, mapTypeGroups, maps } from "../../../configs/game-config";
 import type { MapId } from "../../../types/map";
-import { mapTeleportDialogLayout } from "../../../configs/hudLayout";
+import { dialogFrame, mapTeleportDialogLayout } from "../../../configs/hudLayout";
 
 /**
  * 地图传送弹窗
@@ -20,7 +20,7 @@ export default class MapTeleportDialog {
   open() {
     // 布局见 configs/hudLayout.mapTeleportDialogLayout（内容区宽度固定、高度自适应）
     const layout = mapTeleportDialogLayout;
-    const dialog = GameUiHelper.createDialog(layout.name, layout.title);
+    const dialog = GameUiHelper.createDialog(layout.name, layout.title, new Vec2(), dialogFrame.size, layout.eyebrow);
     const content = GameUiHelper.createColumn(layout.content.name, layout.content.groupSpacing, new Vec2(0, layout.content.top), new Size(layout.content.width, 0));
     // 配置还没到（快照失败 / 刚启动）：不渲染空弹窗，给一句能看懂的提示
     if (maps.size === 0) {
