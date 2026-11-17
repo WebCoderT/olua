@@ -422,11 +422,10 @@ export const tipsLayout = {
   errorFadeDuration: 1.5,
   messageColor: Color.GREEN,
   errorColor: Color.RED,
-  /** 自动战斗状态提示（跟随主角的矢量胶囊）：胶囊尺寸 / 圆角 / 字号、两个提示同显时寻路提示向下让位的偏移（像素） */
+  /** 自动战斗状态提示（跟随主角的矢量胶囊）：胶囊尺寸 / 圆角 / 字号（两个提示互斥不同显，无让位偏移） */
   autoTipSize: new Size(140, 30),
   autoTipRadius: 15,
   autoTipFontSize: 14,
-  autoTipPathOffsetY: -60,
 };
 
 //#endregion
