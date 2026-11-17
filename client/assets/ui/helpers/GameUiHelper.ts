@@ -1457,12 +1457,12 @@ export default class GameUiHelper {
     graphics.fillColor = innerHighlight;
     graphics.rect(left + bw + 1, bottom + size.height - bw - 2, size.width - (bw + 1) * 2, 1);
     graphics.fill();
-    // 4) 四角铆钉（ui.css .panel--rivet）：左上实心 + 右上 / 左下 / 右下各一颗，各带一个小拖尾点
+    // 4) 四角铆钉（ui.css .panel--rivet）：**右上角不画**（用户拍板 2026-11-18：带关闭键的弹窗
+    //    右上角是铆钉主圆 + 拖尾小点「两个圈圈」挤在 × 旁边，很难看）；其余三角各一颗、各带小拖尾点
     const r = rivet.size / 2;
     const inset = rivet.inset;
     const rivetPoints: Array<[number, number, number, number]> = [
       [left + inset, bottom + size.height - inset, 1, 0],
-      [left + size.width - inset, bottom + size.height - inset, -1, 0],
       [left + inset, bottom + inset, 1, 0],
       [left + size.width - inset, bottom + inset, -1, 0],
     ];

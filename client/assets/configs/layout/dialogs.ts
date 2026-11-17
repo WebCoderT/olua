@@ -53,14 +53,15 @@ export const dialogFrame = {
   },
   /**
    * 头部眉题（ui.css `.panel-eyebrow`）：左上角一行小字（`BAG · B` 这类英文缩写），
-   * 距弹窗左边缘 `padDialog`、距上边缘 `sp6`，字号 f10、金色、字距加大
+   * 距弹窗左边缘 `padDialog`、中心距顶边 26（用户拍板 2026-11-18：bag_dialog 540 高时 Y=244），
+   * 字号 f10、金色、字距加大
    *
    * 与标题（居中）分工：眉题给键盘快捷键与分区信息，标题才是中文名。
    * 宽高只决定文本对齐框（LEFT + CENTER），不动不影响排版。
    */
   eyebrow: {
     left: T.spacing.padDialog,
-    top: T.spacing.sp6,
+    top: 19,
     width: 240,
     height: 14,
     fontSize: T.fontSize.f10,
@@ -68,20 +69,23 @@ export const dialogFrame = {
   },
   /** 标题：距弹窗上边缘的内缩、文本高度、宽度两侧内缩、字号与颜色（摆放见 GameUiHelper.createDialog） */
   title: {
-    /** ui.css `.panel-head` 的 padding-top（--sp-7） */
-    insetTop: T.spacing.sp7,
+    /**
+     * 标题中心距弹窗顶边的距离（用户拍板 2026-11-18：以 bag_dialog 实测为准 ——
+     * 弹窗 540 高时标题中心 Y=245，即距顶 25；全弹窗统一按此距离）
+     */
+    insetTop: 25,
     height: 24,
     widthPadding: 60,
     /** 用户拍板（2026-11-18）：全弹窗标题统一 12 号 */
     fontSize: T.fontSize.f12,
     color: T.text[1],
-    /** 标题下的短金线（ui.css .panel-title::after，44×1，margin-top --sp-3） */
-    rule: { width: T.border.titleRuleWidth, height: T.border.titleRuleHeight, color: T.gold[3], gap: T.spacing.sp3 },
+    /** 标题下的短金线（ui.css .panel-title::after，44×1）；gap = 标题下沿到金线中心的距离（Y=226 → 距顶 44） */
+    rule: { width: T.border.titleRuleWidth, height: T.border.titleRuleHeight, color: T.gold[3], gap: 7 },
   },
   /**
    * 标题栏拖拽柄（#1090：只有标题栏可拖动弹窗，内容区拖动不影响弹窗位置）
    *
-   * 通栏透明条带，从弹窗顶边覆盖到标题金线之下（padding-top 28 + 标题 24 + 金线区 ≈ 56），
+   * 通栏透明条带，从弹窗顶边覆盖到标题金线之下（标题距顶 25 + 高 24 + 金线区 ≈ 56），
    * 垫在标题/眉题/关闭键之下 —— 按标题文字、眉题都是拖拽，按关闭键是关窗。
    */
   headDrag: { height: 56 },
