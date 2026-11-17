@@ -1,5 +1,5 @@
 import { isValid, Label, Node, UITransform } from "cc";
-import { hoverTipLayout } from "../../../configs/hudLayout";
+import { dialogFrame, hoverTipLayout } from "../../../configs/hudLayout";
 import GameUiHelper from "../../helpers/GameUiHelper";
 import LayerManager from "../../core/LayerManager";
 import { designResolution } from "../../utils/layout/ScreenLayout";
@@ -37,6 +37,9 @@ export default class HoverTipDialog extends Node {
     super(hoverTipLayout.name);
     GameUiHelper.applyHoverTipBodyStyle(this);
     let contentHeight = hoverTipLayout.padding * 2 + hoverTipLayout.title.iconSize.height;
+    // 眉题（全弹窗统一副标题口径）：占一行（f10 高 14 + 行距），Layout 会把它排到最顶
+    this.addChild(GameUiHelper.createEyebrow(`${hoverTipLayout.name}_eyebrow`, hoverTipLayout.size, hoverTipLayout.eyebrow));
+    contentHeight += dialogFrame.eyebrow.height + hoverTipLayout.rowSpacing;
     this.addChild(GameUiHelper.createHoverTipTitle(data.title, data.icon));
     const rows = [...data.rows, ...(data.dynamicRow !== undefined ? [data.dynamicRow] : [])];
     rows.forEach((row) => {

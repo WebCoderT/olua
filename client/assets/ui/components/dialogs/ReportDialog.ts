@@ -62,6 +62,8 @@ export default class ReportDialog extends Node {
     this.addChild(mask);
 
     const panel = GameUiHelper.createDialogPanel(layout.panel.name, layout.panel.size);
+    // 眉题（全弹窗统一副标题口径，见 createEyebrow）
+    panel.addChild(GameUiHelper.createEyebrow(`${layout.panel.name}_eyebrow`, layout.panel.size, layout.eyebrow));
     this.addChild(panel);
     const title = UiHelper.createLabel(
       layout.title.name,

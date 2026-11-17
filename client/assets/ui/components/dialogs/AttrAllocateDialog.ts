@@ -42,7 +42,7 @@ export default class AttrAllocateDialog {
     }
     // 弹窗已在场景切换 / 关闭按钮销毁时清掉残留引用
     if (this.dialog && !isValid(this.dialog)) this.dialog = null;
-    const dialog = GameUiHelper.createDialog(attrAllocateDialogLayout.name, attrAllocateDialogLayout.title, new Vec2(), attrAllocateDialogLayout.size);
+    const dialog = GameUiHelper.createDialog(attrAllocateDialogLayout.name, attrAllocateDialogLayout.title, new Vec2(), attrAllocateDialogLayout.size, attrAllocateDialogLayout.eyebrow);
     const pointsNode = GameUiHelper.createAttrPointsLabel();
     dialog.addChild(pointsNode);
     this.pointsLabel = pointsNode.getComponent(Label);

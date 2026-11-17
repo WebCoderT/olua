@@ -1526,6 +1526,24 @@ export default class GameUiHelper {
    *
    * @param eyebrow 左上角英文眉题（`BAG · B` 这类，含键盘快捷键）；不传则不画
    */
+  /**
+   * 眉题标签（`.panel-eyebrow`：左上角一行金色小字，含分区 / 快捷键信息）。
+   * 标准弹窗（createDialog）与自建面板的 overlay 弹窗（确认框 / 举报 / 频道 / 选区 / 公告详情 /
+   * 死亡界面 / 物品详情）都要求有副标题（2026-11-18 用户拍板「副标题必须有」），共用本方法。
+   */
+  static createEyebrow(name: string, panelSize: Size, eyebrow: string) {
+    const cap = dialogFrame.eyebrow;
+    return UiHelper.createLabel(
+      name,
+      eyebrow,
+      cap.color,
+      cap.fontSize,
+      new Vec2(-panelSize.width / 2 + cap.left + cap.width / 2, panelSize.height / 2 - cap.top - cap.height / 2),
+      new Size(cap.width, cap.height),
+      Label.HorizontalAlign.LEFT,
+    );
+  }
+
   static createDialog(name: string, title: string, position: Vec2 = new Vec2(), size: Size = dialogFrame.size, eyebrow = "") {
     // 弹窗
     const dialog = this.createDialogBg(name, position, size);
@@ -1540,18 +1558,7 @@ export default class GameUiHelper {
     dialog.addChild(head);
     // 眉题：左上角一行小字，左对齐（不画底、不拦点击 —— 纯标注）
     if (eyebrow) {
-      const cap = dialogFrame.eyebrow;
-      dialog.addChild(
-        UiHelper.createLabel(
-          `${name}_eyebrow`,
-          eyebrow,
-          cap.color,
-          cap.fontSize,
-          new Vec2(-size.width / 2 + cap.left + cap.width / 2, size.height / 2 - cap.top - cap.height / 2),
-          new Size(cap.width, cap.height),
-          Label.HorizontalAlign.LEFT,
-        ),
-      );
+      dialog.addChild(this.createEyebrow(`${name}_eyebrow`, size, eyebrow));
     }
     // 关闭弹窗按钮（矢量 ×：与设计稿 .panel-close 同口径，不再用图片）
     const closeButton = this.createVectorButton(
@@ -2370,6 +2377,9 @@ export default class GameUiHelper {
     layout.verticalDirection = Layout.VerticalDirection.TOP_TO_BOTTOM;
     layout.padding = goodDetailLayout.padding;
     layout.resizeMode = Layout.ResizeMode.CONTAINER;
+
+    // 眉题（全弹窗统一副标题口径）：Layout 会把它排到内容最顶
+    content.addChild(this.createEyebrow(`${goodDetailLayout.name}_eyebrow`, goodDetailLayout.size, goodDetailLayout.eyebrow));
 
     // 头部
     const contentHeader = UiHelper.createFlexRow("header", goodDetailLayout.headerSpacing, new Vec2(), new Size(220, 40));

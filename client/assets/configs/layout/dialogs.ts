@@ -173,7 +173,8 @@ const growthBindGold = { position: new Vec2(310, -150), size: new Size(216, 16),
 export const warSoulDialogLayout = {
   name: "war_soul_dialog",
   title: "战魂",
-  eyebrow: "GROWTH · SOUL",
+  /** 眉题 = 17-growth 稿原文（军衔/称号/战魂共用一张稿，稿的眉题含三者全称） */
+  eyebrow: "GROWTH · RANK / TITLE / SOUL",
   size: new Size(880, 540),
   /** 左：等级卡片竖向滚动列表（卡片按等级从上到下，状态用颜色区分） */
   list: growthCardList("soul_list"),
@@ -209,7 +210,8 @@ export const warSoulDialogLayout = {
 export const titleUpgradeDialogLayout = {
   name: "title_upgrade_dialog",
   title: "称号",
-  eyebrow: "GROWTH · TITLE",
+  /** 眉题 = 17-growth 稿原文（军衔/称号/战魂共用一张稿） */
+  eyebrow: "GROWTH · RANK / TITLE / SOUL",
   size: new Size(880, 540),
   /** 左：等级卡片竖向滚动列表（卡片按等级从上到下，状态用颜色区分；34 个称号与战魂 37 个同容器尺寸） */
   list: growthCardList("title_list"),
@@ -244,7 +246,8 @@ export const titleUpgradeDialogLayout = {
 export const rankUpgradeDialogLayout = {
   name: "rank_upgrade_dialog",
   title: "军衔",
-  eyebrow: "GROWTH · RANK",
+  /** 眉题 = 17-growth 稿原文（军衔/称号/战魂共用一张稿） */
+  eyebrow: "GROWTH · RANK / TITLE / SOUL",
   size: new Size(880, 540),
   /** 左：阶数卡片竖向滚动列表（100 阶从上到下，状态用颜色区分） */
   list: growthCardList("rank_list", { borderWidth: 2 }),
@@ -287,6 +290,7 @@ export const rankUpgradeDialogLayout = {
 export const mapTeleportDialogLayout = {
   name: "map_teleport_dialog",
   title: "大陆传送官",
+  eyebrow: "TELEPORT",
   /** 内容列（纵向容器，高度自适应）：顶部位置与宽度（弹窗 600，左右各留 10） */
   content: { name: "map_teleport_content", width: 580, top: 215, groupSpacing: 16 },
   /** 分组标题 */
@@ -713,6 +717,7 @@ export const skillListDialogLayout = {
 export const attrAllocateDialogLayout = {
   name: "attr_allocate_dialog",
   title: "属性点",
+  eyebrow: "CHARACTER · ATTR",
   size: new Size(320, 300),
   /** 剩余点数（与技能面板同一条：紧贴标题下沿，加完就地改数字，不重开弹窗） */
   points: { name: "attr_points", position: new Vec2(0, 102), size: new Size(300, 18), fontSize: 12 },
@@ -745,6 +750,7 @@ export const attrAllocateDialogLayout = {
 export const skillShortcutSettingDialogLayout = {
   name: "skill_shortcut_setting_dialog",
   title: "设置快捷键",
+  eyebrow: "SHORTCUT",
   /** 弹窗尺寸 370×140（07-skill 稿的 .key-dlg，四角带 bracket 角标） */
   size: new Size(370, 140),
   /** 副标题（稿 .key-hint）：标题下方一行灰字，居中 */
@@ -778,6 +784,8 @@ export const skillShortcutSettingDialogLayout = {
  */
 export const deathDialogLayout = {
   name: "death_dialog",
+  /** 眉题（「副标题必须有」，全弹窗统一 `.panel-eyebrow` 口径） */
+  eyebrow: "DEATH",
   /** 遮罩颜色（黑色半透明，盖住整个屏幕并挡住世界点击） */
   maskColor: T.surface.scrim,
   /** 主面板（稿 `.death`：560 宽，内容 44/40 内距；这里给固定外框） */
@@ -821,6 +829,8 @@ export const deathDialogLayout = {
  */
 export const confirmDialogLayout = {
   name: "confirm_dialog",
+  /** 眉题（「副标题必须有」，全弹窗统一 `.panel-eyebrow` 口径） */
+  eyebrow: "CONFIRM",
   /** 遮罩颜色（黑色半透明，盖住整个屏幕并挡住下层点击；与死亡遮罩同色） */
   maskColor: T.surface.scrim,
   /** 居中面板：尺寸（矢量底板 + 四角铆钉，见 createDialogPanel） */
@@ -844,6 +854,8 @@ export const confirmDialogLayout = {
 /** 物品详情弹窗（跟随鼠标，坐标为屏幕中心系） */
 export const goodDetailLayout = {
   name: "good_detail",
+  /** 眉题（「副标题必须有」，全弹窗统一 `.panel-eyebrow` 口径）：物品详情 = ITEM */
+  eyebrow: "ITEM",
   size: new Size(240, 200),
   /** 内容区：纵向网格排版的内边距与行间距（头部 / 基础信息 / 回收价 / 标签 / 介绍依次排） */
   padding: 10,
@@ -919,6 +931,8 @@ export const goodDetailLayout = {
 /** 悬停详情弹窗布局（宽度固定，高度由内容自适应；坐标为屏幕中心系） */
 export const hoverTipLayout = {
   name: "hover_tip",
+  /** 眉题（「副标题必须有」，全弹窗统一 `.panel-eyebrow` 口径）：状态/技能悬停框 = TIP */
+  eyebrow: "TIP",
   /** 初始尺寸（高度只是占位，Layout 会按内容自适应） */
   size: new Size(240, 40),
   /** 内容区内边距与行间距 */
@@ -1015,6 +1029,8 @@ export const announcementBoardDialogLayout = {
  */
 export const announcementNoticeDialogLayout = {
   name: "announcement_notice_dialog",
+  /** 眉题：与公告列表弹窗（ANNOUNCEMENT）同一分区 */
+  eyebrow: "ANNOUNCEMENT",
   title: "公告",
   maskColor: T.surface.scrim,
   panel: { name: "announcement_notice_panel", size: new Size(640, 460) },
@@ -1050,6 +1066,8 @@ export const announcementNoticeDialogLayout = {
  */
 export const zoneSelectLayout = {
   name: "zone_select_dialog",
+  /** 眉题（「副标题必须有」，全弹窗统一 `.panel-eyebrow` 口径） */
+  eyebrow: "ZONE",
   maskColor: T.surface.scrim,
   panel: { name: "zone_select_panel", size: new Size(560, 500) },
   /** 标题文本的位置与样式（配色与通用弹窗标题一致） */
@@ -1376,6 +1394,8 @@ export const socialDialogLayout = {
  */
 export const reportDialogLayout = {
   name: "report_dialog",
+  /** 眉题（「副标题必须有」，全弹窗统一 `.panel-eyebrow` 口径） */
+  eyebrow: "REPORT",
   maskColor: T.surface.scrim,
   panel: { name: "report_panel", size: new Size(460, 320) },
   title: { name: "report_title", position: new Vec2(0, 122), size: new Size(400, 26), fontSize: 16, color: T.ember[4] },
@@ -1965,6 +1985,8 @@ export const leaderboardDialogLayout = {
  */
 export const channelSelectLayout = {
   name: "channel_select_dialog",
+  /** 眉题（「副标题必须有」，全弹窗统一 `.panel-eyebrow` 口径） */
+  eyebrow: "CHANNEL",
   maskColor: T.surface.scrim,
   panel: { name: "channel_select_panel", size: new Size(420, 400) },
   /** 标题（配色与选服弹窗同一套） */

@@ -35,6 +35,8 @@ export default class DeathDialog extends Node {
     // 死亡面板（稿 20-overlay 的 `.death`：560 宽主面板，深底 + 上半暗朱亮带）
     const panel = layout.panel;
     const panelNode = UiHelper.createNode(panel.name, panel.position, panel.size);
+    // 眉题（全弹窗统一副标题口径，见 createEyebrow）
+    panelNode.addChild(GameUiHelper.createEyebrow(`${panel.name}_eyebrow`, panel.size, layout.eyebrow));
     const panelGraphics = panelNode.addComponent(Graphics);
     panelGraphics.fillColor = panel.fill;
     panelGraphics.roundRect(-panel.size.width / 2, -panel.size.height / 2, panel.size.width, panel.size.height, panel.radius);

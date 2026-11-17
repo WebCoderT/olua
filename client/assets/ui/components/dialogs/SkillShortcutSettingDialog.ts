@@ -25,7 +25,7 @@ export default class SkillShortcutSettingDialog {
   /** 打开：为指定技能选择键位 */
   open(role: Role, skillId: SkillId) {
     this.close();
-    const dialog = GameUiHelper.createDialog(layout.name, layout.title, new Vec2(), layout.size);
+    const dialog = GameUiHelper.createDialog(layout.name, layout.title, new Vec2(), layout.size, layout.eyebrow);
     // 副标题（稿 .key-hint）
     dialog.addChild(
       UiHelper.createLabel(
