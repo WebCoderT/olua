@@ -709,12 +709,15 @@ export const skillListDialogLayout = {
 //#region 属性弹窗（#833 加点；22-attributes 稿改为总览＋加点合一）
 
 /**
- * 属性弹窗布局（22-attributes 稿：420×580，panel--rivet）
+ * 属性弹窗布局（22-attributes 稿：420×460，panel--rivet）
  *
  * 替换 06 稿时代的 320×300 加点小弹窗：角色信息「属性」入口改开本窗。
- * 三段自上而下（一屏看完）：剩余属性点 → 战斗属性总览（两列 10 项）→ 四维加点 + 洗点条，
+ * 三段自上而下（一屏看完）：剩余属性点 → 战斗属性总览（两列 10 项）→ 四维加点，
  * 底部一条说明（稿 .panel-foot）。战斗属性数值全部来自服务端 roleUpdate 下发的
  * `BattleAttributes`（装备/称号/战魂/军衔加成已汇总），客户端零计算、只展示。
+ *
+ * 洗点条已移除（#1113）：客户端不再提供洗点入口（服务端接口保留）；
+ * 洗点区腾出后弹窗 580 → 460 收拢，底栏说明贴住加点行。
  *
  * 四行加点固定（力量 / 敏捷 / 体质 / 精神），不用 ScrollView。行内从左到右：
  * 名称、已分配点数、作用说明、「+」按钮。说明列故意只写「物理攻击」这类短语
@@ -727,7 +730,7 @@ export const attrAllocateDialogLayout = {
   name: "attr_allocate_dialog",
   title: "属性",
   eyebrow: "角色",
-  size: new Size(420, 580),
+  size: new Size(420, 460),
   /** 剩余点数行（稿 .pt-row）：左灰标签 + 右金色数值，加完就地改数字，不重开弹窗 */
   points: {
     name: "attr_points",
@@ -782,21 +785,10 @@ export const attrAllocateDialogLayout = {
     /** 「+」按钮：贴行右缘 */
     add: { width: 30, height: 24, label: "+" },
   },
-  /** 洗点条（稿 .attr-foot）：左说明（不写价格 —— 价格只在服务端）+ 右 danger 按钮 */
-  reset: {
-    name: "attr_reset_button",
-    x: 146,
-    y: -188,
-    width: 96,
-    height: 32,
-    label: "洗 点",
-    dividerY: -167,
-    note: { name: "attr_reset_note", x: -66, width: 244, fontSize: T.fontSize.f10, color: T.text[4] },
-  },
-  /** 底部说明条（稿 .panel-foot）：两行小字（稿同位） */
+  /** 底部说明条（稿 .panel-foot）：两行小字（距底 36 / 18，同 580 版比例；上方即加点行末） */
   foot: {
-    dividerY: -254,
-    y: -272,
+    dividerY: -194,
+    y: -212,
     left: { name: "attr_foot_left", x: -84, width: 260, fontSize: T.fontSize.f11, color: T.text[4] },
     right: { name: "attr_foot_right", x: 118, width: 150, fontSize: T.fontSize.f11, color: T.text[4] },
   },

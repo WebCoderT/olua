@@ -7,7 +7,6 @@ import { attrAllocateDialogLayout, T } from "../../../configs/hudLayout";
 import { goodShowAttributesLabel } from "../../../configs/good";
 import { getText } from "../../../configs/texts";
 import { ATTR_POINT_KEYS, AttrPointKey } from "../../../types/role";
-import ConfirmDialog from "./ConfirmDialog";
 
 /** 总览行的键：BattleAttributes 八键 + 表外的魔法上限 / 战斗力（文案见 texts） */
 type OverviewKey = typeof attrAllocateDialogLayout.overview.keys[number];
@@ -16,16 +15,14 @@ type OverviewKey = typeof attrAllocateDialogLayout.overview.keys[number];
  * 属性弹窗（#833 加点；#1108 按 22-attributes 稿扩为总览＋加点合一）
  *
  * 三段一屏：剩余属性点 → 战斗属性总览（两列 10 项，服务端 roleUpdate 汇总下发，
- * 客户端零计算）→ 四维加点 + 洗点条，底部一条说明。
+ * 客户端零计算）→ 四维加点，底部一条说明。洗点条已移除（#1113）：客户端不再提供
+ * 洗点入口，服务端接口保留。
  *
  * 三条取舍（#833 原有两条沿用，一条被 #1108 推翻）：
  * - **一次加一点**：界面上就是四个「+」，点一下发一次（服务端接口本来支持多段增量，
  *   但「一次加几点」的输入框在手机上比四个按钮难用得多）；
  * - **加完就地重建**，不重开弹窗：重开会让玩家丢失「刚点了哪一项」的视觉连续性，
  *   而这个弹窗只有四行、重建成本可以忽略；
- * - **洗点必须二次确认**：它要花绑定元宝且不可撤销。确认框里**不写价格** ——
- *   价格只在服务端（`growth_scalars.attrResetCost`），写死一个数字，
- *   运营调价那天客服就会被「界面明明写着 300」找上门。
  * - **（#1108 推翻）点数为 0 时「＋」置灰不可点**：#833 原为「不禁用、点了收 20037 提示」；
  *   22 稿（06 稿精神行同款）用禁用画法表达「没点可加」，置灰是即时反馈，
  *   不用点一下才知道。服务端校验仍是权威，置灰只是省一次必拒的请求。
@@ -39,8 +36,6 @@ export default class AttrAllocateDialog {
   private overviewContent: Node | null = null;
   /** 四行的容器（加完点重建行用） */
   private listContent: Node | null = null;
-  /** 洗点确认框（开着时不许再开一个） */
-  private confirmDialog: ConfirmDialog | null = null;
   /** 正在等服务端回执：防止连点把同一笔请求发两次（第二个会被服务端按余额拒掉，但界面会闪） */
   private pending = false;
 
@@ -69,17 +64,12 @@ export default class AttrAllocateDialog {
     this.overviewContent = overview;
     dialog.addChild(overview);
 
-    // 四维加点（四行 + 洗点条）
+    // 四维加点（四行）
     dialog.addChild(this.createSectionTitle(cfg.list.title.name, getText("label_attributes_alloc"), cfg.list.title.y, cfg.list.title));
     dialog.addChild(this.createDivider("attr_alloc_divider", cfg.list.dividerY, contentWidth));
     const list = GameUiHelper.createAttrListView();
     this.listContent = list;
     dialog.addChild(list);
-    dialog.addChild(this.createDivider("attr_reset_divider", cfg.reset.dividerY, contentWidth));
-    dialog.addChild(
-      this.createNoteLabel(cfg.reset.note.name, getText("label_attr_reset_note"), cfg.reset.note.x, cfg.reset.y, cfg.reset.note.width, cfg.reset.note.fontSize, cfg.reset.note.color),
-    );
-    dialog.addChild(GameUiHelper.createAttrResetButton(() => this.confirmReset()));
 
     // 底部说明条（稿 .panel-foot 两行小字）
     dialog.addChild(this.createDivider("attr_foot_divider", cfg.foot.dividerY, contentWidth));
@@ -156,7 +146,7 @@ export default class AttrAllocateDialog {
     return GameUiHelper.createText(name, text, style.fontSize, new Vec2(-width / 2 + 60, y), new Size(120, 18), style.color, Label.HorizontalAlign.LEFT);
   }
 
-  /** 小字说明行（洗点条说明 / 底部说明条，左对齐） */
+  /** 小字说明行（底部说明条，左对齐） */
   private createNoteLabel(name: string, text: string, x: number, y: number, width: number, fontSize: number, color: Color): Node {
     return UiHelper.createLabel(name, text, color, fontSize, new Vec2(x, y), new Size(width, 16), Label.HorizontalAlign.LEFT);
   }
@@ -183,42 +173,8 @@ export default class AttrAllocateDialog {
     }
   }
 
-  /** 洗点：先确认（花钱且不可撤销），确认后走服务端 */
-  private confirmReset() {
-    if (this.confirmDialog && isValid(this.confirmDialog)) return;
-    const confirm = new ConfirmDialog({
-      title: getText("label_attr_reset_title"),
-      message: getText("label_attr_reset_confirm"),
-      confirmText: getText("label_confirm_ok"),
-      cancelText: getText("label_confirm_cancel"),
-      onConfirm: () => {
-        this.confirmDialog = null;
-        void this.reset();
-      },
-      onCancel: () => {
-        this.confirmDialog = null;
-      },
-    });
-    this.confirmDialog = confirm;
-    LayerManager.addDialogToUILayer(confirm);
-  }
-
-  /** 真的洗点：四维归零 + 点数全退 + 扣绑定元宝，三件事都在服务端同一次写档里 */
-  private async reset(): Promise<void> {
-    if (this.pending) return;
-    this.pending = true;
-    try {
-      const ok = await StorageManager.resetAttrsOnServer();
-      if (ok) this.rebuild();
-    } finally {
-      this.pending = false;
-    }
-  }
-
-  /** 关闭弹窗（连确认框一起收掉，否则会留下一块无主遮罩） */
+  /** 关闭弹窗 */
   close() {
-    if (this.confirmDialog && isValid(this.confirmDialog)) this.confirmDialog.destroy();
-    this.confirmDialog = null;
     if (this.dialog && isValid(this.dialog)) this.dialog.destroy();
     this.dialog = null;
     this.pointsLabel = null;

@@ -482,21 +482,11 @@ export const uiTexts = {
   label_attr_combat_power: "战斗力",
   /** 四维加点段标题 */
   label_attributes_alloc: "四维加点",
-  /**
-   * 洗点条说明（不写价格：价格只在服务端 growth_scalars.attrResetCost）。
-   * 注意：说明条走 createLabel（CLAMP + 不换行），文案必须单行放得下（余量 ≥ 40px）。
-   */
-  label_attr_reset_note: "洗点退还全部点数 · 消耗绑定元宝 · 不可撤销",
-  /** 底部说明条两行（稿 .panel-foot；同上，单行口径） */
+  /** 底部说明条两行（稿 .panel-foot；走 createLabel（CLAMP + 不换行），文案必须单行放得下，余量 ≥ 40px） */
   label_attr_foot_left: "数值由服务端汇总下发 · 含装备称号军衔加成",
   label_attr_foot_right: "点数为 0 时「＋」置灰",
   /** 加点成功的浮动提示（{attr} 四维名 / {points} 剩余点数） */
   label_attr_allocate_tip: "{attr} +1（剩 {points} 点）",
-  /** 洗点成功的浮动提示（{refund} 退还点数 / {cost} 消耗的绑定元宝） */
-  label_attr_reset_tip: "洗点完成：退还 {refund} 点，消耗 {cost} 绑定元宝",
-  /** 洗点确认弹窗（价格只在服务端：确认框不写金额，成功/失败提示里才有准确数字） */
-  label_attr_reset_title: "洗 点",
-  label_attr_reset_confirm: "洗点会把四项全部归零，已分配的点数全部退还，并消耗一笔绑定元宝。确定要洗点吗？",
 
   //#region 悬停详情行模板
   hover_skill_type: "类型：{type}（{target}）",

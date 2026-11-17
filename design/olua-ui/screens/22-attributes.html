@@ -10,13 +10,13 @@
 <link rel="stylesheet" href="../tokens.css">
 <link rel="stylesheet" href="../ui.css">
 <style>
-/* ── 属性 420×580：战斗属性总览（两列）＋ 四维加点 ＋ 洗点 ──
-   按 token 实测：头部 ~55 + 内容 ~431 + 底部说明条 ~46 ≈ 542，
-   总高 580（留 ~38 呼吸位）—— 所有元素都收在框内。
+/* ── 属性 420×460：战斗属性总览（两列）＋ 四维加点 ──
+   原为 580 含洗点条；#1113 客户端移除洗点入口（服务端接口保留），
+   弹窗收拢 580 → 460，底部说明条贴住加点行。
    替换原 06 稿的 320×300 加点小弹窗：角色信息「属性」入口改开本窗，
    也可从 HUD 独立打开。战斗属性数值全部来自服务端 roleUpdate 下发
    （装备/称号/战魂/军衔加成已汇总），客户端零计算、只展示。 */
-.attributes{position:relative;width:420px;height:580px}
+.attributes{position:relative;width:420px;height:460px}
 .attributes .panel-body{padding:10px 16px 0}
 .attributes .divider{margin:6px 0 8px}
 /* 剩余点数行：紧贴标题下沿，加完就地改数字 */
@@ -43,11 +43,6 @@
 /* 点数耗尽态（#state=depleted）：＋ 整体置灰不可点，与 06 稿精神行的禁用画法一致 */
 .attributes.is-depleted .plus{opacity:.4;cursor:not-allowed;pointer-events:none}
 .attributes.is-depleted .pt-row dd{color:var(--text-4)}
-/* 洗点：底部一条，左说明右按钮 */
-.attr-foot{display:flex;align-items:center;justify-content:space-between;margin-top:12px;
-  border-top:1px solid var(--line-1);padding-top:10px}
-.attr-foot .note{font-size:10.5px;color:var(--text-4);line-height:1.6;max-width:230px}
-.attr-foot .btn{min-width:96px;height:32px;font-size:12px;flex:0 0 auto}
 </style>
 </head>
 <body>
@@ -97,12 +92,6 @@
             <div class="arow"><b>体质</b><span class="d">生命 / 物防</span><span class="v">203</span><button class="plus" aria-label="体质加一点">＋</button></div>
             <div class="arow"><b>精神</b><span class="d">法攻 / 法力</span><span class="v">88</span><button class="plus" aria-label="精神加一点">＋</button></div>
           </div>
-        </div>
-
-        <!-- 洗点：花钱且不可撤销，点击先弹确认框（价格只在服务端，界面不写数字） -->
-        <div class="attr-foot">
-          <span class="note">洗点退还全部点数 · 消耗绑定元宝 · 不可撤销</span>
-          <button class="btn btn--danger">洗 点</button>
         </div>
 
       </div>

@@ -3727,21 +3727,6 @@ export default class GameUiHelper {
     return node;
   }
 
-  /** 创建洗点按钮（#833）：四行下方居中，点击由调用方弹确认框（洗点要花钱，不能一点就扣） */
-  static createAttrResetButton(onReset: () => void): Node {
-    const cfg = attrAllocateDialogLayout.reset;
-    const button = this.createToneButton(
-      cfg.name,
-      cfg.label,
-      new Vec2(cfg.x, cfg.y),
-      new Size(cfg.width, cfg.height),
-      uiSize.smallButtonFontSize,
-      buttonTone.danger,
-    );
-    button.on(Node.EventType.TOUCH_END, onReset, this);
-    return button;
-  }
-
   /**
    * 创建单个技能行（未学习置灰；已学习点击触发回调）
    *
