@@ -24,6 +24,14 @@ const { borderResources, borders, prefixSuffixBorders, customEquipmentBorders, g
 const { getEquipment, getItem, items } = require(path.join(outDir, "configs/items.js"));
 const { getEquipmentVariantKey, getEquipmentBaseKey } = require(path.join(outDir, "configs/equipments.js"));
 
+/** GameUiHelper 已按域拆到 helpers/parts/（#1115 批次 1）：断言用源码 = barrel + 全部 parts 拼接 */
+function gameUiSourceCombined(helperTsPath) {
+  const dir = path.join(path.dirname(helperTsPath), "parts");
+  return [fs.readFileSync(helperTsPath, "utf8"),
+    ...fs.readdirSync(dir).filter((x) => x.endsWith(".ts")).sort().map((x) => fs.readFileSync(path.join(dir, x), "utf8"))].join("\n");
+}
+
+
 const read = (rel) => fs.readFileSync(path.join(PROJECT_ROOT, rel), "utf8");
 
 console.log("\n— A. 边框资源表 —");
@@ -170,13 +178,13 @@ check(!!worst && worst.frames >= 8, `每张边框至少 8 帧（最少的 ${wors
 check(true, "全部边框图集的帧序与未裁剪检查通过（84 张 × 8~12 帧）");
 
 console.log("\n— F. 接线（源码断言）—");
-const helperSource = read("assets/ui/helpers/GameUiHelper.ts");
+const helperSource = gameUiSourceCombined(path.join(PROJECT_ROOT, "assets/ui/helpers/GameUiHelper.ts"));
 const animationSource = read("assets/ui/helpers/AnimationHelper.ts");
 const preloadSource = read("assets/ui/core/PreloadManager.ts");
 const barrelSource = read("assets/configs/hudLayout.ts");
 const equipmentSource = read("assets/configs/equipments.ts");
 
-check(/this\.applyEquipmentBorder\(sprite, good\);/.test(helperSource), "createGood 给物品图标挂边框（传的是图标节点，边框随图标压暗/销毁）");
+check(/applyEquipmentBorder\(sprite, good\);/.test(helperSource), "createGood 给物品图标挂边框（传的是图标节点，边框随图标压暗/销毁）");
 check(/if \(!isEquipment\(good\)\) return;/.test(helperSource), "只有装备才挂边框");
 check(/resolveEquipmentBorder\(good\)/.test(helperSource) && /applyEffectToNode\(/.test(helperSource), "边框 key 与显示效果都来自 configs/border 的 resolve");
 check(/icon\.addChild\(border\);/.test(helperSource), "边框是图标的子节点（不是格子的子节点，不影响拖动找图标）");
@@ -188,7 +196,7 @@ check(/loadFramesFromAtlas/.test(helperSource) && /playLoopAtlas/.test(helperSou
 // 注意：**先剥注释再切片**——直接切原文件的话，切片点落在一条多行注释中间时注释剥不掉，
 // 注释里的中文会被当成「裸中文文案」（加长文档注释就会踩这个假警报）
 const borderCode = helperSource.replace(/\/\/[^\n]*/g, "").replace(/\/\*[\s\S]*?\*\//g, "");
-const borderMethods = borderCode.slice(borderCode.indexOf("static applyEquipmentBorder"), borderCode.indexOf("static fitNodeToBox") + 800);
+const borderMethods = borderCode.slice(borderCode.indexOf("function applyEquipmentBorder"), borderCode.indexOf("function createEquipmentDetailBackground"));
 check(!/\b(56|10|255)\b/.test(borderMethods), "边框显示代码没有写死的尺寸/帧率/透明度（全走 equipmentBorderLayout）");
 check(!/[\u4e00-\u9fa5]/.test(borderMethods), "边框显示代码没有裸中文文案");
 

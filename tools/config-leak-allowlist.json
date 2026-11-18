@@ -23,9 +23,19 @@
       "reason": "getChildByName(\"other_head\" / \"role_hp_bar\" / \"role_hp_text\") 查的是本文件用 GameUiHelper.createHead 建好的头顶信息栏（与 RoleDisplay.updateHead 的取件口径成对，同一套结构的两端），不是可调配置。"
     },
     {
-      "file": "ui/helpers/GameUiHelper.ts",
+      "file": "ui/helpers/parts/growth-parts.ts",
       "rule": "nodeName",
-      "reason": "new Node(\"soul_card_border\") / new Node(\"soul_show_box\") 是战魂卡片与勾选框内部的分组节点：创建与使用都在本文件内，属于代码结构，不存在「调它」的场景。"
+      "reason": "new Node(\"soul_card_border\") / new Node(\"soul_show_box\") / new Node(\"rank_badge_plate\") 是战魂卡片、勾选框与军衔徽记内部的分组节点：创建与使用都在本文件内，属于代码结构，不存在「调它」的场景。"
+    },
+    {
+      "file": "ui/helpers/parts/role-parts.ts",
+      "rule": "nodeName",
+      "reason": "new Node(\"equipment_upgrade_hint_plate\") 是装备升级提示的衬底分组节点：创建与使用都在本文件内，属于代码结构，不存在「调它」的场景。"
+    },
+    {
+      "file": "ui/helpers/parts/tip-fx.ts",
+      "rule": "nodeName",
+      "reason": "new Node(\"hit_screen_flash\") 是受击红闪的整屏覆盖节点：创建与销毁都在本文件内，属于代码结构，不存在「调它」的场景。"
     },
     {
       "file": "ui/RoleSelector.ts",

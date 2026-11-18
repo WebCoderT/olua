@@ -32,6 +32,14 @@ const { rankLevels, rankMaxLevel, getRankLevel, rankAttributeLabels } = require(
 const { titleLevels } = require(path.join(outDir, "configs/game-config.js"));
 const { soulLevels } = require(path.join(outDir, "configs/game-config.js"));
 
+/** GameUiHelper 已按域拆到 helpers/parts/（#1115 批次 1）：断言用源码 = barrel + 全部 parts 拼接 */
+function gameUiSourceCombined(helperTsPath) {
+  const dir = path.join(path.dirname(helperTsPath), "parts");
+  return [fs.readFileSync(helperTsPath, "utf8"),
+    ...fs.readdirSync(dir).filter((x) => x.endsWith(".ts")).sort().map((x) => fs.readFileSync(path.join(dir, x), "utf8"))].join("\n");
+}
+
+
 const read = (rel) => fs.readFileSync(path.join(PROJECT_ROOT, rel), "utf8");
 /** 快照行是 {min,max}，客户端运行时表是元组 [min,max] */
 const tuple = (range) => (Array.isArray(range) ? range : [range.min, range.max]);
@@ -122,14 +130,14 @@ check(totalCost > 5000000 && totalCost < 20000000, `100 阶全程合计 ≈ ${(t
 
 console.log("\n— D. 头顶红字（军衔的唯一外显）—");
 check(getRankLevel(0) === null && getRankLevel(-1) === null && getRankLevel(1)?.level === 1 && getRankLevel(101) === null, "getRankLevel：0/负数/越界返回 null，1 起有效");
-const uiHelperSource = read("assets/ui/helpers/GameUiHelper.ts");
+const uiHelperSource = gameUiSourceCombined(path.join(PROJECT_ROOT, "assets/ui/helpers/GameUiHelper.ts"));
 const hudSource = read("assets/configs/layout/hud.ts");
 const textsSource = read("assets/configs/texts.ts");
-const headBody = uiHelperSource.split("static createHead(")[1].split("static createRoleName")[0];
-check(/static getRankHeadText\(rank: number\)/.test(uiHelperSource) && /getText\("label_rank_head", \{ rank: config\.label \}\)/.test(uiHelperSource), "头顶红字文案统一走 GameUiHelper.getRankHeadText（未授衔返回空串）");
+const headBody = uiHelperSource.split("function createHead(")[1].split("function createRoleName")[0];
+check(/function getRankHeadText\(rank: number\)/.test(uiHelperSource) && /getText\("label_rank_head", \{ rank: config\.label \}\)/.test(uiHelperSource), "头顶红字文案统一走 GameUiHelper.getRankHeadText（未授衔返回空串）");
 check(/"role_rank"/.test(headBody), "createHead 建出军衔红字节点（role_rank）");
 check(!/"role_name"/.test(headBody), "角色名称已移出头顶信息栏（显示在人物区域正中间，见 createRoleName）");
-check(/static createRoleName\(role: Role\)/.test(uiHelperSource) && /UiHelper\.createLabel\("role_name", role\.name, layout\.color, layout\.fontSize, layout\.position, layout\.size\)/.test(uiHelperSource), "createRoleName 用 roleShowLayout.name 建名称节点（与怪物名称同一套「身体正中心」口径）");
+check(/function createRoleName\(role: Role\)/.test(uiHelperSource) && /UiHelper\.createLabel\("role_name", role\.name, layout\.color, layout\.fontSize, layout\.position, layout\.size\)/.test(uiHelperSource), "createRoleName 用 roleShowLayout.name 建名称节点（与怪物名称同一套「身体正中心」口径）");
 check(/roleShowLayout\.rank\.(color|fontSize|size)/.test(headBody), "红字的颜色/字号/尺寸取自 configs（不写死在代码里）");
 // 红字排列顺序、名称纵坐标、具体色值都是显示效果，靠人眼看，不做断言
 check(/label_rank_head: "【\{rank\}】"/.test(textsSource), "头顶红字模板 label_rank_head 带 {rank} 占位（文案唯一来源在 configs/texts）");
@@ -162,7 +170,7 @@ check(/createHead\("role_head", this\.role\.hp, this\.role\.maxHp, this\.role\.r
 check(/this\.addChild\(GameUiHelper\.createRoleName\(this\.role\)\)/.test(displaySource), "RoleDisplay 把名称节点挂在角色身上（在 appearance 之后添加 → 绘制在角色之上）");
 check(/getChildByName\("role_rank"\)/.test(displaySource) && /GameUiHelper\.getRankHeadText\(role\.rank\)/.test(displaySource), "RoleDisplay.updateHead 按名字刷新军衔红字（晋升后无需重进图）");
 
-check(/static createRankCard/.test(uiHelperSource) && /static updateRankCard/.test(uiHelperSource) && /static createRankAttributeList/.test(uiHelperSource) && /static createRankBadge/.test(uiHelperSource), "GameUiHelper 有军衔四零件（卡片 / 卡片状态刷新 / 属性表 / 徽记）");
+check(/function createRankCard/.test(uiHelperSource) && /function updateRankCard/.test(uiHelperSource) && /function createRankAttributeList/.test(uiHelperSource) && /function createRankBadge/.test(uiHelperSource), "GameUiHelper 有军衔四零件（卡片 / 卡片状态刷新 / 属性表 / 徽记）");
 check(/rankUpgradeDialogLayout\.list\.cardSize/.test(uiHelperSource) && /rankAttributeLabels/.test(uiHelperSource) && /getText\("label_rank_progress"/.test(uiHelperSource), "军衔零件的几何、属性顺序与文案都来自 configs（不写死）");
 check(/new RankUpgradeDialog\(\)\.open\(\)/.test(roleInfoSource) && /roleInfoDialogLayout\.rankButton/.test(roleInfoSource), "角色信息弹窗有「军衔」按钮打开军衔弹窗（唯一入口）");
 check(!/RankUpgradeDialog/.test(npcClicksSource), "军衔不走 NPC（入口只在角色信息弹窗）");

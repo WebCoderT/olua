@@ -43,6 +43,14 @@ try {
 
 const { designResolution, getPopupPosition } = require(path.join(outDir, "ui/utils/layout/ScreenLayout.js"));
 const { goodDetailLayout } = require(path.join(outDir, "configs/layout/dialogs.js"));
+
+/** GameUiHelper 已按域拆到 helpers/parts/（#1115 批次 1）：断言用源码 = barrel + 全部 parts 拼接 */
+function gameUiSourceCombined(helperTsPath) {
+  const dir = path.join(path.dirname(helperTsPath), "parts");
+  return [fs.readFileSync(helperTsPath, "utf8"),
+    ...fs.readdirSync(dir).filter((x) => x.endsWith(".ts")).sort().map((x) => fs.readFileSync(path.join(dir, x), "utf8"))].join("\n");
+}
+
 const cc = loadCcShim(outDir);
 const { Vec2, Size } = cc;
 
@@ -171,7 +179,7 @@ check(gap > 0 && screenMargin > 0, "placement 已登记（gap / screenMargin 均
 check(!!goodDetailLayout.size.width && !!goodDetailLayout.size.height, "弹窗仍用配置里的占位尺寸（首帧量到的就是它，撑开后复夹）", `${goodDetailLayout.size.width}×${goodDetailLayout.size.height}`);
 
 console.log("\n— 接线：GameUiHelper 的摆放口径 —");
-const helperSource = fs.readFileSync(GAME_UI_HELPER_FILE, "utf8");
+const helperSource = gameUiSourceCombined(GAME_UI_HELPER_FILE);
 const helperCode = helperSource.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\n]*/g, "");
 const gameHelperSource = fs.readFileSync(GAME_HELPER_FILE, "utf8");
 const dialogsSource = fs.readFileSync(DIALOGS_FILE, "utf8");

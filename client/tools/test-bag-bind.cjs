@@ -15,6 +15,14 @@ const fs = require("fs");
 const path = require("path");
 const { prepare } = require("./lib/configs-sandbox.cjs");
 
+/** GameUiHelper 已按域拆到 helpers/parts/（#1115 批次 1）：断言用源码 = barrel + 全部 parts 拼接 */
+function gameUiSourceCombined(helperTsPath) {
+  const dir = path.join(path.dirname(helperTsPath), "parts");
+  return [fs.readFileSync(helperTsPath, "utf8"),
+    ...fs.readdirSync(dir).filter((x) => x.endsWith(".ts")).sort().map((x) => fs.readFileSync(path.join(dir, x), "utf8"))].join("\n");
+}
+
+
 const ROOT = path.join(__dirname, "..");
 let passed = 0;
 let failed = 0;
@@ -195,16 +203,16 @@ function main() {
   );
 
   console.log("\n=== 接线：详情弹窗显示绑定与溯源 ===");
-  const helper = readSrc("ui/helpers/GameUiHelper.ts");
+  const helper = gameUiSourceCombined(path.join(ROOT, "assets/ui/helpers/GameUiHelper.ts"));
   check(/createGoodDetailDialog\(good: Goods, anchor: Node, compare: Equipment \| "hint" \| null = null, meta\?: BagCellMeta\)/.test(helper), "详情弹窗接第四参 meta（绑定与溯源）");
   check(/createGoodDetailDialog\(good, cell, comparable && holdingCtrl \? worn : comparable \? "hint" : null, options\?\.meta\)/.test(helper), "createGood 把格子元数据透传给详情弹窗");
-  const dialogBody = extractBody(helper, "static createGoodDetailDialog(");
+  const dialogBody = extractBody(helper, "function createGoodDetailDialog(");
   check(!!dialogBody && /meta\.bound === true/.test(dialogBody) && /label_good_detail_bound/.test(dialogBody), "只有真绑定才加「已绑定 · 不可交易」行（未绑定不留空位）");
   check(!!dialogBody && /label_good_detail_origin_role/.test(dialogBody), "溯源行：掉落者（谁掉的）");
   check(!!dialogBody && /label_good_detail_origin_monster/.test(dialogBody) && /monsterLabelOf\(origin\.monster\)/.test(dialogBody), "溯源行：怪物（key 翻中文名）");
   check(!!dialogBody && /label_good_detail_origin_time/.test(dialogBody) && /formatOriginTime\(origin\.at\)/.test(dialogBody), "溯源行：掉落时间");
   check(!!dialogBody && /originRows\.forEach\(\(row\) => content\.addChild\(row\)\)/.test(dialogBody), "溯源行 join 进内容区（参与排版）");
-  const formatBody = extractBody(helper, "static formatOriginTime(");
+  const formatBody = extractBody(helper, "function formatOriginTime(");
   check(!!formatBody && /getText\("label_good_detail_origin_time_format"/.test(formatBody), "时间格式走 configs/texts（代码里不写中文）");
   check(!!formatBody && /!Number\.isFinite\(at\) \|\| at <= 0/.test(formatBody), "非法时间戳返回空串（调用方整行不显示）");
 
