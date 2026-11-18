@@ -370,13 +370,24 @@ export function applyBottomNavBarButtonStyle(node: Node, button: BottomNavBarBut
    * 刀剑图标 + 「挂机」文字；底板边框与图标/文字颜色随挂机状态切换
    * （开 = 金 `#F3DEA6` + 金边，关 = text-2 + line-2），由组件拿返回值在 refresh 里改
    * @param node 目标节点
-   * @returns 底板节点 / 文字 Label / 图标换色（状态切换时重画）
+   * @returns 底板节点 / 外圈节点（开启态亮出，见 autoFight.onRing）/ 文字 Label / 图标换色（状态切换时重画）
    */
-export function applyAutoFightButtonStyle(node: Node): { plate: Node; label: Label; setIconColor: (color: Color) => void } {
+export function applyAutoFightButtonStyle(node: Node): { plate: Node; ring: Node; label: Label; setIconColor: (color: Color) => void } {
     const layout = bottomBarLayout.autoFight;
     const uiTransform = node.addComponent(UITransform);
     uiTransform.setContentSize(layout.size);
     node.setPosition(layout.position.x, layout.position.y, 0);
+    // 开启态外圈（稿 `.auto.on` 的 box-shadow 0 0 0 1px）：比底板四周各大 1px 的空心描边板，
+    // 常态隐藏、开启时亮出（显隐在组件 refresh 里切）
+    const ring = createGlassPlate(
+      "auto_fight_ring",
+      new Size(layout.size.width + 2, layout.size.height + 2),
+      T.radius.r2,
+      layout.onRing,
+      T.overlay.transparent,
+    );
+    ring.active = false;
+    node.addChild(ring);
     const plate = createGlassPlate("auto_fight_plate", layout.size, T.radius.r2, T.line[2]);
     node.addChild(plate);
     // 图标（稿 `.auto svg{width:14px;height:14px}`，与文字同排）
@@ -390,7 +401,7 @@ export function applyAutoFightButtonStyle(node: Node): { plate: Node; label: Lab
     node.addChild(labelNode);
     // 组件自身即按钮（点击走 TOUCH_END），鼠标通道补一次命中拦截
     blockClickThrough(node);
-    return { plate, label, setIconColor };
+    return { plate, ring, label, setIconColor };
   }
 
 
