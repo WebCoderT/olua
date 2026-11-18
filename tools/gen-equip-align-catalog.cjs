@@ -136,7 +136,7 @@ function buildCatalog({ equipments, role, animation, dialogs }) {
 
   const clothes = map(equipments.clothes, "cloth");
   const weapons = map(equipments.weapons, "weapon");
-  const dialogBg = dialogs.roleInfoDialogLayout?.background ?? {};
+  const dialogBg = dialogs.roleInfoDialogLayout?.preview ?? {};
 
   return {
     generatedBy: "tools/gen-equip-align-catalog.cjs",
@@ -156,11 +156,11 @@ function buildCatalog({ equipments, role, animation, dialogs }) {
       colliderOffset: vec(role.roleBody?.colliderOffset),
     },
     /**
-     * 内观视图的底座（#523）
+     * 内观视图的底座（#523；#1089 起底座 = 角色信息弹窗的立绘视口）
      *
-     * 内观工作台画的是**角色信息弹窗里那块区域**：背景图（含圆盘）+ 内观节点。
-     * - `background` 取自 `configs/layout/dialogs.roleInfoDialogLayout.background`（唯一真值，
-     *   页面不许自己写坐标）；
+     * 内观工作台画的是**角色信息弹窗里那块区域**：立绘视口（框内立绘）+ 内观节点。
+     * - `background` 取自 `configs/layout/dialogs.roleInfoDialogLayout.preview`（唯一真值，
+     *   页面不许自己写坐标；弹窗里的内观被 Mask 裁进这块视口，工作台视图与之一致）；
      * - `plate` 是**实测值**：背景图 858×908（@2x）上金色圆盘外缘约 x 240~600、y 640~790，
      *   换算到弹窗坐标就是中心 (-82.5, -149.5)、半径 90。它不是配置里的东西 ——
      *   **换背景图就要重测**（这也是它只在这里出现一次的原因）；

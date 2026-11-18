@@ -3,7 +3,7 @@
  *
  * 拆分自原 configs/layout/dialogs.ts（#1115 批次 2），数值与注释原样保留。
  */
-import { Size, Vec2 } from "cc";
+import { Size, Vec2, Color } from "cc";
 import { dialogFootLayout } from "./frame";
 import { T } from "../tokens";
 
@@ -13,8 +13,30 @@ export const roleInfoDialogLayout = {
   eyebrow: "快捷键 · C",
   /** 弹窗尺寸 660×520（06-role-info 稿） */
   size: new Size(660, 520),
-  /** 中区底板（稿的内衬区：矢量玻璃底板，尺寸/位置见下；不再用装饰贴图） */
-  background: { position: new Vec2(-58, -19), size: new Size(431, 452) },
+  /**
+   * 立绘视口（稿 `.preview`：216×396 有边框的框内立绘区，overflow:hidden；#1089）
+   *
+   * x 对齐内观工作台的脚底圆盘中心（`equip-align.catalog.json` 的 `inShow.plate.center[0]`
+   * = -82.5）—— 立绘按「脚踩圆盘」调，框心跟着圆盘走，调好的立绘站在框内正中；
+   * y 与 396 高取稿的 body 区（头部下沿 215、页脚分隔线上沿 -181 → 中心 17）。
+   * 内观节点整体挂进视口被 Mask 裁剪：光效/特效再大也不会压到装备槽或面板外。
+   * 框内溢出本身说明服务端 `equip_in_aligns` 的 inScale/inPosition 需要在内观工作台重调
+   * （客户端不代调、只裁剪 —— 2026-11-18 用户拍板）。
+   */
+  preview: {
+    position: new Vec2(-82.5, 17),
+    size: new Size(216, 396),
+    radius: T.radius.r2,
+    /** 边框（卡片常规档）：画在视口之外的兄弟节点上（Mask 里的 Graphics 是裁剪形状，画了不可见） */
+    border: T.line[2],
+    /** 暗底（稿 radial-gradient 的收端 rgba(0,0,0,.42)，稿精确色） */
+    fill: new Color(0, 0, 0, 107),
+    /** 上部金斑（稿渐变的起点色 rgba(194,146,69,.14) = line-1 档） */
+    glow: T.line[1],
+    /** 金斑圆心距视口顶部的比例（稿 circle at 50% 36%）与半径（半宽的倍数） */
+    glowCenterRatio: 0.36,
+    glowRadiusRatio: 0.42,
+  },
   /**
    * 六入口按钮的公共外观（稿 `.entries .btn`：76 宽、f12、ghost 档）
    * 宽度取 84（= 稿的列宽），六个按钮等距排成一列，靠右缘留 3
