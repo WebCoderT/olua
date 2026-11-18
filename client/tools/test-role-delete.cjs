@@ -128,7 +128,7 @@ console.log("— 界面接线：RoleSelector / 配置 —");
 
 const selectorSource = fs.readFileSync(ROLE_SELECTOR_FILE, "utf8");
 const scenesSource = fs.readFileSync(SCENES_FILE, "utf8");
-const storageSource = fs.readFileSync(STORAGE_MANAGER_FILE, "utf8");
+const storageSource = require("./lib/storage-src.cjs").storageSourceFor(STORAGE_MANAGER_FILE);
 
 check(/manageButton\.on\(Node\.EventType\.TOUCH_END, \(\) => this\.toggleManageRole\(\)/.test(selectorSource), "「管理」按钮已绑定 toggleManageRole（原来只建节点没绑事件）");
 check(/button\.on\(Node\.EventType\.TOUCH_END, \(event[\s\S]{0,60}event\.propagationStopped = true;[\s\S]{0,60}this\.onDeleteRoleClick\(role\.id\)/.test(selectorSource), "每个删除按钮都绑定了 onDeleteRoleClick（并先停掉冒泡，免得连带选中角色）");

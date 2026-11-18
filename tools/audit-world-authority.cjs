@@ -130,9 +130,10 @@ if (fs.existsSync(OLD_SPAWNER)) {
 forbid(CLIENT_UI, [/rollDropTable/, /resolveDropTable/], "客户端不许抽掉落（服务端 settle 帧的 reward 就是结果，客户端只演）");
 forbid(CLIENT_CONFIGS, [/export function resolveDropTable/], "掉落表只作为服务端 seed 的来源，客户端不再解析它（#581 删了这条回滚）");
 
-// addGood 只有一个定义（StorageManager 里），别处出现就是「本地发物品」
+// addGood 只有一个定义（ui/core/storage/bag-service.ts，#1115 批次 6 自 StorageManager 拆出；
+// facade 的委托行也放行），别处出现就是「本地发物品」
 for (const file of walk(CLIENT_UI)) {
-  if (path.basename(file) === "StorageManager.ts") continue;
+  if (path.basename(file) === "bag-service.ts" || file.endsWith("core/StorageManager.ts")) continue;
   const lines = read(file, "扫描目标").split(/\r?\n/);
   lines.forEach((text, index) => {
     if (/\baddGood\s*\(/.test(text)) {

@@ -89,7 +89,8 @@ function main() {
   check(/createGoodCompareSection\(good as Equipment, compare\)/.test(helper) && /equipmentAttributeDiffs\(goodShowAttributes\.get\(good\.slot\)/.test(helper), "对比段按槽位显示属性逐项出「旧值 → 新值（±差）」");
   check(/label_good_detail_compare_combat/.test(helper) && /equipmentCombatValue\(worn\)/.test(helper), "对比段含战斗力行（与「更好装备」提示同一口径）");
 
-  const storage = readSrc("ui/core/StorageManager.ts");
+const { storageSourceFor } = require("./lib/storage-src.cjs");
+  const storage = storageSourceFor(require("path").join(__dirname, "..", "assets", "ui", "core", "StorageManager.ts"));
   check(/static getWornEquipment\(slot: EQUIPMENT_TYPE\): Equipment \| null/.test(storage), "StorageManager.getWornEquipment = 对比数据源（未穿戴返回 null）");
 
   const bag = readSrc("ui/components/panel/BagGridView.ts");

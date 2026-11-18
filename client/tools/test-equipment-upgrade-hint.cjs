@@ -99,7 +99,8 @@ function main() {
   check(items.findBagEquipmentUpgrade([[null, null]], EQUIPMENT_TYPE.WEAPON, canUse, null) === null, "全空格背包 → null");
 
   console.log("=== 接线：角标点击 → 数据层 → 背包变动刷新（源码静态断言）===");
-  const storage = readSrc("ui/core/StorageManager.ts");
+const { storageSourceFor } = require("./lib/storage-src.cjs");
+  const storage = storageSourceFor(require("path").join(__dirname, "..", "assets", "ui", "core", "StorageManager.ts"));
   check(/static findBetterEquipmentInBag\(slot: EQUIPMENT_TYPE\)/.test(storage) && /findBagEquipmentUpgrade\(/.test(storage), "StorageManager.findBetterEquipmentInBag 包装纯函数（注入角色与可穿判定）");
   // #556 后换装走服务端 bag-op：找更优格仍是本地的，换装动作复用 equipFromBag（空格归服务端找、旧装备回原格）
   check(

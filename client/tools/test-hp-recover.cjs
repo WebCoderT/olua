@@ -193,7 +193,8 @@ const helperSource = read("assets/ui/core/GameHelper.ts");
 check(!/combatCalc/.test(helperSource), "GameHelper 里没有本地属性计算（#541 服务端权威：hpRecover 由 roleUpdate 帧下发，客户端只消费）");
 check(/Exclude<keyof BattleAttributes, "hpRecover">/.test(read("assets/configs/game-config.ts")), "战斗力权重表把 hpRecover 排除在外（回血不计入战斗力/地图门槛）");
 
-check(/HpHelper\.ensureDefaults\(role\);/.test(read("assets/ui/core/StorageManager.ts")), "StorageManager.ensureRoleDefaults 补旧存档的回血字段");
+const { storageSourceFor } = require("./lib/storage-src.cjs");
+check(/HpHelper\.ensureDefaults\(role\);/.test(storageSourceFor(require("path").join(__dirname, "..", "assets", "ui", "core", "StorageManager.ts"))), "StorageManager.ensureRoleDefaults 补旧存档的回血字段");
 const hpHelperSource = read("assets/ui/utils/battle/HpHelper.ts");
 check(/if \(typeof role\.hpRecover !== "number"\)/.test(hpHelperSource), "HpHelper 自己也会兜底缺失字段（不依赖调用方先跑 ensureRoleDefaults）");
 check(/if \(role\.hp <= 0 \|\| role\.maxHp <= 0\) return false;/.test(hpHelperSource), "HpHelper 死亡不回复（有守卫）");

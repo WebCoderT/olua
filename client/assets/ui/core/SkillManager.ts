@@ -138,3 +138,8 @@ export default class SkillManager {
     return Math.max(0, this.getEffectiveCooldown(skillId) - (Date.now() - last) / 1000);
   }
 }
+
+// #1115 批次 6 破环：StorageManager 换快捷键时要触发技能释放，但不 import 本模块（否则
+// SkillManager → StorageManager → SkillManager 成环）。模块加载时注入回调 —— SkillManager
+// 被 Game.ts 引入，注册必然发生；回调包一层箭头函数保住 this。
+StorageManager.setShortcutReleaseHandler((skillId) => SkillManager.release(skillId));

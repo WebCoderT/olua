@@ -148,7 +148,8 @@ function main() {
   //#region 四、使用链路的接线
 
   console.log("\n=== 四、使用链路接线（StorageManager + 快照顺序 + 文案）===");
-  const storageSource = read("assets/ui/core/StorageManager.ts");
+  const { storageSourceFor } = require("./lib/storage-src.cjs");
+  const storageSource = storageSourceFor(require("path").join(__dirname, "..", "assets", "ui", "core", "StorageManager.ts"));
   const textsSource = read("assets/configs/texts.ts");
   const applySource = read("assets/configs/apply-snapshot.ts");
   check(/isLevelScroll\(good\)\)\s*return await this\.useLevelScroll\(row, col\)/.test(storageSource), "useGood 把升级卷轴分发到 useLevelScroll");
@@ -158,7 +159,7 @@ function main() {
     "本地预检区间：不在区间就**不发请求**，直接提示该换哪一卷",
   );
   check(
-    /RoleApi\.levelScrollUse\(role\.id, \{ row, col, revision: role\.revision \}\)/.test(storageSource),
+    /RoleApi\.levelScrollUse\(role\.id, \{ row, col, revision \}\)/.test(storageSource) && /withRevision\(role, \(revision\)/.test(storageSource),
     "请求带 revision（乐观锁）且只报格子坐标 —— 等级与区间不往上报",
   );
   check(

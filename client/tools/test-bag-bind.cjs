@@ -189,7 +189,8 @@ function main() {
   check(recycled.bag[0][1] && recycled.bag[0][1].bound === true && recycled.bag[0][1].count === 2, "非装备格原样保留（连绑定都不动）");
 
   console.log("\n=== 接线：拾取应答照搬元数据（StorageManager）===");
-  const storage = readSrc("ui/core/StorageManager.ts");
+const { storageSourceFor } = require("./lib/storage-src.cjs");
+  const storage = storageSourceFor(require("path").join(__dirname, "..", "assets", "ui", "core", "StorageManager.ts"));
   const applyBody = extractBody(storage, "static applyPickResult(");
   check(!!applyBody, "StorageManager.applyPickResult 存在");
   check(!!applyBody && /cell\.bound/.test(applyBody) && /cell\.from/.test(applyBody), "拾取应答读 bound / from（服务端写的，客户端不重算）");

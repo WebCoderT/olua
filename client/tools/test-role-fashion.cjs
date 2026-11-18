@@ -31,7 +31,7 @@ function check(condition, label, extra) {
 
 const root = path.join(__dirname, "..");
 
-const storageSource = fs.readFileSync(path.join(root, "assets/ui/core/StorageManager.ts"), "utf8");
+const storageSource = require("./lib/storage-src.cjs").storageSourceFor(path.join(root, "assets/ui/core/StorageManager.ts"));
 const dialogSource = fs.readFileSync(path.join(root, "assets/ui/components/dialogs/FashionDialog.ts"), "utf8");
 const layoutSource = dialogsSourceFor(path.join(root, "assets/configs/layout/dialogs"));
 const apiSource = fs.readFileSync(path.join(root, "assets/ui/utils/net/Api.ts"), "utf8");
