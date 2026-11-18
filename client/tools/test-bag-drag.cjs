@@ -42,6 +42,14 @@ try {
 const { StorageManager, Role, outDir } = sandbox;
 const { moveBagCellGrid, normalizeBagGrid, getItem, getItemsByType } = require(path.join(outDir, "configs/items.js"));
 const { installBagOpEcho } = require("./lib/storage-sandbox.cjs");
+
+/** GameUiHelper 已按域拆到 helpers/parts/（#1115 批次 1）：断言用源码 = barrel + 全部 parts 拼接 */
+function gameUiSourceCombined(helperTsPath) {
+  const dir = path.join(path.dirname(helperTsPath), "parts");
+  return [fs.readFileSync(helperTsPath, "utf8"),
+    ...fs.readdirSync(dir).filter((x) => x.endsWith(".ts")).sort().map((x) => fs.readFileSync(path.join(dir, x), "utf8"))].join("\n");
+}
+
 // #556：整理 / 搬运都走 role.bagOp —— 服务端语义由 server/test/e2e-bag.cjs 盯，这里只保证客户端接得上
 installBagOpEcho(sandbox.RoleApi, StorageManager);
 
@@ -349,7 +357,7 @@ const draggableSource = fs.readFileSync(DRAGGABLE_FILE, "utf8");
 const storageSource = fs.readFileSync(STORAGE_MANAGER_FILE, "utf8");
 const itemsSource = fs.readFileSync(ITEMS_FILE, "utf8");
 const panelsSource = fs.readFileSync(PANELS_FILE, "utf8");
-const gameUiHelperSource = fs.readFileSync(GAME_UI_HELPER_FILE, "utf8");
+const gameUiHelperSource = gameUiSourceCombined(GAME_UI_HELPER_FILE);
 const gameHelperSource = fs.readFileSync(GAME_HELPER_FILE, "utf8");
 
 // 数据层接线
@@ -418,11 +426,11 @@ check(/this\.bagGrid\?\.cancelDrag\(\);/.test(dialogSource), "关弹窗先把拖
 check(/按住物品拖到别的格子 → StorageManager\.moveBagGood/.test(dialogSource), "BagDialog 的说明里写清了拖动的归属");
 
 // 零件实现
-check(/static createBagDragGhost\(icon: string\)/.test(gameUiHelperSource), "GameUiHelper 暴露 createBagDragGhost");
-check(/static createBagDragHighlight\(\)/.test(gameUiHelperSource), "GameUiHelper 暴露 createBagDragHighlight");
-check(/static followScreenPoint\(node: Node, screenPoint: Vec3\)/.test(gameUiHelperSource), "GameUiHelper 暴露 followScreenPoint");
-check(/static alignNodeToNode\(node: Node, target: Node\)/.test(gameUiHelperSource), "GameUiHelper 暴露 alignNodeToNode");
-check(/static setNodeOpacity\(node: Node \| null, opacity: number\)/.test(gameUiHelperSource), "GameUiHelper 暴露 setNodeOpacity");
+check(/function createBagDragGhost\(icon: string\)/.test(gameUiHelperSource), "GameUiHelper 暴露 createBagDragGhost");
+check(/function createBagDragHighlight\(\)/.test(gameUiHelperSource), "GameUiHelper 暴露 createBagDragHighlight");
+check(/function followScreenPoint\(node: Node, screenPoint: Vec3\)/.test(gameUiHelperSource), "GameUiHelper 暴露 followScreenPoint");
+check(/function alignNodeToNode\(node: Node, target: Node\)/.test(gameUiHelperSource), "GameUiHelper 暴露 alignNodeToNode");
+check(/function setNodeOpacity\(node: Node \| null, opacity: number\)/.test(gameUiHelperSource), "GameUiHelper 暴露 setNodeOpacity");
 check(/static screenPositionToWorldPosition\(screenPos: Vec3\)/.test(gameHelperSource), "GameHelper 暴露 screenPositionToWorldPosition（屏幕转世界）");
 check(/convertToNodeSpaceAR\(GameHelper\.screenPositionToWorldPosition\(screenPoint\)/.test(gameUiHelperSource), "屏幕坐标经世界坐标换算到父节点坐标系");
 

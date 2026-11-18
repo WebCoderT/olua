@@ -27,7 +27,15 @@ const { monsterDefaultSpeedRate } = require(path.join(outDir, "configs/game-conf
 
 /** #655 起怪物数值与表现都是库里的行（快照 = server/data/config-sync.sql） */
 const factory = require("./lib/factory-data.cjs");
-const HELPER_SRC = fs.readFileSync(path.join(PROJECT_ROOT, "assets/ui/helpers/GameUiHelper.ts"), "utf8");
+
+/** GameUiHelper 已按域拆到 helpers/parts/（#1115 批次 1）：断言用源码 = barrel + 全部 parts 拼接 */
+function gameUiSourceCombined(helperTsPath) {
+  const dir = path.join(path.dirname(helperTsPath), "parts");
+  return [fs.readFileSync(helperTsPath, "utf8"),
+    ...fs.readdirSync(dir).filter((x) => x.endsWith(".ts")).sort().map((x) => fs.readFileSync(path.join(dir, x), "utf8"))].join("\n");
+}
+
+const HELPER_SRC = gameUiSourceCombined(path.join(PROJECT_ROOT, "assets/ui/helpers/GameUiHelper.ts"));
 const GEN_SRC = fs.readFileSync(path.join(PROJECT_ROOT, "tools/gen-monster-config.cjs"), "utf8");
 const RUNTIME_SRC = fs.readFileSync(path.join(PROJECT_ROOT, "assets/configs/game-config.ts"), "utf8");
 const OUT_RES = path.join(PROJECT_ROOT, "assets/resources/monster/out");

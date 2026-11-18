@@ -21,6 +21,14 @@ const { PROJECT_ROOT, prepare, check, finish } = require("./lib/configs-sandbox.
 const outDir = prepare("olua-drop-rule", ["ui/utils/drop/DropRule.ts"]);
 const rule = require(path.join(outDir, "ui/utils/drop/DropRule.js"));
 
+/** GameUiHelper 已按域拆到 helpers/parts/（#1115 批次 1）：断言用源码 = barrel + 全部 parts 拼接 */
+function gameUiSourceCombined(helperTsPath) {
+  const dir = path.join(path.dirname(helperTsPath), "parts");
+  return [fs.readFileSync(helperTsPath, "utf8"),
+    ...fs.readdirSync(dir).filter((x) => x.endsWith(".ts")).sort().map((x) => fs.readFileSync(path.join(dir, x), "utf8"))].join("\n");
+}
+
+
 const read = (rel) => fs.readFileSync(path.join(PROJECT_ROOT, rel), "utf8");
 
 /**
@@ -155,8 +163,8 @@ console.log("\n=== 结构：文案与归属标记 ===");
     check(new RegExp(`^\\s*${key}:`, "m").test(texts), `文案 ${key} 已登记（核心代码里不写中文）`);
   }
 
-  const helper = read("assets/ui/helpers/GameUiHelper.ts");
-  const ownerMarkBody = methodBody(helper, "private static createDropOwnerMark(");
+  const helper = gameUiSourceCombined(path.join(PROJECT_ROOT, "assets/ui/helpers/GameUiHelper.ts"));
+  const ownerMarkBody = methodBody(helper, "function createDropOwnerMark(");
   check(ownerMarkBody.length > 0, "createDropOwnerMark 方法体能取到");
   check(ownerMarkBody.includes("Mask.Type.GRAPHICS_ELLIPSE"), "归属头像是圆形的（Mask GRAPHICS_ELLIPSE 裁方图）");
   check(ownerMarkBody.includes("owner.occupation && owner.sex"), "缺职业或性别就不画头像（不画空框）");

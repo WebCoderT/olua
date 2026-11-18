@@ -11,6 +11,14 @@ const fs = require("fs");
 const path = require("path");
 const { prepare, seedRuntimeTables, check, finish } = require("./lib/configs-sandbox.cjs");
 
+/** GameUiHelper 已按域拆到 helpers/parts/（#1115 批次 1）：断言用源码 = barrel + 全部 parts 拼接 */
+function gameUiSourceCombined(helperTsPath) {
+  const dir = path.join(path.dirname(helperTsPath), "parts");
+  return [fs.readFileSync(helperTsPath, "utf8"),
+    ...fs.readdirSync(dir).filter((x) => x.endsWith(".ts")).sort().map((x) => fs.readFileSync(path.join(dir, x), "utf8"))].join("\n");
+}
+
+
 const ROOT = path.join(__dirname, "..");
 
 function readSrc(rel) {
@@ -69,7 +77,7 @@ function main() {
   check(/if \(pressed === ctrlPressed\) return;/.test(modifier), "状态未变不通知（按住不松连发 KEY_DOWN 不会狂重建弹窗）");
   check(/export function isCtrlPressed/.test(modifier) && /ctrlListeners\.delete\(listener\)/.test(modifier), "isCtrlPressed 读状态、onCtrlChange 返回退订函数");
 
-  const helper = readSrc("ui/helpers/GameUiHelper.ts");
+  const helper = gameUiSourceCombined(path.join(ROOT, "assets/ui/helpers/GameUiHelper.ts"));
   // 第三参恒为「对比模式」（#789 在其后追加了可选的第四参 meta，签名允许带它）
   check(
     /createGoodDetailDialog\(good: Goods, anchor: Node, compare: Equipment \| "hint" \| null = null(, meta\?: BagCellMeta)?\)/.test(helper),

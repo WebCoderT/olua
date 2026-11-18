@@ -120,7 +120,7 @@ const MOUSE_LISTEN_REVIEWED = new Map([
     "节点由 GameUiHelper.applyShortcutKeyStyle 登记（内部即 blockClickThrough → trackUiPress）",
   ],
   [
-    "assets/ui/helpers/GameUiHelper.ts#sprite",
+    "assets/ui/helpers/parts/item-parts.ts#sprite",
     "背包/装备格子里的物品图标：格子经 bindPointerAction 登记（内部即 trackUiPress）",
   ],
 ]);
@@ -200,9 +200,9 @@ const WIRING = [
  * （Sprite 带 @requireComponent(UITransform)）。核不到就按「缺失」处理，不许白名单烂在库里。
  */
 const SELF_HIT_REVIEWED = new Map([
-  ["assets/ui/components/hud/AutoFightButton.ts", ["applyAutoFightButtonStyle", "assets/ui/helpers/GameUiHelper.ts"]],
-  ["assets/ui/components/hud/BottomNavButton.ts", ["applyBottomNavBarButtonStyle", "assets/ui/helpers/GameUiHelper.ts"]],
-  ["assets/ui/components/hud/ShortcutKeySlot.ts", ["applyShortcutKeyStyle", "assets/ui/helpers/GameUiHelper.ts"]],
+  ["assets/ui/components/hud/AutoFightButton.ts", ["applyAutoFightButtonStyle", "assets/ui/helpers/parts/role-parts.ts"]],
+  ["assets/ui/components/hud/BottomNavButton.ts", ["applyBottomNavBarButtonStyle", "assets/ui/helpers/parts/role-parts.ts"]],
+  ["assets/ui/components/hud/ShortcutKeySlot.ts", ["applyShortcutKeyStyle", "assets/ui/helpers/parts/role-parts.ts"]],
   ["assets/ui/components/panel/BagGridView.ts", ["applyFlexColStyle", "assets/ui/helpers/UiHelper.ts"]],
 ]);
 
@@ -397,7 +397,7 @@ for (const [rel, text] of fileTexts) {
   if (reviewed) {
     const [helper, helperFile] = reviewed;
     const helperText = fileTexts.get(helperFile) || "";
-    const helperOk = new RegExp(`static\\s+${helper}\\s*\\(`).test(helperText) && /addComponent\((?:UITransform|Sprite)\)/.test(helperText);
+    const helperOk = new RegExp(`(?:static\\s+|function\\s+)${helper}\\s*\\(`).test(helperText) && /addComponent\((?:UITransform|Sprite)\)/.test(helperText);
     selfHitNodes.push({
       file: rel,
       verdict: helperOk ? "助手已施加" : "待确认",

@@ -21,6 +21,14 @@ const path = require("path");
 const { PROJECT_ROOT, prepare, check, finish, fail } = require("./lib/configs-sandbox.cjs");
 /** #655 起配置的唯一来源是数据库快照（server/data/config-sync.sql）；属性已是 {min,max} */
 const factory = require("./lib/factory-data.cjs");
+
+/** GameUiHelper 已按域拆到 helpers/parts/（#1115 批次 1）：断言用源码 = barrel + 全部 parts 拼接 */
+function gameUiSourceCombined(helperTsPath) {
+  const dir = path.join(path.dirname(helperTsPath), "parts");
+  return [fs.readFileSync(helperTsPath, "utf8"),
+    ...fs.readdirSync(dir).filter((x) => x.endsWith(".ts")).sort().map((x) => fs.readFileSync(path.join(dir, x), "utf8"))].join("\n");
+}
+
 const rowsOf = (list) => list.map(({ updatedAt, ...row }) => row);
 
 /** 源码断言（读真实文件，盯「接线」而不是复刻实现） */
@@ -117,7 +125,7 @@ function main() {
   const soulDialog = stage("components/dialogs/WarSoulDialog.ts");
   const rankDialog = stage("components/dialogs/RankUpgradeDialog.ts");
   const storageSource = stage("core/StorageManager.ts");
-  const uiHelperSource = stage("helpers/GameUiHelper.ts");
+  const uiHelperSource = gameUiSourceCombined(path.join(PROJECT_ROOT, "assets/ui/helpers/GameUiHelper.ts"));
   const textsSource = read("assets/configs/texts.ts");
 
   check(/titleUpgradeChain\.forEach\(/.test(titleDialog) && !/titleLevels\.forEach\(/.test(titleDialog), "称号弹窗列表遍历升级链（不再全量 titleLevels）");

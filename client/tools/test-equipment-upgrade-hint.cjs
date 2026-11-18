@@ -11,6 +11,14 @@ const fs = require("fs");
 const path = require("path");
 const { prepare, seedRuntimeTables, check, finish } = require("./lib/configs-sandbox.cjs");
 
+/** GameUiHelper 已按域拆到 helpers/parts/（#1115 批次 1）：断言用源码 = barrel + 全部 parts 拼接 */
+function gameUiSourceCombined(helperTsPath) {
+  const dir = path.join(path.dirname(helperTsPath), "parts");
+  return [fs.readFileSync(helperTsPath, "utf8"),
+    ...fs.readdirSync(dir).filter((x) => x.endsWith(".ts")).sort().map((x) => fs.readFileSync(path.join(dir, x), "utf8"))].join("\n");
+}
+
+
 const ROOT = path.join(__dirname, "..");
 
 function readSrc(rel) {
@@ -116,7 +124,7 @@ function main() {
   check(/upgradeHint: \{/.test(panels) && /position: new Vec2\(19, 19\)/.test(panels), "角标几何进 configs/layout/panels.equipmentSlotLayout.upgradeHint（组件只引用不自带坐标）");
   const texts = readSrc("configs/texts.ts");
   check(/label_equip_upgrade_hint: "换"/.test(texts), "角标文案进 configs/texts（玩家中文不出 ui/，见 audit-config-leak）");
-  const helper = readSrc("ui/helpers/GameUiHelper.ts");
+  const helper = gameUiSourceCombined(path.join(ROOT, "assets/ui/helpers/GameUiHelper.ts"));
   check(/getText\("label_equip_upgrade_hint"\)/.test(helper) && /circle\(0, 0, layout\.size\.width \/ 2\)/.test(helper), "GameUiHelper.createEquipmentUpgradeHint 用 Graphics 圆底 + 文案表文案");
 
   finish("装备升级提示：数据层行为与接线全部符合口径");

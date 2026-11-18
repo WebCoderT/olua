@@ -31,6 +31,14 @@ const {
 const { dropItemLayout } = require(path.join(outDir, "configs/layout/hud.js"));
 const { isEquipment } = require(path.join(outDir, "types/good.js"));
 
+/** GameUiHelper 已按域拆到 helpers/parts/（#1115 批次 1）：断言用源码 = barrel + 全部 parts 拼接 */
+function gameUiSourceCombined(helperTsPath) {
+  const dir = path.join(path.dirname(helperTsPath), "parts");
+  return [fs.readFileSync(helperTsPath, "utf8"),
+    ...fs.readdirSync(dir).filter((x) => x.endsWith(".ts")).sort().map((x) => fs.readFileSync(path.join(dir, x), "utf8"))].join("\n");
+}
+
+
 const read = (rel) => fs.readFileSync(path.join(PROJECT_ROOT, rel), "utf8");
 
 /**
@@ -123,14 +131,14 @@ check(!!dropItemLayout, "configs/layout/hud 导出 dropItemLayout");
 check(!!dropItemLayout.nameColor && !!dropItemLayout.countColor, "非装备名称色与数量色都在配置里（代码不写死 Color）");
 
 console.log("\n— D. 接线（源码断言）—");
-const helperSource = read("assets/ui/helpers/GameUiHelper.ts");
+const helperSource = gameUiSourceCombined(path.join(PROJECT_ROOT, "assets/ui/helpers/GameUiHelper.ts"));
 const dropManagerSource = read("assets/ui/core/DropManager.ts");
 const barrelSource = read("assets/configs/hudLayout.ts");
 const hudSource = read("assets/configs/layout/hud.ts");
 // 先剥注释再切片：注释里的中文/数字不会被当成「裸文案/写死数值」
 const helperCode = helperSource.replace(/\/\/[^\n]*/g, "").replace(/\/\*[\s\S]*?\*\//g, "");
-const dropItemBody = methodBody(helperCode, "static createDropItem");
-const dropNameBody = methodBody(helperCode, "static createDropNameRow");
+const dropItemBody = methodBody(helperCode, "function createDropItem");
+const dropNameBody = methodBody(helperCode, "function createDropNameRow");
 
 check(dropItemBody.length > 0 && dropNameBody.length > 0, "两个方法都在 GameUiHelper 里（createDropItem / createDropNameRow）");
 check(

@@ -26,6 +26,14 @@ const soulRows = factory.souls();
 const roleLevels = factory.levelRows();
 const { titleLevels, titleMaxLevel, getTitleLevel, titleAttributeLabels } = require(path.join(outDir, "configs/game-config.js"));
 
+/** GameUiHelper 已按域拆到 helpers/parts/（#1115 批次 1）：断言用源码 = barrel + 全部 parts 拼接 */
+function gameUiSourceCombined(helperTsPath) {
+  const dir = path.join(path.dirname(helperTsPath), "parts");
+  return [fs.readFileSync(helperTsPath, "utf8"),
+    ...fs.readdirSync(dir).filter((x) => x.endsWith(".ts")).sort().map((x) => fs.readFileSync(path.join(dir, x), "utf8"))].join("\n");
+}
+
+
 const read = (rel) => fs.readFileSync(path.join(PROJECT_ROOT, rel), "utf8");
 
 /** PNG 尺寸（IHDR：宽高在固定偏移 16/20，大端 uint32） */
@@ -124,7 +132,7 @@ const displaySource = read("assets/ui/components/role/RoleDisplay.ts");
 const managerSource = read("assets/ui/core/RoleUIManager.ts");
 const gameSource = read("assets/ui/Game.ts");
 const preloadSource = read("assets/ui/core/PreloadManager.ts");
-const uiHelperSource = read("assets/ui/helpers/GameUiHelper.ts");
+const uiHelperSource = gameUiSourceCombined(path.join(PROJECT_ROOT, "assets/ui/helpers/GameUiHelper.ts"));
 const roleInfoSource = read("assets/ui/components/dialogs/RoleInfoDialog.ts");
 const dialogSource = read("assets/ui/components/dialogs/TitleUpgradeDialog.ts");
 const textsSource = read("assets/configs/texts.ts");
@@ -150,7 +158,7 @@ check(/updateTitleShow\(\);/.test(gameSource), "进图时挂称号外显（Game 
 check(/updateTitleShow: \(\) => void;/.test(managerSource) && /static updateTitleShow\(\)/.test(managerSource), "RoleUIManager 接口与实现都有 updateTitleShow");
 check(/dir: title\.animation, kind: "frames"/.test(preloadSource) && /getTitleLevel\(role\.title\)/.test(preloadSource), "进图前预载当前称号的帧目录（未激活跳过）");
 
-check(/static createTitleCard/.test(uiHelperSource) && /static createTitleAttributeList/.test(uiHelperSource) && /static createTitleAnimation/.test(uiHelperSource), "GameUiHelper 有称号三零件（卡片/属性表/动画）");
+check(/function createTitleCard/.test(uiHelperSource) && /function createTitleAttributeList/.test(uiHelperSource) && /function createTitleAnimation/.test(uiHelperSource), "GameUiHelper 有称号三零件（卡片/属性表/动画）");
 check(/titleUpgradeDialogLayout\.list\.cardSize/.test(uiHelperSource) && /titleAttributeLabels/.test(uiHelperSource), "称号零件的几何与属性顺序都来自 configs（不写死）");
 check(/new TitleUpgradeDialog\(\)\.open\(\)/.test(roleInfoSource) && /roleInfoDialogLayout\.titleButton/.test(roleInfoSource), "角色信息弹窗有「称号」按钮打开称号弹窗（唯一入口）");
 check(/new WarSoulDialog/.test(npcClicksSource) && !/TitleUpgradeDialog/.test(npcClicksSource), "NPC 只挂战魂弹窗，称号不走 NPC");

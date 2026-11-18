@@ -41,8 +41,16 @@ const { EQUIPMENT_PREFIX, isEquipment } = require(path.join(outDir, "types/good.
 const { getItemsByType } = require(path.join(outDir, "configs/items.js"));
 const { getFrameIndex } = require(path.join(outDir, "ui/utils/animation/FrameOrder.js"));
 
+/** GameUiHelper 已按域拆到 helpers/parts/（#1115 批次 1）：断言用源码 = barrel + 全部 parts 拼接 */
+function gameUiSourceCombined(helperTsPath) {
+  const dir = path.join(path.dirname(helperTsPath), "parts");
+  return [fs.readFileSync(helperTsPath, "utf8"),
+    ...fs.readdirSync(dir).filter((x) => x.endsWith(".ts")).sort().map((x) => fs.readFileSync(path.join(dir, x), "utf8"))].join("\n");
+}
+
+
 const read = (rel) => fs.readFileSync(path.join(PROJECT_ROOT, rel), "utf8");
-const gameUiSource = read("assets/ui/helpers/GameUiHelper.ts");
+const gameUiSource = gameUiSourceCombined(path.join(PROJECT_ROOT, "assets/ui/helpers/GameUiHelper.ts"));
 const preloadSource = read("assets/ui/core/PreloadManager.ts");
 const lightSource = read("assets/configs/light.ts");
 const layoutSource = read("assets/configs/layout/lights.ts");
@@ -224,17 +232,17 @@ check(dropLightEffectConfig("") === null, "空 key 返回 null（调用方直接
 }
 
 console.log("\n— G. 接线：挂点唯一、画在图标下层、循环播放、预加载 —");
-check(/this\.applyEquipmentLight\(node, good\)/.test(gameUiSource), "掉落物零件里挂了装备光柱（唯一挂点）");
+check(/applyEquipmentLight\(node, good\)/.test(gameUiSource), "掉落物零件里挂了装备光柱（唯一挂点）");
 {
   // 层级：光柱必须在图标之前 addChild（同一父节点下排在前面的画在下层）
-  const createDropItem = gameUiSource.slice(gameUiSource.indexOf("static createDropItem"), gameUiSource.indexOf("static createDropNameRow"));
+  const createDropItem = gameUiSource.slice(gameUiSource.indexOf("function createDropItem"), gameUiSource.indexOf("function createDropNameRow"));
   const lightIndex = createDropItem.indexOf("applyEquipmentLight");
   const iconIndex = createDropItem.indexOf("node.addChild(icon)");
   check(lightIndex >= 0 && iconIndex >= 0 && lightIndex < iconIndex, "光柱在图标之前挂载（画在图标下层，物品本身清晰可辨）");
 }
-check(/if \(!isEquipment\(good\)\) return;/.test(gameUiSource.slice(gameUiSource.indexOf("static applyEquipmentLight"), gameUiSource.indexOf("static createEquipmentLight"))), "非装备不挂光柱");
+check(/if \(!isEquipment\(good\)\) return;/.test(gameUiSource.slice(gameUiSource.indexOf("function applyEquipmentLight"), gameUiSource.indexOf("function createEquipmentLight"))), "非装备不挂光柱");
 {
-  const applyLight = gameUiSource.slice(gameUiSource.indexOf("static applyEquipmentLight"), gameUiSource.indexOf("static createEquipmentLight"));
+  const applyLight = gameUiSource.slice(gameUiSource.indexOf("function applyEquipmentLight"), gameUiSource.indexOf("function createEquipmentLight"));
   check(/dropLightEffectConfig\(lightKey\)/.test(applyLight), "表现参数取自快照（dropLightEffectConfig，管理端「特效管理」可改）");
   check(/if \(!config \|\| !config\.enabled\) return;/.test(applyLight), "该档被运营关掉时连节点都不建（不是建一个空精灵）");
   check(/playLoopAtlasWithDuration\(/.test(applyLight), "一轮时长走图集总时长口径（playLoopAtlasWithDuration，与升级特效同一套）");
@@ -244,7 +252,7 @@ check(!/equipmentLightLayout\.frameRate/.test(gameUiSource), "界面不再从 la
 check(!/frameRate/.test(layoutSource), "configs/layout/lights 只剩基准尺寸与节点名前缀（帧率已搬去服务端）");
 check(/equipmentLightLayout\.size/.test(gameUiSource) && /equipmentLightLayout\.namePrefix/.test(gameUiSource), "基准尺寸与节点名前缀走 configs/layout/lights");
 {
-  const createLight = gameUiSource.slice(gameUiSource.indexOf("static createEquipmentLight"), gameUiSource.indexOf("static createEquipmentLight") + 900);
+  const createLight = gameUiSource.slice(gameUiSource.indexOf("function createEquipmentLight"), gameUiSource.indexOf("function createEquipmentLight") + 900);
   check(!/trim\s*=\s*true/.test(createLight), "光柱没有把 trim 改成 true（这批素材 trim=true 会帧间抖动）");
   check(!/Sprite\.SizeMode\.RAW/.test(createLight), "光柱用固定尺寸（CUSTOM），不按素材原始尺寸撑开");
   check(

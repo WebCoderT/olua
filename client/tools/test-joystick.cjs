@@ -25,6 +25,14 @@ const fs = require("fs");
 const path = require("path");
 const { PROJECT_ROOT, prepare, check, finish, fail } = require("./lib/configs-sandbox.cjs");
 
+/** GameUiHelper 已按域拆到 helpers/parts/（#1115 批次 1）：断言用源码 = barrel + 全部 parts 拼接 */
+function gameUiSourceCombined(helperTsPath) {
+  const dir = path.join(path.dirname(helperTsPath), "parts");
+  return [fs.readFileSync(helperTsPath, "utf8"),
+    ...fs.readdirSync(dir).filter((x) => x.endsWith(".ts")).sort().map((x) => fs.readFileSync(path.join(dir, x), "utf8"))].join("\n");
+}
+
+
 const UI = path.join(PROJECT_ROOT, "assets/ui");
 const CONFIGS = path.join(PROJECT_ROOT, "assets/configs");
 const CC_DIR = (outDir) => path.join(path.dirname(outDir), "node_modules/cc/index.js");
@@ -160,7 +168,7 @@ const joystickInputSrc = read(path.join(UI, "components/input/RoleJoystickInput.
 const joystickSrc = read(path.join(UI, "components/hud/Joystick.ts"));
 const roleDisplaySrc = read(path.join(UI, "components/role/RoleDisplay.ts"));
 const gameSrc = read(path.join(UI, "Game.ts"));
-const gameUiHelperSrc = read(path.join(UI, "helpers/GameUiHelper.ts"));
+const gameUiHelperSrc = gameUiSourceCombined(path.join(UI, "helpers/GameUiHelper.ts"));
 const screenClickSrc = read(path.join(UI, "components/input/ScreenClickInput.ts"));
 const pointerSrc = read(path.join(UI, "utils/input/Pointer.ts"));
 const pureSrc = read(path.join(UI, "utils/input/Joystick.ts"));

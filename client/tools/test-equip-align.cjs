@@ -16,6 +16,14 @@ const fs = require("fs");
 const path = require("path");
 const { PROJECT_ROOT, prepare, check, finish, fail } = require("./lib/configs-sandbox.cjs");
 
+/** GameUiHelper 已按域拆到 helpers/parts/（#1115 批次 1）：断言用源码 = barrel + 全部 parts 拼接 */
+function gameUiSourceCombined(helperTsPath) {
+  const dir = path.join(path.dirname(helperTsPath), "parts");
+  return [fs.readFileSync(helperTsPath, "utf8"),
+    ...fs.readdirSync(dir).filter((x) => x.endsWith(".ts")).sort().map((x) => fs.readFileSync(path.join(dir, x), "utf8"))].join("\n");
+}
+
+
 const read = (rel) => fs.readFileSync(path.join(PROJECT_ROOT, rel), "utf8");
 
 try {
@@ -112,7 +120,7 @@ try {
 
   const appearance = read("assets/ui/components/role/RoleAppearance.ts");
   const inShow = read("assets/ui/components/panel/RoleInShowView.ts");
-  const helper = read("assets/ui/helpers/GameUiHelper.ts");
+  const helper = gameUiSourceCombined(path.join(PROJECT_ROOT, "assets/ui/helpers/GameUiHelper.ts"));
 
   check(!/placeWeaponOnHand\(/.test(appearance), "RoleAppearance 不再调用 placeWeaponOnHand（#541：外观帧算法已删除，只认数据）");
   check(!/applyWeaponTransform|spriteContentBox|retryAlign|EQUIP_ALIGN/.test(appearance), "外观不再有独立的武器定位路径（衣服与武器同一份 applyOutTransform）");
@@ -134,7 +142,7 @@ try {
   check(/createRoleClothInShow\([^)]*\(\) => this\.alignWeapon\(\)/.test(inShow), "衣服内观素材就绪后触发一次对齐");
   check(/createRoleWeaponInshow\([^)]*\(\) => this\.alignWeapon\(\)/.test(inShow), "武器内观素材就绪后触发一次对齐");
 
-  check(/static spriteContentBox\(/.test(helper), "GameUiHelper.spriteContentBox 存在（帧内容 bbox 的唯一读法）");
+  check(/function spriteContentBox\(/.test(helper), "GameUiHelper.spriteContentBox 存在（帧内容 bbox 的唯一读法）");
   check(/frame\.offset/.test(helper) && /frame\.getRect\(\)/.test(helper), "spriteContentBox 用 SpriteFrame.offset + rect 还原裁剪偏移");
   check(/rect\.width \* rect\.height <= BLANK_FRAME_MAX_AREA/.test(helper), "占位空帧按面积判（武器空帧是 2×2，边长判据会把它当真实帧去算中心）");
   check(/playLoopAtlasWithDuration\([^)]*\)\.then\(/.test(helper) || /void AnimationHelper\.playLoopAtlasWithDuration/.test(helper), "内观创建把「素材就绪」回调接在异步加载上");

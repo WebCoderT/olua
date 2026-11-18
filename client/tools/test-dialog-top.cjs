@@ -23,6 +23,14 @@ const path = require("path");
 const { prepareLayer } = require("./lib/layer-sandbox.cjs");
 const { PROJECT_ROOT, check, finish, fail } = require("./lib/configs-sandbox.cjs");
 
+/** GameUiHelper 已按域拆到 helpers/parts/（#1115 批次 1）：断言用源码 = barrel + 全部 parts 拼接 */
+function gameUiSourceCombined(helperTsPath) {
+  const dir = path.join(path.dirname(helperTsPath), "parts");
+  return [fs.readFileSync(helperTsPath, "utf8"),
+    ...fs.readdirSync(dir).filter((x) => x.endsWith(".ts")).sort().map((x) => fs.readFileSync(path.join(dir, x), "utf8"))].join("\n");
+}
+
+
 const LAYER_MANAGER_FILE = path.join(PROJECT_ROOT, "assets/ui/core/LayerManager.ts");
 const GAME_UI_HELPER_FILE = path.join(PROJECT_ROOT, "assets/ui/helpers/GameUiHelper.ts");
 const GAME_FILE = path.join(PROJECT_ROOT, "assets/ui/Game.ts");
@@ -127,7 +135,7 @@ check(uiLayer.children[uiLayer.children.length - 1] === loose, "不在任何弹�
 console.log("\n— B. 接线（源码断言）—");
 
 const layerSource = read(LAYER_MANAGER_FILE);
-const helperSource = read(GAME_UI_HELPER_FILE);
+const helperSource = gameUiSourceCombined(GAME_UI_HELPER_FILE);
 const gameSource = read(GAME_FILE);
 const storageSource = read(STORAGE_MANAGER_FILE);
 const hoverTipSource = read(HOVER_TIP_MANAGER_FILE);
@@ -139,15 +147,15 @@ check(/item\.parent !== parent/.test(layerSource) && /getSiblingIndex\(\)/.test(
 check(/if \(topIndex <= index\) return;/.test(layerSource), "已在最上层时提前返回（不做无意义的重排）");
 check(/dialogNodes = this\.dialogNodes\.filter\(\(item\) => isValid\(item\)\)/.test(layerSource), "登记时清掉已销毁的清单项");
 
-const raiseBody = methodBody(helperSource, "static bindDialogRaiseOnPress(node: Node) {");
+const raiseBody = methodBody(helperSource, "function bindDialogRaiseOnPress(node: Node) {");
 check(Boolean(raiseBody), "GameUiHelper.bindDialogRaiseOnPress 存在");
 check(/TOUCH_START/.test(raiseBody) && /LayerManager\.raiseDialog\(node\)/.test(raiseBody), "触摸通道：TOUCH_START 冒泡到弹窗根即置顶（点弹窗内任何位置都算）");
 check(/MOUSE_DOWN/.test(raiseBody) && /HAS_MOUSE/.test(raiseBody), "鼠标通道：MOUSE_DOWN 补一次（只在有鼠标的环境登记）");
 check(!/MOUSE_MOVE/.test(raiseBody), "不注册 MOUSE_MOVE（节点一旦命中就会吞掉指针移动，指针样式与按住走路都会卡住）");
 check(/trackUiPress\(node\)/.test(raiseBody), "顺带登记「按压起点」（与 blockClickThrough 同一套口径，幂等）");
 
-const dialogBgBody = methodBody(helperSource, "static createDialogBg(name: string");
-check(/this\.bindDialogRaiseOnPress\(dialog\)/.test(dialogBgBody), "createDialogBg 里挂上置顶（走 createDialog 的弹窗全部自动获得该行为）");
+const dialogBgBody = methodBody(helperSource, "function createDialogBg(name: string");
+check(/bindDialogRaiseOnPress\(dialog\)/.test(dialogBgBody), "createDialogBg 里挂上置顶（走 createDialog 的弹窗全部自动获得该行为）");
 
 // 每个弹窗的挂载点都必须登记：漏一个，那个弹窗就点不动
 // [文件, 登记式挂载次数（弹窗）, 普通挂载次数（临时层，如商城/背包的悬停详情）]
@@ -186,7 +194,7 @@ check(/blockClickThrough\(this\)/.test(confirmSource), "确认框仍然独占鼠
 // 飘字是临时层：游戏内仍挂 UI 图层（保持最上，不参与弹窗置顶排序）；
 // 登录/选角这类没调 initLayer 的场景没有图层容器，改挂场景里的 Canvas —— 注意不是场景根：
 // Canvas 的原点才是屏幕中心，挂场景根会把飘字摆到世界原点（= 屏幕左下角顶点外），见 GameUiHelper.mountFloatingTip
-check(/private static mountFloatingTip\(tip: Node\)/.test(helperSource) && /if \(uiLayer && isValid\(uiLayer\) && uiLayer\.scene\)[\s\S]{0,80}LayerManager\.addToUILayer\(tip\)/.test(helperSource), "飘字提示：游戏内仍挂 UI 图层（临时层保持最上），非游戏场景挂 Canvas");
+check(/function mountFloatingTip\(tip: Node\)/.test(helperSource) && /if \(uiLayer && isValid\(uiLayer\) && uiLayer\.scene\)[\s\S]{0,80}LayerManager\.addToUILayer\(tip\)/.test(helperSource), "飘字提示：游戏内仍挂 UI 图层（临时层保持最上），非游戏场景挂 Canvas");
 check(/getComponent\(Canvas\)\) \?\? scene/.test(helperSource) && /host\.addChild\(tip\)/.test(helperSource), "非游戏场景的飘字挂在 Canvas 下（原点 = 屏幕中心），不是场景根");
 check(/LayerManager\.addToUILayer\(detailDialog\)/.test(helperSource), "悬停物品详情仍是 addToUILayer（同上）");
 check(/LayerManager\.addToUILayer\(detail\)/.test(mallSource), "商城的悬停详情仍是 addToUILayer（同上）");

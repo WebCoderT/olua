@@ -48,6 +48,14 @@ const { clothes, getEquipmentVariantKey } = require(path.join(outDir, "configs/e
 const { EQUIPMENT_TYPE } = require(path.join(outDir, "types/good.js"));
 const { default: HpHelper } = require(path.join(outDir, "ui/utils/battle/HpHelper.js"));
 
+/** GameUiHelper 已按域拆到 helpers/parts/（#1115 批次 1）：断言用源码 = barrel + 全部 parts 拼接 */
+function gameUiSourceCombined(helperTsPath) {
+  const dir = path.join(path.dirname(helperTsPath), "parts");
+  return [fs.readFileSync(helperTsPath, "utf8"),
+    ...fs.readdirSync(dir).filter((x) => x.endsWith(".ts")).sort().map((x) => fs.readFileSync(path.join(dir, x), "utf8"))].join("\n");
+}
+
+
 const read = (rel) => fs.readFileSync(path.join(PROJECT_ROOT, rel), "utf8");
 const percent = (value) => `${(value * 100).toFixed(1)}%`;
 
@@ -129,7 +137,7 @@ check(
   [EQUIPMENT_TYPE.CLOTH, EQUIPMENT_TYPE.OTHER1, EQUIPMENT_TYPE.OTHER2].every((slot) => (goodShowAttributes.get(slot) ?? []).includes("hpRecover")),
   "全属性部位（衣服 / 其他1 / 其他2）的详情列出回血",
 );
-const uiHelperSource = read("assets/ui/helpers/GameUiHelper.ts");
+const uiHelperSource = gameUiSourceCombined(path.join(PROJECT_ROOT, "assets/ui/helpers/GameUiHelper.ts"));
 check(
   /for \(const element of goodShowAttributesLabel\.keys\(\)\)/.test(uiHelperSource) && /\(goodShowAttributes\.get\(good\.slot\) \?\? \[\]\)\.forEach/.test(uiHelperSource),
   "角色属性列表与装备详情都遍历配置里的属性表（新增一条属性不用改界面代码）",

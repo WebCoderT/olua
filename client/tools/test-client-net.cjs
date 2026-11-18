@@ -25,6 +25,14 @@ const path = require("path");
 const { prepareNet } = require("./lib/net-sandbox.cjs");
 const { PROJECT_ROOT, prepare, check, finish, fail } = require("./lib/configs-sandbox.cjs");
 
+/** GameUiHelper 已按域拆到 helpers/parts/（#1115 批次 1）：断言用源码 = barrel + 全部 parts 拼接 */
+function gameUiSourceCombined(helperTsPath) {
+  const dir = path.join(path.dirname(helperTsPath), "parts");
+  return [fs.readFileSync(helperTsPath, "utf8"),
+    ...fs.readdirSync(dir).filter((x) => x.endsWith(".ts")).sort().map((x) => fs.readFileSync(path.join(dir, x), "utf8"))].join("\n");
+}
+
+
 const ASSETS = path.join(PROJECT_ROOT, "assets");
 const FILE = {
   helper: path.join(ASSETS, "ui/helpers/GameUiHelper.ts"),
@@ -383,8 +391,8 @@ async function expectFailure(action) {
   check(/installNetwork\(\)/.test(read(FILE.login)), "登录场景调 installNetwork");
   check(/installNetwork\(\)/.test(read(FILE.selector)), "选角场景调 installNetwork");
 
-  const helperSource = read(FILE.helper);
-  check(/private static mountFloatingTip\(tip: Node\)/.test(helperSource) && /uiLayer\.scene/.test(helperSource), "飘字挂载点跨场景可用（游戏内走 UI 图层，登录/选角挂场景里的 Canvas）");
+  const helperSource = gameUiSourceCombined(FILE.helper);
+  check(/function mountFloatingTip\(tip: Node\)/.test(helperSource) && /uiLayer\.scene/.test(helperSource), "飘字挂载点跨场景可用（游戏内走 UI 图层，登录/选角挂场景里的 Canvas）");
   check(
     /scene\.children\.find\(\(child\) => !!child\.getComponent\(Canvas\)\) \?\? scene/.test(helperSource),
     "非游戏场景挂 Canvas 下：Canvas 原点就是屏幕中心，飘字坐标（configs/layout/hud.tipsLayout）才对得上",

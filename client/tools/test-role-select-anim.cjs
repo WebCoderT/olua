@@ -21,6 +21,14 @@ const fs = require("fs");
 const path = require("path");
 const { PROJECT_ROOT, prepare, check, finish, fail } = require("./lib/configs-sandbox.cjs");
 
+/** GameUiHelper 已按域拆到 helpers/parts/（#1115 批次 1）：断言用源码 = barrel + 全部 parts 拼接 */
+function gameUiSourceCombined(helperTsPath) {
+  const dir = path.join(path.dirname(helperTsPath), "parts");
+  return [fs.readFileSync(helperTsPath, "utf8"),
+    ...fs.readdirSync(dir).filter((x) => x.endsWith(".ts")).sort().map((x) => fs.readFileSync(path.join(dir, x), "utf8"))].join("\n");
+}
+
+
 const read = (rel) => fs.readFileSync(path.join(PROJECT_ROOT, rel), "utf8");
 const exists = (rel) => fs.existsSync(path.join(PROJECT_ROOT, rel));
 
@@ -76,7 +84,7 @@ try {
   console.log("\n— C. 接线契约（选角组件 / 零件工厂） —");
   {
     const selector = read("assets/ui/RoleSelector.ts");
-    const helper = read("assets/ui/helpers/GameUiHelper.ts");
+    const helper = gameUiSourceCombined(path.join(PROJECT_ROOT, "assets/ui/helpers/GameUiHelper.ts"));
 
     // #1059：卡片底板 / 角标 / 名牌改用 Graphics 现画（矢量替代位图），但「选中」不再画框 ——
     // 判定靠展示帧 + 脚下特效，所以这里守的是「没有画框代码」，不是「没有 Graphics」
@@ -86,7 +94,7 @@ try {
     check(selector.includes("ROLE_PREVIEW_PREFIX"), "预览节点按统一前缀命名（才能按 id 找回）");
     check(/private setRoleSelected\(/.test(selector), "setRoleSelected 一处收口（不散落在各调用点）");
 
-    check(/static setRolePreviewSelected\(/.test(helper), "零件工厂有 setRolePreviewSelected");
+    check(/function setRolePreviewSelected\(/.test(helper), "零件工厂有 setRolePreviewSelected");
     check(/createRoleShowImage\(occupation, sex\)/.test(helper), "选中态按「职业-性别」取 show 图集");
     check(/roleSelectEffectImage/.test(helper), "脚下特效走统一的取图函数");
     // 先装载再藏站立帧：这是顺序契约（防止「站立已藏、展示帧还没到」的空窗），不是观感数值
