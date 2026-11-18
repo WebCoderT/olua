@@ -40,10 +40,19 @@ const STUB_IMPORTS = {
   "./GameHelper": "../../stubs/GameHelper",
   "./LayerManager": "../../stubs/LayerManager",
   "../helpers/GameUiHelper": "../../stubs/GameUiHelper",
-  // 角色落盘会写穿服务端（见 ui/utils/net）：同步请求与场景/飘字无关，
-  // 这里顶成「记账式」替身 —— 只记下安排过同步，真语义由 client/tools/test-client-net.cjs 验证
-  "../utils/net/RoleSync": "../../stubs/RoleSync",
-  "../utils/net/Session": "../../stubs/Session",
+  // #1115 批次 6：StorageManager 的实现拆进 ui/core/storage/，子模块从自己的目录出发引用
+  // 同一批 stub —— specifier 多一层、替换值也多一层（相对 src/ui/core/storage/）
+  "../RoleUIManager": "../../../stubs/RoleUIManager",
+  "../SceneManager": "../../../stubs/SceneManager",
+  "../SoundManager": "../../../stubs/SoundManager",
+  "../GameHelper": "../../../stubs/GameHelper",
+  "../LayerManager": "../../../stubs/LayerManager",
+  "../../helpers/GameUiHelper": "../../../stubs/GameUiHelper",
+  "../../utils/net/RoleSync": "../../../stubs/RoleSync",
+  "../../utils/net/Session": "../../../stubs/Session",
+  "../../utils/net/Api": "../../../stubs/Api",
+  "../../utils/net/ApiModels": "../../../stubs/ApiModels",
+  "../../utils/net/CombatChannel": "../../../stubs/CombatChannelTypes",
   // #304 / #308 / #250 之后 StorageManager 也直接调角色接口（购买 / 用药 / 升级收权到服务端）：
   // Api 顶成记账式替身（默认「未搭桩即拒绝」，测试要成功就自己给 handler）；
   // CombatChannel / ApiModels 在 StorageManager 里只有 `import type`，运行期会被擦掉，补类型替身即可
@@ -339,6 +348,13 @@ function prepareStorage(sandboxName, extraEntries = []) {
   // 引导进度的纯逻辑（#402）：StorageManager 的旧档补齐要过它，属于它的直接依赖
   copy(path.join(ASSETS, "ui/utils/guide/guide-progress.ts"), path.join(srcDir, "ui/utils/guide/guide-progress.ts"));
   copy(path.join(ASSETS, "ui/core/StorageManager.ts"), path.join(srcDir, "ui/core/StorageManager.ts"), true);
+  // #1115 批次 6：StorageManager 的实现拆进 ui/core/storage/（facade 门面只转发）。
+  // 子模块同样指向 UI / 环依赖，逐文件重写 import（与 StorageManager.ts 同一重写表）
+  fs.mkdirSync(path.join(srcDir, "ui/core/storage"), { recursive: true });
+  for (const file of fs.readdirSync(path.join(ASSETS, "ui/core/storage"))) {
+    if (!file.endsWith(".ts")) continue;
+    copy(path.join(ASSETS, "ui/core/storage", file), path.join(srcDir, "ui/core/storage", file), true);
+  }
   // 额外入口：沙箱里还没有的，按原样复制一份（configs / types 已整份复制，不重复拷）
   extraEntries.forEach((rel) => {
     const target = path.join(srcDir, rel);

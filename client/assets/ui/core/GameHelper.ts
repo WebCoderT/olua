@@ -1,8 +1,8 @@
 import { Camera, Vec3 } from "cc";
 import { TextRef } from "../../types/common";
 import { Equipment } from "../../types/good";
+import { Role } from "../../entities/Role";
 import { OECCUPATION, SEX } from "../../types/role";
-import StorageManager from "./StorageManager";
 import { mapLabelOf, maps } from "../../configs/game-config";
 import { getText, textRef } from "../../configs/texts";
 import { MapId } from "../../types/map";
@@ -37,8 +37,8 @@ export default class GameHelper {
   }
 
   /** 角色是否能穿上装备 */
-  static checkRoleCanUseEquipment(equipment: Equipment) {
-    return this.getEquipmentRejectReason(equipment) === null;
+  static checkRoleCanUseEquipment(equipment: Equipment, role: Role | null) {
+    return this.getEquipmentRejectReason(equipment, role) === null;
   }
 
   /**
@@ -46,9 +46,9 @@ export default class GameHelper {
    * 判定项与顺序：等级 → 性别 → 职业
    * 只产出「用哪条文案 + 参数」（TextRef），具体中文取自 configs/texts，方便提示层直接展示
    * @param equipment 待校验装备
+   * @param role 当前角色（显式传入 —— StorageManager 与本模块不再互相 import，#1115 批次 6）
    */
-  static getEquipmentRejectReason(equipment: Equipment): TextRef | null {
-    const role = StorageManager.findOnlineRole();
+  static getEquipmentRejectReason(equipment: Equipment, role: Role | null): TextRef | null {
     if (!role) return textRef("reject_no_role");
     if (equipment.level > role.level) return textRef("reject_equip_level", { level: equipment.level });
     if (equipment.sex !== role.sex && equipment.sex !== SEX.ALL) {
@@ -72,9 +72,9 @@ export default class GameHelper {
    * 数值 `0` 表示不限制（安全地图就是 0/0/0），所以判据是「> 0 且 > 角色值」。
    *
    * @param mapId 目标地图编号
+   * @param role 当前角色（显式传入 —— StorageManager 与本模块不再互相 import，#1115 批次 6）
    */
-  static getMapEnterRejectReason(mapId: MapId): TextRef | null {
-    const role = StorageManager.findOnlineRole();
+  static getMapEnterRejectReason(mapId: MapId, role: Role | null): TextRef | null {
     if (!role) return textRef("reject_no_role");
     const config = maps.get(mapId);
     if (!config) return null;

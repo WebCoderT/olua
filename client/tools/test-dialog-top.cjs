@@ -137,7 +137,7 @@ console.log("\n— B. 接线（源码断言）—");
 const layerSource = read(LAYER_MANAGER_FILE);
 const helperSource = gameUiSourceCombined(GAME_UI_HELPER_FILE);
 const gameSource = read(GAME_FILE);
-const storageSource = read(STORAGE_MANAGER_FILE);
+const storageSource = require("./lib/storage-src.cjs").storageSourceFor(STORAGE_MANAGER_FILE);
 const hoverTipSource = read(HOVER_TIP_MANAGER_FILE);
 
 check(/static addDialogToUILayer\(node: Node\)/.test(layerSource) && /static raiseDialog\(node: Node\)/.test(layerSource), "LayerManager 对外两个入口：登记挂载 + 置顶");

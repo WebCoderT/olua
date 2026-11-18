@@ -141,7 +141,8 @@ function main() {
   check(/export interface WornItem \{/.test(goodSrc), "types/good 里声明了 WornItem（与 BagCell 同一个 BagOrigin）");
   check(/bound\?: boolean;/.test(goodSrc) && /from\?: BagOrigin;/.test(goodSrc), "WornItem 带 bound / from 两个可选字段");
 
-  const storageSrc = readSrc("ui/core/StorageManager.ts");
+const { storageSourceFor } = require("./lib/storage-src.cjs");
+  const storageSrc = storageSourceFor(require("path").join(__dirname, "..", "assets", "ui", "core", "StorageManager.ts"));
   const ensureBody = extractBody(storageSrc, "static ensureRoleDefaults(");
   check(!!ensureBody, "找到 StorageManager.ensureRoleDefaults");
   check(!!ensureBody && ensureBody.includes("wornItemOf("), "读档把槽位规整成对象（wornItemOf）");

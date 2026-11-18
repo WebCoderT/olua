@@ -405,7 +405,8 @@ async function expectFailure(action) {
 
   console.log("— B. 客户端：角色数据以服务端为准 —");
 
-  const storageSource = read(FILE.storage);
+  const { storageSourceFor } = require("./lib/storage-src.cjs");
+  const storageSource = storageSourceFor(FILE.storage);
   check(/static cacheRole\(role: Role\)/.test(storageSource), "StorageManager.cacheRole 存在（服务端完整数据写进本地缓存）");
   check(
     /static cacheServerRole\(detail: \{ data: unknown; revision: number \}\)/.test(storageSource) &&

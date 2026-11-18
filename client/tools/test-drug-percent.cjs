@@ -129,14 +129,15 @@ console.log("\n— D. 图标素材 —");
 
 console.log("\n— E. 接线与文案 —");
 {
-  const code = read(path.join("assets", "ui", "core", "StorageManager.ts"));
+  const { storageSourceFor } = require("./lib/storage-src.cjs");
+  const code = storageSourceFor(require("path").join(__dirname, "..", "assets", "ui", "core", "StorageManager.ts"));
   // 只看 useDrug 的方法体，别被文件里其他 resolveDrugRecovery 引用干扰
   // （#308 之后签名是 `static async useDrug(...)`，定位不能用 "static useDrug(" 这种同步写法）
   const start = code.search(/static (?:async )?useDrug\(/);
   const body = start < 0 ? "" : code.slice(start, code.indexOf("static ", start + 10));
   check(body.includes("resolveDrugRecovery"), "useDrug 走 resolveDrugRecovery（回复量口径只有一份）");
   check(!/effects\.reduce\(/.test(body), "useDrug 不再手抄 reduce 累加旧口径");
-  check(/RoleApi\.drugUse\(role\.id, \{ row, col, revision: role\.revision \}\)/.test(body), "用药收权：扣格与回血由服务端算（客户端只报格子 + 修订号）");
+  check(/RoleApi\.drugUse\(role\.id, \{ row, col, revision \}\)/.test(body) && /withRevision\(role, \(revision\)/.test(body), "用药收权：扣格与回血由服务端算（客户端只报格子 + 修订号，经 withRevision 壳）");
 }
 {
   const texts = read(path.join("assets", "configs", "texts.ts"));

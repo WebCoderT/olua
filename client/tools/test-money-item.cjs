@@ -128,11 +128,12 @@ function main() {
   //#region 四、使用链路的接线
 
   console.log("\n=== 四、使用链路接线（StorageManager + 文案）===");
-  const storageSource = read("assets/ui/core/StorageManager.ts");
+  const { storageSourceFor } = require("./lib/storage-src.cjs");
+  const storageSource = storageSourceFor(require("path").join(__dirname, "..", "assets", "ui", "core", "StorageManager.ts"));
   const textsSource = read("assets/configs/texts.ts");
   check(/isMoneyItem\(good\)\)\s*return await this\.useMoneyItem\(row, col\)/.test(storageSource), "useGood 把货币道具分发到 useMoneyItem");
   check(/static async useMoneyItem\(row: number, col: number\)/.test(storageSource), "useMoneyItem 方法存在（签名与用药同一套坐标入参）");
-  check(/RoleApi\.moneyUse\(role\.id, \{ row, col, revision: role\.revision \}\)/.test(storageSource), "请求带 revision（乐观锁）且只报格子坐标 —— 金额与币种不往上报");
+  check(/RoleApi\.moneyUse\(role\.id, \{ row, col, revision \}\)/.test(storageSource) && /withRevision\(role, \(revision\)/.test(storageSource), "请求带 revision（乐观锁）且只报格子坐标 —— 金额与币种不往上报（经 withRevision 壳）");
   check(
     /if \(currency === "bindGold"\)/.test(storageSource) && /role\[currency\] = Number/.test(storageSource),
     "按服务端返回的 currency 写回**对应那一个**账本字段（收敛后唯一 bindGold）",

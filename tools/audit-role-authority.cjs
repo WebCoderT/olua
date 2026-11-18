@@ -160,25 +160,26 @@ function collectTs(dir, out = []) {
  */
 const ASSIGNMENT_EXCEPTIONS = [
   {
-    file: "ui/core/StorageManager.ts",
+    // #1115 批次 6：StorageManager 拆分后，本地赋值收进 ui/core/storage/ 各子模块
+    file: "ui/core/storage/role-cache.ts",
     field: "bag",
     match: "role.bag = (Array.isArray(role.bag)",
     why: "旧存档迁移：把物品快照对象收敛成 { id, count }（服务端下发的就是这份文档）",
   },
   {
-    file: "ui/core/StorageManager.ts",
+    file: "ui/core/storage/role-cache.ts",
     field: "bag",
     match: "role.bag = normalizeBagGrid(role.bag",
     why: "网格尺寸对齐当前配置（尺寸归客户端，服务端 reconcileBag 就按这个形状存）",
   },
   {
-    file: "ui/core/StorageManager.ts",
+    file: "ui/core/storage/bag-service.ts",
     field: "bag",
     match: "role.bag = previous;",
     why: "拖动被服务端拒绝后回滚乐观 UI（不留「看着动了其实没动」的网格）",
   },
   {
-    file: "ui/core/StorageManager.ts",
+    file: "ui/core/storage/role-cache.ts",
     field: "fashionCloth",
     match: 'role.fashionCloth = typeof fashion === "string"',
     why: "老档清洗（#377 存量）：历史存档里 fashionCloth 是数字 / 未知 id 时收敛成 null —— 不是「换穿着」，穿着态仍只走 fashion-wear",

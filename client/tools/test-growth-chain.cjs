@@ -125,7 +125,8 @@ function main() {
   const titleDialog = stage("components/dialogs/TitleUpgradeDialog.ts");
   const soulDialog = stage("components/dialogs/WarSoulDialog.ts");
   const rankDialog = stage("components/dialogs/RankUpgradeDialog.ts");
-  const storageSource = stage("core/StorageManager.ts");
+  const { storageSourceFor } = require("./lib/storage-src.cjs");
+  const storageSource = storageSourceFor(require("path").join(__dirname, "..", "assets", "ui", "core", "StorageManager.ts"));
   const uiHelperSource = gameUiSourceCombined(path.join(PROJECT_ROOT, "assets/ui/helpers/GameUiHelper.ts"));
   const textsSource = read("assets/configs/texts.ts");
 
