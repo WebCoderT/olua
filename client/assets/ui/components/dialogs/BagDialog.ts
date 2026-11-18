@@ -4,6 +4,7 @@ import GameUiHelper from "../../helpers/GameUiHelper";
 import UiHelper from "../../helpers/UiHelper";
 import LayerManager from "../../core/LayerManager";
 import BagGridView, { BagCellAction } from "../panel/BagGridView";
+import BaseDialog from "./dialog-kit";
 import ConfirmDialog from "./ConfirmDialog";
 import { bagDialogLayout, buttonTone, uiSize } from "../../../configs/hudLayout";
 import { getText } from "../../../configs/texts";
@@ -25,9 +26,7 @@ import { GUIDE_EVENT } from "../../../types/guide";
  * 物品的使用/丢弃/搬运规则、成败提示统一在数据层，本类不做任何规则判断，新增物品用法只需改数据层
  * 实例由使用方（BottomBar）创建持有，不导出全局单例
  */
-export default class BagDialog {
-  /** 弹窗节点 */
-  private dialog: Node | null = null;
+export default class BagDialog extends BaseDialog {
   /** 背包格子网格 */
   private bagGrid: BagGridView | null = null;
   /** 计数行左边的「已用 / 总数 格」（每次刷新背包都要改字，所以留引用） */
@@ -51,27 +50,14 @@ export default class BagDialog {
 
   /** 打开/关闭弹窗 */
   open() {
-    if (this.dialog && isValid(this.dialog) && this.dialog.active) {
-      this.close();
-      return;
-    }
+    const opened = this.openFrame(bagDialogLayout, (dialog) => this.build(dialog));
     // 引导（#402）：「看看背包」那一步就是「打开过背包」—— 事件在**真打开**之后发，
-    // 上面的切换关闭不该算一次（玩家关窗不该被当成学会了）
-    GuideStore.notify(GUIDE_EVENT.OPEN_BAG);
-    // 弹窗已在场景切换中被销毁时清理残留引用
-    if (this.dialog && !isValid(this.dialog)) {
-      this.dialog = null;
-      this.bagGrid = null;
-      this.recycleButton = null;
-      this.discardButton = null;
-    }
-    // 兜底复位待确认状态与定时器（关弹窗时已清过，这里防场景切换等异常路径残留）
-    this.cancelRecycleConfirm();
-    this.discardMode = false;
-    this.clearDiscardPending();
-    this.closeDiscardConfirm();
-    // 弹窗框与背包格子由通用零件拼装
-    const dialog = GameUiHelper.createDialog(bagDialogLayout.name, bagDialogLayout.title, new Vec2(), bagDialogLayout.size, bagDialogLayout.eyebrow);
+    // 切换关闭不该算一次（玩家关窗不该被当成学会了）
+    if (opened) GuideStore.notify(GUIDE_EVENT.OPEN_BAG);
+  }
+
+  /** 组装弹窗框与背包格子（通用零件拼装；骨架由 BaseDialog 建） */
+  private build(dialog: Node) {
     // 底部「一键整理」：合并同类可叠加物并重排（搬运与提示都在数据层，这里只上报点击）
     // 底部三键按 05 稿的色调分档：整理 = ghost（次要）、回收 = 金键（次要主动作）、丢弃 = 危险（暗朱）
     const tidyButton = GameUiHelper.createToneButton(
@@ -141,8 +127,6 @@ export default class BagDialog {
     // 计数行 + 页脚（稿 05-bag 的 .count-line 与 .panel-foot）
     this.buildCountAndFoot(dialog);
     this.refreshCount();
-    this.dialog = dialog;
-    LayerManager.addDialogToUILayer(dialog);
   }
 
   /** 刷新背包（物品变更后调用，弹窗未打开时忽略） */
@@ -411,8 +395,8 @@ export default class BagDialog {
     if (label) label.string = text;
   }
 
-  /** 关闭弹窗 */
-  close() {
+  /** 关闭弹窗（销毁与清弹窗引用在 BaseDialog.close） */
+  protected onClose() {
     this.cancelRecycleConfirm();
     // 退出丢弃模式：先清待确认与定时器；节点即将销毁，不必再改按钮文案
     this.clearDiscardPending();
@@ -424,7 +408,5 @@ export default class BagDialog {
     this.recycleButton = null;
     this.discardButton = null;
     this.bagGrid = null;
-    this.dialog?.destroy();
-    this.dialog = null;
   }
 }

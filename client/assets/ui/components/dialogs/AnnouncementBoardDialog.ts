@@ -1,8 +1,9 @@
-import { Button, Graphics, Label, Layout, Node, ScrollView, Size, Vec2, isValid } from "cc";
+import { Button, Graphics, Label, Layout, Node, ScrollView, Vec2, isValid } from "cc";
 import { AnnouncementApi } from "../../utils/net/Api";
 import type { AnnouncementView } from "../../../configs/announcement";
 import { buildAnnouncementViews } from "../../../configs/announcement";
 import { announcementBoardDialogLayout as layout, T } from "../../../configs/hudLayout";
+import { createHDivider } from "./dialog-kit";
 import { getText } from "../../../configs/texts";
 import AnnouncementReadStore from "../../core/AnnouncementReadStore";
 import LayerManager from "../../core/LayerManager";
@@ -74,11 +75,8 @@ export default class AnnouncementBoardDialog {
     dialog.addChild(frameNode);
     // 头部与正文之间的分隔线（稿 `.br-head` 的 border-bottom）
     const dividerWidth = frame.size.width - T.spacing.padDialog * 2;
-    const divider = UiHelper.createNode(`${detail.title.name}_divider`, new Vec2(frame.position.x, detail.divider.y), new Size(dividerWidth, 1));
-    const dividerGraphics = divider.addComponent(Graphics);
-    dividerGraphics.fillColor = detail.divider.color;
-    dividerGraphics.rect(-dividerWidth / 2, -0.5, dividerWidth, 1);
-    dividerGraphics.fill();
+    const divider = createHDivider(`${detail.title.name}_divider`, dividerWidth, detail.divider.color);
+    divider.setPosition(frame.position.x, detail.divider.y, 0);
     dialog.addChild(divider);
     this.detailTitle = UiHelper.createLabel(detail.title.name, "", detail.title.color, detail.title.fontSize, detail.title.position, detail.title.size);
     // 标题单行放不下时缩字号而不是换行：换行会向下顶开下面的元信息与正文区

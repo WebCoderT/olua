@@ -1,6 +1,5 @@
 import { isValid, Label, Node, ScrollView, Size, Vec2 } from "cc";
 import GameUiHelper from "../../helpers/GameUiHelper";
-import LayerManager from "../../core/LayerManager";
 import PartyStore from "../../core/PartyStore";
 import SocialStore from "../../core/SocialStore";
 import OtherPlayerManager from "../../core/OtherPlayerManager";
@@ -9,8 +8,8 @@ import CombatChannel, { PARTY_ACTION } from "../../utils/net/CombatChannel";
 import type { PartyAction, PartyInvite, PartyMemberEntry } from "../../utils/net/CombatChannel";
 import { relationLabels } from "../../../configs/social";
 import { partyDialogLayout as layout } from "../../../configs/hudLayout";
-import { blockClickThrough } from "../../utils/input/UiHit";
 import { clearChildren } from "../../utils/node/NodeTree";
+import BaseDialog, { createListEmpty } from "./dialog-kit";
 import { createRoundedPanel, createTabStrip, paintTabStrip } from "./tab-kit";
 
 /** 两个页签（成员 / 邀请） */
@@ -36,11 +35,7 @@ const TABS: PartyTab[] = ["members", "invite"];
  * 队长多「踢出 / 转让」「解散」，队员只有「退出」。画错最多是点一下被拒，
  * 但反过来（该有的按钮没画）玩家会以为功能不存在 —— 所以宁可多画。
  */
-export default class PartyDialog {
-  /** 弹窗根 */
-  private dialog: Node | null = null;
-  /** 内容容器（切页 / 状态变化时清空重画） */
-  private body: Node | null = null;
+export default class PartyDialog extends BaseDialog {
   /** 底部按钮容器（身份变化时整份重画：队长多一枚「解散」） */
   private footer: Node | null = null;
   /** 当前页签 */
@@ -70,36 +65,26 @@ export default class PartyDialog {
 
   /** 打开 / 关闭弹窗（重复点即关闭） */
   open() {
-    if (this.dialog && isValid(this.dialog) && this.dialog.active) {
-      this.close();
-      return;
-    }
-    if (this.dialog && !isValid(this.dialog)) this.reset();
-    this.dialog = GameUiHelper.createDialog(layout.name, layout.title, new Vec2(), layout.size, layout.eyebrow);
-    blockClickThrough(this.dialog);
-    LayerManager.addDialogToUILayer(this.dialog);
-    this.createTabs();
-    this.body = UiHelper.createGroupNode(`${layout.name}_body`, new Vec2());
-    this.dialog.addChild(this.body);
-    this.paintFooter();
-    this.unsubscribe = PartyStore.onChange(() => {
-      // 顺序有意义：先确认在途邀请（可能要飘一句「已邀请」），再按最新数据重画
-      this.confirmPendingInvite();
-      this.refreshTabCaptions();
-      this.render();
+    this.openFrame(layout, () => {
+      this.createTabs();
+      this.paintFooter();
+      this.unsubscribe = PartyStore.onChange(() => {
+        // 顺序有意义：先确认在途邀请（可能要飘一句「已邀请」），再按最新数据重画
+        this.confirmPendingInvite();
+        this.refreshTabCaptions();
+        this.render();
+      });
+      // 默认停在「成员」：打开队伍面板的人先想知道「队里现在有谁」
+      this.select("members");
     });
-    // 默认停在「成员」：打开队伍面板的人先想知道「队里现在有谁」
-    this.select("members");
   }
 
-  /** 关闭弹窗（订阅退掉） */
-  close() {
+  /** 关闭弹窗时退订（销毁与清引用在 BaseDialog.close） */
+  protected onClose() {
     if (this.unsubscribe) {
       this.unsubscribe();
       this.unsubscribe = null;
     }
-    if (this.dialog && isValid(this.dialog)) this.dialog.destroy();
-    this.reset();
   }
 
   /** 是否开着（Game 里据此决定要不要把邀请提示顶到面板上） */
@@ -443,7 +428,7 @@ export default class PartyDialog {
 
   /** 空列表/空页的一句灰字 */
   private createEmpty(name: string, text: string) {
-    return UiHelper.createLabel(`${name}_empty`, text, layout.row.metaColor, layout.row.metaFontSize, new Vec2(), new Size(layout.row.size.width, 32));
+    return createListEmpty(`${name}_empty`, text, { color: layout.row.metaColor, fontSize: layout.row.metaFontSize, width: layout.row.size.width, height: layout.row.emptyHeight });
   }
 
   /** 行底板（圆角 + 填充 + 描边；尺寸与配色全来自 layout） */
@@ -458,9 +443,7 @@ export default class PartyDialog {
   //#endregion
 
   /** 释放引用（关闭后） */
-  private reset() {
-    this.dialog = null;
-    this.body = null;
+  protected reset() {
     this.footer = null;
     this.tab = "members";
     this.invited.clear();

@@ -1,10 +1,10 @@
-import { isValid, Label, Node, ScrollView, Vec2 } from "cc";
+import { isValid, Label, Node, ScrollView } from "cc";
 import GameUiHelper from "../../helpers/GameUiHelper";
 import HoverTipManager from "../../core/HoverTipManager";
-import LayerManager from "../../core/LayerManager";
 import StorageManager from "../../core/StorageManager";
 import { oeccupationSkills } from "../../../configs/skill";
 import { getText } from "../../../configs/texts";
+import BaseDialog from "./dialog-kit";
 import SkillShortcutSettingDialog from "./SkillShortcutSettingDialog";
 import { skillListDialogLayout } from "../../../configs/hudLayout";
 import GuideStore from "../../core/GuideStore";
@@ -23,11 +23,9 @@ import { GUIDE_EVENT } from "../../../types/guide";
  * 点了走服务端（`StorageManager.upgradeSkillOnServer`），成功后**就地重建**技能行并改数字 ——
  * 不重开弹窗：重开会把滚动位置弹回顶部，玩家刚翻到第 8 个技能，升一级又被扔回第 1 个。
  */
-export default class SkillListDialog {
+export default class SkillListDialog extends BaseDialog {
   /** 快捷键设置弹窗（子弹窗，由本弹窗持有） */
   private shortcutKeySettingDialog = new SkillShortcutSettingDialog();
-  /** 弹窗节点（切换关闭要用；关闭后置空） */
-  private dialog: Node | null = null;
   /** 技能点标签（升级成功后改数字用） */
   private pointsLabel: Label | null = null;
   /** 技能列表的滚动内容节点（升级成功后重建行用） */
@@ -37,16 +35,11 @@ export default class SkillListDialog {
 
   /** 打开/关闭技能列表弹窗（开关：已开则关） */
   open() {
-    if (this.dialog && isValid(this.dialog) && this.dialog.active) {
-      this.close();
-      return;
-    }
-    // 弹窗已在场景切换 / 关闭按钮销毁时清掉残留引用
-    if (this.dialog && !isValid(this.dialog)) this.dialog = null;
-    // 引导（#402）：「认识技能」那一步就是「打开过技能列表」—— 事件在**真打开**之后发，
-    // 上面的切换关闭不该算一次（玩家关窗不该被当成学会了）
-    GuideStore.notify(GUIDE_EVENT.OPEN_SKILL);
-    const dialog = GameUiHelper.createDialog(skillListDialogLayout.name, skillListDialogLayout.title, new Vec2(), skillListDialogLayout.size, skillListDialogLayout.eyebrow);
+    const cfg = skillListDialogLayout;
+    const opened = this.openFrame(
+      // 页脚文案走 texts（skill_foot_left/right），不在 layout.footTexts
+      { name: cfg.name, title: cfg.title, eyebrow: cfg.eyebrow, size: cfg.size, foot: cfg.foot, footTexts: { left: getText("skill_foot_left"), right: getText("skill_foot_right") } },
+      (dialog) => {
     // 技能点（#828）：稿 07-skill 的 .pt-line —— 左标签 + 右数值 + 行底分隔线；
     // 数值是容器里的子节点，改数字只动它（标签是静态文案）
     const pointsNode = GameUiHelper.createSkillPointsLabel();
@@ -55,19 +48,12 @@ export default class SkillListDialog {
     const skillList = GameUiHelper.createSkillListView();
     this.listContent = skillList.getComponent(ScrollView).content;
     dialog.addChild(skillList);
-    // 页脚（稿 .panel-foot）：左「悬停看详情 · 点图标设置快捷键」/ 右「升级消耗技能点」
-    dialog.addChild(
-      GameUiHelper.createDialogFoot(
-        "skill_foot",
-        skillListDialogLayout.size.width,
-        skillListDialogLayout.foot,
-        getText("skill_foot_left"),
-        getText("skill_foot_right"),
-      ),
+      this.rebuild();
+      },
     );
-    this.dialog = dialog;
-    LayerManager.addDialogToUILayer(dialog);
-    this.rebuild();
+    // 引导（#402）：「认识技能」那一步就是「打开过技能列表」—— 事件在**真打开**之后发，
+    // 切换关闭不该算一次（玩家关窗不该被当成学会了）
+    if (opened) GuideStore.notify(GUIDE_EVENT.OPEN_SKILL);
   }
 
   /**
@@ -124,13 +110,10 @@ export default class SkillListDialog {
     }
   }
 
-  /** 关闭弹窗（连同子弹窗与悬停提示一起收掉） */
-  close() {
-    // 快捷键设置弹窗是独立挂在 UI 层的，不随列表销毁 —— 不显式收掉会留下一块无主面板
+  /** 关闭弹窗（销毁与清引用在 BaseDialog.close）：快捷键子弹窗与悬停提示不随列表销毁，要显式收 */
+  protected onClose() {
     this.shortcutKeySettingDialog.close();
     HoverTipManager.hide();
-    if (this.dialog && isValid(this.dialog)) this.dialog.destroy();
-    this.dialog = null;
     this.pointsLabel = null;
     this.listContent = null;
   }

@@ -14,6 +14,7 @@ import { getRelationColor } from "../../../configs/social";
 import { clearChildren } from "../../utils/node/NodeTree";
 import GuideStore from "../../core/GuideStore";
 import { GUIDE_EVENT } from "../../../types/guide";
+import BaseDialog, { createHDivider, createListEmpty } from "./dialog-kit";
 import { createTabStrip, paintTabStrip } from "./tab-kit";
 import { blockClickThrough } from "../../utils/input/UiHit";
 
@@ -55,11 +56,7 @@ function formatClock(ts: number): string {
  * 弹窗打开时挂起屏幕气泡（ChatBubbles.setSuppressed）：同一条消息既在全屏面板里
  * 又在角落冒泡是纯干扰。关闭时恢复，并把当前页标为已读。
  */
-export default class ChatDialog {
-  /** 弹窗根 */
-  private dialog: Node | null = null;
-  /** 内容容器（切页 / 新消息时清空重画；消息量 ≤ 50/频道，整画便宜且不会漏） */
-  private body: Node | null = null;
+export default class ChatDialog extends BaseDialog {
   /** 当前页签 */
   private tab: ChatTab = "world";
   /** 私聊会话对象（null = 选人页） */
@@ -103,15 +100,13 @@ export default class ChatDialog {
     this.select("world");
   }
 
-  /** 关闭弹窗（订阅退掉、气泡恢复） */
-  close() {
+  /** 关闭弹窗（订阅退掉、气泡恢复；销毁与清引用在 BaseDialog.close） */
+  protected onClose() {
     if (this.unsubscribe) {
       this.unsubscribe();
       this.unsubscribe = null;
     }
     ChatBubbles.setSuppressed(false);
-    if (this.dialog && isValid(this.dialog)) this.dialog.destroy();
-    this.reset();
   }
 
   /** 重贴左下角（开小窗时由组合根调；关着时是 no-op） */
@@ -143,11 +138,8 @@ export default class ChatDialog {
     // 分隔线：稿是 1px rgba(0,0,0,.55)，用填充条画（1px 描边在实机不渲染）
     const width = layout.size.width - 2;
     for (const y of [dividers.headY, dividers.inputY]) {
-      const line = UiHelper.createNode(`chat_divider_${y}`, new Vec2(0, y), new Size(width, 1));
-      const graphics = line.addComponent(Graphics);
-      graphics.fillColor = dividers.color;
-      graphics.rect(-width / 2, -0.5, width, 1);
-      graphics.fill();
+      const line = createHDivider(`chat_divider_${y}`, width, dividers.color);
+      line.setPosition(0, y, 0);
       dialog.addChild(line);
     }
   }
@@ -426,15 +418,13 @@ export default class ChatDialog {
   //#region 公共零件
 
   private createEmptyLabel(text: string) {
-    return UiHelper.createLabel("chat_empty", text, layout.row.metaColor, layout.row.textFontSize, new Vec2(), new Size(layout.row.size.width, layout.row.emptyHeight));
+    return createListEmpty("chat_empty", text, { color: layout.row.metaColor, fontSize: layout.row.textFontSize, width: layout.row.size.width, height: layout.row.emptyHeight });
   }
 
   //#endregion
 
   /** 释放引用（关闭后） */
-  private reset() {
-    this.dialog = null;
-    this.body = null;
+  protected reset() {
     this.tab = "world";
     this.privatePeer = null;
     this.tabNodes.clear();

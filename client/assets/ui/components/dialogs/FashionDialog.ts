@@ -1,13 +1,13 @@
-import { Color, Graphics, isValid, Label, Node, ScrollView, Size, Sprite, Vec2 } from "cc";
+import { Color, Graphics, Label, Node, ScrollView, Size, Sprite, Vec2 } from "cc";
 import GameUiHelper from "../../helpers/GameUiHelper";
-import LayerManager from "../../core/LayerManager";
 import SoundManager from "../../core/SoundManager";
 import StorageManager from "../../core/StorageManager";
 import UiHelper from "../../helpers/UiHelper";
+import { blockClickThrough } from "../../utils/input/UiHit";
+import BaseDialog from "./dialog-kit";
 import { fashionDialogLayout } from "../../../configs/hudLayout";
 import { FashionDataEntry } from "../../../configs/game-config";
 import { clearChildren } from "../../utils/node/NodeTree";
-import { blockClickThrough } from "../../utils/input/UiHit";
 
 /** 弹窗布局（几何、配色与文案统一见 configs/hudLayout.fashionDialogLayout） */
 const layout = fashionDialogLayout;
@@ -25,9 +25,7 @@ const layout = fashionDialogLayout;
  *   upgrade 且有售价 → 显示价格，点击购买（扣费与清单在服务端）；其余 → 置灰「未开放」；
  * - 顶部一行显示当前穿戴；外观会在关弹窗前就生效（地图上的主角与内观同步刷新）。
  */
-export default class FashionDialog {
-  /** 弹窗节点 */
-  private dialog: Node | null = null;
+export default class FashionDialog extends BaseDialog {
   /** 图标列表内容节点（卡片全部挂在这里） */
   private listContent: Node | null = null;
   /** 顶部「当前穿戴」标签 */
@@ -35,34 +33,23 @@ export default class FashionDialog {
 
   /** 打开/关闭弹窗 */
   open() {
-    if (this.dialog && isValid(this.dialog) && this.dialog.active) {
-      this.close();
-      return;
-    }
-    if (this.dialog && !isValid(this.dialog)) this.reset();
-    this.dialog = GameUiHelper.createDialog(layout.name, layout.title, new Vec2(), layout.size, layout.eyebrow);
-    // 页脚（稿 18-fashion 的 .panel-foot）
-    this.dialog.addChild(
-      GameUiHelper.createDialogFoot("fashion_foot", layout.size.width, layout.foot, layout.footTexts.left, layout.footTexts.right),
-    );
-    // 顶部：当前穿戴
-    this.currentLabel = UiHelper.createLabel(
-      "fashion_current",
-      "",
-      Color.WHITE,
-      layout.current.fontSize,
-      layout.current.position,
-      layout.current.size,
-    );
-    this.dialog.addChild(this.currentLabel);
-    // 列表：四列卡片，竖向滚动
-    const list = GameUiHelper.createScrollView(layout.list.name, layout.list.position, layout.list.size);
-    this.listContent = list.getComponent(ScrollView).content;
-    this.dialog.addChild(list);
-    // 弹窗整体吃掉点击：否则点在卡片之间的空隙会穿透到下层 UI（见 audit-ui-click-through）
-    blockClickThrough(this.dialog);
-    LayerManager.addDialogToUILayer(this.dialog);
-    this.refresh();
+    this.openFrame(layout, () => {
+      // 顶部：当前穿戴
+      this.currentLabel = UiHelper.createLabel(
+        "fashion_current",
+        "",
+        Color.WHITE,
+        layout.current.fontSize,
+        layout.current.position,
+        layout.current.size,
+      );
+      this.dialog?.addChild(this.currentLabel);
+      // 列表：四列卡片，竖向滚动
+      const list = GameUiHelper.createScrollView(layout.list.name, layout.list.position, layout.list.size);
+      this.listContent = list.getComponent(ScrollView).content;
+      this.dialog?.addChild(list);
+      this.refresh();
+    });
   }
 
   /** 整体刷新（穿/脱/购买之后调用）：当前穿戴提示 + 卡片状态全部重算 */
@@ -160,15 +147,8 @@ export default class FashionDialog {
     return node;
   }
 
-  /** 关闭弹窗 */
-  close() {
-    if (this.dialog && isValid(this.dialog)) this.dialog.destroy();
-    this.reset();
-  }
-
-  /** 释放引用 */
-  private reset() {
-    this.dialog = null;
+  /** 关闭后释放引用（销毁与清弹窗引用在 BaseDialog.close） */
+  protected reset() {
     this.listContent = null;
     this.currentLabel = null;
   }
