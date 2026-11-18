@@ -221,7 +221,7 @@ export const rankUpgradeDialogLayout = {
     borderColor: T.gold[2],
     borderWidth: 2,
     /** 环内大字（军衔名的末字） */
-    glyph: { position: new Vec2(0, 8), size: new Size(120, 52), fontSize: 40, color: T.gold[4] },
+    glyph: { position: new Vec2(0, 8), size: new Size(120, 52), fontSize: T.fontSize.f40, color: T.gold[4] },
     /** 段名（如「王爵」，金环内下方的小字） */
     tier: { position: new Vec2(0, -38), size: new Size(120, 16), fontSize: T.fontSize.f11, color: T.gold[2] },
     /** 稿 `.emblem::after` 的虚线外环（金环外一圈小点，圆点数 / 半径 / 点径 / 点色） */

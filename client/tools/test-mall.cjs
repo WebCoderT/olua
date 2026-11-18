@@ -321,8 +321,8 @@ if (sandbox) {
     const columns = readNum(/columns: (\d+)/, "卡片列数");
     const gapX = readNum(/gapX: (\d+)/, "卡片列间距");
     const padding = readNum(/padding: (\d+),/, "卡片内边距");
-    const kindFontSize = readNum(/kind: \{ fontSize: (\d+),/, "类别行字号");
-    const priceBlock = readNum(/price: \{ fontSize: \d+, color: T\.gold\[4\], blockWidth: (\d+) \}/, "价格块宽");
+    const kindFontSize = readNum(/kind: \{ fontSize: (?:T\.fontSize\.)?f(\d+),/, "类别行字号");
+    const priceBlock = readNum(/price: \{ fontSize: (?:T\.fontSize\.)?f\d+, color: T\.gold\[4\], blockWidth: (\d+) \}/, "价格块宽");
     const iconWidth = readNum(/iconSize: new Size\((\d+), \d+\)/, "图标宽");
     const cardWidth = (listWidth - (columns - 1) * gapX) / columns;
     // 文字列宽 = 卡宽 − 两侧 padding − 图标 − 图标与文字的间距 10（与 MallDialog.createCard 同一算式）
@@ -331,7 +331,7 @@ if (sandbox) {
     // 最长品质文案「普通的人级」= 5 个全角字（全角宽度 ≈ 字号）
     check(textWidth >= kindFontSize * 5, "类别行放得下最长的「普通的人级」5 个字", `可用 ${textWidth} / 需要 ${kindFontSize * 5}`);
     // 价格块要放得下「9999 绑元」（4 位数字 ≈ 4×0.55 字号 + 空格 + 2 个全角字，见 ui/helpers/TextLayout）
-    const priceFontSize = readNum(/price: \{ fontSize: (\d+),/, "价格字号");
+    const priceFontSize = readNum(/price: \{ fontSize: (?:T\.fontSize\.)?f(\d+),/, "价格字号");
     const priceNeeded = Math.ceil(priceFontSize * 0.55 * 4 + priceFontSize / 2 + priceFontSize * 2);
     check(priceBlock >= priceNeeded, "价格块放得下「9999 绑元」", `块宽 ${priceBlock} / 需要 ${priceNeeded}`);
   }
@@ -365,7 +365,7 @@ if (sandbox) {
     check(/columns: 3/.test(block), "一行 3 张卡片（列数在配置里）");
     check(/iconSize: new Size\(46, 46\)/.test(block), "商品卡片的图标尺寸在配置里");
     check(/buyButton: \{ size: new Size\(56, 24\), fontSize: T\.fontSize\.f12 \}/.test(block), "购买按钮（金键）几何在配置里");
-    check(/price: \{ fontSize: 12, color: T\.gold\[4\], blockWidth: 120 \}/.test(block), "价格行（字号 / 块宽 / 金色令牌）在配置里");
+    check(/price: \{ fontSize: T\.fontSize\.f12, color: T\.gold\[4\], blockWidth: 120 \}/.test(block), "价格行（字号 / 块宽 / 金色令牌）在配置里");
     check(/rowsPerPage: 2/.test(block), "每页 2 行（每页 3 × 2 = 6 件）");
     check(/pageIndicator: \{ name: "mall_page_indicator", position: new Vec2\(0, -138\)/.test(block), "页码几何在配置里（居中于翻页一排）");
     check(/firstButton:[\s\S]{0,200}prevButton:[\s\S]{0,200}nextButton:[\s\S]{0,200}lastButton:/.test(block), "首/上/下/末四个翻页按钮几何在配置里");

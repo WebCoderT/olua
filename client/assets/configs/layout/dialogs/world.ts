@@ -14,7 +14,7 @@ export const mapTeleportDialogLayout = {
   /** 内容列（纵向容器，高度自适应）：顶部位置与宽度（弹窗 600，左右各留 10） */
   content: { name: "map_teleport_content", width: 580, top: 215, groupSpacing: 16 },
   /** 分组标题 */
-  groupTitle: { fontSize: 14, height: 20, color: T.gold[4] },
+  groupTitle: { fontSize: T.fontSize.f14, height: 20, color: T.gold[4] },
   /** 地图按钮网格：每行 4 个（4 × 123 + 3 × 20 = 552，在 580 容器内水平居中） */
   grid: { spacingX: 20, spacingY: 12 },
 };
@@ -98,9 +98,9 @@ export const zoneSelectLayout = {
   maskColor: T.surface.scrim,
   panel: { name: "zone_select_panel", size: new Size(560, 500) },
   /** 标题文本的位置与样式（配色与通用弹窗标题一致） */
-  titleLabel: { name: "zone_select_title", position: new Vec2(0, 220), size: new Size(480, 28), fontSize: 18, color: T.ember[4] },
+  titleLabel: { name: "zone_select_title", position: new Vec2(0, 220), size: new Size(480, 28), fontSize: T.fontSize.f18, color: T.ember[4] },
   /** 说明行：为什么必须先选一个区（不同区的角色互不相通） */
-  hint: { position: new Vec2(0, 188), size: new Size(500, 20), fontSize: 12, color: T.text[3] },
+  hint: { position: new Vec2(0, 188), size: new Size(500, 20), fontSize: T.fontSize.f12, color: T.text[3] },
   /** 区列表（纵向滚动，每行固定高、行间距见 row.gap） */
   list: { name: "zone_select_list", position: new Vec2(0, -20), size: new Size(500, 356) },
   row: {
@@ -160,9 +160,9 @@ export const channelSelectLayout = {
   maskColor: T.surface.scrim,
   panel: { name: "channel_select_panel", size: new Size(420, 400) },
   /** 标题（配色与选服弹窗同一套） */
-  titleLabel: { name: "channel_select_title", position: new Vec2(0, 170), size: new Size(360, 28), fontSize: 18, color: T.ember[4] },
+  titleLabel: { name: "channel_select_title", position: new Vec2(0, 170), size: new Size(360, 28), fontSize: T.fontSize.f18, color: T.ember[4] },
   /** 说明行：告诉玩家换线意味着什么（各线怪物与掉落独立，人挤就换线） */
-  hint: { position: new Vec2(0, 142), size: new Size(380, 20), fontSize: 12, color: T.text[3] },
+  hint: { position: new Vec2(0, 142), size: new Size(380, 20), fontSize: T.fontSize.f12, color: T.text[3] },
   /** 线列表（纵向滚动；行高与间距见 row） */
   list: { name: "channel_select_list", position: new Vec2(0, -8), size: new Size(372, 240) },
   row: {

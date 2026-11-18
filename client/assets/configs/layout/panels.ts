@@ -25,7 +25,7 @@ export const equipmentSlotLayout = {
     position: new Vec2(19, 19),
     /** 圆牌直径与字号 */
     size: new Size(24, 24),
-    fontSize: 13,
+    fontSize: T.fontSize.f13,
     /** 圆底填充与描边（绿 = 变强），文字用白字保对比度 */
     fill: T.jadeDeep,
     borderColor: T.jade,
@@ -78,7 +78,7 @@ export const bagGridLayout = {
     /** 标签框中心相对物品图标中心的偏移 */
     position: new Vec2(11, -17),
     /** 数字标签的字号与标签框 */
-    fontSize: 14,
+    fontSize: T.fontSize.f14,
     size: new Size(24, 16),
     /** 常规数量颜色 */
     color: T.text[1],

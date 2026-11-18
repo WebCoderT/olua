@@ -199,7 +199,7 @@ export const announcementNoticeDialogLayout = {
   maskColor: T.surface.scrim,
   panel: { name: "announcement_notice_panel", size: new Size(640, 460) },
   /** 标题文本的位置与样式（配色与通用弹窗标题一致） */
-  titleLabel: { name: "announcement_notice_title", position: new Vec2(0, 200), size: new Size(560, 26), fontSize: 16, color: T.ember[4] },
+  titleLabel: { name: "announcement_notice_title", position: new Vec2(0, 200), size: new Size(560, 26), fontSize: T.fontSize.f16, color: T.ember[4] },
   /** 公告列表（纵向滚动，每一条自己撑高） */
   list: { name: "announcement_notice_list", position: new Vec2(0, 20), size: new Size(576, 350) },
   /** 单条公告：标题 / 级别 · 时间窗 / 正文，纵向排列且高度按内容自适应 */
@@ -208,9 +208,9 @@ export const announcementNoticeDialogLayout = {
     /** 条目之间与条目内部的纵向间距 */
     itemGap: 22,
     rowGap: 6,
-    title: { fontSize: 15, lineHeight: 21, color: T.gold[4] },
-    meta: { fontSize: 11, lineHeight: 16, color: T.text[4] },
-    body: { fontSize: 13, lineHeight: 20, color: T.text[1] },
+    title: { fontSize: T.fontSize.f14, lineHeight: 21, color: T.gold[4] },
+    meta: { fontSize: T.fontSize.f11, lineHeight: 16, color: T.text[4] },
+    body: { fontSize: T.fontSize.f13, lineHeight: 20, color: T.text[1] },
   },
   /** 「我知道了」按钮（中号按钮，面板底部居中） */
   confirmButton: { name: "announcement_notice_confirm_button", text: "我知道了", position: new Vec2(0, -200) },

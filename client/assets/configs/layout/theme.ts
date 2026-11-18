@@ -46,7 +46,7 @@ export const uiTheme = {
     damage: {
       color: T.combat.damage,
       blockedColor: T.combat.blocked,
-      fontSize: 18,
+      fontSize: T.fontSize.f18,
       size: new Size(80, 24),
       spawnOffsetY: 40,
       riseDuration: 0.6,
@@ -57,7 +57,7 @@ export const uiTheme = {
     /** 技能释放飘字（释放者头顶） */
     skill: {
       color: T.gold[4],
-      fontSize: 14,
+      fontSize: T.fontSize.f14,
       size: new Size(120, 20),
       spawnOffsetY: 40,
       riseDuration: 0.6,
@@ -67,7 +67,7 @@ export const uiTheme = {
     /** 经验飘字（被击杀怪物头顶） */
     exp: {
       color: T.combat.exp,
-      fontSize: 14,
+      fontSize: T.fontSize.f14,
       size: new Size(100, 20),
       spawnOffsetY: 40,
       riseDuration: 0.6,
@@ -81,7 +81,7 @@ export const uiTheme = {
     combat: {
       upColor: T.combat.up,
       downColor: T.combat.down,
-      fontSize: 14,
+      fontSize: T.fontSize.f14,
       size: new Size(90, 18),
       spawnOffsetX: 36,
       spawnOffsetY: 14,

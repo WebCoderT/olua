@@ -25,7 +25,7 @@ export const roleInfoBarLayout = {
   /** 背景框尺寸（与信息栏同尺寸；#1059 起底板改矢量绘制） */
   backgroundSize: new Size(344, 84),
   /** 名称（左对齐，17px 衬线体；bbox 从 who 列左缘 -92 起，宽 130） */
-  name: { position: new Vec2(-27, 10), size: new Size(130, 20), fontSize: 17 },
+  name: { position: new Vec2(-27, 10), size: new Size(130, 20), fontSize: T.fontSize.f16 },
   /** 等级（与名称同一基线，11px 金-4：显示成「42 级」） */
   level: { position: new Vec2(56, 8), size: new Size(56, 16), fontSize: T.fontSize.f11, color: T.gold[4] },
   /** 头像（按职业/性别取图；54×58 + 1px 金-2 边框 + 深褐底） */
@@ -51,7 +51,7 @@ export const roleInfoBarLayout = {
     /** 分隔线（稿 `.info .pw{border-left:1px solid line-2}`）：相对信息栏中心的 x + 上下高度 */
     divider: { x: 83, height: 40, color: T.line[2] },
     label: { text: "战斗力", position: new Vec2(0, 12), size: new Size(84, 12), fontSize: T.fontSize.f10, color: T.text[3], spacingX: 2 },
-    value: { position: new Vec2(0, -8), size: new Size(84, 22), fontSize: 19, color: T.ember[3] },
+    value: { position: new Vec2(0, -8), size: new Size(84, 22), fontSize: T.fontSize.f20, color: T.ember[3] },
   },
   /** 状态图标条（首个图标中心对齐头像中心、向右排开，横向布局；稿 `.buff` 26×26 带金线框） */
   statusBar: { position: new Vec2(-159, -63), size: new Size(240, 26), spacing: 4, iconSize: new Size(26, 26) },
@@ -137,7 +137,7 @@ export const bottomBarLayout = {
   hpOrb: {
     position: new Vec2(-393, 6),
     size: new Size(90, 90),
-    text: { position: new Vec2(0, 0), size: new Size(120, 14), fontSize: 14 },
+    text: { position: new Vec2(0, 0), size: new Size(120, 14), fontSize: T.fontSize.f14 },
     /** 球下方的小标题（稿 `.orb-cap`：bottom -19 → 中心 -64；10px、字距拉开） */
     caption: { text: "生命", position: new Vec2(0, -56), size: new Size(60, 12), fontSize: T.fontSize.f10, color: T.text[3], spacingX: 2 },
   },
@@ -148,7 +148,7 @@ export const bottomBarLayout = {
   mpOrb: {
     position: new Vec2(393, 6),
     size: new Size(90, 90),
-    text: { position: new Vec2(0, 0), size: new Size(120, 14), fontSize: 14 },
+    text: { position: new Vec2(0, 0), size: new Size(120, 14), fontSize: T.fontSize.f14 },
     /** 球下方的小标题（稿 `.orb-cap`：bottom -19 → 中心 -64；10px、字距拉开） */
     caption: { text: "法力", position: new Vec2(0, -56), size: new Size(60, 12), fontSize: T.fontSize.f10, color: T.text[3], spacingX: 2 },
   },
@@ -158,8 +158,8 @@ export const bottomBarLayout = {
   shortcutSlot: {
     size: new Size(48, 56),
     /** 稿 `.sslot .k{right:3px;bottom:1px}` → 槽中心 (19, -23)，字号 9 */
-    key: { position: new Vec2(19, -23), size: new Size(20, 10), fontSize: 9 },
-    cooldown: { position: new Vec2(0, 0), size: new Size(40, 20), fontSize: 16 },
+    key: { position: new Vec2(19, -23), size: new Size(20, 10), fontSize: T.fontSize.f10 },
+    cooldown: { position: new Vec2(0, 0), size: new Size(40, 20), fontSize: T.fontSize.f16 },
     /** 空槽（未绑技能）：稿 `.sslot.is-empty` 虚线框 + 12px text-4；客户端没有技能名，用一个占位字 */
     emptyColor: T.text[4],
     emptyFontSize: T.fontSize.f12,
@@ -375,7 +375,7 @@ export const dropItemLayout = {
   /** 名称行：位置相对图标下沿再往下偏 offsetY；字号 / 行高 / 各段之间的横向间距 */
   name: {
     offsetY: 3,
-    fontSize: 10,
+    fontSize: T.fontSize.f10,
     lineHeight: 12,
     spacing: 2,
   },
@@ -404,7 +404,7 @@ export const dropItemLayout = {
 /** 浮动提示（消息/错误）：居中显示后上浮淡出 */
 export const tipsLayout = {
   size: new Size(480, 24),
-  fontSize: 16,
+  fontSize: T.fontSize.f16,
   /**
    * 描边（Label 自带的 outline）
    *
@@ -532,7 +532,7 @@ export const questNpcMarkLayout = {
   /** 相对 NPC 节点原点的偏移（NPC 静止不动，故不需要跟随） */
   offset: new Vec2(0, 96),
   size: new Size(40, 26),
-  fontSize: 20,
+  fontSize: T.fontSize.f20,
   availableColor: T.gold[4],
   readyColor: T.jade,
   /** 标记字符（! 可接 / ? 可交付；两个都没有就整块隐藏） */
