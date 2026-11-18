@@ -505,7 +505,8 @@ const SCREENS = [
   ['19','map','地图与线路','地图预览 / 大陆传送官(#state=teleport) / 选线','MapPreview/Teleport/…'],
   ['20','overlay','通用弹层','确认 / 死亡 / 举报 / 悬停 / 引导','Confirm/Death/Report/…'],
   ['21','settings','设置','选择角色 / 退出登录（退出走确认框）','SettingsDialog.ts'],
-  ['22','attributes','属性','战斗属性总览 / 四维加点 / 洗点','AttrAllocateDialog.ts']
+  ['22','attributes','属性','战斗属性总览 / 四维加点 / 洗点','AttrAllocateDialog.ts'],
+  ['23','item-detail','物品详情','装备完整版（绑定/溯源/标签/Ctrl 对比）+ 消耗品简版','createGoodDetailDialog (dialog-builder.ts)']
 ];
 document.getElementById('screen-grid').innerHTML = SCREENS.map(([no,id,name,desc,file])=>`
   <a class="scr" href="screens/${no}-${id}.html" target="_blank">

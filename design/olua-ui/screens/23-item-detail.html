@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>23 · 物品详情 · Olua UI</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Noto+Serif+SC:wght@700;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../tokens.css">
+<link rel="stylesheet" href="../ui.css">
+<style>
+/* ── 物品详情（背包格 / 商城格悬停）：240 宽自适应高，两态一屏看全 ──
+   基座 = ui.css `.tip`（240 宽 + 金线边 + 近黑底）；装备版叠品质底光，
+   客户端里是前后缀决定的品质背景动画（createEquipmentDetailBackground）垫底。 */
+.duo{display:flex;align-items:flex-start;gap:56px}
+.detail{width:240px;padding:var(--sp-5) var(--sp-5) var(--sp-4);border-radius:var(--r-2);
+  border:var(--bw-1) solid var(--gold-2);background:rgba(14,10,6,.97);
+  box-shadow:var(--shadow-panel);font-size:var(--fs-12);position:relative;overflow:hidden}
+.detail--legend{background:
+  radial-gradient(120% 88% at 50% 0%,rgba(232,163,60,.14),transparent 62%),
+  radial-gradient(150% 70% at 50% 108%,rgba(232,163,60,.08),transparent 58%),
+  rgba(14,10,6,.97)}
+.eyebrow{font-size:var(--fs-10);letter-spacing:.22em;color:var(--gold-2);padding-bottom:var(--sp-3);
+  border-bottom:var(--bw-1) solid var(--line-1)}
+.head{display:flex;align-items:flex-start;gap:10px;padding:var(--sp-3) 0 var(--sp-2)}
+.head .ic-wrap{width:40px;height:40px;flex:0 0 auto;border-radius:var(--r-1);border:var(--bw-1) solid var(--line-2);
+  background:rgba(0,0,0,.4);display:grid;place-items:center;font-size:20px;color:var(--q-legend)}
+.tname{font-family:var(--font-display);font-weight:700;font-size:14px;line-height:1.35;letter-spacing:.02em}
+.tname .pfx{color:var(--q-legend)}
+.tname .sfx{color:var(--q-epic)}
+/* 信息 / 回收 / 绑定 / 溯源：两端对齐行（客户端为左对齐文案行，稿取同信息的行形态） */
+.line{display:flex;justify-content:space-between;gap:var(--sp-4);padding:2px 0;color:var(--text-3)}
+.line span:last-child{font-family:var(--font-num);color:var(--text-1)}
+.line.recycle span:last-child{color:var(--amber)}
+.line.bound{justify-content:flex-start}
+.line.bound span:last-child{color:var(--gold-4);font-family:inherit}
+.origin{margin:2px 0;padding:var(--sp-2) 0;border-top:var(--bw-1) solid var(--line-1);border-bottom:var(--bw-1) solid var(--line-1)}
+.origin .line{color:var(--text-4);font-size:var(--fs-11)}
+.origin .line span:last-child{color:var(--text-4);font-family:inherit}
+.tags{display:flex;gap:8px;padding:var(--sp-2) 0;font-size:var(--fs-11);color:var(--gold-4);letter-spacing:.04em}
+.desc{margin-top:var(--sp-2);padding-top:var(--sp-3);border-top:var(--bw-1) solid var(--line-1);
+  color:var(--text-2);line-height:1.7}
+.attrs{margin-top:var(--sp-3);display:flex;flex-direction:column;gap:3px}
+.arow{display:flex;align-items:center;gap:10px;padding:1px 0;color:var(--text-1);font-size:var(--fs-12)}
+.arow .dot{width:8px;height:8px;border-radius:50%;background:var(--gold-3);flex:0 0 auto}
+.arow .k{width:52px;color:var(--text-1)}
+.arow .v{font-family:var(--font-num);letter-spacing:.04em}
+.cmp{margin-top:var(--sp-3);padding-top:var(--sp-3);border-top:var(--bw-1) solid var(--line-1)}
+.cmp .cmp-t{font-size:var(--fs-12);color:var(--gold-4);letter-spacing:.08em;padding-bottom:4px}
+.cmp .arow .from{color:var(--text-4);text-decoration:line-through;text-decoration-color:rgba(237,226,204,.3)}
+.cmp .arow .delta{font-family:var(--font-num)}
+.cmp .up{color:var(--jade)}
+.cmp .down{color:var(--ember-4)}
+.cmp .same{color:var(--text-3)}
+.cmp .power{display:flex;justify-content:space-between;color:var(--text-3);margin-top:4px}
+.cmp .power b{font-family:var(--font-num);color:var(--jade);font-weight:400}
+/* 消耗品版：无属性 / 无对比，介绍后即收 */
+.foot-note{position:absolute;right:18px;bottom:14px;width:240px;font-size:var(--fs-10);color:var(--text-4);
+  text-align:center;letter-spacing:.06em}
+</style>
+</head>
+<body>
+<div class="stage"><div class="stage-inner">
+  <div class="stage-bg stage-bg--blur"><img src="../assets/hero-bg.jpg"></div>
+  <div class="stage-scrim" style="background:rgba(8,5,3,.8)"></div>
+
+  <div class="layer layer--dialog center">
+    <div class="duo">
+
+      <!-- 装备完整版：传说武器（带绑定 / 溯源 / 标签 / Ctrl 对比段） -->
+      <div class="detail detail--legend">
+        <div class="eyebrow">ITEM</div>
+        <div class="head">
+          <div class="ic-wrap">⚔</div>
+          <div class="tname"><span class="pfx">屠龙</span>·裂空<span class="sfx">＋无畏</span></div>
+        </div>
+        <div class="line"><span>等级 / 部位</span><span>40 · 武器</span></div>
+        <div class="line recycle"><span>回收</span><span>1,200 绑定元宝</span></div>
+        <div class="line bound"><span>已绑定 · 不可交易</span></div>
+        <div class="origin">
+          <div class="line"><span>拾荒者 掉落</span></div>
+          <div class="line"><span>来自 沙盗匪首</span></div>
+          <div class="line"><span>掉落于 11-18 14:30</span></div>
+        </div>
+        <div class="tags"><span>唯一</span><span>不可强化</span></div>
+        <div class="desc">沙漠王庭的遗物，剑身刻有失传的战文。<br>持有者可感到底层翻涌的沙暴之力。</div>
+        <div class="attrs">
+          <div class="arow"><i class="dot"></i><span class="k">物理攻击</span><span class="v">22 - 28</span></div>
+          <div class="arow"><i class="dot"></i><span class="k">魔法攻击</span><span class="v">14 - 20</span></div>
+          <div class="arow"><i class="dot"></i><span class="k">物理防御</span><span class="v">8 - 12</span></div>
+          <div class="arow"><i class="dot"></i><span class="k">战斗力</span><span class="v">2,140</span></div>
+        </div>
+        <div class="cmp">
+          <div class="cmp-t">对比 · 身上穿戴</div>
+          <div class="arow"><i class="dot"></i><span class="k">物理攻击</span><span class="from">14-20</span><span>→ 22-28</span><span class="delta up">+8</span></div>
+          <div class="arow"><i class="dot"></i><span class="k">魔法攻击</span><span class="from">14-20</span><span>→ 14-20</span><span class="delta same">持平</span></div>
+          <div class="arow"><i class="dot"></i><span class="k">物理防御</span><span class="from">10-14</span><span>→ 8-12</span><span class="delta down">-2</span></div>
+          <div class="power"><span>战斗力</span><b>+1,860</b></div>
+        </div>
+      </div>
+
+      <!-- 消耗品简版：单行标题、无属性 / 无对比 -->
+      <div class="detail">
+        <div class="eyebrow">ITEM</div>
+        <div class="head">
+          <div class="ic-wrap" style="color:var(--ember-4)">✚</div>
+          <div class="tname" style="color:var(--text-1)">金创药（大）</div>
+        </div>
+        <div class="desc">立即恢复 300 点生命值。<br>战斗中也可使用，冷却 1 秒。</div>
+      </div>
+
+    </div>
+  </div>
+  <div class="foot-note">悬停跟随锚点 · 默认在格子上方，放不下翻到下方 · Ctrl 按住才出对比段</div>
+
+</div></div>
+<script src="../stage.js"></script>
+</body>
+</html>
