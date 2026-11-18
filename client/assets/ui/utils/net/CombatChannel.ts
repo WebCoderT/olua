@@ -47,6 +47,14 @@ export interface CombatSettleOk {
   ok: true;
   skillId: string;
   targetId: string;
+  /**
+   * 放行的这一发记下的冷却结束时刻（服务端毫秒轴，#1137 批次 2）
+   *
+   * **冷却显示的唯一起点**：客户端用 ServerClock 换算成本地时刻写进冷却表，
+   * 不再本地 `Date.now()` 起钟（本地钟与 lastCastAt 漂移是 #1133 弹回的推手）。
+   * 冷却配 0 的技能不带（缺字段 = 无冷却）。
+   */
+  cooldownUntilMs?: number;
   damage: number;
   hp: number;
   maxHp: number;
@@ -678,6 +686,14 @@ export interface RoleAuthorityUpdate {
   physicalAttack?: [number, number];
   magicAttack?: [number, number];
   taoistAttack?: [number, number];
+  /**
+   * 仍在冷却中的技能 → 剩余毫秒（#1137 批次 2）
+   *
+   * 冷却显示的**存量来源**：进图 / 重连靠它拿到完整冷却状态（settle-ok 只覆盖刚放的
+   * 那一发）。只在仍有冷却时带（空表不带）；不在表里的技能 = 服务端判定已就绪，
+   * 客户端要清掉本地残留的倒计时。
+   */
+  cooldowns?: Record<string, number>;
   physicalDefense?: [number, number];
   magicDefense?: [number, number];
   taoistDefense?: [number, number];
@@ -786,6 +802,16 @@ export default class CombatChannel {
    * 对不上（重连丢表、超长延迟）时缺省，只把机器可读的 `rejected` / `code` 交给上层。
    */
   static onCastRejected: ((rejected: CastRejected) => void) | null = null;
+
+  /**
+   * 出手被接受出口（#1137 批次 2；组合根接线到 `SkillManager.noteServerCooldown`）
+   *
+   * settle 帧的 `ok: true` 都走这里：`skillId` 由 sendCast 记下的 castId 对账表反查
+   * （对不上时缺省）；`cooldownUntilMs` 是服务端记下的权威冷却结束时刻（服务端毫秒轴，
+   * 无冷却技能缺省）—— 客户端冷却显示的唯一起点，本地不再自起时钟。
+   * 没接线时冷却帧被丢弃（客户端回退成「等 roleUpdate 冷却表」）。
+   */
+  static onCastAccepted: ((accepted: { skillId?: string; cooldownUntilMs?: number }) => void) | null = null;
 
   /**
    * 位置修正出口（#811；组合根接线到 `AutoBattle.applyServerCorrection`）
@@ -992,6 +1018,10 @@ export default class CombatChannel {
       console.warn("[combat] 收到结算但没有处理者（onSettle 未接线），结果被丢弃");
       return;
     }
+    // 权威冷却（#1137 批次 2）：放行的出手把服务端记的冷却结束时刻交给上层起表；
+    // 拒绝的出手走 onCastRejected 的 remainMs 对齐 —— 两条路合起来冷却显示全是服务端值
+    const ok = settle as CombatSettleOk;
+    this.onCastAccepted?.({ skillId, cooldownUntilMs: ok.cooldownUntilMs });
     this.onSettle(settle);
   }
 

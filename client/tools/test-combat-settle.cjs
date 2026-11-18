@@ -163,6 +163,35 @@ check(
 );
 
 // ==============================================================================
+//  C1.五. 冷却收权（#1137 批次 2：冷却显示全由服务端值驱动，本地不自起时钟）
+// ==============================================================================
+
+console.log("\n— C1.五. 冷却收权（#1137 批次 2）—");
+
+check(
+  !/cooldowns\.set\(skillId, Date\.now\(\)\)/.test(skillManagerSource),
+  "tryCast 不再本地起冷却钟（本地钟与 lastCastAt 漂移是 #1133 弹回的推手；表只写服务端给来的值）",
+);
+check(
+  /static noteServerCooldown\(/.test(skillManagerSource) && /ServerClock\.skew/.test(skillManagerSource),
+  "SkillManager.noteServerCooldown 用 ServerClock 换算 settle-ok 的权威 cooldownUntilMs（冷却显示的主入口）",
+);
+check(
+  /static applyServerCooldowns\(/.test(skillManagerSource) && /!\(key in cooldowns\)/.test(skillManagerSource),
+  "SkillManager.applyServerCooldowns 整表对齐 roleUpdate 快照（表外技能 = 服务端判定已就绪，清本地残留）",
+);
+check(
+  /onCastAccepted\?\.\(\{ skillId, cooldownUntilMs: ok\.cooldownUntilMs \}\)/.test(channelSource) &&
+    /CombatChannel\.onCastAccepted = \(\{ skillId, cooldownUntilMs \}\) => \{/.test(gameSource) &&
+    /CombatChannel\.onCastAccepted = null;/.test(gameSource),
+  "Game.ts 接线 onCastAccepted（settle-ok 带回权威冷却结束时刻；onDestroy 摘掉）",
+);
+check(
+  /SkillManager\.applyServerCooldowns\(update\.cooldowns\)/.test(gameSource),
+  "Game.ts 把 roleUpdate 的冷却表交给 SkillManager 对齐（进图/重连的存量冷却来源）",
+);
+
+// ==============================================================================
 //  C. 服务端快照与守卫
 // ==============================================================================
 

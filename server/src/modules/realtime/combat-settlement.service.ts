@@ -201,6 +201,8 @@ export class CombatSettlementService {
       ok: true,
       skillId: cast.skillId,
       targetId: cast.targetId,
+      // 权威冷却结束时刻（#1137 批次 2）：客户端冷却显示以它起表
+      ...(verdict.cooldownUntilMs === undefined ? {} : { cooldownUntilMs: verdict.cooldownUntilMs }),
       damage: 0,
       hp: 0,
       maxHp: 0,
@@ -285,6 +287,8 @@ export class CombatSettlementService {
         ok: true,
         skillId: cast.skillId,
         targetId: "",
+        // 权威冷却结束时刻（#1137 批次 2）：无伤害技能同样过冷却闸，同样要带回
+        ...(verdict.cooldownUntilMs === undefined ? {} : { cooldownUntilMs: verdict.cooldownUntilMs }),
         damage: 0,
         hp: 0,
         maxHp: 0,
@@ -484,6 +488,8 @@ export class CombatSettlementService {
       skillId: cast.skillId,
       // 顶层字段 = 最近的那一只（旧客户端只认这几个字段，不至于因为 AOE 而「什么都不显示」）
       targetId: primary?.targetId ?? "",
+      // 权威冷却结束时刻（#1137 批次 2）：客户端冷却显示以它起表（冷却配 0 的技能不带）
+      ...(verdict.cooldownUntilMs === undefined ? {} : { cooldownUntilMs: verdict.cooldownUntilMs }),
       damage: primary?.damage ?? 0,
       hp: primary?.hp ?? 0,
       maxHp: primary?.maxHp ?? 0,
@@ -852,6 +858,8 @@ export class CombatSettlementService {
       ok: true,
       skillId: cast.skillId,
       targetId: cast.targetId,
+      // 权威冷却结束时刻（#1137 批次 2）：客户端冷却显示以它起表（冷却配 0 的技能不带）
+      ...(verdict.cooldownUntilMs === undefined ? {} : { cooldownUntilMs: verdict.cooldownUntilMs }),
       damage,
       hp: applied.hp,
       maxHp: target.maxHp,

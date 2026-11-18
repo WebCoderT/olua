@@ -4,6 +4,7 @@ import { SkillContextInput, SkillId, SkillTargetType } from "../../types/skill";
 import GameUiHelper from "../helpers/GameUiHelper";
 import { canAttackTarget } from "../utils/battle/BattleMath";
 import MpHelper from "../utils/battle/MpHelper";
+import ServerClock from "../utils/net/ServerClock";
 import AutoBattle from "./AutoBattle";
 import EffectManager from "./EffectManager";
 import StorageManager from "./StorageManager";
@@ -22,7 +23,15 @@ import StorageManager from "./StorageManager";
 export default class SkillManager {
   /** 施法上下文提供者（由组合根注入） */
   private static contextProvider: (() => SkillContextInput) | null = null;
-  /** 技能冷却记录（skillId -> 上次释放时间戳，毫秒） */
+  /**
+   * 技能冷却表（skillId -> 就绪时刻，本地毫秒轴）
+   *
+   * **只写服务端给来的值**（#1137 批次 2）：settle-ok 的 `cooldownUntilMs`（ServerClock
+   * 换算本地轴）、roleUpdate 快照的 `cooldowns` 表、冷却拒绝帧的 `remainMs`。
+   * 本地不再 `Date.now()` 起钟 —— 本地钟与服务端 lastCastAt 漂移正是 #1133 蓝量弹回的推手；
+   * 放了技能、settle-ok 还没回来的空窗里表是空的，连点会多出几发注定被服务端冷却闸拒掉的
+   * cast 帧，被拒帧会立刻把表对齐（表现上只是多一两条 warn 日志，不会重复出效果）。
+   */
   private static cooldowns = new Map<SkillId, number>();
 
   /** 注入施法上下文提供者 */
@@ -101,12 +110,10 @@ export default class SkillManager {
         return false;
       }
     }
-    // 记录冷却（本地冷却只是预判；服务端有独立的 lastCastAt，被拒时由 alignCooldown 按权威值对齐），
-    // 显示技能释放提示（位置在释放者，挂特效层），调用技能实现
-    // 蓝量在服务端（#1133）：本地**不再扣蓝**——耗蓝由 cast 帧的服务端施法闸（#813 spendCastMp）扣，
-    // 扣完的权威值经 roleUpdate 帧回传刷蓝条；本地扣一份再被帧覆盖就是「蓝量弹回」的根源。
+    // 冷却表只写服务端给来的值（#1137 批次 2）：settle-ok 带回权威 cooldownUntilMs，
+    // 被拒帧按 remainMs 对齐 —— 本地不预起钟。蓝量同样在服务端（#1133）：耗蓝由 cast 帧的
+    // 服务端施法闸（#813 spendCastMp）扣，权威值经 roleUpdate 帧回传刷蓝条。
     // 上面的 hasEnough 只是快捷预判（省一次注定失败的出手），判准以服务端为准。
-    this.cooldowns.set(skillId, Date.now());
     GameUiHelper.showSkillTip(context.caster, config.label);
     // 技能特效（配置的 effect / effectIsOnSelf）：与动作动画同时开始播放，见 core/EffectManager
     // 区域（PLACE）技能例外：特效位置由技能实现决定（如十步一杀播在突进落点），不在施法起点代播
@@ -115,41 +122,67 @@ export default class SkillManager {
     return true;
   }
 
-  /** 技能实际冷却时间（秒）：技能配置冷却 / 角色对应动作的速度倍率（倍率 <= 0 视为 1，即不加速） */
-  private static getEffectiveCooldown(skillId: SkillId): number {
-    const config = skills.get(skillId);
-    if (!config) return 0;
-    const rate = StorageManager.findOnlineRole()?.speedRate[config.action] ?? 1;
-    return config.cooldown / (rate > 0 ? rate : 1);
-  }
-
-  /** 技能是否处于冷却 */
+  /** 技能是否处于冷却（表里只有服务端给来的就绪时刻，本地不写） */
   static inCooldown(skillId: SkillId): boolean {
-    const last = this.cooldowns.get(skillId);
-    return last !== undefined && Date.now() - last < this.getEffectiveCooldown(skillId) * 1000;
+    const readyAt = this.cooldowns.get(skillId);
+    return readyAt !== undefined && Date.now() < readyAt;
   }
 
-  /** 获取技能冷却剩余秒数（未冷却返回 0），按实际冷却（含速度倍率折算）计算，供 UI 显示倒计时 */
+  /** 获取技能冷却剩余秒数（未冷却返回 0），供 UI 显示倒计时 */
   static getCooldownRemaining(skillId: SkillId): number {
-    const last = this.cooldowns.get(skillId);
-    if (last === undefined) return 0;
-    return Math.max(0, this.getEffectiveCooldown(skillId) - (Date.now() - last) / 1000);
+    const readyAt = this.cooldowns.get(skillId);
+    if (readyAt === undefined) return 0;
+    return Math.max(0, (readyAt - Date.now()) / 1000);
   }
 
   /**
-   * 按服务端的权威剩余冷却对齐本地冷却钟（#1133）
+   * 服务端放行帧带回的权威冷却结束时刻写进冷却表（#1137 批次 2）
    *
-   * 本地 `cooldowns` 与服务端 `lastCastAt` 是两个独立时钟：speedRate 口径差一点、网络抖一下，
-   * 漂移累积后客户端以为转好了、服务端还在冷却里 —— 这一手被拒，出手没打出去还占一个往返。
-   * 服务端 cooldown 拒绝帧带权威的 `remainMs`，把它写回本地（本冷却上限内取小），下一发就不会再撞。
+   * `cooldownUntilMs` 是**服务端毫秒轴**的绝对时刻，换算本地轴要减去时钟偏差
+   * （`ServerClock.skew` = 服务端此刻 − 本地此刻；未校准时偏差为 0，两端都是 epoch 毫秒，
+   * 只差系统钟的几秒，冷却显示影响有限）。这是冷却显示的**主入口**：每次成功出手都走这里。
+   * @param skillId 技能编号（settle-ok 帧的 castId 经 CombatChannel 对账回成 skillId）
+   * @param cooldownUntilMs 服务端记的冷却结束时刻（<=0 / 无冷却时缺省，不写表）
+   */
+  static noteServerCooldown(skillId: SkillId, cooldownUntilMs?: number): void {
+    if (!skills.has(skillId) || !(cooldownUntilMs && cooldownUntilMs > 0)) return;
+    this.cooldowns.set(skillId, cooldownUntilMs - ServerClock.skew);
+  }
+
+  /**
+   * roleUpdate 快照的冷却表整表对齐（#1137 批次 2）
+   *
+   * 表是**全量语义**：服务端只在仍有冷却时带（空表不带），不在表里的技能 =
+   * 服务端判定已就绪 —— 本地残留的倒计时（重连前放的技能）要清掉，否则会
+   * 「服务端早就转好了、本地还锁着」。进图 / 重连后靠这一帧拿到完整冷却状态。
+   * @param cooldowns skillId → 剩余毫秒（帧不带 / 形状不对时整个跳过，不动本地表）
+   */
+  static applyServerCooldowns(cooldowns: Record<string, number> | undefined): void {
+    if (!cooldowns || typeof cooldowns !== "object") return;
+    const now = Date.now();
+    for (const key of Array.from(this.cooldowns.keys())) {
+      if (!(key in cooldowns)) this.cooldowns.delete(key);
+    }
+    for (const rawId of Object.keys(cooldowns)) {
+      const skillId = rawId as SkillId;
+      const remainMs = cooldowns[rawId];
+      if (!skills.has(skillId) || !(remainMs > 0)) continue;
+      this.cooldowns.set(skillId, now + remainMs);
+    }
+  }
+
+  /**
+   * 按服务端的权威剩余冷却对齐本地冷却表（#1133 引入；#1137 起语义 = 直接写服务端值）
+   *
+   * 冷却拒绝帧带权威的 `remainMs`：写回本地表，下一发就不会再撞。它与
+   * `noteServerCooldown`（settle-ok）是冷却表仅有的两条写路径之外的一条——
+   * 都来自服务端帧，本地依旧不自行起钟。
    * @param skillId 技能编号（settle 拒绝帧的 castId 经 CombatChannel 对账回成 skillId）
    * @param remainMs 服务端判的剩余冷却毫秒（<=0 不动）
    */
   static alignCooldown(skillId: SkillId, remainMs: number): void {
     if (!skills.has(skillId) || !(remainMs > 0)) return;
-    const total = this.getEffectiveCooldown(skillId) * 1000;
-    const wait = Math.min(Math.ceil(remainMs), Math.max(1, Math.ceil(total)));
-    this.cooldowns.set(skillId, Date.now() + wait - total);
+    this.cooldowns.set(skillId, Date.now() + Math.ceil(remainMs));
   }
 }
 

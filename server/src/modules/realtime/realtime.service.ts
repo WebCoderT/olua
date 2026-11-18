@@ -30,6 +30,7 @@ import { BlockService } from "./block.service";
 import { PartyService } from "../party/party.service";
 import { EventLogService } from "../event-log/event-log.service";
 import { ChatService } from "./chat.service";
+import { CastGuardService } from "./cast-guard.service";
 import { CombatSettlementService } from "./combat-settlement.service";
 import { MonsterAiService } from "./monster-ai.service";
 import { DropService } from "./drop.service";
@@ -280,6 +281,7 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
     private readonly combat: CombatSettlementService,
     private readonly monsterAi: MonsterAiService,
     private readonly presence: PlayerPresenceService,
+    private readonly castGuard: CastGuardService,
     private readonly aoi: AoiService,
     private readonly chat: ChatService,
     private readonly blocks: BlockService,
@@ -914,6 +916,12 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
               taoistDefense: summary.taoistDefense,
             }
           : {}),
+        // 冷却表（#1137 批次 2）：仍在冷却的技能 → 剩余毫秒，客户端冷却显示的存量来源
+        // （进图 / 重连靠它拿到完整状态；settle-ok 只覆盖刚放的那一发）。空表不带。
+        ...(() => {
+          const cooldowns = this.castGuard.cooldownSnapshotOf(row.account_id, data);
+          return Object.keys(cooldowns).length > 0 ? { cooldowns } : {};
+        })(),
         revision: row.revision,
       },
     };
