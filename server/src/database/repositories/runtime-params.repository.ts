@@ -6,9 +6,9 @@ import { RuntimeParamsRow } from "../rows";
  * 客户端运行时参数（#605 / #655）—— 单行表 `runtime_params`
  *
  * 与 `mall_settings` / `equipment_meta` 同一取向：**一行、没有增删**，出厂值随
- * `config-sync.sql` 首启灌入，后台只能改内容。六组各存一列 JSON，缺键由 service 回落默认。
+ * `config-sync.sql` 首启灌入，后台只能改内容。各组各存一列 JSON，缺键由 service 回落默认。
  * 严格说 `movement`（#811）与 `cast_range`（#1030）是**服务端独占**、不进客户端快照，
- * 只是搭同一张单行表的车。
+ * 只是搭同一张单行表的车；`player_move`（#1138）相反 —— 它**进**客户端快照。
  */
 @Injectable()
 export class RuntimeParamsRepository {
@@ -17,8 +17,8 @@ export class RuntimeParamsRepository {
   /** seed 单行（已存在则跳过） */
   seed(row: RuntimeParamsRow): void {
     this.db.run(
-      `INSERT OR IGNORE INTO runtime_params (id, drop_params, auto_battle, guild_rules, monster_ai, movement, cast_range, updated_at) VALUES (1, ?, ?, ?, ?, ?, ?, ?)`,
-      [row.drop_params, row.auto_battle, row.guild_rules, row.monster_ai, row.movement, row.cast_range, row.updated_at],
+      `INSERT OR IGNORE INTO runtime_params (id, drop_params, auto_battle, guild_rules, monster_ai, movement, cast_range, player_move, updated_at) VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [row.drop_params, row.auto_battle, row.guild_rules, row.monster_ai, row.movement, row.cast_range, row.player_move, row.updated_at],
     );
   }
 
@@ -28,8 +28,8 @@ export class RuntimeParamsRepository {
 
   update(row: RuntimeParamsRow): { changes: number } {
     return this.db.execute(
-      `UPDATE runtime_params SET drop_params = ?, auto_battle = ?, guild_rules = ?, monster_ai = ?, movement = ?, cast_range = ?, updated_at = ? WHERE id = 1`,
-      [row.drop_params, row.auto_battle, row.guild_rules, row.monster_ai, row.movement, row.cast_range, row.updated_at],
+      `UPDATE runtime_params SET drop_params = ?, auto_battle = ?, guild_rules = ?, monster_ai = ?, movement = ?, cast_range = ?, player_move = ?, updated_at = ? WHERE id = 1`,
+      [row.drop_params, row.auto_battle, row.guild_rules, row.monster_ai, row.movement, row.cast_range, row.player_move, row.updated_at],
     );
   }
 }

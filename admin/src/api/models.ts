@@ -7230,6 +7230,17 @@ export type GuildRuleParams = {
   createCostBindGold: number;
 };
 
+export type PlayerMoveParams = {
+  /**
+   * 走路速度（像素/秒）
+   */
+  walkSpeedPxPerS: number;
+  /**
+   * 跑步速度（像素/秒，必须 ≥ 走路）
+   */
+  runSpeedPxPerS: number;
+};
+
 export type RuntimeParams = {
   /**
    * 掉落物手感参数（服务端只下发，不消费）
@@ -7243,6 +7254,10 @@ export type RuntimeParams = {
    * 帮会规则门槛（服务端校验读它）
    */
   guild: GuildRuleParams;
+  /**
+   * 玩家移动速度（#1138 移动收权，速度权威在服务端；客户端拉快照覆写本地）
+   */
+  playerMove: PlayerMoveParams;
   /**
    * 最后修改时间（毫秒）
    */
@@ -7649,6 +7664,17 @@ export type UpdateGuildRuleParams = {
   createCostBindGold?: number;
 };
 
+export type UpdatePlayerMoveParams = {
+  /**
+   * 走路速度（像素/秒）
+   */
+  walkSpeedPxPerS?: number;
+  /**
+   * 跑步速度（像素/秒）
+   */
+  runSpeedPxPerS?: number;
+};
+
 export type UpdateRuntimeParams = {
   /**
    * 掉落物手感参数（只提交改动过的字段）
@@ -7662,6 +7688,10 @@ export type UpdateRuntimeParams = {
    * 帮会规则门槛（只提交改动过的字段）
    */
   guild?: UpdateGuildRuleParams;
+  /**
+   * 玩家移动速度（只提交改动过的字段）
+   */
+  playerMove?: UpdatePlayerMoveParams;
   /**
    * 修改备注（写进审计日志的上下文，便于追溯「为什么改」）
    */

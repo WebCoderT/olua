@@ -109,11 +109,34 @@ export interface GuildRuleParams {
   createCostBindGold: number;
 }
 
-/** 三组一起下发（快照 `runtimeParams` 段就是它的形状） */
+/**
+ * 玩家移动参数（`runtime_params.player_move` 列，#1138 移动收权）
+ *
+ * **进客户端快照**（与 drop / autoBattle / guild 同一组）：移动收权后玩家位移由服务端
+ * 10Hz 步进，速度的权威在这里 —— 客户端拉快照覆写本地刚体速度，两边同速才不会
+ * 「别人眼里的你」与「你自己眼里的你」分道扬镳（过渡期客户端还有本地物理，批次 4
+ * 删掉之后客户端纯按服务端帧表演，但演出节奏仍要同速）。
+ *
+ * 出厂值 64 / 128 px/s 与客户端原常数同值（`configs/role.ts` 的 ROLE_WALK_SPEED=2、
+ * ROLE_RUN_SPEED=4，物理单位 m/s × PTM 32）。代码里的 `FALLBACK_PLAYER_MOVE`
+ * （player-presence.service）只是读不出来时兜住进程的最小可用值。
+ */
+export interface PlayerMoveParams {
+  /** 走路速度（像素 / 秒，出厂 64） */
+  walkSpeedPxPerS: number;
+  /** 跑步速度（像素 / 秒，出厂 128；必须 ≥ 走路，否则「跑」比「走」慢） */
+  runSpeedPxPerS: number;
+}
+
+/** 玩家移动参数的键清单（启动自检 + 管理端回读用） */
+export const PLAYER_MOVE_KEYS: Array<keyof PlayerMoveParams> = ["walkSpeedPxPerS", "runSpeedPxPerS"];
+
+/** 四组一起下发（快照 `runtimeParams` 段就是它的形状） */
 export interface RuntimeParams {
   drop: DropRuntimeParams;
   autoBattle: AutoBattleParams;
   guild: GuildRuleParams;
+  playerMove: PlayerMoveParams;
 }
 
 /**
@@ -294,4 +317,5 @@ export const RUNTIME_PARAM_KEYS: Record<keyof RuntimeParams, string[]> = {
     "dashSnapRadius",
   ],
   guild: ["nameMin", "nameMax", "noticeMax", "applicationMessageMax", "createLevelMin", "createCostBindGold"],
+  playerMove: ["walkSpeedPxPerS", "runSpeedPxPerS"],
 };

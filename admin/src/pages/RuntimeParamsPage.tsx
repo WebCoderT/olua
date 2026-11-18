@@ -11,6 +11,7 @@ import type {
   UpdateGuildRuleParams,
   UpdateMonsterAiParams,
   UpdateMovementGuardParams,
+  UpdatePlayerMoveParams,
 } from "../api";
 import { Button, Card, Field, Input, Select, Spinner } from "../components/ui";
 import { PageHeader } from "../components/PageHeader";
@@ -108,6 +109,13 @@ export function RuntimeParamsPage() {
     const min = Number(draft.guild.nameMin);
     const max = Number(draft.guild.nameMax);
     return Number.isFinite(min) && Number.isFinite(max) && min > max;
+  }, [draft]);
+
+  const playerMoveInvalid = useMemo(() => {
+    if (!draft) return false;
+    const walk = Number(draft.playerMove.walkSpeedPxPerS);
+    const run = Number(draft.playerMove.runSpeedPxPerS);
+    return Number.isFinite(walk) && Number.isFinite(run) && run < walk;
   }, [draft]);
 
   const setAiField = (key: string, value: string) => {
@@ -304,6 +312,38 @@ export function RuntimeParamsPage() {
       </Card>
 
       <Card
+        title="玩家移动速度"
+        actions={
+          loading ? (
+            <Spinner />
+          ) : canWrite ? (
+            <Button disabled={!draft || saving !== null || playerMoveInvalid} loading={saving === "playerMove"} onClick={() => void save("playerMove")}>
+              保存移动速度
+            </Button>
+          ) : null
+        }
+        description="移动收权后玩家位移由服务端 10Hz 步进，速度的权威在这里；客户端拉配置快照覆写本地刚体，两边同速才不会各演各的。保存后玩家下次进游戏拉配置时生效（服务端步进即读即生效）。"
+      >
+        {draft ? (
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {PLAYER_MOVE_FIELDS.map((field) => (
+              <Field key={field.key} label={field.label} hint={field.hint}>
+                <Input
+                  type="number"
+                  min={1}
+                  step={field.step}
+                  value={draft.playerMove[field.key] ?? ""}
+                  disabled={!canWrite}
+                  onChange={(event) => setField("playerMove", field.key, event.target.value)}
+                />
+              </Field>
+            ))}
+            {playerMoveInvalid ? <p className="text-xs text-warn">跑步速度不能小于走路速度，先改回来再保存。</p> : null}
+          </div>
+        ) : null}
+      </Card>
+
+      <Card
         title="怪物 AI 与脱战"
         actions={
           loading ? (
@@ -446,10 +486,15 @@ export function RuntimeParamsPage() {
 
 //#region 字段描述（顺序即页面上的顺序）
 
-type GroupKey = "drop" | "autoBattle" | "guild";
+type GroupKey = "drop" | "autoBattle" | "guild" | "playerMove";
 
-/** 草稿：三组都是「键 → 字符串」（`moveByRun` 也按字符串存 "true"/"false"，统一走一个编辑器） */
-type Draft = { drop: Record<string, string>; autoBattle: Record<string, string>; guild: Record<string, string> };
+/** 草稿：四组都是「键 → 字符串」（`moveByRun` 也按字符串存 "true"/"false"，统一走一个编辑器） */
+type Draft = {
+  drop: Record<string, string>;
+  autoBattle: Record<string, string>;
+  guild: Record<string, string>;
+  playerMove: Record<string, string>;
+};
 
 interface FieldSpec {
   key: string;
@@ -496,6 +541,12 @@ const GUILD_FIELDS: FieldSpec[] = [
   { key: "applicationMessageMax", label: "申请留言最长（字）", hint: "0 = 不限" },
   { key: "createLevelMin", label: "建帮最低等级", hint: "角色等级低于它不能建帮；0 = 不限等级" },
   { key: "createCostBindGold", label: "建帮消耗（绑定元宝）", hint: "0 = 免费；扣款与建帮同一事务，扣了就一定建成" },
+];
+
+/** 玩家移动速度（`runtime_params.player_move`，#1138 移动收权：速度权威在服务端，客户端拉快照覆写本地） */
+const PLAYER_MOVE_FIELDS: Array<FieldSpec & { step?: number }> = [
+  { key: "walkSpeedPxPerS", label: "走路速度（像素/秒）", hint: "服务端 10Hz 步进用它；客户端拉快照同步同一把尺子", step: 1 },
+  { key: "runSpeedPxPerS", label: "跑步速度（像素/秒）", hint: "必须 ≥ 走路速度，否则跑比走慢", step: 1 },
 ];
 
 /**
@@ -575,6 +626,10 @@ function toDraft(row: RuntimeParams): Draft {
       createLevelMin: String(row.guild.createLevelMin ?? 0),
       createCostBindGold: String(row.guild.createCostBindGold ?? 0),
     },
+    playerMove: {
+      walkSpeedPxPerS: String(row.playerMove.walkSpeedPxPerS),
+      runSpeedPxPerS: String(row.playerMove.runSpeedPxPerS),
+    },
   };
 }
 
@@ -591,6 +646,7 @@ function buildPayload(
   | { drop: UpdateDropRuntimeParams }
   | { autoBattle: UpdateAutoBattleParams }
   | { guild: UpdateGuildRuleParams }
+  | { playerMove: UpdatePlayerMoveParams }
   | null {
   const num = (key: string): number | null => {
     const raw = values[key];
@@ -653,6 +709,12 @@ function buildPayload(
       return null;
     }
     return { guild: { nameMin, nameMax, noticeMax, applicationMessageMax, createLevelMin, createCostBindGold } };
+  }
+  if (group === "playerMove") {
+    const walkSpeedPxPerS = num("walkSpeedPxPerS");
+    const runSpeedPxPerS = num("runSpeedPxPerS");
+    if (walkSpeedPxPerS === null || runSpeedPxPerS === null) return null;
+    return { playerMove: { walkSpeedPxPerS, runSpeedPxPerS } };
   }
   const maxTargetDistance = num("maxTargetDistance");
   const cellSize = num("cellSize");

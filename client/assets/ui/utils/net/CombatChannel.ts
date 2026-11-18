@@ -834,6 +834,8 @@ export default class CombatChannel {
    */
   private static POSITION_INTERVAL = 100;
   private static lastPositionSentAt = 0;
+  /** 移动意图的自增序号（#1138 `moveIntent.seq`，服务端挡乱序倒退帧） */
+  private static moveSeq = 0;
 
   /**
    * 正在等应答的那一次换图意图（#606）
@@ -919,6 +921,27 @@ export default class CombatChannel {
   /** 换图重置位置上报节流（新图的第一帧位置要立刻送上去） */
   static resetPositionThrottle(): void {
     this.lastPositionSentAt = 0;
+  }
+
+  /**
+   * 上报移动意图（#1138 移动收权）：只报「往哪走」，步进与碰撞在服务端 10Hz。
+   *
+   * 调用方（RoleDisplay）在**意图变化**时才发（方向换挡 / 走跑切换 / 起走 / 停走），
+   * 不必每帧发 —— 意图是状态不是事件，重复发同一份只是覆盖。停走发 `sendMoveStop`。
+   *
+   * 过渡期（批次 3）客户端还有本地物理：自己眼里的位置仍然本地算，别人看到的是
+   * 服务端步进的位置 —— 两边同速同向，偏差只有绕障路径的细节。
+   */
+  static sendMoveIntent(dx: number, dy: number, run: boolean): void {
+    if (!this.active) return;
+    this.moveSeq += 1;
+    RealtimeClient.send({ type: "moveIntent", data: { seq: this.moveSeq, kind: "dir", dx, dy, run } });
+  }
+
+  /** 停止移动（#1138 `moveStop`）：清掉服务端这份意图，下一拍停步 */
+  static sendMoveStop(): void {
+    if (!this.active) return;
+    RealtimeClient.send({ type: "moveStop", data: {} });
   }
 
   /**
