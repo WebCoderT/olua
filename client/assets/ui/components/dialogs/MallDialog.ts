@@ -120,10 +120,10 @@ export default class MallDialog {
     // 余额胶囊（稿 .balance：暗底胶囊 + 金点 + 文字，右上角）
     const balance = GameUiHelper.createGlassPlate("mall_balance", layout.balance.size, layout.balance.size.height / 2, T.line[2], T.surface.scrim);
     balance.setPosition(layout.balance.position.x, layout.balance.position.y, 0);
-    balance.addChild(GameUiHelper.createVectorDot("mall_balance_dot", T.gold[3], new Vec2(-layout.balance.size.width / 2 + 16, 0), new Size(layout.balance.dot, layout.balance.dot)));
+    balance.addChild(GameUiHelper.createVectorDot("mall_balance_dot", T.gold[3], new Vec2(layout.balance.dotX, 0), new Size(layout.balance.dot, layout.balance.dot)));
     this.bindGoldLabel = UiHelper.createLabel(
       "mall_bind_gold", "", layout.balance.color, layout.balance.fontSize,
-      new Vec2(10, 0), new Size(layout.balance.size.width - 34, layout.balance.size.height),
+      new Vec2(layout.balance.labelX, 0), new Size(layout.balance.labelWidth, layout.balance.size.height),
       Label.HorizontalAlign.LEFT,
     );
     balance.addChild(this.bindGoldLabel);
@@ -241,7 +241,7 @@ export default class MallDialog {
     // 纵向节奏：顶行贴顶、购买行贴底，中间留给限购/库存行
     const topEdge = height / 2 - padding;
     const iconY = topEdge - layout.card.iconSize.height / 2;
-    const textX = -width / 2 + padding + layout.card.iconSize.width + 10;
+    const textX = -width / 2 + padding + layout.card.iconSize.width + layout.card.textGap;
     const textWidth = width / 2 - padding - textX;
     const nameY = topEdge - layout.card.name.lineHeight / 2;
     const kindY = nameY - layout.card.name.lineHeight / 2 - layout.card.kind.lineHeight / 2;
@@ -288,8 +288,8 @@ export default class MallDialog {
           limitOf,
           layout.card.stats.color,
           layout.card.stats.fontSize,
-          new Vec2(-width / 2 + padding + 60, -6),
-          new Size(120, layout.card.stats.lineHeight),
+          new Vec2(-width / 2 + padding + layout.card.stats.offset.x, layout.card.stats.offset.y),
+          layout.card.stats.size,
           Label.HorizontalAlign.LEFT,
         ),
       );

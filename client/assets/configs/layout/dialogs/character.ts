@@ -55,7 +55,7 @@ export const fashionDialogLayout = {
   /** 弹窗尺寸 600×500（18-fashion 稿） */
   size: new Size(600, 500),
   /** 顶部「当前穿戴」提示（稿 `.fcur`：头条一个绿点 + 一句，f12；头部下沿 205 − 半行高 10 = 195） */
-  current: { position: new Vec2(0, 195), fontSize: T.fontSize.f12 },
+  current: { position: new Vec2(0, 195), fontSize: T.fontSize.f12, size: new Size(540, 24) },
   /** 列表（卡片区，四列；稿 `.fgrid` 330 高，中心 8） */
   list: { name: "fashion_list", position: new Vec2(0, 8), size: new Size(560, 330) },
   /** 单张卡片（相对列表内容左上角逐格排布；稿 `.fcard` 152 高，四列宽 132.5） */
@@ -75,6 +75,8 @@ export const fashionDialogLayout = {
     /** 状态角标（已穿戴 / 可穿戴） */
     stateFontSize: T.fontSize.f10,
     statePosition: new Vec2(0, -50),
+    /** 状态字文本框（#1115 批次 3 收编组件内联） */
+    stateSize: new Size(122, 18),
     /** 卡片底色（Graphics 自绘，不依赖底图） */
     fill: T.surface[2],
     /** 已穿戴卡片的描边色 */
@@ -209,6 +211,8 @@ export const skillListDialogLayout = {
  */
 
 export const attrAllocateDialogLayout = {
+  /** 段标题共用几何（#1115 批次 3 收编组件内联）：贴内容左缘（points 宽 388 → x = −194 + 60）+ 文本框 */
+  sectionTitle: { x: -134, size: new Size(120, 18) },
   name: "attr_allocate_dialog",
   title: "属性",
   eyebrow: "角色",
@@ -271,6 +275,8 @@ export const attrAllocateDialogLayout = {
   foot: {
     dividerY: -194,
     y: -212,
+    /** 说明行文本框高（#1115 批次 3 收编组件内联的 16） */
+    noteHeight: 16,
     left: { name: "attr_foot_left", x: -84, width: 260, fontSize: T.fontSize.f11, color: T.text[4] },
     right: { name: "attr_foot_right", x: 118, width: 150, fontSize: T.fontSize.f11, color: T.text[4] },
   },

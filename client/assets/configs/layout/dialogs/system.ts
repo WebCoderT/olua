@@ -268,6 +268,8 @@ export const questDialogLayout = {
      * 曾经写 −180（左缘 −360，跑出行外 84px），被 ScrollView 遮罩裁掉，任务名整行看不见（#477）。
      */
     nameX: -80,
+    /** 名称行中心 y（#1115 批次 3 收编组件内联的 12） */
+    nameY: 12,
     nameSize: new Size(360, 20),
     metaX: -80,
     metaSize: new Size(360, 18),
