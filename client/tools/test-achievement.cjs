@@ -53,10 +53,12 @@ const count = (source, needle) => source.split(needle).length - 1;
 try {
   // achievement.ts 只用 cc 的 Color/Size/Vec2，沙箱里真跑；
   // #655 起成就数据的唯一来源是配置快照（客户端已无这份数据）
-  const outDir = prepare("olua-achievement", ["configs/achievement.ts"]);
+  const outDir = prepare("olua-achievement", ["configs/achievement.ts", "configs/layout/dialogs/achievement.ts"]);
   const config = require(path.join(outDir, "configs/achievement.js"));
 
-  const { achievementCategories, achievementDialogLayout: layout, achievementTexts: texts } = config;
+  // #1115 批次 2：布局迁到 configs/layout/dialogs/achievement（文案与分类仍在 configs/achievement）
+  const { achievementDialogLayout: layout } = require(path.join(outDir, "configs/layout/dialogs/achievement.js"));
+  const { achievementCategories, achievementTexts: texts } = config;
 
   // 库里的成就是平铺列（condition_type / reward_gold …），与 GET /game-config 的 DTO 同形
   const achievementData = factory.achievements().map((row) => ({

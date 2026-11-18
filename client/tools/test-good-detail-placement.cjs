@@ -27,6 +27,7 @@
  */
 const fs = require("fs");
 const path = require("path");
+const { dialogsSourceFor } = require("./lib/layout-dialogs-src.cjs");
 const { PROJECT_ROOT, prepare, loadCcShim, check, finish, fail } = require("./lib/configs-sandbox.cjs");
 
 const GAME_UI_HELPER_FILE = path.join(PROJECT_ROOT, "assets/ui/helpers/GameUiHelper.ts");
@@ -35,14 +36,14 @@ const DIALOGS_FILE = path.join(PROJECT_ROOT, "assets/configs/layout/dialogs.ts")
 
 let outDir;
 try {
-  outDir = prepare("olua-good-detail", ["ui/utils/layout/ScreenLayout.ts", "configs/layout/dialogs.ts"]);
+  outDir = prepare("olua-good-detail", ["ui/utils/layout/ScreenLayout.ts", "configs/layout/dialogs/index.ts"]);
 } catch (error) {
   fail(`沙箱准备失败：${error.message}`);
   return;
 }
 
 const { designResolution, getPopupPosition } = require(path.join(outDir, "ui/utils/layout/ScreenLayout.js"));
-const { goodDetailLayout } = require(path.join(outDir, "configs/layout/dialogs.js"));
+const { goodDetailLayout } = require(path.join(outDir, "configs/layout/dialogs/index.js"));
 
 /** GameUiHelper 已按域拆到 helpers/parts/（#1115 批次 1）：断言用源码 = barrel + 全部 parts 拼接 */
 function gameUiSourceCombined(helperTsPath) {
@@ -182,7 +183,7 @@ console.log("\n— 接线：GameUiHelper 的摆放口径 —");
 const helperSource = gameUiSourceCombined(GAME_UI_HELPER_FILE);
 const helperCode = helperSource.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\n]*/g, "");
 const gameHelperSource = fs.readFileSync(GAME_HELPER_FILE, "utf8");
-const dialogsSource = fs.readFileSync(DIALOGS_FILE, "utf8");
+const dialogsSource = dialogsSourceFor(DIALOGS_FILE);
 
 check(/getPopupPosition\(/.test(helperCode), "详情弹窗位置走 ScreenLayout.getPopupPosition（摆放算法只有一个来源）");
 check(!/getVisibleSize\(\)/.test(helperCode), "摆放边界不再问「可见区」（单分辨率下就是 designResolution，见 ScreenLayout）");

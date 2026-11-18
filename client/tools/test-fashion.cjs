@@ -14,6 +14,7 @@
  */
 const fs = require("fs");
 const path = require("path");
+const { dialogsSourceFor } = require("./lib/layout-dialogs-src.cjs");
 const { PROJECT_ROOT, check, finish, fail } = require("./lib/configs-sandbox.cjs");
 
 let sandbox;
@@ -184,7 +185,7 @@ if (sandbox) {
   console.log("\n— E. 界面接线 —");
   const roleInfoSource = read("assets/ui/components/dialogs/RoleInfoDialog.ts");
   const dialogSource = read("assets/ui/components/dialogs/FashionDialog.ts");
-  const dialogsSource = read("assets/configs/layout/dialogs.ts");
+  const dialogsSource = dialogsSourceFor(path.join(PROJECT_ROOT, "assets/configs/layout/dialogs"));
   check(/new FashionDialog\(\)\.open\(\)/.test(roleInfoSource) && /roleInfoDialogLayout\.fashionButton/.test(roleInfoSource), "角色信息弹窗有「时装」入口（唯一入口，不走 NPC）");
   check(/fashionButton: \{ name: "role_fashion_button"/.test(dialogsSource), "入口按钮几何在 configs/layout/dialogs");
   check(/StorageManager\.wearFashion\(|StorageManager\.unwearFashion\(/.test(dialogSource), "衣柜弹窗的穿脱走数据层（不在界面里改存档）");

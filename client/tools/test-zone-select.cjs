@@ -16,6 +16,7 @@
  */
 const fs = require("fs");
 const path = require("path");
+const { dialogsSourceFor } = require("./lib/layout-dialogs-src.cjs");
 const { PROJECT_ROOT, check, finish, fail } = require("./lib/configs-sandbox.cjs");
 
 let sandbox;
@@ -42,7 +43,7 @@ if (sandbox) {
   const guildSource = read("assets/ui/components/dialogs/GuildPanel.ts");
   const textsSource = read("assets/configs/texts.ts");
   const scenesSource = read("assets/configs/layout/scenes.ts");
-  const dialogsLayoutSource = read("assets/configs/layout/dialogs.ts");
+  const dialogsLayoutSource = dialogsSourceFor(path.join(PROJECT_ROOT, "assets/configs/layout/dialogs"));
   /** 去掉注释后的源码（用来断言「代码里没有裸中文文案」与「没有再调某个接口」） */
   const strip = (source) => source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\n]*/g, "");
 

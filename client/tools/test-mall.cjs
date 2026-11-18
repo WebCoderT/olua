@@ -18,6 +18,7 @@
  */
 const fs = require("fs");
 const path = require("path");
+const { dialogsSourceFor } = require("./lib/layout-dialogs-src.cjs");
 const { PROJECT_ROOT, check, finish, fail } = require("./lib/configs-sandbox.cjs");
 
 let sandbox;
@@ -40,7 +41,7 @@ if (sandbox) {
   const mallSource = read("assets/ui/components/dialogs/MallDialog.ts");
   const bottomBarSource = read("assets/ui/components/hud/BottomBar.ts");
   const textsSource = read("assets/configs/texts.ts");
-  const dialogsSource = read("assets/configs/layout/dialogs.ts");
+  const dialogsSource = dialogsSourceFor(path.join(PROJECT_ROOT, "assets/configs/layout/dialogs"));
   const imagesSource = read("assets/configs/layout/images.ts");
 
   /** 造角色（Role 的 id 取时间戳，同毫秒会撞，测试里显式指定） */

@@ -18,6 +18,7 @@
  */
 const fs = require("fs");
 const path = require("path");
+const { dialogsSourceFor } = require("./lib/layout-dialogs-src.cjs");
 const { PROJECT_ROOT, prepare, seedRuntimeTables, check, finish } = require("./lib/configs-sandbox.cjs");
 /** #655 起配置的唯一来源是数据库快照（server/data/config-sync.sql） */
 const factory = require("./lib/factory-data.cjs");
@@ -149,7 +150,7 @@ const helperSource = read("assets/ui/core/GameHelper.ts");
 const displaySource = read("assets/ui/components/role/RoleDisplay.ts");
 const roleInfoSource = read("assets/ui/components/dialogs/RoleInfoDialog.ts");
 const dialogSource = read("assets/ui/components/dialogs/RankUpgradeDialog.ts");
-const dialogsLayoutSource = read("assets/configs/layout/dialogs.ts");
+const dialogsLayoutSource = dialogsSourceFor(path.join(PROJECT_ROOT, "assets/configs/layout/dialogs"));
 const sizesSource = read("assets/configs/layout/sizes.ts");
 const panelsSource = read("assets/configs/layout/panels.ts");
 const npcSource = read("assets/configs/game-config.ts");

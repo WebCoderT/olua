@@ -13,6 +13,7 @@
  */
 const fs = require("fs");
 const path = require("path");
+const { dialogsSourceFor } = require("./lib/layout-dialogs-src.cjs");
 
 let passed = 0;
 const failures = [];
@@ -32,7 +33,7 @@ const root = path.join(__dirname, "..");
 
 const storageSource = fs.readFileSync(path.join(root, "assets/ui/core/StorageManager.ts"), "utf8");
 const dialogSource = fs.readFileSync(path.join(root, "assets/ui/components/dialogs/FashionDialog.ts"), "utf8");
-const layoutSource = fs.readFileSync(path.join(root, "assets/configs/layout/dialogs.ts"), "utf8");
+const layoutSource = dialogsSourceFor(path.join(root, "assets/configs/layout/dialogs"));
 const apiSource = fs.readFileSync(path.join(root, "assets/ui/utils/net/Api.ts"), "utf8");
 const channelSource = fs.readFileSync(path.join(root, "assets/ui/utils/net/CombatChannel.ts"), "utf8");
 const configSource = fs.readFileSync(path.join(root, "assets/configs/game-config.ts"), "utf8");
