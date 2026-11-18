@@ -183,6 +183,13 @@ export interface RealtimeSettleOk {
   ok: true;
   skillId: string;
   targetId: string;
+  /**
+   * 放行的这一发记下的冷却结束时刻（服务端毫秒轴，#1137 批次 2）
+   *
+   * 只在技能冷却配 > 0 时出现（缺字段 = 无冷却）。客户端用它起冷却倒计时
+   * （ServerClock 换算本地轴）—— 冷却显示全由服务端值驱动，本地不再自起时钟。
+   */
+  cooldownUntilMs?: number;
   /** 本次伤害（服务端按自己的属性表算出，overkill 不截断 —— 血量才截断） */
   damage: number;
   /** 结算后目标剩余血量（0 = 死亡） */
@@ -1433,6 +1440,14 @@ export interface RealtimeRoleUpdateMessage {
     physicalDefense?: [number, number];
     magicDefense?: [number, number];
     taoistDefense?: [number, number];
+    /**
+     * 仍在冷却中的技能 → 剩余毫秒（#1137 批次 2）
+     *
+     * 客户端冷却显示的存量来源：进图 / 重连后靠这一帧拿到完整冷却状态（settle-ok
+     * 只覆盖刚放的那一发）。**只在仍有冷却时带**（空表不带）；不在表里的技能 =
+     * 服务端判定已就绪，客户端要清掉本地残留的倒计时。
+     */
+    cooldowns?: Record<string, number>;
     /** 角色修订号（客户端照搬做存档基线，防下一次推档撞乐观锁） */
     revision: number;
   };

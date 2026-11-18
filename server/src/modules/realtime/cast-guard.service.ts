@@ -1,5 +1,6 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { CastRangeParams } from "../../common/constants/runtime-params";
+import { skillOf } from "../../common/runtime-config-cache";
 import { RuntimeParamsRepository } from "../../database/repositories/runtime-params.repository";
 import { RolesService } from "../roles/roles.service";
 
@@ -57,9 +58,19 @@ import { RolesService } from "../roles/roles.service";
  */
 export type CastRejectReason = "dead" | "cross_map" | "range" | "cooldown" | "mp" | "rate" | "stunned";
 
-/** 判定结果：放行，或带原因的拒绝 */
+/** 判定结果：放行（带权威冷却结束时刻），或带原因的拒绝 */
 export type CastGuardVerdict =
-  | { ok: true }
+  | {
+      ok: true;
+      /**
+       * 放行的这一发记下的**冷却结束时刻**（服务端毫秒轴，#1137 批次 2）
+       *
+       * 客户端用它起冷却倒计时（ServerClock 换算到本地轴）—— 冷却显示全由服务端值驱动，
+       * 本地不再 `Date.now()` 起钟（本地钟与 lastCastAt 漂移正是 #1133 蓝量弹回的推手）。
+       * 冷却配 0 的技能不带（没有冷却就没有这个字段）。
+       */
+      cooldownUntilMs?: number;
+    }
   | {
       ok: false;
       rejected: CastRejectReason;
@@ -294,10 +305,14 @@ export class CastGuardService {
       return { ok: false, rejected: "mp", message: `法力不足：需要 ${mpCost}`, need: mpCost };
     }
     bucket.tokens -= 1;
-    if (cooldownMs > 0) this.lastCastAt.set(`${input.accountId}:${input.skillId}`, now);
-    // 不计冷却的技能（冷却配 0）也要记：它是「刚打完一发」的既成事实，与冷却无关。
-    // 这张表只服务于「他现在算不算在战斗里」（#1001 的 deny_transfer_in_combat）
+    // 「刚打完一发」的既成事实（#1001 的 deny_transfer_in_combat 判据读它）——
+    // 记冷技能与不计冷却的技能都要记，放在冷却分支之前
     this.lastAcceptedAt.set(input.accountId, now);
+    if (cooldownMs > 0) {
+      this.lastCastAt.set(`${input.accountId}:${input.skillId}`, now);
+      // 权威冷却结束时刻随放行帧带回（#1137 批次 2）：客户端的冷却显示以它为唯一起点
+      return { ok: true, cooldownUntilMs: now + cooldownMs };
+    }
     return { ok: true };
   }
 
@@ -309,6 +324,32 @@ export class CastGuardService {
    */
   lastAcceptedOf(accountId: string): number | null {
     return this.lastAcceptedAt.get(accountId) ?? null;
+  }
+
+  /**
+   * 这个账号当前仍在冷却中的技能 → 剩余毫秒（#1137 批次 2，roleUpdate 快照用）
+   *
+   * 客户端的冷却显示全由服务端值驱动：settle-ok 帧只覆盖「刚放的那一发」，
+   * 进图 / 重连后的存量冷却就靠这张表随 roleUpdate 帧下发（**只在仍有冷却时带**，
+   * 空表不带 —— 免得每帧多塞一个恒空对象）。
+   *
+   * 口径与冷却闸同一把尺（`cooldownMsOf`：配置冷却 ÷ speedRate），所以客户端拿到的
+   * remainMs 与下一发会不会被拒必然一致 —— 它不存在「本地算出来已就绪、服务端还在转」的空间。
+   */
+  cooldownSnapshotOf(accountId: string, roleData: Record<string, unknown>): Record<string, number> {
+    const now = Date.now();
+    const prefix = `${accountId}:`;
+    const snapshot: Record<string, number> = {};
+    for (const [key, last] of this.lastCastAt) {
+      if (!key.startsWith(prefix)) continue;
+      const skill = skillOf(key.slice(prefix.length));
+      if (!skill) continue;
+      const cooldownMs = this.cooldownMsOf(skill, roleData);
+      if (cooldownMs <= 0) continue;
+      const remainMs = Math.ceil(cooldownMs - (now - last));
+      if (remainMs > 0) snapshot[key.slice(prefix.length)] = remainMs;
+    }
+    return snapshot;
   }
 
   /** 连接断开：清掉本账号的冷却与令牌桶（内存不陪断线玩家涨；换图**不**清，见文件头） */

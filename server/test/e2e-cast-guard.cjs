@@ -137,6 +137,9 @@ async function startServer(dbPath) {
       WORLD_RESPAWN_MS: "5000",
       // 怪物 AI 不打人：这一套只看「玩家的出手」，被怪打死会把死亡用例搞脏
       MONSTER_AI_TICK_MS: "1000",
+      // 配置重装在管理端写后是进程内即时、但按拆进程形态也留了周期兜底 —— e2e 把间隔压到
+      // 300ms，让「改冷却 → 下一发放按新值判」不依赖 10s 的出厂周期
+      REALTIME_CONFIG_REFRESH_MS: "300",
     },
     stdio: ["ignore", "pipe", "pipe"],
   });
@@ -186,6 +189,8 @@ function connect(url) {
     opened: false,
     settles: [],
     worlds: [],
+    /** roleUpdate 权威快照（#1137 批次 2：冷却表断言用） */
+    roleUpdates: [],
     seq: 0,
     /** 发一发，返回它的 castId（不等待） */
     fire(body) {
@@ -219,6 +224,7 @@ function connect(url) {
       const frame = JSON.parse(raw.toString());
       if (frame.type === "settle") session.settles.push(frame.data);
       if (frame.type === "world") session.worlds.push(frame.data);
+      if (frame.type === "roleUpdate") session.roleUpdates.push(frame.data);
     } catch {
       /* 非 JSON 帧不记 */
     }
@@ -366,6 +372,7 @@ function connect(url) {
     group("四、冷却闸：同一技能连发 → 第二发被拒并带 remainMs");
 
     await sleep(400); // 让上一段落的冷却过掉
+    const cdFiredAt = Date.now();
     const cdTarget = await freshTarget();
     const c1 = a.fire({ skillId: "1000", targetId: cdTarget.instanceId, monsterKey: cdTarget.monsterKey });
     const c2 = a.fire({ skillId: "1000", targetId: cdTarget.instanceId, monsterKey: cdTarget.monsterKey });
@@ -374,12 +381,49 @@ function connect(url) {
     checkEqual(r2 && r2.rejected, "cooldown", "同一拍的第二发被冷却闸拒掉（rejected = cooldown）");
     // 只判「带剩余冷却且为正」（形状 + 方向）。上界是 cooldown ÷ speedRate 算出来的配置值，不判（#966）
     check(!!(r2 && r2.remainMs > 0), "remainMs 带出剩余冷却（客户端据此画灰条）", String(r2 && r2.remainMs));
+    // 放行帧带回权威冷却结束时刻（#1137 批次 2）：服务端毫秒轴、取回时必然还在未来
+    // （测试进程与实时进程同机，Date.now() 可直接比）
+    check(
+      !!(r1 && typeof r1.cooldownUntilMs === "number" && r1.cooldownUntilMs > cdFiredAt),
+      "放行帧带回权威冷却结束时刻 cooldownUntilMs（客户端冷却显示的唯一起点，#1137）",
+      JSON.stringify(r1 && r1.cooldownUntilMs),
+    );
 
     // 冷却记的是「被接受的那一发」：拒掉的那发不该把冷却往后推
     await sleep(260);
     const c3 = a.fire({ skillId: "1000", targetId: cdTarget.instanceId, monsterKey: cdTarget.monsterKey });
     const r3 = await a.settleOf(c3);
     check(!!(r3 && r3.ok), "等过一个有效冷却后立刻能再打（拒掉的那发没有把冷却往后推）", JSON.stringify(r3 && r3.rejected));
+
+    // roleUpdate 快照带冷却表（#1137 批次 2）：把冷却临时拉长到 3 秒（出厂口径从列表现读），
+    // 放行一发后推一版存档触发 roleUpdate —— 快照里应带「1000 → 剩余毫秒」，且在配置上限内
+    const skillList = await api(baseUrl, "GET", "admin/skills", { token: adminToken, zoneId: ADMIN_ZONE });
+    const skillRow = (skillList.data && (Array.isArray(skillList.data) ? skillList.data : skillList.data.list) || []).find((row) => row && row.id === "1000");
+    const originCooldown = skillRow && skillRow.cooldown;
+    check(skillRow && Number.isFinite(originCooldown), "准备：从管理端读到基础剑术的出厂冷却", JSON.stringify(originCooldown));
+    await api(baseUrl, "PATCH", "admin/skills/1000", { token: adminToken, zoneId: ADMIN_ZONE, body: { cooldown: 3 } });
+    await sleep(1200); // 等配置重装兜底把新冷却装进结算层（300ms 间隔），顺带让上一段的旧冷却过掉
+    const snapTarget = await freshTarget();
+    const snapId = a.fire({ skillId: "1000", targetId: snapTarget.instanceId, monsterKey: snapTarget.monsterKey });
+    const snapOk = await a.settleOf(snapId);
+    check(!!(snapOk && snapOk.ok), "准备：拉长冷却后放行一发", JSON.stringify(snapOk && snapOk.rejected));
+    // 触发一次 roleUpdate（轮询比较 revision:updated_at，得真推进修订号）：拉详情再原样 PUT 回去
+    const roleDetail = await api(baseUrl, "GET", `roles/${roleId}`, { token });
+    const detailData = roleDetail.data && roleDetail.data.data;
+    await api(baseUrl, "PUT", `roles/${roleId}`, { token, body: { data: detailData, revision: roleDetail.data && roleDetail.data.revision } });
+    const cdFrame = await waitFor("带冷却表的 roleUpdate", async () => {
+      const frame = a.roleUpdates.find((f) => f && f.cooldowns && f.cooldowns["1000"] > 0);
+      return frame || null;
+    });
+    check(
+      !!(cdFrame && cdFrame.cooldowns["1000"] > 0 && cdFrame.cooldowns["1000"] <= 3000),
+      "roleUpdate 快照带冷却表（1000 → 剩余毫秒，且在配置上限内；进图/重连靠它拿存量冷却）",
+      JSON.stringify(cdFrame && cdFrame.cooldowns),
+    );
+    await api(baseUrl, "PATCH", "admin/skills/1000", { token: adminToken, zoneId: ADMIN_ZONE, body: { cooldown: originCooldown } });
+    const skillRestored = await api(baseUrl, "GET", "admin/skills", { token: adminToken, zoneId: ADMIN_ZONE });
+    const restoredRow = (skillRestored.data && (Array.isArray(skillRestored.data) ? skillRestored.data : skillRestored.data.list) || []).find((row) => row && row.id === "1000");
+    check(restoredRow && restoredRow.cooldown === originCooldown, "还原：基础剑术冷却回到出厂口径", JSON.stringify(restoredRow && restoredRow.cooldown));
 
     //#endregion
 
