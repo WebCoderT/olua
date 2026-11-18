@@ -128,12 +128,12 @@ export const mallDialogLayout = {
     /** 图标右缘到文字块左缘的间距（#1115 批次 3 收编组件内联的 10） */
     textGap: 10,
     /** 名称（本体一行，前缀色，超长缩字）与类别行（前缀+后缀 / 药品，灰小字） */
-    name: { fontSize: 13, lineHeight: 18, plainColor: T.text[1] },
-    kind: { fontSize: 10, lineHeight: 13, kindColor: T.text[4] },
+    name: { fontSize: T.fontSize.f13, lineHeight: 18, plainColor: T.text[1] },
+    kind: { fontSize: T.fontSize.f10, lineHeight: 13, kindColor: T.text[4] },
     /** 限购 / 库存行（#846：今日 2/3 · 剩 5；无限制时不占位） */
-    stats: { fontSize: 10, lineHeight: 13, color: T.text[3], /** 限购行的偏移与文本框（#1115 批次 3 收编组件内联） */ offset: new Vec2(60, -6), size: new Size(120, 13) },
+    stats: { fontSize: T.fontSize.f10, lineHeight: 13, color: T.text[3], /** 限购行的偏移与文本框（#1115 批次 3 收编组件内联） */ offset: new Vec2(60, -6), size: new Size(120, 13) },
     /** 购买行：价格（金，左对齐块）+ 购买按钮（金键，右贴边） */
-    price: { fontSize: 12, color: T.gold[4], blockWidth: 120 },
+    price: { fontSize: T.fontSize.f12, color: T.gold[4], blockWidth: 120 },
     buyButton: { size: new Size(56, 24), fontSize: T.fontSize.f12 },
     /** 置灰态（等级不足 / 售罄 / 买满）：整卡压暗到该不透明度 */
     lockedOpacity: 160,
@@ -177,25 +177,25 @@ export const goodDetailLayout = {
   /** 头部行间距（图标与名称行） */
   headerSpacing: 10,
   /** 基础信息行（等级与部位）：字号与配色（灰字，弱于正文） */
-  info: { fontSize: 12, size: new Size(220, 18), color: T.text[3] },
+  info: { fontSize: T.fontSize.f12, size: new Size(220, 18), color: T.text[3] },
   /** 回收价行：字号与配色（金色，与绑定元宝呼应） */
-  recycle: { fontSize: 12, size: new Size(220, 18), color: T.amber },
+  recycle: { fontSize: T.fontSize.f12, size: new Size(220, 18), color: T.amber },
   /**
    * 绑定标记行（「已绑定 · 不可交易」，#789）
    *
    * 只在**这件物品确实绑定**时出现：颜色取琥珀色（与标签行同调但更醒目），排版占一行。
    * 不绑定时不占位 —— 多数掉落物没绑定，留一行空位会让详情弹窗白白变高。
    */
-  bound: { fontSize: 12, size: new Size(220, 18), color: T.gold[4] },
+  bound: { fontSize: T.fontSize.f12, size: new Size(220, 18), color: T.gold[4] },
   /**
    * 掉落溯源段（谁掉的 / 哪个怪 / 什么时间，#789；只有装备带溯源）
    *
    * 三行弱灰字，排在回收价下方：颜色比正文淡（它是背景信息，不是玩家要拿它做决策的数据）。
    * 行高 15 与字号 11 配套，三行合计约 45 像素，弹窗仍在一块可见区内。
    */
-  origin: { fontSize: 11, lineHeight: 15, size: new Size(220, 15), color: T.text[4] },
+  origin: { fontSize: T.fontSize.f11, lineHeight: 15, size: new Size(220, 15), color: T.text[4] },
   /** 介绍文本 */
-  description: { fontSize: 12, size: new Size(220, 50), lineHeight: 16 },
+  description: { fontSize: T.fontSize.f12, size: new Size(220, 50), lineHeight: 16 },
   /**
    * 「按住 Ctrl 与身上穿戴对比」段（悬停背包装备、按住左 Ctrl 时出现在属性列表下方）
    * 逐项行的排版沿用上面的属性行（图标 + 属性名 50 + 值区），这里只管配色与提示行
@@ -212,13 +212,13 @@ export const goodDetailLayout = {
     hintFontSize: 11,
   },
   /** 标题（装备为三段着色，其他物品单行可换行） */
-  title: { fontSize: 14, size: new Size(170, 40), lineHeight: 20 },
+  title: { fontSize: T.fontSize.f14, size: new Size(170, 40), lineHeight: 20 },
   /** 装备标签行（占名称下方一整行；标签按字数给宽，避免被截断） */
   tag: {
     rowSize: new Size(220, 18),
     /** 标签文字颜色（与白色正文区分，突出标签） */
     color: T.gold[4],
-    fontSize: 11,
+    fontSize: T.fontSize.f11,
     /** 标签之间的横向间距 */
     spacing: 6,
     /** 单条标签的最小宽度与左右留白 */
@@ -258,11 +258,11 @@ export const hoverTipLayout = {
   /** 弹窗距屏幕边缘的最小边距（夹在屏内用） */
   screenMargin: 8,
   /** 标题（名称行，可带图标） */
-  title: { fontSize: 14, iconSize: new Size(28, 28) },
+  title: { fontSize: T.fontSize.f14, iconSize: new Size(28, 28) },
   /** 信息行（「名称：值」单行） */
-  row: { fontSize: 12, size: new Size(220, 16) },
+  row: { fontSize: T.fontSize.f12, size: new Size(220, 16) },
   /** 描述（自动换行，高度按内容自适应） */
-  description: { fontSize: 12, lineHeight: 16, size: new Size(220, 0) },
+  description: { fontSize: T.fontSize.f12, lineHeight: 16, size: new Size(220, 0) },
 };
 
 //#endregion

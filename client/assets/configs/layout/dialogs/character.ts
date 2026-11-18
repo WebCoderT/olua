@@ -167,7 +167,7 @@ export const skillListDialogLayout = {
       gap: 3,
       nameHeight: 20,
       nameFontSize: 12,
-      fontSize: 10,
+      fontSize: T.fontSize.f10,
       lineHeight: 14,
       maxLines: 4,
       /** 行上下内边距（行高 = 名称 + 间距 + 说明高度 + 2×padding，且不小于图标边长） */
@@ -181,7 +181,7 @@ export const skillListDialogLayout = {
      */
     upgrade: { width: 56.5, height: 24, gap: 10, label: "升级" },
     /** 名称行右端的快捷键标注（07 稿 `.key`：右对齐、f10、暗字；没绑键位时不画） */
-    shortcut: { width: 90, fontSize: 10 },
+    shortcut: { width: 90, fontSize: T.fontSize.f10 },
   },
   /** 页脚（稿 `.panel-foot`）：左操作提示 / 右升级说明；两块各 160 宽不重叠 */
   foot: dialogFootLayout(new Size(380, 440), 160),

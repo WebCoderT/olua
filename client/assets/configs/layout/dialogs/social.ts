@@ -17,22 +17,22 @@ export const guildDialogLayout = {
    * 必须整体下移 60 才不压在页签上（y 208 → 148）。底部到 −236 为止，留出面板下沿。
    */
   guest: {
-    hint: { position: new Vec2(0, 148), size: new Size(560, 22), fontSize: 15, color: T.text[1] },
+    hint: { position: new Vec2(0, 148), size: new Size(560, 22), fontSize: T.fontSize.f14, color: T.text[1] },
     nameInput: { position: new Vec2(-60, 110), size: new Vec2(360, 34), placeholder: "输入帮会名（2~12 字）" },
     createButton: { name: "guild_create_button", text: "创建帮会", position: new Vec2(195, 110) },
-    listTitle: { position: new Vec2(0, 78), size: new Size(560, 20), fontSize: 13, color: T.gold[4] },
+    listTitle: { position: new Vec2(0, 78), size: new Size(560, 20), fontSize: T.fontSize.f13, color: T.gold[4] },
     list: { name: "guild_list", position: new Vec2(0, -86), size: new Size(556, 300) },
   },
   // ---- 已加入帮会 ----
   member: {
-    header: { position: new Vec2(-110, 148), size: new Size(340, 24), fontSize: 16, color: T.gold[4] },
-    summary: { position: new Vec2(140, 148), size: new Size(280, 22), fontSize: 12, color: T.text[3] },
-    notice: { position: new Vec2(0, 116), size: new Size(548, 22), fontSize: 12, color: T.text[2] },
+    header: { position: new Vec2(-110, 148), size: new Size(340, 24), fontSize: T.fontSize.f16, color: T.gold[4] },
+    summary: { position: new Vec2(140, 148), size: new Size(280, 22), fontSize: T.fontSize.f12, color: T.text[3] },
+    notice: { position: new Vec2(0, 116), size: new Size(548, 22), fontSize: T.fontSize.f12, color: T.text[2] },
     noticeInput: { position: new Vec2(-60, 86), size: new Vec2(360, 30), placeholder: "输入新公告（0~200 字）" },
     saveButton: { name: "guild_notice_save_button", text: "保存公告", position: new Vec2(195, 86), small: true },
-    memberTitle: { position: new Vec2(0, 56), size: new Size(560, 20), fontSize: 13, color: T.gold[4] },
+    memberTitle: { position: new Vec2(0, 56), size: new Size(560, 20), fontSize: T.fontSize.f13, color: T.gold[4] },
     memberList: { name: "guild_member_list", position: new Vec2(0, -34), size: new Size(556, 160) },
-    applicantTitle: { position: new Vec2(0, -126), size: new Size(560, 20), fontSize: 13, color: T.gold[4] },
+    applicantTitle: { position: new Vec2(0, -126), size: new Size(560, 20), fontSize: T.fontSize.f13, color: T.gold[4] },
     applicantList: { name: "guild_applicant_list", position: new Vec2(0, -184), size: new Size(556, 104) },
     /** 退出 / 解散二选一（帮主只能解散、成员只能退出），一律摆 singleButtonPosition */
     leaveButton: { name: "guild_leave_button", text: "退出帮会", small: true },
@@ -288,9 +288,9 @@ export const reportDialogLayout = {
   eyebrow: "反馈",
   maskColor: T.surface.scrim,
   panel: { name: "report_panel", size: new Size(460, 320) },
-  title: { name: "report_title", position: new Vec2(0, 122), size: new Size(400, 26), fontSize: 16, color: T.ember[4] },
+  title: { name: "report_title", position: new Vec2(0, 122), size: new Size(400, 26), fontSize: T.fontSize.f16, color: T.ember[4] },
   /** 提示行（被举报人 + 一句话说明举报只落库） */
-  hint: { name: "report_hint", position: new Vec2(0, 86), size: new Size(400, 20), fontSize: 13, color: T.text[2] },
+  hint: { name: "report_hint", position: new Vec2(0, 86), size: new Size(400, 20), fontSize: T.fontSize.f13, color: T.text[2] },
   /** 类别小按钮：一行四个（中心 x 从 -135 到 135，间隔 90） */
   category: {
     y: 44,
@@ -475,7 +475,7 @@ export const chatDialogLayout = {
     size: new Size(430, 30),
     spacing: 34,
     maxCount: 3,
-    fontSize: 12,
+    fontSize: T.fontSize.f12,
     fill: T.surface[1],
     border: T.surface[3],
     radius: 6,
