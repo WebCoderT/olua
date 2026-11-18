@@ -2,15 +2,17 @@ import { Injectable, Logger, OnApplicationBootstrap, OnApplicationShutdown } fro
 import { RolesService } from "../roles/roles.service";
 
 /**
- * 周期状态结算（#826 第三批：灼烧这类 DoT / HoT）
+ * 周期状态结算（#826 第三批：灼烧这类 DoT / HoT；#1136 批次 1：自然回复也在这条拍上）
  *
  * ===========================================================================
  * 它是什么
  * ===========================================================================
- * 每秒醒一次，问 `RolesService.applyStatusTicks()`「有哪些状态的这一拍该结算了」，
- * 由它扣血 / 回蓝并落库。**血量变化不推 revision**（`updateDataKeepRevision`），
- * 但会推进 `updated_at` —— 实时通道的 `roleUpdate` 轮询比较的是
- * `revision:updated_at`，所以本人一秒内就能看到血条下降，不需要新协议帧。
+ * 每秒醒一次，先问 `RolesService.applyRegenTicks()` 把全体在线角色的自然回复
+ * 结算落库（#1136 起血蓝回复归服务端，客户端那份已删），再问
+ * `RolesService.applyStatusTicks()`「有哪些状态的这一拍该结算了」，由它扣血 / 回蓝并落库。
+ * **血量变化不推 revision**（`updateDataKeepRevision`），但会推进 `updated_at` ——
+ * 实时通道的 `roleUpdate` 轮询比较的是 `revision:updated_at`，所以本人一秒内就能
+ * 看到血条下降，不需要新协议帧。
  *
  * 别人眼里的血条走 presence 在场表：客户端下一次 `pos` 帧带上新的 hp，
  * 广播时按变化发（`sentHp`）。周期伤害不值得为它单开一条广播 —— 那会让
@@ -43,7 +45,7 @@ export class StatusTickService implements OnApplicationBootstrap, OnApplicationS
 
   onApplicationBootstrap(): void {
     this.timer = setInterval(() => this.tick(), StatusTickService.BEAT_MS).unref();
-    this.logger.log("周期状态结算已启动（statuses.tick_ms > 0 的状态每秒按拍结算）");
+    this.logger.log("周期结算已启动（每秒：自然回复结算全体在线角色 → statuses.tick_ms > 0 的状态按拍结算）");
   }
 
   onApplicationShutdown(): void {
@@ -52,6 +54,17 @@ export class StatusTickService implements OnApplicationBootstrap, OnApplicationS
   }
 
   private tick(): void {
+    // 自然回复先结算（#1136 批次 1）：先把回复落到库里，DoT/HoT 再在其上扣
+    // —— 两段都在本线程内顺序读改写，同一拍内没有竞态；各自独立 try，谁炸都不拖累谁
+    try {
+      const regen = this.roles.applyRegenTicks();
+      if (regen.length > 0) {
+        const digits = regen.map((entry) => `${entry.roleId.slice(0, 6)}:${entry.hp}/${entry.mp}`).join(" ");
+        this.logger.debug(`自然回复结算 ${regen.length} 人 —— ${digits}`);
+      }
+    } catch (error) {
+      this.logger.warn(`自然回复结算失败：${error instanceof Error ? error.message : String(error)}`);
+    }
     try {
       const applied = this.roles.applyStatusTicks();
       if (applied.length > 0) {

@@ -1,6 +1,4 @@
 import { _decorator, Camera, Component, isValid, Node, screen, sys, Vec3 } from "cc";
-import MpHelper from "./utils/battle/MpHelper";
-import HpHelper from "./utils/battle/HpHelper";
 import { ActivityController } from "./controllers/ActivityController";
 import GameMap from "./components/map/GameMap";
 import BottomBar from "./components/hud/BottomBar";
@@ -96,8 +94,6 @@ export class Game extends Component {
   private deathDialog: DeathDialog | null = null;
   /** 场景是否已就绪（start 中的资源预加载完成前，update 不做任何事） */
   private ready = false;
-  /** 自然回复（魔法值 / 血量）的结算计时（秒，满 1 秒结算一次） */
-  private recoverTimer = 0;
   /** 位置上报的累积计时（#323：CombatChannel.sendPosition 内部也节流，这里是帧累计的触发点） */
   private positionReportTimer = 0;
   /** 上次上报的位置（#324：与本次差量判「是否在移动」，随 pos 帧上报给互见广播） */
@@ -516,23 +512,9 @@ export class Game extends Component {
     this.roleDisplay?.update();
     // 移动脚步音（#685：点地面走一步 = 播一声，长按持续移动 = 循环，停下即停）
     this.tickMoveSound();
-    // 角色自然回复（每秒结算一次并落盘：角色数据在存储层是反序列化对象，不落盘下次读取会回滚）
-    // 魔法值按 configs/role.mpRecoverPerSecond 的固定速度；血量按角色的 hpRecover 属性
-    // （等级 / 防御装备 / 战魂 / 称号 / 军衔之和，见 ui/utils/battle/HpHelper）。
-    // 两者共用同一次落盘与刷新：同一秒里先后各写一次存档没有意义，反而把服务端同步的防抖窗口挤掉
-    this.recoverTimer += deltaTime;
-    if (this.recoverTimer >= 1) {
-      const role = StorageManager.findOnlineRole();
-      if (role) {
-        const mpChanged = MpHelper.recover(role, this.recoverTimer * 1000);
-        const hpChanged = HpHelper.recover(role, this.recoverTimer * 1000);
-        if (mpChanged || hpChanged) {
-          StorageManager.updateOnlineRole(role);
-          RoleUIManager.updateRoleData(role);
-        }
-      }
-      this.recoverTimer = 0;
-    }
+    // 血蓝自然回复归服务端（#1136 批次 1）：服务端 status-tick 每秒结算全体在线角色
+    // 并落库（不推 revision、推进 updated_at）→ roleUpdate 帧回流刷条。客户端不再本地
+    // recover —— 本地算一份再被权威帧覆盖就是「数值弹回」的根源（#1133 同款）。
     // 自动战斗提示（屏幕中间：「自动战斗中」挂机期间 /「自动寻路中」自动寻路期间；两者互斥、寻路优先，挂特效层）
     AutoBattleTips.update(this.roleDisplay);
     // 路线指示线（自动寻路期间在大地图地面上画出「角色 → 目标」的路线；无路线时清空）

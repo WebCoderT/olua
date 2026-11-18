@@ -1776,6 +1776,51 @@ export class RolesService {
   }
 
   /**
+   * 自然回复收权（#1136 批次 1）：每秒对全体在线角色按经过时间结算血蓝回复并落库
+   *
+   * #1136 之前回复由客户端本地算（`Game.ts` 每秒 recover + 落盘），服务端只在每次写档
+   * 时 lazy 结算（`settleVitalsAuthority`，客户端上报的血蓝一律丢弃）。客户端删掉本地
+   * 回复之后，库里的血蓝必须由服务端自己持续更新 —— 否则空闲挂机时（没有任何写档）
+   * `roleUpdate` 轮询比不出变化，血蓝条就停住不动了。
+   *
+   * 为什么走 `updateDataKeepRevision`：与 `applyStatusTicks` 同一条「实时型状态」通道，
+   * 推 revision 会跟客户端的防抖存档撞乐观锁（#1133 的「已在后台被修改」误报就是这么来的）。
+   *
+   * **只在 hp / mp 整数位有变化时写库**：累加器的零头（不足 1 点）不值得每秒一次写，
+   * 结算游标由下一次真实写档（存档 / 施法 / 受击）lazy 补齐 —— `settleVitalsAuthority`
+   * 按经过时间算、上限夹取，离开多久也只补到满，不会溢出。血蓝满时这一拍零写入，
+   * `roleUpdate` 也不会空转。
+   *
+   * 死亡（基线 hp ≤ 0）不回复血量 —— 满血复活必须走 revive 接口；魔法照常回复
+   * （与 `settleVitalsAuthority` 的口径一致）。
+   */
+  applyRegenTicks(now = Date.now()): Array<{ accountId: string; roleId: string; hp: number; mp: number }> {
+    const results: Array<{ accountId: string; roleId: string; hp: number; mp: number }> = [];
+    for (const account of this.accounts.listOnline()) {
+      if (!account.online_role_id) continue;
+      const row = this.onlineRoleRow(account.id);
+      if (!row) continue;
+      const stored = decodeStoredRoleData(row.data);
+      const { maxHp, maxMp } = this.resolveResourceLimits(row, stored);
+      // 上限要先进 incoming 再结算：settleVitalsAuthority 用 incoming 里的上限做夹取
+      const incoming: Record<string, unknown> = { ...stored, maxHp, maxMp };
+      settleVitalsAuthority(stored, incoming, now, this.mpRecoverPerSecond());
+      const hp = Math.max(0, Math.floor(Number(incoming.hp) || 0));
+      const mp = Math.max(0, Math.floor(Number(incoming.mp) || 0));
+      const hpBefore = Math.max(0, Math.floor(Number(stored.hp) || 0));
+      const mpBefore = Math.max(0, Math.floor(Number(stored.mp) || 0));
+      if (hp === hpBefore && mp === mpBefore) continue;
+      const written = this.roles.updateDataKeepRevision(row.id, JSON.stringify(incoming), now);
+      if (!written) {
+        this.logger.warn(`自然回复结算写库失败（角色 ${row.id}）—— 这一拍跳过`);
+        continue;
+      }
+      results.push({ accountId: account.id, roleId: row.id, hp, mp });
+    }
+    return results;
+  }
+
+  /**
    * 周期状态结算（#826 第三批）：把状态层算出的「该结算的拍」扣成血量变化
    *
    * 为什么放在 RolesService：血量是存档字段，只有这里有写入通道，而且必须走

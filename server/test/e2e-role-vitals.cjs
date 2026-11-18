@@ -13,6 +13,8 @@
  * · revive：revision 不推进（血量型写入走实时帧，与 applyMonsterHit 同一纪律）
  * · 管理端 PATCH hp/mp：运营旁路（救卡死号），改值同时重置结算游标
  * · 自然回复速度：#605 起读 `growth_scalars.mpRecoverPerSecond`（管理端可改），改 0 不回蓝、改 20 明显回蓝
+ * · 自然回复直写（#1136 批次 1）：在线角色**不存档**也每秒回蓝（status-tick 直写库，
+ *   客户端本地回复已删，roleUpdate 轮询靠 updated_at 比出变化）
  * · 文档：revive 落在「玩家」分组，模型已登记
  *
  * 用法：先 `npm run build`，再 `node --disable-warning=ExperimentalWarning test/e2e-role-vitals.cjs`
@@ -270,5 +272,31 @@ function roleData(id, name, occupation, level, overrides = {}) {
 
   //#endregion
 
-  finish("血蓝收权（save 覆盖 / 复活接口 / lazy 回复结算 / 管理端旁路 / 契约）全部通过");
+  //#region 五、回复直写（#1136 批次 1）：status-tick 每秒对在线角色直接落库
+
+  console.log("— 五、回复直写：在线角色不存档也每秒回蓝（#1136 批次 1）—");
+
+  // 前面的段都依赖「结算窗口为零」的精确断言，所以直写段放在最后：角色在建号时就已在线
+  // （status-tick 只结算在线角色），把回复速度调到 20、蓝打到 lowMp，**不存档**干等 2.4 秒
+  // —— 库里的蓝应该自己涨上去（这正是客户端删掉本地回复后血蓝条的供给来源）。
+  await api("PATCH", scalarPath, { token: adminToken, zoneId: ADMIN_ZONE, body: { value: 20 } });
+  await api("PATCH", `admin/roles/${roleId}`, { token: adminToken, zoneId: ADMIN_ZONE, body: { mp: lowMp } });
+  await sleep(2400);
+  const mpAfterTick = (await api("GET", `roles/${roleId}`, { token })).data.data.mp;
+  check(mpAfterTick >= Math.min(maxMp, lowMp + 20), "在线角色不存档也每秒自动回蓝（status-tick 直写库，#1136 批次 1）", `${mpAfterTick}`);
+
+  // 收尾顺便补一组踢下线的守卫断言（先前段都被「必须在线」守卫覆盖，这里补离线侧）
+  await api("PATCH", scalarPath, { token: adminToken, zoneId: ADMIN_ZONE, body: { value: 2 } });
+  const accountsPage = await api("GET", "admin/accounts", { token: adminToken, zoneId: ADMIN_ZONE });
+  const pageData = accountsPage.data ?? {};
+  const accountRow = (pageData.list ?? pageData.items ?? (Array.isArray(pageData) ? pageData : [])).find?.((item) => item && item.username === "vitals_player");
+  check(!!accountRow, "准备：账号列表里找到测试账号（用于踢下线）", JSON.stringify(Object.keys(pageData)));
+  const kicked = await api("POST", `admin/accounts/${accountRow.id}/offline`, { token: adminToken, zoneId: ADMIN_ZONE });
+  check(kicked.code === 0, "踢下线成功（清掉在线标记）", kicked.message);
+  const afterKick = await saveRole(api, token, roleId, roleData(roleId, "血蓝", "1", 5));
+  check(afterKick.code === 20007, "踢下线后存档被拒（20007 ROLE_KICKED，客户端应回选角）", JSON.stringify(afterKick.code));
+
+  //#endregion
+
+  finish("血蓝收权（save 覆盖 / 复活接口 / lazy 回复结算 / 管理端旁路 / 契约 / 回复直写）全部通过");
 })();

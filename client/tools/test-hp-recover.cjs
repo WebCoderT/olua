@@ -7,15 +7,16 @@
  *   这里只校验「是非负数字 + 逐级不降」——**具体数值以库里的为准，运营改了也照绿**
  * · 装备 / 三条成长线：同样只看字段形态（非负数字 + 显示表齐全），不比数值、不比倍率
  * · 怪物：monsterStats 恒返回 hpRecover = 0（回血是玩家养成的收益，磨血流不许被怪自己回血破坏）
- * · 怪物：monsterStats 恒返回 hpRecover = 0（回血是玩家养成的收益，磨血流不许被怪自己回血破坏）
  * · 显示：装备详情按槽位的展示清单（configs/good.goodShowAttributes）取属性，
  *   防御部位与全属性部位列「每秒回血」，只列攻击三属性的首饰不列（口径与最大血量一致）
- * · 结算（真实 HpHelper）：满血不回、死亡不回（不能被回血「复活」）、按经过时间回复、
- *   不足 1 点的余数留在累加器、无回血时不动、回满即封顶
- * · 接线：Role 有字段并按等级初始化、StorageManager.ensureRoleDefaults 补旧存档、
- *   GameHelper.combatCalc 把五处来源相加且不把它当区间属性、Game.update 的每秒块同时结算血与蓝
+ * · 收权（#1136 批次 1）：血蓝的**增减全部归服务端** —— 受击/扣蓝/回复都在服务端
+ *   （status-tick 每秒结算回复并落库，roleUpdate 帧回流），客户端只剩字段兜底：
+ *   HpHelper/MpHelper 里不许再有 recover/spend 这类「本地写权威字段」的入口，
+ *   Game.update 里不许再有每秒回复块 —— 本地算一份再被权威帧覆盖就是数值弹回（#1133）
+ * · 接线：Role 有字段、StorageManager.ensureRoleDefaults 补旧存档、
+ *   GameHelper.combatCalc 把五处来源相加且不把它当区间属性
  *
- * 数据层跑在沙箱里（真实的 configs/game-config + soul + title + rank + equipments + good + 真实 HpHelper，
+ * 数据层跑在沙箱里（真实的 configs/game-config + soul + title + rank + equipments + good，
  * 见 lib/configs-sandbox.cjs），源码断言直接读文件。
  */
 const fs = require("fs");
@@ -145,29 +146,10 @@ check(
 
 //#endregion
 
-//#region E. 结算（真实 HpHelper）
+//#region E. 收权口径（#1136 批次 1：客户端不写血蓝，只剩兜底）
 
-console.log("\n— E. 结算（真实 HpHelper）—");
+console.log("\n— E. 收权口径（客户端不写血蓝，只剩兜底）—");
 const makeRole = (patch) => Object.assign({ level: roleLevels.length, hp: 5000, maxHp: 10000, hpRecover: 100, hpRecoverAccumulator: 0 }, patch);
-
-let role = makeRole({ hp: 10000 });
-check(HpHelper.recover(role, 1000) === false && role.hp === 10000, "满血不回血（不刷屏也不落盘）");
-
-role = makeRole({});
-check(HpHelper.recover(role, 1000) === true && role.hp === 5100, "每秒回复量 = 角色的 hpRecover 属性（100/秒 → 1 秒回 100）");
-
-role = makeRole({ hp: 9995 });
-check(HpHelper.recover(role, 1000) === true && role.hp === 10000, "回复不会超过最大生命（封顶）");
-
-role = makeRole({ hpRecover: 1 });
-check(HpHelper.recover(role, 400) === false && Math.abs(role.hpRecoverAccumulator - 0.4) < 1e-6, "不足 1 点的余数留在累加器里（0.4 秒 → 攒 0.4 点，不放血）");
-check(HpHelper.recover(role, 600) === true && role.hp === 5001 && Math.abs(role.hpRecoverAccumulator) < 1e-6, "余数攒够 1 点就回 1 点并清零累加器");
-
-role = makeRole({ hp: 0 });
-check(HpHelper.recover(role, 10000) === false && role.hp === 0, "死亡（血量 0）不回血：回血绝不能把角色从死亡流程里「拉起来」");
-
-role = makeRole({ hpRecover: 0 });
-check(HpHelper.recover(role, 10000) === false && role.hp === 5000, "无回血属性时什么也不做");
 
 const legacy = { level: 1, hp: 100, maxHp: 100 };
 HpHelper.ensureDefaults(legacy);
@@ -175,6 +157,13 @@ check(
   legacy.hpRecover === attributes[0].hpRecover && legacy.hpRecoverAccumulator === 0,
   `每秒回血上线前的旧存档会被补齐（缺失字段按 1 级裸回血 ${attributes[0].hpRecover}/秒 兜底）`,
 );
+check(typeof makeRole({}).hp === "number", "HpHelper/MpHelper 只做字段兜底（能读出数字就是合法存档）");
+
+const hpHelperSource = read("assets/ui/utils/battle/HpHelper.ts");
+const mpHelperSource = read("assets/ui/utils/battle/MpHelper.ts");
+check(!/static recover\(/.test(hpHelperSource), "HpHelper 不再有本地回血（#1136 起回复在服务端 status-tick 每秒结算）");
+check(!/static recover\(|static spend\(/.test(mpHelperSource), "MpHelper 不再有本地扣蓝/回蓝（扣蓝在服务端施法闸 #813，回复在 status-tick）");
+check(/ensureDefaults\(role: Role\)/.test(hpHelperSource) && /ensureDefaults\(role: Role\)/.test(mpHelperSource), "两个 Helper 仍保留 ensureDefaults 兜底（旧存档缺字段不炸）");
 
 // 量级探针（「裸回血抵掉同级怪输出两成」「满养成同量级」）随 #655 一并删掉：
 // 它比的是「几套数据之间的比例」，运营调任意一处数值都会红，属于多余的数值断言。
@@ -195,17 +184,12 @@ check(/Exclude<keyof BattleAttributes, "hpRecover">/.test(read("assets/configs/g
 
 const { storageSourceFor } = require("./lib/storage-src.cjs");
 check(/HpHelper\.ensureDefaults\(role\);/.test(storageSourceFor(require("path").join(__dirname, "..", "assets", "ui", "core", "StorageManager.ts"))), "StorageManager.ensureRoleDefaults 补旧存档的回血字段");
-const hpHelperSource = read("assets/ui/utils/battle/HpHelper.ts");
 check(/if \(typeof role\.hpRecover !== "number"\)/.test(hpHelperSource), "HpHelper 自己也会兜底缺失字段（不依赖调用方先跑 ensureRoleDefaults）");
-check(/if \(role\.hp <= 0 \|\| role\.maxHp <= 0\) return false;/.test(hpHelperSource), "HpHelper 死亡不回复（有守卫）");
 
 const gameSource = read("assets/ui/Game.ts");
-check(/const hpChanged = HpHelper\.recover\(role, this\.recoverTimer \* 1000\);/.test(gameSource), "Game.update 的每秒块结算血量回复");
-check(
-  /const mpChanged = MpHelper\.recover\(role, this\.recoverTimer \* 1000\);[\s\S]*?if \(mpChanged \|\| hpChanged\) \{[\s\S]*?StorageManager\.updateOnlineRole\(role\);[\s\S]*?RoleUIManager\.updateRoleData\(role\);/.test(gameSource),
-  "血与蓝共用同一次落盘与刷新（同一秒里写两次存档没意义，还会挤掉同步防抖窗口）",
-);
-check(/private recoverTimer = 0;/.test(gameSource) && !/mpRecoverTimer/.test(gameSource), "计时器已改名 recoverTimer（不再是「只服务魔法值」的名字）");
+check(!/MpHelper\.recover\(|HpHelper\.recover\(/.test(gameSource), "Game.update 不再有本地回复块（#1136 起回复由服务端 status-tick 结算、roleUpdate 帧回流）");
+check(!/recoverTimer/.test(gameSource), "回复计时器已随本地回复一起删除（不留死字段）");
+check(/#1136 批次 1/.test(gameSource), "Game.update 留有收权注释（改回来之前先看 #1133 的教训）");
 
 // #655：怪物数值在 monsters 表里 —— 表结构里根本没有回血列（怪不回血），
 // 断言这条是为了防止有人「顺手」给怪物加一列 hp_recover
