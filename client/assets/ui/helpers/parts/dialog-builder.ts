@@ -6,7 +6,7 @@
  */
 
 
-import { Button, Color, Graphics, isValid, Label, Layout, Node, Size, UITransform, Vec2 } from "cc";
+import { Button, Color, Graphics, isValid, Label, Layout, Mask, Node, Size, UITransform, Vec2 } from "cc";
 import UiHelper from ".././UiHelper";
 import { Draggable } from "../../components/input/Draggable";
 import VectorPlate from "../../components/common/VectorPlate";
@@ -107,6 +107,36 @@ export function createGlassPlate(name: string, size: Size, radius: number, borde
     const node = UiHelper.createNode(name, new Vec2(), size);
     drawGlassPlate(node.addComponent(Graphics), size, radius, border, fill);
     return node;
+  }
+
+  /**
+   * 弹窗里的「框内立绘」视口（稿 `.preview`：overflow:hidden 的内容框，#1089）
+   *
+   * 节点自带 Mask（RECT，与小地图视口同款）：挂进来的子树超出视口矩形的部分被裁掉 ——
+   * 立绘/特效再大也不会压到相邻列或面板外（#1089 的病根就是内观直挂在弹窗上没有边界）。
+   * 背景（暗底 + 上部金斑，近似稿的 radial-gradient）画在视口内第一层；**边框不在这里画**：
+   * Mask 节点的 Graphics 是裁剪形状，画了也不可见，且贴边描边会被裁掉一半（#1104 同款坑）——
+   * 边框由调用方用 createGlassPlate(透明填充) 盖在立绘之上。
+   */
+export function createInShowViewport(
+    name: string,
+    layout: { position: Vec2; size: Size; radius: number; fill: Color; glow: Color; glowCenterRatio: number; glowRadiusRatio: number },
+  ) {
+    const viewport = UiHelper.createNode(name, layout.position, layout.size);
+    viewport.addComponent(Mask);
+    const { width, height } = layout.size;
+    const backdrop = UiHelper.createNode(`${name}_backdrop`, new Vec2(), layout.size);
+    const graphics = backdrop.addComponent(Graphics);
+    // 暗底：稿 radial-gradient(circle at 50% 36%, 金斑, 暗底 72%) 的收端
+    graphics.fillColor = layout.fill;
+    graphics.roundRect(-width / 2, -height / 2, width, height, layout.radius);
+    graphics.fill();
+    // 上部金斑：圆心按稿放在 36% 高度处（y 向上），低透明金色一大团压住立绘上半的背景
+    graphics.fillColor = layout.glow;
+    graphics.circle(0, height / 2 - height * layout.glowCenterRatio, width * layout.glowRadiusRatio);
+    graphics.fill();
+    viewport.addChild(backdrop);
+    return viewport;
   }
 
   /**

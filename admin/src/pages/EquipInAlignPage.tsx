@@ -72,6 +72,13 @@ const CATALOG = catalogJson as unknown as Catalog;
 const IN_SHOW = CATALOG.inShow;
 
 /**
+ * 视图外扩（#1089）：background = 弹窗的立绘视口（216×396）后，视图按它外扩这么多的
+ * 边距取景。取 64 而不是缺省 18 —— 脚底圆盘半径 90、圆心在视口底沿之下 31.5，
+ * 18 的边距会把圆盘下半截裁出画布，「脚踩圆盘」的对齐参照看不完整。
+ */
+const IN_VIEW_MARGIN = 64;
+
+/**
  * 条目：衣服与武器的 `manual` 缺省值不同（衣服恒为绝对位置，武器出厂是「自动算」），
  * 所以分两次生成，不能一次生成后按 kind 改。
  */
@@ -302,7 +309,7 @@ export function EquipInAlignPage() {
     return () => observer.disconnect();
   }, []);
 
-  const view = useMemo(() => viewOfBackground(IN_SHOW.background), []);
+  const view = useMemo(() => viewOfBackground(IN_SHOW.background, IN_VIEW_MARGIN), []);
   /** 1 游戏单位 = 多少像素（视图宽度铺满容器） */
   const k = width / view.width;
   const canvasHeight = view.height * k;

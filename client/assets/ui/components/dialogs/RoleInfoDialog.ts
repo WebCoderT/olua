@@ -50,12 +50,11 @@ export default class RoleInfoDialog extends BaseDialog {
       (dialog) => {
     // 角色信息
     const role = StorageManager.findOnlineRole();
-    // 装饰背景与战斗力图标
-    const bgLayout = roleInfoDialogLayout.background;
-    // 中区底板（稿 .inshow/.attr 区共用的暗色内衬：矢量玻璃底板，替代原装饰贴图）
-    const bg = GameUiHelper.createGlassPlate("role_information_background", bgLayout.size, T.radius.r2, T.line[2]);
-    bg.setPosition(bgLayout.position.x, bgLayout.position.y, 0);
-    dialog.addChild(bg);
+    // 立绘视口（稿 .preview：框内立绘区，Mask 裁剪）—— 最先建：内观挂进它的子树，
+    // 后续兄弟（装备槽、属性、入口）自然画在立绘之上，底部三格不再被特效压住（#1089）
+    const previewLayout = roleInfoDialogLayout.preview;
+    const viewport = GameUiHelper.createInShowViewport("role_inshow_viewport", previewLayout);
+    dialog.addChild(viewport);
     // 装备槽分组（左/右/底三个方向），右键槽位脱下装备、左键角标一键换更好的
     this.equipmentGroups = EQUIPMENT_SLOT_SIDES.map((side) =>
       new EquipmentSlotGroup(
@@ -75,9 +74,15 @@ export default class RoleInfoDialog extends BaseDialog {
     // 角色属性列表
     this.attributeList = new RoleAttributeList(role);
     dialog.addChild(this.attributeList);
-    // 内观（衣服与武器，未装备时容器为空）
+    // 内观（衣服与武器，未装备时容器为空）—— 挂进立绘视口：RoleInShowView 是原点包装节点，
+    // 子节点保持弹窗坐标系下的位置，这里反向平移视口位置把弹窗坐标系原样接进来，裁剪以视口为界
     this.inShowView = new RoleInShowView(role);
-    dialog.addChild(this.inShowView);
+    this.inShowView.setPosition(-previewLayout.position.x, -previewLayout.position.y, 0);
+    viewport.addChild(this.inShowView);
+    // 视口发丝线（稿 .preview 的 border）：盖在立绘之上 —— 画进 Mask 会被裁掉一半（#1104 同款坑）
+    const frame = GameUiHelper.createGlassPlate("role_inshow_viewport_frame", previewLayout.size, previewLayout.radius, previewLayout.border, T.overlay.transparent);
+    frame.setPosition(previewLayout.position.x, previewLayout.position.y, 0);
+    dialog.addChild(frame);
     // 内观几何「开弹窗就再拉一次」（#527）：玩家保存完的第一反应是再点开这个弹窗看一眼，
     // 那时人还在同一张图里、场景没重载 —— 只靠进图拉一次必然「看不到变化」。
     // 先把弹窗按当前配置建出来（不卡交互），拉到新值后再就地重建内观节点。
