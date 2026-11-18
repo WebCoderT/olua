@@ -408,6 +408,11 @@ function connect(url) {
       const watcher = await connectAs(watcherToken);
       const watcherWorld = await watcher.joinWorld("3");
       check(!!watcherWorld && watcherWorld.mapId === "3", "看客进图 3（与目标同图）");
+      // #1139 起条目由 worldJoin 播种（坐标 = 复活点），AOI 对「位置已知」的观看者裁剪
+      // 互见帧（#810；旧世界「没报过 pos = 不裁」的前提随播种消失）—— 看客发一条 pos
+      // （播种条目首帧免仲裁）站到目标落点旁边，否则收不到目标的增量与 left
+      watcher.sendPos("3", 520, 380, 100, false);
+      await sleep(150);
 
       // 目标此时在图 3（上一段刚 join 进来），但还没上报过位置 —— 在场条目由 pos 帧建
       const beforePos = watcher.players.length;

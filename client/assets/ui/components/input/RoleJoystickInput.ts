@@ -37,8 +37,6 @@ export default class RoleJoystickInput {
   private host: Node;
   /** 手柄节点（跟随拖动位移；锚点在自身中心） */
   private handle: Node;
-  /** 状态变化回调（宿主刷新动作与朝向） */
-  private onStateChanged: () => void;
   /** 是否按住（触摸在摇杆上按下且未抬起） */
   private pressed = false;
   /** 是否跑动（拖动幅度达到跑动阈值） */
@@ -46,10 +44,9 @@ export default class RoleJoystickInput {
   /** 移动方向（八方向之一的单位向量；零向量表示不移动） */
   private direction: Vec2 = new Vec2();
 
-  constructor(host: Node, handle: Node, onStateChanged: () => void) {
+  constructor(host: Node, handle: Node) {
     this.host = host;
     this.handle = handle;
-    this.onStateChanged = onStateChanged;
     host.on(Node.EventType.TOUCH_START, this.onTouchStart, this);
     host.on(Node.EventType.TOUCH_MOVE, this.onTouchMove, this);
     host.on(Node.EventType.TOUCH_END, this.onTouchEnd, this);
@@ -78,7 +75,7 @@ export default class RoleJoystickInput {
 
   /** 移除监听并收尾（幂等）；节点销毁时由 NODE_DESTROYED 自动调用 */
   destroy() {
-    this.release(false);
+    this.release();
   }
 
   /**
@@ -108,17 +105,14 @@ export default class RoleJoystickInput {
 
   /**
    * 结束本次操作：手柄回中、清方向与走/跑状态
-   * 幂等：本来就没在按住时什么都不做；死区内按下又原地松开（压根没走过）不必惊动宿主
-   * @param notify 是否通知宿主刷新动作（节点销毁时不通知：那时宿主多半也在销毁中）
+   * 幂等：本来就没在按住时什么都不做
    */
-  private release(notify = true) {
+  private release() {
     if (!this.pressed) return;
-    const wasMoving = this.direction.lengthSqr() > 0;
     this.pressed = false;
     this.run = false;
     this.direction = new Vec2();
     if (isValid(this.handle)) this.handle.setPosition(0, 0, 0);
-    if (wasMoving && notify) this.onStateChanged();
   }
 
   /** 按本次触摸点更新手柄位置与移动状态 */
@@ -146,11 +140,9 @@ export default class RoleJoystickInput {
     return new Vec2(local.x, local.y);
   }
 
-  /** 落地新状态与新手柄方向（方向或走/跑真的变了才通知宿主，避免高频 TOUCH_MOVE 空刷动作） */
+  /** 落地新状态与新手柄方向（宿主每帧读 isMoving / moveDirection 组装意图，#1139 起无需变更通知） */
   private setMoveState(direction: Vec2, run: boolean) {
-    const changed = !this.direction.equals(direction) || this.run !== run;
     this.direction = direction;
     this.run = run;
-    if (changed) this.onStateChanged();
   }
 }

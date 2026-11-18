@@ -294,6 +294,14 @@ function setResetDay(dbPath, roleId, questId, day) {
     check(session.opened, "准备：实时连接已建立");
     const world = await session.joinWorld("1");
     check(!!(world && world.monsters.some((m) => m.alive)), "准备：进图拿到活着的怪物 1", JSON.stringify(world && world.monsters.length));
+    // #1139 起条目由 worldJoin 播种（坐标 = 复活点），实时进程每秒把条目坐标写进
+    // role_positions，会覆写 standAtQuestNpc 的直写摆位。进图后立刻发一条 pos 帧
+    // 把条目摆到任务 NPC 旁边（播种条目首帧免仲裁），此后两个写入方写的是同一坐标，
+    // questApi 每次请求前的直写只剩「刷新鲜度」一个职责
+    {
+      const spot = placeRolesNear(dbPath, "1", "0002");
+      session.socket.send(JSON.stringify({ type: "pos", data: { mapId: "1", x: spot.cx, y: spot.cy, hp: 50, moving: false } }));
+    }
 
     await api(baseUrl, "POST", "admin/auth/register", { body: { username: "quest_admin", password: "pass1234", registerCode: ADMIN_CODE } });
     const adminLogin = await api(baseUrl, "POST", "admin/auth/login", { body: { zoneId: ADMIN_ZONE, username: "quest_admin", password: "pass1234" } });

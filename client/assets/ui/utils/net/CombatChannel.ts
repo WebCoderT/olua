@@ -828,12 +828,6 @@ export default class CombatChannel {
    */
   static onPath: ((frame: PathFrame) => void) | null = null;
 
-  /**
-   * 位置上报的最小间隔（毫秒）：#768 提到 10Hz —— AI 目标检测与互见的采样节拍，
-   * 与服务端广播节拍（10Hz）对齐；再快没有观感收益，只是纯流量
-   */
-  private static POSITION_INTERVAL = 100;
-  private static lastPositionSentAt = 0;
   /** 移动意图的自增序号（#1138 `moveIntent.seq`，服务端挡乱序倒退帧） */
   private static moveSeq = 0;
 
@@ -903,7 +897,8 @@ export default class CombatChannel {
   }
 
   /**
-   * 上报自身位置（#323 AI 目标检测输入 + #324 玩家互见数据源；内部按 4Hz 节流，调用方可以每帧调）
+   * 上报一次自身位置（#1139：周期上报已删 —— pos 帧只剩**复活后的一次性落位**这一条真实来源，
+   * 服务端复活分支（hp 0→>0 免检）靠它知道原地 / 回城的落点；不再节流）
    * @param mapId 当前地图 id
    * @param x 玩家世界坐标
    * @param y 玩家世界坐标
@@ -911,16 +906,8 @@ export default class CombatChannel {
    * @param moving 上报时刻是否在移动（互见的走路/待机演出依据；移动是玩家自己的事，客户端自报）
    */
   static sendPosition(mapId: string, x: number, y: number, hp: number, moving = false): void {
-    const now = Date.now();
-    if (now - this.lastPositionSentAt < this.POSITION_INTERVAL) return;
-    this.lastPositionSentAt = now;
     // #768 帧瘦身：坐标整数像素（world 系本来就是整数刻度，小数是 Cocos 浮点累加的尾巴）
     RealtimeClient.send({ type: "pos", data: { mapId, x: Math.round(x), y: Math.round(y), hp, moving } });
-  }
-
-  /** 换图重置位置上报节流（新图的第一帧位置要立刻送上去） */
-  static resetPositionThrottle(): void {
-    this.lastPositionSentAt = 0;
   }
 
   /**

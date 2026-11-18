@@ -333,6 +333,14 @@ const idsOf = (monsters) => (monsters || []).map((monster) => monster.instanceId
       `播出来的都是 A 怪（key=${MONSTER_A}）`,
       JSON.stringify(keysOf(firstA?.monsters)),
     );
+    // #1139 起条目由 worldJoin 播种（坐标 = 复活点），AOI 对「位置已知」的观看者裁剪
+    // 事件驱动的 world 帧（#810：null = 位置未知才整份发）—— 重播的怪在探针区，
+    // 离复活点好几格，不把甲摆过去就永远收不到重播快照。发一条 pos 帧（播种条目
+    // 首帧免仲裁）把甲放到探针区中心，与「客户端走到怪旁边」同一口径。
+    sessionA.socket.send(
+      JSON.stringify({ type: "pos", data: { mapId: HOME_MAP, x: 400, y: -400, hp: 100, moving: false } }),
+    );
+    await sleep(300);
 
     // #859：没有位置记录的角色只准进新手村。乙要当「另一张图」的对照，先让服务端认为
     // 他本来就在那儿（等价于管理端 `PATCH /admin/roles/:id { onMap }`），否则进图会被拒
