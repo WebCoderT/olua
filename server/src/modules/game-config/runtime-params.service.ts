@@ -7,6 +7,7 @@ import {
   GuildRuleParams,
   MonsterAiRuntimeParams,
   MovementGuardParams,
+  PlayerMoveParams,
   RUNTIME_PARAM_KEYS,
   RuntimeParams,
 } from "../../common/constants/runtime-params";
@@ -70,6 +71,7 @@ export class RuntimeParamsService implements OnApplicationBootstrap {
     dto.drop = effective.drop as unknown as DropRuntimeParamsDto;
     dto.autoBattle = effective.autoBattle as unknown as RuntimeParamsDto["autoBattle"];
     dto.guild = effective.guild as unknown as RuntimeParamsDto["guild"];
+    dto.playerMove = effective.playerMove as unknown as RuntimeParamsDto["playerMove"];
     dto.updatedAt = row?.updated_at ?? 0;
     return dto;
   }
@@ -94,7 +96,17 @@ export class RuntimeParamsService implements OnApplicationBootstrap {
       drop: { ...current.drop, ...definedOnly(dto.drop) } as DropRuntimeParams,
       autoBattle: { ...current.autoBattle, ...definedOnly(dto.autoBattle) } as AutoBattleParams,
       guild: { ...current.guild, ...definedOnly(dto.guild) } as GuildRuleParams,
+      playerMove: { ...current.playerMove, ...definedOnly(dto.playerMove) } as PlayerMoveParams,
     };
+    // 跨字段：跑速必须 ≥ 走速（DTO 只管单字段上下限，管不了两者的大小关系）
+    const walk = Number(next.playerMove.walkSpeedPxPerS);
+    const run = Number(next.playerMove.runSpeedPxPerS);
+    if (Number.isFinite(walk) && Number.isFinite(run) && run < walk) {
+      throw new BizException(
+        BizCode.PARAM_INVALID,
+        `跑速 ${run}px/s 小于走速 ${walk}px/s：跑得比走还慢，移动表现会倒挂`,
+      );
+    }
     // 跨字段：帮会名最短不能超过最长（DTO 只管单字段上下限，管不了这两个的大小关系）
     if (next.guild.nameMin > next.guild.nameMax) {
       throw new BizException(
@@ -111,10 +123,12 @@ export class RuntimeParamsService implements OnApplicationBootstrap {
       // 怪物 AI 不在这套 DTO 里（它归怪物域，没有管理端页面）—— 原样保留，
       // 否则「改掉落参数」会顺手把这一列写成 '{}'（`update` 是整行 UPDATE）
       monster_ai: existing?.monster_ai ?? "{}",
-      // 位移校验同上（#811）：它有自己的两条接口，改三组参数不该动它
+      // 位移校验同上（#811）：它有自己的两条接口，改参数不该动它
       movement: existing?.movement ?? "{}",
       // 出手距离闸同理（#1030）：整行 UPDATE，漏写这一列 = 把它静默清成 '{}'
       cast_range: existing?.cast_range ?? "{}",
+      // 玩家移动是这套 DTO 的第四组（#1138）：写合并后的值，不是原样写回
+      player_move: JSON.stringify(next.playerMove),
       updated_at: Date.now(),
     };
     this.repository.update(row);
@@ -165,6 +179,7 @@ export class RuntimeParamsService implements OnApplicationBootstrap {
       // 位移校验那一列原样写回（同一条整行 UPDATE 的纪律）
       movement: existing?.movement ?? "{}",
       cast_range: existing?.cast_range ?? "{}",
+      player_move: existing?.player_move ?? "{}",
       updated_at: Date.now(),
     };
     this.repository.update(row);
@@ -204,6 +219,7 @@ export class RuntimeParamsService implements OnApplicationBootstrap {
       monster_ai: existing?.monster_ai ?? "{}",
       movement: JSON.stringify(next),
       cast_range: existing?.cast_range ?? "{}",
+      player_move: existing?.player_move ?? "{}",
       updated_at: Date.now(),
     };
     this.repository.update(row);
@@ -242,18 +258,20 @@ export class RuntimeParamsService implements OnApplicationBootstrap {
       monster_ai: existing?.monster_ai ?? "{}",
       movement: existing?.movement ?? "{}",
       cast_range: JSON.stringify(next),
+      player_move: existing?.player_move ?? "{}",
       updated_at: Date.now(),
     };
     this.repository.update(row);
     return this.castRange();
   }
 
-  /** 三列 JSON → 生效值（坏 JSON 当空对象；缺键就是缺键，不补默认值） */
+  /** 四列 JSON → 生效值（坏 JSON 当空对象；缺键就是缺键，不补默认值） */
   private parseAll(row: RuntimeParamsRow | undefined): RuntimeParams {
     return {
       drop: parseGroup(row?.drop_params) as unknown as DropRuntimeParams,
       autoBattle: parseGroup(row?.auto_battle) as unknown as AutoBattleParams,
       guild: parseGroup(row?.guild_rules) as unknown as GuildRuleParams,
+      playerMove: parseGroup(row?.player_move) as unknown as PlayerMoveParams,
     };
   }
 }

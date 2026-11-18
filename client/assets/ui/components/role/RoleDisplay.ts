@@ -106,6 +106,16 @@ export default class RoleDisplay extends Node {
    */
   private controlLocked = false;
 
+  /**
+   * 移动意图上报出口（#1138 移动收权；Game 接线到 `CombatChannel.sendMoveIntent / sendMoveStop`）
+   *
+   * null = 当前没有移动意图（没输入 / 死亡 / 攻击锁 / 被控）—— 服务端收到 `moveStop`
+   * 同语义。**意图变化时才回调**（比对见 `reportMoveIntent`），不是每帧都发。
+   */
+  onMoveIntent: ((intent: { dx: number; dy: number; run: boolean } | null) => void) | null = null;
+  /** 上次上报的意图（null = 上次报的是停；比对用） */
+  private lastReportedIntent: { dx: number; dy: number; run: boolean } | null = null;
+
   constructor(role: Role) {
     super("basic_role");
     this.role = role;
@@ -235,7 +245,38 @@ export default class RoleDisplay extends Node {
     // 选中状态只由鼠标点击改变（点击怪物选中、点击其他位置取消），移动不影响；
     // 但目标本身消失（死亡/移除）时必须同步取消，避免残留无效引用
     if (this.target && this.isTargetGone(this.target)) this.setTarget(null);
+    // 移动意图上报（#1138）：先于位移更新 —— 服务端步进与本地物理同源同拍
+    this.reportMoveIntent();
     this.updateWorldPosition();
+  }
+
+  /**
+   * 移动意图上报（#1138）：本帧的「有效移动意图」与上次上报的不一样才发帧
+   *
+   * 有效意图 = 当前输入（键盘 > 摇杆 > 鼠标按住）或自动战斗走位方向，**但死亡 /
+   * 攻击锁 / 被控期间恒为 null** —— 与 `updateWorldPosition` 的停步条件一致，
+   * 服务端才不会「本地站着打怪、别人看到你在滑步」。
+   */
+  private reportMoveIntent() {
+    if (!this.onMoveIntent) return;
+    const blocked = this.dead || this.attacking || this.controlLocked;
+    let intent: { dx: number; dy: number; run: boolean } | null = null;
+    if (!blocked) {
+      const manual = this.getMoveIntent();
+      const auto = this.autoMove && this.autoMove.lengthSqr() > 0 ? { vector: this.autoMove, run: this.autoRun } : null;
+      const source = manual ?? auto;
+      if (source) {
+        const length = Math.hypot(source.vector.x, source.vector.y);
+        if (length > 1e-6) intent = { dx: source.vector.x / length, dy: source.vector.y / length, run: source.run };
+      }
+    }
+    const last = this.lastReportedIntent;
+    const changed =
+      (intent === null) !== (last === null) ||
+      (intent !== null && last !== null && (Math.abs(intent.dx - last.dx) > 1e-6 || Math.abs(intent.dy - last.dy) > 1e-6 || intent.run !== last.run));
+    if (!changed) return;
+    this.lastReportedIntent = intent;
+    this.onMoveIntent(intent);
   }
 
   /**
