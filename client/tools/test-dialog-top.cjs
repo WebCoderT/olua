@@ -160,16 +160,19 @@ check(/bindDialogRaiseOnPress\(dialog\)/.test(dialogBgBody), "createDialogBg 里
 // 每个弹窗的挂载点都必须登记：漏一个，那个弹窗就点不动
 // [文件, 登记式挂载次数（弹窗）, 普通挂载次数（临时层，如商城/背包的悬停详情）]
 const dialogFiles = [
+  // #1115 批次 4：标准开关弹窗的骨架挂载统一在 BaseDialog.openFrame（dialog-kit.ts 1 处），
+  // 组件内只剩「非骨架节点」（确认框 / 悬停详情）的挂载
+  ["dialog-kit.ts", 1, 0],
   ["RankUpgradeDialog.ts", 1, 0],
   ["WarSoulDialog.ts", 1, 0],
   ["TitleUpgradeDialog.ts", 1, 0],
-  ["SkillListDialog.ts", 1, 0],
+  ["SkillListDialog.ts", 0, 0],
   ["SkillShortcutSettingDialog.ts", 1, 0],
   ["MapTeleportDialog.ts", 1, 0],
   ["MapPreviewDialog.ts", 1, 0],
-  ["RoleInfoDialog.ts", 1, 0],
-  ["MallDialog.ts", 1, 1],
-  ["BagDialog.ts", 2, 0],
+  ["RoleInfoDialog.ts", 0, 0],
+  ["MallDialog.ts", 0, 1],
+  ["BagDialog.ts", 1, 0],
 ];
 /** 数一个文件里的挂载调用：addToUILayer 是 addDialogToUILayer 的子串，用后顾把前者摘掉 */
 const countMount = (source, api) => (source.match(new RegExp(`(?<!Dialog)${api}\\(`, "g")) ?? []).length;
@@ -180,7 +183,7 @@ for (const [file, registeredCount, plainCount] of dialogFiles) {
   check(registered === registeredCount && plain === plainCount, `${file}：弹窗全部走 addDialogToUILayer（${registeredCount} 个），临时层仍走 addToUILayer（${plainCount} 个）`, `实测 登记 ${registered} / 普通 ${plain}`);
 }
 const mallSource = read(path.join(DIALOG_DIR, "MallDialog.ts"));
-check(/GameUiHelper\.createDialog\(layout\.name/.test(mallSource), "商城面板走标准弹窗框（createDialog 自带置顶 / 拦截 / 拖动，不再需要单独挂）");
+check(/extends BaseDialog/.test(mallSource), "商城面板走 BaseDialog 标准骨架（openFrame 的 createDialog 自带置顶 / 拦截 / 拖动，不再需要单独挂）");
 const bagSource = read(path.join(DIALOG_DIR, "BagDialog.ts"));
 check(/GameUiHelper\.bindDialogRaiseOnPress\(this\.bagGrid\)/.test(bagSource), "背包网格自己挂一次置顶（它在 setupTouchOwnership 里收住触摸，TOUCH_START 到不了弹窗根）");
 check(/TOUCH_START, this\.stopTouchBubble/.test(read(path.join(PROJECT_ROOT, "assets/ui/components/panel/BagGridView.ts"))), "背包网格仍然停住触摸冒泡（拖动不带着弹窗一起动，这是它必须自己挂置顶的原因）");

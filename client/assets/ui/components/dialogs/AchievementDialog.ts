@@ -1,6 +1,5 @@
 import { Graphics, Label, isValid, Node, ScrollView, Vec2 } from "cc";
 import GameUiHelper from "../../helpers/GameUiHelper";
-import LayerManager from "../../core/LayerManager";
 import AchievementStore from "../../core/AchievementStore";
 import SoundManager from "../../core/SoundManager";
 import UiHelper from "../../helpers/UiHelper";
@@ -11,6 +10,7 @@ import {
 } from "../../../configs/achievement";
 import type { AchievementCategory } from "../../../configs/achievement";
 import { blockClickThrough } from "../../utils/input/UiHit";
+import BaseDialog from "./dialog-kit";
 import { clearChildren } from "../../utils/node/NodeTree";
 import type { AchievementView } from "../../utils/net/ApiModels";
 import { createRoundedPanel, createTabStrip, paintTabStrip } from "./tab-kit";
@@ -34,10 +34,7 @@ const CODE_BAG_FULL = 20012;
  * 未达成（灰、不可点）/ 可领（绿、可点）/ 已领（灰、不可点）。
  * 点领取失败时**不把整份列表清空**：背包满（20012）时玩家清完格子直接再点一次就行。
  */
-export default class AchievementDialog {
-  private dialog: Node | null = null;
-  /** 内容容器（切页 / 数据变化时清空重画） */
-  private body: Node | null = null;
+export default class AchievementDialog extends BaseDialog {
   /** 当前分类 */
   private category: AchievementCategory = achievementCategories[0];
   private tabNodes = new Map<AchievementCategory, Node>();
@@ -47,35 +44,22 @@ export default class AchievementDialog {
 
   /** 打开 / 关闭（重复点即关闭） */
   open() {
-    if (this.dialog && isValid(this.dialog) && this.dialog.active) {
-      this.close();
-      return;
-    }
-    if (this.dialog && !isValid(this.dialog)) this.reset();
-    this.dialog = GameUiHelper.createDialog(layout.name, layout.title, new Vec2(), layout.size, layout.eyebrow);
-    // 页脚（稿 16-achievement 的 .panel-foot）
-    this.dialog.addChild(
-      GameUiHelper.createDialogFoot("achievement_foot", layout.size.width, layout.foot, layout.footTexts.left, layout.footTexts.right),
-    );
-    blockClickThrough(this.dialog);
-    LayerManager.addDialogToUILayer(this.dialog);
-    this.createTabs();
-    this.body = UiHelper.createGroupNode(`${layout.name}_body`, new Vec2());
-    this.dialog.addChild(this.body);
-    this.unsubscribe = AchievementStore.onChange(() => this.render());
-    // 默认停在「战斗」：它是玩家最先接触的一类（打怪就有）
-    this.select(achievementCategories[0]);
+    this.openFrame(layout, () => {
+      this.createTabs();
+      this.unsubscribe = AchievementStore.onChange(() => this.render());
+      // 默认停在「战斗」：它是玩家最先接触的一类（打怪就有）
+      this.select(achievementCategories[0]);
+    });
   }
 
   /** 关闭（订阅退掉） */
-  close() {
+  protected onClose() {
     if (this.unsubscribe) {
       this.unsubscribe();
       this.unsubscribe = null;
     }
-    if (this.dialog && isValid(this.dialog)) this.dialog.destroy();
-    this.reset();
   }
+
 
   isOpen(): boolean {
     return !!this.dialog && isValid(this.dialog) && this.dialog.active;
@@ -255,9 +239,7 @@ export default class AchievementDialog {
 
   //#endregion
 
-  private reset() {
-    this.dialog = null;
-    this.body = null;
+  protected reset() {
     this.category = achievementCategories[0];
     this.tabNodes.clear();
     this.tabLabels.clear();

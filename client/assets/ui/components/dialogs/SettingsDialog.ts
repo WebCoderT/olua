@@ -1,9 +1,10 @@
 import { isValid, Label, Node, Size, Vec2 } from "cc";
-import LayerManager from "../../core/LayerManager";
 import SceneManager from "../../core/SceneManager";
 import StorageManager from "../../core/StorageManager";
 import UiHelper from "../../helpers/UiHelper";
 import GameUiHelper from "../../helpers/GameUiHelper";
+import LayerManager from "../../core/LayerManager";
+import BaseDialog from "./dialog-kit";
 import ConfirmDialog from "./ConfirmDialog";
 import { settingsDialogLayout as layout } from "../../../configs/hudLayout";
 import { buttonTone, ButtonTone } from "../../../configs/layout/sizes";
@@ -20,29 +21,20 @@ import { logoutToLogin } from "../../utils/net/NetworkSetup";
  *
  * 同一时间只保留一个实例（重复打开先关旧的）；确认框挂 UI 层顶层（全屏模态）。
  */
-export default class SettingsDialog {
-  /** 弹窗节点 */
-  private dialog: Node | null = null;
+export default class SettingsDialog extends BaseDialog {
   /** 退出登录确认框（全屏模态；同一时刻最多一个） */
   private confirmDialog: ConfirmDialog | null = null;
 
   /** 打开/关闭弹窗 */
   open() {
-    if (this.dialog && isValid(this.dialog) && this.dialog.active) {
-      this.close();
-      return;
-    }
-    const dialog = GameUiHelper.createDialog(layout.name, layout.title, new Vec2(), layout.size, layout.eyebrow);
-    dialog.addChild(this.createActionRow(layout.rows.select, getText("settings_select_role"), getText("settings_select_role_desc"), () => this.selectRole()));
-    dialog.addChild(this.createActionRow(layout.rows.logout, getText("settings_logout"), getText("settings_logout_desc"), () => this.confirmLogout()));
-    this.dialog = dialog;
-    LayerManager.addDialogToUILayer(dialog);
+    this.openFrame(layout, (dialog) => {
+      dialog.addChild(this.createActionRow(layout.rows.select, getText("settings_select_role"), getText("settings_select_role_desc"), () => this.selectRole()));
+      dialog.addChild(this.createActionRow(layout.rows.logout, getText("settings_logout"), getText("settings_logout_desc"), () => this.confirmLogout()));
+    });
   }
 
-  /** 关闭弹窗（连确认框一起收：开着的时候点关闭键，不该留下一个盖住全屏的确认框） */
-  close() {
-    if (this.dialog && isValid(this.dialog)) this.dialog.destroy();
-    this.dialog = null;
+  /** 关闭弹窗时连确认框一起收（开着的时候点关闭键，不该留下一个盖住全屏的确认框） */
+  protected onClose() {
     this.closeConfirm();
   }
 

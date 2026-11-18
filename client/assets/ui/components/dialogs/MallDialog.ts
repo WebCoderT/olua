@@ -1,9 +1,10 @@
 import { Button, Color, Graphics, isValid, Label, Node, Size, UIOpacity, UITransform, Vec2 } from "cc";
 import GameUiHelper from "../../helpers/GameUiHelper";
-import LayerManager from "../../core/LayerManager";
 import StorageManager from "../../core/StorageManager";
 import UiHelper from "../../helpers/UiHelper";
 import { buttonTone, mallDialogLayout, T } from "../../../configs/hudLayout";
+import LayerManager from "../../core/LayerManager";
+import BaseDialog from "./dialog-kit";
 import { trackUiPress } from "../../utils/input/Pointer";
 import { getMallCategories, getMallDailyLimit, getMallPrice, getMallRequiredLevel, getMallStock, isMallGoodListed, mallGoodCategoryOf } from "../../../configs/game-config";
 import { getEquipmentNameParts } from "../../../configs/equipments";
@@ -39,9 +40,7 @@ const layout = mallDialogLayout;
  *
  * 实例由使用方（BottomBar）创建持有，不导出全局单例。
  */
-export default class MallDialog {
-  /** 弹窗节点 */
-  private dialog: Node | null = null;
+export default class MallDialog extends BaseDialog {
   /** 商品卡片区（分页容器：卡片与页脚页控件都挂在它下面） */
   private cardArea: Node | null = null;
   /** 当前页的卡片（翻页整批销毁重建，任何时刻只有一页的节点） */
@@ -78,17 +77,12 @@ export default class MallDialog {
 
   /** 打开/关闭弹窗 */
   open() {
-    if (this.dialog && isValid(this.dialog) && this.dialog.active) {
-      this.close();
-      return;
-    }
-    // 弹窗已在场景切换中被销毁时清理残留引用
-    if (this.dialog && !isValid(this.dialog)) this.dialog = null;
-    this.build();
+    this.openFrame(layout, (dialog) => this.build(dialog));
   }
 
   /** 关闭弹窗 */
-  close() {
+  /** 关闭弹窗：收悬停详情并复位全部状态（销毁与清弹窗引用在 BaseDialog.close） */
+  protected onClose() {
     this.closeDetail();
     this.cards = [];
     this.goods = [];
@@ -106,15 +100,12 @@ export default class MallDialog {
     this.bindGoldLabel = null;
     this.emptyTip = null;
     this.limits = new Map();
-    this.dialog?.destroy();
-    this.dialog = null;
   }
 
   //#region 组装
 
   /** 组装弹窗：标准弹窗框 + 余额胶囊 + 商品分页（08-mall 稿，矢量面板，不再用整图背景） */
-  private build() {
-    const dialog = GameUiHelper.createDialog(layout.name, layout.title, new Vec2(), layout.size, layout.eyebrow);
+  private build(dialog: Node) {
     // 标准框的 × 只销毁节点；商城持有一页卡片与悬停详情的引用，走 close() 统一收尾
     dialog.getChildByName(`${layout.name}_close_button`)?.on(Node.EventType.TOUCH_END, () => this.close(), this);
     // 余额胶囊（稿 .balance：暗底胶囊 + 金点 + 文字，右上角）
@@ -152,8 +143,6 @@ export default class MallDialog {
     dialog.addChild(GameUiHelper.createDialogFoot("mall_foot", layout.size.width, layout.foot, getText("mall_foot_left"), getText("mall_foot_right")));
     this.renderPage(0);
     this.refreshBindGold();
-    this.dialog = dialog;
-    LayerManager.addDialogToUILayer(dialog);
     // 限购 / 库存在快照里只有配置，「今天买了几个」得问服务端（#846）：
     // 先按配置把卡片画出来，拉到运行数再重绘一次当前页 —— 不阻塞打开，商城不会因为一次失败请求打不开
     void this.loadLimits();

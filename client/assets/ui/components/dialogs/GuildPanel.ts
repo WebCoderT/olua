@@ -1,4 +1,4 @@
-import { Color, EditBox, Graphics, isValid, Node, ScrollView, Size, Vec2 } from "cc";
+import { Color, EditBox, Graphics, isValid, Node, ScrollView, Vec2 } from "cc";
 import GameUiHelper from "../../helpers/GameUiHelper";
 import LayerManager from "../../core/LayerManager";
 import SocialStore from "../../core/SocialStore";
@@ -10,6 +10,7 @@ import { guildDialogLayout as layout } from "../../../configs/hudLayout";
 import { GUILD_RANK, guildRules } from "../../../configs/social";
 import { getText } from "../../../configs/texts";
 import { clearChildren } from "../../utils/node/NodeTree";
+import { createListEmpty } from "./dialog-kit";
 import ConfirmDialog from "./ConfirmDialog";
 
 /**
@@ -424,7 +425,7 @@ export default class GuildPanel {
   /** 列表空态（一行灰字；给足高度，否则纵向 Layout 量出来是 0） */
   private createEmptyLabel(name: string, text: string) {
     const row = layout.row;
-    return UiHelper.createLabel(name, text, row.metaColor, row.metaFontSize, new Vec2(), new Size(row.size.width, row.emptyHeight));
+    return createListEmpty(name, text, { color: row.metaColor, fontSize: row.metaFontSize, width: row.size.width, height: row.emptyHeight });
   }
 
   /** 文案模板替换（模板集中在 configs/layout/dialogs.guildDialogLayout.texts） */

@@ -289,7 +289,7 @@ if (sandbox) {
   {
     // 建页签的顺序：buildTabs 按 this.categories 建，**必须在分类赋值之后** ——
     // 先建页签再取分类，建出来就是零个页签（表现：客户端商城一个分类都看不到，#765）
-    const buildBlock = mallSource.slice(mallSource.indexOf("private build()"), mallSource.indexOf("private nameOf("));
+    const buildBlock = mallSource.slice(mallSource.indexOf("private build("), mallSource.indexOf("private nameOf("));
     const categoriesAt = buildBlock.indexOf("this.categories = getMallCategories()");
     const tabsAt = buildBlock.indexOf("this.buildTabs(dialog)");
     check(
@@ -370,7 +370,7 @@ if (sandbox) {
     check(/pageIndicator: \{ name: "mall_page_indicator", position: new Vec2\(0, -138\)/.test(block), "页码几何在配置里（居中于翻页一排）");
     check(/firstButton:[\s\S]{0,200}prevButton:[\s\S]{0,200}nextButton:[\s\S]{0,200}lastButton:/.test(block), "首/上/下/末四个翻页按钮几何在配置里");
   }
-  check(/GameUiHelper\.createDialog\(layout\.name, layout\.title/.test(mallSource), "商城面板走标准弹窗框（矢量 panel，不再用整图背景）");
+  check(/extends BaseDialog/.test(mallSource), "商城面板走标准弹窗框（BaseDialog 骨架，矢量 panel，不再用整图背景）");
   check(!/mallBackground|uiMall/.test(mallSource + dialogsSource + imagesSource), "旧商城整图背景的取图函数与登记键已删干净");
   check(fs.existsSync(path.join(PROJECT_ROOT, "assets/configs/game-config.ts.meta")) && fs.existsSync(path.join(PROJECT_ROOT, "assets/ui/components/dialogs/MallDialog.ts.meta")), "新增的 .ts 都带 .meta（进 Cocos 工程的前提）");
 

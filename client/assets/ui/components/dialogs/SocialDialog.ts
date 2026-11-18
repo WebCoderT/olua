@@ -10,12 +10,12 @@ import type { SocialEntry } from "../../utils/net/Api";
 import { socialDialogLayout as layout } from "../../../configs/hudLayout";
 import { getRelationColor, relationLabels } from "../../../configs/social";
 import { getText } from "../../../configs/texts";
-import { blockClickThrough } from "../../utils/input/UiHit";
 import { clearChildren } from "../../utils/node/NodeTree";
 import CombatChannel from "../../utils/net/CombatChannel";
 import ConfirmDialog from "./ConfirmDialog";
 import ReportDialog from "./ReportDialog";
 import GuildPanel from "./GuildPanel";
+import BaseDialog, { createListEmpty } from "./dialog-kit";
 import { createTabStrip, paintTabStrip } from "./tab-kit";
 
 /** 社交弹窗的五个页签 */
@@ -44,11 +44,7 @@ const TABS: SocialTab[] = ["guild", "friends", "enemies", "nearby", "blocks"];
  * 「帮会」页由 `GuildPanel` 画（#388 的整套逻辑原样复用），本类只负责把内容区交给它、
  * 切页时收回。弹窗的开关 / 拖动 / 层级全在这里一处管。
  */
-export default class SocialDialog {
-  /** 弹窗根 */
-  private dialog: Node | null = null;
-  /** 内容容器（切页时清空重画） */
-  private body: Node | null = null;
+export default class SocialDialog extends BaseDialog {
   /** 当前页签 */
   private tab: SocialTab = "guild";
   /** 页签底图（选中态要重画，所以本体与文字分开存） */
@@ -62,27 +58,16 @@ export default class SocialDialog {
 
   /** 打开/关闭弹窗 */
   open() {
-    if (this.dialog && isValid(this.dialog) && this.dialog.active) {
-      this.close();
-      return;
-    }
-    if (this.dialog && !isValid(this.dialog)) this.reset();
-    this.dialog = GameUiHelper.createDialog(layout.name, layout.title, new Vec2(), layout.size, layout.eyebrow);
-    // 弹窗整体吃掉点击：否则点在行与行之间的空隙会穿透到下层 UI（createDialog 已登记过，这里幂等）
-    blockClickThrough(this.dialog);
-    LayerManager.addDialogToUILayer(this.dialog);
-    this.createTabs();
-    this.body = UiHelper.createGroupNode(`${layout.name}_body`, new Vec2());
-    this.dialog.addChild(this.body);
-    this.select("guild");
+    this.openFrame(layout, () => {
+      this.createTabs();
+      this.select("guild");
+    });
   }
 
-  /** 关闭弹窗（确认框、内嵌页一起收掉） */
-  close() {
+  /** 关闭弹窗（确认框、内嵌页一起收掉；销毁与清引用在 BaseDialog.close） */
+  protected onClose() {
     this.closeConfirm();
     this.guildPanel.unmount();
-    if (this.dialog && isValid(this.dialog)) this.dialog.destroy();
-    this.reset();
   }
 
   //#region 页签
@@ -614,7 +599,7 @@ export default class SocialDialog {
 
   /** 列表空态（一行灰字；给足高度，否则纵向 Layout 量出来是 0） */
   private createEmptyLabel(name: string, text: string) {
-    return UiHelper.createLabel(name, text, layout.row.metaColor, layout.row.metaFontSize, new Vec2(), new Size(layout.row.size.width, 32));
+    return createListEmpty(name, text, { color: layout.row.metaColor, fontSize: layout.row.metaFontSize, width: layout.row.size.width, height: layout.row.emptyHeight });
   }
 
   /** 底部「输入角色名 + 按钮」一行（好友页与敌人页共用） */
@@ -704,9 +689,7 @@ export default class SocialDialog {
   //#endregion
 
   /** 释放引用（关闭后） */
-  private reset() {
-    this.dialog = null;
-    this.body = null;
+  protected reset() {
     this.tab = "guild";
     this.tabNodes.clear();
     this.tabLabels.clear();

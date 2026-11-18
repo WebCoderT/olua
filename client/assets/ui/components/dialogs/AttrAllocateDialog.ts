@@ -1,8 +1,8 @@
-import { Color, Graphics, isValid, Label, Node, Size, Vec2 } from "cc";
+import { Color, isValid, Label, Node, Size, Vec2 } from "cc";
 import GameUiHelper from "../../helpers/GameUiHelper";
 import UiHelper from "../../helpers/UiHelper";
-import LayerManager from "../../core/LayerManager";
 import StorageManager from "../../core/StorageManager";
+import BaseDialog, { createHDivider } from "./dialog-kit";
 import { attrAllocateDialogLayout, T } from "../../../configs/hudLayout";
 import { goodShowAttributesLabel } from "../../../configs/good";
 import { getText } from "../../../configs/texts";
@@ -27,9 +27,7 @@ type OverviewKey = typeof attrAllocateDialogLayout.overview.keys[number];
  *   22 稿（06 稿精神行同款）用禁用画法表达「没点可加」，置灰是即时反馈，
  *   不用点一下才知道。服务端校验仍是权威，置灰只是省一次必拒的请求。
  */
-export default class AttrAllocateDialog {
-  /** 弹窗节点（切换关闭要用；关闭后置空） */
-  private dialog: Node | null = null;
+export default class AttrAllocateDialog extends BaseDialog {
   /** 剩余点数数值标签（加完点改数字用） */
   private pointsLabel: Label | null = null;
   /** 总览两列行的容器（属性变化后重建用） */
@@ -41,14 +39,9 @@ export default class AttrAllocateDialog {
 
   /** 打开/关闭（开关：已开则关） */
   open() {
-    if (this.dialog && isValid(this.dialog) && this.dialog.active) {
-      this.close();
-      return;
-    }
-    // 弹窗已在场景切换 / 关闭按钮销毁时清掉残留引用
-    if (this.dialog && !isValid(this.dialog)) this.dialog = null;
     const cfg = attrAllocateDialogLayout;
-    const dialog = GameUiHelper.createDialog(cfg.name, cfg.title, new Vec2(), cfg.size, cfg.eyebrow);
+    // 该 layout 的 foot 是「底部说明条」不是 panel-foot 页脚，骨架只要 name/title/eyebrow/size
+    this.openFrame({ name: cfg.name, title: cfg.title, eyebrow: cfg.eyebrow, size: cfg.size }, (dialog) => {
     const contentWidth = cfg.points.width;
 
     // 剩余点数行（左灰标签 + 右金色数值）+ 行下沿细分隔线
@@ -80,9 +73,8 @@ export default class AttrAllocateDialog {
       this.createNoteLabel(cfg.foot.right.name, getText("label_attr_foot_right"), cfg.foot.right.x, cfg.foot.y, cfg.foot.right.width, cfg.foot.right.fontSize, cfg.foot.right.color),
     );
 
-    this.dialog = dialog;
-    LayerManager.addDialogToUILayer(dialog);
-    this.rebuild();
+      this.rebuild();
+    });
   }
 
   /**
@@ -153,11 +145,8 @@ export default class AttrAllocateDialog {
 
   /** 细分隔线（1px Graphics，AnnouncementBoard 同款画法；颜色 T.line[1]） */
   private createDivider(name: string, y: number, width: number): Node {
-    const node = UiHelper.createNode(name, new Vec2(0, y), new Size(width, 1));
-    const graphics = node.addComponent(Graphics);
-    graphics.fillColor = T.line[1];
-    graphics.rect(-width / 2, -0.5, width, 1);
-    graphics.fill();
+    const node = createHDivider(name, width, T.line[1]);
+    node.setPosition(0, y, 0);
     return node;
   }
 
@@ -173,10 +162,8 @@ export default class AttrAllocateDialog {
     }
   }
 
-  /** 关闭弹窗 */
-  close() {
-    if (this.dialog && isValid(this.dialog)) this.dialog.destroy();
-    this.dialog = null;
+  /** 关闭弹窗（销毁与清弹窗引用在 BaseDialog.close） */
+  protected onClose() {
     this.pointsLabel = null;
     this.overviewContent = null;
     this.listContent = null;

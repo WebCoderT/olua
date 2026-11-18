@@ -1,5 +1,4 @@
 import { isValid, Node, Vec2 } from "cc";
-import LayerManager from "../../core/LayerManager";
 import StorageManager from "../../core/StorageManager";
 import GameUiHelper from "../../helpers/GameUiHelper";
 import { EQUIPMENT_TYPE } from "../../../types/good";
@@ -14,6 +13,7 @@ import TitleUpgradeDialog from "./TitleUpgradeDialog";
 import WarSoulDialog from "./WarSoulDialog";
 import RankUpgradeDialog from "./RankUpgradeDialog";
 import FashionDialog from "./FashionDialog";
+import BaseDialog from "./dialog-kit";
 import SocialDialog from "./SocialDialog";
 import AttrAllocateDialog from "./AttrAllocateDialog";
 
@@ -25,9 +25,7 @@ import AttrAllocateDialog from "./AttrAllocateDialog";
  * 槽位角标左键 = 一键换上背包里更好的装备（哪个槽位亮角标由 refreshHints 按背包现算）
  * 换装后由数据层经 RoleUIManager 调用 updateDialog 刷新对应区块；背包变动经 refreshBag 调用 refreshHints
  */
-export default class RoleInfoDialog {
-  /** 弹窗节点 */
-  private dialog: Node | null = null;
+export default class RoleInfoDialog extends BaseDialog {
   /** 装备槽分组（左/右/底） */
   private equipmentGroups: EquipmentSlotGroup[] = [];
   /** 属性列表（装备变化后刷新数值） */
@@ -39,22 +37,25 @@ export default class RoleInfoDialog {
 
   /** 打开/关闭弹窗 */
   open() {
-    if (this.dialog && isValid(this.dialog) && this.dialog.active) {
-      this.close();
-      return;
-    }
-    // 弹窗已在场景切换中被销毁时清理残留引用
-    if (this.dialog && !isValid(this.dialog)) this.reset();
+    this.openFrame(
+      // 页脚文案走 texts（role_info_foot_left/right），不在 layout.footTexts
+      {
+        name: roleInfoDialogLayout.name,
+        title: roleInfoDialogLayout.title,
+        eyebrow: roleInfoDialogLayout.eyebrow,
+        size: roleInfoDialogLayout.size,
+        foot: roleInfoDialogLayout.foot,
+        footTexts: { left: getText("role_info_foot_left"), right: getText("role_info_foot_right") },
+      },
+      (dialog) => {
     // 角色信息
     const role = StorageManager.findOnlineRole();
-    // 弹窗框（尺寸与装饰背景见 configs/hudLayout.roleInfoDialogLayout）
-    this.dialog = GameUiHelper.createDialog(roleInfoDialogLayout.name, roleInfoDialogLayout.title, new Vec2(), roleInfoDialogLayout.size, roleInfoDialogLayout.eyebrow);
     // 装饰背景与战斗力图标
     const bgLayout = roleInfoDialogLayout.background;
     // 中区底板（稿 .inshow/.attr 区共用的暗色内衬：矢量玻璃底板，替代原装饰贴图）
     const bg = GameUiHelper.createGlassPlate("role_information_background", bgLayout.size, T.radius.r2, T.line[2]);
     bg.setPosition(bgLayout.position.x, bgLayout.position.y, 0);
-    this.dialog.addChild(bg);
+    dialog.addChild(bg);
     // 装备槽分组（左/右/底三个方向），右键槽位脱下装备、左键角标一键换更好的
     this.equipmentGroups = EQUIPMENT_SLOT_SIDES.map((side) =>
       new EquipmentSlotGroup(
@@ -68,15 +69,15 @@ export default class RoleInfoDialog {
         },
       ),
     );
-    this.equipmentGroups.forEach((group) => this.dialog.addChild(group));
+    this.equipmentGroups.forEach((group) => dialog.addChild(group));
     // 各槽位的「更好装备」提示按当前背包点亮
     this.refreshHints();
     // 角色属性列表
     this.attributeList = new RoleAttributeList(role);
-    this.dialog.addChild(this.attributeList);
+    dialog.addChild(this.attributeList);
     // 内观（衣服与武器，未装备时容器为空）
     this.inShowView = new RoleInShowView(role);
-    this.dialog.addChild(this.inShowView);
+    dialog.addChild(this.inShowView);
     // 内观几何「开弹窗就再拉一次」（#527）：玩家保存完的第一反应是再点开这个弹窗看一眼，
     // 那时人还在同一张图里、场景没重载 —— 只靠进图拉一次必然「看不到变化」。
     // 先把弹窗按当前配置建出来（不卡交互），拉到新值后再就地重建内观节点。
@@ -110,19 +111,10 @@ export default class RoleInfoDialog {
         buttonTone.ghost,
       );
       button.on(Node.EventType.TOUCH_END, open, this);
-      this.dialog!.addChild(button);
+      dialog.addChild(button);
     });
-    // 页脚（稿 .panel-foot）：左右各一行小字，几何由面板尺寸算
-    this.dialog.addChild(
-      GameUiHelper.createDialogFoot(
-        "role_info_foot",
-        roleInfoDialogLayout.size.width,
-        roleInfoDialogLayout.foot,
-        getText("role_info_foot_left"),
-        getText("role_info_foot_right"),
-      ),
+      },
     );
-    LayerManager.addDialogToUILayer(this.dialog);
   }
 
   /** 装备变更后刷新：对应槽位的装备显示、属性数值与对应部位的内观 */
@@ -168,16 +160,13 @@ export default class RoleInfoDialog {
     });
   }
 
-  /** 关闭弹窗（连同属性加点子弹窗一起收掉） */
-  close() {
+  /** 关闭弹窗时连属性加点子弹窗一起收掉（销毁与清引用在 BaseDialog.close） */
+  protected onClose() {
     this.attrDialog.close();
-    if (this.dialog && isValid(this.dialog)) this.dialog.destroy();
-    this.reset();
   }
 
-  /** 释放弹窗与子组件引用 */
-  private reset() {
-    this.dialog = null;
+  /** 释放子组件引用 */
+  protected reset() {
     this.equipmentGroups = [];
     this.attributeList = null;
     this.inShowView = null;

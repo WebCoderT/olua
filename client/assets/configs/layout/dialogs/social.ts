@@ -162,6 +162,8 @@ export const socialDialogLayout = {
   /** 列表行（与帮会列表同一套几何与配色） */
   row: {
     size: new Size(556, 52),
+    /** 列表空态提示行高（#1115 批次 4 收编组件内联的 32） */
+    emptyHeight: 32,
     fill: T.surface[1],
     border: T.surface[3],
     radius: T.radius.r2,
@@ -553,6 +555,8 @@ export const partyDialogLayout = {
   /** 成员行：名字 + 等级/状态（左）+ 动作按钮（右，最多两枚） */
   row: {
     size: new Size(552, 56),
+    /** 列表空态提示行高（#1115 批次 4 收编组件内联的 32） */
+    emptyHeight: 32,
     fill: T.surface[1],
     border: T.surface[3],
     radius: T.radius.r2,

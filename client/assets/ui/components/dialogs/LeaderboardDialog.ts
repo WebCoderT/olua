@@ -1,15 +1,14 @@
 import { isValid, Label, Node, ScrollView, Vec2 } from "cc";
 import GameUiHelper from "../../helpers/GameUiHelper";
-import LayerManager from "../../core/LayerManager";
 import LeaderboardStore, { LEADERBOARD_BOARD } from "../../core/LeaderboardStore";
 import type { LeaderboardBoard } from "../../core/LeaderboardStore";
 import ZoneStore from "../../core/ZoneStore";
 import UiHelper from "../../helpers/UiHelper";
 import { leaderboardDialogLayout as layout } from "../../../configs/hudLayout";
 import { getText } from "../../../configs/texts";
-import { blockClickThrough } from "../../utils/input/UiHit";
 import { clearChildren } from "../../utils/node/NodeTree";
 import type { LeaderboardEntry } from "../../utils/net/ApiModels";
+import BaseDialog from "./dialog-kit";
 import { createRoundedPanel, createTabStrip, paintTabStrip } from "./tab-kit";
 
 /** 页签顺序（与 layout.tabs.columns / layout.texts.tabs 一一对应） */
@@ -36,11 +35,7 @@ const TABS: LeaderboardBoard[] = [LEADERBOARD_BOARD.LEVEL, LEADERBOARD_BOARD.COM
  * 用 `me` 返回的 `entry.roleId` 判断，而不是本地存档里的角色 id：
  * 榜单里「我」的定义应当由服务端给的那一份说了算（切角色 / 离线都一致）。
  */
-export default class LeaderboardDialog {
-  /** 弹窗根 */
-  private dialog: Node | null = null;
-  /** 内容容器（切页 / 数据变化时清空重画） */
-  private body: Node | null = null;
+export default class LeaderboardDialog extends BaseDialog {
   /** 当前页签 */
   private tab: LeaderboardBoard = LEADERBOARD_BOARD.LEVEL;
   private tabNodes = new Map<LeaderboardBoard, Node>();
@@ -50,34 +45,20 @@ export default class LeaderboardDialog {
 
   /** 打开 / 关闭弹窗（重复点即关闭） */
   open() {
-    if (this.dialog && isValid(this.dialog) && this.dialog.active) {
-      this.close();
-      return;
-    }
-    if (this.dialog && !isValid(this.dialog)) this.reset();
-    this.dialog = GameUiHelper.createDialog(layout.name, layout.title, new Vec2(), layout.size, layout.eyebrow);
-    // 页脚（稿 15-rank 的 .panel-foot）
-    this.dialog.addChild(
-      GameUiHelper.createDialogFoot("leaderboard_foot", layout.size.width, layout.foot, layout.footTexts.left, layout.footTexts.right),
-    );
-    blockClickThrough(this.dialog);
-    LayerManager.addDialogToUILayer(this.dialog);
-    this.createTabs();
-    this.body = UiHelper.createGroupNode(`${layout.name}_body`, new Vec2());
-    this.dialog.addChild(this.body);
-    this.unsubscribe = LeaderboardStore.onChange(() => this.render());
-    // 默认停在「等级」：它是玩家最先想到、也最好理解的那个维度
-    this.select(LEADERBOARD_BOARD.LEVEL);
+    this.openFrame(layout, () => {
+      this.createTabs();
+      this.unsubscribe = LeaderboardStore.onChange(() => this.render());
+      // 默认停在「等级」：它是玩家最先想到、也最好理解的那个维度
+      this.select(LEADERBOARD_BOARD.LEVEL);
+    });
   }
 
-  /** 关闭弹窗（订阅退掉） */
-  close() {
+  /** 关闭弹窗时退订（销毁与清引用在 BaseDialog.close） */
+  protected onClose() {
     if (this.unsubscribe) {
       this.unsubscribe();
       this.unsubscribe = null;
     }
-    if (this.dialog && isValid(this.dialog)) this.dialog.destroy();
-    this.reset();
   }
 
   isOpen(): boolean {
@@ -243,9 +224,7 @@ export default class LeaderboardDialog {
 
   //#endregion
 
-  private reset() {
-    this.dialog = null;
-    this.body = null;
+  protected reset() {
     this.tab = LEADERBOARD_BOARD.LEVEL;
     this.tabNodes.clear();
     this.tabLabels.clear();

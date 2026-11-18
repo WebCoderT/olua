@@ -18,6 +18,23 @@ import { roleInfoBarLayout, tipsLayout, T, uiTheme } from "../../../configs/hudL
 import { createGlassPlate } from "./dialog-builder";
 import { createVectorDot } from "./role-parts";
 
+/**
+ * 飘字动效收口（#1115 批次 4）：上浮 + 淡出 + 淡出完自毁，五处飘字共用这一段。
+ * @param riseY 上浮的目标 y（局部坐标；调用方按「当前 y + riseDistance」或固定落点算好传入）
+ */
+function floatUpFade(node: Node, riseDuration: number, riseY: number, fadeDuration: number) {
+  const uiOpacity = node.addComponent(UIOpacity);
+  tween(node)
+    .to(riseDuration, { position: new Vec3(node.position.x, riseY, 0) })
+    .start();
+  tween(uiOpacity)
+    .to(fadeDuration, { opacity: 0 })
+    .call(() => {
+      node.destroy();
+    })
+    .start();
+}
+
 /** 伤害飘字的错峰轮转序号（全局累计，见 showDamageText 与 uiTheme.floatingText.damage.offsetXs） */
 let damageTextSeq = 0;
 
@@ -72,16 +89,7 @@ export function createFloatingTip(name: string, text: string, color: Color, move
     }
     // 飘字是临时装饰（屏幕中间上浮 1~3 秒，拾取/提示时高频出现），标为点击穿透：不遮挡世界点击
     markClickThrough(tip);
-    const uiOpacity = tip.addComponent(UIOpacity);
-    tween(tip)
-      .to(moveDuration, { position: new Vec3(0, tipsLayout.risePositionY, 0) })
-      .start();
-    tween(uiOpacity)
-      .to(fadeDuration, { opacity: 0 })
-      .call(() => {
-        tip.destroy();
-      })
-      .start();
+    floatUpFade(tip, moveDuration, tipsLayout.risePositionY, fadeDuration);
     mountFloatingTip(tip);
   }
 
@@ -194,16 +202,7 @@ export function showDamageText(target: Node, damage: number, blocked = false, su
     const offsetXs = style.offsetXs.length ? style.offsetXs : [0];
     const offsetX = offsetXs[damageTextSeq++ % offsetXs.length];
     damageText.setWorldPosition(target.getWorldPosition().x + offsetX, target.getWorldPosition().y, target.getWorldPosition().z);
-    const uiOpacity = damageText.addComponent(UIOpacity);
-    tween(damageText)
-      .to(style.riseDuration, { position: new Vec3(damageText.position.x, damageText.position.y + style.riseDistance, 0) })
-      .start();
-    tween(uiOpacity)
-      .to(style.fadeDuration, { opacity: 0 })
-      .call(() => {
-        damageText.destroy();
-      })
-      .start();
+    floatUpFade(damageText, style.riseDuration, damageText.position.y + style.riseDistance, style.fadeDuration);
   }
 
   /**
@@ -221,16 +220,7 @@ export function showCombatDelta(anchor: Node, delta: number) {
     const text = `${up ? "+" : "-"}${Math.abs(delta)}`;
     const node = UiHelper.createLabel("combat_delta", text, up ? style.upColor : style.downColor, style.fontSize, new Vec2(style.spawnOffsetX, style.spawnOffsetY), style.size);
     anchor.addChild(node);
-    const uiOpacity = node.addComponent(UIOpacity);
-    tween(node)
-      .to(style.riseDuration, { position: new Vec3(node.position.x, node.position.y + style.riseDistance, 0) })
-      .start();
-    tween(uiOpacity)
-      .to(style.fadeDuration, { opacity: 0 })
-      .call(() => {
-        node.destroy();
-      })
-      .start();
+    floatUpFade(node, style.riseDuration, node.position.y + style.riseDistance, style.fadeDuration);
   }
 
   /**
@@ -285,16 +275,7 @@ export function showSkillTip(caster: Node, skillName: string) {
     // 位置在释放者头顶（上移角色身高的一半）
     const casterPosition = caster.getWorldPosition();
     skillTip.setWorldPosition(casterPosition.x, casterPosition.y + style.spawnOffsetY, casterPosition.z);
-    const uiOpacity = skillTip.addComponent(UIOpacity);
-    tween(skillTip)
-      .to(style.riseDuration, { position: new Vec3(skillTip.position.x, skillTip.position.y + style.riseDistance, 0) })
-      .start();
-    tween(uiOpacity)
-      .to(style.fadeDuration, { opacity: 0 })
-      .call(() => {
-        skillTip.destroy();
-      })
-      .start();
+    floatUpFade(skillTip, style.riseDuration, skillTip.position.y + style.riseDistance, style.fadeDuration);
   }
 
   /**
@@ -310,14 +291,5 @@ export function showExpGain(target: Node, exp: number) {
     // 位置在被击杀怪物头顶
     const targetPosition = target.getWorldPosition();
     expText.setWorldPosition(targetPosition.x, targetPosition.y + style.spawnOffsetY, targetPosition.z);
-    const uiOpacity = expText.addComponent(UIOpacity);
-    tween(expText)
-      .to(style.riseDuration, { position: new Vec3(expText.position.x, expText.position.y + style.riseDistance, 0) })
-      .start();
-    tween(uiOpacity)
-      .to(style.fadeDuration, { opacity: 0 })
-      .call(() => {
-        expText.destroy();
-      })
-      .start();
+    floatUpFade(expText, style.riseDuration, expText.position.y + style.riseDistance, style.fadeDuration);
   }

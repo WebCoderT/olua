@@ -1,6 +1,5 @@
 import { Graphics, isValid, Label, Node, ScrollView, Size, Vec2 } from "cc";
 import GameUiHelper from "../../helpers/GameUiHelper";
-import LayerManager from "../../core/LayerManager";
 import QuestStore from "../../core/QuestStore";
 import type { QuestView } from "../../core/QuestStore";
 import UiHelper from "../../helpers/UiHelper";
@@ -11,7 +10,7 @@ import { npcs } from "../../../configs/game-config";
 import { items } from "../../../configs/items";
 import { questDialogLayout as layout } from "../../../configs/hudLayout";
 import { clearChildren } from "../../utils/node/NodeTree";
-import { blockClickThrough } from "../../utils/input/UiHit";
+import BaseDialog from "./dialog-kit";
 import { createTabStrip, paintTabStrip } from "./tab-kit";
 
 /** 两个页签（进行中 / 可接） */
@@ -39,11 +38,7 @@ const TABS: QuestTab[] = ["active", "available"];
  * 服务端把这次的奖励结算随响应带回（绑定元宝 / 经验 / 物品 / 是否升级），这里直接飘字，
  * 不再自己算一遍 —— 数值口径只有一处。
  */
-export default class QuestDialog {
-  /** 弹窗根 */
-  private dialog: Node | null = null;
-  /** 内容容器（切页 / 状态变化时清空重画） */
-  private body: Node | null = null;
+export default class QuestDialog extends BaseDialog {
   /** 当前页签 */
   private tab: QuestTab = "active";
   /** 页签底图与文字（选中态重画） */
@@ -56,38 +51,24 @@ export default class QuestDialog {
 
   /** 打开 / 关闭弹窗（重复点即关闭） */
   open() {
-    if (this.dialog && isValid(this.dialog) && this.dialog.active) {
-      this.close();
-      return;
-    }
-    if (this.dialog && !isValid(this.dialog)) this.reset();
-    this.dialog = GameUiHelper.createDialog(layout.name, layout.title, new Vec2(), layout.size, layout.eyebrow);
-    blockClickThrough(this.dialog);
-    // 页脚（稿 11-quest 的 .panel-foot）：左入口说明 / 右结算说明
-    this.dialog.addChild(
-      GameUiHelper.createDialogFoot("quest_foot", layout.size.width, layout.foot, layout.footTexts.left, layout.footTexts.right),
-    );
-    LayerManager.addDialogToUILayer(this.dialog);
-    this.createTabs();
-    this.body = UiHelper.createGroupNode(`${layout.name}_body`, new Vec2());
-    this.dialog.addChild(this.body);
-    this.unsubscribe = QuestStore.onChange(() => {
-      this.refreshTabCaptions();
-      this.render();
+    this.openFrame(layout, () => {
+      this.createTabs();
+      this.unsubscribe = QuestStore.onChange(() => {
+        this.refreshTabCaptions();
+        this.render();
+      });
+      this.select("active");
+      // 打开即对账：帧只推变化，断线/多端切换后本地可能落后
+      void this.refresh();
     });
-    this.select("active");
-    // 打开即对账：帧只推变化，断线/多端切换后本地可能落后
-    void this.refresh();
   }
 
-  /** 关闭弹窗（订阅退掉） */
-  close() {
+  /** 关闭弹窗时退订（销毁与清引用在 BaseDialog.close） */
+  protected onClose() {
     if (this.unsubscribe) {
       this.unsubscribe();
       this.unsubscribe = null;
     }
-    if (this.dialog && isValid(this.dialog)) this.dialog.destroy();
-    this.reset();
   }
 
   //#region 页签
@@ -288,9 +269,7 @@ export default class QuestDialog {
   //#endregion
 
   /** 释放引用（关闭后） */
-  private reset() {
-    this.dialog = null;
-    this.body = null;
+  protected reset() {
     this.tab = "active";
     this.busyQuestId = "";
     this.tabNodes.clear();
