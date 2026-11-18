@@ -116,6 +116,10 @@ export class Game extends Component {
   private moveSoundStartedAt = 0;
   /** 移动脚步音：循环是否已接上（接上后不再重复调 startLoop） */
   private moveLoopRunning = false;
+  /** 上一次存档撞乐观锁的时刻（#1133：窗口内撞两次才弹提示，单次冲突静默重拉） */
+  private roleSyncConflictAt = 0;
+  /** 乐观锁冲突的「连续」判定窗口（毫秒） */
+  private static readonly ROLE_SYNC_CONFLICT_WINDOW_MS = 10_000;
 
   async start() {
     // 网络层接线（幂等，登录场景已调过一次）：令牌失效回登录场景、请求失败统一飘字
@@ -125,10 +129,15 @@ export class Game extends Component {
     RoleSync.onFailed = (error) => GameUiHelper.createErrorTipText(describeError(error));
     // 同步成功：把服务端刚给的修订号记回本地（下一次推送带着它做乐观锁，否则会拿旧版本撞自己）
     RoleSync.onSaved = (roleId, revision) => StorageManager.applyServerRevision(roleId, revision);
-    // 撞上乐观锁：角色被后台改过 —— 以服务端最新数据为基线（后台改动优先），并告知玩家
+    // 撞上乐观锁：以服务端最新数据为基线（后台改动优先），静默重拉即可。
+    // 绝大多数冲突是战斗在途存档与击杀经验等写入赛跑（#1133），不是后台真改了 ——
+    // 不弹提示；只有短时间内连续撞（两次间隔 < 10s）才算异常，弹一次让玩家知道对齐过。
     RoleSync.onConflict = (fresh) => {
       const role = StorageManager.cacheServerRole(fresh);
-      GameUiHelper.createTip("role_sync_conflict_tip");
+      const now = Date.now();
+      const repeated = now - this.roleSyncConflictAt < Game.ROLE_SYNC_CONFLICT_WINDOW_MS;
+      this.roleSyncConflictAt = now;
+      if (repeated) GameUiHelper.createTip("role_sync_conflict_tip");
       if (role) RoleUIManager.updateRoleData(role);
     };
     // 角色已被后台删除：本地不该继续玩一个不存在的角色（否则会卡在永远同步失败的游戏里）
@@ -157,6 +166,13 @@ export class Game extends Component {
     };
     // 伤害结算上移服务端（#34）：settle 帧的结果由怪物管理器落到目标身上（扣血/飘字/死亡）
     CombatChannel.onSettle = MonsterManager.applyServerSettle.bind(MonsterManager);
+    // 出手被拒（#1133）：蓝量权威在服务端（本地不扣蓝），被拒帧是唯一的反馈通道 ——
+    // mp 拒绝飘「蓝不足」（帧里带权威的 have/need）；cooldown 拒绝按 remainMs 对齐本地
+    // 冷却钟（防两个时钟漂移后反复被拒）；其余拒绝（dead/range/…）只落日志不弹字
+    CombatChannel.onCastRejected = ({ skillId, rejected, remainMs, need, have }) => {
+      if (rejected === "cooldown" && skillId) SkillManager.alignCooldown(skillId, remainMs ?? 0);
+      if (rejected === "mp") GameUiHelper.createErrorTip("skill_mp_tip", { mp: have ?? 0, cost: need ?? 0 });
+    };
     // 世界权威（#35）：world 帧的快照由怪物管理器与场上节点做差量合并（播种落场/重生补场）
     // 地面掉落物也在这一帧里（#802）：进图 / 断线重连**先清再按快照重建**，旧图的东西不跟过来
     CombatChannel.onWorld = (snapshot) => {
@@ -411,6 +427,7 @@ export class Game extends Component {
     RoleSync.onKicked = null;
     // 实时通道：离开游戏就断（回选角/登录不该还挂着一条连接；先摘回调再断，避免收尾时又提示一句）
     CombatChannel.onSettle = null;
+    CombatChannel.onCastRejected = null;
     CombatChannel.onWorld = null;
     CombatChannel.onMonsterAi = null;
     CombatChannel.onPlayers = null;
