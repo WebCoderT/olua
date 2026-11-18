@@ -15,6 +15,7 @@
  */
 const fs = require("fs");
 const path = require("path");
+const { dialogsSourceFor } = require("./lib/layout-dialogs-src.cjs");
 const { prepareStorage } = require("./lib/storage-sandbox.cjs");
 const { PROJECT_ROOT, check, finish, fail } = require("./lib/configs-sandbox.cjs");
 
@@ -22,7 +23,7 @@ const BAG_DIALOG_FILE = path.join(PROJECT_ROOT, "assets/ui/components/dialogs/Ba
 const BAG_GRID_VIEW_FILE = path.join(PROJECT_ROOT, "assets/ui/components/panel/BagGridView.ts");
 const CONFIRM_DIALOG_FILE = path.join(PROJECT_ROOT, "assets/ui/components/dialogs/ConfirmDialog.ts");
 const STORAGE_MANAGER_FILE = path.join(PROJECT_ROOT, "assets/ui/core/StorageManager.ts");
-const DIALOGS_FILE = path.join(PROJECT_ROOT, "assets/configs/layout/dialogs.ts");
+const DIALOGS_FILE = path.join(PROJECT_ROOT, "assets/configs/layout/dialogs");
 const TEXTS_FILE = path.join(PROJECT_ROOT, "assets/configs/texts.ts");
 
 let sandbox;
@@ -199,7 +200,7 @@ console.log("— 界面接线：BagDialog / 配置 —");
 
 const dialogSource = fs.readFileSync(BAG_DIALOG_FILE, "utf8");
 const storageSource = fs.readFileSync(STORAGE_MANAGER_FILE, "utf8");
-const layoutSource = fs.readFileSync(DIALOGS_FILE, "utf8");
+const layoutSource = dialogsSourceFor(DIALOGS_FILE);
 const textsSource = fs.readFileSync(TEXTS_FILE, "utf8");
 
 check(/static getBagDiscardPreview\(row: number, col: number\)/.test(storageSource), "StorageManager 暴露了 getBagDiscardPreview");

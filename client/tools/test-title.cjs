@@ -14,6 +14,7 @@
  */
 const fs = require("fs");
 const path = require("path");
+const { dialogsSourceFor } = require("./lib/layout-dialogs-src.cjs");
 const { PROJECT_ROOT, prepare, seedRuntimeTables, check, finish } = require("./lib/configs-sandbox.cjs");
 const factory = require("./lib/factory-data.cjs");
 
@@ -140,7 +141,7 @@ const npcSource = read("assets/configs/game-config.ts");
 // #603 第七域：NPC 数据搬去服务端，点击行为单独一个文件（它会引 UI 组件）
 const npcClicksSource = read("assets/configs/npcClicks.ts");
 const hudSource = read("assets/configs/layout/hud.ts");
-const dialogsLayoutSource = read("assets/configs/layout/dialogs.ts");
+const dialogsLayoutSource = dialogsSourceFor(path.join(PROJECT_ROOT, "assets/configs/layout/dialogs"));
 const sizesSource = read("assets/configs/layout/sizes.ts");
 const panelsSource = read("assets/configs/layout/panels.ts");
 

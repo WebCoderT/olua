@@ -15,6 +15,7 @@
  */
 const fs = require("fs");
 const path = require("path");
+const { dialogsSourceFor } = require("./lib/layout-dialogs-src.cjs");
 const { PROJECT_ROOT, check, finish, fail } = require("./lib/configs-sandbox.cjs");
 
 let sandbox;
@@ -46,7 +47,7 @@ if (sandbox) {
   const storageSource = read("assets/ui/core/StorageManager.ts");
   const configSource = read("assets/configs/announcement.ts");
   const textsSource = read("assets/configs/texts.ts");
-  const dialogsSource = read("assets/configs/layout/dialogs.ts");
+  const dialogsSource = dialogsSourceFor(path.join(PROJECT_ROOT, "assets/configs/layout/dialogs"));
   const hudSource = read("assets/configs/layout/hud.ts");
   /** 去掉注释后的源码（用来断言「代码里没有裸中文文案」） */
   const strip = (source) => source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\n]*/g, "");

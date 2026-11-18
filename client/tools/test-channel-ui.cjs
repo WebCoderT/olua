@@ -16,6 +16,7 @@
  */
 const fs = require("fs");
 const path = require("path");
+const { dialogsSourceFor } = require("./lib/layout-dialogs-src.cjs");
 const { PROJECT_ROOT, check, finish } = require("./lib/configs-sandbox.cjs");
 
 const read = (rel) => fs.readFileSync(path.join(PROJECT_ROOT, rel), "utf8");
@@ -26,7 +27,7 @@ const SMALL_MAP = "assets/ui/components/hud/SmallMap.ts";
 const CHANNEL_DIALOG = "assets/ui/components/dialogs/ChannelSelectDialog.ts";
 const GAME = "assets/ui/Game.ts";
 const TEXTS = "assets/configs/texts.ts";
-const DIALOGS_LAYOUT = "assets/configs/layout/dialogs.ts";
+const DIALOGS_LAYOUT = "assets/configs/layout/dialogs";
 
 /** 数一个字符串出现次数 */
 const count = (source, needle) => source.split(needle).length - 1;
@@ -40,7 +41,7 @@ try {
   const dialog = read(CHANNEL_DIALOG);
   const game = strip(read(GAME));
   const texts = read(TEXTS);
-  const dialogsLayout = read(DIALOGS_LAYOUT);
+  const dialogsLayout = dialogsSourceFor(path.join(PROJECT_ROOT, DIALOGS_LAYOUT));
 
   console.log("\n— A. world 帧的线字段进契约 —");
   check(/roomId\?: string/.test(combat) && /slot\?: string/.test(combat), "WorldSnapshot 带 roomId / slot（#1000 服务端已发，客户端接住）");

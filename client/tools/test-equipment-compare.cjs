@@ -9,6 +9,7 @@
 
 const fs = require("fs");
 const path = require("path");
+const { dialogsSourceFor } = require("./lib/layout-dialogs-src.cjs");
 const { prepare, seedRuntimeTables, check, finish } = require("./lib/configs-sandbox.cjs");
 
 /** GameUiHelper 已按域拆到 helpers/parts/（#1115 批次 1）：断言用源码 = barrel + 全部 parts 拼接 */
@@ -106,7 +107,7 @@ function main() {
       /label_combat: "战斗力"/.test(texts),
     "对比相关文案全部进 configs/texts（玩家中文不出 ui/，见 audit-config-leak）",
   );
-  const dialogs = readSrc("configs/layout/dialogs.ts");
+  const dialogs = dialogsSourceFor(path.join(ROOT, "assets", "configs/layout/dialogs"));
   check(
     /compare: \{/.test(dialogs) && /gainColor: T\.jade/.test(dialogs) && /lossColor: T\.ember\[4\]/.test(dialogs) && /sameColor: T\.text\[3\]/.test(dialogs),
     "对比配色进 configs/layout/dialogs.goodDetailLayout.compare（变强 jade / 变弱 ember-4 / 持平 text-3）",

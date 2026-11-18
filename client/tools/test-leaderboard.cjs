@@ -15,6 +15,7 @@
  */
 const fs = require("fs");
 const path = require("path");
+const { dialogsSourceFor } = require("./lib/layout-dialogs-src.cjs");
 const { PROJECT_ROOT, check, finish } = require("./lib/configs-sandbox.cjs");
 
 const read = (rel) => fs.readFileSync(path.join(PROJECT_ROOT, rel), "utf8");
@@ -26,7 +27,7 @@ const SERVER_SERVICE = "server/src/modules/leaderboard/leaderboard.service.ts";
 const SERVER_CONTROLLER = "server/src/modules/leaderboard/leaderboard.controller.ts";
 const CLIENT_STORE = "assets/ui/core/LeaderboardStore.ts";
 const CLIENT_DIALOG = "assets/ui/components/dialogs/LeaderboardDialog.ts";
-const CLIENT_LAYOUT = "assets/configs/layout/dialogs.ts";
+const CLIENT_LAYOUT = "assets/configs/layout/dialogs";
 const CLIENT_SMALL_MAP = "assets/ui/components/hud/SmallMap.ts";
 const CLIENT_GAME = "assets/ui/Game.ts";
 
@@ -39,7 +40,7 @@ try {
   const serverController = readRepo(SERVER_CONTROLLER);
   const store = read(CLIENT_STORE);
   const dialog = read(CLIENT_DIALOG);
-  const layout = read(CLIENT_LAYOUT);
+  const layout = dialogsSourceFor(path.join(PROJECT_ROOT, CLIENT_LAYOUT));
   // 只取排行榜那一段：布局文件里有十几个弹窗，同样的 `columns` / `tabs` 关键字到处都是
   const boardLayout = layout.slice(layout.indexOf("leaderboardDialogLayout"));
   const smallMap = read(CLIENT_SMALL_MAP);

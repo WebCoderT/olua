@@ -4,9 +4,9 @@ import LayerManager from "../../core/LayerManager";
 import AchievementStore from "../../core/AchievementStore";
 import SoundManager from "../../core/SoundManager";
 import UiHelper from "../../helpers/UiHelper";
+import { achievementDialogLayout as layout } from "../../../configs/hudLayout";
 import {
   achievementCategories,
-  achievementDialogLayout as layout,
   achievementTexts as texts,
 } from "../../../configs/achievement";
 import type { AchievementCategory } from "../../../configs/achievement";

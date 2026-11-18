@@ -55,9 +55,11 @@ const E2E = "server/test/e2e-game-mail.cjs";
 
 try {
   // mail.ts 只用 cc 的 Color/Size/Vec2，可以在沙箱里编译真跑
-  const outDir = prepare("olua-mail", ["configs/mail.ts"]);
+  const outDir = prepare("olua-mail", ["configs/mail.ts", "configs/layout/dialogs/mail.ts"]);
   const config = require(path.join(outDir, "configs/mail.js"));
-  const { mailDialogLayout: layout, mailTexts: texts } = config;
+  // #1115 批次 2：布局迁到 configs/layout/dialogs/mail（文案仍在 configs/mail）
+  const { mailDialogLayout: layout } = require(path.join(outDir, "configs/layout/dialogs/mail.js"));
+  const { mailTexts: texts } = config;
 
   //#region A. 配置与文案
 

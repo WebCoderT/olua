@@ -53,7 +53,7 @@ const OUT = process.env.EQUIP_ALIGN_OUT || path.join(ROOT, "admin", "src", "data
 const SOURCE_FILES = [
   ...["equipments", "role", "animation", "apply-snapshot"].map((name) => path.join(ASSETS, "configs", `${name}.ts`)),
   // 内观视图的底座（#523）：角色信息弹窗的背景图与尺寸在 layout/dialogs，别在页面里抄第二份
-  path.join(ASSETS, "configs", "layout", "dialogs.ts"),
+  path.join(ASSETS, "configs", "layout", "dialogs", "index.ts"),
 ];
 
 function main() {
@@ -67,7 +67,7 @@ function main() {
     equipments: cfg("equipments"),
     role: cfg("role"),
     animation: cfg("animation"),
-    dialogs: layoutCfg("dialogs"),
+    dialogs: layoutCfg("dialogs/index"),
   });
   fs.mkdirSync(path.dirname(OUT), { recursive: true });
   fs.writeFileSync(OUT, `${JSON.stringify(catalog, null, 2)}\n`, "utf8");

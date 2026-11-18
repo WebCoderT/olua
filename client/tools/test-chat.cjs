@@ -16,6 +16,7 @@
  */
 const fs = require("fs");
 const path = require("path");
+const { dialogsSourceFor } = require("./lib/layout-dialogs-src.cjs");
 const { PROJECT_ROOT, prepare, check, finish, fail } = require("./lib/configs-sandbox.cjs");
 
 const read = (rel) => fs.readFileSync(path.join(PROJECT_ROOT, rel), "utf8");
@@ -219,7 +220,7 @@ try {
     "会话页（已挑好对象）才用 privateChatEmpty，选人页仍用 privateEmpty",
   );
   {
-    const dialogs = read("assets/configs/layout/dialogs.ts");
+    const dialogs = dialogsSourceFor(path.join(PROJECT_ROOT, "assets/configs/layout/dialogs"));
     const textOf = (key) => {
       const hit = new RegExp(`${key}: "([^"]+)"`).exec(dialogs);
       return hit ? hit[1] : "";

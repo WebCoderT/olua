@@ -18,6 +18,7 @@
  */
 const fs = require("fs");
 const path = require("path");
+const { dialogsSourceFor } = require("./lib/layout-dialogs-src.cjs");
 const { PROJECT_ROOT, prepare, check, finish, fail } = require("./lib/configs-sandbox.cjs");
 
 const read = (rel) => fs.readFileSync(path.join(PROJECT_ROOT, rel), "utf8");
@@ -35,7 +36,7 @@ const CLIENT_STORE = "assets/ui/core/SocialStore.ts";
 const CLIENT_DIALOG = "assets/ui/components/dialogs/SocialDialog.ts";
 const CLIENT_GUILD_PANEL = "assets/ui/components/dialogs/GuildPanel.ts";
 const CLIENT_ROLE_INFO = "assets/ui/components/dialogs/RoleInfoDialog.ts";
-const CLIENT_DIALOGS_LAYOUT = "assets/configs/layout/dialogs.ts";
+const CLIENT_DIALOGS_LAYOUT = "assets/configs/layout/dialogs";
 const CLIENT_DIALOGS_REPORT = "assets/ui/components/dialogs/SocialDialog.ts";
 const CLIENT_DIALOGS_REPORT_DIALOG = "assets/ui/components/dialogs/ReportDialog.ts";
 
@@ -216,7 +217,7 @@ try {
   check(/mount\(parent: Node\)/.test(read(CLIENT_GUILD_PANEL)), "帮会页有 mount / unmount");
   check(/new SocialDialog\(\)\.open\(\)/.test(read(CLIENT_ROLE_INFO)), "角色信息弹窗第五格打开社交弹窗");
 
-  const layoutSource = read(CLIENT_DIALOGS_LAYOUT);
+  const layoutSource = dialogsSourceFor(path.join(PROJECT_ROOT, CLIENT_DIALOGS_LAYOUT));
   check(/export const socialDialogLayout = \{/.test(layoutSource), "有 socialDialogLayout");
   check(/size: new Size\(600, 560\)/.test(layoutSource), "社交弹窗加高 60（多出来的一行放页签，帮会页坐标不用挪）");
   // 页签列位：断「五枚 + 等距 + 整行居中」这三条结构关系（具体步进按稿定，不写死）

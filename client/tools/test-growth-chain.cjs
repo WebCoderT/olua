@@ -18,6 +18,7 @@
  */
 const fs = require("fs");
 const path = require("path");
+const { dialogsSourceFor } = require("./lib/layout-dialogs-src.cjs");
 const { PROJECT_ROOT, prepare, check, finish, fail } = require("./lib/configs-sandbox.cjs");
 /** #655 起配置的唯一来源是数据库快照（server/data/config-sync.sql）；属性已是 {min,max} */
 const factory = require("./lib/factory-data.cjs");
@@ -150,7 +151,7 @@ function main() {
     "label_growth_chain_empty",
   ];
   for (const key of labelKeys) check(textsSource.includes(`${key}:`), `文案 key 已登记：${key}`);
-  check(/lockedText/.test(read("assets/configs/layout/dialogs.ts")), "按钮有「不可续升」文案位（满级 / 断链 / 未开放共用置灰态，文案分开）");
+  check(/lockedText/.test(dialogsSourceFor(path.join(PROJECT_ROOT, "assets/configs/layout/dialogs"))), "按钮有「不可续升」文案位（满级 / 断链 / 未开放共用置灰态，文案分开）");
 
   finish("PASS：三条成长线与后台升级路径（渠道 / 顺序 / 下一档 / 三态）全部对齐。");
 }

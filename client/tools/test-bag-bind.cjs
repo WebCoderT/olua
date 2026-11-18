@@ -13,6 +13,7 @@
 
 const fs = require("fs");
 const path = require("path");
+const { dialogsSourceFor } = require("./lib/layout-dialogs-src.cjs");
 const { prepare } = require("./lib/configs-sandbox.cjs");
 
 /** GameUiHelper 已按域拆到 helpers/parts/（#1115 批次 1）：断言用源码 = barrel + 全部 parts 拼接 */
@@ -227,7 +228,7 @@ function main() {
   ["label_good_detail_bound", "label_good_detail_origin_role", "label_good_detail_origin_monster", "label_good_detail_origin_time", "label_good_detail_origin_time_format"].forEach(
     (key) => check(new RegExp(`^\\s*${key}:`, "m").test(texts), `configs/texts 登记了 ${key}`),
   );
-  const dialogs = readSrc("configs/layout/dialogs.ts");
+  const dialogs = dialogsSourceFor(path.join(ROOT, "assets", "configs/layout/dialogs"));
   // 切片到下一个同级的 export const 为止（对象字面量没有配对大括号可用，按段落切最稳）
   const layoutStart = dialogs.indexOf("export const goodDetailLayout = {");
   const layoutSlice = layoutStart === -1 ? "" : dialogs.slice(layoutStart, dialogs.indexOf("\nexport const", layoutStart + 10));
