@@ -440,8 +440,9 @@ async function expectFailure(action) {
     "游戏场景接上 onSaved：把服务端的新修订号写回存储（推送成功后的基线）",
   );
   check(
-    /RoleSync\.onConflict = \(fresh\) => \{[\s\S]*?StorageManager\.cacheServerRole\(fresh\)[\s\S]*?createTip\("role_sync_conflict_tip"\)/.test(gameSource),
-    "游戏场景接上 onConflict：以后台最新数据为基线 + 提示「已同步最新」（否则后台改动会被旧存档抹掉）",
+    /RoleSync\.onConflict = \(fresh\) => \{[\s\S]*?StorageManager\.cacheServerRole\(fresh\)[\s\S]*?roleSyncConflictAt[\s\S]*?role_sync_conflict_tip"?\)?/.test(gameSource) &&
+      /roleSyncConflictAt = 0;/.test(gameSource),
+    "游戏场景接上 onConflict：以后台最新数据为基线，冲突静默重拉、窗口内撞两次才提示（#1133 降噪：多数冲突是战斗写入赛跑，不是后台真改）",
   );
   check(
     /RoleSync\.onMissing = \(roleId\) => \{[\s\S]*?StorageManager\.deleteRole\(roleId\)[\s\S]*?loadScene\("RoleSelector"\)/.test(gameSource),

@@ -6,7 +6,6 @@ import { canAttackTarget } from "../utils/battle/BattleMath";
 import MpHelper from "../utils/battle/MpHelper";
 import AutoBattle from "./AutoBattle";
 import EffectManager from "./EffectManager";
-import RoleUIManager from "./RoleUIManager";
 import StorageManager from "./StorageManager";
 
 /**
@@ -102,13 +101,12 @@ export default class SkillManager {
         return false;
       }
     }
-    // 记录冷却，扣除魔法值（扣完落盘，角色数据在存储层是反序列化对象，不落盘下次读取会回滚），
+    // 记录冷却（本地冷却只是预判；服务端有独立的 lastCastAt，被拒时由 alignCooldown 按权威值对齐），
     // 显示技能释放提示（位置在释放者，挂特效层），调用技能实现
+    // 蓝量在服务端（#1133）：本地**不再扣蓝**——耗蓝由 cast 帧的服务端施法闸（#813 spendCastMp）扣，
+    // 扣完的权威值经 roleUpdate 帧回传刷蓝条；本地扣一份再被帧覆盖就是「蓝量弹回」的根源。
+    // 上面的 hasEnough 只是快捷预判（省一次注定失败的出手），判准以服务端为准。
     this.cooldowns.set(skillId, Date.now());
-    if (config.mpCost > 0 && MpHelper.spend(context.role, config.mpCost)) {
-      StorageManager.updateOnlineRole(context.role);
-      RoleUIManager.updateRoleData(context.role);
-    }
     GameUiHelper.showSkillTip(context.caster, config.label);
     // 技能特效（配置的 effect / effectIsOnSelf）：与动作动画同时开始播放，见 core/EffectManager
     // 区域（PLACE）技能例外：特效位置由技能实现决定（如十步一杀播在突进落点），不在施法起点代播
@@ -136,6 +134,22 @@ export default class SkillManager {
     const last = this.cooldowns.get(skillId);
     if (last === undefined) return 0;
     return Math.max(0, this.getEffectiveCooldown(skillId) - (Date.now() - last) / 1000);
+  }
+
+  /**
+   * 按服务端的权威剩余冷却对齐本地冷却钟（#1133）
+   *
+   * 本地 `cooldowns` 与服务端 `lastCastAt` 是两个独立时钟：speedRate 口径差一点、网络抖一下，
+   * 漂移累积后客户端以为转好了、服务端还在冷却里 —— 这一手被拒，出手没打出去还占一个往返。
+   * 服务端 cooldown 拒绝帧带权威的 `remainMs`，把它写回本地（本冷却上限内取小），下一发就不会再撞。
+   * @param skillId 技能编号（settle 拒绝帧的 castId 经 CombatChannel 对账回成 skillId）
+   * @param remainMs 服务端判的剩余冷却毫秒（<=0 不动）
+   */
+  static alignCooldown(skillId: SkillId, remainMs: number): void {
+    if (!skills.has(skillId) || !(remainMs > 0)) return;
+    const total = this.getEffectiveCooldown(skillId) * 1000;
+    const wait = Math.min(Math.ceil(remainMs), Math.max(1, Math.ceil(total)));
+    this.cooldowns.set(skillId, Date.now() + wait - total);
   }
 }
 

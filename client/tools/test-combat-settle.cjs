@@ -134,6 +134,35 @@ check(/castSeq \+= 1/.test(channelSource), "CombatChannel.castSeq 单调递增�
 check(/id: SkillId;/.test(skillTypeSource), "SkillConfig 声明 id 字段（技能实现 sendCast(config.id) 的来源）");
 
 // ==============================================================================
+//  C2. 出手被拒的反馈（#1133：蓝量权威在服务端，被拒帧是唯一反馈通道）
+// ==============================================================================
+
+// 本地扣蓝预测已删（#1133）：耗蓝由 cast 帧的服务端施法闸（#813 spendCastMp）扣，
+// 权威值经 roleUpdate 帧回传 —— 本地扣一份再被帧覆盖就是「蓝量弹回」的根源
+const skillManagerSource = read(path.join("assets", "ui", "core", "SkillManager.ts"));
+check(
+  !/MpHelper\.spend\(/.test(skillManagerSource) && /MpHelper\.hasEnough\(context\.role, config\.mpCost\)/.test(skillManagerSource),
+  "SkillManager 不再本地扣蓝（MpHelper.spend 已删；hasEnough 只作快捷预判保留）",
+);
+check(
+  /static alignCooldown\(/.test(skillManagerSource) && /remainMs/.test(skillManagerSource),
+  "SkillManager.alignCooldown 按服务端权威 remainMs 对齐本地冷却钟（防两时钟漂移后反复被拒）",
+);
+check(
+  /pendingCasts/.test(channelSource) && /pendingCasts\.set\(this\.castSeq, skillId\)/.test(channelSource) && /pendingCasts\.delete\(settle\.castId\)/.test(channelSource),
+  "CombatChannel 记 castId→skillId 对账表（拒绝帧不带 skillId，回帧反查后清账）",
+);
+check(
+  /onCastRejected\?\.\(\{/.test(channelSource) && /onCastRejected: \(\(rejected: CastRejected\) => void\) \| null = null/.test(channelSource),
+  "CombatChannel 有 onCastRejected 出口（settle ok=false 交给上层表现，没接线时只 warn）",
+);
+check(
+  /CombatChannel\.onCastRejected = \(\{ skillId, rejected, remainMs, need, have \}\) => \{[\s\S]*?SkillManager\.alignCooldown\(skillId, remainMs \?\? 0\)[\s\S]*?skill_mp_tip/.test(gameSource) &&
+    /CombatChannel\.onCastRejected = null;/.test(gameSource),
+  "Game.ts 接线 onCastRejected（mp 拒绝飘「蓝不足」、cooldown 对齐冷却；onDestroy 摘掉）",
+);
+
+// ==============================================================================
 //  C. 服务端快照与守卫
 // ==============================================================================
 

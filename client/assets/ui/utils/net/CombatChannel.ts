@@ -612,6 +612,28 @@ export interface PartyExpGain {
 }
 
 /**
+ * 出手被拒（#1133；协议见 realtime.protocol 的 RealtimeSettleError，`ok: false`）
+ *
+ * `skillId` 是客户端回查的：拒绝帧只带 castId，sendCast 发出时把 castId → skillId
+ * 记在对账表里，settle 回来反查（对不上就缺省 —— 上层按 `rejected` 兜底表现）。
+ */
+export interface CastRejected {
+  castId: number;
+  skillId?: string;
+  /** 六道闸拒绝原因（闸拒绝时与 code 同值；协议层拒绝时缺省） */
+  rejected?: "dead" | "cross_map" | "range" | "cooldown" | "mp" | "rate" | "stunned";
+  /** 机器可读拒绝原因（老字段，什么都可能是） */
+  code: string;
+  message: string;
+  /** 冷却闸专用：还要等多少毫秒（客户端据此对齐本地冷却钟） */
+  remainMs?: number;
+  /** 耗蓝闸专用：这一发需要多少法力 */
+  need?: number;
+  /** 耗蓝闸专用：当前法力 */
+  have?: number;
+}
+
+/**
  * 本账号角色的权威快照（#541，协议见 realtime.protocol 的 RealtimeRoleUpdateMessage）
  *
  * 战斗力 / 八项属性 / 货币 / 等级血蓝全部以这里为准 —— 客户端不再自己算（combatCalc 已退位），
@@ -665,6 +687,8 @@ export interface RoleAuthorityUpdate {
 export default class CombatChannel {
   /** 出手序号（会话内单调递增，服务端按它做幂等；断线重连服务端会清账，这里不回绕） */
   private static castSeq = 0;
+  /** castId → skillId 对账表（#1133）：settle 拒绝帧不带 skillId，回帧时反查后清账 */
+  private static pendingCasts = new Map<number, string>();
   /** 寻路请求序号（会话内单调递增；回执带回来对不上就是过期回执，丢掉） */
   private static pathSeq = 0;
 
@@ -754,6 +778,16 @@ export default class CombatChannel {
   static onServerError: ((error: { code: number; message: string }) => void) | null = null;
 
   /**
+   * 出手被拒出口（#1133；组合根接线）
+   *
+   * settle 帧的 `ok: false`（六道闸拒绝：dead / cross_map / range / cooldown / mp / rate / stunned）。
+   * 之前只 console.warn —— 本地扣掉的蓝悬空、冷却钟漂移无从对齐，正是「蓝量弹回」的推手之一。
+   * `skillId` 由 sendCast 记下的 castId 对账表反查（拒绝帧不带 skillId）；
+   * 对不上（重连丢表、超长延迟）时缺省，只把机器可读的 `rejected` / `code` 交给上层。
+   */
+  static onCastRejected: ((rejected: CastRejected) => void) | null = null;
+
+  /**
    * 位置修正出口（#811；组合根接线到 `AutoBattle.applyServerCorrection`）
    *
    * 服务端只在 `enforce` 档发这条帧，含义是「你客户端现在站的这个地方我不认」。
@@ -814,6 +848,8 @@ export default class CombatChannel {
    */
   static sendCast(skillId: string, targetId: string, monsterKey: string, spot?: { x: number; y: number }): void {
     this.castSeq += 1;
+    // castId → skillId 对账（#1133）：settle 拒绝帧只带 castId，上层要拿 skillId 对齐冷却
+    this.pendingCasts.set(this.castSeq, skillId);
     RealtimeClient.send({
       type: "cast",
       data: spot
@@ -933,9 +969,23 @@ export default class CombatChannel {
   static dispatchSettle(data: unknown): void {
     const settle = data as CombatSettleOk | CombatSettleError | null;
     if (!settle || typeof settle !== "object") return;
+    // castId 对账清账：ok / 被拒都要清（重复投递的 duplicate 帧也清，表不陪会话涨）
+    const skillId = this.pendingCasts.get(settle.castId);
+    this.pendingCasts.delete(settle.castId);
     if (settle.ok === false) {
-      // 被拒的出手等于没打出去：记下来（幂等重发 / 未学习技能这类不该悄悄消失）
+      // 被拒的出手等于没打出去（#1133）：交给上层表现——cooldown 按 remainMs 对齐本地冷却钟、
+      // mp 飘「蓝不足」（帧里带 have/need）；没接线时只 warn（表照清，拒绝不上屏）
       console.warn(`[combat] 出手被拒（castId=${settle.castId} code=${settle.code}）：${settle.message}`);
+      this.onCastRejected?.({
+        castId: settle.castId,
+        skillId,
+        rejected: (settle as CombatSettleError).rejected,
+        code: settle.code,
+        message: settle.message,
+        remainMs: (settle as CombatSettleError).remainMs,
+        need: (settle as CombatSettleError).need,
+        have: (settle as CombatSettleError).have,
+      });
       return;
     }
     if (!this.onSettle) {
@@ -1334,9 +1384,9 @@ export interface CombatSettleError {
   /**
    * 判定链（#813）的拒绝分类：`dead` / `cross_map` / `range` / `cooldown` / `mp` / `rate`
    *
-   * 只在**闸拒绝**时出现（协议错 / 未知目标这些仍只有 `code`）。客户端目前只记日志：
-   * 正常客户端自己就守着冷却与蓝耗，收到这些说明本地状态已经和服务端漂了 ——
-   * 该做的是下一次心跳 / 存档同步回正，而不是给玩家弹一排红字。
+   * 只在**闸拒绝**时出现（协议错 / 未知目标这些仍只有 `code`）。#1133 起交给
+   * `onCastRejected` 上层表现：cooldown 按权威 remainMs 对齐本地冷却钟、mp 飘「蓝不足」，
+   * 其余仍按「这一发没打出去」静默——本地状态漂了，roleUpdate 帧会把它带回正。
    *
    * `stunned`（#826 第三批）是「被眩晕 / 麻痹控制着」：这一发没打出去，等状态掉完再放，
    * 与 `dead` 同类处理。
