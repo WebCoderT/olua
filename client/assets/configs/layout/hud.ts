@@ -175,6 +175,11 @@ export const bottomBarLayout = {
     /** 开启态边框（稿 `.auto.on` 的 rgba(217,162,39,.7)）与字色（稿 #F3DEA6，取最近的 gold-5） */
     onBorder: new Color(217, 162, 39, 178),
     onColor: T.gold[5],
+    /**
+     * 开启态外圈（#1085：稿 `.auto.on` 的 `box-shadow: 0 0 0 1px rgba(217,162,39,.3)`）
+     * 底板外圈 1px 的弱金晕：比底板大一圈（四周各 1px）的空心描边板，开启时亮出
+     */
+    onRing: new Color(217, 162, 39, 77),
   },
   /**
    * 球体皮肤（稿 `.orb` 的四层结构；血球 / 法力球共用）
@@ -426,6 +431,12 @@ export const tipsLayout = {
   autoTipSize: new Size(140, 30),
   autoTipRadius: 15,
   autoTipFontSize: 14,
+  /**
+   * 状态点光晕（#1085：稿 `.autoflag .dot` 的 `box-shadow: 0 0 10px rgba(217,162,39,.8)`）
+   * Graphics 无模糊阴影：点色同色的一层大圆低透明近似（尺寸 = 光晕圆直径，alpha 取中段浓度）
+   */
+  autoTipDotGlowSize: new Size(22, 22),
+  autoTipDotGlowAlpha: 110,
 };
 
 //#endregion

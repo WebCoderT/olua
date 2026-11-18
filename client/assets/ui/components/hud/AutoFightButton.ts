@@ -10,8 +10,8 @@ import GameUiHelper from "../../helpers/GameUiHelper";
  * 挂机状态由 AutoBattle 回调同步（挂机在别处被关闭时外观也能刷新）
  */
 export default class AutoFightButton extends Node {
-  /** 外观零件（底板 / 文字 / 图标换色，由样式工厂返回） */
-  private parts: { plate: Node; label: Label; setIconColor: (color: Color) => void };
+  /** 外观零件（底板 / 开启态外圈 / 文字 / 图标换色，由样式工厂返回） */
+  private parts: { plate: Node; ring: Node; label: Label; setIconColor: (color: Color) => void };
 
   constructor() {
     super("auto_fight_button");
@@ -31,10 +31,11 @@ export default class AutoFightButton extends Node {
     AutoBattle.setHangEnabled(!AutoBattle.isHangEnabled());
   }
 
-  /** 按挂机状态切换外观：底板边框与图标/文字颜色开 = 金、关 = 灰 */
+  /** 按挂机状态切换外观：底板边框与图标/文字颜色开 = 金、关 = 灰；开启态再亮出外圈金晕（#1085） */
   private refresh(enabled: boolean) {
     const skin = bottomBarLayout.autoFight;
     GameUiHelper.restyleGlassPlate(this.parts.plate, skin.size, T.radius.r2, enabled ? skin.onBorder : T.line[2]);
+    this.parts.ring.active = enabled;
     this.parts.label.color = enabled ? skin.onColor : T.text[2];
     this.parts.setIconColor(enabled ? skin.onColor : T.text[2]);
   }

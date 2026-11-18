@@ -144,7 +144,17 @@ export function mountFloatingTip(tip: Node) {
 export function createAutoBattleTip(name: string, text: string, accent: Color): Node {
     const node = UiHelper.createNode(name, new Vec2(), tipsLayout.autoTipSize);
     node.addChild(createGlassPlate(`${name}_plate`, tipsLayout.autoTipSize, tipsLayout.autoTipRadius, accent));
-    node.addChild(createVectorDot(`${name}_dot`, accent, new Vec2(-tipsLayout.autoTipSize.width / 2 + 16, 0), new Size(8, 8)));
+    // 状态点光晕垫在点下面（稿 `.autoflag .dot` 的 box-shadow 0 0 10px：Graphics 无模糊，大圆低透明近似）
+    const dotPosition = new Vec2(-tipsLayout.autoTipSize.width / 2 + 16, 0);
+    node.addChild(
+      createVectorDot(
+        `${name}_dot_glow`,
+        new Color(accent.r, accent.g, accent.b, tipsLayout.autoTipDotGlowAlpha),
+        dotPosition,
+        tipsLayout.autoTipDotGlowSize,
+      ),
+    );
+    node.addChild(createVectorDot(`${name}_dot`, accent, dotPosition, new Size(8, 8)));
     node.addChild(UiHelper.createLabel(`${name}_label`, text, accent, tipsLayout.autoTipFontSize, new Vec2(6, 0), new Size(tipsLayout.autoTipSize.width - 28, tipsLayout.autoTipSize.height)));
     node.active = false;
     return node;
