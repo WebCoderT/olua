@@ -267,8 +267,16 @@ function polylineLength(points) {
 
     //#region 一、位置未上报时不给路
     group("一、位置还没上报：回 unreachable（不给「从原点出发」的路）");
-    const noPos = await session.requestPath("1", { x: 900, y: -900 });
-    check(!!noPos, "刚进图（还没发过 pos）请求寻路拿到回执");
+    // #1139 起条目由 worldJoin 播种（坐标 = 复活点）：进过图的人服务端一定知道起点，
+    // 「起点未知」只剩「连接了但没进过图」这一种（与 e2e-combat 拾取 fail-open 的收窄同款）
+    const ghostReg = await api(baseUrl, "POST", "auth/register", { body: { username: "path_ghost", password: "pass1234" } });
+    const ghostToken = ghostReg.body?.data?.token;
+    await api(baseUrl, "POST", "roles", { token: ghostToken, body: { name: "寻路幽灵", occupation: "1", sex: "1" } });
+    const ghostTicket = await api(baseUrl, "POST", "realtime/ticket", { token: ghostToken });
+    const ghost = connect(`${baseUrl.replace("http", "ws")}/api/realtime?ticket=${encodeURIComponent(ghostTicket.body?.data?.ticket ?? "")}`);
+    await waitFor("幽灵连接握手", async () => (ghost.opened ? ghost : null));
+    const noPos = await ghost.requestPath("1", { x: 900, y: -900 });
+    check(!!noPos, "没进过图的连接请求寻路拿到回执");
     check(noPos?.unreachable === true, "回执是 unreachable（起点未知时不猜）");
     checkEqual(noPos?.points?.length, 0, "unreachable 时 points 必为空（客户端不许退化成直线走）");
     //#endregion

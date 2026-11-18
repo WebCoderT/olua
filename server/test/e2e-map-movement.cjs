@@ -17,6 +17,15 @@
  * 7. **`off` 档完全放行**：超速也不回帧（回滚口径）。
  *
  * ===========================================================================
+ * #1139（移动收权·客户端改造）加的两段
+ * ===========================================================================
+ * 13. **worldJoin 播种**：客户端停发周期 pos 后，在场条目改由 `join()` 创建 ——
+ *     一条 pos 都没发过的连接，players 帧里也有自己（坐标 = 地图复活点、hp = 权威值）；
+ *     条目的「活着」改由 ping 续（只发 ping 撑过位置超时仍在场；连 ping 也停 → 按节拍进 left）；
+ * 14. **血量权威同步**：存档进程落账的血量变化（复活）经 roleUpdate 轮询 → `markHp`
+ *     回到在场条目 —— 互见血条不再依赖 pos 帧搭车。
+ *
+ * ===========================================================================
  * 怎么观察「坐标有没有被采纳」
  * ===========================================================================
  * 在场表是内存态、没有查询接口，但它会随 `players` 广播帧发出去 —— **发帧人自己也收到自己
@@ -222,6 +231,41 @@ function pickBox(dbPath) {
       .prepare("SELECT cx, cy, w, h FROM map_collisions WHERE map_id = '1' AND w BETWEEN 16 AND 96 AND h BETWEEN 16 AND 96 ORDER BY w * h DESC")
       .all();
     return rows.length > 0 ? rows[0] : null;
+  } finally {
+    db.close();
+  }
+}
+
+/** 读地图复活点（管理端点放的 revive_cx/cy，#1139 播种的同源数据；两列任一为空按「没有」→ 原点） */
+function readRevivePoint(dbPath, mapId) {
+  const db = new DatabaseSync(dbPath, { readOnly: true });
+  try {
+    const row = db.prepare("SELECT revive_cx, revive_cy FROM maps WHERE map_id = ?").get(mapId);
+    if (!row || row.revive_cx === null || row.revive_cy === null) return { x: 0, y: 0 };
+    return { x: row.revive_cx, y: row.revive_cy };
+  } finally {
+    db.close();
+  }
+}
+
+/** 直写角色血量（准备段造「死亡」状态，复活接口只对库里 hp ≤ 0 放行） */
+function setRoleHp(dbPath, roleName, hp) {
+  const db = new DatabaseSync(dbPath);
+  try {
+    db.exec("PRAGMA busy_timeout = 10000");
+    const row = db.prepare("SELECT id, data FROM roles WHERE name = ?").get(roleName);
+    if (!row) throw new Error(`roles 里没有 ${roleName} —— 这套 e2e 的前置数据不成立`);
+    const data = JSON.parse(row.data);
+    data.hp = hp;
+    for (let attempt = 1; ; attempt++) {
+      try {
+        db.prepare("UPDATE roles SET data = ? WHERE id = ?").run(JSON.stringify(data), row.id);
+        break;
+      } catch (error) {
+        if (attempt >= 3 || !/locked/i.test(String(error && error.message))) throw error;
+        Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 200 * attempt);
+      }
+    }
   } finally {
     db.close();
   }
@@ -557,6 +601,74 @@ function pickBox(dbPath) {
       check(!!dirAccepted, "enforce：dir 意图不判墙（照收，撞墙由步进滑行兜住）");
       await patchMovement({ mode: "off" });
     }
+    //#endregion
+
+    //#region 十三、worldJoin 播种条目（#1139：客户端停发周期 pos，条目改由 join 创建）
+    group("十三、worldJoin 播种（#1139）：不发 pos 也有在场条目（坐标 = 复活点、hp = 权威值）");
+    const seededReg = await api(baseUrl, "POST", "auth/register", { body: { username: "move_seeded", password: "pass1234" } });
+    const seededToken = seededReg.body?.data?.token;
+    check(!!seededToken, "准备：第二个账号注册成功（不发 pos 的那个）");
+    await api(baseUrl, "POST", "roles", { token: seededToken, body: { name: "播种测试", occupation: "1", sex: "1" } });
+    placeRolesAt(dbPath, "1", ["播种测试"]);
+    const onlineRes = await api(baseUrl, "GET", "roles/online", { token: seededToken });
+    const seededRole = onlineRes.body?.data;
+    check(!!seededRole && !!seededRole.id, "准备：拿到播种测试的在线角色（权威 hp 来源）");
+    const revivePoint = readRevivePoint(dbPath, "1");
+    const seededTicket = await api(baseUrl, "POST", "realtime/ticket", { token: seededToken });
+    const seeded = connect(`${baseUrl.replace("http", "ws")}/api/realtime?ticket=${encodeURIComponent(seededTicket.body?.data?.ticket ?? "")}`);
+    await waitFor("第二个会话握手", async () => (seeded.opened && seeded.userId ? seeded : null));
+    await seeded.joinWorld("1");
+    const seededEntry = await waitFor("players 帧里出现自己（一条 pos 都没发过）", async () => seeded.observed());
+    check(!!seededEntry, "worldJoin 播种：不发 pos，players 帧里也有自己（条目已在 join 创建）");
+    check(
+      !!seededEntry && Math.abs(seededEntry.x - revivePoint.x) < 0.5 && Math.abs(seededEntry.y - revivePoint.y) < 0.5,
+      "播种坐标 = 地图复活点（与客户端进图定位同一来源）",
+      seededEntry && `(${seededEntry.x},${seededEntry.y}) 期望 (${revivePoint.x},${revivePoint.y})`,
+    );
+    check(
+      !!seededRole && seededEntry?.hp === seededRole.data?.hp,
+      "播种 hp = 角色权威血量（从接口拿，不手抄）",
+      seededEntry && `帧=${seededEntry.hp} 接口=${seededRole.data?.hp}`,
+    );
+    // 心跳续新鲜度（#1139）：pos 帧不再是心跳，条目的「活着」改由 ping 续 ——
+    // 只发 ping 不发 pos 撑过位置超时（出厂 3s），条目还在场 = touch 生效
+    const keepDeadline = Date.now() + 3_600;
+    while (Date.now() < keepDeadline) {
+      seeded.socket.send(JSON.stringify({ type: "ping", data: {} }));
+      await sleep(300);
+    }
+    const keptAlive = seeded.observed();
+    check(!!keptAlive, "3.6s 不发 pos（超位置超时）只发 ping：条目仍在场（心跳续新鲜度生效）");
+    // 负面：连 ping 也停 → 超时离场语义保留（按广播节拍进 left，主会话在同房能看到）
+    const leftSeen = await waitFor("停 ping 超时后进 left", async () => {
+      return session.playersFrames.some((frame) => (frame.left ?? []).includes(seeded.userId)) ? true : null;
+    }, 6_000);
+    check(!!leftSeen, "停 ping 超时后按广播节拍进 left（超时离场语义与 pos 心跳时代一致）");
+    //#endregion
+
+    //#region 十四、血量权威同步（#1139：roleUpdate 轮询顺带 markHp，pos 帧零参与）
+    group("十四、血量权威同步（#1139）：HTTP 复活后互见血量跟着回满（roleUpdate → markHp）");
+    setRoleHp(dbPath, "播种测试", 0);
+    // presence 血量同步为 0（走 join 后首帧落位的老口径，hp 随帧带）—— 这样回满才是可见的变化
+    seeded.sendPos("1", revivePoint.x, revivePoint.y, 0);
+    const deadEntry = await waitFor("players 帧里自己的血量归零", async () => {
+      const entry = seeded.observed();
+      return entry && entry.hp === 0 ? entry : null;
+    });
+    check(!!deadEntry, "presence hp 已归零（pos 帧带 hp 的老口径仍有效）");
+    const reviveRes = await api(baseUrl, "POST", `roles/${seededRole.id}/revive`, { token: seededToken });
+    checkEqual(reviveRes.body?.code, 0, "HTTP 复活成功（库里 hp=0 放行，满血由服务端落账）");
+    const revivedHp = reviveRes.body?.data?.hp ?? 0;
+    check(revivedHp > 0, "复活返回满血值", String(revivedHp));
+    const healedEntry = await waitFor("players 帧里自己的血量回满（期间零 pos 帧）", async () => {
+      const entry = seeded.observed();
+      return entry && entry.hp === revivedHp ? entry : null;
+    }, 6_000);
+    check(
+      !!healedEntry,
+      "roleUpdate → markHp：互见血条由 roleUpdate 轮询带回（复活这种「存档进程落账」的变化不再需要 pos 帧搭车）",
+      healedEntry && `hp=${healedEntry.hp} 期望=${revivedHp}`,
+    );
     //#endregion
   } finally {
     server.child.kill("SIGTERM");

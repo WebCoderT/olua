@@ -426,11 +426,10 @@ export default class AutoBattle {
   /**
    * 服务端位置修正（#811；组合根接线到 `CombatChannel.onPosCorrect`）
    *
-   * 除了把主角挪过去，**还必须把当前路点作废**：那条路是按「我刚才在错位置」算的，
-   * 起点错了整条路都错；下一次 tick 会按新位置重新请求。
+   * 主角位置已改服务端帧驱动（#1139），这里只剩**作废当前路点**：那条路是按
+   * 「我刚才在错位置」算的（或落墙拒收说明意图到不了），下一次 tick 会按新状态重新请求。
    */
-  static applyServerCorrection(x: number, y: number): void {
-    this.roleDisplay?.applyServerCorrection(x, y);
+  static applyServerCorrection(_x: number, _y: number): void {
     this.path = [];
     this.pathIndex = 0;
     this.lastRepathAt = 0;

@@ -3,7 +3,8 @@ import { EventKeyboard, Input, input, KeyCode, Node, Vec2 } from "cc";
 /**
  * 角色键盘操控输入
  * 只负责 WASD/Shift 的按下状态与全局监听（键盘事件必须挂在全局 input 单例上，节点上收不到），
- * 按键状态变化时通过构造注入的回调通知宿主（宿主刷新动作与朝向）
+ * 宿主每帧读 isMoving / moveDirection 组装移动意图（#1139 起动作与朝向改由服务端帧驱动，
+ * 状态变化不再需要回调通知）
  * 宿主节点销毁时自动移除全局监听，避免重进场景后残留对已销毁节点的引用
  */
 export default class RoleKeyboardInput {
@@ -17,11 +18,8 @@ export default class RoleKeyboardInput {
   private right = false;
   /** 疾跑（Shift） */
   private sprint = false;
-  /** 按键状态变化回调（宿主刷新动作与朝向） */
-  private onKeysChanged: () => void;
 
-  constructor(host: Node, onKeysChanged: () => void) {
-    this.onKeysChanged = onKeysChanged;
+  constructor(host: Node) {
     input.on(Input.EventType.KEY_DOWN, this.onKeyDown, this);
     input.on(Input.EventType.KEY_UP, this.onKeyUp, this);
     host.once(Node.EventType.NODE_DESTROYED, () => this.destroy());
@@ -73,13 +71,11 @@ export default class RoleKeyboardInput {
   /** 按键按下 */
   private onKeyDown(event: EventKeyboard) {
     this.setKeyState(event.keyCode, true);
-    this.onKeysChanged();
   }
 
   /** 按键抬起 */
   private onKeyUp(event: EventKeyboard) {
     this.setKeyState(event.keyCode, false);
-    this.onKeysChanged();
   }
 
   /** 按键码对应的按下状态变更 */

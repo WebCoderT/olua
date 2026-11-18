@@ -390,10 +390,14 @@ async function main() {
     check(monsterInSnap.maxHp > 0 && monsterInSnap.hp > 0 && monsterInSnap.hp <= monsterInSnap.maxHp, "血量与上限都是正数且 hp ≤ maxHp", `${monsterInSnap.hp}/${monsterInSnap.maxHp}`);
 
     const playerInSnap = await waitFor(
-      "场上玩家出现在快照里",
+      "场上玩家出现在快照里（坐标跟上 pos 帧）",
       async () => {
         const response = await api(base, "GET", "/api/admin/maps/1/monitor", { token: rootToken });
-        return (response.body?.data?.players ?? [])[0] ?? null;
+        const entry = (response.body?.data?.players ?? [])[0] ?? null;
+        // #1139 起条目由 worldJoin 播种并在 join 时立刻落一份复活点快照（#862/#863 的
+        // 「刚进图就能点 NPC」），位置节流 1 秒/角色 —— 玩家会先以复活点出现在快照里，
+        // 等持久化跟上刚上报的 pos 帧再收货
+        return entry && entry.x === 1000 && entry.y === -2000 ? entry : null;
       },
       10_000,
     );

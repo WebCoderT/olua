@@ -119,6 +119,10 @@ function withDb(dbPath, work) {
   const { DatabaseSync } = require("node:sqlite");
   const db = new DatabaseSync(dbPath);
   try {
+    // 这是对**运行中服务端**的库做直写：服务端正握着写锁（世界持久化 / 位置快照）时，
+    // 没有等待就直接抛「database is locked」—— 偶发假红（PR #924 分片 2 同款）。
+    // busy_timeout 让这次写入等服务端放锁
+    db.exec("PRAGMA busy_timeout = 10000");
     work(db);
   } finally {
     db.close();

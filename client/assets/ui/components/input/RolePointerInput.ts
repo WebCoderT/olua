@@ -1,5 +1,5 @@
-import { BoxCollider2D, EventMouse, Input, input, isValid, Node, Vec2, Vec3 } from "cc";
-import { pointerMove } from "../../../configs/role";
+import { EventMouse, Input, input, isValid, Node, Vec2, Vec3 } from "cc";
+import { pointerMove, roleBody } from "../../../configs/role";
 import LayerManager from "../../core/LayerManager";
 import MonsterManager from "../../core/MonsterManager";
 import { getDirectionByVector, getVectorByDirection } from "../../utils/battle/BattleMath";
@@ -14,7 +14,7 @@ import { clearWorldPressRelease, getHitScreenPoint, setWorldPressRelease } from 
  * 所以按住后把指针拖到别的方位，角色立刻转向（不是只在按下那一刻把方向定死）
  *
  * 与键盘操控（RoleKeyboardInput）同一套模式：只保存按下状态与方向，
- * 角色每帧读 moveDirection/isRunning 决定位移与动画，状态变化时通过构造注入的回调通知宿主刷新动作朝向
+ * 角色每帧读 moveDirection/isRunning 组装移动意图（#1139 起动作与朝向改由服务端帧驱动）
  *
  * 不接管的按下：① 落在 UI 元素上（界面操作：开背包/换装/右键使用…）；
  * ② 落在世界侧可交互对象上（NPC：点开对话/传送，LayerManager.isPointOnWorldInteractive）；
@@ -32,8 +32,6 @@ import { clearWorldPressRelease, getHitScreenPoint, setWorldPressRelease } from 
 export default class RolePointerInput {
   /** 鼠标事件坐标基准与方向基准（角色节点） */
   private host: Node;
-  /** 按下状态变化回调（宿主刷新动作与朝向） */
-  private onStateChanged: () => void;
   /** 是否按下（左键或右键） */
   private pressed = false;
   /** 是否跑动（右键按下） */
@@ -43,9 +41,8 @@ export default class RolePointerInput {
   /** 界面交还抬起时的收尾回调（构造时创建一份，销毁时按同一引用注销） */
   private releaseHandler: () => void = () => this.releasePress();
 
-  constructor(host: Node, onStateChanged: () => void) {
+  constructor(host: Node) {
     this.host = host;
-    this.onStateChanged = onStateChanged;
     input.on(Input.EventType.MOUSE_DOWN, this.onMouseDown, this);
     // 按住期间的指针移动必须收：方向要跟着指针走（仅按下时收，松开状态直接返回）
     input.on(Input.EventType.MOUSE_MOVE, this.onMouseMove, this);
@@ -118,25 +115,20 @@ export default class RolePointerInput {
   }
 
   /**
-   * 结束按住（抬起、或界面拦下抬起后把这次按压交还回来）：清掉按下状态与方向并通知宿主刷新动作
+   * 结束按住（抬起、或界面拦下抬起后把这次按压交还回来）：清掉按下状态与方向
    * 幂等：世界侧本来就没在按住（这次按压起点在界面上）时什么都不做
    */
   private releasePress() {
     if (!this.pressed) return;
-    const wasMoving = this.direction.lengthSqr() > 0;
     this.pressed = false;
     this.run = false;
     this.direction = new Vec2();
-    // 死区内按下又原地松开（压根没走过）不必惊动宿主
-    if (wasMoving) this.onStateChanged();
   }
 
-  /** 落地新方向与新跑动状态（方向或走/跑真的变了才通知宿主，避免同扇区内的高频 MOUSE_MOVE 空刷动作） */
+  /** 落地新方向与新跑动状态（宿主每帧读 isMoving / moveDirection 组装意图，#1139 起无需变更通知） */
   private setDirection(direction: Vec2, run: boolean) {
-    const changed = !this.direction.equals(direction) || this.run !== run;
     this.direction = direction;
     this.run = run;
-    if (changed) this.onStateChanged();
   }
 
   /**
@@ -149,8 +141,9 @@ export default class RolePointerInput {
     if (!camera || !isValid(camera.node) || !isValid(this.host)) return new Vec2();
     const worldPoint = camera.screenToWorld(new Vec3(screenPoint.x, screenPoint.y, 0), new Vec3());
     const rolePosition = this.host.getWorldPosition();
-    const bodyOffset = this.host.getComponent(BoxCollider2D)?.offset;
-    const offset = new Vec2(worldPoint.x - rolePosition.x - (bodyOffset?.x ?? 0), worldPoint.y - rolePosition.y - (bodyOffset?.y ?? 0));
+    // 身体中心 = 节点原点 + 碰撞盒偏移（读配置而不是组件：#1139 起角色不再挂物理碰撞体）
+    const bodyOffset = roleBody.colliderOffset;
+    const offset = new Vec2(worldPoint.x - rolePosition.x - bodyOffset.x, worldPoint.y - rolePosition.y - bodyOffset.y);
     // 死区：指针几乎踩在角色身上时不定方向（按住期间落在死区里则保持上一次方向，见 onMouseMove）
     if (offset.length() < pointerMove.deadZone) return new Vec2();
     return getVectorByDirection(getDirectionByVector(offset));

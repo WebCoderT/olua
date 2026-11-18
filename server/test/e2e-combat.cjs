@@ -1383,19 +1383,31 @@ function connect(url) {
     // 还原是准备卫生：判「写回了」而不是「等于某个数」
     check(restoredP.code === 0, "G：拾取半径已还原成改之前的值", restoredP.message);
 
-    // 没报过位置：**放行**（docs/18 §5.3 第 6 步 fail-open）——刚进图的几百毫秒位置是空的，
-    // 这时拒绝会让正常玩家莫名捡不起来；风险窗口远小于误拒的代价。
-    const noPosPlayer = await newGridPlayer("combat_rpn");
-    const mobN = await aliveMonster(noPosPlayer, "1");
-    const killedN = mobN ? await killMonster(noPosPlayer, mobN.monsterKey, mobN.instanceId) : null;
-    const dropN = dropIdIn(killedN);
-    // 击杀者自己就是归属者，保护期不影响；位置一帧不报 → 闸不参与判定
-    const pickedNoPos = dropN ? await pick(noPosPlayer, dropN, { spot: null }) : null;
+    // 没进过图：**放行**（docs/18 §5.3 第 6 步 fail-open）—— #1139 起 worldJoin 就播种在场条目
+    // （坐标 = 地图复活点，join 即落库），「进过图的人」永远有位置可判、不再 fail-open；
+    // 豁免对象只剩「连接根本没进过图」的账号。保护期压到 0，让他捡别人杀出来的那件
+    // （owner 闸不拦、位置一帧不报 → 距离闸不参与判定）。
+    await api(baseUrl, "PATCH", "admin/runtime-params", {
+      token: adminToken, zoneId: ADMIN_ZONE, body: { drop: { protectMs: 0 } },
+    });
+    const dropOwner = await newGridPlayer("combat_rpn0");
+    const mobN0 = await aliveMonster(dropOwner, "1");
+    check(!!mobN0, "G：等到了活着的怪（fail-open 靶子的掉落来源）", JSON.stringify(mobN0));
+    const killedN0 = mobN0 ? await killMonster(dropOwner, mobN0.monsterKey, mobN0.instanceId) : null;
+    const dropN0 = dropIdIn(killedN0);
+    check(!!dropN0, "G：击杀结算带一份掉落（留给没进图的人捡）", dropN0);
+    const noPosPlayer = await newGridPlayer("combat_rpn"); // 连接但**绝不 worldJoin**（背包清空，接得住掉落）
+    const pickedNoPos = dropN0 ? await pick(noPosPlayer, dropN0, { spot: null }) : null;
     check(
       !!(pickedNoPos && pickedNoPos.ok && pickedNoPos.alreadyPicked === false),
-      "G：一帧位置都没报过 → 放行（位置未知不等于隔空取物，fail-open）",
+      "G：连接没进过图（位置真未知）→ 放行（位置未知不等于隔空取物，fail-open）",
       JSON.stringify(pickedNoPos),
     );
+    const restoredProtectMs = await api(baseUrl, "PATCH", "admin/runtime-params", {
+      token: adminToken, zoneId: ADMIN_ZONE, body: { drop: { protectMs: paramsBeforeRadius.data.drop.protectMs } },
+    });
+    // 还原是准备卫生：判「写回了」而不是「等于某个数」
+    check(restoredProtectMs.code === 0, "G：掉落保护期已还原成改之前的值", restoredProtectMs.message);
 
     // —— H. 背包满拒拾：整份放不下 → bag_full，存档与修订号都不动 ——
 
