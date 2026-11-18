@@ -426,7 +426,7 @@ export default class ChatDialog {
   //#region 公共零件
 
   private createEmptyLabel(text: string) {
-    return UiHelper.createLabel("chat_empty", text, layout.row.metaColor, layout.row.textFontSize, new Vec2(), new Size(layout.row.size.width, 32));
+    return UiHelper.createLabel("chat_empty", text, layout.row.metaColor, layout.row.textFontSize, new Vec2(), new Size(layout.row.size.width, layout.row.emptyHeight));
   }
 
   //#endregion

@@ -162,7 +162,7 @@ export default class QuestDialog {
         view.quest.label,
         row.nameColor,
         row.nameFontSize,
-        new Vec2(row.nameX, 12),
+        new Vec2(row.nameX, row.nameY),
         row.nameSize,
         Label.HorizontalAlign.LEFT,
       ),

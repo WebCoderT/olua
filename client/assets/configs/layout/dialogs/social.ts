@@ -51,6 +51,11 @@ export const guildDialogLayout = {
     nameFontSize: 14,
     metaFontSize: 11,
     metaColor: T.text[3],
+    /** 行内 label 尺寸（#1115 批次 3 收编组件内联）：帮会名 / 帮主与成员信息 / 人数 / 空态行高 */
+    nameSize: new Size(100, 20),
+    metaSize: new Size(170, 18),
+    countSize: new Size(90, 18),
+    emptyHeight: 32,
     radius: 6,
     /** 行内各列的中心 x（相对行中心） */
     columns: {
@@ -391,6 +396,8 @@ export const chatDialogLayout = {
    */
   row: {
     size: new Size(376, 22),
+    /** 空态行高（#1115 批次 3 收编组件内联的 32） */
+    emptyHeight: 32,
     fill: T.overlay.transparent,
     border: T.overlay.transparent,
     radius: 6,
@@ -577,6 +584,9 @@ export const partyDialogLayout = {
     declineX: 232,
     /** 同上：文本框左缘 + 16 = 行内左缘（x = −100，宽 320），两枚小按钮落在 121.75~260.25 不越行 */
     nameX: -100,
+    /** 标题 / 提示两行的中心 y（#1115 批次 3 收编组件内联的 10 / -12） */
+    titleY: 10,
+    hintY: -12,
     nameSize: new Size(320, 20),
     textFontSize: T.fontSize.f12,
   },

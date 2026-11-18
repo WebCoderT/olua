@@ -224,10 +224,10 @@ export default class PartyDialog {
       .split("{limit}")
       .join(`${invite.limit}`);
     node.addChild(
-      UiHelper.createLabel(`party_invite_title_${invite.fromRoleId}`, title, layout.row.leaderColor, row.textFontSize, new Vec2(row.nameX, 10), row.nameSize, Label.HorizontalAlign.LEFT),
+      UiHelper.createLabel(`party_invite_title_${invite.fromRoleId}`, title, layout.row.leaderColor, row.textFontSize, new Vec2(row.nameX, row.titleY), row.nameSize, Label.HorizontalAlign.LEFT),
     );
     node.addChild(
-      UiHelper.createLabel(`party_invite_hint_${invite.fromRoleId}`, layout.texts.inviteHint, layout.row.metaColor, layout.row.metaFontSize, new Vec2(row.nameX, -12), row.nameSize, Label.HorizontalAlign.LEFT),
+      UiHelper.createLabel(`party_invite_hint_${invite.fromRoleId}`, layout.texts.inviteHint, layout.row.metaColor, layout.row.metaFontSize, new Vec2(row.nameX, row.hintY), row.nameSize, Label.HorizontalAlign.LEFT),
     );
     node.addChild(this.createAction(`party_accept_${invite.fromRoleId}`, layout.texts.accept, new Vec2(row.acceptX, 0), () => this.accept(invite)));
     node.addChild(this.createAction(`party_decline_${invite.fromRoleId}`, layout.texts.decline, new Vec2(row.declineX, 0), () => this.decline(invite)));

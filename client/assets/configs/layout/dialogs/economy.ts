@@ -89,7 +89,7 @@ export const mallDialogLayout = {
   eyebrow: "快捷键 · M",
   size: new Size(850, 540),
   /** 绑定元宝余额胶囊（稿 .balance：金点 + 文字，右上角） */
-  balance: { position: new Vec2(289, 195), size: new Size(200, 30), fontSize: T.fontSize.f12, color: T.gold[4], dot: 10 },
+  balance: { position: new Vec2(289, 195), size: new Size(200, 30), fontSize: T.fontSize.f12, color: T.gold[4], dot: 10, /** 金点/文字块在胶囊内的 x 与宽（#1115 批次 3 收编组件内联） */ dotX: -84, labelX: 10, labelWidth: 166 },
   /**
    * 分类页签（#758：一排横排按钮，居中均分；挂在弹窗上、卡片区外 —— 换分类时页签不重建）
    *
@@ -125,11 +125,13 @@ export const mallDialogLayout = {
     padding: 12,
     /** 顶行左侧图标（稿 .fig：46×46 圆角小图，装备/物品图标按快照取图） */
     iconSize: new Size(46, 46),
+    /** 图标右缘到文字块左缘的间距（#1115 批次 3 收编组件内联的 10） */
+    textGap: 10,
     /** 名称（本体一行，前缀色，超长缩字）与类别行（前缀+后缀 / 药品，灰小字） */
     name: { fontSize: 13, lineHeight: 18, plainColor: T.text[1] },
     kind: { fontSize: 10, lineHeight: 13, kindColor: T.text[4] },
     /** 限购 / 库存行（#846：今日 2/3 · 剩 5；无限制时不占位） */
-    stats: { fontSize: 10, lineHeight: 13, color: T.text[3] },
+    stats: { fontSize: 10, lineHeight: 13, color: T.text[3], /** 限购行的偏移与文本框（#1115 批次 3 收编组件内联） */ offset: new Vec2(60, -6), size: new Size(120, 13) },
     /** 购买行：价格（金，左对齐块）+ 购买按钮（金键，右贴边） */
     price: { fontSize: 12, color: T.gold[4], blockWidth: 120 },
     buyButton: { size: new Size(56, 24), fontSize: T.fontSize.f12 },

@@ -142,13 +142,13 @@ export default class AttrAllocateDialog {
 
   /** 段标题（「战斗属性 / 四维加点」）：金色小字贴内容左缘（稿 h4） */
   private createSectionTitle(name: string, text: string, y: number, style: { fontSize: number; color: Color }): Node {
-    const width = attrAllocateDialogLayout.points.width;
-    return GameUiHelper.createText(name, text, style.fontSize, new Vec2(-width / 2 + 60, y), new Size(120, 18), style.color, Label.HorizontalAlign.LEFT);
+    const { sectionTitle } = attrAllocateDialogLayout;
+    return GameUiHelper.createText(name, text, style.fontSize, new Vec2(sectionTitle.x, y), sectionTitle.size, style.color, Label.HorizontalAlign.LEFT);
   }
 
   /** 小字说明行（底部说明条，左对齐） */
   private createNoteLabel(name: string, text: string, x: number, y: number, width: number, fontSize: number, color: Color): Node {
-    return UiHelper.createLabel(name, text, color, fontSize, new Vec2(x, y), new Size(width, 16), Label.HorizontalAlign.LEFT);
+    return UiHelper.createLabel(name, text, color, fontSize, new Vec2(x, y), new Size(width, attrAllocateDialogLayout.foot.noteHeight), Label.HorizontalAlign.LEFT);
   }
 
   /** 细分隔线（1px Graphics，AnnouncementBoard 同款画法；颜色 T.line[1]） */

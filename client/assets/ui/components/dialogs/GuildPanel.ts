@@ -155,7 +155,7 @@ export default class GuildPanel {
     const texts = layout.texts;
     const node = this.createRowNode(`guild_row_${guild.id}`, false);
     node.addChild(
-      UiHelper.createLabel(`guild_row_name_${guild.id}`, guild.name, Color.WHITE, row.nameFontSize, new Vec2(row.columns.name, 0), new Size(100, 20)),
+      UiHelper.createLabel(`guild_row_name_${guild.id}`, guild.name, Color.WHITE, row.nameFontSize, new Vec2(row.columns.name, 0), row.nameSize),
     );
     node.addChild(
       UiHelper.createLabel(
@@ -164,7 +164,7 @@ export default class GuildPanel {
         row.metaColor,
         row.metaFontSize,
         new Vec2(row.columns.meta, 0),
-        new Size(170, 18),
+        row.metaSize,
       ),
     );
     node.addChild(
@@ -174,7 +174,7 @@ export default class GuildPanel {
         row.metaColor,
         row.metaFontSize,
         new Vec2(row.columns.extra, 0),
-        new Size(90, 18),
+        row.countSize,
       ),
     );
     // 本窗内申请过就换成「已申请」并且不再发请求：重复申请只会覆盖留言，没有必要连点
@@ -314,7 +314,7 @@ export default class GuildPanel {
         Color.WHITE,
         row.nameFontSize,
         new Vec2(row.columns.name, 0),
-        new Size(100, 20),
+        row.nameSize,
       ),
     );
     node.addChild(
@@ -324,7 +324,7 @@ export default class GuildPanel {
         row.metaColor,
         row.metaFontSize,
         new Vec2(row.columns.meta, 0),
-        new Size(170, 18),
+        row.metaSize,
       ),
     );
     // 任命 / 卸任副帮主（#871）：只有帮主能派（服务端算好的 canAppoint）、对方不是自己也不是帮主。
@@ -375,7 +375,7 @@ export default class GuildPanel {
         Color.WHITE,
         row.nameFontSize,
         new Vec2(row.columns.name, 0),
-        new Size(100, 20),
+        row.nameSize,
       ),
     );
     node.addChild(
@@ -387,7 +387,7 @@ export default class GuildPanel {
         row.metaColor,
         row.metaFontSize,
         new Vec2(row.columns.meta, 0),
-        new Size(170, 18),
+        row.metaSize,
       ),
     );
     const rejectButton = GameUiHelper.createSmallButtion(
@@ -424,7 +424,7 @@ export default class GuildPanel {
   /** 列表空态（一行灰字；给足高度，否则纵向 Layout 量出来是 0） */
   private createEmptyLabel(name: string, text: string) {
     const row = layout.row;
-    return UiHelper.createLabel(name, text, row.metaColor, row.metaFontSize, new Vec2(), new Size(row.size.width, 32));
+    return UiHelper.createLabel(name, text, row.metaColor, row.metaFontSize, new Vec2(), new Size(row.size.width, row.emptyHeight));
   }
 
   /** 文案模板替换（模板集中在 configs/layout/dialogs.guildDialogLayout.texts） */

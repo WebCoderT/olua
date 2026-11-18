@@ -52,7 +52,7 @@ export default class FashionDialog {
       Color.WHITE,
       layout.current.fontSize,
       layout.current.position,
-      new Size(540, 24),
+      layout.current.size,
     );
     this.dialog.addChild(this.currentLabel);
     // 列表：四列卡片，竖向滚动
@@ -140,7 +140,7 @@ export default class FashionDialog {
     else state = layout.stateText.unsupported;
     const stateColor = equipped ? card.activeBorder : buyable ? card.buyColor : card.stateColor;
     node.addChild(
-      UiHelper.createLabel(`fashion_state_${fashion.id}`, state, stateColor, card.stateFontSize, card.statePosition, new Size(122, 18)),
+      UiHelper.createLabel(`fashion_state_${fashion.id}`, state, stateColor, card.stateFontSize, card.statePosition, card.stateSize),
     );
     // 点卡片：已穿戴 → 脱下；已拥有 → 穿上；可购买 → 购买（成功后整批刷新）。
     // 失败提示由请求层统一出（余额不足等），这里只在成功后刷新。
