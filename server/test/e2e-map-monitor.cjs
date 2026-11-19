@@ -135,6 +135,10 @@ function seedSpawnAreas(dbPath) {
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   );
   insert.run("1", "监控区", "1", 0, 1, 1000, -2000, 400, 400, Date.now());
+  // 旧图 1 的测试怪天生被动（aggressive=0）；#1084 后刷的是真 seed 的怪 1 赤焰斗鸡（主动怪），
+  // 玩家站在检测范围内会先触发「进入检测范围」，成因断言（被打之后记恨）就永远等不到 ——
+  // 与旧前提对齐：把这只怪临时改成被动（AI 侧 1 秒 TTL 缓存）
+  db.exec("UPDATE monster_presentation SET aggressive = 0 WHERE id = '1'");
   db.close();
 }
 

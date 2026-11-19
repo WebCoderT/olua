@@ -321,6 +321,14 @@ const idsOf = (monsters) => (monsters || []).map((monster) => monster.instanceId
     const areaId = created.body?.data?.id;
     check(Boolean(areaId), "建一个「3 只 A 怪」的刷怪区", JSON.stringify(created.body?.data ?? created.body));
 
+    // #1084 重排后出厂刷怪区全部在图 0：对照图（3 号图）也补一个探针区，
+    // 乙进图才拿得到自己的世界（重载只针对 HOME_MAP，乙的世界本来就不该被动）
+    const awayCreated = await api(base, "POST", `admin/maps/${AWAY_MAP}/spawn-areas`, {
+      token: adminToken, zoneId: ADMIN_ZONE,
+      body: { name: "对照探针区", monsterKey: MONSTER_A, count: 2, cx: 400, cy: -400, w: 200, h: 200 },
+    });
+    check(Boolean(awayCreated.body?.data?.id), "对照图也建一个探针区（乙的靶子）", JSON.stringify(awayCreated.body?.data ?? awayCreated.body));
+
     const playerA = await preparePlayer(base, "reload_player_a", "重载甲");
     const playerB = await preparePlayer(base, "reload_player_b", "对照乙");
     const sessionA = await connectPlayer(base, playerA);
@@ -550,6 +558,14 @@ const idsOf = (monsters) => (monsters || []).map((monster) => monster.instanceId
     //#region 七、地图规则
 
     group("七、地图规则：一行不存在 = 全默认，保存后 inherited 变 false");
+    // #1084 适配：快照里图 0 自带一行运营改过的规则（allow_drop=0），「一行不存在 = 全默认」
+    // 的出厂语义就用不上了 —— 先把这一行从库里删掉，把出厂态还原出来再验
+    {
+      const { DatabaseSync } = require("node:sqlite");
+      const db = new DatabaseSync(dbPath);
+      db.prepare("DELETE FROM map_rules WHERE map_id = ?").run(HOME_MAP);
+      db.close();
+    }
     const freshRules = await api(base, "GET", `admin/maps/${HOME_MAP}/rules`, { token: adminToken, zoneId: ADMIN_ZONE });
     checkEqual(freshRules.status, 200, "读规则成功");
     checkEqual(freshRules.body?.data?.inherited, true, "新人村没配过规则：inherited=true（全是出厂默认）");

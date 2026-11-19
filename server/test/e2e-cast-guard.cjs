@@ -31,8 +31,9 @@ const ENTRY = path.join(SERVER_DIR, "dist", "main.js");
 
 const ADMIN_CODE = "cast-guard-admin";
 /**
- * 这一套在**图 3（雪域高原）**上跑：它出厂就有一批 2394 血的怪 —— 连打二十几发也打不死，
- * 靶子不会在中途变成 `target_dead`（图 1 的怪只有 65 血，两三下就没了）。
+ * 这一套在**图 3（雪域高原）**上跑：#1084 后出厂快照不再给图 3 配刷怪区，
+ * 准备段起服后播种靶子 —— 一只 60 级 boss（27 万血）当血牛（连打二十几发也打不死，
+ * 靶子不会在中途变成 `target_dead`），五只 1 级赤焰斗鸡（65 血）当「打得动」的脆皮。
  * 跨图用例的陪跑图是图 1（卧龙城）。
  */
 const TEST_MAP = "3";
@@ -257,14 +258,35 @@ function connect(url) {
     // （等价管理端 PATCH /admin/roles/:id { onMap }，见 lib/place-role.cjs）
     placeRolesAt(dbPath, TEST_MAP);
 
+    // #1084 适配：重排后图 3 不再有出厂刷怪区 —— 起服后直接给图 3 播种靶子（必须在
+    // 玩家进图、房间创建之前灌进去，房才会在播种时读到）：一只 60 级 boss（27 万血，
+    // 打不死）当血牛靶，五只 1 级赤焰斗鸡（65 血，1 级角色打得动）当脆皮靶；
+    // 顺手把这两个 key 压成被动 —— 贴脸用例不能赌怪不抬手
+    {
+      const { DatabaseSync } = require("node:sqlite");
+      const db = new DatabaseSync(dbPath);
+      db.exec("UPDATE monster_presentation SET aggressive = 0 WHERE id IN ('1', '220')");
+      const insertArea = db.prepare(
+        `INSERT INTO map_spawn_areas (map_id, name, monster_key, min, max, cx, cy, w, h, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      );
+      const now = Date.now();
+      // 图 3 坐标域 x∈[0,8192] / y∈[-8192,0]：脆皮群放复活点旁，血牛离 2000px 备距离闸用例
+      insertArea.run("3", "闸门脆皮", "1", 5, 5, 4096, -3900, 400, 400, now);
+      insertArea.run("3", "闸门血牛", "220", 1, 1, 4000, -2000, 200, 200, now);
+      // 跨图用例的陪跑图是图 1（卧龙城）：也要有一只活怪当「别图的目标」
+      insertArea.run("1", "跨图靶子", "1", 1, 1, 100, 200, 200, 200, now);
+      db.close();
+    }
+
     const ticket = await api(baseUrl, "POST", "realtime/ticket", { token });
     const a = connect(`${baseUrl.replace("http", "ws")}/api/realtime?ticket=${encodeURIComponent(ticket.data.ticket)}`);
     await waitFor("实时连接握手", async () => (a.opened ? true : null));
 
     const world1 = await a.joinWorld(TEST_MAP);
     const alives = ((world1 && world1.monsters) || []).filter((mob) => mob.alive);
-    // 出厂快照本身就给图 1 配了刷怪区，这里只是再补 3 个槽 —— 所以断「至少 3 只 + 实例 id 形态」，
-    // 不断具体只数（运营随时会调密度）
+    // #1084 起图 3 的靶子是准备段播种的（1 血牛 + 5 脆皮），断「至少 3 只 + 实例 id 形态」，
+    // 不断具体只数
     check(
       alives.length >= 3 && alives.every((item) => /^m3_z1_c0_\d+$/.test(item.instanceId)),
       `图 ${TEST_MAP} 播出了靶子（实例 id 由服务端发牌，带区段）`,
@@ -489,6 +511,11 @@ function connect(url) {
     setRoleHp(dbPath, roleId, RANGE_TEST_HP);
     /** 改距离闸档位（管理端接口；没提交的字段保持原值） */
     const setCastRange = (body) => api(baseUrl, "PATCH", "admin/runtime-params/cast-range", { token: adminToken, zoneId: ADMIN_ZONE, body });
+
+    // #1084 适配：新快照的 cast_range 列是 '{}'（用户库漂移，出厂值是配置数据）——
+    // 先写回出厂基准（log / 24px）再验，别把「快照漂移」当成被测行为
+    const castRangeBaseline = await setCastRange({ mode: "log", jitterPx: 24 });
+    checkEqual(castRangeBaseline.data && castRangeBaseline.data.mode, "log", "准备：距离闸写回出厂基准（log / 24px）");
 
     const rangeInit = await api(baseUrl, "GET", "admin/runtime-params/cast-range", { token: adminToken, zoneId: ADMIN_ZONE });
     checkEqual(rangeInit.code, 0, "距离闸参数可读（GET /admin/runtime-params/cast-range）");

@@ -281,12 +281,30 @@ function insertHistoricalRecord(dbPath, { dropId, createdAt }) {
     const adminToken = adminLogin.data && adminLogin.data.token;
     check(!!adminToken, "准备：管理员已登录", adminLogin.message);
 
+    // #1084 重排后整套搬去图 0（唯一有怪的图），而图 0 出厂 allow_drop = 0 且怪带主动攻击 ——
+    // 先整份提交打开掉落、临时关掉全图主动攻击（AI 缓存 1 秒 TTL）；库是一次性的，不还原
+    const rulesZero = (await api(baseUrl, "GET", "admin/maps/0/rules", { token: adminToken, zoneId: ADMIN_ZONE })).data || null;
+    if (rulesZero && rulesZero.allowDrop === false) {
+      await api(baseUrl, "PATCH", "admin/maps/0/rules", {
+        token: adminToken, zoneId: ADMIN_ZONE,
+        body: { ...rulesZero, allowDrop: true, mapId: undefined, inherited: undefined, updatedBy: undefined, updatedAt: undefined },
+      });
+    }
+    const calmMonsters = await api(baseUrl, "GET", "admin/monsters?page=1&size=100", { token: adminToken, zoneId: ADMIN_ZONE });
+    for (const row of (calmMonsters.data && calmMonsters.data.list) || []) {
+      if (!row.presentation) continue;
+      await api(baseUrl, "PATCH", `admin/monsters/${row.id}`, {
+        token: adminToken, zoneId: ADMIN_ZONE, body: { presentation: { aggressive: false } },
+      });
+    }
+    await sleep(1500);
+
     const registered = await api(baseUrl, "POST", "auth/register", { body: { username: PLAYER, password: "pass1234" } });
     const token = registered.data && registered.data.token;
     const created = await api(baseUrl, "POST", "roles", { token, body: { name: PLAYER, occupation: "1", sex: "1" } });
     const roleId = created.data && created.data.id;
-    // #859：没有位置记录的角色只准进新手村，按运营摆位放到图 1
-    placeRolesAt(dbPath, "1", [PLAYER]);
+    // #859：没有位置记录的角色只准进新手村，按运营摆位放到图 0（#1084 重排后唯一有怪的图）
+    placeRolesAt(dbPath, "0", [PLAYER]);
     // 新号的 `data.bag` 是空数组（= 没有网格），那种存档里任何拾取都会被判 bag_full
     const initial = await api(baseUrl, "GET", `roles/${roleId}`, { token });
     const emptyGrid = Array.from({ length: 4 }, () => Array.from({ length: 10 }, () => null));
@@ -298,8 +316,8 @@ function insertHistoricalRecord(dbPath, { dropId, createdAt }) {
     const ticket = await api(baseUrl, "POST", "realtime/ticket", { token });
     const alice = connect(`${baseUrl.replace("http", "ws")}/api/realtime?ticket=${encodeURIComponent(ticket.data.ticket)}`);
     await waitFor("玩家握手成功", async () => (alice.opened ? alice : null));
-    const world = await alice.joinWorld("1");
-    check(!!world && world.mapId === "1", "准备：玩家已进图 1");
+    const world = await alice.joinWorld("0");
+    check(!!world && world.mapId === "0", "准备：玩家已进图 0");
 
     /** 把某只怪的掉落改成「必掉 1 件 drug_hp_1」（picks 1 × chance 1 → 结果确定） */
     const patchDropOf = (monsterKey, goodId = "drug_hp_1") =>
@@ -311,7 +329,7 @@ function insertHistoricalRecord(dbPath, { dropId, createdAt }) {
 
     let castSeq = 0;
     /** 打一只活着的怪（等活怪 + 站在旁边上报位置），返回击杀那次的结算 */
-    const killOne = async (mapId = "1") => {
+    const killOne = async (mapId = "0") => {
       let snapshot = null;
       for (let attempt = 0; attempt < 6; attempt += 1) {
         snapshot = await alice.joinWorld(mapId);
@@ -550,21 +568,21 @@ function insertHistoricalRecord(dbPath, { dropId, createdAt }) {
     const reTicket = await api(baseUrl, "POST", "realtime/ticket", { token: reToken });
     const again = connect(`${baseUrl.replace("http", "ws")}/api/realtime?ticket=${encodeURIComponent(reTicket.data.ticket)}`);
     await waitFor("重启后重新握手成功", async () => (again.opened ? again : null));
-    const againWorld = await again.joinWorld("1");
-    check(!!againWorld && againWorld.mapId === "1", "B：重启后能重新进图（保留闸不影响正常游戏）");
+    const againWorld = await again.joinWorld("0");
+    check(!!againWorld && againWorld.mapId === "0", "B：重启后能重新进图（保留闸不影响正常游戏）");
 
     // 同一段「打一只捡一件」的逻辑，只是换了新的连接
     const killAndPickAgain = async () => {
       let snapshot = null;
       for (let attempt = 0; attempt < 6; attempt += 1) {
-        snapshot = await again.joinWorld("1");
+        snapshot = await again.joinWorld("0");
         if (snapshot && Array.isArray(snapshot.monsters) && snapshot.monsters.some((monster) => monster.alive)) break;
         await sleep(1_500);
       }
       const mob = snapshot && Array.isArray(snapshot.monsters) ? snapshot.monsters.find((monster) => monster.alive) : null;
       if (!mob) return { dropId: "", picked: null };
       await patchDropOf(mob.monsterKey);
-      const stand = JSON.stringify({ type: "pos", data: { mapId: "1", x: mob.x, y: mob.y, hp: 100 } });
+      const stand = JSON.stringify({ type: "pos", data: { mapId: "0", x: mob.x, y: mob.y, hp: 100 } });
       again.socket.send(stand);
       again.socket.send(stand);
       for (let i = 0; i < 80; i += 1) {
@@ -592,7 +610,7 @@ function insertHistoricalRecord(dbPath, { dropId, createdAt }) {
 
     // 保留条数是本用例自己设的 env（2 条），不是运营数据 —— 断的是「攒够一批会裁」这个机制
     const converged = await waitFor("条数闸把该图流水收敛到保留条数以内", async () => {
-      const rows = readRecords(dbPath).filter((row) => row.zone_id === ADMIN_ZONE && row.map_id === "1");
+      const rows = readRecords(dbPath).filter((row) => row.zone_id === ADMIN_ZONE && row.map_id === "0");
       return rows.length > 0 && rows.length <= 2 ? rows : null;
     }, 15_000);
     check(!!converged, "B：写够一批之后按每图保留条数收敛（不是每写一条就 DELETE，也不是无限增长）", `共 ${converged && converged.length} 条`);

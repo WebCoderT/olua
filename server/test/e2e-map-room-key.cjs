@@ -356,7 +356,7 @@ function withDb(dbPath, fn) {
 
     group("三、存量 id 迁移：重启时补齐线段，并让在跑的旧内存作废");
     const victim = stored[stored.length - 1];
-    const legacyId = "m0_99";
+    const legacyId = "m0_99999";
     withDb(dbPath, (db) => {
       db.prepare("UPDATE world_monsters SET instance_id = ?, slot = '' WHERE instance_id = ?").run(
         legacyId,
@@ -379,8 +379,8 @@ function withDb(dbPath, fn) {
       db.prepare("SELECT instance_id, slot FROM world_monsters WHERE map_id = ?").all(HOME_MAP),
     );
     check(
-      migrated.some((row) => row.instance_id === "m0_z1_c0_99"),
-      "老格式 m0_99 被改写成 m0_z1_c0_99（重启时一次性补线段）",
+      migrated.some((row) => row.instance_id === "m0_z1_c0_99999"),
+      "老格式被改写成新格式（重启时一次性补线段）",
       JSON.stringify(migrated.map((row) => row.instance_id)),
     );
     check(
@@ -388,7 +388,7 @@ function withDb(dbPath, fn) {
       "老格式不再留在库里（否则实时进程出手就是 20008）",
     );
     check(
-      migrated.filter((row) => row.instance_id === "m0_z1_c0_99").every((row) => row.slot === "0"),
+      migrated.filter((row) => row.instance_id === "m0_z1_c0_99999").every((row) => row.slot === "0"),
       "改写时顺手把 slot 补成 '0'（空串不是合法槽位）",
     );
     const epochAfter = epochOf(victimZone);
@@ -402,7 +402,7 @@ function withDb(dbPath, fn) {
     const session2 = await connectPlayer(server.baseUrl, player);
     const rejoined = await session2.joinWorld(HOME_MAP);
     check(
-      Boolean(rejoined) && (rejoined.monsters || []).some((monster) => monster.instanceId === "m0_z1_c0_99"),
+      Boolean(rejoined) && (rejoined.monsters || []).some((monster) => monster.instanceId === "m0_z1_c0_99999"),
       "重连后看到的就是改写后的 id（库是权威，内存跟着库走）",
       JSON.stringify(((rejoined && rejoined.monsters) || []).map((monster) => monster.instanceId)),
     );

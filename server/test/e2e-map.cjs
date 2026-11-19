@@ -29,6 +29,7 @@
 const { spawn } = require("node:child_process");
 const net = require("node:net");
 const path = require("node:path");
+const configSnapshot = require("./lib/config-snapshot.cjs");
 
 const SERVER_DIR = path.join(__dirname, "..");
 const ENTRY = path.join(SERVER_DIR, "dist", "main.js");
@@ -257,10 +258,17 @@ async function main() {
     checkEqual(areas.length, data.spawnAreaCount, "刷怪区条数与计数一致（map_spawn_areas 同一张表）");
     check(areas.length > 0, "0 号图有刷怪区", String(areas.length));
     const area = areas[0] ?? {};
-    checkEqual(area.name, "1号怪物", "区域名沿用当年 Tiled 的对象名（库里存着，改名要自己动手）");
-    checkEqual(area.monsterKey, "1", "怪物 key 是 configs/monster 的关联键");
+    // 区域名 / 只数都是运营数据（#1084 起整表重排成「带N-L等级-怪id」的环带命名）——
+    // 与快照逐字段比，既不断死数值，又钉住「SQL → 建表 → 落库 → 读出来」这条链
+    const seedArea = configSnapshot
+      .optionalRows("map_spawn_areas")
+      .filter((row) => String(row.mapId) === "0")[0] ?? {};
+    checkEqual(area.name, seedArea.name, "区域名与快照一致（Tiled 时代的旧名已由 #1084 整表重排覆盖）");
+    checkEqual(area.monsterKey, seedArea.monsterKey, "怪物 key 是 configs/monster 的关联键");
     checkEqual(area.monsterLabel, "赤焰斗鸡", "怪物名从快照查出来（查不到才回落成 key）");
-    checkEqual(area.min, 0, "区域最少只数恒为 0（#852：count 只落 max）");
+    // #852 说的是**管理端保存**只落 max（页面只有一个数量输入）；快照里的 min 是 #1084 seed
+    // 写的密度下限（2026-11-19 拍板），读接口原样回显 —— 两者别混
+    checkEqual(area.min, seedArea.min, "最少只数与快照一致（seed 的密度下限；管理端保存仍按 #852 只落 max）");
     // 具体坐标 / 只数 / 尺寸都是运营数据（换图、调密度都会变）；要守的是「数字形状 + 在图内」
     check(Number(area.max) > 0, "区域最多只数是正数（播种按它展开）", String(area.max));
     check(Number(area.w) > 0 && Number(area.h) > 0, "区域宽高都是正数", `${area.w} × ${area.h}`);

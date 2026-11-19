@@ -155,7 +155,10 @@ async function main() {
     const before = await api(base, "GET", "/api/admin/maps/0", { token });
     checkEqual(before.status, 200, "能读 0 号图详情");
     const beforeAreas = before.body?.data?.spawnAreas ?? [];
-    checkEqual(beforeAreas.length, 3, "0 号图出厂 3 个刷怪区");
+    // #1084 重排后 0 号图承载全部 220 个刷怪区，具体数是配置数据不判 —— 只判「有」，好做增删对照
+    check(beforeAreas.length >= 1, "0 号图出厂就有刷怪区（#1084 重排后全部落在这张图，具体数是配置数据）");
+    // 跨图对照的基线（四段用：改 0 号图不该动别的图）：改之前先记下
+    const beforeMap3 = ((await api(base, "GET", "/api/admin/maps/3", { token })).body?.data?.spawnAreas ?? []).length;
     check(
       beforeAreas.every((area) => area.inBounds === true),
       "出厂区域全部在图内（越界的话后面「新建在图内」的断言就没有对照组了）",
@@ -192,8 +195,8 @@ async function main() {
     );
 
     const afterCreate = await api(base, "GET", "/api/admin/maps/0", { token });
-    checkEqual(afterCreate.body?.data?.spawnAreas?.length, 4, "详情多了一行（3 → 4）");
-    checkEqual(afterCreate.body?.data?.spawnAreaCount, 4, "列表计数跟着变（同一个数不做两处口径）");
+    checkEqual(afterCreate.body?.data?.spawnAreas?.length, beforeAreas.length + 1, "详情多了一行（基线 + 1）");
+    checkEqual(afterCreate.body?.data?.spawnAreaCount, beforeAreas.length + 1, "列表计数跟着变（同一个数不做两处口径）");
     check(
       (afterCreate.body?.data?.spawnAreas ?? []).some((item) => item.id === area.id),
       "新建的那一行在列表里（不是只返回了却没入库）",
@@ -250,8 +253,8 @@ async function main() {
 
     checkEqual(
       (await api(base, "GET", "/api/admin/maps/0", { token })).body?.data?.spawnAreas?.length,
-      4,
-      "四次失败之后库里还是 4 行（失败的请求没有留下半条记录）",
+      beforeAreas.length + 1,
+      "四次失败之后库里还是基线 + 1 行（失败的请求没有留下半条记录）",
     );
 
     //#endregion
@@ -275,7 +278,7 @@ async function main() {
     checkEqual(updated.body?.data?.inBounds, true, "改完仍在图内");
 
     const unchangedSibling = (await api(base, "GET", "/api/admin/maps/3", { token })).body?.data?.spawnAreas ?? [];
-    checkEqual(unchangedSibling.length, 18, "3 号图的 18 个区域没被顺带改动（改的是 id，不是整表）");
+    checkEqual(unchangedSibling.length, beforeMap3, "3 号图的区域数没被顺带改动（改的是 id，不是整表；#1084 后 3 号图是空图）");
 
     const crossMap = await api(base, "PATCH", `/api/admin/maps/3/spawn-areas/${area.id}`, {
       token,
@@ -302,7 +305,7 @@ async function main() {
     checkEqual(removed.body?.data?.id, area.id, "返回被删掉的行 id");
 
     const afterDelete = await api(base, "GET", "/api/admin/maps/0", { token });
-    checkEqual(afterDelete.body?.data?.spawnAreas?.length, 3, "详情回到 3 行");
+    checkEqual(afterDelete.body?.data?.spawnAreas?.length, beforeAreas.length, "详情回到基线行数");
     check(
       !(afterDelete.body?.data?.spawnAreas ?? []).some((item) => item.id === area.id),
       "删掉的那一行不在列表里",
