@@ -323,6 +323,11 @@ function connect(url) {
       return result && result.data;
     };
 
+    // #1084 适配：新快照里的 1009 半月弯刀是运营改过的单体形态（target_type '1' / require_target 1），
+    // 出厂（config-sync.sql）是群体 '2' / distance 320 / require_target 0 ——
+    // 第四段的「不带目标 cast」只有非单体技能才放行，先把它改回出厂形态（一次性库，不还原）
+    await patchSkill(AREA_SKILL, { targetType: "2", distance: 320, requireTarget: false });
+
     /** 打 N 刀（单体技能），返回成功的 settle */
     const strike = async (target, count) => {
       const results = [];

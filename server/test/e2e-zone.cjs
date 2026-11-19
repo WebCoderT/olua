@@ -109,6 +109,8 @@ function seedSpawnAreas(dbPath) {
   const now = Date.now();
   insert.run("1", "1号怪物", "1", 0, 1, 100, 200, 400, 400, now);
   insert.run("1", "2号怪物", "3", 0, 1, 300, 400, 400, 400, now);
+  // 真 seed 的怪 1 是主动怪（赤焰斗鸡）—— 压成被动，免得围殴干扰只数「有没有」的断言
+  db.exec("UPDATE monster_presentation SET aggressive = 0 WHERE id IN ('1', '3')");
   db.close();
 }
 
@@ -217,8 +219,8 @@ function connect(url) {
 
 (async () => {
   const dbPath = path.join(os.tmpdir(), `olua-e2e-zone-${Date.now()}.db`);
-  seedSpawnAreas(dbPath);
   const server = await startServer(dbPath);
+  seedSpawnAreas(dbPath); // 起服后再插：快照自举会抹掉起服前的行（#1084 适配）
   try {
     const { baseUrl } = server;
 

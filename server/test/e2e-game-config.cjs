@@ -1058,7 +1058,11 @@ async function main() {
 
     // 品质文字颜色（#720）：与文案同下标等长；空数组 = 清空回落客户端内置色；坏 hex / 长度不齐 → 400
     // 颜色与文案同下标等长 —— 这才是要守的约束；「几档」由种子的品质档位决定，不在这里写死（#966）
-    checkEqual(metaRow.prefixColors?.length, metaRow.prefixLabels?.length, "快照里颜色与品质文案等长（同下标一一对应）");
+    // 空数组 = 清空回落客户端内置色（#720 的合法态），同样放行
+    check(
+      (metaRow.prefixColors?.length ?? 0) === 0 || metaRow.prefixColors?.length === metaRow.prefixLabels?.length,
+      "快照里颜色与品质文案等长（同下标一一对应；空数组 = 回落客户端内置色，同样合法）",
+    );
     const metaColors = await api(base, "PATCH", "/api/admin/equipment-meta", {
       token,
       body: { prefixColors: ["#112233", "#445566", "#778899", "#AABBCC", "#DDEEFF"] },
@@ -1415,8 +1419,8 @@ async function main() {
     checkEqual(npcPlain?.scaleX, 1, "没配缩放的 NPC 落默认 1（不是 NULL）");
     checkEqual(npcPlain?.posX, 0, "没配偏移的 NPC 落默认 0（不是 NULL）");
     check(
-      npcsRes.body?.data?.list?.every((row) => typeof row.src === "string" && row.src.length > 0),
-      "全部 NPC 都有素材目录（空 src = 客户端查不到素材、NPC 不显示）",
+      npcsRes.body?.data?.list?.every((row) => (typeof row.src === "string" && row.src.length > 0) || /^010[1-6]$/.test(String(row.id))),
+      "全部 NPC 都有素材目录（任务使者 0101~0106 例外：#1084 拍板 src 留空，等美术 plist 后补）",
     );
 
     const npcKeyword = await api(base, "GET", "/api/admin/npcs?keyword=" + encodeURIComponent("传送官"), { token });
@@ -1469,7 +1473,9 @@ async function main() {
     checkEqual(mallCatList.status, 200, "分类列表可读");
     checkEqual(mallCatList.body?.data?.length, mallCategories.length, `分类数 = 出厂（${mallCategories.length}）`);
     checkEqual(mallCatList.body?.data?.[0]?.label, mallCategories[0]?.label, "首个分类显示名与出厂一致");
-    checkEqual(mallCatList.body?.data?.[0]?.goodCount, mallGoodsSeed.length, "默认分类的商品数 = 出厂上架行数");
+    // 商品数按「该分类在快照里的上架行数」取 —— 新出厂有多个分类（药品等），不再等于全表行数
+    const defaultCatSeedGoods = mallGoodsSeed.filter((row) => row.categoryId === mallCategories[0]?.id).length;
+    checkEqual(mallCatList.body?.data?.[0]?.goodCount, defaultCatSeedGoods, "默认分类的商品数 = 出厂在该分类的上架行数");
 
     // 建分类：id 服务端生成（mc_ 前缀），缺省排到最后
     const mallCatCreate = await api(base, "POST", "/api/admin/mall/categories", { token, body: { label: "热卖推荐" } });
@@ -2010,7 +2016,11 @@ async function main() {
     checkEqual(snap.equipmentSlots?.length, slotRows.length, `快照槽位行数 = 种子（${slotRows.length}）`);
     checkEqual(snap.equipmentMeta?.prefixRates?.length, equipMeta.prefixRates.length, "快照带前后缀倍率（客户端展开 15 个变体的依据）");
     checkEqual(snap.equipmentMeta?.prefixLabels?.[0], equipMeta.prefixLabels[0], "快照带品质文案");
-    checkEqual(snap.equipmentMeta?.prefixColors?.length, 5, "快照带品质文字颜色（#720，与文案同下标）");
+    check(
+      (snap.equipmentMeta?.prefixColors?.length ?? 0) === 0 ||
+        snap.equipmentMeta?.prefixColors?.length === snap.equipmentMeta?.prefixLabels?.length,
+      "快照带品质文字颜色（#720；空数组 = 客户端内置色，非空则必须与文案等长）",
+    );
     check(snap.equipmentMeta?.recycleCurve === undefined, "快照不带回收价曲线（价随变体一行下发）");
     checkEqual(snap.drugs?.length, Object.keys(drugs).length, "快照药品行数 = 生成物");
     checkEqual(snap.items?.length, Object.keys(items).length, "快照物品行数 = 生成物");
@@ -2366,6 +2376,8 @@ async function main() {
     checkEqual(clearPrice.status, 200, "下架商品（还原出厂）");
 
     // #763：药品也能上架 —— 买两瓶药，**叠在同一格**（maxStack 取自 drugs 表；装备仍一件一格）
+    // #1084 适配：新出厂快照里 drug_hp_1 已被运营上架（药品分类）—— 先下架还原「未上架」前提
+    await api(base, "DELETE", "/api/admin/mall/goods/drug_hp_1", { token });
     const drugListed = await api(base, "POST", "/api/admin/mall/goods", {
       token,
       body: { id: "drug_hp_1", categoryId: "default", price: 30 },
@@ -2934,24 +2946,38 @@ async function main() {
     });
     checkEqual(dupCustomRes.status, 400, "自定义表装备标识重复 → 400");
 
-    // —— 改了真生效（边框半边）：交换两个组合 + 自定义条目带显示效果 ——
+    // —— 改了真生效（边框半边）：交换两个组合 + 清单条目带显示效果 ——
+    // #718 契约：effect 的单一来源在清单 —— 棋盘 / 自定义条目上的 effect 只是快照副本，
+    // 写库时由服务端按清单覆盖传播。要改效果就改 items（整份替换），引用处随之更新。
     const swapped = borderOk.slice();
     const tmp = swapped[0].key;
-    swapped[0] = { ...swapped[0], key: swapped[14].key, effect: { x: 3, y: -4, scale: 1.2 } };
+    swapped[0] = { ...swapped[0], key: swapped[14].key };
     swapped[14] = { ...swapped[14], key: tmp };
     const customSeedBorder = "border-30206";
+    const currentItems = (await api(base, "GET", "/api/admin/equipment-borders", { token })).body?.data?.items ?? [];
+    const patchedItems = currentItems.map((item) =>
+      item.key === swapped[0].key
+        ? { ...item, effect: { x: 3, y: -4, scale: 1.2 } }
+        : item.key === customSeedBorder
+          ? { ...item, effect: { x: -2, y: 6, scale: 0.9 } }
+          : item,
+    );
+    if (!patchedItems.some((item) => item.key === customSeedBorder)) {
+      patchedItems.push({ key: customSeedBorder, effect: { x: -2, y: 6, scale: 0.9 } });
+    }
     const borderUpdateRes = await api(base, "PATCH", "/api/admin/equipment-borders", {
       token,
       body: {
         assignments: swapped,
-        customs: [{ equipment: "weapon_20", key: customSeedBorder, effect: { x: -2, y: 6, scale: 0.9 } }],
+        customs: [{ equipment: "weapon_20", key: customSeedBorder }],
+        items: patchedItems,
       },
     });
     checkEqual(borderUpdateRes.status, 200, "合法整边替换 → 200");
     checkEqual(borderUpdateRes.body?.data?.assignments?.[0]?.key, swapped[0].key, "交换后的第 1 格 = 提交值");
-    checkEqual(borderUpdateRes.body?.data?.assignments?.[0]?.effect?.scale, 1.2, "棋盘格的 effect 随条目落库");
+    checkEqual(borderUpdateRes.body?.data?.assignments?.[0]?.effect?.scale, 1.2, "棋盘格的 effect 随清单传播（#718：清单是唯一来源）");
     checkEqual(borderUpdateRes.body?.data?.customs?.[0]?.equipment, "weapon_20", "自定义条目落库");
-    checkEqual(borderUpdateRes.body?.data?.customs?.[0]?.effect?.y, 6, "自定义条目的 effect 落库");
+    checkEqual(borderUpdateRes.body?.data?.customs?.[0]?.effect?.y, 6, "自定义条目的 effect 随清单传播");
     check((borderUpdateRes.body?.data?.updatedAt ?? 0) > 0, "updatedAt 被 touched（0 = 从未改过）");
 
     const borderReread = await api(base, "GET", "/api/admin/equipment-borders", { token });
@@ -3149,8 +3175,14 @@ async function main() {
     const bgSyncRes = await api(base, "POST", "/api/admin/equipment-backgrounds/sync", { token });
     checkEqual(bgSyncRes.status, 201, "按文件夹同步背景清单");
     checkEqual(bgSyncRes.body?.data?.kept, 1, "背景清单 = 文件夹里的 1 个素材");
-    // 清单出厂为空，同步前 GET 里的条目全部来自「棋盘引用处自动并入」→ 移除条数 = 棋盘组合数
-    checkEqual(bgSyncRes.body?.data?.removed?.length, appearanceSeedRow.backgrounds.length, "背景条目全部被移除（条数取快照棋盘，不锁数值）");
+    // #1084 适配：新出厂的清单非空（运营同步过素材文件夹，含未引用条目）——
+    // 移除条数 = 清单里文件夹没有的条目数，只断「棋盘引用的条目全部被移走」（不锁总数）
+    const bgRemovedKeys = bgSyncRes.body?.data?.removed ?? [];
+    check(
+      Array.isArray(bgRemovedKeys) && appearanceSeedRow.backgrounds.every((row) => bgRemovedKeys.includes(row.key)),
+      "背景清单以文件夹为准整批移除（棋盘引用的条目全被移走）",
+      `removed ${bgRemovedKeys.length} 条`,
+    );
     const borderAfterBgSync = await api(base, "GET", "/api/admin/equipment-borders", { token });
     checkEqual(borderAfterBgSync.body?.data?.items?.length, 2, "同步背景不动边框清单（拆边语义在同步路径上同样成立）");
 

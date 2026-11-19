@@ -77,31 +77,11 @@ function freePort() {
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
- * 预先往临时库里插刷怪区（#295：播种来源 = map_spawn_areas）。
- * 地图 1 一区两只怪物 1（max 2）—— 击杀进度（五只）与日常重接各杀一只都打它。
+ * 预先往临时库里插刷怪区（#295：播种来源 = map_spawn_areas）—— **已废**（#1084 适配）：
+ * 空库首启会用 config-sync.sql 快照整表替换 map_spawn_areas，测试预插的行从来就没活过
+ * （旧快照里泄漏的测试命名区才是它侥幸跑通的真正原因）。#1084 重排后 220 个刷怪区全在
+ * 图 0，怪物 1（key "1"）在图 0 上有十几只实例，击杀进度用例直接打它，不再预插。
  */
-function seedSpawnAreas(dbPath) {
-  const { DatabaseSync } = require("node:sqlite");
-  const db = new DatabaseSync(dbPath);
-  db.exec(`CREATE TABLE IF NOT EXISTS map_spawn_areas (
-        id          INTEGER PRIMARY KEY AUTOINCREMENT,
-        map_id      TEXT    NOT NULL,
-        name        TEXT    NOT NULL,
-        monster_key TEXT    NOT NULL,
-        min         INTEGER NOT NULL DEFAULT 0,
-        max         INTEGER NOT NULL DEFAULT 0,
-        cx          REAL    NOT NULL,
-        cy          REAL    NOT NULL,
-        w           REAL    NOT NULL,
-        h           REAL    NOT NULL,
-        updated_at  INTEGER NOT NULL DEFAULT 0
-      );`);
-  db.prepare(
-    `INSERT INTO map_spawn_areas (map_id, name, monster_key, min, max, cx, cy, w, h, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-  ).run("1", "1号怪物", "1", 0, 2, 200, 300, 400, 400, Date.now());
-  db.close();
-}
 
 /** 起一台服务（文件库 + 快重生：击杀进度要连杀 6 只，默认 30s 重生等不起） */
 async function startServer(dbPath) {
@@ -247,7 +227,6 @@ function setResetDay(dbPath, roleId, questId, day) {
 
 (async () => {
   const dbPath = path.join(os.tmpdir(), `olua-e2e-quest-${Date.now()}.db`);
-  seedSpawnAreas(dbPath);
   const server = await startServer(dbPath);
   let serverChild = null;
   try {
@@ -261,16 +240,17 @@ function setResetDay(dbPath, roleId, questId, day) {
     const token = registered.data && registered.data.token;
     // #597 起建号只交三样客户端数据（初始技能含击杀要用的 1000，由服务端给齐）
     const created = await api(baseUrl, "POST", "roles", { token, body: { name: "任务者", occupation: "1", sex: "1" } });
-    // #859 起「没有位置记录」的角色只准进新手村 —— 这一套要进 1 图，
-    // 准备段先按运营摆位把位置写进去（等价管理端 PATCH onMap，见 lib/place-role.cjs）
-    placeRolesAt(dbPath, "1");
+    // #859 起「没有位置记录」的角色只准进新手村 —— 这一套全程在图 0（#1084 重排后
+    // 全部刷怪区都在图 0，任务 NPC 0002 在图 0 也有点位），准备段先按运营摆位把位置写进去
+    // （等价管理端 PATCH onMap，见 lib/place-role.cjs）
+    placeRolesAt(dbPath, "0");
     /**
      * 站到任务 NPC 旁边（#862/#863 的距离校验）
      *
      * 每次请求前都重摆一次：位置快照 10 秒就过期（`QUEST_POS_STALE_MS`），
      * 在准备段摆一次然后赌整套跑完不到 10 秒，是那种「本机绿、CI 红」的写法。
      */
-    const standAtQuestNpc = () => placeRolesNear(dbPath, "1", "0002");
+    const standAtQuestNpc = () => placeRolesNear(dbPath, "0", "0002");
     /** 以「人在传送官旁边」的状态发任务请求（只有 accept / npc-talk 吃距离校验） */
     const questApi = (method, path, body = {}) => {
       standAtQuestNpc();
@@ -292,15 +272,19 @@ function setResetDay(dbPath, roleId, questId, day) {
     const session = connect(`${baseUrl.replace("http", "ws")}/api/realtime?ticket=${encodeURIComponent(ticket.data.ticket)}`);
     await waitFor("握手成功", async () => (session.opened ? session : null));
     check(session.opened, "准备：实时连接已建立");
-    const world = await session.joinWorld("1");
-    check(!!(world && world.monsters.some((m) => m.alive)), "准备：进图拿到活着的怪物 1", JSON.stringify(world && world.monsters.length));
+    const world = await session.joinWorld("0");
+    check(
+      !!(world && world.monsters.some((m) => m.alive && m.monsterKey === "1")),
+      "准备：进图拿到活着的怪物 1（#1084 重排后图 0 全怪环带，按 key 挑）",
+      JSON.stringify(world && world.monsters.length),
+    );
     // #1139 起条目由 worldJoin 播种（坐标 = 复活点），实时进程每秒把条目坐标写进
     // role_positions，会覆写 standAtQuestNpc 的直写摆位。进图后立刻发一条 pos 帧
     // 把条目摆到任务 NPC 旁边（播种条目首帧免仲裁），此后两个写入方写的是同一坐标，
     // questApi 每次请求前的直写只剩「刷新鲜度」一个职责
     {
-      const spot = placeRolesNear(dbPath, "1", "0002");
-      session.socket.send(JSON.stringify({ type: "pos", data: { mapId: "1", x: spot.cx, y: spot.cy, hp: 50, moving: false } }));
+      const spot = placeRolesNear(dbPath, "0", "0002");
+      session.socket.send(JSON.stringify({ type: "pos", data: { mapId: "0", x: spot.cx, y: spot.cy, hp: 50, moving: false } }));
     }
 
     await api(baseUrl, "POST", "admin/auth/register", { body: { username: "quest_admin", password: "pass1234", registerCode: ADMIN_CODE } });
@@ -308,8 +292,12 @@ function setResetDay(dbPath, roleId, questId, day) {
     const adminToken = adminLogin.data && adminLogin.data.token;
     check(!!adminToken, "准备：管理员已登录（配置守卫要用它改表）");
 
-    const questList = await api(baseUrl, "GET", "admin/quests?page=1&size=50", { token: adminToken, zoneId: ADMIN_ZONE });
-    check(questList.code === 0 && questList.data.list.length === 5, "准备：任务配置 seed 了 5 条（8001~8004 主线 + 8101 日常）", JSON.stringify(questList.data && questList.data.total));
+    const questList = await api(baseUrl, "GET", "admin/quests?page=1&size=100", { token: adminToken, zoneId: ADMIN_ZONE });
+    check(
+      questList.code === 0 && questList.data.total >= 5 && (questList.data.list || []).some((row) => row.id === "8001") && (questList.data.list || []).some((row) => row.id === "8101"),
+      "准备：任务配置在列（#1084 后主线 8001~8004 + 8101 日常之外还有任务线 8005 起，总数是配置数据不判）",
+      JSON.stringify(questList.data && questList.data.total),
+    );
 
     /**
      * 连续出手直到目标死亡，返回带 killed 的那次结算（打不死 / 被拒返回 null）
@@ -331,14 +319,16 @@ function setResetDay(dbPath, roleId, questId, day) {
     };
     /**
      * 连续出手直到目标死亡，返回带 killed 的那次结算（实在打不到才返回 null）。
-     * **必须自带重试**：刷怪区只有 2 个槽、重生 `1500ms`，刚连杀完 5 只时可能两只都在冷却，
-     * 只取一次快照会「没有活着的怪」直接空手返回（CI 上就这样抖过一次：六组拿不到击杀，
-     * 后面 6 条断言连环假红）。同理出手被拒（目标在快照与出手之间被别人打死）也要重取快照。
+     * **必须自带重试**：怪会重生（`WORLD_RESPAWN_MS` 1500ms），刚连杀完 5 只时可能
+     * 眼前的实例都在冷却，只取一次快照会「没有活着的怪」直接空手返回（CI 上就这样抖过
+     * 一次：六组拿不到击杀，后面 6 条断言连环假红）。同理出手被拒（目标在快照与出手
+     * 之间被别人打死）也要重取快照。#1084 起图 0 是全怪环带，任务目标是怪物 "1"，
+     * 只挑 key 相符的活怪打 —— 杀别的怪不推进进度。
      */
     const killOne = async (attempts = 30) => {
       for (let attempt = 0; attempt < attempts; attempt++) {
-        const snap = await session.joinWorld("1");
-        const mob = snap && snap.monsters.find((m) => m.alive);
+        const snap = await session.joinWorld("0");
+        const mob = snap && snap.monsters.find((m) => m.alive && m.monsterKey === "1");
         if (mob) {
           for (let i = 0; i < 80; i++) {
             const result = await cast({ skillId: "1000", targetId: mob.instanceId, monsterKey: mob.monsterKey }).promise;
@@ -365,8 +355,8 @@ function setResetDay(dbPath, roleId, questId, day) {
     const snapshot = await api(baseUrl, "GET", "game-config", { token });
     const snapQuests = (snapshot.data && snapshot.data.quests) || [];
     check(
-      snapshot.code === 0 && snapQuests.length === 5 && snapQuests.some((row) => row.id === "8001") && snapQuests.some((row) => row.id === "8101"),
-      "快照带 quests 全量（主线 + 日常都在）",
+      snapshot.code === 0 && snapQuests.length >= 5 && snapQuests.some((row) => row.id === "8001") && snapQuests.some((row) => row.id === "8101"),
+      "快照带 quests 全量（主线 + 日常都在；#1084 后总量是配置数据不判）",
       JSON.stringify(snapQuests.length),
     );
     const snapMain = snapQuests.find((row) => row.id === "8001");
@@ -445,12 +435,14 @@ function setResetDay(dbPath, roleId, questId, day) {
     check(!!killFrame && killFrame.progress === 1 && killFrame.target === 5, "quest 帧带 progress / target", JSON.stringify(killFrame));
 
     let killedTotal = 1;
-    while (killedTotal < 5) {
+    let killAttempts = 0;
+    while (killedTotal < 5 && killAttempts < 60) {
+      killAttempts += 1;
       const result = await killOne();
       if (result && result.killed) killedTotal += 1;
       else await sleep(100);
     }
-    check(killedTotal === 5, "连杀 5 只（重生等待在 killOne 里兜底）", `killed=${killedTotal}`);
+    check(killedTotal === 5, "连杀 5 只（重生等待在 killOne 里兜底）", `killed=${killedTotal} attempts=${killAttempts}`);
     const killReady = await myQuest("8002");
     check(!!killReady && killReady.status === "ready", "进度到量 → ready", JSON.stringify(killReady));
 
@@ -559,17 +551,17 @@ function setResetDay(dbPath, roleId, questId, day) {
     group("七、管理端配置纪律");
     const createdQuest = await api(baseUrl, "POST", "admin/quests", {
       token: adminToken, zoneId: ADMIN_ZONE,
-      body: { id: "8201", kind: "daily", label: "临时任务", objective: { type: "kill", target: "1", count: 1 }, rewards: { bindGold: 1, exp: 1, items: [] } },
+      body: { id: "8999", kind: "daily", label: "临时任务", objective: { type: "kill", target: "1", count: 1 }, rewards: { bindGold: 1, exp: 1, items: [] } },
     });
-    check(createdQuest.code === 0 && createdQuest.data.id === "8201", "动态新增任务成功", JSON.stringify(createdQuest.message));
+    check(createdQuest.code === 0 && createdQuest.data.id === "8999", "动态新增任务成功", JSON.stringify(createdQuest.message));
     const dupQuest = await api(baseUrl, "POST", "admin/quests", {
       token: adminToken, zoneId: ADMIN_ZONE,
-      body: { id: "8201", kind: "daily", label: "重复", objective: { type: "kill", target: "1", count: 1 } },
+      body: { id: "8999", kind: "daily", label: "重复", objective: { type: "kill", target: "1", count: 1 } },
     });
     check(dupQuest.code === 40000, "重复 id → 40000", JSON.stringify(dupQuest));
     const badTarget = await api(baseUrl, "POST", "admin/quests", {
       token: adminToken, zoneId: ADMIN_ZONE,
-      body: { id: "8202", kind: "daily", label: "坏目标", objective: { type: "kill", target: "no_such_monster", count: 1 } },
+      body: { id: "8998", kind: "daily", label: "坏目标", objective: { type: "kill", target: "no_such_monster", count: 1 } },
     });
     check(badTarget.code === 40000, "目标键指向不存在的怪物 → 40000", JSON.stringify(badTarget));
     const cycle = await api(baseUrl, "PATCH", "admin/quests/8001", { token: adminToken, zoneId: ADMIN_ZONE, body: { prevQuestId: "8004" } });
@@ -579,7 +571,7 @@ function setResetDay(dbPath, roleId, questId, day) {
     check(delWithFollower.code === 40000, "被后继任务当前置 → 拒删", JSON.stringify(delWithFollower));
     const delWithProgress = await api(baseUrl, "DELETE", "admin/quests/8001", { token: adminToken, zoneId: ADMIN_ZONE });
     check(delWithProgress.code === 40000, "有玩家进度（claimed 行）→ 拒删", JSON.stringify(delWithProgress));
-    const delTemp = await api(baseUrl, "DELETE", "admin/quests/8201", { token: adminToken, zoneId: ADMIN_ZONE });
+    const delTemp = await api(baseUrl, "DELETE", "admin/quests/8999", { token: adminToken, zoneId: ADMIN_ZONE });
     check(delTemp.code === 0, "无引用的临时任务可删", JSON.stringify(delTemp));
     const delMissing = await api(baseUrl, "DELETE", "admin/quests/9999", { token: adminToken, zoneId: ADMIN_ZONE });
     check(delMissing.code === 50031, "删除不存在的任务 → 404（50031）", JSON.stringify(delMissing));

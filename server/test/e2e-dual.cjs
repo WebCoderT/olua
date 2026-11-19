@@ -197,36 +197,13 @@ function connect(url) {
 }
 
 /**
- * 预先往共享库里插刷怪区（#295）：地图 1 一区一只怪物 1，与旧播种计划等价。
- * 表先建好再插行，服务端启动时的建表与空表 seed 都不会动它。
+ * 预先往共享库里插刷怪区（#295）—— **已废**（#1084 适配）：
+ * 空库首启会用 config-sync.sql 快照整表替换 map_spawn_areas，测试预插的行从来就没活过。
+ * #1084 重排后 220 个刷怪区全在图 0，进图播种自然有怪，不再预插。
  */
-function seedSpawnAreas(dbPath) {
-  const db = new DatabaseSync(dbPath);
-  db.exec(`CREATE TABLE IF NOT EXISTS map_spawn_areas (
-        id          INTEGER PRIMARY KEY AUTOINCREMENT,
-        map_id      TEXT    NOT NULL,
-        name        TEXT    NOT NULL,
-        monster_key TEXT    NOT NULL,
-        min         INTEGER NOT NULL DEFAULT 0,
-        max         INTEGER NOT NULL DEFAULT 0,
-        cx          REAL    NOT NULL,
-        cy          REAL    NOT NULL,
-        w           REAL    NOT NULL,
-        h           REAL    NOT NULL,
-        updated_at  INTEGER NOT NULL DEFAULT 0
-      );`);
-  db.prepare(
-    `INSERT INTO map_spawn_areas (map_id, name, monster_key, min, max, cx, cy, w, h, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-  ).run("1", "1号怪物", "1", 0, 1, 100, 200, 100, 100, Date.now());
-  db.close();
-}
 
 (async () => {
   const dbPath = path.join(os.tmpdir(), `olua-e2e-dual-${process.pid}-${Date.now()}.db`);
-  // 预插刷怪区（#295：播种来源 = map_spawn_areas，客户端不再上报计划）；
-  // 库本来就是先建的文件（双进程共享的前提），起进程前把表和种子插好
-  seedSpawnAreas(dbPath);
   // 两个进程共享同一个库文件；实时进程的巡检间隔调小，踢下线段才不用干等
   const shared = {
     DB_PATH: dbPath,
@@ -260,8 +237,9 @@ function seedSpawnAreas(dbPath) {
     check(!!adminToken, "准备：超管已在存档进程注册", adminReg.body.message);
     // #859 起服务端不再对「还没有位置记录」的角色一律放行（只准进新手村），
     // 这里的角色都是 1 级、要进的图又高于新手村 —— 先按运营摆位把位置写进去
-    // （等价管理端 PATCH /admin/roles/:id { onMap }，见 lib/place-role.cjs）
-    placeRolesAt(dbPath, "1");
+    // （等价管理端 PATCH /admin/roles/:id { onMap }，见 lib/place-role.cjs）；
+    // #1084 重排后进图 0（唯一有怪的图）
+    placeRolesAt(dbPath, "0");
 
     //#endregion
 
@@ -287,9 +265,11 @@ function seedSpawnAreas(dbPath) {
 
     group("二、播种与结算在实时进程跑通；写库对第三方读者可见");
 
-    const world = await session.joinWorld("1");
-    const mob = world && world.monsters && world.monsters[0];
-    check(mob && /^m1_z1_c0_\d+$/.test(mob.instanceId), "worldJoin 播种 1 只怪（服务端发牌，带区段）", JSON.stringify(world));
+    const world = await session.joinWorld("0");
+    // #1084 重排后图 0 是全怪环带（快照顺序 = 按怪 key 升序）：第一只就是怪物 1；
+    // 实例 id 只锁「服务端发牌的三段式形态」，区 / 线 / 序号是运行时数据不锁
+    const mob = world && world.monsters && world.monsters.find((entry) => entry.monsterKey === "1" && entry.alive);
+    check(mob && /^m0_z\d+_c\d+_\d+$/.test(mob.instanceId), "worldJoin 播种拿到怪物 1（服务端发牌，带区段）", JSON.stringify(world && world.monsters.length));
 
     session.socket.send(JSON.stringify({ type: "cast", data: { castId: 1, skillId: "1000", targetId: mob ? mob.instanceId : "m1_1", monsterKey: "1" } }));
     const settle = await session.waitForSettle(1);

@@ -252,6 +252,19 @@ function connect(url) {
     // （等价管理端 PATCH /admin/roles/:id { onMap }，见 lib/place-role.cjs）
     placeRolesAt(dbPath, TEST_MAP);
 
+    // #1084 适配：重排后图 3 不再有出厂刷怪区 —— 起服后直接给图 3 播几只怪 1
+    // （必须在玩家进图、房间创建之前灌进去，房才会在播种时读到）。怪 1 出厂就是
+    // 主动怪（赤焰斗鸡），这一套**要挨打**（验格挡帧 / 被打死清状态），所以不压 passive
+    {
+      const { DatabaseSync } = require("node:sqlite");
+      const db = new DatabaseSync(dbPath);
+      db.prepare(
+        `INSERT INTO map_spawn_areas (map_id, name, monster_key, min, max, cx, cy, w, h, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ).run("3", "状态靶子", "1", 3, 3, 4096, -3900, 400, 400, Date.now());
+      db.close();
+    }
+
     const ticket = await api(baseUrl, "POST", "realtime/ticket", { token });
     const a = connect(`${baseUrl.replace("http", "ws")}/api/realtime?ticket=${encodeURIComponent(ticket.data.ticket)}`);
     await waitFor("实时连接握手", async () => (a.opened ? true : null));

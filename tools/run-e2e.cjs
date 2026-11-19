@@ -68,6 +68,8 @@ const WEIGHT = {
   "test:e2e:chat": 2,
   "test:e2e:rank": 2,
   "test:e2e:quest": 2,
+  // 一次存档启动 + 纯库断言（232 环链路 / 落位 / 奖励容差），比 quest 轻一点
+  "test:e2e:quest-chain": 1,
   // 两张图各起一次世界、三段区域施放中间都要等群体技能的冷却（1.3s × 3）
   "test:e2e:area-skill": 3,
   // 三组共 18 刀，每刀前都要先 PATCH 一次技能行（写库 + 刷快照），刀数不多但来回多

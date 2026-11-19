@@ -346,7 +346,7 @@ export const STATUS_SORT: SortSpec<"id" | "owner" | "label" | "duration" | "upda
   defaultOrder: "asc",
 };
 
-/** 任务配置列表（#396）：默认按 id 数值序（主线 8001 段 / 日常 8100 段，与技能同一动线） */
+/** 任务配置列表（#396）：默认按 id 数值序（主线 8001~8099 与 8110 起 / 日常 8100~8109，与技能同一动线） */
 export const QUEST_SORT: SortSpec<"id" | "kind" | "label" | "minLevel" | "updatedAt"> = {
   columns: {
     id: "CAST(id AS INTEGER)",

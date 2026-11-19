@@ -301,16 +301,22 @@ function setRoleHp(dbPath, roleName, hp) {
     //#endregion
 
     //#region 一、配置口
-    group("一、配置口：出厂 log、能热切、容差 < 1 被拒");
+    group("一、配置口：能写能读、能热切、容差 < 1 被拒");
+    // #1084 适配：快照里 movement 列是运营改过的实况（现为空对象 {}），出厂值是配置数据
+    // 不进断言 —— 先 PATCH 一份基准配置，套件的真正主题是「配置口能写、档位行为对」
+    const seededSave = await patchMovement({ mode: "log", maxSpeed: 400, tolerance: 1.35, wallCheck: true });
+    check(seededSave.body?.code === 0, "PATCH 写入基准配置（mode=log / maxSpeed=400 / wallCheck=true）", seededSave.body?.message);
     const initial = await api(baseUrl, "GET", "admin/runtime-params/movement", { token: adminToken, zoneId: ADMIN_ZONE });
     check(initial.body?.code === 0, "GET /admin/runtime-params/movement 通");
-    checkEqual(initial.body?.data?.mode, "log", "出厂档位是 log（跑一周看误伤率再切 enforce）");
-    check(Number(initial.body?.data?.maxSpeed) > 0, "出厂就带速度上限（具体 px/s 是运营数据，不判）", String(initial.body?.data?.maxSpeed));
-    checkEqual(initial.body?.data?.wallCheck, true, "出厂开穿墙校验");
+    checkEqual(initial.body?.data?.mode, "log", "写入的档位读回来是 log（跑一周看误伤率再切 enforce）");
+    check(Number(initial.body?.data?.maxSpeed) > 0, "速度上限落库（具体 px/s 是运营数据，不判）", String(initial.body?.data?.maxSpeed));
+    checkEqual(initial.body?.data?.wallCheck, true, "穿墙校验落库");
     const badTolerance = await patchMovement({ tolerance: 0.5 });
     checkEqual(badTolerance.body?.code, 40000, "容差 0.5 被拒（比上限还严 = 正常移动全被误判）");
     const badMode = await patchMovement({ mode: "strict" });
     checkEqual(badMode.status, 400, "档位拼错直接 400（不会静默落一个不认识的档位进库）");
+    // 把容差还原回基准（上面 0.5 被拒没有落库，这里只是显式摆回已知状态）
+    await patchMovement({ mode: "log", maxSpeed: 400, tolerance: 1.35, wallCheck: true });
     //#endregion
 
     //#region 二、log 档：照旧采纳

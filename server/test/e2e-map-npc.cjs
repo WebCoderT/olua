@@ -169,9 +169,15 @@ async function main() {
     const list = await api(base, "GET", "/api/admin/maps", { token });
     const rows = list.body?.data?.list ?? [];
     check(rows.length > 0, "地图列表有行（具体几张由资源清单决定）", String(rows.length));
+    // 点位数按快照逐图比（#1084 起图 0 有 8 个：老传送官 + 任务使者 0101~0106 + 天佛赐福）——
+    // 不锁「每图 1 个」的旧出厂，但仍钉住「计数 = map_npcs 行数」
+    const seedNpcCounts = {};
+    for (const row of configSnapshot.optionalRows("map_npcs")) {
+      seedNpcCounts[String(row.mapId)] = (seedNpcCounts[String(row.mapId)] ?? 0) + 1;
+    }
     check(
-      rows.every((row) => row.npcPointCount === 1),
-      "列表里每张图都有 1 个 NPC 点位（npcPointCount 来自 map_npcs 的行数）",
+      rows.every((row) => row.npcPointCount === (seedNpcCounts[String(row.id)] ?? 0) && row.npcPointCount >= 1),
+      "列表里每张图的 NPC 点位数 = 快照（npcPointCount 来自 map_npcs 的行数）",
     );
     check(
       rows.every((row) => row.hasRevivePoint === true),
@@ -213,8 +219,9 @@ async function main() {
     checkEqual(point.inBounds, true, "服务端判它在图内");
 
     const afterCreate = await api(base, "GET", "/api/admin/maps/0", { token });
-    checkEqual(afterCreate.body?.data?.npcPoints?.length, 2, "详情多了 1 行（1 → 2）");
-    checkEqual(afterCreate.body?.data?.npcPointCount, 2, "列表计数跟着变（详情继承列表字段，不做两处口径）");
+    // 基线取「放进来的那一刻」（seed 点位数是运营数据，不锁数值）
+    checkEqual(afterCreate.body?.data?.npcPoints?.length, points.length + 1, "详情多了 1 行（基线 + 1）");
+    checkEqual(afterCreate.body?.data?.npcPointCount, points.length + 1, "列表计数跟着变（详情继承列表字段，不做两处口径）");
 
     //#endregion
 
@@ -244,8 +251,8 @@ async function main() {
 
     checkEqual(
       (await api(base, "GET", "/api/admin/maps/0", { token })).body?.data?.npcPoints?.length,
-      2,
-      "三次失败之后库里还是 2 行（失败的请求没有留下半条记录）",
+      points.length + 1,
+      "三次失败之后库里还是「基线 + 1」行（失败的请求没有留下半条记录）",
     );
 
     //#endregion
@@ -286,7 +293,7 @@ async function main() {
     checkEqual(removed.body?.data?.id, point.id, "返回被删掉的行 id");
 
     const afterDelete = await api(base, "GET", "/api/admin/maps/0", { token });
-    checkEqual(afterDelete.body?.data?.npcPoints?.length, 1, "详情回到 1 行");
+    checkEqual(afterDelete.body?.data?.npcPoints?.length, points.length, "详情回到基线行数（删掉刚建的那一行）");
     check(
       !(afterDelete.body?.data?.npcPoints ?? []).some((item) => item.id === point.id),
       "删掉的那一行不在列表里",

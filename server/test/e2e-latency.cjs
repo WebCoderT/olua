@@ -54,6 +54,8 @@ const ENTRY = path.join(SERVER_DIR, "dist", "main.js");
  *    否则「被怪打死」会让后续采样全部失效，那就不是在量延迟了。
  */
 const MAP_ID = "3";
+/** 管理端请求所在的区（#960 惯例：一个 e2e 进程一个区，与其它套件同值） */
+const ADMIN_ZONE = 1;
 /**
  * 站桩点：图 3 左下角空地
  *
@@ -211,6 +213,7 @@ async function startServer(dbPath) {
       JWT_SECRET: "e2e-latency-secret",
       JWT_EXPIRES_IN: "1h",
       LOG_REQUESTS: "false",
+      ADMIN_REGISTER_CODE: "latency-admin",
       // 采样期间别让世界被重置（重生 / 闲置卸载都会把广播打断）
       WORLD_RESPAWN_MS: "600000",
       WORLD_MAP_IDLE_MS: "0",
@@ -405,6 +408,22 @@ function attachSettleProbe(session, probe) {
     //#endregion
 
     //#region 准备：两个账号 / 角色 / 连接
+
+    // #1084 重排后图 3 不再有出厂刷怪区（全部 220 区在图 0）：出手回执段要一只
+    // 「二十发打不死的满血靶子」，起服后直接给图 3 播种一只 60 级 boss（27 万血，
+    // 1 级角色的伤害被等级压制压到 0，样本全落在同一只身上）——必须在玩家进图
+    // （房间创建）之前灌进去，房才会在播种时读到它
+    const latencyAdminReg = await api(baseUrl, "POST", "admin/auth/register", {
+      body: { username: "latency_admin", password: "Latency#1", registerCode: "latency-admin" },
+    });
+    const latencyAdminToken = latencyAdminReg.data && latencyAdminReg.data.token;
+    check(!!latencyAdminToken, "准备：管理员已登录（给图 3 播种靶子用）", latencyAdminReg.message);
+    const bossSeed = await api(baseUrl, "POST", `admin/maps/${MAP_ID}/spawn-areas`, {
+      token: latencyAdminToken,
+      zoneId: ADMIN_ZONE,
+      body: { name: "延迟靶子区", monsterKey: "220", count: 1, cx: 3000, cy: -3000, w: 200, h: 200 },
+    });
+    check(bossSeed.status === 201 || bossSeed.code === 0, "准备：图 3 已播种 60 级 boss（满血靶子）", JSON.stringify(bossSeed.body ?? bossSeed.data ?? bossSeed));
 
     group("准备：两个账号、两条实时连接、同一间房");
     const accounts = [];

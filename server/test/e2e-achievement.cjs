@@ -73,29 +73,12 @@ function freePort() {
   });
 }
 
-/** 预先往临时库里插刷怪区（播种来源 = map_spawn_areas；地图 1 一区怪物 1，max 2） */
-function seedSpawnAreas(dbPath) {
-  const { DatabaseSync } = require("node:sqlite");
-  const db = new DatabaseSync(dbPath);
-  db.exec(`CREATE TABLE IF NOT EXISTS map_spawn_areas (
-        id          INTEGER PRIMARY KEY AUTOINCREMENT,
-        map_id      TEXT    NOT NULL,
-        name        TEXT    NOT NULL,
-        monster_key TEXT    NOT NULL,
-        min         INTEGER NOT NULL DEFAULT 0,
-        max         INTEGER NOT NULL DEFAULT 0,
-        cx          REAL    NOT NULL,
-        cy          REAL    NOT NULL,
-        w           REAL    NOT NULL,
-        h           REAL    NOT NULL,
-        updated_at  INTEGER NOT NULL DEFAULT 0
-      );`);
-  db.prepare(
-    `INSERT INTO map_spawn_areas (map_id, name, monster_key, min, max, cx, cy, w, h, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-  ).run("1", "1号怪物", "1", 0, 2, 200, 300, 400, 400, Date.now());
-  db.close();
-}
+/**
+ * 预先往临时库里插刷怪区 —— **已废**（#1084 适配）：
+ * 空库首启会用 config-sync.sql 快照整表替换 map_spawn_areas，测试预插的行从来就没活过。
+ * #1084 重排后 220 个刷怪区全在图 0，怪物 1（ach_kill_chicken 的指定目标）在图 0 上
+ * 有十几只实例，杀怪用例直接打它。
+ */
 
 /** 起一台服务（文件库 + 快重生：连杀几只不用等 30 秒） */
 async function startServer(dbPath) {
@@ -232,7 +215,6 @@ function setRoleLevel(dbPath, roleId, level) {
 
 (async () => {
   const dbPath = path.join(os.tmpdir(), `olua-e2e-achievement-${Date.now()}.db`);
-  seedSpawnAreas(dbPath);
   const server = await startServer(dbPath);
   let serverChild = null;
   try {
@@ -248,22 +230,25 @@ function setRoleLevel(dbPath, roleId, level) {
     const created = await api(baseUrl, "POST", "roles", { token, body: { name: "成就者", occupation: "1", sex: "1" } });
     // #859 起「没有位置记录」的角色只准进新手村 —— 这一套要进 1 图，
     // 准备段先按运营摆位把位置写进去（等价管理端 PATCH onMap，见 lib/place-role.cjs）
-    placeRolesAt(dbPath, "1");
+    placeRolesAt(dbPath, "0");
     // 任务交互要过 NPC 距离校验（#862/#863）：把位置摆到传送官旁边（map_npcs 的坐标）
-    const questNpcSpot = placeRolesNear(dbPath, "1", "0002");
+    const questNpcSpot = placeRolesNear(dbPath, "0", "0002");
     const roleId = created.data && created.data.id;
     check(created.code === 0 && created.data.online === true, "准备：角色已创建并自动在线", created.message);
 
     const ticket = await api(baseUrl, "POST", "realtime/ticket", { token });
     const session = connect(`${baseUrl.replace("http", "ws")}/api/realtime?ticket=${encodeURIComponent(ticket.data.ticket)}`);
     await waitFor("握手成功", async () => (session.opened ? session : null));
-    const world = await session.joinWorld("1");
-    check(!!(world && world.monsters.some((m) => m.alive)), "准备：进图拿到活着的怪物 1");
+    const world = await session.joinWorld("0");
+    check(
+      !!(world && world.monsters.some((m) => m.alive && m.monsterKey === "1")),
+      "准备：进图拿到活着的怪物 1（#1084 重排后图 0 全怪环带，按 key 挑）",
+    );
     // #1139 起条目由 worldJoin 播种（坐标 = 复活点），实时进程每秒把条目坐标写进
     // role_positions —— 上面的直写摆位会被覆写。进图后立刻发一条 pos 帧把条目摆到
     // 任务 NPC 旁边（播种条目首帧免仲裁），此后两个写入方写的是同一坐标，互不打架
     session.socket.send(
-      JSON.stringify({ type: "pos", data: { mapId: "1", x: questNpcSpot.cx, y: questNpcSpot.cy, hp: 50, moving: false } }),
+      JSON.stringify({ type: "pos", data: { mapId: "0", x: questNpcSpot.cx, y: questNpcSpot.cy, hp: 50, moving: false } }),
     );
 
     await api(baseUrl, "POST", "admin/auth/register", { body: { username: "ach_admin", password: "pass1234", registerCode: ADMIN_CODE } });
@@ -302,11 +287,11 @@ function setRoleLevel(dbPath, roleId, level) {
       })();
       return { id, promise };
     };
-    /** 连杀一只（自带重试：刷怪区只有 2 槽、重生 1.5s，只取一次快照会空手返回） */
+    /** 连杀一只（自带重试：重生 1.5s，只取一次快照会空手返回）；只挑怪物 1 —— 指定怪成就的 target 是它 */
     const killOne = async (attempts = 30) => {
       for (let attempt = 0; attempt < attempts; attempt++) {
-        const snap = await session.joinWorld("1");
-        const mob = snap && snap.monsters.find((m) => m.alive);
+        const snap = await session.joinWorld("0");
+        const mob = snap && snap.monsters.find((m) => m.alive && m.monsterKey === "1");
         if (mob) {
           for (let i = 0; i < 80; i++) {
             const result = await cast({ skillId: "1000", targetId: mob.instanceId, monsterKey: mob.monsterKey }).promise;
@@ -345,7 +330,7 @@ function setRoleLevel(dbPath, roleId, level) {
     group("三、累计型（quest）：交付一个任务 → 任务型成就 +1");
     // 位置快照 10 秒过期（QUEST_POS_STALE_MS）：击杀段可能跑超，请求前重摆一次刷新鲜度
     // （条目坐标已被上面的 pos 帧对齐到同一处，实时进程即使覆写也写同一坐标）
-    placeRolesNear(dbPath, "1", "0002");
+    placeRolesNear(dbPath, "0", "0002");
     await api(baseUrl, "POST", "quests/accept", { token, body: { questId: "8001" } });
     await api(baseUrl, "POST", "quests/npc-talk", { token, body: { npcId: "0002" } });
     const submitted = await api(baseUrl, "POST", "quests/submit", { token, body: { questId: "8001" } });

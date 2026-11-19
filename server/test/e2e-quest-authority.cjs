@@ -227,11 +227,11 @@ function weekStartDay(now = Date.now()) {
     const adminToken = adminLogin && adminLogin.data && adminLogin.data.token;
     check(!!adminToken, "准备：管理员已登录（要建周常 / 摆点位）");
 
-    // 周常任务 8201：与任务 NPC 对话 1 次（跑通「接 → 推进度 → 交付 → 切周」整条链）
+    // 周常任务 8999：与任务 NPC 对话 1 次（跑通「接 → 推进度 → 交付 → 切周」整条链）
     const weekly = await api(baseUrl, "POST", "admin/quests", {
       token: adminToken, zoneId: ADMIN_ZONE,
       body: {
-        id: "8201",
+        id: "8999",
         kind: "weekly",
         label: "周常试炼",
         description: "本周的例行试炼：去和传送官说句话。",
@@ -241,13 +241,13 @@ function weekStartDay(now = Date.now()) {
         rewards: { bindGold: 300, exp: 50, items: [] },
       },
     });
-    check(weekly && weekly.code === 0, "准备：建了一条 weekly 任务（8201）", weekly && weekly.message);
-    // 8202：发布 NPC 是 9002（现网 `map_npcs` 里没有它），用来测「缺点位放行」那一档；
+    check(weekly && weekly.code === 0, "准备：建了一条 weekly 任务（8999）", weekly && weekly.message);
+    // 8998：发布 NPC 是 9002（现网 `map_npcs` 里没有它），用来测「缺点位放行」那一档；
     // 不挂 prev 链，接取能不能过只取决于 NPC 距离这一道闸
     const noPointQuest = await api(baseUrl, "POST", "admin/quests", {
       token: adminToken, zoneId: ADMIN_ZONE,
       body: {
-        id: "8202",
+        id: "8998",
         kind: "main",
         label: "战魂试炼",
         description: "去战魂使者那儿报个到。",
@@ -257,7 +257,7 @@ function weekStartDay(now = Date.now()) {
         rewards: { bindGold: 100, exp: 10, items: [] },
       },
     });
-    check(noPointQuest && noPointQuest.code === 0, "准备：建了一条发布 NPC 没点位的任务（8202）", noPointQuest && noPointQuest.message);
+    check(noPointQuest && noPointQuest.code === 0, "准备：建了一条发布 NPC 没点位的任务（8998）", noPointQuest && noPointQuest.message);
     check(
       weekly && weekly.data && weekly.data.kind === "weekly",
       "准备：管理端回显 kind = weekly（枚举已放开）",
@@ -324,7 +324,7 @@ function weekStartDay(now = Date.now()) {
 
     withDb(dbPath, (db) => db.prepare("DELETE FROM quest_progress WHERE role_id = ?").run(roleId));
     standAtNpc(dbPath, roleId);
-    const noPointAccept = await api(baseUrl, "POST", "quests/accept", { token, body: { questId: "8202" } });
+    const noPointAccept = await api(baseUrl, "POST", "quests/accept", { token, body: { questId: "8998" } });
     check(noPointAccept && noPointAccept.code === 0, "NPC 全服没点位 → 接取放行（不拿配置缺口卡玩家）", noPointAccept && noPointAccept.message);
 
     // 补一个点位到别的图（map 2）——「只摆在别的图」要变成拒绝，而不是继续放行
@@ -334,7 +334,7 @@ function weekStartDay(now = Date.now()) {
     });
     check(placed && placed.code === 0, "准备：给 9002 在 map 2 摆一个点位", placed && JSON.stringify(placed.message));
     standAtNpc(dbPath, roleId);
-    const otherMapAccept = await api(baseUrl, "POST", "quests/accept", { token, body: { questId: "8202" } });
+    const otherMapAccept = await api(baseUrl, "POST", "quests/accept", { token, body: { questId: "8998" } });
     checkEqual(otherMapAccept && otherMapAccept.code, 20032, "NPC 只摆在别的图 → 20032（走错图不再放行）");
     check(
       otherMapAccept && /不在你当前这张图/.test(otherMapAccept.message || ""),
@@ -392,11 +392,11 @@ function weekStartDay(now = Date.now()) {
 
     // 周常：同样跨轮
     standAtNpc(dbPath, roleId);
-    const acceptWeekly = await api(baseUrl, "POST", "quests/accept", { token, body: { questId: "8201" } });
-    check(acceptWeekly && acceptWeekly.code === 0, "接取周常 8201", acceptWeekly && acceptWeekly.message);
-    const weeklyRow = progressRows(dbPath, roleId, "8201")[0];
-    setResetDay(dbPath, roleId, "8201", weekStartDay() - 7);
-    const expiredWeekly = await api(baseUrl, "POST", "quests/submit", { token, body: { questId: "8201" } });
+    const acceptWeekly = await api(baseUrl, "POST", "quests/accept", { token, body: { questId: "8999" } });
+    check(acceptWeekly && acceptWeekly.code === 0, "接取周常 8999", acceptWeekly && acceptWeekly.message);
+    const weeklyRow = progressRows(dbPath, roleId, "8999")[0];
+    setResetDay(dbPath, roleId, "8999", weekStartDay() - 7);
+    const expiredWeekly = await api(baseUrl, "POST", "quests/submit", { token, body: { questId: "8999" } });
     checkEqual(expiredWeekly && expiredWeekly.code, 20033, "上周的周常行 → submit 20033");
 
     //#endregion
@@ -414,14 +414,14 @@ function weekStartDay(now = Date.now()) {
     // 跨周后：过期行不下发（客户端「没有行 = 可接」的判断不用改）
     const meAfterExpire = await api(baseUrl, "GET", "quests/me", { token });
     const weeklyInMe = (meAfterExpire && meAfterExpire.data && meAfterExpire.data.quests ? meAfterExpire.data.quests : []).filter(
-      (row) => row.questId === "8201",
+      (row) => row.questId === "8999",
     );
     checkEqual(weeklyInMe.length, 0, "跨周后过期的周常行不下发");
 
     standAtNpc(dbPath, roleId);
-    const reAcceptWeekly = await api(baseUrl, "POST", "quests/accept", { token, body: { questId: "8201" } });
+    const reAcceptWeekly = await api(baseUrl, "POST", "quests/accept", { token, body: { questId: "8999" } });
     check(reAcceptWeekly && reAcceptWeekly.code === 0, "跨周后可再接（覆盖重置）", reAcceptWeekly && reAcceptWeekly.message);
-    const resetWeekly = progressRows(dbPath, roleId, "8201");
+    const resetWeekly = progressRows(dbPath, roleId, "8999");
     check(
       resetWeekly.length === 1 && resetWeekly[0].status === "accepted" && resetWeekly[0].progress === 0 && resetWeekly[0].reset_day === weekStartDay(),
       "覆盖重置：同一行、进度清零、天号回到本周周一",
@@ -431,10 +431,10 @@ function weekStartDay(now = Date.now()) {
     // 本周做完 → 20027（文案要说「下周一 05:00」）
     standAtNpc(dbPath, roleId);
     await api(baseUrl, "POST", "quests/npc-talk", { token, body: { npcId: NPC_ID } });
-    const weeklySubmit = await api(baseUrl, "POST", "quests/submit", { token, body: { questId: "8201" } });
+    const weeklySubmit = await api(baseUrl, "POST", "quests/submit", { token, body: { questId: "8999" } });
     check(weeklySubmit && weeklySubmit.code === 0, "周常交付成功", weeklySubmit && weeklySubmit.message);
     standAtNpc(dbPath, roleId);
-    const weeklyAgain = await api(baseUrl, "POST", "quests/accept", { token, body: { questId: "8201" } });
+    const weeklyAgain = await api(baseUrl, "POST", "quests/accept", { token, body: { questId: "8999" } });
     checkEqual(weeklyAgain && weeklyAgain.code, 20027, "本周再接同一周常 → already_done（20027）");
     check(
       weeklyAgain && /下周一/.test(weeklyAgain.message || ""),

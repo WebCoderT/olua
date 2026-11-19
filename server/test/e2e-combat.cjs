@@ -135,37 +135,12 @@ function readKills(dbPath, roleId) {
 }
 
 /**
- * 预先往临时库里插刷怪区（#295：播种来源 = map_spawn_areas，客户端不再上报计划）。
- * 表先建好再插行，服务端启动时的建表与空表 seed 都不会动它。
- * 地图 1 一区两只怪物 1（max 2），地图 2 一区一只怪物 3 —— 与旧播种计划等价。
+ * （#1084 起不再预插刷怪区）怪物全部来自 config-sync.sql 的新手村环带——
+ * 旧做法在起服前往临时库插的行会被空库自举的整表替换抹掉，从来没生效过；
+ * 这套能跑通靠的是旧快照里泄漏的测试命名区，现在统一改跑图 0。
  */
-function seedSpawnAreas(dbPath) {
-  const { DatabaseSync } = require("node:sqlite");
-  const db = new DatabaseSync(dbPath);
-  db.exec(`CREATE TABLE IF NOT EXISTS map_spawn_areas (
-        id          INTEGER PRIMARY KEY AUTOINCREMENT,
-        map_id      TEXT    NOT NULL,
-        name        TEXT    NOT NULL,
-        monster_key TEXT    NOT NULL,
-        min         INTEGER NOT NULL DEFAULT 0,
-        max         INTEGER NOT NULL DEFAULT 0,
-        cx          REAL    NOT NULL,
-        cy          REAL    NOT NULL,
-        w           REAL    NOT NULL,
-        h           REAL    NOT NULL,
-        updated_at  INTEGER NOT NULL DEFAULT 0
-      );`);
-  const insert = db.prepare(
-    `INSERT INTO map_spawn_areas (map_id, name, monster_key, min, max, cx, cy, w, h, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-  );
-  const now = Date.now();
-  insert.run("1", "1号怪物", "1", 0, 2, 200, 300, 400, 400, now);
-  insert.run("2", "1号怪物", "3", 0, 1, 10, 20, 100, 100, now);
-  db.close();
-}
 
-/** 起一台服务并等它就绪（#295 起 DB 用临时文件库：刷怪区要在启动前插好） */
+/** 起一台服务并等它就绪（#295 起 DB 用临时文件库） */
 async function startServer(dbPath) {
   const port = await freePort();
   const baseUrl = `http://127.0.0.1:${port}`;
@@ -336,7 +311,6 @@ function connect(url) {
 
 (async () => {
   const dbPath = path.join(os.tmpdir(), `olua-e2e-combat-${Date.now()}.db`);
-  seedSpawnAreas(dbPath);
   const server = await startServer(dbPath);
   try {
     const { baseUrl } = server;
@@ -355,12 +329,50 @@ function connect(url) {
     check(created.code === 0 && created.data.online === true, "准备：角色已创建并自动在线", created.message);
     // #859 起「没有位置记录」的角色只准进新手村，而这一套全程在图 1 / 图 2 上跑：
     // 先按运营摆位把主角放到图 1（等价管理端 PATCH onMap，见 lib/place-role.cjs）
-    placeRolesAt(dbPath, "1");
+    placeRolesAt(dbPath, "0");
 
     // 管理端令牌：技能 / 装备 / 背包 从 #556 起是服务端权威，玩家侧存档已经改不动它们了
     // （客户端上报会被库里那份回填），所以测试要造这些状态只能走管理端结构化编辑。
     const adminToken = await registerAdmin(baseUrl, "combat_admin", "Combat#123");
     check(!!adminToken, "准备：管理员已登录（改配置表与造角色状态都要用它）");
+
+    // #1084 重排后测试全程在图 0 上跑，而图 0 出厂就是「不掉东西」的图（map_rules.allow_drop = 0，
+    // rollDrops 第一步整单放弃 —— entries 配得再对也不抽）。掉落相关 region 要先临时打开，
+    // 测试结尾还原原值。规则 PATCH 是**整份提交**校验（缺一个字段都 400），所以把 GET 回来的
+    // 整份改一个开关再交回去。
+    const rulesZero = await api(baseUrl, "GET", "admin/maps/0/rules", { token: adminToken, zoneId: ADMIN_ZONE });
+    const zero = (rulesZero.code === 0 && rulesZero.data) || null;
+    const allowDropZero = zero ? Boolean(zero.allowDrop) : null;
+    const rulesBodyOf = (allowDrop) => ({
+      expRate: zero.expRate,
+      dropRate: zero.dropRate,
+      moneyRate: zero.moneyRate,
+      allowPk: zero.allowPk,
+      allowAutoBattle: zero.allowAutoBattle,
+      allowRecall: zero.allowRecall,
+      allowDrop,
+      maxPlayersPerRoom: zero.maxPlayersPerRoom,
+      maxChannels: zero.maxChannels,
+      transferCostMoney: zero.transferCostMoney,
+      transferCooldownMs: zero.transferCooldownMs,
+      denyTransferInCombat: zero.denyTransferInCombat,
+      respawnMsOverride: zero.respawnMsOverride,
+      simulateWhenEmpty: zero.simulateWhenEmpty,
+    });
+    if (allowDropZero === false) {
+      const dropOpened = await api(baseUrl, "PATCH", "admin/maps/0/rules", {
+        token: adminToken, zoneId: ADMIN_ZONE, body: rulesBodyOf(true),
+      });
+      check(dropOpened.code === 0, "准备：临时打开图 0 掉落（map_rules.allowDrop，结尾还原）", dropOpened.message);
+    }
+
+    // 随机绑定概率压到 0（运营可调的旋钮，快照里带的是实况值 —— 不压的话「默认不绑定」
+    // 断言有 bindChance% 的概率抖红）：随机绑定有自己的专项用例（改 100/0 再还原）
+    const bindParamsBase = (await api(baseUrl, "GET", "admin/runtime-params", { token: adminToken, zoneId: ADMIN_ZONE })).data;
+    const bindChanceBase = bindParamsBase && bindParamsBase.drop ? bindParamsBase.drop.bindChance : 0;
+    if (Number(bindChanceBase) !== 0) {
+      await api(baseUrl, "PATCH", "admin/runtime-params", { token: adminToken, zoneId: ADMIN_ZONE, body: { drop: { bindChance: 0 } } });
+    }
 
     // 清空技能，让「未学习」这条用例恢复前提（#597 起初始号自带 1xxx 全 1 级）
     const cleared = await api(baseUrl, "PATCH", `admin/roles/${roleId}`, { token: adminToken, zoneId: ADMIN_ZONE, body: { skills: {} } });
@@ -392,7 +404,7 @@ function connect(url) {
     };
 
     /** 进图播种：拿回服务端发的实例 id（#966 起不数只数 —— 播种密度是配置数据） */
-    const world = await session.joinWorld("1");
+    const world = await session.joinWorld("0");
     const mobA = world && world.monsters[0];
     const mobB = world && world.monsters.find((mob) => mob.instanceId !== (mobA && mobA.instanceId));
     check(
@@ -549,7 +561,7 @@ function connect(url) {
     check(replayAfterReset && replayAfterReset.ok === false && replayAfterReset.code === "target_dead", "targetsReset 后重投被重新校验：死怪不因清账复活", JSON.stringify(replayAfterReset));
 
     // 世界快照如实：死亡的实例 alive=false 且带重生倒计时，活着的照常
-    const snapshot = await session.joinWorld("1");
+    const snapshot = await session.joinWorld("0");
     const snapA = snapshot && snapshot.monsters.find((m) => m.instanceId === (mobA ? mobA.instanceId : "m1_1"));
     const snapB = snapshot && snapshot.monsters.find((m) => m.instanceId === (mobB ? mobB.instanceId : "m1_2"));
     check(!!snapA && snapA.alive === false && snapA.hp === 0 && typeof snapA.respawnInMs === "number", "快照里死亡的实例 alive=false 且带重生倒计时", JSON.stringify(snapA));
@@ -559,12 +571,12 @@ function connect(url) {
     // #606 起进图门槛在服务端判（1 级角色既进不了 1 图 10 级、也进不了 2 图 40 级），
     // 而这一区域要验的是「换图清账」——所以先用管理端把这名角色提到 10 级并承认它的位置
     // （`onMap` 一并写 `mapAt`），换图目标选新手村 0 图（1 级可进），往返两程都在门槛之内
-    const promoted = await api(baseUrl, "PATCH", `admin/roles/${roleId}`, { token: adminToken, zoneId: ADMIN_ZONE, body: { level: 10, onMap: "1" } });
+    const promoted = await api(baseUrl, "PATCH", `admin/roles/${roleId}`, { token: adminToken, zoneId: ADMIN_ZONE, body: { level: 10, onMap: "0" } });
     check(promoted.code === 0, "换图前把角色提到 10 级并摆回 1 图（门槛之上才有得验换图）", promoted.message);
-    const map2 = await session.joinWorld("0");
+    const map2 = await session.joinWorld("1");
     // 不数只数（播种密度是配置数据）：换图要拿到的是一份形状完整、mapId 跟着换的快照
-    check(!!map2 && Array.isArray(map2.monsters) && map2.mapId === "0", "换图 worldJoin 拿到新图的快照（mapId 跟着换）", JSON.stringify(map2 && map2.mapId));
-    const back = await session.joinWorld("1");
+    check(!!map2 && Array.isArray(map2.monsters) && map2.mapId === "1", "换图 worldJoin 拿到新图的快照（mapId 跟着换）", JSON.stringify(map2 && map2.mapId));
+    const back = await session.joinWorld("0");
     const backA = back && back.monsters.find((m) => m.instanceId === (mobA ? mobA.instanceId : "m1_1"));
     check(!!backA && backA.alive === false && backA.hp === 0, "换图往返后旧图实例状态保持（世界状态不随会话清）");
 
@@ -595,7 +607,7 @@ function connect(url) {
     session = connect(`${baseUrl.replace("http", "ws")}/api/realtime?ticket=${encodeURIComponent(ticket2.data.ticket)}`);
     await waitFor("重连成功", async () => (session.opened ? session : null));
     // 重连后重新 join（播种计划为空 —— 实例已存在，不该翻倍），拿回权威状态
-    const rejoined = await session.joinWorld("1");
+    const rejoined = await session.joinWorld("0");
     // 「不重复播种」= 实例 id 没有出现两份（唯一性），且与首次进图是同一份（相对关系）
     const rejoinIds = (rejoined && rejoined.monsters ? rejoined.monsters : []).map((m) => m.instanceId);
     const firstIds = (world && world.monsters ? world.monsters : []).map((m) => m.instanceId);
@@ -624,7 +636,7 @@ function connect(url) {
       const playerToken = registered.data && registered.data.token;
       const createdRole = await api(baseUrl, "POST", "roles", { token: playerToken, body: { name, occupation: "1", sex: "1" } });
       // #859：新号没有位置记录只准进新手村 —— 建号后立刻摆到图 1（这一套的默认战场）
-      placeRolesAt(dbPath, "1", [name]);
+      placeRolesAt(dbPath, "0", [name]);
       const ticket = await api(baseUrl, "POST", "realtime/ticket", { token: playerToken });
       const playerSession = connect(`${baseUrl.replace("http", "ws")}/api/realtime?ticket=${encodeURIComponent(ticket.data.ticket)}`);
       await waitFor(`${name} 握手成功`, async () => (playerSession.opened ? playerSession : null));
@@ -652,11 +664,19 @@ function connect(url) {
       return player.session.joinWorld(mapId);
     };
 
-    /** 等某张图上出现活着的怪（WORLD_RESPAWN_MS = 5s，前面的 region 杀过图 1 的怪） */
-    async function aliveMonster(player, mapId) {
-      return waitFor(`mapId=${mapId} 有活着的怪`, async () => {
+    /**
+     * 等某张图上出现活着的怪（WORLD_RESPAWN_MS = 5s，前面的 region 杀过图 1 的怪）
+     *
+     * #1084 重排后图 0 是全怪环带（220 区、快照顺序 = 按怪 key 升序），「第一只活怪」
+     * 不再天然就是 key "1" —— 而旧图 1 上唯一泄漏的测试怪就是 "1"，好几段断言隐式依赖它
+     * （改它的掉落行后杀任意怪都出货）。缺省挑 key "1" 恢复这个前提：怪按区播种，
+     * key "1" 在图 0 上有十几只实例，杀掉一只还有别的。
+     */
+    async function aliveMonster(player, mapId, wantKey = "1") {
+      return waitFor(`mapId=${mapId} 有活着的怪（key=${wantKey}）`, async () => {
         const snap = await enterAt(player, mapId);
-        const alive = (snap && snap.monsters.find((m) => m.alive)) || null;
+        const alive =
+          (snap && snap.monsters.find((m) => m.alive && (!wantKey || m.monsterKey === wantKey))) || null;
         // #817：掉落点在「怪倒下的地方」，拾取距离闸拿它当参照 —— 记住这只怪在哪，
         // `pick` 之前就把玩家摆到那儿（等价真实客户端「走过去捡」）
         if (alive) player.lastSpot = { mapId, x: alive.x, y: alive.y };
@@ -667,7 +687,7 @@ function connect(url) {
     // —— A. 正常经验：服务端落账（reward 与存档一致、revision 推进）——
 
     const killerA = await newPlayer("combat_rwa");
-    const mobA2 = await aliveMonster(killerA, "1");
+    const mobA2 = await aliveMonster(killerA, "0");
     check(!!mobA2, "A：等到了活着的怪（前面的击杀已按 5s 重生）", JSON.stringify(mobA2));
     const killedA = await killMonster(killerA, mobA2.monsterKey, mobA2.instanceId);
     check(!!(killedA && killedA.ok && killedA.reward), "A：击杀结算带 reward", JSON.stringify(killedA));
@@ -690,7 +710,7 @@ function connect(url) {
     // —— A2. 击杀计数（#400）：独立于经验，一次一加（判相对关系，不判绝对次数）——
 
     const killsBefore = readKills(dbPath, killerA.roleId);
-    const mobA3 = await aliveMonster(killerA, "1");
+    const mobA3 = await aliveMonster(killerA, "0");
     check(!!mobA3, "A：等到第二只活着的怪（验击杀计数是累加而不是覆盖）", JSON.stringify(mobA3));
     const killedA2 = mobA3 ? await killMonster(killerA, mobA3.monsterKey, mobA3.instanceId) : null;
     check(!!(killedA2 && killedA2.killed), "A：第二只也打死了");
@@ -714,7 +734,7 @@ function connect(url) {
     check(expPatched.code === 0, "B：把 1 级升级所需经验改成 1（任何经验都够升）");
 
     const killerB = await newPlayer("combat_rwb");
-    const mobB2 = await aliveMonster(killerB, "2");
+    const mobB2 = await aliveMonster(killerB, "0");
     check(!!mobB2, "B：地图 2 等到了活着的怪", JSON.stringify(mobB2));
     const killedB = await killMonster(killerB, mobB2.monsterKey, mobB2.instanceId);
     // 判「升级真的发生」这个状态机 + 「管理端改曲线即时生效」，不判经验数额
@@ -749,7 +769,7 @@ function connect(url) {
     });
 
     const killerC = await newPlayer("combat_rwc");
-    const mobC = await aliveMonster(killerC, "1");
+    const mobC = await aliveMonster(killerC, "0");
     check(!!mobC, "C：等到了活着的怪", JSON.stringify(mobC));
     const killedC = await killMonster(killerC, mobC.monsterKey, mobC.instanceId);
     // picks 2 × 每次必掉 2 个 → 合并后恰好 drug_hp_1 x4（权重/概率/数量全确定）；
@@ -762,7 +782,7 @@ function connect(url) {
         killedC.reward.drops[0].goodId === "drug_hp_1" &&
         killedC.reward.drops[0].bound === false,
       "C：掉落按改后的表结算（只掉改表里那件，多次抽取合并成一堆，默认不绑定）",
-      JSON.stringify(killedC && killedC.reward && killedC.reward.drops),
+      JSON.stringify({ key: mobC && mobC.monsterKey, exp: killedC && killedC.reward && killedC.reward.exp, drops: killedC && killedC.reward && killedC.reward.drops }),
     );
     check(
       !!(killedC && killedC.reward) && typeof killedC.reward.exp === "number" && killedC.reward.exp > 0 && killedC.reward.leveledUp === false,
@@ -809,7 +829,7 @@ function connect(url) {
       "D：等级落到索引列，修订号只推进一次",
       `level=${afterPatchD.data.level} revision=${revisionD}`,
     );
-    const mobD = await aliveMonster(killerD, "1");
+    const mobD = await aliveMonster(killerD, "0");
     check(!!mobD, "D：等到了活着的怪", JSON.stringify(mobD));
     const killedD2 = mobD ? await killMonster(killerD, mobD.monsterKey, mobD.instanceId) : null;
     check(!!(killedD2 && killedD2.reward) && killedD2.reward.exp === 0, "D：等级差超过上限 → 无经验（exp === 0，0 是「不给」的定义）", JSON.stringify(killedD2 && killedD2.reward));
@@ -823,9 +843,35 @@ function connect(url) {
 
     group("七、怪物 AI：普攻与玩家受击由服务端结算（monster-ai 帧）");
 
+    // #1084 重排后图 0 环带拥挤：被动怪身边就有主动怪，fighter 会被围殴 —— 受击断言读的是
+    // 存档 hp，别的怪多打一记「db hp === hit.hp」就红。这一段往下（七/八/九/十/十一）要的都是
+    // 「被动怪被激怒后」的行为，先把全图怪物的 aggressive 临时关掉（AI 侧 1 秒 TTL 缓存，
+    // 关完等一拍再继续），测试结尾统一还原
+    const calmList = await api(baseUrl, "GET", "admin/monsters?page=1&size=100", { token: adminToken, zoneId: ADMIN_ZONE });
+    const calmTotal = (calmList.data && calmList.data.total) || 0;
+    const calmRows = (calmList.data && calmList.data.list) || [];
+    for (let page = 2; calmRows.length < calmTotal && page <= 10; page++) {
+      const next = await api(baseUrl, "GET", `admin/monsters?page=${page}&size=100`, { token: adminToken, zoneId: ADMIN_ZONE });
+      calmRows.push(...((next.data && next.data.list) || []));
+    }
+    const aggressiveBefore = [];
+    for (const row of calmRows) {
+      if (!row.presentation) continue;
+      const res = await api(baseUrl, "PATCH", `admin/monsters/${row.id}`, {
+        token: adminToken, zoneId: ADMIN_ZONE, body: { presentation: { aggressive: false } },
+      });
+      if (res.code === 0) aggressiveBefore.push({ id: row.id, aggressive: row.presentation.aggressive });
+    }
+    check(
+      aggressiveBefore.length > 0,
+      "七：临时关掉全图怪物主动攻击（受击断言要被动怪行为，结尾还原）",
+      `rows ${aggressiveBefore.length}/${calmRows.length}`,
+    );
+    await sleep(1500);
+
     const fighter = await newPlayer("combat_raf");
-    // 地图 2：一只怪物 3（前面的 region 没动过它），拿服务端发的出生点
-    const aiMob = await aliveMonster(fighter, "2");
+    // 图 0：环带里的活怪（前面的 region 没动过它碰的那只），拿服务端发的出生点
+    const aiMob = await aliveMonster(fighter, "0");
     check(!!aiMob, "七：地图 2 有活着的怪（拿服务端发的出生点）", JSON.stringify(aiMob));
 
     // 出手一次激怒被动怪（结算顺带把「打伤它的人」记给 AI —— 追击由此开始）
@@ -834,7 +880,7 @@ function connect(url) {
 
     /** 周期上报位置（pos 帧有过期时间，断言窗口比它长就要持续喂） */
     let posTimer = null;
-    const reportPos = (x, y, hp) => fighter.session.socket.send(JSON.stringify({ type: "pos", data: { mapId: "2", x, y, hp } }));
+    const reportPos = (x, y, hp) => fighter.session.socket.send(JSON.stringify({ type: "pos", data: { mapId: "0", x, y, hp } }));
     const hitCount = () => fighter.session.ais.reduce((sum, frame) => sum + (frame.hits ? frame.hits.length : 0), 0);
 
     // —— A. 激怒后进入普攻距离：服务端出招，玩家受击落账 ——
@@ -930,13 +976,13 @@ function connect(url) {
     // 快照要读到的是恢复后的 hp = 100
     const selfPos = { x: 100, y: 100 };
     let fighterPosTimer = setInterval(
-      () => fighter.session.socket.send(JSON.stringify({ type: "pos", data: { mapId: "2", x: selfPos.x, y: selfPos.y, hp: 100 } })),
+      () => fighter.session.socket.send(JSON.stringify({ type: "pos", data: { mapId: "0", x: selfPos.x, y: selfPos.y, hp: 100 } })),
       300,
     );
     await sleep(500);
 
     // —— A. 快照兜底：companion 进图立刻拿到一份同图全量 ——
-    await enterAt(companion, "2");
+    await enterAt(companion, "0");
     const fullFrame = await waitFor("companion 的互见快照", async () => {
       return companion.session.players.find((frame) => frame.full === true) || null;
     }, 5_000);
@@ -960,7 +1006,7 @@ function connect(url) {
     // —— B. 增量出现：companion 上报位置后 fighter 收到它 ——
     const companionPos = { x: 200, y: 200, hp: 100, moving: false };
     const companionPosTimer = setInterval(
-      () => companion.session.socket.send(JSON.stringify({ type: "pos", data: { mapId: "2", x: companionPos.x, y: companionPos.y, hp: companionPos.hp, moving: companionPos.moving } })),
+      () => companion.session.socket.send(JSON.stringify({ type: "pos", data: { mapId: "0", x: companionPos.x, y: companionPos.y, hp: companionPos.hp, moving: companionPos.moving } })),
       300,
     );
     const appearFrame = await waitFor("fighter 收到 companion 出现", async () => {
@@ -977,7 +1023,7 @@ function connect(url) {
     }, 8_000);
     check(!!timeoutLeft, "C：fighter 停止上报后 companion 收到离开事件（超时视作离场）", JSON.stringify(timeoutLeft));
     fighterPosTimer = setInterval(
-      () => fighter.session.socket.send(JSON.stringify({ type: "pos", data: { mapId: "2", x: selfPos.x, y: selfPos.y, hp: 100 } })),
+      () => fighter.session.socket.send(JSON.stringify({ type: "pos", data: { mapId: "0", x: selfPos.x, y: selfPos.y, hp: 100 } })),
       300,
     );
     const reappear = await waitFor("companion 再次收到 fighter", async () => {
@@ -1068,11 +1114,9 @@ function connect(url) {
 
     group("九、掉落拾取：地面是世界实体，归属与格子级入包的权威在服务端（pick / picked 帧）");
 
-    // 掉落确定性：怪物 1 改成「必掉 drug_hp_1 x2」（picks 1 × chance 1 × count [2,2]）
-    await api(baseUrl, "PATCH", "admin/monster-drops/1", {
-      token: adminToken, zoneId: ADMIN_ZONE,
-      body: { tableId: null, picks: 1, entries: [{ goodId: "drug_hp_1", weight: 100, chance: 1, count: [2, 2] }] },
-    });
+    // 掉落确定性：把「即将被打的这只怪」改成「必掉 drug_hp_1 x2」（picks 1 × chance 1 × count [2,2]）。
+    // #1084 起地图 0 是全怪环带，aliveMonster 挑到哪只取决于快照时序 —— 拿到 mobK 后按
+    // 它的 key 动态改（改前的行记在 dropRowK，region 末尾还原）。patch 在下面 mobK 落位之后。
 
     /**
      * 站到某个点（发一帧 `pos`，#817 的拾取距离闸读的就是在场表里这份坐标）
@@ -1139,7 +1183,7 @@ function connect(url) {
      * 报出来的却像是掉落语义坏了。所以重试到拿到 dropId 为止：每轮先 `aliveMonster`
      * 把玩家挪到那只怪旁边再打。
      */
-    const killForDrop = async (player, mapId = "1", tries = 3) => {
+    const killForDrop = async (player, mapId = "0", tries = 3) => {
       for (let i = 0; i < tries; i++) {
         const mob = await aliveMonster(player, mapId);
         const killed = mob ? await killMonster(player, mob.monsterKey, mob.instanceId) : null;
@@ -1154,11 +1198,17 @@ function connect(url) {
     const picker = await newGridPlayer("combat_rpk");
     // 旁观者：掉落是**世界实体**，另一个连接也得收到同一份 dropSpawn（dropId 与坐标一致）
     const watcher = await newGridPlayer("combat_rpw");
-    const watcherWorld = await enterAt(watcher, "1");
-    check(!!(watcherWorld && watcherWorld.mapId === "1"), "A：旁观者已进图 1（同图才有掉落广播）", JSON.stringify(watcherWorld && watcherWorld.mapId));
+    const watcherWorld = await enterAt(watcher, "0");
+    check(!!(watcherWorld && watcherWorld.mapId === "0"), "A：旁观者已进图 1（同图才有掉落广播）", JSON.stringify(watcherWorld && watcherWorld.mapId));
 
-    const mobK = await aliveMonster(picker, "1");
+    const mobK = await aliveMonster(picker, "0");
     check(!!mobK, "A：等到了活着的怪", JSON.stringify(mobK));
+    const dropListK = await api(baseUrl, "GET", "admin/monster-drops?page=1&size=300", { token: adminToken, zoneId: ADMIN_ZONE });
+    const dropRowK = (dropListK.data && dropListK.data.list || []).find((row) => row.monsterKey === (mobK && mobK.monsterKey));
+    await api(baseUrl, "PATCH", `admin/monster-drops/${mobK.monsterKey}`, {
+      token: adminToken, zoneId: ADMIN_ZONE,
+      body: { tableId: null, picks: 1, entries: [{ goodId: "drug_hp_1", weight: 100, chance: 1, count: [2, 2] }] },
+    }).then((r) => check(r.code === 0, "A：掉落表 PATCH 成功（key 动态改的前提）", JSON.stringify({ key: mobK.monsterKey, code: r.code, msg: r.message })));
     const killedK = mobK ? await killMonster(picker, mobK.monsterKey, mobK.instanceId) : null;
     check(
       !!(killedK && killedK.reward) &&
@@ -1185,7 +1235,7 @@ function connect(url) {
       JSON.stringify(seenByWatcher),
     );
     // 进图快照与增量广播必须是**同一份**：客户端不该自己再算一次落点
-    const snapK = await picker.session.joinWorld("1");
+    const snapK = await picker.session.joinWorld("0");
     const inSnapshot = snapK && Array.isArray(snapK.drops) ? snapK.drops.find((drop) => drop.dropId === dropK) : null;
     check(
       !!(inSnapshot && seenByWatcher) && inSnapshot.x === seenByWatcher.x && inSnapshot.y === seenByWatcher.y,
@@ -1251,12 +1301,12 @@ function connect(url) {
     const outsider = await newGridPlayer("combat_rpo");
     // 必须先真的进图：#802 的图判定读的是**服务端记下的位置**（worldJoin 放行那一刻写），
     // 没进过图的人拿不到任何掉落（不是「不知道就不判」）
-    const outsiderWorld = await enterAt(outsider, "1");
-    check(!!(outsiderWorld && outsiderWorld.mapId === "1"), "C：旁观者已进图 1（否则图判定会先把它挡住）");
-    const mobP1 = await aliveMonster(picker, "1");
+    const outsiderWorld = await enterAt(outsider, "0");
+    check(!!(outsiderWorld && outsiderWorld.mapId === "0"), "C：旁观者已进图 1（否则图判定会先把它挡住）");
+    const mobP1 = await aliveMonster(picker, "0");
     const killedP1 = mobP1 ? await killMonster(picker, mobP1.monsterKey, mobP1.instanceId) : null;
     const dropC = dropIdIn(killedP1);
-    check(!!dropC, "C：又打出一份掉落在保护期内（新的靶子）", dropC);
+    check(!!dropC, "C：又打出一份掉落在保护期内（新的靶子）", JSON.stringify({ key: mobP1 && mobP1.monsterKey, reward: killedP1 && killedP1.reward }));
     const stolenPick = dropC ? await pick(outsider, dropC, { spot: null }) : null;
     check(
       !!(stolenPick && stolenPick.ok === false && stolenPick.code === "protected") &&
@@ -1271,7 +1321,7 @@ function connect(url) {
     const protectBefore = (await api(baseUrl, "GET", "admin/runtime-params", { token: adminToken, zoneId: ADMIN_ZONE })).data.drop.protectMs;
     const protectedOff = await api(baseUrl, "PATCH", "admin/runtime-params", { token: adminToken, zoneId: ADMIN_ZONE, body: { drop: { protectMs: 0 } } });
     check(protectedOff.code === 0, "C：保护期已压到 0（改完立即生效）", protectedOff.message);
-    const mobC2 = await aliveMonster(picker, "1");
+    const mobC2 = await aliveMonster(picker, "0");
     const killedC2 = mobC2 ? await killMonster(picker, mobC2.monsterKey, mobC2.instanceId) : null;
     const dropC2 = dropIdIn(killedC2);
     const openPick = dropC2 ? await pick(outsider, dropC2, { spot: null }) : null;
@@ -1299,7 +1349,7 @@ function connect(url) {
 
     // #802 之前掉落挂在「击杀者的私人账本」上，换图 / targetsReset 顺手就清了；
     // 现在它是世界实体，生命周期只由 expireAt 决定 —— 这两条判的正是这次语义变化。
-    const dropF = await killForDrop(picker, "1");
+    const dropF = await killForDrop(picker, "0");
     check(!!dropF, "E：在图 1 打出一份掉落（先不拾）", dropF);
     picker.session.socket.send(JSON.stringify({ type: "targetsReset" }));
     await sleep(100);
@@ -1314,11 +1364,11 @@ function connect(url) {
 
     // 图 2 有进图门槛，先把等级提上去（picker 此时已经站在图 1，换图要走门槛判定）
     await api(baseUrl, "PATCH", `admin/roles/${picker.roleId}`, { token: adminToken, zoneId: ADMIN_ZONE, body: { level: 60 } });
-    const dropG = await killForDrop(picker, "1");
-    check(!!dropG, "F：在图 1 打出一份掉落（先不拾）", dropG);
-    await enterAt(picker, "2");
+    const dropG = await killForDrop(picker, "0");
+    check(!!dropG, "F：在图 0 打出一份掉落（先不拾）", dropG);
+    await enterAt(picker, "1");
     check(
-      picker.session.worlds.some((frame) => frame.mapId === "2"),
+      picker.session.worlds.some((frame) => frame.mapId === "1"),
       "F：已经换到图 2（world 帧回来了）",
       JSON.stringify({ enters: picker.session.enterResults.slice(-2), worlds: picker.session.worlds.map((frame) => frame.mapId).slice(-3) }),
     );
@@ -1328,7 +1378,7 @@ function connect(url) {
       "F：换到图 2 后拾图 1 的掉落 → 拒（not_on_map，不是 unknown_drop：东西还在那张图的地上）",
       JSON.stringify(crossPick),
     );
-    await enterAt(picker, "1");
+    await enterAt(picker, "0");
     const backPick = dropG ? await pick(picker, dropG) : null;
     check(
       !!(backPick && backPick.ok && backPick.alreadyPicked === false),
@@ -1341,12 +1391,12 @@ function connect(url) {
     // 掉落点 = 散落后的世界坐标（服务端算，实体上固化）。闸判三件事：
     // 有没有位置、是不是同一张图、离掉落点多远；半径是运营可配的 `drop.pickAcceptRadius`。
     const farPicker = await newGridPlayer("combat_rpf");
-    const mobH = await aliveMonster(farPicker, "1");
+    const mobH = await aliveMonster(farPicker, "0");
     check(!!mobH, "G：等到了活着的怪", JSON.stringify(mobH));
     const killedH = mobH ? await killMonster(farPicker, mobH.monsterKey, mobH.instanceId) : null;
     const dropH = dropIdIn(killedH);
     check(!!dropH, "G：击杀结算带一份掉落（拾取距离闸的靶子）", dropH);
-    const farSpot = { mapId: "1", x: (mobH ? mobH.x : 0) + 800, y: mobH ? mobH.y : 0 };
+    const farSpot = { mapId: "0", x: (mobH ? mobH.x : 0) + 800, y: mobH ? mobH.y : 0 };
     const pickedFar = dropH ? await pick(farPicker, dropH, { spot: farSpot }) : null;
     check(
       !!(pickedFar && pickedFar.ok === false && pickedFar.code === "too_far"),
@@ -1365,11 +1415,11 @@ function connect(url) {
     const paramsBeforeRadius = await api(baseUrl, "GET", "admin/runtime-params", { token: adminToken, zoneId: ADMIN_ZONE });
     const acceptBefore = paramsBeforeRadius.data.drop.pickAcceptRadius;
     await api(baseUrl, "PATCH", "admin/runtime-params", { token: adminToken, zoneId: ADMIN_ZONE, body: { drop: { pickAcceptRadius: 0 } } });
-    const mobH2 = await aliveMonster(farPicker, "1");
+    const mobH2 = await aliveMonster(farPicker, "0");
     const killedH2 = mobH2 ? await killMonster(farPicker, mobH2.monsterKey, mobH2.instanceId) : null;
     const dropH2 = dropIdIn(killedH2);
     const pickedOff = dropH2
-      ? await pick(farPicker, dropH2, { spot: { mapId: "1", x: mobH2.x + 800, y: mobH2.y } })
+      ? await pick(farPicker, dropH2, { spot: { mapId: "0", x: mobH2.x + 800, y: mobH2.y } })
       : null;
     check(
       !!(pickedOff && pickedOff.ok && pickedOff.alreadyPicked === false),
@@ -1391,7 +1441,7 @@ function connect(url) {
       token: adminToken, zoneId: ADMIN_ZONE, body: { drop: { protectMs: 0 } },
     });
     const dropOwner = await newGridPlayer("combat_rpn0");
-    const mobN0 = await aliveMonster(dropOwner, "1");
+    const mobN0 = await aliveMonster(dropOwner, "0");
     check(!!mobN0, "G：等到了活着的怪（fail-open 靶子的掉落来源）", JSON.stringify(mobN0));
     const killedN0 = mobN0 ? await killMonster(dropOwner, mobN0.monsterKey, mobN0.instanceId) : null;
     const dropN0 = dropIdIn(killedN0);
@@ -1420,7 +1470,7 @@ function connect(url) {
     const savedFull = await api(baseUrl, "PATCH", `admin/roles/${fullPlayer.roleId}`, { token: adminToken, zoneId: ADMIN_ZONE, body: { bag: fullCells } });
     check(savedFull.code === 0, "H：背包已存成全满（4×10 格 material_iron x99，管理端结构化编辑）", savedFull.message);
 
-    const mobFull = await aliveMonster(fullPlayer, "1");
+    const mobFull = await aliveMonster(fullPlayer, "0");
     check(!!mobFull, "H：等到了活着的怪（上一只已按 5s 重生）", JSON.stringify(mobFull));
     const killedFull = mobFull ? await killMonster(fullPlayer, mobFull.monsterKey, mobFull.instanceId) : null;
     const dropFull = dropIdIn(killedFull);
@@ -1445,11 +1495,13 @@ function connect(url) {
       JSON.stringify(stillThere),
     );
 
-    // 还原怪物 1 的掉落配置（seed 是内联条目池）
-    await api(baseUrl, "PATCH", "admin/monster-drops/1", {
-      token: adminToken, zoneId: ADMIN_ZONE,
-      body: { tableId: null, picks: dropRowOne.picks, entries: dropRowOne.entries },
-    });
+    // 还原 region 九动态改掉的那张掉落表（seed 是内联条目池；#1084 起 key 不再写死）
+    if (dropRowK) {
+      await api(baseUrl, "PATCH", `admin/monster-drops/${dropRowK.monsterKey}`, {
+        token: adminToken, zoneId: ADMIN_ZONE,
+        body: { tableId: null, picks: dropRowK.picks, entries: dropRowK.entries },
+      });
+    }
 
 
     //#region 十一、绑定与溯源（#789 / #816）：掉落时判定绑定，入包后可见，背包操作与穿脱都只换地方
@@ -1482,7 +1534,7 @@ function connect(url) {
     const touchedDropKeys = new Set();
     /** 打一只怪（先把它的掉落改成指定物品），返回击杀结算 */
     const killWith = async (player, goodId, extra = {}, count = [2, 2]) => {
-      const mob = await aliveMonster(player, "1");
+      const mob = await aliveMonster(player, "0");
       if (!mob) return null;
       touchedDropKeys.add(mob.monsterKey);
       await patchDropOf(mob.monsterKey, goodId, extra, count);
@@ -1521,7 +1573,7 @@ function connect(url) {
     );
     const itemBound = await killWith(binder, "drug_hp_1");
     check(
-      !!itemBound && itemBound.drops[0].bound === true,
+      !!itemBound && Array.isArray(itemBound.drops) && itemBound.drops.length > 0 && itemBound.drops[0].bound === true,
       "A：物品侧强制绑定生效（这只是药品自己的标记，怪物没开）",
       JSON.stringify(itemBound && itemBound.drops),
     );
@@ -1530,7 +1582,7 @@ function connect(url) {
     // 怪物侧：这只怪掉什么都绑
     const monsterBound = await killWith(binder, "drug_hp_1", { bindDrops: true });
     check(
-      !!monsterBound && monsterBound.drops[0].bound === true,
+      !!monsterBound && Array.isArray(monsterBound.drops) && monsterBound.drops.length > 0 && monsterBound.drops[0].bound === true,
       "A：怪物侧「掉落整体强制绑定」生效（物品侧已还原成不强制）",
       JSON.stringify(monsterBound && monsterBound.drops),
     );
@@ -1541,14 +1593,14 @@ function connect(url) {
     await api(baseUrl, "PATCH", "admin/runtime-params", { token: adminToken, zoneId: ADMIN_ZONE, body: { drop: { bindChance: 100 } } });
     const randomBound = await killWith(binder, "drug_hp_1");
     check(
-      !!randomBound && randomBound.drops[0].bound === true,
+      !!randomBound && Array.isArray(randomBound.drops) && randomBound.drops.length > 0 && randomBound.drops[0].bound === true,
       "A：随机绑定概率 100% → 必绑（第三道规则）",
       JSON.stringify(randomBound && randomBound.drops),
     );
     await api(baseUrl, "PATCH", "admin/runtime-params", { token: adminToken, zoneId: ADMIN_ZONE, body: { drop: { bindChance: 0 } } });
     const randomOff = await killWith(binder, "drug_hp_1");
     check(
-      !!randomOff && randomOff.drops[0].bound === false,
+      !!randomOff && Array.isArray(randomOff.drops) && randomOff.drops.length > 0 && randomOff.drops[0].bound === false,
       "A：概率改回 0 → 又回到不绑定（参数即时生效）",
       JSON.stringify(randomOff && randomOff.drops),
     );
@@ -1859,7 +1911,7 @@ function connect(url) {
     group("十、怪物技能：挂载表驱动服务端 AI 释放（casts 帧）");
 
     const casterA = await newPlayer("combat_rsc");
-    const castMob = await aliveMonster(casterA, "2");
+    const castMob = await aliveMonster(casterA, "0");
     check(!!castMob, "十：地图 2 有活着的怪（技能释放的宿主）", JSON.stringify(castMob));
 
     // 原挂载与原攻击区间：region 末尾要还原（不污染 seed 前提与后续断言）
@@ -1889,7 +1941,7 @@ function connect(url) {
 
     const castNear = { x: castMob.x + 10, y: castMob.y };
     const reportCastPos = (hp) =>
-      casterA.session.socket.send(JSON.stringify({ type: "pos", data: { mapId: "2", x: castNear.x, y: castNear.y, hp } }));
+      casterA.session.socket.send(JSON.stringify({ type: "pos", data: { mapId: "0", x: castNear.x, y: castNear.y, hp } }));
     const provokeCast = await cast(casterA.session, { skillId: "1000", targetId: castMob.instanceId, monsterKey: castMob.monsterKey }).promise;
     check(!!(provokeCast && provokeCast.ok), "十：出手激怒这只怪（进入战斗才会放技能）", JSON.stringify(provokeCast));
     reportCastPos(100);
@@ -1949,14 +2001,14 @@ function connect(url) {
     // 判「比原值高」（沙包确实用上了抬高后的曲线），不写死 5000
     check(sandbagHp > levelOneHp, "十：沙包按抬高后的血量建号（血量口径已生效）", `maxHp=${sandbagHp} 原值=${levelOneHp}`);
     // 必须先 joinWorld：monster-ai 帧按「谁在看这张图」派发，没进图的连接收不到广播
-    const worldB = await enterAt(casterB, "2");
+    const worldB = await enterAt(casterB, "0");
     const mobNow = worldB && worldB.monsters.find((entry) => entry.instanceId === castMob.instanceId);
     check(!!(mobNow && mobNow.alive), "十：这只怪还活着（阶段 A 只被打过一记，没被打死）", JSON.stringify(mobNow));
     // 用当前坐标（阶段 A 里它追过玩家，早就离开出生点了）
     const castNearB = { x: mobNow ? mobNow.x + 10 : castNear.x, y: mobNow ? mobNow.y : castNear.y };
     const provokeB = await cast(casterB.session, { skillId: "1000", targetId: castMob.instanceId, monsterKey: castMob.monsterKey }).promise;
     check(!!(provokeB && provokeB.ok), "十：换一名玩家激怒同一只怪（验证挂载改动即时生效）", JSON.stringify(provokeB));
-    const reportBPos = (hp) => casterB.session.socket.send(JSON.stringify({ type: "pos", data: { mapId: "2", x: castNearB.x, y: castNearB.y, hp } }));
+    const reportBPos = (hp) => casterB.session.socket.send(JSON.stringify({ type: "pos", data: { mapId: "0", x: castNearB.x, y: castNearB.y, hp } }));
     reportBPos(sandbagHp);
     const castPosTimerB = setInterval(() => reportBPos(sandbagHp), 500);
 
@@ -2033,6 +2085,21 @@ function connect(url) {
     const hpRestored = await api(baseUrl, "PATCH", "admin/level-curves/hp/1", { token: adminToken, zoneId: ADMIN_ZONE, body: { startValue: levelOneHp } });
     check(hpRestored.code === 0, "十：还原 1 级血量", hpRestored.message);
 
+    // 收尾还原：全图怪物的主动攻击开关（region 七前临时关掉的）与图 0 的掉落开关。
+    // 库是一次性的（tmp 里建、finally 里删），还原主要是走一遍管理端写路径、并把
+    // config-sync.sql 的 seed 前提在本地库里摆回去
+    for (const calmRow of aggressiveBefore) {
+      await api(baseUrl, "PATCH", `admin/monsters/${calmRow.id}`, {
+        token: adminToken, zoneId: ADMIN_ZONE, body: { presentation: { aggressive: calmRow.aggressive } },
+      });
+    }
+    if (allowDropZero === false && zero) {
+      await api(baseUrl, "PATCH", "admin/maps/0/rules", { token: adminToken, zoneId: ADMIN_ZONE, body: rulesBodyOf(false) });
+    }
+    if (Number(bindChanceBase) !== 0) {
+      await api(baseUrl, "PATCH", "admin/runtime-params", { token: adminToken, zoneId: ADMIN_ZONE, body: { drop: { bindChance: bindChanceBase } } });
+    }
+
     //#endregion
 
     console.log(`\n${failed === 0 ? "✅" : "❌"} 伤害结算：${passed} 条通过 / ${failed} 条失败`);
@@ -2044,6 +2111,12 @@ function connect(url) {
       process.exitCode = 1;
     }
   } finally {
+    // 失败（含中途抛出）时把服务端日志尾巴带上：warn 级别的「击杀奖励入账失败 /
+    // 掉落表里配了不存在的物品」是掉落用例红的直接线索，别让它随进程一起丢
+    if (failed > 0 || process.exitCode) {
+      console.log("\n服务端日志（尾部 80 行）：");
+      console.log(server.logs().split("\n").slice(-80).join("\n"));
+    }
     server.child.kill("SIGTERM");
     await sleep(200);
     if (server.child.exitCode === null) server.child.kill("SIGKILL");

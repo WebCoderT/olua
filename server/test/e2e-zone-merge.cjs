@@ -87,7 +87,8 @@ const waitFor = async (label, predicate, timeoutMs = 15_000) => {
   return last;
 };
 
-/** 预先插刷怪区（与世界 e2e 同一份）：源区进图后才有实例可搬 */
+/** 预先插刷怪区（与世界 e2e 同一份）：源区进图后才有实例可搬。
+ *  #1084 适配：必须在**起服后**插 —— 空库首启的自举会整份灌配置快照，把起服前插的行抹掉。 */
 function seedSpawnAreas(dbPath) {
   const db = new DatabaseSync(dbPath);
   db.exec(`CREATE TABLE IF NOT EXISTS map_spawn_areas (
@@ -110,6 +111,8 @@ function seedSpawnAreas(dbPath) {
   const now = Date.now();
   insert.run("1", "1号怪物", "1", 0, 1, 100, 200, 400, 400, now);
   insert.run("1", "2号怪物", "3", 0, 1, 300, 400, 400, 400, now);
+  // 真 seed 的怪 1 是主动怪（赤焰斗鸡）—— 这套只验「实例存在 / 被搬走」，压成被动免得被围殴干扰
+  db.exec("UPDATE monster_presentation SET aggressive = 0 WHERE id IN ('1', '3')");
   db.close();
 }
 
@@ -290,8 +293,8 @@ function connect(url) {
 
 (async () => {
   const dbPath = path.join(os.tmpdir(), `olua-e2e-zone-merge-${Date.now()}.db`);
-  seedSpawnAreas(dbPath);
   const server = await startServer(dbPath);
+  seedSpawnAreas(dbPath); // 起服后再插：快照自举会抹掉起服前的行（见 seedSpawnAreas 注释）
   try {
     const { baseUrl } = server;
 

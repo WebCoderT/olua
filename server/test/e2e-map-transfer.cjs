@@ -540,17 +540,24 @@ function connect(url) {
       maxChannels: 2,
       maxPlayersPerRoom: 5,
     });
-    await saveRules(home, { transferCostMoney: 0, transferCooldownMs: 0, denyTransferInCombat: true });
+    // #1084 后只有图 0 有怪：打手段改在 home 出手（in_combat 记的是「最近出过手」，跨图生效），
+    // 换线用例也跟着搬到 home —— 所以 home 同样开多线
+    await saveRules(home, {
+      transferCostMoney: 0,
+      transferCooldownMs: 0,
+      denyTransferInCombat: true,
+      maxChannels: 2,
+    });
     const combatRules = await rulesOf(away);
 
-    // B 摆位在 away（起点 = 目的地？不：B 的起点是 away，所以「进 away」不收费也不冷却）
-    const worldBob = await bob.session.joinWorld(away);
-    check(!!worldBob, "B 进了目的地（自己本来就该在这张图）");
-    bob.session.reportPos(away, 1000, 800);
+    // B 摆位在 away，但打手在 home（唯一有怪的图）：进 home 不收费也不冷却（两条规则都清了 0）
+    const worldBob = await bob.session.joinWorld(home);
+    check(!!worldBob, "B 进了 home（打手段的舞台，#1084 后唯一有怪的图）");
+    bob.session.reportPos(home, 1000, 800);
     await sleep(150);
 
     // 先确认「没打过手的时候不拦」——否则下面那条 in_combat 分不清是拦对了还是永远拦
-    const calmIntent = await bob.session.mapEnter(home);
+    const calmIntent = await bob.session.mapEnter(away);
     check(
       !!calmIntent && calmIntent.ok === true,
       "没出过手 → 战斗中禁传送不生效（判据不是「这张图一开始就拦」）",
@@ -562,14 +569,14 @@ function connect(url) {
     const shot = mob ? await bob.session.castOnce(mob) : null;
     check(!!shot && shot.ok === true, "B 打出去过一发（被判据接受）", JSON.stringify(shot));
 
-    const combatIntent = await bob.session.mapEnter(home);
+    const combatIntent = await bob.session.mapEnter(away);
     check(
       !!combatIntent && combatIntent.ok === false && combatIntent.field === "in_combat",
       "打过手 → 换图被拒（field=in_combat，与战力门槛的 combat 区分开）",
       JSON.stringify(combatIntent),
     );
 
-    // 换线不受影响：同一张图的另一条线，不叫「传送」
+    // 换线不受影响：同一张图（home，已开多线）的另一条线，不叫「传送」
     const currentChannel = worldBob && worldBob.channel;
     const swapped = await bob.session.changeChannel(currentChannel === 0 ? 1 : 0);
     check(

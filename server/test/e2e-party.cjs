@@ -142,6 +142,13 @@ function seedSpawnAreas(dbPath) {
   // 远处的小号 F 站 (8000, -4000) 距任何点 > 800 稳分不到
   insert.run("1", "赤焰斗鸡区", "1", 0, 4, 1000, -4000, 200, 200, now);
   insert.run("2", "赤焰斗鸡区", "1", 0, 1, 640, -4096, 200, 200, now);
+  // 旧图 1 的测试怪天生被动；#1084 后刷的是真 seed 的怪 1 赤焰斗鸡（主动怪）——
+  // A/B/D/E 贴身站在怪堆里会被围殴打死，击杀段跟着红。与旧前提对齐：临时改成被动
+  // （离线段复用本函数时库还没建 presentation 表，跳过即可 —— 那一段不杀怪）
+  const hasPresentation = db
+    .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'monster_presentation'")
+    .get();
+  if (hasPresentation) db.exec("UPDATE monster_presentation SET aggressive = 0 WHERE id = '1'");
   db.close();
 }
 

@@ -220,6 +220,19 @@ function connect(url) {
     const adminToken = adminLogin.data && adminLogin.data.token;
     check(!!adminToken, "准备：管理员已登录", adminLogin.message);
 
+    // #1084 适配：重排后图 1 不再有出厂刷怪区 —— 起服后直接给图 1 播几只怪 1
+    // （必须在玩家进图、房间创建之前灌进去，房才会在播种时读到）；压成被动，免得围殴干扰经验口径
+    {
+      const { DatabaseSync } = require("node:sqlite");
+      const db = new DatabaseSync(dbPath);
+      db.exec("UPDATE monster_presentation SET aggressive = 0 WHERE id = '1'");
+      db.prepare(
+        `INSERT INTO map_spawn_areas (map_id, name, monster_key, min, max, cx, cy, w, h, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ).run(MAP_ID, "规则靶子", "1", 3, 3, 100, 200, 400, 400, Date.now());
+      db.close();
+    }
+
     async function newPlayer(name) {
       const registered = await api(baseUrl, "POST", "auth/register", { body: { username: name, password: "pass1234" } });
       const token = registered.data && registered.data.token;
