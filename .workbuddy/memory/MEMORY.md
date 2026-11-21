@@ -38,6 +38,8 @@
 ## 架构不变量（全量 → `topics/架构不变量.md`）
 - **服务端权威**：BizException 400 · 乐观锁 409+20006 · 校验 40000 · 失败 `data` 恒 `null` · 客户端零决策、零兜底；
   方向恒 `apply-snapshot → game-config → types`；进 `SERVER_INVENTORY_FIELDS` 的字段不得写也不得补默认值。
+  **刻意例外（2026-11-21 拍板，#1146）**：玩家移动 = 客户端演算 + 4Hz pos 上报，服务端只消费上报位置、
+  保留 #811 三道校验（速度/穿墙/回拉）；服务端演算玩家位置（moveIntent 步进 / teleportTo / player_move 速度权威）不许再加回来。
 - **区 = 服务端算出的上下文，不是请求参数**（#954）：玩家侧接口零 `zoneId`；按 id 取别区对象一律 **404**；
   管理端不绑区但 `X-Zone-Id` 必填、无「全部区」；zone-scoped 仓储没有无区重载。
 - **DTO 的 `boolean` 必须有 `@IsBoolean`**（#1010）：`ValidationPipe({ whitelist: true })` 会把无装饰器字段**静默剥掉**。
