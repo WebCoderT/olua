@@ -83,7 +83,10 @@ export class MapGeometryService {
 
   /** 这个点在不在某个碰撞盒里（**原始盒**，不外扩：闸门只挡真的穿过去的） */
   blockedIn(geo: WalkGeometry, x: number, y: number): boolean {
-    return pointInBoxes(geo, x, y);
+    for (const box of geo.boxes) {
+      if (Math.abs(x - box.cx) <= box.w / 2 && Math.abs(y - box.cy) <= box.h / 2) return true;
+    }
+    return false;
   }
 
   /**
@@ -148,62 +151,6 @@ export class MapGeometryService {
       if (key.startsWith(`${mapId}:`)) this.grids.delete(key);
     }
   }
-}
-
-/** 点是否落在几何的某个碰撞盒里（slideStep 与 blockedIn 共用） */
-function pointInBoxes(geo: WalkGeometry, x: number, y: number): boolean {
-  for (const box of geo.boxes) {
-    if (Math.abs(x - box.cx) <= box.w / 2 && Math.abs(y - box.cy) <= box.h / 2) return true;
-  }
-  return false;
-}
-
-/**
- * 一次带滑行的位移（#854 怪物与 #1138 玩家**共用的一份算法**）
- *
- * 三档退让（docs/27 E4）：整步走得通就走；撞墙则拆成两个分量各试一次（走通的那个照走
- * = **滑行**，撞墙保留平行分量）；都不通就原地不动（返回 moved = 0，卡住策略归调用方）。
- * 最后一律钳进图内：墙画在图外，钳完还在盒里说明这一步等于撞进墙，整步作废退回原点。
- *
- * 为什么收进这里：怪物 AI 的 `slideMove` 与玩家步进各自写一份必然漂移（两边手感
- * 不一致会直接演成「别人眼里的你贴墙走、你自己眼里穿墙」）。
- */
-export function slideStep(
-  geo: WalkGeometry | null,
-  from: { x: number; y: number },
-  dx: number,
-  dy: number,
-): { x: number; y: number; moved: number } {
-  if (geo === null) {
-    // 没有几何（导入工具没跑）：不判碰撞也不钳边界，退回「直接改坐标」的老行为
-    return { x: from.x + dx, y: from.y + dy, moved: Math.hypot(dx, dy) };
-  }
-  let x = from.x;
-  let y = from.y;
-  if (!pointInBoxes(geo, x + dx, y + dy)) {
-    x += dx;
-    y += dy;
-  } else {
-    // 先试位移更大的那个分量（它是「主方向」），再试另一个
-    const order: Array<[number, number]> = Math.abs(dx) >= Math.abs(dy) ? [[dx, 0], [0, dy]] : [[0, dy], [dx, 0]];
-    let slid = false;
-    for (const [stepX, stepY] of order) {
-      if (stepX === 0 && stepY === 0) continue;
-      if (pointInBoxes(geo, x + stepX, y + stepY)) continue;
-      x += stepX;
-      y += stepY;
-      slid = true;
-      break;
-    }
-    if (!slid) return { x: from.x, y: from.y, moved: 0 };
-  }
-  // 钳进图内（外墙就画在图边；世界坐标 y 恒为负，下界是 -height、上界是 0）
-  x = Math.min(geo.width, Math.max(0, x));
-  y = Math.min(0, Math.max(-geo.height, y));
-  // 钳完还在盒里 → 这一小步等于撞进墙，整步作废。
-  // 单帧位移只有零点几到几像素，退回原地不会让「贴墙走」变成抽搐
-  if (pointInBoxes(geo, x, y)) return { x: from.x, y: from.y, moved: 0 };
-  return { x, y, moved: Math.hypot(x - from.x, y - from.y) };
 }
 
 /** 线段与轴对齐矩形是否相交（Liang-Barsky；端点接触也算相交） */

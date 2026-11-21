@@ -29471,25 +29471,6 @@
           "createCostBindGold"
         ]
       },
-      "PlayerMoveParamsDto": {
-        "type": "object",
-        "properties": {
-          "walkSpeedPxPerS": {
-            "type": "number",
-            "description": "走路速度（像素/秒）",
-            "example": 64
-          },
-          "runSpeedPxPerS": {
-            "type": "number",
-            "description": "跑步速度（像素/秒，必须 ≥ 走路）",
-            "example": 128
-          }
-        },
-        "required": [
-          "walkSpeedPxPerS",
-          "runSpeedPxPerS"
-        ]
-      },
       "RuntimeParamsDto": {
         "type": "object",
         "properties": {
@@ -29517,14 +29498,6 @@
               }
             ]
           },
-          "playerMove": {
-            "description": "玩家移动速度（#1138 移动收权，速度权威在服务端；客户端拉快照覆写本地）",
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/PlayerMoveParamsDto"
-              }
-            ]
-          },
           "updatedAt": {
             "type": "number",
             "description": "最后修改时间（毫秒）",
@@ -29535,7 +29508,6 @@
           "drop",
           "autoBattle",
           "guild",
-          "playerMove",
           "updatedAt"
         ]
       },
@@ -30194,19 +30166,6 @@
           }
         }
       },
-      "UpdatePlayerMoveParamsDto": {
-        "type": "object",
-        "properties": {
-          "walkSpeedPxPerS": {
-            "type": "number",
-            "description": "走路速度（像素/秒）"
-          },
-          "runSpeedPxPerS": {
-            "type": "number",
-            "description": "跑步速度（像素/秒）"
-          }
-        }
-      },
       "UpdateRuntimeParamsDto": {
         "type": "object",
         "properties": {
@@ -30231,14 +30190,6 @@
             "allOf": [
               {
                 "$ref": "#/components/schemas/UpdateGuildRuleParamsDto"
-              }
-            ]
-          },
-          "playerMove": {
-            "description": "玩家移动速度（只提交改动过的字段）",
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/UpdatePlayerMoveParamsDto"
               }
             ]
           },

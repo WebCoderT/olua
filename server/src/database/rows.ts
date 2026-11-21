@@ -1399,12 +1399,6 @@ export interface RuntimeParamsRow {
    * 与 `movement` 分开一列：两者要能分别切档回滚（距离闸误伤时不该牵连移动校验）。
    */
   cast_range: string;
-  /**
-   * 玩家移动参数（`PlayerMoveParams` 的 JSON；#1138 移动收权）
-   *
-   * **进客户端快照**：速度权威在服务端，客户端拉快照覆写本地刚体速度（两边同速）。
-   */
-  player_move: string;
   updated_at: number;
 }
 

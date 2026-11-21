@@ -448,16 +448,8 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
       const socket = this.connections.get(accountId);
       if (!socket) return;
       const filtered = this.visiblePlayers(accountId, data);
-      // 快照（full）**空也要发**：客户端靠它重建同房视图，进了一条没人（或全被拉黑）的线
-      // 时吞掉这份帧，客户端就永远等不到全量（#1000 的反向断言踩过 —— 条目改由 join 播种
-      // 后 identityOf 在快照时刻已非 null，visiblePlayers 的「滤完为空 return null」
-      // 会把空快照一起吞掉，这里对 full 帧显式豁免）。
-      if (filtered === null) {
-        if (data.full !== true) return;
-        const empty: PlayersFrameData = { ...data, players: [], actions: [] };
-        this.send(socket, { type: "players", data: empty } satisfies RealtimePlayersMessage);
-        return;
-      }
+      // 全被拉黑 = 什么都不剩：不发空帧（客户端本来就没有这些人）
+      if (!filtered) return;
       this.send(socket, { type: "players", data: filtered } satisfies RealtimePlayersMessage);
     };
     // 聊天投递（#395）：ChatService 选好收件人列表，这里对着连接表发；
@@ -864,12 +856,7 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
       if (socket.roleSyncSignature === signature) continue;
       socket.roleSyncSignature = signature;
       const frame = this.buildRoleUpdate(row);
-      if (frame) {
-        // 血量权威副本同步进在场条目（#1139）：pos 帧停发后，用药 / 自然回复 / 复活的血量
-        // 变化只有 roleUpdate 一条路能到实时进程 —— 互见血条不能停在旧值
-        this.presence.markHp(socket.identity.id, frame.data.hp);
-        this.send(socket, frame);
-      }
+      if (frame) this.send(socket, frame);
     }
   }
 
@@ -879,11 +866,7 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
     if (!row) return;
     socket.roleSyncSignature = `${row.revision}:${row.updated_at}`;
     const frame = this.buildRoleUpdate(row);
-    if (frame) {
-      // 与 syncRoles 同一口径（#1139）：roleUpdate 的权威 hp 顺带落进在场条目
-      this.presence.markHp(socket.identity.id, frame.data.hp);
-      this.send(socket, frame);
-    }
+    if (frame) this.send(socket, frame);
   }
 
   /**
@@ -960,18 +943,14 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
       return;
     }
     if (parsed?.type === "ping") {
-      // 心跳续新鲜度（#1139）：pos 帧停发后，在场条目的「活着」由 ping 续 ——
-      // 冻结标签页停止 ping，超时照旧从互见离场（语义与 pos 心跳时代一致）
-      this.presence.touch(socket.identity.id);
       this.send(socket, { type: "pong", data: { serverTime: Date.now() } });
       return;
     }
     if (parsed?.type === "cast") {
       const data = this.combat.settle(socket.identity.id, parsed.data);
-      // 突进类技能的落点收权（#1138）：**结算成功之后**才落位 —— 落位在结算之前等于
-      // 「报个远点就换一次瞬移」，连冷却都没过就能反复要。落点由服务端算
-      // （沿施法帧的落点方向夹 `CAST_DISPLACEMENT_MAX`，撞墙不挪，见 `teleportTo`）
-      if (data.ok) this.placeCastDisplacement(socket.identity.id, parsed.data);
+      // 突进类技能的落点免检额度（#811）：**结算成功之后**才给 —— 给在结算之前等于
+      // 「报个远点就换一次瞬移」，连冷却都没过就能反复要（见 grantCastDisplacement）
+      if (data.ok) this.grantCastDisplacement(socket.identity.id, parsed.data);
       const frame: RealtimeSettleMessage = { type: "settle", data };
       this.send(socket, frame);
       return;
@@ -1028,17 +1007,6 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
         data.action,
         data.roleId,
       );
-      return;
-    }
-    if (parsed?.type === "moveIntent") {
-      // 移动意图（#1138 移动收权）：客户端只报「往哪走」，步进与碰撞在服务端。
-      // 高频帧（换方向 / 换走跑都重发），格式不对静默丢弃，不回 error 刷屏
-      const intent = parseMoveIntent(parsed.data);
-      if (intent) this.presence.setIntent(socket.identity.id, intent.seq, intent);
-      return;
-    }
-    if (parsed?.type === "moveStop") {
-      this.presence.clearIntent(socket.identity.id);
       return;
     }
     if (parsed?.type === "pos") {
@@ -2164,23 +2132,27 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
   }
 
   /**
-   * 突进类技能的服务端落位（#1138 收权）
+   * 突进类技能的落点免检额度（#811）
    *
-   * 十步一杀这类技能是**瞬移**（客户端 `setWorldPositionByTransfer`），施法帧带着落点
-   * （`cast.data.x/y`，服务端给区域技能夹射程用的同一个点）。旧做法是给免检额度等客户端
-   * 上报落点 —— 本质还是「相信客户端的坐标」。收权后：结算成功就由服务端把人挪过去
-   * （方向与距离按施法帧的落点算，夹在 `CAST_DISPLACEMENT_MAX` 内；撞墙 / 出图不挪）。
+   * 十步一杀这类技能是**瞬移**（客户端 `setWorldPositionByTransfer`），落点随施法帧一起
+   * 上报（`cast.data.x/y`，也就是服务端给区域技能夹射程用的那个点）。不给额度的话，
+   * `enforce` 档会把每一次突进都判成超速再拉回原地 —— 表现为「放技能人弹回去」。
+   *
+   * 额度夹在 `CAST_DISPLACEMENT_MAX` 内，且由在场表按「一次性」消费，攒不起来。
    *
    * **只在结算成功之后调用**（调用点在 `onMessage` 的 cast 分支里，判 `data.ok`）：
-   * 若落在结算之前，一个有冷却的技能被拒也能换到一次瞬移。
+   * 若给在结算之前，一个有冷却的技能被拒也能换到额度 → 「连点施法键 = 每帧瞬移 320px」。
    */
-  private placeCastDisplacement(accountId: string, raw: unknown): void {
+  private grantCastDisplacement(accountId: string, raw: unknown): void {
     if (!raw || typeof raw !== "object") return;
     const data = raw as Record<string, unknown>;
     const x = Number(data.x);
     const y = Number(data.y);
     if (!Number.isFinite(x) || !Number.isFinite(y)) return;
-    this.presence.teleportTo(accountId, x, y, CAST_DISPLACEMENT_MAX);
+    const from = this.presence.positionOf(accountId);
+    if (!from) return;
+    const distance = Math.hypot(x - from.x, y - from.y);
+    this.presence.noteDisplacement(accountId, Math.min(distance, CAST_DISPLACEMENT_MAX));
   }
 
   //#endregion
@@ -2434,40 +2406,6 @@ function parsePosition(raw: unknown): ParsedPosition | null {
   return { mapId: data.mapId, x: data.x, y: data.y, hp: data.hp, moving: data.moving === true };
 }
 
-/** moveIntent.data 的解析结果（#1138：格式不对整条丢弃，高频帧不回 error） */
-interface ParsedMoveIntent {
-  seq: number;
-  kind: "dir" | "target";
-  /** kind = dir：方向向量（是否单位向量交给 guard 归一化） */
-  dx: number;
-  dy: number;
-  /** kind = target：目标点 */
-  tx: number;
-  ty: number;
-  run: boolean;
-}
-
-function parseMoveIntent(raw: unknown): ParsedMoveIntent | null {
-  if (!raw || typeof raw !== "object") return null;
-  const data = raw as Record<string, unknown>;
-  const seq = Number(data.seq);
-  const kind = data.kind;
-  const run = data.run === true;
-  if (kind === "dir") {
-    const dx = Number(data.dx);
-    const dy = Number(data.dy);
-    if (!Number.isFinite(dx) || !Number.isFinite(dy)) return null;
-    return { seq, kind, dx, dy, tx: 0, ty: 0, run };
-  }
-  if (kind === "target") {
-    const tx = Number(data.tx);
-    const ty = Number(data.ty);
-    if (!Number.isFinite(tx) || !Number.isFinite(ty)) return null;
-    return { seq, kind, dx: 0, dy: 0, tx, ty, run };
-  }
-  return null;
-}
-
 /**
  * 一条连接两次寻路请求的最小间隔（毫秒，#811）
  *
@@ -2477,7 +2415,7 @@ function parseMoveIntent(raw: unknown): ParsedMoveIntent | null {
 const PATH_FIND_MIN_INTERVAL_MS = 100;
 
 /**
- * 突进类技能服务端落位的距离上界（像素，#811 定值 / #1138 改作落位夹逼）
+ * 突进类技能落点的免检额度上界（像素，#811）
  *
  * 现网最远的突进是 200px（十步一杀 `skills.distance`），留一倍余量。
  * **不能省这条夹逼**：`cast.data.x/y` 是客户端给的，没有上界就等于「报个远点换一次瞬移」。

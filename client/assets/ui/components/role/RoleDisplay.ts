@@ -1,45 +1,50 @@
-import { isValid, Label, Node, ProgressBar, UITransform, Vec2, Vec3 } from "cc";
+import { BoxCollider2D, isValid, Label, Node, ProgressBar, RigidBody2D, UITransform, Vec2, Vec3 } from "cc";
 import StorageManager from "../../core/StorageManager";
 import { Role } from "../../../entities/Role";
 import { ACTION, DIRECTION } from "../../../types/animation";
 import { actionFinishTimeoutMarginSeconds } from "../../../configs/animation";
-import { roleBody } from "../../../configs/role";
-import { networkConfig } from "../../../configs/network";
+import { roleBody, roleRigid } from "../../../configs/role";
 import { SkillContextInput } from "../../../types/skill";
+import { ROLE_RUN_SPEED, ROLE_WALK_SPEED } from "../../../configs/role";
 import LayerManager from "../../core/LayerManager";
 import GameUiHelper from "../../helpers/GameUiHelper";
 import { getDirectionByVector } from "../../utils/battle/BattleMath";
 import { getSoulLevel } from "../../../configs/game-config";
 import { getTitleLevel } from "../../../configs/game-config";
 import { roleShowLayout } from "../../../configs/hudLayout";
+import { resolveBlockedVelocity } from "../../utils/physics/MoveBlocking";
 import MonsterManager from "../../core/MonsterManager";
 import RoleUIManager from "../../core/RoleUIManager";
-import SnapshotInterpolator from "../../core/SnapshotInterpolator";
-import ServerClock from "../../utils/net/ServerClock";
 import RoleAppearance from "./RoleAppearance";
 import RoleKeyboardInput from "../input/RoleKeyboardInput";
 import RolePointerInput from "../input/RolePointerInput";
 import RoleJoystickInput from "../input/RoleJoystickInput";
 
 /**
- * 服务端快照的瞬移阈值（像素，#1139）
+ * 服务端位置修正的瞬移阈值（像素，#811）
  *
- * 与缓冲最新快照的差量超过它判定「合法大位移」（突进落位 / 复活传送 / 服务端重播种），
- * 整段跳过不滑行 —— 清缓冲从头压，下一拍直接落在新位置。正常行走到不了这条线：
- * 跑速 128px/s 在 10Hz 广播下一帧只走 ~13px。
+ * issue 定的 64px：小于它的偏差是「4Hz 上报的相位差」量级（玩家看不出来），静默插值；
+ * 大于等于它的偏差玩家一定看得出，索性瞬移 + 飘一句说明。
  */
-const SELF_SNAP_DISTANCE = 64;
+const SERVER_CORRECTION_SNAP = 64;
+
+/**
+ * 插值每帧逼近的比例（#811）
+ *
+ * 1/3 约 6 帧走完（60fps 下 100ms）：再快就是瞬移、再慢会让玩家觉得「脚下打滑」。
+ * 与帧率无关的写法（按 dt 积分）收益不大 —— 这里只在收到 `posCorrect` 后短暂生效。
+ */
+const SERVER_CORRECTION_RATIO = 0.34;
 
 /**
  * 角色展示组件（自身即主角节点）
- * 负责主角节点的构建与状态机（动作/朝向）、移动意图上报、攻击锁与技能上下文组装
+ * 负责主角节点的构建与状态机（动作/朝向）、位移、攻击锁与技能上下文组装
  * 具体职责由协作组件承担：外观动画 → RoleAppearance，键盘操控 → RoleKeyboardInput，
  * 鼠标操控 → RolePointerInput，左下角摇杆操控 → RoleJoystickInput（节点在 HUD 层，见 setJoystick）
  * 怪物查询与结算统一走 MonsterManager
- * **位置是纯演出（#1139 移动收权）**：本地不跑任何物理 —— 输入只组装移动意图帧发给服务端
- * （服务端 10Hz 步进 + 仲裁），自己与别人一样按服务端帧插值回放（见 updatePlayback）。
- * 攻击/技能锁（attacking）：动作动画从播放到完整播完期间不接受新的攻击/技能（按下无反应）；
- * 攻击锁期间意图恒 null，服务端同步停步，两边的「站着打」是同一份状态
+ * 攻击/技能锁（attacking）：动作动画从播放到完整播完期间锁定移动，且不接受新的攻击/技能（按下无反应）
+ * 怪物推不动角色、角色也推不动怪物（怪物的碰撞盒是传感器，见 addMonsterCollider），
+ * 角色不会穿过怪物这一条由位移前的阻挡预测保证：撞上只取消这一步，不把怪物挤开（见 MoveBlocking）
  */
 export default class RoleDisplay extends Node {
   /** 外观（衣服/武器节点与动画） */
@@ -64,18 +69,12 @@ export default class RoleDisplay extends Node {
   /** 自动移动是否使用跑步速度 */
   private autoRun = false;
   /**
-   * 自机位置快照缓冲（#1139）：与别人（OtherPlayerManager）/ 怪物（MonsterAI）同一套插值口径
-   * —— 按服务端时间回放，匀速、抗丢帧；帧间距过大（瞬移）时整段跳过（见 applyServerPosition）
+   * 待走完的服务端位置修正（#811；null = 没有待插值的修正）
+   *
+   * 只承载「差得不多」的那种修正（< `SERVER_CORRECTION_SNAP`）：每帧向目标逼近一点，
+   * 玩家看到的是「被轻轻推了一下」；差得多的直接瞬移（见 `applyServerCorrection`）。
    */
-  private readonly positions = new SnapshotInterpolator(
-    networkConfig.realtime.interpolation.bufferSize,
-    networkConfig.realtime.interpolation.maxExtrapolate,
-  );
-  /** 最近一帧服务端快照的移动标记（#1139）：攻击锁收尾时用它恢复走/站，不等下一个广播节拍 */
-  private lastFrameMoving = false;
-  /** 上次实际播到动画里的动作 / 朝向（插值每帧重算但动作没变时不重播 —— crossFade 会把动画拉回开头） */
-  private playedAction: ACTION = ACTION.STAND;
-  private playedDirection: DIRECTION = DIRECTION.DOWN;
+  private serverCorrectionTarget: Vec3 | null = null;
 
   /** 当前角色数据 */
   private role: Role;
@@ -102,33 +101,24 @@ export default class RoleDisplay extends Node {
    * 被控制标记（#826 第三批：眩晕 / 麻痹 / 定身）
    *
    * 由组合根每帧按 `StatusManager.isMoveLocked()` 同步 —— 状态的真实来源是服务端下发的
-   * `statuses` 快照，本组件只负责「锁住手感」。**权限不在这一层**：服务端在控制期间
-   * 不接受移动意图，所以这里漏判也只是意图多报两帧，服务端不会采纳
+   * `statuses` 快照，本组件只负责「锁住手感」。**权限不在这一层**：眩晕期间上报的 `pos` 帧
+   * 会被服务端整帧丢弃，所以这里漏判也只是本地多走两步，解除时会被硬拉回
    */
   private controlLocked = false;
-
-  /**
-   * 移动意图上报出口（#1138 移动收权；Game 接线到 `CombatChannel.sendMoveIntent / sendMoveStop`）
-   *
-   * null = 当前没有移动意图（没输入 / 死亡 / 攻击锁 / 被控）—— 服务端收到 `moveStop`
-   * 同语义。**意图变化时才回调**（比对见 `reportMoveIntent`），不是每帧都发。
-   */
-  onMoveIntent: ((intent: { dx: number; dy: number; run: boolean } | null) => void) | null = null;
-  /** 上次上报的意图（null = 上次报的是停；比对用） */
-  private lastReportedIntent: { dx: number; dy: number; run: boolean } | null = null;
 
   constructor(role: Role) {
     super("basic_role");
     this.role = role;
     this.createBody();
+    this.addRigid();
     LayerManager.addToGameLayer(this);
   }
 
   /** 初始化（外观动画、键盘操控与鼠标操控） */
   init() {
     this.updateOutShow(this.role);
-    this.keyboardInput = new RoleKeyboardInput(this as Node);
-    this.pointerInput = new RolePointerInput(this as Node);
+    this.keyboardInput = new RoleKeyboardInput(this as Node, () => this.refreshMotion());
+    this.pointerInput = new RolePointerInput(this as Node, () => this.refreshMotion());
   }
 
   /**
@@ -138,7 +128,7 @@ export default class RoleDisplay extends Node {
    */
   setJoystick(stick: Node, handle: Node) {
     this.joystickInput?.destroy();
-    this.joystickInput = new RoleJoystickInput(stick, handle);
+    this.joystickInput = new RoleJoystickInput(stick, handle, () => this.refreshMotion());
   }
 
   /** 构建角色身体（尺寸/锚点 + 外观节点 + 名称 + 头部信息栏） */
@@ -155,14 +145,32 @@ export default class RoleDisplay extends Node {
     this.addChild(this.head);
   }
 
+  /** 增加碰撞 */
+  private addRigid() {
+    const rigidBody = this.addComponent(RigidBody2D);
+    rigidBody.gravityScale = roleRigid.gravityScale;
+    rigidBody.fixedRotation = roleRigid.fixedRotation;
+    const boxCollider = this.addComponent(BoxCollider2D);
+    boxCollider.size = roleBody.colliderSize;
+    boxCollider.offset = roleBody.colliderOffset;
+    // 碰撞范围显示（调试用，全部碰撞体共用一套开关；角色自身用另一种配色区分于静态障碍）
+    GameUiHelper.showColliderRange(this as Node, this.role.name, "role");
+  }
+
   //#region 动作与朝向状态机
+
+  /** 操控状态变化（键盘按键/鼠标按下）：死亡/攻击/技能锁/控制期间只记录状态，不改变动作与朝向（解锁后恢复移动） */
+  private refreshMotion() {
+    if (this.dead || this.attacking || this.controlLocked) return;
+    this.updateAction();
+    this.updateDirection();
+  }
 
   /**
    * 同步「被控制」状态（组合根每帧调；值没变直接返回）
    *
    * 锁上时立刻切回待机：不切的话动画还停在跑步帧，人物却寸步不移 —— 看起来像卡住了。
-   * 解锁**不主动恢复动作**（#1139）：服务端在意图激活期间保留意图、控制一解除就恢复步进，
-   * moving 帧会把走/站带回 —— 本地抢跑只会跟帧打架。
+   * 解除时走 `refreshMotion()`，按当前按键状态恢复走/跑（玩家可能一直按着方向键）。
    */
   setControlLocked(locked: boolean) {
     if (this.controlLocked === locked) return;
@@ -171,13 +179,32 @@ export default class RoleDisplay extends Node {
       this.action = ACTION.STAND;
       this.updateAnimationPlay();
     }
+    this.refreshMotion();
+  }
+
+  /** 朝向更改（按当前移动意图取八方向；无输入时保持原朝向） */
+  private updateDirection() {
+    const intent = this.getMoveIntent();
+    if (intent) this.direction = getDirectionByVector(intent.vector);
+    // 动作/朝向统一在此处落地为动画播放（调用方总是成对调用 updateAction + updateDirection）
+    this.updateAnimationPlay();
+  }
+
+  /** 动作更改（只计算动作，动画播放由 updateDirection 统一触发） */
+  private updateAction() {
+    const intent = this.getMoveIntent();
+    if (!intent) {
+      this.action = ACTION.STAND;
+      return;
+    }
+    this.action = intent.run ? ACTION.RUN : ACTION.WALK;
   }
 
   /**
    * 玩家操控的移动意图：键盘优先（按下即接管），其次摇杆（左下角常驻，触屏的主输入手段），
    * 最后鼠标按住的八方向（方向随指针移动实时更新）；都没有输入返回 null。
    * 优先级是固定的链条，桌面端鼠标与摇杆不会同时被按住（同一个指针），所以互不干扰。
-   * 意图只进 `reportMoveIntent` 的上报（#1139 起本地不再拿它驱动位移与动画）
+   * 走跑速度不在这里取（见 updateWorldPosition），这里只回答「往哪走、是否跑」
    */
   private getMoveIntent(): { vector: Vec2; run: boolean } | null {
     const keyboard = this.keyboardInput;
@@ -193,112 +220,22 @@ export default class RoleDisplay extends Node {
    * 更改播放的动作
    * 节点已销毁（切场景收尾）、外观尚未建好（构造未完成）时直接跳过：
    * 该状态下再去操作动画组件只会报错，且动画已无意义
-   * 播完记下「实际播到的」动作与朝向（插值每帧重算，没变不重播，见 updatePlayback）
    */
   private updateAnimationPlay() {
     if (!isValid(this) || !this.appearance || this.dead) return;
     this.appearance.play(this.action, this.direction);
-    this.playedAction = this.action;
-    this.playedDirection = this.direction;
   }
 
   //#endregion
 
-  //#region 位置回放（#1139：服务端权威帧驱动，本地零物理）
+  //#region 位置更新
 
-  /** 每帧驱动：选中目标已死亡/移除则取消选中（面板与选中光圈随之销毁），并回放服务端位置 */
+  /** 每帧驱动：选中目标已死亡/移除则取消选中（面板与选中光圈随之销毁），并更新角色位移 */
   update() {
     // 选中状态只由鼠标点击改变（点击怪物选中、点击其他位置取消），移动不影响；
     // 但目标本身消失（死亡/移除）时必须同步取消，避免残留无效引用
     if (this.target && this.isTargetGone(this.target)) this.setTarget(null);
-    // 移动意图上报（#1138）：输入只产生意图帧，位移由服务端步进
-    this.reportMoveIntent();
-    this.updatePlayback();
-  }
-
-  /**
-   * 自机位置回放（#1139）：与别人（OtherPlayerManager）/ 怪物（MonsterAI）同一套口径 ——
-   * 按服务端时间在快照缓冲里线性插值，朝向与走/站按这一帧的实际位移差量演。
-   * 还没收到第一帧时站在进图定位的位置（复活点，与条目播种同源）等帧。
-   */
-  private updatePlayback() {
-    if (!isValid(this) || this.dead) return; // 躺尸期间不追帧（复活后由帧把位置带回）
-    const sampled = this.positions.sample(ServerClock.renderTime(networkConfig.realtime.interpolation.renderDelay));
-    if (!sampled) return;
-    this.lastFrameMoving = sampled.moving;
-    const current = this.getWorldPosition();
-    const dx = sampled.x - current.x;
-    const dy = sampled.y - current.y;
-    if (dx !== 0 || dy !== 0) {
-      this.setWorldPosition(sampled.x, sampled.y, current.z);
-      LayerManager.move(this.getWorldPosition());
-    }
-    // 朝向 / 动作按帧内速度差量演（与别人同口径）：站着时位移为 0，保持上一次朝向 ——
-    // 拿「到目标的剩余差量」定朝向会让追上之后剩几像素的残差把人转得乱转
-    if (!this.attacking && Math.abs(dx) + Math.abs(dy) > 0.5) {
-      this.direction = getDirectionByVector(new Vec2(dx, dy));
-    }
-    if (!this.attacking) {
-      // 走 / 站取采样结果的移动标记（= 服务端步进的意图）。互见帧只带布尔（run 不随帧下发），
-      // 与别人的表演同一口径：跑与走都播走路动画，步频差异由位移差量自然带出
-      this.action = sampled.moving ? ACTION.WALK : ACTION.STAND;
-    }
-    // 只在真的变了才切：play 里的 crossFade 每帧调用会不断把动画拉回开头
-    if (!this.attacking && (this.action !== this.playedAction || this.direction !== this.playedDirection)) {
-      this.updateAnimationPlay();
-    }
-  }
-
-  /**
-   * 落一帧服务端自机位置（#1139；组合根从 players / entityEnter 帧里挑出自己那条喂进来）
-   *
-   * 与缓冲最新快照的差量超过 `SELF_SNAP_DISTANCE` 判定「合法大位移」（突进落位 / 复活传送 /
-   * 服务端重播种）：清缓冲从头压，下一拍 sample 直接落在新位置 —— 不会看到自己从半个
-   * 地图外滑过来。正常行走的帧间距（跑速 10Hz ≈ 13px）永远到不了这条线。
-   */
-  applyServerPosition(x: number, y: number, moving: boolean, t: number): void {
-    if (!isValid(this)) return;
-    const newest = this.positions.newest;
-    if (newest && Math.hypot(x - newest.x, y - newest.y) > SELF_SNAP_DISTANCE) this.positions.reset();
-    this.positions.push(t, x, y, moving);
-  }
-
-  /** 设置角色世界坐标（如传送到复活点）：传送后清缓冲 —— 旧快照是传送前的位置，不清会被拽回去 */
-  setWorldPositionByTransfer(worldPosition: Vec3) {
-    this.positions.reset();
-    this.setWorldPosition(worldPosition);
-    LayerManager.move(this.getWorldPosition());
-  }
-
-  //#endregion
-
-  /**
-   * 移动意图上报（#1138）：本帧的「有效移动意图」与上次上报的不一样才发帧
-   *
-   * 有效意图 = 当前输入（键盘 > 摇杆 > 鼠标按住）或自动战斗走位方向，**但死亡 /
-   * 攻击锁 / 被控期间恒为 null** —— 与服务端步进的停步条件一致，
-   * 服务端才不会「本地站着打怪、别人看到你在滑步」。
-   */
-  private reportMoveIntent() {
-    if (!this.onMoveIntent) return;
-    const blocked = this.dead || this.attacking || this.controlLocked;
-    let intent: { dx: number; dy: number; run: boolean } | null = null;
-    if (!blocked) {
-      const manual = this.getMoveIntent();
-      const auto = this.autoMove && this.autoMove.lengthSqr() > 0 ? { vector: this.autoMove, run: this.autoRun } : null;
-      const source = manual ?? auto;
-      if (source) {
-        const length = Math.hypot(source.vector.x, source.vector.y);
-        if (length > 1e-6) intent = { dx: source.vector.x / length, dy: source.vector.y / length, run: source.run };
-      }
-    }
-    const last = this.lastReportedIntent;
-    const changed =
-      (intent === null) !== (last === null) ||
-      (intent !== null && last !== null && (Math.abs(intent.dx - last.dx) > 1e-6 || Math.abs(intent.dy - last.dy) > 1e-6 || intent.run !== last.run));
-    if (!changed) return;
-    this.lastReportedIntent = intent;
-    this.onMoveIntent(intent);
+    this.updateWorldPosition();
   }
 
   /**
@@ -312,6 +249,115 @@ export default class RoleDisplay extends Node {
     if (!isValid(target)) return true;
     const monster = MonsterManager.getMonsterData(target);
     return !monster || monster.hp <= 0;
+  }
+
+  /** 每帧根据按键状态更新角色位移 */
+  updateWorldPosition() {
+    // 服务端在纠偏（#811）：插值期间不接管移动，免得刚体速度与插值互相拉扯
+    if (this.advanceServerCorrection()) return;
+    const rigidBody = this.getComponent(RigidBody2D);
+    // 死亡期间原地躺尸：速度清零，不接受任何位移
+    if (this.dead) {
+      rigidBody.linearVelocity = Vec2.ZERO;
+      return;
+    }
+    // 攻击/技能锁期间不可移动，立刻停住
+    if (this.attacking) {
+      rigidBody.linearVelocity = Vec2.ZERO;
+      return;
+    }
+    // 被控制（眩晕 / 麻痹 / 定身）期间不可移动，立刻停住（#826 第三批）
+    if (this.controlLocked) {
+      rigidBody.linearVelocity = Vec2.ZERO;
+      return;
+    }
+    // 非移动动作（待机/攻击等）立刻把速度设为 0，实现"松手即停"
+    if (this.action !== ACTION.WALK && this.action !== ACTION.RUN) {
+      rigidBody.linearVelocity = Vec2.ZERO;
+      return;
+    }
+    // 玩家操控优先（键盘 > 鼠标按下，随时接管），没有玩家输入时才走自动战斗写入的自动移动方向
+    const intent = this.getMoveIntent();
+    let speed: number;
+    let moveVector: Vec2;
+    if (intent) {
+      speed = intent.run ? ROLE_RUN_SPEED : ROLE_WALK_SPEED;
+      moveVector = intent.vector;
+    } else if (this.autoMove && this.autoMove.lengthSqr() > 0) {
+      speed = this.autoRun ? ROLE_RUN_SPEED : ROLE_WALK_SPEED;
+      moveVector = this.autoMove;
+    } else {
+      // 直接赋值速度清零，解决漂移
+      rigidBody.linearVelocity = Vec2.ZERO;
+      return;
+    }
+    // 位移前先做阻挡预测：撞上怪物只取消这一步（怪物不会因此被推动，角色也不会被怪物挤开）
+    const velocity = new Vec2(moveVector.x * speed, moveVector.y * speed);
+    rigidBody.linearVelocity = resolveBlockedVelocity(this as Node, velocity, MonsterManager.getBlockingRects());
+    LayerManager.move(this.getWorldPosition());
+  }
+
+  /** 设置角色世界坐标（如传送到复活点） */
+  setWorldPositionByTransfer(worldPosition: Vec3) {
+    this.setWorldPosition(worldPosition);
+    LayerManager.move(this.getWorldPosition());
+  }
+
+  /**
+   * 服务端位置修正（#811 `posCorrect` 帧的落点）
+   *
+   * 分两档（issue 的口径）：
+   * - 差 < `SERVER_CORRECTION_SNAP`（64px）：**静默插值** —— 记下目标点，`update` 每帧逼近
+   *   一点。这种偏差玩家自己看不出来（4Hz 上报的相位差就是这个量级），弹一下反而像卡了；
+   * - 差 ≥ 64px：**瞬移** + 由调用方飘一次「网络波动」（这一档玩家一定看得出来，
+   *   不说一句他只会以为游戏坏了）。
+   *
+   * 两档都**同步刚体**：`setWorldPosition` 只改节点变换，刚体里还留着上一帧的速度，
+   * 不归零的话下一次物理步进会把人往老方向再带一段（表现为「修正完又飘回去半格」）。
+   */
+  applyServerCorrection(x: number, y: number): void {
+    if (!isValid(this)) return;
+    const current = this.getWorldPosition();
+    const distance = Math.hypot(x - current.x, y - current.y);
+    if (distance < SERVER_CORRECTION_SNAP) {
+      this.serverCorrectionTarget = new Vec3(x, y, current.z);
+      return;
+    }
+    this.serverCorrectionTarget = null;
+    this.stopRigidBody();
+    this.setWorldPositionByTransfer(new Vec3(x, y, current.z));
+  }
+
+  /** 当前有没有待走完的修正（组合根据此决定要不要拦一帧输入） */
+  get hasServerCorrection(): boolean {
+    return this.serverCorrectionTarget !== null;
+  }
+
+  /** 把刚体速度清零（瞬移 / 死亡 / 修正时都要，否则物理步进会把人带走一段） */
+  private stopRigidBody(): void {
+    const rigidBody = this.getComponent(RigidBody2D);
+    if (rigidBody) rigidBody.linearVelocity = Vec2.ZERO;
+  }
+
+  /**
+   * 推进一次插值（`update` 每帧调）
+   *
+   * @returns true = 本帧还在修正中，正常移动逻辑应当跳过（不然刚体速度会跟插值打架）
+   */
+  private advanceServerCorrection(): boolean {
+    const target = this.serverCorrectionTarget;
+    if (!target) return false;
+    const current = this.getWorldPosition();
+    const dx = target.x - current.x;
+    const dy = target.y - current.y;
+    if (Math.hypot(dx, dy) <= 1) {
+      this.serverCorrectionTarget = null;
+      return false;
+    }
+    this.stopRigidBody();
+    this.setWorldPosition(current.x + dx * SERVER_CORRECTION_RATIO, current.y + dy * SERVER_CORRECTION_RATIO, current.z);
+    LayerManager.move(this.getWorldPosition());
+    return true;
   }
 
   //#endregion
@@ -430,10 +476,9 @@ export default class RoleDisplay extends Node {
     }
     const complete = this.attackComplete;
     this.attackComplete = null;
-    // 恢复动作状态（#1139）：攻击锁期间回放不写 action，但一直读帧 —— 用最近一帧的
-    // 移动标记恢复走/站并立刻续播，不等下一个广播节拍
-    this.action = this.lastFrameMoving ? ACTION.WALK : ACTION.STAND;
-    this.updateAnimationPlay();
+    // 恢复动作状态（攻击期间按下的方向键此时生效：有键则直接走/跑，无键回到待机）
+    this.updateAction();
+    this.updateDirection();
     complete?.();
   }
 
@@ -448,10 +493,9 @@ export default class RoleDisplay extends Node {
 
   /**
    * 死亡（由组合根在角色血量归零时调用）
-   * 解除攻击锁（不再恢复动作）、清目标与自动移动，
+   * 解除攻击锁（不再恢复动作）、清目标与自动移动、停住位移，
    * 然后按当前朝向播放死亡动画——播完停最后一帧，之后一直躺尸直到复活
-   * 键盘/鼠标输入、自动移动、技能与普攻在此期间全部被 dead 标记拦住（见各入口的守卫）；
-   * 意图上报同样停（reportMoveIntent 的 blocked 判据），服务端同步停步
+   * 键盘/鼠标输入、自动移动、技能与普攻在此期间全部被 dead 标记拦住（见各入口的守卫）
    */
   die() {
     if (this.dead) return;
@@ -465,16 +509,19 @@ export default class RoleDisplay extends Node {
     this.attackComplete = null;
     this.autoMove = null;
     this.setTarget(null);
+    const rigidBody = this.getComponent(RigidBody2D);
+    if (rigidBody) rigidBody.linearVelocity = Vec2.ZERO;
     this.appearance?.die(this.direction);
   }
 
-  /** 复活（由组合根在补满血量、安全复活传送完成后调用）：解除死亡状态并回到待机（走/站由帧带回） */
+  /** 复活（由组合根在补满血量、安全复活传送完成后调用）：解除死亡状态并回到待机 */
   revive() {
     if (!this.dead) return;
     this.dead = false;
     this.appearance?.revive();
-    this.action = ACTION.STAND;
-    this.updateAnimationPlay();
+    // 按当前输入恢复动作（无输入回到待机）
+    this.updateAction();
+    this.updateDirection();
   }
 
   //#endregion
@@ -521,14 +568,27 @@ export default class RoleDisplay extends Node {
   }
 
   /**
-   * 设置自动移动（自动战斗走位用，见 core/AutoBattle；传 null 表示停止）
+   * 设置自动移动（自动战斗走位用，见 core/AutoBattle；传 null 表示停止并按键盘状态恢复动作）
    * 键盘输入优先于自动移动（玩家随时可接管）；攻击锁期间只记录方向，解锁后由下一帧自动战斗接管
-   * 只记方向不驱动动画（#1139）：意图帧发出后，服务端步进的 moving 帧 + 位移差量会把走/跑/朝向带回
    */
   setAutoMove(direction: Vec2 | null, run: boolean = false) {
     if (this.dead) return;
     this.autoMove = direction;
     this.autoRun = run;
+    if (this.attacking) return;
+    if (direction && direction.lengthSqr() > 0) {
+      const action = run ? ACTION.RUN : ACTION.WALK;
+      const targetDirection = getDirectionByVector(direction);
+      // 动作与朝向都没变时不重复触发动画：crossFade 每帧调用会不断把动画拉回开头
+      if (this.action === action && this.direction === targetDirection) return;
+      this.action = action;
+      this.direction = targetDirection;
+      this.updateAnimationPlay();
+      return;
+    }
+    // 停止自动移动：按键盘当前状态恢复动作与朝向（无键回待机）
+    this.updateAction();
+    this.updateDirection();
   }
 
   //#endregion

@@ -828,8 +828,12 @@ export default class CombatChannel {
    */
   static onPath: ((frame: PathFrame) => void) | null = null;
 
-  /** 移动意图的自增序号（#1138 `moveIntent.seq`，服务端挡乱序倒退帧） */
-  private static moveSeq = 0;
+  /**
+   * 位置上报的最小间隔（毫秒）：#768 提到 10Hz —— AI 目标检测与互见的采样节拍，
+   * 与服务端广播节拍（10Hz）对齐；再快没有观感收益，只是纯流量
+   */
+  private static POSITION_INTERVAL = 100;
+  private static lastPositionSentAt = 0;
 
   /**
    * 正在等应答的那一次换图意图（#606）
@@ -897,8 +901,7 @@ export default class CombatChannel {
   }
 
   /**
-   * 上报一次自身位置（#1139：周期上报已删 —— pos 帧只剩**复活后的一次性落位**这一条真实来源，
-   * 服务端复活分支（hp 0→>0 免检）靠它知道原地 / 回城的落点；不再节流）
+   * 上报自身位置（#323 AI 目标检测输入 + #324 玩家互见数据源；内部按 4Hz 节流，调用方可以每帧调）
    * @param mapId 当前地图 id
    * @param x 玩家世界坐标
    * @param y 玩家世界坐标
@@ -906,29 +909,16 @@ export default class CombatChannel {
    * @param moving 上报时刻是否在移动（互见的走路/待机演出依据；移动是玩家自己的事，客户端自报）
    */
   static sendPosition(mapId: string, x: number, y: number, hp: number, moving = false): void {
+    const now = Date.now();
+    if (now - this.lastPositionSentAt < this.POSITION_INTERVAL) return;
+    this.lastPositionSentAt = now;
     // #768 帧瘦身：坐标整数像素（world 系本来就是整数刻度，小数是 Cocos 浮点累加的尾巴）
     RealtimeClient.send({ type: "pos", data: { mapId, x: Math.round(x), y: Math.round(y), hp, moving } });
   }
 
-  /**
-   * 上报移动意图（#1138 移动收权）：只报「往哪走」，步进与碰撞在服务端 10Hz。
-   *
-   * 调用方（RoleDisplay）在**意图变化**时才发（方向换挡 / 走跑切换 / 起走 / 停走），
-   * 不必每帧发 —— 意图是状态不是事件，重复发同一份只是覆盖。停走发 `sendMoveStop`。
-   *
-   * 过渡期（批次 3）客户端还有本地物理：自己眼里的位置仍然本地算，别人看到的是
-   * 服务端步进的位置 —— 两边同速同向，偏差只有绕障路径的细节。
-   */
-  static sendMoveIntent(dx: number, dy: number, run: boolean): void {
-    if (!this.active) return;
-    this.moveSeq += 1;
-    RealtimeClient.send({ type: "moveIntent", data: { seq: this.moveSeq, kind: "dir", dx, dy, run } });
-  }
-
-  /** 停止移动（#1138 `moveStop`）：清掉服务端这份意图，下一拍停步 */
-  static sendMoveStop(): void {
-    if (!this.active) return;
-    RealtimeClient.send({ type: "moveStop", data: {} });
+  /** 换图重置位置上报节流（新图的第一帧位置要立刻送上去） */
+  static resetPositionThrottle(): void {
+    this.lastPositionSentAt = 0;
   }
 
   /**

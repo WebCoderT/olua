@@ -119,10 +119,7 @@ function seedAreas(dbPath) {
     );
     const now = Date.now();
     insert.run(MAP_ID, "甲区", "1", 3, 2000, -2000, 400, 400, now);
-    // 乙区 originally (4000,-4000)：离甲区 2828px —— #1139 起观看者条目由播种创建（AOI
-    // 对「位置已知」的观看者裁剪事件驱动的 world 帧，#810），一个观看者的 3×3（AOI_CELL=512）
-    // 覆盖不了相距这么远的两个区。挪到甲区旁边的相邻格（仍不同格，按 monster_key 分区断言不受影响）
-    insert.run(MAP_ID, "乙区", "3", 2, 2200, -2200, 400, 400, now);
+    insert.run(MAP_ID, "乙区", "3", 2, 4000, -4000, 400, 400, now);
     insert.run(MAP_ID, "丙区", "5", 2, 2000, 800, 400, 400, now);
   });
 }
@@ -282,13 +279,6 @@ function windowAround(offsetMinutes, spanMinutes) {
 
     //#region 一、播种与落点钳制
     group("一、密度播种：按目标数播种，越界区域落点被钳进图内（#850 / #852）");
-    // #1139 起 AOI 对「位置已知」的观看者裁剪事件驱动的 world 帧（#810）。观看者的位置必须
-    // 在第一次 tick 广播之前就位：先发 pos（此刻条目还不存在 → 走「首帧 pos 建条目」，坐标
-    // 直落甲区中心），再 worldJoin。等 join 之后再摆位会有竞态 —— 密度对齐的第一次广播可能
-    // 恰好落在「已播种（复活点 cell）还没摆位」的窗口里，裁出来的帧没有乙区，之后 tick 再无
-    // 变化就不再广播，latest() 永远停在残帧上（满负载跑实测两次）
-    session.socket.send(JSON.stringify({ type: "pos", data: { mapId: MAP_ID, x: 2000, y: -2000, hp: 100, moving: false } }));
-    await sleep(150);
     const first = await session.joinWorld(MAP_ID);
     check(!!(first && first.monsters.length === 7), "三个区按目标数播种出 7 只（3 + 2 + 2）", JSON.stringify(first && first.monsters.length));
     checkEqual(session.countOf("1"), 3, "甲区 3 只（max 3，无密度系数）");
@@ -304,10 +294,7 @@ function windowAround(offsetMinutes, spanMinutes) {
       first.monsters.every((monster) => monster.x >= 0 && monster.x <= 8192 && monster.y >= -8192 && monster.y <= 0),
       "全部实例都落在图内（钳制对每个落点都生效）",
     );
-    // #1139 起条目由 worldJoin 播种（复活点），AOI 对「位置已知」的观看者裁剪事件驱动的
-    // world 帧 —— 后面几段靠广播帧数怪，观看者必须站到甲区旁边（pos 首帧免仲裁落位）
-    session.socket.send(JSON.stringify({ type: "pos", data: { mapId: MAP_ID, x: 2000, y: -2000, hp: 100, moving: false } }));
-    await sleep(250);    //#endregion
+    //#endregion
 
     //#region 二、改配置 1 秒内生效
     group("二、改 max 之后 tick 按差量对齐（#852 / #669 的根）");
@@ -386,16 +373,12 @@ function windowAround(offsetMinutes, spanMinutes) {
     const ticket2 = await api(baseUrl, "POST", "realtime/ticket", { token });
     session = connect(`${baseUrl.replace("http", "ws")}/api/realtime?ticket=${encodeURIComponent(ticket2.data.ticket)}`);
     await waitFor("第二次握手成功", async () => (session.opened ? session : null));
-    // 同第一段：pos 在 worldJoin 之前发（首帧建条目直落甲区），避开「已播种还没摆位」的裁剪窗口
-    session.socket.send(JSON.stringify({ type: "pos", data: { mapId: MAP_ID, x: 2000, y: -2000, hp: 100, moving: false } }));
-    await sleep(150);
     const rejoined = await session.joinWorld(MAP_ID);
     check(!!rejoined, "重启后 worldJoin 拿回快照");
     // 上一段把乙区抬到 4 只（密度也写进了库），这一段按「无密度」开局 —— tick 会在 1 秒内裁回 2 只。
-    // 先等它收敛（广播帧能看到甲乙两区），再断言总数与实例 id；总数取**再 join 一份全量快照**
-    // （进图应答不按 AOI 裁，丙区在这个格看不见）
+    // 先等它收敛，再断言总数与实例 id（不然比的是「重启瞬间」那份还没对齐的帧）
     checkEqual(await session.waitCount("3", 2, 8_000), 2, "重启后乙区按无密度配置裁回 2 只");
-    const settledFrame = await session.joinWorld(MAP_ID);
+    const settledFrame = session.latest();
     checkEqual(settledFrame.monsters.length, 5, "对齐后共 5 只（甲 1 / 乙 2 / 丙 2）");
     const idsBefore = settledFrame.monsters.map((monster) => monster.instanceId).sort();
     check(idsBefore.every((instanceId) => instanceId.startsWith(`m${MAP_ID}_z1_`)), "实例 id 的区段没有漂移（z1）", idsBefore[0]);
@@ -413,12 +396,9 @@ function windowAround(offsetMinutes, spanMinutes) {
     );
     const pushed = await session.waitNewWorld(baseline, 8_000);
     check(!!pushed, "代际变了之后收到主动下发的 world 帧（没有发 worldJoin）");
-    // #1139：观看者条目有位置，代际推送的世界帧按 AOI 裁剪（#810，只含甲乙两区）——
-    // 全房实例表用再 join 一份全量快照比对（代际重载按库恢复，instanceId 不变）
-    const fullAfter = await session.joinWorld(MAP_ID);
-    const idsAfter = fullAfter ? fullAfter.monsters.map((monster) => monster.instanceId).sort() : [];
+    const idsAfter = pushed ? pushed.monsters.map((monster) => monster.instanceId).sort() : [];
     check(
-      fullAfter && fullAfter.monsters.length === 5 && JSON.stringify(idsAfter) === JSON.stringify(idsBefore),
+      pushed && pushed.monsters.length === 5 && JSON.stringify(idsAfter) === JSON.stringify(idsBefore),
       "重载后的实例表与库里一致（数量与 instanceId 都对得上）",
       JSON.stringify(idsAfter),
     );

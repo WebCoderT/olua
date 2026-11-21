@@ -3,10 +3,9 @@ import { ConfigService } from "@nestjs/config";
 import { GuildRepository } from "../../database/repositories/guild.repository";
 import { RolePositionRepository } from "../../database/repositories/role-position.repository";
 import { roleAttributeSourceOf, summarizeRoleAttributes } from "../combat/role-attributes";
-import { MapService, START_MAP_ID } from "../map/map.service";
+import { START_MAP_ID } from "../map/map.service";
 import { RolesService } from "../roles/roles.service";
-import { MapGeometryService, slideStep } from "./map-geometry.service";
-import { MovementGuardService, MovementRejectReason, MoveIntent } from "./movement-guard.service";
+import { MovementGuardService, MovementRejectReason } from "./movement-guard.service";
 import { PUBLIC_SLOT, roomKey, splitRoomKey } from "../../common/utils/room-key.util";
 import type { RoomRef } from "../../common/utils/room-key.util";
 import type { RealtimePlayerAction, RealtimePlayerAppearance, RealtimePlayerEntry } from "./realtime.protocol";
@@ -14,10 +13,9 @@ import type { RealtimePlayerAction, RealtimePlayerAppearance, RealtimePlayerEntr
 /**
  * 一名在线玩家的在场信息（#324：玩家互见的数据源）
  *
- * **内存态、不落盘**：位置在 #1138 移动收权后是**服务端步进出来的**（10Hz，见
- * `stepIntents`）—— 兼容期没有激活意图的账号仍按客户端自报仲裁（#811 的闸还在），
- * 但意图一激活坐标就只由服务端写。血量在批次 4 之前仍由 pos 帧带来（权威落账在
- * `applyMonsterHit`，这里只是副本）。
+ * **内存态、不落盘、不权威**：位置是客户端自报的最近一次上报（4Hz 节流），
+ * 服务端只做「转发给同图的其他人」这一件事 —— 移动预测仍在各自客户端，
+ * 广播的坐标本质上是「他客户端眼里的位置」的延迟样本。
  */
 interface PresenceEntry {
   zoneId: number;
@@ -69,29 +67,13 @@ interface PresenceEntry {
   trustedY: number;
   trustedAt: number;
   /**
-   * 等「进图后的第一条 pos 帧」落位（#1139）
+   * 本帧的**免检额度**（像素，#811）
    *
-   * 条目改由 `join()` 创建（seed 地图复活点）后，客户端停发周期 pos、只剩一次性帧
-   * （复活）与存量客户端 / e2e 摆位还会发 pos。join 播种的条目基线在复活点，随后的
-   * 第一条 pos（瞬移摆位 / 复活落点）必然超速 —— 这条标记放行它（有限数即收、
-   * 基线挪过去）。**只挂在 join 播种的条目上**：pos 首帧建的条目基线就是那帧坐标，
-   * 与「首帧 pos 建条目」时代的权力逐帧一致（第二帧起照旧仲裁），多给免检帧反而
-   * 会让 #811 的仲裁在 enforce 档下哑一拍（e2e-realtime 九段踩过）。
-   * 真客户端不发 pos，标记一直挂着，无害。
+   * 服务端自己造成的位移必须自己认账（突进类技能报上来的落点），否则 `enforce` 档会把
+   * 每一次「十步一杀」的瞬移都判成作弊再拉回原地。裁决一次即清零 —— 额度不累积，
+   * 不然攒够几帧之后等于没有闸。
    */
-  awaitingPlacement: boolean;
-  /**
-   * 当前移动意图（#1138 移动收权；null = 没在走）
-   *
-   * 意图激活期间坐标由服务端 10Hz 步进（见 `stepIntents`），`pos` 帧的坐标与移动标记
-   * **不再被采纳**（兼容期客户端还带着本地物理，两边的绕障路径本来就不一致 ——
-   * 采纳哪一份都会打架）。到点（target 类）、`moveStop`、换图、被控转不锁都会清。
-   */
-  intent: MoveIntent | null;
-  /** 最近一次被接受的意图序号（`moveIntent.seq`，挡明显倒退的乱序帧） */
-  intentSeq: number;
-  /** 上次步进时刻（10Hz 步进的 Δt 基准） */
-  lastStepAt: number;
+  posCredit: number;
   /** 上次发 `posCorrect` 的时刻（节流判据，见 `movement.correctIntervalMs`） */
   correctedAt: number;
   /**
@@ -173,8 +155,6 @@ export class PlayerPresenceService implements OnApplicationBootstrap, OnApplicat
    */
   private readonly controlCache = new Map<string, { at: number; locked: boolean }>();
   private broadcastTimer: NodeJS.Timeout | null = null;
-  /** 玩家步进定时器（#1138；10Hz 固定） */
-  private stepTimer: NodeJS.Timeout | null = null;
 
   /**
    * 广播出口（发给谁、怎么发是通道的事）。RealtimeService 启动时接线；
@@ -223,23 +203,16 @@ export class PlayerPresenceService implements OnApplicationBootstrap, OnApplicat
     private readonly guilds: GuildRepository,
     private readonly positions: RolePositionRepository,
     private readonly guard: MovementGuardService,
-    private readonly geometry: MapGeometryService,
-    private readonly maps: MapService,
   ) {}
 
   onApplicationBootstrap(): void {
     this.broadcastTimer = setInterval(() => this.broadcast(), this.broadcastMs()).unref();
-    // 玩家步进（#1138 移动收权）：固定 10Hz，与互见广播（`broadcastMs`）分开 ——
-    // 广播频率是「表现层节流」可运营调整，步进是模拟精度，不该被一根配置绳拴在一起
-    this.stepTimer = setInterval(() => this.stepIntents(), this.stepMs()).unref();
-    this.logger.log(`玩家互见已启动（广播 ${this.broadcastMs()}ms / 位置超时 ${this.posStaleMs()}ms / 玩家步进 ${this.stepMs()}ms）`);
+    this.logger.log(`玩家互见已启动（广播 ${this.broadcastMs()}ms / 位置超时 ${this.posStaleMs()}ms）`);
   }
 
   onApplicationShutdown(): void {
     if (this.broadcastTimer) clearInterval(this.broadcastTimer);
     this.broadcastTimer = null;
-    if (this.stepTimer) clearInterval(this.stepTimer);
-    this.stepTimer = null;
   }
 
   //#region 输入（通道侧调用）
@@ -279,7 +252,7 @@ export class PlayerPresenceService implements OnApplicationBootstrap, OnApplicat
    * 单帧位移超过「速度上限 × 容差 × 实际 Δt + 抖动 + 免检额度」判超速；没超速再判有没有
    * 穿过碰撞盒（swept-AABB）。判失败就丢这一帧，`enforce` 档还会定向回一帧 `posCorrect`
    * 把客户端拉回权威位置。合法的大位移各有出口：换图（`join` 重置基线）、复活（血从 ≤0
-   * 变 >0）。hp 只夹有限与非负（上限不夹：maxHp 懒刷新有滞后，
+   * 变 >0）、突进技能（施法帧带落点 → `noteDisplacement` 给额度）。hp 只夹有限与非负（上限不夹：maxHp 懒刷新有滞后，
    * 夹上限会把刚升级玩家的合理血量抹成旧分母）。
    */
   updatePosition(accountId: string, username: string, zoneId: number, mapId: string, x: number, y: number, hp: number, moving: boolean): void {
@@ -288,12 +261,53 @@ export class PlayerPresenceService implements OnApplicationBootstrap, OnApplicat
       // 首帧也要对齐「服务端记的位置」（#861）：条目过期（几秒不报）之后再来一帧伪造的图，
       // 否则又能把人注入到别的图 —— 丢弃只挡得住「条目还在」的那些帧。
       // 位置还没记下来（刚建号）时只认新手村，与 worldJoin 的放行口径一致。
-      // 真客户端（#1139 起不发周期 pos）走不到这里 —— 条目已在 `join()` 播种；
-      // 这条路只剩存量客户端与 e2e 摆位。
+      // 代价是「上报先到、worldJoin 后到」那一帧会被丢：下个节拍（4Hz）就补回来了，
+      // 换图瞬间最多闪一下 —— 拿它换「幽灵玩家」这条通道很值。
       const registered = this.roles.mapAtOfOnlineRole(accountId);
       if (registered ? registered !== mapId : mapId !== START_MAP_ID) return;
-      // 不带 awaitingPlacement：基线就是这帧坐标，第二帧起照旧仲裁（旧世界逐帧同权）
-      this.createEntry(accountId, username, zoneId, mapId, this.slotOfLastRoom(accountId, zoneId, mapId), x, y, hp, moving, false);
+      const role = this.roles.online(accountId);
+      const summary = role ? summarizeRoleAttributes(roleAttributeSourceOf(role.level, role.data)) : null;
+      const maxHp = summary && summary.maxHp > 0 ? summary.maxHp : Math.max(1, hp);
+      // 显示名：角色名优先（互见看到的是「那个角色」，不是登录账号），缺省回落账号名
+      const roleName = typeof role?.data?.name === "string" ? role.data.name : "";
+      this.usernames.set(accountId, roleName || username);
+      const roleId = role?.id ?? "";
+      const guild = this.readGuild(roleId);
+      const now = Date.now();
+      this.entries.set(accountId, {
+        zoneId,
+        mapId,
+        // 线按「最后一次 join 的房间」还原（#1000）：首帧上报先于 worldJoin 时只可能是公共线
+        // （分线进图必须先过 worldJoin 才能改图，见 #861），但**条目过期重建**时他还在原来那条线
+        slot: this.slotOfLastRoom(accountId, zoneId, mapId),
+        x,
+        y,
+        hp,
+        maxHp,
+        moving,
+        updatedAt: now,
+        roleId,
+        guildId: guild.guildId,
+        guildName: guild.guildName,
+        partyId: this.partyOfRole?.(roleId) ?? "",
+        appearance: this.readAppearance(role),
+        appearanceAt: now,
+        sentAppearance: "",
+        sentGuild: "",
+        sentParty: "",
+        sentX: NaN,
+        sentY: NaN,
+        sentMoving: !moving,
+        sentHp: -1,
+        sentMaxHp: -1,
+        trustedX: x,
+        trustedY: y,
+        trustedAt: now,
+        posCredit: 0,
+        correctedAt: 0,
+        persisted: "",
+        persistedAt: 0,
+      });
       return;
     }
     // 换图必须经 worldJoin（#861）：自报的图与登记的不一致 → 整帧丢弃。
@@ -310,45 +324,18 @@ export class PlayerPresenceService implements OnApplicationBootstrap, OnApplicat
       existed.moving = false;
       return;
     }
-    // —— worldJoin 后第一条 pos 落位（#1139）——
-    // 条目已在 `join()` 播种（基线在复活点），这帧放行有限数坐标并挪基线 —— 与
-    // 「首帧 pos 建条目」时代的权力一致。被控期间不发这条（上面已 return，标记保留，
-    // 解除后的第一条 pos 仍可落位）。
-    if (existed.awaitingPlacement) {
-      existed.awaitingPlacement = false;
-      if (Number.isFinite(x) && Number.isFinite(y)) {
-        existed.x = x;
-        existed.y = y;
-        this.resetBaseline(existed, x, y, existed.updatedAt);
-      }
-      existed.moving = moving;
-      existed.hp = Number.isFinite(hp) ? Math.max(0, hp) : 0;
-      this.refreshLazyFields(accountId, existed);
-      return;
+    // —— 位移校验（#811）：坐标可信才动 x/y，其余字段照旧 ——
+    if (this.acceptPosition(accountId, existed, x, y, hp)) {
+      existed.x = x;
+      existed.y = y;
     }
-    // —— 复活是合法重定位：血从「死」变「活」的这帧先清掉旧意图（死了不可能还在走），
-    //    坐标走下面的兼容仲裁收下（客户端本地瞬移到复活点后上报的落点）
-    if (existed.hp <= 0 && Number.isFinite(hp) && hp > 0) existed.intent = null;
-    if (existed.intent === null) {
-      // 兼容期（#1138）：没有激活意图时 pos 帧坐标照旧仲裁 —— 存量客户端 / e2e 摆位
-      // 仍走 #811 的速度 + 穿墙校验；批次 4 客户端删掉本地物理后这条路径自然退役
-      if (this.acceptPosition(accountId, existed, x, y, hp)) {
-        existed.x = x;
-        existed.y = y;
-      }
-      existed.moving = moving;
-    }
-    // 意图激活期间：坐标与移动标记都是服务端步进的事，pos 帧只消费 hp（心跳已在上面刷过）
     existed.hp = Number.isFinite(hp) ? Math.max(0, hp) : 0;
-    this.refreshLazyFields(accountId, existed);
-  }
-
-  /**
-   * 外观 + 血条分母 + 帮会的懒刷新（#383/#389）：换装 / 升级 / 晋升 / 入帮退帮都是低频事件，
-   * 不值得每个 pos 帧查一次库（roles.online 是 DB 读）。pos 主路径与「join 后首帧落位」
-   * 共用这一段（#1139 起两条路都会走到）。
-   */
-  private refreshLazyFields(accountId: string, existed: PresenceEntry): void {
+    existed.moving = moving;
+    // 外观 + 血条分母懒刷新（#383）：换装是低频事件，不值得每个 pos 帧查一次库（roles.online 是 DB 读）。
+    // 分母顺带对齐的理由：换装 / 升级 / 晋升都会改 maxHp，而它只在首见时算过一次 ——
+    // 不同步的话「换了新衣服，别人看到你的血条分母还是旧的」（最多迟一个刷新间隔）
+    // 帮会（#389）搭同一趟车：入帮 / 退帮 / 被踢都走 HTTP 存档，实时进程不会被告知，
+    // 而「同帮的人名字是蓝的」判定要靠他这一份 guildId —— 不刷新就永远停在他首见时的帮会。
     if (existed.updatedAt - existed.appearanceAt > this.appearanceRefreshMs()) {
       const role = this.roles.online(accountId);
       existed.appearance = this.readAppearance(role);
@@ -359,74 +346,6 @@ export class PlayerPresenceService implements OnApplicationBootstrap, OnApplicat
       existed.guildName = guild.guildName;
       existed.appearanceAt = existed.updatedAt;
     }
-  }
-
-  /**
-   * 建一条在场条目（#1139：两个入口共用同一份字段构造）
-   *
-   * - **worldJoin 播种**：`join()` 调，坐标 = 地图复活点（`MapService.reviveSpawnOf`，
-   *   与客户端进图定位同一来源），hp 取角色权威值 —— 真客户端已停发周期 pos，条目
-   *   不能再等首帧 pos；基线在复活点，**带 `awaitingPlacement`**（第一条 pos 免仲裁落位）；
-   * - **pos 首帧**：存量客户端 / e2e 摆位（图合法性已由调用方按 #861 校验）。基线就是
-   *   这帧坐标，**不带 `awaitingPlacement`** —— 下一帧照旧走仲裁，与旧世界逐帧同权。
-   */
-  private createEntry(
-    accountId: string,
-    username: string,
-    zoneId: number,
-    mapId: string,
-    slot: string,
-    x: number,
-    y: number,
-    hp: number,
-    moving: boolean,
-    awaitPlacement: boolean,
-  ): void {
-    const role = this.roles.online(accountId);
-    const summary = role ? summarizeRoleAttributes(roleAttributeSourceOf(role.level, role.data)) : null;
-    const safeHp = Number.isFinite(hp) ? Math.max(0, hp) : 0;
-    const maxHp = summary && summary.maxHp > 0 ? summary.maxHp : Math.max(1, safeHp);
-    // 显示名：角色名优先（互见看到的是「那个角色」，不是登录账号），缺省回落账号名
-    const roleName = typeof role?.data?.name === "string" ? role.data.name : "";
-    this.usernames.set(accountId, roleName || username);
-    const roleId = role?.id ?? "";
-    const guild = this.readGuild(roleId);
-    const now = Date.now();
-    this.entries.set(accountId, {
-      zoneId,
-      mapId,
-      slot,
-      x,
-      y,
-      hp: safeHp,
-      maxHp,
-      moving,
-      updatedAt: now,
-      roleId,
-      guildId: guild.guildId,
-      guildName: guild.guildName,
-      partyId: this.partyOfRole?.(roleId) ?? "",
-      appearance: this.readAppearance(role),
-      appearanceAt: now,
-      sentAppearance: "",
-      sentGuild: "",
-      sentParty: "",
-      sentX: NaN,
-      sentY: NaN,
-      sentMoving: !moving,
-      sentHp: -1,
-      sentMaxHp: -1,
-      trustedX: x,
-      trustedY: y,
-      trustedAt: now,
-      awaitingPlacement: awaitPlacement,
-      intent: null,
-      intentSeq: 0,
-      lastStepAt: now,
-      correctedAt: 0,
-      persisted: "",
-      persistedAt: 0,
-    });
   }
 
   /**
@@ -467,8 +386,7 @@ export class PlayerPresenceService implements OnApplicationBootstrap, OnApplicat
    * - `enforce` 档下失败还会**立刻**回一帧 `posCorrect`（把客户端拉回权威位置），
    *   因为客户端此刻以为自己住在那里，不拉就会一直往那边走、一直失败、无限不同步；
    * - 合法的大位移各有各的出口，不靠「连发两帧」兜：换图在 `join()` 重置基线、
-   *   复活用「血从 ≤0 变 >0」这一条判据（突进的落点在 #1138 起改由服务端直接落位，
-   *   `teleportTo`，不再需要免检额度）。
+   *   突进技能用 `posCredit`（施法帧带上落点）、复活用「血从 ≤0 变 >0」这一条判据。
    *
    * 非有限数是协议垃圾（不是「客户端重定位」），永不接受、也不回帧 —— 垃圾坐标广播出去
    * 就是 NaN 血条，而给它回 `posCorrect` 只会喂给刷帧的人一个免费出口。
@@ -488,7 +406,10 @@ export class PlayerPresenceService implements OnApplicationBootstrap, OnApplicat
       from: { x: entry.trustedX, y: entry.trustedY },
       to: { x, y },
       dtMs: now - entry.trustedAt,
+      credit: entry.posCredit,
     });
+    // 额度是一次性的：不管这帧过没过都清零（攒额度 = 攒一次瞬移）
+    entry.posCredit = 0;
     if (verdict.accept) {
       this.resetBaseline(entry, x, y, now);
       return true;
@@ -524,146 +445,17 @@ export class PlayerPresenceService implements OnApplicationBootstrap, OnApplicat
   }
 
   /**
-   * 记一份移动意图（#1138 移动收权）
+   * 记一笔「服务端即将让这个账号合法地位移 N 像素」（#811）
    *
-   * 校验走 `MovementGuardService.judgeIntent`（三档：off 不判 / log 记账放行 / enforce
-   * 拒收 + `posCorrect`）。形状垃圾（NaN / 零向量）无论档位都不收 —— 收了会把人步进没；
-   * 这种帧静默丢弃，与 pos 帧的 NaN 同一口径（高频帧不回 error）。
-   *
-   * 意图是状态：同方向重复发只是覆盖；序号明显倒退的帧丢弃（乱序容忍靠「倒退才挡」，
-   * 不做严格排序 —— 掉线重连的 seq 归零不该被当成垃圾）。
+   * 目前唯一的调用方是突进类技能的施法帧（`cast` 带落点，如十步一杀）：服务端从施法点
+   * 就知道他要跳到哪，提前给额度，客户端随后上报的落点才不会被判成瞬移。
+   * 额度是**一次性**的，且由调用方负责夹上限（见 `RealtimeService.grantCastDisplacement`）。
    */
-  setIntent(accountId: string, seq: number, raw: MoveIntent): void {
+  noteDisplacement(accountId: string, distance: number): void {
     const entry = this.entries.get(accountId);
     if (!entry) return;
-    if (Number.isFinite(seq) && seq < entry.intentSeq) return;
-    const verdict = this.guard.judgeIntent(entry.mapId, raw);
-    if (verdict.reason === "bad") return;
-    if (!verdict.accept) {
-      // enforce 档拒收（wall）：意图不生效 + 拉回权威位置（节流与 pos 帧共用一条）
-      this.correctPosition(accountId, entry, "wall", Date.now());
-      return;
-    }
-    entry.intent = verdict.intent;
-    entry.intentSeq = Number.isFinite(seq) ? seq : entry.intentSeq;
-    entry.lastStepAt = Date.now();
-    // 意图帧本身就是「人还在」的证据：刷一下新鲜度，挂机走位的人不该被超时清场
-    entry.updatedAt = entry.lastStepAt;
-  }
-
-  /** 停止移动（#1138 `moveStop`）：清掉意图，下一拍移动标记自然落下 */
-  clearIntent(accountId: string): void {
-    const entry = this.entries.get(accountId);
-    if (!entry) return;
-    entry.intent = null;
-    entry.moving = false;
-    entry.updatedAt = Date.now();
-  }
-
-  /**
-   * 服务端直接落位（#1138：突进类技能的落点收权）
-   *
-   * 结算成功后由通道调用（替代旧的 `posCredit` 免检额度 —— 免检的本质是「相信客户端
-   * 报的落点」，收权后落点由服务端算）：按施法帧带的目标方向把人挪过去，距离夹在
-   * `maxDistance` 内；落点撞墙 / 出图则**原地不动**（宁可不瞬移，也不把人塞进墙里）。
-   *
-   * 落位同步仲裁基线：兼容期 pos 仲裁以它为起点，否则下一帧 pos 会被判成超速。
-   */
-  teleportTo(accountId: string, x: number, y: number, maxDistance: number): void {
-    const entry = this.entries.get(accountId);
-    if (!entry) return;
-    if (!Number.isFinite(x) || !Number.isFinite(y) || !(maxDistance > 0)) return;
-    const offsetX = x - entry.x;
-    const offsetY = y - entry.y;
-    const distance = Math.hypot(offsetX, offsetY);
-    if (distance > maxDistance) {
-      const scale = maxDistance / distance;
-      x = entry.x + offsetX * scale;
-      y = entry.y + offsetY * scale;
-    }
-    const geo = this.geometry.geometryOf(entry.mapId);
-    if (geo !== null) {
-      // 出图或落点在墙里：不挪。几何缺失（导入工具没跑）时不判，与步进同一口径
-      if (x < 0 || x > geo.width || y > 0 || y < -geo.height) return;
-      if (this.geometry.blockedIn(geo, x, y)) return;
-    }
-    const now = Date.now();
-    entry.x = x;
-    entry.y = y;
-    entry.updatedAt = now;
-    this.resetBaseline(entry, x, y, now);
-  }
-
-  /**
-   * 10Hz 玩家步进（#1138 移动收权的核心一拍）
-   *
-   * 每个带意图的在场条目按 `playerMove` 的走 / 跑速走一步：碰撞用 `slideStep`
-   * （与怪物 AI 同一份滑行算法），Δt 用**实际间隔**（定时器漂移不掉步子，掉帧不瞬移）。
-   * 步进结果直接写在场表 —— 互见广播、AOI、怪物 AI 索敌、位置快照落库读的都是它，
-   * 谁也不需要知道「这一步是步进出来的」。
-   *
-   * 被控（眩晕 / 麻痹 / 定身）与死亡时不步进但**保留意图**：解除控制 / 复活后客户端
-   * 大概率还按着方向，接着走才是正确行为（被控期间的 pos 帧也不动基线，同一哲学）。
-   *
-   * 兼容期基线同步：步进落点同时推进仲裁基线 —— 意图停下后，下一帧 pos 仲裁
-   * 从服务端位置起算，不会把「服务端刚走出来的路」判成瞬移。
-   */
-  private stepIntents(): void {
-    const now = Date.now();
-    const speeds = this.guard.playerMove();
-    for (const [accountId, entry] of this.entries) {
-      const intent = entry.intent;
-      if (!intent) continue;
-      const dtMs = Math.min(500, Math.max(0, now - entry.lastStepAt));
-      entry.lastStepAt = now;
-      entry.updatedAt = now;
-      // 死人 / 被控的人不走，但意图保留（见方法注释）
-      if (entry.hp <= 0 || this.movementLocked(accountId)) {
-        entry.moving = false;
-        continue;
-      }
-      const speed = intent.run ? speeds.runSpeedPxPerS : speeds.walkSpeedPxPerS;
-      // 本拍步长（像素）：Δt 用实际间隔（见方法注释）
-      const stepLength = (speed * dtMs) / 1000;
-      let stepX: number;
-      let stepY: number;
-      if (intent.kind === "dir") {
-        // 方向已归一化（judgeIntent 出口保证），步长直接乘上去
-        stepX = intent.dx * stepLength;
-        stepY = intent.dy * stepLength;
-      } else {
-        const offsetX = intent.tx - entry.x;
-        const offsetY = intent.ty - entry.y;
-        const distance = Math.hypot(offsetX, offsetY);
-        // 到点：意图清掉，广播下一拍把「停下」发给同图的人
-        if (distance <= 0.01) {
-          entry.intent = null;
-          entry.moving = false;
-          continue;
-        }
-        // 一步不跨过目标点（否则会在目标两侧来回跳）
-        const capped = Math.min(distance, stepLength);
-        stepX = (offsetX / distance) * capped;
-        stepY = (offsetY / distance) * capped;
-      }
-      const geo = this.geometry.geometryOf(entry.mapId);
-      const result = slideStep(geo, entry, stepX, stepY);
-      entry.x = result.x;
-      entry.y = result.y;
-      entry.moving = result.moved >= 0.01;
-      // 兼容期基线同步：pos 仲裁以服务端位置为起点（见方法注释）
-      this.resetBaseline(entry, entry.x, entry.y, now);
-      // target 类到点了：意图清掉
-      if (intent.kind === "target" && Math.hypot(intent.tx - entry.x, intent.ty - entry.y) <= 0.01) {
-        entry.intent = null;
-        entry.moving = false;
-      }
-    }
-  }
-
-  /** 步进节拍（毫秒；固定 10Hz，下限 20ms 防呆） */
-  private stepMs(): number {
-    return Math.max(20, Number(this.config.get<number>("playerMoveTickMs") ?? 100));
+    if (!Number.isFinite(distance) || distance <= 0) return;
+    entry.posCredit = Math.max(entry.posCredit, distance);
   }
 
   /**
@@ -686,37 +478,18 @@ export class PlayerPresenceService implements OnApplicationBootstrap, OnApplicat
       // 换图或原地重进都刷新新鲜度：刚登记就因上报迟到被当离场清掉，快照与增量就对不上了
       existed.updatedAt = Date.now();
       if (movedMap) {
-        // 换图整体重播种（#1139）：客户端进图定位在地图复活点（GameMap 构造即 goToRevivePoint），
-        // 条目坐标与之同源（`reviveSpawnOf`）—— 旧图坐标对新图毫无意义，残留只会让
-        // 「刚传过去的人」在别人的屏幕上从上一张图的坐标滑进来。
-        // 没设复活点的图退回原点（客户端没复活点时同样停在原点，两边一致）。
-        const seed = this.maps.reviveSpawnOf(mapId) ?? { x: 0, y: 0 };
         existed.zoneId = zoneId;
         existed.mapId = mapId;
         existed.slot = room.slot;
-        existed.x = seed.x;
-        existed.y = seed.y;
-        existed.moving = false;
-        existed.awaitingPlacement = true;
         // 换图顺带重置位移基线（#861 / #811）：基线还是上一张图的坐标，跨图距离必然超限，
         // 不重置的话新图的第一帧上报会被当成瞬移（看起来是「进图后愣半秒」，`enforce` 档下
         // 还会白挨一帧 `posCorrect`）。换图这件事本身是服务端放行的，坐标该整体接受
-        this.resetBaseline(existed, seed.x, seed.y, Date.now());
+        existed.trustedX = existed.x;
+        existed.trustedY = existed.y;
+        existed.trustedAt = Date.now();
+        existed.posCredit = 0;
         existed.correctedAt = 0;
-        // 旧图的移动意图在新图没有意义（#1138）：目标点 / 方向语义都变了，一律清掉
-        existed.intent = null;
-        existed.intentSeq = 0;
-        existed.lastStepAt = Date.now();
       }
-    } else {
-      // 首次进图播种条目（#1139 移动收权）：真客户端已停发周期 pos，条目不能再等首帧 pos ——
-      // 坐标 = 地图复活点（与客户端进图定位同一来源），hp 取角色权威值（存档进程落账的）。
-      // 没设复活点的图退回原点；线就是这次 join 的房号线。
-      const seed = this.maps.reviveSpawnOf(mapId) ?? { x: 0, y: 0 };
-      const role = this.roles.online(accountId);
-      const hp = role ? Math.max(0, Math.floor(Number(role.data.hp) || 0)) : 1;
-      // 带 awaitingPlacement：基线在复活点，随后的第一条 pos（摆位 / 复活落点）免仲裁落位
-      this.createEntry(accountId, "", zoneId, mapId, room.slot, seed.x, seed.y, hp, false, true);
     }
     const players: RealtimePlayerEntry[] = [];
     for (const [otherId, entry] of this.entries) {
@@ -734,20 +507,6 @@ export class PlayerPresenceService implements OnApplicationBootstrap, OnApplicat
     // 「不知道你在哪」，玩家看到的是「走过去了却接不了任务」。
     const current = this.entries.get(accountId);
     if (current) this.persistPosition(current, Date.now());
-  }
-
-  /**
-   * 心跳续新鲜度（#1139 移动收权）
-   *
-   * pos 帧曾是唯一的「活着」证据（`updatedAt` 只由它与 join 刷新）—— 真客户端停发
-   * 周期 pos 后，站桩玩家会被 `posStaleMs` 超时当成离场清掉。改由 **ping 续期**：
-   * 客户端本就按服务端下发的节拍发心跳，冻结标签页停止 ping → 超时 → 照旧从互见
-   * 离场、怪物也不追几秒前的位置（三条 stale 判据的语义全部保留）。
-   * 没有条目（还没 worldJoin）时是空操作。
-   */
-  touch(accountId: string): void {
-    const entry = this.entries.get(accountId);
-    if (entry) entry.updatedAt = Date.now();
   }
 
   /**

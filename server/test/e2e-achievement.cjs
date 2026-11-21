@@ -232,7 +232,7 @@ function setRoleLevel(dbPath, roleId, level) {
     // 准备段先按运营摆位把位置写进去（等价管理端 PATCH onMap，见 lib/place-role.cjs）
     placeRolesAt(dbPath, "0");
     // 任务交互要过 NPC 距离校验（#862/#863）：把位置摆到传送官旁边（map_npcs 的坐标）
-    const questNpcSpot = placeRolesNear(dbPath, "0", "0002");
+    placeRolesNear(dbPath, "0", "0002");
     const roleId = created.data && created.data.id;
     check(created.code === 0 && created.data.online === true, "准备：角色已创建并自动在线", created.message);
 
@@ -243,12 +243,6 @@ function setRoleLevel(dbPath, roleId, level) {
     check(
       !!(world && world.monsters.some((m) => m.alive && m.monsterKey === "1")),
       "准备：进图拿到活着的怪物 1（#1084 重排后图 0 全怪环带，按 key 挑）",
-    );
-    // #1139 起条目由 worldJoin 播种（坐标 = 复活点），实时进程每秒把条目坐标写进
-    // role_positions —— 上面的直写摆位会被覆写。进图后立刻发一条 pos 帧把条目摆到
-    // 任务 NPC 旁边（播种条目首帧免仲裁），此后两个写入方写的是同一坐标，互不打架
-    session.socket.send(
-      JSON.stringify({ type: "pos", data: { mapId: "0", x: questNpcSpot.cx, y: questNpcSpot.cy, hp: 50, moving: false } }),
     );
 
     await api(baseUrl, "POST", "admin/auth/register", { body: { username: "ach_admin", password: "pass1234", registerCode: ADMIN_CODE } });
@@ -329,7 +323,6 @@ function setRoleLevel(dbPath, roleId, level) {
 
     group("三、累计型（quest）：交付一个任务 → 任务型成就 +1");
     // 位置快照 10 秒过期（QUEST_POS_STALE_MS）：击杀段可能跑超，请求前重摆一次刷新鲜度
-    // （条目坐标已被上面的 pos 帧对齐到同一处，实时进程即使覆写也写同一坐标）
     placeRolesNear(dbPath, "0", "0002");
     await api(baseUrl, "POST", "quests/accept", { token, body: { questId: "8001" } });
     await api(baseUrl, "POST", "quests/npc-talk", { token, body: { npcId: "0002" } });

@@ -1,5 +1,5 @@
 import { Injectable, Logger } from "@nestjs/common";
-import { MovementGuardParams, PlayerMoveParams } from "../../common/constants/runtime-params";
+import { MovementGuardParams } from "../../common/constants/runtime-params";
 import { RuntimeParamsRepository } from "../../database/repositories/runtime-params.repository";
 import { MapGeometryService } from "./map-geometry.service";
 
@@ -16,33 +16,6 @@ export interface MovementVerdict {
   enforce: boolean;
 }
 
-/**
- * 一份移动意图（#1138 移动收权）
- *
- * `moveIntent` 帧解析并校验后的形状：dir 类只有方向向量，target 类只有目标点 ——
- * 两组坐标不同时出现（互为对方的不变量）。
- */
-export interface MoveIntent {
-  kind: "dir" | "target";
-  /** kind = dir：**归一化后**的方向向量 */
-  dx: number;
-  dy: number;
-  /** kind = target：目标点（世界坐标） */
-  tx: number;
-  ty: number;
-  /** 是否跑步 */
-  run: boolean;
-}
-
-/** 一份意图的裁决结果 */
-export interface MoveIntentVerdict {
-  accept: boolean;
-  /** 拒绝原因：bad = 形状 / 数值非法；wall = 目标点落在碰撞盒里 */
-  reason: "bad" | "wall" | null;
-  /** 归一化后的意图（accept 时非 null） */
-  intent: MoveIntent | null;
-}
-
 /** 一次裁决的输入 */
 export interface MovementInput {
   /** 上次**被接受**的坐标（服务端权威位置） */
@@ -53,6 +26,14 @@ export interface MovementInput {
   dtMs: number;
   /** 地图 id（穿墙校验按图取几何） */
   mapId: string;
+  /**
+   * 这一次位移的**免检额度**（像素，#811）
+   *
+   * 服务端自己造成的位移必须自己认账：击退 / 拉人（#826）由服务端发起，客户端照位移
+   * 表现之后再上报，从服务端的视角看就是「一帧跳了 80px」。不给额度的话，`enforce` 档
+   * 会把每个被击退的玩家都拉回原地 —— 表现为「被怪推了一下，人又弹回去」。
+   */
+  credit: number;
 }
 
 /**
@@ -80,7 +61,7 @@ export interface MovementInput {
  * ===========================================================================
  * 数值口径
  * ===========================================================================
- * `上限 = maxSpeed × tolerance × Δt + jitterPx`（#1138 起 credit 删除：突进改服务端直接落位）
+ * `上限 = maxSpeed × tolerance × Δt + jitterPx + credit`
  * - **Δt 用实际间隔**（上次被接受 → 这次），所以掉帧 200ms 出来的大步长不会被误判；
  *   上限截到 5 秒（再长的间隔按 5 秒算，掉线重连的第一帧不该按真实间隔放开）；
  * - 服务端**没有**角色移速属性（移速只在客户端刚体与怪物 `move_speed` 里），所以
@@ -96,7 +77,7 @@ export class MovementGuardService {
   private readonly logger = new Logger(MovementGuardService.name);
 
   /** 流水计数（`log` 档观察期靠它出数：每 60 秒汇总一行 warn） */
-  private readonly counters = { total: 0, speed: 0, wall: 0, corrected: 0, intentTotal: 0, intentBad: 0, intentWall: 0 };
+  private readonly counters = { total: 0, speed: 0, wall: 0, corrected: 0 };
   /** 上次汇总输出的时刻 */
   private lastSummaryAt = 0;
 
@@ -104,16 +85,6 @@ export class MovementGuardService {
     private readonly runtimeParams: RuntimeParamsRepository,
     private readonly geometry: MapGeometryService,
   ) {}
-
-  /**
-   * 玩家移动速度（#1138：`runtime_params.player_move` 列，**每次现读库**）
-   *
-   * 与 `params()` 同一取向：配置热切优先于省这点 IO。缺列 / 坏 JSON / 缺键按
-   * `FALLBACK_PLAYER_MOVE` 兜底（出厂同值 64 / 128）—— 读不出来时服务端自己也要能走。
-   */
-  playerMove(): PlayerMoveParams {
-    return parsePlayerMove(this.runtimeParams.get()?.player_move);
-  }
 
   /**
    * 当前生效参数（**每次现读库**）
@@ -142,9 +113,7 @@ export class MovementGuardService {
     // 上限截到 5 秒：`pos` 帧超时（3 秒）就会被当离场，理论上到不了这里；
     // 真到了（进程刚起 / 重连首帧）也不能按真实间隔放开 —— 那是给「挂机一小时后瞬移」开后门
     const dtSeconds = Math.min(5, Math.max(0, input.dtMs) / 1000);
-    // #1138 起免检额度（credit）删除：突进落点改由服务端直接落位（`teleportTo`），
-    // 服务端造成的位移不再需要「给额度等客户端上报」这条通道
-    const limit = cfg.maxSpeed * cfg.tolerance * dtSeconds + cfg.jitterPx;
+    const limit = cfg.maxSpeed * cfg.tolerance * dtSeconds + cfg.jitterPx + Math.max(0, input.credit);
     const dist = Math.hypot(input.to.x - input.from.x, input.to.y - input.from.y);
     let reason: MovementRejectReason | null = null;
     if (dist > limit) {
@@ -165,52 +134,8 @@ export class MovementGuardService {
     this.counters.corrected += 1;
   }
 
-  /**
-   * 判一份移动意图（#1138：三档从「帧坐标校验」转成「意图校验」）
-   *
-   * 收权之后速度不再是客户端报的（服务端自己按 `playerMove()` 步进），经典的速度闸
-   ** 没了判的对象 —— 剩下能判的只有**形状与目标点**：
-   * - `bad`：kind 不认识 / 方向是零向量或 NaN / 目标点 NaN —— 形状垃圾，`log` 档也不收
-   *   （归一化救不了 NaN，收了会让步进算出 NaN 坐标把人从图上抹掉）；
-   * - `wall`：target 类的目标点落在碰撞盒里 —— `enforce` 档拒收（人不动 + `posCorrect`
-   *   拉回权威位置），`log` 档照收（走到墙边滑行停住，观察期先量误判）；
-   * - dir 类没有目标点，穿墙校验判不了（未来走到的每一步才知道）—— 交给步进时的
-   *   滑行（`slideMove` 口径），撞墙停住而不是穿过去。
-   *
-   * 方向向量**无论档位都归一化**：这不是「放行 / 拒收」的裁决，是形状卫生 ——
-   * 客户端可能报非单位向量（长度 5 的「方向」），服务端步进用归一化后的值，
-   * 速度只由 `playerMove()` 一把尺子决定。
-   */
-  judgeIntent(mapId: string, intent: MoveIntent): MoveIntentVerdict {
-    const cfg = this.params();
-    if (!validShape(intent)) {
-      this.counters.intentTotal += 1;
-      this.counters.intentBad += 1;
-      return { accept: false, reason: "bad", intent: null };
-    }
-    const normalized = normalizeIntent(intent);
-    this.counters.intentTotal += 1;
-    if (cfg.mode !== "off" && normalized.kind === "target" && this.pointInWall(mapId, normalized.tx, normalized.ty)) {
-      this.counters.intentWall += 1;
-      this.summarize(cfg);
-      // `log` 档照收（观察期不改行为），`enforce` 档拒收
-      return { accept: cfg.mode === "log", reason: "wall", intent: normalized };
-    }
-    return { accept: true, reason: null, intent: normalized };
-  }
-
-  /** 目标点是否落在某个碰撞盒里（几何缺失时不判 —— 加固手段不能让人走不动路） */
-  private pointInWall(mapId: string, x: number, y: number): boolean {
-    const geo = this.geometry.geometryOf(mapId);
-    if (!geo) return false;
-    for (const box of geo.boxes) {
-      if (Math.abs(x - box.cx) <= box.w / 2 && Math.abs(y - box.cy) <= box.h / 2) return true;
-    }
-    return false;
-  }
-
   /** 当前计数快照（排查脚本 / e2e 的诊断出口；不是业务接口） */
-  stats(): { total: number; speed: number; wall: number; corrected: number; intentTotal: number; intentBad: number; intentWall: number } {
+  stats(): { total: number; speed: number; wall: number; corrected: number } {
     return { ...this.counters };
   }
 
@@ -280,45 +205,4 @@ function positiveOr(value: unknown, fallback: number): number {
 function nonNegativeOr(value: unknown, fallback: number): number {
   const num = Number(value);
   return Number.isFinite(num) && num >= 0 ? num : fallback;
-}
-
-/** 玩家移动参数兜底（#1138：缺列 / 坏 JSON / 缺键按出厂同值兜住，服务端自己也要能走） */
-const FALLBACK_PLAYER_MOVE: PlayerMoveParams = { walkSpeedPxPerS: 64, runSpeedPxPerS: 128 };
-
-function parsePlayerMove(raw: string | undefined): PlayerMoveParams {
-  const parsed = parseJsonObject(raw);
-  const walk = positiveOr(parsed.walkSpeedPxPerS, FALLBACK_PLAYER_MOVE.walkSpeedPxPerS);
-  const run = positiveOr(parsed.runSpeedPxPerS, FALLBACK_PLAYER_MOVE.runSpeedPxPerS);
-  // 跑速被配得比走速还小（管理端跨字段校验拦得住接口，拦不住手改库）：跑取走速兜底
-  return { walkSpeedPxPerS: walk, runSpeedPxPerS: Math.max(run, walk) };
-}
-
-/** 解析一列 JSON 对象（坏数据 / 空列 → 空对象） */
-function parseJsonObject(raw: string | undefined): Record<string, unknown> {
-  if (!raw) return {};
-  try {
-    const value: unknown = JSON.parse(raw);
-    return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
-  } catch {
-    return {};
-  }
-}
-
-/** 意图形状校验（无论档位都要过：NaN 坐标收进来会把人步进没了） */
-function validShape(intent: MoveIntent): boolean {
-  if (intent.kind === "dir") {
-    const length = Math.hypot(intent.dx, intent.dy);
-    return Number.isFinite(intent.dx) && Number.isFinite(intent.dy) && length > 1e-6;
-  }
-  if (intent.kind === "target") {
-    return Number.isFinite(intent.tx) && Number.isFinite(intent.ty);
-  }
-  return false;
-}
-
-/** 归一化方向 / 收紧形状（validShape 已通过才有意义） */
-function normalizeIntent(intent: MoveIntent): MoveIntent {
-  if (intent.kind !== "dir") return { ...intent, dx: 0, dy: 0 };
-  const length = Math.hypot(intent.dx, intent.dy);
-  return { ...intent, dx: intent.dx / length, dy: intent.dy / length, tx: 0, ty: 0 };
 }

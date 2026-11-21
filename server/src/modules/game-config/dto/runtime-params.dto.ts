@@ -220,38 +220,6 @@ export class GuildRuleParamsDto {
   createCostBindGold: number;
 }
 
-/** 玩家移动速度参数（`runtime_params.player_move` 列，#1138；服务端消费 + 快照下发） */
-export class PlayerMoveParamsDto {
-  @ApiProperty({ description: "走路速度（像素/秒）", example: 64 })
-  @IsNumber({ maxDecimalPlaces: 2 })
-  @Min(1)
-  @Max(2000)
-  walkSpeedPxPerS: number;
-
-  @ApiProperty({ description: "跑步速度（像素/秒，必须 ≥ 走路）", example: 128 })
-  @IsNumber({ maxDecimalPlaces: 2 })
-  @Min(1)
-  @Max(2000)
-  runSpeedPxPerS: number;
-}
-
-/** 玩家移动速度参数的部分更新（只提交改动过的字段） */
-export class UpdatePlayerMoveParamsDto {
-  @ApiPropertyOptional({ description: "走路速度（像素/秒）" })
-  @IsOptional()
-  @IsNumber({ maxDecimalPlaces: 2 })
-  @Min(1)
-  @Max(2000)
-  walkSpeedPxPerS?: number;
-
-  @ApiPropertyOptional({ description: "跑步速度（像素/秒）" })
-  @IsOptional()
-  @IsNumber({ maxDecimalPlaces: 2 })
-  @Min(1)
-  @Max(2000)
-  runSpeedPxPerS?: number;
-}
-
 /** 三个分组合体（快照 `runtimeParams` 段与 GET 响应的形状） */
 export class RuntimeParamsDto {
   @ApiProperty({ description: "掉落物手感参数（服务端只下发，不消费）", type: DropRuntimeParamsDto })
@@ -268,11 +236,6 @@ export class RuntimeParamsDto {
   @ValidateNested()
   @Type(() => GuildRuleParamsDto)
   guild: GuildRuleParamsDto;
-
-  @ApiProperty({ description: "玩家移动速度（#1138 移动收权，速度权威在服务端；客户端拉快照覆写本地）", type: PlayerMoveParamsDto })
-  @ValidateNested()
-  @Type(() => PlayerMoveParamsDto)
-  playerMove: PlayerMoveParamsDto;
 
   @ApiProperty({ description: "最后修改时间（毫秒）", example: 1762000000000 })
   updatedAt: number;
@@ -674,12 +637,6 @@ export class UpdateRuntimeParamsDto {
   @ValidateNested()
   @Type(() => UpdateGuildRuleParamsDto)
   guild?: UpdateGuildRuleParamsDto;
-
-  @ApiPropertyOptional({ description: "玩家移动速度（只提交改动过的字段）", type: UpdatePlayerMoveParamsDto })
-  @IsOptional()
-  @ValidateNested()
-  @Type(() => UpdatePlayerMoveParamsDto)
-  playerMove?: UpdatePlayerMoveParamsDto;
 
   @ApiPropertyOptional({ description: "修改备注（写进审计日志的上下文，便于追溯「为什么改」）" })
   @IsOptional()

@@ -3,40 +3,14 @@ import { directions } from "./animation";
 import { NeedSetShortcutKeyConfig, OECCUPATION, RELATION_SHIP, RoleOccupationInfo, SEX } from "../types/role";
 import { Size, Vec2 } from "cc";
 
-/**
- * 角色移动速度-全局（物理单位 m/s；换算见 `PHYSICS_PTM`）
- *
- * **权威在服务端**（#1138 移动收权：`runtime_params.player_move` 的走/跑速度，像素/秒），
- * 这里只是「快照没到之前的初始值」，进游戏拉配置快照后由 `setPlayerMoveSpeeds` 覆写
- * —— 客户端（过渡期的本地物理与批次 4 之后的演出节奏）与服务端 10Hz 步进用同一把尺子，
- * 两边不同速的话「别人眼里的你」和「你自己眼里的你」会走出两个速度。
- */
-export let ROLE_WALK_SPEED = 2;
-/** 角色跑动速度-全局（同上，权威在服务端） */
-export let ROLE_RUN_SPEED = 4;
+/** 角色移动速度-全局 */
+export const ROLE_WALK_SPEED = 2;
+/** 角色跑动速度-全局 */
+export const ROLE_RUN_SPEED = 4;
 
 /**
- * Box2D 的像素-物理米换算（Cocos 2D 物理的 PTM 出厂值 32）：刚体速度 1 m/s = 32 世界像素/s。
- * 服务端配置是像素/秒，落进刚体要先除以它 —— 别在别处再写一个 32。
- */
-const PHYSICS_PTM = 32;
-
-/**
- * 覆写玩家移动速度（**唯一写入口**，#1138）
- *
- * 快照给的是像素/秒（服务端口径），落进刚体要除以 PTM。负数 / 非有限数按「不改」处理：
- * 配置拍坏了宁可走默认速度，也不能把角色定住或变成负速度。
- */
-export function setPlayerMoveSpeeds(walkPxPerS: number, runPxPerS: number): void {
-  if (!Number.isFinite(walkPxPerS) || walkPxPerS <= 0 || !Number.isFinite(runPxPerS) || runPxPerS <= 0) return;
-  ROLE_WALK_SPEED = Math.max(0.1, walkPxPerS / PHYSICS_PTM);
-  // 跑速被配得比走速还小（服务端接口校验拦得住，拦不住手改库）：取走速兜底
-  ROLE_RUN_SPEED = Math.max(ROLE_WALK_SPEED, runPxPerS / PHYSICS_PTM);
-}
-
-/**
- * 角色体型（显示与朝向死区基准共用）
- * 角色锚点在脚下（0.5, 0），碰撞盒偏移标记「身体中心」
+ * 角色体型与碰撞盒（显示与物理共用）
+ * 角色锚点在脚下（0.5, 0），所以碰撞盒向上偏移身高的一半才正好罩住身体
  * 调体型（例如换成更瘦的职业模型）只改这里
  *
  * ⚠️ **服务端也有一份同样的数**（`CastGuardService` 的 `ROLE_HALF_WIDTH / ROLE_HALF_HEIGHT /
@@ -47,12 +21,19 @@ export function setPlayerMoveSpeeds(walkPxPerS: number, runPxPerS: number): void
 export const roleBody = {
   /** 角色显示尺寸（宽 × 高，世界单位） */
   size: new Size(40, 70),
-  /**
-   * 碰撞盒尺寸与相对脚下原点的偏移（#1139 起角色不挂物理碰撞体，字段保留为
-   * 「身体范围」的基准：装备对齐清单的派生输入、朝向死区的偏移都读它）
-   */
+  /** 碰撞盒尺寸与相对脚下原点的偏移 */
   colliderSize: new Size(40, 70),
   colliderOffset: new Vec2(0, 35),
+};
+
+/**
+ * 角色刚体参数
+ * 角色位移由代码驱动（键盘/鼠标/A* 寻路），刚体只用来参与碰撞检测：
+ * 不施加重力、不允许旋转，否则会被物理仿真推着走
+ */
+export const roleRigid = {
+  gravityScale: 0,
+  fixedRotation: true,
 };
 
 /**
