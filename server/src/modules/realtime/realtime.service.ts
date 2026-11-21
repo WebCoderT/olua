@@ -448,16 +448,8 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
       const socket = this.connections.get(accountId);
       if (!socket) return;
       const filtered = this.visiblePlayers(accountId, data);
-      // 快照（full）**空也要发**：客户端靠它重建同房视图，进了一条没人（或全被拉黑）的线
-      // 时吞掉这份帧，客户端就永远等不到全量（#1000 的反向断言踩过 —— 条目改由 join 播种
-      // 后 identityOf 在快照时刻已非 null，visiblePlayers 的「滤完为空 return null」
-      // 会把空快照一起吞掉，这里对 full 帧显式豁免）。
-      if (filtered === null) {
-        if (data.full !== true) return;
-        const empty: PlayersFrameData = { ...data, players: [], actions: [] };
-        this.send(socket, { type: "players", data: empty } satisfies RealtimePlayersMessage);
-        return;
-      }
+      // 全被拉黑 = 什么都不剩：不发空帧（客户端本来就没有这些人）
+      if (!filtered) return;
       this.send(socket, { type: "players", data: filtered } satisfies RealtimePlayersMessage);
     };
     // 聊天投递（#395）：ChatService 选好收件人列表，这里对着连接表发；
@@ -864,12 +856,7 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
       if (socket.roleSyncSignature === signature) continue;
       socket.roleSyncSignature = signature;
       const frame = this.buildRoleUpdate(row);
-      if (frame) {
-        // 血量权威副本同步进在场条目（#1139）：pos 帧停发后，用药 / 自然回复 / 复活的血量
-        // 变化只有 roleUpdate 一条路能到实时进程 —— 互见血条不能停在旧值
-        this.presence.markHp(socket.identity.id, frame.data.hp);
-        this.send(socket, frame);
-      }
+      if (frame) this.send(socket, frame);
     }
   }
 
@@ -879,11 +866,7 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
     if (!row) return;
     socket.roleSyncSignature = `${row.revision}:${row.updated_at}`;
     const frame = this.buildRoleUpdate(row);
-    if (frame) {
-      // 与 syncRoles 同一口径（#1139）：roleUpdate 的权威 hp 顺带落进在场条目
-      this.presence.markHp(socket.identity.id, frame.data.hp);
-      this.send(socket, frame);
-    }
+    if (frame) this.send(socket, frame);
   }
 
   /**
@@ -960,9 +943,6 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
       return;
     }
     if (parsed?.type === "ping") {
-      // 心跳续新鲜度（#1139）：pos 帧停发后，在场条目的「活着」由 ping 续 ——
-      // 冻结标签页停止 ping，超时照旧从互见离场（语义与 pos 心跳时代一致）
-      this.presence.touch(socket.identity.id);
       this.send(socket, { type: "pong", data: { serverTime: Date.now() } });
       return;
     }

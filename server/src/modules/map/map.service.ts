@@ -298,20 +298,6 @@ export class MapService {
   }
 
   /**
-   * 一张图的**入场播种点**（#1139 移动收权）：管理端在图上点放的复活点，世界坐标口径
-   * （#672 起这两列就是世界坐标，客户端快照直接当落点用，这里同口径）。
-   *
-   * 互见的在场条目改由 `worldJoin` 创建后，条目坐标不能再信客户端首帧 pos ——
-   * 播种点只有一个权威来源：`maps.revive_cx/cy`（两列任一为空当没有，与快照同一判据）。
-   * 返回 null 时调用方自己兜底（例如退回原点）。
-   */
-  reviveSpawnOf(mapId: string): { x: number; y: number } | null {
-    const row = this.maps.getById(mapId);
-    if (!row || row.revive_cx === null || row.revive_cy === null) return null;
-    return { x: row.revive_cx, y: row.revive_cy };
-  }
-
-  /**
    * 一张图的**可行走几何**（#854：怪物 AI 的移动碰撞与边界钳制要用）
    *
    * 返回世界坐标口径的尺寸与碰撞矩形：一张图占 `x ∈ [0, width]`、`y ∈ [-height, 0]`

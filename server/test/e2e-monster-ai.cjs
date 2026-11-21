@@ -349,11 +349,6 @@ function connect(url) {
     // B 先就位：它要在 A 出手的那一刻正在看这张图
     const worldB = await sessionB.joinWorld("1");
     check(!!worldB, "准备：观战者 B 已在同一张图上");
-    // #1139 起条目由 worldJoin 播种（坐标 = 复活点），AOI 对「位置已知」的观看者裁剪
-    // monster-ai 帧（#810；旧世界「没报过 pos = 不裁」的前提随播种消失）—— B 也要
-    // 站到普通怪旁边（与 A 同一款 pos 摆位），否则 hp / 击退帧到不了 B
-    sessionB.sendPos("1", BRUISER.x + 150, BRUISER.y, 100);
-    await sleep(150);
     //#endregion
 
     //#region 一、别人的战斗也看得见血量（#456）

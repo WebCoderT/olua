@@ -35,8 +35,8 @@ export function setPlayerMoveSpeeds(walkPxPerS: number, runPxPerS: number): void
 }
 
 /**
- * 角色体型（显示与朝向死区基准共用）
- * 角色锚点在脚下（0.5, 0），碰撞盒偏移标记「身体中心」
+ * 角色体型与碰撞盒（显示与物理共用）
+ * 角色锚点在脚下（0.5, 0），所以碰撞盒向上偏移身高的一半才正好罩住身体
  * 调体型（例如换成更瘦的职业模型）只改这里
  *
  * ⚠️ **服务端也有一份同样的数**（`CastGuardService` 的 `ROLE_HALF_WIDTH / ROLE_HALF_HEIGHT /
@@ -47,12 +47,19 @@ export function setPlayerMoveSpeeds(walkPxPerS: number, runPxPerS: number): void
 export const roleBody = {
   /** 角色显示尺寸（宽 × 高，世界单位） */
   size: new Size(40, 70),
-  /**
-   * 碰撞盒尺寸与相对脚下原点的偏移（#1139 起角色不挂物理碰撞体，字段保留为
-   * 「身体范围」的基准：装备对齐清单的派生输入、朝向死区的偏移都读它）
-   */
+  /** 碰撞盒尺寸与相对脚下原点的偏移 */
   colliderSize: new Size(40, 70),
   colliderOffset: new Vec2(0, 35),
+};
+
+/**
+ * 角色刚体参数
+ * 角色位移由代码驱动（键盘/鼠标/A* 寻路），刚体只用来参与碰撞检测：
+ * 不施加重力、不允许旋转，否则会被物理仿真推着走
+ */
+export const roleRigid = {
+  gravityScale: 0,
+  fixedRotation: true,
 };
 
 /**

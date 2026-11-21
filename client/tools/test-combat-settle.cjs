@@ -233,61 +233,6 @@ check(
 );
 
 // ==============================================================================
-//  C1.七. 自机表演化（#1139 批次 4：位置/动画全按服务端帧回放，本地零物理）
-// ==============================================================================
-
-const moveBlockingSource = read(path.join("assets", "ui", "utils", "physics", "MoveBlocking.ts"));
-
-console.log("\n— C1.七. 自机表演化（#1139 批次 4）—");
-
-check(
-  !/RigidBody2D/.test(roleDisplaySource) &&
-    !/resolveBlockedVelocity/.test(roleDisplaySource) &&
-    !/updateWorldPosition/.test(roleDisplaySource),
-  "RoleDisplay 本地位移物理整体退场（无刚体 / 无阻挡预测 / 无 updateWorldPosition）",
-);
-check(
-  /private readonly positions = new SnapshotInterpolator\(/.test(roleDisplaySource) &&
-    /applyServerPosition\(x: number, y: number, moving: boolean, t: number\)/.test(roleDisplaySource) &&
-    /positions\.sample\(ServerClock\.renderTime\(/.test(roleDisplaySource),
-  "自机位置走 SnapshotInterpolator 回放（与别人 / 怪物同一套按服务端时间插值）",
-);
-check(
-  /SELF_SNAP_DISTANCE = 64/.test(roleDisplaySource) &&
-    /Math\.hypot\(x - newest\.x, y - newest\.y\) > SELF_SNAP_DISTANCE\) this\.positions\.reset\(\)/.test(roleDisplaySource),
-  "帧间距 > 64px 判瞬移：清缓冲直接落位（突进 / 复活传送不滑行，行走永远到不了线）",
-);
-check(
-  /const self = frame\.players\.find\(\(entry\) => entry\.a === selfId\);/.test(gameSource) &&
-    /applyServerPosition\(self\.x, self\.y, self\.mv, frame\.t\)/.test(gameSource) &&
-    /applyServerPosition\(selfEntry\.x, selfEntry\.y, selfEntry\.mv, ServerClock\.now\(\)\)/.test(gameSource),
-  "Game.ts 把 players / entityEnter 帧里自己那条喂给主角回放（自机与别人同一条帧流）",
-);
-check(
-  !/reportPosition/.test(gameSource) &&
-    !/positionReportTimer/.test(gameSource) &&
-    !/lastReportedPosition/.test(gameSource),
-  "4Hz 周期位置上报整体删除（reportPosition / 计时器 / 上次位置缓存都不在了）",
-);
-check(
-  /CombatChannel\.sendPosition\(current\.onMap, position\.x, position\.y, current\.hp, false\)/.test(gameSource),
-  "复活收尾发一次性 pos 帧（服务端复活分支靠它知道原地/回城落点，周期上报的唯一残留）",
-);
-check(
-  /setWorldPositionByTransfer\(worldPosition: Vec3\) \{[\s\S]*?this\.positions\.reset\(\)/.test(roleDisplaySource),
-  "传送落点清插值缓冲（不清会被旧快照拽回传送前）",
-);
-check(
-  !/resolveBlockedVelocity|resolveBlockedMove/.test(moveBlockingSource) &&
-    /export function getWorldColliderRect/.test(moveBlockingSource),
-  "MoveBlocking 只剩碰撞盒查询（自动战斗寻路网格用；位移阻挡预测随本地物理一起退场）",
-);
-check(
-  !/roleRigid/.test(roleConfigSource) && !/gravityScale/.test(roleConfigSource),
-  "configs/role.ts 刚体参数删除（角色不进物理世界了）",
-);
-
-// ==============================================================================
 //  C. 服务端快照与守卫
 // ==============================================================================
 

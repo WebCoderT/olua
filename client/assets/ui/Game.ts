@@ -51,7 +51,6 @@ import { partyDialogLayout } from "../configs/hudLayout";
 import RoleSync from "./utils/net/RoleSync";
 import RealtimeClient, { RealtimeStatus } from "./utils/net/RealtimeClient";
 import CombatChannel from "./utils/net/CombatChannel";
-import ServerClock from "./utils/net/ServerClock";
 import { QuestApi } from "./utils/net/Api";
 import { installNetwork } from "./utils/net/NetworkSetup";
 import { loadGameConfig } from "./utils/net/ConfigLoader";
@@ -95,6 +94,10 @@ export class Game extends Component {
   private deathDialog: DeathDialog | null = null;
   /** 场景是否已就绪（start 中的资源预加载完成前，update 不做任何事） */
   private ready = false;
+  /** 位置上报的累积计时（#323：CombatChannel.sendPosition 内部也节流，这里是帧累计的触发点） */
+  private positionReportTimer = 0;
+  /** 上次上报的位置（#324：与本次差量判「是否在移动」，随 pos 帧上报给互见广播） */
+  private lastReportedPosition: { x: number; y: number } | null = null;
   /** 窗口尺寸变化的取消监听函数（场景销毁时调用；只用来把相机拉回主角，不重排布局） */
   private offWindowResize: (() => void) | null = null;
   /** 引导进度订阅（#469：走完/跳过的那一刻补开聊天窗；离场退订） */
@@ -179,22 +182,13 @@ export class Game extends Component {
     // 受击的血量入账/飘字/红闪在这里做（服务端已落账，客户端只演）
     CombatChannel.onMonsterAi = MonsterManager.applyServerAi.bind(MonsterManager);
     // 玩家互见（#324）：players 帧由远端玩家管理器落场（占位节点 + 名字 + 血条，纯演出）；
-    // 自己的那条喂给主角回放（#1139 移动收权）：广播包含发送者，自机与别人同一条帧流 ——
-    // 位置不再本地物理，插值回放见 RoleDisplay.updatePlayback
-    CombatChannel.onPlayers = (frame) => {
-      const selfId = RealtimeClient.onlineUserId ?? "";
-      OtherPlayerManager.applyPlayersFrame(frame, selfId);
-      const self = frame.players.find((entry) => entry.a === selfId);
-      if (self) this.roleDisplay?.applyServerPosition(self.x, self.y, self.mv, frame.t);
-    };
+    // 自己按账号 id 过滤（广播的收件人是同图观看者，服务端不保证剔除发送者）
+    CombatChannel.onPlayers = (frame) => OtherPlayerManager.applyPlayersFrame(frame, RealtimeClient.onlineUserId ?? "");
     // AOI 进出视野（#810）：服务端把广播按格子裁过之后，「刚走进来 / 刚走出去」走这对帧。
     // 两个管理器各自认领自己那半（帧里有 monsters 与 players 两个数组），组合根只做分发
     CombatChannel.onEntityEnter = (frame) => {
       MonsterManager.applyEntityEnter(frame);
       OtherPlayerManager.applyEntityEnter(frame.players, RealtimeClient.onlineUserId ?? "");
-      // 进视野帧不带时间戳（协议只给条目）：按「服务端此刻」压入，与 OtherPlayerManager 同口径
-      const selfEntry = frame.players.find((entry) => entry.a === (RealtimeClient.onlineUserId ?? ""));
-      if (selfEntry) this.roleDisplay?.applyServerPosition(selfEntry.x, selfEntry.y, selfEntry.mv, ServerClock.now());
     };
     CombatChannel.onEntityLeave = (frame) => {
       MonsterManager.applyEntityLeave(frame);
@@ -549,6 +543,8 @@ export class Game extends Component {
     OtherPlayerManager.tick(deltaTime);
     // 网络诊断层（#767）：每帧驱动（内部 0.5s 节流重写文本；关着时第一行就返回，零开销）
     NetDiagnostics.tick(deltaTime);
+    // 自身位置上报（服务端 AI 的目标检测输入 + 互见数据源；通道没连上时是空操作）
+    this.reportPosition(deltaTime);
     // 小地图每帧驱动（内部按刷新间隔节流：地图名称/世界坐标文本与角色黑点/怪物红点重绘）
     this.smallMap?.update();
     // 掉落物自动拾取（角色走到掉落物上即收入背包，用位移后的最新位置判定）
@@ -648,6 +644,19 @@ export class Game extends Component {
     }
   }
 
+  private reportPosition(deltaTime: number) {
+    this.positionReportTimer += deltaTime;
+    if (this.positionReportTimer < 0.25) return;
+    this.positionReportTimer = 0;
+    const role = StorageManager.findOnlineRole();
+    const position = this.roleDisplay?.getWorldPosition();
+    if (!role || !position) return;
+    const moving = this.lastReportedPosition === null ||
+      Math.hypot(position.x - this.lastReportedPosition.x, position.y - this.lastReportedPosition.y) > 0.5;
+    this.lastReportedPosition = { x: position.x, y: position.y };
+    CombatChannel.sendPosition(role.onMap, position.x, position.y, role.hp, moving);
+  }
+
   //#region 死亡与复活
 
   /**
@@ -679,8 +688,6 @@ export class Game extends Component {
    *
    * 按复活方式收尾——原地复活：留在死亡位置直接起身；安全复活：先传送回当前地图的复活点再起身
    * （复活点定位走 GameMap 的 revive 回调，与进图定位同一套换算）。
-   * 收尾后发**一次性 pos 帧**（#1139）：周期上报已删，服务端的复活分支（血 0→>0 免检收下）
-   * 只能靠这一帧知道落点 —— 原地=尸体位置 / 回城=复活点。不发的话互见里自己会一直站在死亡位置。
    */
   private reviveRole(safe: boolean) {
     const role = StorageManager.findOnlineRole();
@@ -699,9 +706,6 @@ export class Game extends Component {
         // 安全复活先传送（复活点定位走 GameMap 的 revive 回调，与进图定位同一套换算）
         if (safe) this.gameMap?.revive();
         this.roleDisplay?.revive();
-        // 复活落点上报（#1139）：位置取传送/起身后的当前坐标（安全复活时已是复活点）
-        const position = this.roleDisplay?.getWorldPosition();
-        if (position) CombatChannel.sendPosition(current.onMap, position.x, position.y, current.hp, false);
         this.deathDialog?.destroy();
         this.deathDialog = null;
       })

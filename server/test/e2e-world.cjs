@@ -334,14 +334,6 @@ function connect(url) {
     const shared = worldB.monsters.find((m) => m.instanceId === wA1.instanceId);
     check(!!(worldB && worldB.monsters.length === worldA1.monsters.length) && !!shared, "账号 B 看到同一份实例（世界跨账号共享，不按账号各发一份）", shared && shared.instanceId);
 
-    // #1139 起条目由 worldJoin 播种（坐标 = 复活点），AOI 对「位置已知」的观看者裁剪
-    // monster-ai / world 帧（#810；旧世界「没报过 pos = 不裁」的前提随播种消失）——
-    // 甲乙都发一条 pos 帧（播种条目首帧免仲裁）站到刷怪区旁，否则收不到击杀 / 重生广播。
-    // (300,-300) 的 3×3 格（AOI_CELL=512）覆盖两个刷怪区的全域。
-    sessionA.socket.send(JSON.stringify({ type: "pos", data: { mapId: "1", x: 300, y: -300, hp: 100, moving: false } }));
-    sessionB.socket.send(JSON.stringify({ type: "pos", data: { mapId: "1", x: 300, y: -300, hp: 100, moving: false } }));
-    await sleep(250);
-
     //#endregion
 
     //#region 二、结算落世界

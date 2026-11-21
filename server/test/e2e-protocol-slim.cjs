@@ -17,7 +17,7 @@
  *    `RealtimeEntityLeaveData` ↔ `EntityLeaveFrame`。enter 的怪条目直接复用
  *    `RealtimeWorldMonster`（客户端建节点走同一段代码），所以这里比的是载荷外壳；
  * 3. **提频默认值钉在源码上**：服务端两个广播节拍兜底 100（configuration.ts + 两个服务）、
- *    env 示例登记 100；客户端 #1139 起停发周期 pos（POSITION_INTERVAL 删除）。
+ *    env 示例登记 100；客户端上报节拍 `POSITION_INTERVAL = 100` 且 `sendPosition` 取整。
  *
  * 纯静态断言，不起服务端（协议形状的运行时行为由各 e2e 照旧覆盖）。
  *
@@ -159,9 +159,7 @@ const clientSrc = stripComments(fs.readFileSync(CLIENT_CHANNEL, "utf8"));
     /MONSTER_AI_BROADCAST_MS=100/.test(envExample) && /PLAYER_SYNC_BROADCAST_MS=100/.test(envExample),
     ".env.example 登记 100（改默认必须改示例，静态审计盯这里）",
   );
-  // #1139 移动收权：客户端停发周期 pos（本地的 POSITION_INTERVAL 节拍整个删除），
-  // pos 帧只剩复活收尾的一次性帧 —— 契约反过来断「这个常量不该再存在」
-  check(!/POSITION_INTERVAL/.test(channelSrc), "客户端不再有周期 pos 上报节拍（#1139：pos 只剩复活一次性帧）");
+  check(/POSITION_INTERVAL = 100/.test(channelSrc), "客户端上报节拍 POSITION_INTERVAL = 100（10Hz）");
   check(/Math\.round\(x\), y: Math\.round\(y\)/.test(channelSrc), "客户端 sendPosition 坐标整数化（#768 帧瘦身）");
 
   //#endregion

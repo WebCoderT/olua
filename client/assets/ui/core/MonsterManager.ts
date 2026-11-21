@@ -94,6 +94,7 @@ export default class MonsterManager {
     LayerManager.clearMonsterLayer();
     // 旧图的目标在服务端那边也一并作废（#34：结算上下文不能跨图延续）
     CombatChannel.resetTargets();
+    CombatChannel.resetPositionThrottle();
   }
 
   /** 生成一只怪物（数据全来自服务端：资源表现与数值取运行时表，出生点/实例/血量按调用方）
