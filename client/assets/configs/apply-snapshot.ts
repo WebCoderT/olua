@@ -41,7 +41,7 @@ import {
 } from "./game-config";
 import { items, rebuildItemIndex } from "./items";
 import { applyEquipmentData, applyEquipmentQualityLabels, applyEquipmentSlots, getEquipmentBaseKey } from "./equipments";
-import { roleDefaultCloths, setMpRecoverPerSecond, setPlayerMoveSpeeds } from "./role";
+import { roleDefaultCloths, setMpRecoverPerSecond } from "./role";
 import { applyDropRuntime } from "./drop";
 import { applyGuideSteps } from "./guide";
 import { applyEquipmentAppearance } from "./border";
@@ -322,8 +322,6 @@ export function applyRuntimeParams(params: GameConfigSnapshot["runtimeParams"]):
   applyDropRuntime(params.drop);
   applyAutoBattleParams(params.autoBattle);
   applyGuildRules(params.guild);
-  // 玩家移动速度（#1138 移动收权）：速度权威在服务端，快照覆写本地刚体参数
-  if (params.playerMove) setPlayerMoveSpeeds(params.playerMove.walkSpeedPxPerS, params.playerMove.runSpeedPxPerS);
 }
 
 //#region 装备外观几何（#513）

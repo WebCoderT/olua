@@ -3,36 +3,10 @@ import { directions } from "./animation";
 import { NeedSetShortcutKeyConfig, OECCUPATION, RELATION_SHIP, RoleOccupationInfo, SEX } from "../types/role";
 import { Size, Vec2 } from "cc";
 
-/**
- * 角色移动速度-全局（物理单位 m/s；换算见 `PHYSICS_PTM`）
- *
- * **权威在服务端**（#1138 移动收权：`runtime_params.player_move` 的走/跑速度，像素/秒），
- * 这里只是「快照没到之前的初始值」，进游戏拉配置快照后由 `setPlayerMoveSpeeds` 覆写
- * —— 客户端（过渡期的本地物理与批次 4 之后的演出节奏）与服务端 10Hz 步进用同一把尺子，
- * 两边不同速的话「别人眼里的你」和「你自己眼里的你」会走出两个速度。
- */
-export let ROLE_WALK_SPEED = 2;
-/** 角色跑动速度-全局（同上，权威在服务端） */
-export let ROLE_RUN_SPEED = 4;
-
-/**
- * Box2D 的像素-物理米换算（Cocos 2D 物理的 PTM 出厂值 32）：刚体速度 1 m/s = 32 世界像素/s。
- * 服务端配置是像素/秒，落进刚体要先除以它 —— 别在别处再写一个 32。
- */
-const PHYSICS_PTM = 32;
-
-/**
- * 覆写玩家移动速度（**唯一写入口**，#1138）
- *
- * 快照给的是像素/秒（服务端口径），落进刚体要除以 PTM。负数 / 非有限数按「不改」处理：
- * 配置拍坏了宁可走默认速度，也不能把角色定住或变成负速度。
- */
-export function setPlayerMoveSpeeds(walkPxPerS: number, runPxPerS: number): void {
-  if (!Number.isFinite(walkPxPerS) || walkPxPerS <= 0 || !Number.isFinite(runPxPerS) || runPxPerS <= 0) return;
-  ROLE_WALK_SPEED = Math.max(0.1, walkPxPerS / PHYSICS_PTM);
-  // 跑速被配得比走速还小（服务端接口校验拦得住，拦不住手改库）：取走速兜底
-  ROLE_RUN_SPEED = Math.max(ROLE_WALK_SPEED, runPxPerS / PHYSICS_PTM);
-}
+/** 角色移动速度-全局 */
+export const ROLE_WALK_SPEED = 2;
+/** 角色跑动速度-全局 */
+export const ROLE_RUN_SPEED = 4;
 
 /**
  * 角色体型与碰撞盒（显示与物理共用）

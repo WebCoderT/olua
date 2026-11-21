@@ -794,40 +794,6 @@ export interface RealtimePositionMessage {
 }
 
 /**
- * 移动意图帧（#1138 移动收权）
- *
- * 客户端只上报「往哪走」的**意图**，步进与碰撞全在服务端（10Hz）—— 坐标不再是客户端
- * 说了算的东西。kind = dir 沿单位方向一直走（键盘 / 摇杆 / 鼠标按住 / 自动战斗走位都
- * 归一成这个形状）；kind = target 走向一个点（到点自动停）。
- *
- * 意图是**状态**不是事件：重复发同一份意图无副作用（服务端覆盖即可），换方向 / 换走跑
- * 重发即可；停下发 `moveStop`。旧 `pos` 帧保留一版兼容期（只消费 hp，见 #1139 收尾）。
- */
-export interface RealtimeMoveIntentMessage {
-  type: "moveIntent";
-  data: {
-    /** 客户端自增序号（服务端只挡「明显倒退」的序号，乱序容忍） */
-    seq: number;
-    /** 意图种类：dir = 沿方向走；target = 走向目标点 */
-    kind: "dir" | "target";
-    /** kind = dir：单位方向向量（服务端会再归一化，脏值不崩） */
-    dx?: number;
-    dy?: number;
-    /** kind = target：目标点（世界坐标） */
-    tx?: number;
-    ty?: number;
-    /** 是否跑步（true = playerMove.runSpeedPxPerS，false = walkSpeedPxPerS） */
-    run?: boolean;
-  };
-}
-
-/** 停止移动（#1138）：清掉这份账号的移动意图，服务端下一拍停步 */
-export interface RealtimeMoveStopMessage {
-  type: "moveStop";
-  data: Record<string, never>;
-}
-
-/**
  * 怪物 AI 广播帧里的一只怪（只发有变化的：位置变了、移动标记变了或血量变了）
  *
  * #768 帧瘦身：字段名取单字/双字缩写（`i`=instanceId、`mv`=moving、`m`=maxHp），

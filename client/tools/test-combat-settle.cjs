@@ -96,9 +96,6 @@ const gameSource = read(path.join("assets", "ui", "Game.ts"));
 const realtimeSource = read(path.join("assets", "ui", "utils", "net", "RealtimeClient.ts"));
 const channelSource = read(path.join("assets", "ui", "utils", "net", "CombatChannel.ts"));
 const skillTypeSource = read(path.join("assets", "types", "skill.ts"));
-const roleDisplaySource = read(path.join("assets", "ui", "components", "role", "RoleDisplay.ts"));
-const roleConfigSource = read(path.join("assets", "configs", "role.ts"));
-const applySnapshotSource = read(path.join("assets", "configs", "apply-snapshot.ts"));
 
 check(
   /CombatChannel\.sendCast\(config\.id, monster\.instanceId, monster\.id\);/.test(warriorSource),
@@ -192,44 +189,6 @@ check(
 check(
   /SkillManager\.applyServerCooldowns\(update\.cooldowns\)/.test(gameSource),
   "Game.ts 把 roleUpdate 的冷却表交给 SkillManager 对齐（进图/重连的存量冷却来源）",
-);
-
-// ==============================================================================
-//  C1.六. 移动意图收权（#1138 批次 3：客户端只报「往哪走」，步进在服务端）
-// ==============================================================================
-
-console.log("\n— C1.六. 移动意图收权（#1138 批次 3）—");
-
-check(
-  /static sendMoveIntent\(dx: number, dy: number, run: boolean\)/.test(channelSource) &&
-    /kind: "dir"/.test(channelSource) &&
-    /static sendMoveStop\(\)/.test(channelSource),
-  "CombatChannel.sendMoveIntent / sendMoveStop（意图帧走 dir 形状，seq 自增）",
-);
-check(
-  /onMoveIntent: \(\(intent: \{ dx: number; dy: number; run: boolean \} \| null\) => void\) \| null = null/.test(roleDisplaySource) &&
-    /private reportMoveIntent\(\)/.test(roleDisplaySource),
-  "RoleDisplay.onMoveIntent 出口 + reportMoveIntent（意图变化才发，不是每帧）",
-);
-check(
-  /const blocked = this\.dead \|\| this\.attacking \|\| this\.controlLocked;/.test(roleDisplaySource),
-  "死亡 / 攻击锁 / 被控期间意图恒为 null（服务端不步进，避免「本地站着打、别人看到滑步」）",
-);
-check(
-  /this\.roleDisplay\.onMoveIntent = \(intent\) => \{/.test(gameSource) &&
-    /CombatChannel\.sendMoveIntent\(intent\.dx, intent\.dy, intent\.run\)/.test(gameSource) &&
-    /CombatChannel\.sendMoveStop\(\);/.test(gameSource),
-  "Game.ts 在 roleDisplay 创建之后接线 onMoveIntent（转成协议帧）",
-);
-check(
-  /export let ROLE_WALK_SPEED/.test(roleConfigSource) &&
-    /export function setPlayerMoveSpeeds\(/.test(roleConfigSource) &&
-    /PHYSICS_PTM = 32/.test(roleConfigSource),
-  "configs/role.ts 移速改为快照可覆写（setPlayerMoveSpeeds 除以 PTM 32 落进刚体）",
-);
-check(
-  /setPlayerMoveSpeeds\(params\.playerMove\.walkSpeedPxPerS, params\.playerMove\.runSpeedPxPerS\)/.test(applySnapshotSource),
-  "apply-snapshot 把 runtimeParams.playerMove 覆写进本地移速（速度权威在服务端）",
 );
 
 // ==============================================================================

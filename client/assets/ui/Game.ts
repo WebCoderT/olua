@@ -319,12 +319,6 @@ export class Game extends Component {
     // 创建地图与主角（互不直接依赖，怪物由地图侧的刷怪区域一次性生成）
     this.gameMap = new GameMap();
     this.roleDisplay = new RoleDisplay(role);
-    // 移动意图上报（#1138 批次 3）：角色组件在意图变化时回调，这里只负责转成协议帧。
-    // 位置不再由客户端说了算 —— 服务端 10Hz 步进，客户端只报「往哪走」
-    this.roleDisplay.onMoveIntent = (intent) => {
-      if (intent) CombatChannel.sendMoveIntent(intent.dx, intent.dy, intent.run);
-      else CombatChannel.sendMoveStop();
-    };
     // 复活点定位：每次进入地图（含大陆传送）都在该地图 npc 对象组的 revive 点位出生
     // 地图是异步加载的、主角在其后创建，故以回调注册，地图先就绪时会立刻回调一次
     this.gameMap.setReviveHandler((worldPosition) => this.roleDisplay.setWorldPositionByTransfer(worldPosition));

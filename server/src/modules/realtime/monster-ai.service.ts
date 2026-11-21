@@ -17,7 +17,6 @@ import { WorldService } from "../world/world.service";
 import type { WorldMonster } from "../world/world-monster";
 import { PUBLIC_SLOT, roomKey, splitRoomKey } from "../../common/utils/room-key.util";
 import { MapService } from "../map/map.service";
-import { slideStep } from "./map-geometry.service";
 import { PlayerPresenceService } from "./player-presence.service";
 import type { RealtimeDropEntry, RealtimeMonsterAiEntry, RealtimeMonsterCast, RealtimeMonsterHit, RealtimeMonsterKill, RealtimeStatusEntry } from "./realtime.protocol";
 
@@ -1370,14 +1369,46 @@ export class MonsterAiService implements OnApplicationBootstrap, OnApplicationSh
    * CPU 最省、观感最不难看的做法（docs/27 E4）。**不做 A\***：一张图十几个矩形，
    * 直线 + 滑行已经够用。
    *
-   * 算法本体已抽到 `map-geometry` 的 `slideStep`（#1138 起玩家步进共用同一份，
-   * 两边各写一份必然漂移）—— 这里只负责把它套到怪物 runtime 上。
+   * 最后一律钳进图内（`clampToMap`）：墙画在图外，被击退出图之后世界坐标里没有「图外」，
+   * 客户端也不会渲染 —— 不钳就是永久消失。
    */
   private slideMove(runtime: MonsterRuntime, dx: number, dy: number, geometry: WalkGeometry | null): number {
-    const result = slideStep(geometry, runtime, dx, dy);
-    runtime.x = result.x;
-    runtime.y = result.y;
-    return result.moved;
+    if (geometry === null) {
+      // 没有几何（导入工具没跑）：不判碰撞也不钳边界，退回「直接改坐标」的老行为
+      runtime.x += dx;
+      runtime.y += dy;
+      return Math.hypot(dx, dy);
+    }
+    const fromX = runtime.x;
+    const fromY = runtime.y;
+    if (!this.blockedIn(runtime.x + dx, runtime.y + dy, geometry)) {
+      runtime.x += dx;
+      runtime.y += dy;
+    } else {
+      // 先试位移更大的那个分量（它是「主方向」），再试另一个
+      const order: Array<[number, number]> = Math.abs(dx) >= Math.abs(dy)
+        ? [[dx, 0], [0, dy]]
+        : [[0, dy], [dx, 0]];
+      let slid = false;
+      for (const [stepX, stepY] of order) {
+        if (stepX === 0 && stepY === 0) continue;
+        if (this.blockedIn(runtime.x + stepX, runtime.y + stepY, geometry)) continue;
+        runtime.x += stepX;
+        runtime.y += stepY;
+        slid = true;
+        break;
+      }
+      if (!slid) return 0;
+    }
+    this.clampToMap(runtime, geometry);
+    // 钳完还在盒里（外墙就画在图边）→ 这一小步等于撞进墙，整步作废。
+    // 单帧位移只有 0.1~6px，退回原地不会让「贴墙走」变成抽搐
+    if (this.blockedIn(runtime.x, runtime.y, geometry)) {
+      runtime.x = fromX;
+      runtime.y = fromY;
+      return 0;
+    }
+    return Math.hypot(runtime.x - fromX, runtime.y - fromY);
   }
 
   /**
@@ -1405,6 +1436,12 @@ export class MonsterAiService implements OnApplicationBootstrap, OnApplicationSh
       if (Math.abs(x - box.cx) <= box.w / 2 && Math.abs(y - box.cy) <= box.h / 2) return true;
     }
     return false;
+  }
+
+  /** 钳进图内：`x ∈ [0, width]`、`y ∈ [-height, 0]`（左上角原点、y 轴向上） */
+  private clampToMap(runtime: MonsterRuntime, geometry: WalkGeometry): void {
+    runtime.x = Math.min(geometry.width, Math.max(0, runtime.x));
+    runtime.y = Math.min(0, Math.max(-geometry.height, runtime.y));
   }
 
   /** 一张图的可行走几何（5 秒 TTL；读库失败按「不判碰撞」处理，不中断 AI） */
