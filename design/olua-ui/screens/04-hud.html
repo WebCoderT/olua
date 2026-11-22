@@ -101,10 +101,16 @@
 .quests .head span{font-family:var(--font-num);font-size:10px;color:var(--text-4);letter-spacing:.1em}
 .quests .head i{flex:1;height:1px;background:linear-gradient(90deg,var(--line-2),transparent)}
 .qrow{display:flex;align-items:center;gap:8px;height:24px;font-size:12px;color:var(--gold-4);
-  letter-spacing:.02em;text-shadow:0 1px 3px #000}
+  letter-spacing:.02em;text-shadow:0 1px 3px #000;padding:0 6px;border-radius:var(--r-1);cursor:pointer}
+.qrow:hover{background:linear-gradient(90deg,rgba(217,162,39,.12),transparent)}
 .qrow .pr{margin-left:auto;font-family:var(--font-num);font-size:11px;color:var(--text-3)}
 .qrow.done{color:var(--jade)}
 .qrow.done .pr{color:var(--jade)}
+/* 「详」按钮：标题行右端，点击开任务详情弹窗（11#state=detail） */
+.quests .head .detail-btn{width:24px;height:20px;padding:0;font-family:var(--font-display);font-size:11px;
+  letter-spacing:.1em;line-height:1;color:var(--gold-4);border:var(--bw-1) solid var(--line-2);
+  border-radius:var(--r-1);background:rgba(0,0,0,.3)}
+.quests .head .detail-btn:hover{background:var(--gold-3);border-color:var(--gold-3);color:var(--text-on-gold)}
 
 /* ── 左下：聊天 ── */
 /* 聊天框贴屏幕底部；底栏收窄后匀出的宽度给了聊天框：右缘 444 < 底栏左缘 470，横向不重叠 */
@@ -360,7 +366,7 @@
 
   <!-- ═══ 左中：任务追踪 ═══ -->
   <div class="quests">
-    <div class="head"><b>任务</b><span>3 / 8</span><i></i></div>
+    <div class="head"><b>任务</b><span>3 / 8</span><i></i><button class="detail-btn" title="任务详情">详</button></div>
     <div class="qrow">剿灭沙盗匪首<span class="pr">2 / 3</span></div>
     <div class="qrow done">采集荒漠血草<span class="pr">可交付</span></div>
     <div class="qrow">拜访铁匠铺老板<span class="pr">0 / 1</span></div>
@@ -480,7 +486,7 @@
 
   <div class="legend">
     <b>HUD 元素与客户端一一对应</b>
-    左上 角色/货币/战力 + Buff 条 · 顶部 选中怪物 · 右上 小地图 + 二级入口（世界地图/线路/排行榜/成就/邮件/设置/声音）· 左中 任务追踪（整块可点）
+    左上 角色/货币/战力 + Buff 条 · 顶部 选中怪物 · 右上 小地图 + 二级入口（世界地图/线路/排行榜/成就/邮件/设置/声音）· 左中 任务追踪（行 hover 高亮 · 整块开任务面板 · 标题行「详」开任务详情弹窗 → 11#state=detail）
     · 左下 聊天（四频道标签 + 清屏/收起 · 带时间戳的消息流 · 频道切换 chip + 输入发送） · 底部 生命球 / 挂机条 + 技能 5 格 + 经验条（同一列）/ 角色·背包·技能·组队·好友·商城 / 设置 / 法力球
   </div>
 

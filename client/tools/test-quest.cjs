@@ -11,7 +11,7 @@
  *    击杀推进只写给 accepted 行、周期日切（本轮已领 20027 / 跨轮覆盖重置 / 领奖不删行）、
  *    #865 放弃接口只删未领过的行
  * D. 客户端消费纪律：quest 帧只喂 QuestStore（单一落点）、点 NPC 即上报对话、
- *    追踪栏点开任务面板、切场景三处都 reset
+ *    追踪栏点开任务面板 + 「详」开任务详情弹窗（放弃两步确认 / 前往寻路）、切场景三处都 reset
  *
  * QuestStore 刻意不 import 网络（见它的类注释），沙箱直接编译真源码跑断言。
  */
@@ -28,6 +28,7 @@ const SERVER_QUEST = "server/src/modules/quest/quest.service.ts";
 const CLIENT_CHANNEL = "assets/ui/utils/net/CombatChannel.ts";
 const CLIENT_STORE = "assets/ui/core/QuestStore.ts";
 const CLIENT_DIALOG = "assets/ui/components/dialogs/QuestDialog.ts";
+const CLIENT_DETAIL = "assets/ui/components/dialogs/QuestDetailDialog.ts";
 const CLIENT_TRACKER = "assets/ui/components/hud/QuestTracker.ts";
 const CLIENT_SPAWNER = "assets/ui/components/map/MapObjectSpawner.ts";
 const CLIENT_BOTTOM_BAR = "assets/ui/components/hud/BottomBar.ts";
@@ -263,6 +264,37 @@ try {
       "顺序：先补 UITransform 再 blockClickThrough（反了防呆会静默跳过鼠标登记，点追踪栏会穿透到世界）",
     );
     check(tracker.includes("this.active = rows.length > 0"), "没有任务时整块收起来（命中区常驻，留着活动会让点左侧空白也开面板）");
+  });
+
+  // #1191 任务详情弹窗：入口 / 放弃两步确认 / 前往
+  guard(() => {
+    const tracker = read(CLIENT_TRACKER);
+    const bottomBar = read(CLIENT_BOTTOM_BAR);
+    const game = readRepo("client/assets/ui/Game.ts");
+    const detail = read(CLIENT_DETAIL);
+    // 入口链路：HUD「详」按钮 → openQuestDetail → BottomBar 持有的 QuestDetailDialog
+    check(tracker.includes("onOpenDetail"), "追踪栏有第二个入口回调（详 = 详情弹窗，与整块点击开面板并存）");
+    check(
+      tracker.includes("quest_tracker_detail_button") && tracker.includes("blockClickThrough(detail)"),
+      "「详」按钮挡穿透（不冒泡成整块的「开面板」）",
+    );
+    check(game.includes("openQuestDetail()"), "Game 把「详」接线到 openQuestDetail（详情弹窗归底部栏持有）");
+    check(bottomBar.includes("new QuestDetailDialog()") && bottomBar.includes("openQuestDetail()"), "底部栏持有并转开任务详情弹窗");
+    // 数据：同面板一个仓、打开即对账
+    check(detail.includes("QuestStore.onChange") && detail.includes("QuestApi.mine()"), "详情弹窗订阅任务仓 + 打开即全量对账（与面板同一数据源）");
+    check(detail.includes("QuestStore.active()"), "详情卡只列进行中 / 可交付（可接在面板的「可接」页签）");
+    // 放弃：两步确认 + 服务端接口 + 快照覆盖
+    check(detail.includes("QuestApi.abandon") && detail.includes("QuestStore.applyStates"), "放弃走 abandon 接口，响应覆盖快照（进行中被引用的环由服务端拒绝）");
+    check(
+      detail.includes("armedQuestId") && detail.includes("layout.abandon.confirmTimeout"),
+      "放弃两步确认：armed 状态 + 3 秒到点复位（与回收 / 丢弃 / 删角色同一套口径）",
+    );
+    check(detail.includes("clearAbandonPending()") && /onClose[\s\S]{0,200}clearAbandonPending/.test(detail), "关弹窗时清两步确认定时器（不挂着跨开关）");
+    // 前往：关弹窗 + 寻路至交付 NPC；跨图不传送只提示
+    check(/go\(view[\s\S]*?this\.close\(\)/.test(detail), "「前往」先关弹窗再寻路（稿：前往 = 关闭弹窗并寻路）");
+    check(detail.includes("AutoBattle.requestMoveTo"), "「前往」复用点击寻路（NPC 目标格被挡由 findPath 就近改寻兜底）");
+    check(detail.includes("maps.get(AutoBattle.getMapId())"), "「前往」读快照 maps 表拿 NPC 点位（不读 TMX）");
+    check(detail.includes("goOtherMapTip"), "交付 NPC 不在本地图时提示所在地图（不做跨图传送）");
   });
 
   //#endregion

@@ -22,6 +22,39 @@
 .qrow2 .s.ok{color:var(--jade)}
 .qrow2 .s b{font-family:var(--font-num);color:var(--text-2);font-weight:400}
 .qrow2 .reward{flex:0 0 auto;text-align:right;font-family:var(--font-num);font-size:10px;color:var(--text-4);line-height:1.7}
+
+/* ── 任务详情弹窗 480×560（#state=detail）：HUD 任务块「详」按钮打开 ──
+   每张详情卡 = 名称+状态+放弃 / 描述 / 目标+进度条 / 奖励明细 / 交付 NPC+前往 */
+.qdetail{position:relative;width:480px;height:560px;display:none;flex-direction:column}
+.qdetail .qlist{height:420px;gap:10px}
+.qcard{position:relative;padding:12px 14px 10px;border-radius:var(--r-2);
+  border:var(--bw-1) solid var(--line-1);background:rgba(0,0,0,.24)}
+.qcard.ready{border-color:rgba(111,191,142,.45);background:linear-gradient(90deg,rgba(111,191,142,.10),transparent)}
+.qc-head{display:flex;align-items:center;gap:8px}
+.qc-head b{font-family:var(--font-display);font-size:15px;color:var(--gold-5);letter-spacing:.04em}
+.qc-head .abandon{margin-left:auto;height:20px;padding:0 8px;font-size:10px;letter-spacing:.08em;
+  color:var(--ember-3);border:var(--bw-1) solid rgba(200,90,60,.55);border-radius:var(--r-1);background:transparent}
+.qc-head .abandon:hover{background:rgba(200,90,60,.18)}
+.qc-head .abandon.confirm{color:var(--gold-5);border-color:var(--gold-4);background:rgba(20,13,7,.92)}
+.qc-desc{font-size:11.5px;line-height:1.7;color:var(--text-2);margin:6px 0 8px}
+.qc-obj{display:flex;align-items:center;gap:8px;height:20px;font-size:11px;color:var(--text-3)}
+.qc-obj .v{color:var(--text-2)}
+.qc-obj .bar{flex:1;height:6px;border-radius:3px;border:var(--bw-1) solid var(--line-1);background:rgba(0,0,0,.45);overflow:hidden}
+.qc-obj .bar i{display:block;height:100%;background:linear-gradient(90deg,var(--gold-2),var(--gold-4))}
+.qcard.ready .bar i{background:linear-gradient(90deg,rgba(111,191,142,.7),var(--jade))}
+.qc-obj .num{font-family:var(--font-num);font-size:11px;color:var(--text-2)}
+.qc-rw{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
+.qc-rw .chip{height:20px;display:inline-flex;align-items:center;padding:0 8px;font-family:var(--font-num);
+  font-size:10px;color:var(--gold-4);border:var(--bw-1) solid var(--line-1);border-radius:var(--r-1);background:rgba(0,0,0,.3)}
+.qc-go{display:flex;align-items:center;gap:8px;margin-top:8px;padding-top:8px;border-top:1px dashed var(--line-1);
+  font-size:11px;color:var(--text-3)}
+.qc-go b{color:var(--text-2);font-weight:400}
+.qc-go .btn{margin-left:auto}
+/* 规格注记 */
+.qnote{position:absolute;right:470px;top:250px;width:230px;padding:12px 14px;border-radius:var(--r-2);
+  border:var(--bw-1) solid var(--line-1);background:rgba(10,7,4,.85);font-size:11px;line-height:1.9;color:var(--text-3)}
+.qnote b{display:block;font-family:var(--font-num);font-size:9px;letter-spacing:.2em;color:var(--gold-2);margin-bottom:4px}
+.qnote em{font-style:normal;color:var(--gold-4)}
 </style>
 </head>
 <body>
@@ -102,9 +135,68 @@
       </div>
       <div class="panel-foot"><span>左侧任务追踪整块可点打开本窗</span><span>交付奖励由服务端结算</span></div>
     </div>
+
+    <!-- ══ 任务详情弹窗（480×560）：HUD 任务块标题行「详」按钮打开，#state=detail 直达 ══ -->
+    <div class="panel panel--rivet qdetail">
+      <div class="panel-head">
+        <span class="panel-eyebrow">QUEST DETAIL</span>
+        <h2 class="panel-title">任务详情</h2>
+        <button class="panel-close" aria-label="关闭">×</button>
+      </div>
+      <div class="panel-body">
+
+        <div class="qlist scroll">
+
+          <div class="qcard ready">
+            <div class="qc-head"><b>采集荒漠血草</b><span class="badge badge--jade">可交付</span><button class="abandon">放弃</button></div>
+            <p class="qc-desc">荒漠血草只在黄昏时显现。采满三株交给大陆传送官，换取修补货车的报酬——他答应替你在沙城商人面前美言几句。</p>
+            <div class="qc-obj"><span>目标</span><span class="v">采集 荒漠血草</span><div class="bar"><i style="width:100%"></i></div><span class="num">3 / 3</span></div>
+            <div class="qc-rw"><span class="chip">1,200 经验</span><span class="chip">80 绑元</span><span class="chip">兽皮 ×2</span></div>
+            <div class="qc-go"><span>交付 <b>大陆传送官</b> · 新手村（图 0）</span><button class="btn btn--xs btn--gold">前 往</button></div>
+          </div>
+
+          <div class="qcard">
+            <div class="qc-head"><b>剿灭沙盗匪首</b><span class="badge badge--muted">进行中</span><button class="abandon confirm">确认放弃</button></div>
+            <p class="qc-desc">沙盗匪首盘踞废弃哨塔以西，劫掠过往商队。哨塔守备官悬赏他的首级——带三份凭证回来复命。</p>
+            <div class="qc-obj"><span>目标</span><span class="v">击杀 沙盗匪首</span><div class="bar"><i style="width:66%"></i></div><span class="num">2 / 3</span></div>
+            <div class="qc-rw"><span class="chip">2,400 经验</span><span class="chip">150 绑元</span></div>
+            <div class="qc-go"><span>交付 <b>哨塔守备官</b> · 废弃哨塔（图 2）</span><button class="btn btn--xs btn--ghost">前 往</button></div>
+          </div>
+
+          <div class="qcard">
+            <div class="qc-head"><b>拜访铁匠铺老板</b><span class="badge badge--muted">进行中</span><button class="abandon">放弃</button></div>
+            <p class="qc-desc">新手村的铁匠铺老板见过太多冒险者，也见过太多折在第一座矿洞里的人。先去和他聊聊——他会告诉你哪把剑值得买。</p>
+            <div class="qc-obj"><span>目标</span><span class="v">对话 铁匠铺老板</span><div class="bar"><i style="width:0%"></i></div><span class="num">0 / 1</span></div>
+            <div class="qc-rw"><span class="chip">600 经验</span></div>
+            <div class="qc-go"><span>交付 <b>铁匠铺老板</b> · 新手村（图 0）</span><button class="btn btn--xs btn--ghost">前 往</button></div>
+          </div>
+
+        </div>
+
+      </div>
+      <div class="panel-foot"><span>入口：HUD 任务块标题行「详」</span><span>「放弃」两步确认 · 3 秒未确认复位</span><span>前往 = 寻路至交付 NPC</span></div>
+    </div>
+
+    <!-- 规格注记 -->
+    <div class="qnote">
+      <b>SPEC · 任务详情弹窗</b>
+      尺寸 <em>480×560</em>，列表滚动<br>
+      入口：HUD 任务块标题行 <em>「详」</em> 按钮（04-hud）<br>
+      卡片 = 名称+状态角标+<em>放弃</em> / 描述 / 目标+进度条 / 奖励明细 chip / 交付 NPC+<em>前往</em><br>
+      「前往」= 关闭弹窗并寻路至交付 NPC；交付出发前不校验距离（服务端不看坐标）<br>
+      「放弃」两步确认：首点变<em>「确认放弃」</em>金框，3 秒未点复位（与删角色同口径）；服务端 abandon 拒绝进行中被引用的环<br>
+      详情数据：描述/目标/奖励来自 quests 快照，进度来自 /quests/me + realtime 帧
+    </div>
   </div>
 
 </div></div>
 <script src="../stage.js"></script>
+<script>
+// #state=detail：直切元素显示（body 类切换在无头截图下会整页空白）
+if (/state=detail/.test(location.hash)) {
+  document.querySelector('.quest').style.display = 'none';
+  document.querySelector('.qdetail').style.display = 'flex';
+}
+</script>
 </body>
 </html>

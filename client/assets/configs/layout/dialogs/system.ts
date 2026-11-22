@@ -3,7 +3,7 @@
  *
  * 拆分自原 configs/layout/dialogs.ts（#1115 批次 2），数值与注释原样保留。
  */
-import { Size, Vec2 } from "cc";
+import { Color, Size, Vec2 } from "cc";
 import { dialogFootLayout } from "./frame";
 import { T } from "../tokens";
 
@@ -299,6 +299,126 @@ export const questDialogLayout = {
   /** 页脚（稿 11-quest 的 .panel-foot）：左入口说明 / 右结算说明 */
   foot: dialogFootLayout(new Size(600, 540), 250),
   footTexts: { left: "左侧任务追踪整块可点打开本窗", right: "交付奖励由服务端结算" },
+};
+
+//#endregion
+
+//#region 任务详情弹窗（#1191，稿 11-quest 的 #state=detail 面板）
+
+/**
+ * 任务详情弹窗布局（稿 `.qdetail`：480×560，入口是 HUD 任务追踪块标题行「详」）
+ *
+ * 与任务面板（600×540 两页签）分工：面板管「接 / 交付」，详情管「看得懂」——
+ * 描述、进度条、奖励明细、交付 NPC 都在详情卡里展开，一卡一任务。
+ *
+ * 卡片高度**不在这里定死**：描述行数随文案变，组件按 `card` 的排版参数算
+ * （估算行数 = 文案长 / 每行字数，Chinese 全角近似），列表总高随卡片累计。
+ */
+export const questDetailDialogLayout = {
+  name: "quest_detail_dialog",
+  title: "任 务 详 情",
+  eyebrow: "任务",
+  /** 稿 `.qdetail{width:480px;height:560px}` */
+  size: new Size(480, 560),
+  /** 任务卡列表（稿 `.qlist` 420 高；头部下沿 ≈ 232、页脚分隔线在 -256，居中取 -10） */
+  list: { name: "quest_detail_list", position: new Vec2(0, -10), size: new Size(444, 420) },
+  /** 详情卡（稿 `.qcard`）：名称+角标+放弃 / 描述 / 目标+进度条 / 奖励 chip / 交付 NPC+前往 */
+  card: {
+    /** 卡宽比列表窄 4（滚动条压边不裁内容） */
+    width: 440,
+    paddingX: 14,
+    padTop: 12,
+    padBottom: 10,
+    fill: T.surface[1],
+    border: T.surface[3],
+    radius: T.radius.r2,
+    /** 可交付卡的描边与底（稿 `.qcard.ready`：jade 45% 描边 + jade 10% 渐变底，渐变近似成整块淡染） */
+    readyBorder: new Color(111, 191, 142, 115),
+    readyFill: new Color(111, 191, 142, 26),
+    /** 名称行（稿 `.qc-head b`：display 15px 金-5；字号按 tokens 收敛口径取 f14） */
+    nameColor: T.gold[5],
+    nameFontSize: T.fontSize.f14,
+    nameSize: new Size(250, 20),
+    /** 描述（稿 `.qc-desc` 11.5px text-2，行高 1.7 ≈ 19） */
+    descColor: T.text[2],
+    descFontSize: T.fontSize.f11,
+    descLineHeight: 19,
+    descGapTop: 6,
+    descGapBottom: 8,
+    /** 目标行（稿 `.qc-obj`：20 高，中间进度条） */
+    objColor: T.text[3],
+    objValueColor: T.text[2],
+    objSize: new Size(120, 20),
+    /** 进度条（稿 `.qc-obj .bar`：高 6 圆角 3，黑底金填充；可交付换 jade） */
+    barHeight: 6,
+    barBg: new Color(0, 0, 0, 115),
+    barBorder: T.line[1],
+    barFill: T.gold[3],
+    barFillReady: T.jade,
+    /** 奖励 chip 行（稿 `.qc-rw`：20 高圆角小签，数字用金-4） */
+    chipHeight: 20,
+    chipFontSize: T.fontSize.f10,
+    chipColor: T.gold[4],
+    chipFill: new Color(0, 0, 0, 77),
+    chipBorder: T.line[1],
+    chipGap: 6,
+    chipMarginTop: 8,
+    /** 交付 NPC 行（稿 `.qc-go`：上 1px 虚线分隔，8+8 上下距） */
+    goColor: T.text[3],
+    goValueColor: T.text[2],
+    goFontSize: T.fontSize.f11,
+    goDivider: T.line[1],
+    goGapTop: 8,
+    goHeight: 24,
+    /** 前往按钮（可交付 = 金键，进行中 = ghost；64×24 行内档） */
+    goButtonSize: new Size(64, 24),
+    goButtonFontSize: T.fontSize.f11,
+  },
+  /** 状态角标（稿 `.badge--jade/.badge--muted`：18 高圆角小签） */
+  badge: {
+    height: 18,
+    fontSize: T.fontSize.f10,
+    readyFill: new Color(111, 191, 142, 38),
+    readyText: T.jade,
+    activeFill: T.surface[3],
+    activeText: T.text[3],
+    texts: { ready: "可交付", active: "进行中" },
+  },
+  /** 放弃按钮（稿 `.abandon`：朱红字弱底，确认态换金框） */
+  abandon: {
+    size: new Size(64, 20),
+    fontSize: T.fontSize.f10,
+    text: "放 弃",
+    confirmText: "确认放弃",
+    /** 待确认 3 秒未点复位（与回收 / 丢弃 / 删角色同一套口径） */
+    confirmTimeout: 3000,
+  },
+  /** 文案（模板用 {x} 占位，组件 split/join 替换——与 QuestDialog 同一口径） */
+  texts: {
+    /** 目标行：{type} {target} */
+    objective: "{type} {target}",
+    /** 目标行的「目标」前缀 */
+    objLabel: "目标",
+    /** 奖励 chip：{value} = 数量 */
+    chipExp: "{value} 经验",
+    chipBindGold: "{value} 绑元",
+    /** 交付 NPC 行：{npc} · {map} */
+    goNpc: "交付 {npc} · {map}",
+    goButton: "前 往",
+    /** 交付 NPC 不在本地图时的提示（不做跨图传送：先去大地图换图） */
+    goOtherMapTip: "「{npc}」在「{map}」，请先前往那张地图",
+    /** 地图未知（快照里查不到该 NPC 的点位） */
+    goUnknownTip: "找不到「{npc}」的位置",
+    goUnknownMap: "未知区域",
+    /** 当前状态无法寻路（主角未就绪 / 死亡） */
+    goRefuseTip: "当前状态无法寻路",
+    empty: "（没有进行中的任务：打开任务面板接一个）",
+    /** 放弃成功的飘字（{name} = 任务名） */
+    abandonedTip: "已放弃「{name}」",
+  },
+  /** 页脚（稿 `.qdetail` 的 .panel-foot 三段并两段） */
+  foot: dialogFootLayout(new Size(480, 560), 210),
+  footTexts: { left: "「放弃」两步确认 · 3 秒未确认复位", right: "交付奖励由服务端结算" },
 };
 
 //#endregion

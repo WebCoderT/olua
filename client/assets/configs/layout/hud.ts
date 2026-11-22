@@ -501,8 +501,17 @@ export const questTrackerLayout = {
     countFontSize: T.fontSize.f10,
     countColor: T.text[4],
     countX: 32,
-    /** 渐隐细线：从标题右侧起铺到右缘（稿 `linear-gradient(90deg,line-2,transparent)`，起于 -867.5） */
-    rule: { startOffset: 52, color: T.line[2] },
+    /** 渐隐细线：从标题右侧起铺到右缘前留出「详」按钮的位置（稿细线是 flex:1，按钮 24 宽 + 6 间距） */
+    rule: { startOffset: 52, endGap: 34, color: T.line[2] },
+    /**
+     * 「详」按钮（#1191，稿 `.quests .head .detail-btn`）：标题行右端 24×20，金框小键，
+     * 点击直达任务详情弹窗（整块点击仍是任务面板，两个入口并存）
+     */
+    detailButton: {
+      text: "详",
+      size: new Size(24, 20),
+      fontSize: T.fontSize.f11,
+    },
   },
   /** 每行高度（稿 `.qrow{height:24px}`） */
   rowHeight: 24,
@@ -518,6 +527,9 @@ export const questTrackerLayout = {
   moreText: "还有 {count} 条任务，打开任务面板查看",
   moreColor: T.text[4],
   moreFontSize: T.fontSize.f11,
+  /** 行 hover 高亮（#1191，稿 `.qrow:hover`：amber 12% 淡染圆角底；触屏没有 hover，不画） */
+  rowHover: new Color(217, 162, 39, 31),
+  rowRadius: T.radius.r1,
   /** 空态不显示任何东西（追踪栏占位也不留） */
   texts: {
     /** 进度格式：{done}/{total} */

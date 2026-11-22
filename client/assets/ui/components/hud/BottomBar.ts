@@ -12,6 +12,7 @@ import MallDialog from "../dialogs/MallDialog";
 import SkillListDialog from "../dialogs/SkillListDialog";
 import ChatDialog from "../dialogs/ChatDialog";
 import QuestDialog from "../dialogs/QuestDialog";
+import QuestDetailDialog from "../dialogs/QuestDetailDialog";
 import PartyDialog from "../dialogs/PartyDialog";
 import SettingsDialog from "../dialogs/SettingsDialog";
 import BottomNavBar from "./BottomNavBar";
@@ -49,6 +50,8 @@ export default class BottomBar extends Node {
   private chatDialog = new ChatDialog();
   /** 任务弹窗（#396：进行中 / 可接，接取与交付都在这里） */
   private questDialog = new QuestDialog();
+  /** 任务详情弹窗（#1191：描述 / 进度条 / 奖励 / 交付 NPC；入口是任务追踪栏的「详」） */
+  private questDetailDialog = new QuestDetailDialog();
   /** 队伍弹窗（#399：成员 / 邀请 / 退出 / 解散；底部「组队」入口与邀请提示都落到它） */
   private partyDialog = new PartyDialog();
   /** 设置弹窗（稿 21-settings：选择角色 / 退出登录） */
@@ -140,6 +143,11 @@ export default class BottomBar extends Node {
   /** 打开任务面板（任务追踪栏点一下就走这里，见 Game 里的 QuestTracker 接线） */
   openQuests() {
     this.questDialog.open();
+  }
+
+  /** 打开任务详情弹窗（#1191：任务追踪栏标题行的「详」走这里） */
+  openQuestDetail() {
+    this.questDetailDialog.open();
   }
 
   /**
