@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Patch } from "@nestjs/common";
+import { Body, Controller, Get, Patch, Post } from "@nestjs/common";
 import { ApiAudience } from "../../common/decorators/audience.decorator";
 import { ApiAdminDoc } from "../../common/decorators/api-doc.decorator";
 import { ApiDataResponse } from "../../common/decorators/api-data-response.decorator";
@@ -6,9 +6,13 @@ import { AuditTarget } from "../../common/decorators/audit-target.decorator";
 import { Permission } from "../../common/constants/permission";
 import { RuntimeParamsService } from "./runtime-params.service";
 import {
+  AutoBattleParamsDto,
   CastRangeParamsDto,
+  DropRuntimeParamsDto,
+  GuildRuleParamsDto,
   MonsterAiParamsDto,
   MovementGuardParamsDto,
+  RecommendedRuntimeParamsDto,
   RuntimeParamsDto,
   UpdateCastRangeParamsDto,
   UpdateMonsterAiParamsDto,
@@ -167,4 +171,118 @@ export class AdminRuntimeParamsController {
   updateCastRange(@Body() dto: UpdateCastRangeParamsDto): CastRangeParamsDto {
     return this.runtimeParamsService.updateCastRange(dto) as unknown as CastRangeParamsDto;
   }
+
+  //#region 默认推荐配置与一键还原（#1185）
+
+  @Get("recommended")
+  @ApiAdminDoc({
+    operationId: "adminRuntimeParams.getRecommended",
+    summary: "默认推荐配置",
+    description:
+      "六组运行时参数的**默认推荐值**（`common/constants/runtime-params-recommended.ts` 是它的单一来源）。\n\n" +
+      "三处以它为准：管理端字段 hint 里标的推荐值、每个模块的「一键还原」落点、" +
+      "`config-sync.sql` 的出厂行（e2e 锁死 seed 行与这份常量一致）。\n\n" +
+      "数值口径（2026-11-23 拍板）：以运营现值为底，缺失的键按文档口径补齐 —— " +
+      "帮会门槛 10 级 / 100000 绑定元宝，两道闸档位 `log`（只记账放行）。",
+    permissions: [Permission.GAME_CONFIG_READ],
+  })
+  @ApiDataResponse(RecommendedRuntimeParamsDto, { description: "六组推荐值（形状与生效值一致，额外含 monsterAi）" })
+  getRecommended(): RecommendedRuntimeParamsDto {
+    return this.runtimeParamsService.recommended() as unknown as RecommendedRuntimeParamsDto;
+  }
+
+  /**
+   * 六个「一键还原」路由共用这一段：形状完全一致（POST + 返回该组生效值），
+   * 差别只有落点常量与列 —— 逐条写比循环注册更直白，Swagger 也能各自成条。
+   */
+  @Post("drop/reset")
+  @AuditTarget("runtimeParams")
+  @ApiAdminDoc({
+    operationId: "adminRuntimeParams.resetDrop",
+    summary: "还原掉落参数至推荐配置",
+    description:
+      "把 `drop` 一组整体写回推荐值，**其余五列原样保留**（只动自己那一列）。改完立即落库，" +
+      "客户端在玩家下次进游戏拉快照后生效；配置版本照常 +1（拦截器按权限点判）。",
+    permissions: [Permission.GAME_CONFIG_WRITE],
+  })
+  @ApiDataResponse(DropRuntimeParamsDto, { description: "还原后的掉落参数" })
+  resetDrop(): DropRuntimeParamsDto {
+    return this.runtimeParamsService.resetDrop() as unknown as DropRuntimeParamsDto;
+  }
+
+  @Post("auto-battle/reset")
+  @AuditTarget("runtimeParams")
+  @ApiAdminDoc({
+    operationId: "adminRuntimeParams.resetAutoBattle",
+    summary: "还原自动战斗参数至推荐配置",
+    description:
+      "把 `autoBattle` 一组整体写回推荐值，其余五列原样保留。客户端在玩家下次进游戏拉快照后生效。",
+    permissions: [Permission.GAME_CONFIG_WRITE],
+  })
+  @ApiDataResponse(AutoBattleParamsDto, { description: "还原后的自动战斗参数" })
+  resetAutoBattle(): AutoBattleParamsDto {
+    return this.runtimeParamsService.resetAutoBattle() as unknown as AutoBattleParamsDto;
+  }
+
+  @Post("guild/reset")
+  @AuditTarget("runtimeParams")
+  @ApiAdminDoc({
+    operationId: "adminRuntimeParams.resetGuild",
+    summary: "还原帮会规则至推荐配置",
+    description:
+      "把 `guild` 一组整体写回推荐值（含建帮门槛 10 级 / 100000 绑定元宝），其余五列原样保留。" +
+      "保存即生效：下一次建帮 / 改公告就按推荐值校验。",
+    permissions: [Permission.GAME_CONFIG_WRITE],
+  })
+  @ApiDataResponse(GuildRuleParamsDto, { description: "还原后的帮会规则" })
+  resetGuild(): GuildRuleParamsDto {
+    return this.runtimeParamsService.resetGuild() as unknown as GuildRuleParamsDto;
+  }
+
+  @Post("monster-ai/reset")
+  @AuditTarget("runtimeParams")
+  @ApiAdminDoc({
+    operationId: "adminRuntimeParams.resetMonsterAi",
+    summary: "还原怪物 AI 参数至推荐配置",
+    description:
+      "把 `monsterAi` 一组整体写回推荐值（含牵引 600 / 回家 1.5 倍速 / 20 秒超时），其余五列原样保留。" +
+      "AI 每 tick 读一次库（1 秒 TTL），还原后 1 秒内生效。",
+    permissions: [Permission.GAME_CONFIG_WRITE],
+  })
+  @ApiDataResponse(MonsterAiParamsDto, { description: "还原后的怪物 AI 参数" })
+  resetMonsterAi(): MonsterAiParamsDto {
+    return this.runtimeParamsService.resetMonsterAi() as unknown as MonsterAiParamsDto;
+  }
+
+  @Post("movement/reset")
+  @AuditTarget("runtimeParams")
+  @ApiAdminDoc({
+    operationId: "adminRuntimeParams.resetMovement",
+    summary: "还原位移校验参数至推荐配置",
+    description:
+      "把 `movement` 一组整体写回推荐值（档位 `log`：照判照放行只记账），其余五列原样保留。" +
+      "下一次 pos 帧就按新值判，不需要重启、也不需要玩家重进。",
+    permissions: [Permission.GAME_CONFIG_WRITE],
+  })
+  @ApiDataResponse(MovementGuardParamsDto, { description: "还原后的位移校验参数" })
+  resetMovement(): MovementGuardParamsDto {
+    return this.runtimeParamsService.resetMovement() as unknown as MovementGuardParamsDto;
+  }
+
+  @Post("cast-range/reset")
+  @AuditTarget("runtimeParams")
+  @ApiAdminDoc({
+    operationId: "adminRuntimeParams.resetCastRange",
+    summary: "还原出手距离闸参数至推荐配置",
+    description:
+      "把 `castRange` 一组整体写回推荐值（档位 `log`、抖动余量 24px），其余五列原样保留。" +
+      "下一次出手就按新值判。",
+    permissions: [Permission.GAME_CONFIG_WRITE],
+  })
+  @ApiDataResponse(CastRangeParamsDto, { description: "还原后的出手距离闸参数" })
+  resetCastRange(): CastRangeParamsDto {
+    return this.runtimeParamsService.resetCastRange() as unknown as CastRangeParamsDto;
+  }
+
+  //#endregion
 }

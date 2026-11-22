@@ -1123,7 +1123,7 @@ export const routes = {
      */
     batchRemove: "/admin/roles/batch-delete",
   },
-  /** adminRuntimeParams 模块（8 个接口） */
+  /** adminRuntimeParams 模块（15 个接口） */
   adminRuntimeParams: {
     /**
      * 运行时参数（GET /admin/runtime-params）
@@ -1138,6 +1138,12 @@ export const routes = {
      */
     update: "/admin/runtime-params",
     /**
+     * 还原自动战斗参数至推荐配置（POST /admin/runtime-params/auto-battle/reset）
+     *
+     * 把 `autoBattle` 一组整体写回推荐值，其余五列原样保留。客户端在玩家下次进游戏拉快照后生效。
+     */
+    resetAutoBattle: "/admin/runtime-params/auto-battle/reset",
+    /**
      * 出手距离闸参数（GET /admin/runtime-params/cast-range）
      *
      * 出手判定链第三道闸的参数（`runtime_params.cast_range` 列，#1030）。与位移校验一样**单独一条接口**、不下发客户端：
@@ -1149,6 +1155,24 @@ export const routes = {
      * **部分更新**：只提交改动过的字段，没提交的保持原值。
      */
     updateCastRange: "/admin/runtime-params/cast-range",
+    /**
+     * 还原出手距离闸参数至推荐配置（POST /admin/runtime-params/cast-range/reset）
+     *
+     * 把 `castRange` 一组整体写回推荐值（档位 `log`、抖动余量 24px），其余五列原样保留。下一次出手就按新值判。
+     */
+    resetCastRange: "/admin/runtime-params/cast-range/reset",
+    /**
+     * 还原掉落参数至推荐配置（POST /admin/runtime-params/drop/reset）
+     *
+     * 把 `drop` 一组整体写回推荐值，**其余五列原样保留**（只动自己那一列）。改完立即落库，客户端在玩家下次进游戏拉快照后生效；配置版本照常 +1（拦截器按权限点判）。
+     */
+    resetDrop: "/admin/runtime-params/drop/reset",
+    /**
+     * 还原帮会规则至推荐配置（POST /admin/runtime-params/guild/reset）
+     *
+     * 把 `guild` 一组整体写回推荐值（含建帮门槛 10 级 / 100000 绑定元宝），其余五列原样保留。保存即生效：下一次建帮 / 改公告就按推荐值校验。
+     */
+    resetGuild: "/admin/runtime-params/guild/reset",
     /**
      * 怪物 AI 参数（GET /admin/runtime-params/monster-ai）
      *
@@ -1162,6 +1186,12 @@ export const routes = {
      */
     updateMonsterAi: "/admin/runtime-params/monster-ai",
     /**
+     * 还原怪物 AI 参数至推荐配置（POST /admin/runtime-params/monster-ai/reset）
+     *
+     * 把 `monsterAi` 一组整体写回推荐值（含牵引 600 / 回家 1.5 倍速 / 20 秒超时），其余五列原样保留。AI 每 tick 读一次库（1 秒 TTL），还原后 1 秒内生效。
+     */
+    resetMonsterAi: "/admin/runtime-params/monster-ai/reset",
+    /**
      * 位移校验参数（GET /admin/runtime-params/movement）
      *
      * 移动三道校验的闸门参数（`runtime_params.movement` 列，#811）。与怪物 AI 一样**单独一条接口**、不下发客户端：
@@ -1173,6 +1203,18 @@ export const routes = {
      * **部分更新**：只提交改动过的字段，没提交的保持原值。
      */
     updateMovement: "/admin/runtime-params/movement",
+    /**
+     * 还原位移校验参数至推荐配置（POST /admin/runtime-params/movement/reset）
+     *
+     * 把 `movement` 一组整体写回推荐值（档位 `log`：照判照放行只记账），其余五列原样保留。下一次 pos 帧就按新值判，不需要重启、也不需要玩家重进。
+     */
+    resetMovement: "/admin/runtime-params/movement/reset",
+    /**
+     * 默认推荐配置（GET /admin/runtime-params/recommended）
+     *
+     * 六组运行时参数的**默认推荐值**（`common/constants/runtime-params-recommended.ts` 是它的单一来源）。
+     */
+    getRecommended: "/admin/runtime-params/recommended",
   },
   /** adminSkill 模块（4 个接口） */
   adminSkill: {

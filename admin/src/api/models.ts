@@ -7850,6 +7850,33 @@ export type UpdateCastRangeParams = {
   jitterPx?: number;
 };
 
+export type RecommendedRuntimeParams = {
+  /**
+   * 掉落参数推荐值
+   */
+  drop: DropRuntimeParams;
+  /**
+   * 自动战斗参数推荐值
+   */
+  autoBattle: AutoBattleParams;
+  /**
+   * 帮会规则推荐值
+   */
+  guild: GuildRuleParams;
+  /**
+   * 怪物 AI 参数推荐值
+   */
+  monsterAi: MonsterAiParams;
+  /**
+   * 位移校验参数推荐值
+   */
+  movement: MovementGuardParams;
+  /**
+   * 出手距离闸参数推荐值
+   */
+  castRange: CastRangeParams;
+};
+
 export type CombatWeights = {
   /**
    * 生命上限：每 1 点生命折算多少战力
