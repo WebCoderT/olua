@@ -60,6 +60,9 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
     // 之后所有配置读的都是库，代码里不再有第二份数值副本（#655）。
     const bootstrap = bootstrapConfigSnapshot(this.db, this.logger);
     if (bootstrap.status === "imported") this.logger.log("出厂数据自举完成（空库首启，只发生一次）");
+    // 必须排在自举之后：`config_meta` 由自举创建 —— 排在前面的话空库首启拿不到守门标记，
+    // 第二次启动时迁移会把（运营 / 测试自建的）任务线与刷怪区再清一遍
+    this.clearQuestLinesOnce();
     this.logger.log(`SQLite 就绪：${path}`);
   }
 
@@ -2196,6 +2199,37 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
       `statuses:${added},skills:${wired}`,
     ]);
     this.logger.log(`存量库补战斗状态出厂数据：新增状态 ${added} 条，补齐技能接线 ${wired} 处`);
+  }
+
+  /**
+   * 存量库一次性清空任务线与怪物生成配置（#1177 全清）
+   *
+   * 什么时候需要：`config-sync.sql` 只在**空库首启**时整份灌入（`config_meta.bootstrap_at`
+   * 有值之后再也不灌），而出厂快照里那批任务（237 条）与刷怪环带（220 区）已经按运营拍板
+   * 全部下线 —— 只改快照的话，跑过很久的存量库重启后这两批数据原样还在，图 0（安全地图）
+   * 照旧长怪、任务使者照旧发任务。
+   *
+   * 三张表一起清：
+   * - `quests`：任务定义（任务使者 NPC 与 map_npcs 保留，布局由运营重排）；
+   * - `map_spawn_areas`：刷怪区（安全地图的「不刷怪」靠接口闸门 + 播种跳过，存量区也必须走）；
+   * - `world_monsters`：**必须跟着清** —— 播种只发生在空房首播，库里已有实例走「库恢复」，
+   *   不清的话安全地图上那些存量怪会被原样救活。
+   *
+   * **只跑一次**（`config_meta.quest_lines_cleared`）：运营之后在管理端重建的任务与刷怪区
+   * 不许被启动逻辑抹掉。`config_meta` 还不存在时直接跳过（那时是空库，自举灌的快照已经是空的了）。
+   */
+  private clearQuestLinesOnce(): void {
+    const hasMeta =
+      this.count("SELECT COUNT(1) AS total FROM sqlite_master WHERE type = 'table' AND name = 'config_meta'") > 0;
+    if (!hasMeta) return;
+    if (this.get<{ value: string }>("SELECT value FROM config_meta WHERE key = ?", ["quest_lines_cleared"])) return;
+    const has = (table: string) =>
+      this.count(`SELECT COUNT(1) AS total FROM sqlite_master WHERE type = 'table' AND name = '${table}'`) > 0;
+    const quests = has("quests") ? this.execute("DELETE FROM quests").changes : 0;
+    const areas = has("map_spawn_areas") ? this.execute("DELETE FROM map_spawn_areas").changes : 0;
+    const monsters = has("world_monsters") ? this.execute("DELETE FROM world_monsters").changes : 0;
+    this.run("INSERT OR REPLACE INTO config_meta (key, value) VALUES (?, ?)", ["quest_lines_cleared", "1"]);
+    this.logger.log(`存量库清空任务线与怪物生成（#1177 全清）：任务 ${quests} 条 / 刷怪区 ${areas} 个 / 世界怪 ${monsters} 只`);
   }
 
   /**

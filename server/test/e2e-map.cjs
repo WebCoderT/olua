@@ -29,6 +29,7 @@
 const { spawn } = require("node:child_process");
 const net = require("node:net");
 const path = require("node:path");
+const os = require("node:os");
 const configSnapshot = require("./lib/config-snapshot.cjs");
 
 const SERVER_DIR = path.join(__dirname, "..");
@@ -155,8 +156,34 @@ async function registerPlayer(baseUrl, username) {
 
 //#region 主流程
 
+/**
+ * 给图 0 补两行「出厂区」（#1177 全清后快照里的刷怪区归零，而本套的区域形状 / 越界口径、
+ * 全量在图内扫描都要以「图里已有区」为基线）。**必须在服务端就绪之后调用** ——
+ * 空库首启会用 config-sync.sql 整份替换配置表，启动前写进来的行从来就没活过。
+ */
+const FIXTURE_AREAS = [
+  { name: "出厂遗留区·壹", monsterKey: "1", min: 1, max: 2, cx: 600, cy: -400, w: 200, h: 200 },
+  { name: "出厂遗留区·贰", monsterKey: "2", min: 0, max: 3, cx: 1200, cy: -900, w: 256, h: 256 },
+];
+
+function seedLegacyAreas(dbPath) {
+  const { DatabaseSync } = require("node:sqlite");
+  const db = new DatabaseSync(dbPath);
+  const insert = db.prepare(
+    "INSERT INTO map_spawn_areas (map_id, name, monster_key, min, max, cx, cy, w, h, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+  );
+  const now = Date.now();
+  for (const area of FIXTURE_AREAS) {
+    insert.run("0", area.name, area.monsterKey, area.min, area.max, area.cx, area.cy, area.w, area.h, now);
+  }
+  db.close();
+}
+
 async function main() {
-  const server = await startServer({});
+  // 播种要直插库行：内存库插不了，改用临时文件库
+  const dbPath = path.join(os.tmpdir(), `olua-e2e-map-${Date.now()}.db`);
+  const server = await startServer({ DB_PATH: dbPath });
+  seedLegacyAreas(dbPath);
   try {
     const base = server.baseUrl;
     const rootToken = await registerAdmin(base, "maproot", "MapAdmin#1");
@@ -261,22 +288,19 @@ async function main() {
 
     const areas = data.spawnAreas ?? [];
     checkEqual(areas.length, data.spawnAreaCount, "刷怪区条数与计数一致（map_spawn_areas 同一张表）");
-    check(areas.length > 0, "0 号图有刷怪区", String(areas.length));
+    check(areas.length > 0, "0 号图有刷怪区（本套自铺的存量基线）", String(areas.length));
     const area = areas[0] ?? {};
-    // 区域名 / 只数都是运营数据（#1084 起整表重排成「带N-L等级-怪id」的环带命名）——
-    // 与快照逐字段比，既不断死数值，又钉住「SQL → 建表 → 落库 → 读出来」这条链
-    const seedArea = configSnapshot
-      .optionalRows("map_spawn_areas")
-      .filter((row) => String(row.mapId) === "0")[0] ?? {};
-    checkEqual(area.name, seedArea.name, "区域名与快照一致（Tiled 时代的旧名已由 #1084 整表重排覆盖）");
+    // 区域名 / 只数与本套种子逐字段比（#1177 全清后快照的刷怪区归零，本套自己铺的
+    // FIXTURE_AREAS 就是基线）—— 既不断死数值，又钉住「SQL → 建表 → 落库 → 读出来」这条链
+    const seedArea = FIXTURE_AREAS[0];
+    checkEqual(area.name, seedArea.name, "区域名与种子一致（读接口原样回显）");
     checkEqual(area.monsterKey, seedArea.monsterKey, "怪物 key 是 configs/monster 的关联键");
-    // 怪物名从快照的 monsters 表里查（不写死某只怪的名字：区是按段铺的，areas[0] 是哪只
-    // 由刷怪区配置决定，换图/重铺就会变）
+    // 怪物名从快照的 monsters 表里查（monsters 定义仍在快照里；不写死某只怪的名字）
     const monsterLabel = configSnapshot.index("monsters")[String(seedArea.monsterKey)]?.label;
     checkEqual(area.monsterLabel, monsterLabel, "怪物名从快照查出来（查不到才回落成 key）");
-    // #852 说的是**管理端保存**只落 max（页面只有一个数量输入）；快照里的 min 是 #1084 seed
-    // 写的密度下限（2026-11-19 拍板），读接口原样回显 —— 两者别混
-    checkEqual(area.min, seedArea.min, "最少只数与快照一致（seed 的密度下限；管理端保存仍按 #852 只落 max）");
+    // #852 说的是**管理端保存**只落 max（页面只有一个数量输入）；种子的 min 是密度下限，
+    // 读接口原样回显 —— 两者别混
+    checkEqual(area.min, seedArea.min, "最少只数与种子一致（密度下限；管理端保存仍按 #852 只落 max）");
     // 具体坐标 / 只数 / 尺寸都是运营数据（换图、调密度都会变）；要守的是「数字形状 + 在图内」
     check(Number(area.max) > 0, "区域最多只数是正数（播种按它展开）", String(area.max));
     check(Number(area.w) > 0 && Number(area.h) > 0, "区域宽高都是正数", `${area.w} × ${area.h}`);

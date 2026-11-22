@@ -218,7 +218,7 @@ function connect(url) {
 }
 
 /** 地面投影的当前行数（直接读库；投影是 100ms 一拍刷的，所以断言都配 waitFor） */
-function groundRows(dbPath, mapId = "0") {
+function groundRows(dbPath, mapId = "3") {
   const { DatabaseSync } = require("node:sqlite");
   const db = new DatabaseSync(dbPath);
   try {
@@ -228,10 +228,26 @@ function groundRows(dbPath, mapId = "0") {
   }
 }
 
+
+/**
+ * 战场刷怪（#1177 全清后出厂快照不再带环带）：图 3（野外、0 级门槛）铺被动怪区。
+ * **必须在服务端就绪之后调用** —— 空库首启的自举会整份替换配置表，启动前写会被抹掉。
+ */
+function seedBattlefield(dbPath) {
+  const { DatabaseSync } = require("node:sqlite");
+  const db = new DatabaseSync(dbPath);
+  db.exec("DELETE FROM map_spawn_areas WHERE map_id = '3'");
+  db.prepare(
+    "INSERT INTO map_spawn_areas (map_id, name, monster_key, min, max, cx, cy, w, h, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+  ).run("3", "掉落战场", "1", 2, 3, 1000, -600, 600, 600, Date.now());
+  db.close();
+}
+
 (async () => {
   const dbPath = path.join(os.tmpdir(), `olua-e2e-drop-admin-${Date.now()}.db`);
   const port = await freePort();
   const server = await startServer(dbPath, port);
+  seedBattlefield(dbPath);
   try {
     const { baseUrl } = server;
 
@@ -248,11 +264,11 @@ function groundRows(dbPath, mapId = "0") {
     const adminToken = rootLogin.data && rootLogin.data.token;
     check(!!adminToken, "准备：超级管理员已登录", rootLogin.message);
 
-    // #1084 重排后整套搬去图 0（唯一有怪的图），而图 0 出厂 allow_drop = 0 且怪带主动攻击 ——
+    // #1084 重排后整套搬去图 3（唯一有怪的图），而图 3 出厂 allow_drop = 0 且怪带主动攻击 ——
     // 先整份提交打开掉落、临时关掉全图主动攻击（AI 缓存 1 秒 TTL）；库是一次性的，不还原
-    const rulesZero = (await api(baseUrl, "GET", "admin/maps/0/rules", { token: adminToken, zoneId: ADMIN_ZONE })).data || null;
+    const rulesZero = (await api(baseUrl, "GET", "admin/maps/3/rules", { token: adminToken, zoneId: ADMIN_ZONE })).data || null;
     if (rulesZero && rulesZero.allowDrop === false) {
-      await api(baseUrl, "PATCH", "admin/maps/0/rules", {
+      await api(baseUrl, "PATCH", "admin/maps/3/rules", {
         token: adminToken, zoneId: ADMIN_ZONE,
         body: { ...rulesZero, allowDrop: true, mapId: undefined, inherited: undefined, updatedBy: undefined, updatedAt: undefined },
       });
@@ -293,7 +309,7 @@ function groundRows(dbPath, mapId = "0") {
     const playerToken = registered && registered.data && registered.data.token;
     check(!!playerToken, "准备：玩家账号已注册", JSON.stringify(registered && { code: registered.code, message: registered.message }));
     const created = await api(baseUrl, "POST", "roles", { token: playerToken, body: { name: PLAYER, occupation: "1", sex: "1" } });
-    placeRolesAt(dbPath, "0", [PLAYER]);
+    placeRolesAt(dbPath, "3", [PLAYER]);
     const player = { token: playerToken, roleId: created && created.data && created.data.id, name: PLAYER };
     check(!!player.roleId, "准备：角色已创建", JSON.stringify(created && { code: created.code, message: created.message }));
 
@@ -309,8 +325,8 @@ function groundRows(dbPath, mapId = "0") {
     const ticket = await api(baseUrl, "POST", "realtime/ticket", { token: player.token });
     const session = connect(`${baseUrl.replace("http", "ws")}/api/realtime?ticket=${encodeURIComponent(ticket.data.ticket)}`);
     await waitFor("玩家握手成功", async () => (session.opened ? session : null));
-    const world = await session.joinWorld("0");
-    check(!!(world && world.mapId === "0"), "准备：玩家已进图 0");
+    const world = await session.joinWorld("3");
+    check(!!(world && world.mapId === "3"), "准备：玩家已进图 3");
 
     /** 把某只怪的掉落改成「必掉 1 件 drug_hp_1」（结果确定，才好断言地面与流水） */
     const patchDropOf = (monsterKey) =>
@@ -326,7 +342,7 @@ function groundRows(dbPath, mapId = "0") {
     const aliveMobOf = async (mapId) => {
       for (let attempt = 0; attempt < 8; attempt += 1) {
         const snapshot = await session.joinWorld(mapId);
-        // 靶子挑「编号最小的活怪」：图 0 重铺刷怪区后第一个实例是 10 级 boss，
+        // 靶子挑「编号最小的活怪」：图 3 重铺刷怪区后第一个实例是 10 级 boss，
         // 它的掉落表可能是空的（打死了也不掉东西），低编号怪才有掉落可断言
         const mob = snapshot && Array.isArray(snapshot.monsters)
           ? [...snapshot.monsters]
@@ -340,7 +356,7 @@ function groundRows(dbPath, mapId = "0") {
     };
 
     /** 打一只活着的怪，返回这次击杀的结算（打不成返回 null，原因留在 `lastKillError`） */
-    const killOne = async (mapId = "0") => {
+    const killOne = async (mapId = "3") => {
       const deadline = Date.now() + 40_000;
       for (let target = 0; target < 3 && Date.now() < deadline; target += 1) {
         const mob = await aliveMobOf(mapId);
@@ -387,7 +403,7 @@ function groundRows(dbPath, mapId = "0") {
 
     /** 等投影表里出现这件（100ms 一拍，落库有延迟） */
     const projected = await waitFor("地面投影里出现这件掉落", async () => {
-      const rows = groundRows(dbPath, "0");
+      const rows = groundRows(dbPath, "3");
       return rows.some((row) => row.drop_id === dropId) ? rows.length : null;
     });
     check(!!projected, "准备：投影表已写入（管理端读的就是它）", String(projected));
@@ -418,12 +434,12 @@ function groundRows(dbPath, mapId = "0") {
       String(target && target.protecting),
     );
 
-    const groundByMap = await api(baseUrl, "GET", `admin/drops/ground?mapId=0`, { token: adminToken, zoneId: ADMIN_ZONE });
+    const groundByMap = await api(baseUrl, "GET", `admin/drops/ground?mapId=3`, { token: adminToken, zoneId: ADMIN_ZONE });
     const groundOtherMap = await api(baseUrl, "GET", `admin/drops/ground?mapId=__nope__`, { token: adminToken, zoneId: ADMIN_ZONE });
     check(
       !!(groundByMap.data && groundByMap.data.list.some((row) => row.dropId === dropId)) &&
         !!(groundOtherMap.data && groundOtherMap.data.total === 0),
-      "mapId 精确过滤：命中本图 / 不存在的图 0 条",
+      "mapId 精确过滤：命中本图 / 不存在的图 3 条",
       JSON.stringify({ hit: groundByMap.data && groundByMap.data.total, miss: groundOtherMap.data && groundOtherMap.data.total }),
     );
 
@@ -488,7 +504,7 @@ function groundRows(dbPath, mapId = "0") {
       "保护中 / 即将过期都不会超过总件数（同一次分组查询求和，不是三个时间点）",
       JSON.stringify(sum && { total: sum.total, protectedTotal: sum.protectedTotal, expiringTotal: sum.expiringTotal }),
     );
-    const thisMap = sum && (sum.byMap || []).find((item) => item.mapId === "0");
+    const thisMap = sum && (sum.byMap || []).find((item) => item.mapId === "3");
     check(
       !!(thisMap && thisMap.cap > 0 && thisMap.total >= 1),
       "按图明细里有这张图，且单图上限来自运行时参数（> 0）",
@@ -506,8 +522,8 @@ function groundRows(dbPath, mapId = "0") {
 
     group("三、清空：三道确认 / 就地合并 / 真的清空且照写流水");
 
-    const noConfirm = await api(baseUrl, "POST", "admin/drops/clear", { token: adminToken, zoneId: ADMIN_ZONE, body: { mapId: "0" } });
-    const falseConfirm = await api(baseUrl, "POST", "admin/drops/clear", { token: adminToken, zoneId: ADMIN_ZONE, body: { mapId: "0", confirm: false } });
+    const noConfirm = await api(baseUrl, "POST", "admin/drops/clear", { token: adminToken, zoneId: ADMIN_ZONE, body: { mapId: "3" } });
+    const falseConfirm = await api(baseUrl, "POST", "admin/drops/clear", { token: adminToken, zoneId: ADMIN_ZONE, body: { mapId: "3", confirm: false } });
     const noMap = await api(baseUrl, "POST", "admin/drops/clear", { token: adminToken, zoneId: ADMIN_ZONE, body: { mapId: "   ", confirm: true } });
     check(
       !!(noConfirm && noConfirm.code === 40000) && !!(falseConfirm && falseConfirm.code === 40000) && !!(noMap && noMap.code === 40000),
@@ -515,10 +531,10 @@ function groundRows(dbPath, mapId = "0") {
       JSON.stringify({ noConfirm: noConfirm && noConfirm.code, falseConfirm: falseConfirm && falseConfirm.code, noMap: noMap && noMap.code }),
     );
 
-    const accepted = await api(baseUrl, "POST", "admin/drops/clear", { token: adminToken, zoneId: ADMIN_ZONE, body: { mapId: "0", confirm: true } });
+    const accepted = await api(baseUrl, "POST", "admin/drops/clear", { token: adminToken, zoneId: ADMIN_ZONE, body: { mapId: "3", confirm: true } });
     const request = accepted && accepted.data;
     check(
-      !!(request && typeof request.requestId === "number" && request.requestId > 0 && request.mapId === "0"),
+      !!(request && typeof request.requestId === "number" && request.requestId > 0 && request.mapId === "3"),
       "提交成功：返回 requestId + mapId（真正执行的是实时进程，这里只是受理）",
       JSON.stringify(request && { requestId: request.requestId, merged: request.merged, groundTotal: request.groundTotal }),
     );
@@ -534,7 +550,7 @@ function groundRows(dbPath, mapId = "0") {
      * 不断言「一定是合并」—— 实时进程可能在这两次调用之间就把它做完了。这里断的是
      * **自洽**：返同一个 requestId 就必须 `merged=true`，返新 id 就必须 `merged=false`。
      */
-    const again = await api(baseUrl, "POST", "admin/drops/clear", { token: adminToken, zoneId: ADMIN_ZONE, body: { mapId: "0", confirm: true } });
+    const again = await api(baseUrl, "POST", "admin/drops/clear", { token: adminToken, zoneId: ADMIN_ZONE, body: { mapId: "3", confirm: true } });
     const againData = again && again.data;
     check(
       !!(againData && (againData.requestId === request.requestId ? againData.merged === true : againData.merged === false)),
@@ -554,7 +570,7 @@ function groundRows(dbPath, mapId = "0") {
       JSON.stringify(done && { cleared: done.cleared, groundTotal: request.groundTotal }),
     );
 
-    const emptied = await waitFor("投影表里这张图被清空", async () => (groundRows(dbPath, "0").length === 0 ? true : null));
+    const emptied = await waitFor("投影表里这张图被清空", async () => (groundRows(dbPath, "3").length === 0 ? true : null));
     check(!!emptied, "地面投影真的空了（不是只改了个标记）", String(projected));
 
     const groundAfterClear = await api(baseUrl, "GET", "admin/drops/ground?mapId=1", { token: adminToken, zoneId: ADMIN_ZONE });
@@ -623,7 +639,7 @@ function groundRows(dbPath, mapId = "0") {
     const pickDropId = dropIdOf(killed2);
     check(!!pickDropId && pickDropId !== dropId, "打出第二件掉落（拾取者那一段的靶子）", pickDropId || lastKillError);
     if (pickDropId) {
-      await waitFor("第二件已落库", async () => (groundRows(dbPath, "0").some((row) => row.drop_id === pickDropId) ? true : null));
+      await waitFor("第二件已落库", async () => (groundRows(dbPath, "3").some((row) => row.drop_id === pickDropId) ? true : null));
       session.socket.send(JSON.stringify({ type: "pick", data: { dropId: pickDropId } }));
       const picked = await session.waitPicked(pickDropId);
       check(!!(picked && picked.ok === true), "这件被捡起来了（流水才会写 picked + picked_name）", JSON.stringify(picked && { ok: picked.ok, code: picked.code }));
@@ -726,7 +742,7 @@ function groundRows(dbPath, mapId = "0") {
       JSON.stringify({ ground: viewerGround.code, records: viewerRecords.code, index: viewerIndex.code }),
     );
 
-    const viewerClear = await api(baseUrl, "POST", "admin/drops/clear", { token: viewerToken, zoneId: ADMIN_ZONE, body: { mapId: "0", confirm: true } });
+    const viewerClear = await api(baseUrl, "POST", "admin/drops/clear", { token: viewerToken, zoneId: ADMIN_ZONE, body: { mapId: "3", confirm: true } });
     check(
       !!(viewerClear && viewerClear.code === 30006),
       "观察员不能清空（`drop:clear` 不可逆，只给管理员 → 30006 权限不足）",

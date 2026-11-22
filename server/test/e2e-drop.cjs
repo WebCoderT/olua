@@ -266,10 +266,26 @@ function recordsOf(dbPath, dropId, result) {
   return readRecordRows(dbPath).filter((row) => row.drop_id === dropId && (!result || row.result === result));
 }
 
+
+/**
+ * 战场刷怪（#1177 全清后出厂快照不再带环带）：图 3（野外、0 级门槛）铺被动怪区。
+ * **必须在服务端就绪之后调用** —— 空库首启的自举会整份替换配置表，启动前写会被抹掉。
+ */
+function seedBattlefield(dbPath) {
+  const { DatabaseSync } = require("node:sqlite");
+  const db = new DatabaseSync(dbPath);
+  db.exec("DELETE FROM map_spawn_areas WHERE map_id = '3'");
+  db.prepare(
+    "INSERT INTO map_spawn_areas (map_id, name, monster_key, min, max, cx, cy, w, h, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+  ).run("3", "掉落战场", "1", 2, 3, 1000, -600, 600, 600, Date.now());
+  db.close();
+}
+
 (async () => {
   const dbPath = path.join(os.tmpdir(), `olua-e2e-drop-${Date.now()}.db`);
   const port = await freePort();
   let server = await startServer(dbPath, port);
+  seedBattlefield(dbPath);
   try {
     const { baseUrl } = server;
 
@@ -283,18 +299,25 @@ function recordsOf(dbPath, dropId, result) {
     const adminToken = adminLogin.data && adminLogin.data.token;
     check(!!adminToken, "准备：管理员已登录", adminLogin.message);
 
-    // #1084 重排后整套搬去图 0（唯一有怪的图），而图 0 出厂 allow_drop = 0（不掉东西的图）。
+    // #1084 重排后整套搬去图 3（唯一有怪的图），而图 3 出厂 allow_drop = 0（不掉东西的图）。
     // 规则 PATCH 是**整份提交**校验 —— 把 GET 回来的整份改一个开关再交回去；库是一次性的，不必还原
-    const rulesZero = (await api(baseUrl, "GET", "admin/maps/0/rules", { token: adminToken, zoneId: ADMIN_ZONE })).data || null;
+    const rulesZero = (await api(baseUrl, "GET", "admin/maps/3/rules", { token: adminToken, zoneId: ADMIN_ZONE })).data || null;
     if (rulesZero && rulesZero.allowDrop === false) {
-      const opened = await api(baseUrl, "PATCH", "admin/maps/0/rules", {
+      const opened = await api(baseUrl, "PATCH", "admin/maps/3/rules", {
         token: adminToken, zoneId: ADMIN_ZONE,
         body: { ...rulesZero, allowDrop: true, mapId: undefined, inherited: undefined, updatedBy: undefined, updatedAt: undefined },
       });
-      check(opened.code === 0, "准备：临时打开图 0 掉落（map_rules.allowDrop，整份提交）", opened.message);
+      check(opened.code === 0, "准备：临时打开图 3 掉落（map_rules.allowDrop，整份提交）", opened.message);
     }
 
-    // #1084 重排后图 0 环带拥挤：1 级角色站在怪堆里会被主动怪围殴打死（cast 回 dead，
+    // 出厂实况的 protectMs / ttlMs 可能就是 0 / 10s（#1177 快照来自运营库）：归属保护用例
+    // 需要正值，且「保护期」段隔着两段用例、小值会先到期。压成 protect 60s / ttl 300s
+    // （protect 必须严格小于 ttl，否则 spawn 帧里 protectInMs === expireInMs；
+    // ttl 上限 5 分钟，再大 DTO 会拒）；段内的「压 0 / 还原」各自照旧
+    const protectOn = await api(baseUrl, "PATCH", "admin/runtime-params", { token: adminToken, zoneId: ADMIN_ZONE, body: { drop: { protectMs: 60_000, ttlMs: 300_000 } } });
+    check(protectOn.code === 0, "准备：掉落保护期临时压到 5 分钟（后面「保护期」段隔着两段用例，8s 会先到期）（归属保护用例需要正值）", protectOn.message);
+
+    // #1084 重排后图 3 环带拥挤：1 级角色站在怪堆里会被主动怪围殴打死（cast 回 dead，
     // 每一段跟着红在准备上）。这套要的是「地上有掉落」，先把全图怪物主动攻击临时关掉
     // （AI 侧 1 秒 TTL 缓存 → 等一拍再继续）；库是一次性的，不还原
     const monstersAll = await api(baseUrl, "GET", "admin/monsters?page=1&size=100", { token: adminToken, zoneId: ADMIN_ZONE });
@@ -306,13 +329,13 @@ function recordsOf(dbPath, dropId, result) {
     }
     await sleep(1500);
 
-    /** 注册 + 建号 + 摆到图 0 + 连上实时通道 */
+    /** 注册 + 建号 + 摆到图 3 + 连上实时通道 */
     async function newPlayer(name) {
       const registered = await api(baseUrl, "POST", "auth/register", { body: { username: name, password: "pass1234" } });
       const token = registered.data && registered.data.token;
       const created = await api(baseUrl, "POST", "roles", { token, body: { name, occupation: "1", sex: "1" } });
-      // #859：没有位置记录的角色只准进新手村，这里按运营摆位放到图 0（等价管理端 PATCH onMap；#1084 重排后唯一有怪的图）
-      placeRolesAt(dbPath, "0", [name]);
+      // #859：没有位置记录的角色只准进新手村，这里按运营摆位放到图 3（等价管理端 PATCH onMap；#1084 重排后唯一有怪的图）
+      placeRolesAt(dbPath, "3", [name]);
       const ticket = await api(baseUrl, "POST", "realtime/ticket", { token });
       const session = connect(`${baseUrl.replace("http", "ws")}/api/realtime?ticket=${encodeURIComponent(ticket.data.ticket)}`);
       await waitFor(`${name} 握手成功`, async () => (session.opened ? session : null));
@@ -347,9 +370,9 @@ function recordsOf(dbPath, dropId, result) {
       JSON.stringify({ alice: aliceBag.bag && aliceBag.bag.length, bob: bobBag.bag && bobBag.bag.length }),
     );
 
-    const aliceWorld = await alice.session.joinWorld("0");
-    const bobWorld = await bob.session.joinWorld("0");
-    check(!!(aliceWorld && aliceWorld.mapId === "0") && !!(bobWorld && bobWorld.mapId === "0"), "准备：两名玩家都进了图 0（同图才收得到掉落广播）");
+    const aliceWorld = await alice.session.joinWorld("3");
+    const bobWorld = await bob.session.joinWorld("3");
+    check(!!(aliceWorld && aliceWorld.mapId === "3") && !!(bobWorld && bobWorld.mapId === "3"), "准备：两名玩家都进了图 3（同图才收得到掉落广播）");
     check(
       Array.isArray(aliceWorld.drops) && aliceWorld.drops.length === 0,
       "准备：进图快照带 drops 段且此刻为空（服务端刚起、地面干净）",
@@ -385,7 +408,7 @@ function recordsOf(dbPath, dropId, result) {
     const aliveMobOf = async (player, mapId) => {
       for (let attempt = 0; attempt < 8; attempt += 1) {
         const snapshot = await player.session.joinWorld(mapId);
-        // 靶子挑「编号最小的活怪」：图 0 重铺刷怪区后第一个实例是 10 级 boss，
+        // 靶子挑「编号最小的活怪」：图 3 重铺刷怪区后第一个实例是 10 级 boss，
         // 它的掉落表可能是空的（打死了也不掉东西），低编号怪才有掉落可断言
         const mob = snapshot && Array.isArray(snapshot.monsters)
           ? [...snapshot.monsters]
@@ -415,7 +438,7 @@ function recordsOf(dbPath, dropId, result) {
      * 站在怪堆里连打二十来刀，被怪打死是常态（cast 回 `dead`）—— 那种情况先复活再换下一只，
      * 否则后面每一段都会跟着报「没打成」，红在准备上却像是掉落语义坏了。
      */
-    const killOne = async (player, mapId = "0", goodIds = ["drug_hp_1"]) => {
+    const killOne = async (player, mapId = "3", goodIds = ["drug_hp_1"]) => {
       const deadline = Date.now() + 40_000;
       for (let target = 0; target < 3 && Date.now() < deadline; target += 1) {
         const mob = await aliveMobOf(player, mapId);
@@ -514,7 +537,7 @@ function recordsOf(dbPath, dropId, result) {
     check(!!aliceRow, "A：落库了（drop_id 是主键，重连的管理端读得到）", JSON.stringify(aliceRow));
     check(
       !!(aliceRow && seenByAlice) &&
-        aliceRow.map_id === "0" &&
+        aliceRow.map_id === "3" &&
         aliceRow.good_id === seenByAlice.goodId &&
         aliceRow.count === seenByAlice.count &&
         aliceRow.x === seenByAlice.x &&
@@ -745,7 +768,7 @@ function recordsOf(dbPath, dropId, result) {
 
     const overflowPool = [];
     for (let round = 0; round < 10 && overflowPool.length <= 20; round += 1) {
-      const killed = await killOne(alice, "0", goodIds);
+      const killed = await killOne(alice, "3", goodIds);
       if (!killed) break;
       for (const entry of (killed.reward && killed.reward.drops) || []) {
         if (typeof entry.dropId === "string" && entry.dropId) overflowPool.push(entry.dropId);
@@ -836,7 +859,7 @@ function recordsOf(dbPath, dropId, result) {
     const reTicket = await api(restarted.baseUrl, "POST", "realtime/ticket", { token: reToken });
     const reSession = connect(`${restarted.baseUrl.replace("http", "ws")}/api/realtime?ticket=${encodeURIComponent(reTicket.data.ticket)}`);
     await waitFor("重连握手成功", async () => (reSession.opened ? reSession : null));
-    const reWorld = await reSession.joinWorld("0");
+    const reWorld = await reSession.joinWorld("3");
     check(
       !!reWorld && Array.isArray(reWorld.drops) && reWorld.drops.length === 0,
       "C：重连后的进图快照 drops 为空（地面清空是「服务端权威」，不靠客户端自己忘掉）",

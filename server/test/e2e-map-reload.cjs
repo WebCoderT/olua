@@ -289,11 +289,29 @@ const keysOf = (monsters) =>
   (monsters || []).map((monster) => monster.monsterKey).sort();
 const idsOf = (monsters) => (monsters || []).map((monster) => monster.instanceId).sort();
 
+/**
+ * 给两张图各补一行「出厂区」（#1177 全清后快照里的刷怪区归零，而本套的
+ * 「清空出厂区再铺探针区」「另一张图保持出厂配置当对照」都要以「出厂有区」为基线）。
+ * **必须在服务端就绪之后调用**（空库首启会用 config-sync.sql 整份替换配置表）。
+ */
+function seedLegacyAreas(dbPath) {
+  const { DatabaseSync } = require("node:sqlite");
+  const db = new DatabaseSync(dbPath);
+  const insert = db.prepare(
+    "INSERT INTO map_spawn_areas (map_id, name, monster_key, min, max, cx, cy, w, h, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+  );
+  const now = Date.now();
+  insert.run(HOME_MAP, "出厂遗留区·壹", MONSTER_A, 0, 2, 600, -400, 200, 200, now);
+  insert.run(AWAY_MAP, "出厂遗留区·贰", MONSTER_A, 0, 2, 800, -500, 240, 240, now);
+  db.close();
+}
+
 (async () => {
   const dbPath = path.join(os.tmpdir(), `olua-e2e-map-reload-${Date.now()}.db`);
   let server = null;
   try {
     server = await startServer(dbPath);
+    seedLegacyAreas(dbPath);
     const base = server.baseUrl;
     const adminToken = await registerAdmin(base, "reloadroot", "ReloadAdmin#1");
     check(Boolean(adminToken), "超管注册并登录成功");
@@ -319,7 +337,7 @@ const idsOf = (monsters) => (monsters || []).map((monster) => monster.instanceId
 
     group("准备：新手村只留一个刷怪区（3 只），另一张图保持出厂配置当对照");
     const factoryAreas = await areasOf(base, adminToken, HOME_MAP);
-    check(factoryAreas.length > 0, "新手村出厂就有刷怪区（配置快照灌的）", String(factoryAreas.length));
+    check(factoryAreas.length > 0, "新手村有刷怪区（#1177 全清后由本套种子的存量基线顶上）", String(factoryAreas.length));
     for (const area of factoryAreas) {
       const removed = await api(base, "DELETE", `admin/maps/${HOME_MAP}/spawn-areas/${area.id}`, {
         token: adminToken, zoneId: ADMIN_ZONE,

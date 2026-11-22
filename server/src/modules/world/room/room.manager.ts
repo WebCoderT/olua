@@ -206,6 +206,17 @@ export class RoomManager {
   //#region 加载 / 播种 / 销毁
 
   /**
+   * 安全地图不长怪（#1177 双保险的第二道）：接口层已拦「新建 / 改区」，这里再把
+   * **三个播种入口**（首播 `ensure` / 热重载 `reload` / 密度对齐 `alignDensity`）统一掐掉——
+   * 哪怕有人绕过接口直接往库里插行（或存量迁移漏了），安全地图也长不出怪。
+   * 判据读落库类型；**库恢复不受影响**（恢复的是上一场的世界，不新鲜播种）。
+   */
+  private seedableAreasOf(mapId: string) {
+    return this.mapConfigs.getById(mapId)?.type === MapType.NORMAL ? [] : this.spawnAreas.listByMap(mapId);
+  }
+
+
+  /**
    * 取一间房，没有就从库里恢复或按刷怪区播种（惰性加载：第一个观看者进图时才建）
    *
    * 三层兜底顺序与改造前一致：**内存 → 库 → 播种**。播种只发生在「库里这一区一行都没有」
@@ -230,13 +241,8 @@ export class RoomManager {
       lastEmptyTickAt: 0,
     };
 
-    // 安全地图不刷怪（#1177 双保险的第二道）：接口层已拦「新建 / 改区」，这里播种再跳一次 ——
-    // 哪怕有人绕过接口直接往库里插行（或存量迁移漏了），安全地图也长不出怪。
-    // 判据读落库类型；**库恢复不受影响**（恢复的是上一场的世界，不新鲜播种）。
-    const areas =
-      this.mapConfigs.getById(mapId)?.type === MapType.NORMAL
-        ? []
-        : this.spawnAreas.listByMap(mapId);
+    // 首播走统一的「可播种区域」口径（#1177：安全地图返回空清单）
+    const areas = this.seedableAreasOf(mapId);
     const mapPixel = this.mapPixelOf(mapId);
     /**
      * 副本房（#1001 第二刀）：**不从库恢复**
@@ -325,7 +331,7 @@ export class RoomManager {
     room.monsters.clear();
     room.seq = 0;
     room.trimGraceUntil = 0;
-    const areas = this.spawnAreas.listByMap(room.mapId);
+    const areas = this.seedableAreasOf(room.mapId);
     const seeded = this.seed(room, areas, this.mapPixelOf(room.mapId), Math.max(1, room.viewers.size));
     return { removed, seeded };
   }
@@ -402,7 +408,9 @@ export class RoomManager {
    * @returns 这一轮增删了几只（调用方据此决定要不要广播）
    */
   alignDensity(room: Room, now: number, refillPerTick: number): number {
-    const areas = this.spawnAreas.listByMap(room.mapId);
+    // 密度对齐同样是播种入口（#1177）：不掐的话安全地图上每 tick 都按刷怪区补怪——
+    // 首播跳了，对齐下一秒又给长回来，还会逐只广播 world 帧
+    const areas = this.seedableAreasOf(room.mapId);
     if (areas.length === 0) return 0;
     const online = Math.max(1, room.viewers.size);
     const mapPixel = this.mapPixelOf(room.mapId);

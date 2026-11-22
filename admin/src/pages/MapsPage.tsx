@@ -41,8 +41,8 @@ interface MapFilters {
   keyword: string;
   /** 类型码；"all" = 全部 */
   type: string;
-  /** 进入门槛：none 无门槛 / level 等级 / combat 战斗力 / soul 战魂 / all */
-  gate: "all" | "none" | "level" | "combat" | "soul";
+  /** 进入门槛：none 无门槛 / level 等级 / all（#1177 后只剩等级一项门槛） */
+  gate: "all" | "none" | "level";
   spawn: "all" | "yes" | "no";
   npc: "all" | "yes" | "no";
   revive: "all" | "yes" | "no";
@@ -387,16 +387,14 @@ export function MapsPage() {
 
   /**
    * 筛选后的列表（#1179）。纯前端过滤：清单本来就一次全量下发，62 条不值得发请求；
-   * 门槛三选一互相独立（level/combat/soulOfWar > 0 = 配了该门槛），与类型筛选可叠加。
+   * 门槛二选一互相独立（level > 0 = 配了等级门槛），与类型筛选可叠加。
    */
   const filteredList = list.filter((item) => {
     const keyword = filters.keyword.trim().toLowerCase();
     if (keyword && !item.label.toLowerCase().includes(keyword) && !item.id.includes(keyword)) return false;
     if (filters.type !== "all" && item.type !== filters.type) return false;
-    if (filters.gate === "none" && (item.level > 0 || item.combat > 0 || item.soulOfWar > 0)) return false;
+    if (filters.gate === "none" && item.level > 0) return false;
     if (filters.gate === "level" && item.level <= 0) return false;
-    if (filters.gate === "combat" && item.combat <= 0) return false;
-    if (filters.gate === "soul" && item.soulOfWar <= 0) return false;
     if (filters.spawn !== "all" && (item.spawnAreaCount > 0) !== (filters.spawn === "yes")) return false;
     if (filters.npc !== "all" && (item.npcPointCount > 0) !== (filters.npc === "yes")) return false;
     if (filters.revive !== "all" && item.hasRevivePoint !== (filters.revive === "yes")) return false;
@@ -455,8 +453,6 @@ export function MapsPage() {
                 <option value="all">全部</option>
                 <option value="none">无门槛</option>
                 <option value="level">有等级门槛</option>
-                <option value="combat">有战斗力门槛</option>
-                <option value="soul">有战魂门槛</option>
               </Select>
             </FormField>
             <FormField width="w-28" label="刷怪区">

@@ -258,6 +258,27 @@ function weekStartDay(now = Date.now()) {
       },
     });
     check(noPointQuest && noPointQuest.code === 0, "准备：建了一条发布 NPC 没点位的任务（8998）", noPointQuest && noPointQuest.message);
+
+    // #1177 全清后出厂快照不再带任务：本套用到的 8001（主线 talk）与 8101（日常）自己建，
+    // 形状与原出厂一致（发布 NPC 都是 0002；8001 不挂 prev 链）
+    const mainQuest = await api(baseUrl, "POST", "admin/quests", {
+      token: adminToken, zoneId: ADMIN_ZONE,
+      body: {
+        id: "8001", kind: "main", label: "初入大陆", description: "拜访大陆传送官，了解这片大陆的现状。",
+        npcId: NPC_ID, minLevel: 1, objective: { type: "talk", target: NPC_ID, count: 1 },
+        rewards: { bindGold: 500, exp: 100, items: [] },
+      },
+    });
+    check(mainQuest && mainQuest.code === 0, "准备：重建了主线任务 8001（talk 型）", mainQuest && mainQuest.message);
+    const dailyQuest = await api(baseUrl, "POST", "admin/quests", {
+      token: adminToken, zoneId: ADMIN_ZONE,
+      body: {
+        id: "8101", kind: "daily", label: "日常试炼", description: "今天的例行杂务：去找传送官聊聊。",
+        npcId: NPC_ID, minLevel: 1, objective: { type: "talk", target: NPC_ID, count: 1 },
+        rewards: { bindGold: 200, exp: 30, items: [] },
+      },
+    });
+    check(dailyQuest && dailyQuest.code === 0, "准备：重建了日常任务 8101", dailyQuest && dailyQuest.message);
     check(
       weekly && weekly.data && weekly.data.kind === "weekly",
       "准备：管理端回显 kind = weekly（枚举已放开）",

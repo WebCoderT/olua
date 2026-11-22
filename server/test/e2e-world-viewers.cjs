@@ -46,13 +46,14 @@ const fs = require("node:fs");
 const net = require("node:net");
 const os = require("node:os");
 const path = require("node:path");
+const { placeRolesAt } = require("./lib/place-role.cjs");
 const WebSocket = require("ws");
 
 const SERVER_DIR = path.join(__dirname, "..");
 const ENTRY = path.join(SERVER_DIR, "dist", "main.js");
 
-/** 起点图（新手村）与换图目标（雪域高原）：两张都要求 1 级，换图双向都放行 */
-const HOME_MAP = "0";
+/** 起点图（图 1 八卦台，#1177 全清后本套自铺刷怪区的野外图）与换图目标（图 3 百旗围场）：两张都 0 级门槛，换图双向都放行 */
+const HOME_MAP = "1";
 const AWAY_MAP = "3";
 /** 空闲卸载阈值（毫秒）；比它多半拍就够看见日志了 */
 const IDLE_MS = 1200;
@@ -299,6 +300,9 @@ function connect(url) {
     const A = await preparePlayer(baseUrl, "viewer_player_a", "看图的甲");
     const B = await preparePlayer(baseUrl, "viewer_player_b", "看图的乙");
     check(!!(A.token && B.token), "准备：两个玩家账号已注册并建好角色");
+    // #859 起新号没有位置记录只准进新手村：起点图已换到图 1（自铺刷怪区的野外图），
+    // 先按运营摆位把两个人都摆过去（等价管理端 PATCH onMap；按**角色名**匹配）
+    placeRolesAt(dbPath, HOME_MAP, ["看图的甲", "看图的乙"]);
 
     const connectAs = async (player) => {
       const ticket = await api(baseUrl, "POST", "realtime/ticket", { token: player.token });

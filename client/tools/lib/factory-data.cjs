@@ -36,6 +36,15 @@ function rows(table) {
   return result;
 }
 
+/**
+ * 同 rows()，但允许空表（#1177 全清：quests / map_spawn_areas 出厂就是空的，
+ * 空表不是「快照过期」而是运营还没重建）。
+ */
+function rowsOrEmpty(table) {
+  const result = readRowsCamel(text(), table);
+  return Array.isArray(result) ? result : [];
+}
+
 /** 某张表的「主键 → 行」索引 */
 function index(table, key = "id") {
   const result = {};
@@ -428,19 +437,33 @@ function statuses() {
   }));
 }
 
-/** 任务（目标 / 奖励在库里是平铺的六列，DTO 上是两个嵌套对象） */
+/**
+ * #1177 全清后快照里的 quests 归零（任务由运营重建），但客户端任务链单测
+ * （tools/test-quest.cjs）需要一条真实的「主线 4 环 + 日常」链当蓝本 ——
+ * 快照空时回落到这组固定值（与 server/test/lib/seed-quests.cjs 同源，改一处要同步另一处）。
+ */
+const QUEST_FIXTURE_ROWS = [
+  { id: "8001", kind: "main", prevQuestId: "", npcId: "0002", objectiveType: "talk", objectiveTarget: "0002", objectiveCount: 1 },
+  { id: "8002", kind: "main", prevQuestId: "8001", npcId: "0002", objectiveType: "kill", objectiveTarget: "1", objectiveCount: 5 },
+  { id: "8003", kind: "main", prevQuestId: "8002", npcId: "0002", objectiveType: "collect", objectiveTarget: "material_hide", objectiveCount: 3 },
+  { id: "8004", kind: "main", prevQuestId: "8003", npcId: "9002", objectiveType: "talk", objectiveTarget: "9002", objectiveCount: 1 },
+  { id: "8101", kind: "daily", prevQuestId: "", npcId: "0002", objectiveType: "kill", objectiveTarget: "2", objectiveCount: 10 },
+];
+
+/** 任务（目标 / 奖励在库里是平铺的六列，DTO 上是两个嵌套对象）；#1177 全清后允许空表 */
 function quests() {
-  return rows("quests").map((row) => ({
+  const source = rowsOrEmpty("quests").length > 0 ? rowsOrEmpty("quests") : QUEST_FIXTURE_ROWS;
+  return source.map((row) => ({
     id: row.id,
     kind: row.kind,
-    label: row.label,
-    description: row.description,
+    label: row.label ?? "",
+    description: row.description ?? "",
     prevQuestId: row.prevQuestId,
-    minLevel: row.minLevel,
+    minLevel: row.minLevel ?? 1,
     npcId: row.npcId,
     objective: { type: row.objectiveType, target: row.objectiveTarget, count: row.objectiveCount },
-    rewards: { bindGold: row.rewardBindGold, exp: row.rewardExp, items: row.rewardItems ?? [] },
-    updatedAt: row.updatedAt,
+    rewards: { bindGold: row.rewardBindGold ?? 0, exp: row.rewardExp ?? 0, items: row.rewardItems ?? [] },
+    updatedAt: row.updatedAt ?? 0,
   }));
 }
 

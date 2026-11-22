@@ -20,6 +20,7 @@
 const { spawn } = require("node:child_process");
 const net = require("node:net");
 const path = require("node:path");
+const os = require("node:os");
 
 const SERVER_DIR = path.join(__dirname, "..");
 const ENTRY = path.join(SERVER_DIR, "dist", "main.js");
@@ -66,6 +67,23 @@ function freePort() {
 }
 
 /** 起一台服务并等它就绪（内存库：每次跑都是出厂形态，62 个区域来自 config-sync.sql） */
+/**
+ * 给图 0 补「出厂区」存量（#1177 全清后快照里的刷怪区归零，而本套的区域 CRUD、
+ * 同名 409 与「有区改安全地图 409」都要以「图里已有区」为基线）。
+ * **必须在服务端就绪之后调用**（空库首启会用 config-sync.sql 整份替换配置表）。
+ */
+function seedLegacyAreas(dbPath) {
+  const { DatabaseSync } = require("node:sqlite");
+  const db = new DatabaseSync(dbPath);
+  const insert = db.prepare(
+    "INSERT INTO map_spawn_areas (map_id, name, monster_key, min, max, cx, cy, w, h, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+  );
+  const now = Date.now();
+  insert.run("0", "出厂遗留区·壹", "1", 0, 2, 600, -400, 200, 200, now);
+  insert.run("0", "出厂遗留区·贰", "2", 0, 2, 1200, -900, 256, 256, now);
+  db.close();
+}
+
 async function startServer(env) {
   const port = await freePort();
   const baseUrl = `http://127.0.0.1:${port}`;
@@ -159,7 +177,10 @@ async function makeSpawnable(base, token, mapId) {
 //#region 主流程
 
 async function main() {
-  const server = await startServer({});
+  // 播种要直插库行：内存库插不了，改用临时文件库
+  const dbPath = path.join(os.tmpdir(), `olua-e2e-map-spawn-area-${Date.now()}.db`);
+  const server = await startServer({ DB_PATH: dbPath });
+  seedLegacyAreas(dbPath);
   try {
     const base = server.baseUrl;
     const token = await registerAdmin(base, "spawnroot", "SpawnAdmin#1");

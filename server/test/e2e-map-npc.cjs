@@ -21,6 +21,7 @@
 const { spawn } = require("node:child_process");
 const net = require("node:net");
 const path = require("node:path");
+const os = require("node:os");
 
 const SERVER_DIR = path.join(__dirname, "..");
 const ENTRY = path.join(SERVER_DIR, "dist", "main.js");
@@ -155,8 +156,24 @@ function pointOf(overrides = {}) {
 
 //#region 主流程
 
+/**
+ * 给图 0 补一行「出厂区」（#1177 全清后快照里的刷怪区归零，而「刷怪区中心点随快照下发」
+ * 这条断言要以「图里已有区」为基线）。**必须在服务端就绪之后调用**。
+ */
+function seedLegacyArea(dbPath) {
+  const { DatabaseSync } = require("node:sqlite");
+  const db = new DatabaseSync(dbPath);
+  db.prepare(
+    "INSERT INTO map_spawn_areas (map_id, name, monster_key, min, max, cx, cy, w, h, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+  ).run("0", "出厂遗留区", "1", 0, 2, 600, -400, 200, 200, Date.now());
+  db.close();
+}
+
 async function main() {
-  const server = await startServer({});
+  // 播种要直插库行：内存库插不了，改用临时文件库
+  const dbPath = path.join(os.tmpdir(), `olua-e2e-map-npc-${Date.now()}.db`);
+  const server = await startServer({ DB_PATH: dbPath });
+  seedLegacyArea(dbPath);
   try {
     const base = server.baseUrl;
     const token = await registerAdmin(base, "mapnpcroot", "MapNpc#1");
