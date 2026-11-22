@@ -43,6 +43,9 @@
 - **区 = 服务端算出的上下文，不是请求参数**（#954）：玩家侧接口零 `zoneId`；按 id 取别区对象一律 **404**；
   管理端不绑区但 `X-Zone-Id` 必填、无「全部区」；zone-scoped 仓储没有无区重载。
 - **DTO 的 `boolean` 必须有 `@IsBoolean`**（#1010）：`ValidationPipe({ whitelist: true })` 会把无装饰器字段**静默剥掉**。
+- **校验失败的消息必须全中文**（#1172）：管道统一用 `httpValidationPipe()`（兜底翻译英文默认模板 + 路径前缀），
+  **别再 `new ValidationPipe`**（测试内嵌管道也要用它）；新 DTO 的 `@Min/@Max` 要么带中文 message（带单位带边界），
+  要么接受兜底的「路径：不能小于 N」。`IsNumber` 的 message 是第二个参数（`ValidationOptions`）。
 - **跨进程指令一律落表 + 轮询**（热重载 / 掉落清空 / 副本登记同一形状），管理端不直接改内存、不直接 `DELETE` 投影表。
 - 守点：`audit-zone-scope`（五类判据 + `zone-scope-allowlist.json`）· `audit-admin-zone` · `audit-server-boundaries`
   （**type-only import 同样计数**）· `audit-admin-ui`（七条）。
