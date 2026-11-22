@@ -211,7 +211,14 @@ export function SpawnAreasDialog({
       onClose={onClose}
     >
       {!detail ? null : detail.spawnAreas.length === 0 ? (
-        <EmptyState title="没有刷怪区" description="安全地图不刷怪；野外图点「绘制刷怪区」，在底图上拖一个框就能加" />
+        <EmptyState
+          title="没有刷怪区"
+          description={
+            detail.type === "0"
+              ? "这张图是安全地图，不刷怪（服务端不允许建区）：要在这张图上刷怪，先把「类型」改成等级 / 战斗力 / 战魂地图"
+              : "这张图还没有刷怪区；点「绘制刷怪区」，在底图上拖一个框就能加"
+          }
+        />
       ) : (
         <div className="overflow-x-auto">
           <table className={tableClass}>

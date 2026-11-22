@@ -417,6 +417,15 @@ function attachSettleProbe(session, probe) {
     });
     const latencyAdminToken = latencyAdminReg.data && latencyAdminReg.data.token;
     check(!!latencyAdminToken, "准备：管理员已登录（给图 3 播种靶子用）", latencyAdminReg.message);
+    // #1157：出厂 62 张图全是安全地图，而安全地图不允许建刷怪区 —— 先把图 3 改成等级地图
+    // （门槛沿用原值 0 = 不限进，不改变谁能进图，只改变「能不能配怪」）
+    const targetMap = (await api(baseUrl, "GET", `admin/maps/${MAP_ID}`, { token: latencyAdminToken }))?.data;
+    const spawnableMap = await api(baseUrl, "PATCH", `admin/maps/${MAP_ID}`, {
+      token: latencyAdminToken,
+      body: { label: targetMap.label, type: "1", level: targetMap.level, combat: targetMap.combat, soulOfWar: targetMap.soulOfWar },
+    });
+    check(spawnableMap?.data?.type === "1", "准备：图 3 已改成等级地图（安全地图不允许配怪）", spawnableMap?.message);
+
     const bossSeed = await api(baseUrl, "POST", `admin/maps/${MAP_ID}/spawn-areas`, {
       token: latencyAdminToken,
       zoneId: ADMIN_ZONE,

@@ -140,6 +140,22 @@ function boxOf(overrides = {}) {
   return { name: "e2e 刷怪区", monsterKey: "1", count: 3, cx: 1200, cy: -900, w: 256, h: 256, ...overrides };
 }
 
+/**
+ * 把一张图改成可刷怪的类型（#1157）
+ *
+ * 出厂 62 张图全是安全地图，而安全地图从 #1157 起**不允许建 / 改刷怪区** ——
+ * 这套 e2e 的靶场必须是能刷怪的图，所以准备阶段先改类型（改成等级地图，门槛沿用原值，
+ * 图 0 门槛本来就是 0，不影响谁进得来）。
+ */
+async function makeSpawnable(base, token, mapId) {
+  const detail = (await api(base, "GET", `/api/admin/maps/${mapId}`, { token })).body?.data;
+  if (!detail) return null;
+  return api(base, "PATCH", `/api/admin/maps/${mapId}`, {
+    token,
+    body: { label: detail.label, type: "1", level: detail.level, combat: detail.combat, soulOfWar: detail.soulOfWar },
+  });
+}
+
 //#region 主流程
 
 async function main() {
@@ -149,9 +165,18 @@ async function main() {
     const token = await registerAdmin(base, "spawnroot", "SpawnAdmin#1");
     check(Boolean(token), "超管注册并登录成功");
 
+    //#region 准备：0 号图改成等级地图（#1157：安全地图不允许配怪）
+
+    group("准备：0 号图改成等级地图（安全地图不允许建 / 改刷怪区）");
+    const spawnable = await makeSpawnable(base, token, "0");
+    checkEqual(spawnable?.status, 200, "0 号图类型改成等级地图");
+    checkEqual(spawnable?.body?.data?.type, "1", "返回体里类型已是等级地图（保存即生效）");
+
+    //#endregion
+
     //#region 一、先看家底
 
-    group("一、起始状态：0 号图 3 个刷怪区（来自出厂快照）");
+    group("一、起始状态：0 号图出厂就有刷怪区（来自出厂快照）");
 
     const before = await api(base, "GET", "/api/admin/maps/0", { token });
     checkEqual(before.status, 200, "能读 0 号图详情");
@@ -336,9 +361,40 @@ async function main() {
 
     //#endregion
 
-    //#region 七、权限
+    //#region 七、安全地图闸门（#1157）
 
-    group("七、权限：观察员能读，写 403；无令牌 401");
+    group("七、安全地图闸门：不能建区，也不能把有区的图改成安全地图");
+
+    // 图 3 出厂是安全地图且**没有**刷怪区（#1084 之后 220 个区全在图 0）——「干净的安全地图」对照组
+    const safeDetail = (await api(base, "GET", "/api/admin/maps/3", { token })).body?.data;
+    checkEqual(safeDetail?.type, "0", "图 3 是安全地图");
+    checkEqual((safeDetail?.spawnAreas ?? []).length, 0, "图 3 没有刷怪区");
+
+    const onSafeMap = await api(base, "POST", "/api/admin/maps/3/spawn-areas", { token, body: boxOf({ name: "安全地图上的区" }) });
+    checkEqual(onSafeMap.status, 400, "安全地图上新建刷怪区 → 400");
+    checkEqual(onSafeMap.body?.code, 50047, "业务码是 MAP_SPAWN_AREA_ON_SAFE_MAP");
+
+    // 图 0 现在是等级地图、带着出厂那批区 —— 改回安全地图要被拦（否则「先建区再改类型」就绕过了上一条）
+    const map0 = (await api(base, "GET", "/api/admin/maps/0", { token })).body?.data;
+    const toSafeMap = await api(base, "PATCH", "/api/admin/maps/0", {
+      token,
+      body: { label: map0.label, type: "0", level: map0.level, combat: map0.combat, soulOfWar: map0.soulOfWar },
+    });
+    checkEqual(toSafeMap.status, 409, "图里还有刷怪区 → 改成安全地图 409");
+    checkEqual(toSafeMap.body?.code, 20040, "业务码是 MAP_SAFE_WITH_SPAWN_AREAS");
+
+    // 干净的安全地图保存不受影响：存量的「安全地图」不该被这条守点挡得连名字都改不了
+    const safeSave = await api(base, "PATCH", "/api/admin/maps/3", {
+      token,
+      body: { label: safeDetail.label, type: "0", level: safeDetail.level, combat: safeDetail.combat, soulOfWar: safeDetail.soulOfWar },
+    });
+    checkEqual(safeSave.status, 200, "没有刷怪区时把类型保存成安全地图 → 200（不误伤存量）");
+
+    //#endregion
+
+    //#region 八、权限
+
+    group("八、权限：观察员能读，写 403；无令牌 401");
 
     const viewerToken = await registerAdmin(base, "spawnviewer", "SpawnAdmin#2");
     const viewerId = (await api(base, "GET", "/api/admin/admins", { token })).body?.data?.list?.find(
@@ -360,9 +416,9 @@ async function main() {
 
     //#endregion
 
-    //#region 八、文档契约
+    //#region 九、文档契约
 
-    group("八、文档契约：三个 operation + 写模型");
+    group("九、文档契约：三个 operation + 写模型");
 
     const docsResponse = await fetch(`${base}/api-docs-json`);
     const doc = await docsResponse.json();

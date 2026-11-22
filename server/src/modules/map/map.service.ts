@@ -4,6 +4,7 @@ import {
   COLLISION_BOX_LIMITS,
   MAP_TYPE_GROUPS,
   MAP_TYPE_LABELS,
+  MapType,
   MapTypeValue,
   SPAWN_AREA_LIMITS,
 } from "../../common/constants/map-config";
@@ -130,7 +131,7 @@ export interface MapEnterReject {
  * |---|---|---|
  * | `label` / `type` / `level` / `combat` / `soulOfWar` | `maps` 表 | **管理端**（`save`） |
  * | `layers` / `groups` / 尺寸 | `maps` 表的几何列 + `content` JSON（源自 TMX） | 改 TMX + 跑 `import-map-resources` |
- * | `spawnAreas` | `map_spawn_areas` 表 | **管理端绘制**（`createSpawnArea` / `updateSpawnArea` / `deleteSpawnArea`） |
+ * | `spawnAreas` | `map_spawn_areas` 表 | **管理端绘制**（`createSpawnArea` / `updateSpawnArea` / `deleteSpawnArea`）；**安全地图（`type = 0`）建 / 改一律拒**，删放行（#1157） |
  * | `npcPoints` | `map_npcs` 表 | **管理端点放 / 拖动**（`createNpc` / `updateNpc` / `deleteNpc`） |
  * | `revivePoint` | `maps.revive_cx/cy` | **管理端点选**（`setRevivePoint` / `clearRevivePoint`） |
  * | `collisions` | `map_collisions` 表 | **管理端绘制**（`createCollision` / `updateCollision` / `deleteCollision`） |
@@ -794,6 +795,18 @@ export class MapService {
    */
   save(id: string, dto: SaveMapConfigDto, actor: AuthenticatedUser): MapSummaryDto {
     const before = this.requireRow(id);
+    // 反方向的守点（#1157）：这次要把类型改成安全地图、而图里还有刷怪区 → 先删区。
+    // 只在「类型由别的值切到安全地图」时拦：存量里本来就是安全地图且带区的图，
+    // 改名字 / 改门槛不该被这一条挡死（运营自己会去收拾那批历史数据）。
+    if (dto.type === MapType.NORMAL && before.type !== MapType.NORMAL) {
+      const areas = this.spawnAreas.countByMap().find((item) => item.map_id === id)?.total ?? 0;
+      if (areas > 0) {
+        throw BizException.conflict(
+          BizCode.MAP_SAFE_WITH_SPAWN_AREAS,
+          `地图 ${id}（${before.label}）还有 ${areas} 个刷怪区 —— 安全地图不刷怪，改成安全地图之前先把它们删掉，或者换成等级 / 战斗力 / 战魂地图`,
+        );
+      }
+    }
     const row: MapRow = {
       ...before,
       label: dto.label.trim(),
@@ -828,7 +841,8 @@ export class MapService {
    * 属于业务判断。放在一处也让 e2e 能直接对着文案断言。
    */
   createSpawnArea(mapId: string, dto: SaveSpawnAreaDto, actor: AuthenticatedUser): MapSpawnAreaDto {
-    const { mapPixel } = this.requireDrawableMap(mapId);
+    const { row, mapPixel } = this.requireDrawableMap(mapId);
+    this.requireSpawnableMap(row);
     const name = dto.name.trim();
     this.requireMonster(dto.monsterKey);
     this.requireNameFree(mapId, name, null);
@@ -861,8 +875,11 @@ export class MapService {
    * 位置尺寸也允许改：画完发现框偏了一点，重画一个再删掉旧的太笨。
    */
   updateSpawnArea(mapId: string, areaId: number, dto: SaveSpawnAreaDto, actor: AuthenticatedUser): MapSpawnAreaDto {
-    const { mapPixel } = this.requireDrawableMap(mapId);
+    const { row, mapPixel } = this.requireDrawableMap(mapId);
+    // 先确认「要改的那一行确实在这张图上」（跨图 / 已被删 → 404），再判这张图能不能配怪（400）：
+    // 「你改的东西不存在」比「这张图不能配怪」更贴近事实，也保住了跨图隔离那条断言
     const before = this.requireArea(mapId, areaId);
+    this.requireSpawnableMap(row);
     const name = dto.name.trim();
     this.requireMonster(dto.monsterKey);
     this.requireNameFree(mapId, name, areaId);
@@ -915,6 +932,21 @@ export class MapService {
       );
     }
     return { row, mapPixel };
+  }
+
+  /**
+   * 这张图能不能配怪：安全地图不行（#1157）
+   *
+   * 判定读**落库的当前类型**，不读 DTO —— 类型在管理端改完立刻生效，不需要重载房间。
+   * 安全地图的语义就是「主城 / 新手村，不刷怪」，界面上类型下拉的文案、刷怪区列表的空态、
+   * docs/19 的口径都这么写；这里把它从文案变成会失败的约束。
+   */
+  private requireSpawnableMap(row: MapRow): void {
+    if (row.type !== MapType.NORMAL) return;
+    throw new BizException(
+      BizCode.MAP_SPAWN_AREA_ON_SAFE_MAP,
+      `地图 ${row.map_id}（${row.label}）是安全地图 —— 安全地图不刷怪。要在这张图上配怪，先把「类型」改成等级 / 战斗力 / 战魂地图`,
+    );
   }
 
   /** 怪物 key 必须在 monsters 表里（播种时也是同一判据：不认识就跳过并告警，这里提前拦住） */

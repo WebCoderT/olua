@@ -54,6 +54,8 @@ export function SpawnAreaFormDialog({
   onSaved: (message: string) => void;
 }) {
   const canWrite = hasPermission(PERMISSION.GAME_CONFIG_WRITE);
+  // 安全地图（类型 = 安全地图）不刷怪（#1157）：服务端建 / 改都会拒，这里先把「保存」锁住并说清原因
+  const safeMap = detail.type === "0";
   const monsterOptions = entityOptions("monster");
   const [name, setName] = useState("");
   const [monsterKey, setMonsterKey] = useState("");
@@ -167,13 +169,19 @@ export function SpawnAreaFormDialog({
             <Button variant="outline" disabled={saving} onClick={onClose}>
               取消
             </Button>
-            <Button disabled={!valid || saving || !canWrite} loading={saving} onClick={() => void submit()}>
+            <Button disabled={!valid || saving || !canWrite || safeMap} loading={saving} onClick={() => void submit()}>
               {area ? "保存改动" : "创建"}
             </Button>
           </>
         }
       >
         <div className="space-y-3">
+          {safeMap ? (
+            <Notice tone="warn" title="这张图是安全地图，不刷怪">
+              类型是<b>安全地图</b>的图不允许配置怪物（服务端会拒），所以这里只能看、能删，不能保存。
+              要在这张图上加怪，先到上面的「玩法配置」把<b>类型</b>改成等级 / 战斗力 / 战魂地图再回来。
+            </Notice>
+          ) : null}
           <div className="grid grid-cols-2 gap-2 rounded-xl border border-line bg-surface-2/40 px-3 py-2 text-[11px] text-ink-4 sm:grid-cols-4">
             <Info label="左上角（Tiled）" value={`${round(box.x)}, ${round(box.y)}`} />
             <Info label="尺寸（像素）" value={`${round(box.width)} × ${round(box.height)}`} />
