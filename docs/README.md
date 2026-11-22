@@ -64,7 +64,7 @@ README（仓库根） → 01 总览（认路）
 | 10 | [任务、成就、排行与社交](./10-任务成就排行与社交.md) | 事件总线、任务状态机、累计 vs 状态型成就、三榜、邮件、队伍 | 进度不涨 / 榜不变 / 邮件没收到 |
 | 11 | [客户端](./11-客户端.md) | 四场景、六图层、32 个 Manager、网络三件套、Cocos 已知坑 | 表现层问题 / 换装 / 引导 / 打包 |
 | 12 | [管理端](./12-管理端.md) | 54 条路由、三级导航、`gameData` 查表、操作日志五条设计、玩家行为流水与操作日志的分表口径 | 运营改数 / 权限 / 审计 |
-| 13 | [部署、运维与质量门禁](./13-部署运维与质量门禁.md) | 五个容器（开 HTTPS 时七个）、`deploy.sh` 七模式、三套备份、CI 两 job、96 套 e2e、19 项审计 | 上线 / 回滚 / 排线上故障 |
+| 13 | [部署、运维与质量门禁](./13-部署运维与质量门禁.md) | 五个容器（开 HTTPS 时七个）、`deploy.sh` 七模式、三套备份、CI 两 job、95 套 e2e、19 项审计 | 上线 / 回滚 / 排线上故障 |
 | 14 | [接口清单](./14-接口清单.md) | **自动生成**：268 个 operationId 全表 | 查某个接口叫什么、在哪个 tag |
 | 15 | [数据表清单](./15-数据表清单.md) | 77 张表：39 配置 + 38 运行时，字段级 + 用途 + 谁读写 | 查字段 / 加表 / 对不上列名 |
 | 16 | [配置位置总表](./16-配置位置总表.md) | **39 张表 ↔ 页面双向索引**、藏在弹窗里的入口、四类生效通道、只能改库的配置 | 「这个配置在哪儿改」「改了怎么没生效」 |
@@ -194,7 +194,7 @@ README（仓库根） → 01 总览（认路）
 | 77 张表 / 各表行数 | **口径从清单算**：`node -e "const t=require('./server/scripts/lib/config-tables.cjs');console.log(t.CONFIG_TABLES.length, t.RUNTIME_TABLES.length)"`（39 + 38 = 77）。库里实际建出来的张数另用 `sqlite3 server/data/olua.db "SELECT count(*) FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%';"` —— 老库可能少一张（新表还没建），所以「77」认清单不认库 |
 | 39 配置 / 38 运行时 | `server/scripts/lib/config-tables.cjs` 的 `CONFIG_TABLES` / `RUNTIME_TABLES` |
 | 281 个接口 | `server/openapi.json` 的 `paths` 展开后的 operationId 数；或直接看 [14](./14-接口清单.md) 的标题 |
-| 96 套 e2e | `node -e "console.log(Object.keys(require('./server/package.json').scripts).filter(k=>k.startsWith('test:e2e')).length)"`（**按脚本数**；`ls server/test/e2e*.cjs` 是 95 个文件，差的那 1 个是 `test:e2e:backup` → `test/backup.cjs`） |
+| 95 套 e2e | `node -e "console.log(Object.keys(require('./server/package.json').scripts).filter(k=>k.startsWith('test:e2e')).length)"`（**按脚本数**；`ls server/test/e2e*.cjs` 是 94 个文件，差的那 1 个是 `test:e2e:backup` → `test/backup.cjs`） |
 | 19 项审计 | `ls tools/audit-*.cjs \| wc -l` |
 | 32 个客户端 Manager | `ls client/assets/ui/core/*.ts \| wc -l` |
 | 53 个管理端页面 / 54 条路由 | `ls admin/src/pages/*.tsx \| wc -l` / `grep -o 'path="[^"]*"' admin/src/App.tsx \| sort -u \| wc -l` |
