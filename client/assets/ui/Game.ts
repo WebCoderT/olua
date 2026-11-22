@@ -28,6 +28,7 @@ import MailStore from "./core/MailStore";
 import GuideStore from "./core/GuideStore";
 import GuideOverlay from "./components/GuideOverlay";
 import { GUIDE_SPOT } from "../types/guide";
+import { installSiblingSortGuard } from "./utils/node/SiblingSortGuard";
 import type { GuideSpot } from "../types/guide";
 import { SEX } from "../types/role";
 import ChatStore from "./core/ChatStore";
@@ -56,6 +57,10 @@ import { installNetwork } from "./utils/net/NetworkSetup";
 import { loadGameConfig } from "./utils/net/ConfigLoader";
 import { describeError } from "./utils/net/ApiError";
 const { ccclass, property } = _decorator;
+
+// 引擎坑兜底（#1184）：兄弟重排队列里残留已销毁节点会让 AFTER_UPDATE 抛异常、整页停在 Error 页。
+// 编辑器里单独跑 Game 场景时不会经过 Loading，所以这里也装一次（installSiblingSortGuard 幂等）
+installSiblingSortGuard();
 
 /**
  * 移动脚步音「起步一声 → 接循环」的间隔（毫秒，#685）
