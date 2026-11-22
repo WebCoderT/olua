@@ -28,7 +28,7 @@ const SERVER_DIR = path.join(__dirname, "..");
 const ENTRY = path.join(SERVER_DIR, "dist", "main.js");
 
 /** 图 1：三个 0 尺寸刷怪区，位置固定 */
-const MAP_ID = "1";
+const MAP_ID = "6"; // #1150 换图后图 1 只有 1872 宽，装不下 5×512px 的击退跑道（会被边界钳住）；图 6 是 5424×4352
 /** 撞飞靶：普通怪 */
 const PUSH_TARGET = { key: "1", x: 400, y: -400 };
 /** 群体靶（1009 用）：同区两只，稍微散开 */
@@ -125,8 +125,15 @@ function prepareWorld(dbPath) {
     // 怪不动也不打人：这一套只看玩家的出手（击杀脆怪那一刀除外，脆怪 hp=30 也还不了手）
     const row = db.prepare("SELECT monster_ai FROM runtime_params WHERE id = 1").get();
     const raw = row && row.monster_ai ? JSON.parse(row.monster_ai) : {};
+    // leashRange 也放大：默认 600px，被 5×512 推出去之后怪会掉头「回家」（朝 −x 走），
+    // 位移观测看到的就成了反方向。这一段只看「推得动」，不需要回巢拉扯。
     db.prepare("UPDATE runtime_params SET monster_ai = ? WHERE id = 1").run(
-      JSON.stringify({ ...raw, attackInterval: 60_000, idleMoveInterval: [60_000, 60_000] }),
+      JSON.stringify({
+        ...raw,
+        attackInterval: 60_000,
+        idleMoveInterval: [60_000, 60_000],
+        leashRange: 100_000,
+      }),
     );
   });
 }
@@ -292,7 +299,7 @@ function connect(url) {
     await sleep(1_200);
     // #859 起「没有位置记录」的角色只准进新手村 —— 这一套要进 1 图，
   // 准备段先按运营摆位把位置写进去（等价管理端 PATCH onMap，见 lib/place-role.cjs）
-  placeRolesAt(dbPath, "1");
+  placeRolesAt(dbPath, MAP_ID);
   const world = await session.joinWorld(MAP_ID);
     const monsters = ((world && world.monsters) || []).filter((mob) => mob.alive);
     const pushTarget = monsters.find((mob) => mob.monsterKey === PUSH_TARGET.key);
@@ -422,6 +429,10 @@ function connect(url) {
     if (!beforePos) throw new Error("靶子不在视野内，这一段没法观测位移");
     const aiBefore = session.aiFrames.length;
     const leavesBefore = session.leaves.length;
+    // pos 帧有 TTL（服务端据此判「这个观看者还在线」）：这一段要盯着 AI 帧看 1.5s，
+    // 期间必须持续上报位置，否则玩家被判离线 → 一帧 AI 都收不到（framesDelta = 0，
+    // 表现为「等待超时」而不是「怪没被推走」）
+    const keepPos = setInterval(() => session.sendPos(playerPos.x, playerPos.y, 1_000_000), 400);
     const pushed = await strike(pushTarget, 1);
     checkEqual(pushed.length, 1, "位移采样这一刀结算成功");
     // 不锁 pushDistance 的具体像素：那是技能配置（push_distance），改表就会红。
@@ -434,25 +445,43 @@ function connect(url) {
     //    （不写「位移 > 100px」这种跟技能配置绑死的阈值）
     // ② 或者它直接出了 3×3 视野、客户端收到 entityLeave —— 512px 的击退够把视野
     //    边缘的怪一步推出去，那是**推得够远**的另一种表现，不是「没推」
-    const afterPush = await waitFor(
-      "推完之后怪被推走（AI 帧位置更大，或被推出视野 leave 掉）",
-      async () => {
-        for (let i = aiBefore; i < session.aiFrames.length; i += 1) {
-          const entry = (session.aiFrames[i].monsters || []).find((m) => m.i === pushTarget.instanceId);
-          if (!entry) continue;
-          if (entry.x > beforePos.x) return { kind: "moved", entry };
+    /**
+     * 盯 AI 帧看位移（**不用 waitFor**：这条谓词允许「一帧都攒不到」，超时不是失败，
+     * 超时后还有快照兜底 —— 用 waitFor 会把兜底前的那段等待记成一条红）
+     */
+    const deadline = Date.now() + 2_500;
+    let afterPush = null;
+    while (!afterPush && Date.now() < deadline) {
+      for (let i = aiBefore; i < session.aiFrames.length; i += 1) {
+        const entry = (session.aiFrames[i].monsters || []).find((m) => m.i === pushTarget.instanceId);
+        if (entry && entry.x > beforePos.x) {
+          afterPush = { kind: "moved", entry };
+          break;
         }
-        if (session.leaves.slice(leavesBefore).includes(pushTarget.instanceId)) return { kind: "left" };
-        return null;
-      },
-      5_000,
-    );
-    if (afterPush) {
+      }
+      if (!afterPush && session.leaves.slice(leavesBefore).includes(pushTarget.instanceId)) {
+        afterPush = { kind: "left" };
+      }
+      if (!afterPush) await sleep(100);
+    }
+    // AI 帧只在「有变化」时才推：怪被推完就静止，可能一帧都攒不到（实测 framesDelta = 0，
+    // 表现成「等待超时」而不是「没推动」）。兜底拿一份权威快照（worldJoin 幂等）读当前位置
+    let settled = afterPush;
+    if (!settled) {
+      const snap = await session.joinWorld(MAP_ID);
+      const entry = snap && (snap.monsters || []).find((m) => m.instanceId === pushTarget.instanceId);
+      if (entry) settled = { kind: "snapshot", entry };
+    }
+    clearInterval(keepPos);
+    const afterPushFinal = settled;
+    if (afterPushFinal) {
       // 方向 = 施法者 → 怪（玩家在怪的 −x 侧，推走 = x 更大）
       check(
-        afterPush.kind === "left" || afterPush.entry.x > beforePos.x,
+        afterPushFinal.kind === "left" || afterPushFinal.entry.x > beforePos.x,
         "怪真的被推走且方向背离施法者",
-        afterPush.kind === "left" ? "被推出 3×3 视野（entityLeave）" : `x ${Math.round(beforePos.x)} → ${Math.round(afterPush.entry.x)}`,
+        afterPushFinal.kind === "left"
+          ? "被推出 3×3 视野（entityLeave）"
+          : `x ${Math.round(beforePos.x)} → ${Math.round(afterPushFinal.entry.x)}（${afterPushFinal.kind}）`,
       );
     }
     //#endregion

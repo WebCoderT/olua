@@ -227,6 +227,22 @@ function connect(url) {
     const adminToken = adminLogin.data && adminLogin.data.token;
     check(!!adminToken, "准备：管理员已登录", adminLogin.message);
 
+    // #1150 换图后 MAP_DEFAULTS 的 level 全是 0（门槛是运营数据），出厂 label 也换成素材后缀。
+    // 门槛是这套的主题 —— 起服后自己把图 2 / 图 10 的门槛配出来，label 一律现读配置、不锁名字。
+    const mapLabel = {};
+    for (const id of ["1", "2", "10"]) {
+      const row = (await api(baseUrl, "GET", `admin/maps/${id}`, { token: adminToken, zoneId: ADMIN_ZONE })).data;
+      mapLabel[id] = row.label;
+    }
+    for (const [id, level] of [["2", 40], ["10", 50]]) {
+      const row = (await api(baseUrl, "GET", `admin/maps/${id}`, { token: adminToken, zoneId: ADMIN_ZONE })).data;
+      const patched = await api(baseUrl, "PATCH", `admin/maps/${id}`, {
+        token: adminToken, zoneId: ADMIN_ZONE,
+        body: { label: row.label, type: row.type, level, combat: row.combat, soulOfWar: row.soulOfWar },
+      });
+      check(patched.code === 0, `准备：图 ${id} 进入门槛配成 ${level} 级（#1150 换图后出厂 level 全 0）`, patched.message);
+    }
+
     const registered = await api(baseUrl, "POST", "auth/register", { body: { username: "map_player", password: "pass1234" } });
     const playerToken = registered.data && registered.data.token;
     const created = await api(baseUrl, "POST", "roles", { token: playerToken, body: { name: "门槛测试", occupation: "1", sex: "1" } });
@@ -263,7 +279,7 @@ function connect(url) {
       const notStart = await session.waitForResult(() => session.sendJoin("1"), "1");
       check(!!notStart && notStart.ok === false, "新号 worldJoin(1) 被拒（不再「没有位置记录就放行」）", JSON.stringify(notStart));
       checkEqual(notStart && notStart.field, "start", "拒绝原因 = start（还没有落脚点，只准进新手村）");
-      checkEqual(notStart && notStart.mapLabel, "卧龙城", "带目标图名（提示要用）");
+      checkEqual(notStart && notStart.mapLabel, mapLabel["1"], "带目标图名（提示要用；现读配置，不锁名字）");
       checkEqual((await roleData()).mapAt, undefined, "被拒的那次不写位置");
 
       // 未知图：以前会放行并给它建一张空图 —— 拼错一个地图 id 就能进没有地形、没有怪、
@@ -284,7 +300,7 @@ function connect(url) {
 
     //#region 二、改包直发 worldJoin 换高级图 → 被拒
 
-    group("二、改包直发 worldJoin 换高级图（1 级 → 王城 40 级）");
+    group("二、改包直发 worldJoin 换高级图（1 级 → 图 2 的 40 级门槛）");
     {
       const worldsBefore = session.worlds.length;
       const before = session.results.length;
@@ -297,7 +313,7 @@ function connect(url) {
       checkEqual(rejected && rejected.field, "level", "拒绝原因指向等级");
       // 要求的等级来自那张图的配置（运营数据）；这里判「带出一个正的等级」，具体值由后面「改门槛即生效」那段证明
       check(Number(rejected && rejected.need) > 0, "拒绝里带出该图要求的等级", JSON.stringify(rejected && rejected.need));
-      checkEqual(rejected && rejected.mapLabel, "王城", "带图名（提示要用）");
+      checkEqual(rejected && rejected.mapLabel, mapLabel["2"], "带图名（提示要用；现读配置，不锁名字）");
       // 被拒不该落地：没有 world 帧，观看者身份也没登记
       await sleep(600);
       checkEqual(session.worlds.length, worldsBefore, "被拒后没有收到 world 帧（世界层没被惊动）");
@@ -313,7 +329,7 @@ function connect(url) {
       const rejected = await session.waitForResult(() => session.sendMapEnter("2"), "2");
       check(!!rejected && rejected.ok === false && rejected.field === "level" && Number(rejected.need) > 0, "mapEnter(2) 被拒且原因同 worldJoin", JSON.stringify(rejected));
       const allowed = await session.waitForResult(() => session.sendMapEnter("3"), "3");
-      check(!!allowed && allowed.ok === true, "mapEnter(3) 放行（雪域高原只要 1 级）", JSON.stringify(allowed));
+      check(!!allowed && allowed.ok === true, "mapEnter(3) 放行（图 3 出厂 level 0，不设门槛）", JSON.stringify(allowed));
       const same = await session.waitForResult(() => session.sendMapEnter("0"), "0");
       check(!!same && same.ok === true, "mapEnter(当前图) 放行", JSON.stringify(same));
       checkEqual((await roleData()).mapAt, "0", "意图不落地：位置仍是 0（只有 worldJoin 才写位置）");
@@ -327,12 +343,12 @@ function connect(url) {
     {
       // 运营摆位：PATCH onMap 同时承认这个位置（mapAt），否则「门槛认为他还在旧图」
       const placed = await api(baseUrl, "PATCH", `admin/roles/${roleId}`, { token: adminToken, zoneId: ADMIN_ZONE, body: { onMap: "2" } });
-      check(placed.code === 0, "运营把 1 级角色摆到王城（PATCH onMap=2）", placed.message);
+      check(placed.code === 0, "运营把 1 级角色摆到图 2（PATCH onMap=2）", placed.message);
       const placedData = await roleData();
       checkEqual(placedData.mapAt, "2", "摆位同时写了服务端位置：mapAt = 2");
 
       const joined = await session.joinWorld("2");
-      check(!!joined && joined.mapId === "2", "1 级角色进王城成功（位置与目标一致 → 不拦）");
+      check(!!joined && joined.mapId === "2", "1 级角色进图 2 成功（位置与目标一致 → 不拦）");
 
       // 运营再把门槛调高：站在里面的人重连进来仍然不拦（#573 的教训）
       const mapTwo = await api(baseUrl, "GET", "admin/maps/2", { token: adminToken, zoneId: ADMIN_ZONE });
@@ -341,7 +357,7 @@ function connect(url) {
         token: adminToken, zoneId: ADMIN_ZONE,
         body: { label: config.label, type: config.type, level: 99, combat: config.combat, soulOfWar: config.soulOfWar },
       });
-      check(raised.code === 0, "运营把王城进入等级调到 99", raised.message);
+      check(raised.code === 0, "运营把图 2 进入等级调到 99", raised.message);
 
       // 换一条连接（模拟重新登录）：登录进的是脚下那张图，不能被自己的门槛挡住
       session.socket.close();
@@ -349,7 +365,7 @@ function connect(url) {
       const relogin = await session.joinWorld("2");
       check(!!relogin && relogin.mapId === "2", "重连后 worldJoin(2) 仍然放行（运营调高门槛不锁人）", JSON.stringify(relogin && relogin.mapId));
 
-      // 但此时去别的图就按新门槛判：10 图（桃花源溪 50 级）依然进不去，且 2 图的门槛确实生效
+      // 但此时去别的图就按新门槛判：10 图（门槛已在准备段配成 50 级）依然进不去，且 2 图的门槛确实生效
       const other = await session.waitForResult(() => session.sendMapEnter("10"), "10");
       check(!!other && other.ok === false && other.field === "level" && Number(other.need) > 0, "mapEnter(10) 被拒（带出要求的等级）", JSON.stringify(other));
     }

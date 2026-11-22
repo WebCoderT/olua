@@ -137,11 +137,11 @@ function seedSpawnAreas(dbPath) {
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   );
   const now = Date.now();
-  // 图 1 的刷怪区压小压紧（#877 分成距离闸 800px）：怪刷在 (900..1100, -4100..-3900)，
-  // 贴身的 A/B/D/E 站 (980..1080, -4020..-3960) 距任何刷出点 ≤ 150px 稳分到；
-  // 远处的小号 F 站 (8000, -4000) 距任何点 > 800 稳分不到
-  insert.run("1", "赤焰斗鸡区", "1", 0, 4, 1000, -4000, 200, 200, now);
-  insert.run("2", "赤焰斗鸡区", "1", 0, 1, 640, -4096, 200, 200, now);
+  // #1150 换图后新图 1 只有 1872×1344（x∈[0,1872] y∈[-1344,0]），旧坐标 (1000,-4000) 已在图外
+  // （图外收不到 AOI 帧 / 分成距离闸也量不准）。怪区改摆 (900,-650)，贴身四号距任何刷出点 ≤150px；
+  // 远处的小号 F 站 (1700,-100)，距刷怪区最近点 ≈954px > 800 稳分不到
+  insert.run("1", "赤焰斗鸡区", "1", 0, 4, 900, -650, 200, 200, now);
+  insert.run("2", "赤焰斗鸡区", "1", 0, 1, 640, -900, 200, 200, now);
   // 旧图 1 的测试怪天生被动；#1084 后刷的是真 seed 的怪 1 赤焰斗鸡（主动怪）——
   // A/B/D/E 贴身站在怪堆里会被围殴打死，击杀段跟着红。与旧前提对齐：临时改成被动
   // （离线段复用本函数时库还没建 presentation 表，跳过即可 —— 那一段不杀怪）
@@ -149,6 +149,16 @@ function seedSpawnAreas(dbPath) {
     .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'monster_presentation'")
     .get();
   if (hasPresentation) db.exec("UPDATE monster_presentation SET aggressive = 0 WHERE id = '1'");
+  // 怪挨打也别还手：这几段只验分组 / 经验分成 / 距离闸，而图 0 重铺刷怪区后密度是最高档
+  // （33 区、峰值 776 只），1 级角色被还手的怪啃几口就会死 —— 一旦死掉，后面所有 cast
+  // 都被 `rejected: "dead"` 拒掉，整组击杀断言连锁红（实测 ~1/4 概率）。物攻压 0 即可。
+  // （离线段复用本函数时库还没建表，跳过 —— 那一段不杀怪）
+  const hasMonsters = db
+    .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'monsters'")
+    .get();
+  if (hasMonsters) {
+    db.prepare("UPDATE monsters SET physical_attack_min = 0, physical_attack_max = 0 WHERE id IN ('1', '2')").run();
+  }
   db.close();
 }
 
@@ -390,17 +400,17 @@ function snap(snapshot) {
     // 进图 + 位置上报：队伍的身份（角色 / 地图）与「在线」都来自在场表。
     // A/B/D/E 挤在刷怪区旁（怪刷在 900..1100, -4100..-3900）；F 站 (8000,-4000) —— 距任何刷出点都 > 800
     sA.send("worldJoin", { mapId: "1" });
-    sA.send("pos", { mapId: "1", x: 980, y: -4020, hp: 100, moving: false });
+    sA.send("pos", { mapId: "1", x: 880, y: -670, hp: 100, moving: false });
     sB.send("worldJoin", { mapId: "1" });
-    sB.send("pos", { mapId: "1", x: 1020, y: -4000, hp: 100, moving: false });
+    sB.send("pos", { mapId: "1", x: 920, y: -650, hp: 100, moving: false });
     sD.send("worldJoin", { mapId: "1" });
-    sD.send("pos", { mapId: "1", x: 1060, y: -3980, hp: 100, moving: false });
+    sD.send("pos", { mapId: "1", x: 960, y: -630, hp: 100, moving: false });
     sE.send("worldJoin", { mapId: "1" });
-    sE.send("pos", { mapId: "1", x: 1080, y: -3960, hp: 100, moving: false });
+    sE.send("pos", { mapId: "1", x: 980, y: -610, hp: 100, moving: false });
     sF.send("worldJoin", { mapId: "1" });
-    sF.send("pos", { mapId: "1", x: 8000, y: -4000, hp: 100, moving: false });
+    sF.send("pos", { mapId: "1", x: 1700, y: -100, hp: 100, moving: false });
     sC.send("worldJoin", { mapId: "2" });
-    sC.send("pos", { mapId: "2", x: 640, y: -4096, hp: 100, moving: false });
+    sC.send("pos", { mapId: "2", x: 640, y: -900, hp: 100, moving: false });
     const joined = await waitFor("六个会话都拿到所在图的权威快照", async () =>
       sA.worlds > 0 && sB.worlds > 0 && sC.worlds > 0 && sD.worlds > 0 && sE.worlds > 0 && sF.worlds > 0 ? true : null,
     );

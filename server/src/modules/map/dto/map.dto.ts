@@ -38,11 +38,27 @@ export class MapLayerDto {
   @ApiProperty({ description: "图层名（Tiled 里的图层名，如 ground / wall）" })
   name: string;
 
-  @ApiProperty({ description: "横向格数" })
+  @ApiProperty({
+    description: "图层类型：`tile` 瓦片层（width/height 是格数）/ `image` 图像层（#1150 真彩底图分页，width/height 是像素）",
+    enum: ["tile", "image"],
+    required: false,
+  })
+  type?: "tile" | "image";
+
+  @ApiProperty({ description: "横向尺寸（瓦片层 = 格数；图像层 = 像素）" })
   width: number;
 
-  @ApiProperty({ description: "纵向格数" })
+  @ApiProperty({ description: "纵向尺寸（瓦片层 = 格数；图像层 = 像素）" })
   height: number;
+
+  @ApiProperty({ description: "图像层在整图内的像素偏移（瓦片层恒为 0）", required: false })
+  offsetX?: number;
+
+  @ApiProperty({ description: "图像层在整图内的像素偏移（瓦片层恒为 0）", required: false })
+  offsetY?: number;
+
+  @ApiProperty({ description: "图像层的贴图文件名（瓦片层没有）", required: false })
+  source?: string;
 }
 
 /**

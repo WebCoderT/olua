@@ -405,8 +405,27 @@ function connect(url) {
 
     /** 进图播种：拿回服务端发的实例 id（#966 起不数只数 —— 播种密度是配置数据） */
     const world = await session.joinWorld("0");
-    const mobA = world && world.monsters[0];
-    const mobB = world && world.monsters.find((mob) => mob.instanceId !== (mobA && mobA.instanceId));
+    /**
+     * 目标挑「编号最小的那只」：图 0 重铺刷怪区后**第一个实例是 10 级 boss**（区按外圈先铺 boss），
+     * 而 boss 对 1 级角色有等级压制 —— 打上去 `damage: 0 / suppressed: true`，下面所有伤害
+     * 断言都会失真。编号最小的怪是 1 级，用它做靶子才测得到结算本身。
+     */
+    const mobA =
+      world && world.monsters.length
+        ? [...world.monsters].sort((a, b) => Number(a.monsterKey) - Number(b.monsterKey))[0]
+        : null;
+    /**
+     * 出手要带的怪物 key **跟着服务端发的那只走**（#966：怪物 key 是配置数据）。
+     * 换图 / 重铺刷怪区之后图 0 的第一个实例不一定是 1 号怪，写死 "1" 会让「未学习 /
+     * 结算」这些用例变成 unknown_target 的假红。
+     */
+    const mobKey = (mobA && mobA.monsterKey) || "1";
+    // 第二只靶子同样挑低编号（第一只之外的次小），别落在 10 级 boss 上（等级压制 → 0 伤害）
+    const mobB =
+      world &&
+      [...world.monsters]
+        .sort((a, b) => Number(a.monsterKey) - Number(b.monsterKey))
+        .find((mob) => mob.instanceId !== (mobA && mobA.instanceId));
     check(
       !!world &&
         Array.isArray(world.monsters) &&
@@ -432,19 +451,19 @@ function connect(url) {
 
     group("一、非法指令全被拒（不认识的技能 / 怪物 / 未学习）");
 
-    const badShape = await cast(session, { skillId: 12345, targetId: "t1", monsterKey: "1" }).promise;
+    const badShape = await cast(session, { skillId: 12345, targetId: "t1", monsterKey: mobKey }).promise;
     check(badShape && badShape.ok === false && badShape.code === "bad_request", "cast 字段不合法被拒（bad_request）", JSON.stringify(badShape));
 
-    const unknownSkill = await cast(session, { skillId: "9999", targetId: "t1", monsterKey: "1" }).promise;
+    const unknownSkill = await cast(session, { skillId: "9999", targetId: "t1", monsterKey: mobKey }).promise;
     check(unknownSkill && unknownSkill.ok === false && unknownSkill.code === "unknown_skill", "不存在的技能被拒（unknown_skill）", JSON.stringify(unknownSkill));
 
     const unknownMonster = await cast(session, { skillId: "1000", targetId: "t1", monsterKey: "no_such_monster" }).promise;
     check(unknownMonster && unknownMonster.ok === false && unknownMonster.code === "unknown_target", "不存在的怪物 key 被拒（unknown_target）", JSON.stringify(unknownMonster));
 
-    const fakeTarget = await cast(session, { skillId: "1000", targetId: "m1_999", monsterKey: "1" }).promise;
+    const fakeTarget = await cast(session, { skillId: "1000", targetId: "m1_999", monsterKey: mobKey }).promise;
     check(fakeTarget && fakeTarget.ok === false && fakeTarget.code === "unknown_target", "不存在的实例 id 被拒（unknown_target，世界权威后 id 由服务端发牌）", JSON.stringify(fakeTarget));
 
-    const notLearned = await cast(session, { skillId: "1000", targetId: mobA ? mobA.instanceId : "m1_1", monsterKey: "1" }).promise;
+    const notLearned = await cast(session, { skillId: "1000", targetId: mobA ? mobA.instanceId : "m1_1", monsterKey: mobKey }).promise;
     check(notLearned && notLearned.ok === false && notLearned.code === "skill_not_learned", "未学习的技能被拒（skill_not_learned）", JSON.stringify(notLearned));
 
     //#endregion
@@ -457,7 +476,7 @@ function connect(url) {
     check(saved.code === 0, "准备：角色已学会技能 1000（管理端结构化编辑）", saved.message);
 
     const target = mobA ? mobA.instanceId : "m1_1";
-    const firstShot = cast(session, { skillId: "1000", targetId: target, monsterKey: "1" });
+    const firstShot = cast(session, { skillId: "1000", targetId: target, monsterKey: mobKey });
     const first = await firstShot.promise;
     check(!!(first && first.ok), "首次出手结算成功", JSON.stringify(first));
     // 数值区间（[8, 16] 那种）不判：它由物攻区间与技能倍率算出来，改表就红（#966）。
@@ -470,7 +489,7 @@ function connect(url) {
     );
     check(!!first && first.ok && first.duplicate === false, "首次结算 duplicate = false");
 
-    const second = await cast(session, { skillId: "1000", targetId: target, monsterKey: "1" }).promise;
+    const second = await cast(session, { skillId: "1000", targetId: target, monsterKey: mobKey }).promise;
     // 算术自洽：第二击的余量 = 第一击报的血量 − 第二击报的伤害。不断「=== maxHp − 累计伤害」——
     // 那要把 `monsters` 表的血量搬进来比对，属配置数据
     check(!!(second && second.ok) && second.hp === first.hp - second.damage, "第二击在第一击的余量上继续扣（hp 自洽）", second && `hp=${second.hp}`);
@@ -486,7 +505,7 @@ function connect(url) {
     const settleCountBefore = session.settles.length;
     session.socket.send(JSON.stringify({
       type: "cast",
-      data: { castId: firstShot.id, skillId: "1000", targetId: mobA ? mobA.instanceId : "m1_1", monsterKey: "1" },
+      data: { castId: firstShot.id, skillId: "1000", targetId: mobA ? mobA.instanceId : "m1_1", monsterKey: mobKey },
     }));
     const replay = await waitFor(`castId=${firstShot.id} 重投后的新 settle`, async () => {
       const hits = session.settles
@@ -496,7 +515,7 @@ function connect(url) {
     });
     check(!!(replay && replay.ok && replay.duplicate === true), "重复的 castId 原样重发并标记 duplicate", JSON.stringify(replay));
     check(!!(replay && replay.ok) && replay.damage === (first.ok ? first.damage : -1), "重发的伤害与首次一致（没有重掷随机数）");
-    const afterReplay = await cast(session, { skillId: "1000", targetId: mobA ? mobA.instanceId : "m1_1", monsterKey: "1" }).promise;
+    const afterReplay = await cast(session, { skillId: "1000", targetId: mobA ? mobA.instanceId : "m1_1", monsterKey: mobKey }).promise;
     check(!!(afterReplay && afterReplay.ok) && afterReplay.hp === beforeIdempotent - afterReplay.damage, "重放没有多扣血（第三击只扣一次）", `hp=${afterReplay.hp}`);
 
     // #827：幂等账按时间过期，不再「只留 256 条、超出挤掉最旧」。先灌 300 条
@@ -506,14 +525,14 @@ function connect(url) {
     for (let i = 0; i < FLOOD; i++) {
       session.socket.send(JSON.stringify({
         type: "cast",
-        data: { castId: 900000 + i, skillId: "9999", targetId: mobA ? mobA.instanceId : "m1_1", monsterKey: "1" },
+        data: { castId: 900000 + i, skillId: "9999", targetId: mobA ? mobA.instanceId : "m1_1", monsterKey: mobKey },
       }));
     }
     await sleep(800);
     const settleCountAfterFlood = session.settles.length;
     session.socket.send(JSON.stringify({
       type: "cast",
-      data: { castId: firstShot.id, skillId: "1000", targetId: mobA ? mobA.instanceId : "m1_1", monsterKey: "1" },
+      data: { castId: firstShot.id, skillId: "1000", targetId: mobA ? mobA.instanceId : "m1_1", monsterKey: mobKey },
     }));
     const replayAfterFlood = await waitFor(`灌 ${FLOOD} 条后重放首发的 settle`, async () => {
       const hits = session.settles
@@ -534,7 +553,7 @@ function connect(url) {
     group("四、死亡由服务端判：恰好一次 killed，之后 target_dead");
     let deathHp = null;
     for (let i = 0; i < 60; i += 1) {
-      const result = await cast(session, { skillId: "1000", targetId: mobA ? mobA.instanceId : "m1_1", monsterKey: "1" }).promise;
+      const result = await cast(session, { skillId: "1000", targetId: mobA ? mobA.instanceId : "m1_1", monsterKey: mobKey }).promise;
       if (!result || !result.ok) break;
       if (result.killed) {
         deathHp = result.hp;
@@ -545,7 +564,7 @@ function connect(url) {
     // 「恰好报一次」不再数次数 —— 循环结构本身就保证了 ≤1，而重复报 killed 的根因是幂等，
     // 下面 target_dead + 重发同 castId 的两条已经覆盖
     check(deathHp === 0, "killed 那一帧的血量为 0（死亡态的定义）", `hp=${deathHp}`);
-    const deadCast = await cast(session, { skillId: "1000", targetId: mobA ? mobA.instanceId : "m1_1", monsterKey: "1" }).promise;
+    const deadCast = await cast(session, { skillId: "1000", targetId: mobA ? mobA.instanceId : "m1_1", monsterKey: mobKey }).promise;
     check(deadCast && deadCast.ok === false && deadCast.code === "target_dead", "死后再打报 target_dead", JSON.stringify(deadCast));
 
     //#endregion
@@ -557,7 +576,7 @@ function connect(url) {
     await sleep(100);
     // targetsReset 只清幂等账：重投同 castId 会**重新走一遍校验** —— 而世界状态不被清账影响，
     // 死掉的怪照旧拒绝（#34 时代「清账后满血重来」的语义随世界权威一起终结）
-    const replayAfterReset = await cast(session, { skillId: "1000", targetId: mobA ? mobA.instanceId : "m1_1", monsterKey: "1" }).promise;
+    const replayAfterReset = await cast(session, { skillId: "1000", targetId: mobA ? mobA.instanceId : "m1_1", monsterKey: mobKey }).promise;
     check(replayAfterReset && replayAfterReset.ok === false && replayAfterReset.code === "target_dead", "targetsReset 后重投被重新校验：死怪不因清账复活", JSON.stringify(replayAfterReset));
 
     // 世界快照如实：死亡的实例 alive=false 且带重生倒计时，活着的照常
@@ -587,7 +606,7 @@ function connect(url) {
     const settleCountBeforeStale = session.settles.length;
     session.socket.send(JSON.stringify({
       type: "cast",
-      data: { castId: firstShot.id, skillId: "1000", targetId: mobA ? mobA.instanceId : "m1_1", monsterKey: "1" },
+      data: { castId: firstShot.id, skillId: "1000", targetId: mobA ? mobA.instanceId : "m1_1", monsterKey: mobKey },
     }));
     const staleReplay = await waitFor(`castId=${firstShot.id} 换图往返后的重投`, async () => {
       const hits = session.settles
@@ -619,7 +638,7 @@ function connect(url) {
     const rejoinA = rejoined && rejoined.monsters.find((m) => m.instanceId === (mobA ? mobA.instanceId : "m1_1"));
     check(!!rejoinA && rejoinA.alive === false && rejoinA.hp === 0, "重连拿回的状态与断线前一致（断线不清世界状态）");
     // castSeq 继续往下走；重连后同一 castId 也没人记得它 —— 视为新出手（打活着的 mobB）
-    const reconnected = await cast(session, { skillId: "1000", targetId: mobB ? mobB.instanceId : "m1_2", monsterKey: "1" }).promise;
+    const reconnected = await cast(session, { skillId: "1000", targetId: mobB ? mobB.instanceId : "m1_2", monsterKey: mobB ? mobB.monsterKey : mobKey }).promise;
     check(!!(reconnected && reconnected.ok && reconnected.duplicate === false), "重连后结算上下文已清（同 castId 不算重复）", JSON.stringify(reconnected));
 
     //#endregion
@@ -924,8 +943,11 @@ function connect(url) {
     // 甚至短暂反向；「在移动（mv=true）且没远离目标」才是这条要证明的事。
     // 广播坐标是整数化的（#768），所以两边都取整再比 —— 浮点 hypot 会差出 1e-13 那种假红
     const distToTarget = (entry) => Math.round(Math.hypot(entry.x - far.x, entry.y - far.y));
+    const spawnDist = Math.round(Math.hypot(aiMob.x - far.x, aiMob.y - far.y));
+    // 广播坐标是整数化的（#768），AI 每拍步长也取整 —— **给 2px 容差**。这条要证的是
+    // 「没在远离」，不是像素级精确靠近；1px 的取整误差不该判成行为错误。
     check(
-      !!chaseEntry && distToTarget(chaseEntry) <= Math.round(Math.hypot(aiMob.x - far.x, aiMob.y - far.y)),
+      !!chaseEntry && distToTarget(chaseEntry) <= spawnDist + 2,
       "C：怪物朝玩家方向移动（在移动，且到目标的距离没有变大）",
       JSON.stringify({ entry: { x: chaseEntry && chaseEntry.x, y: chaseEntry && chaseEntry.y }, spawnDist: Math.round(Math.hypot(aiMob.x - far.x, aiMob.y - far.y)), nowDist: chaseEntry ? distToTarget(chaseEntry) : null }),
     );

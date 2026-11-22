@@ -225,6 +225,23 @@ function readRecords(dbPath) {
 }
 
 /**
+ * 清掉某张图的历史流水
+ *
+ * 这一段要验的是「条数闸留下最新的」，库里若还躺着前面几段写下的行，dropId 的序号
+ * （`d_<区>_<图>_<序号>`，按房间代际重排）就会与新一轮撞车，断言退化成「比 id」。
+ */
+function clearRecordsForMap(dbPath, zoneId, mapId) {
+  const { DatabaseSync } = require("node:sqlite");
+  const db = new DatabaseSync(dbPath);
+  try {
+    db.exec("PRAGMA busy_timeout = 10000");
+    db.prepare("DELETE FROM drop_records WHERE zone_id = ? AND map_id = ?").run(zoneId, mapId);
+  } finally {
+    db.close();
+  }
+}
+
+/**
  * 直接插一条「历史流水」，返回**这次插进去的行数**
  *
  * 天数闸要验的是「`created_at` 早于保留期的行会被删」，而 e2e 里等不了 7 天 ——
@@ -336,7 +353,13 @@ function insertHistoricalRecord(dbPath, { dropId, createdAt }) {
         if (snapshot && Array.isArray(snapshot.monsters) && snapshot.monsters.some((monster) => monster.alive)) break;
         await sleep(1_500);
       }
-      const mob = snapshot && Array.isArray(snapshot.monsters) ? snapshot.monsters.find((monster) => monster.alive) : null;
+      // 靶子挑「编号最小的活怪」：图 0 重铺刷怪区后第一个实例是 10 级 boss，
+      // 它的掉落表可能是空的（打死了也不掉东西），低编号怪才有掉落可断言
+      const mob = snapshot && Array.isArray(snapshot.monsters)
+        ? [...snapshot.monsters]
+            .filter((monster) => monster.alive)
+            .sort((a, b) => Number(a.monsterKey) - Number(b.monsterKey))[0] || null
+        : null;
       if (!mob) return null;
       await patchDropOf(mob.monsterKey);
       const stand = JSON.stringify({ type: "pos", data: { mapId, x: mob.x, y: mob.y, hp: 100 } });
@@ -579,7 +602,13 @@ function insertHistoricalRecord(dbPath, { dropId, createdAt }) {
         if (snapshot && Array.isArray(snapshot.monsters) && snapshot.monsters.some((monster) => monster.alive)) break;
         await sleep(1_500);
       }
-      const mob = snapshot && Array.isArray(snapshot.monsters) ? snapshot.monsters.find((monster) => monster.alive) : null;
+      // 靶子挑「编号最小的活怪」：图 0 重铺刷怪区后第一个实例是 10 级 boss，
+      // 它的掉落表可能是空的（打死了也不掉东西），低编号怪才有掉落可断言
+      const mob = snapshot && Array.isArray(snapshot.monsters)
+        ? [...snapshot.monsters]
+            .filter((monster) => monster.alive)
+            .sort((a, b) => Number(a.monsterKey) - Number(b.monsterKey))[0] || null
+        : null;
       if (!mob) return { dropId: "", picked: null };
       await patchDropOf(mob.monsterKey);
       const stand = JSON.stringify({ type: "pos", data: { mapId: "0", x: mob.x, y: mob.y, hp: 100 } });
@@ -601,6 +630,8 @@ function insertHistoricalRecord(dbPath, { dropId, createdAt }) {
       return { dropId: "", picked: null };
     };
 
+    // 先把这张图的历史流水清空：这一段只验「条数闸留最新」，不该跟前面几段写的行抢序号
+    clearRecordsForMap(dbPath, ADMIN_ZONE, "0");
     const written = [];
     for (let round = 0; round < 3; round += 1) {
       const result = await killAndPickAgain();

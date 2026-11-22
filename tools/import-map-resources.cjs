@@ -56,7 +56,13 @@ function readXmlAttribute(attributes, name) {
 // 图层解析（管理端地图页的只读视图）
 // ----------------------------------------------------------------------------//
 
-/** 瓦片图层：只取结构（名字 / 格数），`<data>` 里的几万个 gid 对管理端没有意义 */
+/**
+ * 图层结构（管理端地图页的只读视图）
+ *
+ * - 瓦片图层 `<layer>`：只取结构（名字 / 格数），`<data>` 里的几万个 gid 对管理端没有意义；
+ * - 图像图层 `<imagelayer>`（#1150）：真彩地图的底图是分页大图，取名字 / 像素尺寸 / 偏移。
+ *   带上 `type: "image"` 让读方知道 `width/height` 是像素不是格数。
+ */
 function parseLayers(xml) {
   const layers = [];
   const pattern = /<layer\b([^>]*)>/g;
@@ -68,6 +74,21 @@ function parseLayers(xml) {
       name: readXmlAttribute(attributes, "name"),
       width: Number(readXmlAttribute(attributes, "width")) || 0,
       height: Number(readXmlAttribute(attributes, "height")) || 0,
+    });
+  }
+  const imagePattern = /<imagelayer\b([^>]*)>([\s\S]*?)<\/imagelayer>/g;
+  while ((match = imagePattern.exec(xml))) {
+    const attributes = match[1];
+    const imageTag = /<image\b([^>]*)\/?>/.exec(match[2]);
+    if (!imageTag) continue;
+    layers.push({
+      name: readXmlAttribute(attributes, "name"),
+      type: "image",
+      width: Number(readXmlAttribute(imageTag[1], "width")) || 0,
+      height: Number(readXmlAttribute(imageTag[1], "height")) || 0,
+      offsetX: Number(readXmlAttribute(attributes, "offsetx")) || 0,
+      offsetY: Number(readXmlAttribute(attributes, "offsety")) || 0,
+      source: readXmlAttribute(imageTag[1], "source"),
     });
   }
   return layers;

@@ -134,7 +134,7 @@ function seedSpawnAreas(dbPath) {
     `INSERT INTO map_spawn_areas (map_id, name, monster_key, min, max, cx, cy, w, h, updated_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   );
-  insert.run("1", "监控区", "1", 0, 1, 1000, -2000, 400, 400, Date.now());
+  insert.run("1", "监控区", "1", 0, 1, 900, -650, 400, 400, Date.now()); // #1150 换图后图 1 是 1872×1344，旧值 1000,-2000 已在图外
   // 旧图 1 的测试怪天生被动（aggressive=0）；#1084 后刷的是真 seed 的怪 1 赤焰斗鸡（主动怪），
   // 玩家站在检测范围内会先触发「进入检测范围」，成因断言（被打之后记恨）就永远等不到 ——
   // 与旧前提对齐：把这只怪临时改成被动（AI 侧 1 秒 TTL 缓存）
@@ -318,6 +318,7 @@ async function main() {
   try {
     const base = server.baseUrl;
     seedSpawnAreas(dbPath);
+    await sleep(1_200); // aggressive=0 的直改要走 AI 侧 1 秒 TTL —— 不等的话怪会带着「主动」缓存生成，记恨成因就变成「进入检测范围」
 
     const rootToken = await registerAdmin(base, "monitorroot", "MonRoot#1");
     check(Boolean(rootToken), "准备：超管注册并登录成功");
@@ -337,7 +338,7 @@ async function main() {
     checkEqual((empty.body?.data?.events ?? []).length, 0, "events 是空数组");
     checkEqual(empty.body?.data?.cursor, 0, "cursor = 0（没有事件时也不会往前跳）");
     checkEqual(empty.body?.data?.mapId, "2", "回带 mapId（页面据此确认没串图）");
-    checkEqual(empty.body?.data?.width, 8192, "尺寸照旧给（没有快照也能画空底图）");
+    checkEqual(empty.body?.data?.width, 2784, "尺寸照旧给（没有快照也能画空底图；#1150 换图后图 2 是 2784×1920）");
 
     //#endregion
 
@@ -364,7 +365,7 @@ async function main() {
     const world = await session.joinWorld("1");
     checkEqual((world?.monsters ?? []).length, 1, "准备：地图 1 播种出 1 只怪（本套的刷怪区只有一行）");
     const target = world.monsters[0];
-    session.reportPos("1", 1000, -2000);
+    session.reportPos("1", 900, -650);
 
     const live = await waitFor(
       "地图 1 出现第一帧快照",
@@ -403,8 +404,8 @@ async function main() {
     );
     check(Boolean(playerInSnap), "场上玩家也在快照里（左边图上的方块就是它）");
     checkEqual(playerInSnap?.name, "看图的角色", "玩家名取角色名（不是登录账号名）");
-    checkEqual(playerInSnap?.x, 1000, "玩家 x = 刚上报的 pos 帧");
-    checkEqual(playerInSnap?.y, -2000, "玩家 y = 刚上报的 pos 帧（世界坐标，y 轴向上）");
+    checkEqual(playerInSnap?.x, 900, "玩家 x = 刚上报的 pos 帧");
+    checkEqual(playerInSnap?.y, -650, "玩家 y = 刚上报的 pos 帧（世界坐标，y 轴向上）");
     check(Number.isFinite(playerInSnap?.maxHp) && playerInSnap.maxHp > 0, "玩家血量上限也带上（画血量条要分母）");
 
     const staleAtLive = live.staleMs;
@@ -489,7 +490,7 @@ async function main() {
 
     // 走开 + 停报（3 秒后服务端判「位置上报超时」→ 结束追击，这条必须有，否则日志里全是没头没尾的追击）
     clearInterval(keepPos);
-    session.reportPos("1", 1000, -2000);
+    session.reportPos("1", 900, -650);
     const chaseEnd = await waitFor(
       "文字流出现「结束追击」",
       async () => {
@@ -538,7 +539,7 @@ async function main() {
     check(typeof killEvent?.at === "number" && killEvent.at > 0, "带事件时刻（页面显示几点几分）", String(killEvent?.at));
     check(Number.isFinite(killEvent?.x) && Number.isFinite(killEvent?.y), "带死亡点坐标（页面上「怪物位置」）", `(${Math.round(killEvent?.x)},${Math.round(killEvent?.y)})`);
     check(
-      Math.abs(killEvent.x - 1000) <= 400 && Math.abs(killEvent.y - -2000) <= 400,
+      Math.abs(killEvent.x - 900) <= 400 && Math.abs(killEvent.y - -650) <= 400,
       "死亡点落在刷怪区附近（同一套世界坐标，不是客户端屏幕坐标）",
     );
     check(killEvent?.respawnAt > killEvent?.at, "带下次刷新时刻（页面显示「下次刷新 HH:MM:SS」）", `${killEvent?.respawnAt - killEvent?.at}ms 后`);
@@ -572,7 +573,7 @@ async function main() {
     check(typeof corpse?.respawnInMs === "number" && corpse.respawnInMs >= 0, "带重生倒计时（图上圆心里那个秒数）", `${corpse?.respawnInMs}ms`);
     check(typeof corpse?.respawnAt === "number" && corpse.respawnAt > 0, "带绝对重生时刻");
     check(
-      Math.abs(corpse.x - 1000) <= 400 && Math.abs(corpse.y - -2000) <= 400,
+      Math.abs(corpse.x - 900) <= 400 && Math.abs(corpse.y - -650) <= 400,
       "尸体位置仍在刷怪区附近（不是被清成 0,0）",
       `(${Math.round(corpse?.x)},${Math.round(corpse?.y)})`,
     );

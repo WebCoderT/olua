@@ -330,7 +330,7 @@ function weekStartDay(now = Date.now()) {
     // 补一个点位到别的图（map 2）——「只摆在别的图」要变成拒绝，而不是继续放行
     const placed = await api(baseUrl, "POST", `admin/maps/2/npcs`, {
       token: adminToken, zoneId: ADMIN_ZONE,
-      body: { npcId: NPC_NO_POINT, cx: 4096, cy: -5312 },
+      body: { npcId: NPC_NO_POINT, cx: 1400, cy: -900 }, // #1150 换图后图 2 是 2784×1920，旧值 4096,-5312 已在图外
     });
     check(placed && placed.code === 0, "准备：给 9002 在 map 2 摆一个点位", placed && JSON.stringify(placed.message));
     standAtNpc(dbPath, roleId);

@@ -212,7 +212,7 @@ README（仓库根） → 01 总览（认路）
 | 73 个环境变量 | `grep -cE "^[A-Z_]+=" server/.env.example` |
 | 5 张具名掉落表 / 220 行每怪掉落 | `SELECT count(*) FROM drop_tables;` / `SELECT count(*) FROM monster_drops;` |
 | 掉落账本容量 256 | `grep -n "CAST_DEDUPE_CAPACITY" server/src/modules/realtime/combat-settlement.service.ts` |
-| 11 张图 / 64 刷怪区 / 12 NPC / 1538 碰撞盒 / 206 怪物实例 | `for t in maps map_spawn_areas map_npcs map_collisions world_monsters; do echo -n "$t "; sqlite3 server/data/olua.db "select count(*) from $t"; done` |
+| 62 张图 / 3 刷怪区 / 0 NPC / 4 碰撞盒 / 0 怪物实例 | `for t in maps map_spawn_areas map_npcs map_collisions world_monsters; do echo -n "$t "; sqlite3 server/data/olua.db "select count(*) from $t"; done` |
 | 地图资源 11 目录 / 11 tmx / 287 tsx / 68MB | `ls -d client/assets/resources/map/*/ \| wc -l`；`ls client/assets/resources/map/*/*.tsx \| wc -l`；`du -sh client/assets/resources/map` |
 | 29 个功能标签 / 476 条 issue 全覆盖 | `gh label list --limit 100 --json name --jq '[.[]\|select(.name\|startswith("功能:"))]\|length'`；覆盖核验见 [38 第六节](./38-issue标签体系.md) |
 

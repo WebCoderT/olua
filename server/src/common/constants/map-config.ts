@@ -132,8 +132,9 @@ export interface MapDefault {
 /**
  * 出厂种子 —— **一次搬迁的产物，不是第二份配置**
  *
- * 这 11 条是 #573 从客户端 `configs/map.ts` 原样搬过来的（迁移那天玩家看到的东西
- * 一个字都不变）。之后运营在管理端改的是 `maps` 表，**不是这里**：
+ * 这 62 条是 #1150 换图（旧 11 张客户端拼图 → 真彩地图 DT2101~DT2162）时重写的默认值：
+ * 名称取素材目录后缀（无后缀用 DT 编号），类型一律安全地图、无门槛，玩法条件由运营在
+ * 管理端逐张填。之后运营在管理端改的是 `maps` 表，**不是这里**：
  * seed 只在「库里没有这张图的行」时插入（`INSERT OR IGNORE`），改过之后重启不会被盖回来。
  *
  * 用数组而不是 `Record<string, …>`：键清单那种形状容易被误读成「又维护了一份地图表」，
@@ -144,17 +145,68 @@ export interface MapDefault {
  * 运营在管理端填上即可。
  */
 export const MAP_DEFAULTS: MapDefault[] = [
-  { id: "0", label: "新手村", type: MapType.NORMAL, level: 1, combat: 0, soulOfWar: 0 },
-  { id: "1", label: "卧龙城", type: MapType.NORMAL, level: 10, combat: 0, soulOfWar: 0 },
-  { id: "2", label: "王城", type: MapType.NORMAL, level: 40, combat: 0, soulOfWar: 0 },
-  { id: "3", label: "雪域高原", type: MapType.LEVEL, level: 1, combat: 0, soulOfWar: 0 },
-  { id: "4", label: "漠北草原", type: MapType.LEVEL, level: 10, combat: 0, soulOfWar: 0 },
-  { id: "5", label: "大漠戈壁", type: MapType.LEVEL, level: 20, combat: 0, soulOfWar: 0 },
-  { id: "6", label: "破碎神庙", type: MapType.LEVEL, level: 30, combat: 0, soulOfWar: 0 },
-  { id: "7", label: "灼烧之地", type: MapType.LEVEL, level: 35, combat: 0, soulOfWar: 0 },
-  { id: "8", label: "石林峡谷", type: MapType.LEVEL, level: 40, combat: 0, soulOfWar: 0 },
-  { id: "9", label: "水乡泽国", type: MapType.LEVEL, level: 45, combat: 0, soulOfWar: 0 },
-  { id: "10", label: "桃花源溪", type: MapType.LEVEL, level: 50, combat: 0, soulOfWar: 0 },
+  { id: "0", label: "泡点、擂台", type: MapType.NORMAL, level: 0, combat: 0, soulOfWar: 0 },
+  { id: "1", label: "泡点、擂台", type: MapType.NORMAL, level: 0, combat: 0, soulOfWar: 0 },
+  { id: "2", label: "泡点", type: MapType.NORMAL, level: 0, combat: 0, soulOfWar: 0 },
+  { id: "3", label: "泡点、新手村", type: MapType.NORMAL, level: 0, combat: 0, soulOfWar: 0 },
+  { id: "4", label: "大殿", type: MapType.NORMAL, level: 0, combat: 0, soulOfWar: 0 },
+  { id: "5", label: "DT2106", type: MapType.NORMAL, level: 0, combat: 0, soulOfWar: 0 },
+  { id: "6", label: "DT2107", type: MapType.NORMAL, level: 0, combat: 0, soulOfWar: 0 },
+  { id: "7", label: "DT2108", type: MapType.NORMAL, level: 0, combat: 0, soulOfWar: 0 },
+  { id: "8", label: "DT2109", type: MapType.NORMAL, level: 0, combat: 0, soulOfWar: 0 },
+  { id: "9", label: "擂台", type: MapType.NORMAL, level: 0, combat: 0, soulOfWar: 0 },
+  { id: "10", label: "DT2111", type: MapType.NORMAL, level: 0, combat: 0, soulOfWar: 0 },
+  { id: "11", label: "擂台", type: MapType.NORMAL, level: 0, combat: 0, soulOfWar: 0 },
+  { id: "12", label: "DT2113", type: MapType.NORMAL, level: 0, combat: 0, soulOfWar: 0 },
+  { id: "13", label: "DT2114", type: MapType.NORMAL, level: 0, combat: 0, soulOfWar: 0 },
+  { id: "14", label: "DT2115", type: MapType.NORMAL, level: 0, combat: 0, soulOfWar: 0 },
+  { id: "15", label: "BOSS地图", type: MapType.NORMAL, level: 0, combat: 0, soulOfWar: 0 },
+  { id: "16", label: "泡点、擂台", type: MapType.NORMAL, level: 0, combat: 0, soulOfWar: 0 },
+  { id: "17", label: "DT2118", type: MapType.NORMAL, level: 0, combat: 0, soulOfWar: 0 },
+  { id: "18", label: "DT2119", type: MapType.NORMAL, level: 0, combat: 0, soulOfWar: 0 },
+  { id: "19", label: "DT2120", type: MapType.NORMAL, level: 0, combat: 0, soulOfWar: 0 },
+  { id: "20", label: "DT2121", type: MapType.NORMAL, level: 0, combat: 0, soulOfWar: 0 },
+  { id: "21", label: "BOSS地图", type: MapType.NORMAL, level: 0, combat: 0, soulOfWar: 0 },
+  { id: "22", label: "BOSS地图", type: MapType.NORMAL, level: 0, combat: 0, soulOfWar: 0 },
+  { id: "23", label: "DT2124", type: MapType.NORMAL, level: 0, combat: 0, soulOfWar: 0 },
+  { id: "24", label: "泡点、擂台", type: MapType.NORMAL, level: 0, combat: 0, soulOfWar: 0 },
+  { id: "25", label: "泡点、擂台", type: MapType.NORMAL, level: 0, combat: 0, soulOfWar: 0 },
+  { id: "26", label: "DT2127", type: MapType.NORMAL, level: 0, combat: 0, soulOfWar: 0 },
+  { id: "27", label: "BOSS地图", type: MapType.NORMAL, level: 0, combat: 0, soulOfWar: 0 },
+  { id: "28", label: "BOSS地图", type: MapType.NORMAL, level: 0, combat: 0, soulOfWar: 0 },
+  { id: "29", label: "DT2130", type: MapType.NORMAL, level: 0, combat: 0, soulOfWar: 0 },
+  { id: "30", label: "泡点、擂台", type: MapType.NORMAL, level: 0, combat: 0, soulOfWar: 0 },
+  { id: "31", label: "DT2132", type: MapType.NORMAL, level: 0, combat: 0, soulOfWar: 0 },
+  { id: "32", label: "浴龙池", type: MapType.NORMAL, level: 0, combat: 0, soulOfWar: 0 },
+  { id: "33", label: "泡点、擂台", type: MapType.NORMAL, level: 0, combat: 0, soulOfWar: 0 },
+  { id: "34", label: "DT2135", type: MapType.NORMAL, level: 0, combat: 0, soulOfWar: 0 },
+  { id: "35", label: "DT2136", type: MapType.NORMAL, level: 0, combat: 0, soulOfWar: 0 },
+  { id: "36", label: "DT2137", type: MapType.NORMAL, level: 0, combat: 0, soulOfWar: 0 },
+  { id: "37", label: "泡点、擂台", type: MapType.NORMAL, level: 0, combat: 0, soulOfWar: 0 },
+  { id: "38", label: "泡点、擂台", type: MapType.NORMAL, level: 0, combat: 0, soulOfWar: 0 },
+  { id: "39", label: "泡点、擂台", type: MapType.NORMAL, level: 0, combat: 0, soulOfWar: 0 },
+  { id: "40", label: "DT2141", type: MapType.NORMAL, level: 0, combat: 0, soulOfWar: 0 },
+  { id: "41", label: "藏宝殿", type: MapType.NORMAL, level: 0, combat: 0, soulOfWar: 0 },
+  { id: "42", label: "BOSS地图", type: MapType.NORMAL, level: 0, combat: 0, soulOfWar: 0 },
+  { id: "43", label: "BOSS地图", type: MapType.NORMAL, level: 0, combat: 0, soulOfWar: 0 },
+  { id: "44", label: "DT2145", type: MapType.NORMAL, level: 0, combat: 0, soulOfWar: 0 },
+  { id: "45", label: "DT2146", type: MapType.NORMAL, level: 0, combat: 0, soulOfWar: 0 },
+  { id: "46", label: "DT2147", type: MapType.NORMAL, level: 0, combat: 0, soulOfWar: 0 },
+  { id: "47", label: "DT2148", type: MapType.NORMAL, level: 0, combat: 0, soulOfWar: 0 },
+  { id: "48", label: "泡点、擂台", type: MapType.NORMAL, level: 0, combat: 0, soulOfWar: 0 },
+  { id: "49", label: "DT2150", type: MapType.NORMAL, level: 0, combat: 0, soulOfWar: 0 },
+  { id: "50", label: "DT2151", type: MapType.NORMAL, level: 0, combat: 0, soulOfWar: 0 },
+  { id: "51", label: "DT2152", type: MapType.NORMAL, level: 0, combat: 0, soulOfWar: 0 },
+  { id: "52", label: "BOSS地图", type: MapType.NORMAL, level: 0, combat: 0, soulOfWar: 0 },
+  { id: "53", label: "DT2154", type: MapType.NORMAL, level: 0, combat: 0, soulOfWar: 0 },
+  { id: "54", label: "DT2155", type: MapType.NORMAL, level: 0, combat: 0, soulOfWar: 0 },
+  { id: "55", label: "DT2156", type: MapType.NORMAL, level: 0, combat: 0, soulOfWar: 0 },
+  { id: "56", label: "DT2157", type: MapType.NORMAL, level: 0, combat: 0, soulOfWar: 0 },
+  { id: "57", label: "DT2158", type: MapType.NORMAL, level: 0, combat: 0, soulOfWar: 0 },
+  { id: "58", label: "BOSS地图", type: MapType.NORMAL, level: 0, combat: 0, soulOfWar: 0 },
+  { id: "59", label: "DT2160", type: MapType.NORMAL, level: 0, combat: 0, soulOfWar: 0 },
+  { id: "60", label: "DT2161", type: MapType.NORMAL, level: 0, combat: 0, soulOfWar: 0 },
+  { id: "61", label: "泡点、擂台", type: MapType.NORMAL, level: 0, combat: 0, soulOfWar: 0 },
 ];
 
 /** 按 id 取出厂值（资源清单里有、这里没有的图返回 null，由调用方给空默认） */

@@ -136,7 +136,8 @@ async function registerAdmin(baseUrl, username, password) {
 
 /** 一个合法的矩形（世界坐标；0 号图 8192×8192，所以远在图内） */
 function boxOf(overrides = {}) {
-  return { name: "e2e 刷怪区", monsterKey: "1", count: 3, cx: 4000, cy: -4000, w: 256, h: 256, ...overrides };
+  // #1150 换图后新图 0 是 2304×1856（旧图 8192 宽，原默认 4000,-4000 已在图外、API 会拒）
+  return { name: "e2e 刷怪区", monsterKey: "1", count: 3, cx: 1200, cy: -900, w: 256, h: 256, ...overrides };
 }
 
 //#region 主流程
@@ -183,8 +184,8 @@ async function main() {
     checkEqual(area.monsterLabel !== "", true, "怪物名由服务端查表拼出（不要求客户端认识 key）");
     checkEqual(area.min, 0, "min 恒为 0（#852：密度目标的下限，count 只落 max）");
     checkEqual(area.max, 5, "max 落库 = 提交的数量（密度目标的基准）");
-    checkEqual(area.cx, 4000, "世界中心 x 原样存下");
-    checkEqual(area.cy, -4000, "世界中心 y 原样存下（y 轴向上，故为负）");
+    checkEqual(area.cx, 1200, "世界中心 x 原样存下");
+    checkEqual(area.cy, -900, "世界中心 y 原样存下（y 轴向上，故为负）");
     checkEqual(area.w, 256, "区域宽原样存下");
     checkEqual(area.h, 256, "区域高原样存下");
     checkEqual(area.inBounds, true, "服务端判它在图内");
@@ -247,7 +248,7 @@ async function main() {
       `越界文案说人话（实际：「${outside.body?.message ?? ""}」）`,
     );
     check(
-      String(outside.body?.message ?? "").includes("8192"),
+      String(outside.body?.message ?? "").includes("2304"),
       "文案里带上地图尺寸，方便判断是画错了还是这张图几何不对",
     );
 
@@ -265,7 +266,7 @@ async function main() {
 
     const updated = await api(base, "PATCH", `/api/admin/maps/0/spawn-areas/${area.id}`, {
       token,
-      body: boxOf({ name: "e2e 改名区", monsterKey: "2", count: 7, cx: 2000, cy: -2000, w: 384, h: 384 }),
+      body: boxOf({ name: "e2e 改名区", monsterKey: "2", count: 7, cx: 2000, cy: -1400, w: 384, h: 384 }),
     });
     checkEqual(updated.status, 200, "修改返回 200");
     checkEqual(updated.body?.data?.id, area.id, "改的是同一行（没有变成「删了再建」）");
@@ -289,7 +290,7 @@ async function main() {
 
     const keepName = await api(base, "PATCH", `/api/admin/maps/0/spawn-areas/${area.id}`, {
       token,
-      body: boxOf({ name: "e2e 改名区", monsterKey: "2", count: 7, cx: 2000, cy: -2000, w: 384, h: 384 }),
+      body: boxOf({ name: "e2e 改名区", monsterKey: "2", count: 7, cx: 2000, cy: -1400, w: 384, h: 384 }),
     });
     checkEqual(keepName.status, 200, "改回自己的名字不算重名（查重要排除自己那一行）");
 
