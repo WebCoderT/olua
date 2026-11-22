@@ -1,19 +1,18 @@
 /**
- * Tip 浮层与战斗反馈：错误提示/浮动提示/伤害飘字/受击红闪/技能提示/经验（含两个节流字段）
+ * Tip 浮层与战斗反馈：错误提示/浮动提示/伤害飘字/技能提示/经验（含节流字段）
  *
  * 由 GameUiHelper.ts 按域拆出（epic #1115 批次 1，机械搬移零行为变化）：
  * 原类 static 方法改为模块函数；调用方仍经 GameUiHelper 默认导出使用，本文件不直接消费。
+ * 受击全屏红闪已删（#1176）：受击反馈只留伤害飘字。
  */
 
 
-import { Animation, Canvas, Color, director, Graphics, isValid, Label, Node, Size, Sprite, tween, UIOpacity, UITransform, Vec2, Vec3 } from "cc";
+import { Animation, Canvas, Color, director, isValid, Label, Node, Size, Sprite, tween, UIOpacity, Vec2, Vec3 } from "cc";
 import UiHelper from ".././UiHelper";
 import { getText, TextParams } from "../../../configs/texts";
-import { hitScreenFlash } from "../../../configs/game-config";
 import { StatusBadge } from "../../../types/status";
 import { markClickThrough } from "../../utils/input/UiHit";
 import LayerManager from "../../core/LayerManager";
-import { designResolution } from "../../utils/layout/ScreenLayout";
 import { roleInfoBarLayout, tipsLayout, T, uiTheme } from "../../../configs/hudLayout";
 import { createGlassPlate } from "./dialog-builder";
 import { createVectorDot } from "./role-parts";
@@ -37,9 +36,6 @@ function floatUpFade(node: Node, riseDuration: number, riseY: number, fadeDurati
 
 /** 伤害飘字的错峰轮转序号（全局累计，见 showDamageText 与 uiTheme.floatingText.damage.offsetXs） */
 let damageTextSeq = 0;
-
-  /** 上一次受击红闪的时刻（毫秒时间戳，见 showHitScreenFlash 与 configs/effect.hitScreenFlash.cooldownMs） */
-let lastHitFlashAt = 0;
 
 
 
@@ -231,45 +227,6 @@ export function showCombatDelta(anchor: Node, delta: number) {
     const node = UiHelper.createLabel("combat_delta", text, up ? style.upColor : style.downColor, style.fontSize, new Vec2(style.spawnOffsetX, style.spawnOffsetY), style.size);
     anchor.addChild(node);
     floatUpFade(node, style.riseDuration, node.position.y + style.riseDistance, style.fadeDuration);
-  }
-
-  /**
-   * 受击屏幕反馈：全屏薄红闪一下（挂特效层、以相机为中心铺满可视区，淡入即淡出后自毁）
-   * 由怪物普攻命中玩家时调用（服务端 monster-ai 帧的 hits → MonsterManager.onPlayerServerHit，
-   * 接线在 Game.start）；按配置限频 —— 被围殴时不重触发，避免红屏常驻。参数见 configs/effect.hitScreenFlash
-   */
-export function showHitScreenFlash() {
-    const config = hitScreenFlash;
-    const now = Date.now();
-    if (now - lastHitFlashAt < config.cooldownMs) return;
-    lastHitFlashAt = now;
-    // 图层容器没进场景（登录/选角这类）或场景正在切换时不闪
-    const effectLayer = LayerManager.EffectLayer;
-    if (!effectLayer || !isValid(effectLayer) || !effectLayer.scene) return;
-    const camera = LayerManager.camera;
-    if (!camera || !isValid(camera.node)) return;
-    const size = designResolution;
-    const flash = new Node("hit_screen_flash");
-    const transform = flash.addComponent(UITransform);
-    const width = size.width * config.overscan;
-    const height = size.height * config.overscan;
-    transform.setContentSize(width, height);
-    const graphics = flash.addComponent(Graphics);
-    graphics.fillColor = config.color;
-    graphics.rect(-width / 2, -height / 2, width, height);
-    graphics.fill();
-    flash.addComponent(UIOpacity);
-    LayerManager.addToEffectLayer(flash);
-    // 屏幕中心即相机中心（与 AutoBattleTips 同一口径），铺在特效层最上但不盖 UI
-    flash.setWorldPosition(camera.node.getWorldPosition());
-    // 临时装饰：不参与点击命中，别让一闪而过的红层挡住世界点击
-    markClickThrough(flash);
-    const opacity = flash.getComponent(UIOpacity)!;
-    tween(opacity)
-      .to(config.fadeIn, { opacity: 255 * config.maxOpacity })
-      .to(config.fadeOut, { opacity: 0 })
-      .call(() => flash.destroy())
-      .start();
   }
 
   /**

@@ -5,14 +5,14 @@
  * 两层断言：
  * 1. 配置层（configs-sandbox 编真实表跑断言）：
  *    · 飘字错峰表 offsetXs 非空、全为有限数字（错峰轮转的前提）
- *    · 红闪配置字段齐全且取值合理（maxOpacity ∈ (0,1]、时长 > 0、限频 ≥ 0）
  *    · 角色侧受击动画链路真实可用：roleAnimationMap 每个方向都有 injured 片段（2 帧）、
  *      受击不需要武器（无武器外观也能播）、speedRate.INJURED 有效（受击时长口径存在）
  * 2. 接线层（读源码静态断言，跑不了引擎就盯住关键行）：
  *    · 受击动作的优先级守卫（施法/死亡不播）在 RoleDisplay.playInjured 里真实存在
  *    · RoleAppearance.playInjured 不改写宿主动作状态（否则受击会被 FINISHED 续播无限重播）
- *    · 受击出口 MonsterManager.onPlayerServerHit 由组合根 Game 接线（血量入账 + 飘字 + 红闪 +
+ *    · 受击出口 MonsterManager.onPlayerServerHit 由组合根 Game 接线（血量入账 + 飘字 +
  *      受击动作）并在卸载时摘除 —— #670 删掉本地怪物 AI 后，这是玩家挨打的唯一一条路
+ *    · #1176：全屏红闪已删 —— 受击反馈只留伤害飘字，红闪配置与调用不得回潮
  *
  * 用法：node client/tools/test-hit-feedback.cjs
  */
@@ -45,7 +45,7 @@ function main() {
   }
 
   const { uiTheme } = require(path.join(outDir, "configs/layout/theme.js"));
-  const { hitScreenFlash } = require(path.join(outDir, "configs/game-config.js"));
+  const gameConfigExports = require(path.join(outDir, "configs/game-config.js"));
   const { roleAnimationMap, actionNeedWeapon } = require(path.join(outDir, "configs/animation.js"));
   const { defaultRoleSpeedRate } = require(path.join(outDir, "configs/role.js"));
   console.log("\n=== 数值反馈：飘字错峰表（configs/layout/theme）===");
@@ -54,12 +54,9 @@ function main() {
   check(offsetXs.every((value) => typeof value === "number" && Number.isFinite(value)), "offsetXs 全为有限数字");
   check(new Set(offsetXs).size === offsetXs.length, "offsetXs 无重复（重复项等于浪费一个落点）");
 
-  console.log("\n=== 屏幕反馈：红闪配置（configs/game-config.hitScreenFlash）===");
-  check(!!hitScreenFlash.color, "color 已配置");
-  check(typeof hitScreenFlash.maxOpacity === "number" && hitScreenFlash.maxOpacity > 0 && hitScreenFlash.maxOpacity <= 1, "maxOpacity ∈ (0, 1]（薄红提示，不能盖住画面）");
-  check(hitScreenFlash.fadeIn > 0 && hitScreenFlash.fadeOut > 0, "淡入/淡出时长均 > 0");
-  check(hitScreenFlash.cooldownMs >= 0, "限频间隔 ≥ 0");
-  check(hitScreenFlash.overscan >= 1, "overscan ≥ 1（铺满可视区防边缘露底）");
+  console.log("\n=== 屏幕反馈：红闪已删（#1176 用户拍板：受击反馈只要伤害飘字）===");
+  check(!("hitScreenFlash" in gameConfigExports), "hitScreenFlash 配置已删（configs/game-config 不再导出）");
+  check(!/hitScreenFlash/.test(readSrc("ui/helpers/parts/tip-fx.ts")), "tip-fx 不再有红闪实现与节流字段");
 
   console.log("\n=== 动作反馈：受击动画链路（configs/animation + configs/role）===");
   const directions = ["up", "right_up", "right", "right_down", "down", "left_down", "left", "left_up"];
@@ -85,11 +82,12 @@ function main() {
   check(/MonsterManager\.onPlayerServerHit = /.test(gameSrc), "组合根 Game 接线受击出口");
   check(/MonsterManager\.onPlayerServerHit = null/.test(gameSrc), "场景卸载时摘除受击出口（避免跨场景残留）");
   // 受击三件套都挂在同一条回调上（#670：本地怪物 AI 删除后这是玩家挨打的唯一一条路）
-  check(/showHitScreenFlash\(\)/.test(gameSrc), "受击回调触发屏幕红闪");
+  check(/showDamageText\(this\.roleDisplay, hit\.d\)/.test(gameSrc), "受击回调飘伤害数字（label_damage 格式 -{value}，如 -100）");
+  check(!/showHitScreenFlash/.test(gameSrc), "受击回调不再触发屏幕红闪（#1176）");
   check(/playInjured\(\)/.test(gameSrc), "受击回调触发受击动作");
   check(/applyMonsterHit\(\{ hp: hit\.hp, maxHp: hit\.m \}\)/.test(gameSrc), "受击回调把服务端血量入账（客户端不自算；#768 帧缩写 m = maxHp）");
 
-  finish("PASS：受击反馈三件套配置齐全、受击动画链路真实可用、优先级守卫与组合根接线在位。");
+  finish("PASS：受击反馈配置齐全、受击动画链路真实可用、优先级守卫与组合根接线在位、红闪不回潮（#1176）。");
 }
 
 main();
