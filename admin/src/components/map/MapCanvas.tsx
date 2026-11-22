@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { mapPreview } from "../../api";
+import { monsterInfo, mapPreview } from "../../api";
 import type { MapCollision, MapDetail, MapNpc, MapRevivePoint, MapSpawnArea } from "../../api";
 import { gameResUrl } from "../GameImage";
 import { overflowText } from "./bounds";
@@ -380,6 +380,8 @@ export function MapCanvas({
           detail.spawnAreas.map((area) => {
             const box = tiledBoxOf(area);
             const active = area.id === selectedAreaId;
+            // 等级走管理端同步查表（登录后已拉好快照）；查不到配置就省掉 Lv 段，不显示假的
+            const levelText = spawnLevelTextOf(area.monsterKey);
             // 越界区域描警示色：容器 overflow-hidden 会把越出 viewBox 的部分裁掉，
             // 也就是「区域在图外」在画面上表现为「这块区域不见了」—— 只有颜色能提示。
             const color = active ? COLOR.spawnActive : area.inBounds ? COLOR.spawn : COLOR.spawnOutside;
@@ -403,7 +405,7 @@ export function MapCanvas({
                   strokeDasharray={area.inBounds && !active ? undefined : `${labelSize * 0.45} ${labelSize * 0.25}`}
                   vectorEffect="non-scaling-stroke"
                 >
-                  <title>{`#${area.id} ${area.name} · ${area.monsterLabel}(${area.monsterKey}) ${area.min}~${area.max} 只\n世界坐标 (${area.cx}, ${area.cy}) ${area.w}×${area.h}${area.inBounds ? "" : `\n⚠ 越出地图边界（${overflowText(area)}），超出的部分在画面上看不到`}`}</title>
+                  <title>{`#${area.id} ${area.name} · ${area.monsterLabel}(${area.monsterKey})${levelText} ${area.min}~${area.max} 只\n世界坐标 (${area.cx}, ${area.cy}) ${area.w}×${area.h}${area.inBounds ? "" : `\n⚠ 越出地图边界（${overflowText(area)}），超出的部分在画面上看不到`}`}</title>
                 </rect>
                 <text
                   x={box.x + box.width / 2}
@@ -416,7 +418,9 @@ export function MapCanvas({
                   paintOrder="stroke"
                   pointerEvents="none"
                 >
-                  {box.width / detail.width >= 0.12 ? `#${area.id} ${area.monsterLabel} ${area.min}~${area.max}` : `#${area.id}`}
+                  {box.width / detail.width >= 0.12
+                    ? `#${area.id} ${area.monsterLabel}${levelText}（${area.monsterKey}） ${area.min}~${area.max}`
+                    : `#${area.id}`}
                 </text>
               </g>
             );
@@ -658,5 +662,17 @@ export function worldPointOf(point: DrawPoint): { cx: number; cy: number } {
 /** 与画布像素对齐到两位小数：拖出来的 1234.5678 进库没有意义，也让 e2e 能直接对数字 */
 function round2(value: number): number {
   return Math.round(value * 100) / 100;
+}
+
+/**
+ * 刷怪区标签的等级段（#1169）：`Lv.2`，查不到怪物配置返回空串
+ *
+ * 等级来自管理端同步查表 `monsterInfo`（`GET /admin/game-data` 快照，登录后已加载）。
+ * 查不到就**省掉整段**而不是写 `Lv.?`——那种一眼「数据没到」的占位在图上挤成一团反而难读；
+ * 怪物名本身由服务端兜底成 key（`MapSpawnArea.monsterLabel`），所以名字段永远有内容。
+ */
+function spawnLevelTextOf(monsterKey: string): string {
+  const level = monsterInfo(monsterKey)?.level;
+  return level === undefined ? "" : ` Lv.${level}`;
 }
 

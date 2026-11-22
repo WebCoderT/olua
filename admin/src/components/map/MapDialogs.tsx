@@ -1,5 +1,6 @@
 import { Modal } from "../Modal";
 import { Badge, Button, EmptyState, tableClass, tdClass, thClass, theadClass } from "../ui";
+import { monsterInfo } from "../../api";
 import type { MapCollision, MapDetail, MapNpc, MapSpawnArea } from "../../api";
 import { overflowText, overflowTitle } from "./bounds";
 
@@ -242,6 +243,9 @@ export function SpawnAreasDialog({
                     <td className={rowClass(area.id === focusId)}>{area.name}</td>
                     <td className={rowClass(area.id === focusId)}>
                       {area.monsterLabel} <span className="text-ink-6">({area.monsterKey})</span>
+                      {monsterInfo(area.monsterKey)?.level !== undefined ? (
+                        <span className="ml-1.5 text-ink-6">Lv.{monsterInfo(area.monsterKey)!.level}</span>
+                      ) : null}
                     </td>
                     <td className={rowClass(area.id === focusId)}>
                       {area.min}~{area.max}
