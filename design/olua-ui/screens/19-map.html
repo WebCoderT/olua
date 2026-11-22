@@ -33,7 +33,9 @@
   animation:ringPulse var(--dur-4) var(--ease-in-out) infinite}
 /* 选线 */
 .chan{position:relative;width:420px;height:400px}
-/* 大陆传送官弹窗（mapTeleportDialogLayout：弹窗 600 宽，内容列 580、分组标题 + 4 列按钮网格 123×34 gap20/12） */
+/* 大陆传送官弹窗（mapTeleportDialogLayout：弹窗 600 宽，内容列 580、分组标题 + 4 列按钮网格 123×34 gap20/12）
+   实现口径（#1157）：客户端用的是通用弹窗 600×500（dialogFrame.size）而不是这里的 400 高，
+   内容区取 580×430 的滚动视口 —— 只补「能滚」这一条（62 张图一个分组十几行），不动弹窗高度。 */
 .tport{position:relative;width:600px;height:400px;display:none}
 .tport .groups{height:288px;overflow:auto;display:flex;flex-direction:column;gap:16px;padding-right:2px}
 .tport .gt{font-size:14px;height:20px;color:var(--gold-4);letter-spacing:.1em}

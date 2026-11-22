@@ -171,6 +171,9 @@ export function MapsPage() {
       setList((prev) => prev.map((item) => (item.id === saved.id ? { ...item, ...saved } : item)));
       setDetail((prev) => (prev ? { ...prev, ...saved } : prev));
       setForm(formOf(saved));
+      // 类型改成安全地图之后不能再画刷怪区（#1157）：保存成功就把绘制模式退掉，
+      // 免得画布还停在「拖框 = 建区」的状态、拖一下换一个服务端 400
+      if (saved.type === "0" && mode === "spawn") setMode("view");
       // 角色详情 / 实体选择器读的是本地名录缓存，保存成功要让它重新拉一次
       void refreshMapCatalog();
       toastSuccess(`「${saved.label}」的玩法配置已保存（服务端立即生效，客户端下次进游戏拉取）`);
@@ -183,6 +186,9 @@ export function MapsPage() {
 
   /** 切换画布模式（再点一次同一个模式 = 回到查看；换模式时把上一个模式的草稿清掉） */
   const switchMode = (next: CanvasMode) => {
+    // 安全地图不允许配怪（#1157）：「绘制刷怪区」按钮已置灰，这里再兜一层
+    // （同一个入口将来若被快捷键 / 脚本调到，也不该绕过）
+    if (next === "spawn" && detail?.type === "0") return;
     setMode((current) => (current === next ? "view" : next));
     setDraft(null);
     setEditArea(null);
@@ -438,6 +444,8 @@ export function MapsPage() {
                   </div>
                   <p className="mt-2 text-[11px] text-ink-5">
                     数值 <code className="text-ink-4">0</code> 表示<b>不限制</b>（安全地图就是 0 / 0 / 0）。已经在图里的玩家不受影响，新门槛从下一次进游戏开始生效。
+                    <br />
+                    类型选<b>安全地图</b>的图<b>不允许配刷怪区</b>（服务端会拒）：要在这张图上刷怪，类型必须是等级 / 战斗力 / 战魂地图；反过来，图里还有刷怪区时也改不回安全地图。
                   </p>
                 </Card>
 
@@ -494,7 +502,11 @@ export function MapsPage() {
                     />
                   </div>
                   <div className="mt-3 flex flex-wrap items-center gap-2">
-                    <ModeSwitch mode={mode} onChange={switchMode} />
+                    <ModeSwitch mode={mode} onChange={switchMode} spawnBlocked={detail.type === "0"} />
+                    {/* 安全地图不刷怪（#1157）：按钮置灰，旁边再说一句「怎么才能画」 */}
+                    {detail.type === "0" ? (
+                      <span className="text-[11px] text-warn-hi">安全地图不刷怪：要画刷怪区，先把上面的「类型」改成等级 / 战斗力 / 战魂地图</span>
+                    ) : null}
                     {/* 复活点是单值：有就允许清，没有就不显示（一个点了没反应的按钮比没有更糟） */}
                     {detail.revivePoint ? (
                       <Button variant="ghost" onClick={() => void clearRevivePoint()}>
@@ -695,10 +707,27 @@ export function MapsPage() {
  *
  * 四个分段按钮而不是四个独立按钮：它们是**互斥状态**，用互斥的样式说出来（当前那个高亮）。
  * 再点一次当前模式 = 回查看 —— 编辑态是「临时借用的画布」，用完该能一键还回去。
+ *
+ * `spawnBlocked`：安全地图（类型 = 安全地图）不允许配怪（#1157），「绘制刷怪区」直接置灰。
+ * 服务端也会拒（权威在那儿），这里只是让他在拖框之前就知道为什么不行。
  */
-function ModeSwitch({ mode, onChange }: { mode: CanvasMode; onChange: (next: CanvasMode) => void }) {
-  const items: Array<{ key: CanvasMode; label: string; active: string }> = [
-    { key: "spawn", label: "绘制刷怪区", active: "bg-warn/20 text-warn-hi" },
+function ModeSwitch({
+  mode,
+  onChange,
+  spawnBlocked,
+}: {
+  mode: CanvasMode;
+  onChange: (next: CanvasMode) => void;
+  spawnBlocked: boolean;
+}) {
+  const items: Array<{ key: CanvasMode; label: string; active: string; disabled?: boolean; hint?: string }> = [
+    {
+      key: "spawn",
+      label: "绘制刷怪区",
+      active: "bg-warn/20 text-warn-hi",
+      disabled: spawnBlocked,
+      hint: "安全地图不刷怪：先把上面的「类型」改成等级 / 战斗力 / 战魂地图",
+    },
     { key: "collision", label: "绘制碰撞盒", active: "bg-ember/20 text-ember-hi" },
     { key: "npc", label: "放置 NPC", active: "bg-gold/20 text-gold-hi" },
     { key: "revive", label: "设复活点", active: "bg-jade/20 text-jade-hi" },
@@ -709,12 +738,17 @@ function ModeSwitch({ mode, onChange }: { mode: CanvasMode; onChange: (next: Can
         <button
           key={item.key}
           type="button"
+          disabled={item.disabled}
           onClick={() => onChange(item.key)}
           className={`px-2.5 py-1.5 text-xs font-medium transition ${
-            mode === item.key ? item.active : "text-ink-3 hover:bg-surface-4/60"
+            item.disabled
+              ? "cursor-not-allowed text-ink-5 opacity-50"
+              : mode === item.key
+                ? item.active
+                : "text-ink-3 hover:bg-surface-4/60"
           }`}
           // 再点一次退出：提示写在 title 里，不给按钮换字（换字会让四个按钮宽度跳变）
-          title={mode === item.key ? "再点一次退出该模式" : undefined}
+          title={item.disabled ? item.hint : mode === item.key ? "再点一次退出该模式" : undefined}
         >
           {item.label}
         </button>

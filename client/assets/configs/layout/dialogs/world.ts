@@ -11,8 +11,14 @@ export const mapTeleportDialogLayout = {
   name: "map_teleport_dialog",
   title: "大陆传送官",
   eyebrow: "世界地图",
-  /** 内容列（纵向容器，高度自适应）：顶部位置与宽度（弹窗 600，左右各留 10） */
-  content: { name: "map_teleport_content", width: 580, top: 215, groupSpacing: 16 },
+  /**
+   * 内容视口（纵向滚动）：弹窗 600×500，标题金线下沿在中心上方 215。
+   *
+   * 视口宽 580（左右各留 10）、高 430（顶 215 → 底 -215，离弹窗底边还有 35）——
+   * 62 张图一个分组十几行，靠高度自适应会直接顶出屏幕，所以内容一律进滚动区：
+   * 分组标题与网格依次往下排，地图再多也只是滑。
+   */
+  content: { name: "map_teleport_content", position: new Vec2(0, 0), size: new Size(580, 430), groupSpacing: 16 },
   /** 分组标题 */
   groupTitle: { fontSize: T.fontSize.f14, height: 20, color: T.gold[4] },
   /** 地图按钮网格：每行 4 个（4 × 123 + 3 × 20 = 552，在 580 容器内水平居中） */

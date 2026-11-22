@@ -298,6 +298,23 @@ const idsOf = (monsters) => (monsters || []).map((monster) => monster.instanceId
     const adminToken = await registerAdmin(base, "reloadroot", "ReloadAdmin#1");
     check(Boolean(adminToken), "超管注册并登录成功");
 
+    //#region 准备：两张图改成可刷怪的类型（#1157）
+
+    // 出厂 62 张图全是安全地图，而安全地图不允许建 / 改刷怪区 —— 这套要在两张图上播种，
+    // 所以先把类型改成等级地图（门槛沿用原值，图 0/3 出厂都是 0 = 不限进，谁都不受影响）
+    group("准备：把两张图的类型改成等级地图（安全地图不允许配怪）");
+    for (const mapId of [HOME_MAP, AWAY_MAP]) {
+      const detail = (await api(base, "GET", `admin/maps/${mapId}`, { token: adminToken, zoneId: ADMIN_ZONE })).body?.data;
+      const saved = await api(base, "PATCH", `admin/maps/${mapId}`, {
+        token: adminToken,
+        zoneId: ADMIN_ZONE,
+        body: { label: detail.label, type: "1", level: detail.level, combat: detail.combat, soulOfWar: detail.soulOfWar },
+      });
+      checkEqual(saved.body?.data?.type, "1", `图 ${mapId} 已是等级地图`);
+    }
+
+    //#endregion
+
     //#region 准备：清空新手村的出厂刷怪区，只留一个「3 只 A 怪」的区
 
     group("准备：新手村只留一个刷怪区（3 只），另一张图保持出厂配置当对照");
