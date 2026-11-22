@@ -6,6 +6,12 @@
 
 ## 纪律（不可绕过）
 - issue → 分支 → PR（「关联 #n」，**不写 Closes**）→ 本地校验绿 → squash → 手动 `gh issue close`；长正文一律 `--body-file`。
+- **主仓库工作区必须停在 master**（用户 2026-11-23 重申）：**所有改动（含建分支、写 WIP）一律在
+  `~/worktrees/olua-<issue>`**，主仓库只做 `fetch` / `pull --ff-only` / `worktree` 管理，不许 checkout 别的分支、
+  不许留脏文件。发现违反就当场纠正：`git diff > /tmp/<issue>.patch` → 还原 → `checkout master` →
+  在 worktree 里 `apply` 补丁，**别丢别人的 WIP**。
+- **合并完成必同步本地**（用户 2026-11-23 明确）：每次 PR squash 合并后，**立刻** `git pull --ff-only`
+  把主仓库更到最新 master，删掉已合并的本地分支与 worktree，不许让本地停在旧提交上。
 - **不跑 CI（2026-11-14 拍板）**：门禁 = `make ci-static` + `make e2e-all`（+ `make client-test`），本地连跑 2~3 次绿就合；
   别为 CI 红反复改测试，也别推送去触发 CI。
 - **不自行构建客户端（2026-11-16 拍板）**：用户不说「你自己测试」就不许跑 Cocos 构建；改完代码 + `make client-check` 即停，构建与验证等用户开口。
