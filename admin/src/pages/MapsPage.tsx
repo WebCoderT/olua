@@ -34,6 +34,32 @@ interface MapForm {
   soulOfWar: string;
 }
 
+/**
+ * 列表筛选（#1179）：62 张图全量在前端，纯客户端过滤、输入即生效。
+ * 有 / 无 三态字段用 "yes" / "no" / "all"，与下拉选项一一对应。
+ */
+interface MapFilters {
+  /** 名称 / id 模糊匹配（空 = 不过滤） */
+  keyword: string;
+  /** 类型码；"all" = 全部 */
+  type: string;
+  /** 进入门槛：none 无门槛 / level 等级 / combat 战斗力 / soul 战魂 / all */
+  gate: "all" | "none" | "level" | "combat" | "soul";
+  spawn: "all" | "yes" | "no";
+  npc: "all" | "yes" | "no";
+  revive: "all" | "yes" | "no";
+  collision: "all" | "yes" | "no";
+}
+
+const EMPTY_FILTERS: MapFilters = { keyword: "", type: "all", gate: "all", spawn: "all", npc: "all", revive: "all", collision: "all" };
+
+/** 有 / 无 两态下拉的公共选项（刷怪区 / NPC / 复活点 / 碰撞盒四列共用） */
+const HAS_OPTIONS: Array<{ value: MapFilters["spawn"]; label: string }> = [
+  { value: "all", label: "全部" },
+  { value: "yes", label: "有" },
+  { value: "no", label: "无" },
+];
+
 /** 打开中的观测弹窗（页面主视图只留配置 + 地图，其余按需打开） */
 type DialogKey =
   | "layers"
@@ -114,6 +140,9 @@ export function MapsPage() {
   const [collisionDraft, setCollisionDraft] = useState<DrawBox | null>(null);
   /** 正在编辑的碰撞盒；与 collisionDraft 互斥 */
   const [editCollision, setEditCollision] = useState<MapCollision | null>(null);
+
+  /** 列表筛选条件（#1179，形状见 MapFilters） */
+  const [filters, setFilters] = useState<MapFilters>(EMPTY_FILTERS);
 
   const loadList = useCallback(async () => {
     setLoading(true);
@@ -318,6 +347,35 @@ export function MapsPage() {
   /** 越界数（区域 + 点位；服务端判，0 时页面保持安静，>0 才出红色徽标） */
   const outOfBounds = detail ? outOfBoundsCount(detail.spawnAreas) + pointsOutOfBounds(detail) : 0;
 
+  /**
+   * 筛选后的列表（#1179）。纯前端过滤：清单本来就一次全量下发，62 条不值得发请求；
+   * 门槛三选一互相独立（level/combat/soulOfWar > 0 = 配了该门槛），与类型筛选可叠加。
+   */
+  const filteredList = list.filter((item) => {
+    const keyword = filters.keyword.trim().toLowerCase();
+    if (keyword && !item.label.toLowerCase().includes(keyword) && !item.id.includes(keyword)) return false;
+    if (filters.type !== "all" && item.type !== filters.type) return false;
+    if (filters.gate === "none" && (item.level > 0 || item.combat > 0 || item.soulOfWar > 0)) return false;
+    if (filters.gate === "level" && item.level <= 0) return false;
+    if (filters.gate === "combat" && item.combat <= 0) return false;
+    if (filters.gate === "soul" && item.soulOfWar <= 0) return false;
+    if (filters.spawn !== "all" && (item.spawnAreaCount > 0) !== (filters.spawn === "yes")) return false;
+    if (filters.npc !== "all" && (item.npcPointCount > 0) !== (filters.npc === "yes")) return false;
+    if (filters.revive !== "all" && item.hasRevivePoint !== (filters.revive === "yes")) return false;
+    if (filters.collision !== "all" && (item.collisionCount > 0) !== (filters.collision === "yes")) return false;
+    return true;
+  });
+
+  /** 有条件在生效（决定「清空」按钮与标题里的 `n/m` 计数样式） */
+  const filterActive = JSON.stringify(filters) !== JSON.stringify(EMPTY_FILTERS);
+
+  /** 一键回到「不筛选」 */
+  const clearFilters = () => setFilters(EMPTY_FILTERS);
+
+  /** 有 / 无 三态下拉的统一 onChange（key 限定在四个 has 类字段上） */
+  const setHasFilter = (key: "spawn" | "npc" | "revive" | "collision", value: string) =>
+    setFilters({ ...filters, [key]: value as MapFilters["spawn"] });
+
   return (
     <div className="space-y-3">
       <PageHeader
@@ -332,6 +390,81 @@ export function MapsPage() {
           </>
         }
       />
+
+      {/* 列表筛选（#1179）：清单全量在前端，输入即过滤，所以没有「查询」按钮，只有清空 */}
+      {!loading ? (
+        <Card>
+          <div className="flex flex-wrap items-end gap-2">
+            <FormField width="w-44" label="名称 / id">
+              <Input
+                value={filters.keyword}
+                placeholder="模糊匹配"
+                onChange={(event) => setFilters({ ...filters, keyword: event.target.value })}
+              />
+            </FormField>
+            <FormField width="w-36" label="类型">
+              <Select value={filters.type} onChange={(event) => setFilters({ ...filters, type: event.target.value })}>
+                <option value="all">全部</option>
+                {types.map((group) => (
+                  <option key={group.type} value={group.type}>
+                    {group.label}
+                  </option>
+                ))}
+              </Select>
+            </FormField>
+            <FormField width="w-36" label="进入门槛">
+              <Select value={filters.gate} onChange={(event) => setFilters({ ...filters, gate: event.target.value as MapFilters["gate"] })}>
+                <option value="all">全部</option>
+                <option value="none">无门槛</option>
+                <option value="level">有等级门槛</option>
+                <option value="combat">有战斗力门槛</option>
+                <option value="soul">有战魂门槛</option>
+              </Select>
+            </FormField>
+            <FormField width="w-28" label="刷怪区">
+              <Select value={filters.spawn} onChange={(event) => setHasFilter("spawn", event.target.value)}>
+                {HAS_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </Select>
+            </FormField>
+            <FormField width="w-28" label="NPC 点位">
+              <Select value={filters.npc} onChange={(event) => setHasFilter("npc", event.target.value)}>
+                {HAS_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </Select>
+            </FormField>
+            <FormField width="w-28" label="复活点">
+              <Select value={filters.revive} onChange={(event) => setHasFilter("revive", event.target.value)}>
+                {HAS_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </Select>
+            </FormField>
+            <FormField width="w-28" label="碰撞盒">
+              <Select value={filters.collision} onChange={(event) => setHasFilter("collision", event.target.value)}>
+                {HAS_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </Select>
+            </FormField>
+            {filterActive ? (
+              <Button variant="outline" onClick={clearFilters}>
+                清空筛选
+              </Button>
+            ) : null}
+          </div>
+        </Card>
+      ) : null}
 
       {loading ? (
         <div className="flex items-center gap-2 py-10 text-xs text-ink-5">
@@ -353,12 +486,12 @@ export function MapsPage() {
           */}
           <div className="lg:relative">
             <Card
-              title={`地图（${list.length}）`}
+              title={`地图（${filteredList.length}${filterActive ? `/${list.length}` : ""}）`}
               description="按 id 升序，点一行看详情；列表超出卡体时在卡内滚动"
               className="flex flex-col overflow-hidden lg:absolute lg:inset-0 [&>div]:min-h-0 [&>div]:flex-1 [&>div]:overflow-y-auto"
             >
               <ul className="space-y-1">
-                {list.map((item) => {
+                {filteredList.map((item) => {
                   const active = item.id === selected;
                   return (
                     <li key={item.id}>
@@ -393,6 +526,9 @@ export function MapsPage() {
                   );
                 })}
               </ul>
+              {filteredList.length === 0 ? (
+                <p className="py-6 text-center text-xs text-ink-5">没有匹配的地图，换个筛选条件试试</p>
+              ) : null}
             </Card>
           </div>
 
