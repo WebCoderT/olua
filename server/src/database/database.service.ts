@@ -582,12 +582,11 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
         map_id      TEXT    PRIMARY KEY,
         label       TEXT    NOT NULL DEFAULT '',
         type        TEXT    NOT NULL DEFAULT '0',
+        -- 进入门槛只剩等级一项（#1177）：战斗力 / 战魂阶两列已删，别加回来
         level       INTEGER NOT NULL DEFAULT 0,
-        combat      INTEGER NOT NULL DEFAULT 0,
-        soul_of_war INTEGER NOT NULL DEFAULT 0,
         -- 地图几何（#655）：以前是 'map-sizes.generated.ts' / 'map-content.generated.ts'
         -- 两份编译期快照（源自 Tiled 的 TMX 头），现在只是这一行的列。
-        -- 判据没变：几何来自资源，运营不改它；运营改的是上面五行。
+        -- 判据没变：几何来自资源，运营不改它；运营改的是上面三行（名称 / 类型 / 进入等级）。
         grid_cols   INTEGER NOT NULL DEFAULT 0,
         grid_rows   INTEGER NOT NULL DEFAULT 0,
         tile_width  INTEGER NOT NULL DEFAULT 128,
@@ -1773,6 +1772,15 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
     // 会变成「一进图就飞到角上」）。存量库的初值由 migrate-map-points.cjs 从 TMX 对象组灌一次
     this.ensureColumn("maps", "revive_cx", "REAL");
     this.ensureColumn("maps", "revive_cy", "REAL");
+    // 地图类型收敛（#1177）：四类 → 两类（0 安全 / 1 野外）。复用码 "1"（原「等级地图」），
+    // 存量 "2"（战斗力）与 "3"（战魂）就地 UPDATE 成 "1"；两个门槛列没有消费方，删掉
+    // （不删的话 SELECT * 导出会把它们一直带进 config-sync.sql，下一个人以为是旋钮）。
+    if (this.hasTable("maps")) {
+      const converted = this.execute("UPDATE maps SET type = '1' WHERE type IN ('2', '3')").changes;
+      if (converted > 0) this.logger.log(`maps.type：${converted} 行战斗力 / 战魂地图 → 野外（#1177）`);
+      this.dropColumnIfExists("maps", "combat");
+      this.dropColumnIfExists("maps", "soul_of_war");
+    }
     // 曲线退场的收尾（#655）：老库的这两张表还留着就会让人以为「还能改」—— 每次启动顺手清掉
     // （`IF EXISTS`，新库就是两条空操作；数据早已由快照灌进 role_levels）
     this.db.exec("DROP TABLE IF EXISTS level_exps; DROP TABLE IF EXISTS growth_segments;");

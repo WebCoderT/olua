@@ -29623,7 +29623,7 @@
           },
           "type": {
             "type": "string",
-            "description": "类型码（0 安全 / 1 等级 / 2 战斗力 / 3 战魂）"
+            "description": "类型码（0 安全 / 1 野外）"
           },
           "typeLabel": {
             "type": "string",
@@ -29632,14 +29632,6 @@
           "level": {
             "type": "number",
             "description": "进入所需等级（0 = 不限）"
-          },
-          "combat": {
-            "type": "number",
-            "description": "进入所需战斗力（0 = 不限）"
-          },
-          "soulOfWar": {
-            "type": "number",
-            "description": "进入所需战魂阶（0 = 不限）"
           },
           "npcs": {
             "description": "NPC 点位（#672 起由后台放置；坐标已是世界坐标，客户端直接摆节点）",
@@ -29691,8 +29683,6 @@
           "type",
           "typeLabel",
           "level",
-          "combat",
-          "soulOfWar",
           "npcs",
           "revive",
           "spawnAreas",
@@ -29711,7 +29701,7 @@
           },
           "label": {
             "type": "string",
-            "description": "类型名（安全地图 / 等级地图 / 战斗力地图 / 战魂地图）"
+            "description": "类型名（安全地图 / 野外地图）"
           }
         },
         "required": [
@@ -33748,23 +33738,15 @@
           },
           "type": {
             "type": "string",
-            "description": "类型码（0 安全 / 1 等级 / 2 战斗力 / 3 战魂）"
+            "description": "类型码（0 安全 / 1 野外）"
           },
           "typeLabel": {
             "type": "string",
-            "description": "类型名（安全地图 / 等级地图 / 战斗力地图 / 战魂地图）"
+            "description": "类型名（安全地图 / 野外地图）"
           },
           "level": {
             "type": "number",
             "description": "进入所需等级（0 = 不限）"
-          },
-          "combat": {
-            "type": "number",
-            "description": "进入所需战斗力（0 = 不限）"
-          },
-          "soulOfWar": {
-            "type": "number",
-            "description": "进入所需战魂阶（0 = 不限）"
           },
           "src": {
             "type": "string",
@@ -33825,8 +33807,6 @@
           "type",
           "typeLabel",
           "level",
-          "combat",
-          "soulOfWar",
           "src",
           "cols",
           "rows",
@@ -34187,23 +34167,15 @@
           },
           "type": {
             "type": "string",
-            "description": "类型码（0 安全 / 1 等级 / 2 战斗力 / 3 战魂）"
+            "description": "类型码（0 安全 / 1 野外）"
           },
           "typeLabel": {
             "type": "string",
-            "description": "类型名（安全地图 / 等级地图 / 战斗力地图 / 战魂地图）"
+            "description": "类型名（安全地图 / 野外地图）"
           },
           "level": {
             "type": "number",
             "description": "进入所需等级（0 = 不限）"
-          },
-          "combat": {
-            "type": "number",
-            "description": "进入所需战斗力（0 = 不限）"
-          },
-          "soulOfWar": {
-            "type": "number",
-            "description": "进入所需战魂阶（0 = 不限）"
           },
           "src": {
             "type": "string",
@@ -34316,8 +34288,6 @@
           "type",
           "typeLabel",
           "level",
-          "combat",
-          "soulOfWar",
           "src",
           "cols",
           "rows",
@@ -35008,12 +34978,10 @@
           },
           "type": {
             "type": "string",
-            "description": "地图类型（0 安全地图 / 1 等级地图 / 2 战斗力地图 / 3 战魂地图）",
+            "description": "地图类型（0 安全地图 / 1 野外地图）",
             "enum": [
               "0",
-              "1",
-              "2",
-              "3"
+              "1"
             ]
           },
           "level": {
@@ -35021,26 +34989,12 @@
             "description": "进入所需等级（0 = 不限）",
             "minimum": 0,
             "maximum": 200
-          },
-          "combat": {
-            "type": "number",
-            "description": "进入所需战斗力（0 = 不限）",
-            "minimum": 0,
-            "maximum": 999999999
-          },
-          "soulOfWar": {
-            "type": "number",
-            "description": "进入所需战魂阶（0 = 不限）",
-            "minimum": 0,
-            "maximum": 999
           }
         },
         "required": [
           "label",
           "type",
-          "level",
-          "combat",
-          "soulOfWar"
+          "level"
         ]
       },
       "SaveSpawnAreaDto": {

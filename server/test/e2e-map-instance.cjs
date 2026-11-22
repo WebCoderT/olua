@@ -278,11 +278,11 @@ function connect(url) {
     // 进副本要过「进图门槛」（与 worldJoin 同一条判据在 entryOfRoom 之外）——本套不测门槛，
     // 所以把这张图的三项清零（准备动作，不是被测逻辑）
     const dungeonConfig = (await api(baseUrl, "GET", `admin/maps/${dungeon}`, { token: adminToken, zoneId: ADMIN_ZONE })).data;
-    if (Number(dungeonConfig.level) > 0 || Number(dungeonConfig.combat) > 0 || Number(dungeonConfig.soulOfWar) > 0) {
+    if (Number(dungeonConfig.level) > 0) {
       await api(baseUrl, "PATCH", `admin/maps/${dungeon}`, {
         token: adminToken,
         zoneId: ADMIN_ZONE,
-        body: { label: dungeonConfig.label, type: dungeonConfig.type, level: 0, combat: 0, soulOfWar: 0 },
+        body: { label: dungeonConfig.label, type: dungeonConfig.type, level: 0 },
       });
     }
     const rules = (await api(baseUrl, "GET", `admin/maps/${dungeon}/rules`, { token: adminToken, zoneId: ADMIN_ZONE })).data;

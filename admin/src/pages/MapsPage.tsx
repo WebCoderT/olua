@@ -22,16 +22,14 @@ import { mapsApi, refreshMapCatalog } from "../api";
 import type { MapCollision, MapDetail, MapNpc, MapSpawnArea, MapSummary, MapTypeGroup, SaveMapConfig } from "../api";
 import { toastSuccess } from "../store/toast";
 
-/** 类型码（服务端生成的字面量联合："0" 安全 / "1" 等级 / "2" 战斗力 / "3" 战魂） */
+/** 类型码（服务端生成的字面量联合："0" 安全 / "1" 野外；#1177 收敛） */
 type MapTypeCode = SaveMapConfig["type"];
 
-/** 编辑表单的形状（= 服务端 `SaveMapConfigDto` 的五个字段） */
+/** 编辑表单的形状（= 服务端 `SaveMapConfigDto` 的三个字段；门槛只剩等级，#1177） */
 interface MapForm {
   label: string;
   type: MapTypeCode;
   level: string;
-  combat: string;
-  soulOfWar: string;
 }
 
 /**
@@ -89,7 +87,7 @@ const DEFAULT_LAYERS: MapLayerVisibility = { spawn: true, npc: true, revive: tru
  *
  * | 块 | 能不能改 | 改了怎么生效 |
  * |---|---|---|
- * | 名称 / 类型 / 进入等级 / 进入战斗力 / 进入战魂阶 | **能改**（`PATCH /admin/maps/:id`） | 立即（服务端进图校验读同一张表；客户端下次进游戏拉快照） |
+ * | 名称 / 类型 / 进入等级 | **能改**（`PATCH /admin/maps/:id`；门槛只剩等级，#1177） | 立即（服务端进图校验读同一张表；客户端下次进游戏拉快照） |
  * | 刷怪区 / NPC 点位 / 复活点 / 碰撞盒 | **能改**（在图上拖框 / 点放） | 客户端下次进游戏拉快照（世界播种等该图分域重新加载） |
  * | 图层 / 场上怪物 | 只读 | 改 TMX → 跑导入工具 → 重打包客户端 |
  *
@@ -193,8 +191,6 @@ export function MapsPage() {
         label: form.label.trim(),
         type: form.type,
         level: toInt(form.level),
-        combat: toInt(form.combat),
-        soulOfWar: toInt(form.soulOfWar),
       });
       // 服务端返回的是保存后那一行（含计数）—— 直接铺回列表与详情，不额外再拉一次
       setList((prev) => prev.map((item) => (item.id === saved.id ? { ...item, ...saved } : item)));
@@ -602,7 +598,7 @@ export function MapsPage() {
                     </div>
                   }
                 >
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
                     <FormField label="地图名称">
                       <Input value={form.label} maxLength={24} placeholder="如：卧龙城" onChange={(event) => setForm({ ...form, label: event.target.value })} />
                     </FormField>
@@ -618,17 +614,11 @@ export function MapsPage() {
                     <FormField label="进入等级（0 = 不限）">
                       <Input type="number" min={0} max={200} value={form.level} onChange={(event) => setForm({ ...form, level: event.target.value })} />
                     </FormField>
-                    <FormField label="进入战斗力（0 = 不限）">
-                      <Input type="number" min={0} value={form.combat} onChange={(event) => setForm({ ...form, combat: event.target.value })} />
-                    </FormField>
-                    <FormField label="进入战魂阶（0 = 不限）">
-                      <Input type="number" min={0} value={form.soulOfWar} onChange={(event) => setForm({ ...form, soulOfWar: event.target.value })} />
-                    </FormField>
                   </div>
                   <p className="mt-2 text-[11px] text-ink-5">
-                    数值 <code className="text-ink-4">0</code> 表示<b>不限制</b>（安全地图就是 0 / 0 / 0）。已经在图里的玩家不受影响，新门槛从下一次进游戏开始生效。
+                    数值 <code className="text-ink-4">0</code> 表示<b>不限制</b>（安全地图就是 0）。门槛只剩等级一项（#1177 删了战斗力 / 战魂阶）；已经在图里的玩家不受影响，新门槛从下一次进游戏开始生效。
                     <br />
-                    类型选<b>安全地图</b>的图<b>不允许配刷怪区</b>（服务端会拒）：要在这张图上刷怪，类型必须是等级 / 战斗力 / 战魂地图；反过来，图里还有刷怪区时也改不回安全地图。
+                    类型选<b>安全地图</b>的图<b>不允许配刷怪区</b>（服务端会拒）：要在这张图上刷怪，类型必须是野外地图；反过来，图里还有刷怪区时也改不回安全地图。
                   </p>
                 </Card>
 
@@ -691,7 +681,7 @@ export function MapsPage() {
                     <ModeSwitch mode={mode} onChange={switchMode} spawnBlocked={detail.type === "0"} />
                     {/* 安全地图不刷怪（#1157）：按钮置灰，旁边再说一句「怎么才能画」 */}
                     {detail.type === "0" ? (
-                      <span className="text-[11px] text-warn-hi">安全地图不刷怪：要画刷怪区，先把上面的「类型」改成等级 / 战斗力 / 战魂地图</span>
+                      <span className="text-[11px] text-warn-hi">安全地图不刷怪：要画刷怪区，先把上面的「类型」改成野外地图</span>
                     ) : null}
                     {/* 复活点是单值：有就允许清，没有就不显示（一个点了没反应的按钮比没有更糟） */}
                     {detail.revivePoint ? (
@@ -861,6 +851,7 @@ export function MapsPage() {
           open={dialog === "rules"}
           mapId={detail.id}
           mapLabel={detail.label}
+          mapType={detail.type}
           onClose={() => setDialog(null)}
         />
       ) : null}
@@ -912,7 +903,7 @@ function ModeSwitch({
       label: "绘制刷怪区",
       active: "bg-warn/20 text-warn-hi",
       disabled: spawnBlocked,
-      hint: "安全地图不刷怪：先把上面的「类型」改成等级 / 战斗力 / 战魂地图",
+      hint: "安全地图不刷怪：先把上面的「类型」改成野外地图",
     },
     { key: "collision", label: "绘制碰撞多边形", active: "bg-ember/20 text-ember-hi" },
     { key: "npc", label: "放置 NPC", active: "bg-gold/20 text-gold-hi" },
@@ -984,8 +975,6 @@ function formOf(row: MapSummary): MapForm {
     label: row.label,
     type: row.type as MapTypeCode,
     level: String(row.level),
-    combat: String(row.combat),
-    soulOfWar: String(row.soulOfWar),
   };
 }
 
@@ -997,13 +986,7 @@ function toInt(value: string): number {
 
 /** 两份表单是否等价（数字按数值比：`"10"` 与 `"010"` 存进去是同一个值） */
 function sameForm(a: MapForm, b: MapForm): boolean {
-  return (
-    a.label.trim() === b.label.trim() &&
-    a.type === b.type &&
-    toInt(a.level) === toInt(b.level) &&
-    toInt(a.combat) === toInt(b.combat) &&
-    toInt(a.soulOfWar) === toInt(b.soulOfWar)
-  );
+  return a.label.trim() === b.label.trim() && a.type === b.type && toInt(a.level) === toInt(b.level);
 }
 
 /** 与画布像素对齐到两位小数（拖动 / 点按算出来的 1234.5678 进库没有意义，也让 e2e 能直接对数字） */

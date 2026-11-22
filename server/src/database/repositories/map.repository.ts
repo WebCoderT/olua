@@ -23,17 +23,15 @@ export class MapRepository {
   /** seed 一行（已有同 id 的行则跳过 —— 运营改过的值不会被重启盖回来） */
   seedRow(row: MapRow): void {
     this.db.run(
-      `INSERT OR IGNORE INTO maps (map_id, label, type, level, combat, soul_of_war,
+      `INSERT OR IGNORE INTO maps (map_id, label, type, level,
          grid_cols, grid_rows, tile_width, tile_height, pixel_width, pixel_height, content,
          updated_by, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         row.map_id,
         row.label,
         row.type,
         row.level,
-        row.combat,
-        row.soul_of_war,
         row.grid_cols,
         row.grid_rows,
         row.tile_width,
@@ -84,12 +82,12 @@ export class MapRepository {
     return this.db.get<MapRow>("SELECT * FROM maps WHERE map_id = ?", [mapId]) ?? null;
   }
 
-  /** 改内容（不做部分更新：一张图的五个字段是联动的一组状态，分字段更新会留下上一次的其它字段） */
+  /** 改内容（不做部分更新：一张图的三个字段是联动的一组状态，分字段更新会留下上一次的其它字段） */
   update(row: MapRow): void {
     this.db.run(
-      `UPDATE maps SET label = ?, type = ?, level = ?, combat = ?, soul_of_war = ?, updated_by = ?, updated_at = ?
+      `UPDATE maps SET label = ?, type = ?, level = ?, updated_by = ?, updated_at = ?
        WHERE map_id = ?`,
-      [row.label, row.type, row.level, row.combat, row.soul_of_war, row.updated_by, row.updated_at, row.map_id],
+      [row.label, row.type, row.level, row.updated_by, row.updated_at, row.map_id],
     );
   }
 

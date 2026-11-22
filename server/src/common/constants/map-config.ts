@@ -18,20 +18,18 @@
  */
 
 /**
- * 地图类型（码值与历史上的客户端 `types/map.MapType` 逐值一致）
+ * 地图类型（#1177 收敛后只剩两种）
  *
- * 注意 `SOUL_OF_WAR` 在旧客户端枚举里是**数字** 3、其余是字符串 —— 那种不一致是
- * 历史包袱，不是语义：落库与下发一律按字符串 `"3"`，省掉「这里要 String() 那里不要」。
+ * 历史（#1177 前）有四类：安全 / 等级 / 战斗力 / 战魂（码 `"0"`..`"3"`）。
+ * 收敛时**复用了码 `"1"`**（原来是等级地图）：存量 `"2"`（战斗力）与 `"3"`（战魂）
+ * 由启动迁移 UPDATE 成 `"1"`，本来就是 `"1"` 的行原地变成野外 —— 不用二次改写。
+ * 进入门槛只保留「进入等级」；战斗力与战魂阶两列已删（#1177），别再加回来。
  */
 export const MapType = {
-  /** 安全地图：无进入条件（主城 / 新手村） */
+  /** 安全地图：不刷怪、不允许 PK、无门槛（主城 / 新手村） */
   NORMAL: "0",
-  /** 等级地图：达到等级才能进 */
-  LEVEL: "1",
-  /** 战斗力地图：达到战力才能进 */
-  COMBAT: "2",
-  /** 战魂地图：达到战魂阶才能进 */
-  SOUL_OF_WAR: "3",
+  /** 野外地图：无限制 —— 可刷怪、可开 PK（`map_rules.allow_pk`）、最多一道进入等级门槛 */
+  WILD: "1",
 } as const;
 
 export type MapTypeValue = (typeof MapType)[keyof typeof MapType];
@@ -42,9 +40,7 @@ export const MAP_TYPE_VALUES: MapTypeValue[] = Object.values(MapType);
 /** 类型中文名（接口与界面展示的唯一来源） */
 export const MAP_TYPE_LABELS: Record<MapTypeValue, string> = {
   [MapType.NORMAL]: "安全地图",
-  [MapType.LEVEL]: "等级地图",
-  [MapType.COMBAT]: "战斗力地图",
-  [MapType.SOUL_OF_WAR]: "战魂地图",
+  [MapType.WILD]: "野外地图",
 };
 
 /** 传送弹窗的分组顺序（= 上面的声明顺序；快照原样下发，客户端不再自己排） */
@@ -54,18 +50,14 @@ export const MAP_TYPE_GROUPS: Array<{ type: MapTypeValue; label: string }> = MAP
 }));
 
 /**
- * 进入条件的取值上限
+ * 进入条件的取值上限（#1177 后只剩「进入等级」一项）
  *
- * 只是拦「明显拍错」（把进入等级写成 999、把战魂阶写成 500 这类）：
- * 等级上限与角色的等级上限同源（`GROWTH_SCALARS.roleMaxLevel` 出厂 200，
- * 这里给一点余量到 500 反而会放过错误值，所以直接按 200 封顶）；
- * 战力是派生值（血量 × 10 起步，几十万很正常），上限给 9 位；
- * 战魂阶的满阶在 `souls` 表里（37），给到 999 是为了运营将来加阶不用改这里。
+ * 只是拦「明显拍错」（把进入等级写成 999 这类）：等级上限与角色的等级上限同源
+ * （`GROWTH_SCALARS.roleMaxLevel` 出厂 200，这里给一点余量到 500 反而会放过错误值，
+ * 所以直接按 200 封顶）。战斗力 / 战魂阶两个门槛已随 #1177 删掉，别在这里加回来。
  */
 export const MAP_ENTER_LIMITS = {
   level: { min: 0, max: 200 },
-  combat: { min: 0, max: 999_999_999 },
-  soulOfWar: { min: 0, max: 999 },
 } as const;
 
 /** 地图名称的最大长度（超出就是粘错了东西，不是「名字长」） */
@@ -130,8 +122,6 @@ export interface MapDefault {
   label: string;
   type: MapTypeValue;
   level: number;
-  combat: number;
-  soulOfWar: number;
 }
 
 /**
@@ -150,68 +140,68 @@ export interface MapDefault {
  * 运营在管理端填上即可。
  */
 export const MAP_DEFAULTS: MapDefault[] = [
-  { id: "0", label: "望星台", type: MapType.NORMAL, level: 0, combat: 0, soulOfWar: 0 },
-  { id: "1", label: "八卦台", type: MapType.LEVEL, level: 0, combat: 0, soulOfWar: 0 },
-  { id: "2", label: "青石校场", type: MapType.LEVEL, level: 11, combat: 0, soulOfWar: 0 },
-  { id: "3", label: "百旗围场", type: MapType.LEVEL, level: 0, combat: 0, soulOfWar: 0 },
-  { id: "4", label: "阎罗大殿", type: MapType.LEVEL, level: 21, combat: 0, soulOfWar: 0 },
-  { id: "5", label: "盘根断崖", type: MapType.LEVEL, level: 0, combat: 0, soulOfWar: 0 },
-  { id: "6", label: "火焰洞窟", type: MapType.LEVEL, level: 31, combat: 0, soulOfWar: 0 },
-  { id: "7", label: "陷坑矿场", type: MapType.LEVEL, level: 0, combat: 0, soulOfWar: 0 },
-  { id: "8", label: "破败庙门", type: MapType.LEVEL, level: 41, combat: 0, soulOfWar: 0 },
-  { id: "9", label: "石栏擂台", type: MapType.NORMAL, level: 0, combat: 0, soulOfWar: 0 },
-  { id: "10", label: "紫泉洞窟", type: MapType.LEVEL, level: 51, combat: 0, soulOfWar: 0 },
-  { id: "11", label: "四象圆台", type: MapType.LEVEL, level: 0, combat: 0, soulOfWar: 0 },
-  { id: "12", label: "落日土径", type: MapType.LEVEL, level: 0, combat: 0, soulOfWar: 0 },
-  { id: "13", label: "霜刺长廊", type: MapType.LEVEL, level: 0, combat: 0, soulOfWar: 0 },
-  { id: "14", label: "熔脊浮岛", type: MapType.LEVEL, level: 0, combat: 0, soulOfWar: 0 },
-  { id: "15", label: "金盘石堂", type: MapType.LEVEL, level: 0, combat: 0, soulOfWar: 0 },
-  { id: "16", label: "迷雾柱顶", type: MapType.LEVEL, level: 0, combat: 0, soulOfWar: 0 },
-  { id: "17", label: "绿野迷踪", type: MapType.LEVEL, level: 0, combat: 0, soulOfWar: 0 },
-  { id: "18", label: "晶崖花径", type: MapType.LEVEL, level: 0, combat: 0, soulOfWar: 0 },
-  { id: "19", label: "晶窟祭坛", type: MapType.LEVEL, level: 0, combat: 0, soulOfWar: 0 },
-  { id: "20", label: "碧苔地牢", type: MapType.LEVEL, level: 0, combat: 0, soulOfWar: 0 },
-  { id: "21", label: "紫光悬屿", type: MapType.LEVEL, level: 0, combat: 0, soulOfWar: 0 },
-  { id: "22", label: "青焰石室", type: MapType.LEVEL, level: 0, combat: 0, soulOfWar: 0 },
-  { id: "23", label: "十字水台", type: MapType.LEVEL, level: 0, combat: 0, soulOfWar: 0 },
-  { id: "24", label: "紫曜大殿", type: MapType.LEVEL, level: 0, combat: 0, soulOfWar: 0 },
-  { id: "25", label: "冰封五台", type: MapType.LEVEL, level: 0, combat: 0, soulOfWar: 0 },
-  { id: "26", label: "金阙浮岛", type: MapType.LEVEL, level: 0, combat: 0, soulOfWar: 0 },
-  { id: "27", label: "沉渊残台", type: MapType.LEVEL, level: 0, combat: 0, soulOfWar: 0 },
-  { id: "28", label: "魂旗高台", type: MapType.LEVEL, level: 0, combat: 0, soulOfWar: 0 },
-  { id: "29", label: "浮金迷城", type: MapType.LEVEL, level: 0, combat: 0, soulOfWar: 0 },
-  { id: "30", label: "萤火草坛", type: MapType.LEVEL, level: 0, combat: 0, soulOfWar: 0 },
-  { id: "31", label: "紫电浮阶", type: MapType.LEVEL, level: 0, combat: 0, soulOfWar: 0 },
-  { id: "32", label: "浴龙池", type: MapType.LEVEL, level: 0, combat: 0, soulOfWar: 0 },
-  { id: "33", label: "楼阁石台", type: MapType.NORMAL, level: 0, combat: 0, soulOfWar: 0 },
-  { id: "34", label: "废土营寨", type: MapType.LEVEL, level: 0, combat: 0, soulOfWar: 0 },
-  { id: "35", label: "紫晶悬岩", type: MapType.LEVEL, level: 0, combat: 0, soulOfWar: 0 },
-  { id: "36", label: "熔岩祭坛", type: MapType.LEVEL, level: 0, combat: 0, soulOfWar: 0 },
-  { id: "37", label: "寒玉石庭", type: MapType.LEVEL, level: 0, combat: 0, soulOfWar: 0 },
-  { id: "38", label: "云海雷台", type: MapType.LEVEL, level: 0, combat: 0, soulOfWar: 0 },
-  { id: "39", label: "圣翼圆盘", type: MapType.LEVEL, level: 0, combat: 0, soulOfWar: 0 },
-  { id: "40", label: "花溪林地", type: MapType.LEVEL, level: 0, combat: 0, soulOfWar: 0 },
-  { id: "41", label: "藏宝殿", type: MapType.LEVEL, level: 0, combat: 0, soulOfWar: 0 },
-  { id: "42", label: "四方战场", type: MapType.LEVEL, level: 0, combat: 0, soulOfWar: 0 },
-  { id: "43", label: "黑曜王座", type: MapType.LEVEL, level: 0, combat: 0, soulOfWar: 0 },
-  { id: "44", label: "赤焰浮阁", type: MapType.LEVEL, level: 0, combat: 0, soulOfWar: 0 },
-  { id: "45", label: "碧水方城", type: MapType.LEVEL, level: 0, combat: 0, soulOfWar: 0 },
-  { id: "46", label: "沙瀑废村", type: MapType.LEVEL, level: 0, combat: 0, soulOfWar: 0 },
-  { id: "47", label: "冰棘荒原", type: MapType.LEVEL, level: 0, combat: 0, soulOfWar: 0 },
-  { id: "48", label: "星霜六角台", type: MapType.LEVEL, level: 0, combat: 0, soulOfWar: 0 },
-  { id: "49", label: "八阵荒营", type: MapType.LEVEL, level: 0, combat: 0, soulOfWar: 0 },
-  { id: "50", label: "冰湖雪野", type: MapType.LEVEL, level: 0, combat: 0, soulOfWar: 0 },
-  { id: "51", label: "雪河废村", type: MapType.LEVEL, level: 0, combat: 0, soulOfWar: 0 },
-  { id: "52", label: "孤崖木桥", type: MapType.LEVEL, level: 0, combat: 0, soulOfWar: 0 },
-  { id: "53", label: "龙骨冰廊", type: MapType.LEVEL, level: 0, combat: 0, soulOfWar: 0 },
-  { id: "54", label: "冰晶废墟", type: MapType.LEVEL, level: 0, combat: 0, soulOfWar: 0 },
-  { id: "55", label: "幽谷石桥", type: MapType.LEVEL, level: 0, combat: 0, soulOfWar: 0 },
-  { id: "56", label: "褐石残垣", type: MapType.LEVEL, level: 0, combat: 0, soulOfWar: 0 },
-  { id: "57", label: "冰水残城", type: MapType.LEVEL, level: 0, combat: 0, soulOfWar: 0 },
-  { id: "58", label: "幽灯石室", type: MapType.LEVEL, level: 0, combat: 0, soulOfWar: 0 },
-  { id: "59", label: "土堡围城", type: MapType.LEVEL, level: 0, combat: 0, soulOfWar: 0 },
-  { id: "60", label: "木栅庄园", type: MapType.LEVEL, level: 0, combat: 0, soulOfWar: 0 },
-  { id: "61", label: "环水花庭", type: MapType.NORMAL, level: 0, combat: 0, soulOfWar: 0 },
+  { id: "0", label: "望星台", type: MapType.NORMAL, level: 0 },
+  { id: "1", label: "八卦台", type: MapType.WILD, level: 0 },
+  { id: "2", label: "青石校场", type: MapType.WILD, level: 11 },
+  { id: "3", label: "百旗围场", type: MapType.WILD, level: 0 },
+  { id: "4", label: "阎罗大殿", type: MapType.WILD, level: 21 },
+  { id: "5", label: "盘根断崖", type: MapType.WILD, level: 0 },
+  { id: "6", label: "火焰洞窟", type: MapType.WILD, level: 31 },
+  { id: "7", label: "陷坑矿场", type: MapType.WILD, level: 0 },
+  { id: "8", label: "破败庙门", type: MapType.WILD, level: 41 },
+  { id: "9", label: "石栏擂台", type: MapType.NORMAL, level: 0 },
+  { id: "10", label: "紫泉洞窟", type: MapType.WILD, level: 51 },
+  { id: "11", label: "四象圆台", type: MapType.WILD, level: 0 },
+  { id: "12", label: "落日土径", type: MapType.WILD, level: 0 },
+  { id: "13", label: "霜刺长廊", type: MapType.WILD, level: 0 },
+  { id: "14", label: "熔脊浮岛", type: MapType.WILD, level: 0 },
+  { id: "15", label: "金盘石堂", type: MapType.WILD, level: 0 },
+  { id: "16", label: "迷雾柱顶", type: MapType.WILD, level: 0 },
+  { id: "17", label: "绿野迷踪", type: MapType.WILD, level: 0 },
+  { id: "18", label: "晶崖花径", type: MapType.WILD, level: 0 },
+  { id: "19", label: "晶窟祭坛", type: MapType.WILD, level: 0 },
+  { id: "20", label: "碧苔地牢", type: MapType.WILD, level: 0 },
+  { id: "21", label: "紫光悬屿", type: MapType.WILD, level: 0 },
+  { id: "22", label: "青焰石室", type: MapType.WILD, level: 0 },
+  { id: "23", label: "十字水台", type: MapType.WILD, level: 0 },
+  { id: "24", label: "紫曜大殿", type: MapType.WILD, level: 0 },
+  { id: "25", label: "冰封五台", type: MapType.WILD, level: 0 },
+  { id: "26", label: "金阙浮岛", type: MapType.WILD, level: 0 },
+  { id: "27", label: "沉渊残台", type: MapType.WILD, level: 0 },
+  { id: "28", label: "魂旗高台", type: MapType.WILD, level: 0 },
+  { id: "29", label: "浮金迷城", type: MapType.WILD, level: 0 },
+  { id: "30", label: "萤火草坛", type: MapType.WILD, level: 0 },
+  { id: "31", label: "紫电浮阶", type: MapType.WILD, level: 0 },
+  { id: "32", label: "浴龙池", type: MapType.WILD, level: 0 },
+  { id: "33", label: "楼阁石台", type: MapType.NORMAL, level: 0 },
+  { id: "34", label: "废土营寨", type: MapType.WILD, level: 0 },
+  { id: "35", label: "紫晶悬岩", type: MapType.WILD, level: 0 },
+  { id: "36", label: "熔岩祭坛", type: MapType.WILD, level: 0 },
+  { id: "37", label: "寒玉石庭", type: MapType.WILD, level: 0 },
+  { id: "38", label: "云海雷台", type: MapType.WILD, level: 0 },
+  { id: "39", label: "圣翼圆盘", type: MapType.WILD, level: 0 },
+  { id: "40", label: "花溪林地", type: MapType.WILD, level: 0 },
+  { id: "41", label: "藏宝殿", type: MapType.WILD, level: 0 },
+  { id: "42", label: "四方战场", type: MapType.WILD, level: 0 },
+  { id: "43", label: "黑曜王座", type: MapType.WILD, level: 0 },
+  { id: "44", label: "赤焰浮阁", type: MapType.WILD, level: 0 },
+  { id: "45", label: "碧水方城", type: MapType.WILD, level: 0 },
+  { id: "46", label: "沙瀑废村", type: MapType.WILD, level: 0 },
+  { id: "47", label: "冰棘荒原", type: MapType.WILD, level: 0 },
+  { id: "48", label: "星霜六角台", type: MapType.WILD, level: 0 },
+  { id: "49", label: "八阵荒营", type: MapType.WILD, level: 0 },
+  { id: "50", label: "冰湖雪野", type: MapType.WILD, level: 0 },
+  { id: "51", label: "雪河废村", type: MapType.WILD, level: 0 },
+  { id: "52", label: "孤崖木桥", type: MapType.WILD, level: 0 },
+  { id: "53", label: "龙骨冰廊", type: MapType.WILD, level: 0 },
+  { id: "54", label: "冰晶废墟", type: MapType.WILD, level: 0 },
+  { id: "55", label: "幽谷石桥", type: MapType.WILD, level: 0 },
+  { id: "56", label: "褐石残垣", type: MapType.WILD, level: 0 },
+  { id: "57", label: "冰水残城", type: MapType.WILD, level: 0 },
+  { id: "58", label: "幽灯石室", type: MapType.WILD, level: 0 },
+  { id: "59", label: "土堡围城", type: MapType.WILD, level: 0 },
+  { id: "60", label: "木栅庄园", type: MapType.WILD, level: 0 },
+  { id: "61", label: "环水花庭", type: MapType.NORMAL, level: 0 },
 ];
 
 /** 按 id 取出厂值（资源清单里有、这里没有的图返回 null，由调用方给空默认） */

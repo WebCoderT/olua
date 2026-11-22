@@ -1,4 +1,5 @@
 import { Injectable, Logger } from "@nestjs/common";
+import { MapType } from "../../../common/constants/map-config";
 import { MapRuleRepository, mapRulesOf } from "../../../database/repositories/map-rule.repository";
 import { MapRepository } from "../../../database/repositories/map.repository";
 import { MapSpawnAreaRepository } from "../../../database/repositories/map-spawn-area.repository";
@@ -229,7 +230,13 @@ export class RoomManager {
       lastEmptyTickAt: 0,
     };
 
-    const areas = this.spawnAreas.listByMap(mapId);
+    // 安全地图不刷怪（#1177 双保险的第二道）：接口层已拦「新建 / 改区」，这里播种再跳一次 ——
+    // 哪怕有人绕过接口直接往库里插行（或存量迁移漏了），安全地图也长不出怪。
+    // 判据读落库类型；**库恢复不受影响**（恢复的是上一场的世界，不新鲜播种）。
+    const areas =
+      this.mapConfigs.getById(mapId)?.type === MapType.NORMAL
+        ? []
+        : this.spawnAreas.listByMap(mapId);
     const mapPixel = this.mapPixelOf(mapId);
     /**
      * 副本房（#1001 第二刀）：**不从库恢复**

@@ -238,7 +238,7 @@ function connect(url) {
       const row = (await api(baseUrl, "GET", `admin/maps/${id}`, { token: adminToken, zoneId: ADMIN_ZONE })).data;
       const patched = await api(baseUrl, "PATCH", `admin/maps/${id}`, {
         token: adminToken, zoneId: ADMIN_ZONE,
-        body: { label: row.label, type: row.type, level, combat: row.combat, soulOfWar: row.soulOfWar },
+        body: { label: row.label, type: row.type, level },
       });
       check(patched.code === 0, `准备：图 ${id} 进入门槛配成 ${level} 级（#1150 换图后出厂 level 全 0）`, patched.message);
     }
@@ -355,7 +355,7 @@ function connect(url) {
       const config = mapTwo.data;
       const raised = await api(baseUrl, "PATCH", "admin/maps/2", {
         token: adminToken, zoneId: ADMIN_ZONE,
-        body: { label: config.label, type: config.type, level: 99, combat: config.combat, soulOfWar: config.soulOfWar },
+        body: { label: config.label, type: config.type, level: 99 },
       });
       check(raised.code === 0, "运营把图 2 进入等级调到 99", raised.message);
 

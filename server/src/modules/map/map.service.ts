@@ -112,7 +112,7 @@ export const START_MAP_ID = "0";
  * 进图被拒的原因（#606）
  *
  * 只给「哪一项 / 差多少 / 图名」，不给完整中文句子：文案归客户端（`configs/texts` 的
- * `reject_map_level` / `reject_map_combat` / `reject_map_soul` / `reject_map_unknown` /
+ * `reject_map_level` / `reject_map_unknown` /
  * `reject_map_start`），服务端给结构化字段，换语言 / 改措辞不用改服务端。
  *
  * `unknown` / `start` 两个「不是数值门槛」的取值是 #859 加的：前者是「这张图配置里没有」，
@@ -121,7 +121,7 @@ export const START_MAP_ID = "0";
  */
 export interface MapEnterReject {
   /** 缺哪一项（决定客户端取哪条文案） */
-  field: "level" | "combat" | "soul" | "unknown" | "start" | "zone";
+  field: "level" | "unknown" | "start" | "zone";
   /** 这张图要求的值（`unknown` / `start` 恒 0） */
   need: number;
   /** 图名（客户端提示里要用；`unknown` 时是客户端报上来的那个 id） */
@@ -135,7 +135,7 @@ export interface MapEnterReject {
  *
  * | 数据 | 存放 | 谁能改 |
  * |---|---|---|
- * | `label` / `type` / `level` / `combat` / `soulOfWar` | `maps` 表 | **管理端**（`save`） |
+ * | `label` / `type` / `level` | `maps` 表 | **管理端**（`save`） |
  * | `layers` / `groups` / 尺寸 | `maps` 表的几何列 + `content` JSON（源自 TMX） | 改 TMX + 跑 `import-map-resources` |
  * | `spawnAreas` | `map_spawn_areas` 表 | **管理端绘制**（`createSpawnArea` / `updateSpawnArea` / `deleteSpawnArea`）；**安全地图（`type = 0`）建 / 改一律拒**，删放行（#1157） |
  * | `npcPoints` | `map_npcs` 表 | **管理端点放 / 拖动**（`createNpc` / `updateNpc` / `deleteNpc`） |
@@ -245,8 +245,6 @@ export class MapService {
         type: row.type,
         typeLabel: MAP_TYPE_LABELS[row.type as MapTypeValue] ?? row.type,
         level: row.level,
-        combat: row.combat,
-        soulOfWar: row.soul_of_war,
         npcs: this.npcPoints.listByMap(row.map_id).map((point) => this.npcPointDtoOf(point)),
         revive: this.revivePointDtoOf(row),
         spawnAreas: this.spawnAreas.listByMap(row.map_id).map((area) => this.spawnAreaPointDtoOf(area)),
@@ -276,15 +274,13 @@ export class MapService {
    * @param mapId 目标地图 id
    * @param role  角色当前的三项门槛值（等级取行里的索引列，战斗力按服务端口径现算）
    */
-  enterRejectOf(mapId: string, role: { level: number; combat: number; soulOfWar: number }): MapEnterReject | null {
+  enterRejectOf(mapId: string, role: { level: number }): MapEnterReject | null {
     const row = this.maps.getById(mapId);
     // 不认识的图：拒（#859）。放行会让「拼错 id」变成一条进空白世界的通道，见类顶部边界 3
     if (!row) return { field: "unknown", need: 0, mapLabel: mapId };
+    // 门槛只剩等级一项（#1177）：战斗力 / 战魂阶已删。数值 0 = 不限制，
+    // 判据是「配置 > 0 且配置 > 角色值」
     if (row.level > 0 && row.level > role.level) return { field: "level", need: row.level, mapLabel: row.label };
-    if (row.combat > 0 && row.combat > role.combat) return { field: "combat", need: row.combat, mapLabel: row.label };
-    if (row.soul_of_war > 0 && row.soul_of_war > role.soulOfWar) {
-      return { field: "soul", need: row.soul_of_war, mapLabel: row.label };
-    }
     return null;
   }
 
@@ -722,6 +718,14 @@ export class MapService {
    */
   saveRules(id: string, dto: SaveMapRulesDto, actor: AuthenticatedUser): MapRulesDto {
     const row = this.requireRow(id);
+    // 安全地图不允许开 PK（#1177）：「安全地图」的语义就是不刷怪、不 PK。
+    // 判据读**落库的当前类型**（与 requireSpawnableMap 同一取向）——管理端改完类型立刻生效
+    if (dto.allowPk && row.type === MapType.NORMAL) {
+      throw BizException.conflict(
+        BizCode.MAP_SAFE_ALLOW_PK,
+        `地图 ${id}（${row.label}）是安全地图 —— 安全地图不允许 PK，allowPk 得先关掉`,
+      );
+    }
     const before = mapRulesOf(this.mapRules.find(id));
     const now = Date.now();
     this.mapRules.save({
@@ -816,7 +820,7 @@ export class MapService {
       if (areas > 0) {
         throw BizException.conflict(
           BizCode.MAP_SAFE_WITH_SPAWN_AREAS,
-          `地图 ${id}（${before.label}）还有 ${areas} 个刷怪区 —— 安全地图不刷怪，改成安全地图之前先把它们删掉，或者换成等级 / 战斗力 / 战魂地图`,
+          `地图 ${id}（${before.label}）还有 ${areas} 个刷怪区 —— 安全地图不刷怪，改成安全地图之前先把它们删掉，或者换成野外地图`,
         );
       }
     }
@@ -825,15 +829,13 @@ export class MapService {
       label: dto.label.trim(),
       type: dto.type,
       level: dto.level,
-      combat: dto.combat,
-      soul_of_war: dto.soulOfWar,
       updated_by: actor.username,
       updated_at: Date.now(),
     };
     this.maps.update(row);
     this.logger.log(
       `地图 ${id} 配置已更新：${before.label} → ${row.label} / 类型 ${before.type}→${row.type} / ` +
-        `等级 ${before.level}→${row.level} / 战力 ${before.combat}→${row.combat} / 战魂 ${before.soul_of_war}→${row.soul_of_war}`,
+        `等级 ${before.level}→${row.level}`,
     );
     return this.summaryOf(
       row,
@@ -958,7 +960,7 @@ export class MapService {
     if (row.type !== MapType.NORMAL) return;
     throw new BizException(
       BizCode.MAP_SPAWN_AREA_ON_SAFE_MAP,
-      `地图 ${row.map_id}（${row.label}）是安全地图 —— 安全地图不刷怪。要在这张图上配怪，先把「类型」改成等级 / 战斗力 / 战魂地图`,
+      `地图 ${row.map_id}（${row.label}）是安全地图 —— 安全地图不刷怪。要在这张图上配怪，先把「类型」改成野外地图`,
     );
   }
 
@@ -1475,8 +1477,6 @@ export class MapService {
     dto.type = row.type;
     dto.typeLabel = MAP_TYPE_LABELS[row.type as MapTypeValue] ?? row.type;
     dto.level = row.level;
-    dto.combat = row.combat;
-    dto.soulOfWar = row.soul_of_war;
     dto.src = this.srcOf(id);
     dto.cols = size.cols;
     dto.rows = size.rows;

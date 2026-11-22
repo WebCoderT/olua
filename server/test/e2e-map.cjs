@@ -180,8 +180,8 @@ async function main() {
     );
 
     const types = list.body?.data?.types ?? [];
-    checkEqual(types.length, 4, "列表带全部类型选项（编辑下拉要能选到当下没人用的类型）");
-    checkEqual(types.map((item) => item.type).join(","), "0,1,2,3", "类型选项按声明顺序");
+    checkEqual(types.length, 2, "列表带全部类型选项（编辑下拉要能选到当下没人用的类型；#1177 收敛后 0/1）");
+    checkEqual(types.map((item) => item.type).join(","), "0,1", "类型选项按声明顺序");
     checkEqual(types[0]?.label, "安全地图", "类型名由服务端给（客户端与后台都不再各抄一份）");
 
     const map0 = rows.find((row) => row.id === "0") ?? {};
@@ -389,12 +389,12 @@ async function main() {
 
     const saved = await api(base, "PATCH", "/api/admin/maps/0", {
       token: rootToken,
-      body: { label: "新手村·改", type: "1", level: 5, combat: 0, soulOfWar: 0 },
+      body: { label: "新手村·改", type: "1", level: 5 },
     });
     checkEqual(saved.status, 200, "保存玩法配置 → 200");
     checkEqual(saved.body?.data?.label, "新手村·改", "返回的是保存后那一行");
     checkEqual(saved.body?.data?.type, "1", "类型改掉了");
-    checkEqual(saved.body?.data?.typeLabel, "等级地图", "类型名跟着变（不是缓存住的旧值）");
+    checkEqual(saved.body?.data?.typeLabel, "野外地图", "类型名跟着变（不是缓存住的旧值）");
     checkEqual(saved.body?.data?.level, 5, "进入等级改掉了");
     checkEqual(saved.body?.data?.src, "map/0/0", "返回里仍带资源路径（只读回显，不是入参）");
 
@@ -405,19 +405,19 @@ async function main() {
     const listAfter = await api(base, "GET", "/api/admin/maps", { token: rootToken });
     const rowAfter = (listAfter.body?.data?.list ?? []).find((row) => row.id === "0") ?? {};
     checkEqual(rowAfter.label, "新手村·改", "列表也反映新名字");
-    checkEqual(rowAfter.typeLabel, "等级地图", "列表里的类型名同样跟着变");
+    checkEqual(rowAfter.typeLabel, "野外地图", "列表里的类型名同样跟着变");
 
     const afterSnap = await api(base, "GET", "/api/game-config", { token: playerToken });
     const snapMap0 = (afterSnap.body?.data?.maps ?? []).find((row) => row.id === "0") ?? {};
     checkEqual(snapMap0.label, "新手村·改", "玩家快照里也是新名字（客户端下次进游戏就换成这个）");
     checkEqual(snapMap0.level, 5, "玩家快照里的进入等级同步了 —— 这是「保存即生效」对玩家的那一半");
     checkEqual(snapMap0.type, "1", "快照里的类型码同步");
-    checkEqual((afterSnap.body?.data?.mapTypes ?? []).length, 4, "快照同时下发类型分组（顺序即传送弹窗分组）");
+    checkEqual((afterSnap.body?.data?.mapTypes ?? []).length, 2, "快照同时下发类型分组（顺序即传送弹窗分组；#1177 收敛后 0 安全 / 1 野外）");
 
     // 资源路径不可改：请求里塞 src 会被白名单剥掉，返回仍是目录约定算出来的那个
     const withSrc = await api(base, "PATCH", "/api/admin/maps/1", {
       token: rootToken,
-      body: { label: "卧龙城", type: "0", level: 10, combat: 0, soulOfWar: 0, src: "map/evil/evil" },
+      body: { label: "卧龙城", type: "0", level: 10, src: "map/evil/evil" },
     });
     checkEqual(withSrc.status, 200, "带多余字段的请求仍成功（白名单剥离，不是 400）");
     checkEqual(withSrc.body?.data?.src, "map/1/1", "塞进来的 src 被丢掉 —— 下发方永远改不到客户端加载哪张图");
@@ -441,25 +441,25 @@ async function main() {
 
     const badType = await api(base, "PATCH", "/api/admin/maps/0", {
       token: rootToken,
-      body: { label: "x", type: "9", level: 1, combat: 0, soulOfWar: 0 },
+      body: { label: "x", type: "9", level: 1 },
     });
     checkEqual(badType.status, 400, "类型不在 0..3 → 400");
 
     const badLevel = await api(base, "PATCH", "/api/admin/maps/0", {
       token: rootToken,
-      body: { label: "x", type: "0", level: 201, combat: 0, soulOfWar: 0 },
+      body: { label: "x", type: "0", level: 201 },
     });
     checkEqual(badLevel.status, 400, "进入等级超过上限 → 400（拦「把 999 拍进去」这类错误）");
 
-    const negativeCombat = await api(base, "PATCH", "/api/admin/maps/0", {
+    const negativeLevel = await api(base, "PATCH", "/api/admin/maps/0", {
       token: rootToken,
-      body: { label: "x", type: "0", level: 1, combat: -1, soulOfWar: 0 },
+      body: { label: "x", type: "0", level: -1 },
     });
-    checkEqual(negativeCombat.status, 400, "负战斗力 → 400");
+    checkEqual(negativeLevel.status, 400, "负等级 → 400（战斗力 / 战魂阶门槛已删，#1177）");
 
     const emptyLabel = await api(base, "PATCH", "/api/admin/maps/0", {
       token: rootToken,
-      body: { label: "", type: "0", level: 1, combat: 0, soulOfWar: 0 },
+      body: { label: "", type: "0", level: 1 },
     });
     checkEqual(emptyLabel.status, 400, "空名称 → 400（列表里会显示成空白按钮）");
 
@@ -477,12 +477,12 @@ async function main() {
 
     const post = await api(base, "POST", "/api/admin/maps", {
       token: rootToken,
-      body: { label: "新地图", type: "0", level: 0, combat: 0, soulOfWar: 0 },
+      body: { label: "新地图", type: "0", level: 0 },
     });
     checkEqual(post.status, 404, "POST 新建地图 → 404（一张图存不存在由客户端的 TMX 决定）");
     const put = await api(base, "PUT", "/api/admin/maps/0", {
       token: rootToken,
-      body: { label: "改个名", type: "0", level: 1, combat: 0, soulOfWar: 0 },
+      body: { label: "改个名", type: "0", level: 1 },
     });
     checkEqual(put.status, 404, "PUT 整份替换 → 404（保存走 PATCH，语义是「改这五个字段」）");
     const del = await api(base, "DELETE", "/api/admin/maps/0", { token: rootToken });
@@ -497,7 +497,7 @@ async function main() {
 
     const patchMissing = await api(base, "PATCH", "/api/admin/maps/99", {
       token: rootToken,
-      body: { label: "幽灵图", type: "0", level: 0, combat: 0, soulOfWar: 0 },
+      body: { label: "幽灵图", type: "0", level: 0 },
     });
     checkEqual(patchMissing.status, 404, "改一张不存在的图 → 404");
     checkEqual(patchMissing.body?.code, 50032, "同样是 50032（不是「参数不合法」）");
@@ -521,7 +521,7 @@ async function main() {
     checkEqual(viewerDetail.status, 200, "观察员可读详情");
     const viewerWrite = await api(base, "PATCH", "/api/admin/maps/0", {
       token: viewerToken, zoneId: ADMIN_ZONE,
-      body: { label: "观察员改的", type: "0", level: 1, combat: 0, soulOfWar: 0 },
+      body: { label: "观察员改的", type: "0", level: 1 },
     });
     checkEqual(viewerWrite.status, 403, "观察员改玩法配置 → 403（写入口存在，但他没有 gameConfig:write）");
 
@@ -586,8 +586,8 @@ async function main() {
     check(Boolean(schemas.SaveMapConfigDto), "有 SaveMapConfigDto（写入口只有这一个形状）");
     checkEqual(
       Object.keys(schemas.SaveMapConfigDto?.properties ?? {}).sort().join(","),
-      "combat,label,level,soulOfWar,type",
-      "写模型只有五个字段：**没有 src / 尺寸 / 图层** —— 资源本体不是一个可编辑的字段",
+      "label,level,type",
+      "写模型只有三个字段（#1177 删战斗力 / 战魂阶）：**没有 src / 尺寸 / 图层** —— 资源本体不是一个可编辑的字段",
     );
     check(
       Object.keys(schemas).every((name) => !/^(Create|Update|Delete)Map/.test(name)),

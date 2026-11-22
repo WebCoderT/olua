@@ -270,11 +270,6 @@ export const uiTexts = {
   reject_map_start: "还没有落脚点，先回新手村再来",
   /** 地图等级不足（{map} · {level}） */
   reject_map_level: "{map} 需要等级达到 {level} 级",
-  /** 地图战斗力不足（{map} · {combat}） */
-  reject_map_combat: "{map} 需要战斗力达到 {combat}",
-  /** 地图战魂阶数不足（{map} · {soul}） */
-  reject_map_soul: "{map} 需要战魂等级达到 {soul} 阶",
-
   //#region 界面标签：角色与战魂
   /** 战魂卡片状态（已激活 / 未激活） */
   label_soul_active: "已激活",

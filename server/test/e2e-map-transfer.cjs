@@ -323,7 +323,7 @@ function connect(url) {
     // 一张 10 级图会让「余额不够」变成「等级不够」，整组断言测的东西就换了。
     // 关门槛是准备动作（不是被测逻辑），顺带证明门槛与代价是两条独立判据。
     const awayConfig = (await api(baseUrl, "GET", `admin/maps/${away}`, { token: adminToken, zoneId: ADMIN_ZONE })).data;
-    if (Number(awayConfig.level) > 0 || Number(awayConfig.combat) > 0 || Number(awayConfig.soulOfWar) > 0) {
+    if (Number(awayConfig.level) > 0) {
       await api(baseUrl, "PATCH", `admin/maps/${away}`, {
         token: adminToken,
         zoneId: ADMIN_ZONE,
@@ -331,16 +331,14 @@ function connect(url) {
           label: awayConfig.label,
           type: awayConfig.type,
           level: 0,
-          combat: 0,
-          soulOfWar: 0,
         },
       });
     }
     const awayAfter = (await api(baseUrl, "GET", `admin/maps/${away}`, { token: adminToken, zoneId: ADMIN_ZONE })).data;
     check(
-      Number(awayAfter.level) === 0 && Number(awayAfter.combat) === 0 && Number(awayAfter.soulOfWar) === 0,
+      Number(awayAfter.level) === 0,
       "准备：目的地三项门槛已清零（1 级号能进）",
-      `${awayAfter.level} / ${awayAfter.combat} / ${awayAfter.soulOfWar}`,
+      `${awayAfter.level}`,
     );
 
     const rulesOf = async (mapId) => {

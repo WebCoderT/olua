@@ -163,10 +163,10 @@ function main() {
     );
     // 行不存在时补一行（正常情况由 config-sync.sql 带进来；新加一张图时跑本工具也不会漏）
     const insertMissing = db.prepare(
-      `INSERT OR IGNORE INTO maps (map_id, label, type, level, combat, soul_of_war,
+      `INSERT OR IGNORE INTO maps (map_id, label, type, level,
          grid_cols, grid_rows, tile_width, tile_height, pixel_width, pixel_height, content,
          updated_by, updated_at)
-       VALUES (?, ?, '', 0, 0, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, '', 0, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     );
     const now = Date.now();
     let created = 0;

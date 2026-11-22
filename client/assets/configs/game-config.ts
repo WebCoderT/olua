@@ -2205,9 +2205,8 @@ export function applyMapRows(rows: MapConfigRow[], groups: MapTypeGroupRow[]): v
       label: String(row.label ?? ""),
       type: String(row.type ?? ""),
       typeLabel: String(row.typeLabel ?? row.type ?? ""),
+      // 进入门槛只剩等级一项（#1177）：战斗力 / 战魂阶已删
       level: Number(row.level) || 0,
-      combat: Number(row.combat) || 0,
-      soulOfWar: Number(row.soulOfWar) || 0,
       // 点位（#672）：坐标已经是世界坐标，客户端不再换算；缺段当「没有点位」而不是报错 ——
       // 老服务端配新客户端时少几个 NPC 比整个快照加载失败好
       npcs: (row.npcs ?? [])

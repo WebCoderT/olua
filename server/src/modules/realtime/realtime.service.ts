@@ -1263,15 +1263,9 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
       return { field: "start", need: 0, mapLabel: this.maps.labelOf(mapId) };
     }
     if (current === mapId) return null;
-    // 战斗力按服务端口径现算（与 roleUpdate 帧同一个函数）：存档里的 combat 可能落后一帧。
-    // 等级在成长曲线之外算不出来（理论上到不了，曲线改坏才会）→ 用存档里那份：
-    // 它同样是服务端写进去的（`applyAuthoritativeAttributes`），不是客户端自报
-    const attributes = summarizeRoleAttributes(roleAttributeSourceOf(row.level, data));
-    return this.maps.enterRejectOf(mapId, {
-      level: row.level,
-      combat: attributes?.combat ?? Math.max(0, Number(data.combat) || 0),
-      soulOfWar: Math.max(0, Number(data.soulOfWar) || 0),
-    });
+    // 门槛只剩等级一项（#1177）：等级在成长曲线之外算不出来（理论上到不了，曲线改坏才会）
+    // → 用存档里那份：它同样是服务端写进去的（`applyAuthoritativeAttributes`），不是客户端自报
+    return this.maps.enterRejectOf(mapId, { level: row.level });
   }
 
   /**

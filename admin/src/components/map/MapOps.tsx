@@ -225,13 +225,13 @@ function numOr(value: string, fallback: number): number {
  * 补的。剩下的列如果照旧可编辑，运营改完会以为「这张图的行为变了」—— 而实际要等对应
  * 的那一刀。#747（死配置）就是这么来的。
  * 现已接入：`expRate` / `dropRate` / `allowDrop`（#812）、`maxPlayersPerRoom` / `maxChannels`（#1000）、
- * `transferCostMoney` / `transferCooldownMs` / `denyTransferInCombat` / `simulateWhenEmpty`（#1001）。
+ * `transferCostMoney` / `transferCooldownMs` / `denyTransferInCombat` / `simulateWhenEmpty`（#1001）、
+ * `allowPk`（#1177 落配置语义：安全地图保存时被服务端拒，野外可开）。
  *
  * 值照旧随整份覆盖提交（表单里保留的是读回来的原值），所以置灰不会把别人配的东西清掉。
  */
 const UNWIRED_HINTS: Partial<Record<keyof RulesForm, string>> = {
   moneyRate: "未接入：金币掉落走 drop_tables 的货币物品，与经验不是同一条链",
-  allowPk: "未接入：真 PK 玩法在 #403",
   allowAutoBattle: "未接入：等副本落地后接（关掉挂机要连客户端一起改）",
   allowRecall: "未接入：拉人与回城还没有统一入口",
   respawnMsOverride: "未接入：重生时长的三级继承在 #1001 之后的下一刀 / docs/27",
@@ -279,11 +279,14 @@ export function MapRulesDialog({
   open,
   mapId,
   mapLabel,
+  mapType,
   onClose,
 }: {
   open: boolean;
   mapId: string;
   mapLabel: string;
+  /** 这张图的类型码（"0" 安全 / "1" 野外）—— allowPk 的提示与守点说明按它分流（#1177） */
+  mapType?: string;
   onClose: () => void;
 }) {
   const canWrite = hasPermission(PERMISSION.GAME_CONFIG_WRITE);
@@ -422,7 +425,16 @@ export function MapRulesDialog({
           <section>
             <h4 className="mb-1.5 text-xs font-medium text-ink-3">规则开关</h4>
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-              <RuleToggle checked={form.allowPk} hint={UNWIRED_HINTS.allowPk ?? ""} title="允许 PK" unwired onChange={(next) => patch("allowPk", next)} />
+              <RuleToggle
+                checked={form.allowPk}
+                hint={
+                  mapType === "0"
+                    ? "安全地图不允许 PK：开着保存会被服务端拒（409）；真正的玩家互攻等 PK 玩法落地（#403）"
+                    : "野外地图可开。目前只是配置语义：真正的玩家互攻等 PK 玩法落地（#403）后按它放行"
+                }
+                title="允许 PK"
+                onChange={(next) => patch("allowPk", next)}
+              />
               <RuleToggle checked={form.allowAutoBattle} hint={UNWIRED_HINTS.allowAutoBattle ?? ""} title="允许自动挂机" unwired onChange={(next) => patch("allowAutoBattle", next)} />
               <RuleToggle checked={form.allowRecall} hint={UNWIRED_HINTS.allowRecall ?? ""} title="允许召回" unwired onChange={(next) => patch("allowRecall", next)} />
               <RuleToggle checked={form.allowDrop} hint="false = 活动图：怪倒了不掉东西（这一条**已接入**结算）" title="这张图掉落物品" disabled={!canWrite} onChange={(next) => patch("allowDrop", next)} />
