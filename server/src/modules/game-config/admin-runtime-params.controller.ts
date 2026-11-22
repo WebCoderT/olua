@@ -6,10 +6,12 @@ import { AuditTarget } from "../../common/decorators/audit-target.decorator";
 import { Permission } from "../../common/constants/permission";
 import { RuntimeParamsService } from "./runtime-params.service";
 import {
+  AoiParamsDto,
   CastRangeParamsDto,
   MonsterAiParamsDto,
   MovementGuardParamsDto,
   RuntimeParamsDto,
+  UpdateAoiParamsDto,
   UpdateCastRangeParamsDto,
   UpdateMonsterAiParamsDto,
   UpdateMovementGuardParamsDto,
@@ -166,5 +168,40 @@ export class AdminRuntimeParamsController {
   @ApiDataResponse(CastRangeParamsDto, { description: "更新后的生效值" })
   updateCastRange(@Body() dto: UpdateCastRangeParamsDto): CastRangeParamsDto {
     return this.runtimeParamsService.updateCastRange(dto) as unknown as CastRangeParamsDto;
+  }
+
+  @Get("aoi")
+  @ApiAdminDoc({
+    operationId: "adminRuntimeParams.getAoi",
+    summary: "AOI 推送口径",
+    description:
+      "地图数据推送的裁剪口径（`runtime_params.aoi` 列，#1170）。与怪物 AI / 位移校验一样**单独一条接口**、不下发客户端：\n\n" +
+      "- `cellSize`：格子边长（像素，出厂 512），视野 = 玩家所在格 + 周围 8 格的并集；\n" +
+      "- `maxEntities`：单帧实体上限（出厂 200），超出只留离格心最近的 N 个；\n" +
+      "- `leaveDelayMs`：离开视野延迟（出厂 1000ms），站格子边界来回走不闪；\n" +
+      "- `broadcastHz`：互见广播节拍（出厂 10Hz），格子索引与进出差量每拍刷新。\n\n" +
+      "缺键时服务端按历史常量兜住（512 / 200 / 1000ms / 10Hz，行为与配置化之前一致）。",
+    permissions: [Permission.GAME_CONFIG_READ],
+  })
+  @ApiDataResponse(AoiParamsDto, { description: "当前生效值" })
+  getAoi(): AoiParamsDto {
+    return this.runtimeParamsService.aoi() as unknown as AoiParamsDto;
+  }
+
+  @Patch("aoi")
+  @AuditTarget("runtimeParams")
+  @ApiAdminDoc({
+    operationId: "adminRuntimeParams.updateAoi",
+    summary: "编辑 AOI 推送口径",
+    description:
+      "**部分更新**：只提交改动过的字段，没提交的保持原值。\n\n" +
+      "**生效时机是重启**：格子边长变了等于把所有已成形的格子索引作废（实体在旧格里的位置全错），\n" +
+      "运行中热切会出现「一半房间按旧值建、一半按新值建」的时段 —— 所以四个参数统一启动时读一次，\n" +
+      "保存后**重启服务端**（API 与实时两个进程）才生效。",
+    permissions: [Permission.GAME_CONFIG_WRITE],
+  })
+  @ApiDataResponse(AoiParamsDto, { description: "更新后的生效值" })
+  updateAoi(@Body() dto: UpdateAoiParamsDto): AoiParamsDto {
+    return this.runtimeParamsService.updateAoi(dto) as unknown as AoiParamsDto;
   }
 }

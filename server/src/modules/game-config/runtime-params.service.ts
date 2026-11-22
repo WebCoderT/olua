@@ -1,6 +1,7 @@
 import { Injectable, Logger, OnApplicationBootstrap } from "@nestjs/common";
 import { BizCode } from "../../common/constants/biz-code";
 import {
+  AoiRuntimeParams,
   AutoBattleParams,
   CastRangeParams,
   DropRuntimeParams,
@@ -16,6 +17,7 @@ import { RuntimeParamsRow } from "../../database/rows";
 import {
   DropRuntimeParamsDto,
   RuntimeParamsDto,
+  UpdateAoiParamsDto,
   UpdateCastRangeParamsDto,
   UpdateMonsterAiParamsDto,
   UpdateMovementGuardParamsDto,
@@ -115,6 +117,8 @@ export class RuntimeParamsService implements OnApplicationBootstrap {
       movement: existing?.movement ?? "{}",
       // 出手距离闸同理（#1030）：整行 UPDATE，漏写这一列 = 把它静默清成 '{}'
       cast_range: existing?.cast_range ?? "{}",
+      // AOI 同理（#1170）：它有自己的两条接口，且重启才生效
+      aoi: existing?.aoi ?? "{}",
       updated_at: Date.now(),
     };
     this.repository.update(row);
@@ -165,6 +169,7 @@ export class RuntimeParamsService implements OnApplicationBootstrap {
       // 位移校验那一列原样写回（同一条整行 UPDATE 的纪律）
       movement: existing?.movement ?? "{}",
       cast_range: existing?.cast_range ?? "{}",
+      aoi: existing?.aoi ?? "{}",
       updated_at: Date.now(),
     };
     this.repository.update(row);
@@ -204,6 +209,7 @@ export class RuntimeParamsService implements OnApplicationBootstrap {
       monster_ai: existing?.monster_ai ?? "{}",
       movement: JSON.stringify(next),
       cast_range: existing?.cast_range ?? "{}",
+      aoi: existing?.aoi ?? "{}",
       updated_at: Date.now(),
     };
     this.repository.update(row);
@@ -242,10 +248,50 @@ export class RuntimeParamsService implements OnApplicationBootstrap {
       monster_ai: existing?.monster_ai ?? "{}",
       movement: existing?.movement ?? "{}",
       cast_range: JSON.stringify(next),
+      aoi: existing?.aoi ?? "{}",
       updated_at: Date.now(),
     };
     this.repository.update(row);
     return this.castRange();
+  }
+
+
+  /**
+   * AOI 推送口径（`aoi` 列，#1170）
+   *
+   * 与 `movement()` 同一取向：**原样返回**（缺键不补），兜底由消费方 `AoiService` 做
+   * （读不到按历史常量 512 / 200 / 1000ms / 10Hz 兜住，行为与配置化之前完全一致）。
+   */
+  aoi(): AoiRuntimeParams {
+    return parseGroup(this.repository.get()?.aoi) as unknown as AoiRuntimeParams;
+  }
+
+  /**
+   * 更新 AOI 推送口径（部分更新；与其它六组都分开）
+   *
+   * 合并用 `definedOnly`，落库时**其余七列原样写回**（`update` 是整行 UPDATE）。
+   * 单字段取值域由 DTO 管；这里不判跨字段 —— 四个参数彼此独立（格子的几何 /
+   * 上限裁剪 / 离开合并 / 节拍互不引用）。
+   *
+   * **生效时机是重启**：格子边长变了等于所有已成形的索引作废，四个参数统一启动时读。
+   */
+  updateAoi(dto: UpdateAoiParamsDto): AoiRuntimeParams {
+    const existing = this.repository.get();
+    const current = parseGroup(existing?.aoi);
+    const next = { ...current, ...definedOnly(dto) } as Record<string, unknown>;
+    const row: RuntimeParamsRow = {
+      id: 1,
+      drop_params: existing?.drop_params ?? "{}",
+      auto_battle: existing?.auto_battle ?? "{}",
+      guild_rules: existing?.guild_rules ?? "{}",
+      monster_ai: existing?.monster_ai ?? "{}",
+      movement: existing?.movement ?? "{}",
+      cast_range: existing?.cast_range ?? "{}",
+      aoi: JSON.stringify(next),
+      updated_at: Date.now(),
+    };
+    this.repository.update(row);
+    return this.aoi();
   }
 
   /** 三列 JSON → 生效值（坏 JSON 当空对象；缺键就是缺键，不补默认值） */

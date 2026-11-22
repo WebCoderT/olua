@@ -6,6 +6,7 @@ import { roleAttributeSourceOf, summarizeRoleAttributes } from "../combat/role-a
 import { START_MAP_ID } from "../map/map.service";
 import { RolesService } from "../roles/roles.service";
 import { MovementGuardService, MovementRejectReason } from "./movement-guard.service";
+import { AoiService } from "./aoi.service";
 import { PUBLIC_SLOT, roomKey, splitRoomKey } from "../../common/utils/room-key.util";
 import type { RoomRef } from "../../common/utils/room-key.util";
 import type { RealtimePlayerAction, RealtimePlayerAppearance, RealtimePlayerEntry } from "./realtime.protocol";
@@ -203,6 +204,7 @@ export class PlayerPresenceService implements OnApplicationBootstrap, OnApplicat
     private readonly guilds: GuildRepository,
     private readonly positions: RolePositionRepository,
     private readonly guard: MovementGuardService,
+    private readonly aoi: AoiService,
   ) {}
 
   onApplicationBootstrap(): void {
@@ -961,7 +963,11 @@ export class PlayerPresenceService implements OnApplicationBootstrap, OnApplicat
   //#region 配置
 
   private broadcastMs(): number {
-    // #768 提频：默认 10Hz（与客户端上报节拍对齐），配置可覆写，下限 50ms 不变
+    // #1170：广播节拍优先读 `runtime_params.aoi.broadcastHz`（管理端可改，重启生效）。
+    // 没配（存量库 / 缺键）回落 env 缺省，行为与配置化之前完全一致；下限 50ms 两边都夹
+    // `broadcastIntervalMs()` 没配返回 0 → 回落 env 缺省；解析逻辑只住 AOI 服务一处
+    const interval = this.aoi.broadcastIntervalMs();
+    if (interval > 0) return interval;
     return Math.max(50, Number(this.config.get<number>("playerSyncBroadcastMs") ?? 100));
   }
 

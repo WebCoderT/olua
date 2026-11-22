@@ -1123,7 +1123,7 @@ export const routes = {
      */
     batchRemove: "/admin/roles/batch-delete",
   },
-  /** adminRuntimeParams 模块（8 个接口） */
+  /** adminRuntimeParams 模块（10 个接口） */
   adminRuntimeParams: {
     /**
      * 运行时参数（GET /admin/runtime-params）
@@ -1137,6 +1137,18 @@ export const routes = {
      * **部分更新**：只提交改动过的分组，组内只提交改动过的字段（没提交的保持原值）。
      */
     update: "/admin/runtime-params",
+    /**
+     * AOI 推送口径（GET /admin/runtime-params/aoi）
+     *
+     * 地图数据推送的裁剪口径（`runtime_params.aoi` 列，#1170）。与怪物 AI / 位移校验一样**单独一条接口**、不下发客户端：
+     */
+    getAoi: "/admin/runtime-params/aoi",
+    /**
+     * 编辑 AOI 推送口径（PATCH /admin/runtime-params/aoi）
+     *
+     * **部分更新**：只提交改动过的字段，没提交的保持原值。
+     */
+    updateAoi: "/admin/runtime-params/aoi",
     /**
      * 出手距离闸参数（GET /admin/runtime-params/cast-range）
      *
