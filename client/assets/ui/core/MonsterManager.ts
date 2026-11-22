@@ -63,7 +63,7 @@ export default class MonsterManager {
   /** 本会话是否收到过 world 帧（只用于那一条「进入服务端权威模式」的一次性日志；换图清场时重置） */
   private static worldSeen = false;
 
-  /** 玩家被服务端 AI 普攻命中的出口（#323；组合根接线：飘字 / 红闪 / 受击动作 / 血量入账） */
+  /** 玩家被服务端 AI 普攻命中的出口（#323；组合根接线：飘字 / 受击动作 / 血量入账（#1176 删红闪）） */
   static onPlayerServerHit: ((hit: MonsterHitEntry) => void) | null = null;
 
   /**
@@ -195,7 +195,7 @@ export default class MonsterManager {
 
   /**
    * 服务端 AI 广播的落点（#323）：位置增量交给 MonsterAI 趋近演出，血量刷新血条，
-   * 命中事件里属于自己的那份交给组合根接线（别人的受击不演红闪，但血条要看）。
+   * 命中事件里属于自己的那份交给组合根接线（别人的受击不进这条链，但血条要看）。
    */
   static applyServerAi(data: MonsterAiFrame) {
     for (const entry of data.monsters) {

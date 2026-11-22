@@ -5,7 +5,7 @@
  * - parts/ui-parts.ts       通用零件薄代理（转发 UiHelper）与无样式节点工具
  * - parts/dialog-builder.ts 弹窗骨架与按钮（弹窗框/玻璃板/眉题/页脚/按钮/悬停详情/物品详情弹窗）
  * - parts/growth-parts.ts   成长线三窗零件（战魂/称号/军衔的卡片/属性/动画/绑定元宝行）
- * - parts/tip-fx.ts         Tip 浮层与战斗反馈（提示/伤害飘字/红闪/技能/经验）
+ * - parts/tip-fx.ts         Tip 浮层与战斗反馈（提示/伤害飘字/技能/经验）
  * - parts/item-parts.ts     物品与装备零件（物品/背包格/边框/详情背景/光效/掉落物/格式化）
  * - parts/role-parts.ts     角色与 HUD 零件（货币/战力/头像/血条/头顶/预览/底部导航/属性行）
  * - parts/skill-parts.ts    技能零件（技能点/列表/技能行）

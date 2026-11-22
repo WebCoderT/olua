@@ -179,7 +179,7 @@ export class Game extends Component {
     // 与 settle 回执里的 statuses 走同一个落点（整表重建图标栏），不做增量
     CombatChannel.onStatuses = (statuses) => StatusManager.applyFromServer(statuses);
     // 怪物 AI 权威（#323）：monster-ai 帧由怪物管理器落点（位置趋近演出 + 自己的受击事件），
-    // 受击的血量入账/飘字/红闪在这里做（服务端已落账，客户端只演）
+    // 受击的血量入账/飘字在这里做（服务端已落账，客户端只演）
     CombatChannel.onMonsterAi = MonsterManager.applyServerAi.bind(MonsterManager);
     // 玩家互见（#324）：players 帧由远端玩家管理器落场（占位节点 + 名字 + 血条，纯演出）；
     // 自己按账号 id 过滤（广播的收件人是同图观看者，服务端不保证剔除发送者）
@@ -264,14 +264,14 @@ export class Game extends Component {
     // 用**错误色**（#498）：拒绝不是普通提示，绿色小字和「已邀请」「经验 +N」混在一起分不出来。
     CombatChannel.onServerError = (error) => GameUiHelper.createErrorTipText(error.message);
     // 玩家受击反馈（#13 / #323）：怪物普攻命中由**服务端**判定（monster-ai 帧的 hits），
-    // 这里做血量入账 + 飘字 + 红闪 + 受击动作（优先级规则在 RoleDisplay.playInjured：
+    // 这里做血量入账 + 飘字 + 受击动作（优先级规则在 RoleDisplay.playInjured：
     // 施法/死亡不播，其余情况一次性抖一下不打断任何事）。#670 删掉本地怪物 AI 后，
-    // 这是玩家挨打的**唯一**一条路 —— 本地既不结算也不再自己判断命中
+    // 这是玩家挨打的**唯一**一条路 —— 本地既不结算也不再自己判断命中。
+    // 全屏红闪已删（#1176 用户拍板：受击反馈只要伤害飘字，整屏闪红太吵）
     MonsterManager.onPlayerServerHit = (hit) => {
       StorageManager.applyMonsterHit({ hp: hit.hp, maxHp: hit.m });
       if (!this.roleDisplay) return;
       GameUiHelper.showDamageText(this.roleDisplay, hit.d);
-      GameUiHelper.showHitScreenFlash();
       this.roleDisplay.playInjured();
     };
     // 服务端配置快照（#294 / #573）：管理端改的运营配置（成长线文案/价格/属性、商城定价、地图玩法配置…）
