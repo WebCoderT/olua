@@ -127,7 +127,7 @@ check(true, `全部称号目录的图集帧序/画布检查通过（${diskDirs.l
 
 console.log("\n— E. 接线（源码断言）—");
 const roleSource = read("assets/entities/Role.ts");
-const storageSource = read("assets/ui/core/StorageManager.ts");
+const storageSource = require("./lib/storage-src.cjs").storageSourceFor(path.join(PROJECT_ROOT, "assets/ui/core/StorageManager.ts"));
 const helperSource = read("assets/ui/core/GameHelper.ts");
 const displaySource = read("assets/ui/components/role/RoleDisplay.ts");
 const managerSource = read("assets/ui/core/RoleUIManager.ts");
@@ -160,7 +160,8 @@ check(/updateTitleShow: \(\) => void;/.test(managerSource) && /static updateTitl
 check(/dir: title\.animation, kind: "frames"/.test(preloadSource) && /getTitleLevel\(role\.title\)/.test(preloadSource), "进图前预载当前称号的帧目录（未激活跳过）");
 
 check(/function createTitleCard/.test(uiHelperSource) && /function createTitleAttributeList/.test(uiHelperSource) && /function createTitleAnimation/.test(uiHelperSource), "GameUiHelper 有称号三零件（卡片/属性表/动画）");
-check(/titleUpgradeDialogLayout\.list\.cardSize/.test(uiHelperSource) && /titleAttributeLabels/.test(uiHelperSource), "称号零件的几何与属性顺序都来自 configs（不写死）");
+// #1120 拆分后：卡片尺寸收进 paintGrowthCard 的 spec（布局常量整体传入，零件不再点取 cardSize）
+check(/titleUpgradeDialogLayout\.list/.test(uiHelperSource) && /titleUpgradeDialogLayout\.attribute/.test(uiHelperSource) && /titleAttributeLabels/.test(uiHelperSource), "称号零件的几何与属性顺序都来自 configs（不写死）");
 check(/new TitleUpgradeDialog\(\)\.open\(\)/.test(roleInfoSource) && /roleInfoDialogLayout\.titleButton/.test(roleInfoSource), "角色信息弹窗有「称号」按钮打开称号弹窗（唯一入口）");
 check(/new WarSoulDialog/.test(npcClicksSource) && !/TitleUpgradeDialog/.test(npcClicksSource), "NPC 只挂战魂弹窗，称号不走 NPC");
 check(/createTitleCard|createTitleAttributeList|createTitleAnimation|upgradeTitle\(\)|RoleUIManager\.updateTitleShow/.test(dialogSource), "称号弹窗接线：零件/升级/头顶刷新");

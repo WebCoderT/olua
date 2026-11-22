@@ -564,7 +564,7 @@ export class RoleSelector extends Component {
       ),
     );
     cell.addChild(
-      UiHelper.createLabel(`${LEVEL_LABEL_PREFIX}${role.id}`, `${role.level} 级`, cardLayout.level.color, cardLayout.level.fontSize, new Vec2(cardLayout.level.offsetX, cardLayout.level.offsetY), cardLayout.level.size, Label.HorizontalAlign.RIGHT),
+      UiHelper.createLabel(`${LEVEL_LABEL_PREFIX}${role.id}`, getText("role_select_level_suffix", { level: role.level }), cardLayout.level.color, cardLayout.level.fontSize, new Vec2(cardLayout.level.offsetX, cardLayout.level.offsetY), cardLayout.level.size, Label.HorizontalAlign.RIGHT),
     );
     // 选中角标（金底深字，默认隐藏，选中时点亮）
     const badge = this.createBadge(`${CARD_BADGE_PREFIX}${role.id}`, cardLayout.badge.textKey);
@@ -745,7 +745,7 @@ export class RoleSelector extends Component {
     GameUiHelper.setRolePreviewSelected(preview, true, role.occupation, role.sex);
     this.mainView.stagePlate.active = true;
     this.mainView.stagePlateName.string = role.name;
-    this.mainView.stagePlateLevel.string = `${role.level} 级`;
+    this.mainView.stagePlateLevel.string = getText("role_select_level_suffix", { level: role.level });
   }
 
   /** 复位角色选中态：左栏回占位、chips 回空、立绘与名牌隐藏、进游戏按钮置灰（选中角色被删除后调用） */

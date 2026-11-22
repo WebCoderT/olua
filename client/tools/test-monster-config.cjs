@@ -110,12 +110,13 @@ check(
   check(aggressiveCount > 0, "快照里至少有一只主动怪（规则真的铺开过）", `主动 ${aggressiveCount}/220`);
 }
 
+// 只盯普通老怪（2~4）；1 号是 boss，速度 / 检测是运营数据（管理端随时调），不进断言
 check(
-  [1, 2, 3, 4].every((index) => {
+  [2, 3, 4].every((index) => {
     const m = rows.get(String(index));
     return m && m.moveSpeed === 2 && m.detectRange === 200;
   }),
-  "1~4 号老怪行为不回退（速度 2 / 检测 200）",
+  "2~4 号普通老怪行为不回退（速度 2 / 检测 200；1 号 boss 是运营数据不断言）",
 );
 
 const resMissing = [];

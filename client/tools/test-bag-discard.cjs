@@ -199,7 +199,7 @@ check(cellAt(0, 0) !== null, "取预览不会改动背包");
 console.log("— 界面接线：BagDialog / 配置 —");
 
 const dialogSource = fs.readFileSync(BAG_DIALOG_FILE, "utf8");
-const storageSource = fs.readFileSync(STORAGE_MANAGER_FILE, "utf8");
+const storageSource = require("./lib/storage-src.cjs").storageSourceFor(STORAGE_MANAGER_FILE);
 const layoutSource = dialogsSourceFor(DIALOGS_FILE);
 const textsSource = fs.readFileSync(TEXTS_FILE, "utf8");
 
@@ -207,7 +207,8 @@ check(/static getBagDiscardPreview\(row: number, col: number\)/.test(storageSour
 check(/static async discardBagGood\(row: number, col: number\): Promise<boolean> \{/.test(storageSource), "StorageManager 暴露了 discardBagGood");
 check(/action: "discard", row, col/.test(storageSource), "丢弃只报「丢哪一格」，置空由服务端做（#556）");
 
-check(/createMiddleButton\(\s*bagDialogLayout\.discardButton\.name/.test(dialogSource), "背包底部建了「丢弃」按钮");
+// #1120 拆分后：中号按钮工厂收进 GameUiHelper.createToneButton（tone 决定配色）
+check(/GameUiHelper\.createToneButton\(\s*bagDialogLayout\.discardButton\.name/.test(dialogSource), "背包底部建了「丢弃」按钮");
 check(/discardButton\.on\(Node\.EventType\.TOUCH_END, \(\) => this\.toggleDiscardMode\(\)/.test(dialogSource), "丢弃按钮绑定了模式开关");
 check(/private toggleDiscardMode\(\)/.test(dialogSource), "有 toggleDiscardMode（进入/退出丢弃模式）");
 check(/setButtonText\(this\.discardButton, getText\("label_bag_discard_exit"\)\)/.test(dialogSource), "进入丢弃模式后按钮文案变「退出丢弃」");
@@ -221,8 +222,9 @@ check(/setTimeout\(\(\) => this\.clearDiscardPending\(\), bagDialogLayout\.disca
 
 check(/this\.exitDiscardMode\(\);\s*(\/\/[^\n]*\n\s*)*void StorageManager\.tidyBag\(\)/.test(dialogSource), "点「一键整理」会先退出丢弃模式");
 check(/this\.exitDiscardMode\(\);\s*this\.onRecycleClick\(\)/.test(dialogSource), "点「一键回收」会先退出丢弃模式");
-check(/close\(\) \{\s*this\.cancelRecycleConfirm\(\);[\s\S]{0,160}this\.clearDiscardPending\(\);/.test(dialogSource), "关弹窗会清掉丢弃待确认与定时器");
-check(/isValid\(this\.dialog\)\) \{\s*this\.dialog = null;[\s\S]{0,160}this\.discardButton = null;/.test(dialogSource), "弹窗被外部销毁时清理丢弃按钮引用");
+// 生命周期收进 BaseDialog（dialog-kit）：close() 先走 onClose 钩子再销毁 —— 断言钩子里的清理顺序
+check(/onClose\(\) \{\s*this\.cancelRecycleConfirm\(\);[\s\S]{0,120}this\.clearDiscardPending\(\);/.test(dialogSource), "关弹窗会清掉丢弃待确认与定时器");
+check(/setButtonText\(button: Node \| null, text: string\) \{\s*if \(!button \|\| !isValid\(button\)\) return;/.test(dialogSource) && /this\.discardButton = null;/.test(dialogSource), "弹窗被外部销毁时残留引用不误操作（写文案前验 isValid，关闭时清引用）");
 
 // 布局：三按钮横向错开、丢弃按钮配置齐备
 {
@@ -317,7 +319,7 @@ check(/onConfirm: \(\) => \{[\s\S]{0,160}void StorageManager\.discardBagGood\(fr
 check(/onCancel: \(\) => \{[\s\S]{0,160}this\.bagGrid\?\.releaseDiscardHold\(\);/.test(dialogSource), "点「取消」只放开扣留（数据没动过，物品回原位）");
 check(!/confirm\.on\(Node\.EventType\.TOUCH_END/.test(dialogSource), "按钮逻辑不写在弹窗这层（由 ConfirmDialog 组件负责）");
 check(/private closeDiscardConfirm\(\) \{/.test(dialogSource), "有统一的收框入口");
-check(/close\(\) \{[\s\S]{0,320}this\.closeDiscardConfirm\(\);/.test(dialogSource), "关背包弹窗会收掉确认框（它挂在 UI 层，不随弹窗销毁）");
+check(/onClose\(\) \{[\s\S]{0,320}this\.closeDiscardConfirm\(\);/.test(dialogSource), "关背包弹窗会收掉确认框（它挂在 UI 层，不随弹窗销毁）");
 check(/this\.bagGrid\?\.releaseDiscardHold\(\);\s*\n\s*this\.bagGrid\?\.refresh\(/.test(dialogSource), "背包一变就放开扣留（refresh 里统一复位待确认状态）");
 check(/this\.closeDiscardConfirm\(\);\s*\n\s*const confirm = new ConfirmDialog/.test(dialogSource), "重复弹之前先收掉上一个（同一时刻只留一个确认框）");
 
