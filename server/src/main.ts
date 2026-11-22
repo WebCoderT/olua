@@ -1,5 +1,5 @@
 import "reflect-metadata";
-import { Logger, ValidationPipe } from "@nestjs/common";
+import { Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { NestFactory } from "@nestjs/core";
 import { NestExpressApplication } from "@nestjs/platform-express";
@@ -7,6 +7,7 @@ import { AppModule } from "./app.module";
 import { configReader, readConfigSnapshot } from "./config/config-snapshot";
 import { AllExceptionsFilter } from "./common/filters/all-exceptions.filter";
 import { TransformInterceptor } from "./common/interceptors/transform.interceptor";
+import { httpValidationPipe } from "./common/validation/validation-pipe.factory";
 import { lanIPv4Addresses } from "./common/utils/net-address.util";
 import { ModularLogger } from "./common/logger/modular-logger";
 import { setupSwagger, SWAGGER_PATH } from "./swagger/setup";
@@ -52,13 +53,9 @@ async function bootstrap() {
   app.set("trust proxy", config.get<boolean>("trustProxy") ?? false);
   // 跨域：客户端（Cocos Web 预览）与管理端（Vite dev server）都是独立源，必须开
   app.enableCors({ origin: corsOrigins.includes("*") ? true : corsOrigins });
-  app.useGlobalPipes(
-    new ValidationPipe({
-      whitelist: true,
-      transform: true,
-      transformOptions: { enableImplicitConversion: true },
-    }),
-  );
+  // 校验失败的消息必须全中文：自定义 exceptionFactory 兜底翻译 class-validator 的
+  // 英文默认模板（#1172），其余配置与实时进程同一口径（httpValidationPipe 工厂）
+  app.useGlobalPipes(httpValidationPipe());
   app.useGlobalFilters(new AllExceptionsFilter());
   app.useGlobalInterceptors(new TransformInterceptor());
 

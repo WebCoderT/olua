@@ -36,6 +36,7 @@ const { NestFactory } = require("@nestjs/core");
 const { ValidationPipe } = require("@nestjs/common");
 const { AppModule } = require("../dist/app.module");
 const { AllExceptionsFilter } = require("../dist/common/filters/all-exceptions.filter");
+const { httpValidationPipe } = require("../dist/common/validation/validation-pipe.factory");
 const { TransformInterceptor } = require("../dist/common/interceptors/transform.interceptor");
 const { setupSwagger } = require("../dist/swagger/setup");
 // 存档 PUT 的公共帮手（#820 起 revision 必填：先 GET 拿修订号再 PUT）
@@ -143,7 +144,7 @@ async function raiseLevel(roleId, level, token) {
 (async () => {
   const app = await NestFactory.create(AppModule.register({ realtime: true }), { logger: false });
   app.setGlobalPrefix("api");
-  app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true, transformOptions: { enableImplicitConversion: true } }));
+  app.useGlobalPipes(httpValidationPipe());
   app.useGlobalFilters(new AllExceptionsFilter());
   app.useGlobalInterceptors(new TransformInterceptor());
   // 文档挂载点与 main.ts 同一份实现（否则测试验的就不是真正跑起来的那份文档）
@@ -371,6 +372,13 @@ async function raiseLevel(roleId, level, token) {
 
   const badCount = await api("PATCH", `admin/roles/${roleA2Id}`, { token: adminToken, zoneId: ADMIN_ZONE, body: { bag: [{ row: 0, col: 0, id: "1", count: 0 }] } });
   check(badCount.code === 40000, "背包数量为 0 被拦下（DTO 40000）", `${badCount.code}`);
+  // #1172：管理端这条消息来自 DTO 自带的中文 message（「背包物品数量至少为 1」）——
+  // 全中文、不带英文默认模板词；兜底翻译层的判据见 e2e-bag（bag-op 的裸装饰器）
+  check(
+    /背包物品数量至少为 1/.test(String(badCount.message)) && !/must /.test(String(badCount.message)),
+    "背包数量被拒的消息也是中文（DTO 自带 message，#1172）",
+    JSON.stringify(badCount.message),
+  );
 
   const lostProps = await api("PATCH", `admin/roles/${roleA2Id}`, { token: adminToken, zoneId: ADMIN_ZONE, body: { bag: [{ row: 0, col: 0, id: "9001", count: 2 }] } });
   check(

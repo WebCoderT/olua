@@ -267,8 +267,18 @@ function pickBox(dbPath) {
     checkEqual(initial.body?.data?.wallCheck, true, "穿墙校验落库");
     const badTolerance = await patchMovement({ tolerance: 0.5 });
     checkEqual(badTolerance.body?.code, 40000, "容差 0.5 被拒（比上限还严 = 正常移动全被误判）");
+    check(
+      /容差至少 1/.test(String(badTolerance.body?.message)) && !/must /.test(String(badTolerance.body?.message)),
+      "容差被拒的消息是中文（含「容差至少 1」，不是英文默认模板，#1172）",
+      JSON.stringify(badTolerance.body?.message),
+    );
     const badMode = await patchMovement({ mode: "strict" });
     checkEqual(badMode.status, 400, "档位拼错直接 400（不会静默落一个不认识的档位进库）");
+    check(
+      /档位只能是 off \/ log \/ enforce/.test(String(badMode.body?.message)) && !/must /.test(String(badMode.body?.message)),
+      "档位被拒的消息也是中文（#1172）",
+      JSON.stringify(badMode.body?.message),
+    );
     // 把容差还原回基准（上面 0.5 被拒没有落库，这里只是显式摆回已知状态）
     await patchMovement({ mode: "log", maxSpeed: 400, tolerance: 1.35, wallCheck: true });
     //#endregion

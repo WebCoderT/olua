@@ -645,6 +645,29 @@ function recordsOf(dbPath, dropId, result) {
     });
     check(restored.code === 0, "B：保护期已还原成改之前的值", restored.message);
 
+    //#region 三点五、校验消息全中文（#1172）
+
+    group("三点五、校验消息全中文（#1172：DTO 自带 message，不落英文默认模板）");
+
+    const ttlTooLow = await api(baseUrl, "PATCH", "admin/runtime-params", {
+      token: adminToken, zoneId: ADMIN_ZONE, body: { drop: { ttlMs: 5000 } },
+    });
+    check(
+      ttlTooLow.code === 40000 && /掉落存活时长至少 10 秒/.test(ttlTooLow.message) && !/must /.test(ttlTooLow.message),
+      "A：ttlMs=5000 → 40000 且消息是中文（含「掉落存活时长至少 10 秒」，不是 must not be less than）",
+      JSON.stringify(ttlTooLow && { code: ttlTooLow.code, message: ttlTooLow.message }),
+    );
+    const capTooLow = await api(baseUrl, "PATCH", "admin/runtime-params", {
+      token: adminToken, zoneId: ADMIN_ZONE, body: { drop: { maxGroundPerMap: 5 } },
+    });
+    check(
+      capTooLow.code === 40000 && /单图地面上限至少 20 件/.test(capTooLow.message) && !/must /.test(capTooLow.message),
+      "A：maxGroundPerMap=5 → 40000 且消息是中文（含「单图地面上限至少 20 件」）",
+      JSON.stringify(capTooLow && { code: capTooLow.code, message: capTooLow.message }),
+    );
+
+    //#endregion
+
     //#endregion
 
     //#region 四、生命周期：TTL 到点自己消失

@@ -25,6 +25,7 @@ const { NestFactory } = require("@nestjs/core");
 const { ValidationPipe } = require("@nestjs/common");
 const { AppModule } = require("../dist/app.module");
 const { AllExceptionsFilter } = require("../dist/common/filters/all-exceptions.filter");
+const { httpValidationPipe } = require("../dist/common/validation/validation-pipe.factory");
 const { TransformInterceptor } = require("../dist/common/interceptors/transform.interceptor");
 const { setupSwagger } = require("../dist/swagger/setup");
 
@@ -91,7 +92,7 @@ function sendMail(roleId, token, body) {
 (async () => {
   const app = await NestFactory.create(AppModule.register({ realtime: true }), { logger: false });
   app.setGlobalPrefix("api");
-  app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true, transformOptions: { enableImplicitConversion: true } }));
+  app.useGlobalPipes(httpValidationPipe());
   app.useGlobalFilters(new AllExceptionsFilter());
   app.useGlobalInterceptors(new TransformInterceptor());
   setupSwagger(app);
