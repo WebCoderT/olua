@@ -1674,6 +1674,14 @@ export interface SkillRow {
   second_hit_ratio: number;
   /** 拉人距离（像素；0 = 不拉。方向 = 目标朝施法者。与 `push_distance` 方向相反） */
   pull_distance: number;
+  /**
+   * 释放行为（#1166；attack | status | dash）
+   *
+   * 客户端「释放后做什么」的唯一分发依据：单体攻击 / 自身状态 / 自身突进。
+   * 出厂默认 attack（与 #1166 之前所有单体技能的老行为一致）；服务端结算不按它掷伤害 ——
+   * 伤害分流仍走 target_type / require_target（dash 的校验约束保证它 targetType = "0"）。
+   */
+  behavior: string;
   updated_at: number;
 }
 

@@ -274,8 +274,9 @@ function main() {
   const warrior = read("assets/skills/warrior.ts");
   // #822 起状态型技能不在客户端挂 buff：只发 cast，status_id 由服务端按 skills 行施加
   // （客户端自己 apply 等于「服务端不知道的 buff」—— 既不计入结算，也不会出现在别人的屏幕上）
+  // #1166 起实现按行为命名：状态行为的实现叫 skillStatus（不再叫 skill_1010）
   check(
-    /skill_1010[\s\S]{0,400}CombatChannel\.sendCast/.test(warrior) && !/skill_1010[\s\S]{0,400}StatusManager\.apply\(/.test(warrior),
+    /skillStatus[\s\S]{0,400}CombatChannel\.sendCast/.test(warrior) && !/skillStatus[\s\S]{0,400}StatusManager\.apply\(/.test(warrior),
     "状态技能只发 cast 帧、不本地 apply（statusId 由服务端读配置施加）",
   );
   check(/castLockMs/.test(warrior), "技能释放实现把 castLockMs 传给动作锁");

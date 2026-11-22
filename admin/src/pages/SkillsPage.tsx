@@ -3,6 +3,8 @@ import {
   formatTime,
   OCCUPATION_LABELS,
   PERMISSION,
+  SKILL_ACTION_OPTIONS,
+  SKILL_BEHAVIOR_LABELS,
   SKILL_CATEGORY_LABELS,
   SKILL_OWNER_LABELS,
   SKILL_OWNER_OPTIONS,
@@ -52,6 +54,8 @@ interface SkillForm {
   icon: string;
   category: string;
   targetType: string;
+  /** 释放行为（#1166）：attack 单体攻击 / status 自身状态 / dash 自身突进 */
+  behavior: string;
   action: string;
   effect: string;
   effectOnSelf: boolean;
@@ -90,6 +94,7 @@ function toForm(item: Skill): SkillForm {
     icon: item.icon,
     category: item.category,
     targetType: item.targetType,
+    behavior: item.behavior || "attack",
     action: item.action,
     effect: item.effect,
     effectOnSelf: item.effectOnSelf,
@@ -162,6 +167,18 @@ function SkillEditDialog({
 
   const set = <K extends keyof SkillForm>(key: K, value: SkillForm[K]) => setForm({ ...form, [key]: value });
 
+  /**
+   * 切换释放行为（#1166）：带出与分类 / 目标类型的联动 ——
+   * status 自动把分类切到状态(2)，dash 自动把目标类型切到区域(0)；
+   * 切走的反向不自动改（用户可能只是改一下又改回来，自动改回会丢掉他手调的值），校验提示兜底。
+   */
+  const setBehavior = (behavior: string) => {
+    const next = { ...form, behavior };
+    if (behavior === "status") next.category = "2";
+    if (behavior === "dash") next.targetType = "0";
+    setForm(next);
+  };
+
   const setCoefficient = (index: number, patch: Partial<DamageCoefficient>) => {
     setForm({
       ...form,
@@ -191,6 +208,11 @@ function SkillEditDialog({
   }
   if (form.category === "2" && !form.statusId) problems.push("状态型技能必须指定要挂载的状态");
   if (form.category !== "2" && form.coefficients.length === 0) problems.push("主动 / 回复类技能至少要有一条伤害系数");
+  // 行为与分类 / 目标类型的联动（#1166；与服务端 assertSkillConsistency 同口径，
+  // 这里做即时提示，权威拒绝在服务端 40000）
+  if (form.behavior === "status" && form.category !== "2") problems.push("行为是「自身状态」的技能，分类必须是状态");
+  if (form.behavior !== "status" && form.category === "2") problems.push("状态型技能（分类 2）的行为必须是「自身状态」");
+  if (form.behavior === "dash" && form.targetType !== "0") problems.push("行为是「自身突进」的技能，目标类型必须是区域（服务端按它走「不查目标」的分流）");
   form.coefficients.forEach((entry, index) => {
     if (!entry.baseType) problems.push(`第 ${index + 1} 级的收益基数没选`);
     const message = checkNumber(String(entry.baseTypeRate), { name: `第 ${index + 1} 级的倍率`, min: 0, max: 100 });
@@ -206,6 +228,7 @@ function SkillEditDialog({
       icon: form.icon.trim(),
       category: form.category as UpdateSkill["category"],
       targetType: form.targetType as UpdateSkill["targetType"],
+      behavior: form.behavior as UpdateSkill["behavior"],
       action: form.action.trim(),
       effect: form.effect.trim(),
       effectOnSelf: form.effectOnSelf,
@@ -279,6 +302,18 @@ function SkillEditDialog({
             ))}
           </Select>
         </Field>
+        <Field
+          label="释放行为"
+          hint="客户端「释放后做什么」的分发依据（#1166）：突进要目标类型为区域、状态要分类为状态，切换时自动带出"
+        >
+          <Select value={form.behavior} onChange={(event) => setBehavior(event.target.value)}>
+            {Object.entries(SKILL_BEHAVIOR_LABELS).map(([value, text]) => (
+              <option key={value} value={value}>
+                {text}
+              </option>
+            ))}
+          </Select>
+        </Field>
         <Field label="职业归属" hint="决定它出现在哪个职业的技能栏里（全职业 = 三栏都有）">
           <Select value={form.occupation} onChange={(event) => set("occupation", event.target.value)}>
             {Object.entries(OCCUPATION_LABELS).map(([value, text]) => (
@@ -298,8 +333,18 @@ function SkillEditDialog({
           value={form.icon}
           onChange={(path) => set("icon", path)}
         />
-        <Field label="施法动作" hint="客户端动画动作键（如 attack_near）；空 = 不播动作">
-          <Input value={form.action} onChange={(event) => set("action", event.target.value)} />
+        <Field label="施法动作" hint="客户端动画动作键（#1166 起下拉选择，配错键 = 不播动画）；空 = 不播动作">
+          <Select value={form.action} onChange={(event) => set("action", event.target.value)}>
+            {SKILL_ACTION_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+            {/* 配置里存了下拉之外的动作键（老数据 / 手工导的行）：保留原值，避免保存时被悄悄清空 */}
+            {form.action && !SKILL_ACTION_OPTIONS.some((item) => item.value === form.action) ? (
+              <option value={form.action}>{form.action}（未登记的动作键）</option>
+            ) : null}
+          </Select>
         </Field>
         <IconField
           label="技能特效"
@@ -484,7 +529,7 @@ function SkillEditDialog({
   );
 }
 
-/** 新建表单的初值（建行其余的默认值由服务端补：分类 0 / 目标 1 / 等级 1 / 其余 0） */
+/** 新建表单的初值（建行其余的默认值由服务端补：分类 0 / 目标 1 / 行为 attack / 等级 1 / 其余 0） */
 function emptyCreateForm() {
   return {
     id: "9004",
@@ -492,6 +537,7 @@ function emptyCreateForm() {
     icon: "",
     category: "0",
     targetType: "1",
+    behavior: "attack",
     action: "attack_skill_1",
     effect: "effect/skill/1008@0",
     cooldown: "8",
@@ -532,11 +578,23 @@ function SkillCreateDialog({
 
   const set = <K extends keyof ReturnType<typeof emptyCreateForm>>(key: K, value: string) => setForm({ ...form, [key]: value });
 
+  /** 切换释放行为（#1166）：与编辑弹窗同一联动 —— status 带出分类 2，dash 带出目标类型 0 */
+  const setBehavior = (behavior: string) => {
+    const next = { ...form, behavior };
+    if (behavior === "status") next.category = "2";
+    if (behavior === "dash") next.targetType = "0";
+    setForm(next);
+  };
+
   const problems: string[] = [];
   if (!/^9\d{3}$/.test(form.id.trim())) problems.push("id 必须是 9000~9999 的四位数字（怪物技能段）");
   if (!form.label.trim()) problems.push("技能名不能为空");
   const stateful = form.category === "2";
   if (stateful && !form.statusId) problems.push("状态型技能必须指定要挂载的状态");
+  // 行为联动校验（#1166）：与服务端 assertSkillConsistency 同口径
+  if (form.behavior === "status" && form.category !== "2") problems.push("行为是「自身状态」的技能，分类必须是状态");
+  if (form.behavior !== "status" && form.category === "2") problems.push("状态型技能（分类 2）的行为必须是「自身状态」");
+  if (form.behavior === "dash" && form.targetType !== "0") problems.push("行为是「自身突进」的技能，目标类型必须是区域");
   for (const message of [
     checkNumber(form.cooldown, { name: "冷却", min: 0, max: 3600 }),
     checkNumber(form.distance, { name: "施法距离", min: 0, max: 100_000 }),
@@ -555,6 +613,7 @@ function SkillCreateDialog({
       icon: form.icon.trim(),
       category: form.category as CreateSkill["category"],
       targetType: form.targetType as CreateSkill["targetType"],
+      behavior: form.behavior as CreateSkill["behavior"],
       action: form.action.trim(),
       effect: form.effect.trim(),
       effectOnSelf: stateful,
@@ -619,6 +678,15 @@ function SkillCreateDialog({
             ))}
           </Select>
         </Field>
+        <Field label="释放行为" hint="#1166：突进带出区域目标、状态带出状态分类">
+          <Select value={form.behavior} onChange={(event) => setBehavior(event.target.value)}>
+            {Object.entries(SKILL_BEHAVIOR_LABELS).map(([value, text]) => (
+              <option key={value} value={value}>
+                {text}
+              </option>
+            ))}
+          </Select>
+        </Field>
         <IconField
           label="图标"
           hint="空 = 不显示；建完也能在编辑弹窗里改"
@@ -627,8 +695,14 @@ function SkillCreateDialog({
           value={form.icon}
           onChange={(path) => set("icon", path)}
         />
-        <Field label="施法动作" hint="如 attack_skill_1">
-          <Input value={form.action} onChange={(event) => set("action", event.target.value)} />
+        <Field label="施法动作" hint="客户端动画动作键（下拉选择）；空 = 不播动作">
+          <Select value={form.action} onChange={(event) => set("action", event.target.value)}>
+            {SKILL_ACTION_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </Select>
         </Field>
         <IconField
           label="技能特效"
@@ -852,6 +926,7 @@ export function SkillsPage() {
                 <th className={thClass}>分类</th>
                 <th className={thClass}>职业</th>
                 <th className={thClass}>目标</th>
+                <th className={thClass}>行为</th>
                 <th className={thClass}>消耗</th>
                 <th className={thClass}>倍率</th>
                 <th className={thClass}>动作锁</th>
@@ -876,6 +951,7 @@ export function SkillsPage() {
                     <td className={tdClass}>{SKILL_CATEGORY_LABELS[item.category] ?? item.category}</td>
                     <td className={tdClass}>{OCCUPATION_LABELS[item.occupation] ?? item.occupation}</td>
                     <td className={tdClass}>{SKILL_TARGET_TYPE_LABELS[item.targetType] ?? item.targetType}</td>
+                    <td className={tdClass}>{SKILL_BEHAVIOR_LABELS[item.behavior] ?? item.behavior}</td>
                     <td className={`${tdClass} text-xs text-ink-4`}>
                       冷却 {item.cooldown}s · 蓝 {item.mpCost}
                       {item.distance > 0 ? ` · 距离 ${item.distance}` : ""}

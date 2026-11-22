@@ -406,6 +406,7 @@ function skills() {
     canAuto: bool(row.canAuto),
     occupation: row.occupation,
     pushDistance: row.pushDistance,
+    behavior: row.behavior ?? "attack",
     updatedAt: row.updatedAt,
   }));
 }

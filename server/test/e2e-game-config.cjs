@@ -2679,6 +2679,28 @@ async function main() {
     const ghostStatusRef = await api(base, "PATCH", "/api/admin/skills/1000", { token, body: { statusId: "9999" } });
     checkEqual(ghostStatusRef.status, 404, "statusId 指向不存在的状态 → 404");
     checkEqual(ghostStatusRef.body?.code, 50030, "状态未找到用专属业务码 50030");
+
+    // —— 释放行为（#1166）：客户端按它分发「释放后做什么」，跨字段约束与 service 同口径 ——
+    checkEqual(skill1000?.behavior, "attack", "普攻的释放行为出厂 = 单体攻击");
+    checkEqual(skills["1008"].behavior, "dash", "十步一杀的释放行为出厂 = 自身突进（启动回填 / 快照带的）");
+    checkEqual(skill1010?.behavior, "status", "护体神盾的释放行为出厂 = 自身状态");
+    const badBehavior = await api(base, "PATCH", "/api/admin/skills/1000", { token, body: { behavior: "teleport" } });
+    checkEqual(badBehavior.status, 400, "行为不在枚举里 → 400（DTO 拦下）");
+    const behaviorStatusMismatch = await api(base, "PATCH", "/api/admin/skills/1000", { token, body: { behavior: "status" } });
+    checkEqual(behaviorStatusMismatch.status, 400, "行为配自身状态但分类不是状态 → 400");
+    checkEqual(behaviorStatusMismatch.body?.code, 40000, "行为与分类不一致 → 40000（跨字段约束）");
+    const behaviorDashMismatch = await api(base, "PATCH", "/api/admin/skills/1000", { token, body: { behavior: "dash" } });
+    checkEqual(behaviorDashMismatch.status, 400, "行为配自身突进但目标类型不是区域 → 400");
+    checkEqual(behaviorDashMismatch.body?.code, 40000, "突进与目标类型不一致 → 40000（跨字段约束）");
+    const statusAttackMismatch = await api(base, "PATCH", "/api/admin/skills/1010", { token, body: { behavior: "attack" } });
+    checkEqual(statusAttackMismatch.status, 400, "状态型技能把行为改成单体攻击 → 400（两边各按各的分流就分叉了）");
+    const dashToStatus = await api(base, "PATCH", "/api/admin/skills/1008", { token, body: { behavior: "status" } });
+    checkEqual(dashToStatus.status, 400, "突进技能把行为改成自身状态 → 400");
+    const dashRewrite = await api(base, "PATCH", "/api/admin/skills/1008", { token, body: { behavior: "dash" } });
+    checkEqual(dashRewrite.status, 200, "突进技能显式写回突进行为 → 200（目标类型区域已满足约束）");
+    checkEqual(dashRewrite.body?.data?.behavior, "dash", "响应里的行为仍是突进");
+    const behaviorRewrite = await api(base, "PATCH", "/api/admin/skills/1000", { token, body: { behavior: "attack" } });
+    checkEqual(behaviorRewrite.status, 200, "单体攻击显式写回原行为 → 200");
     // 与约束无关的字段照常可改：1008 是「分类主动但倍率空」的历史行，不该连改名都改不了
     const patchLock = await api(base, "PATCH", "/api/admin/skills/1008", { token, body: { castLockMs: 500 } });
     checkEqual(patchLock.status, 200, "历史不一致行改释放限制字段不被跨字段约束拦下");
@@ -2750,6 +2772,9 @@ async function main() {
     checkEqual(snapSkill1000?.castLockMs, 700, "快照里的技能带释放动作锁（客户端按它锁出手）");
     checkEqual(snapSkill1000?.occupation, "2", "快照里的技能带职业归属（客户端据此重建技能栏）");
     checkEqual(snapSkill1000?.pushDistance, 60, "快照里的技能带击退距离（客户端据此推怪）");
+    checkEqual(snapSkill1000?.behavior, "attack", "快照里的技能带释放行为（客户端按它分发释放实现，#1166）");
+    const snapSkill1008 = skillSnapshot.body?.data?.skills?.find((row) => row.id === "1008");
+    checkEqual(snapSkill1008?.behavior, "dash", "快照里十步一杀的行为是突进（客户端按它走瞬移实现）");
     const snapStatus2001 = skillSnapshot.body?.data?.statuses?.find((row) => row.id === "2001");
     checkEqual(Object.keys(snapStatus2001?.combat ?? {}).length, 0, "快照里的状态修正跟着被清空（改配置对客户端生效的通道）");
 

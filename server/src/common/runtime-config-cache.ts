@@ -142,6 +142,8 @@ export interface SkillSource {
   second_hit_ratio: number;
   /** 拉人距离（像素；0 = 不拉；#826 第三批） */
   pull_distance: number;
+  /** 释放行为（#1166：attack | status | dash；结算用它兜住「突进不该找目标」） */
+  behavior: string;
 }
 
 /** 状态行（#822：角色侧状态要在结算层回答「防御倍率 / 格挡多少」）
@@ -465,6 +467,8 @@ export function applySkillOverrides(rows: SkillSource[]): void {
       // #826 第三批：两段连击与拉人。缺字段一律按 0（= 没有这两件事），旧配置行为不变
       secondHitRatio: numberOr(row.second_hit_ratio),
       pullDistance: numberOr(row.pull_distance),
+      // #1166：释放行为。旧快照没有这列时按 attack 兜底（= 所有单体技能的老行为）
+      behavior: row.behavior || "attack",
     });
   }
   skillRows = map;

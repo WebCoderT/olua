@@ -338,10 +338,13 @@ function rollRange(range: [number, number]): number {
  * 三种「配了也放不出来」的组合在这里挡掉，省得 AI 每 tick 白跑：
  * - 分类不是主动 / 状态（被动与回复不归怪物 AI 管）；
  * - 主动技能没有伤害系数（放出去伤害恒 0，与角色侧 `assertSkillConsistency` 同一理由）；
- * - 状态型技能指向的状态行不存在（被删了 / 改了 id）。
+ * - 状态型技能指向的状态行不存在（被删了 / 改了 id）；
+ * - 释放行为是 dash（#1166：突进是「施法者朝鼠标位置瞬移」的角色侧演出，怪物 AI 没有
+ *   瞬移与鼠标悬停语义 —— 不挡的话 AI 会按主动技能掷伤害，与客户端的突进演出分叉）。
  */
 function buildCastPlan(skill: SkillRow, priority: number, cooldownOverride: number | null, status: StatusRow | undefined): CastPlan | null {
   if (skill.category !== "0" && skill.category !== "2") return null;
+  if (String(skill.behavior ?? "") === "dash") return null;
   const coefficients = parseCoefficientsJson(skill.damage_coefficients);
   const first = coefficients[0];
   const rate = first ? Number(first.baseTypeRate) || 0 : 0;

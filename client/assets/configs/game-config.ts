@@ -10,7 +10,7 @@ import type { MapConfig, MapId, NpcData } from "../types/map";
 import { OECCUPATION } from "../types/role";
 import type { SpeedRate } from "../types/animation";
 import { ACTION } from "../types/animation";
-import type { DamageCoefficient, SkillData, SkillId } from "../types/skill";
+import type { DamageCoefficient, SkillBehavior, SkillData, SkillId } from "../types/skill";
 import { SkillTargetType, SkillType } from "../types/skill";
 import type { MonsterPresentation, MonsterRuntimeStats } from "../types/monster";
 import type {
@@ -1524,6 +1524,8 @@ export interface SkillSeedLike {
   occupation: string;
   /** 击退距离（像素；0 = 不击退） */
   pushDistance: number;
+  /** 释放行为（#1166：attack | status | dash；旧快照缺这列时按 attack 兜底） */
+  behavior: string;
 }
 
 /** 技能数值表（内容全部来自服务端；加载期为空） */
@@ -1595,6 +1597,9 @@ function toSkillData(row: SkillSeedLike): SkillData & { id: SkillId } {
     castLockMs: Number(row.castLockMs) || 0,
     // 缺省 true：绝大多数技能都要有目标才能放；自身 / 状态型技能在表里显式写 false
     requireTarget: row.requireTarget !== false,
+    // 释放行为（#1166）：客户端按它分发释放实现。旧快照没有这列时按 attack 兜底
+    // （= #1166 之前所有单体技能的老行为，与状态型的区分仍有 type=2 可查）
+    behavior: (row.behavior || "attack") as SkillBehavior,
   };
 }
 
