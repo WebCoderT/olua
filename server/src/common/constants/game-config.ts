@@ -139,6 +139,26 @@ export const SKILL_CATEGORY_LABELS: Record<string, string> = {
 export const SKILL_TARGET_TYPE_VALUES = ["0", "1", "2", "3"];
 
 /**
+ * 技能释放行为（#1166）
+ *
+ * 客户端「释放后做什么」的唯一分发依据（以前按 id 硬编码分发，运营在管理端改不了行为）：
+ * - `attack`：单体攻击 —— 面向目标播动作、出手上报服务端掷伤害（1000/1002~1007/1009/1011 的老行为）；
+ * - `status`：自身状态 —— 只上报一次出手，状态由服务端挂给自己（1010/9002/9003 的老行为）；
+ * - `dash`：自身突进 —— 朝鼠标悬停位置瞬移（距离上限 = distance），不掷伤害（1008 的老行为）。
+ *
+ * 与 `category` 的联动约束（`assertSkillConsistency`）：`status` ⇔ `category = "2"`；
+ * `dash` ⇒ 目标类型必须是区域（"0"，与 #824 起服务端「不查目标、不掷伤害」的分流同一路径）。
+ */
+export const SKILL_BEHAVIOR_VALUES = ["attack", "status", "dash"];
+
+/** 技能释放行为中文名（管理端界面用） */
+export const SKILL_BEHAVIOR_LABELS: Record<string, string> = {
+  attack: "单体攻击",
+  status: "自身状态",
+  dash: "自身突进",
+};
+
+/**
  * 技能的职业归属（= 客户端 `types/role.OECCUPATION` 的枚举值，**逐值一致**）
  *
  * #603 第十一域起跟着技能行入库：客户端技能栏按这一列重建「职业 → 技能」映射,

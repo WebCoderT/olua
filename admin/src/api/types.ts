@@ -416,6 +416,33 @@ export const SKILL_TARGET_TYPE_LABELS: Record<string, string> = {
   "3": "自身",
 };
 
+/** 释放行为（#1166；与服务端 `SKILL_BEHAVIOR_VALUES` 同集合） */
+export const SKILL_BEHAVIOR_LABELS: Record<string, string> = {
+  attack: "单体攻击",
+  status: "自身状态",
+  dash: "自身突进",
+};
+
+/**
+ * 施法动作下拉项（#1166；键 = 客户端 `types/animation.ts` 的 `ACTION` 枚举，**逐值一致**）
+ *
+ * 以前是自由文本输入，填错动作键客户端就不播动画（还不报错）；改下拉后配错的可能性归零。
+ * `die`（死亡）不当施法动作，不进下拉 —— 配它等于让角色当场躺下。
+ */
+export const SKILL_ACTION_OPTIONS: readonly { value: string; label: string; hint: string }[] = [
+  { value: "", label: "（不播动作）", hint: "释放时不改变角色动画" },
+  { value: "stand", label: "stand · 站立", hint: "原地施法，多数持续型技能用它" },
+  { value: "attack_near", label: "attack_near · 近战攻击", hint: "挥砍动作" },
+  { value: "attack_skill_1", label: "attack_skill_1 · 技能攻击 1", hint: "重击类技能动作" },
+  { value: "attack_far", label: "attack_far · 远程攻击", hint: "法师 / 道士施法动作" },
+  { value: "a1", label: "a1 · 特殊动作 A", hint: "怪物咆哮类动作" },
+  { value: "test1", label: "test1 · 测试动作 1", hint: "素材试验帧" },
+  { value: "test3", label: "test3 · 测试动作 3", hint: "素材试验帧" },
+  { value: "walk", label: "walk · 走路", hint: "一般不当施法动作" },
+  { value: "run", label: "run · 跑动", hint: "一般不当施法动作" },
+  { value: "injured", label: "injured · 受伤", hint: "一般不当施法动作" },
+];
+
 /** 状态来源 */
 export const STATUS_SOURCE_LABELS: Record<string, string> = {
   skill: "技能",

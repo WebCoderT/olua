@@ -1253,12 +1253,15 @@ const AOE_DEFAULT_RADIUS = 200;
 /**
  * 这个技能要不要点一只怪当目标（#824）
  *
- * 判据 = `target_type === "1"`（单体）且 `require_target` 没关（`#822` 起状态型技能配 0）。
- * 与客户端 `SkillManager.tryCast` 的判断同一口径
+ * 判据 = `target_type === "1"`（单体）且 `require_target` 没关（`#822` 起状态型技能配 0），
+ * 另加 `behavior !== "dash"`（#1166：突进技能的目标是「一块地」，配置校验保证它
+ * `target_type = "0"`，这里再兜一道 —— 就算运营绕过校验把目标类型改坏，突进也不会
+ * 被 unknown_target 拦掉）。与客户端 `SkillManager.tryCast` 的判断同一口径
  * （`config.targetType === SINGLE && config.requireTarget !== false`）——
  * 两边各写一套的结果是「客户端去找目标、服务端说不用」，或者反过来。
  */
 function needsMonsterTarget(skill: Record<string, unknown>): boolean {
+  if (String(skill.behavior ?? "") === "dash") return false;
   const targetType = String(skill.targetType ?? "1");
   if (targetType !== "1") return false;
   return skill.requireTarget !== false;

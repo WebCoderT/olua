@@ -86,18 +86,18 @@ const RATES_1000 = [1, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 2].map((valu
  * 谁读字段谁读清单决定它出不出来。现在字段是唯一来源，按技能栏的实际表现对齐到 "1"。
  */
 const EXPECTED = {
-  "1000": { id: "1000", label: "‌基础剑术", icon: "skill/icon/1001", cooldown: 1, mpCost: 0, targetType: "1", oeccupation: "1", level: 1, description: "普通单体攻击技能，通过挥砍手中武器，对敌人直接造成普通物理伤害，伤害与物理攻击相关", type: "0", distance: 10, damageCoefficients: RATES_1000, action: "attack_near", canAuto: true },
-  "1001": { id: "1001", label: "烈火剑法", icon: "skill/icon/1006", cooldown: 1, mpCost: 8, targetType: "1", oeccupation: "1", level: 10, description: "战士标志性爆发技能，10级可造成‌280%~560%‌ 攻击伤害，附带15%暴击率，觉醒后还会附加灼烧效果，是PK秒杀、打BOSS爆发的核心招式", type: "0", distance: 10, damageCoefficients: rates(3, 4), action: "attack_skill_1", canAuto: false, effect: "effect/skill/1006@0", effectIsOnSelf: true, statusId: "2003" },
-  "1002": { id: "1002", label: "刺杀剑术", icon: "skill/icon/1003", cooldown: 1, mpCost: 6, targetType: "1", oeccupation: "1", level: 10, description: "公认的破防神技，隔位释放的第二格剑气为无属性攻击，可无视目标防御，直接穿透法师的魔法盾，是克制远程职业、挑战高防BOSS的必备技能", type: "0", distance: 0, damageCoefficients: rates(3, 4), action: "stand", canAuto: false, effect: "effect/skill/1002@0", effectIsOnSelf: true },
-  "1003": { id: "1003", label: "莲月剑法", icon: "skill/icon/2003", cooldown: 1, mpCost: 6, targetType: "1", oeccupation: "1", level: 10, description: "传奇3版本特色技能，可打出两段连击，总伤害达300%，目标防御越高伤害增幅越明显，适合团战持续黏人输出、残血收割", type: "0", distance: 0, damageCoefficients: rates(3, 4), action: "stand", canAuto: false, effect: "effect/skill/1002@0", effectIsOnSelf: true },
-  "1004": { id: "1004", label: "‌擒龙手‌", icon: "skill/icon/3010", cooldown: 1, mpCost: 10, targetType: "1", oeccupation: "1", level: 10, description: "高阶特色技能，可将远处的目标直接拉到身边并附加眩晕，同时给自己增加攻击buff，是团战中强切敌方后排的神技", type: "0", distance: 100000, damageCoefficients: rates(3, 4), action: "attack_far", canAuto: false, effect: "effect/skill/1002@0", effectIsOnSelf: false, statusId: "2004" },
-  "1005": { id: "1005", label: "野蛮冲撞", icon: "skill/icon/1010", cooldown: 1, mpCost: 8, targetType: "1", oeccupation: "1", level: 10, description: "全版本通用的核心控场技能，10级可冲撞4格，65%概率将等级低于自身的目标撞飞并眩晕0.8秒，用于追击敌人、分割敌方阵型、抢BOSS卡位都非常实用", type: "0", distance: 0, damageCoefficients: rates(3, 4), action: "stand", canAuto: false, effect: "effect/skill/1002@0", effectIsOnSelf: true },
-  "1006": { id: "1006", label: "逐日剑法‌", icon: "skill/icon/2202", cooldown: 1, mpCost: 8, targetType: "1", oeccupation: "1", level: 10, description: "四格范围内的突进突袭技能，可快速拉近与远程职业的距离，弥补战士手短的短板，是PK中追击残血目标的利器", type: "0", distance: 0, damageCoefficients: rates(3, 4), action: "stand", canAuto: false, effect: "effect/skill/1002@0", effectIsOnSelf: true },
-  "1007": { id: "1007", label: "狮子吼", icon: "skill/icon/3007", cooldown: 1, mpCost: 12, targetType: "1", oeccupation: "1", level: 10, description: "范围麻痹技能，可震开并麻痹周围3格内的敌人，等级高于目标时必中，被围攻时能快速脱身，团战中可打乱敌方后排输出节奏", type: "0", distance: 0, damageCoefficients: rates(3, 4), action: "stand", canAuto: false, effect: "effect/skill/1002@0", effectIsOnSelf: true, statusId: "2005" },
-  "1008": { id: "1008", label: "十步一杀", icon: "skill/icon/1005", cooldown: 1, mpCost: 10, targetType: "0", oeccupation: "1", level: 10, description: "高阶专属技能，可瞬间突进到目标身前，是后期版本中贴身开团、追击残血目标的先手招式", type: "0", distance: 200, damageCoefficients: [], action: "attack_far", canAuto: false, effect: "effect/skill/3010@0" },
-  "1009": { id: "1009", label: "半月弯刀", icon: "skill/icon/1004", cooldown: 1, mpCost: 6, targetType: "2", requireTarget: false, oeccupation: "1", level: 10, description: "范围群攻技能，可同时攻击周围范围内的多个敌人，挂机清怪效率极高，被围时贴身释放也能快速清场突围", type: "0", distance: 320, damageCoefficients: rates(3, 4), action: "stand", canAuto: false, effect: "effect/skill/1002@0", effectIsOnSelf: true },
-  "1010": { id: "1010", label: "‌护体神盾", icon: "skill/icon/2009", cooldown: 60, mpCost: 15, statusId: "2001", requireTarget: false, targetType: "3", oeccupation: "1", level: 1, description: "被动减伤技能，概率格挡 incoming 伤害，大幅提升战士的生存能力，是后期团战中站得住脚的关键保障", type: "2", distance: 0, damageCoefficients: rates(3, 4), action: "attack_far", canAuto: false },
-  "1011": { id: "1011", label: "金刚护体", icon: "skill/icon/1008", cooldown: 1, mpCost: 15, statusId: "2002", requireTarget: false, targetType: "1", oeccupation: "1", level: 10, description: "主动防御buff，开启后短时间内可提升40%物防、30%魔防，附带25%减伤效果，能硬抗法师多套技能，打BOSS和团战前必开", type: "2", distance: 0, damageCoefficients: rates(3, 4), action: "attack_far", canAuto: false },
+  "1000": { id: "1000", label: "‌基础剑术", icon: "skill/icon/1001", cooldown: 1, mpCost: 0, targetType: "1", oeccupation: "1", level: 1, description: "普通单体攻击技能，通过挥砍手中武器，对敌人直接造成普通物理伤害，伤害与物理攻击相关", type: "0", distance: 10, damageCoefficients: RATES_1000, action: "attack_near", canAuto: true, behavior: "attack" },
+  "1001": { id: "1001", label: "烈火剑法", icon: "skill/icon/1006", cooldown: 1, mpCost: 8, targetType: "1", oeccupation: "1", level: 10, description: "战士标志性爆发技能，10级可造成‌280%~560%‌ 攻击伤害，附带15%暴击率，觉醒后还会附加灼烧效果，是PK秒杀、打BOSS爆发的核心招式", type: "0", distance: 10, damageCoefficients: rates(3, 4), action: "attack_skill_1", canAuto: false, effect: "effect/skill/1006@0", effectIsOnSelf: true, statusId: "2003", behavior: "attack" },
+  "1002": { id: "1002", label: "刺杀剑术", icon: "skill/icon/1003", cooldown: 1, mpCost: 6, targetType: "1", oeccupation: "1", level: 10, description: "公认的破防神技，隔位释放的第二格剑气为无属性攻击，可无视目标防御，直接穿透法师的魔法盾，是克制远程职业、挑战高防BOSS的必备技能", type: "0", distance: 0, damageCoefficients: rates(3, 4), action: "stand", canAuto: false, effect: "effect/skill/1002@0", effectIsOnSelf: true, behavior: "attack" },
+  "1003": { id: "1003", label: "莲月剑法", icon: "skill/icon/2003", cooldown: 1, mpCost: 6, targetType: "1", oeccupation: "1", level: 10, description: "传奇3版本特色技能，可打出两段连击，总伤害达300%，目标防御越高伤害增幅越明显，适合团战持续黏人输出、残血收割", type: "0", distance: 0, damageCoefficients: rates(3, 4), action: "stand", canAuto: false, effect: "effect/skill/1002@0", effectIsOnSelf: true, behavior: "attack" },
+  "1004": { id: "1004", label: "‌擒龙手‌", icon: "skill/icon/3010", cooldown: 1, mpCost: 10, targetType: "1", oeccupation: "1", level: 10, description: "高阶特色技能，可将远处的目标直接拉到身边并附加眩晕，同时给自己增加攻击buff，是团战中强切敌方后排的神技", type: "0", distance: 100000, damageCoefficients: rates(3, 4), action: "attack_far", canAuto: false, effect: "effect/skill/1002@0", effectIsOnSelf: false, statusId: "2004", behavior: "attack" },
+  "1005": { id: "1005", label: "野蛮冲撞", icon: "skill/icon/1010", cooldown: 1, mpCost: 8, targetType: "1", oeccupation: "1", level: 10, description: "全版本通用的核心控场技能，10级可冲撞4格，65%概率将等级低于自身的目标撞飞并眩晕0.8秒，用于追击敌人、分割敌方阵型、抢BOSS卡位都非常实用", type: "0", distance: 0, damageCoefficients: rates(3, 4), action: "stand", canAuto: false, effect: "effect/skill/1002@0", effectIsOnSelf: true, behavior: "attack" },
+  "1006": { id: "1006", label: "逐日剑法‌", icon: "skill/icon/2202", cooldown: 1, mpCost: 8, targetType: "1", oeccupation: "1", level: 10, description: "四格范围内的突进突袭技能，可快速拉近与远程职业的距离，弥补战士手短的短板，是PK中追击残血目标的利器", type: "0", distance: 0, damageCoefficients: rates(3, 4), action: "stand", canAuto: false, effect: "effect/skill/1002@0", effectIsOnSelf: true, behavior: "attack" },
+  "1007": { id: "1007", label: "狮子吼", icon: "skill/icon/3007", cooldown: 1, mpCost: 12, targetType: "1", oeccupation: "1", level: 10, description: "范围麻痹技能，可震开并麻痹周围3格内的敌人，等级高于目标时必中，被围攻时能快速脱身，团战中可打乱敌方后排输出节奏", type: "0", distance: 0, damageCoefficients: rates(3, 4), action: "stand", canAuto: false, effect: "effect/skill/1002@0", effectIsOnSelf: true, statusId: "2005", behavior: "attack" },
+  "1008": { id: "1008", label: "十步一杀", icon: "skill/icon/1005", cooldown: 1, mpCost: 10, targetType: "0", oeccupation: "1", level: 10, description: "高阶专属技能，可瞬间突进到目标身前，是后期版本中贴身开团、追击残血目标的先手招式", type: "0", distance: 200, damageCoefficients: [], action: "attack_far", canAuto: false, effect: "effect/skill/3010@0", behavior: "dash" },
+  "1009": { id: "1009", label: "半月弯刀", icon: "skill/icon/1004", cooldown: 1, mpCost: 6, targetType: "2", requireTarget: false, oeccupation: "1", level: 10, description: "范围群攻技能，可同时攻击周围范围内的多个敌人，挂机清怪效率极高，被围时贴身释放也能快速清场突围", type: "0", distance: 320, damageCoefficients: rates(3, 4), action: "stand", canAuto: false, effect: "effect/skill/1002@0", effectIsOnSelf: true, behavior: "attack" },
+  "1010": { id: "1010", label: "‌护体神盾", icon: "skill/icon/2009", cooldown: 60, mpCost: 15, statusId: "2001", requireTarget: false, targetType: "3", oeccupation: "1", level: 1, description: "被动减伤技能，概率格挡 incoming 伤害，大幅提升战士的生存能力，是后期团战中站得住脚的关键保障", type: "2", distance: 0, damageCoefficients: rates(3, 4), action: "attack_far", canAuto: false, behavior: "status" },
+  "1011": { id: "1011", label: "金刚护体", icon: "skill/icon/1008", cooldown: 1, mpCost: 15, statusId: "2002", requireTarget: false, targetType: "1", oeccupation: "1", level: 10, description: "主动防御buff，开启后短时间内可提升40%物防、30%魔防，附带25%减伤效果，能硬抗法师多套技能，打BOSS和团战前必开", type: "2", distance: 0, damageCoefficients: rates(3, 4), action: "attack_far", canAuto: false, behavior: "status" },
 };
 
 const roleSkills = skillData.filter((item) => item.owner !== "monster");
@@ -163,16 +163,16 @@ check(
 );
 check(!/from "\.\.\/skills\/warrior"/.test(dataSource), "技能数据区不 import 技能实现（注释里允许提到名字，import 语句不允许）");
 check(!/from "\.\.\/ui\/(?!utils\/net\/ApiModels)/.test(dataSource) && !/from "\.\.\/entities\//.test(dataSource), "不引用 ui/ 运行时与 entities/（ApiModels 的纯类型除外）");
-check(/import \{ skill_1000, skill_1001, skill_1008, skill_1010 \} from "\.\.\/skills\/warrior";/.test(skillSource), "skill.ts（接线层）引用 skills/warrior 的 4 个实现");
+check(/import \{ skillAttack, skillDash, skillStatus \} from "\.\.\/skills\/warrior";/.test(skillSource), "skill.ts（接线层）引用 skills/warrior 的 3 个行为实现（#1166）");
 check(
-  /const roleSkillHandlers: Record<RoleSkillId, \(context: SkillContext\) => void> = \{/.test(skillSource),
-  "接线映射是 Record<RoleSkillId, ...>（tsc 强制 12 个角色 id 齐全，漏接编译不过）",
+  /const behaviorHandlers: Record<SkillBehavior, \(context: SkillContext\) => void> = \{/.test(skillSource),
+  "接线映射是 Record<SkillBehavior, ...>（#1166 起按行为分发，tsc 强制三种行为齐全）",
 );
 check(
   /skills\.set\(item\.id, \{ \.\.\.item, onClick \}\);/.test(skillSource),
-  "skills Map 由 spread 合成（数值透传 + onClick 按 id 接上）",
+  "skills Map 由 spread 合成（数值透传 + onClick 按行为接上）",
 );
-check(/if \(!onClick\) continue;/.test(skillSource), "没有本地实现的技能（怪物技能）不进 skills Map —— 误调本地释放更该暴露");
+check(/if \(item\.owner === "monster"\) continue;/.test(skillSource), "怪物技能不进 skills Map —— 误调本地释放更该暴露");
 
 // ==============================================================================
 //  C. 接线运行期（编译 skill.ts → 产物 warrior.js 换命名函数桩 → 同一性）
@@ -234,22 +234,20 @@ if (!tsc) {
     const ownErrors = log.split("\n").filter((line) => line.includes("error TS") && /configs\/(skill|skill-data)\.ts/.test(line));
     check(ownErrors.length === 0, "skill.ts / skill-data.ts 自身编译 0 错（warrior 依赖图报错属预期）", ownErrors.slice(0, 3).join(" | "));
 
-    // 编译产物里的 skills/warrior.js 换成命名函数桩（切断 cc / ui 依赖，保留 4 个导出）
+    // 编译产物里的 skills/warrior.js 换成命名函数桩（切断 cc / ui 依赖，保留 3 个行为实现）
     const warriorJs = path.join(out, "skills/warrior.js");
     check(fs.existsSync(warriorJs), "产物里有 skills/warrior.js（替换法成立）");
     if (fs.existsSync(warriorJs)) {
       fs.writeFileSync(warriorJs, [
         '"use strict";',
         'Object.defineProperty(exports, "__esModule", { value: true });',
-        "exports.skill_1010 = exports.skill_1008 = exports.skill_1001 = exports.skill_1000 = void 0;",
-        "function skill_1000() {}",
-        "function skill_1001() {}",
-        "function skill_1008() {}",
-        "function skill_1010() {}",
-        "exports.skill_1000 = skill_1000;",
-        "exports.skill_1001 = skill_1001;",
-        "exports.skill_1008 = skill_1008;",
-        "exports.skill_1010 = skill_1010;",
+        "exports.skillStatus = exports.skillDash = exports.skillAttack = void 0;",
+        "function skillAttack() {}",
+        "function skillStatus() {}",
+        "function skillDash() {}",
+        "exports.skillAttack = skillAttack;",
+        "exports.skillStatus = skillStatus;",
+        "exports.skillDash = skillDash;",
       ].join("\n"));
 
       const wired = require(path.join(out, "configs/skill.js"));
@@ -258,17 +256,18 @@ if (!tsc) {
       // 这里按线上同一条路灌种子再让接线层重算 skills Map —— 不灌就是「空 Map 全红」
       require(path.join(out, "configs/game-config.js")).applySkillData(factory.skills());
       wired.rebuildSkills();
-      /** id → 应接的实现函数名（与 warrior.ts 的导出名一一对应） */
+      /** id → 应接的实现函数名（#1166：按 behavior 分发，与 warrior.ts 的导出名一一对应） */
       const HANDLERS = {
-        "1000": "skill_1000", "1001": "skill_1001", "1002": "skill_1000", "1003": "skill_1000",
-        "1004": "skill_1000", "1005": "skill_1000", "1006": "skill_1000", "1007": "skill_1000",
-        "1008": "skill_1008", "1009": "skill_1000", "1010": "skill_1010", "1011": "skill_1000",
+        "1000": "skillAttack", "1001": "skillAttack", "1002": "skillAttack", "1003": "skillAttack",
+        "1004": "skillAttack", "1005": "skillAttack", "1006": "skillAttack", "1007": "skillAttack",
+        "1008": "skillDash", "1009": "skillAttack", "1010": "skillStatus", "1011": "skillStatus",
       };
       for (const [id, fn] of Object.entries(HANDLERS)) {
         const skill = wired.skills.get(id);
-        check(!!skill && typeof skill.onClick === "function" && skill.onClick === stubs[fn], `${id} 的 onClick === ${fn}（同一性）`);
+        check(!!skill && typeof skill.onClick === "function" && skill.onClick === stubs[fn], `${id}（${fn}）的 onClick 同一性`);
       }
       check(JSON.stringify([...wired.skills.keys()]) === JSON.stringify(Object.keys(HANDLERS)), "skills Map 键序 = 1000→1011（消费方按 id 取，不依赖顺序，但钉住防漂移）");
+      check(wired.skills.get("9001") === undefined, "怪物技能（9001）不进 skills Map（只演出，不走本地释放入口）");
 
       // 接线后的消费方视图：数值透传没被 spread 弄丢（抽 1001 的 effectIsOnSelf 与 1008 的空系数）
       const skill1001 = wired.skills.get("1001");

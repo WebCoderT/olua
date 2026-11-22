@@ -55,6 +55,9 @@ const SKILL_COLUMNS: Array<[string, (row: SkillRow) => SqlParam]> = [
   // 两段连击 / 拉人（#826 第三批）：同样漏登记就是「PATCH 200 但库没变」
   ["second_hit_ratio", (row) => row.second_hit_ratio],
   ["pull_distance", (row) => row.pull_distance],
+  // 释放行为（#1166）：attack / status / dash。漏登记同样「PATCH 200 但库没变」，
+  // 而且客户端按它分发释放实现 —— 漏了就是快照里行为永远是老值
+  ["behavior", (row) => row.behavior],
   ["updated_at", (row) => row.updated_at],
 ];
 

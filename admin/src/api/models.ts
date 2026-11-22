@@ -3808,6 +3808,10 @@ export type Skill = {
    */
   targetType: "0" | "1" | "2" | "3";
   /**
+   * 释放行为（#1166）：attack 单体攻击 / status 自身状态 / dash 自身突进。客户端按它分发释放实现 —— 运营改行为不用动客户端代码
+   */
+  behavior: "attack" | "status" | "dash";
+  /**
    * 施法动作（客户端动画动作键，如 attack_near；空串 = 不播动作）
    */
   action: string;
@@ -3934,6 +3938,10 @@ export type UpdateSkill = {
    */
   targetType?: "0" | "1" | "2" | "3";
   /**
+   * 释放行为（#1166）：attack 单体攻击 / status 自身状态 / dash 自身突进。status ⇔ category 必须是状态(2)；dash ⇒ 目标类型必须是区域(0)。跨字段约束在 service 校验
+   */
+  behavior?: "attack" | "status" | "dash";
+  /**
    * 施法动作（≤50 字；空串 = 不播动作）
    */
   action?: string;
@@ -4036,6 +4044,10 @@ export type CreateSkill = {
    * 目标类型：0 区域 / 1 单体 / 2 群体 / 3 自身
    */
   targetType?: "0" | "1" | "2" | "3";
+  /**
+   * 释放行为（#1166）：attack 单体攻击 / status 自身状态 / dash 自身突进。status ⇔ category 必须是状态(2)；dash ⇒ 目标类型必须是区域(0)。跨字段约束在 service 校验
+   */
+  behavior?: "attack" | "status" | "dash";
   /**
    * 施法动作（≤50 字；空串 = 不播动作）
    */

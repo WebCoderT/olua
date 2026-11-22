@@ -1175,6 +1175,7 @@ export class GameConfigService {
     if (dto.icon !== undefined) next.icon = dto.icon;
     if (dto.category !== undefined) next.category = dto.category;
     if (dto.targetType !== undefined) next.target_type = dto.targetType;
+    if (dto.behavior !== undefined) next.behavior = dto.behavior;
     if (dto.action !== undefined) next.action = dto.action;
     if (dto.effect !== undefined) next.effect = dto.effect;
     if (dto.effectOnSelf !== undefined) next.effect_on_self = dto.effectOnSelf ? 1 : 0;
@@ -1203,11 +1204,18 @@ export class GameConfigService {
     // #826 第三批：两段连击与拉人。同样只影响「这一发怎么结算」，不参与跨字段校验
     if (dto.secondHitRatio !== undefined) next.second_hit_ratio = dto.secondHitRatio;
     if (dto.pullDistance !== undefined) next.pull_distance = dto.pullDistance;
-    // 跨字段约束放在写库之前：状态必须真实存在、主动技能得能打出伤害、状态型技能得挂到状态。
-    // 只在本次请求**动了分类 / 倍率 / 状态**时才校验 —— 这三个字段之外的部分（名字、冷却、
-    // 动作锁……）与约束无关；而且库里存在「分类是主动但没配倍率」的历史行（如 1008 十步一杀，
-    // 客户端把它当控制技），按合并后的行无条件校验会让这些行连改名都改不了。
-    const touchesConsistency = dto.category !== undefined || dto.damageCoefficients !== undefined || dto.statusId !== undefined;
+    // 跨字段约束放在写库之前：状态必须真实存在、主动技能得能打出伤害、状态型技能得挂到状态、
+    // 行为与分类 / 目标类型三者一致（#1166）。
+    // 分两条链跑：只改 behavior 时只跑行为联动（assertSkillBehavior）—— 1008 是「分类主动但
+    // 倍率空」的历史行，倍率那道历史校验不该挡「只改行为」；动了分类 / 倍率 / 状态 / 目标类型
+    // 则整条跑（联动校验在 assertSkillConsistency 里也会走）。
+    const touchesBehavior = dto.behavior !== undefined;
+    const touchesConsistency =
+      dto.category !== undefined ||
+      dto.damageCoefficients !== undefined ||
+      dto.statusId !== undefined ||
+      dto.targetType !== undefined;
+    if (touchesBehavior) this.assertSkillBehavior(next);
     if (touchesConsistency) this.assertSkillConsistency(next);
     next.updated_at = Date.now();
     this.skillsRepo.update(next);
@@ -1268,6 +1276,8 @@ export class GameConfigService {
       // 两段连击 / 拉人默认 0：新建的技能在运营配之前与改动前一致
       second_hit_ratio: dto.secondHitRatio ?? 0,
       pull_distance: dto.pullDistance ?? 0,
+      // 释放行为（#1166）默认 attack：新建的怪物技能绝大多数是「放一次伤害」
+      behavior: dto.behavior ?? "attack",
       updated_at: Date.now(),
     };
     this.assertSkillConsistency(row);
@@ -1592,6 +1602,33 @@ export class GameConfigService {
     // category "0" = 客户端 SkillType.PROACTIVE（要打出伤害的那种）
     if (row.category === "0" && coefficients.length === 0) {
       throw new BizException(BizCode.PARAM_INVALID, "主动技能至少要有一条伤害系数（否则伤害恒为 0）");
+    }
+    // 释放行为与分类 / 目标类型的联动（#1166）也归这条链：改分类 / 目标类型同样要保证三者一致
+    this.assertSkillBehavior(row);
+  }
+
+  /**
+   * 释放行为的联动校验（#1166）：只看 behavior ↔ category ↔ targetType 三者一致
+   *
+   * 单独拆出来是因为 **behavior 是新字段、历史行有包袱**：1008 十步一杀是「分类主动但
+   * 倍率空」的历史行，`assertSkillConsistency` 的倍率校验会拦它 —— 只改行为（PATCH
+   * `behavior`）不该被那道历史校验挡住，所以只改 behavior 时只跑这条联动。
+   */
+  private assertSkillBehavior(row: SkillRow): void {
+    // behavior 是客户端「释放后做什么」的唯一分发依据，三处不一致 =
+    // 客户端和服务端各按自己那一份走，同一个技能两边演的是两出戏。
+    // - status ⇔ category "2"：客户端按 behavior 分流到「只上报不结算」，服务端按 category
+    //   分流到挂状态；少一边另一边就把它当伤害技能打。
+    // - dash ⇒ targetType "0"（区域）：服务端「不查目标、不掷伤害」的分流判据是 target_type，
+    //   突进技能送的目标本来就是空的，配成单体会被 unknown_target 拦掉。
+    if (row.behavior === "status" && row.category !== "2") {
+      throw new BizException(BizCode.PARAM_INVALID, `行为是「自身状态」的技能分类必须是状态(2)（技能 ${row.id}）`);
+    }
+    if (row.behavior !== "status" && row.category === "2") {
+      throw new BizException(BizCode.PARAM_INVALID, `状态型技能（分类 2）的行为必须是「自身状态」(status)（技能 ${row.id}）`);
+    }
+    if (row.behavior === "dash" && row.target_type !== "0") {
+      throw new BizException(BizCode.PARAM_INVALID, `行为是「自身突进」的技能目标类型必须是区域(0)（技能 ${row.id}）`);
     }
   }
 

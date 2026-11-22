@@ -122,9 +122,10 @@ const monsterManager = fs.readFileSync(path.join(root, "assets/ui/core/MonsterMa
 check(monsterManager.includes("StatusManager.applyFromServer(data.statuses)"), "结算回执里的状态快照会刷新图标（MonsterManager 接线）");
 check(/if \(data\.statusOnly\) return;/.test(monsterManager), "statusOnly 的结算不碰怪物血条（状态技能没有目标）");
 const warrior = fs.readFileSync(path.join(root, "assets/skills/warrior.ts"), "utf8");
-const skill1010 = warrior.slice(warrior.indexOf("export function skill_1010"));
-check(skill1010.includes('CombatChannel.sendCast(context.config.id, "", "")'), "状态技能只发 cast 帧（状态由服务端施加）");
-check(!/skill_1010[\s\S]{0,400}StatusManager\.apply\(/.test(warrior), "状态技能不再本地 apply（服务端不知道的 buff 等于没有）");
+// #1166 起实现按行为命名：状态行为的实现叫 skillStatus（不再叫 skill_1010）
+const skillStatusImpl = warrior.slice(warrior.indexOf("export function skillStatus"));
+check(skillStatusImpl.includes('CombatChannel.sendCast(context.config.id, "", "")'), "状态技能只发 cast 帧（状态由服务端施加）");
+check(!/skillStatus[\s\S]{0,400}StatusManager\.apply\(/.test(warrior), "状态技能不再本地 apply（服务端不知道的 buff 等于没有）");
 const combatChannel = fs.readFileSync(path.join(root, "assets/ui/utils/net/CombatChannel.ts"), "utf8");
 check(combatChannel.includes("statusOnly?: boolean") && combatChannel.includes("statuses?: CombatStatusEntry[]"), "settle 帧形状声明了 statusOnly / statuses");
 

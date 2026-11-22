@@ -10,12 +10,22 @@ import CombatChannel from "../ui/utils/net/CombatChannel";
 import { getDirectionByVector, getDirectionToTarget } from "../ui/utils/battle/BattleMath";
 import { HAS_MOUSE } from "../ui/utils/input/Pointer";
 
-/** ‌基础剑术：对单体目标造成一次物理伤害（伤害与物理攻击相关） */
-export function skill_1000(context: SkillContext) {
+/**
+ * 角色技能的三个释放实现（#1166 起按 `behavior` 分发，不再按技能 id）
+ *
+ * 以前这里是 `skill_1000` / `skill_1008` / `skill_1010` 一堆 id 函数、由
+ * `configs/skill.roleSkillHandlers` 按 id 接上 —— 新增技能要改客户端代码，运营改不了。
+ * 现在释放行为是技能配置的一个字段（`skills.behavior`：attack / status / dash），
+ * 管理端把行为配好、快照下发即生效；这个文件只剩**三种行为的通用实现**。
+ * 文件名保留 warrior.ts（历史起点；换名要连 Cocos 的 .meta 一起动，收益不值得）。
+ */
+
+/** 单体攻击（behavior = "attack"）：对目标造成一次伤害（伤害与配置的收益基数相关） */
+export function skillAttack(context: SkillContext) {
   const { config, caster, target, monsters } = context;
   if (!target) return;
   // 普攻音效（#683）：只有**战士的普通攻击**响这一声。
-  // 按 `config.id` 过滤而不是按函数：1002~1011 都复用本实现（配置里换的是动作与数值），
+  // 按 `config.id` 过滤而不是按函数：#1166 起所有单体攻击共用本实现（配置里换的是动作与数值），
   // 而「战士普通攻击」这个音效项指的就是 id 1000（基础剑术，occupation = 战士）。
   if (config.id === "1000") void SoundManager.play("warrior_attack");
   // 面向目标播放技能配置的动作动画（config.action）——表现立刻走，不等服务端的往返
@@ -31,13 +41,8 @@ export function skill_1000(context: SkillContext) {
   CombatChannel.sendCast(config.id, monster.instanceId, monster.id);
 }
 
-/** 烈火剑法：对单体目标造成一次强化物理伤害 */
-export function skill_1001(context: SkillContext) {
-  skill_1000(context);
-}
-
 /**
- * 状态型技能（护体神盾 / 金刚护体等）：只发一次出手，状态由服务端施加（#822）
+ * 自身状态（behavior = "status"，护体神盾 / 金刚护体等）：只发一次出手，状态由服务端施加（#822）
  *
  * 以前这里是本地 `StatusManager.apply(statusId)` —— 客户端自己亮图标，服务端完全不知道，
  * 于是「护体神盾」既没真正生效（受击不吃格挡），又在结算里被当伤害技能打成了 300% 核弹。
@@ -47,23 +52,23 @@ export function skill_1001(context: SkillContext) {
  * 没有目标：`requireTarget = false` 的技能在 `SkillManager.tryCast` 里本来就不找目标，
  * 这里送空串，服务端也不按目标校验（自身施法）。
  */
-export function skill_1010(context: SkillContext) {
+export function skillStatus(context: SkillContext) {
   CombatChannel.sendCast(context.config.id, "", "");
 }
 
 /**
- * 十步一杀：朝鼠标悬停位置突进
+ * 自身突进（behavior = "dash"，十步一杀等）：朝鼠标悬停位置瞬移
  * - 悬停点在施法距离（config.distance）内：瞬移到鼠标位置
  * - 悬停点在范围外：沿「角色 → 悬停点」方向取距离上限处为落点
  * 落点先吸附到最近可行走位置（避免扎进墙/障碍），瞬移后面向突进方向播放技能动作，
  * 并在落点播放一次特效（区域技能的特效位置由技能实现决定，SkillManager 不代播）
  *
- * **出手也要报给服务端**（#824）：这个技能 `damage_coefficients` 是空数组（纯位移、不掷伤害），
+ * **出手也要报给服务端**（#824）：突进技能 `damage_coefficients` 是空数组（纯位移、不掷伤害），
  * 但冷却与法力是服务端的账 —— 不报等于「服务端不知道他放过这一手」，改包就能无限突进。
- * 服务端按 `target_type = 0` 走区域那条路：不查目标、不掷伤害，只过六道闸并回 `noDamage`。
+ * 服务端按 `behavior = "dash"`（#1166）走区域那条路：不查目标、不掷伤害，只过六道闸并回 `noDamage`。
  * 位移本身仍在本地（落点校验要等 #811 位置源收口，服务端现在没有权威坐标可比）。
  */
-export function skill_1008(context: SkillContext) {
+export function skillDash(context: SkillContext) {
   const { config, role, caster } = context;
   // 定向依赖鼠标悬停位置：触屏环境与开局未动过鼠标时没有悬停点，放弃本次释放
   if (!HAS_MOUSE) return;

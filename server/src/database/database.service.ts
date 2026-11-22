@@ -1233,7 +1233,11 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
         -- 拉人（#826 第三批）：把目标朝施法者拉回多少像素，0 = 不拉。与 push_distance
         -- 方向相反（推是远离施法者），两者可以同时配（先拉后推这种技能不常见，但语义不冲突）
         pull_distance       REAL    NOT NULL DEFAULT 0,
-        updated_at          INTEGER NOT NULL DEFAULT 0
+        updated_at          INTEGER NOT NULL DEFAULT 0,
+        -- 释放行为（#1166）：attack 单体攻击 / status 自身状态 / dash 自身突进。
+        -- 客户端按它分发释放实现；默认 attack 与 #1166 之前所有单体技能的老行为一致。
+        -- 放在 updated_at 之后：与存量库 ALTER TABLE ADD COLUMN 补出来的列序一致
+        behavior            TEXT    NOT NULL DEFAULT 'attack'
       );
 
       -- 状态（#367）：同样 owner 区分角色 / 怪物；combat 是 JSON 数值修正
@@ -1726,6 +1730,13 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
     // 两段连击 / 拉人（#826 第三批）：默认 0 = 都没有，存量行行为不变
     this.ensureColumn("skills", "second_hit_ratio", "REAL NOT NULL DEFAULT 0");
     this.ensureColumn("skills", "pull_distance", "REAL NOT NULL DEFAULT 0");
+    // 释放行为（#1166）：attack / status / dash。补列默认 attack（= 所有单体技能的老行为）；
+    // 紧接着把「历史行为正确」的两类行回填到位 —— 1008 十步一杀一直是突进、
+    // category=2 的行一直是自身状态。条件限定 behavior 还是默认值：
+    // 运营在管理端显式改过的行为不会被启动回填覆盖。
+    this.ensureColumn("skills", "behavior", "TEXT NOT NULL DEFAULT 'attack'");
+    this.run("UPDATE skills SET behavior = 'status' WHERE behavior = 'attack' AND category = '2'");
+    this.run("UPDATE skills SET behavior = 'dash' WHERE behavior = 'attack' AND id = '1008'");
     // 状态的三类 + 层数 + 周期 + 控制（#826 第三批）：默认值都是「旧行为」——
     // kind=buff（不参与任何分流）、max_stacks=1（不叠）、tick_ms=0（无周期）、flags 空（无控制）
     this.ensureColumn("statuses", "kind", "TEXT NOT NULL DEFAULT 'buff'");

@@ -144,20 +144,31 @@ export interface SkillConfig {
    * 自身 / 状态型技能配 false：没有敌人时也能给自己上状态
    */
   requireTarget?: boolean;
+  /**
+   * 释放行为（#1166，缺省 attack）：客户端「释放后做什么」的唯一分发依据 ——
+   * configs/skill 按**行为**接实现，不再按技能 id 硬编码，运营在管理端改行为不用动客户端代码。
+   * - attack 单体攻击：面向目标播动作、出手上报服务端掷伤害；
+   * - status 自身状态：只上报一次出手，状态由服务端挂给自己；
+   * - dash 自身突进：朝鼠标悬停位置瞬移（距离上限 = distance），不掷伤害。
+   */
+  behavior: SkillBehavior;
 }
+
+/** 技能释放行为（与服务端 `SKILL_BEHAVIOR_VALUES` 逐值一致；#1166） */
+export type SkillBehavior = "attack" | "status" | "dash";
 
 /**
  * 技能数值数据（= SkillConfig 去掉 onClick）
  * configs/skill-data.ts 的技能表用它：纯数值 + 文案、零引擎依赖，可被 Node 沙箱直接 require 跑断言；
- * 释放实现不进来 —— 由 configs/skill.ts 的 skillHandlers 按 id 接回（见 SkillConfig.onClick）
+ * 释放实现不进来 —— 由 configs/skill.ts 按 behavior（#1166 起不再是按 id）接回（见 SkillConfig.onClick）
  */
 export type SkillData = Omit<SkillConfig, "onClick">;
 
 /**
  * 角色技能 ID（技能栏 / 快捷键 / 角色存档都按它引用，所以清单是固定的）
  *
- * 新增角色技能要同时改三处：这里的联合类型、`configs/skill-data` 的数值行、
- * `configs/skill` 的释放实现 —— 联合类型让漏接实现编译不过。
+ * #1166 起新增角色技能**不用**再改客户端：释放实现按 `behavior` 分发，
+ * 管理端把行为 / 动作 / 数值配好，快照下发即生效。这份联合类型只剩「角色 id 段」的语义。
  */
 export type RoleSkillId = "1000" | "1001" | "1002" | "1003" | "1004" | "1005" | "1006" | "1007" | "1008" | "1009" | "1010" | "1011";
 

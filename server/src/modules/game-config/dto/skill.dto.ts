@@ -19,6 +19,7 @@ import { PageMetaDto, PageQueryDto } from "../../../common/dto/api-envelope.dto"
 import { parseCoefficientsJson } from "../../../common/config-json";
 import {
   DAMAGE_BASE_TYPES,
+  SKILL_BEHAVIOR_VALUES,
   SKILL_CATEGORY_VALUES,
   SKILL_OWNER_VALUES,
   SKILL_TARGET_TYPE_VALUES,
@@ -70,6 +71,14 @@ export class SkillDto {
 
   @ApiProperty({ description: "目标类型：0 区域 / 1 单体 / 2 群体 / 3 自身（与客户端 SkillTargetType 同值）", enum: SKILL_TARGET_TYPE_VALUES })
   targetType: string;
+
+  @ApiProperty({
+    description:
+      "释放行为（#1166）：attack 单体攻击 / status 自身状态 / dash 自身突进。" +
+      "客户端按它分发释放实现 —— 运营改行为不用动客户端代码",
+    enum: SKILL_BEHAVIOR_VALUES,
+  })
+  behavior: string;
 
   @ApiProperty({ description: "施法动作（客户端动画动作键，如 attack_near；空串 = 不播动作）" })
   action: string;
@@ -178,6 +187,7 @@ export class SkillDto {
     dto.icon = row.icon;
     dto.category = row.category;
     dto.targetType = row.target_type;
+    dto.behavior = row.behavior;
     dto.action = row.action;
     dto.effect = row.effect;
     dto.effectOnSelf = row.effect_on_self === 1;
@@ -251,6 +261,16 @@ export class UpdateSkillDto {
   @IsOptional()
   @IsIn(SKILL_TARGET_TYPE_VALUES, { message: `targetType 必须是 ${SKILL_TARGET_TYPE_VALUES.join(" / ")} 之一` })
   targetType?: string;
+
+  @ApiPropertyOptional({
+    description:
+      `释放行为（#1166）：attack 单体攻击 / status 自身状态 / dash 自身突进。` +
+      "status ⇔ category 必须是状态(2)；dash ⇒ 目标类型必须是区域(0)。跨字段约束在 service 校验",
+    enum: SKILL_BEHAVIOR_VALUES,
+  })
+  @IsOptional()
+  @IsIn(SKILL_BEHAVIOR_VALUES, { message: `behavior 必须是 ${SKILL_BEHAVIOR_VALUES.join(" / ")} 之一` })
+  behavior?: string;
 
   @ApiPropertyOptional({ description: "施法动作（≤50 字；空串 = 不播动作）", maxLength: 50 })
   @IsOptional()
