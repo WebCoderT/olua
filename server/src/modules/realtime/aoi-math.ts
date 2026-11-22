@@ -5,13 +5,14 @@
  * 的状态机在 `aoi.service.ts`。分开的理由与 `map-geometry` 拆纯函数一样 —— 这一层没有
  * 任何状态，改它不需要跑服务端，e2e 也能直接拿它算期望值。
  *
- * ## 为什么格子边长是常量而不是运行时参数
- * 改格子边长等于把**所有已成形的索引**重建一遍（实体在旧格里的位置全作废），而索引的
- * 生命周期挂在房间上、房间的生命周期跨重启（库里的世界）。做成热改参数就会出现「一半
- * 房间按 512 建、一半按 256 建」的时段，排查成本远大于收益。改它 = 发版。
+ * ## 为什么格子边长「重启生效」而不是运行中热切（#1170 起可配）
+ * 边长可配（`runtime_params.aoi.cellSize`），但**生效时机是重启**：改边长等于把
+ * 所有已成形的索引重建一遍（实体在旧格里的位置全作废），而索引的生命周期挂在房间上、
+ * 房间的生命周期跨重启（库里的世界）。热切会出现「一半房间按旧值建、一半按新值建」
+ * 的时段，排查成本远大于收益。所以四个参数统一启动时读一次；缺键回落这里的常量。
  */
 
-/** 格子边长（像素）。8192² 的图 → 16×16 = 256 格；一格视野 = 3×3 共 ±768px */
+/** 格子边长（像素，出厂值）。8192² 的图 → 16×16 = 256 格；一格视野 = 3×3 共 ±768px */
 export const AOI_CELL = 512;
 
 /**
@@ -54,14 +55,14 @@ export function playerEntityOf(accountId: string): string {
  * 世界坐标 y 轴**向上**（地面在 y=0，天在 y=-H），而 Tiled 的行号从上往下数 —— 所以行号
  * 取 `floor(-y / CELL)` 才与地图数据对得上。列号直接用 `floor(x / CELL)`。
  */
-export function cellKeyOf(x: number, y: number): string {
-  return `${Math.floor(x / AOI_CELL)}:${Math.floor(-y / AOI_CELL)}`;
+export function cellKeyOf(x: number, y: number, cellSize: number = AOI_CELL): string {
+  return `${Math.floor(x / cellSize)}:${Math.floor(-y / cellSize)}`;
 }
 
 /** 格子中心（世界坐标；距离上限裁剪用它当基准点） */
-export function cellCenterOf(cellKey: string): { x: number; y: number } {
+export function cellCenterOf(cellKey: string, cellSize: number = AOI_CELL): { x: number; y: number } {
   const [col, row] = cellKey.split(":").map(Number);
-  return { x: (col + 0.5) * AOI_CELL, y: -(row + 0.5) * AOI_CELL };
+  return { x: (col + 0.5) * cellSize, y: -(row + 0.5) * cellSize };
 }
 
 /**

@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { formatTime, PERMISSION, runtimeParamsApi } from "../api";
 import type {
+  AoiParams,
   CastRangeParams,
   MonsterAiParams,
   MovementGuardParams,
   RuntimeParams,
   UpdateAutoBattleParams,
+  UpdateAoiParams,
   UpdateCastRangeParams,
   UpdateDropRuntimeParams,
   UpdateGuildRuleParams,
@@ -54,6 +56,9 @@ export function RuntimeParamsPage() {
   const [movementSaving, setMovementSaving] = useState(false);
   const [castRangeDraft, setCastRangeDraft] = useState<Record<string, string> | null>(null);
   const [castRangeSaving, setCastRangeSaving] = useState(false);
+  // AOI 推送口径（#1170）：同样单独一条接口；四个参数都是纯服务端消费，**重启生效**
+  const [aoiDraft, setAoiDraft] = useState<Record<string, string> | null>(null);
+  const [aoiSaving, setAoiSaving] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -67,6 +72,8 @@ export function RuntimeParamsPage() {
       setMovementDraft(toMovementDraft(movement));
       const castRange = await runtimeParamsApi.getCastRange();
       setCastRangeDraft(toCastRangeDraft(castRange));
+      const aoi = await runtimeParamsApi.getAoi();
+      setAoiDraft(toAoiDraft(aoi));
     } catch {
       /* 错误已由请求层统一提示 */
     } finally {
@@ -156,6 +163,27 @@ export function RuntimeParamsPage() {
 
   const setCastRangeField = (key: string, value: string) => {
     setCastRangeDraft((current) => (current ? { ...current, [key]: value } : current));
+  };
+
+  const setAoiField = (key: string, value: string) => {
+    setAoiDraft((current) => (current ? { ...current, [key]: value } : current));
+  };
+
+  const saveAoi = async () => {
+    if (!aoiDraft) return;
+    const payload = buildAoiPayload(aoiDraft);
+    if (!payload) return;
+    setAoiSaving(true);
+    try {
+      const row = await runtimeParamsApi.updateAoi(payload);
+      setAoiDraft(toAoiDraft(row));
+      // 格子边长变了等于全部格子索引作废 —— 四个参数统一启动时读，保存后要重启才生效
+      toastSuccess("AOI 推送口径已保存（重启服务端后生效）");
+    } catch {
+      /* 错误已由请求层统一提示 */
+    } finally {
+      setAoiSaving(false);
+    }
   };
 
   const saveCastRange = async () => {
@@ -440,6 +468,40 @@ export function RuntimeParamsPage() {
           </div>
         ) : null}
       </Card>
+
+      <Card
+        title="AOI 推送口径（服务端）"
+        actions={
+          loading ? (
+            <Spinner />
+          ) : canWrite ? (
+            <Button disabled={!aoiDraft || aoiSaving} loading={aoiSaving} onClick={() => void saveAoi()}>
+              保存 AOI 参数
+            </Button>
+          ) : null
+        }
+        description={
+          canWrite
+            ? "地图数据的推送按「玩家所在格 + 周围 8 格」裁剪。四个参数彼此独立；格子边长变了等于把所有已成形的格子索引作废 —— 所以这一组**重启服务端后才生效**（API 与实时两个进程都要重启），页面上改完只落库。"
+            : "当前角色没有「修改养成配置」权限，本页只读。"
+        }
+      >
+        {aoiDraft ? (
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {AOI_FIELDS.map((field) => (
+              <Field key={field.key} label={field.label} hint={field.hint}>
+                <Input
+                  type="number"
+                  min={0}
+                  value={aoiDraft[field.key] ?? ""}
+                  disabled={!canWrite}
+                  onChange={(event) => setAoiField(field.key, event.target.value)}
+                />
+              </Field>
+            ))}
+          </div>
+        ) : null}
+      </Card>
     </div>
   );
 }
@@ -531,6 +593,13 @@ const MOVEMENT_FIELDS: Array<FieldSpec & { step?: number }> = [
 /** 出手距离闸的数值字段（只有档位 + 一个余量：判据本身全部来自配置表） */
 const CAST_RANGE_FIELDS: Array<FieldSpec & { step?: number }> = [
   { key: "jitterPx", label: "抖动余量（像素）", hint: "抵掉 10Hz 上报相位差与怪物插值滞后；出厂 24" },
+];
+
+const AOI_FIELDS: FieldSpec[] = [
+  { key: "cellSize", label: "格子边长（像素）", hint: "8192² 的图按 512 切是 16×16 格；调小视野更贴合但索引更密。重启生效" },
+  { key: "maxEntities", label: "单帧实体上限", hint: "一个视野里超出它只留离格心最近的 N 个，防单帧 JSON 顶爆。重启生效" },
+  { key: "leaveDelayMs", label: "离开视野延迟（毫秒）", hint: "出视野先记账，期内又看见就取消 —— 站格子边界来回走不闪。重启生效" },
+  { key: "broadcastHz", label: "互见广播节拍（Hz）", hint: "格子索引与进出差量每拍刷新；下限 50ms 由服务端夹。重启生效" },
 ];
 
 //#endregion
@@ -805,6 +874,35 @@ function buildCastRangePayload(values: Record<string, string>): UpdateCastRangeP
   if (values.jitterPx === undefined || values.jitterPx.trim() === "" || !Number.isFinite(jitterPx)) return null;
   const mode = values.mode === "off" || values.mode === "enforce" ? values.mode : "log";
   return { mode, jitterPx };
+}
+
+//#endregion
+
+//#region AOI 推送口径（#1170）
+
+/** AOI 生效值 → 草稿 */
+function toAoiDraft(row: AoiParams): Record<string, string> {
+  return {
+    cellSize: String(row.cellSize),
+    maxEntities: String(row.maxEntities),
+    leaveDelayMs: String(row.leaveDelayMs),
+    broadcastHz: String(row.broadcastHz),
+  };
+}
+
+/** AOI 草稿 → 提交体（有一处不是数字就整组不提交） */
+function buildAoiPayload(values: Record<string, string>): UpdateAoiParams | null {
+  const num = (key: string): number | null => {
+    const raw = values[key];
+    const parsed = Number(raw);
+    return raw !== undefined && raw.trim() !== "" && Number.isFinite(parsed) ? parsed : null;
+  };
+  const cellSize = num("cellSize");
+  const maxEntities = num("maxEntities");
+  const leaveDelayMs = num("leaveDelayMs");
+  const broadcastHz = num("broadcastHz");
+  if (cellSize === null || maxEntities === null || leaveDelayMs === null || broadcastHz === null) return null;
+  return { cellSize, maxEntities, leaveDelayMs, broadcastHz };
 }
 
 //#endregion

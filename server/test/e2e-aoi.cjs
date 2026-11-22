@@ -18,7 +18,11 @@
  * 4. **序列化次数**：3 个玩家分布在 2 个格子里 → 每轮 stringify ≈ 2 次，而收件是 3 人次
  *    （#767 的统计行里读；「一格一次」正是这一刀收益的主体）；
  * 5. **边界抖动**：站在格子边界来回 20 次（总时长 < 离开延迟 1s）→ 同一只怪不出现
- *    「先 leave 后 enter」的交替（没有「闪一下」）。
+ *    「先 leave 后 enter」的交替（没有「闪一下」）；
+ * 6. **口径配置化（#1170）**：`runtime_params.aoi` 四个参数管理端可改（重启生效）——
+ *    CRUD 与校验范围先验，然后**真重启一次**：把格子边长改成 128 后，相距 800px
+ *    （旧口径下互见、新口径下隔 6 格）的两个玩家不再互见；贴到同一点又恢复互见
+ *    （证明裁剪管线本身是好的，不是「永远看不见」）。
  *
  * ## 断言的边界（2026-11-14 用户拍板）
  * - **代码口径才进断言**：帧的形状 / 两端的字段名 / 进出的方向 / 纯函数几何（格子键、
@@ -180,6 +184,7 @@ async function startServer(dbPath) {
       DB_PATH: dbPath,
       JWT_SECRET: "e2e-aoi-secret",
       JWT_EXPIRES_IN: "1h",
+      ADMIN_REGISTER_CODE: "aoi-admin",
       LOG_REQUESTS: "false",
       WORLD_TICK_MS: "300",
       WORLD_PERSIST_MS: "1000",
@@ -387,7 +392,7 @@ function outlineByCell(monsters, at) {
 
 (async () => {
   const dbPath = path.join(os.tmpdir(), `olua-e2e-aoi-${Date.now()}.db`);
-  const server = await startServer(dbPath);
+  let server = await startServer(dbPath);
   const { baseUrl } = server;
   try {
     const pixel = mapPixelOf(dbPath, MAP_ID);
@@ -399,7 +404,7 @@ function outlineByCell(monsters, at) {
 
     group("零、格子几何（纯函数口径）");
     const aoiMath = require("../dist/modules/realtime/aoi-math.js");
-    check(aoiMath.AOI_CELL === 512, "格子边长是拍板的 512（常量，不进运行时参数）", String(aoiMath.AOI_CELL));
+    check(aoiMath.AOI_CELL === 512, "格子边长的出厂缺省是 512（#1170 起可配，缺键按它兜底）", String(aoiMath.AOI_CELL));
     check(aoiMath.cellKeyOf(0, 0) === "0:0", "原点落在 0:0", aoiMath.cellKeyOf(0, 0));
     check(aoiMath.cellKeyOf(511, -511) === "0:0", "格内右上角仍在 0:0（左闭右开）", aoiMath.cellKeyOf(511, -511));
     check(aoiMath.cellKeyOf(512, -512) === "1:1", "跨过半格即 1:1", aoiMath.cellKeyOf(512, -512));
@@ -408,6 +413,10 @@ function outlineByCell(monsters, at) {
     check(neighbors.length === 9 && neighbors.includes("1:1") && neighbors.includes("-1:-1") && neighbors.includes("0:0"), "3×3 邻域是 9 格且含自身", neighbors.join(" "));
     const center = aoiMath.cellCenterOf("0:0");
     check(center.x === 256 && center.y === -256, "格心在格子的几何中心（上限裁剪按它排序）", `${center.x},${center.y}`);
+    // #1170：几何函数按「格子边长」参数化（缺参回落出厂缺省）—— 配了别的边长时口径要跟着走
+    check(aoiMath.cellKeyOf(0, 0, 128) === "0:0" && aoiMath.cellKeyOf(127, -127, 128) === "0:0" && aoiMath.cellKeyOf(128, -128, 128) === "1:1", "cellKeyOf 接受自定义边长（128px 的切分正确）");
+    const center128 = aoiMath.cellCenterOf("0:0", 128);
+    check(center128.x === 64 && center128.y === -64, "cellCenterOf 接受自定义边长", `${center128.x},${center128.y}`);
 
     //#endregion
 
@@ -603,6 +612,90 @@ function outlineByCell(monsters, at) {
       // 这个用例里的帧全部经过 AOI 裁剪（B / C 在别的格子）—— 收得到就说明裁剪路径把 t 带上了
       check(sessionB.playersTs.length > 0 && sessionB.aiTs.length > 0, "被裁剪的观看者收到带 t 的帧（裁剪只删条目，不改时间基准）");
     }
+
+    //#endregion
+
+    //#region 六、AOI 口径配置化（#1170）：管理端可改，重启生效
+
+    group("六、AOI 口径配置化（管理端 GET/PATCH + 重启后实际生效）");
+    const adminRegistered = await api(baseUrl, "POST", "admin/auth/register", { body: { username: "aoi_admin", password: "super-pass-1", registerCode: "aoi-admin" } });
+    const adminToken = adminRegistered.data && adminRegistered.data.token;
+    check(!!adminToken, "准备：管理端账号已注册");
+    const adminOpts = { token: adminToken, zoneId: 1 };
+
+    // 服务端消费方真的在读这列（反证：方法名写错拿到空串，空串判失败）
+    {
+      const presenceSrc = fs.readFileSync(path.join(SERVER_DIR, "src", "modules", "realtime", "player-presence.service.ts"), "utf8");
+      check(/aoi\.broadcastIntervalMs\(\)/.test(presenceSrc), "互见节拍消费 runtime_params.aoi（presence 走 AoiService 换算）");
+      const aoiSrc = fs.readFileSync(path.join(SERVER_DIR, "src", "modules", "realtime", "aoi.service.ts"), "utf8");
+      check(/get\(\)\?\.aoi/.test(aoiSrc) && /onApplicationBootstrap/.test(aoiSrc), "格子索引启动时读一次 runtime_params.aoi");
+    }
+
+    const aoiBefore = await api(baseUrl, "GET", "admin/runtime-params/aoi", adminOpts);
+    check(aoiBefore.code === 0 && Number.isFinite(aoiBefore.data?.cellSize) && Number.isFinite(aoiBefore.data?.maxEntities) && Number.isFinite(aoiBefore.data?.leaveDelayMs) && Number.isFinite(aoiBefore.data?.broadcastHz), "GET 四个键都是数字（缺键由服务端按历史常量兜住）", JSON.stringify(aoiBefore.data));
+
+    // 部分更新：只改 cellSize，其余三键原样保留
+    const aoiPatched = await api(baseUrl, "PATCH", "admin/runtime-params/aoi", { ...adminOpts, body: { cellSize: 128 } });
+    check(aoiPatched.code === 0 && aoiPatched.data?.cellSize === 128, "PATCH 改格子边长 → 回读 128", JSON.stringify(aoiPatched.data));
+    check(aoiPatched.data?.maxEntities === aoiBefore.data?.maxEntities && aoiPatched.data?.leaveDelayMs === aoiBefore.data?.leaveDelayMs && aoiPatched.data?.broadcastHz === aoiBefore.data?.broadcastHz, "部分更新不动其余三键");
+
+    // 校验范围：越界 / 非整数 / 非数字一律 40000
+    for (const [label, body] of [
+      ["格子边长 0 越下界", { cellSize: 0 }],
+      ["格子边长 4096 越上界", { cellSize: 4096 }],
+      ["单帧上限 5 越下界", { maxEntities: 5 }],
+      ["广播节拍 100 越上界", { broadcastHz: 100 }],
+      ["离开延迟 1.5 非整数", { leaveDelayMs: 1.5 }],
+      ["格子边长 abc 非数字", { cellSize: "abc" }],
+    ]) {
+      const rejected = await api(baseUrl, "PATCH", "admin/runtime-params/aoi", { ...adminOpts, body });
+      check(rejected.code === 40000, `拒绝：${label}`, `code=${rejected.code}`);
+    }
+    const aoiAfterReject = await api(baseUrl, "GET", "admin/runtime-params/aoi", adminOpts);
+    check(aoiAfterReject.data?.cellSize === 128, "被拒的补丁没有落库（仍是 128）");
+
+    // 改 AOI 不牵连别组：整行 UPDATE 的纪律（掉落组原样保留）
+    const dropBefore = await api(baseUrl, "GET", "admin/runtime-params", adminOpts);
+    await api(baseUrl, "PATCH", "admin/runtime-params/aoi", { ...adminOpts, body: { maxEntities: 150 } });
+    const dropAfter = await api(baseUrl, "GET", "admin/runtime-params", adminOpts);
+    check(dropAfter.code === 0 && dropAfter.data?.drop?.autoPickupRadius === dropBefore.data?.drop?.autoPickupRadius, "改 AOI 组不动掉落组（整行 UPDATE 原样写回）");
+
+    // —— 行为生效：重启，格子边长 128 下相距 800px 的两人互不可见 ——
+    server.child.kill("SIGTERM");
+    await sleep(500);
+    server = await startServer(dbPath);
+    const baseUrl2 = server.baseUrl;
+
+    const connectAs2 = async (one, label) => {
+      const ticket = await api(baseUrl2, "POST", "realtime/ticket", { token: one.token });
+      const session = connect(`${baseUrl2.replace("http", "ws")}/api/realtime?ticket=${encodeURIComponent(ticket.data.ticket)}`, one.accountId);
+      await waitFor(`${label} 握手成功`, async () => (session.opened ? session : null));
+      return session;
+    };
+    const sessionA2 = await connectAs2(accounts[0], "A2");
+    const sessionB2 = await connectAs2(accounts[1], "B2");
+    check(sessionA2.opened && sessionB2.opened, "准备：重启后两条实时连接已建立");
+
+    // A 先落位再让 B 进图：B 的进图快照里就有 A（进 AOI 基线，离开才发得出去）——
+    // 顺序反过来会撞进「刚进图没报位置 → 收到的人不在基线里、永不 leave」的既有窗口，
+    // 那是另一个问题，不该在这一套里掺和
+    await sessionA2.join(MAP_ID);
+    const movedA2 = await sessionA2.moveTo(farPoint.x, farPoint.y);
+    check(movedA2, "准备：A 已落位到远端");
+    await sessionB2.join(MAP_ID);
+    // 800px：旧口径 512px 格下两人在 3×3 内（互见）；128px 格下隔 6 格（互不可见）
+    const movedB2 = await sessionB2.moveTo(farPoint.x + 800, farPoint.y);
+    check(movedB2, "准备：B 已落位到 800px 外");
+    await sleep(2_500); // 离开延迟（出厂 1000ms）+ 数拍余量
+    check(!sessionA2.players.has(accounts[1].accountId) && !sessionB2.players.has(accounts[0].accountId), "格子边长 128 生效：相距 800px 的两人互不可见（旧口径下互见）");
+
+    // 对照组：贴到同一点 → 恢复互见（证明管线是好的，不是「永远看不见」）
+    await sessionB2.moveTo(farPoint.x, farPoint.y);
+    await waitFor("贴到同一点后恢复互见", async () => sessionA2.players.has(accounts[1].accountId) && sessionB2.players.has(accounts[0].accountId), 6_000);
+    check(sessionA2.players.has(accounts[1].accountId) && sessionB2.players.has(accounts[0].accountId), "同格后恢复互见（裁剪管线本身没坏）");
+
+    sessionA2.socket.close();
+    sessionB2.socket.close();
 
     //#endregion
 

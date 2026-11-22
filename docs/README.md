@@ -193,7 +193,7 @@ README（仓库根） → 01 总览（认路）
 |---|---|
 | 77 张表 / 各表行数 | **口径从清单算**：`node -e "const t=require('./server/scripts/lib/config-tables.cjs');console.log(t.CONFIG_TABLES.length, t.RUNTIME_TABLES.length)"`（39 + 38 = 77）。库里实际建出来的张数另用 `sqlite3 server/data/olua.db "SELECT count(*) FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%';"` —— 老库可能少一张（新表还没建），所以「77」认清单不认库 |
 | 39 配置 / 38 运行时 | `server/scripts/lib/config-tables.cjs` 的 `CONFIG_TABLES` / `RUNTIME_TABLES` |
-| 271 个接口 | `server/openapi.json` 的 `paths` 展开后的 operationId 数；或直接看 [14](./14-接口清单.md) 的标题 |
+| 273 个接口 | `server/openapi.json` 的 `paths` 展开后的 operationId 数；或直接看 [14](./14-接口清单.md) 的标题 |
 | 95 套 e2e | `node -e "console.log(Object.keys(require('./server/package.json').scripts).filter(k=>k.startsWith('test:e2e')).length)"`（**按脚本数**；`ls server/test/e2e*.cjs` 是 94 个文件，差的那 1 个是 `test:e2e:backup` → `test/backup.cjs`） |
 | 19 项审计 | `ls tools/audit-*.cjs \| wc -l` |
 | 32 个客户端 Manager | `ls client/assets/ui/core/*.ts \| wc -l` |
@@ -202,7 +202,7 @@ README（仓库根） → 01 总览（认路）
 | 客户端单测 70 套 | `ls client/tools/test-*.cjs \| wc -l` |
 | 32 段快照 | `grep -cE "^      [a-zA-Z]+:" server/src/modules/game-config/client-config.service.ts` |
 | 14 张进结算缓存 | `grep -cE "^    apply" server/src/modules/game-config/runtime-config.service.ts` |
-| 198 个 admin 接口 | `node -e "…遍历 openapi.json 的 /admin 前缀…"`（完整命令见 [16](./16-配置位置总表.md) 附录 B） |
+| 200 个 admin 接口 | `node -e "…遍历 openapi.json 的 /admin 前缀…"`（完整命令见 [16](./16-配置位置总表.md) 附录 B） |
 | 28 个客户端 configs / 9 个被覆写 | `ls client/assets/configs/*.ts \| wc -l` / `grep -oE 'from "\./[A-Za-z0-9_-]+"' client/assets/configs/apply-snapshot.ts \| sort -u` |
 
 > 📌 这张表里**带数量声明的行大多已经是守点**（`audit-count-claims` 判据 A~H）：审计项数、e2e 套数、

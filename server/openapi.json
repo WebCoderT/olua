@@ -12773,6 +12773,108 @@
         ]
       }
     },
+    "/admin/runtime-params/aoi": {
+      "get": {
+        "description": "地图数据推送的裁剪口径（`runtime_params.aoi` 列，#1170）。与怪物 AI / 位移校验一样**单独一条接口**、不下发客户端：\n\n- `cellSize`：格子边长（像素，出厂 512），视野 = 玩家所在格 + 周围 8 格的并集；\n- `maxEntities`：单帧实体上限（出厂 200），超出只留离格心最近的 N 个；\n- `leaveDelayMs`：离开视野延迟（出厂 1000ms），站格子边界来回走不闪；\n- `broadcastHz`：互见广播节拍（出厂 10Hz），格子索引与进出差量每拍刷新。\n\n缺键时服务端按历史常量兜住（512 / 200 / 1000ms / 10Hz，行为与配置化之前一致）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
+        "operationId": "adminRuntimeParams.getAoi",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "当前生效值",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/AoiParamsDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "AOI 推送口径",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/AoiParamsDto"
+        },
+        "x-olua-permissions": [
+          "gameConfig:read"
+        ]
+      },
+      "patch": {
+        "description": "**部分更新**：只提交改动过的字段，没提交的保持原值。\n\n**生效时机是重启**：格子边长变了等于把所有已成形的格子索引作废（实体在旧格里的位置全错），\n运行中热切会出现「一半房间按旧值建、一半按新值建」的时段 —— 所以四个参数统一启动时读一次，\n保存后**重启服务端**（API 与实时两个进程）才生效。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
+        "operationId": "adminRuntimeParams.updateAoi",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateAoiParamsDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "更新后的生效值",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/AoiParamsDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "编辑 AOI 推送口径",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/AoiParamsDto"
+        },
+        "x-olua-permissions": [
+          "gameConfig:write"
+        ]
+      }
+    },
     "/admin/combat-weights": {
       "get": {
         "description": "当前生效的七项倍率 + 最后修改时间（**单行配置，没有分页**）。\n\n口径（客户端与服务端一致）：区间属性（三系攻击 / 三系防御）按**上下限之和**乘倍率，生命按单值乘倍率，最后求和。`hpRecover`（每秒回血）**不计入** —— 回血不改变输出与承伤上限，\n算进来会凭空抬高所有地图的门槛。\n\n缺行回落出厂值（`config-sync.sql`），所以这张表不需要迁移。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
@@ -30488,6 +30590,58 @@
           "jitterPx": {
             "type": "number",
             "description": "抖动余量（像素）"
+          }
+        }
+      },
+      "AoiParamsDto": {
+        "type": "object",
+        "properties": {
+          "cellSize": {
+            "type": "number",
+            "description": "格子边长（像素，出厂 512）：视野 = 玩家所在格 + 周围 8 格的并集。改它需要重建全部格子索引，重启生效",
+            "example": 512
+          },
+          "maxEntities": {
+            "type": "number",
+            "description": "单帧实体上限（出厂 200）：一个视野里塞进几百只时只留离格心最近的 N 个，防单帧 JSON 顶爆",
+            "example": 200
+          },
+          "leaveDelayMs": {
+            "type": "number",
+            "description": "离开视野延迟（毫秒，出厂 1000）：出视野先记账，期内又看见就取消 —— 站格子边界来回走不闪",
+            "example": 1000
+          },
+          "broadcastHz": {
+            "type": "number",
+            "description": "互见广播节拍（Hz，出厂 10）：格子索引与进出差量每拍刷新一次；下限 50ms 由服务端夹",
+            "example": 10
+          }
+        },
+        "required": [
+          "cellSize",
+          "maxEntities",
+          "leaveDelayMs",
+          "broadcastHz"
+        ]
+      },
+      "UpdateAoiParamsDto": {
+        "type": "object",
+        "properties": {
+          "cellSize": {
+            "type": "number",
+            "description": "格子边长（像素），128 ~ 2048"
+          },
+          "maxEntities": {
+            "type": "number",
+            "description": "单帧实体上限，10 ~ 500"
+          },
+          "leaveDelayMs": {
+            "type": "number",
+            "description": "离开视野延迟（毫秒），0 ~ 10000"
+          },
+          "broadcastHz": {
+            "type": "number",
+            "description": "互见广播节拍（Hz），1 ~ 20"
           }
         }
       },
