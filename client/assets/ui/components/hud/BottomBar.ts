@@ -147,6 +147,9 @@ export default class BottomBar extends Node {
    * @param auto true = 只开不关且不推进引导（进游戏自动弹出用）；false = 玩家点入口/Enter 的开关
    */
   openChatBox(auto = false) {
+    // BottomBar 是 Node 子类，场景销毁后 Cocos _destruct 会把构造器赋值的字段置 null；
+    // 销毁期残余回调（#1188）走到这里时 chatDialog 可能已是 null，直接 no-op 不崩
+    if (!this.chatDialog) return;
     this.chatDialog.open(auto);
   }
 
