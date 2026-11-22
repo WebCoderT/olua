@@ -209,6 +209,23 @@ group("三、每只怪在 map_spawn_areas 至少一个区（#1084 全量落位�
   check(dangling.length === 0, "没有指向不存在怪物的刷怪区", dangling.slice(0, 5).map((a) => a.monster_key).join(","));
   const empty = areas.filter((a) => a.min < 1 || a.max < a.min);
   check(empty.length === 0, "每个区的 min ≥ 1 且 max ≥ min", empty.slice(0, 5).map((a) => `${a.map_id}:${a.monster_key}`).join(","));
+
+  // 使者分驻（#1162）：使者 s 必须落在第 s 段猎场图上 —— 这是「任务链串联地图」的载体，
+  // 搬回一张图（比如全挤回村）会让玩家升段不用跑图，串联就名存实亡。
+  const BAND_MAPS = ["0", "2", "4", "6", "8", "10"]; // 与 BAND_PLAN 逐段对应
+  const stationed = db
+    .prepare("SELECT npc_id, map_id FROM map_npcs WHERE npc_id IN ('0101','0102','0103','0104','0105','0106')")
+    .all();
+  checkEqual(stationed.length, 6, "六位使者都落了 map_npcs 点位");
+  const misstationed = stationed.filter((r) => {
+    const s = Number(r.npc_id.slice(-1)) - 1;
+    return r.map_id !== BAND_MAPS[s];
+  });
+  check(
+    misstationed.length === 0,
+    "使者按段分驻猎场（壹→图0 … 陆→图10）",
+    misstationed.map((r) => `${r.npc_id}→图${r.map_id}`).join(","),
+  );
 }
 
 group("四、逐环奖励在 §9.4 基准的容差带内（防手改跑飞）");

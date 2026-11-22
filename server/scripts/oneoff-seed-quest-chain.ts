@@ -4,8 +4,12 @@
  * ## 它做什么
  * 220 只怪 = 220 个 kill 环 + 每段 2 个 talk 调剂环 ≈ 232 环，从 8005 顺延
  * （跳过 8100~8109，日常 8101 不动）。六段（1-10 / … / 51-60）各 1 位任务 NPC
- * （npcs 0101~0106，**src 留空** —— 美术 plist 由用户后补，填上前客户端不显示该 NPC），
- * 落位 map_npcs 一点位（map 0 新手村）。
+ * （npcs 0101~0106，**src 留空** —— 美术 plist 由用户后补，填上前客户端不显示该 NPC）。
+ *
+ * ## 使者分驻猎场（#1162，2026-11-23 拍板）
+ * 使者 s 落在第 s 段猎场图（壹→图 0 望星台、贰→图 2 青石校场…陆→图 10 紫泉洞窟），
+ * 锚点是该图的大陆传送官（0002 每图一个点位）。段首「投奔」与段末「复命」都以该使者为目标
+ * —— 升一个等级段就必须跑一次图，任务链把六张猎场串成一条线；玩家不能再蹲在村里交所有任务。
  *
  * 刷怪落位**整表重排**：map_spawn_areas 全删重建（220 区**按等级段分图**，每段一张猎场，
  * 见下方 BAND_PLAN；每张图从外向内铺同心环，boss 占该段最外环首槽 = 巢穴在猎场外缘，
@@ -42,8 +46,8 @@ const APPLY = process.argv.includes("--apply");
  * 只占 16%；新图 0（DT2101）只有 2304×1856（427 万 px²），220 区是整图的 2.5 倍，怎么排都
  * 放不下。于是按等级段分摊到 6 张图，每图 33~38 区，区尺寸还能保持 170~190。
  *
- * 图 0 就是 1-10 级猎场（带复活点与 6 位任务使者，村口开打 —— **怪多是刻意的**：
- * 2026-11-22 拍板「出门即死不管，靠玩家自己团结解决」）。
+ * 图 0 就是 1-10 级猎场（带复活点与使者·壹，村口开打 —— **怪多是刻意的**：
+ * 2026-11-22 拍板「出门即死不管，靠玩家自己团结解决」；#1162 后其余五位使者分驻各自猎场）。
  *
  * rect = 该图上的刷怪区边长；脚本按格位算容量（放不下直接抛错，不会静默丢怪）。
  * 图 0 / 图 2 的半短边只有 900 上下，170 才装得下 33/38 区；其余图半径够，统一 190。
@@ -57,9 +61,6 @@ const BAND_PLAN = [
   { start: 51, map: "10", rect: 190 },
 ] as const;
 const SEGMENTS: readonly number[] = BAND_PLAN.map((b) => b.start);
-/** 任务 NPC 所在图（新手复活点那间村）与村中心：换图后图 0 复活点 1152,-928 */
-const QUEST_MAP = "0";
-const VILLAGE = { x: 1152, y: -928 };
 /** 主线环 id 起点 / 日常保留段 */
 const QUEST_ID_START = 8005;
 const DAILY_RESERVED = [8100, 8109] as const;
@@ -309,31 +310,52 @@ async function main(): Promise<void> {
     }
   }
 
-  // ---------- 4. 任务 NPC 点位：全在图 0 村中心空地（避开复活点 / 墙 / 刷怪区） ----------
-  const homeAreas = areaRows.filter((a) => a.map_id === QUEST_MAP);
-  const npcCollisions = collisionsOf.get(QUEST_MAP) ?? [];
+  // ---------- 4. 任务 NPC 点位：使者 s 分驻第 s 段猎场图（#1162 串联） ----------
+  // 锚点 = 该图的大陆传送官（0002，每图一个点位，都在图中心附近）；绕它由内向外找 64×64
+  // 空位，避让该图碰撞盒 / 复活点 / 刷怪区 / 已落的使者。跨图使者互不挤占。
+  const officerOf = new Map(
+    db
+      .all<{ map_id: string; cx: number; cy: number }>(
+        "SELECT map_id, cx, cy FROM map_npcs WHERE npc_id = '0002'",
+      )
+      .map((r) => [r.map_id, r]),
+  );
   const npcRects: Rect[] = [];
-  const npcSpots = npcRows.map((npc) => {
+  const npcSpots = npcRows.map((npc, s) => {
+    const mapId = bands[s].map;
+    const anchor = officerOf.get(mapId);
+    if (!anchor) throw new Error(`图 ${mapId} 没有大陆传送官点位，使者 ${npc.id} 无法分驻`);
+    const geom = geomOf.get(mapId);
+    if (!geom) throw new Error(`图 ${mapId} 不在 maps 表里`);
+    const mapAreas = areaRows.filter((a) => a.map_id === mapId);
+    const mapCollisions = collisionsOf.get(mapId) ?? [];
     for (let r = 150; r <= 330; r += 30) {
       for (let k = 0; k < 48; k++) {
         const angle = (2 * Math.PI * k) / 48;
         const spot: Rect = {
-          cx: VILLAGE.x + Math.cos(angle) * r,
-          cy: VILLAGE.y + Math.sin(angle) * r,
+          cx: anchor.cx + Math.cos(angle) * r,
+          cy: anchor.cy + Math.sin(angle) * r,
           w: 64,
           h: 64,
         };
+        // 出界守卫：半径再大也不许跑出图（锚点在图中心附近，正常找不到这么远）
+        if (
+          Math.abs(spot.cx) > geom.pixel_width / 2 ||
+          Math.abs(spot.cy) > geom.pixel_height / 2
+        ) {
+          continue;
+        }
         const blocked =
-          npcCollisions.some((c) => rectsOverlap(spot, c, 32)) ||
-          homeAreas.some((a) => rectsOverlap(spot, a, 40)) ||
+          mapCollisions.some((c) => rectsOverlap(spot, c, 32)) ||
+          mapAreas.some((a) => rectsOverlap(spot, a, 40)) ||
           npcRects.some((n) => rectsOverlap(spot, n, 80));
         if (!blocked) {
           npcRects.push(spot);
-          return { npc_id: npc.id, cx: spot.cx, cy: spot.cy };
+          return { map_id: mapId, npc_id: npc.id, cx: spot.cx, cy: spot.cy };
         }
       }
     }
-    throw new Error(`任务 NPC ${npc.id} 在图 ${QUEST_MAP} 村中心找不到空位`);
+    throw new Error(`任务 NPC ${npc.id} 在图 ${mapId} 传送官附近找不到空位`);
   });
 
   // ---------- 5. 任务链（232 环） ----------
@@ -454,13 +476,13 @@ async function main(): Promise<void> {
   console.log(
     `各区落图：${bands
       .map((bd) => `${bd.map} ${areaRows.filter((a) => a.map_id === bd.map).length} 区`)
-      .join(" · ")} · NPC 全落 ${QUEST_MAP}`,
+      .join(" · ")} · 使者分驻 ${npcSpots.map((s) => `${s.npc_id}→图${s.map_id}`).join(" / ")}`,
   );
   for (const spot of npcSpots) {
     const near = areaRows
-      .filter((a) => a.map_id === QUEST_MAP)
+      .filter((a) => a.map_id === spot.map_id)
       .some((a) => rectsOverlap({ cx: spot.cx, cy: spot.cy, w: 64, h: 64 }, a, 0));
-    if (near) throw new Error(`NPC ${spot.npc_id} 压在刷怪区上`);
+    if (near) throw new Error(`NPC ${spot.npc_id} 压在图 ${spot.map_id} 的刷怪区上`);
   }
   console.log(`首环 ${quests[0].id}（${quests[0].label}）· 末环 ${quests[quests.length - 1].id}（${quests[quests.length - 1].label}）`);
 
@@ -487,7 +509,7 @@ async function main(): Promise<void> {
     for (const spot of npcSpots) {
       db.run(
         `INSERT INTO map_npcs (map_id, npc_id, cx, cy, updated_at) VALUES (?, ?, ?, ?, 0)`,
-        [QUEST_MAP, spot.npc_id, spot.cx, spot.cy],
+        [spot.map_id, spot.npc_id, spot.cx, spot.cy],
       );
     }
     // 任务链：只动本脚本的两个 id 段（8001~8004 与日常 8101 不碰）

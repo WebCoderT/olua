@@ -365,16 +365,17 @@ async function main() {
 
     group("七、安全地图闸门：不能建区，也不能把有区的图改成安全地图");
 
-    // 图 3 出厂是安全地图且**没有**刷怪区（#1084 之后 220 个区全在图 0）——「干净的安全地图」对照组
-    const safeDetail = (await api(base, "GET", "/api/admin/maps/3", { token })).body?.data;
-    checkEqual(safeDetail?.type, "0", "图 3 是安全地图");
-    checkEqual((safeDetail?.spawnAreas ?? []).length, 0, "图 3 没有刷怪区");
+    // 图 9 出厂是安全地图且**没有**刷怪区（#1162 起 4 张安全城 = 0/9/33/61，其余全是等级地图）
+    // ——「干净的安全地图」对照组（原来的图 3 已改成等级地图，不再适合这个角色）
+    const safeDetail = (await api(base, "GET", "/api/admin/maps/9", { token })).body?.data;
+    checkEqual(safeDetail?.type, "0", "图 9 是安全地图");
+    checkEqual((safeDetail?.spawnAreas ?? []).length, 0, "图 9 没有刷怪区");
 
-    const onSafeMap = await api(base, "POST", "/api/admin/maps/3/spawn-areas", { token, body: boxOf({ name: "安全地图上的区" }) });
+    const onSafeMap = await api(base, "POST", "/api/admin/maps/9/spawn-areas", { token, body: boxOf({ name: "安全地图上的区" }) });
     checkEqual(onSafeMap.status, 400, "安全地图上新建刷怪区 → 400");
     checkEqual(onSafeMap.body?.code, 50047, "业务码是 MAP_SPAWN_AREA_ON_SAFE_MAP");
 
-    // 图 0 现在是等级地图、带着出厂那批区 —— 改回安全地图要被拦（否则「先建区再改类型」就绕过了上一条）
+    // 图 0 被准备段改成了等级地图、带着出厂那批区 —— 改回安全地图要被拦（否则「先建区再改类型」就绕过了上一条）
     const map0 = (await api(base, "GET", "/api/admin/maps/0", { token })).body?.data;
     const toSafeMap = await api(base, "PATCH", "/api/admin/maps/0", {
       token,
@@ -384,7 +385,7 @@ async function main() {
     checkEqual(toSafeMap.body?.code, 20040, "业务码是 MAP_SAFE_WITH_SPAWN_AREAS");
 
     // 干净的安全地图保存不受影响：存量的「安全地图」不该被这条守点挡得连名字都改不了
-    const safeSave = await api(base, "PATCH", "/api/admin/maps/3", {
+    const safeSave = await api(base, "PATCH", "/api/admin/maps/9", {
       token,
       body: { label: safeDetail.label, type: "0", level: safeDetail.level, combat: safeDetail.combat, soulOfWar: safeDetail.soulOfWar },
     });
