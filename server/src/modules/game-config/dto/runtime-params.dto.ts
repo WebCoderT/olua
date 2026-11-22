@@ -851,3 +851,27 @@ export class UpdateAoiParamsDto {
   @Max(20)
   broadcastHz?: number;
 }
+
+/** 七组推荐值（`GET admin/runtime-params/recommended` 的形状，#1185；值来自服务端常量，不走校验管道） */
+export class RecommendedRuntimeParamsDto {
+  @ApiProperty({ description: "掉落参数推荐值", type: DropRuntimeParamsDto })
+  drop: DropRuntimeParamsDto;
+
+  @ApiProperty({ description: "自动战斗参数推荐值", type: AutoBattleParamsDto })
+  autoBattle: AutoBattleParamsDto;
+
+  @ApiProperty({ description: "帮会规则推荐值", type: GuildRuleParamsDto })
+  guild: GuildRuleParamsDto;
+
+  @ApiProperty({ description: "怪物 AI 参数推荐值", type: MonsterAiParamsDto })
+  monsterAi: MonsterAiParamsDto;
+
+  @ApiProperty({ description: "位移校验参数推荐值", type: MovementGuardParamsDto })
+  movement: MovementGuardParamsDto;
+
+  @ApiProperty({ description: "出手距离闸参数推荐值", type: CastRangeParamsDto })
+  castRange: CastRangeParamsDto;
+
+  @ApiProperty({ description: "AOI 推送口径推荐值", type: AoiParamsDto })
+  aoi: AoiParamsDto;
+}

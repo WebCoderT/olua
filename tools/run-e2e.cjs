@@ -54,6 +54,8 @@ delete process.env.NODE_OPTIONS;
 const WEIGHT = {
   "test:e2e:backup": 7,
   "test:e2e:guard": 6,
+  // 内存库一次启动 + 六组各一次 PATCH / reset / 回读（来回多但都很快）
+  "test:e2e:runtime-params": 2,
   "test:e2e:mail": 5,
   "test:e2e:combat": 5,
   "test:e2e:party": 4,

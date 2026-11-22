@@ -5,6 +5,7 @@ import type {
   CastRangeParams,
   MonsterAiParams,
   MovementGuardParams,
+  RecommendedRuntimeParams,
   RuntimeParams,
   UpdateAutoBattleParams,
   UpdateAoiParams,
@@ -15,6 +16,7 @@ import type {
   UpdateMovementGuardParams,
 } from "../api";
 import { Button, Card, Field, Input, Select, Spinner } from "../components/ui";
+import { ConfirmDialog } from "../components/ConfirmDialog";
 import { PageHeader } from "../components/PageHeader";
 import { hasPermission } from "../store/session";
 import { toastSuccess } from "../store/toast";
@@ -59,6 +61,10 @@ export function RuntimeParamsPage() {
   // AOI 推送口径（#1170）：同样单独一条接口；四个参数都是纯服务端消费，**重启生效**
   const [aoiDraft, setAoiDraft] = useState<Record<string, string> | null>(null);
   const [aoiSaving, setAoiSaving] = useState(false);
+  // 推荐配置（#1185）：只读一份给 hint 标注与「一键还原」的确认文案用
+  const [recommended, setRecommended] = useState<RecommendedRuntimeParams | null>(null);
+  const [resetTarget, setResetTarget] = useState<ModuleKey | null>(null);
+  const [resetting, setResetting] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -74,6 +80,8 @@ export function RuntimeParamsPage() {
       setCastRangeDraft(toCastRangeDraft(castRange));
       const aoi = await runtimeParamsApi.getAoi();
       setAoiDraft(toAoiDraft(aoi));
+      const rec = await runtimeParamsApi.getRecommended();
+      setRecommended(rec);
     } catch {
       /* 错误已由请求层统一提示 */
     } finally {
@@ -186,6 +194,112 @@ export function RuntimeParamsPage() {
     }
   };
 
+  //#region 一键还原至推荐配置（#1185）
+
+  /** 七个模块的还原文案（确认弹窗与成功提示共用；生效时机与各组保存按钮一致） */
+  const RESET_MODULES: Record<ModuleKey, { title: string; confirm: string; toast: string }> = {
+    drop: {
+      title: "还原掉落参数",
+      confirm: "把掉落手感 10 个字段整体写回推荐值，当前的自定义值会被覆盖；其余模块不受影响。",
+      toast: "掉落参数已还原为推荐配置（玩家下次进游戏拉配置时生效）",
+    },
+    autoBattle: {
+      title: "还原自动战斗参数",
+      confirm: "把自动战斗与寻路 14 个字段整体写回推荐值，当前的自定义值会被覆盖；其余模块不受影响。",
+      toast: "自动战斗参数已还原为推荐配置（玩家下次进游戏拉配置时生效）",
+    },
+    guild: {
+      title: "还原帮会规则",
+      confirm: "把帮会规则 6 个字段整体写回推荐值（含建帮门槛 10 级 / 100000 绑定元宝），当前的自定义值会被覆盖；其余模块不受影响。",
+      toast: "帮会规则已还原为推荐配置（下次建帮 / 改公告即按推荐值校验）",
+    },
+    monsterAi: {
+      title: "还原怪物 AI 参数",
+      confirm: "把怪物 AI 11 个字段整体写回推荐值（含牵引半径 600 / 回家 1.5 倍速 / 20 秒超时），当前的自定义值会被覆盖；其余模块不受影响。",
+      toast: "怪物 AI 参数已还原为推荐配置（1 秒内生效，不需要玩家重进）",
+    },
+    movement: {
+      title: "还原移动校验参数",
+      confirm: "把移动校验参数整体写回推荐值（档位 log：照判照放行只记账），当前的自定义值会被覆盖；其余模块不受影响。",
+      toast: "移动校验参数已还原为推荐配置（下一次位移判定即生效）",
+    },
+    castRange: {
+      title: "还原出手距离闸参数",
+      confirm: "把出手距离闸参数整体写回推荐值（档位 log、抖动余量 24px），当前的自定义值会被覆盖；其余模块不受影响。",
+      toast: "出手距离闸已还原为推荐配置（下一次出手即生效）",
+    },
+    aoi: {
+      title: "还原 AOI 推送口径",
+      confirm: "把 AOI 四个参数整体写回推荐值（格子 512 / 上限 200 / 离开延迟 1 秒 / 节拍 10Hz），当前的自定义值会被覆盖；其余模块不受影响。AOI 参数重启服务端后才生效。",
+      toast: "AOI 推送口径已还原为推荐配置（重启服务端后生效）",
+    },
+  };
+
+  /** 七个 reset 接口与模块名的对应（返回值都是该组生效值；这里只触发，回读统一走 load） */
+  const RESET_CALLS: Record<ModuleKey, () => Promise<unknown>> = {
+    drop: () => runtimeParamsApi.resetDrop(),
+    autoBattle: () => runtimeParamsApi.resetAutoBattle(),
+    guild: () => runtimeParamsApi.resetGuild(),
+    monsterAi: () => runtimeParamsApi.resetMonsterAi(),
+    movement: () => runtimeParamsApi.resetMovement(),
+    castRange: () => runtimeParamsApi.resetCastRange(),
+    aoi: () => runtimeParamsApi.resetAoi(),
+  };
+
+  const confirmReset = async () => {
+    if (!resetTarget) return;
+    setResetting(true);
+    try {
+      await RESET_CALLS[resetTarget]();
+      await load();
+      toastSuccess(RESET_MODULES[resetTarget].toast);
+    } catch {
+      /* 错误已由请求层统一提示 */
+    } finally {
+      setResetting(false);
+      setResetTarget(null);
+    }
+  };
+
+  /** 卡片右上角那枚「还原推荐」按钮（还原是写操作，只读角色不给） */
+  const resetButton = (module: ModuleKey) =>
+    canWrite ? (
+      <Button variant="outline" disabled={saving !== null || resetting} onClick={() => setResetTarget(module)}>
+        还原推荐
+      </Button>
+    ) : null;
+
+  /** 数值字段的 hint 追加推荐值（「掉落存活时长至少 10 秒…；推荐 180000」） */
+  const hintWith = (module: "drop" | "autoBattle" | "guild" | "monsterAi" | "movement" | "castRange" | "aoi", field: FieldSpec): string => {
+    if (!recommended) return field.hint;
+    const value = (recommended[module] as unknown as Record<string, unknown>)[field.key];
+    return value === undefined ? field.hint : `${field.hint}；推荐 ${formatRecValue(value)}`;
+  };
+
+  /** 怪物 AI 的区间字段拆成了 Min / Max 两个框，从推荐值的数组里各取一端 */
+  const aiHintWith = (field: FieldSpec): string => {
+    if (!recommended) return field.hint;
+    const pairOf: Record<string, "idleMoveInterval" | "idleMoveDuration"> = {
+      idleMoveIntervalMin: "idleMoveInterval",
+      idleMoveIntervalMax: "idleMoveInterval",
+      idleMoveDurationMin: "idleMoveDuration",
+      idleMoveDurationMax: "idleMoveDuration",
+    };
+    const pair = pairOf[field.key];
+    if (!pair) return hintWith("monsterAi", field);
+    const value = recommended.monsterAi[pair] as [number, number];
+    return `${field.hint}；推荐 ${field.key.endsWith("Min") ? value[0] : value[1]}`;
+  };
+
+  /** 推荐值的展示格式：布尔 → 是 / 否，数组 → [a, b]，其余原样 */
+  function formatRecValue(value: unknown): string {
+    if (typeof value === "boolean") return value ? "是" : "否";
+    if (Array.isArray(value)) return `[${value.join(", ")}]`;
+    return String(value);
+  }
+
+  //#endregion
+
   const saveCastRange = async () => {
     if (!castRangeDraft) return;
     const payload = buildCastRangePayload(castRangeDraft);
@@ -222,9 +336,12 @@ export function RuntimeParamsPage() {
           loading ? (
             <Spinner />
           ) : canWrite ? (
-            <Button disabled={!draft || saving !== null} loading={saving === "drop"} onClick={() => void save("drop")}>
-              保存掉落参数
-            </Button>
+            <>
+              {resetButton("drop")}
+              <Button disabled={!draft || saving !== null} loading={saving === "drop"} onClick={() => void save("drop")}>
+                保存掉落参数
+              </Button>
+            </>
           ) : null
         }
         description={
@@ -235,7 +352,10 @@ export function RuntimeParamsPage() {
       >
         {draft ? (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <Field label="boss 掉落公告" hint="关掉就不发全服公告（只对 boss 档怪生效，30 秒最多一条）">
+            <Field
+              label="boss 掉落公告"
+              hint={recommended ? `关掉就不发全服公告（只对 boss 档怪生效，30 秒最多一条）；推荐 ${recommended.drop.announceBoss ? "发公告" : "不发"}` : "关掉就不发全服公告（只对 boss 档怪生效，30 秒最多一条）"}
+            >
               <Select
                 value={draft.drop.announceBoss}
                 disabled={!canWrite}
@@ -246,7 +366,7 @@ export function RuntimeParamsPage() {
               </Select>
             </Field>
             {DROP_FIELDS.map((field) => (
-              <Field key={field.key} label={field.label} hint={field.hint}>
+              <Field key={field.key} label={field.label} hint={hintWith("drop", field)}>
                 <Input
                   type="number"
                   min={0}
@@ -266,16 +386,22 @@ export function RuntimeParamsPage() {
           loading ? (
             <Spinner />
           ) : canWrite ? (
-            <Button disabled={!draft || saving !== null} loading={saving === "autoBattle"} onClick={() => void save("autoBattle")}>
-              保存自动战斗参数
-            </Button>
+            <>
+              {resetButton("autoBattle")}
+              <Button disabled={!draft || saving !== null} loading={saving === "autoBattle"} onClick={() => void save("autoBattle")}>
+                保存自动战斗参数
+              </Button>
+            </>
           ) : null
         }
         description="超时类参数是毫秒，半径类是世界像素。网格边长调小会更贴合障碍但搜索变慢；卡住阈值调小会让自动走位更容易放弃目标。"
       >
         {draft ? (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <Field label="移动用跑步" hint="关闭则自动走位一律用走路速度">
+            <Field
+              label="移动用跑步"
+              hint={recommended ? `关闭则自动走位一律用走路速度；推荐 ${recommended.autoBattle.moveByRun ? "跑步" : "走路"}` : "关闭则自动走位一律用走路速度"}
+            >
               <Select
                 value={draft.autoBattle.moveByRun}
                 disabled={!canWrite}
@@ -286,7 +412,7 @@ export function RuntimeParamsPage() {
               </Select>
             </Field>
             {AUTO_FIELDS.map((field) => (
-              <Field key={field.key} label={field.label} hint={field.hint}>
+              <Field key={field.key} label={field.label} hint={hintWith("autoBattle", field)}>
                 <Input
                   type="number"
                   min={0}
@@ -306,9 +432,12 @@ export function RuntimeParamsPage() {
           loading ? (
             <Spinner />
           ) : canWrite ? (
-            <Button disabled={!draft || saving !== null || guildInvalid} loading={saving === "guild"} onClick={() => void save("guild")}>
-              保存帮会规则
-            </Button>
+            <>
+              {resetButton("guild")}
+              <Button disabled={!draft || saving !== null || guildInvalid} loading={saving === "guild"} onClick={() => void save("guild")}>
+                保存帮会规则
+              </Button>
+            </>
           ) : null
         }
         description="服务端校验读的就是这几个数：客户端提示只是提前反馈，能不能建帮 / 发公告由服务端判。"
@@ -316,7 +445,7 @@ export function RuntimeParamsPage() {
         {draft ? (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {GUILD_FIELDS.map((field) => (
-              <Field key={field.key} label={field.label} hint={field.hint}>
+              <Field key={field.key} label={field.label} hint={hintWith("guild", field)}>
                 <Input
                   type="number"
                   min={0}
@@ -337,9 +466,12 @@ export function RuntimeParamsPage() {
           loading ? (
             <Spinner />
           ) : canWrite ? (
-            <Button disabled={!aiDraft || aiSaving || aiInvalid !== null} loading={aiSaving} onClick={() => void saveAi()}>
-              保存怪物 AI 参数
-            </Button>
+            <>
+              {resetButton("monsterAi")}
+              <Button disabled={!aiDraft || aiSaving || aiInvalid !== null} loading={aiSaving} onClick={() => void saveAi()}>
+                保存怪物 AI 参数
+              </Button>
+            </>
           ) : null
         }
         description={
@@ -351,7 +483,7 @@ export function RuntimeParamsPage() {
         {aiDraft ? (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {AI_FIELDS.map((field) => (
-              <Field key={field.key} label={field.label} hint={field.hint}>
+              <Field key={field.key} label={field.label} hint={aiHintWith(field)}>
                 <Input
                   type="number"
                   min={0}
@@ -373,9 +505,12 @@ export function RuntimeParamsPage() {
           loading ? (
             <Spinner />
           ) : canWrite ? (
-            <Button disabled={!movementDraft || movementSaving} loading={movementSaving} onClick={() => void saveMovement()}>
-              保存移动校验参数
-            </Button>
+            <>
+              {resetButton("movement")}
+              <Button disabled={!movementDraft || movementSaving} loading={movementSaving} onClick={() => void saveMovement()}>
+                保存移动校验参数
+              </Button>
+            </>
           ) : null
         }
         description={
@@ -386,7 +521,10 @@ export function RuntimeParamsPage() {
       >
         {movementDraft ? (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <Field label="档位" hint="off 不校验（回滚用）/ log 只记账放行（出厂）/ enforce 拒绝并拉回">
+            <Field
+              label="档位"
+              hint={recommended ? `off 不校验（回滚用）/ log 只记账放行（出厂）/ enforce 拒绝并拉回；推荐 ${recommended.movement.mode}` : "off 不校验（回滚用）/ log 只记账放行（出厂）/ enforce 拒绝并拉回"}
+            >
               <Select
                 value={movementDraft.mode}
                 disabled={!canWrite}
@@ -397,7 +535,10 @@ export function RuntimeParamsPage() {
                 <option value="enforce">enforce · 拒绝并拉回</option>
               </Select>
             </Field>
-            <Field label="是否校验穿墙" hint="碰撞数据出问题时可单独关掉，不牵连速度校验">
+            <Field
+              label="是否校验穿墙"
+              hint={recommended ? `碰撞数据出问题时可单独关掉，不牵连速度校验；推荐 ${recommended.movement.wallCheck ? "校验" : "不校验"}` : "碰撞数据出问题时可单独关掉，不牵连速度校验"}
+            >
               <Select
                 value={movementDraft.wallCheck}
                 disabled={!canWrite}
@@ -408,7 +549,7 @@ export function RuntimeParamsPage() {
               </Select>
             </Field>
             {MOVEMENT_FIELDS.map((field) => (
-              <Field key={field.key} label={field.label} hint={field.hint}>
+              <Field key={field.key} label={field.label} hint={hintWith("movement", field)}>
                 <Input
                   type="number"
                   min={0}
@@ -429,9 +570,12 @@ export function RuntimeParamsPage() {
           loading ? (
             <Spinner />
           ) : canWrite ? (
-            <Button disabled={!castRangeDraft || castRangeSaving} loading={castRangeSaving} onClick={() => void saveCastRange()}>
-              保存距离闸参数
-            </Button>
+            <>
+              {resetButton("castRange")}
+              <Button disabled={!castRangeDraft || castRangeSaving} loading={castRangeSaving} onClick={() => void saveCastRange()}>
+                保存距离闸参数
+              </Button>
+            </>
           ) : null
         }
         description={
@@ -442,7 +586,10 @@ export function RuntimeParamsPage() {
       >
         {castRangeDraft ? (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <Field label="档位" hint="off 不判（回滚用）/ log 只记账放行（出厂）/ enforce 超距即拒">
+            <Field
+              label="档位"
+              hint={recommended ? `off 不判（回滚用）/ log 只记账放行（出厂）/ enforce 超距即拒；推荐 ${recommended.castRange.mode}` : "off 不判（回滚用）/ log 只记账放行（出厂）/ enforce 超距即拒"}
+            >
               <Select
                 value={castRangeDraft.mode}
                 disabled={!canWrite}
@@ -454,7 +601,7 @@ export function RuntimeParamsPage() {
               </Select>
             </Field>
             {CAST_RANGE_FIELDS.map((field) => (
-              <Field key={field.key} label={field.label} hint={field.hint}>
+              <Field key={field.key} label={field.label} hint={hintWith("castRange", field)}>
                 <Input
                   type="number"
                   min={0}
@@ -475,9 +622,12 @@ export function RuntimeParamsPage() {
           loading ? (
             <Spinner />
           ) : canWrite ? (
-            <Button disabled={!aoiDraft || aoiSaving} loading={aoiSaving} onClick={() => void saveAoi()}>
-              保存 AOI 参数
-            </Button>
+            <>
+              {resetButton("aoi")}
+              <Button disabled={!aoiDraft || aoiSaving} loading={aoiSaving} onClick={() => void saveAoi()}>
+                保存 AOI 参数
+              </Button>
+            </>
           ) : null
         }
         description={
@@ -489,7 +639,7 @@ export function RuntimeParamsPage() {
         {aoiDraft ? (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {AOI_FIELDS.map((field) => (
-              <Field key={field.key} label={field.label} hint={field.hint}>
+              <Field key={field.key} label={field.label} hint={hintWith("aoi", field)}>
                 <Input
                   type="number"
                   min={0}
@@ -502,6 +652,17 @@ export function RuntimeParamsPage() {
           </div>
         ) : null}
       </Card>
+
+      <ConfirmDialog
+        open={resetTarget !== null}
+        title={resetTarget ? RESET_MODULES[resetTarget].title : ""}
+        description={resetTarget ? RESET_MODULES[resetTarget].confirm : ""}
+        confirmText="还原为推荐值"
+        danger
+        loading={resetting}
+        onConfirm={() => void confirmReset()}
+        onCancel={() => (resetting ? undefined : setResetTarget(null))}
+      />
     </div>
   );
 }
@@ -509,6 +670,9 @@ export function RuntimeParamsPage() {
 //#region 字段描述（顺序即页面上的顺序）
 
 type GroupKey = "drop" | "autoBattle" | "guild";
+
+/** 可单独还原的模块名（与服务端七条 reset 路由一一对应；顺序即页面卡片顺序） */
+type ModuleKey = "drop" | "autoBattle" | "guild" | "monsterAi" | "movement" | "castRange" | "aoi";
 
 /** 草稿：三组都是「键 → 字符串」（`moveByRun` 也按字符串存 "true"/"false"，统一走一个编辑器） */
 type Draft = { drop: Record<string, string>; autoBattle: Record<string, string>; guild: Record<string, string> };
