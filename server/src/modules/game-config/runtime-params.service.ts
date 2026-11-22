@@ -1,6 +1,7 @@
 import { Injectable, Logger, OnApplicationBootstrap } from "@nestjs/common";
 import { BizCode } from "../../common/constants/biz-code";
 import {
+  AoiRuntimeParams,
   AutoBattleParams,
   CastRangeParams,
   DropRuntimeParams,
@@ -11,6 +12,7 @@ import {
   RuntimeParams,
 } from "../../common/constants/runtime-params";
 import {
+  RECOMMENDED_AOI_PARAMS,
   RECOMMENDED_AUTO_BATTLE_PARAMS,
   RECOMMENDED_CAST_RANGE_PARAMS,
   RECOMMENDED_DROP_PARAMS,
@@ -26,6 +28,7 @@ import { RuntimeParamsRow } from "../../database/rows";
 import {
   DropRuntimeParamsDto,
   RuntimeParamsDto,
+  UpdateAoiParamsDto,
   UpdateCastRangeParamsDto,
   UpdateMonsterAiParamsDto,
   UpdateMovementGuardParamsDto,
@@ -125,6 +128,8 @@ export class RuntimeParamsService implements OnApplicationBootstrap {
       movement: existing?.movement ?? "{}",
       // 出手距离闸同理（#1030）：整行 UPDATE，漏写这一列 = 把它静默清成 '{}'
       cast_range: existing?.cast_range ?? "{}",
+      // AOI 同理（#1170）：它有自己的两条接口，且重启才生效
+      aoi: existing?.aoi ?? "{}",
       updated_at: Date.now(),
     };
     this.repository.update(row);
@@ -175,6 +180,7 @@ export class RuntimeParamsService implements OnApplicationBootstrap {
       // 位移校验那一列原样写回（同一条整行 UPDATE 的纪律）
       movement: existing?.movement ?? "{}",
       cast_range: existing?.cast_range ?? "{}",
+      aoi: existing?.aoi ?? "{}",
       updated_at: Date.now(),
     };
     this.repository.update(row);
@@ -214,6 +220,7 @@ export class RuntimeParamsService implements OnApplicationBootstrap {
       monster_ai: existing?.monster_ai ?? "{}",
       movement: JSON.stringify(next),
       cast_range: existing?.cast_range ?? "{}",
+      aoi: existing?.aoi ?? "{}",
       updated_at: Date.now(),
     };
     this.repository.update(row);
@@ -252,6 +259,7 @@ export class RuntimeParamsService implements OnApplicationBootstrap {
       monster_ai: existing?.monster_ai ?? "{}",
       movement: existing?.movement ?? "{}",
       cast_range: JSON.stringify(next),
+      aoi: existing?.aoi ?? "{}",
       updated_at: Date.now(),
     };
     this.repository.update(row);
@@ -261,7 +269,7 @@ export class RuntimeParamsService implements OnApplicationBootstrap {
   /**
    * 默认推荐配置（#1185）
    *
-   * 六组的权威推荐值住在 `common/constants/runtime-params-recommended.ts` —— 这里只是透传。
+   * 七组的权威推荐值住在 `common/constants/runtime-params-recommended.ts` —— 这里只是透传。
    * 管理端 hint 标推荐值、一键还原的落点、`config-sync.sql` 的出厂行，三处都以它为准
    * （e2e 锁死 seed 行与常量一致，谁漂了直接红）。
    */
@@ -272,7 +280,7 @@ export class RuntimeParamsService implements OnApplicationBootstrap {
   /**
    * 一键还原掉落参数到推荐值（#1185）
    *
-   * 六个 reset 共用 `writeColumn`：**只写自己那一列**、其余五列原样写回（整行 UPDATE 纪律，
+   * 七个 reset 共用 `writeColumn`：**只写自己那一列**、其余六列原样写回（整行 UPDATE 纪律，
    * 与上面各 update 的取向一致）。推荐值本身合法（跨字段约束都满足），不需要再走一遍校验。
    */
   resetDrop(): DropRuntimeParams {
@@ -310,11 +318,17 @@ export class RuntimeParamsService implements OnApplicationBootstrap {
     return this.castRange();
   }
 
+  /** 一键还原 AOI 推送口径到推荐值（#1185；格子 512 / 上限 200 / 离开延迟 1 秒 / 节拍 10Hz，重启生效） */
+  resetAoi(): AoiRuntimeParams {
+    this.writeColumn("aoi", RECOMMENDED_AOI_PARAMS);
+    return this.aoi();
+  }
+
   /**
    * 只写 `runtime_params` 单行里的一列，其余列原样保留（#1185）
    *
    * 与各 `updateXxx` 的整行 UPDATE 不同：reset 的输入是常量（不存在「没提交的字段」问题），
-   * 六组共用一个写法反而更不易漏列 —— 列名拼错在类型层就红（`RuntimeParamsColumn` 联合类型）。
+   * 七组共用一个写法反而更不易漏列 —— 列名拼错在类型层就红（`RuntimeParamsColumn` 联合类型）。
    */
   private writeColumn(column: RuntimeParamsColumn, value: unknown): void {
     const existing = this.repository.get();
@@ -325,6 +339,7 @@ export class RuntimeParamsService implements OnApplicationBootstrap {
       monster_ai: existing?.monster_ai ?? "{}",
       movement: existing?.movement ?? "{}",
       cast_range: existing?.cast_range ?? "{}",
+      aoi: existing?.aoi ?? "{}",
     };
     next[column] = JSON.stringify(value);
     this.repository.update({
@@ -335,6 +350,7 @@ export class RuntimeParamsService implements OnApplicationBootstrap {
       monster_ai: next.monster_ai,
       movement: next.movement,
       cast_range: next.cast_range,
+      aoi: next.aoi,
       updated_at: Date.now(),
     });
   }
@@ -342,6 +358,45 @@ export class RuntimeParamsService implements OnApplicationBootstrap {
   /** 读单列 JSON（reset 后回读用；坏 JSON / 空列 → 空对象，与 parseGroup 同一取向） */
   private parseGroupByKey(column: RuntimeParamsColumn): Record<string, unknown> {
     return parseGroup(this.repository.get()?.[column]);
+  }
+
+
+  /**
+   * AOI 推送口径（`aoi` 列，#1170）
+   *
+   * 与 `movement()` 同一取向：**原样返回**（缺键不补），兜底由消费方 `AoiService` 做
+   * （读不到按历史常量 512 / 200 / 1000ms / 10Hz 兜住，行为与配置化之前完全一致）。
+   */
+  aoi(): AoiRuntimeParams {
+    return parseGroup(this.repository.get()?.aoi) as unknown as AoiRuntimeParams;
+  }
+
+  /**
+   * 更新 AOI 推送口径（部分更新；与其它六组都分开）
+   *
+   * 合并用 `definedOnly`，落库时**其余七列原样写回**（`update` 是整行 UPDATE）。
+   * 单字段取值域由 DTO 管；这里不判跨字段 —— 四个参数彼此独立（格子的几何 /
+   * 上限裁剪 / 离开合并 / 节拍互不引用）。
+   *
+   * **生效时机是重启**：格子边长变了等于所有已成形的索引作废，四个参数统一启动时读。
+   */
+  updateAoi(dto: UpdateAoiParamsDto): AoiRuntimeParams {
+    const existing = this.repository.get();
+    const current = parseGroup(existing?.aoi);
+    const next = { ...current, ...definedOnly(dto) } as Record<string, unknown>;
+    const row: RuntimeParamsRow = {
+      id: 1,
+      drop_params: existing?.drop_params ?? "{}",
+      auto_battle: existing?.auto_battle ?? "{}",
+      guild_rules: existing?.guild_rules ?? "{}",
+      monster_ai: existing?.monster_ai ?? "{}",
+      movement: existing?.movement ?? "{}",
+      cast_range: existing?.cast_range ?? "{}",
+      aoi: JSON.stringify(next),
+      updated_at: Date.now(),
+    };
+    this.repository.update(row);
+    return this.aoi();
   }
 
   /** 三列 JSON → 生效值（坏 JSON 当空对象；缺键就是缺键，不补默认值） */
@@ -354,8 +409,8 @@ export class RuntimeParamsService implements OnApplicationBootstrap {
   }
 }
 
-/** `runtime_params` 单行的六个 JSON 列名（`writeColumn` 的判据：拼错在类型层就红） */
-type RuntimeParamsColumn = "drop_params" | "auto_battle" | "guild_rules" | "monster_ai" | "movement" | "cast_range";
+/** `runtime_params` 单行的七个 JSON 列名（`writeColumn` 的判据：拼错在类型层就红） */
+type RuntimeParamsColumn = "drop_params" | "auto_battle" | "guild_rules" | "monster_ai" | "movement" | "cast_range" | "aoi";
 
 /** 去掉值为 undefined 的键（见 `update` 里的说明：DTO 实例的空字段会覆盖现值） */
 function definedOnly<T extends object>(value: T | undefined): Partial<T> {

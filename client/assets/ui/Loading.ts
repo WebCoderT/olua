@@ -9,6 +9,11 @@ import { getText } from "../configs/texts";
 import { installNetwork } from "./utils/net/NetworkSetup";
 import { loadGameConfig } from "./utils/net/ConfigLoader";
 import type { GameConfigLoadResult } from "./utils/net/ConfigLoader";
+import { installSiblingSortGuard } from "./utils/node/SiblingSortGuard";
+
+// 引擎坑兜底（#1184）：兄弟重排队列里残留已销毁节点会让 AFTER_UPDATE 抛异常、整页停在 Error 页。
+// 必须在本场景第一帧之前装好，所以放在模块顶层而不是 start() 里（见 utils/node/SiblingSortGuard）
+installSiblingSortGuard();
 
 const { ccclass } = _decorator;
 

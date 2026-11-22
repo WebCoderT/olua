@@ -1,7 +1,7 @@
 /**
  * 运行时参数的**默认推荐配置**（#1185）
  *
- * 六组的权威推荐值都在这一个常量里 —— 「一键还原」的落点、`config-sync.sql` 的出厂行、
+ * 七组的权威推荐值都在这一个常量里 —— 「一键还原」的落点、`config-sync.sql` 的出厂行、
  * 管理端 hint 里标的推荐值，三处都以它为准（e2e 里有断言锁死 seed 行与常量一致）。
  *
  * 为什么现在代码里可以有值了（#655 说过「值不在这里」）：#655 反对的是**读的时候静默回落**
@@ -93,6 +93,14 @@ export const RECOMMENDED_CAST_RANGE_PARAMS = {
   jitterPx: 24,
 } as const;
 
+/** AOI 推送口径（`runtime_params.aoi` 列，#1170；服务端消费，重启生效） */
+export const RECOMMENDED_AOI_PARAMS = {
+  cellSize: 512,
+  maxEntities: 200,
+  leaveDelayMs: 1000,
+  broadcastHz: 10,
+} as const;
+
 /** 六组推荐值打包（`GET admin/runtime-params/recommended` 的形状） */
 export const RECOMMENDED_RUNTIME_PARAMS = {
   drop: RECOMMENDED_DROP_PARAMS,
@@ -101,6 +109,7 @@ export const RECOMMENDED_RUNTIME_PARAMS = {
   monsterAi: RECOMMENDED_MONSTER_AI_PARAMS,
   movement: RECOMMENDED_MOVEMENT_GUARD_PARAMS,
   castRange: RECOMMENDED_CAST_RANGE_PARAMS,
+  aoi: RECOMMENDED_AOI_PARAMS,
 } as const;
 
 export type RecommendedRuntimeParams = typeof RECOMMENDED_RUNTIME_PARAMS;
@@ -113,6 +122,7 @@ export const RUNTIME_PARAM_MODULE_NAMES = [
   "monsterAi",
   "movement",
   "castRange",
+  "aoi",
 ] as const;
 
 export type RuntimeParamModuleName = (typeof RUNTIME_PARAM_MODULE_NAMES)[number];

@@ -262,6 +262,41 @@ export interface CastRangeParams {
 /** 出手距离闸的键清单（启动自检 + 管理端回读用） */
 export const CAST_RANGE_KEYS: Array<keyof CastRangeParams> = ["mode", "jitterPx"];
 
+/**
+ * AOI 推送口径（`runtime_params.aoi` 列，#1170）
+ *
+ * **服务端消费，不进客户端快照**：视野裁剪是推送架构的事，客户端只管收帧，
+ * 知道格子边长对它没有任何用处。
+ *
+ * 与 monster_ai / movement / cast_range 同性质（一进程一份、运营可调、服务端独占），
+ * 所以进 `runtime_params` 单行表而不是另开一张表。**生效时机是重启**：格子边长变了
+ * 等于把所有已成形的索引作废（实体在旧格里的位置全错），运行中热切会出现
+ * 「一半房间按 512 建、一半按新值建」的时段 —— 所以四个参数统一启动时读一次，
+ * 管理端改完提示「重启后生效」。
+ *
+ * 出厂值在 `config-sync.sql`（512 / 200 / 1000 / 10）；代码里的 `AOI_CELL` 等常量
+ * （aoi-math.ts）只是**读不出来时兜住进程**的最小可用值，兼作纯函数的缺省参，
+ * 不是第二份出厂值。
+ */
+export interface AoiRuntimeParams {
+  /** 格子边长（像素，出厂 512）：8192² 的图 → 16×16 = 256 格；一格视野 = 3×3 共 ±768px */
+  cellSize: number;
+  /** 单帧实体上限（出厂 200）：超出只留离格心最近的 N 个，防「怪围上来」把帧顶爆 */
+  maxEntities: number;
+  /** 离开视野延迟（毫秒，出厂 1000）：边界来回走不闪（期内又看见就取消离开） */
+  leaveDelayMs: number;
+  /** 互见广播节拍（Hz，出厂 10）：格子索引与进出差量每拍跑一次 */
+  broadcastHz: number;
+}
+
+/** AOI 参数的键清单（管理端「保存后回读」与启动自检用） */
+export const AOI_PARAM_KEYS: Array<keyof AoiRuntimeParams> = [
+  "cellSize",
+  "maxEntities",
+  "leaveDelayMs",
+  "broadcastHz",
+];
+
 /** 三组的键清单（**启动自检用**：库里少了哪个键就点名报错，不静默补默认值） */
 export const RUNTIME_PARAM_KEYS: Record<keyof RuntimeParams, string[]> = {
   drop: [

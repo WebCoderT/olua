@@ -1,5 +1,6 @@
-import { Injectable } from "@nestjs/common";
+import { Injectable, Logger, OnApplicationBootstrap } from "@nestjs/common";
 import {
+  AOI_CELL,
   AOI_LEAVE_DELAY_MS,
   AOI_MAX_ENTITIES,
   cellCenterOf,
@@ -7,6 +8,7 @@ import {
   neighborCellKeys,
   playerEntityOf,
 } from "./aoi-math";
+import { RuntimeParamsRepository } from "../../database/repositories/runtime-params.repository";
 
 /**
  * 一间房的格子索引
@@ -57,9 +59,75 @@ interface ViewAoi {
  * 集合都不同，缓存与共用都不成立。
  */
 @Injectable()
-export class AoiService {
+export class AoiService implements OnApplicationBootstrap {
+  private readonly logger = new Logger(AoiService.name);
   private readonly rooms = new Map<string, RoomAoi>();
   private readonly viewers = new Map<string, ViewAoi>();
+
+  constructor(private readonly runtimeParamsRepo: RuntimeParamsRepository) {}
+
+  //#region 推送口径（#1170：runtime_params.aoi，启动时读一次，重启生效）
+
+  /** 格子边长（缺键 / 坏值回落历史常量 —— 行为与配置化之前完全一致） */
+  private cellSize = AOI_CELL;
+  /** 单帧实体上限 */
+  private maxEntities = AOI_MAX_ENTITIES;
+  /** 离开视野延迟 */
+  private leaveDelayMs = AOI_LEAVE_DELAY_MS;
+
+  /**
+   * 启动时读一次 `runtime_params.aoi`（#1170）
+   *
+   * 缺键不报错也不补默认值进库 —— 直接回落历史常量并 warn（与 `MovementGuardService`
+   * 同一取向）：配置化不能让「没跑 config-import 的存量库」连服务都起不来。
+   * 坏值（非正数 / 非有限数）按缺键处理。
+   */
+  onApplicationBootstrap(): void {
+    const raw = this.runtimeParamsRepo.get()?.aoi;
+    let config: Record<string, unknown> = {};
+    try {
+      const parsed: unknown = raw ? JSON.parse(raw) : undefined;
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) config = parsed as Record<string, unknown>;
+    } catch {
+      config = {};
+    }
+    const pick = (key: string, fallback: number, min: number, max: number): number => {
+      const value = Number(config[key]);
+      if (!Number.isFinite(value) || value < min || value > max) return fallback;
+      return value;
+    };
+    this.cellSize = pick("cellSize", AOI_CELL, 128, 2048);
+    this.maxEntities = pick("maxEntities", AOI_MAX_ENTITIES, 10, 500);
+    this.leaveDelayMs = pick("leaveDelayMs", AOI_LEAVE_DELAY_MS, 0, 10000);
+    const missing: string[] = [];
+    for (const key of ["cellSize", "maxEntities", "leaveDelayMs", "broadcastHz"]) {
+      if (config[key] === undefined) missing.push(key);
+    }
+    if (missing.length > 0) {
+      this.logger.warn(`runtime_params.aoi 缺键：${missing.join(", ")}（按历史常量兜住）。跑 make config-import 补出厂值`);
+    }
+    this.logger.log(
+      `AOI 口径：格子 ${this.cellSize}px / 上限 ${this.maxEntities} / 离开 ${this.leaveDelayMs}ms` +
+        (this.broadcastIntervalMs() ? ` / 广播 ${this.broadcastIntervalMs()}ms` : ""),
+    );
+  }
+
+  /** 互见广播间隔（毫秒）：广播节拍由 `player-presence` 的定时器消费，这里只负责换算与夹下限 */
+  broadcastIntervalMs(): number {
+    const raw = this.runtimeParamsRepo.get()?.aoi;
+    let broadcastHz = NaN;
+    try {
+      const parsed: unknown = raw ? JSON.parse(raw) : undefined;
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) broadcastHz = Number((parsed as Record<string, unknown>).broadcastHz);
+    } catch {
+      broadcastHz = NaN;
+    }
+    // 下限 50ms 与原 `playerSyncBroadcastMs` 的防呆一致；没配（NaN）返回 0 = 调用方走自己的缺省
+    if (!Number.isFinite(broadcastHz)) return 0;
+    return Math.max(50, Math.round(1000 / broadcastHz));
+  }
+
+  //#endregion
 
   /**
    * 索引版本号
@@ -83,7 +151,7 @@ export class AoiService {
    */
   index(roomId: string, entityId: string, x: number, y: number): void {
     const room = this.roomOf(roomId);
-    const cell = cellKeyOf(x, y);
+    const cell = cellKeyOf(x, y, this.cellSize);
     const previous = room.cellOf.get(entityId);
     if (previous !== cell) {
       if (previous !== undefined) {
@@ -188,17 +256,17 @@ export class AoiService {
         if (!bucket) continue;
         for (const entityId of bucket) candidates.push(entityId);
       }
-      if (candidates.length <= AOI_MAX_ENTITIES) {
+      if (candidates.length <= this.maxEntities) {
         for (const entityId of candidates) ids.add(entityId);
       } else {
-        const center = cellCenterOf(cell);
+        const center = cellCenterOf(cell, this.cellSize);
         const distance = (entityId: string): number => {
           const at = room.pos.get(entityId);
           if (!at) return Number.POSITIVE_INFINITY;
           return (at.x - center.x) ** 2 + (at.y - center.y) ** 2;
         };
         candidates.sort((left, right) => distance(left) - distance(right));
-        for (let i = 0; i < AOI_MAX_ENTITIES; i += 1) ids.add(candidates[i]);
+        for (let i = 0; i < this.maxEntities; i += 1) ids.add(candidates[i]);
       }
     }
     this.visibleCache.set(key, { gen: this.generation, ids });
@@ -263,7 +331,7 @@ export class AoiService {
    */
   diff(roomId: string, accountId: string, x: number, y: number, now: number): { cell: string; enters: string[]; leaves: string[] } {
     const viewer = this.viewerOf(roomId, accountId);
-    const cell = cellKeyOf(x, y);
+    const cell = cellKeyOf(x, y, this.cellSize);
     viewer.cell = cell;
     const visible = this.visibleInCell(roomId, cell);
     const self = playerEntityOf(accountId);
@@ -284,7 +352,7 @@ export class AoiService {
       if (visible.has(entityId)) continue;
       const deadline = viewer.leaving.get(entityId);
       if (deadline === undefined) {
-        viewer.leaving.set(entityId, now + AOI_LEAVE_DELAY_MS);
+        viewer.leaving.set(entityId, now + this.leaveDelayMs);
         continue;
       }
       if (now < deadline) continue;

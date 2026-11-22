@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { formatTime, PERMISSION, runtimeParamsApi } from "../api";
 import type {
+  AoiParams,
   CastRangeParams,
   MonsterAiParams,
   MovementGuardParams,
   RecommendedRuntimeParams,
   RuntimeParams,
   UpdateAutoBattleParams,
+  UpdateAoiParams,
   UpdateCastRangeParams,
   UpdateDropRuntimeParams,
   UpdateGuildRuleParams,
@@ -56,6 +58,9 @@ export function RuntimeParamsPage() {
   const [movementSaving, setMovementSaving] = useState(false);
   const [castRangeDraft, setCastRangeDraft] = useState<Record<string, string> | null>(null);
   const [castRangeSaving, setCastRangeSaving] = useState(false);
+  // AOI 推送口径（#1170）：同样单独一条接口；四个参数都是纯服务端消费，**重启生效**
+  const [aoiDraft, setAoiDraft] = useState<Record<string, string> | null>(null);
+  const [aoiSaving, setAoiSaving] = useState(false);
   // 推荐配置（#1185）：只读一份给 hint 标注与「一键还原」的确认文案用
   const [recommended, setRecommended] = useState<RecommendedRuntimeParams | null>(null);
   const [resetTarget, setResetTarget] = useState<ModuleKey | null>(null);
@@ -73,6 +78,8 @@ export function RuntimeParamsPage() {
       setMovementDraft(toMovementDraft(movement));
       const castRange = await runtimeParamsApi.getCastRange();
       setCastRangeDraft(toCastRangeDraft(castRange));
+      const aoi = await runtimeParamsApi.getAoi();
+      setAoiDraft(toAoiDraft(aoi));
       const rec = await runtimeParamsApi.getRecommended();
       setRecommended(rec);
     } catch {
@@ -166,25 +173,30 @@ export function RuntimeParamsPage() {
     setCastRangeDraft((current) => (current ? { ...current, [key]: value } : current));
   };
 
-  const saveCastRange = async () => {
-    if (!castRangeDraft) return;
-    const payload = buildCastRangePayload(castRangeDraft);
+  const setAoiField = (key: string, value: string) => {
+    setAoiDraft((current) => (current ? { ...current, [key]: value } : current));
+  };
+
+  const saveAoi = async () => {
+    if (!aoiDraft) return;
+    const payload = buildAoiPayload(aoiDraft);
     if (!payload) return;
-    setCastRangeSaving(true);
+    setAoiSaving(true);
     try {
-      const row = await runtimeParamsApi.updateCastRange(payload);
-      setCastRangeDraft(toCastRangeDraft(row));
-      toastSuccess("出手距离闸已保存（下一次出手即生效）");
+      const row = await runtimeParamsApi.updateAoi(payload);
+      setAoiDraft(toAoiDraft(row));
+      // 格子边长变了等于全部格子索引作废 —— 四个参数统一启动时读，保存后要重启才生效
+      toastSuccess("AOI 推送口径已保存（重启服务端后生效）");
     } catch {
       /* 错误已由请求层统一提示 */
     } finally {
-      setCastRangeSaving(false);
+      setAoiSaving(false);
     }
   };
 
   //#region 一键还原至推荐配置（#1185）
 
-  /** 六个模块的还原文案（确认弹窗与成功提示共用；生效时机与各组保存按钮一致） */
+  /** 七个模块的还原文案（确认弹窗与成功提示共用；生效时机与各组保存按钮一致） */
   const RESET_MODULES: Record<ModuleKey, { title: string; confirm: string; toast: string }> = {
     drop: {
       title: "还原掉落参数",
@@ -216,9 +228,14 @@ export function RuntimeParamsPage() {
       confirm: "把出手距离闸参数整体写回推荐值（档位 log、抖动余量 24px），当前的自定义值会被覆盖；其余模块不受影响。",
       toast: "出手距离闸已还原为推荐配置（下一次出手即生效）",
     },
+    aoi: {
+      title: "还原 AOI 推送口径",
+      confirm: "把 AOI 四个参数整体写回推荐值（格子 512 / 上限 200 / 离开延迟 1 秒 / 节拍 10Hz），当前的自定义值会被覆盖；其余模块不受影响。AOI 参数重启服务端后才生效。",
+      toast: "AOI 推送口径已还原为推荐配置（重启服务端后生效）",
+    },
   };
 
-  /** 六个 reset 接口与模块名的对应（返回值都是该组生效值；这里只触发，回读统一走 load） */
+  /** 七个 reset 接口与模块名的对应（返回值都是该组生效值；这里只触发，回读统一走 load） */
   const RESET_CALLS: Record<ModuleKey, () => Promise<unknown>> = {
     drop: () => runtimeParamsApi.resetDrop(),
     autoBattle: () => runtimeParamsApi.resetAutoBattle(),
@@ -226,6 +243,7 @@ export function RuntimeParamsPage() {
     monsterAi: () => runtimeParamsApi.resetMonsterAi(),
     movement: () => runtimeParamsApi.resetMovement(),
     castRange: () => runtimeParamsApi.resetCastRange(),
+    aoi: () => runtimeParamsApi.resetAoi(),
   };
 
   const confirmReset = async () => {
@@ -251,8 +269,8 @@ export function RuntimeParamsPage() {
       </Button>
     ) : null;
 
-  /** 数值字段的 hint 追加推荐值（「掉落存活时长至少 10 秒…；推荐 10000」） */
-  const hintWith = (module: "drop" | "autoBattle" | "guild" | "monsterAi" | "movement" | "castRange", field: FieldSpec): string => {
+  /** 数值字段的 hint 追加推荐值（「掉落存活时长至少 10 秒…；推荐 180000」） */
+  const hintWith = (module: "drop" | "autoBattle" | "guild" | "monsterAi" | "movement" | "castRange" | "aoi", field: FieldSpec): string => {
     if (!recommended) return field.hint;
     const value = (recommended[module] as unknown as Record<string, unknown>)[field.key];
     return value === undefined ? field.hint : `${field.hint}；推荐 ${formatRecValue(value)}`;
@@ -282,6 +300,22 @@ export function RuntimeParamsPage() {
 
   //#endregion
 
+  const saveCastRange = async () => {
+    if (!castRangeDraft) return;
+    const payload = buildCastRangePayload(castRangeDraft);
+    if (!payload) return;
+    setCastRangeSaving(true);
+    try {
+      const row = await runtimeParamsApi.updateCastRange(payload);
+      setCastRangeDraft(toCastRangeDraft(row));
+      toastSuccess("出手距离闸已保存（下一次出手即生效）");
+    } catch {
+      /* 错误已由请求层统一提示 */
+    } finally {
+      setCastRangeSaving(false);
+    }
+  };
+
   return (
     <div className="flex flex-col gap-4">
       <PageHeader
@@ -291,7 +325,6 @@ export function RuntimeParamsPage() {
             掉落手感与自动战斗参数以前写死在客户端（<span className="font-mono text-xs">configs/drop</span> 与{" "}
             <span className="font-mono text-xs">configs/autoBattle</span>），帮会规则写死在服务端常量里。现在都能在这里改：
             改完不需要重新打客户端包，玩家下次进游戏拉配置时生效（帮会规则是立即生效）。
-            每个模块都能「一键还原」到默认推荐配置（字段说明里的「推荐 X」就是还原后的值）。
             {params ? <span className="ml-1 text-ink-5">上次修改：{formatTime(params.updatedAt)}</span> : null}
           </>
         }
@@ -583,6 +616,43 @@ export function RuntimeParamsPage() {
         ) : null}
       </Card>
 
+      <Card
+        title="AOI 推送口径（服务端）"
+        actions={
+          loading ? (
+            <Spinner />
+          ) : canWrite ? (
+            <>
+              {resetButton("aoi")}
+              <Button disabled={!aoiDraft || aoiSaving} loading={aoiSaving} onClick={() => void saveAoi()}>
+                保存 AOI 参数
+              </Button>
+            </>
+          ) : null
+        }
+        description={
+          canWrite
+            ? "地图数据的推送按「玩家所在格 + 周围 8 格」裁剪。四个参数彼此独立；格子边长变了等于把所有已成形的格子索引作废 —— 所以这一组**重启服务端后才生效**（API 与实时两个进程都要重启），页面上改完只落库。"
+            : "当前角色没有「修改养成配置」权限，本页只读。"
+        }
+      >
+        {aoiDraft ? (
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {AOI_FIELDS.map((field) => (
+              <Field key={field.key} label={field.label} hint={hintWith("aoi", field)}>
+                <Input
+                  type="number"
+                  min={0}
+                  value={aoiDraft[field.key] ?? ""}
+                  disabled={!canWrite}
+                  onChange={(event) => setAoiField(field.key, event.target.value)}
+                />
+              </Field>
+            ))}
+          </div>
+        ) : null}
+      </Card>
+
       <ConfirmDialog
         open={resetTarget !== null}
         title={resetTarget ? RESET_MODULES[resetTarget].title : ""}
@@ -601,8 +671,8 @@ export function RuntimeParamsPage() {
 
 type GroupKey = "drop" | "autoBattle" | "guild";
 
-/** 可单独还原的模块名（与服务端六条 reset 路由一一对应；顺序即页面卡片顺序） */
-type ModuleKey = "drop" | "autoBattle" | "guild" | "monsterAi" | "movement" | "castRange";
+/** 可单独还原的模块名（与服务端七条 reset 路由一一对应；顺序即页面卡片顺序） */
+type ModuleKey = "drop" | "autoBattle" | "guild" | "monsterAi" | "movement" | "castRange" | "aoi";
 
 /** 草稿：三组都是「键 → 字符串」（`moveByRun` 也按字符串存 "true"/"false"，统一走一个编辑器） */
 type Draft = { drop: Record<string, string>; autoBattle: Record<string, string>; guild: Record<string, string> };
@@ -687,6 +757,13 @@ const MOVEMENT_FIELDS: Array<FieldSpec & { step?: number }> = [
 /** 出手距离闸的数值字段（只有档位 + 一个余量：判据本身全部来自配置表） */
 const CAST_RANGE_FIELDS: Array<FieldSpec & { step?: number }> = [
   { key: "jitterPx", label: "抖动余量（像素）", hint: "抵掉 10Hz 上报相位差与怪物插值滞后；出厂 24" },
+];
+
+const AOI_FIELDS: FieldSpec[] = [
+  { key: "cellSize", label: "格子边长（像素）", hint: "8192² 的图按 512 切是 16×16 格；调小视野更贴合但索引更密。重启生效" },
+  { key: "maxEntities", label: "单帧实体上限", hint: "一个视野里超出它只留离格心最近的 N 个，防单帧 JSON 顶爆。重启生效" },
+  { key: "leaveDelayMs", label: "离开视野延迟（毫秒）", hint: "出视野先记账，期内又看见就取消 —— 站格子边界来回走不闪。重启生效" },
+  { key: "broadcastHz", label: "互见广播节拍（Hz）", hint: "格子索引与进出差量每拍刷新；下限 50ms 由服务端夹。重启生效" },
 ];
 
 //#endregion
@@ -961,6 +1038,35 @@ function buildCastRangePayload(values: Record<string, string>): UpdateCastRangeP
   if (values.jitterPx === undefined || values.jitterPx.trim() === "" || !Number.isFinite(jitterPx)) return null;
   const mode = values.mode === "off" || values.mode === "enforce" ? values.mode : "log";
   return { mode, jitterPx };
+}
+
+//#endregion
+
+//#region AOI 推送口径（#1170）
+
+/** AOI 生效值 → 草稿 */
+function toAoiDraft(row: AoiParams): Record<string, string> {
+  return {
+    cellSize: String(row.cellSize),
+    maxEntities: String(row.maxEntities),
+    leaveDelayMs: String(row.leaveDelayMs),
+    broadcastHz: String(row.broadcastHz),
+  };
+}
+
+/** AOI 草稿 → 提交体（有一处不是数字就整组不提交） */
+function buildAoiPayload(values: Record<string, string>): UpdateAoiParams | null {
+  const num = (key: string): number | null => {
+    const raw = values[key];
+    const parsed = Number(raw);
+    return raw !== undefined && raw.trim() !== "" && Number.isFinite(parsed) ? parsed : null;
+  };
+  const cellSize = num("cellSize");
+  const maxEntities = num("maxEntities");
+  const leaveDelayMs = num("leaveDelayMs");
+  const broadcastHz = num("broadcastHz");
+  if (cellSize === null || maxEntities === null || leaveDelayMs === null || broadcastHz === null) return null;
+  return { cellSize, maxEntities, leaveDelayMs, broadcastHz };
 }
 
 //#endregion

@@ -17,8 +17,8 @@ export class RuntimeParamsRepository {
   /** seed 单行（已存在则跳过） */
   seed(row: RuntimeParamsRow): void {
     this.db.run(
-      `INSERT OR IGNORE INTO runtime_params (id, drop_params, auto_battle, guild_rules, monster_ai, movement, cast_range, updated_at) VALUES (1, ?, ?, ?, ?, ?, ?, ?)`,
-      [row.drop_params, row.auto_battle, row.guild_rules, row.monster_ai, row.movement, row.cast_range, row.updated_at],
+      `INSERT OR IGNORE INTO runtime_params (id, drop_params, auto_battle, guild_rules, monster_ai, movement, cast_range, aoi, updated_at) VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [row.drop_params, row.auto_battle, row.guild_rules, row.monster_ai, row.movement, row.cast_range, row.aoi, row.updated_at],
     );
   }
 
@@ -28,8 +28,8 @@ export class RuntimeParamsRepository {
 
   update(row: RuntimeParamsRow): { changes: number } {
     return this.db.execute(
-      `UPDATE runtime_params SET drop_params = ?, auto_battle = ?, guild_rules = ?, monster_ai = ?, movement = ?, cast_range = ?, updated_at = ? WHERE id = 1`,
-      [row.drop_params, row.auto_battle, row.guild_rules, row.monster_ai, row.movement, row.cast_range, row.updated_at],
+      `UPDATE runtime_params SET drop_params = ?, auto_battle = ?, guild_rules = ?, monster_ai = ?, movement = ?, cast_range = ?, aoi = ?, updated_at = ? WHERE id = 1`,
+      [row.drop_params, row.auto_battle, row.guild_rules, row.monster_ai, row.movement, row.cast_range, row.aoi, row.updated_at],
     );
   }
 }

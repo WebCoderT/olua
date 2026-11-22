@@ -7850,6 +7850,44 @@ export type UpdateCastRangeParams = {
   jitterPx?: number;
 };
 
+export type AoiParams = {
+  /**
+   * 格子边长（像素，出厂 512）：视野 = 玩家所在格 + 周围 8 格的并集。改它需要重建全部格子索引，重启生效
+   */
+  cellSize: number;
+  /**
+   * 单帧实体上限（出厂 200）：一个视野里塞进几百只时只留离格心最近的 N 个，防单帧 JSON 顶爆
+   */
+  maxEntities: number;
+  /**
+   * 离开视野延迟（毫秒，出厂 1000）：出视野先记账，期内又看见就取消 —— 站格子边界来回走不闪
+   */
+  leaveDelayMs: number;
+  /**
+   * 互见广播节拍（Hz，出厂 10）：格子索引与进出差量每拍刷新一次；下限 50ms 由服务端夹
+   */
+  broadcastHz: number;
+};
+
+export type UpdateAoiParams = {
+  /**
+   * 格子边长（像素），128 ~ 2048
+   */
+  cellSize?: number;
+  /**
+   * 单帧实体上限，10 ~ 500
+   */
+  maxEntities?: number;
+  /**
+   * 离开视野延迟（毫秒），0 ~ 10000
+   */
+  leaveDelayMs?: number;
+  /**
+   * 互见广播节拍（Hz），1 ~ 20
+   */
+  broadcastHz?: number;
+};
+
 export type RecommendedRuntimeParams = {
   /**
    * 掉落参数推荐值
@@ -7875,6 +7913,10 @@ export type RecommendedRuntimeParams = {
    * 出手距离闸参数推荐值
    */
   castRange: CastRangeParams;
+  /**
+   * AOI 推送口径推荐值
+   */
+  aoi: AoiParams;
 };
 
 export type CombatWeights = {

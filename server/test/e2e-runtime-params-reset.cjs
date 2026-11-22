@@ -134,6 +134,7 @@ async function api(method, path, options = {}) {
       ["monsterAi", "monsterAi"],
       ["movement", "movement"],
       ["castRange", "castRange"],
+      ["aoi", "aoi"],
     ];
     for (const [apiGroup, seedColumn] of pairs) {
       check(
@@ -156,6 +157,8 @@ async function api(method, path, options = {}) {
     check(deepEqual(freshMovement.data, recommended.data.movement), "空库首启的位移校验生效值 == 推荐值（档位 log）", JSON.stringify(freshMovement.data || null));
     const freshCastRange = await api("GET", "admin/runtime-params/cast-range", { token: adminToken, zoneId: ADMIN_ZONE });
     check(deepEqual(freshCastRange.data, recommended.data.castRange), "空库首启的出手距离闸生效值 == 推荐值（档位 log）", JSON.stringify(freshCastRange.data || null));
+    const freshAoi = await api("GET", "admin/runtime-params/aoi", { token: adminToken, zoneId: ADMIN_ZONE });
+    check(deepEqual(freshAoi.data, recommended.data.aoi), "空库首启的 AOI 推送口径生效值 == 推荐值", JSON.stringify(freshAoi.data || null));
 
     //#endregion
 
@@ -176,6 +179,8 @@ async function api(method, path, options = {}) {
     check(dirtyMovement.code === 0, "位移校验已弄脏（mode off / maxSpeed 9999）", dirtyMovement.message);
     const dirtyCastRange = await api("PATCH", "admin/runtime-params/cast-range", { token: adminToken, zoneId: ADMIN_ZONE, body: { mode: "enforce" } });
     check(dirtyCastRange.code === 0, "出手距离闸已弄脏（mode enforce）", dirtyCastRange.message);
+    const dirtyAoi = await api("PATCH", "admin/runtime-params/aoi", { token: adminToken, zoneId: ADMIN_ZONE, body: { cellSize: 128, maxEntities: 10 } });
+    check(dirtyAoi.code === 0, "AOI 已弄脏（cellSize 128 / maxEntities 10）", dirtyAoi.message);
 
     // 六个 reset 逐个打：每一步断言「自己回到推荐值」+「还没轮到的组仍是脏值」（reset 不得越权洗掉别人）
     const resetCases = [
@@ -185,6 +190,7 @@ async function api(method, path, options = {}) {
       { path: "monster-ai/reset", group: "monsterAi" },
       { path: "movement/reset", group: "movement" },
       { path: "cast-range/reset", group: "castRange" },
+      { path: "aoi/reset", group: "aoi" },
     ];
     const dirtyProbe = {
       drop: (value) => value.ttlMs === 300000,
@@ -193,6 +199,7 @@ async function api(method, path, options = {}) {
       monsterAi: (value) => value.leashRange === 100,
       movement: (value) => value.mode === "off",
       castRange: (value) => value.mode === "enforce",
+      aoi: (value) => value.cellSize === 128 && value.maxEntities === 10,
     };
     for (const [index, item] of resetCases.entries()) {
       const result = await api("POST", `admin/runtime-params/${item.path}`, { token: adminToken, zoneId: ADMIN_ZONE });
@@ -215,6 +222,8 @@ async function api(method, path, options = {}) {
       "全还原后：三组快照参数生效值 == 推荐值",
       JSON.stringify(finalThree.data || null),
     );
+    const finalAoi = await api("GET", "admin/runtime-params/aoi", { token: adminToken, zoneId: ADMIN_ZONE });
+    check(deepEqual(finalAoi.data, recommended.data.aoi), "全还原后：AOI 生效值 == 推荐值", JSON.stringify(finalAoi.data || null));
 
     //#endregion
 
@@ -244,13 +253,13 @@ async function api(method, path, options = {}) {
 
     //#region 五、文档
 
-    console.log("— 五、文档：recommended + 六条 reset 都在契约里 —");
+    console.log("— 五、文档：recommended + 七条 reset 都在契约里 —");
 
     const docResponse = await fetch(`${baseUrl.replace(/\/api$/, "")}/api-docs-json`);
     const docs = await docResponse.json();
     const recommendedOp = (docs.paths["/api/admin/runtime-params/recommended"] || {}).get;
     check(!!recommendedOp && JSON.stringify(recommendedOp).includes("gameConfig:read"), "GET recommended 在契约里且标 gameConfig:read", JSON.stringify(!!recommendedOp));
-    const resetPaths = ["drop/reset", "auto-battle/reset", "guild/reset", "monster-ai/reset", "movement/reset", "cast-range/reset"];
+    const resetPaths = ["drop/reset", "auto-battle/reset", "guild/reset", "monster-ai/reset", "movement/reset", "cast-range/reset", "aoi/reset"];
     for (const tail of resetPaths) {
       const op = (docs.paths[`/api/admin/runtime-params/${tail}`] || {}).post;
       check(!!op && JSON.stringify(op).includes("gameConfig:write"), `POST ${tail} 在契约里且标 gameConfig:write`, JSON.stringify(!!op));
@@ -269,8 +278,9 @@ async function api(method, path, options = {}) {
 
 /** 组名 → 该组生效值对象（drop / autoBattle / guild 共用一个合体接口，其余各走各的） */
 async function readGroup(group, token) {
-  const path = group === "monsterAi" ? "admin/runtime-params/monster-ai" : group === "movement" ? "admin/runtime-params/movement" : group === "castRange" ? "admin/runtime-params/cast-range" : "admin/runtime-params";
+  const solo = group === "monsterAi" ? "admin/runtime-params/monster-ai" : group === "movement" ? "admin/runtime-params/movement" : group === "castRange" ? "admin/runtime-params/cast-range" : group === "aoi" ? "admin/runtime-params/aoi" : null;
+  const path = solo ?? "admin/runtime-params";
   const result = await api("GET", path, { token, zoneId: ADMIN_ZONE });
-  if (group === "monsterAi" || group === "movement" || group === "castRange") return result.data;
+  if (solo) return result.data;
   return result.data ? result.data[group] : null;
 }

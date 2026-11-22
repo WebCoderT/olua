@@ -124,12 +124,14 @@ import {
   UpdateLevelCurveDto,
 } from "../modules/game-config/dto/growth.dto";
 import {
+  AoiParamsDto,
   AutoBattleParamsDto,
   DropRuntimeParamsDto,
   GuildRuleParamsDto,
   MonsterAiParamsDto,
   MovementGuardParamsDto,
   RuntimeParamsDto,
+  UpdateAoiParamsDto,
   UpdateAutoBattleParamsDto,
   UpdateDropRuntimeParamsDto,
   UpdateGuildRuleParamsDto,
@@ -424,6 +426,9 @@ export const SWAGGER_MODELS = [
   // 怪物 AI 参数（#853 / #854：单独一组、单独两条接口，不下发客户端）
   MonsterAiParamsDto,
   UpdateMonsterAiParamsDto,
+  // AOI 推送口径（#1170：同上，且重启才生效）
+  AoiParamsDto,
+  UpdateAoiParamsDto,
   // 位移校验参数（#811：同上，服务端独占）
   MovementGuardParamsDto,
   UpdateMovementGuardParamsDto,

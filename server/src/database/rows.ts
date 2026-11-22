@@ -1399,6 +1399,8 @@ export interface RuntimeParamsRow {
    * 与 `movement` 分开一列：两者要能分别切档回滚（距离闸误伤时不该牵连移动校验）。
    */
   cast_range: string;
+  /** AOI 推送口径（`AoiRuntimeParams` 的 JSON；#1170，服务端消费、不下发客户端，重启生效） */
+  aoi: string;
   updated_at: number;
 }
 

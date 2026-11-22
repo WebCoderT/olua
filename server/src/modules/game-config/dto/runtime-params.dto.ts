@@ -774,7 +774,85 @@ export class UpdateCastRangeParamsDto {
   jitterPx?: number;
 }
 
-/** 六组推荐值（`GET admin/runtime-params/recommended` 的形状，#1185；值来自服务端常量，不走校验管道） */
+/**
+ * AOI 推送口径（`runtime_params.aoi` 列，#1170）
+ *
+ * 推送架构的四个参数：格子边长（视野 = 3×3 格并集）/ 单帧实体上限 /
+ * 离开视野延迟 / 互见广播节拍。纯服务端消费、不下发客户端。
+ *
+ * **生效时机是重启**：格子边长变了等于把所有已成形的格子索引作废，
+ * 四个参数统一启动时读一次 —— 页面上要标「重启后生效」。
+ */
+export class AoiParamsDto {
+  @ApiProperty({
+    description: "格子边长（像素，出厂 512）：视野 = 玩家所在格 + 周围 8 格的并集。改它需要重建全部格子索引，重启生效",
+    example: 512,
+  })
+  @IsInt()
+  @Min(128)
+  @Max(2048)
+  cellSize: number;
+
+  @ApiProperty({
+    description: "单帧实体上限（出厂 200）：一个视野里塞进几百只时只留离格心最近的 N 个，防单帧 JSON 顶爆",
+    example: 200,
+  })
+  @IsInt()
+  @Min(10)
+  @Max(500)
+  maxEntities: number;
+
+  @ApiProperty({
+    description: "离开视野延迟（毫秒，出厂 1000）：出视野先记账，期内又看见就取消 —— 站格子边界来回走不闪",
+    example: 1000,
+  })
+  @IsInt()
+  @Min(0)
+  @Max(10000)
+  leaveDelayMs: number;
+
+  @ApiProperty({
+    description: "互见广播节拍（Hz，出厂 10）：格子索引与进出差量每拍刷新一次；下限 50ms 由服务端夹",
+    example: 10,
+  })
+  @IsInt()
+  @Min(1)
+  @Max(20)
+  broadcastHz: number;
+}
+
+/** AOI 口径的部分更新：只提交改动过的字段，没提交的保持原值 */
+export class UpdateAoiParamsDto {
+  @ApiPropertyOptional({ description: "格子边长（像素），128 ~ 2048" })
+  @IsOptional()
+  @IsInt()
+  @Min(128)
+  @Max(2048)
+  cellSize?: number;
+
+  @ApiPropertyOptional({ description: "单帧实体上限，10 ~ 500" })
+  @IsOptional()
+  @IsInt()
+  @Min(10)
+  @Max(500)
+  maxEntities?: number;
+
+  @ApiPropertyOptional({ description: "离开视野延迟（毫秒），0 ~ 10000" })
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(10000)
+  leaveDelayMs?: number;
+
+  @ApiPropertyOptional({ description: "互见广播节拍（Hz），1 ~ 20" })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(20)
+  broadcastHz?: number;
+}
+
+/** 七组推荐值（`GET admin/runtime-params/recommended` 的形状，#1185；值来自服务端常量，不走校验管道） */
 export class RecommendedRuntimeParamsDto {
   @ApiProperty({ description: "掉落参数推荐值", type: DropRuntimeParamsDto })
   drop: DropRuntimeParamsDto;
@@ -793,4 +871,7 @@ export class RecommendedRuntimeParamsDto {
 
   @ApiProperty({ description: "出手距离闸参数推荐值", type: CastRangeParamsDto })
   castRange: CastRangeParamsDto;
+
+  @ApiProperty({ description: "AOI 推送口径推荐值", type: AoiParamsDto })
+  aoi: AoiParamsDto;
 }

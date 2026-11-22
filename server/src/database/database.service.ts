@@ -1537,6 +1537,10 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
         -- 不进客户端快照），**单独一列**而不是并进 movement：两者要能分别回滚
         -- （距离闸误伤时只关它，不能把移动校验一起关掉）
         cast_range  TEXT    NOT NULL DEFAULT '{}',
+        -- AOI 推送口径（#1170）：格子边长 / 单帧实体上限 / 离开延迟 / 广播节拍。
+        -- 与 movement / cast_range 同性质（服务端独占、不进客户端快照）；**重启生效** ——
+        -- 格子边长热切会让已成形索引作废，四个参数统一启动时读一次
+        aoi         TEXT    NOT NULL DEFAULT '{}',
         updated_at  INTEGER NOT NULL DEFAULT 0
       );
 
@@ -1790,6 +1794,10 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
     // 出手距离闸（#1030）：存量库补一列空的 '{}'，读取侧缺键按 `off` 兜底
     // （`CastGuardService`），跑一次 `make config-import` 才有出厂档位 `log`
     this.ensureColumn("runtime_params", "cast_range", "TEXT NOT NULL DEFAULT '{}'");
+    // AOI 推送口径（#1170）：存量库补一列空的 '{}'，读取侧缺键按历史常量兜底
+    // （`AoiService`，512 / 200 / 1000ms / 10Hz 与旧行为完全一致），
+    // 跑一次 `make config-import` 才有出厂值
+    this.ensureColumn("runtime_params", "aoi", "TEXT NOT NULL DEFAULT '{}'");
     // 掉落强制绑定（#789）：五张道具表各一列「掉出来就绑定」+ 每怪一列「这只怪掉的东西都绑定」。
     // 默认 0 = 不强制 —— 存量库补列后行为与之前完全一样（绑定只由 drop_params.bindChance 掷）
     this.ensureColumn("equipments", "bind_on_drop", "INTEGER NOT NULL DEFAULT 0");
