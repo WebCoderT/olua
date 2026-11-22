@@ -229,7 +229,12 @@ async function main() {
     const layers = data.layers ?? [];
     checkEqual(layers.length, map0.layerCount, "详情图层数与列表计数一致");
     checkEqual(layers[0]?.name, "ground", "图层名按 TMX 顺序");
-    checkEqual(Number(layers[0]?.width), Number(map0.cols), "图层尺寸（格）与地图格数一致");
+    // #1150 换图：底图改成「分页大图」（imagelayer），尺寸是像素不是格数 ——
+    // 首层（ground）必须铺满整张图，分页只是纹理上限的切法，不影响图幅
+    checkEqual(layers[0]?.type, "image", "底图是图像图层（真彩地图一个大图分页）");
+    check(Number(layers[0]?.width) > 0 && Number(layers[0]?.height) > 0, "图像图层尺寸是像素（> 0）", `${layers[0]?.width} × ${layers[0]?.height}`);
+    checkEqual(Number(layers[0]?.offsetX), 0, "首层从图左上角开始（offsetX = 0）");
+    checkEqual(Number(layers[0]?.offsetY), 0, "首层从图左上角开始（offsetY = 0）");
 
     // #676：`groups` 这一栏整个下架了 —— TMX 里已经没有对象组，接口再下发它就是「有数据可读」的假象。
     checkEqual(data.groups, undefined, "详情里没有 groups（TMX 对象组已整组删除，接口不再回显）");
@@ -265,7 +270,10 @@ async function main() {
       .filter((row) => String(row.mapId) === "0")[0] ?? {};
     checkEqual(area.name, seedArea.name, "区域名与快照一致（Tiled 时代的旧名已由 #1084 整表重排覆盖）");
     checkEqual(area.monsterKey, seedArea.monsterKey, "怪物 key 是 configs/monster 的关联键");
-    checkEqual(area.monsterLabel, "赤焰斗鸡", "怪物名从快照查出来（查不到才回落成 key）");
+    // 怪物名从快照的 monsters 表里查（不写死某只怪的名字：区是按段铺的，areas[0] 是哪只
+    // 由刷怪区配置决定，换图/重铺就会变）
+    const monsterLabel = configSnapshot.index("monsters")[String(seedArea.monsterKey)]?.label;
+    checkEqual(area.monsterLabel, monsterLabel, "怪物名从快照查出来（查不到才回落成 key）");
     // #852 说的是**管理端保存**只落 max（页面只有一个数量输入）；快照里的 min 是 #1084 seed
     // 写的密度下限（2026-11-19 拍板），读接口原样回显 —— 两者别混
     checkEqual(area.min, seedArea.min, "最少只数与快照一致（seed 的密度下限；管理端保存仍按 #852 只落 max）");
@@ -347,7 +355,7 @@ async function main() {
       "y 正方向越界也要判出来（y 轴向上，图的顶边是 0 —— 这里最容易把符号写反）",
     );
 
-    // 11 张图的全部区域扫一遍：口径一错就是一大片越界，这个遍历是最省事的判据
+    // 全部图的区域扫一遍：口径一错就是一大片越界，这个遍历是最省事的判据
     let totalAreas = 0;
     const outside = [];
     for (const row of rows) {
@@ -480,8 +488,8 @@ async function main() {
     const del = await api(base, "DELETE", "/api/admin/maps/0", { token: rootToken });
     checkEqual(del.status, 404, "DELETE 删除地图 → 404");
 
-    const outOfRange = await api(base, "GET", "/api/admin/maps/11", { token: rootToken });
-    checkEqual(outOfRange.status, 404, "11 号图不存在 → 404");
+    const outOfRange = await api(base, "GET", "/api/admin/maps/999", { token: rootToken });
+    checkEqual(outOfRange.status, 404, "99 号图不存在 → 404");
     checkEqual(outOfRange.body?.code, 50032, "用地图专属业务码 50032（不是 50000 兜底）");
     const nonsense = await api(base, "GET", "/api/admin/maps/abc", { token: rootToken });
     checkEqual(nonsense.status, 404, "id 形态不对同样 404（不 400：客户端不该猜 id 长什么样）");

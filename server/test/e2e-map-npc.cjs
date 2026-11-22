@@ -148,9 +148,9 @@ async function registerPlayer(baseUrl, username) {
   return registered.body?.data?.token;
 }
 
-/** 0 号图（8192×8192）上的一个合法点位 */
+/** 0 号图上的一个合法点位（#1150 换图后新图 0 是 2304×1856，旧值 4000,-4000 已在图外、API 会拒） */
 function pointOf(overrides = {}) {
-  return { npcId: "0001", cx: 4000, cy: -4000, ...overrides };
+  return { npcId: "0001", cx: 1200, cy: -900, ...overrides };
 }
 
 //#region 主流程
@@ -179,9 +179,10 @@ async function main() {
       rows.every((row) => row.npcPointCount === (seedNpcCounts[String(row.id)] ?? 0) && row.npcPointCount >= 1),
       "列表里每张图的 NPC 点位数 = 快照（npcPointCount 来自 map_npcs 的行数）",
     );
+    const snapshotMaps = configSnapshot.index("maps", "mapId");
     check(
-      rows.every((row) => row.hasRevivePoint === true),
-      "列表里每张图都标了「有复活点」",
+      rows.every((row) => row.hasRevivePoint === (snapshotMaps[String(row.id)]?.reviveCx != null)),
+      "列表里每张图的「有复活点」与快照一致（#1150 换图后只有图 0 出厂带复活点，其余等运营配）",
     );
 
     const detail = await api(base, "GET", "/api/admin/maps/0", { token });
@@ -214,8 +215,8 @@ async function main() {
     const point = created.body?.data ?? {};
     check(Number.isInteger(point.id) && point.id > 0, "返回带库里的行 id");
     checkEqual(point.npcId, "0001", "npcId 原样返回");
-    checkEqual(point.cx, 4000, "世界坐标 x 原样存下");
-    checkEqual(point.cy, -4000, "世界坐标 y 原样存下（y 轴向上，故为负）");
+    checkEqual(point.cx, 1200, "世界坐标 x 原样存下");
+    checkEqual(point.cy, -900, "世界坐标 y 原样存下（y 轴向上，故为负）");
     checkEqual(point.inBounds, true, "服务端判它在图内");
 
     const afterCreate = await api(base, "GET", "/api/admin/maps/0", { token });
@@ -245,7 +246,7 @@ async function main() {
     checkEqual(outside.status, 400, "点在图外 → 400（不是静默存进去）");
     checkEqual(outside.body?.code, 40000, "业务码是 PARAM_INVALID");
     check(
-      String(outside.body?.message ?? "").includes("8192"),
+      String(outside.body?.message ?? "").includes("2304"),
       `越界文案带上地图尺寸（实际：「${outside.body?.message ?? ""}」）`,
     );
 
@@ -263,13 +264,13 @@ async function main() {
 
     const moved = await api(base, "PATCH", `/api/admin/maps/0/npcs/${point.id}`, {
       token,
-      body: { npcId: "0001", cx: 2000, cy: -2000 },
+      body: { npcId: "0001", cx: 1500, cy: -1200 },
     });
     checkEqual(moved.status, 200, "修改返回 200");
     checkEqual(moved.body?.data?.id, point.id, "改的是同一行（没有变成「删了再建」）");
     checkEqual(moved.body?.data?.npcId, "0001", "npcId 没变（拖动只换坐标）");
-    checkEqual(moved.body?.data?.cx, 2000, "位置已挪");
-    checkEqual(moved.body?.data?.cy, -2000, "新坐标已落库");
+    checkEqual(moved.body?.data?.cx, 1500, "位置已挪");
+    checkEqual(moved.body?.data?.cy, -1200, "新坐标已落库");
 
     const crossMap = await api(base, "PATCH", `/api/admin/maps/3/npcs/${point.id}`, {
       token,
@@ -308,25 +309,25 @@ async function main() {
 
     group("六、复活点：单值，PUT 覆盖 / DELETE 置空且幂等");
 
-    const revPut = await api(base, "PUT", "/api/admin/maps/0/revive-point", { token, body: { cx: 1000, cy: -2000 } });
+    const revPut = await api(base, "PUT", "/api/admin/maps/0/revive-point", { token, body: { cx: 1000, cy: -1500 } });
     checkEqual(revPut.status, 200, "设置复活点返回 200");
     checkEqual(revPut.body?.data?.cx, 1000, "新坐标已落库");
     checkEqual(revPut.body?.data?.inBounds, true, "服务端判它在图内");
     checkEqual(
       (await api(base, "GET", "/api/admin/maps/0", { token })).body?.data?.revivePoint?.cy,
-      -2000,
+      -1500,
       "详情里读到的是新值（不是只返回了却没写）",
     );
 
-    const revOverwrite = await api(base, "PUT", "/api/admin/maps/0/revive-point", { token, body: { cx: 3000, cy: -3000 } });
+    const revOverwrite = await api(base, "PUT", "/api/admin/maps/0/revive-point", { token, body: { cx: 1300, cy: -1000 } });
     checkEqual(revOverwrite.status, 200, "再设一次是覆盖（一张图只有一个复活点）");
-    checkEqual(revOverwrite.body?.data?.cx, 3000, "覆盖后是新坐标");
+    checkEqual(revOverwrite.body?.data?.cx, 1300, "覆盖后是新坐标");
 
     const revOutside = await api(base, "PUT", "/api/admin/maps/0/revive-point", { token, body: { cx: -10, cy: -10 } });
     checkEqual(revOutside.status, 400, "复活点在图外 → 400");
     checkEqual(
       (await api(base, "GET", "/api/admin/maps/0", { token })).body?.data?.revivePoint?.cx,
-      3000,
+      1300,
       "被拒之后库里还是上一次的值",
     );
 

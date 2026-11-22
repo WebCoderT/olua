@@ -220,6 +220,19 @@ function pickBox(dbPath) {
   try {
     const { baseUrl } = server;
 
+    // #1150 换图后图 1 不再有出厂碰撞盒（旧图 161 个 + 四道外墙）：穿墙段要一个小块盒子，
+    // 起服后、进图（房创建）前灌一个 64×64 的测试墙（geometryOf 建房时读一次）
+    {
+      const { DatabaseSync } = require("node:sqlite");
+      const db = new DatabaseSync(dbPath);
+      try {
+        db.exec("PRAGMA busy_timeout = 10000");
+        db.prepare("INSERT INTO map_collisions (map_id, cx, cy, w, h, updated_at) VALUES ('1', 900, -500, 64, 64, 0)").run();
+      } finally {
+        db.close();
+      }
+    }
+
     //#region 准备
     group("准备：一个玩家连接 + 管理员（档位要热切，走管理端 PATCH）");
     const registered = await api(baseUrl, "POST", "auth/register", { body: { username: "move_player", password: "pass1234" } });

@@ -12,7 +12,9 @@
  *    加怪 / 删怪时，任务链必须跟着重排，不许静默漏覆盖；
  * 2. **主线链 prev_quest_id 连通无断链、无环**：首环 = 8005（接在 8004「战魂之门」
  *    之后）、末环 = 60 级 boss（2026-11-19 拍板的段内环序：报到 → 清怪 → 复命 → boss）；
- * 3. **每只怪在 map_spawn_areas 至少一个区**（§9.5 全量落位重排后没有「有环无怪」的死环）；
+ * 3. **每只怪在 map_spawn_areas 至少一个区**，且每个区落在**自己那张图**的真实像素边界内
+ *    （§9.5 全量落位重排后没有「有环无怪」的死环；#1150 换图后 220 区按等级段分铺到 6 张图，
+ *    边界判据改成按 maps 表的 pixel_width/height 逐图比 —— 不写死任何一张图的尺寸）；
  * 4. **逐环奖励在 §9.4 基准的容差带内**（reward_exp / reward_bind_gold / min_level），
  *    防手改跑飞 —— 基准公式与脚本同源（docs/31 §9.4），这里只做容差复核不重算精确值。
  *
@@ -176,11 +178,37 @@ group("三、每只怪在 map_spawn_areas 至少一个区（#1084 全量落位�
   const covered = new Set(db.prepare("SELECT DISTINCT monster_key FROM map_spawn_areas").all().map((r) => r.monster_key));
   const missing = monsters.filter((m) => !covered.has(m.id));
   check(missing.length === 0, "每只怪都能刷出来", missing.length ? `缺 ${missing.slice(0, 8).map((m) => m.id).join(",")}` : `${covered.size} 种全覆盖`);
-  const areas = db.prepare("SELECT monster_key, cx, cy, w, h FROM map_spawn_areas").all();
-  const oob = areas.filter(
-    (a) => a.cx - a.w / 2 < 0 || a.cx + a.w / 2 > 8192 || a.cy + a.h / 2 > 0 || a.cy - a.h / 2 < -8192,
+  const areas = db.prepare("SELECT map_id, monster_key, min, max, cx, cy, w, h FROM map_spawn_areas").all();
+  // 边界判据跟快照走：每张图的真实像素尺寸来自 maps 表（#1150 换图后区是**按段分图**铺的，
+  // 旧的 8192 常量既不是任何一张图的尺寸，也会把「合法但不在 8192 内」的区误判成越界）
+  const mapSize = new Map(
+    db.prepare("SELECT map_id, pixel_width, pixel_height FROM maps").all().map((m) => [m.map_id, m]),
   );
-  check(oob.length === 0, "刷怪区都落在图内（#850 的边界纪律从源头遵守）");
+  const orphan = areas.filter((a) => !mapSize.has(a.map_id));
+  check(
+    orphan.length === 0,
+    "刷怪区的 map_id 都在 maps 表里（没有孤儿区）",
+    orphan.slice(0, 5).map((a) => `${a.map_id}:${a.monster_key}`).join(","),
+  );
+  const oob = areas.filter((a) => {
+    const m = mapSize.get(a.map_id);
+    if (!m) return false;
+    return (
+      a.cx - a.w / 2 < 0 ||
+      a.cx + a.w / 2 > m.pixel_width ||
+      a.cy + a.h / 2 > 0 ||
+      a.cy - a.h / 2 < -m.pixel_height
+    );
+  });
+  check(
+    oob.length === 0,
+    "刷怪区都落在自己那张图内（按快照的 pixel_width/height 判，不写死 8192）",
+    oob.slice(0, 5).map((a) => `图${a.map_id} ${a.monster_key} @${Math.round(a.cx)},${Math.round(a.cy)}`).join("；"),
+  );
+  const dangling = areas.filter((a) => !monsters.some((m) => m.id === a.monster_key));
+  check(dangling.length === 0, "没有指向不存在怪物的刷怪区", dangling.slice(0, 5).map((a) => a.monster_key).join(","));
+  const empty = areas.filter((a) => a.min < 1 || a.max < a.min);
+  check(empty.length === 0, "每个区的 min ≥ 1 且 max ≥ min", empty.slice(0, 5).map((a) => `${a.map_id}:${a.monster_key}`).join(","));
 }
 
 group("四、逐环奖励在 §9.4 基准的容差带内（防手改跑飞）");

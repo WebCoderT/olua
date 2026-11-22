@@ -659,10 +659,10 @@ async function main() {
           return null;
         };
 
-        // 锚点取新手村的复活点：那是「玩家出生就站在这里」的坐标，必然不在任何碰撞盒里
-        // （随手挑一个 x/y 很容易撞上外墙 —— 外墙盒是横贯整张图的 8320×128 长条）
-        const AX = 4057.2;
-        const AY = -3688.04;
+        // 锚点取新手村的复活点：那是「玩家出生就站在这里」的坐标，必然不在任何碰撞盒里。
+        // #1150 换图后新图 0（DT2101，2304×1856）复活点是 1152,-928（旧图锚点 4057,-3688 已在新图外）
+        const AX = 1152;
+        const AY = -928;
         // 正常上报：位置进在场表并广播（首见 sentX=NaN 必有增量）
         mover.socket.send(JSON.stringify({ type: "pos", data: { mapId: "0", x: AX, y: AY, hp: 50, moving: false } }));
         const firstSeen = await waitFor("观看者看到移动者", seenPosition, 3_000);

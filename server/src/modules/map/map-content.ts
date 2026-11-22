@@ -11,10 +11,21 @@
 export interface MapLayerInfo {
   /** 图层名（Tiled 里的图层名） */
   name: string;
-  /** 横向格数 */
+  /**
+   * 图层类型：缺省 = 瓦片层（`width/height` 是格数）；
+   * `"image"` = 图像层（#1150 真彩底图分页，`width/height` 是像素，另带偏移与贴图名）
+   */
+  type?: "tile" | "image";
+  /** 横向尺寸（瓦片层 = 格数；图像层 = 像素） */
   width: number;
-  /** 纵向格数 */
+  /** 纵向尺寸（瓦片层 = 格数；图像层 = 像素） */
   height: number;
+  /** 图像层在整图内的像素偏移 */
+  offsetX?: number;
+  /** 图像层在整图内的像素偏移 */
+  offsetY?: number;
+  /** 图像层的贴图文件名 */
+  source?: string;
 }
 
 export interface MapObjectInfo {

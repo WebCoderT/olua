@@ -57,13 +57,12 @@ const MAP_ID = "3";
 /** 管理端请求所在的区（#960 惯例：一个 e2e 进程一个区，与其它套件同值） */
 const ADMIN_ZONE = 1;
 /**
- * 站桩点：图 3 左下角空地
+ * 站桩点：图 3 右下角空地（#1150 换图后新图 3 是 2784×1664，旧值 1000,-7900 已在图外）
  *
- * 离最近的刷怪区（中心 1339,-5338，半高约 612）还有 1900px 以上，
- * 超出 AOI 半径（3×3 格 = 1536px），怪看不见我们、也就不会来打。
- * 两人重合站（AOI 内才互相看得见）。
+ * 离延迟靶子区（中心 300,-300）约 2370px，超出 AOI 半径（3×3 格 = 1536px），
+ * 怪看不见我们、也就不会来打。两人重合站（AOI 内才互相看得见）。
  */
-const SPOT = { x: 1000, y: -7900 };
+const SPOT = { x: 2400, y: -1400 };
 /** 上报血量：够高，全程不被打死（死了会触发复活重定位，干扰位移样本） */
 const HP = 5000;
 
@@ -421,7 +420,7 @@ function attachSettleProbe(session, probe) {
     const bossSeed = await api(baseUrl, "POST", `admin/maps/${MAP_ID}/spawn-areas`, {
       token: latencyAdminToken,
       zoneId: ADMIN_ZONE,
-      body: { name: "延迟靶子区", monsterKey: "220", count: 1, cx: 3000, cy: -3000, w: 200, h: 200 },
+      body: { name: "延迟靶子区", monsterKey: "220", count: 1, cx: 300, cy: -300, w: 200, h: 200 },
     });
     check(bossSeed.status === 201 || bossSeed.code === 0, "准备：图 3 已播种 60 级 boss（满血靶子）", JSON.stringify(bossSeed.body ?? bossSeed.data ?? bossSeed));
 

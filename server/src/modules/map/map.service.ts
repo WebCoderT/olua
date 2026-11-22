@@ -767,8 +767,14 @@ export class MapService {
     detail.layers = content.layers.map((layer) => {
       const dto = new MapLayerDto();
       dto.name = layer.name;
+      dto.type = layer.type === "image" ? "image" : "tile";
       dto.width = layer.width;
       dto.height = layer.height;
+      if (dto.type === "image") {
+        dto.offsetX = layer.offsetX ?? 0;
+        dto.offsetY = layer.offsetY ?? 0;
+        dto.source = layer.source;
+      }
       return dto;
     });
     detail.spawnAreas = areas;

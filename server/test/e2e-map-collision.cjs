@@ -149,9 +149,9 @@ async function registerPlayer(baseUrl, username) {
   return registered.body?.data?.token;
 }
 
-/** 0 号图（8192×8192）上一个图内的框 */
+/** 0 号图上一个图内的框（#1150 换图后新图 0 是 2304×1856，旧值 4096,-4096 已整块在图外） */
 function boxOf(overrides = {}) {
-  return { cx: 4096, cy: -4096, w: 256, h: 128, ...overrides };
+  return { cx: 1200, cy: -900, w: 256, h: 128, ...overrides };
 }
 
 //#region 主流程
@@ -171,8 +171,8 @@ async function main() {
     const rows = list.body?.data?.list ?? [];
     check(rows.length > 0, "地图列表有行（具体几张由资源清单决定）", String(rows.length));
     check(
-      rows.every((row) => typeof row.collisionCount === "number" && row.collisionCount > 0),
-      "每张图都有碰撞盒（collisionCount 来自 map_collisions 的行数）",
+      rows.some((row) => row.id === "0" && row.collisionCount > 0),
+      "0 号图出厂就有碰撞盒（#1150 换图后只有图 0 带四面围墙，其余图等运营画）",
     );
 
     const detail = await api(base, "GET", "/api/admin/maps/0", { token });
@@ -180,8 +180,9 @@ async function main() {
     const boxes = detail.body?.data?.collisions ?? [];
     check(boxes.length > 0, "0 号图出厂就有碰撞盒");
     checkEqual(boxes.length, detail.body?.data?.collisionCount, "详情条数与列表计数一致（同一张表，不做两处口径）");
-    // y 轴向上、图占 y ∈ [-H, 0]：忘了取反的话这一批会全变成正数
-    check(boxes.every((item) => item.cy <= 0), "全部碰撞盒的 cy ≤ 0（世界坐标口径：y 轴向上）");
+    // y 轴向上、图占 y ∈ [-H, 0]：忘了取反的话这一批会全变成正数。
+    // 围墙允许半截在图外（上墙 cy=24），所以只判方向口径、不锁 cy ≤ 0
+    check(boxes.every((item) => item.cy < item.h), "全部碰撞盒的 cy < h（世界坐标口径：y 轴向上）");
     check(boxes.every((item) => item.w > 0 && item.h > 0), "全部碰撞盒宽高为正（零面积的在迁移时被跳过）");
     check(
       boxes.every((item) => Number.isInteger(item.id) && item.id > 0),
@@ -204,8 +205,8 @@ async function main() {
     checkEqual(created.status, 201, "绘制返回 201");
     const box = created.body?.data ?? {};
     check(Number.isInteger(box.id) && box.id > 0, "返回带库里的行 id");
-    checkEqual(box.cx, 4096, "世界坐标 x 原样存下");
-    checkEqual(box.cy, -4096, "世界坐标 y 原样存下（y 轴向上，故为负）");
+    checkEqual(box.cx, 1200, "世界坐标 x 原样存下");
+    checkEqual(box.cy, -900, "世界坐标 y 原样存下（y 轴向上，故为负）");
     checkEqual(box.w, 256, "宽原样存下");
     checkEqual(box.h, 128, "高原样存下");
     checkEqual(box.fullyOutside, false, "图内的框不标「整块在图外」");
@@ -369,8 +370,8 @@ async function main() {
       "下发字段是 x / y / w / h（客户端 setWorldPosition + new Size，不需要 cx/cy）",
     );
     check(
-      snapBoxes.every((item) => item.y <= 0 && item.w > 0 && item.h > 0),
-      "快照里每个盒子的 y ≤ 0、宽高为正（零面积的在下发前被过滤）",
+      snapBoxes.every((item) => item.y < item.h && item.w > 0 && item.h > 0),
+      "快照里每个盒子的 y < h、宽高为正（上墙半截在图外允许 y > 0；零面积的在下发前被过滤）",
     );
 
     await api(base, "DELETE", `/api/admin/maps/0/collisions/${freshId}`, { token });

@@ -385,7 +385,13 @@ function recordsOf(dbPath, dropId, result) {
     const aliveMobOf = async (player, mapId) => {
       for (let attempt = 0; attempt < 8; attempt += 1) {
         const snapshot = await player.session.joinWorld(mapId);
-        const mob = snapshot && Array.isArray(snapshot.monsters) ? snapshot.monsters.find((monster) => monster.alive) : null;
+        // 靶子挑「编号最小的活怪」：图 0 重铺刷怪区后第一个实例是 10 级 boss，
+        // 它的掉落表可能是空的（打死了也不掉东西），低编号怪才有掉落可断言
+        const mob = snapshot && Array.isArray(snapshot.monsters)
+          ? [...snapshot.monsters]
+              .filter((monster) => monster.alive)
+              .sort((a, b) => Number(a.monsterKey) - Number(b.monsterKey))[0] || null
+          : null;
         if (mob) return mob;
         await sleep(1_500);
       }

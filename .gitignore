@@ -81,3 +81,11 @@ server/data/*.db
 server/data/*.db-wal
 server/data/*.db-shm
 server/data/backups/
+
+# e2e / 本机运行落在 server 根的运行时库（同上，绝不进版本库）
+server/*.db
+server/*.db-wal
+server/*.db-shm
+
+# 真彩地图源素材（~GB 级 .map + WIL/WIX + 缩略图，仅本机留底，转换产物进 client/resources）
+/原始地图/

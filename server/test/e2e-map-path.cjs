@@ -21,7 +21,8 @@
  * 与 issue 验收的两处偏差（都是实测后的收窄，不是放水）
  * ===========================================================================
  * - issue 写「(100,-100) → (5000,-5000)，中间 3 个碰撞盒，路点/直线 < 1.5」：那是**合成场景**。
- *   这套跑的是真实地图 1（161 个碰撞盒 + 四道外墙），绕行必然更长 → 改锁「逐段不穿墙」
+ *   这套跑的是真实地图 1 + 自灌的测试墙（#1150 换图后图 1 不再有出厂碰撞盒，见准备段），
+ *   绕行必然更长 → 改锁「逐段不穿墙」
  *   （真正要保证的东西）+「开阔直线 < 1.25」（拉直有效的证明）。硬锁 1.5 只会得到一个
  *   随地图数据漂移的假红；
  * - issue 写「耗时 > 16ms 记 warn」：日志断言容易假绿（并行跑时抖动），改成**回执成功**即可，
@@ -240,6 +241,24 @@ function polylineLength(points) {
   const server = await startServer(dbPath);
   try {
     const { baseUrl } = server;
+
+    // #1150 换图后图 1 不再有出厂碰撞盒（旧图 161 个 + 四道外墙）：绕行 / 吸附断言要墙。
+    // 起服后、进图（房创建）前灌一组测试墙（geometryOf 建房时读一次）：
+    //   两段竖墙留 200px 缺口（y -850~-650 之间），逼 A* 绕行；一个 128×128 盒当吸附目标。
+    //   新图 1 是 1872×1344（x∈[0,1872] y∈[-1344,0]）。
+    {
+      const { DatabaseSync } = require("node:sqlite");
+      const db = new DatabaseSync(dbPath);
+      try {
+        db.exec("PRAGMA busy_timeout = 10000");
+        const ins = db.prepare("INSERT INTO map_collisions (map_id, cx, cy, w, h, updated_at) VALUES ('1', ?, ?, ?, ?, 0)");
+        ins.run(800, -350, 60, 600); // y ∈ [-650, -50]
+        ins.run(800, -1050, 60, 400); // y ∈ [-1250, -850]
+        ins.run(1300, -700, 128, 128); // 吸附测试的中等盒子
+      } finally {
+        db.close();
+      }
+    }
     const boxes = boxesOf(dbPath, "1");
 
     //#region 准备
@@ -278,9 +297,10 @@ function polylineLength(points) {
     // 站在开阔地（264,-264）：附近 150px 内没有碰撞盒，先把基线落这里
     session.sendPos("1", 264, -264, 100);
     await sleep(250);
-    const far = { x: 7000, y: -7000 };
+    // 目标取图 1 内的对角方向（#1150 换图后新图 1 是 1872×1344，旧值 7000,-7000 已在图外）
+    const far = { x: 1600, y: -1100 };
     const pathFar = await session.requestPath("1", far);
-    check(!!pathFar && pathFar.unreachable === false, "到对角 (7000,-7000) 算出了路（可达）", pathFar && `points=${pathFar.points.length}`);
+    check(!!pathFar && pathFar.unreachable === false, "到对角 (1600,-1100) 算出了路（可达）", pathFar && `points=${pathFar.points.length}`);
     check(!!pathFar && pathFar.points.length > 1, "路点多于一个（不是「直线捅过去」）", pathFar && `points=${pathFar.points.length}`);
     //#endregion
 
@@ -296,7 +316,7 @@ function polylineLength(points) {
       const straight = Math.hypot(far.x - 264, far.y + 264);
       const length = polylineLength(points);
       check(length >= straight * 0.99, "路点长度不小于直线距离（几何自洽）", `路点 ${length.toFixed(0)}px / 直线 ${straight.toFixed(0)}px`);
-      // 真实地图 161 个盒子，绕行必然比 issue 的合成场景（3 个盒子）长 —— 锁 3 倍是「没有绕远路」的判据
+      // 测试墙逼出来的绕行必然比 issue 的合成场景（3 个盒子）长 —— 锁 3 倍是「没有绕远路」的判据
       check(length <= straight * 3, "绕行倍率 < 3（没有绕出远路）", `比值 ${(length / straight).toFixed(2)}`);
       // 坐标落在格心上 = 服务端用的是 auto_battle.cellSize（与客户端同一张网格）
       const midPoints = (pathFar?.points ?? []).slice(0, -1);

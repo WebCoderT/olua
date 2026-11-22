@@ -7,7 +7,8 @@
  * （npcs 0101~0106，**src 留空** —— 美术 plist 由用户后补，填上前客户端不显示该 NPC），
  * 落位 map_npcs 一点位（map 0 新手村）。
  *
- * 刷怪落位**整表重排**：map_spawn_areas 全删重建（220 区全部落 map 0，按等级环带分布，
+ * 刷怪落位**整表重排**：map_spawn_areas 全删重建（220 区**按等级段分图**，每段一张猎场，
+ * 见下方 BAND_PLAN；每张图从外向内铺同心环，boss 占该段最外环首槽 = 巢穴在猎场外缘，
  * 密度取最高档 —— normal 25→15 随等级递减、boss 巢穴化 2 只）；world_monsters 全删，
  * 重启后由 RoomManager 按新刷怪区重播种（运行时表不手摆）。
  *
@@ -34,12 +35,31 @@ import { DatabaseService } from "../src/database/database.service";
 
 const APPLY = process.argv.includes("--apply");
 
-/** 6 个等级段的起始等级（等 10 级边界 = 等级曲线前六段） */
-const SEGMENTS = [1, 11, 21, 31, 41, 51] as const;
-/** 新手村（map 0）与村中心（revive 点，落位环带圆心） */
+/**
+ * 6 个等级段 → 各自的猎场图（**#1150 换图后按段分图**，2026-11-21 拍板）。
+ *
+ * 为什么不再「220 区全落 map 0」：旧图 0 是 8192×8192（6700 万 px²），220 个 220×220 的区
+ * 只占 16%；新图 0（DT2101）只有 2304×1856（427 万 px²），220 区是整图的 2.5 倍，怎么排都
+ * 放不下。于是按等级段分摊到 6 张图，每图 33~38 区，区尺寸还能保持 170~190。
+ *
+ * 图 0 就是 1-10 级猎场（带复活点与 6 位任务使者，村口开打 —— **怪多是刻意的**：
+ * 2026-11-22 拍板「出门即死不管，靠玩家自己团结解决」）。
+ *
+ * rect = 该图上的刷怪区边长；脚本按格位算容量（放不下直接抛错，不会静默丢怪）。
+ * 图 0 / 图 2 的半短边只有 900 上下，170 才装得下 33/38 区；其余图半径够，统一 190。
+ */
+const BAND_PLAN = [
+  { start: 1, map: "0", rect: 170 },
+  { start: 11, map: "2", rect: 170 },
+  { start: 21, map: "4", rect: 190 },
+  { start: 31, map: "6", rect: 190 },
+  { start: 41, map: "8", rect: 190 },
+  { start: 51, map: "10", rect: 190 },
+] as const;
+const SEGMENTS: readonly number[] = BAND_PLAN.map((b) => b.start);
+/** 任务 NPC 所在图（新手复活点那间村）与村中心：换图后图 0 复活点 1152,-928 */
 const QUEST_MAP = "0";
-const VILLAGE = { x: 4057.2, y: -3688.04 };
-const MAP_SIZE = 8192;
+const VILLAGE = { x: 1152, y: -928 };
 /** 主线环 id 起点 / 日常保留段 */
 const QUEST_ID_START = 8005;
 const DAILY_RESERVED = [8100, 8109] as const;
@@ -124,10 +144,26 @@ async function main(): Promise<void> {
     "SELECT value FROM growth_scalars WHERE key = 'expGain.expPerLevel'",
   );
   const expPerLevel = expRow?.value ?? 5;
-  const collisions = db.all<Rect>(
-    "SELECT cx, cy, w, h FROM map_collisions WHERE map_id = ?",
-    [QUEST_MAP],
+
+  interface MapGeom {
+    map_id: string;
+    label: string;
+    pixel_width: number;
+    pixel_height: number;
+  }
+  const geomRows = db.all<MapGeom>(
+    "SELECT map_id, label, pixel_width, pixel_height FROM maps",
   );
+  const geomOf = new Map(geomRows.map((g) => [g.map_id, g]));
+  /** 各图碰撞盒（落位避让用；没有盒子的图就是空数组） */
+  const collisionsOf = new Map<string, Rect[]>();
+  for (const c of db.all<Rect & { map_id: string }>(
+    "SELECT map_id, cx, cy, w, h FROM map_collisions",
+  )) {
+    const list = collisionsOf.get(c.map_id) ?? [];
+    list.push({ cx: c.cx, cy: c.cy, w: c.w, h: c.h });
+    collisionsOf.set(c.map_id, list);
+  }
 
   // ---------- 1. 六段 NPC（src 留空，美术后补） ----------
   const npcRows = SEGMENTS.map((start, i) => ({
@@ -141,82 +177,73 @@ async function main(): Promise<void> {
     pos_y: 0,
   }));
 
-  // ---------- 2. 全局同心环布局（先算，NPC 点位要用环半径） ----------
-  let bandRingRadii: number[][] = [];
-  /**
-   * 村外围从外向内铺**固定间距的同心环**（环距 340 = 矩形 220 + 邻环边缘间隙 120），
-   * 六个等级段从最外环向内**逐环瓜分**：每段怪先占满自己分到的环（boss 占该段最外环
-   * 的首槽 = 巢穴在段带外缘），装不下再向内拿一条环。相比「按段算带边界」，环距固定
-   * 让相邻段的落点天然错开一个环距，不会出现「band 外缘贴着上一带外缘」的挤压。
-   */
-  const RECT_SIZE = 220;
-  const RECT_SPACING = RECT_SIZE + 36;
-  const RING_STEP = 340;
-  const RING_OUTER = 3145; // 最外环半径（rect 中心最大 3530 - 半宽余量）
-  const RING_INNER = 425; // 最内环（村中心建筑群外缘之外一步）
-  const bandCounts = SEGMENTS.map((start) =>
-    monsters.filter((m) => m.level >= start && m.level <= start + 9).length,
+  // ---------- 2. 每段猎场各自铺格（放不下就在这抛错，不静默丢怪） ----------
+  const bandCounts = SEGMENTS.map(
+    (start) => monsters.filter((m) => m.level >= start && m.level <= start + 9).length,
   );
-  const ringRadii: number[] = [];
-  for (let r = RING_OUTER; r >= RING_INNER; r -= RING_STEP) ringRadii.push(r);
-  const ringCapacity = (radius: number): number =>
-    Math.max(6, Math.floor((2 * Math.PI * radius) / (RECT_SPACING * 1.15)));
-  // 逐带瓜分：band 5（最高段）先挑最外环，依次向内；band 1（新手段）最后从
-  // **剩余环的内侧**取 —— 新手村中心（revive 点）的 AOI 只有 ±768px，新手出门
-  // 必须立刻看得见第一带怪，所以 band 1 的怪要贴着村子摆（765/1105 环）
-  {
-    let cursor = 0;
-    const bandRingIndices: number[][] = [];
-    for (let b = SEGMENTS.length - 1; b >= 0; b--) {
-      let remaining = bandCounts[b];
-      const rings: number[] = [];
-      if (b === 0) {
-        // 新手段：从内向外取剩余环（内侧优先，怪物贴村）
-        let inner = ringRadii.length - 1;
-        while (remaining > 0 && inner >= cursor) {
-          rings.push(inner);
-          remaining -= ringCapacity(ringRadii[inner]);
-          inner--;
-        }
-        if (remaining > 0) throw new Error(`第 1 段的 ${remaining} 只怪没有环可分`);
-      } else {
-        while (remaining > 0 && cursor < ringRadii.length) {
-          rings.push(cursor);
-          remaining -= ringCapacity(ringRadii[cursor]);
-          cursor++;
-        }
-        if (remaining > 0) throw new Error(`第 ${b + 1} 段的 ${remaining} 只怪没有环可分`);
-      }
-      bandRingIndices[b] = rings;
-    }
-    if (cursor > ringRadii.length) throw new Error("同心环不够分");
-    bandRingRadii = bandRingIndices.map((idx) =>
-      idx.map((i) => ringRadii[i]).sort((a, b2) => b2 - a),
-    );
-    console.log(
-      `同心环 ${ringRadii.length} 条（${ringRadii.map((r) => Math.round(r)).join("/")}），每段怪 ${bandCounts.join("/")} 分环 ${bandRingRadii.map((r) => r.map((x) => Math.round(x)).join("+")).join(" / ")}`,
-    );
+  interface BandLayout {
+    map: string;
+    label: string;
+    rect: number;
+    center: { x: number; y: number };
+    /** 可用格位，**由外向内**排好（离图心远的在前） */
+    cells: Rect[];
   }
-
-  // ---------- 3. NPC 点位：本段怪带内缘、沿「讨伐道」（正东方向一条线） ----------
-  const npcSpots = npcRows.map((npc, i) => {
-    // 段带内缘 = 该段最内环再往村里退一步（第 1 段的「上一段」就是村本身）
-    const rings = bandRingRadii[i];
-    const cx = VILLAGE.x + rings[rings.length - 1] + RING_STEP / 2;
-    const cy = VILLAGE.y;
-    // 碰撞避让：优先向南挪（村中心障碍群在圆心一带，东侧走廊基本干净）
-    for (let dy = 0; dy < 2000; dy += 60) {
-      const spot = { cx, cy: cy - dy, w: 64, h: 64 };
-      if (!collisions.some((c) => rectsOverlap(spot, c, 32))) {
-        return { npc_id: npc.id, cx, cy: cy - dy };
+  /**
+   * 每段一张图，图上按 **rect + 60 的格子间距**铺格（不是同心环）。
+   *
+   * 为什么放弃同心环（#1150 实测）：刷怪区是**轴对齐方块**，两块不重叠的判据是
+   * `max(|dx|,|dy|) ≥ 边长`，而同心环上相邻格的连线在 45° 方向时两个分量都只有
+   * 弦长/√2 —— 按弧长算的容量因此高估，图 0 摆到第 11 个就挤满了。格子间距在
+   * 两个轴上都恒定，天然满足判据，容量也好算。
+   *
+   * 图心留一块 `半区宽 + 140` 的空地（复活点 / 传送官 / 任务 NPC 在那儿），
+   * 压着碰撞盒（pad 16）的格子直接剔掉。
+   */
+  const bands: BandLayout[] = BAND_PLAN.map((plan, b) => {
+    const g = geomOf.get(plan.map);
+    if (!g || !g.pixel_width || !g.pixel_height) {
+      throw new Error(`图 ${plan.map} 没有几何（先 make config-export 重导快照再跑）`);
+    }
+    const rect = plan.rect;
+    const pitch = rect + 60;
+    const inset = rect / 2 + 12;
+    const halfW = g.pixel_width / 2;
+    const halfH = g.pixel_height / 2;
+    const center = { x: halfW, y: -halfH };
+    const collisions = collisionsOf.get(plan.map) ?? [];
+    const cols = Math.floor((halfW - inset) / pitch);
+    const rows = Math.floor((halfH - inset) / pitch);
+    const found: Array<{ rect: Rect; dist: number }> = [];
+    for (let i = -cols; i <= cols; i++) {
+      for (let j = -rows; j <= rows; j++) {
+        const dist = Math.hypot(i * pitch, j * pitch);
+        if (dist < rect / 2 + 140) continue; // 图心留空（复活点 / NPC）
+        const box: Rect = {
+          cx: center.x + i * pitch,
+          cy: center.y + j * pitch,
+          w: rect,
+          h: rect,
+        };
+        if (collisions.some((c) => rectsOverlap(box, c, 16))) continue;
+        found.push({ rect: box, dist });
       }
     }
-    return { npc_id: npc.id, cx, cy };
+    // 由外向内；同半径按 x 再按 y 定序（保证重跑完全一致）
+    found.sort((a, b2) => b2.dist - a.dist || a.rect.cx - b2.rect.cx || b2.rect.cy - a.rect.cy);
+    if (found.length < bandCounts[b]) {
+      throw new Error(
+        `图 ${plan.map}（${g.label}）摆 ${rect} 区只有 ${found.length} 个格位，第 ${b + 1} 段要 ${bandCounts[b]} 个`,
+      );
+    }
+    return { map: plan.map, label: g.label, rect, center, cells: found.map((f) => f.rect) };
   });
+  console.log(
+    `分图猎场：${bands.map((bd, b) => `${bd.map}「${bd.label}」${bd.rect}区 × ${bandCounts[b]}/${bd.cells.length}格`).join(" · ")}`,
+  );
 
-  // ---------- 4. 刷怪落位：整表重排（220 区全落 map 0） ----------
+  // ---------- 3. 刷怪落位：220 区按段铺到各自猎场（整表重排） ----------
   const rnd = mulberry32(0x1084);
-  const placedRects: Rect[] = [];
   const areaRows: Array<{
     map_id: string;
     name: string;
@@ -229,77 +256,87 @@ async function main(): Promise<void> {
     h: number;
   }> = [];
 
-  /** 每带做确定性角槽布局：boss 占该段最外环首槽，普通怪接着摊满再向内一条环 */
-  const slotLayout = new Map<string, { radius: number; angle: number }>();
+  /** 格位微抖（±8，格距 60 所以不会抖出重叠），让整片猎场不像棋盘 */
+  function jitter(box: Rect): Rect {
+    return {
+      cx: box.cx + Math.round((rnd() - 0.5) * 16),
+      cy: box.cy + Math.round((rnd() - 0.5) * 16),
+      w: box.w,
+      h: box.h,
+    };
+  }
+
   for (let s = 0; s < SEGMENTS.length; s++) {
+    const bd = bands[s];
     const start = SEGMENTS[s];
     const inSeg = monsters.filter((m) => m.level >= start && m.level <= start + 9);
-    const members = [
-      ...inSeg.filter((m) => m.tier === "boss"),
-      ...inSeg.filter((m) => m.tier !== "boss"),
-    ];
-    let ringIdx = 0;
-    let slotIdx = 0;
-    for (const m of members) {
-      const rings = bandRingRadii[s];
-      const radius = rings[Math.min(ringIdx, rings.length - 1)];
-      const slots = ringCapacity(radius);
-      slotLayout.set(m.id, {
-        radius,
-        angle: (2 * Math.PI * slotIdx) / slots + rnd() * 0.04,
+    const bosses = inSeg.filter((m) => m.tier === "boss");
+    const normals = inSeg.filter((m) => m.tier !== "boss");
+    const used = bd.cells.map(() => false);
+    // boss 巢穴铺在猎场外缘：最外圈按等间隔挑格（后面的普通怪跳过这些格）
+    const stride = Math.max(1, Math.floor(bd.cells.length / (bosses.length + 1)));
+    const bossCells: number[] = [];
+    for (let k = 0; k < bosses.length; k++) {
+      let idx = Math.min(bd.cells.length - 1, k * stride);
+      while (used[idx]) idx++;
+      used[idx] = true;
+      bossCells.push(idx);
+    }
+    let cursor = 0;
+    for (const m of [...bosses, ...normals]) {
+      const isBoss = m.tier === "boss";
+      let idx: number;
+      if (isBoss) {
+        idx = bossCells.shift() as number;
+      } else {
+        while (used[cursor]) cursor++;
+        idx = cursor;
+        used[idx] = true;
+        cursor++;
+      }
+      const rect = jitter(bd.cells[idx]);
+      // 密度取最高档（2026-11-19 拍板）：normal 25→15 随怪等级线性递减；boss 巢穴化 2 只
+      const max = isBoss ? 2 : Math.round(25 - (10 * (m.level - 1)) / 59);
+      const min = isBoss ? 1 : Math.round(max * 0.6);
+      areaRows.push({
+        map_id: bd.map,
+        name: `带${s + 1}-L${m.level}-${m.id}`,
+        monster_key: m.id,
+        min,
+        max,
+        ...rect,
       });
-      slotIdx++;
-      if (slotIdx >= slots) {
-        slotIdx = 0;
-        ringIdx = Math.min(ringIdx + 1, rings.length - 1);
-      }
     }
   }
 
-  /** 按角槽落位：守点卡住就在槽位附近微调（角度步进 + 半径锯齿）重试 */
-  function place(segIndex: number, isBoss: boolean, key: string): Rect {
-    const w = RECT_SIZE;
-    const slot = slotLayout.get(key);
-    if (!slot) throw new Error(`怪 ${key} 没有角槽（带 ${segIndex + 1} 布局遗漏）`);
-    for (let attempt = 0; attempt < 128; attempt++) {
-      const drift = Math.ceil(attempt / 2) * 14 * (attempt % 2 === 0 ? -1 : 1);
-      const radius = slot.radius + drift;
-      const angle = slot.angle + attempt * 0.05;
-      const rect: Rect = {
-        cx: Math.min(MAP_SIZE - w / 2 - 8, Math.max(w / 2 + 8, VILLAGE.x + Math.cos(angle) * radius)),
-        cy: Math.min(-w / 2 - 8, Math.max(-MAP_SIZE + w / 2 + 8, VILLAGE.y + Math.sin(angle) * radius)),
-        w,
-        h: w,
-      };
-      const blocked =
-        collisions.some((c) => rectsOverlap(rect, c, 16)) ||
-        placedRects.some((p) => rectsOverlap(rect, p, isBoss ? 60 : 36));
-      if (!blocked) {
-        placedRects.push(rect);
-        return rect;
+  // ---------- 4. 任务 NPC 点位：全在图 0 村中心空地（避开复活点 / 墙 / 刷怪区） ----------
+  const homeAreas = areaRows.filter((a) => a.map_id === QUEST_MAP);
+  const npcCollisions = collisionsOf.get(QUEST_MAP) ?? [];
+  const npcRects: Rect[] = [];
+  const npcSpots = npcRows.map((npc) => {
+    for (let r = 150; r <= 330; r += 30) {
+      for (let k = 0; k < 48; k++) {
+        const angle = (2 * Math.PI * k) / 48;
+        const spot: Rect = {
+          cx: VILLAGE.x + Math.cos(angle) * r,
+          cy: VILLAGE.y + Math.sin(angle) * r,
+          w: 64,
+          h: 64,
+        };
+        const blocked =
+          npcCollisions.some((c) => rectsOverlap(spot, c, 32)) ||
+          homeAreas.some((a) => rectsOverlap(spot, a, 40)) ||
+          npcRects.some((n) => rectsOverlap(spot, n, 80));
+        if (!blocked) {
+          npcRects.push(spot);
+          return { npc_id: npc.id, cx: spot.cx, cy: spot.cy };
+        }
       }
     }
-    throw new Error(`怪 ${key} 在第 ${segIndex + 1} 带 128 次尝试都摆不下`);
-  }
+    throw new Error(`任务 NPC ${npc.id} 在图 ${QUEST_MAP} 村中心找不到空位`);
+  });
 
-  for (const m of monsters) {
-    const segIndex = Math.min(5, Math.floor((m.level - 1) / 10));
-    const isBoss = m.tier === "boss";
-    // 密度取最高档（2026-11-19 拍板）：normal 25→15 随怪等级线性递减；boss 巢穴化 2 只
-    const max = isBoss ? 2 : Math.round(25 - (10 * (m.level - 1)) / 59);
-    const min = isBoss ? 1 : Math.round(max * 0.6);
-    const rect = place(segIndex, isBoss, m.id);
-    areaRows.push({
-      map_id: QUEST_MAP,
-      name: `带${segIndex + 1}-L${m.level}-${m.id}`,
-      monster_key: m.id,
-      min,
-      max,
-      ...rect,
-    });
-  }
-
-  // ---------- 4. 任务链（232 环） ----------
+  // ---------- 5. 任务链（232 环） ----------
   // 环 id：8005 起顺延，跳过 8100~8109（日常 8100~8109 段原地保留）
   const nextQuestId = (() => {
     let n = QUEST_ID_START;
@@ -322,11 +359,12 @@ async function main(): Promise<void> {
 
     // 段首报到
     const segQuests: GeneratedQuest[] = [];
+    const huntMap = `${bands[s].label}（图 ${bands[s].map}）`;
     segQuests.push({
       id: nextQuestId(),
       kind: "main",
       label: `投奔·任务使者${CN_NUM[s]}`,
-      description: `前往任务使者·${CN_NUM[s]}处报到，接下 ${start}-${start + 9} 级的讨伐名录。`,
+      description: `前往任务使者·${CN_NUM[s]}处报到，接下 ${start}-${start + 9} 级的讨伐名录（猎场在${huntMap}）。`,
       prev_quest_id: "",
       min_level: start,
       npc_id: npcId,
@@ -348,7 +386,7 @@ async function main(): Promise<void> {
         id: nextQuestId(),
         kind: "main",
         label: `讨伐·${m.label}`,
-        description: `在任务使者·${CN_NUM[s]}划定的猎场击杀 ${count} 只${m.label}（${m.level} 级）。`,
+        description: `在${huntMap}击杀 ${count} 只${m.label}（${m.level} 级）。`,
         prev_quest_id: "",
         min_level: start,
         npc_id: npcId,
@@ -370,7 +408,7 @@ async function main(): Promise<void> {
       id: nextQuestId(),
       kind: "main",
       label: `复命·任务使者${CN_NUM[s]}`,
-      description: `带着 ${start}-${start + 9} 级猎场的战果，回任务使者·${CN_NUM[s]}处复命。`,
+      description: `带着${huntMap}的战果，回任务使者·${CN_NUM[s]}处复命。`,
       prev_quest_id: "",
       min_level: start,
       npc_id: npcId,
@@ -387,7 +425,7 @@ async function main(): Promise<void> {
         id: nextQuestId(),
         kind: "main",
         label: `讨伐·${b.label}`,
-        description: `${b.label}（${b.level} 级）盘踞在猎场外缘的巢穴。斩了它，${start}-${start + 9} 级的名录就此勾销。`,
+        description: `${b.label}（${b.level} 级）盘踞在${huntMap}外缘的巢穴。斩了它，${start}-${start + 9} 级的名录就此勾销。`,
         prev_quest_id: "",
         min_level: start + 5,
         npc_id: npcId,
@@ -407,12 +445,23 @@ async function main(): Promise<void> {
     }
   }
 
-  // ---------- 5. 输出 / 落库 ----------
+  // ---------- 6. 输出 / 落库 ----------
   const newIds = quests.map((q) => q.id);
   if (new Set(newIds).size !== newIds.length) throw new Error("环 id 有重复（分配器跑了飞）");
   const killTargets = new Set(quests.filter((q) => q.objective_type === "kill").map((q) => q.objective_target));
   console.log(`怪物 ${monsters.length} · 环 ${quests.length}（kill ${killTargets.size} 覆盖 / talk ${quests.length - killTargets.size}）`);
-  console.log(`环 id：${newIds[0]} ~ ${newIds[newIds.length - 1]} · NPC ${npcRows.map((n) => n.id).join("/")} · 刷怪区 ${areaRows.length} 区（全落 ${QUEST_MAP}）`);
+  console.log(`环 id：${newIds[0]} ~ ${newIds[newIds.length - 1]} · NPC ${npcRows.map((n) => n.id).join("/")} · 刷怪区 ${areaRows.length} 区 / ${bands.length} 张图`);
+  console.log(
+    `各区落图：${bands
+      .map((bd) => `${bd.map} ${areaRows.filter((a) => a.map_id === bd.map).length} 区`)
+      .join(" · ")} · NPC 全落 ${QUEST_MAP}`,
+  );
+  for (const spot of npcSpots) {
+    const near = areaRows
+      .filter((a) => a.map_id === QUEST_MAP)
+      .some((a) => rectsOverlap({ cx: spot.cx, cy: spot.cy, w: 64, h: 64 }, a, 0));
+    if (near) throw new Error(`NPC ${spot.npc_id} 压在刷怪区上`);
+  }
   console.log(`首环 ${quests[0].id}（${quests[0].label}）· 末环 ${quests[quests.length - 1].id}（${quests[quests.length - 1].label}）`);
 
   if (!APPLY) {

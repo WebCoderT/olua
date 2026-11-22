@@ -110,7 +110,8 @@ function mapPixelOf(dbPath, mapId) {
   const { DatabaseSync } = require("node:sqlite");
   const db = new DatabaseSync(dbPath);
   try {
-    const row = db.prepare("SELECT pixel_width, pixel_height FROM maps WHERE id = ?").get(mapId);
+    // 列名是 map_id（#1150 前误写成 id，一直静默走 8192² 兜底）
+    const row = db.prepare("SELECT pixel_width, pixel_height FROM maps WHERE map_id = ?").get(mapId);
     if (row && Number(row.pixel_width) > 0) return { width: Number(row.pixel_width), height: Number(row.pixel_height) };
     return { width: 8192, height: 8192 };
   } catch {
@@ -154,9 +155,11 @@ function seedSpawnAreas(dbPath, pixel) {
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     );
     const now = Date.now();
-    const size = Math.round(pixel.width * 0.3);
-    insert.run(MAP_ID, "近端区", "1", 60, 60, Math.round(pixel.width * 0.28), -Math.round(pixel.height * 0.28), size, size, now);
-    insert.run(MAP_ID, "远端区", "1", 85, 85, Math.round(pixel.width * 0.72), -Math.round(pixel.height * 0.72), size, size, now);
+    // #1150 换图后新图 1 只有 1872×1344：两块区要保持「3×3 视野不可能同时覆盖」
+    // （两中心至少相距 3 格）且整体落在图内 —— 比例从 0.28/0.72 改成 0.16/0.84，区域压到 400²
+    const size = Math.min(Math.round(pixel.width * 0.3), 400);
+    insert.run(MAP_ID, "近端区", "1", 60, 60, Math.round(pixel.width * 0.16), -Math.round(pixel.height * 0.16), size, size, now);
+    insert.run(MAP_ID, "远端区", "1", 85, 85, Math.round(pixel.width * 0.84), -Math.round(pixel.height * 0.84), size, size, now);
     db.exec("DELETE FROM world_monsters WHERE map_id = '1'");
   } finally {
     db.close();
@@ -389,8 +392,8 @@ function outlineByCell(monsters, at) {
   try {
     const pixel = mapPixelOf(dbPath, MAP_ID);
     seedSpawnAreas(dbPath, pixel);
-    const nearPoint = { x: Math.round(pixel.width * 0.28), y: -Math.round(pixel.height * 0.28) };
-    const farPoint = { x: Math.round(pixel.width * 0.72), y: -Math.round(pixel.height * 0.72) };
+    const nearPoint = { x: Math.round(pixel.width * 0.16), y: -Math.round(pixel.height * 0.16) };
+    const farPoint = { x: Math.round(pixel.width * 0.84), y: -Math.round(pixel.height * 0.84) };
 
     //#region 零、几何口径（纯函数，直接从构建产物读 —— 它是服务端与 e2e 共用的那一份）
 

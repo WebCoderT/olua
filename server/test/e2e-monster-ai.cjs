@@ -130,6 +130,10 @@ function seedSpawnAreas(dbPath) {
   // 会把 1 级玩家的击退拦掉 —— 这套要测的是位移本身。怪物数值 1 秒 TTL 现取库，直改生效。
   // 血量拉到 10 万：79 血会被暴击一刀带走（killed 分支没有 push，二、三段全部连锁红）
   db.prepare("UPDATE monsters SET level = 0, max_hp = 100000 WHERE id IN ('3', '200')").run();
+  // #1150 换图后图 1 不再有出厂碰撞盒：不穿墙段要的那道左外墙自灌（半截在图内，进图前生效）
+  db.prepare(
+    "INSERT INTO map_collisions (map_id, cx, cy, w, h, updated_at) VALUES ('1', ?, ?, ?, ?, 0)",
+  ).run(LEFT_WALL.cx, LEFT_WALL.cy, LEFT_WALL.w, LEFT_WALL.h);
   db.close();
 }
 
@@ -168,12 +172,12 @@ async function walk(session, from, to, hp, stepPx = 60, intervalMs = 110) {
 }
 
 /**
- * 地图 1 的**左外墙**（`map_collisions` 里本来就有的四道围墙之一：`cx=0 / w=128`）
- *
- * 用它测「不穿墙」不用另造地形：墙就在出生点左边 136px，把怪往左推一定撞上。
+ * 图 1 的**左外墙**（#1150 换图后图 1 不再有出厂碰撞盒，进图前自灌一道贴左边缘的竖墙：
+ * `cx=0 / w=128 / h=图高`，半截在图外、墙面 x=64）。用它测「不穿墙」不用另造地形：
+ * 墙就在出生点左边 136px，把怪往左推一定撞上。
  * 口径与 `map.service.walkGeometryOf` 一致（中心 + 宽高，含边界）。
  */
-const LEFT_WALL = { cx: 0, cy: -4096, w: 128, h: 8320 };
+const LEFT_WALL = { cx: 0, cy: -672, w: 128, h: 1344 };
 const inLeftWall = (x, y) => Math.abs(x - LEFT_WALL.cx) <= LEFT_WALL.w / 2 && Math.abs(y - LEFT_WALL.cy) <= LEFT_WALL.h / 2;
 
 /** 起一台服务（临时文件库：seedSpawnAreas 要能从外面改库）；AI tick/广播都调快，等待才不用按秒算 */
