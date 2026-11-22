@@ -333,7 +333,20 @@ export function MapsPage() {
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-3 lg:grid-cols-[260px_minmax(0,1fr)]">
-          <Card title={`地图（${list.length}）`} description="按 id 升序，点一行看详情">
+          {/*
+            左卡与右列等高、列表在卡内滚（#1151）：
+            - grid 子项默认 stretch，`h-full` 让左卡吃满行高 —— 行高由右列（配置卡 + 地图卡）决定；
+            - `Card` 的正文是裸 `<div>`（ui.tsx 没开 className 口子），用任意子选择器把它转成
+              flex 的滚动区：`min-h-0` 是 flex 子项能触发 `overflow-y-auto` 的前提，
+              缺了它正文会被内容撑到自然高度、整卡跟着长高（与「明明写了 overflow 还是在滚整页」同一个根因）；
+            - header 不参与滚动（它是 `<header>`，选择器只命中正文 div）。
+            窄屏单列时行高是 auto，`h-full` 退化为无约束，与原行为一致。
+          */}
+          <Card
+            title={`地图（${list.length}）`}
+            description="按 id 升序，点一行看详情；列表超出卡体时在卡内滚动"
+            className="flex h-full flex-col overflow-hidden [&>div]:min-h-0 [&>div]:flex-1 [&>div]:overflow-y-auto"
+          >
             <ul className="space-y-1">
               {list.map((item) => {
                 const active = item.id === selected;
