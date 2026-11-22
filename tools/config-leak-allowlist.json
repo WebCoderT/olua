@@ -33,11 +33,6 @@
       "reason": "new Node(\"equipment_upgrade_hint_plate\") 是装备升级提示的衬底分组节点：创建与使用都在本文件内，属于代码结构，不存在「调它」的场景。"
     },
     {
-      "file": "ui/helpers/parts/tip-fx.ts",
-      "rule": "nodeName",
-      "reason": "new Node(\"hit_screen_flash\") 是受击红闪的整屏覆盖节点：创建与销毁都在本文件内，属于代码结构，不存在「调它」的场景。"
-    },
-    {
       "file": "ui/RoleSelector.ts",
       "rule": "nodeName",
       "reason": "new Node(\"role_selector_stage\") 是选角场景的舞台根节点（整块构图缩放挂点），创建后只在本文件内作为布局容器使用，无外部按名引用。"
@@ -125,6 +120,11 @@
       "file": "ui/utils/net/NetDiagnostics.ts",
       "rule": "color",
       "reason": "诊断文本的颜色（#767）是排查工具的固定配色：只在开关打开时可见、不进正式 HUD，不存在「调它」的场景。"
+    },
+    {
+      "file": "ui/utils/node/SiblingSortGuard.ts",
+      "rule": "cn",
+      "reason": "引擎兜底（#1184）的 console.warn 诊断：中文只说给开发者（节点名 / 父节点名 / 引擎 issue 引用），玩家永远看不到，也没有「运营改文案」的场景 —— 与 Pointer.ts 的 cameraPriority 提示、NetDiagnostics 同类。搬进 texts 反而让它看起来像正式文案。"
     }
   ]
 }

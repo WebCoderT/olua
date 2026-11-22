@@ -27,6 +27,8 @@ export default class MapTeleportDialog {
     const dialog = GameUiHelper.createDialog(layout.name, layout.title, new Vec2(), dialogFrame.size, layout.eyebrow);
     // 配置还没到（快照失败 / 刚启动）：不渲染空弹窗，给一句能看懂的提示
     if (maps.size === 0) {
+      // 已经建出来的弹窗不能留成孤儿（没进 UI 层，既不显示也不会被场景销毁）
+      dialog.destroy();
       GameUiHelper.createTip("map_config_loading_tip");
       return;
     }
