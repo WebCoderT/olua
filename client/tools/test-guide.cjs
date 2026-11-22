@@ -214,6 +214,12 @@ const overlay = read(OVERLAY_FILE);
 check(/GuideStore\.start\(role\)/.test(game), "组合根进游戏时用角色存档启动引导");
 check(/GuideOverlay\.setSpotProvider\(\(spot\) => this\.resolveGuideSpot\(spot\)\)/.test(game), "组合根注册「语义位 → 节点」解析器（不写死坐标）");
 check(/GuideStore\.reset\(\)/.test(game) && /GuideOverlay\.setSpotProvider\(null\)/.test(game), "离开游戏时清进度并摘掉解析器（否则指向已销毁的 HUD）");
+const resetAt = game.indexOf("GuideStore.reset()");
+const offGuideAt = game.indexOf("this.offGuideChange?.();");
+check(
+  resetAt >= 0 && offGuideAt >= 0 && offGuideAt < resetAt,
+  "退订 offGuideChange 必须先于 GuideStore.reset()（#1188：reset 会 emit，销毁期回调摸到已置 null 的 chatDialog）",
+);
 check(/GuideStore\.notifyMove\(/.test(game), "移动事件按实际位移喂给引导（摇杆 / 方向键 / 点地面都算）");
 check(!/blockClickThrough|addComponent\(Button\)/.test(overlay), "遮罩不拦点击（引导绝不锁操作：卡死即事故）");
 check(/GuideStore\.skip\(\)/.test(overlay), "气泡上的跳过按钮直接调 GuideStore.skip");

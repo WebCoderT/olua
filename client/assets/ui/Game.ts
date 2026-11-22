@@ -478,6 +478,11 @@ export class Game extends Component {
     this.guideOverlay = null;
     this.guideLastPosition = null;
     GuideOverlay.setSpotProvider(null);
+    // 引导进度订阅必须先摘再 reset（#1188）：reset 会 emit，挂在 GuideStore 的回调里
+    // 会走 bottomBar.openChatBox —— 而 bottomBar 已随场景销毁（Cocos _destruct 把
+    // 构造器赋值字段置 null），退订写在后面就是 null.open 崩溃。
+    this.offGuideChange?.();
+    this.offGuideChange = null;
     GuideStore.reset();
     // 聊天的消息 / 未读 / 气泡同理（消息不跨会话持久是服务端定好的口径，客户端跟着清）
     ChatStore.reset();
@@ -492,9 +497,6 @@ export class Game extends Component {
     // 窗口尺寸监听挂在 screen 单例上（不随节点销毁），必须显式取消
     this.offWindowResize?.();
     this.offWindowResize = null;
-    // 引导进度订阅同理（GuideStore 不随场景销毁，挂着的回调会指向已销毁的 bottomBar）
-    this.offGuideChange?.();
-    this.offGuideChange = null;
     this.screenClickInput?.destroy();
     this.cursorInput?.destroy();
     CursorManager.destroy();
