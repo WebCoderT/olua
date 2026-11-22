@@ -6,7 +6,7 @@ import { SkillId, SkillTargetType } from "../../types/skill";
 import type RoleDisplay from "../components/role/RoleDisplay";
 import { canAttackTarget } from "../utils/battle/BattleMath";
 import { getMapWorldRect } from "../utils/map/MapPointMath";
-import PathGrid from "../utils/map/PathGrid";
+import PathGrid, { type PolyPoint } from "../utils/map/PathGrid";
 import GameUiHelper from "../helpers/GameUiHelper";
 import MonsterManager from "./MonsterManager";
 import SkillManager from "./SkillManager";
@@ -446,22 +446,25 @@ export default class AutoBattle {
     // 网格范围 = 地图像素范围。地图节点原点在左上角（#566），范围就是
     // [原点.x, 原点.x + W] × [原点.y - H, 原点.y]，不再拼「中心 ± 半图」
     const bounds = getMapWorldRect(map);
-    this.grid = new PathGrid(bounds, autoBattle.cellSize, autoBattle.clearance, this.readStaticObstacles(map));
+    const obstacles = this.readStaticObstacles();
+    this.grid = new PathGrid(bounds, autoBattle.cellSize, autoBattle.clearance, obstacles.rects, obstacles.polys);
     return this.grid;
   }
 
   /**
-   * 读静态障碍（服务端快照里的碰撞盒 + NPC 点位按估算体型占位），转成世界坐标矩形
+   * 读静态障碍（服务端快照里的碰撞多边形 + NPC 点位按估算体型占位）
    *
    * 两样都读快照（#672 / #676 起那是唯一来源）：地图文件里已经没有对象组，
    * 从 TMX 读会得到空数组 —— 表现为「寻路穿墙」，而页面上看起来一切正常。
+   * #1190 起碰撞是多边形（顶点原样交给 PathGrid 烙格），NPC 占位仍是矩形。
    */
-  private static readStaticObstacles(map: Node): Rect[] {
+  private static readStaticObstacles(): { rects: Rect[]; polys: PolyPoint[][] } {
     const rects: Rect[] = [];
+    const polys: PolyPoint[][] = [];
     const layout = maps.get(this.mapId);
-    layout?.collisions.forEach((box) => {
-      // 快照里的碰撞盒已经是「中心 + 尺寸」，`Rect` 要的是左下角 → 往下挪半个高
-      rects.push(new Rect(box.x - box.w / 2, box.y - box.h / 2, box.w, box.h));
+    layout?.collisions.forEach((poly) => {
+      // 快照里的碰撞多边形已经是世界坐标顶点序列（首尾自动闭合），原样交给 PathGrid
+      polys.push(poly.points.map(([x, y]) => ({ x, y })));
     });
     layout?.npcs.forEach((point) => {
       // 点位已经是世界坐标（#672），矩形按「以点为中心」摊开
@@ -469,7 +472,7 @@ export default class AutoBattle {
       const height = autoBattle.npcObstacleSize.height;
       rects.push(new Rect(point.x - width / 2, point.y - height / 2, width, height));
     });
-    return rects;
+    return { rects, polys };
   }
 
   /** 放弃当前目标：挂机时拉黑一段时间换下一个（无限重复的前提是不卡死在一只怪上），快速攻击直接结束 */

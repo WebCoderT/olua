@@ -353,21 +353,26 @@ export function CollisionsDialog({
           <thead className={theadClass}>
             <tr>
               <th className={thClass}>#</th>
-              <th className={thClass}>中心（世界坐标）</th>
-              <th className={thClass}>尺寸</th>
+              <th className={thClass}>顶点（世界坐标）</th>
+              <th className={thClass}>包围盒</th>
               <th className={thClass}>位置</th>
               <th className={thClass} />
             </tr>
           </thead>
           <tbody>
-            {detail.collisions.map((box) => (
+            {detail.collisions.map((box) => {
+              const xs = box.points.map((p) => p[0]);
+              const ys = box.points.map((p) => p[1]);
+              const bbox =
+                xs.length > 0 ? `${Math.round(Math.max(...xs) - Math.min(...xs))} × ${Math.round(Math.max(...ys) - Math.min(...ys))}` : "—";
+              return (
               <tr key={box.id}>
                 <td className={rowClass(box.id === focusId)}>{box.id}</td>
                 <td className={rowClass(box.id === focusId)}>
-                  ({box.cx}, {box.cy})
+                  {box.points.length} 个顶点（首 {box.points[0]?.[0] ?? "—"}, {box.points[0]?.[1] ?? "—"}）
                 </td>
                 <td className={rowClass(box.id === focusId)}>
-                  {box.w} × {box.h}
+                  {bbox}
                 </td>
                 <td className={rowClass(box.id === focusId)}>
                   {box.fullyOutside ? <Badge tone="ember">整块在图外（看不见）</Badge> : <span className="text-ink-5">图内 / 跨边界</span>}
@@ -378,7 +383,8 @@ export function CollisionsDialog({
                   </Button>
                 </td>
               </tr>
-            ))}
+              );
+            })}
           </tbody>
         </table>
       )}

@@ -199,13 +199,20 @@ function connect(url) {
   return session;
 }
 
-/** 从库里挑一个「小块」碰撞盒（避开四面外墙：那些 w/h 上千，跨过去要几千像素） */
+/** 从库里挑一个「小块」碰撞多边形（#1190：返回其包围盒，避开四面外墙：那些跨过去要几千像素） */
 function pickBox(dbPath) {
   const db = new DatabaseSync(dbPath, { readOnly: true });
   try {
     const rows = db
-      .prepare("SELECT cx, cy, w, h FROM map_collisions WHERE map_id = '1' AND w BETWEEN 16 AND 96 AND h BETWEEN 16 AND 96 ORDER BY w * h DESC")
-      .all();
+      .prepare("SELECT points FROM map_collisions WHERE map_id = '1' ORDER BY id ASC")
+      .all()
+      .map((row) => {
+        const poly = JSON.parse(row.points);
+        const xs = poly.map((p) => p[0]);
+        const ys = poly.map((p) => p[1]);
+        return { cx: (Math.min(...xs) + Math.max(...xs)) / 2, cy: (Math.min(...ys) + Math.max(...ys)) / 2, w: Math.max(...xs) - Math.min(...xs), h: Math.max(...ys) - Math.min(...ys) };
+      })
+      .filter((box) => box.w >= 16 && box.w <= 96 && box.h >= 16 && box.h <= 96);
     return rows.length > 0 ? rows[0] : null;
   } finally {
     db.close();
@@ -227,7 +234,10 @@ function pickBox(dbPath) {
       const db = new DatabaseSync(dbPath);
       try {
         db.exec("PRAGMA busy_timeout = 10000");
-        db.prepare("INSERT INTO map_collisions (map_id, cx, cy, w, h, updated_at) VALUES ('1', 900, -500, 64, 64, 0)").run();
+        // #1190 起碰撞是多边形：64×64 的测试墙写成四点多边形（中心 (900, -500)）
+        db
+          .prepare("INSERT INTO map_collisions (map_id, points, updated_at) VALUES ('1', ?, 0)")
+          .run(JSON.stringify([[868, -532], [932, -532], [932, -468], [868, -468]]));
       } finally {
         db.close();
       }

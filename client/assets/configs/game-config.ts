@@ -2217,11 +2217,17 @@ export function applyMapRows(rows: MapConfigRow[], groups: MapTypeGroupRow[]): v
       spawnAreas: (row.spawnAreas ?? [])
         .filter((area) => area && typeof area.monsterKey === "string")
         .map((area) => ({ monsterKey: area.monsterKey, cx: Number(area.cx) || 0, cy: Number(area.cy) || 0 })),
-      // 碰撞盒（#676）：宽高必须为正 —— 零面积的盒子在客户端建出来是个「点了没反应的空节点」，
-      // 直接丢掉比留着让人以为「这里明明有碰撞」好
+      // 碰撞多边形（#676 / #1190）：顶点必须 ≥3 —— 封闭不了的多边形在客户端建出来
+      // 是个「点了没反应的空形状」，直接丢掉比留着让人以为「这里明明有碰撞」好
       collisions: (row.collisions ?? [])
-        .filter((box) => box && Number(box.w) > 0 && Number(box.h) > 0)
-        .map((box) => ({ x: Number(box.x) || 0, y: Number(box.y) || 0, w: Number(box.w) || 0, h: Number(box.h) || 0 })),
+        .filter((poly) => poly && Array.isArray(poly.points) && poly.points.length >= 3)
+        .map((poly) =>
+          poly.points
+            .filter((p) => Array.isArray(p) && p.length === 2)
+            .map((p) => [Number(p[0]) || 0, Number(p[1]) || 0] as [number, number]),
+        )
+        .filter((points) => points.length >= 3)
+        .map((points) => ({ points })),
       // 房间形状与传送费（#812）：只进「客户端要预判」的三项，倍率不进快照。
       // 服务端**总是**带这三项（`map.configs()` 对没配过的图也给出厂默认），所以这里的
       // `|| 0` 只防「字段是 undefined」这种版本错位，不构成第二套默认值 —— 数值口径

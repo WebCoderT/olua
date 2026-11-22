@@ -853,19 +853,19 @@ export const routes = {
      */
     save: (id: string) => `/admin/maps/${encodeURIComponent(id)}`,
     /**
-     * 画一个碰撞盒（在图上拖一个框）（POST /admin/maps/{id}/collisions）
+     * 画一个碰撞多边形（在图上连点顶点、点第一个点闭合）（POST /admin/maps/{id}/collisions）
      *
-     * 管理端地图页「绘制碰撞盒」保存时调它。**入参是世界坐标**（原点 = 地图左上角、y 轴向上，故 `cy` 为负），
+     * 管理端地图页「绘制碰撞多边形」保存时调它。**入参是顶点序列 `points`（世界坐标**：原点 = 地图左上角、
      */
     createCollision: (id: string) => `/admin/maps/${encodeURIComponent(id)}/collisions`,
     /**
-     * 删除碰撞盒（DELETE /admin/maps/{id}/collisions/{boxId}）
+     * 删除碰撞多边形（DELETE /admin/maps/{id}/collisions/{boxId}）
      *
      * 删掉这张图上的一个碰撞盒。图里的人要换图 / 重进才会觉得「这里能过去了」——
      */
     deleteCollision: (id: string, boxId: string) => `/admin/maps/${encodeURIComponent(id)}/collisions/${encodeURIComponent(boxId)}`,
     /**
-     * 修改碰撞盒（整份覆盖）（PATCH /admin/maps/{id}/collisions/{boxId}）
+     * 修改碰撞多边形（整份顶点覆盖）（PATCH /admin/maps/{id}/collisions/{boxId}）
      *
      * 挪位置与改尺寸是同一次动作，入参与新建完全一致。**整份覆盖**而不是分字段：
      */

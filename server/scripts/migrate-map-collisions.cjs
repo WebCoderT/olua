@@ -78,15 +78,23 @@ function main() {
       return;
     }
 
+    // #1190 起表里存多边形顶点（[[x,y],...]）：矩形按四角转 4 点多边形（左下→右下→右上→左上）
+    const rectPointsJson = (cx, cy, w, h) =>
+      JSON.stringify([
+        [cx - w / 2, cy - h / 2],
+        [cx + w / 2, cy - h / 2],
+        [cx + w / 2, cy + h / 2],
+        [cx - w / 2, cy + h / 2],
+      ]);
     const insert = db.prepare(
-      "INSERT INTO map_collisions (map_id, cx, cy, w, h, updated_at) VALUES (?, ?, ?, ?, ?, 0)",
+      "INSERT INTO map_collisions (map_id, points, updated_at) VALUES (?, ?, 0)",
     );
     let inserted = 0;
     db.exec("BEGIN");
     try {
       for (const item of plan) {
         for (const box of item.boxes) {
-          inserted += insert.run(item.mapId, box.cx, box.cy, box.w, box.h).changes;
+          inserted += insert.run(item.mapId, rectPointsJson(box.cx, box.cy, box.w, box.h)).changes;
         }
       }
       db.exec("COMMIT");

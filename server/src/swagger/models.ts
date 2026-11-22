@@ -176,7 +176,7 @@ import {
 import { EquipAlignDto, EquipAlignListDto, EquipAlignPointDto, SaveEquipAlignDto } from "../modules/game-config/dto/equip-align.dto";
 import { EquipInAlignDto, EquipInAlignListDto, EquipInAlignPointDto, SaveEquipInAlignDto } from "../modules/game-config/dto/equip-in-align.dto";
 import {
-  MapCollisionBoxDto,
+  MapCollisionPolygonDto,
   MapCollisionDeletedDto,
   MapCollisionDto,
   MapConfigDto,
@@ -639,9 +639,9 @@ export const SWAGGER_MODELS = [
   MapSpawnAreaPointDto,
   SaveMapNpcDto,
   SaveRevivePointDto,
-  // 碰撞盒（#676）
+  // 碰撞多边形（#676；#1190 起是多边形）
   MapCollisionDto,
-  MapCollisionBoxDto,
+  MapCollisionPolygonDto,
   MapCollisionDeletedDto,
   SaveMapCollisionDto,
   // 实时地图监控（#665）

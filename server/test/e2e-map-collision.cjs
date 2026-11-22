@@ -1,20 +1,20 @@
 #!/usr/bin/env node
 /**
- * 服务端 e2e：地图上的碰撞盒（#676）
+ * 服务端 e2e：地图上的碰撞多边形（#676 起归后台；#1190 从矩形升级为多边形）
  *
  * 这一套钉住的是「**地图文件从此只做显示**」这件事的最后一块：
  *
- * 1. **出厂就有**：11 张图的碰撞盒由 `db:migrate-map-collisions` 从 TMX 的 `collision`
- *    对象组搬进 `map_collisions`，坐标是世界坐标（`cy` 为负 / 0）。断言 `cy <= 0` 就是
- *    「迁移脚本没忘了把 y 取反」的判据 —— 忘了取反会整批变成正数。
- * 2. **能画**：POST 一个框 → 入库、详情多一行、列表 `collisionCount` 跟着变。
- * 3. **只校验两件事**：宽高 ≥ 1px（拖出来一个 0 宽的框等于没画）；图必须存在且有几何。
- *    **故意不判「在图内」** —— 见下一条。
- * 4. **越界是合法的，但「整块在图外」要标出来**：四面围墙本来就画在图外（`x = -64`、宽 8320），
+ * 1. **出厂就有**：0 号图的四面围墙在 `map_collisions` 里（config-sync 灌的，#1150 换图后
+ *    只有图 0 带围墙），顶点是 JSON `[[x,y],...]` 世界坐标（y 轴向上，故绝大多数 y 为负）。
+ *    断言「所有顶点 y ≤ 1000 且至少一个 y < 0」就是「忘了把 y 取反会整批变正几千」的判据。
+ * 2. **能画**：POST 一圈顶点 → 入库、详情多一行、列表 `collisionCount` 跟着变。
+ * 3. **语义校验**：顶点 3~64、每个顶点是 [x, y] 数字、相邻顶点间距 ≥ 1px、**不自交**；
+ *    图必须存在且有几何。**故意不判「在图内」** —— 见下一条。
+ * 4. **越界是合法的，但「整块在图外」要标出来**：四面围墙本来就画在图外（`x = -64`），
  *    半截在外是正常数据；整块在外才是「画面上完全看不到」，只标 `fullyOutside`，不拒。
- * 5. **能改能删**：PATCH 整份覆盖（挪位置 = 改尺寸同一次动作）；删完再删 404；跨图 404。
+ * 5. **能改能删**：PATCH 整份覆盖（拖顶点 / 增删点是同一次动作）；删完再删 404；跨图 404。
  * 6. **快照**：玩家侧 `GET /game-config` 的 `maps[].collisions` 跟着改，且字段是
- *    `x / y / w / h`（下发客户端用，与 `cx / cy` 刻意不同名 —— 客户端拿到直接建节点）。
+ *    `points`（下发客户端用，客户端拿到直接建多边形碰撞体，不需要任何换算）。
  * 7. **权限与契约**：观察员能读、写 403；三个 operation 在 openapi.json 里，
  *    写模型没有 `mapId` / `id`（路径里已经有了）。
  *
@@ -72,7 +72,7 @@ function freePort() {
   });
 }
 
-/** 起一台服务并等它就绪（内存库：每次跑都是出厂形态，碰撞盒来自 config-sync.sql） */
+/** 起一台服务并等它就绪（内存库：每次跑都是出厂形态，碰撞多边形来自 config-sync.sql） */
 async function startServer(env) {
   const port = await freePort();
   const baseUrl = `http://127.0.0.1:${port}`;
@@ -149,9 +149,19 @@ async function registerPlayer(baseUrl, username) {
   return registered.body?.data?.token;
 }
 
-/** 0 号图上一个图内的框（#1150 换图后新图 0 是 2304×1856，旧值 4096,-4096 已整块在图外） */
-function boxOf(overrides = {}) {
-  return { cx: 1200, cy: -900, w: 256, h: 128, ...overrides };
+/** 矩形（中心 + 宽高）→ 等价四点多边形（造数据用；0 号图 #1150 换图后是 2304×1856） */
+function rectPoints(cx, cy, w, h) {
+  return [
+    [cx - w / 2, cy - h / 2],
+    [cx + w / 2, cy - h / 2],
+    [cx + w / 2, cy + h / 2],
+    [cx - w / 2, cy + h / 2],
+  ];
+}
+
+/** 0 号图上一个图内的多边形（默认 = 中心 (1200, -900) 的 256×128 四边形） */
+function polyOf(overrides = {}) {
+  return { points: rectPoints(1200, -900, 256, 128), ...overrides };
 }
 
 //#region 主流程
@@ -165,55 +175,60 @@ async function main() {
 
     //#region 一、出厂状态
 
-    group("一、出厂状态：碰撞盒来自 TMX 迁移，坐标是世界坐标");
+    group("一、出厂状态：围墙多边形来自 config-sync，顶点是世界坐标");
 
     const list = await api(base, "GET", "/api/admin/maps", { token });
     const rows = list.body?.data?.list ?? [];
     check(rows.length > 0, "地图列表有行（具体几张由资源清单决定）", String(rows.length));
     check(
       rows.some((row) => row.id === "0" && row.collisionCount > 0),
-      "0 号图出厂就有碰撞盒（#1150 换图后只有图 0 带四面围墙，其余图等运营画）",
+      "0 号图出厂就有碰撞多边形（#1150 换图后只有图 0 带四面围墙，其余图等运营画）",
     );
 
     const detail = await api(base, "GET", "/api/admin/maps/0", { token });
     checkEqual(detail.status, 200, "能读 0 号图详情");
     const boxes = detail.body?.data?.collisions ?? [];
-    check(boxes.length > 0, "0 号图出厂就有碰撞盒");
+    check(boxes.length > 0, "0 号图出厂就有碰撞多边形");
     checkEqual(boxes.length, detail.body?.data?.collisionCount, "详情条数与列表计数一致（同一张表，不做两处口径）");
-    // y 轴向上、图占 y ∈ [-H, 0]：忘了取反的话这一批会全变成正数。
-    // 围墙允许半截在图外（上墙 cy=24），所以只判方向口径、不锁 cy ≤ 0
-    check(boxes.every((item) => item.cy < item.h), "全部碰撞盒的 cy < h（世界坐标口径：y 轴向上）");
-    check(boxes.every((item) => item.w > 0 && item.h > 0), "全部碰撞盒宽高为正（零面积的在迁移时被跳过）");
+    // y 轴向上、图占 y ∈ [-H, 0]：忘了取反的话这一批顶点会全变成正几千。
+    // 围墙允许半截在图外（上墙顶点 y 为小正数），所以只判方向口径、不锁 y ≤ 0
+    check(
+      boxes.every((item) => item.points.every(([x, y]) => Number.isFinite(x) && Number.isFinite(y) && y <= 1000)),
+      "全部顶点 y ≤ 1000（世界坐标口径：y 轴向上，忘取反会是正几千）",
+    );
+    check(
+      boxes.every((item) => item.points.length >= 3 && item.points.some(([, y]) => y < 0)),
+      "每个多边形 ≥3 个顶点、至少一个顶点 y < 0（图在 y 负半轴）",
+    );
     check(
       boxes.every((item) => Number.isInteger(item.id) && item.id > 0),
-      "每行都带库里的 id（改 / 删用它定位 —— 碰撞盒没有名字）",
+      "每行都带库里的 id（改 / 删用它定位 —— 碰撞多边形没有名字）",
     );
-    // 反面判据：四面围墙是**半截**在图外（x = -64、宽 8320），不该被当成「整块在外」
+    // 反面判据：四面围墙是**半截**在图外（x = -64 起），不该被当成「整块在外」
     checkEqual(
       boxes.filter((item) => item.fullyOutside).length,
       0,
-      "0 号图没有整块在图外的盒子（围墙半截在外不算；判据方向写反会是 97）",
+      "0 号图没有整块在图外的多边形（围墙半截在外不算；判据方向写反会整批红）",
     );
 
     //#endregion
 
     //#region 二、画一个
 
-    group("二、画一个：拖框 → 入库 → 计数跟着变");
+    group("二、画一个：点一圈顶点 → 入库 → 计数跟着变");
 
-    const created = await api(base, "POST", "/api/admin/maps/0/collisions", { token, body: boxOf() });
+    const created = await api(base, "POST", "/api/admin/maps/0/collisions", { token, body: polyOf() });
     checkEqual(created.status, 201, "绘制返回 201");
     const box = created.body?.data ?? {};
     check(Number.isInteger(box.id) && box.id > 0, "返回带库里的行 id");
-    checkEqual(box.cx, 1200, "世界坐标 x 原样存下");
-    checkEqual(box.cy, -900, "世界坐标 y 原样存下（y 轴向上，故为负）");
-    checkEqual(box.w, 256, "宽原样存下");
-    checkEqual(box.h, 128, "高原样存下");
-    checkEqual(box.fullyOutside, false, "图内的框不标「整块在图外」");
+    checkEqual(box.points.length, 4, "顶点数原样存下");
+    checkEqual(box.points[0][0], 1072, "顶点 x 原样存下");
+    checkEqual(box.points[0][1], -964, "顶点 y 原样存下（y 轴向上，故为负）");
+    checkEqual(box.fullyOutside, false, "图内的多边形不标「整块在图外」");
     checkEqual(
       Object.keys(box).sort().join(","),
-      "cx,cy,fullyOutside,h,id,w",
-      "回显字段就这六个（没有 inBounds —— 碰撞盒不做越界判定）",
+      "fullyOutside,id,points",
+      "回显字段就这三个（没有 inBounds —— 碰撞多边形不做越界判定）",
     );
 
     const afterCreate = await api(base, "GET", "/api/admin/maps/0", { token });
@@ -227,39 +242,72 @@ async function main() {
     // 拖出来的浮点收到两位（与刷怪区同口径：`123.4567` 进库没有意义）
     const rounded = await api(base, "POST", "/api/admin/maps/0/collisions", {
       token,
-      body: boxOf({ cx: 1000.123456, cy: -1000.987654, w: 33.33333, h: 44.44444 }),
+      body: polyOf({ points: rectPoints(1000.123456, -1000.987654, 33.33333, 44.44444) }),
     });
-    checkEqual(rounded.status, 201, "带小数的框也收");
-    checkEqual(rounded.body?.data?.cx, 1000.12, "x 收两位小数");
-    checkEqual(rounded.body?.data?.cy, -1000.99, "y 收两位小数（负数不是截断成 -1000.98）");
-    checkEqual(rounded.body?.data?.w, 33.33, "宽收两位小数");
+    checkEqual(rounded.status, 201, "带小数的顶点也收");
+    checkEqual(rounded.body?.data?.points[0][0], 983.46, "x 收两位小数");
+    checkEqual(rounded.body?.data?.points[0][1], -1023.21, "y 收两位小数（负数不是截断成 -1023.22）");
     await api(base, "DELETE", `/api/admin/maps/0/collisions/${rounded.body?.data?.id}`, { token });
 
     //#endregion
 
-    //#region 三、只校验两件事
+    //#region 三、语义校验
 
-    group("三、校验：宽高不能是 0，图必须存在；越界**不**拦");
+    group("三、校验：顶点数 / 边长 / 自交 / 图存在；越界**不**拦");
 
-    const tooThin = await api(base, "POST", "/api/admin/maps/0/collisions", { token, body: boxOf({ w: 0 }) });
-    checkEqual(tooThin.status, 400, "宽 0 → 400（拖出来的零宽框等于没画）");
-    checkEqual(tooThin.body?.code, 40000, "业务码是 PARAM_INVALID");
+    const tooFew = await api(base, "POST", "/api/admin/maps/0/collisions", {
+      token,
+      body: polyOf({ points: [[0, -100], [100, -100]] }),
+    });
+    checkEqual(tooFew.status, 400, "2 个顶点 → 400（封闭最少要 3 点）");
+    checkEqual(tooFew.body?.code, 40000, "业务码是 PARAM_INVALID");
     check(
-      String(tooThin.body?.message ?? "").includes("1"),
-      `文案说得出下限（实际：「${tooThin.body?.message ?? ""}」）`,
+      String(tooFew.body?.message ?? "").includes("3"),
+      `文案说得出顶点下限（实际：「${tooFew.body?.message ?? ""}」）`,
     );
     checkEqual(
-      (await api(base, "POST", "/api/admin/maps/0/collisions", { token, body: boxOf({ h: 0.4 }) })).status,
+      (await api(base, "POST", "/api/admin/maps/0/collisions", { token, body: { points: "abc" } })).status,
       400,
-      "高 0.4 收两位后变 0.4 → 仍小于 1 → 400",
+      "顶点不是数组 → 400（DTO 就拦下了，没进业务层）",
     );
     checkEqual(
-      (await api(base, "POST", "/api/admin/maps/0/collisions", { token, body: { cx: "abc", cy: -1, w: 10, h: 10 } })).status,
+      (await api(base, "POST", "/api/admin/maps/0/collisions", {
+        token,
+        body: polyOf({ points: [[0, -100], ["a", -100], [100, -200]] }),
+      })).status,
       400,
-      "中心不是数字 → 400（DTO 就拦下了，没进业务层）",
+      "顶点坐标不是数字 → 400",
     );
     checkEqual(
-      (await api(base, "POST", "/api/admin/maps/99/collisions", { token, body: boxOf() })).status,
+      (await api(base, "POST", "/api/admin/maps/0/collisions", {
+        token,
+        body: polyOf({ points: [[0, -100], [0.5, -100], [100, -200]] }),
+      })).status,
+      400,
+      "相邻顶点间距 0.5px < 1px → 400（重复点 / 抖动点）",
+    );
+    checkEqual(
+      (await api(base, "POST", "/api/admin/maps/0/collisions", {
+        token,
+        // 蝴蝶结：两条对角边相交
+        body: polyOf({ points: [[0, -100], [100, -200], [100, -100], [0, -200]] }),
+      })).status,
+      400,
+      "自交（蝴蝶结）→ 400（射线法判不出哪边是里面）",
+    );
+    check(
+      String(
+        (
+          await api(base, "POST", "/api/admin/maps/0/collisions", {
+            token,
+            body: polyOf({ points: [[0, -100], [100, -200], [100, -100], [0, -200]] }),
+          })
+        ).body?.message ?? "",
+      ).includes("自交"),
+      "自交文案说得出「不能自交」",
+    );
+    checkEqual(
+      (await api(base, "POST", "/api/admin/maps/99/collisions", { token, body: polyOf() })).status,
       404,
       "不存在的图 → 404（没有几何就没法判 fullyOutside）",
     );
@@ -267,21 +315,22 @@ async function main() {
     // 越界允许：这是这一轮最容易被「顺手加个校验」破坏的一条
     const outside = await api(base, "POST", "/api/admin/maps/0/collisions", {
       token,
-      body: { cx: 20000, cy: -100, w: 100, h: 100 },
+      body: polyOf({ points: rectPoints(20000, -100, 100, 100) }),
     });
     checkEqual(outside.status, 201, "整块画在图外 → 仍然收下（围墙就在图外，不能拒）");
     checkEqual(outside.body?.data?.fullyOutside, true, "但它被标成「整块在图外」（画面上看不到）");
 
     const straddle = await api(base, "POST", "/api/admin/maps/0/collisions", {
       token,
-      body: { cx: 4096, cy: 0, w: 8320, h: 128 },
+      // 左墙同款：x 从 -64 跨到 128，半截在图外
+      body: polyOf({ points: [[-64, -100], [128, -100], [128, -220], [-64, -220]] }),
     });
     checkEqual(straddle.status, 201, "半截在图外的围墙也收");
     checkEqual(straddle.body?.data?.fullyOutside, false, "半截在外不算「整块在图外」（判据方向就在这里）");
 
     const belowMap = await api(base, "POST", "/api/admin/maps/0/collisions", {
       token,
-      body: { cx: 4096, cy: -9000, w: 200, h: 200 },
+      body: polyOf({ points: rectPoints(4096, -9000, 200, 200) }),
     });
     checkEqual(belowMap.body?.data?.fullyOutside, true, "整块在图下方之外也算整块在外（y 轴向上的那一侧）");
 
@@ -302,16 +351,16 @@ async function main() {
 
     const moved = await api(base, "PATCH", `/api/admin/maps/0/collisions/${box.id}`, {
       token,
-      body: { cx: 2000, cy: -2000, w: 512, h: 128 },
+      body: polyOf({ points: rectPoints(2000, -2000, 512, 128) }),
     });
     checkEqual(moved.status, 200, "修改返回 200");
     checkEqual(moved.body?.data?.id, box.id, "改的是同一行（没有变成「删了再建」）");
-    checkEqual(moved.body?.data?.cx, 2000, "位置已挪");
-    checkEqual(moved.body?.data?.w, 512, "尺寸也一起改了（挪位置与改尺寸是同一次动作）");
+    checkEqual(moved.body?.data?.points[0][0], 1744, "顶点已挪");
+    checkEqual(moved.body?.data?.points.length, 4, "顶点数可以一并改（拖顶点 / 增删点是同一次动作）");
 
     const crossMap = await api(base, "PATCH", `/api/admin/maps/3/collisions/${box.id}`, {
       token,
-      body: boxOf({ cx: 1000, cy: -1000 }),
+      body: polyOf({ points: rectPoints(1000, -1000, 64, 64) }),
     });
     checkEqual(crossMap.status, 404, "拿 0 号图的行 id 去改 3 号图 → 404");
     checkEqual(crossMap.body?.code, 50036, "业务码是 MAP_COLLISION_NOT_FOUND");
@@ -348,11 +397,14 @@ async function main() {
 
     //#region 六、玩家侧快照
 
-    group("六、快照：客户端拿到的碰撞盒字段是 x / y / w / h");
+    group("六、快照：客户端拿到的碰撞多边形字段是 points");
 
-    const fresh = await api(base, "POST", "/api/admin/maps/0/collisions", { token, body: boxOf({ cx: 3000, cy: -3000 }) });
+    const fresh = await api(base, "POST", "/api/admin/maps/0/collisions", {
+      token,
+      body: polyOf({ points: rectPoints(3000, -3000, 64, 64) }),
+    });
     const freshId = fresh.body?.data?.id;
-    check(Boolean(freshId), "先画一个盒子（后面要在快照里找它）");
+    check(Boolean(freshId), "先画一个多边形（后面要在快照里找它）");
 
     const playerToken = await registerPlayer(base, "mapbox_player");
     check(Boolean(playerToken), "玩家注册并登录成功");
@@ -362,16 +414,16 @@ async function main() {
     const map0 = (snapshot.body?.data?.maps ?? []).find((row) => row.id === "0") ?? {};
     const snapBoxes = map0.collisions ?? [];
     checkEqual(snapBoxes.length, boxes.length + 1, "快照里的条数与详情一致（客户端进图就按它铺碰撞体）");
-    const hit = snapBoxes.find((item) => item.x === 3000 && item.y === -3000) ?? null;
-    check(Boolean(hit), "刚画的那个盒子出现在快照里（重进游戏就生效）");
+    const hit = snapBoxes.find((item) => item.points?.[0]?.[0] === 2968 && item.points?.[0]?.[1] === -3032) ?? null;
+    check(Boolean(hit), "刚画的那个多边形出现在快照里（重进游戏就生效）");
     checkEqual(
       Object.keys(hit ?? {}).sort().join(","),
-      "h,w,x,y",
-      "下发字段是 x / y / w / h（客户端 setWorldPosition + new Size，不需要 cx/cy）",
+      "points",
+      "下发字段只有 points（客户端直接建多边形碰撞体，不需要 cx/cy 与 x/y/w/h 两套名字）",
     );
     check(
-      snapBoxes.every((item) => item.y < item.h && item.w > 0 && item.h > 0),
-      "快照里每个盒子的 y < h、宽高为正（上墙半截在图外允许 y > 0；零面积的在下发前被过滤）",
+      snapBoxes.every((item) => Array.isArray(item.points) && item.points.length >= 3),
+      "快照里每个多边形 ≥3 个顶点（坏行在下发前就被跳过）",
     );
 
     await api(base, "DELETE", `/api/admin/maps/0/collisions/${freshId}`, { token });
@@ -391,16 +443,16 @@ async function main() {
 
     checkEqual((await api(base, "GET", "/api/admin/maps/0", { token: viewerToken, zoneId: ADMIN_ZONE })).status, 200, "观察员可读详情");
     checkEqual(
-      (await api(base, "POST", "/api/admin/maps/0/collisions", { token: viewerToken, zoneId: ADMIN_ZONE, body: boxOf() })).status,
+      (await api(base, "POST", "/api/admin/maps/0/collisions", { token: viewerToken, zoneId: ADMIN_ZONE, body: polyOf() })).status,
       403,
-      "观察员画碰撞盒 → 403（他没有 gameConfig:write）",
+      "观察员画碰撞多边形 → 403（他没有 gameConfig:write）",
     );
     checkEqual(
       (await api(base, "DELETE", "/api/admin/maps/0/collisions/1", { token: viewerToken, zoneId: ADMIN_ZONE })).status,
       403,
-      "观察员删碰撞盒 → 403",
+      "观察员删碰撞多边形 → 403",
     );
-    checkEqual((await api(base, "POST", "/api/admin/maps/0/collisions", { body: boxOf() })).status, 401, "无令牌 → 401");
+    checkEqual((await api(base, "POST", "/api/admin/maps/0/collisions", { body: polyOf() })).status, 401, "无令牌 → 401");
 
     //#endregion
 
@@ -424,8 +476,8 @@ async function main() {
     const schemas = doc.components?.schemas ?? {};
     checkEqual(
       Object.keys(schemas.SaveMapCollisionDto?.properties ?? {}).sort().join(","),
-      "cx,cy,h,w",
-      "写模型四个字段：**没有 mapId / id**（路径里已经有了盒子）",
+      "points",
+      "写模型一个字段：**没有 mapId / id**（路径里已经有了）",
     );
     checkEqual(
       pathNew?.post?.["x-olua-data-schema"]?.$ref,
@@ -433,9 +485,9 @@ async function main() {
       "绘制回显的是这一行的 DTO（前端直接铺回画布）",
     );
     checkEqual(
-      Object.keys(schemas.MapCollisionBoxDto?.properties ?? {}).sort().join(","),
-      "h,w,x,y",
-      "下发模型只有几何（`MapCollisionBoxDto` 就是客户端那个 `MapCollisionBox`）",
+      Object.keys(schemas.MapCollisionPolygonDto?.properties ?? {}).sort().join(","),
+      "points",
+      "下发模型只有几何（`MapCollisionPolygonDto` 就是客户端那个 `MapCollisionPolygon`）",
     );
 
     //#endregion
@@ -449,11 +501,11 @@ async function main() {
 main()
   .then(() => {
     if (failed) {
-      console.log(`\n❌ 服务端 e2e（地图碰撞盒）：${passed} 条通过 / ${failed} 条失败`);
+      console.log(`\n❌ 服务端 e2e（地图碰撞多边形）：${passed} 条通过 / ${failed} 条失败`);
       console.log(failures.map((label) => `   · ${label}`).join("\n"));
       process.exit(1);
     }
-    console.log(`\n✅ 服务端 e2e（地图碰撞盒）：${passed} 条通过 / 0 条失败`);
+    console.log(`\n✅ 服务端 e2e（地图碰撞多边形）：${passed} 条通过 / 0 条失败`);
   })
   .catch((error) => {
     console.error("\n💥 e2e 运行失败：", error);

@@ -133,6 +133,27 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
       this.db.exec("DROP TABLE map_monitor_state");
       this.logger.log("map_monitor_state 主键扩成三列（含 slot）：旧投影已丢弃（运行时投影，一秒后重建）");
     }
+    // 碰撞盒矩形 → 多边形（#1190）：老库加 points 列、把矩形四角回填成 4 点多边形、摘掉旧列。
+    // 三件事只在「老形状还在」时做一次（新库的 CREATE 已是多边形形状，hasColumn(cx) 为 false 直接跳过）；
+    // 回填用 SQLite 内置 json_array 拼四角（左下 → 右下 → 右上 → 左上，世界坐标 y 向上），
+    // 摘列放最后：回填还引用 cx/cy/w/h，先摘会 no such column。
+    if (this.hasTable("map_collisions") && !this.hasColumn("map_collisions", "points")) {
+      this.ensureColumn("map_collisions", "points", "TEXT NOT NULL DEFAULT '[]'");
+    }
+    if (this.hasTable("map_collisions") && this.hasColumn("map_collisions", "cx")) {
+      this.db.exec(`
+        UPDATE map_collisions SET points = json_array(
+          json_array(cx - w / 2, cy - h / 2),
+          json_array(cx + w / 2, cy - h / 2),
+          json_array(cx + w / 2, cy + h / 2),
+          json_array(cx - w / 2, cy + h / 2)
+        );
+      `);
+      for (const column of ["cx", "cy", "w", "h"]) {
+        this.db.exec(`ALTER TABLE map_collisions DROP COLUMN ${column}`);
+      }
+      this.logger.log("map_collisions 已从矩形（cx/cy/w/h）迁到多边形（points JSON，#1190）：存量矩形按四角转 4 点");
+    }
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS accounts (
         id             TEXT PRIMARY KEY,
@@ -536,21 +557,17 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
       CREATE UNIQUE INDEX IF NOT EXISTS idx_map_npcs_natural ON map_npcs(map_id, npc_id);
       CREATE INDEX IF NOT EXISTS idx_map_npcs_map ON map_npcs(map_id);
 
-      -- 碰撞盒（#676）：一行 = 一个轴对齐阻挡矩形，坐标是世界坐标（中心 + 尺寸）。
-      -- 以前这批矩形只活在 TMX 的 collision 对象组里（客户端两处读：生成静态碰撞体、
-      -- 自动战斗的静态障碍），后台只能看不能改。现在归这张表，TMX 只留瓦片 ——
-      -- 「地图文件只做显示，所有数据在管理端」这条边界就是这张表换来的。
-      -- **允许超出地图边界**：现有每张图的四面围墙本来就画在图外（x=-64、宽 8320），
-      -- 那是「把玩家关在图里」的手段，不是数据错误，所以这里没有越界拒绝，只有一个
-      -- 「整块在图外」的展示标记（完全看不到的框要能一眼认出来）。
-      -- 没有名字列：碰撞盒是匿名的（Tiled 里这批对象也都没起名），页面按 id 指认。
+      -- 碰撞多边形（#676 由管理端绘制；#1190 起一行 = 一个任意简单多边形）：
+      -- points 是 JSON 顶点数组 [[x,y],...]（≥3 个顶点，按绘制顺序，首尾自动闭合），坐标是世界坐标
+      -- （原点在地图左上角、x 向右、y 轴向上，故 y 为负）。以前这批矩形只活在 TMX 的
+      -- collision 对象组里（客户端两处读：生成静态碰撞体 / 自动战斗的静态障碍），后台只能看。
+      -- **允许超出地图边界**：现有每张图的四面围墙本来就画在图外（x=-64），那是「把玩家
+      -- 关在图里」的手段，不是数据错误，所以这里没有越界拒绝，只有「整块在图外」的展示标记。
+      -- 没有名字列：碰撞多边形是匿名的（Tiled 里这批对象也都没起名），页面按 id 指认。
       CREATE TABLE IF NOT EXISTS map_collisions (
         id         INTEGER PRIMARY KEY AUTOINCREMENT,
         map_id     TEXT    NOT NULL,
-        cx         REAL    NOT NULL,
-        cy         REAL    NOT NULL,
-        w          REAL    NOT NULL,
-        h          REAL    NOT NULL,
+        points     TEXT    NOT NULL,
         updated_at INTEGER NOT NULL DEFAULT 0
       );
       CREATE INDEX IF NOT EXISTS idx_map_collisions_map ON map_collisions(map_id);

@@ -1,5 +1,11 @@
 import { Rect, Vec2 } from "cc";
 
+/** 多边形顶点（世界坐标；与服务端 `polygon.util` 的 PolyPoint 同形，#1190） */
+export interface PolyPoint {
+  x: number;
+  y: number;
+}
+
 /** 格子（列/行） */
 interface GridCell {
   col: number;
@@ -87,19 +93,25 @@ export default class PathGrid {
   private readonly rows: number;
   /** 视线检测采样步长（像素） */
   private readonly losStep: number;
-  /** 静态障碍（世界坐标，已按通行余量外扩） */
+  /** 通行余量（像素）：静态多边形的贴边外扩在烙格时按它算（#1190） */
+  private readonly clearance: number;
+  /** 静态障碍矩形（世界坐标，已按通行余量外扩；NPC 占位仍是矩形） */
   private readonly staticRects: Rect[];
+  /** 静态障碍多边形（#1190：快照里的碰撞多边形，顶点世界坐标，首尾自动闭合） */
+  private readonly staticPolys: PolyPoint[][];
   /** 可走格（1 = 可走，0 = 阻挡），按行铺平 */
   private walkable: Uint8Array;
 
-  constructor(bounds: Rect, cellSize: number, clearance: number, staticRects: Rect[]) {
+  constructor(bounds: Rect, cellSize: number, clearance: number, staticRects: Rect[] = [], staticPolys: PolyPoint[][] = []) {
     this.originX = bounds.x;
     this.originY = bounds.y;
     this.cellSize = cellSize;
     this.cols = Math.max(1, Math.ceil(bounds.width / cellSize));
     this.rows = Math.max(1, Math.ceil(bounds.height / cellSize));
     this.losStep = cellSize / 2;
+    this.clearance = clearance;
     this.staticRects = staticRects.map((rect) => this.inflate(rect, clearance));
+    this.staticPolys = staticPolys;
     this.walkable = new Uint8Array(this.cols * this.rows);
   }
 
@@ -107,6 +119,7 @@ export default class PathGrid {
   rebuild(dynamicRects: Rect[]) {
     this.walkable.fill(1);
     this.staticRects.forEach((rect) => this.stampRect(rect, 0));
+    this.staticPolys.forEach((poly) => this.stampPolygon(poly, 0));
     dynamicRects.forEach((rect) => this.stampRect(rect, 0));
   }
 
@@ -163,6 +176,36 @@ export default class PathGrid {
     for (let row = startRow; row <= endRow; row++) {
       for (let col = startCol; col <= endCol; col++) {
         this.walkable[row * this.cols + col] = value;
+      }
+    }
+  }
+
+  /**
+   * 把多边形覆盖到的格子标记为 value（#1190）
+   *
+   * **烙格规则必须与服务端 `MapGeometryService.buildGrid` 逐行对齐**：格子中心在形内、
+   * 或到任一边的距离 ≤ `clearance`，都标阻挡 —— 两端不一致的话，同一个目标点
+   * 吸附到的最近可站立格会不同（客户端预判「能到」、服务端算出「不可达」）。
+   * 多边形没有现成的「外扩形状」，用「到边距离」表达与矩形外扩盒同一个语义。
+   */
+  private stampPolygon(poly: PolyPoint[], value: number) {
+    const xs = poly.map((p) => p.x);
+    const ys = poly.map((p) => p.y);
+    const minX = Math.min(...xs) - this.clearance;
+    const minY = Math.min(...ys) - this.clearance;
+    const maxX = Math.max(...xs) + this.clearance;
+    const maxY = Math.max(...ys) + this.clearance;
+    const startCol = Math.max(0, Math.ceil((minX - this.originX) / this.cellSize - 0.5));
+    const endCol = Math.min(this.cols - 1, Math.floor((maxX - this.originX) / this.cellSize - 0.5));
+    const startRow = Math.max(0, Math.ceil((minY - this.originY) / this.cellSize - 0.5));
+    const endRow = Math.min(this.rows - 1, Math.floor((maxY - this.originY) / this.cellSize - 0.5));
+    for (let row = startRow; row <= endRow; row++) {
+      for (let col = startCol; col <= endCol; col++) {
+        const cx = this.originX + (col + 0.5) * this.cellSize;
+        const cy = this.originY + (row + 0.5) * this.cellSize;
+        if (pointInPolygon(cx, cy, poly) || pointToPolygonEdgesDistance(cx, cy, poly) <= this.clearance) {
+          this.walkable[row * this.cols + col] = value;
+        }
       }
     }
   }
@@ -287,4 +330,49 @@ export default class PathGrid {
     }
     return result;
   }
+}
+
+/**
+ * 射线法判点在多边形内（even-odd；#1190）
+ *
+ * **必须与服务端 `polygon.util.pointInPolygon` 逐行同形**：边界上的点不算严格「在内」，
+ * 碰撞判定关心的是「这一步撞不撞墙」，边界差半像素没有 gameplay 意义。
+ */
+function pointInPolygon(px: number, py: number, poly: PolyPoint[]): boolean {
+  let inside = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const ax = poly[i].x;
+    const ay = poly[i].y;
+    const bx = poly[j].x;
+    const by = poly[j].y;
+    if (ay > py !== by > py && px < ((bx - ax) * (py - ay)) / (by - ay) + ax) {
+      inside = !inside;
+    }
+  }
+  return inside;
+}
+
+/**
+ * 点到多边形各边的最小距离（#1190）
+ *
+ * **必须与服务端 `polygon.util.pointToPolygonEdgesDistance` 逐行同形**：
+ * 烙格的「贴边外扩」靠它，两端数字不一样 = 同一个格子两端可走性不同。
+ */
+function pointToPolygonEdgesDistance(px: number, py: number, poly: PolyPoint[]): number {
+  let min = Infinity;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const ax = poly[j].x;
+    const ay = poly[j].y;
+    const bx = poly[i].x;
+    const by = poly[i].y;
+    const dx = bx - ax;
+    const dy = by - ay;
+    const lengthSq = dx * dx + dy * dy;
+    const dist = lengthSq === 0 ? Math.hypot(px - ax, py - ay) : (() => {
+      const t = Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / lengthSq));
+      return Math.hypot(px - (ax + t * dx), py - (ay + t * dy));
+    })();
+    if (dist < min) min = dist;
+  }
+  return min;
 }

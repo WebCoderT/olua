@@ -3,18 +3,18 @@ import { DatabaseService } from "../database.service";
 import { MapCollisionRow } from "../rows";
 
 /**
- * 碰撞盒数据访问（#676：碰撞区域从 TMX 搬到后台）
+ * 碰撞多边形数据访问（#676：碰撞区域从 TMX 搬到后台；#1190：矩形升级为多边形）
  *
  * ## 这张表为什么比 `map_spawn_areas` 还薄
  *
- * 碰撞盒没有名字、没有种类、没有归属对象 —— 它就是一个「这块地方过不去」的矩形。
- * 所以仓储只有最朴素的增删改查，**连唯一索引都没有**：两个位置尺寸完全一样的碰撞盒
+ * 碰撞多边形没有名字、没有种类、没有归属对象 —— 它就是「这地块地方过不去」的一圈顶点。
+ * 所以仓储只有最朴素的增删改查，**连唯一索引都没有**：两份顶点完全一样的多边形
  * 在语义上是冗余的，但不是错的（删掉一个不影响另一个），拿它当约束只会在画布上
- * 「画两次同一个框」时莫名其妙地 409。
+ * 「画两次同一块」时莫名其妙地 409。
  *
  * ## 校验不在这一层
  *
- * 矩形合法性（宽高下限）与「整块在图外」的展示结论都在 `map.service`：仓储只写 SQL。
+ * 多边形合法性（顶点数 / 不自交）与「整块在图外」的展示结论都在 `map.service`：仓储只写 SQL。
  * 这样 e2e 能直接对着服务端的文案断言，也避免「仓储里抛业务异常」这种分层混乱。
  */
 @Injectable()
@@ -29,19 +29,19 @@ export class MapCollisionRepository {
   /** 插入一行，返回带 id 的完整行（接口要回显，别让客户端再猜一次 id） */
   insert(row: Omit<MapCollisionRow, "id">): MapCollisionRow {
     const id = this.db.insertReturningId(
-      `INSERT INTO map_collisions (map_id, cx, cy, w, h, updated_at) VALUES (?, ?, ?, ?, ?, ?)`,
-      [row.map_id, row.cx, row.cy, row.w, row.h, row.updated_at],
+      `INSERT INTO map_collisions (map_id, points, updated_at) VALUES (?, ?, ?)`,
+      [row.map_id, row.points, row.updated_at],
     );
     const created = this.findById(id);
-    if (!created) throw new Error(`碰撞盒刚插入却读不回来（id=${id}），库状态异常`);
+    if (!created) throw new Error(`碰撞多边形刚插入却读不回来（id=${id}），库状态异常`);
     return created;
   }
 
   /** 整行覆盖（管理端表单是整份提交，不做分字段更新） */
   update(row: MapCollisionRow): void {
     this.db.run(
-      `UPDATE map_collisions SET cx = ?, cy = ?, w = ?, h = ?, updated_at = ? WHERE id = ?`,
-      [row.cx, row.cy, row.w, row.h, row.updated_at, row.id],
+      `UPDATE map_collisions SET points = ?, updated_at = ? WHERE id = ?`,
+      [row.points, row.updated_at, row.id],
     );
   }
 

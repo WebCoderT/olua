@@ -240,16 +240,16 @@ async function main() {
     checkEqual(data.groups, undefined, "详情里没有 groups（TMX 对象组已整组删除，接口不再回显）");
 
     const collisions = data.collisions ?? [];
-    checkEqual(collisions.length, data.collisionCount, "碰撞盒条数与列表里的计数一致（同一张表）");
-    check(collisions.length > 0, "0 号图有碰撞盒（由 db:migrate-map-collisions 从 TMX 搬过来）");
+    checkEqual(collisions.length, data.collisionCount, "碰撞多边形条数与列表里的计数一致（同一张表）");
+    check(collisions.length > 0, "0 号图有碰撞多边形（#1190 起多边形顶点在 map_collisions.points）");
     const box = collisions[0] ?? {};
     checkEqual(
       Object.keys(box).sort().join(","),
-      "cx,cy,fullyOutside,h,id,w",
-      "碰撞盒字段：行 id + 中心 + 尺寸 + 是否整块在图外（没有 inBounds —— 围墙本来就在图外）",
+      "fullyOutside,id,points",
+      "碰撞多边形字段：行 id + 顶点序列 + 是否整块在图外（没有 inBounds —— 围墙本来就在图外）",
     );
-    check(box.w > 0 && box.h > 0, "碰撞盒宽高都是正数");
-    check(typeof box.cx === "number" && typeof box.cy === "number", "中心点是数字（不是字符串回显）");
+    check(box.points.length >= 3 && box.points.every((p) => Array.isArray(p) && p.length === 2), "碰撞多边形顶点是 [[x,y],...] 形状", JSON.stringify(box.points).slice(0, 80));
+    check(box.points.every((p) => typeof p[0] === "number" && typeof p[1] === "number"), "顶点坐标是数字（不是字符串回显）");
     check(typeof box.fullyOutside === "boolean", "fullyOutside 是布尔（不是 0 / 1）");
     // 反面判据：四面围墙是**半截**在图外（`x = -64`、宽 8320），不算「整块在外」。
     // 判据方向写反（`top <= 0` 当成「在图上方」）会让 99 个里 97 个亮红灯 —— 这条就是钉这个的。
