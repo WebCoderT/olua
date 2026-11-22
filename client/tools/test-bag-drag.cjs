@@ -354,7 +354,7 @@ console.log("\n— 界面接线：BagGridView / BagDialog / 配置 —");
 const gridViewSource = fs.readFileSync(BAG_GRID_VIEW_FILE, "utf8");
 const dialogSource = fs.readFileSync(BAG_DIALOG_FILE, "utf8");
 const draggableSource = fs.readFileSync(DRAGGABLE_FILE, "utf8");
-const storageSource = fs.readFileSync(STORAGE_MANAGER_FILE, "utf8");
+const storageSource = require("./lib/storage-src.cjs").storageSourceFor(STORAGE_MANAGER_FILE);
 const itemsSource = fs.readFileSync(ITEMS_FILE, "utf8");
 const panelsSource = fs.readFileSync(PANELS_FILE, "utf8");
 const gameUiHelperSource = gameUiSourceCombined(GAME_UI_HELPER_FILE);
@@ -408,9 +408,10 @@ check(/private stopTouchBubble\(event: EventTouch\) \{\s*event\.propagationStopp
 check(!/MOUSE_(DOWN|MOVE|UP)[\s\S]{0,80}stopTouchBubble/.test(gridViewSource), "只收 touch 通道（鼠标通道的穿透拦截归 blockClickThrough）");
 
 // 兜底：按下点自带拖动手势时，Draggable 不抢这次拖动
-check(/this\.dragging = false;\s*\n\s*if \(event\.target/.test(draggableSource), "每次按下都从「不拖」开始（上次的残留不会让弹窗跟动）");
-check(/event\.target !== this\.node/.test(draggableSource), "弹窗自己（拖拽柄）不被这条兜底拦掉");
-check(/event\.target\.hasEventListener\(Node\.EventType\.TOUCH_MOVE\)/.test(draggableSource), "按下点有自己的拖动手势（注册过 TOUCH_MOVE）→ 弹窗不抢");
+// 拖拽归属（#1090 重设计：只有标题栏柄可拖弹窗，内容区怎么拖都不影响位置 —— 旧的「兜底不抢」机制退场）
+check(/private onTouchStart\(event: EventTouch\) \{\s*this\.pressed = event\.target === this\.node;\s*\}/.test(draggableSource), "按下认领给柄自己才记（子件/兄弟件的按下不拖弹窗）");
+check(/blockClickThrough\(this\.node\);/.test(draggableSource), "拖拽柄在鼠标通道拦截穿透（点柄不会点到下层 UI）");
+check(/const target = this\.dragTarget \?\? this\.node;/.test(draggableSource), "拖动的是 dragTarget（弹窗根），缺省才拖自身");
 
 // 表现零件
 check(/GameUiHelper\.createBagDragGhost\(drag\.icon\)/.test(gridViewSource), "拖动时建出跟随指针的幽灵图标");

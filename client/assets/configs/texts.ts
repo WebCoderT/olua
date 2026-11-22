@@ -356,6 +356,8 @@ export const uiTexts = {
   role_select_chip_level: "等级 {level}",
   /** 左栏属性 chip：没有角色时的占位 */
   role_select_chip_empty: "尚未选择角色",
+  /** 角色卡右上角与中间大立绘脚下名牌的等级后缀（{level} = 角色等级） */
+  role_select_level_suffix: "{level} 级",
   /** 左栏主按钮（进游戏） */
   role_select_enter: "进 入 游 戏",
   /** 左栏次按钮（返回登录） */

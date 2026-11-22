@@ -145,7 +145,7 @@ check(/label_rank_head: "【\{rank\}】"/.test(textsSource), "头顶红字模板
 
 console.log("\n— E. 接线（源码断言）—");
 const roleSource = read("assets/entities/Role.ts");
-const storageSource = read("assets/ui/core/StorageManager.ts");
+const storageSource = require("./lib/storage-src.cjs").storageSourceFor(path.join(PROJECT_ROOT, "assets/ui/core/StorageManager.ts"));
 const helperSource = read("assets/ui/core/GameHelper.ts");
 const displaySource = read("assets/ui/components/role/RoleDisplay.ts");
 const roleInfoSource = read("assets/ui/components/dialogs/RoleInfoDialog.ts");
@@ -164,7 +164,7 @@ check(/createTip\("rank_max_tip"\)/.test(storageSource) && /rank_bind_gold_tip/.
 // #250：扣费与落阶都搬到服务端，客户端走三条成长线共用的 upgradeGrowthOnServer
 const growthBody = storageSource.slice(storageSource.indexOf("private static async upgradeGrowthOnServer"), storageSource.indexOf("static async upgradeSoul"));
 check(/upgradeGrowthOnServer\(role, "rank", next\.level, "rank_upgrade_tip"\)/.test(storageSource), "晋升交给共用的服务端升级流程（本地不再扣费落阶）");
-check(/RoleApi\.growthUpgrade\(role\.id, \{ kind, targetLevel: nextLevel, revision: role\.revision \}\)/.test(growthBody), "升级请求带修订号做乐观锁（后台改过 → 20006 被拒）");
+check(/withRevision\(role, \(revision\) => RoleApi\.growthUpgrade\(role\.id, \{ kind, targetLevel: nextLevel, revision \}\)\)/.test(growthBody), "升级请求带修订号做乐观锁（withRevision 壳取当前修订号，后台改过 → 20006 被拒）");
 check(/role\.bindGold = Number\(data\.bindGold \?\? role\.bindGold\)/.test(growthBody) && /role\.rank = Number\(data\.rank \?\? nextLevel\)/.test(growthBody), "以服务端返回的余额与阶位为准（客户端那套「先扣钱再落阶」已下线）");
 check(!/combatCalc/.test(growthBody), "晋升后**不在客户端重算**属性与战斗力（#541 服务端权威：服务端重算落库，roleUpdate 帧带回）");
 check(/createHead\("role_head", this\.role\.hp, this\.role\.maxHp, this\.role\.rank\)/.test(displaySource), "RoleDisplay 建头部信息栏时把军衔一并传进去（进图即显示）");
@@ -172,7 +172,9 @@ check(/this\.addChild\(GameUiHelper\.createRoleName\(this\.role\)\)/.test(displa
 check(/getChildByName\("role_rank"\)/.test(displaySource) && /GameUiHelper\.getRankHeadText\(role\.rank\)/.test(displaySource), "RoleDisplay.updateHead 按名字刷新军衔红字（晋升后无需重进图）");
 
 check(/function createRankCard/.test(uiHelperSource) && /function updateRankCard/.test(uiHelperSource) && /function createRankAttributeList/.test(uiHelperSource) && /function createRankBadge/.test(uiHelperSource), "GameUiHelper 有军衔四零件（卡片 / 卡片状态刷新 / 属性表 / 徽记）");
-check(/rankUpgradeDialogLayout\.list\.cardSize/.test(uiHelperSource) && /rankAttributeLabels/.test(uiHelperSource) && /getText\("label_rank_progress"/.test(uiHelperSource), "军衔零件的几何、属性顺序与文案都来自 configs（不写死）");
+// #1120 拆分后：卡片尺寸收进 paintGrowthCard 的 spec（布局常量整体传入，零件不再点取 cardSize）
+check(/rankUpgradeDialogLayout\.list/.test(uiHelperSource) && /rankUpgradeDialogLayout\.attribute/.test(uiHelperSource) && /rankUpgradeDialogLayout\.badge/.test(uiHelperSource) && /rankAttributeLabels/.test(uiHelperSource), "军衔零件的几何、属性顺序都来自 configs（不写死）");
+check(/rankUpgradeDialogLayout/.test(dialogsLayoutSource) && /cardSize/.test(dialogsLayoutSource), "军衔弹窗布局常量（含卡片尺寸）在 configs/layout/dialogs");
 check(/new RankUpgradeDialog\(\)\.open\(\)/.test(roleInfoSource) && /roleInfoDialogLayout\.rankButton/.test(roleInfoSource), "角色信息弹窗有「军衔」按钮打开军衔弹窗（唯一入口）");
 check(!/RankUpgradeDialog/.test(npcClicksSource), "军衔不走 NPC（入口只在角色信息弹窗）");
 check(/createRankCard|updateRankCard|createRankBadge|upgradeRank\(\)/.test(dialogSource), "军衔弹窗接线：零件 + 晋升 + 状态刷新");
