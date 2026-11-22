@@ -6,7 +6,7 @@ import { toastSuccess } from "../../store/toast";
 import { ConfirmDialog } from "../ConfirmDialog";
 import { Modal } from "../Modal";
 import { Button, Field, Input, Notice } from "../ui";
-import { worldPointsOf, type DrawPoint } from "./MapCanvas";
+import { type DrawPoint } from "./MapCanvas";
 
 /**
  * 碰撞多边形表单（#676 画完就填它；#1190 从矩形四数字框升级为顶点列表）
@@ -108,7 +108,10 @@ export function CollisionFormDialog({
     if (!valid || saving) return;
     setSaving(true);
     try {
-      const body = { points: worldPointsOf(numbers.map((p) => ({ x: p.x, y: p.y }))) };
+      // numbers 已经是世界坐标（画布草稿进表单时 useEffect 已转过一次 Tiled→世界，
+      // 编辑态读的更是库里的原值）—— 这里只做两位小数取整，**绝不能再过 worldPointsOf**：
+      // 那会把 y 再翻一次（#1196 的双重取负：多边形被翻到地图上方，画布裁掉、看不见）。
+      const body = { points: numbers.map((p) => [round2(p.x), round2(p.y)] as [number, number]) };
       const saved = box ? await mapsApi.updateCollision(mapId, String(box.id), body) : await mapsApi.createCollision(mapId, body);
       toastSuccess(`碰撞多边形 #${saved.id} 已${box ? "更新" : "新建"}：${saved.points.length} 个顶点`);
       onSaved(`${box ? "已更新" : "已新建"}碰撞多边形 #${saved.id}`);
