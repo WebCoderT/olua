@@ -338,8 +338,11 @@ export class Game extends Component {
     this.roleInfoBar = new RoleInfoBar(role);
     LayerManager.addToUILayer(this.roleInfoBar);
     RoleUIManager.registerRoleInfoBar(this.roleInfoBar);
-    /** 任务追踪栏（左侧常驻；点一下开任务面板 —— 面板归底部栏持有，这里只给回调） */
-    this.questTracker = new QuestTracker(() => this.bottomBar?.openQuests());
+    /** 任务追踪栏（左侧常驻；整块点击开任务面板、标题行「详」开任务详情——两个弹窗都归底部栏持有） */
+    this.questTracker = new QuestTracker(
+      () => this.bottomBar?.openQuests(),
+      () => this.bottomBar?.openQuestDetail(),
+    );
     LayerManager.addToUILayer(this.questTracker);
     /** 小地图（右上角常驻，依赖主角组件取世界坐标） */
     this.smallMap = new SmallMap(this.roleDisplay);
