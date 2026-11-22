@@ -225,6 +225,11 @@ export function MapsPage() {
     setEditNpc(null);
     setCollisionDraft(null);
     setEditCollision(null);
+    // 进碰撞模式顺手点亮碰撞层（#1196）：该层默认关是「数量大不糊图」的取舍，
+    // 但「点绘封闭 → 保存 → 图上没有」会被当成没存上 —— 回显必须跟着模式走。
+    // 只在「进模式」这一次开：用户手动关掉之后切出去再切回来仍会再亮，
+    // 想保持关闭看数据走列表弹窗，图上勾选随时可再关。
+    if (next === "collision") setLayers((current) => ({ ...current, collision: true }));
   };
 
   /** 从图上点刷怪区 → 直接打开编辑表单（列表弹窗仍然保留，用来总览与删） */
