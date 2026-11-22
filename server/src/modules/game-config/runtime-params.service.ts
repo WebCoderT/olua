@@ -11,6 +11,17 @@ import {
   RUNTIME_PARAM_KEYS,
   RuntimeParams,
 } from "../../common/constants/runtime-params";
+import {
+  RECOMMENDED_AOI_PARAMS,
+  RECOMMENDED_AUTO_BATTLE_PARAMS,
+  RECOMMENDED_CAST_RANGE_PARAMS,
+  RECOMMENDED_DROP_PARAMS,
+  RECOMMENDED_GUILD_RULE_PARAMS,
+  RECOMMENDED_MONSTER_AI_PARAMS,
+  RECOMMENDED_MOVEMENT_GUARD_PARAMS,
+  RECOMMENDED_RUNTIME_PARAMS,
+  RecommendedRuntimeParams,
+} from "../../common/constants/runtime-params-recommended";
 import { BizException } from "../../common/errors/biz.exception";
 import { RuntimeParamsRepository } from "../../database/repositories/runtime-params.repository";
 import { RuntimeParamsRow } from "../../database/rows";
@@ -255,6 +266,100 @@ export class RuntimeParamsService implements OnApplicationBootstrap {
     return this.castRange();
   }
 
+  /**
+   * 默认推荐配置（#1185）
+   *
+   * 七组的权威推荐值住在 `common/constants/runtime-params-recommended.ts` —— 这里只是透传。
+   * 管理端 hint 标推荐值、一键还原的落点、`config-sync.sql` 的出厂行，三处都以它为准
+   * （e2e 锁死 seed 行与常量一致，谁漂了直接红）。
+   */
+  recommended(): RecommendedRuntimeParams {
+    return RECOMMENDED_RUNTIME_PARAMS;
+  }
+
+  /**
+   * 一键还原掉落参数到推荐值（#1185）
+   *
+   * 七个 reset 共用 `writeColumn`：**只写自己那一列**、其余六列原样写回（整行 UPDATE 纪律，
+   * 与上面各 update 的取向一致）。推荐值本身合法（跨字段约束都满足），不需要再走一遍校验。
+   */
+  resetDrop(): DropRuntimeParams {
+    this.writeColumn("drop_params", RECOMMENDED_DROP_PARAMS);
+    return this.parseGroupByKey("drop_params") as unknown as DropRuntimeParams;
+  }
+
+  /** 一键还原自动战斗参数到推荐值（#1185） */
+  resetAutoBattle(): AutoBattleParams {
+    this.writeColumn("auto_battle", RECOMMENDED_AUTO_BATTLE_PARAMS);
+    return this.parseGroupByKey("auto_battle") as unknown as AutoBattleParams;
+  }
+
+  /** 一键还原帮会规则到推荐值（#1185；含建帮门槛 10 级 / 100000 绑定元宝） */
+  resetGuild(): GuildRuleParams {
+    this.writeColumn("guild_rules", RECOMMENDED_GUILD_RULE_PARAMS);
+    return this.parseGroupByKey("guild_rules") as unknown as GuildRuleParams;
+  }
+
+  /** 一键还原怪物 AI 参数到推荐值（#1185；补齐牵引 600 / 1.5 倍速 / 20 秒超时） */
+  resetMonsterAi(): MonsterAiRuntimeParams {
+    this.writeColumn("monster_ai", RECOMMENDED_MONSTER_AI_PARAMS);
+    return this.monsterAi();
+  }
+
+  /** 一键还原位移校验参数到推荐值（#1185；档位 log = 只记账放行） */
+  resetMovement(): MovementGuardParams {
+    this.writeColumn("movement", RECOMMENDED_MOVEMENT_GUARD_PARAMS);
+    return this.movement();
+  }
+
+  /** 一键还原出手距离闸参数到推荐值（#1185；档位 log） */
+  resetCastRange(): CastRangeParams {
+    this.writeColumn("cast_range", RECOMMENDED_CAST_RANGE_PARAMS);
+    return this.castRange();
+  }
+
+  /** 一键还原 AOI 推送口径到推荐值（#1185；格子 512 / 上限 200 / 离开延迟 1 秒 / 节拍 10Hz，重启生效） */
+  resetAoi(): AoiRuntimeParams {
+    this.writeColumn("aoi", RECOMMENDED_AOI_PARAMS);
+    return this.aoi();
+  }
+
+  /**
+   * 只写 `runtime_params` 单行里的一列，其余列原样保留（#1185）
+   *
+   * 与各 `updateXxx` 的整行 UPDATE 不同：reset 的输入是常量（不存在「没提交的字段」问题），
+   * 七组共用一个写法反而更不易漏列 —— 列名拼错在类型层就红（`RuntimeParamsColumn` 联合类型）。
+   */
+  private writeColumn(column: RuntimeParamsColumn, value: unknown): void {
+    const existing = this.repository.get();
+    const next: Record<RuntimeParamsColumn, string> = {
+      drop_params: existing?.drop_params ?? "{}",
+      auto_battle: existing?.auto_battle ?? "{}",
+      guild_rules: existing?.guild_rules ?? "{}",
+      monster_ai: existing?.monster_ai ?? "{}",
+      movement: existing?.movement ?? "{}",
+      cast_range: existing?.cast_range ?? "{}",
+      aoi: existing?.aoi ?? "{}",
+    };
+    next[column] = JSON.stringify(value);
+    this.repository.update({
+      id: 1,
+      drop_params: next.drop_params,
+      auto_battle: next.auto_battle,
+      guild_rules: next.guild_rules,
+      monster_ai: next.monster_ai,
+      movement: next.movement,
+      cast_range: next.cast_range,
+      aoi: next.aoi,
+      updated_at: Date.now(),
+    });
+  }
+
+  /** 读单列 JSON（reset 后回读用；坏 JSON / 空列 → 空对象，与 parseGroup 同一取向） */
+  private parseGroupByKey(column: RuntimeParamsColumn): Record<string, unknown> {
+    return parseGroup(this.repository.get()?.[column]);
+  }
+
 
   /**
    * AOI 推送口径（`aoi` 列，#1170）
@@ -303,6 +408,9 @@ export class RuntimeParamsService implements OnApplicationBootstrap {
     };
   }
 }
+
+/** `runtime_params` 单行的七个 JSON 列名（`writeColumn` 的判据：拼错在类型层就红） */
+type RuntimeParamsColumn = "drop_params" | "auto_battle" | "guild_rules" | "monster_ai" | "movement" | "cast_range" | "aoi";
 
 /** 去掉值为 undefined 的键（见 `update` 里的说明：DTO 实例的空字段会覆盖现值） */
 function definedOnly<T extends object>(value: T | undefined): Partial<T> {

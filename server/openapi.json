@@ -12875,6 +12875,382 @@
         ]
       }
     },
+    "/admin/runtime-params/recommended": {
+      "get": {
+        "description": "七组运行时参数的**默认推荐值**（`common/constants/runtime-params-recommended.ts` 是它的单一来源）。\n\n三处以它为准：管理端字段 hint 里标的推荐值、每个模块的「一键还原」落点、`config-sync.sql` 的出厂行（e2e 锁死 seed 行与这份常量一致）。\n\n数值口径（2026-11-23 拍板）：以运营现值为底，缺失的键按文档口径补齐 —— 帮会门槛 10 级 / 100000 绑定元宝，两道闸档位 `log`（只记账放行），掉落存活期 / 保护期回 3 分钟 / 30 秒。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
+        "operationId": "adminRuntimeParams.getRecommended",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "七组推荐值（形状与生效值一致）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/RecommendedRuntimeParamsDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "默认推荐配置",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/RecommendedRuntimeParamsDto"
+        },
+        "x-olua-permissions": [
+          "gameConfig:read"
+        ]
+      }
+    },
+    "/admin/runtime-params/drop/reset": {
+      "post": {
+        "description": "把 `drop` 一组整体写回推荐值，**其余六列原样保留**（只动自己那一列）。改完立即落库，客户端在玩家下次进游戏拉快照后生效；配置版本照常 +1（拦截器按权限点判）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
+        "operationId": "adminRuntimeParams.resetDrop",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "还原后的掉落参数",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/DropRuntimeParamsDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "还原掉落参数至推荐配置",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/DropRuntimeParamsDto"
+        },
+        "x-olua-permissions": [
+          "gameConfig:write"
+        ]
+      }
+    },
+    "/admin/runtime-params/auto-battle/reset": {
+      "post": {
+        "description": "把 `autoBattle` 一组整体写回推荐值，其余六列原样保留。客户端在玩家下次进游戏拉快照后生效。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
+        "operationId": "adminRuntimeParams.resetAutoBattle",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "还原后的自动战斗参数",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/AutoBattleParamsDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "还原自动战斗参数至推荐配置",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/AutoBattleParamsDto"
+        },
+        "x-olua-permissions": [
+          "gameConfig:write"
+        ]
+      }
+    },
+    "/admin/runtime-params/guild/reset": {
+      "post": {
+        "description": "把 `guild` 一组整体写回推荐值（含建帮门槛 10 级 / 100000 绑定元宝），其余六列原样保留。保存即生效：下一次建帮 / 改公告就按推荐值校验。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
+        "operationId": "adminRuntimeParams.resetGuild",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "还原后的帮会规则",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/GuildRuleParamsDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "还原帮会规则至推荐配置",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/GuildRuleParamsDto"
+        },
+        "x-olua-permissions": [
+          "gameConfig:write"
+        ]
+      }
+    },
+    "/admin/runtime-params/monster-ai/reset": {
+      "post": {
+        "description": "把 `monsterAi` 一组整体写回推荐值（含牵引 600 / 回家 1.5 倍速 / 20 秒超时），其余六列原样保留。AI 每 tick 读一次库（1 秒 TTL），还原后 1 秒内生效。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
+        "operationId": "adminRuntimeParams.resetMonsterAi",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "还原后的怪物 AI 参数",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/MonsterAiParamsDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "还原怪物 AI 参数至推荐配置",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/MonsterAiParamsDto"
+        },
+        "x-olua-permissions": [
+          "gameConfig:write"
+        ]
+      }
+    },
+    "/admin/runtime-params/movement/reset": {
+      "post": {
+        "description": "把 `movement` 一组整体写回推荐值（档位 `log`：照判照放行只记账），其余六列原样保留。下一次 pos 帧就按新值判，不需要重启、也不需要玩家重进。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
+        "operationId": "adminRuntimeParams.resetMovement",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "还原后的位移校验参数",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/MovementGuardParamsDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "还原位移校验参数至推荐配置",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/MovementGuardParamsDto"
+        },
+        "x-olua-permissions": [
+          "gameConfig:write"
+        ]
+      }
+    },
+    "/admin/runtime-params/cast-range/reset": {
+      "post": {
+        "description": "把 `castRange` 一组整体写回推荐值（档位 `log`、抖动余量 24px），其余六列原样保留。下一次出手就按新值判。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
+        "operationId": "adminRuntimeParams.resetCastRange",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "还原后的出手距离闸参数",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/CastRangeParamsDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "还原出手距离闸参数至推荐配置",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/CastRangeParamsDto"
+        },
+        "x-olua-permissions": [
+          "gameConfig:write"
+        ]
+      }
+    },
+    "/admin/runtime-params/aoi/reset": {
+      "post": {
+        "description": "把 `aoi` 一组整体写回推荐值（格子 512 / 单帧上限 200 / 离开延迟 1 秒 / 节拍 10Hz），其余六列原样保留。AOI 参数**重启生效**（格子边长变了等于所有已成形的索引作废）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
+        "operationId": "adminRuntimeParams.resetAoi",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "还原后的 AOI 推送口径",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/AoiParamsDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "还原 AOI 推送口径至推荐配置",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/AoiParamsDto"
+        },
+        "x-olua-permissions": [
+          "gameConfig:write"
+        ]
+      }
+    },
     "/admin/combat-weights": {
       "get": {
         "description": "当前生效的七项倍率 + 最后修改时间（**单行配置，没有分页**）。\n\n口径（客户端与服务端一致）：区间属性（三系攻击 / 三系防御）按**上下限之和**乘倍率，生命按单值乘倍率，最后求和。`hpRecover`（每秒回血）**不计入** —— 回血不改变输出与承伤上限，\n算进来会凭空抬高所有地图的门槛。\n\n缺行回落出厂值（`config-sync.sql`），所以这张表不需要迁移。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:read`（查看养成配置；角色：超级管理员 / 管理员 / 只读观察员）",
@@ -30635,6 +31011,76 @@
             "description": "互见广播节拍（Hz），1 ~ 20"
           }
         }
+      },
+      "RecommendedRuntimeParamsDto": {
+        "type": "object",
+        "properties": {
+          "drop": {
+            "description": "掉落参数推荐值",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DropRuntimeParamsDto"
+              }
+            ]
+          },
+          "autoBattle": {
+            "description": "自动战斗参数推荐值",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AutoBattleParamsDto"
+              }
+            ]
+          },
+          "guild": {
+            "description": "帮会规则推荐值",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/GuildRuleParamsDto"
+              }
+            ]
+          },
+          "monsterAi": {
+            "description": "怪物 AI 参数推荐值",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/MonsterAiParamsDto"
+              }
+            ]
+          },
+          "movement": {
+            "description": "位移校验参数推荐值",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/MovementGuardParamsDto"
+              }
+            ]
+          },
+          "castRange": {
+            "description": "出手距离闸参数推荐值",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/CastRangeParamsDto"
+              }
+            ]
+          },
+          "aoi": {
+            "description": "AOI 推送口径推荐值",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AoiParamsDto"
+              }
+            ]
+          }
+        },
+        "required": [
+          "drop",
+          "autoBattle",
+          "guild",
+          "monsterAi",
+          "movement",
+          "castRange",
+          "aoi"
+        ]
       },
       "CombatWeightsDto": {
         "type": "object",
