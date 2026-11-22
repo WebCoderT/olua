@@ -136,9 +136,9 @@ export function MapsPage() {
   const [npcDraft, setNpcDraft] = useState<DrawPoint | null>(null);
   /** 正在编辑的 NPC 点位；与 npcDraft 互斥 */
   const [editNpc, setEditNpc] = useState<MapNpc | null>(null);
-  /** 刚拖出来的碰撞盒（Tiled 口径）—— 有它就打开新建表单 */
-  const [collisionDraft, setCollisionDraft] = useState<DrawBox | null>(null);
-  /** 正在编辑的碰撞盒；与 collisionDraft 互斥 */
+  /** 刚点绘封闭的碰撞多边形（Tiled 口径顶点）—— 有它就打开新建表单 */
+  const [collisionDraft, setCollisionDraft] = useState<DrawPoint[] | null>(null);
+  /** 正在编辑的碰撞多边形；与 collisionDraft 互斥 */
   const [editCollision, setEditCollision] = useState<MapCollision | null>(null);
 
   /** 列表筛选条件（#1179，形状见 MapFilters） */
@@ -262,13 +262,55 @@ export function MapsPage() {
     }
   };
 
-  /** `collision` 模式拖完一个框 → 打开新建表单（框已带位置尺寸，只差确认 / 微调） */
-  const onDrawCollisionBox = (box: DrawBox) => {
+  /** `collision` 模式点绘封闭 → 打开新建表单（顶点已带坐标，只差确认 / 微调） */
+  const onDrawCollisionPolygon = (points: DrawPoint[]) => {
     setEditCollision(null);
-    setCollisionDraft(box);
+    setCollisionDraft(points);
   };
 
-  /** 点图上已有的碰撞盒 → 打开编辑表单（碰撞盒没有名字，靠画布高亮认人） */
+  /** `collision` 模式拖完一个顶点 → 整份提交新顶点序列（id 不变，画布原地更新） */
+  const onMoveCollisionVertex = async (box: MapCollision, index: number, to: DrawPoint) => {
+    if (!detail) return;
+    const points = box.points.map(([x, y], i) => (i === index ? [round2(to.x), round2(-to.y)] as [number, number] : [x, y] as [number, number]));
+    try {
+      await mapsApi.updateCollision(detail.id, String(box.id), { points });
+      toastSuccess(`碰撞多边形 #${box.id} 已挪顶点 #${index + 1}`);
+      reloadDetail();
+    } catch {
+      /* 错误已由请求层统一提示（顶点太近 / 自交都有中文文案） */
+    }
+  };
+
+  /** `collision` 模式双击一条边 → 在它的中点插一个顶点（整份提交） */
+  const onInsertCollisionVertex = async (box: MapCollision, edgeIndex: number) => {
+    if (!detail) return;
+    const a = box.points[edgeIndex];
+    const b = box.points[(edgeIndex + 1) % box.points.length];
+    const mid: [number, number] = [round2((a[0] + b[0]) / 2), round2((a[1] + b[1]) / 2)];
+    const points = [...box.points.slice(0, edgeIndex + 1), mid, ...box.points.slice(edgeIndex + 1)];
+    try {
+      await mapsApi.updateCollision(detail.id, String(box.id), { points });
+      toastSuccess(`碰撞多边形 #${box.id} 已插顶点（${box.points.length + 1} 个）`);
+      reloadDetail();
+    } catch {
+      /* 同上 */
+    }
+  };
+
+  /** `collision` 模式双击一个顶点 → 删掉它（画布已保底 ≥3 点，整份提交） */
+  const onDeleteCollisionVertex = async (box: MapCollision, index: number) => {
+    if (!detail || box.points.length <= 3) return;
+    const points = box.points.filter((_, i) => i !== index);
+    try {
+      await mapsApi.updateCollision(detail.id, String(box.id), { points });
+      toastSuccess(`碰撞多边形 #${box.id} 已删顶点（剩 ${points.length} 个）`);
+      reloadDetail();
+    } catch {
+      /* 同上 */
+    }
+  };
+
+  /** 点图上已有的碰撞多边形 → 打开编辑表单（多边形没有名字，靠画布高亮认人） */
   const openCollision = (box: MapCollision) => {
     setCollisionDraft(null);
     setEditCollision(box);
@@ -635,8 +677,11 @@ export function MapsPage() {
                       selectedNpcId={editNpc?.id}
                       selectedCollisionId={editCollision?.id}
                       onDrawBox={onDrawBox}
-                      onDrawCollisionBox={onDrawCollisionBox}
+                      onDrawCollisionPolygon={onDrawCollisionPolygon}
                       onPickCollision={openCollision}
+                      onMoveCollisionVertex={(box, index, to) => void onMoveCollisionVertex(box, index, to)}
+                      onInsertCollisionVertex={(box, edgeIndex) => void onInsertCollisionVertex(box, edgeIndex)}
+                      onDeleteCollisionVertex={(box, index) => void onDeleteCollisionVertex(box, index)}
                       onPlaceNpc={onPlaceNpc}
                       onMoveNpc={onMoveNpc}
                       onPlaceRevive={onPlaceRevive}
@@ -869,7 +914,7 @@ function ModeSwitch({
       disabled: spawnBlocked,
       hint: "安全地图不刷怪：先把上面的「类型」改成等级 / 战斗力 / 战魂地图",
     },
-    { key: "collision", label: "绘制碰撞盒", active: "bg-ember/20 text-ember-hi" },
+    { key: "collision", label: "绘制碰撞多边形", active: "bg-ember/20 text-ember-hi" },
     { key: "npc", label: "放置 NPC", active: "bg-gold/20 text-gold-hi" },
     { key: "revive", label: "设复活点", active: "bg-jade/20 text-jade-hi" },
   ];

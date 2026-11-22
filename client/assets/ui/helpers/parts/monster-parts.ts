@@ -6,7 +6,7 @@
  */
 
 
-import { Animation, BoxCollider2D, Color, Graphics, Node, Size, Sprite, UITransform, Vec2 } from "cc";
+import { Animation, BoxCollider2D, Color, Graphics, Node, PolygonCollider2D, Size, Sprite, UITransform, Vec2 } from "cc";
 import UiHelper from ".././UiHelper";
 import AnimationHelper from ".././AnimationHelper";
 import { debugConfig } from "../../../configs/debug";
@@ -117,9 +117,12 @@ export function createMonsterAreaNode(label: string, size: Size) {
    */
 export function showColliderRange(node: Node, name?: string, kind: ColliderRangeKind = "obstacle") {
     if (!debugConfig.colliderRange) return null;
+    const color = kind === "role" ? rangeStyle.roleColor : rangeStyle.obstacleColor;
+    // #1190：碰撞多边形（PolygonCollider2D）优先 —— 顶点是相对量，按顶点画多边形轮廓
+    const polygon = node.getComponent(PolygonCollider2D);
+    if (polygon) return drawPolygonRange(node, polygon.points, color, name ?? node.name);
     const collider = node.getComponent(BoxCollider2D);
     if (!collider) return null;
-    const color = kind === "role" ? rangeStyle.roleColor : rangeStyle.obstacleColor;
     return drawRange(node, collider.size, collider.offset, color, name ?? node.name);
   }
 
@@ -168,6 +171,50 @@ export function drawRange(node: Node, size: Size, offset: Vec2, color: Color, la
         UiHelper.createLabel(
           "collider_range_name",
           `${label} ${Math.round(size.width)}×${Math.round(size.height)}`,
+          color,
+          rangeStyle.nameFontSize,
+          new Vec2(),
+          rangeStyle.nameSize,
+        ),
+      );
+    return view;
+  }
+
+  /**
+   * 绘制多边形碰撞范围（#1190：`showColliderRange` 的多边形分支用）
+   *
+   * 与 `drawRange` 同一套样式（线宽 / 填充透明度 / 名称字号），差别只在形状：
+   * Graphics 按 `points`（相对节点原点的顶点序列）moveTo / lineTo / close 画轮廓；
+   * 名称标注按顶点包围盒的尺寸显示。
+   * @param node 已挂载 PolygonCollider2D 的节点
+   * @param points 碰撞体顶点（相对节点原点，首尾自动闭合）
+   * @param color 范围框与名称颜色
+   * @param label 名称（空串则只画范围框）
+   */
+export function drawPolygonRange(node: Node, points: Vec2[], color: Color, label: string) {
+    if (points.length < 3) return null;
+    const graphics = node.addComponent(Graphics);
+    graphics.lineWidth = rangeStyle.lineWidth;
+    graphics.strokeColor = color;
+    graphics.fillColor = new Color(color.r, color.g, color.b, rangeStyle.fillAlpha);
+    graphics.moveTo(points[0].x, points[0].y);
+    for (let i = 1; i < points.length; i++) graphics.lineTo(points[i].x, points[i].y);
+    graphics.close();
+    graphics.fill();
+    graphics.stroke();
+
+    const xs = points.map((p) => p.x);
+    const ys = points.map((p) => p.y);
+    const width = Math.max(...xs) - Math.min(...xs);
+    const height = Math.max(...ys) - Math.min(...ys);
+    const view = UiHelper.createGroupNode("collider_range_view", new Vec2());
+    node.addChild(view);
+    LayerManager.setNodeToLayer(view, node.layer);
+    if (label)
+      view.addChild(
+        UiHelper.createLabel(
+          "collider_range_name",
+          `${label} ${Math.round(width)}×${Math.round(height)}`,
           color,
           rangeStyle.nameFontSize,
           new Vec2(),

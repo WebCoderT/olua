@@ -1,7 +1,7 @@
 import { HttpStatus, Injectable, Logger } from "@nestjs/common";
 import { BizCode } from "../../common/constants/biz-code";
 import {
-  COLLISION_BOX_LIMITS,
+  COLLISION_POLY_LIMITS,
   MAP_TYPE_GROUPS,
   MAP_TYPE_LABELS,
   MapType,
@@ -12,9 +12,15 @@ import { BizException } from "../../common/errors/biz.exception";
 import { parseMonitorEvent, parseMonitorSnapshot } from "../../common/map-monitor";
 import { AuthenticatedUser } from "../../common/interfaces/api-envelope.interface";
 import {
+  parsePolygonPoints,
+  polygonBBoxFullyOutside,
+  polygonPointsJson,
+  polygonSelfIntersects,
+  type PolyPoint,
+} from "../../common/utils/polygon.util";
+import {
   pointInBounds,
   pointOverflowText,
-  rectFullyOutside,
   spawnAreaInBounds,
   spawnAreaOverflow,
 } from "../../common/utils/spawn-area-bounds.util";
@@ -59,9 +65,9 @@ import {
   MapMonitorPlayerDto,
 } from "./dto/map-monitor.dto";
 import {
-  MapCollisionBoxDto,
   MapCollisionDeletedDto,
   MapCollisionDto,
+  MapCollisionPolygonDto,
   MapConfigDto,
   MapDetailDto,
   MapLayerDto,
@@ -244,7 +250,7 @@ export class MapService {
         npcs: this.npcPoints.listByMap(row.map_id).map((point) => this.npcPointDtoOf(point)),
         revive: this.revivePointDtoOf(row),
         spawnAreas: this.spawnAreas.listByMap(row.map_id).map((area) => this.spawnAreaPointDtoOf(area)),
-        collisions: this.collisions.listByMap(row.map_id).map((box) => this.collisionBoxDtoOf(box)),
+        collisions: this.collisions.listByMap(row.map_id).map((box) => this.collisionPolygonDtoOf(box)),
         // 只进「客户端要预判」的三项（#812 / docs/20 §12 第 10 条）：
         // 倍率一律不进 —— 客户端算的经验与服务端给的迟早会漂
         maxPlayersPerRoom: rules.maxPlayersPerRoom,
@@ -299,29 +305,36 @@ export class MapService {
   }
 
   /**
-   * 一张图的**可行走几何**（#854：怪物 AI 的移动碰撞与边界钳制要用）
+   * 一张图的**可行走几何**（#854：怪物 AI 的移动碰撞与边界钳制要用；#1190 起是多边形）
    *
-   * 返回世界坐标口径的尺寸与碰撞矩形：一张图占 `x ∈ [0, width]`、`y ∈ [-height, 0]`
-   * （左上角原点、y 轴向上，与刷怪区的 `pointInBounds` 同一套约定）；`boxes` 就是
-   * `map_collisions` 的矩形（中心 + 宽高），客户端建静态碰撞体用的是同一批数据。
+   * 返回世界坐标口径的尺寸与碰撞多边形：一张图占 `x ∈ [0, width]`、`y ∈ [-height, 0]`
+   * （左上角原点、y 轴向上，与刷怪区的 `pointInBounds` 同一套约定）；`polys` 就是
+   * `map_collisions` 的顶点序列，客户端建静态碰撞体用的是同一批数据。
    *
    * **为什么由地图域给**：可行走区是地图的事实，不是 AI 的事实。AI 自己拼一份
    * 「图多大、墙在哪」，早晚会和客户端那一份对不上（客户端撞不过去的地方，怪能穿过去）。
    *
    * 没有几何列（`pixel_width = 0`，导入工具没跑）时返回 `null`：调用方按「不判碰撞」处理，
    * 与 `sizeOf` 的既有兜底一致 —— 拿 0 当图宽会把所有怪钳到原点。
+   * 顶点 JSON 坏了的行**跳过并告警**（几何是加固手段，一行坏数据不能拖垮整张图的判定）。
    */
   walkGeometryOf(mapId: string): {
     width: number;
     height: number;
-    boxes: Array<{ cx: number; cy: number; w: number; h: number }>;
+    polys: PolyPoint[][];
   } | null {
     const row = this.maps.getById(mapId);
     if (!row || !(row.pixel_width > 0) || !(row.pixel_height > 0)) return null;
+    const polys: PolyPoint[][] = [];
+    for (const box of this.collisions.listByMap(mapId)) {
+      const poly = parsePolygonPoints(box.points);
+      if (poly) polys.push(poly);
+      else this.logger.warn(`地图 ${mapId} 的碰撞行 #${box.id} 顶点 JSON 坏了，本轮跳过不判`);
+    }
     return {
       width: row.pixel_width,
       height: row.pixel_height,
-      boxes: this.collisions.listByMap(mapId).map((box) => ({ cx: box.cx, cy: box.cy, w: box.w, h: box.h })),
+      polys,
     };
   }
 
@@ -1242,44 +1255,41 @@ export class MapService {
    */
   createCollision(mapId: string, dto: SaveMapCollisionDto, actor: AuthenticatedUser): MapCollisionDto {
     const { mapPixel } = this.requireDrawableMap(mapId);
-    const box = this.requireBox(dto);
+    const points = this.requirePolygon(dto.points);
 
     const created = this.collisions.insert({
       map_id: mapId,
-      cx: box.cx,
-      cy: box.cy,
-      w: box.w,
-      h: box.h,
+      points: polygonPointsJson(points),
       updated_at: Date.now(),
     });
     this.logger.log(
-      `地图 ${mapId} 新增碰撞盒 #${created.id}：${box.w}×${box.h} @ (${box.cx}, ${box.cy})（by ${actor.username}）`,
+      `地图 ${mapId} 新增碰撞多边形 #${created.id}：${points.length} 个顶点（by ${actor.username}）`,
     );
     return this.collisionDtoOf(created, mapPixel);
   }
 
   /**
-   * 改一个碰撞盒（整份覆盖：挪位置与改尺寸是同一次动作）
+   * 改一个碰撞多边形（整份覆盖：挪顶点 / 增删顶点是同一次动作）
    *
-   * 画布上拖动走的也是它 —— 拖完只提交新中心，宽高原样带回。
+   * 画布上拖顶点走的也是它 —— 拖完提交整份顶点序列，id 不变。
    */
   updateCollision(mapId: string, boxId: number, dto: SaveMapCollisionDto, actor: AuthenticatedUser): MapCollisionDto {
     const { mapPixel } = this.requireDrawableMap(mapId);
     const before = this.requireCollision(mapId, boxId);
-    const box = this.requireBox(dto);
+    const points = this.requirePolygon(dto.points);
 
-    this.collisions.update({ ...before, cx: box.cx, cy: box.cy, w: box.w, h: box.h, updated_at: Date.now() });
+    this.collisions.update({ ...before, points: polygonPointsJson(points), updated_at: Date.now() });
     this.logger.log(
-      `地图 ${mapId} 碰撞盒 #${boxId} 已更新：(${before.cx}, ${before.cy}) ${before.w}×${before.h} → ` +
-        `(${box.cx}, ${box.cy}) ${box.w}×${box.h}（by ${actor.username}）`,
+      `地图 ${mapId} 碰撞多边形 #${boxId} 已更新：${parsePolygonPoints(before.points)?.length ?? "?"} 点 → ` +
+        `${points.length} 点（by ${actor.username}）`,
     );
     const updated = this.collisions.findById(boxId);
-    if (!updated) throw new Error(`碰撞盒 #${boxId} 刚更新却读不回来，库状态异常`);
+    if (!updated) throw new Error(`碰撞多边形 #${boxId} 刚更新却读不回来，库状态异常`);
     return this.collisionDtoOf(updated, mapPixel);
   }
 
   /**
-   * 删一个碰撞盒
+   * 删一个碰撞多边形
    *
    * **立刻生效**（不是「下次进图」）：碰撞体是客户端进图时按快照铺的，图里的人要换图 / 重进
    * 才没有它 —— 与点位同一条生效时机，页面照实提示。
@@ -1287,54 +1297,78 @@ export class MapService {
   deleteCollision(mapId: string, boxId: number, actor: AuthenticatedUser): MapCollisionDeletedDto {
     this.requireCollision(mapId, boxId);
     this.collisions.remove(boxId);
-    this.logger.log(`地图 ${mapId} 碰撞盒 #${boxId} 已删除（by ${actor.username}）`);
+    this.logger.log(`地图 ${mapId} 碰撞多边形 #${boxId} 已删除（by ${actor.username}）`);
     return { deleted: true, id: boxId };
   }
 
   /**
-   * 碰撞盒的数值校验
+   * 碰撞多边形的语义校验
    *
    * 数值统一收两位小数（与刷怪区同一口径：拖出来的 `123.4567` 进库没有意义，
-   * 也让 e2e 能直接对数字）。下限 1px —— 碰撞盒可以是一条贴墙的缝。
+   * 也让 e2e 能直接对数字）。顶点数 / 边长 / 自交的边界见 `COLLISION_POLY_LIMITS`：
+   * 自交的多边形射线法判定会碎成「哪边算里面都说不清」，入库前直接拒绝。
    */
-  private requireBox(dto: SaveMapCollisionDto): { cx: number; cy: number; w: number; h: number } {
-    const box = { cx: round2(dto.cx), cy: round2(dto.cy), w: round2(dto.w), h: round2(dto.h) };
-    if (!Number.isFinite(box.cx) || !Number.isFinite(box.cy)) {
-      throw new BizException(BizCode.PARAM_INVALID, "碰撞盒的中心必须是数字");
+  private requirePolygon(raw: number[][]): Array<PolyPoint> {
+    if (!Array.isArray(raw)) {
+      throw new BizException(BizCode.PARAM_INVALID, "碰撞多边形的顶点必须是一个数组");
     }
-    if (box.w < COLLISION_BOX_LIMITS.minSize || box.h < COLLISION_BOX_LIMITS.minSize) {
+    if (raw.length < COLLISION_POLY_LIMITS.minVertices || raw.length > COLLISION_POLY_LIMITS.maxVertices) {
       throw new BizException(
         BizCode.PARAM_INVALID,
-        `碰撞盒太小（${box.w}×${box.h}），宽高都不能小于 ${COLLISION_BOX_LIMITS.minSize} 像素`,
+        `碰撞多边形需要 ${COLLISION_POLY_LIMITS.minVertices}~${COLLISION_POLY_LIMITS.maxVertices} 个顶点，收到 ${raw.length} 个`,
       );
     }
-    return box;
+    const points: Array<PolyPoint> = [];
+    for (const item of raw) {
+      if (!Array.isArray(item) || item.length !== 2) {
+        throw new BizException(BizCode.PARAM_INVALID, "碰撞多边形的每个顶点必须是 [x, y] 两个数字");
+      }
+      const x = round2(item[0]);
+      const y = round2(item[1]);
+      if (!Number.isFinite(x) || !Number.isFinite(y)) {
+        throw new BizException(BizCode.PARAM_INVALID, "碰撞多边形的顶点坐标必须是数字");
+      }
+      points.push({ x, y });
+    }
+    for (let i = 0; i < points.length; i++) {
+      const a = points[i];
+      const b = points[(i + 1) % points.length];
+      if (Math.hypot(b.x - a.x, b.y - a.y) < COLLISION_POLY_LIMITS.minEdge) {
+        throw new BizException(
+          BizCode.PARAM_INVALID,
+          `碰撞多边形第 ${i + 1} 个顶点与相邻顶点太近，顶点间距不能小于 ${COLLISION_POLY_LIMITS.minEdge} 像素`,
+        );
+      }
+    }
+    if (polygonSelfIntersects(points)) {
+      throw new BizException(BizCode.PARAM_INVALID, "碰撞多边形不能自交（边与边相交会算不出哪边是里面）");
+    }
+    return points;
   }
 
-  /** 取一个碰撞盒，且必须属于路径里那张图（防止拿 A 图的行 id 去改 B 图） */
+  /** 取一个碰撞多边形，且必须属于路径里那张图（防止拿 A 图的行 id 去改 B 图） */
   private requireCollision(mapId: string, boxId: number): MapCollisionRow {
     const box = this.collisions.findById(boxId);
     if (!box || box.map_id !== mapId) {
-      throw BizException.notFound(BizCode.MAP_COLLISION_NOT_FOUND, `地图 ${mapId} 没有碰撞盒 #${boxId}`);
+      throw BizException.notFound(BizCode.MAP_COLLISION_NOT_FOUND, `地图 ${mapId} 没有碰撞多边形 #${boxId}`);
     }
     return box;
   }
 
-  /** 行 → 管理端 DTO（`fullyOutside` 与读接口同源，只此一处判） */
+  /** 行 → 管理端 DTO（`fullyOutside` 与读接口同源，只此一处判；坏 JSON 当作空顶点回显） */
   private collisionDtoOf(box: MapCollisionRow, mapPixel: MapPixelSize): MapCollisionDto {
+    const points = parsePolygonPoints(box.points) ?? [];
     return {
       id: box.id,
-      cx: box.cx,
-      cy: box.cy,
-      w: box.w,
-      h: box.h,
-      fullyOutside: rectFullyOutside(box, mapPixel),
+      points: points.map((p) => [p.x, p.y]),
+      fullyOutside: polygonBBoxFullyOutside(points, mapPixel),
     };
   }
 
-  /** 行 → 下发客户端的矩形（字段名对齐客户端的 `MapCollisionBox`：直接建节点） */
-  private collisionBoxDtoOf(box: MapCollisionRow): MapCollisionBoxDto {
-    return { x: box.cx, y: box.cy, w: box.w, h: box.h };
+  /** 行 → 下发客户端的多边形（字段名对齐客户端的 `MapCollisionPolygon`：直接建碰撞体） */
+  private collisionPolygonDtoOf(box: MapCollisionRow): MapCollisionPolygonDto {
+    const points = parsePolygonPoints(box.points) ?? [];
+    return { points: points.map((p) => [p.x, p.y]) };
   }
 
   //#endregion

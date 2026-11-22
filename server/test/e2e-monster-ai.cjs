@@ -131,9 +131,17 @@ function seedSpawnAreas(dbPath) {
   // 血量拉到 10 万：79 血会被暴击一刀带走（killed 分支没有 push，二、三段全部连锁红）
   db.prepare("UPDATE monsters SET level = 0, max_hp = 100000 WHERE id IN ('3', '200')").run();
   // #1150 换图后图 1 不再有出厂碰撞盒：不穿墙段要的那道左外墙自灌（半截在图内，进图前生效）
+  // #1190 起碰撞是多边形：左外墙写成四点多边形（顶点序与 rectPoints 同形：左下→右下→右上→左上）
   db.prepare(
-    "INSERT INTO map_collisions (map_id, cx, cy, w, h, updated_at) VALUES ('1', ?, ?, ?, ?, 0)",
-  ).run(LEFT_WALL.cx, LEFT_WALL.cy, LEFT_WALL.w, LEFT_WALL.h);
+    "INSERT INTO map_collisions (map_id, points, updated_at) VALUES ('1', ?, 0)",
+  ).run(
+    JSON.stringify([
+      [LEFT_WALL.cx - LEFT_WALL.w / 2, LEFT_WALL.cy - LEFT_WALL.h / 2],
+      [LEFT_WALL.cx + LEFT_WALL.w / 2, LEFT_WALL.cy - LEFT_WALL.h / 2],
+      [LEFT_WALL.cx + LEFT_WALL.w / 2, LEFT_WALL.cy + LEFT_WALL.h / 2],
+      [LEFT_WALL.cx - LEFT_WALL.w / 2, LEFT_WALL.cy + LEFT_WALL.h / 2],
+    ]),
+  );
   db.close();
 }
 

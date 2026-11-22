@@ -1,11 +1,18 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { MapService } from "../map/map.service";
+import {
+  pointInPolygon,
+  pointToPolygonEdgesDistance,
+  polygonBBox,
+  segmentHitsEdge,
+  type PolyPoint,
+} from "../../common/utils/polygon.util";
 
-/** 一张图的可行走几何（碰撞矩形：中心 + 宽高，与 `map_collisions` 同形） */
+/** 一张图的可行走几何（#854；#1190 起碰撞是**任意简单多边形**，与 `map_collisions.points` 同形） */
 export interface WalkGeometry {
   width: number;
   height: number;
-  boxes: Array<{ cx: number; cy: number; w: number; h: number }>;
+  polys: PolyPoint[][];
 }
 
 /**
@@ -81,25 +88,25 @@ export class MapGeometryService {
     return geo;
   }
 
-  /** 这个点在不在某个碰撞盒里（**原始盒**，不外扩：闸门只挡真的穿过去的） */
+  /** 这个点在不在某个碰撞多边形里（**原始形状**，不外扩：闸门只挡真的穿过去的） */
   blockedIn(geo: WalkGeometry, x: number, y: number): boolean {
-    for (const box of geo.boxes) {
-      if (Math.abs(x - box.cx) <= box.w / 2 && Math.abs(y - box.cy) <= box.h / 2) return true;
+    for (const poly of geo.polys) {
+      if (pointInPolygon(x, y, poly)) return true;
     }
     return false;
   }
 
   /**
-   * 从 `from` 到 `to` 的位移是否**穿过**了碰撞盒（swept-AABB）
+   * 从 `from` 到 `to` 的位移是否**穿过**了碰撞多边形（#1190 起按边判）
    *
-   * 三条口径：
-   * - **起点在盒里就不判**：那是数据改坏 / 人已经在墙里，判它等于把人锁死在原地
-   *   （issue 的「站在碰撞盒内部不往外推」）；
+   * 三条口径（与矩形版一脉相承）：
+   * - **起点在形内就不判**：那是数据改坏 / 人已经在墙里，判它等于把人锁死在原地
+   *   （issue 的「站在碰撞区内部不往外推」）；
    * - **出图也算撞墙**：`x ∉ [0, width]` 或 `y ∉ [-height, 0]` 直接算穿墙 ——
    *   客户端本来就钳在图内，能报出图外坐标只有改包。⚠️ 世界坐标的 y **恒为负**
    *   （原点在左上角、y 向上），所以下界是 `-height`、上界是 `0`：写成 `y < 0` 会把
    *   每一个合法点都判成出图（第一次实现就踩了，e2e 里 25px 的正常小步全被判 wall）；
-   * - **线段与盒做精确相交**（Liang-Barsky 裁剪），不是按步长采样 —— 采样步长再小
+   * - **线段与每条边做精确相交**（端点接触也算），不是按步长采样 —— 采样步长再小
    *   也存在「一步跨过薄墙」的缝隙，而这条路是给作弊者准备的，缝隙就等于没有。
    */
   crossesWall(mapId: string, from: { x: number; y: number }, to: { x: number; y: number }): boolean {
@@ -107,13 +114,16 @@ export class MapGeometryService {
     if (geo === null) return false;
     if (to.x < 0 || to.x > geo.width || to.y > 0 || to.y < -geo.height) return true;
     if (this.blockedIn(geo, from.x, from.y)) return false;
-    // 位移的包围盒先粗筛：绝大多数盒根本不在这条线段附近（最多的图 265 个盒）
-    for (const box of geo.boxes) {
-      const minX = box.cx - box.w / 2;
-      const maxX = box.cx + box.w / 2;
-      const minY = box.cy - box.h / 2;
-      const maxY = box.cy + box.h / 2;
-      if (segmentHitsAabb(from.x, from.y, to.x, to.y, minX, minY, maxX, maxY)) return true;
+    // 包围盒先粗筛：绝大多数多边形根本不在这条线段附近（最多的图 265 个碰撞行）
+    for (const poly of geo.polys) {
+      const bbox = polygonBBox(poly);
+      if (to.x < bbox.minX && from.x < bbox.minX) continue;
+      if (to.x > bbox.maxX && from.x > bbox.maxX) continue;
+      if (to.y < bbox.minY && from.y < bbox.minY) continue;
+      if (to.y > bbox.maxY && from.y > bbox.maxY) continue;
+      for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+        if (segmentHitsEdge(from, to, poly[j], poly[i])) return true;
+      }
     }
     return false;
   }
@@ -153,65 +163,33 @@ export class MapGeometryService {
   }
 }
 
-/** 线段与轴对齐矩形是否相交（Liang-Barsky；端点接触也算相交） */
-export function segmentHitsAabb(
-  x0: number,
-  y0: number,
-  x1: number,
-  y1: number,
-  minX: number,
-  minY: number,
-  maxX: number,
-  maxY: number,
-): boolean {
-  const dx = x1 - x0;
-  const dy = y1 - y0;
-  let tMin = 0;
-  let tMax = 1;
-  // 四条边：p 为方向在该轴的分量取反，q 为「起点到边界的距离」
-  const edges: Array<[number, number]> = [
-    [-dx, x0 - minX],
-    [dx, maxX - x0],
-    [-dy, y0 - minY],
-    [dy, maxY - y0],
-  ];
-  for (const [p, q] of edges) {
-    if (p === 0) {
-      // 与该边平行：起点在外面就直接否掉
-      if (q < 0) return false;
-      continue;
-    }
-    const r = q / p;
-    if (p < 0) {
-      if (r > tMax) return false;
-      if (r > tMin) tMin = r;
-    } else {
-      if (r < tMin) return false;
-      if (r < tMax) tMax = r;
-    }
-  }
-  return true;
-}
+// #1190：线段-矩形相交（segmentHitsAabb）已删，判定改走 polygon.util 的逐边相交。
 
-/** 按客户端 `PathGrid` 的口径烙一张可走网格 */
+/** 按客户端 `PathGrid` 的口径烙一张可走网格（#1190：障碍是多边形，两端同一条「形内或贴边 ≤ clearance」规则） */
 function buildGrid(geo: WalkGeometry, cellSize: number, clearance: number): WalkGrid {
   const cols = Math.max(1, Math.ceil(geo.width / cellSize));
   const rows = Math.max(1, Math.ceil(geo.height / cellSize));
   const originY = -geo.height;
   const walkable = new Uint8Array(cols * rows).fill(1);
-  for (const box of geo.boxes) {
-    // Rect 形状（左下角 + 宽高）→ 外扩 → 再按格子中心判定
-    const x = box.cx - box.w / 2 - clearance;
-    const y = box.cy - box.h / 2 - clearance;
-    const width = box.w + clearance * 2;
-    const height = box.h + clearance * 2;
+  for (const poly of geo.polys) {
+    // 多边形包围盒按 clearance 外扩出候选格范围，再逐格判「中心在形内 / 到任一边 ≤ clearance」。
+    // 这条规则与客户端 PathGrid.stampPolygon 逐行对齐（两端不一致 = 同一个点吸附到不同格）
+    const bbox = polygonBBox(poly);
+    const x = bbox.minX - clearance;
+    const y = bbox.minY - clearance;
+    const width = bbox.maxX - bbox.minX + clearance * 2;
+    const height = bbox.maxY - bbox.minY + clearance * 2;
     const startCol = Math.max(0, Math.ceil((x - 0) / cellSize - 0.5));
     const endCol = Math.min(cols - 1, Math.floor((x + width - 0) / cellSize - 0.5));
     const startRow = Math.max(0, Math.ceil((y - originY) / cellSize - 0.5));
     const endRow = Math.min(rows - 1, Math.floor((y + height - originY) / cellSize - 0.5));
     for (let row = startRow; row <= endRow; row++) {
       for (let col = startCol; col <= endCol; col++) {
-        walkable[row * cols + col] = 0;
+        const cx = (col + 0.5) * cellSize;
+        const cy = originY + (row + 0.5) * cellSize;
+        if (pointInPolygon(cx, cy, poly) || pointToPolygonEdgesDistance(cx, cy, poly) <= clearance) {
+          walkable[row * cols + col] = 0;
+        }
       }
     }
   }

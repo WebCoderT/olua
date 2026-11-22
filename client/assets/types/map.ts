@@ -60,24 +60,22 @@ export interface MapSpawnAreaPoint {
 }
 
 /**
- * 碰撞盒（世界坐标；#676 起由管理端在地图上拖框画）
- *
- * 一个轴对齐矩形：`(x, y)` 是**中心**，`(w, h)` 是尺寸 —— 与库表和接口字段一一对应，
- * 客户端拿到直接 `node.setWorldPosition(x, y)` + 节点尺寸 `new Size(w, h)`，不换算。
+ * 碰撞多边形（世界坐标；#676 起由管理端绘制，#1190 起从矩形升级为多边形）
  *
  * **可以超出地图边界**：每张图四面围墙本来就画在图外（`x = -64`、宽 8320），
  * 那是「把玩家关在图里」的手段 —— 别在下游加「在不在图内」的过滤，那会让围墙失效、
  * 玩家直接走出去。
  */
-export interface MapCollisionBox {
-  /** 矩形中心 x（原点 = 地图左上角） */
-  x: number;
-  /** 矩形中心 y（y 轴向上，故为负） */
-  y: number;
-  /** 矩形宽（像素） */
-  w: number;
-  /** 矩形高（像素） */
-  h: number;
+/**
+ * 碰撞多边形（#1190：从矩形升级为任意简单多边形）
+ *
+ * `points` 是顶点序列 `[x, y][]`（服务端快照原样下发，世界坐标：原点 = 地图左上角、
+ * y 轴向上故 y 为负；按绘制顺序、首尾自动闭合、不自交 —— 服务端入库时已校验）。
+ * 客户端两处读：生成静态物理碰撞体（`CollisionAreaSpawner`）、自动战斗的静态障碍（A* 烙格）。
+ */
+export interface MapCollisionPolygon {
+  /** 顶点序列 [x, y][]（世界坐标） */
+  points: Array<[number, number]>;
 }
 
 /**
@@ -111,7 +109,7 @@ export interface MapConfig {
   /** 刷怪区中心（只给小地图标名字，不含尺寸与数量） */
   spawnAreas: MapSpawnAreaPoint[];
   /** 碰撞盒（静态碰撞体 + 自动战斗的静态障碍都用它；空数组 = 这张图没有阻挡） */
-  collisions: MapCollisionBox[];
+  collisions: MapCollisionPolygon[];
   /**
    * 单房间人数上限（#812；0 = 不限）
    *

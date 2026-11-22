@@ -2,7 +2,7 @@ import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
 import { Type } from "class-transformer";
 import { ArrayMaxSize, IsArray, IsBoolean, IsIn, IsInt, IsNumber, IsOptional, IsString, Length, Max, Min } from "class-validator";
 import {
-  COLLISION_BOX_LIMITS,
+  COLLISION_POLY_LIMITS,
   INSTANCE_LIMITS,
   MAP_ENTER_LIMITS,
   MAP_LABEL_MAX_LENGTH,
@@ -82,29 +82,20 @@ export class MapSpawnAreaOverflowDto {
 }
 
 /**
- * 碰撞盒（**服务端库表** `map_collisions` 的一行；#676 起由管理端绘制）
+ * 碰撞多边形（**服务端库表** `map_collisions` 的一行；#676 起由管理端绘制，#1190 起是多边形）
  *
- * 与刷怪区同一套字段（中心 + 尺寸、世界坐标），但**没有 `inBounds`**：
- * 每张图四面围墙本来就画在图外（`x = -64`、宽 8320），那是「把玩家关在图里」的手段，
- * 拿刷怪区那条「越界就拒」的判据套上来，第一张图就会被判 4 个错。
+ * 与刷怪区同一套世界坐标口径，但**没有 `inBounds`**：每张图四面围墙本来就画在图外
+ * （`x = -64`），那是「把玩家关在图里」的手段，拿刷怪区那条「越界就拒」的判据套上来，
+ * 第一张图就会被判 4 个错。
  *
- * 只有 `fullyOutside`：整块落在图外 = 画面上完全看不到这个盒子。那才是需要人看一眼的信号。
+ * 只有 `fullyOutside`：整块落在图外 = 画面上完全看不到这个多边形。那才是需要人看一眼的信号。
  */
 export class MapCollisionDto {
-  @ApiProperty({ description: "行 id（改 / 删用它定位；碰撞盒没有名字）" })
+  @ApiProperty({ description: "行 id（改 / 删用它定位；碰撞多边形没有名字）" })
   id: number;
 
-  @ApiProperty({ description: "矩形中心 x（世界坐标；原点 = 地图左上角）" })
-  cx: number;
-
-  @ApiProperty({ description: "矩形中心 y（世界坐标；y 轴向上，故为负）" })
-  cy: number;
-
-  @ApiProperty({ description: "矩形宽（像素）" })
-  w: number;
-
-  @ApiProperty({ description: "矩形高（像素）" })
-  h: number;
+  @ApiProperty({ description: "顶点序列 [[x,y],...]（世界坐标；原点 = 地图左上角，y 轴向上故 y 为负）", type: "array", items: { type: "array", items: { type: "number" } } })
+  points: number[][];
 
   @ApiProperty({ description: "整块落在图外（画面上完全看不到；允许存在，四面围墙就是超出的）" })
   @IsBoolean()
@@ -112,33 +103,21 @@ export class MapCollisionDto {
 }
 
 /**
- * 新建 / 修改一个碰撞盒（#676）
+ * 新建 / 修改一个碰撞多边形（#676；#1190 起从矩形升级为多边形）
  *
- * 入参与刷怪区同构（世界坐标 `cx/cy/w/h`），因为画的、存的和下发客户端的是同一份矩形：
- * 客户端拿到就直接建节点（位置 = 中心、尺寸 = 宽高），不需要任何换算。
+ * `points` 是顶点序列 `[[x, y], ...]`（≥3 点、按绘制顺序、首尾自动闭合，世界坐标）。
+ * 画的、存的和下发客户端的是同一份顶点：客户端拿到直接建多边形碰撞体，不需要任何换算。
  *
- * 宽高下限比刷怪区小得多（1px）：碰撞盒可以是一条很薄的缝，不能拿「区域起码 16px」去卡它。
+ * 结构校验（数组 / 数字）在这里，**语义校验**（顶点数 / 边长 / 不自交）在
+ * `map.service.requirePolygon` —— 那边的错误文案能带上第几个顶点，e2e 直接对文案断言。
  */
 export class SaveMapCollisionDto {
-  @ApiProperty({ description: "矩形中心 x（世界坐标；原点 = 地图左上角）" })
-  @Type(() => Number)
-  @IsNumber({}, { message: "cx 必须是数字" })
-  cx: number;
-
-  @ApiProperty({ description: "矩形中心 y（世界坐标；y 轴向上，故为负）" })
-  @Type(() => Number)
-  @IsNumber({}, { message: "cy 必须是数字" })
-  cy: number;
-
-  @ApiProperty({ description: `矩形宽（像素，至少 ${COLLISION_BOX_LIMITS.minSize}）` })
-  @Type(() => Number)
-  @IsNumber({}, { message: "矩形宽必须是数字" })
-  w: number;
-
-  @ApiProperty({ description: `矩形高（像素，至少 ${COLLISION_BOX_LIMITS.minSize}）` })
-  @Type(() => Number)
-  @IsNumber({}, { message: "矩形高必须是数字" })
-  h: number;
+  @ApiProperty({
+    description: `顶点序列 [[x,y],...]（${COLLISION_POLY_LIMITS.minVertices}~${COLLISION_POLY_LIMITS.maxVertices} 点，世界坐标 y 轴向上故 y 为负；相邻顶点间距 ≥ ${COLLISION_POLY_LIMITS.minEdge}px；不自交）`,
+    type: "array", items: { type: "array", items: { type: "number" } },
+  })
+  @IsArray({ message: "碰撞多边形的顶点必须是一个数组" })
+  points: number[][];
 }
 
 /** 删除碰撞盒的结果（要回 id：前端靠它从本地列表里摘掉那一行） */
@@ -152,23 +131,14 @@ export class MapCollisionDeletedDto {
 }
 
 /**
- * 碰撞盒（**下发客户端用**）
+ * 碰撞多边形（**下发客户端用**）
  *
- * 字段名是 `x / y / w / h`，与客户端的 `MapCollisionBox` 一一对应：客户端直接拿去
- * `new Size(w, h)` + `setWorldPosition(x, y)`。少发字段不会漂，多发字段迟早有人当判据。
+ * `points` 与客户端的 `MapCollisionPolygon.points` 一一对应（`[[x,y],...]`，世界坐标）：
+ * 客户端直接拿去建多边形碰撞体（点取相对质心坐标）。少发字段不会漂，多发字段迟早有人当判据。
  */
-export class MapCollisionBoxDto {
-  @ApiProperty({ description: "矩形中心 x（世界坐标）" })
-  x: number;
-
-  @ApiProperty({ description: "矩形中心 y（世界坐标，为负）" })
-  y: number;
-
-  @ApiProperty({ description: "矩形宽（像素）" })
-  w: number;
-
-  @ApiProperty({ description: "矩形高（像素）" })
-  h: number;
+export class MapCollisionPolygonDto {
+  @ApiProperty({ description: "顶点序列 [[x,y],...]（世界坐标，y 为负）", type: "array", items: { type: "array", items: { type: "number" } } })
+  points: number[][];
 }
 
 /**
@@ -530,9 +500,9 @@ export class MapConfigDto {
   @ApiProperty({
     description:
       "碰撞盒（#676 起归后台；客户端直接建静态碰撞体 + 当自动战斗的静态障碍）。空数组 = 这张图没有阻挡",
-    type: [MapCollisionBoxDto],
+    type: [MapCollisionPolygonDto],
   })
-  collisions: MapCollisionBoxDto[];
+  collisions: MapCollisionPolygonDto[];
 
   @ApiProperty({
     description:

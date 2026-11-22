@@ -192,19 +192,56 @@ function connect(url) {
   return session;
 }
 
-/** 地图 1 的碰撞盒（与 `walkGeometryOf` 同一形状：中心 + 宽高） */
+/** 地图 1 的碰撞多边形（#1190：与 walkGeometryOf 同一形状，顶点序列 [[x,y],...]） */
 function boxesOf(dbPath, mapId) {
   const db = new DatabaseSync(dbPath, { readOnly: true });
   try {
-    return db.prepare("SELECT cx, cy, w, h FROM map_collisions WHERE map_id = ?").all(mapId);
+    return db
+      .prepare("SELECT points FROM map_collisions WHERE map_id = ?")
+      .all(mapId)
+      .map((row) => JSON.parse(row.points));
   } finally {
     db.close();
   }
 }
 
-/** 点是否在任一盒子里 */
-function insideAnyBox(boxes, x, y) {
-  return boxes.some((box) => Math.abs(x - box.cx) <= box.w / 2 && Math.abs(y - box.cy) <= box.h / 2);
+/** 矩形（中心 + 宽高）→ 等价四点多边形（测试墙造数据用） */
+function rectPoints(cx, cy, w, h) {
+  return JSON.stringify([
+    [cx - w / 2, cy - h / 2],
+    [cx + w / 2, cy - h / 2],
+    [cx + w / 2, cy + h / 2],
+    [cx - w / 2, cy + h / 2],
+  ]);
+}
+
+/** 点是否在任一多边形里（射线法 even-odd） */
+function insideAnyBox(polys, x, y) {
+  return polys.some((poly) => {
+    let inside = false;
+    for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+      const [ax, ay] = poly[i];
+      const [bx, by] = poly[j];
+      if (ay > y !== by > y && x < ((bx - ax) * (y - ay)) / (by - ay) + ax) inside = !inside;
+    }
+    return inside;
+  });
+}
+
+/** 多边形包围盒（#1190 顶点序列 [[x,y],...]；挑「中等大小」的墙用） */
+function polyBBox(poly) {
+  const xs = poly.map((p) => p[0]);
+  const ys = poly.map((p) => p[1]);
+  const minX = Math.min(...xs);
+  const minY = Math.min(...ys);
+  return {
+    minX,
+    minY,
+    cx: (minX + Math.max(...xs)) / 2,
+    cy: (minY + Math.max(...ys)) / 2,
+    w: Math.max(...xs) - minX,
+    h: Math.max(...ys) - minY,
+  };
 }
 
 /**
@@ -251,10 +288,10 @@ function polylineLength(points) {
       const db = new DatabaseSync(dbPath);
       try {
         db.exec("PRAGMA busy_timeout = 10000");
-        const ins = db.prepare("INSERT INTO map_collisions (map_id, cx, cy, w, h, updated_at) VALUES ('1', ?, ?, ?, ?, 0)");
-        ins.run(800, -350, 60, 600); // y ∈ [-650, -50]
-        ins.run(800, -1050, 60, 400); // y ∈ [-1250, -850]
-        ins.run(1300, -700, 128, 128); // 吸附测试的中等盒子
+        const ins = db.prepare("INSERT INTO map_collisions (map_id, points, updated_at) VALUES ('1', ?, 0)");
+        ins.run(rectPoints(800, -350, 60, 600)); // y ∈ [-650, -50]
+        ins.run(rectPoints(800, -1050, 60, 400)); // y ∈ [-1250, -850]
+        ins.run(rectPoints(1300, -700, 128, 128)); // 吸附测试的中等盒子
       } finally {
         db.close();
       }
@@ -346,7 +383,7 @@ function polylineLength(points) {
     group("五、目标点落在碰撞盒里：吸附到最近可站立格（snapped）");
     {
       // 挑「中等大小」的盒子：太大了目标格 6 圈内找不到可站立格（吸附半径是 6 格 × cellSize）
-      const box = boxes.find((item) => item.w >= 64 && item.h >= 64 && item.w <= 160 && item.h <= 160);
+      const box = boxes.map(polyBBox).find((bbox) => bbox.w >= 64 && bbox.h >= 64 && bbox.w <= 160 && bbox.h <= 160);
       check(!!box, "准备：挑到一个够大的盒子当目标点", box && JSON.stringify(box));
       if (box) {
         const inWall = { x: box.cx, y: box.cy };

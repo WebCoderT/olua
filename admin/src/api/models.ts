@@ -6989,23 +6989,11 @@ export type MapSpawnAreaPoint = {
   cy: number;
 };
 
-export type MapCollisionBox = {
+export type MapCollisionPolygon = {
   /**
-   * 矩形中心 x（世界坐标）
+   * 顶点序列 [[x,y],...]（世界坐标，y 为负）
    */
-  x: number;
-  /**
-   * 矩形中心 y（世界坐标，为负）
-   */
-  y: number;
-  /**
-   * 矩形宽（像素）
-   */
-  w: number;
-  /**
-   * 矩形高（像素）
-   */
-  h: number;
+  points: number[][];
 };
 
 export type MapConfig = {
@@ -7052,7 +7040,7 @@ export type MapConfig = {
   /**
    * 碰撞盒（#676 起归后台；客户端直接建静态碰撞体 + 当自动战斗的静态障碍）。空数组 = 这张图没有阻挡
    */
-  collisions: MapCollisionBox[];
+  collisions: MapCollisionPolygon[];
   /**
    * 单房间人数上限（#812；0 = 不限）。客户端传送弹窗显示 `23/30` 的分母；**人数**那一半要等分线（#1000）
    */
@@ -9784,25 +9772,13 @@ export type MapRevivePoint = {
 
 export type MapCollision = {
   /**
-   * 行 id（改 / 删用它定位；碰撞盒没有名字）
+   * 行 id（改 / 删用它定位；碰撞多边形没有名字）
    */
   id: number;
   /**
-   * 矩形中心 x（世界坐标；原点 = 地图左上角）
+   * 顶点序列 [[x,y],...]（世界坐标；原点 = 地图左上角，y 轴向上故 y 为负）
    */
-  cx: number;
-  /**
-   * 矩形中心 y（世界坐标；y 轴向上，故为负）
-   */
-  cy: number;
-  /**
-   * 矩形宽（像素）
-   */
-  w: number;
-  /**
-   * 矩形高（像素）
-   */
-  h: number;
+  points: number[][];
   /**
    * 整块落在图外（画面上完全看不到；允许存在，四面围墙就是超出的）
    */
@@ -10517,21 +10493,9 @@ export type MapNpcDeleted = {
 
 export type SaveMapCollision = {
   /**
-   * 矩形中心 x（世界坐标；原点 = 地图左上角）
+   * 顶点序列 [[x,y],...]（3~64 点，世界坐标 y 轴向上故 y 为负；相邻顶点间距 ≥ 1px；不自交）
    */
-  cx: number;
-  /**
-   * 矩形中心 y（世界坐标；y 轴向上，故为负）
-   */
-  cy: number;
-  /**
-   * 矩形宽（像素，至少 1）
-   */
-  w: number;
-  /**
-   * 矩形高（像素，至少 1）
-   */
-  h: number;
+  points: number[][];
 };
 
 export type MapCollisionDeleted = {

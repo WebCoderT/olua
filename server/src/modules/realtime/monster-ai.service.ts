@@ -8,6 +8,7 @@ import { SkillRepository } from "../../database/repositories/skill.repository";
 import { StatusRepository } from "../../database/repositories/status.repository";
 import { MonsterRow, SkillRow, StatusRow } from "../../database/rows";
 import { parseCoefficientsJson, parseCombatJson, parseControlFlagsJson, parseTickEffectJson } from "../../common/config-json";
+import { pointInPolygon, type PolyPoint } from "../../common/utils/polygon.util";
 import { DEFENSE_BY_ATTACK, MONSTER_STAT_COLUMN } from "../../common/constants/game-enums";
 import type { MonsterAiRuntimeParams } from "../../common/constants/runtime-params";
 import { roleAttributeSourceOf, summarizeRoleAttributes } from "../combat/role-attributes";
@@ -269,8 +270,8 @@ interface MonsterRuntime {
   sentHp: number;
 }
 
-/** 一张图的可行走几何（`MapService.walkGeometryOf` 的形状；`null` = 不用判碰撞） */
-type WalkGeometry = { width: number; height: number; boxes: Array<{ cx: number; cy: number; w: number; h: number }> };
+/** 一张图的可行走几何（`MapService.walkGeometryOf` 的形状；#1190 起障碍是多边形；`null` = 不用判碰撞） */
+type WalkGeometry = { width: number; height: number; polys: PolyPoint[][] };
 
 /** 读一列 JSON 对象（坏数据返回 null，由调用方决定兜底） */
 function parseJsonObject(text: string | undefined): Record<string, unknown> | null {
@@ -1433,10 +1434,10 @@ export class MonsterAiService implements OnApplicationBootstrap, OnApplicationSh
     runtime.y = targetY;
   }
 
-  /** 这个点在不在某个碰撞矩形里（`map_collisions` 的矩形：中心 + 宽高） */
+  /** 这个点在不在某个碰撞多边形里（#1190：`map_collisions` 的顶点序列，射线法判） */
   private blockedIn(x: number, y: number, geometry: WalkGeometry): boolean {
-    for (const box of geometry.boxes) {
-      if (Math.abs(x - box.cx) <= box.w / 2 && Math.abs(y - box.cy) <= box.h / 2) return true;
+    for (const poly of geometry.polys) {
+      if (pointInPolygon(x, y, poly)) return true;
     }
     return false;
   }

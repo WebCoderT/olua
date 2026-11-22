@@ -22,7 +22,7 @@ import { overflowText } from "./bounds";
  * 进（读库 → 画）：`x = cx`、`y = -cy`（`tiledPointOf`）；矩形再按中心反算（`tiledBoxOf`）。
  * 出（画 → 提交）：`cx = x`、`cy = -y`（`worldPointOf`）；矩形同理（`worldBoxOf`）。
  *
- * ## 五种模式（#672 从「绘制开关」扩成模式，#676 加了碰撞盒）
+ * ## 五种模式（#672 从「绘制开关」扩成模式，#676 加了碰撞，#1190 碰撞改点绘多边形）
  *
  * | 模式 | 按下空白 | 按下已有对象 |
  * |---|---|---|
@@ -30,16 +30,15 @@ import { overflowText } from "./bounds";
  * | `spawn` | 拖出矩形 → 新建刷怪区 | 不响应（拖拽期间误触会不停弹窗） |
  * | `npc` | 松手处 = 新 NPC 点位的坐标 | **拖动**，松手即保存；没拖动就算点击 → 打开编辑 |
  * | `revive` | 松手处 = 复活点 | 拖动复活点同理 |
- * | `collision` | 拖出矩形 → 新建碰撞盒 | 不响应（拖拽期间误触会不停弹窗） |
+ * | `collision` | 单击 = 加一个顶点；**点第一个点（≥3 点时）= 封闭** → 新建碰撞多边形 | 拖顶点 = 挪；双击顶点 = 删；双击边 = 插点 |
  *
- * 四种编辑模式都有同一个「防手滑」底座：太小的框不提交（`MIN_DRAW_PX` /
- * `MIN_COLLISION_DRAW_PX`）、`Esc` 取消、`touchAction: none`（拖拽时别让页面跟着滚）。
+ * 编辑模式的共同底座：`Esc` 取消、右键撤销上一个顶点、`touchAction: none`（拖拽时别让页面跟着滚）。
  *
- * ## 碰撞盒为什么只能「画新的 + 点开改」，不能拖
+ * ## 碰撞多边形为什么是「点绘」而不是拖框（#1190）
  *
- * 刷怪区和碰撞盒都是矩形，但拖动一个「可能延伸到图外」的大矩形需要处理「抓住的是框内哪一点」
- * 与「指针出了 viewBox 怎么算」两件事，而它的收益只是省掉两次坐标输入 ——
- * 表单里四个数字（加 Tiled 口径对照）足够精确。所以：画布上拖 = 新建，点已有 = 打开表单。
+ * 矩形两个角就能画完，多边形不行 —— 用户口径：**连续点击多个点，最后点击第一个点完成封闭**。
+ * 点绘的交互重心在「加点多、改点也多」，所以顶点拖拽 / 插点 / 删点直接做在画布上；
+ * 精确到像素的微调仍归表单（顶点数值列表），画布负责「大概在哪」。
  *
  * ## 别把点击处理挂在 `<svg>` 上，挂在垫底的那块透明矩形上
  *
@@ -108,12 +107,13 @@ const LABEL_RATIO = 1 / 60;
 /** 拖出来的框小于这个像素（TMX 单位）就当没画 —— 与 `SPAWN_AREA_LIMITS.minSize` 同一口径 */
 export const MIN_DRAW_PX = 16;
 /**
- * 碰撞盒的最小绘制尺寸（TMX 单位）
+ * 多边形「点第一个点闭合」的命中半径（TMX 单位，按图宽的比例算）
  *
- * 比刷怪区低：碰撞盒可以是「贴墙的一条缝」（现有数据里有 96×28、102×33 这种），
- * 拿 16px 去卡会让人画不出正常的小阻挡。服务端下限是 1px，这里留 4px 纯粹是防手抖。
+ * 「最后点击第一个点完成封闭」的落点判定：差这个半径以内都算点中了第一个点。
+ * 按图宽比例取（8192 的图约 23 单位，缩到屏幕上就是「光标旁边的那个圈」），写死会在
+ * 大图上小到点不中、小图上大到误闭合。
  */
-export const MIN_COLLISION_DRAW_PX = 4;
+export const CLOSE_HIT_RADIUS_RATIO = 1 / 350;
 
 export function MapCanvas({
   detail,
@@ -122,8 +122,11 @@ export function MapCanvas({
   onPickNpc,
   onPickRevive,
   onDrawBox,
-  onDrawCollisionBox,
+  onDrawCollisionPolygon,
   onPickCollision,
+  onMoveCollisionVertex,
+  onInsertCollisionVertex,
+  onDeleteCollisionVertex,
   onPlaceNpc,
   onMoveNpc,
   onPlaceRevive,
@@ -143,10 +146,19 @@ export function MapCanvas({
   onPickRevive?: (point: MapRevivePoint) => void;
   /** 画完一个矩形（Tiled 口径）；由上层换算成世界坐标并打开表单 */
   onDrawBox?: (box: DrawBox) => void;
-  /** 画完一个碰撞盒（Tiled 口径）—— 与刷怪区分开是因为两边的表单不一样 */
-  onDrawCollisionBox?: (box: DrawBox) => void;
-  /** 点击一个已有碰撞盒：打开编辑表单 */
+  /**
+   * 点绘封闭一个碰撞多边形（Tiled 口径的顶点序列，≥3 点）
+   * —— 与刷怪区分开是因为两边的表单不一样
+   */
+  onDrawCollisionPolygon?: (points: DrawPoint[]) => void;
+  /** 点击一个已有碰撞多边形：打开编辑表单（仅查看模式） */
   onPickCollision?: (box: MapCollision) => void;
+  /** `collision` 模式拖动已有顶点并松手：上层整份提交新顶点 */
+  onMoveCollisionVertex?: (box: MapCollision, index: number, to: DrawPoint) => void;
+  /** `collision` 模式双击一条边：在它的中点插一个顶点（上层整份提交） */
+  onInsertCollisionVertex?: (box: MapCollision, edgeIndex: number) => void;
+  /** `collision` 模式双击一个顶点：删掉它（≤3 点时画布直接忽略，保底封闭） */
+  onDeleteCollisionVertex?: (box: MapCollision, index: number) => void;
   /** `npc` 模式点空白：把落点（Tiled 口径）交给上层打开「放哪个 NPC」的表单 */
   onPlaceNpc?: (point: DrawPoint) => void;
   /** `npc` 模式拖动已有 NPC 点并松手（已经判断过「确实移动了」） */
@@ -159,7 +171,7 @@ export function MapCanvas({
   selectedAreaId?: number;
   /** 正在编辑的 NPC 点：圈加粗 + 换色 */
   selectedNpcId?: number;
-  /** 正在编辑的碰撞盒：描边加粗（碰撞盒没有名字，全靠高亮认人） */
+  /** 正在编辑的碰撞多边形：描边加粗（多边形没有名字，全靠高亮认人） */
   selectedCollisionId?: number;
   /** 宽度上限：页面上按视口高度限（一屏能同时看到配置与地图），放大镜里给 100% */
   maxWidth?: string;
@@ -170,12 +182,27 @@ export function MapCanvas({
   const [draft, setDraft] = useState<{ x0: number; y0: number; x1: number; y1: number } | null>(null);
   /** 拖拽中的点（NPC / 复活点）：位置是 Tiled 口径，`moved` 用来区分「点击」与「拖动」 */
   const [drag, setDrag] = useState<{ npc: MapNpc | null; from: DrawPoint; at: DrawPoint; moved: boolean } | null>(null);
+  /**
+   * 点绘中的碰撞多边形草稿（Tiled 口径顶点序列）
+   *
+   * 用户口径：**连续点击多个点，最后点击第一个点完成封闭** —— 点够 3 个后第一个点
+   * 会亮起来，点到它附近就提交整份顶点给上层开表单。
+   */
+  const [polyDraft, setPolyDraft] = useState<DrawPoint[] | null>(null);
+  /** 点绘时跟着光标的预览点（拖住不放时的预览线终点） */
+  const [polyCursor, setPolyCursor] = useState<DrawPoint | null>(null);
+  /** 拖动中的已有顶点（collision 模式）：松手提交，位置实时跟手 */
+  const [vertexDrag, setVertexDrag] = useState<{ box: MapCollision; index: number; at: DrawPoint; moved: boolean } | null>(
+    null,
+  );
 
   // 所有地图的预览图都是 TMX 的等比缩小（实测 2048 vs 8192），容器按 TMX 宽高比留位，
   // 图片 object-contain 正好铺满 —— 不写死 8192，也不假设正方形。
   const ratio = detail.height > 0 ? detail.width / detail.height : 1;
   const dotRadius = Math.max(8, detail.width * DOT_RADIUS_RATIO);
   const labelSize = Math.max(20, detail.width * LABEL_RATIO);
+  /** 点第一个点闭合的命中半径（随图宽走，见 CLOSE_HIT_RADIUS_RATIO） */
+  const closeRadius = Math.max(8, detail.width * CLOSE_HIT_RADIUS_RATIO);
   const collisionBoxes = detail.collisions;
   const editing = mode !== "view";
 
@@ -206,16 +233,22 @@ export function MapCanvas({
       if (event.key !== "Escape") return;
       setDraft(null);
       setDrag(null);
+      setPolyDraft(null);
+      setPolyCursor(null);
+      setVertexDrag(null);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [editing]);
 
-  // 退出编辑模式时清掉草稿，否则下次进来还挂着上一次的半个框 / 半个点
+  // 退出编辑模式时清掉草稿，否则下次进来还挂着上一次的半个框 / 半个点 / 半个多边形
   useEffect(() => {
     if (!editing) {
       setDraft(null);
       setDrag(null);
+      setPolyDraft(null);
+      setPolyCursor(null);
+      setVertexDrag(null);
     }
   }, [editing]);
 
@@ -224,18 +257,33 @@ export function MapCanvas({
   /**
    * 空白处按下（垫底透明矩形）
    *
-   * 四种编辑模式四种含义：画刷怪区 / 画碰撞盒 / 放 NPC / 设复活点。全都把指针捕获到 `svg` 上 ——
-   * 之后 move / up 统一由 `svg` 收，拖到图外也不会丢事件。
+   * 编辑模式各有含义：画刷怪区 / 点绘碰撞多边形 / 放 NPC / 设复活点。画框与顶点拖拽
+   * 都把指针捕获到 `svg` 上 —— 之后 move / up 统一由 `svg` 收，拖到图外也不会丢事件。
    */
   const onBackgroundDown = (event: React.PointerEvent<SVGRectElement>) => {
     if (!editing || event.button !== 0) return;
-    event.currentTarget.ownerSVGElement?.setPointerCapture(event.pointerId);
     const point = pointOf(event);
-    if (mode === "spawn" || mode === "collision") {
+    if (mode === "spawn") {
+      event.currentTarget.ownerSVGElement?.setPointerCapture(event.pointerId);
       setDraft({ x0: point.x, y0: point.y, x1: point.x, y1: point.y });
       return;
     }
+    if (mode === "collision") {
+      event.currentTarget.ownerSVGElement?.setPointerCapture(event.pointerId);
+      // 用户口径：**连续点击多个点，最后点击第一个点完成封闭** —— 点够 3 个后
+      // 第一个点亮起来，点到它附近就整份提交（换算成世界坐标归上层）
+      if (polyDraft && polyDraft.length >= 3 && Math.hypot(point.x - polyDraft[0].x, point.y - polyDraft[0].y) <= closeRadius) {
+        onDrawCollisionPolygon?.(polyDraft);
+        setPolyDraft(null);
+        setPolyCursor(null);
+        return;
+      }
+      setPolyDraft([...(polyDraft ?? []), point]);
+      setPolyCursor(point);
+      return;
+    }
     // 点位模式：按下即落点（松手才提交，见 onPointerUp —— 这样 Esc 还有机会取消）
+    event.currentTarget.ownerSVGElement?.setPointerCapture(event.pointerId);
     setDrag({ npc: null, from: point, at: point, moved: true });
   };
 
@@ -246,7 +294,24 @@ export function MapCanvas({
     setDrag({ npc, from: at, at, moved: false });
   };
 
+  /** 拖动一个已有的碰撞顶点（collision 模式；松手整份提交，见 releasePointer） */
+  const startVertexDrag = (event: React.PointerEvent<SVGCircleElement>, box: MapCollision, index: number, at: DrawPoint) => {
+    if (mode !== "collision" || event.button !== 0) return;
+    event.currentTarget.ownerSVGElement?.setPointerCapture(event.pointerId);
+    setVertexDrag({ box, index, at, moved: false });
+  };
+
   const movePointer = (event: React.PointerEvent<SVGSVGElement>) => {
+    if (vertexDrag) {
+      const point = pointOf(event);
+      const moved = vertexDrag.moved || Math.hypot(point.x - vertexDrag.at.x, point.y - vertexDrag.at.y) > dotRadius * 0.3;
+      setVertexDrag({ ...vertexDrag, at: point, moved });
+      return;
+    }
+    if (polyDraft) {
+      setPolyCursor(pointOf(event));
+      return;
+    }
     if (draft) {
       const point = pointOf(event);
       setDraft({ ...draft, x1: point.x, y1: point.y });
@@ -261,15 +326,19 @@ export function MapCanvas({
 
   const releasePointer = (event: React.PointerEvent<SVGSVGElement>) => {
     const point = pointOf(event);
+    if (vertexDrag) {
+      const { box, index, moved } = vertexDrag;
+      setVertexDrag(null);
+      // 确实拖动了才提交：点一下顶点不该把它挪走
+      if (moved) onMoveCollisionVertex?.(box, index, point);
+      return;
+    }
     if (draft) {
       const box = normalizeBox({ ...draft, x1: point.x, y1: point.y });
       setDraft(null);
-      // 太小的框当没画：手抖点一下会得到一个 1×1 的区域，那种区域能刷但不能用。
-      // 碰撞盒允许更薄（贴墙的缝），所以两边门槛不同
-      const minSize = mode === "collision" ? MIN_COLLISION_DRAW_PX : MIN_DRAW_PX;
-      if (box.width < minSize || box.height < minSize) return;
-      if (mode === "collision") onDrawCollisionBox?.(box);
-      else onDrawBox?.(box);
+      // 太小的框当没画：手抖点一下会得到一个 1×1 的区域，那种区域能刷但不能用
+      if (box.width < MIN_DRAW_PX || box.height < MIN_DRAW_PX) return;
+      onDrawBox?.(box);
       return;
     }
     if (!drag) return;
@@ -289,6 +358,14 @@ export function MapCanvas({
       return;
     }
     if (mode === "revive") onPlaceRevive?.(point);
+  };
+
+  /** 右键 = 撤销上一个顶点（点绘进行中）：不拦浏览器的右键菜单会让这个动作变成「刷新页面」 */
+  const onCanvasContextMenu = (event: React.MouseEvent<SVGSVGElement>) => {
+    event.preventDefault();
+    if (!polyDraft) return;
+    if (polyDraft.length <= 1) setPolyDraft(null);
+    else setPolyDraft(polyDraft.slice(0, -1));
   };
 
   const dragging = drag?.moved ? drag : null;
@@ -330,9 +407,11 @@ export function MapCanvas({
         aria-label={`${detail.label} 的刷怪区、点位与碰撞盒`}
         onPointerMove={movePointer}
         onPointerUp={releasePointer}
+        onContextMenu={onCanvasContextMenu}
         onPointerCancel={() => {
           setDraft(null);
           setDrag(null);
+          setPolyCursor(null);
         }}
       >
         {/* 空白处的命中层：画在最底层，尺寸 = 整张图。有它就不必在 `<svg>` 上判「是不是点到了对象」 */}
@@ -345,33 +424,80 @@ export function MapCanvas({
           onPointerDown={onBackgroundDown}
         />
 
-        {/* 碰撞盒（服务端 map_collisions）：垫在最底层，只给轮廓 —— 填充会糊住底图，
-            反而看不出刷怪区压在什么地形上。查看模式下点开可改（画盒模式下整层不吃事件） */}
+        {/* 碰撞多边形（服务端 map_collisions）：垫在最底层，只给轮廓 —— 填充会糊住底图，
+            反而看不出刷怪区压在什么地形上。查看模式下点开可改；collision 模式下顶点可拖、
+            边可双击插点、顶点可双击删除（多边形本体不接事件，防拖顶点时误开表单） */}
         {visible.collision &&
           collisionBoxes.map((box) => {
-            const rect = tiledBoxOf(box);
+            const tiled = tiledPointsOf(box);
             const active = box.id === selectedCollisionId;
+            const draggingVertex = vertexDrag?.box.id === box.id ? vertexDrag : null;
+            // 拖动中的顶点实时跟手：只动被抓住的那一个，其余照旧
+            const shown = draggingVertex ? tiled.map((p, i) => (i === draggingVertex.index ? draggingVertex.at : p)) : tiled;
+            const strokeColor = box.fullyOutside ? COLOR.outside : COLOR.collision;
             return (
-              <rect
-                key={`collision-${box.id}`}
-                x={rect.x}
-                y={rect.y}
-                width={rect.width}
-                height={rect.height}
-                fill={COLOR.collision}
-                fillOpacity={active ? 0.3 : 0.16}
-                stroke={box.fullyOutside ? COLOR.outside : COLOR.collision}
-                strokeOpacity={0.65}
-                strokeWidth={active ? 2.5 : 1}
-                strokeDasharray={box.fullyOutside ? `${labelSize * 0.3} ${labelSize * 0.2}` : undefined}
-                vectorEffect="non-scaling-stroke"
-                className={editing ? undefined : "cursor-pointer"}
-                // 画盒模式下整层不接事件：否则「在碰撞盒上按下」会开表单而不是开始拖新框
-                pointerEvents={editing ? "none" : undefined}
-                onClick={() => onPickCollision?.(box)}
-              >
-                <title>{`碰撞盒 #${box.id}\n世界坐标中心 (${box.cx}, ${box.cy}) ${box.w}×${box.h}${box.fullyOutside ? "\n⚠ 整块落在地图外，画面上看不到它（四面围墙允许超出，但这种是数据错误）" : ""}`}</title>
-              </rect>
+              <g key={`collision-${box.id}`}>
+                <polygon
+                  points={shown.map((p) => `${p.x},${p.y}`).join(" ")}
+                  fill={COLOR.collision}
+                  fillOpacity={active ? 0.3 : 0.16}
+                  stroke={strokeColor}
+                  strokeOpacity={0.65}
+                  strokeWidth={active ? 2.5 : 1}
+                  strokeDasharray={box.fullyOutside ? `${labelSize * 0.3} ${labelSize * 0.2}` : undefined}
+                  vectorEffect="non-scaling-stroke"
+                  className={mode === "view" ? "cursor-pointer" : undefined}
+                  pointerEvents={editing ? "none" : undefined}
+                  onClick={() => onPickCollision?.(box)}
+                >
+                  <title>{`碰撞多边形 #${box.id}\n${box.points.length} 个顶点${box.fullyOutside ? "\n⚠ 整块落在地图外，画面上看不到它（四面围墙允许超出，但这种是数据错误）" : ""}`}</title>
+                </polygon>
+                {mode === "collision" ? (
+                  <>
+                    {/* 边命中层（透明粗线）：双击在边上插一个顶点 */}
+                    {tiled.map((p, i) => {
+                      const q = tiled[(i + 1) % tiled.length];
+                      return (
+                        <line
+                          key={`edge-${box.id}-${i}`}
+                          x1={p.x}
+                          y1={p.y}
+                          x2={q.x}
+                          y2={q.y}
+                          stroke="transparent"
+                          strokeWidth={Math.max(dotRadius, labelSize)}
+                          pointerEvents="stroke"
+                          style={{ cursor: "copy" }}
+                          onDoubleClick={() => onInsertCollisionVertex?.(box, i)}
+                        >
+                          <title>{`边 ${i + 1}→${(i + 1) % tiled.length + 1}（双击在中点插一个顶点）`}</title>
+                        </line>
+                      );
+                    })}
+                    {/* 顶点手柄：拖动挪位置，双击删除（≤3 点时禁删 —— 封闭保底） */}
+                    {tiled.map((p, i) => (
+                      <circle
+                        key={`vertex-${box.id}-${i}`}
+                        cx={shown[i].x}
+                        cy={shown[i].y}
+                        r={dotRadius * 0.6}
+                        fill={COLOR.collision}
+                        fillOpacity={0.9}
+                        stroke="var(--color-surface-0)"
+                        strokeWidth={1.5}
+                        vectorEffect="non-scaling-stroke"
+                        className="cursor-move"
+                        onPointerDown={(event) => startVertexDrag(event, box, i, p)}
+                        onDoubleClick={() => {
+                          if (tiled.length > 3) onDeleteCollisionVertex?.(box, i);
+                        }}
+                      >
+                        <title>{`顶点 ${i + 1} (${box.points[i][0]}, ${box.points[i][1]})\n拖动挪位置${tiled.length > 3 ? " · 双击删除" : "（保底 3 点，不可删）"}`}</title>
+                      </circle>
+                    ))}
+                  </>
+                ) : null}
+              </g>
             );
           })}
 
@@ -505,6 +631,75 @@ export function MapCanvas({
           />
         ) : null}
 
+        {/* 点绘预览（collision 模式）：已点顶点连成折线 + 光标预览线。
+            点够 3 个后第一个点亮成「可闭合」的圈 —— 点它附近就封闭（用户口径） */}
+        {polyDraft && polyDraft.length > 0 ? (
+          <g pointerEvents="none">
+            <polyline
+              points={polyDraft.map((p) => `${p.x},${p.y}`).join(" ")}
+              fill="none"
+              stroke={COLOR.collision}
+              strokeWidth={2}
+              vectorEffect="non-scaling-stroke"
+            />
+            {polyCursor && mode === "collision" ? (
+              <line
+                x1={polyDraft[polyDraft.length - 1].x}
+                y1={polyDraft[polyDraft.length - 1].y}
+                x2={polyCursor.x}
+                y2={polyCursor.y}
+                stroke={COLOR.collision}
+                strokeOpacity={0.5}
+                strokeWidth={1.5}
+                strokeDasharray={`${labelSize * 0.35} ${labelSize * 0.25}`}
+                vectorEffect="non-scaling-stroke"
+              />
+            ) : null}
+            {polyDraft.map((p, i) => (
+              <circle key={`poly-draft-${i}`} cx={p.x} cy={p.y} r={dotRadius * 0.5} fill={COLOR.collision} />
+            ))}
+            {polyDraft.length >= 3 ? (
+              <>
+                <circle
+                  cx={polyDraft[0].x}
+                  cy={polyDraft[0].y}
+                  r={closeRadius}
+                  fill={COLOR.collision}
+                  fillOpacity={0.25}
+                  stroke={COLOR.collision}
+                  strokeWidth={2}
+                  vectorEffect="non-scaling-stroke"
+                />
+                <text
+                  x={polyDraft[0].x}
+                  y={polyDraft[0].y - closeRadius - labelSize * 0.4}
+                  textAnchor="middle"
+                  fontSize={labelSize}
+                  fill="var(--color-ink-1)"
+                  stroke="var(--color-surface-0)"
+                  strokeWidth={labelSize / 22}
+                  paintOrder="stroke"
+                >
+                  {`点这里闭合（已 ${polyDraft.length} 点）`}
+                </text>
+              </>
+            ) : (
+              <text
+                x={polyDraft[0].x}
+                y={polyDraft[0].y - labelSize * 0.8}
+                textAnchor="middle"
+                fontSize={labelSize * 0.9}
+                fill="var(--color-ink-1)"
+                stroke="var(--color-surface-0)"
+                strokeWidth={labelSize / 22}
+                paintOrder="stroke"
+              >
+                {`再点 ${3 - polyDraft.length} 个点开始成面（右键撤销 · Esc 取消）`}
+              </text>
+            )}
+          </g>
+        ) : null}
+
         {/* 拖拽预览：虚线框 + 实时尺寸。pointerEvents none —— 它出现在光标下面，不能吃掉 move 事件 */}
         {draftBox ? (
           <g pointerEvents="none">
@@ -558,7 +753,10 @@ const MODE_HINT: Record<CanvasMode, { text: string; color: string } | null> = {
   spawn: { text: "在图上拖出矩形 = 新建刷怪区 · Esc 取消", color: "var(--color-gold-hi)" },
   npc: { text: "点空白 = 放一个 NPC（再选是谁）· 拖已有点 = 挪位置 · Esc 取消", color: "var(--color-jade-hi)" },
   revive: { text: "点哪里 = 复活点就设在哪里 · 拖动已有点 = 挪位置 · Esc 取消", color: "var(--color-warn-hi)" },
-  collision: { text: "在图上拖出矩形 = 新建碰撞盒 · 查看模式下点已有框可改 · Esc 取消", color: "var(--color-ember-hi)" },
+  collision: {
+    text: "连续点击加顶点 · 点第一个点（≥3 点）封闭 · 拖顶点挪位 · 双击边插点 / 双击顶点删点 · 右键撤销 · Esc 取消",
+    color: "var(--color-ember-hi)",
+  },
 };
 
 /**
@@ -678,6 +876,20 @@ export function tiledPointOf(point: { cx: number; cy: number }): DrawPoint {
 /** Tiled 口径的点 → 提交给服务端的世界坐标（`cx = x`、`cy = -y`） */
 export function worldPointOf(point: DrawPoint): { cx: number; cy: number } {
   return { cx: round2(point.x), cy: round2(-point.y) };
+}
+
+/**
+ * 世界坐标的碰撞多边形 → Tiled 口径的顶点序列（#1190）
+ *
+ * 与点的换算同一条式子（`y = -y`），只是成批做：画布渲染与顶点拖拽都吃这份。
+ */
+export function tiledPointsOf(box: { points: Array<readonly number[]> }): DrawPoint[] {
+  return box.points.map((p) => ({ x: p[0], y: -p[1] }));
+}
+
+/** Tiled 口径的顶点序列 → 提交给服务端的世界坐标 `[[x,y],...]`（#1190） */
+export function worldPointsOf(points: DrawPoint[]): Array<[number, number]> {
+  return points.map((p) => [round2(p.x), round2(-p.y)]);
 }
 
 /** 与画布像素对齐到两位小数：拖出来的 1234.5678 进库没有意义，也让 e2e 能直接对数字 */

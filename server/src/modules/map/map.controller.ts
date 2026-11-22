@@ -360,17 +360,17 @@ export class AdminMapController {
   @AuditTarget("map")
   @ApiAdminDoc({
     operationId: "adminMap.createCollision",
-    summary: "画一个碰撞盒（在图上拖一个框）",
+    summary: "画一个碰撞多边形（在图上连点顶点、点第一个点闭合）",
     description:
-      "管理端地图页「绘制碰撞盒」保存时调它。**入参是世界坐标**（原点 = 地图左上角、y 轴向上，故 `cy` 为负），\n" +
-      "与读接口的 `collisions` 完全同构 —— 画布（Tiled 口径）负责换算 `cx = x + w/2`、`cy = -(y + h/2)`。\n\n" +
+      "管理端地图页「绘制碰撞多边形」保存时调它。**入参是顶点序列 `points`（世界坐标**：原点 = 地图左上角、\n" +
+      "y 轴向上故 `y` 为负；按绘制顺序、首尾自动闭合），与读接口的 `collisions` 完全同构。\n\n" +
       "#676 之前碰撞矩形只写在 TMX 的 `collision` 对象组里（客户端两处读：生成静态碰撞体、自动战斗的静态障碍），\n" +
-      "后台只能看。现在归这张表，**TMX 里已经没有对象组了**。\n\n" +
-      "校验只有两条：\n" +
+      "后台只能看。#676 归这张表（TMX 里已经没有对象组）；#1190 起从矩形升级为**任意简单多边形**。\n\n" +
+      "校验：\n" +
       "- 地图存在且有像素尺寸（`50032`）；\n" +
-      "- 宽高 ≥ 1px（`40000`）。\n\n" +
-      "**故意不判「在图内」**：每张图四面围墙本来就画在图外（`x = -64`、宽 8320），那是把玩家关在图里的手段。\n" +
-      "整块在图外的盒子会在详情里标 `fullyOutside`，但不会被拒。\n\n" +
+      "- 顶点 3~64、相邻顶点间距 ≥ 1px、不自交（`40000`）。\n\n" +
+      "**故意不判「在图内」**：每张图四面围墙本来就画在图外（`x = -64`），那是把玩家关在图里的手段。\n" +
+      "整块在图外的多边形会在详情里标 `fullyOutside`，但不会被拒。\n\n" +
       "**生效时机**：客户端进游戏时按快照铺碰撞体，图里的人要换图 / 重进才生效。",
     permissions: [Permission.GAME_CONFIG_WRITE],
   })
@@ -388,7 +388,7 @@ export class AdminMapController {
   @AuditTarget("map")
   @ApiAdminDoc({
     operationId: "adminMap.updateCollision",
-    summary: "修改碰撞盒（整份覆盖）",
+    summary: "修改碰撞多边形（整份顶点覆盖）",
     description:
       "挪位置与改尺寸是同一次动作，入参与新建完全一致。**整份覆盖**而不是分字段：\n" +
       "表单一次提交，分字段更新只会让两个标签页同时改时互相截半。\n\n" +
@@ -396,7 +396,7 @@ export class AdminMapController {
     permissions: [Permission.GAME_CONFIG_WRITE],
   })
   @ApiParam({ name: "id", description: "地图 id" })
-  @ApiParam({ name: "boxId", description: "碰撞盒行 id（详情里的 collisions[].id）" })
+  @ApiParam({ name: "boxId", description: "碰撞多边形行 id（详情里的 collisions[].id）" })
   @ApiDataResponse(MapCollisionDto, { description: "更新后的这一行" })
   updateCollision(
     @Param("id") id: string,
@@ -411,7 +411,7 @@ export class AdminMapController {
   @AuditTarget("map")
   @ApiAdminDoc({
     operationId: "adminMap.deleteCollision",
-    summary: "删除碰撞盒",
+    summary: "删除碰撞多边形",
     description:
       "删掉这张图上的一个碰撞盒。图里的人要换图 / 重进才会觉得「这里能过去了」——\n" +
       "碰撞体是客户端进图时按快照铺的。\n\n行不存在或不属于这张图 → 404 `50036`。",

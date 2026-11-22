@@ -11215,10 +11215,10 @@ INSERT INTO "mall_goods" ("id", "category_id", "price", "required_level", "updat
 
 -- ===== map_collisions（4 行）=====
 DELETE FROM "map_collisions";
-INSERT INTO "map_collisions" ("id", "map_id", "cx", "cy", "w", "h", "updated_at") VALUES (1620, '0', -24, -928, 80, 2112, 1795245735825);
-INSERT INTO "map_collisions" ("id", "map_id", "cx", "cy", "w", "h", "updated_at") VALUES (1621, '0', 2328, -928, 80, 2112, 1795245735825);
-INSERT INTO "map_collisions" ("id", "map_id", "cx", "cy", "w", "h", "updated_at") VALUES (1622, '0', 1152, 24, 2432, 64, 1795245735825);
-INSERT INTO "map_collisions" ("id", "map_id", "cx", "cy", "w", "h", "updated_at") VALUES (1623, '0', 1152, -1880, 2432, 64, 1795245735825);
+INSERT INTO "map_collisions" ("id", "map_id", "points", "updated_at") VALUES (1620, '0', '[[-64,-1984],[16,-1984],[16,128],[-64,128]]', 1795245735825);
+INSERT INTO "map_collisions" ("id", "map_id", "points", "updated_at") VALUES (1621, '0', '[[2288,-1984],[2368,-1984],[2368,128],[2288,128]]', 1795245735825);
+INSERT INTO "map_collisions" ("id", "map_id", "points", "updated_at") VALUES (1622, '0', '[[-64,-8],[2368,-8],[2368,56],[-64,56]]', 1795245735825);
+INSERT INTO "map_collisions" ("id", "map_id", "points", "updated_at") VALUES (1623, '0', '[[-64,-1912],[2368,-1912],[2368,-1848],[-64,-1848]]', 1795245735825);
 
 -- ===== map_npcs（68 行）=====
 DELETE FROM "map_npcs";

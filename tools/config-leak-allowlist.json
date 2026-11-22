@@ -125,6 +125,16 @@
       "file": "ui/utils/node/SiblingSortGuard.ts",
       "rule": "cn",
       "reason": "引擎兜底（#1184）的 console.warn 诊断：中文只说给开发者（节点名 / 父节点名 / 引擎 issue 引用），玩家永远看不到，也没有「运营改文案」的场景 —— 与 Pointer.ts 的 cameraPriority 提示、NetDiagnostics 同类。搬进 texts 反而让它看起来像正式文案。"
+    },
+    {
+      "file": "ui/components/map/CollisionAreaSpawner.ts",
+      "rule": "magicCompare",
+      "reason": "多边形最小顶点数 3 是几何定义（#1190：3 个点才成面），不是可运营配置 —— 与服务端 parsePolygonPoints 的拒绝口径同形，客户端读到坏数据时跳过防止建出线段碰撞体。"
+    },
+    {
+      "file": "ui/helpers/parts/monster-parts.ts",
+      "rule": "magicCompare",
+      "reason": "多边形最小顶点数 3 是几何定义（#1190：画碰撞范围可视化时不足 3 点画不出面），与服务端/客户端共同的「3 才成面」口径一致，不存在「运营调它」的场景。"
     }
   ]
 }
