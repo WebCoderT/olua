@@ -382,6 +382,12 @@ export function MapCanvas({
             const active = area.id === selectedAreaId;
             // 等级走管理端同步查表（登录后已拉好快照）；查不到配置就省掉 Lv 段，不显示假的
             const levelText = spawnLevelTextOf(area.monsterKey);
+            // 标签主体（编号 + 名称 + 等级 + 编号括注）与数量段 —— 无论区域多窄都画在框上（#1173）
+            const whoText = `#${area.id} ${area.monsterLabel}${levelText}（${area.monsterKey}）`;
+            const countText = `${area.min}~${area.max}`;
+            // 宽区域单行放得下；窄区域拆两行并把字号缩到 0.8×，减少横向溢出
+            const wide = box.width / detail.width >= 0.12;
+            const fontSize = wide ? labelSize : labelSize * 0.8;
             // 越界区域描警示色：容器 overflow-hidden 会把越出 viewBox 的部分裁掉，
             // 也就是「区域在图外」在画面上表现为「这块区域不见了」—— 只有颜色能提示。
             const color = active ? COLOR.spawnActive : area.inBounds ? COLOR.spawn : COLOR.spawnOutside;
@@ -409,18 +415,33 @@ export function MapCanvas({
                 </rect>
                 <text
                   x={box.x + box.width / 2}
-                  y={box.y + box.height / 2 + labelSize / 3}
+                  y={box.y + box.height / 2}
                   textAnchor="middle"
-                  fontSize={labelSize}
+                  fontSize={fontSize}
                   fill="var(--color-ink-1)"
                   stroke="var(--color-surface-0)"
-                  strokeWidth={labelSize / 22}
+                  strokeWidth={fontSize / 22}
                   paintOrder="stroke"
                   pointerEvents="none"
                 >
-                  {box.width / detail.width >= 0.12
-                    ? `#${area.id} ${area.monsterLabel}${levelText}（${area.monsterKey}） ${area.min}~${area.max}`
-                    : `#${area.id}`}
+                  {/*
+                    单行时 y = 垂直中心 + 字号/3（视觉居中）；两行时两行各让开半个行高，
+                    第一行取主体、第二行只放数量 —— 拆行的意义是**窄框别把两段挤成一根长横线**。
+                  */}
+                  {wide ? (
+                    <tspan x={box.x + box.width / 2} y={box.y + box.height / 2 + fontSize / 3}>
+                      {`${whoText} ${countText}`}
+                    </tspan>
+                  ) : (
+                    <>
+                      <tspan x={box.x + box.width / 2} y={box.y + box.height / 2 - fontSize * 0.55 + fontSize / 3}>
+                        {whoText}
+                      </tspan>
+                      <tspan x={box.x + box.width / 2} y={box.y + box.height / 2 + fontSize * 0.55 + fontSize / 3}>
+                        {countText}
+                      </tspan>
+                    </>
+                  )}
                 </text>
               </g>
             );
