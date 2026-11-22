@@ -340,56 +340,61 @@ export function MapsPage() {
       ) : (
         <div className="grid grid-cols-1 gap-3 lg:grid-cols-[260px_minmax(0,1fr)]">
           {/*
-            左卡与右列等高、列表在卡内滚（#1151）：
-            - grid 子项默认 stretch，`h-full` 让左卡吃满行高 —— 行高由右列（配置卡 + 地图卡）决定；
+            左卡与右列等高、列表在卡内滚（#1151，#1168 修「等高没生效」）：
+            - 关键：grid 行高 = 两列**内容自然高度的最大值**。62 张地图的左列表远比右列高，
+              行被左列撑到几千 px，`h-full` 等来的只是「等高等于巨行」——滚动落到了整页上。
+              所以左卡必须在 lg 上**脱离文档流**（外层 relative + 卡 absolute inset-0）：
+              绝对定位不参与行高计算，行高才真正由右列（配置卡 + 地图卡）决定。
             - `Card` 的正文是裸 `<div>`（ui.tsx 没开 className 口子），用任意子选择器把它转成
               flex 的滚动区：`min-h-0` 是 flex 子项能触发 `overflow-y-auto` 的前提，
               缺了它正文会被内容撑到自然高度、整卡跟着长高（与「明明写了 overflow 还是在滚整页」同一个根因）；
             - header 不参与滚动（它是 `<header>`，选择器只命中正文 div）。
-            窄屏单列时行高是 auto，`h-full` 退化为无约束，与原行为一致。
+            窄屏单列：absolute 不生效，卡回到文档流、随内容自然长，与原行为一致。
           */}
-          <Card
-            title={`地图（${list.length}）`}
-            description="按 id 升序，点一行看详情；列表超出卡体时在卡内滚动"
-            className="flex h-full flex-col overflow-hidden [&>div]:min-h-0 [&>div]:flex-1 [&>div]:overflow-y-auto"
-          >
-            <ul className="space-y-1">
-              {list.map((item) => {
-                const active = item.id === selected;
-                return (
-                  <li key={item.id}>
-                    <button
-                      type="button"
-                      onClick={() => setSelected(item.id)}
-                      className={`w-full rounded-lg border px-2.5 py-2 text-left transition ${
-                        active ? "border-gold/50 bg-gold/10" : "border-line bg-surface-2/40 hover:border-line-strong"
-                      }`}
-                    >
-                      <div className="flex items-baseline justify-between gap-2">
-                        <span className="truncate text-sm text-ink-1">{item.label || `（未命名 #${item.id}）`}</span>
-                        <span className="shrink-0 text-xs text-ink-5">#{item.id}</span>
-                      </div>
-                      <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-ink-5">
-                        <span>{item.typeLabel}</span>
-                        <span>·</span>
-                        <span>
-                          {item.cols}×{item.rows}
-                        </span>
-                        <span>·</span>
-                        <span>刷怪区 {item.spawnAreaCount}</span>
-                        <span>·</span>
-                        <span>NPC {item.npcPointCount}</span>
-                        <span>·</span>
-                        <span>碰撞 {item.collisionCount}</span>
-                        {/* 复活点只有「有 / 没有」两种状态：没有时不必占位，写出来反而像少了一个 */}
-                        {item.hasRevivePoint ? <span className="text-jade/70">· 复活点</span> : null}
-                      </div>
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-          </Card>
+          <div className="lg:relative">
+            <Card
+              title={`地图（${list.length}）`}
+              description="按 id 升序，点一行看详情；列表超出卡体时在卡内滚动"
+              className="flex flex-col overflow-hidden lg:absolute lg:inset-0 [&>div]:min-h-0 [&>div]:flex-1 [&>div]:overflow-y-auto"
+            >
+              <ul className="space-y-1">
+                {list.map((item) => {
+                  const active = item.id === selected;
+                  return (
+                    <li key={item.id}>
+                      <button
+                        type="button"
+                        onClick={() => setSelected(item.id)}
+                        className={`w-full rounded-lg border px-2.5 py-2 text-left transition ${
+                          active ? "border-gold/50 bg-gold/10" : "border-line bg-surface-2/40 hover:border-line-strong"
+                        }`}
+                      >
+                        <div className="flex items-baseline justify-between gap-2">
+                          <span className="truncate text-sm text-ink-1">{item.label || `（未命名 #${item.id}）`}</span>
+                          <span className="shrink-0 text-xs text-ink-5">#{item.id}</span>
+                        </div>
+                        <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-ink-5">
+                          <span>{item.typeLabel}</span>
+                          <span>·</span>
+                          <span>
+                            {item.cols}×{item.rows}
+                          </span>
+                          <span>·</span>
+                          <span>刷怪区 {item.spawnAreaCount}</span>
+                          <span>·</span>
+                          <span>NPC {item.npcPointCount}</span>
+                          <span>·</span>
+                          <span>碰撞 {item.collisionCount}</span>
+                          {/* 复活点只有「有 / 没有」两种状态：没有时不必占位，写出来反而像少了一个 */}
+                          {item.hasRevivePoint ? <span className="text-jade/70">· 复活点</span> : null}
+                        </div>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </Card>
+          </div>
 
           <div className="space-y-3">
             {detailLoading && !detail ? (
