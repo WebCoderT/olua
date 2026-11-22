@@ -245,6 +245,21 @@ const CLOTH_10_MAX_HP = equipBases["cloth_10"].maxHp;
 
     //#endregion
 
+    //#region 〇点五、校验消息全中文（#1172 兜底层）
+
+    group("〇点五、校验消息全中文（#1172：bag-op 的裸装饰器走兜底翻译层）");
+
+    // BagOpCellDto 的 @Max(ROLE_BAG_AXIS_MAX - 1) 是裸装饰器（没有 message）：
+    // 全局管道把英文默认模板翻译成「路径：不能大于 N」，不允许漏出 must not be greater than
+    const badRow = await api(baseUrl, "POST", `roles/${roleId}/bag-op`, { token, body: { action: "equip", row: 999, col: 0, revision: 1 } });
+    check(
+      badRow.code === 40000 && /不能大于/.test(String(badRow.message)) && !/must /.test(String(badRow.message)),
+      "A：行号越界的消息是中文（兜底翻译带路径，如「row：不能大于 9」）",
+      JSON.stringify(badRow && { code: badRow.code, message: badRow.message }),
+    );
+
+    //#endregion
+
     //#region 一、穿戴：离包、进槽位、属性当场重算
 
     group("一、穿戴（服务端自己算）");

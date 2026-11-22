@@ -1,11 +1,12 @@
 import "reflect-metadata";
-import { Logger, ValidationPipe } from "@nestjs/common";
+import { Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { NestFactory } from "@nestjs/core";
 import { NestExpressApplication } from "@nestjs/platform-express";
 import { AppModule } from "./app.module";
 import { AllExceptionsFilter } from "./common/filters/all-exceptions.filter";
 import { TransformInterceptor } from "./common/interceptors/transform.interceptor";
+import { httpValidationPipe } from "./common/validation/validation-pipe.factory";
 import { lanIPv4Addresses } from "./common/utils/net-address.util";
 import { ModularLogger } from "./common/logger/modular-logger";
 
@@ -48,13 +49,8 @@ async function bootstrap() {
   // 与存档进程同一口径：反代后面必须开，直连不能开（见 main.ts 的完整说明）
   app.set("trust proxy", config.get<boolean>("trustProxy") ?? false);
   app.enableCors({ origin: corsOrigins.includes("*") ? true : corsOrigins });
-  app.useGlobalPipes(
-    new ValidationPipe({
-      whitelist: true,
-      transform: true,
-      transformOptions: { enableImplicitConversion: true },
-    }),
-  );
+  // 与存档进程同一口径（httpValidationPipe 工厂，含 #1172 的中文兜底翻译）
+  app.useGlobalPipes(httpValidationPipe());
   app.useGlobalFilters(new AllExceptionsFilter());
   app.useGlobalInterceptors(new TransformInterceptor());
 

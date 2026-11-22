@@ -28,6 +28,7 @@ const { NestFactory } = require("@nestjs/core");
 const { ValidationPipe } = require("@nestjs/common");
 const { AppModule } = require("../dist/app.module");
 const { AllExceptionsFilter } = require("../dist/common/filters/all-exceptions.filter");
+const { httpValidationPipe } = require("../dist/common/validation/validation-pipe.factory");
 const { TransformInterceptor } = require("../dist/common/interceptors/transform.interceptor");
 const { DatabaseService } = require("../dist/database/database.service");
 const { EQUIPMENT_SLOT_KEYS } = require("../dist/common/constants/game-enums");
@@ -95,7 +96,7 @@ async function api(method, route, options = {}) {
 (async () => {
   const app = await NestFactory.create(AppModule.register({ realtime: true }), { logger: false });
   app.setGlobalPrefix("api");
-  app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true, transformOptions: { enableImplicitConversion: true } }));
+  app.useGlobalPipes(httpValidationPipe());
   app.useGlobalFilters(new AllExceptionsFilter());
   app.useGlobalInterceptors(new TransformInterceptor());
   await app.listen(0);
