@@ -46,6 +46,20 @@ import { overflowText } from "./bounds";
  * （子元素的 handler 先跑，父元素的 state 还没更新看不到抑制标记）。现在把「空白处按下」
  * 交给 viewBox 大小的透明 `<rect>`（画在最底层），子元素天然优先 —— 不需要任何 flag。
  *
+ * ## 缩放与平移（#1201，全做在本组件内部，页面零感知）
+
+ * `view` 状态是 **viewBox 的子矩形**（Tiled 口径 `{x,y,w,h}`），倍率 = `detail.width / view.w`。
+ * 所有元素照旧画在 map 坐标系里，所以**天然跟随缩放**——「元素同时放大缩小」不需要任何额外
+ * 代码；描边有 `non-scaling-stroke` 兜着（屏幕恒定线宽），点标记 / 标签按 map 单位取值，
+ * 放大时跟着变大，正是需求要的效果。
+ *
+ * - **滚轮**：光标为锚点（指哪放哪）。必须用原生 `wheel` 监听（`passive: false` 才能
+ *   `preventDefault`）——React 合成的 `onWheel` 是 passive 的，拦不住页面滚动。
+ * - **右上角 ＋/－/重置**：以当前视野中心为锚点；1×（全图）时禁止再缩。
+ * - **拖动平移**：仅查看模式且放大后启用——编辑模式的「按下空白」已经被各种绘制语义占用，
+ *   不能再抢；编辑时想挪视野用滚轮 / 按钮。
+ * - `pointOf` 按当前 view 折算，任何倍率下拖拽 / 点绘 / 放点都精确；平移贴边夹持。
+ *
  * ## 坐标系之外的两个约定
  *
  * - 线宽用 `vectorEffect="non-scaling-stroke"`：viewBox 是 TMX 像素（8192），容器只有几百像素，
@@ -114,6 +128,14 @@ export const MIN_DRAW_PX = 16;
  * 大图上小到点不中、小图上大到误闭合。
  */
 export const CLOSE_HIT_RADIUS_RATIO = 1 / 350;
+
+/** 缩放倍率上限（1× = 全图；16× 下一个点位标签能占小半块画布，够用了） */
+const ZOOM_MAX = 16;
+/** 单次滚轮 / 按钮缩放的步进（1.25 倍：一格一档，走 6 档到 4×，不至于一滚就糊脸） */
+const ZOOM_STEP = 1.25;
+/** 缩放 / 平移控件的小按钮样式（token 组合，与画布上的提示横幅同一套底） */
+const ZOOM_BUTTON_CLASS =
+  "flex h-7 w-7 items-center justify-center rounded-md border border-line bg-surface-0/85 text-sm leading-none text-ink-2 transition-colors hover:border-gold-dim hover:text-ink-1 disabled:cursor-not-allowed disabled:opacity-40";
 
 export function MapCanvas({
   detail,
@@ -195,6 +217,21 @@ export function MapCanvas({
   const [vertexDrag, setVertexDrag] = useState<{ box: MapCollision; index: number; at: DrawPoint; moved: boolean } | null>(
     null,
   );
+  /**
+   * 当前视野：viewBox 的子矩形（Tiled 口径）。1× 时恒等于整张图；
+   * 倍率 = `detail.width / view.w`。缩放 / 平移都只动这四个数。
+   */
+  const [view, setView] = useState({ x: 0, y: 0, w: detail.width, h: detail.height });
+  /** 拖动平移进行中：记录按下时的屏幕位置与视野原点，move 里按位移折算 */
+  const [pan, setPan] = useState<{ from: { x: number; y: number }; origin: { x: number; y: number } } | null>(null);
+  /** 当前倍率（>1 = 已放大） */
+  const zoom = detail.width / view.w;
+
+  // 切换地图（或图尺寸变了）复位视野：上一张图的残留偏移对这张图没有意义
+  useEffect(() => {
+    setView({ x: 0, y: 0, w: detail.width, h: detail.height });
+    setPan(null);
+  }, [detail.id, detail.width, detail.height]);
 
   // 所有地图的预览图都是 TMX 的等比缩小（实测 2048 vs 8192），容器按 TMX 宽高比留位，
   // 图片 object-contain 正好铺满 —— 不写死 8192，也不假设正方形。
@@ -211,20 +248,64 @@ export function MapCanvas({
    *
    * 基准取 **svg 自己的 rect**（不是事件目标的）：点在 `<g>` / `<circle>` 上时，
    * `getBoundingClientRect()` 返回的是那个小圆的包围盒 —— 曾因此把拖动坐标算到图外。
+   * 缩放后（#1201）svg 的 viewBox 是 `view` 子矩形，屏幕像素要按 `view` 折算并加上偏移。
    */
   const pointOf = useCallback(
     (event: { clientX: number; clientY: number }): DrawPoint => {
       const rect = svgRef.current?.getBoundingClientRect();
       if (!rect || rect.width <= 0 || rect.height <= 0) return { x: 0, y: 0 };
-      const x = ((event.clientX - rect.left) / rect.width) * detail.width;
-      const y = ((event.clientY - rect.top) / rect.height) * detail.height;
+      const x = ((event.clientX - rect.left) / rect.width) * view.w + view.x;
+      const y = ((event.clientY - rect.top) / rect.height) * view.h + view.y;
       return {
         x: Math.min(Math.max(x, 0), detail.width),
         y: Math.min(Math.max(y, 0), detail.height),
       };
     },
+    [view, detail.width, detail.height],
+  );
+
+  /**
+   * 以 `point`（map 坐标）为锚点缩放一步
+   *
+   * 锚点不动是唯一要紧的事：光标指着的图上位置，缩放前后都得留在屏幕同一处——
+   * 推导：`view.x' = p.x − (p.x − view.x) × (w'/w)`（相似三角形）。夹在地图边界内（贴边）。
+   */
+  const zoomAt = useCallback(
+    (point: DrawPoint, factor: number) => {
+      setView((current) => {
+        const w = Math.min(detail.width, Math.max(detail.width / ZOOM_MAX, current.w * factor));
+        const h = w * (detail.height / detail.width);
+        const x = Math.min(Math.max(point.x - (point.x - current.x) * (w / current.w), 0), detail.width - w);
+        const y = Math.min(Math.max(point.y - (point.y - current.y) * (h / current.h), 0), detail.height - h);
+        return { x, y, w, h };
+      });
+    },
     [detail.width, detail.height],
   );
+
+  /**
+   * 滚轮缩放：原生监听 + `passive: false`（React 合成 onWheel 是 passive 的，preventDefault 无效，
+   * 页面会跟着滚）。依赖 view 重挂监听——回调很轻，不值得为省一次挂载引入 ref 镜像。
+   */
+  useEffect(() => {
+    const svg = svgRef.current;
+    if (!svg) return;
+    const onWheel = (event: WheelEvent) => {
+      event.preventDefault();
+      const rect = svg.getBoundingClientRect();
+      if (rect.width <= 0 || rect.height <= 0) return;
+      const point = {
+        x: ((event.clientX - rect.left) / rect.width) * view.w + view.x,
+        y: ((event.clientY - rect.top) / rect.height) * view.h + view.y,
+      };
+      zoomAt(point, event.deltaY < 0 ? 1 / ZOOM_STEP : ZOOM_STEP);
+    };
+    svg.addEventListener("wheel", onWheel, { passive: false });
+    return () => svg.removeEventListener("wheel", onWheel);
+  }, [view, zoomAt]);
+
+  /** 以当前视野中心为锚点缩放（＋/－按钮） */
+  const zoomByButton = (factor: number) => zoomAt({ x: view.x + view.w / 2, y: view.y + view.h / 2 }, factor);
 
   // Esc 取消：拖到一半发现画错了，不用松手再删一个区域 / 不用再把它拖回去
   useEffect(() => {
@@ -236,6 +317,7 @@ export function MapCanvas({
       setPolyDraft(null);
       setPolyCursor(null);
       setVertexDrag(null);
+      setPan(null);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -249,6 +331,7 @@ export function MapCanvas({
       setPolyDraft(null);
       setPolyCursor(null);
       setVertexDrag(null);
+      setPan(null);
     }
   }, [editing]);
 
@@ -261,7 +344,14 @@ export function MapCanvas({
    * 都把指针捕获到 `svg` 上 —— 之后 move / up 统一由 `svg` 收，拖到图外也不会丢事件。
    */
   const onBackgroundDown = (event: React.PointerEvent<SVGRectElement>) => {
-    if (!editing || event.button !== 0) return;
+    if (event.button !== 0) return;
+    // 放大后的查看模式：拖空白 = 平移视野（编辑模式的按下已被绘制语义占用，不平移）
+    if (!editing && zoom > 1) {
+      event.currentTarget.ownerSVGElement?.setPointerCapture(event.pointerId);
+      setPan({ from: { x: event.clientX, y: event.clientY }, origin: { x: view.x, y: view.y } });
+      return;
+    }
+    if (!editing) return;
     const point = pointOf(event);
     if (mode === "spawn") {
       event.currentTarget.ownerSVGElement?.setPointerCapture(event.pointerId);
@@ -302,6 +392,20 @@ export function MapCanvas({
   };
 
   const movePointer = (event: React.PointerEvent<SVGSVGElement>) => {
+    if (pan) {
+      // 平移：屏幕位移按当前 view 折算回 map 单位（方向取反——抓住地图拖，地图跟手走）
+      const rect = svgRef.current?.getBoundingClientRect();
+      if (rect && rect.width > 0 && rect.height > 0) {
+        const dx = ((event.clientX - pan.from.x) / rect.width) * view.w;
+        const dy = ((event.clientY - rect.top) / rect.height) * view.h;
+        setView((current) => ({
+          ...current,
+          x: Math.min(Math.max(pan.origin.x - dx, 0), detail.width - current.w),
+          y: Math.min(Math.max(pan.origin.y - dy, 0), detail.height - current.h),
+        }));
+      }
+      return;
+    }
     if (vertexDrag) {
       const point = pointOf(event);
       const moved = vertexDrag.moved || Math.hypot(point.x - vertexDrag.at.x, point.y - vertexDrag.at.y) > dotRadius * 0.3;
@@ -325,6 +429,10 @@ export function MapCanvas({
   };
 
   const releasePointer = (event: React.PointerEvent<SVGSVGElement>) => {
+    if (pan) {
+      setPan(null);
+      return;
+    }
     const point = pointOf(event);
     if (vertexDrag) {
       const { box, index, moved } = vertexDrag;
@@ -399,9 +507,11 @@ export function MapCanvas({
 
       <svg
         ref={svgRef}
-        viewBox={`0 0 ${detail.width} ${detail.height}`}
+        viewBox={`${view.x} ${view.y} ${view.w} ${view.h}`}
         preserveAspectRatio="none"
-        className={`absolute inset-0 h-full w-full ${editing ? "cursor-crosshair" : ""} ${dragging ? "cursor-grabbing" : ""}`}
+        className={`absolute inset-0 h-full w-full ${editing ? "cursor-crosshair" : ""} ${dragging ? "cursor-grabbing" : ""} ${
+          pan ? "cursor-grabbing" : !editing && zoom > 1 ? "cursor-grab" : ""
+        }`}
         style={editing ? { touchAction: "none" } : undefined}
         role="img"
         aria-label={`${detail.label} 的刷怪区、点位与碰撞盒`}
@@ -412,6 +522,7 @@ export function MapCanvas({
           setDraft(null);
           setDrag(null);
           setPolyCursor(null);
+          setPan(null);
         }}
       >
         {/* 空白处的命中层：画在最底层，尺寸 = 整张图。有它就不必在 `<svg>` 上判「是不是点到了对象」 */}
@@ -740,8 +851,28 @@ export function MapCanvas({
         </div>
       ) : null}
 
+      {/* 缩放控件（右上角）：滚轮之外还留按钮入口——触屏 / 没滚轮的鼠标也得能缩。
+          ＋－以当前视野中心为锚点；1× 时不能再缩、「重置」也就没有意义 */}
+      <div className="absolute right-1.5 top-1.5 flex flex-col gap-1">
+        <button type="button" className={ZOOM_BUTTON_CLASS} title="放大（滚轮上）" onClick={() => zoomByButton(1 / ZOOM_STEP)} disabled={zoom >= ZOOM_MAX}>
+          ＋
+        </button>
+        <button type="button" className={ZOOM_BUTTON_CLASS} title="缩小（滚轮下）" onClick={() => zoomByButton(ZOOM_STEP)} disabled={zoom <= 1}>
+          －
+        </button>
+        <button
+          type="button"
+          className={`${ZOOM_BUTTON_CLASS} text-[10px]`}
+          title="复位到 1:1 全图"
+          onClick={() => setView({ x: 0, y: 0, w: detail.width, h: detail.height })}
+          disabled={zoom <= 1}
+        >
+          重置
+        </button>
+      </div>
+
       <div className="pointer-events-none absolute bottom-1 right-1 rounded bg-surface-0/70 px-1.5 py-0.5 text-[10px] text-ink-5">
-        {detail.width} × {detail.height} px · {detail.cols}×{detail.rows} 格
+        {detail.width} × {detail.height} px · {detail.cols}×{detail.rows} 格{zoom > 1 ? ` · ${Math.round(zoom * 100)}%` : ""}
       </div>
     </div>
   );
