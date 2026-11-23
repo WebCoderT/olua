@@ -1,13 +1,17 @@
-import { Node, Vec3 } from "cc";
+import { Node, Vec2, Vec3 } from "cc";
 import { maps, npcs } from "../../../configs/game-config";
 // 副作用导入：NPC 点击行为在 npcClicks 里登记（数据在服务端，行为留客户端）
 import "../../../configs/npcClicks";
+import AutoBattle from "../../core/AutoBattle";
 import LayerManager from "../../core/LayerManager";
 import QuestNpcMarks from "../../core/QuestNpcMarks";
 import GameUiHelper from "../../helpers/GameUiHelper";
 import QuestTalk from "../../utils/net/QuestTalk";
 import { markWorldInteractive } from "../../utils/input/UiHit";
 import { addObstacleCollider } from "../../utils/physics/ObstacleCollider";
+
+/** NPC 可交互半径（世界像素）：与服务端 talk 距离闸 QUEST_NPC_RADIUS 同口径（120px） */
+const NPC_INTERACT_RADIUS = 120;
 
 /**
  * 地图对象生成器（NPC 点位 / 复活点）
@@ -79,9 +83,7 @@ export default class MapObjectSpawner {
     npcNode.on(
       Node.EventType.TOUCH_END,
       () => {
-        // 点 NPC 即一次「对话」（#396）：推进 talk 目标，失败静默；原有点击行为照旧
-        QuestTalk.report(id);
-        npc.onClick && npc.onClick();
+        this.interactNpc(id, npcNode);
       },
       this,
     );
@@ -89,5 +91,36 @@ export default class MapObjectSpawner {
     // 点它也不清掉当前攻击目标（见 LayerManager.isPointOnWorldInteractive）。
     // 标记就打在这个挂了点击监听的节点上：判定范围与它的点击范围天然一致
     markWorldInteractive(npcNode);
+  }
+
+  /**
+   * NPC 点击交互：在可交互范围内直接触发（点 NPC 即一次「对话」（#396），失败静默，
+   * 原有点击行为照旧）；不在范围内**不提示也不弹窗**，自动寻路走近，进入范围后再触发。
+   *
+   * 范围口径 = 服务端 talk 距离闸 `QUEST_NPC_RADIUS`（120px，`server/src/common/constants/quest.ts`）：
+   * 走到位后 talk 必过闸，不会出现「自动走过去了还是提示太远」。
+   */
+  private interactNpc(id: string, npcNode: Node) {
+    const npc = npcs.get(id);
+    if (!npc) return;
+    const fire = () => {
+      QuestTalk.report(id);
+      npc.onClick && npc.onClick();
+    };
+    const npcPos = npcNode.getWorldPosition();
+    const me = AutoBattle.getRolePosition();
+    if (me && Math.hypot(me.x - npcPos.x, me.y - npcPos.y) <= NPC_INTERACT_RADIUS) {
+      fire();
+      return;
+    }
+    // 走过去再触发：目标点即 NPC 点位（占位是障碍，寻路会就近停在身边），进入范围圈即触发
+    const accepted = AutoBattle.requestMoveToNear(
+      new Vec2(npcPos.x, npcPos.y),
+      new Vec2(npcPos.x, npcPos.y),
+      NPC_INTERACT_RADIUS,
+      fire,
+    );
+    // 主角未就绪（死亡等）：受理不了就退回直接触发，保持旧行为可用
+    if (!accepted) fire();
   }
 }

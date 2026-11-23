@@ -1,4 +1,4 @@
-import { isValid, Node, Rect, Vec2 } from "cc";
+import { isValid, Node, Rect, Vec2, Vec3 } from "cc";
 import { autoBattle } from "../../configs/autoBattle";
 import { maps } from "../../configs/game-config";
 import { skills } from "../../configs/skill";
@@ -40,6 +40,10 @@ export default class AutoBattle {
   private static pendingSkill: SkillId | null = null;
   /** 点击寻路的目标点（小地图弹窗下发；静态目标，走到即结束，玩家手动移动可打断） */
   private static pendingPoint: Vec2 | null = null;
+  /** 交互寻路（NPC 点击走近交互）：走进该点周围 interactRadius 即视为到达并触发 interactArrive */
+  private static interactNear: Vec2 | null = null;
+  private static interactRadius = 0;
+  private static interactArrive: (() => void) | null = null;
   /** 当前自动战斗目标 */
   private static target: Node | null = null;
   /** 无法接近目标的拉黑记录（节点 -> 解禁时间戳） */
@@ -145,6 +149,9 @@ export default class AutoBattle {
     this.pendingSkill = null;
     this.target = null;
     this.pendingPoint = new Vec2(point.x, point.y);
+    // 新寻路覆盖旧的交互寻路：走到一半又点了别的目标，旧回调作废
+    this.interactNear = null;
+    this.interactArrive = null;
     this.path = [];
     this.pathIndex = 0;
     this.stuckCount = 0;
@@ -160,6 +167,27 @@ export default class AutoBattle {
   /** 当前地图 id（读服务端快照里的点位用；空串 = 还没注册，调用方按「没有点位」处理） */
   static getMapId(): string {
     return this.mapId;
+  }
+
+  /** 主角当前世界坐标（未就绪返回 null；NPC 点击的交互范围判定用） */
+  static getRolePosition(): Vec3 | null {
+    return this.roleDisplay && isValid(this.roleDisplay) ? this.roleDisplay.getWorldPosition() : null;
+  }
+
+  /**
+   * 请求寻路直至进入指定点周围 radius 范围（NPC 点击走近交互）：与 requestMoveTo 同一套
+   * 走位机制（卡住检测 / 按需重算路径），但到达判定是「进入范围」而非「走到点」——
+   * NPC 占位是障碍，走到点本身不可达，寻路只会停在它身边。
+   * 进入范围即触发 `onNear` 并停住（静默，不弹「已到达目的地」）；
+   * 玩家手动移动 / 新寻路 / 卡住放弃都会取消，回调不再触发。
+   * @returns 是否受理（主角未就绪或死亡时不受理，调用方自行退回直接交互）
+   */
+  static requestMoveToNear(point: Vec2, nearWorld: Vec2, radius: number, onNear: () => void): boolean {
+    if (!this.requestMoveTo(point)) return false;
+    this.interactNear = new Vec2(nearWorld.x, nearWorld.y);
+    this.interactRadius = radius;
+    this.interactArrive = onNear;
+    return true;
   }
 
   /**
@@ -282,6 +310,8 @@ export default class AutoBattle {
   private static clearRuntimeState() {
     this.pendingSkill = null;
     this.pendingPoint = null;
+    this.interactNear = null;
+    this.interactArrive = null;
     this.target = null;
     this.path = [];
     this.pathIndex = 0;
@@ -323,6 +353,11 @@ export default class AutoBattle {
   private static approachToPoint(roleDisplay: RoleDisplay) {
     const to = this.pendingPoint as Vec2;
     const position = roleDisplay.getWorldPosition();
+    // 交互寻路：先判「进入范围」（每帧判，走进圈里立刻触发，不一定要走到点跟前）
+    if (this.interactNear && Math.hypot(position.x - this.interactNear.x, position.y - this.interactNear.y) <= this.interactRadius) {
+      this.finishPointMove();
+      return;
+    }
     if (Math.hypot(position.x - to.x, position.y - to.y) <= autoBattle.arriveTolerance) {
       this.finishPointMove();
       return;
@@ -332,11 +367,13 @@ export default class AutoBattle {
     this.advance(roleDisplay, to, () => this.repathTo(roleDisplay, to), () => this.giveUpPointMove());
   }
 
-  /** 到达点击寻路的目标点：清状态停住并提示（挂机开关不动，下一 tick 自动恢复选怪出手） */
+  /** 到达点击寻路的目标点：清状态停住；交互寻路静默触发回调（不弹「已到达目的地」），普通寻路照旧提示 */
   private static finishPointMove() {
+    const arrive = this.interactArrive;
     this.clearRuntimeState();
     this.roleDisplay?.setAutoMove(null);
-    GameUiHelper.createTip("map_move_arrive_tip");
+    if (arrive) arrive();
+    else GameUiHelper.createTip("map_move_arrive_tip");
   }
 
   /** 点击寻路无法到达（连续卡住）：清状态停住并提示 */
