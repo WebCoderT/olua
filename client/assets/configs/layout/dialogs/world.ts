@@ -23,6 +23,34 @@ export const mapTeleportDialogLayout = {
   groupTitle: { fontSize: T.fontSize.f14, height: 20, color: T.gold[4] },
   /** 地图按钮网格：每行 4 个（4 × 123 + 3 × 20 = 552，在 580 容器内水平居中） */
   grid: { spacingX: 20, spacingY: 12 },
+  /**
+   * 按钮格（#1205）：地图按钮 + 下方一行「进入所需等级」
+   *
+   * 等级写在按钮**外面**（按钮下沿再往下 2px）而不是塞进按钮字里：地图名不被挤短，
+   * 等级按同一基线对齐。格子宽 = 按钮宽，所以网格仍是每行 4 个；格子高 36 + 2 + 14 = 52。
+   */
+  cell: {
+    /** 等级行高（按钮正下方） */
+    levelHeight: 14,
+    /** 按钮与等级行的间距 */
+    levelGap: 2,
+    levelFontSize: T.fontSize.f10,
+    /** 等级文字常态（次要元信息色：等级是参照信息，不抢按钮名的视觉） */
+    levelColor: T.text[3],
+    /** 没达到等级：等级行转警告色（按钮底板另叠一层透明度，见 lockedOpacity） */
+    lockedTextColor: T.amber,
+    /** 置灰透明度（0~255）：只压按钮底板，等级行保持可读——它是「为什么点不动」的唯一解释 */
+    lockedOpacity: 110,
+  },
+  /** 文案（模板用 {x} 占位，组件 split/join 替换） */
+  texts: {
+    /** 等级行：{level} = 进入所需等级 */
+    level: "Lv.{level}",
+    /** 等级 0 = 不限 */
+    unlimited: "不限",
+    /** 没达到等级时点按钮的提示（{map} 名称 / {level} 所需等级） */
+    lockedTip: "需要 {level} 级才能进入「{map}」",
+  },
 };
 
 //#endregion
