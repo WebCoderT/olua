@@ -59,6 +59,8 @@ import { overflowText } from "./bounds";
  * - **拖动平移**：仅查看模式且放大后启用——编辑模式的「按下空白」已经被各种绘制语义占用，
  *   不能再抢；编辑时想挪视野用滚轮 / 按钮。
  * - `pointOf` 按当前 view 折算，任何倍率下拖拽 / 点绘 / 放点都精确；平移贴边夹持。
+ * - **底图（预览图）用同一套几何跟随**（#1203）：img 加 `scale(zoom) translate(-view%)`
+ *   变换，与 viewBox 子矩形严格一致——否则叠加层缩放了、底图还是全图，两层对不上。
  *
  * ## 坐标系之外的两个约定
  *
@@ -500,6 +502,13 @@ export function MapCanvas({
           src={gameResUrl(mapPreview(detail.id), "jpg")}
           onError={() => setImageFailed(true)}
           className="absolute inset-0 h-full w-full object-contain"
+          style={{
+            // 底图跟随缩放（#1203）：与 viewBox 子矩形同一套几何——先按 view 偏移平移
+            // （百分比相对元素自身尺寸 = 整图），再从左上原点放大 zoom 倍。
+            // 1× 时两个值都归零退化为无变换；容器 overflow-hidden 兜裁剪。
+            transform: `scale(${zoom}) translate(${(-view.x / detail.width) * 100}%, ${(-view.y / detail.height) * 100}%)`,
+            transformOrigin: "0 0",
+          }}
           // 底图只是参照物：拖选 / 右键另存都不该发生（这一层是「纸」，不是内容）
           draggable={false}
         />
