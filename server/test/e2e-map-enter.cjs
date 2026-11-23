@@ -227,20 +227,21 @@ function connect(url) {
     const adminToken = adminLogin.data && adminLogin.data.token;
     check(!!adminToken, "准备：管理员已登录", adminLogin.message);
 
-    // #1150 换图后 MAP_DEFAULTS 的 level 全是 0（门槛是运营数据），出厂 label 也换成素材后缀。
-    // 门槛是这套的主题 —— 起服后自己把图 2 / 图 10 的门槛配出来，label 一律现读配置、不锁名字。
+    // #1208 起 62 张图都有出厂等级（四段分档），但**门槛是运营数据**，不能拿它当断言前提：
+    // 准备段自己把图 2 / 图 10 抬到 40 / 50、图 3 清回 0 —— 本套测的是判据与放行规则，不是那张分档表。
+    // label 一律现读配置、不锁名字。
     const mapLabel = {};
     for (const id of ["1", "2", "10"]) {
       const row = (await api(baseUrl, "GET", `admin/maps/${id}`, { token: adminToken, zoneId: ADMIN_ZONE })).data;
       mapLabel[id] = row.label;
     }
-    for (const [id, level] of [["2", 40], ["10", 50]]) {
+    for (const [id, level] of [["2", 40], ["3", 0], ["10", 50]]) {
       const row = (await api(baseUrl, "GET", `admin/maps/${id}`, { token: adminToken, zoneId: ADMIN_ZONE })).data;
       const patched = await api(baseUrl, "PATCH", `admin/maps/${id}`, {
         token: adminToken, zoneId: ADMIN_ZONE,
         body: { label: row.label, type: row.type, level },
       });
-      check(patched.code === 0, `准备：图 ${id} 进入门槛配成 ${level} 级（#1150 换图后出厂 level 全 0）`, patched.message);
+      check(patched.code === 0, `准备：图 ${id} 进入门槛配成 ${level} 级`, patched.message);
     }
 
     const registered = await api(baseUrl, "POST", "auth/register", { body: { username: "map_player", password: "pass1234" } });
@@ -329,7 +330,7 @@ function connect(url) {
       const rejected = await session.waitForResult(() => session.sendMapEnter("2"), "2");
       check(!!rejected && rejected.ok === false && rejected.field === "level" && Number(rejected.need) > 0, "mapEnter(2) 被拒且原因同 worldJoin", JSON.stringify(rejected));
       const allowed = await session.waitForResult(() => session.sendMapEnter("3"), "3");
-      check(!!allowed && allowed.ok === true, "mapEnter(3) 放行（图 3 出厂 level 0，不设门槛）", JSON.stringify(allowed));
+      check(!!allowed && allowed.ok === true, "mapEnter(3) 放行（准备段把图 3 门槛清 0）", JSON.stringify(allowed));
       const same = await session.waitForResult(() => session.sendMapEnter("0"), "0");
       check(!!same && same.ok === true, "mapEnter(当前图) 放行", JSON.stringify(same));
       checkEqual((await roleData()).mapAt, "0", "意图不落地：位置仍是 0（只有 worldJoin 才写位置）");
@@ -396,7 +397,7 @@ function connect(url) {
     group("六、正常换图：够条件放行，位置跟着走");
     {
       const allowed = await session.waitForResult(() => session.sendMapEnter("3"), "3");
-      check(!!allowed && allowed.ok === true, "mapEnter(3) 放行（雪域高原 1 级）", JSON.stringify(allowed));
+      check(!!allowed && allowed.ok === true, "mapEnter(3) 放行（门槛 0，1 级号可进）", JSON.stringify(allowed));
       const joined = await session.joinWorld("3");
       check(!!joined && joined.mapId === "3", "worldJoin(3) 成功", JSON.stringify(joined && joined.mapId));
       checkEqual((await roleData()).mapAt, "3", "位置更新为 3");
