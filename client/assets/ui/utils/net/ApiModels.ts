@@ -7006,7 +7006,7 @@ export type MapConfig = {
    */
   label: string;
   /**
-   * 类型码（0 安全 / 1 等级 / 2 战斗力 / 3 战魂）
+   * 类型码（0 安全 / 1 野外）
    */
   type: string;
   /**
@@ -7017,14 +7017,6 @@ export type MapConfig = {
    * 进入所需等级（0 = 不限）
    */
   level: number;
-  /**
-   * 进入所需战斗力（0 = 不限）
-   */
-  combat: number;
-  /**
-   * 进入所需战魂阶（0 = 不限）
-   */
-  soulOfWar: number;
   /**
    * NPC 点位（#672 起由后台放置；坐标已是世界坐标，客户端直接摆节点）
    */
@@ -7061,7 +7053,7 @@ export type MapTypeGroup = {
    */
   type: string;
   /**
-   * 类型名（安全地图 / 等级地图 / 战斗力地图 / 战魂地图）
+   * 类型名（安全地图 / 野外地图）
    */
   label: string;
 };
@@ -9554,25 +9546,17 @@ export type MapSummary = {
    */
   label: string;
   /**
-   * 类型码（0 安全 / 1 等级 / 2 战斗力 / 3 战魂）
+   * 类型码（0 安全 / 1 野外）
    */
   type: string;
   /**
-   * 类型名（安全地图 / 等级地图 / 战斗力地图 / 战魂地图）
+   * 类型名（安全地图 / 野外地图）
    */
   typeLabel: string;
   /**
    * 进入所需等级（0 = 不限）
    */
   level: number;
-  /**
-   * 进入所需战斗力（0 = 不限）
-   */
-  combat: number;
-  /**
-   * 进入所需战魂阶（0 = 不限）
-   */
-  soulOfWar: number;
   /**
    * 客户端资源路径（如 map/0/0）
    */
@@ -9864,25 +9848,17 @@ export type MapDetail = {
    */
   label: string;
   /**
-   * 类型码（0 安全 / 1 等级 / 2 战斗力 / 3 战魂）
+   * 类型码（0 安全 / 1 野外）
    */
   type: string;
   /**
-   * 类型名（安全地图 / 等级地图 / 战斗力地图 / 战魂地图）
+   * 类型名（安全地图 / 野外地图）
    */
   typeLabel: string;
   /**
    * 进入所需等级（0 = 不限）
    */
   level: number;
-  /**
-   * 进入所需战斗力（0 = 不限）
-   */
-  combat: number;
-  /**
-   * 进入所需战魂阶（0 = 不限）
-   */
-  soulOfWar: number;
   /**
    * 客户端资源路径（如 map/0/0）
    */
@@ -10425,21 +10401,13 @@ export type SaveMapConfig = {
    */
   label: string;
   /**
-   * 地图类型（0 安全地图 / 1 等级地图 / 2 战斗力地图 / 3 战魂地图）
+   * 地图类型（0 安全地图 / 1 野外地图）
    */
-  type: "0" | "1" | "2" | "3";
+  type: "0" | "1";
   /**
    * 进入所需等级（0 = 不限）
    */
   level: number;
-  /**
-   * 进入所需战斗力（0 = 不限）
-   */
-  combat: number;
-  /**
-   * 进入所需战魂阶（0 = 不限）
-   */
-  soulOfWar: number;
 };
 
 export type SaveSpawnArea = {

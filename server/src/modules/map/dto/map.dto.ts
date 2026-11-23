@@ -390,20 +390,14 @@ export class MapSummaryDto {
   @ApiProperty({ description: "地图名" })
   label: string;
 
-  @ApiProperty({ description: "类型码（0 安全 / 1 等级 / 2 战斗力 / 3 战魂）" })
+  @ApiProperty({ description: "类型码（0 安全 / 1 野外）" })
   type: string;
 
-  @ApiProperty({ description: "类型名（安全地图 / 等级地图 / 战斗力地图 / 战魂地图）" })
+  @ApiProperty({ description: "类型名（安全地图 / 野外地图）" })
   typeLabel: string;
 
   @ApiProperty({ description: "进入所需等级（0 = 不限）" })
   level: number;
-
-  @ApiProperty({ description: "进入所需战斗力（0 = 不限）" })
-  combat: number;
-
-  @ApiProperty({ description: "进入所需战魂阶（0 = 不限）" })
-  soulOfWar: number;
 
   @ApiProperty({ description: "客户端资源路径（如 map/0/0）" })
   src: string;
@@ -463,7 +457,7 @@ export class MapConfigDto {
   @ApiProperty({ description: "地图名" })
   label: string;
 
-  @ApiProperty({ description: "类型码（0 安全 / 1 等级 / 2 战斗力 / 3 战魂）" })
+  @ApiProperty({ description: "类型码（0 安全 / 1 野外）" })
   type: string;
 
   @ApiProperty({ description: "类型名" })
@@ -471,12 +465,6 @@ export class MapConfigDto {
 
   @ApiProperty({ description: "进入所需等级（0 = 不限）" })
   level: number;
-
-  @ApiProperty({ description: "进入所需战斗力（0 = 不限）" })
-  combat: number;
-
-  @ApiProperty({ description: "进入所需战魂阶（0 = 不限）" })
-  soulOfWar: number;
 
   @ApiProperty({
     description: "NPC 点位（#672 起由后台放置；坐标已是世界坐标，客户端直接摆节点）",
@@ -527,7 +515,7 @@ export class MapTypeGroupDto {
   @ApiProperty({ description: "类型码" })
   type: string;
 
-  @ApiProperty({ description: "类型名（安全地图 / 等级地图 / 战斗力地图 / 战魂地图）" })
+  @ApiProperty({ description: "类型名（安全地图 / 野外地图）" })
   label: string;
 }
 
@@ -575,14 +563,14 @@ export class MapDetailDto extends MapSummaryDto {
 }
 
 /**
- * 保存一张图的玩法配置（**整份覆盖**这五个字段）
+ * 保存一张图的玩法配置（**整份覆盖**这三个字段，#1177 后）
  *
- * 为什么是整份而不是部分更新：这五项在页面上是一张表单、一次提交，
+ * 为什么是整份而不是部分更新：这几项在页面上是一张表单、一次提交，
  * 分字段更新只会让「两个管理员同时开两个标签页」变成互相覆盖一半 —— 整份提交至少是
  * 最后一次写入说了算，页面刷新就能看出来。
  *
- * 名称之外的四个字段都允许 0：**0 = 不限制**（安全地图就是「等级 0 / 战力 0 / 战魂 0」，
- * 而不是「等级 1」—— 后者会把 1 级新号挡在新手村外面）。
+ * 进入门槛只剩等级一项：**0 = 不限制**（安全地图就是「等级 0」，而不是「等级 1」——
+ * 后者会把 1 级新号挡在新手村外面）。战斗力 / 战魂阶两个门槛已随 #1177 删掉。
  */
 export class SaveMapConfigDto {
   @ApiProperty({ description: "地图名称（显示在传送弹窗 / 小地图 / 公告里）", maxLength: MAP_LABEL_MAX_LENGTH })
@@ -607,25 +595,6 @@ export class SaveMapConfigDto {
   @Max(MAP_ENTER_LIMITS.level.max, { message: `进入等级不能大于 ${MAP_ENTER_LIMITS.level.max}` })
   level: number;
 
-  @ApiProperty({
-    description: "进入所需战斗力（0 = 不限）",
-    minimum: MAP_ENTER_LIMITS.combat.min,
-    maximum: MAP_ENTER_LIMITS.combat.max,
-  })
-  @IsInt({ message: "进入战斗力必须是整数" })
-  @Min(MAP_ENTER_LIMITS.combat.min, { message: `进入战斗力不能小于 ${MAP_ENTER_LIMITS.combat.min}` })
-  @Max(MAP_ENTER_LIMITS.combat.max, { message: `进入战斗力不能大于 ${MAP_ENTER_LIMITS.combat.max}` })
-  combat: number;
-
-  @ApiProperty({
-    description: "进入所需战魂阶（0 = 不限）",
-    minimum: MAP_ENTER_LIMITS.soulOfWar.min,
-    maximum: MAP_ENTER_LIMITS.soulOfWar.max,
-  })
-  @IsInt({ message: "进入战魂阶必须是整数" })
-  @Min(MAP_ENTER_LIMITS.soulOfWar.min, { message: `进入战魂阶不能小于 ${MAP_ENTER_LIMITS.soulOfWar.min}` })
-  @Max(MAP_ENTER_LIMITS.soulOfWar.max, { message: `进入战魂阶不能大于 ${MAP_ENTER_LIMITS.soulOfWar.max}` })
-  soulOfWar: number;
 }
 
 /**

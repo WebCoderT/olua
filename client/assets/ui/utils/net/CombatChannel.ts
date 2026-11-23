@@ -1243,7 +1243,7 @@ export default class CombatChannel {
     const result: MapEnterResult = {
       mapId,
       ok: payload.ok === true,
-      field: payload.field === "level" || payload.field === "combat" || payload.field === "soul" ? payload.field : undefined,
+      field: payload.field === "level" ? payload.field : undefined,
       need: typeof payload.need === "number" && Number.isFinite(payload.need) ? payload.need : undefined,
       mapLabel: typeof payload.mapLabel === "string" ? payload.mapLabel : undefined,
     };
@@ -1376,7 +1376,7 @@ export interface MapEnterResult {
   mapId: string;
   ok: boolean;
   /** 缺哪一项（`ok = true` 时没有）；`unknown` = 图不存在，`start` = 还没有位置记录、只准进新手村 */
-  field?: "level" | "combat" | "soul" | "unknown" | "start";
+  field?: "level" | "unknown" | "start";
   /** 这张图要求的值（`ok = true` 时没有） */
   need?: number;
   /** 图名（提示里要用） */

@@ -299,8 +299,19 @@ function checkSpawnAreasInMap() {
     h: Number(row.h),
   }));
   if (areas.length === 0) {
-    problem("server/data/config-sync.sql", 0, "一个刷怪区都没解析出来 —— 快照格式变了，请同步改本审计的解析（别让它空跑即通过）");
-    return;
+    // #1177 全清后快照里的刷怪区归零是**合法状态**（任务线与刷怪区由运营重建）。
+    // 但不能「空跑即通过」：解析坏掉也会得 0。用快照头部的 counts 行当旁证 ——
+    // 头部声明了非 0 而这里一行都没解析出来，才是「格式变了」。
+    const countsLine = text.split("\n", 12).find((line) => line.startsWith("-- counts: ")) ?? "";
+    const declared = Number((countsLine.match(/map_spawn_areas=(\d+)/) ?? [])[1]);
+    if (Number.isFinite(declared) && declared > 0) {
+      problem("server/data/config-sync.sql", 0, `头部声明 map_spawn_areas=${declared}，却一行都没解析出来 —— 快照格式变了，请同步改本审计的解析`);
+      return;
+    }
+    if (!Number.isFinite(declared)) {
+      problem("server/data/config-sync.sql", 0, "快照头部没找到 -- counts: 行（含 map_spawn_areas=N）—— 解析依据丢了，请同步改本审计");
+      return;
+    }
   }
   if (Object.keys(sizes).length === 0) {
     problem("server/data/config-sync.sql", 0, "一张地图尺寸都没解析出来 —— 同上");

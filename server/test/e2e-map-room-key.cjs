@@ -46,13 +46,14 @@ const net = require("node:net");
 const os = require("node:os");
 const path = require("node:path");
 const WebSocket = require("ws");
+const { placeRolesAt } = require("./lib/place-role.cjs");
 
 const SERVER_DIR = path.join(__dirname, "..");
 const ENTRY = path.join(SERVER_DIR, "dist", "main.js");
 const ADMIN_CODE = "room-key-code";
 
-/** 新手村（1 级可进，出厂有刷怪区） */
-const HOME_MAP = "0";
+/** 图 1 八卦台（0 级门槛野外；#1177 全清后本套自铺刷怪区，新手村是安全地图长不出怪） */
+const HOME_MAP = "1";
 /** 采集节拍：1000 会让「等一帧」变成等一秒，整套会慢到没法看 */
 const MONITOR_MS = 200;
 
@@ -281,7 +282,7 @@ function withDb(dbPath, fn) {
     const roomKeyUtil = require(path.join(SERVER_DIR, "dist", "common", "utils", "room-key.util.js"));
     const { roomKey, splitRoomKey, isInstanceSlot, channelOfSlot, instanceIdOf, parseInstanceSeq } = roomKeyUtil;
 
-    checkEqual(roomKey(1, HOME_MAP), "1:0:0", "不传 slot 就是公共线（调用方不必到处写 '0'）");
+    checkEqual(roomKey(1, HOME_MAP), `1:${HOME_MAP}:0`, "不传 slot 就是公共线（调用方不必到处写 '0'）");
     checkEqual(roomKey(3, "12", "2"), "3:12:2", "三键拼装：区 + 图 + 线");
 
     const three = splitRoomKey("3:12:2");
@@ -312,7 +313,25 @@ function withDb(dbPath, fn) {
 
     //#endregion
 
+/**
+ * 给图 1 铺一块刷怪区（#1177 全清后快照不再带环带）。**必须在服务端就绪之后调用**
+ * （空库首启会用 config-sync.sql 整份替换配置表）。铺 2 只，迁移段要拿其中一只改老格式。
+ */
+function seedBattlefield(dbPath) {
+  const { DatabaseSync } = require("node:sqlite");
+  const db = new DatabaseSync(dbPath);
+  db.exec("DELETE FROM map_spawn_areas WHERE map_id = '1'");
+  const insert = db.prepare(
+    "INSERT INTO map_spawn_areas (map_id, name, monster_key, min, max, cx, cy, w, h, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+  );
+  const now = Date.now();
+  insert.run(HOME_MAP, "房号战场·壹", "1", 1, 1, 400, -400, 300, 300, now);
+  insert.run(HOME_MAP, "房号战场·贰", "1", 1, 1, 800, -500, 300, 300, now);
+  db.close();
+}
+
     server = await startServer(dbPath);
+    seedBattlefield(dbPath);
 
     //#region 二、服务端按新口径发牌与落库
 
@@ -322,14 +341,16 @@ function withDb(dbPath, fn) {
 
     const player = await preparePlayer(server.baseUrl, "room_key_player", "看房的甲");
     check(Boolean(player.token), "玩家注册并建号成功");
+    // #859：新号没有位置记录只准进新手村 —— 战场在图 1，先按运营摆位把人摆过去
+    placeRolesAt(dbPath, HOME_MAP, ["看房的甲"]);
     const session = await connectPlayer(server.baseUrl, player);
 
     const world = await session.joinWorld(HOME_MAP);
     const monsters = (world && world.monsters) || [];
     check(monsters.length > 0, "进图拿到权威快照（新手村出厂有刷怪区）", String(monsters.length));
     check(
-      monsters.every((monster) => /^m0_z1_c0_\d+$/.test(monster.instanceId)),
-      "实例 id 是 m0_z1_c0_N（新口径：区段 + 公共线段 + 序号）",
+      monsters.every((monster) => /^m1_z1_c0_\d+$/.test(monster.instanceId)),
+      "实例 id 是 m1_z1_c0_N（新口径：区段 + 公共线段 + 序号）",
       JSON.stringify(monsters.map((monster) => monster.instanceId)),
     );
 
@@ -356,7 +377,7 @@ function withDb(dbPath, fn) {
 
     group("三、存量 id 迁移：重启时补齐线段，并让在跑的旧内存作废");
     const victim = stored[stored.length - 1];
-    const legacyId = "m0_99999";
+    const legacyId = "m1_99999";
     withDb(dbPath, (db) => {
       db.prepare("UPDATE world_monsters SET instance_id = ?, slot = '' WHERE instance_id = ?").run(
         legacyId,
@@ -379,7 +400,7 @@ function withDb(dbPath, fn) {
       db.prepare("SELECT instance_id, slot FROM world_monsters WHERE map_id = ?").all(HOME_MAP),
     );
     check(
-      migrated.some((row) => row.instance_id === "m0_z1_c0_99999"),
+      migrated.some((row) => row.instance_id === "m1_z1_c0_99999"),
       "老格式被改写成新格式（重启时一次性补线段）",
       JSON.stringify(migrated.map((row) => row.instance_id)),
     );
@@ -388,7 +409,7 @@ function withDb(dbPath, fn) {
       "老格式不再留在库里（否则实时进程出手就是 20008）",
     );
     check(
-      migrated.filter((row) => row.instance_id === "m0_z1_c0_99999").every((row) => row.slot === "0"),
+      migrated.filter((row) => row.instance_id === "m1_z1_c0_99999").every((row) => row.slot === "0"),
       "改写时顺手把 slot 补成 '0'（空串不是合法槽位）",
     );
     const epochAfter = epochOf(victimZone);
@@ -402,7 +423,7 @@ function withDb(dbPath, fn) {
     const session2 = await connectPlayer(server.baseUrl, player);
     const rejoined = await session2.joinWorld(HOME_MAP);
     check(
-      Boolean(rejoined) && (rejoined.monsters || []).some((monster) => monster.instanceId === "m0_z1_c0_99999"),
+      Boolean(rejoined) && (rejoined.monsters || []).some((monster) => monster.instanceId === "m1_z1_c0_99999"),
       "重连后看到的就是改写后的 id（库是权威，内存跟着库走）",
       JSON.stringify(((rejoined && rejoined.monsters) || []).map((monster) => monster.instanceId)),
     );
@@ -431,7 +452,7 @@ function withDb(dbPath, fn) {
       JSON.stringify(monitor && monitor.slots),
     );
     check(
-      (monitor?.monsters ?? []).every((monster) => /^m0_z1_c0_\d+$/.test(monster.instanceId)),
+      (monitor?.monsters ?? []).every((monster) => /^m1_z1_c0_\d+$/.test(monster.instanceId)),
       "监控里的实例 id 与快照同一口径",
       JSON.stringify((monitor?.monsters ?? []).map((monster) => monster.instanceId)),
     );

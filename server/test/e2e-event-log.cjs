@@ -28,6 +28,7 @@ const { placeRolesAt, placeRolesNear } = require("./lib/place-role.cjs");
 const { DatabaseSync } = require("node:sqlite");
 const WebSocket = require("ws");
 const { paceCast } = require("./lib/cast-pace.cjs");
+const { seedQuests } = require("./lib/seed-quests.cjs");
 
 const SERVER_DIR = path.join(__dirname, "..");
 const ENTRY = path.join(SERVER_DIR, "dist", "main.js");
@@ -117,6 +118,20 @@ function detailOf(row) {
   } catch {
     return null;
   }
+}
+
+/**
+ * 战场刷怪（#1177 全清后出厂快照不再带环带）：本套战场在图 1，铺一块怪物 1 的区。
+ * **必须在服务端就绪之后调用**（空库首启会用 config-sync.sql 整份替换配置表）。
+ */
+function seedBattlefield(dbPath) {
+  const { DatabaseSync } = require("node:sqlite");
+  const db = new DatabaseSync(dbPath);
+  db.exec("DELETE FROM map_spawn_areas WHERE map_id = '1'");
+  db.prepare(
+    "INSERT INTO map_spawn_areas (map_id, name, monster_key, min, max, cx, cy, w, h, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+  ).run("1", "事件战场", "1", 2, 3, 400, -400, 400, 400, Date.now());
+  db.close();
 }
 
 async function startServer(dbPath) {
@@ -246,6 +261,8 @@ function connect(url) {
 (async () => {
   const dbPath = path.join(os.tmpdir(), `olua-e2e-event-${Date.now()}.db`);
   const server = await startServer(dbPath);
+  seedBattlefield(dbPath);
+  seedQuests(dbPath);
   try {
     const { baseUrl } = server;
 

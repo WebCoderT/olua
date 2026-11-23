@@ -20,6 +20,7 @@
 const { spawn } = require("node:child_process");
 const net = require("node:net");
 const path = require("node:path");
+const os = require("node:os");
 
 const SERVER_DIR = path.join(__dirname, "..");
 const ENTRY = path.join(SERVER_DIR, "dist", "main.js");
@@ -66,6 +67,23 @@ function freePort() {
 }
 
 /** 起一台服务并等它就绪（内存库：每次跑都是出厂形态，62 个区域来自 config-sync.sql） */
+/**
+ * 给图 0 补「出厂区」存量（#1177 全清后快照里的刷怪区归零，而本套的区域 CRUD、
+ * 同名 409 与「有区改安全地图 409」都要以「图里已有区」为基线）。
+ * **必须在服务端就绪之后调用**（空库首启会用 config-sync.sql 整份替换配置表）。
+ */
+function seedLegacyAreas(dbPath) {
+  const { DatabaseSync } = require("node:sqlite");
+  const db = new DatabaseSync(dbPath);
+  const insert = db.prepare(
+    "INSERT INTO map_spawn_areas (map_id, name, monster_key, min, max, cx, cy, w, h, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+  );
+  const now = Date.now();
+  insert.run("0", "出厂遗留区·壹", "1", 0, 2, 600, -400, 200, 200, now);
+  insert.run("0", "出厂遗留区·贰", "2", 0, 2, 1200, -900, 256, 256, now);
+  db.close();
+}
+
 async function startServer(env) {
   const port = await freePort();
   const baseUrl = `http://127.0.0.1:${port}`;
@@ -144,7 +162,7 @@ function boxOf(overrides = {}) {
  * 把一张图改成可刷怪的类型（#1157）
  *
  * 出厂 62 张图全是安全地图，而安全地图从 #1157 起**不允许建 / 改刷怪区** ——
- * 这套 e2e 的靶场必须是能刷怪的图，所以准备阶段先改类型（改成等级地图，门槛沿用原值，
+ * 这套 e2e 的靶场必须是能刷怪的图，所以准备阶段先改类型（改成野外地图，门槛沿用原值，
  * 图 0 门槛本来就是 0，不影响谁进得来）。
  */
 async function makeSpawnable(base, token, mapId) {
@@ -152,25 +170,28 @@ async function makeSpawnable(base, token, mapId) {
   if (!detail) return null;
   return api(base, "PATCH", `/api/admin/maps/${mapId}`, {
     token,
-    body: { label: detail.label, type: "1", level: detail.level, combat: detail.combat, soulOfWar: detail.soulOfWar },
+    body: { label: detail.label, type: "1", level: detail.level },
   });
 }
 
 //#region 主流程
 
 async function main() {
-  const server = await startServer({});
+  // 播种要直插库行：内存库插不了，改用临时文件库
+  const dbPath = path.join(os.tmpdir(), `olua-e2e-map-spawn-area-${Date.now()}.db`);
+  const server = await startServer({ DB_PATH: dbPath });
+  seedLegacyAreas(dbPath);
   try {
     const base = server.baseUrl;
     const token = await registerAdmin(base, "spawnroot", "SpawnAdmin#1");
     check(Boolean(token), "超管注册并登录成功");
 
-    //#region 准备：0 号图改成等级地图（#1157：安全地图不允许配怪）
+    //#region 准备：0 号图改成野外地图（#1157：安全地图不允许配怪）
 
-    group("准备：0 号图改成等级地图（安全地图不允许建 / 改刷怪区）");
+    group("准备：0 号图改成野外地图（安全地图不允许建 / 改刷怪区）");
     const spawnable = await makeSpawnable(base, token, "0");
-    checkEqual(spawnable?.status, 200, "0 号图类型改成等级地图");
-    checkEqual(spawnable?.body?.data?.type, "1", "返回体里类型已是等级地图（保存即生效）");
+    checkEqual(spawnable?.status, 200, "0 号图类型改成野外地图");
+    checkEqual(spawnable?.body?.data?.type, "1", "返回体里类型已是野外地图（保存即生效）");
 
     //#endregion
 
@@ -365,8 +386,8 @@ async function main() {
 
     group("七、安全地图闸门：不能建区，也不能把有区的图改成安全地图");
 
-    // 图 9 出厂是安全地图且**没有**刷怪区（#1162 起 4 张安全城 = 0/9/33/61，其余全是等级地图）
-    // ——「干净的安全地图」对照组（原来的图 3 已改成等级地图，不再适合这个角色）
+    // 图 9 出厂是安全地图且**没有**刷怪区（#1162 起 4 张安全城 = 0/9/33/61，其余全是野外地图）
+    // ——「干净的安全地图」对照组（原来的图 3 已改成野外地图，不再适合这个角色）
     const safeDetail = (await api(base, "GET", "/api/admin/maps/9", { token })).body?.data;
     checkEqual(safeDetail?.type, "0", "图 9 是安全地图");
     checkEqual((safeDetail?.spawnAreas ?? []).length, 0, "图 9 没有刷怪区");
@@ -375,11 +396,11 @@ async function main() {
     checkEqual(onSafeMap.status, 400, "安全地图上新建刷怪区 → 400");
     checkEqual(onSafeMap.body?.code, 50047, "业务码是 MAP_SPAWN_AREA_ON_SAFE_MAP");
 
-    // 图 0 被准备段改成了等级地图、带着出厂那批区 —— 改回安全地图要被拦（否则「先建区再改类型」就绕过了上一条）
+    // 图 0 被准备段改成了野外地图、带着出厂那批区 —— 改回安全地图要被拦（否则「先建区再改类型」就绕过了上一条）
     const map0 = (await api(base, "GET", "/api/admin/maps/0", { token })).body?.data;
     const toSafeMap = await api(base, "PATCH", "/api/admin/maps/0", {
       token,
-      body: { label: map0.label, type: "0", level: map0.level, combat: map0.combat, soulOfWar: map0.soulOfWar },
+      body: { label: map0.label, type: "0", level: map0.level },
     });
     checkEqual(toSafeMap.status, 409, "图里还有刷怪区 → 改成安全地图 409");
     checkEqual(toSafeMap.body?.code, 20040, "业务码是 MAP_SAFE_WITH_SPAWN_AREAS");
@@ -387,7 +408,7 @@ async function main() {
     // 干净的安全地图保存不受影响：存量的「安全地图」不该被这条守点挡得连名字都改不了
     const safeSave = await api(base, "PATCH", "/api/admin/maps/9", {
       token,
-      body: { label: safeDetail.label, type: "0", level: safeDetail.level, combat: safeDetail.combat, soulOfWar: safeDetail.soulOfWar },
+      body: { label: safeDetail.label, type: "0", level: safeDetail.level },
     });
     checkEqual(safeSave.status, 200, "没有刷怪区时把类型保存成安全地图 → 200（不误伤存量）");
 

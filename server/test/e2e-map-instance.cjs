@@ -144,6 +144,22 @@ async function stopServer(server) {
   await sleep(200);
 }
 
+/**
+ * 给图 1 铺一块刷怪区（#1177 全清后出厂快照不再带环带，本套的「副本要有世界」自己铺）。
+ *
+ * **必须在服务端就绪之后调用**：空库首启会用 config-sync.sql 把配置表整份灌一遍，
+ * 启动前写进来的行会被替换掉。铺在图 1（野外）而不是新手村：安全地图不播种，
+ * 铺了也长不出怪。怪 key 用出厂怪物 "1"（monsters 定义保留）。
+ */
+function seedDungeonArea(dbPath) {
+  const db = new DatabaseSync(dbPath);
+  db.exec("DELETE FROM map_spawn_areas WHERE map_id = '1'");
+  db.prepare(
+    "INSERT INTO map_spawn_areas (map_id, name, monster_key, min, max, cx, cy, w, h, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+  ).run("1", "副本世界", "1", 2, 2, 900, -600, 600, 600, Date.now());
+  db.close();
+}
+
 async function api(baseUrl, method, route, options = {}) {
   const headers = { "Content-Type": "application/json" };
   if (options.token) headers.Authorization = `Bearer ${options.token}`;
@@ -242,6 +258,7 @@ function connect(url) {
   const dbPath = path.join(os.tmpdir(), `olua-e2e-map-instance-${Date.now()}.db`);
   const port = await freePort();
   const server = await startServer(dbPath, port);
+  seedDungeonArea(dbPath);
   try {
     const { baseUrl } = server;
     // 权威常量直接读 dist（不手抄一份进测试）：新手村 id 改了这边跟着变
@@ -278,11 +295,11 @@ function connect(url) {
     // 进副本要过「进图门槛」（与 worldJoin 同一条判据在 entryOfRoom 之外）——本套不测门槛，
     // 所以把这张图的三项清零（准备动作，不是被测逻辑）
     const dungeonConfig = (await api(baseUrl, "GET", `admin/maps/${dungeon}`, { token: adminToken, zoneId: ADMIN_ZONE })).data;
-    if (Number(dungeonConfig.level) > 0 || Number(dungeonConfig.combat) > 0 || Number(dungeonConfig.soulOfWar) > 0) {
+    if (Number(dungeonConfig.level) > 0) {
       await api(baseUrl, "PATCH", `admin/maps/${dungeon}`, {
         token: adminToken,
         zoneId: ADMIN_ZONE,
-        body: { label: dungeonConfig.label, type: dungeonConfig.type, level: 0, combat: 0, soulOfWar: 0 },
+        body: { label: dungeonConfig.label, type: dungeonConfig.type, level: 0 },
       });
     }
     const rules = (await api(baseUrl, "GET", `admin/maps/${dungeon}/rules`, { token: adminToken, zoneId: ADMIN_ZONE })).data;

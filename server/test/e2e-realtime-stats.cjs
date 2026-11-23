@@ -37,11 +37,13 @@ const net = require("node:net");
 const os = require("node:os");
 const path = require("node:path");
 const WebSocket = require("ws");
+const { placeRolesAt } = require("./lib/place-role.cjs");
 
 const SERVER_DIR = path.join(__dirname, "..");
 const ENTRY = path.join(SERVER_DIR, "dist", "main.js");
 
-const HOME_MAP = "0";
+/** 进图战场（#1177 全清后图 0 是安全地图长不出怪）：改用图 1，本套自铺一块刷怪区 */
+const HOME_MAP = "1";
 /** 统计汇总窗口（毫秒）：压小让「几秒的活动」也覆盖多个窗口 */
 const STATS_MS = 300;
 /** 广播统计行的前缀（与 realtime.service flushStats 的文案同源） */
@@ -176,16 +178,32 @@ function parseStatsLines(logs, kind) {
 }
 
 /**
+ * 战场刷怪（#1177 全清后出厂快照不再带环带）：图 1 铺一块被动怪区，monster-ai 轮才有帧可等。
+ * **必须在服务端就绪之后调用**（空库首启的自举会整份替换配置表）。
+ */
+function seedBattlefield(dbPath) {
+  const { DatabaseSync } = require("node:sqlite");
+  const db = new DatabaseSync(dbPath);
+  db.exec("DELETE FROM map_spawn_areas WHERE map_id = '1'");
+  db.prepare(
+    "INSERT INTO map_spawn_areas (map_id, name, monster_key, min, max, cx, cy, w, h, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+  ).run("1", "统计战场", "1", 1, 1, 400, -400, 300, 300, Date.now());
+  db.close();
+}
+
+/**
  * 一个玩家的完整活动：进图 + 连续上报交替位置
  *
  * 位置每帧都变 = 互见增量每拍都有变化 = players 轮必然发生（这一套唯一保证
  * 「一定有活动」的开关）。返回后连接保持打开，怪物 AI 照常跑。
  */
-async function activePlayer(baseUrl, label) {
+async function activePlayer(baseUrl, label, dbPath) {
   const registered = await api(baseUrl, "POST", "auth/register", { body: { username: `stats_${label}`, password: "pass1234" } });
   const token = registered.body && registered.body.data && registered.body.data.token;
   if (!token) throw new Error(`注册失败：${JSON.stringify(registered.body)}`);
   await api(baseUrl, "POST", "roles", { token, body: { name: `统计${label}`, occupation: "1", sex: "1" } });
+  // #859：新号没有位置记录只准进新手村 —— 战场在图 1，先按运营摆位把人摆过去
+  placeRolesAt(dbPath, HOME_MAP, [`统计${label}`]);
   const ticket = await api(baseUrl, "POST", "realtime/ticket", { token });
   const socket = new WebSocket(`${baseUrl.replace("http", "ws")}/api/realtime?ticket=${encodeURIComponent(ticket.body.data.ticket)}`);
   await new Promise((resolve, reject) => {
@@ -217,8 +235,9 @@ async function stopServer(server, dbPath) {
   group("一、开关打开（REALTIME_STATS_INTERVAL_MS=300）：统计行出现且数字齐全");
   const dbPath1 = path.join(os.tmpdir(), `olua-e2e-realtime-stats-on-${Date.now()}.db`);
   const on = await startServer(dbPath1, STATS_MS);
+  seedBattlefield(dbPath1);
   try {
-    const socket = await activePlayer(on.baseUrl, "a");
+    const socket = await activePlayer(on.baseUrl, "a", dbPath1);
 
     // players 轮：位置一直在变，广播节拍 100ms（#768 起 10Hz）< 汇总窗口，窗口内必有累计
     const playersLines = await waitFor("players 统计行", async () => {
@@ -260,8 +279,9 @@ async function stopServer(server, dbPath) {
   group("二、开关关闭（REALTIME_STATS_INTERVAL_MS=0）：同样的活动，一条统计行都没有");
   const dbPath2 = path.join(os.tmpdir(), `olua-e2e-realtime-stats-off-${Date.now()}.db`);
   const off = await startServer(dbPath2, 0);
+  seedBattlefield(dbPath2);
   try {
-    const socket = await activePlayer(off.baseUrl, "b");
+    const socket = await activePlayer(off.baseUrl, "b", dbPath2);
     await sleep(1500);
     check(!off.logs().includes(STATS_PREFIX), "关闭时 stdout 里没有任何统计行（钩子全是空操作）");
     socket.close();

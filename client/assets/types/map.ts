@@ -92,16 +92,12 @@ export interface MapCollisionPolygon {
 export interface MapConfig {
   /** 地图名称（传送弹窗 / 小地图 / 预览图标题都读它） */
   label: string;
-  /** 类型码（"0" 安全 / "1" 等级 / "2" 战斗力 / "3" 战魂） */
+  /** 类型码（"0" 安全 / "1" 野外；#1177 收敛） */
   type: string;
   /** 类型名（服务端拼好的显示文案，客户端不再自己维护一份码表） */
   typeLabel: string;
-  /** 进入所需等级（0 = 不限） */
+  /** 进入所需等级（0 = 不限；门槛只剩这一项，#1177 删了战斗力 / 战魂阶） */
   level: number;
-  /** 进入所需战斗力（0 = 不限） */
-  combat: number;
-  /** 进入所需战魂阶（0 = 不限） */
-  soulOfWar: number;
   /** NPC 点位（坐标已是世界坐标，进图直接摆节点） */
   npcs: MapNpcPoint[];
   /** 复活点（null = 这张图没有：进图不定位、死亡不在这张图复活） */

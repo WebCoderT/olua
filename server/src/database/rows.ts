@@ -628,12 +628,8 @@ export interface MapRow {
   label: string;
   /** 类型码（取值域见 common/constants/map-config 的 `MapType`） */
   type: string;
-  /** 进入所需等级（0 = 无限制） */
+  /** 进入所需等级（0 = 无限制；门槛只剩这一项，#1177 删了战斗力 / 战魂阶） */
   level: number;
-  /** 进入所需战斗力（0 = 无限制） */
-  combat: number;
-  /** 进入所需战魂阶（0 = 无限制） */
-  soul_of_war: number;
   /** 横向格数（几何来自 TMX，运营不改） */
   grid_cols: number;
   /** 纵向格数 */

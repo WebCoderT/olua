@@ -60,6 +60,9 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
     // 之后所有配置读的都是库，代码里不再有第二份数值副本（#655）。
     const bootstrap = bootstrapConfigSnapshot(this.db, this.logger);
     if (bootstrap.status === "imported") this.logger.log("出厂数据自举完成（空库首启，只发生一次）");
+    // 必须排在自举之后：`config_meta` 由自举创建 —— 排在前面的话空库首启拿不到守门标记，
+    // 第二次启动时迁移会把（运营 / 测试自建的）任务线与刷怪区再清一遍
+    this.clearQuestLinesOnce();
     this.logger.log(`SQLite 就绪：${path}`);
   }
 
@@ -582,12 +585,11 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
         map_id      TEXT    PRIMARY KEY,
         label       TEXT    NOT NULL DEFAULT '',
         type        TEXT    NOT NULL DEFAULT '0',
+        -- 进入门槛只剩等级一项（#1177）：战斗力 / 战魂阶两列已删，别加回来
         level       INTEGER NOT NULL DEFAULT 0,
-        combat      INTEGER NOT NULL DEFAULT 0,
-        soul_of_war INTEGER NOT NULL DEFAULT 0,
         -- 地图几何（#655）：以前是 'map-sizes.generated.ts' / 'map-content.generated.ts'
         -- 两份编译期快照（源自 Tiled 的 TMX 头），现在只是这一行的列。
-        -- 判据没变：几何来自资源，运营不改它；运营改的是上面五行。
+        -- 判据没变：几何来自资源，运营不改它；运营改的是上面三行（名称 / 类型 / 进入等级）。
         grid_cols   INTEGER NOT NULL DEFAULT 0,
         grid_rows   INTEGER NOT NULL DEFAULT 0,
         tile_width  INTEGER NOT NULL DEFAULT 128,
@@ -1773,6 +1775,15 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
     // 会变成「一进图就飞到角上」）。存量库的初值由 migrate-map-points.cjs 从 TMX 对象组灌一次
     this.ensureColumn("maps", "revive_cx", "REAL");
     this.ensureColumn("maps", "revive_cy", "REAL");
+    // 地图类型收敛（#1177）：四类 → 两类（0 安全 / 1 野外）。复用码 "1"（原「等级地图」），
+    // 存量 "2"（战斗力）与 "3"（战魂）就地 UPDATE 成 "1"；两个门槛列没有消费方，删掉
+    // （不删的话 SELECT * 导出会把它们一直带进 config-sync.sql，下一个人以为是旋钮）。
+    if (this.hasTable("maps")) {
+      const converted = this.execute("UPDATE maps SET type = '1' WHERE type IN ('2', '3')").changes;
+      if (converted > 0) this.logger.log(`maps.type：${converted} 行战斗力 / 战魂地图 → 野外（#1177）`);
+      this.dropColumnIfExists("maps", "combat");
+      this.dropColumnIfExists("maps", "soul_of_war");
+    }
     // 曲线退场的收尾（#655）：老库的这两张表还留着就会让人以为「还能改」—— 每次启动顺手清掉
     // （`IF EXISTS`，新库就是两条空操作；数据早已由快照灌进 role_levels）
     this.db.exec("DROP TABLE IF EXISTS level_exps; DROP TABLE IF EXISTS growth_segments;");
@@ -2188,6 +2199,37 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
       `statuses:${added},skills:${wired}`,
     ]);
     this.logger.log(`存量库补战斗状态出厂数据：新增状态 ${added} 条，补齐技能接线 ${wired} 处`);
+  }
+
+  /**
+   * 存量库一次性清空任务线与怪物生成配置（#1177 全清）
+   *
+   * 什么时候需要：`config-sync.sql` 只在**空库首启**时整份灌入（`config_meta.bootstrap_at`
+   * 有值之后再也不灌），而出厂快照里那批任务（237 条）与刷怪环带（220 区）已经按运营拍板
+   * 全部下线 —— 只改快照的话，跑过很久的存量库重启后这两批数据原样还在，图 0（安全地图）
+   * 照旧长怪、任务使者照旧发任务。
+   *
+   * 三张表一起清：
+   * - `quests`：任务定义（任务使者 NPC 与 map_npcs 保留，布局由运营重排）；
+   * - `map_spawn_areas`：刷怪区（安全地图的「不刷怪」靠接口闸门 + 播种跳过，存量区也必须走）；
+   * - `world_monsters`：**必须跟着清** —— 播种只发生在空房首播，库里已有实例走「库恢复」，
+   *   不清的话安全地图上那些存量怪会被原样救活。
+   *
+   * **只跑一次**（`config_meta.quest_lines_cleared`）：运营之后在管理端重建的任务与刷怪区
+   * 不许被启动逻辑抹掉。`config_meta` 还不存在时直接跳过（那时是空库，自举灌的快照已经是空的了）。
+   */
+  private clearQuestLinesOnce(): void {
+    const hasMeta =
+      this.count("SELECT COUNT(1) AS total FROM sqlite_master WHERE type = 'table' AND name = 'config_meta'") > 0;
+    if (!hasMeta) return;
+    if (this.get<{ value: string }>("SELECT value FROM config_meta WHERE key = ?", ["quest_lines_cleared"])) return;
+    const has = (table: string) =>
+      this.count(`SELECT COUNT(1) AS total FROM sqlite_master WHERE type = 'table' AND name = '${table}'`) > 0;
+    const quests = has("quests") ? this.execute("DELETE FROM quests").changes : 0;
+    const areas = has("map_spawn_areas") ? this.execute("DELETE FROM map_spawn_areas").changes : 0;
+    const monsters = has("world_monsters") ? this.execute("DELETE FROM world_monsters").changes : 0;
+    this.run("INSERT OR REPLACE INTO config_meta (key, value) VALUES (?, ?)", ["quest_lines_cleared", "1"]);
+    this.logger.log(`存量库清空任务线与怪物生成（#1177 全清）：任务 ${quests} 条 / 刷怪区 ${areas} 个 / 世界怪 ${monsters} 只`);
   }
 
   /**

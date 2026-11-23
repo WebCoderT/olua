@@ -26,6 +26,7 @@ const path = require("path");
 const { placeRolesAt, placeRolesNear } = require("./lib/place-role.cjs");
 const WebSocket = require("ws");
 const { paceCast } = require("./lib/cast-pace.cjs");
+const { seedQuests } = require("./lib/seed-quests.cjs");
 
 const SERVER_DIR = path.join(__dirname, "..");
 const ENTRY = path.join(SERVER_DIR, "dist", "main.js");
@@ -77,11 +78,19 @@ function freePort() {
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
- * 预先往临时库里插刷怪区（#295：播种来源 = map_spawn_areas）—— **已废**（#1084 适配）：
- * 空库首启会用 config-sync.sql 快照整表替换 map_spawn_areas，测试预插的行从来就没活过
- * （旧快照里泄漏的测试命名区才是它侥幸跑通的真正原因）。#1084 重排后 220 个刷怪区全在
- * 图 0，怪物 1（key "1"）在图 0 上有十几只实例，击杀进度用例直接打它，不再预插。
+ * 战场刷怪（#1177 全清后出厂快照不再带环带）：图 3（野外、0 级门槛）铺一块怪物 1 的区。
+ * **必须在服务端就绪之后调用** —— 空库首启会用 config-sync.sql 整份替换配置表，
+ * 启动前写进来的行从来就没活过（#1084 之前的老坑）。
  */
+function seedBattlefield(dbPath) {
+  const { DatabaseSync } = require("node:sqlite");
+  const db = new DatabaseSync(dbPath);
+  db.exec("DELETE FROM map_spawn_areas WHERE map_id = '3'");
+  db.prepare(
+    "INSERT INTO map_spawn_areas (map_id, name, monster_key, min, max, cx, cy, w, h, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+  ).run("3", "任务战场", "1", 2, 3, 1000, -600, 600, 600, Date.now());
+  db.close();
+}
 
 /** 起一台服务（文件库 + 快重生：击杀进度要连杀 6 只，默认 30s 重生等不起） */
 async function startServer(dbPath) {
@@ -228,6 +237,8 @@ function setResetDay(dbPath, roleId, questId, day) {
 (async () => {
   const dbPath = path.join(os.tmpdir(), `olua-e2e-quest-${Date.now()}.db`);
   const server = await startServer(dbPath);
+  seedBattlefield(dbPath);
+  seedQuests(dbPath);
   let serverChild = null;
   try {
     const { baseUrl } = server;
@@ -240,17 +251,17 @@ function setResetDay(dbPath, roleId, questId, day) {
     const token = registered.data && registered.data.token;
     // #597 起建号只交三样客户端数据（初始技能含击杀要用的 1000，由服务端给齐）
     const created = await api(baseUrl, "POST", "roles", { token, body: { name: "任务者", occupation: "1", sex: "1" } });
-    // #859 起「没有位置记录」的角色只准进新手村 —— 这一套全程在图 0（#1084 重排后
-    // 全部刷怪区都在图 0，任务 NPC 0002 在图 0 也有点位），准备段先按运营摆位把位置写进去
+    // #859 起「没有位置记录」的角色只准进新手村 —— 这一套全程在图 0（#1177 全清后
+    // 战场是图 3（本套自铺刷怪区），任务 NPC 0002 在图 3 也有点位），准备段先按运营摆位把位置写进去
     // （等价管理端 PATCH onMap，见 lib/place-role.cjs）
-    placeRolesAt(dbPath, "0");
+    placeRolesAt(dbPath, "3");
     /**
      * 站到任务 NPC 旁边（#862/#863 的距离校验）
      *
      * 每次请求前都重摆一次：位置快照 10 秒就过期（`QUEST_POS_STALE_MS`），
      * 在准备段摆一次然后赌整套跑完不到 10 秒，是那种「本机绿、CI 红」的写法。
      */
-    const standAtQuestNpc = () => placeRolesNear(dbPath, "0", "0002");
+    const standAtQuestNpc = () => placeRolesNear(dbPath, "3", "0002");
     /** 以「人在传送官旁边」的状态发任务请求（只有 accept / npc-talk 吃距离校验） */
     const questApi = (method, path, body = {}) => {
       standAtQuestNpc();
@@ -272,10 +283,10 @@ function setResetDay(dbPath, roleId, questId, day) {
     const session = connect(`${baseUrl.replace("http", "ws")}/api/realtime?ticket=${encodeURIComponent(ticket.data.ticket)}`);
     await waitFor("握手成功", async () => (session.opened ? session : null));
     check(session.opened, "准备：实时连接已建立");
-    const world = await session.joinWorld("0");
+    const world = await session.joinWorld("3");
     check(
       !!(world && world.monsters.some((m) => m.alive && m.monsterKey === "1")),
-      "准备：进图拿到活着的怪物 1（#1084 重排后图 0 全怪环带，按 key 挑）",
+      "准备：进图拿到活着的怪物 1（#1084 重排后自建刷怪区只铺怪物 1，按 key 挑）",
       JSON.stringify(world && world.monsters.length),
     );
 
@@ -314,12 +325,12 @@ function setResetDay(dbPath, roleId, questId, day) {
      * **必须自带重试**：怪会重生（`WORLD_RESPAWN_MS` 1500ms），刚连杀完 5 只时可能
      * 眼前的实例都在冷却，只取一次快照会「没有活着的怪」直接空手返回（CI 上就这样抖过
      * 一次：六组拿不到击杀，后面 6 条断言连环假红）。同理出手被拒（目标在快照与出手
-     * 之间被别人打死）也要重取快照。#1084 起图 0 是全怪环带，任务目标是怪物 "1"，
+     * 之间被别人打死）也要重取快照。#1177 起战场刷怪区只铺怪物 1，任务目标就是怪物 "1"，
      * 只挑 key 相符的活怪打 —— 杀别的怪不推进进度。
      */
     const killOne = async (attempts = 30) => {
       for (let attempt = 0; attempt < attempts; attempt++) {
-        const snap = await session.joinWorld("0");
+        const snap = await session.joinWorld("3");
         const mob = snap && snap.monsters.find((m) => m.alive && m.monsterKey === "1");
         if (mob) {
           for (let i = 0; i < 80; i++) {

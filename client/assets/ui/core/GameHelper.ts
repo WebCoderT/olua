@@ -79,9 +79,8 @@ export default class GameHelper {
     const config = maps.get(mapId);
     if (!config) return null;
     const map = mapLabelOf(mapId);
+    // 门槛只剩等级一项（#1177）：战斗力 / 战魂阶已删
     if (config.level > 0 && config.level > role.level) return textRef("reject_map_level", { map, level: config.level });
-    if (config.combat > 0 && config.combat > role.combat) return textRef("reject_map_combat", { map, combat: config.combat });
-    if (config.soulOfWar > 0 && config.soulOfWar > role.soulOfWar) return textRef("reject_map_soul", { map, soul: config.soulOfWar });
     return null;
   }
 
@@ -93,12 +92,10 @@ export default class GameHelper {
    * `field` 认不出来（服务端加了新门槛而客户端还没更新）时返回 null：宁可不提示，
    * 也不显示一句「地图进不去」这种什么都没说的废话。
    */
-  static mapEnterRejectText(result: { field?: "level" | "combat" | "soul" | "unknown" | "start"; need?: number; mapLabel?: string }): TextRef | null {
+  static mapEnterRejectText(result: { field?: "level" | "unknown" | "start"; need?: number; mapLabel?: string }): TextRef | null {
     const map = result.mapLabel ?? "";
     const need = result.need ?? 0;
     if (result.field === "level") return textRef("reject_map_level", { map, level: need });
-    if (result.field === "combat") return textRef("reject_map_combat", { map, combat: need });
-    if (result.field === "soul") return textRef("reject_map_soul", { map, soul: need });
     // 两种「不是数值门槛」的拒绝（#859）：图不存在 / 还没有位置记录（只准进新手村）
     if (result.field === "unknown") return textRef("reject_map_missing");
     if (result.field === "start") return textRef("reject_map_start");

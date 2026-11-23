@@ -43,7 +43,12 @@ const { readRows, readSnapshotText } = require("./lib/snapshot-sql.cjs");
  * 正常情况下空表几乎一定是导出前就空着（或表名写错），所以默认判红；这份名单只放
  * **设计上就该为空**的表，加一条就要在注释里写清「空了也不会让使用方看到一页空白」。
  */
-const EMPTY_ALLOWED = new Set(["map_rules"]);
+// `map_rules`（#809）**允许整张空**，而且是常态：这张表的语义是「一行不存在 = 全默认」，
+// 绝大多数图不单独配规则。空快照导过去不会让界面空白，只会让那张图的规则回到出厂值 ——
+// 「每张图都插一行」反而会把「调过」与「没调过」在库里弄得一样。
+// `quests` / `map_spawn_areas`（#1177 全清）出厂就是空的：任务线与刷怪区由运营在管理端
+// 重建，快照带出厂环带反而会在空库自启时把清掉的布局原样灌回来。
+const EMPTY_ALLOWED = new Set(["map_rules", "quests", "map_spawn_areas"]);
 
 const ROOT = path.resolve(__dirname, "..");
 const SERVER_SRC = path.join(ROOT, "server", "src");

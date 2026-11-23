@@ -95,6 +95,19 @@ const waitFor = async (label, predicate, timeoutMs = 15_000) => {
   return last;
 };
 
+/**
+ * 给起点图铺一块怪物 1 的区（#1177 全清后出厂快照不再带环带；配合准备段把起点图改成野外）。
+ * **必须在服务端就绪之后调用**（空库首启会用 config-sync.sql 整份替换配置表）。
+ */
+function seedBattlefield(dbPath, mapId) {
+  const { DatabaseSync } = require("node:sqlite");
+  const db = new DatabaseSync(dbPath);
+  db.prepare(
+    "INSERT INTO map_spawn_areas (map_id, name, monster_key, min, max, cx, cy, w, h, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+  ).run(mapId, "传送战场", "1", 2, 3, 1000, -800, 500, 500, Date.now());
+  db.close();
+}
+
 async function startServer(dbPath, port) {
   const child = spawn(process.execPath, ["--disable-warning=ExperimentalWarning", ENTRY], {
     cwd: SERVER_DIR,
@@ -293,6 +306,10 @@ function connect(url) {
   const dbPath = path.join(os.tmpdir(), `olua-e2e-map-transfer-${Date.now()}.db`);
   const port = await freePort();
   const server = await startServer(dbPath, port);
+  // 起点图 = START_MAP_ID（权威常量在 try 里才拿到）；先用字面量占位是错的 —— 改成在拿到 home 后再播种不行（房间可能已建），
+  // 所以这里读 dist 常量提前拿到同一个值
+  const { START_MAP_ID: homeIdEarly } = require(path.join(SERVER_DIR, "dist", "modules", "map", "map.service.js"));
+  seedBattlefield(dbPath, homeIdEarly);
   try {
     const { baseUrl } = server;
     // 权威常量直接读 dist（不手抄一份进测试）：新手村 id 改了这边跟着变
@@ -323,7 +340,7 @@ function connect(url) {
     // 一张 10 级图会让「余额不够」变成「等级不够」，整组断言测的东西就换了。
     // 关门槛是准备动作（不是被测逻辑），顺带证明门槛与代价是两条独立判据。
     const awayConfig = (await api(baseUrl, "GET", `admin/maps/${away}`, { token: adminToken, zoneId: ADMIN_ZONE })).data;
-    if (Number(awayConfig.level) > 0 || Number(awayConfig.combat) > 0 || Number(awayConfig.soulOfWar) > 0) {
+    if (Number(awayConfig.level) > 0) {
       await api(baseUrl, "PATCH", `admin/maps/${away}`, {
         token: adminToken,
         zoneId: ADMIN_ZONE,
@@ -331,17 +348,27 @@ function connect(url) {
           label: awayConfig.label,
           type: awayConfig.type,
           level: 0,
-          combat: 0,
-          soulOfWar: 0,
         },
       });
     }
     const awayAfter = (await api(baseUrl, "GET", `admin/maps/${away}`, { token: adminToken, zoneId: ADMIN_ZONE })).data;
     check(
-      Number(awayAfter.level) === 0 && Number(awayAfter.combat) === 0 && Number(awayAfter.soulOfWar) === 0,
+      Number(awayAfter.level) === 0,
       "准备：目的地三项门槛已清零（1 级号能进）",
-      `${awayAfter.level} / ${awayAfter.combat} / ${awayAfter.soulOfWar}`,
+      `${awayAfter.level}`,
     );
+
+    // #1177 全清后出厂快照不带怪，而新手村（home）是安全地图——安全地图不播种、长不出怪。
+    // 本套的打手段与空房 tick 都要 home 上有怪：把 home 类型改成野外（库是一次性的），
+    // 刷怪区由 seedBattlefield 直插库行（见 startServer 之后的调用）
+    const homeConfig = (await api(baseUrl, "GET", `admin/maps/${home}`, { token: adminToken, zoneId: ADMIN_ZONE })).data;
+    if (homeConfig.type !== "1") {
+      const homeWild = await api(baseUrl, "PATCH", `admin/maps/${home}`, {
+        token: adminToken, zoneId: ADMIN_ZONE,
+        body: { label: homeConfig.label, type: "1", level: homeConfig.level },
+      });
+      check(homeWild.code === 0, "准备：起点图已改成野外地图（本套要在它上面刷怪）", homeWild.message);
+    }
 
     const rulesOf = async (mapId) => {
       const response = await api(baseUrl, "GET", `admin/maps/${mapId}/rules`, { token: adminToken, zoneId: ADMIN_ZONE });

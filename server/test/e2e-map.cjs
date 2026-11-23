@@ -29,6 +29,7 @@
 const { spawn } = require("node:child_process");
 const net = require("node:net");
 const path = require("node:path");
+const os = require("node:os");
 const configSnapshot = require("./lib/config-snapshot.cjs");
 
 const SERVER_DIR = path.join(__dirname, "..");
@@ -155,8 +156,34 @@ async function registerPlayer(baseUrl, username) {
 
 //#region 主流程
 
+/**
+ * 给图 0 补两行「出厂区」（#1177 全清后快照里的刷怪区归零，而本套的区域形状 / 越界口径、
+ * 全量在图内扫描都要以「图里已有区」为基线）。**必须在服务端就绪之后调用** ——
+ * 空库首启会用 config-sync.sql 整份替换配置表，启动前写进来的行从来就没活过。
+ */
+const FIXTURE_AREAS = [
+  { name: "出厂遗留区·壹", monsterKey: "1", min: 1, max: 2, cx: 600, cy: -400, w: 200, h: 200 },
+  { name: "出厂遗留区·贰", monsterKey: "2", min: 0, max: 3, cx: 1200, cy: -900, w: 256, h: 256 },
+];
+
+function seedLegacyAreas(dbPath) {
+  const { DatabaseSync } = require("node:sqlite");
+  const db = new DatabaseSync(dbPath);
+  const insert = db.prepare(
+    "INSERT INTO map_spawn_areas (map_id, name, monster_key, min, max, cx, cy, w, h, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+  );
+  const now = Date.now();
+  for (const area of FIXTURE_AREAS) {
+    insert.run("0", area.name, area.monsterKey, area.min, area.max, area.cx, area.cy, area.w, area.h, now);
+  }
+  db.close();
+}
+
 async function main() {
-  const server = await startServer({});
+  // 播种要直插库行：内存库插不了，改用临时文件库
+  const dbPath = path.join(os.tmpdir(), `olua-e2e-map-${Date.now()}.db`);
+  const server = await startServer({ DB_PATH: dbPath });
+  seedLegacyAreas(dbPath);
   try {
     const base = server.baseUrl;
     const rootToken = await registerAdmin(base, "maproot", "MapAdmin#1");
@@ -180,8 +207,8 @@ async function main() {
     );
 
     const types = list.body?.data?.types ?? [];
-    checkEqual(types.length, 4, "列表带全部类型选项（编辑下拉要能选到当下没人用的类型）");
-    checkEqual(types.map((item) => item.type).join(","), "0,1,2,3", "类型选项按声明顺序");
+    checkEqual(types.length, 2, "列表带全部类型选项（编辑下拉要能选到当下没人用的类型；#1177 收敛后 0/1）");
+    checkEqual(types.map((item) => item.type).join(","), "0,1", "类型选项按声明顺序");
     checkEqual(types[0]?.label, "安全地图", "类型名由服务端给（客户端与后台都不再各抄一份）");
 
     const map0 = rows.find((row) => row.id === "0") ?? {};
@@ -261,22 +288,19 @@ async function main() {
 
     const areas = data.spawnAreas ?? [];
     checkEqual(areas.length, data.spawnAreaCount, "刷怪区条数与计数一致（map_spawn_areas 同一张表）");
-    check(areas.length > 0, "0 号图有刷怪区", String(areas.length));
+    check(areas.length > 0, "0 号图有刷怪区（本套自铺的存量基线）", String(areas.length));
     const area = areas[0] ?? {};
-    // 区域名 / 只数都是运营数据（#1084 起整表重排成「带N-L等级-怪id」的环带命名）——
-    // 与快照逐字段比，既不断死数值，又钉住「SQL → 建表 → 落库 → 读出来」这条链
-    const seedArea = configSnapshot
-      .optionalRows("map_spawn_areas")
-      .filter((row) => String(row.mapId) === "0")[0] ?? {};
-    checkEqual(area.name, seedArea.name, "区域名与快照一致（Tiled 时代的旧名已由 #1084 整表重排覆盖）");
+    // 区域名 / 只数与本套种子逐字段比（#1177 全清后快照的刷怪区归零，本套自己铺的
+    // FIXTURE_AREAS 就是基线）—— 既不断死数值，又钉住「SQL → 建表 → 落库 → 读出来」这条链
+    const seedArea = FIXTURE_AREAS[0];
+    checkEqual(area.name, seedArea.name, "区域名与种子一致（读接口原样回显）");
     checkEqual(area.monsterKey, seedArea.monsterKey, "怪物 key 是 configs/monster 的关联键");
-    // 怪物名从快照的 monsters 表里查（不写死某只怪的名字：区是按段铺的，areas[0] 是哪只
-    // 由刷怪区配置决定，换图/重铺就会变）
+    // 怪物名从快照的 monsters 表里查（monsters 定义仍在快照里；不写死某只怪的名字）
     const monsterLabel = configSnapshot.index("monsters")[String(seedArea.monsterKey)]?.label;
     checkEqual(area.monsterLabel, monsterLabel, "怪物名从快照查出来（查不到才回落成 key）");
-    // #852 说的是**管理端保存**只落 max（页面只有一个数量输入）；快照里的 min 是 #1084 seed
-    // 写的密度下限（2026-11-19 拍板），读接口原样回显 —— 两者别混
-    checkEqual(area.min, seedArea.min, "最少只数与快照一致（seed 的密度下限；管理端保存仍按 #852 只落 max）");
+    // #852 说的是**管理端保存**只落 max（页面只有一个数量输入）；种子的 min 是密度下限，
+    // 读接口原样回显 —— 两者别混
+    checkEqual(area.min, seedArea.min, "最少只数与种子一致（密度下限；管理端保存仍按 #852 只落 max）");
     // 具体坐标 / 只数 / 尺寸都是运营数据（换图、调密度都会变）；要守的是「数字形状 + 在图内」
     check(Number(area.max) > 0, "区域最多只数是正数（播种按它展开）", String(area.max));
     check(Number(area.w) > 0 && Number(area.h) > 0, "区域宽高都是正数", `${area.w} × ${area.h}`);
@@ -389,12 +413,12 @@ async function main() {
 
     const saved = await api(base, "PATCH", "/api/admin/maps/0", {
       token: rootToken,
-      body: { label: "新手村·改", type: "1", level: 5, combat: 0, soulOfWar: 0 },
+      body: { label: "新手村·改", type: "1", level: 5 },
     });
     checkEqual(saved.status, 200, "保存玩法配置 → 200");
     checkEqual(saved.body?.data?.label, "新手村·改", "返回的是保存后那一行");
     checkEqual(saved.body?.data?.type, "1", "类型改掉了");
-    checkEqual(saved.body?.data?.typeLabel, "等级地图", "类型名跟着变（不是缓存住的旧值）");
+    checkEqual(saved.body?.data?.typeLabel, "野外地图", "类型名跟着变（不是缓存住的旧值）");
     checkEqual(saved.body?.data?.level, 5, "进入等级改掉了");
     checkEqual(saved.body?.data?.src, "map/0/0", "返回里仍带资源路径（只读回显，不是入参）");
 
@@ -405,19 +429,19 @@ async function main() {
     const listAfter = await api(base, "GET", "/api/admin/maps", { token: rootToken });
     const rowAfter = (listAfter.body?.data?.list ?? []).find((row) => row.id === "0") ?? {};
     checkEqual(rowAfter.label, "新手村·改", "列表也反映新名字");
-    checkEqual(rowAfter.typeLabel, "等级地图", "列表里的类型名同样跟着变");
+    checkEqual(rowAfter.typeLabel, "野外地图", "列表里的类型名同样跟着变");
 
     const afterSnap = await api(base, "GET", "/api/game-config", { token: playerToken });
     const snapMap0 = (afterSnap.body?.data?.maps ?? []).find((row) => row.id === "0") ?? {};
     checkEqual(snapMap0.label, "新手村·改", "玩家快照里也是新名字（客户端下次进游戏就换成这个）");
     checkEqual(snapMap0.level, 5, "玩家快照里的进入等级同步了 —— 这是「保存即生效」对玩家的那一半");
     checkEqual(snapMap0.type, "1", "快照里的类型码同步");
-    checkEqual((afterSnap.body?.data?.mapTypes ?? []).length, 4, "快照同时下发类型分组（顺序即传送弹窗分组）");
+    checkEqual((afterSnap.body?.data?.mapTypes ?? []).length, 2, "快照同时下发类型分组（顺序即传送弹窗分组；#1177 收敛后 0 安全 / 1 野外）");
 
     // 资源路径不可改：请求里塞 src 会被白名单剥掉，返回仍是目录约定算出来的那个
     const withSrc = await api(base, "PATCH", "/api/admin/maps/1", {
       token: rootToken,
-      body: { label: "卧龙城", type: "0", level: 10, combat: 0, soulOfWar: 0, src: "map/evil/evil" },
+      body: { label: "卧龙城", type: "0", level: 10, src: "map/evil/evil" },
     });
     checkEqual(withSrc.status, 200, "带多余字段的请求仍成功（白名单剥离，不是 400）");
     checkEqual(withSrc.body?.data?.src, "map/1/1", "塞进来的 src 被丢掉 —— 下发方永远改不到客户端加载哪张图");
@@ -441,25 +465,25 @@ async function main() {
 
     const badType = await api(base, "PATCH", "/api/admin/maps/0", {
       token: rootToken,
-      body: { label: "x", type: "9", level: 1, combat: 0, soulOfWar: 0 },
+      body: { label: "x", type: "9", level: 1 },
     });
     checkEqual(badType.status, 400, "类型不在 0..3 → 400");
 
     const badLevel = await api(base, "PATCH", "/api/admin/maps/0", {
       token: rootToken,
-      body: { label: "x", type: "0", level: 201, combat: 0, soulOfWar: 0 },
+      body: { label: "x", type: "0", level: 201 },
     });
     checkEqual(badLevel.status, 400, "进入等级超过上限 → 400（拦「把 999 拍进去」这类错误）");
 
-    const negativeCombat = await api(base, "PATCH", "/api/admin/maps/0", {
+    const negativeLevel = await api(base, "PATCH", "/api/admin/maps/0", {
       token: rootToken,
-      body: { label: "x", type: "0", level: 1, combat: -1, soulOfWar: 0 },
+      body: { label: "x", type: "0", level: -1 },
     });
-    checkEqual(negativeCombat.status, 400, "负战斗力 → 400");
+    checkEqual(negativeLevel.status, 400, "负等级 → 400（战斗力 / 战魂阶门槛已删，#1177）");
 
     const emptyLabel = await api(base, "PATCH", "/api/admin/maps/0", {
       token: rootToken,
-      body: { label: "", type: "0", level: 1, combat: 0, soulOfWar: 0 },
+      body: { label: "", type: "0", level: 1 },
     });
     checkEqual(emptyLabel.status, 400, "空名称 → 400（列表里会显示成空白按钮）");
 
@@ -477,12 +501,12 @@ async function main() {
 
     const post = await api(base, "POST", "/api/admin/maps", {
       token: rootToken,
-      body: { label: "新地图", type: "0", level: 0, combat: 0, soulOfWar: 0 },
+      body: { label: "新地图", type: "0", level: 0 },
     });
     checkEqual(post.status, 404, "POST 新建地图 → 404（一张图存不存在由客户端的 TMX 决定）");
     const put = await api(base, "PUT", "/api/admin/maps/0", {
       token: rootToken,
-      body: { label: "改个名", type: "0", level: 1, combat: 0, soulOfWar: 0 },
+      body: { label: "改个名", type: "0", level: 1 },
     });
     checkEqual(put.status, 404, "PUT 整份替换 → 404（保存走 PATCH，语义是「改这五个字段」）");
     const del = await api(base, "DELETE", "/api/admin/maps/0", { token: rootToken });
@@ -497,7 +521,7 @@ async function main() {
 
     const patchMissing = await api(base, "PATCH", "/api/admin/maps/99", {
       token: rootToken,
-      body: { label: "幽灵图", type: "0", level: 0, combat: 0, soulOfWar: 0 },
+      body: { label: "幽灵图", type: "0", level: 0 },
     });
     checkEqual(patchMissing.status, 404, "改一张不存在的图 → 404");
     checkEqual(patchMissing.body?.code, 50032, "同样是 50032（不是「参数不合法」）");
@@ -521,7 +545,7 @@ async function main() {
     checkEqual(viewerDetail.status, 200, "观察员可读详情");
     const viewerWrite = await api(base, "PATCH", "/api/admin/maps/0", {
       token: viewerToken, zoneId: ADMIN_ZONE,
-      body: { label: "观察员改的", type: "0", level: 1, combat: 0, soulOfWar: 0 },
+      body: { label: "观察员改的", type: "0", level: 1 },
     });
     checkEqual(viewerWrite.status, 403, "观察员改玩法配置 → 403（写入口存在，但他没有 gameConfig:write）");
 
@@ -586,8 +610,8 @@ async function main() {
     check(Boolean(schemas.SaveMapConfigDto), "有 SaveMapConfigDto（写入口只有这一个形状）");
     checkEqual(
       Object.keys(schemas.SaveMapConfigDto?.properties ?? {}).sort().join(","),
-      "combat,label,level,soulOfWar,type",
-      "写模型只有五个字段：**没有 src / 尺寸 / 图层** —— 资源本体不是一个可编辑的字段",
+      "label,level,type",
+      "写模型只有三个字段（#1177 删战斗力 / 战魂阶）：**没有 src / 尺寸 / 图层** —— 资源本体不是一个可编辑的字段",
     );
     check(
       Object.keys(schemas).every((name) => !/^(Create|Update|Delete)Map/.test(name)),

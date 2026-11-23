@@ -197,10 +197,19 @@ function connect(url) {
 }
 
 /**
- * 预先往共享库里插刷怪区（#295）—— **已废**（#1084 适配）：
- * 空库首启会用 config-sync.sql 快照整表替换 map_spawn_areas，测试预插的行从来就没活过。
- * #1084 重排后 220 个刷怪区全在图 0，进图播种自然有怪，不再预插。
+ * 往共享库里插刷怪区（#295 播种来源 = map_spawn_areas）。
+ *
+ * #1084 起预插没活过（空库首启会用 config-sync.sql 整表替换）—— 必须在**两个进程都就绪之后**
+ * 写，#1177 全清后出厂快照不再带环带，本套的战场自己铺：图 1（野外、0 级门槛）铺一块被动怪区。
  */
+function seedBattlefield(dbPath) {
+  const db = new DatabaseSync(dbPath);
+  db.exec("DELETE FROM map_spawn_areas WHERE map_id = '1'");
+  db.prepare(
+    "INSERT INTO map_spawn_areas (map_id, name, monster_key, min, max, cx, cy, w, h, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+  ).run("1", "双进程战场", "1", 2, 3, 900, -600, 600, 600, Date.now());
+  db.close();
+}
 
 (async () => {
   const dbPath = path.join(os.tmpdir(), `olua-e2e-dual-${process.pid}-${Date.now()}.db`);
@@ -213,6 +222,7 @@ function connect(url) {
   };
   const main = await startProcess(MAIN_ENTRY, "存档进程", { ...shared, REALTIME_EMBEDDED: "false" });
   const realtime = await startProcess(REALTIME_ENTRY, "实时进程", shared, "REALTIME_PORT");
+  seedBattlefield(dbPath);
   try {
     const { baseUrl } = main;
     const { baseUrl: rtUrl } = realtime;
@@ -238,8 +248,8 @@ function connect(url) {
     // #859 起服务端不再对「还没有位置记录」的角色一律放行（只准进新手村），
     // 这里的角色都是 1 级、要进的图又高于新手村 —— 先按运营摆位把位置写进去
     // （等价管理端 PATCH /admin/roles/:id { onMap }，见 lib/place-role.cjs）；
-    // #1084 重排后进图 0（唯一有怪的图）
-    placeRolesAt(dbPath, "0");
+    // #1177 全清后进图 1（本套自建的战场，见 seedBattlefield）
+    placeRolesAt(dbPath, "1");
 
     //#endregion
 
@@ -265,11 +275,11 @@ function connect(url) {
 
     group("二、播种与结算在实时进程跑通；写库对第三方读者可见");
 
-    const world = await session.joinWorld("0");
-    // #1084 重排后图 0 是全怪环带（快照顺序 = 按怪 key 升序）：第一只就是怪物 1；
+    const world = await session.joinWorld("1");
+    // 自建刷怪区只铺怪物 1（见 seedBattlefield）：第一只就是它；
     // 实例 id 只锁「服务端发牌的三段式形态」，区 / 线 / 序号是运行时数据不锁
     const mob = world && world.monsters && world.monsters.find((entry) => entry.monsterKey === "1" && entry.alive);
-    check(mob && /^m0_z\d+_c\d+_\d+$/.test(mob.instanceId), "worldJoin 播种拿到怪物 1（服务端发牌，带区段）", JSON.stringify(world && world.monsters.length));
+    check(mob && /^m1_z\d+_c\d+_\d+$/.test(mob.instanceId), "worldJoin 播种拿到怪物 1（服务端发牌，带区段）", JSON.stringify(world && world.monsters.length));
 
     session.socket.send(JSON.stringify({ type: "cast", data: { castId: 1, skillId: "1000", targetId: mob ? mob.instanceId : "m1_1", monsterKey: "1" } }));
     const settle = await session.waitForSettle(1);

@@ -255,6 +255,11 @@ function connect(url) {
     );
 
     /** 读 / 存规则（GET 拿全量再整份提交 —— 与页面同一个口径，15 个字段不许漏） */
+    const rulesOfMap = async (id) => {
+      const response = await api(baseUrl, "GET", `admin/maps/${id}/rules`, { token: adminToken, zoneId: ADMIN_ZONE });
+      check(response.code === 0, `准备：图 ${id} 的规则可读`, String(response.code));
+      return response.data ?? {};
+    };
     const rulesOf = async () => {
       const response = await api(baseUrl, "GET", `admin/maps/${MAP_ID}/rules`, { token: adminToken, zoneId: ADMIN_ZONE });
       return response && response.data;
@@ -414,9 +419,37 @@ function connect(url) {
 
     //#endregion
 
-    //#region 二、经验倍率
+    //#region 二、安全地图不允许开 PK（#1177）
 
-    group("二、expRate：同一把尺子量两次（同 key 的怪，两个 1 级 0 经验的新号）");
+    group("二、安全地图 allowPk：保存时被 409 拒，野外放行");
+
+    // 图 "0" 出厂是安全地图：开 PK 一律 409（判据读落库类型，与刷怪区守点同一取向）
+    const pkOnSafe = await api(baseUrl, "PATCH", "admin/maps/0/rules", {
+      token: adminToken,
+      zoneId: ADMIN_ZONE,
+      body: { ...(await rulesOfMap("0")), allowPk: true },
+    });
+    check(pkOnSafe.code === 20041, "安全地图 allowPk=true → 409（业务码 MAP_SAFE_ALLOW_PK）", String(pkOnSafe.code));
+    check(String(pkOnSafe.message ?? "").includes("安全地图"), "报错文案点明「安全地图」", String(pkOnSafe.message));
+
+    // 同一张安全地图关着 PK 保存放行：拦的是「开 PK」，不是整张规则表
+    const pkOffSafe = await api(baseUrl, "PATCH", "admin/maps/0/rules", {
+      token: adminToken,
+      zoneId: ADMIN_ZONE,
+      body: { ...(await rulesOfMap("0")), allowPk: false },
+    });
+    check(pkOffSafe.code === 0, "安全地图 allowPk=false 正常保存", String(pkOffSafe.code));
+
+    // MAP_ID（"1"）是野外地图：允许开，回读一致；用完关回去，别让后面的倍率用例带着 PK 跑
+    const pkOnWild = await saveRules({ allowPk: true });
+    check(!!pkOnWild && pkOnWild.allowPk === true, "野外地图 allowPk=true 放行", JSON.stringify(pkOnWild && pkOnWild.allowPk));
+    await saveRules({ allowPk: false });
+
+    //#endregion
+
+    //#region 三、经验倍率
+
+    group("三、expRate：同一把尺子量两次（同 key 的怪，两个 1 级 0 经验的新号）");
 
     const baseline = await killOne(alpha);
     check(!!baseline, "A：alpha 在 expRate=1 下打死一只", baseline ? baseline.monsterKey : "(没打成)");
@@ -435,7 +468,7 @@ function connect(url) {
       JSON.stringify({ one: baseline && baseline.exp, two: doubled && doubled.exp }),
     );
 
-    group("二、expRate = 0：不给经验（存在性断言，不依赖任何数值）");
+    group("四、expRate = 0：不给经验（存在性断言，不依赖任何数值）");
 
     await saveRules({ expRate: 0 });
     const muted = monsterKey ? await killOne(gamma, monsterKey) : null;
@@ -449,7 +482,7 @@ function connect(url) {
 
     //#region 三、掉落倍率与开关
 
-    group("三、allowDrop / dropRate：必掉 1 件的怪，逐档验证");
+    group("五、allowDrop / dropRate：必掉 1 件的怪，逐档验证");
 
     check(!!monsterKey, "准备：沿用同一只怪的 key（掉落表按 key 配）", String(monsterKey));
     const patchedDrop = monsterKey ? await patchGuaranteedDrop(monsterKey) : null;
@@ -496,7 +529,7 @@ function connect(url) {
 
     //#region 四、纯函数（不走真实击杀，直接对表）
 
-    group("四、纯函数：倍率怎么算，钉在这里");
+    group("六、纯函数：倍率怎么算，钉在这里");
 
     check(scaleExp(10, 2) === 20, "scaleExp(10, 2) = 20", String(scaleExp(10, 2)));
     check(scaleExp(10, 0) === 0, "scaleExp(10, 0) = 0（活动图不给经验）", String(scaleExp(10, 0)));
