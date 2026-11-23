@@ -36,8 +36,8 @@
  * - 用**临时文件库**：`map_monitor_state` 要直接读（采集器只写不读，接口层要管理端令牌，
  *   而这一套验的是世界层的名单，不该为它拉一套 admin 认证进来）；
  * - `WORLD_MAP_IDLE_MS` 调到 1.2s：出厂值 10 分钟，等不起；
- * - **地图 0（新手村）与地图 3（雪域高原）都是 1 级可进** —— 换图要双向都过门槛，
- *   1 级的号进不了卧龙城（10 级）与王城（40 级）。
+ * - **起点图与换图目标的门槛在准备段清 0**（`maps.level`）—— 门槛是运营数据、#1213 起逐张不同，
+ *   不能拿「这张图几级」当断言前提；本套只验「换图即退出旧图」，1 级新号双向都要能换。
  *
  * 用法：npm run test:e2e:world-viewers（前置 npm run build）
  */
@@ -52,7 +52,7 @@ const WebSocket = require("ws");
 const SERVER_DIR = path.join(__dirname, "..");
 const ENTRY = path.join(SERVER_DIR, "dist", "main.js");
 
-/** 起点图（图 1 八卦台，#1177 全清后本套自铺刷怪区的野外图）与换图目标（图 3 百旗围场）：两张都 0 级门槛，换图双向都放行 */
+/** 起点图（图 1 八卦台，#1177 全清后本套自铺刷怪区的野外图）与换图目标（图 3 百旗围场）：准备段把两张的门槛都清 0，换图双向都放行 */
 const HOME_MAP = "1";
 const AWAY_MAP = "3";
 /** 空闲卸载阈值（毫秒）；比它多半拍就够看见日志了 */
@@ -139,6 +139,9 @@ function seedSpawnAreas(dbPath) {
         updated_at  INTEGER NOT NULL DEFAULT 0
       );`);
   db.exec(`DELETE FROM map_spawn_areas WHERE map_id = '${HOME_MAP}'`);
+  // 两张图的门槛不是本套的断言对象（门槛是运营数据，且 #1213 起逐张不同）：
+  // 起服后清 0，让 1 级新号双向都能换图 —— 本套只验「换图即退出旧图」这条世界层规则
+  db.exec(`UPDATE maps SET level = 0 WHERE map_id IN ('${HOME_MAP}', '${AWAY_MAP}')`);
   db.prepare(
     `INSERT INTO map_spawn_areas (map_id, name, monster_key, min, max, cx, cy, w, h, updated_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
