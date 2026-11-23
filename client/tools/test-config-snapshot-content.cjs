@@ -67,7 +67,7 @@ function main() {
   const { monsterRuntime, monsterResource, applyMonsterPresentation, applyMonsterRuntimeStats } = require(path.join(outDir, "configs/game-config.js"));
   const { npcs } = require(path.join(outDir, "configs/game-config.js"));
   const { fashionData } = require(path.join(outDir, "configs/game-config.js"));
-  const { equipmentPrefixRates, equipmentSuffixRates } = require(path.join(outDir, "configs/game-config.js"));
+  const { equipmentPrefixRates, equipmentSuffixRates, mapLevelLocked } = require(path.join(outDir, "configs/game-config.js"));
   const snapshotApi = require(path.join(outDir, "configs/apply-snapshot.js"));
 
   // 沙箱的「快照到达前」状态：客户端自身零出厂行，表是 hydrateSnapshotTables 按服务端种子灌的。
@@ -79,6 +79,14 @@ function main() {
   // #655：沙箱里这张表由快照灌满（线上也是同一条 apply* 链），所以判据从「空」改成「行数 = 快照行数」；
   // 「客户端没有本地兜底」由源码断言守（game-config.ts 里 npcs 以空 Map 起）
   check(npcs.size === factory.npcs().length, "NPC 表行数 = 快照行数（客户端自身零出厂行）", `size=${npcs.size}`);
+
+  console.log("\n=== 地图等级门槛的口径（#1205 传送弹窗置灰判据）===");
+  // 三档边界缺一档都会误伤：不限等级永不挡；等级未知放行；只有「确实不够」才锁
+  check(mapLevelLocked(30, 29), "等级 29 < 门槛 30：锁住（按钮置灰）", `locked=${mapLevelLocked(30, 29)}`);
+  check(!mapLevelLocked(30, 30), "等级正好等于门槛：不锁（够就是够）", `locked=${mapLevelLocked(30, 30)}`);
+  check(!mapLevelLocked(30, 40), "等级高于门槛：不锁", `locked=${mapLevelLocked(30, 40)}`);
+  check(!mapLevelLocked(0, 1), "门槛 0（不限）：永不锁", `locked=${mapLevelLocked(0, 1)}`);
+  check(!mapLevelLocked(30, 0), "角色等级未知（0）：不锁（宁可放行让服务端拒，别把能进的图误置灰）", `locked=${mapLevelLocked(30, 0)}`);
 
   console.log("\n=== 装备：只下发基础件，变体按倍率重算 ===");
   const baseBefore = getItem("cloth_1");

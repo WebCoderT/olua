@@ -2182,6 +2182,21 @@ export function mapLabelOf(id: MapId): string {
   const config = maps.get(id);
   return config && config.label ? config.label : `地图 ${id}`;
 }
+
+/**
+ * 这张图的等级门槛对当前角色是否**没达到**（#1205，传送弹窗据此置灰按钮）
+ *
+ * 三档口径，缺一档都会误伤：
+ * - `required <= 0` = 不限等级（服务端 `maps.level` 的 0 口径），永不挡；
+ * - `roleLevel <= 0` = 角色等级未知（角色数据还没到 / 未登录），**不做判断**——
+ *   宁可放行让服务端拒，也不要把一张明明能进的图置灰；
+ * - 否则 `roleLevel < required` 才算不够。
+ */
+export function mapLevelLocked(required: number, roleLevel: number): boolean {
+  if (!(required > 0)) return false;
+  if (!(roleLevel > 0)) return false;
+  return roleLevel < required;
+}
 /**
  * 覆写地图玩法配置（#573）
  *
