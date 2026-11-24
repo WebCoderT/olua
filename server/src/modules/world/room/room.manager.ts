@@ -280,8 +280,9 @@ export class RoomManager {
 
     if (rows.length === 0) this.seed(room, areas, mapPixel, 1);
     // 恢复 / 播种之后，把卸载期间到期未处理的重生一次性补上（与 tick 同一条口径）：
-    // 房间空闲卸载期间不跑 tick，回来时那些「其实早该刷了」的怪要当场站起来
-    processRespawns(room.monsters, Date.now());
+    // 房间空闲卸载期间不跑 tick，回来时那些「其实早该刷了」的怪要当场站起来；
+    // 落点与 tick 同源——在归属刷怪区里重新随机撒点（#1226）
+    processRespawns(room.monsters, Date.now(), (monster) => this.respawnPointOf(monster));
     this.rooms.set(roomId, room);
 
     if (backfilled > 0) {
@@ -559,6 +560,20 @@ export class RoomManager {
     }
     const clipped = clampRectToMap(area, mapPixel);
     return clampPointToMap(clipped ? pickPointInArea(clipped.cx, clipped.cy, clipped.w, clipped.h) : raw(), mapPixel);
+  }
+
+  /**
+   * 一只怪的**重生落点**（#1226）：在它归属的刷怪区里重新随机撒一个点
+   *
+   * 与播种（`pickSpawnPoint`）同一条路——越界钳制 / 零面积退化都一样，重生的怪不会
+   * 落到播种刷不出来的地方。取不到落点（区被删 / 换了图 / 老档 `areaId` 为空）返回 null，
+   * 调用方退回原地：配置变更是运营的事，不该由重生把怪丢出图外。
+   */
+  respawnPointOf(monster: Pick<WorldMonster, "mapId" | "areaId">): { x: number; y: number } | null {
+    if (monster.areaId === null) return null;
+    const area = this.spawnAreas.findById(monster.areaId);
+    if (!area || area.map_id !== monster.mapId) return null;
+    return this.pickSpawnPoint(monster.mapId, area, this.mapPixelOf(monster.mapId));
   }
 
   /**

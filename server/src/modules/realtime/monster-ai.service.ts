@@ -483,7 +483,7 @@ export type MonsterAiLogEvent =
  * - **位置只有一份**（#855）：在场表（`PlayerPresenceService`）是位置与血量的唯一副本，
  *   本服务只读不存。曾经这里也有一张 `positions`，问题是它存的是**客户端原始坐标** ——
  *   一份伪造的 `pos` 同时骗过互见与索敌，位置仲裁（#596）等于白做；
- * - **位置不落盘**：坐标的持久真相是出生点（世界服务的既有边界），重启后怪物回出生点
+ * - **位置不落盘**：坐标的持久真相是出生点（世界服务的既有边界），重启后怪物回出生点（重生落点则按 #1226 在归属刷怪区里重新随机撒点）
  *   重新游走 —— 几秒钟的表现层状态，不值得为它加一张表；
  * - 超时没上报的玩家视作离场，怪物丢失目标（判据在在场表里，`aiTargetsOn` 已过滤）；
  * - 怪物不消耗魔法值：技能表的 `mpCost` 只对角色生效（怪物没有资源系统）。
@@ -700,7 +700,7 @@ export class MonsterAiService implements OnApplicationBootstrap, OnApplicationSh
   }
 
   /**
-   * 怪物被击杀：AI 运行时作废（重生回出生点后按新的一轮游走重新开始，身上的状态一并清掉）；
+   * 怪物被击杀：AI 运行时作废（重生换新落点后按新的一轮游走重新开始，身上的状态一并清掉）；
    * 带击杀事件（#689，结算侧在奖励结算完后调用）时攒进待广播队列，
    * 同图观看者的下一拍 monster-ai 帧会带上 —— 死亡清场与掉落铺场的跨端演出全靠它。
    */
@@ -976,7 +976,7 @@ export class MonsterAiService implements OnApplicationBootstrap, OnApplicationSh
       const geometry = this.geometryOf(room.mapId);
       for (const monster of room.monsters.values()) {
         if (!monster.alive) {
-          // 死了的怪没有运行时可言（重生回出生点后按新的一轮重新开始）
+          // 死了的怪没有运行时可言（重生换新落点后按新的一轮重新开始）
           runtimes.delete(monster.instanceId);
           continue;
         }
