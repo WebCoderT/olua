@@ -541,6 +541,100 @@ export const questTrackerLayout = {
 
 //#endregion
 
+//#region 消息记录（#1224：右下角常驻系统消息流水）
+
+/**
+ * 消息记录面板（逐值对照 04-hud 的 `.mlog` 段）
+ *
+ * 稿 `.mlog{right:20px;bottom:18px;width:352px;height:272px}` → 屏幕坐标（原点在中心）：
+ * 右缘 960-20=940、左缘 940-352=588（中心 x = 764）；下缘 -540+18=-522、上缘 -522+272=-250（中心 y = -386）。
+ * 与左下聊天块镜像；**只收系统消息**（系统 / 获得 / 战斗 / 任务），聊天对话在左下聊天。
+ */
+export const messageLogLayout = {
+  /** 面板中心（收起时高度变小，纵向位置由组件按「底边不动」重算） */
+  position: new Vec2(764, -386),
+  size: new Size(352, 272),
+  radius: T.radius.r3,
+  fill: T.surface.glass,
+  border: T.line[3],
+  /** 左上角铆钉（稿 `.panel--rivet`；右下那颗会顶到 foot 注释，按小地图先例只留一颗） */
+  rivet: { offset: 9, size: 6, color: T.gold[3] },
+  /** 面板距屏幕右 / 下缘的距离（收起时按它重算中心 y，底边不动） */
+  edge: { right: 20, bottom: 18 },
+  /** 标题行（稿 `.mlog-head`：标题 13px 金-4 + 计数 + 3px 容量条 + 收起钮，高 32） */
+  head: {
+    height: 32,
+    paddingX: 12,
+    title: "消息记录",
+    titleFontSize: T.fontSize.f13,
+    titleColor: T.gold[4],
+    titleSpacingX: 2,
+    /** 计数：当前条数（金）+ ` / 1000`（弱化）；数字右对齐固定槽位、后缀独立一列，位数变化时容量条不跳 */
+    countFontSize: T.fontSize.f10,
+    countColor: T.gold[4],
+    countDenColor: T.text[4],
+    countX: 66,
+    numWidth: 22,
+    denWidth: 34,
+    /**
+     * 容量条（稿 `.capbar`：3px 细条，当前 312/1000 的占比）：
+     * 常色金阶、满格转朱红（即将清空）；宽度由「计数右缘 → 收起钮左缘」之间的剩余空间决定
+     */
+    bar: {
+      height: 3,
+      radius: 2,
+      bg: T.surface.sunken,
+      fill: T.gold[3],
+      full: T.ember[3],
+      gap: 8,
+    },
+    /** 收起钮（稿 `.chat-tools button` 22×22：点一下折到只剩标题行，再点展开） */
+    collapse: {
+      text: "▾",
+      expandText: "▴",
+      size: new Size(22, 22),
+      fontSize: T.fontSize.f10,
+      color: T.text[4],
+      hoverColor: T.gold[4],
+      fill: T.surface.input,
+      border: T.line[2],
+      radius: T.radius.r1,
+    },
+  },
+  /** 消息行（稿 `.mlog-msgs`：10 行、每行「时间 10px + 36×18 标签 + 11px 正文」） */
+  rows: {
+    /** 面板内可见行数（312 条里只画最近这 10 条，往上翻是弹窗的事 —— 本块只做流水回看） */
+    count: 10,
+    height: 21,
+    paddingX: 12,
+    /** 时间列宽 / 与标签的间距 / 标签与正文的间距 */
+    timeWidth: 30,
+    gap: 6,
+    tag: { width: 36, height: 18, fontSize: T.fontSize.f10, radius: T.radius.r1, fill: T.surface.input, border: T.line[2] },
+    text: { fontSize: T.fontSize.f11, color: T.text[2] },
+    time: { fontSize: T.fontSize.f10, color: T.text[4] },
+    /** 分类标签文案与色（稿：系统灰 / 获得翠绿 / 战斗朱红 / 任务金） */
+    tagTexts: { system: "系统", gain: "获得", fight: "战斗", quest: "任务" },
+    tagColors: { system: T.text[3], gain: T.jade, fight: T.ember[3], quest: T.gold[4] },
+    /** 空态（本次上线还没有任何系统消息） */
+    emptyText: "暂无系统消息",
+    emptyColor: T.text[4],
+  },
+  /** 底部注释（稿 `.mlog-foot`：左「系统消息 · 不含聊天对话」+ 右「满 1000 条自动清空 · 重新累计」） */
+  foot: {
+    height: 28,
+    paddingX: 12,
+    fontSize: T.fontSize.f10,
+    ruleColor: T.surface[0],
+    left: "系统消息 · 不含聊天对话",
+    right: "满 1000 条自动清空 · 重新累计",
+    leftColor: T.text[4],
+    rightColor: T.text[3],
+  },
+};
+
+//#endregion
+
 //#region NPC 头顶任务标记（#396：可接 ! / 可交付 ?）
 
 /**

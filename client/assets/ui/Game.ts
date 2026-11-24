@@ -7,6 +7,7 @@ import MonsterInfoPanel from "./components/hud/MonsterInfoPanel";
 import MonsterSelectIndicator from "./components/hud/MonsterSelectIndicator";
 import SmallMap from "./components/hud/SmallMap";
 import QuestTracker from "./components/hud/QuestTracker";
+import MessageLog from "./components/hud/MessageLog";
 import Joystick from "./components/hud/Joystick";
 import RoleDisplay from "./components/role/RoleDisplay";
 import ScreenClickInput from "./components/input/ScreenClickInput";
@@ -35,6 +36,7 @@ import ChatStore from "./core/ChatStore";
 import ChatBubbles from "./core/ChatBubbles";
 import QuestStore from "./core/QuestStore";
 import QuestNpcMarks from "./core/QuestNpcMarks";
+import MessageLogStore from "./core/MessageLogStore";
 import MonsterAI from "./core/MonsterAI";
 import AutoBattle from "./core/AutoBattle";
 import AutoBattleTips from "./core/AutoBattleTips";
@@ -93,6 +95,8 @@ export class Game extends Component {
   private smallMap: SmallMap | null = null;
   /** 任务追踪栏（左侧常驻，进行中的任务与进度；点一下开任务面板） */
   private questTracker: QuestTracker | null = null;
+  /** 消息记录（#1224：右下角常驻的系统消息流水，数据在 MessageLogStore） */
+  private messageLog: MessageLog | null = null;
   /** 操作摇杆（左下角常驻，按住拖动即移动；手感参数见 configs/role.joystickMove） */
   private joystick: Joystick | null = null;
   /** 死亡遮罩弹窗（进入死亡流程时创建、复活后销毁） */
@@ -348,6 +352,15 @@ export class Game extends Component {
     this.smallMap = new SmallMap(this.roleDisplay);
     LayerManager.addToUILayer(this.smallMap);
     /**
+     * 消息记录（#1224：右下角常驻，稿 04-hud `.mlog`）
+     *
+     * 只收系统消息（系统提示 / 获得 / 战斗 / 任务），聊天对话在左下聊天窗；
+     * 数据纯内存（`MessageLogStore`，不落存档、不发请求），离开游戏场景即清空 ——
+     * 「重新上线就清空」由 `onDestroy` 里的 dispose + clear 保证。
+     */
+    this.messageLog = new MessageLog();
+    LayerManager.addToUILayer(this.messageLog);
+    /**
      * 操作摇杆（左下角常驻；节点归摇杆组件，输入逻辑在下面注入给主角组件）
      *
      * **只在触屏设备上创建**（sys.isMobile）：web-desktop 构建在电脑浏览器里跑，
@@ -495,6 +508,11 @@ export class Game extends Component {
     this.questTracker = null;
     QuestStore.reset();
     QuestNpcMarks.reset();
+    // 消息记录（#1224）：流水不跨会话（重新上线即空仓）。
+    // 先退订再清仓（#1188 口径）：clear 会 emit，面板已随场景销毁，回调里摸字段就是 null.xxx
+    this.messageLog?.dispose();
+    this.messageLog = null;
+    MessageLogStore.clear();
     RealtimeClient.onStatusChange = null;
     RealtimeClient.stop();
     // 窗口尺寸监听挂在 screen 单例上（不随节点销毁），必须显式取消

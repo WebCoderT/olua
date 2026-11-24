@@ -167,6 +167,36 @@
 .chat-in .input{flex:1;min-width:0;height:26px;font-size:11.5px;background:rgba(0,0,0,.42)}
 .chat-in .btn{flex:none;height:26px;min-width:56px;font-size:11.5px}
 
+/* ── 右下：消息记录 ── */
+/* 系统消息流水（获得/战斗/任务/系统提示）：上限 1000 条，满 1000 整表清空重新累计；不含聊天对话 */
+.mlog{position:absolute;right:20px;bottom:18px;width:352px;height:272px;display:flex;flex-direction:column}
+/* 底部注释贴着面板下缘走，右下铆钉会顶到「重新累计」，只留左上角铆钉（同小地图先例） */
+.mlog .panel--rivet::after{content:none}
+.mlog .panel{width:100%;height:100%;display:flex;flex-direction:column;border-radius:var(--r-3);
+  background:linear-gradient(170deg,rgba(26,19,11,.86),rgba(14,10,6,.9))}
+.mlog-head{display:flex;align-items:center;gap:8px;padding:8px 12px 7px;border-bottom:1px solid rgba(0,0,0,.55)}
+.mlog-head b{font-family:var(--font-display);font-size:13px;letter-spacing:.2em;color:var(--gold-4)}
+.mlog-head .cnt{font-family:var(--font-num);font-size:10px;letter-spacing:.06em;color:var(--gold-4);white-space:nowrap}
+.mlog-head .cnt i{font-style:normal;color:var(--text-4)}
+/* 容量条：head 内 3px 细条，实时显示 312/1000 的占比；满格时换朱红提示即将清空 */
+.mlog-head .capbar{flex:1;height:3px;border-radius:2px;background:rgba(0,0,0,.55);overflow:hidden}
+.mlog-head .capbar i{display:block;height:100%;width:31.2%;background:linear-gradient(90deg,var(--gold-2),var(--gold-4))}
+.mlog-head .capbar.full i{width:100%;background:linear-gradient(90deg,var(--ember-2),var(--ember-4))}
+/* 收起钮复用聊天头的 .chat-tools */
+.mlog-msgs{flex:1;min-height:0;overflow:hidden;padding:7px 12px;display:flex;flex-direction:column;gap:4px;justify-content:flex-end}
+.mlog .msg{font-size:11px}
+/* 覆盖 ui.css 全局 .tag 的 padding/height（0 12px 内边距会把 36px 宽挤到只剩 10px 内容宽，文字竖排） */
+.mlog .tag{flex:none;width:36px;height:18px;padding:0;text-align:center;font-size:9.5px;line-height:1.55;
+  letter-spacing:.06em;border-radius:2px;border:var(--bw-1) solid var(--line-2);background:rgba(0,0,0,.3);
+  color:var(--text-3)}
+.mlog .tag--get{color:var(--jade)}
+.mlog .tag--fight{color:var(--ember-3)}
+.mlog .tag--quest{color:var(--gold-4)}
+.mlog .msg em{font-style:normal;color:var(--jade)}
+.mlog-foot{display:flex;align-items:center;justify-content:space-between;gap:8px;
+  padding:6px 18px 8px 12px;border-top:1px solid rgba(0,0,0,.55);font-size:9.5px;letter-spacing:.06em;color:var(--text-4)}
+.mlog-foot b{font-weight:400;color:var(--text-3)}
+
 /* ── 底部主操作栏 ── */
 .bottom{position:absolute;left:50%;bottom:10px;transform:translateX(-50%);width:auto;height:auto;
   display:flex;align-items:flex-end;justify-content:center;gap:18px;padding:0 10px 6px}
@@ -243,7 +273,7 @@
 .autoflag .dot{background:var(--amber);box-shadow:0 0 10px rgba(217,162,39,.8)}
 
 /* 图注（设计稿说明用，不属于游戏界面） */
-.legend{position:absolute;right:20px;bottom:186px;width:270px;padding:12px 14px;border-radius:var(--r-2);
+.legend{position:absolute;right:20px;bottom:308px;width:270px;padding:12px 14px;border-radius:var(--r-2);
   border:1px dashed var(--line-2);background:rgba(10,7,4,.6);font-size:10.5px;line-height:1.8;color:var(--text-4)}
 .legend b{display:block;font-family:var(--font-num);font-size:9px;letter-spacing:.2em;color:var(--gold-2);margin-bottom:5px}
 
@@ -408,6 +438,34 @@
     </div>
   </div>
 
+  <!-- ═══ 右下：消息记录（系统消息流水 · 不含聊天 · 上限 1000 条 · 满 1000 清空一次） ═══ -->
+  <div class="mlog">
+    <div class="panel panel--rivet">
+      <div class="mlog-head">
+        <b>消息记录</b>
+        <span class="cnt num">312<i> / 1000</i></span>
+        <div class="capbar"><i></i></div>
+        <div class="chat-tools">
+          <button title="收起"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M6 9l6 6 6-6"/></svg></button>
+        </div>
+      </div>
+      <div class="mlog-msgs">
+        <div class="msg"><span class="t num">20:32</span><span class="tag tag--fight">战斗</span><div class="c">你击败了 沙盗匪首，经验 +3,200</div></div>
+        <div class="msg"><span class="t num">20:33</span><span class="tag tag--get">获得</span><div class="c"><em>屠龙·裂空</em> 已放入背包</div></div>
+        <div class="msg"><span class="t num">20:33</span><span class="tag tag--get">获得</span><div class="c">荒漠血草 ×12</div></div>
+        <div class="msg"><span class="t num">20:35</span><span class="tag tag--quest">任务</span><div class="c">「剿灭沙盗匪首」目标进度 2 / 3</div></div>
+        <div class="msg"><span class="t num">20:38</span><span class="tag">系统</span><div class="c"><em>烈火剑法</em> 升到 Lv.3</div></div>
+        <div class="msg"><span class="t num">20:39</span><span class="tag tag--fight">战斗</span><div class="c">暴击！对 沙盗护卫 造成 3,960 伤害</div></div>
+        <div class="msg"><span class="t num">20:40</span><span class="tag tag--quest">任务</span><div class="c">「采集荒漠血草」已完成，可交付</div></div>
+        <div class="msg"><span class="t num">20:41</span><span class="tag">系统</span><div class="c">欢迎回到沙城，<em>苍狼</em>。</div></div>
+      </div>
+      <div class="mlog-foot">
+        <span>系统消息 · 不含聊天对话</span>
+        <b>满 1000 条自动清空 · 重新累计</b>
+      </div>
+    </div>
+  </div>
+
   <!-- ═══ 底部：主操作栏 ═══ -->
   <div class="bottom">
     <div class="orb-w">
@@ -487,7 +545,8 @@
   <div class="legend">
     <b>HUD 元素与客户端一一对应</b>
     左上 角色/货币/战力 + Buff 条 · 顶部 选中怪物 · 右上 小地图 + 二级入口（世界地图/线路/排行榜/成就/邮件/设置/声音）· 左中 任务追踪（行 hover 高亮 · 整块开任务面板 · 标题行「详」开任务详情弹窗 → 11#state=detail）
-    · 左下 聊天（四频道标签 + 清屏/收起 · 带时间戳的消息流 · 频道切换 chip + 输入发送） · 底部 生命球 / 挂机条 + 技能 5 格 + 经验条（同一列）/ 角色·背包·技能·组队·好友·商城 / 设置 / 法力球
+    · 左下 聊天（四频道标签 + 清屏/收起 · 带时间戳的消息流 · 频道切换 chip + 输入发送） · 右下 消息记录（系统消息流水：获得/战斗/任务/系统提示，不含聊天对话 · head 实时计数 + 容量条 · 上限 1000 条、满 1000 整表清空重新累计 · 收起钮）
+    · 底部 生命球 / 挂机条 + 技能 5 格 + 经验条（同一列）/ 角色·背包·技能·组队·好友·商城 / 设置 / 法力球
   </div>
 
   <!-- 移动端摇杆 175×172（joystickLayout：贴左下 left24/bottom18；手柄 72×73、拖动半径 48）+ 选中怪物脚下光圈（帧动画循环） -->

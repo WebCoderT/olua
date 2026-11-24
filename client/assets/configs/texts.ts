@@ -103,6 +103,14 @@ export const uiTexts = {
   /** 复活请求失败（服务端拒绝或网络不通；死亡弹窗保留可重试） */
   revive_failed_tip: "复活失败，请稍后重试",
 
+  //#region 消息记录：任务流水（#1224，HUD 右下角「消息记录」里的「任务」分类）
+  /** 目标进度前进（{quest} = 任务名 · {done}/{total}） */
+  message_log_quest_progress: "「{quest}」目标进度 {done} / {total}",
+  /** 目标达成、可以回去交付（进了追踪栏的「可交付」同一时刻） */
+  message_log_quest_ready: "「{quest}」已完成目标，可交付",
+  /** 已交付领奖 */
+  message_log_quest_claimed: "「{quest}」已交付",
+
   //#region 浮动提示：拾取
   /** 拾取到物品（{names} = 物品名列表或「名称 x数量」） */
   pickup_tip: "拾取 {names}",

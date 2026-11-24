@@ -1,6 +1,8 @@
 import type { QuestState } from "../utils/net/ApiModels";
 import { allQuests, quests } from "../../configs/game-config";
 import type { QuestData } from "../../configs/game-config";
+import { getText } from "../../configs/texts";
+import MessageLogStore from "./MessageLogStore";
 
 /**
  * 任务状态口径（#396）
@@ -58,10 +60,16 @@ export default class QuestStore {
 
   /** 全量覆盖（`/quests/me`、接取、交付的响应都带完整快照） */
   static applyStates(states: QuestState[]): void {
-    this.states.clear();
+    // 覆盖前留一份旧表：任务流水（#1224）靠「前后一比」判是不是刚发生的事 ——
+    // 首载（登录时的 /quests/me）旧表为空，全部按「首次接触」跳过，不会把进行中的任务报一遍
+    const before = this.states;
+    const next = new Map<string, QuestState>();
     for (const state of states) {
-      if (state && state.questId) this.states.set(state.questId, state);
+      if (state && state.questId) next.set(state.questId, state);
     }
+    this.states = next;
+    // 用 forEach 而不是 for...of Map：打包走 babel loose，迭代器展开在这套配置里不可靠（见 olua-client 技能）
+    next.forEach((state, questId) => this.logTransition(questId, before.get(questId) ?? null, state));
     this.notify();
   }
 
@@ -72,8 +80,39 @@ export default class QuestStore {
    */
   static applyState(state: QuestState): void {
     if (!state || !state.questId) return;
+    const before = this.states.get(state.questId) ?? null;
     this.states.set(state.questId, state);
+    this.logTransition(state.questId, before, state);
     this.notify();
+  }
+
+  /**
+   * 任务流水（#1224，HUD 右下角消息记录的「任务」分类）
+   *
+   * 只在**状态真的前进**时记一句，四个判据：
+   * - 首次接触（`prev` 为空）不记 —— 登录全量快照会把所有进行中任务都算成「新生」；
+   * - `accepted → ready` 记「可交付」；`→ claimed` 记「已交付」；
+   * - 进度增长（accepted 状态下 progress 变大）记「目标进度」。
+   * 文案 key 在 `configs/texts`，任务名取配置表（查不到退回 id）。
+   */
+  private static logTransition(questId: string, prev: QuestState | null, next: QuestState): void {
+    if (!prev) return;
+    const quest = quests.get(questId);
+    const label = quest?.label ?? questId;
+    if (next.status === "claimed" && prev.status !== "claimed") {
+      MessageLogStore.push("quest", getText("message_log_quest_claimed", { quest: label }));
+      return;
+    }
+    if (next.status === "ready" && prev.status !== "ready") {
+      MessageLogStore.push("quest", getText("message_log_quest_ready", { quest: label }));
+      return;
+    }
+    const progress = Math.max(0, next.progress ?? 0);
+    if (next.status === "accepted" && progress > Math.max(0, prev.progress ?? 0)) {
+      // 分母优先用进度行上的 target（服务端已钳过），没给才退回配置的目标数
+      const target = next.target > 0 ? next.target : quest?.objective.count ?? progress;
+      MessageLogStore.push("quest", getText("message_log_quest_progress", { quest: label, done: progress, total: target }));
+    }
   }
 
   /** 某条任务的进度行（没接过返回 null） */

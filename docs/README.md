@@ -196,7 +196,7 @@ README（仓库根） → 01 总览（认路）
 | 281 个接口 | `server/openapi.json` 的 `paths` 展开后的 operationId 数；或直接看 [14](./14-接口清单.md) 的标题 |
 | 95 套 e2e | `node -e "console.log(Object.keys(require('./server/package.json').scripts).filter(k=>k.startsWith('test:e2e')).length)"`（**按脚本数**；`ls server/test/e2e*.cjs` 是 94 个文件，差的那 1 个是 `test:e2e:backup` → `test/backup.cjs`） |
 | 19 项审计 | `ls tools/audit-*.cjs \| wc -l` |
-| 32 个客户端 Manager | `ls client/assets/ui/core/*.ts \| wc -l` |
+| 33 个客户端 Manager | `ls client/assets/ui/core/*.ts \| wc -l` |
 | 53 个管理端页面 / 54 条路由 | `ls admin/src/pages/*.tsx \| wc -l` / `grep -o 'path="[^"]*"' admin/src/App.tsx \| sort -u \| wc -l` |
 | 685 件装备 / 10275 条变体 | `SELECT count(*) FROM equipments;` / `SELECT count(*) FROM equipment_variants;`（应等于 685×15） |
 | 客户端单测 70 套 | `ls client/tools/test-*.cjs \| wc -l` |
