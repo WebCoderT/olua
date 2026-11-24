@@ -55,6 +55,7 @@ export default class RoleInfoDialog extends BaseDialog {
     // RoleInShowView 是原点包装节点，直接以弹窗中心为原点原样全显；
     // #1231 拍板去掉全部遮罩层（Mask / 玻璃板框）与背景板，只显示衣服与武器内观
     this.inShowView = new RoleInShowView(role);
+    this.inShowView.setPosition(-40, 53, 0);
     dialog.addChild(this.inShowView);
     // 装备槽分组（左/右/底三个方向），右键槽位脱下装备、左键角标一键换更好的
     this.equipmentGroups = EQUIPMENT_SLOT_SIDES.map((side) =>
