@@ -32,6 +32,11 @@
  * 全部按「先删自己这批再插」：quests 按 id 清、npcs/map_npcs 按 npc_id 清、刷怪区整表
  * 重建（#1177 起本表就归本脚本管）、monsters 只 UPDATE。重跑只在值有变时才写。
  *
+ * ## 快照可见性
+ *
+ * `--apply` 成功后会把 `config_version` +1（见 main 末尾）：客户端快照按这个版本缓存，
+ * 不推版本的话运行中的服务端会一直发旧数据（直接改库不经过管理端写接口的版本拦截器）。
+ *
  * ## 不碰什么
  *
  * maps / monster_drops / monster_presentation / 成就 / 曲线段——运营数据与本刀无关。
@@ -535,6 +540,19 @@ function main() {
     }
 
     console.log(`\n已写入：怪物 ${monsterDiffs.length} 行 / 刷怪区 ${areaRows} 区 / NPC ${NPCS.length} 个 / 任务 ${questPlan.length} 条。`);
+
+    // ============ 推配置版本 ============
+    // 快照按 config_version 缓存（#881），版本 +1 只发生在管理端写接口的拦截器里 ——
+    // 直接改库绕过它，运行中的服务端会一直发旧快照（2026-11-24 实踩：#1215 落库后
+    // 客户端地图弹窗看不到刷怪区怪名，直到有人在管理端碰了一下配置才自愈）。
+    // 与 ConfigRevisionRepository.bumpVersion 同语义：单行表 ensure + version+1；
+    // 不写 config_revisions（那是管理端写接口的审计账，直接改库的数据变更本来也不在那条账上）。
+    db.exec("INSERT OR IGNORE INTO config_version (id, version, updated_at, updated_by) VALUES (1, 0, 0, '')");
+    const version = db
+      .prepare("UPDATE config_version SET version = version + 1, updated_at = ?, updated_by = 'oneoff-quest-line' WHERE id = 1 RETURNING version")
+      .get(now).version;
+    console.log(`config_version → ${version}（运行中的服务端会在下一次客户端请求时重建快照，无需重启）。`);
+
     console.log("下一步：跑 splice 脚本同步 config-sync.sql 的五张表段（maps 等其余段有运营 WIP，不整份导出）。");
   } finally {
     db.close();
