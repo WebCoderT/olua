@@ -110,34 +110,6 @@ export function createGlassPlate(name: string, size: Size, radius: number, borde
   }
 
   /**
-   * 弹窗里的「立绘背景区」（原稿 `.preview` 的 overflow:hidden 内容框，#1089；#1231 起不再裁剪）
-   *
-   * **不裁剪**：立绘（role_in_show）直接完整显示 —— #1231 用户拍板去掉遮罩层。
-   * 但 #1089 的层级修复保留：视口节点仍由调用方最先建、内观挂进它的子树，
-   * 后续兄弟（装备槽、属性、入口）自然画在立绘之上，底部三格不被特效压住。
-   * 背景（暗底 + 上部金斑，近似稿的 radial-gradient）画在视口内第一层。
-   */
-export function createInShowViewport(
-    name: string,
-    layout: { position: Vec2; size: Size; radius: number; fill: Color; glow: Color; glowCenterRatio: number; glowRadiusRatio: number },
-  ) {
-    const viewport = UiHelper.createNode(name, layout.position, layout.size);
-    const { width, height } = layout.size;
-    const backdrop = UiHelper.createNode(`${name}_backdrop`, new Vec2(), layout.size);
-    const graphics = backdrop.addComponent(Graphics);
-    // 暗底：稿 radial-gradient(circle at 50% 36%, 金斑, 暗底 72%) 的收端
-    graphics.fillColor = layout.fill;
-    graphics.roundRect(-width / 2, -height / 2, width, height, layout.radius);
-    graphics.fill();
-    // 上部金斑：圆心按稿放在 36% 高度处（y 向上），低透明金色一大团压住立绘上半的背景
-    graphics.fillColor = layout.glow;
-    graphics.circle(0, height / 2 - height * layout.glowCenterRatio, width * layout.glowRadiusRatio);
-    graphics.fill();
-    viewport.addChild(backdrop);
-    return viewport;
-  }
-
-  /**
    * HUD 底衬（稿 `.bottom::before` 的底部暗角）
    *
    * 稿是 `radial-gradient(58% 100% at 50% 100%, rgba(10,7,4,.82), transparent 74%)`：

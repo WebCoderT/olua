@@ -3,7 +3,7 @@
  *
  * 拆分自原 configs/layout/dialogs.ts（#1115 批次 2），数值与注释原样保留。
  */
-import { Size, Vec2, Color } from "cc";
+import { Size, Vec2 } from "cc";
 import { dialogFootLayout } from "./frame";
 import { T } from "../tokens";
 
@@ -13,29 +13,9 @@ export const roleInfoDialogLayout = {
   eyebrow: "快捷键 · C",
   /** 弹窗尺寸 660×520（06-role-info 稿） */
   size: new Size(660, 520),
-  /**
-   * 立绘背景区（稿 `.preview`：216×396 的框内立绘区；#1089 层级修复保留，#1231 起不再裁剪）
-   *
-   * x 对齐内观工作台的脚底圆盘中心（`equip-align.catalog.json` 的 `inShow.plate.center[0]`
-   * = -82.5）—— 立绘按「脚踩圆盘」调，背景区中心跟着圆盘走；
-   * y 与 396 高取稿的 body 区（头部下沿 215、页脚分隔线上沿 -181 → 中心 17）。
-   * 内观节点整体挂进这个背景区（不裁剪、不盖框，#1231 用户拍板「直接全部显示」）；
-   * #1089 的层级修复保留：背景区先建、装备槽等兄弟画在立绘之上。
-   * 框内溢出本身说明服务端 `equip_in_aligns` 的 inScale/inPosition 需要在内观工作台重调
-   * （客户端不代调，#1089 时代的「只裁剪」口径被 #1231 推翻 —— 改为不裁剪）。
-   */
-  preview: {
-    position: new Vec2(-82.5, 17),
-    size: new Size(216, 396),
-    radius: T.radius.r2,
-    /** 暗底（稿 radial-gradient 的收端 rgba(0,0,0,.42)，稿精确色） */
-    fill: new Color(0, 0, 0, 107),
-    /** 上部金斑（稿渐变的起点色 rgba(194,146,69,.14) = line-1 档） */
-    glow: T.line[1],
-    /** 金斑圆心距视口顶部的比例（稿 circle at 50% 36%）与半径（半宽的倍数） */
-    glowCenterRatio: 0.36,
-    glowRadiusRatio: 0.42,
-  },
+  // 立绘区（稿 .preview）已整体移除（#1231）：不裁剪、不盖框、不要背景板，
+  // 内观（role_in_show：衣服 + 武器）作为原点包装节点直接挂在弹窗上原样全显；
+  // #1089 的层级修复保留（内观最先挂，装备槽等兄弟画在它之上）。
   /**
    * 六入口按钮的公共外观（稿 `.entries .btn`：76 宽、f12、ghost 档）
    * 宽度取 84（= 稿的列宽），六个按钮等距排成一列，靠右缘留 3
