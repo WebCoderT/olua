@@ -37,6 +37,7 @@ import ChatBubbles from "./core/ChatBubbles";
 import QuestStore from "./core/QuestStore";
 import QuestNpcMarks from "./core/QuestNpcMarks";
 import MessageLogStore from "./core/MessageLogStore";
+import RoleDeltaLog from "./core/storage/role-delta-log";
 import MonsterAI from "./core/MonsterAI";
 import AutoBattle from "./core/AutoBattle";
 import AutoBattleTips from "./core/AutoBattleTips";
@@ -513,6 +514,9 @@ export class Game extends Component {
     this.messageLog?.dispose();
     this.messageLog = null;
     MessageLogStore.clear();
+    // 角色差分基线一并丢掉（#1229）：下一局第一次对比只建基线，
+    // 否则换角色进来会拿前一个角色的数据比出一串「获得 / 消耗」
+    RoleDeltaLog.reset();
     RealtimeClient.onStatusChange = null;
     RealtimeClient.stop();
     // 窗口尺寸监听挂在 screen 单例上（不随节点销毁），必须显式取消

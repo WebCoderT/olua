@@ -60,14 +60,15 @@ export function createErrorTipText(text: string) {
    * 创建提示（普通飘字）
    * @param name 文案 key（configs/texts 的 uiTexts）
    * @param params 模板参数（文案里写 {key}，这里给值）
-   * @param category 消息记录分类（#1224；默认「系统」，拾取那类传 "gain"）
+   * @param category 消息记录分类（默认「系统」；传 null = 只飘字不入流水 ——
+   *   流水已由角色差分覆盖同一件事时用，例如拾取：进包那一刻 role-delta-log 会记「获得 X ×N」）
    */
-export function createTip(name: string, params?: TextParams, category: MessageLogCategory = "system") {
+export function createTip(name: string, params?: TextParams, category: MessageLogCategory | null = "system") {
     createFloatingTip(name, getText(name, params), tipsLayout.messageColor, tipsLayout.messageMoveDuration, tipsLayout.messageFadeDuration, category);
   }
 
   /** 普通提示（文案直接给定：同上，用于服务端返回的提示语） */
-export function createTipText(text: string, category: MessageLogCategory = "system") {
+export function createTipText(text: string, category: MessageLogCategory | null = "system") {
     createFloatingTip("message_tip", text, tipsLayout.messageColor, tipsLayout.messageMoveDuration, tipsLayout.messageFadeDuration, category);
   }
 
@@ -270,9 +271,8 @@ export function showExpGain(target: Node, exp: number) {
     if (exp <= 0 || !isValid(target)) return;
     const style = uiTheme.floatingText.exp;
     const text = getText("label_exp_gain", { exp });
-    // 击杀经验进消息记录（#1224，战斗分类）：这句没有对应的飘字提示文案来源，
-    // 所以在这里单独记一条 —— 与飘字同一份文案，玩家的两处读数不会打架
-    MessageLogStore.push("fight", text);
+    // 消息记录不在这里写（#1229）：经验差异由 role-delta-log 在角色落账时统一记一条，
+    // 覆盖击杀 / 组队分经验 / 升级卷轴 / 任务发奖全部来源 —— 在这儿再记一次就是两条
     const expText = UiHelper.createLabel("exp_gain_text", text, style.color, style.fontSize, new Vec2(), style.size);
     LayerManager.addToEffectLayer(expText);
     // 位置在被击杀怪物头顶

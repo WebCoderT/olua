@@ -367,9 +367,10 @@ export default class DropManager {
     if (!drop) return; // 节点已不在（换图清场等）：入包已应用，没有地面部分要收
     this.removeDropNode(drop.dropId);
     // 飘字用帧里带的东西（不再从地面节点上取）：节点可能被 dropRemove 先收走了
-    // 分类给「获得」（#1224）：拾取是进包消息，消息记录里不该和系统提示混成一类
+    // 不进消息记录（#1229）：进包那一刻 role-delta-log 会按背包差异记「获得 X ×N」——
+    // 这里再记一条就是同一件事两条（而且那只覆盖拾取，覆盖不到购买/邮件/任务奖励）
     const label = getItem(data.goodId)?.label ?? data.goodId;
-    GameUiHelper.createTip("pickup_tip", { names: getText("label_good_count", { name: label, count: data.count }) }, "gain");
+    GameUiHelper.createTip("pickup_tip", { names: getText("label_good_count", { name: label, count: data.count }) }, null);
   }
 
   /**

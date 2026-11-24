@@ -11,6 +11,7 @@ import { bagMetaOf, normalizeBagGrid, withBagMeta, wornItemOf } from "../../../c
 import { getFashion } from "../../../configs/game-config";
 import { normalizeGuideProgress } from "../../utils/guide/guide-progress";
 import { guideStepCount } from "../../../configs/guide";
+import RoleDeltaLog from "./role-delta-log";
 
 /**
  * 本地角色缓存（#1115 批次 6 自 StorageManager 拆出）
@@ -197,6 +198,10 @@ export default class RoleCache {
    * 有的那一边）分两份写，迟早一处修了另一处没修。
    */
   private static mergeIntoCache(role: Role) {
+    // #1229 个人流水：所有「角色数据进了本地缓存」的改动都经过这里（含 #1238 的 writeBack），
+    // 差分挂在这儿能覆盖「只刷背包、不刷角色 UI」的路径（丢弃 / 整理），
+    // 与 ui-bridge 上的同一处调用互为兜底（先到的那次把差异写掉，后到的对比无差异即空转）
+    RoleDeltaLog.note(role);
     const roles = this.getRoles().map((i) => {
       if (i.id === role.id) {
         // 修订号只信「有的那一边」：内存里的 role 可能是旧存档解析出来的（没有 revision 字段），
