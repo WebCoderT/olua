@@ -6,7 +6,7 @@
  */
 
 
-import { Button, Color, Graphics, isValid, Label, Layout, Mask, Node, Size, UITransform, Vec2 } from "cc";
+import { Button, Color, Graphics, isValid, Label, Layout, Node, Size, UITransform, Vec2 } from "cc";
 import UiHelper from ".././UiHelper";
 import { Draggable } from "../../components/input/Draggable";
 import VectorPlate from "../../components/common/VectorPlate";
@@ -110,20 +110,18 @@ export function createGlassPlate(name: string, size: Size, radius: number, borde
   }
 
   /**
-   * 弹窗里的「框内立绘」视口（稿 `.preview`：overflow:hidden 的内容框，#1089）
+   * 弹窗里的「立绘背景区」（原稿 `.preview` 的 overflow:hidden 内容框，#1089；#1231 起不再裁剪）
    *
-   * 节点自带 Mask（RECT，与小地图视口同款）：挂进来的子树超出视口矩形的部分被裁掉 ——
-   * 立绘/特效再大也不会压到相邻列或面板外（#1089 的病根就是内观直挂在弹窗上没有边界）。
-   * 背景（暗底 + 上部金斑，近似稿的 radial-gradient）画在视口内第一层；**边框不在这里画**：
-   * Mask 节点的 Graphics 是裁剪形状，画了也不可见，且贴边描边会被裁掉一半（#1104 同款坑）——
-   * 边框由调用方用 createGlassPlate(透明填充) 盖在立绘之上。
+   * **不裁剪**：立绘（role_in_show）直接完整显示 —— #1231 用户拍板去掉遮罩层。
+   * 但 #1089 的层级修复保留：视口节点仍由调用方最先建、内观挂进它的子树，
+   * 后续兄弟（装备槽、属性、入口）自然画在立绘之上，底部三格不被特效压住。
+   * 背景（暗底 + 上部金斑，近似稿的 radial-gradient）画在视口内第一层。
    */
 export function createInShowViewport(
     name: string,
     layout: { position: Vec2; size: Size; radius: number; fill: Color; glow: Color; glowCenterRatio: number; glowRadiusRatio: number },
   ) {
     const viewport = UiHelper.createNode(name, layout.position, layout.size);
-    viewport.addComponent(Mask);
     const { width, height } = layout.size;
     const backdrop = UiHelper.createNode(`${name}_backdrop`, new Vec2(), layout.size);
     const graphics = backdrop.addComponent(Graphics);
