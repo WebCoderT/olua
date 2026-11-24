@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Modal } from "../components/Modal";
 import { PageHeader } from "../components/PageHeader";
 import { Badge, Button, Card, EmptyState, Field as FormField, Input, Select, Spinner } from "../components/ui";
-import { MapCanvas, type CanvasMode, type DrawBox, type DrawPoint, type MapLayerVisibility } from "../components/map/MapCanvas";
+import { MapCanvas, worldBoxOf, type CanvasMode, type DrawBox, type DrawPoint, type MapLayerVisibility } from "../components/map/MapCanvas";
 import { CollisionFormDialog } from "../components/map/CollisionForm";
 import { MapMonitorDialog } from "../components/map/MapMonitor";
 import { MapRulesDialog, ReloadWorldDialog } from "../components/map/MapOps";
@@ -257,6 +257,60 @@ export function MapsPage() {
     try {
       const saved = await mapsApi.updateNpc(detail.id, String(point.id), { npcId: point.npcId, cx: round2(to.x), cy: round2(-to.y) });
       toastSuccess(`NPC「${saved.npcLabel}」已挪到 (${saved.cx}, ${saved.cy})`);
+      reloadDetail();
+    } catch {
+      /* 错误已由请求层统一提示（越界 400） */
+    }
+  };
+
+  /**
+   * `spawn` 模式拖完一个已有区域 → 松手即保存新中心（#1219）
+   *
+   * 接口是整份覆盖：原字段原样带回（只改 cx/cy），`count` 取 `max`。
+   * 不做乐观更新 —— 一次往返换「图上那个框就是库里那行」，拖错了再拖一次就好。
+   */
+  const onMoveArea = async (area: MapSpawnArea, to: DrawPoint) => {
+    if (!detail) return;
+    try {
+      const saved = await mapsApi.updateSpawnArea(detail.id, String(area.id), {
+        name: area.name,
+        monsterKey: area.monsterKey,
+        count: area.max,
+        densityPeak: area.densityPeak ?? undefined,
+        densityOff: area.densityOff ?? undefined,
+        peakHours: area.peakHours ?? undefined,
+        cx: round2(to.x),
+        cy: round2(-to.y),
+        w: area.w,
+        h: area.h,
+      });
+      toastSuccess(`刷怪区 #${saved.id}「${saved.name}」已挪到 (${saved.cx}, ${saved.cy})`);
+      reloadDetail();
+    } catch {
+      /* 错误已由请求层统一提示（越界 / 重名 / 安全地图 400） */
+    }
+  };
+
+  /**
+   * `spawn` 模式拖完四角手柄 → 松手保存新尺寸（#1219）
+   *
+   * 手柄给出的是 Tiled 口径的新框，`worldBoxOf` 换算回世界坐标（页面不手算几何，
+   * 换算只在 MapCanvas 的 tiled/world 两兄弟函数里）。
+   */
+  const onResizeArea = async (area: MapSpawnArea, box: DrawBox) => {
+    if (!detail) return;
+    const world = worldBoxOf(box);
+    try {
+      const saved = await mapsApi.updateSpawnArea(detail.id, String(area.id), {
+        name: area.name,
+        monsterKey: area.monsterKey,
+        count: area.max,
+        densityPeak: area.densityPeak ?? undefined,
+        densityOff: area.densityOff ?? undefined,
+        peakHours: area.peakHours ?? undefined,
+        ...world,
+      });
+      toastSuccess(`刷怪区 #${saved.id}「${saved.name}」已改为 ${saved.w}×${saved.h}`);
       reloadDetail();
     } catch {
       /* 错误已由请求层统一提示（越界 400） */
@@ -676,6 +730,8 @@ export function MapsPage() {
                       onPlaceNpc={onPlaceNpc}
                       onMoveNpc={onMoveNpc}
                       onPlaceRevive={onPlaceRevive}
+                      onMoveArea={(area, to) => void onMoveArea(area, to)}
+                      onResizeArea={(area, box) => void onResizeArea(area, box)}
                     />
                   </div>
                   <div className="mt-3 flex flex-wrap items-center gap-2">

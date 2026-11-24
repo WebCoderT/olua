@@ -80,7 +80,8 @@ function seedLegacyAreas(dbPath) {
   );
   const now = Date.now();
   insert.run("0", "出厂遗留区·壹", "1", 0, 2, 600, -400, 200, 200, now);
-  insert.run("0", "出厂遗留区·贰", "2", 0, 2, 1200, -900, 256, 256, now);
+  // 贰故意给 min=4（#1219：验证「更新沿用库里旧值」——挪位置不该把运营垫的下限抹掉）
+  insert.run("0", "出厂遗留区·贰", "2", 4, 2, 1200, -900, 256, 256, now);
   db.close();
 }
 
@@ -319,10 +320,22 @@ async function main() {
     checkEqual(updated.body?.data?.name, "e2e 改名区", "名字已改");
     checkEqual(updated.body?.data?.monsterKey, "2", "怪物已换");
     checkEqual(updated.body?.data?.max, 7, "数量已改");
-    checkEqual(updated.body?.data?.min, 0, "min 不跟着 max 变（#852 起恒为 0）");
+    checkEqual(updated.body?.data?.min, 0, "新建行的 min 保持 0（#1219：更新沿用库里旧值，新建落 0）");
     checkEqual(updated.body?.data?.cx, 2000, "位置已挪");
     checkEqual(updated.body?.data?.w, 384, "宽已改");
     checkEqual(updated.body?.data?.inBounds, true, "改完仍在图内");
+
+    // 库里垫过 min 的行：整份覆盖也不能把它抹掉（#1219，min=4 由 seedLegacyAreas 垫）
+    const seeded = ((await api(base, "GET", "/api/admin/maps/0", { token })).body?.data?.spawnAreas ?? []).find(
+      (item) => item.name === "出厂遗留区·贰",
+    );
+    check(!!seeded, "垫过 min 的存量区在列表里（seed 没被出厂数据冲掉）");
+    const keepMin = await api(base, "PATCH", `/api/admin/maps/0/spawn-areas/${seeded.id}`, {
+      token,
+      body: boxOf({ name: "出厂遗留区·贰", monsterKey: "2", count: 9, cx: seeded.cx, cy: seeded.cy, w: seeded.w, h: seeded.h }),
+    });
+    checkEqual(keepMin.status, 200, "存量区更新返回 200");
+    checkEqual(keepMin.body?.data?.min, 4, "更新保留库里已有的 min（#1219：拖挪位置不抹掉运营垫的下限）");
 
     const unchangedSibling = (await api(base, "GET", "/api/admin/maps/3", { token })).body?.data?.spawnAreas ?? [];
     checkEqual(unchangedSibling.length, beforeMap3, "3 号图的区域数没被顺带改动（改的是 id，不是整表；#1084 后 3 号图是空图）");
