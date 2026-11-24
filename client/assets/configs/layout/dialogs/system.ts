@@ -250,12 +250,15 @@ export const questDialogLayout = {
   },
   /** 任务列表（框体主体；稿 `.qlist` 396 高，中心 -17） */
   list: { name: "quest_list", position: new Vec2(0, -17), size: new Size(556, 396) },
-  /** 任务行：名称 + 进度（左）+ 动作按钮（右） */
+  /** 任务行（稿 `.qrow2`）：名称+进度（左）+ 奖励列（右二）+ 动作（右一） */
   row: {
     size: new Size(552, 64),
     fill: T.surface[1],
     border: T.surface[3],
     radius: T.radius.r2,
+    /** 可交付行的描边与底（稿 `.qrow2.ready`：jade 45% 描边 + 10% 淡染底，与详情卡同值） */
+    readyBorder: new Color(111, 191, 142, 115),
+    readyFill: new Color(111, 191, 142, 26),
     nameFontSize: T.fontSize.f14,
     textFontSize: T.fontSize.f11,
     nameColor: T.gold[5],
@@ -263,17 +266,38 @@ export const questDialogLayout = {
     readyColor: T.jade,
     /**
      * 两行文字的 x 是**文本框中心**，且 `UiHelper.createLabel` 是 CLAMP + 左对齐 → 文字从
-     * 文本框左缘（nameX − 宽/2）起排。所以 x 必须让「左缘 = 行左缘 + 16」：
-     * 行宽 552（半宽 276）→ 左缘 −260 → 宽 360 时 x = −80。
+     * 文本框左缘（nameX − 宽/2）起排。所以 x 必须让「左缘 = 行左缘 + 14」：
+     * 行宽 552（半宽 276）→ 左缘 −260 → 宽 300 时 x = −110。
      * 曾经写 −180（左缘 −360，跑出行外 84px），被 ScrollView 遮罩裁掉，任务名整行看不见（#477）。
      */
-    nameX: -80,
+    nameX: -110,
     /** 名称行中心 y（#1115 批次 3 收编组件内联的 12） */
     nameY: 12,
-    nameSize: new Size(360, 20),
-    metaX: -80,
-    metaSize: new Size(360, 18),
-    buttonX: 214,
+    /** 宽从 360 收到 300：右半给奖励列（稿 `.mid{flex:1}`，中间列不压奖励块） */
+    nameSize: new Size(300, 20),
+    metaX: -110,
+    metaSize: new Size(300, 18),
+    /**
+     * 奖励列（稿 `.qrow2 .reward`：右对齐数字块，f10 text-4 行高 1.7 ≈ 17）。
+     * 盒宽 130，右缘 186 = 行右缘 262 − 按钮 64 − 间距 12；中心 x = 186 − 65 = 121。
+     */
+    rewardX: 121,
+    rewardSize: new Size(130, 34),
+    rewardFontSize: T.fontSize.f10,
+    rewardColor: T.text[4],
+    /** 行内动作键（稿 `.btn--xs` 64×24 行内档，与详情弹窗「前往」同款） */
+    actionSize: new Size(64, 24),
+    actionFontSize: T.fontSize.f11,
+    /** 动作区中心 x：行右缘 276 − 内距 14 = 内容右缘 262，再往左半键宽 32 → 230 */
+    buttonX: 230,
+  },
+  /** 行内状态角标（稿 `.badge--muted`：与任务详情弹窗 badge 同配色，只用于「进行中」行） */
+  badge: {
+    height: 18,
+    fontSize: T.fontSize.f10,
+    activeFill: T.surface[3],
+    activeText: T.text[3],
+    text: "进行中",
   },
   /** 文案 */
   texts: {
@@ -282,14 +306,16 @@ export const questDialogLayout = {
     availableEmpty: "（暂时没有能接的任务：升级或先完成前置）",
     accept: "接 取",
     submit: "交 付",
-    accepted: "进行中",
     ready: "可交付",
     /** 进度行：{done} / {total} */
     progress: "进度 {done}/{total}",
     /** 目标行：{type} · {target} ×{count} */
     objective: "{type} · {target} ×{count}",
-    /** 交接奖励行 */
+    /** 交接奖励行（交付成功的飘字） */
     rewards: "奖励：绑定元宝 {bindGold} · 经验 {exp}",
+    /** 行内奖励列（稿 `.qrow2 .reward`，右对齐两行）：{value} = 数量 */
+    rewardExp: "{value} 经验",
+    rewardBindGold: "{value} 绑元",
     /** 接取 / 交付失败的兜底提示（服务端的错误文案更具体，走请求层统一提示） */
     acceptFailed: "接取失败",
     submitFailed: "交付失败",

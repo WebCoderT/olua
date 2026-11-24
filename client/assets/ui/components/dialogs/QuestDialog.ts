@@ -9,6 +9,8 @@ import { monsterLabelOf } from "../../../configs/game-config";
 import { npcs } from "../../../configs/game-config";
 import { items } from "../../../configs/items";
 import { questDialogLayout as layout } from "../../../configs/hudLayout";
+import { buttonTone } from "../../../configs/hudLayout";
+import type { ButtonTone } from "../../../configs/hudLayout";
 import { clearChildren } from "../../utils/node/NodeTree";
 import BaseDialog from "./dialog-kit";
 import { createTabStrip, paintTabStrip } from "./tab-kit";
@@ -130,12 +132,17 @@ export default class QuestDialog extends BaseDialog {
     views.forEach((view) => content.addChild(this.createRow(view)));
   }
 
-  /** 一行任务：名称 + 状态/进度（左）+ 动作按钮（右） */
+  /**
+   * 一行任务（稿 `.qrow2`）：名称 + 状态/进度（左）+ 奖励列（右二）+ 动作（右一）
+   *
+   * 可交付行整行换玉色描边与淡染底（稿 `.qrow2.ready`，配色与详情卡同值）。
+   */
   private createRow(view: QuestView) {
     const row = layout.row;
+    const ready = view.status === "ready";
     const node = UiHelper.createNode(`quest_row_${view.quest.id}`, new Vec2(), row.size);
     const graphics = node.addComponent(Graphics);
-    UiHelper.paintRoundedPanel(graphics, row.size, row.radius, row.fill, row.border);
+    UiHelper.paintRoundedPanel(graphics, row.size, row.radius, ready ? row.readyFill : row.fill, ready ? row.readyBorder : row.border);
 
     node.addChild(
       UiHelper.createLabel(
@@ -178,31 +185,54 @@ export default class QuestDialog extends BaseDialog {
       ),
     );
 
-    // 动作按钮：可接 = 接取；可交付 = 交付；进行中 = 灰（只显示状态，不可点）
-    if (view.status === "available") {
-      node.addChild(this.createAction(`quest_accept_${view.quest.id}`, layout.texts.accept, new Vec2(row.buttonX, 0), () => this.accept(view)));
-    } else if (view.status === "ready") {
-      node.addChild(this.createAction(`quest_submit_${view.quest.id}`, layout.texts.submit, new Vec2(row.buttonX, 0), () => this.submit(view)));
-    } else {
+    // 奖励列（稿 `.qrow2 .reward`：右对齐两行，经验 + 绑元，零值不显示整块）
+    const rewardLines: string[] = [];
+    if (view.quest.rewards.exp > 0) rewardLines.push(layout.texts.rewardExp.split("{value}").join(`${view.quest.rewards.exp}`));
+    if (view.quest.rewards.bindGold > 0) rewardLines.push(layout.texts.rewardBindGold.split("{value}").join(`${view.quest.rewards.bindGold}`));
+    if (rewardLines.length > 0) {
       node.addChild(
         UiHelper.createLabel(
-          `quest_state_${view.quest.id}`,
-          layout.texts.accepted,
-          row.metaColor,
-          row.textFontSize,
-          new Vec2(row.buttonX, 0),
-          new Size(80, 20),
+          `quest_row_reward_${view.quest.id}`,
+          rewardLines.join("\n"),
+          row.rewardColor,
+          row.rewardFontSize,
+          new Vec2(row.rewardX, 0),
+          row.rewardSize,
+          Label.HorizontalAlign.RIGHT,
+          Label.VerticalAlign.CENTER,
         ),
       );
+    }
+
+    // 动作区（右一）：可接 = ghost 接取；可交付 = 金键交付；进行中 = 灰角标（只示意状态，不可点）
+    if (view.status === "available") {
+      node.addChild(this.createAction(`quest_accept_${view.quest.id}`, layout.texts.accept, new Vec2(row.buttonX, 0), () => this.accept(view), buttonTone.ghost));
+    } else if (view.status === "ready") {
+      node.addChild(this.createAction(`quest_submit_${view.quest.id}`, layout.texts.submit, new Vec2(row.buttonX, 0), () => this.submit(view), buttonTone.gold));
+    } else {
+      node.addChild(this.createStateBadge(view));
     }
     return node;
   }
 
-  /** 行内动作按钮（复用 HUD 小按钮的外观，位置由调用方给） */
-  private createAction(name: string, text: string, position: Vec2, onTap: () => void) {
-    const button = GameUiHelper.createSmallButtion(name, text, position);
+  /** 行内动作按钮（稿 `.btn--xs` 64×24 行内档，色调由状态决定：金=交付 / ghost=接取） */
+  private createAction(name: string, text: string, position: Vec2, onTap: () => void, tone: ButtonTone) {
+    const button = GameUiHelper.createToneButton(name, text, position, layout.row.actionSize, layout.row.actionFontSize, tone);
     button.on(Node.EventType.TOUCH_END, onTap, this);
     return button;
+  }
+
+  /** 「进行中」灰角标（稿 `.badge--muted`：与详情弹窗角标同配色，纯示意不可点） */
+  private createStateBadge(view: QuestView) {
+    const badge = layout.badge;
+    const width = badge.text.length * badge.fontSize + 16;
+    const size = new Size(width, badge.height);
+    const node = UiHelper.createNode(`quest_row_badge_${view.quest.id}`, new Vec2(layout.row.buttonX, 0), size);
+    const graphics = node.addComponent(Graphics);
+    // 徽标无独立描边：fill 与 border 同色，paintRoundedPanel 画出来就是一块均匀淡染
+    UiHelper.paintRoundedPanel(graphics, size, 2, badge.activeFill, badge.activeFill);
+    node.addChild(UiHelper.createLabel(`${node.name}_text`, badge.text, badge.activeText, badge.fontSize, new Vec2(), size));
+    return node;
   }
 
   //#endregion
