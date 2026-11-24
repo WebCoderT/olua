@@ -73,7 +73,7 @@ export interface RoomReloadResult {
  *    作废（**不落盘**：库里已是改写后的权威，落盘会把旧 id 写回去）。#851 起**有人看的
  *    房间当场按库重载并广播**，没人看的保持惰性（下次 join 再加载）。代际从 #961 起按区记
  *    （原来的 `world_meta.epoch` 是全局单值，合并一次所有图都白重建）；
- * 2. 重生：死亡满 `worldRespawnMs` 的实例复活（满血、回出生点），并通知观看者；
+ * 2. 重生：死亡满 `worldRespawnMs` 的实例复活（满血、在归属刷怪区内重新随机落点，#1226），并通知观看者；
  *    **没人看的房默认不跑**（#1001）：空房冻结，回来时由 `RoomManager.ensure` 一次性补算；
  *    配了 `map_rules.simulate_when_empty` 的图按 `EMPTY_ROOM_TICK_MS`（5s）推进一次；
  * 3. 密度对齐（#852）：按「目标数 vs 当前实例数」的差量补 / 裁，每次最多补 2 只 ——
@@ -374,7 +374,8 @@ export class WorldService implements OnApplicationBootstrap, OnApplicationShutdo
     this.checkEpoch();
     for (const room of this.roomManager.list()) {
       if (room.viewers.size > 0) {
-        let changed = processRespawns(room.monsters, now) > 0;
+        // 重生落点与播种同源（#1226）：在归属刷怪区里重新随机撒点，取不到就退回原地
+        let changed = processRespawns(room.monsters, now, (monster) => this.roomManager.respawnPointOf(monster)) > 0;
         // 密度对齐只对「有人看」的房间做：没人看的房按 docs/27「无人冻结」停常规刷怪，
         // 何况没有观看者时人数系数恒为 1，对齐也没意义
         changed = this.roomManager.alignDensity(room, now, this.refillPerTick()) > 0 || changed;
@@ -389,7 +390,7 @@ export class WorldService implements OnApplicationBootstrap, OnApplicationShutdo
       room.lastEmptyTickAt = now;
       if (!this.roomManager.simulateWhenEmptyOf(room.mapId)) continue;
       // 空房没有观看者：不广播（`onWorldChanged` 发了也没人接），但脏标记交给节流落盘
-      processRespawns(room.monsters, now);
+      processRespawns(room.monsters, now, (monster) => this.roomManager.respawnPointOf(monster));
     }
     // 落盘按 worldPersistMs 节流（#849）：受击只标脏，真正的写在节流点一次事务写完
     if (now - this.lastPersistAt >= this.persistMs()) {
