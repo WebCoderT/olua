@@ -78,74 +78,80 @@ try {
   guard(() => {
     QuestStore.reset();
     QuestStore.setLevel(1);
-    // 8001 无前置 → 等级够就可接；8002 前置是 8001（没领奖）→ locked
-    check(QuestStore.statusOf("8001") === "available", "无前置 + 等级够 = 可接");
-    check(QuestStore.statusOf("8002") === "locked", "前置没领奖 = 未解锁（客户端算，不发请求）");
-    check(QuestStore.statusOf("8101") === "available", "日常没有前置，等级够即可接");
+    // 7001 无前置（星灯纪链首）→ 等级够就可接；7002 前置是 7001（没领奖）→ locked
+    check(QuestStore.statusOf("7001") === "available", "无前置 + 等级够 = 可接");
+    check(QuestStore.statusOf("7002") === "locked", "前置没领奖 = 未解锁（客户端算，不发请求）");
+    check(QuestStore.statusOf("7003") === "locked", "链上第二环也锁着（前置的前置未完成）");
     check(QuestStore.statusOf("9999") === "unknown", "配置里没有的任务 id 是 unknown（不瞎显示）");
-    check(QuestStore.available().length === 2, "可接列表只含真能接的（8003 也没解锁）");
+    check(QuestStore.available().length === 1, "可接列表只含真能接的（7002/7003 都没解锁）");
 
     QuestStore.setLevel(0);
-    check(QuestStore.statusOf("8001") === "available", "等级未设置（0）时不做等级门控（进图前不误锁）");
+    check(QuestStore.statusOf("7001") === "available", "等级未设置（0）时不做等级门控（进图前不误锁）");
     QuestStore.reset();
   });
 
   guard(() => {
     QuestStore.reset();
-    QuestStore.setLevel(1);
+    QuestStore.setLevel(3);
     QuestStore.applyStates([
-      { questId: "8001", status: "claimed", progress: 1, target: 1 },
-      { questId: "8002", status: "accepted", progress: 2, target: 5 },
+      { questId: "7001", status: "claimed", progress: 1, target: 1 },
+      { questId: "7002", status: "accepted", progress: 2, target: 5 },
     ]);
-    check(QuestStore.statusOf("8001") === "claimed", "全量覆盖：claimed 行进仓");
-    check(QuestStore.statusOf("8002") === "accepted", "全量覆盖：进行中的行进仓");
-    check(QuestStore.statusOf("8003") === "locked", "前置 8002 还没领奖 → 8003 仍未解锁");
-    check(QuestStore.view("8002").progress === 2 && QuestStore.view("8002").target === 5, "视图带进度与目标");
+    check(QuestStore.statusOf("7001") === "claimed", "全量覆盖：claimed 行进仓");
+    check(QuestStore.statusOf("7002") === "accepted", "全量覆盖：进行中的行进仓");
+    check(QuestStore.statusOf("7003") === "locked", "前置 7002 还没领奖 → 7003 仍未解锁");
+    check(QuestStore.view("7002").progress === 2 && QuestStore.view("7002").target === 5, "视图带进度与目标");
 
     // 单条合并不能抹掉别的行（NPC 对话响应只带该 NPC 的任务）
-    QuestStore.applyState({ questId: "8002", status: "ready", progress: 5, target: 5 });
-    check(QuestStore.statusOf("8002") === "ready", "单条合并：状态就地更新");
-    check(QuestStore.statusOf("8001") === "claimed", "单条合并不抹掉其它行");
+    QuestStore.applyState({ questId: "7002", status: "ready", progress: 5, target: 5 });
+    check(QuestStore.statusOf("7002") === "ready", "单条合并：状态就地更新");
+    check(QuestStore.statusOf("7001") === "claimed", "单条合并不抹掉其它行");
 
     const active = QuestStore.active();
-    check(active.length === 1 && active[0].quest.id === "8002", "进行中只含有进度行的任务");
+    check(active.length === 1 && active[0].quest.id === "7002", "进行中只含有进度行的任务");
     check(active[0].status === "ready", "可交付排在前面（active 排序口径）");
-    // 8001 已领奖 → 8002 变可接的前提是它没有进度行；这里它有 accepted 行，所以可接只有链上的下一环
+    // 7001 已领奖 → 7002 变可接的前提是它没有进度行；这里它有 accepted 行，所以可接只有链上的下一环
     const available = QuestStore.available();
     check(available.every((view) => QuestStore.statusOf(view.quest.id) === "available"), "可接列表里每条都是 available 态");
-    check(!available.some((view) => view.quest.id === "8002"), "可接不含已接 / 已领奖的");
-    QuestStore.applyState({ questId: "8002", status: "claimed", progress: 5, target: 5 });
-    check(QuestStore.statusOf("8003") === "available", "前置 8002 领奖后 8003 解锁（链式门控）");
+    check(!available.some((view) => view.quest.id === "7002"), "可接不含已接 / 已领奖的");
+    QuestStore.applyState({ questId: "7002", status: "claimed", progress: 5, target: 5 });
+    check(QuestStore.statusOf("7003") === "available", "前置 7002 领奖后 7003 解锁（链式门控）");
     QuestStore.reset();
   });
 
   guard(() => {
     QuestStore.reset();
     QuestStore.setLevel(1);
-    // 0002 名下：8001 可接、8003 未解锁；9002 名下：8004 未解锁
-    check(QuestStore.markOf("0002") === "!", "有可接任务 → NPC 头顶 !");
-    check(QuestStore.markOf("9002") === null, "任务全未解锁 → 不挂标记");
+    // 1101（苍梧）名下 7001 在 1 级即可接；1103（白芷）名下 7005~7007 全在 6 级以上 → 1 级全锁
+    check(QuestStore.markOf("1101") === "!", "有可接任务 → NPC 头顶 !");
+    check(QuestStore.markOf("1103") === null, "任务全未解锁 → 不挂标记");
     check(QuestStore.markOf("1234") === null, "没有任务的 NPC → 不挂标记");
 
-    QuestStore.applyStates([{ questId: "8001", status: "ready", progress: 1, target: 1 }]);
-    check(QuestStore.markOf("0002") === "?", "有可交付 → ? 压过 !（先交再谈接新的）");
-    check(QuestStore.atNpc("0002").length === 2, "atNpc 返回该 NPC 名下全部任务视图");
+    // 走到第九章初：7001~7007 全领过 → 1101 名下 7004/7008 解锁（7001 领过 + 两环可接）
+    QuestStore.setLevel(9);
+    QuestStore.applyStates(
+      ["7001", "7002", "7003", "7004", "7005", "7006", "7007"].map((id) => ({ questId: id, status: "claimed", progress: 1, target: 1 })),
+    );
+    check(QuestStore.atNpc("1101").length === 3, "atNpc 返回该 NPC 名下已解锁的任务视图（领过 1 + 可接 2）");
+    QuestStore.applyState({ questId: "7004", status: "ready", progress: 1, target: 1 });
+    check(QuestStore.markOf("1101") === "?", "有可交付 → ? 压过 !（先交再谈接新的）");
 
     let fired = 0;
     const off = QuestStore.onChange(() => (fired += 1));
-    QuestStore.applyState({ questId: "8002", status: "accepted", progress: 1, target: 5 });
+    QuestStore.applyState({ questId: "7005", status: "accepted", progress: 1, target: 5 });
     check(fired === 1, "onChange 在状态变化时触发（追踪栏 / 标记靠它刷新）");
     off();
-    QuestStore.applyState({ questId: "8002", status: "accepted", progress: 2, target: 5 });
+    QuestStore.applyState({ questId: "7005", status: "accepted", progress: 2, target: 5 });
     check(fired === 1, "退订后不再触发（订阅函数成对给）");
     QuestStore.reset();
-    check(QuestStore.statusOf("8001") === "available" && QuestStore.active().length === 0, "reset 清空（切角色不留旧进度）");
+    check(QuestStore.statusOf("7001") === "available" && QuestStore.active().length === 0, "reset 清空（切角色不留旧进度）");
   });
 
   guard(() => {
     // 配置表本身的不变量：奖励物品 id 非空、目标数量 ≥1、主线链不成环
     const list = [...quests.values()];
-    check(list.length >= 5, "任务配置至少 5 条（主线 4 + 日常 1）");
+    check(list.length >= 28, "任务配置至少 28 条（星灯纪 28 环主线）");
+    check(list.filter((quest) => !quest.prevQuestId).length === 1, "链首唯一（只有 7001 没有前置）");
     check(list.every((quest) => quest.objective.count >= 1), "每个任务的目标数量 ≥1");
     check(list.every((quest) => ["kill", "talk", "collect"].includes(quest.objective.type)), "目标类型只有 kill / talk / collect");
     check(list.every((quest) => quest.rewards.items.every((item) => item.goodId)), "奖励物品 goodId 都非空");
