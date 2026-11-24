@@ -2591,6 +2591,11 @@ export class RolesService {
    * 与 `warnIfAttributesMismatch` 的关系：那条是「派生值算不算得出对」，这条是
    * 「这个字段根本不该由客户端决定」。前者记日志后照样覆盖，后者记日志后**也照样落库**
    * （回填成库里的值再落）—— 都不拒收，因为拒收会让「客户端少收了一帧」变成玩不了。
+   *
+   * drift 只收「有自愈路径」的偏差（#1224）：这些字段都在 `roleUpdate` 帧里，库里改了
+   * 下一个轮询周期就推回客户端覆盖，warn 是「帧到达前那一拍」的窗口记录。
+   * `mapAt`（帧故意不带）与「库里没有键的独占字段」在 `enforceServerAuthority` 里
+   * **静默**纠偏 —— 纠偏行为一字不少，只是不值得刷一条永远修不好 / 没有库值可比的日志。
    */
   private enforceAuthority(stored: Record<string, unknown>, incoming: Record<string, unknown>): void {
     const drift = enforceServerAuthority(stored, incoming);
