@@ -414,7 +414,12 @@ async function expectFailure(action) {
     "StorageManager 提供 cacheServerRole（连修订号一起缓存）与 applyServerRevision（推送成功后对齐基线）",
   );
   check(/static createRole\(/.test(storageSource) === false, "本地 createRole 已移除（创建必须走服务端）");
-  check(/this\.setRoles\(roles\);\s*\n\s*RoleSync\.schedule\(role\);/.test(storageSource), "updateOnlineRole 落盘后安排一次同步（本地落盘唯一出口 = 同步唯一触发点）");
+  // #1236 起「落本地」那一步抽进了 mergeIntoCache（与 writeBack 共用同一份合并规则），
+  // 但这条守点的意思没变：**落盘与 schedule 必须同时发生** —— 只剩 schedule 或只剩落盘都不算
+  check(
+    /this\.mergeIntoCache\(role\);\s*\n\s*RoleSync\.schedule\(role\);/.test(storageSource),
+    "updateOnlineRole 落本地后安排一次同步（本地落盘唯一出口 = 同步唯一触发点）",
+  );
   check(/const revision = typeof role\.revision === "number" \? role\.revision : i\.revision;/.test(storageSource), "updateOnlineRole 不会被 Object.assign 抹掉已存下的修订号（否则退回无乐观锁）");
   check(/RoleSync\.schedule\(role\)/.test(storageSource) && /Session\.clear\(\)/.test(storageSource), "clear() 同时清掉会话（清存档别留着登录态）");
 

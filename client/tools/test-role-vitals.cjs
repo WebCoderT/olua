@@ -31,6 +31,35 @@ const root = path.join(__dirname, "..");
 const gameSource = fs.readFileSync(path.join(root, "assets/ui/Game.ts"), "utf8");
 const textsSource = fs.readFileSync(path.join(root, "assets/configs/texts.ts"), "utf8");
 const apiSource = fs.readFileSync(path.join(root, "assets/ui/utils/net/Api.ts"), "utf8");
+const battleSource = fs.readFileSync(path.join(root, "assets/ui/core/storage/battle-applier.ts"), "utf8");
+const roleCacheSource = fs.readFileSync(path.join(root, "assets/ui/core/storage/role-cache.ts"), "utf8");
+
+/**
+ * 按大括号配对切出方法体（#1236）
+ *
+ * 不按缩进、也不用「从前缀往后截 N 个字符」—— 后者会把下一个方法一起算进来，
+ * 守点就退化成「整文件里有没有这一行」的假绿。签名找不到时返回**空串**：
+ * 调用方必须判空，方法改名了也要红，而不是静悄悄通过。
+ */
+function methodBody(source, signature) {
+  const start = source.indexOf(signature);
+  if (start < 0) return "";
+  const open = source.indexOf("{", start);
+  if (open < 0) return "";
+  let depth = 0;
+  for (let i = open; i < source.length; i += 1) {
+    const ch = source[i];
+    if (ch === "{") depth += 1;
+    else if (ch === "}") {
+      depth -= 1;
+      if (depth === 0) return source.slice(open + 1, i);
+    }
+  }
+  return "";
+}
+
+// 反证：切法本身可信 —— 方法名对不上必须拿到空串（否则下面几条断言可能是假绿）
+check(methodBody(battleSource, "private noSuchMethodAtAll(") === "", "反证：方法名不存在时切出空串（切法可信）");
 
 console.log("— 复活走服务端（Game.reviveRole）—");
 check(/RoleApi\.revive\(role\.id\)/.test(gameSource), "reviveRole 调用 RoleApi.revive（满血由服务端落账）");
@@ -44,6 +73,22 @@ check(!/role\.hp = role\.maxHp/.test(reviveRoleBody), "reviveRole 里不再有�
 console.log("— 文案与生成接口 —");
 check(/revive_failed_tip:\s*"/.test(textsSource), "texts.ts 登记 revive_failed_tip");
 check(/revive: \(id: string/.test(apiSource), "RoleApi.revive 已由 gen-api 生成");
+
+console.log("— roleUpdate 帧要落本地缓存（#1236）—");
+// 帧只刷 UI 不写缓存时，缓存里的 mp 停在上次真落盘的时刻；击杀奖励 / 拾取读缓存把旧蓝刷上屏，
+// 一秒后被下一帧拉回 —— 就是「打死怪蓝量涨一截又回去」。这条只钉「必须写回」，不钉顺序。
+const applyUpdateBody = methodBody(battleSource, "static applyServerRoleUpdate(");
+check(applyUpdateBody.length > 0, "切到 applyServerRoleUpdate 方法体（方法还在、名字没改）");
+check(/RoleCache\.writeBack\(role\)/.test(applyUpdateBody), "applyServerRoleUpdate 把帧内容写回本地缓存（RoleCache.writeBack）");
+// 写回是「只落本地」：帧的内容就是服务端现状，推上去只是白占一个防抖节拍
+const writeBackBody = methodBody(roleCacheSource, "static writeBack(");
+check(writeBackBody.length > 0, "切到 RoleCache.writeBack 方法体");
+check(/mergeIntoCache\(role\)/.test(writeBackBody), "writeBack 走 mergeIntoCache 落本地");
+check(!/RoleSync\.schedule/.test(writeBackBody), "writeBack 不触发服务端同步（不 schedule）");
+// 合并逻辑只有一份：revision 基线规则从 updateOnlineRole 抽到 mergeIntoCache，别两处漂
+const mergeBody = methodBody(roleCacheSource, "static mergeIntoCache(");
+check(/typeof role\.revision === "number" \? role\.revision : i\.revision/.test(mergeBody), "mergeIntoCache 保留 revision 基线合并规则");
+check(/mergeIntoCache\(role\)/.test(methodBody(roleCacheSource, "static updateOnlineRole(")), "updateOnlineRole 也走同一份合并逻辑");
 
 console.log("");
 if (failures.length === 0) {
