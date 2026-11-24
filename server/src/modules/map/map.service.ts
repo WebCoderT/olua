@@ -888,6 +888,8 @@ export class MapService {
    * 改一个刷怪区（整份覆盖，不是部分更新）
    *
    * 位置尺寸也允许改：画完发现框偏了一点，重画一个再删掉旧的太笨。
+   * #1219：`min` 沿用库里旧值 —— 表单没有 min 输入（#852），固定写 0 会把运营直接在
+   * 库里垫的下限抹掉（拖一下位置就把「常驻 4 只」清成 0）。新建仍然落 0。
    */
   updateSpawnArea(mapId: string, areaId: number, dto: SaveSpawnAreaDto, actor: AuthenticatedUser): MapSpawnAreaDto {
     const { row, mapPixel } = this.requireDrawableMap(mapId);
@@ -904,7 +906,7 @@ export class MapService {
       ...before,
       name,
       monster_key: dto.monsterKey,
-      min: 0,
+      min: before.min,
       max: dto.count,
       ...this.densityOf(dto),
       cx: box.cx,

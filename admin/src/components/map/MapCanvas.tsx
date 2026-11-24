@@ -27,7 +27,7 @@ import { overflowText } from "./bounds";
  * | 模式 | 按下空白 | 按下已有对象 |
  * |---|---|---|
  * | `view` | 什么都不做 | 打开编辑弹窗 |
- * | `spawn` | 拖出矩形 → 新建刷怪区 | 不响应（拖拽期间误触会不停弹窗） |
+ * | `spawn` | 拖出矩形 → 新建刷怪区 | 拖区体 = 挪位置 · 拖四角手柄 = 改尺寸 · 点击 = 打开表单（#1219） |
  * | `npc` | 松手处 = 新 NPC 点位的坐标 | **拖动**，松手即保存；没拖动就算点击 → 打开编辑 |
  * | `revive` | 松手处 = 复活点 | 拖动复活点同理 |
  * | `collision` | 单击 = 加一个顶点；**点第一个点（≥3 点时）= 封闭** → 新建碰撞多边形 | 拖顶点 = 挪；双击顶点 = 删；双击边 = 插点 |
@@ -149,6 +149,8 @@ export function MapCanvas({
   onDrawCollisionPolygon,
   onPickCollision,
   onMoveCollisionVertex,
+  onMoveArea,
+  onResizeArea,
   onInsertCollisionVertex,
   onDeleteCollisionVertex,
   onPlaceNpc,
@@ -179,6 +181,10 @@ export function MapCanvas({
   onPickCollision?: (box: MapCollision) => void;
   /** `collision` 模式拖动已有顶点并松手：上层整份提交新顶点 */
   onMoveCollisionVertex?: (box: MapCollision, index: number, to: DrawPoint) => void;
+  /** `spawn` 模式拖动已有区域并松手（确实移动了）：上层回传原字段只改 cx/cy */
+  onMoveArea?: (area: MapSpawnArea, to: DrawPoint) => void;
+  /** `spawn` 模式拖完四角手柄：上层按新 box（Tiled 口径）换算 cx/cy/w/h 提交 */
+  onResizeArea?: (area: MapSpawnArea, box: DrawBox) => void;
   /** `collision` 模式双击一条边：在它的中点插一个顶点（上层整份提交） */
   onInsertCollisionVertex?: (box: MapCollision, edgeIndex: number) => void;
   /** `collision` 模式双击一个顶点：删掉它（≤3 点时画布直接忽略，保底封闭） */
@@ -219,6 +225,16 @@ export function MapCanvas({
   const [vertexDrag, setVertexDrag] = useState<{ box: MapCollision; index: number; at: DrawPoint; moved: boolean } | null>(
     null,
   );
+  /**
+   * 拖动中的已有刷怪区（spawn 模式）：整块平移，松手提交新中心；`moved` 区分点击与拖动
+   * （点击 = 打开编辑表单，与 NPC 点位同口径）。
+   */
+  const [areaDrag, setAreaDrag] = useState<{ area: MapSpawnArea; from: DrawPoint; at: DrawPoint; moved: boolean } | null>(null);
+  /**
+   * 拖动中的尺寸手柄（spawn 模式）：对角固定（`anchor`），拖的那个角跟手；
+   * 松手把 anchor..at 归一成 box 交给上层（< 最小尺寸当没改，与新建拖框同口径）。
+   */
+  const [resizeDrag, setResizeDrag] = useState<{ area: MapSpawnArea; anchor: DrawPoint; at: DrawPoint; moved: boolean } | null>(null);
   /**
    * 当前视野：viewBox 的子矩形（Tiled 口径）。1× 时恒等于整张图；
    * 倍率 = `detail.width / view.w`。缩放 / 平移都只动这四个数。
@@ -319,6 +335,8 @@ export function MapCanvas({
       setPolyDraft(null);
       setPolyCursor(null);
       setVertexDrag(null);
+      setAreaDrag(null);
+      setResizeDrag(null);
       setPan(null);
     };
     window.addEventListener("keydown", onKey);
@@ -333,6 +351,8 @@ export function MapCanvas({
       setPolyDraft(null);
       setPolyCursor(null);
       setVertexDrag(null);
+      setAreaDrag(null);
+      setResizeDrag(null);
       setPan(null);
     }
   }, [editing]);
@@ -393,6 +413,20 @@ export function MapCanvas({
     setVertexDrag({ box, index, at, moved: false });
   };
 
+  /** 拖动一个已有的刷怪区（spawn 模式）：整块平移；松手见 releasePointer */
+  const startAreaDrag = (event: React.PointerEvent<SVGRectElement>, area: MapSpawnArea, at: DrawPoint) => {
+    if (mode !== "spawn" || event.button !== 0) return;
+    event.currentTarget.ownerSVGElement?.setPointerCapture(event.pointerId);
+    setAreaDrag({ area, from: at, at, moved: false });
+  };
+
+  /** 拖一个四角手柄改尺寸（spawn 模式）：对角固定，`at` 跟手 */
+  const startResizeDrag = (event: React.PointerEvent<SVGCircleElement>, area: MapSpawnArea, anchor: DrawPoint) => {
+    if (mode !== "spawn" || event.button !== 0) return;
+    event.currentTarget.ownerSVGElement?.setPointerCapture(event.pointerId);
+    setResizeDrag({ area, anchor, at: anchor, moved: false });
+  };
+
   const movePointer = (event: React.PointerEvent<SVGSVGElement>) => {
     if (pan) {
       // 平移：屏幕位移按当前 view 折算回 map 单位（方向取反——抓住地图拖，地图跟手走）
@@ -412,6 +446,18 @@ export function MapCanvas({
       const point = pointOf(event);
       const moved = vertexDrag.moved || Math.hypot(point.x - vertexDrag.at.x, point.y - vertexDrag.at.y) > dotRadius * 0.3;
       setVertexDrag({ ...vertexDrag, at: point, moved });
+      return;
+    }
+    if (areaDrag) {
+      const point = pointOf(event);
+      const moved = areaDrag.moved || Math.hypot(point.x - areaDrag.from.x, point.y - areaDrag.from.y) > dotRadius * 0.5;
+      setAreaDrag({ ...areaDrag, at: point, moved });
+      return;
+    }
+    if (resizeDrag) {
+      const point = pointOf(event);
+      const moved = resizeDrag.moved || Math.hypot(point.x - resizeDrag.at.x, point.y - resizeDrag.at.y) > dotRadius * 0.3;
+      setResizeDrag({ ...resizeDrag, at: point, moved });
       return;
     }
     if (polyDraft) {
@@ -441,6 +487,24 @@ export function MapCanvas({
       setVertexDrag(null);
       // 确实拖动了才提交：点一下顶点不该把它挪走
       if (moved) onMoveCollisionVertex?.(box, index, point);
+      return;
+    }
+    if (areaDrag) {
+      const { area, moved } = areaDrag;
+      setAreaDrag(null);
+      // 没拖动 = 点击：打开编辑表单（位置尺寸在表单里精确微调）
+      if (!moved) onPickArea(area);
+      else onMoveArea?.(area, point);
+      return;
+    }
+    if (resizeDrag) {
+      const { area, anchor, moved } = resizeDrag;
+      setResizeDrag(null);
+      if (!moved) return;
+      // 对角固定、拖的那个角松手处 = 新框：太小的框当没改（与新建拖框同口径，防手抖把区缩没）
+      const box = normalizeBox({ x0: anchor.x, y0: anchor.y, x1: point.x, y1: point.y });
+      if (box.width < MIN_DRAW_PX || box.height < MIN_DRAW_PX) return;
+      onResizeArea?.(area, box);
       return;
     }
     if (draft) {
@@ -532,6 +596,8 @@ export function MapCanvas({
           setDrag(null);
           setPolyCursor(null);
           setPan(null);
+          setAreaDrag(null);
+          setResizeDrag(null);
         }}
       >
         {/* 空白处的命中层：画在最底层，尺寸 = 整张图。有它就不必在 `<svg>` 上判「是不是点到了对象」 */}
@@ -621,10 +687,18 @@ export function MapCanvas({
             );
           })}
 
-        {/* 服务端刷怪区（实）：click 打开编辑弹窗。绘制模式下不响应点击（否则一按就弹窗） */}
+        {/* 服务端刷怪区（实）：查看模式 click 打开编辑弹窗；spawn 模式拖区体 = 挪位置、
+            拖四角手柄 = 改尺寸（松手提交，见 startAreaDrag / startResizeDrag）。
+            其余编辑模式不响应事件（在刷怪区里点一下不该误开表单 / 误拖 NPC） */}
         {visible.spawn &&
           detail.spawnAreas.map((area) => {
-            const box = tiledBoxOf(area);
+            const origin = tiledBoxOf(area);
+            // 拖动中的区域整块跟手：平移量 = 当前指针 − 按下起点（其余区域照旧）
+            const moving = areaDrag?.area.id === area.id ? areaDrag : null;
+            const dx = moving ? moving.at.x - moving.from.x : 0;
+            const dy = moving ? moving.at.y - moving.from.y : 0;
+            const box = { x: origin.x + dx, y: origin.y + dy, width: origin.width, height: origin.height };
+            const interactive = mode === "spawn";
             const active = area.id === selectedAreaId;
             // 等级走管理端同步查表（登录后已拉好快照）；查不到配置就省掉 Lv 段，不显示假的
             const levelText = spawnLevelTextOf(area.monsterKey);
@@ -637,14 +711,15 @@ export function MapCanvas({
             // 越界区域描警示色：容器 overflow-hidden 会把越出 viewBox 的部分裁掉，
             // 也就是「区域在图外」在画面上表现为「这块区域不见了」—— 只有颜色能提示。
             const color = active ? COLOR.spawnActive : area.inBounds ? COLOR.spawn : COLOR.spawnOutside;
+            // 四角手柄（spawn 模式）：对角固定改尺寸；对角点 = anchor，拖的那个角松手处 = 新角
+            const corners: Array<{ p: DrawPoint; anchor: DrawPoint; cursor: string; label: string }> = [
+              { p: { x: origin.x, y: origin.y }, anchor: { x: origin.x + origin.width, y: origin.y + origin.height }, cursor: "nwse-resize", label: "左上角" },
+              { p: { x: origin.x + origin.width, y: origin.y }, anchor: { x: origin.x, y: origin.y + origin.height }, cursor: "nesw-resize", label: "右上角" },
+              { p: { x: origin.x, y: origin.y + origin.height }, anchor: { x: origin.x + origin.width, y: origin.y }, cursor: "nesw-resize", label: "左下角" },
+              { p: { x: origin.x + origin.width, y: origin.y + origin.height }, anchor: { x: origin.x, y: origin.y }, cursor: "nwse-resize", label: "右下角" },
+            ];
             return (
-              <g
-                key={`spawn-${area.id}`}
-                className={editing ? undefined : "cursor-pointer"}
-                // 编辑点位时整块区域不再吃事件：不然「在刷怪区里点一下放 NPC」会先弹开区域表单
-                pointerEvents={editing ? "none" : undefined}
-                onClick={() => onPickArea(area)}
-              >
+              <g key={`spawn-${area.id}`}>
                 <rect
                   x={box.x}
                   y={box.y}
@@ -656,8 +731,19 @@ export function MapCanvas({
                   strokeWidth={active ? 3.5 : area.inBounds ? 2 : 3}
                   strokeDasharray={area.inBounds && !active ? undefined : `${labelSize * 0.45} ${labelSize * 0.25}`}
                   vectorEffect="non-scaling-stroke"
+                  className={interactive ? "cursor-move" : mode === "view" ? "cursor-pointer" : undefined}
+                  pointerEvents={interactive ? "auto" : editing ? "none" : undefined}
+                  onClick={mode === "view" ? () => onPickArea(area) : undefined}
+                  onPointerDown={
+                    interactive
+                      ? (event) => {
+                          // 拖动基准 = 指针当前位置（不是区域角点）：整块平移量 = 指针位移
+                          startAreaDrag(event, area, pointOf(event));
+                        }
+                      : undefined
+                  }
                 >
-                  <title>{`#${area.id} ${area.name} · ${area.monsterLabel}(${area.monsterKey})${levelText} ${area.min}~${area.max} 只\n世界坐标 (${area.cx}, ${area.cy}) ${area.w}×${area.h}${area.inBounds ? "" : `\n⚠ 越出地图边界（${overflowText(area)}），超出的部分在画面上看不到`}`}</title>
+                  <title>{`#${area.id} ${area.name} · ${area.monsterLabel}(${area.monsterKey})${levelText} ${area.min}~${area.max} 只\n世界坐标 (${area.cx}, ${area.cy}) ${area.w}×${area.h}${area.inBounds ? "" : `\n⚠ 越出地图边界（${overflowText(area)}），超出的部分在画面上看不到`}${interactive ? "\n拖动挪位置 · 拖四角手柄改尺寸 · 点一下打开表单" : ""}`}</title>
                 </rect>
                 <text
                   x={box.x + box.width / 2}
@@ -689,9 +775,68 @@ export function MapCanvas({
                     </>
                   )}
                 </text>
+                {/* 四角手柄：拖 = 改尺寸（对角固定）。注意 anchor 用**原始坐标**（origin），
+                    拖动预览在下面单独画，手柄本体不跟手 —— 跟手的是预览框 */}
+                {interactive && !moving ? (
+                  corners.map((corner, index) => (
+                    <circle
+                      key={`spawn-handle-${area.id}-${index}`}
+                      cx={corner.p.x}
+                      cy={corner.p.y}
+                      r={dotRadius * 0.55}
+                      fill={COLOR.spawnActive}
+                      fillOpacity={0.9}
+                      stroke="var(--color-surface-0)"
+                      strokeWidth={1.5}
+                      vectorEffect="non-scaling-stroke"
+                      className={corner.cursor}
+                      onPointerDown={(event) => startResizeDrag(event, area, corner.anchor)}
+                    >
+                      <title>{`#${area.id} ${corner.label}（拖动改区域尺寸，对角固定）`}</title>
+                    </circle>
+                  ))
+                ) : null}
               </g>
             );
           })}
+
+        {/* 改尺寸预览（spawn 模式拖手柄中）：对角到手柄当前位置的虚线框 + 实时尺寸。
+            pointerEvents none —— 它在光标下面，不能吃掉 move 事件 */}
+        {resizeDrag ? (
+          <g pointerEvents="none">
+            {(() => {
+              const preview = normalizeBox({ x0: resizeDrag.anchor.x, y0: resizeDrag.anchor.y, x1: resizeDrag.at.x, y1: resizeDrag.at.y });
+              return (
+                <>
+                  <rect
+                    x={preview.x}
+                    y={preview.y}
+                    width={preview.width}
+                    height={preview.height}
+                    fill={COLOR.spawnActive}
+                    fillOpacity={0.16}
+                    stroke={COLOR.spawnActive}
+                    strokeWidth={2}
+                    strokeDasharray={`${labelSize * 0.4} ${labelSize * 0.25}`}
+                    vectorEffect="non-scaling-stroke"
+                  />
+                  <text
+                    x={preview.x + preview.width / 2}
+                    y={preview.y + preview.height / 2 + labelSize / 3}
+                    textAnchor="middle"
+                    fontSize={labelSize}
+                    fill="var(--color-ink-1)"
+                    stroke="var(--color-surface-0)"
+                    strokeWidth={labelSize / 22}
+                    paintOrder="stroke"
+                  >
+                    {Math.round(preview.width)} × {Math.round(preview.height)}
+                  </text>
+                </>
+              );
+            })()}
+          </g>
+        ) : null}
 
         {/* 复活点（服务端 maps.revive_cx/cy，每图最多一个）：点 = 打开，拖动 = 挪位置 */}
         {visible.revive && detail.revivePoint && reviveOrigin && reviveAt ? (
@@ -890,7 +1035,7 @@ export function MapCanvas({
 /** 每种编辑模式左上角那一行提示（`view` 不提示：查看模式不该有常驻横幅） */
 const MODE_HINT: Record<CanvasMode, { text: string; color: string } | null> = {
   view: null,
-  spawn: { text: "在图上拖出矩形 = 新建刷怪区 · Esc 取消", color: "var(--color-gold-hi)" },
+  spawn: { text: "拖出矩形 = 新建 · 拖已有区 = 挪位置 · 拖四角手柄 = 改尺寸 · 点已有区 = 打开表单 · Esc 取消", color: "var(--color-gold-hi)" },
   npc: { text: "点空白 = 放一个 NPC（再选是谁）· 拖已有点 = 挪位置 · Esc 取消", color: "var(--color-jade-hi)" },
   revive: { text: "点哪里 = 复活点就设在哪里 · 拖动已有点 = 挪位置 · Esc 取消", color: "var(--color-warn-hi)" },
   collision: {
