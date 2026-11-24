@@ -249,6 +249,9 @@ try {
     check(dialog.includes("QuestApi.accept") && dialog.includes("QuestApi.submit"), "接取 / 交付都在弹窗里（响应即最新快照）");
     check(dialog.includes("QuestStore.applyStates(result.quests)"), "交付响应直接覆盖快照（不再请求一次）");
     check(!/distance|getWorldPosition/.test(dialog), "客户端不做距离校验（#862：距离闸在服务端，客户端拿位置当准入等于自己说了算）");
+    check(dialog.includes("createToneButton"), "行内动作键走色调按钮（稿 11-quest：金=交付 / ghost=接取）");
+    check(!dialog.includes("createSmallButtion"), "旧 HUD 小按钮不再用于任务行（重排后统一走色调按钮）");
+    check(dialog.includes("texts.rewardExp") && dialog.includes("texts.rewardBindGold"), "行内奖励列读 quests 快照的奖励模板（不另算一份奖励）");
   });
 
   guard(() => {
