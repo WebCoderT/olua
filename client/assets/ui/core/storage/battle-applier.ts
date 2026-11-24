@@ -102,7 +102,8 @@ export default class BattleApplier {
    * 换装、任务/成就/邮件发奖、商城、成长线升级、后台改动、升级，全部由服务端重算后
    * 经这一帧汇合到本地。区间属性缺省（等级不在成长曲线的边角存档）时不动对应字段。
    * 成长线阶位（称号 / 战魂 / 军衔）自 #551 起也走这一帧 —— 后台改完不重进就生效。
-   * 只刷新显示、**不触发存档**：帧的内容就是服务端现状，推回去是白推还多占一个防抖节拍。
+   * 只刷新显示 + 落本地缓存、**不推服务端**：帧的内容就是服务端现状，推回去是白推还多占一个
+   * 防抖节拍（`RoleCache.writeBack`，见 #1236 —— 落本地这一步不能省，缓存里那份 mp 没人别的路径更新）。
    */
   static applyServerRoleUpdate(update: RoleAuthorityUpdate): void {
     const role = RoleCache.findOnlineRole();
@@ -157,6 +158,11 @@ export default class BattleApplier {
     if (Array.isArray(update.fashionsOwned)) role.fashionsOwned = update.fashionsOwned;
     role.hp = Math.min(role.hp, role.maxHp);
     role.revision = update.revision;
+    // 写回本地缓存（#1236）：上面改的 `role` 是 `findOnlineRole()` 从 localStorage 反序列化出来的
+    // 临时对象，只刷 UI 不落缓存的话，缓存里的 hp / mp 会停在上一次真落盘的时刻 —— 而打怪时
+    // 蓝量每秒都在变，下一次击杀奖励 / 拾取读缓存就把旧蓝量刷上屏、一秒后被下一帧拉回。
+    // **只落本地、不推服务端**：帧的内容就是服务端现状，推回去是白占一个防抖节拍
+    RoleCache.writeBack(role);
     updateRoleUi(role);
     // 金钱变化音放在刷 UI 之后：先让数字变，再出声（顺序反了会有「听到声音但数字还没动」的一帧）
     if (moneyChanged) void SoundManager.play("money_change");
