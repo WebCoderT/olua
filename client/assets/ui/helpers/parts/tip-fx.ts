@@ -13,6 +13,8 @@ import { getText, TextParams } from "../../../configs/texts";
 import { StatusBadge } from "../../../types/status";
 import { markClickThrough } from "../../utils/input/UiHit";
 import LayerManager from "../../core/LayerManager";
+import MessageLogStore from "../../core/MessageLogStore";
+import type { MessageLogCategory } from "../../core/MessageLogStore";
 import { roleInfoBarLayout, tipsLayout, T, uiTheme } from "../../../configs/hudLayout";
 import { createGlassPlate } from "./dialog-builder";
 import { createVectorDot } from "./role-parts";
@@ -45,26 +47,28 @@ let damageTextSeq = 0;
    * @param params 模板参数（文案里写 {key}，这里给值）
    */
 export function createErrorTip(name: string, params?: TextParams) {
-    createFloatingTip(name, getText(name, params), tipsLayout.errorColor, tipsLayout.errorMoveDuration, tipsLayout.errorFadeDuration);
+    // 错误提示不进消息记录（log = null）：校验反馈是「刚才那次操作」的，不是系统流水
+    createFloatingTip(name, getText(name, params), tipsLayout.errorColor, tipsLayout.errorMoveDuration, tipsLayout.errorFadeDuration, null);
   }
 
   /** 错误提示（文案直接给定：服务端返回的提示语属于「数据」，不是界面固定文案） */
 export function createErrorTipText(text: string) {
-    createFloatingTip("error_tip", text, tipsLayout.errorColor, tipsLayout.errorMoveDuration, tipsLayout.errorFadeDuration);
+    createFloatingTip("error_tip", text, tipsLayout.errorColor, tipsLayout.errorMoveDuration, tipsLayout.errorFadeDuration, null);
   }
 
   /**
    * 创建提示（普通飘字）
    * @param name 文案 key（configs/texts 的 uiTexts）
    * @param params 模板参数（文案里写 {key}，这里给值）
+   * @param category 消息记录分类（#1224；默认「系统」，拾取那类传 "gain"）
    */
-export function createTip(name: string, params?: TextParams) {
-    createFloatingTip(name, getText(name, params), tipsLayout.messageColor, tipsLayout.messageMoveDuration, tipsLayout.messageFadeDuration);
+export function createTip(name: string, params?: TextParams, category: MessageLogCategory = "system") {
+    createFloatingTip(name, getText(name, params), tipsLayout.messageColor, tipsLayout.messageMoveDuration, tipsLayout.messageFadeDuration, category);
   }
 
   /** 普通提示（文案直接给定：同上，用于服务端返回的提示语） */
-export function createTipText(text: string) {
-    createFloatingTip("message_tip", text, tipsLayout.messageColor, tipsLayout.messageMoveDuration, tipsLayout.messageFadeDuration);
+export function createTipText(text: string, category: MessageLogCategory = "system") {
+    createFloatingTip("message_tip", text, tipsLayout.messageColor, tipsLayout.messageMoveDuration, tipsLayout.messageFadeDuration, category);
   }
 
   /**
@@ -72,8 +76,20 @@ export function createTipText(text: string) {
    *
    * 文案由调用方传入：登记在 configs/texts 的固定文案走 createTip / createErrorTip（内部 getText 取），
    * 服务端返回的动态文案走 createTipText / createErrorTipText —— 核心代码里仍然没有面向玩家的中文。
+   *
+   * `log`（#1224）：普通提示同时进 HUD 右下角的消息记录（`MessageLogStore`），
+   * **错误提示传 null 不记** —— 穿戴/进图被拒、背包满这类校验反馈是「针对刚才那次操作」的，
+   * 记进流水只会把真正的系统消息挤掉。
    */
-export function createFloatingTip(name: string, text: string, color: Color, moveDuration: number, fadeDuration: number) {
+export function createFloatingTip(
+    name: string,
+    text: string,
+    color: Color,
+    moveDuration: number,
+    fadeDuration: number,
+    log: MessageLogCategory | null = "system",
+  ) {
+    if (log) MessageLogStore.push(log, text);
     const tip = UiHelper.createTipLabel(name, text, color, tipsLayout.fontSize, tipsLayout.size);
     // 描边：飘字落在屏幕中心，那里常压着深色/同色面板（登录页那条深红装饰板），
     // 不加描边的纯色小字基本读不出来（见 tipsLayout.outline 与 #457）
@@ -253,7 +269,11 @@ export function showSkillTip(caster: Node, skillName: string) {
 export function showExpGain(target: Node, exp: number) {
     if (exp <= 0 || !isValid(target)) return;
     const style = uiTheme.floatingText.exp;
-    const expText = UiHelper.createLabel("exp_gain_text", getText("label_exp_gain", { exp }), style.color, style.fontSize, new Vec2(), style.size);
+    const text = getText("label_exp_gain", { exp });
+    // 击杀经验进消息记录（#1224，战斗分类）：这句没有对应的飘字提示文案来源，
+    // 所以在这里单独记一条 —— 与飘字同一份文案，玩家的两处读数不会打架
+    MessageLogStore.push("fight", text);
+    const expText = UiHelper.createLabel("exp_gain_text", text, style.color, style.fontSize, new Vec2(), style.size);
     LayerManager.addToEffectLayer(expText);
     // 位置在被击杀怪物头顶
     const targetPosition = target.getWorldPosition();
