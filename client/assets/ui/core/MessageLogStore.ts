@@ -1,20 +1,27 @@
 /**
- * 消息记录仓（#1224：HUD 右下角常驻系统消息流水）
+ * 消息记录仓（#1224 建、#1229 扩成个人流水：HUD 右下角常驻）
  *
  * ## 口径（用户 2026-11-24 拍板）
- * - **只收系统消息**：系统提示 / 获得 / 战斗 / 任务；**聊天对话不进这里**（聊天在左下 ChatStore）；
+ * - **收与「我」相关的一切变化**：系统提示 / 任务 / 经验 / 等级 / 货币 / 物品获得与消耗 / 成长
+ *   （点数、四维、战力、技能、战魂、称号、军衔、装备、时装）；**聊天对话不进这里**（聊天在左下 ChatStore）；
+ * - **不收操作态**：血量/魔法每次受击都变、位置朝向是操作反馈 —— 记进来会把流水刷没（见 role-delta-log 的字段清单）；
  * - **服务端不存**：纯客户端内存，不落存档、不发请求、不进 localStorage；
  * - **重新上线就清空**：`Game.onDestroy`（离开游戏场景回登录/选角）调 `clear()`，与 ChatStore 不跨会话一致；
  * - **上限 1000 条，满 1000 整表清空一次、重新累计**（产品规则，不是分页淘汰）。
  *
+ * ## 谁往里写
+ * - `core/storage/role-delta-log.ts`：角色数据快照差分（经验/等级/货币/物品/成长的全部条目）—— 主力；
+ * - `helpers/parts/tip-fx.ts`：普通提示（服务端提示语、界面提示）落「系统」；
+ * - `core/QuestStore.ts`：任务状态前进落「任务」。
+ *
  * ## 为什么是静态仓（同 ChatStore / QuestStore 的纪律）
- * 写消息的是「提示层 / 任务 / 拾取 / 经验」这些互不认识的地方，读的只有 HUD 上的 MessageLog 一块，
+ * 写消息的是「提示层 / 任务 / 角色落账」这些互不认识的地方，读的只有 HUD 上的 MessageLog 一块，
  * 中间少一层就会变成「谁都得拿到面板引用」。仓在这里、消费者订阅 onChange，重画交给面板。
  *
  * ## 不 import cc
  * 本类要能被 `tools/test-message-log.cjs` 直接编译跑断言（同 ChatStore），所以只留纯 TypeScript。
  */
-export type MessageLogCategory = "system" | "gain" | "fight" | "quest";
+export type MessageLogCategory = "system" | "quest" | "gain" | "exp" | "level" | "money" | "growth";
 
 /** 一条消息记录（展示所需的最小字段） */
 export interface MessageLogEntry {

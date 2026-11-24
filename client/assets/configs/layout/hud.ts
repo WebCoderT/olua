@@ -613,20 +613,40 @@ export const messageLogLayout = {
     tag: { width: 36, height: 18, fontSize: T.fontSize.f10, radius: T.radius.r1, fill: T.surface.input, border: T.line[2] },
     text: { fontSize: T.fontSize.f11, color: T.text[2] },
     time: { fontSize: T.fontSize.f10, color: T.text[4] },
-    /** 分类标签文案与色（稿：系统灰 / 获得翠绿 / 战斗朱红 / 任务金） */
-    tagTexts: { system: "系统", gain: "获得", fight: "战斗", quest: "任务" },
-    tagColors: { system: T.text[3], gain: T.jade, fight: T.ember[3], quest: T.gold[4] },
-    /** 空态（本次上线还没有任何系统消息） */
-    emptyText: "暂无系统消息",
+    /**
+     * 分类标签文案与色（#1229 个人流水七类）：
+     * 系统灰 / 任务金 / 获得翠绿 / 经验冷蓝 / 升级琥珀 / 货币暗金 / 成长朱红淡
+     * 七类都是两字，36px 宽的 chip 不用改（扩容分类不改编版式）
+     */
+    tagTexts: {
+      system: "系统",
+      quest: "任务",
+      gain: "获得",
+      exp: "经验",
+      level: "升级",
+      money: "货币",
+      growth: "成长",
+    },
+    tagColors: {
+      system: T.text[3],
+      quest: T.gold[4],
+      gain: T.jade,
+      exp: T.frost,
+      level: T.amber,
+      money: T.gold[3],
+      growth: T.ember[4],
+    },
+    /** 空态（本次上线还没有任何流水） */
+    emptyText: "暂无记录",
     emptyColor: T.text[4],
   },
-  /** 底部注释（稿 `.mlog-foot`：左「系统消息 · 不含聊天对话」+ 右「满 1000 条自动清空 · 重新累计」） */
+  /** 底部注释（稿 `.mlog-foot`：左「个人流水 · 不含聊天对话」+ 右「满 1000 条自动清空 · 重新累计」） */
   foot: {
     height: 28,
     paddingX: 12,
     fontSize: T.fontSize.f10,
     ruleColor: T.surface[0],
-    left: "系统消息 · 不含聊天对话",
+    left: "个人流水 · 不含聊天对话",
     right: "满 1000 条自动清空 · 重新累计",
     leftColor: T.text[4],
     rightColor: T.text[3],

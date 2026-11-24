@@ -9,15 +9,18 @@ import { clearChildren } from "../../utils/node/NodeTree";
 import { messageLogLayout as layout, T } from "../../../configs/hudLayout";
 
 /**
- * 消息记录（#1224：HUD 右下角常驻的系统消息流水，稿 `design/olua-ui/screens/04-hud.html` 的 `.mlog`）
+ * 消息记录（#1224 建 / #1229 扩成个人流水：HUD 右下角常驻，稿 `design/olua-ui/screens/04-hud.html` 的 `.mlog`）
  *
  * ## 它显示什么
- * 只显示**系统消息**（系统提示 / 获得 / 战斗 / 任务），聊天对话不进这里 —— 聊天在左下常驻窗。
+ * 与「我」相关的一切变化：经验 / 等级 / 货币 / 物品获得与消耗 / 成长（点数、四维、战力、技能、
+ * 战魂、称号、军衔、装备、时装）/ 任务 / 系统提示；聊天对话不进这里 —— 聊天在左下常驻窗。
  * 标题行：标题 + 当前条数 / 上限 + 3px 容量条（满格转朱红）+ 收起钮；
  * 正文：最近 `rows.count` 条，每行「时间 + 分类标签 + 正文」；底部注明「不含聊天对话 / 满 1000 条自动清空」。
+ * 分类是数据驱动的（`layout.rows.tagTexts` / `tagColors`）：加一类只改 configs/layout，本文件不动。
  *
  * ## 数据与生命周期
  * - 数据只在 `MessageLogStore`（纯内存：不落存档、不发请求，重新上线即清空）；
+ * - 写入方主要是 `ui/core/storage/role-delta-log.ts`（角色数据差分），本类只读；
  * - 本类**不发请求、不存状态**，订阅 onChange 整块重画（最多 10 行，比差量更新省心且不会漏）；
  * - 离开游戏场景时组合根先 `dispose()` 再 `MessageLogStore.clear()`（#1188 口径：先退订再 reset，
  *   否则销毁期 emit 会摸到被 `_destruct` 置 null 的字段）。

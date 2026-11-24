@@ -111,6 +111,46 @@ export const uiTexts = {
   /** 已交付领奖 */
   message_log_quest_claimed: "「{quest}」已交付",
 
+  //#region 消息记录：个人流水（#1229：经验 / 等级 / 货币 / 物品 / 成长；数值自带符号，如 {value} = +3,200）
+  /** 经验增减（{value} 带符号） */
+  message_log_exp: "经验 {value}",
+  /** 等级提升（{from} 原等级 · {to} 新等级） */
+  message_log_level_up: "等级提升 Lv.{from} → Lv.{to}",
+  /** 等级下调（后台调整 / 纠偏；正常玩法不会出现） */
+  message_log_level_down: "等级调整 Lv.{from} → Lv.{to}",
+  /** 绑定元宝增减（{value} 带符号） */
+  message_log_money: "绑定元宝 {value}",
+  /** 物品到手（{name} 物品名 · {count} 件数）：拾取 / 购买 / 邮件 / 任务奖励 / 回收返还都走这句 */
+  message_log_item_gain: "获得 {name} ×{count}",
+  /** 物品减少（{name} 物品名 · {count} 件数）：使用 / 丢弃 / 出售 / 合成消耗 */
+  message_log_item_lose: "消耗 {name} ×{count}",
+  /** 技能点增减（{value} 带符号；升级给的点也会走这句） */
+  message_log_skill_point: "技能点 {value}",
+  /** 属性点增减（{value} 带符号） */
+  message_log_attr_point: "属性点 {value}",
+  /** 四维加点（{attr} 力量/敏捷/体质/精神 · {value} 带符号） */
+  message_log_attr: "{attr} {value}",
+  /** 战斗力变化（{value} 带符号） */
+  message_log_combat: "战斗力 {value}",
+  /** 技能升级（{skill} 技能名 · {level} 新等级） */
+  message_log_skill_up: "{skill} 升至 Lv.{level}",
+  /** 技能等级下调（后台调整；正常玩法不会出现） */
+  message_log_skill_down: "{skill} 调整至 Lv.{level}",
+  /** 战魂阶位变化（{level} 新阶数） */
+  message_log_soul: "战魂 Lv.{level}",
+  /** 称号阶位变化（{level} 新阶数） */
+  message_log_title: "称号 Lv.{level}",
+  /** 军衔阶位变化（{level} 新阶数） */
+  message_log_rank: "军衔 第 {level} 阶",
+  /** 穿上一件装备（{name} 装备名） */
+  message_log_equip_on: "装备 {name}",
+  /** 脱下装备（{name} 装备名） */
+  message_log_equip_off: "脱下 {name}",
+  /** 更换时装（{name} 时装名） */
+  message_log_fashion: "更换时装 {name}",
+  /** 脱下时装 */
+  message_log_fashion_off: "脱下时装",
+
   //#region 浮动提示：拾取
   /** 拾取到物品（{names} = 物品名列表或「名称 x数量」） */
   pickup_tip: "拾取 {names}",

@@ -43,6 +43,9 @@ const STUB_IMPORTS = {
   // #1115 批次 6：StorageManager 的实现拆进 ui/core/storage/，子模块从自己的目录出发引用
   // 同一批 stub —— specifier 多一层、替换值也多一层（相对 src/ui/core/storage/）
   "../RoleUIManager": "../../../stubs/RoleUIManager",
+  // #1229：ui-bridge 的技能名解析器引用 configs/skill —— 它连着 skills/ 的释放实现（引擎层），
+  // 沙箱里顶成空表替身（configs/items / game-config 不连实现，照常用真的）
+  "../../../configs/skill": "../../../stubs/configs-skill",
   "../SceneManager": "../../../stubs/SceneManager",
   "../SoundManager": "../../../stubs/SoundManager",
   "../GameHelper": "../../../stubs/GameHelper",
@@ -355,6 +358,9 @@ function prepareStorage(sandboxName, extraEntries = []) {
     if (!file.endsWith(".ts")) continue;
     copy(path.join(ASSETS, "ui/core/storage", file), path.join(srcDir, "ui/core/storage", file), true);
   }
+  // #1229：storage 子模块的流水出口（role-delta-log → MessageLogStore）也要跟着进来，
+  // 否则所有走 storage 沙箱的测试在 require role-cache 时找不到 ../MessageLogStore
+  copy(path.join(ASSETS, "ui/core/MessageLogStore.ts"), path.join(srcDir, "ui/core/MessageLogStore.ts"), true);
   // 额外入口：沙箱里还没有的，按原样复制一份（configs / types 已整份复制，不重复拷）
   extraEntries.forEach((rel) => {
     const target = path.join(srcDir, rel);
