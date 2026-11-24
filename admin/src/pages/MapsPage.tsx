@@ -20,10 +20,55 @@ import {
 } from "../components/map/MapDialogs";
 import { mapsApi, refreshMapCatalog } from "../api";
 import type { MapCollision, MapDetail, MapNpc, MapSpawnArea, MapSummary, MapTypeGroup, SaveMapConfig } from "../api";
-import { toastSuccess } from "../store/toast";
+import { toastError, toastSuccess } from "../store/toast";
 
 /** 类型码（服务端生成的字面量联合："0" 安全 / "1" 野外；#1177 收敛） */
 type MapTypeCode = SaveMapConfig["type"];
+
+/**
+ * 画布暂存的一笔改动（#1221）
+ *
+ * 拖拽挪位 / 改尺寸 / 碰撞顶点增删挪 / 设清复活点**不再松手即请求**：先记成一笔暂存
+ * （画布本地即时反映），点「保存改动」才逐项提交。同一个对象连续改多笔只保留最后一笔
+ * （key 覆盖），所以暂存数 ≤ 改过的对象数；复活点是单值，set / clear 互相覆盖。
+ */
+type PendingOp =
+  | { kind: "npc"; id: number; npcId: string; cx: number; cy: number }
+  | {
+      kind: "area";
+      id: number;
+      name: string;
+      monsterKey: string;
+      count: number;
+      densityPeak?: number;
+      densityOff?: number;
+      peakHours?: string;
+      cx: number;
+      cy: number;
+      w: number;
+      h: number;
+    }
+  | { kind: "collision"; id: number; points: number[][] }
+  | { kind: "revive-set"; cx: number; cy: number }
+  | { kind: "revive-clear" };
+
+/** 复活点在暂存里的固定 key（一张图只有一个复活点，set / clear 后写的覆盖前写的） */
+const REVIVE_OP_KEY = "revive";
+
+/** 暂存改动的一行短标签（保存失败的提示里点名哪一项没存上） */
+function opLabel(op: PendingOp): string {
+  switch (op.kind) {
+    case "npc":
+      return `NPC 点位 #${op.id}`;
+    case "area":
+      return `刷怪区 #${op.id}「${op.name}」`;
+    case "collision":
+      return `碰撞多边形 #${op.id}`;
+    case "revive-set":
+    case "revive-clear":
+      return "复活点";
+  }
+}
 
 /** 编辑表单的形状（= 服务端 `SaveMapConfigDto` 的三个字段；门槛只剩等级，#1177） */
 interface MapForm {
@@ -87,8 +132,8 @@ const DEFAULT_LAYERS: MapLayerVisibility = { spawn: true, npc: true, revive: tru
  *
  * | 块 | 能不能改 | 改了怎么生效 |
  * |---|---|---|
- * | 名称 / 类型 / 进入等级 | **能改**（`PATCH /admin/maps/:id`；门槛只剩等级，#1177） | 立即（服务端进图校验读同一张表；客户端下次进游戏拉快照） |
- * | 刷怪区 / NPC 点位 / 复活点 / 碰撞盒 | **能改**（在图上拖框 / 点放） | 客户端下次进游戏拉快照（世界播种等该图分域重新加载） |
+ * | 名称 / 类型 / 进入等级 | **能改**（`PATCH /admin/maps/:id`；门槛只剩等级，#1177） | 点「保存」立即生效（服务端进图校验读同一张表；客户端下次进游戏拉快照） |
+ * | 刷怪区 / NPC 点位 / 复活点 / 碰撞盒 | **能改**（图上拖框 / 点放 / 拖拽微调） | 画布微调先**本地暂存**（#1221），点「保存改动」批量入库；客户端下次进游戏拉快照 |
  * | 图层 / 场上怪物 | 只读 | 改 TMX → 跑导入工具 → 重打包客户端 |
  *
  * #676 起 TMX 里**一个对象组都没有**（`tools/strip-map-objects.cjs` 整组删除），
@@ -138,6 +183,10 @@ export function MapsPage() {
   const [collisionDraft, setCollisionDraft] = useState<DrawPoint[] | null>(null);
   /** 正在编辑的碰撞多边形；与 collisionDraft 互斥 */
   const [editCollision, setEditCollision] = useState<MapCollision | null>(null);
+  /** 画布暂存改动（key → op，#1221）：保存前不发请求，画布本地即时反映 */
+  const [pending, setPending] = useState<Map<string, PendingOp>>(new Map());
+  /** 「保存改动」批量提交中 */
+  const [savingEdits, setSavingEdits] = useState(false);
 
   /** 列表筛选条件（#1179，形状见 MapFilters） */
   const [filters, setFilters] = useState<MapFilters>(EMPTY_FILTERS);
@@ -164,6 +213,8 @@ export function MapsPage() {
     if (!selected) return;
     let cancelled = false;
     setDetailLoading(true);
+    // 换图 = 丢弃上一张图的画布暂存（入口 pickMap 已弹过确认；这里兜住程序化的切图路径）
+    setPending(new Map());
     mapsApi
       .detail(selected)
       .then((data) => {
@@ -181,6 +232,15 @@ export function MapsPage() {
       cancelled = true;
     };
   }, [selected]);
+
+  /**
+   * 左列表点一张图（#1221）：画布上有未保存改动时先弹确认——
+   * 暂存只改了本地（库里没动过），确认切图 = 丢弃本地暂存。
+   */
+  const pickMap = (id: string) => {
+    if (id !== selected && pending.size > 0 && !window.confirm(`这张图有 ${pending.size} 项未保存的画布改动，切换将丢弃，确定吗？`)) return;
+    setSelected(id);
+  };
 
   /** 保存玩法配置（整份覆盖；只提交这五个字段） */
   const save = async () => {
@@ -246,76 +306,63 @@ export function MapsPage() {
     setNpcDraft(point);
   };
 
+  /** 把一笔改动记进暂存（#1221；同一对象后写覆盖前写，所以暂存数 ≤ 改过的对象数） */
+  const stage = (key: string, op: PendingOp) =>
+    setPending((prev) => {
+      const next = new Map(prev);
+      next.set(key, op);
+      return next;
+    });
+
+  /** 画布微调的本地落地（#1221）：只改 detail 让画布即时反映，不发请求；越界标记按本地口径重算，保存后以服务端拉回为准 */
+  const applyDetail = (updater: (d: MapDetail) => MapDetail) => setDetail((prev) => (prev ? updater(prev) : prev));
+
   /**
-   * `npc` 模式拖完一个已有的点 → 松手即保存
+   * `npc` 模式拖完一个已有的点 → 暂存新落点（#1221）
    *
-   * 只改坐标不改 NPC：`npcId` 原样带回（换 NPC 走表单）。乐观更新不做 —— 一次往返
-   * 换来的是「图上那个点真的就在库里那个位置」，而拖错了还要再拖回来。
+   * 保存时 `npcId` 原样带回（只改坐标）；画布立刻挪到位，不弹提示不刷新。
    */
-  const onMoveNpc = async (point: MapNpc, to: DrawPoint) => {
-    if (!detail) return;
-    try {
-      const saved = await mapsApi.updateNpc(detail.id, String(point.id), { npcId: point.npcId, cx: round2(to.x), cy: round2(-to.y) });
-      toastSuccess(`NPC「${saved.npcLabel}」已挪到 (${saved.cx}, ${saved.cy})`);
-      reloadDetail();
-    } catch {
-      /* 错误已由请求层统一提示（越界 400） */
-    }
+  const onMoveNpc = (point: MapNpc, to: DrawPoint) => {
+    const cx = round2(to.x);
+    const cy = round2(-to.y);
+    stage(`npc:${point.id}`, { kind: "npc", id: point.id, npcId: point.npcId, cx, cy });
+    applyDetail((d) => ({
+      ...d,
+      npcPoints: d.npcPoints.map((n) => (n.id === point.id ? { ...n, cx, cy, inBounds: pointInBounds(d, cx, cy) } : n)),
+    }));
+  };
+
+  /** `spawn` 模式拖完已有区域（挪位 / 改尺寸共用）→ 暂存新框；其余字段原样保留（接口是整份覆盖） */
+  const stageAreaBox = (area: MapSpawnArea, box: { cx: number; cy: number; w: number; h: number }) => {
+    stage(`area:${area.id}`, {
+      kind: "area",
+      id: area.id,
+      name: area.name,
+      monsterKey: area.monsterKey,
+      count: area.max,
+      densityPeak: area.densityPeak ?? undefined,
+      densityOff: area.densityOff ?? undefined,
+      peakHours: area.peakHours ?? undefined,
+      ...box,
+    });
+    applyDetail((d) => ({
+      ...d,
+      spawnAreas: d.spawnAreas.map((a) => (a.id === area.id ? { ...a, ...box, ...areaBounds(d, box) } : a)),
+    }));
   };
 
   /**
-   * `spawn` 模式拖完一个已有区域 → 松手即保存新中心（#1219）
-   *
-   * 接口是整份覆盖：原字段原样带回（只改 cx/cy），`count` 取 `max`。
-   * 不做乐观更新 —— 一次往返换「图上那个框就是库里那行」，拖错了再拖一次就好。
+   * `spawn` 模式拖完一个已有区域 → 暂存新中心（#1219 的拖拽挪位，#1221 起先暂存）
    */
-  const onMoveArea = async (area: MapSpawnArea, to: DrawPoint) => {
-    if (!detail) return;
-    try {
-      const saved = await mapsApi.updateSpawnArea(detail.id, String(area.id), {
-        name: area.name,
-        monsterKey: area.monsterKey,
-        count: area.max,
-        densityPeak: area.densityPeak ?? undefined,
-        densityOff: area.densityOff ?? undefined,
-        peakHours: area.peakHours ?? undefined,
-        cx: round2(to.x),
-        cy: round2(-to.y),
-        w: area.w,
-        h: area.h,
-      });
-      toastSuccess(`刷怪区 #${saved.id}「${saved.name}」已挪到 (${saved.cx}, ${saved.cy})`);
-      reloadDetail();
-    } catch {
-      /* 错误已由请求层统一提示（越界 / 重名 / 安全地图 400） */
-    }
-  };
+  const onMoveArea = (area: MapSpawnArea, to: DrawPoint) => stageAreaBox(area, { cx: round2(to.x), cy: round2(-to.y), w: area.w, h: area.h });
 
   /**
-   * `spawn` 模式拖完四角手柄 → 松手保存新尺寸（#1219）
+   * `spawn` 模式拖完四角手柄 → 暂存新尺寸（#1219；#1221 起先暂存）
    *
    * 手柄给出的是 Tiled 口径的新框，`worldBoxOf` 换算回世界坐标（页面不手算几何，
    * 换算只在 MapCanvas 的 tiled/world 两兄弟函数里）。
    */
-  const onResizeArea = async (area: MapSpawnArea, box: DrawBox) => {
-    if (!detail) return;
-    const world = worldBoxOf(box);
-    try {
-      const saved = await mapsApi.updateSpawnArea(detail.id, String(area.id), {
-        name: area.name,
-        monsterKey: area.monsterKey,
-        count: area.max,
-        densityPeak: area.densityPeak ?? undefined,
-        densityOff: area.densityOff ?? undefined,
-        peakHours: area.peakHours ?? undefined,
-        ...world,
-      });
-      toastSuccess(`刷怪区 #${saved.id}「${saved.name}」已改为 ${saved.w}×${saved.h}`);
-      reloadDetail();
-    } catch {
-      /* 错误已由请求层统一提示（越界 400） */
-    }
-  };
+  const onResizeArea = (area: MapSpawnArea, box: DrawBox) => stageAreaBox(area, worldBoxOf(box));
 
   /** `collision` 模式点绘封闭 → 打开新建表单（顶点已带坐标，只差确认 / 微调） */
   const onDrawCollisionPolygon = (points: DrawPoint[]) => {
@@ -323,46 +370,48 @@ export function MapsPage() {
     setCollisionDraft(points);
   };
 
-  /** `collision` 模式拖完一个顶点 → 整份提交新顶点序列（id 不变，画布原地更新） */
-  const onMoveCollisionVertex = async (box: MapCollision, index: number, to: DrawPoint) => {
-    if (!detail) return;
-    const points = box.points.map(([x, y], i) => (i === index ? [round2(to.x), round2(-to.y)] as [number, number] : [x, y] as [number, number]));
-    try {
-      await mapsApi.updateCollision(detail.id, String(box.id), { points });
-      toastSuccess(`碰撞多边形 #${box.id} 已挪顶点 #${index + 1}`);
-      reloadDetail();
-    } catch {
-      /* 错误已由请求层统一提示（顶点太近 / 自交都有中文文案） */
-    }
+  /** `collision` 模式顶点增删挪的公共暂存：整份记录新顶点序列（id 不变） */
+  const stageCollisionPoints = (box: MapCollision, points: number[][]) => {
+    stage(`collision:${box.id}`, { kind: "collision", id: box.id, points });
+    applyDetail((d) => ({
+      ...d,
+      collisions: d.collisions.map((c) => (c.id === box.id ? { ...c, points, fullyOutside: polygonFullyOutside(d, points) } : c)),
+    }));
   };
 
-  /** `collision` 模式双击一条边 → 在它的中点插一个顶点（整份提交） */
-  const onInsertCollisionVertex = async (box: MapCollision, edgeIndex: number) => {
-    if (!detail) return;
+  /** `collision` 模式拖完一个顶点 → 暂存新顶点序列 */
+  const onMoveCollisionVertex = (box: MapCollision, index: number, to: DrawPoint) =>
+    stageCollisionPoints(
+      box,
+      box.points.map(([x, y], i) => (i === index ? [round2(to.x), round2(-to.y)] : [x, y])),
+    );
+
+  /** `collision` 模式双击一条边 → 在它的中点插一个顶点（暂存） */
+  const onInsertCollisionVertex = (box: MapCollision, edgeIndex: number) => {
     const a = box.points[edgeIndex];
     const b = box.points[(edgeIndex + 1) % box.points.length];
-    const mid: [number, number] = [round2((a[0] + b[0]) / 2), round2((a[1] + b[1]) / 2)];
-    const points = [...box.points.slice(0, edgeIndex + 1), mid, ...box.points.slice(edgeIndex + 1)];
-    try {
-      await mapsApi.updateCollision(detail.id, String(box.id), { points });
-      toastSuccess(`碰撞多边形 #${box.id} 已插顶点（${box.points.length + 1} 个）`);
-      reloadDetail();
-    } catch {
-      /* 同上 */
-    }
+    const mid: number[] = [round2((a[0] + b[0]) / 2), round2((a[1] + b[1]) / 2)];
+    stageCollisionPoints(box, [...box.points.slice(0, edgeIndex + 1), mid, ...box.points.slice(edgeIndex + 1)]);
   };
 
-  /** `collision` 模式双击一个顶点 → 删掉它（画布已保底 ≥3 点，整份提交） */
-  const onDeleteCollisionVertex = async (box: MapCollision, index: number) => {
-    if (!detail || box.points.length <= 3) return;
-    const points = box.points.filter((_, i) => i !== index);
-    try {
-      await mapsApi.updateCollision(detail.id, String(box.id), { points });
-      toastSuccess(`碰撞多边形 #${box.id} 已删顶点（剩 ${points.length} 个）`);
-      reloadDetail();
-    } catch {
-      /* 同上 */
-    }
+  /** `collision` 模式双击一个顶点 → 删掉它（画布已保底 ≥3 点，暂存） */
+  const onDeleteCollisionVertex = (box: MapCollision, index: number) => {
+    if (box.points.length <= 3) return;
+    stageCollisionPoints(box, box.points.filter((_, i) => i !== index));
+  };
+
+  /** `revive` 模式点空白 → 暂存新复活点（不需要表单：位置就是全部信息） */
+  const onPlaceRevive = (point: DrawPoint) => {
+    const cx = round2(point.x);
+    const cy = round2(-point.y);
+    stage(REVIVE_OP_KEY, { kind: "revive-set", cx, cy });
+    applyDetail((d) => ({ ...d, revivePoint: { cx, cy, inBounds: pointInBounds(d, cx, cy) } }));
+  };
+
+  /** 清掉复活点（暂存；入库后玩家死在这张图会退回上一处——保存前随时可「放弃」还原） */
+  const clearRevivePoint = () => {
+    stage(REVIVE_OP_KEY, { kind: "revive-clear" });
+    applyDetail((d) => ({ ...d, revivePoint: null }));
   };
 
   /** 点图上已有的碰撞多边形 → 打开编辑表单（多边形没有名字，靠画布高亮认人） */
@@ -371,49 +420,82 @@ export function MapsPage() {
     setEditCollision(box);
   };
 
-  /** `revive` 模式点空白 → 直接设 / 挪复活点（不需要表单：位置就是全部信息） */
-  const onPlaceRevive = async (point: DrawPoint) => {
-    if (!detail) return;
-    try {
-      const saved = await mapsApi.setRevivePoint(detail.id, { cx: round2(point.x), cy: round2(-point.y) });
-      toastSuccess(`复活点已设为 (${saved.cx}, ${saved.cy})`);
-      reloadDetail();
-    } catch {
-      /* 同上 */
-    }
-  };
-
-  /** 清掉复活点（幂等操作，但仍要二次确认：删掉之后玩家死在这张图会退回上一处） */
-  const clearRevivePoint = async () => {
-    if (!detail) return;
-    try {
-      await mapsApi.clearRevivePoint(detail.id);
-      toastSuccess("这张图的复活点已清空");
-      reloadDetail();
-    } catch {
-      /* 同上 */
-    }
-  };
-
-  /** 刷怪区 / 点位改动之后：列表计数与详情都要跟着变（两处都读服务端，不做本地拼算） */
-  const reloadDetail = () => {
-    setDraft(null);
-    setEditArea(null);
-    setNpcDraft(null);
-    setEditNpc(null);
-    setCollisionDraft(null);
-    setEditCollision(null);
-    void loadList();
-    if (!selected) return;
-    mapsApi
+  /**
+   * 只刷新当前这张图（#1221）：详情重拉 + 左列表该行计数本地更新。
+   * 不再 `loadList` 全刷——别的图的计数没变，62 张图没必要陪着一起转。
+   * 故意不动玩法配置表单 `form`：画布改动与名称/类型/等级无关，重拉不该覆盖还没保存的输入。
+   */
+  const refreshDetail = useCallback(() => {
+    if (!selected) return Promise.resolve();
+    return mapsApi
       .detail(selected)
       .then((data) => {
         setDetail(data);
-        setForm(formOf(data));
+        // 左列表该行的计数跟着新详情走（字段与 MapSummary 同名，只铺计数块，别整份覆盖丢列）
+        setList((prev) => prev.map((item) => (item.id === data.id ? { ...item, ...countsOf(data) } : item)));
       })
       .catch(() => {
         /* 错误已由请求层统一提示 */
       });
+  }, [selected]);
+
+  /** 放弃全部画布暂存：本地还原到服务端最后确认的状态（只拉当前图，不动列表） */
+  const discardEdits = () => {
+    setPending(new Map());
+    void refreshDetail();
+  };
+
+  /**
+   * 「保存改动」：把暂存逐项提交（#1221）
+   *
+   * 失败项保留在暂存里（可再点保存重试），成功项清掉；无论成败都重拉当前图——
+   * 入库后的 `inBounds` / 计数以服务端为准，本地预览口径让位。逐条串行而不是并发：
+   * 同一张图的写接口幂等且互不依赖，串行只是让失败名单和提交顺序一致，量级（≤ 改过的对象数）撑得住。
+   */
+  const saveEdits = async () => {
+    if (!detail || pending.size === 0 || savingEdits) return;
+    setSavingEdits(true);
+    const ops = [...pending.values()];
+    const failed: PendingOp[] = [];
+    for (const op of ops) {
+      try {
+        switch (op.kind) {
+          case "npc":
+            await mapsApi.updateNpc(detail.id, String(op.id), { npcId: op.npcId, cx: op.cx, cy: op.cy });
+            break;
+          case "area":
+            await mapsApi.updateSpawnArea(detail.id, String(op.id), {
+              name: op.name,
+              monsterKey: op.monsterKey,
+              count: op.count,
+              densityPeak: op.densityPeak,
+              densityOff: op.densityOff,
+              peakHours: op.peakHours,
+              cx: op.cx,
+              cy: op.cy,
+              w: op.w,
+              h: op.h,
+            });
+            break;
+          case "collision":
+            await mapsApi.updateCollision(detail.id, String(op.id), { points: op.points });
+            break;
+          case "revive-set":
+            await mapsApi.setRevivePoint(detail.id, { cx: op.cx, cy: op.cy });
+            break;
+          case "revive-clear":
+            await mapsApi.clearRevivePoint(detail.id);
+            break;
+        }
+      } catch {
+        failed.push(op);
+      }
+    }
+    setPending(new Map(failed.map((op) => [keyOf(op), op])));
+    setSavingEdits(false);
+    await refreshDetail();
+    if (failed.length === 0) toastSuccess(`${ops.length} 项画布改动已保存`);
+    else toastError(`${failed.length} 项没存上：${failed.map(opLabel).join("、")}（已保留在暂存里，可再点「保存改动」重试）`);
   };
 
   /** 从图上点 NPC → 打开该点位的编辑表单 */
@@ -590,7 +672,7 @@ export function MapsPage() {
                     <li key={item.id}>
                       <button
                         type="button"
-                        onClick={() => setSelected(item.id)}
+                        onClick={() => pickMap(item.id)}
                         className={`w-full rounded-lg border px-2.5 py-2 text-left transition ${
                           active ? "border-gold/50 bg-gold/10" : "border-line bg-surface-2/40 hover:border-line-strong"
                         }`}
@@ -682,7 +764,8 @@ export function MapsPage() {
                   description={
                     <>
                       刷怪区、NPC、复活点、碰撞盒都在**这张图上改**（#667 / #672 / #676 起 TMX 不再是它们的来源）：
-                      选模式 → 在图上拖 / 点一下，填完即入库。
+                      拖框 / 点放建新对象在表单里确认即入库；**拖拽挪位、改尺寸、碰撞顶点微调、设清复活点先暂存在画布上**，
+                      攒完点右上「保存改动」一次入库（#1221），保存前后都只刷新这张图。
                       <br />
                       区域与点位必须落在图内：越界的那块会被画布裁掉，所以越界的区域描成红色虚线、越界的点位画成红圈虚线 —— 新建时越界会被服务端直接拒。
                       **碰撞盒例外**：四面围墙本来就画在图外，允许越界，只有「整块在图外」会标红。
@@ -696,6 +779,18 @@ export function MapsPage() {
                     <>
                       {/* 只在有越界时出现：0 越界是常态，天天挂一个绿徽标等于没有徽标 */}
                       {outOfBounds > 0 && <Badge tone="ember">越界 {outOfBounds}</Badge>}
+                      {/* 画布暂存（#1221）：有改动才出现，保存 / 放弃都在这一排 */}
+                      {pending.size > 0 && <Badge tone="warn">画布改动 {pending.size} 未保存</Badge>}
+                      {pending.size > 0 && (
+                        <Button variant="ghost" onClick={discardEdits} disabled={savingEdits}>
+                          放弃改动
+                        </Button>
+                      )}
+                      {pending.size > 0 && (
+                        <Button onClick={() => void saveEdits()} disabled={savingEdits}>
+                          {savingEdits ? "保存中…" : "保存改动"}
+                        </Button>
+                      )}
                       <Button variant="ghost" onClick={() => setZoomed(true)}>
                         放大
                       </Button>
@@ -724,14 +819,14 @@ export function MapsPage() {
                       onDrawBox={onDrawBox}
                       onDrawCollisionPolygon={onDrawCollisionPolygon}
                       onPickCollision={openCollision}
-                      onMoveCollisionVertex={(box, index, to) => void onMoveCollisionVertex(box, index, to)}
-                      onInsertCollisionVertex={(box, edgeIndex) => void onInsertCollisionVertex(box, edgeIndex)}
-                      onDeleteCollisionVertex={(box, index) => void onDeleteCollisionVertex(box, index)}
+                      onMoveCollisionVertex={onMoveCollisionVertex}
+                      onInsertCollisionVertex={onInsertCollisionVertex}
+                      onDeleteCollisionVertex={onDeleteCollisionVertex}
                       onPlaceNpc={onPlaceNpc}
                       onMoveNpc={onMoveNpc}
                       onPlaceRevive={onPlaceRevive}
-                      onMoveArea={(area, to) => void onMoveArea(area, to)}
-                      onResizeArea={(area, box) => void onResizeArea(area, box)}
+                      onMoveArea={onMoveArea}
+                      onResizeArea={onResizeArea}
                     />
                   </div>
                   <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -742,7 +837,7 @@ export function MapsPage() {
                     ) : null}
                     {/* 复活点是单值：有就允许清，没有就不显示（一个点了没反应的按钮比没有更糟） */}
                     {detail.revivePoint ? (
-                      <Button variant="ghost" onClick={() => void clearRevivePoint()}>
+                      <Button variant="ghost" onClick={clearRevivePoint}>
                         清除复活点
                       </Button>
                     ) : null}
@@ -831,7 +926,7 @@ export function MapsPage() {
             setDraft(null);
             setEditArea(null);
           }}
-          onSaved={reloadDetail}
+          onSaved={() => void refreshDetail()}
         />
       ) : null}
       {detail ? (
@@ -845,7 +940,7 @@ export function MapsPage() {
             setCollisionDraft(null);
             setEditCollision(null);
           }}
-          onSaved={reloadDetail}
+          onSaved={() => void refreshDetail()}
         />
       ) : null}
       {detail ? (
@@ -859,7 +954,7 @@ export function MapsPage() {
             setNpcDraft(null);
             setEditNpc(null);
           }}
-          onSaved={reloadDetail}
+          onSaved={() => void refreshDetail()}
         />
       ) : null}
       <SpawnAreasDialog
@@ -1049,4 +1144,76 @@ function sameForm(a: MapForm, b: MapForm): boolean {
 /** 与画布像素对齐到两位小数（拖动 / 点按算出来的 1234.5678 进库没有意义，也让 e2e 能直接对数字） */
 function round2(value: number): number {
   return Math.round(value * 100) / 100;
+}
+
+/** 暂存改动 → Map key（stage 与保存后「只留失败项」用同一把钥匙，才覆盖得到同一笔） */
+function keyOf(op: PendingOp): string {
+  switch (op.kind) {
+    case "npc":
+      return `npc:${op.id}`;
+    case "area":
+      return `area:${op.id}`;
+    case "collision":
+      return `collision:${op.id}`;
+    case "revive-set":
+    case "revive-clear":
+      return REVIVE_OP_KEY;
+  }
+}
+
+/** 新详情 → 左列表行要更新的计数块（字段与 MapSummary 同名；只铺计数，别整份覆盖丢了别的列） */
+function countsOf(
+  data: MapDetail,
+): Pick<MapSummary, "npcPointCount" | "hasRevivePoint" | "collisionCount" | "spawnAreaCount" | "worldMonsterCount"> {
+  return {
+    npcPointCount: data.npcPointCount,
+    hasRevivePoint: data.hasRevivePoint,
+    collisionCount: data.collisionCount,
+    spawnAreaCount: data.spawnAreaCount,
+    worldMonsterCount: data.worldMonsterCount,
+  };
+}
+
+/**
+ * 本地越界判定（#1221 暂存预览专用）
+ *
+ * `bounds.ts` 的口径是「判据不在管理端」——那说的是**库里那行的红绿**。画布上还没保存的
+ * 拖拽没有服务端行可读，只能本地粗判一遍让红虚线跟着挪；容差取 1px 与服务端一致，
+ * 保存（或放弃）之后 detail 重新从服务端拉，这里的结果即被权威值覆盖。
+ */
+const LOCAL_EDGE_TOLERANCE = 1;
+
+/** 点位（NPC / 复活点）是否在图内：世界坐标 `[0, W] × [-H, 0]`，容差 1px */
+function pointInBounds(detail: MapDetail, cx: number, cy: number): boolean {
+  return (
+    cx >= -LOCAL_EDGE_TOLERANCE && cx <= detail.width + LOCAL_EDGE_TOLERANCE && cy <= LOCAL_EDGE_TOLERANCE && cy >= -detail.height - LOCAL_EDGE_TOLERANCE
+  );
+}
+
+/** 区域框的本地越界标记（inBounds + 四边超出量，口径同上） */
+function areaBounds(detail: MapDetail, box: { cx: number; cy: number; w: number; h: number }): Pick<MapSpawnArea, "inBounds" | "overflow"> {
+  const overflow = {
+    left: overEdge(-(box.cx - box.w / 2)),
+    right: overEdge(box.cx + box.w / 2 - detail.width),
+    top: overEdge(box.cy + box.h / 2),
+    bottom: overEdge(-box.cy - box.h / 2 - detail.height),
+  };
+  return { inBounds: overflow.left === 0 && overflow.right === 0 && overflow.top === 0 && overflow.bottom === 0, overflow };
+}
+
+/** 单边超出量：容差内算 0（四舍五入成整数，与列表里的红字宽度读法一致） */
+function overEdge(amount: number): number {
+  return amount > LOCAL_EDGE_TOLERANCE ? Math.round(amount) : 0;
+}
+
+/** 碰撞多边形是否整块在图外（暂存预览的粗判：所有顶点都在同一侧外）；保存后以服务端为准 */
+function polygonFullyOutside(detail: MapDetail, points: number[][]): boolean {
+  if (points.length === 0) return false;
+  const sides: Array<(p: number[]) => boolean> = [
+    (p) => p[0] < 0,
+    (p) => p[0] > detail.width,
+    (p) => p[1] > 0,
+    (p) => p[1] < -detail.height,
+  ];
+  return sides.some((side) => points.every(side));
 }
