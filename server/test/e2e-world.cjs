@@ -7,7 +7,7 @@
  *     满血起算 / 重复 join 不翻倍）；第二个账号 join 同图看到**同一份**实例（世界跨账号共享）
  * 二、结算落世界：cast 的扣血直接写世界实例（快照如实反映）；打死由服务端判，快照带重生倒计时；
  *     击杀事件随 monster-ai 帧广播给同图观看者（#689：别人的屏幕据此清场与铺掉落）
- * 三、tick 重生：死亡满 respawn 阈值后由 tick 复活（满血回出生点），观看者收到 world 广播帧
+ * 三、tick 重生：死亡满 respawn 阈值后由 tick 复活（满血、在归属刷怪区内重新随机落点 #1226），观看者收到 world 广播帧
  * 四、优雅关闭与重启恢复：SIGTERM 正常退出（exitCode 0）、状态已落盘；
  *     同库重启后 join 拿回扣过血的实例，卸载期间到期的重生被一次性补上
  *
@@ -397,7 +397,8 @@ function connect(url) {
     const revived = await sessionA.waitForNewWorld(broadcastBaseline, "1");
     const revivedMonster = revived ? revived.monsters.find((m) => m.instanceId === wA2.instanceId) : null;
     check(!!revivedMonster && revivedMonster.alive === true && revivedMonster.hp === revivedMonster.maxHp, "respawn 阈值后怪被 tick 复活（满血）并广播", JSON.stringify(revivedMonster));
-    check(revivedMonster && revivedMonster.x === wA2.x && revivedMonster.y === wA2.y, "重生回到原出生点");
+    // 重生落点是随机值（#1226），不赌具体坐标：判「仍在这只怪归属的刷怪区矩形内」这个相对关系
+    check(revivedMonster && inRect(revivedMonster, 400, -400, 400), "重生换新落点且仍在归属刷怪区矩形内（#1226）", JSON.stringify(revivedMonster));
 
     //#endregion
 

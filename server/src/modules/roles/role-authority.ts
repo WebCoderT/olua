@@ -92,6 +92,8 @@ export const SERVER_FASHION_FIELDS = ["fashionCloth"] as const;
  *   客户端连这个字段都不该知道 —— 唯一写点是「被接受的 worldJoin」（`RolesService.setMapAt`）
  *   与管理端摆位（PATCH 带 `onMap` 时一并写）。它一旦可被客户端书写，
  *   「改包先把位置改成高级图再登录进去」就绕过了门槛，整条收权白做。
+ *   纠偏**静默**（#1224）：`roleUpdate` 帧不带它、客户端镜像永远停在登录那份档，
+ *   warn 没有自愈路径 —— 但覆盖照做，改包伪造同样被按库覆盖回。
  *
  *   注意它**不是** `onMap`：`onMap` 仍是客户端自报的位置（走图 / 统计 / 复活点都用它，
  *   见上表最后一行），`mapAt` 只回答「服务端认为你在哪」，两者故意分开 ——
@@ -187,6 +189,16 @@ export function reconcileBag(stored: unknown, incoming: unknown): unknown {
 /**
  * 把服务端独占字段以**库里的值**为准（就地改 `incoming`）
  *
+ * 纠偏行为对三类字段都一样（覆盖 / 删除 / 回填，一字不动）；差别只在**哪些进 drift 日志**：
+ *
+ * - `SERVER_OWNED_FIELDS`：帧里都带（`buildRoleUpdate`），库里改了下一个轮询周期就会推回
+ *   客户端覆盖 —— drift 是「帧到达前那一拍」的窗口记录，保留；
+ * - 独占字段库里**没有键**：照旧删除（#819 防线=删除本身），但不算改口 —— 客户端那份是
+ *   旧档缓存整份带回（如新号推 `fashionsOwned: []`），没有库值可比，warn 是永久噪音（#1224）；
+ * - `mapAt`：帧**故意不带**它（客户端不该知道，#606），客户端缓存的是登录时那份档，
+ *   会话内 worldJoin 改了库值也不会有帧把它带回 —— warn 没有自愈路径（下次登录才刷新），
+ *   静默按库覆盖。改包伪造 mapAt 同样被覆盖回库值，防线不变。
+ *
  * @param stored  库里当前的存档文档（`decodeStoredRoleData(existing.data)`）
  * @param incoming 客户端这次推上来的、已通过结构校验的文档（会被就地修改）
  * @returns 被纠正的字段清单（空 = 客户端没动过这些字段，正常情况）
@@ -209,17 +221,17 @@ export function enforceServerAuthority(
   }
   for (const field of SERVER_EXCLUSIVE_FIELDS) {
     // 独占字段（#596 时装拥有清单）：库里没有就删掉上报值 —— 没有「老档放行」例外，
-    // 否则改包第一次 PUT 就能把清单填满（见 SERVER_FASHION_FIELDS 注释）
+    // 否则改包第一次 PUT 就能把清单填满（见 SERVER_FASHION_FIELDS 注释）。
+    // 删除不进 drift（#1224）：旧档缓存整份带回不是改口，没有库值可比。
     if (!hasOwn(stored, field)) {
-      if (hasOwn(incoming, field)) {
-        drift.push({ field, stored: undefined, reported: incoming[field] });
-        delete incoming[field];
-      }
+      delete incoming[field];
       continue;
     }
     if (sameValue(stored[field], incoming[field])) continue;
-    drift.push({ field, stored: stored[field], reported: incoming[field] });
     incoming[field] = stored[field];
+    // mapAt 静默（#1224）：帧不带它、客户端镜像永远停在登录那份档，warn 无自愈路径；
+    // 其余（fashionsOwned）是真改口，帧会推回对齐，保留 warn
+    if (field !== "mapAt") drift.push({ field, stored: stored[field], reported: incoming[field] });
   }
   // legacy 账本键（#843、#844 收敛）：gold / silver 已不是任何字段，上报值不回填也不放行 ——
   // 直接剥掉。旧档里残留的同名死键会在下一次整份保存时被这一步洗掉。

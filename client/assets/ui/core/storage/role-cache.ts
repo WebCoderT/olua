@@ -167,6 +167,19 @@ export default class RoleCache {
   }
 
   /**
+   * 只把角色副本写回本地缓存，**不推服务端**（#1236）
+   *
+   * `roleUpdate` 帧的落账（`BattleApplier.applyServerRoleUpdate`）改的是一份从缓存反序列化
+   * 出来的临时对象：帧的内容就是服务端现状，推回去只是白占一个防抖节拍 —— 但**必须写回本地**。
+   * 不写的话缓存里的 hp / mp 会一直停在上一次真落盘的时刻，而角色打怪时蓝量每秒都在变：
+   * 下一次击杀奖励 / 拾取从缓存取到角色就把旧蓝量刷上屏、一秒后被权威帧拉回，
+   * 表现成「打死怪蓝量涨一截又回去」。
+   */
+  static writeBack(role: Role) {
+    this.mergeIntoCache(role);
+  }
+
+  /**
    * 更新在线角色（**本地落盘的唯一出口**，同时也是写穿服务端的唯一触发点）
    *
    * 打怪升级/拾取/买卖/换装/吃药都会走到这里，所以服务端同步必须防抖
@@ -174,7 +187,18 @@ export default class RoleCache {
    * 调用方不需要关心同步结果：本地已经落盘，游戏内读到的永远是这一份。
    */
   static updateOnlineRole(role: Role) {
-    // #1229 个人流水：这里是「本地落盘的唯一出口」，任何改动都会经过它 ——
+    this.mergeIntoCache(role);
+    RoleSync.schedule(role);
+  }
+
+  /**
+   * 按 id 把副本并进缓存（保持修订号基线）
+   *
+   * 「落本地 + 推服务端」与「只落本地」两条出口共用这一段：合并规则（尤其是 revision 只信
+   * 有的那一边）分两份写，迟早一处修了另一处没修。
+   */
+  private static mergeIntoCache(role: Role) {
+    // #1229 个人流水：所有「角色数据进了本地缓存」的改动都经过这里（含 #1238 的 writeBack），
     // 差分挂在这儿能覆盖「只刷背包、不刷角色 UI」的路径（丢弃 / 整理），
     // 与 ui-bridge 上的同一处调用互为兜底（先到的那次把差异写掉，后到的对比无差异即空转）
     RoleDeltaLog.note(role);
@@ -190,7 +214,6 @@ export default class RoleCache {
       return i;
     });
     this.setRoles(roles);
-    RoleSync.schedule(role);
   }
 
   /**

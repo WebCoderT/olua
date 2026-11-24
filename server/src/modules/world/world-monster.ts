@@ -23,7 +23,7 @@ export interface WorldMonster {
   monsterKey: string;
   /** 归属刷怪区（#852：密度补种按它统计「这一区现在几只」；老档可空） */
   areaId: number | null;
-  /** 出生点（世界坐标；重生的落点也是它） */
+  /** 出生点（世界坐标；播种与重生都在归属刷怪区内随机取点，见 processRespawns） */
   x: number;
   y: number;
   hp: number;
@@ -119,11 +119,23 @@ export function worldMonsterSnapshotOf(monster: WorldMonster): WorldMonsterSnaps
 /**
  * 到期重生的补处理（tick 与「房间重新加载」共用这一条口径）
  *
- * 重生 = 满血、回出生点、清掉死亡时间戳。返回本轮重生了几只（调用方据此决定要不要广播）。
+ * 重生 = 满血、换新落点、清掉死亡时间戳。返回本轮重生了几只（调用方据此决定要不要广播）。
  * 「卸载的房间不跑 tick、重载时一次性补上」靠的就是它接受任意 `now`：错过多个周期也不会
  * 连环重生，只补一次。
+ *
+ * ## 落点：重生也在归属刷怪区内随机撒点（#1226）
+ *
+ * 原设计是「回出生点」（播种时随机一次，之后每次复活都在同一处）——玩家打死怪站着不动
+ * 等 30 秒，怪在原位站起来，体感像「位置没变过」。现在重生时通过 `pickPoint` 重新随机一个
+ * 落点，新点即新出生点（世界层「坐标是唯一稳定真相」的口径不变：变的是真相本身，AI 运行时
+ * 在击杀时已作废，重生后按新坐标初始化）。`pickPoint` 返回 null = 取不到落点（区被删 /
+ * 图类型变了 / 老档 areaId 为空），退回原地——与旧行为一致，不因配置变动把怪丢出图外。
  */
-export function processRespawns(monsters: Map<string, WorldMonster>, now: number): number {
+export function processRespawns(
+  monsters: Map<string, WorldMonster>,
+  now: number,
+  pickPoint?: (monster: WorldMonster) => { x: number; y: number } | null,
+): number {
   let revived = 0;
   for (const monster of monsters.values()) {
     if (monster.alive || monster.respawnAt === null || monster.respawnAt > now) continue;
@@ -131,6 +143,11 @@ export function processRespawns(monsters: Map<string, WorldMonster>, now: number
     monster.hp = monster.maxHp;
     monster.killedAt = null;
     monster.respawnAt = null;
+    const point = pickPoint?.(monster);
+    if (point) {
+      monster.x = point.x;
+      monster.y = point.y;
+    }
     monster.dirty = true;
     revived += 1;
   }
