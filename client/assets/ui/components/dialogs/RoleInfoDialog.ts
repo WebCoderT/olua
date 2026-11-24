@@ -7,7 +7,7 @@ import EquipmentSlotGroup, { EQUIPMENT_SLOT_SIDES } from "../panel/EquipmentSlot
 import RoleAttributeList from "../panel/RoleAttributeList";
 import RoleInShowView from "../panel/RoleInShowView";
 import { refreshInAlign } from "../../utils/net/ConfigLoader";
-import { buttonTone, roleInfoDialogLayout, T } from "../../../configs/hudLayout";
+import { buttonTone, roleInfoDialogLayout } from "../../../configs/hudLayout";
 import { getText } from "../../../configs/texts";
 import TitleUpgradeDialog from "./TitleUpgradeDialog";
 import WarSoulDialog from "./WarSoulDialog";
@@ -74,15 +74,12 @@ export default class RoleInfoDialog extends BaseDialog {
     // 角色属性列表
     this.attributeList = new RoleAttributeList(role);
     dialog.addChild(this.attributeList);
-    // 内观（衣服与武器，未装备时容器为空）—— 挂进立绘视口：RoleInShowView 是原点包装节点，
-    // 子节点保持弹窗坐标系下的位置，这里反向平移视口位置把弹窗坐标系原样接进来，裁剪以视口为界
+    // 内观（衣服与武器，未装备时容器为空）—— 挂进立绘背景区：RoleInShowView 是原点包装节点，
+    // 子节点保持弹窗坐标系下的位置，这里反向平移把弹窗坐标系原样接进来；
+    // #1231 起不再挂 Mask / 玻璃板框，立绘直接完整显示
     this.inShowView = new RoleInShowView(role);
     this.inShowView.setPosition(-previewLayout.position.x, -previewLayout.position.y, 0);
     viewport.addChild(this.inShowView);
-    // 视口发丝线（稿 .preview 的 border）：盖在立绘之上 —— 画进 Mask 会被裁掉一半（#1104 同款坑）
-    const frame = GameUiHelper.createGlassPlate("role_inshow_viewport_frame", previewLayout.size, previewLayout.radius, previewLayout.border, T.overlay.transparent);
-    frame.setPosition(previewLayout.position.x, previewLayout.position.y, 0);
-    dialog.addChild(frame);
     // 内观几何「开弹窗就再拉一次」（#527）：玩家保存完的第一反应是再点开这个弹窗看一眼，
     // 那时人还在同一张图里、场景没重载 —— 只靠进图拉一次必然「看不到变化」。
     // 先把弹窗按当前配置建出来（不卡交互），拉到新值后再就地重建内观节点。
