@@ -17,6 +17,7 @@
   <link rel="stylesheet" href="css/style.css" />
 </head>
 <body>
+  <div class="site-notice"><b>停服公告</b><span class="site-notice__full">：游戏与管理后台暂时停开，仅保留官网；源码与自建部署文档照常开放</span><span class="site-notice__short">：游戏与管理后台暂时停开，仅保留官网</span><a href="deploy.html">自己部署 →</a></div>
 
   <header class="nav" id="nav">
     <div class="nav__inner">
@@ -34,7 +35,7 @@
         <a href="deploy.html">部署</a>
         <a href="about.html">关于</a>
       </nav>
-      <a class="nav__cta" href="https://game.yimw.cn" target="_blank" rel="noopener">在线试玩</a>
+      <a class="nav__cta" href="deploy.html">自己搭一套</a>
       <button class="nav__toggle" id="navToggle" aria-label="打开菜单">
         <span></span><span></span><span></span>
       </button>
@@ -74,8 +75,8 @@
     </div>
     <div class="guide-wrap">
       <div class="prose reveal">
-        <p>浏览器打开 <a href="https://game.yimw.cn" target="_blank" rel="noopener">game.yimw.cn</a>，
-           没有下载、没有安装。第一次来先注册；账号下最多三个角色，选错职业不用重开账号。</p>
+        <p>线上试玩已关闭，本页讲的是<b>自己部署一份</b>之后的玩法：按 <a href="deploy.html">部署说明</a> 起好服务，
+           再用浏览器打开你自己的地址，不需要下载安装客户端。第一次来先注册；账号下最多三个角色，选错职业不用重开账号。</p>
       </div>
       <div class="guide-grid">
         <figure class="guide-figure reveal">
@@ -188,7 +189,7 @@
     </div>
     <div class="guide-wrap">
       <div class="prose reveal">
-        <p>管理端与游戏共用一套服务端数据，<b>改完即生效</b>，不用重启进程。第一次部署时，
+        <p>这里说的是<b>你自己部署的管理端</b>（线上后台已停开）。它与游戏共用一套服务端数据，<b>改完即生效</b>，不用重启进程。第一次部署时，
            第一个注册的管理员自动成为<b>超级管理员</b>；之后的账号由超管在「管理员」页开通，或凭注册码注册。</p>
         <p>登录后先选一个区。管理端<b>一次只在一个区里干活</b>，顶栏的「区服」按钮随时可切；
            这个选择不是权限限制 —— 超管能看所有区，只是每次请求带的是当前区的上下文。</p>
@@ -555,7 +556,7 @@
       </a>
     </div>
     <p style="text-align:center;margin-top:40px;" class="reveal">
-      <a class="btn btn--blood" href="https://game.yimw.cn" target="_blank" rel="noopener">在线试玩</a>
+      <a class="btn btn--blood" href="deploy.html">看部署说明 →</a>
     </p>
   </section>
 
