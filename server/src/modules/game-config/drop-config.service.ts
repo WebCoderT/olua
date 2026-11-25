@@ -186,8 +186,9 @@ export class DropConfigService {
   }
 
   /**
-   * 条目池校验：goodId 必须是真实存在的物品（装备变体 / 药品 / 材料三张表之一），
-   * count 区间 0 ≤ min ≤ max。weight / chance 的单字段范围已由 DTO 挡过。
+   * 条目池校验：goodId 必须是真实存在的物品（装备变体 / 药品 / 物品 / 货币道具 / 升级卷轴
+   * 五张表之一，`itemExists` 统一认），count 区间 0 ≤ min ≤ max。weight / chance 的单字段
+   * 范围已由 DTO 挡过。
    */
   private assertEntries(entries: Array<{ goodId: string; weight?: number; chance?: number; count?: number[] }>): Array<{ goodId: string; weight: number; chance: number; count: [number, number] }> {
     if (!Array.isArray(entries) || entries.length === 0) {

@@ -33,10 +33,16 @@ import {
   itemText,
   itemType,
   levelCount,
+  levelScrollIcon,
+  levelScrollRange,
+  levelScrollText,
   mapIds,
   mapPreview,
   mapText,
   maxStackOf,
+  moneyItemAmount,
+  moneyItemIcon,
+  moneyItemText,
   MONSTER_TIER_LABELS,
   monsterIcon,
   monsterInfo,
@@ -131,10 +137,16 @@ function brief(text: string): string {
   return flat.length > NOTE_MAX ? `${flat.slice(0, NOTE_MAX)}…` : flat;
 }
 
-/** 物品 / 装备图标：装备表 → 药品表 → 物品表，取第一个查得到的 */
+/** 物品 / 装备图标：装备表 → 药品表 → 物品表 → 货币道具表 → 升级卷轴表，取第一个查得到的 */
 function itemLikeIcon(id: string): string {
   const base = equipmentBaseId(id);
-  return (base ? equipmentIcon(base) : "") || drugIcon(id) || itemIcon(id);
+  return (
+    (base ? equipmentIcon(base) : "") ||
+    drugIcon(id) ||
+    itemIcon(id) ||
+    moneyItemIcon(id) ||
+    levelScrollIcon(id)
+  );
 }
 
 /* ===========================================================================
@@ -185,6 +197,12 @@ export function entityNote(kind: EntityKind, id: string): string {
       const level = equipmentLevel(id);
       // 装备带部位与等级（与装备选择器同一口径）；药品 / 材料退回描述
       if (slot) return [slotLabel(slot), level > 0 ? `Lv.${level}` : "", id].filter(Boolean).join(" · ");
+      // 货币道具（#785）：面值一眼可见，不然六档面值在候选里全叫「绑定元宝（N）」要逐条读名字
+      const amount = moneyItemAmount(id);
+      if (amount > 0) return [`单件 +${amount}`, `可叠 ${maxStackOf(id)}`, id].filter(Boolean).join(" · ");
+      // 升级卷轴（#787）：可用等级区间是挑卷时唯一关心的元数据
+      const range = levelScrollRange(id);
+      if (range) return [`Lv.${range[0]}~${range[1]} 可用`, `可叠 ${maxStackOf(id)}`, id].filter(Boolean).join(" · ");
       const description = itemDescription(id) || "";
       return brief(description) || itemType(id) || id;
     }
@@ -275,11 +293,20 @@ export function entityImage(kind: EntityKind, id: string): EntityImage {
  * 清单（选择器的候选集）
  * =========================================================================== */
 
-/** 物品分组：装备按部位、药品、材料、其它（顺序在这里定，选择器只按组名排） */
+/**
+ * 物品分组：装备按部位、药品、货币道具、升级卷轴、材料、其它
+ *
+ * 组序（选择器里的呈现顺序）照客户端背包整理序（`bagTidyTypeOrder`）：
+ * 装备按部位在前，其后药品 → 货币道具 → 升级卷轴 → 材料 → 其它（顺序在这里定）。
+ * #785 货币道具 / #787 升级卷轴是独立两张表，不塞进「材料」里混着 ——
+ * 运营找「绑定元宝面值」或「哪一卷能掉」时按组翻才快。
+ */
 function itemGroupOf(id: string): string {
   const slot = equipmentSlot(id);
   if (slot) return slotLabel(slot);
   if (drugText(id)) return "药品";
+  if (moneyItemText(id)) return "货币道具";
+  if (levelScrollText(id)) return "升级卷轴";
   const type = itemType(id);
   if (type === "material") return "材料";
   return "其它";
@@ -323,8 +350,10 @@ export function entityOptions(kind: EntityKind): EntityOption[] {
     const order = new Map<string, number>([
       ...equipmentSlotKeys().map((slot, index) => [slotLabel(slot), index] as [string, number]),
       ["药品", 90],
-      ["材料", 91],
-      ["其它", 92],
+      ["货币道具", 91],
+      ["升级卷轴", 92],
+      ["材料", 93],
+      ["其它", 94],
     ]);
     options = itemIds()
       .map((id) => optionOf("item", id, itemGroupOf(id)))
@@ -377,9 +406,9 @@ export function groupNames(options: EntityOption[]): string[] {
 }
 
 /**
- * 掉落用物品清单：装备**只列基础件**，药品 / 材料照旧
+ * 掉落用物品清单：装备**只列基础件**，药品 / 货币道具 / 升级卷轴 / 材料照旧
  *
- * 为什么：一件基础装有 15 个前后缀变体（`cloth_1_p3s2` …），它们不是「不同的掉落物」——
+ * 为什么装备去变体：一件基础装有 15 个前后缀变体（`cloth_1_p3s2` …），它们不是「不同的掉落物」——
  * 掉出来是哪一档由变体表决定，不是靠运营在掉落条目里一件件点名。以前把全部变体铺进
  * 候选，运营挑一条 `helmet_1_p2s1` 就等于把「掉什么品质」写死在这只怪身上。
  * 判据用 `equipmentBaseId`（基础件返回自身，变体返回它的基础件，非装备返回空）。
