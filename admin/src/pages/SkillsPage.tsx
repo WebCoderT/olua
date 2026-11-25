@@ -333,7 +333,7 @@ function SkillEditDialog({
           value={form.icon}
           onChange={(path) => set("icon", path)}
         />
-        <Field label="施法动作" hint="客户端动画动作键（#1166 起下拉选择，配错键 = 不播动画）；空 = 不播动作">
+        <Field label="施法动作" hint="客户端动画动作键（#1166 起下拉选择，配错键 = 不播动画）；空 = 不播动作。怪物技能（#1251）客户端统一播 attack 段，本字段不参与怪物演出">
           <Select value={form.action} onChange={(event) => set("action", event.target.value)}>
             {SKILL_ACTION_OPTIONS.map((option) => (
               <option key={option.value} value={option.value}>
@@ -538,7 +538,7 @@ function emptyCreateForm() {
     category: "0",
     targetType: "1",
     behavior: "attack",
-    action: "attack_skill_1",
+    action: "attack",
     effect: "effect/skill/1008@0",
     cooldown: "8",
     distance: "80",
@@ -695,7 +695,7 @@ function SkillCreateDialog({
           value={form.icon}
           onChange={(path) => set("icon", path)}
         />
-        <Field label="施法动作" hint="客户端动画动作键（下拉选择）；空 = 不播动作">
+        <Field label="施法动作" hint="客户端动画动作键（下拉选择）；空 = 不播动作。怪物技能（#1251）客户端统一播 attack 段，本字段不参与怪物演出">
           <Select value={form.action} onChange={(event) => set("action", event.target.value)}>
             {SKILL_ACTION_OPTIONS.map((option) => (
               <option key={option.value} value={option.value}>
