@@ -1,6 +1,16 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
-import { adminRoleLabel, authApi, ensureGameData, ensureMapCatalog, PERMISSION } from "../api";
+import {
+  adminRoleLabel,
+  authApi,
+  ensureGameData,
+  ensureMapCatalog,
+  gameDataVersion,
+  mapCatalogVersion,
+  PERMISSION,
+  subscribeGameData,
+  subscribeMapCatalog,
+} from "../api";
 import type { ZoneOption } from "../api";
 import { APP_TITLE } from "../api/config";
 import {
@@ -327,6 +337,13 @@ export function Layout() {
   useEffect(() => {
     void ensureGameData();
   }, []);
+
+  // 订阅两份模块缓存的落地信号（#1268）：它们都是异步拉、同步读 —— 页面首渲时快照还没到，
+  // 查表全是空串（图标「无图」、名字回落 id），而模块变量落地不触发重渲，刷新后要切一次页才恢复。
+  // 版本号在 Layout 层订阅：数据一到，`<Outlet />` 下的当前页跟着重渲一次就补上了；
+  // 之后版本不再变化，不破坏「同步字典要求稳定」的约定。
+  useSyncExternalStore(subscribeGameData, gameDataVersion);
+  useSyncExternalStore(subscribeMapCatalog, mapCatalogVersion);
 
   /**
    * 换页面时的三件收尾

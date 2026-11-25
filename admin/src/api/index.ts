@@ -116,6 +116,8 @@ export {
   avatarPath,
   ensureGameData,
   gameDataLoaded,
+  gameDataVersion,
+  subscribeGameData,
   drugIcon,
   drugIds,
   drugLevel,
@@ -172,4 +174,4 @@ export {
 } from "./gameData";
 export type { GrowthStepMeta, MonsterInfo, NpcInfo } from "./gameData";
 // 地图名录（#573）：名字只在服务端，这里只是「拉一次 + 进程内缓存」的读口
-export { ensureMapCatalog, mapCatalogLoaded, mapIds, mapText, refreshMapCatalog } from "./mapCatalog";
+export { ensureMapCatalog, mapCatalogLoaded, mapCatalogVersion, mapIds, mapText, refreshMapCatalog, subscribeMapCatalog } from "./mapCatalog";
