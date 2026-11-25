@@ -124,6 +124,15 @@ export interface MonsterAIState {
   dead: boolean;
   /** 当前朝向（由位移差量与事件方向决定） */
   direction: DIRECTION;
+  /**
+   * 动作锁（#1240）：`playServerAction` 起播非循环动作（普攻/施法）后置真，
+   * 期间 stepServer 的站定分支不把当前动作覆盖回待机——否则攻击起播后下一帧就被打断。
+   * 解锁走三条路：动画 FINISHED（replayCurrent）、超时（lockExpireAt，FINISHED 丢失的兜底）、
+   * 服务端说在移动（移动中的怪不可能在出招）。
+   */
+  locked: boolean;
+  /** 动作锁到期时刻（毫秒；片段时长 + actionFinishTimeoutMarginSeconds） */
+  lockExpireAt: number;
   // 服务端位置不在这里（#769）：坐标是「一串带时间戳的快照」，存在 MonsterAI 自己的
   // WeakMap<Node, SnapshotInterpolator> 里 —— 插值器是 ui/core 的类，放进 types 会反向依赖
 }

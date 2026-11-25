@@ -1,5 +1,5 @@
 import { Animation, isValid, Node, RigidBody2D, Vec2 } from "cc";
-import { getAnimationName } from "../../configs/animation";
+import { actionFinishTimeoutMarginSeconds, getAnimationName } from "../../configs/animation";
 import { networkConfig } from "../../configs/network";
 import { ACTION, DIRECTION } from "../../types/animation";
 import { Monster, MonsterAIState } from "../../types/monster";
@@ -12,6 +12,9 @@ const MONSTER_ANIMATION_NODE = "monster_animation";
 
 /** 一次性动作：播完即回待机，不做续播（受伤动作就属于这种） */
 const ONCE_ACTIONS: ACTION[] = [ACTION.INJURED];
+
+/** 循环动作：事件驱动上锁时跳过它们——循环片段没有 FINISHED，锁上去只能等超时解锁 */
+const LOOP_ACTIONS: ACTION[] = [ACTION.STAND, ACTION.WALK, ACTION.RUN];
 
 /**
  * 怪物表现层（静态类）—— **客户端不跑任何怪物行为**
@@ -103,11 +106,21 @@ export default class MonsterAI {
     const offsetY = sampled.y - position.y;
     if (offsetX !== 0 || offsetY !== 0) node.setWorldPosition(sampled.x, sampled.y, position.z);
     if (sampled.moving) {
+      // 服务端说在移动：动作锁立即失效（服务端出手前必先站定，移动中的怪不可能在出招），
+      // 否则走路段起播前还得白等一段锁时间
+      state.locked = false;
       // 「在移动」但没有位移（刚起步 / 一帧内没推进）：保持上一次朝向，别拿零向量算方向
       const direction = Math.abs(offsetX) + Math.abs(offsetY) > 0.5 ? getDirectionByVector(new Vec2(offsetX, offsetY)) : state.direction;
       this.playAction(animate, state, ACTION.WALK, direction);
     } else {
       this.stopMoving(node);
+      // 事件动作（普攻/施法）播放期间不覆盖：#1240 —— 站定分支每帧都到，
+      // 不加锁的话攻击起播后下一帧就被 crossFade(stand) 打断，只能看到 0.2 秒的半截混合。
+      // 超时兜底见 playServerAction（FINISHED 丢失时也会解锁，不会永久卡死在攻击态）
+      if (state.locked) {
+        if (Date.now() < state.lockExpireAt) return;
+        state.locked = false;
+      }
       this.playAction(animate, state, ACTION.STAND, state.direction);
     }
   }
@@ -118,14 +131,29 @@ export default class MonsterAI {
    * 服务端权威模式下怪物的行为不在本地决策，动作只能由事件驱动：
    * 普攻命中 → attack_near；释放技能 → 技能配置的 action。
    * 半销毁节点、已死亡的怪、还没装载动画的怪一律静默跳过 —— 这是最常见的崩点。
+   *
+   * #1240 动作锁：非循环动作（普攻/施法这类一次性演出）起播后上锁，
+   * 锁到「片段时长 + actionFinishTimeoutMarginSeconds」——期间 stepServer 的站定分支
+   * 不许把它覆盖回待机（角色侧 RoleDisplay.startAttack 同款守点，超时兜底防 FINISHED 丢失）。
+   * 片段不存在（素材缺，如怪物包没有攻击帧）时 playAction 回退待机，不上锁 —— 观感与缺帧现状一致。
    */
   static playServerAction(node: Node, action: ACTION, direction?: DIRECTION) {
     if (!isValid(node)) return;
     const animate = this.getAnimate(node);
     if (!animate) return;
-    const state = this.states.get(node);
-    if (!state || state.dead) return;
-    this.playAction(animate, state, action, direction ?? state.direction);
+    const state = this.getState(node);
+    if (state.dead) return;
+    const resolved = this.playAction(animate, state, action, direction ?? state.direction);
+    if (resolved && LOOP_ACTIONS.indexOf(resolved) < 0) {
+      // 只给「真的在播非循环片段」的动作上锁
+      const clip = animate.getState(getAnimationName(resolved, state.direction));
+      const duration = (clip?.duration ?? 0) + actionFinishTimeoutMarginSeconds;
+      state.locked = true;
+      state.lockExpireAt = Date.now() + duration * 1000;
+    } else {
+      // 回退待机 / 落在循环动作上：旧锁一并清掉（循环片段没有 FINISHED，靠超时解锁太慢）
+      state.locked = false;
+    }
   }
 
   /**
@@ -139,6 +167,15 @@ export default class MonsterAI {
     const state = this.states.get(node);
     // 死亡动画播完不续播：节点由 MonsterManager 在死亡动画的 FINISHED 里移除
     if (state?.dead) return;
+    // 动作锁（#1240）：事件动作（普攻/施法）播完 → 解锁并切回待机。
+    // 这类动作不该像待机那样循环重播（重播会一直卡在攻击态），stepServer 下一帧会接手站定表现
+    if (state?.locked) {
+      state.locked = false;
+      state.action = ACTION.STAND;
+      const standName = getAnimationName(ACTION.STAND, state.direction);
+      if (animate.getState(standName)) animate.play(standName);
+      return;
+    }
     const action = state?.action ?? ACTION.STAND;
     const direction = state?.direction ?? DIRECTION.DOWN;
     if (state && ONCE_ACTIONS.indexOf(action) >= 0) {
@@ -189,13 +226,15 @@ export default class MonsterAI {
    * 播放怪物动作
    * 只有动作或朝向变了才切换（每帧重启动画会永远停在第一帧）；
    * 该动作/朝向没有帧资源时回退待机（如 attack_near 只有部分方向），保证怪物身上一直有动画在播
+   * @returns 实际生效的动作（含缺帧回退成 STAND 的那一种；调用方据此决定是否上动作锁）
    */
-  private static playAction(animate: Animation, state: MonsterAIState, action: ACTION, direction: DIRECTION) {
+  private static playAction(animate: Animation, state: MonsterAIState, action: ACTION, direction: DIRECTION): ACTION {
     const resolvedAction = animate.getState(getAnimationName(action, direction)) ? action : ACTION.STAND;
-    if (state.action === resolvedAction && state.direction === direction) return;
+    if (state.action === resolvedAction && state.direction === direction) return resolvedAction;
     state.action = resolvedAction;
     state.direction = direction;
     animate.crossFade(getAnimationName(resolvedAction, direction), 0.2);
+    return resolvedAction;
   }
 
   /** 取怪物身体里的动画组件（由 GameUiHelper.createMonsterBody 创建） */
@@ -216,6 +255,8 @@ export default class MonsterAI {
       action: ACTION.STAND,
       dead: false,
       direction: DIRECTION.DOWN,
+      locked: false,
+      lockExpireAt: 0,
     };
     this.states.set(node, state);
     return state;
