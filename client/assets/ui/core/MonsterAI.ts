@@ -143,7 +143,16 @@ export default class MonsterAI {
     if (!animate) return;
     const state = this.getState(node);
     if (state.dead) return;
-    const resolved = this.playAction(animate, state, action, direction ?? state.direction);
+    const targetDirection = direction ?? state.direction;
+    // #1259 事件动作必须真的重启：playAction 的「动作与朝向没变就不切」早退是给 stepServer
+    // 每帧调用的循环动作准备的；普攻/施法由服务端事件驱动，上一刀的同名动作若还卡在
+    // 状态机里（FINISHED 续播丢失、或上一刀没播完下一刀 hit 已到），早退会让怪永远定格 ——
+    // 只见伤害不见动画，且连刀还会不断重置动作锁、站定分支永远救不回来。
+    // 与远端玩家 playRemoteAction 同口径（#693）：按攻击间隔出手，重启动画才是对的。
+    if (LOOP_ACTIONS.indexOf(action) < 0 && state.action === action && state.direction === targetDirection) {
+      state.action = ACTION.STAND;
+    }
+    const resolved = this.playAction(animate, state, action, targetDirection);
     if (resolved && LOOP_ACTIONS.indexOf(resolved) < 0) {
       // 只给「真的在播非循环片段」的动作上锁
       const clip = animate.getState(getAnimationName(resolved, state.direction));
