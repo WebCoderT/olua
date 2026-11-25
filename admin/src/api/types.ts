@@ -432,14 +432,16 @@ export const SKILL_BEHAVIOR_LABELS: Record<string, string> = {
 export const SKILL_ACTION_OPTIONS: readonly { value: string; label: string; hint: string }[] = [
   { value: "", label: "（不播动作）", hint: "释放时不改变角色动画" },
   { value: "stand", label: "stand · 站立", hint: "原地施法，多数持续型技能用它" },
-  { value: "attack_near", label: "attack_near · 近战攻击", hint: "挥砍动作" },
-  { value: "attack_skill_1", label: "attack_skill_1 · 技能攻击 1", hint: "重击类技能动作" },
-  { value: "attack_far", label: "attack_far · 远程攻击", hint: "法师 / 道士施法动作" },
-  { value: "a1", label: "a1 · 特殊动作 A", hint: "怪物咆哮类动作" },
+  // #1251：怪物普攻与施法统一播 attack 段（怪物攻击不区分远近动画），不再读此字段
+  { value: "attack", label: "attack · 攻击（怪物段）", hint: "怪物素材的攻击动作；怪物技能统一播它" },
+  { value: "attack_near", label: "attack_near · 近战攻击", hint: "挥砍动作（角色专用）" },
+  { value: "attack_skill_1", label: "attack_skill_1 · 技能攻击 1", hint: "重击类技能动作（角色专用）" },
+  { value: "attack_far", label: "attack_far · 远程攻击", hint: "法师 / 道士施法动作（角色专用）" },
+  { value: "a1", label: "a1 · 特殊动作 A", hint: "角色素材有段；怪物素材包没有，配了不播" },
   { value: "test1", label: "test1 · 测试动作 1", hint: "素材试验帧" },
   { value: "test3", label: "test3 · 测试动作 3", hint: "素材试验帧" },
   { value: "walk", label: "walk · 走路", hint: "一般不当施法动作" },
-  { value: "run", label: "run · 跑动", hint: "一般不当施法动作" },
+  { value: "run", label: "run · 跑动", hint: "一般不当施法动作（怪物素材无此段）" },
   { value: "injured", label: "injured · 受伤", hint: "一般不当施法动作" },
 ];
 

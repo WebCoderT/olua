@@ -326,11 +326,11 @@ function main() {
   {
     const mmSource = fs.readFileSync(path.join(__dirname, "../assets/ui/core/MonsterManager.ts"), "utf8");
     /**
-     * 按大括号配对切方法体（不按缩进）；只认**声明形态**（`名字(参数) {`），
+     * 按大括号配对切方法体（不按缩进）；只认**声明形态**（`名字(参数) [: 返回类型] {`），
      * 跳过 `this.xxx(...)` 这类调用点 —— 方法名找不到声明返回空串（空串一律判失败）。
      */
     const methodBody = (src, methodName) => {
-      const decl = new RegExp(methodName + "\\s*\\([^)]*\\)\\s*\\{");
+      const decl = new RegExp(methodName + "\\s*\\([^)]*\\)\\s*(?::\\s*[^{]+)?\\{");
       const match = src.match(decl);
       if (!match) return "";
       const open = match.index + match[0].length - 1;
@@ -353,6 +353,17 @@ function main() {
     check(
       attackBody.indexOf("ATTACK_NEAR") < 0,
       "普攻不再写死角色专用 attack_near（怪物素材包没有这段，播它会静默回退待机）",
+    );
+    // #1251：怪物攻击不区分远近动画，施法同样统一播 attack，不再读技能配置的 action 键
+    const castBody = methodBody(mmSource, "playServerCast");
+    check(castBody !== "", "反证法：playServerCast 方法名写错必须拿到空串", castBody.length ? "方法体已切出" : "空串");
+    check(
+      /playServerAction\(node,\s*ACTION\.ATTACK\)/.test(castBody),
+      "施法演出统一播 attack 段（出厂技能配的 attack_skill_1/a1 怪物素材包全无）",
+    );
+    check(
+      castBody.indexOf("config.action") < 0,
+      "施法不再读技能配置的 action 键（那是角色素材的远近之分，怪物素材没有）",
     );
   }
 

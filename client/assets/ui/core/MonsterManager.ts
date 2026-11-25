@@ -261,9 +261,14 @@ export default class MonsterManager {
   /**
    * 怪物释放技能的演出（#372）
    *
-   * 数值全在服务端（伤害走 hits），这里只做三件事：播技能动作、播技能特效、
+   * 数值全在服务端（伤害走 hits），这里只做三件事：播施法动作、播技能特效、
    * 状态型技能在怪物身上挂状态特效。配置查不到（技能被删 / 客户端快照落后）时告警跳过 ——
    * 演不出来可以接受，崩溃不行。
+   *
+   * #1251 口径：怪物攻击不区分远近动画，普攻与施法**统一播 ACTION.ATTACK**。
+   * 技能配置里的 action 键（attack_skill_1 / a1 等）是角色素材的段落，怪物素材包
+   * 全都没有，播它们只会在 playAction 静默回退待机 —— 出厂怪物技能 9001~9003
+   * 就踩在这里（#1251 起出厂数据统一改 attack，客户端也不再看这个字段）。
    */
   private static playServerCast(cast: MonsterCastEntry): boolean {
     const node = this.instanceIndex.get(cast.i);
@@ -275,7 +280,7 @@ export default class MonsterManager {
       console.warn(`[monster-skill] 怪物 ${cast.i} 释放的技能 ${cast.s} 不在配置里，无法演出`);
       return false;
     }
-    MonsterAI.playServerAction(node, config.action);
+    MonsterAI.playServerAction(node, ACTION.ATTACK);
     // effectIsOnSelf / 无目标时退回释放者，与角色侧同一口径
     EffectManager.play(config, node, null, monster);
     if (cast.st) this.applyStatusEffect(cast.i, node, cast.st);
