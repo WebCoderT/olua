@@ -35,6 +35,8 @@ import type {
   Fashion,
   GameConfigSnapshot,
   Item,
+  LevelScroll,
+  MoneyItem,
   Rank,
   Skill,
   Soul,
@@ -128,6 +130,8 @@ let slotLabels = new Map<string, string>();
 let slotOrder: string[] = [];
 let items = new Map<string, Item>();
 let drugs = new Map<string, Drug>();
+let moneyItems = new Map<string, MoneyItem>();
+let levelScrolls = new Map<string, LevelScroll>();
 let skills = new Map<string, Skill>();
 let statuses = new Map<string, Status>();
 let fashions = new Map<string, Fashion>();
@@ -181,6 +185,8 @@ function index(data: GameConfigSnapshot): void {
 
   items = new Map(data.items.map((row) => [row.id, row]));
   drugs = new Map(data.drugs.map((row) => [row.id, row]));
+  moneyItems = new Map(data.moneyItems.map((row) => [row.id, row]));
+  levelScrolls = new Map(data.levelScrolls.map((row) => [row.id, row]));
   skills = new Map(data.skills.map((row) => [row.id, row]));
   statuses = new Map(data.statuses.map((row) => [row.id, row]));
   fashions = new Map(data.fashions.map((row) => [row.id, row]));
@@ -289,15 +295,28 @@ export function equipmentIds(): string[] {
 
 //#region 物品 / 药品 / 时装 / 技能 / 状态
 
-/** 物品 id → 名（装备 / 药品 / 材料都在内） */
+/**
+ * 物品 id → 名（装备 / 药品 / 货币道具 / 升级卷轴 / 材料都在内）
+ *
+ * 回落顺序 = 客户端 `rebuildItemIndex` 的注册序（装备 → 药品 → 货币 → 卷轴 → 材料）。
+ * #785 货币道具与 #787 升级卷轴自上线起就是物品总表成员（客户端背包里能拿到），
+ * 查表跟不上它们就会出现「未知物品 level_scroll_1」这类显示。
+ */
 export function itemText(id: string): string {
   if (!id) return "";
-  return equipmentName(id) || items.get(id)?.label || drugs.get(id)?.label || `未知物品 ${id}`;
+  return (
+    equipmentName(id) ||
+    items.get(id)?.label ||
+    drugs.get(id)?.label ||
+    moneyItems.get(id)?.label ||
+    levelScrolls.get(id)?.label ||
+    `未知物品 ${id}`
+  );
 }
 
-/** 全部可进背包的物品 id（装备 / 药品 / 材料都在内） */
+/** 全部可进背包的物品 id（装备 / 药品 / 货币道具 / 升级卷轴 / 材料都在内，与客户端物品总表同口径） */
 export function itemIds(): string[] {
-  return [...variants.keys(), ...items.keys(), ...drugs.keys()];
+  return [...variants.keys(), ...items.keys(), ...drugs.keys(), ...moneyItems.keys(), ...levelScrolls.keys()];
 }
 
 /**
@@ -308,7 +327,7 @@ export function itemIds(): string[] {
  */
 export function itemIconOf(id: string): string {
   if (!id) return "";
-  return equipmentIcon(id) || itemIcon(id) || drugIcon(id);
+  return equipmentIcon(id) || itemIcon(id) || drugIcon(id) || moneyItemIcon(id) || levelScrollIcon(id);
 }
 
 /** 物品 id → 描述（材料 / 药品有，装备没有） */
@@ -344,6 +363,55 @@ export function drugIcon(id: string): string {
 /** 全部药品 id */
 export function drugIds(): string[] {
   return [...drugs.keys()];
+}
+
+/**
+ * 货币道具（#785）与升级卷轴（#787）的查表访问器
+ *
+ * 两表都是「可使用的消耗品」，但走不同链路（货币 = 账本入账，卷轴 = 硬性 +1 级），
+ * 副标题要的元数据也不同（面值 vs 可用等级区间），所以各给各的访问器；
+ * 名字 / 图标 / 叠加上限的通用回落已经并进 `itemText` / `itemIconOf` / `maxStackOf`。
+ */
+
+/** 货币道具 id → 名（不在表返回空串） */
+export function moneyItemText(id: string): string {
+  return moneyItems.get(id)?.label ?? "";
+}
+
+/** 货币道具 id → 图标 */
+export function moneyItemIcon(id: string): string {
+  return moneyItems.get(id)?.icon ?? "";
+}
+
+/** 货币道具 id → 单件入账金额（查不到返回 0） */
+export function moneyItemAmount(id: string): number {
+  return moneyItems.get(id)?.amount ?? 0;
+}
+
+/** 全部货币道具 id */
+export function moneyItemIds(): string[] {
+  return [...moneyItems.keys()];
+}
+
+/** 升级卷轴 id → 名（不在表返回空串） */
+export function levelScrollText(id: string): string {
+  return levelScrolls.get(id)?.label ?? "";
+}
+
+/** 升级卷轴 id → 图标 */
+export function levelScrollIcon(id: string): string {
+  return levelScrolls.get(id)?.icon ?? "";
+}
+
+/** 升级卷轴 id → 可用等级区间 [minLevel, maxLevel]（查不到返回 null） */
+export function levelScrollRange(id: string): [number, number] | null {
+  const row = levelScrolls.get(id);
+  return row ? [row.minLevel, row.maxLevel] : null;
+}
+
+/** 全部升级卷轴 id */
+export function levelScrollIds(): string[] {
+  return [...levelScrolls.keys()];
 }
 
 /** 时装 id → 名 */
@@ -413,6 +481,11 @@ export function maxStackOf(id: string): number {
   if (drug > 0) return drug;
   const item = items.get(id)?.maxStack ?? 0;
   if (item > 0) return item;
+  // #785 货币道具 / #787 升级卷轴：各表自带 maxStack（服务端 resolveMaxStack 同一口径）
+  const money = moneyItems.get(id)?.maxStack ?? 0;
+  if (money > 0) return money;
+  const scroll = levelScrolls.get(id)?.maxStack ?? 0;
+  if (scroll > 0) return scroll;
   return 1;
 }
 
