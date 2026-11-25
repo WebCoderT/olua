@@ -140,6 +140,16 @@ check(GEN_SRC.includes(`"${STAND_BASE_FRAME}"`), `生成器几何基准帧 = ${S
 // 客户端不许再 import configs/game-config 的怪物 Map（那个 Map 已经删了；谁抄旧代码这里红）
 check(!/from "\.\.\/\.\.\/configs\/monster"/.test(fs.readFileSync(path.join(PROJECT_ROOT, "assets/ui/core/MonsterManager.ts"), "utf8")), "MonsterManager 不再 import configs/game-config（数据全走 monsterRuntime）");
 check(/speedRate:\s*\{\s*\.\.\.monsterDefaultSpeedRate,\s*\.\.\.\(row\.speedRate \?\? \{\}\)\s*\}/.test(RUNTIME_SRC), "运行时表落表时默认速度打底 + 快照覆盖合并");
+// #1254：出厂数据已显式写入五键速度，默认表降级为兜底 —— oneoff 脚本的 SEED 必须与默认表同值，
+// 两边漂了会出现「出厂怪速度 ≠ 客户端兜底速度」的静默分叉。
+{
+  const seedSrc = fs.readFileSync(path.join(PROJECT_ROOT, "../server/scripts/oneoff-seed-monster-speed-rates.cjs"), "utf8");
+  const monsterActions = ["stand", "walk", "attack", "injured", "die"];
+  const broken = monsterActions.filter(
+    (action) => new RegExp(`\\{[^}]*\\b${action}:\\s*(${monsterDefaultSpeedRate[action]})\\b`).test(seedSrc) === false,
+  );
+  check(broken.length === 0, "oneoff-seed-monster-speed-rates 的 SEED 与 monsterDefaultSpeedRate 同值", broken.join(", "));
+}
 // 真机踩到的坑（#588 验证轮）：Animation.play 在「还没挂进场景」的节点上调用，
 // Cocos 3.8.7 不会在启用后自动恢复 —— spriteFrame 一直空，站着不动的怪整只不显示。
 // 判据不是「play 过」，而是「挂进怪物层之后又播了一次」。
