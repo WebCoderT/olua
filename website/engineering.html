@@ -17,6 +17,7 @@
   <link rel="stylesheet" href="css/style.css" />
 </head>
 <body>
+  <div class="site-notice"><b>停服公告</b><span class="site-notice__full">：游戏与管理后台暂时停开，仅保留官网；源码与自建部署文档照常开放</span><span class="site-notice__short">：游戏与管理后台暂时停开，仅保留官网</span><a href="deploy.html">自己部署 →</a></div>
 
   <header class="nav" id="nav">
     <div class="nav__inner">
@@ -34,7 +35,7 @@
         <a href="deploy.html">部署</a>
         <a href="about.html">关于</a>
       </nav>
-      <a class="nav__cta" href="https://game.yimw.cn" target="_blank" rel="noopener">在线试玩</a>
+      <a class="nav__cta" href="deploy.html">自己搭一套</a>
       <button class="nav__toggle" id="navToggle" aria-label="打开菜单">
         <span></span><span></span><span></span>
       </button>
@@ -188,7 +189,7 @@
           </tr>
           <tr>
             <td><b>静态审计</b></td>
-            <td><code>make audit</code>（15 个脚本）</td>
+            <td><code>make audit</code>（19 个脚本）</td>
             <td>全仓扫描</td>
             <td>越界引用、手改生成物、硬编码、路径不存在</td>
           </tr>
@@ -201,7 +202,7 @@
           <tr>
             <td><b>服务端 e2e</b></td>
             <td><code>make server-verify</code></td>
-            <td><b>29 套</b>，每套起真服务 + 真库</td>
+            <td><b>96 套</b>，每套起真服务 + 真库</td>
             <td>接口行为、权限、并发、存档一致性</td>
           </tr>
           <tr>
@@ -269,7 +270,7 @@
       </article>
 
       <article class="cap">
-        <div class="cap__head"><h3>口径与一致性</h3><span class="cap__count">6 项</span></div>
+        <div class="cap__head"><h3>口径与一致性</h3><span class="cap__count">7 项</span></div>
         <ul>
           <li><b>地图原点</b> —— 世界坐标与 TMX 坐标只差一次 y 取反，错一处 NPC 全体偏半张图</li>
           <li><b>资源引用</b> —— 代码里写的每个资源路径都要在磁盘上真存在</li>
@@ -277,6 +278,7 @@
           <li><b>配置外泄</b> —— 位置、颜色、时长、概率、文案不许写进逻辑</li>
           <li><b>部署接线</b> —— nginx 上游名 = compose 服务名；DB_PATH 必须落在卷里</li>
           <li><b>文档目录表</b> —— 每篇都要登记、序号对得上文件名、链接不死，接口数与 <code>openapi.json</code> 一致</li>
+          <li><b>数量声明</b> —— 审计 / e2e / 单测 / 表 / 页面数按磁盘现算，不许手抄旧值</li>
         </ul>
       </article>
 

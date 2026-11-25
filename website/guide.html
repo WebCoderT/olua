@@ -4,12 +4,12 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>新手指南 · olua 开源项目</title>
-  <meta name="description" content="olua 新手指南：注册登录、选择职业、界面与操作、升级路线、打宝技巧、地图战力门槛与常见问题 FAQ。浏览器即开即玩，五分钟上手。" />
+  <meta name="description" content="olua 新手指南：注册登录、选择职业、界面与操作、升级路线、打宝技巧、地图战力门槛与常见问题 FAQ。本地部署后五分钟上手，操作与升级路线都在这里。" />
   <link rel="canonical" href="https://yimw.cn/guide.html" />
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://yimw.cn/guide.html" />
   <meta property="og:title" content="新手指南 · olua 开源项目" />
-  <meta property="og:description" content="olua 新手指南：注册登录、选择职业、界面与操作、升级路线、打宝技巧、地图战力门槛与常见问题 FAQ。浏览器即开即玩，五分钟上手。" />
+  <meta property="og:description" content="olua 新手指南：注册登录、选择职业、界面与操作、升级路线、打宝技巧、地图战力门槛与常见问题 FAQ。本地部署后五分钟上手，操作与升级路线都在这里。" />
   <meta property="og:image" content="https://yimw.cn/assets/img/新手村.jpg" />
   <meta name="twitter:card" content="summary_large_image" />
   <link rel="icon" href="assets/icons/favicon.ico" sizes="any" />
@@ -17,6 +17,7 @@
   <link rel="stylesheet" href="css/style.css" />
 </head>
 <body>
+  <div class="site-notice"><b>停服公告</b><span class="site-notice__full">：游戏与管理后台暂时停开，仅保留官网；源码与自建部署文档照常开放</span><span class="site-notice__short">：游戏与管理后台暂时停开，仅保留官网</span><a href="deploy.html">自己部署 →</a></div>
 
   <header class="nav" id="nav">
     <div class="nav__inner">
@@ -34,7 +35,7 @@
         <a href="deploy.html">部署</a>
         <a href="about.html">关于</a>
       </nav>
-      <a class="nav__cta" href="https://game.yimw.cn" target="_blank" rel="noopener">在线试玩</a>
+      <a class="nav__cta" href="deploy.html">自己搭一套</a>
       <button class="nav__toggle" id="navToggle" aria-label="打开菜单">
         <span></span><span></span><span></span>
       </button>
@@ -50,8 +51,8 @@
   <section class="section">
     <div class="prose">
       <h3 class="reveal">第一步：注册与登录</h3>
-      <p class="reveal">打开 <a href="https://game.yimw.cn" target="_blank" rel="noopener">game.yimw.cn</a>（或 <a href="http://101.34.39.217:8080" target="_blank" rel="noopener">IP 直连入口</a>），
-         注册账号即可进入。<b>不需要下载任何客户端</b>，浏览器就是你的战场。
+      <p class="reveal">线上试玩已关闭。按 <a href="deploy.html">部署说明</a> 在自己机器上起一套服务，
+         然后打开本地地址注册账号即可进入。<b>不需要下载安装客户端</b>，浏览器就是你的战场。
          一个账号同一时间只能一条线在线，别处登录会自动顶掉旧会话——账号安全，从踢人开始。</p>
 
       <h3 class="reveal">第二步：选择职业</h3>
@@ -114,7 +115,7 @@
     <div class="faq reveal">
       <details>
         <summary>需要下载客户端吗？</summary>
-        <div class="faq__a">不需要。浏览器打开 <code>game.yimw.cn</code> 即玩，支持主流桌面与移动浏览器。资源首次加载会稍慢，之后有缓存。</div>
+        <div class="faq__a">不需要下载安装客户端。线上试玩已关闭；按 <a href="deploy.html">部署说明</a> 起一套自己的服务后，用主流桌面或移动浏览器打开即可玩。资源首次加载稍慢，之后有缓存。</div>
       </details>
       <details>
         <summary>一个账号能同时多处登录吗？</summary>
@@ -122,7 +123,7 @@
       </details>
       <details>
         <summary>装备能充值买吗？</summary>
-        <div class="faq__a">不能。装备全靠打，商城只卖外观时装等非数值商品。最强的装备永远在怪物身上。</div>
+        <div class="faq__a">不能用人民币直购。装备主要靠打怪掉落，也可以用游戏内元宝在商城直接买（商城把全部装备自动上架）；时装等外观只改样子不改数值。</div>
       </details>
       <details>
         <summary>挂机时会被怪打死吗？</summary>
@@ -138,7 +139,7 @@
       </details>
     </div>
     <p style="text-align:center;margin-top:40px;" class="reveal">
-      <a class="btn btn--blood" href="https://game.yimw.cn" target="_blank" rel="noopener">在线试玩</a>
+      <a class="btn btn--blood" href="deploy.html">看部署说明 →</a>
     </p>
   </section>
 

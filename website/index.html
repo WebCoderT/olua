@@ -4,12 +4,12 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>olua · 一个免费开源的 2D 即时战斗项目</title>
-  <meta name="description" content="olua 是一个免费开源（MIT）的 2D 即时战斗游戏项目：Cocos Creator 客户端 + NestJS 服务端 + React 运营后台，18 万行 TypeScript，任何人可自行部署游玩。这里记录它的架构、数据流、工程管理与设计取舍。" />
+  <meta name="description" content="olua 是一个免费开源（MIT）的 2D 即时战斗游戏项目：Cocos Creator 客户端 + NestJS 服务端 + React 运营后台，20 万行 TypeScript，任何人可自行部署游玩。这里记录它的架构、数据流、工程管理与设计取舍。" />
   <link rel="canonical" href="https://yimw.cn/" />
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://yimw.cn/" />
   <meta property="og:title" content="olua · 一个免费开源的 2D 即时战斗项目" />
-  <meta property="og:description" content="olua 是一个免费开源（MIT）的 2D 即时战斗游戏项目：Cocos Creator 客户端 + NestJS 服务端 + React 运营后台，18 万行 TypeScript，任何人可自行部署游玩。这里记录它的架构、数据流、工程管理与设计取舍。" />
+  <meta property="og:description" content="olua 是一个免费开源（MIT）的 2D 即时战斗游戏项目：Cocos Creator 客户端 + NestJS 服务端 + React 运营后台，20 万行 TypeScript，任何人可自行部署游玩。这里记录它的架构、数据流、工程管理与设计取舍。" />
   <meta property="og:image" content="https://yimw.cn/assets/img/新手村.jpg" />
   <meta name="twitter:card" content="summary_large_image" />
   <link rel="icon" href="assets/icons/favicon.ico" sizes="any" />
@@ -18,6 +18,7 @@
   <link rel="stylesheet" href="css/style.css" />
 </head>
 <body>
+  <div class="site-notice"><b>停服公告</b><span class="site-notice__full">：游戏与管理后台暂时停开，仅保留官网；源码与自建部署文档照常开放</span><span class="site-notice__short">：游戏与管理后台暂时停开，仅保留官网</span><a href="deploy.html">自己部署 →</a></div>
 
   <!-- ========== 顶部导航 ========== -->
   <header class="nav" id="nav">
@@ -36,7 +37,7 @@
         <a href="deploy.html">部署</a>
         <a href="about.html">关于</a>
       </nav>
-      <a class="nav__cta" href="https://game.yimw.cn" target="_blank" rel="noopener">在线试玩</a>
+      <a class="nav__cta" href="deploy.html">自己搭一套</a>
       <button class="nav__toggle" id="navToggle" aria-label="打开菜单">
         <span></span><span></span><span></span>
       </button>
@@ -59,7 +60,7 @@
       </p>
       <div class="hero__actions reveal">
         <a class="btn btn--blood" href="project.html">看看这个项目</a>
-        <a class="btn btn--ghost" href="https://game.yimw.cn" target="_blank" rel="noopener">在线试玩</a>
+        <a class="btn btn--ghost" href="deploy.html">自己搭一套 →</a>
       </div>
       <p class="hero__sub reveal" style="margin-top:20px;font-size:13px;opacity:.75;">
         想直接跑起来？<a href="deploy.html" style="color:var(--gold);">看部署说明 →</a>
@@ -91,12 +92,12 @@
       <p class="section__sub">全部来自仓库统计</p>
     </div>
     <div class="metrics metrics--6 reveal">
-      <div class="metric"><b>18.7 万</b><span>行 TypeScript</span><i>三端源码</i></div>
+      <div class="metric"><b>20.4 万</b><span>行 TypeScript</span><i>三端源码</i></div>
       <div class="metric"><b>3</b><span>个端</span><i>客户端 / 服务端 / 后台</i></div>
-      <div class="metric"><b>268</b><span>接口操作</span><i>契约自动生成</i></div>
-      <div class="metric"><b>76</b><span>张数据表</span><i>SQLite 单库</i></div>
+      <div class="metric"><b>283</b><span>接口操作</span><i>228 条路径</i></div>
+      <div class="metric"><b>77</b><span>张数据表</span><i>SQLite 单库</i></div>
       <div class="metric"><b>70</b><span>已实现能力</span><i>只列能跑的</i></div>
-      <div class="metric"><b>92</b><span>套 e2e</span><i>真服务真库</i></div>
+      <div class="metric"><b>96</b><span>套 e2e</span><i>真服务真库</i></div>
     </div>
   </section>
 
@@ -112,19 +113,19 @@
         <h3>客户端</h3>
         <p class="trio__role">玩家看到的全部</p>
         <p>登录、选角、战斗、背包、商城、社交。只负责输入与表现，本地不判定任何战斗结果。</p>
-        <div class="trio__stack">Cocos Creator 3.8.7<br />TypeScript · 5.5 万行</div>
+        <div class="trio__stack">Cocos Creator 3.8.7<br />TypeScript · 6.5 万行</div>
       </article>
       <article class="trio__card" data-tag="server /">
         <h3>服务端</h3>
         <p class="trio__role">唯一手写接口的地方</p>
         <p>账号、角色、地图、怪物、战斗结算、掉落、邮件。两个进程共用一个 SQLite，契约从这里生成。</p>
-        <div class="trio__stack">NestJS 12 + node:sqlite<br />25 模块 · 7.9 万行</div>
+        <div class="trio__stack">NestJS 12 + node:sqlite<br />25 模块 · 8.2 万行</div>
       </article>
       <article class="trio__card" data-tag="admin /">
         <h3>管理端</h3>
         <p class="trio__role">运营改数据的地方</p>
         <p>地图刷怪区、NPC、碰撞盒、掉落表、装备体系、特效、权限与日志，53 个页面，改完即生效。</p>
-        <div class="trio__stack">React 19 + Vite<br />53 页面 · 5.4 万行</div>
+        <div class="trio__stack">React 19 + Vite<br />53 页面 · 5.6 万行</div>
       </article>
     </div>
     <p style="text-align:center;margin-top:36px;" class="reveal">

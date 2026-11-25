@@ -17,6 +17,7 @@
   <link rel="stylesheet" href="css/style.css" />
 </head>
 <body>
+  <div class="site-notice"><b>停服公告</b><span class="site-notice__full">：游戏与管理后台暂时停开，仅保留官网；源码与自建部署文档照常开放</span><span class="site-notice__short">：游戏与管理后台暂时停开，仅保留官网</span><a href="deploy.html">自己部署 →</a></div>
 
   <header class="nav" id="nav">
     <div class="nav__inner">
@@ -34,7 +35,7 @@
         <a href="deploy.html">部署</a>
         <a href="about.html">关于</a>
       </nav>
-      <a class="nav__cta" href="https://game.yimw.cn" target="_blank" rel="noopener">在线试玩</a>
+      <a class="nav__cta" href="deploy.html">自己搭一套</a>
       <button class="nav__toggle" id="navToggle" aria-label="打开菜单">
         <span></span><span></span><span></span>
       </button>
@@ -47,12 +48,12 @@
     <p class="page-hero__sub reveal">这些系统在实机上是什么样 —— 附真机截图</p>
   </section>
 
-  <!-- ========== 两大职业（纯文字：立绘由选角界面的实际角色形象承担，这里不放图） ========== -->
+  <!-- ========== 三职业（纯文字：立绘由选角界面的实际角色形象承担，这里不放图） ========== -->
   <section class="section">
     <div class="section__head reveal">
       <p class="eyebrow eyebrow--center">CLASSES</p>
-      <h2 class="section__title">两个职业</h2>
-      <p class="section__sub">近战与法术，两种解法</p>
+      <h2 class="section__title">三个职业</h2>
+      <p class="section__sub">近战、法术与召唤，三种解法</p>
     </div>
     <div class="grid grid--classes">
       <article class="class-card reveal">
@@ -81,6 +82,18 @@
           </ul>
         </div>
       </article>
+      <article class="class-card reveal">
+        <div class="class-card__body">
+          <h3 class="class-card__name class-card__name--taoist">道 士</h3>
+          <p class="class-card__role">召唤 · 辅助 · 以柔克刚</p>
+          <p>能召唤、能治疗，也能靠持续伤害慢慢磨。单刷稳，组队更稳；不追求一波秒杀，讲究的是站得住、耗得起。</p>
+          <ul class="class-card__traits">
+            <li>召唤协助，单刷不孤单</li>
+            <li>治疗与辅助，组队更耐打</li>
+            <li>持续消耗，越磨越稳</li>
+          </ul>
+        </div>
+      </article>
     </div>
   </section>
 
@@ -88,7 +101,7 @@
   <section class="section section--alt">
     <div class="prose reveal">
       <h3>装备品质体系：555 种组合，全靠打</h3>
-      <p>olua 的装备没有商城直购、没有抽卡保底——<b>每一件都从怪物身上爆出来</b>。
+      <p>olua 没有抽卡保底，也没有人民币直购——装备主要靠打怪掉落，也能用游戏内元宝在商城直接买。
          装备由「基础件 × 前缀品质 × 后缀阶级」组合而成：</p>
       <div class="quality-scale" aria-label="前缀品质五档">
         <span class="q-0">普通</span>
@@ -247,7 +260,7 @@
       </article>
     </div>
     <p style="text-align:center;margin-top:40px;" class="reveal">
-      <a class="btn btn--blood" href="https://game.yimw.cn" target="_blank" rel="noopener">在线试玩</a>
+      <a class="btn btn--blood" href="deploy.html">看部署说明 →</a>
       <a class="btn btn--ghost" href="guide.html" style="margin-left:14px;">新手指南</a>
     </p>
   </section>
