@@ -72,9 +72,13 @@ const CATALOG = catalogJson as unknown as Catalog;
 const IN_SHOW = CATALOG.inShow;
 
 /**
- * 视图外扩（#1089）：background = 弹窗的立绘视口（216×396）后，视图按它外扩这么多的
- * 边距取景。取 64 而不是缺省 18 —— 脚底圆盘半径 90、圆心在视口底沿之下 31.5，
- * 18 的边距会把圆盘下半截裁出画布，「脚踩圆盘」的对齐参照看不完整。
+ * 视图外扩：视图按底座（清单 `inShow.background`）外扩这么多的边距取景。
+ *
+ * 底座有两种形态（生成器 `tools/gen-equip-align-catalog.cjs` 决定，页面不自算）：
+ * - 立绘视口（#1089 时代）：216×396 那会儿取 64 是为了圆盘（半径 90、圆心在视口底沿
+ *   之下 31.5）不被裁出画布；
+ * - 弹窗全幅（#1231 起客户端移除立绘视口 / 背景板，#1272 起清单缺失时退化为
+ *   `roleInfoDialogLayout.size`，660×520）：圆盘本来就在窗内，64 纯粹留个呼吸边。
  */
 const IN_VIEW_MARGIN = 64;
 
