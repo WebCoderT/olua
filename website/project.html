@@ -317,7 +317,7 @@
         </div>
         <div class="kv__row">
           <dt>素材</dt>
-          <dd><code>client/assets/resources/</code> 体积大，不入库。通过 <code>make resources-download</code> 从 Release 拉取并校验 sha1。</dd>
+          <dd><code>client/assets/resources/</code> 体积大，不入库。资源包不再走 GitHub Release 分发（#1293 已下线），由维护者自行保管。</dd>
         </div>
       </dl>
     </div>
@@ -352,7 +352,7 @@
 │   │   ├── ui/       <i># 界面、控制器、组件、网络层</i>
 │   │   ├── skills/   <i># 技能表现</i>
 │   │   ├── entities/ <i># 角色、怪物实体</i>
-│   │   └── resources/ <i># 素材（不入库，走 Release）</i>
+│   │   └── resources/ <i># 素材（不入库）</i>
 │   ├── README.md · FAQ.md
 │   └── types/engine/ <i># Cocos 类型声明（vendoring，CI 免编辑器）</i>
 │

@@ -24,7 +24,7 @@
  * 一开始这里带过一个 `hasAsset`（探测 `resources/` 下 plist 在不在）。它有两个问题：
  *
  *   1. **它不是配置数据，是「这台机器上有什么」** —— 而 `client/assets/resources/` 是
- *      gitignore 的（素材走 GitHub Release 分发，`make resources-download`）。于是同一份
+ *      gitignore 的（素材不入库）。于是同一份
  *      配置在装了素材的机器上生成 33 个 `true`、在 CI 上生成 33 个 `false`；
  *   2. 一旦按「重生成 + 逐字节比对」钉住清单（`tools/audit-equip-align-catalog.cjs`），
  *      这个字段会让 CI **必然**报不一致 —— 那不是漂移，是环境差异，属于假红。

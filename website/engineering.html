@@ -4,12 +4,12 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>工程管理 · olua 开源项目</title>
-  <meta name="description" content="olua 的研发流程与质量门禁：issue → 分支 → PR → CI → squash；PR 只跑一次全套门禁；96 套 e2e、19 项跨端审计、资源清单锁与 AI 协作纪律。" />
+  <meta name="description" content="olua 的研发流程与质量门禁：issue → 分支 → PR → CI → squash；PR 只跑一次全套门禁；96 套 e2e、19 项跨端审计与 AI 协作纪律。" />
   <link rel="canonical" href="https://yimw.cn/engineering.html" />
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://yimw.cn/engineering.html" />
   <meta property="og:title" content="工程管理 · olua 开源项目" />
-  <meta property="og:description" content="olua 的研发流程与质量门禁：issue → 分支 → PR → CI → squash；PR 只跑一次全套门禁；96 套 e2e、19 项跨端审计、资源清单锁与 AI 协作纪律。" />
+  <meta property="og:description" content="olua 的研发流程与质量门禁：issue → 分支 → PR → CI → squash；PR 只跑一次全套门禁；96 套 e2e、19 项跨端审计与 AI 协作纪律。" />
   <meta property="og:image" content="https://yimw.cn/assets/img/新手村.jpg" />
   <meta name="twitter:card" content="summary_large_image" />
   <link rel="icon" href="assets/icons/favicon.ico" sizes="any" />
@@ -53,7 +53,6 @@
     <a href="#ci">CI 门禁</a>
     <a href="#layers">测试分层</a>
     <a href="#audits">19 项审计</a>
-    <a href="#resources">资源分发</a>
     <a href="#ai">AI 协作</a>
   </nav>
 
@@ -296,29 +295,6 @@
       <b>为什么用静态扫描而不是写更多测试？</b>这些问题的共同点是「能出图、能跑、不报错」——
       地图偏半张、资源静默空白、生成物被手改，全都不会让任何测试变红。
       静态扫描比测试便宜，而且能一次性覆盖全仓，适合守这种「约定类」的错误。
-    </div>
-  </section>
-
-  <!-- ========== 资源分发 ========== -->
-  <section class="section" id="resources">
-    <div class="section__head reveal">
-      <p class="eyebrow eyebrow--center">ASSETS</p>
-      <h2 class="section__title">素材不进版本库，但要能锁住</h2>
-      <p class="section__sub">清单 + Release 分卷，多人多机保持一致</p>
-    </div>
-
-    <div class="prose reveal">
-      <p><code>client/assets/resources/</code> 体积大，有意不进 Git。但「不进库」不等于「不管」——
-        仓库里提交一份 <code>resources.manifest.json</code>，记录每个文件的 <b>sha1 + 大小</b>，
-        连 <code>.meta</code> 一起记（Cocos 的 uuid 绑在 meta 上，漏了 meta 等于素材全断链）。</p>
-
-      <div class="cmd">make resources-verify            <i># 拉代码后先跑：本地资源 vs 清单</i>
-make resources-download VERSION=x <i># 不一致或新机器：下载分卷、解压、自动校验</i>
-
-<i># 改完素材的人发布：</i>
-make resources-manifest → make resources-pack → make resources-upload</div>
-
-      <p>约定是<b>先合并带新清单的 PR，再上传 Release</b>。反过来的话，别人拉到的清单指向一个还不存在的包。</p>
     </div>
   </section>
 

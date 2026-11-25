@@ -65,7 +65,7 @@ CREATOR ?= CocosCreator
         client-clean-frames client-clean-frames-apply client-open client-gen-declarations \
         server-dev server-build server-start server-e2e server-e2e-roles server-e2e-guard \
         server-e2e-mail server-e2e-account-email server-e2e-realtime server-e2e-combat server-e2e-drop server-e2e-world server-e2e-world-viewers server-e2e-dual server-e2e-game-config server-e2e-config-version server-e2e-event-log server-e2e-backup server-e2e-zone server-e2e-guild server-e2e-social server-e2e-chat server-e2e-quest server-e2e-sell server-e2e-bag server-e2e-blocks server-e2e-party server-e2e-rank server-e2e-achievement server-e2e-game-mail server-e2e-equip-align server-e2e-equip-in-align server-e2e-map server-verify db-backup db-restore config-export config-import config-check gen-api \
-        resources-manifest resources-verify resources-pack resources-upload resources-download image-manifest \
+        image-manifest \
         admin-dev admin-build admin-typecheck admin-preview \
         icons \
         clean
@@ -535,41 +535,11 @@ ci: ci-static e2e-all ## 门禁全量（本机串行版 = CI 跑过的全部内�
 	@echo "  已覆盖：make client-check（类型声明 vendoring 进 client/types/engine/，无需编辑器）"
 
 # ==============================================================================
-#  resources 同步（client/assets/resources 不入库，靠清单 + GitHub Release 分发）
-#  流程见根 README「资源同步」节；python 在 Windows 下覆盖：make PY=python ...
+#  image-manifest（管理端图标选择器数据源）
 # ==============================================================================
-
-RES_PY ?= python3
-# RES_VERSION 与 VERSION 等价（文档里两种写法都能用）
-ifeq ($(strip $(RES_VERSION)),)
-RES_VERSION := $(VERSION)
-endif
 
 image-manifest: ## 生成客户端素材的图片清单（管理端图标选择器在生产环境的数据源）
 	$(NODE) tools/gen-image-manifest.cjs
-
-resources-manifest: ## 生成/更新 resources.manifest.json：make resources-manifest VERSION=2026-10-25-1
-	@test -n "$(RES_VERSION)" || { echo "用法：make resources-manifest VERSION=<版本号>"; exit 1; }
-	$(RES_PY) client/tools/resources_sync.py manifest --version $(RES_VERSION)
-
-resources-verify: ## 本地资源与清单一致性校验（拉代码后先跑这条）
-	$(RES_PY) client/tools/resources_sync.py verify
-
-resources-pack: ## 打分卷 zip 到 resources_dist/$(RES_VERSION)/：make resources-pack VERSION=...
-	@test -n "$(RES_VERSION)" || { echo "用法：make resources-pack VERSION=<版本号>"; exit 1; }
-	$(RES_PY) client/tools/resources_sync.py pack --version $(RES_VERSION)
-
-resources-upload: ## 上传分卷到 GitHub Release（tag = resources-<VERSION>，需 gh 已登录）
-	@test -n "$(RES_VERSION)" || { echo "用法：make resources-upload VERSION=<版本号>"; exit 1; }
-	gh release create resources-$(RES_VERSION) resources_dist/$(RES_VERSION)/*.zip \
-		--title "resources $(RES_VERSION)" \
-		--notes "client/assets/resources 分发包（清单 resources.manifest.json 对应 version=$(RES_VERSION)）"
-
-resources-download: ## 下载 Release 分卷并解压校验：make resources-download RES_VERSION=...
-	@test -n "$(RES_VERSION)" || { echo "用法：make resources-download RES_VERSION=<版本号>"; exit 1; }
-	mkdir -p resources_dist/$(RES_VERSION)
-	gh release download resources-$(RES_VERSION) --dir resources_dist/$(RES_VERSION)
-	$(RES_PY) client/tools/resources_sync.py extract --dir resources_dist/$(RES_VERSION)
 
 # ==============================================================================
 #  清理

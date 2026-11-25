@@ -4,7 +4,7 @@
  *
  *   node tools/strip-map-objects.cjs              # 处理 client/assets/resources/map/*\/*.tmx
  *   node tools/strip-map-objects.cjs --dry        # 只报告会删掉什么
- *   node tools/strip-map-objects.cjs --dir <路径> # 处理别的资源目录（分卷解出来的那份）
+ *   node tools/strip-map-objects.cjs --dir <路径> # 处理别的资源目录（资源包解出来的那份）
  *
  * ## 为什么要删
  *
@@ -33,11 +33,11 @@
  *
  * ## 为什么不是 git 里的删除
  *
- * `client/assets/resources/` 是 **gitignore** 的（资源按分卷分发，见 `make resources-*`），
- * 所以这个动作没法靠 commit 传播。要有工具，才知道「换台机器该做什么」。
+ * `client/assets/resources/` 是 **gitignore** 的（素材不入库），所以这个动作没法靠 commit 传播。
+ * 要有工具，才知道「换台机器该做什么」。
  *
- * 重新打包资源后记得刷新清单（`python3 client/tools/resources_sync.py manifest`，
- * 不带 `--version` 就沿用原版本号）—— 否则 `make resources-verify` 会报不一致。
+ * 动过地图素材后记得刷新清单（`python3 client/tools/resources_sync.py manifest`，
+ * 不带 `--version` 就沿用原版本号）—— 否则 `verify` 会报不一致。
  */
 "use strict";
 
@@ -143,7 +143,7 @@ function main() {
       : `已删：${touched} 张图的 ${totalGroups} 个对象组 / ${totalObjects} 个对象`,
   );
   console.log("下一步：node tools/import-map-resources.cjs → make config-export");
-  console.log("       重新分卷后：python3 client/tools/resources_sync.py manifest（沿用原版本号）");
+  console.log("       刷新清单：python3 client/tools/resources_sync.py manifest（沿用原版本号）");
 }
 
 main();

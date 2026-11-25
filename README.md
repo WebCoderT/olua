@@ -243,15 +243,13 @@ make verify         # 提交前跑这个：上面全部 + 三端构建
 
 ## 素材
 
-游戏素材有 2.4G，**有意不放进代码仓库**，改用「清单 + GitHub Release 分卷」分发：
-清单 `resources.manifest.json` 随代码提交，分卷 zip 挂在 tag 为 `resources-<版本号>` 的 Release 上。
+游戏素材有 2.4G，**有意不放进代码仓库**。原先的「清单 + GitHub Release 分卷」分发渠道已下线
+（资源包由维护者自行保管，新机器不再有公开下载来源）；仓库里的清单 `resources.manifest.json`
+与同步脚本 `client/tools/resources_sync.py` 保留，仅用于本地核对与打包：
 
 ```bash
-make resources-verify                    # 拉完代码先核对本地素材与清单是否一致
-make resources-download VERSION=<版本号>  # 不一致或新机器：下载、解压、自动校验
+python3 client/tools/resources_sync.py verify   # 核对本地素材与清单是否一致
 ```
-
-改完素材要发布时：`make resources-manifest` → `make resources-pack` → `make resources-upload`（需 `gh` 已登录）。
 
 ## 联系
 

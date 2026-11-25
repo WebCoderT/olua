@@ -34,7 +34,7 @@
  *   4. **`outScale` 为 0 / 非正**：多一半是把 `undefined` 当默认值写进去的，
  *      页面上那件装备会缩成一个点；
  *   5. **`hasAsset` 之类"本机有什么"的字段回流**：`client/assets/resources/` 是
- *      gitignore 的（素材走 Release 分发），这类字段在 CI 上必然全 false、
+ *      gitignore 的（素材不入库），这类字段在 CI 上必然全 false、
  *      在开发机上必然全 true —— 一旦回流，这条逐字节比对就会天天假红。
  *
  * 用法：node tools/audit-equip-align-catalog.cjs
