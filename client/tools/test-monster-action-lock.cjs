@@ -367,6 +367,40 @@ function main() {
     );
   }
 
+  group("八、连刀复现（#1259：FINISHED 丢失时连刀不重启 → 怪永久定格）");
+  {
+    // 场景：刀1 起播后 FINISHED 续播丢失（节点销毁竞争 / 播放被吞，实机症状「只播一次后定格」），
+    // 之后服务端按攻速连刀 —— 每刀都早退不切动画、还不断重置动作锁，站定分支永远救不回来。
+    // 修复口径：事件动作与状态机动作同名时强制重启（远端玩家 playRemoteAction 同款，#693）。
+    const node = makeMonster();
+    pushStationary(node, serverNow());
+    MonsterAI.playServerAction(node, "attack_near"); // 刀1
+    check(crossFades().includes("attack_near_down"), "刀1 起播", crossFades().join(","));
+    crossFadeCallsReset();
+    // FINISHED 丢失：不调 replayCurrent。0.5 秒后（锁未过期）刀2 到达：
+    advance(500);
+    MonsterAI.playServerAction(node, "attack_near"); // 刀2
+    check(crossFades().includes("attack_near_down"), "刀2 强制重启攻击动画（不因状态机同名早退）", crossFades().join(","));
+    crossFadeCallsReset();
+    advance(50);
+    MonsterAI.tick(new Map([[node, makeMonsterData()]]));
+    check(crossFades().length === 0, "连刀期间锁照常生效（动画真的在播，站定帧不覆盖）", crossFades().join(","));
+    // 服务端停手：锁到期后超时兜底解锁切回待机（死锁解除路径不回归）
+    advance(1500 + 50);
+    MonsterAI.tick(new Map([[node, makeMonsterData()]]));
+    check(crossFades().join(",") === "stand_down", "停手后锁到期切回待机", crossFades().join(","));
+
+    // 回归：FINISHED 正常路径下，解锁切回待机后的下一刀照样起播（修复不得破坏正常流）
+    const node2 = makeMonster();
+    pushStationary(node2, serverNow());
+    MonsterAI.playServerAction(node2, "attack_near"); // 刀1
+    MonsterAI.replayCurrent(node2); // FINISHED → 解锁切待机
+    crossFadeCallsReset();
+    advance(50);
+    MonsterAI.playServerAction(node2, "attack_near"); // 刀2
+    check(crossFades().includes("attack_near_down"), "FINISHED 正常解锁后下一刀照样起播", crossFades().join(","));
+  }
+
   Date.now = realNow;
   finish("怪物动作锁全绿：事件动作播完/超时/移动才解锁，缺帧回退不上锁");
 }
