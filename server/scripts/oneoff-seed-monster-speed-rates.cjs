@@ -120,7 +120,7 @@ function main() {
       .get(now).version;
     console.log(`config_version → ${version}（运行中的服务端会在下一次客户端请求时重建快照，无需重启）。`);
 
-    console.log("下一步：node scripts/sync-config-sql-sections.cjs --tables monster_presentation 把出厂段同步进 config-sync.sql。");
+    console.log("下一步：node scripts/sync-config-sql-sections.cjs --tables monster_presentation --columns speed_rate 把出厂段的该列同步进 config-sync.sql（列级刀：库里有运营 WIP 的其它列不会被携带，#1257）。");
   } finally {
     db.close();
   }
