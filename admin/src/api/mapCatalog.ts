@@ -17,6 +17,26 @@ import type { MapSummary } from "./models";
 let catalog: MapSummary[] = [];
 let loading: Promise<void> | null = null;
 
+//#region 加载信号（#1268：与 gameData 同一套，Layout 订阅后落地时整块重渲）
+
+let version = 0;
+const listeners = new Set<() => void>();
+
+/** 名录版本号（`useSyncExternalStore` 的 getSnapshot；每次 catalog 落地时 +1） */
+export function mapCatalogVersion(): number {
+  return version;
+}
+
+/** 订阅版本变化（返回退订函数） */
+export function subscribeMapCatalog(listener: () => void): () => void {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
+}
+
+//#endregion
+
 /** 地图 id → 名字（缓存没到时回落 id） */
 export function mapText(id: string): string {
   if (!id) return "";
@@ -45,6 +65,9 @@ export function ensureMapCatalog(): Promise<void> {
       .list()
       .then((result) => {
         catalog = result.list;
+        // 通知订阅者（#1268）：已挂载页面读的还是「名录为空」的首渲态（地图名回落 id）
+        version += 1;
+        for (const listener of listeners) listener();
       })
       .catch(() => {
         // 名录拉不到就按 id 显示：这不是错误状态，只是少了个好听的名字

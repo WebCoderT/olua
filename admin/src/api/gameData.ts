@@ -94,6 +94,34 @@ interface BaseInfo {
 let loaded = false;
 let loading: Promise<void> | null = null;
 
+//#region 加载信号（#1268）
+
+/**
+ * 快照版本号：每次 `index()` 落地时 +1
+ *
+ * 模块级缓存落地时没有 React 信号 —— 之前页面首渲时快照还没到，查表全是空串
+ * （图标「无图」、名字回落 id），而且数据到了也不会重渲，要切一次页才恢复。
+ * `Layout` 用 `useSyncExternalStore` 订阅这个版本号，数据一到整块重渲一次；
+ * 之后版本不再变化，维持「同步渲染的字典要求稳定」的约定。
+ */
+let version = 0;
+const listeners = new Set<() => void>();
+
+/** 快照版本号（`useSyncExternalStore` 的 getSnapshot；只在落地时变化） */
+export function gameDataVersion(): number {
+  return version;
+}
+
+/** 订阅版本变化（返回退订函数） */
+export function subscribeGameData(listener: () => void): () => void {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
+}
+
+//#endregion
+
 let variants = new Map<string, EquipmentVariant>();
 let bases = new Map<string, BaseInfo>();
 let slotLabels = new Map<string, string>();
@@ -180,6 +208,9 @@ function index(data: GameConfigSnapshot): void {
     .sort((a, b) => a.id.localeCompare(b.id));
 
   loaded = true;
+  // 通知订阅者（#1268）：已挂载的页面这时还停在「查表为空」的首渲态，重渲一次才补上图标与名字
+  version += 1;
+  for (const listener of listeners) listener();
 }
 
 //#endregion
