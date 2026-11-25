@@ -19,7 +19,13 @@ export const MONSTER_MAX_HP_MAX = 2_000_000_000;
 /** 检测范围的防御性上限（像素；出厂值在 150~320 之间，留足放大余地） */
 export const MONSTER_DETECT_RANGE_MAX = 5000;
 
-/** 移动速度的防御性上限（刚体线速度单位；出厂 2，与客户端 `ROLE_WALK_SPEED` 同口径） */
+/**
+ * 移动速度的防御性上限（**像素 / 秒**，服务端 AI `stepToward` 直接按此速度模拟）
+ *
+ * 注意与玩家速度不同尺：玩家走 Box2D 刚体物理单位（`ROLE_WALK_SPEED = 2` ≈ 64 px/s、
+ * `ROLE_RUN_SPEED = 4` ≈ 128 px/s，PTM_RATIO = 32），怪物这里没有物理放大。
+ * 出厂 80：落在玩家步行与跑步之间 —— 走着不跑会被追上，跑起来能脱身。
+ */
 export const MONSTER_MOVE_SPEED_MAX = 100;
 
 /** 动作速度覆盖的倍率区间（1 = 原速；0.1 / 10 已经远超肉眼可辨的两端） */
@@ -305,7 +311,7 @@ export class UpdateMonsterPresentationDto {
   detectRange?: number;
 
   @ApiPropertyOptional({
-    description: "移动速度（刚体线速度单位；出厂 2，与角色步行同口径）。不传则不改",
+    description: "移动速度（像素/秒；出厂 80，落在玩家步行约 64 / 跑步约 128 px/s 之间）。不传则不改",
     minimum: 0,
     maximum: MONSTER_MOVE_SPEED_MAX,
   })

@@ -70,7 +70,7 @@ export class AdminMonsterController {
       "**行为参数**（落在 `monster_presentation` 表，服务端 AI 有 1 秒缓存 → 最迟 1 秒生效）：\n" +
       "- `presentation.aggressive`：是否主动攻击玩家。关掉后只游走，被打才记恨。\n" +
       "- `presentation.detectRange`：检测范围（像素半径），主动怪在这个距离内发现玩家。\n" +
-      "- `presentation.moveSpeed`：移动速度（刚体线速度单位，出厂 2，与角色步行同口径）。\n" +
+      "- `presentation.moveSpeed`：移动速度（像素/秒，出厂 80；玩家步行约 64 / 跑步约 128 px/s，追击速度落在两者之间——走着不跑会被追上、跑起来能脱身）。\n" +
       "- `presentation.speedRate`：动作速度覆盖（动作键 → 每秒循环数）。键只认 " +
       "stand / walk / run / injured / die（怪物素材只有这五个动作有帧）；**传 `{}` = 清空回客户端默认，不传 = 不改**。\n\n" +
       "**生效时间三档**：基础数值即时；行为参数 ≤1 秒（实时进程 AI 缓存 TTL）；" +
