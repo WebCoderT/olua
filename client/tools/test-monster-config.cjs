@@ -8,7 +8,7 @@
  *   contentSize > 0、outOffset 与图集基准帧 trim 反向偏移一致（直接重读 plist 独立复核，
  *   生成器与引擎同一数据源）；
  * · key 双向对账：资源行（monster_presentation）与数值行（monsters）一一对应（生成器断言，这里复核）；
- * · 动作速度：经 applyMonsterPresentation 落运行时表后，每只怪 speedRate 都是**完整 11 个动作**
+ * · 动作速度：经 applyMonsterPresentation 落运行时表后，每只怪 speedRate 都是**完整 12 个动作**
  *   且 >0（快照覆盖与 monsterDefaultSpeedRate 在落表时合成）；
  * · 主动怪取值：每只怪都有明确的布尔值，且快照里至少有一只主动（#751 起「谁主动」归运营，
  *   生成器只按体型 / tier 打印建议、不写库 —— 所以不再断言快照符合体型规则）；
@@ -42,8 +42,8 @@ const OUT_RES = path.join(PROJECT_ROOT, "assets/resources/monster/out");
 
 /** 几何基准帧（与生成器一致）：图集 stand 是 8 向 × 4 帧，方向 4 = 正面第 0 帧 */
 const STAND_BASE_FRAME = "d4_00.png";
-/** 动作全集（ACTION 枚举的**值**，运行时 speedRate 的键就是它们） */
-const ACTION_KEYS = ["stand", "walk", "run", "attack_near", "attack_skill_1", "test3", "attack_far", "injured", "a1", "die", "test1"];
+/** 动作全集（ACTION 枚举的**值**，运行时 speedRate 的键就是它们；ATTACK 是 #1247 由 run 改名的怪物攻击段） */
+const ACTION_KEYS = ["stand", "walk", "run", "attack", "attack_near", "attack_skill_1", "test3", "attack_far", "injured", "a1", "die", "test1"];
 
 /** 重读某只怪基准帧的图集 trim 数据（生成器与引擎同一数据源，这里独立复核） */
 function readTrim(key) {
@@ -93,10 +93,10 @@ for (const m of monsterResource.values()) {
   const values = ACTION_KEYS.map((action) => m.speedRate[action]);
   if (values.length !== ACTION_KEYS.length || !values.every((value) => typeof value === "number" && value > 0)) rateBroken += 1;
 }
-check(rateBroken === 0, "落表后每只怪 speedRate 都是完整 11 个动作且 >0（快照覆盖与默认表合成）", `坏 ${rateBroken} 条`);
+check(rateBroken === 0, "落表后每只怪 speedRate 都是完整 12 个动作且 >0（快照覆盖与默认表合成）", `坏 ${rateBroken} 条`);
 check(
   ACTION_KEYS.every((action) => typeof monsterDefaultSpeedRate[action] === "number" && monsterDefaultSpeedRate[action] > 0),
-  "monsterDefaultSpeedRate 覆盖全部 11 个动作",
+  "monsterDefaultSpeedRate 覆盖全部 12 个动作",
 );
 
 // #751：主动与否是**玩法决定**，归运营（管理端「怪物配置」勾选）。生成器只按体型 / tier

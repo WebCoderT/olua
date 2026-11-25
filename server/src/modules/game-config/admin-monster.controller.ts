@@ -72,7 +72,7 @@ export class AdminMonsterController {
       "- `presentation.detectRange`：检测范围（像素半径），主动怪在这个距离内发现玩家。\n" +
       "- `presentation.moveSpeed`：移动速度（像素/秒，出厂 80；玩家步行约 64 / 跑步约 128 px/s，追击速度落在两者之间——走着不跑会被追上、跑起来能脱身）。\n" +
       "- `presentation.speedRate`：动作速度覆盖（动作键 → 每帧秒数）。键只认 " +
-      "stand / walk / run / injured / die（怪物素材只有这五个动作有帧）；**传 `{}` = 清空回客户端默认，不传 = 不改**。\n\n" +
+      "stand / walk / attack / injured / die（怪物素材只有这五个动作有帧）；**传 `{}` = 清空回客户端默认，不传 = 不改**。\n\n" +
       "**生效时间三档**：基础数值即时；行为参数 ≤1 秒（实时进程 AI 缓存 TTL）；" +
       "**画面表现**（动作速度、外观）要客户端重进地图才会拿到新快照。\n\n" +
       "- `id` 不存在 → 404（`50019`）；传了 `presentation` 但这只怪没有资源表现行 → 404（`50038`，先去跑几何生成器）。\n" +

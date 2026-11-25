@@ -65,8 +65,8 @@ export interface MonsterPresentation {
    */
   contentSize: Size;
   /**
-   * 动作速度（每秒循环数）：快照带的逐怪覆盖与 configs/monster 的 monsterDefaultSpeedRate
-   * 在落运行时表时已合成完毕，消费方直接用
+   * 动作速度（值 = 每帧秒数，片段总时长 = 帧数 × 该值）：快照带的逐怪覆盖与
+   * configs 的 monsterDefaultSpeedRate 在落运行时表时已合成完毕，消费方直接用
    */
   speedRate: SpeedRate;
   /**

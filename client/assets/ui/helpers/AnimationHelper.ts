@@ -342,7 +342,7 @@ export default class AnimationHelper {
 
   /**
    * 取一个图集里某个动作的全部帧（帧名含「/动作名/」即命中，如 wing/100001/stand/40000.png）
-   * 图集本身含多套动作（attack/run/stand…），整条播放会串动作，因此按动作过滤；已按帧序号排序
+   * 图集本身含多套动作（attack/stand…，怪物 attack 段 #1247 起叫 attack），整条播放会串动作，因此按动作过滤；已按帧序号排序
    * @param atlasSrc 图集资源路径（resources 下 plist 的路径，不含扩展名）
    * @param action 动作名（图集帧路径里的一段，如 "stand"）
    */

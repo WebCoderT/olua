@@ -5828,7 +5828,7 @@ export type UpdateMonsterPresentation = {
    */
   moveSpeed?: number;
   /**
-   * 动作速度覆盖（动作键 → 每帧秒数）。**传 `{}` = 清空回客户端默认，不传 = 不改**；动作键只认 stand / walk / run / injured / die（其余动作没有帧）
+   * 动作速度覆盖（动作键 → 每帧秒数）。**传 `{}` = 清空回客户端默认，不传 = 不改**；动作键只认 stand / walk / attack / injured / die（其余动作没有帧）
    */
   speedRate?: Record<string, number>;
 };

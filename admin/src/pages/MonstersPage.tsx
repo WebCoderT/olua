@@ -40,8 +40,8 @@ function attributeSummary(item: Monster): string {
 const ACTION_SPEED_KEYS: { key: string; label: string }[] = [
   { key: "stand", label: "待机" },
   { key: "walk", label: "行走" },
-  // key 沿用素材导出管线的 run，但这段实际是**攻击**动画 —— 怪物不播放奔跑（#1244）
-  { key: "run", label: "攻击" },
+  // #1247 由 run 改名 attack：怪物没有奔跑，这段素材画面是攻击动作
+  { key: "attack", label: "攻击" },
   { key: "injured", label: "受击" },
   { key: "die", label: "死亡" },
 ];

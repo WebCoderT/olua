@@ -35,11 +35,12 @@ export const MONSTER_SPEED_RATE_MAX = 10;
 /**
  * 允许覆盖速度的动作键
  *
- * 与客户端 `monsterActionSpecs` 里有帧的五个动作逐字一致（stand / walk / run / injured / die）。
- * 其余动作（攻击 / 技能 / 测试动作）在怪物素材里没有帧、播放时回退待机 —— 填了也不会播，
+ * 与客户端 `monsterActionSpecs` 里有帧的五个动作逐字一致（stand / walk / attack / injured / die）。
+ * attack 是 #1247 由 run 改名的攻击段（怪物没有奔跑）；其余动作（attack_near 等角色攻击动作 /
+ * 技能 / 测试动作）在怪物素材里没有帧、播放时回退待机 —— 填了也不会播，
  * 所以写进来直接 400，而不是存进库装作生效。
  */
-export const MONSTER_ACTION_KEYS = ["stand", "walk", "run", "injured", "die"];
+export const MONSTER_ACTION_KEYS = ["stand", "walk", "attack", "injured", "die"];
 
 /** 闭区间属性段（区间值非负整数在这里挡；「min ≤ max」是跨字段约束，由 service 校验）。
  * **必须声明在使用它的 MonsterAttributesDto 之前** —— emitDecoratorMetadata 会在装饰器里

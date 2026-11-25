@@ -26,6 +26,12 @@ export enum ACTION {
   WALK = "walk",
   // 跑动
   RUN = "run",
+  /**
+   * 攻击（怪物素材段，#1247 由 run 改名）
+   * 怪物没有奔跑：原 run 段的画面就是攻击，目录/动作名现改为 attack 与画面一致；
+   * `RUN` 保留给角色（role 素材真有跑动段）
+   */
+  ATTACK = "attack",
   /** 攻击_近 */
   ATTACK_NEAR = "attack_near",
   /** 攻击1 */

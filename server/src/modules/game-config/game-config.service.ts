@@ -2014,7 +2014,7 @@ function assertMonsterAttributeRanges(attributes: MonsterAttributesDto): void {
  * 动作速度覆盖的键 / 值校验（#751）
  *
  * 两种错都只在「跑起来才看得见」，所以宁可写不进去：
- * - **键不在白名单**：怪物素材只有 stand / walk / run / injured / die 五个动作有帧，
+ * - **键不在白名单**：怪物素材只有 stand / walk / attack / injured / die 五个动作有帧，
  *   给 `attackNear` 配了速度也不会播（客户端回退待机）—— 存进去等于假装生效；
  * - **值越界**：0 会让帧不动、负数会让 `AnimationState` 行为未定义。
  *
