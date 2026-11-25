@@ -43,8 +43,7 @@ const roleSpriteFrameLength: AnimationLength = {
  * - stand: 每方向 4 帧，方向间隔 10（0-79 段，如 0-3 / 10-13 / ...）
  * - walk / attack: 每方向 6 帧，方向间隔 10（80-155 / 160-235 段）
  *   ⚠️ 攻击段原目录名叫 run（#1244 确认画面是攻击、#1247 起目录/动作名已改 attack）：
- *   怪物没有奔跑 —— 移动只播 walk、攻击走事件驱动（attack_near / 技能 action）；
- *   目前还没有配置把 attack 段用起来（技能 action 可配 "attack" 接入）
+ *   怪物没有奔跑 —— 移动只播 walk、攻击走事件驱动（#1249 起普攻命中播 attack、技能 action 也可配 "attack"）
  * - injured: 每方向 2 帧，方向间隔 2（240-255 段连续排布）
  * - die: 每方向 10 帧，方向间隔 10（260-339 段）
  * 素材包没有 attack_near 等（attack_near 与 attack 段是两回事：前者角色专用攻击动作，

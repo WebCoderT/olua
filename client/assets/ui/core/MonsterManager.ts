@@ -282,11 +282,17 @@ export default class MonsterManager {
     return true;
   }
 
-  /** 补播一次普攻动作（服务端模式下由命中事件驱动） */
+  /**
+   * 补播一次普攻动作（服务端模式下由命中事件驱动）
+   *
+   * #1249：怪物素材包没有 attack_near（那是角色专用攻击动作，#1247 前误写在这里），
+   * 播 ATTACK_NEAR 会因找不到片段在 playAction 静默回退成待机 —— 普攻动画永远出不来。
+   * 改播怪物专用攻击段 ACTION.ATTACK（#1247 由 run 改名的那段），与技能施法共用同一画面。
+   */
   private static playServerAttack(instanceId: string) {
     const node = this.instanceIndex.get(instanceId);
     if (!node || !isValid(node)) return;
-    MonsterAI.playServerAction(node, ACTION.ATTACK_NEAR);
+    MonsterAI.playServerAction(node, ACTION.ATTACK);
   }
 
   /**
