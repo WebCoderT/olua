@@ -127,6 +127,10 @@ export function entryErrors(drafts: EntryDraft[]): string[] {
  *
  * 「批量添加」走多选：一次勾十几种材料比开十几次弹窗快得多。装备的变体不在这里逐件点名 ——
  * 掉出来是哪一档由变体表决定，候选里没有 `xxx_p2s1` 这种行。
+ *
+ * 「清空」（#1265）：一键删掉全部条目行，推倒重配不用逐行点删（删行按钮在只剩一行时还禁删）。
+ * 只清编辑器草稿，**保存后才落库**；空条目会被两处弹窗的提交校验拦下 —— 每怪掉落想真正
+ * 清空走兜底，走弹窗里「清空（走兜底）」那个模式，不在这里。
  */
 export function EntriesEditor({ drafts, onChange }: { drafts: EntryDraft[]; onChange: (next: EntryDraft[]) => void }) {
   // 2200 多条的清单由 catalog 缓存；掉落口径的过滤（去变体）也只算一次
@@ -144,6 +148,12 @@ export function EntriesEditor({ drafts, onChange }: { drafts: EntryDraft[]; onCh
     const existing = new Set(drafts.map((draft) => draft.goodId.trim()).filter(Boolean));
     const rows = ids.filter((id) => !existing.has(id)).map((id) => ({ ...emptyEntryDraft(), goodId: id }));
     if (rows.length > 0) onChange([...drafts, ...rows]);
+  };
+
+  /** 一键清空全部条目行（#1265）：只清草稿，保存才落库；误点有确认挡一道 */
+  const clearAll = () => {
+    if (!window.confirm(`确定清空全部 ${drafts.length} 条条目？（保存后才生效）`)) return;
+    onChange([]);
   };
 
   // 权重合计：算「占比」用（0 权重的条目不会进 total 之外的任何分母）
@@ -164,6 +174,15 @@ export function EntriesEditor({ drafts, onChange }: { drafts: EntryDraft[]; onCh
           </Button>
           <Button variant="outline" className="px-2.5 py-1 text-xs" onClick={add}>
             加一条
+          </Button>
+          {/* 与 DropConfigPage 行内「删除」同一套 ember 用色：清空是破坏性动作，颜色上先打招呼 */}
+          <Button
+            variant="outline"
+            className="px-2.5 py-1 text-xs text-ember-hi"
+            disabled={drafts.length === 0}
+            onClick={clearAll}
+          >
+            清空
           </Button>
         </div>
       </div>
