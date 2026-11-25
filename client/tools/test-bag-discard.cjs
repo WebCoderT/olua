@@ -221,30 +221,33 @@ check(/this\.clearDiscardPending\(\);\s*void StorageManager\.discardBagGood\(row
 check(/setTimeout\(\(\) => this\.clearDiscardPending\(\), bagDialogLayout\.discardButton\.confirmTimeout\)/.test(dialogSource), "待确认状态带超时自动放弃");
 
 check(/this\.exitDiscardMode\(\);\s*(\/\/[^\n]*\n\s*)*void StorageManager\.tidyBag\(\)/.test(dialogSource), "点「一键整理」会先退出丢弃模式");
-check(/this\.exitDiscardMode\(\);\s*this\.onRecycleClick\(\)/.test(dialogSource), "点「一键回收」会先退出丢弃模式");
+// #1278 起底部是「自动回收 / 自动使用」开关弹窗（一键回收按钮移入弹窗内），底部不再直接回收
+check(/this\.exitDiscardMode\(\);\s*this\.autoRecycleDialog\.open\(\)/.test(dialogSource), "点「自动回收」会先退出丢弃模式再开弹窗");
+check(/this\.exitDiscardMode\(\);\s*this\.autoUseDialog\.open\(\)/.test(dialogSource), "点「自动使用」会先退出丢弃模式再开弹窗");
 // 生命周期收进 BaseDialog（dialog-kit）：close() 先走 onClose 钩子再销毁 —— 断言钩子里的清理顺序
-check(/onClose\(\) \{\s*this\.cancelRecycleConfirm\(\);[\s\S]{0,120}this\.clearDiscardPending\(\);/.test(dialogSource), "关弹窗会清掉丢弃待确认与定时器");
+check(/onClose\(\) \{[\s\S]{0,80}this\.clearDiscardPending\(\);/.test(dialogSource), "关弹窗会清掉丢弃待确认与定时器");
 check(/setButtonText\(button: Node \| null, text: string\) \{\s*if \(!button \|\| !isValid\(button\)\) return;/.test(dialogSource) && /this\.discardButton = null;/.test(dialogSource), "弹窗被外部销毁时残留引用不误操作（写文案前验 isValid，关闭时清引用）");
 
-// 布局：三按钮横向错开、丢弃按钮配置齐备
+// 布局：四按钮横向错开、丢弃按钮配置齐备（#1278 三键改四键）
 {
   const start = layoutSource.indexOf("export const bagDialogLayout");
   const end = layoutSource.indexOf("//#region 技能列表弹窗");
   const block = layoutSource.slice(start, end);
   check(start > 0 && end > start, "能定位 bagDialogLayout 配置块");
   check(/discardButton:\s*\{[\s\S]*name: "bag_discard_button"[\s\S]*confirmTimeout: 3000/.test(block), "discardButton 配置齐备（名称/位置/超时）");
-  // 只断结构不断数值：三个按钮的 x 互不相同且递增，且 y **齐平**（一排并排）；
+  // 只断结构不断数值：四个按钮的 x 互不相同且递增，且 y **齐平**（一排并排）；
   // 具体 y 由稿的松紧决定，写死会让「按稿调间距」变成改测试
   const posOf = (key) => {
     const re = new RegExp(key + ":\\s*\\{[\\s\\S]{0,240}?position: new Vec2\\((-?\\d+), (-?\\d+)\\)");
     const m = re.exec(block);
     return m ? { x: Number(m[1]), y: Number(m[2]) } : null;
   };
-  const buttons = ["tidyButton", "recycleButton", "discardButton"].map(posOf);
-  check(buttons.every(Boolean), "整理 / 回收 / 丢弃三个按钮都配了位置");
-  check(new Set(buttons.map((b) => b.x)).size === 3, `底部三个按钮横向错开（x = ${buttons.map((b) => b.x).join(" / ")}）`);
-  check(buttons[0].x < buttons[1].x && buttons[1].x < buttons[2].x, "三按钮按 整理 → 回收 → 丢弃 从左到右排列");
-  check(new Set(buttons.map((b) => b.y)).size === 1, "三按钮在同一行（y 齐平）");
+  const buttonKeys = ["tidyButton", "autoRecycleButton", "autoUseButton", "discardButton"];
+  const buttons = buttonKeys.map(posOf);
+  check(buttons.every(Boolean), "整理 / 自动回收 / 自动使用 / 丢弃四个按钮都配了位置");
+  check(new Set(buttons.map((b) => b.x)).size === 4, `底部四个按钮横向错开（x = ${buttons.map((b) => b.x).join(" / ")}）`);
+  check(buttons.every((b, i) => i === 0 || buttons[i - 1].x < b.x), "四按钮按 整理 → 自动回收 → 自动使用 → 丢弃 从左到右排列");
+  check(new Set(buttons.map((b) => b.y)).size === 1, "四按钮在同一行（y 齐平）");
 }
 
 // 文案：全部登记在 configs/texts（组件里不写裸中文）

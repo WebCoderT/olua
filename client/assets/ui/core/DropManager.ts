@@ -23,6 +23,7 @@ import GameUiHelper from "../helpers/GameUiHelper";
 import LayerManager from "./LayerManager";
 import CursorManager from "./CursorManager";
 import StorageManager from "./StorageManager";
+import AutoBagService from "./storage/auto-bag-service";
 import PartyStore from "./PartyStore";
 import GuideStore from "./GuideStore";
 import SoundManager from "./SoundManager";
@@ -382,10 +383,17 @@ export default class DropManager {
    */
   private static handlePickRejection(drop: DropItem | undefined, error: PickError): void {
     switch (error.code) {
-      case "bag_full":
+      case "bag_full": {
         // 背包满沿用既有节流（fullTipInterval）：它同时压制重试，不只是提示
         this.notifyBagFull();
+        // 自动回收（#1278）：勾了清单就回收腾格子，然后立刻重拾这件 ——
+        // 显式重发走 requestPick，不受上面那个「防每帧刷屏」节流的压制；
+        // 没勾任何东西时 onBagFullRejected 直接返回，行为与从前一致
+        void AutoBagService.onBagFullRejected(() => {
+          if (drop && this.items.has(drop.dropId)) this.requestPick(drop);
+        });
         return;
+      }
       case "protected": {
         const owner = error.ownerName || drop?.ownerName || "";
         const seconds = this.secondsOfWait(error.waitMs, drop);

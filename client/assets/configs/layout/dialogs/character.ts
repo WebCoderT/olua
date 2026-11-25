@@ -35,6 +35,14 @@ export const roleInfoDialogLayout = {
   titleButton: { name: "role_title_button", position: new Vec2(285, -60), text: "称 号" },
   soulButton: { name: "role_soul_button", position: new Vec2(285, -100), text: "战 魂" },
   /**
+   * 「自动穿戴」开关行（#1278）：衣服槽正下方
+   *
+   * 底部三格（衣服 / 其他1 / 其他2）在 equipmentSlotLayout.groups.bottom（-126, -150）横排，
+   * 槽 50 高 → 组底 -175；开关行高 20，中心 -192，距页脚分隔线（-236）留 44。
+   * 行宽取组宽 170（与三格对齐）。勾上后自动换上背包里更好的装备（AutoBagService 触发）。
+   */
+  autoWearRow: { name: "auto_wear_row", position: new Vec2(-126, -192), width: 170, height: 20, fontSize: T.fontSize.f11, hintWidth: 240, hintColor: T.text[4] },
+  /**
    * 页脚（稿 `.panel-foot`）：顶部 1px 分隔线 + 两端各一行小字
    * 几何由面板尺寸算（见 dialogFootLayout），文案进 configs/texts
    */

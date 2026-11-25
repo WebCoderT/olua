@@ -40,22 +40,21 @@ export const bagDialogLayout = {
    */
   foot: dialogFootLayout(new Size(600, 540), 250),
   /**
-   * 底部三个操作按钮（子件坐标以弹窗中心为原点；稿 05-bag 实测：118×36、两两间距 14、中心 ±132、
-   * 按钮条中心距面板顶 485 → y = -215）—— 与稿一致，不再用 123 宽的中号档
+   * 底部四个操作按钮（#1278：三键改四键 —— 「一键回收」移入自动回收弹窗，
+   * 原位改「自动回收」开关弹窗，新增「自动使用」开关弹窗；子件坐标以弹窗中心为原点）
+   *
+   * 118×36 键四枚 + 间距 14：中心 ±198 / ±66（四键总宽 514，面板 600 内边距 20 各留余量）；
+   * 按钮条中心距面板顶 485 → y = -215，与稿三键版一致
    */
   buttonSize: new Size(118, 36),
-  tidyButton: { name: "bag_tidy_button", position: new Vec2(-132, -215) },
+  tidyButton: { name: "bag_tidy_button", position: new Vec2(-198, -215) },
   /**
-   * 「一键回收」：把背包里的装备整格换成绑定元宝（身上穿着的不算）
-   * 回收不可撤销，所以按钮是**两步确认**：第一次点击先看数（件数 + 可得绑定元宝）并变成「确认回收」，
-   * 再点一次才真的回收；超时或关掉弹窗自动复位（不会误回收，也不需要额外的确认弹窗）
+   * 「自动回收」：开关自动回收弹窗（勾选清单 + 弹窗内一键回收，见 AutoRecycleDialog）
+   * 背包满时的自动回收只收勾选的东西，未勾选的永远不会被自动回收
    */
-  recycleButton: {
-    name: "bag_recycle_button",
-    position: new Vec2(0, -215),
-    /** 待确认状态保持时间（毫秒），到点自动变回「一键回收」 */
-    confirmTimeout: 3000,
-  },
+  autoRecycleButton: { name: "bag_auto_recycle_button", position: new Vec2(-66, -215) },
+  /** 「自动使用」：开关自动使用弹窗（勾选后背包里有就自动用，见 AutoUseDialog） */
+  autoUseButton: { name: "bag_auto_use_button", position: new Vec2(66, -215) },
   /**
    * 「丢弃」：**开关式**按钮 —— 点一下进入丢弃模式，再点退出（按钮文案随之在「丢弃 / 退出丢弃」间切换）
    *
@@ -66,10 +65,58 @@ export const bagDialogLayout = {
    */
   discardButton: {
     name: "bag_discard_button",
-    position: new Vec2(132, -215),
+    position: new Vec2(198, -215),
     /** 待确认状态保持时间（毫秒），到点自动放弃（与回收、删除角色同一套口径） */
     confirmTimeout: 3000,
   },
+};
+
+//#endregion
+
+//#region 自动回收弹窗
+
+/**
+ * 自动回收弹窗布局（组件见 ui/components/dialogs/AutoRecycleDialog；#1278）
+ *
+ * 面板走标准弹窗框（createDialog），420×480：说明行 → 勾选清单（滚动）→ 一键回收按钮。
+ * 「全部装备」是清单第一条（整类开关，不进滚动区 —— 它是安全边界，得一直看得见）；
+ * 可卖非装备物品在滚动区逐项勾选（回收价 > 0 的才列，与服务端 sellPriceOf 同源）。
+ */
+export const autoRecycleDialogLayout = {
+  name: "auto_recycle_dialog",
+  title: "自动回收",
+  eyebrow: "自动 · 背包",
+  size: new Size(420, 480),
+  /** 顶部说明行（勾选语义一句话） */
+  hint: { y: 196, fontSize: T.fontSize.f11, color: T.text[4], width: 380, height: 16 },
+  /** 「全部装备」整类开关行（滚动区外，常驻可见） */
+  allEquipmentRow: { y: 168, height: 24, fontSize: T.fontSize.f12, color: T.text[1], name: "auto_recycle_all_row" },
+  /** 可卖物品滚动清单（#1104 坑：滚动区四边留 3px，防首行贴上裁剪线） */
+  list: { name: "auto_recycle_list", position: new Vec2(0, 8), size: new Size(380, 240), padding: 3, rowHeight: 24, rowSpacing: 3, fontSize: T.fontSize.f12, color: T.text[1], nameWidth: 240 },
+  /** 清单空态（配置里没有可卖的非装备物品时） */
+  emptyTip: { position: new Vec2(0, 8), size: new Size(300, 20), fontSize: T.fontSize.f12, color: T.text[3] },
+  /** 「一键回收」按钮：按当前勾选清单立即执行（两步确认保留） */
+  recycleButton: { name: "auto_recycle_now_button", position: new Vec2(0, -172), confirmTimeout: 3000 },
+};
+
+//#endregion
+
+//#region 自动使用弹窗
+
+/**
+ * 自动使用弹窗布局（组件见 ui/components/dialogs/AutoUseDialog；#1278）
+ *
+ * 420×480：说明行 → 可使用物品勾选清单（滚动；药品 / 货币道具 / 升级卷轴逐项，
+ * 装备不进清单 —— 自动穿戴是角色信息弹窗里的独立开关）。
+ */
+export const autoUseDialogLayout = {
+  name: "auto_use_dialog",
+  title: "自动使用",
+  eyebrow: "自动 · 背包",
+  size: new Size(420, 480),
+  hint: { y: 196, fontSize: T.fontSize.f11, color: T.text[4], width: 380, height: 16 },
+  list: { name: "auto_use_list", position: new Vec2(0, 28), size: new Size(380, 330), padding: 3, rowHeight: 24, rowSpacing: 3, fontSize: T.fontSize.f12, color: T.text[1], nameWidth: 240 },
+  emptyTip: { position: new Vec2(0, 28), size: new Size(300, 20), fontSize: T.fontSize.f12, color: T.text[3] },
 };
 
 //#endregion

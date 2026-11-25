@@ -3,6 +3,7 @@ import { Role } from "../../entities/Role";
 import type { Node } from "cc";
 import type { SkillId } from "../../types/skill";
 import type { StatusBadge } from "../../types/status";
+import AutoBagService from "./storage/auto-bag-service";
 
 interface RoleInfoBarView {
   updateRole: (role: Role) => void;
@@ -128,6 +129,10 @@ export default class RoleUIManager {
   static refreshBag() {
     this.bagDialog?.refresh();
     this.roleInfoDialog?.refreshHints();
+    // 自动使用 / 自动穿戴的统一触发点（#1278）：拾取/购买/邮件/整理/回收……
+    // 所有背包变化都汇聚到 refreshBag，自动化挂在这里就一处管全部；
+    // fire-and-forget：自动化内部有自己的重入闸，还会改背包再走回这里
+    AutoBagService.onBagChanged();
   }
 
   /** 设置怪物信息面板创建器（由组合根注入，选中怪物时才真正创建面板） */

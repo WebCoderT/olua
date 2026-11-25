@@ -663,3 +663,87 @@ export function summarizeBagRecycle(bag: BagCell[][]): BagRecycleSettlement {
 }
 
 //#endregion
+
+//#region 自动回收 / 自动使用（#1278：勾选清单由玩家自选，判定纯函数与单测共用）
+
+/**
+ * 自动回收的勾选清单（#1278）：玩家在「自动回收」弹窗里勾了哪些东西
+ *
+ * · `allEquipment`：「全部装备」整类一条 —— 装备变体 id 有几百个（基础件 × 前后缀），
+ *   逐件勾不现实，回收语义又是「整类换钱」，所以装备只给一个总开关；
+ * · `ids`：非装备物品（药品 / 材料 / 货币 / 卷轴中回收价 > 0 的）逐项勾选的 id 集。
+ *
+ * 未勾选的物品**永远不会被自动回收** —— 这是这条功能的安全边界，服务端仍会按价签复核。
+ */
+export interface BagRecycleSelection {
+  /** 「全部装备」整类开关 */
+  allEquipment: boolean;
+  /** 勾选的非装备物品 id 集（只影响回收判定；不含装备变体 id） */
+  ids: ReadonlySet<string>;
+}
+
+/**
+ * 按勾选清单收集背包里的回收条目（**纯函数**，自动回收与弹窗内一键回收共用）
+ *
+ * · 装备格：`allEquipment` 开着才收（装备本不可叠加，count 恒 1，仍按 count 算防存档异常）；
+ * · 非装备格：id 在 `ids` 里才收；
+ * · 解析不出配置的 id（已下架）：不认识它，就不替它决定，不收。
+ *
+ * 同 id 合并件数（服务端 `sellGoods` 本来就合并，这里对齐口径少报几条）。
+ */
+export function collectBagRecycleEntries(bag: BagCell[][], selection: BagRecycleSelection): Array<{ goodId: string; count: number }> {
+  const merged = new Map<string, number>();
+  bag.forEach((row) =>
+    row.forEach((cell) => {
+      if (!cell) return;
+      const good = getItem(cell.id);
+      if (!good) return; // 解析不出配置的 id：不动
+      if (isEquipment(good)) {
+        if (!selection.allEquipment) return;
+      } else if (!selection.ids.has(cell.id)) {
+        return;
+      }
+      merged.set(cell.id, (merged.get(cell.id) ?? 0) + Math.max(1, cell.count));
+    }),
+  );
+  return Array.from(merged, ([goodId, count]) => ({ goodId, count }));
+}
+
+/**
+ * 按勾选清单的回收预览（件数 + 合计价）：复用同一条收集，价签口径与整包回收一致
+ * （装备 = 变体 `recyclePrice`，非装备 = `sellPirce`，服务端 `sellPriceOf` 读同一份快照）。
+ */
+export function summarizeBagRecycleBySelection(bag: BagCell[][], selection: BagRecycleSelection): BagRecycleSettlement {
+  let count = 0;
+  let totalPrice = 0;
+  for (const entry of collectBagRecycleEntries(bag, selection)) {
+    const good = getItem(entry.goodId);
+    if (!good) continue;
+    const unit = isEquipment(good) ? getRecyclePrice(good) : Math.max(0, good.sellPirce);
+    count += entry.count;
+    totalPrice += unit * entry.count;
+  }
+  return { count, totalPrice };
+}
+
+/**
+ * 背包里勾选了的、**可使用**的物品格（**纯函数**，自动使用与单测共用）
+ *
+ * 「可使用」= `useGood` 会分发的四类（装备穿戴 / 药品 / 货币 / 卷轴）；
+ * 装备不走自动使用（自动穿戴是角色信息弹窗里的独立开关，不在勾选清单里），
+ * 所以这里只认药品 / 货币 / 卷轴三类；材料「暂未开放使用」，天然不进候选。
+ */
+export function findUsableCells(bag: BagCell[][], ids: ReadonlySet<string>): Array<{ row: number; col: number; id: string }> {
+  const hits: Array<{ row: number; col: number; id: string }> = [];
+  bag.forEach((line, row) =>
+    line.forEach((cell, col) => {
+      if (!cell || !ids.has(cell.id)) return;
+      const good = getItem(cell.id);
+      if (!good || isEquipment(good)) return; // 装备不走自动使用（勾选清单本就不含，防御性再挡一层）
+      hits.push({ row, col, id: cell.id });
+    }),
+  );
+  return hits;
+}
+
+//#endregion

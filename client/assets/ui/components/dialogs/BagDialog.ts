@@ -6,6 +6,8 @@ import LayerManager from "../../core/LayerManager";
 import BagGridView, { BagCellAction } from "../panel/BagGridView";
 import BaseDialog from "./dialog-kit";
 import ConfirmDialog from "./ConfirmDialog";
+import AutoRecycleDialog from "./AutoRecycleDialog";
+import AutoUseDialog from "./AutoUseDialog";
 import { bagDialogLayout, buttonTone, uiSize } from "../../../configs/hudLayout";
 import { getText } from "../../../configs/texts";
 import { BagCellPos } from "../../../types/good";
@@ -18,7 +20,9 @@ import { GUIDE_EVENT } from "../../../types/guide";
  * - 左键（触屏点击）→ 使用物品：StorageManager.useGood 按物品大类分发（装备穿戴 / 药品服用 / …）
  * - 右键 → 穿戴装备：StorageManager.equipFromBag（非装备会给出提示）
  * - 「一键整理」→ StorageManager.tidyBag（合并同类可叠加物 + 按等级/部位重排，规则在数据层与配置表）
- * - 「一键回收」→ StorageManager.recycleBagEquipments（背包里的装备整格换成绑定元宝，**两步确认**）
+ * - 「自动回收」→ 开关 AutoRecycleDialog（勾选清单 + 弹窗内一键回收；背包满时的自动回收也在那里配置，
+ *   #1278 起底部不再直接放一键回收按钮）
+ * - 「自动使用」→ 开关 AutoUseDialog（勾选后背包里有就自动用，#1278）
  * - 「丢弃」按钮 → 开关丢弃模式，开启后点格子里的物品即丢弃该格（**两步确认**，不可恢复）
  * - **把物品拖到弹窗外面松手** → 弹全屏确认框（确定 = 销毁该格、取消 = 物品回原位，见 onDropOutside）
  * - 按住物品拖到别的格子 → StorageManager.moveBagGood（空格=移动 / 同种可叠加=合并 / 其余=交换；
@@ -31,12 +35,6 @@ export default class BagDialog extends BaseDialog {
   private bagGrid: BagGridView | null = null;
   /** 计数行左边的「已用 / 总数 格」（每次刷新背包都要改字，所以留引用） */
   private countLabel: Label | null = null;
-  /** 回收按钮（两步确认要改它的文案，所以留引用） */
-  private recycleButton: Node | null = null;
-  /** 回收按钮是否处于「待确认」状态（第二次点击才真的回收） */
-  private recyclePending = false;
-  /** 回收待确认的超时定时器（到点自动复位，见 onRecycleClick） */
-  private recycleConfirmTimer: ReturnType<typeof setTimeout> | null = null;
   /** 丢弃按钮（开关式：进入/退出丢弃模式时改它的文案） */
   private discardButton: Node | null = null;
   /** 是否处于丢弃模式（开启后点击格子 = 丢弃，不再使用/穿戴） */
@@ -47,6 +45,10 @@ export default class BagDialog extends BaseDialog {
   private discardConfirmTimer: ReturnType<typeof setTimeout> | null = null;
   /** 拖出弹窗后弹出的销毁确认框（全屏模态，挂 UI 层顶层；同一时刻最多一个） */
   private confirmDialog: ConfirmDialog | null = null;
+  /** 自动回收弹窗（#1278；持有实例，「再点一次按钮 = 关闭」靠它） */
+  private autoRecycleDialog = new AutoRecycleDialog();
+  /** 自动使用弹窗（#1278；同上） */
+  private autoUseDialog = new AutoUseDialog();
 
   /** 打开/关闭弹窗 */
   open() {
@@ -59,7 +61,7 @@ export default class BagDialog extends BaseDialog {
   /** 组装弹窗框与背包格子（通用零件拼装；骨架由 BaseDialog 建） */
   private build(dialog: Node) {
     // 底部「一键整理」：合并同类可叠加物并重排（搬运与提示都在数据层，这里只上报点击）
-    // 底部三键按 05 稿的色调分档：整理 = ghost（次要）、回收 = 金键（次要主动作）、丢弃 = 危险（暗朱）
+    // 底部四键按 05 稿的色调分档：整理 = ghost（次要）、两个自动 = 金键（次要主动作）、丢弃 = 危险（暗朱）
     const tidyButton = GameUiHelper.createToneButton(
       bagDialogLayout.tidyButton.name,
       getText("label_bag_tidy"),
@@ -82,25 +84,42 @@ export default class BagDialog extends BaseDialog {
       this,
     );
     dialog.addChild(tidyButton);
-    // 底部「一键回收」：回收不可撤销 → 两步确认（见 onRecycleClick）
-    const recycleButton = GameUiHelper.createToneButton(
-      bagDialogLayout.recycleButton.name,
-      getText("label_bag_recycle"),
-      bagDialogLayout.recycleButton.position,
+    // 底部「自动回收」：开关自动回收弹窗（勾选清单 + 弹窗内一键回收，见 AutoRecycleDialog）
+    const autoRecycleButton = GameUiHelper.createToneButton(
+      bagDialogLayout.autoRecycleButton.name,
+      getText("label_bag_auto_recycle"),
+      bagDialogLayout.autoRecycleButton.position,
       bagDialogLayout.buttonSize,
       uiSize.middleButtonFontSize,
       buttonTone.gold,
     );
-    recycleButton.on(
+    autoRecycleButton.on(
       Node.EventType.TOUCH_END,
       () => {
         this.exitDiscardMode();
-        this.onRecycleClick();
+        this.autoRecycleDialog.open();
       },
       this,
     );
-    dialog.addChild(recycleButton);
-    this.recycleButton = recycleButton;
+    dialog.addChild(autoRecycleButton);
+    // 底部「自动使用」：开关自动使用弹窗（见 AutoUseDialog）
+    const autoUseButton = GameUiHelper.createToneButton(
+      bagDialogLayout.autoUseButton.name,
+      getText("label_bag_auto_use"),
+      bagDialogLayout.autoUseButton.position,
+      bagDialogLayout.buttonSize,
+      uiSize.middleButtonFontSize,
+      buttonTone.gold,
+    );
+    autoUseButton.on(
+      Node.EventType.TOUCH_END,
+      () => {
+        this.exitDiscardMode();
+        this.autoUseDialog.open();
+      },
+      this,
+    );
+    dialog.addChild(autoUseButton);
     // 底部「丢弃」：开关式（开启后点格子即丢弃，不可恢复 → 两步确认见 onDiscardCell）
     const discardButton = GameUiHelper.createToneButton(
       bagDialogLayout.discardButton.name,
@@ -132,9 +151,8 @@ export default class BagDialog extends BaseDialog {
   /** 刷新背包（物品变更后调用，弹窗未打开时忽略） */
   refresh() {
     if (!this.dialog || !isValid(this.dialog) || !this.dialog.active) return;
-    // 背包内容一变，之前「待确认」的两份状态就都不可信了：回收报出的件数/绑定元宝、要丢弃的那一格
-    // （拖动物品可能把目标格的东西换走或挪走），一律先复位 —— 宁可让玩家重点一次，也不误伤
-    this.cancelRecycleConfirm();
+    // 背包内容一变，之前「待确认」的丢弃状态就不可信了：要丢弃的那一格
+    // （拖动物品可能把目标格的东西换走或挪走），先复位 —— 宁可让玩家重点一次，也不误伤
     this.clearDiscardPending();
     // 拖出弹窗、正等销毁确认的那件物品同理：格子即将重建，先放开扣留（恢复不透明度，之后节点即销毁）
     this.bagGrid?.releaseDiscardHold();
@@ -255,7 +273,7 @@ export default class BagDialog extends BaseDialog {
    * 丢弃不可恢复，所以不让一次点击就生效：
    * 1. 第一次点击：不改数据，只把物品名与整格数量报给玩家，并记住这一格；
    * 2. 3 秒内再点**同一格**：真的丢弃（数据层置空 → 落盘 → 刷新网格）；
-   * 3. 超时、点了别的格子、退出丢弃模式、点整理/回收或关弹窗：放弃待确认 ——
+   * 3. 超时、点了别的格子、退出丢弃模式、点整理/自动键或关弹窗：放弃待确认 ——
    *    其中「点别的格子」直接换成新目标，免得玩家想改丢另一件时还得先等它超时
    */
   private onDiscardCell(row: number, col: number) {
@@ -339,55 +357,6 @@ export default class BagDialog extends BaseDialog {
 
   //#endregion
 
-  //#region 回收
-
-  /**
-   * 「一键回收」点击：两步确认
-   *
-   * 回收把背包里的装备整格换成绑定元宝、**不可撤销**，所以不让一次点击就生效：
-   * 1. 第一次点击：不改数据，只把件数与可得绑定元宝报给玩家（浮动提示），按钮文案变「确认回收」；
-   * 2. 期间再点一次：真的回收（入账与提示都在数据层）；
-   * 3. 超时（confirmTimeout）或关掉弹窗：按钮文案复位 —— 下次点击重新从第 1 步开始。
-   *
-   * 分两步而不是弹一个确认框：不新增节点、不新增鼠标监听（按钮走工厂已登记防穿透），
-   * 也避免「确认框盖在弹窗上又要处理层级与穿透」这类输入坑（见 utils/input 的按压归属）
-   */
-  private onRecycleClick() {
-    if (!this.recyclePending) {
-      const summary = StorageManager.getBagRecycleSummary();
-      if (!summary.count) {
-        GameUiHelper.createTip("bag_recycle_empty_tip");
-        return;
-      }
-      this.recyclePending = true;
-      this.setButtonText(this.recycleButton, getText("label_bag_recycle_confirm"));
-      GameUiHelper.createTip("bag_recycle_confirm_tip", { count: summary.count, price: summary.totalPrice });
-      this.clearRecycleConfirmTimer();
-      // 到点自动复位：免得「确认回收」一直挂着，被玩家无意再点
-      this.recycleConfirmTimer = setTimeout(() => this.cancelRecycleConfirm(), bagDialogLayout.recycleButton.confirmTimeout);
-      return;
-    }
-    // 确认回收：先复位按钮（回收会刷新背包网格，但按钮不在网格里，只是保持状态干净），再真的搬
-    this.cancelRecycleConfirm();
-    void StorageManager.recycleBagEquipments();
-  }
-
-  /** 退出回收的待确认状态：清定时器、复位文案（弹窗已销毁时只清状态，不碰节点） */
-  private cancelRecycleConfirm() {
-    this.clearRecycleConfirmTimer();
-    if (!this.recyclePending) return;
-    this.recyclePending = false;
-    this.setButtonText(this.recycleButton, getText("label_bag_recycle"));
-  }
-
-  private clearRecycleConfirmTimer() {
-    if (this.recycleConfirmTimer === null) return;
-    clearTimeout(this.recycleConfirmTimer);
-    this.recycleConfirmTimer = null;
-  }
-
-  //#endregion
-
   /** 改按钮文案（按钮工厂把文字放在 `<按钮名>_label` 子节点上；按钮已销毁时静默跳过） */
   private setButtonText(button: Node | null, text: string) {
     if (!button || !isValid(button)) return;
@@ -397,7 +366,6 @@ export default class BagDialog extends BaseDialog {
 
   /** 关闭弹窗（销毁与清弹窗引用在 BaseDialog.close） */
   protected onClose() {
-    this.cancelRecycleConfirm();
     // 退出丢弃模式：先清待确认与定时器；节点即将销毁，不必再改按钮文案
     this.clearDiscardPending();
     this.discardMode = false;
@@ -405,7 +373,9 @@ export default class BagDialog extends BaseDialog {
     this.closeDiscardConfirm();
     // 拖动中关弹窗：幽灵与落点高亮挂在弹窗下会随弹窗销毁，这里先让网格把拖动状态收干净
     this.bagGrid?.cancelDrag();
-    this.recycleButton = null;
+    // 两个自动弹窗一起收（它们挂在 UI 层，不随本弹窗销毁）
+    this.autoRecycleDialog.close();
+    this.autoUseDialog.close();
     this.discardButton = null;
     this.bagGrid = null;
   }
