@@ -98,7 +98,8 @@ export default class MonsterAI {
     if (!positions) return; // 还没收到服务端位置：原地站着等第一帧
     const animate = this.getAnimate(node);
     if (!animate) return;
-    const sampled = positions.sample(ServerClock.renderTime(networkConfig.realtime.interpolation.renderDelay));
+    const renderTime = ServerClock.renderTime(networkConfig.realtime.interpolation.renderDelay);
+    const sampled = positions.sample(renderTime);
     if (!sampled) return;
     const state = this.getState(node);
     const position = node.getWorldPosition();
@@ -106,6 +107,11 @@ export default class MonsterAI {
     const offsetY = sampled.y - position.y;
     if (offsetX !== 0 || offsetY !== 0) node.setWorldPosition(sampled.x, sampled.y, position.z);
     if (sampled.moving) {
+      // #1261：快照回放滞后 renderDelay（120ms），hit 事件实时到达起播攻击后，采样点还落在
+      // **出手之前**的移动尾巴上 —— 那是事件之前的历史，无权打断事件之后起播的动作：
+      // 只演位移，不切走路、不清锁。采样时刻过了 actionAt 之后的服务端移动才是真移动，
+      // 照常打断（服务端权威不回归：出手后被服务端带着走就老老实实切走路）。
+      if (state.actionAt > 0 && renderTime < state.actionAt) return;
       // 服务端说在移动：动作锁立即失效（服务端出手前必先站定，移动中的怪不可能在出招），
       // 否则走路段起播前还得白等一段锁时间
       state.locked = false;
@@ -132,18 +138,22 @@ export default class MonsterAI {
    * 普攻命中 → attack、释放技能 → attack（#1249/#1251：怪物攻击不区分远近动画，统一播 attack 段；技能配置的 action 是角色素材键，怪物素材包全无）。
    * 半销毁节点、已死亡的怪、还没装载动画的怪一律静默跳过 —— 这是最常见的崩点。
    *
+   * @param eventAt 帧的服务端时刻（#1261）：快照回放滞后 renderDelay，出手前的移动尾巴
+   * 还在被回放，采样时刻早于它就不得打断刚起播的动作（见 stepServer 移动分支）。缺省 0 = 无保护。
+   *
    * #1240 动作锁：非循环动作（普攻/施法这类一次性演出）起播后上锁，
    * 锁到「片段时长 + actionFinishTimeoutMarginSeconds」——期间 stepServer 的站定分支
    * 不许把它覆盖回待机（角色侧 RoleDisplay.startAttack 同款守点，超时兜底防 FINISHED 丢失）。
    * 片段不存在（素材缺，如怪物包没有攻击帧）时 playAction 回退待机，不上锁 —— 观感与缺帧现状一致。
    */
-  static playServerAction(node: Node, action: ACTION, direction?: DIRECTION) {
+  static playServerAction(node: Node, action: ACTION, direction?: DIRECTION, eventAt = 0) {
     if (!isValid(node)) return;
     const animate = this.getAnimate(node);
     if (!animate) return;
     const state = this.getState(node);
     if (state.dead) return;
     const targetDirection = direction ?? state.direction;
+    state.actionAt = eventAt > 0 ? eventAt : 0;
     // #1259 事件动作必须真的重启：playAction 的「动作与朝向没变就不切」早退是给 stepServer
     // 每帧调用的循环动作准备的；普攻/施法由服务端事件驱动，上一刀的同名动作若还卡在
     // 状态机里（FINISHED 续播丢失、或上一刀没播完下一刀 hit 已到），早退会让怪永远定格 ——
@@ -266,6 +276,7 @@ export default class MonsterAI {
       direction: DIRECTION.DOWN,
       locked: false,
       lockExpireAt: 0,
+      actionAt: 0,
     };
     this.states.set(node, state);
     return state;

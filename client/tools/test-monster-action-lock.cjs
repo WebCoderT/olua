@@ -347,7 +347,7 @@ function main() {
     const attackBody = methodBody(mmSource, "playServerAttack");
     check(attackBody !== "", "反证法：playServerAttack 方法名写错必须拿到空串", attackBody.length ? "方法体已切出" : "空串");
     check(
-      /playServerAction\(node,\s*ACTION\.ATTACK\)/.test(attackBody),
+      /playServerAction\(node,\s*ACTION\.ATTACK,\s*undefined,\s*eventAt\)/.test(attackBody),
       "普攻命中播怪物专用 attack 段（素材包只有 stand/walk/attack/injured/die）",
     );
     check(
@@ -358,7 +358,7 @@ function main() {
     const castBody = methodBody(mmSource, "playServerCast");
     check(castBody !== "", "反证法：playServerCast 方法名写错必须拿到空串", castBody.length ? "方法体已切出" : "空串");
     check(
-      /playServerAction\(node,\s*ACTION\.ATTACK\)/.test(castBody),
+      /playServerAction\(node,\s*ACTION\.ATTACK,\s*undefined,\s*eventAt\)/.test(castBody),
       "施法演出统一播 attack 段（出厂技能配的 attack_skill_1/a1 怪物素材包全无）",
     );
     check(
@@ -399,6 +399,43 @@ function main() {
     advance(50);
     MonsterAI.playServerAction(node2, "attack_near"); // 刀2
     check(crossFades().includes("attack_near_down"), "FINISHED 正常解锁后下一刀照样起播", crossFades().join(","));
+  }
+
+  group("九、出手帧序列的完整性（#1261：hit 与停点快照同帧，攻击起播不被过早打断）");
+  {
+    // 真实广播序列（#1261 排查确认）：移动段 → 出手帧（停点快照 mv=false + hits 同帧）。
+    // 插值器 moving 取「夹住渲染时刻两帧的后一帧」—— 尾巴段的后一帧是停点，moving=false 走站定分支，
+    // 由动作锁挡住；真正能打断攻击的是「出手后服务端转追击」（普攻硬直治本，见 monster-ai.service）。
+    // 时间轴按真实广播节奏逐拍推进（步长 ≤100ms，renderTime = fakeNow-120 不越过最后快照）。
+    const node = makeMonster();
+    pushMovingFirst(node); // 移动段快照：t = fakeNow-250 与 fakeNow-100（moving=true）
+    // 出手帧：停点快照（与移动末帧同点）+ hit 同帧
+    MonsterAI.applyServerState(node, 130, 100, false, fakeNow);
+    MonsterAI.playServerAction(node, "attack_near", undefined, fakeNow);
+    crossFadeCallsReset();
+    advance(100); // renderTime = fakeNow-120：夹在移动段末帧与停点帧之间 → moving=false（停点）
+    MonsterAI.tick(new Map([[node, makeMonsterData()]]));
+    check(crossFades().length === 0, "出手帧到达后 120ms 内不被切换（站定分支被锁挡住）", crossFades().join(","));
+    crossFadeCallsReset();
+    advance(100);
+    MonsterAI.tick(new Map([[node, makeMonsterData()]])); // 外插段 moving=false，站定分支照旧被锁挡住
+    check(crossFades().length === 0, "停点稳态照常被锁挡住（不覆盖回待机）", crossFades().join(","));
+    crossFadeCallsReset();
+    // 出手后服务端转追击：真移动照常打断（服务端权威不回归；硬直时长在服务端管）
+    advance(100);
+    MonsterAI.applyServerState(node, 160, 100, true, fakeNow - 100); // x 从停点 130 继续向右推进
+    MonsterAI.tick(new Map([[node, makeMonsterData()]]));
+    check(crossFades().includes("walk_right"), "事件时刻之后的真移动照常切走路", crossFades().join(","));
+
+    // actionAt 保护「事件之前的历史」：停点快照丢失（丢帧）时缓冲只剩移动段，
+    // 渲染时刻早于事件时刻的移动尾巴不得打断刚起播的动作
+    const node2 = makeMonster();
+    pushMovingFirst(node2);
+    MonsterAI.playServerAction(node2, "attack_near", undefined, fakeNow - 100);
+    crossFadeCallsReset();
+    advance(10); // renderTime = fakeNow-110，仍早于事件时刻（fakeNow-100）
+    MonsterAI.tick(new Map([[node2, makeMonsterData()]]));
+    check(crossFades().length === 0, "渲染时刻早于事件时刻的移动段不切走路（事件前历史）", crossFades().join(","));
   }
 
   Date.now = realNow;
