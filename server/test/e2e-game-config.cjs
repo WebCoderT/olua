@@ -1858,7 +1858,9 @@ async function main() {
     checkEqual(monsterDropRef.body?.data?.tableId, "common", "引用的表 id 已落");
     checkEqual(monsterDropRef.body?.data?.entries, null, "引用具名表时内联条目清空");
     const monsterDropsTableOnly = await api(base, "GET", "/api/admin/monster-drops?source=table", { token });
-    checkEqual(monsterDropsTableOnly.body?.data?.total, 1, "按来源筛 table：只有怪 1");
+    // #1277 起 220 只出厂怪全部 source='table' 绑等级区间表（elite_1_10 … elite_61_70），
+    // 上一步又把怪 1 PATCH 到 common —— 所以按来源筛 table 应命中全部 220 行。
+    checkEqual(monsterDropsTableOnly.body?.data?.total, 220, "按来源筛 table：220 只怪全部是表引用");
     const dropTableRemoveReferenced = await api(base, "DELETE", "/api/admin/drop-tables/common", { token });
     checkEqual(dropTableRemoveReferenced.status, 400, "删除被引用中的具名表 → 400（引用保护）");
     check(dropTableRemoveReferenced.body?.message?.includes("1 只怪物"), "引用保护的报错带引用计数");
