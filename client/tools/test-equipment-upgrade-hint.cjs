@@ -103,8 +103,9 @@ const { storageSourceFor } = require("./lib/storage-src.cjs");
   const storage = storageSourceFor(require("path").join(__dirname, "..", "assets", "ui", "core", "StorageManager.ts"));
   check(/static findBetterEquipmentInBag\(slot: EQUIPMENT_TYPE\)/.test(storage) && /findBagEquipmentUpgrade\(/.test(storage), "StorageManager.findBetterEquipmentInBag 包装纯函数（注入角色与可穿判定）");
   // #556 后换装走服务端 bag-op：找更优格仍是本地的，换装动作复用 equipFromBag（空格归服务端找、旧装备回原格）
+  // #1278 起签名带 opts（quiet 透传给自动穿戴路径），断言放宽到 opts 可选段
   check(
-    /static async equipBetterFromBag\(slot: EQUIPMENT_TYPE\): Promise<boolean>/.test(storage) &&
+    /static async equipBetterFromBag\(slot: EQUIPMENT_TYPE, opts: UseOptions = \{\}\): Promise<boolean>/.test(storage) &&
       /equipBetterFromBag[\s\S]*?findBetterEquipmentInBag[\s\S]*?return await this\.equipFromBag\(/.test(storage),
     "StorageManager.equipBetterFromBag = 找更优格 + 复用 equipFromBag 换装（旧装备回原格）",
   );

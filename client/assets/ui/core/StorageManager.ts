@@ -84,8 +84,11 @@ export default class StorageManager {
   static async discardBagGood(row: number, col: number): Promise<boolean> { return BagService.discardBagGood(row, col); }
   static async tidyBag(): Promise<boolean> { return BagService.tidyBag(); }
   static async moveBagGood(fromRow: number, fromCol: number, toRow: number, toCol: number): Promise<boolean> { return BagService.moveBagGood(fromRow, fromCol, toRow, toCol); }
-  static getBagRecycleSummary() { return BagService.getBagRecycleSummary(); }
   static async recycleBagEquipments(): Promise<boolean> { return BagService.recycleBagEquipments(); }
+  static async recycleBySelection(
+    selection: Parameters<typeof BagService.recycleBySelection>[0],
+    opts?: Parameters<typeof BagService.recycleBySelection>[1],
+  ) { return BagService.recycleBySelection(selection, opts); }
   static addGood(good: Parameters<typeof BagService.addGood>[0], count?: number, meta?: Parameters<typeof BagService.addGood>[2]): boolean { return BagService.addGood(good, count, meta); }
   static consumeBagGood(row: number, col: number, role?: Role) { BagService.consumeBagGood(row, col, role); }
   static async useDrug(row: number, col: number): Promise<boolean> { return BagService.useDrug(row, col); }

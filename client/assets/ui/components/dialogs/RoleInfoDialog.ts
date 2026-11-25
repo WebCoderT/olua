@@ -14,8 +14,10 @@ import WarSoulDialog from "./WarSoulDialog";
 import RankUpgradeDialog from "./RankUpgradeDialog";
 import FashionDialog from "./FashionDialog";
 import BaseDialog from "./dialog-kit";
+import CheckRow from "../panel/CheckRow";
 import SocialDialog from "./SocialDialog";
 import AttrAllocateDialog from "./AttrAllocateDialog";
+import * as AutoBagPrefs from "../../core/storage/auto-bag-prefs";
 
 /**
  * 角色信息弹窗
@@ -73,6 +75,22 @@ export default class RoleInfoDialog extends BaseDialog {
     this.equipmentGroups.forEach((group) => dialog.addChild(group));
     // 各槽位的「更好装备」提示按当前背包点亮
     this.refreshHints();
+    // 「自动穿戴」开关（#1278）：衣服槽正下方 —— 勾上后自动换上背包里更好的装备
+    // （判定复用一键换装 findBetterEquipmentInBag；触发在 RoleUIManager.refreshBag 汇聚点）
+    const autoWearRow = new CheckRow(
+      roleInfoDialogLayout.autoWearRow.name,
+      getText("label_auto_wear"),
+      AutoBagPrefs.getAutoWear(role.id),
+      {
+        width: roleInfoDialogLayout.autoWearRow.width,
+        height: roleInfoDialogLayout.autoWearRow.height,
+        fontSize: roleInfoDialogLayout.autoWearRow.fontSize,
+        color: roleInfoDialogLayout.autoWearRow.hintColor,
+      },
+      (checked) => AutoBagPrefs.setAutoWear(role.id, checked),
+    );
+    autoWearRow.setPosition(roleInfoDialogLayout.autoWearRow.position.x, roleInfoDialogLayout.autoWearRow.position.y, 0);
+    dialog.addChild(autoWearRow);
     // 角色属性列表
     this.attributeList = new RoleAttributeList(role);
     dialog.addChild(this.attributeList);

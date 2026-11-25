@@ -17,17 +17,18 @@ import {
   MoneyCurrency,
 } from "../../../types/good";
 import {
+  collectBagRecycleEntries,
   findBagEquipmentUpgrade,
   getEquipment,
   getItem,
   MONEY_CURRENCY_LABELS,
   moveBagCellGrid,
   resolveDrugRecovery,
-  summarizeBagRecycle,
   tidyBagGrid,
   withBagMeta,
   wornIdOf,
 } from "../../../configs/items";
+import type { BagRecycleSelection } from "../../../configs/items";
 import { RoleApi } from "../../utils/net/Api";
 import type { BagOp, BagOpResult } from "../../utils/net/ApiModels";
 import { withRevision } from "./with-revision";
@@ -39,6 +40,13 @@ import { updateRoleUi } from "./ui-bridge";
  * 背包服务（#1115 批次 6 自 StorageManager 拆出）：
  * 使用 / 穿脱 / 丢弃 / 整理 / 搬运 / 回收 / 入包 —— 五个写动作都经 runBagOp 走服务端权威。
  */
+/**
+ * 使用动作的可选项（#1278）：`quiet` = 自动路径（自动使用 / 自动穿戴）静默 ——
+ * 失败与「用不了」的浮动提示一律不打（挂机时满血嗑药被拒这种事不该刷屏）；
+ * 成功提示保留（玩家要知道东西被自动用了）。手动路径不传 = 照旧有提示。
+ */
+export interface UseOptions { quiet?: boolean }
+
 export default class BagService {
 
   //#region 背包物品使用
@@ -50,19 +58,20 @@ export default class BagService {
    * 材料/其他 → 暂未开放（后续合成、任务用途在此扩展）
    * @param row 背包行
    * @param col 背包列
+   * @param opts `quiet` = 失败提示静默（自动路径用，见 UseOptions）
    * @returns 是否成功使用
    */
-  static async useGood(row: number, col: number): Promise<boolean> {
+  static async useGood(row: number, col: number, opts: UseOptions = {}): Promise<boolean> {
     const role = RoleCache.findOnlineRole();
     const cell = role?.bag[row]?.[col];
     if (!role || !cell) return false;
     const good = getItem(cell.id);
     if (!good) return false;
-    if (isEquipment(good)) return await BagService.equipFromBag(row, col);
-    if (isDrug(good)) return await BagService.useDrug(row, col);
-    if (isMoneyItem(good)) return await BagService.useMoneyItem(row, col);
-    if (isLevelScroll(good)) return await BagService.useLevelScroll(row, col);
-    GameUiHelper.createTip("good_unsupported_tip");
+    if (isEquipment(good)) return await BagService.equipFromBag(row, col, opts);
+    if (isDrug(good)) return await BagService.useDrug(row, col, opts);
+    if (isMoneyItem(good)) return await BagService.useMoneyItem(row, col, opts);
+    if (isLevelScroll(good)) return await BagService.useLevelScroll(row, col, opts);
+    if (!opts.quiet) GameUiHelper.createTip("good_unsupported_tip");
     return false;
   }
 
@@ -126,9 +135,10 @@ export default class BagService {
    *
    * @param row 背包行
    * @param col 背包列
+   * @param opts `quiet` = 失败提示静默（自动穿戴路径用，见 UseOptions）
    * @returns 是否穿戴成功（失败原因已用浮动提示告知）
    */
-  static async equipFromBag(row: number, col: number): Promise<boolean> {
+  static async equipFromBag(row: number, col: number, opts: UseOptions = {}): Promise<boolean> {
     const role = RoleCache.findOnlineRole();
     const cell = role?.bag[row]?.[col];
     if (!role || !cell) return false;
@@ -136,12 +146,12 @@ export default class BagService {
     const good = getItem(cell.id);
     if (!good) return false;
     if (!isEquipment(good)) {
-      GameUiHelper.createTip("equip_unsupported_tip");
+      if (!opts.quiet) GameUiHelper.createTip("equip_unsupported_tip");
       return false;
     }
     const reason = GameHelper.getEquipmentRejectReason(good, role);
     if (reason) {
-      GameUiHelper.createTip(reason.key, reason.params);
+      if (!opts.quiet) GameUiHelper.createTip(reason.key, reason.params);
       return false;
     }
     const result = await BagService.runBagOp(role, { action: "equip", row, col });
@@ -198,15 +208,16 @@ export default class BagService {
   }
 
   /**
-   * 一键换上背包里该槽位更好的装备（角色信息弹窗提示角标的点击入口）
+   * 一键换上背包里该槽位更好的装备（角色信息弹窗提示角标的点击入口、自动穿戴共用）
    * 复用 equipFromBag：校验/换装/旧装备回原格/属性重算与各处刷新都是同一条路
    * @param slot 装备槽位
+   * @param opts `quiet` = 失败提示静默（自动穿戴路径用，见 UseOptions）
    * @returns 是否换上成功（没有更好的装备时返回 false，不打扰）
    */
-  static async equipBetterFromBag(slot: EQUIPMENT_TYPE): Promise<boolean> {
+  static async equipBetterFromBag(slot: EQUIPMENT_TYPE, opts: UseOptions = {}): Promise<boolean> {
     const better = BagService.findBetterEquipmentInBag(slot);
     if (!better) return false;
-    return await BagService.equipFromBag(better.row, better.col);
+    return await BagService.equipFromBag(better.row, better.col, opts);
   }
 
   /**
@@ -372,41 +383,36 @@ export default class BagService {
   //#region 背包回收
 
   /**
-   * 背包里可回收装备的结算预览（件数 + 可得绑定元宝）
-   * 回收不可撤销，所以按钮先要一份数给玩家看清楚（见 BagDialog 的二次确认）
-   * 判定与计价都在配置层纯函数里（configs/items.summarizeBagRecycle），这里只取当前角色
-   */
-  static getBagRecycleSummary(): { count: number; totalPrice: number } {
-    const role = RoleCache.findOnlineRole();
-    if (!role) return { count: 0, totalPrice: 0 };
-    return summarizeBagRecycle(role.bag);
-  }
-
-  /**
-   * 一键回收背包内的全部装备（当前在线角色）：按件折算**绑定元宝**入账
+   * 按勾选清单回收背包物品（当前在线角色）：按件折算**绑定元宝**入账（#1278）
    *
-   * 只回收**背包里**的装备 —— 身上穿着的槽位不受影响；药品/材料/解析不出配置的 id 一概不动。
+   * 「自动回收弹窗」里的一键回收与背包满时的自动回收共用这一个入口：
+   * 勾了什么回收什么 —— 装备看 `selection.allEquipment` 整类开关，
+   * 非装备看 `selection.ids`；清单为空/背包里没有可回收的，就什么都不发。
    *
    * **结算在服务端**（#397）：本地只负责「把要卖的东西列出来」（goodId + 件数），
    * 价格与扣物都由 `role.sellGoods` 说了算 —— 客户端报的价一概不看，改存档也改不出钱。
    * 服务端返回的 bag / bindGold / revision 直接覆盖本地（与商城购买同一套手法，
    * 见 buyMallGood）：本地不再自己算「扣掉哪几格」，两边各算一套必然有一天对不上。
    *
-   * 计价口径见共享快照的出售价表（装备 = configs/growth 的回收价曲线 × 前后缀倍率），
-   * 与按钮上「可得多少」的预览同一个来源（configs/items.summarizeBagRecycle）。
-   * @returns 是否回收成功（背包里没有可回收的装备时返回 false 并提示）
+   * @param selection 勾选清单（configs/items.BagRecycleSelection）
+   * @param opts `quiet` = 空清单不弹提示（自动回收路径用）
+   * @returns 回收件数与合计价（清单为空 / 无可回收 / 请求失败返回 null；
+   *          失败提示已由请求层弹过，成功提示由调用方按场景决定措辞）
    */
-  static async recycleBagEquipments(): Promise<boolean> {
+  static async recycleBySelection(
+    selection: BagRecycleSelection,
+    opts: UseOptions = {},
+  ): Promise<{ count: number; total: number } | null> {
     const role = RoleCache.findOnlineRole();
-    if (!role) return false;
-    const entries = BagService.collectBagEquipmentEntries(role.bag);
+    if (!role) return null;
+    const entries = collectBagRecycleEntries(role.bag, selection);
     const count = entries.reduce((sum, entry) => sum + entry.count, 0);
     if (!count) {
-      GameUiHelper.createTip("bag_recycle_empty_tip");
-      return false;
+      if (!opts.quiet) GameUiHelper.createTip("bag_recycle_empty_tip");
+      return null;
     }
     const result = await withRevision(role, (revision) => RoleApi.sellGoods(role.id, { entries, revision }));
-    if (!result) return false; // 失败提示已由请求层弹过（非 silent 请求）
+    if (!result) return null; // 失败提示已由请求层弹过（非 silent 请求）
     const data = result.data as Record<string, unknown>;
     role.bindGold = Number(data.bindGold ?? role.bindGold);
     // 服务端已经扣完格子：以它那份为准整体替换（格子只存 key + 数量，无引用关系）
@@ -415,26 +421,23 @@ export default class BagService {
     RoleCache.updateOnlineRole(role);
     updateRoleUi(role);
     RoleUIManager.refreshBag();
-    GameUiHelper.createTip("bag_recycle_tip", { count: result.count, price: result.total });
-    return true;
+    return { count: result.count, total: result.total };
   }
 
   /**
-   * 背包里的装备清单（回收请求的入参）：同 id 合并件数
+   * 一键回收背包内的全部装备（当前在线角色）：按件折算**绑定元宝**入账
    *
-   * 只挑**装备**：与 `configs/items.recycleBagEquipmentGrid` 同一口径；
-   * 解析不出配置的 id 不动（不认识的东西不替玩家决定）。服务端仍会按快照价复核。
+   * #1278 起「回收什么」由玩家在自动回收弹窗里勾选（见 recycleBySelection）；
+   * 本方法保留为「整包装备」这一特例的兼容入口（全部装备、无逐项物品）。
+   *
+   * 计价口径见共享快照的出售价表，与预览同一个来源。
+   * @returns 是否回收成功（背包里没有可回收的装备时返回 false 并提示）
    */
-  private static collectBagEquipmentEntries(bag: BagCell[][]): Array<{ goodId: string; count: number }> {
-    const merged = new Map<string, number>();
-    bag.forEach((row) => {
-      row.forEach((cell) => {
-        const good = cell ? getItem(cell.id) : null;
-        if (!cell || !good || !isEquipment(good) || !cell.id) return;
-        merged.set(cell.id, (merged.get(cell.id) ?? 0) + Math.max(1, cell.count));
-      });
-    });
-    return Array.from(merged, ([goodId, count]) => ({ goodId, count }));
+  static async recycleBagEquipments(): Promise<boolean> {
+    const result = await BagService.recycleBySelection({ allEquipment: true, ids: new Set<string>() });
+    if (!result) return false;
+    GameUiHelper.createTip("bag_recycle_tip", { count: result.count, price: result.total });
+    return true;
   }
 
   //#endregion
@@ -525,7 +528,7 @@ export default class BagService {
    * @param col 背包列
    * @returns 是否成功使用（失败原因已用浮动提示告知）
    */
-  static async useDrug(row: number, col: number): Promise<boolean> {
+  static async useDrug(row: number, col: number, opts: UseOptions = {}): Promise<boolean> {
     const role = RoleCache.findOnlineRole();
     const cell = role?.bag[row]?.[col];
     if (!role || !cell) return false;
@@ -537,14 +540,15 @@ export default class BagService {
     const healsHp = recovery.hp > 0;
     const healsMp = recovery.mp > 0;
     if (!healsHp && !healsMp) {
-      GameUiHelper.createTip("drug_unsupported_tip");
+      if (!opts.quiet) GameUiHelper.createTip("drug_unsupported_tip");
       return false;
     }
     // 血蓝都已满（该药对应的资源都回不动）→ 提示且不发请求（与服务端同一判定式）
     const hpFull = role.hp >= role.maxHp;
     const mpFull = role.mp >= role.maxMp;
     if ((!healsHp || hpFull) && (!healsMp || mpFull)) {
-      GameUiHelper.createTip(healsHp ? "drug_full_tip" : "drug_mp_full_tip");
+      // 自动使用路径静默：满血满蓝不嗑药是常态不是异常，刷提示只会打扰挂机
+      if (!opts.quiet) GameUiHelper.createTip(healsHp ? "drug_full_tip" : "drug_mp_full_tip");
       return false;
     }
     // 连点节流（#848）：同一瓶药一秒内只发一次请求，冷却本身由服务端裁
@@ -575,16 +579,17 @@ export default class BagService {
    * （防抖推回 revision 与服务端一致，幂等）。入账不改战斗属性，无需重算。
    * @param row 背包行
    * @param col 背包列
+   * @param opts `quiet` = 失败提示静默（自动使用路径用，见 UseOptions）
    * @returns 是否成功使用（失败原因已用浮动提示告知）
    */
-  static async useMoneyItem(row: number, col: number): Promise<boolean> {
+  static async useMoneyItem(row: number, col: number, opts: UseOptions = {}): Promise<boolean> {
     const role = RoleCache.findOnlineRole();
     const cell = role?.bag[row]?.[col];
     if (!role || !cell) return false;
     // 格子只存物品 key，数据实时解析（不是货币道具就当不了钱用）
     const good = getItem(cell.id);
     if (!good || !isMoneyItem(good)) {
-      GameUiHelper.createTip("money_use_invalid_tip");
+      if (!opts.quiet) GameUiHelper.createTip("money_use_invalid_tip");
       return false;
     }
     // 连点节流（#847）：同一个道具一秒内只发一次请求（服务端另有 1 秒权威冷却）
@@ -626,26 +631,30 @@ export default class BagService {
    * revision。**不本地 +1** —— 自增一版就会与服务端落库值漂开（下次存档被回填，表现成「等级弹回去」）。
    * @param row 背包行
    * @param col 背包列
+   * @param opts `quiet` = 失败提示静默（自动使用路径用，见 UseOptions）
    * @returns 是否成功使用（失败原因已用浮动提示告知）
    */
-  static async useLevelScroll(row: number, col: number): Promise<boolean> {
+  static async useLevelScroll(row: number, col: number, opts: UseOptions = {}): Promise<boolean> {
     const role = RoleCache.findOnlineRole();
     const cell = role?.bag[row]?.[col];
     if (!role || !cell) return false;
     const good = getItem(cell.id);
     if (!good || !isLevelScroll(good)) {
-      GameUiHelper.createTip("level_scroll_use_invalid_tip");
+      if (!opts.quiet) GameUiHelper.createTip("level_scroll_use_invalid_tip");
       return false;
     }
     const level = Math.max(1, Math.floor(Number(role.level) || 1));
     if (level < good.minLevel || level > good.maxLevel) {
       // 这一句是玩家的主要反馈：卷轴不对口时他要立刻知道「该换哪一卷」
-      GameUiHelper.createTip("level_scroll_level_out_of_range_tip", {
-        name: getGoodDisplayName(good),
-        min: good.minLevel,
-        max: good.maxLevel,
-        level,
-      });
+      // 自动使用路径静默：等级不对口是常态（挂机升级穿过区间），不该每捡一卷刷一条
+      if (!opts.quiet) {
+        GameUiHelper.createTip("level_scroll_level_out_of_range_tip", {
+          name: getGoodDisplayName(good),
+          min: good.minLevel,
+          max: good.maxLevel,
+          level,
+        });
+      }
       return false;
     }
     const result = await withRevision(role, (revision) => RoleApi.levelScrollUse(role.id, { row, col, revision }));

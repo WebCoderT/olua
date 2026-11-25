@@ -152,8 +152,8 @@ function main() {
   const storageSource = storageSourceFor(require("path").join(__dirname, "..", "assets", "ui", "core", "StorageManager.ts"));
   const textsSource = read("assets/configs/texts.ts");
   const applySource = read("assets/configs/apply-snapshot.ts");
-  check(/isLevelScroll\(good\)\)\s*return await this\.useLevelScroll\(row, col\)/.test(storageSource), "useGood 把升级卷轴分发到 useLevelScroll");
-  check(/static async useLevelScroll\(row: number, col: number\)/.test(storageSource), "useLevelScroll 方法存在（签名与用药同一套坐标入参）");
+  check(/isLevelScroll\(good\)\)\s*return await this\.useLevelScroll\(row, col, opts\)/.test(storageSource), "useGood 把升级卷轴分发到 useLevelScroll（opts 透传给自动使用）");
+  check(/static async useLevelScroll\(row: number, col: number, opts: UseOptions = \{\}\)/.test(storageSource), "useLevelScroll 方法存在（坐标入参 + quiet 可选）");
   check(
     /if \(level < good\.minLevel \|\| level > good\.maxLevel\)/.test(storageSource),
     "本地预检区间：不在区间就**不发请求**，直接提示该换哪一卷",

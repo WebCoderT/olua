@@ -72,6 +72,26 @@ export const uiTexts = {
   bag_recycle_tip: "回收 {count} 件装备，获得 {price} 绑定元宝",
   /** 批量回收二次确认（{count} 件 · {price} 绑定元宝） */
   bag_recycle_confirm_tip: "将回收 {count} 件装备，可得 {price} 绑定元宝（再点一次确认）",
+  /** 背包满触发自动回收的结果（{count} 件 · {price} 绑定元宝；#1278，只回收勾选清单里的东西） */
+  auto_recycle_tip: "背包已满，自动回收 {count} 件，获得 {price} 绑定元宝",
+  /** 自动回收弹窗的说明行（勾选语义一句话说清） */
+  auto_recycle_hint: "勾选后：背包满时自动回收勾选的物品；未勾选的永远不会自动回收",
+  /** 自动回收弹窗「全部装备」整类勾选行（装备变体太多，逐件勾不现实） */
+  auto_recycle_all_equipment: "全部装备（捡到就折算绑定元宝）",
+  /** 自动回收弹窗内「一键回收」按钮（按当前勾选清单立即执行，保留两步确认） */
+  label_auto_recycle_now: "一键回收",
+  /** 自动回收弹窗清单的分组标题：非装备可卖物品 */
+  auto_recycle_section_others: "可卖物品（勾选后背包满时自动回收）",
+  /** 自动回收弹窗清单空态（配置里没有可卖的非装备物品） */
+  auto_recycle_empty_list: "暂无可卖物品（回收价大于 0 的才出现在这里）",
+  /** 自动使用弹窗的说明行 */
+  auto_use_hint: "勾选后：背包里只要有就自动使用（药品血蓝不满才喝）",
+  /** 自动使用弹窗清单空态（配置里没有可使用物品） */
+  auto_use_empty_list: "暂无可使用的物品",
+  /** 自动穿戴复选框（角色信息弹窗衣服槽下方；勾上后自动换上背包里更好的装备） */
+  label_auto_wear: "自动穿戴",
+  /** 自动穿戴复选框旁的一行小说明 */
+  auto_wear_hint: "勾选后自动换上背包里更好的装备",
   /** 进入丢弃模式 */
   bag_discard_mode_tip: "点击物品即可丢弃（整格丢弃，不可恢复）",
   /** 丢弃的两步确认（第一次点击，{name} 物品名 · {count} 整格数量） */
@@ -456,6 +476,10 @@ export const uiTexts = {
   //#region 界面标签：背包操作按钮（文案在这里，几何见 configs/layout/dialogs.bagDialogLayout）
   /** 「一键整理」按钮 */
   label_bag_tidy: "一键整理",
+  /** 「自动回收」按钮（点击开关自动回收弹窗；#1278 起一键回收按钮移入弹窗内） */
+  label_bag_auto_recycle: "自动回收",
+  /** 「自动使用」按钮（点击开关自动使用弹窗） */
+  label_bag_auto_use: "自动使用",
   /** 「一键回收」按钮（正常态 / 两步确认的待确认态） */
   label_bag_recycle: "一键回收",
   label_bag_recycle_confirm: "确认回收",

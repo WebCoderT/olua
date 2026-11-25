@@ -131,8 +131,8 @@ function main() {
   const { storageSourceFor } = require("./lib/storage-src.cjs");
   const storageSource = storageSourceFor(require("path").join(__dirname, "..", "assets", "ui", "core", "StorageManager.ts"));
   const textsSource = read("assets/configs/texts.ts");
-  check(/isMoneyItem\(good\)\)\s*return await this\.useMoneyItem\(row, col\)/.test(storageSource), "useGood 把货币道具分发到 useMoneyItem");
-  check(/static async useMoneyItem\(row: number, col: number\)/.test(storageSource), "useMoneyItem 方法存在（签名与用药同一套坐标入参）");
+  check(/isMoneyItem\(good\)\)\s*return await this\.useMoneyItem\(row, col, opts\)/.test(storageSource), "useGood 把货币道具分发到 useMoneyItem（opts 透传给自动使用）");
+  check(/static async useMoneyItem\(row: number, col: number, opts: UseOptions = \{\}\)/.test(storageSource), "useMoneyItem 方法存在（坐标入参 + quiet 可选）");
   check(/RoleApi\.moneyUse\(role\.id, \{ row, col, revision \}\)/.test(storageSource) && /withRevision\(role, \(revision\)/.test(storageSource), "请求带 revision（乐观锁）且只报格子坐标 —— 金额与币种不往上报（经 withRevision 壳）");
   check(
     /if \(currency === "bindGold"\)/.test(storageSource) && /role\[currency\] = Number/.test(storageSource),
