@@ -4,13 +4,16 @@
 
 **A 2D role-playing game you can play right in the browser.** Create a character, explore maps, fight monsters,
 loot equipment, level up, join a guild — the whole loop works end to end; this is not a tech demo.
-The project is **free and open source**: play the live instance or deploy your own copy.
+The project is **free and open source**; deploy your own copy. The live game servers are currently paused —
+only the website stays up.
 
 | What you want | Where to go |
 | --- | --- |
-| Play right now | <https://game.yimw.cn> (web build, no download) |
-| See what the project looks like | <https://yimw.cn> (site: gameplay, screenshots, architecture, deployment) |
-| Open the admin console | <https://admin.yimw.cn> (edit configs, post announcements, manage accounts) |
+| Gameplay, screenshots and the full illustrated tutorial | <https://yimw.cn> (official site) |
+| Run your own copy | "Run your own copy" below — two Docker commands |
+
+> The live game and admin servers are **temporarily offline** (only the website remains). To play, spin up your own
+> copy with the steps below.
 
 > Code lives on [GitHub](https://github.com/WebCoderT/olua); [Gitee](https://gitee.com/putiwan/olua) is a read-only mirror.
 > If you find it interesting, a **Star ⭐** is appreciated.
@@ -21,10 +24,10 @@ A top-down 2D world in the style of classic oriental MMORPGs: keyboard to move, 
 The tedious parts of the genre are deliberately gone — no crafting trees, no pay walls, no forced grouping.
 
 You create a character, spawn in the starter map, and a 6-step tutorial teaches you to walk, fight, loot and open
-your bag. From there it's your call:
+your bag. A 28-step main storyline then walks you through map after map — or go wherever you like:
 
-- **Get stronger**: kill monsters for experience; leveling refills your bars and unlocks harder maps. Equipment drops
-  from monsters, or buy it outright in the mall.
+- **Get stronger**: kill monsters for experience; leveling refills your bars and unlocks harder maps. Every main-story
+  step pays experience and bound currency. Equipment drops from monsters, or buy it outright in the mall.
 - **Look better**: every piece of equipment rolls a prefix and a suffix. The same sword becomes a different quality
   item — with a glowing frame on its bag slot and an animated background in its detail panel.
 - **Collect**: three growth tracks — Soul (37 ranks), Title (34 ranks), Military Rank (100 ranks) — each adds stats
@@ -76,14 +79,22 @@ The admin console (browser-based, for operators editing game data):
 
 ### Maps and exploration
 
-- Multiple maps, each with its own level and combat-power gate; the teleporter tells you exactly what you're short of.
+- 62 maps, each with its own level and combat-power gate; the teleporter tells you exactly what you're short of.
 - Every map has a revive point; entering and teleporting always start there.
 - The minimap follows you with red dots for real monster positions; click to enlarge, left-click for auto-pathing,
   right-click to teleport.
 - Walking routes around trees and walls — you never get stuck on obstacles.
 
+### Quests
+
+- A 28-step main storyline: take quests from NPCs, read the story as you go, clear the kill objectives and turn in
+  for experience and bound currency.
+- Steps chain strictly one after another with level gates — following the storyline walks you through the early
+  maps and systems.
+
 ### Combat
 
+- 220 monster species spread across the 62 maps, roaming in packs by species; drops differ between them.
 - WASD to move, left-click to walk, right-click to run, click a monster to attack; an on-screen joystick works in
   mobile browsers too.
 - Skills have cooldowns and mana costs, with effects and floating numbers; monsters have skills of their own.
@@ -104,7 +115,8 @@ The admin console (browser-based, for operators editing game data):
 - Prefix + suffix combos create quality tiers; bag frames and detail-panel backgrounds play different animations.
 - Monsters drop equipment: glowing beams appear on the ground — the higher the quality, the brighter — walk over
   to pick up.
-- The bag sorts, drags, recycles into currency with one click, or destroys unwanted stacks.
+- The bag sorts, drags, recycles into currency with one click, or destroys unwanted stacks; toggles for auto-recycle
+  (a full bag frees space then re-picks), auto-use and auto-equip make idle play easier.
 - The mall auto-lists every equipment variant, browsable by page; 20 fashion outfits change looks but not stats.
 
 ### Social
