@@ -57,7 +57,7 @@ export default class AutoUseDialog extends BaseDialog {
     const list = GameUiHelper.createScrollView(layout.list.name, layout.list.position, layout.list.size, layout.list.rowSpacing, layout.list.padding);
     const content = list.getComponent(ScrollView)?.content;
     if (!content) return;
-    const usable = [...items.values()].filter((good) => !isEquipment(good) && (isDrug(good) || isMoneyItem(good) || isLevelScroll(good)));
+    const usable = Array.from(items.values()).filter((good) => !isEquipment(good) && (isDrug(good) || isMoneyItem(good) || isLevelScroll(good)));
     if (!usable.length) {
       dialog.addChild(
         UiHelper.createLabel(

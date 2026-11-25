@@ -35,14 +35,18 @@ export default class CheckRow extends Node {
     this.checked = checked;
     this.addComponent(UITransform).setContentSize(layout.width, layout.height);
     // 勾选框（两态图，居左；src 传空串让 createSprite 只建组件，图由 swapCheckboxIcon 统一加载）
-    const box = UiHelper.createSprite(`${name}_checkbox`, "", new Vec2(-layout.width / 2 + 12, 0), new Size(16, 16));
+    // 引擎坑（#1283）：createNode 底下锚点是默认 (0.5, 0.5)，而下面的 x 全是「行左缘」坐标 ——
+    // 锚点不归零的话节点中心被摆在左缘上，文字块整体左移自身宽度的一半（用户实测弹窗文字偏左一半）。
+    // 统一改成左缘语义：anchorPoint.x = 0，位置即左缘。
+    const box = UiHelper.createSprite(`${name}_checkbox`, "", new Vec2(-layout.width / 2 + 4, 0), new Size(16, 16));
+    box.getComponent(UITransform)?.setAnchorPoint(0, 0.5);
     this.checkboxSprite = box.getComponent(Sprite) ?? null;
     this.addChild(box);
     this.swapCheckboxIcon();
     // 行文字（框右侧留 24：框 16 + 间距 8）
-    this.addChild(
-      UiHelper.createLabel(`${name}_label`, text, layout.color, layout.fontSize, new Vec2(-layout.width / 2 + 24, 0), new Size(layout.width - 24, layout.height), Label.HorizontalAlign.LEFT),
-    );
+    const rowLabel = UiHelper.createLabel(`${name}_label`, text, layout.color, layout.fontSize, new Vec2(-layout.width / 2 + 24, 0), new Size(layout.width - 24, layout.height), Label.HorizontalAlign.LEFT);
+    rowLabel.getComponent(UITransform)?.setAnchorPoint(0, 0.5);
+    this.addChild(rowLabel);
     // 整行可点：点击音 + 鼠标通道拦截（防穿透，与登录页勾选框同一套口径）+ 触摸切换
     SoundManager.bindClick(this);
     blockClickThrough(this);

@@ -77,7 +77,7 @@ export default class AutoRecycleDialog extends BaseDialog {
     const list = GameUiHelper.createScrollView(layout.list.name, layout.list.position, layout.list.size, layout.list.rowSpacing, layout.list.padding);
     const content = list.getComponent(ScrollView)?.content;
     if (!content) return;
-    const sellables = [...items.values()].filter((good) => !isEquipment(good) && good.sellPirce > 0);
+    const sellables = Array.from(items.values()).filter((good) => !isEquipment(good) && good.sellPirce > 0);
     if (!sellables.length) {
       dialog.addChild(
         UiHelper.createLabel(

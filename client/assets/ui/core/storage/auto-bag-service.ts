@@ -1,5 +1,6 @@
 import { EQUIPMENT_TYPE } from "../../../types/good";
-import { equipmentSlots, findUsableCells } from "../../../configs/items";
+import { findUsableCells } from "../../../configs/items";
+import { equipmentSlots } from "../../../configs/equipments";
 import GameUiHelper from "../../helpers/GameUiHelper";
 import BagService from "./bag-service";
 import RoleCache from "./role-cache";

@@ -66,7 +66,7 @@ export function getRecycleSelection(roleId: string): BagRecycleSelection {
 
 /** 写自动回收勾选 */
 export function setRecycleSelection(roleId: string, selection: BagRecycleSelection): void {
-  writeBlob(roleId, { ...readBlob(roleId), recycle: { allEquipment: selection.allEquipment, ids: [...selection.ids] } });
+  writeBlob(roleId, { ...readBlob(roleId), recycle: { allEquipment: selection.allEquipment, ids: Array.from(selection.ids) } });
 }
 
 /** 读自动使用勾选的物品 id 集（没有记录 = 空集 = 永不自动使用） */
@@ -76,7 +76,7 @@ export function getUseIds(roleId: string): Set<string> {
 
 /** 写自动使用勾选 */
 export function setUseIds(roleId: string, ids: ReadonlySet<string>): void {
-  writeBlob(roleId, { ...readBlob(roleId), use: [...ids] });
+  writeBlob(roleId, { ...readBlob(roleId), use: Array.from(ids) });
 }
 
 /** 读自动穿戴开关（没有记录 = 关） */
