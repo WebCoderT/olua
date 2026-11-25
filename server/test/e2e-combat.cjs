@@ -1655,7 +1655,11 @@ function connect(url) {
 
     // —— B. 装备溯源：谁掉的 / 哪个怪 / 什么时候；非装备不带溯源 ——
 
-    const equipDrop = await killWith(binder, "weapon_1", {}, [1, 1]);
+    // #1286 起基础件掉落会按前后缀权重随机抽档。这一段验的是绑定 / 溯源 / 穿脱，
+    // 不该赌随机结果，所以掉落表里直接手写变体 id —— 服务端对手写变体不再二次抽档，
+    // B / E 两段也就能稳定拿到同 id 的绑定件与对照件。
+    const testWeaponId = "weapon_1_p3s2";
+    const equipDrop = await killWith(binder, testWeaponId, {}, [1, 1]);
     check(!!equipDrop && equipDrop.drops.length >= 1, "B：装备掉落已抽取", JSON.stringify(equipDrop && equipDrop.drops));
     const pickedEquip = equipDrop ? await pick(binder, dropIdIn(equipDrop.killed)) : null;
     const equipCell = pickedEquip && pickedEquip.ok ? pickedEquip.placed[0] : null;
@@ -1688,7 +1692,7 @@ function connect(url) {
     const roleAfterEquip = await api(baseUrl, "GET", `roles/${binder.roleId}`, { token: binder.token });
     const bagAfterEquip = roleAfterEquip.data && roleAfterEquip.data.data && roleAfterEquip.data.data.bag;
     const storedEquip = Array.isArray(bagAfterEquip)
-      ? bagAfterEquip.reduce((hit, line) => hit || (line || []).find((cell) => cell && cell.id === "weapon_1") || null, null)
+      ? bagAfterEquip.reduce((hit, line) => hit || (line || []).find((cell) => cell && cell.id === testWeaponId) || null, null)
       : null;
     check(
       !!storedEquip && !!storedEquip.from && storedEquip.from.role === "combat_rbn1",
@@ -1846,12 +1850,12 @@ function connect(url) {
 
     // —— E. 装备槽存对象（#816 后半）：绑定与溯源跟着这件东西走，穿脱只是换地方 ——
 
-    // 打一件**强制绑定**的武器（B 段那件 weapon_1 是未绑定的，正好留着一个同 id 的对照）
-    const boundEquipDrop = await killWith(binder, "weapon_1", { bindDrops: true }, [1, 1]);
+    // 打一件**强制绑定**的武器（B 段那件是未绑定的，正好留着一个同 id 的对照）
+    const boundEquipDrop = await killWith(binder, testWeaponId, { bindDrops: true }, [1, 1]);
     const pickedBoundEquip = boundEquipDrop ? await pick(binder, dropIdIn(boundEquipDrop.killed)) : null;
     const boundEquipCell = pickedBoundEquip && pickedBoundEquip.ok ? pickedBoundEquip.placed[0] : null;
     check(
-      !!boundEquipCell && boundEquipCell.id === "weapon_1" && boundEquipCell.bound === true && !!boundEquipCell.from,
+      !!boundEquipCell && boundEquipCell.id === testWeaponId && boundEquipCell.bound === true && !!boundEquipCell.from,
       "E：绑定武器入包（bound = true 且带溯源，作为穿脱前的基准）",
       JSON.stringify(boundEquipCell),
     );
@@ -1861,7 +1865,7 @@ function connect(url) {
       let hit = null;
       grid.forEach((line, row) =>
         (line || []).forEach((cell, col) => {
-          if (!hit && cell && cell.id === "weapon_1" && cell.bound === true) hit = { row, col };
+          if (!hit && cell && cell.id === testWeaponId && cell.bound === true) hit = { row, col };
         }),
       );
       return hit;
@@ -1883,7 +1887,7 @@ function connect(url) {
     check(wornResult.code === 0, "E：穿上那件绑定武器", wornResult.message);
     const wornSlot = wornResult.code === 0 ? wornResult.data.data.equipments.weapon : null;
     check(
-      !!wornSlot && typeof wornSlot === "object" && wornSlot.id === "weapon_1",
+      !!wornSlot && typeof wornSlot === "object" && wornSlot.id === testWeaponId,
       "E：槽位值是对象 { id }（不是裸 id 字符串）",
       JSON.stringify(wornSlot),
     );
@@ -1898,7 +1902,7 @@ function connect(url) {
     const storedWornRole = await api(baseUrl, "GET", `roles/${binder.roleId}`, { token: binder.token });
     const storedWornSlot = storedWornRole.data.data.equipments && storedWornRole.data.data.equipments.weapon;
     check(
-      !!storedWornSlot && typeof storedWornSlot === "object" && storedWornSlot.id === "weapon_1" && storedWornSlot.bound === true,
+      !!storedWornSlot && typeof storedWornSlot === "object" && storedWornSlot.id === testWeaponId && storedWornSlot.bound === true,
       "E：存档里的 equipments.weapon 是对象且 bound 为 true",
       JSON.stringify(storedWornSlot),
     );
@@ -1909,9 +1913,9 @@ function connect(url) {
       body: { action: "unequip", slot: "weapon", revision: storedWornRole.data.revision },
     });
     check(offResult.code === 0, "E：脱下武器（落点由服务端找第一个空格）", offResult.message);
-    // 背包里这时有两件 weapon_1（B 段那件未绑定的 + 刚脱下来的绑定件），只认带 bound 的那件
+    // 背包里这时有两件同 id 武器（B 段那件未绑定的 + 刚脱下来的绑定件），只认带 bound 的那件
     const offCells =
-      offResult.code === 0 ? offResult.data.data.bag.flat().filter((cell) => cell && cell.id === "weapon_1") : [];
+      offResult.code === 0 ? offResult.data.data.bag.flat().filter((cell) => cell && cell.id === testWeaponId) : [];
     const offCell = offCells.find((cell) => cell.bound === true) || null;
     check(
       !!offCell && offCells.some((cell) => cell.bound !== true),

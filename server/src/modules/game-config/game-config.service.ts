@@ -35,6 +35,7 @@ import { SoulRepository, SoulListOptions } from "../../database/repositories/sou
 import { TitleRepository, TitleListOptions } from "../../database/repositories/title.repository";
 import { moneyItemSeedOf } from "../../common/constants/money-items";
 import { levelScrollDraftOf } from "../../common/constants/level-scrolls";
+import { DEFAULT_PREFIX_DROP_WEIGHTS, DEFAULT_SUFFIX_DROP_WEIGHTS } from "../../common/constants/equipment-appearance";
 import { itemExists } from "../../common/runtime-config-cache";
 import { RuntimeConfigService } from "./runtime-config.service";
 import {
@@ -715,6 +716,8 @@ export class GameConfigService {
     const suffixLabels = dto.suffixLabels ?? current.suffixLabels;
     let prefixColors = dto.prefixColors ?? current.prefixColors;
     let suffixColors = dto.suffixColors ?? current.suffixColors;
+    let prefixDropWeights = dto.prefixDropWeights ?? current.prefixDropWeights;
+    let suffixDropWeights = dto.suffixDropWeights ?? current.suffixDropWeights;
     if (prefixRates.length !== prefixLabels.length) {
       throw new BizException(BizCode.PARAM_INVALID, `前缀倍率（${prefixRates.length} 项）与文案（${prefixLabels.length} 项）长度必须一致`);
     }
@@ -727,9 +730,18 @@ export class GameConfigService {
     if (dto.suffixColors !== undefined && dto.suffixColors.length > 0 && dto.suffixColors.length !== suffixLabels.length) {
       throw new BizException(BizCode.PARAM_INVALID, `后缀颜色（${dto.suffixColors.length} 项）与文案（${suffixLabels.length} 项）长度必须一致（或传空数组 = 全部用内置色）`);
     }
+    // 掉落权重（#1286）：显式传了非空数组就必须与档数等长；空数组 = 回落到出厂递减值
+    if (dto.prefixDropWeights !== undefined && dto.prefixDropWeights.length > 0 && dto.prefixDropWeights.length !== prefixLabels.length) {
+      throw new BizException(BizCode.PARAM_INVALID, `前缀掉落权重（${dto.prefixDropWeights.length} 项）与文案（${prefixLabels.length} 项）长度必须一致（或传空数组 = 用出厂递减权重）`);
+    }
+    if (dto.suffixDropWeights !== undefined && dto.suffixDropWeights.length > 0 && dto.suffixDropWeights.length !== suffixLabels.length) {
+      throw new BizException(BizCode.PARAM_INVALID, `后缀掉落权重（${dto.suffixDropWeights.length} 项）与文案（${suffixLabels.length} 项）长度必须一致（或传空数组 = 用出厂递减权重）`);
+    }
     // 没传颜色而档数变了 → 自动对齐（#720：改档位不该被颜色长度拦住）
     if (dto.prefixColors === undefined) prefixColors = reconcileTierColors(prefixColors, prefixLabels.length);
     if (dto.suffixColors === undefined) suffixColors = reconcileTierColors(suffixColors, suffixLabels.length);
+    prefixDropWeights = reconcileTierWeights(prefixDropWeights, prefixLabels.length, DEFAULT_PREFIX_DROP_WEIGHTS);
+    suffixDropWeights = reconcileTierWeights(suffixDropWeights, suffixLabels.length, DEFAULT_SUFFIX_DROP_WEIGHTS);
     this.equipments.updateMeta({
       id: 1,
       prefix_rates: JSON.stringify(prefixRates),
@@ -738,6 +750,8 @@ export class GameConfigService {
       suffix_labels: JSON.stringify(suffixLabels),
       prefix_colors: JSON.stringify(prefixColors),
       suffix_colors: JSON.stringify(suffixColors),
+      prefix_drop_weights: JSON.stringify(prefixDropWeights),
+      suffix_drop_weights: JSON.stringify(suffixDropWeights),
       updated_at: Date.now(),
     });
     this.touchRuntime();
@@ -2068,4 +2082,17 @@ function reconcileTierColors(colors: string[], tierCount: number): string[] {
   if (colors.length === 0 || colors.length === tierCount) return colors;
   if (colors.length > tierCount) return colors.slice(0, tierCount);
   return [...colors, ...Array.from({ length: tierCount - colors.length }, () => colors[colors.length - 1])];
+}
+
+/**
+ * 掉落权重对齐到当前档数（#1286）
+ *
+ * 空数组（库里没值 / 运营显式清空）→ 用出厂递减值，避免「权重全空」把全服变成只掉光板；
+ * 档数变了 → 截短或用最后一档权重垫补（扩档的新档先沿用最低权重，运营再去管理端调）。
+ */
+function reconcileTierWeights(weights: number[], tierCount: number, fallback: number[]): number[] {
+  const source = weights.length > 0 ? weights : fallback;
+  if (source.length === tierCount) return [...source];
+  if (source.length > tierCount) return source.slice(0, tierCount);
+  return [...source, ...Array.from({ length: tierCount - source.length }, () => source[source.length - 1] ?? 1)];
 }

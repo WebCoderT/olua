@@ -253,6 +253,8 @@ function equipmentMeta() {
     suffixLabels: row.suffixLabels,
     prefixColors: row.prefixColors ?? [],
     suffixColors: row.suffixColors ?? [],
+    prefixDropWeights: row.prefixDropWeights ?? [],
+    suffixDropWeights: row.suffixDropWeights ?? [],
     updatedAt: row.updatedAt,
   };
 }

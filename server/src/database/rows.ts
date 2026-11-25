@@ -1093,6 +1093,10 @@ export interface EquipmentMetaRow {
   prefix_colors: string;
   /** 后缀文字颜色 JSON（#720，同上） */
   suffix_colors: string;
+  /** 前缀掉落权重 JSON（#1286，与文案同长；下标 = 档位序号，0 = 不掉这一档） */
+  prefix_drop_weights: string;
+  /** 后缀掉落权重 JSON（#1286，同上） */
+  suffix_drop_weights: string;
   updated_at: number;
 }
 

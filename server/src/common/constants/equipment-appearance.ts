@@ -36,6 +36,21 @@ export const EQUIPMENT_COMBO_COUNT = (EQUIPMENT_PREFIX_MAX + 1) * (EQUIPMENT_SUF
  */
 export const EQUIPMENT_TIER_MAX = 10;
 
+/**
+ * 变体掉落权重（#1286）出厂值：前缀 5 档、后缀 3 档，逐档递减
+ *
+ * 组合权重 = 前缀权重 × 后缀权重（`rollVariantOfBase` 分别按两组权重独立抽档，
+ * 联合概率与组合权重归一化后完全等价）。p0s0 = 100 × 100 = 10000，
+ * p4s2 = 6 × 12 = 72（约 0.25%），与「越好的越难掉」的既有口径一致。
+ *
+ * 存量库补列时填的就是这两组值；运行时若库里解析为空 / 长度与档数不符，
+ * 也回落到这里 —— 手滑清空权重不该让全服只掉光板。
+ */
+export const DEFAULT_PREFIX_DROP_WEIGHTS: number[] = [100, 50, 25, 12, 6];
+export const DEFAULT_SUFFIX_DROP_WEIGHTS: number[] = [100, 40, 12];
+/** 单档权重硬上限（管理端表单 / DTO / 服务端同一把尺子） */
+export const EQUIPMENT_DROP_WEIGHT_MAX = 1000;
+
 /** 装备外观配置的取值范围（DTO 校验、服务端兜底、管理端表单提示共用） */
 export const EQUIPMENT_APPEARANCE_LIMITS = {
   /** 边框 key 格式（= resources/effect/border 下的图集文件名，如 border-30123） */

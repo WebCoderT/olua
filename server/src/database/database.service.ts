@@ -9,6 +9,7 @@ import { AnnouncementLevel } from "../common/constants/announcement";
 import { MONEY_ITEM_SEEDS } from "../common/constants/money-items";
 import { LEVEL_SCROLL_SEEDS } from "../common/constants/level-scrolls";
 import { ROLE_LEVEL_CURVE_SEEDS } from "../common/constants/role-level-curve";
+import { DEFAULT_PREFIX_DROP_WEIGHTS, DEFAULT_SUFFIX_DROP_WEIGHTS } from "../common/constants/equipment-appearance";
 import {
   COMBAT_SKILL_NUMBER_SEEDS,
   COMBAT_SKILL_STATUS_SEEDS,
@@ -987,6 +988,8 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
         suffix_labels TEXT    NOT NULL DEFAULT '[]',
         prefix_colors TEXT    NOT NULL DEFAULT '[]',
         suffix_colors TEXT    NOT NULL DEFAULT '[]',
+        prefix_drop_weights TEXT NOT NULL DEFAULT '[]',
+        suffix_drop_weights TEXT NOT NULL DEFAULT '[]',
         updated_at    INTEGER NOT NULL DEFAULT 0
       );
 
@@ -1797,6 +1800,14 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
     // 品质文字颜色收管理端（#720）：存量库补列（空数组 = 客户端按内置色渲染，零迁移）
     this.ensureColumn("equipment_meta", "prefix_colors", "TEXT NOT NULL DEFAULT '[]'");
     this.ensureColumn("equipment_meta", "suffix_colors", "TEXT NOT NULL DEFAULT '[]'");
+    // 变体掉落权重（#1286）：存量库补列后是空数组，首次启动填出厂递减值。
+    // 条件是「任一边仍为空」—— 运营保存过的非空权重不会被重启盖回来。
+    this.ensureColumn("equipment_meta", "prefix_drop_weights", "TEXT NOT NULL DEFAULT '[]'");
+    this.ensureColumn("equipment_meta", "suffix_drop_weights", "TEXT NOT NULL DEFAULT '[]'");
+    this.execute(
+      "UPDATE equipment_meta SET prefix_drop_weights = ?, suffix_drop_weights = ? WHERE id = 1 AND (prefix_drop_weights = '[]' OR suffix_drop_weights = '[]')",
+      [JSON.stringify(DEFAULT_PREFIX_DROP_WEIGHTS), JSON.stringify(DEFAULT_SUFFIX_DROP_WEIGHTS)],
+    );
     // 称号成长列表顺序（#230）：存量库补列；部分唯一索引保证 upgrade 渠道的行不重号（可空行不参与）
     this.ensureColumn("titles", "upgrade_order", "INTEGER");
     this.db.exec(

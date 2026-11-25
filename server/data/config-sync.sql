@@ -165,7 +165,7 @@ INSERT INTO "equipment_appearance" ("id", "borders", "backgrounds", "custom_bord
 
 -- ===== equipment_meta（1 行）=====
 DELETE FROM "equipment_meta";
-INSERT INTO "equipment_meta" ("id", "prefix_rates", "suffix_rates", "prefix_labels", "suffix_labels", "updated_at", "prefix_colors", "suffix_colors") VALUES (1, '[1,1.1,1.2,1.3,1.4]', '[1,2,3]', '["普通的","强化的","精良的","极品的","超神的"]', '["人级","天级","神级"]', 0, '["#DDDDDD","#6EE86E","#4DA6FF","#C77DFF","#FFA640"]', '["#B0B0B0","#4DE3FF","#FFD700"]');
+INSERT INTO "equipment_meta" ("id", "prefix_rates", "suffix_rates", "prefix_labels", "suffix_labels", "updated_at", "prefix_colors", "suffix_colors", "prefix_drop_weights", "suffix_drop_weights") VALUES (1, '[1,1.1,1.2,1.3,1.4]', '[1,2,3]', '["普通的","强化的","精良的","极品的","超神的"]', '["人级","天级","神级"]', 0, '["#DDDDDD","#6EE86E","#4DA6FF","#C77DFF","#FFA640"]', '["#B0B0B0","#4DE3FF","#FFD700"]', '[100,50,25,12,6]', '[100,40,12]');
 
 -- ===== equipment_slots（13 行）=====
 DELETE FROM "equipment_slots";
