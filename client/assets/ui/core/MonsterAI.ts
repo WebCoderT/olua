@@ -129,7 +129,7 @@ export default class MonsterAI {
    * 播一次服务端驱动的动作（#372：由 MonsterManager 收到 casts / hits 后调用）
    *
    * 服务端权威模式下怪物的行为不在本地决策，动作只能由事件驱动：
-   * 普攻命中 → attack_near；释放技能 → 技能配置的 action。
+   * 普攻命中 → attack（#1249：怪物素材没有 attack_near，普攻与技能共用 attack 段）；释放技能 → 技能配置的 action。
    * 半销毁节点、已死亡的怪、还没装载动画的怪一律静默跳过 —— 这是最常见的崩点。
    *
    * #1240 动作锁：非循环动作（普攻/施法这类一次性演出）起播后上锁，
@@ -225,7 +225,7 @@ export default class MonsterAI {
   /**
    * 播放怪物动作
    * 只有动作或朝向变了才切换（每帧重启动画会永远停在第一帧）；
-   * 该动作/朝向没有帧资源时回退待机（如 attack_near 只有部分方向），保证怪物身上一直有动画在播
+   * 该动作/朝向没有帧资源时回退待机（如个别包缺 attack 段），保证怪物身上一直有动画在播
    * @returns 实际生效的动作（含缺帧回退成 STAND 的那一种；调用方据此决定是否上动作锁）
    */
   private static playAction(animate: Animation, state: MonsterAIState, action: ACTION, direction: DIRECTION): ACTION {

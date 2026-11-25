@@ -322,6 +322,40 @@ function main() {
     );
   }
 
+  group("七、普攻动作选择守点（#1249：普攻命中播怪物专用 attack 段）");
+  {
+    const mmSource = fs.readFileSync(path.join(__dirname, "../assets/ui/core/MonsterManager.ts"), "utf8");
+    /**
+     * 按大括号配对切方法体（不按缩进）；只认**声明形态**（`名字(参数) {`），
+     * 跳过 `this.xxx(...)` 这类调用点 —— 方法名找不到声明返回空串（空串一律判失败）。
+     */
+    const methodBody = (src, methodName) => {
+      const decl = new RegExp(methodName + "\\s*\\([^)]*\\)\\s*\\{");
+      const match = src.match(decl);
+      if (!match) return "";
+      const open = match.index + match[0].length - 1;
+      let depth = 0;
+      for (let i = open; i < src.length; i++) {
+        if (src[i] === "{") depth++;
+        else if (src[i] === "}") {
+          depth--;
+          if (depth === 0) return src.slice(open, i + 1);
+        }
+      }
+      return "";
+    };
+    const attackBody = methodBody(mmSource, "playServerAttack");
+    check(attackBody !== "", "反证法：playServerAttack 方法名写错必须拿到空串", attackBody.length ? "方法体已切出" : "空串");
+    check(
+      /playServerAction\(node,\s*ACTION\.ATTACK\)/.test(attackBody),
+      "普攻命中播怪物专用 attack 段（素材包只有 stand/walk/attack/injured/die）",
+    );
+    check(
+      attackBody.indexOf("ATTACK_NEAR") < 0,
+      "普攻不再写死角色专用 attack_near（怪物素材包没有这段，播它会静默回退待机）",
+    );
+  }
+
   Date.now = realNow;
   finish("怪物动作锁全绿：事件动作播完/超时/移动才解锁，缺帧回退不上锁");
 }
