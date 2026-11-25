@@ -1,0 +1,581 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>使用教程 · olua 开源项目</title>
+  <meta name="description" content="olua 完整使用教程：从登录、创建角色、背包与成长，到管理端的账号、装备、掉落、地图、公告与系统配置，全部配真机截图。" />
+  <link rel="canonical" href="https://yimw.cn/tutorial.html" />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://yimw.cn/tutorial.html" />
+  <meta property="og:title" content="使用教程 · olua 开源项目" />
+  <meta property="og:description" content="olua 完整使用教程：客户端从登录到成长，管理端从账号到地图配置，全部配真机截图。" />
+  <meta property="og:image" content="https://yimw.cn/assets/img/%E6%96%B0%E6%89%8B%E6%9D%91.jpg" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <link rel="icon" href="assets/icons/favicon.ico" sizes="any" />
+  <link rel="icon" type="image/png" sizes="256x256" href="assets/icons/logo-256.png" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+
+  <header class="nav" id="nav">
+    <div class="nav__inner">
+      <a class="nav__brand" href="index.html">
+        <img class="nav__logo" src="assets/icons/logo-256.png" alt="olua logo" />
+        <span class="nav__name">olua</span>
+      </a>
+      <nav class="nav__links" id="navLinks">
+        <a href="index.html">首页</a>
+        <a href="project.html">项目概览</a>
+        <a href="tutorial.html" class="is-active">使用教程</a>
+        <a href="architecture.html">数据流</a>
+        <a href="engineering.html">工程管理</a>
+        <a href="design.html">设计思路</a>
+        <a href="deploy.html">部署</a>
+        <a href="about.html">关于</a>
+      </nav>
+      <a class="nav__cta" href="https://game.yimw.cn" target="_blank" rel="noopener">在线试玩</a>
+      <button class="nav__toggle" id="navToggle" aria-label="打开菜单">
+        <span></span><span></span><span></span>
+      </button>
+    </div>
+  </header>
+
+  <section class="page-hero">
+    <p class="page-hero__crumb reveal">PLAYER &amp; OPERATOR GUIDE · 全流程</p>
+    <h1 class="page-hero__title reveal">使用教程</h1>
+    <p class="page-hero__sub reveal">从第一次登录，到运营后台改一条配置 —— 每一步都配真机截图</p>
+  </section>
+
+  <section class="section">
+    <div class="prose reveal">
+      <p>这份教程分两段：前半段是<b>玩家侧</b>，从登录、创建角色到背包、成长与社交；后半段是<b>管理端</b>，
+         按左侧导航顺序把每个页面讲一遍。所有截图都来自本地部署后的真实运行画面，点击任意截图可看原图。</p>
+      <div class="toc">
+        <a href="#start">01 开始游戏</a>
+        <a href="#hud">02 界面与操作</a>
+        <a href="#growth">03 成长与社交</a>
+        <a href="#admin-start">04 管理端入门</a>
+        <a href="#admin-ops">05 运营管理</a>
+        <a href="#admin-combat">06 战斗与装备</a>
+        <a href="#admin-world">07 世界与表现</a>
+        <a href="#admin-growth">08 养成与玩法</a>
+        <a href="#admin-system">09 系统管理</a>
+        <a href="#recipes">10 常用操作速查</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== 玩家侧 ==================== -->
+  <section class="section section--alt" id="start">
+    <div class="section__head reveal">
+      <h2 class="section__title">01 · 开始游戏</h2>
+      <p class="section__sub">登录 → 选区 → 建角色 → 进新手村</p>
+    </div>
+    <div class="guide-wrap">
+      <div class="prose reveal">
+        <p>浏览器打开 <a href="https://game.yimw.cn" target="_blank" rel="noopener">game.yimw.cn</a>，
+           没有下载、没有安装。第一次来先注册；账号下最多三个角色，选错职业不用重开账号。</p>
+      </div>
+      <div class="guide-grid">
+        <figure class="guide-figure reveal">
+          <a href="assets/img/登录.jpg" target="_blank" rel="noopener"><img src="assets/img/登录.jpg" alt="登录界面：账号、密码与区服" loading="lazy" /></a>
+          <figcaption><b>登录</b>：账号 + 密码 + 区服。顶部能看到当前版本号，右下角有用户协议与隐私政策入口。</figcaption>
+        </figure>
+        <figure class="guide-figure reveal">
+          <a href="assets/img/选择区服.jpg" target="_blank" rel="noopener"><img src="assets/img/选择区服.jpg" alt="选择区服：一区开放中" loading="lazy" /></a>
+          <figcaption><b>选择区服</b>：每个区独立存档、独立在线列表。区服状态、开服时间与推荐标签都由运营后台配置。</figcaption>
+        </figure>
+        <figure class="guide-figure reveal">
+          <a href="assets/img/角色选择.jpg" target="_blank" rel="noopener"><img src="assets/img/角色选择.jpg" alt="角色选择：账号下已有角色与创建入口" loading="lazy" /></a>
+          <figcaption><b>角色选择</b>：账号下已有角色按等级排开，右侧「创建角色」新增；每个角色显示职业、等级与所在区。</figcaption>
+        </figure>
+        <figure class="guide-figure reveal">
+          <a href="assets/img/创建角色.jpg" target="_blank" rel="noopener"><img src="assets/img/创建角色.jpg" alt="创建角色：性别、职业与角色名" loading="lazy" /></a>
+          <figcaption><b>创建角色</b>：选性别、职业，填角色名即可。当前三职业：<b>战士</b>近战抗打、<b>法师</b>远程群伤、<b>道士</b>带召唤与辅助。</figcaption>
+        </figure>
+        <figure class="guide-figure reveal">
+          <a href="assets/img/过渡场景.jpg" target="_blank" rel="noopener"><img src="assets/img/过渡场景.jpg" alt="进图过场：燃烧的城门" loading="lazy" /></a>
+          <figcaption><b>进图过场</b>：创建角色或切换地图时播放，过场结束才把操作权交回给玩家。</figcaption>
+        </figure>
+        <figure class="guide-figure reveal">
+          <a href="assets/img/新手村.jpg" target="_blank" rel="noopener"><img src="assets/img/新手村.jpg" alt="新手村：NPC、怪物与主界面" loading="lazy" /></a>
+          <figcaption><b>新手村</b>：出生点就在 NPC 旁边。左上角角色信息、右上角小地图、底部技能栏与功能入口一屏齐全。</figcaption>
+        </figure>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="hud">
+    <div class="section__head reveal">
+      <h2 class="section__title">02 · 界面与操作</h2>
+      <p class="section__sub">先认识屏幕上的每一块，再谈打怪</p>
+    </div>
+    <div class="guide-wrap">
+      <div class="prose reveal">
+        <p>常用操作：<b>WASD / 按住左键</b>移动，<b>左键点怪</b>攻击，<b>右键</b>跑步，<b>1~6</b>放技能；
+           手机浏览器会出现虚拟摇杆。新手引导只高亮、不锁操作，跟着点一遍就会。</p>
+      </div>
+      <div class="guide-grid">
+        <figure class="guide-figure reveal">
+          <a href="assets/img/角色信息.jpg" target="_blank" rel="noopener"><img src="assets/img/角色信息.jpg" alt="角色信息面板：等级、战力与装备" loading="lazy" /></a>
+          <figcaption><b>角色信息</b>：等级、战力、生命 / 魔法、攻防与装备槽位。换装后属性立刻重算，外观同步变化。</figcaption>
+        </figure>
+        <figure class="guide-figure reveal">
+          <a href="assets/img/属性点.jpg" target="_blank" rel="noopener"><img src="assets/img/属性点.jpg" alt="属性面板：战斗属性与四维加点" loading="lazy" /></a>
+          <figcaption><b>属性点</b>：上半部分是战斗属性总览，下半部分是力量 / 敏捷 / 体质 / 精神四维加点，点数由升级获得。</figcaption>
+        </figure>
+        <figure class="guide-figure reveal">
+          <a href="assets/img/背包.jpg" target="_blank" rel="noopener"><img src="assets/img/背包.jpg" alt="背包：物品格子、整理与回收" loading="lazy" /></a>
+          <figcaption><b>背包</b>：格子按品质描边，支持整理、拖动、使用、回收；底部还有自动回收与自动使用的勾选入口。</figcaption>
+        </figure>
+        <figure class="guide-figure reveal">
+          <a href="assets/img/物品掉落.jpg" target="_blank" rel="noopener"><img src="assets/img/物品掉落.jpg" alt="地面掉落：品质光柱与拾取提示" loading="lazy" /></a>
+          <figcaption><b>物品掉落</b>：装备落地按品质升起光柱，品质越高越显眼；走近自动拾取，掉落结果由服务端结算。</figcaption>
+        </figure>
+        <figure class="guide-figure reveal">
+          <a href="assets/img/小地图.jpg" target="_blank" rel="noopener"><img src="assets/img/小地图.jpg" alt="小地图预览：怪物红点与传送入口" loading="lazy" /></a>
+          <figcaption><b>小地图</b>：右上角实时显示周围怪物与队友；点开放大后，左键寻路、右键传送。</figcaption>
+        </figure>
+        <figure class="guide-figure reveal">
+          <a href="assets/img/地图传送官.jpg" target="_blank" rel="noopener"><img src="assets/img/地图传送官.jpg" alt="地图传送官：按等级分组的传送列表" loading="lazy" /></a>
+          <figcaption><b>地图传送官</b>：按等级段列出可去的地图，战力不够会直接告诉你差多少，不会让你白跑。</figcaption>
+        </figure>
+      </div>
+    </div>
+  </section>
+
+  <section class="section section--alt" id="growth">
+    <div class="section__head reveal">
+      <h2 class="section__title">03 · 成长与社交</h2>
+      <p class="section__sub">三条成长线、商城与外观，以及同屏的人</p>
+    </div>
+    <div class="guide-wrap">
+      <div class="guide-grid">
+        <figure class="guide-figure reveal">
+          <a href="assets/img/战魂.jpg" target="_blank" rel="noopener"><img src="assets/img/战魂.jpg" alt="战魂系统：37 阶成长线" loading="lazy" /></a>
+          <figcaption><b>战魂 · 37 阶</b>：消耗战魂精华逐阶升级，每阶加属性并计入战力；升级材料与数值全部在管理端配置。</figcaption>
+        </figure>
+        <figure class="guide-figure reveal">
+          <a href="assets/img/称号.jpg" target="_blank" rel="noopener"><img src="assets/img/称号.jpg" alt="称号系统：34 阶称号链" loading="lazy" /></a>
+          <figcaption><b>称号 · 34 阶</b>：解锁后顶在角色头顶，既是排面也是高级地图的准入条件之一。</figcaption>
+        </figure>
+        <figure class="guide-figure reveal">
+          <a href="assets/img/军衔.jpg" target="_blank" rel="noopener"><img src="assets/img/军衔.jpg" alt="军衔系统：100 阶军衔" loading="lazy" /></a>
+          <figcaption><b>军衔 · 100 阶</b>：最长的一条成长线，从新兵一路升到元帅，等级参与战力与地图准入计算。</figcaption>
+        </figure>
+        <figure class="guide-figure reveal">
+          <a href="assets/img/社交.jpg" target="_blank" rel="noopener"><img src="assets/img/社交.jpg" alt="社交面板：好友、敌人、黑名单与举报" loading="lazy" /></a>
+          <figcaption><b>社交</b>：好友需要双方同意，敌人是单向的，黑名单与举报各走各的入口；同屏名字按关系上色。</figcaption>
+        </figure>
+        <figure class="guide-figure reveal">
+          <a href="assets/img/商城.jpg" target="_blank" rel="noopener"><img src="assets/img/商城.jpg" alt="商城：装备与道具分页浏览" loading="lazy" /></a>
+          <figcaption><b>商城</b>：装备、药品与功能道具分页浏览，买前能看完整属性，买后直接进背包。</figcaption>
+        </figure>
+        <figure class="guide-figure reveal">
+          <a href="assets/img/时装.jpg" target="_blank" rel="noopener"><img src="assets/img/时装.jpg" alt="时装：只改外观不改数值" loading="lazy" /></a>
+          <figcaption><b>时装</b>：只改外观、不改数值；穿上后八个方向的动作外观一起换。</figcaption>
+        </figure>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== 管理端 ==================== -->
+  <section class="section" id="admin-start">
+    <div class="section__head reveal">
+      <h2 class="section__title">04 · 管理端入门</h2>
+      <p class="section__sub">登录、选区、权限与顶栏</p>
+    </div>
+    <div class="guide-wrap">
+      <div class="prose reveal">
+        <p>管理端与游戏共用一套服务端数据，<b>改完即生效</b>，不用重启进程。第一次部署时，
+           第一个注册的管理员自动成为<b>超级管理员</b>；之后的账号由超管在「管理员」页开通，或凭注册码注册。</p>
+        <p>登录后先选一个区。管理端<b>一次只在一个区里干活</b>，顶栏的「区服」按钮随时可切；
+           这个选择不是权限限制 —— 超管能看所有区，只是每次请求带的是当前区的上下文。</p>
+      </div>
+      <div class="guide-grid">
+        <figure class="guide-figure reveal">
+          <a href="assets/img/admin/00-login.jpg" target="_blank" rel="noopener"><img src="assets/img/admin/00-login.jpg" alt="管理端登录：账号、密码与区服" loading="lazy" /></a>
+          <figcaption><b>登录</b>：账号 + 密码 + 区服三件套。登录失败会记录 IP，连续失败按服务端配置锁定。</figcaption>
+        </figure>
+        <figure class="guide-figure reveal">
+          <a href="assets/img/admin/00-register.jpg" target="_blank" rel="noopener"><img src="assets/img/admin/00-register.jpg" alt="管理端注册：注册码与账号信息" loading="lazy" /></a>
+          <figcaption><b>注册</b>：默认关闭。服务端配了注册码就按注册码放行；没配则需要显式打开注册开关。</figcaption>
+        </figure>
+        <figure class="guide-figure reveal">
+          <a href="assets/img/admin/01-overview.jpg" target="_blank" rel="noopener"><img src="assets/img/admin/01-overview.jpg" alt="管理端概览：账号、角色、在线与趋势" loading="lazy" /></a>
+          <figcaption><b>概览</b>：账号 / 角色 / 在线 / 封禁四个总数，加上新增与在线趋势，进后台先看这一屏。</figcaption>
+        </figure>
+        <figure class="guide-figure reveal">
+          <a href="assets/img/admin/49-me.jpg" target="_blank" rel="noopener"><img src="assets/img/admin/49-me.jpg" alt="我的账号：身份、权限点与改密" loading="lazy" /></a>
+          <figcaption><b>我的账号</b>：当前身份、登录记录、<b>逐条权限点</b>与改密入口。改密成功后旧令牌当场失效。</figcaption>
+        </figure>
+      </div>
+    </div>
+  </section>
+
+  <section class="section section--alt" id="admin-ops">
+    <div class="section__head reveal">
+      <h2 class="section__title">05 · 运营管理</h2>
+      <p class="section__sub">账号、角色、区服、帮会、邮件、举报与公告</p>
+    </div>
+    <div class="guide-wrap">
+      <div class="prose reveal">
+        <p>这一组是日常运营最常来的地方：查人、封人、发东西、发公告。所有写操作都会自动进「操作日志」，
+           谁在什么时候改了什么都追得到。</p>
+      </div>
+      <div class="guide-grid">
+        <figure class="guide-figure reveal">
+          <a href="assets/img/admin/02-accounts.jpg" target="_blank" rel="noopener"><img src="assets/img/admin/02-accounts.jpg" alt="账号管理列表" loading="lazy" /></a>
+          <figcaption><b>账号管理</b>：按账号 / 状态 / 注册时间筛选，支持封禁、解封、重置口令与批量操作。</figcaption>
+        </figure>
+        <figure class="guide-figure reveal">
+          <a href="assets/img/admin/03-roles.jpg" target="_blank" rel="noopener"><img src="assets/img/admin/03-roles.jpg" alt="角色管理列表" loading="lazy" /></a>
+          <figcaption><b>角色管理</b>：按角色名 / id / 等级 / 在线状态查，点进去能看到完整角色档案。</figcaption>
+        </figure>
+        <figure class="guide-figure reveal">
+          <a href="assets/img/admin/02b-account-detail.jpg" target="_blank" rel="noopener"><img src="assets/img/admin/02b-account-detail.jpg" alt="账号详情：封禁、重置口令、补录邮箱与角色列表" loading="lazy" /></a>
+          <figcaption><b>账号详情</b>：账号状态、注册 / 最近登录、邮箱补录，以及该账号在本区的角色列表；封禁、重置口令、清空角色都在这一页。</figcaption>
+        </figure>
+        <figure class="guide-figure reveal">
+          <a href="assets/img/admin/03b-role-detail.jpg" target="_blank" rel="noopener"><img src="assets/img/admin/03b-role-detail.jpg" alt="角色详情：属性、装备、背包、技能与成长线" loading="lazy" /></a>
+          <figcaption><b>角色详情</b>：左侧只读属性与战力，右侧直接换装备、改背包 / 技能 / 时装 / 称号 / 战魂 / 军衔；保存只提交改动过的字段。</figcaption>
+        </figure>
+        <figure class="guide-figure reveal">
+          <a href="assets/img/admin/04-zones.jpg" target="_blank" rel="noopener"><img src="assets/img/admin/04-zones.jpg" alt="区服运营：状态、开服时间与合并" loading="lazy" /></a>
+          <figcaption><b>区服运营</b>：改区服状态（开放 / 维护）、开服时间、推荐标签，也能发起合区。</figcaption>
+        </figure>
+        <figure class="guide-figure reveal">
+          <a href="assets/img/admin/05-guilds.jpg" target="_blank" rel="noopener"><img src="assets/img/admin/05-guilds.jpg" alt="帮会管理列表" loading="lazy" /></a>
+          <figcaption><b>帮会管理</b>：查帮会、看成员与申请，必要时解散或改公告。</figcaption>
+        </figure>
+        <figure class="guide-figure reveal">
+          <a href="assets/img/admin/06-mails.jpg" target="_blank" rel="noopener"><img src="assets/img/admin/06-mails.jpg" alt="邮件列表与投递状态" loading="lazy" /></a>
+          <figcaption><b>邮件</b>：系统邮件的投递记录与状态，失败可重试；附件与过期时间都在这里看。</figcaption>
+        </figure>
+        <figure class="guide-figure reveal">
+          <a href="assets/img/admin/07-mail-send.jpg" target="_blank" rel="noopener"><img src="assets/img/admin/07-mail-send.jpg" alt="发消息：给单个角色发邮件" loading="lazy" /></a>
+          <figcaption><b>发消息</b>：给指定角色发邮件，正文 + 附件。角色 id 可以用角色选择器挑，不用背编号。</figcaption>
+        </figure>
+        <figure class="guide-figure reveal">
+          <a href="assets/img/admin/08-mail-broadcast.jpg" target="_blank" rel="noopener"><img src="assets/img/admin/08-mail-broadcast.jpg" alt="消息群发：按条件筛选收件人" loading="lazy" /></a>
+          <figcaption><b>消息群发</b>：按区服 / 等级 / 在线状态筛收件人，先预览人数再发送。</figcaption>
+        </figure>
+        <figure class="guide-figure reveal">
+          <a href="assets/img/admin/09-reports.jpg" target="_blank" rel="noopener"><img src="assets/img/admin/09-reports.jpg" alt="玩家举报列表" loading="lazy" /></a>
+          <figcaption><b>玩家举报</b>：玩家提交的举报按时间排开，带被举报人与原因，处理结果留痕。</figcaption>
+        </figure>
+        <figure class="guide-figure reveal">
+          <a href="assets/img/admin/10-announcements.jpg" target="_blank" rel="noopener"><img src="assets/img/admin/10-announcements.jpg" alt="公告：全区与分区公告" loading="lazy" /></a>
+          <figcaption><b>公告</b>：全区 / 分区公告，支持定时上下线；游戏内滚动条与登录页提示读的是同一份数据。</figcaption>
+        </figure>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="admin-combat">
+    <div class="section__head reveal">
+      <h2 class="section__title">06 · 战斗与装备</h2>
+      <p class="section__sub">装备体系、对齐工作台、怪物 / 技能 / 状态与掉落</p>
+    </div>
+    <div class="guide-wrap">
+      <div class="prose reveal">
+        <p>这一组页面决定「游戏里看到什么、打出多少」。所有数值都直接落库，服务端只认库里的值；
+           改完不需要发版，下一次进图或刷新快照就生效。</p>
+      </div>
+      <div class="guide-grid">
+        <figure class="guide-figure reveal">
+          <a href="assets/img/admin/11-equipments.jpg" target="_blank" rel="noopener"><img src="assets/img/admin/11-equipments.jpg" alt="装备配置：基础件与变体" loading="lazy" /></a>
+          <figcaption><b>装备配置</b>：基础件 × 前后缀生成变体，逐件改等级、售价与八项属性。</figcaption>
+        </figure>
+        <figure class="guide-figure reveal">
+          <a href="assets/img/admin/12-equipment-tiers.jpg" target="_blank" rel="noopener"><img src="assets/img/admin/12-equipment-tiers.jpg" alt="前后缀管理：品质与阶级" loading="lazy" /></a>
+          <figcaption><b>前后缀管理</b>：前缀五档决定属性倍率与名字颜色，后缀三档决定成长上限。</figcaption>
+        </figure>
+        <figure class="guide-figure reveal">
+          <a href="assets/img/admin/13-equipment-settings.jpg" target="_blank" rel="noopener"><img src="assets/img/admin/13-equipment-settings.jpg" alt="槽位与规则：部位顺序与回收价" loading="lazy" /></a>
+          <figcaption><b>槽位与规则</b>：部位 key、名称、底图、位置分组与「一键整理」顺序都在这里定。</figcaption>
+        </figure>
+        <figure class="guide-figure reveal">
+          <a href="assets/img/admin/14-equipment-borders.jpg" target="_blank" rel="noopener"><img src="assets/img/admin/14-equipment-borders.jpg" alt="装备边框：品质对应边框素材" loading="lazy" /></a>
+          <figcaption><b>装备边框</b>：每个品质对应一套边框动画，可从素材文件夹同步，引用失效会标黄。</figcaption>
+        </figure>
+        <figure class="guide-figure reveal">
+          <a href="assets/img/admin/15-equipment-backgrounds.jpg" target="_blank" rel="noopener"><img src="assets/img/admin/15-equipment-backgrounds.jpg" alt="装备详情背景：逐品质背景动画" loading="lazy" /></a>
+          <figcaption><b>装备详情背景</b>：详情面板的背景动画按品质配置，和边框一样支持文件夹同步。</figcaption>
+        </figure>
+        <figure class="guide-figure reveal">
+          <a href="assets/img/admin/16-equip-align.jpg" target="_blank" rel="noopener"><img src="assets/img/admin/16-equip-align.jpg" alt="装备对齐：8 方向动作帧对位" loading="lazy" /></a>
+          <figcaption><b>装备对齐</b>：8 个方向的装备动作帧逐帧调位置与缩放，改完即落库。</figcaption>
+        </figure>
+        <figure class="guide-figure reveal">
+          <a href="assets/img/admin/17-equip-in-align.jpg" target="_blank" rel="noopener"><img src="assets/img/admin/17-equip-in-align.jpg" alt="内观对齐：武器与衣服外观对位" loading="lazy" /></a>
+          <figcaption><b>内观对齐</b>：角色信息面板里的武器 / 衣服外观逐件对位，与战斗内对齐分开存。</figcaption>
+        </figure>
+        <figure class="guide-figure reveal">
+          <a href="assets/img/admin/18-monsters.jpg" target="_blank" rel="noopener"><img src="assets/img/admin/18-monsters.jpg" alt="怪物配置：属性、AI 与技能" loading="lazy" /></a>
+          <figcaption><b>怪物配置</b>：血量、攻击、防御、移动速度、AI 参数与携带技能，逐只怪单独配。</figcaption>
+        </figure>
+        <figure class="guide-figure reveal">
+          <a href="assets/img/admin/19-skills.jpg" target="_blank" rel="noopener"><img src="assets/img/admin/19-skills.jpg" alt="技能配置：冷却、耗蓝与伤害" loading="lazy" /></a>
+          <figcaption><b>技能配置</b>：冷却、耗蓝、距离、伤害公式与特效，职业归属也在这里定。</figcaption>
+        </figure>
+        <figure class="guide-figure reveal">
+          <a href="assets/img/admin/20-statuses.jpg" target="_blank" rel="noopener"><img src="assets/img/admin/20-statuses.jpg" alt="状态配置：Buff 与结算间隔" loading="lazy" /></a>
+          <figcaption><b>状态配置</b>：Buff / Debuff 的持续时间、叠加规则与每秒结算间隔。</figcaption>
+        </figure>
+        <figure class="guide-figure reveal">
+          <a href="assets/img/admin/21-combat-weights.jpg" target="_blank" rel="noopener"><img src="assets/img/admin/21-combat-weights.jpg" alt="战斗力权重：各项属性换算" loading="lazy" /></a>
+          <figcaption><b>战斗力权重</b>：攻击、防御、生命等属性各自折算多少战力，改这里会影响所有角色的战力与地图准入。</figcaption>
+        </figure>
+        <figure class="guide-figure reveal">
+          <a href="assets/img/admin/22-drops.jpg" target="_blank" rel="noopener"><img src="assets/img/admin/22-drops.jpg" alt="掉落表配置：条目池与权重" loading="lazy" /></a>
+          <figcaption><b>掉落表配置</b>：条目池 + 权重 + 概率 + 件数，一张表可被多只怪复用。</figcaption>
+        </figure>
+        <figure class="guide-figure reveal">
+          <a href="assets/img/admin/23-monster-drops.jpg" target="_blank" rel="noopener"><img src="assets/img/admin/23-monster-drops.jpg" alt="怪物掉落：逐怪绑定掉落表" loading="lazy" /></a>
+          <figcaption><b>怪物掉落</b>：每只怪绑定哪些掉落表、各自概率多少，逐条可调。</figcaption>
+        </figure>
+        <figure class="guide-figure reveal">
+          <a href="assets/img/admin/24-drop-monitor.jpg" target="_blank" rel="noopener"><img src="assets/img/admin/24-drop-monitor.jpg" alt="掉落监控：实时掉率与异常" loading="lazy" /></a>
+          <figcaption><b>掉落监控</b>：实时看各图各怪的掉落次数与稀有物产出，异常掉率一眼能发现。</figcaption>
+        </figure>
+        <figure class="guide-figure reveal">
+          <a href="assets/img/admin/25-drop-records.jpg" target="_blank" rel="noopener"><img src="assets/img/admin/25-drop-records.jpg" alt="掉落流水：逐条掉落记录" loading="lazy" /></a>
+          <figcaption><b>掉落流水</b>：谁在什么时间从哪只怪身上掉了什么，逐条可查，支持按角色 / 物品筛。</figcaption>
+        </figure>
+      </div>
+    </div>
+  </section>
+
+  <section class="section section--alt" id="admin-world">
+    <div class="section__head reveal">
+      <h2 class="section__title">07 · 世界与表现</h2>
+      <p class="section__sub">地图、NPC、特效、音效、运行时参数与新手引导</p>
+    </div>
+    <div class="guide-wrap">
+      <div class="prose reveal">
+        <p>地图页是整个管理端最「可视化」的一页：底图上直接放 NPC、画刷怪区、画碰撞盒、点复活点。
+           改完点「重载世界」，当前在线的玩家会按新配置重新加载。</p>
+      </div>
+      <div class="guide-grid">
+        <figure class="guide-figure reveal">
+          <a href="assets/img/admin/26-maps.jpg" target="_blank" rel="noopener"><img src="assets/img/admin/26-maps.jpg" alt="地图管理：底图、NPC、刷怪区与碰撞盒" loading="lazy" /></a>
+          <figcaption><b>地图管理</b>：底图上放 NPC、矩形刷怪区、碰撞盒与复活点；右侧面板逐项编辑，支持重载世界。</figcaption>
+        </figure>
+        <figure class="guide-figure reveal">
+          <a href="assets/img/admin/27-npcs.jpg" target="_blank" rel="noopener"><img src="assets/img/admin/27-npcs.jpg" alt="NPC 配置：对话、商店与传送" loading="lazy" /></a>
+          <figcaption><b>NPC 配置</b>：NPC 名称、立绘、对话与功能（商店 / 传送 / 任务）逐条配。</figcaption>
+        </figure>
+        <figure class="guide-figure reveal">
+          <a href="assets/img/admin/28-ui-effects.jpg" target="_blank" rel="noopener"><img src="assets/img/admin/28-ui-effects.jpg" alt="特效管理：掉落光柱与 UI 特效" loading="lazy" /></a>
+          <figcaption><b>特效管理</b>：掉落光柱、按钮光效等 UI 特效的素材与播放参数。</figcaption>
+        </figure>
+        <figure class="guide-figure reveal">
+          <a href="assets/img/admin/29-audio.jpg" target="_blank" rel="noopener"><img src="assets/img/admin/29-audio.jpg" alt="音效配置：背景音与按钮音" loading="lazy" /></a>
+          <figcaption><b>音效配置</b>：登录背景音、按钮点击音等 key 对应到具体音频文件，素材从客户端目录直读。</figcaption>
+        </figure>
+        <figure class="guide-figure reveal">
+          <a href="assets/img/admin/30-runtime-params.jpg" target="_blank" rel="noopener"><img src="assets/img/admin/30-runtime-params.jpg" alt="运行时参数：战斗、移动、AOI 与掉落" loading="lazy" /></a>
+          <figcaption><b>运行时参数</b>：战斗、移动、施法距离、AOI、掉落与自动战斗参数，带「恢复推荐值」。</figcaption>
+        </figure>
+        <figure class="guide-figure reveal">
+          <a href="assets/img/admin/31-guide-steps.jpg" target="_blank" rel="noopener"><img src="assets/img/admin/31-guide-steps.jpg" alt="新手引导：步骤、高亮目标与触发事件" loading="lazy" /></a>
+          <figcaption><b>新手引导</b>：每步的标识、标题、高亮目标、推进事件与文案，顺序可上下移动。</figcaption>
+        </figure>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="admin-growth">
+    <div class="section__head reveal">
+      <h2 class="section__title">08 · 养成与玩法</h2>
+      <p class="section__sub">称号、战魂、军衔、成长参数、物品、商城、任务与成就</p>
+    </div>
+    <div class="guide-wrap">
+      <div class="guide-grid">
+        <figure class="guide-figure reveal">
+          <a href="assets/img/admin/32-titles.jpg" target="_blank" rel="noopener"><img src="assets/img/admin/32-titles.jpg" alt="称号配置：34 阶称号链" loading="lazy" /></a>
+          <figcaption><b>称号配置</b>：34 阶称号的名称、属性、升级消耗与头顶显示样式。</figcaption>
+        </figure>
+        <figure class="guide-figure reveal">
+          <a href="assets/img/admin/33-souls.jpg" target="_blank" rel="noopener"><img src="assets/img/admin/33-souls.jpg" alt="战魂配置：37 阶升级链" loading="lazy" /></a>
+          <figcaption><b>战魂配置</b>：37 阶战魂的升级顺序、材料与属性加成。</figcaption>
+        </figure>
+        <figure class="guide-figure reveal">
+          <a href="assets/img/admin/34-ranks.jpg" target="_blank" rel="noopener"><img src="assets/img/admin/34-ranks.jpg" alt="军衔配置：100 阶军衔" loading="lazy" /></a>
+          <figcaption><b>军衔配置</b>：100 阶军衔的晋升条件、属性与显示名。</figcaption>
+        </figure>
+        <figure class="guide-figure reveal">
+          <a href="assets/img/admin/35-growth.jpg" target="_blank" rel="noopener"><img src="assets/img/admin/35-growth.jpg" alt="成长参数：等级曲线与全局标量" loading="lazy" /></a>
+          <figcaption><b>成长参数</b>：等级经验曲线、升级属性与全局成长标量。</figcaption>
+        </figure>
+        <figure class="guide-figure reveal">
+          <a href="assets/img/admin/36-items.jpg" target="_blank" rel="noopener"><img src="assets/img/admin/36-items.jpg" alt="物品配置：材料与功能道具" loading="lazy" /></a>
+          <figcaption><b>物品配置</b>：材料、功能道具的名称、图标、堆叠与使用效果。</figcaption>
+        </figure>
+        <figure class="guide-figure reveal">
+          <a href="assets/img/admin/37-drugs.jpg" target="_blank" rel="noopener"><img src="assets/img/admin/37-drugs.jpg" alt="药品配置：五档药品" loading="lazy" /></a>
+          <figcaption><b>药品配置</b>：五档药品的回血量 / 回蓝量、冷却与售价。</figcaption>
+        </figure>
+        <figure class="guide-figure reveal">
+          <a href="assets/img/admin/38-money-items.jpg" target="_blank" rel="noopener"><img src="assets/img/admin/38-money-items.jpg" alt="货币道具：元宝与绑定货币" loading="lazy" /></a>
+          <figcaption><b>货币道具</b>：元宝等货币道具的获取与消耗配置。</figcaption>
+        </figure>
+        <figure class="guide-figure reveal">
+          <a href="assets/img/admin/39-level-scrolls.jpg" target="_blank" rel="noopener"><img src="assets/img/admin/39-level-scrolls.jpg" alt="升级卷轴：7 种卷轴" loading="lazy" /></a>
+          <figcaption><b>升级卷轴</b>：7 种升级卷轴的等级区间、成功率与使用限制。</figcaption>
+        </figure>
+        <figure class="guide-figure reveal">
+          <a href="assets/img/admin/40-fashions.jpg" target="_blank" rel="noopener"><img src="assets/img/admin/40-fashions.jpg" alt="时装配置：外观素材与获取方式" loading="lazy" /></a>
+          <figcaption><b>时装配置</b>：时装外观素材、部位与获取方式，只改外观不改数值。</figcaption>
+        </figure>
+        <figure class="guide-figure reveal">
+          <a href="assets/img/admin/41-mall.jpg" target="_blank" rel="noopener"><img src="assets/img/admin/41-mall.jpg" alt="商城：分类、商品与库存" loading="lazy" /></a>
+          <figcaption><b>商城</b>：分类、商品、价格、库存与限购；装备可以自动上架。</figcaption>
+        </figure>
+        <figure class="guide-figure reveal">
+          <a href="assets/img/admin/42-quests.jpg" target="_blank" rel="noopener"><img src="assets/img/admin/42-quests.jpg" alt="任务配置：任务链与奖励" loading="lazy" /></a>
+          <figcaption><b>任务配置</b>：任务链、前置条件、目标与奖励；出厂主线与运营自建任务在同一页管理。</figcaption>
+        </figure>
+        <figure class="guide-figure reveal">
+          <a href="assets/img/admin/43-achievements.jpg" target="_blank" rel="noopener"><img src="assets/img/admin/43-achievements.jpg" alt="成就配置：条件与奖励" loading="lazy" /></a>
+          <figcaption><b>成就配置</b>：成就条件、奖励与分类；奖励会走游戏内邮件发放。</figcaption>
+        </figure>
+      </div>
+    </div>
+  </section>
+
+  <section class="section section--alt" id="admin-system">
+    <div class="section__head reveal">
+      <h2 class="section__title">09 · 系统管理</h2>
+      <p class="section__sub">管理员、日志、配置版本与系统信息</p>
+    </div>
+    <div class="guide-wrap">
+      <div class="prose reveal">
+        <p>后台自己的管理：谁能进、谁改了什么、配置被改到第几版、服务端跑得怎么样。
+           排障与追责先看这一组页，别一上来就翻服务端日志。</p>
+      </div>
+      <div class="guide-grid">
+        <figure class="guide-figure reveal">
+          <a href="assets/img/admin/44-admins.jpg" target="_blank" rel="noopener"><img src="assets/img/admin/44-admins.jpg" alt="管理员列表：角色与权限" loading="lazy" /></a>
+          <figcaption><b>管理员</b>：开通账号、分配角色（超管 / 管理员 / 只读）、重置口令与停用。</figcaption>
+        </figure>
+        <figure class="guide-figure reveal">
+          <a href="assets/img/admin/45-audit-logs.jpg" target="_blank" rel="noopener"><img src="assets/img/admin/45-audit-logs.jpg" alt="操作日志：谁改了什么" loading="lazy" /></a>
+          <figcaption><b>操作日志</b>：所有写操作自动记录，敏感字段已打码，可按人 / 动作 / 时间筛。</figcaption>
+        </figure>
+        <figure class="guide-figure reveal">
+          <a href="assets/img/admin/46-event-logs.jpg" target="_blank" rel="noopener"><img src="assets/img/admin/46-event-logs.jpg" alt="玩家行为流水：登录、进图、击杀与拾取" loading="lazy" /></a>
+          <figcaption><b>玩家行为流水</b>：登录、进图、击杀、拾取、消耗等玩家事件，排障时按角色一拉就清楚。</figcaption>
+        </figure>
+        <figure class="guide-figure reveal">
+          <a href="assets/img/admin/47-config-versions.jpg" target="_blank" rel="noopener"><img src="assets/img/admin/47-config-versions.jpg" alt="配置版本：版本列表与回滚" loading="lazy" /></a>
+          <figcaption><b>配置版本</b>：每次改配置生成一版，可看差异、可回滚；客户端按版本号决定要不要拉新快照。</figcaption>
+        </figure>
+        <figure class="guide-figure reveal">
+          <a href="assets/img/admin/48-system.jpg" target="_blank" rel="noopener"><img src="assets/img/admin/48-system.jpg" alt="系统信息：进程、数据库与配置快照" loading="lazy" /></a>
+          <figcaption><b>系统信息</b>：进程状态、数据库大小、配置快照导入导出与备份入口。</figcaption>
+        </figure>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="recipes">
+    <div class="section__head reveal">
+      <h2 class="section__title">10 · 常用操作速查</h2>
+      <p class="section__sub">五个最常被问到的流程</p>
+    </div>
+    <div class="guide-wrap">
+      <div class="prose reveal">
+        <h3>改一个数值，让全服生效</h3>
+        <ol>
+          <li>在对应配置页改值并保存（例如「怪物配置」里某只怪的血量）；</li>
+          <li>保存后配置版本 +1，服务端下次进图 / 下次快照拉取时使用新值；</li>
+          <li>要立刻验证，去「系统信息」看当前版本号，再让测试角色重新进图。</li>
+        </ol>
+
+        <h3>给一个角色发补偿</h3>
+        <ol>
+          <li>打开「发消息」，用角色选择器挑人；</li>
+          <li>填标题、正文与附件（元宝 / 物品 / 装备）；</li>
+          <li>发送后到「邮件」页确认投递状态，失败可重试。</li>
+        </ol>
+
+        <h3>改某张图的刷怪区</h3>
+        <ol>
+          <li>「地图管理」选中地图，在底图上拖出矩形刷怪区；</li>
+          <li>右侧选怪物、填数量与刷新间隔，保存；</li>
+          <li>点「重载世界」，在线玩家会按新配置重新加载该图。</li>
+        </ol>
+
+        <h3>调一件装备的外观位置</h3>
+        <ol>
+          <li>「装备对齐」选装备与方向，拖动 / 缩放动作帧对位；</li>
+          <li>「内观对齐」单独调角色信息面板里的外观；</li>
+          <li>保存即落库，客户端下次加载资源时使用新坐标。</li>
+        </ol>
+
+        <h3>配置改坏了怎么回滚</h3>
+        <ol>
+          <li>「配置版本」里找到改坏之前的版本；</li>
+          <li>看两版差异确认影响范围；</li>
+          <li>点回滚，生成一个新版本（历史不会被抹掉）。</li>
+        </ol>
+
+        <div class="callout reveal">
+          <b>权限提醒</b>：界面看不到某个菜单，通常是当前账号没有对应权限点，不是页面坏了。
+          超管可以在「管理员」页调整角色与权限；所有写接口服务端都会独立校验，前端隐藏只是体验。
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section section--alt">
+    <div class="section__head reveal">
+      <h2 class="section__title">继续往下看</h2>
+      <p class="section__sub">教程只是入口，细节都在文档里</p>
+    </div>
+    <div class="grid grid--features">
+      <a class="card reveal" href="guide.html">
+        <h3>新手指南</h3>
+        <p>操作小抄、升级路线与打宝心法，五分钟上手。</p>
+      </a>
+      <a class="card reveal" href="deploy.html">
+        <h3>部署自己的服务器</h3>
+        <p>一台装 Docker 的机器，四行命令起五个容器。</p>
+      </a>
+      <a class="card reveal" href="architecture.html">
+        <h3>架构与数据流</h3>
+        <p>一次攻击、一件装备、一条配置改动的完整路径。</p>
+      </a>
+      <a class="card reveal" href="https://github.com/WebCoderT/olua" target="_blank" rel="noopener">
+        <h3>源码与 issue</h3>
+        <p>MIT 协议，欢迎自己改；遇到问题直接提 issue。</p>
+      </a>
+    </div>
+    <p style="text-align:center;margin-top:40px;" class="reveal">
+      <a class="btn btn--blood" href="https://game.yimw.cn" target="_blank" rel="noopener">在线试玩</a>
+    </p>
+  </section>
+
+  <footer class="footer">
+    <img class="footer__logo" src="assets/icons/logo-256.png" alt="" aria-hidden="true" />
+    <p>olua · 免费开源的 2D 即时战斗项目 · 任何人都可以自己部署</p>
+    <nav class="footer__nav">
+      <a href="index.html">首页</a><span>·</span>
+      <a href="project.html">项目概览</a><span>·</span>
+      <a href="tutorial.html">使用教程</a><span>·</span>
+      <a href="architecture.html">数据流</a><span>·</span>
+      <a href="engineering.html">工程管理</a><span>·</span>
+      <a href="design.html">设计思路</a><span>·</span>
+      <a href="deploy.html">部署</a><span>·</span>
+      <a href="about.html">关于</a>
+    </nav>
+    <p class="footer__health">健康游戏忠告：抵制不良游戏，拒绝盗版游戏。注意自我保护，谨防受骗上当。适度游戏益脑，沉迷游戏伤身。合理安排时间，享受健康生活。</p>
+    <p class="footer__copy">© 2026 olua · 基于 MIT 协议开源 · <a href="https://github.com/WebCoderT/olua" target="_blank" rel="noopener">GitHub</a> / <a href="https://gitee.com/putiwan/olua" target="_blank" rel="noopener">Gitee</a></p>
+  </footer>
+
+  <script src="js/main.js"></script>
+</body>
+</html>
