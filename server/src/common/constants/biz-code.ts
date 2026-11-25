@@ -768,4 +768,24 @@ export const BizCode = {
    */
   REALTIME_WRONG_SHARD: 50150,
   //#endregion
+
+  //#region 配置快照导入导出（#1266）
+
+  /**
+   * 配置快照导出失败（脚本起不来 / 超时 / 数据是内存库）
+   *
+   * 单独一个码而不是并进 50000：导出是运维链路，失败原因要能让界面直接展示
+   * （内存库没文件可导 / 脚本缺失是两种完全不同的处理方式）。
+   */
+  CONFIG_SNAPSHOT_EXPORT_FAILED: 50151,
+  /**
+   * 配置快照导入失败（格式校验 / 版本闸 / 读回校验没过）
+   *
+   * CLI 的中文报错原样透传给界面 —— 三道自保的每一道都说得清「为什么拒、怎么办」，
+   * 重新包装只会丢信息。
+   */
+  CONFIG_SNAPSHOT_IMPORT_FAILED: 50152,
+  /** 已有一次导入正在进行（整表替换必须独占，两个管理员同时导会互相踩） */
+  CONFIG_SNAPSHOT_IMPORT_BUSY: 50153,
+  //#endregion
 } as const;

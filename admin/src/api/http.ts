@@ -10,6 +10,12 @@ export interface RequestConfig {
   path: string;
   query?: Record<string, string | number | undefined | null>;
   body?: unknown;
+  /**
+   * 原始文本体（#1266）：为 true 时 `body` 是现成的字符串，**不再 JSON.stringify**。
+   * 配置快照导入专用 —— 4MB+ 的 SQL 塞进 JSON 信封会被解析器默认上限顶回去，
+   * 也没有必要多包一层。Content-Type 由调用方自己给（text/plain）。
+   */
+  rawBody?: boolean;
   /** 是否携带令牌（登录 / 注册为 false） */
   auth: boolean;
   /** 静默模式：不触发全局错误提示（表单这类自己就地展示错误的场景用） */
@@ -92,7 +98,11 @@ async function request<T>(partial: Partial<RequestConfig> & Pick<RequestConfig, 
     response = await fetch(buildUrl(config.path, config.query), {
       method: config.method,
       headers: config.headers,
-      body: config.body === undefined ? undefined : JSON.stringify(config.body),
+      body: config.rawBody
+        ? (config.body as string)
+        : config.body === undefined
+          ? undefined
+          : JSON.stringify(config.body),
       signal: controller.signal,
     });
   } catch (error) {
@@ -142,6 +152,8 @@ export interface HttpOptions {
   query?: RequestConfig["query"];
   auth?: boolean;
   silent?: boolean;
+  /** 单次请求放宽超时（毫秒）；不传用全局 API_TIMEOUT（导入快照这类慢操作用） */
+  timeout?: number;
 }
 
 /** 业务侧只认这几个方法 */
@@ -156,4 +168,20 @@ export const http = {
     request<T>({ method: "PATCH", path, body, auth: options.auth ?? true, silent: options.silent }),
   del: <T>(path: string, options: HttpOptions = {}) =>
     request<T>({ method: "DELETE", path, auth: options.auth ?? true, silent: options.silent }),
+  /**
+   * 原始文本 POST（#1266 配置快照导入专用）：体是现成的字符串，不包 JSON 信封。
+   * 只此一处直发文本体 —— 其它接口一律走 `post` 的 JSON 信封。
+   */
+  postText: <T>(path: string, text: string, options: HttpOptions = {}) =>
+    request<T>({
+      method: "POST",
+      path,
+      query: options.query,
+      body: text,
+      rawBody: true,
+      auth: options.auth ?? true,
+      silent: options.silent,
+      timeout: options.timeout ?? API_TIMEOUT,
+      headers: { "Content-Type": "text/plain; charset=utf-8" },
+    }),
 };

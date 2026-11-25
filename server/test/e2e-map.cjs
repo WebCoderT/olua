@@ -439,9 +439,11 @@ async function main() {
     checkEqual((afterSnap.body?.data?.mapTypes ?? []).length, 2, "快照同时下发类型分组（顺序即传送弹窗分组；#1177 收敛后 0 安全 / 1 野外）");
 
     // 资源路径不可改：请求里塞 src 会被白名单剥掉，返回仍是目录约定算出来的那个
+    // type 保持「1 野外」：#1266 起新库自举会保留出厂刷怪区（八卦台 3 个），
+    // 把带刷怪区的图改成安全地图会被「安全地图不刷怪」守点正确拒绝 —— 那是另一条测试的事
     const withSrc = await api(base, "PATCH", "/api/admin/maps/1", {
       token: rootToken,
-      body: { label: "卧龙城", type: "0", level: 10, src: "map/evil/evil" },
+      body: { label: "八卦台·改", type: "1", level: 10, src: "map/evil/evil" },
     });
     checkEqual(withSrc.status, 200, "带多余字段的请求仍成功（白名单剥离，不是 400）");
     checkEqual(withSrc.body?.data?.src, "map/1/1", "塞进来的 src 被丢掉 —— 下发方永远改不到客户端加载哪张图");

@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import { formatBytes, formatTime, formatTimeFull, PERMISSION, systemApi } from "../api";
+import { configSnapshotApi, formatBytes, formatTime, formatTimeFull, PERMISSION, systemApi } from "../api";
+import { ApiError } from "../api";
 import type { SystemInfo } from "../api";
-import { Badge, Button, Card, EmptyState, Spinner, tableClass, tdClass, thClass, theadClass } from "../components/ui";
+import { Badge, Button, Card, EmptyState, Notice, Spinner, tableClass, tdClass, thClass, theadClass } from "../components/ui";
 import { hasPermission } from "../store/session";
 import { toastSuccess } from "../store/toast";
 import { PageHeader } from "../components/PageHeader";
@@ -14,6 +15,182 @@ function InfoItem({ label, value }: { label: string; value: ReactNode }) {
       <p className="text-xs text-ink-5">{label}</p>
       <p className="mt-1 break-all text-sm text-ink-1">{value}</p>
     </div>
+  );
+}
+
+/**
+ * 配置快照的版本闸特征串（服务端 CLI 报错原文）
+ *
+ * 服务端导入失败时把 CLI 的中文报错透传回来；这里只认「文件比目标库旧」这一种
+ * 业务分支（它值得一个「确认回退」入口），其余失败一律原样展示、不提供重试开关。
+ */
+const VERSION_GATE_MARK = "文件比目标库旧";
+
+/**
+ * 配置快照导入 / 导出（#1266）
+ *
+ * 导出 = 当前库全部配置表序列化成 config-sync.sql（内容与 `make config-export` 完全一致），
+ * 下载留档；导入 = 上传一份 config-sync.sql 整表替换配置表（账号与存档不动），
+ * 语义全部继承 `make config-import` 的同一份脚本：导入前自动留档、版本闸、逐字节读回校验。
+ *
+ * 导入是全服生效的大操作，交互上三道确认：
+ * 1. 选文件后要点「开始导入」并过 `window.confirm`；
+ * 2. 版本闸拒绝（文件比库旧）→ 显示原文报错，用户勾「确认回退」才会带 force 重试；
+ * 3. 成功后 toast + 报告面板都提醒「重启服务端」—— 进程内存里的配置覆盖层不会自动刷新。
+ */
+function ConfigSnapshotCard() {
+  const canImport = hasPermission(PERMISSION.SYSTEM_WRITE);
+  const [exporting, setExporting] = useState(false);
+  const [file, setFile] = useState<File | null>(null);
+  const [importing, setImporting] = useState(false);
+  const [importError, setImportError] = useState<string | null>(null);
+  const [confirmRollback, setConfirmRollback] = useState(false);
+  const [report, setReport] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      const result = await systemApi.exportConfigSnapshot();
+      const blob = new Blob([result.sql], { type: "application/sql" });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `config-sync-v${result.version}-${new Date().toISOString().slice(0, 19).replaceAll(":", "")}.sql`;
+      anchor.click();
+      URL.revokeObjectURL(url);
+      toastSuccess(`已导出：${result.tables} 张配置表 / ${result.rows} 行 / 第 ${result.version} 版`);
+    } catch {
+      /* 错误已由请求层统一提示 */
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const runImport = async (rollback: boolean) => {
+    if (!file) return;
+    setImporting(true);
+    setImportError(null);
+    try {
+      const result = await configSnapshotApi.importRaw(await file.text(), rollback);
+      setReport(result.report);
+      setFile(null);
+      setConfirmRollback(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      toastSuccess("导入成功 —— 请尽快重启服务端，让内存里的配置与新库一致");
+    } catch (error) {
+      // silent 的自展示错误：版本闸拒绝要转成「确认回退」入口，不能只弹一次性 toast
+      setImportError(error instanceof ApiError ? error.message : "导入失败，请稍后重试");
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  const handleImport = () => {
+    if (!file) return;
+    if (
+      !window.confirm(
+        `确认导入「${file.name}」？\n\n` +
+          "将整表替换全部配置表（账号与角色存档不受影响），导入前的配置会自动留档。\n" +
+          "导入成功后需要重启服务端才完全生效。",
+      )
+    ) {
+      return;
+    }
+    void runImport(false);
+  };
+
+  return (
+    <Card
+      title="配置数据导入 / 导出"
+      description="导出的文件与 make config-export 的产物完全一致（config-sync.sql）；导入整表替换全部配置表，导入前自动留档"
+    >
+      <div className="flex flex-wrap items-center gap-3">
+        <Button variant="outline" loading={exporting} onClick={() => void handleExport()}>
+          导出当前配置
+        </Button>
+        <span className="text-xs text-ink-5">
+          下载 config-sync.sql 留档备份，或传到另一台机器批量替换
+        </span>
+      </div>
+
+      <div className="mt-5 border-t border-line pt-5">
+        {canImport ? (
+          <div className="flex flex-col gap-3">
+            <div className="flex flex-wrap items-center gap-3">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".sql,text/plain"
+                className="hidden"
+                onChange={(event) => {
+                  setImportError(null);
+                  setConfirmRollback(false);
+                  setFile(event.target.files?.[0] ?? null);
+                }}
+              />
+              <Button variant="outline" onClick={() => fileInputRef.current?.click()} disabled={importing}>
+                选择 config-sync.sql…
+              </Button>
+              {file ? (
+                <span className="text-xs text-ink-3">
+                  {file.name}（{formatBytes(file.size)}）
+                </span>
+              ) : (
+                <span className="text-xs text-ink-5">尚未选择文件</span>
+              )}
+              {file ? (
+                <Button variant="primary" loading={importing} onClick={handleImport}>
+                  开始导入
+                </Button>
+              ) : null}
+            </div>
+
+            <Notice tone="warn" title="导入会整表替换全部配置表">
+              只动配置表：账号、角色存档、审计日志不受影响。导入成功后<strong>必须重启服务端</strong>
+              （API 与实时两个进程），内存里已装载的配置才会与库一致。文件里的配置版本比库里旧时会被拒绝 ——
+              确认要回退的话，界面上会给出「确认回退」入口。
+            </Notice>
+
+            {importError ? (
+              <Notice tone="ember" title="导入失败">
+                <p className="whitespace-pre-wrap">{importError}</p>
+                {importError.includes(VERSION_GATE_MARK) ? (
+                  <label className="mt-2 flex items-start gap-2 text-ink-2">
+                    <input
+                      type="checkbox"
+                      checked={confirmRollback}
+                      onChange={(event) => setConfirmRollback(event.target.checked)}
+                    />
+                    <span>我确认要回退：用这份旧文件覆盖当前全部配置（导入前会自动留档，配置版本号只升不降）</span>
+                  </label>
+                ) : null}
+                {importError.includes(VERSION_GATE_MARK) && confirmRollback ? (
+                  <div className="mt-2">
+                    <Button variant="primary" loading={importing} onClick={() => void runImport(true)}>
+                      确认回退并导入
+                    </Button>
+                  </div>
+                ) : null}
+              </Notice>
+            ) : null}
+
+            {report ? (
+              <details className="rounded-xl border border-line bg-surface-2/40 px-4 py-3">
+                <summary className="cursor-pointer text-xs font-medium text-ink-2">
+                  上一次导入的报告（来自导入脚本，含留档路径）
+                </summary>
+                <pre className="mt-2 whitespace-pre-wrap font-mono text-[11px] leading-relaxed text-ink-3">{report}</pre>
+              </details>
+            ) : null}
+          </div>
+        ) : (
+          <Notice tone="muted">
+            导入需要「导入配置快照」权限（system:write，管理员 / 超级管理员持有）。当前账号只能导出备份。
+          </Notice>
+        )}
+      </div>
+    </Card>
   );
 }
 
@@ -209,6 +386,8 @@ export function SystemPage() {
           </div>
         ) : null}
       </Card>
+
+      <ConfigSnapshotCard />
 
       <Card
         title="配置快照"

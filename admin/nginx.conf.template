@@ -105,6 +105,11 @@ server {
     set $olua_api http://server:3100;
     proxy_pass $olua_api;
 
+    # 配置快照导入（#1266）：请求体就是 config-sync.sql 全文（当前约 4MB+，余量给配置增长）。
+    # 不放开的话默认 1MB 上限直接 413，界面表现为「导入失败」但服务端根本没收到请求。
+    # 边缘那一跳（TLS 反代）也要同值 —— 两层各自有默认上限，漏一层就只在 https 部署下炸。
+    client_max_body_size 64m;
+
     proxy_http_version 1.1;
     proxy_set_header Host $host;
     proxy_set_header X-Real-IP $remote_addr;

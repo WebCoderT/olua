@@ -49,6 +49,8 @@ import { ReviveResultDto } from "../modules/roles/dto/revive.dto";
 import { FashionBuyResultDto, FashionWearResultDto } from "../modules/roles/dto/fashion.dto";
 import { BagOpCellDto, BagOpDto, BagOpResultDto } from "../modules/roles/dto/bag-op.dto";
 import {
+  ConfigSnapshotExportDto,
+  ConfigSnapshotImportResultDto,
   SystemConfigItemDto,
   SystemDatabaseDto,
   SystemInfoDto,
@@ -378,6 +380,8 @@ export const SWAGGER_MODELS = [
   SystemDatabaseDto,
   SystemTableCountDto,
   SystemConfigItemDto,
+  ConfigSnapshotExportDto,
+  ConfigSnapshotImportResultDto,
   // 公告
   ActiveAnnouncementDto,
   AnnouncementDto,

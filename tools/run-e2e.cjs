@@ -113,6 +113,8 @@ const WEIGHT = {
   "test:e2e:realtime-shard": 3,
   // 一次启动 + 两刀（每刀前按真客户端冷却等 1.1 秒）+ 一次跨进程清空要等实时进程回写
   "test:e2e:drop-admin": 4,
+  // 一次完整启动 + 全量导出 / 导入各一次（导入的读回校验要把快照再生成一遍）+ 若干拒绝分支（无等待窗）
+  "test:e2e:config-snapshot": 2,
 };
 
 function weightOf(script) {

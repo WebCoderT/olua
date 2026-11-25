@@ -62,7 +62,11 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
     if (bootstrap.status === "imported") this.logger.log("出厂数据自举完成（空库首启，只发生一次）");
     // 必须排在自举之后：`config_meta` 由自举创建 —— 排在前面的话空库首启拿不到守门标记，
     // 第二次启动时迁移会把（运营 / 测试自建的）任务线与刷怪区再清一遍
-    this.clearQuestLinesOnce();
+    // #1266 修正：本次自举灌进来的库（marker = imported:*）**不清理** —— #1215 的星灯纪
+    // 任务线与刷怪区就在出厂快照里，清理会把「新部署自带任务线 / 刷怪区」整个抹掉；
+    // 清理的语义是「存量库里已被运营下线的那两批旧数据」，只对存量库（skipped:existing）
+    // 生效。这里把标记补写成「已处理」，下次启动不再进这段逻辑。
+    this.clearQuestLinesOnce(bootstrap.status === "imported");
     this.logger.log(`SQLite 就绪：${path}`);
   }
 
@@ -2217,12 +2221,21 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
    *
    * **只跑一次**（`config_meta.quest_lines_cleared`）：运营之后在管理端重建的任务与刷怪区
    * 不许被启动逻辑抹掉。`config_meta` 还不存在时直接跳过（那时是空库，自举灌的快照已经是空的了）。
+   *
+   * #1266 修正：`freshlyImported`（本次启动刚自举灌的库）**跳过清理**并直接写标记 ——
+   * #1215 之后出厂快照重新带上了任务线（28 条）与刷怪区（220 区），那正是运营拍板要
+   * 出厂就有的东西；这条清理只对存量库生效（自举 marker 是 `skipped:existing`）。
    */
-  private clearQuestLinesOnce(): void {
+  private clearQuestLinesOnce(freshlyImported = false): void {
     const hasMeta =
       this.count("SELECT COUNT(1) AS total FROM sqlite_master WHERE type = 'table' AND name = 'config_meta'") > 0;
     if (!hasMeta) return;
     if (this.get<{ value: string }>("SELECT value FROM config_meta WHERE key = ?", ["quest_lines_cleared"])) return;
+    if (freshlyImported) {
+      // 出厂快照自带的新任务线 / 刷怪区不是「要清的旧数据」：记下「已处理」，别的什么都不动
+      this.run("INSERT OR REPLACE INTO config_meta (key, value) VALUES (?, ?)", ["quest_lines_cleared", "skipped:freshly-imported"]);
+      return;
+    }
     const has = (table: string) =>
       this.count(`SELECT COUNT(1) AS total FROM sqlite_master WHERE type = 'table' AND name = '${table}'`) > 0;
     const quests = has("quests") ? this.execute("DELETE FROM quests").changes : 0;

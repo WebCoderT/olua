@@ -3109,6 +3109,32 @@ export type SystemInfo = {
   time: number;
 };
 
+export type ConfigSnapshotExport = {
+  /**
+   * config-sync.sql 全文（UTF-8 文本）
+   */
+  sql: string;
+  /**
+   * 配置表张数
+   */
+  tables: number;
+  /**
+   * 配置行数
+   */
+  rows: number;
+  /**
+   * 导出时库里的配置版本
+   */
+  version: number;
+};
+
+export type ConfigSnapshotImportResult = {
+  /**
+   * 导入脚本的完整输出（含占用统计、版本变化、留档路径）
+   */
+  report: string;
+};
+
 export type ActiveAnnouncement = {
   /**
    * 公告 id
@@ -11851,6 +11877,10 @@ export type AdminMapMonitorQuery = {
    * 本次最多取多少条事件（默认 60，上限 200）
    */
   limit?: number;
+};
+
+export type AdminSystemImportConfigSnapshotQuery = {
+  force: string;
 };
 
 export type AdminZoneMergePrecheckQuery = {
