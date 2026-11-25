@@ -9691,7 +9691,7 @@
     },
     "/admin/monsters/{id}": {
       "patch": {
-        "description": "**部分更新**：只改请求体里出现的字段。\n\n**基础数值与定位**（落在 `monsters` 表，改完即时生效 —— 世界播种与伤害结算直读它）：\n- `label`：名称（头顶名牌）。\n- `level`：显示用元数据，改它**不会**重算战斗数值。\n- `maxHp`：生命上限（已展开值，≥1）。已活着的世界实例沿用出生时的值，重生后用新值。\n- `attributes`：六项攻防区间，**整份提交、整份替换**（0 ≤ min ≤ max）。\n- `tier`：定位 normal / elite / boss。**不**重算已展开的血量 / 攻防，但决定 BOSS 判定（击杀 BOSS 才发的邮件读它）；掉落不随它变（看 `monster_drops` 那张表）。\n\n**行为参数**（落在 `monster_presentation` 表，服务端 AI 有 1 秒缓存 → 最迟 1 秒生效）：\n- `presentation.aggressive`：是否主动攻击玩家。关掉后只游走，被打才记恨。\n- `presentation.detectRange`：检测范围（像素半径），主动怪在这个距离内发现玩家。\n- `presentation.moveSpeed`：移动速度（像素/秒，出厂 80；玩家步行约 64 / 跑步约 128 px/s，追击速度落在两者之间——走着不跑会被追上、跑起来能脱身）。\n- `presentation.speedRate`：动作速度覆盖（动作键 → 每秒循环数）。键只认 stand / walk / run / injured / die（怪物素材只有这五个动作有帧）；**传 `{}` = 清空回客户端默认，不传 = 不改**。\n\n**生效时间三档**：基础数值即时；行为参数 ≤1 秒（实时进程 AI 缓存 TTL）；**画面表现**（动作速度、外观）要客户端重进地图才会拿到新快照。\n\n- `id` 不存在 → 404（`50019`）；传了 `presentation` 但这只怪没有资源表现行 → 404（`50038`，先去跑几何生成器）。\n- 动作键不在白名单 / 数值越界 → 400（`40000`）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
+        "description": "**部分更新**：只改请求体里出现的字段。\n\n**基础数值与定位**（落在 `monsters` 表，改完即时生效 —— 世界播种与伤害结算直读它）：\n- `label`：名称（头顶名牌）。\n- `level`：显示用元数据，改它**不会**重算战斗数值。\n- `maxHp`：生命上限（已展开值，≥1）。已活着的世界实例沿用出生时的值，重生后用新值。\n- `attributes`：六项攻防区间，**整份提交、整份替换**（0 ≤ min ≤ max）。\n- `tier`：定位 normal / elite / boss。**不**重算已展开的血量 / 攻防，但决定 BOSS 判定（击杀 BOSS 才发的邮件读它）；掉落不随它变（看 `monster_drops` 那张表）。\n\n**行为参数**（落在 `monster_presentation` 表，服务端 AI 有 1 秒缓存 → 最迟 1 秒生效）：\n- `presentation.aggressive`：是否主动攻击玩家。关掉后只游走，被打才记恨。\n- `presentation.detectRange`：检测范围（像素半径），主动怪在这个距离内发现玩家。\n- `presentation.moveSpeed`：移动速度（像素/秒，出厂 80；玩家步行约 64 / 跑步约 128 px/s，追击速度落在两者之间——走着不跑会被追上、跑起来能脱身）。\n- `presentation.speedRate`：动作速度覆盖（动作键 → 每帧秒数）。键只认 stand / walk / run / injured / die（怪物素材只有这五个动作有帧）；**传 `{}` = 清空回客户端默认，不传 = 不改**。\n\n**生效时间三档**：基础数值即时；行为参数 ≤1 秒（实时进程 AI 缓存 TTL）；**画面表现**（动作速度、外观）要客户端重进地图才会拿到新快照。\n\n- `id` 不存在 → 404（`50019`）；传了 `presentation` 但这只怪没有资源表现行 → 404（`50038`，先去跑几何生成器）。\n- 动作键不在白名单 / 数值越界 → 400（`40000`）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
         "operationId": "adminMonster.update",
         "parameters": [
           {
@@ -27631,7 +27631,7 @@
           },
           "speedRate": {
             "type": "object",
-            "description": "动作速度覆盖（只写要改的动作，每秒循环数；缺省走客户端 monsterDefaultSpeedRate）",
+            "description": "动作速度覆盖（只写要改的动作，值 = 每帧秒数；缺省走客户端 monsterDefaultSpeedRate）",
             "nullable": true,
             "additionalProperties": {
               "type": "number"
@@ -27772,7 +27772,7 @@
           },
           "speedRate": {
             "type": "object",
-            "description": "动作速度覆盖（动作键 → 每秒循环数）。**传 `{}` = 清空回客户端默认，不传 = 不改**；动作键只认 stand / walk / run / injured / die（其余动作没有帧）",
+            "description": "动作速度覆盖（动作键 → 每帧秒数）。**传 `{}` = 清空回客户端默认，不传 = 不改**；动作键只认 stand / walk / run / injured / die（其余动作没有帧）",
             "additionalProperties": {
               "type": "number"
             }

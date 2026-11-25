@@ -40,7 +40,8 @@ function attributeSummary(item: Monster): string {
 const ACTION_SPEED_KEYS: { key: string; label: string }[] = [
   { key: "stand", label: "待机" },
   { key: "walk", label: "行走" },
-  { key: "run", label: "奔跑" },
+  // key 沿用素材导出管线的 run，但这段实际是**攻击**动画 —— 怪物不播放奔跑（#1244）
+  { key: "run", label: "攻击" },
   { key: "injured", label: "受击" },
   { key: "die", label: "死亡" },
 ];
@@ -263,7 +264,7 @@ function MonsterEditDialog({
             </div>
             <div className="mt-3">
               <span className="mb-1 block text-xs font-medium text-ink-4">
-                动作速度覆盖（每秒循环数，留空 = 用客户端默认）
+                动作速度覆盖（每帧秒数，留空 = 用客户端默认）
               </span>
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
                 {ACTION_SPEED_KEYS.map(({ key, label: actionLabel }) => (

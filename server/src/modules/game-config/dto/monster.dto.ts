@@ -143,7 +143,7 @@ export class MonsterPresentationDto {
   @ApiProperty({ description: "检测范围（像素半径）：主动怪在这个距离内发现玩家" })
   detectRange: number;
   @ApiProperty({
-    description: "动作速度覆盖（只写要改的动作，每秒循环数；缺省走客户端 monsterDefaultSpeedRate）",
+    description: "动作速度覆盖（只写要改的动作，值 = 每帧秒数；缺省走客户端 monsterDefaultSpeedRate）",
     nullable: true,
     additionalProperties: { type: "number" },
   })
@@ -170,7 +170,7 @@ export class MonsterPresentationDto {
   }
 }
 
-/** `speed_rate` 列（JSON：动作名 → 每秒循环数）；空对象表示全用客户端默认 */
+/** `speed_rate` 列（JSON：动作名 → 每帧秒数）；空对象表示全用客户端默认 */
 function parseSpeedRate(text: string | undefined): Record<string, number> | undefined {
   if (!text) return undefined;
   try {
@@ -323,7 +323,7 @@ export class UpdateMonsterPresentationDto {
 
   @ApiPropertyOptional({
     description:
-      "动作速度覆盖（动作键 → 每秒循环数）。**传 `{}` = 清空回客户端默认，不传 = 不改**；" +
+      "动作速度覆盖（动作键 → 每帧秒数）。**传 `{}` = 清空回客户端默认，不传 = 不改**；" +
       `动作键只认 ${MONSTER_ACTION_KEYS.join(" / ")}（其余动作没有帧）`,
     additionalProperties: { type: "number" },
   })
