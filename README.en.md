@@ -38,31 +38,38 @@ Death is cheap: revive where you fell, or teleport back to town at full health.
 
 ## What it looks like
 
+All screenshots are from a real local deployment. The full illustrated tutorial (including every admin page)
+lives on the website: <https://yimw.cn/tutorial.html>.
+
 <p align="center">
-  <img src="website/assets/img/login.jpg" width="49%" alt="Login: account, password, server select" />
-  <img src="website/assets/img/role-select.jpg" width="49%" alt="Character select and creation" />
+  <img src="website/assets/img/登录.jpg" width="32%" alt="Login: account, password, server select" />
+  <img src="website/assets/img/选择区服.jpg" width="32%" alt="Server select" />
+  <img src="website/assets/img/创建角色.jpg" width="32%" alt="Create character: warrior, mage, taoist" />
 </p>
 <p align="center">
-  <img src="website/assets/img/game.jpg" width="49%" alt="In-game: combat, bag, loot beams on the ground" />
-  <img src="website/assets/img/combat.jpg" width="49%" alt="Multi-player combat and skill effects" />
+  <img src="website/assets/img/角色选择.jpg" width="32%" alt="Character select" />
+  <img src="website/assets/img/新手村.jpg" width="32%" alt="Starter village: NPCs, monsters and HUD" />
+  <img src="website/assets/img/背包.jpg" width="32%" alt="Bag: item grid, sort and recycle" />
 </p>
 <p align="center">
-  <img src="website/assets/img/equip-detail.jpg" width="49%" alt="Equipment detail: quality frame and stats" />
-  <img src="website/assets/img/mall.jpg" width="49%" alt="Mall: all equipment auto-listed" />
+  <img src="website/assets/img/物品掉落.jpg" width="32%" alt="Loot beams on the ground" />
+  <img src="website/assets/img/战魂.jpg" width="32%" alt="War soul: 37 tiers" />
+  <img src="website/assets/img/商城.jpg" width="32%" alt="Mall: equipment and items" />
 </p>
 
 The admin console (browser-based, for operators editing game data):
 
 <p align="center">
-  <img src="website/assets/img/admin-dashboard.jpg" width="49%" alt="Admin overview: accounts, characters, online trend" />
-  <img src="website/assets/img/admin-align.jpg" width="49%" alt="Admin equipment alignment: positioning sprites" />
+  <img src="website/assets/img/admin/01-overview.jpg" width="32%" alt="Admin overview: accounts, characters, online trend" />
+  <img src="website/assets/img/admin/16-equip-align.jpg" width="32%" alt="Admin equipment alignment: positioning sprites" />
+  <img src="website/assets/img/admin/26-maps.jpg" width="32%" alt="Admin map editor: NPCs, spawn areas and collision boxes" />
 </p>
 
 ## What you can play
 
 ### Accounts and characters
 
-- Register, log in, pick a server; up to 3 characters per account, all data stored server-side — switch computers
+- Register, log in, pick a server; up to 3 characters per account across warrior / mage / taoist, all data stored server-side — switch computers
   and continue where you left off.
 - Progress auto-saves as you play, with an extra save on map change and logout.
 - Deleting a character takes two confirmations, so no accidental losses.
@@ -212,4 +219,4 @@ After changing assets, publish them: `make resources-manifest` → `make resourc
 
 ## Contact
 
-![QQ group](website/assets/img/qq-group.jpg)
+![QQ group](website/assets/img/QQ群.jpg)

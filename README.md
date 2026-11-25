@@ -32,31 +32,84 @@
 
 ## 界面长什么样
 
+下面全部是本地部署后的真机截图。**完整图文教程（含管理端每个页面的说明）在官网：
+<https://yimw.cn/tutorial.html>**。
+
+客户端：
+
 <p align="center">
-  <img src="website/assets/img/login.jpg" width="49%" alt="登录：账号、密码、选服务器" />
-  <img src="website/assets/img/role-select.jpg" width="49%" alt="角色选择与创建" />
+  <img src="website/assets/img/登录.jpg" width="32%" alt="登录：账号、密码、选服务器" />
+  <img src="website/assets/img/选择区服.jpg" width="32%" alt="选择区服：区服状态与开服时间" />
+  <img src="website/assets/img/创建角色.jpg" width="32%" alt="创建角色：战士 / 法师 / 道士" />
 </p>
+<p align="center"><sub>登录 · 选服 · 创建角色</sub></p>
+
 <p align="center">
-  <img src="website/assets/img/game.jpg" width="49%" alt="游戏主界面：战斗、背包、地面掉落的光柱" />
-  <img src="website/assets/img/combat.jpg" width="49%" alt="多人同屏战斗与技能特效" />
+  <img src="website/assets/img/角色选择.jpg" width="32%" alt="角色选择：账号下已有角色" />
+  <img src="website/assets/img/新手村.jpg" width="32%" alt="新手村：NPC、怪物与主界面" />
+  <img src="website/assets/img/过渡场景.jpg" width="32%" alt="进图过场：燃烧的城门" />
 </p>
+<p align="center"><sub>角色选择 · 新手村 · 进图过场</sub></p>
+
 <p align="center">
-  <img src="website/assets/img/equip-detail.jpg" width="49%" alt="装备详情：品质边框与属性" />
-  <img src="website/assets/img/mall.jpg" width="49%" alt="商城：装备自动上架" />
+  <img src="website/assets/img/角色信息.jpg" width="32%" alt="角色信息：等级、战力与装备" />
+  <img src="website/assets/img/属性点.jpg" width="32%" alt="属性点：战斗属性与四维加点" />
+  <img src="website/assets/img/背包.jpg" width="32%" alt="背包：物品格子、整理与回收" />
 </p>
+<p align="center"><sub>角色信息 · 属性点 · 背包</sub></p>
+
+<p align="center">
+  <img src="website/assets/img/物品掉落.jpg" width="32%" alt="地面掉落：品质光柱" />
+  <img src="website/assets/img/小地图.jpg" width="32%" alt="小地图：怪物红点与寻路" />
+  <img src="website/assets/img/地图传送官.jpg" width="32%" alt="地图传送官：按等级分组的传送" />
+</p>
+<p align="center"><sub>物品掉落 · 小地图 · 地图传送官</sub></p>
+
+<p align="center">
+  <img src="website/assets/img/战魂.jpg" width="32%" alt="战魂：37 阶成长线" />
+  <img src="website/assets/img/称号.jpg" width="32%" alt="称号：34 阶称号链" />
+  <img src="website/assets/img/军衔.jpg" width="32%" alt="军衔：100 阶军衔" />
+</p>
+<p align="center"><sub>战魂 37 阶 · 称号 34 阶 · 军衔 100 阶</sub></p>
+
+<p align="center">
+  <img src="website/assets/img/社交.jpg" width="32%" alt="社交：好友、敌人、黑名单与举报" />
+  <img src="website/assets/img/商城.jpg" width="32%" alt="商城：装备与道具分页浏览" />
+  <img src="website/assets/img/时装.jpg" width="32%" alt="时装：只改外观不改数值" />
+</p>
+<p align="center"><sub>社交 · 商城 · 时装</sub></p>
 
 运营后台（浏览器打开，给运营改数据用的）：
 
 <p align="center">
-  <img src="website/assets/img/admin-dashboard.jpg" width="49%" alt="后台概览：账号、角色、在线与增长趋势" />
-  <img src="website/assets/img/admin-align.jpg" width="49%" alt="后台装备对齐：给装备调位置和大小" />
+  <img src="website/assets/img/admin/01-overview.jpg" width="32%" alt="后台概览：账号、角色、在线与增长趋势" />
+  <img src="website/assets/img/admin/02-accounts.jpg" width="32%" alt="账号管理：筛选、封禁与重置口令" />
+  <img src="website/assets/img/admin/03-roles.jpg" width="32%" alt="角色管理：多条件筛选与角色档案" />
 </p>
+<p align="center"><sub>概览 · 账号管理 · 角色管理</sub></p>
+
+<p align="center">
+  <img src="website/assets/img/admin/16-equip-align.jpg" width="32%" alt="装备对齐：8 方向动作帧逐帧对位" />
+  <img src="website/assets/img/admin/26-maps.jpg" width="32%" alt="地图管理：NPC、刷怪区与碰撞盒" />
+  <img src="website/assets/img/admin/22-drops.jpg" width="32%" alt="掉落表配置：条目池、权重与概率" />
+</p>
+<p align="center"><sub>装备对齐 · 地图管理 · 掉落表配置</sub></p>
+
+<p align="center">
+  <img src="website/assets/img/admin/30-runtime-params.jpg" width="32%" alt="运行时参数：战斗、移动与 AOI" />
+  <img src="website/assets/img/admin/45-audit-logs.jpg" width="32%" alt="操作日志：谁在什么时候改了什么" />
+  <img src="website/assets/img/admin/47-config-versions.jpg" width="32%" alt="配置版本：差异对比与回滚" />
+</p>
+<p align="center"><sub>运行时参数 · 操作日志 · 配置版本</sub></p>
+
+管理端的**全部功能页**都有截图，每个页面的用途与操作都写在
+[使用教程](https://yimw.cn/tutorial.html) 里。
 
 ## 你能玩到什么
 
 ### 账号与角色
 
-- 注册、登录、选服，一个账号最多 3 个角色，角色数据存在服务器上，换电脑继续玩。
+- 注册、登录、选服，一个账号最多 3 个角色；战士 / 法师 / 道士三职业，角色数据存在服务器上，换电脑继续玩。
 - 进度自动保存：边玩边存，切地图和退出前会立刻再存一次，不会因为关页面丢进度。
 - 选角界面可以删角色（两步确认，防手滑）。
 
@@ -171,7 +224,7 @@ make verify         # 提交前跑这个：上面全部 + 三端构建
 | --- | --- |
 | [`docs/`](docs/README.md) | 40 篇代码文档：每条链路从数据库讲到屏幕 |
 | [`FAQ.md`](FAQ.md) | 常见问题：为什么这么设计、踩过哪些坑 |
-| [`website/`](website/index.html) | 官网：玩法细节、架构图、工程管理、设计取舍 |
+| [`website/`](website/index.html) | 官网：玩法细节、完整使用教程、架构图、工程管理、设计取舍 |
 
 ## 许可
 
@@ -193,4 +246,4 @@ make resources-download VERSION=<版本号>  # 不一致或新机器：下载、
 
 ## 联系
 
-![QQ 群](website/assets/img/qq-group.jpg)
+![QQ 群](website/assets/img/QQ群.jpg)

@@ -4,21 +4,24 @@
 
 /* ---------- 截图数据（文件名 + 说明，新增截图在这里加一行即可） ---------- */
 var SHOTS = [
-  { file: "login.jpg",         title: "登录：账号 / 密码 / 区服，浏览器即开即玩" },
-  { file: "role-select.jpg",   title: "角色选择与创建：多角色立在石台上，点职业查看信息" },
-  { file: "game.jpg",          title: "游戏主界面：战斗、背包与地面掉落光柱" },
-  { file: "combat.jpg",        title: "多人同屏战斗与技能特效" },
-  { file: "skill.jpg",         title: "技能列表：冷却 / 耗蓝 / 技能说明一栏看清" },
-  { file: "skill-warrior.jpg", title: "技能详情：战士「十步一杀」" },
-  { file: "skill-mage.jpg",    title: "技能详情：法师「流星火雨」" },
-  { file: "bag.jpg",           title: "背包与快捷技能格" },
-  { file: "item-tip.jpg",      title: "物品悬浮详情：属性、品质与价格" },
-  { file: "equip-detail.jpg",  title: "装备详情：品质边框、背景动画与属性面板" },
-  { file: "mall.jpg",          title: "商城：全部装备自动上架，卡片分页浏览" },
-  { file: "mall-detail.jpg",   title: "商城商品详情：买前看属性，买后入背包" },
-  { file: "title.jpg",         title: "称号系统：34 阶成长线，解锁即顶在头顶" },
-  { file: "teleport.jpg",      title: "地图传送官：按等级分组的大陆传送" },
-  { file: "small-map.jpg",     title: "小地图预览弹窗：左键寻路 / 右键传送" }
+  { file: "登录.jpg",       title: "登录：账号 / 密码 / 区服，浏览器即开即玩" },
+  { file: "选择区服.jpg",   title: "选择区服：各区状态、开服时间与推荐标签" },
+  { file: "角色选择.jpg",   title: "角色选择：账号下已有角色与创建入口" },
+  { file: "创建角色.jpg",   title: "创建角色：战士 / 法师 / 道士三职业" },
+  { file: "过渡场景.jpg",   title: "进图过场：燃烧的城门" },
+  { file: "新手村.jpg",     title: "新手村：NPC、怪物与完整主界面" },
+  { file: "角色信息.jpg",   title: "角色信息：等级、战力、攻防与装备槽位" },
+  { file: "属性点.jpg",     title: "属性点：战斗属性总览与四维加点" },
+  { file: "背包.jpg",       title: "背包：品质描边、整理与自动回收入口" },
+  { file: "物品掉落.jpg",   title: "物品掉落：品质光柱与地面拾取" },
+  { file: "小地图.jpg",     title: "小地图：怪物红点、左键寻路 / 右键传送" },
+  { file: "地图传送官.jpg", title: "地图传送官：按等级分组的大陆传送" },
+  { file: "战魂.jpg",       title: "战魂：37 阶成长线，逐阶加属性" },
+  { file: "称号.jpg",       title: "称号：34 阶称号链，解锁即顶在头顶" },
+  { file: "军衔.jpg",       title: "军衔：100 阶军衔，从新兵到元帅" },
+  { file: "社交.jpg",       title: "社交：好友、敌人、黑名单与举报" },
+  { file: "商城.jpg",       title: "商城：装备与道具分页浏览，买后入背包" },
+  { file: "时装.jpg",       title: "时装：只改外观不改数值" }
 ];
 
 /* ---------- 渲染画廊 ---------- */
