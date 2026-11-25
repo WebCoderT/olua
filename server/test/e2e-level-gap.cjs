@@ -111,6 +111,8 @@ function withDb(dbPath, run) {
 function prepareWorld(dbPath) {
   withDb(dbPath, (db) => {
     db.prepare("DELETE FROM map_spawn_areas WHERE map_id = ?").run(MAP_ID);
+    // #1233 起出厂快照带了运营手绘的碰撞：靶位几何要与出厂数据解耦
+    db.prepare("DELETE FROM map_collisions WHERE map_id = ?").run(MAP_ID);
     db.prepare(
       `INSERT INTO map_spawn_areas (map_id, name, monster_key, min, max, cx, cy, w, h, updated_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,

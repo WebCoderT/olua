@@ -131,6 +131,9 @@ function seedSpawnAreas(dbPath) {
   // 血量拉到 10 万：79 血会被暴击一刀带走（killed 分支没有 push，二、三段全部连锁红）
   db.prepare("UPDATE monsters SET level = 0, max_hp = 100000 WHERE id IN ('3', '200')").run();
   // #1150 换图后图 1 不再有出厂碰撞盒：不穿墙段要的那道左外墙自灌（半截在图内，进图前生效）
+  // #1233 起出厂快照带了运营手绘的碰撞（460+ 行，图 1 也有一整圈）：这套的几何假设是
+  // 「图 1 只有下面这堵左外墙」，起服后先把该图碰撞清空再自灌，测试几何与出厂数据解耦。
+  db.prepare("DELETE FROM map_collisions WHERE map_id = '1'").run();
   // #1190 起碰撞是多边形：左外墙写成四点多边形（顶点序与 rectPoints 同形：左下→右下→右上→左上）
   db.prepare(
     "INSERT INTO map_collisions (map_id, points, updated_at) VALUES ('1', ?, 0)",
@@ -148,9 +151,10 @@ function seedSpawnAreas(dbPath) {
 /**
  * 改一只怪的移动速度（`monster_presentation.move_speed`，AI 1 秒 TTL 现取库）
  *
- * 出厂表里 220 行怪几乎全是 `move_speed = 2`（占位值，运营还没配）——2px/s 的怪连
- * 600px 的牵引半径都走不出去，脱战与回家这两件事根本测不出来。这一套只把参与断言的
- * 两只怪调到「人跑得掉、怪走得回」的量级，不改数值断言（不锁具体速度）。
+ * 出厂表里 220 行怪的 `move_speed` 曾全是 2（单位口径错位：玩家速度是 Box2D 物理单位
+ * ≈ 64~128 px/s，怪物这里直接是像素/秒，2px/s 的怪连 600px 的牵引半径都走不出去）——
+ * #1233 已归一为 80。这一套仍把参与断言的两只怪调到「人跑得掉、怪走得回」的量级，
+ * 不改数值断言（不锁具体速度）。
  */
 function setMonsterSpeed(dbPath, monsterKey, moveSpeed) {
   const { DatabaseSync } = require("node:sqlite");

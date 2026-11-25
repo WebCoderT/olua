@@ -132,6 +132,10 @@ function seedSpawnAreas(dbPath) {
       );`);
   // 出厂区域整份清掉（图 1 / 2）：测试只认自己插的那几块，断言的坐标才可预测
   db.exec("DELETE FROM map_spawn_areas WHERE map_id IN ('1', '2');");
+  // #1233 起出厂快照带了运营手绘的碰撞：靶位几何要与出厂数据解耦。
+  // 离线段（复用本函数起服前）空库还没有这张表，跳过 —— 那一段不做位移断言
+  const hasCollisions = db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'map_collisions'").get();
+  if (hasCollisions) db.exec("DELETE FROM map_collisions WHERE map_id IN ('1', '2');");
   const insert = db.prepare(
     `INSERT INTO map_spawn_areas (map_id, name, monster_key, min, max, cx, cy, w, h, updated_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,

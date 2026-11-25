@@ -280,6 +280,7 @@ function polylineLength(points) {
     const { baseUrl } = server;
 
     // #1150 换图后图 1 不再有出厂碰撞盒（旧图 161 个 + 四道外墙）：绕行 / 吸附断言要墙。
+    // #1233 起出厂快照又带了运营手绘的碰撞（图 1 一整圈）：先清掉再自灌，几何只认下面三堵墙。
     // 起服后、进图（房创建）前灌一组测试墙（geometryOf 建房时读一次）：
     //   两段竖墙留 200px 缺口（y -850~-650 之间），逼 A* 绕行；一个 128×128 盒当吸附目标。
     //   新图 1 是 1872×1344（x∈[0,1872] y∈[-1344,0]）。
@@ -288,6 +289,7 @@ function polylineLength(points) {
       const db = new DatabaseSync(dbPath);
       try {
         db.exec("PRAGMA busy_timeout = 10000");
+        db.prepare("DELETE FROM map_collisions WHERE map_id = '1'").run();
         const ins = db.prepare("INSERT INTO map_collisions (map_id, points, updated_at) VALUES ('1', ?, 0)");
         ins.run(rectPoints(800, -350, 60, 600)); // y ∈ [-650, -50]
         ins.run(rectPoints(800, -1050, 60, 400)); // y ∈ [-1250, -850]

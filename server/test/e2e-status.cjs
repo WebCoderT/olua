@@ -175,6 +175,9 @@ function setMonsterLevel(dbPath, key, level) {
 function prepareWorld(dbPath) {
   withDb(dbPath, (db) => {
     db.prepare("DELETE FROM map_spawn_areas WHERE map_id = ?").run(MAP_ID);
+    // #1233 起出厂快照带了运营手绘的碰撞：这套的几何假设是「靶位之间畅通」，
+    // 起服后先清掉该图碰撞，测试几何与出厂数据解耦
+    db.prepare("DELETE FROM map_collisions WHERE map_id = ?").run(MAP_ID);
     const seed = db.prepare(
       `INSERT INTO map_spawn_areas (map_id, name, monster_key, min, max, cx, cy, w, h, updated_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,

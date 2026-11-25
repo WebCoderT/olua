@@ -5824,7 +5824,7 @@ export type UpdateMonsterPresentation = {
    */
   detectRange?: number;
   /**
-   * 移动速度（刚体线速度单位；出厂 2，与角色步行同口径）。不传则不改
+   * 移动速度（像素/秒；出厂 80，落在玩家步行约 64 / 跑步约 128 px/s 之间）。不传则不改
    */
   moveSpeed?: number;
   /**

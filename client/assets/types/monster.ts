@@ -70,7 +70,9 @@ export interface MonsterPresentation {
    */
   speedRate: SpeedRate;
   /**
-   * 移动速度：与 configs/role 的 ROLE_WALK_SPEED 同一单位（像素/秒）。
+   * 移动速度（**像素/秒**，服务端 AI 直接按此速度模拟）—— 与玩家速度不同尺：
+   * 玩家走 Box2D 刚体物理单位（ROLE_WALK_SPEED = 2 ≈ 64 px/s、ROLE_RUN_SPEED = 4 ≈ 128 px/s），
+   * 怪物这里没有物理放大，出厂 80 落在玩家步行与跑步之间。
    * 客户端只用它算「向服务端坐标趋近」的步长（#670：游走与追击都是服务端模拟的），
    * 服务端用它模拟同一只怪同样的速度 —— 两边同速，画面才不会忽快忽慢
    */

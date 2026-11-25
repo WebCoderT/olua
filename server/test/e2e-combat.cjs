@@ -145,6 +145,8 @@ function seedBattlefield(dbPath) {
   const { DatabaseSync } = require("node:sqlite");
   const db = new DatabaseSync(dbPath);
   db.exec("DELETE FROM map_spawn_areas WHERE map_id = '3'");
+  // #1233 起出厂快照带了运营手绘的碰撞：靶位几何要与出厂数据解耦
+  db.exec("DELETE FROM map_collisions WHERE map_id = '3'");
   const insert = db.prepare(
     "INSERT INTO map_spawn_areas (map_id, name, monster_key, min, max, cx, cy, w, h, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
   );
