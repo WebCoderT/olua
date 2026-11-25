@@ -136,7 +136,28 @@ function buildCatalog({ equipments, role, animation, dialogs }) {
 
   const clothes = map(equipments.clothes, "cloth");
   const weapons = map(equipments.weapons, "weapon");
-  const dialogBg = dialogs.roleInfoDialogLayout?.preview ?? {};
+  /**
+   * 内观取景底座（#1272）
+   *
+   * - `roleInfoDialogLayout.preview` 还在（#1089 时代）：底座 = 立绘视口，与客户端 Mask 一致；
+   * - preview 已被删（#1231 起弹窗移除立绘视口 / 背景板，内观原样全显）：底座退化为
+   *   **弹窗全幅**（`roleInfoDialogLayout.size`，中心原点）。对齐是平移不变的相对几何
+   *   （武器对衣服、脚对圆盘），取景窗只要罩得住全部条目几何即可 —— 之前 preview 缺失
+   *   时 size 写成 0，工作台视图塌缩成 128×128 的小窗，衣服 / 武器全部落在窗外。
+   */
+  const dialogLayout = dialogs.roleInfoDialogLayout ?? {};
+  const dialogPreview = dialogLayout.preview ?? null;
+  const inShowBackground = dialogPreview
+    ? {
+        image: String(dialogPreview.image ?? ""),
+        position: vec(dialogPreview.position),
+        size: [Number(dialogPreview.size?.width) || 0, Number(dialogPreview.size?.height) || 0],
+      }
+    : {
+        image: "",
+        position: [0, 0],
+        size: [Number(dialogLayout.size?.width) || 0, Number(dialogLayout.size?.height) || 0],
+      };
 
   return {
     generatedBy: "tools/gen-equip-align-catalog.cjs",
@@ -156,11 +177,12 @@ function buildCatalog({ equipments, role, animation, dialogs }) {
       colliderOffset: vec(role.roleBody?.colliderOffset),
     },
     /**
-     * 内观视图的底座（#523；#1089 起底座 = 角色信息弹窗的立绘视口）
+     * 内观视图的底座（#523；#1089 起底座 = 角色信息弹窗的立绘视口；#1272 起缺失时退化为弹窗全幅）
      *
-     * 内观工作台画的是**角色信息弹窗里那块区域**：立绘视口（框内立绘）+ 内观节点。
-     * - `background` 取自 `configs/layout/dialogs.roleInfoDialogLayout.preview`（唯一真值，
-     *   页面不许自己写坐标；弹窗里的内观被 Mask 裁进这块视口，工作台视图与之一致）；
+     * 内观工作台画的是**角色信息弹窗里那块区域**。
+     * - `background`：`configs/layout/dialogs.roleInfoDialogLayout.preview` 还在就用它
+     *   （唯一真值，页面不许自己写坐标）；#1231 起该配置被删（弹窗不再有立绘视口 /
+     *   背景板，内观原样全显），退化为弹窗全幅 —— 只有尺寸没有图，页面当纯取景窗用；
      * - `plate` 是**实测值**：背景图 858×908（@2x）上金色圆盘外缘约 x 240~600、y 640~790，
      *   换算到弹窗坐标就是中心 (-82.5, -149.5)、半径 90。它不是配置里的东西 ——
      *   **换背景图就要重测**（这也是它只在这里出现一次的原因）；
@@ -168,11 +190,7 @@ function buildCatalog({ equipments, role, animation, dialogs }) {
      *   而不是跟着当前选中的衣服漂）。取配置里的第一件，避免页面自己猜。
      */
     inShow: {
-      background: {
-        image: String(dialogBg.image ?? ""),
-        position: vec(dialogBg.position),
-        size: [Number(dialogBg.size?.width) || 0, Number(dialogBg.size?.height) || 0],
-      },
+      background: inShowBackground,
       plate: { center: [-82.5, -149.5], radius: 90 },
       baseClothKey: clothes.length ? clothes[0].key : "",
     },
