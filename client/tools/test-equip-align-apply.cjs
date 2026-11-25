@@ -159,6 +159,16 @@ function main() {
     Boolean(snapshotFn && alignFn) && /snapshotLoaded/.test(snapshotFn[0]) && !/snapshotLoaded/.test(alignFn[0]),
     "几何每次进图都拉（只有快照被 loaded 短路 —— 否则退回选角再进图看不到新位置）",
   );
+  // #1280：快照改版本门控（先问轻量版本号，变了才拉全量）—— 否则管理端改配置
+  // （前后缀颜色 / 文案 / 掉落表…）客户端不重启进程就永远看不到，表现成「保存没生效」
+  check(
+    Boolean(snapshotFn) && /GameConfigApi\.version\(/.test(snapshotFn[0]) && /snapshotVersion === version/.test(snapshotFn[0]),
+    "快照先拉轻量版本号做门控（loadSnapshotOnce 里必须有 version 请求与版本比对）",
+  );
+  check(
+    Boolean(snapshotFn) && /GameConfigApi\.snapshot\(/.test(snapshotFn[0]),
+    "版本不一致时才拉全量快照（全量请求只能在 loadSnapshotOnce 内部）",
+  );
 
   const game = read("assets/ui/Game.ts");
   check(

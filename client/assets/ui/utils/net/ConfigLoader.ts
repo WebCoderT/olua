@@ -21,9 +21,13 @@ import { getText } from "../../../configs/texts";
  *   · `network` —— 请求本身没成（服务端没起、断网、401…），下次进图重试；
  *   · `contract` —— 拿到了但缺段 / 形状不对（服务端代码 bug），逐条列出 key 与中文名。
  *   两类都**不置「已加载」**：一次抖动不该永久退化成空表。
- * - **快照只拉一次，三套外观数据每次进图都拉**（#513 / #523 / #739）：
- *   快照十几张表、只跟版本有关，进程内重复拉纯浪费 RTT；
- *   而外观 / 内观几何、装备边框与详情背景的显示效果都是「人眼调一版、立刻要看效果」的东西，
+ * - **快照按版本拉（#1280）**：进程内曾经「只拉一次」，管理端改了任何快照配置
+ *   （前后缀颜色 / 文案 / 掉落表…）客户端不重启进程就永远看不到 —— 正是「保存没生效」
+ *   的一大类假象。现在每次进图先拉轻量版本号（`GET /game-config/version`，几十字节）：
+ *   与已加载版本一致就直接放行（不重复拉十几张表），不一致（或从未加载）才拉全量快照
+ *   并落库。管理端任何快照配置改动**下次进图即生效**，验收动作仍是「退回选角再进图」，
+ *   但不再需要重启进程。
+ * - 而外观 / 内观几何、装备边框与详情背景的显示效果都是「人眼调一版、立刻要看效果」的东西，
  *   验收动作就是**退回选角再进图**（场景重载，JS 上下文不重来）。只拉一次的话，那种重进看不到新位置，
  *   会被当成「保存没生效」—— 这几个接口都只有几十行数据，每次进图拉一次不值得省。
  *   （装备外观那段在快照里也有同名字段：那是首帧兜底与老客户端兼容，新鲜度以这个接口为准。）
@@ -53,6 +57,8 @@ export interface GameConfigLoadResult {
 }
 
 let snapshotLoaded = false;
+/** 已加载快照的配置版本（`GET /game-config/version` 的值；null = 还没成功拉过快照） */
+let snapshotVersion: number | null = null;
 let snapshotLoading: Promise<GameConfigLoadResult> | null = null;
 let alignLoading: Promise<void> | null = null;
 let inAlignLoading: Promise<void> | null = null;
@@ -153,24 +159,34 @@ function fetchInAlignGeometry(): Promise<void> {
 }
 
 /**
- * 快照拉一次就够（十几张表，只跟服务端版本有关）
+ * 快照按版本拉（#1280）：每次进图先问服务端版本号（几十字节的轻量请求），
+ * 与已加载的不一致（或从未加载）才拉全量快照 —— 管理端改配置不重启进程也能在下次进图看到。
  *
- * 成功才置 `snapshotLoaded`：失败（网络或契约）下次进图必须重试，
+ * 成功才记 `snapshotLoaded` / `snapshotVersion`：失败（网络或契约）下次进图必须重试，
  * 否则一次抖动就永久停在空表上，而玩家只会看到「背包空了」「技能点不出来」。
+ * 版本接口失败也按 network 处理（下次进图重试，不挡在半路）。
  */
 function loadSnapshotOnce(): Promise<GameConfigLoadResult> {
-  if (snapshotLoaded) return Promise.resolve({ ok: true });
-  if (!snapshotLoading) {
-    // target 是 ES2015（Cocos 打包基线），Promise 没有 .finally —— 用 then/catch 两段收尾
-    snapshotLoading = GameConfigApi.snapshot({ silent: true })
-      .then((snapshot: GameConfigSnapshot) => applyLoadedSnapshot(snapshot))
-      .catch((error: unknown) => networkFailure(error))
-      .then((result: GameConfigLoadResult) => {
-        snapshotLoading = null;
-        if (result.ok) snapshotLoaded = true;
+  if (snapshotLoading) return snapshotLoading;
+  // target 是 ES2015（Cocos 打包基线），Promise 没有 .finally —— 用 then/catch 两段收尾
+  snapshotLoading = GameConfigApi.version({ silent: true })
+    .then(({ version }) => {
+      // 版本没变且已加载成功：与「只拉一次」时代同口径，不重复拉十几张表
+      if (snapshotLoaded && snapshotVersion === version) return { ok: true } as GameConfigLoadResult;
+      return GameConfigApi.snapshot({ silent: true }).then((snapshot: GameConfigSnapshot) => {
+        const result = applyLoadedSnapshot(snapshot);
+        if (result.ok) {
+          snapshotLoaded = true;
+          snapshotVersion = version;
+        }
         return result;
-      }) as Promise<GameConfigLoadResult>;
-  }
+      });
+    })
+    .catch((error: unknown) => networkFailure(error))
+    .then((result: GameConfigLoadResult) => {
+      snapshotLoading = null;
+      return result;
+    }) as Promise<GameConfigLoadResult>;
   return snapshotLoading;
 }
 
