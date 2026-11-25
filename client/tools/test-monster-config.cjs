@@ -150,6 +150,21 @@ check(/speedRate:\s*\{\s*\.\.\.monsterDefaultSpeedRate,\s*\.\.\.\(row\.speedRate
   );
   check(broken.length === 0, "oneoff-seed-monster-speed-rates 的 SEED 与 monsterDefaultSpeedRate 同值", broken.join(", "));
 }
+// #1263：服务端普攻收招（attackActionTime，毫秒）必须 ≥ 攻击动画时长 —— speedRate 是
+// 每秒循环数（createClip 采样率 = 帧数 × rate → 整段时长 = 1/rate 秒），攻击段 speedRate 1
+// = 1s。收招配小了，怪「打一刀 → 硬结束 → 转追击」，客户端渲染看到是广播粒度 100ms +
+// 回放滞后 120ms，走位群战时每刀攻击动画都被追击拦腰切断（站桩单挑看不出来，容易漏）。
+{
+  const fallbackSrc = fs.readFileSync(
+    path.join(PROJECT_ROOT, "../server/src/modules/realtime/monster-ai.service.ts"),
+    "utf8",
+  );
+  const parsed = /const FALLBACK_AI[^=]*=\s*\{([\s\S]*?)\}/.exec(fallbackSrc)?.[1] ?? "";
+  const attackActionTime = /attackActionTime:\s*(\d+)/.exec(parsed)?.[1];
+  const swingMs = (1 / monsterDefaultSpeedRate.attack) * 1000;
+  const ok = attackActionTime !== undefined && Number(attackActionTime) >= swingMs;
+  check(ok, `服务端普攻收招 ≥ 攻击动画时长（${swingMs}ms）`, attackActionTime ? `${attackActionTime}ms` : "FALLBACK_AI 里没找到 attackActionTime");
+}
 // 真机踩到的坑（#588 验证轮）：Animation.play 在「还没挂进场景」的节点上调用，
 // Cocos 3.8.7 不会在启用后自动恢复 —— spriteFrame 一直空，站着不动的怪整只不显示。
 // 判据不是「play 过」，而是「挂进怪物层之后又播了一次」。

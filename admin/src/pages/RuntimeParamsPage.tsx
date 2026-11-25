@@ -733,7 +733,7 @@ const GUILD_FIELDS: FieldSpec[] = [
 const AI_FIELDS: Array<FieldSpec & { step?: number }> = [
   { key: "attackInterval", label: "普攻间隔（毫秒）", hint: "两次普攻之间至少隔这么久" },
   { key: "attackRange", label: "普攻距离（像素）", hint: "进入这个距离才站定出手" },
-  { key: "attackActionTime", label: "施法硬直兜底（毫秒）", hint: "技能没配 cast_lock_ms 时用它" },
+  { key: "attackActionTime", label: "普攻收招 / 施法硬直兜底（毫秒）", hint: "普攻与没配 cast_lock_ms 的技能共用；必须 ≥ 攻击动画时长（1s），配小了走位时动画会被追击打断" },
   { key: "pushDuration", label: "击退时长（毫秒）", hint: "技能只配距离时用它换算击退速度" },
   { key: "idleMoveIntervalMin", label: "游走间隔最小（毫秒）", hint: "待机时两次走动之间至少隔多久" },
   { key: "idleMoveIntervalMax", label: "游走间隔最大（毫秒）", hint: "必须 ≥ 最小" },
