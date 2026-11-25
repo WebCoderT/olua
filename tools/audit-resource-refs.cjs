@@ -37,11 +37,6 @@
  * 不查什么：resources 里存在但代码没引用的素材（噪音大，增删素材不等于要改代码）；
  * DB 运行时数据（fashions 等表的存量行是 seed 的镜像 + 运营手改，快照一致则 seed 一致）。
  *
- * 另带一项**只警告、不判红**的清单体检（#1025）：`resources.manifest.json` 与磁盘文件集
- * 按「存在性 + 大小」比一遍，失配就打印一行提示 —— 素材只加在本地没发版时，磁盘比清单新，
- * 所有引用仍然是通的，判红只会让 `make audit` 天天红然后被忽略。逐文件 sha1 的口径仍是
- * `client/tools/resources_sync.py verify` 的职责（这里说「一致」不代表 sha1 一致）。
- *
  * 用法：node tools/audit-resource-refs.cjs
  * 退出码：全部命中 = 0；任一断链 = 1（`make audit` 据此判定 FAIL）
  */
@@ -57,13 +52,12 @@ const RES_ROOT = path.join(ROOT, "client", "assets", "resources");
 const SCAN_DIRS = ["client/assets/configs", "client/assets/ui", "client/assets/types", "client/assets/skills"];
 
 /**
- * resources 不入库（~4G 走 GitHub Release 分发），CI runner 上没有这个目录。
+ * resources 不入库，CI runner 上没有这个目录。
  * 磁盘核对在本机跑才有意义；CI 上跳过（审计的其他职责——引用抽取逻辑——无法脱离磁盘验证），
  * 与 client-test 依赖本机素材是同一取舍：门禁以有素材的机器为准。
  */
 if (!fs.existsSync(RES_ROOT)) {
   console.log("client/assets/resources 不存在（CI / 未拉取素材的环境）—— 资源引用核对需要磁盘素材，跳过");
-  console.log("本机核对：先 make resources-download RES_VERSION=<版本号>，再跑本审计");
   process.exit(0);
 }
 
@@ -401,96 +395,12 @@ if (appearanceKeys === 0) failures.push("装备外观：快照里一条 key 都�
 
 //#endregion
 
-//#region 清单体检（只警告，不判红 —— #1025）
-
-/**
- * `resources.manifest.json` 与磁盘的粗体检。
- *
- * 为什么要做：素材只在本地加过、还没发版时，清单会落后磁盘上千个文件 —— 所有代码引用
- * 照样是通的，但别人 `make resources-download` 拿到的还是旧包，而这件事**没有任何门禁会
- * 提示**（`resources_sync.py verify` 需要人主动跑，常年没人跑）。
- *
- * 为什么只警告：这类失配的修复动作是「素材定稿后重新发版」，不是改代码。判红会逼人在改
- * 素材的中途就去发 2.4GB 的包，最后这条红线被无视 —— 假红比不检测更糟。
- *
- * 口径比 verify 松，刻意如此：只比**存在性 + 大小**，不算 sha1（全量 sha1 要读 2.4GB）。
- * 所以这里说「一致」只代表文件集与大小对得上，不代表内容逐字节一致。
- */
-function reportManifestDrift() {
-  const manifestPath = path.join(ROOT, "resources.manifest.json");
-  let manifest;
-  try {
-    manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
-  } catch {
-    console.log("\n清单体检：resources.manifest.json 缺失或不是合法 JSON —— 跳过（不影响结论）");
-    return;
-  }
-
-  const entries = Array.isArray(manifest.files) ? manifest.files : [];
-  if (entries.length === 0) {
-    console.log("\n清单体检：resources.manifest.json 里一条记录都没有 —— 跳过（不影响结论）");
-    return;
-  }
-
-  const version = typeof manifest.version === "string" ? manifest.version : "(无版本号)";
-  const known = new Set();
-  const missing = [];
-  const resized = [];
-
-  for (const entry of entries) {
-    const [rel, , size] = Array.isArray(entry) ? entry : [];
-    if (typeof rel !== "string" || !rel) continue;
-    const key = rel.toLowerCase();
-    known.add(key);
-    if (!diskFiles.has(key)) {
-      missing.push(rel);
-      continue;
-    }
-    if (typeof size !== "number") continue;
-    // 大小对不上 = 内容一定变了（比 sha1 便宜得多，能抓住 .meta 的 uuid 漂移）
-    try {
-      if (fs.statSync(path.join(RES_ROOT, rel)).size !== size) resized.push(rel);
-    } catch {
-      // 大小写不一致的机器（Linux）上 stat 会失败 —— 存在性已经过了，不再深究
-    }
-  }
-  const extra = [...diskFiles].filter((p) => !known.has(p));
-
-  if (missing.length === 0 && extra.length === 0 && resized.length === 0) {
-    console.log(`\n清单体检：与磁盘一致（version=${version}，${entries.length} 个文件，按存在性与大小）`);
-    return;
-  }
-
-  const samples = (list) =>
-    list
-      .slice(0, 3)
-      .map((p) => `  ${p}`)
-      .join("\n");
-
-  console.log(`\n清单体检：resources.manifest.json 落后磁盘（version=${version}）—— 仅提示，不影响结论`);
-  console.log(
-    `  磁盘多出 ${extra.length} 个 · 清单里缺失 ${missing.length} 个 · 大小不一致 ${resized.length} 个` +
-      `（清单 ${entries.length} 条 / 磁盘 ${diskFiles.size} 个文件）`,
-  );
-  if (extra.length) console.log(`  多出样例：\n${samples(extra)}`);
-  if (missing.length) console.log(`  缺失样例：\n${samples(missing)}`);
-  if (resized.length) console.log(`  大小变了样例：\n${samples(resized)}`);
-  console.log(
-    "  处理：素材定稿后 `make resources-manifest` → `resources-pack` → `resources-upload RES_VERSION=<新版本>`，" +
-      "并把仓库根的清单一起提交（见 #1025）；要逐文件 sha1 口径用 `python3 client/tools/resources_sync.py verify`",
-  );
-}
-
-//#endregion
-
 //#region 汇总
 
 const auditCount = refs.size + titleAtlas.length + bgSerials.length + lightSerials.length;
 console.log(
   `扫描 ${SCAN_DIRS.length} 个源码目录：静态引用 ${refs.size} · 称号 ${titleAtlas.length} · 详情背景 ${bgSerials.length} · 光柱 ${lightSerials.length} · 装备外观 key ${appearanceKeys}，加磁盘结构核对共 ${passed} 处命中`,
 );
-
-reportManifestDrift();
 
 if (failures.length === 0) {
   console.log(`\n✔ 资源引用与磁盘素材一致（核对 ${passed} 处）`);

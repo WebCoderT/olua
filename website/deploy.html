@@ -4,12 +4,12 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>自己部署 · olua 开源项目</title>
-  <meta name="description" content="olua 自建服务器部署指南：Docker Compose 一键部署服务端与管理端，拉取 2.7GB 游戏资源包，Cocos 打包客户端，域名与环境变量配置，常见问题排查。" />
+  <meta name="description" content="olua 自建服务器部署指南：Docker Compose 一键部署服务端与管理端，Cocos 打包客户端，域名与环境变量配置，常见问题排查。" />
   <link rel="canonical" href="https://yimw.cn/deploy.html" />
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://yimw.cn/deploy.html" />
   <meta property="og:title" content="自己部署 · olua 开源项目" />
-  <meta property="og:description" content="olua 自建服务器部署指南：Docker Compose 一键部署服务端与管理端，拉取 2.7GB 游戏资源包，Cocos 打包客户端，域名与环境变量配置，常见问题排查。" />
+  <meta property="og:description" content="olua 自建服务器部署指南：Docker Compose 一键部署服务端与管理端，Cocos 打包客户端，域名与环境变量配置，常见问题排查。" />
   <meta property="og:image" content="https://yimw.cn/assets/img/新手村.jpg" />
   <meta name="twitter:card" content="summary_large_image" />
   <link rel="icon" href="assets/icons/favicon.ico" sizes="any" />
@@ -88,14 +88,7 @@
       <pre class="reveal"><code>git clone https://github.com/WebCoderT/olua.git
 cd olua</code></pre>
 
-      <h4>2. 拉取游戏资源包（约 2.7GB，仓库不含素材）</h4>
-      <pre class="reveal"><code># 查看已发布的资源版本
-gh release list --repo WebCoderT/olua
-
-# 下载并解压到 client/assets/resources（也可手动从 GitHub Releases 页面下载）
-make resources-download VERSION=&lt;版本号&gt;</code></pre>
-
-      <h4>3. 填写部署配置</h4>
+      <h4>2. 填写部署配置</h4>
       <pre class="reveal"><code>cp deploy.env.example deploy.env
 vim deploy.env</code></pre>
       <p class="reveal">关键配置项：</p>
@@ -117,24 +110,17 @@ vim deploy.env</code></pre>
         换域名 / 分环境 = 改配置文件重发一次，<b>不改代码、不重建镜像</b>。没有域名时 IP 访问会落入管理端（default_server 兜底）。
       </div>
 
-      <h4>4. 一键部署</h4>
+      <h4>3. 一键部署</h4>
       <pre class="reveal"><code>bash .workbuddy/skills/olua-deploy/scripts/deploy.sh            # 全量：传代码 + 生成 .env + 重建镜像 + 健康检查
 bash .workbuddy/skills/olua-deploy/scripts/deploy.sh --no-build # 只换代码，不重建镜像（改静态文件用）
 bash .workbuddy/skills/olua-deploy/scripts/deploy.sh --game     # 同步 Cocos 客户端构建产物
 bash .workbuddy/skills/olua-deploy/scripts/deploy.sh --resources # 同步游戏素材包（image/audio manifest 等）
 bash .workbuddy/skills/olua-deploy/scripts/deploy.sh --verify   # 只做验收检查</code></pre>
 
-      <h4>5. 打包并上传客户端（可选，本地开发机执行）</h4>
+      <h4>4. 打包并上传客户端（可选，本地开发机执行）</h4>
       <p class="reveal">游戏客户端用 Cocos Creator 打开 <code>client/</code> 构建 Web 桌面包（Cocos 只能 GUI 构建），
       产物在 <code>client/build/web-desktop-001/</code>，然后：</p>
       <pre class="reveal"><code>bash .workbuddy/skills/olua-deploy/scripts/deploy.sh --game</code></pre>
-
-      <h3 class="reveal">发布新资源版本（开发者）</h3>
-      <pre class="reveal"><code>make resources-manifest VERSION=2026-11-04-1   # 生成清单（先入库提交）
-make resources-pack RES_VERSION=2026-11-04-1   # 打分卷包
-make resources-upload RES_VERSION=2026-11-04-1 # 传 GitHub Release</code></pre>
-      <p class="reveal"><code>VERSION=</code> 与 <code>RES_VERSION=</code> 两种写法等价。同步约定：<b>先清单入库，后上传资源</b>，
-      其他机器 <code>git pull</code> 后按清单下载即可逐字节校验。</p>
 
       <h3 class="reveal">本地开发</h3>
       <pre class="reveal"><code>cd server &amp;&amp; npm install &amp;&amp; npm run start:dev   # 服务端 :3100

@@ -218,16 +218,15 @@ no free technical support. Issues are welcome, with no response-time guarantee.
 
 ## Assets
 
-Game assets total 2.4 GB and are **intentionally kept out of the repository**, distributed as
-"manifest + GitHub Release volumes": the manifest `resources.manifest.json` is committed with the code, and the
-volume zips live on the Release tagged `resources-<version>`.
+Game assets total 2.4 GB and are **intentionally kept out of the repository**. The former
+"manifest + GitHub Release volumes" distribution channel has been retired (asset packs are kept
+by the maintainers; there is no public download source anymore). The manifest `resources.manifest.json`
+and the sync script `client/tools/resources_sync.py` remain in the repo, for local verification and
+packing only:
 
 ```bash
-make resources-verify                    # after cloning, check local assets against the manifest
-make resources-download VERSION=<version>  # mismatch or fresh machine: download, extract, verify
+python3 client/tools/resources_sync.py verify   # check local assets against the manifest
 ```
-
-After changing assets, publish them: `make resources-manifest` → `make resources-pack` → `make resources-upload` (requires a logged-in `gh`).
 
 ## Contact
 

@@ -8,7 +8,7 @@
  *
  * 清单放在 `client/assets/resources/` 里面（而不是仓库根）是刻意的：
  * 它跟着 `/game-resources/` 同一个根走，dev 由中间件读、prod 由 nginx 反代 game 容器，
- * 页面代码只有一条 URL。resources 目录本身不入库（`make resources-*` 分发），
+ * 页面代码只有一条 URL。resources 目录本身不入库，
  * 所以这份清单也随资源包一起走 —— 换机器 / 更新素材后重跑本脚本即可。
  *
  * 形状与 dev 的 `__list` 响应逐字段一致：`{ dir, images }`（外加 generatedAt 便于排查陈旧清单）。
@@ -64,7 +64,7 @@ function collect(dir) {
 function main() {
   if (!fs.existsSync(RESOURCES)) {
     console.error(`素材目录不存在：${RESOURCES}`);
-    console.error("先按 README「资源同步」拉资源（make resources-download VERSION=<v>）");
+    console.error("本机需先备好 client/assets/resources 素材（不入库、无公开下载渠道）");
     process.exit(1);
   }
   const images = collect(RESOURCES);

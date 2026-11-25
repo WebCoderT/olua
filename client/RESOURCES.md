@@ -1,11 +1,11 @@
 # 客户端资源目录（`client/assets/resources/`）
 
-> **素材不入库**（约 2.4 GB / 11 651 个文件）。分发靠仓库根的 `resources.manifest.json`
-> 与 `client/tools/resources_sync.py`（`manifest` / `verify` / `pack` / `extract`）。
-> 动过目录或文件名之后必须重新生成清单并升版本 —— 否则别人 `verify` 会缺文件：
+> **素材不入库**（约 2.4 GB / 11 651 个文件）。原先「清单 + GitHub Release 分卷」的分发渠道已下线
+> （#1293），资源包由维护者自行保管。仓库根的 `resources.manifest.json` 与
+> `client/tools/resources_sync.py`（`manifest` / `verify` / `pack` / `extract`）保留，仅用于本地核对与打包：
 >
 > ```bash
-> python3 client/tools/resources_sync.py manifest --version 2026-11-06-1
+> python3 client/tools/resources_sync.py verify
 > ```
 >
 > 「资源路径」在代码里分三处出现：客户端 `configs/`（取图函数 + 具名表）、服务端库表
@@ -101,10 +101,9 @@
    同一套正则必须**同时**跑 `server/data/config-sync.sql` 与本地库，否则两边漂移。
 4. **客户端**：`configs/layout/images.ts` 的取图函数与具名表、`configs/{border,background,light,role,animation}`、
    `types/*` 注释。
-5. **门禁**：`node tools/audit-resource-refs.cjs`（静态字面量 + 展开型引用 + 磁盘结构自检 + 快照 key 点名；
-   末尾还会按**存在性 + 大小**体检清单，清单落后磁盘时打一行提示 —— **只警告不判红**，因为那是「还没发版」
-   而不是断链。逐文件 sha1 的口径仍是 `resources_sync.py verify`）与 `make test-changed`。
-6. **清单**：`resources_sync.py manifest --version <新版本>`。
+5. **门禁**：`node tools/audit-resource-refs.cjs`（静态字面量 + 展开型引用 + 磁盘结构自检 + 快照 key 点名）
+   与 `make test-changed`。
+6. **清单**：动过素材后 `resources_sync.py manifest`（不带 `--version` 沿用原版本号），保持清单与磁盘一致。
 
 零引用素材**不删只归档**：移到 `_loose_frames_archive/orphans-<年月>/`（该目录 gitignored，
 同卷移动可随时移回）。
@@ -135,7 +134,7 @@ bind-gold-500.png     bind-gold-1000.png    bind-gold-5000.png     bind-gold-100
 > 或者自己填别的路径 —— 图片换名 / 换位置只影响这一列。
 >
 > 素材不进库：`.meta` 交给 Cocos 导入时生成；新增整批素材后要重新出清单
-> （`resources_sync.py manifest --version <新版本>`），否则别人 `verify` 会缺这 24 张。
+> （`resources_sync.py manifest`，不带 `--version` 沿用原版本号），本地 `verify` 才一致。
 
 ## 七、升级卷轴图标（`item/scroll/`，#787）
 

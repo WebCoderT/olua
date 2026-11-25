@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
-"""resources 多人一致性同步工具（#266）
+"""resources 一致性同步工具（#266；GitHub Release 分发渠道已下线 —— #1293）
 
-client/assets/resources 不入库（体积 ~4G），多机并行靠「清单锁 + GitHub Releases 分发」保证一致：
+client/assets/resources 不入库（体积 ~4G）。原先靠「清单锁 + GitHub Releases 分发」多机保持一致，
+分发渠道下线后本脚本保留，用于本地清单生成、一致性校验与打包：
   manifest  生成/更新 resources.manifest.json（全量文件 sha1+size，含 .meta——Cocos uuid 绑在 meta 上，
             各机器自生成 meta 会 uuid 漂移、prefab 引用断裂，所以 meta 必须随包分发）
   verify    对比本地资源与 manifest（missing / extra / mismatch），一致性守卫
-  pack      按资源树顶层目录打 zip（单卷超 1900MB 自动续卷，GitHub Release 单资产上限 2GiB）
-  extract   解压 dist 目录里的全部分卷并 verify（download 的落盘侧）
+  pack      按资源树顶层目录打 zip（单卷超 1900MB 自动续卷）
+  extract   解压 dist 目录里的全部分卷并 verify
 
 zip 内路径 = 相对 client/assets/resources 的 posix 路径；解压回同一目录。
 
@@ -15,8 +16,6 @@ zip 内路径 = 相对 client/assets/resources 的 posix 路径；解压回同�
   python client/tools/resources_sync.py verify
   python client/tools/resources_sync.py pack --version 2026-10-25-1 [--out resources_dist]
   python client/tools/resources_sync.py extract --dir resources_dist/2026-10-25-1
-
-上传/下载走 Makefile 的 resources-upload / resources-download（gh release，见 README「资源同步」节）。
 """
 
 import argparse
@@ -86,7 +85,7 @@ def cmd_verify() -> int:
             print(f"  [{label}] …共 {len(items)} 个")
     if missing or extra or mismatch:
         print(f"✘ resources 与清单（version={data['version']}）不一致：缺失 {len(missing)} / 多出 {len(extra)} / 不一致 {len(mismatch)}")
-        print("  修复：git pull 后跑 make resources-download；或确认改动后重新 pack + upload + manifest 提交")
+        print("  修复：从资源包重新 extract；或确认改动后重新 pack + manifest 保持一致")
         return 1
     print(f"✔ resources 与清单一致（{len(expected)} 个文件，version={data['version']}）")
     return 0
