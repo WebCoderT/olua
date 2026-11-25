@@ -1853,15 +1853,19 @@ export function applyFashionRows(rows: FashionRow[]): void {
  * 怪物默认动作速度（**每帧秒数**，片段总时长 = 帧数 × 该值，见 AnimationHelper.createClip；
  * 注意与技能 CD 的 speedRate「每秒循环数 1/rate」是两套同名参数不同口径）
  * 怪物素材是统一帧规格（见 configs/animation 的 monsterActionSpecs：stand 4 帧 / walk·attack 6 帧 /
- * injured 2 帧 / die 10 帧，攻击段 #1247 起叫 attack），所以全怪共用一套默认即可；
- * 个别怪要调速 → 服务端 monster-presentation.generated.ts 那行的 speedRate 覆盖（随快照下发）
+ * injured 2 帧 / die 10 帧，攻击段 #1247 起叫 attack）。
+ *
+ * #1254 起出厂数据已把五键速度**显式写进每行** `monster_presentation.speed_rate`（随快照下发，
+ * 管理端怪物页逐怪可调）——本表从「唯一来源」降级为**兜底**：只有库行缺键时才生效，
+ * 正常情况用不到。改这里的值必须同步改 server/scripts/oneoff-seed-monster-speed-rates.cjs
+ * 的 SEED（test-monster-config 盯着两边一致），否则出厂怪与兜底速度静默分叉。
  */
 export const monsterDefaultSpeedRate: SpeedRate = {
   [ACTION.STAND]: 1, // 4 帧 / 1 秒：缓慢的呼吸循环
   [ACTION.WALK]: 1, // 6 帧 / 1 秒，与角色步行循环同速
   [ACTION.RUN]: 1, // 角色跑动 6 帧 / 1 秒（怪物不用）
   [ACTION.ATTACK]: 1, // 怪物攻击段 6 帧 / 1 秒（原 run 段，#1247）
-  [ACTION.ATTACK_NEAR]: 2, // 怪物素材暂无 attack_near 帧（回退待机），留 0.5 秒一击的默认
+  [ACTION.ATTACK_NEAR]: 2, // 角色专用键；怪物演出已统一走 attack（#1251），此键对怪物不生效
   [ACTION.ATTACK_SKILL_1]: 2,
   [ACTION.TEST3]: 1,
   [ACTION.ATTACK_FAR]: 2,
