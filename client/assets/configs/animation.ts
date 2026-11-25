@@ -26,6 +26,7 @@ const roleSpriteFrameLength: AnimationLength = {
   [ACTION.STAND]: 8,
   [ACTION.WALK]: 8,
   [ACTION.RUN]: 8,
+  [ACTION.ATTACK]: 0, // 怪物专用动作（#1247），角色素材没有这段
   [ACTION.ATTACK_NEAR]: 8,
   [ACTION.ATTACK_SKILL_1]: 8,
   [ACTION.TEST3]: 8,
@@ -40,16 +41,16 @@ const roleSpriteFrameLength: AnimationLength = {
  * 怪物动作帧规格（resources/monster/out/<id> 素材包实测布局，各包统一）：
  * 帧号公式 = start + 方向下标 × spacing + 帧内下标（方向内连续、方向之间按 spacing 跳开）
  * - stand: 每方向 4 帧，方向间隔 10（0-79 段，如 0-3 / 10-13 / ...）
- * - walk / run: 每方向 6 帧，方向间隔 10（80-155 / 160-235 段）
- *   ⚠️ run 段实际画的是**攻击**动作（#1244，用户确认）：怪物不播放奔跑 —— 移动只播 walk、
- *   攻击走事件驱动（attack_near / 技能 action），目前没有配置把这段用起来；
- *   目录/动作名沿用素材导出管线的 run，别按字面理解成奔跑
+ * - walk / attack: 每方向 6 帧，方向间隔 10（80-155 / 160-235 段）
+ *   ⚠️ 攻击段原目录名叫 run（#1244 确认画面是攻击、#1247 起目录/动作名已改 attack）：
+ *   怪物没有奔跑 —— 移动只播 walk、攻击走事件驱动（attack_near / 技能 action）；
+ *   目前还没有配置把 attack 段用起来（技能 action 可配 "attack" 接入）
  * - injured: 每方向 2 帧，方向间隔 2（240-255 段连续排布）
  * - die: 每方向 10 帧，方向间隔 10（260-339 段）
- * 素材包没有攻击动作（attack_near 等）与 test/a1 动作的帧，不进映射表——
+ * 素材包没有 attack_near 等（attack_near 与 attack 段是两回事：前者角色专用攻击动作，
+ * 怪物素材包没有它的帧）与 test/a1 动作的帧，不进映射表——
  * 播放这些动作时引擎侧没有对应片段，MonsterAI.playAction 会回退成待机；
  * 个别包缺段（如怪物 27 没有走路段）时该动作同样自动回退。
- * 注：素材包的 run 段实际是攻击画面（见 monsterActionSpecs 的 #1244 注记），怪物不播放奔跑。
  */
 export interface MonsterActionSpec {
   action: ACTION;
@@ -64,7 +65,8 @@ export interface MonsterActionSpec {
 export const monsterActionSpecs: MonsterActionSpec[] = [
   { action: ACTION.STAND, start: 0, frames: 4, spacing: 10 },
   { action: ACTION.WALK, start: 80, frames: 6, spacing: 10 },
-  { action: ACTION.RUN, start: 160, frames: 6, spacing: 10 },
+  // #1247 由 run 改名 attack：怪物没有奔跑，这段帧号（160-235）画面实际是攻击动作
+  { action: ACTION.ATTACK, start: 160, frames: 6, spacing: 10 },
   { action: ACTION.INJURED, start: 240, frames: 2, spacing: 2 },
   { action: ACTION.DIE, start: 260, frames: 10, spacing: 10 },
 ];
@@ -163,6 +165,7 @@ export const actionNeedWeapon: ActionNeedWeapon = {
   [ACTION.STAND]: false,
   [ACTION.WALK]: false,
   [ACTION.RUN]: false,
+  [ACTION.ATTACK]: false,
   [ACTION.ATTACK_NEAR]: true,
   [ACTION.ATTACK_SKILL_1]: false,
   [ACTION.TEST3]: false,

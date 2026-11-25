@@ -40,7 +40,8 @@ MONSTER_ACTION_SPECS = [
     # (action, start, frames, spacing)
     ("stand", 0, 4, 10),
     ("walk", 80, 6, 10),
-    ("run", 160, 6, 10),
+    # #1247 由 run 改名 attack：怪物没有奔跑，160-235 段画面实际是攻击动作
+    ("attack", 160, 6, 10),
     ("injured", 240, 2, 2),
     ("die", 260, 10, 10),
 ]

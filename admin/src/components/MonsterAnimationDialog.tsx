@@ -22,9 +22,8 @@ import { Badge, Button, Field } from "./ui";
 const ACTIONS = [
   { key: "stand", label: "站立" },
   { key: "walk", label: "行走" },
-  // 素材目录名沿用导出管线的 run，但这段图实际画的是**攻击**动作 —— 怪物不播放奔跑
-  // （移动只播 walk，攻击走事件驱动，见客户端 MonsterAI 与 configs/animation 的 #1244 注记）
-  { key: "run", label: "攻击" },
+  // #1247 由 run 改名 attack：怪物没有奔跑，这段素材画面是攻击动作
+  { key: "attack", label: "攻击" },
   { key: "injured", label: "受击" },
   { key: "die", label: "死亡" },
 ] as const;
@@ -126,7 +125,7 @@ export function MonsterAnimationDialog({ monster, onClose }: { monster: AdminMon
         </div>
         <p className="text-xs text-ink-5">
           帧率与客户端一致：按该怪 speedRate 取每帧秒数（动作名命中才生效），未配置即客户端默认 1 秒/帧；点击画布可放大。
-          显示「无图」= 素材包缺这一段（客户端会静默回退成待机，不会报错）。「攻击」段的素材目录名沿用导出管线的 run。
+          显示「无图」= 素材包缺这一段（客户端会静默回退成待机，不会报错）。
         </p>
       </div>
     </Modal>

@@ -229,6 +229,7 @@ export const defaultRoleSpeedRate: SpeedRate = {
   [ACTION.STAND]: 1,
   [ACTION.WALK]: 1,
   [ACTION.RUN]: 1,
+  [ACTION.ATTACK]: 1, // 怪物专用动作（#1247），角色不用
   [ACTION.ATTACK_NEAR]: 4,
   [ACTION.ATTACK_SKILL_1]: 1,
   [ACTION.TEST3]: 1,
