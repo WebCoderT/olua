@@ -66,7 +66,7 @@ export const RECOMMENDED_GUILD_RULE_PARAMS = {
 export const RECOMMENDED_MONSTER_AI_PARAMS = {
   attackInterval: 2000,
   attackRange: 60,
-  attackActionTime: 400,
+  attackActionTime: 1000, // #1263：对齐攻击动画时长（1s），否则走位群战每刀都被追击切断
   pushDuration: 200,
   idleMoveInterval: [4000, 9000],
   idleMoveDuration: [300, 800],

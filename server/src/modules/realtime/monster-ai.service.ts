@@ -40,7 +40,11 @@ type MonsterAiParams = MonsterAiRuntimeParams;
 const FALLBACK_AI: MonsterAiParams = {
   attackInterval: 2000,
   attackRange: 60,
-  attackActionTime: 400,
+  // #1263：普攻收招必须 ≥ 攻击动画时长（attack 段 6 帧 × speedRate 1 = 1s）。
+  // 400ms 时走位群战里怪「打一刀 → 400ms → 转追击」，客户端渲染看到是广播粒度 100ms
+  // + 回放滞后 120ms ≈ 520ms 起 mv=true，1s 的挥砍每刀都被拦腰切断（站桩单挑不受影响，
+  // 所以「偶尔异常、多怪更明显」）。与动画对齐后收招播完才转身，攻速（attackInterval）不变。
+  attackActionTime: 1000,
   pushDuration: 200,
   idleMoveInterval: [4000, 9000],
   idleMoveDuration: [300, 800],
