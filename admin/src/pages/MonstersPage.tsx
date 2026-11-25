@@ -35,7 +35,8 @@ function attributeSummary(item: Monster): string {
  * 可以覆盖播放速度的动作（#751）
  *
  * 与服务端 `MONSTER_ACTION_KEYS` / 客户端 `monsterActionSpecs` 逐字一致：怪物素材只有这五个
- * 动作有帧，其余动作（攻击 / 技能 / 测试动作）播放时回退待机 —— 所以界面只给这五个输入框。
+ * 动作有帧，其余动作键（attack_near 等角色专用攻击段，#1251 起怪物演出也不再读技能配置的动作键）
+ * 怪物素材包没有帧、配了也回退待机 —— 所以界面只给这五个输入框。攻击手感就改「攻击」这一格。
  */
 const ACTION_SPEED_KEYS: { key: string; label: string }[] = [
   { key: "stand", label: "待机" },
@@ -264,7 +265,7 @@ function MonsterEditDialog({
             </div>
             <div className="mt-3">
               <span className="mb-1 block text-xs font-medium text-ink-4">
-                动作速度覆盖（每帧秒数，留空 = 用客户端默认）
+                动作速度覆盖（每帧秒数，数值越小越快；留空 = 用客户端默认。怪物普攻与施法统一播「攻击」段 #1251）
               </span>
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
                 {ACTION_SPEED_KEYS.map(({ key, label: actionLabel }) => (
@@ -283,7 +284,8 @@ function MonsterEditDialog({
                 ))}
               </div>
               <p className="mt-1 text-xs text-ink-5">
-                只有这五个动作有帧；攻击 / 技能动作在素材里没有帧，播放时回退待机，所以不给入口。
+                只有这五个动作有帧；attack_near / attack_skill_1 等角色专用键怪物素材包没有帧，配了也回退待机。
+                怪物普攻与技能施法统一播「攻击」段（#1251），调速改这一格即可。
               </p>
             </div>
           </div>
