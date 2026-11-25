@@ -135,6 +135,11 @@
       "file": "ui/helpers/parts/monster-parts.ts",
       "rule": "magicCompare",
       "reason": "多边形最小顶点数 3 是几何定义（#1190：画碰撞范围可视化时不足 3 点画不出面），与服务端/客户端共同的「3 才成面」口径一致，不存在「运营调它」的场景。"
+    },
+    {
+      "file": "ui/core/storage/auto-bag-service.ts",
+      "rule": "magicCompare",
+      "reason": "自动使用循环的 64 轮上限是防死循环的工程护栏（背包上限 80 格、每用一格都重扫背包，用不动即 break），不是可调数值 —— 真正的背包容量在服务端配置里，这里只兜底防刷请求。"
     }
   ]
 }
