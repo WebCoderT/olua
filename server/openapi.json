@@ -5496,6 +5496,109 @@
         ]
       }
     },
+    "/admin/system/config-snapshot/export": {
+      "get": {
+        "description": "把当前库的全部配置表序列化成 `config-sync.sql` 的**文件内容**（文本随 JSON 信封返回，前端转 Blob 落盘）。\n\n- 内容与 `make config-export` 的产物**完全一致**（同一个脚本生成）：只含配置表，账号 / 角色存档 / 审计日志不进文件；\n- 导出是**只读**的：服务端在跑也能导（WAL 保证读到已提交的一致状态），不需要停服；\n- 拿这份文件可以：留档备份、传到另一台机器 `make config-import`、或在管理端本页导入；\n- `tables` / `rows` / `version` 是给界面展示的统计（张数按 DELETE 段数、行数按 INSERT 条数现算）。\n\n内存库部署形态（`:memory:`，e2e / 临时环境）没有文件可导，返回 50151 并说明原因。\n\n只读备份不记审计（与「系统信息」同一取向）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`system:read`（查看系统信息；角色：超级管理员 / 管理员）",
+        "operationId": "adminSystem.exportConfigSnapshot",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "快照全文与统计",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/ConfigSnapshotExportDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "导出配置快照",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/ConfigSnapshotExportDto"
+        },
+        "x-olua-permissions": [
+          "system:read"
+        ]
+      }
+    },
+    "/admin/system/config-snapshot/import": {
+      "post": {
+        "description": "上传一份 `config-sync.sql` 的**文件内容**（请求体就是 SQL 全文，`Content-Type` 不限），整表替换库里的全部配置表。安全语义与 `make config-import` 完全一致（同一个脚本执行）：\n\n- **只动配置表**：账号、角色存档、审计日志、世界怪物实例一个字都不碰；\n- **导入前自动留档**到 `server/data/backups/config-before-import-<时间>.sql`，导错了指回去就能还原；\n- **三道自保**：格式与表清单校验（少一张表就拒绝，否则那张会被清空）、版本闸（文件比库旧拒绝）、导入后逐字节读回校验；\n- **版本闸拒绝是正常分支**：界面把版本差展示给用户，用户勾「我确认要回退」后带 `?force=true` 重试（留档照做，版本号只升不降）；\n- **成功后必须重启服务端**：进程内存里的配置覆盖层（运行时参数等）不会自动刷新，返回的 `report` 里带脚本自己的这条提醒；\n- 导入全程互斥：已有一次导入进行中返回 409（50153）。\n\n整表替换全服生效，由审计拦截器按 operationId 自动留痕（targetType `config`）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`system:write`（导入配置快照；角色：超级管理员 / 管理员）",
+        "operationId": "adminSystem.importConfigSnapshot",
+        "parameters": [
+          {
+            "name": "force",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "导入脚本的完整输出",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/ConfigSnapshotImportResultDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "导入配置快照",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/ConfigSnapshotImportResultDto"
+        },
+        "x-olua-permissions": [
+          "system:write"
+        ]
+      }
+    },
     "/announcements/active": {
       "get": {
         "description": "只返回**同时满足**三个条件的公告：手动启用了、已到生效开始时间、还没到结束时间（`startsAt` / `endsAt` 为 null 分别表示立即生效 / 不设截止）。\n\n**只含全服公告**（投放范围为「全服」的那些）：这条路没有令牌、也就没有区，登录页与还没选区的玩家看到的就是它。进游戏之后用 `GET /announcements/mine`：那条会多带上「本区」公告。\n\n排序：**重要在前**，同级按发布时间倒序。无生效公告时返回空数组（不是 null）。\n\n无需令牌 —— 停机维护这类公告在登录页就要能显示。\n\n---\n\n**鉴权**：无需令牌，公开接口。",
@@ -23552,6 +23655,48 @@
           "backup",
           "config",
           "time"
+        ]
+      },
+      "ConfigSnapshotExportDto": {
+        "type": "object",
+        "properties": {
+          "sql": {
+            "type": "string",
+            "description": "config-sync.sql 全文（UTF-8 文本）"
+          },
+          "tables": {
+            "type": "number",
+            "description": "配置表张数",
+            "example": 31
+          },
+          "rows": {
+            "type": "number",
+            "description": "配置行数",
+            "example": 45000
+          },
+          "version": {
+            "type": "number",
+            "description": "导出时库里的配置版本",
+            "example": 42
+          }
+        },
+        "required": [
+          "sql",
+          "tables",
+          "rows",
+          "version"
+        ]
+      },
+      "ConfigSnapshotImportResultDto": {
+        "type": "object",
+        "properties": {
+          "report": {
+            "type": "string",
+            "description": "导入脚本的完整输出（含占用统计、版本变化、留档路径）"
+          }
+        },
+        "required": [
+          "report"
         ]
       },
       "ActiveAnnouncementDto": {

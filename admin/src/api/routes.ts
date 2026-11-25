@@ -1324,7 +1324,7 @@ export const routes = {
      */
     update: (id: string) => `/admin/statuses/${encodeURIComponent(id)}`,
   },
-  /** adminSystem 模块（1 个接口） */
+  /** adminSystem 模块（3 个接口） */
   adminSystem: {
     /**
      * 系统信息（GET /admin/system）
@@ -1332,6 +1332,18 @@ export const routes = {
      * 版本 / Node 版本 / 运行时长 / 内存 / 数据文件路径与体积 / 各表行数 / 脱敏配置快照。
      */
     info: "/admin/system",
+    /**
+     * 导出配置快照（GET /admin/system/config-snapshot/export）
+     *
+     * 把当前库的全部配置表序列化成 `config-sync.sql` 的**文件内容**（文本随 JSON 信封返回，前端转 Blob 落盘）。
+     */
+    exportConfigSnapshot: "/admin/system/config-snapshot/export",
+    /**
+     * 导入配置快照（POST /admin/system/config-snapshot/import）
+     *
+     * 上传一份 `config-sync.sql` 的**文件内容**（请求体就是 SQL 全文，`Content-Type` 不限），整表替换库里的全部配置表。安全语义与 `make config-import` 完全一致（同一个脚本执行）：
+     */
+    importConfigSnapshot: "/admin/system/config-snapshot/import",
   },
   /** adminTitle 模块（4 个接口） */
   adminTitle: {

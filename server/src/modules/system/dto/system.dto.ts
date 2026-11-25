@@ -164,3 +164,24 @@ export class SystemInfoDto {
   @ApiProperty({ description: "服务端时间戳（毫秒）" })
   time: number;
 }
+
+/** 配置快照导出（#1266）：内容与 `make config-export` 产物一致，前端转 Blob 下载 */
+export class ConfigSnapshotExportDto {
+  @ApiProperty({ description: "config-sync.sql 全文（UTF-8 文本）", type: "string" })
+  sql: string;
+
+  @ApiProperty({ description: "配置表张数", example: 31 })
+  tables: number;
+
+  @ApiProperty({ description: "配置行数", example: 45000 })
+  rows: number;
+
+  @ApiProperty({ description: "导出时库里的配置版本", example: 42 })
+  version: number;
+}
+
+/** 配置快照导入结果（#1266）：脚本输出原样带回（含留档路径与重启提醒） */
+export class ConfigSnapshotImportResultDto {
+  @ApiProperty({ description: "导入脚本的完整输出（含占用统计、版本变化、留档路径）", type: "string" })
+  report: string;
+}

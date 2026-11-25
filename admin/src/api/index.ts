@@ -63,6 +63,7 @@ export {
   equipmentBackgroundApi,
   gameDataApi,
 } from "./endpoints";
+export { configSnapshotApi } from "./configSnapshot";
 export { routes } from "./routes";
 export type * from "./models";
 

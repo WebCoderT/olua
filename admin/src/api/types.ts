@@ -189,6 +189,13 @@ export const PERMISSION = {
    */
   SYSTEM_READ: "system:read",
   /**
+   * 导入配置快照（#1266）：上传 config-sync.sql 整表替换全部配置表
+   *
+   * 与 `GAME_CONFIG_WRITE`（逐页改数值）不同量级 —— 一次导入替换全部配置表，
+   * 管理员与超级管理员持有、观察员没有。导出备份不需要它（只读，有 SYSTEM_READ 就够）。
+   */
+  SYSTEM_WRITE: "system:write",
+  /**
    * 查看养成配置（称号 / 战魂的等级序列、属性与价格）
    *
    * 只读观察员**也给**：配置表是业务数据（玩家看到的一切数值都出自这里），
@@ -275,6 +282,7 @@ export const PERMISSION_LABELS: Record<string, string> = {
   [PERMISSION.DROP_READ]: "查看掉落记录",
   [PERMISSION.DROP_CLEAR]: "清空地面掉落",
   [PERMISSION.SYSTEM_READ]: "查看系统信息",
+  [PERMISSION.SYSTEM_WRITE]: "导入配置快照",
   [PERMISSION.GAME_CONFIG_READ]: "查看养成配置",
   [PERMISSION.GAME_CONFIG_WRITE]: "修改养成配置",
   [PERMISSION.ZONE_READ]: "查看区服",

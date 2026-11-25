@@ -118,6 +118,7 @@
     "test:e2e:push": "node --disable-warning=ExperimentalWarning test/e2e-push.cjs",
     "test:e2e:status": "node --disable-warning=ExperimentalWarning test/e2e-status.cjs",
     "test:e2e:config-version": "node --disable-warning=ExperimentalWarning test/e2e-config-version.cjs",
+    "test:e2e:config-snapshot": "node --disable-warning=ExperimentalWarning test/e2e-config-snapshot.cjs",
     "test:e2e:event-log": "node --disable-warning=ExperimentalWarning test/e2e-event-log.cjs",
     "test:e2e:use-cooldown": "node --disable-warning=ExperimentalWarning test/e2e-use-cooldown.cjs",
     "test:e2e:mall-limit": "node --disable-warning=ExperimentalWarning test/e2e-mall-limit.cjs"
