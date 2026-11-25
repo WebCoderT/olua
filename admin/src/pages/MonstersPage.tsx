@@ -6,6 +6,7 @@ import type { AdminMonster, DropTable, Monster, MonsterAttributes, PageResult, S
 import { AttributesGrid, crossedRangeKeys } from "../components/AttributesEditor";
 import { FrameAnimation } from "../components/FrameAnimation";
 import { GameIcon } from "../components/GameImage";
+import { MonsterAnimationDialog } from "../components/MonsterAnimationDialog";
 import { Modal } from "../components/Modal";
 import { Pagination } from "../components/Pagination";
 import { Badge, Button, Card, EmptyState, Field, Input, Notice, Select, Spinner, tableClass, tdClass, thClass, theadClass } from "../components/ui";
@@ -568,6 +569,9 @@ export function MonstersPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   /** 技能挂载弹窗的目标怪（= null 表示关闭） */
   const [skillTarget, setSkillTarget] = useState<AdminMonster | null>(null);
+
+  /** 动画预览弹窗的怪（#1241：只读预览，不需要写权限） */
+  const [animTarget, setAnimTarget] = useState<AdminMonster | null>(null);
   /** 掉落弹窗的目标怪（= null 表示关闭） */
   const [dropTarget, setDropTarget] = useState<AdminMonster | null>(null);
   /**
@@ -726,7 +730,8 @@ export function MonstersPage() {
                 <tr key={item.id} className="transition hover:bg-surface-4/30">
                   <td className={tdClass}>
                     {monsterOut(item.id) ? (
-                      // 站立动画筛 d0（客户端里「朝下站立」那条循环）；没配外观的怪退回静态头像
+                      // 站立动画筛 d0（客户端 directions[0] = UP，「朝上站立」那条循环；
+                      // 游戏里默认摆的「朝下待机」走的是 d4，见 createMonsterBody）；没配外观的怪退回静态头像
                       <FrameAnimation atlas={`${monsterOut(item.id)}/stand`} alt={item.label} framePrefix="d0" />
                     ) : (
                       <GameIcon path={monsterIcon(item.id)} alt={item.label} />
@@ -763,6 +768,9 @@ export function MonstersPage() {
                   <td className={`${tdClass} text-xs text-ink-4`}>{formatTime(item.updatedAt)}</td>
                   <td className={`${tdClass} text-right`}>
                     <div className="flex justify-end gap-2">
+                      <Button variant="outline" className="px-2.5 py-1 text-xs" onClick={() => setAnimTarget(item)}>
+                        动画
+                      </Button>
                       <Button
                         variant="outline"
                         className="px-2.5 py-1 text-xs"
@@ -812,6 +820,8 @@ export function MonstersPage() {
           void load();
         }}
       />
+
+      <MonsterAnimationDialog key={animTarget?.id ?? "none"} monster={animTarget} onClose={() => setAnimTarget(null)} />
 
       <MonsterDropDialog
         monsterKey={dropTarget?.id ?? dropKey}

@@ -210,6 +210,7 @@ export function FrameAnimation({
   alt,
   size = 40,
   frameRate = 10,
+  frameMs,
   framePrefix,
   zoomable = true,
 }: {
@@ -219,6 +220,12 @@ export function FrameAnimation({
   size?: number;
   /** 每秒帧数（与客户端同素材的播放帧率保持一致，边框 / 背景都是 10） */
   frameRate?: number;
+  /**
+   * 每帧毫秒数（直接给定，优先于 frameRate 换算）。
+   * 怪物动画的客户端口径是「每帧秒数」且缺省 1 秒/帧 —— 比秒还慢的档会被
+   * `1000 / max(1, frameRate)` 的 fps≥1 钳制拉平，所以慢速动画要走这个入口。
+   */
+  frameMs?: number;
   /** 只播帧名以它开头的帧（怪物 / 装备 stand 表按方向切，见 loadAtlasAnimation） */
   framePrefix?: string;
   zoomable?: boolean;
@@ -248,10 +255,10 @@ export function FrameAnimation({
       const k = Math.min(size / maxW, size / maxH);
       canvas.width = Math.max(1, Math.round(maxW * k));
       canvas.height = Math.max(1, Math.round(maxH * k));
-      const frameMs = Math.max(1, 1000 / Math.max(1, frameRate));
+      const ms = frameMs ?? Math.max(1, 1000 / Math.max(1, frameRate));
       const tick: Tick = (now: number) => {
         if (!animation) return;
-        const slot = Math.floor(now / frameMs) % animation.frames.length;
+        const slot = Math.floor(now / ms) % animation.frames.length;
         if (slot === lastSlot) return; // 帧没换就不重画（一屏 20 个播放器时省一大半绘制）
         lastSlot = slot;
         drawFrame(canvas, animation.image, animation.frames[slot], k);
@@ -262,7 +269,7 @@ export function FrameAnimation({
       cancelled = true;
       unsubscribe?.();
     };
-  }, [atlas, size, frameRate, framePrefix]);
+  }, [atlas, size, frameRate, frameMs, framePrefix]);
 
   if (!atlas || failed) {
     return (
@@ -292,7 +299,7 @@ export function FrameAnimation({
         {canvas}
       </Zoomable>
       {zoom ? (
-        <AnimationLightbox atlas={atlas} alt={alt} frameRate={frameRate} framePrefix={framePrefix} onClose={() => setZoom(false)} />
+        <AnimationLightbox atlas={atlas} alt={alt} frameRate={frameRate} frameMs={frameMs} framePrefix={framePrefix} onClose={() => setZoom(false)} />
       ) : null}
     </>
   );
@@ -303,12 +310,14 @@ function AnimationLightbox({
   atlas,
   alt,
   frameRate,
+  frameMs,
   framePrefix,
   onClose,
 }: {
   atlas: string;
   alt?: string;
   frameRate: number;
+  frameMs?: number;
   framePrefix?: string;
   onClose: () => void;
 }) {
@@ -326,10 +335,10 @@ function AnimationLightbox({
       const k = Math.min(640 / maxW, 640 / maxH, 3);
       canvas.width = Math.max(1, Math.round(maxW * k));
       canvas.height = Math.max(1, Math.round(maxH * k));
-      const frameMs = Math.max(1, 1000 / Math.max(1, frameRate));
+      const ms = frameMs ?? Math.max(1, 1000 / Math.max(1, frameRate));
       const tick = (now: number) => {
         if (!canvas) return;
-        const slot = Math.floor(now / frameMs) % loaded.frames.length;
+        const slot = Math.floor(now / ms) % loaded.frames.length;
         if (slot === lastSlot) return;
         lastSlot = slot;
         drawFrame(canvas, loaded.image, loaded.frames[slot], k);
@@ -340,7 +349,7 @@ function AnimationLightbox({
       cancelled = true;
       unsubscribe?.();
     };
-  }, [atlas, frameRate, framePrefix]);
+  }, [atlas, frameRate, frameMs, framePrefix]);
   return (
     <Lightbox alt={alt} onClose={onClose}>
       <canvas
