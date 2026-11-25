@@ -12,9 +12,11 @@ import { MonsterRow } from "../../database/rows";
 import { DEFAULT_CRIT_DAMAGE, roleAttributeSourceOf, summarizeRoleAttributes } from "../combat/role-attributes";
 import { RolesService } from "../roles/roles.service";
 import { GameEventsService } from "../../common/events/game-events.service";
+import { GameConfigService } from "../game-config/game-config.service";
 import { PartyService } from "../party/party.service";
 import { WorldService } from "../world/world.service";
 import { roomKey } from "../../common/utils/room-key.util";
+import { isEquipmentVariantId, rollVariantOfBase, type EquipmentDropWeights } from "../../common/utils/roll-equipment-variant";
 import { MapMonitorService } from "./map-monitor.service";
 import { MapService, type MapRules } from "../map/map.service";
 import { MonsterAiService } from "./monster-ai.service";
@@ -84,6 +86,8 @@ export class CombatSettlementService {
     private readonly monsterConfigs: MonsterRepository,
     private readonly monsterDrops: MonsterDropRepository,
     private readonly dropTables: DropTableRepository,
+    /** 装备规则（#1286：前后缀掉落权重走 game-config 公开口；现读库，管理端改完下一刀生效） */
+    private readonly gameConfig: GameConfigService,
     private readonly growth: GrowthRepository,
     private readonly events: GameEventsService,
     private readonly party: PartyService,
@@ -1119,6 +1123,7 @@ export class CombatSettlementService {
     if (!table) return [];
     const monsterBind = row?.bind_drops === 1;
     const bindChance = this.dropBindChance();
+    const dropWeights = this.equipmentDropWeights();
     const result: Array<{ goodId: string; count: number; bound: boolean }> = [];
     for (const drop of rollDropTable(table, rules.dropRate)) {
       // 掉落表是管理端可改的数据：配了不存在的物品 id 就在这里拦下（#802）。
@@ -1127,12 +1132,37 @@ export class CombatSettlementService {
         this.logger.warn(`掉落表里配了不存在的物品 ${drop.goodId}（来源怪物 ${monsterKey}）：这一件不生成`);
         continue;
       }
+      // #1286：装备基础件在掉落这一刻按前后缀权重抽档；药品 / 材料 / 手写变体原样走
+      const rolled = this.rollEquipmentVariant(drop.goodId, dropWeights);
+      if (!itemTypeOf(rolled)) {
+        this.logger.warn(`变体掉落抽到了不存在的装备 ${rolled}（来源怪物 ${monsterKey}）：回落基础件 ${drop.goodId}`);
+      } else {
+        drop.goodId = rolled;
+      }
       result.push({
         ...drop,
         bound: monsterBind || bindOnDropOf(drop.goodId) || Math.random() * 100 < bindChance,
       });
     }
     return result;
+  }
+
+  /** 前后缀掉落权重（#1286）：现读装备规则的只读公开口，管理端改完下一刀生效 */
+  private equipmentDropWeights(): EquipmentDropWeights {
+    try {
+      const meta = this.gameConfig.getEquipmentMeta();
+      return { prefix: meta.prefixDropWeights, suffix: meta.suffixDropWeights };
+    } catch {
+      // 规则行缺失是配置事故，不该连带把击杀结算整条打断；空权重 = 全掉光板（p0s0）
+      this.logger.warn("装备规则行缺失，变体掉落暂按 p0s0 结算");
+      return { prefix: [], suffix: [] };
+    }
+  }
+
+  /** 只有装备基础件抽档；非装备与运营手写的变体 id 原样返回 */
+  private rollEquipmentVariant(goodId: string, weights: EquipmentDropWeights): string {
+    if (itemTypeOf(goodId) !== "equipment" || isEquipmentVariantId(goodId)) return goodId;
+    return rollVariantOfBase(goodId, weights);
   }
 
   /**

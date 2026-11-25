@@ -38,15 +38,21 @@ import { toastSuccess } from "../store/toast";
 
 //#region 档位定义（#697 的 TiersDialog 迁出为页内卡片）
 
-/** 一档 = 一条文案 + 一个倍率 + 一个文字颜色（输入态都是字符串，提交时再解析；#720 起带颜色） */
-type TierDraft = { label: string; rate: string; color: string };
+/** 一档 = 文案 + 倍率 + 文字颜色 + 掉落权重（输入态都是字符串，提交时再解析；#1286 起带权重） */
+type TierDraft = { label: string; rate: string; color: string; dropWeight: string };
 
-const TIER_LIMITS = { min: 1, max: 10, maxRate: 1000, maxLabelLength: 10 };
+const TIER_LIMITS = { min: 1, max: 10, maxRate: 1000, maxLabelLength: 10, maxDropWeight: 1000 };
 
 /** 颜色的出厂回落值（与客户端内置色同源；老数据没上色时取色器显示它们） */
 const BUILTIN_TIER_COLORS = {
   prefix: ["#DDDDDD", "#6EE86E", "#4DA6FF", "#C77DFF", "#FFA640"],
   suffix: ["#B0B0B0", "#4DE3FF", "#FFD700"],
+} as const;
+
+/** 掉落权重的出厂回落值（与服务端 DEFAULT_*_DROP_WEIGHTS 同源；老数据没配时输入框显示它们） */
+const BUILTIN_TIER_DROP_WEIGHTS = {
+  prefix: [100, 50, 25, 12, 6],
+  suffix: [100, 40, 12],
 } as const;
 
 const HEX_COLOR_PATTERN = /^#[0-9A-Fa-f]{6}$/;
@@ -69,6 +75,11 @@ function tierProblem(tiers: TierDraft[], kind: string): string | null {
     if (Number(tier.rate) <= 0) return `${kind}第 ${index + 1} 档的倍率必须大于 0`;
     if (Number(tier.rate) > TIER_LIMITS.maxRate) return `${kind}第 ${index + 1} 档的倍率超出防御性上限（${TIER_LIMITS.maxRate}）`;
     if (!HEX_COLOR_PATTERN.test(tier.color.trim())) return `${kind}第 ${index + 1} 档的颜色要形如 #RRGGBB`;
+    if (!isNumber(tier.dropWeight)) return `${kind}第 ${index + 1} 档的掉落权重不是数字`;
+    if (Number(tier.dropWeight) < 0) return `${kind}第 ${index + 1} 档的掉落权重不能小于 0`;
+    if (Number(tier.dropWeight) > TIER_LIMITS.maxDropWeight) {
+      return `${kind}第 ${index + 1} 档的掉落权重超出上限（${TIER_LIMITS.maxDropWeight}）`;
+    }
   }
   return null;
 }
@@ -86,11 +97,14 @@ function TiersCard({ onChanged }: { onChanged: () => void }) {
       const row = await equipmentMetaApi.get();
       const colorOf = (colors: string[] | undefined, kind: keyof typeof BUILTIN_TIER_COLORS, index: number): string =>
         colors?.[index] ?? BUILTIN_TIER_COLORS[kind][Math.min(index, BUILTIN_TIER_COLORS[kind].length - 1)];
+      const weightOf = (weights: number[] | undefined, kind: keyof typeof BUILTIN_TIER_DROP_WEIGHTS, index: number): number =>
+        weights?.[index] ?? BUILTIN_TIER_DROP_WEIGHTS[kind][Math.min(index, BUILTIN_TIER_DROP_WEIGHTS[kind].length - 1)];
       setPrefixTiers(
         row.prefixLabels.map((label, index) => ({
           label,
           rate: String(row.prefixRates[index] ?? 1),
           color: colorOf(row.prefixColors, "prefix", index),
+          dropWeight: String(weightOf(row.prefixDropWeights, "prefix", index)),
         })),
       );
       setSuffixTiers(
@@ -98,6 +112,7 @@ function TiersCard({ onChanged }: { onChanged: () => void }) {
           label,
           rate: String(row.suffixRates[index] ?? 1),
           color: colorOf(row.suffixColors, "suffix", index),
+          dropWeight: String(weightOf(row.suffixDropWeights, "suffix", index)),
         })),
       );
     } catch {
@@ -119,7 +134,15 @@ function TiersCard({ onChanged }: { onChanged: () => void }) {
   const appendTier = (kind: "prefix" | "suffix") => {
     const setter = kind === "prefix" ? setPrefixTiers : setSuffixTiers;
     const builtin = BUILTIN_TIER_COLORS[kind];
-    setter((current) => [...(current ?? []), { label: "新档", rate: "1", color: builtin[Math.min(current?.length ?? 0, builtin.length - 1)] }]);
+    setter((current) => [
+      ...(current ?? []),
+      {
+        label: "新档",
+        rate: "1",
+        color: builtin[Math.min(current?.length ?? 0, builtin.length - 1)],
+        dropWeight: "1",
+      },
+    ]);
   };
   const removeTier = (kind: "prefix" | "suffix", index: number) => {
     const setter = kind === "prefix" ? setPrefixTiers : setSuffixTiers;
@@ -137,6 +160,8 @@ function TiersCard({ onChanged }: { onChanged: () => void }) {
         suffixLabels: suffixTiers.map((tier) => tier.label.trim()),
         suffixRates: suffixTiers.map((tier) => Number(tier.rate)),
         suffixColors: suffixTiers.map((tier) => tier.color.trim()),
+        prefixDropWeights: prefixTiers.map((tier) => Number(tier.dropWeight)),
+        suffixDropWeights: suffixTiers.map((tier) => Number(tier.dropWeight)),
       });
       toastSuccess("前后缀档位已保存（档位定义与文字颜色即改即生效；装备变体要回「装备配置」页点「重新生成变体」才会按新档数重建）");
       onChanged();
@@ -167,6 +192,7 @@ function TiersCard({ onChanged }: { onChanged: () => void }) {
                 <th className="text-xs font-normal text-ink-4">文案</th>
                 <th className="w-28 text-xs font-normal text-ink-4">属性倍率</th>
                 <th className="w-48 text-xs font-normal text-ink-4">文字颜色</th>
+                <th className="w-32 text-xs font-normal text-ink-4">掉落权重</th>
                 <th className="w-16 text-right text-xs font-normal text-ink-4">操作</th>
               </tr>
             </thead>
@@ -206,6 +232,18 @@ function TiersCard({ onChanged }: { onChanged: () => void }) {
                       />
                     </div>
                   </td>
+                  <td>
+                    <Input
+                      type="number"
+                      step="1"
+                      min={0}
+                      max={TIER_LIMITS.maxDropWeight}
+                      value={tier.dropWeight}
+                      disabled={!canWrite}
+                      title="变体掉落权重：组合权重 = 前缀 × 后缀；0 = 不掉这一档"
+                      onChange={(event) => patchTier(kind, index, { dropWeight: event.target.value })}
+                    />
+                  </td>
                   <td className="text-right">
                     <Button variant="ghost" disabled={!canWrite || (tiers?.length ?? 0) <= TIER_LIMITS.min} onClick={() => removeTier(kind, index)}>
                       删除
@@ -223,7 +261,7 @@ function TiersCard({ onChanged }: { onChanged: () => void }) {
   return (
     <Card
       title="前后缀档位"
-      description="文案用于客户端拼品质名（如「精良的·天级」），倍率用于「重新生成变体」时算属性，颜色是品质文字的着色（客户端名称与文案按它渲染，#720）。保存即改档位定义，但已展开的装备变体行不变 —— 增删档位后回「装备配置」页点「重新生成变体」。"
+      description="文案用于客户端拼品质名（如「精良的·天级」），倍率用于「重新生成变体」时算属性，颜色是品质文字的着色（#720）。掉落权重（#1286）决定怪掉装备时抽到这一档的概率：组合权重 = 前缀 × 后缀，0 = 不掉该档，下一刀生效。保存即改档位定义，但已展开的装备变体行不变 —— 增删档位后回「装备配置」页点「重新生成变体」。"
       actions={
         loading ? (
           <Spinner />

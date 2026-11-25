@@ -20,6 +20,7 @@ import {
 import { PageMetaDto, PageQueryDto } from "../../../common/dto/api-envelope.dto";
 import { EquipmentMetaRow, EquipmentRow, EquipmentSlotRow, EquipmentVariantRow } from "../../../database/rows";
 import { EQUIPMENT_SLOT_KEYS, OCCUPATION_HINT, OCCUPATION_LABELS, SEX_HINT, SEX_LABELS } from "../../../common/constants/game-enums";
+import { EQUIPMENT_DROP_WEIGHT_MAX } from "../../../common/constants/equipment-appearance";
 import { attributesFromRow, ConfigAttributesDto, SoulRowShape } from "./title.dto";
 
 export { EQUIPMENT_SLOT_KEYS };
@@ -701,6 +702,20 @@ export class EquipmentMetaDto {
   })
   suffixColors: string[];
 
+  @ApiProperty({
+    description: "前缀掉落权重（#1286，下标 = 档位序号；与文案等长，0 = 该档不掉）",
+    example: [100, 50, 25, 12, 6],
+    type: [Number],
+  })
+  prefixDropWeights: number[];
+
+  @ApiProperty({
+    description: "后缀掉落权重（#1286，口径同前缀）",
+    example: [100, 40, 12],
+    type: [Number],
+  })
+  suffixDropWeights: number[];
+
   @ApiProperty({ description: "最近更新时间（毫秒）" })
   updatedAt: number;
 
@@ -712,6 +727,8 @@ export class EquipmentMetaDto {
     dto.suffixLabels = parseStringArray(row.suffix_labels);
     dto.prefixColors = parseStringArray(row.prefix_colors);
     dto.suffixColors = parseStringArray(row.suffix_colors);
+    dto.prefixDropWeights = parseNumberArray(row.prefix_drop_weights);
+    dto.suffixDropWeights = parseNumberArray(row.suffix_drop_weights);
     dto.updatedAt = row.updated_at;
     return dto;
   }
@@ -792,6 +809,32 @@ export class UpdateEquipmentMetaDto {
   @IsString({ each: true, message: "颜色必须是字符串" })
   @Matches(/^#[0-9A-Fa-f]{6}$/, { each: true, message: "颜色要形如 #RRGGBB（6 位十六进制）" })
   suffixColors?: string[];
+
+  @ApiPropertyOptional({
+    description: "前缀掉落权重（#1286，整份替换；与文案等长，每项 0~1000，0 = 该档不掉；空数组 = 回落到出厂递减值）",
+    example: [100, 50, 25, 12, 6],
+    type: [Number],
+  })
+  @IsOptional()
+  @IsArray({ message: "前缀掉落权重必须是数组" })
+  @ArrayMaxSize(10, { message: "前缀掉落权重最多 10 项" })
+  @IsNumber({}, { each: true, message: "掉落权重必须是数字" })
+  @Min(0, { each: true, message: "掉落权重不能小于 0" })
+  @Max(EQUIPMENT_DROP_WEIGHT_MAX, { each: true, message: "掉落权重超出防御性上限" })
+  prefixDropWeights?: number[];
+
+  @ApiPropertyOptional({
+    description: "后缀掉落权重（#1286，口径同前缀）",
+    example: [100, 40, 12],
+    type: [Number],
+  })
+  @IsOptional()
+  @IsArray({ message: "后缀掉落权重必须是数组" })
+  @ArrayMaxSize(10, { message: "后缀掉落权重最多 10 项" })
+  @IsNumber({}, { each: true, message: "掉落权重必须是数字" })
+  @Min(0, { each: true, message: "掉落权重不能小于 0" })
+  @Max(EQUIPMENT_DROP_WEIGHT_MAX, { each: true, message: "掉落权重超出防御性上限" })
+  suffixDropWeights?: number[];
 }
 
 /** JSON 文本列 → 数字数组（脏数据降级成空数组） */

@@ -4996,6 +4996,14 @@ export type EquipmentMeta = {
    */
   suffixColors: string[];
   /**
+   * 前缀掉落权重（#1286，下标 = 档位序号；与文案等长，0 = 该档不掉）
+   */
+  prefixDropWeights: number[];
+  /**
+   * 后缀掉落权重（#1286，口径同前缀）
+   */
+  suffixDropWeights: number[];
+  /**
    * 最近更新时间（毫秒）
    */
   updatedAt: number;
@@ -5026,6 +5034,14 @@ export type UpdateEquipmentMeta = {
    * 后缀文字颜色（#720，整份替换；口径同前缀颜色）
    */
   suffixColors?: string[];
+  /**
+   * 前缀掉落权重（#1286，整份替换；与文案等长，每项 0~1000，0 = 该档不掉；空数组 = 回落到出厂递减值）
+   */
+  prefixDropWeights?: number[];
+  /**
+   * 后缀掉落权重（#1286，口径同前缀）
+   */
+  suffixDropWeights?: number[];
 };
 
 export type EquipAlignPoint = {

@@ -1091,6 +1091,51 @@ async function main() {
     checkEqual(metaRestored.body?.data?.prefixRates?.[4], equipMeta.prefixRates[4], "倍率已还原（不污染后续结算断言）");
     checkEqual(metaRestored.body?.data?.prefixColors?.length, equipMeta.prefixColors.length, "颜色已还原（档数回到种子，不污染快照断言）");
 
+    // 变体掉落权重（#1286）：只校验形状与边界，不锁出厂数值（数值以库为准）
+    checkEqual(metaRow.prefixDropWeights?.length, metaRow.prefixLabels?.length, "前缀掉落权重与文案等长（下标 = 档位）");
+    checkEqual(metaRow.suffixDropWeights?.length, metaRow.suffixLabels?.length, "后缀掉落权重与文案等长");
+    const metaWeightsMismatch = await api(base, "PATCH", "/api/admin/equipment-meta", { token, body: { prefixDropWeights: [1] } });
+    checkEqual(metaWeightsMismatch.status, 400, "掉落权重与文案长度不一致 → 400");
+    const metaWeightsBad = await api(base, "PATCH", "/api/admin/equipment-meta", { token, body: { suffixDropWeights: [-1, 1, 1] } });
+    checkEqual(metaWeightsBad.status, 400, "掉落权重为负数 → 400");
+    const metaWeightsCleared = await api(base, "PATCH", "/api/admin/equipment-meta", { token, body: { prefixDropWeights: [] } });
+    checkEqual(metaWeightsCleared.status, 200, "空数组权重 = 回落出厂递减值");
+    checkEqual(metaWeightsCleared.body?.data?.prefixDropWeights?.length, metaRow.prefixLabels.length, "回落后权重与文案等长");
+    const metaWeightsRestored = await api(base, "PATCH", "/api/admin/equipment-meta", {
+      token,
+      body: { prefixDropWeights: metaRow.prefixDropWeights, suffixDropWeights: metaRow.suffixDropWeights },
+    });
+    checkEqual(metaWeightsRestored.status, 200, "掉落权重已还原（不污染后续断言）");
+
+    // 抽档纯函数：确定性随机源，验形状/特判/回退，不验具体掉率
+    const { rollVariantOfBase, isEquipmentVariantId } = require("../dist/common/utils/roll-equipment-variant.js");
+    check(!isEquipmentVariantId("cloth_1") && isEquipmentVariantId("cloth_1_p0s0"), "p0s0 的 id 就是基础件，不带变体后缀");
+    checkEqual(
+      rollVariantOfBase("cloth_1", { prefix: [0, 100, 0, 0, 0], suffix: [100, 0, 0] }, () => 0.5),
+      "cloth_1_p1s0",
+      "只留 p1 与 s0 → 拼出 p1s0",
+    );
+    checkEqual(
+      rollVariantOfBase("cloth_1", { prefix: [0, 0, 0, 0, 100], suffix: [0, 0, 100] }, () => 0),
+      "cloth_1_p4s2",
+      "最高档组合可拼出（id 形状正确）",
+    );
+    checkEqual(
+      rollVariantOfBase("cloth_1", { prefix: [100, 0, 0, 0, 0], suffix: [100, 0, 0] }, () => 0.5),
+      "cloth_1",
+      "p0s0 保持基础件 id",
+    );
+    checkEqual(
+      rollVariantOfBase("cloth_1_p3s2", { prefix: [0, 100, 0, 0, 0], suffix: [0, 0, 100] }, () => 0),
+      "cloth_1_p3s2",
+      "掉落表里手写的变体不再二次抽档",
+    );
+    checkEqual(
+      rollVariantOfBase("cloth_1", { prefix: [0, 0], suffix: [0, 0, 0] }, () => 0.5),
+      "cloth_1",
+      "权重全 0 → 回落光板，不生成幽灵 id",
+    );
+
     //#endregion
 
     //#region 九、药品配置（#253）：seed 同源 / keyword 筛 / 只许改 / 百分比上限
@@ -2022,6 +2067,14 @@ async function main() {
       (snap.equipmentMeta?.prefixColors?.length ?? 0) === 0 ||
         snap.equipmentMeta?.prefixColors?.length === snap.equipmentMeta?.prefixLabels?.length,
       "快照带品质文字颜色（#720；空数组 = 客户端内置色，非空则必须与文案等长）",
+    );
+    check(
+      snap.equipmentMeta?.prefixDropWeights?.length === snap.equipmentMeta?.prefixLabels?.length,
+      "快照带前缀掉落权重（与文案等长；服务端抽档用，客户端只读不决策）",
+    );
+    check(
+      snap.equipmentMeta?.suffixDropWeights?.length === snap.equipmentMeta?.suffixLabels?.length,
+      "快照带后缀掉落权重（与文案等长）",
     );
     check(snap.equipmentMeta?.recycleCurve === undefined, "快照不带回收价曲线（价随变体一行下发）");
     checkEqual(snap.drugs?.length, Object.keys(drugs).length, "快照药品行数 = 生成物");

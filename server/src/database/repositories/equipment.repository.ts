@@ -183,8 +183,11 @@ export class EquipmentRepository {
   updateMeta(row: EquipmentMetaRow): { changes: number } {
     return this.db.execute(
       `UPDATE equipment_meta SET prefix_rates = ?, suffix_rates = ?, prefix_labels = ?, suffix_labels = ?,
-         prefix_colors = ?, suffix_colors = ?, updated_at = ? WHERE id = 1`,
-      [row.prefix_rates, row.suffix_rates, row.prefix_labels, row.suffix_labels, row.prefix_colors, row.suffix_colors, row.updated_at],
+         prefix_colors = ?, suffix_colors = ?, prefix_drop_weights = ?, suffix_drop_weights = ?, updated_at = ? WHERE id = 1`,
+      [
+        row.prefix_rates, row.suffix_rates, row.prefix_labels, row.suffix_labels,
+        row.prefix_colors, row.suffix_colors, row.prefix_drop_weights, row.suffix_drop_weights, row.updated_at,
+      ],
     );
   }
 

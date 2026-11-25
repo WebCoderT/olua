@@ -73,6 +73,8 @@ import { EquipmentAppearanceService } from "./equipment-appearance.service";
   // 不跨模块注入（`role-attributes` 是纯函数，拿不到 Nest 的 provider）
   // RuntimeConfigService（#732）：实时进程要定时 refreshAll —— 管理端写操作后的进程内重装
   // 跨不过进程边界，实时进程不重装就会按旧配置现算战斗力（与操作应答各执一份值，客户端抖动）
-  exports: [MallPricingService, RuntimeParamsService, RuntimeConfigService],
+  // GameConfigService（#1286）：变体掉落抽档要现读前后缀掉落权重；只暴露这一个只读口，
+  // 不让实时域直连装备仓储（边界见 audit-server-boundaries）
+  exports: [MallPricingService, RuntimeParamsService, RuntimeConfigService, GameConfigService],
 })
 export class GameConfigModule {}
