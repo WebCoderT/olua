@@ -106,11 +106,35 @@ export function Input({ className = "", ...rest }: InputHTMLAttributes<HTMLInput
   return <input {...rest} className={`${CONTROL_CLASS} ${className}`} />;
 }
 
+/**
+ * 下拉框（全站唯一的 select 实现）
+ *
+ * 原生 `<select>` 直接套深色底时，系统箭头仍按浅色模式画（黑色描边），在 legend 石色上
+ * 几乎不可见、还贴着文字，看起来像文字边的一粒糊点（#1269）。统一改成：
+ * `appearance-none` 收掉系统箭头 + 右侧 `pr-8` 留白 + 自绘 SVG 箭头（`text-ink-4`）。
+ *
+ * `className` 落在定宽的**外层**上（select 恒 `w-full` 撑满）：宽度只给一层的老规矩
+ * 在组件内部就成立，调用方写 `<Select className="w-24">` 不会再和内层 `w-full` 打架。
+ */
 export function Select({ className = "", children, ...rest }: SelectHTMLAttributes<HTMLSelectElement>) {
   return (
-    <select {...rest} className={`${CONTROL_CLASS} ${className}`}>
-      {children}
-    </select>
+    <div className={`relative ${className}`}>
+      <select {...rest} className={`${CONTROL_CLASS} appearance-none pr-8`}>
+        {children}
+      </select>
+      <svg
+        aria-hidden="true"
+        viewBox="0 0 16 16"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        className="pointer-events-none absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ink-4"
+      >
+        <path d="m4 6.5 4 4 4-4" />
+      </svg>
+    </div>
   );
 }
 
