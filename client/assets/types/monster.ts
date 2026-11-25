@@ -135,6 +135,14 @@ export interface MonsterAIState {
   locked: boolean;
   /** 动作锁到期时刻（毫秒；片段时长 + actionFinishTimeoutMarginSeconds） */
   lockExpireAt: number;
+  /**
+   * 最近一次事件动作（普攻/施法）的**服务端事件时刻**（#1261，毫秒；帧 t，缺省 0）。
+   * 客户端快照回放滞后 renderDelay（120ms）：hit 实时到达起播攻击后，采样点还落在
+   * **出手之前的移动尾巴**上（moving=true）——移动分支若照常打断，攻击动画刚起就被走路盖掉。
+   * stepServer 据此区分两种移动：采样时刻早于 actionAt 的是事件前的历史尾巴，只演位移、
+   * 不切动作不清锁；不早于 actionAt 的才是事件后的真移动，照常打断（服务端权威不回归）。
+   */
+  actionAt: number;
   // 服务端位置不在这里（#769）：坐标是「一串带时间戳的快照」，存在 MonsterAI 自己的
   // WeakMap<Node, SnapshotInterpolator> 里 —— 插值器是 ui/core 的类，放进 types 会反向依赖
 }

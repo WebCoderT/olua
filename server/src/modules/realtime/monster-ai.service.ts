@@ -1170,6 +1170,12 @@ export class MonsterAiService implements OnApplicationBootstrap, OnApplicationSh
           runtime.nextAttackAt = now + this.ai.attackInterval;
           const hit = this.attack(monster, chasing);
           if (hit) {
+            // #1261：出手有收招 —— attackActionTime 内不移动不出手（与施法硬直同一机制，
+            // 期间走 tick 顶部的 castEndAt 分支：movingNow=false 直接返回）。
+            // 之前普攻没有动作占用，出手后下一拍就能转追击（movingNow=true），客户端
+            // 快照回放滞后 120ms，攻击动画刚起播就被「出手前的移动尾巴 / 出手后的追击」打断。
+            // 攻速（nextAttackAt）不受影响；击退打断硬直的现成逻辑（castEndAt = 0）同样覆盖普攻。
+            runtime.castEndAt = now + this.ai.attackActionTime;
             // 打得动：这一个目标的失败账本清零
             runtime.failCounts.delete(chasing);
             this.pushHit(mapKey, hit);

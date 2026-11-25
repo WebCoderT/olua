@@ -220,13 +220,13 @@ export default class MonsterManager {
     // 技能释放（#372）：动作 + 特效 + 自身状态特效，全部由服务端驱动
     const castIds = new Set<string>();
     for (const cast of data.casts ?? []) {
-      if (this.playServerCast(cast)) castIds.add(cast.i);
+      if (this.playServerCast(cast, data.t)) castIds.add(cast.i);
     }
     const myId = RealtimeClient.onlineUserId;
     for (const hit of data.hits) {
       // 普攻在服务端没有单独的「出手」事件：命中即代表这只怪刚挥了一下，补播攻击动作
       // （技能的那一下就由 casts 播过了，同一帧不重复播）
-      if (!castIds.has(hit.i)) this.playServerAttack(hit.i);
+      if (!castIds.has(hit.i)) this.playServerAttack(hit.i, data.t);
       if (hit.a !== myId) continue;
       if (!this.onPlayerServerHit) {
         console.warn("[monster-ai] 玩家被普攻命中但没有处理者（onPlayerServerHit 未接线），事件被丢弃");
@@ -270,7 +270,7 @@ export default class MonsterManager {
    * 全都没有，播它们只会在 playAction 静默回退待机 —— 出厂怪物技能 9001~9003
    * 就踩在这里（#1251 起出厂数据统一改 attack，客户端也不再看这个字段）。
    */
-  private static playServerCast(cast: MonsterCastEntry): boolean {
+  private static playServerCast(cast: MonsterCastEntry, eventAt = 0): boolean {
     const node = this.instanceIndex.get(cast.i);
     if (!node || !isValid(node)) return false; // 半销毁 / 已死亡的怪：静默跳过
     const monster = this.monsterMap.get(node);
@@ -280,7 +280,7 @@ export default class MonsterManager {
       console.warn(`[monster-skill] 怪物 ${cast.i} 释放的技能 ${cast.s} 不在配置里，无法演出`);
       return false;
     }
-    MonsterAI.playServerAction(node, ACTION.ATTACK);
+    MonsterAI.playServerAction(node, ACTION.ATTACK, undefined, eventAt);
     // effectIsOnSelf / 无目标时退回释放者，与角色侧同一口径
     EffectManager.play(config, node, null, monster);
     if (cast.st) this.applyStatusEffect(cast.i, node, cast.st);
@@ -293,11 +293,12 @@ export default class MonsterManager {
    * #1249：怪物素材包没有 attack_near（那是角色专用攻击动作，#1247 前误写在这里），
    * 播 ATTACK_NEAR 会因找不到片段在 playAction 静默回退成待机 —— 普攻动画永远出不来。
    * 改播怪物专用攻击段 ACTION.ATTACK（#1247 由 run 改名的那段），与技能施法共用同一画面。
+   * @param eventAt 帧的服务端时刻（#1261）：快照回放滞后，出手前的移动尾巴不得打断刚起播的攻击
    */
-  private static playServerAttack(instanceId: string) {
+  private static playServerAttack(instanceId: string, eventAt = 0) {
     const node = this.instanceIndex.get(instanceId);
     if (!node || !isValid(node)) return;
-    MonsterAI.playServerAction(node, ACTION.ATTACK);
+    MonsterAI.playServerAction(node, ACTION.ATTACK, undefined, eventAt);
   }
 
   /**
