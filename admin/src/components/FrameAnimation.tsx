@@ -180,13 +180,24 @@ function subscribe(tick: Tick): () => void {
 //#endregion
 
 /**
- * 把一帧画上画布：contain 缩进 canvas（k 已由调用方按全帧最大原始尺寸算好），
- * 裁剪帧摆到 (ox, oy)。像素风不平滑，与缩略图同口径。
+ * 光效图集（effect/border、effect/background）走平滑采样：#1312。
+ * 边框 / 背景是软渐变光效（1~2px 发光线），非整数倍缩到 40~56px 时最近邻会把发光线
+ * 采成硬像素点，且发光范围逐帧变化 —— 采样点每帧落在不同位置，预览看起来"边框在抖"；
+ * 游戏客户端（Cocos）默认线性过滤，同一素材是平滑渐隐的。双线性才与游戏内观感一致。
+ * 像素素材（怪物 / 装备站立、称号、战魂、NPC）保持最近邻，见 `frameSmoothOf`。
  */
-function drawFrame(canvas: HTMLCanvasElement, image: HTMLImageElement, frame: AtlasFrame, k: number): void {
+function frameSmoothOf(atlas: string, explicit?: boolean): boolean {
+  return explicit ?? atlas.replace(/^\/+/, "").startsWith("effect/");
+}
+
+/**
+ * 把一帧画上画布：contain 缩进 canvas（k 已由调用方按全帧最大原始尺寸算好），
+ * 裁剪帧摆到 (ox, oy)。采样口径由 `smooth` 决定（像素风不平滑，光效图集平滑，见 frameSmoothOf）。
+ */
+function drawFrame(canvas: HTMLCanvasElement, image: HTMLImageElement, frame: AtlasFrame, k: number, smooth: boolean): void {
   const ctx = canvas.getContext("2d");
   if (!ctx) return;
-  ctx.imageSmoothingEnabled = false;
+  ctx.imageSmoothingEnabled = smooth;
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   const dw = Math.max(1, Math.round(frame.w * k));
   const dh = Math.max(1, Math.round(frame.h * k));
@@ -213,11 +224,14 @@ export function FrameAnimation({
   frameMs,
   framePrefix,
   zoomable = true,
+  /** 覆盖平滑采样判定（缺省按图集路径：`effect/` 开头 = 光效图集 = 平滑，见 frameSmoothOf） */
+  smooth: smoothOverride,
 }: {
   atlas: string;
   alt?: string;
   /** 显示方框边长（contain；多帧尺寸不一致时画布取全帧最大者，不跳画布） */
   size?: number;
+  smooth?: boolean;
   /** 每秒帧数（与客户端同素材的播放帧率保持一致，边框 / 背景都是 10） */
   frameRate?: number;
   /**
@@ -233,6 +247,8 @@ export function FrameAnimation({
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [failed, setFailed] = useState(false);
   const [zoom, setZoom] = useState(false);
+  // 光效图集（边框 / 详情背景）平滑采样，像素素材保持最近邻 —— 判据见 frameSmoothOf
+  const smooth = frameSmoothOf(atlas, smoothOverride);
 
   useEffect(() => {
     let cancelled = false;
@@ -261,7 +277,7 @@ export function FrameAnimation({
         const slot = Math.floor(now / ms) % animation.frames.length;
         if (slot === lastSlot) return; // 帧没换就不重画（一屏 20 个播放器时省一大半绘制）
         lastSlot = slot;
-        drawFrame(canvas, animation.image, animation.frames[slot], k);
+        drawFrame(canvas, animation.image, animation.frames[slot], k, smooth);
       };
       unsubscribe = subscribe(tick);
     });
@@ -289,7 +305,7 @@ export function FrameAnimation({
       role="img"
       aria-label={alt ?? ""}
       className="rounded border border-line bg-surface-2/60"
-      style={{ imageRendering: "pixelated" }}
+      style={{ imageRendering: smooth ? "auto" : "pixelated" }}
     />
   );
   if (!zoomable) return canvas;
@@ -299,7 +315,7 @@ export function FrameAnimation({
         {canvas}
       </Zoomable>
       {zoom ? (
-        <AnimationLightbox atlas={atlas} alt={alt} frameRate={frameRate} frameMs={frameMs} framePrefix={framePrefix} onClose={() => setZoom(false)} />
+        <AnimationLightbox atlas={atlas} alt={alt} frameRate={frameRate} frameMs={frameMs} framePrefix={framePrefix} smooth={smooth} onClose={() => setZoom(false)} />
       ) : null}
     </>
   );
@@ -312,6 +328,7 @@ function AnimationLightbox({
   frameRate,
   frameMs,
   framePrefix,
+  smooth,
   onClose,
 }: {
   atlas: string;
@@ -319,6 +336,7 @@ function AnimationLightbox({
   frameRate: number;
   frameMs?: number;
   framePrefix?: string;
+  smooth: boolean;
   onClose: () => void;
 }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -341,7 +359,7 @@ function AnimationLightbox({
         const slot = Math.floor(now / ms) % loaded.frames.length;
         if (slot === lastSlot) return;
         lastSlot = slot;
-        drawFrame(canvas, loaded.image, loaded.frames[slot], k);
+        drawFrame(canvas, loaded.image, loaded.frames[slot], k, smooth);
       };
       unsubscribe = subscribe(tick);
     });
@@ -349,7 +367,7 @@ function AnimationLightbox({
       cancelled = true;
       unsubscribe?.();
     };
-  }, [atlas, frameRate, frameMs, framePrefix]);
+  }, [atlas, frameRate, frameMs, framePrefix, smooth]);
   return (
     <Lightbox alt={alt} onClose={onClose}>
       <canvas
@@ -357,7 +375,7 @@ function AnimationLightbox({
         role="img"
         aria-label={alt ?? ""}
         className="max-h-[60vmin] max-w-[60vmin] rounded border border-line-strong bg-surface-2/60"
-        style={{ imageRendering: "pixelated" }}
+        style={{ imageRendering: smooth ? "auto" : "pixelated" }}
       />
     </Lightbox>
   );
