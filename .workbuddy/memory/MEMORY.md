@@ -60,16 +60,18 @@
   （**type-only import 同样计数**）· `audit-admin-ui`（七条）。
 - 副本（#1001）/ 分线（#1000+#1016）/ 战斗 / AI / 背包 / 邮件 / 商城 / 进图 / 任务 / 拾取 / 帮会 / 掉落 / 区边界 / 分片 → topics。
 
-## 素材（`client/assets/resources` 不入库，2.4GB 走 Release）
+## 素材（`client/assets/resources` 不入库；Release 分发链已下线 #1293）
 - **「素材缺图」只看三处**：DB 里 9 张带 `icon` 的表对磁盘 · `images.ts` 的 `uiImages` 62 条 · `node tools/audit-resource-refs.cjs`。
   三处全绿 = 没缺图；`verify` 红只是**清单过期**（#1025）。
 - 图集加载 `loadLoopFrames(dir)` 候选 `[dir, dir/<basename>]`，「图集优先、散帧兜底」。
-- 发布：`make resources-manifest/pack/upload RES_VERSION=<新版本>` + 提交**仓库根**的 `resources.manifest.json`；
-  sha1 口径只认 `resources_sync.py verify`，别造第二个真相。
+- **分发已下线（#1293，2026-11-26）**：远端 4 个资源 Release 与 `resources-*` tag 已删（素材无异地副本，
+  `resources_sync.py` / `resources.manifest.json` 留作本地核对与打包，素材包由维护者自管）；
+  `make resources-*` 五个 target 已删，本地核对用 `python3 client/tools/resources_sync.py verify`；
 
 ## 引擎坑 / 部署
 指针事件配 `UITransform`；Game 挂 Canvas → 五世界层建好再 `setWorldPosition(0,0,0)`；显隐与摆位绑「片段就绪」。
 compose 五服务：admin:80 唯一入口 / game:8080 / server:3100 / realtime:3101 / website 不映射；卷 `olua_olua-data`。
+**停服期只发官网**：`deploy.sh --no-build` 跳过 `compose up -d`，不会把已 `stop` 的 server/realtime/game 拉起；verify 的 game 502 属预期（#1290）。
 **HTTPS（#742，`profiles: ["tls"]`）** 加 `edge`（独占 :80/:443，443 → admin:80）+ `certbot`，admin 退到 `127.0.0.1:8081`；
 开关是 `deploy.env` 的 `OLUA_TLS=on` → `deploy.sh` 派生 `COMPOSE_PROFILES` + 端口变量，首签 `--tls-init`。
 
@@ -80,7 +82,11 @@ compose 五服务：admin:80 唯一入口 / game:8080 / server:3100 / realtime:3
 - 新页面一律 `cd admin && npm run new:page -- <Name>` 起步（合规骨架 + `__UI_CAPTURE__` 状态清单）；显示效果靠人眼看截图，不写断言。
 
 ## 进度与口径（细节 → `topics/进度年表.md`）
-- **当前 open**（2026-11-26）：只剩 #403 帮会战（远期占位）。**#1278 背包自动回收/使用/穿戴已合**
+- **当前 open**（2026-11-26）：只剩 #403 帮会战（远期占位）。**#1286 前后缀掉落权重（变体随机掉落）已合**
+  （PR #1292 `155f0a9b`：equipment_meta 加 prefix/suffix_drop_weights 两列（[] = 不抽档、行为与合并前一致），
+  rollDrops 命中基础件时抽档改写 _pXsY，手写变体 id 不二次抽档；管理端装备规则页每档「掉落权重」列 0 = 不掉落；
+  开抽档把权重配非零即可，无需迁移；变体 p0s0 的 id 就是基础件本身，抽档要特判）·
+  **#1278 背包自动回收/使用/穿戴已合**
   （PR #1282 `f92f3039`：底部四键 + 两勾选弹窗 + 背包满自动回收/重拾 + 衣服槽下自动穿戴复选框；
   服务端零改动；偏好本机 localStorage 按角色分键，默认全不勾）·
   **#1280 配置快照按版本门控已合**（PR #1281：管理端改配置不重启进程下次进图即生效）·
