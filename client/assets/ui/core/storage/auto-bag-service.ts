@@ -23,6 +23,10 @@ import * as AutoBagPrefs from "./auto-bag-prefs";
  *
  * 勾选偏好在本机（auto-bag-prefs，按角色分键）；**没勾的东西永远不会被自动处理**。
  */
+
+/** 连发背包变化的合并窗口（毫秒）：拾取一波 / 自动使用逐格会把 refreshBag 连发十几次 */
+const AUTO_BAG_SCAN_DEBOUNCE_MS = 150;
+
 export default class AutoBagService {
   /** onBagChanged 的重入闸：自动使用/穿戴自身会改背包再触发 refreshBag，用闸把递归拍平 */
   private static busy = false;
@@ -30,6 +34,14 @@ export default class AutoBagService {
   private static pending = false;
   /** 自动回收的在途闸：bag_full 拒绝可能连着来（自动拾取逐帧重试），回收请求别叠单 */
   private static recycling = false;
+  /**
+   * 尾随防抖句柄（#1300）：连发的背包变化并成一次扫描
+   *
+   * 拾取一波 / 自动使用逐格会把 refreshBag 连发十几次 —— 每次都直起一轮扫描的话，
+   * 三段自动化（使用/穿戴/回收）会被空跑十几遍。150ms 内的变化合并成一次；
+   * 扫描执行中（busy）的变化走原有 pending 闸，收尾的 do-while 消费，最终一致语义不变。
+   */
+  private static debounceHandle: ReturnType<typeof setTimeout> | null = null;
 
   /**
    * 背包变化后的统一检查：自动使用 + 自动穿戴（勾了才做，没勾零开销）
@@ -39,10 +51,20 @@ export default class AutoBagService {
    * 调用方（RoleUIManager.refreshBag）不 await：fire-and-forget，失败静默。
    */
   static onBagChanged(): void {
-    if (AutoBagService.busy) {
-      AutoBagService.pending = true;
-      return;
-    }
+    AutoBagService.pending = true;
+    // 扫描在跑：pending 会被收尾的 do-while 消费，不重复排班
+    if (AutoBagService.busy) return;
+    // 已排了一场扫描：这次变化等防抖到点一起算
+    if (AutoBagService.debounceHandle !== null) return;
+    AutoBagService.debounceHandle = setTimeout(() => {
+      AutoBagService.debounceHandle = null;
+      AutoBagService.startDrain();
+    }, AUTO_BAG_SCAN_DEBOUNCE_MS);
+  }
+
+  /** 防抖到点起跑（busy 时直接返回：在跑的那轮的 do-while 会消费 pending） */
+  private static startDrain(): void {
+    if (AutoBagService.busy) return;
     AutoBagService.busy = true;
     void (async () => {
       try {
