@@ -213,6 +213,8 @@ function prepareNet(sandboxName) {
     RealtimeStatus: load("ui/utils/net/RealtimeClient.js").RealtimeStatus,
     /** 开发模式的接口地址派生（#775：主机取自页面，测试逐种主机断言） */
     devBaseUrlFor: network.devBaseUrlFor,
+    /** 打包态的接口地址二分（#1316：网页同源 /api，原生 / file:// / localhost 走线上绝对地址） */
+    packagedBaseUrlFor: network.packagedBaseUrlFor,
     buildRealtimeUrl: load("ui/utils/net/RealtimeClient.js").buildRealtimeUrl,
     realtimePath: load("ui/utils/net/RealtimeClient.js").realtimePath,
     ApiRoutes: routes.ApiRoutes,

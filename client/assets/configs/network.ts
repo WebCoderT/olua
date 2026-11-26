@@ -9,7 +9,10 @@
  *     主机**取自当前页面**：电脑上打开是 localhost，手机用局域网 IP 打开就自动是那个 IP
  *     （见 devBaseUrlFor）—— 真机调试因此不用改配置。`localhost` 在手机上指的是手机自己，
  *     写死它必然连不上。
- *   - `false`（打包） → `/api`，同源，由 nginx 反代到服务端
+ *   - `false`（打包） → 打包态里再按页面宿主自动二分（见 packagedBaseUrlFor）：
+ *     - 网页版（页面挂在我们的 nginx 下，http(s) + 真实域名/IP）→ `/api` 同源，由 nginx 反代到服务端；
+ *     - **原生安装包 / file:// / localhost 宿主**（没有同源后端可落）→ 线上绝对地址
+ *       `PROD_API_ORIGIN`（edge → admin → server / realtime，不依赖 game 容器，#1316）。
  *
  * ## 发布流程里的一步
  * **每次打包发布前把 `DEV_MODE` 改成 `false`，打完开发就改回 `true`** —— 忘了改的后果：
@@ -60,12 +63,47 @@ function pageHostname(): string {
   return usable ? hostname : "localhost";
 }
 
-/** 打包产物走的同源地址（nginx 反代到服务端） */
+/** 打包网页版走的同源地址（页面挂在我们的 nginx 下，反代到服务端） */
 const PROD_BASE_URL = "/api";
+
+/**
+ * 线上服务端入口（**原生安装包 / file:// 打开时的绝对地址**，#1316）
+ *
+ * 选 admin 域而不是 game 域：game 容器默认不启动（#1314），安装包只依赖
+ * edge → admin → server / server-realtime 这条链路。要换入口只改这一个常量
+ * （实时地址由 baseUrl 推导，会跟着走 https → wss）。
+ */
+const PROD_API_ORIGIN = "https://admin.yimw.cn";
+
+/**
+ * 打包态的接口根地址：按页面宿主自动二分（纯函数，test-client-net 有形状断言）
+ *
+ * - `protocol` 是 http/https、`hostname` 是**非 localhost** 的真实主机 → 网页版，
+ *   同源 `/api`（nginx 反代，与页面协议天然一致，HTTPS 天然兼容）；
+ * - 其余 —— 原生安装包（页面宿主是本地容器 / file://，`pageHostname` 已回落 localhost）、
+ *   本机直开产物调试 —— 没有同源后端，连线上绝对地址。
+ *
+ * @param protocol 当前页面协议（可空）
+ * @param hostname 当前页面主机名（可空）
+ */
+export function packagedBaseUrlFor(protocol: string, hostname: string): string {
+  const isRealHost =
+    (protocol === "https:" || protocol === "http:") &&
+    hostname !== "" &&
+    hostname !== "localhost" &&
+    !/^127(\.\d{1,3}){3}$/.test(hostname) &&
+    !/^\[::1\]$|^::1$/.test(hostname);
+  return isRealHost ? PROD_BASE_URL : `${PROD_API_ORIGIN}/api`;
+}
+
+/** 当前页面的协议（拿不到时给 file:，让打包态走线上绝对地址） */
+function pageProtocol(): string {
+  return typeof window !== "undefined" && window.location ? window.location.protocol : "file:";
+}
 
 export const networkConfig = {
   /** 接口根地址（后面接 ui/utils/net/ApiRoutes 里登记的路由） */
-  baseUrl: DEV_MODE ? devBaseUrlFor(pageHostname()) : PROD_BASE_URL,
+  baseUrl: DEV_MODE ? devBaseUrlFor(pageHostname()) : packagedBaseUrlFor(pageProtocol(), pageHostname()),
   /** 单次请求超时（毫秒） */
   timeout: 10000,
   /** 网络层失败（连不上 / 超时）的重试次数；业务失败不重试 */

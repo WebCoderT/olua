@@ -114,6 +114,31 @@ server {
     expires 7d;
   }
 
+  # 实时通道（#1316）：`/api/realtime*` 整段反代到**实时进程**，带 WS 升级头。
+  #
+  # 为什么管理端 nginx 也要有这条：原生安装包 / game 容器不在时（#1314 起 game 默认不启动），
+  # 客户端的唯一 https 入口是本容器 —— 之前 Upgrade 头只在 game nginx 与 edge 里，
+  # 从这里走 WS 握手会退化成普通 HTTP 被拒（「能登录、一进图就掉线」）。
+  # 取票 POST /api/realtime/ticket 也在这里（票是无状态加密票，落实时进程与落存档进程等价，
+  # 与 game nginx 同一口径）。前缀匹配取最长，这条自然盖过下面的 /api/。
+  location /api/realtime {
+    resolver 127.0.0.11 valid=10s ipv6=off;
+    set $olua_realtime http://server-realtime:3101;
+    proxy_pass $olua_realtime;
+
+    proxy_http_version 1.1;
+    # WebSocket 升级的两件套：缺了 Upgrade 头，握手会退化成普通 HTTP 请求被拒
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    # WS 是长连接：默认 60s 没数据就被 nginx 掐断（客户端有心跳，但别把余量压到 0）
+    proxy_read_timeout 3600s;
+    proxy_send_timeout 3600s;
+  }
+
   location /api/ {
     # 用「变量 + Docker 内置 DNS」而不是把上游写成字面量：写死的话，server 容器还没就绪时
     # nginx 会因为 `host not found in upstream` **直接启动失败**（depends_on 只保证启动顺序，

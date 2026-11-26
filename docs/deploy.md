@@ -326,9 +326,13 @@ bash .workbuddy/skills/olua-deploy/scripts/deploy.sh --game client/build/web-des
 
 - **接口地址由 `DEV_MODE` 一个开关决定**（`client/assets/configs/network.ts`）：`true` = 开发，
   走 `http://<页面 host>:3100/api`（主机取自**当前页面**，所以手机用局域网 IP 打开也能连）；
-  `false` = 打包，走同源 `/api`。**同源这一条就是 HTTPS 天然兼容的原因**：页面是 https，
+  `false` = 打包，**按页面宿主自动二分**（#1316）：网页版（http(s) + 非 localhost 宿主）走同源 `/api`；
+  **原生安装包 / file:// / localhost 宿主**（没有同源后端可落）走 `PROD_API_ORIGIN`
+  （`https://admin.yimw.cn`，edge → admin → server / realtime，不依赖 game 容器）。
+  **同源这一条就是 HTTPS 天然兼容的原因**：页面是 https，
   `/api` 自然是 https，实时通道的地址也按 `http→ws / https→wss` 从 baseUrl 推导 ——
   换协议客户端一行都不用改（#742 核过一遍）。⚠ 发布前把 `DEV_MODE` 改回 `false`。
+  管理端 nginx 的 `location /api/realtime` 带 WS 升级头（#1316），安装包的实时通道从 admin 域走。
 - **缺资源必须报 404**：`deploy/nginx-game.conf` **故意不写** SPA 那种 `try_files $uri /index.html`，
   否则缺图时会回一段 HTML 给资源加载器，错误极难定位。
 - **缓存策略**：构建没开 `md5Cache`，文件名不带内容哈希 → 资源只能短期缓存（`assets/` 设 1 小时）；

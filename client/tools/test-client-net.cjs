@@ -55,7 +55,7 @@ try {
   fail(`沙箱准备失败：${error.message}`);
   return;
 }
-const { HttpClient, ApiError, ApiErrorKind, describeError, Session, Api, ApiRoutes, RoleSync, networkConfig, sys, ROLE_SYNC_BIZ_CODES, devBaseUrlFor } = net;
+const { HttpClient, ApiError, ApiErrorKind, describeError, Session, Api, ApiRoutes, RoleSync, networkConfig, sys, ROLE_SYNC_BIZ_CODES, devBaseUrlFor, packagedBaseUrlFor } = net;
 
 //#region XMLHttpRequest 替身（测试逐条断言发出去的东西）
 
@@ -146,6 +146,13 @@ async function expectFailure(action) {
   const devUrlLocal = devBaseUrlFor("localhost");
   check(/^http:\/\/localhost:\d+\/api$/.test(devUrlLocal), "可信主机（localhost）拼出开发地址", devUrlLocal);
   check(networkConfig.baseUrl === devUrlLocal, "沙箱里没有可信页面主机（pageHostname 回落 localhost），baseUrl 就是 localhost 开发地址", networkConfig.baseUrl);
+
+  // #1316：打包态自动二分 —— 网页版同源 /api，原生安装包 / file:// / localhost 宿主连线上绝对地址
+  check(packagedBaseUrlFor("https:", "game.yimw.cn") === "/api", "打包网页版（https + 真实域名）→ 同源 /api", packagedBaseUrlFor("https:", "game.yimw.cn"));
+  check(packagedBaseUrlFor("http:", "192.168.1.7") === "/api", "打包网页版（局域网 IP 直开）→ 同源 /api", packagedBaseUrlFor("http:", "192.168.1.7"));
+  check(/^https:\/\/.+\/api$/.test(packagedBaseUrlFor("file:", "")), "原生安装包（file:// 页面）→ 线上绝对地址", packagedBaseUrlFor("file:", ""));
+  check(/^https:\/\/.+\/api$/.test(packagedBaseUrlFor("http:", "localhost")), "本地容器宿主（localhost 页面）→ 线上绝对地址", packagedBaseUrlFor("http:", "localhost"));
+  check(/^https:\/\/.+\/api$/.test(packagedBaseUrlFor("http:", "127.0.0.1")), "127.0.0.1 宿主也算本地 → 线上绝对地址", packagedBaseUrlFor("http:", "127.0.0.1"));
 
   console.log("— A. 统一响应包裹：成功只交 data，失败归一成 ApiError —");
 
@@ -501,11 +508,18 @@ async function expectFailure(action) {
     /export const DEV_MODE = (true|false);/.test(networkSource),
     "configs/network 有唯一的 DEV_MODE 手动开关（开发/打包差异不再自动判断）",
   );
-  // 断言只锁**形状**：开发地址由页面主机派生、打包是相对路径 —— 锁死具体 IP 会让正常换网络变红
+  // 断言只锁**形状**：开发地址由页面主机派生；打包是三元里的自动二分（网页同源 /api，
+  // 原生 / file:// / localhost 宿主走线上绝对地址）—— 锁死具体 IP 会让正常换网络变红
   check(
-    /DEV_MODE \? devBaseUrlFor\(pageHostname\(\)\) : PROD_BASE_URL/.test(networkSource) &&
+    /DEV_MODE \? devBaseUrlFor\(pageHostname\(\)\) : packagedBaseUrlFor\(pageProtocol\(\), pageHostname\(\)\)/.test(networkSource) &&
       /const PROD_BASE_URL = "\/api";/.test(networkSource),
-    "baseUrl 由 DEV_MODE 三元给出（开发地址按页面主机派生，打包走同源相对路径）",
+    "baseUrl 由 DEV_MODE 三元给出（开发地址按页面主机派生，打包按页面宿主二分）",
+  );
+  check(
+    /const PROD_API_ORIGIN = "https:\/\/.+";/.test(networkSource) &&
+      /export function packagedBaseUrlFor\(/.test(networkSource) &&
+      /function pageProtocol\(\): string \{/.test(networkSource),
+    "打包态二分住在 packagedBaseUrlFor（PROD_API_ORIGIN 是唯一的线上入口字面量，页面协议拿不到时按 file: 走绝对地址）",
   );
   check(
     /function pageHostname\(\): string \{[\s\S]{0,400}return usable \? hostname : "localhost";/.test(networkSource),
