@@ -261,7 +261,7 @@ docker run --rm -v olua-data:/data -v /opt/olua/backup:/backup \
 | `docker info` 报权限错误 | `ubuntu` 不在 docker 组 → `sudo usermod -aG docker ubuntu`，**重新登录**才生效 |
 | 看起来「Docker 没启动」 | 别只信 `docker info`（它受 socket 权限影响），看 `systemctl status docker` |
 | 管理端 502 | nginx 反代用的 `server:3100` 是 compose 内网域名；`docker compose logs server` 看服务端是否真起来了 |
-| 能登录但实时通道连不上 | `docker compose logs server-realtime` 看实时进程；`/api/realtime*` 必须反代到它且带 WS upgrade 头（`make audit` 会查） |
+| 能登录但实时通道连不上 | `docker compose logs server-realtime` 看实时进程；`/api/realtime*` 必须反代到它且带 WS upgrade 头（`make audit` 会查）；**edge 不得开 http2**（CFNetwork 在 h2 上发不出 WS 升级，#1320） |
 | 页面能开但接口 404 | 反代前缀 `/api/` 必须与服务端 `API_PREFIX=api` 一致（`make audit` 会查） |
 | 登录限流把所有人锁死 | `TRUST_PROXY` 必须为 `true`（compose 已设），否则来源 IP 全是 nginx 容器的 |
 | 上传 40M 归档被中断 | `scp` 可能超过前台命令时限，放到后台跑即可，不是网络故障 |
@@ -338,6 +338,11 @@ bash .workbuddy/skills/olua-deploy/scripts/deploy.sh --game client/build/web-des
   `/api` 自然是 https，实时通道的地址也按 `http→ws / https→wss` 从 baseUrl 推导 ——
   换协议客户端一行都不用改（#742 核过一遍）。⚠ 发布前把 `DEV_MODE` 改回 `false`。
   管理端 nginx 的 `location /api/realtime` 带 WS 升级头（#1316），安装包的实时通道从 admin 域走。
+- **edge 绝不能开 HTTP/2（#1320）**：edge 在 ALPN 里广播 h2 时，Apple CFNetwork（macOS/iOS
+  原生包的网络栈）会选 h2 并尝试 RFC 8441 扩展 CONNECT 升级 WebSocket —— nginx 不支持、
+  客户端也不回退，升级请求在 h2 层就被拒（连 access log 都没有）。实测症状：原生包登录 /
+  进图正常，但实时通道永远握不上手 → 心跳清算判下线 → 操作全被拒、没有怪物。浏览器会自动
+  回退 HTTP/1.1 所以网页版没事。`make audit` 有守点，把 `http2 on;` 加回 edge 必红。
 - **缺资源必须报 404**：`deploy/nginx-game.conf` **故意不写** SPA 那种 `try_files $uri /index.html`，
   否则缺图时会回一段 HTML 给资源加载器，错误极难定位。
 - **缓存策略**：构建没开 `md5Cache`，文件名不带内容哈希 → 资源只能短期缓存（`assets/` 设 1 小时）；

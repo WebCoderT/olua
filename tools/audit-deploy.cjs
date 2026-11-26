@@ -446,6 +446,15 @@ anchor(
   "deploy/nginx-edge.conf 里应有 `listen 443 ssl;` —— 没有它就没有任何地方持有证书"
 );
 
+// edge 的 443 不得开 HTTP/2（#1320）：edge 在 ALPN 里广播 h2 时，Apple CFNetwork（macOS/iOS
+// 原生包的网络栈）会选 h2 并尝试 RFC 8441 扩展 CONNECT 升级 WebSocket —— nginx 不支持、
+// 客户端不回退，升级请求在 h2 层就被拒（access log 都没有），原生包的实时通道全断。
+if (!/^\s*http2\s+on\s*;/m.test(edgeNginx)) {
+  ok("edge 443 不开 HTTP/2（逼 CFNetwork 走 HTTP/1.1 标准 WS 升级，#1320）");
+} else {
+  fail("deploy/nginx-edge.conf 里有 `http2 on;` —— 原生客户端（CFNetwork）在 h2 上发不出 WebSocket 升级，实时通道全断（#1320）");
+}
+
 // 证书目录固定叫 olua（certbot 的 `--cert-name olua`）：换域名时证书内容变、目录不变，
 // 这里就不用跟着改。两边只要有一边改了名字，nginx 与 certbot 就各写各的。
 anchor(
