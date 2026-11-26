@@ -501,6 +501,10 @@ export class Game extends Component {
     this.offGuideChange?.();
     this.offGuideChange = null;
     GuideStore.reset();
+    // 角色信息栏的实时状态指示灯（#1324）：同样先退订再拆场景（#1188 口径）——
+    // 换角色/回登录时 RealtimeClient.stop() 还会 emit 一次 Idle，退订晚了回调就摸到已销毁的节点
+    this.roleInfoBar?.dispose();
+    this.roleInfoBar = null;
     // 聊天的消息 / 未读 / 气泡同理（消息不跨会话持久是服务端定好的口径，客户端跟着清）
     ChatStore.reset();
     ChatBubbles.reset();

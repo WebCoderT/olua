@@ -643,6 +643,11 @@ export const uiTexts = {
   realtime_reconnected_tip: "已重新连接服务器",
   /** 实时通道被同账号的另一条连接顶掉（服务端一个账号只留一条连接，见 utils/net/RealtimeClient） */
   realtime_replaced_tip: "账号已在其它窗口登录，本窗口已断开",
+  /** 实时通道连接状态指示（#1324：HUD 角色信息栏的小圆点文字；四条都取三个字，右对齐不跳位） */
+  realtime_status_connected: "已连接",
+  realtime_status_connecting: "连接中",
+  realtime_status_disconnected: "已断开",
+  realtime_status_idle: "未连接",
   /** 登录/注册表单未填写完整 */
   login_input_empty_tip: "请输入账号和密码",
   /**

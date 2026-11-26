@@ -145,7 +145,17 @@ async function expectFailure(action) {
   );
   const devUrlLocal = devBaseUrlFor("localhost");
   check(/^http:\/\/localhost:\d+\/api$/.test(devUrlLocal), "可信主机（localhost）拼出开发地址", devUrlLocal);
-  check(networkConfig.baseUrl === devUrlLocal, "沙箱里没有可信页面主机（pageHostname 回落 localhost），baseUrl 就是 localhost 开发地址", networkConfig.baseUrl);
+  // 期望值从源码现读 DEV_MODE：仓库默认态是 true（开发），打包发布期间是 false（#1316 口径，
+  // 打完包改回 true 是 network.ts 注释里的人工流程，不作为代码不变量锁）——两种仓库状态断言都自洽
+  const devModeOn = /export const DEV_MODE = true/.test(read(FILE.network));
+  const expectedBaseUrl = devModeOn ? devUrlLocal : packagedBaseUrlFor("file:", "");
+  check(
+    networkConfig.baseUrl === expectedBaseUrl,
+    devModeOn
+      ? "沙箱里没有可信页面主机（pageHostname 回落 localhost），开发态 baseUrl 就是 localhost 开发地址"
+      : "打包态（DEV_MODE=false）baseUrl 就是线上绝对地址（原生安装包口径）",
+    networkConfig.baseUrl,
+  );
 
   // #1316：打包态自动二分 —— 网页版同源 /api，原生安装包 / file:// / localhost 宿主连线上绝对地址
   check(packagedBaseUrlFor("https:", "game.yimw.cn") === "/api", "打包网页版（https + 真实域名）→ 同源 /api", packagedBaseUrlFor("https:", "game.yimw.cn"));

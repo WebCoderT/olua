@@ -276,6 +276,28 @@ async function connectOk(heartbeatMs = 600000) {
   check(changes[1].reconnected === false && changes[1].lost === false, "首次连上不算「重连回来」，也不报掉线");
   RealtimeClient.stop();
 
+  console.log("\n— C2. addStatusListener：多播订阅（HUD 常驻状态指示灯的入口，#1324） —");
+
+  reset();
+  const listenerChanges = [];
+  const off = RealtimeClient.addStatusListener((change) => listenerChanges.push(change));
+  check(listenerChanges.length === 1 && listenerChanges[0].status === RealtimeStatus.Idle, "注册即以当前状态回调一次（订阅者不用自己摸初始值）", JSON.stringify(listenerChanges));
+  const live2 = await connectOk();
+  check(
+    listenerChanges.map((c) => c.status).join(" → ") === "idle → connecting → connected" && changes.map((c) => c.status).join(" → ") === "connecting → connected",
+    "多播监听器与 onStatusChange 单槽收到同一串状态（互不覆盖）",
+    `多播 ${listenerChanges.map((c) => c.status).join("→")} / 单槽 ${changes.map((c) => c.status).join("→")}`,
+  );
+  const listenerCount = listenerChanges.length;
+  off();
+  RealtimeClient.stop();
+  await waitFor(() => RealtimeClient.status === RealtimeStatus.Idle, 900);
+  check(
+    listenerChanges.length === listenerCount && listenerChanges[listenerChanges.length - 1].status === RealtimeStatus.Connected,
+    "退订之后状态变化不再到达（旧监听不残留，销毁方必须先退订）",
+    listenerChanges.map((c) => c.status).join(" → "),
+  );
+
   console.log("\n— D. 应用层心跳：间隔取自 welcome，且被应答时一直活着 —");
 
   reset();
