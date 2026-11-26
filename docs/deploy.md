@@ -214,7 +214,8 @@ git archive --format=tar.gz -o /tmp/olua-src.tgz <旧commit>
 
 ```bash
 cd /opt/olua
-docker compose ps                     # 容器状态（应有 server / server-realtime / admin / game 四个）
+docker compose ps                     # 容器状态（应有 server / server-realtime / admin / website 四个；
+                                      # game 挂 profiles:["game"]（#1314）默认不启动，发客户端后才在）
 docker compose logs -f server         # 存档进程日志（Ctrl-C 退出）
 docker compose logs -f server-realtime # 实时进程日志（WS / 世界 / 结算都在这里）
 docker compose logs -f admin          # 管理端 nginx 日志
@@ -308,7 +309,9 @@ bash .workbuddy/skills/olua-deploy/scripts/deploy.sh --game                     
 bash .workbuddy/skills/olua-deploy/scripts/deploy.sh --game client/build/web-desktop
 ```
 
-脚本会：校验源目录有 `index.html`（防把空目录 rsync 上去）→ `rsync -az --delete` 同步 → `docker compose up -d game` → 验收。
+脚本会：校验源目录有 `index.html`（防把空目录 rsync 上去）→ `rsync -az --delete` 同步 →
+`docker compose --profile game up -d game`（**显式打开 profile**：game 默认不启动，#1314）→ 验收。
+不想发客户端了就 `docker compose rm -sf game` 把容器拿掉，普通部署不会再把它拉回来。
 
 ### 9.3 体积与耗时（做好心理预期）
 

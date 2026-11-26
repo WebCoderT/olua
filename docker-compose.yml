@@ -10,7 +10,7 @@
 #  收：docker compose down               # 数据在具名卷里，不会丢
 #
 #  拓扑：浏览器 → admin(nginx :80) → /api 反代 → server(:3100)
-#        浏览器 → game(nginx :8080) → /api 反代 → server(:3100)
+#        浏览器 → game(nginx :8080) → /api 反代 → server(:3100)   ← game 挂 profiles:["game"]，默认不启动
 #                                   └→ /api/realtime* 反代 → server-realtime(:3101，WS)
 #        管理端与接口**同源**，所以不需要 CORS；而反代之后服务端必须相信代理给的来源 IP。
 #        这两件事都由本文件的拓扑决定（见下面的 environment），不靠每个 .env 各写一遍。
@@ -169,7 +169,13 @@ services:
   # 游戏客户端（Web 端）：静态托管 Cocos 构建产物，并把 /api 同源反代到服务端。
   # **独立端口**而不是塞进上面的 80：Cocos 产物的资源路径相对根目录，放子路径会大面积 404。
   # 产物由 olua-deploy 技能的 deploy.sh --game 从本机 rsync 上来（素材体量大，见 docs/deploy.md）。
+  # **默认不启动**（#1314，`profiles: ["game"]`）：没有在发客户端的时期，普通 `up -d`
+  # 不会拉它，`game.yimw.cn` 502 属预期；要发客户端走 deploy.sh --game / --resources
+  # （显式 `--profile game up -d game`）。管理端素材走 /game-resources/（admin 直出），不经过本容器。
   game:
+    profiles: ["game"]
+
+
     image: nginx:1.27-alpine
     restart: unless-stopped
     depends_on:

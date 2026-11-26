@@ -146,7 +146,9 @@ cp server/.env.example server/.env      # at minimum set JWT_SECRET and ADMIN_RE
 docker compose up -d --build
 ```
 
-This starts five containers — site, admin, game, API and realtime — exposing only ports 80 and 8080.
+This starts four containers — site, admin, API and realtime — exposing only port 80.
+The web game client is **not started by default** (`profiles: ["game"]`, #1314); to deploy it, run
+`bash .workbuddy/skills/olua-deploy/scripts/deploy.sh --game` (see [`docs/deploy.md`](docs/deploy.md) §9).
 Domains, HTTPS, backups, upgrades and rollbacks are covered in [`docs/deploy.md`](docs/deploy.md).
 
 ### Local development: three commands

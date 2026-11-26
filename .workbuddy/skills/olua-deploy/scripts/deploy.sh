@@ -8,6 +8,8 @@
 #      bash scripts/deploy.sh --env-only      # 只更新 server/.env 并重启服务端
 #      bash scripts/deploy.sh --game [目录]   # 同步游戏 Web 产物到 :8080（默认 client/build/web-desktop-001）
 #      bash scripts/deploy.sh --resources     # 同步管理端素材（image-manifest 等）到 game/resources/
+#      # ↑ 这两个模式是唯一会拉起 game 容器的路径：game 挂 profiles:["game"]（#1314），
+#      #   全量 / --no-build / --tls-init 的 up -d 都不会碰它；不部署客户端时 game.yimw.cn 502 属预期。
 #      bash scripts/deploy.sh --tls-init      # 首次签发证书（OLUA_TLS=on 才用；跑一次就够）
 #      bash scripts/deploy.sh --verify        # 只做验收检查
 #
@@ -151,12 +153,23 @@ verify() {
     echo -n 'admin page: '; curl --noproxy '*' $CURL_TLS -s -o /dev/null -w '%{http_code}\n' --max-time 10 $ADMIN_PROBE/
     echo -n 'admin api: ';  curl --noproxy '*' $CURL_TLS -s --max-time 10 $ADMIN_PROBE/api/health; echo
     $INNER_LINE
-    echo -n 'game page: ';  curl --noproxy '*' -s -o /dev/null -w '%{http_code}\n' --max-time 10 http://127.0.0.1:${GAME_PORT}/
-    echo -n 'game api: ';   curl --noproxy '*' -s --max-time 10 http://127.0.0.1:${GAME_PORT}/api/health; echo
+    # game 挂了 profiles:["game"]（#1314）默认不启动：探针只在容器真的在跑时才输出，
+    # 不部署客户端的时期不再出现一串 502 噪音
+    game_up=\$(docker ps -q --filter 'name=olua-game-1\$' --filter 'status=running' | wc -l | tr -d ' ')
+    if [ \"\$game_up\" != 0 ]; then
+      echo -n 'game page: ';  curl --noproxy '*' -s -o /dev/null -w '%{http_code}\n' --max-time 10 http://127.0.0.1:${GAME_PORT}/
+      echo -n 'game api: ';   curl --noproxy '*' -s --max-time 10 http://127.0.0.1:${GAME_PORT}/api/health; echo
+    else
+      echo 'game page/api: 跳过（game 容器未运行，默认不启动，#1314）'
+    fi
     echo '--- 三域名分流（Host 头模拟，不依赖本机 DNS）'
     echo -n \"site($SITE_PRIMARY): \";  curl --noproxy '*' $CURL_TLS -s -H \"Host: $SITE_PRIMARY\" -o /dev/null -w '%{http_code}\n' --max-time 10 $ADMIN_PROBE/
     echo -n \"admin($ADMIN_DOMAIN): \"; curl --noproxy '*' $CURL_TLS -s -H \"Host: $ADMIN_DOMAIN\" -o /dev/null -w '%{http_code}\n' --max-time 10 $ADMIN_PROBE/
-    echo -n \"game($GAME_DOMAIN): \";   curl --noproxy '*' $CURL_TLS -s -H \"Host: $GAME_DOMAIN\" -o /dev/null -w '%{http_code}\n' --max-time 10 $ADMIN_PROBE/
+    if [ \"\$game_up\" != 0 ]; then
+      echo -n \"game($GAME_DOMAIN): \"; curl --noproxy '*' $CURL_TLS -s -H \"Host: $GAME_DOMAIN\" -o /dev/null -w '%{http_code}\n' --max-time 10 $ADMIN_PROBE/
+    else
+      echo \"game($GAME_DOMAIN): 跳过（game 容器未运行）\"
+    fi
     echo -n 'image-manifest: ';         curl --noproxy '*' $CURL_TLS -s -H \"Host: $ADMIN_DOMAIN\" -o /dev/null -w '%{http_code}\n' --max-time 10 $ADMIN_PROBE/game-resources/image-manifest.json"
   if [ "$TLS" = "on" ]; then
     # TLS 专项：这三条正是 #742 的验收项（跳转 / 证书链完整 / 到期时间）
@@ -180,9 +193,9 @@ tls_init() {
   echo "    前提：这些域名都已解析到 ${DEPLOY_HOST}，控制台放行了 80 与 443"
   build_compose_env
   "${SCP[@]}" /tmp/olua-compose.env "$TARGET:$DEPLOY_DIR/.env"
-  # 只起后端与静态站：**不起 edge**（:80 要空出来给 certbot 的 standalone）
+  # 只起后端与静态站：**不起 edge**（:80 要空出来给 certbot 的 standalone），也不起 game（默认不在 up 里，#1314）
   "${SSH[@]}" "$TARGET" "cd '$DEPLOY_DIR' && docker compose stop edge 2>/dev/null || true"
-  "${SSH[@]}" "$TARGET" "cd '$DEPLOY_DIR' && docker compose up -d --build server server-realtime admin game website"
+  "${SSH[@]}" "$TARGET" "cd '$DEPLOY_DIR' && docker compose up -d --build server server-realtime admin website"
   echo "==> 申请证书（--cert-name olua：目录固定，换域名不用改 nginx）"
   "${SSH[@]}" "$TARGET" "cd '$DEPLOY_DIR' && docker compose --profile tls run --rm -p 80:80 --entrypoint certbot certbot certonly \
     --standalone --cert-name olua $DOMAIN_FLAGS \
@@ -206,8 +219,8 @@ sync_resources() {
   rsync -a --delete --stats \
     -e "ssh -i $KEY -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null" \
     "$src/" "$TARGET:$DEPLOY_DIR/game/resources/" || { echo "✗ rsync 失败"; exit 1; }
-  echo "==> 起/更新 game 容器"
-  "${SSH[@]}" "$TARGET" "cd '$DEPLOY_DIR' && docker compose up -d game"
+  echo "==> 起/更新 game 容器（--profile game 显式打开；不写 profile 时它默认不启动，#1314）"
+  "${SSH[@]}" "$TARGET" "cd '$DEPLOY_DIR' && docker compose --profile game up -d game"
 }
 
 # 同步游戏 Web 产物：首次全量（2~3G，耗时以小时计），之后只传差异
@@ -223,8 +236,8 @@ sync_game() {
   rsync -a --delete --stats \
     -e "ssh -i $KEY -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null" \
     "$src/" "$TARGET:$DEPLOY_DIR/game/" || { echo "✗ rsync 失败"; exit 1; }
-  echo "==> 起/更新 game 容器"
-  "${SSH[@]}" "$TARGET" "cd '$DEPLOY_DIR' && docker compose up -d game"
+  echo "==> 起/更新 game 容器（--profile game 显式打开；不写 profile 时它默认不启动，#1314）"
+  "${SSH[@]}" "$TARGET" "cd '$DEPLOY_DIR' && docker compose --profile game up -d game"
 }
 
 case "$MODE" in
@@ -270,7 +283,7 @@ fi
 if [ "$MODE" = "no-build" ]; then
   echo "==> 6/6 跳过重建（--no-build）"
 else
-  echo "==> 6/6 docker compose up -d --build（耗时，放到后台跑更稳）"
+  echo "==> 6/6 docker compose up -d --build（耗时，放到后台跑更稳；game 挂 profiles:[\"game\"] 不会被拉起，#1314）"
   "${SSH[@]}" "$TARGET" "cd '$DEPLOY_DIR' && docker compose up -d --build"
 fi
 
