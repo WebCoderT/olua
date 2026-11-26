@@ -534,6 +534,30 @@ for (const svc of ["edge", "certbot"]) {
   }
 }
 
+// deploy.sh --game 的 rsync 目标是 `game/` 整目录（带 --delete），而管理端素材
+// `game/resources/` 也挂在里面（--resources 模式的 rsync 目标）。不带 exclude 时
+// --delete 会把素材整目录清掉（#1318 线上事故：地图切片 / /game-resources/ 全 404）。
+// 判定只看 rsync 命令本身（剥掉 `#` 注释行），防止「注释里写了旗标但代码没写」的假绿。
+{
+  const script = read(".workbuddy/skills/olua-deploy/scripts/deploy.sh");
+  const gameTargetAt = script.indexOf('"$TARGET:$DEPLOY_DIR/game/"');
+  const cmdStart = script.lastIndexOf("rsync -a --delete", gameTargetAt);
+  if (gameTargetAt < 0 || cmdStart < 0) {
+    fail("deploy.sh 里找不到 --game 的 rsync（game/ 目标）—— 发客户端链路断了");
+  } else {
+    const cmd = script
+      .slice(cmdStart, gameTargetAt)
+      .split("\n")
+      .filter((l) => !/^\s*#/.test(l))
+      .join("\n");
+    if (cmd.includes("--exclude=/resources")) {
+      ok("deploy.sh --game 的 rsync 排除了 resources/", "game/resources/ 是 --resources 的地盘，--delete 不能扫到它");
+    } else {
+      fail(`deploy.sh --game 的 rsync 没带 \`--exclude=/resources\` —— --delete 会把管理端素材 game/resources/ 整目录删掉（#1318 事故）`);
+    }
+  }
+}
+
 // 证书与校验目录必须是**同一对具名卷**：certbot 写、edge 只读读，
 // 挂成不同的目录（或一边 bind mount 一边具名卷）时，续期会「成功但没人看得见」
 const edgeBlock = serviceBlock("edge");
