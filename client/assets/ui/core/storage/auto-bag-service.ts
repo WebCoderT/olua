@@ -1,5 +1,5 @@
 import { EQUIPMENT_TYPE } from "../../../types/good";
-import { findUsableCells } from "../../../configs/items";
+import { findUsableCells, hasRecycleSelection } from "../../../configs/items";
 import { equipmentSlots } from "../../../configs/equipments";
 import GameUiHelper from "../../helpers/GameUiHelper";
 import BagService from "./bag-service";
@@ -15,8 +15,11 @@ import * as AutoBagPrefs from "./auto-bag-prefs";
  * 本类只回答「什么时候做、做几次」，不新增任何一条服务端链路。
  *
  * 触发点（唯二）：
- * · 背包变化 → `onBagChanged`（RoleUIManager.refreshBag 汇聚点）：自动使用 + 自动穿戴；
+ * · 背包变化 → `onBagChanged`（RoleUIManager.refreshBag 汇聚点）：自动使用 + 自动穿戴 + 自动回收扫描；
  * · 拾取被拒（服务端回 `bag_full`）→ `onBagFullRejected`（DropManager）：自动回收 + 重拾。
+ *
+ * #1289 重做：回收从「勾选物品清单、背包满才触发」改成「部位 × 等级段勾选 + 开关」——
+ * 开关开着就**持续扫描**（背包每变一次扫一遍），符合勾选的装备直接回收成绑定元宝。
  *
  * 勾选偏好在本机（auto-bag-prefs，按角色分键）；**没勾的东西永远不会被自动处理**。
  */
@@ -82,12 +85,22 @@ export default class AutoBagService {
         await BagService.equipBetterFromBag(slot, { quiet: true });
       }
     }
+    // ── 自动回收：开关开着才扫；**放在最后** —— 先让自动穿戴把「更好的」拿走，
+    //    剩下的才轮到回收，不然刚捡到的好装备会被先卖掉。quiet：没勾中就安静收场 ──
+    if (AutoBagPrefs.getAutoRecycle(role.id)) {
+      const selection = AutoBagPrefs.getRecycleSelection(role.id);
+      if (hasRecycleSelection(selection)) {
+        const result = await BagService.recycleBySelection(selection, { quiet: true });
+        if (result) GameUiHelper.createTip("auto_recycle_scan_tip", { count: result.count, price: result.total });
+      }
+    }
   }
 
   /**
    * 拾取被拒（服务端回 `bag_full`）：按勾选清单自动回收腾格子，成功后重拾被拒的掉落物
    *
-   * · 没勾任何东西（清单全空）→ 什么都不做：自动回收的安全边界是「未勾选永不回收」；
+   * · **开关没开**（#1289 起自动回收必须显式打开）或清单全空 → 什么都不做：
+   *   自动回收的安全边界是「开关 + 勾选，二者都满足才动手」；
    * · 回收请求在途时再来 bag_full → 直接忽略（回收完那一次请求自然腾出格子，
    *   自动拾取的节流窗口过后会继续捡剩下的）；
    * · 回收成功 → 飘一条「自动回收」提示，并立刻重试被拒的那件（走 requestPick 显式重发，
@@ -98,8 +111,9 @@ export default class AutoBagService {
   static async onBagFullRejected(retryPickup: () => void): Promise<void> {
     const role = RoleCache.findOnlineRole();
     if (!role || AutoBagService.recycling) return;
+    if (!AutoBagPrefs.getAutoRecycle(role.id)) return;
     const selection = AutoBagPrefs.getRecycleSelection(role.id);
-    if (!selection.allEquipment && selection.ids.size === 0) return;
+    if (!hasRecycleSelection(selection)) return;
     AutoBagService.recycling = true;
     try {
       const result = await BagService.recycleBySelection(selection, { quiet: true });

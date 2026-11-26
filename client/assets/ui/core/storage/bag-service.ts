@@ -29,6 +29,7 @@ import {
   wornIdOf,
 } from "../../../configs/items";
 import type { BagRecycleSelection } from "../../../configs/items";
+import { equipmentBySlot, recycleLevelBands } from "../../../configs/equipments";
 import { RoleApi } from "../../utils/net/Api";
 import type { BagOp, BagOpResult } from "../../utils/net/ApiModels";
 import { withRevision } from "./with-revision";
@@ -385,9 +386,9 @@ export default class BagService {
   /**
    * 按勾选清单回收背包物品（当前在线角色）：按件折算**绑定元宝**入账（#1278）
    *
-   * 「自动回收弹窗」里的一键回收与背包满时的自动回收共用这一个入口：
-   * 勾了什么回收什么 —— 装备看 `selection.allEquipment` 整类开关，
-   * 非装备看 `selection.ids`；清单为空/背包里没有可回收的，就什么都不发。
+   * 「自动回收弹窗」里的一键回收与自动回收扫描共用这一个入口：
+   * 勾了什么回收什么 —— 只可能是装备（部位 × 等级段，#1289），非装备不进清单；
+   * 清单为空/背包里没有可回收的，就什么都不发。
    *
    * **结算在服务端**（#397）：本地只负责「把要卖的东西列出来」（goodId + 件数），
    * 价格与扣物都由 `role.sellGoods` 说了算 —— 客户端报的价一概不看，改存档也改不出钱。
@@ -427,14 +428,17 @@ export default class BagService {
   /**
    * 一键回收背包内的全部装备（当前在线角色）：按件折算**绑定元宝**入账
    *
-   * #1278 起「回收什么」由玩家在自动回收弹窗里勾选（见 recycleBySelection）；
-   * 本方法保留为「整包装备」这一特例的兼容入口（全部装备、无逐项物品）。
+   * #1289 起勾选清单是「部位 × 等级段」；「全部装备」= 所有部位 × 全部等级段
+   * （段边界现取 recycleLevelBands()，与弹窗清单同一份规则，不会各算一套）。
    *
    * 计价口径见共享快照的出售价表，与预览同一个来源。
    * @returns 是否回收成功（背包里没有可回收的装备时返回 false 并提示）
    */
   static async recycleBagEquipments(): Promise<boolean> {
-    const result = await BagService.recycleBySelection({ allEquipment: true, ids: new Set<string>() });
+    const bands = recycleLevelBands().map((band) => band.min);
+    const slots: Record<string, number[]> = {};
+    equipmentBySlot.forEach((_bucket, slot) => { slots[slot] = bands; });
+    const result = await BagService.recycleBySelection({ slots });
     if (!result) return false;
     GameUiHelper.createTip("bag_recycle_tip", { count: result.count, price: result.total });
     return true;

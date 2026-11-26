@@ -1,6 +1,6 @@
 import { BagCell, BagCellPos, BagOrigin, DrugEffect, Equipment, EQUIPMENT_TYPE, GOOD_TYPE, Goods, isEquipment, MoneyCurrency, WornItem } from "../types/good";
 import { drugs, levelScrolls, moneyItems } from "./game-config";
-import { equipmentCombatValue, equipmentSlotOrder, getAllEquipmentVariants, getMallGoods, getRecyclePrice } from "./equipments";
+import { equipmentCombatValue, equipmentSlotOrder, getAllEquipmentVariants, getMallGoods, getRecyclePrice, recycleLevelBands } from "./equipments";
 import { materials } from "./game-config";
 
 /**
@@ -664,29 +664,49 @@ export function summarizeBagRecycle(bag: BagCell[][]): BagRecycleSettlement {
 
 //#endregion
 
-//#region 自动回收 / 自动使用（#1278：勾选清单由玩家自选，判定纯函数与单测共用）
+//#region 自动回收 / 自动使用（#1278；#1289 重做为「部位 × 等级段」，判定纯函数与单测共用）
 
 /**
- * 自动回收的勾选清单（#1278）：玩家在「自动回收」弹窗里勾了哪些东西
+ * 自动回收的勾选清单（#1289 重做，用户拍板）：**部位 → 勾选的等级段**
  *
- * · `allEquipment`：「全部装备」整类一条 —— 装备变体 id 有几百个（基础件 × 前后缀），
- *   逐件勾不现实，回收语义又是「整类换钱」，所以装备只给一个总开关；
- * · `ids`：非装备物品（药品 / 材料 / 货币 / 卷轴中回收价 > 0 的）逐项勾选的 id 集。
+ * · 自动回收**只针对装备**：药品 / 升级卷轴等非装备物品不再进清单 ——
+ *   「不能勾选无法（不该）回收的东西」；
+ * · `slots`：部位 key → 该部位勾选的等级段**下界**集合（1 = 「1-10级」、11 = 「11-15级」……
+ *   段边界见 `recycleLevelBands()` 的固定规则）。按段下界而不是按段序号落盘：
+ *   运营加了更高等级装备只会多出未勾选的新段，老勾选不会错位。
  *
  * 未勾选的物品**永远不会被自动回收** —— 这是这条功能的安全边界，服务端仍会按价签复核。
  */
 export interface BagRecycleSelection {
-  /** 「全部装备」整类开关 */
-  allEquipment: boolean;
-  /** 勾选的非装备物品 id 集（只影响回收判定；不含装备变体 id） */
-  ids: ReadonlySet<string>;
+  /** 部位 key → 勾选的等级段下界集合（空数组 / 缺部位 = 该部位不自动回收） */
+  slots: Readonly<Record<string, readonly number[]>>;
+}
+
+/** 清单里是否勾了至少一段（空清单 = 自动回收一步都不会做，安全边界） */
+export function hasRecycleSelection(selection: BagRecycleSelection): boolean {
+  const slots = Object.keys(selection.slots);
+  for (const slot of slots) {
+    if (selection.slots[slot].length > 0) return true;
+  }
+  return false;
+}
+
+/**
+ * 装备等级所属的回收段（不在任何段里 —— 超出当前装备表等级范围的等级 → null，不匹配任何勾选）
+ */
+export function recycleBandOfLevel(level: number): { min: number; max: number } | null {
+  for (const band of recycleLevelBands()) {
+    if (level >= band.min && level <= band.max) return band;
+  }
+  return null;
 }
 
 /**
  * 按勾选清单收集背包里的回收条目（**纯函数**，自动回收与弹窗内一键回收共用）
  *
- * · 装备格：`allEquipment` 开着才收（装备本不可叠加，count 恒 1，仍按 count 算防存档异常）；
- * · 非装备格：id 在 `ids` 里才收；
+ * · 只收**装备**：部位勾了该等级段才收（段判定 = `recycleBandOfLevel(good.level)` 的下界
+ *   在该部位的勾选集合里）；**非装备格一律不收**（#1289：药品 / 卷轴不进自动回收）；
+ * · 回收价 ≤ 0 的装备变体不收 —— 服务端 `sellGoods` 对不可卖物品整单拒绝，客户端先滤掉；
  * · 解析不出配置的 id（已下架）：不认识它，就不替它决定，不收。
  *
  * 同 id 合并件数（服务端 `sellGoods` 本来就合并，这里对齐口径少报几条）。
@@ -697,12 +717,11 @@ export function collectBagRecycleEntries(bag: BagCell[][], selection: BagRecycle
     row.forEach((cell) => {
       if (!cell) return;
       const good = getItem(cell.id);
-      if (!good) return; // 解析不出配置的 id：不动
-      if (isEquipment(good)) {
-        if (!selection.allEquipment) return;
-      } else if (!selection.ids.has(cell.id)) {
-        return;
-      }
+      if (!good || !isEquipment(good)) return; // 非装备 / 解析不出配置的 id：不收（#1289 起没有逐项清单）
+      const band = recycleBandOfLevel(good.level);
+      const checked = selection.slots[good.slot] ?? [];
+      if (!band || checked.indexOf(band.min) === -1) return;
+      if (getRecyclePrice(good) <= 0) return; // 服务端会因不可卖整单拒绝，客户端先滤掉
       merged.set(cell.id, (merged.get(cell.id) ?? 0) + Math.max(1, cell.count));
     }),
   );
@@ -711,17 +730,17 @@ export function collectBagRecycleEntries(bag: BagCell[][], selection: BagRecycle
 
 /**
  * 按勾选清单的回收预览（件数 + 合计价）：复用同一条收集，价签口径与整包回收一致
- * （装备 = 变体 `recyclePrice`，非装备 = `sellPirce`，服务端 `sellPriceOf` 读同一份快照）。
+ * （只可能是装备：变体 `recyclePrice`，服务端 `sellPriceOf` 读同一份快照）。
  */
 export function summarizeBagRecycleBySelection(bag: BagCell[][], selection: BagRecycleSelection): BagRecycleSettlement {
   let count = 0;
   let totalPrice = 0;
   for (const entry of collectBagRecycleEntries(bag, selection)) {
-    const good = getItem(entry.goodId);
+    // collectBagRecycleEntries 只收装备（#1289 起非装备根本进不了清单），这里断言形状取价
+    const good = getItem(entry.goodId) as Equipment | undefined;
     if (!good) continue;
-    const unit = isEquipment(good) ? getRecyclePrice(good) : Math.max(0, good.sellPirce);
     count += entry.count;
-    totalPrice += unit * entry.count;
+    totalPrice += getRecyclePrice(good) * entry.count;
   }
   return { count, totalPrice };
 }

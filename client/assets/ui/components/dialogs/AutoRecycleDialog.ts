@@ -4,28 +4,35 @@ import GameUiHelper from "../../helpers/GameUiHelper";
 import UiHelper from "../../helpers/UiHelper";
 import BaseDialog from "./dialog-kit";
 import CheckRow from "../panel/CheckRow";
-import { items, summarizeBagRecycleBySelection, type BagRecycleSelection } from "../../../configs/items";
-import { isEquipment } from "../../../types/good";
+import { summarizeBagRecycleBySelection, type BagRecycleSelection } from "../../../configs/items";
+import {
+  equipmentBySlot,
+  equipmentSlotOrder,
+  equipmentSlots,
+  recycleLevelBands,
+} from "../../../configs/equipments";
+import type { EQUIPMENT_TYPE } from "../../../types/good";
 import { autoRecycleDialogLayout, buttonTone, uiSize } from "../../../configs/hudLayout";
 import { getText } from "../../../configs/texts";
 import * as AutoBagPrefs from "../../core/storage/auto-bag-prefs";
 
 /**
- * 自动回收弹窗（#1278）
+ * 自动回收弹窗（#1289 重做；原 #1278 的「全部装备 + 可卖物品清单」下线）
  *
- * 勾选清单 + 弹窗内「一键回收」：
- * · 「全部装备」整类开关（滚动区外常驻 —— 装备变体几百个 id，逐件勾不现实，
- *   回收语义又是整类换钱；这是自动回收的安全边界之一，得一直看得见）；
- * · 可卖非装备物品逐项勾选（药品 / 材料 / 货币 / 卷轴中回收价 > 0 的，与服务端 sellPriceOf 同源）；
- * · 「一键回收」按**当前勾选清单**立即执行（两步确认保留 —— 回收不可撤销）。
+ * 勾选结构 = **部位 × 等级段**（用户拍板）：
+ * · 每个装备部位一节，标题就是部位名（鞋子 / 武器 / 衣服……按管理端槽位排序）；
+ * · 标题下方是该部位的等级段选项：`1-10级`、`11-15级`、`16-20级`……（段规则固定，见 recycleLevelBands）；
+ * · **只有装备**：药品 / 升级卷轴等非装备物品不进清单 —— 不能勾选不该回收的东西；
+ * · 没有装备数据的部位不出现（勾了也没东西可回收，列出来只会让人困惑）。
  *
- * 语义（挂在 DropManager 的 bag_full 拒绝上，见 AutoBagService.onBagFullRejected）：
- * 勾选后**背包满时自动回收勾选的物品**并自动重拾被拒的掉落物；**未勾选的永远不会被自动回收**。
- * 勾选偏好存本机、按角色分键（auto-bag-prefs），改动即落盘。
+ * 底部一排两个控件：
+ * · 「一键回收」按当前勾选立即执行（两步确认 —— 回收不可撤销）；
+ * · 「自动回收」开关（#1289）：开启后 AutoBagService 持续扫描背包，自动回收符合勾选的装备
+ *   （偏好落盘 auto-bag-prefs，按角色分键）。
  */
 export default class AutoRecycleDialog extends BaseDialog {
-  /** 「全部装备」开关行（回填勾选态与读取当前态用） */
-  private allEquipmentRow: CheckRow | null = null;
+  /** 勾选行的节点名前缀（`<PREFIX><slot>_<bandMin>`，读当前勾选用；部位 key 不含下划线） */
+  private static readonly ROW_PREFIX = "auto_recycle_band_";
   /** 一键回收按钮（两步确认要改文案） */
   private recycleButton: Node | null = null;
   /** 一键回收是否处于待确认态 */
@@ -62,53 +69,39 @@ export default class AutoRecycleDialog extends BaseDialog {
         new Size(layout.hint.width, layout.hint.height),
       ),
     );
-    // 「全部装备」整类开关（滚动区外，常驻可见）
-    const allRow = new CheckRow(
-      layout.allEquipmentRow.name,
-      getText("auto_recycle_all_equipment"),
-      selection.allEquipment,
-      { width: layout.list.size.width, height: layout.allEquipmentRow.height, fontSize: layout.allEquipmentRow.fontSize, color: layout.allEquipmentRow.color },
-      (checked) => this.persist(role.id, { allEquipment: checked, ids: this.currentIds() }),
-    );
-    allRow.setPosition(0, layout.allEquipmentRow.y, 0);
-    dialog.addChild(allRow);
-    this.allEquipmentRow = allRow;
-    // 可卖非装备物品滚动清单（物品总表按注册序：药品 → 货币 → 卷轴 → 材料，过滤回收价 > 0）
+    // 部位 × 等级段滚动清单（部位按管理端槽位排序；没有装备数据的部位不出现）
     const list = GameUiHelper.createScrollView(layout.list.name, layout.list.position, layout.list.size, layout.list.rowSpacing, layout.list.padding);
     const content = list.getComponent(ScrollView)?.content;
     if (!content) return;
-    const sellables = Array.from(items.values()).filter((good) => !isEquipment(good) && good.sellPirce > 0);
-    if (!sellables.length) {
-      dialog.addChild(
+    const bands = recycleLevelBands();
+    const slots = Array.from(equipmentSlotOrder.keys())
+      .sort((a, b) => (equipmentSlotOrder.get(a) ?? 0) - (equipmentSlotOrder.get(b) ?? 0))
+      .filter((slot) => (equipmentBySlot.get(slot as EQUIPMENT_TYPE)?.size ?? 0) > 0);
+    for (const slot of slots) {
+      const slotLabel = equipmentSlots.get(slot as EQUIPMENT_TYPE)?.label ?? slot;
+      content.addChild(
         UiHelper.createLabel(
-          `${layout.name}_empty`,
-          getText("auto_recycle_empty_list"),
-          layout.emptyTip.color,
-          layout.emptyTip.fontSize,
-          layout.emptyTip.position,
-          layout.emptyTip.size,
+          `${AutoRecycleDialog.ROW_PREFIX}title_${slot}`,
+          slotLabel,
+          layout.sectionTitle.color,
+          layout.sectionTitle.fontSize,
+          new Vec2(0, 0),
+          new Size(layout.list.size.width - layout.list.padding * 2, layout.sectionTitle.height),
         ),
       );
-    }
-    for (const good of sellables) {
-      const id = good.id ?? "";
-      if (!id) continue;
-      const row = new CheckRow(
-        `${layout.list.name}_${id}`,
-        good.label,
-        selection.ids.has(id),
-        { width: layout.list.size.width, height: layout.list.rowHeight, fontSize: layout.list.fontSize, color: layout.list.color },
-        (checked) => {
-          const ids = this.currentIds();
-          if (checked) ids.add(id);
-          else ids.delete(id);
-          this.persist(role.id, { allEquipment: this.allEquipmentRow?.isChecked() ?? false, ids });
-        },
-      );
-      content.addChild(row);
+      for (const band of bands) {
+        const row = new CheckRow(
+          `${AutoRecycleDialog.ROW_PREFIX}${slot}_${band.min}`,
+          getText("auto_recycle_band", { min: band.min, max: band.max }),
+          (selection.slots[slot] ?? []).indexOf(band.min) !== -1,
+          { width: layout.list.size.width - layout.list.padding * 2, height: layout.list.rowHeight, fontSize: layout.list.fontSize, color: layout.list.color },
+          () => this.persist(role.id, this.currentSelection()),
+        );
+        content.addChild(row);
+      }
     }
     dialog.addChild(list);
-    // 「一键回收」（两步确认，按当前勾选清单执行 —— 与自动回收同一套判定）
+    // 底部一排：「一键回收」（两步确认）+ 「自动回收」开关
     const recycleButton = GameUiHelper.createToneButton(
       layout.recycleButton.name,
       getText("label_auto_recycle_now"),
@@ -120,18 +113,35 @@ export default class AutoRecycleDialog extends BaseDialog {
     recycleButton.on(Node.EventType.TOUCH_END, () => this.onRecycleClick(), this);
     dialog.addChild(recycleButton);
     this.recycleButton = recycleButton;
+    const toggleRow = new CheckRow(
+      layout.autoToggle.name,
+      getText("label_bag_auto_recycle"),
+      AutoBagPrefs.getAutoRecycle(role.id),
+      { width: layout.autoToggle.width, height: layout.autoToggle.height, fontSize: layout.autoToggle.fontSize, color: layout.autoToggle.color },
+      (checked) => AutoBagPrefs.setAutoRecycle(role.id, checked),
+    );
+    toggleRow.setPosition(layout.autoToggle.position.x, layout.autoToggle.position.y, 0);
+    dialog.addChild(toggleRow);
   }
 
-  /** 读滚动清单里当前勾着的 id（行节点名编码了物品 id，勾选态在行自己身上） */
-  private currentIds(): Set<string> {
-    const ids = new Set<string>();
-    const prefix = `${autoRecycleDialogLayout.list.name}_`;
-    this.dialog?.getChildByName(autoRecycleDialogLayout.list.name)?.getComponent(ScrollView)?.content?.children.forEach((row) => {
-      if (row instanceof CheckRow && row.isChecked() && row.name.startsWith(prefix)) {
-        ids.add(row.name.slice(prefix.length));
-      }
-    });
-    return ids;
+  /** 读滚动清单里当前的勾选（行节点名编码了 `部位_段下界`，勾选态在行自己身上） */
+  private currentSelection(): BagRecycleSelection {
+    const slots: Record<string, number[]> = {};
+    const titlePrefix = `${AutoRecycleDialog.ROW_PREFIX}title_`;
+    this.dialog
+      ?.getChildByName(autoRecycleDialogLayout.list.name)
+      ?.getComponent(ScrollView)
+      ?.content?.children.forEach((row) => {
+        if (!(row instanceof CheckRow) || !row.isChecked() || row.name.startsWith(titlePrefix)) return;
+        const rest = row.name.slice(AutoRecycleDialog.ROW_PREFIX.length);
+        const split = rest.lastIndexOf("_");
+        if (split <= 0) return;
+        const slot = rest.slice(0, split);
+        const bandMin = Number(rest.slice(split + 1));
+        if (!slot || !Number.isInteger(bandMin) || bandMin <= 0) return;
+        (slots[slot] ??= []).push(bandMin);
+      });
+    return { slots };
   }
 
   /** 落盘当前勾选（按角色分键存本机） */
@@ -191,7 +201,6 @@ export default class AutoRecycleDialog extends BaseDialog {
 
   protected onClose() {
     this.resetRecycleButton();
-    this.allEquipmentRow = null;
     this.recycleButton = null;
   }
 }

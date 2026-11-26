@@ -234,6 +234,24 @@ export function getRecyclePrice(equipment: Equipment | null | undefined): number
 }
 
 /**
+ * 自动回收的等级段（#1289，用户定）：首段 **1-10 级**，之后 **5 级一段**排到当前装备表的最高等级
+ * （出厂装备 1~60 级 → 1-10、11-15、16-20 … 56-60，共 11 段）。
+ *
+ * 段的边界是**固定规则**，不随数据漂：运营加了 65 级装备只会多出「61-65」这样的新段，
+ * 已保存的勾选（按段下界记）不会跟着错位。装备表为空时只有首段。
+ */
+export function recycleLevelBands(): Array<{ min: number; max: number }> {
+  let maxLevel = 0;
+  equipmentBySlot.forEach((bucket) => bucket.forEach((item) => { if (item.level > maxLevel) maxLevel = item.level; }));
+  const bands: Array<{ min: number; max: number }> = [{ min: 1, max: 10 }];
+  while (bands[bands.length - 1].max < maxLevel) {
+    const min = bands[bands.length - 1].max + 1;
+    bands.push({ min, max: min + 4 });
+  }
+  return bands;
+}
+
+/**
  * 装备的战斗力贡献（**纯函数**，角色信息弹窗「更好装备」提示的判定口径，见 configs/items.findBagEquipmentUpgrade）
  *
  * 权重表 configs/battle.combatCalc（与服务端生成物 COMBAT_WEIGHTS 同源）：
