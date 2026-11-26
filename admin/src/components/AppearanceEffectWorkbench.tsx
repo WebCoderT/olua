@@ -87,7 +87,10 @@ export function AppearanceEffectWorkbench(props: {
     if (!ctx) return;
     canvas.width = canvasW;
     canvas.height = canvasH;
-    ctx.imageSmoothingEnabled = false;
+    // 边框 / 背景是光效素材（软渐变），平滑采样才与游戏内（Cocos 线性过滤）一致；
+    // 最近邻会把 1~2px 发光线采成硬像素，与动画预览抖动同一根源（#1312）。
+    // 工作台只服务这两类光效，无像素素材入参，故直接放开。
+    ctx.imageSmoothingEnabled = true;
     ctx.clearRect(0, 0, canvasW, canvasH);
 
     const cx = canvasW / 2;
@@ -188,7 +191,7 @@ export function AppearanceEffectWorkbench(props: {
           <canvas
             ref={canvasRef}
             className="cursor-move touch-none rounded bg-surface-0/80"
-            style={{ imageRendering: "pixelated", maxWidth: "100%" }}
+            style={{ imageRendering: "auto", maxWidth: "100%" }}
             onPointerDown={onPointerDown}
             onPointerMove={onPointerMove}
             onPointerUp={onPointerUp}
