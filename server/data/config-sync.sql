@@ -6,7 +6,7 @@
 -- config-version: 0
 -- olua config snapshot v1
 -- tables: achievements,audio_settings,combat_weights,drop_tables,drugs,equip_aligns,equip_in_aligns,equipment_appearance,equipment_meta,equipment_slots,equipment_variants,equipments,fashions,growth_scalars,guide_settings,items,level_scrolls,mall_categories,mall_goods,map_collisions,map_npcs,map_rules,map_spawn_areas,maps,money_items,monster_drops,monster_presentation,monster_skills,monsters,npcs,quests,ranks,role_level_curves,runtime_params,skills,souls,statuses,titles,ui_effects
--- counts: achievements=24,audio_settings=12,combat_weights=7,drop_tables=11,drugs=11,equip_aligns=32,equip_in_aligns=31,equipment_appearance=1,equipment_meta=1,equipment_slots=13,equipment_variants=10275,equipments=685,fashions=20,growth_scalars=11,guide_settings=1,items=5,level_scrolls=7,mall_categories=2,mall_goods=3,map_collisions=464,map_npcs=77,map_rules=0,map_spawn_areas=220,maps=62,money_items=8,monster_drops=220,monster_presentation=220,monster_skills=3,monsters=220,npcs=36,quests=28,ranks=100,role_level_curves=24,runtime_params=1,skills=15,souls=37,statuses=7,titles=34,ui_effects=7
+-- counts: achievements=24,audio_settings=14,combat_weights=7,drop_tables=11,drugs=11,equip_aligns=32,equip_in_aligns=31,equipment_appearance=1,equipment_meta=1,equipment_slots=13,equipment_variants=10275,equipments=685,fashions=20,growth_scalars=11,guide_settings=1,items=5,level_scrolls=7,mall_categories=2,mall_goods=3,map_collisions=464,map_npcs=77,map_rules=0,map_spawn_areas=220,maps=62,money_items=8,monster_drops=220,monster_presentation=220,monster_skills=3,monsters=220,npcs=36,quests=28,ranks=100,role_level_curves=24,runtime_params=1,skills=15,souls=37,statuses=7,titles=34,ui_effects=7
 
 PRAGMA foreign_keys = OFF;
 BEGIN;
@@ -37,10 +37,12 @@ INSERT INTO "achievements" ("id", "category", "label", "description", "condition
 INSERT INTO "achievements" ("id", "category", "label", "description", "condition_type", "condition_target", "condition_count", "reward_bind_gold", "reward_exp", "reward_items", "sort_order", "hidden", "updated_at") VALUES ('ach_collect_gem', 'explore', '珠光宝气', '背包里同时持有 5 颗宝石。', 'collect', 'material_gem', 5, 8000, 1800, '[]', 50, 0, 0);
 INSERT INTO "achievements" ("id", "category", "label", "description", "condition_type", "condition_target", "condition_count", "reward_bind_gold", "reward_exp", "reward_items", "sort_order", "hidden", "updated_at") VALUES ('ach_collect_sun', 'explore', '日饮一壶', '背包里同时持有 20 瓶太阳水。', 'collect', 'drug_sun', 20, 12000, 2600, '[{"goodId":"material_gem","count":2}]', 60, 1, 0);
 
--- ===== audio_settings（12 行）=====
+-- ===== audio_settings（14 行）=====
 DELETE FROM "audio_settings";
 INSERT INTO "audio_settings" ("audio_key", "file_path", "volume", "loop", "enabled", "updated_by", "updated_at") VALUES ('login_bgm', 'audio/login-bgm.wav', 60, 1, 1, 'gm001', 1793743546980);
 INSERT INTO "audio_settings" ("audio_key", "file_path", "volume", "loop", "enabled", "updated_by", "updated_at") VALUES ('warrior_attack', 'audio/warrior-attack.wav', 70, 0, 1, '', 0);
+INSERT INTO "audio_settings" ("audio_key", "file_path", "volume", "loop", "enabled", "updated_by", "updated_at") VALUES ('monster_attack', 'audio/monster-attack.wav', 60, 0, 1, '', 0);
+INSERT INTO "audio_settings" ("audio_key", "file_path", "volume", "loop", "enabled", "updated_by", "updated_at") VALUES ('monster_die', 'audio/monster-die.wav', 70, 0, 1, '', 0);
 INSERT INTO "audio_settings" ("audio_key", "file_path", "volume", "loop", "enabled", "updated_by", "updated_at") VALUES ('role_die_man', 'audio/role-die-man.wav', 80, 0, 1, 'gm001', 1793743533766);
 INSERT INTO "audio_settings" ("audio_key", "file_path", "volume", "loop", "enabled", "updated_by", "updated_at") VALUES ('role_die_woman', 'audio/role-die-woman.wav', 80, 0, 1, 'gm001', 1793743534546);
 INSERT INTO "audio_settings" ("audio_key", "file_path", "volume", "loop", "enabled", "updated_by", "updated_at") VALUES ('item_drop', 'audio/item-drop.wav', 70, 0, 1, 'gm001', 1793743554431);

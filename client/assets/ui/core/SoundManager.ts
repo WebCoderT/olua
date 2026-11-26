@@ -14,10 +14,10 @@ const MOVE_MIN_GAP_MS = 80;
  *
  * ## 它是什么
  *
- * 运营在管理端「音效配置」里改的 12 项，客户端按 **key** 播 —— 文件路径 / 音量 / 循环 / 开关
+ * 运营在管理端「音效配置」里改的 14 项，客户端按 **key** 播 —— 文件路径 / 音量 / 循环 / 开关
  * 全部来自服务端，客户端不存一份默认值（没下发就不响，见 `configs/game-config` 区 21）。
  *
- * 调用点一共 12 个 key，全在「服务端已经确认」的那一行之后（别提前播，那会把「点了但被拒」
+ * 调用点一共 14 个 key，全在「服务端已经确认」的那一行之后（别提前播，那会把「点了但被拒」
  * 演成「成功」）：
  *
  * | key | 调用点 |
@@ -25,6 +25,8 @@ const MOVE_MIN_GAP_MS = 80;
  * | `login_bgm` | `ui/Login.start` 起播、`ui/core/SceneManager.loadScene` 停 |
  * | `ui_click` | **所有按钮**：`bindClick(node)`（`UiHelper.createButton` / `createToggle` 自动挂，其余手写按钮各自贴一行） |
  * | `warrior_attack` | `skills/warrior.skill_1000`（只对战士） |
+ * | `monster_attack` | `ui/core/MonsterManager.playServerAttack` / `playServerCast`（怪物普攻与施法，所有怪物共用） |
+ * | `monster_die` | `ui/core/MonsterManager.applyDamage` 死亡分支（各类击杀清场的唯一汇点） |
  * | `role_die_man` / `role_die_woman` | `ui/Game.checkRoleDeath`（按 `role.sex` 选一个） |
  * | `move` | `ui/Game.update`（移动状态驱动，#685：点地面走一步 = 播一声，长按持续移动 = 循环，停下即停） |
  * | `item_drop` | `ui/core/DropManager.spawnResults`（铺到地上）+ `applyPickedFrame`（捡起来） |
