@@ -176,7 +176,9 @@ cp server/.env.example server/.env      # 至少填 JWT_SECRET 与 ADMIN_REGISTE
 docker compose up -d --build
 ```
 
-跑完会起五个容器：网站、管理后台、游戏、接口服务、实时服务，对外只开 80 和 8080。
+跑完会起四个容器：网站、管理后台、接口服务、实时服务，对外只开 80。
+游戏网页端默认不启动（`profiles: ["game"]`，#1314）；要发客户端跑
+`bash .workbuddy/skills/olua-deploy/scripts/deploy.sh --game`，详见 [`docs/deploy.md`](docs/deploy.md)。
 域名、HTTPS、备份、升级、回滚等完整步骤见 [`docs/deploy.md`](docs/deploy.md)。
 
 ### 本机开发：三条命令

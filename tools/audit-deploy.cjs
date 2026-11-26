@@ -520,6 +520,20 @@ for (const svc of ["edge", "certbot"]) {
   }
 }
 
+// game 必须挂在 game 组（#1314）：客户端不是常驻服务，没在发客户端的时期
+// 普通 `up -d` 不该把它拉回来（占 :8080、game.yimw.cn 一直有人撞）。发客户端走
+// deploy.sh --game / --resources 的显式 `--profile game up -d game`。
+{
+  const block = serviceBlock("game");
+  if (!block) {
+    fail("compose 里没有 game 服务 —— 发客户端的容器没了（deploy.sh --game 会拉不起来）");
+  } else if (/^\s+profiles:\s*\[\s*"game"\s*\]/m.test(block)) {
+    ok("compose 的 game 挂在 game 组", "默认 up -d 不启动；deploy.sh --game 显式 --profile game 拉起");
+  } else {
+    fail(`compose 的 game 没挂 \`profiles: ["game"]\` —— 普通 up -d 也会起它，不部署客户端时它一直空转占着 :8080`);
+  }
+}
+
 // 证书与校验目录必须是**同一对具名卷**：certbot 写、edge 只读读，
 // 挂成不同的目录（或一边 bind mount 一边具名卷）时，续期会「成功但没人看得见」
 const edgeBlock = serviceBlock("edge");
