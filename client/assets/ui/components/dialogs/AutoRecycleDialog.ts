@@ -3,7 +3,7 @@ import StorageManager from "../../core/StorageManager";
 import GameUiHelper from "../../helpers/GameUiHelper";
 import UiHelper from "../../helpers/UiHelper";
 import BaseDialog from "./dialog-kit";
-import CheckRow from "../panel/CheckRow";
+import CheckRow, { appendCheckGrid } from "../panel/CheckRow";
 import { summarizeBagRecycleBySelection, type BagRecycleSelection } from "../../../configs/items";
 import {
   equipmentBySlot,
@@ -89,16 +89,25 @@ export default class AutoRecycleDialog extends BaseDialog {
           new Size(layout.list.size.width - layout.list.padding * 2, layout.sectionTitle.height),
         ),
       );
-      for (const band of bands) {
-        const row = new CheckRow(
-          `${AutoRecycleDialog.ROW_PREFIX}${slot}_${band.min}`,
-          getText("auto_recycle_band", { min: band.min, max: band.max }),
-          (selection.slots[slot] ?? []).indexOf(band.min) !== -1,
-          { width: layout.list.size.width - layout.list.padding * 2, height: layout.list.rowHeight, fontSize: layout.list.fontSize, color: layout.list.color },
-          () => this.persist(role.id, this.currentSelection()),
-        );
-        content.addChild(row);
-      }
+      // 一行三列（#1304）：节标题仍独占一行，节内的等级段按三列铺开
+      appendCheckGrid(content, {
+        namePrefix: AutoRecycleDialog.ROW_PREFIX,
+        rowPrefix: `${AutoRecycleDialog.ROW_PREFIX}grid_${slot}`,
+        items: bands.map((band) => ({
+          key: `${slot}_${band.min}`,
+          text: getText("auto_recycle_band", { min: band.min, max: band.max }),
+          checked: (selection.slots[slot] ?? []).indexOf(band.min) !== -1,
+        })),
+        spec: {
+          width: layout.list.size.width - layout.list.padding * 2,
+          columns: layout.list.columns,
+          columnGap: layout.list.columnGap,
+          rowHeight: layout.list.rowHeight,
+          fontSize: layout.list.fontSize,
+          color: layout.list.color,
+        },
+        onToggle: () => this.persist(role.id, this.currentSelection()),
+      });
     }
     dialog.addChild(list);
     // 底部一排：「一键回收」（两步确认）+ 「自动回收」开关
@@ -124,23 +133,36 @@ export default class AutoRecycleDialog extends BaseDialog {
     dialog.addChild(toggleRow);
   }
 
-  /** 读滚动清单里当前的勾选（行节点名编码了 `部位_段下界`，勾选态在行自己身上） */
+  /**
+   * 读滚动清单里当前的勾选（行节点名编码了 `部位_段下界`，勾选态在行自己身上）
+   *
+   * #1304 起清单是「行容器 → 三个勾选行」的网格，勾选行不再直接挂在 content 下，
+   * 所以要往下走一层把 CheckRow 全捞出来（节标题是 Label 节点，自然不会被当成勾选行）。
+   */
   private currentSelection(): BagRecycleSelection {
     const slots: Record<string, number[]> = {};
-    const titlePrefix = `${AutoRecycleDialog.ROW_PREFIX}title_`;
-    this.dialog
+    const content = this.dialog
       ?.getChildByName(autoRecycleDialogLayout.list.name)
       ?.getComponent(ScrollView)
-      ?.content?.children.forEach((row) => {
-        if (!(row instanceof CheckRow) || !row.isChecked() || row.name.startsWith(titlePrefix)) return;
-        const rest = row.name.slice(AutoRecycleDialog.ROW_PREFIX.length);
-        const split = rest.lastIndexOf("_");
-        if (split <= 0) return;
-        const slot = rest.slice(0, split);
-        const bandMin = Number(rest.slice(split + 1));
-        if (!slot || !Number.isInteger(bandMin) || bandMin <= 0) return;
-        (slots[slot] ??= []).push(bandMin);
+      ?.content;
+    const rows: CheckRow[] = [];
+    const collect = (node: Node) => {
+      node.children.forEach((child) => {
+        if (child instanceof CheckRow) rows.push(child);
+        else collect(child);
       });
+    };
+    if (content) collect(content);
+    rows.forEach((row) => {
+      if (!row.isChecked()) return;
+      const rest = row.name.slice(AutoRecycleDialog.ROW_PREFIX.length);
+      const split = rest.lastIndexOf("_");
+      if (split <= 0) return;
+      const slot = rest.slice(0, split);
+      const bandMin = Number(rest.slice(split + 1));
+      if (!slot || !Number.isInteger(bandMin) || bandMin <= 0) return;
+      (slots[slot] ??= []).push(bandMin);
+    });
     return { slots };
   }
 

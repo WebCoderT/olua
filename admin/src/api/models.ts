@@ -801,6 +801,142 @@ export type LevelScrollUse = {
   revision: number;
 };
 
+export type BagUseBatchItem = {
+  /**
+   * 背包行
+   */
+  row: number;
+  /**
+   * 背包列
+   */
+  col: number;
+  /**
+   * 这一格用的是什么物品 id（空格 / 认不出的 id 时为空串）
+   */
+  id: string;
+  /**
+   * 这一格走的是哪条规则：drug / money / levelScroll / unknown（不是可直接使用的物品）
+   */
+  kind: "drug" | "money" | "levelScroll" | "unknown";
+  /**
+   * 这一格实际用掉了多少件（0 = 一件都没用成）
+   */
+  count: number;
+  /**
+   * 是否至少用成了一件
+   */
+  ok: boolean;
+  /**
+   * 失败原因的业务码（ok=true 时为 null）：20013 药品 / 20014 血蓝已满 / 20030 药品冷却 / 20023 货币道具 / 20031 道具冷却 / 20024~20026 升级卷轴
+   */
+  code: number | null;
+  /**
+   * 失败原因（中文，ok=true 时为 null）
+   */
+  message: string | null;
+};
+
+export type BagUseBatchResult = {
+  /**
+   * 角色 id
+   */
+  id: string;
+  /**
+   * 所属账号 id
+   */
+  accountId: string;
+  /**
+   * 所属区 id（展示用；服务端按它判归属，客户端不要回传）
+   */
+  zoneId: number;
+  /**
+   * 角色名
+   */
+  name: string;
+  /**
+   * 职业：1 战士 / 2 魔法师 / 3 道士 / 4 全职业
+   */
+  occupation: string;
+  /**
+   * 性别：1 男 / 2 女 / 3 全性别
+   */
+  sex: string;
+  /**
+   * 等级
+   */
+  level: number;
+  /**
+   * 是否当前选中（在线）角色
+   */
+  online: boolean;
+  /**
+   * 修订号（每次落库 +1；客户端保存进度时带上它做乐观锁）
+   */
+  revision: number;
+  /**
+   * 创建时间（毫秒）
+   */
+  createdAt: number;
+  /**
+   * 最近更新时间（毫秒）
+   */
+  updatedAt: number;
+  /**
+   * 角色完整数据（客户端 entities/Role 的 JSON 快照，服务端按不透明文档存取；管理端只编辑其中的常用字段）
+   */
+  data: Record<string, unknown>;
+  /**
+   * 逐条结果（与请求的 uses 一一对应）
+   */
+  uses: BagUseBatchItem[];
+  /**
+   * 本次实际用掉的件数合计（所有目标相加）
+   */
+  usedCount: number;
+  /**
+   * 实际生效的生命回复量合计（封顶后）
+   */
+  recoveredHp: number;
+  /**
+   * 实际生效的魔法回复量合计（封顶后）
+   */
+  recoveredMp: number;
+  /**
+   * 货币道具本次入账的绑定元宝合计
+   */
+  bindGoldGained: number;
+  /**
+   * 升级卷轴本次升的等级数合计
+   */
+  levelsGained: number;
+};
+
+export type BagUseTarget = {
+  /**
+   * 背包行
+   */
+  row: number;
+  /**
+   * 背包列
+   */
+  col: number;
+  /**
+   * 这一格用几件（缺省 1；叠放的一堆可以一次用完）。逐次扣减：用不动（血蓝满 / 冷却中 / 等级出区间）就停在这一条上，剩下的留给下一轮
+   */
+  count?: number;
+};
+
+export type BagUseBatch = {
+  /**
+   * 要用的目标（稀疏：只报有东西的格子；同一格不要重复报）
+   */
+  uses: BagUseTarget[];
+  /**
+   * 修订号（乐观锁，必填）：客户端读到的值，与服务端不一致时 20006，需先拉最新存档（B62 / #820）
+   */
+  revision: number;
+};
+
 export type SkillUpgradeResult = {
   /**
    * 角色 id

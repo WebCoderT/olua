@@ -78,21 +78,36 @@ export const bagDialogLayout = {
 /**
  * 自动回收弹窗布局（组件见 ui/components/dialogs/AutoRecycleDialog；#1278，#1289 重做）
  *
- * 面板走标准弹窗框（createDialog），420×540：说明行 → 部位×等级段清单（滚动）→ 底部一排
+ * 面板走标准弹窗框（createDialog），520×540：说明行 → 部位×等级段清单（滚动）→ 底部一排
  * 「一键回收」按钮 + 「自动回收」开关。
  * 清单按部位分节：节标题 = 部位名（装备槽配置的 label），节内 = 等级段勾选行
  * （1-10级、11-15级……，段规则见 configs/equipments.recycleLevelBands）；
  * 非装备物品不再进清单（#1289：药品 / 卷轴不进自动回收）。
+ *
+ * #1304：清单从单列改成**一行三列**（面板 420 → 520 腾出列宽，见 panel CheckRow.appendCheckGrid）。
  */
 export const autoRecycleDialogLayout = {
   name: "auto_recycle_dialog",
   title: "自动回收",
   eyebrow: "自动 · 背包",
-  size: new Size(420, 540),
+  size: new Size(520, 540),
   /** 顶部说明行（勾选语义一句话） */
-  hint: { y: 226, fontSize: T.fontSize.f11, color: T.text[4], width: 380, height: 16 },
+  hint: { y: 226, fontSize: T.fontSize.f11, color: T.text[4], width: 480, height: 16 },
   /** 部位×等级段滚动清单（#1104 坑：滚动区四边留 3px，防首行贴上裁剪线） */
-  list: { name: "auto_recycle_list", position: new Vec2(0, 24), size: new Size(380, 320), padding: 3, rowHeight: 24, rowSpacing: 3, fontSize: T.fontSize.f12, color: T.text[1], nameWidth: 240 },
+  list: {
+    name: "auto_recycle_list",
+    position: new Vec2(0, 24),
+    size: new Size(480, 320),
+    padding: 3,
+    rowHeight: 24,
+    rowSpacing: 3,
+    fontSize: T.fontSize.f12,
+    color: T.text[1],
+    nameWidth: 240,
+    /** 一行几列（#1304）与列间距 */
+    columns: 3,
+    columnGap: 6,
+  },
   /** 部位节标题行（标题 = 部位名，勾选行都归在它下面） */
   sectionTitle: { height: 26, fontSize: T.fontSize.f13, color: T.gold[3] },
   /** 「一键回收」按钮：按当前勾选清单立即执行（两步确认保留；与开关同一排，按钮在左） */
@@ -108,17 +123,32 @@ export const autoRecycleDialogLayout = {
 /**
  * 自动使用弹窗布局（组件见 ui/components/dialogs/AutoUseDialog；#1278）
  *
- * 420×480：说明行 → 可使用物品勾选清单（滚动；药品 / 货币道具 / 升级卷轴逐项，
+ * 520×480：说明行 → 可使用物品勾选清单（滚动；药品 / 货币道具 / 升级卷轴逐项，
  * 装备不进清单 —— 自动穿戴是角色信息弹窗里的独立开关）。
+ *
+ * #1304：清单从单列改成**一行三列**（面板 420 → 520 腾出列宽，见 panel CheckRow.appendCheckGrid）。
  */
 export const autoUseDialogLayout = {
   name: "auto_use_dialog",
   title: "自动使用",
   eyebrow: "自动 · 背包",
-  size: new Size(420, 480),
-  hint: { y: 196, fontSize: T.fontSize.f11, color: T.text[4], width: 380, height: 16 },
-  list: { name: "auto_use_list", position: new Vec2(0, 28), size: new Size(380, 330), padding: 3, rowHeight: 24, rowSpacing: 3, fontSize: T.fontSize.f12, color: T.text[1], nameWidth: 240 },
-  emptyTip: { position: new Vec2(0, 28), size: new Size(300, 20), fontSize: T.fontSize.f12, color: T.text[3] },
+  size: new Size(520, 480),
+  hint: { y: 196, fontSize: T.fontSize.f11, color: T.text[4], width: 480, height: 16 },
+  list: {
+    name: "auto_use_list",
+    position: new Vec2(0, 28),
+    size: new Size(480, 330),
+    padding: 3,
+    rowHeight: 24,
+    rowSpacing: 3,
+    fontSize: T.fontSize.f12,
+    color: T.text[1],
+    nameWidth: 240,
+    /** 一行几列（#1304）与列间距 */
+    columns: 3,
+    columnGap: 6,
+  },
+  emptyTip: { position: new Vec2(0, 28), size: new Size(400, 20), fontSize: T.fontSize.f12, color: T.text[3] },
 };
 
 //#endregion

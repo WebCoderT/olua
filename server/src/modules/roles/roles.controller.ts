@@ -9,6 +9,7 @@ import { BagOpDto, BagOpResultDto } from "./dto/bag-op.dto";
 import { DrugUseDto, DrugUseResultDto } from "./dto/drug-use.dto";
 import { MoneyUseDto, MoneyUseResultDto } from "./dto/money-use.dto";
 import { LevelScrollUseDto, LevelScrollUseResultDto } from "./dto/level-scroll-use.dto";
+import { BagUseBatchDto, BagUseBatchResultDto } from "./dto/bag-use-batch.dto";
 import { SkillUpgradeDto, SkillUpgradeResultDto } from "./dto/skill-upgrade.dto";
 import { AttrAllocateDto, AttrChangeResultDto, AttrResetDto } from "./dto/attr-points.dto";
 import { GrowthUpgradeDto } from "./dto/growth-upgrade.dto";
@@ -218,6 +219,32 @@ export class RolesController {
     @Body() dto: LevelScrollUseDto,
   ): LevelScrollUseResultDto {
     return this.rolesService.useLevelScroll(user.id, id, dto);
+  }
+
+  @Post(":id/bag-use-batch")
+  @HttpCode(HttpStatus.OK)
+  @ApiPlayerDoc({
+    operationId: "role.bagUseBatch",
+    summary: "批量使用背包物品（药品 / 货币道具 / 升级卷轴，一次落库）",
+    description:
+      "自动使用的热路径：一次请求用掉若干格物品，**规则与 drug-use / money-use / level-scroll-use 完全同一份**" +
+      "（服务端把三条单条路径的判定抽成同一批私有助手），区别只在「一次解码、一次落库、revision 只 +1」。\n" +
+      "**逐条失败不整单回滚**：用不动的那一格记 `{ ok:false, code, message }` 继续下一条（自动使用" +
+      "「能用的都用了」的语义）；但**一条都没成功时**按第一条的码抛错（20013 / 20014 / 20030 / 20023 / " +
+      "20031 / 20024~20026），单条接口的错误语义不变。\n" +
+      "`count` 是「这一格最多用几件」：叠放的一堆可以一次用完，逐次扣减，用不动就停在那一格；" +
+      "一次请求最多真正用掉 64 件（再多交给下一轮）。\n" +
+      "客户端只报「用哪几格、每格几件」：回血量 / 入账金额 / 等级区间 / 冷却一律读库现算。\n\n" +
+      "带上 revision 时乐观锁语义与 role.save 相同（20006 / 20007）。",
+  })
+  @ApiParam({ name: "id", description: "角色 id" })
+  @ApiDataResponse(BagUseBatchResultDto, { description: "使用后的角色（含逐条结果与回血 / 入账 / 升级合计）" })
+  bagUseBatch(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("id") id: string,
+    @Body() dto: BagUseBatchDto,
+  ): BagUseBatchResultDto {
+    return this.rolesService.useBagBatch(user.id, id, dto);
   }
 
   @Post(":id/skill-upgrade")

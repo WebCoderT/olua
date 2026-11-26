@@ -17,8 +17,26 @@
  *
  * 用法：node client/tools/test-auto-bag.cjs
  */
+const fs = require("fs");
 const path = require("path");
 const { prepare, check, finish, fail } = require("./lib/configs-sandbox.cjs");
+
+/** 抓取类成员方法体（按大括号配对，不按缩进 —— 与 test-bag-drag-drop 同一口径） */
+function extractMethod(src, signature) {
+  const start = src.indexOf(signature);
+  if (start === -1) return null;
+  const open = src.indexOf("{", start);
+  if (open === -1) return null;
+  let depth = 0;
+  for (let i = open; i < src.length; i++) {
+    if (src[i] === "{") depth++;
+    else if (src[i] === "}") {
+      depth--;
+      if (depth === 0) return src.slice(start, i + 1);
+    }
+  }
+  return null;
+}
 
 /** 内存版 sys.localStorage（auto-bag-prefs 的偏好存取在 node 沙箱里就靠它） */
 const PREFS_CC_EXTRA = `
@@ -222,7 +240,54 @@ function main() {
 
   //#endregion
 
-  finish("自动回收（部位 × 等级段）/ 自动使用 / 偏好存取全部断言通过");
+  //#region F. 弹窗清单网格（#1304：一行三列，读源码静态断言）
+
+  console.log("\n=== 弹窗清单网格：一行三列 ===");
+  {
+    const readAsset = (rel) => fs.readFileSync(path.join(__dirname, "..", "assets", rel), "utf8");
+
+    // 网格实现只有一处：CheckRow.appendCheckGrid（两个弹窗共用，避免各写一套列宽算法）
+    const checkRowSrc = readAsset("ui/components/panel/CheckRow.ts");
+    check(/export function appendCheckGrid\(/.test(checkRowSrc), "CheckRow 导出 appendCheckGrid（网格唯一实现）");
+    check(/index % columns/.test(checkRowSrc), "按 columns 取模分列（列数不是写死的）");
+    check(
+      /left \+ column \* \(cellWidth \+ columnGap\)/.test(checkRowSrc),
+      "列坐标 = 行内等分 + 列间距（第 0 列贴左缘）",
+    );
+    check(/content\.addChild\(container\)/.test(checkRowSrc), "每次开新行才往 content 挂一个行容器（Layout 按行算高）");
+
+    // 两个弹窗都走网格，不再自己 new CheckRow 铺单列
+    const useSrc = readAsset("ui/components/dialogs/AutoUseDialog.ts");
+    check(useSrc.includes("appendCheckGrid(content"), "自动使用清单走 appendCheckGrid");
+    check(!/new CheckRow\(/.test(useSrc), "自动使用不再逐项 new CheckRow（单列铺法已撤）");
+    check(/columns: layout\.list\.columns/.test(useSrc), "列数取自布局配置（configs/layout/dialogs/economy.ts）");
+
+    const recycleSrc = readAsset("ui/components/dialogs/AutoRecycleDialog.ts");
+    check(recycleSrc.includes("appendCheckGrid(content"), "自动回收清单走 appendCheckGrid");
+    check(/rowPrefix: `\$\{AutoRecycleDialog\.ROW_PREFIX\}grid_\$\{slot\}`/.test(recycleSrc), "每个部位的行容器前缀带 slot（否则多节重名）");
+    // 勾选行不再直接挂在 content 下：读勾选必须递归，否则 currentSelection 恒为空（静默失效）
+    const selectionBody = extractMethod(recycleSrc, "private currentSelection()");
+    check(!!selectionBody, "AutoRecycleDialog.currentSelection 存在");
+    check(!!selectionBody && /const collect = /.test(selectionBody), "读勾选会递归穿透行容器");
+    check(
+      !!selectionBody && !/content\?\.children\.forEach/.test(selectionBody),
+      "不再只遍历 content 的直接子节点（网格化后那样恒为空）",
+    );
+
+    // 布局：两个弹窗都是三列，且面板为三列腾了宽度
+    const layoutSrc = readAsset("configs/layout/dialogs/economy.ts");
+    // 逐块断言（文件里还有商城三列卡片，全局数「columns: 3」会串到别的弹窗上）
+    const useBlock = layoutSrc.slice(layoutSrc.indexOf("export const autoUseDialogLayout"), layoutSrc.indexOf("//#region 商城弹窗"));
+    const recycleBlock = layoutSrc.slice(layoutSrc.indexOf("export const autoRecycleDialogLayout"), layoutSrc.indexOf("//#region 自动使用弹窗"));
+    check(/columns: 3/.test(useBlock), "自动使用清单三列");
+    check(/columns: 3/.test(recycleBlock), "自动回收清单三列");
+    check(/autoUseDialogLayout[\s\S]*?size: new Size\(520, 480\)/.test(layoutSrc), "自动使用面板宽 520（三列每列有字宽）");
+    check(/autoRecycleDialogLayout[\s\S]*?size: new Size\(520, 540\)/.test(layoutSrc), "自动回收面板宽 520（三列每列有字宽）");
+  }
+
+  //#endregion
+
+  finish("自动回收（部位 × 等级段）/ 自动使用 / 偏好存取 / 清单三列网格全部断言通过");
 }
 
 main();

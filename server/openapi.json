@@ -1030,6 +1030,70 @@
         }
       }
     },
+    "/roles/{id}/bag-use-batch": {
+      "post": {
+        "description": "自动使用的热路径：一次请求用掉若干格物品，**规则与 drug-use / money-use / level-scroll-use 完全同一份**（服务端把三条单条路径的判定抽成同一批私有助手），区别只在「一次解码、一次落库、revision 只 +1」。\n**逐条失败不整单回滚**：用不动的那一格记 `{ ok:false, code, message }` 继续下一条（自动使用「能用的都用了」的语义）；但**一条都没成功时**按第一条的码抛错（20013 / 20014 / 20030 / 20023 / 20031 / 20024~20026），单条接口的错误语义不变。\n`count` 是「这一格最多用几件」：叠放的一堆可以一次用完，逐次扣减，用不动就停在那一格；一次请求最多真正用掉 64 件（再多交给下一轮）。\n客户端只报「用哪几格、每格几件」：回血量 / 入账金额 / 等级区间 / 冷却一律读库现算。\n\n带上 revision 时乐观锁语义与 role.save 相同（20006 / 20007）。\n\n---\n\n**鉴权**：客户端令牌（`player`），只能操作令牌所属账号自己的数据。",
+        "operationId": "role.bagUseBatch",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "角色 id",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BagUseBatchDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "使用后的角色（含逐条结果与回血 / 入账 / 升级合计）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/BagUseBatchResultDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "player": []
+          }
+        ],
+        "summary": "批量使用背包物品（药品 / 货币道具 / 升级卷轴，一次落库）",
+        "tags": [
+          "客户端"
+        ],
+        "x-olua-audience": "player",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/BagUseBatchResultDto"
+        }
+      }
+    },
     "/roles/{id}/skill-upgrade": {
       "post": {
         "description": "把**一个**技能从当前等级升到下一级：花费 `当前等级` 技能点（1→2 花 1 点、2→3 花 2 点），等级 +1，伤害倍率随之取 `damageCoefficients` 的下一档。**客户端报「升哪个技能」，不报等级与花费** —— 改包也跳不了级、定不了价。\n技能点来源：建号 1 点，之后每升 1 级角色 +1 点（含升级卷轴）。\n上限 = 该技能的伤害系数档数（11 档 = 11 级），到顶后要运营加档才抬得动。\n\n失败路径：20034 目标不合法（技能 id 认不出 / 系数为空没有可升的档 / 还没学会）；20035 技能点不足（`details` 带 need / owned）；20036 该技能已到顶；带上 revision 时乐观锁语义与 role.save 相同（20006 / 20007）。\n\n---\n\n**鉴权**：客户端令牌（`player`），只能操作令牌所属账号自己的数据。",
@@ -19980,6 +20044,214 @@
         "required": [
           "row",
           "col",
+          "revision"
+        ]
+      },
+      "BagUseBatchItemDto": {
+        "type": "object",
+        "properties": {
+          "row": {
+            "type": "number",
+            "description": "背包行"
+          },
+          "col": {
+            "type": "number",
+            "description": "背包列"
+          },
+          "id": {
+            "type": "string",
+            "description": "这一格用的是什么物品 id（空格 / 认不出的 id 时为空串）"
+          },
+          "kind": {
+            "type": "string",
+            "description": "这一格走的是哪条规则：drug / money / levelScroll / unknown（不是可直接使用的物品）",
+            "enum": [
+              "drug",
+              "money",
+              "levelScroll",
+              "unknown"
+            ]
+          },
+          "count": {
+            "type": "number",
+            "description": "这一格实际用掉了多少件（0 = 一件都没用成）"
+          },
+          "ok": {
+            "type": "boolean",
+            "description": "是否至少用成了一件"
+          },
+          "code": {
+            "type": "number",
+            "description": "失败原因的业务码（ok=true 时为 null）：20013 药品 / 20014 血蓝已满 / 20030 药品冷却 / 20023 货币道具 / 20031 道具冷却 / 20024~20026 升级卷轴",
+            "nullable": true
+          },
+          "message": {
+            "type": "string",
+            "description": "失败原因（中文，ok=true 时为 null）",
+            "nullable": true
+          }
+        },
+        "required": [
+          "row",
+          "col",
+          "id",
+          "kind",
+          "count",
+          "ok",
+          "code",
+          "message"
+        ]
+      },
+      "BagUseBatchResultDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "角色 id"
+          },
+          "accountId": {
+            "type": "string",
+            "description": "所属账号 id"
+          },
+          "zoneId": {
+            "type": "number",
+            "description": "所属区 id（展示用；服务端按它判归属，客户端不要回传）",
+            "example": 1
+          },
+          "name": {
+            "type": "string",
+            "description": "角色名"
+          },
+          "occupation": {
+            "type": "string",
+            "description": "职业：1 战士 / 2 魔法师 / 3 道士 / 4 全职业"
+          },
+          "sex": {
+            "type": "string",
+            "description": "性别：1 男 / 2 女 / 3 全性别"
+          },
+          "level": {
+            "type": "number",
+            "description": "等级"
+          },
+          "online": {
+            "type": "boolean",
+            "description": "是否当前选中（在线）角色"
+          },
+          "revision": {
+            "type": "number",
+            "description": "修订号（每次落库 +1；客户端保存进度时带上它做乐观锁）"
+          },
+          "createdAt": {
+            "type": "number",
+            "description": "创建时间（毫秒）"
+          },
+          "updatedAt": {
+            "type": "number",
+            "description": "最近更新时间（毫秒）"
+          },
+          "data": {
+            "type": "object",
+            "description": "角色完整数据（客户端 entities/Role 的 JSON 快照，服务端按不透明文档存取；管理端只编辑其中的常用字段）",
+            "additionalProperties": true
+          },
+          "uses": {
+            "description": "逐条结果（与请求的 uses 一一对应）",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BagUseBatchItemDto"
+            }
+          },
+          "usedCount": {
+            "type": "number",
+            "description": "本次实际用掉的件数合计（所有目标相加）"
+          },
+          "recoveredHp": {
+            "type": "number",
+            "description": "实际生效的生命回复量合计（封顶后）"
+          },
+          "recoveredMp": {
+            "type": "number",
+            "description": "实际生效的魔法回复量合计（封顶后）"
+          },
+          "bindGoldGained": {
+            "type": "number",
+            "description": "货币道具本次入账的绑定元宝合计"
+          },
+          "levelsGained": {
+            "type": "number",
+            "description": "升级卷轴本次升的等级数合计"
+          }
+        },
+        "required": [
+          "id",
+          "accountId",
+          "zoneId",
+          "name",
+          "occupation",
+          "sex",
+          "level",
+          "online",
+          "revision",
+          "createdAt",
+          "updatedAt",
+          "data",
+          "uses",
+          "usedCount",
+          "recoveredHp",
+          "recoveredMp",
+          "bindGoldGained",
+          "levelsGained"
+        ]
+      },
+      "BagUseTargetDto": {
+        "type": "object",
+        "properties": {
+          "row": {
+            "type": "number",
+            "description": "背包行",
+            "minimum": 0,
+            "maximum": 63,
+            "example": 0
+          },
+          "col": {
+            "type": "number",
+            "description": "背包列",
+            "minimum": 0,
+            "maximum": 63,
+            "example": 0
+          },
+          "count": {
+            "type": "number",
+            "description": "这一格用几件（缺省 1；叠放的一堆可以一次用完）。逐次扣减：用不动（血蓝满 / 冷却中 / 等级出区间）就停在这一条上，剩下的留给下一轮",
+            "minimum": 1,
+            "maximum": 9999,
+            "example": 5
+          }
+        },
+        "required": [
+          "row",
+          "col"
+        ]
+      },
+      "BagUseBatchDto": {
+        "type": "object",
+        "properties": {
+          "uses": {
+            "description": "要用的目标（稀疏：只报有东西的格子；同一格不要重复报）",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BagUseTargetDto"
+            }
+          },
+          "revision": {
+            "type": "number",
+            "description": "修订号（乐观锁，必填）：客户端读到的值，与服务端不一致时 20006，需先拉最新存档（B62 / #820）",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "uses",
           "revision"
         ]
       },

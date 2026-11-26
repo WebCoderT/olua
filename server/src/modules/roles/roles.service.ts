@@ -47,6 +47,12 @@ import { EVENT_TYPE } from "../../common/constants/event-type";
 import { DrugUseDto, DrugUseResultDto } from "./dto/drug-use.dto";
 import { MoneyUseDto, MoneyUseResultDto } from "./dto/money-use.dto";
 import { LevelScrollUseDto, LevelScrollUseResultDto } from "./dto/level-scroll-use.dto";
+import {
+  BAG_USE_BATCH_MAX_APPLY,
+  BagUseBatchDto,
+  BagUseBatchItemDto,
+  BagUseBatchResultDto,
+} from "./dto/bag-use-batch.dto";
 import { SkillUpgradeDto, SkillUpgradeResultDto } from "./dto/skill-upgrade.dto";
 import { AttrAllocateDto, AttrChangeResultDto, AttrResetDto } from "./dto/attr-points.dto";
 import { GrowthUpgradeDto, GrowthKind } from "./dto/growth-upgrade.dto";
@@ -990,39 +996,59 @@ export class RolesService {
     return row ? row.revision : null;
   }
 
+  //#region 玩家侧「用掉一件东西」的共用规则（单条接口与批量接口同一份）
+
   /**
-   * 药品使用（玩家侧 #308）：回复结算与格子扣减都在服务端
+   * 玩家侧写入口的公共前置：账号 → 归属 → 在线 → 修订号，全过才解码存档
    *
-   * 客户端只报「用背包哪一格」，这里完成整条链：格子校验 → 查 drugs 表（管理端改回复量
-   * 即时生效，与 #258 怪物数值读库同一取向）→ 回复量合成 → 血蓝各自封顶 → 扣减格子 →
-   * revision 原子 +1。
-   *
-   * 回复量口径与客户端 `resolveDrugRecovery` 对齐（drugs 表存的是**按键求和后的单值**）：
-   * hp = effect_hp + effect_hp_percent ÷ 100 × maxHp，魔法同理，四舍五入，负值按 0。
-   * maxHp / maxMp 用**服务端重算**的战斗属性（与 combat 比对同源，客户端报多少不算数）；
-   * 等级不在成长曲线里（重算不出）时退回存档里客户端上报的那份 —— 用药是恢复性操作，
-   * 兜底比拒绝更符合玩家预期。
-   *
-   * 失败路径：20013 格子为空 / 非药品 / 无生效回复量；20014 血蓝均已满（回复不动任何一项）；
-   * 20030 冷却中（读 `drugs.cooldown`，单位秒，键是「角色 + 药品」）。冷却由**服务端**计时，
-   * 客户端那份节流只是省往返 —— 改包绕不过服务端（#848）。
+   * 四条顺序固定，且每条使用路径都**必须**全做：少任何一条就是
+   * 「改包能替别人的角色用药」「被管理员踢下线还能继续用东西」「并发写入互相覆盖」。
+   * 抽出来是为了让单条（drug-use / money-use / level-scroll-use）与批量（bag-use-batch）
+   * 四条入口不可能漏掉其中一步。
    */
-  useDrug(accountId: string, roleId: string, dto: DrugUseDto): DrugUseResultDto {
+  private beginUseWrite(accountId: string, roleId: string, revision: number) {
     const account = this.mustAccount(accountId);
     const existing = this.mustOwnRole(accountId, roleId);
-    // 与升级 / 购买同一纪律：被踢下线的角色不能继续用药（用药也是写）
+    // 与升级 / 购买 / 背包操作同一纪律：被踢下线的角色不能继续写
     if (account.online_role_id !== roleId) {
       throw BizException.conflict(BizCode.ROLE_KICKED, "该角色已被管理员下线，请重新选择角色进入游戏");
     }
-    if (dto.revision !== existing.revision) {
+    if (revision !== existing.revision) {
       throw BizException.conflict(BizCode.ROLE_REVISION_CONFLICT, "该角色已在别处被修改，请先同步最新数据");
     }
+    return { account, existing, data: decodeStoredRoleData(existing.data) };
+  }
 
-    const data = decodeStoredRoleData(existing.data);
-    // 先结算自然回复再判「已满」（#596）：两次用药之间攒的回复要先入账，
-    // 否则攒一会儿就够满的药会被误判成「无需使用」拒掉
-    settleVitalsAuthority(data, data, Date.now(), this.mpRecoverPerSecond());
-    const cell = this.readBagCell(data, dto.row, dto.col);
+  /** 背包某格现在是什么 id（空格 / 越界返回空串；只读，不抛）—— 批量使用按 id 判「走哪条规则」 */
+  private peekBagId(data: Record<string, unknown>, row: number, col: number): string {
+    const bag = data.bag;
+    const line = Array.isArray(bag) ? (bag as unknown[])[row] : undefined;
+    const cell = Array.isArray(line) ? (line as unknown[])[col] : undefined;
+    if (!cell || typeof cell !== "object") return "";
+    const id = (cell as Record<string, unknown>).id;
+    return typeof id === "string" ? id : "";
+  }
+
+  /**
+   * 用药结算一次（#308 / #848）：回复 → 各自封顶 → 扣一格 → 占冷却，全部落在 `data` 上
+   *
+   * 口径与客户端 `resolveDrugRecovery` 对齐（drugs 表存的是**按键求和后的单值**）：
+   * hp = effect_hp + effect_hp_percent ÷ 100 × maxHp，魔法同理，四舍五入，负值按 0。
+   * maxHp / maxMp 用**服务端重算**的战斗属性；重算不出（旧存档 / 等级不在曲线里）退回存档值 ——
+   * 用药是恢复性操作，兜底比拒绝更符合玩家预期。
+   *
+   * 失败一律抛 BizException（20013 目标不合法 / 20014 血蓝已满 / 20030 冷却中），
+   * 由调用方决定「整单失败」还是「记一条跳过」。调用前必须已经结算过自然回复（见 settleVitalsAuthority）。
+   */
+  private applyDrugUse(
+    data: Record<string, unknown>,
+    existing: RoleRow,
+    level: number,
+    roleId: string,
+    row: number,
+    col: number,
+  ): { drugId: string; recoveredHp: number; recoveredMp: number; cooldownKey: string } {
+    const cell = this.readBagCell(data, row, col);
     // 格子里必须是药品表里登记过的 id：背包里也可能有装备 / 材料，那些不走用药
     const drug = this.drugs.findByKey(cell.id);
     if (!drug) throw BizException.conflict(BizCode.DRUG_USE_TARGET_INVALID, "该格子不是可使用的药品");
@@ -1034,7 +1060,7 @@ export class RolesService {
       throw BizException.conflict(BizCode.DRUG_USE_TARGET_INVALID, "该药品没有任何生效的回复效果");
     }
 
-    const { maxHp, maxMp } = this.resolveResourceLimits(existing, data);
+    const { maxHp, maxMp } = this.resolveResourceLimits(existing, data, level);
     const hp = Math.max(0, Math.floor(Number(data.hp) || 0));
     const mp = Math.max(0, Math.floor(Number(data.mp) || 0));
     // 血蓝都已满（该药对应的资源都回不动）→ 拒用不扣药（与客户端预检同一判定式）
@@ -1068,60 +1094,27 @@ export class RolesService {
     if (healsMp && !mpFull) data.mp = mp + recoveredMp;
 
     // 扣减数量（药品可叠加，减到 0 清格；**只改 count，bound / from 原样保留** —— #816）
-    const remaining = Math.max(1, cell.count) - 1;
-    this.writeBagCount(data, dto.row, dto.col, remaining);
-
-    const row: RoleRow = {
-      ...existing,
-      data: JSON.stringify(data),
-      revision: existing.revision + 1,
-      updated_at: Date.now(),
-    };
-    this.persistOrConflictGuarded(row, existing.revision, "使用药品", cooldownKey);
-    // 行为流水（#886）：药是消耗品，「用了什么、回了多少」记一条
-    this.eventLogs.record({
-      type: EVENT_TYPE.CONSUME,
-      accountId,
-      roleId,
-      roleName: existing.name,
-      mapId: this.mapAtOf(data),
-      target: drug.id,
-      amount: 1,
-      detail: { reason: "drug", hp: recoveredHp, mp: recoveredMp },
-    });
-    return DrugUseResultDto.fromRow(row, account.online_role_id, drug.id, recoveredHp, recoveredMp);
+    this.writeBagCount(data, row, col, Math.max(1, cell.count) - 1);
+    return { drugId: drug.id, recoveredHp, recoveredMp, cooldownKey };
   }
 
   /**
-   * 货币道具使用（玩家侧 #785）：入账与扣减都在服务端
+   * 货币道具结算一次（#785 / #847）：金额与币种只读 `money_items` 表 → 入账 → 扣一格 → 占冷却
    *
-   * 货币直接对应角色存档的唯一账本字段（`role-authority.ts` 的 `SERVER_LEDGER_FIELDS`）：
-   * `bindGold`（绑定元宝；2026-11-11 收敛后只剩 bindGold 一种，#843、#844）。客户端只报「用背包哪一格」，**金额与币种一律读
-   * `money_items` 表** —— 运营把 100000 改成 1，玩家下次使用就只加 1，改包也改不出钱。
-   *
-   * 与用药的区别：不结算血蓝、不判「已满」；冷却固定 1 秒（`MONEY_ITEM_COOLDOWN_MS`，
-   * 键是「角色 + 道具」），以前这里完全没有间隔 —— 改包能把 999 个道具在一秒内变现（#847）。
-   *
-   * 失败路径：20023 格子为空 / 格子里不是货币道具 / 该行没有配置入账金额；
-   * 20031 冷却中；
-   * 带上 revision 时乐观锁语义与 role.save 相同（20006）；被踢下线 20007。
+   * 客户端只报「用哪一格」：运营把 100000 改成 1，玩家下次使用就只加 1，改包也改不出钱。
+   * 与用药的区别：不结算血蓝、不判「已满」；冷却固定 1 秒（键是「角色 + 道具」）。
+   * 失败抛 20023（目标不合法）/ 20031（冷却中）。
    */
-  useMoneyItem(accountId: string, roleId: string, dto: MoneyUseDto): MoneyUseResultDto {
-    const account = this.mustAccount(accountId);
-    const existing = this.mustOwnRole(accountId, roleId);
-    // 与用药 / 购买同一纪律：被踢下线的角色不能继续写
-    if (account.online_role_id !== roleId) {
-      throw BizException.conflict(BizCode.ROLE_KICKED, "该角色已被管理员下线，请重新选择角色进入游戏");
-    }
-    if (dto.revision !== existing.revision) {
-      throw BizException.conflict(BizCode.ROLE_REVISION_CONFLICT, "该角色已在别处被修改，请先同步最新数据");
-    }
-
-    const data = decodeStoredRoleData(existing.data);
+  private applyMoneyUse(
+    data: Record<string, unknown>,
+    roleId: string,
+    row: number,
+    col: number,
+  ): { itemId: string; currency: MoneyKind; amount: number; balance: number; cooldownKey: string } {
     const cell = this.readBagCell(
       data,
-      dto.row,
-      dto.col,
+      row,
+      col,
       BizCode.MONEY_ITEM_USE_TARGET_INVALID,
       "该格子为空，没有可使用的货币道具",
     );
@@ -1141,7 +1134,7 @@ export class RolesService {
     }
 
     // 服务端冷却（#847）：以前这里完全没有间隔，改包就能把 999 个道具在一秒内变现。
-    // 校验全部通过之后才占位，失败（乐观锁 / 写入异常）由 persistOrConflictGuarded 退掉。
+    // 校验全部通过之后才占位，失败（乐观锁 / 写入异常）由调用方退掉。
     const cooldownKey = `money:${roleId}:${item.id}`;
     const cooling = this.useCooldowns.take(cooldownKey, MONEY_ITEM_COOLDOWN_MS);
     if (cooling > 0) {
@@ -1158,52 +1151,31 @@ export class RolesService {
     data[currency] = balance;
 
     // 扣减数量（可叠加，减到 0 清格；**只改 count，bound / from 原样保留** —— #816）
-    const remaining = Math.max(1, cell.count) - 1;
-    this.writeBagCount(data, dto.row, dto.col, remaining);
-
-    const row: RoleRow = {
-      ...existing,
-      data: JSON.stringify(data),
-      revision: existing.revision + 1,
-      updated_at: Date.now(),
-    };
-    this.persistOrConflictGuarded(row, existing.revision, "使用货币道具", cooldownKey);
-    return MoneyUseResultDto.fromRow(row, account.online_role_id, item.id, currency, amount, balance);
+    this.writeBagCount(data, row, col, Math.max(1, cell.count) - 1);
+    return { itemId: item.id, currency, amount, balance, cooldownKey };
   }
 
   /**
-   * 升级卷轴使用（玩家侧 #787）：**硬性 +1 级**，不扣经验
-   *
-   * 与经验升级的区别就在「不看 `exp` 够不够」：攒够不够是运营的另一条线（打怪 / 泡点），
-   * 卷轴是花钱买的一级 —— 所以经验原样保留（下次打怪入账时继续按曲线判定），也不清零。
+   * 升级卷轴结算一次（#787）：**硬性 +1 级**（不看经验），属性重算 + 补满血蓝，扣一格
    *
    * 三条判定，顺序有意义：
-   * 1. **区间**（`min_level ~ max_level`，读库，改完立刻生效）：Lv1 用完正好到 1000 级，
-   *    再点就是 20025「该换卷了」—— 这是卷轴的核心规则，不是配错；
-   * 2. **等级上限**（`roleMaxLevel`）：到顶了给 20026（「抬上限」与「加卷轴」是两件事，
-   *    运维看到码要知道去改哪个）；
-   * 3. 属性重算 + 补满血蓝：与经验升级同一个惯例（A7「升级统一回满」，四条路径一致），
-   *    血蓝上限也跟着新等级走；同时把 `data.level` 与列一起写（B11）。
+   * 1. **区间**（`min_level ~ max_level`，读库，改完立刻生效）：用出这段就 20025「该换卷了」；
+   * 2. **等级上限**（`roleMaxLevel`）：到顶给 20026（「抬上限」与「加卷轴」是两件事）；
+   * 3. 属性重算 + 补满血蓝（A7「升级统一回满」），并把 `data.level` 一起写（B11）。
    *
-   * 失败路径：20024 格子为空 / 不是升级卷轴 / 区间配置不合法；20025 等级不在区间内；
-   * 20026 已到等级上限；带 revision 时乐观锁与 role.save 同义（20006）；被踢下线 20007。
+   * `fromLevel` 由调用方给：批量里可能连着升几级，必须用**当前**等级判区间，不能用请求进来时那份。
+   * 失败抛 20024 / 20025 / 20026。
    */
-  useLevelScroll(accountId: string, roleId: string, dto: LevelScrollUseDto): LevelScrollUseResultDto {
-    const account = this.mustAccount(accountId);
-    const existing = this.mustOwnRole(accountId, roleId);
-    // 与用药 / 用货币道具 / 购买同一纪律：被踢下线的角色不能继续写
-    if (account.online_role_id !== roleId) {
-      throw BizException.conflict(BizCode.ROLE_KICKED, "该角色已被管理员下线，请重新选择角色进入游戏");
-    }
-    if (dto.revision !== existing.revision) {
-      throw BizException.conflict(BizCode.ROLE_REVISION_CONFLICT, "该角色已在别处被修改，请先同步最新数据");
-    }
-
-    const data = decodeStoredRoleData(existing.data);
+  private applyLevelScroll(
+    data: Record<string, unknown>,
+    fromLevel: number,
+    row: number,
+    col: number,
+  ): { scrollId: string; fromLevel: number; toLevel: number; exp: number } {
     const cell = this.readBagCell(
       data,
-      dto.row,
-      dto.col,
+      row,
+      col,
       BizCode.LEVEL_SCROLL_USE_TARGET_INVALID,
       "该格子为空，没有可使用的升级卷轴",
     );
@@ -1212,7 +1184,6 @@ export class RolesService {
       throw BizException.conflict(BizCode.LEVEL_SCROLL_USE_TARGET_INVALID, "该格子不是可使用的升级卷轴");
     }
 
-    const fromLevel = Math.max(1, Math.floor(existing.level));
     const minLevel = Math.floor(Number(scroll.min_level) || 0);
     const maxLevel = Math.floor(Number(scroll.max_level) || 0);
     // 区间本身坏掉（手改库 / 老数据 0 值）→ 拒用而不是「任何等级都能用」
@@ -1234,29 +1205,288 @@ export class RolesService {
     const toLevel = fromLevel + 1;
     const exp = Math.max(0, Math.floor(Number(data.exp) || 0));
     // 等级变了属性就变：服务端重算写回存档（权威值），血蓝按升级惯例补满。
-    // `data.level` 也要一起写（B11）—— 卷轴以前只改列，文档里那份停在旧等级，
-    // 管理端详情与客户端本地看到的就是两个数字
+    // `data.level` 也要一起写（B11）—— 卷轴以前只改列，文档里那份停在旧等级
     data.level = toLevel;
-    // 硬性 +1 级也是「升一级」：技能点照 +1（#828 的「每级 +1」一把尺子）。
-    // 少了这一步，用卷轴升的级等于白升 —— 玩家看不出差别，但点数就是少了一点
+    // 硬性 +1 级也是「升一级」：技能点照 +1（#828 的「每级 +1」一把尺子）
     data.skillPoints = skillPointsOf(data.skillPoints) + SKILL_POINTS_PER_LEVEL;
     this.applyAuthoritativeAttributes(toLevel, data);
     data.hp = typeof data.maxHp === "number" ? data.maxHp : data.hp;
     data.mp = typeof data.maxMp === "number" ? data.maxMp : data.mp;
 
     // 扣减数量（可叠加，减到 0 清格；**只改 count，bound / from 原样保留** —— #816）
-    const remaining = Math.max(1, cell.count) - 1;
-    this.writeBagCount(data, dto.row, dto.col, remaining);
+    this.writeBagCount(data, row, col, Math.max(1, cell.count) - 1);
+    return { scrollId: scroll.id, fromLevel, toLevel, exp };
+  }
+
+  //#endregion
+
+  /**
+   * 药品使用（玩家侧 #308）：回复结算与格子扣减都在服务端
+   *
+   * 客户端只报「用背包哪一格」，这里完成整条链：格子校验 → 查 drugs 表（管理端改回复量
+   * 即时生效，与 #258 怪物数值读库同一取向）→ 回复量合成 → 血蓝各自封顶 → 扣减格子 →
+   * revision 原子 +1。
+   *
+   * 回复量口径与客户端 `resolveDrugRecovery` 对齐（drugs 表存的是**按键求和后的单值**）：
+   * hp = effect_hp + effect_hp_percent ÷ 100 × maxHp，魔法同理，四舍五入，负值按 0。
+   * maxHp / maxMp 用**服务端重算**的战斗属性（与 combat 比对同源，客户端报多少不算数）；
+   * 等级不在成长曲线里（重算不出）时退回存档里客户端上报的那份 —— 用药是恢复性操作，
+   * 兜底比拒绝更符合玩家预期。
+   *
+   * 失败路径：20013 格子为空 / 非药品 / 无生效回复量；20014 血蓝均已满（回复不动任何一项）；
+   * 20030 冷却中（读 `drugs.cooldown`，单位秒，键是「角色 + 药品」）。冷却由**服务端**计时，
+   * 客户端那份节流只是省往返 —— 改包绕不过服务端（#848）。
+   */
+  useDrug(accountId: string, roleId: string, dto: DrugUseDto): DrugUseResultDto {
+    const { account, existing, data } = this.beginUseWrite(accountId, roleId, dto.revision);
+    // 先结算自然回复再判「已满」（#596）：两次用药之间攒的回复要先入账，
+    // 否则攒一会儿就够满的药会被误判成「无需使用」拒掉
+    settleVitalsAuthority(data, data, Date.now(), this.mpRecoverPerSecond());
+    // 回复 / 封顶 / 扣格 / 占冷却都在助手里面（与批量接口同一份规则）
+    const outcome = this.applyDrugUse(data, existing, Math.max(1, Math.floor(existing.level)), roleId, dto.row, dto.col);
 
     const row: RoleRow = {
       ...existing,
-      level: toLevel,
+      data: JSON.stringify(data),
+      revision: existing.revision + 1,
+      updated_at: Date.now(),
+    };
+    this.persistOrConflictGuarded(row, existing.revision, "使用药品", outcome.cooldownKey);
+    // 行为流水（#886）：药是消耗品，「用了什么、回了多少」记一条
+    this.eventLogs.record({
+      type: EVENT_TYPE.CONSUME,
+      accountId,
+      roleId,
+      roleName: existing.name,
+      mapId: this.mapAtOf(data),
+      target: outcome.drugId,
+      amount: 1,
+      detail: { reason: "drug", hp: outcome.recoveredHp, mp: outcome.recoveredMp },
+    });
+    return DrugUseResultDto.fromRow(
+      row,
+      account.online_role_id,
+      outcome.drugId,
+      outcome.recoveredHp,
+      outcome.recoveredMp,
+    );
+  }
+
+  /**
+   * 货币道具使用（玩家侧 #785）：入账与扣减都在服务端
+   *
+   * 货币直接对应角色存档的唯一账本字段（`role-authority.ts` 的 `SERVER_LEDGER_FIELDS`）：
+   * `bindGold`（绑定元宝；2026-11-11 收敛后只剩 bindGold 一种，#843、#844）。客户端只报「用背包哪一格」，**金额与币种一律读
+   * `money_items` 表** —— 运营把 100000 改成 1，玩家下次使用就只加 1，改包也改不出钱。
+   *
+   * 与用药的区别：不结算血蓝、不判「已满」；冷却固定 1 秒（`MONEY_ITEM_COOLDOWN_MS`，
+   * 键是「角色 + 道具」），以前这里完全没有间隔 —— 改包能把 999 个道具在一秒内变现（#847）。
+   *
+   * 失败路径：20023 格子为空 / 格子里不是货币道具 / 该行没有配置入账金额；
+   * 20031 冷却中；
+   * 带上 revision 时乐观锁语义与 role.save 相同（20006）；被踢下线 20007。
+   */
+  useMoneyItem(accountId: string, roleId: string, dto: MoneyUseDto): MoneyUseResultDto {
+    const { account, existing, data } = this.beginUseWrite(accountId, roleId, dto.revision);
+    // 校验 / 冷却 / 入账 / 扣格都在助手里面（与批量接口同一份规则）
+    const outcome = this.applyMoneyUse(data, roleId, dto.row, dto.col);
+
+    const row: RoleRow = {
+      ...existing,
+      data: JSON.stringify(data),
+      revision: existing.revision + 1,
+      updated_at: Date.now(),
+    };
+    this.persistOrConflictGuarded(row, existing.revision, "使用货币道具", outcome.cooldownKey);
+    return MoneyUseResultDto.fromRow(
+      row,
+      account.online_role_id,
+      outcome.itemId,
+      outcome.currency,
+      outcome.amount,
+      outcome.balance,
+    );
+  }
+
+  /**
+   * 升级卷轴使用（玩家侧 #787）：**硬性 +1 级**，不扣经验
+   *
+   * 与经验升级的区别就在「不看 `exp` 够不够」：攒够不够是运营的另一条线（打怪 / 泡点），
+   * 卷轴是花钱买的一级 —— 所以经验原样保留（下次打怪入账时继续按曲线判定），也不清零。
+   *
+   * 三条判定，顺序有意义：
+   * 1. **区间**（`min_level ~ max_level`，读库，改完立刻生效）：Lv1 用完正好到 1000 级，
+   *    再点就是 20025「该换卷了」—— 这是卷轴的核心规则，不是配错；
+   * 2. **等级上限**（`roleMaxLevel`）：到顶了给 20026（「抬上限」与「加卷轴」是两件事，
+   *    运维看到码要知道去改哪个）；
+   * 3. 属性重算 + 补满血蓝：与经验升级同一个惯例（A7「升级统一回满」，四条路径一致），
+   *    血蓝上限也跟着新等级走；同时把 `data.level` 与列一起写（B11）。
+   *
+   * 失败路径：20024 格子为空 / 不是升级卷轴 / 区间配置不合法；20025 等级不在区间内；
+   * 20026 已到等级上限；带 revision 时乐观锁与 role.save 同义（20006）；被踢下线 20007。
+   */
+  useLevelScroll(accountId: string, roleId: string, dto: LevelScrollUseDto): LevelScrollUseResultDto {
+    const { account, existing, data } = this.beginUseWrite(accountId, roleId, dto.revision);
+    // 区间 / 上限 / 属性重算 / 扣格都在助手里面（与批量接口同一份规则）
+    const outcome = this.applyLevelScroll(data, Math.max(1, Math.floor(existing.level)), dto.row, dto.col);
+
+    const row: RoleRow = {
+      ...existing,
+      level: outcome.toLevel,
       data: JSON.stringify(data),
       revision: existing.revision + 1,
       updated_at: Date.now(),
     };
     this.persistOrConflict(row, existing.revision, "使用升级卷轴");
-    return LevelScrollUseResultDto.fromRow(row, account.online_role_id, scroll.id, fromLevel, exp, this.expNeedOf(toLevel));
+    return LevelScrollUseResultDto.fromRow(
+      row,
+      account.online_role_id,
+      outcome.scrollId,
+      outcome.fromLevel,
+      outcome.exp,
+      this.expNeedOf(outcome.toLevel),
+    );
+  }
+
+  /**
+   * 批量使用背包物品（自动使用的热路径）
+   *
+   * 与三条单条接口的关系：**规则同一份**（`applyDrugUse` / `applyMoneyUse` / `applyLevelScroll`），
+   * 区别只有两点：
+   * 1. **一次解码、一次落库、revision 只 +1** —— 单条路径用 N 件就是 N 次
+   *    「全量 decode → 改一格 → 全量 encode → UPDATE」（自动使用时挂机捡一堆卷轴就是几十次），
+   *    这里一次做完；实时进程与 3100 共用同一行，写次数直接决定两边撞乐观锁的概率。
+   * 2. **逐条失败不整单回滚**：自动使用的语义是「能用的都用了，用不动的留着」，
+   *    所以失败的格子记一条 `{ok:false, code, message}` 继续下一条；但**一条都没成功时**
+   *    抛第一条的异常 —— 单条接口的错误码语义（20014 血已满 / 20025 该换卷 / 20030 冷却中）
+   *    不能因为走了批量就变成含糊的「失败」。
+   *
+   * 每条规则的边界都还在服务端：客户端只报「哪几格、每格几件」，
+   * 回血量 / 入账金额 / 等级区间 / 冷却一律读库现算。`count` 逐次扣减，用不动就停在那一格。
+   *
+   * 行为流水（#886）按「一种药一条、amount = 实际用掉件数」记 —— 不按次刷 60 条。
+   */
+  useBagBatch(accountId: string, roleId: string, dto: BagUseBatchDto): BagUseBatchResultDto {
+    const { account, existing, data } = this.beginUseWrite(accountId, roleId, dto.revision);
+    // 与单条用药同一纪律（#596）：先结算自然回复，再逐条判「血蓝已满」——
+    // 否则一批药里第一瓶把血回满、后面的全被判满拒掉，与「攒了一会儿的回复」口径不一致
+    settleVitalsAuthority(data, data, Date.now(), this.mpRecoverPerSecond());
+
+    const uses: BagUseBatchItemDto[] = [];
+    /** 本次占掉的冷却键：整单一件都没用成 / 落库失败时要退掉（不能让玩家白等一秒） */
+    const takenCooldowns: string[] = [];
+    /** 药品消耗按 id 合并，收尾时一条一种写行为流水 */
+    const drugLogs = new Map<string, { count: number; hp: number; mp: number }>();
+    let usedCount = 0;
+    let recoveredHp = 0;
+    let recoveredMp = 0;
+    let bindGoldGained = 0;
+    let levelsGained = 0;
+    /** 批内运行中的等级：同一批里可能连着用几卷，后一件必须按升完之后的等级判区间与上限 */
+    let level = Math.max(1, Math.floor(existing.level));
+    let firstError: BizException | null = null;
+
+    for (const target of dto.uses) {
+      const times = Math.min(Math.max(1, Math.floor(Number(target.count) || 1)), BAG_USE_BATCH_MAX_APPLY);
+      let applied = 0;
+      let kind: BagUseBatchItemDto["kind"] = "unknown";
+      let id = "";
+      let error: BizException | null = null;
+
+      for (let i = 0; i < times && usedCount < BAG_USE_BATCH_MAX_APPLY; i++) {
+        try {
+          const cellId = this.peekBagId(data, target.row, target.col);
+          if (!cellId) {
+            throw BizException.conflict(BizCode.BAG_TARGET_INVALID, "该格子已经空了，没有可使用的物品");
+          }
+          id = cellId;
+          if (this.drugs.findByKey(cellId)) {
+            kind = "drug";
+            const outcome = this.applyDrugUse(data, existing, level, roleId, target.row, target.col);
+            takenCooldowns.push(outcome.cooldownKey);
+            recoveredHp += outcome.recoveredHp;
+            recoveredMp += outcome.recoveredMp;
+            const log = drugLogs.get(outcome.drugId) ?? { count: 0, hp: 0, mp: 0 };
+            log.count += 1;
+            log.hp += outcome.recoveredHp;
+            log.mp += outcome.recoveredMp;
+            drugLogs.set(outcome.drugId, log);
+          } else if (this.moneyItems.findByKey(cellId)) {
+            kind = "money";
+            const outcome = this.applyMoneyUse(data, roleId, target.row, target.col);
+            takenCooldowns.push(outcome.cooldownKey);
+            bindGoldGained += outcome.amount;
+          } else if (this.levelScrolls.findByKey(cellId)) {
+            kind = "levelScroll";
+            const outcome = this.applyLevelScroll(data, level, target.row, target.col);
+            level = outcome.toLevel;
+            levelsGained += 1;
+          } else {
+            throw BizException.conflict(BizCode.BAG_TARGET_INVALID, "该格子里的物品不能直接使用");
+          }
+          applied += 1;
+          usedCount += 1;
+        } catch (caught) {
+          // 只吞业务拒绝（码与中文文案原样带回给客户端）；真异常照旧往上抛
+          if (!(caught instanceof BizException)) throw caught;
+          error = caught;
+          break;
+        }
+      }
+
+      if (applied === 0 && error && !firstError) firstError = error;
+      uses.push({
+        row: target.row,
+        col: target.col,
+        id,
+        kind,
+        count: applied,
+        ok: applied > 0,
+        code: applied > 0 ? null : (error?.code ?? null),
+        message: applied > 0 ? null : (error?.message ?? null),
+      });
+    }
+
+    if (usedCount === 0) {
+      // 一件都没用成：退掉冷却占位，按第一条的码抛（单条接口的错误语义不能丢）
+      for (const key of takenCooldowns) this.useCooldowns.release(key);
+      throw firstError ?? BizException.conflict(BizCode.BAG_TARGET_INVALID, "没有任何可使用的物品");
+    }
+
+    const row: RoleRow = {
+      ...existing,
+      // 等级列与存档同步（B11）：批里升了几级就写最终值
+      level,
+      data: JSON.stringify(data),
+      revision: existing.revision + 1,
+      updated_at: Date.now(),
+    };
+    try {
+      this.persistOrConflict(row, existing.revision, "批量使用物品");
+    } catch (error) {
+      // 落库失败（409 或写入异常）= 这批没真的用掉，冷却一并退掉
+      for (const key of takenCooldowns) this.useCooldowns.release(key);
+      throw error;
+    }
+    for (const [drugId, log] of drugLogs) {
+      this.eventLogs.record({
+        type: EVENT_TYPE.CONSUME,
+        accountId,
+        roleId,
+        roleName: existing.name,
+        mapId: this.mapAtOf(data),
+        target: drugId,
+        amount: log.count,
+        detail: { reason: "drug", hp: log.hp, mp: log.mp },
+      });
+    }
+    return BagUseBatchResultDto.fromRow(row, account.online_role_id, uses, {
+      usedCount,
+      recoveredHp,
+      recoveredMp,
+      bindGoldGained,
+      levelsGained,
+    });
   }
 
   /**
@@ -1673,9 +1903,16 @@ export class RolesService {
   /**
    * 用药的资源上限：服务端重算（与 combat 比对同源）优先，重算不出退回存档里客户端上报的值
    * （等级不在成长曲线里属于旧存档边角情况，恢复性操作走兜底而不是拒绝）
+   *
+   * `levelOverride` 给批量使用用：同一批里先用升级卷轴升了级，后面那瓶药的上限必须按**新的**等级算，
+   * 不能用请求进来时那一行（`existing.level`）的旧值。
    */
-  private resolveResourceLimits(existing: RoleRow, data: Record<string, unknown>): { maxHp: number; maxMp: number } {
-    const summary = summarizeRoleAttributes(roleAttributeSourceOf(existing.level, data));
+  private resolveResourceLimits(
+    existing: RoleRow,
+    data: Record<string, unknown>,
+    levelOverride?: number,
+  ): { maxHp: number; maxMp: number } {
+    const summary = summarizeRoleAttributes(roleAttributeSourceOf(levelOverride ?? existing.level, data));
     if (summary) return { maxHp: summary.maxHp, maxMp: summary.maxMp };
     return {
       maxHp: Math.max(1, Math.floor(Number(data.maxHp) || 0)),

@@ -31,7 +31,7 @@ import {
 import type { BagRecycleSelection } from "../../../configs/items";
 import { equipmentBySlot, recycleLevelBands } from "../../../configs/equipments";
 import { RoleApi } from "../../utils/net/Api";
-import type { BagOp, BagOpResult } from "../../utils/net/ApiModels";
+import type { BagOp, BagOpResult, BagUseTarget } from "../../utils/net/ApiModels";
 import { withRevision } from "./with-revision";
 import RoleCache from "./role-cache";
 import { getGoodDisplayName, guardRepeatedUse } from "./shared";
@@ -47,6 +47,20 @@ import { updateRoleUi } from "./ui-bridge";
  * 成功提示保留（玩家要知道东西被自动用了）。手动路径不传 = 照旧有提示。
  */
 export interface UseOptions { quiet?: boolean }
+
+/** 批量使用的一次结果（自动使用的提示与后续判断都看这几个数，不再逐件累加） */
+export interface BatchUseSummary {
+  /** 实际用掉的总件数 */
+  used: number;
+  recoveredHp: number;
+  recoveredMp: number;
+  /** 货币道具入账的绑定元宝 */
+  bindGold: number;
+  /** 升级卷轴升的级数 */
+  levels: number;
+  /** 没动成的格子数（血蓝满 / 冷却 / 等级出区间 —— 服务端逐条判的） */
+  skipped: number;
+}
 
 export default class BagService {
 
@@ -74,6 +88,59 @@ export default class BagService {
     if (isLevelScroll(good)) return await BagService.useLevelScroll(row, col, opts);
     if (!opts.quiet) GameUiHelper.createTip("good_unsupported_tip");
     return false;
+  }
+
+  /**
+   * 批量使用背包物品（#1304：自动使用的热路径，一次请求用掉多格）
+   *
+   * 为什么要有它：自动使用以前是「一格一格 `useGood`」，用 10 件就是 10 次 HTTP，
+   * 服务端每次都要全量解析存档 → 改一格 → 全量序列化 → UPDATE + revision+1 ——
+   * 挂机捡一堆卷轴时主线程与实时进程都被这条链拖住（#1297 / #1300 的后续）。
+   * 服务端为此提供了 `role.bagUseBatch`：**规则与单条接口同一份**，只是合并成一次落库。
+   *
+   * 与单条 `useGood` 的分工：
+   * · **手动点击仍然走单条**（提示逐条、冷却/区间文案更精确）；
+   * · 只有自动使用走这里，**逐条失败不报错**（服务端逐条判血蓝满 / 冷却 / 等级区间，
+   *   用不动的留在包里等下一轮），所以结果只用来飘一条合计提示。
+   *
+   * @param targets 要用的格子（稀疏；`count` = 这一格最多用几件，缺省 1）
+   * @returns 合计结果；无角色 / 空目标 / 请求失败（提示已由请求层弹过）返回 null
+   */
+  static async useGoodsBatch(targets: BagUseTarget[]): Promise<BatchUseSummary | null> {
+    const role = RoleCache.findOnlineRole();
+    if (!role || targets.length === 0) return null;
+    // silent：自动路径不弹错误提示。与单条 `useDrug` 的区别在这里 —— 单条有本地预检
+    // （满血 / 等级出区间）挡在前面，服务端拒绝是罕见事；批量是「一批里能用的都用」，
+    // 「全都用不动」（满血嗑药、等级不对口）是挂机时的常态，弹提示就是刷屏。
+    const result = await withRevision(role, (revision) =>
+      RoleApi.bagUseBatch(role.id, { uses: targets, revision }, { silent: true }),
+    );
+    if (!result) return null; // 失败提示已由请求层弹过（非 silent 请求）
+    // 服务端返回的就是「用完之后」的整份角色：照搬，不在本地推算
+    const data = (result.data ?? {}) as Record<string, unknown>;
+    if (Array.isArray(data.bag)) role.bag = data.bag as typeof role.bag;
+    if (typeof data.hp === "number") role.hp = data.hp;
+    if (typeof data.mp === "number") role.mp = data.mp;
+    if (typeof data.exp === "number") role.exp = data.exp;
+    if (typeof data.maxHp === "number") role.maxHp = data.maxHp;
+    if (typeof data.maxMp === "number") role.maxMp = data.maxMp;
+    if (typeof data.hpRecover === "number") role.hpRecover = data.hpRecover;
+    if (typeof data.combat === "number") role.combat = data.combat;
+    if (typeof data.bindGold === "number") role.bindGold = data.bindGold;
+    // 等级读 **DTO 顶层**：`row.level` 才是唯一权威（与单条卷轴同一纪律，存档里的 level 升级时不跟着写）
+    if (typeof result.level === "number") role.level = result.level;
+    // revision 已由 withRevision 壳对齐
+    RoleCache.updateOnlineRole(role);
+    updateRoleUi(role);
+    RoleUIManager.refreshBag();
+    return {
+      used: result.usedCount,
+      recoveredHp: result.recoveredHp,
+      recoveredMp: result.recoveredMp,
+      bindGold: result.bindGoldGained,
+      levels: result.levelsGained,
+      skipped: (result.uses ?? []).filter((item) => !item.ok).length,
+    };
   }
 
   /**

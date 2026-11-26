@@ -3,7 +3,7 @@ import StorageManager from "../../core/StorageManager";
 import GameUiHelper from "../../helpers/GameUiHelper";
 import UiHelper from "../../helpers/UiHelper";
 import BaseDialog from "./dialog-kit";
-import CheckRow from "../panel/CheckRow";
+import { appendCheckGrid } from "../panel/CheckRow";
 import { items } from "../../../configs/items";
 import { isDrug, isEquipment, isLevelScroll, isMoneyItem } from "../../../types/good";
 import { autoUseDialogLayout } from "../../../configs/hudLayout";
@@ -57,7 +57,9 @@ export default class AutoUseDialog extends BaseDialog {
     const list = GameUiHelper.createScrollView(layout.list.name, layout.list.position, layout.list.size, layout.list.rowSpacing, layout.list.padding);
     const content = list.getComponent(ScrollView)?.content;
     if (!content) return;
-    const usable = Array.from(items.values()).filter((good) => !isEquipment(good) && (isDrug(good) || isMoneyItem(good) || isLevelScroll(good)));
+    const usable = Array.from(items.values()).filter(
+      (good) => !!good.id && !isEquipment(good) && (isDrug(good) || isMoneyItem(good) || isLevelScroll(good)),
+    );
     if (!usable.length) {
       dialog.addChild(
         UiHelper.createLabel(
@@ -70,23 +72,26 @@ export default class AutoUseDialog extends BaseDialog {
         ),
       );
     }
-    for (const good of usable) {
-      const id = good.id ?? "";
-      if (!id) continue;
-      const row = new CheckRow(
-        `${layout.list.name}_${id}`,
-        good.label,
-        useIds.has(id),
-        { width: layout.list.size.width, height: layout.list.rowHeight, fontSize: layout.list.fontSize, color: layout.list.color },
-        (checked) => {
-          const ids = AutoBagPrefs.getUseIds(role.id);
-          if (checked) ids.add(id);
-          else ids.delete(id);
-          AutoBagPrefs.setUseIds(role.id, ids);
-        },
-      );
-      content.addChild(row);
-    }
+    // 一行三列（#1304）：物品一多，单列要滚很久；勾选行本身仍是整行可点的 CheckRow
+    appendCheckGrid(content, {
+      namePrefix: `${layout.list.name}_`,
+      rowPrefix: `${layout.list.name}_grid`,
+      items: usable.map((good) => ({ key: good.id as string, text: good.label, checked: useIds.has(good.id as string) })),
+      spec: {
+        width: layout.list.size.width - layout.list.padding * 2,
+        columns: layout.list.columns,
+        columnGap: layout.list.columnGap,
+        rowHeight: layout.list.rowHeight,
+        fontSize: layout.list.fontSize,
+        color: layout.list.color,
+      },
+      onToggle: (id, checked) => {
+        const ids = AutoBagPrefs.getUseIds(role.id);
+        if (checked) ids.add(id);
+        else ids.delete(id);
+        AutoBagPrefs.setUseIds(role.id, ids);
+      },
+    });
     dialog.addChild(list);
   }
 }

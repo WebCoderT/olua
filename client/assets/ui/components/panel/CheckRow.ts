@@ -76,3 +76,83 @@ export default class CheckRow extends Node {
     });
   }
 }
+
+/** 网格排布参数（#1304：自动使用 / 自动回收的清单从单列改成一行三列） */
+export interface CheckGridSpec {
+  /** 内容区宽度（已扣掉滚动区的左右内边距） */
+  width: number;
+  /** 每行几列 */
+  columns: number;
+  /** 列间距 */
+  columnGap: number;
+  /** 行高（= 单格高度） */
+  rowHeight: number;
+  /** 文字字号与配色（与原来的单列行一致） */
+  fontSize: number;
+  color: Color;
+}
+
+/** 网格里的一个勾选项 */
+export interface CheckGridItem {
+  /** 勾选行节点名的后半段（自动回收在这里编码「部位_段下界」，见 AutoRecycleDialog.ROW_PREFIX） */
+  key: string;
+  /** 行文字（物品名 / 等级段） */
+  text: string;
+  checked: boolean;
+}
+
+/** 一次网格排布的参数 */
+export interface CheckGridOptions {
+  /** 勾选行节点名前缀（前缀 + key 必须全局唯一） */
+  namePrefix: string;
+  /** 行容器节点名前缀（同一内容区里多次调用必须不同，否则行容器重名） */
+  rowPrefix: string;
+  items: CheckGridItem[];
+  spec: CheckGridSpec;
+  /** 勾选态变化回调（key = 上面那个 key） */
+  onToggle: (key: string, checked: boolean) => void;
+}
+
+/**
+ * 把一批勾选项按 `columns` 列铺进滚动内容（#1304）
+ *
+ * 为什么先装「行容器」而不是直接给 `CheckRow` 设 x：滚动内容是纵向 Layout
+ * （`ResizeMode.CONTAINER`），它按**直接子节点**算总高 —— 把 3 个勾选行直接平铺进去，
+ * Layout 会把它们当 3 行竖着排，横向位置也一并被覆盖。所以每 `columns` 个勾选项装进一个
+ * 固定高度的行容器，行容器里再横向摆列；行容器本身仍是 content 的直接子节点，纵向节奏不变。
+ *
+ * @returns 建出来的行容器（测试与排版核对用；正常渲染不需要）
+ */
+export function appendCheckGrid(content: Node, options: CheckGridOptions): Node[] {
+  const { spec, items, namePrefix, rowPrefix, onToggle } = options;
+  const columns = Math.max(1, Math.floor(spec.columns));
+  const columnGap = Math.max(0, spec.columnGap);
+  // 等分：最后留的余数（width 除不尽时）不再补到最后一列，避免右边多出一条不规则空隙
+  const cellWidth = Math.max(1, Math.floor((spec.width - columnGap * (columns - 1)) / columns));
+  const left = -spec.width / 2 + cellWidth / 2;
+  const containers: Node[] = [];
+  let container: Node | null = null;
+  items.forEach((item, index) => {
+    const column = index % columns;
+    if (column === 0) {
+      container = UiHelper.createNode(
+        `${rowPrefix}_row_${Math.floor(index / columns)}`,
+        new Vec2(0, 0),
+        new Size(spec.width, spec.rowHeight),
+      );
+      content.addChild(container);
+      containers.push(container);
+    }
+    const row = new CheckRow(
+      `${namePrefix}${item.key}`,
+      item.text,
+      item.checked,
+      { width: cellWidth, height: spec.rowHeight, fontSize: spec.fontSize, color: spec.color },
+      (checked) => onToggle(item.key, checked),
+    );
+    // 行容器锚点是默认 0.5（左缘 = -width/2），勾选行自己也是 0.5 锚点 → 直接按中心摆
+    row.setPosition(left + column * (cellWidth + columnGap), 0, 0);
+    container!.addChild(row);
+  });
+  return containers;
+}
