@@ -146,6 +146,24 @@ export default class RealtimeClient {
   /** 状态变化出口（接线方在这里提示玩家；不接也能跑，只是没人看见） */
   static onStatusChange: ((change: RealtimeStatusChange) => void) | null = null;
 
+  /** 常驻 UI 的状态订阅者（多播；与上面的单槽互不干扰，各自决定怎么呈现） */
+  private static statusListeners = new Set<(change: RealtimeStatusChange) => void>();
+
+  /**
+   * 订阅实时通道状态变化（HUD 状态指示灯这类**多路消费者**的入口；
+   * `onStatusChange` 是提示接线的单槽，两边独立触发、互不覆盖）
+   *
+   * 注册时**立刻**用当前状态回调一次（订阅者不用自己摸初始值）；返回退订函数 ——
+   * 订阅方销毁前必须先退订（#1188：销毁期 emit 回调摸已销毁字段是崩溃源）。
+   */
+  static addStatusListener(listener: (change: RealtimeStatusChange) => void): () => void {
+    this.statusListeners.add(listener);
+    listener({ status: this.currentStatus, willRetry: false, reconnected: false, lost: false });
+    return () => {
+      this.statusListeners.delete(listener);
+    };
+  }
+
   /** 当前状态 */
   static get status(): RealtimeStatus {
     return this.currentStatus;
@@ -568,13 +586,15 @@ export default class RealtimeClient {
 
   private static emit(status: RealtimeStatus, extra: { reconnected?: boolean; lost?: boolean; willRetry?: boolean; reason?: string }): void {
     this.currentStatus = status;
-    this.onStatusChange?.({
+    const change: RealtimeStatusChange = {
       status,
       willRetry: extra.willRetry ?? false,
       reconnected: extra.reconnected ?? false,
       lost: extra.lost ?? false,
       reason: extra.reason,
-    });
+    };
+    this.onStatusChange?.(change);
+    for (const listener of this.statusListeners) listener(change);
   }
 
   private static clearHandshakeTimer(): void {

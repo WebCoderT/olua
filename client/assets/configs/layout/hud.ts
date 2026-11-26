@@ -53,6 +53,25 @@ export const roleInfoBarLayout = {
     label: { text: "战斗力", position: new Vec2(0, 12), size: new Size(84, 12), fontSize: T.fontSize.f10, color: T.text[3], spacingX: 2 },
     value: { position: new Vec2(0, -8), size: new Size(84, 22), fontSize: T.fontSize.f20, color: T.ember[3] },
   },
+  /**
+   * 实时通道状态指示（#1324）：战斗力数值正下方 —— 小圆点 + 同色文字（右对齐，与战斗力数值共用右缘）
+   * 只挂在**本人**信息栏（其他玩家的信息栏不带通道状态）。四态颜色全取 token，
+   * 文案见 configs/texts 的 realtime_status_*（四条都是三个字，右对齐下不跳位）
+   */
+  realtimeStatus: {
+    position: new Vec2(116, -32),
+    size: new Size(84, 12),
+    /** 圆点直径与圆心 x（文字右对齐后左缘约 +12，圆点贴在它左边留 4px） */
+    dotSize: 6,
+    dotX: 5,
+    fontSize: T.fontSize.f10,
+    colors: {
+      idle: T.text[3],
+      connecting: T.gold[4],
+      connected: T.jade,
+      disconnected: T.ember[3],
+    },
+  },
   /** 状态图标条（首个图标中心对齐头像中心、向右排开，横向布局；稿 `.buff` 26×26 带金线框） */
   statusBar: { position: new Vec2(-159, -63), size: new Size(240, 26), spacing: 4, iconSize: new Size(26, 26) },
 };

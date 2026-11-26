@@ -3,12 +3,22 @@ import GameUiHelper from "../../helpers/GameUiHelper";
 import UiHelper from "../../helpers/UiHelper";
 import RoleUIManager from "../../core/RoleUIManager";
 import StatusIconBar from "./StatusIconBar";
+import RealtimeClient, { RealtimeStatus } from "../../utils/net/RealtimeClient";
 import { Role } from "../../../entities/Role";
 import { RELATION_SHIP } from "../../../types/role";
 import { roleInfoBarLayout, T, uiImages } from "../../../configs/hudLayout";
+import { getText } from "../../../configs/texts";
 
 /** 货币种数（收敛后只有绑定元宝一种，#843/#844），用于把货币容器宽度等分给每件 */
 const CURRENCY_COUNT = 1;
+
+/** 实时通道状态 → 指示文字的文案 key（#1324；四态颜色见 hudLayout.realtimeStatus.colors，按同一组键取） */
+const REALTIME_STATUS_TEXTS: Record<RealtimeStatus, string> = {
+  [RealtimeStatus.Idle]: "realtime_status_idle",
+  [RealtimeStatus.Connecting]: "realtime_status_connecting",
+  [RealtimeStatus.Connected]: "realtime_status_connected",
+  [RealtimeStatus.Disconnected]: "realtime_status_disconnected",
+};
 
 /**
  * 角色信息栏组件（左上角常驻 HUD）
@@ -32,6 +42,12 @@ export default class RoleInfoBar extends Node {
   private shownCombat: number;
   /** 是否为本人信息栏（本人贴左上角，其他玩家固定在屏幕中心） */
   private isSelf: boolean;
+  /** 实时通道状态点的圆（#1324，仅本人信息栏；状态变化时清了重画换色） */
+  private realtimeDot: Graphics | null = null;
+  /** 实时通道状态文字（与圆点同色） */
+  private realtimeLabel: Label | null = null;
+  /** 实时通道状态订阅的退订函数（dispose 时先退订，#1188 口径） */
+  private offRealtimeStatus: (() => void) | null = null;
 
   constructor(role: Role) {
     super("role_info_bar");
@@ -68,6 +84,19 @@ export default class RoleInfoBar extends Node {
     this.combatNode = combat.node;
     this.shownCombat = role.combat;
     this.addChild(combat.node);
+    // 实时通道状态指示（#1324：战斗力数值正下方的小圆点 + 同色文字；只有本人信息栏带）
+    if (isSelf) {
+      const rs = layout.realtimeStatus;
+      const node = UiHelper.createNode("realtime_status", rs.position, rs.size);
+      const dotNode = UiHelper.createNode("realtime_status_dot", new Vec2(rs.dotX, 0), new Size(rs.dotSize, rs.dotSize));
+      this.realtimeDot = dotNode.addComponent(Graphics);
+      node.addChild(dotNode);
+      this.realtimeLabel = UiHelper.createLabel("realtime_status_text", "", T.text[3], rs.fontSize, new Vec2(), rs.size, Label.HorizontalAlign.RIGHT).getComponent(Label)!;
+      node.addChild(this.realtimeLabel.node);
+      this.addChild(node);
+      // 注册即以当前状态回调一次，之后每次状态变化跟着变；退订函数留到 dispose
+      this.offRealtimeStatus = RealtimeClient.addStatusListener((change) => this.paintRealtimeStatus(change.status));
+    }
     // 状态图标条（头像正下方，进行中状态的图标；由 StatusManager 经 RoleUIManager 刷新）
     const statusIconBar = new StatusIconBar();
     this.addChild(statusIconBar);
@@ -133,5 +162,31 @@ export default class RoleInfoBar extends Node {
     this.shownCombat = combat;
     this.combatLabel.string = combat.toString();
     GameUiHelper.showCombatDelta(this.combatNode, delta);
+  }
+
+  /**
+   * 实时通道状态点的着色与文案（#1324）
+   *
+   * 点与文字永远同色：已连接 jade / 连接中 gold-4 / 已断开 ember-3 / 未连接 text-3（灰）。
+   * 圆是 Graphics 现画的，换色 = 清了重画一次（点只有 6px，DrawCall 不变）。
+   * 订阅方（RealtimeClient.addStatusListener）销毁前先退订 —— 这里是纯绘制，字段已清时直接跳过兜底。
+   */
+  private paintRealtimeStatus(status: RealtimeStatus) {
+    if (!this.realtimeDot || !this.realtimeLabel) return;
+    const rs = roleInfoBarLayout.realtimeStatus;
+    const color = rs.colors[status];
+    const graphics = this.realtimeDot;
+    graphics.clear();
+    graphics.fillColor = color;
+    graphics.circle(0, 0, rs.dotSize / 2);
+    graphics.fill();
+    this.realtimeLabel.string = getText(REALTIME_STATUS_TEXTS[status]);
+    this.realtimeLabel.color = color;
+  }
+
+  /** 离场清理：先退订静态监听再拆字段（#1188：销毁期 emit 回调摸已销毁字段是崩溃源），由 ui/Game 的场景收尾调用 */
+  dispose() {
+    this.offRealtimeStatus?.();
+    this.offRealtimeStatus = null;
   }
 }
