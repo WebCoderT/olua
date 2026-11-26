@@ -6,9 +6,9 @@ import type { EQUIPMENT_PREFIX, EQUIPMENT_SUFFIX } from "./good";
  * 整包帧循环播放（原始尺寸随素材家族而异，显示尺寸的适配见 configs/layout/borders）。
  */
 export interface BorderResource {
-  /** 边框 key（= 图集文件名，如 border-30123；配置表之间用它互相关联） */
+  /** 边框 key（= 图集文件名，如 border-30135；配置表之间用它互相关联） */
   key: string;
-  /** 图集资源路径（resources 下、不含扩展名，如 effect/border/border-30123） */
+  /** 图集资源路径（resources 下、不含扩展名，如 effect/border/border-30135） */
   atlas: string;
 }
 

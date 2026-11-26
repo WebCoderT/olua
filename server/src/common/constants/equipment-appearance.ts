@@ -126,7 +126,8 @@ export interface EquipmentAppearanceSeed {
  * 出厂映射（按档数展开，#697 起参数化）
  *
  * 沿用客户端 2026-11 之前的口径：**先按后缀分档、档内按前缀递增**，依次取边框
- * （border-30123 起）与背景（bg-16000 起）—— 后缀越强整体越靠后，档内前缀越强越靠后。
+ * （border-30135 起，#1322：起始家族 91×104 厚框 30123~30134 已整体下线）与背景
+ * （bg-16000 起）—— 后缀越强整体越靠后，档内前缀越强越靠后。
  *
  * 档数扩到出厂值之外时公式照样外推（编号顺延）——新编号在客户端资源清单里
  * 多半不存在，客户端 apply 会把不认识的 key 丢掉（那个组合暂时没边框），
@@ -138,7 +139,7 @@ export function buildAppearanceDefaults(prefixCount: number, suffixCount: number
   for (let suffix = 0; suffix < suffixCount; suffix++) {
     for (let prefix = 0; prefix < prefixCount; prefix++) {
       const slot = suffix * prefixCount + prefix;
-      borders.push({ prefix, suffix, key: `border-${30123 + slot}` });
+      borders.push({ prefix, suffix, key: `border-${30135 + slot}` });
       backgrounds.push({ prefix, suffix, key: `bg-${16000 + slot}` });
     }
   }
