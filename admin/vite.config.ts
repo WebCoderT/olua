@@ -148,6 +148,39 @@ function gameResources(): Plugin {
                       ? "audio/mp4"
                       : "application/octet-stream";
         res.setHeader("Content-Type", type);
+        // 长度 + Range/206（#1305）：`<audio>` 与视频要能「定位」才肯播。只 pipe 不给 length 时，
+        // Safari 连 duration 都算不出来，直接触发 onerror —— 音效页那句「读不到 … 文件不在
+        // 资源包里」有一半是这么来的（真正的原因是一次媒体层失败，不是文件缺失）。
+        // 生产由 nginx 的 alias 处理这两件事，这里补上是为了 dev 与生产同口径。
+        const { size } = fs.statSync(file);
+        res.setHeader("Accept-Ranges", "bytes");
+        const range = req.headers.range;
+        if (range && !range.includes(",")) {
+          const [startText, endText] = range.replace(/^bytes=/, "").split("-");
+          const start = Number.parseInt(startText ?? "", 10);
+          const end = endText ? Math.min(Number.parseInt(endText, 10), size - 1) : size - 1;
+          // 越界 / 反向区间一律 416（多区间请求已经在上面的 `includes(",")` 里退化成全量）
+          if (!Number.isFinite(start) || start < 0 || start >= size || end < start) {
+            res.statusCode = 416;
+            res.setHeader("Content-Range", `bytes */${size}`);
+            res.end();
+            return;
+          }
+          res.statusCode = 206;
+          res.setHeader("Content-Range", `bytes ${start}-${end}/${size}`);
+          res.setHeader("Content-Length", String(end - start + 1));
+          if (req.method === "HEAD") {
+            res.end();
+            return;
+          }
+          fs.createReadStream(file, { start, end }).pipe(res);
+          return;
+        }
+        res.setHeader("Content-Length", String(size));
+        if (req.method === "HEAD") {
+          res.end();
+          return;
+        }
         fs.createReadStream(file).pipe(res);
       });
     },

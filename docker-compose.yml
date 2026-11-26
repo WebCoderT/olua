@@ -158,6 +158,13 @@ services:
       # 所以绑定地址与端口都做成变量，TLS 部署把它们设成 `127.0.0.1` + `8081`：
       # 外网打不进来，本机 curl / compose 内网的 edge 仍然够得着。
       - "${OLUA_ADMIN_BIND:-0.0.0.0}:${OLUA_ADMIN_PORT:-80}:80"
+    volumes:
+      # 客户端素材（#1305）：管理端的 `/game-resources/` 由**自己的 nginx** 直接出，
+      # 不再反代 game 容器 —— 否则 game 一停，音效试听 / 选图 / 装备对齐整片 502，
+      # 而页面只会说「文件不在资源包里」。
+      # 与 server 服务的 `EQUIPMENT_APPEARANCE_RES_DIR` 是**同一个宿主机目录**：
+      # 管理端看到的素材永远等于游戏实际在用的那份（deploy.sh --resources 同步的就是它）。
+      - ./game/resources:/usr/share/nginx/game-resources:ro
 
   # 游戏客户端（Web 端）：静态托管 Cocos 构建产物，并把 /api 同源反代到服务端。
   # **独立端口**而不是塞进上面的 80：Cocos 产物的资源路径相对根目录，放子路径会大面积 404。
