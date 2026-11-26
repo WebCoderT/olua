@@ -76,27 +76,29 @@ export const bagDialogLayout = {
 //#region 自动回收弹窗
 
 /**
- * 自动回收弹窗布局（组件见 ui/components/dialogs/AutoRecycleDialog；#1278）
+ * 自动回收弹窗布局（组件见 ui/components/dialogs/AutoRecycleDialog；#1278，#1289 重做）
  *
- * 面板走标准弹窗框（createDialog），420×480：说明行 → 勾选清单（滚动）→ 一键回收按钮。
- * 「全部装备」是清单第一条（整类开关，不进滚动区 —— 它是安全边界，得一直看得见）；
- * 可卖非装备物品在滚动区逐项勾选（回收价 > 0 的才列，与服务端 sellPriceOf 同源）。
+ * 面板走标准弹窗框（createDialog），420×540：说明行 → 部位×等级段清单（滚动）→ 底部一排
+ * 「一键回收」按钮 + 「自动回收」开关。
+ * 清单按部位分节：节标题 = 部位名（装备槽配置的 label），节内 = 等级段勾选行
+ * （1-10级、11-15级……，段规则见 configs/equipments.recycleLevelBands）；
+ * 非装备物品不再进清单（#1289：药品 / 卷轴不进自动回收）。
  */
 export const autoRecycleDialogLayout = {
   name: "auto_recycle_dialog",
   title: "自动回收",
   eyebrow: "自动 · 背包",
-  size: new Size(420, 480),
+  size: new Size(420, 540),
   /** 顶部说明行（勾选语义一句话） */
-  hint: { y: 196, fontSize: T.fontSize.f11, color: T.text[4], width: 380, height: 16 },
-  /** 「全部装备」整类开关行（滚动区外，常驻可见） */
-  allEquipmentRow: { y: 168, height: 24, fontSize: T.fontSize.f12, color: T.text[1], name: "auto_recycle_all_row" },
-  /** 可卖物品滚动清单（#1104 坑：滚动区四边留 3px，防首行贴上裁剪线） */
-  list: { name: "auto_recycle_list", position: new Vec2(0, 8), size: new Size(380, 240), padding: 3, rowHeight: 24, rowSpacing: 3, fontSize: T.fontSize.f12, color: T.text[1], nameWidth: 240 },
-  /** 清单空态（配置里没有可卖的非装备物品时） */
-  emptyTip: { position: new Vec2(0, 8), size: new Size(300, 20), fontSize: T.fontSize.f12, color: T.text[3] },
-  /** 「一键回收」按钮：按当前勾选清单立即执行（两步确认保留） */
-  recycleButton: { name: "auto_recycle_now_button", position: new Vec2(0, -172), confirmTimeout: 3000 },
+  hint: { y: 226, fontSize: T.fontSize.f11, color: T.text[4], width: 380, height: 16 },
+  /** 部位×等级段滚动清单（#1104 坑：滚动区四边留 3px，防首行贴上裁剪线） */
+  list: { name: "auto_recycle_list", position: new Vec2(0, 24), size: new Size(380, 320), padding: 3, rowHeight: 24, rowSpacing: 3, fontSize: T.fontSize.f12, color: T.text[1], nameWidth: 240 },
+  /** 部位节标题行（标题 = 部位名，勾选行都归在它下面） */
+  sectionTitle: { height: 26, fontSize: T.fontSize.f13, color: T.gold[3] },
+  /** 「一键回收」按钮：按当前勾选清单立即执行（两步确认保留；与开关同一排，按钮在左） */
+  recycleButton: { name: "auto_recycle_now_button", position: new Vec2(-98, -206), confirmTimeout: 3000 },
+  /** 「自动回收」开关：开启后持续扫描背包，回收勾选的部位 × 等级段（按钮在左、开关在右） */
+  autoToggle: { name: "auto_recycle_toggle_row", position: new Vec2(102, -206), width: 150, height: 36, fontSize: T.fontSize.f12, color: T.text[1] },
 };
 
 //#endregion

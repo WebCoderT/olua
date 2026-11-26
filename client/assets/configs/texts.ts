@@ -74,16 +74,14 @@ export const uiTexts = {
   bag_recycle_confirm_tip: "将回收 {count} 件装备，可得 {price} 绑定元宝（再点一次确认）",
   /** 背包满触发自动回收的结果（{count} 件 · {price} 绑定元宝；#1278，只回收勾选清单里的东西） */
   auto_recycle_tip: "背包已满，自动回收 {count} 件，获得 {price} 绑定元宝",
-  /** 自动回收弹窗的说明行（勾选语义一句话说清） */
-  auto_recycle_hint: "勾选后：背包满时自动回收勾选的物品；未勾选的永远不会自动回收",
-  /** 自动回收弹窗「全部装备」整类勾选行（装备变体太多，逐件勾不现实） */
-  auto_recycle_all_equipment: "全部装备（捡到就折算绑定元宝）",
+  /** #1289 */
+  auto_recycle_scan_tip: "自动回收 {count} 件，获得 {price} 绑定元宝",
+  /** #1289：等级段选项文案（段规则见 configs/equipments.recycleLevelBands） */
+  auto_recycle_band: "{min}-{max}级",
+  /** 自动回收弹窗的说明行（#1289 重做：按部位 × 等级段勾选 + 开关授权） */
+  auto_recycle_hint: "按部位和等级区间勾选，打开「自动回收」后，背包里符合条件的装备会自动回收成绑定元宝",
   /** 自动回收弹窗内「一键回收」按钮（按当前勾选清单立即执行，保留两步确认） */
   label_auto_recycle_now: "一键回收",
-  /** 自动回收弹窗清单的分组标题：非装备可卖物品 */
-  auto_recycle_section_others: "可卖物品（勾选后背包满时自动回收）",
-  /** 自动回收弹窗清单空态（配置里没有可卖的非装备物品） */
-  auto_recycle_empty_list: "暂无可卖物品（回收价大于 0 的才出现在这里）",
   /** 自动使用弹窗的说明行 */
   auto_use_hint: "勾选后：背包里只要有就自动使用（药品血蓝不满才喝）",
   /** 自动使用弹窗清单空态（配置里没有可使用物品） */
