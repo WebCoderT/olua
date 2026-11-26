@@ -50,7 +50,17 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
     if (path !== ":memory:") mkdirSync(dirname(path), { recursive: true });
     this.db = new DatabaseSync(path);
     // WAL 提升并发读性能；外键打开后删账号会级联删角色
-    if (path !== ":memory:") this.db.exec("PRAGMA journal_mode = WAL;");
+    if (path !== ":memory:") {
+      this.db.exec("PRAGMA journal_mode = WAL;");
+      // synchronous = NORMAL（#1299）：WAL 模式下 SQLite 官方推荐的档位 —— 提交只写 WAL 文件、
+      // 不逐笔 fsync（fsync 留给 checkpoint 做）。默认的 FULL 让**每一次提交都同步刷盘**，而
+      // 击杀结算（角色存档 UPDATE + 行为流水 INSERT）与拾取入包是全服共享事件循环上的同步代码，
+      // 挂机时每秒几十次提交 = 每秒几十次 fsync 排队，实时进程被磁盘同步拖住，全图一起卡。
+      // 取舍：进程崩溃不丢数据（WAL 文件还在，下次启动照常恢复）；只有操作系统崩溃 / 断电
+      // 才可能丢最近一拍提交 —— 对本服务可接受：世界状态本来就是内存权威（重启清场），
+      // 角色存档最多丢最后一两秒的操作，与「硬杀进程丢最后一批掉落投影」同一量级。
+      this.db.exec("PRAGMA synchronous = NORMAL;");
+    }
     this.db.exec("PRAGMA foreign_keys = ON;");
     // busy_timeout（#35 起服务端有了常驻写）：写操作撞上锁时等一等再报错，而不是立刻抛
     // SQLITE_BUSY。世界状态的节流落盘与玩家存档防抖推送可能同时写，SQLite 单文件一锁全库，
