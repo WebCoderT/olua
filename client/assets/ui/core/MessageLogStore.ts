@@ -12,7 +12,8 @@
  * ## 谁往里写
  * - `core/storage/role-delta-log.ts`：角色数据快照差分（经验/等级/货币/物品/成长的全部条目）—— 主力；
  * - `helpers/parts/tip-fx.ts`：普通提示（服务端提示语、界面提示）落「系统」；
- * - `core/QuestStore.ts`：任务状态前进落「任务」。
+ * - `core/QuestStore.ts`：任务状态前进落「任务」；
+ * - `ui/Game.ts`：把 `RealtimeClient.logSink` 接进来（#1326，实时连接的建连网址 / 状态 / 错误明细落「系统」）。
  *
  * ## 为什么是静态仓（同 ChatStore / QuestStore 的纪律）
  * 写消息的是「提示层 / 任务 / 角色落账」这些互不认识的地方，读的只有 HUD 上的 MessageLog 一块，

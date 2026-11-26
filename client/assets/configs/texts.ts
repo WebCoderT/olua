@@ -648,6 +648,26 @@ export const uiTexts = {
   realtime_status_connecting: "连接中",
   realtime_status_disconnected: "已断开",
   realtime_status_idle: "未连接",
+  /**
+   * 实时连接日志（#1326：右下角消息记录的「系统」类目）
+   *
+   * 连接全生命周期各点位落流水 —— 排查「连到哪 / 卡在哪一步 / 错在哪」时不用再接电脑看 console
+   * （原生包玩家根本看不到 console）。{url} 是完整建连网址（含一次性票据参数，票据 30 秒过期）。
+   */
+  realtime_log_tag: "[实时]",
+  realtime_log_start: "开始建立实时连接",
+  realtime_log_ticket_failed: "取票失败：{detail}",
+  realtime_log_connecting: "建连：{url}",
+  realtime_log_connect_failed: "建立连接失败：{detail}",
+  realtime_log_socket_error: "连接出错",
+  realtime_log_handshake_timeout: "握手超时（没等到 welcome），重建连接",
+  realtime_log_connected: "已连接（账号 {user}，心跳 {heartbeat}ms）",
+  realtime_log_pong_timeout: "心跳无应答，判为掉线",
+  realtime_log_replaced: "本连接已被顶掉（账号已在别处连接），不再重连",
+  realtime_log_zone_blocked: "本区暂不可进（{reason}），不再重连",
+  realtime_log_wrong_shard: "连接落在错误的分片上（第 {count} 次），重新取票后立即重连",
+  realtime_log_disconnected: "连接断开（{reason}），退避后重连",
+  realtime_log_retry: "第 {attempt} 次重试，{delay}ms 后重开",
   /** 登录/注册表单未填写完整 */
   login_input_empty_tip: "请输入账号和密码",
   /**
