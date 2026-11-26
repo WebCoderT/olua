@@ -1,4 +1,5 @@
 import { networkConfig } from "../../../configs/network";
+import { getText } from "../../../configs/texts";
 import { ApiRoutes } from "./ApiRoutes";
 import { RealtimeApi } from "./Api";
 import ApiError from "./ApiError";
@@ -146,6 +147,20 @@ export default class RealtimeClient {
   /** 状态变化出口（接线方在这里提示玩家；不接也能跑，只是没人看见） */
   static onStatusChange: ((change: RealtimeStatusChange) => void) | null = null;
 
+  /**
+   * 连接日志出口（#1326：右下角消息记录）
+   *
+   * `ui/Game` 进场景时接到 `MessageLogStore.push("system", …)`、销毁时摘除（防销毁后写入）。
+   * 不接时零开销（原生包没接也能跑）。日志只做展示，不做任何判定依据。
+   */
+  static logSink: ((text: string) => void) | null = null;
+
+  /** 落一条连接日志（文案取自 texts 的 realtime_log_*；console 照发，sink 是游戏内的展示出口） */
+  private static log(text: string): void {
+    console.info(`[realtime] ${text}`);
+    this.logSink?.(`${getText("realtime_log_tag")} ${text}`);
+  }
+
   /** 常驻 UI 的状态订阅者（多播；与上面的单槽互不干扰，各自决定怎么呈现） */
   private static statusListeners = new Set<(change: RealtimeStatusChange) => void>();
 
@@ -189,6 +204,7 @@ export default class RealtimeClient {
     this.stopped = false;
     this.attempts = 0;
     this.wrongShardRetries = 0;
+    this.log(getText("realtime_log_start"));
     void this.open();
   }
 
@@ -236,7 +252,9 @@ export default class RealtimeClient {
       // 分片（#770）：票里带着「这个账号该连哪个实时进程」，非 0 时拼进路径
       shard = result.shard ?? 0;
     } catch (error) {
-      console.warn(`[realtime] 取连接票据失败：${error instanceof ApiError ? error.describe() : String(error)}`);
+      const detail = error instanceof ApiError ? error.describe() : String(error);
+      console.warn(`[realtime] 取连接票据失败：${detail}`);
+      this.log(getText("realtime_log_ticket_failed", { detail }));
       // 令牌失效：请求层已经把人送回登录场景了，再连也取不到票 —— 停在这里
       if (error instanceof ApiError && error.needRelogin) {
         this.stop();
@@ -251,12 +269,18 @@ export default class RealtimeClient {
 
   /** 拿票据去建连（地址由 configs/network.baseUrl 推出来，客户端不写第二份地址） */
   private static connect(ticket: string, shard = 0): void {
+    const url = buildRealtimeUrl(ticket, shard);
+    // 完整网址落流水（#1326）：票据是一次性短时凭证（30 秒过期、用掉即删），
+    // 暴露在本地消息记录里没有风险，但排查「连到了哪」全靠这一条
+    this.log(getText("realtime_log_connecting", { url }));
     let socket: WebSocket;
     try {
-      socket = new WebSocket(buildRealtimeUrl(ticket, shard));
+      socket = new WebSocket(url);
     } catch (error) {
-      // 地址拼不出来 / 环境没有 WebSocket：按网络抖动处理，退避之后再试
+      // 地址拼不出来 / 环境没有 WebSocket（原生包没勾 WebSocket 模块就是在这里炸）：
+      // 按网络抖动处理，退避之后再试
       console.warn(`[realtime] 建立连接失败：${String(error)}`);
+      this.log(getText("realtime_log_connect_failed", { detail: String(error) }));
       this.scheduleRetry();
       return;
     }
@@ -264,7 +288,10 @@ export default class RealtimeClient {
     socket.onopen = () => this.armHandshakeTimeout();
     socket.onmessage = (event: MessageEvent) => this.onFrame(event.data);
     // onerror 之后紧跟一条 close（浏览器不给细节），统一在 onClose 里处理，这里只记一笔
-    socket.onerror = () => console.warn("[realtime] 连接出错");
+    socket.onerror = () => {
+      console.warn("[realtime] 连接出错");
+      this.log(getText("realtime_log_socket_error"));
+    };
     socket.onclose = (event: CloseEvent) => this.onClose(event.code, event.reason);
   }
 
@@ -279,6 +306,7 @@ export default class RealtimeClient {
     this.handshakeTimer = setTimeout(() => {
       this.handshakeTimer = null;
       console.warn("[realtime] 握手超时（没等到 welcome），重建连接");
+      this.log(getText("realtime_log_handshake_timeout"));
       this.closeSocket();
     }, networkConfig.realtime.handshakeTimeout);
   }
@@ -306,6 +334,7 @@ export default class RealtimeClient {
       this.clearPongTimer();
       this.armPing(heartbeatMs);
       console.info(`[realtime] 已连接（账号 ${this.userId ?? "?"}，心跳 ${heartbeatMs}ms）`);
+      this.log(getText("realtime_log_connected", { user: this.userId ?? "?", heartbeat: heartbeatMs }));
       // 补发最近一次进图登记：断线回来服务端不记得这个观看者了；
       // **首次连接也要发** —— 建图常比连接快（#493），那时 spawnAll 已经把图 id 记进 lastJoin
       // 但没有通道可发，只能在这里补上。没有 lastJoin（还没进过图）时是无操作。
@@ -485,6 +514,7 @@ export default class RealtimeClient {
       this.pongTimer = null;
       // socket 层不会自己发现对端没了（拔网线 / NAT 表过期都会留下一条「看起来还在」的连接）
       console.warn("[realtime] 心跳无应答，判为掉线");
+      this.log(getText("realtime_log_pong_timeout"));
       this.closeSocket();
     }, networkConfig.realtime.pongTimeout);
   }
@@ -522,6 +552,7 @@ export default class RealtimeClient {
       // 别处已经连上了：抢回来只会互相踢。停在这里，等下次进游戏再连
       this.stopped = true;
       console.warn("[realtime] 本连接已被顶掉（账号已在别处连接），不再重连");
+      this.log(getText("realtime_log_replaced"));
       this.emit(RealtimeStatus.Disconnected, { lost: wasConnected, willRetry: false, reason: reason || `close=${code}` });
       return;
     }
@@ -531,6 +562,7 @@ export default class RealtimeClient {
     if (code === REALTIME_CLOSE.MAINTENANCE || code === REALTIME_CLOSE.ZONE_MERGED) {
       this.stopped = true;
       console.warn(`[realtime] 本区暂不可进（${reason || `close=${code}`}），不再重连`);
+      this.log(getText("realtime_log_zone_blocked", { reason: reason || `close=${code}` }));
       this.emit(RealtimeStatus.Disconnected, { lost: wasConnected, willRetry: false, reason: reason || `close=${code}` });
       return;
     }
@@ -541,12 +573,14 @@ export default class RealtimeClient {
     if (code === REALTIME_CLOSE.WRONG_SHARD && this.wrongShardRetries < 2) {
       this.wrongShardRetries += 1;
       console.info(`[realtime] 连接落在错误的分片上（第 ${this.wrongShardRetries} 次），重新取票后立即重连`);
+      this.log(getText("realtime_log_wrong_shard", { count: this.wrongShardRetries }));
       this.attempts = 0;
       void this.open();
       return;
     }
 
     console.warn(`[realtime] 连接断开（${reason || `close=${code}`}），退避后重连`);
+    this.log(getText("realtime_log_disconnected", { reason: reason || `close=${code}` }));
     this.emit(RealtimeStatus.Disconnected, { lost: wasConnected, willRetry: true, reason: reason || `close=${code}` });
     this.scheduleRetry();
   }
@@ -563,6 +597,7 @@ export default class RealtimeClient {
     const { reconnectBaseDelay, reconnectMaxDelay } = networkConfig.realtime;
     const delay = Math.min(reconnectBaseDelay * Math.pow(2, this.attempts), reconnectMaxDelay);
     this.attempts += 1;
+    this.log(getText("realtime_log_retry", { attempt: this.attempts, delay }));
     this.retryTimer = setTimeout(() => {
       this.retryTimer = null;
       void this.open();

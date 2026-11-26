@@ -298,6 +298,8 @@ export class Game extends Component {
       SceneManager.loadScene("Game");
       return;
     }
+    // 连接日志进右下角消息记录（#1326）：销毁时先摘出口再 stop（防销毁后写入）
+    RealtimeClient.logSink = (text) => MessageLogStore.push("system", text);
     RealtimeClient.start();
     // 音效（#683）：建常驻节点（跨场景不销毁，见 core/SoundManager）。配置已在上面那份快照里落库，
     // 所以这里不拉任何东西 —— 之后每次 `SoundManager.play(key)` 都只是查表 + 播放。
@@ -522,6 +524,8 @@ export class Game extends Component {
     // 否则换角色进来会拿前一个角色的数据比出一串「获得 / 消耗」
     RoleDeltaLog.reset();
     RealtimeClient.onStatusChange = null;
+    // 日志出口先摘（#1326）：stop / 销毁期产生的连接日志不应再落进刚清空的消息记录
+    RealtimeClient.logSink = null;
     RealtimeClient.stop();
     // 窗口尺寸监听挂在 screen 单例上（不随节点销毁），必须显式取消
     this.offWindowResize?.();

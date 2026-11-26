@@ -196,6 +196,7 @@ function reset() {
   scheduledDelays.length = 0;
   changes = [];
   RealtimeClient.onStatusChange = (change) => changes.push(change);
+  RealtimeClient.logSink = null;
   responder = () => ({ status: 200, text: envelope(0, "请求成功", { ticket: "TK", expiresIn: 30000 }) });
   Session.save("tk_test", { id: "acc_1", username: "tester", status: "active", onlineRoleId: null, createdAt: 0, lastLoginAt: null });
 }
@@ -297,6 +298,46 @@ async function connectOk(heartbeatMs = 600000) {
     "退订之后状态变化不再到达（旧监听不残留，销毁方必须先退订）",
     listenerChanges.map((c) => c.status).join(" → "),
   );
+
+  console.log("\n— C3. logSink：连接日志落右下角消息记录（含完整网址与错误明细，#1326） —");
+
+  reset();
+  const logs = [];
+  RealtimeClient.logSink = (text) => logs.push(text);
+  const liveLog = await connectOk();
+  check(logs[0] === "[实时] 开始建立实时连接", "启动即落一条开始日志", logs[0]);
+  check(logs.some((t) => t === `[实时] 建连：${buildRealtimeUrl("TK")}`), "建连日志带完整网址（含一次性票据参数）", logs.find((t) => t.startsWith("[实时] 建连")));
+  check(logs.some((t) => t === "[实时] 已连接（账号 acc_1，心跳 600000ms）"), "连上后落账号与心跳间隔", logs.find((t) => t.includes("已连接")));
+  RealtimeClient.stop();
+  const logsAfterStop = logs.length;
+  await delay(0);
+  check(logs.length === logsAfterStop, "stop() 不落日志（离开场景时的收尾不该刷进刚清空的消息记录）");
+
+  // 原生包缺 WebSocket 模块的真凶路径：new WebSocket() 抛错，现在会落「建立连接失败」明细
+  reset();
+  const failLogs = [];
+  RealtimeClient.logSink = (text) => failLogs.push(text);
+  const realWebSocket = global.WebSocket;
+  global.WebSocket = class {
+    constructor() {
+      throw new Error("WebSocket is not defined");
+    }
+  };
+  RealtimeClient.start();
+  await waitFor(() => failLogs.some((t) => t.includes("建立连接失败")));
+  check(
+    failLogs.some((t) => t.startsWith("[实时] 建连：")),
+    "构造抛错前先落了完整建连网址（排查「连到了哪」不受失败影响）",
+    failLogs.find((t) => t.startsWith("[实时] 建连")),
+  );
+  check(
+    failLogs.some((t) => t === "[实时] 建立连接失败：Error: WebSocket is not defined"),
+    "构造抛错的明细落流水（不再只静默退避）",
+    failLogs.find((t) => t.includes("建立连接失败")),
+  );
+  check(failLogs.some((t) => /^\[实时\] 第 \d+ 次重试/.test(t)), "失败后落重试计划（次数 + 延迟）", failLogs.find((t) => t.includes("重试")));
+  global.WebSocket = realWebSocket;
+  RealtimeClient.stop();
 
   console.log("\n— D. 应用层心跳：间隔取自 welcome，且被应答时一直活着 —");
 
