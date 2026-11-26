@@ -79,6 +79,30 @@ export class CombatSettlementService {
   /** 已经报过「群体技能没配作用半径」的技能 id（缓存 1 秒重建，不去重会刷屏） */
   private readonly warnedNoRadius = new Set<string>();
 
+  /**
+   * 掉落配置的解析缓存（#1299）：`raw JSON 字符串 → 解析结果` 的记忆化
+   *
+   * 每次击杀 `rollDrops` 都要 parse 掉落表的 picks / entries、每拍 `dropParams` 都要 parse
+   * drop_params —— 内容没变时解析结果是纯浪费（AoE 一波 8 杀就把同一份 entries parse 十几遍）。
+   * 键用**原始字符串相等**而不是 updated_at：管理端改表必然换掉整条字符串（update 是整列替换），
+   * 没改则逐字节相同 —— 「管理端改完下一刀生效」语义原样保留，且不依赖 updated_at 一定被刷新。
+   * 键空间有限（怪物 key × 掉落表 id，都是几十~几百量级），不做淘汰。
+   */
+  private readonly dropTablePicksCache = new Map<string, { raw: string; value: number | [number, number] }>();
+  private readonly dropTableEntriesCache = new Map<string, { raw: string; value: DropEntryRow[] }>();
+  private readonly monsterPicksCache = new Map<string, { raw: string; value: number | [number, number] }>();
+  private readonly monsterEntriesCache = new Map<string, { raw: string; value: DropEntryRow[] }>();
+  private readonly dropBindCache = new Map<string, { raw: string; value: Record<string, unknown> }>();
+
+  /** 按「原始字符串相等」记忆化的 JSON.parse（见上方字段注释） */
+  private parseJsonCached<T>(cache: Map<string, { raw: string; value: T }>, key: string, raw: string): T {
+    const hit = cache.get(key);
+    if (hit && hit.raw === raw) return hit.value;
+    const value = JSON.parse(raw) as T;
+    cache.set(key, { raw, value });
+    return value;
+  }
+
   constructor(
     private readonly roles: RolesService,
     private readonly world: WorldService,
@@ -1110,15 +1134,25 @@ export class CombatSettlementService {
       const referenced = this.dropTables.findByKey(row.table_id);
       if (referenced) {
         table = {
-          picks: row.picks ? JSON.parse(row.picks) : JSON.parse(referenced.picks),
-          entries: JSON.parse(referenced.entries),
+          picks: row.picks
+            ? this.parseJsonCached(this.monsterPicksCache, row.monster_key, row.picks)
+            : this.parseJsonCached(this.dropTablePicksCache, referenced.id, referenced.picks),
+          entries: this.parseJsonCached(this.dropTableEntriesCache, referenced.id, referenced.entries),
         };
       }
     } else if (row && row.source === "entries" && row.entries) {
-      table = { picks: row.picks ? JSON.parse(row.picks) : 1, entries: JSON.parse(row.entries) };
+      table = {
+        picks: row.picks ? this.parseJsonCached(this.monsterPicksCache, row.monster_key, row.picks) : 1,
+        entries: this.parseJsonCached(this.monsterEntriesCache, row.monster_key, row.entries),
+      };
     } else {
       const fallback = this.dropTables.findByKey("default");
-      table = fallback ? { picks: JSON.parse(fallback.picks), entries: JSON.parse(fallback.entries) } : null;
+      table = fallback
+        ? {
+            picks: this.parseJsonCached(this.dropTablePicksCache, fallback.id, fallback.picks),
+            entries: this.parseJsonCached(this.dropTableEntriesCache, fallback.id, fallback.entries),
+          }
+        : null;
     }
     if (!table) return [];
     const monsterBind = row?.bind_drops === 1;
@@ -1182,7 +1216,9 @@ export class CombatSettlementService {
     const raw = this.runtimeParams.get()?.drop_params;
     if (!raw) return {};
     try {
-      const parsed: unknown = JSON.parse(raw);
+      // 解析结果按原始字符串记忆化（#1299）：内容没变不再 parse（每次击杀都会走到这里）；
+      // 坏 JSON 在 parseJsonCached 里抛出、不进缓存，每次都按原逻辑退空对象
+      const parsed = this.parseJsonCached<unknown>(this.dropBindCache, "drop_params", raw);
       return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : {};
     } catch {
       return {};
