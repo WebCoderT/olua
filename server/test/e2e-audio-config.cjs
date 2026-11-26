@@ -5,14 +5,14 @@
  * 盯的不变量（改音效接口 / seed / AUDIO_DEFAULTS 后必须全绿）：
  *
  * 一、鉴权：观察员可读不可写（403 / 30006）、玩家令牌 401 —— 改音效是运营动作
- * 二、seed：**12 项**按 `AUDIO_KEYS` 登记顺序（分类成组）补出、四个分类各有项、
+ * 二、seed：**14 项**按 `AUDIO_KEYS` 登记顺序（分类成组）补出、四个分类各有项、
  *     每行形状对（展示名 / 分类 / 分类名 / 音量范围 / 路径合法 / 两个布尔 / 无追账）；
  *     **没有新建 / 删除接口**（POST / DELETE 404：key 由客户端播放代码决定）
  * 三、路径判据：只认 `audio/` 下、扩展名白名单、不许 `..` / 绝对路径 / 中文与空格；
  *     空串合法（= 未配置，这一项不响）；反斜杠会被规范成正斜杠
  * 四、音量边界：0 / 100 收，-1 / 101 / 小数被拒
  * 五、保存：整份覆盖 + 追账字段（updatedBy / updatedAt > 0）+ 再读一次还在
- * 六、客户端（#683）：快照有 `audio` 段（12 行、只有播放要用的五个字段）、
+ * 六、客户端（#683）：快照有 `audio` 段（14 行、只有播放要用的五个字段）、
  *     公开接口 `GET /game-config/audio` 不带令牌也能读且与快照同形状同顺序
  * 七、审计：action = adminAudioSetting.save、targetType = audioSetting
  * 八、文档：两个管理 operation + 一个玩家 operation、模型字段齐全、写模型没有 key
@@ -134,7 +134,7 @@ function saveAudio(key, token, body) {
     console.log("— 一、鉴权：观察员可读不可写、玩家令牌 401 —");
 
     const viewerList = await api("GET", "admin/audio-settings", { token: viewerToken, zoneId: ADMIN_ZONE });
-    check(viewerList.code === 0 && viewerList.data.total === 12, "观察员能读音效列表（gameConfig:read）", `${viewerList.status}`);
+    check(viewerList.code === 0 && viewerList.data.total === 14, "观察员能读音效列表（gameConfig:read）", `${viewerList.status}`);
     const viewerSave = await saveAudio("login_bgm", viewerToken, { volume: 30 });
     check(
       viewerSave.status === 403 && viewerSave.code === 30006,
@@ -148,7 +148,7 @@ function saveAudio(key, token, body) {
 
     //#region 二、seed 与「没有新建 / 删除」
 
-    console.log("— 二、seed：12 项按登记顺序（分类成组）补出、没有新建 / 删除接口 —");
+    console.log("— 二、seed：14 项按登记顺序（分类成组）补出、没有新建 / 删除接口 —");
 
     const list = await api("GET", "admin/audio-settings", { token: adminToken, zoneId: ADMIN_ZONE });
     check(list.code === 0, "超管能读音效列表", list.message);
@@ -163,6 +163,8 @@ function saveAudio(key, token, body) {
       "login_bgm",
       "ui_click",
       "warrior_attack",
+      "monster_attack",
+      "monster_die",
       "role_die_man",
       "role_die_woman",
       "move",
@@ -218,8 +220,8 @@ function saveAudio(key, token, body) {
     // 分类是**清单本身**的一部分（不是运营数据）：每类各几项，改了清单就要改这条
     const byCategory = rows.reduce((acc, row) => ({ ...acc, [row.category]: (acc[row.category] ?? 0) + 1 }), {});
     check(
-      byCategory.login === 2 && byCategory.combat === 4 && byCategory.item === 4 && byCategory.growth === 2,
-      "四个分类各有项（登录 2 / 战斗 4 / 物品 4 / 成长 2）",
+      byCategory.login === 2 && byCategory.combat === 6 && byCategory.item === 4 && byCategory.growth === 2,
+      "四个分类各有项（登录 2 / 战斗 6 / 物品 4 / 成长 2）",
       JSON.stringify(byCategory),
     );
     check(rows.some((row) => row.loop), "至少有一项是循环（登录背景音）", rows.filter((row) => row.loop).map((row) => row.key).join(","));
@@ -316,7 +318,7 @@ function saveAudio(key, token, body) {
     const snapshot = await api("GET", "game-config", { token: playerToken });
     check(snapshot.code === 0, "玩家能拉配置快照", snapshot.message);
     const audio = snapshot.data?.audio;
-    check(Array.isArray(audio) && audio.length === 12, "快照 audio 段 12 行（客户端按 key 取用）", `${Array.isArray(audio) ? audio.length : typeof audio}`);
+    check(Array.isArray(audio) && audio.length === 14, "快照 audio 段 14 行（客户端按 key 取用）", `${Array.isArray(audio) ? audio.length : typeof audio}`);
     check(
       Array.isArray(audio) && audio.every((row) => ["key", "filePath", "volume", "loop", "enabled"].every((field) => field in row)),
       "客户端形状只有播放要用的五个字段",
@@ -335,7 +337,7 @@ function saveAudio(key, token, body) {
 
     // 公开接口：登录场景没有令牌，而登录背景音正是那时要播的（与公告同一口径）
     const anonymous = await api("GET", "game-config/audio");
-    check(anonymous.code === 0 && anonymous.data?.total === 12, "公开接口不带令牌也能读（登录页要用）", `${anonymous.status}/${anonymous.code}`);
+    check(anonymous.code === 0 && anonymous.data?.total === 14, "公开接口不带令牌也能读（登录页要用）", `${anonymous.status}/${anonymous.code}`);
     check(
       JSON.stringify((anonymous.data?.list ?? []).map((row) => row.key)) === JSON.stringify(EXPECTED_KEYS),
       "公开接口与快照同形状同顺序（客户端只留一套读法）",

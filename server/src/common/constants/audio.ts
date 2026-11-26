@@ -54,6 +54,10 @@ export type AudioCategory = (typeof AUDIO_CATEGORIES)[number]["key"];
  * - `ui_click` → `ui/core/SoundManager.bindClick`（**所有按钮**：`UiHelper.createButton` / `createToggle`
  *   自动挂，手写按钮各自贴一行；技能快捷栏与世界对象不算按钮，不响）
  * - `warrior_attack` → `skills/warrior.skill_1000`（战士基础剑术，仅战士）
+ * - `monster_attack` → `ui/core/MonsterManager.playServerAttack` / `playServerCast`（怪物普攻与施法
+ *   统一播 ATTACK 动作的那两处，#1251；所有怪物共用一个「通用」音，不按怪物种类分）
+ * - `monster_die` → `ui/core/MonsterManager.applyDamage` 死亡分支（自己的击杀 / 别人的击杀 /
+ *   世界快照兜底清场都汇到这一处，所有怪物共用）
  * - `role_die_man` / `role_die_woman` → `ui/Game.checkRoleDeath`（按 `role.sex` 选一个）
  * - `item_drop` → `ui/core/DropManager.spawnResults`（掉落物铺到地上）+ `applyPickedFrame`（捡起来）
  * - `equip_wear` → `ui/core/StorageManager.equipFromBag`（服务端接受之后）
@@ -69,6 +73,8 @@ export const AUDIO_KEYS = [
   "ui_click",
   // 战斗与角色
   "warrior_attack",
+  "monster_attack",
+  "monster_die",
   "role_die_man",
   "role_die_woman",
   "move",
@@ -149,6 +155,28 @@ export const AUDIO_DEFAULTS: Record<AudioKey, AudioPreset> = {
     label: "战士普通攻击音",
     category: "combat",
     filePath: "audio/warrior-attack.wav",
+    volume: 70,
+    loop: false,
+    enabled: true,
+  },
+  monster_attack: {
+    // 通用怪物攻击音（2026-11-26 运营给文件，原名「怪物攻击.wav」按命名纪律改成英文）：
+    // 所有怪物共用一个音，不按种类分 —— 怪物素材包没有按种类配音的通道，播放入口也只有
+    // 「服务端说这只怪出手了」这一个事件。怪物攻击远比战士普攻高频（一片怪同时在打），
+    // 音量给 60 压一档，客户端还有 80ms 最小间隔兜着（见 MonsterManager）
+    label: "怪物攻击音",
+    category: "combat",
+    filePath: "audio/monster-attack.wav",
+    volume: 60,
+    loop: false,
+    enabled: true,
+  },
+  monster_die: {
+    // 通用怪物死亡音：自己的击杀 / 别人的击杀 / 快照兜底清场都汇到 applyDamage 死亡分支，
+    // 与 item_drop 同理是「可能一群同时响」的音，音量 70 + 客户端 80ms 最小间隔
+    label: "怪物死亡音",
+    category: "combat",
+    filePath: "audio/monster-die.wav",
     volume: 70,
     loop: false,
     enabled: true,

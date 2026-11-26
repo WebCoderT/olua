@@ -72,6 +72,26 @@
    222
   ],
   [
+   "audio/monster-attack.wav",
+   "6d1374d337e8e059ac48daee06f0274a38654381",
+   47674
+  ],
+  [
+   "audio/monster-attack.wav.meta",
+   "4a6467e0d7b9eee887feecd319a1528972d33aa2",
+   222
+  ],
+  [
+   "audio/monster-die.wav",
+   "98c3781df387c2f3125a0f10992960358c1d4202",
+   101790
+  ],
+  [
+   "audio/monster-die.wav.meta",
+   "97c030e9dcd16f1df0677d4659828faeadd4ba99",
+   222
+  ],
+  [
    "audio/move.wav",
    "44f36e25ea2bf416e592d16ac402724937120066",
    38696
@@ -123,8 +143,8 @@
   ],
   [
    "audio-manifest.json",
-   "b4b88a5778eab804a6c91c45a6c13c4a64d464a4",
-   421
+   "295b2022d4c087e3391f1d0bc5c5da9d66af5526",
+   482
   ],
   [
    "audio-manifest.json.meta",
@@ -25908,8 +25928,8 @@
   ],
   [
    "image-manifest.json",
-   "8e25b28ae53fc3423e149bc035b2d58bc027da59",
-   92576
+   "d304aae6aeb0dde62e807cc1a18ce60235da7185",
+   116384
   ],
   [
    "image-manifest.json.meta",

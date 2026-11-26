@@ -12,6 +12,7 @@ import LayerManager from "./LayerManager";
 import CursorManager from "./CursorManager";
 import MonsterAI from "./MonsterAI";
 import EffectManager from "./EffectManager";
+import SoundManager from "./SoundManager";
 import AnimationHelper from "../helpers/AnimationHelper";
 import GameUiHelper from "../helpers/GameUiHelper";
 import StorageManager from "./StorageManager";
@@ -46,6 +47,14 @@ import RealtimeClient from "../utils/net/RealtimeClient";
  * CombatChannel 会自动重发进图登记。
  */
 export default class MonsterManager {
+  /**
+   * 通用怪物音效的最小间隔（毫秒）：一片怪同时普攻 / 同时死（AoE、挂机清场）时
+   * 每只都播一声就是噪音，靠 `SoundManager.play(key, minGapMs)` 按 key 节流。
+   * 与 SoundManager 的 CLICK_MIN_GAP_MS / item_drop 拾取 80ms 同一档 —— 工程护栏，
+   * 不是运营数值（真要调吵不吵，去管理端改音量）。
+   */
+  private static readonly MONSTER_SOUND_MIN_GAP_MS = 80;
+
   /** 已生成怪物：怪物节点 -> 怪物运行时数据 */
   private static monsterMap = new Map<Node, Monster>();
 
@@ -281,6 +290,9 @@ export default class MonsterManager {
       return false;
     }
     MonsterAI.playServerAction(node, ACTION.ATTACK, undefined, eventAt);
+    // 通用怪物攻击音（施法也是 ATTACK 动作，#1251）：动作真的起播了才响 ——
+    // 上面的早退分支（半销毁 / 已死 / 配置缺失）都不响，与「响在确认之后」同一口径
+    void SoundManager.play("monster_attack", MonsterManager.MONSTER_SOUND_MIN_GAP_MS);
     // effectIsOnSelf / 无目标时退回释放者，与角色侧同一口径
     EffectManager.play(config, node, null, monster);
     if (cast.st) this.applyStatusEffect(cast.i, node, cast.st);
@@ -299,6 +311,9 @@ export default class MonsterManager {
     const node = this.instanceIndex.get(instanceId);
     if (!node || !isValid(node)) return;
     MonsterAI.playServerAction(node, ACTION.ATTACK, undefined, eventAt);
+    // 通用怪物攻击音：命中事件代表这只怪刚挥了一下（普攻在服务端没有单独的出手事件），
+    // 与上面的动作同源同闸 —— 找不到节点 / 已死亡时动作和声音一起不发
+    void SoundManager.play("monster_attack", MonsterManager.MONSTER_SOUND_MIN_GAP_MS);
   }
 
   /**
@@ -562,6 +577,9 @@ export default class MonsterManager {
     // 头顶血条隐藏（死亡后血量已无意义，留着会一直显示 0 / maxHp）
     const head = target.getChildByName("monster_head");
     if (head) head.active = false;
+    // 通用怪物死亡音：死亡清场的唯一汇点就在这一条分支（自己的击杀 / 别人的击杀 /
+    // 快照兜底清场），所以声音也只在这里发一次；缺死亡帧资源的怪同样响（声音不依赖帧图）
+    void SoundManager.play("monster_die", MonsterManager.MONSTER_SOUND_MIN_GAP_MS);
     if (!MonsterAI.die(target)) target.destroy();
   }
 
