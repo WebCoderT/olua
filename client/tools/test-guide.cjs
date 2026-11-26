@@ -162,7 +162,7 @@ check(GuideStore.current().step === 1, "当前步事件推进到第 1 步");
 GuideStore.notify(steps[0].trigger);
 check(GuideStore.current().step === 1, "重复收到同一个事件不会连跳两步");
 check(StorageManager.findOnlineRole().guide.step === 1, "进度已写回角色存档（换设备 / 重连都从这一步继续）");
-check(JSON.parse(sandbox.shim.__memory.get("roles"))[0].guide.step === 1, "存档文件里真的是第 1 步（不是只在内存对象上）");
+check(StorageManager.getRoles()[0].guide.step === 1, "进度已写回角色缓存（#1297 起缓存即内存，无存档文件）");
 
 // 模拟「重连」：存档原样读回 → start 之后仍在第 1 步
 GuideStore.reset();

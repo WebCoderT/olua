@@ -69,7 +69,7 @@ function seed(cells) {
   return role;
 }
 
-/** 从存储读回（每次都是反序列化的新对象，能真实反映落盘结果） */
+/** 从缓存读回（#1297 起角色缓存是共享引用的内存数组：读者与写者看同一份对象） */
 const online = () => StorageManager.findOnlineRole();
 const cellAt = (row, col) => online().bag[row][col];
 /** 背包里所有非空格子 */
@@ -96,8 +96,9 @@ check((await StorageManager.discardBagGood(0, 0)) === true, "丢弃装备返回 
 check(cellAt(0, 0) === null, "格子已被清空");
 check(filledCells().length === 0, "背包里再无物品");
 
-// 2. 落盘真的生效
-check(JSON.parse(sandbox.shim.__memory.get("roles"))[0].bag[0][0] === null, "丢弃已写入存档（不是只改了内存对象）");
+// 2. 写回真的生效（#1297 起缓存是内存数组，没有「存档文件」可查；断言走缓存读回，
+//    若有人把 findOnlineRole 改回副本语义而丢掉写回，这条与上面的 cellAt 一起红）
+check(StorageManager.getRoles()[0].bag[0][0] === null, "丢弃已写回角色缓存（所有读者可见）");
 
 // 3. 可叠加物品：整格一起丢（不做数量拆分）
 seed([{ row: 2, col: 3, id: drug.id, count: 37 }]);

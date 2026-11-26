@@ -14,25 +14,39 @@ import { guideStepCount } from "../../../configs/guide";
 import RoleDeltaLog from "./role-delta-log";
 
 /**
- * 本地角色缓存（#1115 批次 6 自 StorageManager 拆出）
+ * 本地角色缓存（#1115 批次 6 自 StorageManager 拆出；#1297 起改纯内存）
  *
  * **本地 roles 是服务端数据的缓存，服务端才是权威**（账号体系见 ui/utils/net）：
  * - 进游戏前由选角场景拉一次完整数据写进缓存（见 cacheRole），游戏内各处照旧同步读；
- * - 任何一次落盘（updateOnlineRole）都会经 RoleSync 防抖推回服务端，不再有「只存本地」的改动；
+ * - 任何一次改动（updateOnlineRole）都会经 RoleSync 防抖推回服务端，不再有「只存本地」的改动；
  * - 账号与令牌不在这里，见 ui/utils/net/Session（clear 会一并清掉会话，避免清了存档还留着登录态）。
+ *
+ * **#1297：角色数组只存内存，不再写 localStorage。** 以前每次 getRoles/updateOnlineRole 都对
+ * 最多 6 个角色的完整存档（背包/技能/任务/引导）做全量 JSON.parse / stringify，同步序列化全在
+ * 主线程上，拾取、用卷轴、回收每一步都反复触发 —— 是挂机时卡顿的主根因。而这份落盘本来就没有
+ * 恢复价值：数据服务端权威，页面刷新后选角页重新拉列表、进游戏经 RoleApi.select 重取完整数据，
+ * 链路已存在。localStorage 从此只留账号级小件（selectedRole 标记；令牌/账号见 Session）。
  */
 export default class RoleCache {
 
-  /** 获取角色列表 */
+  /**
+   * 角色缓存本体（#1297 起纯内存）
+   *
+   * 这里是**共享引用**：getRoles / findOnlineRole / findRoleById 返回的都是缓存里的对象本身，
+   * 不再每次反序列化出副本。各 storage 模块对它的改动（mergeIntoCache 的 Object.assign）
+   * 因此天然对所有读者可见 —— 以前靠「每次 parse 出新对象」隔离出副本语义，现在没有副本。
+   * 缓存为空（页面刚刷新 / 未进过游戏）时调用方拿到的就是 []，与以前「没落盘过」等价。
+   */
+  private static cache: Role[] = [];
+
+  /** 获取角色列表（返回缓存本体，不是副本 —— 改动即时全局可见） */
   static getRoles(): Role[] {
-    const roles = sys.localStorage.getItem("roles");
-    if (roles) return JSON.parse(roles);
-    return [];
+    return this.cache;
   }
 
-  /** 更新角色列表 */
+  /** 更新角色列表（整体替换缓存数组；单个角色的局部更新走 mergeIntoCache / cacheRole） */
   static setRoles(roles: Role[]) {
-    sys.localStorage.setItem("roles", JSON.stringify(roles));
+    this.cache = roles;
   }
 
   /**
@@ -101,7 +115,7 @@ export default class RoleCache {
    *
    * 真删在服务端：选角场景先调 RoleApi.remove，服务端删成功后才来这里清缓存
    * ——顺序反了会出现「本地没了但服务端还在」，下次拉列表角色又冒出来。
-   * 本地这一步就是从数组移除并落盘，**不可恢复**。
+   * 本地这一步就是从缓存数组移除（#1297 起只动内存），**不可恢复**。
    * 删完必须确认 selectedRole 不再指向已不存在的角色：玩家上次进游戏时选中过它，
    * 残留的选中项会让下一次 findOnlineRole 取到 undefined（进游戏直接卡在取角色那一步）；
    * 顺手也清掉「本来就指向不存在角色」的脏选中项（例如存档被外部改动过）。
@@ -120,17 +134,17 @@ export default class RoleCache {
   }
 
   /**
-   * 清空本地存储（角色缓存 + 当前会话）
+   * 清空角色缓存 + 当前会话
    *
-   * 登录场景启动时调用（**仅未登录时** —— 已有登录态的刷新会直接跳选角并保留缓存，
-   * 见 ui/Login.start）：确保换账号重新登录时，上个账号的角色缓存与令牌不会串到下一个账号。
+   * 登录场景启动时调用（**仅未登录时** —— 已有登录态的刷新会直接跳选角，缓存本来就在内存里
+   * 随刷新清空了，见 ui/Login.start）：确保换账号重新登录时，上个账号的角色缓存与令牌不会串到下一个账号。
    *
-   * 只删自己管的两个键 + 会话，**不调 `sys.localStorage.clear()`**：那个会把本机所有键一起抹掉，
+   * 只清内存数组 + `selectedRole` 键 + 会话，**不调 `sys.localStorage.clear()`**：那个会把本机所有键一起抹掉，
    * 包括与账号无关的展示状态（如公告已读记录，见 AnnouncementReadStore）——
    * 一旦后续有别的模块往本机写东西，全清也会静默带走它们，而这处清缓存的意图只是「换账号重新来」。
    */
   static clear() {
-    sys.localStorage.removeItem("roles");
+    this.cache = [];
     sys.localStorage.removeItem("selectedRole");
     Session.clear();
   }
@@ -156,12 +170,12 @@ export default class RoleCache {
     sys.localStorage.removeItem("selectedRole");
   }
 
-  /** 获取当前在线角色（每次读取都会补齐旧存档缺失的字段，见 ensureRoleDefaults） */
+  /** 获取当前在线角色（每次读取都会补齐存档缺失的字段，见 ensureRoleDefaults） */
   static findOnlineRole() {
     const selectedRole = sys.localStorage.getItem("selectedRole");
-    const role = this.getRoles().find((i) => i.id === selectedRole);
-    // 存储里是 JSON.parse 出来的普通对象（非 Role 实例），字段可能缺后续版本新增的部分，
-    // 统一在这里补齐，避免各调用方（快捷键栏/快捷键设置/落库）各自处理
+    const role = this.cache.find((i) => i.id === selectedRole);
+    // 缓存里的对象来自服务端快照（非 Role 实例），字段可能缺后续版本新增的部分，
+    // 统一在这里补齐，避免各调用方（快捷键栏/快捷键设置/写回）各自处理
     if (role) this.ensureRoleDefaults(role);
     return role;
   }
@@ -180,11 +194,11 @@ export default class RoleCache {
   }
 
   /**
-   * 更新在线角色（**本地落盘的唯一出口**，同时也是写穿服务端的唯一触发点）
+   * 更新在线角色（**写回缓存的唯一出口**，同时也是写穿服务端的唯一触发点）
    *
    * 打怪升级/拾取/买卖/换装/吃药都会走到这里，所以服务端同步必须防抖
    * （只推最后一份数据、失败不重排，见 utils/net/RoleSync）。
-   * 调用方不需要关心同步结果：本地已经落盘，游戏内读到的永远是这一份。
+   * 调用方不需要关心同步结果：本地缓存已经更新，游戏内读到的永远是这一份。
    */
   static updateOnlineRole(role: Role) {
     this.mergeIntoCache(role);
@@ -194,7 +208,7 @@ export default class RoleCache {
   /**
    * 按 id 把副本并进缓存（保持修订号基线）
    *
-   * 「落本地 + 推服务端」与「只落本地」两条出口共用这一段：合并规则（尤其是 revision 只信
+   * 「只写回缓存」与「写回缓存 + 推服务端」两条出口共用这一段：合并规则（尤其是 revision 只信
    * 有的那一边）分两份写，迟早一处修了另一处没修。
    */
   private static mergeIntoCache(role: Role) {

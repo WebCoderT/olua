@@ -287,7 +287,7 @@ console.log("\n— 数据层：StorageManager.moveBagGood —");
 seed([{ row: 0, col: 0, id: drug.id, count: 6 }]);
 check((await StorageManager.moveBagGood(0, 0, 5, 10)) === true, "拖动搬到空格返回 true");
 check(cellAt(0, 0) === null && cellAt(5, 10)?.count === 6, "内存里的背包已搬运");
-check(JSON.parse(sandbox.shim.__memory.get("roles"))[0].bag[5][10]?.count === 6, "搬运结果已写入存档（不是只改内存）");
+check(StorageManager.getRoles()[0].bag[5][10]?.count === 6, "搬运结果已写回角色缓存（#1297 起缓存即内存，无存档文件）");
 
 // 2. 合并
 seed([
