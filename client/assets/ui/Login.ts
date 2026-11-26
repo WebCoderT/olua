@@ -129,7 +129,8 @@ export class Login extends Component {
     this.buildPanel();
     this.buildBottombar();
     // 走到这里必然没有登录态（上方已拦截直接跳选角）：清掉上个账号的角色缓存与选中标记，
-    // 避免换账号时串号 —— 有登录态的刷新不动缓存，回来还在原账号上
+    // 避免换账号时串号 —— 有登录态的刷新不动会话，角色缓存本来就在内存里（#1297），
+    // 随刷新清空了，选角页重新拉列表、进游戏经 RoleApi.select 重取完整数据
     StorageManager.clear();
     // 「记住账号」：把上次记住的账号名填回输入框（密码从不落盘，每次都要重输）
     this.restoreRememberedAccount();

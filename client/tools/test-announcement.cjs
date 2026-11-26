@@ -166,13 +166,15 @@ if (sandbox) {
   console.log("\n— F. StorageManager.clear()（不清与账号无关的展示状态）—");
   {
     shim.__memory.clear();
-    shim.__memory.set("roles", "[]");
+    // #1297 起角色缓存是内存数组（不再有 "roles" localStorage 键），预置内存缓存再清
+    StorageManager.setRoles([{ id: "r1", name: "r1" }]);
     shim.__memory.set("selectedRole", "r1");
     shim.__memory.set("olua.announcementRead", JSON.stringify(["a"]));
     const before = Session.cleared;
     StorageManager.clear();
     // 直接看垫片内存「键还在不在」：缺失键在 Map 上是 undefined（真实的 getItem 才折算成 null）
-    check(!shim.__memory.has("roles"), "清掉角色缓存");
+    check(StorageManager.getRoles().length === 0, "清掉角色缓存（内存数组）");
+    check(!shim.__memory.has("roles"), "\"roles\" 键不存在（#1297 起角色数据不落盘）");
     check(!shim.__memory.has("selectedRole"), "清掉当前在线角色标记");
     check(Session.cleared === before + 1, "连带清会话（换账号不再串登录态）");
     check(shim.__memory.get("olua.announcementRead") === JSON.stringify(["a"]), "**保留**公告已读记录（它不是角色缓存，进登录页清缓存不该带走它）");

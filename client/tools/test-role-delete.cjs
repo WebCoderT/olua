@@ -46,8 +46,8 @@ function seed(roles, selectedRole) {
 
 /** 存档里真实的 selectedRole 值（直接看垫片内存，不从业务接口倒推） */
 const rawSelected = () => shim.__memory.get("selectedRole") ?? null;
-/** 存档里真实的 roles 数组 */
-const rawRoles = () => JSON.parse(shim.__memory.get("roles") ?? "[]");
+/** 缓存里真实的 roles 数组（#1297 起纯内存，直接看 RoleCache 本体） */
+const rawRoles = () => StorageManager.getRoles();
 
 console.log("— 数据层：StorageManager.deleteRole —");
 
