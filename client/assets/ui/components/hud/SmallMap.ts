@@ -10,7 +10,7 @@ import MonsterManager from "../../core/MonsterManager";
 import StorageManager from "../../core/StorageManager";
 import GameUiHelper, { SmallMapDot } from "../../helpers/GameUiHelper";
 import UiHelper from "../../helpers/UiHelper";
-import { drawVectorIcon, type VectorIconShape } from "../../helpers/VectorIcon";
+import { drawVectorIcon } from "../../helpers/VectorIcon";
 import { icons } from "../../../configs/layout/icons";
 import { getMapWorldRect } from "../../utils/map/MapPointMath";
 import { bindPointerAction } from "../../utils/input/Pointer";
@@ -30,8 +30,8 @@ import type RoleDisplay from "../role/RoleDisplay";
  * 结构（逐值对照 design/olua-ui/screens/04-hud.html 的 .map 段；子件坐标以面板中心为原点）：
  * - 面板底板：304×250 的铆钉面板（复用弹窗同款 createDialogPanel：r3 + line-3 边 + 四角铆钉）
  * - 标题条（.map-head）：图名（gold-5）+「· N 线」副文字（text-4，分线图才显示）+ 下拉箭头
- * - 功能入口 rail（.map-rail）：面板左外侧的 2 列网格，7 颗 34×34 描边图标
- *   （世界/线路/排行榜/成就/消息+红点/设置/声音）
+ * - 功能入口 rail（.map-rail）：面板左外侧的 2 列网格，7 个文字按钮
+ *   （世界/线路/排行榜/成就/消息+红点/设置/声音；#1310 起由描边图标改为直接写功能名）
  * - 地图区域（.map-view）：280×170 视口 —— 径向底色 + 22px 网格 + 真实底图 preview.jpg（opacity .5）
  *   按「内容区 ↔ 世界视野」等比缩放后随角色平移（缩放见 configs/smallMap.getSmallMapScale）+ 内暗角
  * - 底部（.map-foot）：只剩右下角世界坐标 `X 128 Y 96`（排行榜/线路在 rail 里，不在这）
@@ -42,20 +42,7 @@ import type RoleDisplay from "../role/RoleDisplay";
  * 自动寻路期间（点击寻路/追怪）还会画上路线指示线（起点为中心的角色黑点，与大地图同一处路线、同一缩放口径）
  * 地图名称与世界坐标文本同样按 smallMapConfig.refreshInterval 节流刷新
  */
-/** rail 入口 key → 描边图标（数据逐字取自 design/olua-ui/screens/04-hud.html 的 .map-rail） */
-function railIconOf(key: string): VectorIconShape {
-  const map: Record<string, VectorIconShape> = {
-    world: icons.mapWorld,
-    channel: icons.mapChannel,
-    ranking: icons.mapRanking,
-    achievement: icons.mapAchievement,
-    mail: icons.mapMail,
-    config: icons.mapSettings,
-    sound: icons.mapSound,
-  };
-  return map[key] ?? { paths: [] };
-}
-
+/** rail 入口按钮：玻璃底板 + 功能名文字（#1310 起不再画描边图标） */
 export default class SmallMap extends Node {
   /** 地图名称文本 */
   private mapNameLabel: Label;
@@ -203,27 +190,26 @@ export default class SmallMap extends Node {
 
   //#region 结构拼装
 
-  /** 左侧：功能入口按钮（两列网格，见 hudLayout.smallMapLayout.entryGrid；顶边与地图面板对齐） */
+  /** 左侧：功能入口按钮（两列文字网格，见 hudLayout.smallMapLayout.entryGrid；顶边与地图面板对齐） */
   private createEntryButtons() {
     const layout = smallMapLayout;
     const grid = layout.entryGrid;
-    const rows = Math.ceil(layout.entryIcons.length / grid.columns);
-    const gridWidth = grid.columns * grid.buttonSize + (grid.columns - 1) * grid.gap;
-    const gridHeight = rows * grid.buttonSize + (rows - 1) * grid.gap;
+    const rows = Math.ceil(layout.entries.length / grid.columns);
+    const gridWidth = grid.columns * grid.buttonSize.width + (grid.columns - 1) * grid.gap;
+    const gridHeight = rows * grid.buttonSize.height + (rows - 1) * grid.gap;
     // 网格容器：子节点排列完全交给 Layout（按行填充），整体顶边与地图面板顶边对齐
     const container = GameUiHelper.createGrid(
       "small_map_entry_buttons", grid.gap, grid.gap, layout.entryGridPosition, new Size(gridWidth, gridHeight),
     );
     // 「世界」打开小地图弹窗、「线路」分线图上开选线弹窗、「排行榜」打开本区榜、
     // 「成就」打开成就面板、「邮件」打开消息中心（邮件 + 公告入口，见 mailDialog）；config/sound 暂为占位
-    layout.entryIcons.forEach((icon) => {
-      // rail 是稿 .map-rail 的 7 颗描边图标（34×34、2 列；图标数据见 configs/layout/icons.ts）
-      const button = this.createRailIconButton(icon);
-      if (icon === "world") bindPointerAction(button, () => this.openMapPreviewDialog(), this);
-      if (icon === "channel") bindPointerAction(button, () => this.openChannelSelect(), this);
-      if (icon === "ranking") bindPointerAction(button, () => this.leaderboardDialog.open(), this);
-      if (icon === "achievement") bindPointerAction(button, () => this.achievementDialog.open(), this);
-      if (icon === layout.mailEntry) {
+    layout.entries.forEach((key) => {
+      const button = this.createRailTextButton(key);
+      if (key === "world") bindPointerAction(button, () => this.openMapPreviewDialog(), this);
+      if (key === "channel") bindPointerAction(button, () => this.openChannelSelect(), this);
+      if (key === "ranking") bindPointerAction(button, () => this.leaderboardDialog.open(), this);
+      if (key === "achievement") bindPointerAction(button, () => this.achievementDialog.open(), this);
+      if (key === layout.mailEntry) {
         bindPointerAction(button, () => this.mailDialog.open(), this);
         this.entryDot = this.createEntryDot(button);
       }
@@ -233,26 +219,20 @@ export default class SmallMap extends Node {
   }
 
   /**
-   * 文字兜底按钮（排行榜 / 线路没有方形图标）：34×34 玻璃底板 + 居中文字
-   * 文字节点名固定 `{key}_text`（线号刷新按名字取件）
-   */
-  /**
-   * rail 里的单颗入口按钮：矢量玻璃底板 + **描边图标**（稿 .map-rail 没有文字）
+   * rail 里的单个入口按钮：矢量玻璃底板 + **功能名文字**（#1310）
    *
-   * 图标 18px 居中（稿 .ic 默认 18），数据见 configs/layout/icons.ts；未知 key 画空但按钮仍在，
-   * 免得新增入口时整列错位
+   * 玩家认不出 .map-rail 那套描边图标，直接写功能名（文案见 texts 的 `map_entry_<key>`）。
+   * 底板沿用 rail 口径（`.map-rail button` ≈ surface-2 深底 + line-2 发丝边 + r-2），
+   * 文字骨白 text-2（同稿图标色）。未知 key 仍建按钮但文案为空，免得新增入口时整列错位
    */
-  private createRailIconButton(key: string) {
-    const layout = smallMapLayout.entryGrid;
+  private createRailTextButton(key: string) {
+    const grid = smallMapLayout.entryGrid;
     const button = new Node(`small_map_entry_${key}`);
-    button.addComponent(UITransform).setContentSize(layout.buttonSize, layout.buttonSize);
-    // 稿 `.map-rail button{background:rgba(22,15,9,.92)}` ≈ surface-2（比 HUD 玻璃底更深一档）
-    button.addChild(GameUiHelper.createGlassPlate(`${key}_plate`, new Size(layout.buttonSize, layout.buttonSize), T.radius.r2, T.line[2], T.surface[2]));
-    const iconNode = UiHelper.createNode(`${key}_icon`, new Vec2(), new Size(18, 18));
-    // 稿 `.map-rail button{color:var(--text-2)}`：rail 图标是**骨白**、不是金色
-    // （金色只给底栏导航 `.nbtn .ic`）—— 早前两处都画成 gold[3]，实机上 rail 一片暗棕
-    drawVectorIcon(iconNode, railIconOf(key), new Size(18, 18), T.text[2], 2);
-    button.addChild(iconNode);
+    button.addComponent(UITransform).setContentSize(grid.buttonSize);
+    button.addChild(GameUiHelper.createGlassPlate(`${key}_plate`, grid.buttonSize, T.radius.r2, T.line[2], T.surface[2]));
+    button.addChild(GameUiHelper.createText(
+      `${key}_text`, getText(`map_entry_${key}`), grid.fontSize, new Vec2(), grid.buttonSize, grid.textColor,
+    ));
     return button;
   }
 

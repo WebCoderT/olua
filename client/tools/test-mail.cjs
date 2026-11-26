@@ -236,12 +236,12 @@ try {
   const hud = read(CLIENT_HUD_LAYOUT);
   check(/private mailDialog = new MailDialog\(\{/.test(smallMap), "小地图持有邮件面板实例");
   check(/onOpenAnnouncement: \(\) => this\.openAnnouncementDialog\(\)/.test(smallMap), "公告板入口收进邮件面板（不再单独占一颗图标）");
-  check(/if \(icon === layout\.mailEntry\) \{\s*bindPointerAction\(button, \(\) => this\.mailDialog\.open\(\), this\)/.test(smallMap), "mail 入口打开消息中心");
+  check(/if \(key === layout\.mailEntry\) \{\s*bindPointerAction\(button, \(\) => this\.mailDialog\.open\(\), this\)/.test(smallMap), "mail 入口打开消息中心");
   check(/this\.entryDot\.active = this\.mailUnread \+ this\.announcementUnread > 0/.test(smallMap), "红点按「邮件待处理 + 未读公告」合计显隐");
   check(/await GameMailApi\.mine\(\{ silent: true \}\)/.test(smallMap), "进游戏静默探一次邮件（拉不到不弹提示）");
   check(/this\.setMailUnread\(box \? box\.unread \+ box\.unclaimed : 0\)/.test(smallMap), "探测口径与面板回调一致（未读 + 未领）");
-  check(/mailEntry: "mail"/.test(hud), "入口图标名在配置里（复用现成 ui/minimap/mail 素材）");
-  check(/entryDot: \{ position: new Vec2\(12, 12\), size: new Size\(8, 8\) \}/.test(hud), "红点几何在配置里（稿 .reddot：8px、right/top 1px）");
+  check(/mailEntry: "mail"/.test(hud), "入口 key 在配置里（#1310 起按钮写「消息」文字）");
+  check(/entryDot: \{ position: new Vec2\([^)]*\), size: new Size\(8, 8\) \}/.test(hud), "红点几何在配置里（8px；相对坐标随按钮尺寸走，不断言数值）");
 
   const game = read(CLIENT_GAME);
   check(/MailStore\.clear\(\);/.test(game), "离开游戏清收件箱（邮件是发给具体角色的）");

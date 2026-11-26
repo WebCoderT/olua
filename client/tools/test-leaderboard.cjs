@@ -96,7 +96,7 @@ try {
   console.log("\n— E. 入口与清缓存 —");
 
   check(
-    /if \(icon === "ranking"\) bindPointerAction\(button, \(\) => this\.leaderboardDialog\.open\(\), this\)/.test(smallMap),
+    /if \(key === "ranking"\) bindPointerAction\(button, \(\) => this\.leaderboardDialog\.open\(\), this\)/.test(smallMap),
     "「排行榜」入口是 rail 里的描边图标（稿 .map-rail 的 7 颗之一）",
   );
   check(/LeaderboardStore\.clear\(\)/.test(game), "离开游戏时清榜单缓存（否则底部那行会写上一个角色的名次）");

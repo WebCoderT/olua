@@ -74,7 +74,7 @@ try {
   check(/maps\.get\(role\.onMap\)/.test(smallMap), "线数读配置快照的 maps（#812 已下发，开弹窗不拉接口）");
   check(/CombatChannel\.currentChannel/.test(smallMap), "当前线读 world 帧带回的 channel");
   check(
-    /if \(icon === "channel"\) bindPointerAction\(button, \(\) => this\.openChannelSelect\(\), this\)/.test(smallMap),
+    /if \(key === "channel"\) bindPointerAction\(button, \(\) => this\.openChannelSelect\(\), this\)/.test(smallMap),
     "「线路」入口是 rail 里的描边图标（稿 .map-rail 的 7 颗之一）",
   );
   check(/channelDialog\.open\(config\.maxChannels, CombatChannel\.currentChannel\)/.test(read(SMALL_MAP)), "弹窗拿到线数与当前线");
