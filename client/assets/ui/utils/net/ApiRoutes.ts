@@ -280,7 +280,7 @@ export const ApiRoutes = {
      */
     ticket: "/realtime/ticket",
   },
-  /** role 模块（21 个接口） */
+  /** role 模块（22 个接口） */
   role: {
     /**
      * 角色列表（GET /roles）
@@ -330,6 +330,12 @@ export const ApiRoutes = {
      * 五个动作共用一条写路径，`action` 区分，字段组合在服务端逐条校验。
      */
     bagOp: (id: string) => `/roles/${encodeURIComponent(id)}/bag-op`,
+    /**
+     * 批量使用背包物品（药品 / 货币道具 / 升级卷轴，一次落库）（POST /roles/{id}/bag-use-batch）
+     *
+     * 自动使用的热路径：一次请求用掉若干格物品，**规则与 drug-use / money-use / level-scroll-use 完全同一份**（服务端把三条单条路径的判定抽成同一批私有助手），区别只在「一次解码、一次落库、revision 只 +1」。
+     */
+    bagUseBatch: (id: string) => `/roles/${encodeURIComponent(id)}/bag-use-batch`,
     /**
      * 药品使用（回复结算与扣减都在服务端）（POST /roles/{id}/drug-use）
      *

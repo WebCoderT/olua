@@ -11,7 +11,8 @@ import * as AutoBagPrefs from "./auto-bag-prefs";
  *
  * 三个能力都是「客户端替玩家按按钮」：判定与执行全部复用既有数据层
  * （回收 = BagService.recycleBySelection → 服务端 sellGoods；
- * 使用 = BagService.useGood（quiet）；穿戴 = BagService.equipBetterFromBag（quiet）），
+ * 使用 = BagService.useGoodsBatch → 服务端 bagUseBatch（#1304：一次请求用掉能用的全部，
+ * 单条接口仍留给手动点击）；穿戴 = BagService.equipBetterFromBag（quiet）），
  * 本类只回答「什么时候做、做几次」，不新增任何一条服务端链路。
  *
  * 触发点（唯二）：
@@ -26,6 +27,14 @@ import * as AutoBagPrefs from "./auto-bag-prefs";
 
 /** 连发背包变化的合并窗口（毫秒）：拾取一波 / 自动使用逐格会把 refreshBag 连发十几次 */
 const AUTO_BAG_SCAN_DEBOUNCE_MS = 150;
+
+/**
+ * 一次批量使用最多报多少格（#1304）
+ *
+ * 与服务端 `BagUseBatchDto` 的 `ArrayMaxSize(BAG_USE_BATCH_MAX_APPLY)` 对齐：
+ * 报多了整个请求会被 40000 拒掉，所以客户端先截断，剩下的交给下一轮扫描。
+ */
+const AUTO_USE_BATCH_MAX = 64;
 
 export default class AutoBagService {
   /** onBagChanged 的重入闸：自动使用/穿戴自身会改背包再触发 refreshBag，用闸把递归拍平 */
@@ -90,13 +99,19 @@ export default class AutoBagService {
     // ── 自动使用：背包里勾选了的、可使用的物品，逐格用掉 ──
     const useIds = AutoBagPrefs.getUseIds(role.id);
     if (useIds.size > 0) {
-      // 上限护栏：一格一格用（每用一格背包都会被服务端那份整体替换，重新扫），
-      // 64 轮足以清空任何背包；用不动（冷却 / 等级区间 / 服务端拒绝）就停，别对同一格刷请求
-      for (let guard = 0; guard < 64; guard++) {
-        const cell = findUsableCells(role.bag, useIds)[0];
-        if (!cell) break;
-        const ok = await BagService.useGood(cell.row, cell.col, { quiet: true });
-        if (!ok) break;
+      // 一次请求把「能用的都用了」（#1304 批量接口）：服务端逐条判血蓝满 / 冷却 / 等级区间，
+      // 用不动的留在包里等下一轮扫描 —— 不再一格一次 HTTP。
+      // count = 这一格的堆叠数：叠着的药 / 卷轴一次用完，不用一轮一轮啃。
+      const targets = findUsableCells(role.bag, useIds)
+        .slice(0, AUTO_USE_BATCH_MAX)
+        .map((cell) => ({
+          row: cell.row,
+          col: cell.col,
+          count: Math.max(1, Math.floor(role.bag[cell.row]?.[cell.col]?.count ?? 1)),
+        }));
+      if (targets.length > 0) {
+        const result = await BagService.useGoodsBatch(targets);
+        if (result && result.used > 0) GameUiHelper.createTip("auto_use_scan_tip", { count: result.used });
       }
     }
     // ── 自动穿戴：勾上后，背包里有「更好的」装备就换上（findBetterEquipmentInBag 口径；
