@@ -4,6 +4,7 @@ import { dropRuntime } from "../../../configs/drop";
 import AutoBattle from "../../core/AutoBattle";
 import DropManager from "../../core/DropManager";
 import LayerManager from "../../core/LayerManager";
+import MessageLogStore from "../../core/MessageLogStore";
 import MonsterManager from "../../core/MonsterManager";
 import SkillManager from "../../core/SkillManager";
 import { getHitScreenPoint, isUiPressOnUiElement } from "../../utils/input/Pointer";
@@ -57,6 +58,13 @@ export default class ScreenClickInput {
     if (!isAttack && button !== EventMouse.BUTTON_RIGHT) return;
     // 命中检测统一用屏幕坐标（见 utils/input/Pointer.getHitScreenPoint）
     const screenPoint = getHitScreenPoint(event);
+    // 临时诊断（#1328，定位后移除）：点击命中链路全量数据落消息记录
+    MessageLogStore.push(
+      "system",
+      `点击 button=${isAttack ? "左" : "右"} 坐标=(${screenPoint.x.toFixed(0)},${screenPoint.y.toFixed(0)})`
+        + ` UI=${LayerManager.isPointOnUi(screenPoint)} 起点UI=${isUiPressOnUiElement()}`
+        + ` ${MonsterManager.debugClickHit(screenPoint)}`,
+    );
     // 点在 UI 元素上：交给界面自己处理，世界侧不做任何反应
     // （不加这一层的话，点界面会走到下面的 setTarget 把当前攻击目标清掉，角色就停手了）
     if (LayerManager.isPointOnUi(screenPoint)) return;

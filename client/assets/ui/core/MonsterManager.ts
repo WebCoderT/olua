@@ -1,4 +1,4 @@
-import { Animation, isValid, Label, Node, ProgressBar, Rect, UITransform, Vec2, Vec3 } from "cc";
+import { Animation, isValid, Label, Node, ProgressBar, Rect, UITransform, Vec2, Vec3, view } from "cc";
 import { monsterResourceOf, monsterStatsOrDefault } from "../../configs/game-config";
 import { findSkillConfig, skills } from "../../configs/skill";
 import { statuses } from "../../configs/game-config";
@@ -159,6 +159,37 @@ export default class MonsterManager {
       if (isValid(node) && node.getComponent(UITransform).hitTest(position)) return node;
     }
     return null;
+  }
+
+  /** 临时诊断（#1328，定位后移除）：点击命中链路的运行时数据，结果落右下角消息记录 */
+  static debugClickHit(screenPoint: Vec2): string {
+    const parts: string[] = [];
+    let total = 0;
+    let shown = 0;
+    for (const [node, monster] of this.monsterMap) {
+      if (!isValid(node)) continue;
+      total += 1;
+      if (shown >= 2) continue;
+      shown += 1;
+      const trans = node.getComponent(UITransform);
+      const hit = trans ? trans.hitTest(screenPoint) : "无UITransform";
+      const wp = node.getWorldPosition();
+      parts.push(
+        `${monster.label} layer=${node.layer} size=${trans ? trans.contentSize.width : "?"}x${trans ? trans.contentSize.height : "?"}`
+        + ` 世界=(${wp.x.toFixed(0)},${wp.y.toFixed(0)}) 命中=${hit}`,
+      );
+    }
+    const camera = LayerManager.camera;
+    if (camera) {
+      const world = camera.screenToWorld(new Vec3(screenPoint.x, screenPoint.y, 0), new Vec3());
+      const pixelSize = view.getVisibleSizeInPixel();
+      parts.push(
+        `相机 vis=${camera.visibility} 世界点=(${world.x.toFixed(0)},${world.y.toFixed(0)})`
+        + ` 画布像素=${pixelSize.width.toFixed(0)}x${pixelSize.height.toFixed(0)} dpr=${view.getDevicePixelRatio()}`,
+      );
+    }
+    parts.push(`怪物总数=${total}`);
+    return parts.join(" | ");
   }
 
   /**
