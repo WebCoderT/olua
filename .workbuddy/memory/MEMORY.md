@@ -40,6 +40,9 @@
 - **要造「出厂没有的刷怪区」必须在起服后、首次进图（房创建）前插**（#1084）：空库首启的出厂自举
   会整份灌 config-sync.sql，把启动前预插的 `map_spawn_areas` 行抹掉。
 - 延迟类指标只打印分位数、不设阈值（#1043）。
+- **「只有新加的没声音 / 图片」先查产物新旧**（#1301 后踩过）：`assets/resources/config.json` 里有没有该资源
+  映射 + `assets/main/index.js` 里有没有调用点，两样都缺就是那份客户端产物比代码旧（重新构建即好），
+  别一头扎进 SoundManager / 资源加载。
 - 「每张表必须归类」有守点（#438，`e2e-guard` 与 `config-tables.cjs` 双向比对）。
 - **合并前类型检查以 `make ci-static` 为准**（#804）：单跑 `make client-check` 0 错，`ci-static` 仍可能报真错。
 - 工具链：只信 Grep 工具（BSD grep 交替恒空）· 批量替换 `perl -pi -e` · `curl --noproxy '*'` · 判进程 `kill -0`。
@@ -74,15 +77,28 @@ compose 五服务：admin:80 唯一入口 / game:8080 / server:3100 / realtime:3
 **停服期只发官网**：`deploy.sh --no-build` 跳过 `compose up -d`，不会把已 `stop` 的 server/realtime/game 拉起；verify 的 game 502 属预期（#1290）。
 **HTTPS（#742，`profiles: ["tls"]`）** 加 `edge`（独占 :80/:443，443 → admin:80）+ `certbot`，admin 退到 `127.0.0.1:8081`；
 开关是 `deploy.env` 的 `OLUA_TLS=on` → `deploy.sh` 派生 `COMPOSE_PROFILES` + 端口变量，首签 `--tls-init`。
+**`/game-resources/` 由 admin 自己的 nginx 出**（#1305/#1307）：`alias /usr/share/nginx/game-resources/` +
+compose 挂 `./game/resources:...:ro`（与 server 的 `EQUIPMENT_APPEARANCE_RES_DIR` 同一宿主机目录），
+**不许改回反代 game 容器**（game 一停就是 502，页面只会说「文件不在资源包里」）。
+坑：nginx 自带 mime.types 没有 wav，且 **location 里写 `types{}` 会把父级映射整份顶掉**（json/png 一起变
+octet-stream）→ 必须同层 `include /etc/nginx/mime.types;` 再补 `audio/wav wav;`。本机没有 docker/envsubst，
+模板渲染与行为验证只能在服务器上做（`ssh -i olua.pem ubuntu@`，root 登不上）。
 
 ## admin 视觉 = legend 设计系统（#946）
 - token 唯一来源 `admin/src/index.css` 的 `@theme`（surface/line/ink/gold/ember/jade/warn 语义名）；稿单一来源
   `design/legend-console/`。**Tailwind 内置色族与裸色值全禁**；四族职责不交叉；金底必配深字；SVG 用 `var(--color-*)`。
 - 守点 `audit-admin-ui` 七条（结构 4 + 词汇 3），**改守点后必须反证**。Badge/Notice tone 键 = `jade/ember/gold/warn/muted`。
 - 新页面一律 `cd admin && npm run new:page -- <Name>` 起步（合规骨架 + `__UI_CAPTURE__` 状态清单）；显示效果靠人眼看截图，不写断言。
+- **动画预览采样口径（#1312）**：`FrameAnimation` 的 atlas 以 `effect/` 开头（边框/背景光效图集）= 双线性平滑
+  （与游戏内 Cocos 线性过滤一致），其余像素素材保持最近邻 pixelated；判定在组件内 `frameSmoothOf`，别在调用点散写。
+  背景：光效是软渐变，最近邻缩非整数倍会逐帧闪跳（"有的位置会抖"）。坑：帧间错位的互相关判据在细发光线上**退化**
+  （平移 1~2px 重合度差 <2%），不能当证据，要目视对照帧图。
 
 ## 进度与口径（细节 → `topics/进度年表.md`）
-- **当前 open**（2026-11-26）：只剩 #403 帮会战（远期占位）。**#1286 前后缀掉落权重（变体随机掉落）已合**
+- **当前 open**（2026-11-27）：只剩 #403 帮会战（远期占位）。**#1322 border-30123~30134 下线已合**
+  （PR #1323 `4c5bc382`：清单 84→72、出厂基数 30123→30135、快照 appearance 行外科平移；
+  坑：快照整体重导是待决项，重导会打红 drug-percent / monster-config 两个数据单测）·
+  **#1286 前后缀掉落权重（变体随机掉落）已合**
   （PR #1292 `155f0a9b`：equipment_meta 加 prefix/suffix_drop_weights 两列（[] = 不抽档、行为与合并前一致），
   rollDrops 命中基础件时抽档改写 _pXsY，手写变体 id 不二次抽档；管理端装备规则页每档「掉落权重」列 0 = 不掉落；
   开抽档把权重配非零即可，无需迁移；变体 p0s0 的 id 就是基础件本身，抽档要特判）·
@@ -108,8 +124,8 @@ compose 五服务：admin:80 唯一入口 / game:8080 / server:3100 / realtime:3
   wrapped label 的配置 y 是**文字块上边缘**不是中心；稿的 `.panel` 高度可溢出、客户端有硬边界 → 取内容实际高度（05 背包 500→540）。
   刻意不按稿：14 聊天（常驻左下小窗 #469）、08 商城（现用整图美术）。
 - **收口类 issue 关了就回去划文档的「缺口表」**：改法 `~~原文~~` + 已修（#nnnn）；优先级矩阵只标 ✅ 不重排（重排是玩法决策）。
-- **口径数字**：`docs/14` 281 个 operationId（以 `audit-docs-toc` 现算为准）；client 单测 72 套；
-  e2e **按 `test:e2e*` 脚本数 95 套**（`ls test/e2e*.cjs` 是 94，差 `test:e2e:backup`）；`make audit` 19 项；
+- **口径数字**：`docs/14` 284 个 operationId（以 `audit-docs-toc` 现算为准）；client 单测 75 套；
+  e2e **按 `test:e2e*` 脚本数 97 套**（`ls test/e2e*.cjs` 是 96，差 `test:e2e:backup`）；`make audit` 19 项；
   表 77 = 39 配置 + 38 运行时；管理端 53 页面 / 54 路由；客户端 32 Manager；`docs/37` 是最高优先单一来源。
 - **派生数字守点**（口诀：**要么精确维护、要么不写**）：
   `audit-docs-toc` 守目录表四类（每篇登记 / 序号 == 文件名前缀 / 无死链 / `N 个接口` == `openapi.json`）·

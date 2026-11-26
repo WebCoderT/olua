@@ -32,7 +32,7 @@
  * 以后再有「开发和打包行为不一样」的配置（地址、日志、调试工具……）都加到这里，
  * 用 `DEV_MODE ? 开发值 : 打包值` 表达，不再各写各的开关。
  */
-export const DEV_MODE = true;
+export const DEV_MODE = false;
 
 /** 开发模式连的服务端端口（与服务端 `server/.env` 的 PORT 默认值一致） */
 const DEV_PORT = 3100;
