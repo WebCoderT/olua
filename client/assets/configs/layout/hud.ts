@@ -152,13 +152,18 @@ export const bottomBarLayout = {
     /** 球下方的小标题（稿 `.orb-cap`：bottom -19 → 中心 -64；10px、字距拉开） */
     caption: { text: "法力", position: new Vec2(0, -56), size: new Size(60, 12), fontSize: T.fontSize.f10, color: T.text[3], spacingX: 2 },
   },
-  /** 快捷键栏（横向布局容器，5 格 = 5×48 + 4×4 = 256，与挂机条 / 经验条同宽同列） */
-  shortcutBar: { spacing: 4, position: new Vec2(-202, 9), size: new Size(256, 56) },
+  /**
+   * 快捷键栏（横向布局容器，5 格 = 5×48 + 4×4 = 256，与挂机条 / 经验条同宽同列）
+   *
+   * #1310：槽由 48×56 改为 48×48 正方形 —— 高度与宽度一致（图标本来就是方的，多出的 8px 只是空着）。
+   * 四组共用底线 -19 不变，故栏中心由 9 上移到 5（底边仍 -19、顶边 29）。
+   */
+  shortcutBar: { spacing: 4, position: new Vec2(-202, 5), size: new Size(256, 48) },
   /** 单个快捷键槽：图标尺寸 + 右下角按键名 + 居中冷却倒计时 */
   shortcutSlot: {
-    size: new Size(48, 56),
-    /** 稿 `.sslot .k{right:3px;bottom:1px}` → 槽中心 (19, -23)，字号 9 */
-    key: { position: new Vec2(19, -23), size: new Size(20, 10), fontSize: T.fontSize.f10 },
+    size: new Size(48, 48),
+    /** 稿 `.sslot .k{right:3px;bottom:1px}` → 距右/底各 5px，48 高槽中心 (19, -19)，字号 9 */
+    key: { position: new Vec2(19, -19), size: new Size(20, 10), fontSize: T.fontSize.f10 },
     cooldown: { position: new Vec2(0, 0), size: new Size(40, 20), fontSize: T.fontSize.f16 },
     /** 空槽（未绑技能）：稿 `.sslot.is-empty` 虚线框 + 12px text-4；客户端没有技能名，用一个占位字 */
     emptyColor: T.text[4],
@@ -266,11 +271,13 @@ export const smallMapLayout = {
   size: new Size(304, 256),
   position: new Vec2(788, 398),
   /**
-   * 功能入口 rail（稿 `.map-rail`）：**2 列 × 34px、间距 5、共 7 颗描边图标**
-   * 世界 / 线路 / 排行榜 / 成就 / 消息(+红点) / 设置 / 声音 —— 排行榜与线路**在 rail 里**，
+   * 功能入口 rail（稿 `.map-rail`）：**2 列、间距 5、共 7 个文字按钮**（#1310 起由描边图标改文字，
+   * 玩家认不出图标含义）。世界 / 线路 / 排行榜 / 成就 / 消息(+红点) / 设置 / 声音 —— 排行榜与线路**在 rail 里**，
    * 底部（.map-foot）只剩世界坐标（早前「胶囊在地图下方」是看漏稿，#1076 尾批已改回）
+   *
+   * key 同时是按钮节点名后缀（`small_map_entry_<key>`）与文案 key 后缀（`map_entry_<key>`）
    */
-  entryIcons: ["world", "channel", "ranking", "achievement", "mail", "config", "sound"],
+  entries: ["world", "channel", "ranking", "achievement", "mail", "config", "sound"],
   /**
    * 哪个入口开消息中心（邮件面板，公告板在面板里；#429 之前这颗只开公告板）
    *
@@ -278,12 +285,23 @@ export const smallMapLayout = {
    * 两路都是「有东西要处理」，分成两个红点反而要玩家去猜哪个更急。
    */
   mailEntry: "mail",
-  /** 未读红点（稿 `.map-rail .reddot`：8px、right/top 1px → 按钮中心坐标 (12,12)） */
-  entryDot: { position: new Vec2(12, 12), size: new Size(8, 8) },
-  /** rail 网格（稿 `grid-template-columns:34px 34px; gap:5px`） */
-  entryGrid: { columns: 2, buttonSize: 34, gap: 5 },
-  /** rail 容器中心：left = -152-81 = -233、宽 73；top = +125、高 = 4 行×34 + 3×5 = 151 */
-  entryGridPosition: new Vec2(-196.5, 53),
+  /** 未读红点（8px；按钮右上角内侧 1px —— 与稿 `.reddot{right:1px;top:1px}` 同口径，58×26 按钮相对坐标 (24,8)） */
+  entryDot: { position: new Vec2(24, 8), size: new Size(8, 8) },
+  /**
+   * rail 网格：2 列文字按钮（#1310）
+   *
+   * 按钮 58×26：最长文案「排行榜」3 字 × 12px = 36，左右各留 11 内边距；
+   * 4 行 × 26 + 3×5 = 119 高。文字 f12 骨白（同稿 rail 图标的 text-2），底/边沿用 rail 原有口径。
+   */
+  entryGrid: {
+    columns: 2,
+    buttonSize: new Size(58, 26),
+    gap: 5,
+    fontSize: T.fontSize.f12,
+    textColor: T.text[2],
+  },
+  /** rail 容器中心：右缘贴面板左缘留 8 → x = -152-8-60.5；顶边与面板顶边对齐 → y = +128-59.5 */
+  entryGridPosition: new Vec2(-220.5, 68.5),
   /** 标题条（稿 `.map-head`：高 40、内容居中 —— 图名 gold-5 + 「· N 线」text-4 + 下拉箭头 12px） */
   head: {
     /** 条带在面板内的中心 y（稿 `.map-head` 中心 505，面板中心 398 → +107） */

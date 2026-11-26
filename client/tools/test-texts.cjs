@@ -62,6 +62,14 @@ const checks = [
   ["channel_changed_tip", { channel: 3 }, "已切换到3线"],
   ["channel_full_suggest_tip", { channel: 2, suggest: 1 }, "2线已满，1线还有空位"],
   ["channel_full_tip", { channel: 2 }, "2线已满"],
+  // HUD 右上角小地图入口（#1310 由图标改文字：按钮上就是这几个词，玩家靠它认功能）
+  ["map_entry_world", undefined, "世界"],
+  ["map_entry_channel", undefined, "线路"],
+  ["map_entry_ranking", undefined, "排行榜"],
+  ["map_entry_achievement", undefined, "成就"],
+  ["map_entry_mail", undefined, "消息"],
+  ["map_entry_config", undefined, "设置"],
+  ["map_entry_sound", undefined, "声音"],
 ];
 
 let bad = 0;

@@ -196,7 +196,7 @@ if (sandbox) {
 
     // 游戏内：小地图「公告」入口 + 未读红点
     check(/import AnnouncementBoardDialog from "\.\.\/dialogs\/AnnouncementBoardDialog";/.test(smallMapSource), "小地图引了公告板弹窗");
-    check(/icon === layout\.mailEntry/.test(smallMapSource), "消息入口由配置指定（layout.mailEntry，#429 起邮件面板承载公告入口）");
+    check(/key === layout\.mailEntry/.test(smallMapSource), "消息入口由配置指定（layout.mailEntry，#429 起邮件面板承载公告入口）");
     check(/onOpenAnnouncement: \(\) => this\.openAnnouncementDialog\(\)/.test(smallMapSource), "公告入口挂在邮件面板上（消息中心 > 公告）");
     check(/this\.announcementDialog\.open\(\)/.test(smallMapSource), "公告入口真的打开公告板");
     check(/this\.entryDot = this\.createEntryDot\(button\)/.test(smallMapSource), "消息入口上挂了未读红点节点");
@@ -275,14 +275,14 @@ if (sandbox) {
     check(/confirmButton: \{ name: "announcement_notice_confirm_button", text: "我知道了"/.test(noticeBlock), "「我知道了」的几何与文案都在配置里");
     check(/item: \{[\s\S]{0,400}itemGap: \d/.test(noticeBlock), "条目间距仍走配置（提醒弹窗一条条纵向摊开；具体数值手调，不断言）");
 
-    // 小地图入口与红点（稿 .map-rail：2 列 34px、7 颗描边图标，不再用 ui/minimap 图标）
+    // 小地图入口与红点（#1310：rail 由描边图标改成文字按钮，玩家认不出图标含义）
     check(/mailEntry: "mail"/.test(hudSource), "消息入口仍指定为 mail（红点与公告板都跟它走）");
-    // rail 是稿 .map-rail 的 7 颗描边图标（世界/线路/排行榜/成就/消息+红点/设置/声音）
     check(
-      /entryIcons: \["world", "channel", "ranking", "achievement", "mail", "config", "sound"\]/.test(hudSource) && /createRailIconButton/.test(smallMapSource),
-      "mail 在入口 rail 清单里（矢量图标按钮，无图标素材）",
+      /entries: \["world", "channel", "ranking", "achievement", "mail", "config", "sound"\]/.test(hudSource) && /createRailTextButton/.test(smallMapSource),
+      "mail 在入口文字按钮清单里（按钮写功能名，不画图标）",
     );
-    check(/entryDot: \{ position: new Vec2\(12, 12\), size: new Size\(8, 8\) \}/.test(hudSource), "未读红点几何在配置里（稿 .reddot：8px、right/top 1px）");
+    check(!/railIconOf|icons\.mapMail/.test(smallMapSource), "rail 不再画描边图标（#1310 全部文字）");
+    check(/entryDot: \{ position: new Vec2\([^)]*\), size: new Size\(8, 8\) \}/.test(hudSource), "未读红点几何在配置里（8px；相对坐标随按钮尺寸走，不断言数值）");
 
     // 新增脚本都带 .meta（进 Cocos 工程的前提）
     [

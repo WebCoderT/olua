@@ -758,6 +758,21 @@ export const uiTexts = {
    * 分线才追加「· 2 线」这样的后缀。
    */
   map_channel_suffix: " · {channel}线",
+  //#region 界面标签：小地图入口按钮（#1310 由图标改文字；几何见 configs/layout/hud.smallMapLayout.entryGrid）
+  /**
+   * 右上角小地图左侧的 7 个入口（key 见 smallMapLayout.entries）
+   *
+   * 都用功能名，不写图标 —— 玩家认不出那套描边图标谁是谁。
+   * 「排行榜」是 3 字（36px），按钮宽 58 留得住，不必缩写成「排行」。
+   */
+  map_entry_world: "世界",
+  map_entry_channel: "线路",
+  map_entry_ranking: "排行榜",
+  map_entry_achievement: "成就",
+  map_entry_mail: "消息",
+  map_entry_config: "设置",
+  map_entry_sound: "声音",
+  //#endregion
   /** 选线弹窗标题（#1016） */
   channel_select_title: "选择线路",
   /** 选线弹窗说明（为什么同一张图会有好几条线） */
