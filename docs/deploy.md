@@ -313,6 +313,11 @@ bash .workbuddy/skills/olua-deploy/scripts/deploy.sh --game client/build/web-des
 `docker compose --profile game up -d game`（**显式打开 profile**：game 默认不启动，#1314）→ 验收。
 不想发客户端了就 `docker compose rm -sf game` 把容器拿掉，普通部署不会再把它拉回来。
 
+> ⚠️ `--game` 与 `--resources` 的目标是**嵌套**的：`game/resources/`（管理端素材）挂在
+> `game/`（Web 产物）里面。`--game` 的 rsync 必须带 `--exclude=/resources`（#1318，脚本里已
+> 写死并有审计守点），否则 `--delete` 会把管理端素材整目录清掉——地图切片、装备对齐、
+> `/game-resources/` 全 404，只能靠重跑 `--resources`（2.4G 全量）恢复。
+
 ### 9.3 体积与耗时（做好心理预期）
 
 | 项 | 事实 |

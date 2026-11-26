@@ -233,7 +233,10 @@ sync_game() {
   echo "==> rsync 增量同步 → $DEPLOY_DIR/game/（首次全量，之后只传差异）"
   # 这里**不用 rsync 的 -z**：产物主体是已经压过的 PNG（实测 200MB → gzip 195MB，
   # 几乎零收益），压缩只会白耗本机与服务器两端 CPU，反而拖慢传输。
-  rsync -a --delete --stats \
+  # --exclude=/resources 是保命的：管理端素材 game/resources/ 也挂在这个目录下
+  # （--resources 模式的 rsync 目标），产物里没有这个子目录，不带 exclude 的
+  # --delete 会把它整目录清掉（#1318 线上事故：地图切片 / /game-resources/ 全 404）。
+  rsync -a --delete --stats --exclude=/resources \
     -e "ssh -i $KEY -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null" \
     "$src/" "$TARGET:$DEPLOY_DIR/game/" || { echo "✗ rsync 失败"; exit 1; }
   echo "==> 起/更新 game 容器（--profile game 显式打开；不写 profile 时它默认不启动，#1314）"
