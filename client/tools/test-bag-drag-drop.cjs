@@ -90,12 +90,15 @@ function main() {
   const gridSrc = readSrc("ui/components/panel/BagGridView.ts");
   const refreshBody = extractMethod(gridSrc, "refresh(role: Role)");
   check(!!refreshBody, "BagGridView.refresh 存在");
+  // #1300 起单格事件注册收敛进 renderCell（增量刷新：签名没变的格子不动监听）
+  const renderCellBody = extractMethod(gridSrc, "renderCell(cell: Node, rowIndex: number, colIndex: number");
+  check(!!renderCellBody, "BagGridView.renderCell 存在（单格重建收敛在一处）");
   check(
-    !!refreshBody && /TOUCH_END, \(event: EventTouch\) => this\.onCellTouchEnd\(event\)/.test(refreshBody),
+    !!renderCellBody && /TOUCH_END, \(event: EventTouch\) => this\.onCellTouchEnd\(event\)/.test(renderCellBody),
     "TOUCH_END 接到落子收尾 onCellTouchEnd",
   );
   check(
-    !!refreshBody && /TOUCH_CANCEL, \(event: EventTouch\) => this\.onCellTouchEnd\(event\)/.test(refreshBody),
+    !!renderCellBody && /TOUCH_CANCEL, \(event: EventTouch\) => this\.onCellTouchEnd\(event\)/.test(renderCellBody),
     "TOUCH_CANCEL 也接到同一个落子收尾（引擎把「松手在起点格外」改判成 CANCEL，#193）",
   );
   check(!/TOUCH_CANCEL, \(\) => this\.endDrag\(\)/.test(gridSrc), "CANCEL 不再是裸 endDrag（那会让拖动永不落子）");

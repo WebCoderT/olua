@@ -2,7 +2,7 @@ import { EventMouse, EventTouch, isValid, Node, Sprite, UITransform, Vec2, Vec3 
 import { Role } from "../../../entities/Role";
 import { cursorConfig, getGoodCursorStyle } from "../../../configs/cursor";
 import { getItem } from "../../../configs/items";
-import { BagCellPos, isEquipment } from "../../../types/good";
+import { BagCell, BagCellPos, isEquipment } from "../../../types/good";
 import CursorManager from "../../core/CursorManager";
 import StorageManager from "../../core/StorageManager";
 import GameUiHelper from "../../helpers/GameUiHelper";
@@ -83,6 +83,14 @@ interface BagDragState {
 export default class BagGridView extends Node {
   /** 格子节点（[行][列]） */
   private cells: Node[][] = [];
+  /**
+   * 每格的渲染签名（#1300）：`id / count / bound / from` 拼一起，空格为 null
+   *
+   * 增量刷新的依据：签名没变的格子原样保留（节点、事件监听、悬停注册都不动），
+   * 只重建变了的格子。以前每次 refresh 都把 40 格全部 clearChildren + 重建 ——
+   * 拾取一波 / 自动使用逐格都会连发 refresh，网格重建本身 10ms 级，连发就是秒级卡顿。
+   */
+  private rendered: (string | null)[][] = [];
   /** 格子操作回调（由弹窗注入） */
   private handleCellAction: BagCellHandler;
   /** 受理区与「拖出受理区」上报（由弹窗注入） */
@@ -113,49 +121,69 @@ export default class BagGridView extends Node {
     GameUiHelper.applyColumnStyle(this, bagGridLayout.rowSpacing, bagGridLayout.position, bagGridLayout.size);
     // 行与格子由零件工厂生成（行容器为格子的 flex row）
     this.cells = GameUiHelper.createRoleBagCellRow(this);
+    // 渲染签名与格子同形，初始全空（第一次 refresh 全量铺）
+    this.rendered = this.cells.map((row) => row.map(() => null));
     // 网格内的触摸不外传（否则一拖物品，整个弹窗也跟着拖）
     this.setupTouchOwnership();
   }
 
-  /** 按背包数据刷新：先清空旧内容（真正销毁）与旧监听，再逐格填充物品与操作事件 */
+  /**
+   * 按背包数据刷新：**增量**（#1300）—— 逐格比对渲染签名，只重建变了的格子
+   *
+   * 单格重建（拆监听 → 清子节点 → 铺物品 → 重挂事件）收敛在 renderCell；
+   * 签名没变的格子什么都不动，重复 refresh 的主线程开销从「全量重建 40 格」
+   * 降到「逐格字符串比较」。
+   */
   refresh(role: Role) {
-    // 刷新会重建格子节点，进行中的拖动（幽灵、高亮、压暗）随之作废，先收干净
+    // 刷新会重建变化的格子，进行中的拖动（幽灵、高亮、压暗）随之作废，先收干净
     this.endDrag();
-    this.cells.forEach((row) =>
-      row.forEach((cell) => {
-        CursorManager.unregisterHover(cell);
-        clearChildren(cell);
-        cell.targetOff(this);
+    this.cells.forEach((row, rowIndex) =>
+      row.forEach((cell, colIndex) => {
+        // 角色缺失（登出瞬间弹窗还开着）按整包空处理；bag 尺寸与格子不一致时越界读按空格处理
+        const bagCell = role?.bag[rowIndex]?.[colIndex] ?? null;
+        const signature = bagCell
+          ? `${bagCell.id}\u0001${bagCell.count}\u0001${bagCell.bound ? 1 : 0}\u0001${bagCell.from ?? ""}`
+          : null;
+        if (this.rendered[rowIndex]?.[colIndex] === signature) return;
+        this.renderCell(cell, rowIndex, colIndex, bagCell, signature);
       }),
     );
-    role.bag.forEach((row, rowIndex) => {
-      row.forEach((bagCell, colIndex) => {
-        if (!bagCell) return;
-        // 格子只存物品 key，显示数据实时解析（id 失效的格子跳过不渲染）
-        const good = getItem(bagCell.id);
-        if (!good) return;
-        const cell = this.cells[rowIndex][colIndex];
-        // 传格子数量 → 可叠加物右下角画数量角标（画不画、画多少由 configs/items.getStackBadge 决定）
-        // compareWornProvider → 悬停装备按住 Ctrl 时与身上同槽位穿戴对比（身上装备槽不传，不对比）
-        // meta → 这一格的绑定与掉落溯源（#789，详情弹窗据此显示「已绑定」与掉落来源）
-        GameUiHelper.createGood(cell, good, bagCell.count, {
-          compareWornProvider: () => (isEquipment(good) ? StorageManager.getWornEquipment(good.slot) : null),
-          meta: { bound: bagCell.bound, from: bagCell.from },
-        });
-        // 拖动手势（只有有物品的格子才需要：空格没什么可拖的，落点则用指针位置单独判定）。
-        // 结束收尾 END 与 CANCEL 都接到 onCellTouchEnd：引擎把「松手在认领节点之外」改判成
-        // TOUCH_CANCEL（见类注释），只挂 END 的话拖到别的格子松手永远不落子
-        cell.on(Node.EventType.TOUCH_START, (event: EventTouch) => this.onCellTouchStart(rowIndex, colIndex, event), this);
-        cell.on(Node.EventType.TOUCH_MOVE, (event: EventTouch) => this.onCellTouchMove(event), this);
-        cell.on(Node.EventType.TOUCH_END, (event: EventTouch) => this.onCellTouchEnd(event), this);
-        cell.on(Node.EventType.TOUCH_CANCEL, (event: EventTouch) => this.onCellTouchEnd(event), this);
-        // 右键按住不该拖动物品：TOUCH_* 事件不带按键，另在鼠标通道记一笔（触屏环境收不到，恒为左键）
-        cell.on(Node.EventType.MOUSE_DOWN, (event: EventMouse) => this.onCellMouseDown(event), this);
-        bindPointerAction(cell, (button) => this.onCellAction(rowIndex, colIndex, this.toAction(button)), this);
-        // 鼠标移到格子里的物品上时显示该物品大类对应的指针颜色（界面物品优先于世界对象）
-        CursorManager.registerHover(cell, cursorConfig.priority.ui, () => getGoodCursorStyle(good.type));
-      });
+  }
+
+  /**
+   * 重建一个格子（拆旧挂新，见 refresh 的说明）
+   *
+   * 空格 / 配置表里认不出的物品：清干净后直接返回（签名照记，下一轮同样跳过）。
+   */
+  private renderCell(cell: Node, rowIndex: number, colIndex: number, bagCell: BagCell | null, signature: string | null) {
+    if (!this.rendered[rowIndex]) this.rendered[rowIndex] = [];
+    this.rendered[rowIndex][colIndex] = signature;
+    CursorManager.unregisterHover(cell);
+    clearChildren(cell);
+    cell.targetOff(this);
+    if (!bagCell) return;
+    // 格子只存物品 key，显示数据实时解析（id 失效的格子跳过不渲染）
+    const good = getItem(bagCell.id);
+    if (!good) return;
+    // 传格子数量 → 可叠加物右下角画数量角标（画不画、画多少由 configs/items.getStackBadge 决定）
+    // compareWornProvider → 悬停装备按住 Ctrl 时与身上同槽位穿戴对比（身上装备槽不传，不对比）
+    // meta → 这一格的绑定与掉落溯源（#789，详情弹窗据此显示「已绑定」与掉落来源）
+    GameUiHelper.createGood(cell, good, bagCell.count, {
+      compareWornProvider: () => (isEquipment(good) ? StorageManager.getWornEquipment(good.slot) : null),
+      meta: { bound: bagCell.bound, from: bagCell.from },
     });
+    // 拖动手势（只有有物品的格子才需要：空格没什么可拖的，落点则用指针位置单独判定）。
+    // 结束收尾 END 与 CANCEL 都接到 onCellTouchEnd：引擎把「松手在认领节点之外」改判成
+    // TOUCH_CANCEL（见类注释），只挂 END 的话拖到别的格子松手永远不落子
+    cell.on(Node.EventType.TOUCH_START, (event: EventTouch) => this.onCellTouchStart(rowIndex, colIndex, event), this);
+    cell.on(Node.EventType.TOUCH_MOVE, (event: EventTouch) => this.onCellTouchMove(event), this);
+    cell.on(Node.EventType.TOUCH_END, (event: EventTouch) => this.onCellTouchEnd(event), this);
+    cell.on(Node.EventType.TOUCH_CANCEL, (event: EventTouch) => this.onCellTouchEnd(event), this);
+    // 右键按住不该拖动物品：TOUCH_* 事件不带按键，另在鼠标通道记一笔（触屏环境收不到，恒为左键）
+    cell.on(Node.EventType.MOUSE_DOWN, (event: EventMouse) => this.onCellMouseDown(event), this);
+    bindPointerAction(cell, (button) => this.onCellAction(rowIndex, colIndex, this.toAction(button)), this);
+    // 鼠标移到格子里的物品上时显示该物品大类对应的指针颜色（界面物品优先于世界对象）
+    CursorManager.registerHover(cell, cursorConfig.priority.ui, () => getGoodCursorStyle(good.type));
   }
 
   /** 指针按键转背包动作（左键使用、右键穿戴） */
