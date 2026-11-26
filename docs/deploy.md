@@ -12,8 +12,8 @@
               ├─ yimw.cn / www        ─► 官网容器(nginx，挂 ./website 纯静态)
               ├─ admin.yimw.cn / IP   ─► 管理端（本容器静态页 + 单页前端路由，default_server 兜底）
               │    ├─►  /api/*  ────────────────┐
-              │    └─►  /game-resources/* ──┐   │
-              │                             │   │
+              │    └─►  /game-resources/*  → 本容器 alias（挂 ./game/resources，不经 game 容器）
+              │                                 │
               └─ game.yimw.cn         ─► 游戏容器(nginx，同一份 Cocos 产物)
                     ├─►  /api/*  ─────────┤（含 /api/realtime 的 WS upgrade 头）
                     ▼                     ▼
@@ -38,9 +38,12 @@
 `deploy.env` 的 `OLUA_SITE_DOMAINS` / `OLUA_ADMIN_DOMAIN` / `OLUA_GAME_DOMAIN` 里给，
 deploy.sh 每次部署生成 compose `.env` 上传 → 换域名只改 deploy.env 重发，不改代码、不重建镜像。
 
-管理端的图片 / 音效选择器与装备对齐工作台走 `/game-resources/`（反代到 game 容器的
-`/resources/`）：那份素材（`client/assets/resources`，含 `image-manifest.json` /
-`audio-manifest.json`）**不在 Cocos 构建产物里**，要单独 `deploy.sh --resources` 增量同步。
+管理端的图片 / 音效选择器与装备对齐工作台走 `/game-resources/`，由**管理端容器自己的 nginx**
+从挂进来的 `./game/resources` 直出（`alias`，与 server 的 `EQUIPMENT_APPEARANCE_RES_DIR` 是同一份）：
+那份素材（`client/assets/resources`，含 `image-manifest.json` / `audio-manifest.json`）
+**不在 Cocos 构建产物里**，要单独 `deploy.sh --resources` 增量同步。
+**不要改回反代 game 容器**（#1305）：素材与游戏进程是两个生命周期，game 停机时（如"只保留官网"
+的停服期）反代拿到 502，而页面只会说"文件不在资源包里"，排查方向直接跑偏。
 
 五条设计约束，改动时别破坏：
 

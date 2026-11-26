@@ -100,6 +100,8 @@ export default class SoundManager {
   private static clickBound = new WeakSet<Node>();
   /** 每个 key 上一次播放的时间戳（仅用于带 `minGapMs` 的调用，见 `play`） */
   private static lastPlayAt = new Map<string, number>();
+  /** 已经因为「配置不可用」警告过的 key（每个 key 只报一次，见 `warnSkipped`） */
+  private static warnedKeys = new Set<string>();
 
   /**
    * 建常驻节点（幂等，第一次调用时生效）
@@ -176,7 +178,10 @@ export default class SoundManager {
     }
     if (audioConfigs.size === 0) await this.ensureConfig();
     const config = audioConfigOf(key);
-    if (!config) return;
+    if (!config) {
+      this.warnSkipped(key);
+      return;
+    }
     this.init();
     if (!this.node || !this.sfx) return;
     const clip = await this.clipOf(config.filePath);
@@ -295,6 +300,24 @@ export default class SoundManager {
         this.configRequest = null;
       });
     return this.configRequest;
+  }
+
+  /**
+   * 「这一项为什么不响」的唯一可观测点（#1305）
+   *
+   * `audioConfigOf` 的三种 null（没下发 / 已停用 / 路径为空）以前都是静默 return：
+   * 现场只有「没声音」，日志里一个字都没有，于是「配置没到」和「文件没进资源包」
+   * （后者由 `clipOf` 的 warn 交代）长得一模一样。加新音效时这一条尤其值钱。
+   *
+   * 同一个 key 只报一次：战斗里每 80ms 就可能调一次，刷屏比不报更难查。
+   */
+  private static warnSkipped(key: string): void {
+    if (this.warnedKeys.has(key)) return;
+    this.warnedKeys.add(key);
+    const row = audioConfigs.get(key);
+    // 三种原因必须写在同一行：`audit-config-leak` 的「中文文案」判据是**按行**看的，
+    // 一旦把文案拆到没有 `console.` 的行上，就会被当成玩家可见文案报红。
+    console.warn(`[sound] 跳过 ${key}：${!row ? "服务端没有下发这个 key" : row.enabled ? "filePath 为空" : "该项已停用"}`);
   }
 
   /**
