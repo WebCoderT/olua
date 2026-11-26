@@ -98,9 +98,20 @@ server {
   # 顺手交给 nginx 做 Range/206：<audio> 与大图都靠它，别自己实现。
   location /game-resources/ {
     alias /usr/share/nginx/game-resources/;
-    # 素材只在发版/同步时变，允许缓存但别太久（改完素材不该等一周才看到）
+    # wav 的 MIME 要自己补：nginx 1.27 自带的 mime.types 里只有 mp3 / ogg，没有 wav ——
+    # 不补的话试听拿到的是 `application/octet-stream`，Chrome 靠嗅探还能放，Safari 直接
+    # 当「不支持的源」拒掉，表现是「点了试听没反应」而看不出是 Content-Type 的锅。
+    #
+    # **只在 location 里写 `types { wav; }` 会把父级的映射整份顶掉**（实测 json 与 png 都
+    # 变成 application/octet-stream，试听清单和图片选择器一起受影响），所以这里把系统那份
+    # 再 include 一次，与下面那条 wav 在**同一层**合并。
+    include /etc/nginx/mime.types;
+    types {
+      audio/wav wav;
+    }
+    # 素材只在发版/同步时变，允许缓存但别太久（改完素材不该等一周才看到）。
+    # 只用 `expires`：再叠一条 `add_header Cache-Control` 会让响应带两个 Cache-Control 头。
     expires 7d;
-    add_header Cache-Control "public";
   }
 
   location /api/ {
