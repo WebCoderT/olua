@@ -13,7 +13,7 @@ export interface BorderPick {
 /**
  * 装备边框（品质光效框）
  *
- * 素材：resources/effect/border 下 84 张图集（border-<编号>.plist + 同名 png，整包 8~12 帧循环），
+ * 素材：resources/effect/border 下 72 张图集（border-<编号>.plist + 同名 png，整包 8~12 帧循环），
  * 显示在背包格子与身上装备槽的物品图标上（唯一挂点 = GameUiHelper.createGood，见 applyEquipmentBorder）。
  *
  * ## #695：映射表搬到服务端了
@@ -36,10 +36,8 @@ export interface BorderPick {
  * test-equipment-border.cjs 会拿它与磁盘实际文件比对，写错会当场报出来）
  */
 const borderSerials: number[] = [
-  // 91×104 厚框（带星点）：30123 ~ 30134
-  30123, 30124, 30125, 30126, 30127, 30128,
-  30129, 30130, 30131, 30132, 30133, 30134,
   // 200×200 细裂纹框：30135 ~ 30146
+  //（91×104 厚框 30123 ~ 30134 已整体下线：#1322 —— 素材删除、清单同步删行，前后缀映射早已不再引用）
   30135, 30136, 30137, 30138, 30139, 30140,
   30141, 30142, 30143, 30144, 30145, 30146,
   // 80×80 框：30147 ~ 30158

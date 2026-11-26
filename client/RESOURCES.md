@@ -62,9 +62,9 @@
 | 规则 | 例子 | 说明 |
 | --- | --- | --- |
 | 目录与文件名**全小写 + 连字符** | `create-role` / `auto-fight-close` | 不用下划线、不用大写、不用拼音缩写 |
-| 图集 **`.plist` 与 `.png` 同名成对** | `border-30123.plist` + `border-30123.png` | 帧名在 plist 内部是 `<基名>_0000` |
+| 图集 **`.plist` 与 `.png` 同名成对** | `border-30135.plist` + `border-30135.png` | 帧名在 plist 内部是 `<基名>_0000` |
 | 一套画多张表时加 `@<序号>` | `wing_100004@0` / `@1`、`monster@0` | 序号是**表**的序号，不是帧号 |
-| 语义前缀代替原始编号 | `border-30123` / `bg-16000` / `light-1` | 原来是 `sfx_30123_0`（`sfx` = sound effect，被错用在图上）；现在前缀说清用途，编号（美术资产号）保留 |
+| 语义前缀代替原始编号 | `border-30135` / `bg-16000` / `light-1` | 原来是 `sfx_30123_0`（`sfx` = sound effect，被错用在图上）；现在前缀说清用途，编号（美术资产号）保留 |
 | 光柱六档 | `light-1` … `light-6` | key 同时是 `ui_effects` 的行键与素材名，**不含斜杠**（会拼进节点名） |
 | 纯数字名保留 | `title/13009`、`soul/13001`、`npc/2108`、`equipment/rings/2010210`、`monster/1`、`skill/icon/1001`、`map/1` | 这些编号是配置里的 id（装备的编号就是 id 的数字部分），改名等于改数据；只把它们**收进有意义的目录** |
 | 禁止出现的东西 | `sfx_` 前缀、非 ASCII、空格 | 审计会拦 |
@@ -75,7 +75,7 @@
 `resources.getInfoWithPath(candidate, SpriteAtlas)` 探一遍 `[src, src/<基名>]`，
 命中就按图集加载，否则回退「目录里的散帧」。
 
-1. **平铺**：`effect/border/border-30123.plist`（同目录一堆平级的图集）
+1. **平铺**：`effect/border/border-30135.plist`（同目录一堆平级的图集）
    用于 `effect/{border,background,light}`、`title`、`soul`、`npc`、`wing`。
 2. **目录内同名**：`role/boy/stand/stand.plist`、`equipment/clothes/out/005/stand/stand.plist`、
    `ui/create-role/preview/1-1-stand@0.plist`

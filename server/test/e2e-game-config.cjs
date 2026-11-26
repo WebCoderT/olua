@@ -3096,10 +3096,10 @@ async function main() {
     const appearanceNoToken = await api(base, "GET", "/api/game-config/equipment-appearance");
     checkEqual(appearanceNoToken.status, 401, "外观接口需要令牌（与快照同口径）");
 
-    // —— 背景半边也走一遍写路径（背景 key 形如 bg-16000，与边框的 border-30123 各占一套格式）——
+    // —— 背景半边也走一遍写路径（背景 key 形如 bg-16000，与边框的 border-30135 各占一套格式）——
     const backgroundOk = backgroundPage.assignments ?? [];
     const badBgKey = backgroundOk.slice();
-    badBgKey[0] = { ...badBgKey[0], key: "border-30123" };
+    badBgKey[0] = { ...badBgKey[0], key: "border-30135" };
     const badBgKeyRes = await api(base, "PATCH", "/api/admin/equipment-backgrounds", { token, body: { assignments: badBgKey, customs: [] } });
     checkEqual(badBgKeyRes.status, 400, "背景 key 填了边框的 key → 400（两半 key 格式各自卡）");
 

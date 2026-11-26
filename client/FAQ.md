@@ -243,10 +243,10 @@ Cocos 的 `TiledMap` 默认把瓦片画在「地图中心为原点」的本地�
 ### 装备的发光边框（品质光效）是怎么定的？想换边框 / 给某件装备单独配一个改哪里？
 
 - **显示位置**：背包格子和身上装备槽的物品图标上（唯一挂点 = `GameUiHelper.createGood`，两个入口共用）。边框是 `resources/borders` 下的图集（plist + 同名 png，8~12 帧）整包循环播放，挂在**图标节点**上 —— 拖动压暗图标时边框一起变暗，格子刷新销毁图标时边框随之销毁
-- **哪个前后缀用哪张边框**：`configs/border` 的 `prefixSuffixBorderData` —— 5 前缀 × 3 后缀 = 15 种组合各一张，按强度升序取**前 15 张**（border-30123 ~ border-30137，先按后缀分人级/天级/神级三档、档内按前缀递增）。想换只改这张表
-- **特殊装备自定义边框**：同一文件里的 `customEquipmentBorderData`，**优先于**前后缀表 —— 写变体 id（`weapon_20_p4s2`）只对那一个变体生效，写基础件 key（`weapon_20`）对**全部变体**生效；剩下的 69 张边框就是留给它的（素材长什么样见 `tools/border-preview.png` 索引图，黄框 = 已分配的 15 张）
-- **全部 84 张边框都登记在系统里**（`configs/border.borderResources`，与磁盘文件一一比对的单测守着），只是暂时只有 15 张被分配
-- **尺寸**：84 张边框分属 6 个原始尺寸家族（91×104 / 200×200 / 80×80 / 98×92 / 89×88），统一按 **contain**（保持各自宽高比）缩进 `configs/layout/borders.equipmentBorderLayout.size`（默认 56×56 = 格子 50 + 两侧各 3 溢出）里；帧率也在这里调
+- **哪个前后缀用哪张边框**：`configs/border` 的 `prefixSuffixBorderData` —— 5 前缀 × 3 后缀 = 15 种组合各一张，按强度升序取**前 15 张**（border-30135 ~ border-30149，先按后缀分人级/天级/神级三档、档内按前缀递增）。想换只改这张表
+- **特殊装备自定义边框**：同一文件里的 `customEquipmentBorderData`，**优先于**前后缀表 —— 写变体 id（`weapon_20_p4s2`）只对那一个变体生效，写基础件 key（`weapon_20`）对**全部变体**生效；剩下的 57 张边框就是留给它的（素材长什么样见 `tools/border-preview.png` 索引图，黄框 = 已分配的 15 张）
+- **全部 72 张边框都登记在系统里**（`configs/border.borderResources`，与磁盘文件一一比对的单测守着），只是暂时只有 15 张被分配
+- **尺寸**：72 张边框分属 5 个原始尺寸家族（200×200 ×2 / 80×80 / 98×92 / 89×88），统一按 **contain**（保持各自宽高比）缩进 `configs/layout/borders.equipmentBorderLayout.size`（默认 56×56 = 格子 50 + 两侧各 3 溢出）里；帧率也在这里调
 - **预加载**：`PreloadManager` 会把前后缀表用到的边框图集**后台**预载（`configs/border.getAssignedBorders`，不阻塞进图），第一次开背包时多半已就绪，没就绪也只是边框晚一拍出现
 - **一个引擎坑（为什么边框精灵 `trim = true`）**：这批边框图集**未裁剪但每帧 offset 全部非 0**，而 offset 只在 `trim = false` 的逆向补边路径里生效 —— 引擎会按它把整帧画面平移出去（边框整体挪出格子）；`trim = true` 时画面取 rect 全帧、完全不看 offset，未裁剪素材的 rect == 原始尺寸，正好铺满节点框且不变形。单测里守着「每帧 rect == 原始尺寸」这条前提，以后真加进来**裁剪过**的边框素材，记得把那件素材改成 `trim = false` 渲染
 - 回归单测：`node tools/test-equipment-border.cjs`（资源表与磁盘一致、15 组合全覆盖且用前 15 张、取用优先级各分支、真实装备表抽查、帧序号/未裁剪守卫、界面接线源码断言；共 46 项）

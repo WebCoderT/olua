@@ -119,7 +119,7 @@ export function parseAtlasFrames(xml: string): AtlasFrame[] | null {
 
 /**
  * 载入一份图集动画（模块级缓存）：路径拼法两级尝试（`目录/同名` 优先、退回「路径即基名」），
- * 与 `GameFrame.loadFirstFrame` 同一套 —— 边框 `effect/border/border-30123` 与背景
+ * 与 `GameFrame.loadFirstFrame` 同一套 —— 边框 `effect/border/border-30135` 与背景
  * `effect/background/bg-16000` 都是「`目录/同名` 优先、退回「路径即基名」」两级尝试。全都不存在返回 null。
  *
  * `framePrefix`：只播 plist 文档序里帧名以它开头的帧。怪物 / 装备的 `stand` 表把

@@ -4,7 +4,7 @@
  *
  * 盯的不变量（改边框系统后必须全绿）：
  * · 资源表与磁盘一致（resources/borders 下每张图集都登记、登记的每张都真实存在、key 唯一）
- * · 前后缀 15 种组合全覆盖、恰好一次，且用的是「前 15 张」边框（border-30123 ~ border-30137）
+ * · 前后缀 15 种组合全覆盖、恰好一次，且用的是「前 15 张」边框（border-30135 ~ border-30149）
  * · 取用优先级：自定义表（精确 id → 基础件 key）→ 前后缀表 → 不显示；自定义指向未登记边框时回退
  * · 真实装备表抽查：从 items 总表解析出的装备能查到正确的边框
  * · 素材守卫：帧名末尾序号升序（AnimationHelper 按序号排序 → 播放顺序正确）；
@@ -61,7 +61,7 @@ check(getAssignedBorders().length === 0, "快照到达前预加载清单为空�
 
 // 测试自建映射：先按后缀分三档、档内按前缀递增，取「前 15 张」编号（与出厂口径同构）
 const APPLIED = [];
-for (let s = 0; s < SUFFIX_COUNT; s++) for (let p = 0; p < PREFIX_COUNT; p++) APPLIED.push({ prefix: p, suffix: s, key: `border-${30123 + s * PREFIX_COUNT + p}` });
+for (let s = 0; s < SUFFIX_COUNT; s++) for (let p = 0; p < PREFIX_COUNT; p++) APPLIED.push({ prefix: p, suffix: s, key: `border-${30135 + s * PREFIX_COUNT + p}` });
 applyEquipmentAppearance({ borders: APPLIED, customBorders: [] });
 
 check(combos.every((combo) => prefixSuffixBorders.has(combo)), "apply 后 15 种组合全部有映射", `缺：${combos.filter((c) => !prefixSuffixBorders.has(c)).join("、") || "无"}`);
@@ -175,7 +175,7 @@ for (const resource of borderResources) {
   }
 }
 check(!!worst && worst.frames >= 8, `每张边框至少 8 帧（最少的 ${worst ? worst.key : "?"} 有 ${worst ? worst.frames : 0} 帧）`);
-check(true, "全部边框图集的帧序与未裁剪检查通过（84 张 × 8~12 帧）");
+check(true, "全部边框图集的帧序与未裁剪检查通过（72 张 × 8~12 帧）");
 
 console.log("\n— F. 接线（源码断言）—");
 const helperSource = gameUiSourceCombined(path.join(PROJECT_ROOT, "assets/ui/helpers/GameUiHelper.ts"));
