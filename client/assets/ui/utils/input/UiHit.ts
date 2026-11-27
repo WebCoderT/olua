@@ -1,5 +1,5 @@
 import { Node, UITransform, Vec2, isValid } from "cc";
-import { ensureMouseHitTestable, HAS_MOUSE, releaseWorldPress, trackUiPress } from "./Pointer";
+import { ensureMouseHitTestable, getHitWindowId, HAS_MOUSE, releaseWorldPress, trackUiPress } from "./Pointer";
 
 /**
  * 命中检测（界面层 / 世界侧可交互对象）
@@ -130,5 +130,6 @@ function hitNode(node: Node, screenPoint: Vec2, isTarget: (node: Node) => boolea
   }
   if (!isTarget(node)) return false;
   const transform = node.getComponent(UITransform);
-  return !!transform && transform.hitTest(screenPoint);
+  // hitTest 必须带窗口 id：原生包主窗口 id 非 0，裸调会把所有相机 continue 掉、永远 miss（#1328）
+  return !!transform && transform.hitTest(screenPoint, getHitWindowId());
 }

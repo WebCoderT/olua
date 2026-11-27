@@ -21,6 +21,7 @@ import GuideStore from "./GuideStore";
 import { GUIDE_EVENT } from "../../types/guide";
 import { addMonsterCollider } from "../utils/physics/MonsterCollider";
 import { getWorldColliderRect } from "../utils/physics/MoveBlocking";
+import { getHitWindowId } from "../utils/input/Pointer";
 import CombatChannel, { CombatKillReward, CombatSettleHit, EntityEnterFrame, EntityLeaveFrame, MonsterAiFrame, MonsterCastEntry, MonsterHitEntry, MonsterKillEntry, WorldSnapshot } from "../utils/net/CombatChannel";
 import RealtimeClient from "../utils/net/RealtimeClient";
 
@@ -156,7 +157,7 @@ export default class MonsterManager {
    */
   static getClickedMonster(position: Vec2): Node | null {
     for (const node of this.monsterMap.keys()) {
-      if (isValid(node) && node.getComponent(UITransform).hitTest(position)) return node;
+      if (isValid(node) && node.getComponent(UITransform).hitTest(position, getHitWindowId())) return node;
     }
     return null;
   }
@@ -173,7 +174,7 @@ export default class MonsterManager {
       if (shown >= 2) continue;
       shown += 1;
       const trans = node.getComponent(UITransform);
-      const engineHit = trans ? trans.hitTest(screenPoint) : false;
+      const engineHit = trans ? trans.hitTest(screenPoint, getHitWindowId()) : false;
       // 手算：复刻引擎 hitTest 的数学（screenToWorld -> 逆 worldMatrix -> 锚点平移 -> 范围判断），
       // 但只用主相机（与走路换算同款）。引擎 hitTest 与手算结果不一致时，差异就出在
       // 引擎的相机选择/窗口短路（hitTest 遍历节点渲染场景的相机，还会按 systemWindowId 跳过）

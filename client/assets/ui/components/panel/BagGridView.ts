@@ -6,7 +6,7 @@ import { BagCell, BagCellPos, isEquipment } from "../../../types/good";
 import CursorManager from "../../core/CursorManager";
 import StorageManager from "../../core/StorageManager";
 import GameUiHelper from "../../helpers/GameUiHelper";
-import { bindPointerAction, getPointerButton, PointerButton } from "../../utils/input/Pointer";
+import { bindPointerAction, getHitWindowId, getPointerButton, notePointerWindowId, PointerButton } from "../../utils/input/Pointer";
 import { clearChildren } from "../../utils/node/NodeTree";
 import { bagGridLayout } from "../../../configs/hudLayout";
 
@@ -252,6 +252,8 @@ export default class BagGridView extends Node {
       return;
     }
     // 屏幕坐标必须 clone：事件对象的 getLocation 返回的是会被下一次事件改写的同一个向量
+    // 窗口 id 顺手记上（hitTest 要带，见 Pointer.getHitWindowId / #1328；触屏链路不走 getHitScreenPoint）
+    notePointerWindowId(event);
     this.drag = {
       from: { row, col },
       start: event.getLocation().clone(),
@@ -274,6 +276,7 @@ export default class BagGridView extends Node {
     const drag = this.drag;
     if (!drag) return;
     if (!drag.active && this.rightPress) return;
+    notePointerWindowId(event);
     const point = event.getLocation();
     if (!drag.active) {
       if (Vec2.distance(point, drag.start) < bagGridLayout.drag.threshold) return;
@@ -304,6 +307,7 @@ export default class BagGridView extends Node {
     const active = drag.active;
     const from = drag.from;
     // 屏幕坐标必须当下取：判定要用「松手点」，不是拖动中记下的最后一个落点
+    notePointerWindowId(event);
     const point = event.getLocation();
     const hit = active ? this.hitCell(point) : null;
     // 弹窗外优先判：松手点确实在弹窗矩形外就按销毁走，不受拖动途中记下的落点影响
@@ -389,8 +393,8 @@ export default class BagGridView extends Node {
     for (let row = 0; row < this.cells.length; row++) {
       const line = this.cells[row];
       for (let col = 0; col < line.length; col++) {
-        const transform = line[col].getComponent(UITransform);
-        if (transform && transform.hitTest(screenPoint)) return { row, col };
+      const transform = line[col].getComponent(UITransform);
+      if (transform && transform.hitTest(screenPoint, getHitWindowId())) return { row, col };
       }
     }
     return null;
@@ -406,7 +410,7 @@ export default class BagGridView extends Node {
     if (!area || !isValid(area)) return false;
     const transform = area.getComponent(UITransform);
     if (!transform) return false;
-    return !transform.hitTest(screenPoint);
+    return !transform.hitTest(screenPoint, getHitWindowId());
   }
 
   //#endregion

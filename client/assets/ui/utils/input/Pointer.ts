@@ -23,12 +23,40 @@ export const HAS_MOUSE = sys.hasFeature(sys.Feature.EVENT_MOUSE);
  * （node-event-processor）与 Button 判定用的都是这个；而 `getUILocation()` 是设计分辨率下的 UI 坐标，
  * 只有画布尺寸恰好等于设计分辨率时两者才相等（画布越大差得越多），混用会让命中点整体偏移。
  * 因此「UI 命中、怪物命中、掉落物命中、光标悬停」全部从这里取点（见 utils/input/UiHit 的说明）。
+ *
+ * 顺手把这次事件的窗口 id 记下来（见 notePointerWindowId）：命中检测要带着同一个 id 才对得上。
  * @param event 鼠标事件
  * @returns 屏幕坐标（新对象）
  */
 export function getHitScreenPoint(event: EventMouse): Vec2 {
+  notePointerWindowId(event);
   return event.getLocation();
 }
+
+//#region 命中检测的窗口 id（#1328）
+
+/**
+ * `UITransform.hitTest(point, windowId)` 的第二参数：只认「systemWindowId 与传入的 windowId 相等」的相机。
+ * web / 编辑器预览恒 0，裸调 `hitTest(point)` 碰巧能过；**原生包主窗口 id 非 0**（mac 实测 1），
+ * 裸调会让 hitTest 把所有相机都 continue 掉、永远 miss —— 引擎自己的派发（node-event-processor / Button）
+ * 全都传了 `event.windowId`，手写命中检测漏传就是「原生包点得到 UI 按钮、点不到怪物」的根因。
+ *
+ * 窗口 id 记录与读取（取点与命中同一个口径）：每个指针事件（EventMouse / EventTouch 都有 windowId 字段）
+ * 在取屏幕坐标时顺手记录，命中检测读最近一次的值。单窗口游戏 id 恒定，不存在并发覆盖问题。
+ */
+let pointerWindowId = 0;
+
+/** 记录最近一次指针事件的窗口 id（EventMouse / EventTouch 都可传） */
+export function notePointerWindowId(event: { windowId?: number }) {
+  pointerWindowId = event.windowId ?? 0;
+}
+
+/** 最近一次指针事件的窗口 id（`UITransform.hitTest` 的第二参数） */
+export function getHitWindowId(): number {
+  return pointerWindowId;
+}
+
+//#endregion
 
 /** 取鼠标事件的按键语义（非左右键返回 null） */
 export function getPointerButton(event: EventMouse): PointerButton | null {
