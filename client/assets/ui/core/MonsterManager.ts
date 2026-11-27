@@ -21,6 +21,7 @@ import GuideStore from "./GuideStore";
 import { GUIDE_EVENT } from "../../types/guide";
 import { addMonsterCollider } from "../utils/physics/MonsterCollider";
 import { getWorldColliderRect } from "../utils/physics/MoveBlocking";
+import { getHitWindowId } from "../utils/input/Pointer";
 import CombatChannel, { CombatKillReward, CombatSettleHit, EntityEnterFrame, EntityLeaveFrame, MonsterAiFrame, MonsterCastEntry, MonsterHitEntry, MonsterKillEntry, WorldSnapshot } from "../utils/net/CombatChannel";
 import RealtimeClient from "../utils/net/RealtimeClient";
 
@@ -156,7 +157,7 @@ export default class MonsterManager {
    */
   static getClickedMonster(position: Vec2): Node | null {
     for (const node of this.monsterMap.keys()) {
-      if (isValid(node) && node.getComponent(UITransform).hitTest(position)) return node;
+      if (isValid(node) && node.getComponent(UITransform).hitTest(position, getHitWindowId())) return node;
     }
     return null;
   }

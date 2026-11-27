@@ -385,7 +385,7 @@ check(/if \(!drag\.active && this\.rightPress\) return;/.test(gridViewSource), "
 // 阈值与落点
 check(/Vec2\.distance\(point, drag\.start\) < bagGridLayout\.drag\.threshold/.test(gridViewSource), "位移小于阈值就不算拖动（点击仍是点击）");
 check(/event\.getLocation\(\)\.clone\(\)/.test(gridViewSource), "起点坐标 clone（事件里的向量会被后续事件改写）");
-check(/transform\.hitTest\(screenPoint\)/.test(gridViewSource), "落点判定用 UITransform.hitTest（屏幕坐标口径）");
+check(/transform\.hitTest\(screenPoint, getHitWindowId\(\)\)/.test(gridViewSource), "落点判定用 UITransform.hitTest（屏幕坐标口径，带窗口 id —— 原生包裸调永远 miss #1328）");
 
 // 拖动后的点击拦截
 check(/private pressDragged = false;/.test(gridViewSource), "有「本次按压拖动过」的标记");

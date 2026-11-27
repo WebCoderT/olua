@@ -278,7 +278,7 @@ const confirmSource = fs.readFileSync(CONFIRM_DIALOG_FILE, "utf8");
 check(/export interface BagDropArea \{/.test(gridSource), "BagGridView 暴露 BagDropArea 接口（受理区 + 拖出上报）");
 check(/constructor\(onCellAction: BagCellHandler, dropArea: BagDropArea\)/.test(gridSource), "网格构造接收受理区（由背包弹窗注入）");
 check(/private isOutsideDropArea\(screenPoint: Vec2\): boolean \{/.test(gridSource), "有「松手点在受理区外」的独立判定");
-check(/return !transform\.hitTest\(screenPoint\);/.test(gridSource), "受理区判定用弹窗的 UITransform.hitTest（与格子同一口径）");
+check(/return !transform\.hitTest\(screenPoint, getHitWindowId\(\)\);/.test(gridSource), "受理区判定用弹窗的 UITransform.hitTest（与格子同一口径，带窗口 id —— 原生包裸调永远 miss #1328）");
 check(
   /if \(active && !hit && this\.isOutsideDropArea\(point\)\) \{/.test(gridSource),
   "三个条件齐了才走销毁：拖过阈值 + 没落在格子上 + 落在弹窗外（点击与弹窗内落空都不算）",

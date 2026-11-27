@@ -28,6 +28,7 @@ import PartyStore from "./PartyStore";
 import GuideStore from "./GuideStore";
 import SoundManager from "./SoundManager";
 import { GUIDE_EVENT } from "../../types/guide";
+import { getHitWindowId } from "../utils/input/Pointer";
 
 /**
  * 地面上的一个掉落物（#804 起按 **dropId** 索引，不再按节点）
@@ -294,7 +295,7 @@ export default class DropManager {
   static getClickedDrop(position: Vec2): Node | null {
     const drops = Array.from(this.items.values()).reverse();
     for (const drop of drops) {
-      if (isValid(drop.node) && drop.node.getComponent(UITransform)?.hitTest(position)) return drop.node;
+      if (isValid(drop.node) && drop.node.getComponent(UITransform)?.hitTest(position, getHitWindowId())) return drop.node;
     }
     return null;
   }
