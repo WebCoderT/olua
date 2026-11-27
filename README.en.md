@@ -10,10 +10,12 @@ only the website stays up.
 | What you want | Where to go |
 | --- | --- |
 | Gameplay, screenshots and the full illustrated tutorial | <https://yimw.cn> (official site) |
+| **Download the release client (v1.0.0)** | Join QQ group **1124215785** and grab the installer from the group files (Windows / macOS) |
 | Run your own copy | "Run your own copy" below — two Docker commands |
 
-> The live game and admin servers are **temporarily offline** (only the website remains). To play, spin up your own
-> copy with the steps below.
+> The live game and admin servers are **temporarily offline** (only the website remains). The **v1.0.0 release
+> client** shipped on 2026-11-27: join QQ group **1124215785** to download it from the group files and connect
+> to your own deployed server.
 
 > Code lives on [GitHub](https://github.com/WebCoderT/olua); [Gitee](https://gitee.com/putiwan/olua) is a read-only mirror.
 > If you find it interesting, a **Star ⭐** is appreciated.
