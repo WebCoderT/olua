@@ -10,7 +10,7 @@ only the website stays up.
 | What you want | Where to go |
 | --- | --- |
 | Gameplay, screenshots and the full illustrated tutorial | <https://yimw.cn> (official site) |
-| **Download the release client (v1.0.0)** | Join QQ group **1124215785** and grab the installer from the group files (Windows / macOS) |
+| **Download the release client (v1.0.0)** | Official [download page](https://yimw.cn/download.html): join QQ group **1124215785** and grab the installer from the group files (Windows / macOS) |
 | Run your own copy | "Run your own copy" below — two Docker commands |
 
 > The live game and admin servers are **temporarily offline** (only the website remains). The **v1.0.0 release

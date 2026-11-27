@@ -513,6 +513,17 @@ a { color: inherit; text-decoration: none; }
 }
 .contact__mail:hover { text-decoration: underline; }
 
+/* ---------- 下载页（download.html）：三卡一排 + 群号/关键词大字 ---------- */
+.contact--download { max-width: 1080px; }
+.download__group {
+  font-family: var(--serif);
+  font-size: 30px;
+  letter-spacing: 0.08em;
+  color: var(--gold);
+  margin: 6px 0 10px;
+  text-shadow: 0 0 18px rgba(217, 164, 65, 0.35);
+}
+
 /* ---------- 页脚 ---------- */
 .footer {
   text-align: center;
