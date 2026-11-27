@@ -4,7 +4,6 @@ import { dropRuntime } from "../../../configs/drop";
 import AutoBattle from "../../core/AutoBattle";
 import DropManager from "../../core/DropManager";
 import LayerManager from "../../core/LayerManager";
-import MessageLogStore from "../../core/MessageLogStore";
 import MonsterManager from "../../core/MonsterManager";
 import SkillManager from "../../core/SkillManager";
 import { getHitScreenPoint, isUiPressOnUiElement } from "../../utils/input/Pointer";
@@ -58,16 +57,6 @@ export default class ScreenClickInput {
     if (!isAttack && button !== EventMouse.BUTTON_RIGHT) return;
     // 命中检测统一用屏幕坐标（见 utils/input/Pointer.getHitScreenPoint）
     const screenPoint = getHitScreenPoint(event);
-    // 临时诊断（#1328，定位后移除）：点击命中链路全量数据落消息记录。
-    // 拆多条短行（消息面板单行裁断），全 ASCII（config-leak 的 cn 规则拦裸中文）；
-    // 同时 console.log 整包数据 —— mac 原生包从终端启动二进制可直接看完整 stdout。
-    const uiHit = LayerManager.isPointOnUi(screenPoint);
-    const pressOnUi = isUiPressOnUiElement();
-    const debugLines = MonsterManager.debugClickHit(screenPoint);
-    const headLine = `click ${isAttack ? "L" : "R"} (${screenPoint.x.toFixed(0)},${screenPoint.y.toFixed(0)}) ui=${uiHit ? 1 : 0} press=${pressOnUi ? 1 : 0}`;
-    MessageLogStore.push("system", headLine);
-    for (const line of debugLines) MessageLogStore.push("system", line);
-    console.log(`[click-debug] ${headLine} ${debugLines.join(" | ")}`);
     // 点在 UI 元素上：交给界面自己处理，世界侧不做任何反应
     // （不加这一层的话，点界面会走到下面的 setTarget 把当前攻击目标清掉，角色就停手了）
     if (LayerManager.isPointOnUi(screenPoint)) return;

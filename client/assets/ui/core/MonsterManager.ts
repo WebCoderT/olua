@@ -1,4 +1,4 @@
-import { Animation, isValid, Label, Mat4, Node, ProgressBar, Rect, UITransform, Vec2, Vec3, view } from "cc";
+import { Animation, isValid, Label, Node, ProgressBar, Rect, UITransform, Vec2, Vec3 } from "cc";
 import { monsterResourceOf, monsterStatsOrDefault } from "../../configs/game-config";
 import { findSkillConfig, skills } from "../../configs/skill";
 import { statuses } from "../../configs/game-config";
@@ -160,68 +160,6 @@ export default class MonsterManager {
       if (isValid(node) && node.getComponent(UITransform).hitTest(position, getHitWindowId())) return node;
     }
     return null;
-  }
-
-  /** 临时诊断（#1328，定位后移除）：点击命中链路的运行时数据，多条短行落右下角消息记录（全 ASCII，面板单行裁断） */
-  static debugClickHit(screenPoint: Vec2): string[] {
-    const lines: string[] = [];
-    const camera = LayerManager.camera;
-    let total = 0;
-    let shown = 0;
-    for (const [node, monster] of this.monsterMap) {
-      if (!isValid(node)) continue;
-      total += 1;
-      if (shown >= 2) continue;
-      shown += 1;
-      const trans = node.getComponent(UITransform);
-      const engineHit = trans ? trans.hitTest(screenPoint, getHitWindowId()) : false;
-      // 手算：复刻引擎 hitTest 的数学（screenToWorld -> 逆 worldMatrix -> 锚点平移 -> 范围判断），
-      // 但只用主相机（与走路换算同款）。引擎 hitTest 与手算结果不一致时，差异就出在
-      // 引擎的相机选择/窗口短路（hitTest 遍历节点渲染场景的相机，还会按 systemWindowId 跳过）
-      let calcHit = false;
-      let localText = "-";
-      if (trans && camera && isValid(camera.node)) {
-        const world = camera.screenToWorld(new Vec3(screenPoint.x, screenPoint.y, 0), new Vec3());
-        const worldMatrix = new Mat4();
-        node.getWorldMatrix(worldMatrix);
-        const invMatrix = new Mat4();
-        Mat4.invert(invMatrix, worldMatrix);
-        const local = Vec2.transformMat4(new Vec2(), new Vec2(world.x, world.y), invMatrix);
-        local.x += trans.anchorPoint.x * trans.contentSize.width;
-        local.y += trans.anchorPoint.y * trans.contentSize.height;
-        const size = trans.contentSize;
-        calcHit = local.x >= 0 && local.y >= 0 && local.x <= size.width && local.y <= size.height;
-        localText = `(${local.x.toFixed(0)},${local.y.toFixed(0)})`;
-      }
-      const size = trans ? trans.contentSize : null;
-      const boxText = size ? `${size.width.toFixed(0)}x${size.height.toFixed(0)}` : "none";
-      lines.push(
-        `${monster.label} eng=${engineHit ? 1 : 0} calc=${calcHit ? 1 : 0}`
-          + ` local=${localText} box=${boxText}`,
-      );
-      // 引擎 hitTest 的相机资格清单（只报第一只怪所属渲染场景的相机）：
-      // 每台报「vis 含怪层 / systemWindowId / swapchain 有无」——这三条任一不满足就被 hitTest 跳过
-      if (shown === 1 && trans) {
-        const scene = (trans as unknown as { _getRenderScene?: () => { cameras?: object[] } })._getRenderScene?.();
-        const cameras = (scene?.cameras ?? []) as Array<{ visibility?: number; systemWindowId?: number; window?: { swapchain?: unknown } }>;
-        cameras.slice(0, 3).forEach((cam, index) => {
-          const visMonster = node.layer & (cam.visibility ?? 0) ? 1 : 0;
-          const swap = cam.window?.swapchain ? 1 : 0;
-          lines.push(`cam${index} visM=${visMonster} win=${cam.systemWindowId} sw=${swap}`);
-        });
-        lines.push(`cams=${cameras.length}`);
-      }
-    }
-    if (camera) {
-      const world = camera.screenToWorld(new Vec3(screenPoint.x, screenPoint.y, 0), new Vec3());
-      const pixelSize = view.getVisibleSizeInPixel();
-      lines.push(
-        `main world=(${world.x.toFixed(0)},${world.y.toFixed(0)})`
-          + ` dpr=${view.getDevicePixelRatio()} px=${pixelSize.width.toFixed(0)}x${pixelSize.height.toFixed(0)}`,
-      );
-    }
-    lines.push(`mon=${total}`);
-    return lines;
   }
 
   /**
