@@ -6,7 +6,8 @@
  * 一、快照下发：quests 进 game-config 快照（客户端配置覆写的来源），seed 行齐全
  * 二、接取门控：主线链前置 / 重复接取 / 等级不够都被服务端拒（客户端的判断只是提前灰按钮）
  * 三、talk 进度：npc-talk 推进 accepted 行（到量转 ready + quest 帧），submit 领奖后
- *     main 保留 claimed 行作链门控；可接未接的任务在 npc-talk 响应里是 available
+ *     main 保留 claimed 行作链门控；无进度行且「等级够 + 前置已领奖」的任务在 npc-talk
+ *     响应里是 available（#1365：前置没完成的根本不下发，与 accept 同一口径）
  * 四、kill 进度：击杀结算递进（唯一发生在 realtime 侧的进度变化），逐格 +1、到量 ready、
  *     quest 帧只推本人；奖励（绑定元宝 / 经验 / 物品）一次落库
  * 五、collect：交付时查背包（不足 20017 整单拒绝、行保持原状），够就扣走并发奖
@@ -382,6 +383,9 @@ function setResetDay(dbPath, roleId, questId, day) {
     const talkBefore = await questApi("POST", "quests/npc-talk", { npcId: "0002" });
     const beforeRow = talkBefore.code === 0 ? (talkBefore.data.quests || []).find((row) => row.questId === "8001") : null;
     check(!!beforeRow && beforeRow.status === "available", "未接取时 npc-talk 里 8001 是 available", JSON.stringify(beforeRow));
+    // #1365：前置未完成的任务不下发 available（亮「接取」按钮却必被 20015 拒 = UI 说谎）
+    const gatedTalkRow = talkBefore.code === 0 ? (talkBefore.data.quests || []).find((row) => row.questId === "8003") : null;
+    check(!gatedTalkRow, "前置未完成的 8003 不在 npc-talk 响应里（与 accept 同一口径）", JSON.stringify(talkBefore.data && talkBefore.data.quests));
 
     const acceptedMain = await questApi("POST", "quests/accept", { questId: "8001" });
     const mainRow = acceptedMain.code === 0 ? (acceptedMain.data.quests || []).find((row) => row.questId === "8001") : null;

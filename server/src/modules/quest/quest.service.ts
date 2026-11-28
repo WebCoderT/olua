@@ -119,8 +119,7 @@ export class QuestService implements OnModuleInit {
       );
     }
     if (quest.prev_quest_id) {
-      const prev = this.progressRepo.findByKey(role.id, quest.prev_quest_id);
-      if (!prev || prev.status !== "claimed") {
+      if (!this.prevClaimed(role.id, quest)) {
         throw BizException.conflict(BizCode.QUEST_STATE_INVALID, "先完成前置任务才能接取");
       }
     }
@@ -239,18 +238,26 @@ export class QuestService implements OnModuleInit {
       if (bumped) this.emitProgress(accountId, quest.id, bumped.status, bumped.progress, quest.objective_count);
     }
 
-    // NPC 名下全部任务的状态（可接未接的返回 available 态 —— 客户端据此亮出「接取」按钮）
+    // NPC 名下全部任务的状态（#1365：与 accept 同一口径 —— 等级够且前置已领奖才标 available，
+    // 否则不下发。亮出「接取」按钮却必然被 20015 拒，等于 UI 说谎）
     const quests: QuestStateDto[] = [];
     for (const quest of this.questsRepo.listAll()) {
       if (quest.npc_id !== npcId) continue;
       const row = this.progressRepo.findByKey(role.id, quest.id);
       if (row && !this.isStale(quest, row)) {
         quests.push(this.stateOf(accountId, quest, row.status, row.progress));
-      } else {
+      } else if (role.level >= quest.min_level && this.prevClaimed(role.id, quest)) {
         quests.push(QuestStateDto.from(quest.id, "available", 0, quest.objective_count));
       }
     }
     return { dialog: npc.dialog, quests };
+  }
+
+  /** 主线链前置是否已完成（空串 = 无前置；claim 行是完成的证据，#1365 起接取复核与 npcTalk 下发共用） */
+  private prevClaimed(roleId: string, quest: QuestRow): boolean {
+    if (!quest.prev_quest_id) return true;
+    const prev = this.progressRepo.findByKey(roleId, quest.prev_quest_id);
+    return !!prev && prev.status === "claimed";
   }
 
   /**

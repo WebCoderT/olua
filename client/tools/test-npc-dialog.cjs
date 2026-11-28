@@ -102,6 +102,10 @@ try {
   check("节点名不外泄到组件", !/getChildByName\(["']/.test(dialog));
   check("不再走 resources.load", !/resources\.load\s*\(/.test(dialog));
   check("提供 setPrefab 注入口", /static setPrefab\(/.test(dialog));
+  // #1365：多个同类动作时取第一个（数组顺序固定）——取最后一个会让玩家对着「第一个任务」
+  // 的语境点按钮、实际发出去的却是另一个 questId
+  check("runAction 取第一个匹配动作", /actions\.find\(\(item\) => item\.kind === kind\)/.test(dialog));
+  check("不再有取最后一个匹配的旧写法", !/if \(NpcDialog\.actions\[i\]\.kind === kind\) action = NpcDialog\.actions\[i\]/.test(dialog));
 } catch (error) {
   failures += 1;
   console.log("  [!!] 单测抛异常：", error && error.stack ? error.stack.split("\n").slice(0, 3).join("\n") : error);
