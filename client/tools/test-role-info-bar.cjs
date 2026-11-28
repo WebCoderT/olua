@@ -52,6 +52,22 @@ try {
   ];
   for (const p of required) check(`prefab 缺节点 ${p}`, !!pathOf(p));
 
+  // nodes 映射 ↔ prefab 层级一致性（#1357：引擎 getChildByPath 逐段匹配不递归，
+  // hud.ts 里的路径必须能在 prefab 里**从根逐段走到**，否则运行时取到 null 直接崩）
+  const root = byName("RoleInfoBar");
+  const resolveStrict = (p) => p.split("/").reduce((acc, part) => {
+    if (!acc) return undefined;
+    return (acc._children || []).map((c) => objs[c.__id__]).find((n) => n._name === part);
+  }, root);
+  const hud = read("assets/configs/layout/hud.ts");
+  const mapMatch = /nodes:\s*\{([^}]*)\}/.exec(hud);
+  check("hud.ts 有 nodes 映射", !!mapMatch);
+  if (mapMatch) {
+    const entries = [...mapMatch[1].matchAll(/(\w+):\s*"([^"]+)"/g)];
+    check("nodes 映射非空", entries.length >= 9, `只解析到 ${entries.length} 项`);
+    for (const [, key, p] of entries) check(`nodes.${key}="${p}" 从根可逐段解析`, !!resolveStrict(p));
+  }
+
   // 组件类型：底板/头像框/头像/分隔线/状态点是 Sprite，文本是 Label
   for (const p of ["Background", "AvatarFrame", "Avatar", "CombatDivider", "RealtimeStatus/StatusDot"]) {
     check(`${p} 是 Sprite`, !!comp(p, "cc.Sprite"));
