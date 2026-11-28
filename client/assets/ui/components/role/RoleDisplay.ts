@@ -235,6 +235,8 @@ export default class RoleDisplay extends Node {
     // 选中状态只由鼠标点击改变（点击怪物选中、点击其他位置取消），移动不影响；
     // 但目标本身消失（死亡/移除）时必须同步取消，避免残留无效引用
     if (this.target && this.isTargetGone(this.target)) this.setTarget(null);
+    // 经典走路模式的步进推进（连续模式空操作，见 RolePointerInput.tick）
+    this.pointerInput?.tick();
     this.updateWorldPosition();
   }
 

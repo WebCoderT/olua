@@ -161,6 +161,7 @@ function completeSnapshot(over = {}) {
         maxTargetDistance: 0,
         moveByRun: true,
         classicWalkMode: false,
+        classicStepLength: 100,
         cellSize: 40,
         clearance: 20,
         repathInterval: 400,
