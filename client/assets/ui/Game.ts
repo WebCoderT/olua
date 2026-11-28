@@ -13,6 +13,7 @@ import RoleDisplay from "./components/role/RoleDisplay";
 import ScreenClickInput from "./components/input/ScreenClickInput";
 import CursorInput from "./components/input/CursorInput";
 import DeathDialog from "./components/dialogs/DeathDialog";
+import NpcDialog from "./components/dialogs/NpcDialog";
 import GameHelper from "./core/GameHelper";
 import StorageManager from "./core/StorageManager";
 import SceneManager from "./core/SceneManager";
@@ -515,6 +516,8 @@ export class Game extends Component {
     this.questTracker = null;
     QuestStore.reset();
     QuestNpcMarks.reset();
+    // 通用 NPC 对话条（#1337）：键盘监听是全局的，换场景/换角色前必须摘掉
+    NpcDialog.clear();
     // 消息记录（#1224）：流水不跨会话（重新上线即空仓）。
     // 先退订再清仓（#1188 口径）：clear 会 emit，面板已随场景销毁，回调里摸字段就是 null.xxx
     this.messageLog?.dispose();

@@ -384,7 +384,7 @@ table.spec code{font-family:var(--font-num);color:var(--gold-4);font-size:12px}
 
   <!-- ══════════ 界面索引 ══════════ -->
   <section id="screens">
-    <div class="sec-head"><span class="idx">10</span><h2>界面索引 · 21</h2><p>点开看每一屏的完整稿（1920×1080，等比适配）</p></div>
+    <div class="sec-head"><span class="idx">10</span><h2>界面索引 · 24</h2><p>点开看每一屏的完整稿（1920×1080，等比适配）</p></div>
     <div class="screens" id="screen-grid"></div>
   </section>
 
@@ -506,7 +506,8 @@ const SCREENS = [
   ['20','overlay','通用弹层','确认 / 死亡 / 举报 / 悬停 / 引导','Confirm/Death/Report/…'],
   ['21','settings','设置','选择角色 / 退出登录（退出走确认框）','SettingsDialog.ts'],
   ['22','attributes','属性','战斗属性总览 / 四维加点 / 洗点','AttrAllocateDialog.ts'],
-  ['23','item-detail','物品详情','装备完整版（绑定/溯源/标签/Ctrl 对比）+ 消耗品简版','createGoodDetailDialog (dialog-builder.ts)']
+  ['23','item-detail','物品详情','装备完整版（绑定/溯源/标签/Ctrl 对比）+ 消耗品简版','createGoodDetailDialog (dialog-builder.ts)'],
+  ['24','npc-dialog','NPC 对话','全宽底部 30% 对话条：名牌 / 正文分页 / 任务快捷 / 未配置兜底（#state=long/quest/empty）','NpcDialog（待实现）']
 ];
 document.getElementById('screen-grid').innerHTML = SCREENS.map(([no,id,name,desc,file])=>`
   <a class="scr" href="screens/${no}-${id}.html" target="_blank">
