@@ -18,7 +18,9 @@
 - **多会话并行 = worktree**（#948）：改动只在自己的 `~/worktrees/olua-<issue>`；动笔前 `git status` 认领；只 `git add <明确路径>`。
   依赖要 `cp -al` 或自己 `npm ci`，**别 `ln -s` 到别人的 worktree**（对方 `npm ci` / `worktree remove` 会让你的依赖消失）。
   `make client-test` 另需两样 gitignore 产物：`client/temp/declarations`（`cp -R`，缺了 tsc 报 `Cannot find module 'cc'`）、
-  `client/assets/resources`（`ln -s` 主工程即可，缺了成片 ENOENT）。
+  `client/assets/resources`（**#1348 起不再是整目录 gitignore**——`ui/` 有跟踪文件、目录是真实的：
+  整目录 `ln -s` 会变嵌套软链 + `audit-resource-refs` 的 `indexDisk` 不递归软链 → 整域断链误报；
+  正确手法：非 ui 各域 `cp -al` 硬链接，`ui/` 用 find 把主仓缺失文件逐个 `cp -al` 补齐）。
 - 仓库 PUBLIC：密钥 / IP / 邀请码 / JWT 不进记忆不进库。**`website/` 默认不动**（例外只在用户亲口同意：#742 换 https、#1047 数字对账）；
   官网数字也会漂，`project.html` 指标区上方有每个数字的复算命令注释，改前先跑（「70 项已实现能力」无来源，别照抄）。
 - **现状 ≠ 正确**：issue 正文先按行号实测 `server/src` + `admin/src` 再动手。
