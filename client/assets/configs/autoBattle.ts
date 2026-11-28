@@ -31,8 +31,15 @@ export const autoBattle = {
   cellSize: 0,
   /** 通行余量（像素）：障碍矩形向外扩张这么多再烙进网格，避免自动走位贴墙卡住；快照覆写 */
   clearance: 0,
-  /** NPC 在寻路网格中的占位尺寸（Tiled 点位没有宽高，只能按典型 NPC 体型估算） */
-  npcObstacleSize: new Size(60, 90),
+  /**
+   * NPC 在寻路网格中的占位盒（#1339：与 NPC 障碍碰撞盒同形状同位置）
+   * 碰撞盒在 `MapObjectSpawner.NPC_COLLIDER_SIZE / NPC_COLLIDER_OFFSET`（100×100、中心在点位下方 35px），
+   * 这里的摊开中心 = 点位 + (0, `npcObstacleOffsetY`)，两边必须一致 —— 否则调试显示的碰撞框
+   * 与 A* 占位是两个形状，「比对」比对出矛盾。
+   */
+  npcObstacleSize: new Size(100, 100),
+  /** NPC 占位盒中心相对点位（容器中心）的纵向偏移（引擎 y 向上，负 = 在下方） */
+  npcObstacleOffsetY: -35,
   /** 重新寻路间隔（毫秒）：目标会移动（游走/被击退），路径要定期重算；快照覆写 */
   repathInterval: 0,
   /** 到达路点的判定半径（像素），进入半径即走向下一个路点；快照覆写 */

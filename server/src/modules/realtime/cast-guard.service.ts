@@ -128,15 +128,15 @@ const CAST_TOKENS_MAX_PER_SEC = 20;
  * 角色碰撞盒（#1030，距离闸用）
  *
  * 与客户端 `client/assets/configs/role.ts` 的 `roleBody` **必须同值**：
- * `colliderSize = 40 × 70`、`colliderOffset = (0, 35)` —— 后者意味着节点的原点在脚下，
- * 碰撞盒整体在节点上方，所以判距离时角色的盒心是 `(x, y + 35)`。
+ * `colliderSize = 40 × 40`、`colliderOffset = (0, 20)`（#1339：贴地的 40×40，原 40×70 罩全身）——
+ * 节点的原点在脚下，所以判距离时角色的盒心是 `(x, y + 20)`。
  *
  * 客户端换碰撞盒而这里没跟 → 边缘玩家的正常出手会被判成超距（`enforce` 档）；
  * 反过来这里比客户端宽 → 只是少拦一点，不会误伤。**往宽的一侧偏是安全的**。
  */
 const ROLE_HALF_WIDTH = 20;
-const ROLE_HALF_HEIGHT = 35;
-const ROLE_BOX_OFFSET_Y = 35;
+const ROLE_HALF_HEIGHT = 20;
+const ROLE_BOX_OFFSET_Y = 20;
 
 /**
  * 施法者位置的有效期（毫秒）

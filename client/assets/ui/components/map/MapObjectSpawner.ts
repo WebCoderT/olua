@@ -1,4 +1,4 @@
-import { Node, Vec2, Vec3 } from "cc";
+import { Node, Size, Vec2, Vec3 } from "cc";
 import { maps, npcs } from "../../../configs/game-config";
 // 副作用导入：NPC 点击行为在 npcClicks 里登记（数据在服务端，行为留客户端）
 import "../../../configs/npcClicks";
@@ -12,6 +12,14 @@ import { addObstacleCollider } from "../../utils/physics/ObstacleCollider";
 
 /** NPC 可交互半径（世界像素）：与服务端 talk 距离闸 QUEST_NPC_RADIUS 同口径（120px） */
 const NPC_INTERACT_RADIUS = 120;
+
+/**
+ * NPC 障碍碰撞盒（#1339）：100×100、底边贴容器底边
+ * 容器锚点 0.5/0.5（地图点位 = 容器中心），底边 y=-85 → 盒中心 (0, -35)。
+ * 立绘上半身不算挡位；管理端 NPC 对齐工作台画的就是这个框（比对口径见 admin NpcAlignWorkbench）。
+ */
+const NPC_COLLIDER_SIZE = new Size(100, 100);
+const NPC_COLLIDER_OFFSET = new Vec2(0, -35);
 
 /**
  * 地图对象生成器（NPC 点位 / 复活点）
@@ -71,7 +79,7 @@ export default class MapObjectSpawner {
       return;
     }
     const npcNode = GameUiHelper.createNpcNode(npc);
-    addObstacleCollider(npcNode);
+    addObstacleCollider(npcNode, NPC_COLLIDER_SIZE, NPC_COLLIDER_OFFSET);
     // 碰撞范围显示（调试用，全部碰撞体共用一套开关）
     GameUiHelper.showColliderRange(npcNode, npc.label);
     // 先入层再定位：节点无父节点时 setWorldPosition 写进去的其实是本地坐标，

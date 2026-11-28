@@ -14,10 +14,10 @@
     "width": 40,
     "height": 70,
     "colliderWidth": 40,
-    "colliderHeight": 70,
+    "colliderHeight": 40,
     "colliderOffset": [
       0,
-      35
+      20
     ]
   },
   "inShow": {
