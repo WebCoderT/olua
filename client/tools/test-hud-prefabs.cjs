@@ -128,11 +128,12 @@ try {
   check("VectorPlate executeInEditMode（编辑器里可见）", /executeInEditMode/.test(vp));
 
   // ── B. 接线 ──
-  for (const field of ["smallMapPrefab", "bottomBarPrefab", "messageLogPrefab", "chatBoxPrefab"]) {
+  for (const field of ["smallMapPrefab", "bottomBarPrefab", "messageLogPrefab", "chatBoxPrefab", "growthEntriesPrefab"]) {
     check(`Game 有 @property(Prefab) ${field}`,
       new RegExp(`@property\\(\\{\\s*type:\\s*Prefab\\s*\\}\\)[\\s\\S]{0,220}${field}`).test(game));
   }
-  check("Game 构造 BottomBar 传 prefab + 聊天 prefab", /new BottomBar\(role, this\.bottomBarPrefab!, this\.chatBoxPrefab!\)/.test(game));
+  check("Game 构造 BottomBar 传 prefab + 聊天 prefab + 成长线入口 prefab",
+    /new BottomBar\(role, this\.bottomBarPrefab!, this\.chatBoxPrefab!, this\.growthEntriesPrefab\)/.test(game));
   check("Game 构造 SmallMap 传 prefab", /new SmallMap\(this\.roleDisplay, this\.smallMapPrefab!\)/.test(game));
   check("Game 构造 MessageLog 传 prefab", /new MessageLog\(this\.messageLogPrefab!\)/.test(game));
 

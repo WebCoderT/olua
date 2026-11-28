@@ -109,6 +109,10 @@ export class Game extends Component {
   @property({ type: Prefab })
   chatBoxPrefab: Prefab | null = null;
 
+  /** 成长线入口 prefab（#1381：称号 / 元神两颗胶囊，静态外观在 prefab，点击由 BottomBar 接） */
+  @property({ type: Prefab })
+  growthEntriesPrefab: Prefab | null = null;
+
   /** 地图组件 */
   private gameMap: GameMap;
   /** 主角组件 */
@@ -369,7 +373,7 @@ export class Game extends Component {
     this.screenClickInput = new ScreenClickInput(this.roleDisplay);
     this.cursorInput = new CursorInput();
     // 初始化底部栏（其内部自行组装功能按键区/血球/经验条/快捷键栏，并持有各弹窗）
-    this.bottomBar = new BottomBar(role, this.bottomBarPrefab!, this.chatBoxPrefab!);
+    this.bottomBar = new BottomBar(role, this.bottomBarPrefab!, this.chatBoxPrefab!, this.growthEntriesPrefab);
     LayerManager.addToUILayer(this.bottomBar);
     RoleUIManager.registerBottomBar(this.bottomBar);
     /** 将角色信息栏加入游戏UI */
