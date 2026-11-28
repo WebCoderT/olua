@@ -488,7 +488,7 @@ export default class AutoBattle {
     } else {
       this.path = [new Vec2(to.x, to.y)];
     }
-    // 经典模式（#1346）：路点[0] 是当前格的格心，角色步中途可能已越过它——裁掉回头路
+    // 经典模式（#1346/#1349）：路点[0] 是当前格的格心，角色步中途可能已越过它——裁掉回头路
     if (autoBattle.classicWalkMode) this.prunePassedWaypoints(new Vec2(from.x, from.y));
     // 服务端寻路（#811 第三道）：本地的这一份是**即时预判**（点了就先动，不留 40~80ms 空窗），
     // 服务端回执一到就用它替换 —— 权威路点才算「我走过去没穿墙」。连接不在时（离线）就只走本地
@@ -496,24 +496,28 @@ export default class AutoBattle {
   }
 
   /**
-   * 裁掉已越过的前导路点（#1346，经典走路模式）
+   * 裁掉已越过的前导路点（#1346 / #1349，经典走路模式）
    *
-   * 重寻路从「当前位置所在格」起算，路点[0] 是该格的**格心**——角色步中途已经越过格心时，
-   * 新路径第一个点就在身后，不裁掉就会先走回头路再前进，每 400ms 重寻路一次形成来回跑。
-   * 服务端路径回执同样从「上报位置所在格」起算，落地后同样裁。
+   * 服务端权威路径（#811）从**服务端最后一次接受的位置**起算（4Hz pos 上报 + RTT），
+   * 回执到达时角色已经按本地路径走出 0.5~1.5 格甚至更远——回执整体替换本地路径后，
+   * 前 1~2 个路点在角色**身后**，不裁掉就会先走回头路再前进；重寻路 400ms 一次 +
+   * 回执一次，往返形成来回折返。本地重寻路从「当前位置所在格」起算，路点[0] 是
+   * 邻格格心，步中途越过格心时同样适用本判据。
    *
-   * 判据（两个条件都满足才裁，避免拐角误裁）：
-   * - 距路点[0] ≤ cellSize（还在它附近一格内）；
-   * - 距路点[1] < 路点[0]→路点[1] 的距离（已经比路点[0]更接近下一站 = 已越过它）。
+   * 判据（#1349 换投影、不限距离）：路点[0]→路点[1] 方向上角色位置的投影分量 > 0
+   * （已越过路点[0]、在其朝向路点[1]的一侧）就裁，循环裁到第一个没越过的路点——
+   * 回执滞后几格都能裁干净，裁完剩余路点全在前方。**严格 > 0 保拐角**：垂直拐弯的
+   * 下一段与来向正交，贴着来向走到拐角前投影恰为 0，不会误裁拐角路点。
    */
   private static prunePassedWaypoints(position: Vec2) {
     while (this.path.length >= 2) {
       const current = this.path[0];
       const next = this.path[1];
-      const passed =
-        Math.hypot(position.x - current.x, position.y - current.y) <= autoBattle.cellSize &&
-        Math.hypot(position.x - next.x, position.y - next.y) < Math.hypot(next.x - current.x, next.y - current.y);
-      if (!passed) break;
+      const dx = next.x - current.x;
+      const dy = next.y - current.y;
+      // lenSq === 0 防御：路点不应重复，真重复时不能拿零向量做投影
+      if (dx === 0 && dy === 0) break;
+      if ((position.x - current.x) * dx + (position.y - current.y) * dy <= 0) break;
       this.path.shift();
     }
   }
@@ -535,7 +539,8 @@ export default class AutoBattle {
     if (frame.points.length === 0) return;
     this.path = frame.points.map((point) => new Vec2(point.x, point.y));
     this.pathIndex = 0;
-    // 服务端路径同样从「上报位置所在格」的格心起算（#1346）：角色步中途已越过时裁掉回头路
+    // 服务端路径从「服务端最后一次接受的位置」起算（#1349）：4Hz 上报 + RTT，回执到达时
+    // 角色可能已走出 0.5~1.5 格，前几个路点在身后——裁掉已越过的前导路点，别照它走回头路
     if (autoBattle.classicWalkMode) {
       const position = this.roleDisplay && isValid(this.roleDisplay) ? this.roleDisplay.getWorldPosition() : null;
       if (position) this.prunePassedWaypoints(new Vec2(position.x, position.y));
