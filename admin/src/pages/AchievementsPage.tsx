@@ -8,7 +8,7 @@ import { toastSuccess } from "../store/toast";
 import { Modal } from "../components/Modal";
 import { PageHeader } from "../components/PageHeader";
 import { EntityPickButton } from "../components/entity/EntityPickButton";
-import { entityOptions } from "../components/entity/catalog";
+import { useEntityOptions } from "../components/entity/catalog";
 import { anyPickerOpen } from "../components/pickerStack";
 
 /** 分类的中文名（与成就种子的 category 同值） */
@@ -138,13 +138,14 @@ export function AchievementsPage() {
   const [creating, setCreating] = useState(false);
   const [saving, setSaving] = useState(false);
   /** 物品候选（奖励物品 + 持有类条件的目标，同一份清单） */
-  const itemOptions = useMemo(() => entityOptions("item"), []);
+  const itemOptions = useEntityOptions("item");
   /**
    * 怪物候选（击杀类条件的目标）
    *
    * 首项是「任意怪（`*`）」—— 成就有相当一部分是「累计击杀 N 只」而不是「打死某一只」，
    * 这个特殊目标得能挑到，否则运营只能又去手打一个 `*`。
    */
+  const monsterCatalogOptions = useEntityOptions("monster");
   const monsterOptions = useMemo(
     () => [
       {
@@ -155,9 +156,9 @@ export function AchievementsPage() {
         image: {},
         search: "任意怪 any *",
       },
-      ...entityOptions("monster"),
+      ...monsterCatalogOptions,
     ],
-    [],
+    [monsterCatalogOptions],
   );
 
   const load = useCallback(async () => {

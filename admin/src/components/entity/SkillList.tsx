@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { Button, Input } from "../ui";
 import { EntityCard } from "./EntityCard";
 import { EntityPicker } from "./EntityPicker";
-import { entityImage, entityLabel, entityNote, entityOptions } from "./catalog";
+import { entityImage, entityLabel, entityNote, useEntityOptions } from "./catalog";
 
 /** 技能行：id + 等级（等级用字符串，便于受控输入时空着不跳） */
 export interface SkillRow {
@@ -27,7 +27,7 @@ export function SkillList({
   disabled?: boolean;
 }) {
   const [open, setOpen] = useState(false);
-  const options = useMemo(() => entityOptions("skill"), []);
+  const options = useEntityOptions("skill");
   const learned = new Set(rows.map((row) => row.id));
   const candidates = useMemo(() => options.filter((option) => !learned.has(option.id)), [options, learned]);
 
