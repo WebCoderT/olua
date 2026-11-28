@@ -2,6 +2,7 @@ import { BagCell, BagCellPos, BagOrigin, DrugEffect, Equipment, EQUIPMENT_TYPE, 
 import { drugs, levelScrolls, moneyItems } from "./game-config";
 import { equipmentCombatValue, equipmentSlotOrder, getAllEquipmentVariants, getMallGoods, getRecyclePrice, recycleLevelBands } from "./equipments";
 import { materials } from "./game-config";
+import { bagCol, bagRow } from "./role";
 
 /**
  * 物品总表：物品 id -> 物品数据
@@ -600,6 +601,24 @@ export function normalizeBagGrid(bag: BagCell[][], rows: number, cols: number): 
   }
   if (dropped > 0) console.warn(`[items] 背包尺寸与当前配置不符（应为 ${rows}×${cols}），已裁掉 ${dropped} 格超出范围的物品`);
   return result;
+}
+
+/**
+ * 背包是否已满（配置尺寸内所有格子都有物品；#1373 自动回收的触发前置）
+ *
+ * 客户端近似判定：任一空格即「未满」。服务端入包时另有「可叠加并堆」的口径，
+ * 拾取结果以服务端为准 —— 这里只回答「要不要扫描回收」，误差最多是满后多等一次
+ * 拾取被拒（bag_full 路径兜底），不会多发请求。
+ */
+export function isBagFull(bag: BagCell[][], rows = bagRow, cols = bagCol): boolean {
+  for (let row = 0; row < rows; row++) {
+    const line = bag[row];
+    if (!Array.isArray(line)) return false;
+    for (let col = 0; col < cols; col++) {
+      if (!line[col]) return false;
+    }
+  }
+  return true;
 }
 
 //#endregion

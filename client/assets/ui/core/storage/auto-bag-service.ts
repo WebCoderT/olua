@@ -1,5 +1,5 @@
 import { EQUIPMENT_TYPE } from "../../../types/good";
-import { findUsableCells, hasRecycleSelection } from "../../../configs/items";
+import { findUsableCells, hasRecycleSelection, isBagFull } from "../../../configs/items";
 import { equipmentSlots } from "../../../configs/equipments";
 import GameUiHelper from "../../helpers/GameUiHelper";
 import BagService from "./bag-service";
@@ -19,8 +19,10 @@ import * as AutoBagPrefs from "./auto-bag-prefs";
  * · 背包变化 → `onBagChanged`（RoleUIManager.refreshBag 汇聚点）：自动使用 + 自动穿戴 + 自动回收扫描；
  * · 拾取被拒（服务端回 `bag_full`）→ `onBagFullRejected`（DropManager）：自动回收 + 重拾。
  *
- * #1289 重做：回收从「勾选物品清单、背包满才触发」改成「部位 × 等级段勾选 + 开关」——
- * 开关开着就**持续扫描**（背包每变一次扫一遍），符合勾选的装备直接回收成绑定元宝。
+ * #1289 重做：回收清单改成「部位 × 等级段勾选 + 开关」。#1373 收敛触发时机：
+ * 回收**只在背包已满时做一次**（批量接口一次收掉全部勾中装备）—— #1289 曾改成
+ * 「开关开着持续扫描」（背包每变一次扫一遍），挂机拾取时每次都发回收请求，请求量过大。
+ * 拾取被拒（服务端 bag_full）走 `onBagFullRejected` 兜底，同样满时才动、无匹配零请求。
  *
  * 勾选偏好在本机（auto-bag-prefs，按角色分键）；**没勾的东西永远不会被自动处理**。
  */
@@ -122,9 +124,12 @@ export default class AutoBagService {
         await BagService.equipBetterFromBag(slot, { quiet: true });
       }
     }
-    // ── 自动回收：开关开着才扫；**放在最后** —— 先让自动穿戴把「更好的」拿走，
-    //    剩下的才轮到回收，不然刚捡到的好装备会被先卖掉。quiet：没勾中就安静收场 ──
-    if (AutoBagPrefs.getAutoRecycle(role.id)) {
+    // ── 自动回收：开关开着且**背包已满**才扫（#1373 回到 #1278 口径：「满时一次性回收」——
+    //    #1289 的「背包每变一次就扫」会让每次拾取都发一次回收请求，挂机时请求量随拾取线性涨）；
+    //    满了才回收一批（recycleBySelection 一次请求收掉全部勾中装备）。**放在最后** ——
+    //    先让自动穿戴把「更好的」拿走，剩下的才轮到回收，不然刚捡到的好装备会被先卖掉。
+    //    未满但有勾中装备就先放着；拾取被拒（bag_full）走 onBagFullRejected 兜底 ──
+    if (AutoBagPrefs.getAutoRecycle(role.id) && isBagFull(role.bag)) {
       const selection = AutoBagPrefs.getRecycleSelection(role.id);
       if (hasRecycleSelection(selection)) {
         const result = await BagService.recycleBySelection(selection, { quiet: true });

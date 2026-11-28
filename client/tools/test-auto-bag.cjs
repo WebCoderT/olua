@@ -59,7 +59,7 @@ function main() {
     return;
   }
 
-  const { items, collectBagRecycleEntries, summarizeBagRecycleBySelection, findUsableCells, recycleBandOfLevel, hasRecycleSelection } = require(path.join(outDir, "configs/items.js"));
+  const { items, collectBagRecycleEntries, summarizeBagRecycleBySelection, findUsableCells, recycleBandOfLevel, hasRecycleSelection, isBagFull } = require(path.join(outDir, "configs/items.js"));
   const { getRecyclePrice, recycleLevelBands } = require(path.join(outDir, "configs/equipments.js"));
   const { bagRow, bagCol } = require(path.join(outDir, "configs/role.js"));
   const { isDrug, isEquipment } = require(path.join(outDir, "types/good.js"));
@@ -283,6 +283,29 @@ function main() {
     check(/columns: 3/.test(recycleBlock), "自动回收清单三列");
     check(/autoUseDialogLayout[\s\S]*?size: new Size\(520, 480\)/.test(layoutSrc), "自动使用面板宽 520（三列每列有字宽）");
     check(/autoRecycleDialogLayout[\s\S]*?size: new Size\(520, 540\)/.test(layoutSrc), "自动回收面板宽 520（三列每列有字宽）");
+  }
+
+  console.log("\n=== isBagFull 与回收触发前置（#1373：满才回收）===");
+  {
+    const { bagRow, bagCol } = require(path.join(outDir, "configs/role.js"));
+    const cell = () => ({ id: "dummy_good", count: 1, origin: "drop" });
+    const fullBag = Array.from({ length: bagRow }, () => Array.from({ length: bagCol }, cell));
+
+    check(isBagFull(fullBag) === true, "全部格子有物品 → 满");
+    const withHole = fullBag.map((line) => [...line]);
+    withHole[bagRow - 1][bagCol - 1] = null;
+    check(isBagFull(withHole) === false, "任一空格 → 未满");
+    check(isBagFull([fullBag[0]]) === false, "行数不足配置 → 未满（脏数据防御，不按缺省行数硬算）");
+    check(isBagFull(fullBag, bagRow, bagCol + 1) === false, "显式扩列后末列缺失 → 未满（自定义尺寸生效）");
+    // 末行/末列之外的越界物品不影响判定（配置尺寸内的格子才作数）
+    const overFull = [...fullBag.map((line) => [...line]), Array.from({ length: bagCol }, cell)];
+    check(isBagFull(overFull) === true, "配置尺寸全满 + 越界行 → 仍判满（超出配置的格不作数）");
+
+    // 触发层：runOnce 的回收段必须有 isBagFull(role.bag) 前置（#1289 的「每次都扫」不许回潮）
+    const serviceSrc = fs.readFileSync(path.join(__dirname, "..", "assets", "ui/core/storage/auto-bag-service.ts"), "utf8");
+    const runOnceBody = extractMethod(serviceSrc, "static async runOnce()");
+    check(!!runOnceBody && /getAutoRecycle\(role\.id\) && isBagFull\(role\.bag\)/.test(runOnceBody), "自动回收扫描带「背包已满」前置（开关 && isBagFull）");
+    check(!!runOnceBody && !/if \(AutoBagPrefs\.getAutoRecycle\(role\.id\)\) \{\s*const selection/.test(runOnceBody), "#1289 的「开关开着就扫」旧写法已撤");
   }
 
   //#endregion
