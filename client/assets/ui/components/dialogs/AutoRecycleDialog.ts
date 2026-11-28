@@ -27,8 +27,8 @@ import * as AutoBagPrefs from "../../core/storage/auto-bag-prefs";
  *
  * 底部一排两个控件：
  * · 「一键回收」按当前勾选立即执行（两步确认 —— 回收不可撤销）；
- * · 「自动回收」开关（#1289）：开启后 AutoBagService 持续扫描背包，自动回收符合勾选的装备
- *   （偏好落盘 auto-bag-prefs，按角色分键）。
+ * · 「自动回收」开关（#1289）：开启后 AutoBagService 在**背包满时**一次性回收符合勾选的装备
+ *   （#1373 收敛：不再背包每变一次就扫——挂机时每次拾取都发回收请求；偏好落盘 auto-bag-prefs，按角色分键）。
  */
 export default class AutoRecycleDialog extends BaseDialog {
   /** 勾选行的节点名前缀（`<PREFIX><slot>_<bandMin>`，读当前勾选用；部位 key 不含下划线） */

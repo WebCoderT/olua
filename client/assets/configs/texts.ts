@@ -79,7 +79,7 @@ export const uiTexts = {
   /** #1289：等级段选项文案（段规则见 configs/equipments.recycleLevelBands） */
   auto_recycle_band: "{min}-{max}级",
   /** 自动回收弹窗的说明行（#1289 重做：按部位 × 等级段勾选 + 开关授权） */
-  auto_recycle_hint: "按部位和等级区间勾选，打开「自动回收」后，背包里符合条件的装备会自动回收成绑定元宝",
+  auto_recycle_hint: "按部位和等级区间勾选，打开「自动回收」后，背包放满时符合条件的装备会一次性回收成绑定元宝",
   /** 自动回收弹窗内「一键回收」按钮（按当前勾选清单立即执行，保留两步确认） */
   label_auto_recycle_now: "一键回收",
   /** 自动使用弹窗的说明行 */
