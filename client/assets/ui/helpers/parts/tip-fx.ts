@@ -92,7 +92,9 @@ export function createFloatingTip(
   ) {
     if (log) MessageLogStore.push(log, text);
     const tip = UiHelper.createTipLabel(name, text, color, tipsLayout.fontSize, tipsLayout.size);
-    // 描边：飘字落在屏幕中心，那里常压着深色/同色面板（登录页那条深红装饰板），
+    // 落点：屏幕正上方（目标面板正下方，间隙账见 configs/layout/hud.tipsLayout，#1370）
+    tip.setPosition(0, tipsLayout.positionY, 0);
+    // 描边：飘字常压着深色/同色面板（登录页那条深红装饰板），
     // 不加描边的纯色小字基本读不出来（见 tipsLayout.outline 与 #457）
     const label = tip.getComponent(Label);
     if (label) {
@@ -100,7 +102,7 @@ export function createFloatingTip(
       label.outlineWidth = tipsLayout.outline.width;
       label.outlineColor = tipsLayout.outline.color;
     }
-    // 飘字是临时装饰（屏幕中间上浮 1~3 秒，拾取/提示时高频出现），标为点击穿透：不遮挡世界点击
+    // 飘字是临时装饰（屏幕上方上浮 1~3 秒，拾取/提示时高频出现），标为点击穿透：不遮挡世界点击
     markClickThrough(tip);
     floatUpFade(tip, moveDuration, tipsLayout.risePositionY, fadeDuration);
     mountFloatingTip(tip);
@@ -114,7 +116,7 @@ export function createFloatingTip(
    * 既不渲染也不跟随任何东西，玩家看不到任何提示（服务端返回的「账号或密码错误」这类提示会全丢）。
    *
    * 但只换挂载点还不够，**坐标口径是第二层坑**：飘字的坐标以**屏幕中心为原点**设计
-   * （见 configs/layout/hud.tipsLayout：起点 (0, 0)、上浮到 (0, risePositionY)），这套口径在游戏内成立
+   * （见 configs/layout/hud.tipsLayout：起点 (0, positionY)、上浮到 (0, risePositionY)），这套口径在游戏内成立
    * 是因为 UILayer 被 LayerManager.move 搬到角色位置上（= 屏幕中心）。挂在**场景根**上时局部 (0, 0)
    * 是**世界原点**，而登录 / 选角的 UI 相机是 Canvas 的子节点、世界位置在 Canvas 中心（约设计尺寸的一半），
    * 于是飘字被摆到相对相机中心偏了「半个屏幕」的地方 —— 正好压在屏幕左下角顶点上，大半个在屏外。
