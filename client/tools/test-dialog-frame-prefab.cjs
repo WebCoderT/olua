@@ -101,6 +101,16 @@ try {
     const comp = objs.find((o) => o.__type__ === TYPES.dialogFrame);
     check("DialogFrame 组件五件引用已绑定", ["headDrag", "eyebrowLabel", "closeButtonNode", "titleLabel", "titleRule"].every((k) => comp[k] && typeof comp[k].__id__ === "number"), "组件引用字段缺失（prefab 里没绑上）");
     check("DialogFrame 组件无空引用", !JSON.stringify(comp).includes('"__id__": null'));
+    // #1391：节点必须有 PrefabInfo、组件必须有 CompPrefabInfo（漏接线 = 编辑器一运行 instantiate 就崩 isChildOf）
+    for (const [pi, o] of objs.entries()) {
+      if (o.__type__ === "cc.Node") {
+        const info = o._prefab && objs[o._prefab.__id__];
+        check(`DialogFrame 节点 ${o._name || pi} 有 PrefabInfo`, !!info && info.__type__ === "cc.PrefabInfo" && !!info.fileId && info.root && info.asset, "节点缺 _prefab 接线（编辑器实例化会崩）");
+      } else if (o.__type__ !== "cc.Prefab" && o.__type__ !== "cc.PrefabInfo" && o.__type__ !== "cc.CompPrefabInfo" && "node" in o) {
+        const info = o.__prefab && objs[o.__prefab.__id__];
+        check(`DialogFrame 组件 ${o.__type__} 有 CompPrefabInfo`, !!info && info.__type__ === "cc.CompPrefabInfo" && !!info.fileId, "组件缺 __prefab 接线（编辑器实例化会崩）");
+      }
+    }
   }
 
   {
@@ -127,6 +137,16 @@ try {
     check("DialogFoot 分隔线 = FillRect", types.includes(TYPES.fillRect));
     const comp = objs.find((o) => o.__type__ === TYPES.dialogFoot);
     check("DialogFoot 组件三件引用已绑定", ["rule", "leftLabel", "rightLabel"].every((k) => comp[k] && typeof comp[k].__id__ === "number"));
+    // #1391：同 DialogFrame，PrefabInfo / CompPrefabInfo 接线必须齐全
+    for (const [pi, o] of objs.entries()) {
+      if (o.__type__ === "cc.Node") {
+        const info = o._prefab && objs[o._prefab.__id__];
+        check(`DialogFoot 节点 ${o._name || pi} 有 PrefabInfo`, !!info && info.__type__ === "cc.PrefabInfo" && !!info.fileId && info.root && info.asset, "节点缺 _prefab 接线（编辑器实例化会崩）");
+      } else if (o.__type__ !== "cc.Prefab" && o.__type__ !== "cc.PrefabInfo" && o.__type__ !== "cc.CompPrefabInfo" && "node" in o) {
+        const info = o.__prefab && objs[o.__prefab.__id__];
+        check(`DialogFoot 组件 ${o.__type__} 有 CompPrefabInfo`, !!info && info.__type__ === "cc.CompPrefabInfo" && !!info.fileId, "组件缺 __prefab 接线（编辑器实例化会崩）");
+      }
+    }
   }
 
   //#endregion
