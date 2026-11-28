@@ -1,7 +1,7 @@
 import { isValid, Node, UITransform, Vec2, Vec3 } from "cc";
 import { dropRuntime, FULL_SCREEN_PICKUP_RADIUS } from "../../configs/drop";
 import { getGoodCursorStyle, cursorConfig } from "../../configs/cursor";
-import { getItem } from "../../configs/items";
+import { getItem, isBagFull } from "../../configs/items";
 import { dropItemLayout } from "../../configs/layout/hud";
 import { mapLabelOf } from "../../configs/game-config";
 import { getText, TextParams } from "../../configs/texts";
@@ -23,6 +23,7 @@ import GameUiHelper from "../helpers/GameUiHelper";
 import LayerManager from "./LayerManager";
 import CursorManager from "./CursorManager";
 import StorageManager from "./StorageManager";
+import RoleCache from "./storage/role-cache";
 import AutoBagService from "./storage/auto-bag-service";
 import PartyStore from "./PartyStore";
 import GuideStore from "./GuideStore";
@@ -83,6 +84,20 @@ const PICKUP_SOUND_MIN_GAP_MS = 80;
  * 开成配置项只会多一列没人会去调的参数（见 #747 的教训）。
  */
 const DROP_TIP_MIN_GAP_MS = 800;
+
+/**
+ * 单帧自动拾取的最大请求数（#1385）
+ *
+ * 服务端每条 pick 帧都是一次**同步**事务（读账号行 + 读角色行 + JSON.parse 整份存档 +
+ * 格子入包 + 写行 + 流水），实时进程（node:sqlite 同步驱动）里几十条连排就把事件循环
+ * 堵住 —— 全屏拾取（#1380，半径 1200px）在怪物死亡 / dropSpawn 一到的那一帧，屏幕内
+ * 全部掉落会同时发出 pick，几十条连排正是「怪物死亡卡顿」的主因。
+ *
+ * 每帧限量 5 条把洪峰摊成涓流：60fps 下每秒最多 300 条，屏幕上的掉落几十毫秒内捡完，
+ * 而服务端每帧只多扛 5 次事务（几毫秒），位置回执 / AI / 广播不再被压住。
+ * 手动点击拾取（`pickup`）不在此列 —— 人手一次一件，永远到不了洪峰。
+ */
+const AUTO_PICK_PER_FRAME = 5;
 
 /**
  * 掉落管理器（静态类）
@@ -275,6 +290,20 @@ export default class DropManager {
     if (this.items.size === 0) return;
     // 背包已满的节流期内直接跳过：既避免每帧刷提示，也避免每帧重复尝试入包
     if (Date.now() - this.fullTipTime < this.fullTipInterval) return;
+    // 背包满本地预判（#1385）：满了就不发全屏 pick 批量 —— 每条被拒的 pick 服务端也照付
+    // 全价（读账号行 + 读角色行 + JSON.parse 整份存档后才在格子扫描里抛 bag_full），
+    // 满包时每 fullTipInterval 一轮全屏重试全是白付，还周期性堵实时进程。
+    // 提示照旧节流；回收由 onBagChanged 防抖路径与 bag_full 拒绝兜底触发，
+    // 腾出格子后下一帧自然续捡。本地判满只在本地账短暂落后于服务端时误判，
+    // 手动点击拾取（`pickup`）不走这条闸，不受影响。
+    const role = RoleCache.findOnlineRole();
+    if (role && isBagFull(role.bag)) {
+      this.notifyBagFull();
+      return;
+    }
+    // 每帧限量（#1385）：只数**真的发出去**的帧（在途去重跳过的不占额度），发满即停，
+    // 剩下的下一帧继续 —— 洪峰变涓流，服务端不再被一拍打满
+    let sent = 0;
     for (const drop of Array.from(this.items.values())) {
       const position = drop.node.getWorldPosition();
       const distance = Math.hypot(position.x - rolePosition.x, position.y - rolePosition.y);
@@ -287,7 +316,10 @@ export default class DropManager {
       }
       // 本地已到期：服务端马上会发 dropRemove，这里静默跳过（主动点它时才提示「已消失」）
       if (verdict !== true) continue;
-      this.requestPick(drop);
+      if (this.requestPick(drop)) {
+        sent++;
+        if (sent >= AUTO_PICK_PER_FRAME) break;
+      }
     }
   }
 
@@ -332,16 +364,18 @@ export default class DropManager {
    * 只做一件事：发 pick 帧，节点保留在地面 —— 入包与移除都等 `picked` 应答
    * （`applyPickedFrame`）。背包放不放得下只有服务端知道，本地先斩后奏会演出入包了其实没有。
    * 应答在途（或刚超时未到重发前）直接返回，不提示不重发。
+   * @returns 帧是否**真的发出**（在途去重 / 通道离线时为 false —— #1385 的每帧限量按实发数计）
    */
-  private static requestPick(drop: DropItem): void {
+  private static requestPick(drop: DropItem): boolean {
     const sentAt = this.pendingPicks.get(drop.dropId);
     if (sentAt !== undefined) {
-      if (Date.now() - sentAt < dropRuntime.pickReplyTimeout) return;
+      if (Date.now() - sentAt < dropRuntime.pickReplyTimeout) return false;
       // 应答超时（帧丢失 / 断线期间）：撤掉在途标记，允许重新拾取
       this.pendingPicks.delete(drop.dropId);
     }
-    if (!CombatChannel.sendPick(drop.dropId)) return; // 通道不在线：等恢复后再试
+    if (!CombatChannel.sendPick(drop.dropId)) return false; // 通道不在线：等恢复后再试
     this.pendingPicks.set(drop.dropId, Date.now());
+    return true;
   }
 
   /**

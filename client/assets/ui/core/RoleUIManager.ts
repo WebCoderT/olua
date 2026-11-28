@@ -135,6 +135,27 @@ export default class RoleUIManager {
     AutoBagService.onBagChanged();
   }
 
+  /** scheduleBagRefresh 的在途闸（#1385）：闸在时再来的合并请求直接忽略 */
+  private static bagRefreshScheduled = false;
+
+  /**
+   * 背包刷新合帧（#1385）：同一拍多条背包变化只重建一次背包 UI
+   *
+   * 全屏自动拾取（#1380）开启后，怪物死亡的一两百毫秒内会涌进几十条 `picked` 应答，
+   * 逐条 `refreshBag()` 就是几十次背包弹窗全量重建挤在同一拍 —— 客户端侧的卡顿放大器。
+   * 这里把「什么时候刷」与「改了什么」解耦：数据照旧同步落账（revision / 格子即时生效，
+   * 不等这一拍），只有 UI 重建合并到下一个宏任务执行一次。pending 闸先复位再刷：
+   * 刷新途中又来的变化能排上下一拍，不丢。
+   */
+  static scheduleBagRefresh(): void {
+    if (RoleUIManager.bagRefreshScheduled) return;
+    RoleUIManager.bagRefreshScheduled = true;
+    setTimeout(() => {
+      RoleUIManager.bagRefreshScheduled = false;
+      this.refreshBag();
+    }, 0);
+  }
+
   /** 设置怪物信息面板创建器（由组合根注入，选中怪物时才真正创建面板） */
   static setMonsterInfoFactory(factory: MonsterInfoFactory) {
     this.monsterInfoFactory = factory;

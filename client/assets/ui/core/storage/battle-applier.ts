@@ -199,8 +199,10 @@ export default class BattleApplier {
     role.revision = revision;
     RoleCache.updateOnlineRole(role);
     updateRoleUi(role);
-    // 背包弹窗开着时实时跟上（updateUi 只刷信息栏/底栏/血条，不含背包）；弹窗没开时是 no-op
-    if (placed.length) RoleUIManager.refreshBag();
+    // 背包弹窗开着时实时跟上（updateUi 只刷信息栏/底栏/血条，不含背包）；弹窗没开时是 no-op。
+    // 合帧刷新（#1385）：全屏拾取下同一拍会涌进几十条 picked，逐条 refreshBag 是几十次
+    // 整包 UI 重建 —— 数据已同步落账，只把 UI 重建合并到下一拍一次
+    if (placed.length) RoleUIManager.scheduleBagRefresh();
   }
 
   /**
