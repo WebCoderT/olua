@@ -376,7 +376,6 @@ export function applyAutoFightButtonStyle(node: Node): { plate: Node; ring: Node
     const layout = bottomBarLayout.autoFight;
     const uiTransform = node.addComponent(UITransform);
     uiTransform.setContentSize(layout.size);
-    node.setPosition(layout.position.x, layout.position.y, 0);
     // 开启态外圈（稿 `.auto.on` 的 box-shadow 0 0 0 1px）：比底板四周各大 1px 的空心描边板，
     // 常态隐藏、开启时亮出（显隐在组件 refresh 里切）
     const ring = createGlassPlate(

@@ -20,7 +20,7 @@ import { goodShowAttributes } from "../../../configs/good";
 import { equipmentAttributeDiffs, equipmentCombatValue, equipmentSlots, formatSignedAttributeValue, getEquipmentNameParts, getRecyclePrice } from "../../../configs/equipments";
 import LayerManager from "../../core/LayerManager";
 import { getPopupPosition } from "../../utils/layout/ScreenLayout";
-import { ButtonTone, buttonStyle, buttonTone, chatDialogLayout, dialogFrame, goodDetailLayout, hoverTipLayout, T, uiSize } from "../../../configs/hudLayout";
+import { ButtonTone, buttonStyle, buttonTone, dialogFrame, goodDetailLayout, hoverTipLayout, T, uiSize } from "../../../configs/hudLayout";
 import { BagCellMeta } from "../../../configs/items";
 import { createRow } from "./ui-parts";
 import { applyBackgroundEffect, createEquipmentDetailBackground, createGoodTagRow, formatAttributeValue, formatOriginTime } from "./item-parts";
@@ -73,29 +73,6 @@ export function createHoverTipDescription(text: string): Node {
 
 
 
-  /**
-   * 创建常驻聊天小窗的壳（#469）：半透明深色圆角底板 + 金色细边，贴 `chatDialogLayout.dock` 指定的角
-   *
-   * 与 createDialogBg 的差别：没有 ornate 大框、没有标题栏、不可拖拽 —— 常驻窗要的是「在但不抢戏」；
-   * 尺寸 / 配色 / 停靠边距全在 `configs/layout/dialogs.chatDialogLayout`。
-   */
-export function createChatBox(): Node {
-    const layout = chatDialogLayout;
-    // 稿 `.chat .panel` 是 `panel panel--rivet`：1px 金线 + 四角铆钉 + 顶部亮带，
-    // 所以直接复用弹窗面板的矢量画法，只把底 / 顶带 / 边 / 圆角换成稿 `.panel` 的暖褐色阶
-    const node = createDialogPanel(layout.name, layout.size, {
-      fill: layout.box.fill,
-      fillTop: layout.box.fillTop,
-      fillTopRatio: layout.box.fillTopRatio,
-      border: layout.box.border,
-      radius: layout.box.radius,
-    });
-    // 窗体整体拦截指针：聊天窗底下是可点地的世界，盖住的区域不该再把点击漏给寻路
-    blockClickThrough(node);
-    // 停靠左下角（固定值，见 chatDialogLayout.position；窗口缩放时由 ChatDialog.refreshDock 重贴）
-    node.setPosition(layout.position.x, layout.position.y, 0);
-    return node;
-  }
 
   /**
    * HUD 常驻件底板（半透明暖褐 + 一圈弱金线，无铆钉）

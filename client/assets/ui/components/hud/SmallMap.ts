@@ -1,7 +1,7 @@
-import { Graphics, isValid, Label, Node, Size, Sprite, SpriteFrame, UIOpacity, UITransform, Vec2, Vec3 } from "cc";
+import { Graphics, instantiate, isValid, Label, Node, Prefab, Size, Sprite, SpriteFrame, UIOpacity, UITransform, Vec2, Vec3 } from "cc";
 import { mapLabelOf, maps } from "../../../configs/game-config";
 import { getSmallMapScale, smallMapConfig } from "../../../configs/smallMap";
-import { T, mapPreviewImage, smallMapLayout } from "../../../configs/hudLayout";
+import { T, mapPreviewImage, smallMapLayout, smallMapPrefab } from "../../../configs/hudLayout";
 import { buildAnnouncementViews, countUnread } from "../../../configs/announcement";
 import { getText } from "../../../configs/texts";
 import AutoBattle from "../../core/AutoBattle";
@@ -106,21 +106,40 @@ export default class SmallMap extends Node {
   /** 路线当前是否已画出（无路线时据此决定是否要清空绘制层，避免每帧对空层调用 clear） */
   private routeDrawn = false;
 
-  constructor(roleDisplay: RoleDisplay) {
+  constructor(roleDisplay: RoleDisplay, prefab: Prefab) {
     super("small_map");
     this.roleDisplay = roleDisplay;
     this.mapPreviewDialog = new MapPreviewDialog(roleDisplay);
     // 公告板自己拉公告；未读数变化通过回调回到这里（红点长什么样是 HUD 的事）
     this.announcementDialog = new AnnouncementBoardDialog((unread) => this.setAnnouncementUnread(unread));
-    // 主体（尺寸与右上角固定位置：见 configs/hudLayout.smallMap，改位置直接改配置）
-    this.addComponent(UITransform).setContentSize(smallMapLayout.size);
-    this.setPosition(smallMapLayout.position.x, smallMapLayout.position.y, 0);
-    // 面板底板（稿 .map .panel：与弹窗同款铆钉面板，只是尺寸 304×250）
-    this.addChild(GameUiHelper.createDialogPanel("small_map_panel", smallMapLayout.size));
-    this.createEntryButtons();
-    this.createHead();
-    this.createMapArea();
-    this.createCoordinate();
+    if (!prefab) {
+      console.warn("[small-map] prefab 未注入：请确认 Game 场景的 smallMapPrefab 字段已绑定");
+      return;
+    }
+    // 实例化 prefab：把根节点子树挂到 this（#1361：面板/标题/摆位锚点都在 prefab，编辑器可视化改）
+    const instance = instantiate(prefab) as Node;
+    this.addComponent(UITransform).setContentSize(instance.getComponent(UITransform)!.contentSize);
+    const children = instance.children.slice();
+    for (const child of children) child.setParent(this);
+    // 根位置以 prefab 为准（#1359 口径）
+    this.setPosition(instance.position.x, instance.position.y, 0);
+    const paths = smallMapPrefab.nodes;
+    const nodeOf = (path: string): Node | null => {
+      const found = this.getChildByPath(path);
+      if (!found) console.warn(`[small-map] prefab 缺节点: ${path}`);
+      return found;
+    };
+    const labelOf = (path: string): Label | null => {
+      const comp = nodeOf(path)?.getComponent(Label) ?? null;
+      if (!comp) console.warn(`[small-map] 节点缺 Label 组件: ${path}`);
+      return comp;
+    };
+    this.mapNameLabel = labelOf(paths.mapName)!;
+    this.channelLabel = labelOf(paths.channelLabel)!;
+    this.positionLabel = labelOf(paths.positionText)!;
+    this.createEntryButtons(nodeOf(paths.entryRail)!);
+    this.createHead(nodeOf(paths.chevron)!);
+    this.createMapArea(nodeOf(paths.mapView)!);
     // 进游戏先探一次未读（失败静默：拉不到就不显示红点）
     void this.refreshAnnouncementUnread();
     void this.refreshMailUnread();
@@ -190,16 +209,16 @@ export default class SmallMap extends Node {
 
   //#region 结构拼装
 
-  /** 左侧：功能入口按钮（两列文字网格，见 hudLayout.smallMapLayout.entryGrid；顶边与地图面板对齐） */
-  private createEntryButtons() {
+  /** 左侧：功能入口按钮（两列文字网格；容器摆位在 prefab 的 EntryRail 锚点上，这里只管排列与按钮） */
+  private createEntryButtons(anchor: Node) {
     const layout = smallMapLayout;
     const grid = layout.entryGrid;
     const rows = Math.ceil(layout.entries.length / grid.columns);
     const gridWidth = grid.columns * grid.buttonSize.width + (grid.columns - 1) * grid.gap;
     const gridHeight = rows * grid.buttonSize.height + (rows - 1) * grid.gap;
-    // 网格容器：子节点排列完全交给 Layout（按行填充），整体顶边与地图面板顶边对齐
+    // 网格容器：子节点排列完全交给 Layout，贴在 prefab 锚点原点（摆位归 prefab）
     const container = GameUiHelper.createGrid(
-      "small_map_entry_buttons", grid.gap, grid.gap, layout.entryGridPosition, new Size(gridWidth, gridHeight),
+      "small_map_entry_buttons", grid.gap, grid.gap, new Vec2(), new Size(gridWidth, gridHeight),
     );
     // 「世界」打开小地图弹窗、「线路」分线图上开选线弹窗、「排行榜」打开本区榜、
     // 「成就」打开成就面板、「邮件」打开消息中心（邮件 + 公告入口，见 mailDialog）；config/sound 暂为占位
@@ -215,7 +234,7 @@ export default class SmallMap extends Node {
       }
       container.addChild(button);
     });
-    this.addChild(container);
+    anchor.addChild(container);
   }
 
   /**
@@ -237,26 +256,18 @@ export default class SmallMap extends Node {
   }
 
   /**
-   * 标题条（稿 .map-head：高 40、内容居中）：图名 gold-5 +「· N 线」副文字 + 下拉箭头
+   * 标题条的下拉箭头（稿 `svg 12px color text-3`）
    *
-   * 副文字与图名分两个 Label（稿里 span 与 b 是两种颜色字号）：名字节点够宽居中摆放，
-   * 副文字左对齐、左缘按 3 字图名估算（图名长度变化时会有 ±几像素的间隙差，稿的 flex 居中做不到等价）
+   * 图名与「· N 线」副文字都是 prefab 里的静态 Label；这里只建箭头矢量图标，
+   * 挂在 prefab 的 ChevronAnchor 锚点上 —— 有线号时排在副文字之后（相对锚点 x=0），
+   * 公共线没有副文字，箭头紧跟图名（相对锚点左移）。
    */
-  private createHead() {
+  private createHead(anchor: Node) {
     const head = smallMapLayout.head;
-    this.mapNameLabel = GameUiHelper.createText("small_map_name", "", head.nameFontSize, new Vec2(-14, head.y), new Size(200, 18), head.nameColor).getComponent(Label);
-    // 稿 `.map-head b{letter-spacing:.16em}`：图名要拉开字距，否则和副文字挤成一团
-    this.mapNameLabel.spacingX = head.nameSpacingX;
-    this.addChild(this.mapNameLabel.node);
-    this.channelLabel = GameUiHelper.createText(
-      "small_map_channel", "", head.channel.fontSize, head.channel.position, head.channel.size, head.channel.color,
-      Label.HorizontalAlign.LEFT,
-    ).getComponent(Label);
-    this.addChild(this.channelLabel.node);
-    const chevron = UiHelper.createNode("small_map_chevron", head.chevron.position, head.chevron.size);
+    const chevron = UiHelper.createNode("small_map_chevron", new Vec2(), head.chevron.size);
     drawVectorIcon(chevron, icons.headChevron, head.chevron.size, head.chevron.color, 2);
     this.chevronNode = chevron;
-    this.addChild(chevron);
+    anchor.addChild(chevron);
   }
 
   /** 消息入口的未读红点（常驻子节点，按未读数切显隐；矢量红点，替代 dot 贴图） */
@@ -267,12 +278,16 @@ export default class SmallMap extends Node {
     return dot;
   }
 
-  /** 中部：地图内容区（稿 .map-view：径向底色 + 网格 + 真实底图视口 + 坐标点 + 内暗角） */
-  private createMapArea() {
+  /** 中部：地图内容区（稿 .map-view：径向底色 + 网格 + 真实底图视口 + 坐标点 + 内暗角）
+   *
+   * 视口/底图/点位层/暗角都是代码动态绘制件，全部挂 prefab 的 MapViewAnchor 锚点**原点**上 ——
+   * 内容区的摆位与尺寸归 prefab 锚点，代码只负责往里填动态内容。
+   */
+  private createMapArea(anchor: Node) {
     const layout = smallMapLayout;
     const view = layout.mapView;
     // 真实小地图：内容区大小的视口（Mask 裁剪）+ 底图（尺寸/缩放/位置由 updateMapImage 逐帧按真实坐标设置）
-    this.mapView = GameUiHelper.createSmallMapMapView(layout.contentPosition, layout.contentSize);
+    this.mapView = GameUiHelper.createSmallMapMapView(new Vec2(), layout.contentSize);
     // 径向底色（稿 .map-view 的 background）：放在视口**内部** —— 画在外面时半径 125 的径向圆
     // 会溢出面板下沿、还会盖住标题条（第一版踩过）；视口 Mask 顺带把它裁齐
     this.mapView.addChild(GameUiHelper.createSmallMapBackdrop("small_map_placeholder", new Vec2(), layout.contentSize, view.backdrop));
@@ -289,36 +304,21 @@ export default class SmallMap extends Node {
     // 22px 网格：画在底图之上（见 createSmallMapGrid 注释）
     this.mapView.addChild(GameUiHelper.createSmallMapGrid("small_map_grid", new Vec2(), layout.contentSize, view.grid));
     // 路线指示线层：放在视口内 → 超出内容区的路线被 Mask 裁掉；在底图之上、坐标点之下
-    this.routeGraphics = GameUiHelper.createSmallMapRouteLayer(layout.contentPosition, layout.contentSize);
+    this.routeGraphics = GameUiHelper.createSmallMapRouteLayer(new Vec2(), layout.contentSize);
     this.mapView.addChild(this.routeGraphics.node);
-    this.addChild(this.mapView);
+    anchor.addChild(this.mapView);
     // 内容区发丝线（稿 `.map-view{border:1px solid var(--line-1)}`）：底图是满幅贴图，
     // 没有这一圈线时地图和面板之间是「硬切」，看不出视口边界
     const frame = GameUiHelper.createGlassPlate("small_map_view_frame", layout.contentSize, T.radius.r2, view.border, T.overlay.transparent);
-    frame.setPosition(layout.contentPosition.x, layout.contentPosition.y, 0);
-    this.addChild(frame);
+    frame.setPosition(0, 0, 0);
+    anchor.addChild(frame);
     // 坐标点绘制层（角色白点/怪物红点画在内容区尺寸的矩形内，中心与地图中心一致；在视口之上，故点位永远盖在底图上）
-    this.dotsGraphics = GameUiHelper.createSmallMapDotLayer(layout.contentPosition, layout.contentSize);
-    this.addChild(this.dotsGraphics.node);
+    this.dotsGraphics = GameUiHelper.createSmallMapDotLayer(new Vec2(), layout.contentSize);
+    anchor.addChild(this.dotsGraphics.node);
     // 内暗角（稿 .vign：inset 26px 黑 .75）：盖在点位之上，边缘渐暗 —— 层叠描边近似
-    this.addChild(GameUiHelper.createSmallMapVignette("small_map_vignette", layout.contentPosition, layout.contentSize, view.vignette));
+    anchor.addChild(GameUiHelper.createSmallMapVignette("small_map_vignette", new Vec2(), layout.contentSize, view.vignette));
     // 点击地图区域打开小地图弹窗（整图预览：左键寻路 / 右键传送）；点位层盖在底图上，点击由它接收
     bindPointerAction(this.dotsGraphics.node, () => this.openMapPreviewDialog(), this);
-  }
-
-  /**
-   * 底部世界坐标（稿 .map-foot：只剩右下角坐标，格式 `X 128 Y 96`）
-   *
-   * 排行榜 / 线路在左侧 rail 里（稿 .map-rail 的 7 颗图标之一），底部没有胶囊 ——
-   * 早前「胶囊在地图正下方」是看漏稿，已改回（见 createEntryButtons）
-   */
-  private createCoordinate() {
-    const bar = smallMapLayout.positionBar;
-    this.positionLabel = GameUiHelper.createText(
-      "small_map_position_text", "", bar.fontSize, bar.position, bar.size, bar.color,
-      Label.HorizontalAlign.RIGHT,
-    ).getComponent(Label);
-    this.addChild(this.positionLabel.node);
   }
 
   //#endregion
@@ -363,9 +363,10 @@ export default class SmallMap extends Node {
     const channel = config && config.maxChannels > 1 ? CombatChannel.currentChannel : 0;
     const suffix = channel > 0 ? getText("map_channel_suffix", { channel: channel + 1 }) : "";
     this.channelLabel.string = suffix;
-    // 没有副文字时箭头紧跟图名，有线号时排在副文字之后（稿是 flex 居中，客户端给两个固定位）
-    const head = smallMapLayout.head.chevron;
-    this.chevronNode?.setPosition(suffix ? head.position.x : head.aloneX, head.position.y, 0);
+    // 没有副文字时箭头紧跟图名，有线号时排在副文字之后 —— ChevronAnchor 锚点停在
+    // prefab 设计的「有线号」位置上，两种状态给相对锚点的两个 x（摆位归 prefab，这里只切换状态）
+    const base = this.chevronNode ? this.chevronNode.parent.position.x : smallMapLayout.head.chevron.position.x;
+    this.chevronNode?.setPosition(suffix ? 0 : smallMapLayout.head.chevron.aloneX - base, 0, 0);
   }
 
   /** 打开选线弹窗（#1016；单线图 / 配置没到时守卫直接 return，标签维持装饰图） */

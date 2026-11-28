@@ -21,7 +21,7 @@ export default class RoleHpOrb extends Node {
     super("role_hp_orb");
     const layout = bottomBarLayout.hpOrb;
     // 节点自身摆到配置位置（球体与文字都以它为原点）
-    this.setPosition(layout.position.x, layout.position.y, 0);
+    // 摆位归 prefab 锚点（#1361）：挂载时贴锚点原点，不再自己按配置定位
     // 矢量圆形血量显示（液面竖向渐变：亮端 hpHi → 深端 ember1；**先挂球体**：矢量球的液面是 Graphics，
     // 会把后挂的兄弟节点盖住，所以文字必须排在球之后才看得见；贴图时代球是 Sprite，同样按兄弟顺序绘制）
     const orb = GameUiHelper.createRoundOrb(role.hp / role.maxHp, new Vec2(), layout.size, T.hpHi, T.ember[1]);

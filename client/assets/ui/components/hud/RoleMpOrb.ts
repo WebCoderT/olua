@@ -20,7 +20,7 @@ export default class RoleMpOrb extends Node {
   constructor(role: Role) {
     super("role_mp_orb");
     const layout = bottomBarLayout.mpOrb;
-    this.setPosition(layout.position.x, layout.position.y, 0);
+    // 摆位归 prefab 锚点（#1361）：挂载时贴锚点原点，不再自己按配置定位
     // 矢量圆形魔法值显示（液面竖向渐变：亮端 mpHi → 深端 frostDeep；先挂球体，文字随后压在液面之上）
     const orb = GameUiHelper.createRoundOrb(role.mp / role.maxMp, new Vec2(), layout.size, T.mpHi, T.frostDeep);
     this.setProgress = orb.setProgress;
