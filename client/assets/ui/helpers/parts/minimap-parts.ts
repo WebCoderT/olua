@@ -210,11 +210,13 @@ export function drawRouteLine(graphics: Graphics, points: Vec2[], style: RouteLi
         for (let offset = carried; offset <= length; offset += gap) {
           const ratio = offset / length;
           graphics.circle(from.x + dx * ratio, from.y + dy * ratio, radius);
-          graphics.fill();
         }
         // 段末距本段最后一个点的余量 → 折算成下一段从段首起多远放点
         carried = gap - ((length - carried) % gap);
       }
+      // #1352：所有圆点一次 fill（圆点各自带 moveTo 不会连成多边形）——
+      // 大图整幅路线 270+ 个点逐点 fill 是 30 次重绘/秒 × 270 次提交，批量后一次提交
+      graphics.fill();
     }
     // 终点圆点：比途中的点大一圈，标出目的地
     const end = points[points.length - 1];

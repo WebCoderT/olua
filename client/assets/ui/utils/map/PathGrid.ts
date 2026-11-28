@@ -101,6 +101,22 @@ export default class PathGrid {
   private readonly staticPolys: PolyPoint[][];
   /** 可走格（1 = 可走，0 = 阻挡），按行铺平 */
   private walkable: Uint8Array;
+  /**
+   * 静态层快照（#1352）：静态障碍（碰撞多边形 + NPC 占位）烙出来的可走格。
+   * 大图的全图尺度多边形逐格烙一遍是百万级运算（46 号图 ~350 万次），而静态障碍
+   * 永远不变——构建时烙一次存快照，之后 rebuild 只做一次数组拷贝再烙动态矩形。
+   */
+  private readonly staticLayer: Uint8Array;
+  /** A\* 复用数组（#1352）：按网格规模一次分配，搜索间用代次戳区分新旧状态，不再每轮重分配 */
+  private readonly gScore: Float32Array;
+  private readonly fScore: Float32Array;
+  private readonly cameFrom: Int32Array;
+  /** 最近一次触碰代次（= 当前代次才算「gScore/cameFrom 有效」） */
+  private readonly touchGen: Uint32Array;
+  /** 最近一次关闭代次（= 当前代次才算「已在 closed 集」） */
+  private readonly closedGen: Uint32Array;
+  /** 当前搜索代次（每次 search 自增） */
+  private searchGen = 0;
 
   constructor(bounds: Rect, cellSize: number, clearance: number, staticRects: Rect[] = [], staticPolys: PolyPoint[][] = []) {
     this.originX = bounds.x;
@@ -113,13 +129,23 @@ export default class PathGrid {
     this.staticRects = staticRects.map((rect) => this.inflate(rect, clearance));
     this.staticPolys = staticPolys;
     this.walkable = new Uint8Array(this.cols * this.rows);
-  }
-
-  /** 重算可走格（每次寻路前调用：静态障碍 + 本次的动态障碍一起烙进网格） */
-  rebuild(dynamicRects: Rect[]) {
+    // Uint8Array 零初始化 = 全阻挡，先铺满可走再烙静态障碍（原 fill(1) 在 rebuild 里，#1352 上移）
     this.walkable.fill(1);
+    // 静态层只在构建时烙一次（多边形逐格判定是重活，#1352 起不再随 rebuild 重复）
     this.staticRects.forEach((rect) => this.stampRect(rect, 0));
     this.staticPolys.forEach((poly) => this.stampPolygon(poly, 0));
+    this.staticLayer = this.walkable.slice();
+    const total = this.cols * this.rows;
+    this.gScore = new Float32Array(total);
+    this.fScore = new Float32Array(total);
+    this.cameFrom = new Int32Array(total);
+    this.touchGen = new Uint32Array(total);
+    this.closedGen = new Uint32Array(total);
+  }
+
+  /** 重算可走格（每次寻路前调用）：静态层快照直接拷回，再烙本次的动态障碍（#1352） */
+  rebuild(dynamicRects: Rect[]) {
+    this.walkable.set(this.staticLayer);
     dynamicRects.forEach((rect) => this.stampRect(rect, 0));
   }
 
@@ -166,6 +192,34 @@ export default class PathGrid {
     // 目标格没有被调整过时补上精确目标点，尽量贴近目标（贴近过程中被挡住会停在接触位置）
     if (goal.col === goalCell.col && goal.row === goalCell.row) points.push(new Vec2(to.x, to.y));
     return this.smooth(points);
+  }
+
+  /** 世界坐标所在格（网格外返回 null；AutoBattle 判「追怪目标换格才重算」用，#1352） */
+  cellIndexOf(x: number, y: number): { col: number; row: number } | null {
+    return this.toCell(x, y);
+  }
+
+  /**
+   * 展示路线拉直（#1352）：贪心「最远可视」，返回保留路点的下标序列（升序，含首尾）。
+   * 经典模式路径逐格 200+ 点，指示线每帧复制 + 重绘还要按弧长铺点，展示层先拉直成
+   * 十几个关键拐点再画；**只影响显示，行走数据仍走逐格路径**。
+   */
+  simplifyIndices(points: Vec2[]): number[] {
+    if (points.length <= 2) return points.map((_, index) => index);
+    const kept: number[] = [0];
+    let current = 0;
+    while (current < points.length - 1) {
+      let next = current + 1;
+      for (let candidate = points.length - 1; candidate > next; candidate--) {
+        if (this.hasLineOfSight(points[current], points[candidate])) {
+          next = candidate;
+          break;
+        }
+      }
+      kept.push(next);
+      current = next;
+    }
+    return kept;
   }
 
   /** 障碍矩形按通行余量外扩（负数收缩，只用于外扩场景） */
@@ -252,22 +306,23 @@ export default class PathGrid {
 
   /** 八方向 A*（禁止切角），返回从起点到终点的格子序列（不含起点格） */
   private search(start: GridCell, goal: GridCell): GridCell[] {
-    const total = this.cols * this.rows;
     const startIndex = start.row * this.cols + start.col;
     const goalIndex = goal.row * this.cols + goal.col;
-    const gScore = new Float32Array(total).fill(Infinity);
-    const fScore = new Float32Array(total).fill(Infinity);
-    const cameFrom = new Int32Array(total).fill(-1);
-    const closed = new Uint8Array(total);
+    // #1352：gScore/fScore/cameFrom 按网格规模一次分配、跨搜索复用，代次戳区分新旧状态——
+    // 大图（1.8 万格）每轮搜索重新分配三张定长数组是几百 KB 的 GC 垫背；代次戳让
+    // 「未触碰格」天然等价于「gScore = Infinity / cameFrom 无效 / 未关闭」
+    const gen = ++this.searchGen;
+    const { gScore, fScore, cameFrom, touchGen, closedGen } = this;
     gScore[startIndex] = 0;
+    touchGen[startIndex] = gen;
     fScore[startIndex] = this.heuristic(start.col, start.row, goal.col, goal.row);
     const open = new MinHeap(fScore);
     open.push(startIndex);
     while (open.size > 0) {
       const current = open.pop();
       if (current === goalIndex) break;
-      if (closed[current]) continue;
-      closed[current] = 1;
+      if (closedGen[current] === gen) continue;
+      closedGen[current] = gen;
       const col = current % this.cols;
       const row = Math.floor(current / this.cols);
       for (const offset of NEIGHBOR_OFFSETS) {
@@ -279,20 +334,22 @@ export default class PathGrid {
           if (!this.isWalkableCell(col + offset.dc, row) || !this.isWalkableCell(col, row + offset.dr)) continue;
         }
         const nextIndex = nextRow * this.cols + nextCol;
-        if (closed[nextIndex]) continue;
+        if (closedGen[nextIndex] === gen) continue;
+        const known = touchGen[nextIndex] === gen ? gScore[nextIndex] : Infinity;
         const tentative = gScore[current] + offset.cost;
-        if (tentative >= gScore[nextIndex]) continue;
+        if (tentative >= known) continue;
         gScore[nextIndex] = tentative;
+        touchGen[nextIndex] = gen;
         fScore[nextIndex] = tentative + this.heuristic(nextCol, nextRow, goal.col, goal.row);
         cameFrom[nextIndex] = current;
         open.push(nextIndex);
       }
     }
-    // 终点不可达（cameFrom 没有记录且终点不是起点）
-    if (goalIndex !== startIndex && cameFrom[goalIndex] < 0) return [];
+    // 终点不可达：终点从未被本轮触碰（代次对不上），且终点不是起点
+    if (goalIndex !== startIndex && touchGen[goalIndex] !== gen) return [];
     const cells: GridCell[] = [];
     let node = goalIndex;
-    while (node !== startIndex && node >= 0) {
+    while (node !== startIndex && node >= 0 && touchGen[node] === gen) {
       cells.push({ col: node % this.cols, row: Math.floor(node / this.cols) });
       node = cameFrom[node];
     }

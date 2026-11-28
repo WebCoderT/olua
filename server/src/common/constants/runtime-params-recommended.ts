@@ -42,7 +42,7 @@ export const RECOMMENDED_AUTO_BATTLE_PARAMS = {
   classicStepLength: 100,
   cellSize: 40,
   clearance: 20,
-  repathInterval: 400,
+  repathInterval: 1000,
   waypointTolerance: 14,
   stuckInterval: 500,
   stuckDistance: 8,

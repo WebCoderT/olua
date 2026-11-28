@@ -53,6 +53,15 @@ export default class AutoBattle {
   private static path: Vec2[] = [];
   /** 正在走向的路点下标 */
   private static pathIndex = 0;
+  /**
+   * 展示路线缓存（#1352，经典走路模式）：把逐格路径用视线拉直成关键拐点，
+   * `displayIndices` 是各拐点在 `path` 里的下标。只给指示线/小地图画线用，
+   * 行走数据仍走逐格的 `path`。路径整体替换（本地重算 / 服务端回执）时重建。
+   */
+  private static displayRoute: Vec2[] = [];
+  private static displayIndices: number[] = [];
+  /** 上次重寻路时的目标格（#1352：追怪只在目标换格时重算，不按时间盲算） */
+  private static lastTargetCell: { col: number; row: number } | null = null;
   /** 上次寻路时间戳 */
   private static lastRepathAt = 0;
   /**
@@ -193,13 +202,26 @@ export default class AutoBattle {
 
   /**
    * 当前寻路路线（世界坐标，供小地图/大地图/预览弹窗画路线指示线）
-   * 从「正在走向的路点」起，依次为后续 A* 路点，最后补上实时目标点
+   * 经典模式（#1352）返回视线拉直后的关键拐点（跳过已走过的），连续模式从「正在走向的路点」起
+   * 依次为后续 A* 路点；最后补上实时目标点
    * （点击寻路是下发的固定点，追怪时目标会移动，故终点取实时坐标，线的末端始终指着目标）；
-   * 未在自动走位（当前无路径，例如已进入范围内原地出手）时返回空数组
+   * 未在自动走位（当前无路径，例如已进入范围内原地出手）时返回空数组。
+   * 展示路线只影响画线，行走数据仍走逐格的 `path`
    */
   static getRoutePoints(): Vec2[] {
     if (this.path.length === 0) return [];
     const points: Vec2[] = [];
+    // 经典模式（#1352）：展示路线是拉直后的关键拐点（下标升序），跳过已走过的，每帧只复制十几个点
+    if (autoBattle.classicWalkMode && this.displayRoute.length > 0) {
+      let start = 0;
+      while (start < this.displayIndices.length && this.displayIndices[start] < this.pathIndex) start++;
+      for (let i = start; i < this.displayRoute.length; i++) {
+        points.push(new Vec2(this.displayRoute[i].x, this.displayRoute[i].y));
+      }
+      const destination = this.getDestination();
+      if (destination) points.push(destination);
+      return points;
+    }
     const from = Math.min(this.pathIndex, this.path.length - 1);
     for (let i = from; i < this.path.length; i++) points.push(new Vec2(this.path[i].x, this.path[i].y));
     const destination = this.getDestination();
@@ -417,8 +439,9 @@ export default class AutoBattle {
       this.lastStuckX = position.x;
       this.lastStuckY = position.y;
     }
-    // 路径按间隔重算：追怪时目标会移动；点击寻路的点不动，重算是廉价的幂等操作
-    if (this.lastRepathAt === 0 || now - this.lastRepathAt >= autoBattle.repathInterval) repath();
+    // 路线按需重算（#1352）：不再按时间盲算——点击寻路有路就不算，追怪目标换格才算；
+    // repathInterval 只是最小节流间隔。卡住检测（上面）会把 lastRepathAt 清零强制重算
+    if (this.needRepath(to, now)) repath();
     // 经典模式会在到步后同帧切下一个路点，声明为 let（连续模式行为不变）
     let waypoint = this.path[this.pathIndex];
     if (!waypoint) {
@@ -469,6 +492,9 @@ export default class AutoBattle {
     const grid = this.ensureGrid();
     if (!grid) {
       this.path = [new Vec2(to.x, to.y)];
+      this.displayRoute = [];
+      this.displayIndices = [];
+      this.lastTargetCell = null;
       return;
     }
     // 动态障碍每次寻路前重烙：怪物围成的「墙」也会被绕开；追击目标自身不算障碍，路径才能通到它身边
@@ -488,11 +514,45 @@ export default class AutoBattle {
     } else {
       this.path = [new Vec2(to.x, to.y)];
     }
+    this.lastTargetCell = grid.cellIndexOf(to.x, to.y);
     // 经典模式（#1346/#1349）：路点[0] 是当前格的格心，角色步中途可能已越过它——裁掉回头路
     if (autoBattle.classicWalkMode) this.prunePassedWaypoints(new Vec2(from.x, from.y));
+    this.rebuildDisplayRoute(grid);
     // 服务端寻路（#811 第三道）：本地的这一份是**即时预判**（点了就先动，不留 40~80ms 空窗），
     // 服务端回执一到就用它替换 —— 权威路点才算「我走过去没穿墙」。连接不在时（离线）就只走本地
     if (this.mapId) this.pendingPathSeq = CombatChannel.requestPath(this.mapId, { x: to.x, y: to.y });
+  }
+
+  /**
+   * 是否需要重寻路（#1352）：按需而非按时间——
+   * - 首轮 / 卡住检测强制（lastRepathAt 被清零）→ 必算；
+   * - repathInterval 只是**最小节流间隔**，目标再怎么动也不会快过它重算；
+   * - 路已走完还没到（点击寻路被截断 / 追怪目标挪走）→ 必算；
+   * - 点击寻路目标不动：有路就不算（截断 / 卡住兜底）；
+   * - 追怪：目标换了格才算（目标没动，既有路照样走）。
+   */
+  private static needRepath(to: Vec2, now: number): boolean {
+    if (this.lastRepathAt === 0) return true;
+    if (now - this.lastRepathAt < autoBattle.repathInterval) return false;
+    if (this.pathIndex >= this.path.length) return true;
+    if (this.pendingPoint) return false;
+    const grid = this.grid;
+    if (!grid) return true;
+    const cell = grid.cellIndexOf(to.x, to.y);
+    const last = this.lastTargetCell;
+    if (!cell || !last) return true;
+    return cell.col !== last.col || cell.row !== last.row;
+  }
+
+  /** 重建展示路线缓存（#1352，经典走路模式）：逐格路径视线拉直成关键拐点；连续模式路径本来就少，不需要 */
+  private static rebuildDisplayRoute(grid: PathGrid) {
+    if (!autoBattle.classicWalkMode || this.path.length === 0) {
+      this.displayRoute = [];
+      this.displayIndices = [];
+      return;
+    }
+    this.displayIndices = grid.simplifyIndices(this.path);
+    this.displayRoute = this.displayIndices.map((index) => new Vec2(this.path[index].x, this.path[index].y));
   }
 
   /**
@@ -544,6 +604,12 @@ export default class AutoBattle {
     if (autoBattle.classicWalkMode) {
       const position = this.roleDisplay && isValid(this.roleDisplay) ? this.roleDisplay.getWorldPosition() : null;
       if (position) this.prunePassedWaypoints(new Vec2(position.x, position.y));
+    }
+    // 展示路线随路径整体替换重建（#1352）；网格不在就清缓存（getRoutePoints 会退回逐格展示）
+    if (this.grid && autoBattle.classicWalkMode) this.rebuildDisplayRoute(this.grid);
+    else {
+      this.displayRoute = [];
+      this.displayIndices = [];
     }
   }
 

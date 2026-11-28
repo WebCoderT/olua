@@ -1035,7 +1035,7 @@ export class RealtimeService implements OnApplicationBootstrap, OnModuleDestroy 
       const request = parsePathFind(parsed.data);
       if (!request) return;
       const now = Date.now();
-      // 节流：重寻路的节奏在客户端（repathInterval 400ms），这里只防刷 ——
+      // 节流：重寻路的节奏在客户端（repathInterval 出厂 1000ms），这里只防刷 ——
       // 一条连接 100ms 内重复请求直接丢，回执也就不发了（客户端自己会超时重发）
       if (typeof socket.lastPathFindAt === "number" && now - socket.lastPathFindAt < PATH_FIND_MIN_INTERVAL_MS) return;
       socket.lastPathFindAt = now;
@@ -2403,7 +2403,7 @@ function parsePosition(raw: unknown): ParsedPosition | null {
 /**
  * 一条连接两次寻路请求的最小间隔（毫秒，#811）
  *
- * 客户端重寻路的节奏是 `autoBattle.repathInterval`（出厂 400ms），这里只防刷：
+ * 客户端重寻路的节奏是 `autoBattle.repathInterval`（出厂 1000ms），这里只防刷：
  * 真有实现要更密的节奏（比如边走边修路），先改这个常量，而不是让服务端裸奔。
  */
 const PATH_FIND_MIN_INTERVAL_MS = 100;
