@@ -86,6 +86,12 @@ export class Game extends Component {
    */
   @property({ type: Prefab })
   npcDialogPrefab: Prefab | null = null;
+  /**
+   * 角色信息栏 prefab（#1353 HUD prefab 化样板）：静态外观在编辑器里可视化改，
+   * start 时注入给 RoleInfoBar 构造函数，不再用代码拼节点。
+   */
+  @property({ type: Prefab })
+  roleInfoBarPrefab: Prefab | null = null;
 
   /** 地图组件 */
   private gameMap: GameMap;
@@ -351,7 +357,7 @@ export class Game extends Component {
     LayerManager.addToUILayer(this.bottomBar);
     RoleUIManager.registerBottomBar(this.bottomBar);
     /** 将角色信息栏加入游戏UI */
-    this.roleInfoBar = new RoleInfoBar(role);
+    this.roleInfoBar = new RoleInfoBar(role, this.roleInfoBarPrefab!);
     LayerManager.addToUILayer(this.roleInfoBar);
     RoleUIManager.registerRoleInfoBar(this.roleInfoBar);
     /** 任务追踪栏（左侧常驻；整块点击开任务面板、标题行「详」开任务详情——两个弹窗都归底部栏持有） */

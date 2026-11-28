@@ -14,6 +14,37 @@ import { T } from "./tokens";
 
 //#region 角色信息栏（左上角常驻）
 
+/**
+ * 角色信息栏 prefab 的运行时契约（#1353 HUD prefab 化样板）
+ *
+ * 静态外观（位置 / 尺寸 / 颜色 / 字号）已固化在 `ui/prefabs/hud/RoleInfoBar.prefab`，
+ * 改版式请直接改 prefab；这里只放运行时代码必须知道的**节点名**与动态色。
+ */
+export const roleInfoBarPrefab = {
+  /** prefab 里的固定节点名：组件靠这些名字取引用，重命名节点要同步这里 */
+  nodes: {
+    name: "Name",
+    level: "Level",
+    currencyValue: "CurrencyValue",
+    combatValue: "CombatValue",
+    combatDivider: "CombatDivider",
+    avatar: "Avatar",
+    statusDot: "RealtimeStatus/StatusDot",
+    statusText: "RealtimeStatus/StatusText",
+    statusIcons: "StatusIcons",
+  },
+  /**
+   * 实时通道四态色（数据驱动的动态色，无法固化进 prefab）：
+   * prefab 里 StatusDot / StatusText 放 text[3] 占位色，运行时按状态覆盖。
+   */
+  realtimeColors: {
+    idle: T.text[3],
+    connecting: T.gold[4],
+    connected: T.jade,
+    disconnected: T.ember[3],
+  } as Record<string, Color>,
+};
+
 /** 角色信息栏布局（坐标以信息栏中心为原点，逐值对照 04-hud 的 `.info` 段） */
 export const roleInfoBarLayout = {
   /** 信息栏自身尺寸（HUD 规范 344×84：左边缘距屏幕 20、顶边 18） */
