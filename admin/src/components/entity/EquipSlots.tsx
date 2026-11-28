@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { equipmentSlot, equipmentSlotKeys, slotLabel } from "../../api";
 import { EntityCard } from "./EntityCard";
 import { EntityPicker } from "./EntityPicker";
-import { entityImage, entityLabel, entityNote, entityOptions } from "./catalog";
+import { entityImage, entityLabel, entityNote, useEntityOptions } from "./catalog";
 
 /**
  * 装备槽面板（可视化穿戴）
@@ -41,7 +41,7 @@ export function EquipSlots({
   }, [value]);
 
   const knownSlots = useMemo(() => equipmentSlotKeys(), []);
-  const all = useMemo(() => entityOptions("equipment"), []);
+  const all = useEntityOptions("equipment");
   // 有装备的槽用大卡（要看得出穿的是哪件），空槽压成一行小按钮 ——
   // 13 个部位里有 11 个通常是空的，全用大卡会平白吃掉四行高度
   const wornSlots = slots.filter((slot) => !!value[slot]);

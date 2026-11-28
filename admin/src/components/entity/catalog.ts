@@ -10,6 +10,7 @@
  * 客户端加一件装备 / 一个技能，选择器自动多一条。
  */
 
+import { useSyncExternalStore } from "react";
 import {
   drugIcon,
   drugIds,
@@ -27,6 +28,7 @@ import {
   fashionIcon,
   fashionIds,
   fashionText,
+  gameDataVersion,
   itemDescription,
   itemIcon,
   itemIds,
@@ -60,6 +62,7 @@ import {
   slotLabel,
   soulMeta,
   soulText,
+  subscribeGameData,
   titleMeta,
   titleText,
 } from "../../api";
@@ -331,7 +334,17 @@ function optionOf(kind: EntityKind, id: string, group: string): EntityOption {
  */
 const optionCache = new Map<EntityKind, EntityOption[]>();
 
+/** 上次建缓存时的字典版本（#1376） */
+let cacheVersion = -1;
+
 export function entityOptions(kind: EntityKind): EntityOption[] {
+  // 字典落地会 bump 版本（gameData.index）——数据没到时建出的缓存（往往是**空清单**）
+  // 必须作废重算，否则数据到了下拉还是空的（#1376 地图 NPC 下拉空清单就是这个）
+  const version = gameDataVersion();
+  if (version !== cacheVersion) {
+    optionCache.clear();
+    cacheVersion = version;
+  }
   const cached = optionCache.get(kind);
   if (cached) return cached;
 
@@ -396,6 +409,17 @@ export function entityOptions(kind: EntityKind): EntityOption[] {
 
   optionCache.set(kind, options);
   return options;
+}
+
+/**
+ * React 侧取候选清单（#1376）：订阅字典版本，数据落地即重算
+ *
+ * 组件里用 `useMemo(() => entityOptions(kind), [])` 会把**数据没到时**算出的空清单
+ * 锁死在组件生命周期里（Layout 重渲也不会重算）——统一走这里，版本变了自动换新清单。
+ */
+export function useEntityOptions(kind: EntityKind): EntityOption[] {
+  useSyncExternalStore(subscribeGameData, gameDataVersion);
+  return entityOptions(kind);
 }
 
 /** 按分组过滤（`null` = 全部组）；组名按清单里首次出现的顺序返回 */

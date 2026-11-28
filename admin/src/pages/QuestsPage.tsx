@@ -1,11 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { formatTime, PERMISSION, questsApi } from "../api";
 import type { CreateQuest, PageResult, Quest, QuestRewardItem, UpdateQuest } from "../api";
 import { Modal } from "../components/Modal";
 import { Pagination } from "../components/Pagination";
 import { DescriptionField, FormFooter, ProblemList } from "../components/form-bits";
 import { EntityPickButton } from "../components/entity/EntityPickButton";
-import { entityLabel, entityOptions } from "../components/entity/catalog";
+import { entityLabel, useEntityOptions } from "../components/entity/catalog";
 import type { EntityKind } from "../components/entity/catalog";
 import { anyPickerOpen } from "../components/pickerStack";
 import { Badge, Button, Card, EmptyState, Field, Input, Select, Spinner, tableClass, tdClass, thClass, theadClass } from "../components/ui";
@@ -140,8 +140,8 @@ function QuestDialog({
   const [form, setForm] = useState<QuestForm | null>(null);
   const [submitting, setSubmitting] = useState(false);
   /** 奖励物品的候选（与服务端校验同一份物品总表；选择器只认 EntityOption） */
-  const rewardOptions = useMemo(() => entityOptions("item"), []);
-  const npcCandidates = useMemo(() => entityOptions("npc"), []);
+  const rewardOptions = useEntityOptions("item");
+  const npcCandidates = useEntityOptions("npc");
 
   useEffect(() => {
     if (!open) return;
@@ -152,7 +152,7 @@ function QuestDialog({
 
   /** 目标键的候选表：跟目标类型走（怪物 / NPC / 物品三份全量清单） */
   const targetKind: EntityKind = OBJECTIVE_TARGET_SOURCE[form?.objectiveType ?? "kill"] ?? "item";
-  const targetOptions = useMemo(() => entityOptions(targetKind), [targetKind]);
+  const targetOptions = useEntityOptions(targetKind);
 
   if (!open || !form) return null;
 

@@ -4,7 +4,7 @@ import { Modal } from "../Modal";
 import { Button, Input } from "../ui";
 import { EntityImage } from "./EntityImage";
 import { EntityPickerList } from "./EntityPickerList";
-import { entityImage, entityLabel, entityOptions } from "./catalog";
+import { entityImage, entityLabel, useEntityOptions } from "./catalog";
 
 /** 背包里的一格（与 `RoleBagCell` 同形；组件不依赖 api 类型，便于复用到别处） */
 export interface BagCellValue {
@@ -178,7 +178,7 @@ function CellEditor({
   onClose: () => void;
   onSubmit: (id: string, count: number) => void;
 }) {
-  const options = useMemo(() => entityOptions("item"), []);
+  const options = useEntityOptions("item");
   const [id, setId] = useState("");
   const [count, setCount] = useState("1");
 
