@@ -9,6 +9,35 @@ import { T } from "../tokens";
 
 //#region 通用弹窗框（createDialog 系列零件的缺省几何）
 
+/**
+ * 弹窗骨架 prefab 的运行时契约（#1386 弹窗 prefab 化第一期）
+ *
+ * 静态骨架（底板/眉题/标题/关闭键/拖拽柄/短金线）与头部摆位几何固化在
+ * `ui/prefabs/dialogs/DialogFrame.prefab`（DialogFrame 组件 @property 承载），
+ * `GameUiHelper.createDialog` 实例化后只写文案与尺寸；这里登记 prefab 内的**固定节点名**
+ * —— 组件引用走 prefab 序列化的 @property 绑定（不走名字查找），本契约是**单测断言
+ * prefab 结构的单一真相**（test-dialog-frame-prefab 按它解析，不手抄节点名；
+ * prefab 改层级/重命名节点要同步这里）。
+ */
+export const dialogFramePrefab = {
+  nodes: {
+    headDrag: "HeadDrag",
+    eyebrow: "Eyebrow",
+    closeButton: "CloseButton",
+    title: "Title",
+    titleRule: "TitleRule",
+  },
+};
+
+/** 弹窗页脚 prefab 的运行时契约（#1386）：分隔线与两端小字的结构在 prefab，几何/文案运行时写 */
+export const dialogFootPrefab = {
+  nodes: {
+    rule: "Rule",
+    left: "Left",
+    right: "Right",
+  },
+};
+
 /** 通用弹窗框几何（所有弹窗共用：位置跟随拖动，尺寸可被各弹窗覆盖） */
 export const dialogFrame = {
   /** 缺省弹窗尺寸（createDialog 不传尺寸时使用；ui.css --dlg-w-md / --dlg-h-md） */
@@ -105,9 +134,10 @@ export const dialogFrame = {
 /**
  * 弹窗页脚几何（ui.css `.panel-foot`）：顶部 1px 分隔线 + 两端各一行小字
  *
- * 16 个弹窗里 13 个有页脚，几何只随面板尺寸变，所以按尺寸算而不是逐屏手抄：
- * 线距面板底 24（`--sp-6` + 字高的一半）、字中心距底 8；两端文字块宽 `textWidth`，
- * 内缘距面板边 `inset`（= `--pad-dialog` 20）→ 左块中心 = -半宽 + inset + 半宽文字块。
+ * #1386 起页脚结构/字号/颜色在 `ui/prefabs/dialogs/DialogFoot.prefab`，
+ * 这里只剩**随面板尺寸变的摆位几何**：线距面板底 24（`--sp-6` + 字高的一半）、
+ * 字中心距底 8；两端文字块宽 `textWidth`，内缘距面板边 `inset`（= `--pad-dialog` 20）
+ * → 左块中心 = -半宽 + inset + 半宽文字块。
  *
  * @param size 弹窗尺寸（页脚按**面板高度**贴底，不含外框）
  * @param textWidth 单侧文字块宽（两端各一块，居中会让长句截断，所以给足）
@@ -123,9 +153,6 @@ export function dialogFootLayout(size: Size, textWidth = 300, inset = T.spacing.
     rightX: halfWidth - inset - textWidth / 2,
     width: textWidth,
     height: 14,
-    fontSize: T.fontSize.f11,
-    color: T.text[4],
-    lineColor: T.line[1],
   };
 }
 

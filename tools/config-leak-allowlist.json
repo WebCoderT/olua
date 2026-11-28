@@ -140,6 +140,11 @@
       "file": "ui/core/storage/auto-bag-service.ts",
       "rule": "magicCompare",
       "reason": "自动使用循环的 64 轮上限是防死循环的工程护栏（背包上限 80 格、每用一格都重扫背包，用不动即 break），不是可调数值 —— 真正的背包容量在服务端配置里，这里只兜底防刷请求。"
+    },
+    {
+      "file": "ui/helpers/parts/dialog-builder.ts",
+      "rule": "cn",
+      "reason": "createDialog / createDialogFoot 的 prefab 未注入 throw：这是「场景配置错误」的开发期报错（fail fast，#1386），不是玩家可见文案——玩家正常流程永远看不到它，报错措辞面向维护者，搬进 configs 只会让文案 key 指向一条不该被运营调的调试信息。"
     }
   ]
 }

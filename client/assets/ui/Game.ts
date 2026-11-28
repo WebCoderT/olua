@@ -14,6 +14,8 @@ import ScreenClickInput from "./components/input/ScreenClickInput";
 import CursorInput from "./components/input/CursorInput";
 import DeathDialog from "./components/dialogs/DeathDialog";
 import NpcDialog from "./components/dialogs/NpcDialog";
+import DialogFrame from "./components/dialogs/DialogFrame";
+import DialogFoot from "./components/dialogs/DialogFoot";
 import GameHelper from "./core/GameHelper";
 import StorageManager from "./core/StorageManager";
 import SceneManager from "./core/SceneManager";
@@ -113,6 +115,16 @@ export class Game extends Component {
   /** 成长线入口 prefab（#1381：称号 / 元神两颗胶囊，静态外观在 prefab，点击由 BottomBar 接） */
   @property({ type: Prefab })
   growthEntriesPrefab: Prefab | null = null;
+  /**
+   * 通用弹窗骨架 prefab（#1386）：底板/眉题/标题/关闭键/拖拽柄与摆位在 prefab，
+   * start 时注入给 DialogFrame 组件；`GameUiHelper.createDialog` 实例化它，代码只写文案与尺寸。
+   */
+  @property({ type: Prefab })
+  dialogFramePrefab: Prefab | null = null;
+
+  /** 弹窗页脚 prefab（#1386：通栏线 + 两端小字的结构，几何与文案运行时写） */
+  @property({ type: Prefab })
+  dialogFootPrefab: Prefab | null = null;
 
   /** 地图组件 */
   private gameMap: GameMap;
@@ -164,6 +176,9 @@ export class Game extends Component {
   async start() {
     // 通用 NPC 对话框 prefab 静态注入（#1348）：编辑器里把 ui/prefabs/NpcDialog 拖到本组件字段
     NpcDialog.setPrefab(this.npcDialogPrefab);
+    // 弹窗骨架/页脚 prefab 静态注入（#1386）：createDialog / createDialogFoot 实例化它们
+    DialogFrame.setPrefab(this.dialogFramePrefab);
+    DialogFoot.setPrefab(this.dialogFootPrefab);
     // 网络层接线（幂等，登录场景已调过一次）：令牌失效回登录场景、请求失败统一飘字
     installNetwork();
     // 角色进度同步的失败出口：同步请求是静默的（不弹通用提示），

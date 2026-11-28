@@ -6,16 +6,16 @@
  */
 
 
-import { Button, Color, Graphics, isValid, Label, Layout, Node, Size, UITransform, Vec2 } from "cc";
+import { Button, Color, Graphics, instantiate, isValid, Label, Layout, Node, Size, UITransform, Vec2 } from "cc";
 import UiHelper from ".././UiHelper";
-import { Draggable } from "../../components/input/Draggable";
 import VectorPlate from "../../components/common/VectorPlate";
+import DialogFrame from "../../components/dialogs/DialogFrame";
+import DialogFoot from "../../components/dialogs/DialogFoot";
 import { getText } from "../../../configs/texts";
 import { monsterLabelOf } from "../../../configs/game-config";
 import { Equipment, Goods, isEquipment } from "../../../types/good";
 import SoundManager from "../../core/SoundManager";
 import { blockClickThrough } from "../../utils/input/UiHit";
-import { ensureMouseHitTestable, HAS_MOUSE, trackUiPress } from "../../utils/input/Pointer";
 import { goodShowAttributes } from "../../../configs/good";
 import { equipmentAttributeDiffs, equipmentCombatValue, equipmentSlots, formatSignedAttributeValue, getEquipmentNameParts, getRecyclePrice } from "../../../configs/equipments";
 import LayerManager from "../../core/LayerManager";
@@ -134,129 +134,32 @@ export function drawGlassPlate(graphics: Graphics, size: Size, radius: number, b
   }
 
   /**
-   * 创建通用弹窗背景面板（矢量底板 + 四角铆钉，#1059）
+   * 创建通用弹窗背景面板（矢量底板 + 四角铆钉，#1059；#1386 起绘制进 VectorPlate 组件）
    *
    * 对齐 `design/olua-ui` 的 `.panel--rivet`：暖炭褐底 + 顶部明暗过渡 + 1px 古铜金线 + 四角铆钉。
-   * 全部用 Graphics 现画（不再九宫拼图）：弹窗尺寸变化时金线恒为 1px、铆钉恒为同一个圆，
-   * 不会被拉伸成椭圆；配色与几何见 configs/layout/dialogs.dialogFrame.panel。
+   * #1386：绘制逻辑已与 VectorPlate 组件完全同构（组件按 UITransform 尺寸重画、外观全部
+   * @property 化、缺省值取 configs.dialogFrame.panel）——这里不再手画 Graphics，
+   * 改挂组件；prefab 化的弹窗（DialogFrame.prefab）与运行时 addComponent 的旧弹窗同视觉。
    * 返回的容器尺寸即弹窗尺寸，后续子件坐标以弹窗中心为原点（与 createDialog 系列一致）。
    */
-export function createDialogPanel(name: string, size: Size = dialogFrame.size, style: { fill?: Color; fillTop?: Color; fillTopRatio?: number; border?: Color; radius?: number } = {}) {
-    const panelStyle = dialogFrame.panel;
-    const { borderWidth, innerHighlight, rivet } = panelStyle;
-    // 默认是弹窗那一套（不透明面板）；HUD 常驻件（聊天小窗）传 style 换成稿 `.panel` 的近不透明暖褐
-    const fill = style.fill ?? panelStyle.fill;
-    // 顶亮带跟着 fill 一起覆盖：只换底不换带会剩一条与稿无关的亮棕（聊天窗就是这种情况）
-    const fillTop = style.fillTop ?? panelStyle.fillTop;
-    const border = style.border ?? panelStyle.border;
-    const radius = style.radius ?? panelStyle.radius;
+export function createDialogPanel(name: string, size: Size = dialogFrame.size) {
     const panel = UiHelper.createNode(name, new Vec2(), size);
-    const graphics = panel.addComponent(Graphics);
-    const left = -size.width / 2;
-    const bottom = -size.height / 2;
-    const bw = Math.max(1, borderWidth);
-    // 1) 外框 + 底衬：稿的边线是 rgba(194,146,69,.48) 叠在面板底色上，
-    //    而 Graphics 的 1px 描边在实机上整条不渲染（见 drawGlassPlate 的注释）——
-    //    所以先把边线色与面板底色合成为不透明色，再用它铺整块、内缩填底色，恒 1px 的金边就出来了；
-    //    若直接铺半透明边线，它会跟面板**外面**的亮地图混成灰线
-    const ringColor = UiHelper.blendOver(border, fill);
-    graphics.fillColor = ringColor;
-    graphics.roundRect(left, bottom, size.width, size.height, radius);
-    graphics.fill();
-    graphics.fillColor = fill;
-    graphics.roundRect(left + bw, bottom + bw, size.width - bw * 2, size.height - bw * 2, Math.max(0, radius - bw));
-    graphics.fill();
-    // 2) 竖向渐变（稿 `.panel` 的 165deg：surface-3 → surface-2 62% → #150F08）——
-    //    纯色亮带会把上半面板压成一片发亮的死平色，格子与金线都没了对比
-    UiHelper.paintVerticalGradient(
-      graphics,
-      size,
-      [
-        { t: 0, color: fillTop },
-        { t: 0.62, color: fill },
-        { t: 1, color: panelStyle.gradientBottom },
-      ],
-      bw,
-      radius,
-      panelStyle.gradientSteps,
-    );
-    // 3) 内侧一圈极弱高光：贴顶边往下 2px，撑出「金属压边」的厚度感（同样用 1px 填充条）
-    graphics.fillColor = innerHighlight;
-    graphics.rect(left + bw + 1, bottom + size.height - bw - 2, size.width - (bw + 1) * 2, 1);
-    graphics.fill();
-    // 4) 四角铆钉（ui.css .panel--rivet）：**右上角不画**（用户拍板 2026-11-18：带关闭键的弹窗
-    //    右上角是铆钉主圆 + 拖尾小点「两个圈圈」挤在 × 旁边，很难看）；其余三角各一颗、各带小拖尾点
-    const r = rivet.size / 2;
-    const inset = rivet.inset;
-    const rivetPoints: Array<[number, number, number, number]> = [
-      [left + inset, bottom + size.height - inset, 1, 0],
-      [left + inset, bottom + inset, 1, 0],
-      [left + size.width - inset, bottom + inset, -1, 0],
-    ];
-    for (const [x, y, dir] of rivetPoints) {
-      graphics.fillColor = rivet.color;
-      graphics.circle(x, y, r);
-      graphics.fill();
-      graphics.circle(x + dir * rivet.trailOffset, y, rivet.trailSize / 2);
-      graphics.fill();
-    }
+    panel.addComponent(VectorPlate);
     return panel;
   }
 
   /**
-   * 创建游戏通用弹窗背景
-   *
-   * 拖拽不在根上（#1090：只有标题栏可拖动弹窗）—— createDialog 会在标题栏加一条
-   * 透明的拖拽柄（components/input/Draggable），内容区怎么拖都不影响弹窗位置。
+   * 「点中弹窗即浮到其它弹窗之上」的置顶接线：#1386 起实现移到 utils/input/DialogBehavior
+   * （DialogFrame 骨架组件与工厂共享同一实现，避免 helper ↔ 组件循环依赖）；
+   * 这里 re-export 保持 GameUiHelper 聚合出口与既有调用点（ReportDialog / BagDialog / ConfirmDialog）不变。
    */
-export function createDialogBg(name: string, position: Vec2 = new Vec2(), size: Size = dialogFrame.size) {
-    const dialog = createDialogPanel(name, size);
-    dialog.setPosition(position.x, position.y, 0);
-    // 弹窗面板整体在鼠标通道上拦截：弹窗打开时点它任意位置（含空白处）都不再穿透到下层的 HUD
-    // （关闭按钮这类只走 touch 通道的 Button 对 mouse 通道不可见，详见 utils/input/UiHit.blockClickThrough）
-    blockClickThrough(dialog);
-    // 同屏多弹窗时，点哪个哪个浮到其它弹窗之上（见 LayerManager.raiseDialog）
-    bindDialogRaiseOnPress(dialog);
-    return dialog;
-  }
+export { bindDialogRaiseOnPress } from "../../utils/input/DialogBehavior";
 
-  /**
-   * 绑定「点中弹窗即浮到其它弹窗之上」（同屏多弹窗的层级直觉：最近点过的那个在最上层）
-   *
-   * @param node 弹窗根，或弹窗内的任意节点（后者由 LayerManager 沿祖先找到所属弹窗）——
-   *   那些**把触摸收住、不让事件冒泡到弹窗根**的手势区域（如背包网格，见 BagGridView.setupTouchOwnership）
-   *   必须自己挂一次，否则在它里面按下时弹窗不会浮上来
-   *
-   * 两条输入通道都要接管（引擎的两条通道各自独立派发，见 utils/input/UiHit 的说明）：
-   * · 触摸通道：TOUCH_START 冒泡到弹窗根 —— 点到弹窗内任何位置（含子按钮、子列表）都会走到这里；
-   * · 鼠标通道：MOUSE_DOWN 同样沿祖先链冒泡（引擎命中测试后 `event.bubbles = true`，见 utils/input/Pointer）；
-   *   只登记 MOUSE_DOWN —— **不登记 MOUSE_MOVE**：节点一旦命中就会吞掉它，指针样式与按住走路都会卡住。
-   *
-   * 提层只是改兄弟序号，不影响本次触摸/鼠标的归属（触摸通道在 TOUCH_START 已把整段触摸判给命中节点，
-   * 拖动弹窗照旧），也不改变遮挡关系：模态遮罩命中时事件不会冒泡到它下面的弹窗（兄弟不在冒泡链上）。
-   */
-export function bindDialogRaiseOnPress(node: Node) {
-    node.on(Node.EventType.TOUCH_START, () => LayerManager.raiseDialog(node));
-    if (!HAS_MOUSE) return;
-    if (!ensureMouseHitTestable(node, "bindDialogRaiseOnPress")) return;
-    // 本节点也注册了鼠标事件，顺手登记「按压起点」（本节点通常已由 blockClickThrough 登记过，幂等）
-    trackUiPress(node);
-    node.on(Node.EventType.MOUSE_DOWN, () => LayerManager.raiseDialog(node));
-  }
-
-  /**
-   * 创建通用弹窗
-   *
-   * 骨架对齐 `design/olua-ui` 的 `.panel--rivet` + `.panel-head`：
-   * 底板（矢量铆钉）→ 左上眉题（可选）→ 居中标题 + 44×1 短金线 → 右上关闭键。
-   * 头部三段几何全部来自 configs/layout/dialogs.dialogFrame（eyebrow / title / closeButton）。
-   *
-   * @param eyebrow 左上角英文眉题（`BAG · B` 这类，含键盘快捷键）；不传则不画
-   */
   /**
    * 眉题标签（`.panel-eyebrow`：左上角一行金色小字，含分区 / 快捷键信息）。
-   * 标准弹窗（createDialog）与自建面板的 overlay 弹窗（确认框 / 举报 / 频道 / 选区 / 公告详情 /
-   * 死亡界面 / 物品详情）都要求有副标题（2026-11-18 用户拍板「副标题必须有」），共用本方法。
+   * 标准弹窗（createDialog）的眉题在 DialogFrame.prefab 里；本方法保留给
+   * **自建面板的 overlay 弹窗**（确认框 / 举报 / 频道 / 选区 / 公告详情 / 死亡界面 /
+   * 物品详情）—— 它们要求有副标题（2026-11-18 用户拍板「副标题必须有」），共用本方法。
    */
 export function createEyebrow(name: string, panelSize: Size, eyebrow: string) {
     const cap = dialogFrame.eyebrow;
@@ -271,65 +174,43 @@ export function createEyebrow(name: string, panelSize: Size, eyebrow: string) {
     );
   }
 
+  /**
+   * 创建通用弹窗（#1386 起骨架来自 `ui/prefabs/dialogs/DialogFrame.prefab`）
+   *
+   * 骨架对齐 `design/olua-ui` 的 `.panel--rivet` + `.panel-head`：
+   * 底板（VectorPlate）→ 标题栏拖拽柄 → 左上眉题 → 居中标题 + 44×1 短金线 → 右上关闭键。
+   * prefab 由 Game 场景的 `Game.dialogFramePrefab` 注入（NpcDialog 同款静态引用）；
+   * 代码只写**文案与尺寸**（frame.setTitle / setEyebrow / setSize），摆位与样式全部归 prefab
+   * —— 组件 onLoad 自动接线 blockClickThrough / 置顶提层 / 拖拽 / 关闭键销毁（原 createDialogBg 行为）。
+   * 签名不变，调用点零改动；prefab 未注入 = 场景配置错误，直接抛错暴露（不留代码兜底路径）。
+   *
+   * @param eyebrow 左上角英文眉题（`BAG · B` 这类，含键盘快捷键）；不传则不画（整块隐藏）
+   */
 export function createDialog(name: string, title: string, position: Vec2 = new Vec2(), size: Size = dialogFrame.size, eyebrow = "") {
-    // 弹窗
-    const dialog = createDialogBg(name, position, size);
-    // 标题栏拖拽柄（#1090：只有标题栏可拖动弹窗）：通栏透明条带，垫在标题/眉题/关闭键之下
-    // （先 add，兄弟节点后加的命中优先级更高 —— 按关闭键不会触发拖拽，按标题文字拖的是柄）
-    const head = UiHelper.createNode(
-      `${name}_head_drag`,
-      new Vec2(0, size.height / 2 - dialogFrame.headDrag.height / 2),
-      new Size(size.width, dialogFrame.headDrag.height),
-    );
-    head.addComponent(Draggable).dragTarget = dialog;
-    dialog.addChild(head);
-    // 眉题：左上角一行小字，左对齐（不画底、不拦点击 —— 纯标注）
-    if (eyebrow) {
-      dialog.addChild(createEyebrow(`${name}_eyebrow`, size, eyebrow));
+    const prefab = DialogFrame.getPrefab();
+    if (!prefab) {
+      throw new Error("DialogFrame.prefab 未注入：请确认 Game 场景 Game 组件的 dialogFramePrefab 字段已绑定（#1386）");
     }
-    // 关闭弹窗按钮（矢量 ×：与设计稿 .panel-close 同口径，不再用图片）
-    const closeButton = createVectorButton(
-      `${name}_close_button`,
-      dialogFrame.closeButton.text,
-      new Vec2(size.width / 2 - dialogFrame.closeButton.insetX, size.height / 2 - dialogFrame.closeButton.insetY),
-      dialogFrame.closeButton.size,
-      dialogFrame.closeButton.fontSize,
-      dialogFrame.closeButton.color,
-    );
-    dialog.addChild(closeButton);
-    // 弹窗标题（居中 + 下方短金线）
-    const titleHeight = dialogFrame.title.height;
-    const titleY = size.height / 2 - dialogFrame.title.insetTop;
-    const dialogTitle = UiHelper.createLabel(
-      `${name}_title`,
-      title,
-      dialogFrame.title.color,
-      dialogFrame.title.fontSize,
-      new Vec2(0, titleY),
-      new Size(size.width - dialogFrame.title.widthPadding, titleHeight),
-    );
-    dialog.addChild(dialogTitle);
-    const rule = dialogFrame.title.rule;
-    const ruleNode = UiHelper.createNode(`${name}_title_rule`, new Vec2(0, titleY - titleHeight / 2 - rule.gap), new Size(rule.width, rule.height));
-    const ruleGraphics = ruleNode.addComponent(Graphics);
-    ruleGraphics.fillColor = rule.color;
-    ruleGraphics.rect(-rule.width / 2, -rule.height / 2, rule.width, rule.height);
-    ruleGraphics.fill();
-    dialog.addChild(ruleNode);
-    // 添加关闭功能
-    closeButton.on(Node.EventType.TOUCH_END, () => dialog.destroy());
+    const dialog = instantiate(prefab);
+    dialog.name = name;
+    dialog.setPosition(position.x, position.y, 0);
+    const frame = dialog.getComponent(DialogFrame)!;
+    frame.setTitle(title);
+    frame.setEyebrow(eyebrow);
+    frame.setSize(size);
     return dialog;
   }
 
   /**
-   * 弹窗页脚（ui.css `.panel-foot`）：通栏 1px 分隔线 + 两端各一行小字
+   * 弹窗页脚（ui.css `.panel-foot`；#1386 起结构来自 `ui/prefabs/dialogs/DialogFoot.prefab`）
    *
-   * 几何来自 configs/layout/dialogs 的 `dialogFootLayout`（按面板尺寸算，不逐屏手抄），
+   * 通栏 1px 分隔线 + 两端各一行小字：结构与字号/颜色/线色在 prefab（DialogFoot 组件），
+   * 摆位几何随面板尺寸变（`dialogFootLayout` 按尺寸算，不逐屏手抄），
    * 文案由调用方给（业务文案在 configs/texts）。纯标注层，不拦点击 ——
    * 弹窗根已经 blockClickThrough，点在页脚上照样算「点中弹窗」。
    *
    * @param width 通栏线宽（一般就是弹窗宽）
-   * @param foot 页脚几何（dialogFootLayout 的返回值）
+   * @param foot 页脚几何（dialogFootLayout 的返回值：线 y / 文字 y / 两端 x / 文本块宽高）
    */
 export function createDialogFoot(
     name: string,
@@ -341,42 +222,19 @@ export function createDialogFoot(
       rightX: number;
       width: number;
       height: number;
-      fontSize: number;
-      color: Color;
-      lineColor: Color;
     },
     leftText: string,
     rightText: string,
   ) {
-    const container = UiHelper.createNode(name, new Vec2(), new Size(width, foot.height));
-    const rule = UiHelper.createNode(`${name}_rule`, new Vec2(0, foot.lineY), new Size(width, 1));
-    const graphics = rule.addComponent(Graphics);
-    graphics.fillColor = foot.lineColor;
-    graphics.rect(-width / 2, -0.5, width, 1);
-    graphics.fill();
-    container.addChild(rule);
-    container.addChild(
-      UiHelper.createLabel(
-        `${name}_left`,
-        leftText,
-        foot.color,
-        foot.fontSize,
-        new Vec2(foot.leftX, foot.textY),
-        new Size(foot.width, foot.height),
-        Label.HorizontalAlign.LEFT,
-      ),
-    );
-    container.addChild(
-      UiHelper.createLabel(
-        `${name}_right`,
-        rightText,
-        foot.color,
-        foot.fontSize,
-        new Vec2(foot.rightX, foot.textY),
-        new Size(foot.width, foot.height),
-        Label.HorizontalAlign.RIGHT,
-      ),
-    );
+    const prefab = DialogFoot.getPrefab();
+    if (!prefab) {
+      throw new Error("DialogFoot.prefab 未注入：请确认 Game 场景 Game 组件的 dialogFootPrefab 字段已绑定（#1386）");
+    }
+    const container = instantiate(prefab);
+    container.name = name;
+    const component = container.getComponent(DialogFoot)!;
+    component.setGeometry(foot);
+    component.setTexts(leftText, rightText);
     return container;
   }
 

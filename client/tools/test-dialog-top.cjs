@@ -139,6 +139,10 @@ const helperSource = gameUiSourceCombined(GAME_UI_HELPER_FILE);
 const gameSource = read(GAME_FILE);
 const storageSource = require("./lib/storage-src.cjs").storageSourceFor(STORAGE_MANAGER_FILE);
 const hoverTipSource = read(HOVER_TIP_MANAGER_FILE);
+// #1386 弹窗骨架 prefab 化：bindDialogRaiseOnPress 实现移到 utils/input/DialogBehavior（GameUiHelper re-export），
+// 行为接线随骨架进 components/dialogs/DialogFrame.ts 的 start()
+const dialogBehaviorSource = read(path.join(PROJECT_ROOT, "assets/ui/utils/input/DialogBehavior.ts"));
+const dialogFrameSource = read(path.join(PROJECT_ROOT, "assets/ui/components/dialogs/DialogFrame.ts"));
 
 check(/static addDialogToUILayer\(node: Node\)/.test(layerSource) && /static raiseDialog\(node: Node\)/.test(layerSource), "LayerManager 对外两个入口：登记挂载 + 置顶");
 check(/const dialog = this\.findDialog\(node\);/.test(layerSource) && /if \(!dialog\) return;/.test(layerSource), "raiseDialog 从任意节点沿祖先找所属弹窗（手势区域把触摸收住时靠它）");
@@ -147,15 +151,16 @@ check(/item\.parent !== parent/.test(layerSource) && /getSiblingIndex\(\)/.test(
 check(/if \(topIndex <= index\) return;/.test(layerSource), "已在最上层时提前返回（不做无意义的重排）");
 check(/dialogNodes = this\.dialogNodes\.filter\(\(item\) => isValid\(item\)\)/.test(layerSource), "登记时清掉已销毁的清单项");
 
-const raiseBody = methodBody(helperSource, "function bindDialogRaiseOnPress(node: Node) {");
-check(Boolean(raiseBody), "GameUiHelper.bindDialogRaiseOnPress 存在");
+const raiseBody = methodBody(dialogBehaviorSource, "function bindDialogRaiseOnPress(node: Node) {");
+check(Boolean(raiseBody), "GameUiHelper.bindDialogRaiseOnPress 存在（#1386 起实现在 utils/input/DialogBehavior，GameUiHelper re-export）");
 check(/TOUCH_START/.test(raiseBody) && /LayerManager\.raiseDialog\(node\)/.test(raiseBody), "触摸通道：TOUCH_START 冒泡到弹窗根即置顶（点弹窗内任何位置都算）");
 check(/MOUSE_DOWN/.test(raiseBody) && /HAS_MOUSE/.test(raiseBody), "鼠标通道：MOUSE_DOWN 补一次（只在有鼠标的环境登记）");
 check(!/MOUSE_MOVE/.test(raiseBody), "不注册 MOUSE_MOVE（节点一旦命中就会吞掉指针移动，指针样式与按住走路都会卡住）");
 check(/trackUiPress\(node\)/.test(raiseBody), "顺带登记「按压起点」（与 blockClickThrough 同一套口径，幂等）");
 
-const dialogBgBody = methodBody(helperSource, "function createDialogBg(name: string");
-check(/bindDialogRaiseOnPress\(dialog\)/.test(dialogBgBody), "createDialogBg 里挂上置顶（走 createDialog 的弹窗全部自动获得该行为）");
+// #1386：置顶/拦截随骨架进 DialogFrame 组件的 start() —— createDialog 实例化 prefab 即自动获得
+check(/bindDialogRaiseOnPress\(this\.node\)/.test(dialogFrameSource) && /blockClickThrough\(this\.node\)/.test(dialogFrameSource), "DialogFrame.start() 里挂上置顶与点击拦截（走 createDialog 的弹窗全部自动获得该行为）");
+check(/protected start\(\)/.test(dialogFrameSource) && /protected onLoad\(\)/.test(dialogFrameSource), "DialogFrame 摆位（onLoad）与行为接线（start）分离：编辑器里只摆位不接事件");
 
 // 每个弹窗的挂载点都必须登记：漏一个，那个弹窗就点不动
 // [文件, 登记式挂载次数（弹窗）, 普通挂载次数（临时层，如商城/背包的悬停详情）]
