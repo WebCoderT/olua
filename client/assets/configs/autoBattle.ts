@@ -20,6 +20,13 @@ export const autoBattle = {
   maxTargetDistance: 0,
   /** 自动移动是否使用跑步速度；快照覆写 */
   moveByRun: false,
+  /**
+   * 经典走路模式（#1334；快照覆写）：开启后移动为**一格一步**的传奇式格子走动 ——
+   * 寻路结果不拉直（路点 = 逐格格心），必须走完当前格（落点钉在格心）才开始下一步；
+   * 关闭为现状的连续移动。与服务端权威路径（path.service）消费同一个开关
+   * `runtime_params.auto_battle.classicWalkMode`，两端口径必须一致。
+   */
+  classicWalkMode: false,
   /** A* 网格单元边长（像素），越小越贴合障碍、搜索越慢；快照覆写 */
   cellSize: 0,
   /** 通行余量（像素）：障碍矩形向外扩张这么多再烙进网格，避免自动走位贴墙卡住；快照覆写 */
@@ -70,6 +77,7 @@ export const autoBattle = {
 export interface AutoBattleTuning {
   maxTargetDistance: number;
   moveByRun: boolean;
+  classicWalkMode: boolean;
   cellSize: number;
   clearance: number;
   repathInterval: number;
@@ -106,6 +114,7 @@ export function applyAutoBattleParams(params: Partial<AutoBattleTuning> | undefi
   };
   autoBattle.maxTargetDistance = num(params.maxTargetDistance, autoBattle.maxTargetDistance);
   if (typeof params.moveByRun === "boolean") autoBattle.moveByRun = params.moveByRun;
+  if (typeof params.classicWalkMode === "boolean") autoBattle.classicWalkMode = params.classicWalkMode;
   // 网格边长与重试次数必须 ≥ 1（0 会让寻路 / 放弃逻辑失去意义）
   autoBattle.cellSize = rate(params.cellSize, autoBattle.cellSize);
   autoBattle.clearance = num(params.clearance, autoBattle.clearance);

@@ -1,5 +1,6 @@
 import { isValid, Node, Rect, Vec2, Vec3 } from "cc";
 import { autoBattle } from "../../configs/autoBattle";
+import { ROLE_RUN_SPEED, ROLE_WALK_SPEED } from "../../configs/role";
 import { maps } from "../../configs/game-config";
 import { skills } from "../../configs/skill";
 import { SkillId, SkillTargetType } from "../../types/skill";
@@ -358,7 +359,7 @@ export default class AutoBattle {
       this.finishPointMove();
       return;
     }
-    if (Math.hypot(position.x - to.x, position.y - to.y) <= autoBattle.arriveTolerance) {
+    if (Math.hypot(position.x - to.x, position.y - to.y) <= this.pointArriveTolerance()) {
       this.finishPointMove();
       return;
     }
@@ -381,6 +382,19 @@ export default class AutoBattle {
     this.clearRuntimeState();
     this.roleDisplay?.setAutoMove(null);
     GameUiHelper.createErrorTip("map_move_unreachable_tip");
+  }
+
+  /**
+   * 点击寻路的到达判定半径
+   *
+   * 经典走路模式（#1334）要放宽到「半格对角」：终点是目标格的**格心**，而点击点可以在
+   * 格内任意位置，离格心最远 `cellSize × √2 / 2`（出厂 40 格 ≈ 28.3px，大于出厂 arriveTolerance 20px）——
+   * 不放宽的话人已经站上格心还判「没到」，等重寻路找到「自己到自己」的空路径后就永远到不了，
+   * 最后卡住放弃误报「走不到」。
+   */
+  private static pointArriveTolerance(): number {
+    if (!autoBattle.classicWalkMode) return autoBattle.arriveTolerance;
+    return Math.max(autoBattle.arriveTolerance, (autoBattle.cellSize * Math.SQRT2) / 2);
   }
 
   /** 朝目标点走位（追怪与点击寻路共用）：卡住检测 → 按需重算路径 → 朝当前路点移动 */
@@ -412,6 +426,23 @@ export default class AutoBattle {
       return;
     }
     const direction = new Vec2(waypoint.x - position.x, waypoint.y - position.y);
+    // 经典走路模式（#1334）：一步必须走完才走下一步 —— 到步阈值收紧到「一帧步长」，
+    // 且落点钉在格心。连续模式用 waypointTolerance（14px）提前拐弯，那种口径下
+    // 方向在步中途切换，角色永远站不上格心，格子走动会越走越歪。
+    // 路点在经典模式下是逐格格心（PathGrid keepCells / 服务端 path 同一口径），步长恒定。
+    if (autoBattle.classicWalkMode) {
+      const run = autoBattle.moveByRun;
+      if (direction.length() <= (run ? ROLE_RUN_SPEED : ROLE_WALK_SPEED)) {
+        // 走完这一步：钉在格心，切下一步（本帧先停一步，下一 tick 朝新路点走）
+        roleDisplay.snapToWorldPosition(waypoint.x, waypoint.y);
+        this.pathIndex++;
+        roleDisplay.setAutoMove(null);
+        return;
+      }
+      direction.multiplyScalar(1 / direction.length());
+      roleDisplay.setAutoMove(direction, run);
+      return;
+    }
     if (direction.length() < autoBattle.waypointTolerance) {
       // 到达当前路点：切下一个（本帧先停一步，下一 tick 朝新路点走）
       this.pathIndex++;
@@ -434,8 +465,20 @@ export default class AutoBattle {
     // 动态障碍每次寻路前重烙：怪物围成的「墙」也会被绕开；追击目标自身不算障碍，路径才能通到它身边
     grid.rebuild(MonsterManager.getBlockingRects(this.target));
     const from = roleDisplay.getWorldPosition();
-    const path = grid.findPath(new Vec2(from.x, from.y), new Vec2(to.x, to.y));
-    this.path = path.length > 0 ? path : [new Vec2(to.x, to.y)];
+    // 经典走路模式（#1334）：一格一步，本地预判这份路点同样保持逐格格心（与服务端权威路径同口径）
+    const path = grid.findPath(new Vec2(from.x, from.y), new Vec2(to.x, to.y), {
+      keepCells: autoBattle.classicWalkMode,
+    });
+    if (path.length > 0) {
+      this.path = path;
+    } else if (autoBattle.classicWalkMode) {
+      // 经典模式下 findPath 为空多半是「起点格 == 目标格」（A* 不产出路点）：
+      // 走到目标格心，而不是连续模式的直线趋近 —— 格子走动的落点必须是格心
+      const center = grid.findNearestWalkablePoint(to.x, to.y, 0);
+      this.path = [center ?? new Vec2(to.x, to.y)];
+    } else {
+      this.path = [new Vec2(to.x, to.y)];
+    }
     // 服务端寻路（#811 第三道）：本地的这一份是**即时预判**（点了就先动，不留 40~80ms 空窗），
     // 服务端回执一到就用它替换 —— 权威路点才算「我走过去没穿墙」。连接不在时（离线）就只走本地
     if (this.mapId) this.pendingPathSeq = CombatChannel.requestPath(this.mapId, { x: to.x, y: to.y });

@@ -411,6 +411,23 @@ export function RuntimeParamsPage() {
                 <option value="false">走路</option>
               </Select>
             </Field>
+            <Field
+              label="经典走路模式"
+              hint={
+                recommended
+                  ? `开启则一格一步（走完一步才走下一步，停点为格心）；推荐${recommended.autoBattle.classicWalkMode ? "开启" : "关闭（连续移动）"}`
+                  : "开启则一格一步（走完一步才走下一步，停点为格心）；关闭为连续移动"
+              }
+            >
+              <Select
+                value={draft.autoBattle.classicWalkMode}
+                disabled={!canWrite}
+                onChange={(event) => setField("autoBattle", "classicWalkMode", event.target.value)}
+              >
+                <option value="true">开启（格子走动）</option>
+                <option value="false">关闭（连续移动）</option>
+              </Select>
+            </Field>
             {AUTO_FIELDS.map((field) => (
               <Field key={field.key} label={field.label} hint={hintWith("autoBattle", field)}>
                 <Input
@@ -786,6 +803,7 @@ function toDraft(row: RuntimeParams): Draft {
     },
     autoBattle: {
       moveByRun: row.autoBattle.moveByRun ? "true" : "false",
+      classicWalkMode: row.autoBattle.classicWalkMode ? "true" : "false",
       maxTargetDistance: String(row.autoBattle.maxTargetDistance),
       cellSize: String(row.autoBattle.cellSize),
       clearance: String(row.autoBattle.clearance),
@@ -920,6 +938,7 @@ function buildPayload(
   return {
     autoBattle: {
       moveByRun: values.moveByRun === "true",
+      classicWalkMode: values.classicWalkMode === "true",
       maxTargetDistance,
       cellSize,
       clearance,

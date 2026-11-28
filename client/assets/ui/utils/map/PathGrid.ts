@@ -145,8 +145,12 @@ export default class PathGrid {
   /**
    * 计算从 from 到 to 的行走路径（世界坐标路点，不含起点，已做视线拉直）
    * 目标不可达时返回空数组
+   *
+   * `options.keepCells`（#1334 经典走路模式）：返回**逐格格心**、不拉直、不补精确目标点 ——
+   * 一格一步的格子走动要求每步恰好是「相邻两格中心的连线」（直格 cellSize / 斜格 √2×cellSize），
+   * 拉直与精确目标点都会让步长变得忽长忽短。
    */
-  findPath(from: Vec2, to: Vec2): Vec2[] {
+  findPath(from: Vec2, to: Vec2, options?: { keepCells?: boolean }): Vec2[] {
     const startCell = this.toCell(from.x, from.y);
     const goalCell = this.toCell(to.x, to.y);
     if (!startCell || !goalCell) return [];
@@ -157,6 +161,8 @@ export default class PathGrid {
     const cells = this.search(start, goal);
     if (!cells.length) return [];
     const points = cells.map((cell) => this.cellCenter(cell));
+    // 经典走路模式：一格一步，逐格格心原样返回
+    if (options?.keepCells) return points;
     // 目标格没有被调整过时补上精确目标点，尽量贴近目标（贴近过程中被挡住会停在接触位置）
     if (goal.col === goalCell.col && goal.row === goalCell.row) points.push(new Vec2(to.x, to.y));
     return this.smooth(points);

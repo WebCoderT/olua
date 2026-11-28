@@ -422,6 +422,47 @@ function polylineLength(points) {
       await api(baseUrl, "PATCH", "admin/runtime-params", { token: adminToken, zoneId: ADMIN_ZONE, body: { autoBattle: { cellSize: 40 } } });
     }
     //#endregion
+
+    //#region 八、经典走路模式（#1334）：一格一步
+    group("八、classicWalkMode 开启：路点逐格格心、步长不超过一格对角（不拉直、不补精确目标点）");
+    {
+      const classicOn = await api(baseUrl, "PATCH", "admin/runtime-params", {
+        token: adminToken,
+        zoneId: ADMIN_ZONE,
+        body: { autoBattle: { classicWalkMode: true } },
+      });
+      check(classicOn.body?.data?.autoBattle?.classicWalkMode === true, "经典走路模式开启");
+      const classic = await session.requestPath("1", { x: 1200, y: -1200 });
+      check(!!classic && classic.unreachable === false, "经典模式照样能算出路");
+      const pts = classic?.points ?? [];
+      check(pts.length > 1, "长路径有多于一个路点", `points=${pts.length}`);
+      // 拉直会把同方向的格心合并成长直线段；格子走动要求每一步 ≤ 一格对角（√2 × cellSize）
+      const diagonal = cellSize * Math.SQRT2;
+      let maxStep = 0;
+      for (let i = 1; i < pts.length; i++) {
+        maxStep = Math.max(maxStep, Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y));
+      }
+      check(maxStep <= diagonal + 0.5, "相邻路点步长 ≤ 一格对角（没有拉直成长直线）", `maxStep=${maxStep.toFixed(1)} 对角=${diagonal.toFixed(1)}`);
+      // 全部路点都在同一张网格上（格心两两同余 mod cellSize）：连续模式会在末尾补精确目标点
+      // （1200 在 40 格网里不是格心余数，会破坏同余），经典模式不该有这个点
+      const cs = cellSize;
+      const mod = (value, n) => ((value % n) + n) % n;
+      const ref = pts[0];
+      const aligned = pts.every((p) => mod(p.x - ref.x, cs) < 0.01 && mod(p.y - ref.y, cs) < 0.01);
+      const last = pts[pts.length - 1];
+      check(pts.length === 0 || (aligned && Math.hypot(last.x - 1200, last.y + 1200) > 0.5), "全部路点都是格心（没有补精确目标点）");
+      // 关闭还原：拉直只减路点，格心序列恢复后路点数必然变少
+      const classicOff = await api(baseUrl, "PATCH", "admin/runtime-params", {
+        token: adminToken,
+        zoneId: ADMIN_ZONE,
+        body: { autoBattle: { classicWalkMode: false } },
+      });
+      check(classicOff.body?.data?.autoBattle?.classicWalkMode === false, "经典走路模式关闭还原");
+      const smoothed = await session.requestPath("1", { x: 1200, y: -1200 });
+      check(!!smoothed && smoothed.unreachable === false, "关闭后照样能算出路");
+      check((smoothed?.points ?? []).length < pts.length, "关闭后恢复视线拉直（路点数变少）", `smoothed=${smoothed?.points?.length}`);
+    }
+    //#endregion
   } finally {
     server.child.kill("SIGTERM");
     await sleep(200);

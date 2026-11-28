@@ -1851,6 +1851,29 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
     // （`AoiService`，512 / 200 / 1000ms / 10Hz 与旧行为完全一致），
     // 跑一次 `make config-import` 才有出厂值
     this.ensureColumn("runtime_params", "aoi", "TEXT NOT NULL DEFAULT '{}'");
+    // 经典走路模式（#1334）：JSON 列里补键（改代码不会让存量库的 JSON 长出新键，
+    // 而 `RUNTIME_PARAM_KEYS` 启动自检会把缺键点名报错）。缺省 false = 旧的连续移动，
+    // 与加键前行为完全一致；幂等，键已在就什么都不做
+    {
+      const row = this.db.prepare("SELECT auto_battle FROM runtime_params WHERE id = 1").get() as
+        | { auto_battle: string }
+        | undefined;
+      if (row) {
+        let parsed: Record<string, unknown> = {};
+        try {
+          const value: unknown = JSON.parse(row.auto_battle || "{}");
+          if (value && typeof value === "object" && !Array.isArray(value)) parsed = value as Record<string, unknown>;
+        } catch {
+          parsed = {};
+        }
+        if (parsed.classicWalkMode === undefined) {
+          parsed.classicWalkMode = false;
+          this.db
+            .prepare("UPDATE runtime_params SET auto_battle = ? WHERE id = 1")
+            .run(JSON.stringify(parsed));
+        }
+      }
+    }
     // 掉落强制绑定（#789）：五张道具表各一列「掉出来就绑定」+ 每怪一列「这只怪掉的东西都绑定」。
     // 默认 0 = 不强制 —— 存量库补列后行为与之前完全一样（绑定只由 drop_params.bindChance 掷）
     this.ensureColumn("equipments", "bind_on_drop", "INTEGER NOT NULL DEFAULT 0");

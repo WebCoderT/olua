@@ -111,6 +111,13 @@ export class AutoBattleParamsDto {
   @IsBoolean({ message: "必须是布尔值" })
   moveByRun: boolean;
 
+  @ApiProperty({
+    description: "经典走路模式：开启后移动为一格一步的格子走动（必须走完一步才走下一步，停点为格心）；关闭为连续移动",
+    example: false,
+  })
+  @IsBoolean({ message: "必须是布尔值" })
+  classicWalkMode: boolean;
+
   @ApiProperty({ description: "A* 网格单元边长（像素）：越小越贴合障碍、搜索越慢", example: 40 })
   @IsInt({ message: "必须是整数" })
   @Min(8, { message: "A* 网格边长至少 8 像素" })
@@ -333,6 +340,11 @@ export class UpdateAutoBattleParamsDto {
   @IsOptional()
   @IsBoolean({ message: "必须是布尔值" })
   moveByRun?: boolean;
+
+  @ApiPropertyOptional({ description: "经典走路模式：一格一步的格子走动" })
+  @IsOptional()
+  @IsBoolean({ message: "必须是布尔值" })
+  classicWalkMode?: boolean;
 
   @ApiPropertyOptional({ description: "A* 网格单元边长（像素）" })
   @IsOptional()
