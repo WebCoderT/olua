@@ -548,7 +548,7 @@ export default class AutoBattle {
     });
     layout?.npcs.forEach((point) => {
       // 点位已经是世界坐标（#672）；#1339 起占位盒与 NPC 障碍碰撞盒同形状同位置：
-      // 尺寸/偏移见 configs/autoBattle 的 npcObstacleSize / npcObstacleOffsetY（中心 = 点位下方 35px）
+      // 尺寸/偏移见 configs/autoBattle 的 npcObstacleSize / npcObstacleOffsetY（中心 = 点位下方 55px）
       const width = autoBattle.npcObstacleSize.width;
       const height = autoBattle.npcObstacleSize.height;
       const centerY = point.y + autoBattle.npcObstacleOffsetY;
