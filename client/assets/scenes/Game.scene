@@ -286,6 +286,10 @@
     "camera": {
       "__id__": 4
     },
+    "npcDialogPrefab": {
+      "__uuid__": "a641f30c-8daf-40aa-9045-d8e5eb27a148",
+      "__expectedType__": "cc.Prefab"
+    },
     "_id": "baQOg77ZRIe7zEZZ6eNDYe"
   },
   {

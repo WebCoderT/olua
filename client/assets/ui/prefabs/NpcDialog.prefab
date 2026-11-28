@@ -2888,19 +2888,22 @@
     },
     "_children": [
       {
-        "__id__": 134
+        "__id__": 162
       },
       {
         "__id__": 148
       },
       {
-        "__id__": 162
+        "__id__": 134
       }
     ],
     "_active": true,
     "_components": [
       {
         "__id__": 131
+      },
+      {
+        "__id__": 180
       }
     ],
     "_prefab": {
@@ -3991,5 +3994,39 @@
       "__id__": 0
     },
     "fileId": "CkQXRZGFTAC6yYYGCQBkOQ"
+  },
+  {
+    "__type__": "cc.CompPrefabInfo",
+    "fileId": "hR1jEUbCc+PJRIk9YtC9GZlu"
+  },
+  {
+    "__type__": "cc.Layout",
+    "_name": "",
+    "_objFlags": 0,
+    "node": {
+      "__id__": 130
+    },
+    "_enabled": true,
+    "_resizeMode": 1,
+    "_cellSize": {
+      "__type__": "cc.Size",
+      "width": 40,
+      "height": 40
+    },
+    "_startAxis": 0,
+    "_paddingLeft": 0,
+    "_paddingRight": 0,
+    "_paddingTop": 0,
+    "_paddingBottom": 0,
+    "_spacingX": 24,
+    "_spacingY": 0,
+    "_verticalDirection": 1,
+    "_horizontalDirection": 1,
+    "_affectedByScale": false,
+    "_id": "",
+    "_layoutType": 1,
+    "__prefab": {
+      "__id__": 179
+    }
   }
 ]

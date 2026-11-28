@@ -2,13 +2,11 @@
  * 通用 NPC 对话框布局（#1337）
  *
  * 视觉稿：design/olua-ui/screens/24-npc-dialog.html
- * 面板本体是 **prefab**（client/assets/resources/ui/NpcDialog.prefab），
- * 这里只放运行时代码必须知道的路径、节点名与分页口径 —— 改版式请直接改 prefab，
+ * 面板本体是 **prefab**（client/assets/ui/prefabs/NpcDialog.prefab），由 Game 场景静态注入（#1348），
+ * 这里只放运行时代码必须知道的节点名与分页口径 —— 改版式请直接改 prefab，
  * 别回到组件里用代码拼节点。
  */
 export const npcDialogLayout = {
-  /** resources.load 路径（prefab 与其纯色图随仓库入库，其余 resources 仍不入库） */
-  prefabPath: "ui/NpcDialog",
   /** 设计稿尺寸；运行时只按设计分辨率把 prefab 实例贴到屏幕底边，不改它的宽高 */
   size: { width: 1920, height: 324 },
   /** prefab 里的固定层级前缀（组件拼路径用，不在组件里散写资源样式路径字面量） */

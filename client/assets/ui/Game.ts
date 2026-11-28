@@ -1,4 +1,4 @@
-import { _decorator, Camera, Component, isValid, Node, screen, sys, Vec3 } from "cc";
+import { _decorator, Camera, Component, isValid, Node, Prefab, screen, sys, Vec3 } from "cc";
 import { ActivityController } from "./controllers/ActivityController";
 import GameMap from "./components/map/GameMap";
 import BottomBar from "./components/hud/BottomBar";
@@ -80,6 +80,12 @@ const MOVE_LOOP_AFTER_MS = 450;
 export class Game extends Component {
   @property({ type: Camera })
   camera: Camera;
+  /**
+   * 通用 NPC 对话框 prefab（#1348）：代码资产放 ui/prefabs，编辑器里拖引用进来；
+   * start 时注入给 NpcDialog，不再走 resources.load（resources 整体不入库）
+   */
+  @property({ type: Prefab })
+  npcDialogPrefab: Prefab | null = null;
 
   /** 地图组件 */
   private gameMap: GameMap;
@@ -129,6 +135,8 @@ export class Game extends Component {
   private static readonly ROLE_SYNC_CONFLICT_WINDOW_MS = 10_000;
 
   async start() {
+    // 通用 NPC 对话框 prefab 静态注入（#1348）：编辑器里把 ui/prefabs/NpcDialog 拖到本组件字段
+    NpcDialog.setPrefab(this.npcDialogPrefab);
     // 网络层接线（幂等，登录场景已调过一次）：令牌失效回登录场景、请求失败统一飘字
     installNetwork();
     // 角色进度同步的失败出口：同步请求是静默的（不弹通用提示），
