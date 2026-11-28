@@ -78,11 +78,22 @@ try {
         check(`${name} 节点 ${o._name || idx} 无 __prefab`, !("__prefab" in o), "cc.Node 不该有 __prefab（那是组件专属，出现即引用错乱）");
         const info = o._prefab && objs[o._prefab.__id__];
         check(`${name} 节点 ${o._name || idx} 有 PrefabInfo`, !!info && info.__type__ === "cc.PrefabInfo" && !!info.fileId && info.root && info.asset, "节点缺 _prefab 接线（编辑器实例化会崩）");
+        // #1398：children 只能指节点、components 只能指组件 —— 错位会让引擎把组件当子节点、节点当组件
+        for (const c of o._children || []) {
+          check(`${name} 节点 ${o._name || idx} children[${c.__id__}] 指向节点`, objs[c.__id__] && objs[c.__id__].__type__ === "cc.Node", "children 引用了非节点对象（克隆期错乱）");
+        }
+        for (const c of o._components || []) {
+          const comp = objs[c.__id__];
+          check(`${name} 节点 ${o._name || idx} components[${c.__id__}] 指向组件`, !!comp && comp.__type__ !== "cc.Node" && comp.__type__ !== "cc.Prefab" && comp.__type__ !== "cc.PrefabInfo" && comp.__type__ !== "cc.CompPrefabInfo" && "node" in comp, "components 引用了非组件对象（克隆期错乱）");
+        }
         if (o._prefab) indegree[o._prefab.__id__] = (indegree[o._prefab.__id__] || 0) + 1;
       } else if (o.__type__ !== "cc.Prefab" && o.__type__ !== "cc.PrefabInfo" && o.__type__ !== "cc.CompPrefabInfo" && "node" in o) {
         // #1396：组件误带 _prefab（→PrefabInfo）会让 PrefabInfo 被节点与组件双重引用，
         // 克隆期把 PrefabInfo 当组件处理 → `obj.node.isChildOf is not a function`（DialogFoot 实测）
         check(`${name} 组件 ${o.__type__} 无 _prefab`, !("_prefab" in o), "cc.Component 不该有 _prefab（那是节点专属，出现即 PrefabInfo 双引用）");
+        // #1398：组件的 node 只能指 cc.Node —— 指到组件自己（UITransform 也是 Component）
+        // 会进引擎 isChildOf 分支 → `obj.node.isChildOf is not a function`（DialogFoot 实测）
+        check(`${name} 组件 ${o.__type__} node 指向节点`, o.node && objs[o.node.__id__] && objs[o.node.__id__].__type__ === "cc.Node", "组件 node 引用了非节点对象（克隆期崩 isChildOf）");
         const info = o.__prefab && objs[o.__prefab.__id__];
         check(`${name} 组件 ${o.__type__} 有 CompPrefabInfo`, !!info && info.__type__ === "cc.CompPrefabInfo" && !!info.fileId, "组件缺 __prefab 接线（编辑器实例化会崩）");
         if (o.__prefab) indegree[o.__prefab.__id__] = (indegree[o.__prefab.__id__] || 0) + 1;
