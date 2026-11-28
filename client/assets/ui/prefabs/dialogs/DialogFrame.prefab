@@ -161,9 +161,6 @@
     "rivetInset": 9,
     "rivetTrailSize": 3,
     "rivetTrailOffset": 14,
-    "_prefab": {
-      "__id__": 21
-    },
     "__prefab": {
       "__id__": 26
     }
@@ -205,9 +202,6 @@
     "headDragHeight": 56,
     "closeButtonInsetX": 27,
     "closeButtonInsetY": 25,
-    "_prefab": {
-      "__id__": 22
-    },
     "__prefab": {
       "__id__": 27
     }
@@ -293,9 +287,6 @@
     },
     "_enabled": true,
     "_id": "",
-    "_prefab": {
-      "__id__": 23
-    },
     "__prefab": {
       "__id__": 29
     }
@@ -779,9 +770,6 @@
       "g": 146,
       "b": 69,
       "a": 255
-    },
-    "_prefab": {
-      "__id__": 24
     },
     "__prefab": {
       "__id__": 40
