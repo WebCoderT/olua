@@ -8,6 +8,7 @@ import { T } from "./tokens";
  * 位置/尺寸的坐标系见各自注释：组件自身坐标以屏幕中心为原点，子件坐标以所在容器中心为原点
  * 常驻 HUD 四区域（左上角色信息栏 / 右上小地图 / 底部栏 / 左下操作摇杆）的自身位置是**固定值**，
  * 不做任何按屏幕尺寸的换算 —— 手调位置直接改这里的 position
+ * （例外：角色信息栏 #1359 起 prefab 为准，本人信息栏的根位置在 prefab 根节点上设计）
  *
  * 图片来源见 configs/layout/images（uiImages）；公共尺寸见 configs/layout/sizes（uiSize）
  */
@@ -18,7 +19,8 @@ import { T } from "./tokens";
  * 角色信息栏 prefab 的运行时契约（#1353 HUD prefab 化样板）
  *
  * 静态外观（位置 / 尺寸 / 颜色 / 字号）已固化在 `ui/prefabs/hud/RoleInfoBar.prefab`，
- * 改版式请直接改 prefab；这里只放运行时代码必须知道的**节点名**与动态色。
+ * 改版式请直接改 prefab；这里只放运行时代码必须知道的**节点名**（#1359：代码对信息栏
+ * 只写文字内容，不碰任何样式，故无颜色/字号配置）。
  */
 export const roleInfoBarPrefab = {
   /**
@@ -30,31 +32,17 @@ export const roleInfoBarPrefab = {
     level: "Level",
     currencyValue: "CurrencyBar/CurrencyValue",
     combatValue: "Combat/CombatValue",
-    combatDivider: "CombatDivider",
     avatar: "AvatarFrame/Avatar",
-    statusDot: "RealtimeStatus/StatusDot",
     statusText: "RealtimeStatus/StatusText",
     statusIcons: "StatusIcons",
   },
-  /**
-   * 实时通道四态色（数据驱动的动态色，无法固化进 prefab）：
-   * prefab 里 StatusDot / StatusText 放 text[3] 占位色，运行时按状态覆盖。
-   */
-  realtimeColors: {
-    idle: T.text[3],
-    connecting: T.gold[4],
-    connected: T.jade,
-    disconnected: T.ember[3],
-  } as Record<string, Color>,
 };
 
 /** 角色信息栏布局（坐标以信息栏中心为原点，逐值对照 04-hud 的 `.info` 段） */
 export const roleInfoBarLayout = {
   /** 信息栏自身尺寸（HUD 规范 344×84：左边缘距屏幕 20、顶边 18） */
   size: new Size(344, 84),
-  /** 自己固定在左上角（屏幕坐标，原点在屏幕中心；固定值直接手调） */
-  position: new Vec2(-768, 480),
-  /** 其他玩家（屏幕中心） */
+  /** 本人信息栏位置在 prefab 根节点上设计（#1359 prefab 为准）；其他玩家（屏幕中心） */
   otherPosition: new Vec2(0, 0),
   /** 背景框尺寸（与信息栏同尺寸；#1059 起底板改矢量绘制） */
   backgroundSize: new Size(344, 84),
@@ -107,7 +95,7 @@ export const roleInfoBarLayout = {
     },
   },
   /** 状态图标条（首个图标中心对齐头像中心、向右排开，横向布局；稿 `.buff` 26×26 带金线框） */
-  statusBar: { position: new Vec2(-159, -63), size: new Size(240, 26), spacing: 4, iconSize: new Size(26, 26) },
+  statusBar: { size: new Size(240, 26), spacing: 4, iconSize: new Size(26, 26) },
 };
 
 //#endregion

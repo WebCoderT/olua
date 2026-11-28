@@ -1,9 +1,12 @@
 #!/usr/bin/env node
 /**
- * 角色信息栏 prefab 化单测（#1353，HUD prefab 化样板）
+ * 角色信息栏 prefab 化单测（#1353 HUD prefab 化样板；#1359 口径：prefab 为准）
  *
- * A. prefab 结构：节点层级齐全、组件类型正确、静态外观（颜色 / 字号 / 位置 / 尺寸）已固化
- * B. 接线：Game 静态注入 prefab（@property + 构造传参 + 场景 uuid == meta）、动态色仍代码、placeLevel 读节点字号
+ * A. prefab 结构：节点层级齐全、组件类型正确、引用完整
+ *    —— 注意**不锁**颜色/字号/位置精确值：静态外观归 prefab，用户在编辑器里随便改，
+ *       锁精确值会把合法的可视化改动误判成回归
+ * B. 接线：Game 静态注入 prefab（@property + 构造传参 + 场景 uuid == meta）；
+ *    代码对信息栏只写文字内容，不碰任何样式（无位置覆写、无颜色覆写）
  */
 const fs = require("fs");
 const path = require("path");
@@ -18,8 +21,7 @@ const check = (name, ok, detail) => {
   console.log(`  [!!] ${name}${detail ? "：" + detail : ""}`);
 };
 
-// 组件取色：#rrggbbaa（按 prefab 里的 cc.Color）
-const hex = (c) => "#" + [c.r, c.g, c.b, c.a].map((v) => v.toString(16).padStart(2, "0")).join("");
+// 组件取色器已随精确值断言移除（#1359：外观值归 prefab，不锁）
 
 try {
   // ── A. prefab 结构 ──
@@ -32,16 +34,9 @@ try {
     i === 0 ? byName(part) : (acc ? childrenOf(acc._name).find((n) => n._name === part) : undefined), undefined);
   const compsOf = (p) => (pathOf(p) ? pathOf(p)._components.map((c) => objs[c.__id__]) : []);
   const comp = (p, type) => compsOf(p).find((c) => c.__type__ === type);
-  const vec = (p, field) => pathOf(p)._lpos[field];
 
   check("prefab 有根节点 RoleInfoBar", !!byName("RoleInfoBar"));
-  const rootUt = comp("RoleInfoBar", "cc.UITransform");
-  check("根节点尺寸 344×84", rootUt && rootUt._contentSize.width === 344 && rootUt._contentSize.height === 84);
-  check("根节点贴左上角(-768,480)", vec("RoleInfoBar", "x") === -768 && vec("RoleInfoBar", "y") === 480,
-    vec("RoleInfoBar", "x") + "," + vec("RoleInfoBar", "y"));
-  // 状态图标条是动态组件、自己按配置定位；挂载锚点必须在原点，否则双重偏移跑出信息栏
-  check("StatusIcons 锚点在原点", vec("StatusIcons", "x") === 0 && vec("StatusIcons", "y") === 0,
-    vec("StatusIcons", "x") + "," + vec("StatusIcons", "y"));
+  check("根节点有 UITransform", !!comp("RoleInfoBar", "cc.UITransform"));
 
   // 节点层级齐全（与 roleInfoBarPrefab.nodes 契约一致）
   const required = [
@@ -51,6 +46,9 @@ try {
     "RealtimeStatus", "RealtimeStatus/StatusDot", "RealtimeStatus/StatusText", "StatusIcons",
   ];
   for (const p of required) check(`prefab 缺节点 ${p}`, !!pathOf(p));
+
+  // 节点都带 _lpos（摆位归 prefab；数值不锁——用户在编辑器里随便改）
+  for (const p of required) check(`节点 ${p} 有 _lpos`, !!pathOf(p)._lpos);
 
   // nodes 映射 ↔ prefab 层级一致性（#1357：引擎 getChildByPath 逐段匹配不递归，
   // hud.ts 里的路径必须能在 prefab 里**从根逐段走到**，否则运行时取到 null 直接崩）
@@ -64,7 +62,7 @@ try {
   check("hud.ts 有 nodes 映射", !!mapMatch);
   if (mapMatch) {
     const entries = [...mapMatch[1].matchAll(/(\w+):\s*"([^"]+)"/g)];
-    check("nodes 映射非空", entries.length >= 9, `只解析到 ${entries.length} 项`);
+    check("nodes 映射非空", entries.length >= 7, `只解析到 ${entries.length} 项`);
     for (const [, key, p] of entries) check(`nodes.${key}="${p}" 从根可逐段解析`, !!resolveStrict(p));
   }
 
@@ -75,17 +73,11 @@ try {
   for (const p of ["Name", "Level", "CurrencyBar/CurrencyLabel", "CurrencyBar/CurrencyValue", "Combat/CombatLabel", "Combat/CombatValue", "RealtimeStatus/StatusText"]) {
     check(`${p} 是 Label`, !!comp(p, "cc.Label"));
   }
-
-  // 静态外观固化：颜色（token 值）+ 字号
-  check("底板色 = surface.glass #191209db", hex(comp("Background", "cc.Sprite")._color) === "#191209db",
-    hex(comp("Background", "cc.Sprite")._color));
-  check("名字色 = text1 #ede2ccff", hex(comp("Name", "cc.Label")._color) === "#ede2ccff");
-  check("名字字号 16", comp("Name", "cc.Label")._fontSize === 16);
-  check("等级色 = gold4 #e8c887ff", hex(comp("Level", "cc.Label")._color) === "#e8c887ff");
-  check("等级字号 11", comp("Level", "cc.Label")._fontSize === 11);
-  check("战斗力数值色 = ember3 #e0562fff", hex(comp("Combat/CombatValue", "cc.Label")._color) === "#e0562fff");
-  check("战斗力数值字号 20", comp("Combat/CombatValue", "cc.Label")._fontSize === 20);
-  check("底板引用入库纯色图", comp("Background", "cc.Sprite")._spriteFrame.__uuid__ === "3c6f7b8e-4d21-4f9a-9c30-8b5e2a1d7f44@f9941");
+  // 文本节点的 Label 带颜色/字号属性（外观值不锁精确值，用户在编辑器里随便改）
+  for (const p of ["Name", "Level", "Combat/CombatValue"]) {
+    const l = comp(p, "cc.Label");
+    check(`${p} Label 带 _color/_fontSize`, !!l && "_color" in l && "_fontSize" in l);
+  }
 
   // 引用完整性：所有 __id__ 在范围内
   let bad = 0;
@@ -116,12 +108,26 @@ try {
   check("RoleInfoBar 实例化 prefab", /instantiate\(prefab\)/.test(bar));
   check("不再用 createText 拼名字", !/createText\(/.test(bar));
   check("不再用 createCombatPower 拼战力", !/createCombatPower\(/.test(bar));
-  check("placeLevel 从节点字号读", /this\.nameLabel\.fontSize/.test(bar));
-  check("placeLevel 宽度上限从分隔线节点读", /this\.combatDivider\.position\.x/.test(bar));
-  check("动态色仍代码覆盖 statusDot", /this\.realtimeDot\.color\s*=/.test(bar));
-  check("动态色仍代码覆盖 statusText", /this\.realtimeLabel\.color\s*=/.test(bar));
-  check("飘字仍走动态工厂", /showCombatDelta\(/.test(bar));
+  // #1359：代码对信息栏只写文字内容，不碰任何样式
+  check("不再运行时改 Level 位置（placeLevel 已删）", !/placeLevel/.test(bar));
+  check("本人根节点位置取 prefab 实例位置", /applyFixedPosition\(instance\.position\)/.test(bar));
+  check("子节点零 setPosition（根节点定位除外）", !/\w+\.node\.setPosition\(|levelLabel\.node\.setPosition/.test(bar));
+  check("零颜色覆写（.color = 全无）", !/\.color\s*=/ .test(bar));
+  check("字号零覆写", !/\.fontSize\s*=/ .test(bar));
+  check("通道状态只切文案", /realtimeLabel\.string\s*=\s*getText\(/.test(bar));
+  check("状态点不再换色（realtimeDot 已删）", !/realtimeDot/.test(bar));
+  check("飘字仍走动态工厂（独立浮层，不碰信息栏样式）", /showCombatDelta\(/.test(bar));
+  check("头像换图保留（数据内容而非样式）", /applyAvatar\(/.test(bar));
   check("节点名不外泄到组件", !/getChildByName\(["']/.test(bar));
+
+  // StatusIconBar 也不自定位：摆位归 prefab 的 StatusIcons 锚点
+  const iconBar = read("assets/ui/components/hud/StatusIconBar.ts");
+  check("StatusIconBar 不自定位", !/setPosition/.test(iconBar));
+
+  // 配置里不再有运行时样式覆写项
+  const hudCfg = read("assets/configs/layout/hud.ts");
+  check("realtimeColors 动态色配置已删", !/realtimeColors/.test(hudCfg));
+  check("roleInfoBar 不再有 dividerX / position 自定位项", !/dividerX/.test(hudCfg));
 } catch (error) {
   failures += 1;
   console.log("  [!!] 单测抛异常：", error && error.stack ? error.stack.split("\n").slice(0, 3).join("\n") : error);
@@ -131,4 +137,4 @@ if (failures > 0) {
   console.log(`FAIL：${failures} 项`);
   process.exit(1);
 }
-console.log("PASS：角色信息栏 prefab 结构 / 静态外观固化 / 静态注入接线 / 动态色保留全部通过");
+console.log("PASS：角色信息栏 prefab 结构 / prefab 为准接线 / 代码零样式覆写全部通过");
