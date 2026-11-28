@@ -103,6 +103,25 @@ try {
     check(`${file}/${node} 挂 VectorPlate（面板外观可编辑器改）`, !!hasVp);
   }
 
+  // #1363：BottomBar 的静态视觉在 prefab —— BackdropAnchor 挂 HudBackdrop、Vsep0/Vsep1 挂 VerticalRule
+  const hudBackdropType = compressUuid(JSON.parse(read("assets/ui/components/common/HudBackdrop.ts.meta")).uuid);
+  const verticalRuleType = compressUuid(JSON.parse(read("assets/ui/components/common/VerticalRule.ts.meta")).uuid);
+  const bottomBarObjs = JSON.parse(read("assets/ui/prefabs/hud/BottomBar.prefab"));
+  for (const [node, type, label] of [
+    ["BackdropAnchor", hudBackdropType, "HudBackdrop"],
+    ["Vsep0", verticalRuleType, "VerticalRule"],
+    ["Vsep1", verticalRuleType, "VerticalRule"],
+  ]) {
+    const target = bottomBarObjs.find((o) => o.__type__ === "cc.Node" && o._name === node);
+    const has = target && target._components.some((c) => bottomBarObjs[c.__id__].__type__ === type);
+    check(`BottomBar/${node} 挂 ${label}（prefab 所见即运行时所得）`, !!has);
+  }
+  const hudBackdropSrc = read("assets/ui/components/common/HudBackdrop.ts");
+  const verticalRuleSrc = read("assets/ui/components/common/VerticalRule.ts");
+  check("HudBackdrop/VerticalRule 外观 @property 化 + 编辑器可见",
+    /@property\n  public steps/.test(hudBackdropSrc) && /@property\n  public fadeRange/.test(verticalRuleSrc)
+    && /executeInEditMode/.test(hudBackdropSrc) && /executeInEditMode/.test(verticalRuleSrc));
+
   // VectorPlate 是可序列化的属性组件 + 编辑器可见
   const vp = read("assets/ui/components/common/VectorPlate.ts");
   check("VectorPlate 全外观 @property 化", /@property\n  public fillColor/.test(vp) && /@property\n  public showRivet/.test(vp));
@@ -125,8 +144,9 @@ try {
 
   const bottomBar = read("assets/ui/components/hud/BottomBar.ts");
   check("BottomBar 根位置取 prefab 实例位置", /this\.setPosition\(instance\.position\.x, instance\.position\.y, 0\)/.test(bottomBar));
-  check("BottomBar 不再引用配置定位（position/settingsButton/separators.positions）",
-    !/bottomBarLayout\.(position|settingsButton\.position|separators\.positions)/.test(bottomBar));
+  check("BottomBar 不再引用配置定位（position/settingsButton/backdrop/separators）",
+    !/bottomBarLayout\./.test(bottomBar));
+  check("BottomBar 底衬/分隔线视觉在 prefab（不再代码画）", !/createHudBackdrop|createVerticalRule/.test(bottomBar));
   check("BottomBar 子组件挂 prefab 锚点", /anchor\(paths\.navBar\)\.addChild/.test(bottomBar) && /anchor\(paths\.hpOrb\)\.addChild/.test(bottomBar));
 
   for (const f of ["RoleExpBar", "RoleHpOrb", "RoleMpOrb"]) {
