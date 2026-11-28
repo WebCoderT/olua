@@ -1018,14 +1018,26 @@ export const routes = {
      */
     replaceSkills: (id: string) => `/admin/monsters/${encodeURIComponent(id)}/skills`,
   },
-  /** adminNpc 模块（2 个接口） */
+  /** adminNpc 模块（4 个接口） */
   adminNpc: {
     /**
      * NPC 基础数据列表（GET /admin/npcs）
      *
-     * id 清单固定（seed 自服务端 npc-seed 的 21 个），**没有创建 / 删除**。`keyword` 模糊匹配 id / 名称。
+     * 清单含出厂 seed 行与运营手动新建的行（#1379）。`keyword` 模糊匹配 id / 名称。
      */
     list: "/admin/npcs",
+    /**
+     * 新建 NPC（id 手填）（POST /admin/npcs）
+     *
+     * 运营手动加一行 NPC（#1379）：`id` 手填（字母 / 数字 / 下划线 / 短横线，1~32 位），保留 0002 / 1001 / 9002 这类分段命名习惯。
+     */
+    create: "/admin/npcs",
+    /**
+     * 删除 NPC（有引用则拒绝）（DELETE /admin/npcs/{id}）
+     *
+     * 删一行 NPC（#1379）。**还有地图点位或任务引用 → 409（`50049`）**，提示先去对应页删干净；不连带删引用、不碰玩家任务进度。无引用时删除成功，返回被删的那一行。
+     */
+    delete: (id: string) => `/admin/npcs/${encodeURIComponent(id)}`,
     /**
      * 编辑 NPC 基础数据（PATCH /admin/npcs/{id}）
      *

@@ -24,6 +24,7 @@ import { SkillRepository, SkillListOptions } from "../../database/repositories/s
 import { MonsterSkillRepository } from "../../database/repositories/monster-skill.repository";
 import { StatusRepository, StatusListOptions } from "../../database/repositories/status.repository";
 import { NpcRepository, NpcListOptions } from "../../database/repositories/npc.repository";
+import { MapNpcRepository } from "../../database/repositories/map-npc.repository";
 import { QuestRepository, QuestListOptions } from "../../database/repositories/quest.repository";
 import {
   AchievementRepository,
@@ -108,7 +109,7 @@ import {
   UpdateMonsterPresentationDto,
   monsterAttributesFromRow,
 } from "./dto/monster.dto";
-import { NpcDto, NpcQueryDto, UpdateNpcDto } from "./dto/npc.dto";
+import { CreateNpcDto, NpcDto, NpcQueryDto, UpdateNpcDto } from "./dto/npc.dto";
 import { CreateQuestDto, parseRewardItems, QuestDto, QuestQueryDto, UpdateQuestDto } from "./dto/quest.dto";
 import {
   AchievementDto,
@@ -174,6 +175,8 @@ export class GameConfigService {
     private readonly monsterDropsRepo: MonsterDropRepository,
     private readonly monsterPresentations: MonsterPresentationRepository,
     private readonly npcsRepo: NpcRepository,
+    /** 删 NPC 前查「还有没有地图点位引用它」（#1379） */
+    private readonly mapNpcPointsRepo: MapNpcRepository,
     private readonly fashionsRepo: FashionRepository,
     private readonly skillsRepo: SkillRepository,
     private readonly statusesRepo: StatusRepository,
@@ -1109,6 +1112,53 @@ export class GameConfigService {
     const rows = this.npcsRepo.list(options);
     const total = this.npcsRepo.count(options);
     return { list: rows.map(NpcDto.from), total, page: options.page, size: options.size };
+  }
+
+  /**
+   * 运营新建 NPC（#1379）：id 手填（保留分段命名习惯），全表唯一。
+   *
+   * 只写身份与外观，feature 留空（要绑入口功能走 PATCH，复用同一套互斥逻辑）。
+   * 不 touchRuntime：NPC 是快照下发的数据表，不在结算层覆盖层里。
+   */
+  createNpc(dto: CreateNpcDto): NpcDto {
+    const id = dto.id.trim();
+    if (this.npcsRepo.findByKey(id)) {
+      throw BizException.conflict(BizCode.NPC_ID_EXISTS, `NPC id「${id}」已存在，换个 id`);
+    }
+    const row: NpcRow = {
+      id,
+      label: dto.label.trim(),
+      dialog: dto.dialog ?? "",
+      src: dto.src ?? "",
+      scale_x: dto.scaleX ?? 1,
+      scale_y: dto.scaleY ?? 1,
+      pos_x: dto.posX ?? 0,
+      pos_y: dto.posY ?? 0,
+      feature: "",
+      updated_at: Date.now(),
+    };
+    this.npcsRepo.insert(row);
+    return NpcDto.from(this.npcsRepo.findByKey(id)!);
+  }
+
+  /**
+   * 运营删除 NPC（#1379）：只删行，**不连带清引用** ——
+   * 地图点位（map_npcs）或任务（quests.npc_id）还指着它就直接 409，让运营先去对应页删干净，
+   * 避免客户端出现「点位在、名字退回 id」或「任务无处可交」的幽灵状态。
+   * 不碰玩家存档（任务进度里的 questId 与目标 NPC 是两回事）。
+   */
+  removeNpc(id: string): NpcDto {
+    const existing = this.requireNpc(id);
+    const points = this.mapNpcPointsRepo.countByNpc(id);
+    const quests = this.questsRepo.countByNpc(id);
+    if (points > 0 || quests > 0) {
+      throw BizException.conflict(
+        BizCode.NPC_IN_USE,
+        `NPC「${id}」还被 ${points} 个地图点位、${quests} 个任务引用，先删引用再删`,
+      );
+    }
+    this.npcsRepo.remove(id);
+    return NpcDto.from(existing);
   }
 
   updateNpc(id: string, dto: UpdateNpcDto): NpcDto {

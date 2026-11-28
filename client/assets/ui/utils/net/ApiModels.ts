@@ -6141,6 +6141,41 @@ export type Npc = {
   updatedAt: number;
 };
 
+export type CreateNpc = {
+  /**
+   * NPC id（字母 / 数字 / 下划线 / 短横线，1~32 位；如 9003）
+   */
+  id: string;
+  /**
+   * 名称
+   */
+  label: string;
+  /**
+   * 对话文案（缺省空串）
+   */
+  dialog?: string;
+  /**
+   * 素材目录（resources 相对路径；缺省空串 = 不显示）
+   */
+  src?: string;
+  /**
+   * 横向缩放（0.1~10，缺省 1）
+   */
+  scaleX?: number;
+  /**
+   * 纵向缩放（0.1~10，缺省 1）
+   */
+  scaleY?: number;
+  /**
+   * 横向偏移（像素，±4000，缺省 0）
+   */
+  posX?: number;
+  /**
+   * 纵向偏移（像素，±4000，缺省 0）
+   */
+  posY?: number;
+};
+
 export type NpcPage = {
   /**
    * 总条数

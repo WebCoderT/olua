@@ -326,8 +326,12 @@ export const BizCode = {
   ITEM_NOT_FOUND: 50018,
   /** 怪物不存在（key 清单由客户端配置 seed 固定，不可增删行） */
   MONSTER_NOT_FOUND: 50019,
-  /** NPC 不存在（id 清单由客户端配置 seed 固定，不可增删行） */
+  /** NPC 不存在（#1379 起 id 可由运营自建议，但「查不到」仍是这个码） */
   NPC_NOT_FOUND: 50020,
+  /** NPC id 已被占用（新建时手填 id 撞车） */
+  NPC_ID_EXISTS: 50048,
+  /** NPC 还被地图点位 / 任务引用，不能删（先清引用） */
+  NPC_IN_USE: 50049,
   /** 商城商品不在上架清单（#758 起商品 = 运营手动上架的装备变体，清单在 `mall_goods` 表） */
   MALL_GOOD_NOT_FOUND: 50021,
   /** 商城分类不存在（分类由运营自建，id 在 `mall_categories`） */

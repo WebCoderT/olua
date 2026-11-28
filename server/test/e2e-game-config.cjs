@@ -1503,10 +1503,47 @@ async function main() {
     const npcGhost = await api(base, "PATCH", "/api/admin/npcs/9999", { token, body: { label: "x" } });
     checkEqual(npcGhost.status, 404, "改不存在的 NPC → 404");
     checkEqual(npcGhost.body?.code, 50020, "NPC 未找到用专属业务码 50020");
-    const postNpc = await api(base, "POST", "/api/admin/npcs", { token, body: { id: "9999" } });
-    checkEqual(postNpc.status, 404, "POST NPC → 404（路由不存在）");
-    const deleteNpc = await api(base, "DELETE", "/api/admin/npcs/0002", { token });
-    checkEqual(deleteNpc.status, 404, "DELETE NPC → 404（路由不存在）");
+    // 手动新建 / 删除（#1379）
+    const newNpcId = "9191";
+    const postNpc = await api(base, "POST", "/api/admin/npcs", {
+      token,
+      body: { id: newNpcId, label: "测试新建官", dialog: "你好", src: "npc/2125", scaleX: 1.5, posX: -8 },
+    });
+    checkEqual(postNpc.status, 201, "新建 NPC → 201");
+    checkEqual(postNpc.body?.data?.id, newNpcId, "新建 id 原样返回");
+    checkEqual(postNpc.body?.data?.scaleX, 1.5, "新建外观缩放落库");
+    const postNpcDup = await api(base, "POST", "/api/admin/npcs", { token, body: { id: newNpcId, label: "重复" } });
+    checkEqual(postNpcDup.status, 409, "重复 id → 409");
+    checkEqual(postNpcDup.body?.code, 50048, "重复 id → 50048");
+    const postNpcBadId = await api(base, "POST", "/api/admin/npcs", { token, body: { id: "bad id!", label: "非法" } });
+    checkEqual(postNpcBadId.status, 400, "id 含非法字符 → 400");
+    const postNpcNoLabel = await api(base, "POST", "/api/admin/npcs", { token, body: { id: "9192" } });
+    checkEqual(postNpcNoLabel.status, 400, "名称必填 → 400");
+    const listHasNew = await api(base, "GET", "/api/admin/npcs?keyword=9191", { token });
+    check((listHasNew.body?.data?.list ?? []).some((row) => row.id === newNpcId), "新建的 NPC 出现在列表里");
+    const npcCreatePlayer = await api(base, "POST", "/api/auth/register", {
+      body: { username: "npc_create_player", password: "pass1234" },
+    });
+    const snapshotHasNew = await api(base, "GET", "/api/game-config", { token: npcCreatePlayer.body?.data?.token });
+    check(
+      (snapshotHasNew.body?.data?.npcs ?? []).some((row) => row.id === newNpcId),
+      "新建的 NPC 出现在玩家侧快照 npcs 段（下次进图可见）",
+    );
+
+    // 引用检查：0002 在地图点位里、1104 被任务 7001~ 引用 —— 都不许删（#1379）
+    const deleteMapped = await api(base, "DELETE", "/api/admin/npcs/0002", { token });
+    checkEqual(deleteMapped.status, 409, "有地图点位的 NPC → 拒绝删除 409");
+    checkEqual(deleteMapped.body?.code, 50049, "有引用 → 50049");
+    const deleteQuestNpc = await api(base, "DELETE", "/api/admin/npcs/1104", { token });
+    checkEqual(deleteQuestNpc.status, 409, "被任务引用的 NPC → 拒绝删除 409");
+    checkEqual(deleteQuestNpc.body?.code, 50049, "任务引用 → 50049");
+    const deleteNew = await api(base, "DELETE", `/api/admin/npcs/${newNpcId}`, { token });
+    checkEqual(deleteNew.status, 200, "无引用的 NPC 删除成功 → 200");
+    checkEqual(deleteNew.body?.data?.id, newNpcId, "删除返回被删的那一行");
+    const deleteGhost = await api(base, "DELETE", `/api/admin/npcs/${newNpcId}`, { token });
+    checkEqual(deleteGhost.status, 404, "再删一次 → 404");
+    const deleteViewer = await api(base, "DELETE", "/api/admin/npcs/0101", { token: viewerToken, zoneId: ADMIN_ZONE });
+    checkEqual(deleteViewer.status, 403, "观察员删 NPC → 403");
     const viewerNpcRead = await api(base, "GET", "/api/admin/npcs", { token: viewerToken, zoneId: ADMIN_ZONE });
     checkEqual(viewerNpcRead.body?.code, 0, "观察员能看 NPC 配置");
     const viewerNpcWrite = await api(base, "PATCH", "/api/admin/npcs/0002", { token: viewerToken, zoneId: ADMIN_ZONE, body: { label: "x" } });
