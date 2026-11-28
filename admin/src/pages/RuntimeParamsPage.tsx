@@ -721,7 +721,7 @@ const AUTO_FIELDS: FieldSpec[] = [
   { key: "cellSize", label: "A* 网格边长（像素）", hint: "越小越贴合障碍、搜索越慢" },
   { key: "classicStepLength", label: "经典模式步长（像素）", hint: "经典走路模式下每一步移动的距离；点击一下走一步，按住连续走步" },
   { key: "clearance", label: "通行余量（像素）", hint: "障碍外扩，避免贴墙卡住" },
-  { key: "repathInterval", label: "重寻路间隔（毫秒）", hint: "目标会移动，路径要定期重算" },
+  { key: "repathInterval", label: "重寻路间隔（毫秒）", hint: "最小重算间隔：追怪只在目标换格时重算，点击寻路算一次（卡住会强制重算）" },
   { key: "waypointTolerance", label: "路点判定半径（像素）", hint: "进入半径即走向下一个路点" },
   { key: "stuckInterval", label: "卡住检测间隔（毫秒）", hint: "与下一项配合判卡住" },
   { key: "stuckDistance", label: "卡住位移阈值（像素）", hint: "间隔内位移低于它视为卡住" },
