@@ -88,6 +88,10 @@ const REVIEWED = new Map([
   ],
   ["assets/ui/utils/input/Pointer.ts#node", "bindPointerAction / bindMousePress 的内部实现，本身就在鼠标通道登记"],
   [
+    "assets/ui/utils/input/DialogBehavior.ts#node",
+    "bindDialogRaiseOnPress 的入参（#1386 从 dialog-builder 移入）：置顶接线是弹窗根级行为的共享实现，调用方（DialogFrame.start 的弹窗根 / 三个自建面板弹窗的 this）各自已 blockClickThrough，本函数不重复登记",
+  ],
+  [
     "assets/ui/core/SoundManager.ts#node",
     "bindClick 不是点击元素，是「给已有点击元素补一声点击音」的注册点：真正决定点不点得中的监听在调用方（按钮自己的 TOUCH_END / Button.CLICK），穿透由调用方各自的 blockClickThrough 负责，本文件不该也不需要在鼠标通道登记",
   ],

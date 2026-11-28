@@ -112,8 +112,10 @@ export default class DialogFrame extends Component {
       const draggable = this.headDrag.getComponent(Draggable);
       if (draggable) draggable.dragTarget = this.node;
     }
-    // 关闭键点击销毁整窗
+    // 关闭键点击销毁整窗；关闭键自己也在鼠标通道登记一次（原 createVectorButton 的接线口径：
+    // Button 只走 touch 通道，鼠标通道不登记则点 × 会穿透到下层 UI）
     if (this.closeButtonNode) {
+      blockClickThrough(this.closeButtonNode);
       this.closeButtonNode.on(Node.EventType.TOUCH_END, () => this.node.destroy());
     }
   }
