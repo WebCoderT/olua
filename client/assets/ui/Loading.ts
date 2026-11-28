@@ -253,7 +253,8 @@ export class Loading extends Component {
       // 进入游戏场景前预加载游戏资源（50~100）：地图信息 → 地图内 NPC/怪物帧动画 → 角色穿戴的帧动画
       if (scene === "Game") {
         const role = StorageManager.findOnlineRole();
-        // 资源路径与帧动画来源都按地图 id 走（#672：NPC / 刷怪区从服务端快照取，不读 TMX）
+        // 地图资源路径由 mapSrcOf 读快照 src（#1401：出厂图按 id，派生图按来源 TMX 目录）；
+        // 帧动画来源仍按地图 id / 快照点位（#672：NPC / 刷怪区从服务端快照取，不读 TMX）
         if (role) {
           await this.timed("游戏资源（地图/帧动画）", startedAt, () =>
             PreloadManager.preloadGame(role.onMap, role, (ratio, tip) =>

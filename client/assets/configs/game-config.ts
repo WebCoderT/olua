@@ -2152,11 +2152,12 @@ export function getMallStock(id: string): number {
  * **TMX 里只剩瓦片与碰撞**（#667 刷怪区、#672 NPC 与复活点先后搬到后台）：点位这类
  * 「运维天天要调」的东西留在资源包里，等于每改一次都要重打 3G 的包。
  *
- * 客户端要做的只有两件事：**按 id 拼资源路径**（`mapSrcOf`，目录约定）、
- * **进游戏时把服务端那份配置接住**（`configs/apply-snapshot` 的 `applyMapRows`）。
+ * 客户端要做的只有两件事：**按快照 src 加载资源**（`mapSrcOf`，#1401 起出厂图 = 自身 id、
+ * 派生图 = 来源 TMX 目录）、**进游戏时把服务端那份配置接住**（`applyMapRows`）。
  *
  * ⚠ 所以 `maps` 在配置拉回来之前是**空的**，这不是 bug：
- * - 资源预加载 / 进图**不用查它**（路径由 `mapSrcOf` 算，见 ui/Game 与 Loading）；
+ * - 资源预加载 / 进图都在 `loadGameConfig()` **之后**发生（Loading 与 Game 都先 await 再预加载），
+ *   所以 `mapSrcOf` 查得到 src；老服务端不带 src 字段时回退 id 拼路径，行为不变；
  * - 显示层（小地图 / 传送弹窗）读空时用 `mapLabelOf` 的兜底文案，并随快照到达自动更新；
  * - NPC / 复活点 / 刷怪区标签**必须**有它（没有就一个都不摆，见 `MapObjectSpawner`）。
  */
@@ -2173,13 +2174,18 @@ export function getMallStock(id: string): number {
  */
 
 /**
- * 地图资源路径
+ * 地图资源路径（#1401：以服务端下发的 src 为准）
  *
- * 唯一规则：`resources/map/<id>/<id>.tmx`（底图与预览图在同一个目录里）。
- * **只此一处**：客户端、服务端（`MapService.srcOf`）都按这条约定拼，谁都不存一个 `src` 字段 ——
- * 存了就会有人改它，而改它只会把客户端指到一张不存在的图上。
+ * 出厂图：`src_map_id` 为空，服务端下发 `map/<id>/<id>` —— 与旧口径逐字一致；
+ * 派生图：id 没有同名 TMX 目录，服务端下发来源图的目录，客户端照它加载（否则黑屏）。
+ *
+ * 快照还没到（直接从 Game 场景启动、或老服务端不带 src 字段）时回退到 id 拼路径 ——
+ * 老行 / 老服务端行为不变，新图在快照 ready 后才按 src 走。调用方不需要改：
+ * PreloadManager 与 GameMap 都在这之后才加载地图（Game.start 里 `await loadGameConfig()`）。
  */
 export function mapSrcOf(id: MapId): string {
+  const src = maps.get(id)?.src;
+  if (src) return src;
   return `map/${id}/${id}`;
 }
 
@@ -2230,8 +2236,9 @@ export function mapLevelLocked(required: number, roleLevel: number): boolean {
  * 三条口径：
  * - **整表重建**（先 clear 再按行填）：地图行由服务端决定，客户端没有「本地兜底行」可言。
  *   留着旧行会让「服务端没有这张图」在客户端变成幽灵按钮（点开就是黑屏）。
- * - **资源路径不在这里**（`mapSrcOf` 按 `resources/map/<id>/<id>` 拼）：下发方永远改不到
- *   「客户端加载哪张图」—— 与这个文件开头那条「资源路径一律不覆写」完全一致。
+ * - **资源路径在 #1401 起由服务端下发**（`row.src`）：出厂图 = `map/<id>/<id>`，派生图 =
+ *   来源图的 TMX 目录（新 id 没有自己的资源目录，照自己的 id 拼会黑屏）。`mapSrcOf` 读它，
+ *   快照缺字段时回退 id 拼路径（老服务端兼容）。
  * - **类型分组一并替换**：类型码 → 文案的唯一来源在服务端，客户端的 `mapTypeGroups`
  *   只是它的容器（以前这里也存着一份，改一次文案要改两个仓库里的同一个意思）。
  */
@@ -2240,6 +2247,8 @@ export function applyMapRows(rows: MapConfigRow[], groups: MapTypeGroupRow[]): v
   for (const row of rows) {
     if (!row || typeof row.id !== "string") continue;
     maps.set(row.id, {
+      // #1401：资源路径以服务端下发为准（老服务端不带 src 时留空，mapSrcOf 回退 id 拼路径）
+      src: String(row.src ?? ""),
       label: String(row.label ?? ""),
       type: String(row.type ?? ""),
       typeLabel: String(row.typeLabel ?? row.type ?? ""),

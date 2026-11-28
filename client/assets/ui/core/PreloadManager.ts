@@ -44,7 +44,7 @@ export type PreloadProgress = (ratio: number, tip: string) => void;
 export default class PreloadManager {
   /**
    * 预加载进入游戏场景所需的全部资源
-   * @param mapId 当前所在地图的 id（资源路径由 `mapSrcOf` 按目录约定拼；帧动画按快照里的点位取）
+   * @param mapId 当前所在地图的 id（资源路径由 `mapSrcOf` 读快照 src；帧动画按快照里的点位取）
    * @param role 当前在线角色（取其穿戴的衣服/武器外观；无角色时只加载地图部分）
    * @param onProgress 进度回调（可缺省：直接从 Game 场景启动时没有进度界面）
    */

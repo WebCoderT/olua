@@ -616,6 +616,9 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
         -- 所以 groups 现在恒为空数组：留着这个键只是为了让老库的 JSON 还能被同一个解析器读。
         -- 刷怪区 / NPC / 碰撞盒各有一张表，不在这里。
         content     TEXT    NOT NULL DEFAULT '{"layers":[],"groups":[]}',
+        -- 客户端资源来源地图（#1401）：空 = 用自身 id；非空 = 指向另一张已有地图的 TMX 目录。
+        -- 允许「一张客户端地图 → 多张服务端配置」，派生图复制几何但玩法配置各自独立。
+        src_map_id  TEXT    NOT NULL DEFAULT '',
         -- 复活点（#672）：每张图最多一个，NULL = 这张图没有复活点（客户端不进图定位、不回点复活）。
         -- 以前是 TMX 里 class=revive 的那个点，现在归后台；单值跟地图同生命周期，就不单开表了
         revive_cx   REAL,
@@ -1843,6 +1846,8 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
     this.ensureColumn("maps", "pixel_width", "INTEGER NOT NULL DEFAULT 0");
     this.ensureColumn("maps", "pixel_height", "INTEGER NOT NULL DEFAULT 0");
     this.ensureColumn("maps", "content", `TEXT NOT NULL DEFAULT '{"layers":[],"groups":[]}'`);
+    // 资源来源地图（#1401）：存量行补 '' = 用自身 id 拼 TMX 路径，行为与改动前完全一致
+    this.ensureColumn("maps", "src_map_id", "TEXT NOT NULL DEFAULT ''");
     // 怪物 AI 参数（#655）：原本是生成物 `MONSTER_AI` 的六个常量，现在并进运行时参数单行表
     this.ensureColumn("runtime_params", "monster_ai", "TEXT NOT NULL DEFAULT '{}'");
     // 位移校验参数（#811）：存量库补一列空的 '{}'，读取侧缺键按「最小可用值」兜住

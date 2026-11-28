@@ -17339,6 +17339,61 @@
         "x-olua-permissions": [
           "gameConfig:read"
         ]
+      },
+      "post": {
+        "description": "一张客户端地图可以做多份服务端配置：选一张已有地图作为来源（`sourceMapId`），新行复制它的几何与图层、`src_map_id` 指向它的 TMX 目录；名称 / 类型 / 等级按入参，复活点不继承（新图从零配）。\n\n**id 手填**（`50050` = 已被占用），只能是数字 / 字母 / `_` / `-`，不超过 32 字符；来源图不存在 → 404 `50032`。校验失败一律 400（中文消息）。\n\n**生效时机**：新行立刻进配置快照，客户端下次进游戏拉到；资源加载按快照的 `src` 走来源图的 TMX 目录，所以不需要给新 id 再做一份资源。**删除来源图前必须先把以它为来源的派生图删掉**（否则 409）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
+        "operationId": "adminMap.create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateMapDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "新建的这一行（列表摘要，计数全 0）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/MapCreatedDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "新增地图配置（选一张已有地图作资源来源，#1401）",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/MapCreatedDto"
+        },
+        "x-olua-permissions": [
+          "gameConfig:write"
+        ]
       }
     },
     "/admin/maps/{id}": {
@@ -17397,8 +17452,63 @@
           "gameConfig:read"
         ]
       },
+      "delete": {
+        "description": "只删 `maps` 表里这一行，**客户端的 TMX / 底图 / 预览图完全不动** —— 那属于资源包，要改得重新打包客户端。\n\n仍被引用时 409 `50051`，消息点名是哪一类引用（刷怪区 / NPC 点位 / 碰撞盒 / 玩法规则 / 副本实例 / 场上怪物 / 角色位置 / 以它为资源来源的派生地图）；不连带删除、不留悬空。地图不存在 → 404 `50032`。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
+        "operationId": "adminMap.delete",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "要删除的地图 id",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "删除结果（deleted + id）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiEnvelopeDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/MapDeletedDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          }
+        ],
+        "summary": "删除地图配置（只删库里的行，#1401）",
+        "tags": [
+          "管理端"
+        ],
+        "x-olua-audience": "admin",
+        "x-olua-data-nullable": false,
+        "x-olua-data-schema": {
+          "$ref": "#/components/schemas/MapDeletedDto"
+        },
+        "x-olua-permissions": [
+          "gameConfig:write"
+        ]
+      },
       "patch": {
-        "description": "改的是**整理结果**：名称 / 类型 / 进入等级 / 进入战斗力 / 进入战魂阶。保存后立刻生效 ——\n客户端下次进游戏拉配置快照时拿到新值，传送弹窗与 `changeOnMap` 的拦截就按新条件判。\n\n- 四个数值字段都允许 `0`，**0 = 不限制**（安全地图就是 0/0/0，不是 1/0/0）；\n- `type` 只能是 `0` 安全 / `1` 等级 / `2` 战斗力 / `3` 战魂；\n- **整份覆盖**，不是部分更新：分字段更新会让两个人同时编辑时互相覆盖一半。\n\n地图 id 不存在 → 404（`50032`）。**没有新建 / 删除接口**：一张图存不存在由客户端的 TMX 决定。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
+        "description": "改的是**整理结果**：名称 / 类型 / 进入等级 / 进入战斗力 / 进入战魂阶。保存后立刻生效 ——\n客户端下次进游戏拉配置快照时拿到新值，传送弹窗与 `changeOnMap` 的拦截就按新条件判。\n\n- 四个数值字段都允许 `0`，**0 = 不限制**（安全地图就是 0/0/0，不是 1/0/0）；\n- `type` 只能是 `0` 安全 / `1` 等级 / `2` 战斗力 / `3` 战魂；\n- **整份覆盖**，不是部分更新：分字段更新会让两个人同时编辑时互相覆盖一半。\n\n地图 id 不存在 → 404（`50032`）。**整图的新增 / 删除**见 `POST /admin/maps` 与 `DELETE /admin/maps/:id`（#1401）。\n\n---\n\n**鉴权**：管理端令牌（`admin`）。\n\n**所需权限**：`gameConfig:write`（修改养成配置；角色：超级管理员 / 管理员）",
         "operationId": "adminMap.save",
         "parameters": [
           {
@@ -30254,7 +30364,11 @@
         "properties": {
           "id": {
             "type": "string",
-            "description": "地图 id（= 角色 onMap 存的值 = resources/map 下的目录名）"
+            "description": "地图 id（= 角色 onMap 存的值）"
+          },
+          "src": {
+            "type": "string",
+            "description": "客户端资源路径（#1401）：出厂图 = map/<id>/<id>；派生图的 id 没有同名 TMX 目录，此字段指向来源图的目录。客户端按它加载地图。"
           },
           "label": {
             "type": "string",
@@ -30318,6 +30432,7 @@
         },
         "required": [
           "id",
+          "src",
           "label",
           "type",
           "typeLabel",
@@ -35345,6 +35460,160 @@
           "players",
           "events",
           "cursor"
+        ]
+      },
+      "MapCreatedDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "地图 id（= resources/map 下的目录名，也是角色 onMap 存的值）"
+          },
+          "label": {
+            "type": "string",
+            "description": "地图名"
+          },
+          "type": {
+            "type": "string",
+            "description": "类型码（0 安全 / 1 野外）"
+          },
+          "typeLabel": {
+            "type": "string",
+            "description": "类型名（安全地图 / 野外地图）"
+          },
+          "level": {
+            "type": "number",
+            "description": "进入所需等级（0 = 不限）"
+          },
+          "src": {
+            "type": "string",
+            "description": "客户端资源路径（如 map/0/0）"
+          },
+          "cols": {
+            "type": "number",
+            "description": "横向格数"
+          },
+          "rows": {
+            "type": "number",
+            "description": "纵向格数"
+          },
+          "tileWidth": {
+            "type": "number",
+            "description": "单格宽（像素）"
+          },
+          "tileHeight": {
+            "type": "number",
+            "description": "单格高（像素）"
+          },
+          "width": {
+            "type": "number",
+            "description": "地图像素宽"
+          },
+          "height": {
+            "type": "number",
+            "description": "地图像素高"
+          },
+          "layerCount": {
+            "type": "number",
+            "description": "图层数"
+          },
+          "npcPointCount": {
+            "type": "number",
+            "description": "服务端 NPC 点位数（map_npcs；#672 起点位归后台）"
+          },
+          "hasRevivePoint": {
+            "type": "boolean",
+            "description": "服务端是否设了复活点（maps.revive_cx/cy 非空）"
+          },
+          "collisionCount": {
+            "type": "number",
+            "description": "服务端碰撞盒行数（map_collisions；#676 起碰撞归后台）"
+          },
+          "spawnAreaCount": {
+            "type": "number",
+            "description": "服务端刷怪区行数（map_spawn_areas）"
+          },
+          "worldMonsterCount": {
+            "type": "number",
+            "description": "服务端场上怪物实例数（world_monsters，全部区合计）"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "type",
+          "typeLabel",
+          "level",
+          "src",
+          "cols",
+          "rows",
+          "tileWidth",
+          "tileHeight",
+          "width",
+          "height",
+          "layerCount",
+          "npcPointCount",
+          "hasRevivePoint",
+          "collisionCount",
+          "spawnAreaCount",
+          "worldMonsterCount"
+        ]
+      },
+      "CreateMapDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "新地图 id（数字串或带后缀的短名，如 0-2；不能与已有地图重复）",
+            "maxLength": 32
+          },
+          "label": {
+            "type": "string",
+            "description": "地图名称（显示在传送弹窗 / 小地图 / 公告里）",
+            "maxLength": 24
+          },
+          "type": {
+            "type": "string",
+            "description": "地图类型（0 安全地图 / 1 野外地图）",
+            "enum": [
+              "0",
+              "1"
+            ]
+          },
+          "level": {
+            "type": "number",
+            "description": "进入所需等级（0 = 不限）",
+            "minimum": 0,
+            "maximum": 200
+          },
+          "sourceMapId": {
+            "type": "string",
+            "description": "客户端资源来源地图 id（必须已存在；新图复制它的几何、共用它的 TMX 目录）"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "type",
+          "level",
+          "sourceMapId"
+        ]
+      },
+      "MapDeletedDto": {
+        "type": "object",
+        "properties": {
+          "deleted": {
+            "type": "boolean",
+            "description": "删除成功恒为 true"
+          },
+          "id": {
+            "type": "string",
+            "description": "被删掉的地图 id"
+          }
+        },
+        "required": [
+          "deleted",
+          "id"
         ]
       },
       "MapReloadResultDto": {

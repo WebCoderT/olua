@@ -105,4 +105,62 @@ export class MapRepository {
   countAll(): number {
     return this.db.count("SELECT COUNT(1) AS total FROM maps");
   }
+
+  /**
+   * 新增一行地图配置（#1401）
+   *
+   * `src_map_id` 指向来源地图（客户端资源目录），几何整份从来源行复制 —— 一张 TMX 底图
+   * 可以派生多份独立玩法配置，但指向同一份资源。只用 INSERT 不用 seedRow（后者 OR IGNORE，
+   * 重复 id 会被静默吞掉，这里要在服务层翻成中文 409）。
+   */
+  insert(row: MapRow): void {
+    this.db.run(
+      `INSERT INTO maps (map_id, src_map_id, label, type, level,
+         grid_cols, grid_rows, tile_width, tile_height, pixel_width, pixel_height, content,
+         updated_by, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        row.map_id,
+        row.src_map_id,
+        row.label,
+        row.type,
+        row.level,
+        row.grid_cols,
+        row.grid_rows,
+        row.tile_width,
+        row.tile_height,
+        row.pixel_width,
+        row.pixel_height,
+        row.content,
+        row.updated_by,
+        row.updated_at,
+      ],
+    );
+  }
+
+  /** 删除一行地图配置（#1401；删之前由服务层做完引用检查，这里不再拦） */
+  remove(mapId: string): void {
+    this.db.run("DELETE FROM maps WHERE map_id = ?", [mapId]);
+  }
+
+  /**
+   * 这张图还被谁引用（#1401 删除前的守点，返回非空的表名标签）
+   *
+   * 复活点不列：它是 maps 行自己的两列，随行一起消失，不构成悬空。
+   * 角色位置与场上实例算「运行时占用」—— 人在图里时删配置，下一步进图校验会把他挡在外面，
+   * 所以先挡住删除，让运营先等玩家换图。
+   */
+  referencingOf(mapId: string): string[] {
+    const checks: Array<[string, string]> = [
+      ["刷怪区", "SELECT COUNT(1) AS total FROM map_spawn_areas WHERE map_id = ?"],
+      ["NPC 点位", "SELECT COUNT(1) AS total FROM map_npcs WHERE map_id = ?"],
+      ["碰撞盒", "SELECT COUNT(1) AS total FROM map_collisions WHERE map_id = ?"],
+      ["玩法规则", "SELECT COUNT(1) AS total FROM map_rules WHERE map_id = ?"],
+      ["副本实例", "SELECT COUNT(1) AS total FROM map_instances WHERE map_id = ?"],
+      ["场上怪物", "SELECT COUNT(1) AS total FROM world_monsters WHERE map_id = ?"],
+      ["角色位置", "SELECT COUNT(1) AS total FROM role_positions WHERE map_id = ?"],
+      ["以它为资源来源的派生地图", "SELECT COUNT(1) AS total FROM maps WHERE src_map_id = ?"],
+    ];
+    return checks.filter(([, sql]) => this.db.count(sql, [mapId]) > 0).map(([label]) => label);
+  }
 }

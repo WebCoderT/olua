@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
+import { hasPermission } from "../store/session";
+import { PERMISSION } from "../api";
 import { Modal } from "../components/Modal";
 import { PageHeader } from "../components/PageHeader";
 import { Badge, Button, Card, EmptyState, Field as FormField, Input, Select, Spinner } from "../components/ui";
@@ -19,7 +21,7 @@ import {
   WorldMonstersDialog,
 } from "../components/map/MapDialogs";
 import { mapsApi, refreshMapCatalog } from "../api";
-import type { MapCollision, MapDetail, MapNpc, MapSpawnArea, MapSummary, MapTypeGroup, SaveMapConfig } from "../api";
+import type { CreateMap, MapCollision, MapDetail, MapNpc, MapSpawnArea, MapSummary, MapTypeGroup, SaveMapConfig } from "../api";
 import { toastError, toastSuccess } from "../store/toast";
 
 /** 类型码（服务端生成的字面量联合："0" 安全 / "1" 野外；#1177 收敛） */
@@ -153,7 +155,14 @@ const DEFAULT_LAYERS: MapLayerVisibility = { spawn: true, npc: true, revive: tru
  * 画布是 Tiled 口径（左上角、y 向下），所以「读库 → 画」只做一次 `y = -cy`、提交时反过来。
  * 换算只在 `MapCanvas` 的 `tiledBoxOf` / `worldBoxOf` 两处，别在页面里再手算一遍。
  */
+/** 新建表单初值（来源地图必须选一张已有的：新图复制它的几何、共用它的 TMX 资源） */
+const EMPTY_CREATE: CreateMap = { id: "", label: "", type: "0", level: 0, sourceMapId: "" };
+
 export function MapsPage() {
+  const canWrite = hasPermission(PERMISSION.GAME_CONFIG_WRITE);
+  const [creating, setCreating] = useState(false);
+  const [createDraft, setCreateDraft] = useState<CreateMap>({ ...EMPTY_CREATE });
+  const [deleting, setDeleting] = useState<MapSummary | null>(null);
   const [list, setList] = useState<MapSummary[]>([]);
   const [types, setTypes] = useState<MapTypeGroup[]>([]);
   const [selected, setSelected] = useState<string>("");
@@ -208,6 +217,38 @@ export function MapsPage() {
   useEffect(() => {
     void loadList();
   }, [loadList]);
+
+  /** 新建：trim 后提交，成功后选中新图（id 撞车 / 来源不存在由请求层中文提示，保持弹窗） */
+  const submitCreate = async () => {
+    if (!createDraft.id.trim() || !createDraft.label.trim() || !createDraft.sourceMapId) return;
+    try {
+      const created = await mapsApi.create({ ...createDraft, id: createDraft.id.trim(), label: createDraft.label.trim() });
+      toastSuccess(`地图「${created.id} · ${created.label}」已新建（资源来自 ${createDraft.sourceMapId}，下次进游戏生效）`);
+      setCreating(false);
+      setCreateDraft({ ...EMPTY_CREATE });
+      await loadList();
+      setSelected(created.id);
+      void refreshMapCatalog();
+    } catch {
+      /* 保持弹窗打开 */
+    }
+  };
+
+  /** 删除：有引用服务端 409（中文点名哪类引用），保持确认弹窗打开；删的是当前图就回到列表第一张 */
+  const submitDelete = async () => {
+    if (!deleting) return;
+    try {
+      await mapsApi.delete(deleting.id);
+      toastSuccess(`地图「${deleting.id} · ${deleting.label}」已删除（客户端 TMX 资源未动）`);
+      const wasSelected = deleting.id === selected;
+      setDeleting(null);
+      if (wasSelected) setSelected("");
+      await loadList();
+      void refreshMapCatalog();
+    } catch {
+      /* 保持弹窗打开 */
+    }
+  };
 
   useEffect(() => {
     if (!selected) return;
@@ -561,6 +602,9 @@ export function MapsPage() {
         actions={
           <>
             <Badge tone="gold">可编辑玩法配置</Badge>
+            <Button disabled={!canWrite} onClick={() => { setCreateDraft({ ...EMPTY_CREATE, sourceMapId: selected || list[0]?.id || "" }); setCreating(true); }}>
+              新建地图
+            </Button>
             <Button variant="ghost" onClick={() => void loadList()}>
               刷新
             </Button>
@@ -669,11 +713,11 @@ export function MapsPage() {
                 {filteredList.map((item) => {
                   const active = item.id === selected;
                   return (
-                    <li key={item.id}>
+                    <li key={item.id} className="relative">
                       <button
                         type="button"
                         onClick={() => pickMap(item.id)}
-                        className={`w-full rounded-lg border px-2.5 py-2 text-left transition ${
+                        className={`w-full rounded-lg border py-2 pl-2.5 pr-9 text-left transition ${
                           active ? "border-gold/50 bg-gold/10" : "border-line bg-surface-2/40 hover:border-line-strong"
                         }`}
                       >
@@ -696,6 +740,17 @@ export function MapsPage() {
                           {/* 复活点只有「有 / 没有」两种状态：没有时不必占位，写出来反而像少了一个 */}
                           {item.hasRevivePoint ? <span className="text-jade/70">· 复活点</span> : null}
                         </div>
+                      </button>
+                      {/* 删除只删库里的配置行，客户端 TMX 资源不动（#1401）；有引用服务端 409 中文提示 */}
+                      <button
+                        type="button"
+                        aria-label={`删除地图 ${item.id}`}
+                        title="只删库里的配置行，客户端地图资源不动；有引用会提示先清理"
+                        disabled={!canWrite}
+                        onClick={() => setDeleting(item)}
+                        className="absolute right-1.5 top-1.5 rounded px-1.5 py-0.5 text-[11px] text-ink-4 transition hover:bg-ember/10 hover:text-ember disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        删
                       </button>
                     </li>
                   );
@@ -1027,6 +1082,74 @@ export function MapsPage() {
         onClose={() => setDialog(null)}
       />
       <SourcesDialog open={dialog === "sources"} detail={detail} onClose={() => setDialog(null)} />
+
+      {creating ? (
+        <Modal
+          open
+          title="新建地图配置"
+          hint="必须选一张已有地图作资源来源：新图复制它的几何与图层，共用它的 TMX 资源（一张客户端地图可做多份玩法配置）。"
+          size="md"
+          onClose={() => setCreating(false)}
+          footer={
+            <>
+              <Button variant="outline" onClick={() => setCreating(false)}>取消</Button>
+              <Button onClick={() => void submitCreate()} disabled={!createDraft.id.trim() || !createDraft.label.trim() || !createDraft.sourceMapId}>
+                新建
+              </Button>
+            </>
+          }
+        >
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <FormField label="地图 id" hint="唯一；字母 / 数字 / 下划线 / 短横线，1~32 位">
+              <Input value={createDraft.id} placeholder="如 0-2" onChange={(event) => setCreateDraft({ ...createDraft, id: event.target.value })} />
+            </FormField>
+            <FormField label="地图名称">
+              <Input value={createDraft.label} maxLength={24} placeholder="如 新手村·修行" onChange={(event) => setCreateDraft({ ...createDraft, label: event.target.value })} />
+            </FormField>
+            <FormField label="类型">
+              <Select value={createDraft.type} onChange={(event) => setCreateDraft({ ...createDraft, type: event.target.value as CreateMap["type"] })}>
+                {types.map((type) => (
+                  <option key={type.type} value={type.type}>{type.label}</option>
+                ))}
+              </Select>
+            </FormField>
+            <FormField label="进入等级（0 = 不限）">
+              <Input type="number" min={0} max={200} value={createDraft.level} onChange={(event) => setCreateDraft({ ...createDraft, level: Number(event.target.value) })} />
+            </FormField>
+            <FormField label="资源来源地图（复制几何、共用 TMX）" hint="来源本身是派生图时，新图共用同一份原始 TMX 资源">
+              <Select value={createDraft.sourceMapId} onChange={(event) => setCreateDraft({ ...createDraft, sourceMapId: event.target.value })}>
+                <option value="">请选择</option>
+                {list.map((item) => (
+                  <option key={item.id} value={item.id}>{item.label || item.id}（#{item.id} · {item.cols}×{item.rows} · {item.src}）</option>
+                ))}
+              </Select>
+            </FormField>
+          </div>
+          <p className="mt-2 text-[11px] text-ink-5">
+            新图不带复活点、刷怪区与 NPC 点位 —— 建好后在这张图的画布上单独配。删除来源图前需先删掉所有以它为来源的派生图。
+          </p>
+        </Modal>
+      ) : null}
+
+      {deleting ? (
+        <Modal
+          open
+          title="删除地图配置"
+          hint="只删库里的地图行，客户端 TMX / 底图 / 预览图资源不动（要动资源得重新打包客户端）。"
+          size="sm"
+          onClose={() => setDeleting(null)}
+          footer={
+            <>
+              <Button variant="outline" onClick={() => setDeleting(null)}>取消</Button>
+              <Button variant="danger" onClick={() => void submitDelete()}>确认删除</Button>
+            </>
+          }
+        >
+          <p className="text-sm text-ink-2">
+            确认删除地图「{deleting.id} · {deleting.label}」？有刷怪区 / NPC 点位 / 碰撞盒 / 副本 / 派生图等引用时会被服务端拒绝（提示先去对应页清理）；此操作不可撤销。
+          </p>
+        </Modal>
+      ) : null}
     </div>
   );
 }
