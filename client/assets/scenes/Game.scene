@@ -314,6 +314,14 @@
       "__uuid__": "9f972d37-a996-4c25-b735-4eae4ba0e2b7",
       "__expectedType__": "cc.Prefab"
     },
+    "dialogFramePrefab": {
+      "__uuid__": "9a4fe2dc-0d15-4fa1-a6fe-c1b312857e3b",
+      "__expectedType__": "cc.Prefab"
+    },
+    "dialogFootPrefab": {
+      "__uuid__": "64228bff-2772-4b44-9a06-58a6e326913a",
+      "__expectedType__": "cc.Prefab"
+    },
     "_id": "baQOg77ZRIe7zEZZ6eNDYe"
   },
   {
