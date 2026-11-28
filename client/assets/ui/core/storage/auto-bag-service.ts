@@ -129,7 +129,9 @@ export default class AutoBagService {
     //    满了才回收一批（recycleBySelection 一次请求收掉全部勾中装备）。**放在最后** ——
     //    先让自动穿戴把「更好的」拿走，剩下的才轮到回收，不然刚捡到的好装备会被先卖掉。
     //    未满但有勾中装备就先放着；拾取被拒（bag_full）走 onBagFullRejected 兜底 ──
-    if (AutoBagPrefs.getAutoRecycle(role.id) && isBagFull(role.bag)) {
+    //    `!recycling`（#1385）：bag_full 拒绝路径的回收请求在途时，refreshBag 会把
+    //    onBagChanged 防抖路径也拉起来，两路各自发一次回收就是叠单 —— 共用同一道在途闸
+    if (!AutoBagService.recycling && AutoBagPrefs.getAutoRecycle(role.id) && isBagFull(role.bag)) {
       const selection = AutoBagPrefs.getRecycleSelection(role.id);
       if (hasRecycleSelection(selection)) {
         const result = await BagService.recycleBySelection(selection, { quiet: true });
