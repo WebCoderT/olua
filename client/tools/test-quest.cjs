@@ -196,7 +196,9 @@ try {
   const serverQuest = readRepo(SERVER_QUEST);
   guard(() => {
     check(serverQuest.includes("role.level < quest.min_level"), "接取复核等级（客户端算的可接只是提前灰按钮）");
-    check(serverQuest.includes("quest.prev_quest_id") && serverQuest.includes('prev.status !== "claimed"'), "接取复核主线链前置（claimed 才算完成）");
+    check(serverQuest.includes("quest.prev_quest_id") && /prevClaimed\(role\.id, quest\)|prevClaimed\(roleId, quest\)/.test(serverQuest), "接取复核主线链前置（claimed 才算完成；#1365 起走 prevClaimed 助手）");
+    // #1365：npcTalk 下发 available 与 accept 同口径（等级 + 前置都过才下发，否则不下发）
+    check(/role\.level >= quest\.min_level && this\.prevClaimed\(role\.id, quest\)/.test(serverQuest), "npcTalk 的 available 与 accept 同口径（亮接取按钮却必被拒 = UI 说谎）");
     check(serverQuest.includes("已经接取了这个任务"), "重复接取被拒");
     check(serverQuest.includes("该任务已完成，不能重复接取"), "已完成的主线不能再接");
   });

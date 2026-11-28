@@ -208,10 +208,9 @@ export default class NpcDialog {
 
   private static async runAction(kind: "accept" | "submit"): Promise<void> {
     if (NpcDialog.busy) return;
-    let action: DialogAction | null = null;
-    for (let i = 0; i < NpcDialog.actions.length; i++) {
-      if (NpcDialog.actions[i].kind === kind) action = NpcDialog.actions[i];
-    }
+    // #1365：数组顺序固定（可交付在前），取**第一个**同类动作 ——
+    // 取最后一个会让玩家对着「第一个任务」的语境点按钮、实际发出去的却是另一个 questId
+    const action = NpcDialog.actions.find((item) => item.kind === kind) ?? null;
     if (!action) return;
     NpcDialog.busy = true;
     NpcDialog.render();
