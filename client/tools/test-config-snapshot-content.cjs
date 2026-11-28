@@ -362,7 +362,7 @@ function main() {
   const dropRef = dropRuntime;
   const tuning = {
     drop: { autoPickupRadius: 72, scatterMinDistance: 60, pickReplyTimeout: 3000, fullTipInterval: 800 },
-    autoBattle: { maxTargetDistance: 300, moveByRun: false, cellSize: 24, clearance: 12, repathInterval: 200 },
+    autoBattle: { maxTargetDistance: 300, moveByRun: false, classicWalkMode: true, cellSize: 24, clearance: 12, repathInterval: 200 },
   };
   snapshotApi.applyRuntimeParams(tuning);
   check(dropRef === dropRuntime, "dropRuntime 对象引用不变（消费方持有的是同一个对象）");
@@ -370,6 +370,7 @@ function main() {
   check(dropRuntime.pickReplyTimeout === 3000 && dropRuntime.fullTipInterval === 800, "拾取超时 / 满包间隔也覆写", JSON.stringify(dropRuntime));
   check(autoBattle.maxTargetDistance === 300 && autoBattle.cellSize === 24, "自动战斗距离与网格边长覆写", `dist=${autoBattle.maxTargetDistance} cell=${autoBattle.cellSize}`);
   check(autoBattle.moveByRun === false, "布尔开关（移动用跑步）也能覆写");
+  check(autoBattle.classicWalkMode === true, "布尔开关（经典走路模式）也能覆写（#1334）");
   check(autoBattle.stuckRetryLimit === 0 && autoBattle.dashSnapRadius === 0, "快照里没给的键保持当前值（#724 无出厂值，初始 0 = 快照没给）", `retry=${autoBattle.stuckRetryLimit}`);
   check(autoBattle.routeLine && autoBattle.routeLine.dotRadius === 3, "样式参数（routeLine）不受快照影响 —— 它不在下发范围");
 

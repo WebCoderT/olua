@@ -304,6 +304,20 @@ export default class RoleDisplay extends Node {
   }
 
   /**
+   * 到步吸附（#1334 经典走路模式）：把角色精确钉在当前步的格心上
+   *
+   * 调用时机是「距路点 ≤ 一帧步长」—— 位移量最大 4px，肉眼无感，但格与格之间
+   * 不会因刚体速度的余量越走越歪（连续模式靠 waypointTolerance 的 14px 提前拐弯，
+   * 那种口径下角色永远站不到格心上）。必须同步清刚体速度：不清的话这一帧的
+   * 残余速度会把人往老方向再带一段，吸附就白做了。
+   */
+  snapToWorldPosition(x: number, y: number): void {
+    if (!isValid(this)) return;
+    this.stopRigidBody();
+    this.setWorldPositionByTransfer(new Vec3(x, y, this.getWorldPosition().z));
+  }
+
+  /**
    * 服务端位置修正（#811 `posCorrect` 帧的落点）
    *
    * 分两档（issue 的口径）：
